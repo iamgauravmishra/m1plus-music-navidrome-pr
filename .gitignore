@@ -1,0 +1,25 @@
+# Shanling's firmware stays out of the repo (copyrighted); drop the official zip in firmware/
+firmware/*
+!firmware/README.md
+work/
+out/
+reference/
+*.bin
+*.tar
+*.squashfs
+*.zip
+# History backups and generated release/preview artifacts
+*.bundle
+/release/
+/releases/
+/preview/
+/previews/
+/docs/*preview*.png
+# no trailing slash: also ignores a venv symlink (worktrees link to the main checkout's venv)
+venv
+.venv
+__pycache__/
+*.pyc
+.DS_Store
+fonts/*
+!fonts/README.md
