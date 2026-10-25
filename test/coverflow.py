@@ -14,6 +14,8 @@ q2-pod's test/coverflow.py (Copyright (c) 2026 Diamond Bond, MIT; see NOTICE).
 import argparse, ctypes, os, re, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, 'tools'))
+import pod_ui  # noqa: E402  (the page layout: COVER_Y, ALBUM_Y, ARTIST_Y)
 SRC = os.path.join(ROOT, 'patch', 'coverflow.c')
 INC = os.path.join(ROOT, 'patch', 'offsets.inc')
 
@@ -84,13 +86,28 @@ def save(frame, path):
     img.save(path)
 
 
-def preview(frame, path, album='Kind of Blue', artist='Miles Davis'):
-    """The whole 320x480 page around a rendered frame: navbar, captions, hint. Approximate."""
+def placeholder():
+    """Roughly the stock p_default disc the payload decodes for covers without art (approximate)."""
+    buf = (ctypes.c_uint * TEXELS)()
+    c = (ART - 1) / 2
+    for y in range(ART):
+        for x in range(ART):
+            d = ((x - c) ** 2 + (y - c) ** 2) ** 0.5
+            v = 70 if d < ART * 0.42 and d > ART * 0.12 else 46 if d < ART * 0.45 else 34
+            buf[y * ART + x] = 0xff000000 | v | v << 8 | v << 16
+    return buf
+
+
+def preview(frame, path, album='Kind of Blue', artist='Miles Davis', title='Cover Flow'):
+    """The whole 320x480 page around a rendered frame: status bar gap, navbar, captions, laid out
+    as tools/pod_ui.py builds ui/m1pod_cover.bin (the window starts under the 30 px status bar,
+    drawn here as black). Approximate."""
     from PIL import Image, ImageDraw, ImageFont
     page = Image.new('RGB', (320, 480), (0, 0, 0))
     covers = Image.new('RGB', (W, H))
     covers.putdata([(frame[i] & 255, frame[i] >> 8 & 255, frame[i] >> 16 & 255) for i in range(W * H)])
-    page.paste(covers, (0, 56))
+    top = 480 - pod_ui.CLIENT_H      # the window under the status bar
+    page.paste(covers, (0, top + pod_ui.COVER_Y))
     d = ImageDraw.Draw(page)
 
     def font(size):
@@ -105,14 +122,13 @@ def preview(frame, path, album='Kind of Blue', artist='Miles Davis'):
         w = d.textbbox((0, 0), text, font=f)[2]
         d.text(((320 - w) // 2, y), text, font=f, fill=colour)
 
-    d.rectangle([0, 0, 319, 49], fill=(0, 0, 0))
-    d.line([(0, 49), (319, 49)], fill=(30, 30, 30))
-    d.polygon([(28, 25), (40, 17), (40, 33)], fill=(220, 220, 220))          # Back chevron
-    d.ellipse([272, 13, 296, 37], outline=(220, 220, 220))                   # Now Playing
-    centred('Cover Flow', 14, 20, (255, 255, 255))
-    centred(album, 300, 22, (255, 255, 255))
-    centred(artist, 334, 18, (170, 170, 170))
-    centred('Tap the centre cover to open the album', 392, 13, (136, 136, 136))
+    d.rectangle([0, top, 319, top + 49], fill=(0, 0, 0))
+    d.line([(0, top + 49), (319, top + 49)], fill=(30, 30, 30))
+    d.polygon([(28, top + 25), (40, top + 17), (40, top + 33)], fill=(220, 220, 220))   # Back chevron
+    d.ellipse([272, top + 13, 296, top + 37], outline=(220, 220, 220))                  # Now Playing
+    centred(title, top + 14, 20, (255, 255, 255))
+    centred(album, top + pod_ui.ALBUM_Y + 5, 22, (255, 255, 255))
+    centred(artist, top + pod_ui.ARTIST_Y + 4, 18, (170, 170, 170))
     page.save(path)
 
 

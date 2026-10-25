@@ -7,7 +7,58 @@ M1 Plus's 320x480 portrait touchscreen. It is a page of the M1 Pod payload
 new hook**: everything runs from that page's own widgets, its own timer and its one worker thread.
 
 Preview (approximate, PIL): `docs/coverflow-preview.png`, and the raw frame
-`docs/coverflow-preview-rest.png`.
+`docs/coverflow-preview-rest.png`. Since V2.1fR the same page also opens on one artist's albums
+from the M1 Pod Artists list (`docs/artists.md`, preview `docs/artists-preview.png`).
+
+## Artist scope and the layout without the hint (V2.1fR)
+
+**Not yet hardware-tested** (packages `artists` V2.1fR and `full` V2.1gA, `docs/artists.md`,
+`docs/full.md`). Both changes below exist only in the payload stages with Artists (E, G): they are
+`#ifdef POD_ARTISTS` in `patch/coverflow.c`, whose `#ifndef` halves are the V2.1dE code as shipped,
+and only those stages build the hint-free page (`pod_pages.COVER_NOHINT`). Stage D (V2.1dE and
+every look) and stage F (Shuffle) keep the V2.1dE Cover Flow byte for byte (`docs/payload.md`,
+"Stages and features").
+
+**Scope.** `coverflow_artist(artists, index)`, called from the Artists list (`patch/artists.c`),
+opens the same page, renderer, cache and touch layer on one artist's albums: q2-pod's
+`ARTIST_ALBUMS` scope (`cf.scoped`). Nothing is a second copy; the differences are all keyed on
+`cf.scoped`:
+
+- **Albums.** `loadAlbumList(0xf004, artist)` (`0x4ee8d8`), the stock artist page's own query
+  (artist or album artist, as the stock switch says), copied into the page's deque like the
+  library list. The artist's row is copied too (`_deque_push_back`), so the page owns everything it
+  uses.
+- **Cards.** The stock list ends with an "All songs" row (`REC_ID` −2, `getAlbumByArtist`
+  `0x4eae30`). With two albums or more it stays, as the **All albums** card (q2-pod's rule; its
+  caption "All albums" over the artist, the placeholder art, no cache file); with one album it is
+  dropped (`cf.count`).
+- **Covers.** Each album takes the cache key of the library album of the same name
+  (`strcasecmp` against `getAllAlbum`'s rows, which are grouped by name `COLLATE NOCASE`), so the
+  scoped page shows the main page's files and builds only covers the library list lacks
+  (`key_at`, `cf.keys`).
+- **Tracks.** `loadAlbumList(0xf004, artist)` then `loadAlbumdetailList(0xff01, row)`: the artist
+  page's two steps, repeated on every open because something else may have reused the stock
+  browsing record. They leave class `0xff11` (the album by the artist; for the All songs row every
+  song of the artist), which goes to `g_class_type`, `loadSongList` and the `playing_page` context
+  in place of `0xff10` (`cf.cls`).
+- **Ends.** The shelf does not wrap (q2-pod's `coverflow_bounded`): ring slots past either end are
+  left empty, the drag offset is clamped so the position stays within the artist's albums, and a
+  fling or a side-cover tap snaps no further than an end (`bound`). The main page still wraps.
+- **Title and memory.** The navbar title is the artist (`label_title`). The scope never reads or
+  writes `/mnt/mmc/.coverflow/album`, so the main page reopens on its own last album.
+- **Back** leaves the scoped page for the Artists list, as Back on the covers always leaves the page.
+- "No albums" (the `label_status` line) when the artist has none.
+
+**The hint is gone.** *"Tap the centre cover to open the album"* is removed from the asset and the
+payload no longer looks it up. The covers and the two captions are now one block centred in the
+400 px under the navbar (`tools/pod_ui.py` `COVER_Y`, `ALBUM_Y`, `ARTIST_Y`): `view_covers` moves
+from y 56 to 110, the album line (22 px) sits right under the reflections at 302 and the artist line
+(18 px, grey) under it at 336, leaving 86 px above the art and below the artist line. The captions
+now lie over the frame's bottom rows, which are always black (the reflections end at `CF_TOP +
+ART_SIZE + CF_REFLECT` = 188 of 230), so they ship insensitive (`sensitive=false`, visible) and the
+payload no longer calls `show()` on them: a touch on them reaches the touch layer, and a tap on
+the album name opens the album like a tap on the centre cover. `test/patch.py` checks both with
+demo's own `widget_find_target`.
 
 ## Hardware result and fixes (V2.1dD -> V2.1dE)
 
@@ -82,8 +133,9 @@ V2.1dC model a touch at (160,150) lands on `view_tracks`.
   the centre cover faces you at `ART_SIZE` (140 px), the neighbours turn 60 degrees inward, step
   back and dim, and each has a short reflection. The `slide_menu` holds the index, the offset and
   the wrap-around (and draws the covers itself in the flat fallback); the touch layer moves it.
-- **Text.** The album name and the artist under the frame, updated when a move commits
-  (`EVT_VALUE_CHANGED`), plus the hint *"Tap the centre cover to open the album"*.
+- **Text.** The album name and the artist under the covers, updated when a move commits
+  (`EVT_VALUE_CHANGED`). (The hint line *"Tap the centre cover to open the album"* was removed in
+  V2.1fR.)
 - **Touch.** Drag the shelf (it follows the finger and snaps to a cover; a flick coasts), tap
   the **centre** cover to open the album, tap a **side** cover to bring it to the centre, tap a
   track to play it. **Back** goes tracks -> covers -> out of the page. All of it comes from the
@@ -184,7 +236,8 @@ before any of this runs. In addition:
 
 ## What is not ported
 
-q2-pod's Sort and Refresh cards, the artist and rated scopes, the A-Z jump, the album split by
+q2-pod's Sort and Refresh cards, the rated scope (the artist scope is ported since V2.1fR, see
+above), the A-Z jump, the album split by
 album-artist/folder (`ALBUM_SQL`), the audiobook filter, the ffmpeg fallback for WebP/large PNG
 artwork, Now Playing artwork integration and the wheel/ringnav behaviour. The album list is the
 stock Albums list, name-grouped exactly as the stock page shows it. To clear the cache, delete
@@ -231,3 +284,11 @@ venv/bin/python -I test/patch.py work/mod-pod-cover-lockscreen-iconpercent-space
   label, that every inline-styled button is dark with light text in all six states, that every
   page widget ends inside the 450 px window, and that the nine menu rows overflow the 400 px list
   (so it scrolls) with the stock scroll bar present. 128/128.
+- Since V2.1fR the hit tests probe the moved frame from the asset's own `COVER_Y`, check that a
+  touch on a caption reaches the touch layer (and that the artist line's overhang below the frame
+  takes nothing), that no `label_hint` exists or is looked up, and that the block is centred:
+  137 on a stage D tree (look-all rebuilt with this code), 203 on the V2.1fR stage E tree, whose
+  extra sections cover the Artists page and the artist scope (`docs/artists.md`).
+- After the merge the cover-page checks follow the stage's page: the V2.1dE page (D, F) is checked
+  for its hint and caption positions, the hint-free one (E, G) as above. D 132, E 203, F 182
+  (Shuffle, `docs/shuffle.md`), G 253 (`docs/full.md`).

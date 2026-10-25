@@ -18,12 +18,18 @@ TOOLS = os.path.join(ROOT, 'tools')
 sys.path.insert(0, TOOLS)
 import pod  # noqa: E402
 import pod_pages  # noqa: E402
+import pod_ui  # noqa: E402
 
 WORK = sys.argv[1] if len(sys.argv) > 1 else '/tmp/podtest2'
 DEMO = os.path.join(WORK, 'rootfs', pod.DEMO)
 BUILD = os.path.join(WORK, 'podbuild')
 MANIFEST = json.load(open(os.path.join(BUILD, 'manifest.json')))
 PSYMS = pod.symbols_elf(os.path.join(BUILD, 'patch.elf'))
+# The stage's payload features (tools/pod_pages.py stage_features) and its Cover Flow page: each
+# feature's tests run where the feature is; D and F have the V2.1dE page (with the hint), E and G
+# the one without.
+FEATURES = pod_pages.stage_features(MANIFEST['stage'])
+COVER_PAGE = next((p for p in pod_pages.STAGES[MANIFEST['stage']] if p.kind == 'cover'), None)
 HOME_CLICK_RESUME = pod.HOME_CLICK + 12   # trampoline resumes stock here
 RET = 0x00ff0000     # sentinel return address: emulation stops when PC lands here
 STACK = 0x7ffe0000
@@ -70,7 +76,10 @@ class Machine:
         self.children = {}          # parent handle -> [child handles]
         self.deques = {}            # handle -> list of record addresses
         self.showlist = []          # what loadLocalClassList leaves in *pdeq_showlist
+        self.class_lists = {}       # ... per class, where a test sets one (0xf004: the artists)
         self.tracklist = []         # what loadAlbumdetailList leaves there
+        self.artist_albums = {}     # artist name -> its album rows (loadAlbumList 0xf004)
+        self.artist_tracks = {}     # (artist, album) -> tracks; (artist, None) the All songs row's
         self.free_mb = 1024
         self.thread_ok = True
         self.album_cover = 0        # toolsGetAlbumCover's result
@@ -121,6 +130,11 @@ class Machine:
                        (O['REC_ARTIST'], artist), (O['REC_NAME'], name)):
             self.setword(r + off, self.cstr(s))
         self.setword(r + O['REC_TYPE'], 8)
+        return r
+
+    def all_songs(self, artist):
+        r = self.record(album='All songs', artist=artist, path='', title='All songs', name='', rid=O['ID_ALL_SONGS'])
+        self.setword(r + O['REC_PATH'], 0); self.setword(r + O['REC_TYPE'], 4)
         return r
 
     def new_deque(self, items=()):
@@ -265,21 +279,69 @@ class Machine:
         # ---- Cover Flow: the stock library
         elif name == 'loadLocalClassList':
             self.calls.append(('loadLocalClassList', a0))
-            self.setword(pod.DATA['PDEQ_SHOWLIST'][0], self.new_deque(self.showlist))
-            ret = len(self.showlist)
+            items = self.class_lists.get(a0, self.showlist)
+            self.setword(pod.DATA['PDEQ_SHOWLIST'][0], self.new_deque(items))
+            ret = len(items)
+        elif name == 'loadAlbumList':
+            # loadAlbumList(0xf004, artist row): the artist's albums, then the "All songs" row
+            # (id -2, type 4, the artist at REC_ARTIST) getAlbumByArtist always appends; class 0xff01
+            artist = self.read_cstr(self.word(a1 + O['REC_TITLE'])) if a1 else ''
+            self.calls.append(('loadAlbumList', a0, a1, artist))
+            items = list(self.artist_albums.get(artist, []))
+            if artist in self.artist_albums: items.append(self.all_songs(artist))
+            self.setword(pod.DATA['PDEQ_SHOWLIST'][0], self.new_deque(items))
+            self.setword(pod.DATA['CLASSINFO'][0], O['CLASS_ARTIST_ALBUMS'])
+            self.classinfo_artist = artist
+            ret = len(items)
         elif name == 'loadAlbumdetailList':
             self.calls.append(('loadAlbumdetailList', a0, a1))
-            self.setword(pod.DATA['PDEQ_SHOWLIST'][0], self.new_deque(self.tracklist))
-            self.setword(pod.DATA['CLASSINFO'][0], O['CLASS_ALBUM_TRACKS'])
-            ret = len(self.tracklist)
+            items, cls = self.tracklist, O['CLASS_ALBUM_TRACKS']
+            if a0 == O['CLASS_ARTIST_ALBUMS']:   # 0xff11: the album by the artist in classinfo
+                rid = struct.unpack('<i', self.u.mem_read(a1 + O['REC_ID'], 4))[0]
+                album = None if rid == O['ID_ALL_SONGS'] else self.read_cstr(self.word(a1 + O['REC_ALBUM']))
+                items, cls = self.artist_tracks.get((self.classinfo_artist, album), []), 0xff11
+            self.setword(pod.DATA['PDEQ_SHOWLIST'][0], self.new_deque(items))
+            self.setword(pod.DATA['CLASSINFO'][0], cls)
+            ret = len(items)
         elif name == 'loadSongList':
             self.calls.append(('loadSongList', self.read_cstr(a1), a2, a3))
-            self.deques[a0] = list(self.tracklist)
-            ret = 1
+            if self.stock_songlist:   # as stock does (@0x4e2ce0): the shown list's songs, class set,
+                ret, out = -1, []    # the first song with this file name and CUE start
+                key = (self.read_cstr(a1), a2)
+                for r in self.deques.get(self.word(pod.DATA['PDEQ_SHOWLIST'][0]), []):
+                    if self.word(r + O['REC_TYPE']) != 8: continue
+                    self.setword(r + O['REC_CLASS'], a3)
+                    out.append(r)
+                    if ret < 0 and (self.read_cstr(self.word(r + O['REC_NAME'])), self.word(r + O['REC_CUE_START'])) == key:
+                        ret = len(out) - 1
+                self.deques[a0] = out
+            else:
+                self.deques[a0] = list(self.tracklist)
+                ret = 1
         elif name == 'navigator_to_with_context':
             ctx = self.read_cstr(a0)
             self.calls.append(('navigator_to_with_context', ctx, self.word(a1 + 4),
                                self.word(a1 + 8), self.word(a1 + 12)))
+            if ctx == 'playing_page':   # the queue as start_player copies it, and the class of its songs
+                q = list(self.deques.get(self.word(a1), []))
+                self.played = (q, self.word(a1 + 4))
+            elif ctx == 'dialog/msginfo_dialog':
+                self.calls.append(('toast', self.read_cstr(a1 + 8), self.word(a1), self.word(a1 + 4)))
+        # ---- Shuffle: the stock play mode, the seed
+        elif name == 'mclGetPlayMode':
+            ret = self.mode
+        elif name == 'mclSetPlayMode':
+            self.mode = a0; self.calls.append(('mclSetPlayMode', a0))
+        elif name == 'notifyPlayMode':
+            self.calls.append(('notifyPlayMode',))
+        elif name == 'dmrSendPlayMode':
+            self.calls.append(('dmrSendPlayMode', a0))
+        elif name == 'write_int_config':
+            self.calls.append(('write_int_config', a0, self.read_cstr(a1), self.read_cstr(a2)))
+        elif name == 'toolsRandnum':
+            ret = self.seed % a0 if a0 else 0
+        elif name == 'time_now_ms':
+            ret = self.clock; u.reg_write(UC_MIPS_REG_A3, 0)
         elif name == 'toolsGetAlbumCover':
             self.calls.append(('toolsGetAlbumCover', self.read_cstr(a0), self.read_cstr(a1)))
             if self.album_cover: self.files[self.read_cstr(a1)] = 4096
@@ -295,6 +357,10 @@ class Machine:
             self.u.mem_write(a0, bytes(self.u.mem_read(a1, a2))); ret = a0
         elif name == 'strcmp':
             x, y = self.read_cstr(a0), self.read_cstr(a1); ret = (x > y) - (x < y)
+        elif name == 'strcasecmp':
+            x, y = self.read_cstr(a0).lower(), self.read_cstr(a1).lower(); ret = (x > y) - (x < y)
+        elif name == '_deque_push_back':
+            self.deques.setdefault(a0, []).append(a1); self.calls.append(('_deque_push_back', a0, a1))
         elif name == 'strdup':
             s = self.read_cstr(a0); a = self.malloc(len(s) + 1)
             self.u.mem_write(a, s.encode() + b'\0'); ret = a
@@ -318,7 +384,7 @@ class Machine:
             self.calls.append(('snprintf', out))
         elif name == 'calloc':
             n = a0 * a1
-            if self.heap + n >= HEAP + HEAP_SIZE: ret = 0
+            if self.heap + n >= HEAP + HEAP_SIZE or self.calloc_fail: ret = 0
             else:
                 ret = self.malloc(n); self.u.mem_write(ret, bytes(n))
             self.calls.append(('calloc', n, ret))
@@ -386,7 +452,14 @@ class Machine:
         u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
 
     saved_album = 0
+    classinfo_artist = ''
     fh = (0, '')
+    stock_songlist = False   # loadSongList: stock's copy of the shown list (Shuffle) or the album mock
+    mode = 0                 # mclGetPlayMode
+    seed = 12345             # toolsRandnum
+    clock = 1                # time_now_ms
+    calloc_fail = False
+    played = None            # (queue records, index) handed to playing_page
     bitmap = None
     bitmap_ok = True
 
@@ -531,7 +604,7 @@ def cover_page_tree(m, asset, runtime=True, legacy=False):
 
 
 COVER_WIDGETS = ['btn_return', 'btn_backtoplayer', 'btn_cancel', 'view_covers', 'view_tracks',
-                 'label_album', 'label_artist', 'label_hint', 'label_status']
+                 'label_album', 'label_artist', 'label_status', 'label_title', 'label_hint']
 
 
 def cover_machine(albums=3, tracks=2, cached=True):
@@ -880,11 +953,18 @@ def main():
     legacy = stock_target(m, cover_page_tree(m, asset, legacy=True), 160, 150)
     expect(legacy[-1] == 'view_tracks',
            f'V2.1dC model: a touch on the covers lands on the hidden view_tracks ({legacy})')
-    for x, y in ((160, 150), (20, 100), (300, 250), (160, 70)):
+    fy = pod_ui.cover_layout(COVER_PAGE)[0]   # the frame's top in the window
+    for x, y in ((160, fy + 66), (20, fy + 16), (300, fy + 166), (160, fy + 2), (160, fy + O['CF_VIEW_H'] - 2)):
         got = stock_target(m, cover_page_tree(m, asset), x, y)
         expect(got[-1] == 'touch_layer', f'a touch at ({x},{y}) reaches the touch layer ({got})')
     got = stock_target(m, cover_page_tree(m, asset), 40, 25)
     expect(got[-1] == 'btn_return', f'the navbar Back button still gets its touches ({got})')
+    if not COVER_PAGE.hint:   # the captions over the frame's bottom rows
+        for y in (pod_ui.ALBUM_Y + 10, pod_ui.ARTIST_Y + 2):
+            got = stock_target(m, cover_page_tree(m, asset), 160, y)
+            expect(got[-1] == 'touch_layer', f'a touch on a caption reaches the covers (insensitive captions) ({got})')
+        got = stock_target(m, cover_page_tree(m, asset), 160, pod_ui.COVER_Y + O['CF_VIEW_H'] + 10)
+        expect(got == ['m1pod_cover_page'], f'below the frame the artist line takes nothing ({got})')
     # the same page on the tracks screen: the list is the target, the covers are out of the way
     m.tap(O['CF_CX'])
     got = stock_target(m, cover_page_tree(m, asset), 160, 150)
@@ -918,7 +998,7 @@ def main():
     # 25. Contrast in the built assets: every button we style inline has a dark background and
     #     light text in every widget state (theme-styled navbar buttons excepted).
     import awtk_ui
-    for asset_name in ('m1pod_menu.bin', 'm1pod_cover.bin'):
+    for asset_name in ('m1pod_menu.bin', 'm1pod_cover.bin') + (('m1pod_artists.bin',) if artists_row(page) is not None else ()):
         tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui',
                                                asset_name), 'rb').read())
         for w in tree.walk():
@@ -935,11 +1015,528 @@ def main():
             expect(w.y + w.h <= CLIENT_H,
                    f'{asset_name}:{w.name or w.type} ends inside the 450 px window ({w.y}+{w.h})')
 
+    # 26. Stage D/F (the V2.1dE page): the hint is there and looked up. Stages with Artists: the
+    #     hint is gone: no label_hint in the asset, none looked up, and the block of frame and
+    #     captions sits centred in the 400 px under the navbar.
+    tree = awtk_ui.parse(open(asset, 'rb').read())
+    if COVER_PAGE.hint:
+        m = cover_machine(albums=3); m.call(cover_open, count=5000000)
+        expect('label_hint' in [w.name for w in tree.walk()], 'the V2.1dE cover page has its hint label')
+        expect(('widget_lookup', 'label_hint') in m.calls, 'the V2.1dE payload looks its hint up')
+        caps = [w for w in tree.walk() if w.name in ('label_album', 'label_artist')]
+        expect([(w.y, w.h) for w in caps] == [(pod_ui.HINT_ALBUM_Y, pod_ui.HINT_ALBUM_H), (pod_ui.HINT_ARTIST_Y, pod_ui.HINT_ARTIST_H)],
+               'the V2.1dE captions are where they were')
+    else:
+        expect('label_hint' not in [w.name for w in tree.walk()], 'the cover page has no hint label')
+        m = cover_machine(albums=3); m.call(cover_open, count=5000000)
+        expect(('widget_lookup', 'label_hint') not in m.calls, 'the payload looks no hint up')
+        frame, art = node(asset_tree(asset), 'view_covers'), pod_ui.COVER_Y + O['CF_TOP']
+        top_gap, bottom_gap = art - 50, CLIENT_H - (pod_ui.ARTIST_Y + pod_ui.ARTIST_H)
+        expect(frame.y == pod_ui.COVER_Y and abs(top_gap - bottom_gap) <= 4,
+               f'the covers and captions are centred under the navbar ({top_gap} above, {bottom_gap} below)')
+        expect(pod_ui.ALBUM_Y >= frame.y + O['CF_TOP'] + O['ART_SIZE'] + O['CF_REFLECT'],
+               'the captions start below the reflections, in the always-black rows of the frame')
+        caps = [w for w in tree.walk() if w.name in ('label_album', 'label_artist')]
+        expect(len(caps) == 2 and all(w.get('sensitive') == 'false' and w.get('visible') != 'false' for w in caps),
+               'the captions are shown but insensitive in the asset')
+        expect(not any(c[0] == 'widget_set_sensitive' and c[1] in (m.widgets['label_album'], m.widgets['label_artist'])
+                       for c in m.calls), 'the payload never makes the captions sensitive')
+
+    if 'artists' in FEATURES:
+        artists_tests(expect, page, asset)
+    if 'shuffle' in FEATURES:
+        shuffle_tests(expect, page)
+
     print(f'{ok} passed, {fail} failed')
     sys.exit(1 if fail else 0)
 
 
-def host_frame(frac):
+def artists_row(page):
+    return next((i for i, r in enumerate(page.rows) if r.action == pod_pages.ACT_ARTISTS), None)
+
+
+def artist_rec(m, name, rid):
+    """An Artists row as getAllArtist / GetAllAlbumArtist leave it: the name in REC_TITLE."""
+    return m.record(album='', artist=name, path='', title=name, name='', rid=rid)
+
+
+def artists_machine(artists=('Miles Davis', 'Nina Simone', 'Unknown Artist')):
+    """A machine with the Artists page's widgets, the stock artist list (class 0xf004), each
+    artist's albums (loadAlbumList) and the library album list (getAllAlbum). Miles Davis has
+    three albums, one of them (Jazz Hits) filed under Various Artists in the library list; Nina
+    Simone has one; Unknown Artist none. Every library album is cached under its library key."""
+    m = cover_machine(albums=0)
+    for n in ('pod_listview', 'pod_scrollview'): m.widget(n)
+    m.props[(m.widgets['pod_scrollview'], 'w')] = 310
+    m.class_lists[O['CLASS_ARTISTS']] = [artist_rec(m, a, -1 if a == 'Unknown Artist' else i + 1)
+                                         for i, a in enumerate(artists)]
+    albums = {'Miles Davis': ['Kind of Blue', 'Jazz Hits', 'Bitches Brew'], 'Nina Simone': ['Pastel Blues'],
+              'Unknown Artist': []}
+    library = []   # getAllAlbum's rows: one per album name
+    for artist, names in albums.items():
+        if artist not in artists: continue
+        m.artist_albums[artist] = []
+        for album in names:
+            path = f'/mnt/mmc/{artist}/{album}/1.flac'
+            m.artist_albums[artist].append(m.record(album=album, artist=artist, path=path, rid=100 + len(library)))
+            lib_artist = 'Various Artists' if album == 'Jazz Hits' else artist
+            library.append(m.record(album=album, artist=lib_artist, path=path, rid=len(library) + 1))
+            c = f'/mnt/mmc/.coverflow/{fnv(fnv(O["FNV_SEED"], lib_artist), album) or 1:08x}.jpg'
+            m.present.update((path, c)); m.files[c] = 4096
+            m.artist_tracks[(artist, album)] = [
+                m.record(album=album, artist=artist, title=f'{album} {t}', name=f'{album}{t}.flac',
+                         path=f'/mnt/mmc/{artist}/{album}/{t}.flac', rid=500 + t) for t in range(2)]
+        m.artist_tracks[(artist, None)] = [t for a in names for t in m.artist_tracks[(artist, a)]]
+    for tracks in m.artist_tracks.values():
+        for t in tracks: m.present.add(m.read_cstr(m.word(t + O['REC_PATH'])))
+    m.class_lists[O['CLASS_ALBUMS']] = library
+    m.showlist = library
+    return m
+
+
+def paint(m):
+    """One EVT_AFTER_PAINT on the touch layer, as stock's widget_paint dispatches it."""
+    m.props[(m.widgets['slide_menu'], 'h')] = O['CF_VIEW_H']
+    event = m.alloc(0x40); m.u.mem_write(event, bytes(0x40))
+    m.setword(event + O['EVENT_PAINT_CANVAS'], 0x22220000)
+    m.call(PSYMS['on_paint'], a0=0, a1=event, count=400000000)
+
+
+def artists_tests(expect, page, cover_asset):
+    """Stage E: the menu's Artists row, the Artists page and Cover Flow scoped to one artist."""
+    import awtk_ui
+    row = artists_row(page)
+    open_ = PSYMS['artists_open']
+    asset = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1pod_artists.bin')
+
+    # 27. The menu's Artists row opens our list, not the stock Artists page; nothing else moved.
+    m = artists_machine()
+    m.call(PSYMS['on_row'], a0=PSYMS['pod_rows_0'] + 12 * row, count=5000000)
+    expect(('window_open', 'm1pod_artists') in m.calls, 'the Artists row opens m1pod_artists')
+    expect('stock_resume' not in m.names(), 'the Artists row no longer opens the stock page')
+    base = pod_pages.MENU_SHUFFLE if 'shuffle' in FEATURES else pod_pages.MENU   # the menu without Artists
+    expect([r.label for r in page.rows] == [r.label for r in base.rows] and
+           [(r.action, r.arg) for i, r in enumerate(page.rows) if i != row] ==
+           [(r.action, r.arg) for i, r in enumerate(base.rows) if i != row],
+           'the menu keeps its rows; only Artists changed')
+
+    # 28. The list is the stock Artists query, one stock-styled row per artist, in its order.
+    m = artists_machine()
+    v = m.call(open_, count=5000000)
+    expect(v == 0, 'artists_open returns 0')
+    expect(('loadLocalClassList', O['CLASS_ARTISTS']) in m.calls, 'the list comes from loadLocalClassList(0xf004)')
+    expect('deque_assign' in m.names(), 'the stock list is copied')
+    sv = m.widgets['pod_scrollview']
+    rows = [c[1] for c in m.calls if c[0] == 'list_item_create']
+    expect(len(rows) == 3 and m.children.get(sv) == rows, f'one row per artist in the scroll view ({len(rows)})')
+    labels = {c[2]: c[1] for c in m.calls if c[0] == 'hscroll_label_create'}
+    texts = {c[1]: c[2] for c in m.calls if c[0] == 'widget_set_text_utf8'}
+    expect([texts.get(labels.get(r)) for r in rows] == ['Miles Davis', 'Nina Simone', 'Unknown Artist'],
+           "each row shows the stock row's name (REC_TITLE), in the stock order")
+    for r in rows:
+        lab = labels.get(r)
+        expect(m.props.get((r, 'style')) == 'list_item_style' and lab
+               and m.props.get((lab, 'style')) == 'srlabel_leftwhite21_style'
+               and m.props.get((lab, 'hscroll_label_set_only_parent_focus')) == 1,
+               'an artist row is a stock list_item with an srlabel_leftwhite21_style label')
+    imgs = [c for c in m.calls if c[0] == 'image_base_set_image']
+    expect(len(imgs) == 3 and all(c[2] == 'right_arrow' for c in imgs), 'every artist row has the right_arrow chevron')
+    clicks = [c for c in m.calls if c[0] == 'widget_on' and c[2] == O['EVT_CLICK'] and c[1] in rows]
+    expect([c[4] for c in clicks] == [0, 1, 2] and all(c[3] == PSYMS['ar_on_artist'] for c in clicks),
+           "each row's click carries its index")
+    expect(m.props.get((sv, 'virtual_h')) == 3 * 52, 'the scroll view is as tall as the rows')
+    expect(m.props.get((m.widgets['label_status'], 'sensitive')) == 0, 'the hidden message takes no touch')
+
+    # 29. Real hit tests (demo's widget_find_target) on the page as the asset and the payload
+    #     leave it: every row is hit through the list_view/scroll_view, the navbar keeps its
+    #     buttons, the hidden message takes nothing.
+    root = asset_tree(asset)
+    if m.props.get((m.widgets['label_status'], 'sensitive')) == 0: node(root, 'label_status').flags &= ~F_SENSITIVE
+    node(root, 'pod_scrollview').children = [Node(f'artist{i}', 0, i * 52, 310, 52) for i in range(len(rows))]
+    for i in range(len(rows)):
+        got = stock_target(m, root, 160, 50 + i * 52 + 26)
+        expect(got[-1] == f'artist{i}' and 'pod_scrollview' in got, f'artist row {i} is hit through the scroll view ({got})')
+    expect(stock_target(m, root, 40, 25)[-1] == 'btn_return', 'Back on the Artists page is hit')
+    expect(stock_target(m, root, 290, 25)[-1] == 'btn_backtoplayer', 'Now Playing on the Artists page is hit')
+    got = stock_target(m, root, 160, 225)
+    expect('label_status' not in got, f'the hidden message is not hit ({got})')
+    tree = awtk_ui.parse(open(asset, 'rb').read())
+    lv = next(w for w in tree.walk() if w.name == 'pod_listview')
+    expect(lv.y == 50 and lv.y + lv.h == CLIENT_H, 'the artist list fills the window under the navbar (50-450)')
+    expect([c.type for c in lv.children] == ['scroll_view', 'scroll_bar_m'], 'list_view > scroll_view + scroll_bar_m, as stock')
+
+    # 30. Back leaves the Artists page; closing it frees its copy.
+    m.call(PSYMS['ar_on_back'], count=200000)
+    expect('navigator_back' in m.names(), 'Back on the Artists page goes back')
+    m.call(PSYMS['ar_on_destroy'], count=200000)
+    expect('deque_destroy' in m.names(), 'closing the Artists page frees its list')
+
+    # 31. An empty library: the message, no rows. A broken asset: leave.
+    m = artists_machine(artists=())
+    m.call(open_, count=2000000)
+    expect('list_item_create' not in m.names(), 'no artists, no rows')
+    expect(any(c[0] == 'widget_set_text_utf8' and 'Update Local Music' in c[2] for c in m.calls), 'no artists says so')
+    expect(m.props.get((m.widgets['pod_listview'], 'sensitive')) == 0
+           and m.props.get((m.widgets['label_status'], 'visible')) == 1, 'the empty list is hidden, the message shown')
+    m = artists_machine(); del m.widgets['pod_scrollview']
+    expect(m.call(open_, count=2000000) == 0xffffffff and 'navigator_back' in m.names(), 'a broken Artists asset closes')
+
+    # 32. Tap an artist: Cover Flow on exactly that artist's albums (the stock loadAlbumList(0xf004)),
+    #     titled with the artist, the All albums card last, the covers the library's cached files.
+    m = artists_machine()
+    m.call(open_, count=5000000)
+    m.call(PSYMS['ar_on_artist'], a0=0, count=8000000)
+    expect(('window_open', 'm1pod_cover') in m.calls, 'an artist opens the Cover Flow page')
+    la = [c for c in m.calls if c[0] == 'loadAlbumList']
+    expect(la and la[0][1] == O['CLASS_ARTISTS'] and la[0][3] == 'Miles Davis', f'the stock artist query runs for that artist ({la[:1]})')
+    expect(any(c[0] == '_deque_push_back' for c in m.calls), "the artist's row is copied")
+    slide = m.widgets.get('slide_menu')
+    expect(slide and len(m.children.get(slide, [])) == 4, 'three albums and the All albums card')
+    expect(('widget_set_text_utf8', m.widgets['label_title'], 'Miles Davis') in m.calls, 'the title is the artist')
+    expect(('widget_set_text_utf8', m.widgets['label_album'], 'Kind of Blue') in m.calls, 'the first album is centred')
+    expect('pthread_create' not in m.names(), "the library's cached covers are used: nothing to build")
+    expect(not any(c[0] == 'fopen' and c[1].endswith('.coverflow/album') for c in m.calls),
+           "the main Cover Flow's last album is not read")
+    jazz = f'/mnt/mmc/.coverflow/{fnv(fnv(O["FNV_SEED"], "Various Artists"), "Jazz Hits"):08x}.jpg'
+    paint(m)
+    loads = [c[1] for c in m.calls if c[0] == 'widget_load_image']
+    expect(('file://' + jazz) in loads, f"the compilation shows the library's cover file ({loads})")
+    expect(not any('00000000' in u for u in loads), 'the card has no cover file of its own')
+    b, data, w, h = m.bitmap
+    frame = bytes(m.u.mem_read(data, w * h * 4))
+    host = host_frame(0, ring=[None] * 3 + [True] * 4)
+    if host is not None:   # q2-pod's bounded artist shelf: nothing left of the first album, no repeats
+        expect(frame == host, 'at the first album nothing is drawn to its left (the host frame of that ring)')
+
+    # 33. The card: All albums over the artist; its tracks are every song of the artist (the stock
+    #     All songs row, class 0xff11), and a track of it plays with that class.
+    m.props[(slide, 'value')] = 3
+    m.call(PSYMS['on_changed'], count=2000000)
+    expect(('widget_set_text_utf8', m.widgets['label_album'], 'All albums') in m.calls, 'the card reads All albums')
+    expect(('widget_set_text_utf8', m.widgets['label_artist'], 'Miles Davis') in m.calls, 'over the artist')
+    m.tap(O['CF_CX'])
+    dl = [c for c in m.calls if c[0] == 'loadAlbumdetailList']
+    expect(dl and dl[0][1] == O['CLASS_ARTIST_ALBUMS'] and m.word(dl[0][2]) == O['ID_ALL_SONGS'] & 0xffffffff,
+           "the card opens the stock All songs row with the artist page's class")
+    order = [c[0] for c in m.calls if c[0] in ('loadAlbumList', 'loadAlbumdetailList')]
+    expect(order == ['loadAlbumList', 'loadAlbumdetailList'], f'the artist goes into the browsing record first ({order})')
+    expect(len([c for c in m.calls if c[0] == 'list_item_create']) == 6, "all of the artist's songs are listed")
+    expect(m.word(pod.DATA['G_CLASS_TYPE'][0]) == 0xff11, 'g_class_type is the artist album class (0xff11)')
+    m.call(PSYMS['on_track'], a0=4, count=2000000)
+    play = [c for c in m.calls if c[0] == 'navigator_to_with_context']
+    expect(('loadSongList', 'Bitches Brew0.flac', 0, 0xff11) in m.calls and play and play[0][3] == 0xff11
+           and play[0][4] == O['PLAY_MODE'], f'a track of the card plays with class 0xff11 ({play})')
+
+    # 34. A centre album: its own tracks by the artist; Back -> covers -> the Artists list.
+    m.call(PSYMS['on_back'], count=2000000)
+    expect('navigator_back' not in m.names(), 'Back from the tracks stays on the covers')
+    m.props[(slide, 'value')] = 1
+    m.call(PSYMS['on_changed'], count=2000000)
+    m.tap(O['CF_CX'])
+    dl = [c for c in m.calls if c[0] == 'loadAlbumdetailList']
+    expect(dl and m.read_cstr(m.word(dl[0][2] + O['REC_ALBUM'])) == 'Jazz Hits', 'the centre album opens')
+    expect(len([c for c in m.calls if c[0] == 'list_item_create']) == 2, 'with its two tracks')
+    m.call(PSYMS['on_back'], count=2000000)
+    m.call(PSYMS['on_back'], count=2000000)
+    expect('navigator_back' in m.names(), 'Back from the covers returns to the Artists list')
+
+    # 35. The shelf has ends: a drag right from the first album does not wrap to the card, a drag
+    #     left from the card does not wrap to the first album.
+    m.props[(slide, 'value')] = 0
+    m.touch('down', 60, t=9000); m.touch('move', 120, t=9300); m.touch('move', 200, t=9600)
+    off = struct.unpack('<i', struct.pack('<I', m.props.get((slide, 'xoffset'), 0) & 0xffffffff))[0]
+    m.touch('up', 200, t=9900); m.settle()
+    expect(off == 0 and not any(c[0] == 'slide_menu_set_value' for c in m.calls), f'the first album is an end (xoffset {off})')
+    m.props[(slide, 'value')] = 3
+    m.touch('down', 250, t=12000); m.touch('move', 150, t=12300); m.touch('move', 20, t=12600)
+    m.touch('up', 20, t=12610); m.settle()
+    expect(not any(c[0] == 'slide_menu_set_value' for c in m.calls), 'the card is the other end')
+    m.props[(slide, 'value')] = 3
+    m.touch('down', 100, t=15000); m.touch('move', 200, t=15300); m.touch('move', 290, t=15600)
+    m.touch('up', 290, t=15900); m.settle()
+    expect(('slide_menu_set_value', 1) in m.calls, 'a drag of two spacings from the card goes back two albums')
+
+    # 36. Closing: the scoped page writes no last album, and the main Cover Flow still reads its own.
+    m.call(PSYMS['on_destroy'], count=2000000)
+    expect('fwrite' not in m.names(), "scoped browsing leaves the main Cover Flow's last album alone")
+    expect(sum(1 for c in m.calls if c[0] == 'deque_destroy') >= 2, "the artist's albums and row are freed")
+    m.files['/mnt/mmc/.coverflow/album'] = 4; m.saved_album = 0x1234abcd
+    m.call(PSYMS['coverflow_open'], count=8000000)
+    expect(any(c[0] == 'fopen' and c[1] == '/mnt/mmc/.coverflow/album' and c[2] == 'rb' for c in m.calls),
+           'the main Cover Flow still reads its last album')
+
+    # 37. One album: no card. No albums: the message. Cover Flow already open: refused.
+    m = artists_machine(); m.call(open_, count=5000000)
+    m.call(PSYMS['ar_on_artist'], a0=1, count=8000000)
+    slide = m.widgets.get('slide_menu')
+    expect(slide and len(m.children.get(slide, [])) == 1, 'an artist with one album gets no card')
+    expect(m.call(PSYMS['ar_on_artist'], a0=0, count=200000) == 0 and
+           [c for c in m.calls if c[0] == 'window_open'] == [], 'Cover Flow does not open twice')
+    m = artists_machine(); m.call(open_, count=5000000)
+    m.call(PSYMS['ar_on_artist'], a0=2, count=8000000)
+    expect('slide_menu' not in m.names() and
+           any(c[0] == 'widget_set_text_utf8' and c[2] == 'No albums' for c in m.calls),
+           'an artist without albums says No albums')
+    expect(m.props.get((m.widgets['view_covers'], 'sensitive')) == 0, 'and its empty frame takes no touch')
+
+    # 38. Kill switch: the entry falls through, so neither page can open.
+    m = artists_machine(); m.present.add('/mnt/mmc/m1pod-off')
+    m.call(PSYMS['m1pod_home_click'], a0=m.icon(str(pod_pages.HOME_ENTRY)), count=200000)
+    expect('window_open' not in m.names() and 'stock_resume' in m.names(), 'the kill switch keeps Artists closed')
+
+    # 39. The scoped page's hit test: the covers take touches through the touch layer.
+    m = artists_machine(); m.call(open_, count=5000000); m.call(PSYMS['ar_on_artist'], a0=0, count=8000000)
+    got = stock_target(m, cover_page_tree(m, cover_asset), 160, pod_ui.COVER_Y + 80)
+    expect(got[-1] == 'touch_layer', f"the artist's covers take touches ({got})")
+
+
+# ======================= Shuffle (stages F and G, patch/shuffle.c) =======================
+def song(m, path, album='', track=0, disc=0, cue=0, kind=8):
+    """A songtable row as getAllMusic's callback leaves it (@0x4e9058)."""
+    name = path.rsplit('/', 1)[1]
+    r = m.record(album=album, path=path, title=name, name=name)
+    m.setword(r + O['REC_TRACK'], track); m.setword(r + O['REC_DISC'], disc)
+    m.setword(r + O['REC_CUE_START'], cue); m.setword(r + O['REC_TYPE'], kind)
+    return r
+
+
+def shuffle_machine(rows, mode=0, clock=1, present=True):
+    """A library (rows of song() arguments) that loadLocalClassList(0xf001) loads, and a stock
+    loadSongList that copies it as the Songs page's row handler gets it."""
+    m = Machine()
+    m.stock_songlist = True
+    m.mode, m.clock = mode, clock
+    m.showlist = [song(m, *r) for r in rows]
+    if present:
+        for r in m.showlist: m.present.add(m.read_cstr(m.word(r + O['REC_PATH'])))
+    return m
+
+
+def field(m, r, off): return m.read_cstr(m.word(r + off))
+
+
+def runs(q, key):
+    """The queue as consecutive runs of equal key(record)."""
+    out = []
+    for r in q:
+        k = key(r)
+        if not out or out[-1][0] != k: out.append((k, []))
+        out[-1][1].append(r)
+    return out
+
+
+def shuffle_tests(expect, page):
+    play = PSYMS['shuffle_play']
+    rows0 = PSYMS['pod_rows_0']
+    K = {pod_pages.SHUFFLE_SONGS: 'Songs', pod_pages.SHUFFLE_ALBUMS: 'Albums', pod_pages.SHUFFLE_FOLDERS: 'Folders'}
+    COUNT = 50000000
+
+    # 26. The rows: right after Cover Flow, one per kind, stock-styled, no chevron (they play, as
+    #     Now Playing's row), and the payload's own row table binds them to ACT_SHUFFLE and the kind.
+    import awtk_ui
+    at = [i for i, r in enumerate(page.rows) if r.action == pod_pages.ACT_SHUFFLE]
+    cover = next(i for i, r in enumerate(page.rows) if r.action == pod_pages.ACT_COVER)
+    expect(at == [cover + 1, cover + 2, cover + 3] and [page.rows[i].arg for i in at] == sorted(K),
+           f'Shuffle Songs, Albums, Folders follow Cover Flow ({at})')
+    tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1pod_menu.bin'), 'rb').read())
+    items = {w.name: w for w in tree.walk() if w.type == 'list_item'}
+    for i in at:
+        w = items.get(f'pod_row{i}')
+        labs = [c.get('text') for c in w.children if c.type == 'hscroll_label'] if w else []
+        expect(labs == [page.rows[i].label] and not any(c.type == 'image' for c in w.children),
+               f'menu row {i} reads "{page.rows[i].label}", no chevron ({labs})')
+        m = Machine()
+        name, action, arg = (m.word(rows0 + 12 * i + o) for o in (0, 4, 8))
+        expect((m.read_cstr(name), action, arg) == (f'pod_row{i}', pod_pages.ACT_SHUFFLE, page.rows[i].arg),
+               f'the payload row table binds pod_row{i} to ACT_SHUFFLE {page.rows[i].arg}')
+
+    lib = [(f'/mnt/mmc/m/{d}/{t:02d}.flac', f'Album {d}', t) for d in 'ABCDE' for t in range(1, 4)]
+
+    # 27. Shuffle Songs from its menu row: the Songs page's stock sequence with its class, the play
+    #     mode set to Shuffle the way the Play settings page sets it, then Now Playing.
+    m = shuffle_machine(lib)
+    m.call(PSYMS['on_row'], a0=rows0 + 12 * at[0], count=COUNT)
+    n = m.names()
+    seq = [c for c in n if c in ('loadLocalClassList', '_create_deque', 'loadSongList', 'access', 'mclSetPlayMode',
+                                 'notifyPlayMode', 'dmrSendPlayMode', 'write_int_config',
+                                 'navigator_to_with_context', 'deque_destroy')]
+    expect(seq == ['loadLocalClassList', '_create_deque', 'loadSongList', 'access', 'mclSetPlayMode', 'notifyPlayMode',
+                   'dmrSendPlayMode', 'write_int_config', 'navigator_to_with_context', 'deque_destroy'],
+           f'Shuffle Songs runs the stock sequence in order ({seq})')
+    expect(('loadLocalClassList', O['CLASS_ALL_SONGS']) in m.calls, "the library is the Songs page's query (0xf001)")
+    ls = [c for c in m.calls if c[0] == 'loadSongList']
+    expect(ls and ls[0][3] == O['CLASS_ALL_SONGS'], f'loadSongList with the Songs class ({ls})')
+    expect(('mclSetPlayMode', O['MODE_SHUFFLE']) in m.calls and ('dmrSendPlayMode', O['MODE_SHUFFLE']) in m.calls
+           and ('write_int_config', O['MODE_SHUFFLE'], 'PLAYSET', 'PLAYMODE') in m.calls and m.mode == O['MODE_SHUFFLE'],
+           'the stock play mode becomes Shuffle, saved as [PLAYSET] PLAYMODE=2')
+    nav = [c for c in m.calls if c[0] == 'navigator_to_with_context']
+    q, idx = m.played
+    expect(len(nav) == 1 and nav[0][1] == 'playing_page' and nav[0][3] == O['CLASS_ALL_SONGS']
+           and nav[0][4] == O['PLAY_MODE'], f'Now Playing opens with {{queue, index, 0xf001, 2}} ({nav})')
+    expect([field(m, r, O['REC_PATH']) for r in q] == [r[0] for r in lib],
+           "the queue is the whole library in the library's order (stock Shuffle draws the play order)")
+    expect(0 <= idx < len(lib) and nav[0][2] == idx, f'it starts on a song of the library ({idx})')
+    expect(all(m.word(r + O['REC_CLASS']) == O['CLASS_ALL_SONGS'] for r in q), 'every queued song carries the class')
+    expect(m.word(pod.DATA['G_CLASS_TYPE'][0]) == O['CLASS_ALL_SONGS'], 'g_class_type is the Songs class')
+    expect(not any(c in n for c in ('timer_add', 'pthread_create', 'widget_on', 'window_open')),
+           'a shuffle leaves nothing behind: no timer, thread, handler or page of its own')
+    starts = set()
+    for clock in range(1, 41):
+        m = shuffle_machine(lib, clock=clock * 7919)
+        m.call(play, a0=pod_pages.SHUFFLE_SONGS, count=COUNT)
+        starts.add(m.played[1])
+    expect(len(starts) >= 8, f'the first song is drawn at random ({sorted(starts)})')
+    m = shuffle_machine(lib)
+    firsts = []
+    for _ in range(6):   # taps in a row keep drawing (the generator is seeded once)
+        m.call(play, a0=pod_pages.SHUFFLE_SONGS, count=COUNT); firsts.append(m.played[1])
+    expect(len(set(firsts)) >= 3, f'repeated taps start on different songs ({firsts})')
+
+    # 28. Duplicate file names (01.flac in every album): loadSongList's match by name would always
+    #     give the first; the drawn song itself plays.
+    dup = [(f'/mnt/mmc/m/{d}/01.flac', f'Album {d}', 1) for d in 'ABCDEFGH']
+    starts = set()
+    for clock in range(1, 31):
+        m = shuffle_machine(dup, clock=clock * 104729)
+        m.call(play, a0=pod_pages.SHUFFLE_SONGS, count=COUNT)
+        starts.add(m.played[1])
+    expect(len(starts) >= 4, f'with duplicate names the start is still random ({sorted(starts)})')
+
+    # 29. Already in Shuffle: nothing is written.
+    m = shuffle_machine(lib, mode=O['MODE_SHUFFLE'])
+    m.call(play, a0=pod_pages.SHUFFLE_SONGS, count=COUNT)
+    expect(not any(c[0] in ('mclSetPlayMode', 'write_int_config') for c in m.calls) and m.played,
+           'Shuffle Songs in Shuffle mode plays without touching the setting')
+
+    # 30. Shuffle Albums: every album once, as one run, in a random order; each album in the stock
+    #     album page's order (disc, then track), untagged ones by file name; album names grouped as
+    #     the stock Albums list groups them (NOCASE); from the first album's first track.
+    albums = [('/mnt/mmc/x/kob/03.flac', 'Kind of Blue', 3), ('/mnt/mmc/x/ar/02.flac', 'Abbey Road', 2),
+              ('/mnt/mmc/x/u/b.mp3', '', 0), ('/mnt/mmc/x/kob/01.flac', 'Kind of Blue', 1),
+              ('/mnt/mmc/x/dbl/cd2/01.flac', 'Double', 1, 2), ('/mnt/mmc/x/ar/01.flac', 'abbey road', 1),
+              ('/mnt/mmc/x/u/a.mp3', '', 0), ('/mnt/mmc/x/dbl/cd1/02.flac', 'Double', 2, 1),
+              ('/mnt/mmc/x/kob/02.flac', 'Kind of Blue', 2), ('/mnt/mmc/x/dbl/cd1/01.flac', 'Double', 1, 1),
+              ('/mnt/mmc/x/ar/03.flac', 'ABBEY ROAD', 3)]
+    want = {'kind of blue': ['/mnt/mmc/x/kob/01.flac', '/mnt/mmc/x/kob/02.flac', '/mnt/mmc/x/kob/03.flac'],
+            'abbey road': ['/mnt/mmc/x/ar/01.flac', '/mnt/mmc/x/ar/02.flac', '/mnt/mmc/x/ar/03.flac'],
+            '': ['/mnt/mmc/x/u/a.mp3', '/mnt/mmc/x/u/b.mp3'],
+            'double': ['/mnt/mmc/x/dbl/cd1/01.flac', '/mnt/mmc/x/dbl/cd1/02.flac', '/mnt/mmc/x/dbl/cd2/01.flac']}
+    orders, good = set(), True
+    for clock in range(1, 25):
+        m = shuffle_machine(albums, mode=O['MODE_REPEAT_ALL'], clock=clock * 2654435)
+        v = m.call(play, a0=pod_pages.SHUFFLE_ALBUMS, count=COUNT)
+        q, idx = m.played
+        got = runs(q, lambda r: field(m, r, O['REC_ALBUM']).lower())
+        good &= (v == 0 and idx == 0 and len(got) == 4 and len(q) == len(albums)
+                 and all([field(m, r, O['REC_PATH']) for r in rs] == want[k] for k, rs in got))
+        orders.add(tuple(k for k, _ in got))
+    expect(good, 'Shuffle Albums queues each album once, contiguous, in album order, from its first track')
+    expect(len(orders) >= 6, f'the albums come in a random order ({len(orders)} orders in 24 taps)')
+    expect(not any(c[0] in ('mclSetPlayMode', 'write_int_config') for c in m.calls), 'Shuffle Albums keeps Repeat all')
+    expect(m.names().count('calloc') == 2 and m.names().count('free') == 2, 'its index and the group ranks are freed')
+    nav = [c for c in m.calls if c[0] == 'navigator_to_with_context']
+    expect(nav and nav[0][1:] == ('playing_page', 0, O['CLASS_ALL_SONGS'], O['PLAY_MODE']),
+           f"Now Playing opens on the first album's first track ({nav})")
+    expect(sorted(field(m, r, O['REC_PATH']) for r in m.played[0]) == sorted(a[0] for a in albums)
+           and sorted(field(m, r, O['REC_NAME']) for r in m.played[0]) == sorted(a[0].rsplit('/', 1)[1] for a in albums),
+           'the in-place reorder moved whole records: every song is there exactly once')
+    for start, end in ((O['MODE_SHUFFLE'], O['MODE_ORDER']), (O['MODE_REPEAT_ONE'], O['MODE_ORDER']),
+                       (O['MODE_ORDER'], None), (O['MODE_REPEAT_ALL'], None)):
+        m = shuffle_machine(albums, mode=start)
+        m.call(play, a0=pod_pages.SHUFFLE_ALBUMS, count=COUNT)
+        if end is None:
+            expect(not any(c[0] == 'mclSetPlayMode' for c in m.calls) and m.played, f'Shuffle Albums keeps mode {start}')
+        else:
+            expect(('mclSetPlayMode', end) in m.calls and ('write_int_config', end, 'PLAYSET', 'PLAYMODE') in m.calls,
+                   f'Shuffle Albums turns mode {start} into List play')
+
+    # 31. Shuffle Folders: by folder (a subfolder is its own), each in file-name order.
+    folders = [('/mnt/mmc/B/2.flac',), ('/mnt/mmc/A/b.flac',), ('/mnt/mmc/B/sub/1.flac',),
+               ('/mnt/mmc/A/a.flac',), ('/mnt/mmc/B/1.flac',), ('/mnt/mmc/C/x.flac', 'Abbey Road', 1)]
+    orders, good = set(), True
+    for clock in range(1, 13):
+        m = shuffle_machine(folders, clock=clock * 31337)
+        m.call(play, a0=pod_pages.SHUFFLE_FOLDERS, count=COUNT)
+        q, idx = m.played
+        got = runs(q, lambda r: field(m, r, O['REC_PATH']).rsplit('/', 1)[0])
+        paths = [[field(m, r, O['REC_PATH']) for r in rs] for _, rs in got]
+        good &= (idx == 0 and sorted(k for k, _ in got) == ['/mnt/mmc/A', '/mnt/mmc/B', '/mnt/mmc/B/sub', '/mnt/mmc/C']
+                 and all(p == sorted(p) for p in paths))
+        orders.add(tuple(k for k, _ in got))
+    expect(good, 'Shuffle Folders queues each folder once, contiguous, in file-name order')
+    expect(len(orders) >= 4, f'the folders come in a random order ({len(orders)} seen)')
+
+    # 32. An empty library: the stock message box, nothing copied, nothing played, the mode untouched.
+    for kind in K:
+        m = shuffle_machine([])
+        v = m.call(play, a0=kind, count=COUNT)
+        expect(v == 0xffffffff and ('toast', 'Update Local Music first', O['MSGINFO_KIND'], O['MSGINFO_MS']) in m.calls
+               and not m.played and '_create_deque' not in m.names() and 'mclSetPlayMode' not in m.names(),
+               f'an empty library: Shuffle {K[kind]} says "Update Local Music first" and plays nothing')
+
+    # 33. The first song is not on the card (card out, stale library): a message, no play, no mode
+    #     change, the queue freed.
+    for kind in K:
+        m = shuffle_machine(lib, present=False)
+        v = m.call(play, a0=kind, count=COUNT)
+        expect(v == 0xffffffff and any(c[0] == 'toast' and c[1] == 'Storage unavailable' for c in m.calls)
+               and not m.played and 'mclSetPlayMode' not in m.names() and 'deque_destroy' in m.names(),
+               f'Shuffle {K[kind]} with the card missing says so and plays nothing')
+
+    # 34. No memory for the album index: a message, the queue freed, nothing played.
+    m = shuffle_machine(albums); m.calloc_fail = True
+    v = m.call(play, a0=pod_pages.SHUFFLE_ALBUMS, count=COUNT)
+    expect(v == 0xffffffff and any(c[0] == 'toast' and 'memory' in c[1] for c in m.calls) and not m.played
+           and 'deque_destroy' in m.names() and 'mclSetPlayMode' not in m.names(),
+           'no memory for the index: Shuffle Albums says so and plays nothing')
+
+    # 35. A huge library: Albums/Folders refuse past SHUFFLE_MAX songs before copying anything;
+    #     Songs is the stock Songs path and has no cap of its own.
+    m = shuffle_machine([])
+    one = song(m, '/mnt/mmc/big/01.flac', 'Big', 1)
+    m.present.add('/mnt/mmc/big/01.flac')
+    big = O['SHUFFLE_MAX']
+    m.showlist = [one] * (big + 1)
+    for kind in (pod_pages.SHUFFLE_ALBUMS, pod_pages.SHUFFLE_FOLDERS):
+        try: v = m.call(play, a0=kind, count=COUNT)
+        except AssertionError: v = None   # still sorting at the step limit: the cap did not hold
+        expect(v == 0xffffffff and any(c[0] == 'toast' and c[1] == 'Too many songs to shuffle' for c in m.calls)
+               and '_create_deque' not in m.names() and 'calloc' not in m.names(),
+               f'{big + 1} songs: Shuffle {K[kind]} refuses before copying the library')
+    # exactly SHUFFLE_MAX passes the cap and goes on to allocate the index (refused here, so the
+    # harness need not sort 65,536 songs)
+    m.played = None
+    m.showlist = [one] * big
+    m.calloc_fail = True
+    v = m.call(play, a0=pod_pages.SHUFFLE_ALBUMS, count=COUNT)
+    expect(v == 0xffffffff and ('calloc', 12 * big, 0) in m.calls
+           and not any(c[0] == 'toast' and c[1] == 'Too many songs to shuffle' for c in m.calls),
+           f'{big} songs pass the cap: the {12 * big}-byte index is the only extra allocation')
+    m.calloc_fail = False
+    # the cost on a real-shaped library: 128 albums of 16 tracks, every album intact
+    m2 = shuffle_machine([(f'/mnt/mmc/l/{a:03d}/{t:02d}.flac', f'Album {a:03d}', 16 - t) for a in range(128)
+                          for t in range(16)])
+    v = m2.call(play, a0=pod_pages.SHUFFLE_ALBUMS, count=2000000000)
+    got = runs(m2.played[0], lambda r: field(m2, r, O['REC_ALBUM'])) if m2.played else []
+    expect(v == 0 and len(got) == 128 and all(len(rs) == 16 and [m2.word(r + O['REC_TRACK']) for r in rs]
+                                              == list(range(1, 17)) for _, rs in got),
+           '2048 songs in 128 albums: every album once, tracks 1-16 in order')
+    print(f'  Shuffle Albums over 2048 songs (128 albums): {m2.icount:,} payload instructions')
+    m.showlist = [one] * (big + 1)
+    v = m.call(play, a0=pod_pages.SHUFFLE_SONGS, count=COUNT)
+    expect(v == 0 and m.played and len(m.played[0]) == big + 1, 'Shuffle Songs plays a library of any size')
+
+    # 36. An unknown kind does nothing at all; the kill switch keeps the whole menu (and so every
+    #     shuffle) away.
+    m = shuffle_machine(lib)
+    expect(m.call(play, a0=7, count=COUNT) == 0xffffffff and not m.calls, 'an unknown kind does nothing')
+    m = shuffle_machine(lib); m.present.add('/mnt/mmc/m1pod-off')
+    m.call(PSYMS['m1pod_home_click'], a0=m.icon(str(pod_pages.HOME_ENTRY)), count=COUNT)
+    expect('stock_resume' in m.names() and 'loadLocalClassList' not in m.names() and 'window_open' not in m.names(),
+           'kill switch: the entry icon is stock again, no menu, no shuffle')
+
+
+def host_frame(frac, ring=None):
     """The same shelf from the host build of patch/coverflow.c: every slot the placeholder, which
     is what the payload has when no cover decodes (widget_load_image fails in the harness)."""
     try:
@@ -950,7 +1547,7 @@ def host_frame(frac):
             lib = hostcf.build(tmp)
             tex = (ctypes.c_uint * (O['ART_SIZE'] * O['ART_SIZE']))()
             for i in range(len(tex)): tex[i] = 0xff2b2b2b
-            frame = hostcf.render(lib, frac, [tex] * 7)
+            frame = hostcf.render(lib, frac, [tex if r else None for r in ring] if ring else [tex] * 7)
             return bytes(frame)
     except Exception as e:                                   # noqa: BLE001 - a host build is optional
         print('  host build failed:', e)

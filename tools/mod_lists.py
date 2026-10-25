@@ -1,0 +1,264 @@
+#!/usr/bin/env python3
+"""iPod-style library lists for the Shanling M1 Plus (asset-only: page styles and ui/*.bin).
+
+The library pages (Folders, Artists/Genres/Composers, Songs, Albums, Album detail, Playlists, Search,
+the Now Playing "jump" list) and the dialogs they open are restyled to the look of the M1 Pod menu:
+black page, rows that are stock `list_item_style` tiles, white left-aligned titles (21 px where the
+row's label box is tall enough), grey secondary text, the stock right chevron, one pressed colour.
+
+Almost every row on these pages is built by demo's code, not by the asset (docs/look-lists.md):
+`folder_create_tablerow`, `localclass_create_tablerow` and `music_create_tablerow` make a table_row
+(310 x 64/60) holding a button themed "btn_tablerow_style" (310 x 60/56, layout
+default(r=1,c=0,x=12,s=8)) with a 40 px icon, an hscroll_label themed "srlabel_item_white_style" and
+a "btn_rightarrow_style" chevron; the album, album-detail, playlist and search rows are list_items
+themed "list_item_style". Their geometry is code, so it stays; their look is whatever those style
+names resolve to. This AWTK resolves a style in the window's own theme first, then in the global
+theme (style_const @0x6d3038 via widget_get_window_theme), and a window's theme is
+styles/<window name>.bin (window_base @0x6761dc: assets_manager_ref(STYLE, theme or name)).
+So each page gets a page theme here, derived at build time from the tree's styles/default.bin (the
+theme mod owns that file; run this mod after it and the lists follow its colours):
+
+  btn_tablerow_style       every state copied from default, bg_color taken from list_item_style's
+                           same state: the table rows (Folders, Artists, Songs, jump list) always
+                           match the list_item_style rows (Albums, Playlists, Search, M1 Pod menu)
+  srlabel_item_white/gold20_style  21 px on the single-line pages (Folders, Artists; label box
+                           56-60 px tall); the two-line rows keep 20 px in their 20 px boxes
+  srlabel_item_gray26_style  defined (copy of srlabel_item_gray18_style): stock creates the Songs
+                           and jump-list artist line with this name, which no theme defines, so it
+                           drew #444444 on #131313 until the row's data loaded
+  playlist_btnitem_style   Import/Export tiles: list_item_style colours (stock pressed #2E2A19)
+  btn_tab_style            Search tabs: grey text on the row colour, the active tab white with a
+                           3 px accent underline (stock: a solid accent block, #FE7E40)
+
+and ui edits: the Songs index letter (view_letter) becomes a dark rounded square with a white
+letter (stock: a light-grey disc, black letter); the add-to dialog presses in the list pressed
+colour (stock olive #2E2A19), and the confirm and sort dialogs follow it too (stock already uses
+the stock list pressed colour #362221 there, so they only change if the theme's does).
+Style colours are stored as R, G, B, A bytes.
+
+Page themes are written for both asset themes (default and theme1, the System > Theme option),
+each derived from its own default.bin, so theme1 keeps its accent. Nothing else changes: every
+widget the app looks up keeps its name, type and geometry; no window gets an open/close animation
+(docs/look-lists.md: the "play from here" handlers loop on navigator_back until Now Playing is on
+top, which an animated close would turn into a hang).
+
+Usage: mod_lists.py SRC_WORKDIR OUT_WORKDIR     (OUT == SRC edits in place)
+"""
+import argparse, os, stat, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import awtk_style, awtk_ui
+from awtk_style import T_INT32, T_UINT32
+from mod_battery import clone_workdir, edit_ui
+
+RAW = 'rootfs/release/assets/{theme}/raw'
+THEMES = ('default', 'theme1')               # asset themes; theme1 only overrides a few files
+STYLE_MODE = 0o744                           # stock styles/*.bin mode
+STYLE_MTIME = 1750924035                     # a stock asset mtime: added files build deterministically
+TITLE_PX = 21                                # the M1 Pod menu's row text (srlabel_leftwhite21_style)
+
+# page (window name == theme name) -> page-theme recipes, in the order they are applied
+PAGES = {
+    'folder_page':         ('rows', 'title'),
+    'localclass_page':     ('rows', 'title'),
+    'allmusic_page':       ('rows', 'gray26'),
+    'playerjumpinfo_page': ('rows', 'gray26'),
+    'playlist_page':       ('tiles',),
+    'search_page':         ('tabs',),
+}
+# ui/*.bin edits (relative to raw/ui of the default theme; none of these exists in theme1)
+UI_EDITS = ('allmusic_page.bin', 'dialog/confirminfo_dialog.bin', 'dialog/sortselect_dialog.bin',
+            'dialog/batchadd_dialog.bin')
+
+BORDER_BOTTOM = 8
+
+
+# ---- AWTK style files: tools/awtk_style.py (styles/*.bin; colours are uint32 0xAABBGGRR) -------
+# Lookup is a linear scan over the items (0x662100), so order does not matter; existing order is kept.
+
+def hexcol(v):
+    """uint32 colour -> '#RRGGBB' (opaque) or '#RRGGBBAA', the form the ui files use."""
+    c = awtk_style.color_to_str(v); return c[:7] if c.endswith('FF') else c
+
+class Theme:
+    """awtk_style.Theme plus the (widget, style)-level helpers the recipes use."""
+    def __init__(self, th): self.th = th
+    @property
+    def items(self): return self.th.items
+    def states(self, wt, name): return self.th.find(wt, name)
+    def find(self, wt, name, state):
+        return next(iter(self.th.find(wt, name, state)), None)
+    def put(self, s):
+        """Replace the entry with the same (widget, style, state), else append."""
+        for i, o in enumerate(self.items):
+            if (o.widget, o.style, o.state) == (s.widget, s.style, s.state): self.items[i] = s; return
+        self.items.append(s)
+
+def copy(s, name=None):
+    return awtk_style.Item(s.widget, name or s.style, s.state, list(s.props))
+
+def parse(d):
+    th = awtk_style.parse(d)
+    assert th.version == 0, 'not an AWTK style file'
+    return Theme(th)
+
+# ---- the palette, read from a theme's default.bin --------------------------------------------
+def palette(base):
+    li = {s.state: s.get('bg_color') for s in base.states('list_item', 'list_item_style')}
+    assert li.get('normal') is not None and li.get('pressed') is not None, 'default.bin has no list_item_style'
+    gold = base.find('hscroll_label', 'srlabel_item_gold20_style', 'normal')
+    gray = base.find('hscroll_label', 'srlabel_item_gray18_style', 'normal')
+    assert gold and gray, 'default.bin lacks the stock row text styles'
+    return dict(row=li, accent=gold.get('text_color'), muted=gray.get('text_color'),
+                white=awtk_style.color_from_str('#FFFFFF'), clear=awtk_style.color_from_str('#00000000'))
+
+# ---- page-theme recipes -------------------------------------------------------------------------
+def r_rows(page, base, pal):
+    """btn_tablerow_style = default's, with list_item_style's background in each state."""
+    src = base.states('button', 'btn_tablerow_style')
+    assert src, 'default.bin has no btn_tablerow_style'
+    for s in src:
+        n = copy(s); n.set('bg_color', pal['row'].get(s.state, pal['row']['normal']), T_UINT32); page.put(n)
+
+def r_title(page, base, pal):
+    for name in ('srlabel_item_white_style', 'srlabel_item_gold20_style'):
+        src = base.states('hscroll_label', name)
+        assert src, f'default.bin has no {name}'
+        for s in src:
+            n = copy(s); n.set('font_size', TITLE_PX, T_UINT32); page.put(n)
+
+def r_gray26(page, base, pal):
+    assert not base.states('hscroll_label', 'srlabel_item_gray26_style'), 'gray26 is defined now: drop this recipe'
+    for s in base.states('hscroll_label', 'srlabel_item_gray18_style'):
+        page.put(copy(s, 'srlabel_item_gray26_style'))
+
+def r_tiles(page, base, pal):
+    src = page.states('button', 'playlist_btnitem_style')
+    assert src, 'playlist page theme has no playlist_btnitem_style'
+    for s in src:
+        s.set('bg_color', pal['row'].get(s.state, pal['row']['normal']), T_UINT32)
+
+def r_tabs(page, base, pal):
+    """Search tabs: grey text on the row colour; the active tab white over a 3 px accent line."""
+    src = page.states('tab_button', 'btn_tab_style')
+    assert len(src) == 10, 'unexpected search tab styles'
+    for s in src:
+        active = s.state.endswith('_of_active')
+        pressed = s.state.startswith('pressed')
+        s.set('bg_color', pal['row']['pressed' if pressed and not active else 'normal'], T_UINT32)
+        s.set('text_color', pal['white'] if active or pressed else pal['muted'], T_UINT32)
+        if active:
+            s.set('border', BORDER_BOTTOM, T_INT32); s.set('border_width', 3, T_UINT32)
+            s.set('border_color', pal['accent'], T_UINT32)
+        else:
+            s.set('border_color', pal['clear'], T_UINT32)
+
+RECIPES = {'rows': r_rows, 'title': r_title, 'gray26': r_gray26, 'tiles': r_tiles, 'tabs': r_tabs}
+
+
+def style_rels():
+    """(theme, page, rel path under rootfs/) of every page theme this mod writes."""
+    return [(t, p, f'release/assets/{t}/raw/styles/{p}.bin') for t in THEMES for p in PAGES]
+
+def added_rels(stock_rootfs):
+    """Page themes that are new files (absent in the stock rootfs): fwtool --allow-added list."""
+    return [rel for _, _, rel in style_rels() if not os.path.exists(os.path.join(stock_rootfs, rel))]
+
+def write_file(path, data, existed):
+    if existed:
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+        os.chmod(path, mode | 0o200); open(path, 'wb').write(data); os.chmod(path, mode)
+    else:
+        open(path, 'wb').write(data); os.chmod(path, STYLE_MODE); os.utime(path, (STYLE_MTIME, STYLE_MTIME))
+
+def read(path):
+    return open(path, 'rb').read() if os.path.exists(path) else None
+
+def build_page_themes(work):
+    # Read every source before writing anything: a theme without its own page file falls back to
+    # default's, so theme1's copy starts from default's file as it was before this mod.
+    sources = {}
+    for theme, page, rel in style_rels():
+        own = read(os.path.join(work, 'rootfs', rel))
+        sources[rel] = (own is not None, own if own is not None else
+                        read(os.path.join(work, RAW.format(theme='default'), 'styles', f'{page}.bin')))
+    report = []
+    for theme, page, rel in style_rels():
+        base_path = os.path.join(work, RAW.format(theme=theme), 'styles', 'default.bin')
+        base_raw = read(base_path)
+        assert base_raw, f'{base_path} missing'
+        base = parse(base_raw)
+        assert awtk_style.serialize(base.th) == base_raw, f'{base_path}: style round trip is not byte-exact'
+        path = os.path.join(work, 'rootfs', rel)
+        existed, old = sources[rel]
+        th = parse(old) if old else Theme(awtk_style.Theme())
+        if old: assert awtk_style.serialize(th.th) == old, f'{rel}: style round trip is not byte-exact'
+        pal = palette(base)
+        for r in PAGES[page]: RECIPES[r](th, base, pal)
+        new = awtk_style.serialize(th.th)
+        assert awtk_style.serialize(awtk_style.parse(new)) == new
+        write_file(path, new, existed)
+        report.append(f'{rel}: {"edited" if existed else "added"} {len(old) if existed else 0} -> {len(new)} bytes '
+                      f'({len(th.items)} styles; {", ".join(PAGES[page])})')
+    return report
+
+
+# ---- ui/*.bin edits -------------------------------------------------------------------------------
+def default_palette(work):
+    return palette(parse(open(os.path.join(work, RAW.format(theme='default'), 'styles', 'default.bin'), 'rb').read()))
+
+def each_state(w, prop, value, only=None):
+    """Set an inline style prop in every state the widget already styles it in (or `only`)."""
+    states = only or sorted({k.split(':')[1] for k, _ in w.props if k.startswith('style:') and k.endswith(':' + prop)})
+    assert states, f'{w.name}: no inline {prop}'
+    for st in states: w.set(f'style:{st}:{prop}', value)
+
+def edit_allmusic(root, pal):
+    """The Songs index letter: a dark rounded square with a white letter, as iPod's."""
+    view, label = root.find('view_letter'), root.find('label_letter')
+    assert view and label and view.type == 'view' and label.type == 'label' and label in view.children
+    view.props = [(k, v) for k, v in view.props if 'bg_image' not in k]
+    for st in ('normal', 'disable', 'focused'):
+        view.set(f'style:{st}:bg_color', '#262626')
+        view.set(f'style:{st}:round_radius', '14')
+        view.set(f'style:{st}:border_color', '#3A3A3A')
+        view.set(f'style:{st}:border_width', '1')
+    each_state(label, 'text_color', '#FFFFFF')
+
+def edit_pressed(root, pal, names, old):
+    """Dialog buttons with an inline pressed colour press in the list's pressed colour."""
+    new = hexcol(pal['row']['pressed'])
+    for n in names:
+        w = root.find(n)
+        assert w is not None and w.get('style:pressed:bg_color', '').upper() in (old, new.upper()), f'{n}: unexpected pressed colour'
+        w.set('style:pressed:bg_color', new)
+
+def ui_edit(rel, root, pal):
+    if rel == 'allmusic_page.bin': edit_allmusic(root, pal)
+    elif rel == 'dialog/confirminfo_dialog.bin': edit_pressed(root, pal, ('btn_cancel', 'btn_enter'), '#362221')
+    elif rel == 'dialog/sortselect_dialog.bin': edit_pressed(root, pal, ('button_return',), '#362221')
+    elif rel == 'dialog/batchadd_dialog.bin': edit_pressed(root, pal, ('btn_addplaylist', 'btn_addfav'), '#2E2A19')
+    else: raise KeyError(rel)
+
+def build_ui(work):
+    pal, report = default_palette(work), []
+    for rel in UI_EDITS:
+        path = os.path.join(work, RAW.format(theme='default'), 'ui', rel)
+        assert not os.path.exists(os.path.join(work, RAW.format(theme='theme1'), 'ui', rel)), f'theme1 has its own {rel}'
+        old, new, _ = edit_ui(path, lambda root, rel=rel: ui_edit(rel, root, pal))
+        shape = lambda d: [(w.type, w.name, w.x, w.y, w.w, w.h) for w in awtk_ui.parse(d).walk()]
+        assert shape(old) == shape(new), f'{rel}: a widget was added, removed, renamed or moved'
+        report.append(f'ui/{rel}: {len(old)} -> {len(new)} bytes')
+    return report
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('src'); ap.add_argument('out')
+    a = ap.parse_args()
+    clone_workdir(a.src, a.out)
+    pal = default_palette(a.out)   # the tree's default.bin: stock, or the theme mod's when stacked after it
+    print('lists: palette from styles/default.bin: row ' + ' / '.join(f'{st} {hexcol(v)}' for st, v in sorted(pal['row'].items()))
+          + f', accent {hexcol(pal["accent"])}, muted {hexcol(pal["muted"])}')
+    for line in build_page_themes(a.out) + build_ui(a.out): print('lists:', line)
+
+if __name__ == '__main__': main()

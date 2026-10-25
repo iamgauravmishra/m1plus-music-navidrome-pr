@@ -84,21 +84,51 @@ def hidden(w):
     return w
 
 
+# Cover Flow's page layout (tests and previews read these). Without the hint (page.hint False, the
+# stages with Artists): the covers and their album/artist lines are one block centred in the 400 px
+# under the navbar: the art's top (COVER_Y + CF_TOP) and the artist line's bottom are each 86 px
+# from the body's edges. The captions sit right under the reflections, in the frame's bottom rows,
+# which are always black (the reflections end at CF_TOP + ART_SIZE + CF_REFLECT = 188 of CF_VIEW_H =
+# 230); they are insensitive, so a touch on them still reaches the covers' touch layer under them
+# (and a tap there is a tap on the centre cover).
+COVER_Y = NAVBAR_H + 60          # view_covers: 110..340
+ALBUM_Y, ALBUM_H = COVER_Y + 192, 34   # label_album, 22 px white: 302..336
+ARTIST_Y, ARTIST_H = ALBUM_Y + ALBUM_H, 28   # label_artist, 18 px grey: 336..364
+# The V2.1dE page (page.hint, stages D and F): the frame right under the navbar, the captions
+# under it (sensitive, as shipped) and the "Tap the centre cover" line near the bottom.
+HINT_COVER_Y = NAVBAR_H + 6      # view_covers: 56..286
+HINT_ALBUM_Y, HINT_ALBUM_H = 300, 32
+HINT_ARTIST_Y, HINT_ARTIST_H = 334, 26
+HINT_Y = 392
+
+
+def cover_layout(page):
+    """(frame y, album y, album h, artist y, artist h) of a cover page."""
+    if page.hint: return HINT_COVER_Y, HINT_ALBUM_Y, HINT_ALBUM_H, HINT_ARTIST_Y, HINT_ARTIST_H
+    return COVER_Y, ALBUM_Y, ALBUM_H, ARTIST_Y, ARTIST_H
+
+
 def build_cover_page(page):
-    """Cover Flow's page: the covers frame, the album and artist captions under it, a hint, and
-    the first-run cache build's progress label and Cancel button. patch/coverflow.c fills
-    view_covers with a stock slide_menu and view_tracks with the album's track list; the geometry
-    here must match the CF_* constants in patch/offsets.inc."""
+    """Cover Flow's page: the covers frame, the album and artist captions under the covers, the
+    hint line (page.hint only), and the first-run cache build's progress label and Cancel button.
+    patch/coverflow.c fills view_covers with a stock slide_menu and view_tracks with the album's
+    track list; the frame's size must match the CF_* constants in patch/offsets.inc."""
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
     root.children.append(navbar(page.title))
-    frame = Widget('view', 0, NAVBAR_H + 6, SCREEN_W, 230, [('name', 'view_covers')])
+    fy, ay, ah, ry, rh = cover_layout(page)
+    frame = Widget('view', 0, fy, SCREEN_W, 230, [('name', 'view_covers')])
     styled(frame, ('normal',), 'bg_color', '#000000')
     root.children.append(frame)
-    root.children.append(label('label_album', 10, 300, SCREEN_W - 20, 32, '', 22, '#FFFFFF'))
-    root.children.append(label('label_artist', 10, 334, SCREEN_W - 20, 26, '', 18, '#AAAAAA'))
-    root.children.append(label('label_hint', 10, 392, SCREEN_W - 20, 24,
-                               'Tap the centre cover to open the album', 15, '#888888'))
+    caps = (label('label_album', 10, ay, SCREEN_W - 20, ah, '', 22, '#FFFFFF'),
+            label('label_artist', 10, ry, SCREEN_W - 20, rh, '', 18, '#AAAAAA'))
+    for cap in caps:
+        if not page.hint:
+            cap.set('sensitive', 'false')   # over the frame's black rows: the touch layer takes the touch
+        root.children.append(cap)
+    if page.hint:
+        root.children.append(label('label_hint', 10, HINT_Y, SCREEN_W - 20, 24,
+                                   'Tap the centre cover to open the album', 15, '#888888'))
     status = label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, '#FFFFFF')
     root.children.append(hidden(status))
     cancel = Widget('button', 100, 260, 120, 46, [('name', 'btn_cancel'), ('enable', 'true'),
@@ -119,9 +149,48 @@ def build_cover_page(page):
     return root
 
 
+def stock_list(rows, scroll):
+    """The structure and properties of systemset/sysset_page.bin's list, the stock scrolling list:
+    list_view (default_item_height, black in every state) > scroll_view (310 wide when a bar is
+    there, the speed scales) + scroll_bar_m (10 px, max 1000) at the right."""
+    list_h = CLIENT_H - NAVBAR_H
+    sv_w = SCREEN_W - 10 if scroll else SCREEN_W
+    lv = Widget('list_view', 0, NAVBAR_H, SCREEN_W, list_h, [
+        ('name', 'pod_listview'), ('default_item_height', str(ROW_H))])
+    for st in ('normal', 'disable', 'focused'):
+        lv.set(f'style:{st}:bg_color', '#000000')
+    for st in ('normal', 'disable', 'focused'):
+        lv.set(f'style:{st}:border_color', '#00000000')
+    lv.set('style:normal:border_width', '0')
+    sv = Widget('scroll_view', 0, 0, sv_w, list_h, [
+        ('name', 'pod_scrollview'), ('yspeed_scale', '1'), ('xspeed_scale', '1')])
+    for i, r in enumerate(rows):
+        chevron = r.action not in (pod_pages.ACT_PLAYER, pod_pages.ACT_SHUFFLE)   # rows that play: no chevron
+        sv.children.append(row_item(f'pod_row{i}', i * ROW_H, r.label, chevron, ROW_H, sv_w))
+    lv.children = [sv]
+    if scroll:   # stock's scroll bar, only when there is something to scroll
+        lv.children.append(Widget('scroll_bar_m', sv_w, 0, 10, list_h,
+                                  [('name', 'scroll_bar_m'), ('max', '1000')]))
+    return lv
+
+
+def build_list_page(page):
+    """A page whose rows the payload builds at runtime (patch/artists.c): the navbar over an
+    empty stock list (with its scroll bar: the rows usually overflow), and a hidden message line
+    for an empty library."""
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    root.children.append(navbar(page.title))
+    root.children.append(stock_list([], True))
+    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, '#FFFFFF')))
+    return root
+
+
 def build_page(page):
     if page.kind == 'cover':
         return build_cover_page(page)
+    if page.kind == 'list':
+        return build_list_page(page)
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
     root.children.append(navbar(page.title))
@@ -133,32 +202,8 @@ def build_page(page):
         styled(lab, ('normal',), 'text_align_h', 'center')
         styled(lab, ('normal',), 'text_align_v', 'top')
         root.children.append(lab)
-    rows = len(page.rows)
-    if not rows: return root
-    # The structure and properties of systemset/sysset_page.bin's list, the stock scrolling list:
-    # list_view (default_item_height, black in every state) > scroll_view (310 wide, the speed
-    # scales) + scroll_bar_m (10 px, max 1000) at the right.
-    list_h = CLIENT_H - NAVBAR_H
-    h = ROW_H
-    scroll = rows * h > list_h
-    sv_w = SCREEN_W - 10 if scroll else SCREEN_W
-    lv = Widget('list_view', 0, NAVBAR_H, SCREEN_W, list_h, [
-        ('name', 'pod_listview'), ('default_item_height', str(h))])
-    for st in ('normal', 'disable', 'focused'):
-        lv.set(f'style:{st}:bg_color', '#000000')
-    for st in ('normal', 'disable', 'focused'):
-        lv.set(f'style:{st}:border_color', '#00000000')
-    lv.set('style:normal:border_width', '0')
-    sv = Widget('scroll_view', 0, 0, sv_w, list_h, [
-        ('name', 'pod_scrollview'), ('yspeed_scale', '1'), ('xspeed_scale', '1')])
-    for i, r in enumerate(page.rows):
-        chevron = r.action != pod_pages.ACT_PLAYER
-        sv.children.append(row_item(f'pod_row{i}', i * h, r.label, chevron, h, sv_w))
-    lv.children = [sv]
-    if scroll:   # stock's scroll bar, only when there is something to scroll
-        lv.children.append(Widget('scroll_bar_m', sv_w, 0, 10, list_h,
-                                  [('name', 'scroll_bar_m'), ('max', '1000')]))
-    root.children.append(lv)
+    if not page.rows: return root
+    root.children.append(stock_list(page.rows, len(page.rows) * ROW_H > CLIENT_H - NAVBAR_H))
     return root
 
 

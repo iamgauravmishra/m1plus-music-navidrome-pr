@@ -104,8 +104,36 @@ Home destination.
    return 0 (handled).
 
 Row actions: open a stock Home destination (through the dispatcher with a fake numeric icon), open
-Now Playing, open another M1 Pod page, or open **Cover Flow** (`ACT_COVER`, `patch/coverflow.c`,
-`docs/coverflow.md`), which creates its own window from `ui/m1pod_cover.bin` and installs no hook.
+Now Playing, open another M1 Pod page, open **Cover Flow** (`ACT_COVER`, `patch/coverflow.c`,
+`docs/coverflow.md`), which creates its own window from `ui/m1pod_cover.bin` and installs no hook,
+(stages E, G) open the **Artists** list (`ACT_ARTISTS`, `patch/artists.c`, `docs/artists.md`), whose
+rows open Cover Flow on one artist's albums, or (stages F, G) **shuffle** (`ACT_SHUFFLE`,
+`patch/shuffle.c`, `docs/shuffle.md`): one call that queues the library through the stock Songs path
+and opens Now Playing; no hook either.
+
+### Stages and features
+
+`tools/pod_pages.py` `STAGES` lists each stage's pages; stage E, F and G are stage D's menu and Cover
+Flow plus one or both **payload features**:
+
+| stage | pages | features | package |
+|---|---|---|---|
+| A | menu without Cover Flow (no hook) | | V2.1dA |
+| B | hello | | V2.1dH |
+| C | menu without Cover Flow | | V2.1dM |
+| D | menu + Cover Flow (with its hint line) | | V2.1dE, every look (eT eL eB, fN fA fI fK) |
+| E | menu with Artists repointed + Cover Flow without the hint + Artists | artists | V2.1fR |
+| F | menu with the three Shuffle rows + Cover Flow (with the hint) | shuffle | V2.1fS |
+| G | menu with both + Cover Flow without the hint + Artists | artists, shuffle | V2.1gA |
+
+A stage's features are read off its rows (`stage_features`: `ACT_ARTISTS` → artists, `ACT_SHUFFLE` →
+shuffle). For each feature `tools/pod.py` compiles its own source (`artists.c`, `shuffle.c`) after
+`m1pod.c` and `coverflow.c`, and passes `-DPOD_ARTISTS` / `-DPOD_SHUFFLE` to every source. The shared
+sources keep the feature code under `#ifdef`: `m1pod.c` dispatches `ACT_ARTISTS` / `ACT_SHUFFLE` only
+with the define, and `coverflow.c`'s artist scope and hint-free page are `#ifdef POD_ARTISTS`, its
+`#ifndef POD_ARTISTS` halves being the V2.1dE code as shipped. So stage D still compiles to the
+V2.1dE payload byte for byte, E to V2.1fR's and F to V2.1fS's (both as on their branches), and G is
+the union. `test/patch.py` runs each feature's tests on the stages that have it.
 
 ## The pages
 
@@ -256,8 +284,19 @@ button combo is unverified), so:
     `list_view`/`scroll_view`. **Flashed 2026-10-25: swiping works**; the track list was white on
     white and the menu still could not scroll (450 px window, see `docs/coverflow.md`).
   - **V2.1dE:** stock-styled rows (`list_item_style`) for the menu and the track list, every page
-    laid out in 450 px, the menu a stock-structured scrolling list of 52 px rows. Not yet
-    hardware-tested.
+    laid out in 450 px, the menu a stock-structured scrolling list of 52 px rows. Works on the
+    device (2026-10-25), as does V2.1eA, the four looks on top of it.
+  - **V2.1fR — Artists (stage E):** on V2.1eA, the menu's Artists row opens an M1 Pod artist list
+    (`ui/m1pod_artists.bin`, rows built from the stock `loadLocalClassList(0xf004)`), and an artist
+    opens Cover Flow scoped to its albums. Still one hook; one more pinned stock function
+    (`loadAlbumList` `0x4ee8d8`) and two more libc GOT slots (`strcasecmp`, `_deque_push_back`).
+    Not yet hardware-tested (`docs/artists.md`).
+  - **V2.1fS — Shuffle (stage F):** Shuffle Songs / Albums / Folders rows after Cover Flow
+    (`patch/shuffle.c`): one call queues the library through the stock Songs path and opens Now
+    Playing. Still one hook; seven more pinned stock functions (play mode, random, message box).
+    Not yet hardware-tested (`docs/shuffle.md`).
+  - **V2.1gA — both (stage G):** Artists and Shuffle in one payload (22,824 bytes, 256 of
+    `.scratch`), under the font, the four looks and lock screen 2 (`docs/full.md`).
 
   Rule learnt from V2.1dD: **normal windows are 450 px tall** (under the 30 px `system_bar`);
   only `fullscreen` windows get 480.
@@ -280,7 +319,10 @@ space step, as in V2.1cLB), so flashing one does not lose them.
   (open, cache build, cancel, album, play, Back, close, empty library, no space, broken asset) plus
   a byte-for-byte comparison of the payload's rendered frame against the host build of the same
   renderer, plus hit tests run on demo's own `widget_find_target`, row styles and window bounds.
-  128/128 (Cover Flow), 17/17 (menu), 15/15 (hello), 17/17 (inert).
+  128/128 (Cover Flow), 17/17 (menu), 15/15 (hello), 17/17 (inert) at V2.1dE. After the f-series
+  merge, each feature's tests run on the stages that carry it (`pod_pages.stage_features`): A 17,
+  B 15, C 17, D 132 (four more checks of the V2.1dE cover page), E 203 (Artists, `docs/artists.md`),
+  F 182 (Shuffle, `docs/shuffle.md`), G 253 (both).
 - **Host renderer test** `test/coverflow.py` builds `patch/coverflow.c` for the host and checks the
   depth renderer's geometry, compositing, brightness ladder, reflection and cache key, and writes
   the preview PNGs. 23/23.

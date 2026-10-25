@@ -14,7 +14,12 @@
  */
 #include "offsets.inc"
 
-enum { ACT_HOME = 0, ACT_PAGE = 1, ACT_PLAYER = 2, ACT_COVER = 3 };
+/* ACT_* mirror tools/pod_pages.py. The feature actions exist only in the stages that carry the
+ * feature: tools/pod.py compiles patch/artists.c / patch/shuffle.c and defines POD_ARTISTS /
+ * POD_SHUFFLE for those stages alone, so stage D builds exactly the V2.1dE payload. */
+enum { ACT_HOME = 0, ACT_PAGE = 1, ACT_PLAYER = 2, ACT_COVER = 3, ACT_SHUFFLE = 4, ACT_ARTISTS = 8 };
+
+extern int artists_open(void);   /* patch/artists.c: the Artists list, its own page */
 
 struct pod_row {
     const char *name;   /* row widget name in the asset (pod_row0, pod_row1, ...) */
@@ -79,6 +84,12 @@ static int on_row(void *ctx, void *e) {
     else if (row->action == ACT_PAGE) open_page(row->arg);
     else if (row->action == ACT_PLAYER) on_backtoplayer_onclick((void *)0, (void *)0);
     else if (row->action == ACT_COVER) coverflow_open();   /* patch/coverflow.c; its own page */
+#ifdef POD_ARTISTS
+    else if (row->action == ACT_ARTISTS) artists_open();
+#endif
+#ifdef POD_SHUFFLE
+    else if (row->action == ACT_SHUFFLE) shuffle_play(row->arg); /* patch/shuffle.c; plays, no page */
+#endif
     return RET_OK;
 }
 

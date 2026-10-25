@@ -12,8 +12,16 @@
  * (keys 172/173, ringnav, scrub) are gone; a transparent touch layer of the page's own drives the
  * stock slide_menu (drag, fling, snap, tap by x).
  *
- * No stock function is hooked. The page is opened from a row of the M1 Pod menu, and everything
- * here is reached only from that page's own widgets, timers and its one worker thread.
+ * No stock function is hooked. The page is opened from a row of the M1 Pod menu (the library's
+ * albums) or, in the stages with Artists, from a row of the M1 Pod Artists list (one artist's
+ * albums, coverflow_artist: q2-pod's ARTIST_ALBUMS scope, with the stock "All songs" row as its All
+ * albums card), and everything here is reached only from that page's own widgets, timers and its
+ * one worker thread.
+ *
+ * POD_ARTISTS (tools/pod.py defines it for the stages with Artists, docs/artists.md) selects the
+ * artist scope and the page without the hint line. Without it this file compiles to exactly the
+ * V2.1dE Cover Flow (stage D, the device build), so its #ifndef POD_ARTISTS halves are that code
+ * as shipped and must not be edited; new work goes into the POD_ARTISTS halves.
  */
 #include "offsets.inc"
 
@@ -267,6 +275,9 @@ void cf_sample(const unsigned char *data, unsigned w, unsigned h, unsigned strid
 #define MAX_ALBUMS 4000 /* the job array and the slide_menu's children are bounded */
 
 enum { CF_COVERS, CF_PREPARING, CF_TRACKS }; /* CF_COVERS is 0: a zeroed cf is on it */
+#ifdef POD_ARTISTS
+enum { ARTIST_ALBUMS = 1 };                   /* cf.scoped, as q2-pod's */
+#endif /* POD_ARTISTS */
 
 typedef struct {
     char *track; /* the album's first track, copied so the thread never reads stock deques */
@@ -274,10 +285,28 @@ typedef struct {
 } job_t;
 
 static struct {
+#ifndef POD_ARTISTS
     void *win, *covers, *slide, *name, *artist, *hint, *status, *cancel, *tracks;
+#else /* POD_ARTISTS */
+    void *win, *covers, *slide, *name, *artist, *status, *cancel, *tracks;
+#endif /* POD_ARTISTS */
     void *input;                  /* the transparent touch layer over the covers */
     void *albums;                 /* our copy of the stock album rows */
+#ifdef POD_ARTISTS
+    unsigned count;               /* how many of them are covers (scoped: the card only with two albums) */
+#endif /* POD_ARTISTS */
     void *loaded;                 /* the *pdeq_showlist the track rows were built from */
+#ifdef POD_ARTISTS
+    int cls;                      /* the class that list was loaded with: 0xff10, or 0xff11 scoped */
+    /* Scoped (ARTIST_ALBUMS, else 0): albums holds one artist's album rows as the stock artist
+     * page lists them (loadAlbumList 0xf004), the last one the stock "All songs" row, shown as
+     * the All albums card; artist_row is a deque holding our copy of that artist's row; keys[i]
+     * is album i's cache key, the library album of the same name's, so the covers are the main
+     * Cover Flow's files. No saved album: the main Cover Flow's last album is left alone. */
+    int scoped;
+    void *artist_row;
+    unsigned *keys;
+#endif /* POD_ARTISTS */
     job_t *jobs;
     unsigned long thread;
     unsigned timer;
@@ -315,7 +344,11 @@ static void show(void *w, int on) {
     widget_set_sensitive(w, on);
 }
 
+#ifndef POD_ARTISTS
 static unsigned album_count(void) { return cf.albums ? deque_size(cf.albums) : 0; }
+#else /* POD_ARTISTS */
+static unsigned album_count(void) { return cf.albums ? cf.count : 0; }
+#endif /* POD_ARTISTS */
 static void *album_at(unsigned i) { return i < album_count() ? deque_at(cf.albums, i) : (void *)0; }
 
 static unsigned album_key(void *r) {
@@ -323,6 +356,18 @@ static unsigned album_key(void *r) {
     return h | !h;
 }
 
+#ifdef POD_ARTISTS
+/* The All albums card: the "All songs" row the stock artist query appends (getAlbumByArtist). */
+static int is_card(void *r) { return cf.scoped && r && I(r, REC_ID) == ID_ALL_SONGS; }
+
+/* Album i's cache key; 0 (the card) has no art. */
+static unsigned key_at(unsigned i) {
+    void *r = album_at(i);
+    if (!r || is_card(r)) return 0;
+    return cf.keys ? cf.keys[i] : album_key(r);
+}
+
+#endif /* POD_ARTISTS */
 /* ART_DIR/<key>.jpg<suffix>; out holds at least 64 bytes. */
 static char *art_path(char *out, unsigned size, unsigned key, const char *suffix) {
     snprintf(out, size, ART_DIR "/%08x.jpg%s", key, suffix);
@@ -449,10 +494,19 @@ static int decode(const char *url, unsigned *out, int unload) {
 /* Album a's cached art in buf, else the placeholder (no art, or no cache file yet). */
 static const unsigned *fx_load(int a, unsigned *buf) {
     char url[80];
+#ifndef POD_ARTISTS
     void *r = album_at((unsigned)a);
     if (r) {
+#else /* POD_ARTISTS */
+    unsigned key = key_at((unsigned)a);
+    if (key) {
+#endif /* POD_ARTISTS */
         memcpy(url, "file://", 8);
+#ifndef POD_ARTISTS
         art_path(url + 7, sizeof url - 7, album_key(r), "");
+#else /* POD_ARTISTS */
+        art_path(url + 7, sizeof url - 7, key, "");
+#endif /* POD_ARTISTS */
         if (!access(url + 7, F_OK) && file_size(url + 7) > 0 && decode(url, buf, 1)) return buf;
     }
     return fx.tex + CF_RING * CF_TEXELS;
@@ -504,7 +558,11 @@ static int visual(void *s, int n, int *c, int *frac) {
 
 /* The slide_menu's own EVT_AFTER_PAINT: the covers are drawn over its (empty) children. */
 static int on_paint(void *ctx, void *e) {
+#ifndef POD_ARTISTS
     int c, frac, n, r[4];
+#else /* POD_ARTISTS */
+    int c, frac, n, k, r[4];
+#endif /* POD_ARTISTS */
     const unsigned *ring[CF_RING];
     void *canvas = e ? *(void **)((char *)e + EVENT_PAINT_CANVAS) : (void *)0;
     (void)ctx;
@@ -512,6 +570,11 @@ static int on_paint(void *ctx, void *e) {
     n = (int)widget_count_children(cf.slide);
     if (!visual(cf.slide, n, &c, &frac)) return RET_OK;
     fx_window(c, n, ring);
+#ifdef POD_ARTISTS
+    if (cf.scoped) /* an artist's shelf stops at both ends (q2-pod coverflow_bounded): no repeats */
+        for (k = 0; k < CF_RING; ++k)
+            if ((unsigned)(c + k - CF_REACH) >= (unsigned)n) ring[k] = 0;
+#endif /* POD_ARTISTS */
     if (!fx.drawn || c != fx.c || frac != fx.frac) {
         unsigned *d = (unsigned *)bitmap_lock_buffer_for_write(fx.frame);
         if (!d) return RET_OK;
@@ -530,23 +593,45 @@ static int on_paint(void *ctx, void *e) {
 static void flat_cover(void *img, unsigned i, int near) {
     char url[80];
     const char *want = PLACEHOLDER;
+#ifndef POD_ARTISTS
     void *r = near ? album_at(i) : (void *)0;
     if (r) {
+#else /* POD_ARTISTS */
+    unsigned key = near ? key_at(i) : 0;
+    if (key) {
+#endif /* POD_ARTISTS */
         memcpy(url, "file://", 8);
+#ifndef POD_ARTISTS
         art_path(url + 7, sizeof url - 7, album_key(r), "");
+#else /* POD_ARTISTS */
+        art_path(url + 7, sizeof url - 7, key, "");
+#endif /* POD_ARTISTS */
         if (!access(url + 7, F_OK) && file_size(url + 7) > 0) want = url;
     }
     if (strcmp(widget_get_prop_str(img, "image", ""), want)) image_base_set_image(img, want);
 }
 
+#ifdef POD_ARTISTS
+/* Album over artist under the covers; the card is All albums over the artist. */
+static void captions(void *r) {
+    widget_set_text_utf8(cf.name, is_card(r) ? "All albums" : cf_str(r, REC_ALBUM));
+    widget_set_text_utf8(cf.artist, cf_str(r, REC_ARTIST));
+}
+
+#endif /* POD_ARTISTS */
 static void show_album(void) {
     unsigned n = album_count(), c = (unsigned)widget_get_prop_int(cf.slide, "value", 0);
     void *r = album_at(c);
     if (!r) return;
     cf.album = (int)c;
+#ifndef POD_ARTISTS
     cf.saved_album = album_key(r);
     widget_set_text_utf8(cf.name, cf_str(r, REC_ALBUM));
     widget_set_text_utf8(cf.artist, cf_str(r, REC_ARTIST));
+#else /* POD_ARTISTS */
+    if (!cf.scoped) cf.saved_album = album_key(r);
+    captions(r);
+#endif /* POD_ARTISTS */
     if (!fx.frame) {
         unsigned i;
         for (i = 0; i < n; ++i) {
@@ -589,6 +674,17 @@ static int stride(void) { return widget_get_prop_int(cf.slide, "h", CF_VIEW_H); 
 static int offset(void) { return widget_get_prop_int(cf.slide, "xoffset", 0); }
 static void set_offset(int off) { widget_set_prop_int(cf.slide, "xoffset", off); }
 
+#ifdef POD_ARTISTS
+static int clamp_i(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+/* Scoped, the shelf has ends: an offset of `albums` covers (positive: towards the first album)
+ * stays within the artist's albums, so p = value - offset / h never leaves 0..n-1. */
+static int bound(int albums) {
+    int v = widget_get_prop_int(cf.slide, "value", 0), n = (int)widget_count_children(cf.slide);
+    return cf.scoped ? clamp_i(albums, v - (n - 1), v) : albums;
+}
+
+#endif /* POD_ARTISTS */
 static void snap_stop(void) {
     if (cf.snap_timer) timer_remove(cf.snap_timer);
     cf.snap_timer = 0;
@@ -629,7 +725,11 @@ static int on_snap(const void *unused) {
  * previous albums, as a drag to the right does). */
 static void snap(int albums) {
     snap_stop();
+#ifndef POD_ARTISTS
     cf.snap_to = albums * stride();
+#else /* POD_ARTISTS */
+    cf.snap_to = bound(albums) * stride();
+#endif /* POD_ARTISTS */
     cf.snap_timer = timer_add(on_snap, (void *)0, SNAP_MS);
 }
 
@@ -660,7 +760,14 @@ static int on_pointer(void *ctx, void *e) {
     } else if (type == EVT_POINTER_MOVE && cf.dragging) {
         int dx = x - cf.down_x;
         if (abs_i(dx) > TAP_SLOP || abs_i(pe(e, PE_Y) - cf.down_y) > TAP_SLOP) cf.moved = 1;
+#ifndef POD_ARTISTS
         if (cf.moved) set_offset(cf.base_off + dx * stride() / DRAG_PX);
+#else /* POD_ARTISTS */
+        if (cf.moved) {
+            int h = stride(), off = cf.base_off + dx * h / DRAG_PX;
+            set_offset(cf.scoped ? clamp_i(off, bound(-0x7fff) * h, bound(0x7fff) * h) : off);
+        }
+#endif /* POD_ARTISTS */
         cf.x0 = cf.x1, cf.t0 = cf.t1, cf.x1 = x, cf.t1 = pe(e, EV_TIME);
     } else if ((type == EVT_POINTER_UP || type == EVT_POINTER_ABORT) && cf.dragging) {
         int h = stride(), off = offset(), dt = pe(e, EV_TIME) - cf.t0, fling = 0, albums;
@@ -690,10 +797,15 @@ static void to_covers(void) {
     show(cf.cancel, 0);
     show(cf.tracks, 0);
     widget_destroy_children(cf.tracks);
+#ifndef POD_ARTISTS
     show(cf.covers, 1);
     show(cf.name, 1);
     show(cf.artist, 1);
     show(cf.hint, 1);
+#else /* POD_ARTISTS */
+    show(cf.covers, 1); /* the captions are never hidden, and stay insensitive (the asset): they
+                         * lie over the frame's black bottom rows, so its touch layer gets the touch */
+#endif /* POD_ARTISTS */
     if (!cf.slide) {
         unsigned n = album_count(), i;
         int depth = fx_open();
@@ -733,10 +845,25 @@ static void to_covers(void) {
  * loadSongList and opens playing_page with the stock context, as that page's row handler does
  * (@0x5275a4).
  */
-/* The stock album query, into *pdeq_showlist (which this page then owns while it is up). */
+/* The stock album query, into *pdeq_showlist (which this page then owns while it is up). Scoped,
+ * the artist page's two steps: loadAlbumList(0xf004, artist) puts the artist into the stock
+ * browsing record (album_page_init), then loadAlbumdetailList(0xff01, row) loads that album's songs
+ * by the artist, or for the "All songs" row every song of the artist (albuminfo_page_init with the
+ * artist page's class). The first step is repeated each time: something else may have reused the
+ * record since. */
 static void *load_tracks(void *album) {
+#ifndef POD_ARTISTS
     loadAlbumdetailList(CLASS_ALBUMS, album);
     *(int *)G_CLASS_TYPE = *(int *)CLASSINFO; /* 0xff10, as albuminfo_page_init sets it */
+#else /* POD_ARTISTS */
+    if (cf.scoped) {
+        loadAlbumList(CLASS_ARTISTS, deque_at(cf.artist_row, 0));
+        loadAlbumdetailList(CLASS_ARTIST_ALBUMS, album);
+    } else
+        loadAlbumdetailList(CLASS_ALBUMS, album);
+    cf.cls = *(int *)CLASSINFO;               /* 0xff10 (0xff11 scoped), as albuminfo_page_init */
+    *(int *)G_CLASS_TYPE = cf.cls;            /* sets g_class_type from it (@0x5268fc) */
+#endif /* POD_ARTISTS */
     cf.loaded = *(void **)PDEQ_SHOWLIST;
     return cf.loaded;
 }
@@ -762,9 +889,17 @@ static int on_track(void *ctx, void *e) {
     queue = _create_deque("stSongInfo");
     if (!queue) return RET_OK;
     deque_init(queue);
+#ifndef POD_ARTISTS
     idx = loadSongList(queue, P(t, REC_NAME), I(t, REC_CUE_START), CLASS_ALBUM_TRACKS);
+#else /* POD_ARTISTS */
+    idx = loadSongList(queue, P(t, REC_NAME), I(t, REC_CUE_START), cf.cls);
+#endif /* POD_ARTISTS */
     if (idx >= 0 && deque_size(queue)) {
+#ifndef POD_ARTISTS
         context.dq = queue, context.idx = idx, context.cls = CLASS_ALBUM_TRACKS,
+#else /* POD_ARTISTS */
+        context.dq = queue, context.idx = idx, context.cls = cf.cls,
+#endif /* POD_ARTISTS */
         context.mode = PLAY_MODE;
         navigator_to_with_context("playing_page", &context);
     }
@@ -807,16 +942,26 @@ static int to_tracks(int index) {
     if (!r) return RET_OK;
     snap_stop();
     cf.album = index;
+#ifndef POD_ARTISTS
     cf.saved_album = album_key(r);
+#else /* POD_ARTISTS */
+    if (!cf.scoped) cf.saved_album = album_key(r);
+#endif /* POD_ARTISTS */
     list = load_tracks(r);
     n = list ? (int)deque_size(list) : 0;
     cf.screen = CF_TRACKS;
     show(cf.covers, 0);
+#ifndef POD_ARTISTS
     show(cf.hint, 0);
+#endif /* POD_ARTISTS */
     widget_destroy_children(cf.tracks);
     show(cf.tracks, 1);
+#ifndef POD_ARTISTS
     widget_set_text_utf8(cf.name, cf_str(r, REC_ALBUM));
     widget_set_text_utf8(cf.artist, cf_str(r, REC_ARTIST));
+#else /* POD_ARTISTS */
+    captions(r);
+#endif /* POD_ARTISTS */
     h = widget_get_prop_int(cf.tracks, "h", TRACKS_H);
     lv = list_view_create(cf.tracks, 0, 0, SCREEN_W, h);
     if (!lv) return RET_OK;
@@ -887,22 +1032,74 @@ static int on_cancel(void *ctx, void *e) {
     return RET_OK;
 }
 
+#ifdef POD_ARTISTS
+/* A stock list copied into a deque of our own, so later stock queries cannot pull it away. */
+static void *copy_list(void *list) {
+    void *d = _create_deque("stSongInfo");
+    if (!d) return d;
+    deque_init(d);
+    deque_assign(d, list);
+    return d;
+}
+
+#endif /* POD_ARTISTS */
 /* The albums, exactly as the stock Albums page lists them (loadLocalClassList 0xf003 =
  * getAllAlbum into *pdeq_showlist), copied into a deque of our own so later stock queries on the
  * tracks screen cannot pull it away. */
 static int load_albums(void) {
     void *list;
+#ifndef POD_ARTISTS
     if (cf.albums) return (int)album_count();
+#endif /* POD_ARTISTS */
     if (loadLocalClassList(CLASS_ALBUMS) <= 0) return 0;
     list = *(void **)PDEQ_SHOWLIST;
+#ifndef POD_ARTISTS
     if (!list || !deque_size(list)) return 0;
     cf.albums = _create_deque("stSongInfo");
     if (!cf.albums) return 0;
     deque_init(cf.albums);
     deque_assign(cf.albums, list);
     return (int)album_count();
+#else /* POD_ARTISTS */
+    if (!list || !deque_size(list) || !(cf.albums = copy_list(list))) return 0;
+    cf.count = deque_size(cf.albums);
+    return (int)cf.count;
+#endif /* POD_ARTISTS */
 }
 
+#ifdef POD_ARTISTS
+/* One artist's albums, exactly as the stock artist page lists them (loadAlbumList(0xf004, artist),
+ * album_page_init), the stock "All songs" row last: kept as the All albums card when there are two
+ * albums or more (q2-pod's ARTIST_ALBUMS cards), dropped otherwise. Each album takes the cache key
+ * of the library's album of the same name (getAllAlbum groups by name, ASCII case aside, as
+ * strcasecmp compares), so the covers are the files the main Cover Flow built and nothing is
+ * extracted twice; an album the library list lacks keys itself. */
+static int load_artist(void) {
+    void *list, *all;
+    unsigned n, i, j;
+    loadAlbumList(CLASS_ARTISTS, deque_at(cf.artist_row, 0));
+    list = *(void **)PDEQ_SHOWLIST;
+    n = list ? deque_size(list) : 0;
+    if (!n || !(cf.albums = copy_list(list))) return 0;
+    if (I(deque_at(cf.albums, n - 1), REC_ID) == ID_ALL_SONGS && n - 1 < 2) --n;
+    cf.count = n;
+    if (!n || n > MAX_ALBUMS) return (int)n;
+    cf.keys = calloc(n, sizeof *cf.keys); /* none: each album keys itself (key_at) */
+    all = cf.keys && loadLocalClassList(CLASS_ALBUMS) > 0 ? *(void **)PDEQ_SHOWLIST : (void *)0;
+    for (i = 0; cf.keys && i < n; ++i) {
+        void *r = deque_at(cf.albums, i), *same = r;
+        if (is_card(r)) continue; /* key 0: no art */
+        for (j = 0; all && j < deque_size(all); ++j)
+            if (!strcasecmp(cf_str(deque_at(all, j), REC_ALBUM), cf_str(r, REC_ALBUM))) {
+                same = deque_at(all, j);
+                break;
+            }
+        cf.keys[i] = album_key(same);
+    }
+    return (int)n;
+}
+
+#endif /* POD_ARTISTS */
 /* Jobs for the albums with no cache file yet. 1 when a build is running and the preparing screen
  * is up, 0 when there is nothing to build (or no card, no space, or no thread). */
 static int start_build(void) {
@@ -914,9 +1111,15 @@ static int start_build(void) {
     for (i = 0; i < n; ++i) {
         void *r = album_at(i);
         job_t *j = &cf.jobs[cf.total];
+#ifndef POD_ARTISTS
         unsigned key = album_key(r);
         if (key == cf.saved_album) cf.album = (int)i;
         if (!*cf_str(r, REC_PATH) || !access(art_path(path, sizeof path, key, ""), F_OK)) continue;
+#else /* POD_ARTISTS */
+        unsigned key = key_at(i);
+        if (cf.saved_album && key == cf.saved_album) cf.album = (int)i;
+        if (!key || !*cf_str(r, REC_PATH) || !access(art_path(path, sizeof path, key, ""), F_OK)) continue;
+#endif /* POD_ARTISTS */
         j->track = strdup(cf_str(r, REC_PATH));
         if (!j->track) break;
         j->key = key;
@@ -934,7 +1137,9 @@ static int start_build(void) {
     cf.running = 1;
     cf.screen = CF_PREPARING;
     show(cf.covers, 0);
+#ifndef POD_ARTISTS
     show(cf.hint, 0);
+#endif /* POD_ARTISTS */
     show(cf.status, 1);
     show(cf.cancel, 1);
     widget_set_text_utf8(cf.status, "Preparing covers...");
@@ -970,13 +1175,32 @@ static int on_destroy(void *ctx, void *e) {
     cf.dragging = 0;
     worker_stop();
     fx_close();
+#ifndef POD_ARTISTS
     if (cf.saved_album) blob(LAST_ALBUM, &cf.saved_album, 1);
+#else /* POD_ARTISTS */
+    if (cf.saved_album && !cf.scoped) blob(LAST_ALBUM, &cf.saved_album, 1);
+#endif /* POD_ARTISTS */
     if (cf.albums) deque_destroy(cf.albums);
+#ifndef POD_ARTISTS
     cf.albums = (void *)0;
+#else /* POD_ARTISTS */
+    if (cf.artist_row) deque_destroy(cf.artist_row);
+    free(cf.keys);
+    cf.albums = cf.artist_row = (void *)0;
+    cf.keys = (unsigned *)0;
+#endif /* POD_ARTISTS */
     cf.win = cf.covers = cf.slide = cf.input = cf.name = cf.artist = (void *)0;
+#ifndef POD_ARTISTS
     cf.hint = cf.status = cf.cancel = cf.tracks = (void *)0;
+#else /* POD_ARTISTS */
+    cf.status = cf.cancel = cf.tracks = (void *)0;
+#endif /* POD_ARTISTS */
     cf.screen = CF_COVERS;
+#ifndef POD_ARTISTS
     cf.album = 0;
+#else /* POD_ARTISTS */
+    cf.album = cf.scoped = 0;
+#endif /* POD_ARTISTS */
     return RET_OK;
 }
 
@@ -986,12 +1210,17 @@ static void *bind(const char *name, int (*fn)(void *, void *)) {
     return w;
 }
 
+#ifndef POD_ARTISTS
 /* The M1 Pod menu's Cover Flow row. 0 once the page is up, -1 if it could not open (the caller
  * then leaves the menu as it was). */
 int coverflow_open(void) {
     int n;
     if (cf.win) return -1;
     memset(&cf, 0, sizeof cf);
+#else /* POD_ARTISTS */
+/* The page and its widgets, everything hidden that waits for a screen; -1 if it did not open. */
+static int open_page(void) {
+#endif /* POD_ARTISTS */
     cf.win = window_open("m1pod_cover");
     if (!cf.win) return -1;
     widget_on(cf.win, EVT_DESTROY, on_destroy, (void *)0);
@@ -1001,29 +1230,88 @@ int coverflow_open(void) {
     cf.tracks = widget_lookup(cf.win, "view_tracks", 1);
     cf.name = widget_lookup(cf.win, "label_album", 1);
     cf.artist = widget_lookup(cf.win, "label_artist", 1);
+#ifndef POD_ARTISTS
     cf.hint = widget_lookup(cf.win, "label_hint", 1);
+#endif /* POD_ARTISTS */
     cf.status = widget_lookup(cf.win, "label_status", 1);
     cf.cancel = bind("btn_cancel", on_cancel);
+#ifndef POD_ARTISTS
     if (!cf.covers || !cf.tracks || !cf.name || !cf.artist || !cf.hint || !cf.status || !cf.cancel) {
+#else /* POD_ARTISTS */
+    if (!cf.covers || !cf.tracks || !cf.name || !cf.artist || !cf.status || !cf.cancel) {
+#endif /* POD_ARTISTS */
         navigator_back(); /* an asset that is not ours: leave rather than work on half a page */
         return -1;
     }
     show(cf.status, 0);
     show(cf.cancel, 0);
     show(cf.tracks, 0);
+#ifndef POD_ARTISTS
     n = load_albums();
+#else /* POD_ARTISTS */
+    return 0;
+}
+
+/* n albums loaded: their covers (after building the missing art), else `empty` or "too large". */
+static int open_covers(int n, const char *empty) {
+#endif /* POD_ARTISTS */
     if (n <= 0 || n > MAX_ALBUMS) {
         show(cf.covers, 0);
+#ifndef POD_ARTISTS
         show(cf.hint, 0);
+#endif /* POD_ARTISTS */
         show(cf.status, 1);
         widget_set_text_utf8(cf.name, "");
         widget_set_text_utf8(cf.artist, "");
+#ifndef POD_ARTISTS
         widget_set_text_utf8(cf.status, n > 0 ? "Library too large" : "Update Local Music first");
+#else /* POD_ARTISTS */
+        widget_set_text_utf8(cf.status, n > 0 ? "Library too large" : empty);
+#endif /* POD_ARTISTS */
         cf.screen = CF_COVERS;
         return 0;
     }
+#ifndef POD_ARTISTS
     blob(LAST_ALBUM, &cf.saved_album, 0); /* the last album outlives a reboot */
+#else /* POD_ARTISTS */
+    if (!cf.scoped) blob(LAST_ALBUM, &cf.saved_album, 0); /* the last album outlives a reboot */
+#endif /* POD_ARTISTS */
     if (!start_build()) to_covers();
     return 0;
 }
+#ifdef POD_ARTISTS
+
+/* The M1 Pod menu's Cover Flow row. 0 once the page is up, -1 if it could not open (the caller
+ * then leaves the menu as it was). */
+int coverflow_open(void) {
+    if (cf.win) return -1;
+    memset(&cf, 0, sizeof cf);
+    if (open_page()) return -1;
+    return open_covers(load_albums(), "Update Local Music first");
+}
+
+/* The Artists list's row `index` of `artists` (patch/artists.c; the caller keeps its list): the
+ * same page on that artist's albums, titled with the artist (q2-pod's coverflow_artist). Back
+ * leaves it for the list. 0 once the page is up, -1 if it could not open. */
+int coverflow_artist(void *artists, unsigned index) {
+    void *row = artists && index < deque_size(artists) ? deque_at(artists, index) : (void *)0, *title;
+    if (cf.win || !row) return -1;
+    memset(&cf, 0, sizeof cf);
+    cf.scoped = ARTIST_ALBUMS;
+    cf.artist_row = _create_deque("stSongInfo");
+    if (!cf.artist_row) return -1;
+    deque_init(cf.artist_row);
+    _deque_push_back(cf.artist_row, row); /* a copy, as the stock queries push rows */
+    if (open_page()) {
+        if (!cf.win) { /* else the window's on_destroy frees it */
+            deque_destroy(cf.artist_row);
+            cf.artist_row = (void *)0;
+        }
+        return -1;
+    }
+    title = widget_lookup(cf.win, "label_title", 1);
+    if (title) widget_set_text_utf8(title, cf_str(row, REC_TITLE));
+    return open_covers(load_artist(), "No albums");
+}
+#endif /* POD_ARTISTS */
 #endif /* CF_HOST */

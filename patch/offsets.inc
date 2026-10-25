@@ -53,6 +53,18 @@
 #define CLASS_ALBUM_TRACKS 0xff10 /* what loadAlbumdetailList(0xf003, row) leaves in classinfo[0] */
 #define PLAY_MODE 2           /* playing_page context mode, as album_page/albuminfo_page pass */
 
+/* Artists (patch/artists.c, the scoped Cover Flow). loadLocalClassList(0xf004) runs
+ * GetAllAlbumArtist when the artist_type global (0xa05a14, PLAYSET ARTISTTYPE, read by config_init
+ * @0x4e52d0) is 1, else getAllArtist (@0x4ee6e8); both rows carry the name in REC_TITLE (row
+ * callbacks 0x4e95b8 / 0x4e9724), which the stock Artists rows show (@0x535dec). A tap there opens
+ * album_page {0xf004, row} (@0x535d40), whose loadAlbumList(0xf004, row) (0x4ee8d8) stores the
+ * artist in classinfo_save and loads its albums with class 0xff01 (getAlbumByAlbumArtist /
+ * getAlbumByArtist, @0x4ee7cc); an album row then goes through loadAlbumdetailList(0xff01, row),
+ * which leaves 0xff11 (getMusicByAlbumAnd[Album]Songer, @0x4ee858) in classinfo[0]. */
+#define CLASS_ARTISTS 0xf004
+#define CLASS_ARTIST_ALBUMS 0xff01
+#define ID_ALL_SONGS -2    /* REC_ID of the "All songs" row getAlbumByArtist appends last (@0x4eae30); its tracks are all the artist's songs (classinfo[8] = 1, @0x4eebec) */
+
 /* Cover Flow geometry, 320x480 portrait: a CF_VIEW_W x CF_VIEW_H frame under the 50 px navbar.
  * The centre cover is ART_SIZE square with its top CF_TOP below the frame's; side covers turn
  * 60 degrees inward (the sine table in coverflow.c), sit CF_X1 px from the centre and then CF_XS
@@ -86,3 +98,22 @@
 /* Cover Flow page geometry (the ui/m1pod_cover.bin asset must match; tools/pod_ui.py) */
 #define SCREEN_W 320
 #define TRACKS_H 400            /* the track list fills the window under the 50 px navbar: windows are 450 px tall under the 30 px system_bar */
+
+/* ---------------------------------------------------------------------------
+ * Shuffle (patch/shuffle.c, docs/shuffle.md). Read from this demo with tools/dis.py.
+ */
+#define REC_SIZE 0x58      /* stSongInfo: memset(local, 0, 0x58) in loadSongList @0x4e2e4c and the row callback @0x4e908c */
+#define REC_CLASS 0x38     /* loadSongList stores its class argument here in every copy @0x4e3144 */
+#define REC_TRACK 0x3c     /* atoi(track) @0x4e9304 (column 10 of songtable) */
+#define REC_DISC 0x40      /* atoi(cd_num) @0x4e9318 (column 11); getMusicByAlbum sorts by disc, then track (0x4e9020) */
+#define CLASS_ALL_SONGS 0xf001 /* loadLocalClassList: getAllMusic into *pdeq_showlist (@0x4ee5bc), the Songs page's class */
+/* mclGetPlayMode/mclSetPlayMode values: Now Playing's mode button cycles 0..3 and styles them
+ * btn_imgorder / btn_imgcycle1 / btn_imgrandom / btn_imgcycle (@0x5398cc..0x539948) */
+#define MODE_ORDER 0       /* list play: stops after the last track (mclNextSong @0x5d5950) */
+#define MODE_REPEAT_ONE 1
+#define MODE_SHUFFLE 2     /* mclNextSong draws from the unplayed-index pool mclLoadPlayList fills (@0x5d1fe0, 0x5d03b0) */
+#define MODE_REPEAT_ALL 3
+#define MSGINFO_KIND 1     /* dialog/msginfo_dialog context {kind, ms, text[0x200], text2[0x200]}: kind 1 one white line (@0x4786f8) */
+#define MSGINFO_MS 2000    /* as the stock "file not found" toast @0x525a04 */
+#define MSGINFO_TEXT 0x200
+#define SHUFFLE_MAX 65536  /* Shuffle Albums/Folders sort an index of at most this many songs (q2-pod QUEUE_LIMIT) */

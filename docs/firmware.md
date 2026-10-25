@@ -149,6 +149,19 @@ land on the same size as the other `c` packages.
 
 Mock-up: `docs/lockscreen-preview.png` (approximate; the wallpaper is replaced by a gradient).
 
+**Cover size** (for `--layout cover`, `docs/lockscreen2.md`): `view_img_icon` is filled by a loader at
+`0x53f9b4` with `file:///tmp/coverpic.jpg` (embedded art; `/tmp/externpic.jpg` for folder or
+downloaded art, built-in `random_cover0..7`, else `defaultcover`). That is the same file Now Playing's
+`img_playcover1` shows. `parseplaycover_thd` writes it with `toolsGetAlbumCover(track, dst, 254, 254)`:
+fitted into 254 x 254 with the aspect kept, and never upscaled. So the stock 66 px strip shrank a
+254 px picture, and a 254 px widget draws it 1:1.
+
+**`--layout cover`** (V2.1fK `look-lock2`) is the iPhone-style alternative: date over an 88 px clock at
+the top, the strip as a 274x322 card with the 254 px cover rounded by a corner mask, title / artist /
+play / next under it, and a battery gauge without a number. Full description, touch analysis and
+device checklist: `docs/lockscreen2.md`. The classic layout stays the default (V2.1cL/cLB/dE/eA
+rebuild byte-identical).
+
 
 ## 4. Space recovery (`mod_space.py`, default for mod packages)
 
@@ -220,6 +233,12 @@ lists exactly `demo` (content), the removed files and the mod's own files.
 | `M1Plus-V2.1dH-pod-hello-...-update.bin` | M1 Pod + hook: the Tidal icon opens a hello page | V2.1dH |
 | `M1Plus-V2.1dM-pod-menu-...-update.bin` | M1 Pod + hook: the Tidal icon opens an iPod-style menu | V2.1dM |
 | `M1Plus-V2.1dE-pod-cover-...-update.bin` | V2.1dM plus the menu's **Cover Flow** page (`docs/coverflow.md`); touch, track-list contrast and menu scrolling fixed; SHA-256 `0806ade2...` | V2.1dE |
+| `M1Plus-V2.1eT-look-theme-pod-cover-...-update.bin` | V2.1dE + Minimal theme (`docs/look-theme.md`); `6f921f4f...` | V2.1eT |
+| `M1Plus-V2.1eL-look-lists-pod-cover-...-update.bin` | V2.1dE + library lists (`docs/look-lists.md`); `768b6abd...` | V2.1eL |
+| `M1Plus-V2.1eN-look-nowplaying-pod-cover-...-update.bin` | V2.1dE + iPod-style Now Playing (`docs/look-nowplaying.md`); `84ed09f1...` | V2.1eN |
+| `M1Plus-V2.1eB-look-boot-pod-cover-...-update.bin` | V2.1dE + boot logo, quotes, settings slides (`docs/look-boot.md`); `9cd5d06c...` | V2.1eB |
+| `M1Plus-V2.1eA-look-all-pod-cover-...-update.bin` | V2.1dE + all four looks (`docs/look-all.md`) | V2.1eA |
+| `M1Plus-V2.1fK-look-lock2-pod-cover-...-update.bin` | V2.1eA + iPhone-style lock screen with a large cover (`docs/lockscreen2.md`); `5b2549dc...` | V2.1fK |
 | `M1Plus-V2.1R-stock-restore-update.bin` | stock kernel + stock rootfs bytes | V2.1R |
 
 `b` = battery mod only (`build.py --no-space`, byte-identical to the packages tested below), `c` =

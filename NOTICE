@@ -24,6 +24,62 @@ q2-pod closely, in places line for line; both files carry its copyright notice i
 Everything that talks to the device -- the stock library queries, the art calls, the page, its
 320x480 layout and its touch handling -- is written for the M1 Plus.
 
+Cover Flow's artist scope and the Artists list (patch/coverflow.c coverflow_artist, patch/artists.c,
+docs/artists.md) follow q2-pod's "Artist Albums in Coverflow" (its patch/coverflow.c
+coverflow_artist and patch/navigation.c artist list): the ARTIST_ALBUMS scope with the library's
+list put back on close, no saved album in the scope, the All albums card only with two albums or
+more, and the bounded shelf (coverflow_bounded). The artist list, its albums, the All albums card
+(the stock "All songs" row) and the track queries are the M1 Plus's own stock calls; no q2-pod code
+is copied verbatim.
+
+The look-theme mod (tools/mod_theme.py, docs/look-theme.md) follows q2-pod's "Theme: Minimal":
+its colours (MINIMAL_CHEVRON, SUDO_MUTED, the neutral pressed grey, the page dots), its pinned
+styles/default.bin edits (list fills removed, pressed tint neutral, accent text white), the
+settings-disc recolouring rule of its ringnav_image_add and the status glyph set of its
+status_icon (redrawn here with Pillow instead of ImageMagick). tools/awtk_style.py reads the theme
+format the same way as q2-pod's style_props but was written for this repo.
+
+tools/mod_lists.py (the library list look, docs/look-lists.md) follows q2-pod's tools/ipod.py
+and docs/ipod.md: the choice of pages and dialogs, one pressed colour across lists and dialogs, and the reason it adds no window
+animations (q2-pod's note that the lookup-song handlers spin on an animated Back) come from there.
+No q2-pod asset is copied.
+
+The iPod-style Now Playing look (tools/mod_nowplaying.py, docs/look-nowplaying.md) follows q2-pod's
+Now Playing design (docs/ipod.md, changelog 1.1.7): its type hierarchy and colour values (NP_TITLE_PX,
+NP_META_PX, NP_ARTIST_RGB, NP_ALBUM_RGB, MINIMAL_FILL, SUDO_MUTED, the inactive page-dot grey), the rounded
+art, and its "quiet icons" recolouring (tools/ipod.py quiet_icon, redone with PIL). No q2-pod asset
+file is copied. The look mods share tools/awtk_style.py (see the look-theme paragraph above).
+
+The boot splash (assets/boot-logo.svg, tools/boot_logo.py, docs/look-boot.md) adapts q2-pod's
+assets/boot-logo.svg and docs/boot.md: its palette, scale and layout, and its "POD" lettering and
+centre-button paths, copied unchanged; the "M1" outlines are new. tools/mod_boot.py's jpeg_size is
+q2-pod's tools/build.py jpeg_size (the splash frame-header check), and its curly-quote cmap remap
+follows q2-pod 1.0.4 (tools/build.py font_quotes), reimplemented without fontTools.
+
+patch/shuffle.c (Shuffle Songs / Albums / Folders, docs/shuffle.md) follows q2-pod's Shuffle page
+(patch/navigation.c shuffle_play, shuffle_songs, shuffle_groups; patch/playback.c rand_below,
+shuffle, make_order): the three actions, Shuffle Songs as the stock Shuffle mode over the library
+from a random song, the xorshift32 generator and its seeding, the Fisher-Yates group ranks, the
+album and folder orders, the 65,536-song limit and the messages. q2-pod's play-time grouping engine
+(its playback hooks) is not ported; the queue is built up front instead.
+
 No other q2-pod source file is copied verbatim; the code here was written for the Shanling M1 Plus
 with its own addresses, symbols and page set. Files that follow a q2-pod file carry a reference to it in
 their header, and q2-pod's copyright is reproduced above as its MIT licence requires.
+
+Fonts (docs/font-inter.md). tools/mod_font.py builds the UI font from two fonts under the SIL Open
+Font License 1.1; their licence texts are in assets/fonts/:
+
+    Inter 4.1 -- https://github.com/rsms/inter
+    Copyright (c) 2016 The Inter Project Authors
+    SIL Open Font License 1.1 (assets/fonts/OFL-Inter.txt)
+
+    Source Han Sans 2.005R -- https://github.com/adobe-fonts/source-han-sans
+    Copyright 2014-2025 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'
+    SIL Open Font License 1.1 (assets/fonts/OFL-SourceHanSans.txt)
+
+assets/fonts/Inter-m1plus.ttf is a subset of Inter Regular made by tools/font_inter.py (code points
+of Latin, Greek and Cyrillic, tabular digits mapped, hinting and layout tables removed, composites
+decomposed, outlines rescaled). Source Han Sans is not redistributed here: the build reads the
+pinned release zip that tools/mod_font.py --fetch downloads, and the font it merges into keeps the
+stock name (it is not called "Source").

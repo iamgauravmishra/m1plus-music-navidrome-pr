@@ -154,6 +154,15 @@ removals), repack with `--tailends` (and the `--allow-removed` list for removals
 off by default and not in `build.py`: no hardware has run such binaries yet. If you try it, use its
 own tag and run the full checklist above.
 
+### UI font (V2.1fI, not yet hardware-tested)
+
+`look-all-inter` is `look-all` (V2.1fA: V2.1eA, which works on the device, plus the album fix) with
+the font step first (`docs/font-inter.md`); only `fonts/default.ttf`, two re-measured ui files and the
+pull-down's `dropdown_dialog.bin` (default and theme1) differ. Flash it over V2.1eA and go through the
+checklist in `docs/font-inter.md`; V2.1eA is the fallback. The build needs fontTools
+(`requirements.txt`) and, once, `python3 -I tools/mod_font.py --fetch`; so does `full` (V2.1gA,
+`docs/full.md`), which carries the same font.
+
 ### M1 Pod code payload: test order (V2.1dM and V2.1dE work on hardware)
 
 M1 Pod injects code into `demo` (see `docs/payload.md`), so it is riskier than an asset edit and
@@ -224,7 +233,71 @@ testing.
    - to clear the cache, delete `/mnt/mmc/.coverflow` from a computer
    - check free space on the card afterwards (one JPEG per album, 140 px)
 
-If any stage misbehaves, place `m1pod-off` on the card (disables the hook) or flash `V2.1dM`
+6. **The looks** (asset-only, each on top of V2.1dE; fall back to `V2.1dE`). Flash one at a time
+   if you want to attribute a problem, or go straight to the combined package:
+   - **`M1Plus-V2.1eT-look-theme-...`** (the Minimal theme): `docs/look-theme.md#device-checklist-v21et`
+   - **`M1Plus-V2.1eL-look-lists-...`** (library lists): the checklist in `docs/look-lists.md`
+   - **`M1Plus-V2.1fN-look-nowplaying-...`** (iPod-style Now Playing; V2.1eN before the album fix): `docs/look-nowplaying.md` ("What to check on the device")
+   - **`M1Plus-V2.1eB-look-boot-...`** (boot logo, quotes, settings slides): `docs/look-boot.md#device-checklist-not-yet-hardware-tested`,
+     including the "play from here" hang check for the slides
+   - **`M1Plus-V2.1eA-look-all-...`** (all four, theme -> lists -> nowplaying -> boot): the merged
+     checklist in `docs/look-all.md`. If something is off there, the single looks tell which one it
+     is. V2.1eA works on the device except for a colon in front of the Now Playing album
+   - **`M1Plus-V2.1fA-look-all-...`** (V2.1eA with the album fix; only `ui/playing_page.bin` differs):
+     flash over V2.1eA and check the album line (`docs/look-all.md`, "V2.1fA on the device")
+
+7. **`M1Plus-V2.1fK-look-lock2-...`** (look-all + the iPhone-style lock screen; asset-only, only the
+   lock screen changes; fall back to `V2.1eA`). Checklist, in short (details in
+   `docs/lockscreen2.md#device-checklist-not-yet-hardware-tested`):
+   - cover size and sharpness: a track with embedded art of 254 px or more fills the 254 px square
+     sharply, with no blur or blockiness. Also a folder `cover.jpg` track, and note what a track
+     without art shows
+   - rounded corners on the cover and the card, no fringes
+   - title and artist readable, scrolling, updating with the track
+   - play/pause (off-white glyph swaps) and next work on the first tap
+   - swipe to unlock starting on the cover, the card text, the clock and the bare wallpaper
+   - nothing queued: card gone, date + clock at the top, swipe works everywhere
+   - date `Monday, Oct 19`-style, clock centred and ticking, still 24 h after toggling 12/24 h;
+     battery gauge top right without a number, bolt on the charger
+   - custom wallpaper shows behind; "show time" off hides date/clock/battery
+   - rotation 180: the page turns as a whole
+
+8. **`M1Plus-V2.1fR-artists-...`** (V2.1fA plus M1 Pod Artists and Cover Flow per artist; fall back
+   to `V2.1eA`). Full list in `docs/artists.md#device-checklist-not-yet-hardware-tested`; in short:
+   - M1 Pod -> **Artists** opens a black list like the menu, same names and order as the stock
+     Artists page, scrolls with a scroll bar; a drag does not open an artist; with a large library
+     note how long it takes to open
+   - flip the stock Artists page's artist / album-artist button: our list follows it
+   - an artist with several albums: titled with the artist, only its albums, no "Preparing covers"
+     if the main Cover Flow's cache is built, no repeats, the first album and the **All albums**
+     card are the two ends (a drag past them stops)
+   - All albums (centred, tap): every song of the artist; a song plays, next/previous stay inside
+     the artist; an album: its tracks by the artist, a track plays
+   - Back: tracks -> covers -> Artists -> menu; one-album artist: no card; Unknown Artist: probably
+     "No albums"
+   - then the main **Cover Flow**: it reopens on its own last album; no hint line on either page,
+     the captions sit right under the reflections, a tap on the album name opens the album
+
+9. **`M1Plus-V2.1fS-shuffle-look-all-...`** (V2.1fA plus Shuffle in the M1 Pod menu; fall back to
+   `V2.1eA`). Full list in `docs/shuffle.md#device-checklist-not-yet-hardware-tested`; the core:
+   - tap **Shuffle Songs**: Now Playing opens and plays a random song with the Shuffle mode icon;
+     **Next** goes to another random song (not the next title); tap the row again: another first song
+   - tap **Shuffle Albums**: Now Playing plays track 1 of a random album and the album in order
+     (a multi-disc album: disc 1 then disc 2), then another album from its first track; tap again: a
+     different first album. **Shuffle Folders** the same by folder
+   - play mode afterwards: Shuffle Songs leaves the stock mode on **Shuffle** (a song tapped later in
+     Songs/Albums also shuffles until you change the mode on Now Playing or in Play settings); Shuffle
+     Albums/Folders turn Shuffle or Repeat one into **List play** (stops after the last album) and keep
+     List play or **Repeat all** (the same album order starts again)
+   - reboot mid-shuffle (Memory play on): Songs keeps shuffling; Albums resumes on the track and then
+     follows the Songs order (expected); empty library / card out: a message box, nothing changes
+
+10. **`M1Plus-V2.1gA-full-...`** (everything: the font, the four looks, lock screen 2, Cover Flow,
+   Artists and Shuffle; fall back to `V2.1eA`, or to the single f-package of whatever misbehaves).
+   The combined checklist is `docs/full.md#device-checklist-not-yet-hardware-tested`.
+
+If any stage misbehaves, place `m1pod-off` on the card (disables the hook) or flash `V2.1eA`
+(the device build before Artists), `V2.1dM`
 (menu only), `V2.1cLB` (no payload at all) or `V2.1R` (stock).
 Because the hook only runs on a deliberate tap of the entry icon and always falls through to stock on
 error, a failure should not prevent boot; the worst likely case is the icon doing nothing new.
