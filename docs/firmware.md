@@ -216,6 +216,10 @@ lists exactly `demo` (content), the removed files and the mod's own files.
 | `M1Plus-V2.1cBW-iconpercent-space-watchdog-update.bin` | V2.1cB + 10 s watchdog poll | V2.1cBW |
 | `M1Plus-V2.1cL-lockscreen-space-update.bin` | lock screen mod + space step | V2.1cL |
 | `M1Plus-V2.1cLB-lockscreen-iconpercent-space-update.bin` | lock screen mod + icon + percentage status bar + space step | V2.1cLB |
+| `M1Plus-V2.1dA-pod-inert-...-update.bin` | M1 Pod payload segment, **no hook** (+ lock screen + icon+percent + space) | V2.1dA |
+| `M1Plus-V2.1dH-pod-hello-...-update.bin` | M1 Pod + hook: the Tidal icon opens a hello page | V2.1dH |
+| `M1Plus-V2.1dM-pod-menu-...-update.bin` | M1 Pod + hook: the Tidal icon opens an iPod-style menu | V2.1dM |
+| `M1Plus-V2.1dE-pod-cover-...-update.bin` | V2.1dM plus the menu's **Cover Flow** page (`docs/coverflow.md`); touch, track-list contrast and menu scrolling fixed; SHA-256 `0806ade2...` | V2.1dE |
 | `M1Plus-V2.1R-stock-restore-update.bin` | stock kernel + stock rootfs bytes | V2.1R |
 
 `b` = battery mod only (`build.py --no-space`, byte-identical to the packages tested below), `c` =
@@ -229,6 +233,29 @@ gone through item by item. Then V2.1cLB (lock screen + icon+percent status bar +
 SHA-256 `62f3cb18...`) was flashed over V2.1cS: accepted, and the user reports it works. The other
 `c` packages (cA, cB, cBW, cL) are not tested on hardware, but cLB covers their parts except the
 watchdog change and the `percent` (icon hidden) status bar.
+
+Hardware test 2026-10-20: **V2.1dM** (M1 Pod menu + lock screen + icon+percent + space, SHA-256
+`6b540e660d20d559a412c0330ba557ff453bd0f22237964754969bcb018e38e7`) was flashed **directly over
+stock V2.1R** and works: the player boots, so the loader accepts the appended RWX `PT_LOAD` at
+`0xb00000`; the Home-icon hook on **Tidal** opens the M1 Pod menu; and the menu's rows open the
+stock pages. V2.1dA (inert) and V2.1dH (hello) were never flashed, so the staging order in
+`docs/workflow.md` was skipped and the menu stage proved all three steps at once. That SHA-256 is
+the package as built at commit `e6a2fc0`; later commits change the payload (the Cover Flow row and
+its code), so a rebuild of `V2.1dM` today is functionally the same but not byte-identical.
+Hardware test 2026-10-25: **V2.1dC** (Cover Flow, `282a5803…`) boots, the Cover Flow row opens
+the page, the "Preparing covers" screen appears and the navbar works, but the cover area ignored
+taps and swipes (and the menu could not be scrolled). Root cause: this AWTK build's hit test ignores
+`visible`, and a hidden full-screen `view_tracks` sat on top of the covers — details and the fix in
+`docs/coverflow.md`. **V2.1dD** carries the fix (hidden = insensitive, a transparent touch layer
+driving the carousel, the menu rows in a scroll view). V2.1dC's cache build had written 107
+thumbnails (14 MB) to the card, so extraction and the worker thread work on the device.
+
+Hardware test 2026-10-25, **V2.1dD** (`591880e8…`): **swiping the covers works**. The album's
+track list showed white text on a white background, and the M1 Pod menu could not scroll: normal
+windows are 450 px tall under the 30 px status bar, so the list overhung the window by 30 px and
+its rows did not even overflow it. **V2.1dE** fixes both (stock `list_item_style` rows, pages laid
+out in 450 px, a stock-structured scrolling list with 52 px rows; `docs/coverflow.md`); not yet
+hardware-tested.
 
 Flash: rename to `update.bin`, copy to the root of the microSD card, System settings -> System
 Update -> TF card update. Check settings -> About still says V2.1 (expected, the version string is never changed).
@@ -261,7 +288,22 @@ symlink modes or setuid bits on extraction), then rebuilds the tar with the stoc
 and a regenerated `.info`. An unmodified round trip without `--tailends` produced a zero-line diff
 of the full-precision listing against stock; with `--tailends` only 13 directory sizes differ.
 
-## 7. Ideas for next small mods (still asset-only)
+## 7. M1 Pod: a code payload (not asset-only)
+
+`demo` has the same injectable layout as the Q2 (`ET_EXEC`, LOAD ends at va `0xa10fc8`, a spare
+final `PT_NULL` program header, `$gp = 0xa03ed0`). M1 Pod appends a non-PIC MIPS payload at va
+`0xb00000` (rewriting that `PT_NULL` into an RWX `PT_LOAD`) and hooks exactly one function — the
+Home icon click dispatcher at `0x533b80` — to open new pages. It is the first code mod here and is
+built on top of the lock screen + icon+percent + space tree. Full mechanism, addresses, hook,
+trampoline, kill switch and staging: **`docs/payload.md`**. Built with Homebrew clang/ld.lld 23.1.3
+and validated offline with a Unicorn harness (`test/patch.py`). V2.1dM works on hardware
+(section 5).
+
+The payload's largest page is **Cover Flow** (`docs/coverflow.md`): the stock Local Music albums as
+a depth-rendered cover carousel on a stock `slide_menu`, with its own thumbnail cache under
+`/mnt/mmc/.coverflow` built by one worker thread. It adds no hook of its own.
+
+## 8. Ideas for next small mods (still asset-only)
 
 - status bar clock seconds / 12h, font sizes, colours (`styles/default.bin`, `ui/*.bin`)
 - boot logo image, screensaver page layout

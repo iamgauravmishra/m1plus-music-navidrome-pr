@@ -165,7 +165,13 @@ def cmd_repack(a):
     for k in sorted(removed):
         if k not in s_l or k in n_l: sys.exit(f'ERROR: --allow-removed {k}: not a stock entry, or still present')
         print(f'REMOVED {k} (allowed)')
-    bad = [(k, s_l.get(k), n_l.get(k)) for k in sorted(set(s_l) | set(n_l)) if s_l.get(k) != n_l.get(k) and k not in removed]
+    # --allow-added: exactly these entries may be new (absent in stock, present now); for mod assets
+    added = {'/' + p.lstrip('/') for p in a.allow_added}
+    for k in sorted(added):
+        if k in s_l or k not in n_l: sys.exit(f'ERROR: --allow-added {k}: already a stock entry, or not present')
+        print(f'ADDED {k} (allowed)')
+    skip = removed | added
+    bad = [(k, s_l.get(k), n_l.get(k)) for k in sorted(set(s_l) | set(n_l)) if s_l.get(k) != n_l.get(k) and k not in skip]
     for k, s, n in bad: print(f'META DIFF {k}: stock={s} new={n}')
     print(f'metadata: {len(bad)} entries differ from stock (mode/owner/presence)')
     if bad and not a.allow_meta_diff: sys.exit('ERROR: metadata differs; pass --allow-meta-diff if intended')
@@ -222,6 +228,7 @@ if __name__ == '__main__':
     p.add_argument('--max-size', type=int); p.add_argument('--allow-meta-diff', action='store_true')
     p.add_argument('--tailends', action='store_true', help='mksquashfs -tailends: smaller image, same metadata')
     p.add_argument('--allow-removed', action='append', default=[], metavar='PATH', help='stock file deliberately removed (repeatable)')
+    p.add_argument('--allow-added', action='append', default=[], metavar='PATH', help='file deliberately added that is not in stock (repeatable)')
     p.add_argument('--reuse-squashfs', action='store_true', help='do not rebuild; reuse the stock squashfs bytes'); p.set_defaults(f=cmd_repack)
     p = sp.add_parser('diff'); p.add_argument('a'); p.add_argument('b'); p.set_defaults(f=cmd_diff)
     a = ap.parse_args(); sys.exit(a.f(a) or 0)

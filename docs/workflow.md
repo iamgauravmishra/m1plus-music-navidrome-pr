@@ -154,6 +154,83 @@ removals), repack with `--tailends` (and the `--allow-removed` list for removals
 off by default and not in `build.py`: no hardware has run such binaries yet. If you try it, use its
 own tag and run the full checklist above.
 
+### M1 Pod code payload: test order (V2.1dM and V2.1dE work on hardware)
+
+M1 Pod injects code into `demo` (see `docs/payload.md`), so it is riskier than an asset edit and
+ships in three stages. **Flash them in order**, and keep a `V2.1cLB` or `V2.1R` package on hand to
+fall back. Before flashing any stage, you may pre-place an empty file named `m1pod-off` at the root
+of the SD card to keep the payload disabled (the entry icon then behaves exactly as stock); delete it
+to enable M1 Pod.
+
+**The entry is the Tidal icon** — the first icon on the Home screen in English. Tapping it opens M1
+Pod instead of Tidal (which needs Wi-Fi and a subscription); nothing else on Home changes. The HiFi
+Music icon cannot be used: `demo` only puts it on Home when the language is 简体中文
+(`docs/payload.md#home-icons-and-their-conditions`). If you ever build with `HOME_ENTRY = 0`,
+switching the UI language to Simplified Chinese is the one stock way to make that icon appear for
+testing.
+
+1. `V2.1R` or `V2.1cLB` if the player is not already on a known-good build.
+2. **`M1Plus-V2.1dA-pod-inert-...`** (no hook). The one thing to confirm: the player boots to the
+   normal Home screen and stays up (no watchdog reboot loop), About still reads V2.1, and the Home
+   Tidal icon still opens Tidal / the "no network" message (nothing changed). This proves the loader
+   accepts the new program segment. If it reboot-loops, flash `V2.1cLB`/`V2.1R` back; do not continue.
+3. **`M1Plus-V2.1dH-pod-hello-...`** (hook + hello page). Tap the **Tidal** icon on Home: a small
+   "M1 Pod is alive" page should open. Press **Back** (top-left) → returns to Home. Press **Now
+   Playing** (top-right) → goes to the player. Then test the kill switch: power off, add
+   `/m1pod-off` to the card root, boot, tap the Tidal icon → it should behave as stock Tidal again;
+   remove the file to re-enable. Reboot once and confirm it still boots.
+4. **`M1Plus-V2.1dM-pod-menu-...`** (hook + iPod menu). Tap the Tidal icon: the menu opens (Now
+   Playing, Songs, Albums, Artists, Genres, Folders, Playlists, Settings). Each row should open the
+   matching stock page (or the player); Back returns through the pages to Home. Check a few rows and
+   that playback/library still work, then sleep/wake and reboot.
+   **Done on 2026-10-20** — flashed straight over V2.1R (skipping dA and dH) and it works.
+
+5. **`M1Plus-V2.1dE-pod-cover-...`** (the menu plus Cover Flow). History, 2026-10-25: `V2.1dC` opened
+   and built its cache (107 thumbnails, 14 MB) but the covers ignored every touch; `V2.1dD` fixed
+   that (swiping works) but its track list was white on white and the menu could not scroll
+   (`docs/coverflow.md`). Checklist:
+   - the player boots, About still reads V2.1, Home looks normal
+   - tap **Tidal**: the menu opens with a **Cover Flow** row; the rows look like the stock settings
+     list (dark, white text, arrows), about seven and a half fit, and **dragging the list up shows
+     the last rows** (Playlists, Settings); a tap still opens a row, a drag does not
+   - tap **Cover Flow**:
+     - **first run**: "Preparing covers... n/m" counts up and the covers appear when it finishes.
+       Time it roughly (it extracts one thumbnail per album). Press **Cancel** part-way through on
+       purpose: the covers should appear at once with the finished ones real and the rest a grey
+       disc, and the next open should resume the build where it stopped
+     - the covers: the centre one upright and sharp, the neighbours turned and dimmer, reflections
+       under them, the album name and artist below
+     - **swipe** left and right: the shelf should follow your finger, flick should coast and settle
+       on one cover, and the captions should change when it settles. Watch for lag with a large
+       library (a cover takes about 2.8 M instructions to draw, so a slow frame rate here is the
+       thing most likely to need tuning: `ART_SIZE` and `CF_VIEW_H` in `patch/offsets.inc`)
+     - tap a **side** cover: it should glide to the centre; tap the **centre** cover: the album's
+       track list opens, **dark with white titles like a stock list**, and the last track is
+       reachable by dragging the list up (nothing is hidden under the bottom edge)
+     - drag slowly by about a cover's width (90 px): one album moves; flick: it coasts a few
+       albums and settles; drag right from the first album: it wraps to the last
+     - after **Cancel** or a finished build, the covers must react at once (that is the V2.1dC bug)
+     - tap a **track**: it should play from Now Playing exactly as from the stock album page
+       (check the queue: next/previous stay inside the album), and the hardware prev/next/play keys
+       still work
+     - **Back** from the track list returns to the covers on the same album; **Back** again leaves
+       the page to the menu; **Back** again to Home
+     - reboot, open Cover Flow again: it should open on the **last album** you looked at, with no
+       build (the cache is on the card)
+   - with the **card removed** or nearly full: Cover Flow should still open and show the
+     placeholder discs, never hang
+   - with an **empty library** (or before Update Local Music has run): "Update Local Music first"
+   - the **kill switch** still works: `m1pod-off` at the card root makes the Tidal icon open Tidal
+   - to clear the cache, delete `/mnt/mmc/.coverflow` from a computer
+   - check free space on the card afterwards (one JPEG per album, 140 px)
+
+If any stage misbehaves, place `m1pod-off` on the card (disables the hook) or flash `V2.1dM`
+(menu only), `V2.1cLB` (no payload at all) or `V2.1R` (stock).
+Because the hook only runs on a deliberate tap of the entry icon and always falls through to stock on
+error, a failure should not prevent boot; the worst likely case is the icon doing nothing new.
+If the Tidal icon is not on your Home screen (it can be hidden in Home customisation), show it there
+again, or rebuild with another `HOME_ENTRY` (e.g. 15, CD Ripper).
+
 ## 5. Going back
 
 Flash the `V2.1R` restore package. The official V2.1 file is refused by the menu while V2.1 is the

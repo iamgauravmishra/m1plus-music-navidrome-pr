@@ -27,6 +27,11 @@ ZIP_SHA = 'db7bdbc42ffe6d5c1e3fdca9363edb78a01898b9a725c34793394cf6abfa33c0'
 # variant -> (capital tag letters, slug); series letter: b = without, c = with the space step
 VARIANTS = {'space': ('S', ''), 'percent': ('A', 'percent'), 'icon+percent': ('B', 'iconpercent'),
             'lockscreen': ('L', 'lockscreen'), 'lockscreen+icon+percent': ('LB', 'lockscreen-iconpercent')}
+# M1 Pod payload variants (series 'd'): each stacks on lockscreen + icon+percent + space.
+# variant -> (tag, pod stage, slug). Stage A installs no hook (inert); B = hello; C = menu;
+# D = menu + Cover Flow (docs/coverflow.md).
+POD = {'pod-inert': ('V2.1dA', 'A', 'pod-inert'), 'pod-hello': ('V2.1dH', 'B', 'pod-hello'),
+       'pod-menu': ('V2.1dM', 'C', 'pod-menu'), 'pod-cover': ('V2.1dE', 'D', 'pod-cover')}
 
 def sha256(p):
     h = hashlib.sha256()
@@ -36,13 +41,19 @@ def sha256(p):
 
 def run(*cmd): subprocess.run([sys.executable, '-I', *cmd], check=True)
 
+# pod.py needs pyelftools; prefer the repo venv so `python3 -I tools/build.py` works too.
+VENV_PY = next((p for p in (os.path.join(ROOT, 'venv', 'bin', 'python'),
+                            os.path.join(ROOT, '.venv', 'bin', 'python')) if os.path.exists(p)), sys.executable)
+def run_pod(*cmd): subprocess.run([VENV_PY, '-I', *cmd], check=True)
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     g = ap.add_mutually_exclusive_group(required=True)
-    g.add_argument('--variant', choices=VARIANTS); g.add_argument('--restore', action='store_true')
+    g.add_argument('--variant', choices=list(VARIANTS) + list(POD)); g.add_argument('--restore', action='store_true')
     ap.add_argument('--no-space', action='store_true'); ap.add_argument('--watchdog', action='store_true')
     a = ap.parse_args()
     if a.restore and (a.no_space or a.watchdog): ap.error('--restore ships the stock images; no other options')
+    if a.variant in POD and (a.no_space or a.watchdog): ap.error('pod variants always stack on lockscreen+icon+percent+space; no other options')
     if a.variant == 'space' and a.no_space: ap.error('--variant space needs the space step')
     if not os.path.exists(ZIP): sys.exit(f'missing {ZIP}')
     if sha256(ZIP) != ZIP_SHA: sys.exit('firmware zip SHA-256 mismatch: not the pinned V2.1 package')
@@ -56,6 +67,21 @@ def main():
     if a.restore:
         out = os.path.join(ROOT, 'out', 'M1Plus-V2.1R-stock-restore-update.bin')
         run(os.path.join(TOOLS, 'fwtool.py'), 'repack', stock, out, '--version', 'V2.1R', '--reuse-squashfs')
+    elif a.variant in POD:
+        import pod_pages, pod_ui
+        tag, stage, slug = POD[a.variant]
+        slug = f'{slug}-lockscreen-iconpercent-space'
+        mod = os.path.join(work, f'mod-{slug}')
+        run(os.path.join(TOOLS, 'mod_battery.py'), stock, mod, '--variant', 'icon+percent')
+        run(os.path.join(TOOLS, 'mod_lockscreen.py'), mod, mod)
+        run(os.path.join(TOOLS, 'mod_space.py'), mod)                       # .pdr zero + remove (default)
+        run_pod(os.path.join(TOOLS, 'pod.py'), mod, '--stage', stage)       # patch demo + add assets
+        added = [x for rel in pod_ui.asset_rels(pod_pages.STAGES[stage]) for x in ('--allow-added', rel)]
+        removed = [x for p in mod_space.REMOVE for x in ('--allow-removed', p)]
+        out = os.path.join(ROOT, 'out', f'M1Plus-{tag}-{slug}-update.bin')
+        run(os.path.join(TOOLS, 'fwtool.py'), 'repack', mod, out, '--version', tag, '--tailends', *removed, *added)
+        shutil.rmtree(os.path.join(mod, 'build'), ignore_errors=True)
+        # keep mod/podbuild (manifest + patch.elf) so test/patch.py can run against the built tree
     else:
         space = not a.no_space
         letter, slug = VARIANTS[a.variant]

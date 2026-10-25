@@ -1,3 +1,6 @@
 capstone>=5
 pyelftools>=0.31
 pillow>=10
+# M1 Pod code payload only: the Unicorn offline test harness (test/patch.py). Not needed for the
+# asset mods. See docs/payload.md.
+unicorn==2.1.4

@@ -1,0 +1,29 @@
+m1plus-mod
+==========
+
+The M1 Pod payload (patch/, tools/pod*.py, test/patch.py) is modelled closely on q2-pod, a
+coherent firmware mod for the Shanling Q2:
+
+    q2-pod -- https://github.com/DiamondBond/q2-pod
+    Copyright (c) 2026 Diamond Bond
+    MIT License
+
+The injection mechanism is q2-pod's: a non-PIC payload compiled with clang/ld.lld and appended to
+the UI app (demo) through its final unused PT_NULL program header, rewritten into an RWX PT_LOAD;
+checked MIPS PIC-prologue hooks replaced with a jump to the payload; $gp-restoring trampolines that
+resume the stock function; stock functions reached through absolute-address macros and libc only
+through the app's own GOT slots; the Unicorn test harness (test/patch.py); and the iPod-style menu
+design and geometry (q2-pod docs/ipod.md). The linker script (patch/link.ld), the offsets header
+(patch/offsets.inc) and the build/appender/trampoline logic follow q2-pod's equivalents.
+
+patch/coverflow.c and test/coverflow.py are ports of q2-pod's files of the same names. The depth
+renderer (its projection, compositing, brightness and reflection model, after Rockbox PictureFlow),
+the texture-ring bookkeeping and the thumbnail-cache design (one worker thread, the free-space
+guard, the empty-file "no art" marker, the ART_NEAR window, the .tmp-then-rename write) follow
+q2-pod closely, in places line for line; both files carry its copyright notice in their headers.
+Everything that talks to the device -- the stock library queries, the art calls, the page, its
+320x480 layout and its touch handling -- is written for the M1 Plus.
+
+No other q2-pod source file is copied verbatim; the code here was written for the Shanling M1 Plus
+with its own addresses, symbols and page set. Files that follow a q2-pod file carry a reference to it in
+their header, and q2-pod's copyright is reproduced above as its MIT licence requires.
