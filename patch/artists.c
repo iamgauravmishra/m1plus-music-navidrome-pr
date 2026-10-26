@@ -13,6 +13,15 @@
  * "list_item_style", an hscroll_label themed "srlabel_leftwhite21_style", the "right_arrow" image,
  * inside the asset's stock list_view > scroll_view (+ scroll_bar_m).
  *
+ * A navbar button (the Albums toggle's slot, NAV_VIEW_X) switches Artist and Album Artist: it makes the
+ * same change the stock Artists page's own switch handler does (@0x535770): artist_type flipped,
+ * [PLAYSET] ARTISTTYPE saved with write_int_config, and the stock page's reload flag (0xa06d20) raised so
+ * a later stock Artists page rebuilds; the stock handler's toast and style swap are its own page's. The
+ * title reads "Artists" or "Album Artists" and the button shows the other mode's glyph, the one a tap
+ * switches to. The list is then queried again. Everything stock reads artist_type for (this list, an
+ * artist's albums in Cover Flow and the album page) follows. Without the button or the title the page
+ * still lists in the current mode.
+ *
  * No stock function is hooked. The page is opened from the M1 Pod menu's Artists row and
  * everything here runs from its own widgets; nothing of it outlives the window.
  */
@@ -28,6 +37,7 @@ extern int coverflow_artist(void *artists, unsigned index); /* patch/coverflow.c
 
 static struct {
     void *win, *view, *list, *status;
+    void *title, *toggle; /* label_title and btn_artisttype; either may be missing */
     void *artists; /* our copy of the stock artist rows */
     unsigned count;
 } ar __attribute__((section(".scratch")));
@@ -49,6 +59,19 @@ static int ar_on_artist(void *ctx, void *e) {
     (void)e;
     if (ar.artists && i < ar.count) coverflow_artist(ar.artists, i);
     return RET_OK;
+}
+
+/* The title names the mode artist_type selects; the button shows the glyph of the other one. */
+static void ar_mode_show(void) {
+    int album = *(volatile int *)ARTIST_TYPE == 1;
+    const char *icon = album ? "pod_nav_artist" : "pod_nav_albumartist";
+    if (ar.title) widget_set_tr_text(ar.title, album ? "Album Artists" : "Artists");
+    if (ar.toggle) {
+        widget_set_prop_str(ar.toggle, "style:normal:icon", icon);
+        widget_set_prop_str(ar.toggle, "style:over:icon", icon);
+        widget_set_prop_str(ar.toggle, "style:pressed:icon", album ? "pod_nav_artist_down" : "pod_nav_albumartist_down");
+        widget_invalidate_force(ar.toggle, (void *)0);
+    }
 }
 
 static int ar_on_back(void *ctx, void *e) {
@@ -100,25 +123,16 @@ static void ar_build_rows(void) {
     }
 }
 
-/* The M1 Pod menu's Artists row. 0 once the page is up, -1 if it could not open. */
-int artists_open(void) {
+/* (Re)build the list from the stock query, with artist_type as it is: a copy of the stock rows, so Cover
+ * Flow's own queries cannot pull it away. */
+static void ar_load(void) {
     void *list;
-    if (ar.win) return -1;
-    memset(&ar, 0, sizeof ar);
-    ar.win = window_open("m1pod_artists");
-    if (!ar.win) return -1;
-    widget_on(ar.win, EVT_DESTROY, ar_on_destroy, (void *)0);
-    ar_bind("btn_return", ar_on_back);
-    ar_bind("btn_backtoplayer", ar_on_player);
-    ar.list = widget_lookup(ar.win, "pod_listview", 1);
-    ar.view = widget_lookup(ar.win, "pod_scrollview", 1);
-    ar.status = widget_lookup(ar.win, "label_status", 1);
-    if (!ar.list || !ar.view || !ar.status) {
-        navigator_back(); /* an asset that is not ours */
-        return -1;
-    }
-    ar_show(ar.status, 0);
-    /* The stock Artists query, copied so Cover Flow's own queries cannot pull it away. */
+    if (ar.artists) deque_destroy(ar.artists);
+    ar.artists = (void *)0;
+    ar.count = 0;
+    widget_destroy_children(ar.view);
+    widget_set_prop_int(ar.view, "yoffset", 0);
+    widget_set_prop_int(ar.view, "virtual_h", 0);
     list = loadLocalClassList(CLASS_ARTISTS) > 0 ? *(void **)PDEQ_SHOWLIST : (void *)0;
     if (list && deque_size(list) && (ar.artists = _create_deque("stSongInfo"))) {
         deque_init(ar.artists);
@@ -129,9 +143,46 @@ int artists_open(void) {
     if (!ar.count) {
         ar_show(ar.list, 0);
         ar_show(ar.status, 1);
-        widget_set_text_utf8(ar.status, "Update Local Music first");
-        return 0;
+        widget_set_tr_text(ar.status, "Update Local Music first");
+        return;
     }
+    ar_show(ar.list, 1);
+    ar_show(ar.status, 0);
     ar_build_rows();
+}
+
+/* The button: flip the stock setting the way the stock switch does, then list again. */
+static int ar_on_toggle(void *ctx, void *e) {
+    int type = *(volatile int *)ARTIST_TYPE != 1;
+    (void)ctx; (void)e;
+    *(volatile int *)ARTIST_TYPE = type;
+    write_int_config(type, "PLAYSET", "ARTISTTYPE");
+    *(volatile unsigned char *)ARTIST_RELOAD = 1;
+    ar_mode_show();
+    ar_load();
+    return RET_OK;
+}
+
+/* The M1 Pod menu's Artists row. 0 once the page is up, -1 if it could not open. */
+int artists_open(void) {
+    if (ar.win) return -1;
+    memset(&ar, 0, sizeof ar);
+    ar.win = window_open("m1pod_artists");
+    if (!ar.win) return -1;
+    widget_on(ar.win, EVT_DESTROY, ar_on_destroy, (void *)0);
+    ar_bind("btn_return", ar_on_back);
+    ar_bind("btn_backtoplayer", ar_on_player);
+    ar.list = widget_lookup(ar.win, "pod_listview", 1);
+    ar.view = widget_lookup(ar.win, "pod_scrollview", 1);
+    ar.status = widget_lookup(ar.win, "label_status", 1);
+    ar.title = widget_lookup(ar.win, "label_title", 1);
+    ar.toggle = widget_lookup(ar.win, "btn_artisttype", 1);
+    if (ar.toggle) widget_on(ar.toggle, EVT_CLICK, ar_on_toggle, (void *)0);
+    if (!ar.list || !ar.view || !ar.status) {
+        navigator_back(); /* an asset that is not ours */
+        return -1;
+    }
+    ar_mode_show();
+    ar_load();
     return 0;
 }

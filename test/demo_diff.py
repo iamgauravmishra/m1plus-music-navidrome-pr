@@ -5,17 +5,21 @@ usage: python3 -I test/demo_diff.py <stock demo> <built demo>
 
 Allowed differences: the zeroed .pdr section (space step), the program headers (the payload PT_LOAD),
 the 8-byte Home-icon hook at 0x533b80, the 8-byte boot guard hook at home_page_init 0x534cd4, the 8-byte
-album header hook at albuminfo_listitem0_layout 0x526264, the
-words listed in patch/rows.json, the four cover-size immediates of the lock screen (each must be
-stock | 280), and bytes appended after the stock file. Anything else is an error. Exit status 0 = clean.
+album header hook at albuminfo_listitem0_layout 0x526264, the 8-byte Now Playing hook at playing_page_init
+0x53d1e4, the words listed in patch/rows.json, the four cover-size immediates of the lock screen (each must be
+stock | 264), the five A-B marker immediates of Now Playing (tools/mod_nowplaying.py marker_edits) and bytes
+appended after the stock file. Anything else is an error. Exit status 0 = clean.
 """
 import json, os, struct, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.join(ROOT, 'tools'))
+import mod_nowplaying as mn
 HOOK = (0x533b80, 8)
 HOME_INIT = (0x534cd4, 8)   # home_page_init: the boot guard's hook (docs/architecture.md)
 ALBUMINFO = (0x526264, 8)   # albuminfo_listitem0_layout: the album header hook (patch/albuminfo.c)
-COVER = 280                 # the cover size demo writes (tools/mod_lockscreen.py)
+PLAYING = (0x53d1e4, 8)     # playing_page_init: the Now Playing hook (patch/nowplaying.c)
+COVER = 264                 # the cover size demo writes (tools/mod_lockscreen.py, Now Playing's art)
 COVER_IMM = (0x4df1dc, 0x4df1e0, 0x4df21c, 0x4df220)
 
 def segs(b):
@@ -63,6 +67,9 @@ def main():
     allow(va_to_off(s, HOOK[0]), HOOK[1], 'hook')
     allow(va_to_off(s, HOME_INIT[0]), HOME_INIT[1], 'home-init hook')
     allow(va_to_off(s, ALBUMINFO[0]), ALBUMINFO[1], 'album header hook')
+    allow(va_to_off(s, PLAYING[0]), PLAYING[1], 'playing init hook')
+    markers = mn.marker_edits()
+    for va in markers: allow(va_to_off(s, va), 4, 'markers')
     rows = rows_words()
     for va in rows: allow(va_to_off(s, va), 4, 'rows')
     for va in COVER_IMM: allow(va_to_off(s, va), 4, 'cover')
@@ -93,6 +100,14 @@ def main():
     h = ALBUMINFO[0]; o = va_to_off(s, h)
     print(f'album header hook {h:#x}: {s[o:o + 8].hex()} -> {m[o:o + 8].hex()}', 'changed' if s[o:o + 8] != m[o:o + 8] else 'UNCHANGED')
     ok = ok and s[o:o + 8] != m[o:o + 8] and s[o + 8:o + 16] == m[va_to_off(m, h) + 8:va_to_off(m, h) + 16]
+    h = PLAYING[0]; o = va_to_off(s, h)
+    print(f'Now Playing hook {h:#x}: {s[o:o + 8].hex()} -> {m[o:o + 8].hex()}', 'changed' if s[o:o + 8] != m[o:o + 8] else 'UNCHANGED')
+    ok = ok and s[o:o + 8] != m[o:o + 8] and s[o + 8:o + 16] == m[va_to_off(m, h) + 8:va_to_off(m, h) + 16]
+    for va, (old, new) in markers.items():   # the A-B markers: the stock word in stock, the new one in the build
+        o = va_to_off(s, va); sw = struct.unpack_from('<I', s, o)[0]; mw = struct.unpack_from('<I', m, o)[0]
+        good = (sw, mw) == (old, new)
+        print(f'marker {va:#x}: {sw:#010x} -> {mw:#010x}', 'ok' if good else 'WRONG')
+        ok = ok and good
     print('OK (1 passed, 0 failed)' if ok else 'FAIL (0 passed, 1 failed)')
     return 0 if ok else 1
 

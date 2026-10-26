@@ -38,6 +38,7 @@ def menu_machine(page, icons=(6, 6, 5)):
     m = Machine()
     names = ['btn_return', 'btn_backtoplayer', 'label_info'] + [f'pod_row{i}' for i in range(len(page.rows))]
     names += ['label_title', GRID, NAVBAR, LISTVIEW, SCROLLVIEW, SCROLLBAR, 'home_sview', 'home_sindicator']
+    names += [f'pod_switch{i}' for i, r in enumerate(SETTINGS.rows) if r.action in pod_pages.SWITCH_ACTIONS]   # the Settings page's switch images
     m.widgets = {n: 0x30000000 + i for i, n in enumerate(names)}
     m.types[m.widgets['home_sview']] = 'slide_view'
     for n in (LISTVIEW, SCROLLVIEW, SCROLLBAR): m.types[m.widgets[n]] = n
@@ -59,10 +60,13 @@ def menu_machine(page, icons=(6, 6, 5)):
     return m
 
 
-def row_label(m, i):
-    """The text label of menu row i: the hscroll_label child (not child 0 once the row has its icon)."""
-    kids = m.children[m.widgets[f'pod_row{i}']]
-    return next((k for k in kids if m.types.get(k) == 'hscroll_label'), kids[0])
+def switch_image(m, i): return m.widgets[f'pod_switch{i}']
+
+
+def switch_shows(m, i):
+    """The state of the Settings page's switch image i, from the last image_base_set_image call on it (None: untouched)."""
+    img = [c[2] for c in m.calls if c[0] == 'image_base_set_image' and c[1] == switch_image(m, i)]
+    return {'sset_on': True, 'sset_off': False}[img[-1]] if img else None
 
 
 def home_tests(expect, page):
@@ -146,6 +150,21 @@ def home_tests(expect, page):
     expect(RUN not in m.fs and 'widget_on' not in m.names(),
            'no timer to clear the marker: the marker is removed again and nothing is registered')
 
+    # -- 5b. the directory entry must be durable too: no confirmation, no arming (audit: the errors were ignored)
+    for what, fail in (('the data directory cannot be opened', ('open', '/mnt/data')), ('the directory fsync fails', ('fsync', '/mnt/data'))):
+        m = menu_machine(page); m.fail.add(fail); boot(m)
+        expect(not m.timers and 'widget_on' not in m.names() and 'view_create' not in m.names() and
+               not any(c[0] == 'widget_set_visible' for c in m.calls), f'{what}: not armed (no timer, no handler, no icon, the grid untouched)')
+        expect(RUN not in m.fs and RUN + '.tmp' not in m.fs, f'{what}: no marker is left behind (it is removed again)')
+        m2 = menu_machine(page); m2.fs = dict(m.fs); m2.fs[RUN] = b'1\n'; boot(m2)   # the removal lost too: the next boot falls back
+        expect(m2.fs.get(BAD) == b'1\n' and RUN not in m2.fs and not m2.timers, f'{what}: a marker that survives is a failed boot next time (fail closed)')
+        m = Machine(); m.fs[RUN] = b'1\n'; m.fail.add(fail); boot(m)
+        expect(RUN in m.fs and not m.timers and 'widget_on' not in m.names(),
+               f'{what} while recording a failed boot: the marker stays (the note is not confirmed), this boot is stock')
+        expect(START not in m.fs, f'{what} while recording a failed boot: the setting is not rewritten before the note is down')
+        m3 = Machine(); m3.fs = dict(m.fs); m3.fail = set(m.fail); boot(m3)
+        expect(RUN in m3.fs and not m3.timers, f'{what}: and the next boot is stock again')
+
     # -- 6. the opt-in log (SD card): off by default, on with /mnt/mmc/m1pod-log
     m = Machine(); boot(m)
     expect(LOG not in m.fs and not any(c[0] == 'open' and c[1] == LOG for c in m.calls), 'no log file unless the card has m1pod-log')
@@ -159,14 +178,17 @@ def home_tests(expect, page):
     start_i = next(i for i, r in enumerate(SETTINGS.rows) if r.action == pod_pages.ACT_STARTUP)
     settings_i = next(i for i, r in enumerate(page.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.SETTINGS_PAGE_INDEX)
     entry = PSYMS['m1pod_home_click']
-    expect([r.label for r in SETTINGS.rows] == ['System Settings', 'Play Settings', 'Shanling Home', 'Start in: M1 Pod'] and
-           [r.arg for r in SETTINGS.rows[:2]] == [pod_pages.HOME_SYSSET, pod_pages.HOME_PLAYSET] and (grid_i, start_i) == (2, 3),
-           'the Settings page: System Settings, Play Settings (stock pages), Shanling Home, Start in')
-    expect(page.rows[0].label == 'Now Playing' and page.rows[-1].label == 'Settings' and settings_i == len(page.rows) - 1 and len(page.rows) == 10
+    expect([r.label for r in SETTINGS.rows] == ['Main Menu', 'Cover Flow', 'Start in M1 Pod', 'Playback', 'System Settings', 'Shanling Home'] and
+           [r.arg for r in SETTINGS.rows[3:5]] == [pod_pages.HOME_PLAYSET, pod_pages.HOME_SYSSET] and (grid_i, start_i) == (5, 2)
+           and (SETTINGS.rows[1].action, SETTINGS.rows[1].arg) == (pod_pages.ACT_PAGE, pod_pages.CFSET_PAGE_INDEX),
+           'the Settings page: Main Menu, Cover Flow (its sub-page), the Start in switch, Playback and System Settings (stock pages), Shanling Home')
+    expect(page.rows[0].label == 'Now Playing' and page.rows[-1].label == 'Settings' and settings_i == len(page.rows) - 1 and len(page.rows) == 11
            and not [r for r in page.rows if r.action in (pod_pages.ACT_GRID, pod_pages.ACT_STARTUP)],
            'the menu keeps the grouped rows above one Settings row, which opens the Settings page (no launcher rows left on it)')
 
-    def hid(m): return [c for c in m.calls if c[0] in ('widget_set_visible', 'widget_set_sensitive') and c[2] == 0]
+    def own(m, c): return c[1] not in {h for n, h in m.widgets.items() if n.startswith('pod_row')}   # not one of the menu's rows (patch/menu.c arranges those)
+    def hid(m): return [c for c in m.calls if c[0] in ('widget_set_visible', 'widget_set_sensitive') and c[2] == 0 and own(m, c)]
+    def moved(m): return [c for c in m.calls if c[0] in ('widget_move', 'widget_resize') and own(m, c)]
 
     def armed(startfile=None):
         m = menu_machine(page)
@@ -180,7 +202,8 @@ def home_tests(expect, page):
             m.window = 0x20002000
             m.call(on_row, a0=rowsM + 12 * settings_i)
             m.window = 0x20001000; m.sopen = True
-        m.call(on_row, a0=rowsS + 12 * i)
+        if SETTINGS.rows[i].action in pod_pages.SWITCH_ACTIONS: m.click(f'pod_row{i}')
+        else: m.call(on_row, a0=rowsS + 12 * i)
 
     def tap_icon(m): m.call(entry, a0=m.icon(ICON_NAME))
 
@@ -314,7 +337,7 @@ def home_tests(expect, page):
     # the Home instance with a tree that lacks the navbar or the list: nothing is hidden or moved
     for gone in (NAVBAR, LISTVIEW):
         m = armed(); m.top_main = HOME_WIN; m.widgets.pop(gone); m.call(open_cb)
-        expect(('window_open', page.key) in m.calls and not [c for c in m.calls if c[0] in ('widget_move', 'widget_resize')] and
+        expect(('window_open', page.key) in m.calls and not moved(m) and
                ('widget_set_visible', m.widgets.get(NAVBAR, -1), 0) not in m.calls, f'no {gone}: the page opens as it is, nothing moved or hidden')
     # the touches: the rows reach the top of the screen, the hidden navbar takes none (demo's own hit test)
     m = armed(); m.top_main = HOME_WIN; m.call(open_cb)
@@ -371,7 +394,7 @@ def home_tests(expect, page):
     # 12. the navbar is hidden on the Home instance only; the menu the icon opens (the stock grid is behind it) keeps it
     m = armed()
     tap_icon(m)
-    expect(('window_open', page.key) in m.calls and not hid(m) and not [c for c in m.calls if c[0] in ('widget_move', 'widget_resize')],
+    expect(('window_open', page.key) in m.calls and not hid(m) and not moved(m),
            'the icon opens the menu with its navbar (Back, title, bars icon) and the list where it is')
     m = armed(); m.top_main = HOME_WIN; m.window = 0; m.call(open_cb)
     expect(('window_open', page.key) in m.calls and not hid(m), 'a failed open hides nothing')
@@ -379,18 +402,15 @@ def home_tests(expect, page):
     m.window = 0x20001000
     tap_icon(m)
     expect(not hid(m), 'and a later icon open still has its navbar (the failed attempt left no flag)')
-    # the Settings page shows the setting when it opens (the label is found by type, not as child 0)
+    # the Settings page shows the settings when it opens: its switch images, by name
     m = armed(); m.top_main = HOME_WIN; m.call(open_cb); m.window = 0x20002000
     m.call(on_row, a0=rowsM + 12 * settings_i)
-    expect(('window_open', SETTINGS.key) in m.calls and ('widget_set_text_utf8', row_label(m, start_i), 'Start in: M1 Pod') in m.calls,
-           "the menu's Settings row opens the Settings page, which shows the setting")
-    lab = row_label(m, start_i)
-    expect(m.types[lab] == 'hscroll_label', 'the Start-in row has an hscroll_label child, found by type (with icons it is not child 0)')
-    expect(not [c for c in m.calls if c[0] == 'widget_set_text_utf8' and m.types.get(c[1]) != 'hscroll_label'],
-           'the Start-in text goes only to the hscroll_label, never to the icon image (the V2.1iM ghost text)')
-    expect(len([c for c in m.calls if c[0] == 'widget_set_text_utf8']) == 1 and not hid(m) and
-           not [c for c in m.calls if c[0] in ('widget_move', 'widget_resize')], 'exactly one text is set, and the Settings page keeps its navbar and list')
-    expect([c[0] for c in m.calls].count('widget_on') == 2 + len(SETTINGS.rows), 'its Back, its bars icon and its four rows are bound')
+    expect(('window_open', SETTINGS.key) in m.calls and switch_shows(m, start_i) is True,
+           "the menu's Settings row opens the Settings page; Start in M1 Pod is on")
+    expect(m.types.get(switch_image(m, start_i)) is None and not [c for c in m.calls if c[0] == 'widget_set_text_utf8'],
+           'the switches are images (sset_on / sset_off): no text is set anywhere (the V2.1iM ghost text cannot come back)')
+    expect(not hid(m) and not moved(m), 'the Settings page keeps its navbar and list')
+    expect([c[0] for c in m.calls].count('widget_on') == 2 + len(SETTINGS.rows), 'its Back, its bars icon and its six rows are bound (the Start in switch and Cover Flow, Playback, ... rows)')
     m.call(PSYMS['on_back'])
     expect(m.names() == ['navigator_back'], 'Back goes back to the menu')
 
@@ -459,23 +479,37 @@ def home_tests(expect, page):
         m = armed(); m.top_main = HOME_WIN; m.call(open_cb); settings_row(m, grid_i); m.present.add(kill)
         tap_icon(m)
         expect('window_open' not in m.names(), f'{kill}: no restore')
-    # 15. Start in: the persistent toggle, atomically, with the label following
+    # 15. Start in M1 Pod: the persistent switch, written atomically, the switch image following
     m = armed(); m.top_main = HOME_WIN; m.call(open_cb)
     settings_row(m, start_i)
-    lab = row_label(m, start_i)
     expect(m.fs.get(START) == b'0\n' and writes_atomically(m, START, START + '.tmp', b'0\n'),
-           'toggle -> Shanling: the setting is written atomically')
-    expect(('widget_set_text_utf8', lab, 'Start in: Shanling') in m.calls, 'the label says Shanling')
+           'switch off -> Shanling: the setting is written atomically')
+    expect(switch_shows(m, start_i) is False, 'the switch shows off')
     m.fs[BAD] = b'1\n'; m.timers = []
     m.call(fg_cb, a0=HOME_WIN); expect(not m.timers, 'with Shanling chosen Home in the foreground no longer reopens the menu')
     settings_row(m, start_i)
-    expect(m.fs.get(START) == b'1\n' and ('widget_set_text_utf8', lab, 'Start in: M1 Pod') in m.calls,
-           'toggle -> M1 Pod: written and relabelled')
+    expect(m.fs.get(START) == b'1\n' and switch_shows(m, start_i) is True, 'switch on -> M1 Pod: written, the switch shows on')
     expect(BAD not in m.fs, 're-enabling M1 Pod removes the sticky bad note')
     m.fail.add(('write', START + '.tmp'))
     settings_row(m, start_i)
-    expect(m.fs.get(START) == b'1\n' and not [c for c in m.calls if c[0] == 'widget_set_text_utf8'] and START + '.tmp' not in m.fs,
-           'a failed write changes neither the file nor the label')
+    expect(m.fs.get(START) == b'1\n' and switch_shows(m, start_i) is None and START + '.tmp' not in m.fs,
+           'a failed write changes neither the file nor the switch image')
+    m = menu_machine(page); m.fs[START] = b'0\n'; boot(m); m.top_main = HOME_WIN; m.window = 0x20002000
+    m.call(on_row, a0=rowsM + 12 * settings_i)
+    expect(switch_shows(m, start_i) is False, 'with Shanling saved the Settings page opens with the switch off')
+    # 15b. never a blank Home (audit): the menu is Home (grid hidden), then Start in is switched to Shanling without
+    #      "Shanling Home": the go-home path closes the menus and Home comes to the foreground with no menu to follow
+    def grid_shown(m): return ('widget_set_visible', m.widgets[GRID], 1) in m.calls and ('widget_set_sensitive', m.widgets[GRID], 1) in m.calls
+    m = armed(); m.top_main = HOME_WIN; m.call(open_cb); settings_row(m, start_i)
+    expect(m.fs.get(START) == b'0\n', 'Start in -> Shanling while the menu is Home')
+    m.timers = []; m.call(fg_cb, a0=HOME_WIN)
+    expect(grid_shown(m) and not m.timers, 'Home in the foreground then shows the stock grid again (no menu follows)')
+    m = armed(); m.top_main = HOME_WIN; m.call(open_cb); m.present.add(KILL_SD); m.timers = []; m.call(fg_cb, a0=HOME_WIN)
+    expect(grid_shown(m) and not m.timers, 'a kill switch that appeared while the menu was Home: Home in the foreground shows the grid')
+    m = armed(); m.top_main = HOME_WIN; m.call(open_cb); m.timer_fail = True; m.timers = []; m.call(fg_cb, a0=HOME_WIN)
+    expect(grid_shown(m) and not m.timers, 'the open timer is refused: the grid is shown, not left hidden')
+    m = armed(); m.top_main = HOME_WIN; m.call(open_cb); m.timers = []; m.call(fg_cb, a0=HOME_WIN)
+    expect(not grid_shown(m) and m.timers == [(open_cb, OPEN_MS)], 'while the menu stays Home the grid stays hidden')
     # a failed boot switches to Shanling and adds no icon; the hook still maps a tap (an icon from before), and the
     # Settings page's toggle is the way back
     m = Machine(); m.fs[RUN] = b'1\n'; boot(m)

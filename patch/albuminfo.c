@@ -21,6 +21,7 @@
  */
 #include "offsets.inc"
 #include "stock.h"
+#include "i18n.h"
 
 #define KILL_FILE "/mnt/mmc/m1pod-off"
 #define F_OK 0
@@ -49,7 +50,7 @@ static int ah_on_shuffle(void *ctx, void *e) {
     at = pod_rand(n);
     pick = deque_at(list, at);
     if (!pick || access(P(pick, REC_PATH), F_OK)) {
-        pod_toast("Storage unavailable");
+        pod_toast(TR("Storage unavailable"));
         return RET_OK;
     }
     queue = _create_deque("stSongInfo");
@@ -68,10 +69,29 @@ static int ah_on_shuffle(void *ctx, void *e) {
     return RET_OK;
 }
 
+/* "8 tracks" in the player's language: the key by n == 1 ("%d track" / "%d tracks"; a language with more
+ * plural forms words both the same), the number put where the translation has its %d. The table's text is
+ * never a printf format. Returns the length. */
+static unsigned ah_count(char *out, unsigned size, int n) {
+    const char *f = TR(n == 1 ? "%d track" : "%d tracks");
+    char digits[12];
+    unsigned o = 0, d = 0, i;
+    for (i = (unsigned)(n < 0 ? 0 : n); d == 0 || i; i /= 10) digits[d++] = (char)('0' + i % 10);
+    while (*f && o + 1 < size) {
+        if (f[0] == '%' && f[1] == 'd') {
+            while (d && o + 1 < size) out[o++] = digits[--d];
+            f += 2;
+        } else out[o++] = *f++;
+    }
+    out[o] = 0;
+    return o;
+}
+
 /* "1959 . 8 tracks" when a track carries a year (the first that does), else "8 tracks"; the All
  * albums card (classinfo[8], @0x4eebec) is only a count. */
 static void ah_meta(char *out, unsigned size, int n) {
     int year = 0, i;
+    unsigned o = 0;
     if (!*(unsigned char *)(CLASSINFO + CLASSINFO_ALL_SONGS)) {
         void *list = *(void **)PDEQ_SHOWLIST;
         for (i = 0; list && i < n && !year; ++i) {
@@ -79,8 +99,8 @@ static void ah_meta(char *out, unsigned size, int n) {
             if (year < 1000 || year > 2999) year = 0;
         }
     }
-    if (year) snprintf(out, size, "%d \xc2\xb7 %d track%s", year, n, n == 1 ? "" : "s");
-    else snprintf(out, size, "%d track%s", n, n == 1 ? "" : "s");
+    if (year) o = (unsigned)snprintf(out, size, "%d \xc2\xb7 ", year);
+    ah_count(out + o, size - o, n);
 }
 
 /* The header, after stock built it. item is the list_item holding the four widgets in stock's
@@ -88,7 +108,7 @@ static void ah_meta(char *out, unsigned size, int n) {
 __attribute__((noinline)) static void ah_restyle(void *item) {
     void *art, *title, *artist, *play, *meta, *shuf;
     void *list = *(void **)PDEQ_SHOWLIST;
-    char line[48];
+    char line[64];
     if (!item || access(KILL_FILE, F_OK) == 0 || widget_count_children(item) != 4) return;
     art = widget_get_child(item, 0), title = widget_get_child(item, 1);
     artist = widget_get_child(item, 2), play = widget_get_child(item, 3);
@@ -108,11 +128,11 @@ __attribute__((noinline)) static void ah_restyle(void *item) {
     ah_meta(line, sizeof line, list ? (int)deque_size(list) : 0);
     widget_set_text_utf8(meta, line);
     widget_use_style(play, "btn_albumbtn_style");
-    widget_set_text_utf8(play, "Play all");
+    widget_set_tr_text(play, "Play all");
     widget_move(play, AH_PAD, AH_BTN_Y);
     widget_resize(play, AH_BTN_W, AH_BTN_H);
     widget_use_style(shuf, "btn_albumbtn_style");
-    widget_set_text_utf8(shuf, "Shuffle");
+    widget_set_tr_text(shuf, "Shuffle");
     widget_on(shuf, EVT_CLICK, ah_on_shuffle, (void *)0);
     widget_move(art, AH_PAD, AH_ART_Y);
     widget_resize(art, AH_ART, AH_ART);

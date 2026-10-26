@@ -7,15 +7,16 @@ Requires unicorn (venv) and a workdir patched by tools/pod.py (its podbuild/mani
 test/patch.py calls init(WORKDIR) first, then loads the feature modules, which star-import this one.
 """
 import json, os, re, struct, sys
-from unicorn import Uc, UC_ARCH_MIPS, UC_MODE_MIPS32, UC_MODE_LITTLE_ENDIAN, UC_HOOK_CODE
+from unicorn import Uc, UC_ARCH_MIPS, UC_MODE_MIPS32, UC_MODE_LITTLE_ENDIAN, UC_HOOK_CODE, UC_HOOK_BLOCK
 from unicorn.mips_const import (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3,
-                                UC_MIPS_REG_V0, UC_MIPS_REG_SP, UC_MIPS_REG_RA, UC_MIPS_REG_T9, UC_MIPS_REG_PC, UC_MIPS_REG_GP)
+                                UC_MIPS_REG_V0, UC_MIPS_REG_SP, UC_MIPS_REG_RA, UC_MIPS_REG_T9, UC_MIPS_REG_PC, UC_MIPS_REG_GP, UC_MIPS_REG_F0)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TOOLS = os.path.join(ROOT, 'tools')
 sys.path.insert(0, TOOLS)
 import paths  # noqa: E402
 import pod  # noqa: E402
+import pod_i18n  # noqa: E402
 import pod_pages  # noqa: E402
 import pod_ui  # noqa: E402
 import awtk_ui  # noqa: E402
@@ -71,6 +72,22 @@ def art_file(key):
 REC_SIZE = 0x58
 
 
+class Traps(dict):
+    """address -> name, with a code hook at each address added (one per address, however many tables hold it):
+    only the mocked and watched instructions call back into Python, not every instruction."""
+    def __init__(self, m): super().__init__(); self.m = m
+
+    def __setitem__(self, address, name):
+        super().__setitem__(address, name)
+        if address not in self.m.hooked:
+            self.m.hooked.add(address)
+            self.m.u.hook_add(UC_HOOK_CODE, lambda u, a, s, d: self.m._hook(u, a, s, d), begin=address, end=address)
+            self.m.u.ctl_flush_tb() if hasattr(self.m.u, 'ctl_flush_tb') else None
+
+    def update(self, other):
+        for k, v in dict(other).items(): self[k] = v
+
+
 class Machine:
     """demo's LOAD segments and the payload, with every stock call and libc call trapped."""
 
@@ -88,6 +105,8 @@ class Machine:
         self.next = SCRATCH
         self.heap = HEAP
         self.calls = []
+        self.strings = {}           # the language's table for the mocked locale_info_tr: key -> text (none: English, the key itself)
+        self.bound = {}             # (widget, event) -> (handler, ctx): the latest widget_on, whatever call it was in
         self.present = set()        # paths access() finds
         self.files = {}             # path -> size, for fopen/ftell
         self.window = 0x20001000    # window_open's result (0 = failure)
@@ -97,10 +116,10 @@ class Machine:
         self.types = {}             # handle -> widget type string (widget_get_type)
         self.deques = {}            # handle -> list of record addresses
         self.showlist = []          # what loadLocalClassList leaves in *pdeq_showlist
+        self.album_artists = []     # the artists list while artist_type == 1 (the stock page's album-artist switch)
         self.class_lists = {}       # ... per class, where a test sets one (0xf004: the artists)
-        self.tracklist = []         # what loadAlbumdetailList leaves there
+        self.tracklist = []         # what loadSongList leaves there
         self.artist_albums = {}     # artist name -> its album rows (loadAlbumList 0xf004)
-        self.artist_tracks = {}     # (artist, album) -> tracks; (artist, None) the All songs row's
         self.free_mb = 1024
         self.thread_ok = True
         self.album_cover = 0        # toolsGetAlbumCover's result
@@ -108,11 +127,17 @@ class Machine:
         self.load_image = 1         # widget_load_image: 0 = success
         self.images = {}            # url -> (w, h, RGBA bytes) widget_load_image decodes when it succeeds
         self.parent = {}            # widget handle -> parent handle
-        self.handlers = {a: n for n, (_, _, a) in pod.FUNCTIONS.items()}
+        self.hooked = set()
+        self.handlers = Traps(self)
+        self.handlers.update({a: n for n, (_, _, a) in pod.FUNCTIONS.items()})
         for name in pod.LIBC:       # the payload's libc stubs, trapped at their entry
             if f'pod_lib_{name}' in PSYMS:   # --gc-sections drops the ones it does not call
                 self.handlers[PSYMS[f'pod_lib_{name}']] = name
+        self.handlers.pop(pod.FUNCTIONS['widget_to_local'][2])   # stock's own, run for real: the payload and widget_find_target both call it
         self.handlers[HOME_CLICK_RESUME] = 'stock_resume'
+        # Cover Flow's shelf commits and moves (noinline in patch/coverflow.c): ('set_value', album), ('set_offset', off)
+        self.watch = Traps(self)
+        self.watch.update({PSYMS[n]: n for n in ('set_value', 'set_offset') if n in PSYMS})
         self.handlers[pod.HOME_INIT + 12] = 'stock_init_resume'
         # the Home guard's world (patch/home.c): flash/SD files, file descriptors, the window stack
         self.fs, self.fds, self.next_fd, self.fail = {}, {}, 3, set()
@@ -122,7 +147,11 @@ class Machine:
         self.create_fail = set()    # widget constructors (view_create, ..) that return 0
         self.wm, self.top_main, self.home_opened, self.init_ret = 0x22000000, 0, 1, 0
         self.icount = 0
-        self.u.hook_add(UC_HOOK_CODE, self._hook)
+        self.bitmaps, self.free_blocks = {}, {}   # bitmap_create_ex's results; destroyed data blocks to reuse
+        self.blits, self.texts, self.measures, self.glyphs = [], [], [], []
+        self.fills, self.text_styles, self.cur_style, self.fill_color = [], [], '', 0 # canvas_fill_rect (colour, x, y, w, h); the style widget of each text
+        self.destroyed, self.loads = 0, []   # bitmaps destroyed / images loaded, over the machine's life
+        self.u.hook_add(UC_HOOK_BLOCK, self._block)   # icount: instructions of every block entered
 
     # ---------------- memory helpers ----------------
     def alloc(self, n):
@@ -134,7 +163,7 @@ class Machine:
         return a
 
     def cstr(self, s):
-        a = self.alloc(len(s) + 1); self.u.mem_write(a, s.encode() + b'\0'); return a
+        a = self.alloc(len(s.encode()) + 1); self.u.mem_write(a, s.encode() + b'\0'); return a
 
     def read_cstr(self, a):
         out = b''
@@ -163,6 +192,11 @@ class Machine:
         self.setword(r + O['REC_TYPE'], 8)
         return r
 
+    def play(self, tracks, pos):
+        """The player on tracks[pos]: the play queue (the deque at PLAY_QUEUE) holds the given song records."""
+        self.setword(pod.DATA['PLAY_QUEUE'][0], self.new_deque(tracks))
+        self.play_pos = pos
+
     def all_songs(self, artist):
         r = self.record(album='All songs', artist=artist, path='', title='All songs', name='', rid=O['ID_ALL_SONGS'])
         self.setword(r + O['REC_PATH'], 0); self.setword(r + O['REC_TYPE'], 4)
@@ -180,10 +214,14 @@ class Machine:
         return w
 
     # ---------------- the mocks ----------------
+    def _block(self, u, address, size, _): self.icount += size >> 2
+
     def _hook(self, u, address, size, _):
-        self.icount += 1
         name = self.handlers.get(address)
-        if not name: return
+        if not name:
+            w = self.watch.get(address)   # a payload function of our own: recorded, then run for real
+            if w: self.calls.append((w, struct.unpack('<i', struct.pack('<I', u.reg_read(UC_MIPS_REG_A0)))[0]))
+            return
         a0, a1, a2, a3 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3))
         sp = u.reg_read(UC_MIPS_REG_SP)
         stack = lambda i: self.word(sp + 16 + 4 * i)   # o32: arguments 4.. are on the stack
@@ -204,9 +242,17 @@ class Machine:
             nm = self.read_cstr(a1); self.calls.append(('widget_lookup', nm))
             ret = self.widgets.get(nm, 0)
         elif name == 'widget_on':
-            self.calls.append(('widget_on', a0, a1, a2, a3)); ret = 1
+            self.calls.append(('widget_on', a0, a1, a2, a3)); self.bound[(a0, a1)] = (a2, a3); ret = 1
         elif name == 'widget_set_text_utf8':
             self.calls.append(('widget_set_text_utf8', a0, self.read_cstr(a1))); ret = 0
+        elif name == 'locale_info':
+            ret = 0x23000000
+        elif name == 'locale_info_tr':   # the stock table lookup: the key itself when the table lacks it
+            raw = self.strings.get(self.read_cstr(a1), self.read_cstr(a1)).encode('utf-8')
+            ret = self.alloc(len(raw) + 1); self.u.mem_write(ret, raw + b'\0')
+        elif name == 'widget_set_tr_text':
+            key = self.read_cstr(a1)
+            self.calls.append(('widget_set_tr_text', a0, key)); self.calls.append(('widget_set_text_utf8', a0, self.tr(key))); ret = 0
         elif name == 'navigator_back':
             self.calls.append(('navigator_back',)); ret = 0
         elif name == 'on_backtoplayer_onclick':
@@ -267,7 +313,7 @@ class Machine:
             self.calls.append((kind, w, stack(1), stack(2)))
             self.widgets.setdefault(kind, w)
             ret = w
-        elif name in ('image_create', 'list_view_create', 'scroll_view_create', 'list_item_create',
+        elif name in ('image_create', 'list_item_create',
                       'label_create', 'view_create'):
             if name in self.create_fail:
                 self.calls.append((name, 0)); ret = 0
@@ -300,9 +346,11 @@ class Machine:
             self.calls.append(('window_close', a0))
         elif name == 'widget_move':
             self.props[(a0, 'x')], self.props[(a0, 'y')] = a1, a2
+            if self.mem_geometry: self.setword(a0, a1); self.setword(a0 + 4, a2)   # widget_t x, y @0, 4
             self.calls.append(('widget_move', a0, a1, a2))
         elif name == 'widget_resize':
             self.props[(a0, 'w')], self.props[(a0, 'h')] = a1, a2
+            if self.mem_geometry: self.setword(a0 + 8, a1); self.setword(a0 + 0xc, a2)   # w, h @8, 0xc
             self.calls.append(('widget_resize', a0, a1, a2))
         elif name == 'image_set_draw_type':
             self.calls.append(('image_set_draw_type', a0, a1))
@@ -310,6 +358,7 @@ class Machine:
             self.calls.append(('image_base_set_image', a0, self.read_cstr(a1)))
         elif name == 'widget_load_image':
             url = self.read_cstr(a1)
+            self.loads.append(url)
             self.calls.append(('widget_load_image', url))
             ret = self.load_image
             img = self.images.get(url)
@@ -335,12 +384,17 @@ class Machine:
                 u.reg_write(UC_MIPS_REG_V0, 0); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
                 return
             b = self.malloc(0x48); self.u.mem_write(b, bytes(0x48))
-            data = self.malloc(a0 * a1 * 4)
-            self.setword(b, a0); self.setword(b + 4, a1); self.setword(b + 0x14, data)
+            pool = self.free_blocks.setdefault(a0 * a1 * 4, [])
+            data = pool.pop() if pool else self.malloc(a0 * a1 * 4)
+            self.setword(b, a0); self.setword(b + 4, a1); self.setword(b + 0x14, data); self.setword(b + 0x10, a2)
             self.u.mem_write(b + O['BITMAP_FORMAT'], struct.pack('<H', a3))
             self.bitmap = (b, data, a0, a1)
+            self.bitmaps[b] = (data, a0, a1)
             self.calls.append(('bitmap_create_ex', a0, a1)); ret = b
         elif name == 'bitmap_destroy':
+            self.destroyed += 1
+            if a0 in self.bitmaps:
+                data, bw, bh = self.bitmaps.pop(a0); self.free_blocks.setdefault(bw * bh * 4, []).append(data)
             self.calls.append(('bitmap_destroy', a0))
         elif name == 'bitmap_get_line_length':
             ret = self.word(a0) * 4
@@ -351,10 +405,59 @@ class Machine:
             self.calls.append(('bitmap_unlock_buffer',))
         elif name == 'canvas_draw_image':
             self.calls.append(('canvas_draw_image', a1))
+            self.blits.append((a1, struct.unpack('<4i', self.u.mem_read(a2, 16)), struct.unpack('<4i', self.u.mem_read(a3, 16))))
+        # ---- the Albums grid: the canvas' text calls, wide-char titles, a navbar button
+        elif name == 'widget_prepare_text_style':
+            self.calls.append(('widget_prepare_text_style', a0))
+            self.cur_style = next((n for n, h in self.widgets.items() if h == a0), '')
+            if a1 and a1 == self.canvas_mem:   # the canvas takes the widget's font and size (canvas_t @0x34 / @0xc)
+                size = {'label_album': 22, 'label_artist': 18, 'label_row_title': 21, 'label_row_sub': 18}.get(next((n for n, h in self.widgets.items() if h == a0), ''), 16)
+                self.setword(a1 + O['CANVAS_FONT'], self.font_mem)
+                self.u.mem_write(a1 + O['CANVAS_FONT_SIZE'], struct.pack('<H', size))
+        elif name == 'font_get_vmetrics':   # the 8 byte struct through the hidden pointer in $a0: ascent, descent, line gap
+            self.u.mem_write(a0, struct.pack('<hhi', a2 - 4, -4, 2)); ret = a0
+        elif name == 'font_get_glyph':
+            # a block of full alpha per char: 8 px advance (16 for CJK and the ellipsis), 6 (12) wide, 3/4 of the size high
+            wide = a1 >= 0x2e80 or a1 == 0x2026
+            self.glyphs.append((a1, a2))
+            if a1 == 0xfffd: ret = 0x10   # RET_NOT_FOUND-like: the font has no such glyph
+            else:
+                w, h = (12 if wide else 6), a2 * 3 // 4
+                data = self.malloc(w * h); self.u.mem_write(data, bytes([255]) * (w * h))
+                self.u.mem_write(a3, struct.pack('<hhHHHBBI', 1, -(h - 2), w, h, 16 if wide else 8, 0, 0, data))
+        elif name == 'canvas_measure_text':
+            # a float in $f0: 8 px a char, 16 for CJK and the ellipsis
+            chars = struct.unpack(f'<{a2}I', self.u.mem_read(a1, 4 * a2)) if a2 else ()
+            w = float(sum(16 if c >= 0x2e80 or c == 0x2026 else 8 for c in chars))
+            u.reg_write(UC_MIPS_REG_F0, struct.unpack('<I', struct.pack('<f', w))[0])
+            self.measures.append(a2)
+            u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+            return
+        elif name == 'canvas_draw_text_in_rect':
+            chars = struct.unpack(f'<{a2}I', self.u.mem_read(a1, 4 * a2)) if a2 else ()
+            self.texts.append((''.join(map(chr, chars)), struct.unpack('<4i', self.u.mem_read(a3, 16))))
+            self.text_styles.append(self.cur_style)
+        elif name == 'canvas_set_fill_color':
+            self.fill_color = a1
+        elif name == 'canvas_fill_rect':
+            self.fills.append((self.fill_color, a1, a2, a3, stack(0)))
+        elif name == 'tk_utf8_to_utf16_ex':
+            text = bytes(self.u.mem_read(a0, a1)).decode('utf-8', 'replace')[:a3 - 1]
+            self.u.mem_write(a2, struct.pack(f'<{len(text) + 1}I', *map(ord, text), 0)); ret = a2
+        elif name == 'button_create':
+            if name in self.create_fail:
+                self.calls.append((name, 0)); u.reg_write(UC_MIPS_REG_V0, 0); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+                return
+            w = self.alloc(0x80)
+            self.children.setdefault(a0, []).append(w); self.parent[w] = a0
+            self.rect(w, a1, a2, a3, stack(0)); self.types[w] = 'button'
+            self.calls.append(('button_create', w, a0)); ret = w
         # ---- Cover Flow: the stock library
         elif name == 'loadLocalClassList':
             self.calls.append(('loadLocalClassList', a0))
             items = self.class_lists.get(a0, self.showlist)
+            if a0 == O['CLASS_ARTISTS'] and self.album_artists:   # GetAllAlbumArtist when artist_type == 1
+                items = self.album_artists if self.word(pod.DATA['ARTIST_TYPE'][0]) == 1 else items
             self.setword(pod.DATA['PDEQ_SHOWLIST'][0], self.new_deque(items))
             ret = len(items)
         elif name == 'loadAlbumList':
@@ -372,17 +475,6 @@ class Machine:
             if artist in self.artist_albums: items.append(self.all_songs(artist))
             self.setword(pod.DATA['PDEQ_SHOWLIST'][0], self.new_deque(items))
             self.setword(pod.DATA['CLASSINFO'][0], O['CLASS_ARTIST_ALBUMS'])
-            self.classinfo_artist = artist
-            ret = len(items)
-        elif name == 'loadAlbumdetailList':
-            self.calls.append(('loadAlbumdetailList', a0, a1))
-            items, cls = self.tracklist, O['CLASS_ALBUM_TRACKS']
-            if a0 == O['CLASS_ARTIST_ALBUMS']:   # 0xff11: the album by the artist in classinfo
-                rid = struct.unpack('<i', self.u.mem_read(a1 + O['REC_ID'], 4))[0]
-                album = None if rid == O['ID_ALL_SONGS'] else self.read_cstr(self.word(a1 + O['REC_ALBUM']))
-                items, cls = self.artist_tracks.get((self.classinfo_artist, album), []), 0xff11
-            self.setword(pod.DATA['PDEQ_SHOWLIST'][0], self.new_deque(items))
-            self.setword(pod.DATA['CLASSINFO'][0], cls)
             ret = len(items)
         elif name == 'loadSongList':
             self.calls.append(('loadSongList', self.read_cstr(a1), a2, a3))
@@ -426,6 +518,8 @@ class Machine:
         # ---- Shuffle: the stock play mode, the seed
         elif name == 'mclGetPlayMode':
             ret = self.mode
+        elif name == 'mclGetPlayPos':
+            ret = self.play_pos & 0xffffffff; self.calls.append(('mclGetPlayPos',))
         elif name == 'mclSetPlayMode':
             self.mode = a0; self.calls.append(('mclSetPlayMode', a0))
         elif name == 'notifyPlayMode':
@@ -468,11 +562,12 @@ class Machine:
             i = 0
             while i < len(fmt):
                 if fmt[i] == '%' and i + 1 < len(fmt):
-                    spec = re.match(r'%(0\d+)?(08)?([sdx%])', fmt[i:])
+                    spec = re.match(r'%(0\d+)?(08)?([sdux%])', fmt[i:])
                     conv = spec.group(3); i += spec.end() - 1
                     if conv == '%': out += '%'
                     elif conv == 's': out += self.read_cstr(args[ai]); ai += 1
-                    elif conv == 'd': out += str(struct.unpack('<i', struct.pack('<I', args[ai]))[0]); ai += 1
+                    elif conv == 'd': out += str(struct.unpack('<i', struct.pack('<I', args[ai]))[0]).zfill(int(spec.group(1)[1:]) if spec.group(1) else 0); ai += 1
+                    elif conv == 'u': out += str(args[ai]); ai += 1
                     else: out += f'{args[ai]:08x}'; ai += 1
                 else: out += fmt[i]
                 i += 1
@@ -511,7 +606,7 @@ class Machine:
             if src in self.fs and ('rename', dst) not in self.fail:
                 self.fs[dst] = self.fs.pop(src)
             elif src in self.fs: ret = -1
-            elif src in self.files:
+            elif src in self.files and ('rename', dst) not in self.fail:
                 self.files[dst] = self.files.pop(src); self.present.discard(src); self.present.add(dst)
             else: ret = -1
         elif name == 'unlink':
@@ -586,21 +681,37 @@ class Machine:
         u.reg_write(UC_MIPS_REG_V0, ret & 0xffffffff)
         u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
 
+    def set_language(self, table):
+        """Make the mocked stock translation answer in a language (a strings table name such as 'ru_RU'): our keys from
+        tools/pod_i18n.py, as tools/mod_strings.py writes them into the tables. None: English."""
+        self.strings = {} if table is None else {k: v[pod_i18n.table_for(table)] for k, v in pod_i18n.TEXT.items()}
+
+    def tr(self, key):
+        """The translation as the payload gets it back, UTF-8 bytes read as latin-1 chars like read_cstr's results."""
+        return self.strings.get(key, key).encode('utf-8').decode('latin-1')
+
     def rect(self, w, x, y, cw, ch):
         for k, v in (('x', x), ('y', y), ('w', cw), ('h', ch)): self.props[(w, k)] = v
 
     saved_album = 0
+    blits = ()                # the Albums grid's canvas_draw_image calls (bitmap, src rect, dst rect), texts, text measures
+    texts = ()
+    measures = ()
     slide_starts_at_1 = True   # the stock slide_menu constructor stores value = 1 (the payload sets the value itself)
-    classinfo_artist = ''
     fh = (0, '')
     stock_songlist = False   # loadSongList: stock's copy of the shown list (Shuffle) or the album mock
     mode = 0                 # mclGetPlayMode
+    play_pos = -1            # mclGetPlayPos: the playing track's index in the play queue (*PLAY_QUEUE), -1 for none
     seed = 12345             # toolsRandnum
     clock = 1                # time_now_ms
     calloc_fail = False
     played = None            # (queue records, index) handed to playing_page
     bitmap = None
     bitmap_ok = True
+    canvas_mem = 0            # a canvas in emulated memory (landscape reads its font); font_mem: the font it points at
+    font_mem = 0x7000f000
+    glyphs = ()               # (char, size) of every font_get_glyph call
+    mem_geometry = False      # widget_move / widget_resize also write the widget_t (stock widget_to_local reads it)
 
     def call(self, addr, a0=0, a1=0, count=20000, a2=0):
         self.calls = []
@@ -617,22 +728,31 @@ class Machine:
 
     def names(self): return [c[0] for c in self.calls]
 
-    def touch(self, kind, x, y=150, t=0, count=4000000):
+    def click(self, name, count=2000000):
+        """Tap the widget `name`: its latest EVT_CLICK handler (the payload's widget_on call) runs with the context it was given."""
+        w = self.widgets[name]
+        fn, ctx = self.bound[(w, O['EVT_CLICK'])]
+        return self.call(fn, a0=ctx, count=count)
+
+    def touch(self, kind, x, y=150, t=0, count=4000000, fn='on_pointer'):
         """Deliver one pointer event (EVT_POINTER_*) to the payload's touch layer, as stock's
-        widget_dispatch would: pointer_event_t with type @0, time @8, x @0x18, y @0x1c."""
+        widget_dispatch would: pointer_event_t with type @0, time @8, x @0x18, y @0x1c. fn: the handler
+        (Cover Flow's on_pointer, the Albums grid's al_on_pointer)."""
         e = self.alloc(0x30); self.u.mem_write(e, bytes(0x30))
         self.setword(e, {'down': 0xff, 'move': 0x101, 'up': 0x103, 'abort': 0x107}[kind])
         self.setword(e + 8, t); self.setword(e + 0x18, x); self.setword(e + 0x1c, y)
-        return self.call(PSYMS['on_pointer'], a0=0, a1=e, count=count)
+        return self.call(PSYMS[fn], a0=0, a1=e, count=count)
 
-    def tap(self, x, y=150, count=4000000):
-        self.touch('down', x, y, 1000, count=count); calls = list(self.calls)
-        self.touch('up', x, y, 1080, count=count); self.calls = calls + self.calls
+    def tap(self, x, y=150, count=4000000, fn='on_pointer'):
+        self.touch('down', x, y, 1000, count=count, fn=fn); calls = list(self.calls)
+        self.touch('up', x, y, 1080, count=count, fn=fn); self.calls = calls + self.calls
 
-    def settle(self, limit=200):
-        """Fire the snap timer until it stops re-arming (the harness's timer_add never runs)."""
+    def settle(self, limit=200, step=16):
+        """Fire the snap timer until it stops re-arming (the harness's timer_add never runs), the clock
+        (time_now_ms) advancing step ms before each callback."""
         seen = []
         for _ in range(limit):
+            self.clock += step
             self.call(PSYMS['on_snap'], count=2000000); seen += self.calls
             if not any(c[0] == 'timer_add' for c in self.calls): break
         self.calls = seen
@@ -729,25 +849,74 @@ def cover_page_tree(m, asset, runtime=True):
             nd.flags = nd.flags & ~F_VISIBLE | (F_VISIBLE if m.props[(h, 'visible')] else 0)
         if (h, 'sensitive') in m.props:
             nd.flags = nd.flags & ~F_SENSITIVE | (F_SENSITIVE if m.props[(h, 'sensitive')] else 0)
-    if runtime:
+    if runtime:   # and the geometry the payload's widget_move / widget_resize calls left
         covers = node(root, 'view_covers')
+        def geo(h, d): return tuple(m.props.get((h, k), v) for k, v in zip('xywh', d)) if h else d
+        covers.x, covers.y, covers.w, covers.h = geo(m.widgets.get('view_covers'), (covers.x, covers.y, covers.w, covers.h))
         slide = m.widgets.get('slide_menu')
         sf = F_ENABLE | F_VISIBLE | F_SENSITIVE
         if slide and m.props.get((slide, 'sensitive')) == 0: sf &= ~F_SENSITIVE
-        covers.children.append(Node('slide_menu', 0, 0, 320, O['CF_VIEW_H'], sf))
+        covers.children.append(Node('slide_menu', *geo(slide, (0, 0, 320, O['CF_VIEW_H'])), sf))
         if m.widgets.get('view'):
-            covers.children.append(Node('touch_layer', 0, 0, 320, O['CF_VIEW_H']))
+            covers.children.append(Node('touch_layer', *geo(m.widgets['view'], (0, 0, 320, O['CF_VIEW_H']))))
     return root
 
 
-COVER_WIDGETS = ['btn_return', 'btn_backtoplayer', 'btn_cancel', 'view_covers',
+# ---------------------------------------------------------------------------
+# Repaint, as AWTK does it: only the dirty rectangles are painted, the canvas clipped to them (canvas_begin_frame
+# 0x6447b4 -> canvas_set_clip_rect). widget_invalidate 0x668d9c with no rectangle marks the widget's own 0, 0, w, h,
+# which widget_invalidate_default 0x674920 carries up to the window by the widgets' x, y, unclipped by the parents.
+# The stock slide_menu marks its own rectangle when its xoffset changes (slide_menu_set_prop 0x613c94 -> 0x613bec)
+# and when its value does (slide_menu_set_value 0x61399c, tail call at 0x613a1c). Rectangles are (x, y, w, h) in the
+# window, from the props the payload's calls left (view_covers: the asset's place unless moved, see cover_rects).
+def abs_rect(m, w):
+    x, y = m.props.get((w, 'x'), 0), m.props.get((w, 'y'), 0)
+    p = m.parent.get(w)
+    while p and p != m.window:
+        x, y = x + m.props.get((p, 'x'), 0), y + m.props.get((p, 'y'), 0)
+        p = m.parent.get(p)
+    return x, y, m.props.get((w, 'w'), 0), m.props.get((w, 'h'), 0)
+
+
+def cover_rects(m):
+    """Give view_covers its asset rectangle and the window as its parent, so abs_rect works on the page."""
+    cv = m.widgets['view_covers']
+    for k, v in zip('xywh', (0, pod_ui.COVER_Y, 320, pod_ui.COVER_FRAME_H)): m.props.setdefault((cv, k), v)
+    m.parent[cv] = m.window
+    for k, v in zip('xywh', (0, 0, 320, CLIENT_H)): m.props[(m.window, k)] = v
+
+
+def dirty_rects(m):
+    """The window rectangles the calls of the last m.call marked for repaint."""
+    slide, out = m.widgets.get('slide_menu'), []
+    for c in m.calls:
+        if c[0] == 'widget_invalidate_force': out.append(abs_rect(m, c[1]))
+        elif slide and (c[0] == 'slide_menu_set_value' or (c[0] == 'widget_set_prop_int' and c[1] == slide and c[2] == 'xoffset')):
+            out.append(abs_rect(m, slide))
+    return out
+
+
+def covered(rects, r, step=2):
+    """Whether the union of rects covers the rectangle r (sampled every step px, and its last row and column)."""
+    x0, y0, w, h = r
+    xs = sorted(set(range(x0, x0 + w, step)) | {x0 + w - 1})
+    ys = sorted(set(range(y0, y0 + h, step)) | {y0 + h - 1})
+    return all(any(a <= x < a + c and b <= y < b + d for a, b, c, d in rects) for y in ys for x in xs)
+
+
+COVER_WIDGETS = ['btn_return', 'btn_backtoplayer', 'btn_cancel', 'navigationbar_view', 'view_covers',
                  'label_album', 'label_artist', 'label_status', 'label_title']
 
 
-def cover_machine(albums=3, tracks=2, cached=True):
+CFSORT_FILE, CFSORT_TMP = '/mnt/data/m1pod-cfsort', '/mnt/data/m1pod-cfsort.tmp'   # patch/home.h
+
+
+def cover_machine(albums=3, tracks=2, cached=True, sort='album'):
     """A machine set up to open Cover Flow: the asset's widgets, an album list and, by default,
-    a complete thumbnail cache (so no build runs)."""
+    a complete thumbnail cache (so no build runs). sort: the order setting; the machines default to the stock order
+    ('album'), which the shelf tests index by album number; 'artist' is the setting's own default (the sort tests)."""
     m = Machine()
+    if sort == 'album': m.fs[CFSORT_FILE] = b'0\n'
     for n in COVER_WIDGETS: m.widget(n)
     m.showlist = [m.record(album=f'Album {i}', artist=f'Artist {i}',
                            path=f'/mnt/mmc/m/{i}/1.flac', rid=i + 1) for i in range(albums)]
@@ -785,8 +954,9 @@ def artists_machine(artists=('Miles Davis', 'Nina Simone', 'Unknown Artist')):
     three albums, one of them (Jazz Hits) filed under Various Artists in the library list; Nina
     Simone has one; Unknown Artist none. Every library album is cached under its library key."""
     m = cover_machine(albums=0)
-    for n in ('pod_listview', 'pod_scrollview'): m.widget(n)
+    for n in ('pod_listview', 'pod_scrollview', 'btn_artisttype'): m.widget(n)
     m.props[(m.widgets['pod_scrollview'], 'w')] = 310
+    m.album_artists = [artist_rec(m, a, i + 1) for i, a in enumerate(('Various Artists', 'Miles Davis'))]
     m.class_lists[O['CLASS_ARTISTS']] = [artist_rec(m, a, -1 if a == 'Unknown Artist' else i + 1)
                                          for i, a in enumerate(artists)]
     albums = {'Miles Davis': ['Kind of Blue', 'Jazz Hits', 'Bitches Brew'], 'Nina Simone': ['Pastel Blues'],
@@ -802,28 +972,33 @@ def artists_machine(artists=('Miles Davis', 'Nina Simone', 'Unknown Artist')):
             library.append(m.record(album=album, artist=lib_artist, path=path, rid=len(library) + 1))
             c = art_file(fnv(fnv(O["FNV_SEED"], lib_artist), album) or 1)
             m.present.update((path, c)); m.files[c] = 4096
-            m.artist_tracks[(artist, album)] = [
-                m.record(album=album, artist=artist, title=f'{album} {t}', name=f'{album}{t}.flac',
-                         path=f'/mnt/mmc/{artist}/{album}/{t}.flac', rid=500 + t) for t in range(2)]
-        m.artist_tracks[(artist, None)] = [t for a in names for t in m.artist_tracks[(artist, a)]]
-    for tracks in m.artist_tracks.values():
-        for t in tracks: m.present.add(m.read_cstr(m.word(t + O['REC_PATH'])))
     m.class_lists[O['CLASS_ALBUMS']] = library
     m.showlist = library
     return m
 
 
+def _pos(field):
+    """The address of Cover Flow's cfpos.value (0) or cfpos.off (1); clang may split the struct (cfpos.0, cfpos.1)."""
+    return PSYMS['cfpos'] + 4 * field if 'cfpos' in PSYMS else PSYMS[f'cfpos.{field}']
+
+
+def shelf_value(m): return struct.unpack('<i', struct.pack('<I', m.word(_pos(0))))[0]
+def shelf_off(m): return struct.unpack('<i', struct.pack('<I', m.word(_pos(1))))[0]
+def put_value(m, v): m.setword(_pos(0), v)
+def put_off(m, v): m.setword(_pos(1), v)
+
+
 def paint(m):
     """One EVT_AFTER_PAINT on the touch layer, as stock's widget_paint dispatches it."""
-    m.props[(m.widgets['slide_menu'], 'h')] = O['CF_VIEW_H']
     event = m.alloc(0x40); m.u.mem_write(event, bytes(0x40))
     m.setword(event + O['EVENT_PAINT_CANVAS'], 0x22220000)
     m.call(PSYMS['on_paint'], a0=0, a1=event, count=400000000)
 
 
-def host_frame(frac, ring=None):
+def host_frame(frac, ring=None, land=False):
     """The same shelf from the host build of patch/coverflow.c: every slot the placeholder, which
-    is what the payload has when no cover decodes (widget_load_image fails in the harness)."""
+    is what the payload has when no cover decodes (widget_load_image fails in the harness). land: the
+    landscape shelf, turned, in its window-sized bitmap."""
     try:
         import ctypes, tempfile
         sys.path.insert(0, os.path.join(ROOT, 'test'))
@@ -832,7 +1007,9 @@ def host_frame(frac, ring=None):
             lib = hostcf.build(tmp)
             tex = (ctypes.c_uint * (O['ART_SIZE'] * O['ART_SIZE']))()
             for i in range(len(tex)): tex[i] = 0xff2b2b2b
-            frame = hostcf.render(lib, frac, [tex if r else None for r in ring] if ring else [tex] * 7)
+            texs = [tex if r else None for r in ring] if ring else [tex] * 7
+            frame = (hostcf.render(lib, frac, texs, hostcf.land_cfg(lib), O['CFL_H'], O['CFL_W']) if land
+                     else hostcf.render(lib, frac, texs))
             return bytes(frame)
     except Exception as e:                                   # noqa: BLE001 - a host build is optional
         print('  host build failed:', e)

@@ -11,8 +11,10 @@ dropdown_dialog.bin) carries three kinds of text, all with inline font sizes:
                                                                             16 -> 14 (disable, focused)
 
 pgbar_battery shows no number there (show_text false, stock), the slider and the icons have no text.
-Nothing moves: every box keeps its geometry and vertical alignment (stock: middle, or AWTK's
-default, which centres too), so the smaller text stays centred in it. The tool measures what it
+The caption boxes are widened from 57 to 71 px around the same centre (the tiles are 74 px apart, so
+3 px stay between neighbours): "Bluetooth" is 60 px at 16, so in 57 AWTK broke it as "Bluetoot/h" and
+"Playbac/k Setting". Nothing else moves; the boxes keep height and vertical alignment (stock:
+middle, or AWTK's default, which centres too), so the text stays centred. The tool measures what it
 sets with the shared text model (awtk_text.StbText: truncated advances + 1 px per glyph) in the
 tree's own font, so it must run after the font step:
 
@@ -22,7 +24,8 @@ tree's own font, so it must run after the font step:
   - "12:59 PM" (the widest clock) must fit bar_dclock;
   - every tile caption in English and Simplified Chinese (strings/en_US.bin, zh_CN.bin, the keys
     demo sets @0x4743c8..) must wrap into the 40 px box (lines x font size), greedy word wrap as
-    AWTK breaks lines; the other languages are reported (several overflow already in stock).
+    AWTK breaks lines, and no Latin word may be broken inside; the other languages are reported
+    (several overflow or break words already in stock).
 
 Usage: mod_pulldown.py SRC_WORKDIR OUT_WORKDIR     (OUT == SRC edits in place)
 """
@@ -47,6 +50,7 @@ TILE_KEYS = ('wifiset_wifi', 'wifiset_bt', 'system_keylock', 'gain_high', 'gain_
              'playset', 'sysset', 'usbmode_audio', 'usbmode_dac', 'usbmode_storge')
 MUST_FIT = ('en_US', 'zh_CN')
 VOLUME_MAX, CLOCK_MAX = '100', '12:59 PM'
+TILE_W, TILE_DX = 71, -7                 # caption box width and x shift (stock 57; the box centre stays)
 STOCK_VOLUME_W, STOCK_SPACING = 30, 4        # stock label_volume width and view_bar_left spacing
 
 
@@ -90,6 +94,11 @@ def wrap(ttf, text, px, width):
     return lines
 
 
+def split_words(ttf, text, px, width):
+    """Latin words wider than the box (AWTK would break them inside)."""
+    return [t for t in text.split(' ') if t.isascii() and awtk_width(ttf, t, px) > width]
+
+
 def resize(w, table, states=STATES):
     """Every state that sets a font size gets the table's smaller one; returns {old: new}."""
     done = {}
@@ -128,19 +137,22 @@ def edit(root, ttf, texts, report):
     for name in TILES:
         w = root.find(name); check(w is not None and w.type == 'label', f'{name} missing')
         spx = int(w.get('style:normal:font_size'))
+        check(w.w == 57, f'{name}: unexpected caption width {w.w}')
+        w.x += TILE_DX; w.w = TILE_W      # before measuring: fits() reads w.w
         changed = resize(w, TILE)
         tpx = int(w.get('style:normal:font_size'))
-        fits = lambda t, px: len(wrap(ttf, t, px, w.w)) * px <= w.h
+        fits = lambda t, px, bw=w.w: len(wrap(ttf, t, px, bw)) * px <= w.h
         for lang in MUST_FIT:
             for k, t in texts[lang].items():
+                check(not split_words(ttf, t, tpx, w.w), f'{lang} {k} {t!r}: a word is wider than {w.w} px at {tpx}')
                 check(fits(t, tpx), f'{lang} {k} {t!r} does not fit {w.w}x{w.h} at {tpx}: {wrap(ttf, t, tpx, w.w)}')
-        if name == TILES[0]:   # the boxes are all 57 x 40: count once
-            over = lambda px: sorted(f'{l}:{k}' for l, kv in texts.items() for k, t in kv.items() if not fits(t, px))
-            report.append(f'tile captions over 40 px: {len(over(spx))} at {spx} px (stock), {len(over(tpx))} at {tpx} px '
-                          f'(none in {"/".join(MUST_FIT)}); still over: {", ".join(over(tpx))}')
+        if name == TILES[0]:   # the boxes are all the same size: count once
+            over = lambda px, bw: sorted(f'{l}:{k}' for l, kv in texts.items() for k, t in kv.items() if not fits(t, px, bw))
+            report.append(f'tile captions over 40 px: {len(over(spx, 57))} at {spx} px x 57 (stock), {len(over(tpx, w.w))} at {tpx} px x {w.w} '
+                          f'(none in {"/".join(MUST_FIT)}); still over: {", ".join(over(tpx, w.w))}')
     report.append(f'tiles {changed}')
     after = [(w.type, w.name, w.x, w.y, w.w, w.h) for w in root.walk()]
-    moved = [a for a, b in zip(shape, after) if a != b and a[1] != 'label_volume']   # its width is the only one
+    moved = [a for a, b in zip(shape, after) if a != b and a[1] != 'label_volume' and a[1] not in TILES]   # the volume label's width and the caption boxes
     check(len(shape) == len(after) and not moved, f'widgets moved: {moved}')
 
 

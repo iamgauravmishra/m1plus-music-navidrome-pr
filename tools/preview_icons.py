@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""docs/icons-preview.png: the icon set before (the stock tree) and after (the release tree), 1:1 device pixels, with a
+"""out/preview/icons.png: the icon set before (the stock tree) and after (the release tree), 1:1 device pixels, with a
 3x zoom strip. Markers on the "after" side: blue C = custom Tabler-style SVG, orange K = stock image kept.
 
   preview_icons.py BEFORE_TREE AFTER_TREE OUT.png        (unpacked work trees; venv python)
@@ -8,6 +8,7 @@ import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PIL import Image, ImageDraw, ImageFont
 import mod_icons as M
+import awtk_strings
 from stb_raster import StbFont
 
 RAW = 'rootfs/release/assets/default/raw'
@@ -16,9 +17,19 @@ WHITE = (255, 255, 255)
 ANN = ImageFont.load_default(13); ANN_B = ImageFont.load_default(16)
 
 class Side:
-    def __init__(self, tree, after):
+    def __init__(self, tree, after, locale='en_US'):
         self.tree = tree; self.d = os.path.join(tree, RAW, 'images/xx'); self.after = after
         self.font = StbFont(os.path.join(tree, RAW, 'fonts/default.ttf'))
+        self.strings = dict(awtk_strings.load(os.path.join(tree, RAW, 'strings', locale + '.bin')))   # the language shown (a strings table name)
+    def shown(self, w):
+        """The text of an asset widget as the app shows it: its tr_text key through the language's table (the key itself
+        when the table lacks it, as locale_info_tr does), else its text."""
+        k = w.get('tr_text')
+        return self.strings.get(k, k) if k is not None else w.get('text')
+    def clip(self, text, px, room):
+        """An hscroll_label that is not scrolling: the text cut with an ellipsis where it passes its box."""
+        while self.font.width(text, px) > room and len(text) > 1: text = text[:-2] + '…' if text.endswith('…') else text[:-1] + '…'
+        return text
     def img(self, n): return Image.open(os.path.join(self.d, n + '.png')).convert('RGBA')
     def text(self, im, x, y_mid, s, px, rgb=WHITE, anchor='l'):
         w = self.font.width(s, px)
@@ -108,30 +119,132 @@ def home_pad():
     m = re.search(r'#define HOME_PAD (\d+)', open(os.path.join(M.ROOT, 'patch', 'offsets.inc')).read())
     return int(m.group(1))
 
-def pod_page(s, key, tree_rows=8, home=False):
+def pod_page(s, key, tree_rows=8, home=False, first=0, title=None, icon=None, order=None, switches=None, arrows=None, values=None):
     """A mock of an M1 Pod rows page from the tree's ui asset: navbar title, then each list_item row
     (icon image, label, chevron) on black with the 1 px #222222 hairline. home=True: the Home instance of the
-    menu, no navbar at all (the payload hides it) and the list from y HOME_PAD to HOME_PAD above the 450 px window's bottom."""
+    menu, no navbar at all (the payload hides it) and the list from y HOME_PAD to HOME_PAD above the 450 px window's bottom.
+    title / icon: what the payload sets at run time (the Artists page's title and toggle glyph); the toggle button, if the
+    asset has one (btn_artisttype), is drawn centred in its place.
+    order: the row names top to bottom as patch/menu.c arranged them (hidden rows are left out; default: the asset's order);
+    switches: {switch image name: on} (the Settings and Main Menu pages set them at run time); arrows: the up-arrow buttons shown;
+    values: {value label name: text} (the Cover Flow settings page's Sort value, as the payload sets it)."""
     import awtk_ui
     root = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', key + '.bin'), 'rb').read())
     pad = home_pad()
     top = pad if home else 50
     im = Image.new('RGBA', (W, 450 if home else 50 + tree_rows * 52), (0, 0, 0, 255)); d = ImageDraw.Draw(im)
     if not home:
-        title = next(w for w in root.walk() if w.name == 'label_title').get('text')
-        s.text(im, 36, 25, title, title_px(s.tree))
+        lt = next(w for w in root.walk() if w.name == 'label_title')
+        title = title or s.shown(lt)
+        s.text(im, 36, 25, s.clip(title, title_px(s.tree), lt.w), title_px(s.tree))
         im.alpha_composite(s.img('return'), (14, 14))
         im.alpha_composite(s.img('back_to_player'), (278, 13))
-    for r in [w for w in root.walk() if w.type == 'list_item'][:tree_rows]:
-        y = top + r.y
+        tog = next((w for w in root.walk() if w.name == 'btn_artisttype'), None)
+        if tog:
+            ic = s.img(icon or tog.get('style:normal:icon'))
+            im.alpha_composite(ic, (tog.x + (tog.w - ic.width) // 2, (tog.h - ic.height) // 2))
+    items = [w for w in root.walk() if w.type == 'list_item']
+    if order is not None: items = [next(w for w in items if w.name == n) for n in order]
+    items = items[first:first + tree_rows]
+    for k, r in enumerate(items):
+        y = top + (k * 52 if order is not None else r.y - (items[0].y if first else 0))
         if y >= im.height: break
         d.rectangle((0, y + 51, W - 1, y + 51), fill=(0x22, 0x22, 0x22))
         for c in r.children:
-            if c.type == 'hscroll_label': s.text(im, c.x, y + 26, c.get('text'), 21)
+            if c.type == 'hscroll_label': s.text(im, c.x, y + 26, s.clip(s.shown(c), 21, c.w), 21)
+            elif c.type == 'image' and c.name.startswith('pod_switch'):
+                on = (switches or {}).get(c.name, c.get('image') == 'sset_on')
+                im.alpha_composite(s.img('sset_on' if on else 'sset_off'), (c.x, y + c.y))
+            elif c.type == 'label' and c.name.startswith('pod_value'):   # a value row's grey value, right aligned (the payload sets its text by key)
+                text = (values or {}).get(c.name) or s.shown(c)
+                s.text(im, c.x + c.w, y + 26, text, int(c.get('style:normal:font_size')), (0xAA,) * 3, 'r')
+            elif c.type == 'button':
+                if arrows is None or c.name in arrows:
+                    ic = s.img(c.get('style:normal:icon')); im.alpha_composite(ic, (c.x + (c.w - ic.width) // 2, y + (c.h - ic.height) // 2))
             elif c.type == 'image' and c.get('image') != 'right_arrow': im.alpha_composite(s.img(c.get('image')), (c.x, y + c.y))
             elif c.type == 'image': im.alpha_composite(s.img(c.get('image')), (c.x + 8, y + 16))
     if home: d.rectangle((0, 450 - pad, W - 1, 449), fill=(0, 0, 0))     # the list ends HOME_PAD above the screen edge
     return im
+
+def offsets():
+    """The numeric #defines of patch/offsets.inc (the Albums grid's geometry)."""
+    import re
+    return {m.group(1): int(m.group(2), 0) for m in re.finditer(r'^#define (\w+) (-?(?:0x[0-9a-fA-F]+|\d+))u?\b', open(os.path.join(M.ROOT, 'patch', 'offsets.inc')).read(), re.M)}
+
+ALBUMS = [('Kind of Blue', 'Miles Davis', (70, 110, 190)), ('A Love Supreme', 'John Coltrane', (190, 140, 60)),
+          ('Abbey Road', 'The Beatles', (90, 160, 110)), ('The Dark Side of the Moon', 'Pink Floyd', (60, 40, 110)),
+          ('Rumours', 'Fleetwood Mac', (170, 90, 80)), ('Thriller', 'Michael Jackson', None),
+          ('OK Computer', 'Radiohead', (110, 130, 150)), ('Blue', 'Joni Mitchell', (50, 90, 170)),
+          ('Nevermind', 'Nirvana', (60, 150, 190)), ('Pet Sounds', 'The Beach Boys', (200, 170, 110)),
+          ('日本語のアルバム名前', 'ユーミン', (150, 80, 140)), ('Low', 'David Bowie', (120, 120, 90))]
+
+def sample_cover(rgb, size):
+    """A stand-in cover: a diagonal gradient of rgb; None is the stock placeholder disc (no cache file)."""
+    im = Image.new('RGB', (size, size)); d = ImageDraw.Draw(im)
+    if rgb is None:
+        d.rectangle((0, 0, size, size), fill=(0x2B,) * 3); c = size // 2
+        d.ellipse((c - size * 0.42, c - size * 0.42, c + size * 0.42, c + size * 0.42), fill=(0x40,) * 3)
+        d.ellipse((c - size * 0.12, c - size * 0.12, c + size * 0.12, c + size * 0.12), fill=(0x2B,) * 3)
+        return im.convert('RGBA')
+    for y in range(size):
+        k = 0.55 + 0.45 * (1 - y / size)
+        d.line((0, y, size, y), fill=tuple(int(v * k) for v in rgb))
+    d.ellipse((size * 0.25, size * 0.25, size * 0.75, size * 0.75), outline=tuple(min(255, v + 70) for v in rgb), width=max(1, size // 30))
+    return im.convert('RGBA')
+
+def save_compact(im, path, colors=128):
+    """A palette PNG (median cut, no dither): the previews are flat UI, and docs/ history keeps every regeneration."""
+    im.convert('RGB').quantize(colors, Image.Quantize.MEDIANCUT).save(path, optimize=True)
+
+def albums_navbar(s, im, to):
+    """The Albums page's navbar (Back, title, Now Playing) with the mode toggle, flush left of Now Playing (NAV_VIEW_X),
+    showing the glyph of the mode it switches to."""
+    o = offsets()
+    s.text(im, 36, 25, 'Albums', title_px(s.tree))
+    im.alpha_composite(s.img('return'), (14, 14))
+    im.alpha_composite(s.img('back_to_player'), (278, 13))
+    n = 'pod_nav_' + to
+    im.alpha_composite(s.img(n), (o['NAV_VIEW_X'] + (o['NAV_VIEW_W'] - s.img(n).width) // 2, (o['NAV_H'] - s.img(n).height) // 2))
+
+def albums_grid(s, scroll=0):
+    """ui/m1pod_albums.bin as patch/albums.c paints it: GRID_COLS covers a row, a one-line title (ellipsis) under each."""
+    o = offsets(); W_, H_ = 320, 450
+    im = Image.new('RGBA', (W_, H_), (0, 0, 0, 255)); albums_navbar(s, im, 'list')
+    cover, gap, m, tg, th = o['GRID_COVER'], o['GRID_GAP'], o['GRID_MARGIN'], o['GRID_TITLE_GAP'], o['GRID_TITLE_H']
+    pitch = cover + tg + th + gap
+    for a, (title, _, rgb) in enumerate(ALBUMS * 2):
+        x, top = m + (a % o['GRID_COLS']) * (cover + gap), 50 + gap + (a // o['GRID_COLS']) * pitch - scroll
+        if top >= H_ or top + cover + tg + th <= 50: continue
+        c = sample_cover(rgb, cover); y0, y1 = max(50, top), min(H_, top + cover)
+        if y1 > y0: im.alpha_composite(c.crop((0, y0 - top, cover, y1 - top)), (x, y0))
+        ty = top + cover + tg
+        if ty >= 50 and ty + th <= H_:
+            while s.font.width(title, 16) > cover and len(title) > 1:      # the ellipsis cut, as al_title
+                title = title[:-2] + '…' if title.endswith('…') else title[:-1] + '…'
+            s.text(im, x, ty + th / 2, title, 16)
+    return im
+
+def albums_list(s, pressed=1):
+    """ui/m1pod_albums.bin in list mode as patch/albums.c paints it: LIST_ROW_H rows, a LIST_ART px cover, the album (21 px)
+    and the artist (18 px, #AAAAAA) cut with an ellipsis at LIST_TEXT_W, a hairline under each row, row `pressed` held down."""
+    o = offsets(); H_ = 450
+    im = Image.new('RGBA', (W, H_), (0, 0, 0, 255)); d = ImageDraw.Draw(im); albums_navbar(s, im, 'grid')
+    rh = o['LIST_ROW_H']
+    def cut(text, px):
+        while s.font.width(text, px) > o['LIST_TEXT_W'] and len(text) > 1:      # the ellipsis cut, as al_fit
+            text = text[:-2] + '…' if text.endswith('…') else text[:-1] + '…'
+        return text
+    for r, (title, artist, rgb) in enumerate(ALBUMS * 2):
+        y = 50 + r * rh
+        if y >= H_: break
+        if r == pressed: d.rectangle((0, y, W - 1, y + rh - 2), fill=(0x33, 0x33, 0x33))
+        d.rectangle((0, y + rh - 1, W - 1, y + rh - 1), fill=(0x22, 0x22, 0x22))
+        im.alpha_composite(sample_cover(rgb, o['LIST_ART']), (o['LIST_ART_X'], y + o['LIST_ART_Y']))
+        if y + o['LIST_TITLE_Y'] + o['LIST_TITLE_H'] <= H_:     # a text not wholly in the view is not drawn
+            s.text(im, o['LIST_TEXT_X'], y + o['LIST_TITLE_Y'] + o['LIST_TITLE_H'] / 2, cut(title, 21), 21)
+        if y + o['LIST_SUB_Y'] + o['LIST_SUB_H'] <= H_:
+            s.text(im, o['LIST_TEXT_X'], y + o['LIST_SUB_Y'] + o['LIST_SUB_H'] / 2, cut(artist, 18), 18, (0xAA, 0xAA, 0xAA))
+    return im.crop((0, 0, W, H_))
 
 def zoom_strip(s):
     names = ['bar_play', 'bar_pause', 'bar_vol0', 'bar_vol1', 'bar_vol2', 'bar_vol3', 'bar_vol4', 'bar_wifi1', 'bar_wifi2',
@@ -162,6 +275,6 @@ def main():
         y += h + 4
     d.text((pad, y), 'Status bar icons 3x: ' + sides[0][0] + ' above, ' + sides[1][0] + ' below', fill=(0xAA,) * 3, font=ANN_B); y += 22
     for _, s in sides: sh.alpha_composite(zoom_strip(s), (pad, y)); y += 84
-    sh.crop((0, 0, sh.width, y)).convert('RGB').save(out); print('wrote', out)
+    save_compact(sh.crop((0, 0, sh.width, y)), out); print('wrote', out)
 
 if __name__ == '__main__': main()

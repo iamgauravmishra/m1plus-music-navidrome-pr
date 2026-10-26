@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""docs/battery-unified-preview.png: the status bar's and the lock screen's battery from a built tree,
+"""out/preview/battery.png: the status bar's and the lock screen's battery from a built tree,
 states empty / half / full / charging / low at 8x, with the app's progress-bar fill drawn UNDER the
 image exactly where the tree's ui files put it. Also asserts the fill rectangle lies inside the
 outline's inner edge for every level (the alignment check).

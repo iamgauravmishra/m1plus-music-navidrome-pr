@@ -21,7 +21,7 @@ import awtk_style
 from modlib import clone_workdir, edit_ui
 
 UI = 'rootfs/release/assets/default/raw/ui'
-PAGES = ('m1pod_menu', 'm1pod_shuffle', 'm1pod_settings', 'm1pod_artists', 'm1pod_cover')
+PAGES = ('m1pod_menu', 'm1pod_shuffle', 'm1pod_settings', 'm1pod_extras', 'm1pod_artists', 'm1pod_cover', 'm1pod_cfset')
 TITLE_W = 200                     # the stock navbar title width
 IMG_MTIME = 1750924035            # as the other added ui files (mod_icons.py)
 
@@ -29,8 +29,8 @@ IMG_MTIME = 1750924035            # as the other added ui files (mod_icons.py)
 def edit(root):
     t = root.find('label_title')
     assert t is not None and (t.x, t.y, t.h) == (36, 14, 22), 'unexpected title geometry'
-    assert t.w in (248, TITLE_W), f'unexpected title width {t.w}'
-    t.w = TITLE_W
+    assert t.w <= 248, f'unexpected title width {t.w}'
+    t.w = min(t.w, TITLE_W)   # a page with a navbar toggle (Cover Flow) already ends its title at the toggle's left edge
 
 
 STYLE_RAW = 'rootfs/release/assets/{theme}/raw/styles/default.bin'

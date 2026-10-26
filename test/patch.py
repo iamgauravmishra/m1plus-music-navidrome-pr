@@ -11,7 +11,7 @@ Usage: venv/bin/python -I test/patch.py WORKDIR [MODULE...]     (default: every 
 import importlib.util, os, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-MODULES = ['menu', 'coverflow', 'assets', 'artists', 'rows', 'albuminfo', 'shuffle', 'home']
+MODULES = sorted(f[:-3] for f in os.listdir(os.path.join(HERE, 'pod')) if f.endswith('.py') and f != 'harness.py')
 
 
 def load(name, path):

@@ -154,6 +154,28 @@ STATUS_ICONS = {   # redrawn on the same canvas; stock bytes pinned
 }
 GLYPH_ON, GLYPH_OFF = (255, 255, 255), (0x66, 0x66, 0x66)   # q2-pod status_icon: white / #666666
 
+# The stock orange #FE7E40 left in images, recoloured neutral at build time (V2.1lA, docs/ui.md "Accents"):
+# name -> (stock SHA-256, target colour, knob circle (cx, cy, r) or None). Alpha is kept bit for bit.
+FILL, THUMB, TILE = (0xEE, 0xEE, 0xEC), (0x77, 0x77, 0x77), (0x33, 0x33, 0x33)   # slider fill / thumb disc / cover tile
+KNOB = (42.5, 14, 15)        # the toggles' round knob (right edge of the "on" images)
+ACCENT_ART = {
+    'sset_on.png': ('d3b8d22e033c3cac37f2939ef469d4852f32cf845f5293bf5c2ad126cd1cdd56', FILL, KNOB),
+    'pset_dual.png': ('1af1fd22fd00ba42a33bbe4dc1d8f96f160d6afd3708d6387a4fd5fb7d19ca5a', FILL, KNOB),
+    'pset_high.png': ('90d0718c13aaaadc45a9c92c395cbaf82d877c11f9d043807b8dbd08fe678d0e', FILL, KNOB),
+    'vol_progress.png': ('c76fa2f01c16481819b8857f3bb73a1fa4c0c329cc7f0197db315690408a75ae', FILL, None),
+    'volume_fg.png': ('b96519372917f4e96d36d70066a81d2a810c9843eae231ba0a57f9d18c00ca1d', FILL, None),
+    'drop_fg.png': ('fb5a48820bc9d4deec246e07f505a84b8eeddbd6f279424500be4515493eaf2e', FILL, None),
+    'eq_plan.png': ('d6265a58b756b8d50d527ce1441d5eecda0c044a21f687693caa0e586eeeeb91', FILL, None),
+    'other_progress.png': ('946a53aea72b80e4c089ca2bc73e229f3614731ae5148f27b5257b87cf73dd54', FILL, None),
+    'cdprogress_bar.png': ('71426218829be81778e7d9d503f795ece73d5c06098e6347b4cf586a8e658304', FILL, None),
+    'datetime_back.png': ('e9716de7a2999e2a465cca901d551e34acb8e6a39353244422aa9087808bf2d3', FILL, None),
+    'balance_dot.png': ('96b58613949673255e18c014565a9fe980c8ad1ceb00d8aeaf7d6158f30968a4', THUMB, None),
+    'light_dot.png': ('5e7e6f1c3d9265d9601bcedaca8cb7b7eb7a9e92b38b93a30786e6cde40f8fc9', THUMB, None),
+    'screensaver_defaulticon.png': ('29b5a855eb50e2b27da493bcc4a329f8c50f66f6d7555914ca3c960a4423cbb0', THUMB, None),
+    'defaultcover.png': ('8c4f7c9e81c953d0d49c74dba8a9e28d31e099d3665854e6e15a3b6c01c7e10b', TILE, None),
+    'scover_default.png': ('ef940f9ff070036976fff9bb7fd3128ce5ebb072603098125424ae547c8febeb', TILE, None),
+}
+
 def sha256(b): return hashlib.sha256(b).hexdigest()
 
 def write_keep_mode(path, data):
@@ -400,6 +422,41 @@ def png_bytes(im):
     import io
     b = io.BytesIO(); im.save(b, 'PNG', optimize=True); return b.getvalue()   # no metadata chunks
 
+def accent_to(im, target, knob=None):
+    """The orange of a stock image to `target`: per pixel the HSV saturation against the accent's says
+    how far it is orange (t), its value how bright (shading and dark text on the orange keep their
+    relative depth); the grey part (min channel) is kept. A `knob` circle (the toggles) is turned dark
+    grey by luma, so on = dark knob on a white track (the pull-down's white disc with a dark glyph).
+    Alpha is untouched."""
+    import colorsys
+    px = im.load(); sat_a = (254 - 64) / 254
+    for y in range(im.height):
+        for x in range(im.width):
+            r, g, b, a = px[x, y]
+            if not a: continue
+            h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+            t = min(1.0, s / sat_a) if h <= 0.12 else 0.0
+            if knob and t < 0.5 and (x - knob[0]) ** 2 + (y - knob[1]) ** 2 <= knob[2] ** 2:
+                n = max(0, min(255, round(0x20 + ((r * 299 + g * 587 + b * 114) / 1000 - 150) * 0.25)))
+                px[x, y] = (n, n, n, a); continue
+            m = min(r, g, b); k = (v * 255 / 254) ** 1.5
+            px[x, y] = (*(round(m * (1 - t) + t * min(255, c * k)) for c in target), a)
+    return im
+
+def apply_accents(root):
+    from PIL import Image
+    import io
+    changed = []
+    for name, (pin, target, knob) in sorted(ACCENT_ART.items()):
+        p = os.path.join(root, IMG, name); data = open(p, 'rb').read()
+        assert sha256(data) == pin, f'{name}: not the audited stock image'
+        im = Image.open(io.BytesIO(data)); assert im.mode == 'RGBA', f'{name}: {im.mode}'
+        out = png_bytes(accent_to(im.copy(), target, knob))
+        o = Image.open(io.BytesIO(out)); assert o.size == im.size and o.mode == 'RGBA'
+        assert o.getchannel('A').tobytes() == im.getchannel('A').tobytes(), f'{name}: alpha changed'
+        write_keep_mode(p, out); changed.append((name, len(data), len(out)))
+    return changed
+
 def apply_icons(root):
     from PIL import Image
     import io
@@ -484,6 +541,8 @@ def apply(out):
               f'mod {after[k][0]:.2f} ({after[k][2]} on {after[k][1]})')
     icons = apply_icons(out)
     print(f'theme: {len(icons)} images, {sum(a for _, a, _ in icons)} -> {sum(b for _, _, b in icons)} bytes')
+    acc = apply_accents(out)
+    print(f'theme: {len(acc)} accent images neutral, {sum(a for _, a, _ in acc)} -> {sum(b for _, _, b in acc)} bytes')
     o, n, _ = edit_ui(os.path.join(out, BAR), apply_bar); print(f'theme: {BAR} {len(o)} -> {len(n)} bytes')
     o, n, _ = edit_ui(os.path.join(out, HOME), apply_home); print(f'theme: {HOME} {len(o)} -> {len(n)} bytes')
 

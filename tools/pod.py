@@ -18,7 +18,8 @@ project needs:
     slots -- both pinned.
 
 A second hook, home_page_init, runs the boot guard (patch/home.c); a third, albuminfo_listitem0_layout,
-restyles the album page's header (patch/albuminfo.c). The library rows are pinned
+restyles the album page's header (patch/albuminfo.c), a fourth, playing_page_init, tints Now Playing
+and shows the remaining time (patch/nowplaying.c). The library rows are pinned
 call-site and immediate edits (patch/rows.json). Every patched word and the input demo are pinned
 by value/SHA before anything is written.
 
@@ -41,7 +42,7 @@ OBJCOPY = os.path.join(LLVM, 'llvm-objcopy')
 LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
-SOURCES = ['m1pod.c', 'coverflow.c', 'artists.c', 'shuffle.c', 'albuminfo.c', 'rows.c', 'home.c']
+SOURCES = ['m1pod.c', 'menu.c', 'covercache.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'albuminfo.c', 'nowplaying.c', 'rows.c', 'home.c']
 
 FLAGS = ['--target=mipsel-linux-gnu', '-march=mips32r2', '-mabi=32', '-mfp64',
          '-mno-abicalls', '-fno-pic', '-G0', '-ffreestanding', '-fno-builtin',
@@ -52,7 +53,6 @@ FLAGS = ['--target=mipsel-linux-gnu', '-march=mips32r2', '-mabi=32', '-mfp64',
 # Stock V2.1 demo after mod_space zeroes its .pdr (what this step receives). demo is unchanged by
 # the battery/lockscreen asset mods.
 ZEROED_DEMO_SHA = 'cdd2e97e85076e8ed4f7ce7b34b7b8065ab041477ddeb2b00dc78aa541c37a7b'
-STOCK_DEMO_SHA = '29e23119bc2a0f153f3ea0ba942a39754d1aab0879c1040fae2269df8bd9b3f1'
 
 BASE = 0xb00000            # payload load address (stock LOAD ends at va 0xa10fc8)
 GP = 0xa03ed0             # demo's $gp (DT_PLTGOT + 0x7ff0); every PIC prologue resolves this
@@ -72,6 +72,12 @@ HOME_INIT_PROLOGUE = (0x3c1c004d, 0x279cf1fc, 0x0399e021)
 # to-foreground rebuild), never at boot; m1pod_albuminfo_header runs the stock function first.
 ALBUMINFO_HEADER = 0x526264
 ALBUMINFO_HEADER_PROLOGUE = (0x3c1c004e, 0x279cdc6c, 0x0399e021)
+
+# The fourth hook (patch/nowplaying.c): playing_page_init, the Now Playing page's init (called by the navigator's
+# page-init dispatcher only when the page is built, never at boot). m1pod_playing_init runs the stock function
+# first, then starts the page-scoped tint and remaining-time timer.
+PLAYING_INIT = 0x53d1e4
+PLAYING_INIT_PROLOGUE = (0x3c1c004c, 0x279c6cec, 0x0399e021)
 
 # Stock functions the payload calls, by absolute address (pinned). (return, args, address)
 FUNCTIONS = {
@@ -112,16 +118,28 @@ FUNCTIONS = {
     'bitmap_unlock_buffer':    ('int', 'void *', 0x640828),
     'bitmap_get_line_length':  ('unsigned', 'void *', 0x640264),
     'canvas_draw_image':       ('int', 'void *, void *, const void *, const void *', 0x6455d4),
+    # the Albums grid (patch/albums.c): its pointer position and the canvas text calls (draw_text_in_rect draws at the
+    # canvas' current font, colour and alignment, widget_prepare_text_style sets them from the widget's style)
+    'widget_to_local':         ('int', 'void *, void *', 0x669b88),
+    'widget_prepare_text_style': ('int', 'void *, void *', 0x66a214),
+    'canvas_draw_text_in_rect': ('int', 'void *, const unsigned *, unsigned, const void *', 0x6496a0),
+    'canvas_measure_text':     ('float', 'void *, const unsigned *, unsigned', 0x644544),   # float_t in $f0
+    # the Albums list rows' highlight and hairline: color_t is one word (lcd_set_fill_color stores $a1 at lcd+0xbc), r,g,b,a bytes;
+    # canvas_fill_rect @0x644e4c takes h on the stack and clips to the canvas' clip rect
+    'canvas_set_fill_color':   ('int', 'void *, unsigned', 0x644220),
+    'canvas_fill_rect':        ('int', 'void *, int, int, int, int', 0x644e4c),
+    # Cover Flow landscape (patch/coverflow.c): the page's font, as canvas_draw_text @0x645348 calls it. font_get_vmetrics
+    # returns its 8 byte struct (ascent s16 first) through a hidden pointer in $a0
+    'font_get_glyph':          ('int', 'void *, unsigned, unsigned, void *', 0x6508b0),
+    'font_get_vmetrics':       ('void', 'void *, void *, unsigned', 0x650918),
+    'tk_utf8_to_utf16_ex':     ('unsigned *', 'const char *, unsigned, unsigned *, unsigned', 0x70eb24),   # wchar_t is 32 bit
     'slide_menu_set_value':    ('int', 'void *, int', 0x61399c),
-    'list_view_create':        ('void *', 'void *, int, int, int, int', 0x60c2e0),
-    'scroll_view_create':      ('void *', 'void *, int, int, int, int', 0x6113c4),
     'list_item_create':        ('void *', 'void *, int, int, int, int', 0x60bec8),
     'label_create':            ('void *', 'void *, int, int, int, int', 0x62ee90),
     'timer_add':               ('unsigned', 'int (*)(const void *), void *, unsigned', 0x663530),
     'timer_remove':            ('int', 'unsigned', 0x66360c),
     # Cover Flow data: the stock library queries and the art extractors
     'loadLocalClassList':      ('int', 'int', 0x4ee504),
-    'loadAlbumdetailList':     ('int', 'int, void *', 0x4eea98),
     'loadAlbumList':           ('int', 'int, void *', 0x4ee8d8),   # Artists: an artist's albums (album_page_init)
     'loadSongList':            ('int', 'void *, const char *, int, int', 0x4e2ce0),
     'navigator_to_with_context': ('int', 'const char *, const void *', 0x4d1d48),
@@ -166,6 +184,25 @@ FUNCTIONS = {
     'albumcoverinfo_init':     ('void', 'void *', 0x4dcf9c),
     'batchadd_albumcover_task': ('void', 'int, int', 0x4dccac),   # local_albumsmallcover_task: ends with albumcover_taskstate = 1
 }
+# Now Playing (patch/nowplaying.c): the window's bg_color through the style API (widget_set_style(widget, "normal:bg_color",
+# &value_t) is AWTK's widget_set_style_color: it makes the style mutable, stores the value and invalidates), the uint32
+# value_t it takes, and the player's position and length in seconds (what the page's own timer shows, @0x53a8fc)
+FUNCTIONS.update({
+    'widget_set_style':        ('int', 'void *, const char *, const void *', 0x66c448),
+    'value_set_uint32':        ('void *', 'void *, unsigned', 0x711858),
+    'get_playtimeandlength':   ('int', 'int *, int *', 0x4e015c),
+    # Cover Flow opens on the playing album (patch/covercache.c cc_playing): the playing track's index in the play
+    # queue, the call get_playtimeandlength and the lock screen refresh make (@0x4e0198, @0x53f718); -1 for none
+    'mclGetPlayPos':           ('int', 'void', 0x5d4290),
+})
+# Localisation (patch/i18n.h): the stock translation. locale_info() is the app's locale, locale_info_tr(locale, key) the
+# table lookup (the key itself when absent), widget_set_tr_text(widget, key) stores the key on the widget (the window
+# manager re-translates it when the language changes) and sets the translated text
+FUNCTIONS.update({
+    'locale_info':             ('void *', 'void', 0x6588b0),
+    'locale_info_tr':          ('const char *', 'void *, const char *', 0x658db4),
+    'widget_set_tr_text':      ('int', 'void *, const char *', 0x66f994),
+})
 # Stock data the payload reads or writes, by absolute address. Exported objects are checked
 # against .dynsym; the two unnamed ones carry the code that proves them.
 DATA = {
@@ -176,8 +213,19 @@ DATA = {
     'G_CLASS_TYPE':       (0x97cad4, None),
     # the stock browsing record loadAlbumdetailList fills (@0x4eeac8); its first word is the class.
     'CLASSINFO':          (0xa0c768, None),
+    # the stock Artists page's artist / album artist switch (handler @0x535770): toggles the word, saves
+    # [PLAYSET] ARTISTTYPE and sets the byte (the stock page's list-reload flag, read @0x535fe8)
+    'ARTIST_TYPE':        (0xa05a14, None),
+    'ARTIST_RELOAD':      (0xa06d20, None),
     # set to 1 by the stock Play all handler (@0x525e64) after start_player; the Shuffle button does the same
     'FORCE_REFRESH':      (0xa05a63, 'force_refreshflag'),
+    # the cover source type: parseplaycover_thd sets 1 (busy), 2 / 3 / 5 (a /tmp JPEG), the Now Playing cover loader
+    # @0x53a5d8 reads it (`lw s1, 0x97cad8; lw v1, (s1); bne v1, 2 ...`, @0x53a6a8)
+    'COVER_SRC':          (0x97cad8, None),
+    # the play queue: a deque_t * (stSongInfo rows, the queue start_player copied). Every reader pairs it with
+    # mclGetPlayPos: get_playtimeandlength `lw s1, 0xa0394c; deque_size(*s1)` then `deque_at(*s1, pos)` (@0x4e01cc..0x4e0268),
+    # the lock screen refresh (@0x53f73c, "queued" = 0 <= pos < size), the queue drawer (@0x47a8f0)
+    'PLAY_QUEUE':         (0xa0394c, None),
 }
 LIBC = {
     'atoi': ('int', 'const char *'), 'access': ('int', 'const char *, int'),
@@ -270,7 +318,17 @@ def gen_stock_h(out, demo_path):
     h.append(f'#define POD_ENTRY_NAME "{pod_pages.HOME_ENTRY}"')   # the added icon's widget name (a decimal id, as stock's)
     h.append('extern int stock_home_click_trampoline(void *, void *);')
     h.append('extern void stock_albuminfo_header_trampoline(void *);')
+    h.append('extern int stock_playing_init_trampoline(void *, void *);')
     h.append('extern int coverflow_open(void);')
+    h.append('extern int coverflow_landscape(void);')
+    h.append('extern int coverflow_landscape_toggle(void);')
+    # the customisable menu (patch/menu.c): its item count, the default shown prefix and the row geometry
+    h.append(f'#define POD_MENU_ITEMS {len(pod_pages.ITEMS)}')
+    h.append(f'#define POD_MENU_DEFAULT {pod_pages.DEFAULT_VISIBLE}')
+    h.append(f'#define POD_MENU_FILE_MAX {pod_pages.MENU_FILE_MAX}')
+    h.append(f'#define POD_MENU_ROWS {len(pod_pages.MENU.rows)}')
+    h.append(f'#define POD_EXTRAS_ROWS {len(pod_pages.EXTRAS_PAGE.rows)}')
+    h.append(f'#define POD_ROW_H {pod_ui.ROW_H}')
     h.append('extern int shuffle_play(int);')
     (out / 'stock.h').write_text('\n'.join(h) + '\n')
     # The page and row tables, included by patch/m1pod.c alone.
@@ -290,6 +348,10 @@ def gen_stock_h(out, demo_path):
     h.append(f'#define POD_PAGE_COUNT {len(pages)}')
     h.append(f'#define POD_ENTRY_ID {pod_pages.HOME_ENTRY}')
     h.append('#define POD_ENTRY_PAGE 0')
+    h.append('#define POD_MENU_PAGE 0')
+    h.append(f'#define POD_SETTINGS_PAGE {pod_pages.SETTINGS_PAGE_INDEX}')
+    h.append(f'#define POD_EXTRAS_PAGE {pod_pages.EXTRAS_PAGE_INDEX}')
+    h.append(f'#define POD_MENUCFG_PAGE {pod_pages.MENUCFG_PAGE_INDEX}')
     (out / 'pages.h').write_text('\n'.join(h) + '\n')
     return slots
 
@@ -305,6 +367,9 @@ def gen_asm(out, slots):
     # and for the album page's header builder
     asm += ['.globl stock_albuminfo_header_trampoline', 'stock_albuminfo_header_trampoline:',
             f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{ALBUMINFO_HEADER + 12:x}', 'nop']
+    # and for the Now Playing page's init
+    asm += ['.globl stock_playing_init_trampoline', 'stock_playing_init_trampoline:',
+            f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{PLAYING_INIT + 12:x}', 'nop']
     # libc GOT-slot stubs (load the resolved pointer from demo's own GOT, tail-call it).
     for name, addr in slots.items():
         asm += [f'.section .text.pod_lib_{name},"ax",@progbits', f'.globl pod_lib_{name}', f'pod_lib_{name}:',
@@ -339,7 +404,8 @@ def compile_payload(out, demo_path):
     # compact_set_row_layout is reached only from the patched stock call sites, so keep it
     keep = ['--undefined=compact_set_row_layout', '--undefined=m1pod_home_init',
             '--undefined=stock_home_init_trampoline', '--undefined=m1pod_albuminfo_header',
-            '--undefined=stock_albuminfo_header_trampoline']
+            '--undefined=stock_albuminfo_header_trampoline', '--undefined=m1pod_playing_init',
+            '--undefined=stock_playing_init_trampoline']
     run(LD, '-m', 'elf32ltsmip', '--gc-sections', '-T', os.path.join(PATCH, 'link.ld'),
         '-e', 'm1pod_home_click', '--undefined=m1pod_home_click', '--undefined=stock_home_click_trampoline',
         *keep, *objs, out / 'pod_asm.o', '-o', out / 'patch.elf')
@@ -449,9 +515,12 @@ def patch_demo(raw, payload, ps):
     target3 = ps['m1pod_albuminfo_header']
     check(BASE <= target3 < BASE + len(payload), 'album header entry symbol outside payload')
     hook(patched, ALBUMINFO_HEADER, ALBUMINFO_HEADER_PROLOGUE, target3, 'albuminfo_listitem0_layout')
+    target4 = ps['m1pod_playing_init']
+    check(BASE <= target4 < BASE + len(payload), 'playing init entry symbol outside payload')
+    hook(patched, PLAYING_INIT, PLAYING_INIT_PROLOGUE, target4, 'playing_page_init')
     edits = patch_rows(patched, ps)
     # no row edit may touch a PIC prologue (the hooks are the only ones) or a hook site
-    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, ALBUMINFO_HEADER))
+    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, ALBUMINFO_HEADER, PLAYING_INIT))
               for a, *_ in edits), 'row edit on a hook')
     seg_off = append_payload(patched, payload, BASE)
     return bytes(patched), seg_off, edits
@@ -478,6 +547,7 @@ def main():
         'segment_file_off': seg_off, 'hook': {'addr': HOME_CLICK, 'target': ps['m1pod_home_click']},
         'hook_init': {'addr': HOME_INIT, 'target': ps['m1pod_home_init']},
         'hook_albuminfo': {'addr': ALBUMINFO_HEADER, 'target': ps['m1pod_albuminfo_header']},
+        'hook_playing': {'addr': PLAYING_INIT, 'target': ps['m1pod_playing_init']},
         'zeroed_demo_sha256': ZEROED_DEMO_SHA, 'patched_demo_sha256': sha(patched),
         'assets': assets, 'entry_home_id': pod_pages.HOME_ENTRY,
         'row_edits': edits, 'row_fit': ps['compact_set_row_layout'],
@@ -485,7 +555,7 @@ def main():
     (build / 'manifest.json').write_text(json.dumps(manifest, indent=1) + '\n')
     print(f'payload {len(payload)} bytes ({scratch} .scratch) @ {BASE:#x} (entry {ps["m1pod_home_click"]:#x}), '
           f'hook @ {HOME_CLICK:#x}, boot guard hook @ {HOME_INIT:#x} (home_page_init), '
-          f'album header hook @ {ALBUMINFO_HEADER:#x}')
+          f'album header hook @ {ALBUMINFO_HEADER:#x}, Now Playing init hook @ {PLAYING_INIT:#x}')
     kinds = {k: sum(e[3] == k for e in edits) for k in ('immediate', 'call', 'nop')}
     print(f'  rows: {len(edits)} pinned edits ({kinds["immediate"]} immediates, {kinds["call"]} row-layout '
           f'calls -> compact_set_row_layout @ {ps["compact_set_row_layout"]:#x}, {kinds["nop"]} rebind resizes nopped)')

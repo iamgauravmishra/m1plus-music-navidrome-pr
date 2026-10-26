@@ -36,20 +36,27 @@ restore package). `docs/history.md` lists the tags used so far.
 ## 2. Test
 
 ```
-venv/bin/python -I tools/check.py            # DONE-CRITERION: both packages vs test/golden.sha256, all tests (~1 min)
+venv/bin/python -I tools/check.py            # DONE-CRITERION: both packages vs test/golden.sha256, all tests (~45 s)
 venv/bin/python -I tools/check.py --only release --keep   # quick loop, tree left in work/check/release/
 venv/bin/python -I tools/check.py --update   # only when a hash change is intended; commit test/golden.sha256
 venv/bin/python -I test/patch.py work/check/release/work/mod-release [MODULE...]   # the emulator tests alone
-venv/bin/python -I tools/preview.py WORKDIR docs/release-preview.png    # PIL mock-up of the screens
+venv/bin/python -I tools/preview.py work/check/release/work/mod-release   # PIL mock-up -> out/preview/ (gitignored)
 ```
 
 `check.py` builds the release and restore packages in parallel, compares their SHA-256 with the golden
 file (CHANGED is a failure unless you meant it), then runs `test/patch.py` (the real compiled payload
-under Unicorn, one module per feature in `test/pod/`: menu, coverflow, assets, artists, rows, albuminfo,
-shuffle, home; shared machine in `test/pod/harness.py`) once per distinct payload, `test/demo_diff.py`
+under Unicorn, one module per file in `test/pod/`, each its own process; shared machine in
+`test/pod/harness.py`) once per distinct payload, `test/demo_diff.py`
 (the built `demo` differs from stock only where the mods say), `test/coverflow.py` (host build of the
-depth renderer) and `test/awtk_fill.py` (demo's own fill code). A feature gets a module with a
-`run(ctx)` and a line in `MODULES` in `test/patch.py`.
+depth renderer and the cover filters), `test/awtk_fill.py` (demo's own fill code) and `test/tools.py` (package
+verification on synthetic archives, check.py's own pass/fail/`--update` decisions). A failed build or test makes
+`--update` exit non-zero and write nothing. A feature gets a
+`test/pod/<name>.py` with a `run(ctx)`; nothing else to register. The harness counts instructions per
+emulated block and traps only the mocked and watched addresses, so `icount` is exact up to the part of a block a mock skips.
+
+Previews: `tools/preview*.py` write to `out/preview/` (gitignored). The only tracked preview is
+`docs/release-preview.png`; refresh it at a release merge with
+`venv/bin/python -I tools/preview.py WORKDIR docs/release-preview.png`.
 
 ## 3. Change something
 
@@ -67,7 +74,7 @@ depth renderer) and `test/awtk_fill.py` (demo's own fill code). A feature gets a
 ## 4. Flash
 
 ```
-venv/bin/python -I tools/flash_sd.py out/M1Plus-V2.1kE-release-update.bin     # verified copy to the card as update.bin, eject
+venv/bin/python -I tools/flash_sd.py out/M1Plus-<tag>-release-update.bin     # verified copy to the card as update.bin, eject
 ```
 
 (`--dry-run`, `--no-eject`; by hand: copy to the card root as `update.bin`, compare md5, eject.) Use a
@@ -85,10 +92,12 @@ too). Delete it to enable M1 Pod.
 ### Device checklist for the release
 
 - boots to M1 Pod as the Home screen; About still reads V2.1; sleep, wake, reboot; "Shanling Home"
-  row shows the stock grid, "Start in" toggles the start-up setting and survives a reboot
+  row shows the stock grid, the "Start in M1 Pod" switch changes the start-up setting and survives a reboot;
+  Settings > Cover Flow > Landscape opens Cover Flow in that orientation, Sort (Artist / Album) orders Cover Flow and Albums
+  and survives a reboot, Cover Flow opens on the playing album; Main Menu: the switches and up arrows change the
+  menu (and Extras) on going back, survive a reboot, and Extras and Settings stay on the menu
 - the Tidal icon on the stock grid opens M1 Pod (it is the hooked entry)
-- menu rows (Now Playing, Cover Flow, Shuffle, Songs, Albums, Artists, Genres, Folders, Playlists,
-  Settings) open their pages; Back returns; icons on every row; lists scroll, a drag does not open a row
+- menu rows (Now Playing, Cover Flow, Albums, Artists, Songs, Playlists, Shuffle, Extras, Settings) open their pages; Back returns; icons on every row; lists scroll, a drag does not open a row
 - Cover Flow: first run builds the cache (Cancel works), covers swipe and flick, side tap glides, centre
   tap opens the stock album page (120 px cover, year and track count, Play all, Shuffle; Shuffle starts a
   random track of the album in Shuffle mode and stays on the page); a track plays from Now Playing; Back unwinds
@@ -96,9 +105,13 @@ too). Delete it to enable M1 Pod.
 - Artists: names in stock order; an artist's Cover Flow with the All albums card; Back chain
 - Shuffle Songs / Albums / Folders play and leave the stock play mode as documented in `docs/architecture.md`
 - library pages (Songs, Albums, album, Playlists) show 64 px rows, one-line rows elsewhere
-- Now Playing, lock screen (280 px cover on a translucent card, small battery gauge, play/next work,
+- Now Playing (V2.1mB, not yet seen on the device: the window takes the cover's colour within a second of a track change and goes
+  neutral for a track without a cover; the 264 px cover is sharp with round corners that match the colour; the remaining time reads
+  `-mm:ss` and counts down; the bar is 6 px and round; the A-B repeat markers sit under the bar; heart, More and the grabber work,
+  a swipe on the art changes pages; with `m1pod-off` the page is square, black-grey and shows the total), lock screen (264 px cover on a translucent card, small battery gauge, play/next work,
   swipe from anywhere, nothing queued: date + clock only; Starry Night wallpaper by default), pull-down
   tiles and battery icon, boot logo, settings page slides
+- language (V2.1mD): in System Settings > Language pick e.g. Russian, Japanese, German: the menu, Extras, Settings, Shuffle, Main Menu, Cover Flow, Artists and Albums pages, the album page buttons and count and the messages are in that language (open pages change on the spot); previews of the pages in other languages: `tools/preview_locales.py`; English again afterwards
 - the kill switch: `m1pod-off` on the card makes the entry icon open Tidal again
 
 ## 5. Going back and safety

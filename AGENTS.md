@@ -11,7 +11,7 @@ keep flags, variants or code paths only to reproduce old packages.
 ```
 python3 -m venv venv && venv/bin/pip install -r requirements.txt ; brew install squashfs llvm lld
 venv/bin/python -I tools/build.py                 # the release -> out/M1Plus-<tag>-release-update.bin  (--restore: stock)
-venv/bin/python -I tools/check.py                 # DONE-CRITERION: release + restore vs test/golden.sha256, all tests (~1 min)
+venv/bin/python -I tools/check.py                 # DONE-CRITERION: release + restore vs test/golden.sha256, all tests (~45 s)
 venv/bin/python -I tools/check.py --only release --keep   # quick loop (also --no-tests)
 venv/bin/python -I tools/check.py --update        # only when a hash change is intended; commit test/golden.sha256
 venv/bin/python -I tools/fwtool.py verify|diff|info ...   # package inspection
@@ -40,15 +40,15 @@ gets the Source Han Sans zip.
 ## Version tags
 
 Format `V2.1` + lowercase series + capital letters. The updater refuses a package whose version
-equals the installed one, so each flashed package needs a new tag: bump `TAG` in `tools/build.py`,
-update `test/golden.sha256` (`check.py --update`) and add a line to `docs/history.md`.
+equals the installed one, so each flashed package needs a new tag: bump `TAG` in `tools/build.py` (the one source;
+`check.py` and `preview.py` read it, docs say "the release"), update `test/golden.sha256` (`check.py --update`) and add a line to `docs/history.md`.
 
 ## Safety rules (do not relax)
 
 - Only kernel and rootfs are flashed; bootloader and recovery kernel are never written. The recovery
   button combo is unverified, so a boot loop is the worst case. `docs/workflow.md`.
 - Boot-path code is the boot guard only (`patch/home.c`, behind a crash marker); one more hook on the
-  Home icon tap handler (the M1 Pod icon, plus the Tidal-icon recovery fallback while the bad note exists), and one on the album page's header builder (runs only while that page builds); nothing at paint or in the main loop. The SD file `/mnt/mmc/m1pod-off`
+  Home icon tap handler (the M1 Pod icon, plus the Tidal-icon recovery fallback while the bad note exists), one on the album page's header builder (runs only while that page builds), and one on Now Playing's init (a page-scoped timer, and the cover widget's own after-paint for its corners); nothing else at paint or in the main loop. The SD file `/mnt/mmc/m1pod-off`
   disables the payload. `docs/architecture.md`.
 - Pin every patched word and stock address; refuse to build on mismatch; every hook falls back to stock.
 - Never rename or delete a widget the app looks up by name; restyle, move or hide it.

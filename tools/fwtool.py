@@ -3,7 +3,7 @@
 
   fwtool.py info    UPDATE            show tar members, .info, squashfs superblock
   fwtool.py unpack  UPDATE  WORKDIR   extract tar, verify md5, unsquashfs rootfs, save metadata
-  fwtool.py repack  WORKDIR OUT  --version TAG [--max-size N] [--tailends] [--allow-removed PATH ...]
+  fwtool.py repack  WORKDIR OUT  --version TAG [--tailends] [--allow-removed PATH ...]
                                       mksquashfs WORKDIR/rootfs with stock params, regenerate .info,
                                       rebuild tar with stock member metadata
   fwtool.py verify  UPDATE            md5-check an update file
@@ -57,16 +57,52 @@ def cmd_info(a):
                 t.extract(n, td, filter='data')
                 print('--- squashfs', n, '---'); print(json.dumps(sq_superblock(os.path.join(td, n)), indent=1))
 
+MODEL = 'Shanling M1 Plus'
+PAYLOAD = ('recovery-update/xImage', 'recovery-update/rootfs.squashfs')   # the only files an update carries
+MEMBERS = {INFO_NAME, 'recovery-update', *PAYLOAD}
+
+def verify_package(path):
+    """Strict check of an update file without extracting it: exactly the expected members (regular files,
+    the one directory, no duplicates or other paths), a well-formed manifest (model, version, exactly one
+    md5 line per payload file) and matching md5s. Returns (problems, lines to print)."""
+    bad, out = [], []
+    try: t = tarfile.open(path)
+    except (tarfile.TarError, OSError) as e: return [f'not a readable tar: {e}'], out
+    with t:
+        names = t.getnames()
+        for n in sorted({n for n in names if names.count(n) > 1}): bad.append(f'duplicate member {n}')
+        for n in sorted(set(names) - MEMBERS): bad.append(f'unexpected member {n}')
+        for n in sorted(MEMBERS - set(names)): bad.append(f'missing member {n}')
+        for m in t.getmembers():
+            if m.name in MEMBERS and m.type != (tarfile.DIRTYPE if m.name == 'recovery-update' else tarfile.REGTYPE):
+                bad.append(f'{m.name}: wrong member type {m.type!r}')
+        try: lines = t.extractfile(INFO_NAME).read().decode().rstrip('\n').split('\n')
+        except (KeyError, AttributeError, UnicodeDecodeError): return bad + [f'{INFO_NAME} unreadable'], out
+        sums = {}
+        if len(lines) < 2 or lines[0] != MODEL: bad.append(f'model {lines[0]!r} is not {MODEL!r}')
+        if len(lines) < 2 or not lines[1].strip(): bad.append('empty version line')
+        for l in lines[2:]:
+            m = re.match(r'^([0-9a-f]{32})  (.+)$', l)
+            if not m: bad.append(f'malformed manifest line {l!r}')
+            elif m.group(2) in sums: bad.append(f'duplicate manifest entry {m.group(2)}')
+            else: sums[m.group(2)] = m.group(1)
+        if sorted(sums) != sorted(PAYLOAD): bad.append(f'manifest lists {sorted(sums)}, expected {sorted(PAYLOAD)}')
+        for n in PAYLOAD:
+            f = t.extractfile(n) if n in names and n in sums else None
+            if f is None: continue
+            h = hashlib.md5()
+            for c in iter(lambda: f.read(1 << 20), b''): h.update(c)
+            good = h.hexdigest() == sums[n]
+            out.append(f'{n}: {"OK" if good else "MISMATCH"} ({h.hexdigest()})')
+            if not good: bad.append(f'{n}: md5 mismatch')
+        out.append(f'model={lines[0]!r} version={lines[1] if len(lines) > 1 else None!r}')
+    return bad, out
+
 def cmd_verify(a):
-    with tempfile.TemporaryDirectory() as td:
-        with tarfile.open(a.update) as t: t.extractall(td, filter='data')
-        info = parse_info(open(os.path.join(td, INFO_NAME)).read())
-        ok = True
-        for n, h in info['md5'].items():
-            got = md5(os.path.join(td, n)); good = got == h; ok &= good
-            print(f'{n}: {"OK" if good else "MISMATCH"} ({got})')
-        print(f'model={info["model"]!r} version={info["version"]!r}')
-    return 0 if ok else 1
+    bad, out = verify_package(a.update)
+    for l in out: print(l)
+    for b in bad: print('PROBLEM:', b)
+    return 1 if bad else 0
 
 def cmd_unpack(a):
     os.makedirs(a.workdir, exist_ok=True)
@@ -148,9 +184,8 @@ def cmd_repack(a):
     if a.tailends and not a.reuse_squashfs: cmd += ['-tailends']   # pack file tails into fragments too (data layout only)
     run(cmd)
     size, stock = os.path.getsize(out_sq), meta['squashfs_size']
-    limit = a.max_size or stock
-    print(f'rootfs.squashfs: {size} bytes (stock {stock}, limit {limit})')
-    if size > limit: sys.exit(f'ERROR: rebuilt squashfs ({size}) exceeds limit ({limit})')
+    print(f'rootfs.squashfs: {size} bytes (stock {stock})')
+    if size > stock: sys.exit(f'ERROR: rebuilt squashfs ({size}) exceeds stock ({stock})')
     # metadata check against stock listing (mode, owner, size, name); ignore files the user changed in size
     run(['unsquashfs', '-no-xattrs', '-lln', '-d', '', out_sq], stdout=open(os.path.join(build, 'new.lln'), 'w'))
     def listing(p):
@@ -174,7 +209,7 @@ def cmd_repack(a):
     bad = [(k, s_l.get(k), n_l.get(k)) for k in sorted(set(s_l) | set(n_l)) if s_l.get(k) != n_l.get(k) and k not in skip]
     for k, s, n in bad: print(f'META DIFF {k}: stock={s} new={n}')
     print(f'metadata: {len(bad)} entries differ from stock (mode/owner/presence)')
-    if bad and not a.allow_meta_diff: sys.exit('ERROR: metadata differs; pass --allow-meta-diff if intended')
+    if bad: sys.exit('ERROR: metadata differs from stock')
     # info + tar
     sums = []
     for n in meta['info']['md5']:
@@ -225,7 +260,6 @@ if __name__ == '__main__':
     p = sp.add_parser('verify'); p.add_argument('update'); p.set_defaults(f=cmd_verify)
     p = sp.add_parser('unpack'); p.add_argument('update'); p.add_argument('workdir'); p.set_defaults(f=cmd_unpack)
     p = sp.add_parser('repack'); p.add_argument('workdir'); p.add_argument('out'); p.add_argument('--version', required=True)
-    p.add_argument('--max-size', type=int); p.add_argument('--allow-meta-diff', action='store_true')
     p.add_argument('--tailends', action='store_true', help='mksquashfs -tailends: smaller image, same metadata')
     p.add_argument('--allow-removed', action='append', default=[], metavar='PATH', help='stock file deliberately removed (repeatable)')
     p.add_argument('--allow-added', action='append', default=[], metavar='PATH', help='file deliberately added that is not in stock (repeatable)')

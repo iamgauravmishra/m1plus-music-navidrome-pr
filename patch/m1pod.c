@@ -15,16 +15,20 @@
  *
  * A second hook, home_page_init, does its work in patch/home.c behind a crash marker (the boot
  * guard, docs/architecture.md); m1pod.c only has the two launcher rows and the entry-page open
- * used by the Home timer. A third, albuminfo_listitem0_layout (patch/albuminfo.c), restyles the
+ * used by the Home timer (the menu's own arrangement, which items show and in which order, is patch/menu.c).
+ * A third, albuminfo_listitem0_layout (patch/albuminfo.c), restyles the
  * stock album page's header while that page builds its list.
  */
 #include "offsets.inc"
 
 /* ACT_* mirror tools/pod_pages.py. */
 enum { ACT_HOME = 0, ACT_PAGE = 1, ACT_PLAYER = 2, ACT_COVER = 3, ACT_SHUFFLE = 4, ACT_ARTISTS = 8,
-       ACT_GRID = 9, ACT_STARTUP = 10 };
+       ACT_GRID = 9, ACT_STARTUP = 10, ACT_ALBUMS = 11, ACT_LANDSCAPE = 12, ACT_SORT = 13 };
 
 extern int artists_open(void);   /* patch/artists.c: the Artists list, its own page */
+extern int albums_open(void);    /* patch/albums.c: Albums, our page in the mode used last (grid or list) */
+extern void menu_arrange(void *win, int extras);   /* patch/menu.c: the menu / Extras rows as the saved list says */
+extern void menu_custom_opened(void *win);         /* patch/menu.c: the Main Menu page's switches and arrows */
 
 struct pod_row {
     const char *name;   /* row widget name in the asset (pod_row0, pod_row1, ...) */
@@ -43,6 +47,7 @@ struct pod_page {
  * stage's POD_PAGES/POD_PAGE_COUNT tables and the constants POD_ENTRY_ID and POD_ENTRY_PAGE. */
 #include "stock.h"
 #include "pages.h"
+#include "covercache.h"   /* the Sort setting (cc_sort_artist, cc_sort_toggle) */
 
 #define KILL_FILE "/mnt/mmc/m1pod-off"
 #define F_OK 0
@@ -67,7 +72,16 @@ static int home_open(int id) {
     return stock_home_click_trampoline(&icon, (void *)0);
 }
 
+/* A stock Home destination through the dispatcher (the Albums toggle opens the stock list this way). */
+int pod_home_open(int id) { return home_open(id); }
+
 static int open_page(int index, int as_home);
+
+static int on_menu_fg(void *ctx, void *e) {
+    (void)e;
+    menu_arrange(ctx, 0);
+    return RET_OK;
+}
 
 static int on_back(void *ctx, void *e) {
     (void)ctx; (void)e;
@@ -90,10 +104,65 @@ static int on_row(void *ctx, void *e) {
     else if (row->action == ACT_PLAYER) on_backtoplayer_onclick((void *)0, (void *)0);
     else if (row->action == ACT_COVER) coverflow_open();   /* patch/coverflow.c; its own page */
     else if (row->action == ACT_ARTISTS) artists_open();
+    else if (row->action == ACT_ALBUMS) albums_open();
     else if (row->action == ACT_SHUFFLE) shuffle_play(row->arg); /* patch/shuffle.c; plays, no page */
     else if (row->action == ACT_GRID) home_to_grid();      /* patch/home.c: the stock grid */
-    else if (row->action == ACT_STARTUP) home_toggle();    /* patch/home.c: Start in: M1 Pod / Shanling */
     return RET_OK;
+}
+
+/* The switch rows (Settings: Start in M1 Pod; Settings > Cover Flow: Landscape): a tap flips the setting and the
+ * row's switch image follows it. The context is the slot below, one per action, filled when the page opens. */
+struct swctx { int action; void *img; };
+static struct swctx sw_slot[2] __attribute__((section(".scratch")));
+
+static void switch_show(void *img, int on) {
+    if (img) image_base_set_image(img, on ? "sset_on" : "sset_off");
+}
+
+static int switch_state(int action) { return action == ACT_STARTUP ? home_start() : coverflow_landscape(); }
+
+static int on_switch(void *ctx, void *e) {
+    const struct swctx *s = ctx;
+    int on;
+    (void)e;
+    if (!s) return RET_OK;
+    on = s->action == ACT_STARTUP ? home_toggle() : coverflow_landscape_toggle();   /* -1: not saved, unchanged */
+    if (on >= 0) switch_show(s->img, on);
+    return RET_OK;
+}
+
+static void bind_switch(void *win, unsigned i, const struct pod_row *row) {
+    char name[24];
+    void *r = widget_lookup(win, row->name, 1);
+    int k = row->action == ACT_LANDSCAPE;
+    snprintf(name, sizeof name, "pod_switch%u", i);
+    sw_slot[k].action = row->action;
+    sw_slot[k].img = widget_lookup(win, name, 1);
+    switch_show(sw_slot[k].img, switch_state(row->action));
+    if (r) widget_on(r, EVT_CLICK, on_switch, &sw_slot[k]);
+}
+
+/* Settings > Cover Flow > Sort: the row shows the order (Artist or Album) in its grey value label and a tap flips it
+ * (saved first: a failed save leaves the order and the label as they were). */
+static void *sort_label __attribute__((section(".scratch")));
+
+static void sort_show(void) {
+    if (sort_label) widget_set_tr_text(sort_label, cc_sort_artist() ? "Artist" : "album");   /* "album": the stock key for Album */
+}
+
+static int on_sort(void *ctx, void *e) {
+    (void)ctx; (void)e;
+    if (cc_sort_toggle() >= 0) sort_show();
+    return RET_OK;
+}
+
+static void bind_sort(void *win, unsigned i, const struct pod_row *row) {
+    char name[24];
+    void *r = widget_lookup(win, row->name, 1);
+    snprintf(name, sizeof name, "pod_value%u", i);
+    sort_label = widget_lookup(win, name, 1);
+    sort_show();
+    if (r) widget_on(r, EVT_CLICK, on_sort, (void *)0);
 }
 
 static void bind(void *win, const char *name, int (*fn)(void *, void *), const void *ctx) {
@@ -113,11 +182,20 @@ static int open_page(int index, int as_home) {
     if (!win) return -1;
     bind(win, "btn_return", on_back, (void *)0);
     bind(win, "btn_backtoplayer", on_player, (void *)0);
-    for (i = 0; i < page->count; i++) bind(win, page->rows[i].name, on_row, &page->rows[i]);
-    {   /* the page with the Start-in row shows the setting; the menu may be the Home instance (no navbar) */
-        const char *startup = (const char *)0;
-        for (i = 0; i < page->count; i++) if (page->rows[i].action == ACT_STARTUP) startup = page->rows[i].name;
-        if (startup || (as_home && index == POD_ENTRY_PAGE)) home_menu_opened(win, startup, as_home && index == POD_ENTRY_PAGE);
+    for (i = 0; i < page->count; i++) {
+        const struct pod_row *row = &page->rows[i];
+        if (row->action == ACT_STARTUP || row->action == ACT_LANDSCAPE) bind_switch(win, i, row);
+        else if (row->action == ACT_SORT) bind_sort(win, (unsigned)i, row);
+        else bind(win, row->name, on_row, row);
+    }
+    if (index == POD_MENU_PAGE) {
+        menu_arrange(win, 0);
+        widget_on(win, EVT_WINDOW_FG, on_menu_fg, win);   /* back in front after the Main Menu page: arrange again */
+    } else if (index == POD_EXTRAS_PAGE) menu_arrange(win, 1);
+    else if (index == POD_MENUCFG_PAGE) menu_custom_opened(win);
+    {   /* the Settings page is the way out to the grid; the menu may be the Home instance (no navbar) */
+        int entry = as_home && index == POD_ENTRY_PAGE;
+        if (index == POD_SETTINGS_PAGE || entry) home_menu_opened(win, index == POD_SETTINGS_PAGE, entry);
     }
     return 0;
 }

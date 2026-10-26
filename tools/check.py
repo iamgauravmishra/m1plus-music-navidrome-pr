@@ -9,12 +9,13 @@ the golden hashes, run the tests.
   SKIPPED with the reason, not failed.
 - Compares each package's SHA-256 with test/golden.sha256 (`<sha256>  <tag>  <name>`): MATCH,
   CHANGED (exit 1 unless --update), NEW (not in golden yet).
-- Tests: test/patch.py (the emulated payload, one module per feature) once per distinct payload
-  (keyed by the built demo's SHA-256), test/demo_diff.py (the built demo differs from stock only
-  where the mods say), test/coverflow.py (host build of the depth renderer) and test/awtk_fill.py
-  (demo's own AWTK fill code on the stock tree).
+- Tests: test/patch.py (the emulated payload; one process per module of test/pod/) once per distinct
+  payload (keyed by the built demo's SHA-256), test/demo_diff.py (the built demo differs from stock only
+  where the mods say), test/coverflow.py (host build of the depth renderer), test/awtk_fill.py
+  (demo's own AWTK fill code on the stock tree) and test/tools.py (fwtool verify, this script's decisions).
 - --update rewrites the golden lines of the selected targets (after you meant to change them, and
-  README says so). --keep leaves work/check/<name>/ in place.
+  README says so), but only when every build and test passed; otherwise it writes nothing and exits 1.
+  --keep leaves work/check/<name>/ in place.
 """
 import argparse, concurrent.futures as cf, glob, hashlib, json, os, re, shutil, subprocess, sys, time
 
@@ -22,9 +23,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS = os.path.join(ROOT, 'tools'); TEST = os.path.join(ROOT, 'test')
 GOLDEN = os.path.join(TEST, 'golden.sha256')
 sys.path.insert(0, TOOLS)
-import paths   # noqa: E402
+import build, paths   # noqa: E402
 
-TARGETS = {'release': ('V2.1kE', []), 'restore': ('V2.1R', ['--restore'])}   # name -> (tag, build.py args)
+TARGETS = {'release': (build.TAG, []), 'restore': (build.RESTORE_TAG, ['--restore'])}   # name -> (tag, build.py args)
+MODULES = sorted(os.path.basename(f)[:-3] for f in glob.glob(os.path.join(TEST, 'pod', '*.py')) if not f.endswith('harness.py'))
 
 def missing_input(name):
     if not os.path.exists(paths.ZIP): return f'missing {paths.ZIP}'
@@ -70,6 +72,15 @@ def run_test(name, cmd, key=None):
     t0 = time.time(); rc, log = sh(cmd); c = counts(log)
     return {'test': name, 'key': key, 'rc': rc, 'counts': c, 'log': log[-2500:], 'secs': time.time() - t0}
 
+def test_ok(t):
+    """A test passed: exit 0 and no failure count (a crash or a non-zero exit never passes, counts or not)."""
+    return t['rc'] == 0 and (t['counts'] is None or t['counts'][1] == 0)
+
+def outcome(bad, changed, update):
+    """(exit failure, write the golden file). A build or test failure always fails and never updates the
+    golden hashes; a changed hash fails unless --update accepts it."""
+    return bad or (changed and not update), update and not bad
+
 def read_golden():
     g = {}
     if os.path.exists(GOLDEN):
@@ -88,9 +99,10 @@ def main():
     todo = [n for n in sel if n not in skipped]
     stock = paths.find_stock() or os.path.join(paths.WORK, 'stock')
     builds, tests, payloads = {}, [], set()
-    with cf.ProcessPoolExecutor(max_workers=4) as ex:
+    with cf.ProcessPoolExecutor(max_workers=os.cpu_count() or 4) as ex:
         futs = {ex.submit(build_one, n): n for n in todo}
         if not a.no_tests:
+            futs[ex.submit(run_test, 'tools', [paths.VENV_PY, '-I', os.path.join(TEST, 'tools.py')])] = 'tools'
             futs[ex.submit(run_test, 'coverflow', [paths.VENV_PY, '-I', os.path.join(TEST, 'coverflow.py')])] = 'coverflow'
             if os.path.exists(os.path.join(stock, 'rootfs')):
                 futs[ex.submit(run_test, 'awtk_fill', [paths.VENV_PY, '-I', os.path.join(TEST, 'awtk_fill.py'), stock])] = 'awtk_fill'
@@ -104,34 +116,37 @@ def main():
                 if r.get('tree') and not a.no_tests:     # the emulator tests, once per distinct payload
                     if r['payload'] not in payloads:
                         payloads.add(r['payload'])
-                        pending.add(ex.submit(run_test, 'patch.py', [paths.VENV_PY, '-I', os.path.join(TEST, 'patch.py'), r['tree']], r['payload']))
+                        for mod in MODULES:
+                            pending.add(ex.submit(run_test, f'patch:{mod}', [paths.VENV_PY, '-I', os.path.join(TEST, 'patch.py'), r['tree'], mod], r['payload']))
                     pending.add(ex.submit(run_test, 'demo_diff', [paths.VENV_PY, '-I', os.path.join(TEST, 'demo_diff.py'),
                                                                     os.path.join(stock, 'rootfs', 'release', 'bin', 'demo'),
                                                                     os.path.join(r['tree'], 'rootfs', 'release', 'bin', 'demo')]))
 
-    fail = False; npass = nfail = 0; rows = []
+    bad = changed = False; npass = nfail = 0; rows = []   # bad: a build or test failed; changed: a hash differs from golden
     for n in sel:
         tag = TARGETS[n][0]
         if n in skipped: print(f'{n:8} {tag:7} SKIPPED: {skipped[n]}'); continue
         r = builds[n]
-        if r['error']: fail = True; print(f'{n:8} {tag:7} ERROR {r["error"]}\n{r["log"]}'); continue
+        if r['error']: bad = True; print(f'{n:8} {tag:7} ERROR {r["error"]}\n{r["log"]}'); continue
         g = golden.get(n); st = 'NEW' if not g else 'MATCH' if g[0] == r['sha'] else 'CHANGED'
-        fail |= st == 'CHANGED'
+        changed |= st == 'CHANGED'
         print(f'{n:8} {tag:7} {st:7} {r["sha"][:12]}  {r["secs"]:3.0f}s' + (f'  (golden {g[0][:12]})' if st == 'CHANGED' else ''))
         rows.append((n, tag, r['sha']))
     for t in sorted(tests, key=lambda t: t['test']):
-        c = t['counts']; ok = t['rc'] == 0 and (c is None or c[1] == 0)
-        if not ok: fail = True; print(t['log'])
+        ok = test_ok(t); c = t['counts']
+        if not ok: bad = True; print(t['log'])
         if c: npass += c[0]; nfail += c[1]
-        print(f'test {t["test"]:10} {"PASS" if ok else "FAIL"}  {f"{c[0]} passed, {c[1]} failed" if c else ""}  {t["secs"]:.0f}s')
+        print(f'test {t["test"]:15} {"PASS" if ok else "FAIL"}  {f"{c[0]} passed, {c[1]} failed" if c else ""}  {t["secs"]:.0f}s')
     print(f'checks {npass} passed, {nfail} failed; {time.time() - t0:.0f}s wall')
-    if a.update:
+    fail, write = outcome(bad, changed, a.update)
+    if write:
         for n, tag, sha in rows: golden[n] = (sha, tag)
         with open(GOLDEN, 'w') as f:
             for n in TARGETS:
                 if n in golden: f.write(f'{golden[n][0]}  {golden[n][1]}  {n}\n')
-        print(f'updated {os.path.relpath(GOLDEN, ROOT)}'); fail = nfail > 0 or any(b['error'] for b in builds.values())
+        print(f'updated {os.path.relpath(GOLDEN, ROOT)}')
+    elif a.update: print('NOT updating the golden file: a build or test failed')
     if not a.keep: shutil.rmtree(os.path.join(paths.ROOT, 'work', 'check'), ignore_errors=True)
-    sys.exit(1 if fail or nfail else 0)
+    sys.exit(1 if fail else 0)
 
 if __name__ == '__main__': main()

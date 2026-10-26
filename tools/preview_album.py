@@ -77,7 +77,7 @@ def page(work, title, album, artist, meta, cover, n, scroll=0):
     sv.children.append(hdr)
     sv.children += [line(C['AH_TITLE_Y'], C['AH_TITLE_H'], album, 21, '#FFFFFF'),
                     line(C['AH_ARTIST_Y'], C['AH_ARTIST_H'], artist, 18, '#AAAAAA'),
-                    line(C['AH_META_Y'], C['AH_META_H'], meta, 15, '#9C9C9C')]
+                    line(C['AH_META_Y'], C['AH_META_H'], meta, 15, '#AAAAAA')]
     for i in range(n):   # the stock rows: "N  title" in 21 px white from x 12, 64 px apart
         y = C['AH_HDR_H'] + i * 64 - scroll
         row = Widget('list_item', 0, y, LW, 64, [('style', 'list_item_style')])

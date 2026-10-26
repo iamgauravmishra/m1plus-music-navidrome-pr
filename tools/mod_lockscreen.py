@@ -5,9 +5,9 @@ Stock lock screen: wallpaper (img_screensaver), a 70 px clock left of a battery 
 and the now-playing strip (view_bottomview). The result: date over a 68 px clock, centred at the top
 (widest-case sized, measured as AWTK lays text out); a small battery gauge right on the date line
 (tools/battery_art.py, the status bar's drawing); the now-playing block becomes a translucent card
-(bg #000000A6, radius 18) 8 px from the screen edges with the cover square at 280 x 280, title and
-artist under it, play/next to their right; the swipe hint at 65 %. demo writes the cover at 280
-(four pinned addiu immediates in parseplaycover_thd, 254 -> 280), so it is drawn 1:1. The play and
+(bg #000000A6, radius 18) centred, with the cover square at 264 x 264, title and
+artist under it, play/next to their right; the swipe hint at 65 %. demo writes the cover at 264
+(four pinned addiu immediates in parseplaycover_thd, 254 -> 264), so it is drawn 1:1 here and on Now Playing. The play and
 next glyphs are the Now Playing look's off-white np_* images (mod_nowplaying must run first). The
 app hides view_bottomview (visible and enable off) when nothing is queued; the page is then date +
 clock on the wallpaper. Every property the layout relies on is set absolutely, so it does not depend
@@ -53,7 +53,7 @@ BTN_STATES = ('normal', 'disable', 'focused', 'over', 'pressed')
 # the layout
 CLOCK_SIZE, CLOCK_MARGIN, DATE_SIZE, DATE_FORMAT = 68, 11, 20, 'W, MMM D'
 TOP = 12                                       # y of the date ink
-COVER_SIZE, PAD = 280, 12                      # art size (= what demo writes) and card edge to cover
+COVER_SIZE, PAD = 264, 12                      # art size (= what demo writes, and Now Playing's art) and card edge to cover
 CARD, CARD_RADIUS = '#000000A6', 18
 SLIDE_PCT = 65                                 # swipe hint size in % of the stock 48 x 22
 TITLE_PX, ARTIST_PX = 20, 16                   # stock sizes of the strip's labels

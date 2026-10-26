@@ -42,12 +42,10 @@ class AlbumMachine(RowMachine):
             self.destroyed.append(a0)
             for kids in self.children.values():
                 if a0 in kids: kids.remove(a0)
-            self.icount += 1
             u.reg_write(UC_MIPS_REG_V0, 0); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
             return
         elif name in ('row:button_create', 'row:hscroll_label_create', 'row:image_create') and \
                 name[len('row:'):-len('_create')] in self.create_fail:
-            self.icount += 1
             u.reg_write(UC_MIPS_REG_V0, 0); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
             return
         return super()._hook(u, address, size, _)
@@ -295,10 +293,10 @@ def album_tests(expect, page, cover_asset):
         expect(sorted(btn) == sorted(('normal', 'pressed', 'over', 'focused', 'disable')), f'{theme}: the dark button style has every state')
         bad = [s for s, i in btn.items() if not is_dark(i.color('bg_color')) or i.color('text_color') != '#FFFFFFFF'
                or i.get('font_size') != 20 or i.has('icon')]
-        expect(not bad and btn['pressed'].color('bg_color') == '#3A3A3AFF', f'{theme}: dark fill, white 20 px text, lighter when pressed, no icon ({bad})')
+        expect(not bad and btn['pressed'].color('bg_color') == '#333333FF', f'{theme}: dark fill, white 20 px text, lighter when pressed, no icon ({bad})')
         meta = [i for i in th.items if (i.widget, i.style) == ('hscroll_label', 'srlabel_meta15_style')]
-        expect(len(meta) == 3 and all(i.get('font_size') == 15 and i.color('text_color') == '#9C9C9CFF' for i in meta),
-               f'{theme}: the year line is 15 px #9C9C9C')
+        expect(len(meta) == 3 and all(i.get('font_size') == 15 and i.color('text_color') == '#AAAAAAFF' for i in meta),
+               f'{theme}: the year line is 15 px #AAAAAA')
         stock = [i for i in th.items if (i.widget, i.style) == ('button', 'btn_imgplayall_style')]
         expect(len(stock) == 5 and all(i.get('icon') in ('playall', 'playall_down') for i in stock),
                f'{theme}: the stock Play all style is untouched (a header the hook leaves alone keeps it)')
@@ -308,8 +306,7 @@ def album_tests(expect, page, cover_asset):
     m = artists_machine(); m.load_image = 0; m.stock_songlist = True
     m.call(PSYMS['artists_open'], count=5000000)
     m.call(PSYMS['ar_on_artist'], a0=0, count=8000000)
-    slide = m.widgets['slide_menu']
-    expect(('slide_menu_set_value', 0) in m.calls and m.props[(slide, 'value')] == 0,
+    expect(shelf_value(m) == 0,
            "the artist's Cover Flow starts on its first (leftmost) album, not the stock slide_menu's item 1")
     expect(('widget_set_text_utf8', m.widgets['label_album'], 'Kind of Blue') in m.calls
            and ('widget_set_text_utf8', m.widgets['label_artist'], 'Miles Davis') in m.calls, 'and its captions are set')
@@ -320,14 +317,14 @@ def album_tests(expect, page, cover_asset):
     m = artists_machine(); m.call(PSYMS['artists_open'], count=5000000)
     m.call(PSYMS['ar_on_artist'], a0=1, count=8000000)
     expect(('widget_set_text_utf8', m.widgets['label_album'], 'Pastel Blues') in m.calls
-           and ('widget_set_text_utf8', m.widgets['label_artist'], 'Nina Simone') in m.calls and m.props[(m.widgets['slide_menu'], 'value')] == 0,
+           and ('widget_set_text_utf8', m.widgets['label_artist'], 'Nina Simone') in m.calls and shelf_value(m) == 0,
            'an artist with one album shows its captions on open')
     for last in (0, 2):
         m = cover_machine(albums=3)
         key = fnv(fnv(O['FNV_SEED'], f'Artist {last}'), f'Album {last}') or 1
         m.files['/mnt/mmc/.coverflow/album'] = 4; m.saved_album = key
         m.call(PSYMS['coverflow_open'], count=5000000)
-        expect(('slide_menu_set_value', last) in m.calls and m.props[(m.widgets['slide_menu'], 'value')] == last
+        expect(shelf_value(m) == last
                and ('widget_set_text_utf8', m.widgets['label_album'], f'Album {last}') in m.calls,
                f'the main Cover Flow reopens on its last album ({last})')
     m = cover_machine(albums=1); m.call(PSYMS['coverflow_open'], count=5000000)

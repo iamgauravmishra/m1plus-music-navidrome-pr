@@ -10,24 +10,13 @@
  * Which ids reach Home is decided by reset_homemenu_index/load_home_menu: id 0 only when the
  * `language` global (0xa05ab8) is 0 (Simplified Chinese); every other id comes from the saved
  * HOMEMENU list, which the user can edit in the Home customisation dialog. See docs/architecture.md. */
-#define HOME_HIFIMUSIC 0   /* hifi/hifimusic_page, or "no network"; Simplified Chinese only */
-#define HOME_TIDAL 1       /* tidal/tidal_main, or "no network" (stock again since V2.1kA) */
-#define HOME_UPDATEMUSIC 2 /* systemset/updatemusic_page */
-#define HOME_MYMUSIC 3     /* allmusic_page, context 0xf001: all songs */
-#define HOME_FOLDER 4      /* folder_page */
-#define HOME_ALBUM 5       /* album_page, context {0xf003, 0} */
-#define HOME_SONGER 6      /* localclass_page, 0xf004: artists */
-#define HOME_GENRE 7       /* localclass_page, 0xf006 */
-#define HOME_COMPOSER 8    /* localclass_page, 0xf005 */
-#define HOME_HR 9          /* allmusic_page, 0xf002: hi-res */
-#define HOME_FAV 10        /* allmusic_page, 0xf00a: favourites */
-#define HOME_MANY 11       /* allmusic_page, 0xf008: most played */
-#define HOME_RECENT 12     /* allmusic_page, 0xf007: recently played */
-#define HOME_RECENTADD 13  /* allmusic_page, 0xf009: recently added */
-#define HOME_PLAYLIST 14   /* playlist_page */
-#define HOME_CDRIPPER 15   /* cdripper_page (sets GPIO PA11 first) */
-#define HOME_PLAYSET 16    /* playset/playset_page */
-#define HOME_SYSSET 17     /* systemset/sysset_page */
+/* 0 hifi/hifimusic_page (Simplified Chinese only)   1 tidal/tidal_main        2 systemset/updatemusic_page
+ * 3 allmusic_page 0xf001: all songs                  4 folder_page            5 album_page, context {0xf003, 0}
+ * 6 localclass_page 0xf004: artists                  7 localclass_page 0xf006: genres   8 0xf005: composers
+ * 9 allmusic_page 0xf002: hi-res   10 0xf00a: favourites   11 0xf008: most played   12 0xf007: recently played
+ * 13 0xf009: recently added        14 playlist_page   15 cdripper_page (sets GPIO PA11 first)
+ * 16 playset/playset_page          17 systemset/sysset_page.  The ids tools/pod_pages.py uses are the same. */
+#define HOME_ALBUM 5
 
 /* The Home grid, as the stock page builder 0x534064 / icon builder 0x533d8c lay it out (patch/home.c adds one
  * icon the same way): a slide_view "home_sview" of 320x364 page views, six icons each in two columns and three
@@ -106,7 +95,47 @@
 #define CF_REFLECT 26
 #define CF_REFLECT_TOP 64
 #define DRAG_PX 108        /* finger travel per album */
+#define TAP_SLOP 12        /* px either way: a release within this of the down point (and no drag) is a tap */
+#define DRAG_START 5       /* px along the carousel, and no more across, start a drag (counted from there); tune on the device */
+#define FLING_MS 120       /* the fling coasts for this long at the release velocity */
+#define FLING_WINDOW 80    /* ms of samples the velocity is taken over; none in it but the release, no fling */
+#define SNAP_MS 16         /* the snap animation's timer period */
+#define SNAP_BASE_MS 120   /* an ease takes this plus SNAP_ALBUM_MS per album of travel, at most SNAP_MAX_MS */
+#define SNAP_ALBUM_MS 60
+#define SNAP_MAX_MS 360
 #define FNV_SEED 2166136261u
+
+/* Cover Flow landscape (patch/coverflow.c, docs/ui.md): the same depth renderer into the 320 x 400 body under
+ * the navbar (which stays, Back, toggle and Now Playing working as in portrait), its bitmap rotated a quarter
+ * turn, so the carousel runs along the 400 px side. A logical landscape frame CFL_W x CFL_H (x right, y down as
+ * the user sees it, the content turned 90 degrees clockwise on the screen, the device held turned
+ * counter-clockwise): logical (x, y) is physical (CFL_H - 1 - y, x), CFL_Y px down the window. The centre cover is
+ * the 168 px texture 1:1 like portrait's and the eye, depth and reflection are portrait's; the side covers are
+ * spread wider (CFL_X1, CFL_XS). The captions are drawn into the frame with the page's font (the glyphs turned by
+ * the same map) in the CFL_CAP_W px under the reflections. */
+#define CFL_Y 50           /* the frame's top in the window: under the 50 px navbar */
+#define CFL_W 400          /* the window's 450 px less the navbar */
+#define CFL_H 320
+#define CFL_CX 200
+#define CFL_TOP 28
+#define CFL_X1 160
+#define CFL_XS 84
+#define CFL_DRAG_PX 132    /* finger travel per album */
+#define CFL_ALBUM_Y 244    /* the caption lines' tops (logical), the album's 22 px, the artist's 18 px */
+#define CFL_ARTIST_Y 274
+#define CFL_CAP_W 368      /* 16 px margins, as portrait's captions */
+#define CANVAS_FONT_SIZE 0x0c   /* canvas_t: font_size u16 @0xc, font_t * @0x34 (canvas_draw_text @0x645348 reads both) */
+#define CANVAS_FONT 0x34
+#define GLYPH_FORMAT_ALPHA 0    /* glyph_t: x,y s16, w,h,advance u16 @0..9, format u8 @0xa (0 = 8 bit alpha, rows w bytes), pitch u8, data @0xc */
+
+/* Pointer events (Cover Flow's touch layer, the Albums grid) */
+#define EVT_POINTER_DOWN 0xff   /* input_device_status_on_input_event jump table @0x88f120 */
+#define EVT_POINTER_MOVE 0x101
+#define EVT_POINTER_UP 0x103
+#define EVT_POINTER_ABORT 0x107 /* widget_on_pointer_up/move dispatch it @0x6719b8 */
+#define PE_X 0x18               /* pointer_event_t: x, y (screen coordinates, widget_to_local turns them local); event_t.time u64 @0x8 */
+#define PE_Y 0x1c
+#define EV_TIME 0x08
 
 /* AWTK ABI used by the Cover Flow renderer (all read from this demo) */
 #define EVENT_PAINT_CANVAS 0x18 /* paint_event_t.canvas: paint_event_init stores a3 there @0x65026c */
@@ -118,7 +147,7 @@
 #define IMAGE_DRAW_CENTER 2     /* centred at its own size (DEFAULT 0, ICON 1, CENTER 2, SCALE 3, SCALE_AUTO 4) */
 
 /* Cover Flow page geometry (the ui/m1pod_cover.bin asset must match; tools/pod_ui.py) */
-#define SCREEN_W 320
+#define CF_COVER_Y 89      /* view_covers' y in the window (NAVBAR_H + 39) */
 
 /* ---------------------------------------------------------------------------
  * Shuffle (patch/shuffle.c, docs/architecture.md). Read from this demo with tools/dis.py.
@@ -191,3 +220,79 @@
 #define AH_BTN_W 110
 #define AH_SHUFFLE_X 132
 #define AH_HDR_H 184
+
+/* ---------------------------------------------------------------------------
+ * The Albums grid (patch/albums.c, docs/ui.md). GRID_COLS columns of GRID_COVER px square covers with GRID_GAP px
+ * between them, centred (GRID_MARGIN each side: (320 - 3 * 92 - 2 * 12) / 2); under each cover a one-line title
+ * GRID_TITLE_H high, GRID_TITLE_GAP below the cover; rows GRID_GAP apart; the first row GRID_GAP below the top
+ * and the last GRID_GAP above the bottom. The view is the 400 px under the 50 px navbar (ui/m1pod_albums.bin,
+ * tools/pod_ui.py). GRID_TILES covers stay decoded (memory: GRID_TILES * GRID_COVER^2 * 4 = 0.8 MB at most).
+ * ALBUMS_DEFAULT_GRID is the mode a first use opens (1 grid, 0 list); the choice is then the setting file
+ * ALBUMS_FILE. The navbar toggle button is NAV_VIEW_W wide. On the Pod pages (Albums, Artists, Cover Flow's
+ * landscape switch; ui assets) it sits at NAV_VIEW_X, flush left of Now Playing (x 260); the page title ends at
+ * its left edge.
+ *
+ * The list mode of the same page: rows LIST_ROW_H high like the library rows (rows.json PITCH 64), a LIST_ART px
+ * cover at (LIST_ART_X, LIST_ART_Y), the title (LIST_TITLE_H high at LIST_TITLE_Y, the page's label_row_title
+ * style: 21 px white) and the artist (LIST_SUB_H high at LIST_SUB_Y, label_row_sub: 18 px #AAAAAA) from
+ * LIST_TEXT_X for LIST_TEXT_W px (12 px right margin); a pressed row is filled LIST_PRESS over its LIST_ROW_H - 1
+ * top lines, the last line is the LIST_HAIR hairline. Colours are r,g,b,a bytes of canvas_set_fill_color's word.
+ */
+#define ALBUMS_DEFAULT_GRID 1
+#define GRID_COLS 3
+#define GRID_COVER 92
+#define GRID_GAP 12
+#define GRID_MARGIN 10
+#define GRID_TITLE_GAP 4
+#define GRID_TITLE_H 22
+#define GRID_VIEW_H 400
+#define GRID_TILES 24
+#define NAV_H 50
+#define NAV_VIEW_X 214
+#define NAV_VIEW_W 46
+#define LIST_ROW_H 64
+#define LIST_ART 52
+#define LIST_ART_X 4
+#define LIST_ART_Y 4
+#define LIST_TEXT_X 60
+#define LIST_TEXT_W 248
+#define LIST_TITLE_Y 7
+#define LIST_TITLE_H 24
+#define LIST_SUB_Y 33
+#define LIST_SUB_H 20
+#define LIST_HAIR 0xff222222u
+#define LIST_PRESS 0xff333333u
+
+/* ---------------------------------------------------------------------------
+ * Now Playing (patch/nowplaying.c, docs/architecture.md section 8a, ui assets tools/mod_nowplaying.py). The hook is
+ * on playing_page_init (0x53d1e4). Timer callbacks answer RET_REPEAT to run again (the stock page timer does:
+ * player_timer_start @0x53c210 registers 0x53cf48, which returns 8 while the page lives) and RET_OK to end.
+ * COVER_SRC is the cover source type word (0x97cad8): parseplaycover_thd (0x4ded84) sets it to 1 before it
+ * replaces the files and to 2 (/tmp/coverpic.jpg, embedded art), 3 (/tmp/externpic.jpg, a folder image) or 5
+ * (/tmp/externpic.jpg, copied from the .downpic cache) once the file is complete; the page's cover loader
+ * (0x53a5d8) reads exactly these. Any other value has no JPEG file (4 random_cover, 6/7 streamed).
+ * NP_NEUTRAL is the no-cover tone; the cover's tone has value NP_V_MIN..NP_V_MAX and keeps NP_SAT_NUM/NP_SAT_DEN of
+ * the colour's distance from its brightest channel, so the 0.15..0.92 black gradient over it leaves the white title and the #AAAAAA lines at least 4.5:1 (test/pod/nowplaying.py).
+ */
+#define RET_REPEAT 8
+#define COVER_SRC_BUSY 1
+#define COVER_SRC_EMBEDDED 2
+#define COVER_SRC_FOLDER 3
+#define COVER_SRC_CACHE 5
+#define NP_TICK_MS 500
+#define NP_HASH_MAX 524288
+#define NP_KEY_NEUTRAL 1
+#define NP_NEUTRAL 0xff202020u
+#define NP_V_MIN 32
+#define NP_V_MAX 192
+#define NP_SAT_NUM 4
+#define NP_SAT_DEN 5
+/* The cover's rounded corners (painted by the payload, np_on_art_paint) and the gradient under them (np_tint.png:
+ * black, alpha NP_ALPHA_TOP on the window's first row to NP_ALPHA_BOTTOM on its last, NP_WIN_H rows): the cover is
+ * NP_ART px square at window y NP_ART_Y, its corners NP_ART_R px. Equal to the constants of tools/mod_nowplaying.py. */
+#define NP_ART 264
+#define NP_ART_Y 28
+#define NP_ART_R 12
+#define NP_ALPHA_TOP 38
+#define NP_ALPHA_BOTTOM 235
+#define NP_WIN_H 450

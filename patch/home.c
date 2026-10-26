@@ -33,7 +33,6 @@
 #define O_APPEND 0x8      /* MIPS Linux */
 #define O_CREAT 0x100
 #define O_TRUNC 0x200
-#define EVT_WINDOW_FG 0x12d /* EVT_WINDOW_TO_FOREGROUND: window_manager_dispatch_window_event(.., 0x12d) @0x692a44 */
 
 enum { H_NEW = 0, H_OFF, H_ARMED, H_PROVEN };
 
@@ -46,21 +45,24 @@ static struct {
     int tries;
     int as_home;      /* the menu being opened is the Home instance: its Back is hidden */
     void *home;       /* the stock Home window */
-    void *menu;       /* the menu window the toggle row lives in */
-    const char *startup_row;
+    void *menu;       /* the Settings page window (it opens over the entry menu) */
 } hs __attribute__((section(".scratch")));
 
 static int hm_exists(const char *p) { return access(p, F_OK) == 0; }
 
 static unsigned hm_len(const char *s) { unsigned n = 0; while (s[n]) n++; return n; }
 
-static void hm_sync_dir(void) {
-    int fd = open(DATA_DIR, O_RDONLY, 0);
-    if (fd >= 0) { fsync(fd); close(fd); }
+/* fsync of the data directory: 0 only when the directory entry changes are durable. */
+static int hm_sync_dir(void) {
+    int fd = open(DATA_DIR, O_RDONLY, 0), ok;
+    if (fd < 0) return -1;
+    ok = fsync(fd) == 0;
+    return (close(fd) == 0 && ok) ? 0 : -1;
 }
 
-/* Temp file, fsync, rename onto the target, fsync of the directory. 0 on success. */
-static int hm_write_atomic(const char *path, const char *tmp, const char *data) {
+/* Temp file, fsync, rename onto the target, fsync of the directory. 0 on success. A failure of the last
+ * step returns -1 although the rename happened: the caller must not rely on the file (see hm_arm). */
+int home_write_atomic(const char *path, const char *tmp, const char *data) {
     unsigned n = hm_len(data);
     int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     int ok;
@@ -68,8 +70,7 @@ static int hm_write_atomic(const char *path, const char *tmp, const char *data) 
     ok = write(fd, data, n) == (int)n && fsync(fd) == 0;
     ok = (close(fd) == 0) && ok;
     if (!ok || rename(tmp, path) != 0) { unlink(tmp); return -1; }
-    hm_sync_dir();
-    return 0;
+    return hm_sync_dir();
 }
 
 /* Opt-in log on the SD card: only when /mnt/mmc/m1pod-log exists. Best effort. */
@@ -94,8 +95,8 @@ static void hm_clear_marker(void) {
  * later boot arms again until the user re-enables M1 Pod) and fall back to Shanling. If the note
  * cannot be written the marker stays, so every following boot is stock as well. */
 static void hm_record_failure(void) {
-    if (hm_write_atomic(BAD_NOTE, BAD_TMP, "1\n") != 0) return;
-    hm_write_atomic(START_FILE, START_TMP, "0\n");
+    if (home_write_atomic(BAD_NOTE, BAD_TMP, "1\n") != 0) return;
+    home_write_atomic(START_FILE, START_TMP, "0\n");
     hm_clear_marker();
     hm_log("m1pod: marker found; falling back to Shanling");
 }
@@ -128,7 +129,11 @@ static void hm_arm(void) {
     if (hm_exists(MARKER)) { hm_record_failure(); return; }
     if (hm_exists(BAD_NOTE)) { hm_log("m1pod: an earlier boot failed; stock until re-enabled"); return; }
     if (!hs.start) hm_log("m1pod: starting in Shanling");
-    if (hm_write_atomic(MARKER, MARKER_TMP, "1\n") != 0) return;
+    if (home_write_atomic(MARKER, MARKER_TMP, "1\n") != 0) {
+        unlink(MARKER);   /* the rename may have happened without a durable directory entry: stay stock, leave no marker (if the
+                           * removal is lost too, the next boot finds the marker and falls back to Shanling: fail closed) */
+        return;
+    }
     if (!timer_add(hm_clear, (void *)0, CLEAR_MS)) { hm_clear_marker(); return; }
     hs.state = H_ARMED;
     hm_log("m1pod: armed");
@@ -165,11 +170,15 @@ static void hm_schedule(unsigned ms) {
     if (hs.pending || hs.grid || !hs.start || !hm_ready() || home_off()) return;
     hs.tries = 0;
     if (timer_add(hm_open, (void *)0, ms)) hs.pending = 1;
+    else hm_grid(1);                      /* no timer, no menu: the stock grid, never a blank Home */
 }
 
-/* Home came to the foreground again: a window above it closed (Back, go-home, USB, lock screen, ..). */
+/* Home came to the foreground again: a window above it closed (Back, go-home, USB, lock screen, ..). Whenever no
+ * menu is going to replace the stock grid (the kill switch appeared, or Start in was switched to Shanling while the
+ * menu was Home) the grid is shown again: it was hidden when the menu opened as Home. */
 static int hm_fg(void *ctx, void *e) {
     (void)e;
+    if (!hs.pending && (home_off() || !hs.start)) hm_grid(1);
     if (!home_off() && !widget_lookup(ctx, POD_ENTRY_NAME, 1)) hm_add_icon(ctx);   /* the stock code rebuilt the grid (Home customisation) */
     hm_schedule(OPEN_MS);
     return RET_OK;
@@ -251,27 +260,10 @@ static void hm_fill_window(void *win) {
     }
 }
 
-/* The row's text label is the hscroll_label child, not child 0: the icon image sits in the row too, and
- * widget_set_text on the image drew a second, ghost "Start in: ..." over the icon (V2.1iM on the device). */
-static void hm_set_label(void) {
-    void *row, *c, *label = (void *)0;
-    const char *t;
-    unsigned i, n;
-    if (!hs.menu || !hs.startup_row) return;
-    row = widget_lookup(hs.menu, hs.startup_row, 1);
-    n = row ? widget_count_children(row) : 0;
-    for (i = 0; i < n && i < 8 && !label; i++) {
-        c = widget_get_child(row, i);
-        t = c ? widget_get_type(c) : (const char *)0;
-        if (t && t[0] == 'h' && t[1] == 's') label = c;   /* "hscroll_label" */
-    }
-    if (label) widget_set_text_utf8(label, hs.start ? "Start in: M1 Pod" : "Start in: Shanling");
-}
-
-/* Called by m1pod.c for the entry page (entry = 1) and for the page holding the Start-in row: remember the
- * windows and show the setting; the entry page as the Home instance loses its navbar (the Now Playing row
- * replaces the bars icon; the Settings > Shanling Home row is the way out). */
-void home_menu_opened(void *win, const char *startup_row, int entry) {
+/* Called by m1pod.c for the entry page (entry = 1) and for the Settings page (settings = 1): remember the
+ * windows; the entry page as the Home instance loses its navbar (the Now Playing row replaces the bars icon;
+ * the Settings > Shanling Home row is the way out). */
+void home_menu_opened(void *win, int settings, int entry) {
     if (entry) {
         hs.entry = win;
         if (hs.as_home) {
@@ -280,11 +272,7 @@ void home_menu_opened(void *win, const char *startup_row, int entry) {
             hs.as_home = 0;
         }
     }
-    if (startup_row) {
-        hs.menu = win;
-        hs.startup_row = startup_row;
-        hm_set_label();
-    }
+    if (settings) hs.menu = win;
 }
 
 /* The M1 Pod icon was tapped on the stock grid. After "Shanling Home" (grid flag set, setting M1 Pod) it
@@ -315,14 +303,15 @@ int home_to_grid(void) {
     return RET_OK;
 }
 
-/* "Start in": flip the persistent setting (takes effect at the next start). */
+int home_start(void) { return hs.start; }
+
+/* "Start in M1 Pod": flip the persistent setting (takes effect at the next start). The new state, or -1. */
 int home_toggle(void) {
     int next = !hs.start;
-    if (hm_write_atomic(START_FILE, START_TMP, next ? "1\n" : "0\n") != 0) return RET_OK;
+    if (home_write_atomic(START_FILE, START_TMP, next ? "1\n" : "0\n") != 0) return -1;
     hs.start = next;
     if (next) unlink(BAD_NOTE);
-    hm_set_label();
-    return RET_OK;
+    return next;
 }
 
 void home_boot(void *win) {

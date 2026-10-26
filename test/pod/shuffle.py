@@ -52,10 +52,9 @@ def shuffle_tests(expect, menu):
     K = {pod_pages.SHUFFLE_SONGS: 'Songs', pod_pages.SHUFFLE_ALBUMS: 'Albums', pod_pages.SHUFFLE_FOLDERS: 'Folders'}
     COUNT = 50000000
 
-    # 26. The rows: right after Cover Flow, one per kind, stock-styled, no chevron (they play, as
-    #     Now Playing's row), and the payload's own row table binds them to ACT_SHUFFLE and the kind.
-    #     Stage H: the menu has one Shuffle row after Cover Flow, with a chevron, opening the Shuffle
-    #     page, whose rows are the three, in that order.
+    # 26. The rows: one per kind, stock-styled, no chevron (they play, as Now Playing's row), and the payload's
+    #     own row table binds them to ACT_SHUFFLE and the kind. Stage H: the menu has one Shuffle row, with a
+    #     chevron, opening the Shuffle page, whose rows are the three, in that order.
     import awtk_ui
     at = [i for i, r in enumerate(page.rows) if r.action == pod_pages.ACT_SHUFFLE]
     if spi == 0:
@@ -70,7 +69,7 @@ def shuffle_tests(expect, menu):
     items = {w.name: w for w in tree.walk() if w.type == 'list_item'}
     for i in at:
         w = items.get(f'pod_row{i}')
-        labs = [c.get('text') for c in w.children if c.type == 'hscroll_label'] if w else []
+        labs = [pod_i18n.shown_english(c) for c in w.children if c.type == 'hscroll_label'] if w else []
         expect(labs == [page.rows[i].label] and not any(c.type == 'image' and c.name != 'pod_icon' for c in w.children) and
                all(c.get('sensitive') == 'false' for c in w.children if c.name == 'pod_icon'),
                f'{page.key} row {i} reads "{page.rows[i].label}", no chevron ({labs})')
@@ -271,12 +270,11 @@ def shuffle_page_tests(expect, menu, spi, page):
     rows0 = PSYMS['pod_rows_0']
     i = next(k for k, r in enumerate(menu.rows) if r.action == pod_pages.ACT_PAGE and r.arg == spi)
     cover = next(k for k, r in enumerate(menu.rows) if r.action == pod_pages.ACT_COVER)
-    expect(i == cover + 1 and menu.rows[i].label == 'Shuffle' and
-           not any(r.action == pod_pages.ACT_SHUFFLE for r in menu.rows),
-           f'the menu has one Shuffle row, right after Cover Flow (row {i}), and no shuffle rows of its own')
+    expect(menu.rows[i].label == 'Shuffle' and not any(r.action == pod_pages.ACT_SHUFFLE for r in menu.rows),
+           f'the menu has one Shuffle row (row {i} of the default order, after Playlists), opening the page, and no shuffle rows of its own')
     tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1pod_menu.bin'), 'rb').read())
     w = next((x for x in tree.walk() if x.type == 'list_item' and x.name == f'pod_row{i}'), None)
-    labs = [c.get('text') for c in w.children if c.type == 'hscroll_label'] if w else []
+    labs = [pod_i18n.shown_english(c) for c in w.children if c.type == 'hscroll_label'] if w else []
     expect(labs == ['Shuffle'] and any(c.type == 'image' and c.get('image') == 'right_arrow' for c in w.children),
            f'the Shuffle menu row reads "Shuffle" and has the chevron ({labs})')
     m = Machine()
@@ -308,11 +306,11 @@ def shuffle_page_tests(expect, menu, spi, page):
     items = [x for x in st.walk() if x.type == 'list_item']
     menu_item = next(x for x in tree.walk() if x.type == 'list_item')
     sig = lambda x: (x.get('style'), x.h, [(c.type, c.get('style'), c.x, c.y, c.h) for c in x.children if c.type == 'hscroll_label'])
-    expect(title is not None and title.get('text') == 'Shuffle' and
+    expect(title is not None and pod_i18n.shown_english(title) == 'Shuffle' and
            any(x.name == 'btn_return' for x in st.walk()) and any(x.name == 'btn_backtoplayer' for x in st.walk()),
            'the Shuffle page has the M1 Pod navbar: Shuffle, Back, Now Playing')
     expect([x.name for x in items] == ['pod_row0', 'pod_row1', 'pod_row2'] and
-           [[c.get('text') for c in x.children if c.type == 'hscroll_label'] for x in items] ==
+           [[pod_i18n.shown_english(c) for c in x.children if c.type == 'hscroll_label'] for x in items] ==
            [['Shuffle Songs'], ['Shuffle Albums'], ['Shuffle Folders']] and
            all(sig(x) == sig(menu_item) for x in items) and not any(c.type == 'image' and c.name != 'pod_icon' for x in items for c in x.children) and
            all(c.get('sensitive') == 'false' for x in items for c in x.children if c.name == 'pod_icon'),

@@ -8,7 +8,7 @@ A caption wider than its box is drawn as an hscroll_label shows it when it start
 its left margin, clipped to its box (it then scrolls back and forth, pausing 3 s at each end). Its
 AWTK width (tools/awtk_text.StbText: truncated advances + 1 px per glyph) is printed.
 
-Usage: venv/bin/python -I tools/preview_cover2.py WORKDIR OUT.png
+Usage: venv/bin/python -I tools/preview_cover.py WORKDIR OUT.png [LANDSCAPE.png]
 """
 import argparse, os, sys, tempfile
 from PIL import Image, ImageDraw
@@ -53,6 +53,30 @@ def page(work, album, artist, title, ring, frac=0):
     return im
 
 
+def landscape(work, album='Kind of Blue', artist='Miles Davis'):
+    """The landscape Cover Flow as the user sees it, the player held turned counter-clockwise (480 x 320): the tree's own
+    page (status bar and navbar, which stay portrait, now along the left side) with the real renderer's turned frame in
+    the 320 x 400 body under the navbar, the captions in the tree's font as patch/coverflow.c lays them (centred, 22 px
+    white over 18 px grey). Approximate, like the rest."""
+    from stb_raster import StbFont
+    raw = os.path.join(work, preview_all.RAW)
+    font = StbFont(os.path.join(raw, 'fonts', 'default.ttf'))
+    root = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1pod_cover.bin'), 'rb').read())
+    for w in root.walk():   # the caption labels are hidden in landscape (renamed: the painter has sample text for them)
+        if w.name in ('label_album', 'label_artist'): w.set('text', ''); w.set('name', w.name + '_preview')
+    page_im = preview_all.MenuPainter(raw).render(root, 0).convert('RGBA')
+    with tempfile.TemporaryDirectory() as tmp:
+        lib = hostcf.build(tmp)
+        shelf = [hostcf.texture(c, mark=i == 3) for i, c in enumerate(
+            [(200, 60, 60), (60, 160, 200), (230, 190, 70), (90, 90, 220), (120, 200, 120), (200, 120, 200), (210, 140, 60)])]
+        im = hostcf.landscape(lib, hostcf.ONE // 10, shelf).convert('RGBA')
+    c = hostcf.C
+    for text, px, y, grey in ((album, 22, c['CFL_ALBUM_Y'] + 13, 255), (artist, 18, c['CFL_ARTIST_Y'] + 11, 0xAA)):
+        font.draw(im, (c['CFL_W'] - font.width(text, px)) // 2, int(y - px / 2), text, px, (grey, grey, grey, 255))
+    page_im.paste(im.transpose(Image.ROTATE_270), (0, 480 - pod_ui.CLIENT_H + c['CFL_Y']))   # the physical frame
+    return page_im.transpose(Image.ROTATE_90).convert('RGB')
+
+
 def widths(work):
     """AWTK widths of the sample captions in the tree's font against the caption boxes."""
     ttf = Ttf(os.path.join(work, preview_all.RAW, 'fonts', 'default.ttf'))
@@ -66,8 +90,10 @@ def widths(work):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('work'); ap.add_argument('out')
+    ap.add_argument('work'); ap.add_argument('out'); ap.add_argument('landscape', nargs='?', help='also write the landscape panel here')
     a = ap.parse_args()
+    if a.landscape:
+        landscape(a.work).save(a.landscape); print('wrote', a.landscape)
     shelf = [((200, 60, 60), 0), ((60, 160, 200), 0), ((230, 190, 70), 0), ((90, 90, 220), 1),
              ((120, 200, 120), 0), ((200, 120, 200), 0), ((210, 140, 60), 0)]
     scoped = [None] * 3 + shelf[3:]

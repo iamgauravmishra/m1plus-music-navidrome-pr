@@ -1,6 +1,6 @@
 # History: tags, hardware results, lessons
 
-**These tags are historical.** Only the release (V2.1kE) and `--restore` (V2.1R) are buildable from
+**These tags are historical.** Only the release and `--restore` (V2.1R) are buildable from
 this tree; older packages are not reproducible from it (the variants, flags and payload stages that
 built them were removed). What each one was is recorded here; the design of what survives is in
 `docs/architecture.md` and `docs/ui.md`, the firmware facts in `docs/firmware.md`, the process in
@@ -43,7 +43,24 @@ refuses a version equal to the installed one, so each flashed package needs a ne
 | **V2.1kB** | jA + one album page: the stock `albuminfo_page` restyled by a hook on its header builder (120 px cover, year and track count, dark Play all, Shuffle), Cover Flow / Artists / All albums open it, the custom page and its Cover Flow track list removed; the queue page's navbar title 20 px | built, not flashed |
 | V2.1kC | jA + Now Playing in q2-pod's layout (Back / index / More on top, mode and heart at the foot of the art page, "Hi-Res" text tag, 4 px line without thumb) and Tabler round 2 (110 more stock icons: navbar actions, selection marks, Folders / Playlists / CD discs, dialogs, Now Playing glyphs); SHA-256 1d11ba9cb8764751ba550ed9d4bb7b1a57d898f8e08cdc63b53c95948677247e | built, not yet flashed (`docs/ui.md` "Icon audit") |
 | V2.1kD | kA + kB + kC combined, plus the recovery fallback (while the boot guard's bad note exists, a tap on the Tidal icon opens the M1 Pod menu so Settings > Start in is reachable): the release | flashed; Cover Flow's album page had no cover |
-| **V2.1kE** | kD + the album page's cover from Cover Flow / Artists / All albums (the cover thread is released before the page opens) + the polish listed below (album header, Lucide go-to-player icon, Home padding, queue drawer, Now Playing, speed badges): the **release** | emulated tests only; not flashed |
+| V2.1kE | kD + the album page's cover from Cover Flow / Artists / All albums (the cover thread is released before the page opens) + the polish listed below (album header, Lucide go-to-player icon, Home padding, queue drawer, Now Playing, speed badges) | emulated tests only; not flashed |
+| V2.1lA | kE + UI polish, assets only: the orange left in stock images goes neutral (on/off toggles, slider fills and thumbs, default covers), pull-down tile captions no longer break inside a word (boxes 57 -> 71 px), secondary text one grey `#AAAAAA`, pressed surfaces `#333333` (`docs/ui.md` "Accents in images", "Polish"); SHA-256 b8f0537bdb378f664d7f91815e9712a77f3aaec7e9091e68826050fed572f662 | emulated tests only; not flashed |
+| V2.1lB | kE + the Extras menu (an iPod-style page of the stock Home tiles the menu does not repeat) + the Artist / Album Artist toggle on the Artists page (the stock switch's writes, then the list reloads) | emulated tests only; not flashed |
+| V2.1lC | kE + the Albums grid: the menu's Albums row opens a grid of covers (3 columns, one custom-painted view, a ring of 24 decoded tiles) or the stock list, one navbar button switches and the choice is saved; the shared cover-cache helpers (`patch/covercache.c`) | emulated tests only; not flashed |
+| V2.1lD | kE + lA + lB + lC combined (polish recolours, Extras, Artists toggle, Albums grid); the Albums toggle safety: if the run-time button cannot be added to the stock list's navbar the saved choice is reset to the grid, so the Albums row never strands the user in the list | emulated tests only; not flashed |
+| V2.1lE | landscape Cover Flow (main and per artist): navbar toggle, window-sized rotated frame with rotated captions and exit control, remembered in `/mnt/data/m1pod-landscape`; docs previews as palette PNGs (docs/ PNGs 1.59 MB -> 0.71 MB): the **release** | emulated tests only; not flashed |
+| V2.1lF | lE's landscape Cover Flow turned 90 degrees clockwise (logical (x, y) at physical (319 - y, x), swipe and captions follow), no zoom (168 px covers 1:1, side covers spread wider), a plain `rotate-clockwise` glyph for the toggle and exit control, tap on the second cover out follows the drawn edge, caption buffer bounded, Tidal (Home grid and Extras row) drawn with Tabler `brand-tidal` | flashed 2026-10-26: landscape broken: only the first ~60 % of the frame animated (only the `slide_menu`'s 320 x 276 was ever repainted), the exit glyph lay over the covers, Now Playing gone with the hidden navbar; the Albums toggle overlapped the stock list's search button and the grid navbar had a gap before Now Playing (fixed in lG) |
+| V2.1lG | lF + navbar toggle layout from the stock Albums navbar's real geometry (title 36..183, search 183..243, multi-select 224..284, Now Playing 270..330): the Pod pages' toggle (Albums grid, Artists, Cover Flow landscape) is 46 px wide flush left of Now Playing (x 214); on the stock list it sits flush left of the search button (x 137) with the stock title cut short before it; the Artists page's two-segment strip is a navbar button (microphone-2 / user-star glyphs, title "Artists" / "Album Artists"), the list takes the 44 px back | flashed 2026-10-26: the grid button on the stock Albums list sometimes vanished (the stock navbar rebuild at 0x524e4c destroys its children; replaced by the list mode in lK) |
+| V2.1lH | lF's landscape fixed: every shelf move and album change repaints the whole frame (the touch layer is invalidated, not only the stock `slide_menu`'s rectangle), landscape is the 320 x 400 body under the navbar (which stays: Back, the toggle that returns, Now Playing), no control drawn in the frame; tests model AWTK's dirty rectangles and the page's runtime geometry | emulated tests only; not flashed |
+| V2.1lI | lH + Cover Flow gestures: the release's own travel counts (one tracker for MOVE and UP; a release far from the press is never a tap), a 5 px drag start apart from the 12 px tap tolerance (counted from the threshold: no dead zone, no jump), mostly vertical motion neither taps nor flings, a press during the snap stops the shelf and its release settles it (no shelf left between covers), elapsed-time cubic easing (180 ms per album), fling over the last 80 ms of samples; trial values to tune on the device | emulated tests only; not flashed |
+| V2.1lJ | lI + less work per frame: depth mode owns the shelf position (no stock `slide_menu`, no widget per album: the stock widget laid out all its children, up to 4000, on every drag step and snap tick; the flat fallback keeps it), paint draws only resident textures and a page timer decodes missing covers one per callback (nearest first, then the next one ahead of the travel; 9 slots keep the cover just left behind for a reversal; nothing past an artist's ends) | emulated tests only; not flashed |
+| V2.1lK | lG + the Albums page has a **list mode** of its own (64 px rows: 52 px cover, album 21 px, artist 18 px `#AAAAAA`, hairline, pressed `#333333`; box-reduced Cover Flow cache, same tile ring) and the navbar toggle switches grid / list in place; the run-time decoration of the stock Albums list (and `NAV_LIST_X`, the retry timer, the saved-view reset) is removed; the stock list stays under Shanling Home; new pins `canvas_set_fill_color`, `canvas_fill_rect` | emulated tests only; not flashed |
+| V2.1lL | lK + lH + lI + lJ merged: the Albums grid / list page with the landscape Cover Flow fix, the gesture rework and the per-frame work cut | flashed 2026-10-26: accepted |
+| V2.1mA | lL + a customisable iPod-ordered menu (Now Playing, Cover Flow, Albums, Artists, Songs, Playlists, Shuffle, Extras, Settings; Genres and Folders and anything the user hides are at the top of Extras; the list is `/mnt/data/m1pod-menu`, strictly parsed, defaults on any error) and a reworked Settings page: Main Menu (show / hide switches and up arrows), Cover Flow landscape and Start in M1 Pod as stock-style switches (the navbar rotate button is removed), Playback (was Play Settings), System Settings, Shanling Home; Now Playing row has the wave glyph, Shanling Home the Shanling mark cut from the stock shutdown screen | flashed 2026-10-26 |
+| V2.1mB | mA + the cleanup (unused pins, faster tests, docs describing the current state) + the Now Playing redesign (variant D of the exploration): grabber Back, 264 px art with payload-painted round corners, the window in the cover's colour under a black gradient (fourth hook, `playing_page_init` `0x53d1e4`: a 500 ms page timer averages `/tmp/coverpic.jpg` / `externpic.jpg` when it changes), micro dots, title and artist with heart and More on 36 px discs, 6 px bar, `-mm:ss` remaining time, no album line, index or quality line on the art page, bigger solid transport and dimmer 22 px mode / queue glyphs, the A-B markers moved to the new bar (5 pinned immediates); the cover file is **264** px (sharp 1:1: the four cover-size words 0x118 -> 0x108, the lock screen's card 288x334) | flashed 2026-10-26: works (tint, sharp rounded cover, remaining time); the after-paint corner painter kept |
+| V2.1mC | mB + the code-audit fixes: the boot guard needs the data directory's open and `fsync` to succeed before it arms (an unconfirmed marker is unlinked again); Home never stays blank (the grid is shown when Home returns with no menu to follow: Start in switched to Shanling, a kill switch, a refused open timer); Albums gestures count both axes and the release position, and a press that stops a fling is not a tap; Cover Flow's cache publication failure leaves no "no art" marker, and a refused preparation timer cancels the build; `cc_sample` / `cc_box` step the x mapping without a division per pixel (pixel-identical); tools: strict `fwtool verify`, `check.py --update` never blesses a failed run (`test/tools.py`) | emulated tests only; not flashed; merged into mD |
+| V2.1mD | mB + mC + the language: every text M1 Pod adds follows Settings > Language (13 languages, the stock `tr_text` / `locale_info_tr` mechanism, `patch/i18n.h`, `tools/mod_strings.py`; 40 keys of our own added to the 16 string tables, key = English text, plus 5 stock keys; widths measured per language, no font change needed); the audit fixes of mC are inside (see the mC row): merged into mE | not flashed alone (in mE) |
+| **V2.1mE** | mD + Cover Flow opens on the playing album (`mclGetPlayPos` + the play queue `0xa0394c`, matched by album key, else album name; saved last album otherwise); Settings > Cover Flow sub-page (Landscape switch moved there, new Sort value row); album order Artist (default, ignores a leading "The ") or Album (stock), shared by Cover Flow and Albums via a sorted index over the unreordered stock list; `/mnt/data/m1pod-cfsort`; the key "Cover Flow landscape" is gone: the **release** | flashed 2026-10-26: works |
 
 Pre-history: q2-pod (Shanling Q2) supplied the method (an asset-only mod first, then a code payload in
 a spare `PT_NULL` program header); the M1 Plus runs the same stack, so the pipeline (unpack, edit,
@@ -116,9 +133,40 @@ combination for this model remains unverified.
   and below its list, the queue drawer is restyled (44 px rows, the playing row white 20 px against muted 18 px), Now Playing: no Hi-Res tag, the heart back
   in the top row and the play mode back in the transport row (round-2 glyphs kept), art 216 px again, prev / play / pause / next back to V2.1jA's solid
   glyphs; the playback-speed badges read 1.0x 1.25x 1.5x 2.0x with a real x sign. SHA-256 `514c52e7bc705500731231350dc9a110b69d80147638757b9ee45157057be0a2` (`test/golden.sha256`).
+- **lC**: the Albums grid (`docs/architecture.md` section 5a, `docs/ui.md` section 8). The menu's Albums row opens `ui/m1pod_albums.bin`: one
+  320x400 `view_grid` that paints three 92 px covers a row and a one-line ellipsised title under each in its own `EVT_AFTER_PAINT`,
+  drag and fling scrolling clamped to the content, a tap opens the stock album page (`cc_open_album`, the sequence Cover Flow uses incl. the cover
+  thread release). Covers come from the Cover Flow cache (`<key>-168.jpg`) reduced with an area average into a ring of 24 tiles (0.9 MB, any library
+  size), two decodes a frame; an album without a cached cover shows the stock disc, nothing is built. The navbar toggle (Tabler `layout-grid` / `list`,
+  four added images) switches to the stock Albums list, whose navbar gets the same button at run time, and back; the choice is
+  `/mnt/data/m1pod-albums` (atomic write as Start in) and the Albums row opens the last view. Shared by Cover Flow and the grid and ready for
+  the landscape Cover Flow: `patch/covercache.c` (key, path, decode, nearest / box reduction, album list, open album). Pointer events carry
+  screen coordinates (`widget_to_local` before any hit test). Payload 37,048 bytes. SHA-256 `e67cb548d7c8a113a39d589f8233ed570d58378c16431d3f808b3c602481742c`
+  (`test/golden.sha256`).
+
+## Retired designs (what the docs no longer describe)
+
+- **Entry icon.** Up to jA the M1 Pod entry was the Tidal icon (id 1, taken over); kA made it an icon of its own (id 99).
+- **Stock Albums list with a run-time toggle (lC..lG).** The grid/list button was added to the stock `album_page`
+  navbar after the dispatcher returned. On the device (lG) it was sometimes missing: the stock navbar is rebuilt by
+  `0x524e4c` from the multi-select handlers (`0x525274`, `0x52532c`) and two more callers (`0x5265f4`, `0x5267f0`), the
+  window is found by name (possibly an earlier one still closing) and builds on the dispatcher's schedule, so a decoration
+  can order itself against none of it. Cause not isolated; lK made the list the page's own mode (no run-time decoration).
+- **Landscape Cover Flow navbar (lE/lF).** The navbar was hidden and an exit glyph drawn in the frame's corner, over the
+  covers and with Now Playing gone; only the `slide_menu`'s 320 x 276 (61 %) repainted. lH keeps the navbar and invalidates
+  the whole frame; mA replaced the navbar button (`btn_landscape`, `on_rotate`, `set_land`) by the Settings switch.
+- **Now Playing foot (kC).** Mode and heart at the foot of the art page, a Hi-Res tag, a 192 px art and Tabler's filled
+  transport glyphs (they read worse on the device); jA's PIL glyphs stay, kE put both buttons back at the top row.
+- **Cover thread (kD).** Cover Flow's album page had no cover: only `albumcoverinfo_init` ran, leaving
+  `albumcover_taskstate` 2 and the thread parked; Cover Flow now also calls `batchadd_albumcover_task(0, 0)`.
+- **Album page buttons (kE).** The cover starts 8 px under the navbar and the buttons are 110x36, so the track list
+  starts 24 px higher than before.
 
 ## Lessons
 
+- **A custom-painted view beats a widget per item.** The Albums grid is one `view` that draws only what is visible and keeps a small ring of
+  decoded tiles: the cost per frame and the memory (0.9 MB) do not depend on the library, where the stock lists and the artist list create one
+  row of widgets per entry. Pointer events are in screen coordinates: convert with `widget_to_local` before hit-testing a position.
 - **Hidden widgets still hit-test.** This AWTK's hit test checks only `enable` and `sensitive`, never
   `visible` (`widget_find_target_default` `0x6747d4`, `widget_on_pointer_down_children` `0x6714ac`;
   `widget_set_visible` flips bit 2 only). dC shipped a hidden full-screen `view_tracks` that swallowed
@@ -135,6 +183,10 @@ combination for this model remains unverified.
   undercounts by up to a pixel per glyph; the eA album-line offset (-45) left a sliver of `m:` visible
   (the prefix is 51 px in the stock font, not 45). Measure with `StbText` on the font of the tree being
   built; run font steps first.
+- **AWTK repaints only dirty rectangles.** A widget that draws beyond itself (Cover Flow's frame over the
+  `slide_menu`) must invalidate the whole area it draws: the canvas is clipped to the dirty rects and a stock widget marks
+  only its own rectangle (lF's landscape: only the `slide_menu`'s 276 of 450 px moved). The tests replay the payload's
+  invalidations against its runtime geometry (`dirty_rects`, `test/pod/harness.py`).
 - **The stock `slide_menu` starts on item 1**, not 0 (constructor `0x613970`): always call
   `slide_menu_set_value`, or an artist's shelf opens on its second album and a one-album shelf has no
   captions.

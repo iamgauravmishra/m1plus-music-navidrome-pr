@@ -46,6 +46,7 @@ class RowMachine(Machine):
                   'widget_resize', 'widget_move', 'hscroll_label_set_only_focus', 'widget_set_children_layout'):
             self.handlers[pod.FUNCTIONS[n][2]] = 'row:' + n
         self.handlers[O['DEFAULT_LAYOUT_FN']] = 'row:stock_layout'
+        self.handlers[pod.FUNCTIONS['widget_set_tr_text'][2]] = 'row:widget_set_tr_text'
         self.wtype, self.wname, self.style, self.focus, self.texts = {}, {}, {}, {}, {}
         self.types = {}
         self.layout_ret = 0
@@ -95,7 +96,6 @@ class RowMachine(Machine):
         name = self.handlers.get(address)
         if not name or not name.startswith('row:'):
             return super()._hook(u, address, size, _)
-        self.icount += 1
         name = name[4:]
         a0, a1, a2, a3 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3))
         sp = u.reg_read(UC_MIPS_REG_SP)
@@ -109,6 +109,7 @@ class RowMachine(Machine):
         elif name == 'widget_set_name': self.wname[a0] = self.read_cstr(a1)
         elif name == 'widget_use_style': self.style[a0] = self.read_cstr(a1)
         elif name == 'widget_set_text_utf8': self.texts[a0] = self.read_cstr(a1)
+        elif name == 'widget_set_tr_text': self.texts[a0] = self.tr(self.read_cstr(a1)); self.calls.append(('widget_set_tr_text', a0, self.read_cstr(a1)))
         elif name == 'widget_set_visible':
             self.set_visible(a0, a1); self.calls.append(('widget_set_visible', a0, a1))
         elif name == 'widget_count_children': ret = len(self.kids(a0))
@@ -199,6 +200,10 @@ def rows_tests(expect):
     # the boot guard's hook on home_page_init, the same two words
     allowed |= {pod.fileoff(built, pod.HOME_INIT), pod.fileoff(built, pod.HOME_INIT) + 4}
     allowed |= {pod.fileoff(built, pod.ALBUMINFO_HEADER), pod.fileoff(built, pod.ALBUMINFO_HEADER) + 4}   # the album header hook
+    allowed |= {pod.fileoff(built, pod.PLAYING_INIT), pod.fileoff(built, pod.PLAYING_INIT) + 4}           # the Now Playing init hook
+    import mod_nowplaying   # the A-B marker immediates (five pinned words, disjoint from the row edits)
+    expect(not {hex(a) for a in mod_nowplaying.MARKER_WORDS} & {e[0] for e in edits}, 'the 5 A-B marker sites are not among the row edits')
+    allowed |= {pod.fileoff(built, a) for a in mod_nowplaying.MARKER_WORDS}
     # the lock screen also sets the cover file size in four `addiu a3/a2, zero, 0xfe` words
     # (mod_lockscreen.COVER_IMM); they must be disjoint from the row edits and only change the 16-bit value
     cover_sites = (0x4df1dc, 0x4df1e0, 0x4df21c, 0x4df220)

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Copy a package to the player's TF card as update.bin, with the checks that have been skipped before.
 
-  python3 -I tools/flash_sd.py PACKAGE [--volume /Volumes/Music] [--checked | --force] [--dry-run] [--no-eject]
+  python3 -I tools/flash_sd.py PACKAGE [--volume /Volumes/Music] [--force] [--dry-run] [--no-eject]
 
 Refuses unless
   - `fwtool verify` passes on PACKAGE, and
   - PACKAGE's SHA-256 is in test/golden.sha256 (tools/check.py: that variant builds the golden
-    bytes), or you pass --checked (you ran check.py and it is a deliberate CHANGED/NEW) or --force;
+    bytes), or you pass --force (you ran check.py and it is a deliberate CHANGED/NEW);
   - the volume is a card: `diskutil info` Protocol is Secure Digital or USB, it holds the player's
     .downpic or Music folder, and it is not the SanDisk Extreme USB SSD.
 Then shows the update.bin already on the card (version = firmware_v20.info line 2, SHA-256), copies
@@ -56,8 +56,7 @@ def check_volume(vol):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('package'); ap.add_argument('--volume', default='/Volumes/Music')
-    ap.add_argument('--checked', action='store_true', help='check.py was run and this package is intended (not in golden)')
-    ap.add_argument('--force', action='store_true', help='skip the golden / --checked gate (verify and the card checks stay)')
+    ap.add_argument('--force', action='store_true', help='skip the golden gate for a package check.py just built (verify and the card checks stay)')
     ap.add_argument('--dry-run', action='store_true'); ap.add_argument('--no-eject', action='store_true')
     a = ap.parse_args()
     pkg = os.path.abspath(a.package)
@@ -68,8 +67,8 @@ def main():
     g = golden_for(sha)
     print(f'package: {os.path.basename(pkg)}\n  version {ver}  sha256 {sha}\n  fwtool verify: OK')
     if g: print(f'  golden: MATCH ({g[1]}, {g[0]})')
-    elif a.checked or a.force: print(f'  golden: not matched, continuing ({"--checked" if a.checked else "--force"})')
-    else: sys.exit('refusing: this package is not in test/golden.sha256. Run tools/check.py (and --update if the change is intended), or pass --checked / --force')
+    elif a.force: print('  golden: not matched, continuing (--force)')
+    else: sys.exit('refusing: this package is not in test/golden.sha256. Run tools/check.py (and --update if the change is intended), or pass --force')
     check_volume(a.volume)
     dst = os.path.join(a.volume, 'update.bin')
     if os.path.exists(dst):

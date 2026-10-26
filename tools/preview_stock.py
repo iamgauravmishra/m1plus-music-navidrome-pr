@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""docs/stock-pages-preview.png: PIL mock-up of the stock pages the release restyles (docs/ui.md),
+"""out/preview/stock-pages.png: PIL mock-up of the stock pages the release restyles (docs/ui.md),
 drawn from one finished tree. Approximate, not AWTK; sample data.
 
   Albums (stock list) -> the album page            the stock Albums rows, then albuminfo_page
@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import preview_font   # noqa: F401  (redirects the painters' text to stb_raster, the tree's font)
 import preview_album as PA
-import preview_cover2 as PC
+import preview_cover as PC
 import preview_lists as PL
 from preview_lockscreen import Painter
 

@@ -23,6 +23,7 @@
  */
 #include "offsets.inc"
 #include "stock.h"
+#include "i18n.h"
 
 #define P(r, off) (*(char **)((char *)(r) + (off)))
 #define I(r, off) (*(int *)((char *)(r) + (off)))
@@ -227,11 +228,11 @@ int shuffle_play(int kind) {
     list = loadLocalClassList(CLASS_ALL_SONGS) > 0 ? *(void **)PDEQ_SHOWLIST : (void *)0;
     n = list ? deque_size(list) : 0;
     if (!n) {
-        toast("Update Local Music first");
+        toast(TR("Update Local Music first"));
         return -1;
     }
     if (kind != SHUFFLE_SONGS && n > SHUFFLE_MAX) {
-        toast("Too many songs to shuffle");
+        toast(TR("Too many songs to shuffle"));
         return -1;
     }
     if (kind == SHUFFLE_SONGS) at = rand_below(n);
@@ -250,13 +251,13 @@ int shuffle_play(int kind) {
         else if (found >= 0 && (unsigned)found < n) idx = (unsigned)found;
     } else if (n && !group_order(queue, n, kind == SHUFFLE_FOLDERS)) {
         deque_destroy(queue);
-        toast("Not enough memory to shuffle");
+        toast(TR("Not enough memory"));
         return -1;
     }
     first = n ? deque_at(queue, idx) : (void *)0;
     if (!first || access(str(first, REC_PATH), F_OK)) {
         deque_destroy(queue);
-        toast(n ? "Storage unavailable" : "Update Local Music first");
+        toast(TR(n ? "Storage unavailable" : "Update Local Music first"));
         return -1;
     }
     /* Shuffle Songs is stock Shuffle over the whole library: it draws every next song from the

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Host build of Cover Flow's depth renderer and cache helpers, with checks and PNG captures.
+"""Host build of Cover Flow's depth renderer and the cover cache's pixel helpers, with checks and PNG captures.
 
-The same patch/coverflow.c that goes into the payload is compiled for the host with -DCF_HOST
-(which drops everything that talks to demo) and driven through ctypes, so the geometry, the
-compositing, the texture sampling and the cache key are tested without a device. Modelled on
+The same patch/coverflow.c and patch/covercache.c that go into the payload are compiled for the host with
+-DCF_HOST (which drops everything that talks to demo) and driven through ctypes, so the geometry, the
+compositing, the texture sampling, the grid's box-filter tile reduction and the cache key are tested without
+a device. Modelled on
 q2-pod's test/coverflow.py (Copyright (c) 2026 Diamond Bond, MIT; see NOTICE).
 
   venv/bin/python -I test/coverflow.py [--captures DIR] [--preview PNG]
@@ -16,7 +17,7 @@ import argparse, ctypes, os, re, subprocess, sys, tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
 import pod_ui  # noqa: E402  (the page layout: COVER_Y, ALBUM_Y, ARTIST_Y)
-SRC = os.path.join(ROOT, 'patch', 'coverflow.c')
+SRC = [os.path.join(ROOT, 'patch', f) for f in ('coverflow.c', 'covercache.c')]
 INC = os.path.join(ROOT, 'patch', 'offsets.inc')
 
 
@@ -39,16 +40,19 @@ TEXELS = ART * ART
 def build(tmp):
     so = os.path.join(tmp, 'coverflow.so')
     subprocess.run(['cc', '-O2', '-std=c99', '-Wall', '-DCF_HOST',
-                    '-shared', '-fPIC', '-I', os.path.join(ROOT, 'patch'), SRC, '-o', so], check=True)
+                    '-shared', '-fPIC', '-I', os.path.join(ROOT, 'patch'), *SRC, '-o', so], check=True)
     lib = ctypes.CDLL(so)
     lib.coverflow_render.restype = None
-    lib.coverflow_render.argtypes = [ctypes.POINTER(ctypes.c_uint), ctypes.c_int, ctypes.c_int,
+    lib.coverflow_render.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint), ctypes.c_int, ctypes.c_int,
                                      ctypes.POINTER(ctypes.c_void_p)]
-    lib.cf_fnv.restype = ctypes.c_uint
-    lib.cf_fnv.argtypes = [ctypes.c_uint, ctypes.c_char_p]
-    lib.cf_sample.restype = None
-    lib.cf_sample.argtypes = [ctypes.c_char_p, ctypes.c_uint, ctypes.c_uint, ctypes.c_uint,
-                              ctypes.c_char_p, ctypes.POINTER(ctypes.c_uint)]
+    lib.portrait = ctypes.addressof(ctypes.c_int.in_dll(lib, 'cf_portrait'))   # the shelves' geometry (cfg_t)
+    lib.land = ctypes.addressof(ctypes.c_int.in_dll(lib, 'cf_land'))
+    lib.cc_fnv.restype = ctypes.c_uint
+    lib.cc_fnv.argtypes = [ctypes.c_uint, ctypes.c_char_p]
+    for f in (lib.cc_sample, lib.cc_box):
+        f.restype = None
+        f.argtypes = [ctypes.c_char_p, ctypes.c_uint, ctypes.c_uint, ctypes.c_uint,
+                      ctypes.c_char_p, ctypes.c_uint, ctypes.POINTER(ctypes.c_uint)]
     return lib
 
 
@@ -65,13 +69,27 @@ def texture(colour, mark=0):
     return buf
 
 
-def render(lib, frac, texs):
-    frame = (ctypes.c_uint * (W * H))()
+def render(lib, frac, texs, cfg=None, pw=W, ph=H):
+    """The portrait frame (W x H), or with cfg (lib.land, or a CFG copy) the pw x ph one of that shelf."""
+    frame = (ctypes.c_uint * (pw * ph))()
     ring = (ctypes.c_void_p * RING)()
     for i, t in enumerate(texs):
         ring[i] = ctypes.cast(t, ctypes.c_void_p) if t is not None else None
-    lib.coverflow_render(frame, W, frac, ring)
+    lib.coverflow_render(ctypes.addressof(cfg) if isinstance(cfg, CFG) else cfg or lib.portrait, frame, pw, frac, ring)
     return frame
+
+
+class CFG(ctypes.Structure):
+    """patch/coverflow.c cfg_t."""
+    _fields_ = [(n, ctypes.c_int) for n in ('w', 'h', 'cx', 'top', 'art', 'eye', 'x1', 'xs', 'z1', 'zs', 'reflect', 'rot')]
+
+
+def land_cfg(lib, rot=1):
+    """A copy of the landscape shelf's geometry, turned (the device) or not (to compare the two)."""
+    cfg = CFG.from_address(lib.land)
+    out = CFG(*[getattr(cfg, n) for n, _ in CFG._fields_])
+    out.rot = rot
+    return out
 
 
 def px(frame, x, y):
@@ -84,6 +102,17 @@ def save(frame, path):
     img = Image.new('RGB', (W, H))
     img.putdata([(frame[i] & 255, frame[i] >> 8 & 255, frame[i] >> 16 & 255) for i in range(W * H)])
     img.save(path)
+
+
+def landscape(lib, frac, texs):
+    """The landscape shelf as the user sees it (CFL_W x CFL_H, the content
+    turned 90 degrees clockwise): the turned physical frame, turned back."""
+    from PIL import Image
+    pw, ph = C['CFL_H'], C['CFL_W']
+    frame = render(lib, frac, texs, land_cfg(lib), pw, ph)
+    img = Image.new('RGB', (pw, ph))
+    img.putdata([(v & 255, v >> 8 & 255, v >> 16 & 255) for v in frame])
+    return img.transpose(Image.ROTATE_90)
 
 
 def placeholder():
@@ -226,19 +255,82 @@ def main():
         expect(fy + TOP + ART + REFLECT <= ay and ry + rh <= pod_ui.CLIENT_H,
                f'the captions sit under the reflections, inside the 450 px window ({ay}, {ry + rh})')
 
+        # 8c. Landscape: the same renderer into a window-sized bitmap turned a quarter (the logical x
+        #     along the 450 px side, logical (x, y) at physical (CFL_H - 1 - y, x)).
+        LW, LH, LA, LCX, LTOP, LREFL = C['CFL_W'], C['CFL_H'], ART, C['CFL_CX'], C['CFL_TOP'], REFLECT
+        turned = land_cfg(lib, 1)
+        land = render(lib, 0, texs, turned, LH, LW)            # physical LH wide, LW high
+
+        def lp(frame, x, y): return frame[x * LH + LH - 1 - y]   # the logical pixel of a turned frame
+
+        straight = render(lib, 0, texs, land_cfg(lib, 0), LW, LH)  # the same shelf not turned
+        expect(all(lp(land, x, y) == straight[y * LW + x] for y in range(0, LH, 3) for x in range(0, LW, 2)),
+               'the turned frame is the straight one, pixel for pixel, through the quarter-turn map')
+        half_l = render(lib, ONE // 3, texs, turned, LH, LW)
+        half_s = render(lib, ONE // 3, texs, land_cfg(lib, 0), LW, LH)
+        expect(all(lp(half_l, x, y) == half_s[y * LW + x] for y in range(0, LH, 3) for x in range(0, LW, 2)),
+               'and part-way through a turn')
+        expect(all(land[i] >> 24 == 255 for i in range(0, LW * LH, 7)), 'the landscape frame is opaque')
+        inside = lp(land, LCX, LTOP + LA // 2)                 # the middle of the centre cover: the texture's flat colour
+        border = lp(land, LCX - LA // 2 + 3, LTOP + LA // 2)  # 3 px in from its edge: the 240 grey frame
+        expect((inside & 255, inside >> 8 & 255, inside >> 16 & 255) in (colours[REACH], tuple(v // 2 for v in colours[REACH])),
+               f'the centre cover is on the horizon at the middle of the landscape frame ({inside:06x})')
+        expect((border & 255, border >> 8 & 255, border >> 16 & 255) == (240, 240, 240),
+               'and its edge lies LA / 2 px from the centre line')
+        expect(lp(land, LCX, LTOP - 2) & 0xffffff == 0 and lp(land, LCX, LTOP + LA + LREFL + 4) & 0xffffff == 0,
+               'nothing above the cover, nor below its reflection')
+        expect(all(lp(land, x, y) & 0xffffff == 0 for y in range(LTOP + LA + LREFL, LH) for x in range(0, LW, 5)),
+               'the rows under the reflections are black, for the captions')
+        flat_l = render(lib, 0, [flat] * RING, turned, LH, LW)
+        expect(all(lp(flat_l, x, y) == lp(flat_l, LW - 1 - x, y) for y in range(0, LH, 7) for x in range(0, LCX, 5)),
+               'the landscape shelf is mirror-symmetric about the centre line')
+        lit = [x for x in range(0, LCX - LA // 2) if any(lp(land, x, y) & 0xffffff for y in range(0, LH, 3))]
+        expect(len(lit) >= 100 and len(lit) >= len(side) + 20,
+               f'more of the side covers show than in portrait ({len(lit)} columns against {len(side)})')
+
+        # 8d. Occlusion mid-turn, both shelves: every cover is drawn alone (a flat colour of its own, so its body is the
+        #     commonest pixel value) and in the shelf; wherever the nearest cover's body is, the shelf shows exactly that,
+        #     so no farther cover ever lands on a nearer one (nearest is by distance from the visual position).
+        flats = [texture(c, mark=0) for c in colours]
+        for v in flats:                                             # no border: the body is one flat value per cover
+            for i in range(TEXELS): v[i] = v[ART * (ART // 2) + ART // 2]
+        shelves = ((lib.portrait, W, H, lambda f, x, y: f[y * W + x]),
+                   (land_cfg(lib), LH, LW, lambda f, x, y: f[x * LH + LH - 1 - y]))
+        for cfg, pw, ph, at in shelves:
+            gw, gh = (W, H) if cfg is lib.portrait else (LW, LH)
+            for frac in (0, ONE // 4, -ONE // 4, ONE // 2 - 100, -ONE // 2 + 100, ONE // 3):
+                bodies = []                                         # (distance, {(x, y): value}) per cover
+                for j in range(RING):
+                    one = [None] * RING; one[j] = flats[j]
+                    f = render(lib, frac, one, cfg, pw, ph)
+                    vals = {}
+                    for y in range(gh):
+                        for x in range(gw): vals[(x, y)] = at(f, x, y) & 0xffffff
+                    mode = max(set(vals.values()) - {0}, key=list(vals.values()).count, default=0)
+                    bodies.append((abs((j - REACH) * ONE - frac), mode, {p for p, v in vals.items() if v == mode},
+                                   {p for p, v in vals.items() if v}))
+                shelf = render(lib, frac, flats, cfg, pw, ph)
+                wrong = 0
+                for dist, mode, body, _ in bodies:
+                    for (x, y) in body:   # unless something nearer is drawn there (body, edge or reflection)
+                        if not any(d < dist and (x, y) in lit for d, _, _, lit in bodies) and at(shelf, x, y) & 0xffffff != mode:
+                            wrong += 1
+                expect(wrong == 0, f'{"portrait" if cfg is lib.portrait else "landscape"} frac {frac}: '
+                       f'{wrong} body pixels show a farther cover or a mixture where a nearer cover is not')
+
         # 9. The cache key: FNV-1a of artist then album, each with a separator, never 0.
         def fnv(h, s):
             for c in s.encode(): h = (h ^ c) * 16777619 & 0xffffffff
             return h * 16777619 & 0xffffffff
         for artist, album in (('Miles Davis', 'Kind of Blue'), ('', ''), ('a', 'bc'), ('ab', 'c')):
             want = fnv(fnv(C['FNV_SEED'], artist), album)
-            got = lib.cf_fnv(lib.cf_fnv(C['FNV_SEED'], artist.encode()), album.encode())
-            expect(got == want, f'cf_fnv({artist!r}, {album!r})')
-        expect(lib.cf_fnv(C['FNV_SEED'], b'a') != lib.cf_fnv(C['FNV_SEED'], b'b'), 'keys differ')
+            got = lib.cc_fnv(lib.cc_fnv(C['FNV_SEED'], artist.encode()), album.encode())
+            expect(got == want, f'cc_fnv({artist!r}, {album!r})')
+        expect(lib.cc_fnv(C['FNV_SEED'], b'a') != lib.cc_fnv(C['FNV_SEED'], b'b'), 'keys differ')
         expect(fnv(fnv(C['FNV_SEED'], 'ab'), 'c') != fnv(fnv(C['FNV_SEED'], 'a'), 'bc'),
                'the separator keeps "ab"+"c" and "a"+"bc" apart')
 
-        # 10. cf_sample: the centred square of a wide image, nearest sampled, alpha over black.
+        # 10. cc_sample: the centred square of a wide image, nearest sampled, alpha over black.
         src_w, src_h = 2 * ART, ART
         src = bytearray(src_w * src_h * 4)
         for y in range(src_h):
@@ -247,18 +339,106 @@ def main():
                 src[(y * src_w + x) * 4:(y * src_w + x) * 4 + 4] = bytes(
                     (255, 0, 0, 255) if inside else (0, 255, 0, 255))
         out = (ctypes.c_uint * TEXELS)()
-        lib.cf_sample(bytes(src), src_w, src_h, src_w * 4, bytes((0, 1, 2, 3)), out)
+        lib.cc_sample(bytes(src), src_w, src_h, src_w * 4, bytes((0, 1, 2, 3)), ART, out)
         expect(all(out[i] == 0xff0000ff for i in range(0, TEXELS, 97)),
-               'cf_sample takes the centred square')
+               'cc_sample takes the centred square')
         half_alpha = bytes((10, 20, 30, 128)) * (src_w * src_h)
-        lib.cf_sample(half_alpha, src_w, src_h, src_w * 4, bytes((0, 1, 2, 3)), out)
-        expect(out[0] == 0xff000000 | 5 | 10 << 8 | 15 << 16, 'cf_sample composes alpha over black')
+        lib.cc_sample(half_alpha, src_w, src_h, src_w * 4, bytes((0, 1, 2, 3)), ART, out)
+        expect(out[0] == 0xff000000 | 5 | 10 << 8 | 15 << 16, 'cc_sample composes alpha over black')
+
+        # 11. cc_box, the grid's tile reduction (168 -> GRID_COVER): the same centred square, but an area average.
+        tile = C['GRID_COVER']
+        rgba = bytes((0, 1, 2, 3))
+        box = (ctypes.c_uint * (tile * tile))()
+        lib.cc_box(bytes(src), src_w, src_h, src_w * 4, rgba, tile, box)
+        expect(all(box[i] == 0xff0000ff for i in range(0, tile * tile, 31)), 'cc_box takes the centred square')
+        flat_img = bytes((10, 200, 90, 255)) * (ART * ART)
+        lib.cc_box(flat_img, ART, ART, ART * 4, rgba, tile, box)
+        expect(all(box[i] == 0xff000000 | 10 | 200 << 8 | 90 << 16 for i in range(tile * tile)),
+               'cc_box keeps a flat colour exactly, edge to edge')
+        # a 1 px chequer of black and white averages to mid grey where every box holds both; nearest sampling
+        # shows one of the two
+        chequer = bytearray()
+        for y in range(ART):
+            for x in range(ART):
+                chequer += bytes((255, 255, 255, 255) if (x + y) % 2 else (0, 0, 0, 255))
+        lib.cc_box(bytes(chequer), ART, ART, ART * 4, rgba, tile, box)
+        greys = [box[i] & 255 for i in range(tile * tile)]
+        expect(all(100 <= v <= 155 for v in greys), f'cc_box averages a chequer to grey ({min(greys)}..{max(greys)})')
+        nearest = (ctypes.c_uint * (tile * tile))()
+        lib.cc_sample(bytes(chequer), ART, ART, ART * 4, rgba, tile, nearest)
+        expect({v & 255 for v in nearest} <= {0, 255}, 'cc_sample keeps the chequer hard')
+        # exactly 2:1, each output pixel is the mean of its 2 x 2 block
+        two = bytearray()
+        for y in range(8):
+            for x in range(8):
+                two += bytes((x * 30, y * 30, (x + y) * 10, 255))
+        out4 = (ctypes.c_uint * 16)()
+        lib.cc_box(bytes(two), 8, 8, 32, rgba, 4, out4)
+        want = lambda bx, by: (sum((bx * 2 + i) * 30 for i in range(2)) // 2, sum((by * 2 + j) * 30 for j in range(2)) // 2)
+        expect(all(out4[by * 4 + bx] & 255 == want(bx, by)[0] and out4[by * 4 + bx] >> 8 & 255 == want(bx, by)[1]
+                   for by in range(4) for bx in range(4)), 'cc_box at 2:1 is the 2 x 2 block mean')
+        same_size = (ctypes.c_uint * 64)()
+        lib.cc_box(bytes(two), 8, 8, 32, rgba, 8, same_size)
+        expect(all(same_size[i] & 0xffffff == (two[i * 4] | two[i * 4 + 1] << 8 | two[i * 4 + 2] << 16) for i in range(64)),
+               'cc_box at 1:1 is the image')
+        lib.cc_box(half_alpha, src_w, src_h, src_w * 4, rgba, tile, box)
+        expect(box[0] == 0xff000000 | 5 | 10 << 8 | 15 << 16, 'cc_box composes alpha over black')
+        # a row of the wide image's stride is respected (padding bytes after each line are never read)
+        padded = bytearray()
+        for y in range(4):
+            padded += bytes((50, 60, 70, 255)) * 4 + bytes((255, 255, 255, 255)) * 2
+        out2 = (ctypes.c_uint * 4)()
+        lib.cc_box(bytes(padded), 4, 4, 24, rgba, 2, out2)
+        expect(all(v == 0xff000000 | 50 | 60 << 8 | 70 << 16 for v in out2), 'cc_box honours the stride')
+
+        # 12. Both filters against an independent model (the division per pixel, spelled out), pixel for pixel, for 1:1,
+        #     integral and fractional ratios, enlargements, wide and tall sources, a padded stride, every byte order.
+        import random
+        rnd = random.Random(7)
+
+        def model(kind, px, w, h, stride, at, size):
+            side = min(w, h); ox, oy = (w - side) // 2, (h - side) // 2
+            def over(x, y):
+                o = y * stride + x * 4
+                a_ = px[o + at[3]]
+                return tuple(px[o + at[k]] * a_ // 255 if a_ != 255 else px[o + at[k]] for k in range(3))
+            out_ = []
+            for y in range(size):
+                for x in range(size):
+                    if kind == 'sample':
+                        r, g, b = over(ox + x * side // size, oy + y * side // size)
+                    else:
+                        x0, x1 = x * side // size, min(side, ((x + 1) * side + size - 1) // size)
+                        y0, y1 = y * side // size, min(side, ((y + 1) * side + size - 1) // size)
+                        x1, y1 = max(x1, x0 + 1), max(y1, y0 + 1)
+                        px_ = [over(ox + i, oy + j) for j in range(y0, y1) for i in range(x0, x1)]
+                        n = len(px_)
+                        r, g, b = (sum(p[k] for p in px_) // n for k in range(3))
+                    out_.append(0xff000000 | r | g << 8 | b << 16)
+            return out_
+
+        exact = True
+        for (w_, h_, size_, pad) in ((20, 20, 20, 0), (24, 24, 8, 0), (24, 24, 10, 8), (31, 24, 13, 0), (17, 29, 17, 4),
+                                     (30, 30, 50, 0), (37, 37, 23, 0), (168, 168, 92, 0), (168, 168, 52, 0), (168, 168, 168, 0)):
+            order = rnd.choice(((0, 1, 2, 3), (2, 1, 0, 3), (1, 2, 3, 0)))
+            stride_ = w_ * 4 + pad
+            src_px = bytes(rnd.choice((255, 255, 255, rnd.randrange(256))) if k % 4 == order[3] else rnd.randrange(256)
+                       for k in range(stride_ * h_))
+            for kind, fn in (('sample', lib.cc_sample), ('box', lib.cc_box)):
+                got = (ctypes.c_uint * (size_ * size_))()
+                fn(src_px, w_, h_, stride_, bytes(order), size_, got)
+                if list(got) != model(kind, src_px, w_, h_, stride_, order, size_):
+                    exact = False
+                    print(f'  mismatch: {kind} {w_}x{h_} -> {size_} (stride {stride_}, order {order})')
+        expect(exact, 'cc_sample and cc_box equal the per-pixel division model for 1:1, integral, fractional and enlarging ratios')
 
         if a.captures:
             os.makedirs(a.captures, exist_ok=True)
             for name, frac in (('rest', 0), ('quarter', ONE // 4), ('half', ONE // 2),
                                ('three-quarter', -ONE // 4)):
                 save(render(lib, frac, texs), os.path.join(a.captures, f'coverflow-{name}.png'))
+            landscape(lib, ONE // 5, texs).save(os.path.join(a.captures, 'coverflow-landscape.png'))
             print(f'captures in {a.captures}')
         if a.preview:
             preview(render(lib, ONE // 6, texs), a.preview)

@@ -115,14 +115,14 @@ def build_ui(work):
 # new names in the page theme only, so a header the hook leaves alone keeps stock's btn_imgplayall_style.
 ALBUM_VIEW = 'albuminfo_page'
 BUTTON_STYLE, META_STYLE = 'btn_albumbtn_style', 'srlabel_meta15_style'
-BUTTON_BG, BUTTON_BORDER, BUTTON_PRESSED, BUTTON_PX = '#1E1E1E', '#3A3A3A', '#3A3A3A', 20
-META_COLOR, META_PX = '#9C9C9C', 15
+BUTTON_BG, BUTTON_BORDER, BUTTON_PRESSED, BUTTON_PX = '#1E1E1E', '#3A3A3A', '#333333', 20
+META_COLOR, META_PX = '#AAAAAA', 15
 
 
 def album_view_styles(page, base):
     """btn_albumbtn_style: the dark Play all / Shuffle button (a dark fill with a hairline border,
     pressed lighter, 20 px white text, no icon); srlabel_meta15_style: the "year . N tracks" line, the
-    stock grey line's alignment at 15 px #9C9C9C (4.5:1 on the pressed row the page audit tests)."""
+    stock grey line's alignment at 15 px #AAAAAA (the secondary grey)."""
     for state in ('normal', 'pressed', 'over', 'focused', 'disable'):
         s = awtk_style.Item('button', BUTTON_STYLE, state)
         s.set_color('bg_color', BUTTON_PRESSED if state == 'pressed' else BUTTON_BG)

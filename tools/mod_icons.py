@@ -34,6 +34,7 @@ import xml.etree.ElementTree as ET
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import paths
 from modlib import clone_workdir, edit_ui, write_keep_mode
+import pod_i18n
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSET = os.path.join(ROOT, 'assets', 'icons', 'tabler')
@@ -46,7 +47,7 @@ WHITE, DISC, DISC_DOWN, OFF = (255, 255, 255), (0x77,) * 3, (0x55,) * 3, (0x66,)
 # glyph: a Tabler name; '+name' = custom SVG in assets/icons/custom/ drawn in Tabler's style (no Tabler
 # match); None = stock image kept (text badge or a fitting stock art; Minimal-recoloured already).
 HOME = [  # Home ids 1..17 in English order, HiFi (id 0, zh_CN only) last
-    ('tidal', 'TIDAL (online only; stock image)', None), ('sset_updatemusic', 'Update Library', 'refresh'),
+    ('tidal', 'TIDAL (online only)', 'brand-tidal'), ('sset_updatemusic', 'Update Library', 'refresh'),
     ('mymusic', 'All Songs', 'music'), ('folder', 'Folders', 'folder'), ('album', 'Albums', 'vinyl'),
     ('songer', 'Artists', 'microphone-2'), ('genre', 'Genres', '+guitar'), ('composer', 'Composers', 'feather'),
     ('hr', 'Hi-Res', '+badge-hr'), ('fav', 'Favorites', 'heart'), ('many', 'Most Played', 'flame'),
@@ -95,22 +96,37 @@ LISTS = [('icon_folder', 'folder', 'folder'), ('icon_playlist', 'playlist', 'pla
 COVERS = ['albumcover_s', 'albumcover_m', 'albumcover_info']   # the "no cover" placeholder, 60/90/100 px
 COVER_GLYPH = 'vinyl'
 # M1 Pod menu and Shuffle page rows: label -> (added image, glyph). 40 px #777777 disc, left of the title.
-POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'player-play'), 'Cover Flow': ('pod_ic_coverflow', 'carousel-horizontal'),
+# '@shanling' = the brand mark cut out of a stock image (shanling_mark below), not a glyph.
+POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', '+audio-lines'), 'Cover Flow': ('pod_ic_coverflow', 'carousel-horizontal'),   # audio-lines: Lucide, the wave of the navbar's Now Playing button
             'Shuffle': ('pod_ic_shuffle', 'arrows-shuffle'), 'Songs': ('pod_ic_songs', 'music'),
             'Albums': ('pod_ic_albums', 'vinyl'), 'Artists': ('pod_ic_artists', 'microphone-2'),
             'Genres': ('pod_ic_genres', '+guitar'), 'Folders': ('pod_ic_folders', 'folder'),
-            'Playlists': ('pod_ic_playlists', 'playlist'), 'Settings': ('pod_ic_settings', 'settings'),
+            'Playlists': ('pod_ic_playlists', 'playlist'), 'Settings': ('pod_ic_settings', 'settings'), 'Extras': ('pod_ic_extras', 'dots'),
             'Shuffle Songs': ('pod_ic_shufsongs', 'music'), 'Shuffle Albums': ('pod_ic_shufalbums', 'vinyl'),
             'Shuffle Folders': ('pod_ic_shuffolders', 'folder'),
-            # the launcher's two rows; the Start-in label changes at runtime, the icon stays
-            'Shanling Home': ('pod_ic_grid', 'layout-grid'), 'Start in: M1 Pod': ('pod_ic_startup', 'home'),
+            # the Settings page's rows: the launcher's two, the customise page and the Cover Flow switch
+            'Shanling Home': ('pod_ic_shanling', '@shanling'), 'Start in M1 Pod': ('pod_ic_startup', 'home'),
+            'Main Menu': ('pod_ic_mainmenu', 'list-check'),
+            # Settings > Cover Flow (the Settings page's Cover Flow row uses the menu's carousel disc)
+            'Landscape': ('pod_ic_landscape', 'rotate-clockwise'), 'Sort': ('pod_ic_sort', 'sort-descending'),
+            # the Extras page (the stock Home tiles the menu does not repeat; glyphs as the Home grid's)
+            'Favorites': ('pod_ic_fav', 'heart'), 'Recently Added': ('pod_ic_recentadd', 'clock-plus'),
+            'Recently Played': ('pod_ic_recent', 'history'), 'Most Played': ('pod_ic_most', 'flame'),
+            'Composers': ('pod_ic_composers', 'feather'), 'Hi-Res': ('pod_ic_hires', '+badge-hr'),
+            'Update Library': ('pod_ic_update', 'refresh'), 'Tidal': ('pod_ic_tidal', 'brand-tidal'),
+            'CD Ripper': ('pod_ic_cdripper', 'disc'),
             # the Settings page (the menu's Settings row opens it)
-            'System Settings': ('pod_ic_settings', 'settings'), 'Play Settings': ('pod_ic_playset', 'adjustments')}
+            'System Settings': ('pod_ic_settings', 'settings'), 'Playback': ('pod_ic_playset', 'adjustments')}
 # The "M1 Pod" icon patch/home.c adds to the stock Home grid (id 99): 66x66 like the stock Home icons
 # (white click-wheel glyph on the #777777 disc, #555555 pressed), style home_m1pod_style in home_page.bin.
 POD_HOME = ('m1pod', 'm1pod_down')
 POD_HOME_GLYPH, POD_HOME_STYLE = '+click-wheel', 'home_m1pod_style'
-POD_UI = ['m1pod_menu', 'm1pod_shuffle', 'm1pod_settings']
+POD_UI = ['m1pod_menu', 'm1pod_shuffle', 'm1pod_settings', 'm1pod_extras', 'm1pod_mainmenu', 'm1pod_cfset']
+# The navbar toggles (tools/pod_ui.py NAV_VIEW_ICON, patch/albums.c, patch/artists.c): the glyph of the view a tap switches to, a plain
+# 24 px white glyph like the navbar's others (pressed #777777), added to the images.
+NAV_VIEW = {'pod_nav_grid': 'layout-grid', 'pod_nav_list': 'list',
+            'pod_nav_artist': 'microphone-2', 'pod_nav_albumartist': 'user-star'}   # the Artists page's Artist / Album Artist switch
+NAV_PX = 24
 POD_ICON_X, POD_ICON = 12, 40          # the disc: x 12..52 in the 52 px row (y 6); the title starts at 64
 POD_TEXT_X = 64
 
@@ -158,15 +174,23 @@ SPEEDS = {'p_1': ('1.0X', 0), 'p_1_sel': ('1.0X', 1), 'p_1_25': ('1.25X', 0), 'p
           'p_1_5': ('1.5X', 0), 'p_1_5_sel': ('1.5X', 1), 'p_2': ('2.0X', 0), 'p_2_sel': ('2.0X', 1)}
 PLAYALL = {'playall': 0, 'Play_all': 0, 'playall_down': 1, 'Play_all_down': 1}      # 90x28 "Play all" pills
 WIFI_LOCK = {f'wifi_{i}': i for i in range(1, 5)}                                    # secured network, level 1..4
-# Now Playing (mod_nowplaying.py copies these): name -> (glyph, canvas px, max ink px, colour, pressed name or None)
-# 'pil:NAME' = the solid glyph drawn with PIL (g_play ... below; the V2.1jA transport glyphs, which read better than Tabler's filled ones)
+# Now Playing (mod_nowplaying.py copies these): name -> (glyph, canvas px or (w, h), max ink px, tone, pressed name or None
+# [, disc px]). 'pil:NAME' = the solid glyph drawn with PIL (g_play ... below; the transport glyphs, which read better than
+# Tabler's filled ones); a disc px puts a translucent white disc of that diameter behind the glyph (heart and More).
 NP = {'np_play': ('pil:play', 44, 0, 'fg', 'np_play_down'), 'np_pause': ('pil:pause', 44, 0, 'fg', 'np_pause_down'),
       'np_next': ('pil:next', 36, 0, 'fg', 'np_next_down'), 'np_prev': ('pil:prev', 36, 0, 'fg', 'np_prev_down'),
-      'np_random': ('arrows-shuffle', 30, 26, 'fg', None), 'np_cycle': ('repeat', 30, 26, 'fg', None),
-      'np_cycle1': ('repeat-once', 30, 26, 'fg', None), 'np_order': ('repeat-off', 30, 26, 'dim', None),
-      'np_fav': ('heart:filled', 30, 26, 'fg', None), 'np_unfav': ('heart', 30, 26, 'fg', 'np_unfav_down'),
-      'np_more': ('dots', 30, 26, 'fg', 'np_more_down'), 'np_playqueue': ('playlist', 30, 26, 'fg', 'np_playqueue_down')}
+      'np_grabber': ('pil:grabber', (120, 44), 0, 'ghost', 'np_grabber_down'),
+      'np_random': ('arrows-shuffle', 30, 22, 'mid', None), 'np_cycle': ('repeat', 30, 22, 'mid', None),
+      'np_cycle1': ('repeat-once', 30, 22, 'mid', None), 'np_order': ('repeat-off', 30, 22, 'off', None),
+      'np_fav': ('heart:filled', 44, 20, 'fg', None, 36), 'np_unfav': ('heart', 44, 20, 'fg', 'np_unfav_down', 36),
+      'np_more': ('dots', 44, 20, 'fg', 'np_more_down', 36), 'np_playqueue': ('playlist', 30, 22, 'mid', 'np_playqueue_down')}
 NP_FG, NP_DIM = (0xEE, 0xEE, 0xEC), (0x8C,) * 3        # q2-pod's off-white and its muted pressed grey
+NP_MID, NP_OFF = (0xAA,) * 3, (0x6E,) * 3               # the mode and queue glyphs (the secondary grey); repeat-off
+NP_TONES = {'fg': (NP_FG, 255), 'mid': (NP_MID, 255), 'off': (NP_OFF, 255), 'ghost': ((255, 255, 255), 110)}   # rgb, alpha
+NP_PRESSED = {'ghost': ((255, 255, 255), 190)}            # every other tone presses to NP_DIM
+NP_DISC_ALPHA, NP_DISC_ALPHA_DOWN = 26, 51                # #FFFFFF1A, pressed #FFFFFF33
+
+SHANLING = '@shanling'
 
 def gname(g): return g.lstrip('+').split(':')[0]
 def is_custom(g): return g.startswith('+')
@@ -174,7 +198,7 @@ def is_filled(g): return g.endswith(':filled')
 
 def used_glyphs():
     gl = [e[2] for e in HOME + SETTINGS + LISTS] + list(PULLDOWN.values()) + list(STATUS.values()) + \
-        [g for g in WIFI_LEVELS if g] + [COVER_GLYPH, POD_HOME_GLYPH] + [v[1] for v in POD_ROWS.values()] + \
+        [g for g in WIFI_LEVELS if g] + [COVER_GLYPH, POD_HOME_GLYPH] + list(NAV_VIEW.values()) + [v[1] for v in POD_ROWS.values() if v[1] != SHANLING] + \
         [g for _, g, _ in GLYPHS] + [g for _, g in DISCS] + [v[0] for v in NP.values() if not v[0].startswith('pil:')] + ['lock:filled']
     return sorted({gname(g) for g in gl if g and not is_custom(g)})
 
@@ -270,6 +294,27 @@ def fit(fn, cw, ch, start, align='c'):
     c = Image.new('RGBA', (cw, ch), (0, 0, 0, 0))
     x = cw - g.width if align == 'r' else (0 if align == 'l' else (cw - g.width) // 2)
     c.alpha_composite(g, (x, (ch - g.height) // 2)); return c
+
+# The Shanling mark for the "Shanling Home" row: the brand's own swoosh from the stock shutdown screen
+# (images/xx/shutdown.png, white on a blue shape above the SHANLING wordmark), isolated by whiteness (min of r, g, b:
+# the blue shape is far from white) and scaled to fit the disc, white on transparent. The stock file is pinned.
+SHUTDOWN_SHA = 'b5133684f5f6100415161b5722b63cab1c0123538f3de440e2725e3c5f3dbc6e'
+SHUTDOWN_CROP = (92, 144, 228, 216)     # the mark, without the wordmark below it (starts at y 217)
+MARK_W, MARK_H = 32, 24                 # largest ink on the 40 px disc
+
+def shanling_mark():
+    from PIL import Image, ImageChops, ImageFilter
+    path = os.path.join(find_stock_img(), 'shutdown.png')
+    assert sha256(open(path, 'rb').read()) == SHUTDOWN_SHA, 'shutdown.png is not the pinned stock file'
+    rgb = Image.open(path).convert('RGB').crop(SHUTDOWN_CROP)
+    big = rgb.resize((rgb.width * 4, rgb.height * 4), Image.LANCZOS)
+    r, g, bl = big.split()
+    mask = ImageChops.darker(ImageChops.darker(r, g), bl).point(lambda v: max(0, min(255, (v - 110) * 255 // 110)))
+    mask = mask.filter(ImageFilter.MaxFilter(5))     # the swoosh's hairline strokes are under 1 px at disc size: thicken by about 1 px
+    im = Image.new('RGBA', big.size, WHITE + (0,)); im.putalpha(mask)
+    im = ink_crop(im)
+    k = min(MARK_W / im.width, MARK_H / im.height)
+    return im.resize((max(1, round(im.width * k)), max(1, round(im.height * k))), Image.LANCZOS)
 
 def disc(size, rgb, ss=4):
     from PIL import Image, ImageDraw
@@ -385,7 +430,10 @@ def generate_all(sizes):
         g = glyph(COVER_GLYPH, round(w * 0.6), 'cover', (0x8C,) * 3)
         t.alpha_composite(g, ((w - g.width) // 2, (w - g.height) // 2))
         f[n] = t if sizes[n + ':mode'] == 'RGBA' else t.convert('RGB')
-    for n, g in POD_ROWS.values(): f[n] = on_disc(glyph(g, DISC_GLYPH, 'disc'), POD_ICON, DISC)
+    for n, g in POD_ROWS.values(): f[n] = on_disc(shanling_mark() if g == SHANLING else glyph(g, DISC_GLYPH, 'disc'), POD_ICON, DISC)
+    for n, g in NAV_VIEW.items():
+        f[n] = glyph_fit(g, NAV_PX, NAV_PX)
+        f[n + '_down'] = glyph_fit(g, NAV_PX, NAV_PX, (0x77,) * 3)
     # round 2: glyph images at the stock size, discs, recoloured line art, badges, pills
     for n, g, down in GLYPHS:
         grey = (GREY_GLYPHS[n],) * 3 if n in GREY_GLYPHS else WHITE
@@ -405,45 +453,63 @@ def _aa(size, draw, scale=8):
     draw(ImageDraw.Draw(big), scale)
     return big.resize(size, Image.LANCZOS)
 
-def g_play(d, s, c=44):
-    # right-pointing triangle, 24 wide x 28 tall, shifted right 2 px for optical centring
-    x0, y0 = (c - 24) / 2 + 2, (c - 28) / 2
-    d.polygon([(x0 * s, y0 * s), ((x0 + 24) * s, (y0 + 14) * s), (x0 * s, (y0 + 28) * s)], fill=255)
+# the solid shapes, drawn at s x on a w x h canvas (white mask)
+PLAY_TRI, PAUSE_BAR, SKIP_TRI, GRABBER = (27, 32), (8, 10, 32), (16, 18), (36, 5, 11)   # w x h; bar w, gap, h; w x h; w, h, y
 
-def g_pause(d, s, c=44):
-    bw, gap, h = 7, 8, 26
-    x0, y0 = (c - (2 * bw + gap)) / 2, (c - h) / 2
+def g_play(d, s, w, h):
+    # right-pointing triangle, shifted right 1.5 px for optical centring
+    tw, th = PLAY_TRI
+    x0, y0 = (w - tw) / 2 + 1.5, (h - th) / 2
+    d.polygon([(x0 * s, y0 * s), ((x0 + tw) * s, (y0 + th / 2) * s), (x0 * s, (y0 + th) * s)], fill=255)
+
+def g_pause(d, s, w, h):
+    bw, gap, ph = PAUSE_BAR
+    x0, y0 = (w - (2 * bw + gap)) / 2, (h - ph) / 2
     for x in (x0, x0 + bw + gap):
-        d.rounded_rectangle([x * s, y0 * s, (x + bw) * s - 1, (y0 + h) * s - 1], radius=1.5 * s, fill=255)
+        d.rounded_rectangle([x * s, y0 * s, (x + bw) * s - 1, (y0 + ph) * s - 1], radius=2 * s, fill=255)
 
-def g_skip(d, s, c=36, forward=True):
-    # two triangles touching, 13 wide each x 16 tall: >> (or << mirrored)
-    tw, th = 13, 16
-    x0, y0 = (c - 2 * tw) / 2, (c - th) / 2
+def g_skip(d, s, w, h, forward=True):
+    # two triangles touching: >> (or << mirrored)
+    tw, th = SKIP_TRI
+    x0, y0 = (w - 2 * tw) / 2, (h - th) / 2
     for i in range(2):
         a = x0 + i * tw
         pts = [(a, y0), (a + tw, y0 + th / 2), (a, y0 + th)] if forward else [(a + tw, y0), (a, y0 + th / 2), (a + tw, y0 + th)]
         d.polygon([(x * s, y * s) for x, y in pts], fill=255)
 
-def pil_glyph(kind, px, rgb):
-    """The V2.1jA transport glyph `kind` (play, pause, next, prev) on a px canvas, in rgb."""
+def g_grabber(d, s, w, h):
+    # the sheet handle: a pill centred in the button's width, y px from its top
+    pw, ph, y = GRABBER
+    d.rounded_rectangle([(w - pw) / 2 * s, y * s, (w + pw) / 2 * s - 1, (y + ph) * s - 1], radius=ph / 2 * s, fill=255)
+
+def pil_glyph(kind, size, rgb, alpha=255):
+    """The solid glyph `kind` (play, pause, next, prev, grabber) on a size (px or (w, h)) canvas, in rgb at alpha."""
     from PIL import Image
-    fn = {'play': g_play, 'pause': g_pause, 'next': lambda d, s, c: g_skip(d, s, c, True), 'prev': lambda d, s, c: g_skip(d, s, c, False)}[kind]
-    mask = _aa((px, px), lambda d, s: fn(d, s, px))
+    w, h = size if isinstance(size, tuple) else (size, size)
+    fn = {'play': g_play, 'pause': g_pause, 'next': lambda d, s, w, h: g_skip(d, s, w, h, True),
+          'prev': lambda d, s, w, h: g_skip(d, s, w, h, False), 'grabber': g_grabber}[kind]
+    mask = _aa((w, h), lambda d, s: fn(d, s, w, h))
+    if alpha != 255: mask = mask.point(lambda v: v * alpha // 255)
     im = Image.new('RGBA', mask.size, rgb); im.putalpha(mask); return im
 
+def np_disc(size, disc_px, alpha, g, ink, rgb):
+    """A size x size canvas: a white disc of disc_px at `alpha` centred, the Tabler glyph g (ink px) over it."""
+    from PIL import Image
+    d = disc(disc_px, (255, 255, 255)); d.putalpha(d.getchannel('A').point(lambda v: v * alpha // 255))
+    c = Image.new('RGBA', (size, size), (255, 255, 255, 0)); o = (size - disc_px) // 2
+    c.alpha_composite(d, (o, o)); c.alpha_composite(glyph_fit(g, size, size, rgb, (size - ink) // 2)); return c
+
 def np_images():
-    """The Now Playing glyphs (mod_nowplaying.py): off-white, pressed #8C8C8C; the transport glyphs are the solid
-    PIL-drawn shapes of V2.1jA, the rest Tabler."""
+    """The Now Playing glyphs (mod_nowplaying.py): the tones of NP_TONES, pressed #8C8C8C (the grabber: brighter); the
+    transport glyphs are the solid PIL-drawn shapes, heart and More sit on a translucent disc, the rest Tabler."""
     out = {}
-    for n, (g, px, ink, tone, down) in NP.items():
-        rgb, pad = NP_FG if tone == 'fg' else NP_DIM, (px - ink) // 2
-        if g.startswith('pil:'):
-            out[n] = pil_glyph(g[4:], px, rgb)
-            if down: out[down] = pil_glyph(g[4:], px, NP_DIM)
-            continue
-        out[n] = glyph_fit(g, px, px, rgb, pad)
-        if down: out[down] = glyph_fit(g, px, px, NP_DIM, pad)
+    for n, (g, px, ink, tone, down, *rest) in NP.items():
+        for name, pressed in ((n, False), (down, True)):
+            if not name: continue
+            rgb, alpha = (NP_PRESSED.get(tone) or (NP_DIM, 255)) if pressed else NP_TONES[tone]
+            if g.startswith('pil:'): out[name] = pil_glyph(g[4:], px, rgb, alpha)
+            elif rest: out[name] = np_disc(px, rest[0], NP_DISC_ALPHA_DOWN if pressed else NP_DISC_ALPHA, g, ink, rgb)
+            else: out[name] = glyph_fit(g, px, px, rgb, (px - ink) // 2)
     return out
 
 # ---------------------------------------------------------------- one ring style for every pull-down tile (docs/ui.md)
@@ -501,7 +567,8 @@ def replaced_names():
         list(SPEEDS) + list(PLAYALL) + list(WIFI_LOCK)))
 
 def pod_row_names(): return sorted({n for n, _ in POD_ROWS.values()})
-def pod_names(): return sorted(set(pod_row_names()) | set(POD_HOME))
+def nav_names(): return sorted(set(NAV_VIEW) | {n + '_down' for n in NAV_VIEW})
+def pod_names(): return sorted(set(pod_row_names()) | set(POD_HOME) | set(nav_names()))
 def np_names(): return sorted(set(NP) | {v[4] for v in NP.values() if v[4]})
 
 def added_rels(stock_rootfs=None, *args):
@@ -594,6 +661,7 @@ def apply(src, out):
         assert stat.S_IMODE(os.stat(p).st_mode) == stat.S_IMODE(mode)
     n_rows = apply_pod_rows(out, POD_ROWS)
     add_home_icon(out)
+    add_nav_icons(out)
     print(f'icons: {n_ok} images replaced, {total_old} -> {total_new} bytes ({total_new - total_old:+d}); {n_rows} M1 Pod row icons '
           f'and the Home grid icon ({POD_HOME_STYLE}) added')
 
@@ -610,10 +678,10 @@ def apply_pod_rows(out, rows):
         for row in [w for w in root.walk() if w.type == 'list_item' and w.name.startswith('pod_row')]:
             lab = next(c for c in row.children if c.type == 'hscroll_label')
             assert not any(c.name == 'pod_icon' for c in row.children), 'already has icons'
-            text = lab.get('text'); assert text in rows, f'no icon for the row {text!r}'
+            text = pod_i18n.shown_english(lab); assert text in rows, f'no icon for the row {text!r}'
             img = rows[text][0]; used[img] = 1
-            chevron = any(c.type == 'image' for c in row.children)
-            lab.x, lab.w = POD_TEXT_X, row.w - POD_TEXT_X - (44 if chevron else 12)
+            right = min([c.x for c in row.children if c.type in ('image', 'button') or c.name.startswith('pod_value')] or [row.w - 12])   # the chevron, switch, up arrow or value
+            lab.x, lab.w = POD_TEXT_X, right - POD_TEXT_X
             ic = Widget('image', POD_ICON_X, (row.h - POD_ICON) // 2, POD_ICON, POD_ICON,
                         [('name', 'pod_icon'), ('image', img), ('draw_type', 'icon'), ('sensitive', 'false')])
             row.children.insert(0, ic)
@@ -649,6 +717,13 @@ def add_home_icon(out):
     write_keep_mode(p, awtk_style.serialize(th))
     d = os.path.join(out, IMG)
     for n in POD_HOME:
+        q = os.path.join(d, n + '.png'); assert not os.path.exists(q), f'{n}.png already in the tree'
+        shutil.copyfile(os.path.join(PNG, n + '.png'), q); os.chmod(q, IMG_MODE); os.utime(q, (IMG_MTIME, IMG_MTIME))
+
+def add_nav_icons(out):
+    """The Albums view toggle's four images (used by ui/m1pod_albums.bin, which swaps the glyph at run time with its mode)."""
+    d = os.path.join(out, IMG)
+    for n in nav_names():
         q = os.path.join(d, n + '.png'); assert not os.path.exists(q), f'{n}.png already in the tree'
         shutil.copyfile(os.path.join(PNG, n + '.png'), q); os.chmod(q, IMG_MODE); os.utime(q, (IMG_MTIME, IMG_MTIME))
 

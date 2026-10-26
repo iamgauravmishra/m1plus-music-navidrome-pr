@@ -278,7 +278,7 @@ def edit_playqueue(root, pal):
     for st in ('normal', 'disable', 'focused'): mode.set(f'style:{st}:font_size', str(QUEUE_NAME_PX))
     btm = root.find('button')
     for st in ('normal', 'over', 'disable', 'focused'): btm.set(f'style:{st}:bg_color', '#1E1E1E')
-    btm.set('style:pressed:bg_color', '#3A3A3A')
+    btm.set('style:pressed:bg_color', '#333333')
     for st in ('normal', 'pressed', 'over', 'disable', 'focused'): btm.set(f'style:{st}:font_size', '20')
 
 def ui_edit(rel, root, pal):

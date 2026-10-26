@@ -9,7 +9,7 @@ def run(ctx):
 
     # 25. Contrast in the built assets: every button we style inline has a dark background and
     #     light text in every widget state (theme-styled navbar buttons excepted).
-    for asset_name in ('m1pod_menu.bin', 'm1pod_cover.bin', 'm1pod_artists.bin', 'm1pod_shuffle.bin', 'm1pod_settings.bin'):
+    for asset_name in ('m1pod_menu.bin', 'm1pod_cover.bin', 'm1pod_artists.bin', 'm1pod_shuffle.bin', 'm1pod_settings.bin', 'm1pod_cfset.bin'):
         tree = awtk_ui.parse(open(os.path.join(ui_dir, asset_name), 'rb').read())
         for w in tree.walk():
             if w.type == 'list_item':   # rows: stock's widget and theme styles, as sysset's rows
@@ -78,47 +78,41 @@ def run(ctx):
            'home_m1pod_style has the five states of the stock icon styles: m1pod, m1pod_down when pressed')
     expect(th.items.index(items[-1]) + 1 == min(k for k, i in enumerate(th.items) if i.widget == 'image' and i.style > mod_icons.POD_HOME_STYLE) and
            th.find('image', 'home_tidal_style')[0].get('bg_image') == 'tidal',
-           'inserted in the stock sort order, and the Tidal icon keeps its stock image')
-    stock_tidal = open(os.path.join(mod_icons.find_stock_img(), 'tidal.png'), 'rb').read()
-    expect(open(os.path.join(img_dir, 'tidal.png'), 'rb').read() == stock_tidal and
-           open(os.path.join(img_dir, 'tidal_down.png'), 'rb').read() == open(os.path.join(mod_icons.find_stock_img(), 'tidal_down.png'), 'rb').read(),
-           'tidal.png and tidal_down.png are the stock files (Tidal is Tidal again)')
+           'inserted in the stock sort order, and the Tidal icon keeps its image names')
+    tidal = {i.get('bg_image') for i in th.find('image', 'home_tidal_style')}
+    expect(tidal == {'tidal', 'tidal_down'} and all(
+               open(os.path.join(img_dir, n + '.png'), 'rb').read() == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read()
+               and mod_icons.read_png(os.path.join(img_dir, n + '.png')).size == (66, 66) and n in {h[0] for h in mod_icons.HOME} | {h[0] + '_down' for h in mod_icons.HOME}
+               for n in tidal),
+           'every state of home_tidal_style shows the generated brand-tidal disc (tidal, tidal_down: 66x66, not the stock files)')
+    expect(dict((n, g) for n, _, g in mod_icons.HOME)['tidal'] == 'brand-tidal' and mod_icons.POD_ROWS['Tidal'][1] == 'brand-tidal',
+           'the Home grid and the Extras row both use Tabler\'s brand-tidal')
+    # the Settings rows' icons: Now Playing's wave is the navbar button's glyph (Lucide audio-lines), Shanling Home's mark is cut
+    # from the pinned stock shutdown screen (the committed disc is what the derivation makes), the rest are existing mappings
+    glyphs = {n: g for n, g, _ in mod_icons.GLYPHS}
+    expect(mod_icons.POD_ROWS['Now Playing'][1] == glyphs['back_to_player'] == '+audio-lines', 'the Now Playing row uses the wave glyph of the navbar\'s Now Playing button')
+    from PIL import Image
+    mark = Image.open(os.path.join(mod_icons.PNG, mod_icons.POD_ROWS['Shanling Home'][0] + '.png')).convert('RGBA')
+    expect(mod_icons.POD_ROWS['Shanling Home'][1] == mod_icons.SHANLING and mark.tobytes() == mod_icons.on_disc(mod_icons.shanling_mark(), mod_icons.POD_ICON, mod_icons.DISC).tobytes(),
+           'the Shanling Home row has the brand mark derived from the stock shutdown screen (pinned), on the 40 px disc')
+    ink = [p for p in mark.getdata() if p[0] > 0xc0 and p[3] > 200]
+    expect(len(ink) > 100 and mark.size == (40, 40), f'the mark is light ink on the grey disc ({len(ink)} px)')
+    expect({'Main Menu', 'Cover Flow', 'Landscape', 'Sort', 'Start in M1 Pod', 'Playback'} <= set(mod_icons.POD_ROWS)
+           and not {'Play Settings', 'Start in: M1 Pod', 'Cover Flow landscape'} & set(mod_icons.POD_ROWS)
+           and not any(k.startswith('pod_nav_rotate') for k in mod_icons.NAV_VIEW), 'icons exist for the Settings rows and the Cover Flow page\'s, none for the old labels or the removed rotate button')
+    expect(mod_icons.POD_ROWS['Landscape'][1] == 'rotate-clockwise' and mod_icons.POD_ROWS['Sort'][1] == 'sort-descending'
+           and mod_icons.POD_ROWS['Cover Flow'][1] == 'carousel-horizontal' and 'm1pod_cfset' in mod_icons.POD_UI,
+           'Settings > Cover Flow: the carousel row (also the menu\'s), the rotate glyph for Landscape, Tabler\'s sort-descending for Sort')
     lock_imgs = {n: open(os.path.join(img_dir, n + '.png'), 'rb').read() for n in ('screens_battery', 'screens_charge', 'screens_lowbattery')}
     expect(all(lock_imgs[n] == battery_art.png(battery_art.LOCK, s) for n, s in
                (('screens_battery', 'normal'), ('screens_charge', 'charge'), ('screens_lowbattery', 'low'))),
            'the lock screen battery images are battery_art.png(LOCK)')
 
-    # 41. Now Playing (round 2, V2.1kE layout): the np_* glyphs are the committed Tabler PNGs; the top row is Back / index
-    #     / heart / More (44 px targets, as V2.1jA), the play mode is the transport row's first slot, nothing sits at the
-    #     foot of the art page; img_hr (app-driven: demo only calls widget_set_visible on it) stays at 0x0, insensitive,
-    #     so the Hi-Res tag never shows; the progress line has no thumb.
+    # 41. Now Playing: the np_* images are the committed PNGs (tools/mod_icons.py draws them); the page's own checks are
+    #     in test/pod/nowplaying.py.
     np_names = mod_icons.np_names()
     expect(all(open(os.path.join(img_dir, n + '.png'), 'rb').read() == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read() for n in np_names),
            f'the {len(np_names)} np_* glyphs are the committed PNGs')
-    from PIL import Image
-    solid = {'np_play': ('play', 44, mod_icons.NP_FG), 'np_pause': ('pause', 44, mod_icons.NP_FG), 'np_next': ('next', 36, mod_icons.NP_FG),
-             'np_prev': ('prev', 36, mod_icons.NP_FG), 'np_play_down': ('play', 44, mod_icons.NP_DIM), 'np_pause_down': ('pause', 44, mod_icons.NP_DIM),
-             'np_next_down': ('next', 36, mod_icons.NP_DIM), 'np_prev_down': ('prev', 36, mod_icons.NP_DIM)}
-    expect(all(Image.open(os.path.join(img_dir, n + '.png')).convert('RGBA').tobytes() == mod_icons.pil_glyph(k, px, rgb).tobytes()
-               for n, (k, px, rgb) in solid.items()),
-           'prev / play / pause / next (and their pressed greys) are the solid PIL-drawn glyphs of V2.1jA, the rest of the np_* Tabler')
-    tabler_np = [n for n in np_names if n not in solid and n != 'np_artmask']
-    expect(all(len(set(Image.open(os.path.join(img_dir, n + '.png')).convert('RGBA').getchannel('A').tobytes())) > 2 for n in tabler_np),
-           'heart, mode, more and queue stay the antialiased Tabler glyphs')
-    pp = awtk_ui.parse(open(os.path.join(ui_dir, 'playing_page.bin'), 'rb').read())
-    page1 = {c.name for c in pp.find('view').children}
-    expect(not ({'btn_fav', 'btn_playmode', 'img_hr'} & page1), 'heart, mode and the Hi-Res tag are not on the art page')
-    fav, more, mode, prev = (pp.find(n) for n in ('btn_fav', 'btn_more', 'btn_playmode', 'btn_prev'))
-    expect((fav.y, fav.h, more.y, more.h) == (0, 44, 0, 44) and fav.x + fav.w == more.x and more.x + more.w == 320 and fav.w >= 44 and more.w >= 44,
-           f'the heart sits left of More in the 44 px top row ({(fav.x, fav.w, more.x, more.w)})')
-    expect(mode.x + mode.w <= prev.x and mode.w >= 44 and mode.h >= 44 and mode.x >= 0, 'the play mode is the transport row\'s first slot, left of prev')
-    hr = pp.find('img_hr')
-    expect((hr.w, hr.h) == (0, 0) and hr.get('sensitive') == 'false' and hr.get('visible') == 'false', 'img_hr is kept at 0x0, insensitive: the Hi-Res tag never shows')
-    art = pp.find('img_playcover'); title = pp.find('scrlabel_title'); album = pp.find('scroll_np_album')
-    expect(art.w == 216 and title.y >= art.y + art.w and album.y + album.h <= pp.find('slide_view').h, 'the art is back to 216 px with the title, artist and album under it')
-    sl = pp.find('slider_play')
-    expect((sl.y, sl.h, sl.get('bar_size'), sl.get('style:normal:bg_color'), sl.get('style:normal:icon')) == (342, 30, '4', '#1C1C1C', ''),
-           'the progress line is 4 px in the stock 30 px target, track #1C1C1C, no thumb')
 
     # 42. The queue drawer (ui/dialog/playqueue_dialog.bin, V2.1kE): compact rows built from the template (44 px; the code
     #     reads row_height for its scroll offset), the playing row (srlabel_item_gold20_style, set by the row bind @0x47a19c)
@@ -142,7 +136,7 @@ def run(ctx):
     head = pq.find('list_item')
     expect(head.h == 64 and head.get('style:normal:border') == 'bottom' and head.get('style:normal:border_width') == '1', 'a hairline under the 64 px mode header')
     btm = pq.find('button')
-    expect((btm.y, btm.h) == (396, 44) and btm.get('style:normal:bg_color') == '#1E1E1E' and btm.get('style:pressed:bg_color') == '#3A3A3A',
+    expect((btm.y, btm.h) == (396, 44) and btm.get('style:normal:bg_color') == '#1E1E1E' and btm.get('style:pressed:bg_color') == '#333333',
            'the bottom button keeps its 44 px target in the dark button colours')
     # touches by demo's own hit test: a row button in the template column, the bottom button, the scroll bar, the header
     m = Machine()

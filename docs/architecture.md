@@ -1,6 +1,6 @@
 # Architecture: pipeline, payload, hooks, guard
 
-How the release (V2.1kE) is built and what its code does. The looks (assets) are in `docs/ui.md`,
+How the release is built and what its code does. The looks (assets) are in `docs/ui.md`,
 firmware facts and the space step in `docs/firmware.md`, make/test/flash in `docs/workflow.md`, the
 tag history and lessons in `docs/history.md`.
 
@@ -16,8 +16,8 @@ tag history and lessons in `docs/history.md`.
 | 1 | `mod_battery.py STOCK TREE` | clones stock into the tree; unified battery in the status bar and the pull-down |
 | 2 | `mod_font.py` | Inter + Source Han Sans; runs here so every later step measures the new font |
 | 3 | `mod_space.py` | zero demo's `.pdr`, remove 10 unreferenced files (`docs/firmware.md` section 4) |
-| 4 | `pod.py` | compile the payload, append it to `demo`, install three hooks, apply the library-row edits, write the four `ui/m1pod_*.bin` |
-| 5 | `mod_theme`, `mod_lists`, `mod_nowplaying`, `mod_boot`, `mod_ipodrows`, `mod_pulldown`, `mod_lockscreen`, `mod_wallpaper`, `mod_icons`, `mod_polish` | the asset looks, in this order (`docs/ui.md`) |
+| 4 | `pod.py` | compile the payload, append it to `demo`, install four hooks, apply the library-row edits, write the four `ui/m1pod_*.bin` |
+| 5 | `mod_theme`, `mod_lists`, `mod_nowplaying`, `mod_boot`, `mod_ipodrows`, `mod_pulldown`, `mod_lockscreen`, `mod_wallpaper`, `mod_icons`, `mod_strings`, `mod_polish` | the asset looks, in this order (`docs/ui.md`); `mod_strings` adds our translation keys to the 16 string tables (section 8b) |
 | 6 | `mod_theme.py --scan TREE STOCK` | contrast scan of the finished tree |
 | 7 | `fwtool.py repack --tailends --allow-removed ... --allow-added ...` | squashfs (LZO, 128 KiB blocks, tail ends), metadata-exact; refuses a rootfs larger than stock or any unlisted added/removed file; `verify` follows |
 
@@ -32,12 +32,13 @@ Toolchain for the payload: Homebrew clang/LLD/llvm-objcopy/llvm-readelf (`$LLVM_
 Apple clang has no MIPS target), unicorn 2.1.4 for the tests, mksquashfs 4.7.5. Python runs with `-I`
 on anything touching extracted firmware.
 
-Source map: `patch/m1pod.c` (hook, pages, rows), `patch/coverflow.c`, `patch/artists.c`,
-`patch/shuffle.c`, `patch/albuminfo.c` (the album view's hook), `patch/rows.c` + `patch/rows.json`, `patch/home.c` + `home.h`, `patch/offsets.inc`
+Source map: `patch/m1pod.c` (hook, pages, rows, the Settings switches), `patch/menu.c` (the customisable menu and the Main Menu page), `patch/covercache.c` (+ `.h`: the cover cache, tile reduction and album helpers
+Cover Flow and Albums share), `patch/coverflow.c`, `patch/albums.c`, `patch/artists.c`,
+`patch/shuffle.c`, `patch/albuminfo.c` (the album view's hook), `patch/nowplaying.c` (Now Playing's hook), `patch/rows.c` + `patch/rows.json`, `patch/home.c` + `home.h`, `patch/i18n.h` (`TR()`), `patch/offsets.inc`
 (every stock offset with its evidence), `patch/link.ld`; `tools/pod.py` (build and pins),
-`tools/pod_pages.py` (pages and rows, one source of truth), `tools/pod_ui.py` (page assets).
-Tests: `test/patch.py WORKDIR` runs `test/pod/<module>.py` (menu, coverflow, assets, artists, rows,
-albuminfo, shuffle, home) on `test/pod/harness.py`; `test/coverflow.py` (host build of the renderer),
+`tools/pod_pages.py` (pages and rows, one source of truth), `tools/pod_ui.py` (page assets), `tools/pod_i18n.py` (our texts in 13 languages), `tools/awtk_strings.py` (string table reader/writer), `tools/mod_strings.py`.
+Tests: `test/patch.py WORKDIR` runs `test/pod/<module>.py` (menu, coverflow, albums, assets, artists, rows,
+albuminfo, nowplaying, shuffle, home, i18n) on `test/pod/harness.py`; `test/coverflow.py` (host build of the renderer and the pixel helpers),
 `test/demo_diff.py`, `test/awtk_fill.py`.
 
 ## 2. The payload
@@ -53,14 +54,14 @@ addresses, symbols and pages differ.
 `pod.py append_payload` pads the file to 64 KiB, appends `patch.bin` and rewrites `PH[10]` into a
 file-backed `PT_LOAD` at va `0xb00000`, RWX, `filesz == memsz == len`, align `0x10000` (the mapping
 is checked not to overlap any segment; the ELF still parses with pyelftools, `elfinfo.py`, `dis.py`).
-The payload keeps no `.bss`: writable state (312 bytes) is a zero-filled `PROGBITS` `.scratch`
+The payload keeps no `.bss`: writable state (400 bytes) is a zero-filled `PROGBITS` `.scratch`
 section, so `memsz == filesz` holds; `pod.py` rejects a non-empty `.bss`/`.sbss` and checks `.scratch`
 is inside the payload and shipped zeroed. Everything larger (Cover Flow's frame and textures, job
 array, album copy, album header cover) is heap, allocated when the page opens and freed on close.
-Current payload: 28,888 bytes. Compiled non-PIC (`clang --target=mipsel-linux-gnu -march=mips32r2
+Current payload: 47,832 bytes. Compiled non-PIC (`clang --target=mipsel-linux-gnu -march=mips32r2
 -mabi=32 -mfp64 -mno-abicalls -fno-pic -G0 -Oz`, `-Wall -Wextra -Werror`), linked by `patch/link.ld`
-at `0xb00000` with `--gc-sections`, sources in this order: `m1pod.c coverflow.c artists.c shuffle.c
-albuminfo.c rows.c home.c`.
+at `0xb00000` with `--gc-sections`, sources in this order: `m1pod.c covercache.c coverflow.c albums.c
+artists.c shuffle.c albuminfo.c nowplaying.c rows.c home.c`.
 
 ### $gp and the trampolines
 
@@ -82,7 +83,7 @@ function past its 3-word prologue (`lui $gp,0xa03e; ori $gp,$gp,0x3ed0; j <fn+12
   rename/unlink/mkdir/statfs, pthread_create/join, mutex lock/unlock, the libcstl deque calls). No
   new imports are added.
 
-### The three hooks
+### The four hooks
 
 1. **Home icon click dispatcher** `0x533b80` (unnamed in `.dynsym`; registered on each Home icon by
    `home_page_init` via `widget_on(icon, EVT_CLICK=0x10c, ...)`). Pinned prologue `(0x3c1c004d,
@@ -99,10 +100,17 @@ function past its 3-word prologue (`lui $gp,0xa03e; ori $gp,$gp,0x3ed0; j <fn+12
    runs only while that page builds its list: never at boot, in the main loop or during paint. The hook
    runs the stock function to completion, then restyles its four widgets; any mismatch leaves stock.
 
+4. **`playing_page_init`** `0x53d1e4` (Now Playing's init; patch/nowplaying.c, section 8a). Pinned prologue
+   `(0x3c1c004c, 0x279c6cec, 0x0399e021)`, `$gp` checked, overwritten with `j m1pod_playing_init; nop`; resume `0x53d1f0`. Its only
+   caller is the navigator's page-init dispatcher (`0x4d1b3c`, behind the cut `tools/reach.py` uses), so it runs only when
+   the page is built. The hook runs the stock function to completion and returns its result, then (if it returned `RET_OK`
+   for a non-null window and the kill switch is absent) starts the page timer; any failure leaves the stock page.
+
 `pod.py` asserts the three prologue words and the resulting `$gp` of each hook before writing, checks
 that no row edit touches a hook site, and pins the input `demo` by SHA-256 (the `.pdr`-zeroed stock binary).
 Nothing else is hooked: no prologue is rewritten for the library rows (they are call-site edits,
-section 6), and nothing runs in `platform_init`, the main loop or paint.
+section 6), and nothing runs in `platform_init` or the main loop. The only code at paint is the Now Playing
+cover widget's own `EVT_AFTER_PAINT` (section 8a), registered by hook 4 on that page's widget.
 
 ### What the entry does (`patch/m1pod.c`)
 
@@ -112,21 +120,21 @@ file exists, or the page fails to open, tail into `stock_home_click_trampoline` 
 behaviour). Otherwise `window_open` the entry page, bind `btn_return` -> `navigator_back`,
 `btn_backtoplayer` -> `on_backtoplayer_onclick` and each `pod_rowN` to its action, return 0.
 
-Pages are defined once in `tools/pod_pages.py` (`PAGES`: menu, Cover Flow, Artists, Shuffle, Settings) and
+Pages are defined once in `tools/pod_pages.py` (`PAGES`: menu, Cover Flow, Artists, Shuffle, Settings, Extras, Albums, Main Menu) and
 consumed by `pod_ui.py` (assets) and `pod.py` (the C row/page tables in `stock.h`), so a row's widget,
 label and handler cannot drift apart. Row actions: `ACT_HOME` (open a stock Home destination through
 the dispatcher with a fake numeric-named icon), `ACT_PAGE`, `ACT_PLAYER` (stock
-`on_backtoplayer_onclick`), `ACT_COVER`, `ACT_SHUFFLE`, `ACT_ARTISTS`, `ACT_GRID`, `ACT_STARTUP`. The
-menu is Now Playing, Cover Flow, Shuffle (-> Shuffle page), Songs, Albums, Artists (-> our list),
-Genres, Folders, Playlists, Settings (-> Settings page: System Settings and Play Settings through the
-stock dispatcher with ids 17 and 16, Shanling Home, Start in). Page layout: `docs/ui.md`. To add a
+`on_backtoplayer_onclick`), `ACT_COVER`, `ACT_SHUFFLE`, `ACT_ARTISTS`, `ACT_ALBUMS`, `ACT_GRID`, `ACT_STARTUP`, `ACT_LANDSCAPE` (switch rows, below), `ACT_SORT` (a value row, below). The
+menu items (`ITEMS`, the item id = the row index, default order) are Now Playing, Cover Flow, Albums (-> our page, grid or list mode, section 5a), Artists (-> our list), Songs, Playlists, Shuffle (-> Shuffle page),
+Genres, Folders; then Extras (-> Extras page: a row per item, then the Home ids 10, 13, 12, 11, 8, 9, 2, 1, 15 through the dispatcher) and Settings (-> Settings page: Main Menu, Cover Flow (-> `m1pod_cfset`), the Start in M1 Pod
+switch, Playback and System Settings through the stock dispatcher with ids 16 and 17, Shanling Home). Page layout: `docs/ui.md`. To add a
 page: add a `Page` and a row to `pod_pages.py`, rebuild (assets and tables regenerate), add a test
 module under `test/pod/`.
 
 ### Why the entry is an added icon
 
-Up to V2.1jA the entry was the Tidal icon (id 1, taken over). It is now an icon of its own, id 99 ("M1 Pod"),
-which `patch/home.c` adds to the stock grid (section 9), so Tidal opens Tidal again. The icon has no stock
+The entry is an icon of its own, id 99 ("M1 Pod"), which `patch/home.c` adds to the stock grid (section 9);
+Tidal opens Tidal. The icon has no stock
 id, so it cannot be hidden in Home customisation (the grid rebuild drops it; `hm_fg` puts it back), and the
 dispatcher's bounds check (`sltiu 0x12`, `0x533ba8`) sends an id outside 0..17 to its default (nothing), so
 a tap that reaches stock with the kill switch on is harmless. The HiFi store (id 0) was never usable: demo
@@ -137,7 +145,7 @@ branch patches on the boot path (`reset_homemenu_index`, `load_home_menu`).
 
 Payload `PT_LOAD` `0xb00000`; `$gp = 0xa03ed0`; hooks `0x533b80` (Home icon dispatcher, registered
 through `widget_on`, GOT slot `0x9fe700`), `0x534cd4` (`home_page_init`) and `0x526264`
-(`albuminfo_listitem0_layout`). `.pdr` is zeroed in `demo`
+(`albuminfo_listitem0_layout`) and `0x53d1e4` (`playing_page_init`). `.pdr` is zeroed in `demo`
 only; the About version string stays `V2.1`. Find more with `tools/dis.py` (`sym`, `addr`, `xref`,
 `strxref`, `callers`, `strings-xref`, `full`).
 
@@ -150,7 +158,10 @@ the stock `slide_menu` constructor `0x613914` stores `value = 1` (`sw 1, 0x78` a
 `slide_menu_set_value` -> `0x6120ac` (events `0x11b`, `0x11c`); `songtable` record fields `year`
 `+0x30`, `track` `+0x3c`, `cd_num` `+0x40`, `time`/`time_end` `+0x48`/`+0x4c` (CUE offsets, 0 for
 ordinary files; no duration column); `toolsLoadAllFile` `0x5efd98` and its insert `0x5edb18`;
-`get_screensaver_image` `0x4d7524` (`screensaver_default`, the default wallpaper).
+`get_screensaver_image` `0x4d7524` (`screensaver_default`, the default wallpaper). Pinned for the Albums grid (section 5a):
+`widget_to_local` `0x669b88` (walks the parent chain subtracting each `x`, `y`; the payload runs stock's own), `widget_prepare_text_style`
+`0x66a214`, `canvas_draw_text_in_rect` `0x6496a0`, `canvas_measure_text` `0x644544` (returns a float in `$f0`),
+`tk_utf8_to_utf16_ex` `0x70eb24` (`wchar_t` is 32 bit), `button_create` `0x622adc`.
 
 ### Home icons and their conditions
 
@@ -232,54 +243,121 @@ A cover carousel over the stock Local Music albums, ported from q2-pod's `patch/
 everything runs from the page's own widgets, one timer and one worker thread. Also opened per artist
 (section 5).
 
-- **Covers.** One cover per album on a stock `slide_menu` (index, offset, wrap) drawn by the payload's
+- **Covers.** One cover per album on a shelf (committed album, offset, wrap; an artist's shelf has ends) drawn by the payload's
   depth renderer: the centre cover faces you at `ART_SIZE` 168 px, the neighbours turn 60 degrees
   inward, step back and dim (`CF_BRIGHT1` 192, `CF_BRIGHT2` 128 of 256, gone three out), each with a
   26 px reflection. Geometry (`offsets.inc`): frame 320x276, `CF_TOP` 31, `CF_EYE` 312, `CF_X1` 110,
   `CF_XS` 48, `CF_Z1` 96, `CF_ZS` 22, `DRAG_PX` 108. Change them together and re-run
   `test/coverflow.py`.
 - **Renderer.** After Rockbox PictureFlow via q2-pod; all integer (16.16 turns, 1/16 px geometry, 1/256
-  px row spans). One `bitmap_create_ex(320, 276, ..., RGBA8888)` frame plus 7 textures of 168^2 and one
-  placeholder: about 1.26 MB of heap while open. If an allocation fails the page falls back to flat
-  covers (the `slide_menu`'s own `image` children show the cached JPEGs, `ART_NEAR` 3 either side).
-  The frame is drawn from the touch layer's `EVT_AFTER_PAINT` (`0x120`, dispatched by `widget_paint`
-  `0x66de3c`), an instance event registered with `widget_on`. The position comes only from stock
-  properties (`value`, `xoffset`, `h`): `p = value - xoffset/h` (the stock commit is `value -
-  round(xoffset / item width)`, the item width being the widget height, `0x612360`), so no field
-  offset of the `slide_menu` is pinned. About 3.45 M payload instructions per frame under Unicorn.
-- **Touch.** A transparent full-size touch layer (a `view` over the `slide_menu`, inside
-  `view_covers`) takes `EVT_POINTER_DOWN/MOVE/UP` (`0xff/0x101/0x103`) and abort `0x107`, grabs the
-  pointer (`widget_grab`/`ungrab`) and drives the `slide_menu` through `xoffset` and
-  `slide_menu_set_value`: the shelf follows the finger, a release coasts by the fling (120 ms, at most
-  3 albums) and snaps with a 16 ms timer animation, then commits (`xoffset` 0). A release within 12 px
-  is a tap hit-tested by x: the centre cover (`|x - 160| < 84`) opens the album, a side cover comes to
-  the centre. The `slide_menu` itself is insensitive. Back leaves the page.
+  px row spans). One `bitmap_create_ex(320, 276, ..., RGBA8888)` frame plus 9 textures of 168^2 and one
+  placeholder: about 1.48 MB of heap while open. If an allocation fails the page falls back to flat
+  covers: a stock `slide_menu` whose `image` children (one per album) show the cached JPEGs, `ART_NEAR`
+  3 either side. The frame is drawn from the touch layer's `EVT_AFTER_PAINT` (`0x120`, dispatched by
+  `widget_paint` `0x66de3c`), an instance event registered with `widget_on`; an unchanged position
+  reuses the frame. About 3.47 M payload instructions per frame under Unicorn.
+- **Shelf position.** Depth mode owns it (`cfpos`: committed album, offset) and has no stock
+  widget per album: the stock `slide_menu` lays out every child on each `xoffset` or `value` change
+  (`slide_menu_set_prop` `0x613c94` -> `widget_layout_children` `0x656d1c`, which hides all children
+  and places the near ones, `0x613090`; `slide_menu_set_value` `0x6139fc`), O(albums) per drag step
+  and snap tick with up to 4000 empty children. The flat fallback keeps that `slide_menu` and drives it
+  through its public properties (`value`, `xoffset`, `h`; no field offset pinned). Both read through
+  one set of accessors (`value()`, `offset()`, `stride()`, `count()`, `set_offset()`, `set_value()`):
+  `p = value - offset / stride`, the stock commit's `value - round(xoffset / item width)` with the item
+  width the widget height (`0x612360`), so depth mode keeps the stock units (`CF_VIEW_H` per cover).
+  Wrapping, an artist's ends (`bound()`), the captions and the last-album memory follow `set_value`.
+- **Textures.** Paint never touches a file: it renders from resident textures (`fx_ring`),
+  the placeholder standing in for a cover not decoded yet. A one-shot page timer (`on_load`, `LOAD_MS`
+  1, removed at destroy) decodes one wanted cover per callback on the UI thread (`cc_decode`:
+  `widget_load_image` is not known to be thread-safe, so the preparation worker never calls it),
+  nearest first: the centre, the ring alternately ahead of and behind the travel, then the next cover
+  ahead; a slot is reused from the cover farthest from the centre that is not wanted, so the one just
+  left behind survives a reversal (9 slots for 8 wanted). An artist's shelf wants nothing past its
+  ends. The first frame's covers are decoded when the shelf is built. Each decode still blocks the
+  UI thread for its length; not measured on the device: measure before considering a decoding worker
+  (that needs a reviewed thread-safe decoder publishing finished buffers).
+- **Touch.** A transparent full-size touch layer (a `view` inside `view_covers`, over the flat
+  fallback's `slide_menu`) takes `EVT_POINTER_DOWN/MOVE/UP` (`0xff/0x101/0x103`) and abort `0x107`,
+  grabs the pointer (`widget_grab`/`ungrab`) and drives the shelf (`set_offset`, `set_value`). MOVE
+  and UP share one tracker (`track()`): the greatest excursion from the
+  down point in either axis, a horizontal drag that starts at `DRAG_START` 5 px along the carousel and no
+  more across (its travel counted from that threshold, so neither a jump nor a lost sparse event), the
+  shelf under the finger, and a ring of samples. A release is a tap only if no drag started, no
+  animation was interrupted and the excursion, release included, stayed within `TAP_SLOP` 12 px; a tap
+  is hit-tested by x: the centre cover (`|x - 160| < 84`) opens the album, a side cover comes to the
+  centre. Anything else settles from where the shelf is: a drag coasts by the fling (the velocity from
+  the oldest sample of the last `FLING_WINDOW` 80 ms to the release, coasting `FLING_MS` 120, at most 3
+  albums; a finger that rested has none), a mostly vertical gesture moves nothing. A press during the
+  snap stops the shelf where it is (its release eases to the nearest cover, or a drag carries on from
+  there). The snap eases by elapsed time (`time_now_ms`): `1 - (1 - p)^3` over `SNAP_BASE_MS` 120 +
+  `SNAP_ALBUM_MS` 60 per album of travel (180 ms for one album, at most 360), stepped by a 16 ms one-shot
+  page timer, exactly on the target when the time is up, so late callbacks do not stretch it; a refused
+  timer commits at once, so no nonzero offset is ever left without its timer. Then the commit
+  (offset 0, `set_value`). The thresholds and times are trials, to tune on the device. The flat
+  fallback's `slide_menu` itself is insensitive. Back leaves the page.
+- **Repaint.** AWTK paints only dirty rectangles: `canvas_begin_frame` `0x6447b4` clips the canvas to the LCD's dirty
+  rect (`canvas_set_clip_rect`), and `widget_invalidate` `0x668d9c` (no rect: the widget's own 0, 0, w, h; skipped while
+  the widget's dirty flag, `0x24` bit 9, is set) hands it up through `widget_invalidate_default` `0x674920` to the window,
+  translated by each parent's x, y and not clipped by them. The stock `slide_menu` marks only its own rectangle when
+  `xoffset` changes (`slide_menu_set_prop` `0x613c94`: store, `widget_layout_children`, `widget_invalidate`) or `value`
+  does (`slide_menu_set_value` `0x61399c`, tail call `0x613a1c`). So every offset change and album change calls
+  `widget_invalidate_force` on the touch layer, which is always the frame's rectangle (`redraw()`). Tests model this (`dirty_rects` / `abs_rect` in `test/pod/harness.py`).
+- **Landscape.** The page, main or per artist, opens in a landscape presentation in
+  the 320 x 400 body under the navbar when **Settings > Cover Flow > Landscape** is on (the switch row of `m1pod_cfset`; nothing changes the presentation while the page is open); no global
+  LCD orientation changes. The navbar is untouched in both (Back, the title, Now Playing). The content is turned 90 degrees **clockwise** on the screen (its top edge at the screen's right: the
+  player is held turned counter-clockwise, the status bar and navbar then a strip on the left; the direction is the
+  map in `turned()` / `where()` / `coverflow_render`), the carousel runs along the 400 px side. `cfg_t` (`cf_portrait`,
+  `cf_land`) is the shelf's geometry; `coverflow_render(g, d, pitch, ...)` writes the logical frame through a column
+  stride of `pitch` and a row stride of -1, so the turn costs no copy and no second bitmap: logical (x, y) is physical
+  (319 - y, x), `CFL_Y` 50 px down the window. Landscape numbers (`CFL_*` in `offsets.inc`): logical 400 x 320, the
+  centre cover the 168 px texture 1:1 as in portrait (no zoom) at top 28, portrait's eye, depth and reflection, `x1`
+  160, `xs` 84, `CFL_DRAG_PX` 132: two covers either side, the outer ones cut by the edge (portrait: one and a half). A
+  tap beyond the first side cover's drawn outer edge (projected) brings the second one in. The frame bitmap is the
+  body, 320 x 400 x 4 = 500 KB (portrait 345 KB; one exists at a time, the new one is made before the old goes, so a
+  refusal leaves the page as it was); textures are shared. Frame cost under Unicorn about 4.03 M payload instructions
+  against 3.48 M (1.16x). In landscape `view_covers` and the touch layer are moved and resized to the body (0, 50,
+  320 x 400; the drag stride stays `CF_VIEW_H`), the caption labels are hidden
+  (visibility only: they stay insensitive), and the frame carries the captions, drawn after the covers: the page's font comes from the
+  canvas (`widget_prepare_text_style(label)` fills `canvas+0x34` font, `canvas+0xc` size, as `canvas_draw_text`
+  `0x645348` reads them), `font_get_glyph` `0x6508b0` gives each glyph's 8-bit alpha (`glyph_t`: x, y, w, h, advance,
+  format 0 = alpha, data at 0xc) which is blended in turned at `x + g.x, y + g.y + ascent` (`font_get_vmetrics`
+  `0x650918`, a hidden-pointer struct return, ascent first), advance + 1 px per glyph (4 for a missing glyph), centred
+  in 368 px and cut with an ellipsis. Touch: `where()` turns the
+  pointer back (`widget_to_local` on the touch layer, x = y_local, y = 319 - x_local), so drags and flings along the long
+  side move the shelf as in portrait, a tap on the centre cover (`|x - 200| < 84`) opens the album by
+  `open_album` (stock sequence, cover thread released), a side tap brings that cover in. Persistence:
+  `/mnt/data/m1pod-landscape` (`1` landscape, anything else or missing portrait; written atomically by the switch
+  (`coverflow_landscape_toggle`), read when the covers screen is first built (`use_land`); shared by the main and artist pages). Without a depth frame (flat fallback) there is
+  no landscape, whatever the setting says. A commit redraws the frame (the captions are in it).
 - **Captions.** `label_album` / `label_artist` are `hscroll_label`s configured as Now Playing's info
   lines (`loop`, `yoyo`, `lull` 3000 ms, centred, `ellipses`, 22 px white / 18 px `#AAAAAA`, in 16 px
   margins): a long title scrolls back and forth with a pause at each end, a short one is centred
   (`hscroll_label` paint `0x609cbc` -> `hscroll_label_start`; setting text resets the scroll `0x60a49c`).
   They are insensitive and never hidden: they lie over the frame's black rows, so a tap on the album
   name reaches the touch layer and opens the album. There is no hint line.
-- **Start index.** The stock `slide_menu` starts on item 1, not 0; the page always calls
-  `slide_menu_set_value(cf.slide, cf.album)`, so an artist's page opens on its first album, a
+- **Start index.** The stock `slide_menu` starts on item 1, not 0; the page always sets the start
+  album (`cfpos.value`, or `slide_menu_set_value` in the flat fallback), so an artist's page opens on its first album, a
   one-album shelf has its captions on open, and the main page keeps its last-album memory
   (`/mnt/mmc/.coverflow/album`, including album 0).
 - **The album.** Tapping the centre cover opens the stock `albuminfo_page` (section 8), as a stock
-  Albums row does: `loadAlbumList(0xf003, 0)` puts the stock album list back into `*pdeq_showlist` (the
+  Albums row does (`cc_open_album`, `patch/covercache.c`, the same call the Albums grid makes): `loadAlbumList(0xf003, 0)` puts the stock album list back into `*pdeq_showlist` (the
   page's own copy was made from the same query, so the row is the same), `albumcoverinfo_init` rebuilds
   the cover-task list from it, `batchadd_albumcover_task(0, 0)` releases the cover thread (see section 8, The cover), and `navigator_to_with_context("albuminfo_page", 0xf003 | row << 16)`
   opens the page. The queries repeat on every tap (the page may have been left through Now Playing, and
   anything may have reused the list or the browsing record). Back from the album page returns to the
   covers; the page keeps no track list, header or play code of its own.
 - **Cache.** The page keeps its own `/mnt/mmc/.coverflow/<key>-168.jpg` thumbnails (the size is in the
-  name; key = FNV-1a of artist then album, never 0). The stock cache `/mnt/mmc/.downpic` is keyed by an
+  name; key = FNV-1a of artist then album, never 0; the key, path, decode and reduce helpers are in
+  `patch/covercache.c`, which the Albums grid reads the same files through). The stock cache `/mnt/mmc/.downpic` is keyed by an
   MD5 the payload cannot reproduce and holds 90 px images, so Cover Flow only reads through the stock
   extractors. First open builds the thumbnails on a "Preparing covers... n/m" screen with Cancel (a
   cancelled build resumes); one pthread runs `build_art` over jobs built on the UI thread, touching
   only its jobs, three `volatile` counters, files under `.coverflow` and the two stock art calls under
   `parse_cover_mutex` (`0xa04588`, the lock every stock caller holds; `parseplaycover_thd` takes the
   same one). Each file is written to `.tmp` and renamed; both extractors failing leaves an empty
-  marker (not retried); a vanished track leaves none. No build below 16 MB free (`statfs`), without a
+  marker (not retried); a vanished track leaves none, and neither does a thumbnail that was extracted but could
+  not be published (a failed rename: the next open retries). If the progress timer cannot be created (at the start or
+  when re-armed) the worker is cancelled and joined and the cached covers show. No build below 16 MB free (`statfs`), without a
   card or if `pthread_create` fails. A 250 ms timer polls the counters; Cancel and closing set the
   cancel flag and `pthread_join` (bounded by one album). `EVT_DESTROY` removes the timer, joins, frees
   everything. Nothing is written outside the card.
@@ -293,7 +371,7 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
 scroll bar and a hidden `label_status`), copies the stock artist list (`loadLocalClassList(0xf004)`,
 section 3) into its own deque and adds one 52 px stock-styled row per artist (at most 2000) with the
 `right_arrow` chevron; the order, names and artist/album-artist switch are the stock Artists page's
-(the payload never reads or writes `artist_type`). "Update Local Music first" for an empty library.
+(a navbar button in the toggle slot (`btn_artisttype`; the title reads "Artists" / "Album Artists", the glyph is the other mode's: `pod_nav_artist` / `pod_nav_albumartist`), does what the stock switch handler `0x535770` does: `artist_type` (`0xa05a14`) set, `write_int_config(v, "PLAYSET", "ARTISTTYPE")` (`0x4d6a2c`) and the byte `0xa06d20` (the stock Artists page's reload flag, read at `0x535fe8`) set to 1; then the list is queried again, rows rebuilt and scrolled to the top; the stock toast and style swap belong to the stock page and are skipped; Cover Flow and the album page read `artist_type` themselves). "Update Local Music first" for an empty library.
 Statics are prefixed `ar_`.
 
 A tap calls `coverflow_artist(list, index)`: the same page, renderer, cache and touch layer scoped to
@@ -325,6 +403,90 @@ row, so no hook). Risks: one row per artist is created up front (slow with thous
 fallback is not bounded; renamed albums mid-rescan get their own key. Future: A-Z jump (the stock rows
 carry an index letter at `+0x54`, which the copy function does not copy), a Sort card.
 
+## 5a. Albums (`patch/albums.c`, `patch/covercache.c`, test `test/pod/albums.py`, host test `test/coverflow.py`)
+
+The menu's Albums row (`ACT_ALBUMS`) opens our one Albums page in the mode used last: a **grid** of covers or a **list**
+(the stock Albums list is not used from here); one navbar button switches the mode in place, the choice is persisted.
+`ALBUMS_DEFAULT_GRID` (`offsets.inc`, 1 = grid) is the mode of a first use. No hook; everything runs from the page's widgets and timers.
+
+- **Page** `ui/m1pod_albums.bin` (`kind='grid'`, `tools/pod_ui.py`): the stock navbar (Back, "Albums", Now Playing)
+  plus `btn_albumview` (x 214, 46x50, flush left of Now Playing, `img_btn_style`, the `pod_nav_list` glyph: the view a tap switches to), **one**
+  `view_grid` (320x400 at y 50, black; its style carries the grid's title text: 16 px white, left, middle), a hidden
+  `label_status` and two hidden, insensitive style labels, `label_row_title` (21 px `#FFFFFF`) and `label_row_sub` (18 px `#AAAAAA`), that
+  only carry the list mode's text styles. There is no widget per album, no `list_view`, no `scroll_view`.
+- **Geometry** (`offsets.inc`): `GRID_COLS` 3 columns of `GRID_COVER` 92 px covers, `GRID_GAP` 12 px apart, centred
+  (`GRID_MARGIN` 10 each side: 3 x 92 + 2 x 12 + 2 x 10 = 320); under each cover a one-line title `GRID_TITLE_H` 22 px
+  high, `GRID_TITLE_GAP` 4 px below it; cell 118 px, row pitch 130 px; the first row starts 12 px down the content
+  and the last ends 12 px above its bottom (`content = 12 + rows x 130`); the content scrolls in the 400 px view,
+  clamped to `[0, content - 400]` (two rows or fewer need no scrolling).
+- **Painting.** The view's own `EVT_AFTER_PAINT` (as Cover Flow's frame): `widget_prepare_text_style(view, canvas)` once,
+  then only the cells that touch the view: the cover (a tile bitmap, `canvas_draw_image` 1:1, cut to the view by
+  hand) and the title (`canvas_draw_text_in_rect`, drawn only when it lies wholly in the view). At most 4 rows x 3 =
+  12 cells per frame; a steady frame is about 2,500 payload instructions plus the stock blits and text runs
+  (Unicorn, 9 cells). The text style is the widget's; the canvas does not clip to the view (the stock paint only
+  translates), hence the manual cuts.
+- **Tiles and memory.** `GRID_TILES` 24 entries, replaced least recently drawn first (a frame touches at most 15, the
+  build checks it). A tile is a 92x92 RGBA8888 `bitmap_create_ex` (34 KB, flagged opaque) holding the album's cover:
+  the Cover Flow cache file (`<key>-168.jpg`, key of the album record, so the same files) decoded by the stock
+  loader and reduced with an **area average** (`cc_box`: each output pixel is the mean of the source pixels its box
+  covers, the centred square, alpha over black; nearest sampling shimmers at 168 -> 92). The title is converted to
+  wide chars (`tk_utf8_to_utf16_ex`, at most 47) and, when `canvas_measure_text` says it is wider than the cell, cut
+  by a binary search to the longest prefix that fits with an ellipsis (U+2026), the first time it is drawn, never per
+  frame. Memory while open: 24 x 34 KB + the placeholder 34 KB + 10 KB of tile records (a title and an artist of 48 wide chars each) = 0.9 MB, **whatever the
+  library**, plus the copy of the stock album list (what Cover Flow keeps too, about 0.3 KB per album); closing frees
+  all of it (`EVT_DESTROY`). Decoding is paced: at most two covers per frame (`AL_LOADS`; 0.75 to 1.9 M payload
+  instructions each under Unicorn, a few ms on the device); the other visible cells show the placeholder and a 16 ms
+  timer repaints until the view is complete (a fling past 24 covers keeps up as the cache allows).
+- **No cache, no art.** The grid builds nothing: an album with no cache file, or the empty "no art" marker, shows the
+  stock placeholder disc (`p_default`, reduced like a cover, flat grey if it will not decode) with its title. Open Cover
+  Flow once to build the cache; the covers show the next time the page opens.
+- **Touch.** `EVT_POINTER_DOWN/MOVE/UP/ABORT` on `view_grid`, grabbed by the window while a finger is down (as Cover
+  Flow's layer). Pointer events carry screen coordinates (`widget_on_pointer_down_children` passes the same event down the
+  tree, `0x6714ac`), so every position goes through `widget_to_local(view)`, the same call `widget_find_target` makes. A drag
+  scrolls with the finger after 12 px of travel on either axis (the release counts as a position too, so sparse events
+  still scroll to where the finger ended); a release under 200 ms coasts (the velocity of the last two samples, at most 48 px per
+  16 ms tick, decaying by 1/16 a tick, stopping at an end); a touch stops it, and the release of that touch is never a
+  tap. A release within the slop is a tap: the cell under it (cover or title, not the gaps, margins or the empty tail of
+  the last row; none outside the view), the same one as under the press, opens its album.
+- **Album.** `cc_open_album(0, row)` (`patch/covercache.c`): the stock sequence Cover Flow uses (`loadAlbumList(0xf003, 0)`,
+  `albumcoverinfo_init`, `batchadd_albumcover_task(0, 0)` so the cover thread runs, `navigator_to_with_context("albuminfo_page",
+  0xf003 | row << 16)`; section 4 and 8). Back returns to the grid where it was.
+- **List mode** (the same page and view). Rows of `LIST_ROW_H` 64 px (the library rows'
+  pitch, `rows.json`), content `count x 64`, scroll clamped to `[0, content - 400]`. Per row, in view coordinates: the pressed fill
+  `LIST_PRESS` `#333333` over lines 0..62 (only the row under a finger), the cover `LIST_ART` 52 px at (4, 4) (the tile bitmap, the Cover Flow cache
+  box-reduced to 52, cut to the view by hand), the hairline `LIST_HAIR` `#222222` on line 63 (`canvas_set_fill_color` + `canvas_fill_rect`, both new
+  pins: `0x644220` and `0x644e4c`; `color_t` is one word, `lcd_set_fill_color` stores `$a1` at `lcd+0xbc`; the rect is cut to the view by hand), then
+  two text passes: all titles with the style of the hidden label `label_row_title` (21 px `#FFFFFF`, left, middle) in a `LIST_TEXT_W` 248 x
+  `LIST_TITLE_H` 24 rect at (60, row + 7), then all artists with `label_row_sub` (18 px `#AAAAAA`) in 248 x 20 at (60, row + 33): one
+  `widget_prepare_text_style(label, canvas)` per pass (two a frame, none new in the stock code), each text drawn only when wholly inside the view. Each text is
+  converted to wide chars when the tile is made and cut with an ellipsis (`al_fit`, the grid's binary search with the canvas' own
+  `canvas_measure_text`, in the text's own style) the first time it is drawn; never measured again. Tiles are the grid's ring (24, replaced
+  least recently drawn first; at most 8 rows are in view), 52 px bitmaps (11 KB) in this mode, the same placeholder disc at 52 px.
+  A tap on a row (any x, lines 0..63) opens its album as a grid tile does (`cc_open_album`). A finger down on a row sets `press`, a move
+  past the 12 px slop, the release and an abort clear it; the view is invalidated on each change, nothing else repaints.
+- **The toggle.** The navbar button (`btn_albumview`, x 214, shared with the other Pod pages) switches the mode **in place**: no window opens or
+  closes. `al_set_mode`: stop a fling and a pending reload timer, drop every tile and the placeholder (their size is the old mode's) and make
+  the placeholder at the new size, keep the first album in view (grid -> list: the first row with a visible cell, `row x 3` x 64; list -> grid:
+  `(album / 3)` rows down), set the three icon properties of the button to the glyph of the *other* mode
+  (`pod_nav_grid` in list mode, `pod_nav_list` in grid mode; the same `widget_set_prop_str` pattern as the Artists toggle), invalidate the view, and
+  save the mode (`home_write_atomic`). Nothing is opened, so nothing can be left behind. If the page's asset lacks the two style labels the
+  page leaves again (`navigator_back`) as it does without `view_grid`.
+- **Persistence.** `/mnt/data/m1pod-albums`: `1` the grid, `0` the list, missing or anything else
+  `ALBUMS_DEFAULT_GRID`; written as the Start-in setting is (`home_write_atomic`: temp file, `fsync`, `rename`, directory
+  `fsync`) at every toggle. The menu's Albums row (`albums_open`) opens the page in that mode. If the window cannot open at all it opens the
+  **stock Albums list** through the Home dispatcher (id 5, `pod_home_open`); the stock list stays reachable from Shanling Home, unmodified.
+- **Shared helpers** (`patch/covercache.c`, used by `coverflow.c` and `albums.c`, the next page that shows covers, the landscape
+  Cover Flow, can use them as they are): `cc_fnv`, `cc_album_key`, `cc_path`, `cc_file_size`, `cc_url` (the cache file's `file://` url
+  if it holds a picture), `cc_decode(widget, url, unload, size, box, out)` (stock loader, centred square, nearest or box to `size`),
+  `cc_sample` / `cc_box` (the pure pixel functions, also built for the host), `cc_copy_list`, `cc_albums` (the stock Albums list copied),
+  `cc_open_album(artist_row, row)` (the stock open sequence, library or one artist's). Cover Flow keeps the cache *builder* (worker thread).
+- **Risks.** `widget_prepare_text_style` on a hidden, insensitive label takes the font, size and colour from that label's style (assumed: it reads
+  the style, not the visibility; if not, the list's texts would use the view's 16 px white); `canvas_fill_rect` is assumed to fill the colour
+  `canvas_set_fill_color` was given (one word, r,g,b,a) and, like the other canvas calls, not to clip to the view (a clip would be harmless;
+  the payload cuts by hand); the stock canvas fill colour is left as the list set it (the stock widgets set their own before each fill). None of
+  this was checked on the device. Unicorn cannot judge the real frame time of 7 rows (about 6,000 payload instructions steady, plus 7 blits, 14 text
+  runs, 14 fills), nor the stock text and fill calls.
+
 ## 6. Library rows (`patch/rows.c`, `patch/rows.json`)
 
 q2-pod's restyle of the stock library pages (from its `patch/ipod.json`, `compact_set_row_layout` /
@@ -342,7 +504,7 @@ with `(y + 63) >> 6` at `0x531bac/0x531bb8` and `0x532488/0x532498`), `BODY 60`,
 | Songs | row 60, button 56; title 200 wide, 20 px at y 10; artist 175 at y 30 | row 64, body 60; title x 60..298 (238), 21 px in 24 at y 7; grey 18 px line at y 33 (20) full width, 213 after the MQA badge; multi-select 94..298 |
 | Folders | row 64/60; title 220, chevron at 288 | title 60..277, chevron 285..298; 60..298 for a song file |
 | Artists / Genres / Composers | row 60, button 56, title 220 | row 64, body 60, title 60..277, chevron 285..298 |
-| Albums | item 60, cover 60 at x 0, title 180 at y 10, chevron 296 | item 64, cover 52 drawn 1:1 at (4,4), title/artist 60..277 at y 7/33; 8 covers per batch (was 7) |
+| Albums | item 60, cover 60 at x 0, title 180 at y 10, chevron 296 | item 64, cover 52 drawn 1:1 at (4,4), title/artist 60..277 at y 7/33; 8 covers per batch |
 | an album | track rows 60, "N title" 260 wide; header boxes 20/18 at y 10/30 | track rows 64, "N title" 12..298; header boxes 24/20 at y 7/33 |
 | Playlists | items 60, name 220, create label (60,20,220,20), Import/Export (60,20,90,20) | items 64, name to 12 px before the arrow, create label (60,18,238,24), Import/Export y 18, 24 high |
 | Search | tab rows 64, title 250 at y 10, album covers 60, scroll-end divides by 120 | title 238 at y 7, artist y 33, covers 52 at x 4, divides by 64 |
@@ -442,7 +604,7 @@ the audiobook filter, the multi-disc folder merge, and Shuffle Folder from insid
 ## 8. The album view (`patch/albuminfo.c`, test `test/pod/albuminfo.py`)
 
 There is one album view: the stock `albuminfo_page` (an album's tracks), restyled. It opens from the
-stock Albums list, from Cover Flow (main and per artist), from Artists through Cover Flow and from the
+stock Albums list, from the Albums grid (section 5a), from Cover Flow (main and per artist), from Artists through Cover Flow and from the
 All albums card, always through `navigator_to_with_context("albuminfo_page", class | row << 16)` with
 `*pdeq_showlist` holding the album list the row came from (section 3: the stock Albums handler's
 sequence; Cover Flow and the card repeat it, `coverflow.c open_album`). The stock page loads the
@@ -454,7 +616,7 @@ The payload has no album code of its own except the one hook below (and Cover Fl
 y   0                                         header item 310 wide, 184 high (stock: 100)
     8 +-----------+  Kind of Blue            21 px white   srlabel_item_white_style (stock label)
       |  cover    |  Miles Davis             18 px grey    srlabel_item_gray18_style (stock label)
-      |  120x120  |  1959 . 8 tracks         15 px #9C9C9C srlabel_meta15_style (new label)
+      |  120x120  |  1959 . 8 tracks         15 px #AAAAAA srlabel_meta15_style (new label)
   128 +-----------+
   136   [ Play all ] [ Shuffle ]            two 110 x 36 buttons, 10 px apart, btn_albumbtn_style
   184   1  So What                             stock track rows, 64 px
@@ -472,12 +634,11 @@ draws an orange image with its text baked in; the stock style `btn_imgplayall_st
 theme, so a header the hook skips is the stock one), keeps its stock handler (`0x525d48`, bound to the
 item) and resizes the item to 184. Nothing is renamed or removed (`img_albumcover_m` is looked up by name
 by the cover refresh `0x525a38`). The year line is insensitive (a drag over it scrolls the list); the
-buttons are 110x36 (V2.1kE: the cover starts 8 px under the navbar and the buttons are smaller, so the track list starts 24 px higher).
+buttons are 110x36.
 
 **Styles** are the page theme's (`styles/albuminfo_page.bin`, both asset themes, `tools/mod_ipodrows.py`):
-`btn_albumbtn_style` (`#1E1E1E` fill, `#3A3A3A` hairline border, 20 px white text, `#3A3A3A` pressed, no
-icon) and `srlabel_meta15_style` (the stock grey line's alignment at 15 px `#9C9C9C`: 4.5:1 on the pressed
-row, which the page audit tests). The 21 px title is the rows step's.
+`btn_albumbtn_style` (`#1E1E1E` fill, `#3A3A3A` hairline border, 20 px white text, `#333333` pressed, no
+icon) and `srlabel_meta15_style` (the stock grey line's alignment at 15 px `#AAAAAA`, the secondary grey). The 21 px title is the rows step's.
 
 **Record fields.** `getMusicByAlbum` / `getMusicByAlbumAnd[Album]Songer` (`select * from songtable`)
 fill an `stSongInfo` per row via the callback `0x4e908c`; schema: `id, filename, fileurl, album, songer,
@@ -509,7 +670,7 @@ and never scaled (AWTK's scaling is nearest neighbour, `test/awtk_fill.py`); a c
 small embedded image, a non-square one) sits centred in the 120 px box. With the kill switch the stock
 100 px scale-auto widget shows the 120 px file scaled down.
 
-**The cover thread's state** (found on the device, V2.1kD: Cover Flow's album page had no cover). The thread
+**The cover thread's state.** The thread
 (`0x4dd450`) sleeps 50 ms while `albumcover_taskstate` (`0xa05a18`) is 2. `albumcoverinfo_init` (`0x4dcf9c`)
 sets it to 2 (and clears `albumcover_finishflag` `0xa05a5b`); the batch queuers (`batchadd_albumcover_task`
 `0x4dccac` -> `local_albumsmallcover_task` `0x4dcbb4`, `local_songercover_task` `0x4dccc8`) end by setting it
@@ -523,6 +684,110 @@ shows the placeholder disc until the thread has rendered the file, as from the A
 
 Not done: a duration, a current-track marker in the track rows (the stock page marks nothing), a
 Shuffle that goes to Now Playing (Play all does not either).
+
+## 8a. Now Playing (`patch/nowplaying.c`, test `test/pod/nowplaying.py`; the look is `docs/ui.md` section 4)
+
+The stock `playing_page` (`ui/playing_page.bin`, restyled by `tools/mod_nowplaying.py`) gets a cover-coloured window, the
+cover's rounded corners and a remaining-time label from one hook and one page timer.
+
+**The hook** (`m1pod_playing_init`, section 2): `playing_page_init` `0x53d1e4` (`a0` the window, `a1` the context
+`{queue, index, class, mode}`; it registers the page's `EVT_*` handlers with `widget_on`, starts the queue with
+`start_player` when the context's class is not `0xff`, runs `playing_choiceshowpage` and `player_timer_start`, returns 0, or `0x10` for a null window).
+The hook calls it through `stock_playing_init_trampoline` and returns its result; with `RET_OK`, a window and no
+`/mnt/mmc/m1pod-off`, `np_start` runs: it finds `np_remaining` and `label_playlen` (a missing one turns the time off, not the tint),
+registers `EVT_DESTROY` on the window (`np_on_destroy`, context the window), adds a **repeating 500 ms timer** (`np_tick`, answering
+`RET_REPEAT` 8 as the stock page timer `0x53cf48` does; a refused timer or `widget_on` leaves the page stock), registers
+`np_on_art_paint` on `img_playcover` (`EVT_AFTER_PAINT`) and runs one tick at once. State is one 176-byte `.scratch` struct
+(`np`): the window, the labels, the timer id, the cover key, the window colour, the seconds shown, which label is visible and the
+12x12 corner table. A page built over a live one removes the old timer first; a destroy whose context is not the current window
+(an earlier page's) does nothing; the current one removes the timer and zeroes the state, after which a stray tick returns `RET_OK`
+(ends) without touching a widget.
+
+**The tint** (`np_cover`): demo's cover thread `parseplaycover_thd` (`0x4ded84`) removes `/tmp/coverpic.jpg` and `/tmp/externpic.jpg`, sets the
+source type word `0x97cad8` to 1 (`0x4df044..0x4df094`), writes the new file (extern and embedded covers under `parse_cover_mutex`) and then
+sets the word to 2 (embedded art, `coverpic.jpg`), 3 (a folder image, `externpic.jpg`) or 5 (the `.downpic` cache copied to
+`externpic.jpg`); the page's own loader (`0x53a5d8`) draws exactly these. `np_cover` does nothing while the word is 1, sets the neutral tone once for any other value, and
+for 2, 3, 5 reads the file through stdio (`np_file_key`: FNV-1a of at most 512 KB and the length, never 0; no file or an empty one:
+try again next tick, no colour change). A key different from the last decodes the picture with `cc_decode` (`patch/covercache.c`, the stock
+loader, loaded and unloaded at once as the Cover Flow rows do, `box` mode reducing the centred square to one pixel = its average
+colour), `np_tone` makes the tone and `np_set_color` stores it as the window's `bg_color` with `widget_set_style(win, "normal:bg_color",
+&value_t)` (`0x66c448`, AWTK's `widget_set_style_color`: `widget_ensure_style_mutable` `0x666700`, then `style_set`; the `value_t` is
+made by `value_set_uint32` `0x711858`, colour word `0xAABBGGRR`) and invalidates the window; a failing style call changes nothing,
+not even the colour the corners use. A picture the loader refuses is not tried again until the file changes (the old colour
+stays); the source word is read again before the decode, so a file demo started replacing is left alone. No lock on `parse_cover_mutex`
+is taken (the UI thread never waits for an extraction): a file is read only while the word says 2, 3 or 5, which demo sets after
+writing it; the few instructions between demo removing the old file and setting the word to 1 can only make `fopen` fail (no key, try again).
+Tone: value `NP_V_MIN + v * (NP_V_MAX - NP_V_MIN) / 255` (32..192), every channel keeps `NP_SAT_NUM / NP_SAT_DEN` (4/5) of its
+distance from the brightest `v`, black is `NP_NEUTRAL` (`#202020`, the asset's window colour); `tools/mod_nowplaying.py tone` is the model
+(the test compares them on 369 colours). The window shows it under `np_tint.png` (alpha 38..235 down the 450 rows); with at most 192 the
+white title and the `#AAAAAA` lines keep 4.5:1 (worst case checked at their rows in the test).
+
+**The corners** (`np_on_art_paint`): `img_playcover` is a 264 px square image (the size demo writes, section 6 of `docs/ui.md`); AWTK has no
+image clip, and one static mask would be the wrong colour on all but one window colour. The four 12x12 corner squares are
+painted from the cover widget's `EVT_AFTER_PAINT` (canvas from the event, `EVENT_PAINT_CANVAS`; coordinates are the widget's, as in
+section 5a): `np.corner` holds the coverage (0..255) of the area outside a quarter circle of radius 12 (`np_corner_init`, 8x8 samples
+a pixel, computed once at the page's start; the Python model `corner_alpha` equals it), and every non-zero entry is one
+`canvas_set_fill_color` (the window colour at that row under the gradient, `np_shade` of `np_alpha(y)`, with the coverage as alpha) and
+`canvas_fill_rect(x, y, 1, 1)` that the stock canvas blends, so the corner is anti-aliased over the art. About 160 fills, and only
+when the cover widget repaints (page open, track change; not for the slider, the times or a scrolling title). Without the hook the corners are square.
+
+**The remaining time** (`np_time`): `get_playtimeandlength(&pos, &len)` (`0x4e015c`, the call the stock tick makes at `0x53a8fc`: seconds;
+returns 1, or -1 for an index outside the queue). With 1 and `len > 0`, `np_format_remaining` writes `-mm:ss` (`-hh:mm:ss` from 3600 s;
+zero padded like stock's `toolsTimeItoa`; a position past the length clamps to `-00:00`) into `np_remaining` only when the seconds
+changed and shows it while hiding `label_playlen` (`widget_set_visible`; both labels are insensitive in the asset, so hide = invisible +
+insensitive); otherwise `label_playlen` is shown again and `np_remaining` hidden. demo keeps rewriting `label_playlen` on its own tick, which is why
+the swap is two labels and not one rewritten text (two timers 500 ms apart in phase would flash the total).
+
+**Safety.** Runs only on a Now Playing build; the kill switch, a refused timer, a missing widget or a failing call each leave stock behaviour; the timer is gone with
+the window; no stock memory is written (the style and the labels go through the stock setters); no lock, no thread, no heap. The only paint-time code is the one `EVT_AFTER_PAINT` on the cover widget. Newly pinned: `widget_set_style` `0x66c448`,
+`value_set_uint32` `0x711858`, `get_playtimeandlength` `0x4e015c`, the data word `COVER_SRC` `0x97cad8`; `canvas_set_fill_color` / `canvas_fill_rect` (section 5a) are reused.
+**A-B markers.** `getx_by_playtime` `0x53b824` returns `(pos - cue) * 0x128 / len + 0xc` and its caller `0x53b8f0`
+(`img_repeata` / `img_repeatb`, called from the page timer `0x53cf48` through `show_player_face` and from `player_timer_start`) moves the markers to `y = 0x16c`
+(three `addiu a2, zero, 0x16c`, one per branch); `mod_nowplaying.patch_markers` changes the 16-bit immediates at `0x53b8d4` (0x128 -> 264),
+`0x53b8ec` (0xc -> 28) and `0x53b9c4`, `0x53ba48`, `0x53ba64` (0x16c -> 376, the new bar's centre 369 + 7), after checking those five words and the two functions'
+prologues and call sites (nine more words). Neither function is reachable from `main` / `platform_init` (`tools/reach.py`).
+Not verified on the device: the style call's repaint, the slider's `round_radius`, the corner fills over the real canvas, the look of the 4 px dots.
+
+## 8b. Localisation (`patch/i18n.h`, `tools/pod_i18n.py`, `tools/awtk_strings.py`, `tools/mod_strings.py`, test `test/pod/i18n.py`)
+
+**How the stock app translates.** AWTK's `tr_text`: a widget stores a key (`widget->tr_text`, offset `0x18`) and
+`widget_set_tr_text` (`0x66f994`) sets the key and the text `locale_info_tr(widget_get_locale_info(w), key)` (`0x658db4`;
+`widget_get_locale_info` `0x66b904`, the app's `locale_info` `0x6588b0`). `locale_info_tr` is `str_table_lookup` (`0x658cd8`),
+a binary search by `strcmp`, and returns the **key itself** when the table or the entry is missing. A ui `.bin` property
+`tr_text = key` does the same when the page is built (stock pages use it, e.g. `cdripper_page`; most stock pages set their
+texts in code with `widget_set_tr_text`). A language change is `switch_language` (`0x4cca40`, the language menu) ->
+`locale_info_change` (`0x6589e8`: the `<lang>_<COUNTRY>` file is re-referenced by `locale_info_reload` `0x6588e4`, then the
+locale event `0x122`); the window manager's handler (registered by `locale_info_on` `0x658ba8` at `0x678304`, handler
+`0x6772dc`) unloads fonts and images and runs `widget_re_translate_text` (`0x66f788`) on every open window and its
+children, so **every window still on the stack, ours included, re-translates at once** (a widget set with `widget_set_text_utf8`
+does not: it keeps its text until it is set again, so composed texts are rebuilt each time they are shown).
+
+**Tables.** `strings/<lang>_<COUNTRY>.bin` (`tools/awtk_strings.py`): `u16 0, u16 count`, `count` pairs of `u32` offsets
+(key, value, from the file start) sorted by key, eight zero bytes, then `key\0value\0` in order, UTF-8. 16 tables; the language menu
+reaches 13: `zh_CN` (the default), `zh_HK`, `en_US`, `ja_JP`, `ko_KR`, `fr_FR`, `ge_DE` (German), `sp_ES` (Spanish), `it_IT`, `th_TH`,
+`po_PL` (Polish), `ru_RU`, `uk_UK`. `de_DE`, `es_ES` and `pl_PL` are 11-entry CD ripper stubs nothing loads. The stock
+translations are uneven (some untranslated, `msg_no` "Cancel" is "Nein" in German, `it_IT` lacks 2 keys), so a stock key is used only
+where it is the same English text and reads well in every language (`tools/pod_i18n.py` `STOCK`: `cdrippersettings` Settings,
+`hr`, `sset_updatemusic`, `cdripper`, `album`).
+
+**Our texts.** Every other text M1 Pod adds is a key of our own whose **key is the English text** (`TEXT` in `tools/pod_i18n.py`,
+translations for the 13 languages, brand names `M1 Pod` and `Tidal` left plain): a missing table or entry shows English.
+`tools/mod_strings.py` (a build step) adds them to all 16 tables in sorted position (the three stubs get their twin's text),
+refusing a table that has one already, a stock key that is gone, a text without ink in the shipped font. `tools/pod_ui.py` writes
+`tr_text = key` for page titles, row labels and Cancel (`pod_i18n.text_prop`); the payload includes `patch/i18n.h`:
+`TR(key)` = `locale_info_tr(locale_info(), key)` for composed texts and the message box, `widget_set_tr_text` for a label
+(Artists / Album Artists title, the Update Local Music / Not enough memory / Library too large / No albums / Preparing covers
+messages, the album page's Play all and Shuffle). Composed: the Cover Flow progress is `TR("Preparing covers...")` + `" done/total"`;
+the album page's count is the key `%d track` or `%d tracks` (by `n == 1`) with the number put where the text has its `%d` (never a
+printf format; Polish, Russian and Ukrainian, which have three plural forms, word both keys as a label: "Utwory: 12"); the All albums
+caption (also painted into the landscape frame) is `TR("All albums")`. Adding a text: a `TEXT` entry with all 13 languages (the
+test fails otherwise), its use in an asset or the payload, `test/pod/i18n.py` checks widths and glyphs. The pull-down, lock screen
+and Now Playing add no text.
+
+**Fonts.** One file, no fallback: `mod_font.py` keeps every stock code point, Inter replaces Latin / Greek / Cyrillic, Source Han Sans
+SC the CJK, kana and Hangul stock code points, Thai stays stock. All 430 characters of our texts (including Traditional Chinese for
+`zh_HK` and Thai) already have ink in the shipped font, so the subset needs no extension (zh_HK shows Source Han Sans **SC** forms,
+as the stock zh_HK UI does).
 
 ## 9. Home and the boot guard (`patch/home.c`, `patch/home.h`, test `test/pod/home.py`)
 
@@ -548,9 +813,9 @@ main -> application_init -> navigator_to("home_page") -> navigator_to_with_conte
       If the note cannot be written the marker stays, so every later boot is stock too;
    3. **bad note found** -> stop (sticky: a crash cannot alternate with good boots);
    4. the setting (`/mnt/data/m1pod-start`: `0` = Shanling, missing or anything else = M1 Pod) is read; it
-      no longer stops the guard (V2.1kA): the Shanling start is armed too, because step 7 adds the grid icon;
-   5. **write the marker**: temp file, `fsync`, `rename`, directory `fsync`; any failure -> stop with no
-      marker left;
+      does not stop the guard: the Shanling start is armed too, because step 7 adds the grid icon;
+   5. **write the marker**: temp file, `fsync`, `rename`, directory `fsync` (its open and its `fsync` must succeed: an unconfirmed
+      marker is not armed on); any failure -> stop with no marker left (it is unlinked again);
    6. **arm**: a one-shot UI timer (5 s, `CLEAR_MS`) removes the marker and fsyncs the directory; with
       no timer the marker is removed at once;
    7. **add the "M1 Pod" icon** to the grid (`hm_add_icon`, below; any failure adds nothing), register a
@@ -600,8 +865,8 @@ impossible by construction:** arming needs the marker and the bad note both abse
 after arming leaves the marker, the next start writes the sticky note (or, if it cannot, leaves the
 marker) and runs stock, and every start after that finds the note or marker and runs stock: at most one
 crash, never an alternation. The pod-menu open is covered by the same marker. Costs and residual
-risks: a power-off within 5 s counts as a failed start (the next start is stock; choose **Start in: M1
-Pod** again); a hang inside `fsync` on a broken flash filesystem would hang the UI thread before the
+risks: a power-off within 5 s counts as a failed start (the next start is stock; turn **Start in M1 Pod**
+on again); a hang inside `fsync` on a broken flash filesystem would hang the UI thread before the
 marker is durable; a later misbehaviour after the 5 s window is not caught.
 
 ### Files and the kill switch
@@ -611,9 +876,21 @@ marker is durable; a later misbehaviour after the 5 s window is not caught.
 | `/mnt/mmc/m1pod-off` | SD kill switch: the payload does nothing at boot (no icon), the icon does nothing if it is there, the row fit is off |
 | `/mnt/data/m1pod-off` | the same in flash (cannot be created without a shell) |
 | `/mnt/data/m1pod-run` | the crash marker: exists from "armed" until 5 s later |
-| `/mnt/data/m1pod-bad` | the sticky note when a marker was found; removed by choosing **Start in: M1 Pod** |
+| `/mnt/data/m1pod-bad` | the sticky note when a marker was found; removed by turning on **Start in M1 Pod** |
 | `/mnt/data/m1pod-start` | the setting: `1`/missing = M1 Pod, `0` = Shanling (temp + `fsync` + `rename`) |
+| `/mnt/data/m1pod-albums` | the Albums page's mode: `1`/missing = the grid (`ALBUMS_DEFAULT_GRID`), `0` = the list (same write; section 5a) |
+| `/mnt/data/m1pod-landscape` | Cover Flow's presentation: `1` = landscape, `0`/missing = portrait (atomic write at each switch tap; section 4) |
+| `/mnt/data/m1pod-menu` | the menu's shown items in order: one digit (the item id 0-8) each, then `\n`; `0123456\n` is the default (the file missing). Read with the limits below; written atomically at each change on Settings > Main Menu |
 | `/mnt/mmc/m1pod-log` | opt-in: if this empty file exists, events are appended to `/mnt/mmc/m1pod.log` (armed, boot ok, marker found, kill switch) |
+
+The menu list is **on the boot path** (the menu is the Home screen at start-up; its asset is arranged by `menu_arrange` while it opens), so
+`patch/menu.c` reads `/mnt/data/m1pod-menu` with `open`/`read` of at most 16 bytes (`POD_MENU_FILE_MAX`) and accepts only: no
+more than nine digits `0`-`8`, none twice, an optional single final newline, a file shorter than 16 bytes (an empty list, a lone
+newline, is valid: every item hidden); a missing, empty, longer, corrupt, duplicated or unknown-id file is the default list. It
+never writes while reading, a row or the list missing from the page leaves the asset untouched (every item shown, Extras and
+Settings on the menu), and `Extras` / `Settings` are rows the arrangement never hides, so Settings stays reachable from any file.
+The page arrangement costs a handful of widget calls (`widget_move`, `widget_set_visible`, `widget_set_sensitive`, one
+`virtual_h` / `yoffset` pair); the menu also re-arranges on `EVT_WINDOW_TO_FOREGROUND` (it comes back in front after the Main Menu page).
 
 The setting is an own file, not `config.ini [M1POD]`: `write_int_config` rewrites the shared config
 the stock app parses at start-up, and a bad write there is a boot risk.
@@ -621,16 +898,24 @@ the stock app parses at start-up, and a bad write there is a boot risk.
 ### The launcher
 
 The menu's last row opens the **Settings** page (`m1pod_settings`, the Shuffle page's machinery), whose rows are
-System Settings and Play Settings (stock pages through the dispatcher), **Shanling Home** and **Start in**.
+Main Menu, **Cover Flow** (a sub-page, below), the **Start in M1 Pod** switch, Playback and System Settings (stock pages through the dispatcher with ids 16 and 17) and **Shanling Home**.
+
+**Settings > Cover Flow** (`m1pod_cfset`, `pod_pages.CFSET_PAGE`): **Landscape** (the switch, `/mnt/data/m1pod-landscape`, as before) and **Sort** (`ACT_SORT`: the row shows its value, `Artist` or `Album`, in a grey right-aligned `pod_value<row>` label set by `widget_set_tr_text` so it follows the language; one tap toggles it, saved first, a failed save changes nothing; no sub-choice page). The setting `/mnt/data/m1pod-cfsort` (`cc_sort_artist`, `cc_sort_toggle` in `patch/covercache.c`): only `0` or `0\n` is Album; a missing, empty or any other content is Artist (the default), and reading never writes.
+
+**The album order** (`cc_album_order`). Album = the stock list as it is (`getAllAlbum`: by album title, ASCII case-insensitive). Artist = the row's artist (`songer`, the album's representative track: the album query does not fetch the album artist, so there is no album-artist fallback to apply), then album title, each ASCII case-folded with a leading `The ` dropped (`A `/`An ` are not), ties by the stock position; the Unknown Album row (id -1) is last. The stock deque is never reordered: the page holds `order[]` (stock row numbers, a heapsort, no libc callback; about 25 M instructions for 4000 albums on open) and every access goes through `cc_row`; whatever returns to stock (`cc_open_album`) gets the stock row, `order[i]`. Cover Flow sorts a library of at most `MAX_ALBUMS`; the Albums page (grid and list) uses the same call; the per-artist Cover Flow is not re-sorted (its stock order is album title, `group by album COLLATE NOCASE`, not chronological). Cache keys are unaffected (key = album's artist + title).
+
+**Opening on the playing album** (`find_playing`, once, at open, no polling). `cc_playing()`: `mclGetPlayPos` `0x5d4290` (the position, -1 none) and the play queue, a `deque_t *` in the data word `PLAY_QUEUE` `0xa0394c`; the track is `deque_at(*PLAY_QUEUE, pos)` when `0 <= pos < deque_size` (the same test and accessors as `get_playtimeandlength` `0x4e015c`, the lock screen refresh `0x53f718` and the queue drawer). Its album (`REC_ALBUM`; empty = no match) is matched first by `cc_album_key` (FNV of artist then album), else by album title ignoring ASCII case (a compilation's tracks do not share the album row's artist). Found: that cover is centred (main page, or the artist page when the artist's list has the album); otherwise the saved `LAST_ALBUM`, else the first, as before.
 Shanling Home shows the stock grid for the rest of the session (nothing re-opens the pod menu while it is on):
 it sets `grid`, shows the grid, closes the menu under the Settings page by handle (`window_close(hs.entry)`: a
 second `navigator_back` straight after the first would find the closing page) and then closes the Settings
 page with `navigator_back`; with no known menu below it is one `navigator_back`. Tapping the **M1 Pod icon**
 (id 99) on the grid, when the setting is M1 Pod and the payload is armed, clears the flag and opens the menu as
-the Home instance; a failing open restores the previous state. With "Start in: Shanling" the icon opens a normal
-menu. **Start in: M1 Pod / Shanling** flips the persistent setting and rewrites the label (found by type, the
-`hscroll_label`, since the icons step makes the icon image child 0; `home_menu_opened` runs for the page that
-holds the row, the Settings page). Toggling to M1 Pod takes effect at the next Home foreground event (a
+the Home instance; a failing open restores the previous state. With the switch off ("Shanling") the icon opens a normal
+menu. **Start in M1 Pod** is a switch row: a tap runs `home_toggle`, which flips the persistent setting (`/mnt/data/m1pod-start`, the
+same semantics and the same atomic write as before; it returns the new state or -1 for a failed write, which leaves the file and the switch
+alone) and `patch/m1pod.c` sets the row's stock `sset_on` / `sset_off` image (`pod_switchN`, found by name; at open it shows `home_start()`).
+The switch rows' click ctx is a small slot (action, image) in `.scratch` filled when the Settings page opens; `home_menu_opened` still
+records the Settings window for Shanling Home. The boot guard is untouched. Toggling to M1 Pod takes effect at the next Home foreground event (a
 Shanling start is armed, so the foreground handler exists). **The Home instance has no top bar**: the whole
 `navigationbar_view` is hidden (`visible=false` and `sensitive=false`) and `pod_listview` moves to y `HOME_PAD` (10) and
 resizes to 320x430, its `pod_scrollview` and `scroll_bar_m` keep their widths and take the 430 px height (the
@@ -663,8 +948,9 @@ one-shot timer, never inside the event, so no window opens while the manager is 
 No close animations on the pod pages and nothing in the payload loops on `navigator_back`.
 Evidence that the open order is safe and the grid is hidden before the menu appears: the grid content
 is hidden from `home_boot` on, the window under the menu is plain black (`home_page` bg `#000000`),
-every give-up (kill switch, no top window, Home never opened, `window_open` failure) shows the grid
-again, and the stock Home keeps all its widgets so every stock `widget_lookup` resolves. Hiding
+every give-up (kill switch, no top window, Home never opened, `window_open` failure, a refused open timer) shows the grid
+again, and Home coming to the foreground with no menu to follow (the kill switch appeared, or Start in was switched to
+Shanling while the menu was Home) shows it too (`hm_fg`: never a blank Home), and the stock Home keeps all its widgets so every stock `widget_lookup` resolves. Hiding
 `app_gesture` assumes stock never toggles its visibility itself (it would only re-show the grid).
 
 ### Recovery
@@ -677,20 +963,20 @@ before the hook runs; use the bootloader/recovery flash of V2.1R, whose button c
 unverified. To re-enable after a fallback: a fallback boot is stock and adds no grid icon (the icon is new boot
 code, so it is behind the sticky note like everything else). The way back is the **recovery fallback** in the Home
 icon tap hook (not boot code): while the bad note `/mnt/data/m1pod-bad` exists, a tap on the Tidal icon (id 1)
-opens the M1 Pod menu (the normal instance, with Back) instead of Tidal; Settings > **Start in: M1 Pod** clears
+opens the M1 Pod menu (the normal instance, with Back) instead of Tidal; Settings > **Start in M1 Pod** (switch on) clears
 the note and sets the start file, and the next boot arms the guard again (the icon returns). Without the note,
 or with the kill switch on, Tidal is stock; if the menu cannot open, the tap falls through to stock. From a
 shell, deleting `/mnt/data/m1pod-bad` and writing `1` to `/mnt/data/m1pod-start` does the same; or reflash. Device test procedure: boot, wait 10 s past Home, power-cycle a few times (with the log: every
 start `armed` / `boot ok`, never `marker found`); power off within 5 s of Home once (the log says
 `marker found; falling back to Shanling`, the device boots to the stock Home); then Songs/Albums/Back,
 Now Playing, Cover Flow, Shuffle, lock/unlock, idle timeout, USB mode in and out (you land on the
-menu), Settings > Shanling Home and back by the icon, Start in toggles and reboot, and the kill switch.
+menu), Settings > Shanling Home and back by the icon, Start in toggles and reboot, Main Menu changes and reboot, and the kill switch.
 
 ## 10. Safety rules for the payload
 
 - A boot-time crash is dangerous (the watchdog reboots in a loop, recovery combo unverified): the only
   start-up code is the guarded `home_page_init` hook; every other path is user-initiated.
-- Three hooks only (sections 2, 8, 9); the 59 row edits are call-site and immediate edits, not hooks.
+- Four hooks only (sections 2, 8, 8a, 9); the 59 row edits and the five A-B marker immediates are call-site and immediate edits, not hooks.
 - Every patched word, hook site, `$gp`, address and the input SHA are pinned; `pod.py` refuses to build
   on mismatch; every hook falls back to stock through its trampoline; every error path (non-entry
   icon, kill switch, `window_open` NULL because the asset could not load, null icon) calls stock.
@@ -706,7 +992,12 @@ menu), Settings > Shanling Home and back by the icon, Start in toggles and reboo
 - **Unicorn harness** (`test/pod/harness.py`): loads the real patched `demo` LOAD segments, mocks the
   stock functions and libc and executes the actual compiled payload. `test/patch.py` runs the modules:
   `menu` (entry, non-entry ids, kill switch, `window_open` failure, empty/null icons, row actions,
-  hit tests on every menu row through the `list_view`/`scroll_view`), `coverflow` (open with a complete
+  hit tests on every menu row through the `list_view`/`scroll_view`; the customisable menu: the default order, saved lists, every invalid or oversized list
+  falling back to the defaults (also against the Python model `pod_pages.parse_menu`), the arranged rows hit-tested, Extras with the hidden items, Settings always shown,
+  the Settings switches writing their files, the Main Menu page's switches, arrows, failed saves and persistence), `albums` (the grid: layout against the asset, the menu row and the persisted view, the first frame and paced decoding, tiles of the
+  box-filtered cover, scroll clamping by drag and fling, taps on every cell kind and gap incl. the last partial row, title ellipsis, missing
+  and empty cache files, 4,000 albums with the bitmaps bounded and recycled, destroy, the toggle both ways with its saved file and the decorated
+  stock navbar, hit tests with demo's `widget_find_target`), `coverflow` (open with a complete
   cache, the tap that opens the stock album page with its context, Back, side taps, drag/flick/wrap/abort, close, first-run build, worker
   lock order and markers, no space, refused thread, empty library, broken asset, flat fallback,
   re-query, the depth frame compared byte for byte with the host renderer, hit tests with demo's own
@@ -716,12 +1007,12 @@ menu), Settings > Shanling Home and back by the icon, Start in toggles and reboo
   `albuminfo` (the header hook on the real stock header builder: stock first, the restyled geometry,
   texts and styles, the year line cases, the kill switch and every mismatch or failed create leaving stock,
   the Shuffle sequence, hit tests on the buttons with demo's `widget_find_target`, the page theme, the
-  cover size word, Cover Flow's first album and last-album memory), `shuffle`, `home` (every
+  cover size word, Cover Flow's first album and last-album memory), `nowplaying` (section 8a: the hook, the timer's life, the tint, the remaining time, the corners, the marker words, the built page), `shuffle`, `i18n` (section 8b: the tables, the keys, our texts in all 16 languages through a mocked `locale_info_tr`, widths and glyphs), `home` (every
   boot branch, the call set, the launcher, window-stack cases). Each prints its count and time.
-- `test/coverflow.py` builds `patch/coverflow.c` for the host (`-DCF_HOST`) and checks geometry,
-  compositing, brightness ladder, reflection, cache key and the texture sampler; `test/demo_diff.py`
-  checks the built `demo` differs from stock only in `.pdr`, `PH[10]`, the three hooks, the 59 rows.json
-  words, the four cover-size words and appended bytes; `test/awtk_fill.py` runs demo's own AWTK fill
+- `test/coverflow.py` builds `patch/coverflow.c` and `patch/covercache.c` for the host (`-DCF_HOST`) and checks geometry,
+  compositing, brightness ladder, reflection, cache key, the texture sampler and the grid's box filter (flat colour, chequer, 2:1 block means, stride, alpha); `test/demo_diff.py`
+  checks the built `demo` differs from stock only in `.pdr`, `PH[10]`, the four hooks, the 59 rows.json
+  words, the four cover-size words, the five A-B marker words and appended bytes; `test/awtk_fill.py` runs demo's own AWTK fill
   and image code (translucency, rounded fill, scale_auto nearest neighbour).
 - `fwtool verify` / `diff` on every package; a clean rebuild is byte-identical.
 
@@ -738,4 +1029,4 @@ menu), Settings > Shanling Home and back by the icon, Start in toggles and reboo
 | `test/coverflow.py`, `test/patch.py` | `test/coverflow.py`, `test/patch.py` + `test/pod/` |
 
 q2-pod hooks dozens of sites for a full scroll-wheel reskin; M1 Pod hooks one user-initiated site, one
-guarded start-up site and the album page's header builder (reached only while that page builds), and adds pages.
+guarded start-up site, the album page's header builder and Now Playing's init (reached only while those pages build), and adds pages.
