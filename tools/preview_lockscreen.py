@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Approximate PIL mock-up of the 320x480 lock screen (ui/screensaver_page.bin); not pixel-exact AWTK.
 
-  preview_lockscreen.py RAW_DIR OUT.png LABEL=UI.bin[,pct=N][,charging][,idle][,raw=DIR] ...  [--wallpaper]
+  preview_lockscreen.py RAW_DIR OUT.png LABEL=UI.bin[,pct=N][,charging][,idle][,raw=DIR] ...  [--wallpaper KIND]
 
 RAW_DIR is rootfs/release/assets/default/raw (images/, fonts/default.ttf, styles/); raw=DIR overrides it
 for one panel (e.g. a "before" tree). Text is sized like AWTK's stb font backend (font_size = ascender -
@@ -9,8 +9,9 @@ descender) and placed by its middle/left/right rules. Button icons come from the
 (styles/screensaver_page.bin, then default.bin) like AWTK's window theme lookup.
 App-driven content is sample data: the cover is a synthetic picture, title/artist sample strings;
 `idle` draws the nothing-queued state (the app hides view_bottomview). The wallpaper is app-driven too;
-by default a plain gradient stands in for it (--wallpaper uses the stock image, handy locally, not for
-committing).
+by default a plain gradient stands in for it; --wallpaper busy draws a synthetic busy picture (to show
+a translucent card, docs/ui.md); --wallpaper stock uses the tree's screensaver_default (the stock picture, handy locally and not
+for committing, or The Starry Night, public domain). A bg_color with alpha (#RRGGBBAA) is blended, as demo's canvas fill does.
 """
 import argparse, datetime, os, sys
 from PIL import Image, ImageDraw, ImageFont
@@ -53,6 +54,18 @@ class Theme:
             if hit: return hit[0].get(prop)          # the first theme that defines the style wins (as AWTK)
         return None
 
+def busy_wallpaper():
+    """A synthetic photo-like busy picture: bright sky bands, sun, hills, stripes (no stock asset)."""
+    im = Image.new('RGBA', (W, H)); d = ImageDraw.Draw(im)
+    for y in range(H): d.line([(0, y), (W, y)], fill=(250 - y // 3, 180 - y // 5, 90 + y // 4))
+    d.ellipse([170, 40, 300, 170], fill=(255, 240, 200))
+    for i in range(12): d.line([(-40 + 40 * i, 480), (60 + 40 * i, 150)], fill=(255, 255, 255), width=5)
+    d.polygon([(0, 300), (90, 210), (190, 280), (320, 190), (320, 480), (0, 480)], fill=(40, 120, 70))
+    for i in range(9): d.ellipse([20 + 34 * i, 330 + (i % 3) * 30, 56 + 34 * i, 366 + (i % 3) * 30], fill=(230, 60 + 20 * i, 40))
+    d.rectangle([0, 425, 320, 480], fill=(40, 70, 120))
+    for i in range(4): d.line([(0, 436 + 12 * i), (320, 432 + 12 * i)], fill=(150, 190, 230), width=2)
+    return im
+
 def synthetic_cover(w, h):
     im = Image.new('RGBA', (w, h)); d = ImageDraw.Draw(im)
     for y in range(h): d.line([(0, y), (w, y)], fill=(20 + y * 60 // h, 30 + y * 20 // h, 70 + y * 90 // h))
@@ -61,7 +74,7 @@ def synthetic_cover(w, h):
     return im
 
 class Painter:
-    def __init__(self, raw, wallpaper):
+    def __init__(self, raw, wallpaper='gradient'):
         self.raw, self.wallpaper, self.theme = raw, wallpaper, Theme(raw)
         self.font_path = os.path.join(raw, 'fonts', 'default.ttf')
         a, d = ImageFont.truetype(self.font_path, 1000).getmetrics()
@@ -85,8 +98,10 @@ class Painter:
                                                                    fill=wd.get('style:normal:text_color', '#FFFFFF'), anchor='ls')
         im.alpha_composite(layer.crop(clip), clip[:2])
     def render(self, root, pct, charging, idle):
-        if self.wallpaper:
+        if self.wallpaper == 'stock':
             im = self.icon('screensaver_default').resize((W, H))
+        elif self.wallpaper == 'busy':
+            im = busy_wallpaper()
         else:
             im = Image.new('RGBA', (W, H))
             for y in range(H):
@@ -100,12 +115,15 @@ class Painter:
         if c[0] >= c[2] or c[1] >= c[3]: return
         dr = ImageDraw.Draw(im); t, name = wd.type, wd.name
         bg = wd.get('style:normal:bg_color')
-        if t == 'view' and bg and len(bg) == 7:
+        if t == 'view' and bg and (len(bg) == 7 or len(bg) == 9 and bg[7:] != '00'):
             rad = int(wd.get('style:normal:round_radius', '0'))
-            if rad: dr.rounded_rectangle([r[0], r[1], r[0] + r[2] - 1, r[1] + r[3] - 1], radius=rad, fill=bg)
-            else: dr.rectangle([c[0], c[1], c[2] - 1, c[3] - 1], fill=bg)
+            layer = Image.new('RGBA', (W, H)); ld = ImageDraw.Draw(layer)
+            fill = tuple(int(bg[i:i + 2], 16) for i in range(1, len(bg), 2))
+            if rad: ld.rounded_rectangle([r[0], r[1], r[0] + r[2] - 1, r[1] + r[3] - 1], radius=rad, fill=fill)
+            else: ld.rectangle([c[0], c[1], c[2] - 1, c[3] - 1], fill=fill)
+            im.alpha_composite(layer)
         if t == 'image' and name != 'img_screensaver':
-            img = synthetic_cover(254, 254) if name == 'view_img_icon' else \
+            img = synthetic_cover(r[2], r[3]) if name == 'view_img_icon' else \
                 self.icon('screens_charge' if name == 'img_battery' and charging else wd.get('image'))
             if img:
                 if wd.get('draw_type') == 'scale_auto': img = img.resize((r[2], r[3]), Image.LANCZOS)
@@ -125,7 +143,7 @@ class Painter:
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('raw'); ap.add_argument('out'); ap.add_argument('panels', nargs='+')
-    ap.add_argument('--wallpaper', action='store_true')
+    ap.add_argument('--wallpaper', choices=['gradient', 'busy', 'stock'], default='gradient')
     a = ap.parse_args()
     painters, shots = {}, []
     for spec in a.panels:
@@ -133,14 +151,15 @@ def main():
         pct = next((int(o[4:]) for o in opts if o.startswith('pct=')), 86); charging, idle = 'charging' in opts, 'idle' in opts
         raw = next((o[4:] for o in opts if o.startswith('raw=')), a.raw)
         p = painters.setdefault(raw, Painter(raw, a.wallpaper))
-        state = 'nothing queued' if idle else f'{pct}%{", charging" if charging else ""}'
+        state = ('nothing queued, ' if idle else '') + f'{pct}%{", charging" if charging else ""}'
         shots.append((f'{label}  ({state})', p.render(awtk_ui.parse(open(path, 'rb').read()), pct, charging, idle)))
     top, pad = 18, 10
     out = Image.new('RGB', (len(shots) * (W + pad) + pad, H + top + 18), (40, 40, 40)); d = ImageDraw.Draw(out)
     for i, (label, im) in enumerate(shots):
         x = pad + i * (W + pad); out.paste(im.convert('RGB'), (x, top)); d.text((x, 3), label, fill=(220, 220, 220))
     d.text((pad, H + top + 3), f'approximate PIL mock-up, not AWTK; sample time {NOW:%Y-%m-%d %H:%M}, synthetic cover; wallpaper '
-           + ('stock' if a.wallpaper else 'replaced by a gradient (app-driven)'), fill=(160, 160, 160))
+           + {'stock': "the tree's default picture (screensaver_default)", 'busy': 'a synthetic busy picture (app-driven)', 'gradient': 'replaced by a gradient (app-driven)'}[a.wallpaper],
+           fill=(160, 160, 160))
     out.save(a.out, optimize=True); print('wrote', a.out)
 
 if __name__ == '__main__': main()

@@ -4,7 +4,7 @@
   preview_lists.py STOCK_WORKDIR MOD_WORKDIR OUT.png [--theme default|theme1]
 
 The rows of these pages are built by demo's code, not by their ui/*.bin, so the page models below
-copy the code's geometry (docs/look-lists.md: folder_create_tablerow, music_create_tablerow, the
+copy the code's geometry (docs/ui.md: folder_create_tablerow, music_create_tablerow, the
 navbar builders, search_page.bin) and take every colour, size and icon from the workdir's style
 files the way this AWTK resolves them: the window's own theme (styles/<page>.bin) first, then
 styles/default.bin. Text is sized like AWTK's stb backend (font_size = ascender - descender).
@@ -162,7 +162,7 @@ def main():
     ap.add_argument('stock'); ap.add_argument('mod'); ap.add_argument('out')
     ap.add_argument('--theme', default='default', choices=['default', 'theme1'])
     a = ap.parse_args()
-    rows = [('stock', panels(a.stock, a.theme)), ('look-lists', panels(a.mod, a.theme))]
+    rows = [('stock', panels(a.stock, a.theme)), ('mod', panels(a.mod, a.theme))]
     names = ['Folders (pressed row 4)', 'Songs + index letter', 'Search tabs']
     pad, top = 10, 34
     out = Image.new('RGB', (3 * (W + pad) + pad, 2 * (H + top) + 22), (40, 40, 40)); d = ImageDraw.Draw(out)

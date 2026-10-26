@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Space recovery for the M1 Plus rootfs, so mods that add data still fit the stock squashfs size.
+"""Space recovery for the M1 Plus rootfs, so the mod's added data still fits the stock squashfs size.
 
 Stock rebuilt with fwtool leaves ~12 KB headroom. This step frees room without changing behaviour:
 
@@ -7,28 +7,22 @@ Stock rebuilt with fwtool leaves ~12 KB headroom. This step frees room without c
            /release/bin/demo, as q2-pod does for the Q2. .pdr has address 0, no SHF_ALLOC flag and
            lies outside every program header, so the loader never maps it; it is there for
            debuggers (gdb). File size, headers and every other byte stay identical.
-           --pdr-all (opt-in, not hardware-proven) does the same for all 197 executables and
-           shared libraries: ~540 KB more compressed.
   remove   delete files nothing on the rootfs references (debug tools, orphaned old library
            versions whose soname symlinks point at the newer copy). Evidence: docs/firmware.md.
-  watchdog (opt-in, off by default) checkappprocess.sh polls with `sleep 2` -> `sleep 10`, i.e.
-           one pgrep fork every 10 s instead of every 2 s; a crashed UI reboots after <= 10 s.
 
 The -tailends half of the saving lives in `fwtool.py repack --tailends`.
 
-Usage: mod_space.py WORKDIR [--from STOCK_WORKDIR] [--no-pdr | --pdr-all] [--no-remove] [--watchdog]
-  (modifies WORKDIR in place; with --from, WORKDIR is first cloned from STOCK_WORKDIR)
+Usage: mod_space.py WORKDIR   (modifies WORKDIR in place)
 """
-import argparse, hashlib, os, shutil, struct, subprocess
+import hashlib, os, struct, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from modlib import write_keep_mode
 
 ET_EXEC, ET_DYN, EM_MIPS = 2, 3, 8
 SHT_PROGBITS, SHT_REL, SHT_RELA, SHT_NOBITS, SHF_ALLOC = 1, 9, 4, 8, 0x2
 
 DEMO = 'release/bin/demo'
 DEMO_SHA = '29e23119bc2a0f153f3ea0ba942a39754d1aab0879c1040fae2269df8bd9b3f1'
-# --pdr-all: sha256 over "path sha256\n" of every stock ELF whose .pdr is zeroed (sorted): pins the input set
-PDR_SET_SHA = '451ddb6c8f83a57344fbed385e90240da0c7555168aedf1c0fca2575e7f771aa'
-PDR_SET_COUNT = 197   # REMOVE files are skipped, so the set is the same with or without removal
 
 # path -> stock sha256. Unreferenced by name, symlink or DT_NEEDED anywhere on the rootfs.
 REMOVE = {
@@ -44,15 +38,7 @@ REMOVE = {
     'usr/lib/libgthread-2.0.so.0.5400.3': '4c3628a06f1ee3cf4e36972a40cd7ba42214600b22a3910bd84e1c3a2ae4043a',
 }
 
-WATCHDOG = 'usr/bin/checkappprocess.sh'
-WATCHDOG_STOCK = (b'#!/bin/sh\n#\n#\nwhile true\ndo\n\tpgrep "/release/bin/demo" > /dev/null;\n'
-                  b'\tif [ $? -ne 0 ] \n   \tthen\n\t\treboot\n\tfi\n\tsleep 2\ndone\n')
-
 def sha256(b): return hashlib.sha256(b).hexdigest()
-
-def write_keep_mode(p, data):
-    st = os.stat(p).st_mode & 0o7777
-    os.chmod(p, 0o644); open(p, 'wb').write(data); os.chmod(p, st)
 
 def find_pdr(d):
     """(offset, size) of an ELF's .pdr if it is provably never loaded, None if there is no .pdr.
@@ -82,29 +68,17 @@ def find_pdr(d):
         assert not (lo < end and off < lo + n), 'overlaps ELF/program/section headers'
     return off, size
 
-def zero_pdr(rootfs, all_elfs=False):
-    """Zero .pdr in demo, or with all_elfs in every ET_EXEC/ET_DYN under rootfs; returns [(path, bytes)].
-    Every file is checked (and the set pinned) before the first one is written."""
-    todo, manifest = [], hashlib.sha256()
-    paths = sorted(os.path.relpath(os.path.join(dp, f), rootfs) for dp, _, fn in os.walk(rootfs) for f in fn) if all_elfs else [DEMO]
-    for rel in paths:
-        p = os.path.join(rootfs, rel)
-        if rel in REMOVE or os.path.islink(p) or not os.path.isfile(p): continue   # same set with or without removal
-        with open(p, 'rb') as fh:
-            if fh.read(4) != b'\x7fELF': continue
-        d = open(p, 'rb').read()
-        r = find_pdr(d)
-        if not r: continue
-        if rel == DEMO: assert sha256(d) == DEMO_SHA, f'{DEMO} is not the stock V2.1 binary'
-        manifest.update(f'{rel} {sha256(d)}\n'.encode()); todo.append((rel, *r))
-    assert DEMO in [t[0] for t in todo], f'{DEMO} has no .pdr to zero'
-    assert not all_elfs or (len(todo) == PDR_SET_COUNT and manifest.hexdigest() == PDR_SET_SHA), \
-        f'unexpected ELF set: {len(todo)} files, manifest {manifest.hexdigest()}'
-    for rel, off, size in todo:
-        p = os.path.join(rootfs, rel); d = bytearray(open(p, 'rb').read())
-        d[off:off + size] = bytes(size)
-        write_keep_mode(p, bytes(d))
-    return [(rel, size) for rel, _, size in todo]
+def zero_pdr(rootfs):
+    """Zero .pdr in demo (pinned by SHA-256 first); returns the number of bytes."""
+    p = os.path.join(rootfs, DEMO)
+    d = bytearray(open(p, 'rb').read())
+    assert sha256(d) == DEMO_SHA, f'{DEMO} is not the stock V2.1 binary'
+    r = find_pdr(d)
+    assert r, f'{DEMO} has no .pdr to zero'
+    off, size = r
+    d[off:off + size] = bytes(size)
+    write_keep_mode(p, bytes(d))
+    return size
 
 def remove_unused(rootfs):
     for rel, h in REMOVE.items():
@@ -115,31 +89,10 @@ def remove_unused(rootfs):
     for rel in REMOVE: os.remove(os.path.join(rootfs, rel))
     return size
 
-def slow_watchdog(rootfs):
-    p = os.path.join(rootfs, WATCHDOG)
-    assert open(p, 'rb').read() == WATCHDOG_STOCK, f'{WATCHDOG} is not the stock script'
-    write_keep_mode(p, WATCHDOG_STOCK.replace(b'\tsleep 2\n', b'\tsleep 10\n'))
-
 def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('workdir'); ap.add_argument('--from', dest='src', metavar='STOCK_WORKDIR')
-    g = ap.add_mutually_exclusive_group()
-    g.add_argument('--no-pdr', action='store_true')
-    g.add_argument('--pdr-all', action='store_true', help='zero .pdr in all 197 ELFs, not just demo (not hardware-proven)')
-    ap.add_argument('--no-remove', action='store_true')
-    ap.add_argument('--watchdog', action='store_true', help='checkappprocess.sh: sleep 2 -> sleep 10')
-    a = ap.parse_args()
-    if a.src:
-        if os.path.exists(a.workdir): shutil.rmtree(a.workdir)
-        # APFS clone (fast, no extra space); fall back to a plain copy elsewhere
-        r = subprocess.run(['cp', '-Rc', a.src, a.workdir], capture_output=True)
-        if r.returncode: shutil.copytree(a.src, a.workdir, symlinks=True)
-        shutil.rmtree(os.path.join(a.workdir, 'build'), ignore_errors=True)
-    rootfs = os.path.join(a.workdir, 'rootfs')
-    if not a.no_remove: print(f'remove: {len(REMOVE)} unused files, {remove_unused(rootfs)} bytes')
-    if not a.no_pdr:
-        done = zero_pdr(rootfs, a.pdr_all)
-        print(f'pdr: zeroed .pdr in {len(done)} ELFs, {sum(s for _, s in done)} bytes ({DEMO}: {dict(done)[DEMO]})')
-    if a.watchdog: slow_watchdog(rootfs); print(f'watchdog: {WATCHDOG} sleep 2 -> sleep 10')
+    if len(sys.argv) != 2: sys.exit(__doc__)
+    rootfs = os.path.join(sys.argv[1], 'rootfs')
+    print(f'remove: {len(REMOVE)} unused files, {remove_unused(rootfs)} bytes')
+    print(f'pdr: zeroed .pdr in {DEMO}, {zero_pdr(rootfs)} bytes')
 
 if __name__ == '__main__': main()

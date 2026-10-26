@@ -25,49 +25,62 @@ Everything that talks to the device -- the stock library queries, the art calls,
 320x480 layout and its touch handling -- is written for the M1 Plus.
 
 Cover Flow's artist scope and the Artists list (patch/coverflow.c coverflow_artist, patch/artists.c,
-docs/artists.md) follow q2-pod's "Artist Albums in Coverflow" (its patch/coverflow.c
+docs/architecture.md) follow q2-pod's "Artist Albums in Coverflow" (its patch/coverflow.c
 coverflow_artist and patch/navigation.c artist list): the ARTIST_ALBUMS scope with the library's
 list put back on close, no saved album in the scope, the All albums card only with two albums or
 more, and the bounded shelf (coverflow_bounded). The artist list, its albums, the All albums card
 (the stock "All songs" row) and the track queries are the M1 Plus's own stock calls; no q2-pod code
 is copied verbatim.
 
-The look-theme mod (tools/mod_theme.py, docs/look-theme.md) follows q2-pod's "Theme: Minimal":
+The look-theme mod (tools/mod_theme.py, docs/ui.md) follows q2-pod's "Theme: Minimal":
 its colours (MINIMAL_CHEVRON, SUDO_MUTED, the neutral pressed grey, the page dots), its pinned
 styles/default.bin edits (list fills removed, pressed tint neutral, accent text white), the
 settings-disc recolouring rule of its ringnav_image_add and the status glyph set of its
 status_icon (redrawn here with Pillow instead of ImageMagick). tools/awtk_style.py reads the theme
 format the same way as q2-pod's style_props but was written for this repo.
 
-tools/mod_lists.py (the library list look, docs/look-lists.md) follows q2-pod's tools/ipod.py
+tools/mod_lists.py (the library list look, docs/ui.md) follows q2-pod's tools/ipod.py
 and docs/ipod.md: the choice of pages and dialogs, one pressed colour across lists and dialogs, and the reason it adds no window
 animations (q2-pod's note that the lookup-song handlers spin on an animated Back) come from there.
 No q2-pod asset is copied.
 
-The iPod-style Now Playing look (tools/mod_nowplaying.py, docs/look-nowplaying.md) follows q2-pod's
+The iPod-style Now Playing look (tools/mod_nowplaying.py, docs/ui.md) follows q2-pod's
 Now Playing design (docs/ipod.md, changelog 1.1.7): its type hierarchy and colour values (NP_TITLE_PX,
 NP_META_PX, NP_ARTIST_RGB, NP_ALBUM_RGB, MINIMAL_FILL, SUDO_MUTED, the inactive page-dot grey), the rounded
 art, and its "quiet icons" recolouring (tools/ipod.py quiet_icon, redone with PIL). No q2-pod asset
 file is copied. The look mods share tools/awtk_style.py (see the look-theme paragraph above).
 
-The boot splash (assets/boot-logo.svg, tools/boot_logo.py, docs/look-boot.md) adapts q2-pod's
+The boot splash (assets/boot-logo.svg, tools/boot_logo.py, docs/ui.md) adapts q2-pod's
 assets/boot-logo.svg and docs/boot.md: its palette, scale and layout, and its "POD" lettering and
 centre-button paths, copied unchanged; the "M1" outlines are new. tools/mod_boot.py's jpeg_size is
 q2-pod's tools/build.py jpeg_size (the splash frame-header check), and its curly-quote cmap remap
 follows q2-pod 1.0.4 (tools/build.py font_quotes), reimplemented without fontTools.
 
-patch/shuffle.c (Shuffle Songs / Albums / Folders, docs/shuffle.md) follows q2-pod's Shuffle page
+patch/shuffle.c (Shuffle Songs / Albums / Folders, docs/architecture.md) follows q2-pod's Shuffle page
 (patch/navigation.c shuffle_play, shuffle_songs, shuffle_groups; patch/playback.c rand_below,
 shuffle, make_order): the three actions, Shuffle Songs as the stock Shuffle mode over the library
 from a random song, the xorshift32 generator and its seeding, the Fisher-Yates group ranks, the
 album and folder orders, the 65,536-song limit and the messages. q2-pod's play-time grouping engine
 (its playback hooks) is not ported; the queue is built up front instead.
 
+patch/rows.c, patch/rows.json, tools/mod_ipodrows.py and the stage H demo edits in tools/pod.py
+(the library rows, docs/architecture.md) port q2-pod's restyle of the stock list pages: patch/rows.c's
+compact_set_row_layout / compact_row_layout follow its patch/navigation.c functions of the same names
+closely (the copied default layouter vtable with its layout slot replaced, the text width from the
+row's margins and visible siblings, focus-only scrolling, then the stock layout), patch/rows.json
+maps its patch/ipod.json immediates and row_layout_calls to this demo with its rule of replacing
+only an immediate's 16-bit value, and tools/pod.py's patch_rows follows its tools/ipod.py
+patch_code (pinned word, jal to the payload, the rebind resize removed). The constants (pitch, body,
+52 px art, inset) follow its docs/ipod.md "Rows"; the M1 values, sites and the list_item body, cover
+inset and second-line handling are this repo's. The Shuffle page (stage H) follows q2-pod's Library
+Shuffle row and shuffle_menu page. The battery icon (docs/ui.md) follows q2-pod's Icon
+battery mode (docs/ipod.md "Battery"); its images are drawn here.
+
 No other q2-pod source file is copied verbatim; the code here was written for the Shanling M1 Plus
 with its own addresses, symbols and page set. Files that follow a q2-pod file carry a reference to it in
 their header, and q2-pod's copyright is reproduced above as its MIT licence requires.
 
-Fonts (docs/font-inter.md). tools/mod_font.py builds the UI font from two fonts under the SIL Open
+Fonts (docs/ui.md). tools/mod_font.py builds the UI font from two fonts under the SIL Open
 Font License 1.1; their licence texts are in assets/fonts/:
 
     Inter 4.1 -- https://github.com/rsms/inter
@@ -83,3 +96,27 @@ of Latin, Greek and Cyrillic, tabular digits mapped, hinting and layout tables r
 decomposed, outlines rescaled). Source Han Sans is not redistributed here: the build reads the
 pinned release zip that tools/mod_font.py --fetch downloads, and the font it merges into keeps the
 stock name (it is not called "Source").
+
+Tabler Icons (docs/ui.md). tools/mod_icons.py renders the icons of Tabler Icons 3.49.0
+(https://github.com/tabler/tabler-icons, @tabler/icons) into the UI images; the used SVG sources
+are in assets/icons/tabler/svg/ and the licence text in assets/icons/tabler/LICENSE:
+
+    Copyright (c) 2020-2026 Pawel Kuna
+    MIT License
+
+assets/icons/custom/ holds a few icons drawn for this project in the same style.
+
+Lucide (docs/ui.md). The navbar's "go to Now Playing" icon is Lucide's audio-lines
+(https://lucide.dev/icons/audio-lines, lucide-static 1.61.0, tarball SHA-256
+62773cd2ee411ad2e37c1973d1e4c4b49f9a6c57da6b5d5d0abca08756ba75f1); the SVG and the licence
+text are in assets/icons/lucide/:
+
+    Copyright (c) 2026 Lucide Icons and Contributors
+    ISC License
+
+Wallpaper (docs/ui.md). assets/starry-night-320x480.png is a crop and tone adjustment of
+Vincent van Gogh's "The Starry Night" (1889), which is in the public domain (the artist died in 1890;
+a faithful reproduction of a flat public-domain work, Wikimedia Commons PD-Art). Source: the Google Art
+Project scan, https://commons.wikimedia.org/wiki/File:Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg
+(1920 px thumbnail, SHA-256 dbca2f16b195f6e83feb98d44c0d98eb0b39f560314efbedfedab9e45caa8a2f);
+tools/wallpaper_prepare.py makes it. It replaces the default lock screen picture in the V2.1hB package.

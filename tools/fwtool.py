@@ -130,7 +130,7 @@ def cmd_repack(a):
     sb = meta['superblock']; sq = meta['squashfs']
     rootfs = os.path.join(a.workdir, 'rootfs')
     pseudo = os.path.join(a.workdir, 'stock.pseudo')
-    build = os.path.join(a.workdir, 'build'); os.makedirs(build, exist_ok=True)
+    build = a.build_dir or os.path.join(a.workdir, 'build'); os.makedirs(build, exist_ok=True)
     out_sq = os.path.join(build, os.path.basename(sq))
     if os.path.exists(out_sq): os.remove(out_sq)
     if a.reuse_squashfs:   # ship the untouched stock image (e.g. a restore package with a new version tag)
@@ -229,6 +229,7 @@ if __name__ == '__main__':
     p.add_argument('--tailends', action='store_true', help='mksquashfs -tailends: smaller image, same metadata')
     p.add_argument('--allow-removed', action='append', default=[], metavar='PATH', help='stock file deliberately removed (repeatable)')
     p.add_argument('--allow-added', action='append', default=[], metavar='PATH', help='file deliberately added that is not in stock (repeatable)')
+    p.add_argument('--build-dir', help='scratch dir (default WORKDIR/build)')
     p.add_argument('--reuse-squashfs', action='store_true', help='do not rebuild; reuse the stock squashfs bytes'); p.set_defaults(f=cmd_repack)
     p = sp.add_parser('diff'); p.add_argument('a'); p.add_argument('b'); p.set_defaults(f=cmd_diff)
     a = ap.parse_args(); sys.exit(a.f(a) or 0)

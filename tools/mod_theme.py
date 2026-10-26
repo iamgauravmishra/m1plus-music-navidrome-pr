@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Global look: a Minimal (q2-pod "Theme: Minimal") neutral theme for the Shanling M1 Plus.
 Asset-only: styles/default.bin, ui/system_bar.bin, ui/home_page.bin and some images/xx PNGs.
-Full description, colours, the style -> page table and the device checklist: docs/look-theme.md.
+Full description, colours, the style -> page table and the device checklist: docs/ui.md.
 
 What it does (default assets only; assets/theme1, the stock "Theme" setting's alternative, is
 left stock on purpose, so System settings -> Theme -> the second theme is the stock look):
@@ -20,26 +20,24 @@ left stock on purpose, so System settings -> Theme -> the second theme is the st
      (q2-pod's Minimal mapping by saturation, done at build time instead of at load); the grey
      ones are re-levelled to the same disc; status bar play/pause/Wi-Fi/Bluetooth glyphs are
      redrawn anti-aliased with one stroke weight (q2-pod status_icon), same canvas sizes
-  3. ui/system_bar.bin (must already carry mod_battery.py's icon+percent layout): one 16 px size
-     for the volume number and the percentage, an 18 px clock nudged left so a 12 h "12:59 PM"
+  3. ui/system_bar.bin (must already carry mod_battery.py's icon layout): one 16 px
+     size for the volume number and the percentage, an 18 px clock nudged left so a 12 h "12:59 PM"
      clears the right-hand icons, 4 px icon spacing, a 10 px edge margin on both sides
   4. ui/home_page.bin: cosmetic only: black now-playing strip with a hairline, grey artist line,
      neutral page dots. The icon grid is built in code and untouched
 
 Every widget keeps its name; only geometry and style properties change.
 
-Usage: mod_theme.py SRC_WORKDIR OUT_WORKDIR [--audit]
-       mod_theme.py --scan WORKDIR STOCK_WORKDIR
-  OUT == SRC edits in place (build.py stacks it on the pod-cover tree). --audit prints the
-  contrast table of every row surface against every text style (stock vs mod). --scan checks a
-  finished tree (all looks applied, window themes included) against stock and fails on any text
-  that drops below 4.5:1 and got worse; build.py runs it after every look variant.
+Usage: mod_theme.py SRC_WORKDIR OUT_WORKDIR       (OUT == SRC edits in place)
+       mod_theme.py --scan FINISHED_TREE STOCK_TREE
+  --scan checks a finished tree (all looks applied, window themes included) against stock and fails
+  on any text that drops below 4.5:1 and got worse; build.py runs it after the steps.
 """
 import argparse, hashlib, os, stat, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_style, awtk_ui
 from awtk_style import T_INT32, T_UINT32
-from mod_battery import clone_workdir, edit_ui
+from modlib import clone_workdir, edit_ui
 
 RAW = 'rootfs/release/assets/default/raw'
 STYLE = f'{RAW}/styles/default.bin'
@@ -48,7 +46,7 @@ HOME = f'{RAW}/ui/home_page.bin'
 IMG = f'{RAW}/images/xx'
 STYLE_SHA = '24a8f765f315d836afa85731ca923512a506138930398683242ffaaa831b00c9'   # stock V2.1
 
-# Palette (docs/look-theme.md). Rows/pressed after q2-pod's pinned style edits; MUTED = q2-pod
+# Palette (docs/ui.md). Rows/pressed after q2-pod's pinned style edits; MUTED = q2-pod
 # SUDO_MUTED; DISC = q2-pod MINIMAL_CHEVRON (the Minimal settings disc grey).
 BLACK, LINE, PRESSED = '#000000FF', '#222222FF', '#333333FF'
 WHITE, MUTED, DISC = '#FFFFFFFF', '#8C8C8CFF', 0x77
@@ -202,7 +200,7 @@ def text_styles(th):
             if c and int(c[-2:], 16) > 0x80: out.append((f'{it.widget}/{it.style}', c))
     return out
 
-def audit(th, verbose=False):
+def audit(th):
     """Every row surface state against every label style a row can hold. Returns the worst
     (contrast, row state, text style) for the rest states and for the pressed state."""
     worst = {'rest': (99, None, None), 'pressed': (99, None, None)}
@@ -216,7 +214,6 @@ def audit(th, verbose=False):
                 if col in (ORANGE, SALMON, '#FF0000FF'): continue   # accent/warning marks, audited apart
                 c = contrast(bg, over(col, bg))
                 if c < worst[kind][0]: worst[kind] = (c, f'{style}/{it.state} {bg}', f'{name} {col}')
-            if verbose: print(f'{style:28s} {it.state:8s} bg=#{bytes(bg).hex().upper()}')
     return worst
 
 def _style_color(w, th, state, key):
@@ -432,9 +429,9 @@ def apply_bar(root):
     left, right, clock = root.find('view_bar_left'), root.find('view_bar_right'), root.find('bar_dclock')
     vol, pg, img = root.find('label_volume'), root.find('pgbar_battery'), root.find('img_battery')
     assert all(w is not None for w in (left, right, clock, vol, pg, img)), 'unexpected system_bar layout'
-    # stacks on mod_battery.py --variant icon+percent only: the percentage readout and the icon
-    assert pg.get('show_text') == 'true' and pg.get('format') == '%d%%' and img.get('visible') != 'false', \
-        'system_bar.bin is not the icon+percent layout (run mod_battery.py --variant icon+percent first)'
+    # stacks on mod_battery.py (the 18x11 outline over a horizontal fill, no number)
+    assert (pg.get('show_text') == 'false' and pg.get('vertical') == 'false' and img.get('visible') != 'false'
+            and (img.w, img.h) == (18, 11) and pg.x == img.x + 2), 'system_bar.bin is not the mod_battery.py layout (run it first)'
     assert left.get('children_layout') == 'default(r=1,c=0,x=14,s=4)'
     assert right.get('children_layout') == 'default(r=1,c=0,a=right,s=5)'
     assert clock.get('self_layout') == 'default(x=108,y=0,w=90,h=100%)'
@@ -445,10 +442,10 @@ def apply_bar(root):
     clock.x, clock.w = CLOCK_X, CLOCK_W
     clock.set('self_layout', f'default(x={CLOCK_X},y=0,w={CLOCK_W},h=100%)')
     clock.set('style:normal:font_size', str(CLOCK_PX))
-    pg.set('style:normal:font_size', str(SMALL_PX))     # "100%" is 35 px at 16: fits the 40 px slot
-    assert img.x + img.w == 320 - EDGE and pg.x + pg.w == img.x - GAP
+    # no number: the right-hand icons end GAP px before the battery outline
+    assert img.x + img.w == 320 - EDGE
     right.set('children_layout', f'default(r=1,c=0,a=right,s={GAP})')
-    right.x = pg.x - GAP - right.w
+    right.x = img.x - GAP - right.w
 
 # ---------------------------------------------------------------- ui/home_page.bin
 def apply_home(root):
@@ -466,14 +463,14 @@ def apply_home(root):
     dots.set('style:normal:fg_color', '#555555')
 
 # ---------------------------------------------------------------- main
-def apply(out, verbose_audit=False):
+def apply(out):
     p = os.path.join(out, STYLE); old = open(p, 'rb').read()
     assert sha256(old) == STYLE_SHA, f'{STYLE}: not the audited stock theme ({sha256(old)})'
     th = awtk_style.parse(old); th_stock = awtk_style.parse(old)
     assert awtk_style.serialize(th) == old, 'styles/default.bin round trip is not byte-exact'
     before = audit(th)
     apply_styles(th)
-    after = audit(th, verbose_audit)
+    after = audit(th)
     assert after['rest'][0] >= 4.5 and after['pressed'][0] >= 4.5, f'contrast too low: {after}'
     worse = page_audit(os.path.join(out, RAW, 'ui'), th_stock, th)
     for line in worse: print('  page contrast:', line)
@@ -492,7 +489,7 @@ def apply(out, verbose_audit=False):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('src'); ap.add_argument('out'); ap.add_argument('--audit', action='store_true')
+    ap.add_argument('src'); ap.add_argument('out')
     ap.add_argument('--scan', action='store_true', help='SRC = finished tree, OUT = stock tree: contrast scan only')
     a = ap.parse_args()
     if a.scan:
@@ -502,6 +499,6 @@ def main():
         if bad: sys.exit('mod_theme --scan: text lost contrast below 4.5:1')
         print('scan: ok, no text below 4.5:1 that got worse than stock'); return
     clone_workdir(a.src, a.out)
-    apply(a.out, a.audit)
+    apply(a.out)
 
 if __name__ == '__main__': main()

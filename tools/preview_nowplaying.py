@@ -18,7 +18,7 @@ import argparse, os, sys
 from PIL import Image, ImageDraw, ImageFont
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_ui, awtk_style
-from mod_lockscreen import Ttf
+from awtk_text import Ttf
 from mod_nowplaying import StbText, HSCROLL_MARGIN
 
 W, BAR, H = 320, 30, 450
@@ -121,7 +121,7 @@ class Painter:
         im.alpha_composite(win, (0, BAR))
         return im
     def walk(self, im, wd, ox, oy, clip, page, root):
-        if wd.get('visible') == 'false' or wd.get('disg:hide') == 'true': return
+        if (wd.get('visible') == 'false' and wd.name != 'img_hr') or wd.get('disg:hide') == 'true': return   # img_hr: a Hi-Res track
         if wd.name in ('image_wait', 'img_repeata', 'img_repeatb'): return       # app-driven, normally hidden
         w, h = wd.w, wd.h
         x, y = wd.x, wd.y
@@ -142,6 +142,8 @@ class Painter:
             img = self.image(self.prop(wd, 'icon') or self.prop(wd, 'bg_image'))
             if img: layer.alpha_composite(img, (r[0] + (r[2] - img.width) // 2, r[1] + (r[3] - img.height) // 2))
         elif t in ('label', 'hscroll_label'):
+            ec = self.prop(wd, 'border_color')
+            if ec: ImageDraw.Draw(layer).rectangle([r[0], r[1], r[0] + r[2] - 1, r[1] + r[3] - 1], outline=ec)
             self.text(layer, r, self.sample.get(name, wd.get('text', '')), wd)
         elif t == 'slider':
             bs = int(wd.get('bar_size', '4')); cy = r[1] + r[3] // 2; d = ImageDraw.Draw(layer)

@@ -1,5 +1,5 @@
 Font sources that are not part of the repo (too large to commit), used by `tools/mod_font.py`
-(the `look-all-inter` variant, `docs/font-inter.md`):
+(the release build, `docs/ui.md`):
 
 - `09_SourceHanSansSC.zip`: Source Han Sans 2.005R, Simplified Chinese OTFs (95 MB, SIL OFL 1.1),
   https://github.com/adobe-fonts/source-han-sans/releases/download/2.005R/09_SourceHanSansSC.zip

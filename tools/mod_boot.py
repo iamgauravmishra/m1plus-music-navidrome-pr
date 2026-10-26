@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Boot logo, curly quotes and settings-page transitions (asset-only, no binary patch). docs/look-boot.md
+"""Boot logo, curly quotes and settings-page transitions (asset-only, no binary patch). docs/ui.md
 
   logo     the boot splash: S11logo_display_shell runs display_logo on images/xx/logo.jpg, or on
            logo180.jpg when /mnt/data/config.ini has ROTATEMODE=1 (screen turned 180 degrees). Both
@@ -20,13 +20,12 @@
            System Update (fwupdate_page) and online update (fwdownload_page) stay stock: they are the
            way back from a bad build.
 
-Usage: mod_boot.py SRC_WORKDIR OUT_WORKDIR [--logo JPG --logo180 JPG] [--no-logo] [--no-quotes] [--no-anim]
-  OUT_WORKDIR == SRC_WORKDIR edits in place (used to stack on the M1 Pod build).
+Usage: mod_boot.py SRC_WORKDIR OUT_WORKDIR
+  OUT_WORKDIR == SRC_WORKDIR edits in place.
 """
-import argparse, hashlib, os, struct, sys
+import hashlib, os, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mod_battery import clone_workdir, edit_ui
-from mod_space import write_keep_mode
+from modlib import clone_workdir, edit_ui, write_keep_mode
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 IMAGES = 'rootfs/release/assets/default/raw/images/xx'
@@ -256,15 +255,11 @@ def apply_anim(work):
     print(f'anim: open/close_anim_hint {ANIM} on {n} settings windows (skipped {", ".join(ANIM_SKIP)})')
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('src'); ap.add_argument('out')
-    ap.add_argument('--logo', default=os.path.join(ROOT, 'assets', LOGOS[f'{IMAGES}/logo.jpg'][1]), help='320x480 splash (default assets/boot-logo.jpg)')
-    ap.add_argument('--logo180', default=os.path.join(ROOT, 'assets', LOGOS[f'{IMAGES}/logo180.jpg'][1]), help='the same turned 180 degrees, for ROTATEMODE=1 (default assets/boot-logo180.jpg)')
-    ap.add_argument('--no-logo', action='store_true'); ap.add_argument('--no-quotes', action='store_true'); ap.add_argument('--no-anim', action='store_true')
-    a = ap.parse_args()
-    clone_workdir(a.src, a.out)
-    if not a.no_logo: apply_logo(a.out, a.logo, a.logo180)
-    if not a.no_quotes: apply_quotes(a.out)
-    if not a.no_anim: apply_anim(a.out)
+    if len(sys.argv) != 3: sys.exit(__doc__)
+    src, out = sys.argv[1:]
+    clone_workdir(src, out)
+    apply_logo(out, os.path.join(ROOT, 'assets', LOGOS[f'{IMAGES}/logo.jpg'][1]), os.path.join(ROOT, 'assets', LOGOS[f'{IMAGES}/logo180.jpg'][1]))
+    apply_quotes(out)
+    apply_anim(out)
 
 if __name__ == '__main__': main()

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Combined PIL mock-up of a look-all tree (V2.1fA), one panel per look, drawn by the looks' own
+"""Combined PIL mock-up of the looks of a finished tree, one panel per look, drawn by the looks' own
 preview tools from the finished tree (approximate, not AWTK):
 
-  boot splash      images/xx/logo.jpg as shipped (look-boot)
-  Home             preview_theme.home (look-theme: status bar, Home strip, dots)
-  System Settings  preview_theme.settings (look-theme: rows, icon discs, pressed row)
-  Songs            preview_lists songs page (look-lists: window theme rows, index letter)
-  Now Playing      preview_nowplaying (look-nowplaying)
+  boot splash      images/xx/logo.jpg as shipped
+  Home             preview_theme.home (status bar, Home strip, dots)
+  System Settings  preview_theme.settings (rows, icon discs, pressed row)
+  Songs            preview_lists songs page (window theme rows, index letter)
+  Now Playing      preview_nowplaying
   M1 Pod menu      ui/m1pod_menu.bin drawn with preview_nowplaying's painter over default.bin
                    (the payload's menu follows list_item_style, so it picks up the theme)
 
@@ -56,7 +56,7 @@ def splash(work):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('work'); ap.add_argument('out'); ap.add_argument('--label', default='look-all (V2.1fA)')
+    ap.add_argument('work'); ap.add_argument('out'); ap.add_argument('--label', default='release')
     a = ap.parse_args()
     t = preview_theme.Tree(a.work)
     raw = os.path.join(a.work, RAW)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Draw text the way this firmware's AWTK does: stb_truetype, no hinting, no kerning. docs/font-inter.md
+"""Draw text the way this firmware's AWTK does: stb_truetype, no hinting, no kerning. docs/ui.md
 
-AWTK's stb backend (font_stb_* in demo; docs/look-boot.md, docs/look-nowplaying.md, docs/firmware.md 3b):
+AWTK's stb backend (font_stb_* in demo; docs/ui.md, docs/ui.md, docs/firmware.md 3b):
   scale     font_size / (hhea ascender - descender)            (stbtt_ScaleForPixelHeight)
   cmap      the last Unicode record stb accepts (platform 0, or 3/1, 3/10); format 4 is looked up
             with mod_boot.stb_lookup, a line-for-line port of stbtt_FindGlyphIndex
@@ -22,7 +22,7 @@ file the build produced. Not a pixel-exact AWTK: blending and text alignment are
 import math, os, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mod_boot import tables, stb_lookup
-from mod_lockscreen import f32
+from awtk_text import f32
 
 class StbFont:
     def __init__(self, path):
@@ -201,7 +201,7 @@ class StbFont:
 
     def step(self, g, px):
         """Pen step of one glyph in px: trunc(advance * scale) + 1, as demo's canvas does, in the same
-        float32 arithmetic as the build's text model (mod_lockscreen.StbText)."""
+        float32 arithmetic as the build's text model (awtk_text.StbText)."""
         return int(f32(self.advance(g) * f32(px / (self.asc - self.desc)))) + 1
 
     def width(self, text, px):

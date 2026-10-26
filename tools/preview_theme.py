@@ -60,9 +60,26 @@ def status_bar(im, t, pct=86):
     x = right.x + right.w
     for name, img in (('img_wifi', 'bar_wifi3'), ('img_btclass', 'bar_btcon')):
         ic = t.img(img); w = right.find(name).w; x -= w; paste(im, ic, x + w - ic.width, (BAR - ic.height) // 2); x -= s
+    battery(im, t, b, pct)
+
+def battery(im, t, b, pct=86, state='bar_power'):
+    """img_battery and pgbar_battery of a status bar (system_bar or the pull-down's): the number
+    (show_text) or the gauge: the fill under the state image (stock: bottom-up
+    in 14x17; mod_battery: left to right in the 12x7 interior)."""
+    dr = ImageDraw.Draw(im)
     pg, bat = b.find('pgbar_battery'), b.find('img_battery')
-    paste(im, t.img('bar_power'), bat.x, bat.y)
-    text(dr, t, (pg.x + pg.w, pg.y + pg.h / 2), f'{pct}%', int(pg.get('style:normal:font_size')), (255, 255, 255, 255), 'rm')
+    if pg.get('show_text') == 'true':
+        paste(im, t.img(state), bat.x, bat.y)
+        text(dr, t, (pg.x + pg.w, pg.y + pg.h / 2), f'{pct}%', int(pg.get('style:normal:font_size')), (255, 255, 255, 255), 'rm')
+        return
+    fg = rgba(pg.get('style:normal:fg_color', '#FFFFFF'))
+    if pg.get('vertical') == 'true':
+        fh = pg.h * pct // 100
+        if fh: dr.rectangle((pg.x, pg.y + pg.h - fh, pg.x + pg.w - 1, pg.y + pg.h - 1), fill=fg)
+    else:
+        fw = pg.w * pct // 100
+        if fw: dr.rectangle((pg.x, pg.y, pg.x + fw - 1, pg.y + pg.h - 1), fill=fg)
+    paste(im, t.img(state), bat.x, bat.y)
 
 def navbar(im, t, title):
     dr = ImageDraw.Draw(im)

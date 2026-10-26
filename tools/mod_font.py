@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""UI font: Inter for Latin/Greek/Cyrillic, Source Han Sans SC for CJK/kana/Hangul (asset-only). docs/font-inter.md
+"""UI font: Inter for Latin/Greek/Cyrillic, Source Han Sans SC for CJK/kana/Hangul (asset-only). docs/ui.md
 
 The whole UI draws with one file, release/assets/default/raw/fonts/default.ttf ("微软雅黑+Arial",
 256 units/em, hhea ascender 230 / descender -69), through AWTK's stb_truetype backend: no hinting, no
@@ -21,7 +21,7 @@ This step rewrites that file by code point and keeps everything the layout depen
            stb_truetype reads none of them.
   pulldown the pull-down's own status bar (ui/dialog/dropdown_dialog.bin, default and theme1) shows the
            volume at 20 px in a 30 px label; "100" no longer fits it with the new font (Inter: 33 px as
-           AWTK lays it out, mod_lockscreen.StbText), so label_volume grows to that width and its row's
+           AWTK lays it out, awtk_text.StbText), so label_volume grows to that width and its row's
            spacing (children_layout s) shrinks by as much, so img_digital, the clock and everything
            right of the label stay where they are. Skipped if "100" fits (the stock font: 30 px).
   kept     unitsPerEm, hhea ascender/descender/lineGap, OS/2, head dates, GDEF/GPOS/GSUB (pruned
@@ -34,12 +34,13 @@ mod_boot.stb_lookup (a port of stb_truetype's format-4 lookup) gives a glyph wit
 code point that had ink in stock (no tofu), the replaced code points get the new glyphs, all others
 keep their stock outline, and the vertical metrics are stock.
 
-Usage: mod_font.py SRC_WORKDIR OUT_WORKDIR [--no-inter] [--no-cjk] [--tracking K] [--shs ZIP]
+Usage: mod_font.py SRC_WORKDIR OUT_WORKDIR
        mod_font.py --fetch            download the pinned Source Han Sans SC zip into fonts/
 Needs fontTools (requirements.txt). OUT_WORKDIR == SRC_WORKDIR edits in place.
 """
 import argparse, hashlib, io, os, struct, sys, zipfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from modlib import clone_workdir, edit_ui, write_keep_mode
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FONT = 'rootfs/release/assets/default/raw/fonts/default.ttf'
@@ -59,6 +60,7 @@ INTER_RANGES = [(0x0020, 0x007E), (0x00A0, 0x024F),     # Basic Latin, Latin-1, 
 
 SHS_URL = 'https://github.com/adobe-fonts/source-han-sans/releases/download/2.005R/09_SourceHanSansSC.zip'
 SHS_ZIP = 'fonts/09_SourceHanSansSC.zip'
+import paths   # tools/paths.py: the zip may live in the main checkout's fonts/ (worktrees)
 SHS_ZIP_SHA = 'ef7364f7ac2564be1ae9c1d74276de2653fe38b73449070398c4fc0b7e032ff1'
 SHS_MEMBER = 'OTF/SimplifiedChinese/SourceHanSansSC-Regular.otf'
 SHS_SHA = 'f1d8611151880c6c336aabeac4640ef434fa13cbfbf1ffe82d0a71b2a5637256'
@@ -222,8 +224,7 @@ def fit_pulldown(work):
     pixels from the spacing of its row (view_bar_left, children_layout default(r=1,c=0,x=14,s=4)), so
     the row's last child (img_digital) does not move. Returns [(rel, old w, new w, old s, new s)]."""
     import re
-    from mod_battery import edit_ui
-    from mod_lockscreen import Ttf, awtk_width
+    from awtk_text import Ttf, awtk_width
     ttf = Ttf(os.path.join(work, FONT)); done = []
     for rel in PULLDOWNS:
         path = os.path.join(work, rel)
@@ -252,18 +253,15 @@ def fit_pulldown(work):
         edit_ui(path, edit)
     return done
 
-def apply(work, inter=True, cjk=True, shs_zip=os.path.join(ROOT, SHS_ZIP), tracking=INTER_TRACKING):
-    from mod_space import write_keep_mode
+def apply(work, shs_zip=paths.SHS_ZIP):
     p = os.path.join(work, FONT)
     stock = open(p, 'rb').read()
     check(sha256(stock) == FONT_SHA, f'{FONT} is not the stock V2.1 font (the font step must run first)')
-    ib = None
-    if inter:
-        ib = open(os.path.join(ROOT, INTER_ASSET), 'rb').read()
-        check(INTER_SHA is None or sha256(ib) == INTER_SHA, f'{INTER_ASSET}: SHA-256 mismatch (regenerate with tools/font_inter.py)')
-        ib = track(ib, tracking)
-        print(f'inter: tracking -{tracking} units per glyph (outlines moved left {tracking // 2})')
-    new, rep = merge(stock, ib, shs_font(shs_zip) if cjk else None)
+    ib = open(os.path.join(ROOT, INTER_ASSET), 'rb').read()
+    check(INTER_SHA is None or sha256(ib) == INTER_SHA, f'{INTER_ASSET}: SHA-256 mismatch (regenerate with tools/font_inter.py)')
+    ib = track(ib, INTER_TRACKING)
+    print(f'inter: tracking -{INTER_TRACKING} units per glyph (outlines moved left {INTER_TRACKING // 2})')
+    new, rep = merge(stock, ib, shs_font(shs_zip))
     r = verify(stock, new, rep)
     write_keep_mode(p, new)
     for rel, w0, w1, s0, s1 in fit_pulldown(work):
@@ -275,17 +273,11 @@ def apply(work, inter=True, cjk=True, shs_zip=os.path.join(ROOT, SHS_ZIP), track
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('src', nargs='?'); ap.add_argument('out', nargs='?')
-    ap.add_argument('--no-inter', action='store_true', help='keep the stock Latin/Greek/Cyrillic glyphs')
-    ap.add_argument('--no-cjk', action='store_true', help='keep the stock CJK/kana/Hangul glyphs (no Source Han Sans download needed)')
-    ap.add_argument('--tracking', type=int, default=INTER_TRACKING, help=f'units cut from every Inter advance (default {INTER_TRACKING}; 0 = untightened)')
-    ap.add_argument('--shs', default=os.path.join(ROOT, SHS_ZIP), help=f'Source Han Sans SC zip (default {SHS_ZIP})')
     ap.add_argument('--fetch', action='store_true', help='download and verify the pinned Source Han Sans SC zip, then exit')
     a = ap.parse_args()
-    if a.fetch: return fetch(a.shs)
+    if a.fetch: return fetch(paths.SHS_ZIP)
     if not (a.src and a.out): ap.error('SRC_WORKDIR and OUT_WORKDIR are required')
-    if a.no_inter and a.no_cjk: ap.error('nothing to do')
-    from mod_battery import clone_workdir
     clone_workdir(a.src, a.out)
-    apply(a.out, inter=not a.no_inter, cjk=not a.no_cjk, shs_zip=a.shs, tracking=a.tracking)
+    apply(a.out)
 
 if __name__ == '__main__': main()

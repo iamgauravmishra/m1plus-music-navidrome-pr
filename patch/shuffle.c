@@ -9,7 +9,7 @@
  * path; a folder's path) and the user-facing messages follow q2-pod. q2-pod keeps the groups
  * together at play time with hooks in the stock player (mclNextSong, mclLoadPlayList, ...); this
  * file installs none: Shuffle Albums/Folders build the whole queue up front, in its play order,
- * and hand it to the stock player in a sequential mode (docs/shuffle.md).
+ * and hand it to the stock player in a sequential mode (docs/architecture.md).
  *
  * No stock function is hooked. Everything here runs from a tap on a row of the M1 Pod menu
  * (patch/m1pod.c on_row), once, on the UI thread, and returns: no timer, no thread, no state kept
@@ -273,3 +273,9 @@ int shuffle_play(int kind) {
     deque_destroy(queue);
     return 0;
 }
+
+/* The album page's Play and Shuffle buttons (patch/coverflow.c, docs/ui.md) use the same
+ * generator, message box and play-mode setter as the rows above. */
+unsigned pod_rand(unsigned n) { return rand_below(n); }
+void pod_toast(const char *text) { toast(text); }
+void pod_set_mode(int mode) { set_mode(mode); }

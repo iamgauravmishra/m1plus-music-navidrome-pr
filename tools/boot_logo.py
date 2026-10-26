@@ -8,8 +8,8 @@ The SVG is rasterised by librsvg at 4x and box-filtered down to 320x480 (no ring
 both JPEGs are encoded from that one raster, then checked with mod_boot.jpeg_size.
 
   boot_logo.py                      regenerate the two JPEGs (needs rsvg-convert and Pillow)
-  boot_logo.py --preview WORKDIR    also write docs/look-boot-preview.png: stock splash, new splash,
-                                    and a text sample in the stock vs the quote-fixed default.ttf
+  boot_logo.py --preview WORKDIR    also write a PNG: stock splash, new splash, and a text sample in
+                                    the stock vs the quote-fixed default.ttf, to /tmp/boot-preview.png
                                     (WORKDIR = an unpacked stock tree, e.g. work/stock)
 
 Run with the repo venv: venv/bin/python -I tools/boot_logo.py  (brew install librsvg for rsvg-convert).
@@ -55,8 +55,8 @@ def preview(work, logo):
         d.text((x + 12, y + 16), name, font=label, fill=(150, 150, 150)); y += 40
         for s in sample: d.text((x + 12, y), s, font=f, fill=(255, 255, 255)); y += 34
         y += 24
-    out = os.path.join(ROOT, 'docs', 'look-boot-preview.png')
-    canvas.quantize(128).save(out, optimize=True); print('->', os.path.relpath(out, ROOT))
+    out = '/tmp/boot-preview.png'
+    canvas.quantize(128).save(out, optimize=True); print('->', out)
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

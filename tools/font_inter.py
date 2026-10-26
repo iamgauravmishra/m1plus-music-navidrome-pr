@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Make assets/fonts/Inter-m1plus.ttf, the Inter subset that tools/mod_font.py merges into default.ttf.
-docs/font-inter.md. Offline tool (needs fontTools); the build only reads its committed output.
+docs/ui.md. Offline tool (needs fontTools); the build only reads its committed output.
 
 Input: the official Inter 4.1 release zip (pinned by SHA-256, read in memory, nothing extracted):
   https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip

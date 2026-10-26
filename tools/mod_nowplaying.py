@@ -4,27 +4,30 @@
 Restyles the stock Now Playing page the way q2-pod (MIT) does on the Q2 (docs/ipod.md "Now Playing",
 changelog 1.1.7), re-fitted to the M1 Plus's 320x450 portrait window:
 
-  0   [<] 3/12            HR [heart] [...]      top row, 44 px touch targets
- 46   +------------------------+
-      |   cover 216 x 216      |                  slide page 1: rounded art (corner mask),
-      +------------------------+                  then title 22 px white,
-268   Title                                        artist 18 px #CCCCCC,
-294   Artist                                       album 18 px #BBBBBB (left-aligned, cover width)
-316   Album
-342   (=====o-------------------------)           4 px off-white bar on a dark track
-374   0:15          . o .            6:20         times 14 px grey, page dots between them
-392   [mode]  [<<]   [ > ]   [>>]  [queue]        58 px transport row, monochrome glyphs
-450
+  0   [<] 5/10           [heart] [...]         top row, 44 px touch targets: Back, index, heart (btn_fav), More
+ 44   +------------------------+
+      |   cover 216 x 216      |                    slide page 1: rounded art (corner mask),
+ 262  Title                                          title 22 px white,
+ 288  Artist                                         artist 18 px #CCCCCC,
+ 310  Album                                          album 18 px #BBBBBB (left-aligned, cover width)
+ 342  ----------------------------                   thin 4 px line (#1C1C1C track, off-white fill, no thumb)
+      0:15          . o .            6:20            in the stock 30 px seek target; times 14 px grey, page dots
+ 392  [mode] [<<]   [ > ]   [>>]    [queue]         58 px transport row (touchscreen), Tabler glyphs
+ 450
+
+The Hi-Res tag (img_hr) is not shown: demo only toggles its visibility, so it is kept (every widget the app
+looks up stays) at 0x0, insensitive.
 
 Files (the mod touches nothing shared; every image is new and referenced only from these two files):
   ui/playing_page.bin      geometry and inline styles; every widget keeps its name and parent chain
                            except label_album, which moves from the info page into the album line
-  styles/playing_page.bin  the page's own theme (searched before default.bin, see docs/look-nowplaying.md):
+  styles/playing_page.bin  the page's own theme (searched before default.bin, see docs/ui.md):
                            mode/fav icons -> np_*, plus page-local btn_imgplay_style / btn_imgpause_style
                            and lyric line styles, so default.bin is never edited
-  images/xx/np_*.png       quiet monochrome glyphs (drawn here with PIL, or recoloured stock glyphs)
+  images/xx/np_*.png       Tabler glyphs (tools/mod_icons.py draws them; this step copies the committed PNGs)
+                           and the corner mask (drawn here)
 
-What demo drives here, by name (dis.py xref, docs/look-nowplaying.md): scrlabel_title, scrlabel_artist,
+What demo drives here, by name (dis.py xref, docs/ui.md): scrlabel_title, scrlabel_artist,
 img_playcover, label_index ("%d/%d"), label_info, label_album/genre/year/size/location ("%s:%s"),
 label_playtime, label_playlen, slider_play, img_repeata/b (moved by code to x = 12 + pos*296/len,
 y = 364, so the slider keeps x 12 w 296 and its bar centre at y 357), img_hr, img_mqa, btn_fav/more/
@@ -39,17 +42,16 @@ album_clip: stb advances truncated, +1 px after every glyph, hscroll_label margi
 fonts/default.ttf of the tree being edited, so it follows whatever font an earlier step installed; the
 colon's ink is checked to end left of the edge and the album's first letter to keep all its ink. In
 other UI languages the prefix differs ("专辑", "Альбом"...), so a part of it may show or the name's first
-letters may be clipped (--album-prefix measures another language's word); --album full shows the whole
-label instead.
+letters may be clipped (ALBUM_PREFIX is the English word).
 
-Usage: mod_nowplaying.py SRC_WORKDIR OUT_WORKDIR [--album clip|full] [--album-prefix TEXT]
-  OUT_WORKDIR == SRC_WORKDIR edits in place (used to stack on the pod-cover tree).
+Usage: mod_nowplaying.py SRC_WORKDIR OUT_WORKDIR
+  OUT_WORKDIR == SRC_WORKDIR edits in place.
 """
-import argparse, math, os, stat, struct, sys
+import math, os, shutil, stat, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import awtk_ui, awtk_style
-from mod_battery import clone_workdir, edit_ui
-from mod_lockscreen import Ttf, StbText, f32, STB_SPACING, STB_MISSING   # the shared AWTK text model
+import awtk_ui, awtk_style, mod_icons
+from modlib import clone_workdir, edit_ui
+from awtk_text import Ttf, StbText, f32, STB_SPACING, STB_MISSING   # the shared AWTK text model
 
 RAW = 'rootfs/release/assets/default/raw'
 UI = f'{RAW}/ui/playing_page.bin'
@@ -67,17 +69,18 @@ FG = '#EEEEEC'                   # q2-pod MINIMAL_FILL: glyphs, progress fill, s
 DOWN = '#8C8C8C'                 # q2-pod SUDO_MUTED: pressed glyphs
 TITLE_RGB, ARTIST_RGB, ALBUM_RGB, GREY = '#FFFFFF', '#CCCCCC', '#BBBBBB', '#AAAAAA'   # q2-pod NP_*
 TITLE_PX, META_PX, TIMES_PX, INDEX_PX = 22, 18, 14, 16                                 # q2-pod NP_*_PX
-TRACK = '#333333'                # progress track (q2-pod's #1C1C1C is too faint on this LCD's black)
+TRACK = '#1C1C1C'                # progress track (q2-pod MINIMAL_TRACK)
 DOT_OFF = '#555555'              # q2-pod inactive page dot
 
 TOP = 44                         # top row and its touch targets
 SLIDE_Y, SLIDE_H = TOP, 298      # slide pages 44..342
-ART, ART_Y = 216, 2              # cover, page coords
-ART_X = (W - ART) // 2           # 48; text column uses the cover's edges
+ART, ART_Y = 216, 2              # cover, page coords (the size before the Hi-Res tag and the foot buttons came and went)
+ART_X = (W - ART) // 2           # 52; the text column uses the cover's edges
 ART_R = 10                       # rounded corners (q2-pod NP_ART_RADIUS is 12 at 166 px; Apple's ~4.5%)
 TITLE_Y, TITLE_H = ART_Y + ART + 6, 26
 ARTIST_Y, META_H = TITLE_Y + TITLE_H, 22
 ALBUM_Y = ARTIST_Y + META_H
+MORE_W, FAV_W = 52, 52                                       # the top row's More and heart (btn_fav, left of More)
 assert ALBUM_Y + META_H <= SLIDE_H
 SLIDER = (12, 342, 296, 30)      # stock: the A-B markers are positioned by code for x 12 w 296, y 364
 TIMES_Y, TIMES_H = 374, 18
@@ -89,79 +92,26 @@ SLOTS = {'btn_playmode': (4, 56), 'btn_prev': (64, 60), 'btn_play': (124, 72), '
 # ---------------------------------------------------------------------------------------------- images
 
 # PIL is imported where it is used, so build.py (plain python3) can import added_rels() without pillow
-def _aa(size, draw, scale=8):
-    """Draw at scale x with draw(ImageDraw, s) in white on transparent, downsample (anti-aliased mask)."""
-    from PIL import Image, ImageDraw
-    big = Image.new('L', (size[0] * scale, size[1] * scale), 0)
-    draw(ImageDraw.Draw(big), scale)
-    return big.resize(size, Image.LANCZOS)
-
-def _glyph(mask, rgb):
-    from PIL import Image
-    im = Image.new('RGBA', mask.size, rgb); im.putalpha(mask); return im
-
-def g_play(d, s, c=44):
-    # right-pointing triangle, 24 wide x 28 tall, shifted right 2 px for optical centring
-    x0, y0 = (c - 24) / 2 + 2, (c - 28) / 2
-    d.polygon([(x0 * s, y0 * s), ((x0 + 24) * s, (y0 + 14) * s), (x0 * s, (y0 + 28) * s)], fill=255)
-
-def g_pause(d, s, c=44):
-    bw, gap, h = 7, 8, 26
-    x0, y0 = (c - (2 * bw + gap)) / 2, (c - h) / 2
-    for x in (x0, x0 + bw + gap):
-        d.rounded_rectangle([x * s, y0 * s, (x + bw) * s - 1, (y0 + h) * s - 1], radius=1.5 * s, fill=255)
-
-def g_skip(d, s, c=36, forward=True):
-    # two triangles touching, 13 wide each x 16 tall: >> (or << mirrored)
-    tw, th = 13, 16
-    x0, y0 = (c - 2 * tw) / 2, (c - th) / 2
-    for i in range(2):
-        a = x0 + i * tw
-        pts = [(a, y0), (a + tw, y0 + th / 2), (a, y0 + th)] if forward else [(a + tw, y0), (a, y0 + th / 2), (a + tw, y0 + th)]
-        d.polygon([(x * s, y * s) for x, y in pts], fill=255)
-
-def recolor(src, rgb):
-    """A stock white glyph in another colour, alpha kept (q2-pod quiet_icon colourises to #eeeeee; PIL here)."""
-    from PIL import Image
-    return _glyph(Image.open(src).convert('RGBA').getchannel('A'), rgb)   # p_fav: the red heart turns off-white
-
 def art_mask(size, r):
     """Black corners outside a rounded rect, transparent inside: rounds whatever cover the app draws."""
-    from PIL import Image, ImageChops
-    inside = _aa((size, size), lambda d, s: d.rounded_rectangle([0, 0, size * s - 1, size * s - 1], radius=r * s, fill=255))
+    from PIL import Image, ImageChops, ImageDraw
+    ss = 8
+    big = Image.new('L', (size * ss, size * ss), 0)
+    ImageDraw.Draw(big).rounded_rectangle([0, 0, size * ss - 1, size * ss - 1], radius=r * ss, fill=255)
+    inside = big.resize((size, size), Image.LANCZOS)
     im = Image.new('RGBA', (size, size), BG); im.putalpha(ImageChops.invert(inside)); return im
 
-def make_images(raw_xx):
-    """name -> PIL image for every np_* asset."""
-    stock = lambda n: os.path.join(raw_xx, n + '.png')
-    out = {}
-    for name, fn, c in (('play', g_play, 44), ('pause', g_pause, 44)):
-        m = _aa((c, c), lambda d, s, fn=fn, c=c: fn(d, s, c))
-        out[f'np_{name}'], out[f'np_{name}_down'] = _glyph(m, FG), _glyph(m, DOWN)
-    for name, fwd in (('next', True), ('prev', False)):
-        m = _aa((36, 36), lambda d, s, fwd=fwd: g_skip(d, s, 36, fwd))
-        out[f'np_{name}'], out[f'np_{name}_down'] = _glyph(m, FG), _glyph(m, DOWN)
-    for n in ('random', 'cycle', 'cycle1', 'order', 'fav', 'unfav', 'more', 'playqueue'):
-        out[f'np_{n}'] = recolor(stock('p_' + n), FG)
-    for n in ('unfav', 'more', 'playqueue'):
-        out[f'np_{n}_down'] = recolor(stock('p_' + n), DOWN)
-    out['np_artmask'] = art_mask(ART, ART_R)
-    assert sorted(out) == NP_IMAGES
-    return out
-
-def write_images(rootfs_xx, images):
-    rels = []
-    for name, im in sorted(images.items()):
+def write_images(rootfs_xx):
+    """The Tabler glyphs (committed PNGs of mod_icons.py) and the corner mask, as new files; returns the names."""
+    for name in NP_IMAGES:
         p = os.path.join(rootfs_xx, name + '.png')
-        assert not os.path.exists(p) or open(p, 'rb').read()[:8] == b'\x89PNG\r\n\x1a\n', p
-        im.save(p, optimize=True)            # PIL PNG output carries no timestamp: deterministic
+        assert not os.path.exists(p), p
+        if name == 'np_artmask': art_mask(ART, ART_R).save(p, optimize=True)     # PIL PNG output has no timestamp
+        else: shutil.copyfile(os.path.join(mod_icons.PNG, name + '.png'), p)
         os.chmod(p, IMG_MODE); os.utime(p, (IMG_MTIME, IMG_MTIME))
-        rels.append(name)
-    return rels
+    return list(NP_IMAGES)
 
-NP_IMAGES = sorted(['np_play', 'np_play_down', 'np_pause', 'np_pause_down', 'np_next', 'np_next_down', 'np_prev',
-                    'np_prev_down', 'np_random', 'np_cycle', 'np_cycle1', 'np_order', 'np_fav', 'np_unfav', 'np_more',
-                    'np_playqueue', 'np_unfav_down', 'np_more_down', 'np_playqueue_down', 'np_artmask'])
+NP_IMAGES = sorted(mod_icons.np_names() + ['np_artmask'])
 
 def added_rels(stock_rootfs=None):
     """Rootfs-relative paths of the added images (for fwtool --allow-added; all new in any tree)."""
@@ -189,7 +139,7 @@ def parent_of(root, child):
     for w in root.walk():
         if child in w.children: return w
 
-def apply_ui(root, album_mode, shift):
+def apply_ui(root, shift):
     names = [w.name for w in root.walk() if w.name]
     gesture, local = find(root, 'app_gesture'), find(root, 'view_local')
     svv, sv = find(root, 'slide_view_view'), find(root, 'slide_view')
@@ -206,14 +156,14 @@ def apply_ui(root, album_mode, shift):
     move(svv, 0, 0, W, ROW_Y)
     sv.set('self_layout', f'default(x=0,y={SLIDE_Y},w=100%,h={SLIDE_H})'); move(sv, 0, SLIDE_Y, W, SLIDE_H)
 
-    # ---- top row
+    # ---- top row: Back, the index centred, heart, More; the play mode is the transport row's first slot
     ret = find(root, 'btn_return'); move(ret, 0, 0, 52, TOP)
-    idx = find(root, 'label_index'); move(idx, 52, 0, 128, TOP)
-    text_style(idx, INDEX_PX, GREY, 'left'); each(idx, STATES, 'text_align_v', 'middle')
-    hr = find(root, 'img_hr'); move(hr, 184, (TOP - hr.h) // 2, hr.w, hr.h); hr.set('sensitive', 'false')
-    fav = find(root, 'btn_fav'); move(fav, 216, 0, 52, TOP)
-    fav.set('style:pressed:icon', 'np_unfav_down')
-    more = find(root, 'btn_more'); move(more, 268, 0, 52, TOP); img_button(more, 'np_more', 'np_more_down')
+    idx = find(root, 'label_index'); move(idx, 52, 0, W - 52 - MORE_W - FAV_W, TOP)
+    text_style(idx, INDEX_PX, GREY, 'center'); each(idx, STATES, 'text_align_v', 'middle')
+    fav = find(root, 'btn_fav'); move(fav, W - MORE_W - FAV_W, 0, FAV_W, TOP); fav.set('style:pressed:icon', 'np_unfav_down')
+    more = find(root, 'btn_more'); move(more, W - MORE_W, 0, MORE_W, TOP); img_button(more, 'np_more', 'np_more_down')
+    # the Hi-Res tag: demo only calls widget_set_visible on img_hr, so it stays in the tree, empty and insensitive
+    hr = find(root, 'img_hr'); move(hr, 0, 0, 0, 0); hr.set('sensitive', 'false'); hr.set('visible', 'false')
 
     # ---- page 1: cover, mask, title / artist / album
     cover = find(root, 'img_playcover'); move(cover, ART_X, ART_Y, ART, ART)
@@ -225,14 +175,11 @@ def apply_ui(root, album_mode, shift):
     move(artist, ART_X, ARTIST_Y, ART, META_H); text_style(artist, META_PX, ARTIST_RGB, 'left')
     album = find(root, 'label_album'); info.children.remove(album)
     text_style(album, META_PX, ALBUM_RGB, 'left')
-    if album_mode == 'clip':
-        # a scroll_view clips its children; label_album sits `shift` px left of it so "Album:" is hidden
-        clip = awtk_ui.Widget('scroll_view', ART_X, ALBUM_Y, ART, META_H, [('name', 'scroll_np_album'),
-                              ('xslidable', 'false'), ('yslidable', 'false'), ('sensitive', 'false'), ('focusable', 'false')])
-        move(album, -shift, 0, ART + shift, META_H); clip.children.append(album)
-        page1.children += [mask, title, artist, clip]
-    else:
-        move(album, ART_X, ALBUM_Y, ART, META_H); page1.children += [mask, title, artist, album]
+    # a scroll_view clips its children; label_album sits `shift` px left of it so "Album:" is hidden
+    clip = awtk_ui.Widget('scroll_view', ART_X, ALBUM_Y, ART, META_H, [('name', 'scroll_np_album'),
+                          ('xslidable', 'false'), ('yslidable', 'false'), ('sensitive', 'false'), ('focusable', 'false')])
+    move(album, -shift, 0, ART + shift, META_H); clip.children.append(album)
+    page1.children += [mask, title, artist, clip]
 
     # ---- page 2: lyrics (stock 254 px column, taller); page 3: info (album moved out, lines re-spaced)
     lrc = find(root, 'view_lrc'); move(lrc, 33, 8, 254, SLIDE_H - 16)
@@ -246,7 +193,7 @@ def apply_ui(root, album_mode, shift):
     # ---- progress, times, page dots
     sl = find(root, 'slider_play'); move(sl, *SLIDER)
     each(sl, BTN_STATES, 'bg_color', TRACK); each(sl, BTN_STATES, 'fg_color', FG)
-    sl.set('style:pressed:icon', 'drop_dot_down')        # the bigger dot while dragging (as slider_play1)
+    each(sl, ('normal', 'pressed', 'over'), 'icon', '')   # no thumb: q2-pod's line is bare (drag works anywhere on the bar)
     pt, pl = find(root, 'label_playtime'), find(root, 'label_playlen')
     move(pt, SLIDER[0], TIMES_Y, 90, TIMES_H); text_style(pt, TIMES_PX, GREY, 'left')
     move(pl, SLIDER[0] + SLIDER[2] - 90, TIMES_Y, 90, TIMES_H); text_style(pl, TIMES_PX, GREY, 'right')
@@ -274,21 +221,21 @@ def apply_ui(root, album_mode, shift):
 # view_dlna (full-size, last child) is shown/hidden *and* enabled/disabled by playing_choiceshowpage; in local
 # playback it is disabled, so the model leaves it out as the device does.
 RUNTIME_DISABLED = {'view_dlna'}
-PROBES = ['btn_return', 'btn_fav', 'btn_more', 'slider_play', *SLOTS]
+PROBES = ['btn_return', 'btn_more', 'btn_fav', 'slider_play', *SLOTS]
 
-def _rect(w, parent_rect):
+def _rect(w, parent_rect, dx=0):
     px, py, pw, ph = parent_rect
     sl = w.get('self_layout', '')
     ww = pw if 'w=100%' in sl else w.w
     hh = ph if 'h=100%' in sl else w.h
-    return (px + w.x, py + w.y, ww, hh)
+    return (px + w.x + dx, py + w.y, ww, hh)
 
 def hit(w, rect, x, y):
-    """demo's widget_find_target_default (docs/coverflow.md): children from the top, the first with enable and
+    """demo's widget_find_target_default (docs/architecture.md): children from the top, the first with enable and
     sensitive set that contains the point; `visible` is not looked at."""
-    for c in reversed(w.children):
+    for i, c in reversed(list(enumerate(w.children))):
         if c.get('sensitive') == 'false' or c.get('enable') == 'false' or c.name in RUNTIME_DISABLED: continue
-        r = _rect(c, rect)
+        r = _rect(c, rect, i * rect[2] if w.type == 'slide_view' else 0)      # slide_view: page i at x = i * width
         if r[0] <= x < r[0] + r[2] and r[1] <= y < r[1] + r[3]:
             return hit(c, r, x, y)
     return w
@@ -297,8 +244,8 @@ def check_touch(root):
     """Every control's centre must reach that control; the cover must reach the slide_view (swipe)."""
     rects = {}
     def collect(w, rect):
-        for c in w.children:
-            r = _rect(c, rect); rects[c.name] = r; collect(c, r)
+        for i, c in enumerate(w.children):
+            r = _rect(c, rect, i * rect[2] if w.type == 'slide_view' else 0); rects[c.name] = r; collect(c, r)
     collect(root, (0, 0, W, H))
     sv = find(root, 'slide_view')
     def under(t, anc): return t is anc or any(under(t, c) for c in anc.children) if t is not anc else True
@@ -307,6 +254,7 @@ def check_touch(root):
         x, y, w, h = rects[n]; t = hit(root, (0, 0, W, H), x + w // 2, y + h // 2)
         assert inside(t, find(root, n)), f'touch at the centre of {n} lands on {t.name or t.type}'
         assert w >= 44 and h >= 30 and (n == 'slider_play' or h >= 44), f'{n}: touch target {w}x{h} too small'
+    hr = find(root, 'img_hr'); assert hr.w == 0 and hr.h == 0 and hr.get('sensitive') == 'false', 'img_hr must stay out of the way'
     for x, y in ((W // 2, SLIDE_Y + ART_Y + ART // 2), (W // 2, SLIDE_Y + ALBUM_Y + 10)):
         t = hit(root, (0, 0, W, H), x, y)
         assert inside(t, sv), f'touch at ({x},{y}) on the cover page lands on {t.name or t.type}, not the slide_view'
@@ -351,7 +299,7 @@ def edit_style(path):
 
 # ---------------------------------------------------------------------------------------------- album prefix
 
-# How demo lays a label's text out (disassembly of the stock demo, docs/look-nowplaying.md "The album line"):
+# How demo lays a label's text out (disassembly of the stock demo, docs/ui.md "The album line"):
 #   font    stb_truetype: scale = font_size / (hhea ascender - descender), float32 (stbtt_ScaleForPixelHeight
 #           at 0x67cb9c); advance = trunc(advance * scale) (trunc.w.s at 0x680438 -> glyph_t.advance); glyph
 #           box x0 = floor(xMin * scale), x1 = ceil(xMax * scale), the bitmap drawn at pen + x0
@@ -409,32 +357,30 @@ def album_clip(ttf, prefix, px, margin):
 
 # ---------------------------------------------------------------------------------------------- main
 
+ALBUM_PREFIX = 'Album'      # the English UI's "album" string; the app fills label_album with "Album:<name>"
+
 def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('src'); ap.add_argument('out')
-    ap.add_argument('--album', choices=['clip', 'full'], default='clip', help='clip: hide the "Album:" prefix (default); full: show the label as the app fills it')
-    ap.add_argument('--album-prefix', default='Album', help='localised "album" string of the UI language (default the English "Album")')
-    a = ap.parse_args()
-    clone_workdir(a.src, a.out)
+    if len(sys.argv) != 3: sys.exit(__doc__)
+    src, out = sys.argv[1:]
+    clone_workdir(src, out)
     # measured with the font of the tree being edited (an earlier step may have replaced default.ttf)
-    raw = os.path.join(a.out, RAW)
-    album = find(awtk_ui.parse(open(os.path.join(a.out, UI), 'rb').read()), 'label_album')
-    clip = album_clip(Ttf(os.path.join(a.out, FONT)), a.album_prefix + ':', META_PX,
+    raw = os.path.join(out, RAW)
+    album = find(awtk_ui.parse(open(os.path.join(out, UI), 'rb').read()), 'label_album')
+    clip = album_clip(Ttf(os.path.join(out, FONT)), ALBUM_PREFIX + ':', META_PX,
                       style_int(raw, album, 'margin_left', HSCROLL_MARGIN))
-    xx = os.path.join(a.out, IMAGES)
-    clash = [n for n in added_rels() if os.path.exists(os.path.join(a.out, 'rootfs', n))]
+    xx = os.path.join(out, IMAGES)
+    clash = [n for n in added_rels() if os.path.exists(os.path.join(out, 'rootfs', n))]
     assert not clash, f'np_* images already present (tree already modded?): {clash}'
-    old, new, root = edit_ui(os.path.join(a.out, UI), lambda r: check_touch(apply_ui(r, a.album, clip['shift'])))
-    sold, snew = edit_style(os.path.join(a.out, STYLE))
-    imgs = write_images(xx, make_images(xx))
+    old, new, root = edit_ui(os.path.join(out, UI), lambda r: check_touch(apply_ui(r, clip['shift'])))
+    sold, snew = edit_style(os.path.join(out, STYLE))
+    imgs = write_images(xx)
     size = sum(os.path.getsize(os.path.join(xx, n + '.png')) for n in imgs)
     print(f'nowplaying: {UI} {len(old)} -> {len(new)} bytes; {STYLE} {len(sold)} -> {len(snew)} bytes; '
-          f'{len(imgs)} images added ({size} bytes); album {a.album}')
-    if a.album == 'clip':
-        c = clip
-        print(f'  album prefix "{a.album_prefix}:" at {META_PX} px: AWTK width {c["width"]} px (advances + 1 each), '
-              f'margin_left {c["margin"]}; label at x -{c["shift"]} in scroll_np_album: prefix ink x {c["prefix_ink"][0]}..'
-              f'{c["prefix_ink"][1] - 1} (colon advance {c["colon"][0]}, box {c["colon"][1]}), album pen x {c["album_pen"]} '
-              f'(safety {c["safety"]} px; widest left overhang {c["first"][1]!r} x0 {c["first"][0]})')
+          f'{len(imgs)} images added ({size} bytes)')
+    c = clip
+    print(f'  album prefix "{ALBUM_PREFIX}:" at {META_PX} px: AWTK width {c["width"]} px (advances + 1 each), '
+          f'margin_left {c["margin"]}; label at x -{c["shift"]} in scroll_np_album: prefix ink x {c["prefix_ink"][0]}..'
+          f'{c["prefix_ink"][1] - 1} (colon advance {c["colon"][0]}, box {c["colon"][1]}), album pen x {c["album_pen"]} '
+          f'(safety {c["safety"]} px; widest left overhang {c["first"][1]!r} x0 {c["first"][0]})')
 
 if __name__ == '__main__': main()

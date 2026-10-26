@@ -38,8 +38,8 @@ TEXELS = ART * ART
 
 def build(tmp):
     so = os.path.join(tmp, 'coverflow.so')
-    subprocess.run(['cc', '-O2', '-std=c99', '-Wall', '-DCF_HOST', '-shared', '-fPIC',
-                    '-I', os.path.join(ROOT, 'patch'), SRC, '-o', so], check=True)
+    subprocess.run(['cc', '-O2', '-std=c99', '-Wall', '-DCF_HOST',
+                    '-shared', '-fPIC', '-I', os.path.join(ROOT, 'patch'), SRC, '-o', so], check=True)
     lib = ctypes.CDLL(so)
     lib.coverflow_render.restype = None
     lib.coverflow_render.argtypes = [ctypes.POINTER(ctypes.c_uint), ctypes.c_int, ctypes.c_int,
@@ -98,6 +98,11 @@ def placeholder():
     return buf
 
 
+def layout():
+    """(frame y, album y, album h, artist y, artist h) of the page this shelf is on."""
+    return pod_ui.cover_layout()
+
+
 def preview(frame, path, album='Kind of Blue', artist='Miles Davis', title='Cover Flow'):
     """The whole 320x480 page around a rendered frame: status bar gap, navbar, captions, laid out
     as tools/pod_ui.py builds ui/m1pod_cover.bin (the window starts under the 30 px status bar,
@@ -107,7 +112,8 @@ def preview(frame, path, album='Kind of Blue', artist='Miles Davis', title='Cove
     covers = Image.new('RGB', (W, H))
     covers.putdata([(frame[i] & 255, frame[i] >> 8 & 255, frame[i] >> 16 & 255) for i in range(W * H)])
     top = 480 - pod_ui.CLIENT_H      # the window under the status bar
-    page.paste(covers, (0, top + pod_ui.COVER_Y))
+    fy, ay, _, ry, _ = layout()
+    page.paste(covers, (0, top + fy))
     d = ImageDraw.Draw(page)
 
     def font(size):
@@ -127,8 +133,8 @@ def preview(frame, path, album='Kind of Blue', artist='Miles Davis', title='Cove
     d.polygon([(28, top + 25), (40, top + 17), (40, top + 33)], fill=(220, 220, 220))   # Back chevron
     d.ellipse([272, top + 13, 296, top + 37], outline=(220, 220, 220))                  # Now Playing
     centred(title, top + 14, 20, (255, 255, 255))
-    centred(album, top + pod_ui.ALBUM_Y + 5, 22, (255, 255, 255))
-    centred(artist, top + pod_ui.ARTIST_Y + 4, 18, (170, 170, 170))
+    centred(album, top + ay + 5, 22, (255, 255, 255))
+    centred(artist, top + ry + 4, 18, (170, 170, 170))
     page.save(path)
 
 
@@ -208,6 +214,17 @@ def main():
         # 8. Only the centre cover: no neighbours, no crash, still symmetric.
         alone = render(lib, 0, [None] * REACH + [texs[REACH]] + [None] * REACH)
         expect(alone[(y0 + 5) * W + x0 + 5] == texs[REACH][5 * ART + 5], 'a one-album library draws')
+
+        # 8b. Every shelf: the side covers still show either side of the centre cover, and nothing
+        #     is drawn below the reflections, where the captions lie (the page's layout).
+        side = [x for x in range(0, CX - ART // 2) if any(rest[y * W + x] & 0xffffff for y in range(0, H, 2))]
+        expect(len(side) >= 40, f'the left side covers show beside the centre cover ({len(side)} columns)')
+        fy, ay, _, ry, rh = layout()
+        below = range(TOP + ART + REFLECT, H)
+        expect(all(rest[y * W + x] & 0xffffff == 0 for y in below for x in range(0, W, 3)),
+               'nothing is drawn under the reflections')
+        expect(fy + TOP + ART + REFLECT <= ay and ry + rh <= pod_ui.CLIENT_H,
+               f'the captions sit under the reflections, inside the 450 px window ({ay}, {ry + rh})')
 
         # 9. The cache key: FNV-1a of artist then album, each with a separator, never 0.
         def fnv(h, s):

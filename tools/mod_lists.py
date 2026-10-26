@@ -6,7 +6,7 @@ the Now Playing "jump" list) and the dialogs they open are restyled to the look 
 black page, rows that are stock `list_item_style` tiles, white left-aligned titles (21 px where the
 row's label box is tall enough), grey secondary text, the stock right chevron, one pressed colour.
 
-Almost every row on these pages is built by demo's code, not by the asset (docs/look-lists.md):
+Almost every row on these pages is built by demo's code, not by the asset (docs/ui.md):
 `folder_create_tablerow`, `localclass_create_tablerow` and `music_create_tablerow` make a table_row
 (310 x 64/60) holding a button themed "btn_tablerow_style" (310 x 60/56, layout
 default(r=1,c=0,x=12,s=8)) with a 40 px icon, an hscroll_label themed "srlabel_item_white_style" and
@@ -27,6 +27,7 @@ theme mod owns that file; run this mod after it and the lists follow its colours
                            and jump-list artist line with this name, which no theme defines, so it
                            drew #444444 on #131313 until the row's data loaded
   playlist_btnitem_style   Import/Export tiles: list_item_style colours (stock pressed #2E2A19)
+  srlabel_leftwhite22_style  the queue (jump list) page's navbar title, 22 -> 20 px as every navbar title
   btn_tab_style            Search tabs: grey text on the row colour, the active tab white with a
                            3 px accent underline (stock: a solid accent block, #FE7E40)
 
@@ -39,7 +40,7 @@ Style colours are stored as R, G, B, A bytes.
 Page themes are written for both asset themes (default and theme1, the System > Theme option),
 each derived from its own default.bin, so theme1 keeps its accent. Nothing else changes: every
 widget the app looks up keeps its name, type and geometry; no window gets an open/close animation
-(docs/look-lists.md: the "play from here" handlers loop on navigator_back until Now Playing is on
+(docs/ui.md: the "play from here" handlers loop on navigator_back until Now Playing is on
 top, which an animated close would turn into a hang).
 
 Usage: mod_lists.py SRC_WORKDIR OUT_WORKDIR     (OUT == SRC edits in place)
@@ -48,26 +49,31 @@ import argparse, os, stat, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_style, awtk_ui
 from awtk_style import T_INT32, T_UINT32
-from mod_battery import clone_workdir, edit_ui
+from modlib import clone_workdir, edit_ui
 
 RAW = 'rootfs/release/assets/{theme}/raw'
 THEMES = ('default', 'theme1')               # asset themes; theme1 only overrides a few files
 STYLE_MODE = 0o744                           # stock styles/*.bin mode
 STYLE_MTIME = 1750924035                     # a stock asset mtime: added files build deterministically
 TITLE_PX = 21                                # the M1 Pod menu's row text (srlabel_leftwhite21_style)
+NAVBAR_PX = 20                               # navbar titles (mod_polish.TITLE_NEW)
 
 # page (window name == theme name) -> page-theme recipes, in the order they are applied
 PAGES = {
     'folder_page':         ('rows', 'title'),
     'localclass_page':     ('rows', 'title'),
     'allmusic_page':       ('rows', 'gray26'),
-    'playerjumpinfo_page': ('rows', 'gray26'),
+    'playerjumpinfo_page': ('rows', 'gray26', 'navtitle'),
     'playlist_page':       ('tiles',),
+    'playqueue_dialog':    ('queue',),
     'search_page':         ('tabs',),
 }
 # ui/*.bin edits (relative to raw/ui of the default theme; none of these exists in theme1)
 UI_EDITS = ('allmusic_page.bin', 'dialog/confirminfo_dialog.bin', 'dialog/sortselect_dialog.bin',
-            'dialog/batchadd_dialog.bin')
+            'dialog/batchadd_dialog.bin', 'dialog/playqueue_dialog.bin')
+GEOMETRY_EDITS = ('dialog/playqueue_dialog.bin',)   # these change widget sizes on purpose (the row template)
+QUEUE_ROW, QUEUE_BTN = 44, 40                       # the queue drawer's rows: table row, its button / label (4 px gap)
+QUEUE_NAME_PX, QUEUE_NOW_PX = 18, 20                # other rows / the playing row
 
 BORDER_BOTTOM = 8
 
@@ -131,6 +137,14 @@ def r_gray26(page, base, pal):
     for s in base.states('hscroll_label', 'srlabel_item_gray18_style'):
         page.put(copy(s, 'srlabel_item_gray26_style'))
 
+def r_navtitle(page, base, pal):
+    """The queue page's navbar title (the jump list, built by code with srlabel_leftwhite22_style: 22 px
+    where every other page's title is 20 px since mod_polish): the same white at the navbar size."""
+    src = base.states('hscroll_label', 'srlabel_leftwhite22_style')
+    assert src, 'default.bin has no srlabel_leftwhite22_style'
+    for s in src:
+        n = copy(s); n.set('font_size', NAVBAR_PX, T_UINT32); page.put(n)
+
 def r_tiles(page, base, pal):
     src = page.states('button', 'playlist_btnitem_style')
     assert src, 'playlist page theme has no playlist_btnitem_style'
@@ -152,7 +166,18 @@ def r_tabs(page, base, pal):
         else:
             s.set('border_color', pal['clear'], T_UINT32)
 
-RECIPES = {'rows': r_rows, 'title': r_title, 'gray26': r_gray26, 'tiles': r_tiles, 'tabs': r_tabs}
+def r_queue(page, base, pal):
+    """The queue drawer (ui/dialog/playqueue_dialog.bin, Now Playing's list button on the player's right): its
+    rows are labelled by the app's row bind (@0x47a19c): srlabel_item_white_style for every row and
+    srlabel_item_gold20_style for the playing one (white in the minimal theme too, so the two were the same).
+    Here the other rows are muted 18 px and the playing row white 20 px."""
+    for name, px, col in (('srlabel_item_white_style', QUEUE_NAME_PX, pal['muted']), ('srlabel_item_gold20_style', QUEUE_NOW_PX, pal['white'])):
+        src = base.states('hscroll_label', name)
+        assert src, f'default.bin has no {name}'
+        for s in src:
+            n = copy(s); n.set('font_size', px, T_UINT32); n.set('text_color', col, T_UINT32); page.put(n)
+
+RECIPES = {'rows': r_rows, 'title': r_title, 'gray26': r_gray26, 'navtitle': r_navtitle, 'tiles': r_tiles, 'queue': r_queue, 'tabs': r_tabs}
 
 
 def style_rels():
@@ -232,7 +257,32 @@ def edit_pressed(root, pal, names, old):
         assert w is not None and w.get('style:pressed:bg_color', '').upper() in (old, new.upper()), f'{n}: unexpected pressed colour'
         w.set('style:pressed:bg_color', new)
 
+def edit_playqueue(root, pal):
+    """The queue drawer: rows 44 px (stock 64) with a 40 px button and label, the label 18 px (the playing row's
+    style makes it 20 white, r_queue), the list's own row colours, a header hairline under the play mode line,
+    a quieter left border and the bottom button in the dark button look. The dialog's position, animation, the
+    table and every widget name stay."""
+    row_bg, row_down = hexcol(pal['row']['normal']), hexcol(pal['row']['pressed'])
+    dlg = root.find('playqueue_dialog')
+    for st in ('normal', 'disable', 'focused'): dlg.set(f'style:{st}:border_color', '#3A3A3A')
+    client, trow, btn, name = (root.find(n) for n in ('queue_table_client', 'queue_table_row', 'btn_table_row', 'scrlabel_name'))
+    client.set('row_height', str(QUEUE_ROW))
+    trow.h, btn.h, name.h = QUEUE_ROW, QUEUE_BTN, QUEUE_BTN
+    for st in ('normal', 'over', 'disable', 'focused'): btn.set(f'style:{st}:bg_color', row_bg)
+    btn.set('style:pressed:bg_color', row_down)
+    for st in ('normal', 'disable', 'focused'): name.set(f'style:{st}:font_size', str(QUEUE_NAME_PX))
+    head, mode = root.find('list_item'), root.find('label_playmode')
+    for st in ('normal', 'pressed', 'over', 'disable', 'focused'):
+        head.set(f'style:{st}:border', 'bottom'); head.set(f'style:{st}:border_color', '#3A3A3A')
+        head.set(f'style:{st}:border_width', '1')
+    for st in ('normal', 'disable', 'focused'): mode.set(f'style:{st}:font_size', str(QUEUE_NAME_PX))
+    btm = root.find('button')
+    for st in ('normal', 'over', 'disable', 'focused'): btm.set(f'style:{st}:bg_color', '#1E1E1E')
+    btm.set('style:pressed:bg_color', '#3A3A3A')
+    for st in ('normal', 'pressed', 'over', 'disable', 'focused'): btm.set(f'style:{st}:font_size', '20')
+
 def ui_edit(rel, root, pal):
+    if rel == 'dialog/playqueue_dialog.bin': edit_playqueue(root, pal); return
     if rel == 'allmusic_page.bin': edit_allmusic(root, pal)
     elif rel == 'dialog/confirminfo_dialog.bin': edit_pressed(root, pal, ('btn_cancel', 'btn_enter'), '#362221')
     elif rel == 'dialog/sortselect_dialog.bin': edit_pressed(root, pal, ('button_return',), '#362221')
@@ -246,7 +296,11 @@ def build_ui(work):
         assert not os.path.exists(os.path.join(work, RAW.format(theme='theme1'), 'ui', rel)), f'theme1 has its own {rel}'
         old, new, _ = edit_ui(path, lambda root, rel=rel: ui_edit(rel, root, pal))
         shape = lambda d: [(w.type, w.name, w.x, w.y, w.w, w.h) for w in awtk_ui.parse(d).walk()]
-        assert shape(old) == shape(new), f'{rel}: a widget was added, removed, renamed or moved'
+        if rel in GEOMETRY_EDITS:
+            names = lambda d: [(w.type, w.name) for w in awtk_ui.parse(d).walk()]
+            assert names(old) == names(new), f'{rel}: a widget was added, removed or renamed'
+        else:
+            assert shape(old) == shape(new), f'{rel}: a widget was added, removed, renamed or moved'
         report.append(f'ui/{rel}: {len(old)} -> {len(new)} bytes')
     return report
 

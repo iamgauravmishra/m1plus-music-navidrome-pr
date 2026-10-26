@@ -1,0 +1,659 @@
+{
+ "_about": "Pinned demo edits of the stock library rows (tools/pod.py, payload feature rows, stage H; docs/architecture.md). Mapped from q2-pod patch/ipod.json + tools/ipod.py + patch/navigation.c (Copyright (c) 2026 Diamond Bond, MIT; see NOTICE) to the M1 Plus V2.1 demo. Every word is [address, stock word, function, note] and is checked before anything is written. immediates: addiu rt, $zero, imm -> (word & 0xffff0000) | value. row_layout_calls: jalr $t9 (widget_set_children_layout, a0 = the row, a1 = the layout string in the delay slot) -> jal compact_set_row_layout. nops: a rebind's widget_resize call -> nop. pinned: checked, unchanged.",
+ "immediates": [
+  {
+   "value": 64,
+   "purpose": "PITCH: the row each constructor creates (table_row h / list_item h); the asset row_height / default_item_height match it",
+   "sites": [
+    [
+     "0x5368bc",
+     "0x2402003c",
+     "localclass_create_tablerow",
+     "table_row h, Artists/Genres/Composers"
+    ],
+    [
+     "0x528570",
+     "0x2402003c",
+     "music_create_tablerow",
+     "table_row h, Songs and the other allmusic_page lists (Hi-Res, Favourites, Recent, Most played, Recently added)"
+    ],
+    [
+     "0x5245f0",
+     "0x2402003c",
+     "sub_5244dc (album page row loop)",
+     "list_item h, Albums"
+    ],
+    [
+     "0x52667c",
+     "0x2402003c",
+     "sub_526564 (album detail row loop)",
+     "list_item h, album detail tracks (row 0 is the 100 px header, 0x526644)"
+    ]
+   ]
+  },
+  {
+   "value": 64,
+   "purpose": "PITCH: the album page scroll end divides yoffset by the row pitch for its first cover row",
+   "sites": [
+    [
+     "0x5241b8",
+     "0x2410003c",
+     "sub_524134 (album_scrollview 0x14f scroll end)",
+     ""
+    ]
+   ]
+  },
+  {
+   "value": 64,
+   "purpose": "PITCH: the search page scroll end divided yoffset by 120 although its tab rows are 64 px (stock bug): covers below the first screen were requested for the wrong rows",
+   "sites": [
+    [
+     "0x5410cc",
+     "0x24100078",
+     "sub_541038 (search scroll end)",
+     "scroll_view_album -> local_albumsmallcover_task(first, 9)"
+    ],
+    [
+     "0x541154",
+     "0x24100078",
+     "sub_541038 (search scroll end)",
+     "scroll_view_track -> local_albumsmallcover_task(first, 9)"
+    ]
+   ]
+  },
+  {
+   "value": 60,
+   "purpose": "BODY: the row button / chevron height (PITCH - 4, over list_item_style's 4 px separator)",
+   "sites": [
+    [
+     "0x5368e8",
+     "0x24110038",
+     "localclass_create_tablerow",
+     "s1: button, img_choice, img_icon, scrlabel_name, btn_right h"
+    ],
+    [
+     "0x5285a0",
+     "0x24110038",
+     "music_create_tablerow",
+     "s1: button, img_choice, img_icon, view_info h (view_info is the text container: Q2 group \"text container\")"
+    ],
+    [
+     "0x5243e4",
+     "0x24020038",
+     "album_listitem_layout",
+     "chevron button (btn_rightarrow_style) h"
+    ],
+    [
+     "0x53e654",
+     "0x24020038",
+     "playlist_listitem_layout",
+     "right_arrow image h"
+    ]
+   ]
+  },
+  {
+   "value": 60,
+   "purpose": "BODY: the jump list rebind resizes view_info to (w, BODY) (its rows are asset clones; no row fit)",
+   "sites": [
+    [
+     "0x53909c",
+     "0x24060038",
+     "sub_538e1c (jump list bind)",
+     "view_info"
+    ]
+   ]
+  },
+  {
+   "value": 238,
+   "purpose": "TEXT_W: the jump list rebind width, text x 60 .. 298 as in Songs",
+   "sites": [
+    [
+     "0x5390a4",
+     "0x240500fa",
+     "sub_538e1c (jump list bind)",
+     "view_info w 250; jump list rows are cloned from the asset template, no row-fit"
+    ]
+   ]
+  },
+  {
+   "value": 52,
+   "purpose": "ART: the album cover widget is the thumbnail size, so a 52 px cover draws 1:1 (draw type stays scale_auto: the 60 px placeholder scales down)",
+   "sites": [
+    [
+     "0x524330",
+     "0x2407003c",
+     "album_listitem_layout",
+     "imgleftcover w"
+    ],
+    [
+     "0x5426ac",
+     "0x2407003c",
+     "sub_542630 (search Albums rows)",
+     "imgalbum w (same /tmp/abp/%s0.jpg cache)"
+    ]
+   ]
+  },
+  {
+   "value": 52,
+   "purpose": "ART: the cover thread renders /tmp/abp/<md5>0.jpg at ART (only the Albums and Search Albums rows read it; tmpfs, rebuilt after each boot)",
+   "sites": [
+    [
+     "0x4dd604",
+     "0x2413003c",
+     "parse_albumcovertask_thd",
+     "cover thread (started at boot, runs only per queued task)"
+    ]
+   ]
+  },
+  {
+   "value": 120,
+   "purpose": "AH_ART: the cover thread renders /tmp/abp/<md5>1.jpg, the album page header's cover (the only reader of the 1.jpg files, albuminfo_page), at AH_ART (stock 100), so the 120 px header cover is drawn 1:1",
+   "sites": [
+    [
+     "0x4dd670",
+     "0x24130064",
+     "parse_albumcovertask_thd",
+     "cover thread, flag-1 branch (the album page header's task; runs only per queued task)"
+    ]
+   ]
+  },
+  {
+   "value": 7,
+   "purpose": "TITLE_Y: the title box in the two-line text container (21 px font in a 24 px box: 7..31 of the 60 px body)",
+   "sites": [
+    [
+     "0x528734",
+     "0x2406000a",
+     "music_create_tablerow",
+     "scrlabel_name y"
+    ],
+    [
+     "0x522918",
+     "0x2406000a",
+     "sub_52289c (album row text)",
+     "listsscrlabel y"
+    ],
+    [
+     "0x5416a8",
+     "0x2406000a",
+     "sub_541408 (search Tracks)",
+     "labeltrack y"
+    ],
+    [
+     "0x5427e0",
+     "0x2406000a",
+     "sub_542630 (search Albums)",
+     "title y"
+    ],
+    [
+     "0x5249b0",
+     "0x2406000a",
+     "sub_524990 (album detail header)",
+     "album title y (the 100 px header row, no row fit)"
+    ]
+   ]
+  },
+  {
+   "value": 24,
+   "purpose": "TITLE_H",
+   "sites": [
+    [
+     "0x528728",
+     "0x24020014",
+     "music_create_tablerow",
+     "scrlabel_name h"
+    ],
+    [
+     "0x522914",
+     "0x24020014",
+     "sub_52289c (album row text)",
+     "listsscrlabel h"
+    ],
+    [
+     "0x54169c",
+     "0x24020014",
+     "sub_541408 (search Tracks)",
+     "labeltrack h"
+    ],
+    [
+     "0x5427dc",
+     "0x24020014",
+     "sub_542630 (search Albums)",
+     "title h"
+    ],
+    [
+     "0x5249a0",
+     "0x24020014",
+     "sub_524990 (album detail header)",
+     "album title h"
+    ]
+   ]
+  },
+  {
+   "value": 33,
+   "purpose": "SUB_Y: the grey second line (18 px in 20: 33..53)",
+   "sites": [
+    [
+     "0x5287b8",
+     "0x2406001e",
+     "music_create_tablerow",
+     "view_artist y (30)"
+    ],
+    [
+     "0x5229c0",
+     "0x24060020",
+     "sub_52289c (album row text)",
+     "listsscrartist y (32)"
+    ],
+    [
+     "0x5417e0",
+     "0x24060020",
+     "sub_541408 (search Tracks)",
+     "artist line y (32)"
+    ],
+    [
+     "0x542864",
+     "0x24060020",
+     "sub_542630 (search Albums)",
+     "artist line y (32)"
+    ],
+    [
+     "0x524a84",
+     "0x2406001e",
+     "sub_524a64 (album detail header)",
+     "artist line y (30)"
+    ]
+   ]
+  },
+  {
+   "value": 20,
+   "purpose": "SUB_H (Songs: also img_mqa and scrlabel_artist, inside view_artist)",
+   "sites": [
+    [
+     "0x528708",
+     "0x2411001a",
+     "music_create_tablerow",
+     "s1 = 26: view_artist h AND img_mqa h AND scrlabel_artist h (all inside view_artist); 20 keeps the 20 px mqa icon"
+    ],
+    [
+     "0x5229b4",
+     "0x24020012",
+     "sub_52289c (album row text)",
+     "listsscrartist h (18)"
+    ],
+    [
+     "0x5417d4",
+     "0x24020012",
+     "sub_541408 (search Tracks)",
+     "h 18"
+    ],
+    [
+     "0x542858",
+     "0x24020012",
+     "sub_542630 (search Albums)",
+     "h 18"
+    ],
+    [
+     "0x524a74",
+     "0x24020012",
+     "sub_524a64 (album detail header)",
+     "artist line h (18)"
+    ]
+   ]
+  },
+  {
+   "value": 18,
+   "purpose": "Playlists create / Import / Export labels: y so a 24 px box centres in the 60 px body",
+   "sites": [
+    [
+     "0x53e0dc",
+     "0x24060014",
+     "playlist_firstitem_layout",
+     "label y"
+    ],
+    [
+     "0x53e298",
+     "0x24060014",
+     "playlist_seconditem_layout",
+     "Import label y"
+    ],
+    [
+     "0x53e3c8",
+     "0x24060014",
+     "playlist_seconditem_layout",
+     "Export label y"
+    ]
+   ]
+  },
+  {
+   "value": 24,
+   "purpose": "the same labels' height",
+   "sites": [
+    [
+     "0x53e0d0",
+     "0x24020014",
+     "playlist_firstitem_layout",
+     "label h"
+    ],
+    [
+     "0x53e1d8",
+     "0x24160014",
+     "playlist_seconditem_layout",
+     "s6: Import and Export label h"
+    ]
+   ]
+  },
+  {
+   "value": 238,
+   "purpose": "the Playlists create row label: x 60 .. 298 (no chevron)",
+   "sites": [
+    [
+     "0x53e0d8",
+     "0x240700dc",
+     "playlist_firstitem_layout",
+     "w 220"
+    ]
+   ]
+  },
+  {
+   "value": 8,
+   "purpose": "COVERS_PER_PAGE: batchadd_albumcover_task(first, n): 400 / 64 px rows show up to 8 partial rows",
+   "sites": [
+    [
+     "0x524208",
+     "0x24050007",
+     "sub_524134 (album scroll end)",
+     ""
+    ],
+    [
+     "0x524798",
+     "0x24050007",
+     "sub_52464c (album page return)",
+     ""
+    ],
+    [
+     "0x524970",
+     "0x24050007",
+     "album_page_init",
+     ""
+    ]
+   ]
+  }
+ ],
+ "row_layout_calls": {
+  "purpose": "the ordinary row constructors' own widget_set_children_layout(row, params): install the row fit (patch/rows.c compact_set_row_layout)",
+  "sites": [
+   [
+    "0x5332bc",
+    "0x0320f809",
+    "folder_create_tablerow",
+    "q2 0x52315c folder; params 0x745158 \"default(r=1,c=0,x=12,s=8)\", a0 = btn_table_row"
+   ],
+   [
+    "0x528624",
+    "0x0320f809",
+    "music_create_tablerow",
+    "q2 0x4aa3f0 songs; a0 = btn_table_row (NOT 0x5287e4, the inner view_artist \"default(r=1,c=0,s=5)\")"
+   ],
+   [
+    "0x53696c",
+    "0x0320f809",
+    "localclass_create_tablerow",
+    "q2 0x4b101c local categories"
+   ],
+   [
+    "0x524494",
+    "0x0320f809",
+    "album_listitem_layout",
+    "q2 0x4a4c34 album list; params 0x745360 \"default(r=1,c=0,x=0,s=8)\", a0 = list_item"
+   ],
+   [
+    "0x52651c",
+    "0x0320f809",
+    "albumdeinfo_listitem_layout",
+    "q2 0x4a6394 album-detail tracks"
+   ],
+   [
+    "0x53e6ec",
+    "0x0320f809",
+    "playlist_listitem_layout",
+    "q2 0x4b2944 playlist"
+   ],
+   [
+    "0x541924",
+    "0x0320f809",
+    "sub_541408 (search Tracks rows)",
+    "M1 only"
+   ],
+   [
+    "0x542208",
+    "0x0320f809",
+    "sub_541fb8 (search Artists rows)",
+    "M1 only"
+   ],
+   [
+    "0x542560",
+    "0x0320f809",
+    "sub_5422d8 (search Genres rows)",
+    "M1 only"
+   ],
+   [
+    "0x542930",
+    "0x0320f809",
+    "sub_542630 (search Albums rows)",
+    "M1 only; params \"x=0\" string"
+   ]
+  ]
+ },
+ "nops": {
+  "purpose": "the rebind's widget_resize(title|view_info, 200|220|250, h): with the row fit the row layout owns the width (q2-pod removed Q2 0x522410 the same way)",
+  "sites": [
+   [
+    "0x527918",
+    "0x0320f809",
+    "sub_527674 (Songs bind)",
+    "M1 only"
+   ],
+   [
+    "0x532f6c",
+    "0x0320f809",
+    "sub_532e34 (folder bind)",
+    "q2 0x522410"
+   ],
+   [
+    "0x535e94",
+    "0x0320f809",
+    "sub_535d58 (localclass bind)",
+    "M1 only"
+   ]
+  ]
+ },
+ "pinned": [
+  {
+   "purpose": "folder pitch: stock already PITCH",
+   "sites": [
+    [
+     "0x53320c",
+     "0x24020040",
+     "folder_create_tablerow",
+     "table_row h, Folders"
+    ]
+   ]
+  },
+  {
+   "purpose": "BODY already: stretched by the row layout anyway",
+   "sites": [
+    [
+     "0x533238",
+     "0x2411003c",
+     "folder_create_tablerow",
+     "s1: button and children h"
+    ],
+    [
+     "0x524238",
+     "0x2402003c",
+     "album_listitem_layout",
+     "img_choice h (stretched by layout)"
+    ],
+    [
+     "0x524328",
+     "0x2402003c",
+     "album_listitem_layout",
+     "imgleftcover h (stretched by layout)"
+    ],
+    [
+     "0x5263a4",
+     "0x2402003c",
+     "albumdeinfo_listitem_layout",
+     "img_choice h"
+    ],
+    [
+     "0x53e45c",
+     "0x2402003c",
+     "playlist_listitem_layout",
+     "img_choice h"
+    ],
+    [
+     "0x53e1f0",
+     "0x2403003c",
+     "playlist_seconditem_layout",
+     "Import/Export row buttons h (both)"
+    ],
+    [
+     "0x5228b0",
+     "0x2403003c",
+     "sub_52289c (album row text)",
+     "album text view h (Q2 group \"text container\")"
+    ],
+    [
+     "0x541664",
+     "0x2402003c",
+     "sub_541408 (search Tracks rows)",
+     "view_info h"
+    ],
+    [
+     "0x5427b0",
+     "0x2402003c",
+     "sub_542630 (search Albums rows)",
+     "text view h"
+    ]
+   ]
+  },
+  {
+   "purpose": "Folders divide yoffset by 64 as (y + 63) >> 6: PITCH must stay 64 (a power of two), so every page uses it",
+   "sites": [
+    [
+     "0x531bac",
+     "0x2464003f",
+     "sub_5319fc (folder return / back)",
+     "q2 0x521a84 return offset division"
+    ],
+    [
+     "0x531bb8",
+     "0x00031183",
+     "sub_5319fc",
+     "sra v0, v1, 6 -> local_songercover_folder(first, 9)"
+    ],
+    [
+     "0x532488",
+     "0x2450003f",
+     "sub_5323c4 (folder scroll end)",
+     "q2 0x5228f8 scrolling cover division"
+    ],
+    [
+     "0x532498",
+     "0x00108183",
+     "sub_5323c4",
+     "sra s0, s0, 6 -> local_songercover_folder(first, 9)"
+    ]
+   ]
+  },
+  {
+   "purpose": "Songs scroll bar 372 high (the list is not moved)",
+   "sites": [
+    [
+     "0x5272e0",
+     "0x24020174",
+     "sub_527154 (Songs table setup)",
+     "scroll_bar_create_mobile h 372; the A-Z sidebar image (search_icon 304,0,16,400 @0x527314) replaces it on All Songs/Hi-Res"
+    ]
+   ]
+  },
+  {
+   "purpose": "album cover draw type 4 (scale_auto)",
+   "sites": [
+    [
+     "0x5243b8",
+     "0x24050004",
+     "album_listitem_layout",
+     ""
+    ],
+    [
+     "0x5426c8",
+     "0x24050004",
+     "sub_542630 (search Albums)",
+     ""
+    ]
+   ]
+  },
+  {
+   "purpose": "arguments of the nopped rebind resizes (dead with the call gone)",
+   "sites": [
+    [
+     "0x532f48",
+     "0x2406003c",
+     "sub_532e34 (folder bind)",
+     "scrlabel_name"
+    ],
+    [
+     "0x532f50",
+     "0x240500c8",
+     "sub_532e34 (folder bind)",
+     "multi-select w 200"
+    ],
+    [
+     "0x532f68",
+     "0x240500dc",
+     "sub_532e34 (folder bind)",
+     "w 220 (normal)"
+    ],
+    [
+     "0x535e70",
+     "0x24060038",
+     "sub_535d58 (localclass bind)",
+     "scrlabel_name"
+    ],
+    [
+     "0x535e78",
+     "0x240500c8",
+     "sub_535d58 (localclass bind)",
+     "multi-select w 200"
+    ],
+    [
+     "0x535e90",
+     "0x240500dc",
+     "sub_535d58 (localclass bind)",
+     "w 220 (normal)"
+    ],
+    [
+     "0x5278f4",
+     "0x24060038",
+     "sub_527674 (Songs bind)",
+     "view_info"
+    ],
+    [
+     "0x5278fc",
+     "0x240500c8",
+     "sub_527674 (Songs bind)",
+     "multi-select w 200"
+    ],
+    [
+     "0x527914",
+     "0x240500fa",
+     "sub_527674 (Songs bind)",
+     "view_info w 250 (normal); nop the call instead when the row-fit is installed"
+    ]
+   ]
+  }
+ ]
+}

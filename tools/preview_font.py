@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stock UI font beside the font-inter one, on real screens, drawn like the device draws text.
 
-Two finished trees (e.g. look-all and look-all-inter) side by side: status bar + System Settings,
+Two finished trees (e.g. one built without the font step and the release) side by side: status bar + System Settings,
 Songs, Now Playing, the lock screen, and a list of mixed-script titles (English, Chinese, Japanese,
 Korean, Russian, Greek, Vietnamese, Thai, curly quotes, digits), plus a 3x zoom of part of the titles.
 The panels come from the looks' own preview painters (preview_theme, preview_lists,
@@ -9,7 +9,7 @@ preview_nowplaying, preview_lockscreen); only their text is redirected to tools/
 rasterizes each tree's default.ttf as AWTK's stb_truetype backend does (no hinting, truncated
 advances, font_size = ascender - descender). Layout and blending stay approximate (not AWTK).
 
-Usage: venv/bin/python -I tools/preview_font.py STOCK_WORKDIR NEW_WORKDIR OUT.png [--labels "look-all|look-all-inter"]
+Usage: venv/bin/python -I tools/preview_font.py STOCK_WORKDIR NEW_WORKDIR OUT.png [--labels "A|B"]
 """
 import argparse, os, sys
 from PIL import Image, ImageColor, ImageDraw
@@ -74,7 +74,7 @@ def shots(work):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('stock'); ap.add_argument('new'); ap.add_argument('out')
-    ap.add_argument('--labels', default='stock font (V2.1fA)|Inter + Source Han Sans (V2.1fI)')
+    ap.add_argument('--labels', default='stock font|Inter + Source Han Sans')
     a = ap.parse_args()
     labels = a.labels.split('|')
     rows = [shots(a.stock), shots(a.new)]

@@ -11,7 +11,7 @@ normal window gets under the 30 px status bar: a 50 px navbar over a stock-struc
 list of 52 px rows (400 px visible, so seven and a half rows show and the rest scroll into view).
 Cover Flow's page has its own layout.
 
-Usage: pod_ui.py WORKDIR --stage A|B|C   (writes ui/*.bin into WORKDIR/rootfs; prints the files)
+Usage: pod_ui.py WORKDIR   (writes ui/*.bin into WORKDIR/rootfs; prints the files)
 """
 import argparse, os, stat, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -84,51 +84,56 @@ def hidden(w):
     return w
 
 
-# Cover Flow's page layout (tests and previews read these). Without the hint (page.hint False, the
-# stages with Artists): the covers and their album/artist lines are one block centred in the 400 px
-# under the navbar: the art's top (COVER_Y + CF_TOP) and the artist line's bottom are each 86 px
-# from the body's edges. The captions sit right under the reflections, in the frame's bottom rows,
-# which are always black (the reflections end at CF_TOP + ART_SIZE + CF_REFLECT = 188 of CF_VIEW_H =
-# 230); they are insensitive, so a touch on them still reaches the covers' touch layer under them
-# (and a tap there is a tap on the centre cover).
-COVER_Y = NAVBAR_H + 60          # view_covers: 110..340
-ALBUM_Y, ALBUM_H = COVER_Y + 192, 34   # label_album, 22 px white: 302..336
-ARTIST_Y, ARTIST_H = ALBUM_Y + ALBUM_H, 28   # label_artist, 18 px grey: 336..364
-# The V2.1dE page (page.hint, stages D and F): the frame right under the navbar, the captions
-# under it (sensitive, as shipped) and the "Tap the centre cover" line near the bottom.
-HINT_COVER_Y = NAVBAR_H + 6      # view_covers: 56..286
-HINT_ALBUM_Y, HINT_ALBUM_H = 300, 32
-HINT_ARTIST_Y, HINT_ARTIST_H = 334, 26
-HINT_Y = 392
+# Cover Flow's page layout (tests and previews read these): the shelf is 168 px covers in a 320x276
+# frame (patch/offsets.inc), the captions hscroll_labels in 16 px side margins that scroll a long
+# title back and forth (stock Now Playing's info lines: loop, yoyo, a 3 s lull at each end) and
+# centre one that fits. The block is centred in the 400 px under the navbar: the art's top
+# (COVER_Y + CF_TOP = 120) and the artist line's bottom (380) are 70 px from the body's edges; the
+# album line starts 4 px below the reflections (CF_TOP + ART_SIZE + CF_REFLECT = 225).
+COVER_FRAME_H = 276              # CF_VIEW_H
+COVER_Y = NAVBAR_H + 39          # view_covers: 89..365
+ALBUM_Y, ALBUM_H = COVER_Y + 229, 34      # 318..352
+ARTIST_Y, ARTIST_H = ALBUM_Y + ALBUM_H, 28   # 352..380
+CAPTION_X = 16                   # side margins of the scrolling captions
+CAPTION_LULL = '3000'            # ms at each end, as playing_page.bin's label_album
 
 
-def cover_layout(page):
-    """(frame y, album y, album h, artist y, artist h) of a cover page."""
-    if page.hint: return HINT_COVER_Y, HINT_ALBUM_Y, HINT_ALBUM_H, HINT_ARTIST_Y, HINT_ARTIST_H
+def cover_layout():
+    """(frame y, album y, album h, artist y, artist h) of the cover page."""
     return COVER_Y, ALBUM_Y, ALBUM_H, ARTIST_Y, ARTIST_H
 
 
+def scroll_caption(name, y, h, size, colour):
+    """A caption as stock Now Playing's info lines (playing_page.bin label_album): an hscroll_label,
+    centred, white or grey in every state, that loops back and forth (yoyo) with a lull at each end
+    when its text is wider than the box and shows it centred when it fits; ellipses for the frames
+    it is not scrolling. Insensitive: it lies over the frame's black rows, whose touch layer takes
+    the touch (this AWTK hit-tests insensitive widgets through, hidden ones not)."""
+    w = Widget('hscroll_label', CAPTION_X, y, SCREEN_W - 2 * CAPTION_X, h, [('name', name), ('text', '')])
+    for st in ('normal', 'disable', 'focused'):
+        styled(w, (st,), 'font_size', str(size))
+        styled(w, (st,), 'text_color', colour)
+        styled(w, (st,), 'text_align_h', 'center')
+    for k, v in (('yoyo', 'true'), ('loop', 'true'), ('lull', CAPTION_LULL), ('ellipses', 'true'),
+                 ('sensitive', 'false')):
+        w.set(k, v)
+    return w
+
+
 def build_cover_page(page):
-    """Cover Flow's page: the covers frame, the album and artist captions under the covers, the
-    hint line (page.hint only), and the first-run cache build's progress label and Cancel button.
-    patch/coverflow.c fills view_covers with a stock slide_menu and view_tracks with the album's
-    track list; the frame's size must match the CF_* constants in patch/offsets.inc."""
+    """Cover Flow's page: the covers frame, the scrolling album and artist captions under the
+    covers, and the first-run cache build's progress label and Cancel button. patch/coverflow.c
+    fills view_covers with a stock slide_menu; the frame's size must match the CF_* constants in
+    patch/offsets.inc."""
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
     root.children.append(navbar(page.title))
-    fy, ay, ah, ry, rh = cover_layout(page)
-    frame = Widget('view', 0, fy, SCREEN_W, 230, [('name', 'view_covers')])
+    fy, ay, ah, ry, rh = cover_layout()
+    frame = Widget('view', 0, fy, SCREEN_W, COVER_FRAME_H, [('name', 'view_covers')])
     styled(frame, ('normal',), 'bg_color', '#000000')
     root.children.append(frame)
-    caps = (label('label_album', 10, ay, SCREEN_W - 20, ah, '', 22, '#FFFFFF'),
-            label('label_artist', 10, ry, SCREEN_W - 20, rh, '', 18, '#AAAAAA'))
-    for cap in caps:
-        if not page.hint:
-            cap.set('sensitive', 'false')   # over the frame's black rows: the touch layer takes the touch
-        root.children.append(cap)
-    if page.hint:
-        root.children.append(label('label_hint', 10, HINT_Y, SCREEN_W - 20, 24,
-                                   'Tap the centre cover to open the album', 15, '#888888'))
+    root.children.append(scroll_caption('label_album', ay, ah, 22, '#FFFFFF'))
+    root.children.append(scroll_caption('label_artist', ry, rh, 18, '#AAAAAA'))
     status = label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, '#FFFFFF')
     root.children.append(hidden(status))
     cancel = Widget('button', 100, 260, 120, 46, [('name', 'btn_cancel'), ('enable', 'true'),
@@ -143,9 +148,6 @@ def build_cover_page(page):
     styled(cancel, ('pressed',), 'text_color', '#FFFFFF')
     styled(cancel, ('pressed',), 'font_size', '20')
     root.children.append(hidden(cancel))
-    tracks = Widget('view', 0, NAVBAR_H, SCREEN_W, CLIENT_H - NAVBAR_H, [('name', 'view_tracks')])
-    styled(tracks, ('normal',), 'bg_color', '#000000')
-    root.children.append(hidden(tracks))
     return root
 
 
@@ -165,7 +167,7 @@ def stock_list(rows, scroll):
     sv = Widget('scroll_view', 0, 0, sv_w, list_h, [
         ('name', 'pod_scrollview'), ('yspeed_scale', '1'), ('xspeed_scale', '1')])
     for i, r in enumerate(rows):
-        chevron = r.action not in (pod_pages.ACT_PLAYER, pod_pages.ACT_SHUFFLE)   # rows that play: no chevron
+        chevron = r.action not in (pod_pages.ACT_PLAYER, pod_pages.ACT_SHUFFLE, pod_pages.ACT_STARTUP)   # rows that play or toggle: no chevron
         sv.children.append(row_item(f'pod_row{i}', i * ROW_H, r.label, chevron, ROW_H, sv_w))
     lv.children = [sv]
     if scroll:   # stock's scroll bar, only when there is something to scroll
@@ -194,15 +196,6 @@ def build_page(page):
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
     root.children.append(navbar(page.title))
-    if page.info is not None:
-        lab = Widget('label', 20, NAVBAR_H + 40, SCREEN_W - 40, 140, [
-            ('name', 'label_info'), ('text', page.info), ('line_wrap', 'true')])
-        styled(lab, ('normal',), 'text_color', '#FFFFFF')
-        styled(lab, ('normal',), 'font_size', '24')
-        styled(lab, ('normal',), 'text_align_h', 'center')
-        styled(lab, ('normal',), 'text_align_v', 'top')
-        root.children.append(lab)
-    if not page.rows: return root
     root.children.append(stock_list(page.rows, len(page.rows) * ROW_H > CLIENT_H - NAVBAR_H))
     return root
 
@@ -229,11 +222,10 @@ def asset_rels(pages):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('workdir'); ap.add_argument('--stage', required=True, choices=sorted(pod_pages.STAGES))
+    ap.add_argument('workdir')
     a = ap.parse_args()
-    pages = pod_pages.STAGES[a.stage]
     rootfs = os.path.join(a.workdir, 'rootfs') if os.path.isdir(os.path.join(a.workdir, 'rootfs')) else a.workdir
-    for rel, n in write_assets(rootfs, pages):
+    for rel, n in write_assets(rootfs, pod_pages.PAGES):
         print(f'wrote {rel} ({n} bytes)')
 
 
