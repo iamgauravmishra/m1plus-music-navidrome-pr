@@ -1,4 +1,4 @@
-/* M1 Pod Artists: the stock Local Music artists as an M1 Pod list; a tap opens Cover Flow on that
+/* M1+ Pod Artists: the stock Local Music artists as an M1+ Pod list; a tap opens Cover Flow on that
  * artist's albums.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
@@ -6,7 +6,8 @@
  * https://github.com/DiamondBond/q2-pod; see NOTICE): its Artists list hands an artist's albums to
  * coverflow_artist. On the M1 Plus the list is our own page instead of a hooked stock one.
  *
- * The list is exactly the stock Artists list: loadLocalClassList(0xf004), which runs
+ * The list is the stock Artists list, sorted as the album Artist order is (ar_sort below):
+ * loadLocalClassList(0xf004), which runs
  * GetAllAlbumArtist or getAllArtist as the stock Artists page's own artist/album-artist switch
  * (the artist_type global) says, each row named by REC_TITLE as the stock rows are. The rows are
  * built as stock builds its scrolling rows (systemset_sysset_page_init @0x4adb7c): list_item themed
@@ -22,11 +23,13 @@
  * artist's albums in Cover Flow and the album page) follows. Without the button or the title the page
  * still lists in the current mode.
  *
- * No stock function is hooked. The page is opened from the M1 Pod menu's Artists row and
+ * No stock function is hooked. The page is opened from the M1+ Pod menu's Artists row and
  * everything here runs from its own widgets; nothing of it outlives the window.
  */
 #include "offsets.inc"
 #include "stock.h"
+#include "covercache.h"
+#include "common.h"
 
 extern int coverflow_artist(void *artists, unsigned index); /* patch/coverflow.c */
 
@@ -39,6 +42,7 @@ static struct {
     void *win, *view, *list, *status;
     void *title, *toggle; /* label_title and btn_artisttype; either may be missing */
     void *artists; /* our copy of the stock artist rows */
+    unsigned *order;  /* stock row at each display position; NULL = stock order */
     unsigned count;
 } ar __attribute__((section(".scratch")));
 
@@ -54,11 +58,52 @@ static const char *ar_name(void *r) {
     return s ? s : "";
 }
 
+/* The stock row shown at display position i. */
+static unsigned ar_stock(unsigned i) { return ar.order ? ar.order[i] : i; }
+
 static int ar_on_artist(void *ctx, void *e) {
     unsigned i = (unsigned)(long)ctx;
     (void)e;
-    if (ar.artists && i < ar.count) coverflow_artist(ar.artists, i);
+    if (ar.artists && i < ar.count) coverflow_artist(ar.artists, ar_stock(i));
     return RET_OK;
+}
+
+/* The display order. Names are compared as the album Artist order does (cc_name_cmp: ASCII case aside, a leading
+ * "The " dropped; ties keep the stock order). Only a row whose name starts with an ASCII byte takes part: a name
+ * in another script (CJK, Cyrillic, ...) and the "Unknown Artist" row (id -1) stay exactly where stock put them, so
+ * stock's own placement of those groups (and of their order among themselves) is untouched, wherever it puts them.
+ * The runs of consecutive sortable rows between those fixed ones are sorted, each on its own. The stock rows are
+ * never reordered: order[] is the stock row number at each position, NULL (stock order) when there is no memory. */
+static void **ar_rec __attribute__((section(".scratch")));
+
+static int ar_sortable(void *r) { return *(int *)((char *)r + REC_ID) != -1 && (unsigned char)ar_name(r)[0] < 0x80; }
+
+static int ar_cmp(unsigned a, unsigned b) {
+    int d = cc_name_cmp(ar_name(ar_rec[a]), ar_name(ar_rec[b]));
+    return d ? d : a < b ? -1 : a > b;
+}
+
+static void ar_sort(void) {
+    unsigned i, s;
+    ar.order = (unsigned *)0;
+    if (ar.count < 2) return;
+    ar.order = calloc(ar.count, sizeof *ar.order);
+    ar_rec = calloc(ar.count, sizeof *ar_rec);
+    if (!ar.order || !ar_rec) {
+        free(ar.order);
+        free(ar_rec);
+        ar.order = (unsigned *)0;
+        ar_rec = (void **)0;
+        return;
+    }
+    for (i = 0; i < ar.count; ++i) ar.order[i] = i, ar_rec[i] = deque_at(ar.artists, i);
+    for (i = 0; i < ar.count;) {
+        for (s = i; i < ar.count && ar_sortable(ar_rec[i]); ++i) {}
+        if (i - s > 1) cc_heapsort(ar.order + s, i - s, ar_cmp);
+        if (i == s) ++i;   /* a fixed row */
+    }
+    free(ar_rec);
+    ar_rec = (void **)0;
 }
 
 /* The title names the mode artist_type selects; the button shows the glyph of the other one. */
@@ -74,31 +119,15 @@ static void ar_mode_show(void) {
     }
 }
 
-static int ar_on_back(void *ctx, void *e) {
-    (void)ctx; (void)e;
-    navigator_back();
-    return RET_OK;
-}
-
-static int ar_on_player(void *ctx, void *e) {
-    (void)ctx; (void)e;
-    on_backtoplayer_onclick((void *)0, (void *)0);
-    return RET_OK;
-}
-
 static int ar_on_destroy(void *ctx, void *e) {
     (void)ctx; (void)e;
     if (ar.artists) deque_destroy(ar.artists);
+    free(ar.order);
     memset(&ar, 0, sizeof ar);
     return RET_OK;
 }
 
-static void ar_bind(const char *name, int (*fn)(void *, void *)) {
-    void *w = widget_lookup(ar.win, name, 1);
-    if (w) widget_on(w, EVT_CLICK, fn, (void *)0);
-}
-
-/* One row per artist, in the stock order, each a stock-built list row (see the header). */
+/* One row per artist, in the display order (ar_sort), each a stock-built list row (see the header). */
 static void ar_build_rows(void) {
     int w = widget_get_prop_int(ar.view, "w", SCREEN_W);
     unsigned i;
@@ -112,7 +141,7 @@ static void ar_build_rows(void) {
             widget_use_style(label, "srlabel_leftwhite21_style");
             hscroll_label_set_only_parent_focus(label, 1);
             hscroll_label_set_ellipses(label, 1);
-            widget_set_text_utf8(label, ar_name(deque_at(ar.artists, i)));
+            widget_set_text_utf8(label, ar_name(deque_at(ar.artists, ar_stock(i))));
         }
         img = image_create(row, w - CHEVRON_W, 0, CHEVRON_W - 4, ROW_H);
         if (img) {
@@ -129,6 +158,8 @@ static void ar_load(void) {
     void *list;
     if (ar.artists) deque_destroy(ar.artists);
     ar.artists = (void *)0;
+    free(ar.order);
+    ar.order = (unsigned *)0;
     ar.count = 0;
     widget_destroy_children(ar.view);
     widget_set_prop_int(ar.view, "yoffset", 0);
@@ -139,6 +170,7 @@ static void ar_load(void) {
         deque_assign(ar.artists, list);
         ar.count = deque_size(ar.artists);
         if (ar.count > MAX_ARTISTS) ar.count = MAX_ARTISTS;
+        ar_sort();
     }
     if (!ar.count) {
         ar_show(ar.list, 0);
@@ -163,15 +195,15 @@ static int ar_on_toggle(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* The M1 Pod menu's Artists row. 0 once the page is up, -1 if it could not open. */
+/* The M1+ Pod menu's Artists row. 0 once the page is up, -1 if it could not open. */
 int artists_open(void) {
     if (ar.win) return -1;
     memset(&ar, 0, sizeof ar);
     ar.win = window_open("m1pod_artists");
     if (!ar.win) return -1;
     widget_on(ar.win, EVT_DESTROY, ar_on_destroy, (void *)0);
-    ar_bind("btn_return", ar_on_back);
-    ar_bind("btn_backtoplayer", ar_on_player);
+    pod_bind(ar.win, "btn_return", pod_on_back, (void *)0);
+    pod_bind(ar.win, "btn_backtoplayer", pod_on_player, (void *)0);
     ar.list = widget_lookup(ar.win, "pod_listview", 1);
     ar.view = widget_lookup(ar.win, "pod_scrollview", 1);
     ar.status = widget_lookup(ar.win, "label_status", 1);

@@ -132,7 +132,7 @@ downloaded art, built-in `random_cover0..7`, else `defaultcover`). That is the s
 fitted into 254 x 254 with the aspect kept, and never upscaled. So the stock 66 px strip shrank a
 254 px picture, and a 254 px widget draws it 1:1.
 
-The lock screen layout the release builds from this: `docs/ui.md` ("Lock screen").
+The lock screen layout the release builds from this: `docs/modules/lockscreen.md`.
 
 ## 4. Space recovery (`mod_space.py`)
 
@@ -160,7 +160,7 @@ A plain fwtool rebuild of stock is 12 KB under the stock size, which fwtool enfo
   never mapped; `.pdr` is used by debuggers (gdb), and nothing on the rootfs is known to read it from
   disk. File size, section headers and every other byte are unchanged (cross-checked with
   pyelftools). `demo` is pinned by its stock SHA-256 (`29e23119...b3f1`). The About version string is
-  in `demo`'s `.rodata` and stays `V2.1`.
+  in `demo`'s `.rodata` (0x74773c) and stays `V2.1`; `tools/mod_about.py` adds the `M1+ Pod:<tag>` row to `about_page.bin`.
 - **removed**, each pinned by SHA-256: `usr/bin/strace`, `strace-log-merge`, `sqlite3`, `hcidump`;
   `usr/lib/libdbus-1.so.3.19.8`; `usr/lib/lib{gio,glib,gmodule,gobject,gthread}-2.0.so.0.5400.3`
   (6,438,409 bytes). Evidence they are unused: no symlink resolves to any of them; a byte search of
@@ -204,6 +204,6 @@ of the full-precision listing against stock; with `--tailends` only 13 directory
 ## 6. The code payload
 
 `demo` has the same injectable layout as the Q2 (`ET_EXEC`, LOAD ends at va `0xa10fc8`, a spare
-final `PT_NULL` program header, `$gp = 0xa03ed0`). M1 Pod appends a non-PIC MIPS payload at va
+final `PT_NULL` program header, `$gp = 0xa03ed0`). M1+ Pod appends a non-PIC MIPS payload at va
 `0xb00000` and hooks two functions; mechanism, addresses, trampolines, kill switch and boot guard:
 `docs/architecture.md`.

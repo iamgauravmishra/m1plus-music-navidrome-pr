@@ -40,8 +40,8 @@ ZIP = resolve('firmware/M1 Plus Firmware V2.1.zip')
 SHS_ZIP = resolve('fonts/09_SourceHanSansSC.zip')
 VENV_PY = next((p for base in (ROOT, MAIN) for d in ('venv', '.venv')
                 for p in (os.path.join(base, d, 'bin', 'python'),) if os.path.exists(p)), sys.executable)
-WORK = os.environ.get('M1_WORK') or os.path.join(ROOT, 'work')
-OUT = os.environ.get('M1_OUT') or os.path.join(ROOT, 'out')
+WORK = os.path.abspath(os.environ.get('M1_WORK') or os.path.join(ROOT, 'work'))
+OUT = os.path.abspath(os.environ.get('M1_OUT') or os.path.join(ROOT, 'out'))
 
 def _zip_member(zip_path):
     z = zipfile.ZipFile(zip_path)
@@ -72,5 +72,9 @@ def find_stock(zip_path=ZIP):
     return None
 
 if __name__ == '__main__':
-    for k in ('ROOT', 'MAIN', 'ZIP', 'SHS_ZIP', 'VENV_PY', 'WORK', 'OUT'): print(f'{k:8} {globals()[k]}')
-    print(f'{"STOCK":8} {find_stock() if os.path.exists(ZIP) else None}')
+    # every path absolute, so it can be pasted into a command from any directory
+    for k in ('ROOT', 'MAIN', 'ZIP', 'SHS_ZIP', 'VENV_PY', 'WORK', 'OUT'): print(f'{k:8} {os.path.abspath(globals()[k])}')
+    stock = find_stock() if os.path.exists(ZIP) else None
+    print(f'{"STOCK":8} {os.path.abspath(stock) if stock else None}')
+    print(f'{"DEMO":8} {os.path.join(os.path.abspath(stock), "rootfs", "release", "bin", "demo") if stock else None}')
+    print(f'{"TREE":8} {os.path.join(WORK, "mod-release")}   (the built release tree, after build.py)')

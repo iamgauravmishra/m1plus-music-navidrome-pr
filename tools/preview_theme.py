@@ -10,7 +10,7 @@ from PIL import Image, ImageDraw, ImageFont
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_style, awtk_ui
 
-RAW = 'rootfs/release/assets/default/raw'
+from awtk_ui import RAW
 W, H, BAR, NAV = 320, 480, 30, 50
 
 def rgba(s):
@@ -46,7 +46,8 @@ def text(dr, t, xy, s, px, col, anchor='lm'):
 def paste(im, ic, x, y):
     if ic: im.alpha_composite(ic, (int(x), int(y)))
 
-def status_bar(im, t, pct=86):
+def status_bar(im, t, pct=86, shot=False, clock='12:59 PM'):
+    """shot: the Screenshot countdown's camera shown (pod_shot, the last child of the right-aligned group, so the rightmost)."""
     dr = ImageDraw.Draw(im); b = t.bar
     dr.rectangle((0, 0, W - 1, BAR - 1), fill=rgba(b.get('style:normal:bg_color', '#000000')))
     left = b.find('view_bar_left'); lay = left.get('children_layout')
@@ -55,10 +56,10 @@ def status_bar(im, t, pct=86):
     for name in ('bar_play', 'bar_vol3'):
         ic = t.img(name); paste(im, ic, x, (BAR - ic.height) // 2); x += ic.width + gap
     text(dr, t, (x, BAR / 2), '50', vpx, (255, 255, 255, 255))
-    c = b.find('bar_dclock'); text(dr, t, (c.x + c.w / 2, BAR / 2), '12:59 PM', int(c.get('style:normal:font_size')), (255, 255, 255, 255), 'mm')
+    c = b.find('bar_dclock'); text(dr, t, (c.x + c.w / 2, BAR / 2), clock, int(c.get('style:normal:font_size')), (255, 255, 255, 255), 'mm')
     right = b.find('view_bar_right'); s = int(right.get('children_layout').split('s=')[1].rstrip(')'))
     x = right.x + right.w
-    for name, img in (('img_wifi', 'bar_wifi3'), ('img_btclass', 'bar_btcon')):
+    for name, img in ((('pod_shot', 'pod_bar_shot'),) if shot else ()) + (('img_wifi', 'bar_wifi3'), ('img_btclass', 'bar_btcon')):
         ic = t.img(img); w = right.find(name).w; x -= w; paste(im, ic, x + w - ic.width, (BAR - ic.height) // 2); x -= s
     battery(im, t, b, pct)
 

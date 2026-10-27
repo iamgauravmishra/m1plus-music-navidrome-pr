@@ -9,7 +9,8 @@ test/patch.py calls init(WORKDIR) first, then loads the feature modules, which s
 import json, os, re, struct, sys
 from unicorn import Uc, UC_ARCH_MIPS, UC_MODE_MIPS32, UC_MODE_LITTLE_ENDIAN, UC_HOOK_CODE, UC_HOOK_BLOCK
 from unicorn.mips_const import (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3,
-                                UC_MIPS_REG_V0, UC_MIPS_REG_SP, UC_MIPS_REG_RA, UC_MIPS_REG_T9, UC_MIPS_REG_PC, UC_MIPS_REG_GP, UC_MIPS_REG_F0)
+                                UC_MIPS_REG_V0, UC_MIPS_REG_SP, UC_MIPS_REG_RA, UC_MIPS_REG_T9, UC_MIPS_REG_PC, UC_MIPS_REG_GP, UC_MIPS_REG_F0,
+                                UC_MIPS_REG_CP0_STATUS as _STATUS)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TOOLS = os.path.join(ROOT, 'tools')
@@ -122,6 +123,7 @@ class Machine:
         self.artist_albums = {}     # artist name -> its album rows (loadAlbumList 0xf004)
         self.free_mb = 1024
         self.thread_ok = True
+        self.confirm_yes = False    # the answer of the stock confirm dialog (dialog/confirminfo_dialog)
         self.album_cover = 0        # toolsGetAlbumCover's result
         self.extern_cover = 0
         self.load_image = 1         # widget_load_image: 0 = success
@@ -238,6 +240,8 @@ class Machine:
             self.calls.append(('access', p))
         elif name == 'window_open':
             self.calls.append(('window_open', self.read_cstr(a0))); ret = self.window
+        elif name == 'widget_get_window':   # the page window of a widget (a test sets page_window; none: the widget is in no window)
+            ret = self.page_window
         elif name == 'widget_lookup':
             nm = self.read_cstr(a1); self.calls.append(('widget_lookup', nm))
             ret = self.widgets.get(nm, 0)
@@ -267,6 +271,8 @@ class Machine:
         elif name == 'widget_set_sensitive':
             self.props[(a0, 'sensitive')] = a1
             self.calls.append(('widget_set_sensitive', a0, a1))
+        elif name == 'widget_set_state':
+            self.calls.append(('widget_set_state', a0, self.read_cstr(a1)))
         elif name == 'widget_grab':
             self.calls.append(('widget_grab', a0, a1))
         elif name == 'widget_ungrab':
@@ -348,6 +354,8 @@ class Machine:
             self.props[(a0, 'x')], self.props[(a0, 'y')] = a1, a2
             if self.mem_geometry: self.setword(a0, a1); self.setword(a0 + 4, a2)   # widget_t x, y @0, 4
             self.calls.append(('widget_move', a0, a1, a2))
+        elif name == 'widget_restack':   # the menu lists keep their rows' children in page order: recorded as (row, index)
+            self.calls.append(('widget_restack', a0, a1))
         elif name == 'widget_resize':
             self.props[(a0, 'w')], self.props[(a0, 'h')] = a1, a2
             if self.mem_geometry: self.setword(a0 + 8, a1); self.setword(a0 + 0xc, a2)   # w, h @8, 0xc
@@ -506,6 +514,9 @@ class Machine:
                 self.played = (q, self.word(a1 + 4))
             elif ctx == 'dialog/msginfo_dialog':
                 self.calls.append(('toast', self.read_cstr(a1 + 8), self.word(a1), self.word(a1 + 4)))
+            elif ctx == 'dialog/confirminfo_dialog':   # modal: the button pressed is the result (0xa Yes, else No)
+                self.calls.append(('confirm', self.read_cstr(a1 + 8), self.word(a1)))
+                ret = O['CONFIRM_YES'] if self.confirm_yes else 0
         elif name == 'albumcoverinfo_init':
             self.calls.append(('albumcoverinfo_init', a0))
         elif name == 'batchadd_albumcover_task':
@@ -614,11 +625,32 @@ class Machine:
             ret = 0 if self.fs.pop(p, None) is not None else ret
             self.calls.append(('unlink', p))
         elif name == 'mkdir':
-            self.calls.append(('mkdir', self.read_cstr(a0)))
+            p = self.read_cstr(a0); self.calls.append(('mkdir', p))
+            if ('mkdir', p) in self.fail: ret = -1
+            else: self.present.add(p)
         elif name == 'statfs':
-            self.u.mem_write(a1, struct.pack('<8I', 0, 4096, 0, 0, 0, 0, 0,
-                                             self.free_mb * 256) + bytes(96))
-            self.calls.append(('statfs', self.read_cstr(a0)))
+            # o32 struct statfs: f_type, f_bsize, .., f_bavail (word 7), f_fsid (words 8, 9). The card is its own file system
+            # (type, fsid) unless a test unmounts it; everything else is the root file system.
+            p = self.read_cstr(a0); on_card = p.startswith('/mnt/mmc') and self.card_mounted
+            self.u.mem_write(a1, struct.pack('<10I', 0x4d44 if on_card else 0x73717368, 4096, 0, 0, 0, 0, 0,
+                                             self.free_mb * 256, 0x1234 if on_card else 0x5678, 0) + bytes(88))
+            self.calls.append(('statfs', p))
+            if ('statfs', p) in self.fail: ret = -1
+        # ---- Screenshot: the frame buffer. self.fb = {'var': 40 words, 'fix': 17 words, 'mem': bytes} (None: no /dev/fb0)
+        elif name == 'ioctl':
+            self.calls.append(('ioctl', self.fds[a0][0] if a0 in self.fds else '?', a1))
+            if not self.fb or a0 not in self.fds or self.fds[a0][0] != '/dev/fb0' or ('ioctl', a1) in self.fail: ret = -1
+            elif a1 in (0x4600, 0x4602):
+                words = self.fb['var' if a1 == 0x4600 else 'fix']
+                self.u.mem_write(a2, struct.pack(f'<{len(words)}I', *words))
+            else: ret = -1
+        elif name == 'mmap':
+            self.calls.append(('mmap', a1, a2, a3, stack(0), stack(1)))
+            if ('mmap',) in self.fail or not self.fb: ret = 0xffffffff
+            else:
+                ret = self.malloc(len(self.fb['mem'])); self.u.mem_write(ret, self.fb['mem'])
+        elif name == 'munmap':
+            self.calls.append(('munmap', a0, a1))
         elif name == 'pthread_create':
             self.calls.append(('pthread_create',))
             ret = 0 if self.thread_ok else 11
@@ -647,6 +679,9 @@ class Machine:
             p, fl = self.read_cstr(a0), a1
             self.calls.append(('open', p, fl))
             if ('open', p) in self.fail: ret = -1
+            elif p == '/dev/fb0':
+                if self.fb: ret = self.next_fd; self.fds[ret] = [p, fl, 0]; self.next_fd += 1
+                else: ret = -1
             elif p in self.dirs: ret = self.next_fd; self.fds[ret] = [p, fl, 0]; self.next_fd += 1
             elif p in self.fs or fl & 0x100:
                 if fl & 0x200 or p not in self.fs: self.fs[p] = b''
@@ -694,7 +729,9 @@ class Machine:
         for k, v in (('x', x), ('y', y), ('w', cw), ('h', ch)): self.props[(w, k)] = v
 
     saved_album = 0
-    blits = ()                # the Albums grid's canvas_draw_image calls (bitmap, src rect, dst rect), texts, text measures
+    fb = None                 # Screenshot: the frame buffer /dev/fb0 answers with (see the ioctl / mmap mocks)
+    card_mounted = True       # statfs tells the card's mount point from its parent
+    blits = ()              # the Albums grid's canvas_draw_image calls (bitmap, src rect, dst rect), texts, text measures
     texts = ()
     measures = ()
     slide_starts_at_1 = True   # the stock slide_menu constructor stores value = 1 (the payload sets the value itself)
@@ -706,6 +743,7 @@ class Machine:
     clock = 1                # time_now_ms
     calloc_fail = False
     played = None            # (queue records, index) handed to playing_page
+    page_window = 0          # what widget_get_window answers
     bitmap = None
     bitmap_ok = True
     canvas_mem = 0            # a canvas in emulated memory (landscape reads its font); font_mem: the font it points at
@@ -728,11 +766,16 @@ class Machine:
 
     def names(self): return [c[0] for c in self.calls]
 
-    def click(self, name, count=2000000):
-        """Tap the widget `name`: its latest EVT_CLICK handler (the payload's widget_on call) runs with the context it was given."""
+    def click(self, name, count=2000000, x=None, evt='EVT_CLICK'):
+        """Tap the widget `name`: its latest EVT_CLICK handler (the payload's widget_on call) runs with the context it was given.
+        x: the event is a pointer event at that x (y 0) as stock sends it, screen coordinates (evt: another event type)."""
         w = self.widgets[name]
-        fn, ctx = self.bound[(w, O['EVT_CLICK'])]
-        return self.call(fn, a0=ctx, count=count)
+        fn, ctx = self.bound[(w, O[evt])]
+        e = 0
+        if x is not None:
+            e = self.alloc(0x30); self.u.mem_write(e, bytes(0x30))
+            self.setword(e, O[evt]); self.setword(e + 0x18, x)
+        return self.call(fn, a0=ctx, a1=e, count=count)
 
     def touch(self, kind, x, y=150, t=0, count=4000000, fn='on_pointer'):
         """Deliver one pointer event (EVT_POINTER_*) to the payload's touch layer, as stock's
@@ -756,6 +799,97 @@ class Machine:
             self.call(PSYMS['on_snap'], count=2000000); seen += self.calls
             if not any(c[0] == 'timer_add' for c in self.calls): break
         self.calls = seen
+
+
+# ---------------------------------------------------------------------------
+# Demo's own pointer-event code run for real (test/pod/scroll.py, menutap.py, pulldown.py): the window manager's entry
+# points, scroll_view, list_item and button code under Unicorn on a tree of real widget structs, with only the leaves
+# mocked (timers, animators, the emitter, widget states). A test subclasses StockEventMachine and handles what is its
+# own in leaf(); everything else falls through to the shared mocks here.
+SV_VT, LI_VT, LV_VT, BTN_VT, IMG_VT = 0x97a298, 0x979f78, 0x97a018, 0x97a8d8, 0x97ae78   # g_scroll_view_vtable, g_list_item_vtable, ...
+# leaves of the stock event code that are mocked (address -> name); memcpy and memset are the base machine's
+STOCK_LEAVES = {0x66cd50: 'widget_ref', 0x66ce2c: 'widget_unref', 0x6f11c0: 'darray_init', 0x66a850: 'widget_is_keyboard',
+                0x666888: 'widget_is_focusable', 0x66a9a8: 'widget_get_window', 0x66e620: 'widget_set_focused_internal',
+                0x66962c: 'widget_set_state', 0x666ec0: 'widget_off_by_func', 0x6f4c40: 'event_init', 0x6f4458: 'emitter_dispatch',
+                0x671f18: 'widget_dispatch_simple_event', 0x70122c: 'log_get_log_level', 0x742950: 'printf', 0x743c20: 'fflush',
+                0x742c40: '__cmpdi2', 0x68cc30: 'anim_create', 0x68cd04: 'anim_set_params', 0x673440: 'anim_on', 0x6730c8: 'anim_start',
+                0x66e8c4: 'widget_set_focused', 0x6691d0: 'widget_invalidate_force', 0x66c114: 'widget_update_pointer_cursor'}
+STOCK_LIBC = {0x742160: 'memcpy', 0x742da0: 'memset'}
+STOCK_NOOPS = ('widget_set_focused', 'widget_set_focused_internal', 'widget_invalidate_force', 'widget_ref', 'widget_unref', 'printf',
+               'fflush', 'widget_update_pointer_cursor', 'widget_is_keyboard', 'widget_is_focusable', 'widget_get_window',
+               'darray_init', 'widget_off_by_func', 'darray_deinit')
+
+
+class StockEventMachine(Machine):
+    """The machine with demo's pointer-event code running for real. Class attributes of a subclass: LEAVES (extra mocked
+    addresses, merged over STOCK_LEAVES), EXTRA (extra mocked names the base Machine does not know, such as
+    'widget_animator_destroy'), NOOPS, REAL (more stock functions, from pod.FUNCTIONS, to run for real). log holds what
+    the last pointer event caused, owner maps an emitter to its widget, states the widget_set_state calls."""
+    LEAVES = STOCK_LEAVES
+    EXTRA = ()
+    NOOPS = STOCK_NOOPS
+    REAL = ()
+
+    def __init__(self):
+        super().__init__()
+        for a, n in {**self.LEAVES, **STOCK_LIBC}.items(): self.handlers[a] = n
+        for n in ('widget_grab', 'widget_ungrab', 'widget_dispatch', 'widget_dispatch_event_to_target_recursive') + tuple(self.REAL):
+            if n in pod.FUNCTIONS: self.handlers.pop(pod.FUNCTIONS[n][2], None)        # stock's own, run for real
+        self.u.reg_write(_STATUS, self.u.reg_read(_STATUS) | 1 << 29 | 1 << 26)   # CU1 and FR: the velocity code is floating point (-mfp64)
+        self.setword(pod.GP - 0xd98, self.alloc(8))   # the GOT slot of `stdout` (the dynamic loader fills it): the debug fflush(stdout) reads through it
+        self.owner, self.states, self.log, self.anims, self.end, self.t = {}, {}, [], {}, {}, 0
+
+    def call(self, *a, **k):
+        try: return super().call(*a, **k)
+        except Exception as ex:   # noqa: BLE001 - say where the emulation stopped
+            raise AssertionError(f'{ex} at pc {self.u.reg_read(UC_MIPS_REG_PC):#x}, ra {self.u.reg_read(UC_MIPS_REG_RA):#x}') from ex
+
+    def _hook(self, u, address, size, _):
+        name = self.handlers.get(address)
+        if name not in self.LEAVES.values() and name not in self.EXTRA:
+            return super()._hook(u, address, size, _)
+        a0, a1, a2, a3 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3))
+        ret = self.leaf(name, a0, a1, a2, a3, u.reg_read(UC_MIPS_REG_SP))
+        u.reg_write(UC_MIPS_REG_V0, (ret or 0) & 0xffffffff)
+        u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+
+    def leaf(self, name, a0, a1, a2, a3, sp):
+        """One mocked leaf; its result. A subclass handles its own names first and ends with super().leaf()."""
+        if name in self.NOOPS: return 0
+        if name == 'widget_set_state': self.states[a0] = self.read_cstr(a1)
+        elif name == 'event_init':
+            self.u.mem_write(a0, struct.pack('<II', a1, 0x18)); self.setword(a0 + 0x10, a2)
+        elif name == 'emitter_dispatch': self.log.append(('emit', self.owner.get(a0, a0), self.word(a1) & 0xffff))
+        elif name == 'widget_dispatch_simple_event': self.log.append(('simple', a0, a1))
+        elif name == '__cmpdi2':   # libgcc: signed 64 bit compare (a1:a0 against a3:a2) -> 0 less, 1 equal, 2 greater
+            s64 = lambda lo, hi: struct.unpack('<q', struct.pack('<II', lo, hi))[0]
+            x, y = s64(a0, a1), s64(a2, a3); return 0 if x < y else 1 if x == y else 2
+        elif name == 'log_get_log_level': return 5
+        elif name == 'anim_create':   # widget_animator_scroll_create: a new animator, not started
+            an = self.alloc(0x80); self.u.mem_write(an, bytes(0x80))
+            self.setword(an + 4, a0); self.setword(an + 0x28, 2)
+            self.anims[an] = {'dur': a1}; return an
+        elif name == 'anim_set_params': self.anims[a0].update(x0=a1, y0=a2, x1=a3, y1=self.word(sp + 16))
+        elif name == 'anim_on': self.end[a0] = (a2, a3)
+        elif name == 'anim_start': self.setword(a0 + 0x28, 1)
+        elif name == 'widget_animator_destroy':   # stock queues the free on an idle; the animator is out of the manager and not running
+            self.log.append(('anim_destroy', a0)); self.setword(a0 + 0x28, 0); self.setword(a0 + 0x48, 0)
+        return 0
+
+    # ---- the widget tree: x/y/w/h, flags (enable, visible, sensitive), parent, vtable; an emitter gets the listener object
+    def widget(self, vt, x, y, w, h, parent=0, emitter=False):
+        a = self.alloc(0x180); self.u.mem_write(a, bytes(0x180))
+        for off, v in ((0, x), (4, y), (8, w), (0xc, h), (0x24, 0xd), (0x44, parent), (0x70, vt)): self.setword(a + off, v)
+        if emitter:
+            em = self.alloc(0x20); self.owner[em] = a; self.setword(a + 0x5c, em)
+        return a
+
+    def kids(self, parent, kids):
+        elms = self.alloc(4 * len(kids))
+        for i, c in enumerate(kids): self.setword(elms + 4 * i, c)
+        arr = self.alloc(12)
+        self.setword(arr, len(kids)); self.setword(arr + 4, len(kids)); self.setword(arr + 8, elms)
+        self.setword(parent + 0x58, arr)
 
 
 # ---------------------------------------------------------------------------
@@ -905,7 +1039,7 @@ def covered(rects, r, step=2):
 
 
 COVER_WIDGETS = ['btn_return', 'btn_backtoplayer', 'btn_cancel', 'navigationbar_view', 'view_covers',
-                 'label_album', 'label_artist', 'label_status', 'label_title']
+                 'label_album', 'label_artist', 'label_status', 'label_title', 'btn_allalbums']
 
 
 CFSORT_FILE, CFSORT_TMP = '/mnt/data/m1pod-cfsort', '/mnt/data/m1pod-cfsort.tmp'   # patch/home.h
@@ -937,6 +1071,30 @@ def fnv(h, s):
 def cache_paths(m, albums):
     return [art_file(fnv(fnv(O["FNV_SEED"], f"Artist {i}"), f"Album {i}") or 1)
             for i in range(albums)]
+
+
+def build_state(m):
+    """The shared cache worker's state struct `cb` (patch/covercache.c): jobs, cap, thread, mode, running, done, total, cancelled (words)."""
+    b = PSYMS['cb']
+    keys = ('jobs', 'cap', 'thread', 'mode', 'running', 'done', 'total', 'cancelled')
+    return {k: m.word(b + 4 * i) for i, k in enumerate(keys)}
+
+
+def build_jobs(m):
+    """[(track, key)] of the held job set, in the order the worker takes them."""
+    s = build_state(m)
+    return [(m.read_cstr(m.word(s['jobs'] + 8 * i)), m.word(s['jobs'] + 8 * i + 4)) for i in range(s['total'])] if s['jobs'] else []
+
+
+def count_of(m, name):
+    """How often libc/stock function `name` was called in the last Machine.call (which starts a fresh log)."""
+    return len([c for c in m.calls if c[0] == name])
+
+
+def fired(m, fn, count=40000000):
+    """A payload function (a page timer's callback, a handler) runs: the calls it made."""
+    m.call(PSYMS[fn], count=count)
+    return list(m.calls)
 
 
 def artists_row(page):

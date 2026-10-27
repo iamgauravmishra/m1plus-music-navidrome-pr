@@ -1,4 +1,4 @@
-/* M1 Pod Cover Flow: the stock Local Music albums as a cover carousel inside demo.
+/* M1+ Pod Cover Flow: the stock Local Music albums as a cover carousel inside demo.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
@@ -12,8 +12,8 @@
  * (keys 172/173, ringnav, scrub) are gone; a transparent touch layer of the page's own drives the
  * shelf (drag, fling, snap, tap by x): its own position in depth mode, a stock slide_menu in the flat fallback.
  *
- * No stock function is hooked. The page is opened from a row of the M1 Pod menu (the library's
- * albums) or from a row of the M1 Pod Artists list (one artist's
+ * No stock function is hooked. The page is opened from a row of the M1+ Pod menu (the library's
+ * albums) or from a row of the M1+ Pod Artists list (one artist's
  * albums, coverflow_artist: q2-pod's ARTIST_ALBUMS scope, with the stock "All songs" row as its All
  * albums card), and everything here is reached only from that page's own widgets, timers and its
  * one worker thread. A tap on the centre cover opens the stock album page (open_album; the page
@@ -42,6 +42,7 @@
 #include "home.h"
 #endif
 #include "covercache.h"
+#include "common.h"
 
 /* ===========================================================================
  * The depth renderer (q2-pod, after Rockbox PictureFlow). All integer: 16.16 turns and
@@ -268,10 +269,8 @@ void coverflow_render(const cfg_t *g, unsigned *d, int pitch, int frac,
 #define I(r, off) (*(int *)((char *)(r) + (off)))
 
 #define LAST_ALBUM ART_DIR "/album" /* the centre album's key, so a reboot opens on it */
-#define MIN_FREE_MB 16              /* no new cache files below this much free space on the card */
 #define ART_NEAR 3                  /* flat fallback: real art only this many covers either side */
 #define PLACEHOLDER "p_default"     /* the stock 254 px disc, Now Playing's missing-art image */
-#define F_OK 0
 #define POLL_MS 250
 #define LOAD_MS 1       /* the texture loader: one decode per main-loop turn, input in between */
 #define MAX_ALBUMS 4000 /* the job array and the slide_menu's children are bounded */
@@ -280,13 +279,9 @@ void coverflow_render(const cfg_t *g, unsigned *d, int pitch, int frac,
 enum { CF_COVERS, CF_PREPARING }; /* CF_COVERS is 0: a zeroed cf is on it */
 enum { ARTIST_ALBUMS = 1 };         /* cf.scoped, as q2-pod's */
 
-typedef struct {
-    char *track; /* the album's first track, copied so the thread never reads stock deques */
-    unsigned key;
-} job_t;
-
 static struct {
     void *win, *covers, *slide, *name, *artist, *status, *cancel;
+    void *all;                    /* btn_allalbums, the navbar button of the artist page (hidden unless the shelf has the card) */
     void *input;                  /* the transparent touch layer over the covers, the frame's size */
     int land;                     /* landscape: the frame is the body under the navbar, turned a quarter */
     void *albums;                 /* our copy of the stock album rows */
@@ -300,11 +295,11 @@ static struct {
     int scoped;
     void *artist_row;
     unsigned *keys;
-    job_t *jobs;
-    unsigned long thread;
+    int owns;                     /* this page holds the shared worker's job set (cc_build_*) */
+    int rebuild;                  /* Settings > Cover Flow > Rebuild Covers: every album is extracted again (CC_REBUILD) */
     unsigned timer;
     unsigned saved_album;         /* the centre album's key, kept across opens and reboots */
-    int screen, album, running;
+    int screen, album;
     /* touch: the pointer is down (and grabbed); a horizontal drag has started, from the finger at origin;
      * the press stopped a snap animation; the greatest excursion from the down point (either axis); the
      * offset the press found; the recent samples for the fling velocity (a ring, the newest at sample) */
@@ -314,7 +309,6 @@ static struct {
     /* the snap animation: from and to offsets, its start (time_now_ms) and length, and its timer */
     int snap_from, snap_to, snap_ms;
     unsigned snap_t0, snap_timer;
-    volatile int done, total, cancelled;
 } cf __attribute__((section(".scratch")));
 
 /* The depth renderer's state: the frame, the textures of the covers around the visual position
@@ -365,6 +359,9 @@ static void *album_at(unsigned i) { return i < album_count() ? cc_row(cf.albums,
 /* The All albums card: the "All songs" row the stock artist query appends (getAlbumByArtist). */
 static int is_card(void *r) { return cf.scoped && r && I(r, REC_ID) == ID_ALL_SONGS; }
 
+/* The scoped shelf ends with the card (load_artist keeps it only with two albums or more). */
+static int has_card(void) { return cf.scoped && album_count() && is_card(album_at(album_count() - 1)); }
+
 /* Album i's cache key; 0 (the card) has no art. */
 static unsigned key_at(unsigned i) {
     void *r = album_at(i);
@@ -372,71 +369,17 @@ static unsigned key_at(unsigned i) {
     return cf.keys ? cf.keys[i] : cc_album_key(r);
 }
 
-/* Whether dir's file system has MIN_FREE_MB free (statfs, MIPS o32 layout: f_bsize is word 1,
- * f_bavail word 7), as q2-pod's card_space. */
-static int card_space(const char *dir) {
-    unsigned fs[32];
-    memset(fs, 0, sizeof fs);
-    return !statfs(dir, fs) &&
-           (unsigned long long)fs[7] * fs[1] >= (unsigned long long)MIN_FREE_MB << 20;
-}
-
-/* ---------------------------------------------------------------------------
- * The worker thread. It touches only: its own job array (built before it started), the volatile
- * counters below, files under ART_DIR, and the two stock art functions under parse_cover_mutex,
- * which is the lock every stock caller of them holds (parse_albumcovertask_thd 0x4dd68c,
- * parseplaycover_thd 0x4df1c4). It never touches a widget, a deque or the image manager.
- */
-static void build_art(const job_t *j) {
-    char dst[64], tmp[64];
-    int ok;
-    void *f;
-    if (access(j->track, F_OK)) return; /* storage gone: no marker, the next open retries */
-    cc_path(dst, sizeof dst, j->key, "");
-    cc_path(tmp, sizeof tmp, j->key, ".tmp");
-    pthread_mutex_lock((void *)PARSE_COVER_MUTEX);
-    ok = toolsGetAlbumCover(j->track, tmp, ART_SIZE, ART_SIZE) == 1 ||
-         toolsGetExternCover(j->track, tmp, ART_SIZE, ART_SIZE) == 1;
-    pthread_mutex_unlock((void *)PARSE_COVER_MUTEX);
-    if (ok && cc_file_size(tmp) > 0) {
-        if (rename(tmp, dst)) unlink(tmp); /* extracted but not published: no marker, the next open retries */
-        return;
-    }
-    unlink(tmp);
-    if (access(j->track, F_OK)) return;
-    f = fopen(dst, "w"); /* an empty file marks "no art": the placeholder shows, no retry */
-    if (f) fclose(f);
-}
-
-static void *worker(void *unused) {
-    (void)unused;
-    while (cf.done < cf.total && !cf.cancelled) {
-        build_art(&cf.jobs[cf.done]);
-        ++cf.done;
-    }
-    return (void *)0;
-}
-
-/* ------------------------------------------------------------------------ */
-
+/* The cache is built by the shared worker (patch/covercache.c, cc_build_*): its thread touches no widget, deque or
+ * image manager; this page only polls its counters from its own timer. */
 static void stop_timer(void) {
     if (cf.timer) timer_remove(cf.timer);
     cf.timer = 0;
 }
 
-/* A running worker cancelled and joined (bounded by one album's art), and the job array freed. */
-static void worker_stop(void) {
-    int i;
-    if (cf.running) {
-        cf.cancelled = 1;
-        pthread_join(cf.thread, (void **)0);
-        cf.running = 0;
-    }
-    for (i = 0; i < cf.total; ++i)
-        if (cf.jobs) free(cf.jobs[i].track);
-    free(cf.jobs);
-    cf.jobs = (job_t *)0;
-    cf.total = cf.done = cf.cancelled = 0;
+/* This page's job set released: a running worker is cancelled and joined (bounded by one album's art). */
+static void build_end(void) {
+    if (cf.owns) cc_build_stop();
+    cf.owns = 0;
 }
 
 static void fx_close(void) {
@@ -522,8 +465,8 @@ static int visual(int n, int *c, int *frac) {
     int s = stride(), d = offset(), q;
     if (n <= 0 || s <= 0) return 0;
     q = floor_div(2 * d + s, 2 * s);   /* round(d / s) */
-    *frac = (q * s - d) * CF_ONE / s;  /* p - c */
-    *c = ((value() - q) % n + n) % n;
+    *c = clamp_i(value() - q, 0, n - 1); /* the shelf has ends: past one (the overscroll, under half a cover) the end cover stays the centre */
+    *frac = ((value() - *c) * s - d) * CF_ONE / s;  /* p - c */
     return s;
 }
 
@@ -536,10 +479,9 @@ static int visual(int n, int *c, int *frac) {
  * wants nothing past its ends. Each decode still stalls the UI thread for its length (not measured on
  * the device yet; measure before moving decoding to a worker).
  */
-static int around(int c, int k, int n) { /* album c + k of n, wrapped; an artist's shelf: -1 past its ends */
+static int around(int c, int k, int n) { /* album c + k of n; -1 past the shelf's ends (every shelf has them) */
     int a = c + k;
-    if (cf.scoped) return a >= 0 && a < n ? a : -1;
-    return (a % n + n) % n;
+    return a >= 0 && a < n ? a : -1;
 }
 
 /* The k-th album wanted around c, nearest first: c, then each ring distance ahead of the travel then
@@ -557,9 +499,8 @@ static int resident(int a) { /* the slot holding album a, or -1 */
     return -1;
 }
 
-static int distance(int a, int c, int n) { /* along the shelf, round it for the main one */
-    int d = abs_i(a - c);
-    return cf.scoped || d <= n - d ? d : n - d;
+static int distance(int a, int c) { /* along the shelf */
+    return abs_i(a - c);
 }
 
 /* Album a decoded into a free slot, else into the farthest unwanted one (CF_SLOTS > CF_WANTED: there is one). */
@@ -574,7 +515,7 @@ static void fx_load(int a, int c, int n) {
             break;
         }
         for (k = 0; k < CF_WANTED; ++k) keep |= wanted(c, n, k) == b;
-        d = distance(b, c, n);
+        d = distance(b, c);
         if (!keep && d > far) far = d, slot = i;
     }
     if (slot < 0) return;
@@ -637,7 +578,6 @@ static int on_load(const void *unused) {
  * y + glyph.y + ascent, advancing by the glyph's advance + 1 (4 for a missing glyph).
  */
 #define CAP_MAX 64 /* wide chars kept per caption, the ellipsis included */
-#define ELLIPSIS 0x2026
 
 typedef struct {
     short x, y;
@@ -723,11 +663,7 @@ static int on_paint(void *ctx, void *e) {
     if (!canvas || !depth() || cf.screen != CF_COVERS || !shelf_up()) return RET_OK;
     n = count();
     if (!visual(n, &c, &frac)) return RET_OK;
-    if (fx.seen && c != fx.seen - 1) { /* the way it went, for the prefetch */
-        int d = c - (fx.seen - 1);
-        if (!cf.scoped) d = 2 * d > n ? d - n : 2 * d < -n ? d + n : d;
-        fx.dir = d < 0 ? -1 : 1;
-    }
+    if (fx.seen && c != fx.seen - 1) fx.dir = c < fx.seen - 1 ? -1 : 1; /* the way it went, for the prefetch */
     fx.seen = c + 1;
     if (fx_ring(c, n, ring) && !fx.load_timer) fx.load_timer = timer_add(on_load, (void *)0, LOAD_MS);
     if (!fx.drawn || c != fx.c || frac != fx.frac) {
@@ -774,7 +710,7 @@ static void show_album(void) {
         unsigned i;
         for (i = 0; i < n; ++i) {
             unsigned d = i > c ? i - c : c - i;
-            flat_cover(widget_get_child(cf.slide, i), i, d <= ART_NEAR || n - d <= ART_NEAR);
+            flat_cover(widget_get_child(cf.slide, i), i, d <= ART_NEAR);
         }
     }
 }
@@ -802,11 +738,32 @@ static int on_changed(void *ctx, void *e) {
  * All in the UI thread; the timer is the page's own, removed at destroy.
  */
 
-/* Scoped, the shelf has ends: an offset of `albums` covers (positive: towards the first album)
- * stays within the artist's albums, so p = value - offset / h never leaves 0..n-1. */
+/* Every shelf has ends (no wrap, as Apple's): an offset of `albums` covers (positive: towards the first album)
+ * stays within the albums, so p = value - offset / h never leaves 0..n-1. Past an end only the finger goes, rubber-banded
+ * (rubber), and the snap eases back to the bound. */
 static int bound(int albums) {
     int v = value(), n = count();
-    return cf.scoped ? clamp_i(albums, v - (n - 1), v) : albums;
+    return clamp_i(albums, v - (n - 1), v);
+}
+
+/* The rubber band: past an end the shelf follows the finger at half speed and saturates at OVER_MAX (2/5 of a cover,
+ * so the end cover stays the centre: the renderer's offset from the centre stays under 1/2). With x the finger's travel
+ * past the end, the shelf shows m * x / (x + 2 m), m = OVER_MAX; unrubber is its inverse (a press that finds the shelf
+ * overscrolled picks the travel up where it was). The flat fallback's slide_menu would show its wrapped covers, so it has none. */
+static int rubber(int off, int h) {
+    int lo = bound(-0x7fff) * h, hi = bound(0x7fff) * h, m = h * OVER_NUM / OVER_DEN, x;
+    if (!depth()) return clamp_i(off, lo, hi);
+    if (off > hi) x = off - hi, off = hi + m * x / (x + 2 * m);
+    else if (off < lo) x = lo - off, off = lo - m * x / (x + 2 * m);
+    return off;
+}
+
+static int unrubber(int off, int h) {
+    int lo = bound(-0x7fff) * h, hi = bound(0x7fff) * h, m = h * OVER_NUM / OVER_DEN, s;
+    if (!depth() || h <= 0) return off;
+    if (off > hi) s = off - hi, off = hi + (s >= m ? 64 * m : 2 * m * s / (m - s));
+    else if (off < lo) s = lo - off, off = lo - (s >= m ? 64 * m : 2 * m * s / (m - s));
+    return off;
 }
 
 static void snap_stop(void) {
@@ -815,13 +772,13 @@ static void snap_stop(void) {
 }
 
 /* The offset reached its target: commit it as the stock widget does (offset back to 0 and
- * value - offset / h, wrapped), and the captions follow. */
+ * value - offset / h; the target is within the shelf), and the captions follow. */
 static void commit(void) {
     int h = stride(), n = count(), q, v, now;
     if (n <= 0 || h <= 0) return;
     q = cf.snap_to / h;
     now = value();
-    v = ((now - q) % n + n) % n;
+    v = clamp_i(now - q, 0, n - 1);
     set_offset(0);
     if (v != now) set_value(v);
     else show_album();
@@ -927,7 +884,7 @@ static void track(int x, int y, int t) {
         cf.active = 1, cf.origin = cf.down_x + (dx > 0 ? DRAG_START : -DRAG_START);
     if (cf.active) {
         int h = stride(), off = cf.base_off + (x - cf.origin) * h / drag_px();
-        set_offset(cf.scoped ? clamp_i(off, bound(-0x7fff) * h, bound(0x7fff) * h) : off);
+        set_offset(rubber(off, h));
     }
     cf.sample = (cf.sample + 1) % CF_SAMPLES;
     cf.sx[cf.sample] = x, cf.st[cf.sample] = t;
@@ -959,7 +916,7 @@ static int on_pointer(void *ctx, void *e) {
         cf.interrupted = cf.snap_timer != 0; /* the shelf stops where the animation had it */
         snap_stop();
         cf.dragging = 1, cf.active = cf.reach = 0;
-        cf.down_x = x, cf.down_y = y, cf.base_off = offset();
+        cf.down_x = x, cf.down_y = y, cf.base_off = unrubber(offset(), stride());
         cf.sample = 0, cf.samples = 1, cf.sx[0] = x, cf.st[0] = t;
         widget_grab(cf.covers, cf.input); /* moves and the release come here wherever they go */
     } else if (type == EVT_POINTER_MOVE && cf.dragging) {
@@ -1016,13 +973,14 @@ static void layout(void) {
 
 /* The covers screen: the depth frame over a touch layer, the shelf's position in cfpos; or, when the
  * frame could not be allocated, the flat fallback: a stock slide_menu with one stock image per album
- * (it wraps and commits an index; the touch layer drives it). */
+ * (it commits an index; the touch layer drives it, bounded). */
 static void to_covers(void) {
     cf.screen = CF_COVERS;
     show(cf.status, 0);
     show(cf.cancel, 0);
     show(cf.covers, 1); /* the captions are never hidden, and stay insensitive (the asset): they
                          * lie over the frame's black bottom rows, so its touch layer gets the touch */
+    show(cf.all, has_card()); /* only with the card, and not while preparing */
     if (!cf.built) {
         unsigned n = album_count(), i;
         cf.built = 1;
@@ -1084,6 +1042,13 @@ static void open_album(int index) {
     cc_open_album(cf.scoped ? cf.artist_row : (void *)0, (int)(cf.order ? cf.order[index] : (unsigned)index)); /* the stock row */
 }
 
+/* The artist page's navbar button: what a tap on the All albums card does (the card is the last row), so Back returns here. */
+static int on_all(void *ctx, void *e) {
+    (void)ctx; (void)e;
+    if (cf.screen == CF_COVERS && has_card()) open_album((int)album_count() - 1);
+    return RET_OK;
+}
+
 /* ---------------------------------------------------------------------------
  * Opening: the album list, then art for the albums with no cache file (q2-pod's first-run build;
  * later opens resume where a cancel left off).
@@ -1100,17 +1065,16 @@ static int on_poll(const void *unused) {
     char progress[96];
     (void)unused;
     cf.timer = 0;
-    if (cf.done >= cf.total || cf.cancelled) {
-        worker_stop(); /* joins the thread's last steps */
+    if (cc_build_done() >= cc_build_total()) {
+        build_end(); /* joins the thread's last steps */
         to_covers();
         return RET_OK;
     }
-    snprintf(progress, sizeof progress, "%s %d/%d", TR("Preparing covers..."), cf.done, cf.total);
+    snprintf(progress, sizeof progress, "%s %d/%d", TR("Preparing covers..."), cc_build_done(), cc_build_total());
     widget_set_text_utf8(cf.status, progress);
     cf.timer = timer_add(on_poll, (void *)0, POLL_MS);
     if (!cf.timer) { /* nothing would ever finish this screen: stop here and show what is cached */
-        cf.cancelled = 1;
-        worker_stop();
+        build_end();
         to_covers();
     }
     return RET_OK;
@@ -1119,9 +1083,8 @@ static int on_poll(const void *unused) {
 static int on_cancel(void *ctx, void *e) {
     (void)ctx; (void)e;
     if (cf.screen != CF_PREPARING) return RET_OK;
-    cf.cancelled = 1;
     stop_timer();
-    worker_stop();
+    build_end();   /* cancels and joins: what was written stays, the rest is left as it was */
     to_covers();
     return RET_OK;
 }
@@ -1196,38 +1159,24 @@ static int load_artist(void) {
     return (int)n;
 }
 
-/* Jobs for the albums with no cache file yet. 1 when a build is running and the preparing screen
- * is up, 0 when there is nothing to build (or no card, no space, or no thread). */
+/* Jobs for the albums with no cache file yet (every album in a rebuild, which extracts them all again). 1 when a
+ * build is running and the preparing screen is up, 0 when there is nothing to build (or no card, no space, no thread,
+ * or the shared worker is busy with another page's set). */
 static int start_build(void) {
     unsigned n = album_count(), i;
-    char path[64];
-    cf.done = cf.total = cf.cancelled = 0;
-    cf.jobs = calloc(n ? n : 1, sizeof(job_t));
-    if (!cf.jobs) return 0;
+    if (!cc_build_open(n, cf.rebuild ? CC_REBUILD : CC_MISSING)) return 0;
+    cf.owns = 1;
     for (i = 0; i < n; ++i) {
-        void *r = album_at(i);
-        job_t *j = &cf.jobs[cf.total];
         unsigned key = key_at(i);
-        if (!key || !*cc_str(r, REC_PATH) || !access(cc_path(path, sizeof path, key, ""), F_OK)) continue;
-        j->track = strdup(cc_str(r, REC_PATH));
-        if (!j->track) break;
-        j->key = key;
-        ++cf.total;
+        if (cc_build_add(cc_str(album_at(i), REC_PATH), key) < 0) break;
     }
-    if (!cf.total) {
-        worker_stop(); /* nothing to build: free the job array */
+    if (!cc_build_start()) { /* nothing to build, no card, no space, or no thread: show what is cached already */
+        cf.owns = 0;
         return 0;
     }
-    mkdir(ART_DIR, 0755);
-    if (!card_space(ART_DIR) || pthread_create(&cf.thread, (void *)0, worker, (void *)0)) {
-        worker_stop(); /* no card, no space, or no thread: show what is cached already */
-        return 0;
-    }
-    cf.running = 1;
     cf.timer = timer_add(on_poll, (void *)0, POLL_MS);
     if (!cf.timer) {
-        cf.cancelled = 1;
-        worker_stop(); /* no completion callback possible: stop the worker, show what is cached */
+        build_end(); /* no completion callback possible: stop the worker, show what is cached */
         return 0;
     }
     cf.screen = CF_PREPARING;
@@ -1246,12 +1195,6 @@ static int on_back(void *ctx, void *e) {
     return RET_OK;
 }
 
-static int on_player(void *ctx, void *e) {
-    (void)ctx; (void)e;
-    on_backtoplayer_onclick((void *)0, (void *)0);
-    return RET_OK;
-}
-
 /* The window is going: stop the timer, join the worker, free everything we own. Nothing of ours
  * may outlive the page. */
 static int on_destroy(void *ctx, void *e) {
@@ -1260,7 +1203,7 @@ static int on_destroy(void *ctx, void *e) {
     snap_stop();
     if (cf.dragging) widget_ungrab(cf.covers, cf.input);
     cf.dragging = 0;
-    worker_stop();
+    build_end();
     fx_close();
     if (cf.saved_album && !cf.scoped) blob(LAST_ALBUM, &cf.saved_album, 1);
     if (cf.albums) deque_destroy(cf.albums);
@@ -1270,17 +1213,11 @@ static int on_destroy(void *ctx, void *e) {
     cf.albums = cf.artist_row = (void *)0;
     cf.keys = cf.order = (unsigned *)0;
     cf.win = cf.covers = cf.slide = cf.input = cf.name = cf.artist = (void *)0;
-    cf.status = cf.cancel = (void *)0;
+    cf.status = cf.cancel = cf.all = (void *)0;
     cf.screen = CF_COVERS;
     cf.album = cf.scoped = cf.land = cf.built = 0;
     cfpos.value = cfpos.off = 0;
     return RET_OK;
-}
-
-static void *bind(const char *name, int (*fn)(void *, void *)) {
-    void *w = widget_lookup(cf.win, name, 1);
-    if (w && fn) widget_on(w, EVT_CLICK, fn, (void *)0);
-    return w;
 }
 
 /* The page and its widgets, everything hidden that waits for a screen; -1 if it did not open. */
@@ -1288,13 +1225,14 @@ static int open_page(void) {
     cf.win = window_open("m1pod_cover");
     if (!cf.win) return -1;
     widget_on(cf.win, EVT_DESTROY, on_destroy, (void *)0);
-    bind("btn_return", on_back);
-    bind("btn_backtoplayer", on_player);
+    pod_bind(cf.win, "btn_return", on_back, (void *)0);
+    pod_bind(cf.win, "btn_backtoplayer", pod_on_player, (void *)0);
     cf.covers = widget_lookup(cf.win, "view_covers", 1);
     cf.name = widget_lookup(cf.win, "label_album", 1);
     cf.artist = widget_lookup(cf.win, "label_artist", 1);
     cf.status = widget_lookup(cf.win, "label_status", 1);
-    cf.cancel = bind("btn_cancel", on_cancel);
+    cf.cancel = pod_bind(cf.win, "btn_cancel", on_cancel, (void *)0);
+    cf.all = pod_bind(cf.win, "btn_allalbums", on_all, (void *)0); /* in the asset, hidden; the artist page shows it */
     if (!cf.covers || !cf.name || !cf.artist || !cf.status || !cf.cancel) {
         navigator_back(); /* an asset that is not ours: leave rather than work on half a page */
         return -1;
@@ -1321,11 +1259,22 @@ static int open_covers(int n, const char *empty) {
     return 0;
 }
 
-/* The M1 Pod menu's Cover Flow row. 0 once the page is up, -1 if it could not open (the caller
+/* The M1+ Pod menu's Cover Flow row. 0 once the page is up, -1 if it could not open (the caller
  * then leaves the menu as it was). */
 int coverflow_open(void) {
     if (cf.win) return -1;
     memset(&cf, 0, sizeof cf);
+    if (open_page()) return -1;
+    return open_covers(load_albums(), "Update Local Music first");
+}
+
+/* Settings > Cover Flow > Rebuild Covers, after its confirm: the library's Cover Flow opened with the Preparing screen
+ * on EVERY album (cc_build CC_REBUILD: each cache file is extracted again and replaced, the no-art markers too). Cancel
+ * or Back leaves a complete cache (the old files stay until replaced); when it is done the covers show as usual. */
+int coverflow_rebuild(void) {
+    if (cf.win) return -1;
+    memset(&cf, 0, sizeof cf);
+    cf.rebuild = 1;
     if (open_page()) return -1;
     return open_covers(load_albums(), "Update Local Music first");
 }
@@ -1350,7 +1299,10 @@ int coverflow_artist(void *artists, unsigned index) {
         return -1;
     }
     title = widget_lookup(cf.win, "label_title", 1);
-    if (title) widget_set_text_utf8(title, cc_str(row, REC_TITLE));
+    if (title) {
+        widget_set_text_utf8(title, cc_str(row, REC_TITLE));
+        widget_resize(title, NAV_VIEW_X - widget_get_prop_int(title, "x", 0), widget_get_prop_int(title, "h", 0)); /* ends before the button's slot */
+    }
     return open_covers(load_artist(), "No albums");
 }
 #endif /* CF_HOST */

@@ -35,11 +35,11 @@ Usage: mod_theme.py SRC_WORKDIR OUT_WORKDIR       (OUT == SRC edits in place)
 """
 import argparse, hashlib, os, stat, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import awtk_style, awtk_ui
+import awtk_style, awtk_ui, statusbar
 from awtk_style import T_INT32, T_UINT32
 from modlib import clone_workdir, edit_ui
 
-RAW = 'rootfs/release/assets/default/raw'
+from awtk_ui import RAW
 STYLE = f'{RAW}/styles/default.bin'
 BAR = f'{RAW}/ui/system_bar.bin'
 HOME = f'{RAW}/ui/home_page.bin'
@@ -159,7 +159,6 @@ GLYPH_ON, GLYPH_OFF = (255, 255, 255), (0x66, 0x66, 0x66)   # q2-pod status_icon
 FILL, THUMB, TILE = (0xEE, 0xEE, 0xEC), (0x77, 0x77, 0x77), (0x33, 0x33, 0x33)   # slider fill / thumb disc / cover tile
 KNOB = (42.5, 14, 15)        # the toggles' round knob (right edge of the "on" images)
 ACCENT_ART = {
-    'sset_on.png': ('d3b8d22e033c3cac37f2939ef469d4852f32cf845f5293bf5c2ad126cd1cdd56', FILL, KNOB),
     'pset_dual.png': ('1af1fd22fd00ba42a33bbe4dc1d8f96f160d6afd3708d6387a4fd5fb7d19ca5a', FILL, KNOB),
     'pset_high.png': ('90d0718c13aaaadc45a9c92c395cbaf82d877c11f9d043807b8dbd08fe678d0e', FILL, KNOB),
     'vol_progress.png': ('c76fa2f01c16481819b8857f3bb73a1fa4c0c329cc7f0197db315690408a75ae', FILL, None),
@@ -175,6 +174,47 @@ ACCENT_ART = {
     'defaultcover.png': ('8c4f7c9e81c953d0d49c74dba8a9e28d31e099d3665854e6e15a3b6c01c7e10b', TILE, None),
     'scover_default.png': ('ef940f9ff070036976fff9bb7fd3128ce5ebb072603098125424ae547c8febeb', TILE, None),
 }
+
+# The on/off switch (sset_on / sset_off, 57x28, used by the stock settings rows, the pull-down-free pages and our own rows):
+# redrawn without text, a 46x24 pill track right-aligned in the canvas and a round 18 px knob 3 px in, 8x supersampled. on = the slider-fill off-white track
+# with a dark knob (the pull-down's white disc with a dark glyph), off = the edge grey track with the muted grey knob.
+# name -> (stock SHA-256, on); theme1 shares sset_off with the default theme (it has no file of its own).
+TOGGLE_W, TOGGLE_H = 57, 28                  # the image canvas
+PILL_W, PILL_H, TOGGLE_KNOB, TOGGLE_INSET = 46, 24, 18, 3     # the pill, right-aligned in the canvas (x 11, y 2), and its knob
+TOGGLE_COLOURS = {True: ((0xEE, 0xEE, 0xEC), (0x14, 0x14, 0x14)), False: ((0x3A, 0x3A, 0x3A), (0x8C, 0x8C, 0x8C))}   # track, knob
+TOGGLES = {
+    'assets/default/raw/images/xx/sset_on.png': ('d3b8d22e033c3cac37f2939ef469d4852f32cf845f5293bf5c2ad126cd1cdd56', True),
+    'assets/default/raw/images/xx/sset_off.png': ('f0bb8014368a088b6523dc627e43d44f36a444735ba8dff169b086619254fa33', False),
+    'assets/theme1/raw/images/xx/sset_on.png': ('384730f95a849cfc7524431a9e332f2e3ff7c6e7b5393bad4dc8a18fcb9a303f', True),
+}
+
+def toggle_image(on, ss=8):
+    """The pill switch: alpha masks drawn at ss x and box-reduced, the knob composited over the track."""
+    from PIL import Image, ImageDraw
+    w, h, k, m = TOGGLE_W, TOGGLE_H, TOGGLE_KNOB, TOGGLE_INSET
+    pw, ph = PILL_W, PILL_H; ox, oy = w - pw, (h - ph) // 2
+    track_rgb, knob_rgb = TOGGLE_COLOURS[on]
+    def mask(box, radius):
+        big = Image.new('L', (w * ss, h * ss), 0)
+        ImageDraw.Draw(big).rounded_rectangle([round(v * ss) for v in box[:2]] + [round(v * ss) - 1 for v in box[2:]], radius=round(radius * ss), fill=255)
+        return big.resize((w, h), Image.BOX)
+    kx = ox + pw - m - k if on else ox + m
+    out = Image.new('RGBA', (w, h), track_rgb + (0,)); out.putalpha(mask((ox, oy, ox + pw, oy + ph), ph / 2))
+    knob = Image.new('RGBA', (w, h), knob_rgb + (0,)); knob.putalpha(mask((kx, oy + (ph - k) / 2, kx + k, oy + (ph + k) / 2), k / 2))
+    out.alpha_composite(knob); return out
+
+def apply_toggles(root):
+    from PIL import Image
+    import io
+    changed = []
+    for rel, (pin, on) in sorted(TOGGLES.items()):
+        p = os.path.join(root, 'rootfs/release', rel); data = open(p, 'rb').read()
+        assert sha256(data) == pin, f'{rel}: not the audited stock image'
+        old = Image.open(io.BytesIO(data)); assert old.size == (TOGGLE_W, TOGGLE_H) and old.mode == 'RGBA', f'{rel}: {old.size} {old.mode}'
+        out = png_bytes(toggle_image(on))
+        assert Image.open(io.BytesIO(out)).size == old.size
+        write_keep_mode(p, out); changed.append((rel, len(data), len(out)))
+    return changed
 
 def sha256(b): return hashlib.sha256(b).hexdigest()
 
@@ -479,10 +519,8 @@ def apply_icons(root):
     return changed
 
 # ---------------------------------------------------------------- ui/system_bar.bin
-CLOCK_PX, SMALL_PX, EDGE, GAP = 18, 16, 10, 4
-CLOCK_X, CLOCK_W = 104, 90       # centre 149: "12:59 PM" (66 px at 18) spans 116..182
-
 def apply_bar(root):
+    """The real bar; tools/statusbar.py holds the table (the pull-down's copy of the bar is laid out from it too)."""
     left, right, clock = root.find('view_bar_left'), root.find('view_bar_right'), root.find('bar_dclock')
     vol, pg, img = root.find('label_volume'), root.find('pgbar_battery'), root.find('img_battery')
     assert all(w is not None for w in (left, right, clock, vol, pg, img)), 'unexpected system_bar layout'
@@ -492,17 +530,8 @@ def apply_bar(root):
     assert left.get('children_layout') == 'default(r=1,c=0,x=14,s=4)'
     assert right.get('children_layout') == 'default(r=1,c=0,a=right,s=5)'
     assert clock.get('self_layout') == 'default(x=108,y=0,w=90,h=100%)'
-    left.set('children_layout', f'default(r=1,c=0,x={EDGE},s={GAP})')
-    for st in ('normal', 'disable', 'focused'):
-        assert vol.get(f'style:{st}:font_size') == '20'
-        vol.set(f'style:{st}:font_size', str(SMALL_PX)); vol.set(f'style:{st}:text_align_v', 'middle')
-    clock.x, clock.w = CLOCK_X, CLOCK_W
-    clock.set('self_layout', f'default(x={CLOCK_X},y=0,w={CLOCK_W},h=100%)')
-    clock.set('style:normal:font_size', str(CLOCK_PX))
-    # no number: the right-hand icons end GAP px before the battery outline
-    assert img.x + img.w == 320 - EDGE
-    right.set('children_layout', f'default(r=1,c=0,a=right,s={GAP})')
-    right.x = img.x - GAP - right.w
+    assert all(vol.get(f'style:{st}:font_size') == '20' for st in statusbar.STATES)
+    statusbar.apply(root)
 
 # ---------------------------------------------------------------- ui/home_page.bin
 def apply_home(root):
@@ -514,7 +543,7 @@ def apply_home(root):
     strip.set('style:normal:border_color', '#222222')
     strip.set('style:normal:border_width', '1')
     assert artist.get('style:normal:text_color') == '#FFFFFF'
-    artist.set('style:normal:text_color', '#AAAAAA')       # stock secondary grey, as the M1 Pod pages
+    artist.set('style:normal:text_color', '#AAAAAA')       # stock secondary grey, as the M1+ Pod pages
     assert dots.get('style:normal:selected_fg_color') == '#FFFFFF' and dots.get('style:normal:fg_color') == '#666666'
     dots.set('style:normal:selected_fg_color', '#EEEEEE')  # q2-pod's page dots
     dots.set('style:normal:fg_color', '#555555')
@@ -543,6 +572,8 @@ def apply(out):
     print(f'theme: {len(icons)} images, {sum(a for _, a, _ in icons)} -> {sum(b for _, _, b in icons)} bytes')
     acc = apply_accents(out)
     print(f'theme: {len(acc)} accent images neutral, {sum(a for _, a, _ in acc)} -> {sum(b for _, _, b in acc)} bytes')
+    tg = apply_toggles(out)
+    print(f'theme: {len(tg)} switch images redrawn, {sum(a for _, a, _ in tg)} -> {sum(b for _, _, b in tg)} bytes')
     o, n, _ = edit_ui(os.path.join(out, BAR), apply_bar); print(f'theme: {BAR} {len(o)} -> {len(n)} bytes')
     o, n, _ = edit_ui(os.path.join(out, HOME), apply_home); print(f'theme: {HOME} {len(o)} -> {len(n)} bytes')
 

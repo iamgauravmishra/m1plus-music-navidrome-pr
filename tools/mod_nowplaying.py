@@ -7,11 +7,11 @@
        |   cover 264 x 264, r 12    |       slide page 1: the file is 264 px (1:1); the payload rounds the corners
  292   +----------------------------+
  296           . o .                         micro page dots (4 px)
- 304   Title                  (heart)(...)   22 px white; heart and More 44 px targets on 36 px translucent discs
- 330   Artist                                18 px #AAAAAA
- 354   ================---------------        6 px rounded progress bar in the stock 30 px seek target
- 384   01:23                      -03:42     12 px #AAAAAA; the right one is the remaining time (patch/nowplaying.c)
- 400   [mode] [<<]   [ || ]   [>>]  [queue]   50 px transport row in the five stock slots
+ 305   Title                  (heart)(...)   20 px white; heart and More 44 px targets on 32 px translucent discs
+ 329   Artist                              18 px #AAAAAA
+ 348   ================---------------        6 px rounded progress bar (ink 360..366) in the stock 30 px seek target
+ 379   1:23                        -3:42    14 px #AAAAAA (digits 382..391); the right one is the remaining time (patch/nowplaying.c)
+ 392   [mode] [<<]   [ || ]   [>>]  [queue]   58 px transport row in the five stock slots (glyphs 407..435)
  450
 
 The window is the cover's colour, darkened (patch/nowplaying.c writes bg_color per track; the asset's is the neutral
@@ -22,7 +22,7 @@ stays on the info page, label_index is hidden at 0x0 like img_hr, label_info sta
 What demo drives here, by name (dis.py xref, docs/ui.md): scrlabel_title, scrlabel_artist, img_playcover,
 label_index ("%d/%d"), label_info, label_album/genre/year/size/location ("%s:%s"), label_playtime, label_playlen,
 slider_play, img_repeata/b (moved by code to x = 12 + pos*296/len, y = 364; five pinned immediates make it x =
-28 + pos*264/len, y = 376: the bar's centre + 7), img_hr, img_mqa, btn_fav/more/playmode/prev/play/next/queue/
+28 + pos*264/len, y = 370: the bar's centre + 7), img_hr, img_mqa, btn_fav/more/playmode/prev/play/next/queue/
 return, image_wait, slide_view, slide_indicator, view_lrc, scroll_lrc, label_lyricmsg, view_local/view_dlna,
 app_gesture. Every one keeps its name; the new widgets are img_np_tint and np_remaining.
 
@@ -38,11 +38,12 @@ Usage: mod_nowplaying.py SRC_WORKDIR OUT_WORKDIR
   OUT_WORKDIR == SRC_WORKDIR edits in place.
 """
 import os, shutil, stat, struct, sys
+from math import erf, sqrt
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_ui, awtk_style, mod_icons
 from modlib import clone_workdir, edit_ui, write_keep_mode
 
-RAW = 'rootfs/release/assets/default/raw'
+from awtk_ui import RAW
 UI = f'{RAW}/ui/playing_page.bin'
 STYLE = f'{RAW}/styles/playing_page.bin'
 IMAGES = f'{RAW}/images/xx'
@@ -54,26 +55,43 @@ STATES = ('normal', 'disable', 'focused')
 BTN_STATES = ('normal', 'disable', 'focused', 'over', 'pressed')
 BG = '#202020'                   # the neutral tone: the window until a cover tints it (patch/offsets.inc NP_NEUTRAL)
 FG = '#EEEEEC'                   # q2-pod MINIMAL_FILL: glyphs, selected lyric
-DOWN = '#8C8C8C'                 # q2-pod SUDO_MUTED: pressed glyphs, other lyric lines
+DOWN = '#8C8C8C'                 # q2-pod SUDO_MUTED: pressed glyphs
+LYR_DIM = '#A0A0A0'              # the other lyric lines: lighter than DOWN, 3:1 or better under the scrim on every tone (test/pod/nowplaying.py)
 TITLE_RGB, GREY = '#FFFFFF', '#AAAAAA'      # secondary text is one grey (V2.1lA)
-TITLE_PX, META_PX, TIMES_PX = 22, 18, 12
-TRACK, FILL = '#FFFFFF33', '#FFFFFFEB'      # progress bar: white 20 % track, 92 % fill (over the tint)
+TITLE_PX, META_PX, TIMES_PX = 20, 18, 14
+TRACK, FILL = '#FFFFFF4D', '#FFFFFFEB'      # progress bar: white 30 % track (was 20 %: lost on dark tints), 92 % fill (over the tint)
 DOT_OFF, DOT_ON = '#FFFFFF46', '#FFFFFFEB'
 TINT_ALPHA = (38, 235)           # np_tint.png: black, alpha at the top .. at the bottom (0.15 .. 0.92)
+# The lyrics and info pages put text over whatever the cover's tone is; a translucent black scrim (np_scrim.png, an asset-only
+# image, the first child of view_lyrics and view_info, insensitive) darkens the band behind it, soft at its top and bottom
+# edges. The art page keeps the full tint.
+SCRIM = (0, 8, W, 324)            # x, y, w, h in the page: y 8 .. 332; the text lies in 44 .. 288, inside the full-strength middle
+SCRIM_ALPHA, SCRIM_EDGE = 128, 36 # 50 % black; the edges ramp from 0 over SCRIM_EDGE rows (test/pod/nowplaying.py)
 
 M = 28                           # side margin: the cover, the text column and the bar share it
 ART, ART_R = 264, 12             # cover = what demo writes (mod_lockscreen.COVER_SIZE, 1:1), corner radius
 ART_X, ART_Y = M, 28
+# The soft shadow under the cover (np_shadow.png, an asset-only image, insensitive, a child of page 1 so it slides with the art): the
+# art's rectangle shifted down SHADOW_DY, blurred by a Gaussian of SHADOW_SIGMA px, black, SHADOW_ALPHA (55 %) under the art, which makes the visible maximum (just under the bottom edge) 38 %, laid over the cover
+# with a hole of the art's rounded rectangle (so the payload's corner fills are shadowed too). SHADOW_PAD px on every side hold the
+# blur: 24 > 3 sigma, and the 312 px image (4 .. 316) stays inside the 320 px page.
+SHADOW_PAD, SHADOW_SIGMA, SHADOW_DY, SHADOW_ALPHA = 24, 7.0, 4, 140
+SHADOW_SIZE = ART + 2 * SHADOW_PAD
 SLIDE_H = 352                    # slide pages 0..352 hold art, dots, title and artist; lyrics and info end at 288
 DOTS = (145, 296, 30, 4)         # 3 dots of size 4, 10 apart, centred in the window
-TITLE_Y, TITLE_H, ARTIST_Y, ARTIST_H, TEXT_W = 304, 26, 330, 22, 176
-BTN, FAV_X, MORE_X, BTN_Y = 44, 204, 248, 306       # heart and More: 44 px targets right of the text, 36 px discs in the PNGs
+TITLE_Y, TITLE_H, ARTIST_Y, ARTIST_H, TEXT_W = 305, 24, 329, 22, 176   # the 46 px block is centred on the heart / More discs (y 310..346, centre 328)
+BTN, FAV_X, MORE_X, BTN_Y = 44, 204, 248, 306       # heart and More: 44 px targets right of the text, 32 px discs in the PNGs
 RETURN = (100, 0, 120, 44)       # the grabber pill is drawn in the button (np_grabber), over the art's top 16 px
-SLIDER = (M, 354, W - 2 * M, 30)  # stock 30 px target; bar_size 6 centred at y 369
+# The lower half's rhythm, measured on ink: artist ink bottom 344, then 16 px of air to the bar (ink 360..366), 16 to the
+# times (digits 382..391), 16 to the transport glyphs (pause bars 407..435), and 15 from their bottom to the window's
+# (stock-ish V2.1nL had 22 / 13 / 17 / 11). Each box is placed from its font's ink offset: the 14 px digits start 3 px under
+# their label's top; the glyphs are centred in the row (ROW_Y + ROW_H / 2 = 421, the glyphs' centre).
+SLIDER = (M, 348, W - 2 * M, 30)  # stock 30 px target; bar_size 6 centred at y 363
 BAR = 6
-TIMES_Y, TIMES_H, TIMES_W = 384, 16, 60
-ROW_Y = 400                      # transport row 400..450
+TIMES_Y, TIMES_H, TIMES_W = 379, 18, 72   # 14 px: "-0:00:00" is 8 characters (test/pod/nowplaying.py measures it)
+ROW_Y = 392                      # transport row 392..450, glyphs centred on 421
 ROW_H = H - ROW_Y
+SVV_H = TIMES_Y + TIMES_H        # slide_view_view ends under the times, which it parents (the row overlaps its last 5 px, on top)
 # transport slots: x, w (sum 320 incl. 4 px edges); the image_wait spinner centres on play
 SLOTS = {'btn_playmode': (4, 56), 'btn_prev': (64, 60), 'btn_play': (124, 72), 'btn_next': (196, 60), 'btn_queue': (260, 56)}
 LYR_Y, LYR_H = 44, 244           # the lyrics list; the info lines end at 288 too (the dots sit at 296)
@@ -90,9 +108,9 @@ MARKER_PINS = {0x53b824: 0x3c1c004d, 0x53b828: 0x279c86ac, 0x53b82c: 0x0399e021,
 # ---------------------------------------------------------------------------------------------- the tone (patch/nowplaying.c)
 
 # patch/offsets.inc NP_*: the cover's average colour becomes value NP_V_MIN + v * (NP_V_MAX - NP_V_MIN) / 255 (v = the
-# brightest channel), every channel keeping 4/5 of its distance from v; black is the neutral tone. test/pod/nowplaying.py
+# brightest channel), every channel keeping 23/25 (0.92) of its distance from v (HSV saturation x 0.92; it was 4/5); black is the neutral tone. test/pod/nowplaying.py
 # runs the compiled C against this reference.
-NP_V_MIN, NP_V_MAX, NP_SAT_NUM, NP_SAT_DEN, NP_NEUTRAL = 32, 192, 4, 5, (0x20, 0x20, 0x20)
+NP_V_MIN, NP_V_MAX, NP_SAT_NUM, NP_SAT_DEN, NP_NEUTRAL = 32, 192, 23, 25, (0x20, 0x20, 0x20)
 
 def tone(r, g, b):
     v = max(r, g, b)
@@ -110,6 +128,12 @@ def corner_alpha():
             out.append((n * 255 + 32) // 64)
     return out
 
+_CORNER = []
+def corner_table():
+    """corner_alpha(), computed once."""
+    if not _CORNER: _CORNER.append(corner_alpha())
+    return _CORNER[0]
+
 def tint_alpha(y):
     """The gradient's alpha (0..255) on window row y."""
     return TINT_ALPHA[0] + ((TINT_ALPHA[1] - TINT_ALPHA[0]) * y + (H - 1) // 2) // (H - 1)
@@ -124,17 +148,52 @@ def tint_gradient():
     for y in range(H): im.paste((0, 0, 0, tint_alpha(y)), (0, y, W, y + 1))
     return im
 
+def scrim_alpha(y):
+    """np_scrim.png's alpha on row y of its SCRIM[3] rows: SCRIM_ALPHA in the middle, ramping linearly to 0 at the first and last row."""
+    d = min(y, SCRIM[3] - 1 - y)
+    return SCRIM_ALPHA if d >= SCRIM_EDGE else SCRIM_ALPHA * d // SCRIM_EDGE
+
+def scrim_image():
+    from PIL import Image
+    im = Image.new('RGBA', SCRIM[2:], (0, 0, 0, 0))
+    for y in range(SCRIM[3]): im.paste((0, 0, 0, scrim_alpha(y)), (0, y, SCRIM[2], y + 1))
+    return im
+
+def shadow_alpha(x, y):
+    """np_shadow.png's alpha on pixel (x, y) of its SHADOW_SIZE square (0..255): the Gaussian-blurred rectangle of the art (shifted
+    down SHADOW_DY, maximum SHADOW_ALPHA), seen only where the art is not: the area outside the art's rounded rectangle. The
+    image lies over the cover, so it also darkens the four corner squares the payload paints in the window colour, anti-aliased
+    with the same coverage (corner_alpha); the art itself is untouched."""
+    ax, ay = x - SHADOW_PAD, y - SHADOW_PAD
+    def prof(p, a):      # the interval [a, a + ART) blurred by the Gaussian, at the pixel centre p
+        k = SHADOW_SIGMA * sqrt(2)
+        return 0.5 * (erf((p + 0.5 - a) / k) - erf((p + 0.5 - a - ART) / k))
+    out = 255
+    if 0 <= ax < ART and 0 <= ay < ART:
+        cx, cy = ax if ax < ART_R else ART - 1 - ax, ay if ay < ART_R else ART - 1 - ay
+        out = corner_table()[cy * ART_R + cx] if cx < ART_R and cy < ART_R else 0
+    return round(SHADOW_ALPHA * prof(ax, 0) * prof(ay, SHADOW_DY) * out / 255)
+
+def shadow_image():
+    from PIL import Image
+    im = Image.new('RGBA', (SHADOW_SIZE, SHADOW_SIZE), (0, 0, 0, 0)); px = im.load()
+    for y in range(SHADOW_SIZE):
+        for x in range(SHADOW_SIZE): px[x, y] = (0, 0, 0, shadow_alpha(x, y))
+    return im
+
 def write_images(rootfs_xx):
     """The glyphs (committed PNGs of mod_icons.py), the corner mask and the gradient, as new files; returns the names."""
     for name in NP_IMAGES:
         p = os.path.join(rootfs_xx, name + '.png')
         assert not os.path.exists(p), p
         if name == 'np_tint': tint_gradient().save(p, optimize=True)     # PIL PNG output has no timestamp
+        elif name == 'np_scrim': scrim_image().save(p, optimize=True)
+        elif name == 'np_shadow': shadow_image().save(p, optimize=True)
         else: shutil.copyfile(os.path.join(mod_icons.PNG, name + '.png'), p)
         os.chmod(p, IMG_MODE); os.utime(p, (IMG_MTIME, IMG_MTIME))
     return list(NP_IMAGES)
 
-NP_IMAGES = sorted(mod_icons.np_names() + ['np_tint'])
+NP_IMAGES = sorted(mod_icons.np_names() + ['np_tint', 'np_scrim', 'np_shadow'])
 
 def added_rels(stock_rootfs=None):
     """Rootfs-relative paths of the added images (for fwtool --allow-added; all new in any tree)."""
@@ -183,9 +242,14 @@ def apply_ui(root):
                           ('clickable', 'false'), ('sensitive', 'false')])
     local.children.insert(0, tint)
 
+    # the scrim behind the text of the lyrics and info pages (the first child: painted under the lines, never takes a touch)
+    for page in (lyr, info):
+        page.children.insert(0, awtk_ui.Widget('image', *SCRIM, [('name', 'img_np_scrim_' + page.name.removeprefix('view_')), ('image', 'np_scrim'), ('draw_type', 'default'),
+                                                          ('clickable', 'false'), ('sensitive', 'false')]))
+
     # slide_view_view spans the window down to the times row so the controls it parents (more, fav, times, dots) stay
     # inside it; later siblings (btn_return, slider, buttons) sit on top for touch
-    move(svv, 0, 0, W, ROW_Y)
+    move(svv, 0, 0, W, SVV_H)
     sv.set('self_layout', f'default(x=0,y=0,w=100%,h={SLIDE_H})'); move(sv, 0, 0, W, SLIDE_H)
 
     # ---- the grabber is Back; the index, the Hi-Res tag and the album line are not on the art page
@@ -201,13 +265,18 @@ def apply_ui(root):
     move(title, M, TITLE_Y, TEXT_W, TITLE_H); text_style(title, TITLE_PX, TITLE_RGB, 'left')
     move(artist, M, ARTIST_Y, TEXT_W, ARTIST_H); text_style(artist, META_PX, GREY, 'left')
     page1.children += [title, artist]
+    # the cover's shadow: right over the cover (its hole is the art), under the title and artist; a child of page 1, so it slides away with the art
+    shadow = awtk_ui.Widget('image', ART_X - SHADOW_PAD, ART_Y - SHADOW_PAD, SHADOW_SIZE, SHADOW_SIZE, [('name', 'img_np_shadow'), ('image', 'np_shadow'),
+                            ('draw_type', 'default'), ('clickable', 'false'), ('sensitive', 'false')])
+    assert cover in page1.children, 'the cover is not on page 1'
+    page1.children.insert(page1.children.index(cover) + 1, shadow)
 
     # ---- page 2: lyrics (below the grabber, above the dots); page 3: info (album, genre, year, size, location)
     lrc = find(root, 'view_lrc'); move(lrc, M, LYR_Y, W - 2 * M, LYR_H)
     msg = find(root, 'label_lyricmsg'); move(msg, 0, LYR_Y + (LYR_H - 28) // 2, W, 28); text_style(msg, META_PX, GREY, 'center')
     mqa = find(root, 'img_mqa'); move(mqa, mqa.x, 22, mqa.w, mqa.h)
     y = 52
-    li = find(root, 'label_info'); move(li, 24, y, W - 48, 24); text_style(li, META_PX, FG, 'center'); y += 32
+    li = find(root, 'label_info'); move(li, 8, y, W - 16, 24); text_style(li, META_PX, FG, 'center'); y += 32
     for n in ('label_album', 'label_genre', 'label_year', 'label_size'):
         w = find(root, n); move(w, 24, y, W - 48, 24); text_style(w, META_PX, GREY, 'center'); y += 30
     loc = find(root, 'label_location'); move(loc, 24, y + 4, W - 48, LYR_Y + LYR_H - y - 4); text_style(loc, 16, GREY, 'center')
@@ -243,7 +312,7 @@ def apply_ui(root):
     for n in ('img_repeata', 'img_repeatb'): w = find(root, n); move(w, SLIDER[0], SLIDER[1] + SLIDER[3] // 2 + 7, w.w, w.h)
 
     after = [w.name for w in root.walk() if w.name]
-    assert sorted(set(names)) == sorted(set(after) - {'img_np_tint', 'np_remaining'}), 'a widget name was lost'
+    assert sorted(set(names)) == sorted(set(after) - {'img_np_tint', 'np_remaining', 'img_np_scrim_lyrics', 'img_np_scrim_info', 'img_np_shadow'}), 'a widget name was lost'
     assert album in info.children
     return root
 
@@ -311,7 +380,7 @@ def check_touch(root):
         t = hit(root, (0, 0, W, H), x, y)
         assert inside(t, sv), f'touch at ({x},{y}) on the cover page lands on {t.name or t.type}, not the slide_view'
     # the decoration never takes a touch
-    for n in ('img_np_tint', 'np_remaining', 'label_playtime', 'label_playlen', 'img_repeata', 'img_repeatb', 'image_wait'):
+    for n in ('img_np_tint', 'img_np_scrim_lyrics', 'img_np_scrim_info', 'img_np_shadow', 'np_remaining', 'label_playtime', 'label_playlen', 'img_repeata', 'img_repeatb', 'image_wait'):
         assert find(root, n).get('sensitive') == 'false', f'{n} must be insensitive'
     return [(n, rects[n]) for n in PROBES]
 
@@ -334,7 +403,7 @@ def apply_style(th):
             s = awtk_style.Item('button', name, t.state, list(t.props))
             s.set('icon', down if t.state == 'pressed' else icon); th.items.append(s)
     # lyrics: other lines quiet grey, the current one off-white (stock: white / orange #FE7E40)
-    for name, rgb in (('listitem_lyric_style', DOWN), ('listitem_sellyric_style', FG)):
+    for name, rgb in (('listitem_lyric_style', LYR_DIM), ('listitem_sellyric_style', FG)):
         assert not th.find(style=name)
         for st in BTN_STATES:
             s = awtk_style.Item('list_item', name, st)

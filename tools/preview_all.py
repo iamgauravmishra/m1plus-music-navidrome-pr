@@ -7,7 +7,7 @@ preview tools from the finished tree (approximate, not AWTK):
   System Settings  preview_theme.settings (rows, icon discs, pressed row)
   Songs            preview_lists songs page (window theme rows, index letter)
   Now Playing      preview_nowplaying
-  M1 Pod menu      ui/m1pod_menu.bin drawn with preview_nowplaying's painter over default.bin
+  M1+ Pod menu      ui/m1pod_menu.bin drawn with preview_nowplaying's painter over default.bin
                    (the payload's menu follows list_item_style, so it picks up the theme)
 
 Usage: venv/bin/python -I tools/preview_all.py WORKDIR OUT.png [--label TEXT]
@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_style, awtk_ui
 import preview_theme, preview_lists, preview_nowplaying
 
-RAW = 'rootfs/release/assets/default/raw'
+from awtk_ui import RAW
 W, H = 320, 480
 
 class MenuPainter(preview_nowplaying.Painter):
@@ -64,7 +64,7 @@ def main():
     shots = [('boot splash', splash(a.work)), ('Home', preview_theme.home(t)),
              ('System Settings (Display pressed)', preview_theme.settings(t)),
              ('Songs (index letter)', preview_lists.panels(a.work, 'default')[1]),
-             ('Now Playing', preview_nowplaying.Painter(raw).render(np_root, 0)), ('M1 Pod menu', menu(a.work))]
+             ('Now Playing', preview_nowplaying.Painter(raw).render(np_root, 0)), ('M1+ Pod menu', menu(a.work))]
     pad, top, cols = 12, 20, 3
     rows = (len(shots) + cols - 1) // cols
     out = Image.new('RGB', (cols * (W + pad) + pad, rows * (H + top + pad) + pad + 16), (40, 40, 40))

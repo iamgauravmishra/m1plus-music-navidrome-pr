@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""out/preview/locale-<table>.png: the M1 Pod menu (as Home), Extras, Settings, Shuffle and Main Menu pages in other
+"""out/preview/locale-<table>.png: the M1+ Pod menu (as Home), Extras, Settings, Shuffle and Main Menu pages in other
 languages, drawn from a finished tree's own ui files, strings tables and font (docs/ui.md "Localisation").
 Approximate (PIL, not AWTK): labels that do not fit are cut with an ellipsis, as an idle hscroll_label shows them.
 
@@ -17,9 +17,10 @@ DEFAULT = ['zh_CN', 'ja_JP', 'ge_DE', 'ru_RU']
 
 def sheet(work, table):
     s = PI.Side(work, True, table); s.mark = lambda *a: None
-    panels = [('M1 Pod menu (Home)', preview.menu_page(s, None, home=True)),
+    panels = [('M1+ Pod menu (Home)', preview.menu_page(s, None, home=True)),
               ('Extras', preview.extras_page(s, None)),
-              ('Settings', PI.pod_page(s, 'm1pod_settings', 6, switches={'pod_switch2': True}).convert('RGB')),
+              ('Settings', PI.pod_page(s, 'm1pod_settings', 6).convert('RGB')),
+              ('Settings > Home Screen', PI.pod_page(s, 'm1pod_homeset', 2, switches={'pod_switch0': True}).convert('RGB')),
               ('Settings > Cover Flow', PI.pod_page(s, 'm1pod_cfset', 2, switches={'pod_switch0': False}).convert('RGB')),
               ('Shuffle', PI.pod_page(s, 'm1pod_shuffle', 3).convert('RGB')),
               ('Main Menu', preview.mainmenu_page(s, None))]

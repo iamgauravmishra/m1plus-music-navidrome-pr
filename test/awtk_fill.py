@@ -167,6 +167,19 @@ def main():
     print(f'  canvas_draw_image_ex scale_auto {src} -> {dst}: {len(vals)} distinct colours {sorted(vals)[:4]} -> '
           f'{"nearest neighbour (no filtering)" if nn else "filtered"}')
     ok &= nn
+    # 4. a 1 px border line (the row separator of a list_item style: canvas_draw_hline / canvas_draw_vline with the style's
+    #    border_color as the stroke colour) with an alpha blends it over what is there, like a fill (docs/modules/album-page.md)
+    s.wall(); line = color_t(255, 255, 255, 0x14)
+    d.call('canvas_set_stroke_color', s.canvas, line); d.call('canvas_draw_hline', s.canvas, 20, 50, 200)
+    d.call('canvas_draw_vline', s.canvas, 300, 20, 100)
+    px = s.read(); bad = []
+    for label, pts in (('hline', [(x, 50) for x in (20, 100, 219)]), ('vline', [(300, y) for y in (20, 60, 119)])):
+        for x, y in pts:
+            wq = rgb565(bgr565(wallpaper(x, y))); want = tuple((255 * 0x14 + w * (255 - 0x14)) / 255 for w in wq)
+            if max(abs(g - b) for g, b in zip(px[y][x], want)) > TOL or px[y][x] == wq: bad.append((label, x, y, px[y][x], want))
+    out_ok = all(px[y][x] == rgb565(bgr565(wallpaper(x, y))) for x, y in ((19, 50), (220, 50), (100, 49), (100, 51), (300, 19), (300, 120), (299, 60)))
+    print(f'  canvas_draw_hline / canvas_draw_vline, stroke #FFFFFF14: the blend on the line, nothing beside it: {"ok" if not bad and out_ok else "FAIL " + str(bad[:3])}')
+    ok &= not bad and out_ok
     if len(sys.argv) > 2:
         from PIL import Image
         out = Image.new('RGB', (W, 2 * H + 4), (40, 40, 40))

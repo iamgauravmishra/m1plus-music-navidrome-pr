@@ -79,6 +79,40 @@ def main():
     expect('--update accepts a changed hash', check.outcome(False, True, True) == (False, True))
     expect('--update with a failed test fails and writes nothing', check.outcome(True, True, True) == (True, False))
     expect('--update with a failed test and no change fails', check.outcome(True, False, True) == (True, False))
+
+    # check.py --test: names resolve to patch modules or the named tests; unknown names are refused
+    expect('--test resolves a patch module', check.parse_tests(['albums,tools']) == ['patch:albums', 'tools'])
+    try: check.parse_tests(['nosuchtest']); refused = False
+    except SystemExit: refused = True
+    expect('--test refuses an unknown name', refused)
+
+    # the build cache: a rewrite that keeps size and mtime (the steps set mtimes on purpose) is still a change
+    import buildcache, subprocess
+    with tempfile.TemporaryDirectory() as td:
+        root = os.path.join(td, 'tree'); os.makedirs(os.path.join(root, 'd'))
+        for n, d in (('a', b'one'), ('d/b', b'two'), ('gone', b'x')): open(os.path.join(root, n), 'wb').write(d)
+        os.symlink('a', os.path.join(root, 'lnk'))
+        before = buildcache.snap(root); st = os.stat(os.path.join(root, 'a'))
+        open(os.path.join(root, 'a'), 'wb').write(b'ONE'); os.utime(os.path.join(root, 'a'), ns=(st.st_atime_ns, st.st_mtime_ns))
+        open(os.path.join(root, 'new'), 'wb').write(b'n'); os.remove(os.path.join(root, 'gone'))
+        changed, removed, _ = buildcache.delta_since(before, root)
+        expect('delta sees a same-size same-mtime rewrite, an addition, a removal', sorted(changed) == ['a', 'new'] and removed == ['gone'])
+        buildcache.CACHE = os.path.join(td, 'cache'); buildcache.ENABLED = True
+        buildcache.store_delta('k', root, changed, removed)
+        other = os.path.join(td, 'other'); os.makedirs(other)
+        for n, d in (('a', b'one'), ('gone', b'x')): open(os.path.join(other, n), 'wb').write(d)
+        buildcache.apply_delta('k', other)
+        expect('a stored delta reproduces the tree', open(os.path.join(other, 'a'), 'rb').read() == b'ONE'
+               and os.path.exists(os.path.join(other, 'new')) and not os.path.exists(os.path.join(other, 'gone')))
+    expect('code hash follows imports', 'modlib' in buildcache.closure('mod_theme') or 'awtk_ui' in buildcache.closure('mod_theme'))
+
+    # sub.py refuses an ambiguous or missing OLD and changes nothing
+    with tempfile.TemporaryDirectory() as td:
+        f = os.path.join(td, 'f.txt'); open(f, 'w').write('x = 1\nx = 1\ny = 2\n')
+        sub = lambda *a: subprocess.run([sys.executable, '-I', os.path.join(ROOT, 'tools', 'sub.py'), f, *a], capture_output=True, text=True).returncode
+        expect('sub: ambiguous OLD refused', sub('x = 1', 'x = 3') == 1 and open(f).read() == 'x = 1\nx = 1\ny = 2\n')
+        expect('sub: missing OLD refused', sub('z', 'w') == 1)
+        expect('sub: --all replaces every occurrence', sub('x = 1', 'x = 3', '--all') == 0 and open(f).read() == 'x = 3\nx = 3\ny = 2\n')
     print(f'{ok} passed, {fail} failed')
     sys.exit(1 if fail else 0)
 

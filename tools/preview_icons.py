@@ -11,7 +11,7 @@ import mod_icons as M
 import awtk_strings
 from stb_raster import StbFont
 
-RAW = 'rootfs/release/assets/default/raw'
+from awtk_ui import RAW
 W, BAR = 320, 30
 WHITE = (255, 255, 255)
 ANN = ImageFont.load_default(13); ANN_B = ImageFont.load_default(16)
@@ -63,11 +63,54 @@ def status_bar(s, im, y0=0, bg=(0, 0, 0), vol='50', pct='86%'):
     im.alpha_composite(s.img('bar_btcon'), (173, y0 + 5)); im.alpha_composite(s.img('bar_wifi3'), (224, y0 + 7))
     s.text(im, 292, y0 + BAR / 2, pct, 16, anchor='r'); im.alpha_composite(s.img('bar_power'), (296, y0 + 8))
 
+def asset_bar(s, bar, im, y0=0, vol='100', clock='12:59 PM'):
+    """A status bar drawn from its asset widgets (the system_bar window or the pull-down's view_sysbar): the left group
+    stacked from its children_layout, the clock centred in its box, the right group right-aligned to its view's edge, the
+    battery outline over its fill; the bar's own bg_color (black when it has none). Same images, fonts and offsets as the
+    device draws, so two bars that differ in the asset differ here."""
+    import re
+    bg = (bar.get('style:normal:bg_color') or '#000000').lstrip('#')[:6]
+    ImageDraw.Draw(im).rectangle((0, y0, W - 1, y0 + BAR - 1), fill=tuple(int(bg[i:i + 2], 16) for i in (0, 2, 4)))
+    def group(view, right):
+        m = re.search(r'x=(\d+)', view.get('children_layout') or ''); sp = int(re.search(r's=(\d+)', view.get('children_layout')).group(1))
+        kids = [c for c in view.children if c.name not in ('img_synclink', 'pod_shot')]      # SyncLink is only drawn while connected; the Screenshot camera while it counts down (preview.shot_bars)
+        total = sum(c.w for c in kids) + sp * (len(kids) - 1)
+        x = view.x + view.w - total if right else view.x + int(m.group(1)) if m else view.x
+        for c in kids:
+            if c.type == 'image':
+                name = {'img_playstate': 'bar_play', 'img_volume': 'bar_vol3', 'img_digital': 'bar_digital', 'img_btclass': 'bar_btcon', 'img_wifi': 'bar_wifi3'}[c.name]
+                ic = s.img(name); im.alpha_composite(ic, (x + (c.w - ic.width) // 2 if c.get('draw_type') in ('icon', 'center') else x, y0 + (BAR - ic.height) // 2))
+            else:   # label_volume
+                s.text(im, x, y0 + BAR / 2, vol, int(c.get('style:normal:font_size')))
+            x += c.w + sp
+    group(bar.find('view_bar_left'), False); group(bar.find('view_bar_right'), True)
+    clk = bar.find('bar_dclock'); s.text(im, clk.x + clk.w / 2, y0 + BAR / 2, clock, int(clk.get('style:normal:font_size')), anchor='m')
+    img = bar.find('img_battery'); im.alpha_composite(s.img('bar_power'), (img.x, y0 + img.y))
+    pg = bar.find('pgbar_battery'); ImageDraw.Draw(im).rectangle((pg.x, y0 + pg.y, pg.x + pg.w * 86 // 100 - 1, y0 + pg.y + pg.h - 1), fill=WHITE)
+
+def bars_compare(s):
+    """The real status bar (system_bar.bin) over the pull-down's bar in the default and theme1 dialogs, 1:1 on the pull-down's
+    #141414 panel, then the two differences from the real bar (x 16: all black when they match). Returns (image, they match)."""
+    import awtk_ui
+    from PIL import ImageChops
+    sysbar = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', 'system_bar.bin'), 'rb').read())
+    bars = [sysbar]
+    for theme in ('default', 'theme1'):
+        dd = awtk_ui.parse(open(os.path.join(s.tree, 'rootfs/release/assets', theme, 'raw/ui/dialog/dropdown_dialog.bin'), 'rb').read())
+        bars.append(dd.find('view_sysbar'))
+    drawn = []
+    for b in bars:
+        one = Image.new('RGBA', (W, BAR), (0, 0, 0, 255)); asset_bar(s, b, one); drawn.append(one)
+    diffs = [ImageChops.difference(drawn[0].convert('RGB'), o.convert('RGB')).point(lambda v: min(255, v * 16)) for o in drawn[1:]]
+    out = Image.new('RGBA', (W, 5 * BAR + 4 * 6), (0x14, 0x14, 0x14, 255))
+    for i, one in enumerate(drawn + [d.convert('RGBA') for d in diffs]): out.alpha_composite(one, (0, i * (BAR + 6)))
+    return out, all(not d.getbbox() for d in diffs)
+
 def home(s, page):
-    """A Home page (English: ids 1..17, 6 per page). The sixth slot of page 3 is the M1 Pod icon patch/home.c adds
+    """A Home page (English: ids 1..17, 6 per page). The sixth slot of page 3 is the M1+ Pod icon patch/home.c adds
     (after side); the stock side shows the HiFi store there (zh_CN only), the way the old preview did."""
     im = Image.new('RGBA', (W, 330), (0, 0, 0, 255)); status_bar(s, im)
-    tiles = [t for t in M.HOME if t[0] != 'hifimusic'] + [('m1pod' if s.after else 'hifimusic', 'M1 Pod', None)]
+    tiles = [t for t in M.HOME if t[0] != 'hifimusic'] + [('m1pod' if s.after else 'hifimusic', 'M1+ Pod', None)]
     for i, (n, label, g) in enumerate(tiles[page * 6:(page + 1) * 6]):
         cx, cy = 60 + (i % 3) * 100, BAR + 24 + (i // 3) * 140
         if n == 'hifimusic': label = 'HiFi (zh_CN)'
@@ -120,7 +163,7 @@ def home_pad():
     return int(m.group(1))
 
 def pod_page(s, key, tree_rows=8, home=False, first=0, title=None, icon=None, order=None, switches=None, arrows=None, values=None):
-    """A mock of an M1 Pod rows page from the tree's ui asset: navbar title, then each list_item row
+    """A mock of an M1+ Pod rows page from the tree's ui asset: navbar title, then each list_item row
     (icon image, label, chevron) on black with the 1 px #222222 hairline. home=True: the Home instance of the
     menu, no navbar at all (the payload hides it) and the list from y HOME_PAD to HOME_PAD above the 450 px window's bottom.
     title / icon: what the payload sets at run time (the Artists page's title and toggle glyph); the toggle button, if the
@@ -149,7 +192,8 @@ def pod_page(s, key, tree_rows=8, home=False, first=0, title=None, icon=None, or
     for k, r in enumerate(items):
         y = top + (k * 52 if order is not None else r.y - (items[0].y if first else 0))
         if y >= im.height: break
-        d.rectangle((0, y + 51, W - 1, y + 51), fill=(0x22, 0x22, 0x22))
+        hair = next((c for c in r.children if c.name == 'pod_hair'), None)     # the rows' own inset hairline, else the theme's full-width one
+        d.rectangle(((hair.x if hair else 0), y + 51, W - 1, y + 51), fill=(0x22, 0x22, 0x22))
         for c in r.children:
             if c.type == 'hscroll_label': s.text(im, c.x, y + 26, s.clip(s.shown(c), 21, c.w), 21)
             elif c.type == 'image' and c.name.startswith('pod_switch'):
@@ -203,6 +247,8 @@ def albums_navbar(s, im, to):
     s.text(im, 36, 25, 'Albums', title_px(s.tree))
     im.alpha_composite(s.img('return'), (14, 14))
     im.alpha_composite(s.img('back_to_player'), (278, 13))
+    c = s.img('pod_nav_coverflow')   # the Cover Flow button, flush left of the toggle
+    im.alpha_composite(c, (o['NAV_CF_X'] + (o['NAV_CF_W'] - c.width) // 2, (o['NAV_H'] - c.height) // 2))
     n = 'pod_nav_' + to
     im.alpha_composite(s.img(n), (o['NAV_VIEW_X'] + (o['NAV_VIEW_W'] - s.img(n).width) // 2, (o['NAV_H'] - s.img(n).height) // 2))
 
@@ -210,18 +256,23 @@ def albums_grid(s, scroll=0):
     """ui/m1pod_albums.bin as patch/albums.c paints it: GRID_COLS covers a row, a one-line title (ellipsis) under each."""
     o = offsets(); W_, H_ = 320, 450
     im = Image.new('RGBA', (W_, H_), (0, 0, 0, 255)); albums_navbar(s, im, 'list')
-    cover, gap, m, tg, th = o['GRID_COVER'], o['GRID_GAP'], o['GRID_MARGIN'], o['GRID_TITLE_GAP'], o['GRID_TITLE_H']
-    pitch = cover + tg + th + gap
-    for a, (title, _, rgb) in enumerate(ALBUMS * 2):
-        x, top = m + (a % o['GRID_COLS']) * (cover + gap), 50 + gap + (a // o['GRID_COLS']) * pitch - scroll
-        if top >= H_ or top + cover + tg + th <= 50: continue
+    cover, gap, m, tg, th, sh = o['GRID_COVER'], o['GRID_GAP'], o['GRID_MARGIN'], o['GRID_TITLE_GAP'], o['GRID_TITLE_H'], o['GRID_SUB_H']
+    rgap = o['GRID_ROW_GAP']
+    pitch = cover + tg + th + sh + rgap
+    def cut(text, px):
+        while s.font.width(text, px) > cover and len(text) > 1:      # the ellipsis cut, as al_fit
+            text = text[:-2] + '…' if text.endswith('…') else text[:-1] + '…'
+        return text
+    for a, (title, artist, rgb) in enumerate(ALBUMS * 2):
+        x, top = m + (a % o['GRID_COLS']) * (cover + gap), 50 + rgap + (a // o['GRID_COLS']) * pitch - scroll
+        if top >= H_ or top + cover + tg + th + sh <= 50: continue
         c = sample_cover(rgb, cover); y0, y1 = max(50, top), min(H_, top + cover)
         if y1 > y0: im.alpha_composite(c.crop((0, y0 - top, cover, y1 - top)), (x, y0))
         ty = top + cover + tg
         if ty >= 50 and ty + th <= H_:
-            while s.font.width(title, 16) > cover and len(title) > 1:      # the ellipsis cut, as al_title
-                title = title[:-2] + '…' if title.endswith('…') else title[:-1] + '…'
-            s.text(im, x, ty + th / 2, title, 16)
+            s.text(im, x, ty + th / 2, cut(title, 18), 18)
+        if ty + th >= 50 and ty + th + sh <= H_:
+            s.text(im, x, ty + th + sh / 2, cut(artist, 15), 15, (0xAA, 0xAA, 0xAA))
     return im
 
 def albums_list(s, pressed=1):
@@ -259,9 +310,9 @@ def zoom_strip(s):
 def main():
     before, after, out = sys.argv[1:4]
     sides = [('stock', Side(before, False)), ('release (Tabler Icons)', Side(after, True))]
-    sections = [('Home page 1', lambda s: home(s, 0)), ('Home page 2', lambda s: home(s, 1)), ('Home page 3 (after: with the M1 Pod icon)', lambda s: home(s, 2)),
-                ('M1 Pod menu (opened from the grid icon)', lambda s: pod_page(s, 'm1pod_menu', 8)), ('M1 Pod > Settings page', lambda s: pod_page(s, 'm1pod_settings', 4)),
-                ('M1 Pod > Shuffle page', lambda s: pod_page(s, 'm1pod_shuffle', 3)),
+    sections = [('Home page 1', lambda s: home(s, 0)), ('Home page 2', lambda s: home(s, 1)), ('Home page 3 (after: with the M1+ Pod icon)', lambda s: home(s, 2)),
+                ('M1+ Pod menu (opened from the grid icon)', lambda s: pod_page(s, 'm1pod_menu', 8)), ('M1+ Pod > Settings page', lambda s: pod_page(s, 'm1pod_settings', 6)),
+                ('M1+ Pod > Shuffle page', lambda s: pod_page(s, 'm1pod_shuffle', 3)),
                 ('Settings icons (46)', settings), ('Pull-down', pulldown), ('List placeholders', lists)]
     pad = 14
     heights = [330, 330, 330, 50 + 8 * 52, 50 + 4 * 52, 50 + 3 * 52, 7 * 45 + 6, 290, 70]

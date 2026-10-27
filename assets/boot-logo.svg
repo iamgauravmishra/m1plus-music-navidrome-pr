@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="320" height="480" viewBox="0 0 320 480" role="img" aria-labelledby="title">
-  <title id="title">M1 Pod</title>
-  <!-- M1 Pod boot splash, upright 320x480 like the stock M1 Plus logo.jpg. Adapted from q2-pod's
+  <title id="title">M1+ Pod</title>
+  <!-- M1+ Pod boot splash, upright 320x480 like the stock M1 Plus logo.jpg. Adapted from q2-pod's
        assets/boot-logo.svg (Copyright (c) 2026 Diamond Bond, MIT; see NOTICE): same palette, scale
        and layout. "M1" is drawn here as plain geometric outlines (7 px stems, splayed M, 70 px cap
        height, in the spirit of q2-pod's URW Gothic Book wordmark); "POD" and its centre button are
@@ -8,9 +8,10 @@
        bottom 278.7) is centred at 47% of the height. No gradients, no fonts.
        Render: tools/boot_logo.py (docs/look-boot.md). -->
   <rect width="320" height="480" fill="#000" />
-  <g fill="#F2F2F0">
+  <g fill="#F2F2F0" transform="translate(-24 0)">
     <path d="M108.53 243.50 115.77 187.14 138.72 243.50 146.28 243.50 169.23 187.14 176.47 243.50 183.53 243.50 174.53 173.50 167.22 173.50 142.50 234.22 117.78 173.50 110.47 173.50 101.47 243.50Z" />
     <path d="M204.37 188.07 211.50 181.49 211.50 243.50 218.50 243.50 218.50 173.50 209.84 173.50 199.63 182.93Z" />
+    <path d="M226.50 194.50H266.50V201.50H250V218H243V201.50H226.50ZM243 194.50V178H250V194.50Z" />
   </g>
   <g transform="translate(-27.5 77.5)">
     <g fill="#BDBDB8">

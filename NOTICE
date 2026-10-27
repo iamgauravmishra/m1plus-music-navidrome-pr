@@ -1,7 +1,7 @@
 m1plus-mod
 ==========
 
-The M1 Pod payload (patch/, tools/pod*.py, test/patch.py) is modelled closely on q2-pod, a
+The M1+ Pod payload (patch/, tools/pod*.py, test/patch.py) is modelled closely on q2-pod, a
 coherent firmware mod for the Shanling Q2:
 
     q2-pod -- https://github.com/DiamondBond/q2-pod
@@ -91,28 +91,29 @@ Font License 1.1; their licence texts are in assets/fonts/:
     Copyright 2014-2025 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'
     SIL Open Font License 1.1 (assets/fonts/OFL-SourceHanSans.txt)
 
-assets/fonts/Inter-m1plus.ttf is a subset of Inter Regular made by tools/font_inter.py (code points
+assets/fonts/Inter-m1plus.ttf is a subset of Inter Medium made by tools/font_inter.py (code points
 of Latin, Greek and Cyrillic, tabular digits mapped, hinting and layout tables removed, composites
 decomposed, outlines rescaled). Source Han Sans is not redistributed here: the build reads the
 pinned release zip that tools/mod_font.py --fetch downloads, and the font it merges into keeps the
 stock name (it is not called "Source").
 
-Tabler Icons (docs/ui.md). tools/mod_icons.py renders the icons of Tabler Icons 3.49.0
-(https://github.com/tabler/tabler-icons, @tabler/icons) into the UI images; the used SVG sources
-are in assets/icons/tabler/svg/ and the licence text in assets/icons/tabler/LICENSE:
+Lucide (docs/ui.md). tools/mod_icons.py renders the icons of Lucide
+(https://lucide.dev, lucide-static 1.61.0, tarball SHA-256
+62773cd2ee411ad2e37c1973d1e4c4b49f9a6c57da6b5d5d0abca08756ba75f1) into the UI images; the used SVG
+sources are in assets/icons/lucide/svg/ and the licence text in assets/icons/lucide/LICENSE:
+
+    Copyright (c) 2026 Lucide Icons and Contributors
+    ISC License
+
+Tabler Icons (docs/ui.md). Four glyphs Lucide lacks (brand-tidal, circle-check filled, a-b,
+multiplier-1x) come from Tabler Icons 3.49.0 (https://github.com/tabler/tabler-icons,
+@tabler/icons); the SVG sources are in assets/icons/tabler/svg/ and the licence text in
+assets/icons/tabler/LICENSE:
 
     Copyright (c) 2020-2026 Pawel Kuna
     MIT License
 
 assets/icons/custom/ holds a few icons drawn for this project in the same style.
-
-Lucide (docs/ui.md). The navbar's "go to Now Playing" icon is Lucide's audio-lines
-(https://lucide.dev/icons/audio-lines, lucide-static 1.61.0, tarball SHA-256
-62773cd2ee411ad2e37c1973d1e4c4b49f9a6c57da6b5d5d0abca08756ba75f1); the SVG and the licence
-text are in assets/icons/lucide/:
-
-    Copyright (c) 2026 Lucide Icons and Contributors
-    ISC License
 
 Wallpaper (docs/ui.md). assets/starry-night-320x480.png is a crop and tone adjustment of
 Vincent van Gogh's "The Starry Night" (1889), which is in the public domain (the artist died in 1890;

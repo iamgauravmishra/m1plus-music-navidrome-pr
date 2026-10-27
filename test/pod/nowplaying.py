@@ -24,6 +24,34 @@ class NowMachine(Machine):
         self.pos = {}
         self.stock_ret = 0
         self.opened = []
+        self.texts = {}           # label handle -> its text (latin-1 chars of the UTF-8 bytes, as read_cstr returns)
+        self.get_ret = 0
+        self.bar = 0              # the status bar's handle (0: the window manager has none)
+        self.bar_styles = []      # (bar, "normal:bg_color", uint32)
+        self.bar_style_ret = 0
+        self.on_fail = set()      # event types whose widget_on returns 0 (refused)
+
+    def with_bar(self, top=WIN):
+        """The window manager with a navbar and a status bar among its children; `top` is its top normal window."""
+        nav = self.alloc(0x80); self.bar = self.alloc(0x80)
+        self.children[self.wm] = [nav, self.bar]; self.types[nav] = 'system_bar_bottom'; self.types[self.bar] = 'system_bar'
+        self.top_main = top
+        return self
+
+    def bar_color(self): return self.bar_styles[-1][2] if self.bar_styles else None
+    def bar_calls(self): return [c for c in self.calls if c[0] == 'widget_set_style' and c[1] == self.bar]
+    def fire(self, ev, win=WIN):
+        fn, ctx = self.bound[(win, ev)]
+        return self.call(fn, a0=ctx, a1=0, count=2000000)
+
+    def info_page(self, stock):
+        """The info page's labels (name -> the text stock wrote); returns {name: handle}."""
+        out = {}
+        for n, t in stock.items():
+            out[n] = self.widget(n); self.texts[out[n]] = t.encode('utf-8').decode('latin-1')
+        return out
+
+    def label(self, name): return self.texts[self.widgets[name]].encode('latin-1').decode('utf-8')
 
     def _hook(self, u, address, size, _):
         name = self.handlers.get(address, '')
@@ -33,13 +61,20 @@ class NowMachine(Machine):
             self.calls.append(('stock_playing_init', a0, a1)); ret = self.stock_ret
         elif name == 'widget_set_style':
             v = self.word(a2 + 8); self.calls.append(('widget_set_style', a0, self.read_cstr(a1), v))
-            if self.style_ret == 0: self.styles.append((a0, self.read_cstr(a1), v))
-            ret = self.style_ret
+            ret = self.bar_style_ret if a0 == self.bar else self.style_ret
+            if ret == 0: (self.bar_styles if a0 == self.bar else self.styles).append((a0, self.read_cstr(a1), v))
+        elif name == 'widget_on' and a1 in self.on_fail:
+            self.calls.append(('widget_on', a0, a1, a2, a3)); ret = 0
         elif name == 'value_set_uint32':
             self.setword(a0, 7); self.setword(a0 + 8, a1); ret = a0
         elif name == 'get_playtimeandlength':
             pos, ln, r = self.pt
             self.setword(a0, pos); self.setword(a1, ln); self.calls.append(('get_playtimeandlength',)); ret = r
+        elif name == 'widget_set_text_utf8':   # the labels keep their text (the info page is read back)
+            t = self.read_cstr(a1); self.texts[a0] = t; self.calls.append(('widget_set_text_utf8', a0, t)); ret = 0
+        elif name == 'widget_get_text_utf8':   # stock: the buffer zero-filled, then at most size - 1 bytes
+            raw = self.texts.get(a0, '').encode('latin-1')[:max(a2 - 1, 0)]
+            self.u.mem_write(a1, raw.ljust(a2, b'\0')); self.calls.append(('widget_get_text_utf8', a0)); ret = self.get_ret
         elif name == 'fopen' and self.read_cstr(a0) in self.blobs:
             path = self.read_cstr(a0); h = self.alloc(4); self.pos[h] = 0; self.fh = (h, path)
             self.opened.append(path); self.calls.append(('fopen', path, self.read_cstr(a1))); ret = h
@@ -191,18 +226,18 @@ def run(ctx):
         for r, v in ((UC_MIPS_REG_A0, out), (UC_MIPS_REG_A1, 32), (UC_MIPS_REG_A2, pos), (UC_MIPS_REG_A3, ln)): mm.u.reg_write(r, v & 0xffffffff)
         mm.u.emu_start(PSYMS['np_format_remaining'], RET, count=100000)
         return mm.read_cstr(out)
-    cases = {(0, 0): '-00:00', (0, 1): '-00:01', (0, 59): '-00:59', (0, 60): '-01:00', (0, 3599): '-59:59', (0, 3600): '-01:00:00',
-             (0, 3723): '-01:02:03', (100, 100): '-00:00', (130, 100): '-00:00', (30, 200): '-02:50',
-             (3599, 7200): '-01:00:01', (-5, 10): '-00:15'}
+    cases = {(0, 0): '-0:00', (0, 1): '-0:01', (0, 59): '-0:59', (0, 60): '-1:00', (0, 265): '-4:25', (0, 3599): '-59:59', (0, 3600): '-1:00:00',
+             (0, 3723): '-1:02:03', (100, 100): '-0:00', (130, 100): '-0:00', (30, 200): '-2:50',
+             (3599, 7200): '-1:00:01', (-5, 10): '-0:15', (0, 36000): '-10:00:00'}
     got = {k: fmt(*k) for k in cases}
-    expect(got == cases, f'-mm:ss from 0:00 to over an hour, a position past the end: {[(k, got[k], v) for k, v in cases.items() if got[k] != v]}')
+    expect(got == cases, f'-m:ss (no leading zero) from 0:00 to over an hour, a position past the end: {[(k, got[k], v) for k, v in cases.items() if got[k] != v]}')
     m = NowMachine(); m.page(); m.src(0); m.pt = (30, 200, 1)
     m.init()
-    expect(m.set_texts() == [(m.widgets['np_remaining'], '-02:50')], f'the label shows the time left ({m.set_texts()})')
+    expect(m.set_texts() == [(m.widgets['np_remaining'], '-2:50')], f'the label shows the time left ({m.set_texts()})')
     expect(m.visible('np_remaining') == 1 and m.visible('label_playlen') == 0, 'np_remaining shows and the stock total hides')
     m.tick(); expect(not m.set_texts(), 'an unchanged time is not set again')
-    m.pt = (31, 200, 1); m.tick(); expect(m.set_texts() == [(m.widgets['np_remaining'], '-02:49')], 'the next second is')
-    m.pt = (500, 200, 1); m.tick(); expect(m.set_texts() == [(m.widgets['np_remaining'], '-00:00')], 'a position past the length reads -00:00')
+    m.pt = (31, 200, 1); m.tick(); expect(m.set_texts() == [(m.widgets['np_remaining'], '-2:49')], 'the next second is')
+    m.pt = (500, 200, 1); m.tick(); expect(m.set_texts() == [(m.widgets['np_remaining'], '-0:00')], 'a position past the length reads -0:00')
     m.pt = (0, 0, 1); m.tick(); expect(m.visible('np_remaining') == 0 and m.visible('label_playlen') == 1, 'a length of 0: stock\'s total shows again')
     m.pt = (10, 100, 1); m.tick(); expect(m.visible('np_remaining') == 1 and m.visible('label_playlen') == 0, 'and the remaining time comes back')
     m.pt = (10, 100, -1); m.tick(); expect(m.visible('np_remaining') == 0 and m.visible('label_playlen') == 1, 'a failed query: stock\'s total')
@@ -210,6 +245,112 @@ def run(ctx):
     expect(m.visible('label_playlen') == 1, 'a negative length: stock\'s total')
     m.pt = (10, 100, 1)
     expect(m.props.get((m.widgets['label_playlen'], 'sensitive')) is None, 'sensitivity is the asset\'s (both labels insensitive), only visibility is toggled')
+
+    # the elapsed label (label_playtime): stock's "mm:ss" / "hh:mm:ss" without the leading zero, rewritten only when stock wrote it again
+    def elapsed(text, **kw):
+        m = NowMachine(); m.page(); m.src(0); m.pt = (30, 200, 1)
+        h = m.widget('label_playtime'); m.texts[h] = text
+        for k, v in kw.items(): setattr(m, k, v)
+        m.init(); return m, h
+    pset = lambda m, h: [c[2] for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] == h]
+    cases = {'00:00': '0:00', '00:20': '0:20', '09:59': '9:59', '10:00': '10:00', '59:59': '59:59', '01:02:03': '1:02:03', '10:00:00': '10:00:00',
+             '00:00:20': '0:20', '00:61': '1:01', '125:00': '2:05:00', '0:20': '0:20', '1:02:03': '1:02:03'}
+    got = {}
+    for before in cases:
+        m, h = elapsed(before); got[before] = m.texts[h]
+    expect(got == cases, f'the elapsed text loses its leading zero ({[(k, got[k], v) for k, v in cases.items() if got[k] != v]})')
+    m, h = elapsed('00:20')
+    expect(pset(m, h) == ['0:20'], 'one rewrite of the elapsed label')
+    m.calls = []; m.tick(); m.tick(); expect(not pset(m, h), 'ticks after that leave it alone (no rewrite loop)')
+    m.texts[h] = '00:21'; m.calls = []; m.tick()
+    expect(pset(m, h) == ['0:21'], 'stock writing it again is answered once')
+    m.calls = []; m.tick(); expect(not pset(m, h), 'and not again')
+    m.texts[h] = '00:21'; m.calls = []; m.tick()
+    expect(pset(m, h) == ['0:21'], 'the same stock text written again is answered again, once per write')
+    for odd in ('', '-', 'x0:20', '00:2x', '1:2:3:4', ':20', '00:', '0000:20', '00:20 ', '1' * 30, '00::20'):
+        m, h = elapsed(odd)
+        expect(m.texts[h] == odd and not pset(m, h), f'unexpected text {odd!r} stays as stock wrote it')
+    m, h = elapsed('00:20', get_ret=0x10); expect(m.texts[h] == '00:20' and not pset(m, h), 'a failed read: untouched')
+    m = NowMachine(); m.page(); m.src(0); m.init(); m.tick()
+    expect(not any(c[0] == 'widget_get_text_utf8' for c in m.calls), 'a page without label_playtime: no elapsed handling')
+    m, h = elapsed('00:20', **{}); m.call(PSYMS['np_on_destroy'], a0=WIN, a1=0); m.texts[h] = '00:30'; m.calls = []; m.tick()
+    expect(m.texts[h] == '00:30', 'after the page is gone a stray tick leaves the elapsed label alone')
+    m = NowMachine(); m.page(); m.src(0); h = m.widget('label_playtime'); m.texts[h] = '00:20'; m.present.add(KILL); m.init()
+    expect(m.texts[h] == '00:20', 'the kill switch: stock text')
+
+    # ------------------------------------------------------------------ the info page's lines (np_info)
+    from awtk_text import Ttf, StbText
+    stock_en = {'label_info': 'FLAC|44.1kHz|16bit|950kbps', 'label_album': 'Album:Kid A', 'label_genre': 'Genres:Rock',
+                'label_year': 'Era:1999', 'label_size': 'File Size:35.92MB', 'label_location': 'Location:SD:/Music/Kid A'}
+    want_en = {'label_info': 'FLAC | 44.1 kHz | 16-bit | 950 kbps', 'label_album': 'Album: Kid A', 'label_genre': 'Genre: Rock',
+               'label_year': 'Year: 1999', 'label_size': 'File Size: 35.92 MB', 'label_location': 'Location: SD:/Music/Kid A'}
+    def info(stock, lang=None, **kw):
+        m = NowMachine(); m.page(); m.src(0); m.pt = (30, 200, 1); m.set_language(lang) if lang else None
+        for k, v in kw.items(): setattr(m, k, v)
+        m.info_page(stock); m.init(); return m
+    sets = lambda m: [c for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] != m.widgets['np_remaining']]
+    m = info(stock_en)
+    expect({n: m.label(n) for n in stock_en} == want_en, f'English: "Label: value", spaced units, Genre and Year ({ {n: m.label(n) for n in stock_en} })')
+    expect(len(sets(m)) == 6, f'one rewrite per line ({len(sets(m))})')
+    m.calls = []; m.tick(); m.tick()
+    expect(not sets(m), 'ticks after that leave the lines alone (no rewrite loop)')
+    m.texts[m.widgets['label_album']] = 'Album:Kid A'            # stock writes the line again (a track change)
+    m.calls = []; m.tick()
+    expect(m.label('label_album') == 'Album: Kid A' and len(sets(m)) == 1, 'stock writing a line again is answered once, that line only')
+    m.texts[m.widgets['label_album']] = 'Album:Other'; m.tick(); m.tick()
+    expect(m.label('label_album') == 'Album: Other', 'and the next track\'s text the same way')
+    # values: unknown, zero size, integer kHz, a wide DSD line, units only where they belong, the first colon only
+    cases = {'label_album': {'Album:Unknown': 'Album: Unknown', 'Album:Mega 2MB': 'Album: Mega 2MB', 'Album:A: B': 'Album: A: B',
+                              'Album: Already': 'Album: Already', 'Album:  two spaces': 'Album: two spaces'},
+             'label_size': {'File Size:0.00MB': 'File Size: 0.00 MB', 'File Size: 7.10 MB': 'File Size: 7.10 MB'},
+             'label_year': {'Era:Unknown': 'Year: Unknown', 'Era:0': 'Year: 0'},
+             'label_info': {'MP3|48kHz|16bit|320kbps': 'MP3 | 48 kHz | 16-bit | 320 kbps',
+                            'DSD256|11.3kHz|1bit|11289kbps': 'DSD256|11.3 kHz|1-bit|11289 kbps',
+                            'FLAC|352.8kHz|32bit|22579kbps': 'FLAC|352.8 kHz|32-bit|22579 kbps',
+                            'FLAC | 44.1 kHz | 16-bit | 950 kbps': 'FLAC | 44.1 kHz | 16-bit | 950 kbps', 'FLAC': 'FLAC'}}
+    bad = []
+    for lbl, table in cases.items():
+        for before, after in table.items():
+            m = info({lbl: before}); got = m.label(lbl)
+            if got != after: bad.append((before, got, after))
+    expect(not bad, f'value cases ({bad})')
+    # the wide lines still fit the 272 px label at 18 px (a tight line when the spaced one is too wide)
+    ttf = Ttf(os.path.join(raw, 'fonts', 'default.ttf')); w18 = lambda t: StbText(ttf, 18).layout(t)[1]
+    li = mn.find(mn.awtk_ui.parse(open(os.path.join(raw, 'ui', 'playing_page.bin'), 'rb').read()), 'label_info')
+    pcm = [f'{c}|{r}kHz|{b}bit|{k}kbps' for c in ('FLAC', 'ALAC', 'WAV', 'APE', 'AIFF', 'MP3', 'OGG') for r, b, k in
+           (('44.1', 16, 950), ('48', 24, 2300), ('96', 24, 2800), ('192', 24, 9216), ('352.8', 24, 16934), ('384', 32, 24576))]
+    dsd = [f'{c}|{r}kHz|1bit|{k}kbps' for c in ('DSD64', 'DSD128', 'DSD256', 'DSD512') for r, k in
+           (('2822.4', 5644), ('5644.8', 11289), ('11289.6', 22579), ('22579.2', 45158))]
+    over = []
+    for t in pcm + dsd:
+        m = info({'label_info': t}); out = m.label('label_info')
+        if w18(out) > li.w: over.append((out, w18(out)))
+    expect(not over and li.w == 304 and li.x == 8, f'every quality line, DSD included, fits the {li.w} px label ({over})')
+    spaced = [t for t in pcm + dsd if info({'label_info': t}).label('label_info').count(' | ') == 3]
+    expect(all(len(info({'label_info': t}).label('label_info')) <= O['NP_INFO_SPACED'] for t in spaced) and 'FLAC|44.1kHz|16bit|950kbps' in spaced
+           and 'FLAC|192kHz|24bit|9216kbps' in spaced and not [t for t in dsd if t in spaced] and len(spaced) >= 30,
+           f'the usual lines keep their spaced bars ({len(spaced)} of {len(pcm) + len(dsd)}); the DSD lines go tight')
+    # every language: the stock label and value text is kept, Genre and Year are our keys in that language
+    import pod_i18n
+    for lang in pod_i18n.LOCALES:
+        written = {'label_album': '专辑:Kid A', 'label_genre': 'X:Rock', 'label_year': 'Y:1999', 'label_size': 'Z:3.50MB', 'label_location': 'W:SD:/a'}
+        m = info(written, lang)
+        T = pod_i18n.TEXT
+        expect(m.label('label_genre') == f'{T["Genre"][lang]}: Rock' and m.label('label_year') == f'{T["Year"][lang]}: 1999'
+               and m.label('label_album') == '专辑: Kid A' and m.label('label_size') == 'Z: 3.50 MB' and m.label('label_location') == 'W: SD:/a',
+               f'{lang}: Genre / Year from our table, the other labels as stock wrote them ({m.label("label_genre")}, {m.label("label_year")})')
+    # anything unexpected: stock's text stays
+    keep = {'label_album': 'Unknown', 'label_genre': ':Rock', 'label_size': '', 'label_location': 'x' * 600, 'label_info': 'A' * 511}
+    m = info(keep)
+    expect(all(m.label(n) == keep[n] for n in keep) and not sets(m), 'no colon, a leading colon, an empty text, a text too long to have been read whole: untouched')
+    m = info(stock_en, get_ret=0x10)
+    expect(all(m.label(n) == stock_en[n] for n in stock_en) and not sets(m), 'a failed read of the text: untouched')
+    m = NowMachine(); m.page(); m.src(0); m.info_page({'label_album': 'Album:X'}); m.init()
+    expect(m.label('label_album') == 'Album: X', 'an info page with only some of its labels works for those')
+    m = NowMachine(); m.page(); m.src(0); m.info_page(stock_en); m.present.add(KILL); m.init()
+    expect(all(m.label(n) == stock_en[n] for n in stock_en), 'the kill switch: stock text')
+    m = info(stock_en); m.calls = []; m.call(PSYMS['np_on_destroy'], a0=WIN, a1=0); m.texts[m.widgets['label_album']] = 'Album:Z'; m.tick()
+    expect(m.label('label_album') == 'Album:Z' and not sets(m), 'after the page is gone a stray tick touches nothing')
 
     # ------------------------------------------------------------------ the tone
     mm = NowMachine()
@@ -244,6 +385,199 @@ def run(ctx):
             keep = 255 - mn.tint_alpha(y)
             worst[n] = min(worst.get(n, 99), contrast(fg, tuple(v * keep // 255 for v in t)))
     expect(all(v >= 4.5 for v in worst.values()), f'text keeps 4.5:1 on the darkest and the brightest tone under the gradient ({ {k: round(v, 2) for k, v in worst.items()} })')
+
+    # the progress bar: the unplayed track (white at TRACK's alpha) must show against the window on every tone, the fill against the track
+    over = lambda fg, a, bg: tuple(round(b + (f - b) * a / 255) for f, b in zip(fg, bg))
+    a_track, a_fill = int(mn.TRACK[7:9], 16), int(mn.FILL[7:9], 16)
+    ty = mn.SLIDER[1] + mn.SLIDER[3] // 2
+    tw = {'track vs window': 99, 'fill vs track': 99, 'mode glyph vs window': 99}
+    for c in grid + [(255, 255, 255)]:
+        bg = tuple(v * (255 - mn.tint_alpha(ty)) // 255 for v in mn.tone(*c)); tr = over((255,) * 3, a_track, bg)
+        tw['track vs window'] = min(tw['track vs window'], contrast(tr, bg)); tw['fill vs track'] = min(tw['fill vs track'], contrast(over((255,) * 3, a_fill, tr), tr))
+        gy = mn.ROW_Y + mn.ROW_H // 2; gbg = tuple(v * (255 - mn.tint_alpha(gy)) // 255 for v in mn.tone(*c))
+        tw['mode glyph vs window'] = min(tw['mode glyph vs window'], contrast(mod_icons.NP_MID, gbg))
+    expect(tw['track vs window'] >= 2.3 and tw['fill vs track'] >= 4.5 and tw['mode glyph vs window'] >= 4.5 and mod_icons.NP_MID > (0xAA,) * 3 and mod_icons.NP_OFF < (0xAA,) * 3 and a_track > 0x33,
+           f'the track shows on every tone (the fill stands out of it), the mode glyphs keep 4.5:1, repeat-off stays dimmer ({ {k: round(v, 2) for k, v in tw.items()} })')
+
+    # the lyrics and info pages: the scrim (np_scrim.png, 50 % black, soft top and bottom) sits between the tinted window and the text.
+    # Lyric lines (current white-ish, the others the lighter grey) and the info labels, over every tone, rows 44..288 of the text area
+    lyric_style = {i.style: i for i in awtk_style.parse(open(os.path.join(raw, 'styles', 'playing_page.bin'), 'rb').read()).items
+                   if i.widget == 'list_item' and i.state == 'normal'}
+    col = lambda s: tuple(int(s[k:k + 2], 16) for k in (1, 3, 5))
+    cur, dim = col(lyric_style['listitem_sellyric_style'].color('text_color')), col(lyric_style['listitem_lyric_style'].color('text_color'))
+    secondary = {'lyric inactive': (dim, 3.0), 'lyric current': (cur, 4.5), 'info label': (col(mn.GREY), 3.0), 'info quality line': (col(mn.FG), 4.5), 'info location': (col(mn.GREY), 3.0)}
+    sworst = {k: 99 for k in secondary}
+    for c in grid + [(255, 255, 255)]:
+        t = mn.tone(*c)
+        for y in range(mn.LYR_Y, mn.LYR_Y + mn.LYR_H, 4):
+            keep, sk = 255 - mn.tint_alpha(y), 255 - mn.scrim_alpha(y - mn.SCRIM[1])
+            bg = tuple(v * keep // 255 * sk // 255 for v in t)
+            for k, (fg, _) in secondary.items(): sworst[k] = min(sworst[k], contrast(fg, bg))
+    expect(all(sworst[k] >= need for k, (_, need) in secondary.items()),
+           f'with the scrim the lyric and info text keeps its contrast on every tone: inactive / secondary >= 3:1, current / quality line >= 4.5:1 ({ {k: round(v, 2) for k, v in sworst.items()} })')
+    bare = min(contrast(dim, tuple(v * (255 - mn.tint_alpha(y)) // 255 for v in mn.tone(255, 255, 255))) for y in range(mn.LYR_Y, mn.LYR_Y + mn.LYR_H, 4))
+    expect(bare < 3.0, f'(the scrim is needed: the inactive lyric over the brightest tone alone is {bare:.2f}:1)')
+    expect(lum(dim) > lum(col(mn.DOWN)) and dim == col(mn.LYR_DIM), 'the inactive lyric grey is lighter than the old #8C8C8C')
+    from awtk_text import Ttf as _T14, StbText as _S14
+    _t14 = _T14(os.path.join(raw, 'fonts', 'default.ttf'))
+    tw14 = max(_S14(_t14, mn.TIMES_PX).layout(s)[1] for s in ('-00:00:00', '00:00:00', '-88:88:88'))
+    expect(mn.TIMES_PX == 14 and tw14 <= mn.TIMES_W and mn.TIMES_W - tw14 <= 14, f'the 14 px times fit their box: the widest "-hh:mm:ss" is {tw14} px in {mn.TIMES_W}')
+
+    # ------------------------------------------------------------------ the status bar follows the page (EXPERIMENTAL)
+    def bar_model(t):      # t: the window colour (r, g, b); the page's first row under the gradient, darkened for white glyphs
+        keep = 255 - mn.tint_alpha(0)
+        r, g, b = (v * keep // 255 for v in t)
+        while 2126 * r * r + 7152 * g * g + 722 * b * b > O['NP_BAR_LUM_MAX']: r, g, b = r * 15 >> 4, g * 15 >> 4, b * 15 >> 4
+        return r, g, b
+    def c_bar(t):
+        mm.u.reg_write(UC_MIPS_REG_SP, STACK); mm.u.reg_write(UC_MIPS_REG_RA, RET)
+        mm.u.reg_write(UC_MIPS_REG_A0, t[0] | t[1] << 8 | t[2] << 16); mm.u.emu_start(PSYMS['np_bar_color'], RET, count=100000)
+        v = mm.u.reg_read(UC_MIPS_REG_V0)
+        return v >> 24, (v & 255, v >> 8 & 255, v >> 16 & 255)
+    tones = sorted({mn.tone(*c) for c in grid} | {mn.NP_NEUTRAL, mn.tone(255, 255, 255)})
+    expect(all(c_bar(t) == (255, bar_model(t)) for t in tones), f'np_bar_color equals the model on {len(tones)} tones: the first row under the gradient, darkened to the luminance cap')
+    bad = [t for t in tones if contrast((255, 255, 255), c_bar(t)[1]) < 4.5]
+    wc = min(contrast((255, 255, 255), c_bar(t)[1]) for t in tones)
+    expect(not bad, f'the bar\'s white glyphs and clock keep 4.5:1 on every tone (worst {wc:.2f}:1)')
+    anyrgb = [(rng.randrange(256), rng.randrange(256), rng.randrange(256)) for _ in range(300)] + [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 255)]
+    expect(all(contrast((255, 255, 255), c_bar(c)[1]) >= 4.5 for c in anyrgb), 'the cap holds for any colour, not only the tones (300 random, the primaries and white)')
+    dark = [t for t in tones if bar_model(t) == tuple(v * (255 - mn.tint_alpha(0)) // 255 for v in t)]
+    expect(len(dark) > 20 and mn.NP_NEUTRAL in dark and all(c_bar(t)[1] == tuple(v * (255 - mn.tint_alpha(0)) // 255 for v in t) for t in dark),
+           f'a dark tone gives exactly the page\'s first row ({len(dark)} of {len(tones)} tones are not darkened)')
+    seam = max(max(v * (255 - mn.tint_alpha(0)) // 255 - w for v, w in zip(t, c_bar(t)[1])) for t in tones)
+    print(f'  (status bar: worst white contrast {wc:.2f}:1; largest channel step page row 0 -> bar {seam}; {len(dark)} of {len(tones)} tones undarkened)')
+    expect(O['NP_BAR_STOCK'] == 0xff000000 and (O['EVT_WINDOW_TO_BG'], O['EVT_WINDOW_TO_FG']) == (0x12c, 0x12d), 'stock black, the two window events')
+
+    def tinted(pix=bytes([200, 40, 40, 255]), size=(2, 2), **kw):
+        m = NowMachine().with_bar(); m.page(); m.jpeg('/tmp/coverpic.jpg', pix=pix * (size[0] * size[1]), size=size); m.src(2)
+        for k, v in kw.items(): setattr(m, k, v)
+        m.init(); return m
+    BLACK = O['NP_BAR_STOCK']
+    word_of = lambda rgb: 0xff000000 | rgb[0] | rgb[1] << 8 | rgb[2] << 16
+    m = tinted(bytes([40, 30, 20, 255]))
+    t = mn.tone(40, 30, 20)
+    expect(m.bar_styles[-1] == (m.bar, 'normal:bg_color', word_of(bar_model(t))) and ('widget_invalidate_force', m.bar) in m.calls,
+           f'a dark cover: the bar gets the colour of the page\'s first row ({[hex(s[2]) for s in m.bar_styles]}) and is repainted')
+    expect(bar_model(t) == tuple(v * 217 // 255 for v in t), 'which is the tone under the gradient\'s first row, alpha 38')
+    expect(all(s[0] == m.bar and s[1] == 'normal:bg_color' for s in m.bar_styles) and m.styles == [(WIN, 'normal:bg_color', word_of(t))],
+           'the window\'s own colour is still set once, to the plain tone')
+    n = len(m.bar_styles); m.tick(); m.tick()
+    expect(len(m.bar_styles) == n and not m.bar_calls(), 'ticks while nothing changes leave the bar alone (no repaint loop)')
+    expect(sum(c[0] == 'widget_invalidate_force' and c[1] == m.bar for c in m.calls) == 0, 'and repaint nothing')
+    m = tinted(bytes([250, 250, 250, 255]))
+    expect(contrast((255, 255, 255), tuple(m.bar_color() >> s & 255 for s in (0, 8, 16))) >= 4.5 and m.bar_color() != word_of(tuple(v * 217 // 255 for v in mn.tone(250, 250, 250))),
+           'a bright cover: the bar is darker than the page\'s first row, so the white glyphs stay readable')
+    # the bar is found by type: the navbar is the first child and is never touched; no status bar, nothing to do
+    m = tinted()
+    expect(all(c[1] == m.bar for c in m.calls if c[0] == 'widget_set_style' and c[1] != WIN) and m.children[m.wm][0] not in [c[1] for c in m.calls if c[0] == 'widget_set_style'],
+           'only the child of type system_bar is styled')
+    m = NowMachine(); m.page(); m.src(0); m.init(); m.tick()
+    expect(m.bar_styles == [] and m.styles, 'a window manager without a status bar: the page works, no bar call')
+    m = NowMachine().with_bar(); m.page(); m.src(0); m.wm = 0; m.init(); m.tick()
+    expect(m.bar_styles == [] and m.styles, 'no window manager: the same')
+
+    # background / foreground
+    m = tinted(); col = m.bar_color(); m.bar_styles.clear()
+    m.fire(O['EVT_WINDOW_TO_BG'])
+    expect(m.bar_styles == [(m.bar, 'normal:bg_color', BLACK)] and ('widget_invalidate_force', m.bar) in m.calls, 'EVT_WINDOW_TO_BACKGROUND: the bar is black again and repainted')
+    m.fire(O['EVT_WINDOW_TO_BG'])
+    expect(m.bar_styles == [(m.bar, 'normal:bg_color', BLACK)], 'a second one does not set it again')
+    m.tick(); m.tick()
+    expect(m.bar_styles == [(m.bar, 'normal:bg_color', BLACK)], 'ticks while a dialog (the pull-down) covers the page, the page still the top normal window: the bar stays black')
+    m.blobs['/tmp/coverpic.jpg'] = b'next track' * 30; m.images['file://' + '/tmp/coverpic.jpg'] = (2, 2, bytes([20, 200, 20, 255]) * 4); m.tick()
+    expect(m.bar_styles == [(m.bar, 'normal:bg_color', BLACK)] and len(m.styles) == 2, 'a new cover while covered recolours the page, not the bar')
+    m.fire(O['EVT_WINDOW_TO_FG'])
+    expect(m.bar_color() == word_of(bar_model(mn.tone(20, 200, 20))) and len(m.bar_styles) == 2, 'EVT_WINDOW_TO_FOREGROUND: the bar takes the current cover\'s colour')
+    n = len(m.bar_styles); m.fire(O['EVT_WINDOW_TO_FG'])
+    expect(len(m.bar_styles) == n + 1 and m.bar_color() == word_of(bar_model(mn.tone(20, 200, 20))), 'a repeated foreground event only sets the same colour again')
+    n = len(m.bar_styles); m.tick(); m.tick()
+    expect(len(m.bar_styles) == n, 'then ticks leave it (no loop)')
+    # a handler for another page's window does nothing
+    m.fire(O['EVT_WINDOW_TO_BG']); k = len(m.bar_styles)
+    fn, _ = m.bound[(WIN, O['EVT_WINDOW_TO_FG'])]
+    m.call(fn, a0=WIN + 0x100, a1=0, count=100000)
+    expect(len(m.bar_styles) == k and m.bar_color() == BLACK, 'an event whose context is not the current window changes nothing')
+    # the timer catches what the events missed
+    m = tinted(); m.bar_styles.clear(); m.top_main = WIN + 0x100; m.tick()
+    expect(m.bar_styles == [(m.bar, 'normal:bg_color', BLACK)], 'another normal window on top without an event: the next tick makes the bar black')
+    m.tick(); expect(len(m.bar_styles) == 1, 'once')
+    m.top_main = WIN; m.tick()
+    expect(len(m.bar_styles) == 2 and m.bar_color() != BLACK, 'the page the top window again, still in front: the tick tints again')
+    m.fire(O['EVT_WINDOW_TO_BG']); m.top_main = WIN; m.tick()
+    expect(m.bar_color() == BLACK and len(m.bar_styles) == 3, 'but not while a background event stands (a dialog)')
+
+    # every exit restores black
+    m = tinted(); m.bar_styles.clear()
+    m.call(PSYMS['np_on_destroy'], a0=WIN, a1=0)
+    expect(m.bar_styles == [(m.bar, 'normal:bg_color', BLACK)] and ('timer_remove', 0x777) in m.calls and m.calls.index(('widget_set_style', m.bar, 'normal:bg_color', BLACK)) < m.calls.index(('timer_remove', 0x777)),
+           'page destroy: black first, then the timer goes')
+    m.call(PSYMS['np_on_destroy'], a0=WIN, a1=0); m.tick(); m.fire(O['EVT_WINDOW_TO_FG']); m.fire(O['EVT_WINDOW_TO_BG'])
+    expect(m.bar_styles == [(m.bar, 'normal:bg_color', BLACK)], 'after the destroy: a second destroy, a stray tick and stray window events never touch the bar')
+    m = tinted(); m.fire(O['EVT_WINDOW_TO_BG']); m.bar_styles.clear(); m.call(PSYMS['np_on_destroy'], a0=WIN, a1=0)
+    expect(m.bar_styles == [], 'a destroy of a page already backgrounded has nothing to restore')
+    m = tinted(); m.bar_styles.clear(); m.call(PSYMS['np_on_destroy'], a0=WIN + 0x100, a1=0)
+    expect(m.bar_styles == [], 'an earlier page\'s destroy leaves the bar to the current page')
+    m = tinted(); m.bar_styles.clear(); m.init(win=WIN + 0x100)
+    expect([s[2] for s in m.bar_styles][:1] == [BLACK] and m.bar_color() != BLACK and sum(c[0] == 'timer_remove' for c in m.calls) == 1,
+           'a page built over a live one: black for the old one, then the new one tints')
+    m.calls = []; m.top_main = WIN + 0x100; m.call(PSYMS['np_on_destroy'], a0=WIN, a1=0)
+    expect(not m.bar_calls(), 'and the old page\'s late destroy does not undo it')
+    # hand-over with the album page (pod_bar_tint / pod_bar_black: only the owner restores)
+    ALBUM = WIN + 0x200
+    m = tinted(); m.bar_styles.clear()
+    expect(m.call(PSYMS['pod_bar_tint'], a0=ALBUM, a1=0x00112233) == 1 and len(m.bar_styles) == 1, 'the album page takes the bar over from Now Playing')
+    m.fire(O['EVT_WINDOW_TO_BG']); m.call(PSYMS['np_on_destroy'], a0=WIN, a1=0)
+    expect(len(m.bar_styles) == 1 and m.bar_color() != BLACK, 'Now Playing\'s late background event and destroy (Back) leave the album page\'s colour alone')
+    m = tinted(); m.bar_styles.clear(); m.call(PSYMS['pod_bar_tint'], a0=ALBUM, a1=0x00112233); m.bar_styles.clear(); m.tick(); m.tick()
+    expect(not m.bar_styles, 'ticks while the album page owns the bar do not take it back (the page is not the top window)')
+    m = tinted(); m.fire(O['EVT_WINDOW_TO_BG']); m.bar_styles.clear()
+    m.call(PSYMS['pod_bar_tint'], a0=ALBUM, a1=0x00112233); m.fire(O['EVT_WINDOW_TO_FG'])
+    expect(len(m.bar_styles) == 2 and m.bar_color() == word_of(bar_model(mn.tone(200, 40, 40))), 'and Now Playing takes it back when it comes to the front again')
+
+    # the tone cache (patch/common.c): a changed cover of a known album is not decoded again
+    def tone_run(album='Kind of Blue', playing=True):
+        m = NowMachine(); m.page(); m.src(2)
+        if playing: m.play([m.record(album=album, artist='Miles Davis')], 0)
+        m.jpeg('/tmp/coverpic.jpg', data=b'cover one' * 30, pix=bytes([200, 40, 40, 255]) * 4, size=(2, 2)); m.init()
+        return m
+    def next_cover(m, rgb, data):
+        m.blobs['/tmp/coverpic.jpg'] = data; m.images['file:///tmp/coverpic.jpg'] = (2, 2, bytes(rgb + (255,)) * 4)
+        return [c for c in m.tick() if c[0] == 'widget_load_image']
+    m = tone_run(); first = [s[2] for s in m.styles]
+    expect(first == [word_of(mn.tone(200, 40, 40))], 'a new album: decoded as before, the tone set')
+    expect(next_cover(m, (20, 200, 20), b'cover two' * 30) == [] and [s[2] for s in m.styles] == first * 2,
+           'another cover file (a new hash) of the same album: the cached tone is used, nothing is decoded')
+    m.tick(); expect(len(m.styles) == 2, 'and then ticks leave it')
+    m.play([m.record(album='Other', artist='Miles Davis')], 0)
+    expect(len(next_cover(m, (20, 200, 20), b'cover three' * 30)) == 1 and m.styles[-1][2] == word_of(mn.tone(20, 200, 20)),
+           'another album: decoded, and its own tone set')
+    expect(next_cover(m, (30, 30, 200), b'cover four' * 30) == [] and m.styles[-1][2] == word_of(mn.tone(20, 200, 20)), 'which is cached in turn')
+    m = tone_run(playing=False)
+    expect(len(next_cover(m, (20, 200, 20), b'cover two' * 30)) == 1 and m.styles[-1][2] == word_of(mn.tone(20, 200, 20)), 'no track in the queue: no key, every new cover is decoded')
+    m = tone_run(album='')
+    expect(len(next_cover(m, (20, 200, 20), b'cover two' * 30)) == 1 and m.styles[-1][2] == word_of(mn.tone(20, 200, 20)), 'an untagged track has no album key: no cache')
+    expect(not [c for c in m.calls if (c[0] == 'fopen' and any(x in c[2] for x in 'wa+')) or c[0] in ('fwrite', 'write', 'open')], 'no card writes')
+    # the kill switch, a refused timer, refused events, a failing style call, the cover widget missing
+    m = NowMachine().with_bar(); m.page(); m.present.add(KILL); m.init()
+    expect(not m.bar_styles and m.names() == ['stock_playing_init', 'access'], f'kill switch: the bar is never touched, not even looked up ({m.names()})')
+    m = NowMachine().with_bar(); m.page(); m.timer_fail = True; m.init()
+    expect(not m.bar_styles and not m.styles and (WIN, O['EVT_WINDOW_TO_BG']) not in m.bound, 'a refused timer: the bar is never touched and no window event is registered')
+    m.call(PSYMS['np_on_destroy'], a0=WIN, a1=0)
+    expect(not m.bar_styles, 'and nothing later does')
+    for ev in (O['EVT_WINDOW_TO_BG'], O['EVT_WINDOW_TO_FG']):
+        m = NowMachine().with_bar(); m.page(); m.src(0); m.on_fail = {ev}; m.init(); m.tick()
+        expect(not m.bar_styles and m.styles, f'event {ev:#x} refused: the page tints, the bar is never touched (it could not be restored)')
+        m.call(PSYMS['np_on_destroy'], a0=WIN, a1=0); expect(not m.bar_styles, 'and the destroy has nothing to restore')
+    m = NowMachine().with_bar(); m.page(); m.src(0); m.on_fail = {EVT_DESTROY}; m.init()
+    expect(not m.bar_styles and not m.timers, 'no destroy handler: the page stays stock, the bar too')
+    m = NowMachine().with_bar(); m.page(); m.src(0); m.bar_style_ret = 0x10; m.init(); m.tick()
+    expect(not m.bar_styles and m.styles and not any(c[0] == 'widget_invalidate_force' and c[1] == m.bar for c in m.calls),
+           'a failing bar style call: no repaint of the bar, the page still works')
+    m.call(PSYMS['np_on_destroy'], a0=WIN, a1=0); expect(not m.bar_styles, 'and nothing to restore at the end')
+    m = NowMachine().with_bar(); m.page(art=False); m.src(0); m.init()
+    expect(m.bar_color() is not None, 'without the cover widget the bar still follows')
+    m = NowMachine().with_bar(); m.page(labels=False); m.src(0); m.init(); m.call(PSYMS['np_on_destroy'], a0=WIN, a1=0)
+    expect([s[2] for s in m.bar_styles][-1] == BLACK, 'without the labels: the bar follows and is restored')
 
     # ------------------------------------------------------------------ the cover: decode, average, change, corrupt, missing
     P2, P3 = '/tmp/coverpic.jpg', '/tmp/externpic.jpg'
@@ -317,18 +651,30 @@ def run(ctx):
     f = ui.find
     rect = lambda n: (f(n).x, f(n).y, f(n).w, f(n).h)
     expect(rect('img_playcover') == (28, 28, 264, 264) and mn.ART == mod_lockscreen.COVER_SIZE == 264, 'the cover is 264 px at 28, 28: the size demo writes, so it is drawn 1:1')
+    lines = [rect(n) for n in ('label_info', 'label_album', 'label_genre', 'label_year', 'label_size', 'label_location')]
+    expect(all(a[1] + a[3] <= b[1] for a, b in zip(lines, lines[1:])) and lines[-1][1] + lines[-1][3] <= mn.LYR_Y + mn.LYR_H
+           and all(r[0] >= 0 and r[0] + r[2] <= 320 for r in lines) and lines[0][:3] == (8, 52, 304)
+           and f('label_info').get('style:normal:text_color') == mn.FG and f('label_album').get('style:normal:text_color') == mn.GREY,
+           f'the info page: the quality line (304 px wide) and the four lines stack without overlap, the location under them ({lines})')
     imm = [word(built, a) & 0xffff for a in mod_lockscreen.COVER_IMM]
     expect(imm == [264] * 4 and all(word(stock, a) in (0x240700fe, 0x240600fe) for a in mod_lockscreen.COVER_IMM), 'demo writes the cover file at 264 px (the four pinned words)')
     expect(rect('btn_return') == (100, 0, 120, 44) and f('btn_return').get('style') == 'img_btn_style' and f('btn_return').get('style:normal:bg_image') == 'np_grabber',
            'Back is the grabber: 120x44, the pill in its image')
     expect(rect('slide_indicator') == (145, 296, 30, 4) and f('slide_indicator').get('size') == '4', 'micro dots: 4 px, centred under the art')
-    expect(rect('scrlabel_title') == (28, 304, 176, 26) and rect('scrlabel_artist') == (28, 330, 176, 22), 'title and artist in the 28 px text column left of the buttons')
+    expect(rect('scrlabel_title') == (28, 305, 176, 24) and rect('scrlabel_artist') == (28, 329, 176, 22), 'title and artist in the 28 px text column left of the buttons')
+    expect(mn.TITLE_PX == 20 and mn.META_PX == 18 and mn.TITLE_H >= mn.TITLE_PX + 4 and mn.ARTIST_H >= mn.META_PX + 4
+           and mn.TITLE_Y + mn.TITLE_H == mn.ARTIST_Y and (mn.TITLE_Y + mn.ARTIST_Y + mn.ARTIST_H) / 2 == mn.BTN_Y + mn.BTN // 2 + 0.0
+           and mn.FAV_X - mn.M >= mn.TEXT_W, 'title 20 px, artist 18 px: the 46 px block is centred on the discs (y 328) and the column ends before the heart')
+    from awtk_text import Ttf as _T, StbText as _S
+    _t = _T(os.path.join(raw, 'fonts', 'default.ttf'))
+    _w20 = lambda s: _S(_t, 20).layout(s)[1]
+    expect(_w20('Hello, World') < mn.TEXT_W and _w20('A' * 40) > mn.TEXT_W and _S(_t, 20).layout('Hg')[1] > 0, 'the 20 px title measures with the pinned font: a short title fits the 176 px column, a long one is cut (ellipsis)')
     expect(rect('btn_fav') == (204, 306, 44, 44) and rect('btn_more') == (248, 306, 44, 44), 'heart and More: 44x44 targets, 4 px apart, right edge on the 28 px margin')
-    expect(rect('slider_play') == (28, 354, 264, 30) and f('slider_play').get('bar_size') == '6' and f('slider_play').get('style:normal:icon') == '', 'progress: the stock 30 px target, a 6 px bar, no thumb')
-    expect(rect('label_playtime')[:2] == (28, 384) and rect('np_remaining') == rect('label_playlen') and rect('label_playlen')[0] + rect('label_playlen')[2] == 292,
+    expect(rect('slider_play') == (28, 348, 264, 30) and f('slider_play').get('bar_size') == '6' and f('slider_play').get('style:normal:icon') == '', 'progress: the stock 30 px target, a 6 px bar, no thumb')
+    expect(rect('label_playtime')[:2] == (28, mn.TIMES_Y) and rect('np_remaining') == rect('label_playlen') and rect('label_playlen')[0] + rect('label_playlen')[2] == 292,
            'times under the bar on the margins; the remaining time sits on the total')
-    expect(all(f(n).get(f'style:{s}:font_size') == '12' for n in ('label_playtime', 'label_playlen', 'np_remaining') for s in ('normal', 'disable', 'focused')), 'times are 12 px in every state')
-    expect(f('view_buttons').y == 400 and f('view_buttons').y + f('view_buttons').h == 450, 'the transport row is 400..450')
+    expect(all(f(n).get(f'style:{s}:font_size') == '14' for n in ('label_playtime', 'label_playlen', 'np_remaining') for s in ('normal', 'disable', 'focused')), 'times are 14 px in every state')
+    expect(f('view_buttons').y == 392 and f('view_buttons').y + f('view_buttons').h == 450, 'the transport row is 392..450')
     expect(f('np_remaining').get('visible') == 'false' and all(f(n).get('sensitive') == 'false' for n in ('np_remaining', 'label_playlen', 'label_playtime', 'img_np_tint')),
            'np_remaining starts hidden; the labels and the gradient are insensitive')
     for n in ('label_index', 'img_hr'):
@@ -341,35 +687,124 @@ def run(ctx):
     expect(len(mn.check_touch(ui)) == len(mn.PROBES), 'check_touch: every control\'s centre reaches it, the art and the title rows reach the slide_view')
     expect(all(min(rect(n)[2:]) >= 44 for n in mn.PROBES if n != 'slider_play') and rect('slider_play')[3] == 30, 'touch targets are 44 px or the stock 30 px seek bar')
     lyr = f('view_lrc')
-    expect(lyr.y >= 44 and lyr.y + lyr.h <= mn.DOTS[1] and f('view_info').children and all(c.y + c.h <= mn.DOTS[1] for c in f('view_info').children if c.name), 'lyrics and info end above the dots')
+    expect(lyr.y >= 44 and lyr.y + lyr.h <= mn.DOTS[1] and f('view_info').children and all(c.y + c.h <= mn.DOTS[1] for c in f('view_info').children if c.name and not c.name.startswith('img_np_scrim')), 'lyrics and info text end above the dots (the scrim runs under them)')
     expect(f('view').y + f('slide_view').h <= f('view_buttons').y and f('slide_view').h == mn.SLIDE_H, 'the slide pages end above the transport row')
     # vertical rhythm
     art_end = 28 + 264
-    expect(mn.DOTS[1] - art_end == 4 and 304 - (mn.DOTS[1] + mn.DOTS[3]) == 4 and 330 + 22 <= 354 and 354 + 30 == 384 and 384 + 16 == 400, 'art, dots, title, artist, bar, times and the transport row follow each other without overlap')
+    sy = mn.SLIDER[1]
+    expect(mn.DOTS[1] - art_end == 4 and mn.TITLE_Y - (mn.DOTS[1] + mn.DOTS[3]) == 5 and mn.ARTIST_Y + mn.ARTIST_H - sy <= 3 and sy + 30 <= mn.TIMES_Y
+           and mn.TIMES_Y + mn.TIMES_H == mn.SVV_H and mn.SVV_H - mn.ROW_Y <= 5, 'art, dots, title, artist, bar, times and the transport row follow each other (the insensitive artist box overlaps the bar\'s 30 px target by 3 px at most)')
+    # the lower half's rhythm on ink: the gaps artist -> bar -> digits -> transport glyphs are equal, the glyphs keep ~15 px from the bottom
+    bar_top, bar_bot = sy + 15 - mn.BAR // 2, sy + 15 + mn.BAR // 2
+    dig_top, dig_bot = mn.TIMES_Y + 3, mn.TIMES_Y + 3 + 9              # 14 px digits: ink 9 rows, 3 under the label's top (device screenshot)
+    row_c = mn.ROW_Y + mn.ROW_H // 2; g_top, g_bot = row_c - 14, row_c + 14   # pause bars 28 tall, centred on the 44 px canvas
+    art_bot = 344                                                       # the artist's ink bottom on the device (baseline row of "back number")
+    gaps = (bar_top - art_bot, dig_top - bar_bot, g_top - dig_bot, mn.H - g_bot)
+    expect(gaps == (16, 16, 16, 15), f'ink gaps artist -> bar -> times -> transport glyphs -> window bottom {gaps}')
+    expect(f('view_buttons').y + rect('btn_play')[1] + rect('btn_play')[3] // 2 == row_c == 421 and all(rect(n)[3] >= 44 for n in ('btn_playmode', 'btn_prev', 'btn_play', 'btn_next', 'btn_queue')),
+           'the transport slots are centred on the glyphs and stay 44 px or more')
+    # the cover's shadow: an insensitive child of page 1, right over the cover and under the title; a hole where the art is
+    sh = f('img_np_shadow'); page1 = f('view')
+    kids = [c.name for c in page1.children]
+    expect(sh in page1.children and kids.index('img_np_shadow') == kids.index('img_playcover') + 1 and kids.index('img_np_shadow') < kids.index('scrlabel_title')
+           and sh.get('sensitive') == 'false' and sh.get('image') == 'np_shadow', f'the shadow follows the cover on page 1 (slides with it), before the title, insensitive ({kids})')
+    expect((sh.x, sh.y, sh.w, sh.h) == (mn.ART_X - mn.SHADOW_PAD, mn.ART_Y - mn.SHADOW_PAD, mn.SHADOW_SIZE, mn.SHADOW_SIZE) and sh.x >= 0 and sh.x + sh.w <= 320
+           and sh.y >= 0 and sh.y + sh.h <= mn.SLIDE_H, f'the shadow image lies inside the 320 x {mn.SLIDE_H} page ({(sh.x, sh.y, sh.w, sh.h)}): nothing clipped at the edges')
     # images
     xx = os.path.join(raw, 'images', 'xx')
     from PIL import Image
+    sd = Image.open(os.path.join(xx, 'np_shadow.png')).convert('RGBA'); S, P, A_, R_ = mn.SHADOW_SIZE, mn.SHADOW_PAD, mn.ART, mn.ART_R
+    sa = lambda x, y: sd.getpixel((x, y))[3]
+    expect(sd.size == (S, S) and {sd.getpixel((x, y))[:3] for x in (0, 100, S - 1) for y in (0, 60, S - 1)} == {(0, 0, 0)}, f'np_shadow.png: {S} px square, black')
+    top = max(sa(x, y) for y in range(S) for x in range(S))
+    expect(0.35 * 255 <= top <= 0.45 * 255 and mn.SHADOW_ALPHA >= top, f'its strongest visible pixel is {top / 255:.0%} black (35..45 %; the blur at full strength {mn.SHADOW_ALPHA / 255:.0%} lies under the art)')
+    expect(all(sa(P + x, P + y) == 0 for x in range(R_, A_ - R_, 7) for y in range(R_, A_ - R_, 7)) and sa(P + 130, P + 130) == 0 and sa(P + 3, P + 130) == 0 and sa(P + A_ - 1, P + 130) == 0 and sa(P + 130, P) == 0
+           and sa(P + 130, P + A_ - 1) == 0, 'the art itself is a hole in the shadow (nothing over the cover)')
+    expect(max(sa(x, y) for x in range(S) for y in (0, 1, S - 1, S - 2)) <= 1 and max(sa(x, y) for y in range(S) for x in (0, 1, S - 1, S - 2)) <= 1, 'the blur has faded out at the image edge (no clipping)')
+    expect(all(sa(x, y) == sa(S - 1 - x, y) for x in range(S) for y in range(0, S, 9)), 'the shadow is symmetric left to right')
+    col = [sa(S // 2, P + A_ + d) for d in range(0, 20)]
+    expect(all(a >= b for a, b in zip(col, col[1:])) and col[0] >= 60 and col[-1] <= 2 and sa(S // 2, P - 1) < col[0] and sa(S // 2, P - 1) > 5,
+           f'it falls off smoothly under the art ({col[0] / 255:.0%} at the edge, {col[10] / 255:.0%} 10 px out) and shows above it less than below')
+    # the corners: the shadow darkens the notches the payload fills with the window colour, with the payload's own coverage
+    cov = mn.corner_alpha()
+    expect(all((sa(P + x, P + y) == 0) == (cov[y * R_ + x] == 0) for y in range(R_) for x in range(R_)), 'the hole is the art\'s rounded rectangle: the shadow shows exactly where the corner painter has coverage')
+    expect(sa(P, P) > 0 and sa(P, P) == sa(P + A_ - 1, P) and sa(P, P + A_ - 1) > sa(P, P), 'the corner notches are shadowed (more at the bottom, where the shadow is shifted to)')
+    expect(os.path.getsize(os.path.join(xx, 'np_shadow.png')) < 12000, f'np_shadow.png is small ({os.path.getsize(os.path.join(xx, "np_shadow.png"))} bytes)')
     t = Image.open(os.path.join(xx, 'np_tint.png')).convert('RGBA')
     expect(t.size == (320, 450) and {t.getpixel((0, y))[:3] for y in (0, 225, 449)} == {(0, 0, 0)} and (t.getpixel((7, 0))[3], t.getpixel((7, 449))[3]) == mn.TINT_ALPHA
            and all(t.getpixel((x, y))[3] == mn.tint_alpha(y) for y in range(0, 450, 17) for x in (0, 319)), 'np_tint.png: black, alpha 38 at the top to 235 at the bottom, rows as tint_alpha')
     expect(os.path.getsize(os.path.join(xx, 'np_tint.png')) < 6000, f'np_tint.png is small ({os.path.getsize(os.path.join(xx, "np_tint.png"))} bytes)')
+    sc = Image.open(os.path.join(xx, 'np_scrim.png')).convert('RGBA')
+    SW, SH = mn.SCRIM[2:]
+    expect(sc.size == (SW, SH) and {sc.getpixel((x, y))[:3] for x in (0, 160, 319) for y in (0, 100, SH - 1)} == {(0, 0, 0)}
+           and all(sc.getpixel((x, y))[3] == mn.scrim_alpha(y) for y in range(SH) for x in (0, 319)),
+           'np_scrim.png: black, alpha rows as scrim_alpha')
+    al = [sc.getpixel((5, y))[3] for y in range(SH)]
+    expect(al[0] == 0 and al[-1] == 0 and max(al) == 128 and 0.45 <= max(al) / 255 <= 0.55 and al == al[::-1]
+           and all(a == 128 for a in al[mn.SCRIM_EDGE:SH - mn.SCRIM_EDGE]) and all(x <= y for x, y in zip(al[:mn.SCRIM_EDGE], al[1:mn.SCRIM_EDGE + 1]))
+           and al[mn.SCRIM_EDGE // 2] in range(60, 68), 'the scrim is 50 % black in the middle, ramps softly to 0 at the top and the bottom edge, symmetric')
+    expect(sc.height == SH and mn.SCRIM[1] <= mn.LYR_Y - mn.SCRIM_EDGE and mn.LYR_Y + mn.LYR_H <= mn.SCRIM[1] + SH - mn.SCRIM_EDGE
+           and all(r[1] >= mn.LYR_Y - 4 for r in lines[:1]) and os.path.getsize(os.path.join(xx, 'np_scrim.png')) < 4000,
+           f'the whole text area (y {mn.LYR_Y} .. {mn.LYR_Y + mn.LYR_H}) lies in the full-strength middle of the scrim (y {mn.SCRIM[1]} .. {mn.SCRIM[1] + SH}); the file is small')
+    for pg, nm in (('view_lyrics', 'img_np_scrim_lyrics'), ('view_info', 'img_np_scrim_info')):
+        s = f(nm)
+        expect(f(pg).children[0] is s and rect(nm) == mn.SCRIM and s.get('sensitive') == 'false' and s.get('image') == 'np_scrim',
+               f'{nm}: the first child of {pg} (under the text), insensitive, at {mn.SCRIM}')
+    expect(all(w.name not in ('img_np_scrim_lyrics', 'img_np_scrim_info') or [p for p in ui.walk() if w in p.children][0].name in ('view_lyrics', 'view_info') for w in ui.walk() if w.name),
+           'the scrim is on the lyrics and info pages only: the art page keeps the full tint')
     expect(not os.path.exists(os.path.join(xx, 'np_artmask.png')) and 'img_np_artmask' not in [w.name for w in ui.walk()], 'there is no static corner mask: the payload paints the corners (square without it)')
     def img(n): return Image.open(os.path.join(xx, n + '.png')).convert('RGBA')
     sizes = {n: img(n).size for n in ('np_grabber', 'np_play', 'np_pause', 'np_next', 'np_prev', 'np_fav', 'np_unfav', 'np_more', 'np_random', 'np_playqueue')}
-    expect(sizes['np_grabber'] == (120, 44) and sizes['np_fav'] == sizes['np_unfav'] == sizes['np_more'] == (44, 44) and sizes['np_play'] == sizes['np_pause'] == (44, 44) and sizes['np_next'] == sizes['np_prev'] == (36, 36),
-           f'glyph canvases: grabber 120x44, disc glyphs 44x44, transport as before ({sizes})')
+    expect(sizes['np_grabber'] == (120, 44) and sizes['np_fav'] == sizes['np_unfav'] == sizes['np_more'] == (44, 44) and sizes['np_play'] == sizes['np_pause'] == (44, 44) and sizes['np_next'] == sizes['np_prev'] == (44, 44),
+           f'glyph canvases: grabber 120x44, disc glyphs 44x44, transport 44x44 ({sizes})')
     g = img('np_grabber'); bb = g.getchannel('A').point(lambda v: 255 if v > 40 else 0).getbbox()
     expect(bb == (42, 11, 78, 16) and 108 <= g.getpixel((60, 13))[3] <= 110, f'the grabber pill is 36x5 at x 42, y 11 of the button, white at 43 % ({bb})')
     for n in ('np_fav', 'np_unfav', 'np_more'):
         im = img(n); dbb = im.getchannel('A').point(lambda v: 255 if v > 2 else 0).getbbox()
-        expect(dbb == (4, 4, 40, 40) and im.getpixel((8, 22))[3] == 26 and im.getpixel((8, 22))[:3] == (255, 255, 255), f'{n}: a 36 px disc, white at #1A, in the 44 px target ({dbb})')
-    pb = img('np_play').getchannel('A').point(lambda v: 255 if v > 128 else 0).getbbox()
-    nb = img('np_next').getchannel('A').point(lambda v: 255 if v > 128 else 0).getbbox()
-    qb = img('np_pause').getchannel('A').point(lambda v: 255 if v > 128 else 0).getbbox()
+        expect(dbb == (6, 6, 38, 38) and im.getpixel((10, 22))[3] == 26 and im.getpixel((10, 22))[:3] == (255, 255, 255), f'{n}: a 32 px disc, white at #1A, in the 44 px target ({dbb})')
+    # the glyph in the disc (centre 22.0, 22.0): coverage = the glyph's share of each pixel over the 26/255 disc; sub-pixel bbox edges, centroid
+    def optical(n):
+        im = img(n); W_, H_ = im.size
+        c = [[max(0.0, (im.getpixel((x, y))[3] - 26) / 229) if im.getpixel((x, y))[3] > 26 else 0.0 for x in range(W_)] for y in range(H_)]
+        cols = [max(c[y][x] for y in range(H_)) for x in range(W_)]; rows = [max(r) for r in c]
+        def edges(v):
+            idx = [i for i, a in enumerate(v) if a > 0.02]; return idx[0] + 1 - v[idx[0]], idx[-1] + v[idx[-1]]
+        (x0, x1), (y0, y1) = edges(cols), edges(rows)
+        tot = sum(map(sum, c)); mx = sum((x + 0.5) * c[y][x] for y in range(H_) for x in range(W_)) / tot; my = sum((y + 0.5) * c[y][x] for y in range(H_) for x in range(W_)) / tot
+        return ((x0 + x1) / 2, (y0 + y1) / 2), (mx, my)
+    (fb, fc), (ub, uc), (mb, mc) = optical('np_fav'), optical('np_unfav'), optical('np_more')
+    d = lambda p: max(abs(p[0] - 22), abs(p[1] - 22))
+    expect(d(fb) <= 0.75 and d(fc) <= 0.75 and d(((fb[0] + fc[0]) / 2, (fb[1] + fc[1]) / 2)) <= 0.25 and d(ub) <= 0.75 and abs(ub[0] - fb[0]) < 0.3 and abs(ub[1] - fb[1]) < 0.3
+           and d(mb) <= 0.25 and d(mc) <= 0.25,
+           f'heart and More are centred in their 32 px disc (optical centre = the mean of the box centre and the centroid, within 0.25 px; each within 0.75): the filled heart\'s box ({fb[0] - 22:+.2f}, {fb[1] - 22:+.2f}) and centroid ({fc[0] - 22:+.2f}, {fc[1] - 22:+.2f}), the outline\'s box ({ub[0] - 22:+.2f}, {ub[1] - 22:+.2f}) as the filled one, More ({mb[0] - 22:+.2f}, {mb[1] - 22:+.2f})')
+    cov = lambda n: img(n).getchannel('A').point(lambda v: 255 if v > 0 else 0).getbbox()      # any coverage: the ink with its anti-aliased rim
+    half = lambda n: img(n).getchannel('A').point(lambda v: 255 if v > 127 else 0).getbbox()
     near = lambda b, w, h: abs(b[2] - b[0] - w) <= 1 and abs(b[3] - b[1] - h) <= 1
-    expect(near(pb, 27, 32) and near(qb, 26, 32) and near(nb, 32, 18), f'big solid transport: play 27x32, pause 26x32, skip 32x18 ({pb}, {qb}, {nb})')
+    pb, qb, nb, vb = cov('np_play'), cov('np_pause'), cov('np_next'), cov('np_prev')
+    expect(near(pb, 29, 31) and near(qb, 27, 28) and near(nb, 35, 24) and near(vb, 35, 24) and near(half('np_play'), 29, 31),
+           f'transport ink: play 29x31, pause two 8.4x28 bars (27 wide), skip 35x24 (1.46 x its height), prev = next mirrored ({pb}, {qb}, {nb}, {vb})')
+    expect(sizes['np_next'] == sizes['np_prev'] == (44, 44) and min(sizes['np_next']) >= 40, 'the skip canvases are 44x44 (>= 40 wide): the 60 px slots and the lock screen\'s 48 px targets hold them')
+    cx = lambda b: (b[0] + b[2]) / 2
+    expect(abs(cx(pb) - 22 - 1.5) <= 1 and abs(cx(qb) - 22) <= 1 and abs(cx(nb) - 22) <= 1 and abs(cx(vb) - 22) <= 1 and all(abs((b[1] + b[3]) / 2 - 22) <= 1 for b in (pb, qb, nb, vb)),
+           'every glyph is centred in its canvas (play 1.5 px right: optical centring)')
+    for n in ('np_play', 'np_pause', 'np_next', 'np_prev'):
+        a = img(n).getchannel('A'); part = sum(1 for v in a.getdata() if 0 < v < 255); b = cov(n)
+        expect(part >= 60 and a.getpixel((b[0], b[1])) < 128 and a.getpixel((b[2] - 1, b[3] - 1)) < 128, f'{n}: anti-aliased ({part} partial pixels) with rounded corners (the bbox corners are not inked)')
+        expect(max(img(n).getdata(), key=lambda c: c[3])[:3] == mod_icons.NP_FG and max(img(n + '_down').getdata(), key=lambda c: c[3])[:3] == mod_icons.NP_DIM, f'{n}: off-white, pressed #8C8C8C')
+    pw = img('np_pause').getchannel('A'); row = [pw.getpixel((x, 22)) for x in range(44)]
+    runs = []; run = 0
+    for v in row + [0]:
+        if v > 127: run += 1
+        elif run: runs.append(run); run = 0
+    expect(len(runs) == 2 and all(8 <= r <= 9 for r in runs), f'pause: two bars 8-9 px wide at the middle row ({runs})')
+    # the lock screen reuses play / pause / next in 48 px wide targets 56 px tall (mod_lockscreen): the canvases and the ink fit with room
+    expect(mod_lockscreen.BTN_W >= sizes['np_next'][0] and mod_lockscreen.BTN_W >= sizes['np_play'][0]
+           and (mod_lockscreen.BTN_W - (pb[2] - pb[0])) // 2 + (mod_lockscreen.BTN_W - (nb[2] - nb[0])) // 2 >= 12,
+           'lock screen: play and next canvases fit the 48 px targets, the inks stay >= 12 px apart')
     mid = img('np_random'); mb = mid.getchannel('A').point(lambda v: 255 if v > 128 else 0).getbbox()
-    expect(max(mb[2] - mb[0], mb[3] - mb[1]) <= 22 and max(c for c in mid.getdata() if c[3] > 200)[:3] == mod_icons.NP_MID, 'the mode and queue glyphs are smaller (22 px) and dimmer (#AAAAAA)')
+    qg = img('np_playqueue'); qgb = qg.getchannel('A').point(lambda v: 255 if v > 128 else 0).getbbox()
+    expect(max(mb[2] - mb[0], mb[3] - mb[1]) <= 18 and max(qgb[2] - qgb[0], qgb[3] - qgb[1]) <= 18
+           and max(c for c in mid.getdata() if c[3] > 200)[:3] == mod_icons.NP_MID, 'the mode and queue glyphs are small (18 px) and a notch dimmer than the white transport shapes (#C8C8C8)')
     expect(max(c for c in img('np_order').getdata() if c[3] > 200)[:3] == mod_icons.NP_OFF, 'repeat-off is dimmer still')
     # the style swaps the app does still land on glyphs: every page-theme icon exists
     th = awtk_style.parse(open(os.path.join(raw, 'styles', 'playing_page.bin'), 'rb').read())

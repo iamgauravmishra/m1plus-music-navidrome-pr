@@ -17,11 +17,10 @@ import argparse, datetime, os, sys
 from PIL import Image, ImageDraw, ImageFont
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_ui, awtk_style
+from awtk_text import MONTHS, WEEKDAYS as WDAYS
 
 W, H = 320, 480
 NOW = datetime.datetime(2026, 10, 19, 9, 41, 7)
-MONTHS = 'Jan Feb Mar Apr May Jun Jul Aug Sept Oct Nov Dec'.split()             # demo's MMM table
-WDAYS = 'Sunday Monday Tuesday Wednesday Thursday Friday Saturday'.split()    # demo: W = full English name
 
 def fmt_time(fmt, t):
     """digit_clock formatting as implemented by the M1 Plus AWTK build (see mod_lockscreen.py)."""

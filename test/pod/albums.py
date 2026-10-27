@@ -8,9 +8,12 @@ SCREEN_Y0 = 30 + 50     # the grid view on the screen: under the 30 px status ba
 ALBUMS_FILE, ALBUMS_TMP = '/mnt/data/m1pod-albums', '/mnt/data/m1pod-albums.tmp'
 COVER, GAP, MARGIN, COLS = O['GRID_COVER'], O['GRID_GAP'], O['GRID_MARGIN'], O['GRID_COLS']
 TGAP, THEIGHT, VIEW_H, TILES = O['GRID_TITLE_GAP'], O['GRID_TITLE_H'], O['GRID_VIEW_H'], O['GRID_TILES']
-CELL = COVER + TGAP + THEIGHT
-PITCH = CELL + GAP
+RGAP, SUBH = O['GRID_ROW_GAP'], O['GRID_SUB_H']
+CELL = COVER + TGAP + THEIGHT + SUBH       # a tile: the cover, the album, the artist
+PITCH = CELL + RGAP
+CPITCH = COVER + GAP
 ART = O['ART_SIZE']
+DRAG = 5       # px of vertical travel that start a drag (AL_DRAG)
 ROW, LART, LAX, LAY = O['LIST_ROW_H'], O['LIST_ART'], O['LIST_ART_X'], O['LIST_ART_Y']
 TX, TW, TY, TH, SY, SH = O['LIST_TEXT_X'], O['LIST_TEXT_W'], O['LIST_TITLE_Y'], O['LIST_TITLE_H'], O['LIST_SUB_Y'], O['LIST_SUB_H']
 
@@ -39,7 +42,8 @@ def albums_machine(n=30, cached=True, missing=(), empty=(), title=lambda i: f'Al
     m = Machine()
     if sort == 'album': m.fs[CFSORT_FILE] = b'0\n'
     m.load_image = 0
-    for w in ('btn_return', 'btn_backtoplayer', 'btn_albumview', 'view_grid', 'label_status', 'label_row_title', 'label_row_sub'): m.widget(w)
+    for w in ('btn_return', 'btn_backtoplayer', 'btn_albumview', 'btn_coverflow', 'view_grid', 'label_status', 'label_row_title', 'label_row_sub',
+              'label_grid_title', 'label_grid_sub'): m.widget(w)
     win = m.alloc(0x80)                      # the window: widget_to_local (stock's own code) walks these words
     m.setword(win + 4, 30)                   # y under the status bar
     view = m.widgets['view_grid']
@@ -74,29 +78,57 @@ def paint(m):
     return list(m.blits), list(m.texts)
 
 
+def scroll_of(m):
+    """The page's scroll offset (field 17 of the state struct `al`; drag_to checks the layout below)."""
+    return m.word(PSYMS['al'] + 4 * 17)
+
+
+def coast(m, steps):
+    """Fire the fling timer after each of `steps` ms (time_now_ms advances by it) until it stops; (ticks, final scroll)."""
+    for ticks, st in enumerate(steps, 1):
+        m.clock += st
+        m.call(PSYMS['al_on_fling'], count=2000000)
+        if not any(c[0] == 'timer_add' and c[1] == PSYMS['al_on_fling'] for c in m.calls): return ticks, scroll_of(m)
+    raise AssertionError('the fling never stopped')
+
+
+def tick(m):
+    """The loader's 16 ms timer fires once: the calls it made."""
+    m.call(PSYMS['al_on_load'], count=40000000)
+    return list(m.calls)
+
+
 def settle(m, limit=60):
-    """Paint, and fire the 16 ms reload timer while one is armed, until the view is complete; the last frame."""
+    """Fire the loader's timer until it does not re-arm itself (every cover in its window loaded), then paint; that frame."""
     for _ in range(limit):
-        frame = paint(m)
-        if not any(c[0] == 'timer_add' for c in m.calls): return frame
-        m.call(PSYMS['al_on_more'], count=1000000)
+        if not any(c[0] == 'timer_add' and c[1] == PSYMS['al_on_load'] for c in tick(m)):
+            return paint(m)
     raise AssertionError('the grid never finished loading')
 
 
 def reference(scroll, n):
     """Independent model of what a frame at `scroll` shows: [(album, (src, dst) of the cover or None, title rect or
-    None)] for the cells that touch the view. Brute force over every album unless n is large (then a window of rows)."""
+    None, artist rect or None)] for the cells that touch the view. Brute force over every album unless n is large
+    (then a window of rows)."""
     out = []
-    first = max(0, (scroll - GAP - CELL) // PITCH - 1) * COLS
+    first = max(0, (scroll - RGAP - CELL) // PITCH - 1) * COLS
     for a in range(first, min(n, first + 40) if n > 200 else n):
-        x, top = MARGIN + (a % COLS) * (COVER + GAP), GAP + (a // COLS) * PITCH - scroll
+        x, top = MARGIN + (a % COLS) * CPITCH, RGAP + (a // COLS) * PITCH - scroll
         if top >= VIEW_H or top + CELL <= 0: continue
         cut_top, cut_bottom = max(0, -top), min(COVER, VIEW_H - top)
         cover = ((0, cut_top, COVER, cut_bottom - cut_top), (x, top + cut_top, COVER, cut_bottom - cut_top)) if cut_bottom > cut_top else None
         ty = top + COVER + TGAP
         title = (x, ty, COVER, THEIGHT) if 0 <= ty and ty + THEIGHT <= VIEW_H else None
-        out.append((a, cover, title))
+        sub = (x, ty + THEIGHT, COVER, SUBH) if 0 <= ty + THEIGHT and ty + THEIGHT + SUBH <= VIEW_H else None
+        out.append((a, cover, title, sub))
     return out
+
+
+def grid_texts(m, texts):
+    """The frame's texts split by style: ({album text: rect}, {artist text: rect}) of the grid."""
+    t = {x[0]: x[1] for x, sty in zip(texts, m.text_styles) if sty == 'label_grid_title'}
+    s = {x[0]: x[1] for x, sty in zip(texts, m.text_styles) if sty == 'label_grid_sub'}
+    return t, s
 
 
 def dsts(blits): return sorted(b[2] for b in blits)
@@ -113,9 +145,10 @@ def gesture(m, events):
 
 
 def drag_to(m, target, current, t0=0):
-    """Scroll from `current` to `target` px with a slow drag (no fling): down, one move, a late release."""
-    y = 300
-    return gesture(m, [('down', 100, y, t0), ('move', 100, y + current - target, t0 + 300), ('up', 100, y + current - target, t0 + 700)])
+    """Scroll from `current` to `target` px with a slow drag (no fling): down, one move, a late release. The drag starts
+    after DRAG px of travel and counts from there, so the finger goes that much further."""
+    y = 300 + current - target + (DRAG if current > target else -DRAG)
+    return gesture(m, [('down', 100, 300, t0), ('move', 100, y, t0 + 300), ('up', 100, y, t0 + 700)])
 
 
 def tap_at(m, x, y, t0=1000):
@@ -128,13 +161,18 @@ def run(ctx):
     expect(page.rows[row].action == pod_pages.ACT_ALBUMS, 'the menu\'s Albums row opens our page (ACT_ALBUMS)')
     on_row, rows0 = PSYMS['on_row'], PSYMS['pod_rows_0']
 
-    # 1. Layout: three 92 px covers 12 px apart, centred; the view is the 400 px under the navbar; the ring holds
-    #    every cell a frame can touch.
+    # 1. Layout: two 144 px covers 8 px apart, centred (12 px margins); the view is the 400 px under the navbar; the
+    #    ring holds every cell a frame can touch and its bitmaps stay under today's memory.
+    expect((COLS, COVER, GAP, MARGIN, RGAP, TGAP, THEIGHT, SUBH, CELL, PITCH, TILES) == (2, 144, 8, 12, 10, 4, 22, 20, 190, 200, 12),
+           'the grid is 2 columns of 144 px covers, 8 px apart, 12 px margins; a tile is 190 px (cover, 4, album 22, artist 20), rows 200 px apart')
     expect(COLS * COVER + (COLS - 1) * GAP + 2 * MARGIN == pod_ui.SCREEN_W, f'{COLS} covers + gutters + margins fill the 320 px width')
+    expect((TILES + 1) * COVER * COVER * 4 <= 1100000,
+           f'the tile ring ({TILES} x {COVER * COVER * 4} B = {TILES * COVER * COVER * 4} B, +1 placeholder = {(TILES + 1) * COVER * COVER * 4} B) stays within 1.1 MB')
     expect(VIEW_H == pod_ui.GRID_VIEW_H == pod_ui.CLIENT_H - pod_ui.NAVBAR_H, 'the grid view is the 400 px under the navbar')
-    expect(TILES >= COLS * ((VIEW_H + CELL) // PITCH + 2), f'{TILES} tiles hold the {COLS * ((VIEW_H + CELL) // PITCH + 2)} cells a frame can touch')
-    expect(THEIGHT >= pod_ui.GRID_TITLE_PX + 4 and (O['NAV_VIEW_X'], O['NAV_VIEW_W']) == (pod_ui.NAV_VIEW_X, pod_ui.NAV_VIEW_W),
-           'the title line fits its font; the toggle geometry is shared with the asset')
+    expect(TILES >= COLS * ((VIEW_H + CELL) // PITCH + 3) + 2, f'{TILES} tiles hold the {COLS * ((VIEW_H + CELL) // PITCH + 2)} cells a frame can touch, the next row and two of history')
+    expect(TILES >= VIEW_H // ROW + 2 + 2 + 2, f'and the {VIEW_H // ROW + 2} rows of the list, the next two and two of history')
+    expect(THEIGHT >= pod_ui.GRID_ALBUM_PX + 4 and SUBH >= pod_ui.GRID_ARTIST_PX + 4 and (O['NAV_VIEW_X'], O['NAV_VIEW_W']) == (pod_ui.NAV_VIEW_X, pod_ui.NAV_VIEW_W),
+           'the album and artist lines fit their fonts; the toggle geometry is shared with the asset')
     asset = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1pod_albums.bin')
     tree = awtk_ui.parse(open(asset, 'rb').read())
     grid = tree.find('view_grid')
@@ -152,20 +190,33 @@ def run(ctx):
     nb = tree.find('btn_backtoplayer')
     expect(O['NAV_VIEW_X'] + O['NAV_VIEW_W'] == nb.x, 'the toggle sits flush left of Now Playing, no gap')
     lbl = tree.find('label_title')
-    expect(lbl.x + lbl.w == O['NAV_VIEW_X'], 'and the title ends where it begins')
+    cfb = tree.find('btn_coverflow')
+    expect(cfb is not None and (cfb.x, cfb.y, cfb.w, cfb.h) == (O['NAV_CF_X'], 0, O['NAV_CF_W'], O['NAV_H'])
+           and (O['NAV_CF_X'], O['NAV_CF_W']) == (pod_ui.NAV_CF_X, pod_ui.NAV_CF_W) and cfb.x + cfb.w == btn.x == 168 + 46
+           and cfb.get('style') == btn.get('style') == 'img_btn_style' and cfb.get('style:normal:icon') == 'pod_nav_coverflow'
+           and cfb.get('style:pressed:icon') == 'pod_nav_coverflow_down', 'the Cover Flow button sits flush left of the toggle (x 168, 46x50), same style, carousel glyph')
+    expect(lbl.x + lbl.w == O['NAV_CF_X'] == 168, 'the title ends where the Cover Flow button begins')
+    expect(not [w for w in tree.walk() if w is not cfb and w.name != 'navigationbar_view' and w.type == 'button'
+                and w.x < cfb.x + cfb.w and cfb.x < w.x + w.w], 'no navbar button overlaps the Cover Flow button')
     #     list mode: the two hidden text-style labels, the geometry the rows share with the library rows
     for nm, px, col in (('label_row_title', 21, '#FFFFFF'), ('label_row_sub', 18, '#AAAAAA')):
         w = tree.find(nm)
         expect(w is not None and w.type == 'label' and w.get('visible') == 'false' and w.get('sensitive') == 'false'
                and w.get('style:normal:font_size') == str(px) and w.get('style:normal:text_color') == col and w.get('style:normal:text_align_h') == 'left',
                f'{nm}: a hidden, insensitive label whose style is {px} px {col} (what the list rows are drawn with)')
-    expect(ROW == 64 and LAX + LART + LAX <= 64 and TX + TW + 12 == 320 and TY + TH <= SY and SY + SH <= ROW - 1 and ROW == O['LIST_ROW_H'],
-           'list rows: 64 px like the library rows, 52 px cover at (4,4), text from 60 to a 12 px right margin, two lines and a hairline fit')
+    for nm, px, col in (('label_grid_title', 18, '#FFFFFF'), ('label_grid_sub', 15, '#AAAAAA')):
+        w = tree.find(nm)
+        expect(w is not None and w.type == 'label' and w.get('visible') == 'false' and w.get('sensitive') == 'false'
+               and w.get('style:normal:font_size') == str(px) and w.get('style:normal:text_color') == col and w.get('style:normal:text_align_h') == 'left',
+               f'{nm}: a hidden, insensitive label whose style is {px} px {col} (the grid\'s album / artist text)')
+    expect(ROW == 64 and LAX == 10 and TX == LAX + LART + 12 and LAY + LART <= ROW - 1 and TX + TW + 12 == 320
+           and TY + TH <= SY and SY + SH <= ROW - 1 and ROW == O['LIST_ROW_H'],
+           'list rows: 64 px like the library rows, 52 px cover at (10, 4), text from 74 (12 px after the cover) to a 12 px right margin, two lines and a hairline fit')
     expect(O['LIST_HAIR'] == 0xff222222 and O['LIST_PRESS'] == 0xff333333, 'hairline #222222, pressed #333333 (the other lists\' colours)')
     expect(not [w for w in tree.walk() if w.name in ('btn_stocklist',)] and O.get('NAV_LIST_X') is None, 'no trace of the stock-list toggle')
     imgs = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx')
-    expect(all(os.path.isfile(os.path.join(imgs, f'pod_nav_{k}{s}.png')) for k in ('grid', 'list') for s in ('', '_down')),
-           'the four toggle glyph images are in the tree')
+    expect(all(os.path.isfile(os.path.join(imgs, f'pod_nav_{k}{s}.png')) for k in ('grid', 'list', 'coverflow') for s in ('', '_down')),
+           'the toggle and Cover Flow glyph images are in the tree')
 
     # 2. The menu row: the persisted mode, the default constant when there is none (or it is garbage); "0" is the list
     #    mode of the same page, "1" the grid; never a second window or the stock list.
@@ -182,22 +233,23 @@ def run(ctx):
     m = albums_machine(3); m.window = 0
     open_grid(m)
     expect(('stock_resume', '5') in m.calls, 'if the window will not open the Albums row opens the stock list (Home id 5)')
-    m = albums_machine(3); del m.widgets['label_row_sub']
-    open_grid(m)
-    expect('navigator_back' in m.names() and 'stock_resume' not in m.names(), 'an asset without the list styles leaves the page and does not open the stock list over it')
+    for missing_label in ('label_row_sub', 'label_grid_sub'):
+        m = albums_machine(3); del m.widgets[missing_label]
+        open_grid(m)
+        expect('navigator_back' in m.names() and 'stock_resume' not in m.names(), f'an asset without {missing_label} leaves the page and does not open the stock list over it')
 
     # 3. Opening the grid: the page's widgets bound, the album list copied, the placeholder made, nothing per album,
     #    no cache build.
     m = albums_machine(30)
     calls = open_grid(m)
     names = [c[0] for c in calls]
-    expect(('window_open', 'm1pod_albums') in calls and names.count('widget_on') == 3 + 1 + 4 + 1,
-           f'the window, Back, Now Playing, the toggle, four pointer events and the paint are bound ({names.count("widget_on")})')
+    expect(('window_open', 'm1pod_albums') in calls and names.count('widget_on') == 4 + 1 + 1 + 4 + 1,
+           f'the window, Back, Now Playing, the toggle, Cover Flow, foreground, four pointer events and the paint are bound ({names.count("widget_on")})')
     expect(('loadLocalClassList', O['CLASS_ALBUMS']) in calls and ('deque_assign', 30) in calls, 'the stock album list is copied')
     expect(not any(n in names for n in ('image_create', 'list_item_create', 'label_create', 'hscroll_label_create', 'widget_factory_create_widget')),
            'no widget is created per album')
     expect(not any(n in names for n in ('pthread_create', 'toolsGetAlbumCover', 'toolsGetExternCover', 'mkdir')),
-           'the grid builds no cache')
+           'opening the grid starts no worker (the background build is a timer a moment later: section 13)')
     expect(len(m.bitmaps) == 1 and ('widget_load_image', 'p_default') in calls, 'the placeholder disc is the only bitmap before the first frame')
     expect(('widget_set_visible', m.widgets['label_status'], 0) in calls, 'the status line starts hidden')
 
@@ -205,18 +257,37 @@ def run(ctx):
     #    paced (two covers a frame) and the rest show the placeholder until the reload timer fills them in.
     blits, texts = paint(m)
     ref = reference(0, 30)
-    expect(len(ref) == 9 and [a for a, *_ in ref] == list(range(9)), 'three rows of three are in view at the top')
-    expect(dsts(blits) == want_dsts(ref) and all(b[1] == (0, 0, COVER, COVER) for b in blits),
+    expect(len(ref) == 4 and [a for a, *_ in ref] == list(range(4)) and all(c[2] and c[3] for c in ref),
+           'two rows of two are in view at the top, every cover and both text lines wholly (10 + 190 + 10 + 190 = 400)')
+    expect(dsts(blits) == want_dsts(ref) and all(b[1] == (0, 0, COVER, COVER) or b[1][3] < COVER for b in blits),
            f'one blit per visible cell, at its place, source = the whole tile ({dsts(blits)[:3]})')
-    expect(sorted(t[1] for t in texts) == sorted(c[2] for c in ref), 'one title per visible cell, 92x22 under its cover')
-    expect([t[0] for t in sorted(texts, key=lambda t: (t[1][1], t[1][0]))] == [f'Album {i}' for i in range(9)], 'the titles are the album names')
-    expect(len([c for c in m.calls if c[0] == 'widget_load_image']) == 2, 'a frame decodes at most two covers')
-    expect(any(c[0] == 'timer_add' and c[1] == PSYMS['al_on_more'] and c[2] == 16 for c in m.calls), 'and arms a 16 ms timer for the rest')
-    expect(('widget_prepare_text_style', m.widgets['view_grid']) in m.calls, 'the text style is the view\'s own')
-    m.call(PSYMS['al_on_more'], count=1000000)      # the timer fires
-    expect(('widget_invalidate_force', m.widgets['view_grid']) in m.calls, 'and redraws the view')
+    ts, ss = grid_texts(m, texts)
+    expect(ts == {f'Album {c[0]}': c[2] for c in ref if c[2]} and ss == {f'Artist {c[0]}': c[3] for c in ref if c[3]},
+           'an album (144x22) and an artist (144x20) under each cover')
+    expect(len(ts) == 4 and len(ss) == 4 and ts['Album 0'] == (MARGIN, RGAP + COVER + TGAP, COVER, THEIGHT) and ss['Artist 1'] == (MARGIN + CPITCH, RGAP + COVER + TGAP + THEIGHT, COVER, SUBH),
+           f'album 0\'s title at ({MARGIN}, {RGAP + COVER + TGAP}), album 1\'s artist directly under its title')
+    expect(m.text_styles == ['label_grid_title'] * 4 + ['label_grid_sub'] * 4, 'two text-style passes: the albums, then the artists')
+    expect(not [c for c in m.calls if c[0] in ('widget_load_image', 'bitmap_create_ex', 'timer_add')] and len(m.bitmaps) == 1
+           and len({b[0] for b in blits}) == 1,
+           'paint never decodes, allocates a bitmap or arms a timer: every cover is the one placeholder until the loader has run')
+    expect(any(c[0] == 'timer_add' and c[1] == PSYMS['al_on_load'] and c[2] == 16 for c in calls),
+           'opening arms the page\'s loader on a 16 ms timer')
+    prep = [c[1] for c in m.calls if c[0] == 'widget_prepare_text_style']
+    expect(prep == [m.widgets['label_grid_title'], m.widgets['label_grid_sub']], 'the text styles are the two grid labels\': 18 px white, then 15 px #AAAAAA')
+    # the loader: one cover a tick, the cell nearest the middle of the view first, the view before the row ahead
+    order = []
+    for _ in range(8):
+        before = set(m.loads)
+        calls = tick(m)
+        new = [u for u in m.loads if u not in before]
+        expect(len(new) <= 1 and len([c for c in calls if c[0] == 'widget_load_image' and str(c[1]).startswith('file://')]) <= 1,
+               'one tick decodes at most one cover')
+        order += [m.cache_index[u[7:]] for u in new]
+        if not any(c[0] == 'timer_add' and c[1] == PSYMS['al_on_load'] for c in calls): break
+    expect(order[:4] == [0, 1, 2, 3] and sorted(order[4:]) == [4, 5] and len(order) == 6,
+           f'the four cells in view first (the first row is the nearer to the middle of the view), then the next row ahead ({order})')
     blits, texts = settle(m)
-    expect(len(blits) == 9 and len(m.bitmaps) == 1 + 9, f'every visible cover is a tile of its own once loaded ({len(m.bitmaps)} bitmaps)')
+    expect(len(blits) == 4 and len(m.bitmaps) == 1 + 6, f'every visible cover is a tile of its own once loaded, and the next row is ready ({len(m.bitmaps)} bitmaps)')
     first = m.blits[0][0]
     data, bw, bh = m.bitmaps[first]
     expect((bw, bh) == (COVER, COVER) and set(struct.unpack(f'<{bw * bh}I', bytes(m.u.mem_read(data, bw * bh * 4)))) == {colour(0)},
@@ -225,7 +296,7 @@ def run(ctx):
     paint(m); steady = m.icount
     expect('widget_load_image' not in m.names() and 'bitmap_create_ex' not in m.names() and not m.measures,
            'a steady frame decodes, allocates and measures nothing')
-    print(f'  grid frame: {steady:,} payload instructions steady (9 cells), {TILES} tiles of {COVER}x{COVER}')
+    print(f'  grid frame: {steady:,} payload instructions steady (4 cells), {TILES} tiles of {COVER}x{COVER}')
     # a real 168 px cache file (left half red, right half blue): the box filter's reduction, edge to edge
     m = albums_machine(1)
     url = 'file://' + next(iter(m.cache_index))
@@ -240,7 +311,7 @@ def run(ctx):
 
     # 5. Scrolling: a drag moves the content with the finger and clamps at both ends; the frame at the new offset is the
     #    reference model (partial rows cut by hand to the view, a title only when it fits). No art: only geometry here.
-    n = 15      # five rows
+    n = 15      # an odd count: eight rows, the last with one album
     m = albums_machine(n, cached=False)
     open_grid(m); settle(m)
     expect(not any(c[0] == 'widget_invalidate_force' for c in m.calls), 'painting invalidates nothing once complete')
@@ -249,36 +320,44 @@ def run(ctx):
     blits, texts = paint(m)
     ref = reference(100, n)
     expect(dsts(blits) == want_dsts(ref), 'after scrolling 100 px: the cells and the cut first row')
-    expect(sorted(t[1] for t in texts) == sorted(c[2] for c in ref if c[2]), 'after scrolling 100 px: the titles that fit the view')
+    ts, ss = grid_texts(m, texts)
+    expect(ts == {f'Album {c[0]}': c[2] for c in ref if c[2]} and ss == {f'Artist {c[0]}': c[3] for c in ref if c[3]},
+           'after scrolling 100 px: the albums and artists that lie wholly in the view')
     top_row = [b for b in blits if b[2][1] == 0][0]
-    expect(top_row[1] == (0, 88, COVER, 4) and top_row[2] == (MARGIN, 0, COVER, 4), f'the first row is cut to its last 4 px ({top_row[1]} -> {top_row[2]})')
-    mx = GAP + ((n + COLS - 1) // COLS) * PITCH - VIEW_H
+    expect(top_row[1] == (0, 90, COVER, 54) and top_row[2] == (MARGIN, 0, COVER, 54), f'the first row is cut to its last 54 px ({top_row[1]} -> {top_row[2]})')
+    drag_to(m, 165, 100, 800)
+    ref = reference(165, n)
+    ts, ss = grid_texts(m, paint(m)[1])
+    expect(ts == {f'Album {c[0]}': c[2] for c in ref if c[2]} and ss == {f'Artist {c[0]}': c[3] for c in ref if c[3]}
+           and 'Album 0' not in ts and 'Artist 0' in ss and ref[0][1] is None,
+           'at 165 px the first row\'s cover is gone and its album (7 px cut by the top) is not drawn, its artist (wholly in view) is')
+    mx = RGAP + ((n + COLS - 1) // COLS) * PITCH - VIEW_H
+    expect(mx == 1210, f'fifteen albums are eight rows: 10 + 8 x 200 = 1610 px of content, {mx} px of scroll')
     drag_to(m, 100000, 100, 2000)
     blits, texts = paint(m)
     expect(dsts(blits) == want_dsts(reference(mx, n)), f'dragging far past the end stops at {mx} px')
-    expect(max(b[2][1] + b[2][3] for b in blits) + THEIGHT + TGAP + GAP == VIEW_H, f'the last row ends {GAP} px above the bottom')
+    expect(max(b[2][1] + b[2][3] for b in blits) + TGAP + THEIGHT + SUBH + RGAP == VIEW_H, f'the last row ends {RGAP} px above the bottom')
+    expect(sorted(b[2][0] for b in blits if b[2][1] > 150) == [MARGIN], 'the odd album sits alone in the left column of the last row')
     drag_to(m, -5000, mx, 4000)
     blits, texts = paint(m)
     expect(dsts(blits) == want_dsts(reference(0, n)), 'dragging past the start stops at 0')
-    m2 = albums_machine(5, cached=False); open_grid(m2)
-    drag_to(m2, 300, 0)
-    blits, _ = paint(m2)
-    expect(dsts(blits) == want_dsts(reference(0, 5)) and len(blits) == 5, 'five albums (two rows) cannot scroll')
+    for cnt, top in ((2, 0), (3, 10), (4, 10), (6, 210)):   # rows: 1, 2, 2, 3 -> content 210, 410, 410, 610
+        m2 = albums_machine(cnt, cached=False); open_grid(m2)
+        drag_to(m2, 100000, 0)
+        blits, _ = paint(m2)
+        expect(dsts(blits) == want_dsts(reference(top, cnt)), f'{cnt} albums: the content scrolls by at most {top} px')
 
     # 6. Fling: a quick drag keeps coasting on the 16 ms timer, decaying, and stops by itself or at an end.
     flick = lambda dy, t0=1000: [('down', 100, 350, t0), ('move', 100, 350 + dy // 2, t0 + 16), ('move', 100, 350 + dy, t0 + 32), ('up', 100, 350 + dy, t0 + 40)]
     m = albums_machine(300, cached=False); open_grid(m)
     calls = gesture(m, flick(-80))
     expect(any(c[0] == 'timer_add' and c[1] == PSYMS['al_on_fling'] for c in calls), 'a quick release arms the fling timer')
-    ticks = 0
-    while ticks < 400:
-        m.call(PSYMS['al_on_fling'], count=2000000); ticks += 1
-        if not any(c[0] == 'timer_add' and c[1] == PSYMS['al_on_fling'] for c in m.calls): break
+    ticks, _ = coast(m, [16] * 400)
     expect(8 < ticks < 400, f'the fling decays and stops by itself ({ticks} ticks)')
     m = albums_machine(300, cached=False); open_grid(m)
     gesture(m, flick(80))
-    m.call(PSYMS['al_on_fling'], count=2000000)
-    expect(not any(c[0] == 'timer_add' for c in m.calls), 'a fling into the top stops there')
+    ticks, at = coast(m, [16] * 10)
+    expect(at == 0 and ticks == 1, 'a fling into the top stops there, at 0')
     m = albums_machine(300, cached=False); open_grid(m)
     gesture(m, flick(-80))
     calls = gesture(m, [('down', 100, 350, 2000)])
@@ -288,28 +367,145 @@ def run(ctx):
     expect(not any(c[0] == 'timer_add' for c in gesture(m, [('down', 100, 350, 3000), ('move', 100, 340, 3300), ('up', 100, 340, 3700)])),
            'a slow release (over 200 ms) does not fling')
 
+    # 6b. The drag follows the finger from DRAG px of travel, counted from there (no jump); a fling follows the clock.
+    m = albums_machine(300, cached=False); open_grid(m)
+    drag_to(m, 500, 0)
+    expect(scroll_of(m) == 500, 'the scroll offset read from the state is the one the drag asked for (layout check of scroll_of)')
+    steps = [('down', 100, 300, 1000)]
+    gesture(m, steps)
+    expect(scroll_of(m) == 500, 'a press moves nothing')
+    seen = []
+    for y, want in ((297, 500), (296, 500), (295, 500), (294, 501), (285, 510), (260, 535), (300, 495), (310, 485)):
+        gesture(m, [('move', 100, y, 1100 + len(seen) * 40)]); seen.append(y)
+        expect(scroll_of(m) == want, f'finger up to y {y}: scroll {want} (the first {DRAG} px of travel move nothing, then 1 px per px; got {scroll_of(m)})')
+    gesture(m, [('up', 100, 310, 2500)])
+    m = albums_machine(300, cached=False); open_grid(m); drag_to(m, 500, 0)
+    gesture(m, [('down', 100, 300, 1000), ('move', 100, 305, 1040)])
+    expect(scroll_of(m) == 500, f'a drag the other way (finger down) also starts {DRAG} px in with no jump')
+    gesture(m, [('move', 100, 330, 1080)])
+    expect(scroll_of(m) == 475, f'then follows 1:1 ({scroll_of(m)})')
+    gesture(m, [('up', 100, 330, 2000)])
+    m = albums_machine(300, cached=False); open_grid(m)
+    gesture(m, [('down', 100, 300, 1000), ('move', 100, 297, 1040), ('up', 100, 297, 1400)])
+    expect(scroll_of(m) == 0 and not any(c[0] == 'timer_add' for c in m.calls), f'under {DRAG} px it never scrolled and does not fling')
+    gesture(m, [('down', 100, 300, 3000), ('up', 100, 250, 3500)])
+    expect(scroll_of(m) == 45, 'a release with no move is one sparse sample: 50 px less the threshold')
+    opened = lambda calls: [c for c in calls if c[0] == 'navigator_to_with_context']
+    m = albums_machine(300, cached=False); open_grid(m)
+    expect(opened(gesture(m, [('down', 30, 100, 1000), ('move', 40, 103, 1040), ('up', 41, 104, 1080)])) and scroll_of(m) == 0,
+           'a tap with a few px of wobble on both axes (under the threshold, within 12 px sideways) opens the album and scrolls nothing')
+    expect(not opened(gesture(m, [('down', 30, 100, 2000), ('up', 30, 94, 2080)])) and scroll_of(m) == 1, 'a vertical travel of 6 px is a drag, not a tap')
+
+    #     the fling: Q16 px per ms from the release, losing 1/248 of itself a ms; the same distance whatever the timer's pace
+    def distance(v):
+        """The model of the fling from speed v (Q16 px per ms, positive): the whole pixels it covers."""
+        acc = 0
+        while v:
+            acc += v; v -= v // 248
+            if v < 2048: v = 0
+        return acc >> 16
+    def fly(steps, dy=-80, n=300):
+        m = albums_machine(n, cached=False); open_grid(m)
+        gesture(m, [('down', 100, 350, 1000), ('move', 100, 350 + dy // 2, 1016), ('move', 100, 350 + dy, 1032), ('up', 100, 350 + dy, 1040)])
+        start = scroll_of(m)
+        ticks, at = coast(m, steps)
+        return at - start, ticks
+    want = distance(40 * 65536 // 24)   # 40 px in the 24 ms from the sample before the last move to the release
+    d_reg, t_reg = fly([16] * 400)
+    d_irr, t_irr = fly([7, 40, 3, 25, 1, 90, 16, 33, 2, 5] * 40)
+    d_one, t_one = fly([5000])
+    expect(d_reg == d_irr == d_one == want, f'the fling covers {want} px whatever the timer\'s pace (16 ms ticks {d_reg}, irregular {d_irr}, one late tick {d_one})')
+    expect(t_reg > 20 and t_one == 1, f'regular 16 ms ticks: {t_reg} of them; a single late tick lands it all at once')
+    d_fast, _ = fly([16] * 400, dy=-300)
+    expect(d_fast == distance(3 << 16) and 700 < d_fast < 760 and want < d_fast, f'a very fast flick is capped at 3 px/ms: {d_fast} px')
+    m = albums_machine(8, cached=False); open_grid(m)       # 4 rows: 410 px of scroll
+    gesture(m, [('down', 100, 350, 1000), ('move', 100, 200, 1016), ('move', 100, 50, 1032), ('up', 100, 50, 1040)])
+    ticks, at = coast(m, [16] * 400)
+    expect(at == RGAP + 4 * PITCH - VIEW_H == 410, f'a fling into the end stops exactly at the end ({at})')
+
+    #     the loader: one cover a tick, nearest the middle of the view first, then the next row in the scroll direction
+    def loaded_albums(m, before):
+        return [m.cache_index[u[7:]] for u in m.loads[before:] if u.startswith('file://')]
+    def run_loader(m):
+        """Ticks until idle; the albums decoded, in order, and the most one tick decoded."""
+        start, per_tick = len(m.loads), 0
+        for _ in range(60):
+            n0 = len(m.loads)
+            calls = tick(m)
+            per_tick = max(per_tick, len([u for u in m.loads[n0:] if u.startswith('file://')]))
+            if not any(c[0] == 'timer_add' and c[1] == PSYMS['al_on_load'] for c in calls): break
+        return loaded_albums(m, start), per_tick
+    m = albums_machine(300); open_grid(m)
+    drag_to(m, 1100, 0)
+    got, per = run_loader(m)
+    expect(got == [12, 13, 10, 11, 14, 15, 16, 17] and per == 1,
+           f'at 1100 px: the row nearest the middle, then the others in view, then the row ahead, one cover a tick ({got})')
+    paint(m)
+    expect(not [c for c in m.calls if c[0] in ('widget_load_image', 'bitmap_create_ex', 'timer_add')], 'and a paint then decodes nothing')
+    #     the reversal: back up two rows: only the rows above are decoded (the row ahead is above now), what it left is still there
+    drag_to(m, 900, 1100, 5000)
+    got, per = run_loader(m)
+    expect(sorted(got) == [6, 7, 8, 9] and per == 1, f'back to 900 px (towards the top): the rows above are loaded, the ones just left are reused ({got})')
+    drag_to(m, 1100, 900, 7000)
+    got, per = run_loader(m)
+    expect(got == [], f'and back to 1100 px again: nothing is decoded, the history held it ({got})')
+    got_urls = [u for u in m.loads if u.startswith('file://')]
+    expect(len(got_urls) == len(set(got_urls)), 'no cover was decoded twice in all of that')
+    expect(len(m.bitmaps) == 1 + 12, f'the ring is full and bounded: {len(m.bitmaps)} bitmaps')
+    #     the ring is bounded for any library, going far and back decodes again only what is not there
+    m = albums_machine(4000); open_grid(m)
+    peak = 0
+    for k, target in enumerate((3000, 80000, 200, 1000000, 0)):
+        cur = scroll_of(m)
+        drag_to(m, target, cur, 10000 * (k + 1)); run_loader(m)
+        peak = max(peak, len(m.bitmaps))
+    expect(peak <= TILES + 1, f'4000 albums, five long scrolls: at most {peak} bitmaps live (<= {TILES} + the placeholder)')
+    #     the view is redrawn only for a cover that is in it
+    m = albums_machine(30); open_grid(m)
+    inv = []
+    for _ in range(6):
+        inv.append(('widget_invalidate_force', m.widgets['view_grid']) in tick(m))
+    expect(inv == [True] * 4 + [False] * 2, f'a decoded cell in view redraws the view, one in the row ahead does not ({inv})')
+    #     kill switch: with /mnt/mmc/m1pod-off the Home entry does not open the Pod menu, so the page cannot open
+    m = albums_machine(3); m.present.add('/mnt/mmc/m1pod-off')
+    m.call(PSYMS['m1pod_home_click'], a0=m.icon(str(pod_pages.HOME_ENTRY)), count=200000)
+    expect('window_open' not in m.names(), 'the kill switch keeps the page (and the menu) closed')
+
     # 7. Taps: a cell (cover or title) opens the stock album page for its row exactly as Cover Flow does; gaps, margins,
     #    the empty tail of the last row and a tap after a drag open nothing; the mapping follows the scroll.
-    n = 11      # four rows, the last with two albums
+    n = 11      # six rows, the last with one album
     m = albums_machine(n, cached=False)
     open_grid(m); settle(m)
-    def cell_xy(a, scroll=0, dy=10):
-        return MARGIN + (a % COLS) * (COVER + GAP) + 10, GAP + (a // COLS) * PITCH - scroll + dy
+    def cell_xy(a, scroll=0, dy=10, dx=10):
+        return MARGIN + (a % COLS) * CPITCH + dx, RGAP + (a // COLS) * PITCH - scroll + dy
     opened = lambda calls: [c for c in calls if c[0] == 'navigator_to_with_context']
-    calls = tap_at(m, *cell_xy(4))
+    expect(not opened(tap_at(m, 30, 5)), 'a tap above the first row opens nothing')
+    expect(not opened(tap_at(m, 30, RGAP + CELL + 4)), 'a tap in the gap between the first two rows opens nothing')
+    #     the tile's hit area is its cover, album and artist lines (the whole 144 x 190): corners and edges of album 1 (row 0, right)
+    for what, (dx, dy, want) in {'its top-left pixel': (0, 0, True), 'its cover\'s bottom-right pixel': (COVER - 1, COVER - 1, True),
+                                 'the gap under the cover (above the album)': (50, COVER + 1, True), 'the album line': (50, COVER + TGAP + 5, True),
+                                 'the artist line': (50, COVER + TGAP + THEIGHT + 5, True), 'the last pixel of the artist line': (COVER - 1, CELL - 1, True),
+                                 'one pixel past its right edge': (COVER, 50, False), 'one pixel past the artist line': (50, CELL, False)}.items():
+        x, y = cell_xy(1, 0, dy, dx)
+        got = opened(tap_at(m, x, y))
+        expect(bool(got) == want and (not want or got[0][3] == 1), f'a tap on {what}: ' + ('album 1' if want else 'nothing'))
+    drag_to(m, 300, 0, 100); settle(m)
+    calls = tap_at(m, *cell_xy(4, 300))
     expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_ALBUMS'], 4) in calls, 'a tap on album 4\'s cover opens albuminfo_page with 0xf003 | 4 << 16')
     seq = [c[0] for c in calls if c[0] in ('loadAlbumList', 'albumcoverinfo_init', 'batchadd_albumcover_task', 'navigator_to_with_context')]
     expect(seq == ['loadAlbumList', 'albumcoverinfo_init', 'batchadd_albumcover_task', 'navigator_to_with_context']
            and ('batchadd_albumcover_task', 0, 0) in calls, f'the open sequence includes the cover thread release ({seq})')
     expect(m.deques[m.opened_album[2]] == m.showlist and m.opened_album[1] == 4, 'the page reads its row from the stock list')
-    calls = tap_at(m, *cell_xy(7, dy=COVER + TGAP + 5))
-    expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_ALBUMS'], 7) in calls, 'a tap on a title opens its album too')
-    for what, (x, y) in {'the gap between columns': (MARGIN + COVER + 4, 20), 'the left margin': (4, 20), 'the right margin': (316, 20),
-                         'the gap between rows': (30, GAP + CELL + 4), 'above the first row': (30, 5),
-                         'the empty bottom of the view': (30, VIEW_H - 3)}.items():
+    calls = tap_at(m, *cell_xy(5, 300, dy=COVER + TGAP + 5))
+    expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_ALBUMS'], 5) in calls, 'a tap on a title opens its album too')
+    calls = tap_at(m, *cell_xy(4, 300, dy=COVER + TGAP + THEIGHT + 5))
+    expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_ALBUMS'], 4) in calls, 'and a tap on an artist line')
+    for what, (x, y) in {'the gap between columns': (MARGIN + COVER + 4, 150), 'the left margin': (4, 150), 'the right margin': (316, 150),
+                         'the gap between rows': (30, RGAP + 3 * PITCH - 300 - 5)}.items():
         expect(not opened(tap_at(m, x, y)), f'a tap on {what} opens nothing')
-    mx = GAP + 4 * PITCH - VIEW_H
+    mx = RGAP + 6 * PITCH - VIEW_H
     drag_to(m, 100000, 0, 5000); settle(m)
+    expect(not opened(tap_at(m, 30, VIEW_H - 3)) and not opened(tap_at(m, 30 + CPITCH, 205)) , 'the 10 px under the last row, and the empty cell beside the last album, open nothing')
     for a, want in ((10, True), (9, True), (11, False), (2, False)):
         x, y = cell_xy(a, mx)
         got = opened(tap_at(m, x, y))
@@ -317,13 +513,13 @@ def run(ctx):
                f'scrolled to the end, album {a}: ' + ('opens' if want else 'nothing' + (' (the empty cell of the last row)' if a == 11 else ' (scrolled out above)')))
     expect(not opened(gesture(m, [('down', 100, 200, 9000), ('move', 100, 150, 9300), ('up', 100, 150, 9700)])), 'releasing after a drag is not a tap')
     x, y = cell_xy(10, mx)
-    expect(opened(gesture(m, [('down', x, y, 9800), ('move', x, y + 5, 9850), ('up', x, y + 5, 9900)])), 'a few px of wobble is still a tap')
+    expect(opened(gesture(m, [('down', x, y, 9800), ('move', x, y + 4, 9850), ('up', x, y + 4, 9900)])), f'a wobble under the {DRAG} px drag threshold is still a tap')
     # the screen offset does not matter (widget_to_local), and a stale list is queried again
     m = albums_machine(n, cached=False); open_grid(m)
     m.setword(m.word(m.widgets['view_grid'] + 0x44) + 4, 30 + 17)
-    x, y = cell_xy(4)
+    x, y = cell_xy(3)
     m.tap(x, SCREEN_Y0 + 17 + y, fn='al_on_pointer')
-    expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_ALBUMS'], 4) in m.calls, 'taps are converted with widget_to_local (the window\'s position does not matter)')
+    expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_ALBUMS'], 3) in m.calls, 'taps are converted with widget_to_local (the window\'s position does not matter)')
     m.setword(pod.DATA['PDEQ_SHOWLIST'][0], m.new_deque([m.record(name='other.flac')]))
     x, y = cell_xy(2); m.tap(x, SCREEN_Y0 + 17 + y, fn='al_on_pointer')
     expect(m.deques[m.opened_album[2]] == m.showlist, 'the stock queries run again on every open')
@@ -349,8 +545,8 @@ def run(ctx):
         m = mode_machine(mode)       # the release carries the final 160 px of the travel: the same place as a drag of 200 px
         gesture(m, [('down', 100, 300, 3000), ('move', 100, 260, 3100), ('up', 100, 100, 3800)])
         got = dsts(paint(m)[0])
-        m2 = mode_machine(mode); drag_to(m2, 200, 0)
-        expect(got and got == dsts(paint(m2)[0]), f'{mode}: the release applies its final position (the full 200 px, not 40)')
+        m2 = mode_machine(mode); drag_to(m2, 200 - DRAG, 0)
+        expect(got and got == dsts(paint(m2)[0]), f'{mode}: the release applies its final position (200 px less the {DRAG} px of the threshold, not 40)')
         m = mode_machine(mode)       # a press that stops a fling is not a tap; the next one is
         gesture(m, [('down', 100, 350, 4000), ('move', 100, 310, 4016), ('move', 100, 270, 4032), ('up', 100, 270, 4040)])
         expect(any(c[0] == 'timer_add' and c[1] == PSYMS['al_on_fling'] for c in m.calls), f'{mode}: the flick coasts')
@@ -359,38 +555,72 @@ def run(ctx):
         expect(len(opened(gesture(m, [('down', xa, 100, 5000), ('up', xa, 100, 5080)]))) == 1, f'{mode}: the next plain tap opens the album again')
 
     # 8. Titles: one line, cut with an ellipsis to the cell width by the canvas' own measure; what fits is untouched.
-    longs = {0: 'Short', 1: 'Twelve chars', 2: 'A very long album title that cannot fit', 3: 'ABCDEFGHIJK', 4: 'ABCDEFGHIJKL',
-             5: '日本語のアルバム名前', 6: '日本語のア'}
-    m = albums_machine(7, cached=False, title=lambda i: longs[i])
-    open_grid(m); paint(m)
-    nmeasure = len(m.measures)
-    texts = sorted(m.texts, key=lambda t: (t[1][1], t[1][0]))
-    by_album = {a: t[0] for a, t in enumerate(texts)}
-    expect(by_album[0] == 'Short' and by_album[3] == 'ABCDEFGHIJK', 'a title that fits is drawn whole')
-    expect(by_album[1] == 'Twelve ch…' and by_album[2] == 'A very lo…' and by_album[4] == 'ABCDEFGHI…',
-           f'long titles are cut where text + ellipsis fits 92 px (8 px a char, 16 for the ellipsis) ({by_album[1]!r}, {by_album[2]!r}, {by_album[4]!r})')
-    expect(by_album[5] == '日本語の…' and by_album[6] == '日本語のア', f'wide characters count their width ({by_album[5]!r}, {by_album[6]!r})')
-    expect(nmeasure <= 7 * 7, f'a title is measured about log2(48) times ({nmeasure} for 7)')
+    #    The mock font is 8 px a character, 16 for CJK and the ellipsis: 144 px hold 18 characters, or 16 and an ellipsis,
+    #    or 9 wide characters, or 8 and an ellipsis. The artist line is cut by the same rule, separately.
+    cw = COVER // 8
+    longs = {0: 'Short', 1: 'T' * cw, 2: 'T' * (cw + 1), 3: 'A very long album title that cannot fit', 4: 'あ' * (cw // 2),
+             5: 'あ' * (cw // 2 + 1), 6: '日本語のアルバム名前を長くした', 7: ''}
+    def mock_w(s): return sum(16 if ord(c) >= 0x2e80 or c == '…' else 8 for c in s)
+    def model_cut(s):      # the longest prefix whose width with the ellipsis fits, else the whole text when it fits
+        if mock_w(s) <= COVER: return s
+        k = max(k for k in range(len(s)) if mock_w(s[:k] + '…') <= COVER)
+        return s[:k] + '…'
+    m = albums_machine(8, cached=False, title=lambda i: longs[i])
+    for i in range(8): m.setword(m.showlist[i] + O['REC_ARTIST'], m.cstr(longs[(i + 2) % 8]))
+    open_grid(m)
+    got_t, got_s, nmeasure = [None] * 8, [None] * 8, 0
+    for top, albums_in_view in ((0, range(0, 4)), (400, range(4, 8))):
+        if top: drag_to(m, top, 0, 100)
+        texts = paint(m)[1]
+        nmeasure += len(m.measures)
+        for (txt, rect), sty in zip(texts, m.text_styles):
+            a = [i for i in albums_in_view if rect[0] == MARGIN + (i % COLS) * CPITCH and rect[1] - (RGAP + (i // COLS) * PITCH - top) in (COVER + TGAP, COVER + TGAP + THEIGHT)][0]
+            (got_t if sty == 'label_grid_title' else got_s)[a] = txt
+    want_t = [model_cut(longs[i]) if longs[i] else None for i in range(8)]
+    want_s = [model_cut(longs[(i + 2) % 8]) if longs[(i + 2) % 8] else None for i in range(8)]
+    expect(got_t == want_t, f'albums: what fits is whole, the rest ends in an ellipsis where text + ellipsis fits 144 px, an empty one draws nothing ({got_t})')
+    expect(got_s == want_s, f'artists: the same rule, separately ({got_s})')
+    expect(got_t[1] == 'T' * cw and got_t[2] == 'T' * (cw - 2) + '…' and got_t[4] == 'あ' * (cw // 2) and got_t[5] == 'あ' * (cw // 2 - 1) + '…',
+           f'18 narrow / 9 wide characters fit 144 px, one more is cut (8 px a character, 16 for CJK and the ellipsis) ({got_t[1:6]})')
+    expect(nmeasure <= 8 * 7, f'a text is measured about log2(48) times ({nmeasure} for 15 texts)')
     paint(m)
-    expect(not m.measures, 'titles are measured once, when the tile is made, never again')
+    expect(not m.measures, 'texts are measured once, when the tile is first drawn, never again')
+    #     the same rule with the shipped font's real metrics (the text-width rule of docs/ui.md): 18 px albums and 15 px artists
+    #     of every script of the 16 languages cut to 144 px, the cut the longest that fits with its ellipsis
+    from awtk_text import Ttf, StbText
+    font = Ttf(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/fonts/default.ttf'))
+    for px in (18, 15):
+        wid = lambda s: StbText(font, px).layout(s)[1] if s else 0
+        expect(wid('…') > 0, f'the ellipsis has a glyph at {px} px ({wid("…")} px wide)')
+        for name, s in {'Latin': 'The Rise and Fall of Ziggy Stardust and the Spiders from Mars', 'accents': 'Sérénade pour orchestre à cordes, Ödön Önder',
+                        'Cyrillic': 'Щелкунчик, балет в двух действиях Петра Ильича Чайковского', 'Greek': 'Η Συμφωνία των Αλκυονίδων του Μίκη Θεοδωράκη',
+                        'Japanese': '日本語のアルバム名前を長くしたもの、ひらがなカタカナ', 'Chinese': '周杰伦的第一张正式大型专辑重制版豪华纪念版', 'Traditional': '周杰倫的第一張正式大型專輯重製版豪華紀念版',
+                        'Korean': '한국어로 된 아주 긴 앨범 이름과 가수 이름입니다', 'Vietnamese': 'Những bản tình ca bất hủ của nhạc sĩ Trịnh Công Sơn'}.items():
+            assert wid(s) > COVER, name
+            k = max(k for k in range(len(s)) if wid(s[:k] + '…') <= COVER)
+            expect(wid(s[:k] + '…') <= COVER < wid(s[:k + 1] + '…') and k > 3, f'{px} px {name}: {k} of {len(s)} characters and an ellipsis fit 144 px ({wid(s[:k] + "…")} px)')
+        expect(wid('Kind of Blue') <= COVER and wid('Miles Davis') <= COVER and wid('日本語') <= COVER, f'{px} px: ordinary short names fit whole')
 
     # 9. Missing cache files: no picture for them, the placeholder disc instead, no decode attempt, nothing built.
     m = albums_machine(9, missing={1, 4}, empty={2, 7})
     open_grid(m); blits, _ = settle(m)
     counts = {bm: sum(1 for b in blits if b[0] == bm) for bm in {b[0] for b in blits}}
-    expect(len(blits) == 9 and sorted(counts.values()) == [1] * 5 + [4], f'five albums have a tile each, the four without art share one bitmap ({sorted(counts.values())})')
+    expect(len(blits) == 4 and sorted(counts.values()) == [1, 1, 2], f'albums 0 and 3 have a tile each, 1 (no file) and 2 (empty marker) share one bitmap ({sorted(counts.values())})')
+    ph = m.bitmaps[[bm for bm, c in counts.items() if c == 2][0]]
+    expect(ph[1:] == (COVER, COVER), f'the placeholder is the grid\'s {COVER}x{COVER}')
     expect(not any(n in m.names() for n in ('pthread_create', 'toolsGetAlbumCover', 'mkdir')) and not any(c[0] == 'fopen' and 'w' in c[2] for c in m.calls),
-           'a missing cache file starts no build and writes no marker (open Cover Flow once to make the cache)')
+           'a missing cache file starts no build at open and writes no marker (the background build is section 13)')
     m = albums_machine(6, cached=False)
     open_grid(m); blits, texts = settle(m)
-    expect(len(blits) == 6 and len({b[0] for b in blits}) == 1 and len(texts) == 6, 'with no cache at all every cell is the placeholder with its title')
+    expect(len(blits) == 4 and len({b[0] for b in blits}) == 1 and len(texts) == 8, 'with no cache at all every visible cell is the placeholder with its album and artist')
     m = albums_machine(3, cached=False); m.images.pop('p_default')
     open_grid(m); blits, _ = settle(m)
     d = m.bitmaps[blits[0][0]][0]
-    expect(len(blits) == 3 and set(struct.unpack('<64I', bytes(m.u.mem_read(d, 256)))) == {0xff2b2b2b}, 'without the stock disc the placeholder is flat grey')
+    expect(len(blits) == 3 and set(struct.unpack('<64I', bytes(m.u.mem_read(d, 256)))) == {0xff2b2b2b}
+           and set(struct.unpack('<64I', bytes(m.u.mem_read(d + (COVER * COVER - 64) * 4, 256)))) == {0xff2b2b2b}, 'without the stock disc the placeholder is flat grey')
     m = albums_machine(3, cached=False); m.bitmap_ok = False
     open_grid(m); blits, texts = paint(m)
-    expect(blits == [] and len(texts) == 3, 'if bitmaps cannot be made the titles still show')
+    expect(blits == [] and len(texts) == 6, 'if bitmaps cannot be made the albums and artists still show')
 
     # 10. A large library: the work per frame and the memory do not grow with it.
     n = 4000
@@ -401,29 +631,40 @@ def run(ctx):
     expect(len([c for c in m.calls if c[0] == 'bitmap_create_ex']) == 1, 'the open itself makes one bitmap (the placeholder)')
     settle(m)
     rows = (n + COLS - 1) // COLS
-    mx = GAP + rows * PITCH - VIEW_H
-    last, loaded = 0, [len(m.bitmaps)]
+    mx = RGAP + rows * PITCH - VIEW_H
+    last, loaded, peak = 0, [len(m.bitmaps)], 0
     for target in (mx // 2, mx, 0):
         drag_to(m, target, last, 10000 + 1000 * len(loaded)); last = target
         blits, texts = settle(m)
         expect(dsts(blits) == want_dsts(reference(target, n)), f'4000 albums, scroll {target}: the frame is the visible cells only ({len(blits)})')
         expect(len(m.bitmaps) <= TILES + 1, f'live bitmaps stay within {TILES} tiles + the placeholder ({len(m.bitmaps)})')
+        peak = max(peak, sum(w * h * 4 for _, w, h in m.bitmaps.values()))
         loaded.append(len(m.bitmaps))
+    expect(peak <= (TILES + 1) * COVER * COVER * 4 <= 1100000,
+           f'bitmap memory peaks at {peak} B (<= {(TILES + 1) * COVER * COVER * 4} B = {TILES} tiles + the placeholder)')
     top_urls = [u for u in m.loads if u.startswith('file://')]
     expect(m.destroyed > 0 and len(top_urls) > len(set(top_urls)), f'old tiles are recycled as the view moves, and the albums back at the top are decoded again ({m.destroyed} destroyed, {len(top_urls)} loads of {len(set(top_urls))} covers)')
     m.call(PSYMS['al_on_destroy'], count=2000000)
     expect(len(m.bitmaps) == 0, f'closing the page destroys every bitmap ({len(m.bitmaps)} left)')
     expect(any(c[0] == 'deque_destroy' for c in m.calls) and any(c[0] == 'free' for c in m.calls), 'and frees the list copy and the tile ring')
-    print(f'  4000 albums: open {opened_cost:,} payload instructions, at most {max(loaded)} bitmaps live')
+    print(f'  4000 albums: open {opened_cost:,} payload instructions, at most {max(loaded)} bitmaps live, {peak} B of bitmaps')
 
     # 11. Closing mid-gesture or with a reload timer pending leaves nothing behind.
-    m = albums_machine(30); open_grid(m); paint(m)       # a reload timer is pending after the first frame
+    m = albums_machine(30); open_grid(m); paint(m)       # the loader's timer is pending (armed at open)
     m.touch('down', 100, SCREEN_Y0 + 100, 1000, fn='al_on_pointer')
     m.call(PSYMS['al_on_destroy'], count=2000000)
     expect(('timer_remove', 0x777) in m.calls and any(c[0] == 'widget_ungrab' for c in m.calls), 'destroy removes the timers and releases a grab')
     expect(len(m.bitmaps) == 0, 'and every bitmap')
-    m.call(PSYMS['al_on_more'], count=1000000)
-    expect('widget_invalidate_force' not in m.names(), 'a late timer after close does nothing')
+    m.call(PSYMS['al_on_load'], count=1000000)
+    expect('widget_invalidate_force' not in m.names() and 'timer_add' not in m.names() and 'widget_load_image' not in m.names(),
+           'a late loader tick after close does nothing')
+    m.call(PSYMS['al_on_fling'], count=1000000)
+    expect('widget_invalidate_force' not in m.names() and 'timer_add' not in m.names(), 'nor does a late fling tick')
+    #     each timer on its own: a fling and the loader are both removed
+    m = albums_machine(300, cached=False); open_grid(m)
+    gesture(m, [('down', 100, 350, 1000), ('move', 100, 310, 1016), ('move', 100, 270, 1032), ('up', 100, 270, 1040)])
+    m.call(PSYMS['al_on_destroy'], count=2000000)
+    expect(len([c for c in m.calls if c == ('timer_remove', 0x777)]) == 3, 'destroy removes the loader\'s, the fling\'s and the build\'s timer')
 
     # 12. Empty library: the status line, no view.
     m = albums_machine(0)
@@ -470,10 +711,9 @@ def run(ctx):
            'two text-style switches a frame: all titles, then all artists')
     expect(sorted(f[1:] for f in m.fills if f[0] == O['LIST_HAIR']) == sorted((0, c[4], 320, 1) for c in ref if c[4] is not None)
            and not [f for f in m.fills if f[0] == O['LIST_PRESS']], 'a one pixel hairline under every row whose last line is in view, no pressed fill')
-    expect(len([c for c in m.calls if c[0] == 'widget_load_image']) == 2, 'covers are decoded two a frame here too')
-    m.call(PSYMS['al_on_more'], count=1000000)      # the reload timer fires
+    expect('widget_load_image' not in m.names(), 'list paint decodes nothing either')
     blits, texts = settle(m)
-    expect(len(blits) == 7 and len(m.bitmaps) == 1 + 7, f'every visible row has its own cover once loaded ({len(m.bitmaps)} bitmaps)')
+    expect(len(blits) == 7 and len(m.bitmaps) == 1 + 7 + 2, f'every visible row has its own cover once loaded, and the next two rows are ready ({len(m.bitmaps)} bitmaps)')
     data, bw, bh = m.bitmaps[m.blits[0][0]]
     expect((bw, bh) == (LART, LART) and set(struct.unpack(f'<{bw * bh}I', bytes(m.u.mem_read(data, bw * bh * 4)))) == {colour(0)},
            f'row 0\'s cover is its cache picture reduced to {LART}x{LART}')
@@ -555,8 +795,8 @@ def run(ctx):
 
     # 13d. Ellipsis: the same rule as the grid\'s, at LIST_TEXT_W, separately for the album and the artist (the mock
     #      font is 8 px a character, 16 for CJK and the ellipsis: 248 px hold 31 characters, or 29 and an ellipsis).
-    fits = TW // 8
-    longs = {0: 'T' * fits, 1: 'T' * (fits + 1), 2: 'あ' * 15, 3: 'あ' * 16, 4: 'Short'}
+    fits, wide = TW // 8, TW // 16
+    longs = {0: 'T' * fits, 1: 'T' * (fits + 1), 2: 'あ' * wide, 3: 'あ' * (wide + 1), 4: 'Short'}
     m = albums_machine(5, cached=False, title=lambda i: longs[i])
     m.fs[ALBUMS_FILE] = b'0\n'
     for i in range(5): m.setword(m.showlist[i] + O['REC_ARTIST'], m.cstr(longs[(i + 1) % 5]))
@@ -564,8 +804,8 @@ def run(ctx):
     titles = {t[1][1] // ROW: t[0] for t, sty in zip(texts, m.text_styles) if sty == 'label_row_title'}
     artists = {t[1][1] // ROW: t[0] for t, sty in zip(texts, m.text_styles) if sty == 'label_row_sub'}
     expect(titles[0] == 'T' * fits and titles[1] == 'T' * (fits - 2) + '…', f'a title that fits {TW} px is whole, one more character is cut with an ellipsis ({titles[1]!r})')
-    expect(titles[2] == 'あ' * 15 and titles[3] == 'あ' * 14 + '…', f'wide characters count their width ({titles[2]!r}, {titles[3]!r})')
-    expect(artists[0] == 'T' * (fits - 2) + '…' and artists[1] == 'あ' * 15 and artists[2] == 'あ' * 14 + '…' and artists[3] == 'Short',
+    expect(titles[2] == 'あ' * wide and titles[3] == 'あ' * (wide - 1) + '…', f'wide characters count their width ({titles[2]!r}, {titles[3]!r})')
+    expect(artists[0] == 'T' * (fits - 2) + '…' and artists[1] == 'あ' * wide and artists[2] == 'あ' * (wide - 1) + '…' and artists[3] == 'Short',
            f'the artist line is cut by the same rule ({artists[0]!r}, {artists[2]!r})')
     expect(len(m.measures) <= 10 * 7, f'about log2(48) measures per cut text ({len(m.measures)})')
     paint(m)
@@ -597,7 +837,7 @@ def run(ctx):
     open_grid(m); settle(m)
     expect(glyph(m) == 'pod_nav_list', 'the grid shows the list glyph')
     drag_to(m, 700, 0); paint(m)
-    first_row = (700 - GAP - CELL) // PITCH + 1
+    first_row = (700 - RGAP - CELL) // PITCH + 1
     m.calls = []
     m.call(PSYMS['al_on_toggle'], a0=0, count=20000000)
     calls = m.calls
@@ -619,9 +859,9 @@ def run(ctx):
            and m.props.get((m.widgets['btn_albumview'], 'style:pressed:icon')) == 'pod_nav_list_down', 'toggling back: in place, "1" saved, the list glyph')
     blits, texts = paint(m)
     expect(min(int(t[0].split()[1]) for t in texts) == first_row * COLS, f'back in the grid the same album row is in view (Album {first_row * COLS})')
-    # the tiles of the other mode are never reused: no 92 px blit in the list, no 52 px one in the grid
+    # the tiles of the other mode are never reused: no 144 px blit in the list, no 52 px one in the grid
     blits, _ = settle(m)
-    expect(all(m.bitmaps[b[0]][1:] == (COVER, COVER) for b in blits), 'grid covers are 92 px again')
+    expect(all(m.bitmaps[b[0]][1:] == (COVER, COVER) for b in blits), 'grid covers are 144 px again')
     # many switches: no window churn, no leak
     seen = []
     for _ in range(8):
@@ -629,8 +869,8 @@ def run(ctx):
     expect(len(m.bitmaps) <= TILES + 1, f'after many switches the live bitmaps are still bounded ({len(m.bitmaps)})')
     expect(not [c for c in seen if c[0] in opened_ev], 'eight more switches opened and closed no window')
     # a pending reload timer and a fling are cancelled by the switch
-    m = albums_machine(60); open_grid(m); paint(m)
-    assert any(c[0] == 'timer_add' and c[1] == PSYMS['al_on_more'] for c in m.calls)
+    m = albums_machine(60); calls = open_grid(m)
+    assert any(c[0] == 'timer_add' and c[1] == PSYMS['al_on_load'] for c in calls)
     m.calls = []
     m.call(PSYMS['al_on_toggle'], a0=0, count=20000000)
     expect(('timer_remove', 0x777) in m.calls, 'the pending reload timer is removed when the mode changes')
@@ -641,7 +881,7 @@ def run(ctx):
     m = list_machine(60, cached=False); drag_to(m, 5 * ROW, 0)
     m.call(PSYMS['al_on_toggle'], a0=0, count=20000000)
     blits, texts = paint(m)
-    expect(m.fs.get(ALBUMS_FILE) == b'1\n' and min(int(t[0].split()[1]) for t in texts) == (5 // COLS) * COLS, 'from the list at row 5 the grid shows row 1 (albums 3..5) first')
+    expect(m.fs.get(ALBUMS_FILE) == b'1\n' and min(int(t[0].split()[1]) for t in texts) == (5 // COLS) * COLS, 'from the list at row 5 the grid shows its row 2 (albums 4, 5) first')
     # an empty library, a closed page
     m = albums_machine(0); m.fs[ALBUMS_FILE] = b'0\n'; open_grid(m); m.calls = []
     m.call(PSYMS['al_on_toggle'], a0=0, count=20000000)
@@ -671,8 +911,170 @@ def run(ctx):
     open_grid(m)
     root = asset_tree(asset)
     for x, y, want in ((160, 60, 'view_grid'), (20, 200, 'view_grid'), (160, 449, 'view_grid'), (40, 25, 'btn_return'),
-                       (O['NAV_VIEW_X'] + 20, 25, 'btn_albumview'), (290, 25, 'btn_backtoplayer'), (160, 230, 'view_grid')):
+                       (O['NAV_VIEW_X'] + 20, 25, 'btn_albumview'), (O['NAV_CF_X'] + 20, 25, 'btn_coverflow'),
+                       (O['NAV_CF_X'], 25, 'btn_coverflow'), (O['NAV_VIEW_X'] - 1, 25, 'btn_coverflow'),
+                       (O['NAV_VIEW_X'], 25, 'btn_albumview'), (290, 25, 'btn_backtoplayer'), (160, 230, 'view_grid')):
         got = stock_target(m, root, x, y)
         expect(got[-1] == want, f'a touch at ({x},{y}) goes to {want} ({got})')
     expect(all(node(root, nm).flags & F_SENSITIVE == 0 for nm in ('label_status', 'label_row_title', 'label_row_sub')),
            'the status label and the two list-style labels are insensitive')
+
+    # 16b. The Cover Flow button: bound to al_on_cover, which runs the menu row's open (coverflow_open: the playing
+    #      album, else the last) over the page; nothing of the Albums page closes, so Cover Flow's Back returns to it.
+    for mode in (b'1\n', b'0\n'):
+        m = albums_machine(3); m.fs[ALBUMS_FILE] = mode
+        for w in COVER_WIDGETS:
+            if w not in m.widgets: m.widget(w)
+        calls = open_grid(m)
+        binds = [c for c in calls if c[0] == 'widget_on' and c[1] == m.widgets['btn_coverflow'] and c[2] == O['EVT_CLICK']]
+        expect(len(binds) == 1 and binds[0][3] == PSYMS['al_on_cover'], 'the Cover Flow button is bound to al_on_cover')
+        m.calls = []
+        m.call(PSYMS['al_on_cover'], count=5000000)
+        expect(('window_open', 'm1pod_cover') in m.calls, f'a tap opens m1pod_cover through coverflow_open (mode {mode!r})')
+        expect(not [c for c in m.calls if c[0] in ('navigator_back', 'window_close', 'widget_destroy', 'stock_resume', 'navigator_to_with_context')]
+               and m.fs.get(ALBUMS_FILE) == mode, 'and the Albums page stays underneath, untouched, its mode unchanged')
+    m.calls = []
+    m.call(PSYMS['pod_on_back'], count=2000000)
+    expect(('navigator_back',) in [c[:1] for c in m.calls] and 'window_open' not in m.names(), 'Back is the navigator\'s: it returns to the page below')
+
+    background_build_tests(ctx)
+
+
+# ---------------------------------------------------------------------------
+# The background cache build (the shared worker of patch/covercache.c, started by the page a moment after it is up)
+
+def key_of(i): return fnv(fnv(O['FNV_SEED'], f'Artist {i}'), f'Album {i}') or 1
+
+
+
+
+def background_build_tests(ctx):
+    expect = ctx.expect
+    START, POLL = PSYMS['al_on_build_start'], PSYMS['al_on_build']
+
+    # 17. Opening arms one one-shot timer for the build; nothing is scanned or started in the open itself.
+    m = albums_machine(8, missing={2, 5}, empty={3})
+    calls = open_grid(m)
+    expect([c for c in calls if c[0] == 'timer_add' and c[1] == START] != [] and 'pthread_create' not in [c[0] for c in calls]
+           and build_state(m)['jobs'] == 0, 'the open arms the one-shot start timer and starts no worker')
+    expect(not [c for c in calls if c[0] == 'access' and 'coverflow' in str(c[1:])], 'the open does not stat the cache files (the scan waits for the timer)')
+
+    # 17a. Only the albums with neither a picture nor the empty "no art" marker are jobs: 2 and 5 here (3 has its marker).
+    new = fired(m, 'al_on_build_start')
+    s, jobs = build_state(m), build_jobs(m)
+    expect(count_of(m, 'pthread_create') == 1 and s['running'] == 1 and s['mode'] == 0 and s['total'] == 2 and s['done'] == 0,
+           f'one worker, CC_MISSING, two jobs ({s})')
+    expect(jobs == [(f'/mnt/mmc/m/{i}/1.flac', key_of(i)) for i in (2, 5)], f'the jobs are the missing albums only, 2 then 5 ({jobs})')
+    expect(('mkdir', '/mnt/mmc/.coverflow') in new and [c for c in new if c[0] == 'timer_add' and c[1] == POLL], 'the cache directory is made and the poll timer runs')
+    expect(not [c for c in m.calls if c[0] in ('widget_set_visible', 'widget_set_text_utf8') and c[1] == m.widgets['label_status'] and c[2] not in (0,) and isinstance(c[2], str) and 'Preparing' in c[2]],
+           'no Preparing screen: the page shows the grid')
+
+    # 17b. The tiles that showed the placeholder for want of a file pick the new one up as the done counter advances.
+    for _ in range(10): tick(m)                              # the window is loaded: 2 and 5 found no file and show the placeholder
+    for i in (2, 5): expect(f'file://{art_file(key_of(i))}' not in m.loads, f'album {i}: no file yet, nothing loaded')
+    path2, path5 = art_file(key_of(2)), art_file(key_of(5))
+    m.setword(PSYMS['cb'] + 4 * 5, 1)                       # the worker has finished album 2 ...
+    m.present.add(path2); m.files[path2] = 4096; m.cache_index[path2] = 2
+    new = fired(m, 'al_on_build')
+    expect([c for c in new if c[0] == 'timer_add' and c[1] == POLL] and not [c for c in new if c[0] == 'pthread_join'], 'a poll with the worker still running re-arms itself')
+    expect([c for c in new if c[0] == 'timer_add' and c[1] == PSYMS['al_on_load']], 'the advance re-arms the loader for the tile that had no file')
+    for _ in range(6): tick(m)
+    expect(f'file://{path2}' in m.loads and f'file://{path5}' not in m.loads, 'album 2\'s cover is decoded now; 5 (not built yet) is not')
+    new = fired(m, 'al_on_build')
+    expect(not [c for c in new if c[0] == 'timer_add' and c[1] == PSYMS['al_on_load']], 'a poll with no advance retries nothing')
+
+    # 17c. The worker finishing ends the build: joined, freed, no further poll; the last cover is picked up.
+    m.album_cover = 1
+    m.present |= {f'/mnt/mmc/m/{i}/1.flac' for i in range(8)}   # the tracks are on the card
+    m.call(PSYMS['cc_worker'], count=5000000)                # (the mock thread runs when asked: it takes up at job 1, album 5)
+    m.cache_index[path5] = 5
+    new = fired(m, 'al_on_build')
+    s = build_state(m)
+    expect(s['jobs'] == 0 and s['total'] == 0 and [c for c in new if c[0] == 'pthread_join'] and not [c for c in new if c[0] == 'timer_add' and c[1] == POLL],
+           f'done: the worker is joined, the set freed and the poll ends ({s})')
+    for _ in range(6): tick(m)
+    expect(f'file://{path5}' in m.loads, 'and the last cover is decoded too')
+
+    # 17d. Order: nearest the first album in view first (forward before back), not the library order.
+    m = albums_machine(12, missing={0, 7, 11})
+    open_grid(m)
+    m.setword(PSYMS['al'] + 4 * 17, RGAP + CELL + 2 * PITCH)   # scrolled so that album 6 starts the first row in view
+    fired(m, 'al_on_build_start')
+    order = [int(t.split('/')[4]) for t, _ in build_jobs(m)]
+    expect(order == [7, 11, 0], f'jobs go nearest the view first: 7, 11, 0 ({order})')
+    m = albums_machine(12, missing={0, 7, 11}); open_grid(m); fired(m, 'al_on_build_start')
+    expect([int(t.split('/')[4]) for t, _ in build_jobs(m)] == [0, 7, 11], 'at the top of the page: 0, 7, 11')
+    m = albums_machine(12, missing={0, 7, 11}, sort='artist'); open_grid(m); fired(m, 'al_on_build_start')
+    expect(sorted(int(t.split('/')[4]) for t, _ in build_jobs(m)) == [0, 7, 11], 'in the Artist order the same albums are the jobs (keys are the albums\')')
+
+    # 17e. Cancel and join on destroy (also with the one-shot still pending); a late poll does nothing.
+    m = albums_machine(8, missing={2, 5}); open_grid(m); fired(m, 'al_on_build_start')
+    new = fired(m, 'al_on_destroy', 3000000)
+    expect([c for c in new if c[0] == 'pthread_join'] and build_state(m)['jobs'] == 0 and ('timer_remove', 0x777) in new,
+           'destroy cancels and joins the worker, frees the jobs and drops the timer')
+    expect(build_state(m)['cancelled'] == 0 and build_state(m)['running'] == 0, 'and the shared worker is idle again')
+    new = fired(m, 'al_on_build', 1000000)
+    expect(not [c for c in new if c[0] in ('timer_add', 'pthread_create', 'widget_invalidate_force')], 'a late poll after close does nothing')
+    new = fired(m, 'al_on_build_start', 1000000)
+    expect(not [c for c in new if c[0] in ('timer_add', 'pthread_create')], 'nor does a late start')
+    m = albums_machine(8, missing={2, 5}); open_grid(m)
+    new = fired(m, 'al_on_destroy', 3000000)
+    expect(('timer_remove', 0x777) in new and 'pthread_create' not in [c[0] for c in new] and build_state(m)['jobs'] == 0,
+           'destroy before the start timer fired removes it; no worker was ever made')
+
+    # 17f. One worker at a time. Albums holds it: Cover Flow (the navbar button) takes it over by releasing Albums' first;
+    #      Cover Flow holds it: Albums starts nothing.
+    m = albums_machine(6, missing={1, 4})
+    for w in COVER_WIDGETS:
+        if w not in m.widgets: m.widget(w)
+    open_grid(m); fired(m, 'al_on_build_start')
+    expect(count_of(m, 'pthread_create') == 1 and build_state(m)['running'] == 1, 'Albums runs the worker')
+    new = fired(m, 'al_on_cover', 6000000)
+    names = [c[0] for c in new]
+    expect('pthread_join' in names and 'pthread_create' in names and names.index('pthread_join') < names.index('pthread_create') and ('window_open', 'm1pod_cover') in new,
+           'the Cover Flow button joins Albums\' worker before Cover Flow starts its own (one at a time)')
+    m = albums_machine(6, missing={1, 4})
+    for w in COVER_WIDGETS:
+        if w not in m.widgets: m.widget(w)
+    m.call(PSYMS['coverflow_open'], count=6000000)
+    expect(count_of(m, 'pthread_create') == 1 and build_state(m)['running'] == 1, 'Cover Flow builds its Preparing set')
+    open_grid(m)
+    new = fired(m, 'al_on_build_start')
+    expect(not [c for c in new if c[0] in ('pthread_create', 'mkdir', 'timer_add')],
+           'with Cover Flow holding the worker, Albums starts nothing (no second thread, no poll)')
+    expect(build_state(m)['total'] == 2 and build_state(m)['running'] == 1, 'and leaves Cover Flow\'s jobs alone')
+    new = fired(m, 'al_on_destroy', 3000000)
+    expect(not [c for c in new if c[0] == 'pthread_join'] and build_state(m)['jobs'] != 0, 'closing Albums does not stop a worker it does not own')
+
+    # 17g. No space, no thread, nothing missing, no timer: no worker, nothing left held.
+    m = albums_machine(8, missing={2}); m.free_mb = 2; open_grid(m); fired(m, 'al_on_build_start')
+    expect(count_of(m, 'pthread_create') == 0 and build_state(m)['jobs'] == 0 and not [c for c in m.calls if c[0] == 'timer_add' and c[1] == POLL], 'a full card: no worker')
+    m = albums_machine(8, missing={2}); m.thread_ok = False; open_grid(m); fired(m, 'al_on_build_start')
+    expect(build_state(m)['jobs'] == 0 and not [c for c in m.calls if c[0] == 'timer_add' and c[1] == POLL], 'a refused thread: the set is freed')
+    m = albums_machine(8); open_grid(m); fired(m, 'al_on_build_start')
+    expect(count_of(m, 'pthread_create') == 0 and ('mkdir', '/mnt/mmc/.coverflow') not in m.calls and build_state(m)['jobs'] == 0, 'a complete cache: nothing to do, no thread, no mkdir')
+    m = albums_machine(8, missing={2}); open_grid(m)
+    m.timer_fail = True; fired(m, 'al_on_build_start')
+    expect(count_of(m, 'pthread_create') == 1 and count_of(m, 'pthread_join') == 1 and build_state(m)['jobs'] == 0, 'a poll timer that cannot be made: the worker is joined and freed')
+    m = albums_machine(8, missing={2}); open_grid(m); fired(m, 'al_on_build_start')
+    m.timer_fail = True; fired(m, 'al_on_build')
+    expect(count_of(m, 'pthread_join') == 1 and build_state(m)['jobs'] == 0, 'a refused re-arm: joined and freed')
+
+    # 17h. Back in front (Cover Flow, an album page closed): the build is offered again, once; not while one runs.
+    m = albums_machine(8, missing={2}); open_grid(m)
+    expect([b for b in m.calls if b[0] == 'widget_on' and b[2] == O['EVT_WINDOW_TO_FG'] and b[3] == PSYMS['al_on_fg']] != [], 'the window\'s foreground event is bound')
+    fired(m, 'al_on_build_start')
+    expect(not [c for c in fired(m, 'al_on_fg', 1000000) if c[0] == 'timer_add'], 'foreground while the worker runs arms nothing')
+    m.call(PSYMS['cc_worker'], count=5000000)
+    fired(m, 'al_on_build')
+    expect([c for c in fired(m, 'al_on_fg', 1000000) if c[0] == 'timer_add' and c[1] == START], 'foreground with the worker idle arms the start again')
+    expect(not [c for c in fired(m, 'al_on_fg', 1000000) if c[0] == 'timer_add'], 'and only once while it is pending')
+
+    # 17i. List mode and a big library are bounded: the job set never exceeds CC_MAX_JOBS.
+    m = albums_machine(300, cached=False); m.fs[ALBUMS_FILE] = b'0\n'; open_grid(m); fired(m, 'al_on_build_start', 400000000)
+    s = build_state(m)
+    expect(s['total'] == 300 and s['cap'] == 300, f'300 missing albums in list mode: 300 jobs ({s})')
+    m.call(PSYMS['al_on_destroy'], count=3000000)
+    m = albums_machine(4100, cached=False); open_grid(m); fired(m, 'al_on_build_start', 900000000)
+    s = build_state(m)
+    expect(s['total'] == 4000 and s['cap'] == 4000, f'4100 missing albums: the job set is bounded at CC_MAX_JOBS ({s["total"]}/{s["cap"]})')

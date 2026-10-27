@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""The pull-down control centre's text one step smaller (V2.1gB, docs/ui.md).
+"""The pull-down control centre: its status bar the real one, its text one step smaller (V2.1gB, docs/ui.md).
 
 ui/dialog/dropdown_dialog.bin (default and theme1; the dialog has no page theme, styles/ has no
-dropdown_dialog.bin) carries three kinds of text, all with inline font sizes:
+dropdown_dialog.bin) carries its own copy of the status bar (view_sysbar) and the tile captions:
 
-  label_volume   the volume number in the pull-down's own status bar       20 -> 18 (all three states)
-  bar_dclock     its clock                                                  20 -> 18
+  view_sysbar    laid out from the table the real bar (ui/system_bar.bin) uses, tools/statusbar.py: left group
+                 at x 10, 4 px spacing, the volume number 16 px middle in 30 px, the clock 104..194 at 18 px, the
+                 right group 4 px spacing and clear of the battery; the bar black as the real one
   label_*        the eight tile captions (Wi-Fi, Bluetooth, Buttons lock, gain, USB mode, output,
                  Playback / System Setting), word-wrapped in 57 x 40 boxes  18 -> 16 (normal),
                                                                             16 -> 14 (disable, focused)
@@ -18,9 +19,7 @@ middle, or AWTK's default, which centres too), so the text stays centred. The to
 sets with the shared text model (awtk_text.StbText: truncated advances + 1 px per glyph) in the
 tree's own font, so it must run after the font step:
 
-  - "100" (the widest volume) must fit label_volume; when it fits the stock 30 px box, the font
-    step's widening (tools/mod_font.py fit_pulldown: 30 -> 33 px, the row's spacing 4 -> 3) is
-    undone, so the row is back to stock geometry;
+  - "100" (the widest volume) must fit label_volume (30 px);
   - "12:59 PM" (the widest clock) must fit bar_dclock;
   - every tile caption in English and Simplified Chinese (strings/en_US.bin, zh_CN.bin, the keys
     demo sets @0x4743c8..) must wrap into the 40 px box (lines x font size), greedy word wrap as
@@ -31,6 +30,7 @@ Usage: mod_pulldown.py SRC_WORKDIR OUT_WORKDIR     (OUT == SRC edits in place)
 """
 import argparse, os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import statusbar
 from modlib import clone_workdir, edit_ui
 from awtk_text import Ttf, awtk_width
 
@@ -40,8 +40,6 @@ DIALOG = 'ui/dialog/dropdown_dialog.bin'
 FONT = 'rootfs/release/assets/default/raw/fonts/default.ttf'
 STATES = ('normal', 'disable', 'focused')
 # old -> new inline font sizes
-VOLUME = {20: 18}
-CLOCK = {20: 18}
 TILE = {18: 16, 16: 14}
 TILES = ('label_wifi', 'label_bt', 'label_lock', 'label_gain', 'label_usbmode', 'label_outputway',
          'label_playset', 'label_sysset')
@@ -51,7 +49,6 @@ TILE_KEYS = ('wifiset_wifi', 'wifiset_bt', 'system_keylock', 'gain_high', 'gain_
 MUST_FIT = ('en_US', 'zh_CN')
 VOLUME_MAX, CLOCK_MAX = '100', '12:59 PM'
 TILE_W, TILE_DX = 71, -7                 # caption box width and x shift (stock 57; the box centre stays)
-STOCK_VOLUME_W, STOCK_SPACING = 30, 4        # stock label_volume width and view_bar_left spacing
 
 
 def check(ok, msg):
@@ -113,27 +110,18 @@ def resize(w, table, states=STATES):
 
 def edit(root, ttf, texts, report):
     shape = [(w.type, w.name, w.x, w.y, w.w, w.h) for w in root.walk()]
-    bar, vol, clock = root.find('view_bar_left'), root.find('label_volume'), root.find('bar_dclock')
-    check(bar is not None and vol in bar.children and clock is not None, 'unexpected pull-down layout')
-    report.append(f'label_volume {resize(vol, VOLUME)}')
-    px = int(vol.get('style:normal:font_size'))
-    need = awtk_width(ttf, VOLUME_MAX, px)
-    m = re.fullmatch(r'default\(r=1,c=0,x=(\d+),s=(\d+)\)', bar.get('children_layout') or '')
-    check(m, f'view_bar_left children_layout {bar.get("children_layout")!r}')
-    x0, sp = int(m.group(1)), int(m.group(2))
-    if need <= STOCK_VOLUME_W and (vol.w, sp) != (STOCK_VOLUME_W, STOCK_SPACING):
-        gaps = len(bar.children) - 1
-        end = lambda: x0 + sum(c.w for c in bar.children) + gaps * int(re.search(r's=(\d+)', bar.get('children_layout')).group(1))
-        before = end()
-        report.append(f'label_volume {vol.w} -> {STOCK_VOLUME_W} px, spacing {sp} -> {STOCK_SPACING} (stock: "{VOLUME_MAX}" is {need} px at {px})')
-        vol.w = STOCK_VOLUME_W
-        bar.set('children_layout', f'default(r=1,c=0,x={x0},s={STOCK_SPACING})')
-        check(end() == before, 'the row end moved')
+    sysbar = root.find('view_sysbar')
+    check(sysbar is not None and all(sysbar.find(n) is not None for n in statusbar.NAMES), 'unexpected pull-down layout')
+    # the pull-down's copy of the status bar is laid out from the real bar's table (tools/statusbar.py): identical
+    # positions, sizes and styles, on the real bar's black
+    statusbar.apply(sysbar)
+    for st in statusbar.STATES: sysbar.set(f'style:{st}:bg_color', statusbar.BAR_BG)
+    vol, clock = sysbar.find('label_volume'), sysbar.find('bar_dclock')
+    px = int(vol.get('style:normal:font_size')); need = awtk_width(ttf, VOLUME_MAX, px)
     check(need <= vol.w, f'"{VOLUME_MAX}" needs {need} px at {px}, label_volume is {vol.w}')
-    report.append(f'bar_dclock {resize(clock, CLOCK, ("normal",))}')
     cpx = int(clock.get('style:normal:font_size')); cw = awtk_width(ttf, CLOCK_MAX, cpx)
     check(cw <= clock.w, f'"{CLOCK_MAX}" needs {cw} px at {cpx}, the clock box is {clock.w}')
-    report.append(f'"{VOLUME_MAX}" {need}/{vol.w} px, "{CLOCK_MAX}" {cw}/{clock.w} px')
+    report.append(f'status bar as the real one (statusbar.py): "{VOLUME_MAX}" {need}/{vol.w} px at {px}, "{CLOCK_MAX}" {cw}/{clock.w} px at {cpx}')
     for name in TILES:
         w = root.find(name); check(w is not None and w.type == 'label', f'{name} missing')
         spx = int(w.get('style:normal:font_size'))
@@ -152,7 +140,8 @@ def edit(root, ttf, texts, report):
                           f'(none in {"/".join(MUST_FIT)}); still over: {", ".join(over(tpx, w.w))}')
     report.append(f'tiles {changed}')
     after = [(w.type, w.name, w.x, w.y, w.w, w.h) for w in root.walk()]
-    moved = [a for a, b in zip(shape, after) if a != b and a[1] != 'label_volume' and a[1] not in TILES]   # the volume label's width and the caption boxes
+    bar_names = {w.name for w in sysbar.walk()}
+    moved = [a for a, b in zip(shape, after) if a != b and a[1] not in bar_names and a[1] not in TILES]   # the bar's own widgets and the caption boxes
     check(len(shape) == len(after) and not moved, f'widgets moved: {moved}')
 
 

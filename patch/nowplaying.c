@@ -1,4 +1,4 @@
-/* M1 Pod Now Playing: the stock playing_page (ui/playing_page.bin, tools/mod_nowplaying.py) gets a cover-tinted
+/* M1+ Pod Now Playing: the stock playing_page (ui/playing_page.bin, tools/mod_nowplaying.py) gets a cover-tinted
  * background, rounded cover corners that match it, and a remaining-time label that the assets cannot give it.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
@@ -6,16 +6,20 @@
  * One hook, playing_page_init (0x53d1e4): the page's init, run when Now Playing is built, never at boot or in the
  * main loop. It runs the stock function to completion and then, unless the kill switch /mnt/mmc/m1pod-off exists,
  * starts a page-scoped 500 ms timer (np_tick) and registers EVT_DESTROY on the window, which removes the timer.
- * The timer does two things and nothing else:
+ * The timer does three things and nothing else:
  *   - the tint: demo writes the track's cover to /tmp/coverpic.jpg or /tmp/externpic.jpg (parseplaycover_thd,
  *     source type word 0x97cad8: 2 and 3/5; 1 while it works); when the file changes (a hash of its bytes) the
  *     picture is decoded by the stock loader, box-averaged to one colour (patch/covercache.c) and np_tone turns that
- *     into a dark, slightly desaturated tone that is set as the window's bg_color (widget_set_style); a static
+ *     into a dark, a little desaturated tone that is set as the window's bg_color (widget_set_style); a static
  *     gradient image over it (ui/playing_page.bin, np_tint.png) fades it to black towards the bottom. No cover, or a
  *     source that is not a JPEG file: the neutral dark tone.
  *   - the remaining time: label_playlen carries the total (stock rewrites it on every tick); np_remaining, a label
  *     of the asset, shows "-mm:ss" from get_playtimeandlength while that call gives a length, and label_playlen
  *     shows again whenever it does not.
+ *   - the info page's lines (np_info): rewritten as "Label: value" with spaced units, only when stock wrote them anew.
+ * EXPERIMENTAL, the status bar: while the page is in front its bg_color is the page's colour on the first row (np_bar_color),
+ * set from np_set_color; EVT_WINDOW_TO_BACKGROUND, the destroy, a replaced page and the tick's top-window check put the stock
+ * black back (np_bar_black). Nothing is done unless both window events are registered.
  * The cover is square (AWTK cannot clip an image); its four corners are painted over in the colour the window has
  * there (the tone under the gradient), anti-aliased, from the cover widget's own EVT_AFTER_PAINT: 4 x 12 x 12 pixels
  * of a table np_corner_init computes once, a few dozen canvas_fill_rect calls, and only when the cover repaints.
@@ -25,86 +29,93 @@
 #include "offsets.inc"
 #include "stock.h"
 #include "covercache.h"
+#include "home.h"
+#include "i18n.h"
+#include "common.h"
 
-#define KILL_FILE "/mnt/mmc/m1pod-off"
-#define F_OK 0
 
 static struct {
     void *win, *rem, *tot; /* the window, np_remaining (ours), label_playlen (stock) */
+    void *pt;              /* label_playtime (stock's elapsed time), 0 if the page lacks it */
+    unsigned pdone;        /* the hash of the text label_playtime held after our last look */
     unsigned timer;        /* the repeating np_tick timer */
     unsigned key;          /* what the colour was last made from: 0 nothing yet, NP_KEY_NEUTRAL, or a file's hash */
     unsigned color;        /* the window's bg_color as 0x00BBGGRR (what the corners are painted from) */
     int shown;             /* the seconds np_remaining shows, -1 none */
     int own;               /* 1: np_remaining is the visible label, 0: label_playlen is */
+    int fg;                /* 1 from the page's start and EVT_WINDOW_TO_FOREGROUND, 0 after EVT_WINDOW_TO_BACKGROUND */
+    int barok;             /* 1: both window events are registered, so the status bar may be tinted (else it never is) */
+    int bar;               /* 1: the status bar's bg_color is ours (np_bar_color) and must go back to black */
+    void *info[NP_INFO_N]; /* the info page's labels (np_info_names), 0 for one the page lacks */
+    unsigned done[NP_INFO_N]; /* the hash of the text each label held after our last look: stock's text, or what we wrote */
     unsigned char corner[NP_ART_R * NP_ART_R]; /* the top left corner's coverage outside the arc, 0..255 */
 } np __attribute__((section(".scratch")));
 
-/* A dark, slightly desaturated tone of the cover's average colour (r, g, b bytes), as a color_t word
+/* A dark, a little desaturated tone of the cover's average colour (r, g, b bytes), as a color_t word
  * (0xAABBGGRR, alpha ff). Value: NP_V_MIN + v * (NP_V_MAX - NP_V_MIN) / 255 for the brightest channel v; every
  * channel keeps NP_SAT_NUM / NP_SAT_DEN of its distance from v (a grey stays grey). A black cover is the neutral
  * tone. With NP_V_MAX 192 the white title and the #AAAAAA lines keep 4.5:1 over the gradient (test/pod/nowplaying.py). */
 __attribute__((noinline)) unsigned np_tone(unsigned r, unsigned g, unsigned b) {
-    unsigned v = r > g ? r : g, c[3], i, vt;
-    if (b > v) v = b;
-    if (!v) return NP_NEUTRAL;
-    c[0] = r, c[1] = g, c[2] = b;
-    vt = NP_V_MIN + v * (NP_V_MAX - NP_V_MIN) / 255;
-    for (i = 0; i < 3; ++i) c[i] = vt - vt * NP_SAT_NUM * (v - c[i]) / (NP_SAT_DEN * v);
-    return 0xff000000u | c[0] | c[1] << 8 | c[2] << 16;
+    return pod_tone(r, g, b); /* patch/common.c, shared with the album page's tint */
 }
 
-/* "-mm:ss", or "-hh:mm:ss" from an hour on: the seconds left, as stock's own clock (toolsTimeItoa) prints
- * the elapsed time. A position past the end shows -00:00. */
+/* A clock without a leading zero, as Apple Music prints it: "m:ss", or "h:mm:ss" from an hour on; neg puts a "-" first. */
+__attribute__((noinline)) void np_format_clock(char *out, unsigned size, int secs, int neg) {
+    const char *sign = neg ? "-" : "";
+    if (secs < 0) secs = 0;
+    if (secs >= 3600) snprintf(out, size, "%s%d:%02d:%02d", sign, secs / 3600, secs / 60 % 60, secs % 60);
+    else snprintf(out, size, "%s%d:%02d", sign, secs / 60, secs % 60);
+}
+
+/* "-m:ss", or "-h:mm:ss" from an hour on: the seconds left. A position past the end shows -0:00. */
 __attribute__((noinline)) void np_format_remaining(char *out, unsigned size, int pos, int len) {
-    int left = len - pos;
-    if (left < 0) left = 0;
-    if (left >= 3600) snprintf(out, size, "-%02d:%02d:%02d", left / 3600, left / 60 % 60, left % 60);
-    else snprintf(out, size, "-%02d:%02d", left / 60, left % 60);
+    np_format_clock(out, size, len - pos, 1);
+}
+
+/* Stock's elapsed text ("mm:ss" or "hh:mm:ss", digits and colons only, at most 3 digits a group) as seconds; -1 when it is
+ * anything else (the label is then left as stock wrote it). */
+__attribute__((noinline)) int np_parse_clock(const char *s) {
+    int groups = 0, val[3] = {0, 0, 0}, digits = 0;
+    if (!*s) return -1;
+    for (;; ++s) {
+        if (*s >= '0' && *s <= '9') {
+            if (++digits > 3) return -1;
+            val[groups] = val[groups] * 10 + (*s - '0');
+        } else if (*s == ':' || !*s) {
+            if (!digits) return -1;
+            ++groups, digits = 0;
+            if (!*s) break;
+            if (groups == 3) return -1;
+        } else return -1;
+    }
+    if (groups == 2) return val[0] * 60 + val[1];
+    if (groups == 3) return val[0] * 3600 + val[1] * 60 + val[2];
+    return -1;
 }
 
 /* The gradient's alpha on window row y (np_tint.png: black, NP_ALPHA_TOP at the first row to NP_ALPHA_BOTTOM at the last). */
 __attribute__((noinline)) unsigned np_alpha(unsigned y) {
-    return NP_ALPHA_TOP + ((NP_ALPHA_BOTTOM - NP_ALPHA_TOP) * y + (NP_WIN_H - 1) / 2) / (NP_WIN_H - 1);
+    return pod_alpha(y, NP_ALPHA_TOP, NP_ALPHA_BOTTOM, NP_WIN_H);
 }
 
 /* color (0x..BBGGRR) as the window shows it on row y: under the black gradient. */
 __attribute__((noinline)) unsigned np_shade(unsigned color, unsigned y) {
-    unsigned keep = 255 - np_alpha(y);
-    return (color & 255) * keep / 255 | (color >> 8 & 255) * keep / 255 << 8 | (color >> 16 & 255) * keep / 255 << 16;
+    return pod_shade(color, y, NP_ALPHA_TOP, NP_ALPHA_BOTTOM, NP_WIN_H);
 }
 
 /* The coverage of the area outside a quarter circle of radius NP_ART_R in the corner square of NP_ART_R pixels
  * (the circle's centre at the square's inner corner), 0..255: each pixel is sampled 8 x 8 times. The same numbers
  * as the PNG mask of the earlier builds (test/pod/nowplaying.py). */
 __attribute__((noinline)) void np_corner_init(void) {
-    unsigned x, y, i, j, n, c = 2 * 8 * NP_ART_R;
-    for (y = 0; y < NP_ART_R; ++y)
-        for (x = 0; x < NP_ART_R; ++x) {
-            for (n = 0, i = 0; i < 8; ++i)
-                for (j = 0; j < 8; ++j) {
-                    int dx = (int)(2 * (x * 8 + i) + 1) - (int)c, dy = (int)(2 * (y * 8 + j) + 1) - (int)c;
-                    n += (unsigned)(dx * dx + dy * dy) > c * c;
-                }
-            np.corner[y * NP_ART_R + x] = (unsigned char)((n * 255 + 32) / 64);
-        }
+    pod_corner_fill(np.corner, NP_ART_R);
 }
 
 /* The cover widget's EVT_AFTER_PAINT: the four corners, in widget coordinates (the stock paint only translates). */
 static int np_on_art_paint(void *ctx, void *e) {
     void *canvas = e ? *(void **)((char *)e + EVENT_PAINT_CANVAS) : (void *)0;
-    unsigned k, x, y;
     (void)ctx;
     if (!canvas || !np.win) return RET_OK;
-    for (k = 0; k < 4; ++k)
-        for (y = 0; y < NP_ART_R; ++y) {
-            unsigned ly = k & 2 ? NP_ART - 1 - y : y, shade = np_shade(np.color, NP_ART_Y + ly);
-            for (x = 0; x < NP_ART_R; ++x) {
-                unsigned a = np.corner[y * NP_ART_R + x];
-                if (!a) continue;
-                canvas_set_fill_color(canvas, shade | a << 24);
-                canvas_fill_rect(canvas, k & 1 ? NP_ART - 1 - x : x, ly, 1, 1);
-            }
-        }
+    pod_corners(canvas, np.corner, NP_ART_R, NP_ART, np.color, NP_ART_Y, NP_ALPHA_TOP, NP_ALPHA_BOTTOM, NP_WIN_H);
     return RET_OK;
 }
 
@@ -124,6 +135,34 @@ __attribute__((noinline)) unsigned np_file_key(const char *path) {
     return total ? h | !h : 0;
 }
 
+/* EXPERIMENTAL: the status bar takes the colour the page has on its first row, so the bar and the page read as one surface
+ * (pod_bar_tint / pod_bar_black, patch/common.c, shared with the album page). np_bar_color is np_shade(color, 0), darkened
+ * until the bar's white glyphs keep 4.5:1 (pod_bar_color). */
+__attribute__((noinline)) unsigned np_bar_color(unsigned color) {
+    return pod_bar_color(np_shade(color, 0));
+}
+
+/* The bar in the page's colour, while the page is in front and its events are registered. */
+static void np_bar_apply(void) {
+    if (np.barok && np.fg && pod_bar_tint(np.win, np_bar_color(np.color))) np.bar = 1; /* a failed call keeps what the bar has (and owes) */
+}
+
+/* The stock black, if the bar is ours. Called on every way out: background, destroy, a window above, a replaced page. A page
+ * that took the bar over since (the album page on Back) keeps it: only the owner restores. */
+static void np_bar_black(void) {
+    if (!np.bar) return;
+    np.bar = 0;
+    pod_bar_black(np.win);
+}
+
+/* The timer's check, for what the events missed: the bar is ours only while the page is the top normal window. A dialog
+ * (the pull-down) is not a normal window; its EVT_WINDOW_TO_BACKGROUND has cleared np.fg. */
+static void np_bar_sync(void) {
+    int top = pod_is_top(np.win);
+    if (np.bar && !top) np_bar_black();
+    else if (!np.bar && top) np_bar_apply();
+}
+
 static void np_set_color(unsigned color) {
     unsigned v[4]; /* value_t: type at 0, the uint32 at 8 */
     memset(v, 0, sizeof v);
@@ -131,6 +170,7 @@ static void np_set_color(unsigned color) {
     if (widget_set_style(np.win, "normal:bg_color", v) != RET_OK) return;
     np.color = color & 0xffffff;
     widget_invalidate_force(np.win, (void *)0);
+    np_bar_apply();
 }
 
 /* The cover file of the source type, or NULL for a source with no JPEG file; busy is set while demo is still making it. */
@@ -145,8 +185,9 @@ static const char *np_cover_file(int *busy) {
 static void np_cover(void) {
     int busy;
     const char *path = np_cover_file(&busy);
-    unsigned key, px;
+    unsigned key, px, album, tone;
     char url[40];
+    void *track;
     if (busy) return; /* the file is being replaced: keep the colour */
     if (!path) { /* no picture file: the neutral tone, once */
         if (np.key != NP_KEY_NEUTRAL) np.key = NP_KEY_NEUTRAL, np_set_color(NP_NEUTRAL);
@@ -156,8 +197,18 @@ static void np_cover(void) {
     if (!key || key == np.key) return; /* unreadable: try again next tick; unchanged: nothing to do */
     if (*(volatile int *)COVER_SRC == COVER_SRC_BUSY) return; /* demo started over while we read */
     np.key = key;
+    track = cc_playing();   /* the track's album: its tone may be known (the album page's, an earlier play); an untagged one has no key */
+    album = track && *cc_str(track, REC_ALBUM) ? cc_album_key(track) : 0;
+    if (album && pod_tone_get(album, &tone)) {
+        np_set_color(tone);
+        return;
+    }
     snprintf(url, sizeof url, "file://%s", path);
-    if (cc_decode(np.win, url, 1, 1, 1, &px)) np_set_color(np_tone(px & 255, px >> 8 & 255, px >> 16 & 255));
+    if (cc_decode(np.win, url, 1, 1, 1, &px)) {
+        tone = np_tone(px & 255, px >> 8 & 255, px >> 16 & 255);
+        np_set_color(tone);
+        pod_tone_put(album, tone);
+    }
 }
 
 /* np_remaining is the visible label while the player gives a length, label_playlen (stock's total) otherwise. */
@@ -186,33 +237,180 @@ static void np_time(void) {
     np_label(1);
 }
 
+/* The elapsed label (label_playtime, stock rewrites it on its own tick): reformatted without the leading zero, only when its
+ * text is not the one we left (np.pdone: the hash of what it held after our last look), so there is no rewrite loop. A text
+ * that is not a clock, or that was cut short, is left as stock wrote it. */
+unsigned np_hash(const char *s);
+static void np_elapsed(void) {
+    char s[24], out[24];
+    int secs;
+    unsigned n, h;
+    if (!np.pt || widget_get_text_utf8(np.pt, s, sizeof s) != RET_OK) return;
+    for (n = 0; n < sizeof s && s[n]; ++n) {}
+    if (!n || n >= sizeof s - 1) return;
+    h = np_hash(s);
+    if (h == np.pdone) return;
+    np.pdone = h; /* whatever happens below, this text is not looked at again */
+    secs = np_parse_clock(s);
+    if (secs < 0) return;
+    np_format_clock(out, sizeof out, secs, 0);
+    for (n = 0; out[n] == s[n] && s[n]; ++n) {}
+    if (out[n] == s[n]) return; /* already as wanted */
+    if (widget_set_text_utf8(np.pt, out) == RET_OK) np.pdone = np_hash(out);
+}
+
+/* The info page's lines. Stock writes them when the track changes (show_player_face 0x53bab4 -> the fill 0x539c40, only
+ * while its "changed" flags are set; the page timer calls it every tick but it fills only then): "%s:%s" for album,
+ * genre, year, location, "%s:%.2fMB" for the size, "%s|%.1fkHz|%dbit|%dkbps" (the quality line, label_info), the label
+ * and the "Unknown" of a missing value in the app's language (getFormatString: player_unknown, player_location,
+ * player_filesize ...). Each line is rewritten as "Label: value" with spaced units ("35.92 MB", "16-bit", "950 kbps",
+ * "44.1 kHz"); the Genre and Year labels are our own keys (stock's "Genres" and "Era" read poorly or wrong in
+ * several languages); everything else keeps the stock label and value text, so the language is the stock one.
+ * np.done remembers the hash of what each label held after our last look, so a line is rewritten only when stock has
+ * written it again, never in a loop; anything that does not look as expected is left as stock wrote it. */
+static const char *const np_info_names[NP_INFO_N] = {"label_info", "label_album", "label_genre", "label_year", "label_size", "label_location"};
+
+typedef struct { char *p, *end; } np_out;
+#define NP_UNIT_QUALITY 1 /* kHz, kbps and bit after a digit */
+#define NP_UNIT_SIZE 2    /* MB after a digit */
+
+static void np_put(np_out *o, char c) { if (o->p < o->end) *o->p++ = c; }
+static void np_puts(np_out *o, const char *s) { while (*s) np_put(o, *s++); }
+static int np_starts(const char *s, const char *w) {
+    while (*w) if (*s++ != *w++) return 0;
+    return 1;
+}
+static int np_digit(char c) { return c >= '0' && c <= '9'; }
+
+__attribute__((noinline)) unsigned np_hash(const char *s) {
+    unsigned h = 2166136261u;
+    while (*s) h = (h ^ (unsigned char)*s++) * 16777619u;
+    return h | !h;
+}
+
+/* v copied with the unit spaces of `units`; with `spaced` a quality line's bars get a space on each side. */
+static void np_value(const char *v, np_out *o, int units, int spaced) {
+    const char *p;
+    for (p = v; *p; ++p) {
+        int digit = p > v && np_digit(p[-1]);
+        if (*p == '|' && (units & NP_UNIT_QUALITY)) {
+            if (spaced && p > v && p[-1] != ' ') np_put(o, ' ');
+            np_put(o, '|');
+            if (spaced && p[1] && p[1] != ' ') np_put(o, ' ');
+        } else if (digit && (units & NP_UNIT_QUALITY) && np_starts(p, "kHz")) np_puts(o, " kHz"), p += 2;
+        else if (digit && (units & NP_UNIT_QUALITY) && np_starts(p, "kbps")) np_puts(o, " kbps"), p += 3;
+        else if (digit && (units & NP_UNIT_QUALITY) && np_starts(p, "bit")) np_puts(o, "-bit"), p += 2;
+        else if (digit && (units & NP_UNIT_SIZE) && np_starts(p, "MB")) np_puts(o, " MB"), p += 1;
+        else np_put(o, *p);
+    }
+}
+
+/* The rewritten text of label i from the stock text s, in out; 0 when there is nothing to do or it does not fit. */
+__attribute__((noinline)) int np_info_text(int i, const char *s, char *out, unsigned size) {
+    np_out o;
+    const char *colon = s, *v;
+    unsigned len = 0;
+    o.p = out, o.end = out + size - 1;
+    if (i == 0) {
+        np_value(s, &o, NP_UNIT_QUALITY, 1);
+        len = (unsigned)(o.p - out);
+        if (len > NP_INFO_SPACED) { /* too wide for the label with its bars spaced: tight bars */
+            o.p = out;
+            np_value(s, &o, NP_UNIT_QUALITY, 0);
+        }
+    } else {
+        while (*colon && *colon != ':') ++colon;
+        if (!*colon || colon == s) return 0;
+        if (i == 2 || i == 3) {
+            const char *t = TR(i == 2 ? "Genre" : "Year");
+            if (!t || !*t) return 0;
+            np_puts(&o, t);
+        } else {
+            for (v = s; v < colon; ++v) np_put(&o, *v);
+        }
+        np_puts(&o, ": ");
+        for (v = colon + 1; *v == ' '; ++v) {}
+        np_value(v, &o, i == 4 ? NP_UNIT_SIZE : 0, 0);
+    }
+    if (o.p >= o.end) return 0;
+    *o.p = 0;
+    return 1;
+}
+
+static void np_info(void) {
+    char s[NP_INFO_BUF], out[NP_INFO_BUF + 64];
+    unsigned i, h, n;
+    for (i = 0; i < NP_INFO_N; ++i) {
+        if (!np.info[i] || widget_get_text_utf8(np.info[i], s, sizeof s) != RET_OK) continue;
+        for (n = 0; n < sizeof s && s[n]; ++n) {}
+        if (!n || n >= sizeof s - 1) continue; /* empty, or maybe cut short: leave it */
+        h = np_hash(s);
+        if (h == np.done[i]) continue;         /* the text we last left (or saw) */
+        np.done[i] = h;                        /* whatever happens below, this text is not looked at again */
+        if (!np_info_text((int)i, s, out, sizeof out)) continue;
+        for (n = 0; out[n] == s[n] && s[n]; ++n) {}
+        if (out[n] == s[n]) continue;          /* already as wanted */
+        if (widget_set_text_utf8(np.info[i], out) == RET_OK) np.done[i] = np_hash(out);
+    }
+}
+
+static void np_work(void) {
+    np_cover();
+    np_time();
+    np_elapsed();
+    np_info();
+}
+
 static int np_tick(const void *timer) {
     (void)timer;
     if (!np.win) return RET_OK; /* not ours any more: a timer that returns RET_OK ends */
-    np_cover();
-    np_time();
+    np_bar_sync();
+    np_work();
     return RET_REPEAT;
+}
+
+/* The page is over (or replaced): the timer goes, the status bar is black again, the state is cleared. */
+static void np_stop(void) {
+    np_bar_black();
+    if (np.timer) timer_remove(np.timer);
+    memset(&np, 0, sizeof np);
 }
 
 static int np_on_destroy(void *ctx, void *e) {
     (void)e;
     if (ctx != np.win) return RET_OK; /* an earlier page's end: the new one keeps its state */
-    if (np.timer) timer_remove(np.timer);
-    memset(&np, 0, sizeof np);
+    np_stop();
+    return RET_OK;
+}
+
+/* Another window came over the page (a page, a dialog, the pull-down): the bar is black while it covers. */
+static int np_on_background(void *ctx, void *e) {
+    (void)e;
+    if (!np.win || ctx != np.win) return RET_OK;
+    np.fg = 0;
+    np_bar_black();
+    return RET_OK;
+}
+
+static int np_on_foreground(void *ctx, void *e) {
+    (void)e;
+    if (!np.win || ctx != np.win) return RET_OK;
+    np.fg = 1;
+    np_bar_apply();
     return RET_OK;
 }
 
 static void np_start(void *win) {
     void *art;
-    if (access(KILL_FILE, F_OK) == 0) return;
-    if (np.win) { /* an earlier page that never said it was gone */
-        if (np.timer) timer_remove(np.timer);
-        memset(&np, 0, sizeof np);
-    }
+    unsigned n;
+    if (access(KILL_SD, F_OK) == 0) return;
+    if (np.win) np_stop(); /* an earlier page that never said it was gone */
     np.win = win;
     np.rem = widget_lookup(win, "np_remaining", 1);
     np.tot = widget_lookup(win, "label_playlen", 1);
+    np.pt = widget_lookup(win, "label_playtime", 1);
     np.shown = -1;
+    for (n = 0; n < NP_INFO_N; ++n) np.info[n] = widget_lookup(win, np_info_names[n], 1);
     np.color = NP_NEUTRAL & 0xffffff; /* the asset's window colour */
     if (!widget_on(win, EVT_DESTROY, np_on_destroy, win)) { memset(&np, 0, sizeof np); return; }
     np.timer = timer_add(np_tick, (void *)0, NP_TICK_MS);
@@ -225,7 +423,10 @@ static void np_start(void *win) {
         np_corner_init();
         widget_on(art, EVT_AFTER_PAINT, np_on_art_paint, (void *)0);
     }
-    np_tick((const void *)0);
+    np.fg = 1;
+    np.barok = widget_on(win, EVT_WINDOW_TO_BG, np_on_background, win) && widget_on(win, EVT_WINDOW_TO_FG, np_on_foreground, win);
+    np_bar_apply(); /* the asset's tone until the cover's is known */
+    np_work();
 }
 
 /* The hook (tools/pod.py PLAYING_INIT): stock first, then ours. */

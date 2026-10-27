@@ -19,11 +19,6 @@ This step rewrites that file by code point and keeps everything the layout depen
            SHS is read from the pinned release zip in fonts/ (mod_font.py --fetch), not committed.
   strip    hinting (fpgm, prep, cvt, glyph programs), gasp, DSIG and glyph names (post 3.0) dropped:
            stb_truetype reads none of them.
-  pulldown the pull-down's own status bar (ui/dialog/dropdown_dialog.bin, default and theme1) shows the
-           volume at 20 px in a 30 px label; "100" no longer fits it with the new font (Inter: 33 px as
-           AWTK lays it out, awtk_text.StbText), so label_volume grows to that width and its row's
-           spacing (children_layout s) shrinks by as much, so img_digital, the clock and everything
-           right of the label stay where they are. Skipped if "100" fits (the stock font: 30 px).
   kept     unitsPerEm, hhea ascender/descender/lineGap, OS/2, head dates, GDEF/GPOS/GSUB (pruned
            to the remaining glyphs), every other stock glyph (symbols, CJK punctuation, fullwidth
            forms, Thai, Arabic, ...). The name table's copyright line gains the Inter and Source Han
@@ -47,8 +42,8 @@ FONT = 'rootfs/release/assets/default/raw/fonts/default.ttf'
 FONT_SHA = '9a16af0aead992a2ad64f86d0de8d38bea60d6f605d42ffd0501684666161872'      # stock V2.1 (= mod_boot.FONT_SHA)
 
 INTER_ASSET = 'assets/fonts/Inter-m1plus.ttf'
-INTER_SHA = '3c9bfd5ffd477bd0e6ff3c8102e7bc7fc64913406b25a9282f9ae9069ca006e7'   # tools/font_inter.py output
-INTER_WEIGHT, INTER_EM = 'Regular', 252
+INTER_SHA = 'a9909568a98305254788e3927126a6d4bf1b0d62079344aa5496f1c07ebb7bec'   # tools/font_inter.py output
+INTER_WEIGHT, INTER_EM = 'Medium', 252
 INTER_TRACKING = 8               # units cut from every Inter advance (track(); --tracking, 0 = Inter as designed):
                                  # English UI strings and titles then average Arial's width at 16/18/21 px
 INTER_RANGES = [(0x0020, 0x007E), (0x00A0, 0x024F),     # Basic Latin, Latin-1, Latin Extended-A/B
@@ -216,43 +211,6 @@ def verify(stock, new, rep):
     check(all(c in rep['inter'] for c in added), 'unexpected new code points')
     return dict(stock_cps=len(sm), new_cps=len(nm), replaced=len(replaced & set(sm)), added=len(added), unchanged=len(same))
 
-PULLDOWNS = [f'rootfs/release/assets/{t}/raw/ui/dialog/dropdown_dialog.bin' for t in ('default', 'theme1')]
-VOLUME_MAX = '100'
-
-def fit_pulldown(work):
-    """Widen the pull-down's label_volume to the AWTK width of "100" in the tree's font, taking the
-    pixels from the spacing of its row (view_bar_left, children_layout default(r=1,c=0,x=14,s=4)), so
-    the row's last child (img_digital) does not move. Returns [(rel, old w, new w, old s, new s)]."""
-    import re
-    from awtk_text import Ttf, awtk_width
-    ttf = Ttf(os.path.join(work, FONT)); done = []
-    for rel in PULLDOWNS:
-        path = os.path.join(work, rel)
-        if not os.path.exists(path): continue
-        def edit(root):
-            bar, lab = root.find('view_bar_left'), root.find('label_volume')
-            check(bar is not None and lab is not None and lab in bar.children, f'{rel}: unexpected pull-down layout')
-            sizes = {lab.get(f'style:{st}:font_size') for st in ('normal', 'disable', 'focused')}
-            check(len(sizes) == 1 and None not in sizes, f'{rel}: label_volume font sizes {sizes}')
-            need = awtk_width(ttf, VOLUME_MAX, int(sizes.pop()))
-            if need <= lab.w: return
-            lay = bar.get('children_layout'); m = re.fullmatch(r'default\(r=1,c=0,x=(\d+),s=(\d+)\)', lay or '')
-            check(m is not None, f'{rel}: view_bar_left children_layout {lay!r}')
-            x0, sp = int(m.group(1)), int(m.group(2))
-            gaps = len(bar.children) - 1
-            cut = -(-(need - lab.w) // gaps)                  # spacing taken from each gap, rounded up
-            check(sp - cut >= 1, f'{rel}: "{VOLUME_MAX}" needs {need} px, the row cannot give that much')
-            row = lambda ws, s_: x0 + sum(ws) + s_ * gaps     # where the row ends (fixed children widths)
-            ws = [c.w for c in bar.children]
-            old_end = row(ws, sp)
-            done.append((rel, lab.w, need, sp, sp - cut))
-            lab.w = need
-            bar.set('children_layout', f'default(r=1,c=0,x={x0},s={sp - cut})')
-            new_end = row([c.w for c in bar.children], sp - cut)
-            check(new_end <= old_end <= bar.w, f'{rel}: the row now ends at {new_end}, past {old_end}')
-        edit_ui(path, edit)
-    return done
-
 def apply(work, shs_zip=paths.SHS_ZIP):
     p = os.path.join(work, FONT)
     stock = open(p, 'rb').read()
@@ -264,8 +222,6 @@ def apply(work, shs_zip=paths.SHS_ZIP):
     new, rep = merge(stock, ib, shs_font(shs_zip))
     r = verify(stock, new, rep)
     write_keep_mode(p, new)
-    for rel, w0, w1, s0, s1 in fit_pulldown(work):
-        print(f'pulldown: {rel}: label_volume {w0} -> {w1} px ("{VOLUME_MAX}" as AWTK lays it out), row spacing {s0} -> {s1}')
     print(f'font: {FONT} {len(stock)} -> {len(new)} bytes, sha256 {sha256(new)}; {r["stock_cps"]} stock code points all '
           f'kept with ink, {r["replaced"]} replaced, {r["added"]} added, {r["unchanged"]} unchanged; vertical metrics stock')
     return rep, r

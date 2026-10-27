@@ -2,12 +2,13 @@
 the stock translation, every language's payload output, widths per language, glyphs in the shipped font."""
 import importlib.util, os, re, stat, struct, sys
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
-import awtk_strings, awtk_style, pod_i18n
+import awtk_strings, awtk_style, mod_icons, pod_i18n
 from awtk_text import Ttf, StbText
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
-SAME_AS_ENGLISH = {'Cover Flow', 'Playlists', 'Genres', 'Extras', 'Albums', 'Start in M1 Pod', 'Artists'}   # translations that are the English word by design
+SAME_AS_ENGLISH = {'Cover Flow', 'Playlists', 'Genres', 'Extras', 'Albums', 'Start in M1+ Pod', 'Artists'}   # translations that are the English word by design
+SAME_AS_ENGLISH |= {'Genre', 'Screenshot'}    # French and German write Genre the same; German and Italian say Screenshot
 
 
 def sibling(name):
@@ -97,7 +98,7 @@ def run(ctx):
     expect(tree is not None and used, 'the pages use keys')
     cover = awtk_ui.parse(open(os.path.join(WORK, RAW, 'ui', 'm1pod_cover.bin'), 'rb').read())
     expect(cover.find('btn_cancel').get('tr_text') == 'Cancel', 'the Cancel button is translated')
-    expect(pod_i18n.key_for('Settings') == 'cdrippersettings' and pod_i18n.key_for('Hi-Res') == 'hr' and pod_i18n.key_for('M1 Pod') is None
+    expect(pod_i18n.key_for('Settings') == 'cdrippersettings' and pod_i18n.key_for('Hi-Res') == 'hr' and pod_i18n.key_for('M1+ Pod') is None
            and pod_i18n.key_for('Tidal') is None and pod_i18n.key_for('Albums') == 'Albums', 'stock keys where the English is the same, brand names plain')
 
     # 4. The payload's source: nothing user-visible bypasses the translation.
@@ -108,7 +109,7 @@ def run(ctx):
         for a in call_args(src, 'widget_set_text_utf8'):
             for inner in call_args(a, 'TR'): a = a.replace(inner, '')       # a translated key inside is fine
             for lit in literal.findall(a):
-                if lit not in ('', 'M1 Pod'): plain.append((f, lit))
+                if lit not in ('', 'M1+ Pod'): plain.append((f, lit))
         for a in call_args(src, 'toast') + call_args(src, 'pod_toast'):
             if literal.search(a) and not a.startswith('TR('): plain.append((f, a))
         for name in ('TR', 'widget_set_tr_text'):
@@ -121,7 +122,7 @@ def run(ctx):
     expect(not orphans, f'every key is used by an asset or the payload: {sorted(orphans)}')
     expect({'Landscape', 'Sort', 'Artist', 'album', 'Cover Flow'} <= used | keys_in_c and 'Cover Flow landscape' not in pod_i18n.TEXT,
            'the Settings > Cover Flow page uses its keys (rows in the asset, the value by key in the payload); the old landscape row key is gone')
-    expect(all(k in sources['home.c'] for k in ('"M1 Pod"',)), 'the Home icon keeps the brand name as plain text')
+    expect(all(k in sources['home.c'] for k in ('"M1+ Pod"',)), 'the Home icon keeps the brand name as plain text')
     expect(len(re.findall(r'locale_info_tr|widget_set_tr_text', ' '.join(pod.FUNCTIONS))) == 2 and pod.FUNCTIONS['locale_info_tr'][2] == 0x658db4
            and pod.FUNCTIONS['widget_set_tr_text'][2] == 0x66f994 and pod.FUNCTIONS['locale_info'][2] == 0x6588b0, 'the three stock translation functions are pinned')
 
@@ -168,7 +169,7 @@ def run(ctx):
         expect(text_of(m, st) == [T('Preparing covers...') + ' 0/3'], f'{loc}: the progress line is the translation and the count ({text_of(m, st)})')
         # Albums grid with no library
         m = Machine(); m.set_language(loc)
-        for w in ('btn_return', 'btn_backtoplayer', 'btn_albumview', 'view_grid', 'label_status', 'label_row_title', 'label_row_sub'): m.widget(w)
+        for w in ('btn_return', 'btn_backtoplayer', 'btn_albumview', 'view_grid', 'label_status', 'label_row_title', 'label_row_sub', 'label_grid_title', 'label_grid_sub'): m.widget(w)
         m.call(PSYMS['albums_open'], count=2000000)
         expect(text_of(m, m.widgets['label_status']) == [T('Update Local Music first')], f'{loc}: the empty Albums page')
         # Shuffle: the message boxes
@@ -191,7 +192,7 @@ def run(ctx):
         am = albuminfo.AlbumMachine(); am.set_language(loc)
         item = am.header(tracks=6, year=1959)
         kids = am.kids(item)
-        expect(am.texts.get(kids[3]) == T('Play all') and am.texts.get(kids[5]) == T('Shuffle'), f'{loc}: the buttons read {T("Play all")!r} / {T("Shuffle")!r}')
+        expect(am.texts.get(kids[3]) == T('Play all') and not am.texts.get(kids[5]), f'{loc}: the pill reads {T("Play all")!r}; Shuffle is a glyph with no text')
         for n in (1, 2, 5, 11, 21, 100):
             am = albuminfo.AlbumMachine(); am.set_language(loc)
             item = am.header(tracks=n, year=1959 if n % 2 else 0)
@@ -229,26 +230,54 @@ def run(ctx):
                 k = pod_i18n.key_for(english)
                 if k and width(tr_text(loc, k), row_px) > room: over.append((page.key, english, loc, width(tr_text(loc, k), row_px), room))
     expect(not over, f'every menu, Extras, Shuffle, Settings and Main Menu row and every page title fits its label in all 13 languages ({over[:4]})')
+    albums_tree = awtk_ui.parse(open(os.path.join(WORK, RAW, 'ui', pod_pages.ALBUMS.key + '.bin'), 'rb').read())
+    albums_lbl, cf_btn = albums_tree.find('label_title'), albums_tree.find('btn_coverflow')
+    over = [(loc, width(tr_text(loc, pod_i18n.key_for('Albums')), title_px)) for loc in LOC
+            if albums_lbl.x + width(tr_text(loc, pod_i18n.key_for('Albums')), title_px) > cf_btn.x]
+    expect(not over and albums_lbl.x + albums_lbl.w == cf_btn.x == A['NAV_CF_X'], f'the Albums title ends before the Cover Flow button (x {cf_btn.x}) in all languages, at {title_px} px ({over})')
+    # the artist page's title (the artist's name, set at run time) is cut at the All albums button (NAV_VIEW_X): the page's own
+    # title text, which shows until then, fits that room in every language
+    cf_title = cover.find('label_title')
+    over = [(loc, width(tr_text(loc, pod_i18n.key_for('Cover Flow')), title_px)) for loc in LOC
+            if cf_title.x + width(tr_text(loc, pod_i18n.key_for('Cover Flow')), title_px) > A['NAV_VIEW_X']]
+    expect(not over, f'the Cover Flow title ends before the artist page\'s All albums button (x {A["NAV_VIEW_X"]}) in all languages ({over})')
     over = []
     for loc in LOC:
-        for key in ('Update Local Music first', 'Not enough memory', 'Storage unavailable', 'Too many songs to shuffle'):
+        for key in ('Update Local Music first', 'Not enough memory', 'Storage unavailable', 'Too many songs to shuffle',
+                    'Screenshot in 5 s', 'Screenshot saved', 'Screenshot failed'):
             if width(tr_text(loc, key), msg_px) > 260: over.append((loc, key))          # the message box's line is 260 px (@0x4788a0)
         for key in ('Update Local Music first', 'Library too large', 'No albums', 'Not enough memory'):
             if width(tr_text(loc, key), 20) > cover.find('label_status').w: over.append((loc, key, 'status'))
         if width(tr_text(loc, 'Preparing covers...') + ' 4000/4000', 20) > cover.find('label_status').w: over.append((loc, 'progress'))
         if width(tr_text(loc, 'Cancel'), 20) > cover.find('btn_cancel').w - 10: over.append((loc, 'Cancel'))
         if width(tr_text(loc, 'All albums'), 22) > 288: over.append((loc, 'All albums'))
-        for key in ('Play all', 'Shuffle'):
-            if width(tr_text(loc, key), 20) > A['AH_BTN_W'] - 4: over.append((loc, key, 'button'))
+        # the pill: the text is centred in a 104 px rect (194 - margins 32 + 29 - the 44 px icon square - the spacer -15)
+        if width(tr_text(loc, 'Play all'), 20) > 104: over.append((loc, 'Play all', 'pill'))
         for key in ('%d track', '%d tracks'):
-            if width('1959 \xb7 ' + tr_text(loc, key).replace('%d', '9999'), 15) > A['AH_TEXT_W']: over.append((loc, key, 'count line'))
+            if width('1959 \xb7 ' + tr_text(loc, key).replace('%d', '9999'), 13) > A['AH_TEXT_W']: over.append((loc, key, 'count line'))
         for key in pod_pages.SORT_VALUES:                              # the Sort row's value, in its own label (and the Artist/Album words in the title room)
             k = pod_i18n.key_for(key)
             if width(tr_text(loc, k), pod_ui.VALUE_PX) > pod_ui.VALUE_W - 4: over.append((loc, key, 'sort value'))
+    # The Rebuild Covers confirm: the stock dialog's wrapped label (centred white 20 px, 260 x 80 at y 25, @0x472e1c) takes at most
+    # three lines. A line breaks at a space; a CJK or Thai character is a break of its own (conservative for Thai, which has none).
+    wrap_px = px_of('label', 'label_centerwhite20_style')
+    unit = re.compile(r'[^\s⺀-鿿＀-￯฀-๿]+\s*|[⺀-鿿＀-￯฀-๿]\s*|\s+')
+
+    def wrapped(text, px, maxw):
+        lines, cur = 1, ''
+        for u in unit.findall(text):
+            if cur and width((cur + u).rstrip(), px) > maxw: lines, cur = lines + 1, ''
+            cur += u
+            while width(cur.rstrip(), px) > maxw: lines, cur = lines + 1, cur[len(cur) // 2:]     # a unit wider than a line
+        return lines
+    key = 'Rebuild all covers? This may take a few minutes.'
+    lines = {loc: wrapped(tr_text(loc, key), wrap_px, 260) for loc in LOC}
+    expect(wrap_px == 20 and max(lines.values()) <= 3, f'the Rebuild Covers confirm wraps to at most 3 lines of 260 px at {wrap_px} px in all languages ({lines})')
+    expect(all(len(pod_i18n.TEXT[key][loc].encode()) < 0x1ff for loc in LOC), 'and fits the dialog context\'s 0x200 byte text')
     for loc in LOC:      # the label and the value of the Sort row do not meet: the room left of the value, and the longest value
         longest = max(width(tr_text(loc, pod_i18n.key_for(v)), pod_ui.VALUE_PX) for v in pod_pages.SORT_VALUES)
         label = width(tr_text(loc, pod_i18n.key_for('Sort')), row_px)
-        if 64 + label + 8 > pod_ui.value_x(320) + pod_ui.VALUE_W - longest: over.append((loc, 'Sort', 'label meets value', label, longest))
+        if mod_icons.POD_TEXT_X + label + 8 > pod_ui.value_x(320) + pod_ui.VALUE_W - longest: over.append((loc, 'Sort', 'label meets value', label, longest))
     expect(not over, f'messages, the cover page, the album buttons and count line, and the Sort value fit in all languages ({over[:4]})')
 
     # 8. Glyphs: every character of every text we add, and of the stock texts we reuse, has ink in the shipped font.

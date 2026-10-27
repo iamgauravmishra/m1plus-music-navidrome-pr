@@ -100,6 +100,8 @@
 #define FLING_MS 120       /* the fling coasts for this long at the release velocity */
 #define FLING_WINDOW 80    /* ms of samples the velocity is taken over; none in it but the release, no fling */
 #define SNAP_MS 16         /* the snap animation's timer period */
+#define OVER_NUM 2          /* the rubber band's ceiling past an end: OVER_NUM / OVER_DEN of a cover (patch/coverflow.c rubber) */
+#define OVER_DEN 5
 #define SNAP_BASE_MS 120   /* an ease takes this plus SNAP_ALBUM_MS per album of travel, at most SNAP_MAX_MS */
 #define SNAP_ALBUM_MS 60
 #define SNAP_MAX_MS 360
@@ -166,6 +168,8 @@
 #define MSGINFO_KIND 1     /* dialog/msginfo_dialog context {kind, ms, text[0x200], text2[0x200]}: kind 1 one white line (@0x4786f8) */
 #define MSGINFO_MS 2000    /* as the stock "file not found" toast @0x525a04 */
 #define MSGINFO_TEXT 0x200
+#define CONFIRM_KIND_WRAP 5 /* dialog/confirminfo_dialog context, same layout: kind 5 = a centred white 20 px word-wrapped label (260 x 80 at y 25, @0x472e1c), text at +8 */
+#define CONFIRM_YES 0xa     /* navigator_to_with_context returns this for the Yes button (btn_enter); the call is modal (on_eqreset_onclick @0x49dd6c) */
 #define SHUFFLE_MAX 65536  /* Shuffle Albums/Folders sort an index of at most this many songs (q2-pod QUEUE_LIMIT) */
 
 /* ---------------------------------------------------------------------------
@@ -176,7 +180,10 @@
 #define W_Y 0x04
 #define W_W 0x08
 #define W_H 0x0c
+#define W_PARENT 0x44           /* widget_t parent: widget_restack reads it, lw $v0, 0x44($a0) @0x66a014 */
 #define W_CHILDREN_LAYOUT 0x64  /* widget_set_children_layout: sw $v0, 0x64($s0) @0x657014 */
+#define W_VT 0x70               /* widget_t vtable: widget_paint reads it, lw $v0, 0x70($s0) @0x66dd6c */
+#define SV_PAINT_CHILDREN 0xf4  /* scroll_view_t paint-children hook: scroll_view_on_paint_children calls it (lw $t9, 0xf4($s3) @0x610ed0), list_view stores 0x60c164 (sw @0x60cd10) */
 #define LAYOUT_VTABLE 0x0c      /* children_layouter_t: str_t params (12 bytes), then the vtable */
 #define LAYOUT_X_MARGIN 0x14    /* children_layouter_default_t u8s, read by its layout @0x63a5a0 */
 #define LAYOUT_SPACING 0x16
@@ -188,7 +195,11 @@
 #define ROW_ART 52              /* the album cover (rows.json ART): 1:1 thumbnails */
 #define ROW_ART_INSET 4         /* the cover's left inset on x=0 rows */
 #define ROW_SEPARATOR 4         /* list_item_style draws a 4 px separator under each list_item row */
-#define ROW_MAX_CHILDREN 16     /* the row fit leaves anything with more children to the stock layout */
+#define ROW_MARKER_IMAGE "np_row_playing"   /* the playing row's marker: 40 x 20, a 20 px wave at its right end (tools/mod_icons.py NP) */
+#define ROW_NUM_W 22           /* the album tracks' number column (rows_track_number): every digit is 10 px at 19 px by AWTK's metrics, "99" = 20 */
+#define ROW_NUM_W3 32          /* the column of a 3-digit number (a 100+ track album): "999" = 30 */
+#define ROW_NUM_STYLE "srlabel_tracknum_style"   /* label style of the number: #AAAAAA, 19 px, right aligned (tools/mod_ipodrows.py) */
+#define ROW_MAX_CHILDREN 16   /* the row fit leaves anything with more children to the stock layout */
 
 
 /* ---------------------------------------------------------------------------
@@ -198,35 +209,82 @@
  * writes it from taglib_tag_year. There is no duration column (time / time_end are CUE offsets, 0
  * for ordinary files, @0x5edb88), so the page shows none. CLASSINFO_ALL_SONGS: the byte
  * loadAlbumdetailList sets in the browsing record for the stock All songs row (0xff01, @0x4eebec).
- * Geometry in the header list_item (310 wide, the 320 px list less its scroll bar): the cover is
- * AH_ART square at AH_PAD (the cover thread renders /tmp/abp/<md5>1.jpg at AH_ART, rows.json), the
- * text column beside it, the two buttons (110x36, left-aligned, 10 px apart) side by side under both; the stock track rows follow.
+ * Geometry in the header list_item (310 wide, the 320 px list less its scroll bar; the item starts at
+ * screen x 0, so item x is screen x and everything is centred on x AH_MID = 160, not on the item's 155):
+ * the cover AH_ART square, centred (the cover thread renders /tmp/abp/<md5>1.jpg at AH_ART, rows.json),
+ * its four AH_CORNER px corners masked by images; the title, artist and "year . N tracks" lines centred in
+ * AH_TEXT_W; the round Shuffle (AH_SHUF_W) and the Play all pill (AH_PLAY_W), AH_GAP apart, centred as a
+ * pair; the stock track rows follow at AH_HDR_H.
  */
 #define REC_YEAR 0x30
 #define CLASSINFO_ALL_SONGS 8
-#define AH_PAD 12
-#define AH_ART 120
-#define AH_ART_Y 8
-#define AH_TEXT_X 144
-#define AH_TEXT_W 154
-#define AH_TITLE_Y 28
-#define AH_TITLE_H 26
-#define AH_ARTIST_Y 56
-#define AH_ARTIST_H 24
-#define AH_META_Y 82
-#define AH_META_H 22
-#define AH_BTN_Y 136
-#define AH_BTN_H 36
-#define AH_BTN_W 110
-#define AH_SHUFFLE_X 132
-#define AH_HDR_H 184
+#define AH_MID 160
+#define AH_ART 160
+#define AH_ART_X 80
+#define AH_ART_Y 6
+#define AH_CORNER 10
+#define AH_TEXT_X 17
+#define AH_TEXT_W 286
+/* vertical rhythm (tools/ah_ink.py, measured ink): cover bottom -> title capitals 16, title baseline -> artist capitals 9,
+ * artist baseline -> year digits 9, year baseline -> pill top 16; the label rects are their font size high */
+#define AH_TITLE_Y 180
+#define AH_TITLE_H 22
+#define AH_ARTIST_Y 203
+#define AH_ARTIST_H 18
+#define AH_META_Y 223
+#define AH_META_H 15
+#define AH_BTN_Y 248
+#define AH_BTN_H 44
+#define AH_SHUF_X 42
+#define AH_SHUF_W 44
+#define AH_DISC 38              /* the Shuffle disc as drawn (ah_shuffle*.png), centred in its AH_SHUF_W x AH_BTN_H touch rectangle */
+#define AH_GAP 12               /* drawn gap between the disc and the pill */
+#define AH_PLAY_X 95            /* AH_SHUF_X + (AH_SHUF_W + AH_DISC) / 2 + AH_GAP: the pill's touch rectangle starts where it is drawn */
+#define AH_PLAY_W 180
+#define AH_PILL_H 40            /* the pill as drawn (ah_pill*.png, the style's bg_image), centred in its AH_BTN_H touch rectangle */
+/* The pill's glyph and text (tools/mod_ipodrows.py PLAY_*, docs/ui.md): AWTK centres the AH_PILL_GLYPH px glyph in a
+ * square AH_BTN_H wide at margin_left, and draws the text left aligned at the square's end plus spacer. The hook sets
+ * margin_left (per state, inline) so that glyph + AH_PILL_GAP + text is centred in the pill; the style carries
+ * AH_PILL_MARGIN (the margin for an English text) for when the text cannot be measured. */
+#define AH_PILL_GLYPH 16
+#define AH_PILL_GAP 8
+#define AH_PILL_MARGIN 37
+#define AH_HDR_H 300
+/* Play all and Shuffle open Now Playing like a track tap (ah_open_player): the widget name field the stock pop loop
+ * compares (@0x525920 lw a0, 0x10(top)), at most AH_POP_MAX pages popped, and the stock Play all handler the hook takes
+ * off the button (bound @0x526368 with the item as its context) */
+#define WIDGET_NAME 0x10
+#define AH_POP_MAX 16
+#define AH_STOCK_PLAY 0x525d48u
+/* The album page's cover tint (patch/albuminfo.c, tools/mod_icons.py ah_tint): the window colour is the cover's tone (pod_tone,
+ * the constants of Now Playing's) under a black gradient image, ah_tint.png (a window sized child of the page window, first,
+ * insensitive), whose alpha runs from AH_TINT_A_TOP on window row 0 to AH_TINT_A_BOT on row AH_TINT_ROWS - 1 (the end of
+ * the header: the navbar AH_NAV_H plus AH_HDR_H) and stays there below (200: the deep tint, 78 % dark), so the transparent track rows and the scroll bar strip show a deep version of the cover colour.
+ * Only a real cover tints (the page's image is a file:// url): the placeholder disc and the All albums card stay black. The
+ * cover's corners are painted in the colour behind them from its after-paint (the cover is AH_ART_Y below the header's top,
+ * the header scrolls: window row = AH_NAV_H + AH_ART_Y - yoffset + cover row). AH_TICK_MS: the poll that waits for the cover
+ * thread's file. */
+#define AH_NAV_H 44             /* navigationbar_view (ui asset) and its buttons (rows.json); the list starts here and is AH_WIN_H - AH_NAV_H high */
+#define AH_WIN_H 450
+#define AH_TINT_A_TOP 64
+#define AH_TINT_A_BOT 200
+#define AH_TINT_ROWS 344        /* AH_NAV_H + AH_HDR_H */
+#define AH_TICK_MS 300
+/* The tone cache (patch/common.c): entries of {key, tone, stamp}, 12 bytes each. The album page names its album as the stock
+ * header does: classinfo + 0xd the title, the artist at +0x10d (+0x20d when g_class_type is 0xff14, @0x524b00). */
+#define TONE_CACHE_N 64
+#define CLASSINFO_ALBUM 0xd
+#define CLASSINFO_ARTIST 0x10d
+#define CLASSINFO_ARTIST_14 0x20d
+#define CLASS_14 0xff14
 
 /* ---------------------------------------------------------------------------
  * The Albums grid (patch/albums.c, docs/ui.md). GRID_COLS columns of GRID_COVER px square covers with GRID_GAP px
- * between them, centred (GRID_MARGIN each side: (320 - 3 * 92 - 2 * 12) / 2); under each cover a one-line title
- * GRID_TITLE_H high, GRID_TITLE_GAP below the cover; rows GRID_GAP apart; the first row GRID_GAP below the top
- * and the last GRID_GAP above the bottom. The view is the 400 px under the 50 px navbar (ui/m1pod_albums.bin,
- * tools/pod_ui.py). GRID_TILES covers stay decoded (memory: GRID_TILES * GRID_COVER^2 * 4 = 0.8 MB at most).
+ * between them, centred (GRID_MARGIN each side: (320 - 2 * 144 - 8) / 2 = 12); under each cover the album
+ * (GRID_TITLE_H high, GRID_TITLE_GAP below the cover) and the artist (GRID_SUB_H high), each one line; rows
+ * GRID_ROW_GAP apart; the first row GRID_ROW_GAP below the top and the last GRID_ROW_GAP above the bottom. The
+ * view is the 400 px under the 50 px navbar (ui/m1pod_albums.bin, tools/pod_ui.py). GRID_TILES covers stay decoded
+ * (memory: GRID_TILES * GRID_COVER^2 * 4 = 0.99 MB at most, plus the placeholder).
  * ALBUMS_DEFAULT_GRID is the mode a first use opens (1 grid, 0 list); the choice is then the setting file
  * ALBUMS_FILE. The navbar toggle button is NAV_VIEW_W wide. On the Pod pages (Albums, Artists, Cover Flow's
  * landscape switch; ui assets) it sits at NAV_VIEW_X, flush left of Now Playing (x 260); the page title ends at
@@ -239,23 +297,27 @@
  * top lines, the last line is the LIST_HAIR hairline. Colours are r,g,b,a bytes of canvas_set_fill_color's word.
  */
 #define ALBUMS_DEFAULT_GRID 1
-#define GRID_COLS 3
-#define GRID_COVER 92
-#define GRID_GAP 12
-#define GRID_MARGIN 10
+#define GRID_COLS 2
+#define GRID_COVER 144
+#define GRID_GAP 8              /* between columns */
+#define GRID_ROW_GAP 10         /* between rows, and above the first / below the last: two rows (10 + 190 + 10 + 190) fill the 400 px view exactly */
+#define GRID_MARGIN 12
 #define GRID_TITLE_GAP 4
-#define GRID_TITLE_H 22
+#define GRID_TITLE_H 22         /* the album, the grid title style (18 px white) */
+#define GRID_SUB_H 20           /* the artist, directly under it (15 px #AAAAAA) */
 #define GRID_VIEW_H 400
-#define GRID_TILES 24
+#define GRID_TILES 12           /* the ring: the cells in view, the next rows in the scroll direction, a little history behind */
 #define NAV_H 50
 #define NAV_VIEW_X 214
 #define NAV_VIEW_W 46
+#define NAV_CF_X 168            /* the Albums page's Cover Flow button, flush left of the toggle; its title ends here */
+#define NAV_CF_W 46
 #define LIST_ROW_H 64
 #define LIST_ART 52
-#define LIST_ART_X 4
+#define LIST_ART_X 10
 #define LIST_ART_Y 4
-#define LIST_TEXT_X 60
-#define LIST_TEXT_W 248
+#define LIST_TEXT_X 74          /* LIST_ART_X + LIST_ART + 12 */
+#define LIST_TEXT_W 234         /* to the 12 px right margin: 74 + 234 + 12 = 320 */
 #define LIST_TITLE_Y 7
 #define LIST_TITLE_H 24
 #define LIST_SUB_Y 33
@@ -285,8 +347,8 @@
 #define NP_NEUTRAL 0xff202020u
 #define NP_V_MIN 32
 #define NP_V_MAX 192
-#define NP_SAT_NUM 4
-#define NP_SAT_DEN 5
+#define NP_SAT_NUM 23
+#define NP_SAT_DEN 25
 /* The cover's rounded corners (painted by the payload, np_on_art_paint) and the gradient under them (np_tint.png:
  * black, alpha NP_ALPHA_TOP on the window's first row to NP_ALPHA_BOTTOM on its last, NP_WIN_H rows): the cover is
  * NP_ART px square at window y NP_ART_Y, its corners NP_ART_R px. Equal to the constants of tools/mod_nowplaying.py. */
@@ -296,3 +358,64 @@
 #define NP_ALPHA_TOP 38
 #define NP_ALPHA_BOTTOM 235
 #define NP_WIN_H 450
+/* The info page's lines (np_info): the stock text is read into NP_INFO_BUF bytes (stock writes them with a 0x200
+ * buffer, so a longer text is never rewritten); the quality line keeps single spaces round its bars when the result is
+ * at most NP_INFO_SPACED characters (the label is 304 px wide at 18 px, 8 px from each side: such a line is at most 272 px
+ * wide, a DSD line without the spaces at most 295). */
+#define NP_INFO_N 6
+#define NP_INFO_BUF 512
+#define NP_INFO_SPACED 36
+/* The status bar follows the page (EXPERIMENTAL, np_bar_*): the window events of the page (widget_on on the window:
+ * window_manager_default_open_window dispatches 0x12c to the window a new non-keyboard, non-overlay window covers and 0x12d
+ * to the one it uncovers, @0x69182c / @0x691b3c), the stock black, and the largest weighted square sum (2126 r^2 + 7152 g^2
+ * + 722 b^2, channels 0..255) the bar colour may have: gamma 2 is above the sRGB luminance, so L <= 0.183 and white text
+ * keeps 4.5:1 (test/pod/nowplaying.py checks the true figure). */
+#define EVT_WINDOW_TO_BG 0x12c
+#define EVT_WINDOW_TO_FG 0x12d
+#define NP_BAR_STOCK 0xff000000u
+#define NP_BAR_LUM_MAX 119000000u
+
+/* ---------------------------------------------------------------------------
+ * List gestures (patch/scroll.c, docs/architecture.md "List gestures"). The stock scroll_view (g_scroll_view_vtable
+ * 0x97a298; every stock list is list_view > scroll_view > list_item rows) keeps its drag state in the widget:
+ * scroll_view_t fields as its on_event (0x610724) and scroll_view_is_dragged (0x61064c) read them. The hook is the
+ * vtable's on_event_before_children slot, which widget_on_event_before_children (0x666c34) calls with every pointer event
+ * before the widget's children see it. widget_animator_t: manager @0x58, state @0x28 (1 = running, widget_animator_start
+ * @0x673114), the widget it animates @4.
+ */
+#define SC_RET_STOP 0xb         /* ret_t RET_STOP: widget_on_pointer_down returns at once, children and the widget itself skipped (@0x671324) */
+#define SC_XSLIDE 0x90          /* scroll_view_t: xslidable, yslidable, snap_to_page (bytes; is_dragged @0x610680, @0x610688, @0x6106cc) */
+#define SC_YSLIDE 0x91
+#define SC_SNAP 0x92
+#define SC_DOWN_X 0x98          /* the pointer-down position (on_event DOWN stores e->x, e->y @0x61086c, @0x61087c) */
+#define SC_DOWN_Y 0x9c
+#define SC_PRESSED 0xa0         /* bytes: pressed (set by DOWN, @0x61083c) and dragged (set by the first MOVE past the threshold, @0x610c34) */
+#define SC_DRAGGED 0xa1
+#define SC_WA 0xe8              /* the running scroll animator (scroll_view_scroll_to @0x610548); cleared by the end handler 0x6101b8 (@0x610208) */
+#define SC_AN_STATE 0x28        /* widget_animator_t: state, 1 = running (widget_animator_start @0x673114) */
+#define SC_AN_WIDGET 0x04       /* the widget it animates (widget_animator_stop reads it @0x673258) */
+#define SC_AN_RUNNING 1
+#define SC_DRAG_PX 10           /* scroll_view_is_dragged's threshold: slti .., 0xa @0x6106e0 (kept) */
+
+/* libc constants (MIPS Linux) the payload passes to the stock libc stubs */
+#define F_OK 0
+#define O_RDONLY 0
+#define O_WRONLY 1
+#define O_APPEND 0x8
+#define O_CREAT 0x100
+#define O_TRUNC 0x200
+#define PROT_READ 1
+#define MAP_SHARED 1
+#define MAP_FAILED ((void *)-1)
+
+/* Now Playing's More dialog (patch/playmore.c, docs/modules/playmore.md): ui/dialog/playmore_dialog.bin is a 320 px wide
+ * sheet pinned at y 130 (the stock init, @0x479d10, and its to-background handler @0x4789f0) holding list_view playmore_listview >
+ * scroll_view playmore_scrollview (310 px, the scroll bar scroll_bar_m beside it, 10 px) > list_item rows, PM_ROW_H (50, the
+ * list_view's item_height) high each; the asset adds the hidden rows pod_more and pod_back. The payload shows PM_PAGE_N rows
+ * at a time and puts the sheet on the bottom of the 480 px screen (the stock 130 + 350 ends there too). */
+#define PM_ROW_H 50
+#define PM_PAGE_N 4
+#define PM_SCREEN_H 480
+#define PM_DIALOG_W 320
+#define PM_SV_W 310
+#define PM_BAR_W 10

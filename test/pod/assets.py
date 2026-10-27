@@ -1,4 +1,4 @@
-"""Built assets: the M1 Pod pages are dark with light text and inside the window, the default wallpaper, the icon set and the battery art."""
+"""Built assets: the M1+ Pod pages are dark with light text and inside the window, the default wallpaper, the icon set and the battery art."""
 import hashlib, json, os, re, struct, sys
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
@@ -9,7 +9,7 @@ def run(ctx):
 
     # 25. Contrast in the built assets: every button we style inline has a dark background and
     #     light text in every widget state (theme-styled navbar buttons excepted).
-    for asset_name in ('m1pod_menu.bin', 'm1pod_cover.bin', 'm1pod_artists.bin', 'm1pod_shuffle.bin', 'm1pod_settings.bin', 'm1pod_cfset.bin'):
+    for asset_name in ('m1pod_menu.bin', 'm1pod_cover.bin', 'm1pod_artists.bin', 'm1pod_shuffle.bin', 'm1pod_settings.bin', 'm1pod_cfset.bin', 'm1pod_homeset.bin'):
         tree = awtk_ui.parse(open(os.path.join(ui_dir, asset_name), 'rb').read())
         for w in tree.walk():
             if w.type == 'list_item':   # rows: stock's widget and theme styles, as sysset's rows
@@ -56,7 +56,7 @@ def run(ctx):
            'the status bar battery images are battery_art.png(STATUS)')
     added = mod_icons.pod_names()
     expect(all(open(os.path.join(img_dir, n + '.png'), 'rb').read() == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read() for n in added),
-           f'the {len(added)} M1 Pod row icons are added from the committed PNGs')
+           f'the {len(added)} M1+ Pod row icons are added from the committed PNGs')
     used = set()
     for key in mod_icons.POD_UI:
         tree = awtk_ui.parse(open(os.path.join(ui_dir, key + '.bin'), 'rb').read())
@@ -65,6 +65,12 @@ def run(ctx):
             expect(len(ic) == 1 and ic[0].get('image') in added and ic[0].get('sensitive') == 'false',
                    f'{key}:{row.name} has one insensitive icon image from the added set')
             used.update(c.get('image') for c in ic)
+            lab = next(c for c in row.children if c.type == 'hscroll_label'); hair = [c for c in row.children if c.name == 'pod_hair']
+            expect((ic[0].x, ic[0].w, ic[0].h) == (16, 24, 24) and ic[0].y == (row.h - 24) // 2 and lab.x == 56
+                   and len(hair) == 1 and (hair[0].x, hair[0].y, hair[0].w, hair[0].h) == (56, row.h - 1, row.w - 56, 1) and hair[0].get('sensitive') == 'false'
+                   and all(hair[0].get(f'style:{st}:bg_color') == '#222222' for st in mod_icons.ROW_STATES)
+                   and all(row.get(f'style:{st}:border_width') == '0' for st in mod_icons.ROW_STATES) and row.get('style') == 'list_item_style',
+                   f'{key}:{row.name}: bare 24 px glyph at x 16, title at x 56, the #222222 hairline inset to x 56 (the theme\'s full-width one off), pressed band is the stock style\'s')
     expect(used == set(mod_icons.pod_row_names()), 'every added row icon is used by a row')
     # the Home grid icon (patch/home.c builds the widget): its two 66x66 images and the style that names them
     import awtk_style
@@ -85,24 +91,47 @@ def run(ctx):
                and mod_icons.read_png(os.path.join(img_dir, n + '.png')).size == (66, 66) and n in {h[0] for h in mod_icons.HOME} | {h[0] + '_down' for h in mod_icons.HOME}
                for n in tidal),
            'every state of home_tidal_style shows the generated brand-tidal disc (tidal, tidal_down: 66x66, not the stock files)')
-    expect(dict((n, g) for n, _, g in mod_icons.HOME)['tidal'] == 'brand-tidal' and mod_icons.POD_ROWS['Tidal'][1] == 'brand-tidal',
-           'the Home grid and the Extras row both use Tabler\'s brand-tidal')
+    expect(dict((n, g) for n, _, g in mod_icons.HOME)['tidal'] == 'T:brand-tidal' and mod_icons.POD_ROWS['Tidal'][1] == 'T:brand-tidal',
+           'the Home grid and the Extras row both use Tabler\'s brand-tidal (Lucide has no Tidal)')
+    lucide, tabler_used = mod_icons.used_glyphs()
+    expect(tabler_used == ['a-b', 'brand-tidal', 'circle-check', 'multiplier-1x'] and
+           all(os.path.isfile(os.path.join(mod_icons.LUCIDE_SVG, n + '.svg')) for n in lucide) and
+           not any(os.path.isfile(os.path.join(mod_icons.CUSTOM, n + '.svg')) for n in lucide),
+           f'the set is Lucide ({len(lucide)} committed SVGs) with four Tabler glyphs; no custom SVG shadows a Lucide name')
+    expect(os.path.isfile(os.path.join(mod_icons.LUCIDE, 'LICENSE')) and mod_icons.HOME_GLYPH == 38 and mod_icons.DISC_SW == 1.75
+           and (mod_icons.BARE_PX, mod_icons.BARE_SW) == (24, 2.0) and mod_icons.POD_ICON == 24 and mod_icons.POD_TEXT_X == 56 == mod_icons.HAIR_X,
+           'Home discs: Lucide at stroke 1.75, glyph canvas 38 px on the 66 px discs; list icons bare: 24 px canvas, stroke 2.0 px, title and hairline from x 56')
+    # bare glyphs: no disc behind the 40 x 40 settings icons, white ink only, centred
+    from PIL import Image
+    for n, _, g in mod_icons.SETTINGS + mod_icons.LISTS:
+        im = Image.open(os.path.join(mod_icons.PNG, n + '.png')).convert('RGBA'); bb = im.getchannel('A').getbbox()
+        px = [p for p in im.getdata() if p[3]]
+        expect(im.size == (40, 40) and bb and 8 <= bb[0] and bb[2] <= 32 and 8 <= bb[1] and bb[3] <= 32 and all(p[:3] == (255, 255, 255) for p in px),
+               f'{n}: a bare white glyph inside the 24 px box of the 40 x 40 image ({bb})')
+    expect({n: g for n, _, g in mod_icons.SETTINGS if g.startswith('badge:')} ==
+           {'pset_dac': 'badge:DAC', 'pset_dsdoutput': 'badge:DSD', 'sset_dsdoutput': 'badge:DSD', 'pset_replaygain': 'badge:RG'},
+           'the DAC, DSD output and ReplayGain settings icons are redrawn text badges')
+    chev = {n: (Image.open(os.path.join(mod_icons.PNG, n + '.png')).convert('RGBA')) for n in ('right_arrow', 'right_arrow_down')}
+    expect({p[:3] for p in chev['right_arrow'].getdata() if p[3] == 255} <= {(0x8C,) * 3} and {p[:3] for p in chev['right_arrow_down'].getdata() if p[3] == 255} <= {(0x6E,) * 3},
+           'the list chevron is #8C8C8C, #6E6E6E pressed')
     # the Settings rows' icons: Now Playing's wave is the navbar button's glyph (Lucide audio-lines), Shanling Home's mark is cut
     # from the pinned stock shutdown screen (the committed disc is what the derivation makes), the rest are existing mappings
     glyphs = {n: g for n, g, _ in mod_icons.GLYPHS}
-    expect(mod_icons.POD_ROWS['Now Playing'][1] == glyphs['back_to_player'] == '+audio-lines', 'the Now Playing row uses the wave glyph of the navbar\'s Now Playing button')
-    from PIL import Image
+    expect(mod_icons.POD_ROWS['Now Playing'][1] == glyphs['back_to_player'] == 'audio-lines','the Now Playing row uses the wave glyph of the navbar\'s Now Playing button')
     mark = Image.open(os.path.join(mod_icons.PNG, mod_icons.POD_ROWS['Shanling Home'][0] + '.png')).convert('RGBA')
-    expect(mod_icons.POD_ROWS['Shanling Home'][1] == mod_icons.SHANLING and mark.tobytes() == mod_icons.on_disc(mod_icons.shanling_mark(), mod_icons.POD_ICON, mod_icons.DISC).tobytes(),
-           'the Shanling Home row has the brand mark derived from the stock shutdown screen (pinned), on the 40 px disc')
-    ink = [p for p in mark.getdata() if p[0] > 0xc0 and p[3] > 200]
-    expect(len(ink) > 100 and mark.size == (40, 40), f'the mark is light ink on the grey disc ({len(ink)} px)')
-    expect({'Main Menu', 'Cover Flow', 'Landscape', 'Sort', 'Start in M1 Pod', 'Playback'} <= set(mod_icons.POD_ROWS)
-           and not {'Play Settings', 'Start in: M1 Pod', 'Cover Flow landscape'} & set(mod_icons.POD_ROWS)
+    expect(mod_icons.POD_ROWS['Shanling Home'][1] == mod_icons.SHANLING and mark.tobytes() == mod_icons.bare_icon(mod_icons.SHANLING, mod_icons.POD_ICON).tobytes(),
+           'the Shanling Home row has the brand mark derived from the stock shutdown screen (pinned), bare')
+    ink = [p for p in mark.getdata() if p[3] > 200]; bb = mark.getchannel('A').getbbox()
+    expect(len(ink) > 60 and mark.size == (24, 24) and bb[2] - bb[0] == 24 and all(p[:3] == (255, 255, 255) for p in ink),
+           f'the mark is white ink 24 px wide, thickened to about 2 px strokes ({len(ink)} solid px, box {bb})')
+    expect({'Main Menu', 'Cover Flow', 'Landscape', 'Sort', 'Start in M1+ Pod', 'Playback'} <= set(mod_icons.POD_ROWS)
+           and not {'Play Settings', 'Start in: M1+ Pod', 'Cover Flow landscape'} & set(mod_icons.POD_ROWS)
            and not any(k.startswith('pod_nav_rotate') for k in mod_icons.NAV_VIEW), 'icons exist for the Settings rows and the Cover Flow page\'s, none for the old labels or the removed rotate button')
-    expect(mod_icons.POD_ROWS['Landscape'][1] == 'rotate-clockwise' and mod_icons.POD_ROWS['Sort'][1] == 'sort-descending'
-           and mod_icons.POD_ROWS['Cover Flow'][1] == 'carousel-horizontal' and 'm1pod_cfset' in mod_icons.POD_UI,
-           'Settings > Cover Flow: the carousel row (also the menu\'s), the rotate glyph for Landscape, Tabler\'s sort-descending for Sort')
+    expect(mod_icons.POD_ROWS['Home Screen'][1] == 'layout-grid' and mod_icons.POD_ROWS['Start in M1+ Pod'][1] == 'house'
+           and 'm1pod_homeset' in mod_icons.POD_UI, 'Settings > Home Screen: the grid glyph for its row, the house for Start in')
+    expect(mod_icons.POD_ROWS['Landscape'][1] == 'rotate-cw-square' and mod_icons.POD_ROWS['Sort'][1] == 'arrow-down-wide-narrow'
+           and mod_icons.POD_ROWS['Cover Flow'][1] == 'gallery-horizontal' and 'm1pod_cfset' in mod_icons.POD_UI,
+           'Settings > Cover Flow: the gallery row (also the menu\'s), the rotate glyph for Landscape, arrow-down-wide-narrow for Sort')
     lock_imgs = {n: open(os.path.join(img_dir, n + '.png'), 'rb').read() for n in ('screens_battery', 'screens_charge', 'screens_lowbattery')}
     expect(all(lock_imgs[n] == battery_art.png(battery_art.LOCK, s) for n, s in
                (('screens_battery', 'normal'), ('screens_charge', 'charge'), ('screens_lowbattery', 'low'))),
@@ -155,3 +184,103 @@ def run(ctx):
         expect(white and gold and all(i.get('font_size') == 18 for i in white) and all(i.get('font_size') == 20 for i in gold)
                and all(i.color('text_color') == '#FFFFFFFF' for i in gold) and all(i.color('text_color') != '#FFFFFFFF' for i in white),
                f'{theme}: other rows muted 18 px, the playing row white 20 px')
+
+    # 41. The product name and the About row. "M1+ Pod" is what the user sees: no "M1 Pod" is left in our ui files, the
+    #     16 string tables, demo's payload or the Home icon; the internal names keep m1pod. About keeps its seven stock
+    #     rows in their order (FW. Version still the stock literal) and gets "M1+ Pod:<TAG>" right below FW. Version.
+    import build, mod_about
+    from awtk_text import Ttf, awtk_width
+    raw = os.path.join(WORK, 'rootfs', 'release/assets/default/raw')
+    stale = [f for f in sorted(os.listdir(os.path.join(raw, 'ui'))) if f.startswith('m1pod_')
+             and b'M1 Pod' in open(os.path.join(raw, 'ui', f), 'rb').read()]
+    stale += [f for f in sorted(os.listdir(os.path.join(raw, 'strings'))) if b'M1 Pod' in open(os.path.join(raw, 'strings', f), 'rb').read()]
+    demo = open(os.path.join(WORK, 'rootfs', 'release/bin/demo'), 'rb').read()
+    expect(not stale and b'M1 Pod' not in demo and demo.count(b'M1+ Pod\0') >= 1,
+           f'no user-visible "M1 Pod" is left in the m1pod ui files, the string tables or demo ({stale})')
+    menu = awtk_ui.parse(open(os.path.join(ui_dir, 'm1pod_menu.bin'), 'rb').read())
+    expect(b'M1+ Pod' in open(os.path.join(ui_dir, 'm1pod_menu.bin'), 'rb').read() and menu.find('label_title') is not None,
+           'the menu navbar title is M1+ Pod')
+    expect(os.path.exists(os.path.join(ui_dir, 'm1pod_menu.bin')) and b'/mnt/data/m1pod-start' in demo and b'/mnt/mmc/m1pod-off' in demo,
+           'the internal names are unchanged: m1pod_menu.bin, /mnt/data/m1pod-start, /mnt/mmc/m1pod-off')
+    about = awtk_ui.parse(open(os.path.join(ui_dir, 'systemset/about_page.bin'), 'rb').read())
+    view = about.find('about_scrollview')
+    names = [c.name for c in view.children]
+    expect(names == ['listitem0', 'listitem1', 'listitem7', 'listitem2', 'listitem3', 'listitem4', 'listitem6', 'listitem5'],
+           f'About: the stock rows in order with the new one right below FW. Version ({names})')
+    new, fw = view.find('listitem7'), view.find('listitem1')
+    nl, fl = new.children[0], fw.children[0]
+    expect(re.fullmatch(r'V2\.1[a-z][A-Z]+', build.TAG) is not None, f'the tag comes from tools/build.py ({build.TAG})')
+    expect(nl.name == 'scrlabel7' and nl.get('text') == f'M1+ Pod:{build.TAG}' == mod_about.row_text(build.TAG),
+           f'the About row reads M1+ Pod:{build.TAG}')
+    expect(new.get('style') == fw.get('style') and (nl.type, nl.x, nl.y, nl.w, nl.h) == (fl.type, fl.x, fl.y, fl.w, fl.h)
+           and nl.get('style') == fl.get('style') == 'srlabel_leftwhite21_style' and fl.get('text') is None,
+           'the new row is the FW. Version row cloned (same styles and geometry); the stock label stays text-less (code sets it)')
+    ttf = Ttf(os.path.join(raw, 'fonts/default.ttf'))
+    w = awtk_width(ttf, nl.get('text'), 21)
+    expect(w <= nl.w, f'the row text fits its {nl.w} px label ({w} px)')
+    expect(demo.count(b'V2.1\0') >= 1 and build.TAG.encode() + b'\0' not in demo, 'demo still carries the stock version literal V2.1 (FW. Version), not our tag')
+
+    # 51. The on/off switch (sset_on / sset_off): no text, a pill track and a round knob, the stock 57x28 canvas.
+    import io
+    from PIL import Image
+    import mod_theme
+    for theme, names in (('default', ('sset_on', 'sset_off')), ('theme1', ('sset_on',))):
+        for name in names:
+            im = Image.open(os.path.join(WORK, 'rootfs', 'release/assets', theme, 'raw/images/xx', name + '.png')).convert('RGBA')
+            on = name == 'sset_on'; track, knob = mod_theme.TOGGLE_COLOURS[on]
+            a = im.getchannel('A')
+            expect(im.size == (57, 28) and a.getbbox() == (11, 2, 57, 26), f'{theme}/{name}: the stock 57x28 canvas, a 46x24 pill right-aligned in it, x 11..57, y 2..26 ({im.size}, {a.getbbox()})')
+            kx = 11 + 46 - 3 - 9 if on else 11 + 3 + 9               # the 18 px knob's centre, 3 px in: right when on, left when off
+            expect(im.getpixel((kx, 14))[:3] == knob and im.getpixel((68 - kx, 14))[:3] == track,
+                   f'{theme}/{name}: knob {knob} on the {"right" if on else "left"}, track {track} on the other side')
+            expect(im.getpixel((12, 14))[3] > 200 and im.getpixel((55, 14))[3] > 200 and im.getpixel((11, 2))[3] == 0 and im.getpixel((56, 25))[3] == 0
+                   and im.getpixel((11, 25))[3] == 0 and im.getpixel((56, 2))[3] == 0 and im.getpixel((5, 14))[3] == 0,
+                   f'{theme}/{name}: a pill (the corners are clear, the ends solid, nothing left of x 11)')
+            soft = sum(1 for v in a.getdata() if 0 < v < 255); lit = {p[:3] for p in im.getdata() if p[3] == 255}
+            expect(soft >= 30 and {track, knob} <= lit and len(lit) > 2, f'{theme}/{name}: anti-aliased ({soft} partly covered pixels, {len(lit)} opaque colours: track, knob and the blend of the knob\'s rim)')
+            # the track's rim keeps the track colour (no dark fringe from the transparent side of the mask)
+            rim = [p for p in im.getdata() if 0 < p[3] < 255 and p[:3] != track]
+            expect(not rim, f'{theme}/{name}: the pill\'s edge pixels are the track colour with partial alpha ({len(rim)} stray)')
+    on_l, off_l = mod_theme.TOGGLE_COLOURS[True][0], mod_theme.TOGGLE_COLOURS[False][0]
+    lum_ = lambda c: 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+    expect(lum_(on_l) > 200 and lum_(off_l) < 70 and lum_(mod_theme.TOGGLE_COLOURS[True][1]) < 40 and 100 < lum_(mod_theme.TOGGLE_COLOURS[False][1]) < 160,
+           'on: an off-white track with a dark knob; off: a dark grey track with a grey knob (read by brightness and side)')
+    for theme in ('default', 'theme1'):    # the two on/off words still left are the Dual / High art (no off counterpart)
+        for name in ('pset_dual', 'pset_high'):
+            expect(os.path.exists(os.path.join(WORK, 'rootfs', 'release/assets', theme, 'raw/images/xx', name + '.png')), f'{theme}/{name}: still there')
+
+    # 52. The pull-down's status bar is the real one (tools/statusbar.py lays both out): the same widgets, in the same order, at
+    #     the same positions and sizes, with the same images, fonts, colours, alignment and spacing, in both dropdown themes; the
+    #     bar sits at y 0 of the dialog (open at y 0 of the screen) on the real bar's black, so nothing jumps when it opens.
+    import statusbar
+    from awtk_text import Ttf, StbText
+    real = awtk_ui.parse(open(os.path.join(ui_dir, 'system_bar.bin'), 'rb').read())
+    skip = {'value'}                                   # the battery fill's level is set at run time
+    def sig(w, clock_h=True):
+        props = tuple(sorted((k, v) for k, v in w.props if k not in skip and not (w.type == 'view' and k.startswith('style:') and 'bg_color' in k)))
+        return (w.type, w.name, w.x, w.y, w.w, w.h if (clock_h or w.name != 'bar_dclock') else None, props)
+    # the one difference by design: the Screenshot countdown's camera (pod_shot, hidden, patch/shot.h) is in the real bar only; the pull-down covers
+    # the bar while it is open, and the payload looks the camera up in the window manager's tree (the real bar), so the pull-down gets no copy
+    def own(bar): return [w for w in bar.walk() if w is not bar and w.name != 'pod_shot']
+    ref = [sig(w) for w in own(real)]
+    font = Ttf(os.path.join(WORK, 'rootfs/release/assets/default/raw/fonts/default.ttf'))
+    for theme in ('default', 'theme1'):
+        dd = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets', theme, 'raw/ui/dialog/dropdown_dialog.bin'), 'rb').read())
+        pb = dd.find('view_sysbar')
+        # the pull-down's own view_sysbar and the system_bar window: the clock's h differs in the file only (h=100% resolves to 30 under its self_layout)
+        got = [sig(w, False) for w in pb.walk() if w is not pb]
+        want = [sig(w, False) for w in own(real)]
+        expect(got == want and [w.name for w in pb.walk()][1:] == [w.name for w in own(real)] and not any(w.name == 'pod_shot' for w in pb.walk()),
+               f'{theme}: the pull-down\'s bar has the real bar\'s {len(want)} widgets in order, with the same geometry, images, fonts, colours, alignment and layouts'
+               + ('' if got == want else f' (differs: {[(a[1], a[2:]) for a, b in zip(got, want) if a != b][:3]})'))
+        expect((pb.x, pb.y, pb.w, pb.h) == (0, 0, 320, 30) and real.h == 30 and (dd.x, dd.y) == (0, -340)
+               and all(pb.get(f'style:{st}:bg_color') == '#000000' for st in ('normal', 'disable', 'focused')) and real.get('style:normal:bg_color') == '#000000',
+               f'{theme}: the bar is 320x30 at the dialog\'s top edge, black as the real bar')
+        vol, clk, lv, rv = (pb.find(n) for n in ('label_volume', 'bar_dclock', 'view_bar_left', 'view_bar_right'))
+        expect(all(vol.get(f'style:{st}:font_size') == '16' and vol.get(f'style:{st}:text_align_v') == 'middle' for st in ('normal', 'disable', 'focused'))
+               and clk.get('style:normal:font_size') == '18' and (clk.x, clk.w) == (104, 90) and lv.get('children_layout') == 'default(r=1,c=0,x=10,s=4)'
+               and rv.get('children_layout') == 'default(r=1,c=0,a=right,s=4)' and pb.find('img_battery').x + 18 == 310,
+               f'{theme}: volume 16 px middle, clock 18 px at x 104 (90 wide), left group from x 10, right group 4 px apart, battery outline ends 10 px from the edge')
+        expect(StbText(font, 16).layout('100')[1] <= vol.w and StbText(font, 18).layout('12:59 PM')[1] <= clk.w,
+               f'{theme}: "100" fits the volume label and "12:59 PM" (12 h mode) the clock box in the shipped font')
+    expect(ref and all(real.find(n) is not None for n in statusbar.NAMES), 'the real bar still has every widget the stock code looks up')

@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""The translations of every text M1 Pod adds (docs/ui.md "Localisation").
+"""The translations of every text M1+ Pod adds (docs/ui.md "Localisation").
 
 The stock app translates through AWTK: a widget's `tr_text` is a key into strings/<lang>_<COUNTRY>.bin
 (locale_info_tr 0x658db4, a binary search by strcmp; a key the table lacks comes back unchanged).
-M1 Pod's texts use two kinds of key:
+M1+ Pod's texts use two kinds of key:
 
   * STOCK    a key the stock tables already carry with a good translation in every language (checked by
              test/pod/i18n.py against the shipped tables): used as it is.
   * TEXT     our own keys. The key IS the English text, so a missing table or entry shows English, which is
              also the text of en_US. tools/mod_strings.py adds these to all 16 tables.
 
-Brand names stay as they are (M1 Pod, Tidal, Shanling inside a longer text). Locales: the language menu
+Brand names stay as they are (M1+ Pod, Tidal, Shanling inside a longer text). Locales: the language menu
 reaches 13 tables (switch_language 0x4cca40: zh_CN is the default, then zh_HK en_US ja_JP ko_KR fr_FR ge_DE
 sp_ES it_IT th_TH po_PL ru_RU uk_UK); de_DE, es_ES and pl_PL are 11-entry stubs of the CD ripper strings
 that nothing loads: they get our keys as their twin's text (ge_DE, sp_ES, po_PL = German, Spanish, Polish).
@@ -71,8 +71,10 @@ TEXT = dict([
        'Carpetas aleatorias', 'Cartelle casuali', 'สุ่มโฟลเดอร์', 'Losuj foldery', 'Перемешать папки', 'Перемішати папки'),
     _t('Main Menu', '主菜单', '主選單', 'メインメニュー', '메인 메뉴', 'Menu principal', 'Hauptmenü',
        'Menú principal', 'Menu principale', 'เมนูหลัก', 'Menu główne', 'Главное меню', 'Головне меню'),
-    _t('Start in M1 Pod', '启动进入 M1 Pod', '啟動進入 M1 Pod', '起動時に M1 Pod', '시작 시 M1 Pod', 'Démarrer sur M1 Pod', 'Start in M1 Pod',
-       'Iniciar en M1 Pod', 'Avvia in M1 Pod', 'เริ่มที่ M1 Pod', 'Start w M1 Pod', 'Запуск в M1 Pod', 'Запуск у M1 Pod'),
+    _t('Home Screen', '主屏幕', '主畫面', 'ホーム画面', '홈 화면', "Écran d'accueil", 'Startbildschirm',
+       'Pantalla de inicio', 'Schermata Home', 'หน้าจอหลัก', 'Ekran główny', 'Главный экран', 'Головний екран'),
+    _t('Start in M1+ Pod','启动进入 M1+ Pod', '啟動進入 M1+ Pod', '起動時に M1+ Pod', '시작 시 M1+ Pod', 'Démarrer en M1+ Pod', 'Start in M1+ Pod',
+       'Iniciar en M1+ Pod', 'Avvia in M1+ Pod', 'เริ่มที่ M1+ Pod', 'Start w M1+ Pod', 'Запуск в M1+ Pod', 'Запуск у M1+ Pod'),
     _t('Playback', '播放', '播放', '再生', '재생', 'Lecture', 'Wiedergabe',
        'Reproducción', 'Riproduzione', 'การเล่น', 'Odtwarzanie', 'Воспроизведение', 'Відтворення'),
     _t('System Settings', '系统设置', '系統設定', 'システム設定', '시스템 설정', 'Réglages système', 'Systemeinstellungen',
@@ -120,12 +122,45 @@ TEXT = dict([
        'Ordenar', 'Ordina', 'เรียงลำดับ', 'Sortuj', 'Сортировка', 'Сортування'),
     _t('Artist', '歌手', '歌手', 'アーティスト', '아티스트', 'Artiste', 'Künstler',
        'Artista', 'Artista', 'ศิลปิน', 'Wykonawca', 'Исполнитель', 'Виконавець'),
+    # Settings > Cover Flow > Rebuild Covers: the row, and the message of the stock confirm dialog (a centred white 20 px label
+    # that wraps in 260 x 80 px: at most three lines, test/pod/i18n.py)
+    _t('Rebuild Covers', '重建封面', '重建封面', 'カバーを再作成', '커버 다시 만들기', 'Recréer les pochettes', 'Cover neu erstellen',
+       'Recrear carátulas', 'Ricrea copertine', 'สร้างปกใหม่', 'Odbuduj okładki', 'Пересоздать обложки', 'Оновити обкладинки'),
+    _t('Rebuild all covers? This may take a few minutes.', '重建所有封面？这可能需要几分钟。', '重建所有封面？這可能需要幾分鐘。',
+       'すべてのカバーを再作成しますか？数分かかる場合があります。', '모든 커버를 다시 만들까요? 몇 분 걸릴 수 있습니다.',
+       'Recréer toutes les pochettes ? Cela peut prendre quelques minutes.', 'Alle Cover neu erstellen? Das kann einige Minuten dauern.',
+       '¿Recrear todas las carátulas? Puede tardar unos minutos.', 'Ricreare tutte le copertine? Potrebbe richiedere alcuni minuti.',
+       'สร้างปกทั้งหมดใหม่หรือไม่ อาจใช้เวลาสองสามนาที', 'Odbudować wszystkie okładki? Może to potrwać kilka minut.',
+       'Пересоздать все обложки? Это может занять несколько минут.', 'Оновити всі обкладинки? Це може тривати кілька хвилин.'),
     # the track count of the album page's header: the payload chooses the key by n == 1 and puts the number where %d is;
     # languages with more than two plural forms (pl, ru, uk) use a label that needs none ("Tracks: 12")
     _t('%d track', '%d 首歌曲', '%d 首歌曲', '%d 曲', '%d곡', '%d titre', '%d Titel',
        '%d canción', '%d brano', '%d เพลง', 'Utwory: %d', 'Песен: %d', 'Пісень: %d'),
     _t('%d tracks', '%d 首歌曲', '%d 首歌曲', '%d 曲', '%d곡', '%d titres', '%d Titel',
        '%d canciones', '%d brani', '%d เพลง', 'Utwory: %d', 'Песен: %d', 'Пісень: %d'),
+    # Now Playing's info page labels (patch/nowplaying.c np_info): stock's "Genres" (the plural tab name) and "Era"
+    # (a decade in several tables, "age" in Korean) become "Genre: ..." and "Year: ..."
+    _t('Genre', '风格', '風格', 'ジャンル', '장르', 'Genre', 'Genre',
+       'Género', 'Genere', 'ประเภท', 'Gatunek', 'Жанр', 'Жанр'),
+    _t('Year', '年份', '年份', '年', '연도', 'Année', 'Jahr',
+       'Año', 'Anno', 'ปี', 'Rok', 'Год', 'Рік'),
+    # Screenshot (the Extras row; the toasts of patch/shot.c: the countdown is the fixed 5 s of SHOT_SECONDS)
+    _t('Screenshot', '截图', '截圖', 'スクリーンショット', '스크린샷', "Capture d'écran", 'Screenshot',
+       'Captura de pantalla', 'Screenshot', 'ภาพหน้าจอ', 'Zrzut ekranu', 'Скриншот', 'Знімок екрана'),
+    _t('Screenshot in 5 s', '5 秒后截图', '5 秒後截圖', '5秒後にスクリーンショット', '5초 후 스크린샷', 'Capture dans 5 s', 'Screenshot in 5 s.',
+       'Captura en 5 s', 'Screenshot tra 5 s', 'ภาพหน้าจอใน 5 วินาที', 'Zrzut za 5 s', 'Скриншот через 5 с', 'Знімок через 5 с'),
+    _t('Screenshot saved', '截图已保存', '截圖已儲存', 'スクリーンショットを保存', '스크린샷 저장됨', 'Capture enregistrée', 'Screenshot gespeichert',
+       'Captura guardada', 'Screenshot salvato', 'บันทึกภาพหน้าจอแล้ว', 'Zrzut zapisany', 'Скриншот сохранён', 'Знімок збережено'),
+    _t('Screenshot failed', '截图失败', '截圖失敗', 'スクリーンショット失敗', '스크린샷 실패', 'Échec de la capture', 'Screenshot fehlgeschlagen',
+       'Error en la captura', 'Screenshot non riuscito', 'ถ่ายภาพหน้าจอไม่สำเร็จ', 'Zrzut nieudany', 'Не удалось снять экран', 'Не вдалося зробити знімок'),
+    # Now Playing's More menu (patch/playmore.c): the row that opens the second page (and that page's back header), the short
+    # Playback speed label (stock: "Multiple Speed", wider than the room before the four speed badges) and the 14 px note under it
+    _t('More', '更多', '更多', 'その他', '더 보기', 'Plus', 'Mehr',
+       'Más', 'Altro', 'เพิ่มเติม', 'Więcej', 'Ещё', 'Ще'),
+    _t('Speed', '倍速', '倍速', '再生速度', '재생 속도', 'Vitesse', 'Tempo',
+       'Velocidad', 'Velocità', 'ความเร็ว', 'Prędkość', 'Скорость', 'Швидкість'),
+    _t('Files below 48 kHz only', '仅对 48kHz 以下有效', '僅對 48kHz 以下有效', '48kHz未満のみ', '48kHz 미만 파일만', 'Fichiers < 48 kHz seulement', 'Nur Dateien unter 48 kHz',
+       'Solo archivos bajo 48 kHz', 'Solo file sotto 48 kHz', 'เฉพาะไฟล์ต่ำกว่า 48 kHz', 'Tylko pliki poniżej 48 kHz', 'Только файлы ниже 48 кГц', 'Лише файли нижче 48 кГц'),
 ])
 
 KEYS = sorted(TEXT)
@@ -136,7 +171,7 @@ def english(key):
     return TEXT[key]['en_US'] if key in TEXT else STOCK[key]
 
 
-BRANDS = ('M1 Pod', 'Tidal')     # shown as they are, no key
+BRANDS = ('M1+ Pod', 'Tidal')     # shown as they are, no key
 
 
 def key_for(english):

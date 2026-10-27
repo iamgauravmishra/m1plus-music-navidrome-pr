@@ -1,4 +1,4 @@
-/* M1 Pod: new pages inside the Shanling M1 Plus UI app (/release/bin/demo).
+/* M1+ Pod: new pages inside the Shanling M1 Plus UI app (/release/bin/demo).
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  * The injection scheme -- a non-PIC payload in an appended PT_LOAD at 0xb00000, checked PIC-prologue
@@ -8,7 +8,7 @@
  *
  * Exactly one stock function is hooked: the Home screen's icon click dispatcher (0x533b80, unnamed,
  * registered per icon during home_page_init). It runs only when the user taps a Home icon -- never
- * on the boot path, in the main loop or during paint. Any tap that is not the M1 Pod icon (id 99, added to
+ * on the boot path, in the main loop or during paint. Any tap that is not the M1+ Pod icon (id 99, added to
  * the grid by patch/home.c; Tidal is a normal icon again), or
  * when the kill-switch file exists, or if the page fails to open, continues into stock behaviour
  * through the trampoline.
@@ -23,8 +23,9 @@
 
 /* ACT_* mirror tools/pod_pages.py. */
 enum { ACT_HOME = 0, ACT_PAGE = 1, ACT_PLAYER = 2, ACT_COVER = 3, ACT_SHUFFLE = 4, ACT_ARTISTS = 8,
-       ACT_GRID = 9, ACT_STARTUP = 10, ACT_ALBUMS = 11, ACT_LANDSCAPE = 12, ACT_SORT = 13 };
+       ACT_GRID = 9, ACT_STARTUP = 10, ACT_ALBUMS = 11, ACT_LANDSCAPE = 12, ACT_SORT = 13, ACT_SHOT = 14, ACT_REBUILD = 15 };
 
+extern void shot_start(void);    /* patch/shot.c: the Screenshot row's 5 s timer and capture */
 extern int artists_open(void);   /* patch/artists.c: the Artists list, its own page */
 extern int albums_open(void);    /* patch/albums.c: Albums, our page in the mode used last (grid or list) */
 extern void menu_arrange(void *win, int extras);   /* patch/menu.c: the menu / Extras rows as the saved list says */
@@ -49,8 +50,6 @@ struct pod_page {
 #include "pages.h"
 #include "covercache.h"   /* the Sort setting (cc_sort_artist, cc_sort_toggle) */
 
-#define KILL_FILE "/mnt/mmc/m1pod-off"
-#define F_OK 0
 
 /* The stock Home dispatcher reads only the clicked icon's name (widget_t + W_NAME): it atoi()s it
  * to a Home id and opens that destination. A fake icon with a numeric name reuses it to open any
@@ -61,6 +60,8 @@ static const char HOME_NAMES[18][3] = {"0", "1", "2", "3", "4", "5", "6", "7", "
                                         "9", "10", "11", "12", "13", "14", "15", "16", "17"};
 
 #include "home.h"
+#include "common.h"
+#include "i18n.h"
 static int pod_off(void) { return home_off(); }   /* the SD file and the flash one */
 
 static int home_open(int id) {
@@ -83,16 +84,21 @@ static int on_menu_fg(void *ctx, void *e) {
     return RET_OK;
 }
 
-static int on_back(void *ctx, void *e) {
-    (void)ctx; (void)e;
-    navigator_back();
-    return RET_OK;
-}
-
-static int on_player(void *ctx, void *e) {
-    (void)ctx; (void)e;
-    on_backtoplayer_onclick((void *)0, (void *)0);
-    return RET_OK;
+/* Settings > Cover Flow > Rebuild Covers: the stock yes/no dialog (dialog/confirminfo_dialog, the one the equaliser
+ * reset and the Bluetooth reconnect use) with a wrapped message; the call is modal and returns CONFIRM_YES for Yes.
+ * No (or the dialog failing to open) does nothing at all; Yes opens Cover Flow on its Preparing screen with every
+ * cover extracted again (coverflow_rebuild). */
+static void rebuild_ask(void) {
+    struct {
+        int kind, ms;
+        char text[MSGINFO_TEXT], text2[MSGINFO_TEXT];
+    } info;
+    const char *s = TR("Rebuild all covers? This may take a few minutes.");
+    unsigned i;
+    memset(&info, 0, sizeof info);
+    info.kind = CONFIRM_KIND_WRAP;
+    for (i = 0; s[i] && i < sizeof info.text - 1; ++i) info.text[i] = s[i];
+    if (navigator_to_with_context("dialog/confirminfo_dialog", &info) == CONFIRM_YES) coverflow_rebuild();
 }
 
 static int on_row(void *ctx, void *e) {
@@ -107,10 +113,12 @@ static int on_row(void *ctx, void *e) {
     else if (row->action == ACT_ALBUMS) albums_open();
     else if (row->action == ACT_SHUFFLE) shuffle_play(row->arg); /* patch/shuffle.c; plays, no page */
     else if (row->action == ACT_GRID) home_to_grid();      /* patch/home.c: the stock grid */
+    else if (row->action == ACT_SHOT) shot_start();        /* patch/shot.c; a timer, no page */
+    else if (row->action == ACT_REBUILD) rebuild_ask();    /* a confirm dialog, then Cover Flow rebuilds */
     return RET_OK;
 }
 
-/* The switch rows (Settings: Start in M1 Pod; Settings > Cover Flow: Landscape): a tap flips the setting and the
+/* The switch rows (Settings: Start in M1+ Pod; Settings > Cover Flow: Landscape): a tap flips the setting and the
  * row's switch image follows it. The context is the slot below, one per action, filled when the page opens. */
 struct swctx { int action; void *img; };
 static struct swctx sw_slot[2] __attribute__((section(".scratch")));
@@ -165,11 +173,6 @@ static void bind_sort(void *win, unsigned i, const struct pod_row *row) {
     if (r) widget_on(r, EVT_CLICK, on_sort, (void *)0);
 }
 
-static void bind(void *win, const char *name, int (*fn)(void *, void *), const void *ctx) {
-    void *w = widget_lookup(win, name, 1);
-    if (w) widget_on(w, EVT_CLICK, fn, (void *)ctx);
-}
-
 /* Open POD_PAGES[index]; 0 once its window is up, -1 if AWTK could not open the asset. as_home: the entry
  * page as the Home instance (no navbar); 0 gives the normal instance with Back. */
 static int open_page(int index, int as_home) {
@@ -180,17 +183,17 @@ static int open_page(int index, int as_home) {
     page = &POD_PAGES[index];
     win = window_open(page->asset);
     if (!win) return -1;
-    bind(win, "btn_return", on_back, (void *)0);
-    bind(win, "btn_backtoplayer", on_player, (void *)0);
+    pod_bind(win, "btn_return", pod_on_back, (void *)0);
+    pod_bind(win, "btn_backtoplayer", pod_on_player, (void *)0);
     for (i = 0; i < page->count; i++) {
         const struct pod_row *row = &page->rows[i];
         if (row->action == ACT_STARTUP || row->action == ACT_LANDSCAPE) bind_switch(win, i, row);
         else if (row->action == ACT_SORT) bind_sort(win, (unsigned)i, row);
-        else bind(win, row->name, on_row, row);
+        else pod_bind(win, row->name, on_row, row);
     }
     if (index == POD_MENU_PAGE) {
         menu_arrange(win, 0);
-        widget_on(win, EVT_WINDOW_FG, on_menu_fg, win);   /* back in front after the Main Menu page: arrange again */
+        widget_on(win, EVT_WINDOW_TO_FG, on_menu_fg, win);   /* back in front after the Main Menu page: arrange again */
     } else if (index == POD_EXTRAS_PAGE) menu_arrange(win, 1);
     else if (index == POD_MENUCFG_PAGE) menu_custom_opened(win);
     {   /* the Settings page is the way out to the grid; the menu may be the Home instance (no navbar) */
@@ -202,7 +205,7 @@ static int open_page(int index, int as_home) {
 
 int m1pod_open_entry(void) { return open_page(POD_ENTRY_PAGE, 1); }
 
-/* Recovery: while the boot guard's bad note exists the grid has no M1 Pod icon (it is boot-created), so the
+/* Recovery: while the boot guard's bad note exists the grid has no M1+ Pod icon (it is boot-created), so the
  * Tidal icon (id 1) opens the menu (normal instance, with Back) to reach Settings > Start in. */
 #define TIDAL_ID 1
 static int recovery_tap(int id) { return id == TIDAL_ID && access(BAD_NOTE, F_OK) == 0; }
@@ -212,7 +215,7 @@ int m1pod_home_click(void *icon, void *e) {
     const char *name = icon ? *(const char **)((char *)icon + W_NAME) : (const char *)0;
     int id = (name && name[0]) ? atoi(name) : -1;
     if (id == POD_ENTRY_ID && !pod_off()) {
-        int restored = home_restore();   /* after "Shanling Home": this tap makes M1 Pod Home again */
+        int restored = home_restore();   /* after "Shanling Home": this tap makes M1+ Pod Home again */
         if (open_page(POD_ENTRY_PAGE, 1) == 0) return RET_OK;
         home_restore_failed(restored);
     } else if (recovery_tap(id) && !pod_off()) {

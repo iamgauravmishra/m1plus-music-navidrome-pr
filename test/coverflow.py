@@ -115,18 +115,6 @@ def landscape(lib, frac, texs):
     return img.transpose(Image.ROTATE_90)
 
 
-def placeholder():
-    """Roughly the stock p_default disc the payload decodes for covers without art (approximate)."""
-    buf = (ctypes.c_uint * TEXELS)()
-    c = (ART - 1) / 2
-    for y in range(ART):
-        for x in range(ART):
-            d = ((x - c) ** 2 + (y - c) ** 2) ** 0.5
-            v = 70 if d < ART * 0.42 and d > ART * 0.12 else 46 if d < ART * 0.45 else 34
-            buf[y * ART + x] = 0xff000000 | v | v << 8 | v << 16
-    return buf
-
-
 def layout():
     """(frame y, album y, album h, artist y, artist h) of the page this shelf is on."""
     return pod_ui.cover_layout()

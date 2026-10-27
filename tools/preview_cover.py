@@ -99,7 +99,8 @@ def main():
     scoped = [None] * 3 + shelf[3:]
     shots = [('a long title', page(a.work, LONG, LONG_ARTIST, 'Cover Flow', shelf, hostcf.ONE // 10)),
              ('a title that fits', page(a.work, 'Kind of Blue', 'Miles Davis', 'Cover Flow', shelf)),
-             ('on one artist', page(a.work, 'Kind of Blue', 'Miles Davis', 'Miles Davis', scoped))]
+             ('on one artist', page(a.work, 'Kind of Blue', 'Miles Davis', 'Miles Davis', scoped)),
+             ('stretched past the first album', page(a.work, 'Kind of Blue', 'Miles Davis', 'Cover Flow', scoped, -(hostcf.ONE * 2 // 5)))]   # the rubber band's largest stretch: 2/5 of a cover
     notes = widths(a.work)
     for n in notes: print(n)
     W, H, pad, top = 320, 480, 12, 20

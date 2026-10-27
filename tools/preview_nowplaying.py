@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Approximate PIL mock-up of the Now Playing page (ui/playing_page.bin + its page theme); not pixel-exact AWTK.
 
-  preview_nowplaying.py OUT.png LABEL=RAW_DIR[,page=N][,cover=FILE][,tint=RRGGBB] ...
+  preview_nowplaying.py OUT.png LABEL=RAW_DIR[,page=N][,cover=FILE][,tint=RRGGBB][,playing] ...
 
 RAW_DIR is a tree's rootfs/release/assets/default/raw. Each panel draws a 30 px status bar and the 450 px
 window under it. Styles resolve as on the device: inline style:<state>:<prop>, then the window theme
@@ -22,10 +22,12 @@ from mod_nowplaying import tone, tint_alpha, corner_alpha, ART_R, BG
 
 HSCROLL_MARGIN = 2
 W, BAR, H = 320, 30, 450
-SAMPLE = {'scrlabel_title': 'Money', 'scrlabel_artist': 'Pink Floyd', 'label_album': 'Album:The Dark Side of the Moon',
-          'label_index': '5/10', 'label_playtime': '01:23', 'label_playlen': '06:22', 'np_remaining': '-04:59',
-          'label_info': 'FLAC|44.1kHz|16bit|1021kbps', 'label_genre': 'Genres:Progressive Rock', 'label_year': 'Era:1973',
-          'label_size': 'Size:48.92MB', 'label_location': 'Location:/mnt/mmc/Music/Pink Floyd/The Dark Side of the Moon/06 Money.flac',
+SAMPLE = {'scrlabel_title': 'Money', 'scrlabel_artist': 'Pink Floyd', 'label_album': 'Album: The Dark Side of the Moon',
+          'label_index': '5/10', 'label_playtime': '1:23', 'label_playlen': '6:22', 'np_remaining': '-4:59',
+          # the info page's lines as patch/nowplaying.c np_info leaves them (stock writes "Album:...", "Genres:...", "Era:...",
+          # "File Size:48.92MB", "FLAC|44.1kHz|16bit|1021kbps")
+          'label_info': 'FLAC | 44.1 kHz | 16-bit | 1021 kbps', 'label_genre': 'Genre: Progressive Rock', 'label_year': 'Year: 1973',
+          'label_size': 'File Size: 48.92 MB', 'label_location': 'Location: SD:/Music/Pink Floyd/The Dark Side of the Moon',
           'label_lyricmsg': 'No lyrics'}
 PROGRESS = 22    # % played in the mock-up
 
@@ -63,8 +65,10 @@ class Painter:
     def stb(self, px):
         if px not in self.stbs: self.stbs[px] = StbText(self.ttf, px)
         return self.stbs[px]
+    playing = False      # the play button shows the pause glyph (the app swaps btn_imgplay_style / btn_imgpause_style)
     def image(self, name):
         if not name: return None
+        if self.playing: name = {'np_play': 'np_pause', 'np_play_down': 'np_pause_down'}.get(name, name)
         p = os.path.join(self.raw, 'images', 'xx', name + '.png')
         return Image.open(p).convert('RGBA') if os.path.exists(p) else None
     def prop(self, wd, prop, state='normal'):
@@ -200,6 +204,7 @@ def main():
         p = Painter(raw)
         for o in opts:
             if o.startswith('cover='): p.cover_img = Image.open(o[6:])
+            if o == 'playing': p.playing = True
             if o.startswith('tint='): p.tint = tone(*(int(o[5:][k:k + 2], 16) for k in (0, 2, 4)))
         shots.append((label, p.render(root, page)))
     top, pad = 18, 10

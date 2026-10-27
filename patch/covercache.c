@@ -3,8 +3,8 @@
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE). The cache design follows q2-pod's patch/coverflow.c,
  * Copyright (c) 2026 Diamond Bond, MIT (https://github.com/DiamondBond/q2-pod); see NOTICE.
  *
- * One JPEG per album, /mnt/mmc/.coverflow/<key>-168.jpg, written by Cover Flow's worker thread
- * (patch/coverflow.c); key = FNV-1a of the artist then the album, so the same album has the same file
+ * One JPEG per album, /mnt/mmc/.coverflow/<key>-168.jpg, written by the one worker thread below (started by
+ * Cover Flow's Preparing screen, its Rebuild Covers, or the Albums page in the background); key = FNV-1a of the artist then the album, so the same album has the same file
  * wherever it is listed. Readers decode through the stock image loader (JPEG and PNG to RGBA8888) and
  * reduce the centred square to the size they draw: nearest for Cover Flow's depth textures, an area
  * average for the grid's small tiles. UI thread only. docs/architecture.md section 4.
@@ -98,17 +98,18 @@ void cc_box(const unsigned char *data, unsigned w, unsigned h, unsigned stride, 
 #define I(r, off) (*(int *)((char *)(r) + (off)))
 #define CF_STR_(x) #x
 #define CF_STR(x) CF_STR_(x)
-#define F_OK 0
 
 const char *cc_str(void *r, int field) {
     const char *s = r ? P(r, field) : (const char *)0;
     return s ? s : "";
 }
 
-unsigned cc_album_key(void *r) {
-    unsigned h = cc_fnv(cc_fnv(FNV_SEED, cc_str(r, REC_ARTIST)), cc_str(r, REC_ALBUM));
+unsigned cc_key_of(const char *artist, const char *album) {
+    unsigned h = cc_fnv(cc_fnv(FNV_SEED, artist), album);
     return h | !h;
 }
+
+unsigned cc_album_key(void *r) { return cc_key_of(cc_str(r, REC_ARTIST), cc_str(r, REC_ALBUM)); }
 
 /* ART_DIR/<key>-168.jpg<suffix>: the cache files carry their size, so the 140 px files of the earlier
  * builds are never scaled up. out holds at least 64 bytes. */
@@ -239,26 +240,43 @@ static const char *so_name(const char *s) {
     return s;
 }
 
+/* The name order of both lists (albums by artist and title, the Artists page): ASCII case aside, "The " dropped. */
+int cc_name_cmp(const char *a, const char *b) { return cc_nocase(so_name(a), so_name(b)); }
+
+/* Heapsort of v[0..n) by cmp, which must be total (ties broken by the row numbers in v, so equal names keep the stock
+ * order). No libc callback into the payload; no memory. */
+static int (*so_less)(unsigned, unsigned) __attribute__((section(".scratch")));
+
+static void so_sift(unsigned *v, unsigned i, unsigned n) {
+    for (;;) {
+        unsigned c = 2 * i + 1, t;
+        if (c >= n) return;
+        if (c + 1 < n && so_less(v[c], v[c + 1]) < 0) ++c;
+        if (so_less(v[i], v[c]) >= 0) return;
+        t = v[i], v[i] = v[c], v[c] = t;
+        i = c;
+    }
+}
+
+void cc_heapsort(unsigned *v, unsigned n, int (*cmp)(unsigned, unsigned)) {
+    unsigned i, t;
+    so_less = cmp;
+    for (i = n / 2; i-- > 0;) so_sift(v, i, n);
+    for (i = n; i-- > 1;) {
+        t = v[0], v[0] = v[i], v[i] = t;
+        so_sift(v, 0, i);
+    }
+}
+
 static void **so_rec __attribute__((section(".scratch")));   /* the rows being sorted, by stock number */
 
 static int so_cmp(unsigned a, unsigned b) {
     void *ra = so_rec[a], *rb = so_rec[b];
     int ua = I(ra, REC_ID) == -1, ub = I(rb, REC_ID) == -1, d;
     if (ua != ub) return ua - ub;
-    d = cc_nocase(so_name(cc_str(ra, REC_ARTIST)), so_name(cc_str(rb, REC_ARTIST)));
-    if (!d) d = cc_nocase(so_name(cc_str(ra, REC_ALBUM)), so_name(cc_str(rb, REC_ALBUM)));
+    d = cc_name_cmp(cc_str(ra, REC_ARTIST), cc_str(rb, REC_ARTIST));
+    if (!d) d = cc_name_cmp(cc_str(ra, REC_ALBUM), cc_str(rb, REC_ALBUM));
     return d ? d : a < b ? -1 : a > b;
-}
-
-static void so_sift(unsigned *v, unsigned i, unsigned n) {
-    for (;;) {
-        unsigned c = 2 * i + 1, t;
-        if (c >= n) return;
-        if (c + 1 < n && so_cmp(v[c], v[c + 1]) < 0) ++c;
-        if (so_cmp(v[i], v[c]) >= 0) return;
-        t = v[i], v[i] = v[c], v[c] = t;
-        i = c;
-    }
 }
 
 int cc_sort_artist(void) {
@@ -276,7 +294,7 @@ int cc_sort_toggle(void) {
 }
 
 unsigned *cc_album_order(void *albums) {
-    unsigned n = albums ? deque_size(albums) : 0, i, t;
+    unsigned n = albums ? deque_size(albums) : 0, i;
     unsigned *v;
     if (!n || !cc_sort_artist()) return (unsigned *)0;
     v = calloc(n, sizeof *v);
@@ -288,11 +306,7 @@ unsigned *cc_album_order(void *albums) {
         return (unsigned *)0;
     }
     for (i = 0; i < n; ++i) v[i] = i, so_rec[i] = deque_at(albums, i);
-    for (i = n / 2; i-- > 0;) so_sift(v, i, n);
-    for (i = n; i-- > 1;) {
-        t = v[0], v[0] = v[i], v[i] = t;
-        so_sift(v, 0, i);
-    }
+    cc_heapsort(v, n, so_cmp);
     free(so_rec);
     so_rec = (void **)0;
     return v;
@@ -306,5 +320,144 @@ void *cc_playing(void) {
     int pos = mclGetPlayPos();
     void *queue = *(void **)PLAY_QUEUE;
     return pos >= 0 && queue && (unsigned)pos < deque_size(queue) ? deque_at(queue, (unsigned)pos) : (void *)0;
+}
+
+/* ---------------------------------------------------------------------------
+ * The cache builder (see covercache.h): the one worker thread of the app. Moved from Cover Flow unchanged in behaviour.
+ *
+ * The thread touches only: its own job array (built before it started), the volatile counters below, files under
+ * ART_DIR, and the two stock art functions under parse_cover_mutex, which is the lock every stock caller of them holds
+ * (parse_albumcovertask_thd 0x4dd68c, parseplaycover_thd 0x4df1c4). It never touches a widget, a deque or the image manager.
+ */
+#define MIN_FREE_MB 16 /* no new cache files below this much free space on the card */
+
+typedef struct {
+    char *track; /* the album's first track, copied so the thread never reads stock deques */
+    unsigned key;
+} job_t;
+
+static struct {
+    job_t *jobs;
+    unsigned cap;
+    unsigned long thread;
+    int mode, running;
+    volatile int done, total, cancelled;
+} cb __attribute__((section(".scratch")));
+
+/* Whether dir's file system has MIN_FREE_MB free (statfs, MIPS o32 layout: f_bsize is word 1,
+ * f_bavail word 7), as q2-pod's card_space. */
+static int card_space(const char *dir) {
+    unsigned fs[32];
+    memset(fs, 0, sizeof fs);
+    return !statfs(dir, fs) &&
+           (unsigned long long)fs[7] * fs[1] >= (unsigned long long)MIN_FREE_MB << 20;
+}
+
+static void build_art(const job_t *j) {
+    char dst[64], tmp[64];
+    int ok;
+    void *f;
+    if (access(j->track, F_OK)) return; /* storage gone: no marker, the next open retries */
+    cc_path(dst, sizeof dst, j->key, "");
+    cc_path(tmp, sizeof tmp, j->key, ".tmp");
+    pthread_mutex_lock((void *)PARSE_COVER_MUTEX);
+    ok = toolsGetAlbumCover(j->track, tmp, ART_SIZE, ART_SIZE) == 1 ||
+         toolsGetExternCover(j->track, tmp, ART_SIZE, ART_SIZE) == 1;
+    pthread_mutex_unlock((void *)PARSE_COVER_MUTEX);
+    if (ok && cc_file_size(tmp) > 0) {
+        if (rename(tmp, dst)) unlink(tmp); /* extracted but not published: no marker, the next open retries */
+        return;                            /* (a rebuild's rename replaces the old picture or marker) */
+    }
+    unlink(tmp);
+    if (access(j->track, F_OK)) return;
+    if (!access(dst, F_OK)) return;        /* a rebuild that finds no art keeps the file it has */
+    f = fopen(dst, "w"); /* an empty file marks "no art": the placeholder shows, no retry */
+    if (f) fclose(f);
+}
+
+static void *cc_worker(void *unused) {
+    (void)unused;
+    while (cb.done < cb.total && !cb.cancelled) {
+        build_art(&cb.jobs[cb.done]);
+        ++cb.done;
+    }
+    return (void *)0;
+}
+
+int cc_build_open(unsigned capacity, int mode) {
+    if (cb.jobs) return 0;
+    if (capacity > CC_MAX_JOBS) capacity = CC_MAX_JOBS;
+    cb.jobs = calloc(capacity ? capacity : 1, sizeof(job_t));
+    if (!cb.jobs) return 0;
+    cb.cap = capacity;
+    cb.mode = mode;
+    cb.done = cb.total = cb.cancelled = 0;
+    return 1;
+}
+
+int cc_build_add(const char *track, unsigned key) {
+    char path[64];
+    job_t *j;
+    if (!cb.jobs || cb.running || !key || !track || !*track) return 0;
+    if (cb.mode == CC_MISSING && !access(cc_path(path, sizeof path, key, ""), F_OK)) return 0;
+    if ((unsigned)cb.total >= cb.cap) return -1;
+    j = &cb.jobs[cb.total];
+    j->track = strdup(track);
+    if (!j->track) return -1;
+    j->key = key;
+    ++cb.total;
+    return 1;
+}
+
+void cc_build_stop(void) {
+    int i;
+    if (cb.running) {
+        cb.cancelled = 1;
+        pthread_join(cb.thread, (void **)0);
+        cb.running = 0;
+    }
+    for (i = 0; i < cb.total; ++i)
+        if (cb.jobs) free(cb.jobs[i].track);
+    free(cb.jobs);
+    cb.jobs = (job_t *)0;
+    cb.cap = 0;
+    cb.total = cb.done = cb.cancelled = 0;
+}
+
+int cc_build_start(void) {
+    if (!cb.jobs || cb.running) return 0;
+    if (!cb.total) {
+        cc_build_stop(); /* nothing to build: free the job array */
+        return 0;
+    }
+    mkdir(ART_DIR, 0755);
+    if (!card_space(ART_DIR) || pthread_create(&cb.thread, (void *)0, cc_worker, (void *)0)) {
+        cc_build_stop(); /* no card, no space, or no thread: the caller shows what is cached already */
+        return 0;
+    }
+    cb.running = 1;
+    return 1;
+}
+
+int cc_build_done(void) { return cb.done; }
+int cc_build_total(void) { return cb.total; }
+int cc_build_running(void) { return cb.running; }
+int cc_build_busy(void) { return cb.jobs != (job_t *)0; }
+
+int cc_build_near(void *albums, const unsigned *order, unsigned centre) {
+    unsigned n = albums ? deque_size(albums) : 0, d, i;
+    if (!n) return cb.total;
+    if (centre >= n) centre = n - 1;
+    for (d = 0; d < n; ++d) {
+        unsigned k;
+        for (k = 0; k < 2; ++k) {   /* the row d after the centre, then d before it (d = 0 once) */
+            void *r;
+            if (k ? !d || d > centre : centre + d >= n) continue;
+            i = k ? centre - d : centre + d;
+            r = cc_row(albums, order, i);
+            if (cc_build_add(cc_str(r, REC_PATH), cc_album_key(r)) < 0) return cb.total;
+        }
+    }
+    return cb.total;
 }
 #endif /* CF_HOST */

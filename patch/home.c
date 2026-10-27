@@ -1,4 +1,4 @@
-/* M1 Pod as Home: the boot guard and the launcher. docs/architecture.md has the design and the
+/* M1+ Pod as Home: the boot guard and the launcher. docs/architecture.md has the design and the
  * recovery plan.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE). The crash marker follows q2-pod (Copyright (c)
@@ -16,9 +16,9 @@
  *   4. the bad note exists -> stop;
  *   5. write the marker (temp file, fsync, rename, directory fsync); any failure -> stop;
  *   6. arm: a one-shot UI timer removes the marker CLEAR_MS later (the boot completed);
- *   7. add the "M1 Pod" icon to the stock grid (whatever the setting says; a failure adds nothing),
+ *   7. add the "M1+ Pod" icon to the stock grid (whatever the setting says; a failure adds nothing),
  *      register a Home "to foreground" handler (it re-adds the icon if the stock code rebuilt the grid) and,
- *      when the setting says M1 Pod, schedule the first pod-menu open.
+ *      when the setting says M1+ Pod, schedule the first pod-menu open.
  *
  * A Shanling start is armed too (marker, clear timer) because the icon is new code on the boot path; it
  * only opens nothing. Every failure path leaves the stock Home as it was. The kill switch and the setting are checked again before every later open.
@@ -27,18 +27,12 @@
 #include "stock.h"
 #include "home.h"
 
-#define F_OK 0
-#define O_RDONLY 0
-#define O_WRONLY 1
-#define O_APPEND 0x8      /* MIPS Linux */
-#define O_CREAT 0x100
-#define O_TRUNC 0x200
 
 enum { H_NEW = 0, H_OFF, H_ARMED, H_PROVEN };
 
 static struct {
     int state;
-    int start;        /* the setting: 1 = start in M1 Pod */
+    int start;        /* the setting: 1 = start in M1+ Pod */
     int grid;         /* the user chose the stock grid for this session */
     int pending;      /* an open timer is scheduled */
     void *entry;      /* the entry menu window (the Settings page opens over it) */
@@ -92,7 +86,7 @@ static void hm_clear_marker(void) {
 }
 
 /* A marker at boot: the last attempt never proved itself. Record it (the bad note is sticky: no
- * later boot arms again until the user re-enables M1 Pod) and fall back to Shanling. If the note
+ * later boot arms again until the user re-enables M1+ Pod) and fall back to Shanling. If the note
  * cannot be written the marker stays, so every following boot is stock as well. */
 static void hm_record_failure(void) {
     if (home_write_atomic(BAD_NOTE, BAD_TMP, "1\n") != 0) return;
@@ -112,7 +106,7 @@ static int hm_clear(const void *unused) {
     return RET_OK;
 }
 
-static int hm_read_start(void) {   /* the setting; anything but "0", or no file, is M1 Pod */
+static int hm_read_start(void) {   /* the setting; anything but "0", or no file, is M1+ Pod */
     char c = 0;
     int fd = open(START_FILE, O_RDONLY, 0), n;
     if (fd < 0) return 1;
@@ -184,7 +178,7 @@ static int hm_fg(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* The stock grid's content (gesture > icon pages + the bottom strip) is hidden while M1 Pod is Home, so
+/* The stock grid's content (gesture > icon pages + the bottom strip) is hidden while M1+ Pod is Home, so
  * the window under the menu is plain black and the grid never flashes (V2.1jA, docs/ui.md). Hidden and
  * insensitive; the widgets stay (stock looks them up by name). */
 static void hm_grid(int show) {
@@ -194,7 +188,7 @@ static void hm_grid(int show) {
     widget_set_sensitive(g, show);
 }
 
-/* The "M1 Pod" icon on the stock grid: a clone of what the stock icon builder (0x533d8c) makes per icon, in
+/* The "M1+ Pod" icon on the stock grid: a clone of what the stock icon builder (0x533d8c) makes per icon, in
  * the same calls and order: a 154x118 view in the page, the 66x66 clickable image named by its id with
  * the style home_m1pod_style (tools/mod_icons.py: the click-wheel disc, its _down) and the stock click
  * handler 0x533b80 with the image as ctx (m1pod_home_click maps the id to the pod menu), and the centred
@@ -210,7 +204,7 @@ static void *hm_icon_cell(void *page, unsigned slot) {
     widget_on(img, EVT_CLICK, (void *)STOCK_HOME_CLICK, img);
     widget_use_style(label, "label_centerwhitehome_white");
     label_set_line_wrap(label, 1);
-    widget_set_text_utf8(label, "M1 Pod");
+    widget_set_text_utf8(label, "M1+ Pod");
     return cell;
 }
 
@@ -262,7 +256,7 @@ static void hm_fill_window(void *win) {
 
 /* Called by m1pod.c for the entry page (entry = 1) and for the Settings page (settings = 1): remember the
  * windows; the entry page as the Home instance loses its navbar (the Now Playing row replaces the bars icon;
- * the Settings > Shanling Home row is the way out). */
+ * the Settings > Home Screen > Shanling Home row is the way out). */
 void home_menu_opened(void *win, int settings, int entry) {
     if (entry) {
         hs.entry = win;
@@ -275,8 +269,8 @@ void home_menu_opened(void *win, int settings, int entry) {
     if (settings) hs.menu = win;
 }
 
-/* The M1 Pod icon was tapped on the stock grid. After "Shanling Home" (grid flag set, setting M1 Pod) it
- * restores M1 Pod as Home for the session: the menu opens as the Home instance. Returns 1 if so. */
+/* The M1+ Pod icon was tapped on the stock grid. After "Shanling Home" (grid flag set, setting M1+ Pod) it
+ * restores M1+ Pod as Home for the session: the menu opens as the Home instance. Returns 1 if so. */
 int home_restore(void) {
     if (!hs.grid || !hs.home || !hs.start || !hm_ready() || home_off()) return 0;
     hs.grid = 0;
@@ -291,21 +285,22 @@ void home_restore_failed(int restored) {
     hs.grid = 1;
 }
 
-/* "Shanling Home" (on the Settings page): show the stock grid, keep it for this session, and close the
- * pages above Home: the menu under the Settings page first (by handle: a second back right after the first
- * would find the closing page), then the Settings page itself. */
+/* "Shanling Home" (on the Settings > Home Screen page): show the stock grid, keep it for this session, and
+ * close the pages above Home: the menu and the Settings page under the Home Screen page first (by handle: a
+ * second back right after the first would find the closing page), then the Home Screen page itself. */
 int home_to_grid(void) {
     hs.grid = 1;
     hm_grid(1);
     if (hs.entry && hs.menu && hs.entry != hs.menu) window_close(hs.entry);
-    hs.entry = (void *)0;
+    if (hs.menu) window_close(hs.menu);
+    hs.entry = hs.menu = (void *)0;
     navigator_back();
     return RET_OK;
 }
 
 int home_start(void) { return hs.start; }
 
-/* "Start in M1 Pod": flip the persistent setting (takes effect at the next start). The new state, or -1. */
+/* "Start in M1+ Pod": flip the persistent setting (takes effect at the next start). The new state, or -1. */
 int home_toggle(void) {
     int next = !hs.start;
     if (home_write_atomic(START_FILE, START_TMP, next ? "1\n" : "0\n") != 0) return -1;
@@ -319,7 +314,7 @@ void home_boot(void *win) {
     if (hm_ready()) {
         hs.home = win;
         hm_add_icon(win);                /* after the marker, in the guard's path; a failure adds nothing */
-        widget_on(win, EVT_WINDOW_FG, hm_fg, win);
+        widget_on(win, EVT_WINDOW_TO_FG, hm_fg, win);
         if (hs.start) {
             hm_grid(0);                  /* no grid flash behind the menu */
             hm_schedule(OPEN_FIRST_MS);

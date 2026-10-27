@@ -13,6 +13,7 @@ Usage:
 import struct, sys, json
 
 MAGIC = 0x11221212
+RAW = 'rootfs/release/assets/default/raw'     # the app's resources inside an extracted work tree (ui/, styles/, images/, fonts/, strings/)
 
 class Widget:
     __slots__ = ('type', 'x', 'y', 'w', 'h', 'props', 'children')

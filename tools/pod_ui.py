@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the M1 Pod page assets (ui/*.bin) from tools/pod_pages.py.
+"""Build the M1+ Pod page assets (ui/*.bin) from tools/pod_pages.py.
 
 These are new AWTK UI files, not edits of stock ones, so they are added to the rootfs (fwtool
 repack --allow-added lists them). Each page is a window with a stock-styled navigation bar (title,
@@ -41,12 +41,20 @@ NAV_VIEW_X, NAV_VIEW_W = 214, 46     # patch/offsets.inc NAV_VIEW_X, NAV_VIEW_W
 NAV_VIEW_ICON = {'list': 'pod_nav_list', 'grid': 'pod_nav_grid',
                  'artist': 'pod_nav_albumartist'}   # images added by tools/mod_icons.py; artist: built in Artist mode, so the Album Artist glyph
 TOGGLE_NAME = {'list': 'btn_albumview', 'grid': 'btn_albumview', 'artist': 'btn_artisttype'}
+# The Albums page's Cover Flow button, flush left of the toggle (same style: 24 px white glyph, pressed #777777).
+NAV_CF_W = NAV_VIEW_W
+NAV_CF_X = NAV_VIEW_X - NAV_CF_W     # 168; patch/offsets.inc NAV_CF_X, NAV_CF_W
+NAV_CF_ICON = 'pod_nav_coverflow'
 
 
-def navbar(title, toggle=None):
+NAV_ALL_ICON = 'pod_nav_allalbums'
+
+
+def navbar(title, toggle=None, coverflow=False, allalbums=False):
     nb = Widget('view', 0, 0, SCREEN_W, NAVBAR_H, [('name', 'navigationbar_view')])
     # a title runs under a toggle's button no further than the button's left edge
-    lbl = Widget('label', 36, 14, (NAV_VIEW_X if toggle else 284) - 36, 22,
+    right = NAV_CF_X if coverflow else NAV_VIEW_X if toggle else 284
+    lbl = Widget('label', 36, 14, right - 36, 22,
                  [('name', 'label_title'), ('style', 'navbar_label_white'), ('length', '31'), pod_i18n.text_prop(title)])
     ret = Widget('button', 0, 0, 80, NAVBAR_H, [
         ('name', 'btn_return'), ('enable', 'true'), ('style', 'navbar_btnreturn_style'),
@@ -61,6 +69,14 @@ def navbar(title, toggle=None):
         nb.children.append(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
             ('name', TOGGLE_NAME[toggle]), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', icon + '_down'), ('style:normal:icon', icon), ('style:over:icon', icon)]))
+    if coverflow:
+        nb.children.append(Widget('button', NAV_CF_X, 0, NAV_CF_W, NAVBAR_H, [
+            ('name', 'btn_coverflow'), ('enable', 'true'), ('style', 'img_btn_style'),
+            ('style:pressed:icon', NAV_CF_ICON + '_down'), ('style:normal:icon', NAV_CF_ICON), ('style:over:icon', NAV_CF_ICON)]))
+    if allalbums:   # Cover Flow's artist page (patch/coverflow.c shows it, and shortens the title, only there)
+        nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
+            ('name', 'btn_allalbums'), ('enable', 'true'), ('style', 'img_btn_style'),
+            ('style:pressed:icon', NAV_ALL_ICON + '_down'), ('style:normal:icon', NAV_ALL_ICON), ('style:over:icon', NAV_ALL_ICON)])))
     return nb
 
 
@@ -176,7 +192,7 @@ def build_cover_page(page):
     patch/offsets.inc."""
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
-    root.children.append(navbar(page.title))
+    root.children.append(navbar(page.title, allalbums=True))
     fy, ay, ah, ry, rh = cover_layout()
     frame = Widget('view', 0, fy, SCREEN_W, COVER_FRAME_H, [('name', 'view_covers')])
     styled(frame, ('normal',), 'bg_color', '#000000')
@@ -243,13 +259,14 @@ def build_list_page(page):
 # Its style carries the title text (16 px white, left, middle), which widget_prepare_text_style reads.
 GRID_VIEW_H = CLIENT_H - NAVBAR_H     # patch/offsets.inc GRID_VIEW_H
 GRID_TITLE_PX = 16
+GRID_ALBUM_PX, GRID_ARTIST_PX = 18, 15   # the grid's album / artist text under each cover (white / #AAAAAA)
 LIST_TITLE_PX, LIST_SUB_PX = 21, 18   # the list mode's album / artist text (the library rows': 21 px white, 18 px #AAAAAA)
 
 
 def build_grid_page(page):
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
-    root.children.append(navbar(page.title, toggle='list'))
+    root.children.append(navbar(page.title, toggle='list', coverflow=True))
     grid = Widget('view', 0, NAVBAR_H, SCREEN_W, GRID_VIEW_H, [('name', 'view_grid')])
     styled(grid, ('normal',), 'bg_color', '#000000')
     styled(grid, ('normal',), 'text_color', '#FFFFFF')
@@ -258,8 +275,9 @@ def build_grid_page(page):
     styled(grid, ('normal',), 'text_align_v', 'middle')
     root.children.append(grid)
     root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, '#FFFFFF')))
-    # The list mode's two text styles (patch/albums.c reads them with widget_prepare_text_style; never shown)
-    for name, px, colour in (('label_row_title', LIST_TITLE_PX, '#FFFFFF'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA')):
+    # The two modes' text styles (patch/albums.c reads them with widget_prepare_text_style; never shown)
+    for name, px, colour in (('label_row_title', LIST_TITLE_PX, '#FFFFFF'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA'),
+                             ('label_grid_title', GRID_ALBUM_PX, '#FFFFFF'), ('label_grid_sub', GRID_ARTIST_PX, '#AAAAAA')):
         lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
         styled(lab, ('normal',), 'text_align_v', 'middle')
         root.children.append(lab)
@@ -268,8 +286,9 @@ def build_grid_page(page):
 
 def build_menucfg_page(page):
     """The Main Menu page (patch/menu.c): a row per menu item in the default order, each with an up arrow (a stock
-    button with the stock chevron-up art, expansion_2) and a switch. The payload orders the rows, sets the switches
-    and hides the arrows of the hidden items and of the first shown one."""
+    button with the stock chevron-up art, expansion_2, insensitive: a picture, the row decides by the tap position)
+    and a switch. The payload orders the rows, sets the switches and hides the arrows of the hidden items and of the
+    first shown one."""
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
     root.children.append(navbar(page.title))
@@ -279,7 +298,7 @@ def build_menucfg_page(page):
         row = row_item(f'pod_row{i}', i * ROW_H, r.label, False, ROW_H, sv.w, (f'pod_switch{i}', i < pod_pages.DEFAULT_VISIBLE))
         row.children[0].w = switch_x(sv.w) - UP_W - row.children[0].x
         row.children.append(Widget('button', switch_x(sv.w) - UP_W, 0, UP_W, ROW_H, [
-            ('name', f'pod_up{i}'), ('enable', 'true'), ('style', 'img_btn_style'),
+            ('name', f'pod_up{i}'), ('enable', 'true'), ('sensitive', 'false'), ('style', 'img_btn_style'),
             ('style:pressed:icon', 'expansion_2_down'), ('style:normal:icon', 'expansion_2'), ('style:over:icon', 'expansion_2')]))
         sv.children.append(row)
     root.children.append(lv)
@@ -316,6 +335,25 @@ def write_assets(rootfs, pages):
         os.utime(path, (UI_MTIME, UI_MTIME))   # deterministic build: fixed mtime on added files
         out.append((rel, len(data)))
     return out
+
+
+SYSTEM_BAR = f'{UI}/system_bar.bin'
+SHOT_WIDGET = 'pod_shot'      # patch/shot.h SHOT_IND
+SHOT_IMAGE, SHOT_W = 'pod_bar_shot', 16   # the 16 px camera tools/mod_icons.py adds to images/xx
+
+
+def add_shot_indicator(rootfs):
+    """The Screenshot countdown's camera: one hidden, insensitive image, the last child of the status bar's right-aligned
+    icon group (view_bar_right, so after the Wi-Fi icon and next to the battery outline). The group's layouter skips
+    an invisible child (widget_get_children_for_layout 0x657194, keep_invisible off), so while it is hidden the bar is
+    laid out as stock; patch/shot.c shows it for the countdown, and the group then makes room for it: the icons to its
+    left move 16 + 4 px left, the clock and the left group stay put."""
+    def edit(root):
+        right = root.find('view_bar_right')
+        assert right is not None and root.find(SHOT_WIDGET) is None, 'unexpected system_bar layout'
+        right.children.append(hidden(Widget('image', 0, 0, SHOT_W, 0, [('name', SHOT_WIDGET), ('image', SHOT_IMAGE), ('draw_type', 'center')])))
+    from modlib import edit_ui
+    edit_ui(os.path.join(rootfs, SYSTEM_BAR), edit)
 
 
 def asset_rels(pages):

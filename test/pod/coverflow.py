@@ -91,8 +91,9 @@ def run(ctx):
     expect(mid != 0 and mid < 0, f'the shelf follows a leftward drag (xoffset {mid})')
     expect(('set_value', 1) in m.calls, 'a drag of one cover spacing advances one album')
 
-    # 12c. A fast flick coasts further than the finger went.
-    put_value(m, 2)
+    # 12c. A fast flick coasts further than the finger went (a longer shelf: this one's ends stop it).
+    m = cover_machine(albums=8); m.call(PSYMS['coverflow_open'], count=5000000)
+    put_value(m, 1)
     m.touch('down', 250, t=5000); m.touch('move', 200, t=5020); m.touch('move', 150, t=5040)
     m.touch('up', 150, t=5050)
     m.settle()
@@ -100,12 +101,13 @@ def run(ctx):
     far = max(abs(o) for o in offs) if offs else 0
     expect(far > 2 * O['CF_VIEW_H'], f'a flick coasts more than two albums (|xoffset| up to {far})')
 
-    # 12d. A drag to the right wraps from the first album to the last.
+    # 12d. A drag to the right from the first album does not wrap to the last (the end: see the bounded shelf tests).
+    m = cover_machine(albums=3); m.call(PSYMS['coverflow_open'], count=5000000)
     put_value(m, 0)
     m.touch('down', 60, t=9000); m.touch('move', 120, t=9300); m.touch('move', 160, t=9600)
     m.touch('up', 160, t=9900)
     m.settle()
-    expect(('set_value', 2) in m.calls, 'dragging right from the first album wraps to the last')
+    expect(not any(c[0] == 'set_value' for c in m.calls) and shelf_value(m) == 0 and shelf_off(m) == 0, 'dragging right from the first album stays on it: no wrap to the last')
 
     # 12e. An aborted gesture (stock sends 0x107) releases the grab and snaps back.
     put_value(m, 1)
@@ -135,7 +137,7 @@ def run(ctx):
     #     result renamed into place, and an empty marker when both fail.
     lock = pod.DATA['PARSE_COVER_MUTEX'][0]
     m.album_cover = 1
-    m.call(PSYMS['worker'], count=5000000)
+    m.call(PSYMS['cc_worker'], count=5000000)
     seq = [c for c in m.calls if c[0] in ('lock', 'unlock', 'toolsGetAlbumCover', 'toolsGetExternCover', 'rename')]
     expect(seq[0] == ('lock', lock) and seq[1][0] == 'toolsGetAlbumCover' and seq[2] == ('unlock', lock),
            f'the art call is made under parse_cover_mutex ({seq[:3]})')
@@ -151,7 +153,7 @@ def run(ctx):
     m3 = cover_machine(albums=1, cached=False)
     m3.call(cover_open, count=5000000)
     m3.album_cover = m3.extern_cover = 0
-    m3.call(PSYMS['worker'], count=5000000)
+    m3.call(PSYMS['cc_worker'], count=5000000)
     expect(any(c[0] == 'toolsGetExternCover' for c in m3.calls), 'no embedded art -> the folder image')
     expect(any(c[0] == 'fopen' and c[2] == 'w' for c in m3.calls), 'no art at all leaves an empty marker')
 
@@ -160,14 +162,14 @@ def run(ctx):
     m4.call(cover_open, count=5000000)
     final = cache_paths(m4, 1)[0]
     m4.album_cover = 1; m4.fail.add(('rename', final))
-    m4.call(PSYMS['worker'], count=5000000)
+    m4.call(PSYMS['cc_worker'], count=5000000)
     expect(final not in m4.present and final not in m4.files and not any(c[0] == 'fopen' and c[1] == final for c in m4.calls),
            'a failed rename leaves the final path absent: no empty marker')
     expect(not [p for p in m4.files if p.endswith('.tmp')], 'and the temp file is removed')
     m4b = cover_machine(albums=1, cached=False)
     m4b.call(cover_open, count=5000000)
     m4b.album_cover = m4b.extern_cover = 0
-    m4b.call(PSYMS['worker'], count=5000000)
+    m4b.call(PSYMS['cc_worker'], count=5000000)
     expect(cache_paths(m4b, 1)[0] in m4b.present and m4b.files.get(cache_paths(m4b, 1)[0]) == 0, 'a genuine absence of art still leaves the empty marker')
 
     # 15c. The progress timer cannot be created (audit): the screen never waits for a callback that cannot come
@@ -213,6 +215,8 @@ def run(ctx):
     m = cover_machine(); m.window = 0
     expect(m.call(cover_open, count=200000) == 0xffffffff, 'window_open failure returns -1')
 
+    rebuild_tests(ctx)
+
     # 20. The depth renderer on the real MIPS code: paint the covers and compare the frame with
     #     the host build of the same renderer (test/coverflow.py), pixel for pixel.
     m = cover_machine(albums=5)
@@ -244,9 +248,9 @@ def run(ctx):
     m.call(cover_open, count=5000000)
     pics = [c[2] for c in m.calls if c[0] == 'image_base_set_image']
     expect(pics, 'the flat fallback sets pictures on the stock images')
-    expect(sum(1 for p in pics if p.startswith('file://')) == 2 * 3 + 1,
-           f'real art only within ART_NEAR of the centre (got {pics})')
-    expect(sum(1 for p in pics if p == 'p_default') == 9 - 7, 'the rest keep the placeholder')
+    expect(sum(1 for p in pics if p.startswith('file://')) == 3 + 1,
+           f'real art only within ART_NEAR of the centre, the shelf having no wrapped side (got {pics})')
+    expect(sum(1 for p in pics if p == 'p_default') == 9 - 4, 'the rest keep the placeholder')
     slide = m.widgets.get('slide_menu')
     expect(slide and len(m.children.get(slide, [])) == 9 and m.props.get((slide, 'sensitive')) == 0
            and [c[2:] for c in m.calls if c[0] == 'slide_menu'] == [(O['CF_VIEW_W'], O['ART_SIZE'])],
@@ -467,6 +471,64 @@ def gesture_tests(ctx):
     m.touch('down', 250, t=1000); m.touch('move', 150, t=1050); m.touch('up', 150, t=1400); m.settle()
     expect(values(m) == [1], f'the same travel held still before the release coasts nowhere ({values(m)})')
 
+    # B. The shelf has ends (every shelf, main and per artist, one bounded path): no wrap, a rubber band past the end
+    #    (half speed, saturating at OVER_NUM / OVER_DEN of a cover) and the eased snap springing back; flings stop at the ends.
+    cap = h * O['OVER_NUM'] // O['OVER_DEN']
+    offs_of = lambda m: [signed(c[1]) for c in m.calls if c[0] == 'set_offset']
+    for albums, value, sign, name in ((5, 0, +1, 'the first album'), (5, 4, -1, 'the last album'), (1, 0, +1, 'a one-album shelf (right)'), (1, 0, -1, 'a one-album shelf (left)')):
+        m = page(albums, value)
+        x0 = 100 if sign > 0 else 260
+        m.touch('down', x0, t=1000)
+        seen = []
+        for i, dx in enumerate((10, 30, 60, 110, 180, 260)):   # the finger goes on and on in the same direction
+            m.touch('move', x0 + sign * dx, t=1020 + 20 * i); seen.append(sign * xoff(m))
+        raw = lambda dx: (dx - start) * h // dpx
+        expect(all(a < b for a, b in zip(seen, seen[1:])) and seen[0] > 0 and max(seen) <= cap and seen[-1] > cap // 2
+               and seen[2] < raw(60) // 2 and seen[-1] < raw(260) // 4,
+               f'{name}: the shelf stretches past the end at half speed or less, rising and saturating under {cap} ({seen})')
+        expect(not values(m) and shelf_value(m) == value, f'{name}: nothing wraps while it is stretched')
+        mid = xoff(m)
+        m.touch('up', x0 + sign * 260, t=1200)
+        m.settle()
+        path = [signed(c[1]) for c in m.calls if c[0] == 'set_offset']
+        expect(xoff(m) == 0 and shelf_value(m) == value and not values(m) and abs(mid) > 0,
+               f'{name}: the release springs back to the end cover and wraps nowhere ({values(m)})')
+        expect(path[-1] == 0 and all(abs(a) >= abs(b) for a, b in zip(path, path[1:])) and abs(path[0]) <= abs(mid),
+               f'{name}: the spring-back is the eased snap: the offset only falls to 0 ({path[:4]}..)')
+    # a fling past the end stops at it, either way; a shelf walked to its end and flicked on never wraps
+    m = page(5, 3)
+    m.touch('down', 250, t=1000); m.touch('move', 200, t=1020); m.touch('move', 150, t=1040); m.touch('up', 150, t=1050); m.settle()
+    expect(shelf_value(m) == 4 and values(m) and max(values(m)) == 4 and 0 not in values(m) and xoff(m) == 0,
+           f'a flick left from the fourth of five stops on the last album ({values(m)})')
+    m = page(5, 1)
+    m.touch('down', 100, t=1000); m.touch('move', 150, t=1020); m.touch('move', 200, t=1040); m.touch('up', 200, t=1050); m.settle()
+    expect(shelf_value(m) == 0 and 4 not in values(m) and xoff(m) == 0, f'a flick right from the second album stops on the first ({values(m)})')
+    m = page(5, 4)
+    for k in range(3):
+        m.touch('down', 250, t=2000 + 400 * k); m.touch('move', 200, t=2020 + 400 * k); m.touch('move', 150, t=2040 + 400 * k)
+        m.touch('up', 150, t=2050 + 400 * k); m.settle()
+    expect(shelf_value(m) == 4 and not values(m), 'three flicks on from the last album: it stays the last, nothing wraps to the first')
+    m = page(5, 0)
+    m.tap(cx - 100); m.settle()
+    expect(shelf_value(m) == 0 and not values(m), 'a tap on the (absent) cover left of the first album brings nothing in')
+    m = page(5, 3)
+    m.tap(cx + 100); m.settle()
+    expect(shelf_value(m) == 4, 'a tap on a side cover still brings it in (the last album)')
+    # a press that finds the shelf stretched takes it from where it is (no jump), and its release springs back
+    m = page(5, 0)
+    m.touch('down', 100, t=1000); m.touch('move', 200, t=1050); m.touch('up', 200, t=1100)   # released stretched: the snap is running
+    stretched = xoff(m)
+    m.touch('down', 200, t=1110)
+    expect(stretched > 0 and xoff(m) == stretched, f'a press during the spring-back stops it where it is ({stretched}, {xoff(m)})')
+    m.touch('move', 200 + start + 2, t=1130)
+    expect(abs(xoff(m) - stretched) <= 2 * h // dpx + 2, f'and the drag carries on from there without a jump ({stretched} -> {xoff(m)})')
+    m.touch('up', 200 + start + 2, t=1400); m.settle()
+    expect(xoff(m) == 0 and shelf_value(m) == 0 and not values(m), 'its release springs back to the first album')
+    # a drag inside the shelf is unchanged: no rubber band between the ends
+    m = page(5, 2)
+    m.touch('down', 200, t=1000); m.touch('move', 150, t=1020)
+    expect(xoff(m) == -((200 - 150 - start) * h // dpx), f'between the ends the shelf follows the finger one to one ({xoff(m)})')
+
 
 # The shelf and its textures (docs/architecture.md section 4, Covers / Textures): depth mode owns its position (the
 # stock slide_menu laid out every child, up to 4000, on each offset change: slide_menu_set_prop 0x613c94 ->
@@ -524,10 +586,10 @@ def shelf_tests(ctx):
     expect(costs[1000] <= costs[5] * 1.2, f'a drag step costs the same with 1000 albums as with 5 ({costs})')
     print(f'  drag step: {costs[5]:,} payload instructions (5 albums), {costs[1000]:,} (1000 albums)')
 
-    # S3. One album: it is the centre, a drag wraps onto itself, a tap opens it.
+    # S3. One album: it is the centre, a drag stretches and springs back onto it, a tap opens it.
     m = cover_machine(albums=1); m.call(PSYMS['coverflow_open'], count=5000000)
     m.touch('down', 200, t=1000); m.touch('move', 60, t=1300); m.touch('up', 60, t=1700); m.settle()
-    expect(shelf_value(m) == 0 and shelf_off(m) == 0, 'a one-album shelf drags back onto its album')
+    expect(shelf_value(m) == 0 and shelf_off(m) == 0 and not any(c[0] == 'set_value' for c in m.calls), 'a one-album shelf drags back onto its album')
     m.tap(cx)
     expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_ALBUMS'], 0) in m.calls, 'and a tap opens it')
 
@@ -537,11 +599,16 @@ def shelf_tests(ctx):
     m = cover_machine(albums=n); cols = coloured(m, n)
     m.call(PSYMS['coverflow_open'], count=20000000)
     first = loaded(m, n)
-    expect(sorted(first) == sorted({18, 19, 0, 1, 2, 3, 17, 4}) and first[0] == 0,
+    expect(sorted(first) == sorted({0, 1, 2, 3, 4}) and first[0] == 0,
            f'the open decodes the centre first, the ring around it and the next one ahead ({first})')
     paint(m)
     expect(not any(c[0] in ('widget_load_image', 'fopen', 'access') for c in m.calls) and centre_px(m) == cols[0],
            'paint at rest loads nothing and shows the centre album')
+    for stretch in (O['CF_VIEW_H'] // 4, O['CF_VIEW_H'] * O['OVER_NUM'] // O['OVER_DEN']):   # stretched past the first album: it stays the centre, nothing wraps in
+        put_off(m, stretch); paint(m)
+        expect(not any(c[0] == 'widget_load_image' and c[1].endswith(cache_paths(m, n)[n - 1].rsplit('/', 1)[1]) for c in m.calls) and not [a for a in loaded(m, n) if a >= 10],
+               f'stretched {stretch} px past the first album the last album is not drawn or decoded')
+    put_off(m, 0); paint(m)
     put_value(m, 10)
     paint(m)
     expect(not any(c[0] in ('widget_load_image', 'fopen', 'access') for c in m.calls), 'paint after a jump loads nothing')
@@ -571,7 +638,7 @@ def shelf_tests(ctx):
     m.call(PSYMS['coverflow_open'], count=20000000); paint(m)
     expect(step(m, 1) == [5] and step(m, 2) == [6], 'moving on, the loader fetches only the next cover ahead (5, then 6)')
     back = step(m, 1)
-    expect(back == [17], f'moving back needs no visible cover again, only the prefetch the other way ({back})')
+    expect(back == [], f'moving back needs no visible cover again and nothing is wanted past the first album ({back})')
 
 
 # Landscape (docs/ui.md "Cover Flow landscape"): the same page turned a quarter, drawn into the body under the navbar.
@@ -833,7 +900,7 @@ def landscape_tests(ctx, asset):
            'the navbar has no landscape button (the Settings switch replaced it)')
     lbl = tree.find('label_title')
     settings_lbl = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets/default/raw/ui/m1pod_settings.bin'), 'rb').read()).find('label_title')
-    expect((lbl.x, lbl.w) == (settings_lbl.x, settings_lbl.w) and lbl.x + lbl.w > O['NAV_VIEW_X'] and [c.name for c in tree.find('navigationbar_view').children] == ['label_title', 'btn_return', 'btn_backtoplayer'],
+    expect((lbl.x, lbl.w) == (settings_lbl.x, settings_lbl.w) and lbl.x + lbl.w > O['NAV_VIEW_X'] and [c.name for c in tree.find('navigationbar_view').children] == ['label_title', 'btn_return', 'btn_backtoplayer', 'btn_allalbums'],
            'the title has the whole navbar between Back and Now Playing, as on the other pages without a toggle')
     imgs = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx')
     expect(not any(os.path.exists(os.path.join(imgs, f'pod_nav_rotate{s}.png')) for s in ('', '_down')), 'the rotate glyph images are no longer in the tree')
@@ -847,3 +914,118 @@ def landscape_tests(ctx, asset):
     for x, y in ((160, LY + 2), (160, CF_ALBUM_Y + 4), (160, CF_ARTIST_Y + 4), (10, CLIENT_H - 2), (310, 60)):
         got = stock_target(m, cover_page_tree(m, asset), x, y)
         expect(got[-1] == 'touch_layer', f'a touch at ({x},{y}) in the landscape body reaches the touch layer ({got})')
+
+
+def rebuild_tests(ctx):
+    """Settings > Cover Flow > Rebuild Covers: coverflow_rebuild opens Cover Flow on the Preparing screen with the shared worker
+    in CC_REBUILD mode: every album is extracted again and its file replaced (a no-art marker too); Cancel keeps a complete cache."""
+    expect = ctx.expect
+    rebuild = PSYMS['coverflow_rebuild']
+    OLD = 111           # the size of an existing picture before the rebuild
+
+    def machine(albums=3, **kw):
+        m = cover_machine(albums=albums, **kw)
+        for p in cache_paths(m, albums): m.files[p] = OLD
+        return m
+
+    # 1. A complete cache still builds: every album is a job, the Preparing screen is up, mode CC_REBUILD.
+    m = machine()
+    v = m.call(rebuild, count=5000000)
+    s = build_state(m)
+    expect(v == 0 and count_of(m, 'pthread_create') == 1 and s['running'] == 1 and s['mode'] == 1 and s['total'] == 3,
+           f'a complete cache is rebuilt: one worker, CC_REBUILD, three jobs ({s})')
+    expect(build_jobs(m) == [(f'/mnt/mmc/m/{i}/1.flac', int(os.path.basename(p)[:8], 16)) for i, p in enumerate(cache_paths(m, 3))],
+           'one job per album, in the shelf order')
+    expect(('widget_set_visible', m.widgets['btn_cancel'], 1) in m.calls and ('widget_set_tr_text', m.widgets['label_status'], 'Preparing covers...') in m.calls
+           and 'view' not in [c[0] for c in m.calls], 'the Preparing screen with Cancel is shown, not the covers')
+    expect(('mkdir', '/mnt/mmc/.coverflow') in m.calls, 'the cache directory is made')
+    on_poll = fired(m, 'on_poll', 2000000)
+    expect(('widget_set_text_utf8', m.widgets['label_status'], 'Preparing covers... 0/3') in on_poll, 'the progress counts every album')
+    # the worker: every file is replaced (temp, rename), none removed first
+    dst = cache_paths(m, 3)
+    m.album_cover = 1
+    m.call(PSYMS['cc_worker'], count=5000000)
+    renames = [c for c in m.calls if c[0] == 'rename']
+    expect([c[2] for c in renames] == dst and all(c[1] == c[2] + '.tmp' for c in renames), 'each cover is extracted to a temp file and renamed over the old one')
+    expect(all(m.files.get(p) == 4096 for p in dst) and not [c for c in m.calls if c[0] == 'unlink' and c[1] in dst],
+           'the old files are replaced, never removed before')
+    expect(not [c for c in m.calls if c[0] == 'fopen' and c[2] == 'w'], 'no markers written for albums that have art')
+    # completion: joined, freed, then the covers
+    n = fired(m, 'on_poll', 5000000)
+    expect([c for c in n if c[0] == 'pthread_join'] and build_state(m)['jobs'] == 0 and 'view' in [c[0] for c in n],
+           'when the worker is done the set is freed and the covers show as usual')
+
+    # 2. Markers are replaced: an album that gained art has it now. An album that still has none keeps its marker (no write).
+    m = machine(); dst = cache_paths(m, 3)
+    m.files[dst[1]] = 0
+    m.call(rebuild, count=5000000)
+    m.album_cover = 1
+    m.call(PSYMS['cc_worker'], count=5000000)
+    expect(m.files[dst[1]] == 4096 and m.files[dst[0]] == 4096, 'the no-art marker is overwritten by the new picture')
+    m = machine(); dst = cache_paths(m, 3)
+    m.files[dst[1]] = 0
+    m.call(rebuild, count=5000000)
+    m.album_cover = m.extern_cover = 0
+    m.call(PSYMS['cc_worker'], count=5000000)
+    expect(m.files[dst[1]] == 0 and dst[1] in m.present and all(m.files[dst[i]] == OLD for i in (0, 2)),
+           'with no art found a marker stays a marker and a picture stays (old files stay until a new one replaces them)')
+    expect(not [c for c in m.calls if c[0] == 'fopen' and c[2] == 'w'] and not [c for c in m.calls if c[0] == 'unlink' and c[1] in dst]
+           and not [p for p in m.files if p.endswith('.tmp')], 'and nothing is written or removed but the temp files')
+    # an extraction that cannot be published keeps the old file too (audit rule)
+    m = machine(1); dst = cache_paths(m, 1)
+    m.call(rebuild, count=5000000)
+    m.album_cover = 1; m.fail.add(('rename', dst[0]))
+    m.call(PSYMS['cc_worker'], count=5000000)
+    expect(m.files[dst[0]] == OLD and dst[0] in m.present and not [p for p in m.files if p.endswith('.tmp')], 'a failed rename keeps the old file and leaves no temp file')
+
+    # 3. Cancel (and Back) in the middle: the worker is joined, the cache stays complete, the covers show.
+    m = machine(); dst = cache_paths(m, 3)
+    m.call(rebuild, count=5000000)
+    m.setword(PSYMS['cb'] + 4 * 5, 1)         # album 0 is done: replaced
+    m.files[dst[0]] = 4096
+    n = fired(m, 'on_cancel', 5000000)
+    expect([c for c in n if c[0] == 'pthread_join'] and build_state(m)['jobs'] == 0 and 'view' in [c[0] for c in n], 'Cancel joins the worker, frees the set and shows the covers')
+    expect(all(p in m.present and m.files[p] > 0 for p in dst) and m.files[dst[1]] == OLD and m.files[dst[0]] == 4096
+           and not [c for c in n if c[0] == 'unlink'], 'the cache is complete: the replaced file is new, the others are the old ones')
+    m = machine()
+    m.call(rebuild, count=5000000)
+    n = fired(m, 'on_back', 5000000)
+    expect([c for c in n if c[0] == 'pthread_join'] and build_state(m)['jobs'] == 0 and 'navigator_back' not in [c[0] for c in n], 'Back during the rebuild is Cancel')
+    m = machine()
+    m.call(rebuild, count=5000000)
+    n = fired(m, 'on_destroy', 5000000)
+    expect([c for c in n if c[0] == 'pthread_join'] and build_state(m)['jobs'] == 0 and build_state(m)['running'] == 0, 'closing the page mid-rebuild joins the worker and frees the set')
+
+    # 4. No free space: nothing is touched, the covers show with what is cached; so for no thread, an empty library, a refused timer.
+    m = machine(); m.free_mb = 2
+    m.call(rebuild, count=5000000)
+    expect(count_of(m, 'pthread_create') == 0 and build_state(m)['jobs'] == 0 and 'view' in [c[0] for c in m.calls]
+           and all(m.files[p] == OLD for p in cache_paths(m, 3)), 'no free space: no rebuild, the covers show, every file is untouched')
+    m = machine(); m.thread_ok = False
+    m.call(rebuild, count=5000000)
+    expect(build_state(m)['jobs'] == 0 and 'view' in [c[0] for c in m.calls], 'a refused thread: the covers show')
+    m = machine(); m.timer_fail = True
+    m.call(rebuild, count=5000000)
+    expect(count_of(m, 'pthread_join') == 1 and build_state(m)['jobs'] == 0 and 'view' in [c[0] for c in m.calls], 'a refused progress timer: the worker is joined, the covers show')
+    m = machine(0)
+    v = m.call(rebuild, count=2000000)
+    expect(v == 0 and count_of(m, 'pthread_create') == 0 and any(c[0] == 'widget_set_text_utf8' and 'Update Local Music' in str(c[2]) for c in m.calls),
+           'an empty library: the usual message, no thread')
+    m = machine(); m.call(PSYMS['coverflow_open'], count=5000000)
+    n = fired(m, 'on_destroy', 5000000)
+    m.call(rebuild, count=5000000)
+    expect(count_of(m, 'pthread_create') == 1 and build_state(m)['mode'] == 1, 'after a normal open is closed, a rebuild starts fresh')
+
+    # 5. The normal open is still the missing-only build.
+    m = cover_machine(albums=3, cached=False)
+    m.call(PSYMS['coverflow_open'], count=5000000)
+    expect(build_state(m)['mode'] == 0 and build_state(m)['total'] == 3, 'coverflow_open builds the missing covers only (CC_MISSING)')
+    m = cover_machine(albums=3, cached=False)
+    cached = cache_paths(m, 3)[1]; m.present.add(cached); m.files[cached] = 0     # a marker counts as cached
+    m.call(PSYMS['coverflow_open'], count=5000000)
+    expect(build_state(m)['total'] == 2 and [t for t, _ in build_jobs(m)] == ['/mnt/mmc/m/0/1.flac', '/mnt/mmc/m/2/1.flac'], 'a marker or a picture is not rebuilt by the normal open')
+    # a second page cannot take the worker
+    m = cover_machine(albums=3, cached=False)
+    m.call(PSYMS['coverflow_open'], count=5000000)
+    m.call(PSYMS['coverflow_rebuild'], count=5000000)
+    expect(count_of(m, 'pthread_create') == 0 and build_state(m)['total'] == 3 and build_state(m)['mode'] == 0, 'a page already open: the rebuild is refused and the running build is left alone')

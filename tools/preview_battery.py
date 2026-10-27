@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PIL import Image, ImageDraw, ImageFont
 import awtk_ui, battery_art as B
 
-RAW = 'rootfs/release/assets/default/raw'
+from awtk_ui import RAW
 Z = 8
 ANN = ImageFont.load_default(13)
 

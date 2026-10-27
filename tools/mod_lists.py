@@ -2,7 +2,7 @@
 """iPod-style library lists for the Shanling M1 Plus (asset-only: page styles and ui/*.bin).
 
 The library pages (Folders, Artists/Genres/Composers, Songs, Albums, Album detail, Playlists, Search,
-the Now Playing "jump" list) and the dialogs they open are restyled to the look of the M1 Pod menu:
+the Now Playing "jump" list) and the dialogs they open are restyled to the look of the M1+ Pod menu:
 black page, rows that are stock `list_item_style` tiles, white left-aligned titles (21 px where the
 row's label box is tall enough), grey secondary text, the stock right chevron, one pressed colour.
 
@@ -20,7 +20,7 @@ theme mod owns that file; run this mod after it and the lists follow its colours
 
   btn_tablerow_style       every state copied from default, bg_color taken from list_item_style's
                            same state: the table rows (Folders, Artists, Songs, jump list) always
-                           match the list_item_style rows (Albums, Playlists, Search, M1 Pod menu)
+                           match the list_item_style rows (Albums, Playlists, Search, M1+ Pod menu)
   srlabel_item_white/gold20_style  21 px on the single-line pages (Folders, Artists; label box
                            56-60 px tall); the two-line rows keep 20 px in their 20 px boxes
   srlabel_item_gray26_style  defined (copy of srlabel_item_gray18_style): stock creates the Songs
@@ -55,7 +55,7 @@ RAW = 'rootfs/release/assets/{theme}/raw'
 THEMES = ('default', 'theme1')               # asset themes; theme1 only overrides a few files
 STYLE_MODE = 0o744                           # stock styles/*.bin mode
 STYLE_MTIME = 1750924035                     # a stock asset mtime: added files build deterministically
-TITLE_PX = 21                                # the M1 Pod menu's row text (srlabel_leftwhite21_style)
+TITLE_PX = 21                                # the M1+ Pod menu's row text (srlabel_leftwhite21_style)
 NAVBAR_PX = 20                               # navbar titles (mod_polish.TITLE_NEW)
 
 # page (window name == theme name) -> page-theme recipes, in the order they are applied
@@ -70,8 +70,17 @@ PAGES = {
 }
 # ui/*.bin edits (relative to raw/ui of the default theme; none of these exists in theme1)
 UI_EDITS = ('allmusic_page.bin', 'dialog/confirminfo_dialog.bin', 'dialog/sortselect_dialog.bin',
-            'dialog/batchadd_dialog.bin', 'dialog/playqueue_dialog.bin')
+            'dialog/batchadd_dialog.bin', 'dialog/playqueue_dialog.bin', 'dialog/playmore_dialog.bin')
 GEOMETRY_EDITS = ('dialog/playqueue_dialog.bin',)   # these change widget sizes on purpose (the row template)
+ADD_EDITS = ('dialog/playmore_dialog.bin',)         # these add widgets (the More rows, docs/modules/playmore.md): every stock widget stays, at its place (but the speed row's)
+PM_HIGHLIGHT = 'default(alpha=130)'                 # the AWTK dialog highlighter: the page under the bottom sheet is dimmed by the window manager (set up when the dialog opens)
+PM_SPEED = {'scrlabel1': ((48, 8, 60, 20), (48, 8, 96, 20)),          # Playback speed's row: the label, the note under it and the four badges
+            'label1_msg': ((48, 31, 138, 14), (48, 31, 262, 14)),     # (stock rectangle, ours): the label gets the room before the badges, which
+            'img_1x': ((122, 0, 36, 50), (148, 0, 36, 50)),           # move right (40 px apart, the last one ends at 304 of the 310 px row); the
+            'img_1_25x': ((172, 0, 36, 50), (188, 0, 36, 50)),        # note under them may use the whole row
+            'img_1_5x': ((222, 0, 36, 50), (228, 0, 36, 50)),
+            'img_2x': ((272, 0, 36, 50), (268, 0, 36, 50))}
+PM_RED = '#FF5A4F'                                  # the Delete label: 6.8:1 on the black dialog, 4.85:1 on the pressed row (#362221; a label in a pressed row stays in its normal state)
 QUEUE_ROW, QUEUE_BTN = 44, 40                       # the queue drawer's rows: table row, its button / label (4 px gap)
 QUEUE_NAME_PX, QUEUE_NOW_PX = 18, 20                # other rows / the playing row
 
@@ -249,6 +258,44 @@ def edit_allmusic(root, pal):
         view.set(f'style:{st}:border_width', '1')
     each_state(label, 'text_color', '#FFFFFF')
 
+def edit_playmore(root, pal):
+    """Now Playing's More dialog (patch/playmore.c, docs/modules/playmore.md): the sheet dims the page under it (the dialog's
+    highlight); two rows after listitem6, both in the look of the Add to playlist row: "More" (list_item pod_more: the Extras
+    ellipsis glyph, the label, the stock grey chevron-right) and the second page's header (pod_back: the stock chevron-left
+    `return`, the label "More"); Delete Song's label in red; the hairlines for the order the payload shows (Go to album first
+    has none, A-B repeat is no longer first, the back header has none); Playback speed's row with room for its label. Stock
+    widgets keep their names, order and rectangles, but the speed row's (PM_SPEED)."""
+    sv, add, first, ab = root.find('playmore_scrollview'), root.find('listitem2'), root.find('listitem4'), root.find('listitem0')
+    assert sv and add and first and ab and add in sv.children and root.find('pod_more') is None and root.find('pod_back') is None, 'unexpected playmore_dialog'
+    assert root.type == 'dialog' and root.get('highlight') is None
+    root.set('highlight', PM_HIGHLIGHT)
+    for name, (stock, ours) in PM_SPEED.items():
+        w = root.find(name)
+        assert w is not None and (w.x, w.y, w.w, w.h) == stock, f'{name}: unexpected rectangle'
+        w.x, w.y, w.w, w.h = ours
+    def row(name, children):
+        r = awtk_ui.Widget('list_item', 0, 0, 0, 0, [(k, v) for k, v in add.props])
+        r.set('name', name)
+        r.set('visible', 'false')       # the payload shows it; with the kill switch (or any failure) the dialog is the stock seven rows
+        r.set('sensitive', 'false')
+        r.children = children
+        sv.children.append(r)
+        return r
+    row('pod_more', [
+        awtk_ui.Widget('image', 14, 13, 24, 24, [('name', 'pod_more_icon'), ('draw_type', 'default'), ('image', 'pod_ic_extras'), ('sensitive', 'false')]),
+        awtk_ui.Widget('hscroll_label', 48, 15, 200, 20, [('name', 'pod_more_label'), ('style', 'srlabel_item_white_style')]),
+        awtk_ui.Widget('image', 283, 14, 13, 22, [('name', 'pod_more_chev'), ('draw_type', 'default'), ('image', 'right_arrow'), ('sensitive', 'false')])])
+    back = row('pod_back', [
+        awtk_ui.Widget('image', 14, 14, 13, 22, [('name', 'pod_back_chev'), ('draw_type', 'default'), ('image', 'return'), ('sensitive', 'false')]),
+        awtk_ui.Widget('hscroll_label', 40, 15, 200, 20, [('name', 'pod_back_label'), ('style', 'srlabel_item_white_style')])])
+    assert first.get('style:normal:border') == 'top' and ab.get('style:normal:border') == 'none'
+    first.set('style:normal:border', 'none')
+    back.set('style:normal:border', 'none')
+    ab.set('style:normal:border', 'top')
+    lab = root.find('scrlabel6')
+    assert lab and lab.get('style') == 'srlabel_item_white_style' and lab.get('style:normal:text_color') is None
+    for st in ('normal', 'pressed', 'over', 'disable', 'focused'): lab.set(f'style:{st}:text_color', PM_RED)
+
 def edit_pressed(root, pal, names, old):
     """Dialog buttons with an inline pressed colour press in the list's pressed colour."""
     new = hexcol(pal['row']['pressed'])
@@ -287,21 +334,28 @@ def ui_edit(rel, root, pal):
     elif rel == 'dialog/confirminfo_dialog.bin': edit_pressed(root, pal, ('btn_cancel', 'btn_enter'), '#362221')
     elif rel == 'dialog/sortselect_dialog.bin': edit_pressed(root, pal, ('button_return',), '#362221')
     elif rel == 'dialog/batchadd_dialog.bin': edit_pressed(root, pal, ('btn_addplaylist', 'btn_addfav'), '#2E2A19')
+    elif rel == 'dialog/playmore_dialog.bin': edit_playmore(root, pal)
     else: raise KeyError(rel)
 
 def build_ui(work):
     pal, report = default_palette(work), []
     for rel in UI_EDITS:
-        path = os.path.join(work, RAW.format(theme='default'), 'ui', rel)
-        assert not os.path.exists(os.path.join(work, RAW.format(theme='theme1'), 'ui', rel)), f'theme1 has its own {rel}'
-        old, new, _ = edit_ui(path, lambda root, rel=rel: ui_edit(rel, root, pal))
-        shape = lambda d: [(w.type, w.name, w.x, w.y, w.w, w.h) for w in awtk_ui.parse(d).walk()]
-        if rel in GEOMETRY_EDITS:
-            names = lambda d: [(w.type, w.name) for w in awtk_ui.parse(d).walk()]
-            assert names(old) == names(new), f'{rel}: a widget was added, removed or renamed'
-        else:
-            assert shape(old) == shape(new), f'{rel}: a widget was added, removed, renamed or moved'
-        report.append(f'ui/{rel}: {len(old)} -> {len(new)} bytes')
+        themes = THEMES if rel in ADD_EDITS else THEMES[:1]   # theme1 has its own playmore_dialog.bin (the A-B label 20 px narrower)
+        if rel not in ADD_EDITS: assert not os.path.exists(os.path.join(work, RAW.format(theme='theme1'), 'ui', rel)), f'theme1 has its own {rel}'
+        for theme in themes:
+            path = os.path.join(work, RAW.format(theme=theme), 'ui', rel)
+            old, new, _ = edit_ui(path, lambda root, rel=rel: ui_edit(rel, root, pal))
+            shape = lambda d: [(w.type, w.name, w.x, w.y, w.w, w.h) for w in awtk_ui.parse(d).walk()]
+            if rel in ADD_EDITS:
+                ours = lambda s: s[1] in ('pod_more', 'pod_back') or s[1].startswith(('pod_more_', 'pod_back_'))
+                other = lambda s: s[:2] if s[1] in PM_SPEED else s   # the speed row's rectangles are ours (PM_SPEED)
+                assert [other(s) for s in shape(new) if not ours(s)] == [other(s) for s in shape(old)], f'{rel}: a stock widget was removed, renamed or moved'
+            elif rel in GEOMETRY_EDITS:
+                names = lambda d: [(w.type, w.name) for w in awtk_ui.parse(d).walk()]
+                assert names(old) == names(new), f'{rel}: a widget was added, removed or renamed'
+            else:
+                assert shape(old) == shape(new), f'{rel}: a widget was added, removed, renamed or moved'
+            report.append(f'{theme}/ui/{rel}: {len(old)} -> {len(new)} bytes')
     return report
 
 

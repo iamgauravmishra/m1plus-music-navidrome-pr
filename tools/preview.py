@@ -2,8 +2,8 @@
 """The release sheet (out/preview/release-preview.png; docs/release-preview.png at a release): PIL mock-up of the release's screens (docs/ui.md), drawn by the look
 previews from one finished tree. Approximate, not AWTK; sample data.
 
-  Home pages 1 and 3 (Tabler icons, the M1 Pod icon) + status bar     preview_icons.home
-  M1 Pod menu as Home (no top bar), Settings page, Shuffle page       preview_icons.pod_page (the tree's own ui files)
+  Home pages 1 and 3 (Tabler icons, the M1+ Pod icon) + status bar     preview_icons.home
+  M1+ Pod menu as Home (no top bar), Settings page, Shuffle page       preview_icons.pod_page (the tree's own ui files)
   album page (header, Play, Shuffle)             preview_album
   artist Cover Flow, and the landscape Cover Flow (480 x 320, as the user sees it)   preview_cover
   Albums: the grid and the list mode of ui/m1pod_albums.bin, with the mode toggle    preview_icons.albums_grid / albums_list
@@ -22,7 +22,7 @@ import build, preview_icons as PI
 import pod_pages
 P = pod_pages
 
-RAW = 'rootfs/release/assets/default/raw'
+from awtk_ui import RAW
 
 def run(script, *args):
     subprocess.run([sys.executable, '-I', os.path.join(HERE, script), *args], check=True, stdout=subprocess.DEVNULL)
@@ -36,7 +36,7 @@ def controls(s, work):
     root = awtk_ui.parse(open(os.path.join(raw, 'ui/dialog/dropdown_dialog.bin'), 'rb').read())
     ttf = Ttf(os.path.join(work, MP.FONT)); en = MP.strings(os.path.join(raw, 'strings/en_US.bin'), MP.TILE_KEYS)
     im = Image.new('RGBA', (320, 640), (0x14, 0x14, 0x14, 255)); d = ImageDraw.Draw(im)
-    PI.status_bar(s, im, bg=(0x14, 0x14, 0x14), vol='100')
+    PI.asset_bar(s, root.find('view_sysbar'), im)
     tiles = {'img_wifiswitch': ('drop_wifiopen', 'label_wifi', 'wifiset_wifi'), 'img_btswitch': ('drop_bt', 'label_bt', 'wifiset_bt'),
              'img_keylockswitch': ('drop_keylock', 'label_lock', 'system_keylock'), 'img_gainswitch': ('drop_highgain', 'label_gain', 'gain_high'),
              'img_usbmode': ('drop_usbaudio', 'label_usbmode', 'usbmode_audio'), 'img_outputswitch': ('drop_po', 'label_outputway', 'sset_outputway'),
@@ -83,13 +83,13 @@ def artists_page(s, album_artist=False):
 
 def menu_page(s, data, home=False):
     """The menu as patch/menu.c arranges it for the saved list `data` (None: no file), 400 px under the navbar or the Home instance."""
-    names = [f'pod_row{i}' for i in P.parse_menu(data)] + ['pod_row9', 'pod_row10']
+    names = [f'pod_row{i}' for i in P.parse_menu(data)] + [f'pod_row{len(P.ITEMS)}', f'pod_row{len(P.ITEMS) + 1}']
     return PI.pod_page(s, 'm1pod_menu', 9, home=home, order=names).convert('RGB')
 
 def extras_page(s, data):
-    """Extras: the items the saved list hides, then the stock tiles."""
+    """Extras: the items the saved list does not show, in the fixed grouped order (pod_pages.EXTRAS_ORDER)."""
     shown = set(P.parse_menu(data))
-    names = [f'pod_row{i}' for i in range(len(P.ITEMS)) if i not in shown] + [f'pod_row{i}' for i in range(len(P.ITEMS), len(P.EXTRAS_PAGE.rows))]
+    names = [f'pod_row{i}' for i in P.EXTRAS_ORDER if i not in shown]
     return PI.pod_page(s, 'm1pod_extras', 9, order=names).convert('RGB')
 
 def mainmenu_page(s, data):
@@ -99,6 +99,18 @@ def mainmenu_page(s, data):
     return PI.pod_page(s, 'm1pod_mainmenu', 9, order=[f'pod_row{i}' for i in order],
                        switches={f'pod_switch{i}': i in ids for i in range(len(P.ITEMS))},
                        arrows={f'pod_up{i}' for i in ids[1:]}).convert('RGB')
+
+def shot_bars(work):
+    """The status bar while a Screenshot is pending (the camera shown, Wi-Fi and a connected Bluetooth lit), with the 12 h and the 24 h
+    clock, then the same bar as it is for the capture (the camera hidden), drawn from the tree's own system_bar.bin; 3x."""
+    import preview_theme as PT
+    t = PT.Tree(work)
+    rows = []
+    for clock, shot in (('12:59 PM', True), ('12:59', True), ('12:59 PM', False)):
+        im = Image.new('RGBA', (320, PT.BAR), (0, 0, 0, 255)); PT.status_bar(im, t, shot=shot, clock=clock); rows.append(im)
+    sheet = Image.new('RGB', (320, 3 * PT.BAR + 12), (0x2A, 0x2A, 0x2A))
+    for i, im in enumerate(rows): sheet.paste(im.convert('RGB'), (0, i * (PT.BAR + 6)))
+    return sheet.resize((sheet.width * 3, sheet.height * 3), Image.NEAREST)
 
 def main():
     work = sys.argv[1]
@@ -117,10 +129,12 @@ def main():
     panel = lambda im, i, n: im.crop((i * im.width // n, 0, (i + 1) * im.width // n, im.height))
     home, home3 = PI.home(s, 0).convert('RGB'), PI.home(s, 2).convert('RGB')
     menu = menu_page(s, None, home=True)
-    sett = PI.pod_page(s, 'm1pod_settings', 6, switches={'pod_switch2': True}).convert('RGB')
+    sett = PI.pod_page(s, 'm1pod_settings', 6).convert('RGB')
+    homeset = PI.pod_page(s, 'm1pod_homeset', 2, switches={'pod_switch0': True}).convert('RGB')
     cfset = PI.pod_page(s, 'm1pod_cfset', 2, switches={'pod_switch0': False}, values={'pod_value1': 'Artist'}).convert('RGB')
     shuf = PI.pod_page(s, 'm1pod_shuffle', 3).convert('RGB')
     ctl = controls(s, work).convert('RGB')
+    bars, bars_same = PI.bars_compare(s); bars = bars.convert('RGB')
     custom = b'2301458\n'   # Albums, Artists, Now Playing, Cover Flow, Songs, Playlists, Folders: Shuffle and Genres are hidden
     mm_def, mm_cust = mainmenu_page(s, None), mainmenu_page(s, custom)
     menu_cust = menu_page(s, custom)
@@ -128,16 +142,17 @@ def main():
     extras_cust = extras_page(s, custom)
     art0, art1 = artists_page(s).convert('RGB'), artists_page(s, True).convert('RGB')
     pad, lab = 12, 20
-    cols = [('Home page 1', home), ('Home page 3: the M1 Pod icon', home3), ('M1 Pod menu as Home (no top bar)', menu),
-            ('Settings page', sett), ('Settings > Cover Flow (Sort: Artist)', cfset), ('Shuffle page', shuf),
+    cols = [('Home page 1', home), ('Home page 3: the M1+ Pod icon', home3), ('M1+ Pod menu as Home (no top bar)', menu),
+            ('Settings page', sett), ('Settings > Cover Flow (Sort: Artist)', cfset), ('Settings > Home Screen', homeset),('Shuffle page', shuf),
             ('Settings > Main Menu (default: Genres, Folders hidden)', mm_def), ('Main Menu after customising (Shuffle, Genres hidden)', mm_cust),
-            ('The menu with that list', menu_cust), ('Extras (default: Genres, Folders on top)', extras),
+            ('The menu with that list', menu_cust), ('Extras (default: Library, then Tools)', extras),
             ('Extras with Shuffle, Genres hidden', extras_cust), ('Artists: Artist mode (toggle shows Album Artist)', art0), ('Artists: Album Artist mode (toggle shows Artist)', art1),
             ('Album page', panel(album, 0, 4)), ('Album page, long title', panel(album, 1, 4)),
             ('Artist Cover Flow', panel(cf, 2, 3)),
             ('Albums: grid view (toggle shows the list)', PI.albums_grid(s).convert('RGB')),
             ('Albums: list mode (toggle shows the grid; row 2 pressed)', PI.albums_list(s).convert('RGB')),
             ('Pull-down, toggles and sliders', ctl),
+            ('Status bar: real (top), pull-down default, theme1; below, their differences x16 (' + ('identical' if bars_same else 'DIFFER') + ')', bars),
             ('Lock screen over The Starry Night (playing, idle + charging)', lock),
             ('Cover Flow landscape (Settings > Cover Flow > Landscape; player held turned counter-clockwise)', land)]
     # rows of panels, packed left to right
@@ -156,7 +171,13 @@ def main():
         y += max(i.height for _, i in r) + lab + pad
     d.text((pad, y), 'Battery, status bar and lock screen, 8x', fill=(0xAA,) * 3, font=PI.ANN)
     sh.paste(bat, (pad, y + lab))
-    PI.save_compact(sh.crop((0, 0, wid, y + lab + bat.height + pad)), out); print('wrote', out, sh.size)
+    sb = shot_bars(work)
+    sh2 = Image.new('RGB', (wid, sh.height + sb.height + lab + pad), (0x2A, 0x2A, 0x2A))
+    sh2.paste(sh.crop((0, 0, wid, y + lab + bat.height + pad)), (0, 0))
+    y2 = y + lab + bat.height + pad
+    ImageDraw.Draw(sh2).text((pad, y2), 'Status bar while a Screenshot is pending: 12 h clock, 24 h clock, then as captured (camera hidden); 3x', fill=(0xAA,) * 3, font=PI.ANN)
+    sh2.paste(sb, (pad, y2 + lab))
+    PI.save_compact(sh2.crop((0, 0, wid, y2 + lab + sb.height + pad)), out); print('wrote', out, sh2.size)
 
 if __name__ == '__main__':
     main()

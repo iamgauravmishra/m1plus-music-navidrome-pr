@@ -5,7 +5,7 @@ drawn from one finished tree. Approximate, not AWTK; sample data.
   Albums (stock list) -> the album page            the stock Albums rows, then albuminfo_page
   Cover Flow on an artist -> the same album page   the All albums card opens the same stock page
   a playlist's songs                               the Songs page (allmusic_page) with the q2-pod rows
-  the queue (Now Playing list)                     playerjumpinfo_page: the playing row carries the red disc
+  the queue (Now Playing list)                     playerjumpinfo_page: the playing row has the wave marker at the right end
 
 Usage: venv/bin/python -I tools/preview_stock.py WORKDIR OUT.png
 """
@@ -45,29 +45,36 @@ def albums_list(p, s):
     return pg.im
 
 
-def playlist_detail(p, s):
-    """A playlist's songs: the Songs page (allmusic_page, class 0xff13): 64 px rows, a 40 px icon,
-    title and artist; the stock page has no header and no Play all."""
-    pg = PL.Page(p, s); pg.navbar('Road Trip')
-    for i, (album, title, artist) in enumerate(SONGS):
+def track_rows(pg, rows, playing, pressed, hide):
+    """The track rows of the Songs-family pages and the queue: every row shows the track's file-format disc (icon_flac:
+    the same picture for a library in one format) and the playing row the red disc; with `hide` (patch/rows.c
+    rows_track_icon) no row has a disc: every title starts at the 12 px margin, and the playing row has the wave marker
+    (np_row_playing, 40 px widget at 258..298) after its text, which is 238 px wide."""
+    for i, (title, artist) in enumerate(rows):
         y = BAR + 50 + i * 64
-        pg.table_row(y, 60, pressed=(i == 4))
-        pg.icon('albumcover_s', 12, y, 40, 60)
-        pg.label(title, 60, y + 7, 238, 24, 'hscroll_label', 'srlabel_item_white_style')
-        pg.label(artist, 60, y + 33, 238, 20, 'hscroll_label', 'srlabel_item_gray18_style')
+        pg.table_row(y, 60, pressed=(i == pressed))
+        disc = i == playing
+        if not hide: pg.icon('icon_playing' if disc else 'icon_flac', 12, y, 40, 60)
+        x = 12 if hide else 60
+        w = 238 if hide and disc else 298 - x
+        if hide and disc: pg.icon('np_row_playing', 258, y, 40, 60)
+        pg.label(title, x, y + 7, w, 24, 'hscroll_label', 'srlabel_item_white_style')
+        pg.label(artist, x, y + 33, w, 20, 'hscroll_label', 'srlabel_item_gray18_style')
+
+
+def playlist_detail(p, s, hide=True):
+    """A playlist's songs: the Songs page (allmusic_page, class 0xff13): 64 px rows, title and artist; the stock page
+    has no header and no Play all."""
+    pg = PL.Page(p, s); pg.navbar('Road Trip')
+    track_rows(pg, [(title, artist) for _, title, artist in SONGS], 2, 4, hide)
     return pg.im
 
 
-def queue(p, s):
+def queue(p, s, hide=True):
     """The queue (Now Playing list, playerjumpinfo_page): the navbar title the page builds in
-    srlabel_leftwhite22_style (20 px in this page's theme), the playing row's red disc."""
+    srlabel_leftwhite22_style (20 px in this page's theme), the playing row's wave marker."""
     pg = PL.Page(p, s); pg.navbar('Kind of Blue', search=False)
-    for i, (title, artist) in enumerate(QUEUE):
-        y = BAR + 50 + i * 64
-        pg.table_row(y, 60, pressed=(i == 5))
-        pg.icon('icon_playing' if i == 2 else 'albumcover_s', 12, y, 40, 60)
-        pg.label(title, 60, y + 7, 238, 24, 'hscroll_label', 'srlabel_item_white_style')
-        pg.label(artist, 60, y + 33, 238, 20, 'hscroll_label', 'srlabel_item_gray18_style')
+    track_rows(pg, QUEUE, 2, 5, hide)
     return pg.im
 
 

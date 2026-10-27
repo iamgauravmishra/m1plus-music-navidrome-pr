@@ -40,7 +40,7 @@ import battery_art
 from awtk_text import Ttf, awtk_width, fit_size, worst_case_text
 from modlib import clone_workdir, edit_ui, write_keep_mode
 
-RAW = 'rootfs/release/assets/default/raw'
+from awtk_ui import RAW
 UI = f'{RAW}/ui/screensaver_page.bin'
 FONT = f'{RAW}/fonts/default.ttf'
 PAGE_STYLE = f'{RAW}/styles/screensaver_page.bin'     # the page's window theme (default asset theme)

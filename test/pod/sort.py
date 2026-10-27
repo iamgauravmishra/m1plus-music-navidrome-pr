@@ -275,12 +275,12 @@ def run(ctx):
     expect(titles == [a for a, _ in LIB][:len(titles)] and [tap_row(m, r) for r in range(6)] == [[r] for r in range(6)], 'Album order: the stock rows, as before')
     m = albums_page(LIB, data=b'junk')
     expect(listed(m)[0][:3] == [LIB[12][0], LIB[8][0], LIB[1][0]], 'a corrupt file: Artist')
-    # grid mode: the same order, three to a row
+    # grid mode: the same order, two to a row
     m = albums.albums_machine(0, sort='artist'); fill(m, LIB); albums.open_grid(m)
     albums.settle(m)
-    cells = sorted(((t[1][1], t[1][0], t[0]) for t in m.texts))
-    expect([c[2] for c in cells][:6] == [LIB[i][0] for i in LIB_ARTIST_ORDER[:6]],
-           f'Albums (grid): the same order, three to a row ({[c[2] for c in cells][:6]})')
+    cells = sorted((t[0][1][1], t[0][1][0], t[0][0]) for t in zip(m.texts, m.text_styles) if t[1] == 'label_grid_title')
+    expect([c[2] for c in cells][:4] == [LIB[i][0] for i in LIB_ARTIST_ORDER[:4]],
+           f'Albums (grid): the same order, two to a row ({[c[2] for c in cells][:4]})')
     # an empty library, and the page's memory
     m = albums.albums_machine(0, sort='artist'); albums.open_grid(m)
     expect(('window_open', 'm1pod_albums') in m.calls and ('widget_set_tr_text', m.widgets['label_status'], 'Update Local Music first') in m.calls,

@@ -146,8 +146,8 @@
    ]
   },
   {
-   "value": 120,
-   "purpose": "AH_ART: the cover thread renders /tmp/abp/<md5>1.jpg, the album page header's cover (the only reader of the 1.jpg files, albuminfo_page), at AH_ART (stock 100), so the 120 px header cover is drawn 1:1",
+   "value": 160,
+   "purpose": "AH_ART: the cover thread renders /tmp/abp/<md5>1.jpg, the album page header's cover (the only reader of the 1.jpg files, albuminfo_page), at AH_ART (stock 100), so the 160 px header cover is drawn 1:1 (not 168, Cover Flow's cache size: that cache is a different file the page never reads, so there is nothing to share and 160 keeps the header 8 px shorter)",
    "sites": [
     [
      "0x4dd670",
@@ -378,6 +378,66 @@
      ""
     ]
    ]
+  },
+  {
+   "value": 44,
+   "purpose": "AH_NAV_H: the album page's navbar builder (albuminfo_page_init+0x214, 0x526a3c; ui/albuminfo_page.bin's navigationbar_view is 44 high): the buttons' h, held in s2 (v0 in the last) for every button_create of every branch",
+   "sites": [
+    [
+     "0x526aec",
+     "0x24120032",
+     "albuminfo navbar builder",
+     "s2: h of the select-mode buttons (x 0, 116, 191, 268)"
+    ],
+    [
+     "0x526d7c",
+     "0x24120032",
+     "albuminfo navbar builder",
+     "s2: h of the 0xf001 branch's search button (x 120)"
+    ],
+    [
+     "0x526e40",
+     "0x24120032",
+     "albuminfo navbar builder",
+     "s2: h of the shared tail's buttons (songsort/multi-select x 170/220, Now Playing x 270, Back x 0)"
+    ],
+    [
+     "0x526f44",
+     "0x24020032",
+     "albuminfo navbar builder",
+     "v0: h of the search button at x 170"
+    ]
+   ]
+  },
+  {
+   "value": 11,
+   "purpose": "the navbar title label's y, centred in AH_NAV_H: (44 - 22) / 2 (stock 14 in the 50 px bar)",
+   "sites": [
+    [
+     "0x526d20",
+     "0x2406000e",
+     "albuminfo navbar builder",
+     "hscroll_label y, 0xf001 branch"
+    ],
+    [
+     "0x526fa4",
+     "0x2406000e",
+     "albuminfo navbar builder",
+     "hscroll_label y, the other branches"
+    ]
+   ]
+  },
+  {
+   "value": 12,
+   "purpose": "the select-mode 'All' label's y, centred in AH_NAV_H: (44 - 20) / 2 (stock 16)",
+   "sites": [
+    [
+     "0x526b68",
+     "0x24060010",
+     "albuminfo navbar builder",
+     "label_create y"
+    ]
+   ]
   }
  ],
  "row_layout_calls": {
@@ -468,7 +528,63 @@
    ]
   ]
  },
+ "icon_calls": {
+  "purpose": "the track rows' rebind sets img_icon with image_base_set_image(s3, s4 = the name list_get_left_icon or icon_playing chose); jalr $t9 -> jal rows_track_icon (the same call first, then the repeated format disc is hidden; the playing disc becomes a wave marker moved to the right end of the row). The Artists / Genres / Composers rows set icon_artist / icon_genre / icon_composer (one placeholder per page) or icon_playing the same way. The delay slot (move $a0, $s3 | $s1), the argument move and the GOT load before it are pinned below",
+  "sites": [
+   [
+    "0x5284e0",
+    "0x0320f809",
+    "sub_5283a0 (Songs bind)",
+    "Songs, Hi-Res, Favourites, Recent, Most played, Recently added, a playlist's songs; both the playing and the list_get_left_icon paths join here"
+   ],
+   [
+    "0x53935c",
+    "0x0320f809",
+    "sub_539244 (queue bind)",
+    "Now Playing's queue (the jump list); both paths join here"
+   ],
+   [
+    "0x5367b0",
+    "0x0320f809",
+    "localclass_on_prepare_row (0x536600: Artists, Genres, Composers rows)",
+    "icon_playing and the class placeholders icon_artist / icon_composer / icon_genre all join at 0x5367ac; the class placeholder is hidden"
+   ]
+  ]
+ },
+ "text_calls": {
+  "purpose": "the album detail track row's label builder (0x524b50, once per row) ends in widget_set_text_utf8(label, \"N title\") (tk_snprintf \"%d %s\" into a stack buffer); jalr $t9 -> jal rows_track_number (patch/rows.c: the title without its number on the stock label, the number in a small grey label before it). The delay slot (move $a0, $s2 = the label), the buffer move and the format load are pinned below",
+  "sites": [
+   [
+    "0x524cf4",
+    "0x0320f809",
+    "album_page_init+0x334 (album detail track label builder)",
+    "its only caller is albumdeinfo_listitem_layout+0x10c (0x5264a0), per row while the album page builds"
+   ]
+  ]
+ },
  "pinned": [
+  {
+   "purpose": "the text call's neighbours: the \"%d %s\" format load, move $a1, $s0 (the formatted buffer), lw $gp, lw $t9 widget_set_text_utf8 GOT slot, move $a0, $s2 (the label) in the delay slot",
+   "sites": [
+    ["0x524cdc", "0x24c60e8c", "album_page_init+0x334 (track label builder)", "addiu $a2, $a2, 0xe8c (\"%d %s\")"],
+    ["0x524ce8", "0x02002825", "album_page_init+0x334 (track label builder)", "move $a1, $s0"],
+    ["0x524cf0", "0x8f99a86c", "album_page_init+0x334 (track label builder)", "GOT slot of widget_set_text_utf8"],
+    ["0x524cf8", "0x02402025", "album_page_init+0x334 (track label builder)", "move $a0, $s2"]
+   ]
+  },
+  {
+   "purpose": "the icon call's neighbours: lw $t9 image_base_set_image GOT slot, move $a1, $s4 (the name), move $a0, $s3 (img_icon) in the delay slot",
+   "sites": [
+    ["0x5284d8", "0x8f99a92c", "sub_5283a0 (Songs bind)", "GOT slot of image_base_set_image"],
+    ["0x5284dc", "0x02802825", "sub_5283a0 (Songs bind)", "move $a1, $s4"],
+    ["0x5284e4", "0x02602025", "sub_5283a0 (Songs bind)", "move $a0, $s3"],
+    ["0x539354", "0x8f99a92c", "sub_539244 (queue bind)", "GOT slot of image_base_set_image"],
+    ["0x539358", "0x02802825", "sub_539244 (queue bind)", "move $a1, $s4"],
+    ["0x539360", "0x02602025", "sub_539244 (queue bind)", "move $a0, $s3"],
+    ["0x5367ac", "0x8f99a92c", "localclass_on_prepare_row", "GOT slot of image_base_set_image (the join point of the four name paths)"],
+    ["0x5367b4", "0x02202025", "localclass_on_prepare_row", "move $a0, $s1 (img_icon)"]
+   ]
+  },
   {
    "purpose": "folder pitch: stock already PITCH",
    "sites": [

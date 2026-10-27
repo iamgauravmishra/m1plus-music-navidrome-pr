@@ -18,7 +18,7 @@ import awtk_ui
 import preview_theme, preview_lists, preview_nowplaying, preview_lockscreen
 from stb_raster import StbFont
 
-RAW = 'rootfs/release/assets/default/raw'
+from awtk_ui import RAW
 W, H = 320, 480
 TITLES = [('Paul’s “Boutique” — Live', 'Beastie Boys'), ('七里香', '周杰伦 Jay Chou'),
           ('First Love (Remastered)', '宇多田ヒカル · Utada Hikaru'), ('봄날 Spring Day', '방탄소년단 BTS'),

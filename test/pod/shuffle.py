@@ -300,7 +300,7 @@ def shuffle_page_tests(expect, menu, spi, page):
         expect(m2.names() == ['navigator_back'], 'Back on the Shuffle page is navigator_back (to the menu)')
     else:
         expect(False, 'Back on the Shuffle page is bound')
-    # the page: the M1 Pod navbar titled Shuffle, stock-styled rows exactly like the menu's, no chevrons
+    # the page: the M1+ Pod navbar titled Shuffle, stock-styled rows exactly like the menu's, no chevrons
     st = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', f'release/assets/default/raw/ui/{page.key}.bin'), 'rb').read())
     title = next((x for x in st.walk() if x.name == 'label_title'), None)
     items = [x for x in st.walk() if x.type == 'list_item']
@@ -308,7 +308,7 @@ def shuffle_page_tests(expect, menu, spi, page):
     sig = lambda x: (x.get('style'), x.h, [(c.type, c.get('style'), c.x, c.y, c.h) for c in x.children if c.type == 'hscroll_label'])
     expect(title is not None and pod_i18n.shown_english(title) == 'Shuffle' and
            any(x.name == 'btn_return' for x in st.walk()) and any(x.name == 'btn_backtoplayer' for x in st.walk()),
-           'the Shuffle page has the M1 Pod navbar: Shuffle, Back, Now Playing')
+           'the Shuffle page has the M1+ Pod navbar: Shuffle, Back, Now Playing')
     expect([x.name for x in items] == ['pod_row0', 'pod_row1', 'pod_row2'] and
            [[pod_i18n.shown_english(c) for c in x.children if c.type == 'hscroll_label'] for x in items] ==
            [['Shuffle Songs'], ['Shuffle Albums'], ['Shuffle Folders']] and

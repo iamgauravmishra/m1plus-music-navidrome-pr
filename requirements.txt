@@ -4,6 +4,6 @@ pillow>=10
 # the font step (tools/mod_font.py) and tools/font_inter.py; pinned because the
 # CFF -> TrueType conversion of Source Han Sans (cu2qu) decides the output bytes
 fonttools==4.67.0
-# M1 Pod code payload only: the Unicorn offline test harness (test/patch.py). Not needed for the
+# M1+ Pod code payload only: the Unicorn offline test harness (test/patch.py). Not needed for the
 # asset mods. See docs/architecture.md.
 unicorn==2.1.4

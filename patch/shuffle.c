@@ -1,4 +1,4 @@
-/* M1 Pod Shuffle: Shuffle Songs, Shuffle Albums and Shuffle Folders from the M1 Pod menu.
+/* M1+ Pod Shuffle: Shuffle Songs, Shuffle Albums and Shuffle Folders from the M1+ Pod menu.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
@@ -11,7 +11,7 @@
  * file installs none: Shuffle Albums/Folders build the whole queue up front, in its play order,
  * and hand it to the stock player in a sequential mode (docs/architecture.md).
  *
- * No stock function is hooked. Everything here runs from a tap on a row of the M1 Pod menu
+ * No stock function is hooked. Everything here runs from a tap on a row of the M1+ Pod menu
  * (patch/m1pod.c on_row), once, on the UI thread, and returns: no timer, no thread, no state kept
  * between taps except the random generator's word.
  *
@@ -27,7 +27,6 @@
 
 #define P(r, off) (*(char **)((char *)(r) + (off)))
 #define I(r, off) (*(int *)((char *)(r) + (off)))
-#define F_OK 0
 
 enum { SHUFFLE_SONGS = 0, SHUFFLE_ALBUMS = 1, SHUFFLE_FOLDERS = 2 }; /* tools/pod_pages.py */
 

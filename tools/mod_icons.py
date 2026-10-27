@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Icon set for the Shanling M1 Plus UI: Tabler Icons (MIT) in the Minimal look. Asset-only.
+"""Icon set for the Shanling M1 Plus UI: Lucide (ISC) in the Minimal look, a few Tabler glyphs (MIT) where Lucide has
+no match. Asset-only.
 Description, mapping table, substitutes and what stays stock: docs/ui.md.
 
 Replaces, in the default theme's images/xx (same file names, same pixel size, RGBA PNG, same
 file mode):
-  46 settings icons    40x40, white Tabler glyph (stroke 2) on the #777777 disc
-  18 Home icons        66x66 (+ 17 pressed `_down`), white glyph on the #777777 disc (#555555 pressed)
+  46 settings icons    40x40, a bare white Lucide glyph (24 px canvas, stroke 2.0 px) centred, no disc; the four
+                       stock badges (DAC, DSD output, ReplayGain) redrawn as white text badges in a thin rounded rect
+  18 Home icons        66x66 (+ 17 pressed `_down`), white glyph (38 px canvas, stroke 1.75) on the #777777 disc (#555555 pressed)
   pull-down tiles      50x50, one ring style for every tile (docs/ui.md): #777777 ring + glyph = off,
-                       white disc + dark glyph = on, #444444 = disabled; Tabler glyphs, custom gain bars,
-                       "PO"/"LO" in Inter; backlight sun icons 20x20
+                       white disc + dark glyph = on, #444444 = disabled; Lucide glyphs (24 px canvas), custom gain bars,
+                       "PO"/"LO" in Inter (17 px); backlight sun icons 20x20
   status bar           play/pause (filled), volume 0-4, Wi-Fi 0-4 (unlit arcs #666666), Bluetooth,
                        digital out; stroke 1.5 px at 14-16 px, 2 px at 20 px
   list placeholders    6 folder/playlist/artist/genre/composer/album discs, albumcover s/m/info tiles
@@ -16,17 +18,18 @@ file mode):
                        glyphs at the stock size (pressed #777777); Folders file/SD/USB rows, Playlists page
                        and CD-ripper discs; equaliser preset art recoloured white; speed badges, the Play all
                        pill, secured Wi-Fi rows; the Now Playing np_* glyphs (mod_nowplaying.py copies them)
-Stays stock: brand art and text badges (codec badges, SyncLink, DAC/DSD/A-B), theme1
+Stays stock: brand art and text badges (codec badges, SyncLink, A-B), theme1
 (its own image files), the battery (tools/battery_art.py draws it for mod_battery/mod_lockscreen).
 
-Build time only copies the committed PNGs (assets/icons/tabler/png/); builds stay deterministic and
-need no rasteriser. The PNGs are generated from the committed SVG sources
-(assets/icons/tabler/svg/, @tabler/icons 3.49.0, MIT) by --generate (needs rsvg-convert and Pillow).
+Build time only copies the committed PNGs (assets/icons/png/); builds stay deterministic and
+need no rasteriser. The PNGs are generated from the committed SVG sources (assets/icons/lucide/svg/, lucide-static
+1.61.0, ISC; assets/icons/tabler/svg/, @tabler/icons 3.49.0, MIT, the few 'T:' glyphs) by --generate (needs
+rsvg-convert and Pillow).
 
 Usage: mod_icons.py SRC_WORKDIR OUT_WORKDIR     (OUT == SRC edits in place; a build.py step)
-       mod_icons.py --generate                  rebuild assets/icons/tabler/png from svg/
-       mod_icons.py --fetch TGZ                 copy the used SVGs + LICENSE out of an @tabler/icons tarball
-                                                (SHA-256 pinned; parsed as data, nothing is executed)
+       mod_icons.py --generate                  rebuild assets/icons/png from the svg sources
+       mod_icons.py --fetch TGZ                 copy the used SVGs + LICENSE out of a lucide-static or @tabler/icons
+                                                tarball (SHA-256 pinned; parsed as data, nothing is executed)
        mod_icons.py --check [WORKDIR]           verify the asset PNGs (+ a work tree) against the stock pins
 """
 import argparse, hashlib, io, os, re, shutil, stat, subprocess, sys, tarfile
@@ -38,135 +41,176 @@ import pod_i18n
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSET = os.path.join(ROOT, 'assets', 'icons', 'tabler')
-SVG, PNG = os.path.join(ASSET, 'svg'), os.path.join(ASSET, 'png')
+SVG = os.path.join(ASSET, 'svg')                       # Tabler outline/ + filled/ (the 'T:' glyphs only)
+PNG = os.path.join(ROOT, 'assets', 'icons', 'png')
 IMG = 'rootfs/release/assets/default/raw/images/xx'
 TGZ_SHA = 'aa3042907eb0bdb079fd70733e2d75f785683d4726279128a0ca2343099f7074'   # @tabler/icons 3.49.0
+LUCIDE_SHA = '62773cd2ee411ad2e37c1973d1e4c4b49f9a6c57da6b5d5d0abca08756ba75f1'   # lucide-static 1.61.0
 WHITE, DISC, DISC_DOWN, OFF = (255, 255, 255), (0x77,) * 3, (0x55,) * 3, (0x66,) * 3
 
-# ---------------------------------------------------------------- mapping (stock image -> Tabler glyph)
-# glyph: a Tabler name; '+name' = custom SVG in assets/icons/custom/ drawn in Tabler's style (no Tabler
-# match); None = stock image kept (text badge or a fitting stock art; Minimal-recoloured already).
+# ---------------------------------------------------------------- mapping (stock image -> glyph)
+# glyph: a Lucide name; 'T:name' = a Tabler glyph (Lucide has no match); '+name' = custom SVG in assets/icons/custom/
+# drawn in the same style (no match in either set); 'name:filled' = the outline shapes filled solid (Tabler's own
+# filled style for 'T:' names); 'badge:TEXT' = a text badge (Inter in a thin rounded rect, badge() below).
 HOME = [  # Home ids 1..17 in English order, HiFi (id 0, zh_CN only) last
-    ('tidal', 'TIDAL (online only)', 'brand-tidal'), ('sset_updatemusic', 'Update Library', 'refresh'),
-    ('mymusic', 'All Songs', 'music'), ('folder', 'Folders', 'folder'), ('album', 'Albums', 'vinyl'),
-    ('songer', 'Artists', 'microphone-2'), ('genre', 'Genres', '+guitar'), ('composer', 'Composers', 'feather'),
+    ('tidal', 'TIDAL (online only)', 'T:brand-tidal'), ('sset_updatemusic', 'Update Library', 'refresh-cw'),
+    ('mymusic', 'All Songs', 'music'), ('folder', 'Folders', 'folder'), ('album', 'Albums', 'disc-3'),
+    ('songer', 'Artists', 'mic-vocal'), ('genre', 'Genres', 'guitar'), ('composer', 'Composers', 'feather'),
     ('hr', 'Hi-Res', '+badge-hr'), ('fav', 'Favorites', 'heart'), ('many', 'Most Played', 'flame'),
     ('recent', 'Recently Played', 'history'), ('recentadd', 'Recently Added', 'clock-plus'),
-    ('playlist', 'Playlists', 'playlist'), ('cdripper', 'CD Ripper', 'disc'), ('playset', 'Play Settings', 'adjustments'),
-    ('sysset', 'System Settings', 'settings'), ('hifimusic', 'HiFi Store (zh_CN)', 'building-store'),
+    ('playlist', 'Playlists', 'list-music'), ('cdripper', 'CD Ripper', 'disc'), ('playset', 'Play Settings', 'sliders-horizontal'),
+    ('sysset', 'System Settings', 'settings'), ('hifimusic', 'HiFi Store (zh_CN)', 'store'),
 ]
 SETTINGS = [  # the 46 40x40 settings icons
-    ('playset_foldercover', 'Folder cover', 'photo'), ('pset_balance', 'Balance', 'scale'),
-    ('pset_bootvol', 'Boot volume', 'volume-2'), ('pset_covermode', 'Cover mode', 'maximize'),
-    ('pset_dac', 'DAC', None), ('pset_digital', 'Digital output', 'plug-connected'),
-    ('pset_dsdoutput', 'DSD output', None), ('pset_eq', 'Equalizer', 'adjustments-alt'),
-    ('pset_filter', 'Digital filter', 'wave-sine'), ('pset_gain', 'Gain', 'gauge'),
-    ('pset_gapless', 'Gapless', 'infinity'), ('pset_jumpfolder', 'Jump folder', 'folder-symlink'),
-    ('pset_maxvol', 'Max volume', 'volume'), ('pset_memplay', 'Resume play', 'bookmark'),
-    ('pset_playmode', 'Play mode', 'repeat'), ('pset_replaygain', 'ReplayGain', None),
-    ('pset_usbaudiovol', 'USB audio volume', 'usb'), ('screensaver_info', 'Show info', 'info-circle'),
-    ('screensaver_timeshow', 'Show time', 'clock'), ('sset_about', 'About', 'info-circle'),
-    ('sset_atmosphereled', 'LED light', 'bulb'), ('sset_carmode', 'Car mode', 'car'),
+    ('playset_foldercover', 'Folder cover', 'image'), ('pset_balance', 'Balance', 'scale'),
+    ('pset_bootvol', 'Boot volume', 'volume-1'), ('pset_covermode', 'Cover mode', 'maximize'),
+    ('pset_dac', 'DAC', 'badge:DAC'), ('pset_digital', 'Digital output', 'cable'),
+    ('pset_dsdoutput', 'DSD output', 'badge:DSD'), ('pset_eq', 'Equalizer', 'sliders-vertical'),
+    ('pset_filter', 'Digital filter', 'waves'), ('pset_gain', 'Gain', 'gauge'),
+    ('pset_gapless', 'Gapless', 'infinity'), ('pset_jumpfolder', 'Jump folder', 'folder-output'),
+    ('pset_maxvol', 'Max volume', 'volume-2'), ('pset_memplay', 'Resume play', 'bookmark'),
+    ('pset_playmode', 'Play mode', 'repeat'), ('pset_replaygain', 'ReplayGain', 'badge:RG'),
+    ('pset_usbaudiovol', 'USB audio volume', 'usb'), ('screensaver_info', 'Show info', 'info'),
+    ('screensaver_timeshow', 'Show time', 'clock'), ('sset_about', 'About', 'info'),
+    ('sset_atmosphereled', 'LED light', 'lightbulb'), ('sset_carmode', 'Car mode', 'car'),
     ('sset_covermode', 'Cover mode', 'maximize'), ('sset_display', 'Display', 'sun'),
-    ('sset_doublewake', 'Double-tap wake', 'hand-click'), ('sset_dsdoutput', 'DSD output', None),
-    ('sset_keylock', 'Key lock', 'lock'), ('sset_lighttime', 'Backlight time', 'stopwatch'),
-    ('sset_netservice', 'Network services', 'world'), ('sset_outputway', 'Output', 'headphones'),
-    ('sset_powermanager', 'Power', 'power'), ('sset_prove', 'Certification', 'certificate'),
-    ('sset_screenlock', 'Screen lock', 'lock-square'), ('sset_system', 'System update', 'circle-arrow-up'),
-    ('sset_theme', 'Theme', 'palette'), ('sset_tswake', 'Touch wake', 'hand-finger'),
+    ('sset_doublewake', 'Double-tap wake', 'mouse-pointer-click'), ('sset_dsdoutput', 'DSD output', 'badge:DSD'),
+    ('sset_keylock', 'Key lock', 'lock'), ('sset_lighttime', 'Backlight time', 'timer'),
+    ('sset_netservice', 'Network services', 'globe'), ('sset_outputway', 'Output', 'headphones'),
+    ('sset_powermanager', 'Power', 'power'), ('sset_prove', 'Certification', 'badge-check'),
+    ('sset_screenlock', 'Screen lock', 'lock-keyhole'), ('sset_system', 'System update', 'circle-arrow-up'),
+    ('sset_theme', 'Theme', 'palette'), ('sset_tswake', 'Touch wake', 'pointer'),
     ('sset_usbaudiovol', 'USB audio volume', 'usb'), ('sset_usbmode', 'USB mode', 'usb'),
-    ('sset_wifiset', 'Wi-Fi', 'wifi'), ('system_formatcard', 'Format card', 'device-sd-card'),
-    ('system_language', 'Language', 'language'), ('system_reset', 'Reset', 'rotate'),
-    ('system_scrotate', 'Screen rotation', 'device-mobile-rotated'), ('system_time', 'Date & time', 'calendar'),
+    ('sset_wifiset', 'Wi-Fi', 'wifi'), ('system_formatcard', 'Format card', 'memory-stick'),
+    ('system_language', 'Language', 'languages'), ('system_reset', 'Reset', 'rotate-ccw'),
+    ('system_scrotate', 'Screen rotation', 'rotate-ccw-square'), ('system_time', 'Date & time', 'calendar'),
     ('system_update', 'Firmware update', 'download'), ('usb_chargeswitch', 'USB charging', 'battery-charging'),
 ]
 PULLDOWN = {  # glyph per tile
-    'drop_wifi': 'wifi', 'drop_bt': 'bluetooth', 'drop_keylock': 'lock', 'drop_eq': 'adjustments-alt',
-    'drop_usbaudio': 'usb', 'drop_usbdac': '+dac', 'drop_usbstorage': 'device-usb',
-    'drop_playset': 'adjustments', 'drop_sysset': 'settings',
-    'drop_lighticon0': 'sun-low', 'drop_lighticon1': 'sun-high',
+    'drop_wifi': 'wifi', 'drop_bt': 'bluetooth', 'drop_keylock': 'lock', 'drop_eq': 'sliders-vertical',
+    'drop_usbaudio': 'usb', 'drop_usbdac': '+dac', 'drop_usbstorage': 'hard-drive',
+    'drop_playset': 'sliders-horizontal', 'drop_sysset': 'settings',
+    'drop_lighticon0': 'sun-dim', 'drop_lighticon1': 'sun',
 }
-STATUS = {'bar_play': 'player-play', 'bar_pause': 'player-pause', 'bar_vol0': 'volume-4', 'bar_vol1': 'volume-2',
-          'bar_vol2': 'volume', 'bar_vol3': '+volume-3waves', 'bar_vol4': 'volume-3', 'bar_wifi': 'wifi',
-          'bar_bt': 'bluetooth', 'bar_digital': 'plug-connected'}
-WIFI_LEVELS = [None, 'wifi-0', 'wifi-1', 'wifi-2', 'wifi']     # index = bar_wifi0..4
-LISTS = [('icon_folder', 'folder', 'folder'), ('icon_playlist', 'playlist', 'playlist'),
-         ('icon_artist', 'artist', 'microphone-2'), ('icon_genre', 'genre', '+guitar'),
-         ('icon_composer', 'composer', 'feather'), ('icon_cdalbum', 'album', 'vinyl')]
+STATUS = {'bar_play': 'play', 'bar_pause': 'pause', 'bar_vol0': 'volume', 'bar_vol1': 'volume-1',
+          'bar_vol2': 'volume-2', 'bar_vol3': '+volume-3waves', 'bar_vol4': 'volume-x', 'bar_wifi': 'wifi',
+          'bar_bt': 'bluetooth', 'bar_digital': 'plug'}
+WIFI_LEVELS = [None, 'wifi-zero', 'wifi-low', 'wifi-high', 'wifi']     # index = bar_wifi0..4
+LISTS = [('icon_folder', 'folder', 'folder'), ('icon_playlist', 'playlist', 'list-music'),
+         ('icon_artist', 'artist', 'mic-vocal'), ('icon_genre', 'genre', 'guitar'),
+         ('icon_composer', 'composer', 'feather'), ('icon_cdalbum', 'album', 'disc-3')]
 COVERS = ['albumcover_s', 'albumcover_m', 'albumcover_info']   # the "no cover" placeholder, 60/90/100 px
-COVER_GLYPH = 'vinyl'
-# M1 Pod menu and Shuffle page rows: label -> (added image, glyph). 40 px #777777 disc, left of the title.
+COVER_GLYPH, COVER_FRAC = 'disc-3', 0.52      # the glyph's px as a fraction of the tile
+# The album page (patch/albuminfo.c): its header cover is 160 px, so its placeholder (albumcover_info, the only
+# stock reader besides the Tidal dialogs is that page) is 160 px too; the page's cover tint (ah_tint: a window sized black gradient, patch/offsets.inc AH_TINT_*; the cover's corners are
+# painted by the payload, no masks); Shuffle's 38 px disc
+# with its glyph (pressed one lighter) and the Play all pill's play glyph (dark, 16 px, no padding: the pill's style
+# places it, tools/mod_ipodrows.py pill_layout); the pill itself is an image too (180 x 40, ah_pill / ah_pill_down: the style's
+# bg_image, drawn centred in the 44 px high button, so the touch rectangle is taller than the pill). The sizes are AH_* in patch/offsets.inc (test/pod/albuminfo.py checks them).
+RESIZED = {'albumcover_info': 160}
+AH_TINT = (64, 200, 344, 450)   # alpha at the top row, at row AH_TINT_ROWS - 1 and below (the held deep tint, 78 % dark), the rows, the window height
+ALBUM = ['ah_tint', 'ah_play', 'ah_shuffle', 'ah_shuffle_down', 'ah_pill', 'ah_pill_down']
+AH_SHUF_DISC, AH_SHUF_DISC_DOWN, AH_SHUF_GLYPH, AH_DISC_PX = (0x2A,) * 3, (0x44,) * 3, 19, 38   # AH_DISC (patch/offsets.inc)
+AH_PLAY_GLYPH, AH_PLAY_INK = 16, (0x14,) * 3
+AH_PILL_PX, AH_PILL_FILL, AH_PILL_FILL_DOWN = (180, 40), (0xFF,) * 3, (0xBE,) * 3   # AH_PLAY_W x AH_PILL_H
+# M1+ Pod menu and Shuffle page rows: label -> (added image, glyph). A bare white glyph (BARE_PX canvas) left of the title.
 # '@shanling' = the brand mark cut out of a stock image (shanling_mark below), not a glyph.
-POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', '+audio-lines'), 'Cover Flow': ('pod_ic_coverflow', 'carousel-horizontal'),   # audio-lines: Lucide, the wave of the navbar's Now Playing button
-            'Shuffle': ('pod_ic_shuffle', 'arrows-shuffle'), 'Songs': ('pod_ic_songs', 'music'),
-            'Albums': ('pod_ic_albums', 'vinyl'), 'Artists': ('pod_ic_artists', 'microphone-2'),
-            'Genres': ('pod_ic_genres', '+guitar'), 'Folders': ('pod_ic_folders', 'folder'),
-            'Playlists': ('pod_ic_playlists', 'playlist'), 'Settings': ('pod_ic_settings', 'settings'), 'Extras': ('pod_ic_extras', 'dots'),
-            'Shuffle Songs': ('pod_ic_shufsongs', 'music'), 'Shuffle Albums': ('pod_ic_shufalbums', 'vinyl'),
+POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'audio-lines'), 'Cover Flow': ('pod_ic_coverflow', 'gallery-horizontal'),   # audio-lines: the wave of the navbar's Now Playing button
+            'Shuffle': ('pod_ic_shuffle', 'shuffle'), 'Songs': ('pod_ic_songs', 'music'),
+            'Albums': ('pod_ic_albums', 'disc-3'), 'Artists': ('pod_ic_artists', 'mic-vocal'),
+            'Genres': ('pod_ic_genres', 'guitar'), 'Folders': ('pod_ic_folders', 'folder'),
+            'Playlists': ('pod_ic_playlists', 'list-music'), 'Settings': ('pod_ic_settings', 'settings'), 'Extras': ('pod_ic_extras', 'ellipsis'),
+            'Shuffle Songs': ('pod_ic_shufsongs', 'music'), 'Shuffle Albums': ('pod_ic_shufalbums', 'disc-3'),
             'Shuffle Folders': ('pod_ic_shuffolders', 'folder'),
             # the Settings page's rows: the launcher's two, the customise page and the Cover Flow switch
-            'Shanling Home': ('pod_ic_shanling', '@shanling'), 'Start in M1 Pod': ('pod_ic_startup', 'home'),
-            'Main Menu': ('pod_ic_mainmenu', 'list-check'),
-            # Settings > Cover Flow (the Settings page's Cover Flow row uses the menu's carousel disc)
-            'Landscape': ('pod_ic_landscape', 'rotate-clockwise'), 'Sort': ('pod_ic_sort', 'sort-descending'),
+            'Shanling Home': ('pod_ic_shanling', '@shanling'), 'Start in M1+ Pod': ('pod_ic_startup', 'house'),
+            'Main Menu': ('pod_ic_mainmenu', 'list-checks'),
+            'Home Screen': ('pod_ic_homescreen', 'layout-grid'),   # the Settings > Home Screen row (the stock grid's glyph; Start in has the house)
+            # Settings > Cover Flow (the Settings page's Cover Flow row uses the menu's gallery disc)
+            'Landscape': ('pod_ic_landscape', 'rotate-cw-square'), 'Sort': ('pod_ic_sort', 'arrow-down-wide-narrow'),
+            'Rebuild Covers': ('pod_ic_rebuild', 'image-up'),
             # the Extras page (the stock Home tiles the menu does not repeat; glyphs as the Home grid's)
             'Favorites': ('pod_ic_fav', 'heart'), 'Recently Added': ('pod_ic_recentadd', 'clock-plus'),
             'Recently Played': ('pod_ic_recent', 'history'), 'Most Played': ('pod_ic_most', 'flame'),
             'Composers': ('pod_ic_composers', 'feather'), 'Hi-Res': ('pod_ic_hires', '+badge-hr'),
-            'Update Library': ('pod_ic_update', 'refresh'), 'Tidal': ('pod_ic_tidal', 'brand-tidal'),
-            'CD Ripper': ('pod_ic_cdripper', 'disc'),
+            'Update Library': ('pod_ic_update', 'refresh-cw'), 'Tidal': ('pod_ic_tidal', 'T:brand-tidal'),
+            'CD Ripper': ('pod_ic_cdripper', 'disc'), 'Screenshot': ('pod_ic_screenshot', 'camera'),
             # the Settings page (the menu's Settings row opens it)
-            'System Settings': ('pod_ic_settings', 'settings'), 'Playback': ('pod_ic_playset', 'adjustments')}
-# The "M1 Pod" icon patch/home.c adds to the stock Home grid (id 99): 66x66 like the stock Home icons
+            'System Settings': ('pod_ic_settings', 'settings'), 'Playback': ('pod_ic_playset', 'sliders-horizontal')}
+# The "M1+ Pod" icon patch/home.c adds to the stock Home grid (id 99): 66x66 like the stock Home icons
 # (white click-wheel glyph on the #777777 disc, #555555 pressed), style home_m1pod_style in home_page.bin.
 POD_HOME = ('m1pod', 'm1pod_down')
-POD_HOME_GLYPH, POD_HOME_STYLE = '+click-wheel', 'home_m1pod_style'
-POD_UI = ['m1pod_menu', 'm1pod_shuffle', 'm1pod_settings', 'm1pod_extras', 'm1pod_mainmenu', 'm1pod_cfset']
+POD_HOME_GLYPH, POD_HOME_STYLE = '+click-wheel', 'home_m1pod_style'      # custom: no Lucide glyph is a click wheel
+POD_UI = ['m1pod_menu', 'm1pod_shuffle', 'm1pod_settings', 'm1pod_extras', 'm1pod_mainmenu', 'm1pod_cfset', 'm1pod_homeset']
 # The navbar toggles (tools/pod_ui.py NAV_VIEW_ICON, patch/albums.c, patch/artists.c): the glyph of the view a tap switches to, a plain
 # 24 px white glyph like the navbar's others (pressed #777777), added to the images.
 NAV_VIEW = {'pod_nav_grid': 'layout-grid', 'pod_nav_list': 'list',
-            'pod_nav_artist': 'microphone-2', 'pod_nav_albumartist': 'user-star'}   # the Artists page's Artist / Album Artist switch
+            'pod_nav_artist': 'mic-vocal', 'pod_nav_albumartist': 'user-star',   # the Artists page's Artist / Album Artist switch
+            'pod_nav_coverflow': 'gallery-horizontal',
+            'pod_nav_allalbums': 'list-music'}   # Cover Flow's artist page: open the All albums page (all songs)   # the Albums page's Cover Flow button (the menu row's glyph)
 NAV_PX = 24
-POD_ICON_X, POD_ICON = 12, 40          # the disc: x 12..52 in the 52 px row (y 6); the title starts at 64
-POD_TEXT_X = 64
+# Bare glyphs (no disc) on every list page: a BARE_PX canvas, stroke BARE_SW px absolute. The Pod rows' image is that
+# canvas, x 16..40 in the 52 px row, vertically centred; the title starts at POD_TEXT_X and the 1 px #222222 hairline
+# under each row starts there too (the pressed band stays full width). The stock settings pages keep their 40 x 40 images
+# (labels at x 60) with the same glyph centred in them.
+BARE_PX, BARE_SW = 24, 2.0
+POD_ICON_X, POD_ICON = 16, BARE_PX
+POD_TEXT_X = 56
+HAIR_X, HAIR_COLOUR = POD_TEXT_X, '#222222'
+ROW_STATES = ('normal', 'over', 'pressed', 'focused', 'disable')
+CHEVRON, CHEVRON_DOWN = (0x8C,) * 3, (0x6E,) * 3     # every list chevron (stock right_arrow, the Main Menu's arrows): grey, darker pressed
+# The status bar's Screenshot camera (patch/shot.c shows it while the 5 s countdown runs; tools/pod_ui.py adds the hidden widget): 16 px, white
+SHOT_BAR = ('pod_bar_shot', 'camera')
+SHOT_BAR_PX = 16
 
 # ---- round 2 (docs/ui.md "Icon audit"): the stock images the pages and dialogs still showed.
-# Plain glyph images at the stock size: white (pressed `_down`: #777777), no disc. 'name:filled' = Tabler's
-# filled style. (stock image, glyph, pressed image or None); each file keeps its own size.
+# Plain glyph images at the stock size: white (pressed `_down`: #777777), no disc. 'name:filled' = the shapes filled
+# (Tabler's own filled style for 'T:' names). (stock image, glyph, pressed image or None); each file keeps its own size.
 GLYPHS = [
     # navbar actions and list affordances
-    ('add', 'plus', 'add_down'), ('back_to_player', '+audio-lines', 'back_to_player_down'),   # Lucide (ISC), assets/icons/lucide/
+    ('add', 'plus', 'add_down'), ('back_to_player', 'audio-lines', 'back_to_player_down'),
      ('cancel', 'x', 'cancel_down'), ('delete', 'trash', 'delete_down'),
-    ('mulselect', 'list-check', 'mulselect_down'), ('songsort', 'sort-descending', 'songsort_down'),
-    ('tidal_sort', 'sort-descending', 'tidal_sort_down'), ('search', 'search', 'search_down'),
+    ('mulselect', 'list-checks', 'mulselect_down'), ('songsort', 'arrow-down-wide-narrow', 'songsort_down'),
+    ('tidal_sort', 'arrow-down-wide-narrow', 'tidal_sort_down'), ('search', 'search', 'search_down'),
     ('return', 'chevron-left', 'return_down'), ('right_arrow', 'chevron-right', 'right_arrow_down'),
-    ('list_more', 'dots', 'list_moredown'), ('p_more', 'dots', 'p_moredown'),
+    ('list_more', 'ellipsis', 'list_moredown'), ('p_more', 'ellipsis', 'p_moredown'),
     ('dac_set', 'settings', 'dac_setdown'), ('rippersystem', 'settings', 'rippersystem_down'),
     ('expansion', 'chevron-down', 'expansion_down'), ('expansion_2', 'chevron-up', 'expansion_2_down'),
-    ('albumsinger', 'vinyl', None), ('songsinger', 'music', None),
-    ('p_random', 'arrows-shuffle', None), ('p_cycle', 'repeat', None), ('p_cycle1', 'repeat-once', None),    # the queue dialog's mode
+    ('albumsinger', 'disc-3', None), ('songsinger', 'music', None),
+    ('p_random', 'shuffle', None), ('p_cycle', 'repeat', None), ('p_cycle1', 'repeat-1', None),    # the queue dialog's mode
     ('p_order', 'repeat-off', None),
-    ('mulselected', 'circle-check:filled', None), ('selected', 'circle-check:filled', None),
-    ('screensaver_selected', 'circle-check:filled', None), ('unselect', 'circle', None),
+    ('mulselected', 'T:circle-check:filled', None), ('selected', 'T:circle-check:filled', None),   # a filled disc with the tick cut out: Lucide has none
+    ('screensaver_selected', 'T:circle-check:filled', None), ('unselect', 'circle', None),
     ('screensaver_unselect', 'circle', None), ('cdselected', 'square', None), ('selecting', 'square-check', None),
     # transport glyphs of the pages without the Now Playing look (Bluetooth receiver, USB DAC, AirPlay)
-    ('play', 'player-play:filled', None), ('pause', 'player-pause:filled', None),
-    ('next', 'player-skip-forward:filled', 'next_down'), ('prev', 'player-skip-back:filled', 'prev_down'),
+    ('play', 'play:filled', None), ('pause', 'pause:filled', None),
+    ('next', 'skip-forward:filled', 'next_down'), ('prev', 'skip-back:filled', 'prev_down'),
     # actions in dialogs and pages
-    ('rename', 'pencil', None), ('bt_del', 'trash', None), ('bt_scan', 'refresh', None), ('datetime', 'calendar', None),
+    ('rename', 'pencil', None), ('bt_del', 'trash', None), ('bt_scan', 'refresh-cw', None), ('datetime', 'calendar', None),
     ('wifi_add', 'circle-plus', None), ('kb_visible', 'eye', None), ('kb_invisible', 'eye-off', None),
-    ('p_abrepeat', 'a-b', None), ('p_add', 'playlist-add', None), ('p_delete', 'trash', None),
-    ('p_multiple', 'multiplier-1x', None), ('p_onlinesearch', 'world-search', None),
-    ('player_albuminfo', 'vinyl', None), ('player_songerinfo', 'microphone-2', None),
-    ('batchadd_fav', 'heart', None), ('batchadd_playlist', 'playlist-add', None),
+    ('p_abrepeat', 'T:a-b', None), ('p_add', 'list-plus', None), ('p_delete', 'trash', None),    # a-b, multiplier-1x: no Lucide glyph
+    ('p_multiple', 'T:multiplier-1x', None), ('p_onlinesearch', 'globe', None),
+    ('player_albuminfo', 'disc-3', None), ('player_songerinfo', 'mic-vocal', None),
+    ('batchadd_fav', 'heart', None), ('batchadd_playlist', 'list-plus', None),
 ]
 GREY_GLYPHS = {'kb_visible': 0x8C, 'kb_invisible': 0x8C}     # the password eye was grey in stock
-# 40 px #777777 discs (Folders rows, Playlists page, the CD ripper's track dialog)
+# Sizes of the glyph images (docs/ui.md): the ink box of the navbar and the other glyph buttons is 20 of the stock 22 px
+# (stroke 2.0 px); the dialog glyphs 0.88 of their ink box; the selection marks 0.88 of their ink. Now Playing's
+# back_to_player stays as it was.
+NAV_K, DIALOG_K, MARK_K, GLYPH_SW = 20 / 22, 0.88, 0.88, 2.0
+SMALL_GLYPHS = {'add', 'cancel', 'delete', 'mulselect', 'songsort', 'tidal_sort', 'search', 'return', 'right_arrow',
+                'list_more', 'p_more', 'dac_set', 'rippersystem', 'expansion', 'expansion_2', 'albumsinger', 'songsinger',
+                'p_random', 'p_cycle', 'p_cycle1', 'p_order'}
+DIALOG_GLYPHS = {'rename', 'bt_del', 'bt_scan', 'datetime', 'wifi_add', 'kb_visible', 'kb_invisible', 'p_abrepeat', 'p_add',
+                 'p_delete', 'p_multiple', 'p_onlinesearch', 'player_albuminfo', 'player_songerinfo', 'batchadd_fav', 'batchadd_playlist'}
+MARK_GLYPHS = {'mulselected', 'selected', 'screensaver_selected', 'unselect', 'screensaver_unselect', 'cdselected', 'selecting'}
+CHEVRONS = {'right_arrow', 'expansion', 'expansion_2'}      # the grey list chevrons (CHEVRON, pressed CHEVRON_DOWN)
+# 40 x 40 images (Folders rows, Playlists page, the CD ripper's track dialog): bare glyphs, as the settings icons
 FORMATS = ['aac', 'aiff', 'alac', 'ape', 'dff', 'dsf', 'dts', 'flac', 'iso', 'm4a', 'mp2', 'mp3', 'ogg', 'opus', 'wav', 'wma']
 DISCS = [('icon_' + f, 'file-music') for f in FORMATS] + [
-    ('icon_tf', 'device-sd-card'), ('icon_otg', 'device-usb'), ('icon_cdgenres', '+guitar'), ('icon_cdsonger', 'microphone-2'),
-    ('icon_cdyears', 'calendar'), ('playlist_add', 'playlist-add'), ('playlist_import', 'file-import'),
-    ('playlist_export', 'file-export')]
+    ('icon_tf', 'memory-stick'), ('icon_otg', 'usb'), ('icon_cdgenres', 'guitar'), ('icon_cdsonger', 'mic-vocal'),
+    ('icon_cdyears', 'calendar'), ('playlist_add', 'list-plus'), ('playlist_import', 'file-input'),
+    ('playlist_export', 'file-output')]
 # stock line art kept (instruments, text) and only recoloured white: the orange of the equaliser preset icons
 RECOLOUR = ['eq_blues', 'eq_classical', 'eq_custom', 'eq_dance', 'eq_jazz', 'eq_metal', 'eq_pop', 'eq_rock', 'eq_vocal']
 # playback-speed badges (36x20 text): grey outline, white when selected
@@ -178,32 +222,34 @@ WIFI_LOCK = {f'wifi_{i}': i for i in range(1, 5)}                               
 # [, disc px]). 'pil:NAME' = the solid glyph drawn with PIL (g_play ... below; the transport glyphs, which read better than
 # Tabler's filled ones); a disc px puts a translucent white disc of that diameter behind the glyph (heart and More).
 NP = {'np_play': ('pil:play', 44, 0, 'fg', 'np_play_down'), 'np_pause': ('pil:pause', 44, 0, 'fg', 'np_pause_down'),
-      'np_next': ('pil:next', 36, 0, 'fg', 'np_next_down'), 'np_prev': ('pil:prev', 36, 0, 'fg', 'np_prev_down'),
+      'np_next': ('pil:next', 44, 0, 'fg', 'np_next_down'), 'np_prev': ('pil:prev', 44, 0, 'fg', 'np_prev_down'),
       'np_grabber': ('pil:grabber', (120, 44), 0, 'ghost', 'np_grabber_down'),
-      'np_random': ('arrows-shuffle', 30, 22, 'mid', None), 'np_cycle': ('repeat', 30, 22, 'mid', None),
-      'np_cycle1': ('repeat-once', 30, 22, 'mid', None), 'np_order': ('repeat-off', 30, 22, 'off', None),
-      'np_fav': ('heart:filled', 44, 20, 'fg', None, 36), 'np_unfav': ('heart', 44, 20, 'fg', 'np_unfav_down', 36),
-      'np_more': ('dots', 44, 20, 'fg', 'np_more_down', 36), 'np_playqueue': ('playlist', 30, 22, 'mid', 'np_playqueue_down')}
+      'np_row_playing': ('pil:wave', (40, 20), 0, 'fg', None),
+      'np_random': ('shuffle', 30, 18, 'mid', None), 'np_cycle': ('repeat', 30, 18, 'mid', None),
+      'np_cycle1': ('repeat-1', 30, 18, 'mid', None), 'np_order': ('repeat-off', 30, 18, 'off', None),
+      'np_fav': ('heart:filled', 44, 18, 'fg', None, 32), 'np_unfav': ('heart', 44, 18, 'fg', 'np_unfav_down', 32),
+      'np_more': ('ellipsis', 44, 18, 'fg', 'np_more_down', 32), 'np_playqueue': ('list-music', 30, 18, 'mid', 'np_playqueue_down')}
 NP_FG, NP_DIM = (0xEE, 0xEE, 0xEC), (0x8C,) * 3        # q2-pod's off-white and its muted pressed grey
-NP_MID, NP_OFF = (0xAA,) * 3, (0x6E,) * 3               # the mode and queue glyphs (the secondary grey); repeat-off
+NP_MID, NP_OFF = (0xC8,) * 3, (0x6E,) * 3               # the mode and queue glyphs (brighter than the secondary grey #AAAAAA); repeat-off, dimmer
 NP_TONES = {'fg': (NP_FG, 255), 'mid': (NP_MID, 255), 'off': (NP_OFF, 255), 'ghost': ((255, 255, 255), 110)}   # rgb, alpha
 NP_PRESSED = {'ghost': ((255, 255, 255), 190)}            # every other tone presses to NP_DIM
 NP_DISC_ALPHA, NP_DISC_ALPHA_DOWN = 26, 51                # #FFFFFF1A, pressed #FFFFFF33
 
 SHANLING = '@shanling'
 
-def gname(g): return g.lstrip('+').split(':')[0]
+def gname(g): return g.lstrip('+').split(':')[0] if not g.startswith('T:') else 'T:' + g.split(':')[1]   # 'T:x' keeps its prefix
 def is_custom(g): return g.startswith('+')
+def is_tabler(g): return g.startswith('T:')
 def is_filled(g): return g.endswith(':filled')
+def is_badge(g): return g.startswith('badge:')
 
 def used_glyphs():
+    """(Lucide names, Tabler names) of every glyph the tables use; custom ones excluded."""
     gl = [e[2] for e in HOME + SETTINGS + LISTS] + list(PULLDOWN.values()) + list(STATUS.values()) + \
-        [g for g in WIFI_LEVELS if g] + [COVER_GLYPH, POD_HOME_GLYPH] + list(NAV_VIEW.values()) + [v[1] for v in POD_ROWS.values() if v[1] != SHANLING] + \
+        [g for g in WIFI_LEVELS if g] + [COVER_GLYPH, POD_HOME_GLYPH, SHOT_BAR[1]] + list(NAV_VIEW.values()) + [v[1] for v in POD_ROWS.values() if v[1] != SHANLING] + \
         [g for _, g, _ in GLYPHS] + [g for _, g in DISCS] + [v[0] for v in NP.values() if not v[0].startswith('pil:')] + ['lock:filled']
-    return sorted({gname(g) for g in gl if g and not is_custom(g)})
-
-# Tabler has a "filled" style for these (the "on" tiles and play/pause); anything else stays outline
-def filled_available(name): return os.path.isfile(os.path.join(SVG, 'filled', name + '.svg'))
+    names = {gname(g) for g in gl if g and not is_custom(g) and not is_badge(g)}
+    return sorted(n for n in names if not n.startswith('T:')), sorted(n[2:] for n in names if n.startswith('T:'))
 
 # ---------------------------------------------------------------- SVG -> RGBA (generation only)
 TAGS = {'path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'ellipse'}
@@ -212,7 +258,7 @@ ATTRS = {'d', 'cx', 'cy', 'r', 'rx', 'ry', 'x', 'y', 'width', 'height', 'x1', 'y
 SAFE = re.compile(r'^[0-9A-Za-z.,\-+ ()#%]*$')
 
 def parse_svg(path):
-    """Shapes of a Tabler SVG as data: [(tag, attrs)]; only whitelisted tags/attributes survive."""
+    """Shapes of a Lucide / Tabler SVG as data: [(tag, attrs)]; only whitelisted tags/attributes survive."""
     els = []
     for e in ET.parse(path).getroot().iter():
         tag = e.tag.split('}')[-1]
@@ -223,22 +269,28 @@ def parse_svg(path):
     return els
 
 CUSTOM = os.path.join(ROOT, 'assets', 'icons', 'custom')
-LUCIDE = os.path.join(ROOT, 'assets', 'icons', 'lucide')    # lucide-static 1.61.0 (ISC), npm tarball SHA-256 62773cd2ee411ad2e37c1973d1e4c4b49f9a6c57da6b5d5d0abca08756ba75f1
+LUCIDE = os.path.join(ROOT, 'assets', 'icons', 'lucide')    # lucide-static 1.61.0 (ISC), npm tarball SHA-256 LUCIDE_SHA
+LUCIDE_SVG = os.path.join(LUCIDE, 'svg')
 def svg_path(name, style='outline'):
-    for d in (CUSTOM, LUCIDE):
+    if name.startswith('T:'): return os.path.join(SVG, style, name[2:] + '.svg')
+    for d in (CUSTOM, LUCIDE_SVG):
         c = os.path.join(d, name + '.svg')
         if os.path.isfile(c): return c
-    return os.path.join(SVG, style, name + '.svg')
+    raise FileNotFoundError(name)
 
-def build_svg(name, style, px, sw, solid, dx=0.0, dy=0.0):
+def build_svg(name, style, px, sw, solid, dx=0.0, dy=0.0, margin=0):
+    """margin: extra px on every side of the px x px glyph canvas (the image is px + 2 margin wide, the glyph scale unchanged)."""
     els = parse_svg(svg_path(name, style))
+    solid = solid or name == 'ellipsis'      # Lucide's dots are r=1 circles: filled, they stay solid at any size (outlined, they go hollow when large)
     col = '#FFFFFF'
     if style == 'filled': g = f'fill="{col}"'
     else: g = (f'fill="{col if solid else "none"}" stroke="{col}" stroke-width="{sw}" '
                'stroke-linecap="round" stroke-linejoin="round"')
     body = ''.join('<%s %s/>' % (t, ' '.join(f'{k}="{v}"' for k, v in a.items())) for t, a in els)
     tx, ty = dx * 24 / px, dy * 24 / px
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{px}" height="{px}" viewBox="0 0 24 24">'
+    m, tot = margin * 24 / px, px + 2 * margin
+    vb = f'{-m:.6f} {-m:.6f} {24 + 2 * m:.6f} {24 + 2 * m:.6f}' if margin else '0 0 24 24'
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{tot}" height="{tot}" viewBox="{vb}">'
             f'<g transform="translate({tx:.4f} {ty:.4f})" {g}>{body}</g></svg>')
 
 def _rsvg(svg, px):
@@ -270,13 +322,17 @@ def tint(im, rgb):
     from PIL import Image
     out = Image.new('RGBA', im.size, rgb + (0,)); out.putalpha(im.getchannel('A')); return out
 
+DISC_SW = 1.75      # stroke (24 grid units) of the glyphs on the 66 px Home discs
+
 def glyph(g, px, ctx, rgb=WHITE):
-    """ctx: 'disc'/'home'/'pull'/'cover' stroke 2 outline; 'on'/'solid' Tabler filled where it exists
-    (solid falls back to a filled outline); 'small' 1.5 px absolute at <= 16 px, 2 px above."""
+    """ctx: 'disc' stroke 1.75 (the Home discs); 'bare' BARE_SW px absolute (the list icons); 'tile'/'cover' stroke 2
+    (pull-down ring, no-cover tile); 'solid' filled shapes, 1.5 px absolute at <= 16 px, 2 px above; 'small' 1.5 px
+    absolute at <= 16 px, 2 px above."""
     n = gname(g)
-    if ctx in ('on', 'solid') and filled_available(n): im = render(n, px, 'filled')
-    elif ctx == 'solid': im = render(n, px, 'outline', 1.5 * 24 / px if px <= 16 else 2, True)
+    if ctx == 'solid': im = render(n, px, 'outline', 1.5 * 24 / px if px <= 16 else 2, True)
     elif ctx == 'small': im = render(n, px, 'outline', 1.5 * 24 / px if px <= 16 else 2)
+    elif ctx == 'disc': im = render(n, px, 'outline', DISC_SW)
+    elif ctx == 'bare': im = render(n, px, 'outline', BARE_SW * 24 / px)
     else: im = render(n, px, 'outline', 2)
     return tint(im, rgb) if rgb != WHITE else im
 
@@ -297,24 +353,59 @@ def fit(fn, cw, ch, start, align='c'):
 
 # The Shanling mark for the "Shanling Home" row: the brand's own swoosh from the stock shutdown screen
 # (images/xx/shutdown.png, white on a blue shape above the SHANLING wordmark), isolated by whiteness (min of r, g, b:
-# the blue shape is far from white) and scaled to fit the disc, white on transparent. The stock file is pinned.
+# the blue shape is far from white), scaled to MARK_W px wide and thickened (the swoosh is a hairline in the stock art:
+# a bare glyph needs the weight of the Lucide strokes, about 2 px) by a round dilation of MARK_DIL px; white on
+# transparent. The stock file is pinned.
 SHUTDOWN_SHA = 'b5133684f5f6100415161b5722b63cab1c0123538f3de440e2725e3c5f3dbc6e'
 SHUTDOWN_CROP = (92, 144, 228, 216)     # the mark, without the wordmark below it (starts at y 217)
-MARK_W, MARK_H = 32, 24                 # largest ink on the 40 px disc
+MARK_W, MARK_DIL, MARK_SS = BARE_PX, 1.5, 4      # ink width of the result; px the strokes grow; supersampling
 
 def shanling_mark():
-    from PIL import Image, ImageChops, ImageFilter
+    from PIL import Image, ImageChops, ImageOps
     path = os.path.join(find_stock_img(), 'shutdown.png')
     assert sha256(open(path, 'rb').read()) == SHUTDOWN_SHA, 'shutdown.png is not the pinned stock file'
     rgb = Image.open(path).convert('RGB').crop(SHUTDOWN_CROP)
     big = rgb.resize((rgb.width * 4, rgb.height * 4), Image.LANCZOS)
     r, g, bl = big.split()
     mask = ImageChops.darker(ImageChops.darker(r, g), bl).point(lambda v: max(0, min(255, (v - 110) * 255 // 110)))
-    mask = mask.filter(ImageFilter.MaxFilter(5))     # the swoosh's hairline strokes are under 1 px at disc size: thicken by about 1 px
-    im = Image.new('RGBA', big.size, WHITE + (0,)); im.putalpha(mask)
-    im = ink_crop(im)
-    k = min(MARK_W / im.width, MARK_H / im.height)
-    return im.resize((max(1, round(im.width * k)), max(1, round(im.height * k))), Image.LANCZOS)
+    mask = mask.crop(mask.getbbox())
+    w0 = (MARK_W - MARK_DIL) * MARK_SS                # the width the swoosh has before it grows by MARK_DIL on each axis
+    mask = mask.resize((round(w0), round(mask.height * w0 / mask.width)), Image.LANCZOS)
+    rad = MARK_DIL * MARK_SS / 2; n = int(rad) + 1
+    mask = ImageOps.expand(mask, n); grown = mask
+    for dy in range(-n, n + 1):
+        for dx in range(-n, n + 1):
+            if dx * dx + dy * dy <= rad * rad + 0.01: grown = ImageChops.lighter(grown, ImageChops.offset(mask, dx, dy))
+    grown = grown.crop(grown.getbbox())
+    mask = grown.resize((MARK_W, max(1, round(grown.height * MARK_W / grown.width))), Image.BOX)
+    im = Image.new('RGBA', mask.size, WHITE + (0,)); im.putalpha(mask); return im
+
+# A text badge (DAC, DSD, RG: the stock discs of the DAC / DSD output / ReplayGain settings, redrawn bare): white Inter
+# text in a thin rounded rectangle, the weight of the Lucide strokes at that size; BADGE_W x BADGE_H ink.
+BADGE_W, BADGE_H, BADGE_SW, BADGE_R, BADGE_PAD = BARE_PX, 16, 1.5, 3.5, 1.5
+
+def badge(text, ss=8):
+    from PIL import Image, ImageDraw, ImageFont
+    w, h = BADGE_W, BADGE_H
+    big = Image.new('L', (w * ss, h * ss), 0); d = ImageDraw.Draw(big)
+    d.rounded_rectangle((0, 0, w * ss - 1, h * ss - 1), radius=BADGE_R * ss, fill=255)
+    i = BADGE_SW * ss
+    d.rounded_rectangle((i, i, w * ss - 1 - i, h * ss - 1 - i), radius=(BADGE_R - BADGE_SW) * ss, fill=0)
+    room = (w - 2 * (BADGE_SW + BADGE_PAD)) * ss
+    px = 14
+    while True:                                     # the largest text that clears the outline by BADGE_PAD
+        f = ImageFont.truetype(TILE_FONT, px * ss); bb = f.getbbox(text, stroke_width=ss // 8)
+        if bb[2] - bb[0] <= room or px <= 6: break
+        px -= 1
+    d.text(((w * ss - (bb[2] - bb[0])) // 2 - bb[0], (h * ss - (bb[3] - bb[1])) // 2 - bb[1]), text, font=f, fill=255, stroke_width=ss // 8)
+    im = Image.new('RGBA', (w, h), WHITE + (0,)); im.putalpha(big.resize((w, h), Image.BOX)); return im
+
+def bare_icon(g, canvas):
+    """The bare glyph g (a Lucide / Tabler name, '+custom', 'badge:TEXT' or the Shanling mark) centred in a canvas x canvas
+    transparent image."""
+    from PIL import Image
+    gi = badge(g[6:]) if is_badge(g) else shanling_mark() if g == SHANLING else glyph(g, BARE_PX, 'bare')
+    c = Image.new('RGBA', (canvas, canvas), WHITE + (0,)); c.alpha_composite(gi, ((canvas - gi.width) // 2, (canvas - gi.height) // 2)); return c
 
 def disc(size, rgb, ss=4):
     from PIL import Image, ImageDraw
@@ -322,33 +413,60 @@ def disc(size, rgb, ss=4):
     ImageDraw.Draw(big).ellipse((0, 0, size * ss - 1, size * ss - 1), fill=255)
     im = Image.new('RGBA', (size, size), rgb + (0,)); im.putalpha(big.resize((size, size), Image.LANCZOS)); return im
 
+def pill(size, rgb, ss=4):
+    """A stadium (full round ends) of size (w, h), anti-aliased like disc()."""
+    from PIL import Image, ImageDraw
+    w, h = size
+    big = Image.new('L', (w * ss, h * ss), 0)
+    ImageDraw.Draw(big).rounded_rectangle((0, 0, w * ss - 1, h * ss - 1), radius=h * ss // 2, fill=255)
+    im = Image.new('RGBA', (w, h), rgb + (0,)); im.putalpha(big.resize((w, h), Image.LANCZOS)); return im
+
 def on_disc(g, size, rgb):
     d = disc(size, rgb); d.alpha_composite(g, ((size - g.width) // 2, (size - g.height) // 2)); return d
 
-# glyph size on the disc: Tabler's 24 grid has 2 px padding, so 24 px reads a little small on a 40 px disc
-DISC_GLYPH, HOME_GLYPH = 26, 38
+# glyph canvas on the Home discs (the 24 grid has 2 px padding, so the ink is about 5/6 of it): 38 px on the 66 px discs
+HOME_GLYPH = 38
 
 # ---- round 2: plain glyph images (no disc) at an exact canvas size
-STROKE_PX = {'dots': 3.0}          # Tabler draws a dot as a zero-length stroke, so its px width is the dot
-def glyph_fit(g, cw, ch, rgb=WHITE, pad=1):
-    """Tabler glyph g ('name' or 'name:filled') as the largest glyph whose ink fits (cw - 2 pad) x (ch - 2 pad),
-    absolute stroke 2 px (1.5 px on canvases under 22 px), centred in a transparent cw x ch canvas."""
-    from PIL import Image
-    n, filled = gname(g), is_filled(g)
-    style = 'filled' if filled else 'outline'
-    sw_px = STROKE_PX.get(n, 2.0 if min(cw, ch) >= 22 else 1.5)
-    def at(px, probe=False):
-        sw = sw_px * 24 / px
-        if probe: return _rsvg(build_svg(n, style, px, sw, False), px)
-        return render(n, px, style, sw)
-    lo, hi = 8, 120 if n != 'dots' else min(cw, ch)
-    while lo < hi:                                  # largest px whose ink fits
-        mid = (lo + hi + 1) // 2; bb = at(mid, True).getchannel('A').getbbox()
+def fit_px(n, style, solid, cw, ch, pad, sw_px):
+    """The largest canvas px whose glyph `n` (absolute stroke sw_px) has its ink inside (cw - 2 pad) x (ch - 2 pad)."""
+    lo, hi = 8, 120
+    while lo < hi:
+        mid = (lo + hi + 1) // 2; bb = _rsvg(build_svg(n, style, mid, sw_px * 24 / mid, solid), mid).getchannel('A').getbbox()
         if bb and bb[2] - bb[0] <= cw - 2 * pad and bb[3] - bb[1] <= ch - 2 * pad: lo = mid
         else: hi = mid - 1
-    ink = ink_crop(at(lo))
+    return lo
+
+def glyph_fit(g, cw, ch, rgb=WHITE, pad=1, stroke=None):
+    """Glyph g ('name', 'name:filled' or 'T:name') as the largest glyph whose ink fits (cw - 2 pad) x (ch - 2 pad),
+    absolute stroke 2 px (1.5 px on canvases under 22 px, or `stroke`), centred in a transparent cw x ch canvas. ':filled' is
+    Tabler's filled style for 'T:' names and the Lucide outline shapes filled solid otherwise."""
+    from PIL import Image
+    n, filled = gname(g), is_filled(g)
+    tabler_filled = filled and is_tabler(g)
+    style = 'filled' if tabler_filled else 'outline'
+    solid = filled and not tabler_filled
+    sw_px = stroke or (2.0 if min(cw, ch) >= 22 else 1.5)
+    lo = fit_px(n, style, solid, cw, ch, pad, sw_px)
+    ink = ink_crop(render(n, lo, style, sw_px * 24 / lo, solid))
     c = Image.new('RGBA', (cw, ch), (0, 0, 0, 0)); c.alpha_composite(ink, ((cw - ink.width) // 2, (ch - ink.height) // 2))
     return tint(c, rgb) if rgb != WHITE else c
+
+def glyph_box(g, canvas, k, rgb=WHITE, stroke=GLYPH_SW):
+    """Glyph g fitted into the stock glyph box (the canvas less its 1 px pad, 6 px on canvases of 48 px and up) scaled by k,
+    stroke `stroke` px absolute, centred in a transparent canvas (cw, ch)."""
+    from PIL import Image
+    cw, ch = canvas; pad = 6 if min(cw, ch) >= 48 else 1
+    bw, bh = max(4, round((cw - 2 * pad) * k)), max(4, round((ch - 2 * pad) * k))
+    c = Image.new('RGBA', canvas, (0, 0, 0, 0)); c.alpha_composite(glyph_fit(g, bw, bh, rgb, 0, stroke), ((cw - bw) // 2, (ch - bh) // 2)); return c
+
+def glyph_mark(g, canvas, k, rgb=WHITE, stroke=GLYPH_SW):
+    """A selection mark: the stock-size glyph's ink scaled by k (same canvas, centred; 1.5 px stroke when the ink is under 14 px)."""
+    from PIL import Image
+    ink = glyph_fit(g, *canvas, rgb, 1).getchannel('A').getbbox()
+    tw, th = max(6, round((ink[2] - ink[0]) * k)), max(6, round((ink[3] - ink[1]) * k))
+    c = Image.new('RGBA', canvas, (0, 0, 0, 0))
+    c.alpha_composite(glyph_fit(g, tw, th, rgb, 0, stroke if min(tw, th) >= 14 else 1.5), ((canvas[0] - tw) // 2, (canvas[1] - th) // 2)); return c
 
 def recolour_white(path):
     """A stock image's alpha as a white glyph: the line art kept, the orange gone."""
@@ -370,13 +488,15 @@ def speed_badge(label, selected, size=(36, 20), ss=4):
     d.text(((w * ss - (bb[2] - bb[0])) // 2 - bb[0], (h * ss - (bb[3] - bb[1])) // 2 - bb[1]), label, font=f, fill=255)
     im = Image.new('RGBA', size, col + (0,)); im.putalpha(big.resize(size, Image.LANCZOS)); return im
 
+PILL_GLYPH = 10      # the play glyph's px in the pill
+
 def play_all_pill(pressed, size=(90, 28), ss=4):
     """The Play all button: off-white pill, dark text and play glyph (pressed: #8C8C8C). q2-pod's pill, Inter text."""
     from PIL import Image, ImageDraw, ImageFont
     w, h = size; bg = NP_DIM if pressed else NP_FG; ink = (0x14,) * 3
     big = Image.new('L', (w * ss, h * ss), 0); ImageDraw.Draw(big).rounded_rectangle((0, 0, w * ss - 1, h * ss - 1), radius=h * ss // 2, fill=255)
     im = Image.new('RGBA', size, bg + (0,)); im.putalpha(big.resize(size, Image.LANCZOS))
-    play = glyph_fit('player-play:filled', 12, 12, ink, 0)
+    play = glyph_fit('play:filled', PILL_GLYPH, PILL_GLYPH, ink, 0)
     f = ImageFont.truetype(TILE_FONT, 14); bb = f.getbbox('Play all'); tw = bb[2] - bb[0]
     x0 = (w - (play.width + 6 + tw)) // 2
     im.alpha_composite(play, (x0, (h - play.height) // 2))
@@ -397,15 +517,13 @@ def generate_all(sizes):
     """sizes: {file name: (w, h)} of the stock files -> {file name: RGBA image}."""
     from PIL import Image
     f = {}
-    for n, _, g in SETTINGS:
-        if g: f[n] = on_disc(glyph(g, DISC_GLYPH, 'disc'), 40, DISC)
-    for n, _, g in LISTS: f[n] = on_disc(glyph(g, DISC_GLYPH, 'disc'), 40, DISC)
+    for n, _, g in SETTINGS + LISTS: f[n] = bare_icon(g, 40)
     for n, _, g in HOME:
         if not g: continue
-        f[n] = on_disc(glyph(g, HOME_GLYPH, 'home'), 66, DISC)
-        f[n + '_down'] = on_disc(glyph(g, HOME_GLYPH, 'home'), 66, DISC_DOWN)
-    f[POD_HOME[0]] = on_disc(glyph(POD_HOME_GLYPH, HOME_GLYPH, 'home'), 66, DISC)
-    f[POD_HOME[1]] = on_disc(glyph(POD_HOME_GLYPH, HOME_GLYPH, 'home'), 66, DISC_DOWN)
+        f[n] = on_disc(glyph(g, HOME_GLYPH, 'disc'), 66, DISC)
+        f[n + '_down'] = on_disc(glyph(g, HOME_GLYPH, 'disc'), 66, DISC_DOWN)
+    f[POD_HOME[0]] = on_disc(glyph(POD_HOME_GLYPH, HOME_GLYPH, 'disc'), 66, DISC)
+    f[POD_HOME[1]] = on_disc(glyph(POD_HOME_GLYPH, HOME_GLYPH, 'disc'), 66, DISC_DOWN)
     # pull-down tiles: one ring style, off / on / disabled (docs/ui.md)
     for n, (g, st) in TILES.items(): f[n] = ring_tile(g, st)
     for n in ('drop_lighticon0', 'drop_lighticon1'):
@@ -423,81 +541,216 @@ def generate_all(sizes):
     f['bar_bt'] = fit(lambda p: glyph(STATUS['bar_bt'], p, 'small', OFF), 47, 20, 22, 'r')
     f['bar_btcon'] = fit(lambda p: glyph(STATUS['bar_bt'], p, 'small'), 47, 20, 22, 'r')
     f['bar_digital'] = fit(lambda p: glyph(STATUS['bar_digital'], p, 'small'), 18, 18, 20)
-    # "no cover" tiles: the stock tile colour, a muted glyph at 60 % of the tile
+    # "no cover" tiles: the stock tile colour, a muted glyph at COVER_FRAC of the tile
     for n in COVERS:
-        w = sizes[n][0]; bg = sizes[n + ':bg']
+        w = RESIZED.get(n, sizes[n][0]); bg = sizes[n + ':bg']
         t = Image.new('RGBA', (w, w), bg + (255,))
-        g = glyph(COVER_GLYPH, round(w * 0.6), 'cover', (0x8C,) * 3)
+        g = glyph(COVER_GLYPH, round(w * COVER_FRAC), 'cover', (0x8C,) * 3)       # stroke 2
         t.alpha_composite(g, ((w - g.width) // 2, (w - g.height) // 2))
         f[n] = t if sizes[n + ':mode'] == 'RGBA' else t.convert('RGB')
-    for n, g in POD_ROWS.values(): f[n] = on_disc(shanling_mark() if g == SHANLING else glyph(g, DISC_GLYPH, 'disc'), POD_ICON, DISC)
+    for n, g in POD_ROWS.values(): f[n] = bare_icon(g, POD_ICON)
     for n, g in NAV_VIEW.items():
-        f[n] = glyph_fit(g, NAV_PX, NAV_PX)
-        f[n + '_down'] = glyph_fit(g, NAV_PX, NAV_PX, (0x77,) * 3)
+        f[n] = glyph_box(g, (NAV_PX, NAV_PX), NAV_K)
+        f[n + '_down'] = glyph_box(g, (NAV_PX, NAV_PX), NAV_K, (0x77,) * 3)
+    f[SHOT_BAR[0]] = fit(lambda p: glyph(SHOT_BAR[1], p, 'small'), SHOT_BAR_PX, SHOT_BAR_PX, SHOT_BAR_PX)
     # round 2: glyph images at the stock size, discs, recoloured line art, badges, pills
     for n, g, down in GLYPHS:
         grey = (GREY_GLYPHS[n],) * 3 if n in GREY_GLYPHS else WHITE
-        f[n] = glyph_fit(g, *sizes[n], grey, 6 if min(sizes[n]) >= 48 else 1)
-        if down: f[down] = glyph_fit(g, *sizes[down], (0x77,) * 3)
-    for n, g in DISCS: f[n] = on_disc(glyph(g, DISC_GLYPH, 'disc'), 40, DISC)
+        col, col_down = (CHEVRON, CHEVRON_DOWN) if n in CHEVRONS else (grey, (0x77,) * 3)
+        def make(size, rgb, n=n, g=g):
+            if n in SMALL_GLYPHS: return glyph_box(g, size, NAV_K, rgb)
+            if n in DIALOG_GLYPHS: return glyph_box(g, size, DIALOG_K, rgb)
+            if n in MARK_GLYPHS: return glyph_mark(g, size, MARK_K, rgb)
+            return glyph_fit(g, *size, rgb, 6 if min(size) >= 48 else 1)
+        f[n] = make(sizes[n], col)
+        if down: f[down] = make(sizes[down], col_down)
+    for n, g in DISCS: f[n] = bare_icon(g, 40)
     for n in RECOLOUR: f[n] = recolour_white(os.path.join(find_stock_img(), n + '.png'))
     for n, (label, sel) in SPEEDS.items(): f[n] = speed_badge(label, sel)
     for n, pressed in PLAYALL.items(): f[n] = play_all_pill(pressed)
     for n, level in WIFI_LOCK.items(): f[n] = wifi_lock(level)
+    f.update(album_images())
     return f
 
-def _aa(size, draw, scale=8):
-    """Draw at scale x with draw(ImageDraw, s) in white on transparent, downsample (anti-aliased mask)."""
+def ah_tint_alpha(y):
+    """patch/common.c pod_alpha with the album page's constants (AH_TINT): the black gradient's alpha on window row y."""
+    top, bot, rows, _ = AH_TINT
+    return bot if y >= rows - 1 else top + ((bot - top) * y + (rows - 1) // 2) // (rows - 1)
+
+def album_images():
+    """The album page's images (ALBUM): the tint gradient, Shuffle's disc + glyph, the pill, the play glyph."""
+    from PIL import Image
+    f = {}
+    w = 320; h = AH_TINT[3]
+    tint = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    for y in range(h): tint.paste((0, 0, 0, ah_tint_alpha(y)), (0, y, w, y + 1))
+    f['ah_tint'] = tint
+    g = glyph_fit('shuffle', AH_SHUF_GLYPH, AH_SHUF_GLYPH, WHITE, 0)
+    f['ah_shuffle'] = on_disc(g, AH_DISC_PX, AH_SHUF_DISC)
+    f['ah_shuffle_down'] = on_disc(g, AH_DISC_PX, AH_SHUF_DISC_DOWN)
+    f['ah_pill'] = pill(AH_PILL_PX, AH_PILL_FILL)
+    f['ah_pill_down'] = pill(AH_PILL_PX, AH_PILL_FILL_DOWN)
+    p = glyph_fit('play:filled', AH_PLAY_GLYPH, AH_PLAY_GLYPH, AH_PLAY_INK, 0)
+    f['ah_play'] = p                 # no padding: the style's icon_at left centres it in a pill-high square (mod_ipodrows.pill_layout)
+    return f
+
+def _aa(size, draw, scale=8, box=False):
+    """Draw at scale x with draw(ImageDraw, s) in white on transparent, downsample (anti-aliased mask; box = a plain
+    average, no ringing outside the shape)."""
     from PIL import Image, ImageDraw
     big = Image.new('L', (size[0] * scale, size[1] * scale), 0)
     draw(ImageDraw.Draw(big), scale)
-    return big.resize(size, Image.LANCZOS)
+    return big.resize(size, Image.BOX if box else Image.LANCZOS)
 
 # the solid shapes, drawn at s x on a w x h canvas (white mask)
-PLAY_TRI, PAUSE_BAR, SKIP_TRI, GRABBER = (27, 32), (8, 10, 32), (16, 18), (36, 5, 11)   # w x h; bar w, gap, h; w x h; w, h, y
+GRABBER = (36, 5, 11)               # w, h, y
+# The transport glyphs ("B2 crisp"): our own rounded convex polygons (inset by r, then dilated by r: true round corners),
+# drawn 16x and box-downsampled. Ink sizes in device px; docs/ui.md.
+TSS = 16
+PLAY_INK = (29, 31)                 # w x h of the rounded ink
+PLAY_SHIFT = 1.5                    # optical centring: the ink sits this far right of the canvas centre
+PLAY_R = 0.10                       # corner radius, x the play height
+PAUSE_H, PAUSE_BAR_W, PAUSE_GAP, PAUSE_R = 28, 0.30, 0.36, 0.30       # height; bar width, gap (x height); radius (x bar width)
+SKIP_H, SKIP_WR, SKIP_OV, SKIP_RK = 24, 1.46, 0.18, 0.6              # ink height; total width x height; overlap x triangle width; radius x the play radius
 
-def g_play(d, s, w, h):
-    # right-pointing triangle, shifted right 1.5 px for optical centring
-    tw, th = PLAY_TRI
-    x0, y0 = (w - tw) / 2 + 1.5, (h - th) / 2
-    d.polygon([(x0 * s, y0 * s), ((x0 + tw) * s, (y0 + th / 2) * s), (x0 * s, (y0 + th) * s)], fill=255)
+def _inset(poly, r):
+    """A convex polygon moved inward by r (vertices intersect the offset edges)."""
+    n = len(poly); area = sum(poly[i][0] * poly[(i + 1) % n][1] - poly[(i + 1) % n][0] * poly[i][1] for i in range(n))
+    sgn = 1 if area > 0 else -1; lines = []
+    for i in range(n):
+        (x1, y1), (x2, y2) = poly[i], poly[(i + 1) % n]; dx, dy = x2 - x1, y2 - y1; ln = (dx * dx + dy * dy) ** .5
+        lines.append((x1 - dy / ln * sgn * r, y1 + dx / ln * sgn * r, dx, dy))
+    out = []
+    for i in range(n):
+        ax, ay, adx, ady = lines[i - 1]; bx, by, bdx, bdy = lines[i]
+        t = ((bx - ax) * bdy - (by - ay) * bdx) / (adx * bdy - ady * bdx)
+        out.append((ax + adx * t, ay + ady * t))
+    return out
 
-def g_pause(d, s, w, h):
-    bw, gap, ph = PAUSE_BAR
-    x0, y0 = (w - (2 * bw + gap)) / 2, (h - ph) / 2
-    for x in (x0, x0 + bw + gap):
-        d.rounded_rectangle([x * s, y0 * s, (x + bw) * s - 1, (y0 + ph) * s - 1], radius=2 * s, fill=255)
+def _tri(x0, y0, w, h, fwd):
+    return [(x0, y0), (x0 + w, y0 + h / 2), (x0, y0 + h)] if fwd else [(x0 + w, y0), (x0, y0 + h / 2), (x0 + w, y0 + h)]
 
-def g_skip(d, s, w, h, forward=True):
-    # two triangles touching: >> (or << mirrored)
-    tw, th = SKIP_TRI
-    x0, y0 = (w - 2 * tw) / 2, (h - th) / 2
-    for i in range(2):
-        a = x0 + i * tw
-        pts = [(a, y0), (a + tw, y0 + th / 2), (a, y0 + th)] if forward else [(a + tw, y0), (a, y0 + th / 2), (a + tw, y0 + th)]
-        d.polygon([(x * s, y * s) for x, y in pts], fill=255)
+def _tri_ink(w, h, r):
+    """Width and height of the rounded triangle (pre-rounding box w x h, right-pointing)."""
+    ip = _inset(_tri(0, 0, w, h, True), r)
+    xs, ys = [p[0] for p in ip], [p[1] for p in ip]
+    return max(xs) - min(xs) + 2 * r, max(ys) - min(ys) + 2 * r
+
+def _fit_tri(ink_w, ink_h, r):
+    """The pre-rounding (w, h) whose rounded ink is ink_w x ink_h."""
+    w, h = ink_w, ink_h
+    for _ in range(40):
+        iw, ih = _tri_ink(w, h, r); w *= ink_w / iw; h *= ink_h / ih
+    return w, h
+
+def _round_poly(d, poly, r, s):
+    ip = _inset(poly, r); n = len(ip)
+    cx = sum(p[0] for p in poly) / n; cy = sum(p[1] for p in poly) / n
+    d.polygon([(x * s, y * s) for x, y in ip], fill=255)
+    for i in range(n):
+        (x1, y1), (x2, y2) = ip[i], ip[(i + 1) % n]; dx, dy = x2 - x1, y2 - y1; ln = (dx * dx + dy * dy) ** .5
+        nx, ny = dy / ln, -dx / ln
+        if nx * ((x1 + x2) / 2 - cx) + ny * ((y1 + y2) / 2 - cy) < 0: nx, ny = -nx, -ny      # outward
+        d.polygon([(x1 * s, y1 * s), (x2 * s, y2 * s), ((x2 + nx * r) * s, (y2 + ny * r) * s), ((x1 + nx * r) * s, (y1 + ny * r) * s)], fill=255)
+        d.ellipse([(x1 - r) * s, (y1 - r) * s, (x1 + r) * s, (y1 + r) * s], fill=255)
+
+def transport_mask(kind, size):
+    """The 'L' mask of the transport glyph `kind` (play, pause, next, prev) on a size (px or (w, h)) canvas, ink centred."""
+    from PIL import Image, ImageDraw
+    cw, ch = size if isinstance(size, tuple) else (size, size)
+    s = TSS; big = Image.new('L', (cw * s, ch * s), 0); d = ImageDraw.Draw(big)
+    if kind == 'play':
+        r = PLAY_R * PLAY_INK[1]; w, h = _fit_tri(*PLAY_INK, r)
+        iw, ih = _tri_ink(w, h, r)
+        ip = _inset(_tri(0, 0, w, h, True), r); minx, miny = min(p[0] for p in ip), min(p[1] for p in ip)
+        ox, oy = (cw - iw) / 2 + PLAY_SHIFT - (minx - r), (ch - ih) / 2 - (miny - r)
+        _round_poly(d, _tri(ox, oy, w, h, True), r, s)
+    elif kind == 'pause':
+        bh = PAUSE_H; bw, gap = PAUSE_BAR_W * bh, PAUSE_GAP * bh; x0, y0 = (cw - 2 * bw - gap) / 2, (ch - bh) / 2
+        for x in (x0, x0 + bw + gap):
+            d.rounded_rectangle([round(x * s), round(y0 * s), round((x + bw) * s) - 1, round((y0 + bh) * s) - 1], radius=PAUSE_R * bw * s, fill=255)
+    else:
+        fwd = kind == 'next'; r = SKIP_RK * PLAY_R * PLAY_INK[1]; ink_w = SKIP_WR * SKIP_H
+        w, h = _fit_tri(ink_w / (2 - SKIP_OV), SKIP_H, r)        # first guess for one triangle ...
+        for _ in range(40):                                     # ... then the pair spans ink_w
+            tw = _tri_ink(w, h, r)[0]; span = tw + (w - w * SKIP_OV)
+            w *= ink_w / span; h = _fit_tri(w, SKIP_H, r)[1]
+        ip = _inset(_tri(0, 0, w, h, True), r); iw0, ih = _tri_ink(w, h, r)
+        total = iw0 + w * (1 - SKIP_OV); minx, miny = min(p[0] for p in ip) - r, min(p[1] for p in ip) - r
+        ox, oy = (cw - total) / 2 - minx, (ch - ih) / 2 - miny
+        for i in range(2):
+            _round_poly(d, _tri(ox + i * w * (1 - SKIP_OV), oy, w, h, fwd), r, s)
+    return big.resize((cw, ch), Image.BOX)
 
 def g_grabber(d, s, w, h):
     # the sheet handle: a pill centred in the button's width, y px from its top
     pw, ph, y = GRABBER
     d.rounded_rectangle([(w - pw) / 2 * s, y * s, (w + pw) / 2 * s - 1, (y + ph) * s - 1], radius=ph / 2 * s, fill=255)
 
+# The playing row's marker (patch/rows.c rows_track_icon): a 40 x 20 image drawn centred in the 40 px icon widget, the 20 px wave at
+# its right end (x 20..40, flush with the titles' 298 px right margin); four round-ended bars, 3 px wide, 8/3 px apart.
+WAVE_BARS, WAVE_W, WAVE_GAP, WAVE_PX = (8, 16, 20, 12), 3, 8 / 3, 20
+def g_wave(d, s, w, h):
+    x0 = w - WAVE_PX
+    for i, bh in enumerate(WAVE_BARS):
+        x, y = x0 + i * (WAVE_W + WAVE_GAP), (h - bh) / 2
+        d.rounded_rectangle([round(x * s), round(y * s), round((x + WAVE_W) * s) - 1, round((y + bh) * s) - 1], radius=WAVE_W / 2 * s, fill=255)
+
 def pil_glyph(kind, size, rgb, alpha=255):
     """The solid glyph `kind` (play, pause, next, prev, grabber) on a size (px or (w, h)) canvas, in rgb at alpha."""
     from PIL import Image
     w, h = size if isinstance(size, tuple) else (size, size)
-    fn = {'play': g_play, 'pause': g_pause, 'next': lambda d, s, w, h: g_skip(d, s, w, h, True),
-          'prev': lambda d, s, w, h: g_skip(d, s, w, h, False), 'grabber': g_grabber}[kind]
-    mask = _aa((w, h), lambda d, s: fn(d, s, w, h))
+    shape = {'grabber': g_grabber, 'wave': g_wave}.get(kind)
+    mask = _aa((w, h), lambda d, s: shape(d, s, w, h), 16 if kind == 'wave' else 8, kind == 'wave') if shape else transport_mask(kind, (w, h))
     if alpha != 255: mask = mask.point(lambda v: v * alpha // 255)
     im = Image.new('RGBA', mask.size, rgb); im.putalpha(mask); return im
 
+def ink_metrics(sil, ink):
+    """(bbox centre, silhouette centroid) of a glyph, each (x, y) in px: `ink` is the rendered glyph, `sil` its filled
+    silhouette (the same shape with the holes filled). The bbox edges are sub-pixel (an edge pixel counts by its coverage)."""
+    w, h = ink.size
+    a, s = ink.getchannel('A'), sil.getchannel('A')
+    cols = [max(a.getpixel((x, y)) for y in range(h)) / 255 for x in range(w)]
+    rows = [max(a.getpixel((x, y)) for x in range(w)) / 255 for y in range(h)]
+    def edges(cov):
+        idx = [i for i, v in enumerate(cov) if v > 0]
+        return idx[0] + 1 - cov[idx[0]], idx[-1] + cov[idx[-1]]
+    (x0, x1), (y0, y1) = edges(cols), edges(rows)
+    tot = sum(s.getpixel((x, y)) for y in range(h) for x in range(w))
+    cx = sum((x + 0.5) * s.getpixel((x, y)) for y in range(h) for x in range(w)) / tot
+    cy = sum((y + 0.5) * s.getpixel((x, y)) for y in range(h) for x in range(w)) / tot
+    return ((x0 + x1) / 2, (y0 + y1) / 2), (cx, cy)
+
+NP_OPTICAL_STEP, NP_OPTICAL_MAX, NP_MARGIN = 0.25, 1.5, 3   # the glyph's sub-pixel shift (px, in steps), the most it may move, the room round it
+
+def np_glyph(g, size, ink_px, rgb):
+    """Glyph g (a 2.0 px stroke, `ink_px` ink) on a size x size canvas, placed by its optical centre: the middle of the ink's
+    bounding box and of its silhouette's centroid (a heart's mass is in its lobes, so its box centre looks high), moved to
+    the canvas centre in quarter-pixel steps by an SVG translation (not by whole pixels, which would leave up to 0.5 px)."""
+    from PIL import Image
+    n, solid = gname(g), is_filled(g)
+    sw_px = 2.0
+    px = fit_px(n, 'outline', solid, size, size, (size - ink_px) // 2, sw_px)
+    off = (size - px - 2 * NP_MARGIN) // 2                    # the glyph's canvas (px + 2 NP_MARGIN, room for the shift) lies at (off, off)
+    sw, t = sw_px * 24 / px, px + 2 * NP_MARGIN
+    base = _rsvg(build_svg(n, 'outline', px, sw, solid, margin=NP_MARGIN), t)
+    (bx, by), (cx, cy) = ink_metrics(_rsvg(build_svg(n, 'outline', px, sw, True, margin=NP_MARGIN), t), base)
+    ox, oy = (bx + cx) / 2, (by + cy) / 2                      # the optical centre in the glyph canvas
+    want = size / 2 - off                                      # where it belongs in that canvas
+    q = lambda v: round(max(-NP_OPTICAL_MAX, min(NP_OPTICAL_MAX, v)) / NP_OPTICAL_STEP) * NP_OPTICAL_STEP
+    dx, dy = q(want - ox), q(want - oy)
+    im = _rsvg(build_svg(n, 'outline', px, sw, solid, dx, dy, margin=NP_MARGIN), t)
+    a = im.getchannel('A')
+    assert not any(a.crop(r).getbbox() for r in ((0, 0, t, 1), (0, t - 1, t, t), (0, 0, 1, t), (t - 1, 0, t, t))), f'{g}: the centred glyph touches its canvas edge'
+    c = Image.new('RGBA', (size, size), (0, 0, 0, 0)); c.alpha_composite(im, (off, off))
+    return tint(c, rgb) if rgb != WHITE else c
+
 def np_disc(size, disc_px, alpha, g, ink, rgb):
-    """A size x size canvas: a white disc of disc_px at `alpha` centred, the Tabler glyph g (ink px) over it."""
+    """A size x size canvas: a white disc of disc_px at `alpha` centred, the glyph g (ink px) over it, centred optically."""
     from PIL import Image
     d = disc(disc_px, (255, 255, 255)); d.putalpha(d.getchannel('A').point(lambda v: v * alpha // 255))
     c = Image.new('RGBA', (size, size), (255, 255, 255, 0)); o = (size - disc_px) // 2
-    c.alpha_composite(d, (o, o)); c.alpha_composite(glyph_fit(g, size, size, rgb, (size - ink) // 2)); return c
+    c.alpha_composite(d, (o, o)); c.alpha_composite(np_glyph(g, size, ink, rgb)); return c
 
 def np_images():
     """The Now Playing glyphs (mod_nowplaying.py): the tones of NP_TONES, pressed #8C8C8C (the grabber: brighter); the
@@ -509,20 +762,20 @@ def np_images():
             rgb, alpha = (NP_PRESSED.get(tone) or (NP_DIM, 255)) if pressed else NP_TONES[tone]
             if g.startswith('pil:'): out[name] = pil_glyph(g[4:], px, rgb, alpha)
             elif rest: out[name] = np_disc(px, rest[0], NP_DISC_ALPHA_DOWN if pressed else NP_DISC_ALPHA, g, ink, rgb)
-            else: out[name] = glyph_fit(g, px, px, rgb, (px - ink) // 2)
+            else: out[name] = glyph_fit(g, px, px, rgb, (px - ink) // 2, 1.5 if ink < 22 else None)   # the small mode / queue glyphs keep a 1.5 px stroke
     return out
 
 # ---------------------------------------------------------------- one ring style for every pull-down tile (docs/ui.md)
 RING_OFF, RING_DIS, RING_ON_GLYPH = (0x77,) * 3, (0x44,) * 3, (0x14,) * 3
-TILE_GLYPH = 28      # Tabler glyph px (24 grid, stroke 2) inside the 50 px ring
+TILE_GLYPH, TILE_TEXT = 24, 17      # glyph px (24 grid, stroke 2) and "PO" / "LO" text px inside the 50 px ring
 TILE_FONT = os.path.join(ROOT, 'assets', 'fonts', 'Inter-m1plus.ttf')
 # tile image -> (glyph or 'text:XX', state); the stock geometry: 50 x 50, the circle touching the bounds
 TILES = {
     'drop_wifi': ('wifi', 'off'), 'drop_wifiopen': ('wifi', 'on'), 'drop_bt': ('bluetooth', 'off'),
     'drop_btopen': ('bluetooth', 'on'), 'drop_keylock': ('lock', 'off'), 'drop_keylockopen': ('lock', 'on'),
-    'drop_eq': ('adjustments-alt', 'off'), 'drop_eqopen': ('adjustments-alt', 'on'),
-    'drop_usbaudio': ('usb', 'on'), 'drop_usbdac': ('+dac', 'on'), 'drop_usbstorage': ('device-usb', 'on'),
-    'drop_playset': ('adjustments', 'off'), 'drop_playsetdown': ('adjustments', 'on'),
+    'drop_eq': ('sliders-vertical', 'off'), 'drop_eqopen': ('sliders-vertical', 'on'),
+    'drop_usbaudio': ('usb', 'on'), 'drop_usbdac': ('+dac', 'on'), 'drop_usbstorage': ('hard-drive', 'on'),
+    'drop_playset': ('sliders-horizontal', 'off'), 'drop_playsetdown': ('sliders-horizontal', 'on'),
     'drop_sysset': ('settings', 'off'), 'drop_syssetdown': ('settings', 'on'),
     'drop_lowgain': ('+gain-low', 'off'), 'drop_highgain': ('+gain-high', 'on'),
     'drop_lowgaindisable': ('+gain-low', 'dis'), 'drop_highgaindisable': ('+gain-high', 'dis'),
@@ -543,11 +796,11 @@ def ring_tile(g, state, on_style='disc'):
     gcol = RING_ON_GLYPH if filled else col
     t = Image.new('RGBA', (N, N), col + (0,)); t.putalpha(big.resize((N, N), Image.LANCZOS))
     if g.startswith('text:'):
-        f = ImageFont.truetype(TILE_FONT, 20); bb = f.getbbox(g[5:])
+        f = ImageFont.truetype(TILE_FONT, TILE_TEXT); bb = f.getbbox(g[5:])
         ti = Image.new('RGBA', (bb[2] - bb[0] + 2, bb[3] - bb[1] + 2), gcol + (0,))
         m = Image.new('L', ti.size, 0); ImageDraw.Draw(m).text((1 - bb[0], 1 - bb[1]), g[5:], font=f, fill=255)
         ti.putalpha(m); gi = ti
-    else: gi = ink_crop(glyph(g, TILE_GLYPH, 'disc', gcol))
+    else: gi = ink_crop(glyph(g, TILE_GLYPH, 'tile', gcol))
     t.alpha_composite(gi, ((N - gi.width) // 2, (N - gi.height) // 2)); return t
 
 
@@ -568,11 +821,11 @@ def replaced_names():
 
 def pod_row_names(): return sorted({n for n, _ in POD_ROWS.values()})
 def nav_names(): return sorted(set(NAV_VIEW) | {n + '_down' for n in NAV_VIEW})
-def pod_names(): return sorted(set(pod_row_names()) | set(POD_HOME) | set(nav_names()))
+def pod_names(): return sorted(set(pod_row_names()) | set(POD_HOME) | set(nav_names()) | set(ALBUM) | {SHOT_BAR[0]})
 def np_names(): return sorted(set(NP) | {v[4] for v in NP.values() if v[4]})
 
 def added_rels(stock_rootfs=None, *args):
-    """Rootfs-relative paths of the files this step adds (fwtool --allow-added): the M1 Pod row icons."""
+    """Rootfs-relative paths of the files this step adds (fwtool --allow-added): the M1+ Pod row icons."""
     return [f'{IMG.removeprefix("rootfs/")}/{n}.png' for n in pod_names()]
 
 def sha256(b): return hashlib.sha256(b).hexdigest()
@@ -612,26 +865,33 @@ def cmd_generate():
     files.update(nps)
     shutil.rmtree(PNG, ignore_errors=True); os.makedirs(PNG)
     for n, im in sorted(files.items()):
-        assert n in pod_names() + np_names() or im.size == sizes[n], (n, im.size, sizes.get(n))
+        want = (RESIZED[n],) * 2 if n in RESIZED else sizes.get(n)
+        assert n in pod_names() + np_names() or im.size == want, (n, im.size, want)
         im.save(os.path.join(PNG, n + '.png'), optimize=True)
     print(f'{len(files)} PNGs, {sum(os.path.getsize(os.path.join(PNG, f)) for f in os.listdir(PNG))} bytes -> {PNG}')
 
 def cmd_fetch(tgz):
-    data = open(tgz, 'rb').read()
-    if sha256(data) != TGZ_SHA: sys.exit('tarball SHA-256 mismatch (pinned: @tabler/icons 3.49.0)')
-    names = used_glyphs()
-    shutil.rmtree(SVG, ignore_errors=True)
-    with tarfile.open(fileobj=io.BytesIO(data)) as t:
-        for style in ('outline', 'filled'):
-            os.makedirs(os.path.join(SVG, style), exist_ok=True)
-            for n in names:
-                try: m = t.getmember(f'package/icons/{style}/{n}.svg')
-                except KeyError:
-                    assert style == 'filled', f'missing outline glyph {n}'; continue
+    data = open(tgz, 'rb').read(); h = sha256(data)
+    lucide, tabler = used_glyphs()
+    if h == LUCIDE_SHA:
+        shutil.rmtree(LUCIDE_SVG, ignore_errors=True); os.makedirs(LUCIDE_SVG)
+        with tarfile.open(fileobj=io.BytesIO(data)) as t:
+            for n in lucide: open(os.path.join(LUCIDE_SVG, n + '.svg'), 'wb').write(t.extractfile(f'package/icons/{n}.svg').read())
+            open(os.path.join(LUCIDE, 'LICENSE'), 'wb').write(t.extractfile('package/LICENSE').read())
+        print('lucide svg sources:', len(os.listdir(LUCIDE_SVG)))
+    elif h == TGZ_SHA:
+        shutil.rmtree(SVG, ignore_errors=True)
+        with tarfile.open(fileobj=io.BytesIO(data)) as t:
+            for style in ('outline', 'filled'):
                 os.makedirs(os.path.join(SVG, style), exist_ok=True)
-                open(os.path.join(SVG, style, n + '.svg'), 'wb').write(t.extractfile(m).read())
-        open(os.path.join(ASSET, 'LICENSE'), 'wb').write(t.extractfile('package/LICENSE').read())
-    print('svg sources:', {s: len(os.listdir(os.path.join(SVG, s))) for s in ('outline', 'filled')})
+                for n in tabler:
+                    try: m = t.getmember(f'package/icons/{style}/{n}.svg')
+                    except KeyError:
+                        assert style == 'filled', f'missing outline glyph {n}'; continue
+                    open(os.path.join(SVG, style, n + '.svg'), 'wb').write(t.extractfile(m).read())
+            open(os.path.join(ASSET, 'LICENSE'), 'wb').write(t.extractfile('package/LICENSE').read())
+        print('tabler svg sources:', {s: len(os.listdir(os.path.join(SVG, s))) for s in ('outline', 'filled')})
+    else: sys.exit('tarball SHA-256 mismatch (pinned: lucide-static 1.61.0 or @tabler/icons 3.49.0)')
 
 def check_assets(stock_dir, work_dir=None):
     """Asset PNGs against the stock files: same size and mode; pins match; optional work tree check."""
@@ -641,7 +901,8 @@ def check_assets(stock_dir, work_dir=None):
         sp = os.path.join(stock_dir, n + '.png')
         assert sha256(open(sp, 'rb').read()) == pins[n], f'{n}.png: stock file does not match the pin'
         s, a = read_png(sp), read_png(os.path.join(PNG, n + '.png'))
-        assert (a.size, a.mode, a.format) == (s.size, s.mode, 'PNG') and s.format == 'PNG', f'{n}.png: {a.size} {a.mode} vs {s.size} {s.mode}'
+        size = (RESIZED[n],) * 2 if n in RESIZED else s.size
+        assert (a.size, a.mode, a.format) == (size, s.mode, 'PNG') and s.format == 'PNG', f'{n}.png: {a.size} {a.mode} vs {size} {s.mode}'
         if work_dir:
             w = read_png(os.path.join(work_dir, n + '.png'))
             assert (w.size, w.mode) == (s.size, s.mode), f'{n}.png in the work tree has an unexpected format'
@@ -662,15 +923,19 @@ def apply(src, out):
     n_rows = apply_pod_rows(out, POD_ROWS)
     add_home_icon(out)
     add_nav_icons(out)
-    print(f'icons: {n_ok} images replaced, {total_old} -> {total_new} bytes ({total_new - total_old:+d}); {n_rows} M1 Pod row icons '
+    add_album_icons(out)
+    print(f'icons: {n_ok} images replaced, {total_old} -> {total_new} bytes ({total_new - total_old:+d}); {n_rows} M1+ Pod row icons '
           f'and the Home grid icon ({POD_HOME_STYLE}) added')
 
 IMG_MODE, IMG_MTIME = 0o755, 1750924035     # as the other added images (mod_nowplaying.py)
 UI_DIR = 'rootfs/release/assets/default/raw/ui'
 
 def apply_pod_rows(out, rows):
-    """Icon discs on the M1 Pod menu / Shuffle page rows: an insensitive image at the row's left, the
-    title shifted right (row height, chevrons, names and the payload's row table untouched)."""
+    """Bare glyphs on the M1+ Pod menu / Shuffle / Settings / Extras / Main Menu rows: an insensitive image at the row's
+    left, the title at POD_TEXT_X, and the hairline under the row inset to start under the title: the theme's full-width
+    one (list_item_style's bottom border) is switched off for these rows and an insensitive 1 px view, pod_hair, draws it
+    from HAIR_X to the row's right edge (the pressed band stays the full-width theme colour). Row height, chevrons,
+    names and the payload's row table untouched."""
     from awtk_ui import Widget
     if not any(os.path.exists(os.path.join(out, UI_DIR, k + '.bin')) for k in POD_UI): return 0
     used = {}
@@ -685,6 +950,10 @@ def apply_pod_rows(out, rows):
             ic = Widget('image', POD_ICON_X, (row.h - POD_ICON) // 2, POD_ICON, POD_ICON,
                         [('name', 'pod_icon'), ('image', img), ('draw_type', 'icon'), ('sensitive', 'false')])
             row.children.insert(0, ic)
+            for st in ROW_STATES: row.set(f'style:{st}:border_width', '0')
+            hair = Widget('view', HAIR_X, row.h - 1, row.w - HAIR_X, 1, [('name', 'pod_hair'), ('sensitive', 'false')])
+            for st in ROW_STATES: hair.set(f'style:{st}:bg_color', HAIR_COLOUR)
+            row.children.append(hair)
     for k in POD_UI:
         p = os.path.join(out, UI_DIR, k + '.bin')
         if os.path.exists(p):
@@ -698,7 +967,7 @@ def apply_pod_rows(out, rows):
 HOME_STYLES = 'rootfs/release/assets/default/raw/styles/home_page.bin'
 
 def add_home_icon(out):
-    """The Home grid's "M1 Pod" icon (patch/home.c builds the widget at run time): its two images and the image
+    """The Home grid's "M1+ Pod" icon (patch/home.c builds the widget at run time): its two images and the image
     style home_m1pod_style, a copy of home_tidal_style (normal/disable/focused/pressed/selected) pointing at them,
     inserted in the stock sort order (widget type, style name) among the other home_*_style items."""
     import awtk_style
@@ -721,9 +990,18 @@ def add_home_icon(out):
         shutil.copyfile(os.path.join(PNG, n + '.png'), q); os.chmod(q, IMG_MODE); os.utime(q, (IMG_MTIME, IMG_MTIME))
 
 def add_nav_icons(out):
-    """The Albums view toggle's four images (used by ui/m1pod_albums.bin, which swaps the glyph at run time with its mode)."""
+    """The Albums view toggle's four images (used by ui/m1pod_albums.bin, which swaps the glyph at run time with its mode)
+    and the status bar's Screenshot camera (the hidden pod_shot image tools/pod_ui.py adds to ui/system_bar.bin)."""
     d = os.path.join(out, IMG)
-    for n in nav_names():
+    for n in nav_names() + [SHOT_BAR[0]]:
+        q = os.path.join(d, n + '.png'); assert not os.path.exists(q), f'{n}.png already in the tree'
+        shutil.copyfile(os.path.join(PNG, n + '.png'), q); os.chmod(q, IMG_MODE); os.utime(q, (IMG_MTIME, IMG_MTIME))
+
+def add_album_icons(out):
+    """The album page's images (ALBUM): the corner masks, Shuffle's disc and glyph, the play glyph; patch/albuminfo.c
+    and the page theme (tools/mod_ipodrows.py) refer to them by name."""
+    d = os.path.join(out, IMG)
+    for n in ALBUM:
         q = os.path.join(d, n + '.png'); assert not os.path.exists(q), f'{n}.png already in the tree'
         shutil.copyfile(os.path.join(PNG, n + '.png'), q); os.chmod(q, IMG_MODE); os.utime(q, (IMG_MTIME, IMG_MTIME))
 
@@ -731,7 +1009,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('src', nargs='?'); ap.add_argument('out', nargs='?')
     ap.add_argument('--generate', action='store_true'); ap.add_argument('--pins', action='store_true')
-    ap.add_argument('--fetch', metavar='TGZ'); ap.add_argument('--check', action='store_true')
+    ap.add_argument('--fetch', metavar='TGZ', help='run once per tarball (Lucide, Tabler)'); ap.add_argument('--check', action='store_true')
     a = ap.parse_args()
     if a.pins: cmd_pins()
     elif a.generate: cmd_generate()

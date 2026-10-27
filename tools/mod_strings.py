@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""M1 Pod's texts in every language: our translation keys added to all 16 string tables (asset-only).
+"""M1+ Pod's texts in every language: our translation keys added to all 16 string tables (asset-only).
 
 The pages we add (ui/m1pod_*.bin) and the payload show their texts through the stock translation:
 `tr_text = key` in an asset, widget_set_tr_text / locale_info_tr in the payload (docs/architecture.md
@@ -21,7 +21,7 @@ import awtk_strings, pod_i18n
 from awtk_text import Ttf, StbText
 from modlib import clone_workdir, write_keep_mode
 
-RAW = 'rootfs/release/assets/default/raw'
+from awtk_ui import RAW
 FONT = RAW + '/fonts/default.ttf'
 STRINGS = RAW + '/strings'
 

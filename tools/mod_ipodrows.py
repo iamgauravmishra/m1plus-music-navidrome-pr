@@ -35,6 +35,8 @@ import mod_lists
 from modlib import clone_workdir, edit_ui
 
 PITCH, BODY = 64, 60
+TINT_NAME, TINT_H = 'img_ah_tint', 450      # the album page's tint gradient (the window is 450 px high): patch/offsets.inc AH_WIN_H
+NAV_H = 44             # the album page's navbar: patch/offsets.inc AH_NAV_H
 STOCK_PITCH, STOCK_BODY = 60, 56
 TEXT_W = 238           # x 60 .. 298 in a 310 px row (12 px margins, a 40 px icon + 8)
 TITLE = (0, 7, TEXT_W, 24)
@@ -90,7 +92,26 @@ def edit_jumplist(root):
     artist.w = ARTIST_W
 
 
+def edit_albuminfo(root):
+    """The album page's tint (patch/albuminfo.c): ah_tint, a window sized black gradient, is the window's first child (under the
+    navbar and the list); the list_view and its scroll_view are transparent, so the window's colour (black, or the cover's tone
+    once the payload sets it) shows through the header. The stock rows keep their own black. Nothing is renamed or moved."""
+    assert root.type == 'window' and [c.name for c in root.children] == ['navigationbar_view', 'albuminfo_listview'], 'unexpected albuminfo_page'
+    lv, sv = one(root, 'albuminfo_listview', 'list_view'), one(root, 'albuminfo_scrollview', 'scroll_view')
+    for w in (lv, sv):
+        for st in ('normal', 'disable', 'focused'): w.set(f'style:{st}:bg_color', '#00000000')
+    tint = awtk_ui.Widget('image', 0, 0, 320, TINT_H, [('name', TINT_NAME), ('image', 'ah_tint'), ('draw_type', 'default'),
+                                                       ('clickable', 'false'), ('sensitive', 'false')])
+    root.children.insert(0, tint)
+    # the shorter navbar (patch/offsets.inc AH_NAV_H; the builder's button heights are pinned in patch/rows.json): the list moves up
+    nav, bar = one(root, 'navigationbar_view', 'view'), one(root, 'scroll_bar_m', 'scroll_bar_m')
+    assert (nav.h, lv.y, lv.h, sv.h, bar.h) == (50, 50, 400, 400, 400), 'unexpected albuminfo_page geometry'
+    nav.h, lv.y = NAV_H, NAV_H
+    lv.h = sv.h = bar.h = TINT_H - NAV_H
+
+
 UI_EDITS = {
+    'albuminfo_page.bin': edit_albuminfo,
     'localclass_page.bin': lambda r: row_height(r, 'localclass_table_client'),
     'allmusic_page.bin': edit_allmusic,
     'playerjumpinfo_page.bin': edit_jumplist,
@@ -106,38 +127,133 @@ def build_ui(work):
         assert not os.path.exists(os.path.join(work, mod_lists.RAW.format(theme='theme1'), 'ui', rel)), f'theme1 has its own {rel}'
         old, new, root = edit_ui(path, fn)
         names = lambda d: [(w.type, w.name) for w in awtk_ui.parse(d).walk()]
-        assert names(old) == names(new), f'{rel}: a widget was added, removed or renamed'
+        want = names(old) + ([('image', TINT_NAME)] if rel == 'albuminfo_page.bin' else [])
+        assert sorted(names(new), key=str) == sorted(want, key=str), f'{rel}: a widget was added, removed or renamed'
         report.append(f'ui/{rel}: {len(old)} -> {len(new)} bytes')
     return report
 
 
-# The album view (patch/albuminfo.c): the two styles its hook applies to the stock header. They are
-# new names in the page theme only, so a header the hook leaves alone keeps stock's btn_imgplayall_style.
+# The album view (patch/albuminfo.c): the styles its hook applies to the stock header. They are new
+# names in the page theme only, so a header the hook leaves alone keeps stock's btn_imgplayall_style and
+# text styles. Title, artist and the year line are centred (an hscroll_label shows its text centred when
+# it fits and scrolls it, with ellipses, when it does not, as the Cover Flow captions do).
 ALBUM_VIEW = 'albuminfo_page'
-BUTTON_STYLE, META_STYLE = 'btn_albumbtn_style', 'srlabel_meta15_style'
-BUTTON_BG, BUTTON_BORDER, BUTTON_PRESSED, BUTTON_PX = '#1E1E1E', '#3A3A3A', '#333333', 20
-META_COLOR, META_PX = '#AAAAAA', 15
+PLAY_STYLE, SHUF_STYLE = 'btn_ahplay_style', 'btn_ahshuf_style'
+TITLE_STYLE, ARTIST_STYLE, META_STYLE = 'srlabel_ahtitle_style', 'srlabel_ahartist_style', 'srlabel_ahmeta_style'
+HEAD_STYLE, HEAD_SRC = 'list_item_ahhead_style', 'list_item_notpress_style'
+ROW_STYLE, ROW_PRESSED, ROW_HAIR = 'list_item_style', '#FFFFFF33', '#FFFFFF22'   # the track rows on this page: transparent, pressed 20 % white, hairline 13 % white
+TITLE_PX, ARTIST_PX, META_PX = 22, 18, 15
+TITLE_COLOR, ARTIST_COLOR, META_COLOR = '#FFFFFF', '#AAAAAA', '#9C9C9C'   # the design's #8C8C8C is 3.8:1 on the page's #333333 pressed row: mod_theme --scan wants 4.5
+PLAY_INK, PLAY_PX = '#141414', 18          # the pill's fill is its bg_image (PLAY_BG_IMAGE): white, #BEBEBE pressed
+PLAY_BG_IMAGE, PLAY_BG_IMAGE_DOWN, IMAGE_CENTER = 'ah_pill', 'ah_pill_down', 2   # bg_image_draw_type: DEFAULT 0, ICON 1, CENTER 2 (centred at its own size)
+TRACK_PX = 19                                                # the track rows' title and number on this page (the other pages keep 21)
+PLAY_ICON, SHUF_ICON, SHUF_ICON_DOWN = 'ah_play', 'ah_shuffle', 'ah_shuffle_down'   # tools/mod_icons.py ALBUM
+CENTER, RIGHT = 1, 3                                         # text_align_h: left 2, centre 1, right 3
+NUM_STYLE, NUM_COLOR = 'srlabel_tracknum_style', '#AAAAAA'   # patch/offsets.inc ROW_NUM_STYLE; the secondary grey (as the artist line)
+# The pill's icon and text are laid out by widget_draw_icon_text (@0x67235c) and widget_calc_icon_text_rect (@0x666f04):
+# icon_at 0 = auto, which is TOP when icon height + font size < the height left by the margins (16 + 18 < 44: the
+# glyph above the text); 1 left, 2 right, 3 top, 4 bottom, 5 centre. With "left" the icon is centred in a square
+# as high as the (margined) rect and the text goes in what is right of that square plus the spacer. DEVICE FINDING
+# (V2.1nF screenshot): the text is drawn LEFT aligned at the start of that rect, not centred in it (text_align_h is read
+# with the default 2 = left at @0x672588; V2.1nC assumed centred, so its negative spacer pulled the text onto the glyph).
+# The glyph is centred in the 44 px square, so it ends 14 px before the square's end: spacer = gap - 14 puts the text
+# `gap` px after the glyph's image. margin_left is set per page build by the hook (patch/albuminfo.c ah_centre_pill, from the
+# measured text); the style carries the margin for an English text, which is also the fallback.
+PLAY_ICON_AT, PLAY_ALIGN = 1, 2                              # icon_at left; text_align_h left (left 2, centre 1, right 3)
+PLAY_GLYPH_W, PLAY_GLYPH_VIS = 16, 15                        # ah_play.png: the image, its opaque columns
+PLAY_GAP, PLAY_MARGIN_L, PLAY_MARGIN_R = 8, 37, 0           # patch/offsets.inc AH_PILL_GAP, AH_PILL_MARGIN
+PLAY_SPACER = PLAY_GAP - (44 - PLAY_GLYPH_W) // 2            # -6
+
+
+def pill_margin(text_w, w=180, h=44):
+    """margin_left that centres glyph + gap + text in the pill (the hook's formula), or None when it does not fit."""
+    m = (w - (PLAY_GLYPH_W + PLAY_GAP + text_w)) // 2 - (h - PLAY_GLYPH_W) // 2
+    return m if text_w > 0 and m >= 0 else None
+
+
+def pill_layout(text_w, w=180, h=44, margin_left=None):
+    """Where AWTK draws the pill's glyph and text (x of the glyph's image, x of the text's pen, the text rect
+    (x, w)), from the style numbers above and the measured text width; margin_left as the hook sets it (the style's
+    when the text cannot be measured)."""
+    m = pill_margin(text_w, w, h)
+    ir_x = PLAY_MARGIN_L if margin_left is None and m is None else (m if margin_left is None else margin_left)
+    ir_w = w - ir_x - PLAY_MARGIN_R
+    sq = h                                                    # the icon square: ir.h x ir.h at ir.x
+    icon_x = ir_x + sq // 2 - PLAY_GLYPH_W // 2               # canvas_draw_icon_in_rect: centred on the square
+    rx, rw = ir_x + sq + PLAY_SPACER, ir_w - sq - PLAY_SPACER
+    return icon_x, rx, (rx, rw)                               # the text is left aligned: its pen starts at the rect
+NAVBAR_TITLES = ('navbar_label_white', 'navbar_leftlabel_white', 'navbar_centerlabel_white', 'navbar_rightlabel_white')
 
 
 def album_view_styles(page, base):
-    """btn_albumbtn_style: the dark Play all / Shuffle button (a dark fill with a hairline border,
-    pressed lighter, 20 px white text, no icon); srlabel_meta15_style: the "year . N tracks" line, the
-    stock grey line's alignment at 15 px #AAAAAA (the secondary grey)."""
+    """The header's styles: srlabel_ahtitle / ahartist / ahmeta (the stock white and grey lines, centred, 22 px
+    white, 18 px #AAAAAA, 13 px #9C9C9C); btn_ahplay_style, the Play all pill (white fill, round_radius 22, 20 px
+    dark text, the play glyph image, #BEBEBE pressed); btn_ahshuf_style, the round Shuffle (its disc and glyph
+    are images, pressed one lighter; no fill, no text). The navbar title labels' text is transparent on this
+    page (the design shows Back and Now Playing only; the label stays, so nothing that looks it up changes)."""
     for state in ('normal', 'pressed', 'over', 'focused', 'disable'):
-        s = awtk_style.Item('button', BUTTON_STYLE, state)
-        s.set_color('bg_color', BUTTON_PRESSED if state == 'pressed' else BUTTON_BG)
-        s.set_color('border_color', BUTTON_BORDER)
-        s.set('border_width', 1, awtk_style.T_UINT32)
-        s.set_color('text_color', '#FFFFFF')
-        s.set('font_size', BUTTON_PX, awtk_style.T_UINT32)
+        s = awtk_style.Item('button', PLAY_STYLE, state)
+        s.set_color('bg_color', '#00000000')   # the fill is the image: the button is AH_BTN_H high for the touch, the pill AH_PILL_H
+        s.set('bg_image', PLAY_BG_IMAGE_DOWN if state == 'pressed' else PLAY_BG_IMAGE, awtk_style.T_STRING)
+        s.set('bg_image_draw_type', IMAGE_CENTER, awtk_style.T_UINT32)
+        s.set_color('text_color', PLAY_INK)
+        s.set('font_size', PLAY_PX, awtk_style.T_UINT32)
+        s.set('icon', PLAY_ICON, awtk_style.T_STRING)
+        s.set('icon_at', PLAY_ICON_AT, awtk_style.T_INT32)
+        s.set('margin_left', PLAY_MARGIN_L, awtk_style.T_INT32)
+        s.set('margin_right', PLAY_MARGIN_R, awtk_style.T_INT32)
+        s.set('spacer', PLAY_SPACER, awtk_style.T_INT32)
+        s.set('text_align_h', PLAY_ALIGN, awtk_style.T_INT32)
         page.put(s)
+        s = awtk_style.Item('button', SHUF_STYLE, state)
+        s.set_color('bg_color', '#00000000')
+        s.set('icon', SHUF_ICON_DOWN if state == 'pressed' else SHUF_ICON, awtk_style.T_STRING)
+        page.put(s)
+    # the track rows (the stock list_item_style, resolved in this page's theme first): transparent, so the deep tint under the
+    # list shows; the pressed band and the 1 px hairline are translucent white, which over a black page is exactly today's
+    # #333333 and #222222 (51 and 34 levels of 255)
+    for s in base.states('list_item', ROW_STYLE):
+        n = mod_lists.copy(s)
+        n.set_color('bg_color', ROW_PRESSED if s.state == 'pressed' else '#00000000')
+        n.set_color('border_color', ROW_HAIR)
+        n.set('border_width', 1, awtk_style.T_UINT32)   # theme1's stock rows have a 4 px black gap there; here a hairline in both themes
+        page.put(n)
+    for s in base.states('list_item', HEAD_SRC):   # the header item: the stock notpress look, transparent (the window's colour and the tint show)
+        n = mod_lists.copy(s, HEAD_STYLE)
+        n.set_color('bg_color', '#00000000'); n.set_color('border_color', '#00000000')
+        page.put(n)
+    for name, src_name, px, color in ((TITLE_STYLE, 'srlabel_item_white_style', TITLE_PX, TITLE_COLOR),
+                                      (ARTIST_STYLE, 'srlabel_item_gray18_style', ARTIST_PX, ARTIST_COLOR),
+                                      (META_STYLE, 'srlabel_item_gray18_style', META_PX, META_COLOR)):
+        src = base.states('hscroll_label', src_name)
+        assert src, f'default.bin has no {src_name}'
+        for s in src:
+            n = mod_lists.copy(s, name)
+            n.set('font_size', px, awtk_style.T_UINT32)
+            n.set_color('text_color', color)
+            n.set('text_align_h', CENTER, awtk_style.T_INT32)
+            page.put(n)
+    # the track rows' title (white, and the playing row's gold) and number, TRACK_PX like the number: the rows keep their 64 px
+    for name in ('srlabel_item_white_style', 'srlabel_item_gold20_style'):
+        for s in base.states('hscroll_label', name):
+            n = mod_lists.copy(s); n.set('font_size', TRACK_PX, awtk_style.T_UINT32); page.put(n)
+    # the track rows' number (patch/rows.c rows_track_number): a plain label, so type 'label'; the grey line's colour, the
+    # title's size, right aligned in its fixed column (ROW_NUM_W). #AAAAAA is 5.44:1 on the #333333 pressed row.
     src = base.states('hscroll_label', 'srlabel_item_gray18_style')
     assert src, 'default.bin has no srlabel_item_gray18_style'
     for s in src:
-        n = mod_lists.copy(s, META_STYLE)
-        n.set('font_size', META_PX, awtk_style.T_UINT32)
-        n.set_color('text_color', META_COLOR)
+        n = awtk_style.Item('label', NUM_STYLE, s.state, list(s.props))
+        n.set('font_size', TRACK_PX, awtk_style.T_UINT32)
+        n.set_color('text_color', NUM_COLOR)
+        n.set('text_align_h', RIGHT, awtk_style.T_INT32)
         page.put(n)
+    hidden = 0
+    for name in NAVBAR_TITLES:
+        for s in base.states('label', name):
+            n = mod_lists.copy(s)
+            n.set_color('text_color', '#00000000')
+            page.put(n); hidden += 1
+    assert hidden == 12, f'unexpected navbar title styles ({hidden})'
 
 
 def style_rels():
