@@ -214,26 +214,27 @@
  * the cover AH_ART square, centred (the cover thread renders /tmp/abp/<md5>1.jpg at AH_ART, rows.json),
  * its four AH_CORNER px corners masked by images; the title, artist and "year . N tracks" lines centred in
  * AH_TEXT_W; the round Shuffle (AH_SHUF_W) and the Play all pill (AH_PLAY_W), AH_GAP apart, centred as a
- * pair; the stock track rows follow at AH_HDR_H.
+ * pair; the stock track rows follow at AH_HDR_H. The list starts at the window's top (the floating controls, AH_NAV_*, sit
+ * over it), so the header's first AH_NAV_TOP rows are padding: the cover's AH_ART_Y is AH_NAV_TOP + 6.
  */
 #define REC_YEAR 0x30
 #define CLASSINFO_ALL_SONGS 8
 #define AH_MID 160
 #define AH_ART 160
 #define AH_ART_X 80
-#define AH_ART_Y 6
+#define AH_ART_Y 50
 #define AH_CORNER 10
 #define AH_TEXT_X 17
 #define AH_TEXT_W 286
 /* vertical rhythm (tools/ah_ink.py, measured ink): cover bottom -> title capitals 16, title baseline -> artist capitals 9,
  * artist baseline -> year digits 9, year baseline -> pill top 16; the label rects are their font size high */
-#define AH_TITLE_Y 180
+#define AH_TITLE_Y 224
 #define AH_TITLE_H 22
-#define AH_ARTIST_Y 203
+#define AH_ARTIST_Y 247
 #define AH_ARTIST_H 18
-#define AH_META_Y 223
+#define AH_META_Y 267
 #define AH_META_H 15
-#define AH_BTN_Y 248
+#define AH_BTN_Y 292
 #define AH_BTN_H 44
 #define AH_SHUF_X 42
 #define AH_SHUF_W 44
@@ -249,7 +250,7 @@
 #define AH_PILL_GLYPH 16
 #define AH_PILL_GAP 8
 #define AH_PILL_MARGIN 37
-#define AH_HDR_H 300
+#define AH_HDR_H 344
 /* Play all and Shuffle open Now Playing like a track tap (ah_open_player): the widget name field the stock pop loop
  * compares (@0x525920 lw a0, 0x10(top)), at most AH_POP_MAX pages popped, and the stock Play all handler the hook takes
  * off the button (bound @0x526368 with the item as its context) */
@@ -259,16 +260,22 @@
 /* The album page's cover tint (patch/albuminfo.c, tools/mod_icons.py ah_tint): the window colour is the cover's tone (pod_tone,
  * the constants of Now Playing's) under a black gradient image, ah_tint.png (a window sized child of the page window, first,
  * insensitive), whose alpha runs from AH_TINT_A_TOP on window row 0 to AH_TINT_A_BOT on row AH_TINT_ROWS - 1 (the end of
- * the header: the navbar AH_NAV_H plus AH_HDR_H) and stays there below (200: the deep tint, 78 % dark), so the transparent track rows and the scroll bar strip show a deep version of the cover colour.
+ * the header: AH_HDR_H) and stays there below (200: the deep tint, 78 % dark), so the transparent track rows and the scroll bar strip show a deep version of the cover colour.
  * Only a real cover tints (the page's image is a file:// url): the placeholder disc and the All albums card stay black. The
  * cover's corners are painted in the colour behind them from its after-paint (the cover is AH_ART_Y below the header's top,
- * the header scrolls: window row = AH_NAV_H + AH_ART_Y - yoffset + cover row). AH_TICK_MS: the poll that waits for the cover
- * thread's file. */
-#define AH_NAV_H 44             /* navigationbar_view (ui asset) and its buttons (rows.json); the list starts here and is AH_WIN_H - AH_NAV_H high */
+ * the header scrolls: window row = AH_ART_Y - yoffset + cover row). AH_TICK_MS: the poll that waits for the cover
+ * thread's file.
+ * The floating controls (docs/modules/album-page.md): the stock navbar view is a band over the top of the page, AH_NAV_W x AH_NAV_BAND_H at the
+ * window's origin, last in the window (above the list, which starts at the window's top and is AH_WIN_H high); the stock builders'
+ * buttons (main's slots, docs/modules/navbar.md; AH_NAV_H high in 0x526a3c) draw glass discs through the page theme. The header's first
+ * AH_NAV_TOP rows are padding, so at rest the cover stays where it was, at row AH_ART_Y. */
+#define AH_NAV_H 44             /* the shared builder's buttons (rows.json) */
+#define AH_NAV_BAND_H 50        /* the band: tall enough for the page's own builder's 50 px buttons */
+#define AH_NAV_TOP 44
 #define AH_WIN_H 450
 #define AH_TINT_A_TOP 64
 #define AH_TINT_A_BOT 200
-#define AH_TINT_ROWS 344        /* AH_NAV_H + AH_HDR_H */
+#define AH_TINT_ROWS 344        /* AH_HDR_H: the ramp ends with the header */
 #define AH_TICK_MS 300
 /* The tone cache (patch/common.c): entries of {key, tone, stamp}, 12 bytes each. The album page names its album as the stock
  * header does: classinfo + 0xd the title, the artist at +0x10d (+0x20d when g_class_type is 0xff14, @0x524b00). */
@@ -302,6 +309,7 @@
 #define GRID_GAP 8              /* between columns */
 #define GRID_ROW_GAP 10         /* between rows, and above the first / below the last: two rows (10 + 190 + 10 + 190) fill the 400 px view exactly */
 #define GRID_MARGIN 12
+#define GRID_R 8                /* the covers' corner radius (the Albums grid and the Recently Played shelf), blended into the black behind them (patch/grid.c) */
 #define GRID_TITLE_GAP 4
 #define GRID_TITLE_H 22         /* the album, the grid title style (18 px white) */
 #define GRID_SUB_H 20           /* the artist, directly under it (15 px #AAAAAA) */
@@ -314,6 +322,7 @@
 #define NAV_CF_W 46
 #define LIST_ROW_H 64
 #define LIST_ART 52
+#define LIST_R 4                /* the list covers' corner radius: cut in the bitmap's alpha (a pressed row's fill shows behind them; patch/grid.c blend) */
 #define LIST_ART_X 10
 #define LIST_ART_Y 4
 #define LIST_TEXT_X 74          /* LIST_ART_X + LIST_ART + 12 */
@@ -376,6 +385,115 @@
 #define NP_BAR_LUM_MAX 119000000u
 
 /* ---------------------------------------------------------------------------
+ * The mini player bar on the Home instance of the menu (patch/minibar.c, docs/modules/minibar.md; the widgets are in
+ * ui/m1pod_menu.bin, tools/pod_ui.py MB_*, which must equal these). Apple Music's floating mini player: a full pill in the 450 px
+ * window, MB_W x MB_H at (MB_X, MB_Y), corner radius MB_R = MB_H / 2, a pre-rendered translucent glass image (mb_glass, mb_glass_down:
+ * dark fill, sheen, rim light; the card button's bg_image; not tinted by the album). The cover is MB_ART px square, MB_ART_X from the pill's left and MB_ART_Y from its top, its
+ * four corners MB_ART_R px (alpha in the bitmap). Title (17 px white) and artist (16 px, light grey) are hscroll_labels MB_TEXT_W wide
+ * from MB_TEXT_X (ellipsis, never scrolling); play (or pause, one of the two shows) and next are MB_BTN_W x MB_H touch targets at
+ * MB_PLAY_X / MB_NEXT_X (glyph centres 51 px apart, the next centre 35 px from the pill's right end). The list always runs to the window
+ * bottom, under the translucent pill; while the bar shows, a trailing spacer row pod_pad (MB_PAD high) is visible so the last row can scroll
+ * clear above it (the stock list_view layout keeps it: it sums every visible child's own height). MB_FIRST_MS: the one-shot that starts the page timer (nothing runs
+ * in the menu's first paint), MB_TICK_MS its period; MB_SETTLE: ticks that re-read the /tmp cover file after a track change (demo
+ * writes it a little later). MB_PLAYING: mclGetPlayStatus() while playing.
+ */
+#define MB_X 8
+#define MB_Y 384
+#define MB_W 304
+#define MB_H 56
+#define MB_R 28
+#define MB_GAP 8
+#define MB_PAD 64          /* the list's bottom padding while the bar shows: a trailing spacer row pod_pad of this height, so the last row scrolls clear above the pill (WIN_H - HOME_PAD - (MB_Y - MB_GAP)) */
+#define MB_ART 36
+#define MB_ART_X 14
+#define MB_ART_Y 10
+#define MB_ART_R 5
+#define MB_TEXT_X 60
+#define MB_TEXT_W 130
+#define MB_TITLE_Y 7
+#define MB_TITLE_H 22
+#define MB_ARTIST_Y 29
+#define MB_ARTIST_H 20
+#define MB_PLAY_X 194
+#define MB_NEXT_X 245
+#define MB_BTN_W 48
+#define MB_FIRST_MS 120
+#define MB_TICK_MS 500
+#define MB_SETTLE 3
+#define MB_PLAYING 2
+#define MB_GREY 0xff2b2b2bu
+/* The backdrop blur behind the glass (EXPERIMENTAL, patch/minibar.c mb_blur, tools/pod_blur.py, docs/modules/minibar.md): the pixels under the pill are
+ * read from and written to the lcd's drawing buffer in the card's EVT_BEFORE_PAINT, only when every pin below holds at run time.
+ * EVT_BEFORE_PAINT: widget_paint dispatches 0x11f right after canvas_translate to the widget and before widget_on_paint_background (@0x66dd98), 0x120 after
+ * the children and the border (@0x66de3c). canvas_t: ox, oy at 0 / 4 (canvas_translate @0x6434d4 adds to them), the clip rectangle left, top, right, bottom
+ * (inclusive) at 0x10..0x1c (canvas_get_clip_rect @0x643718 turns it into x, y, w, h), its lcd at 0x30 (canvas_get_width @0x64352c passes it to lcd_get_width).
+ * lcd_t: the first word is begin_frame (lcd_begin_frame @0x657b60 `lw v0, (a0)`, @0x657b8c `lw t9, (s0); jr t9`); the 565 memory lcd's init @0x695dc8
+ * (reached by lcd_mem_bgr565_init @0x696bc4, bitmap_get_bpp_of_format(6) = 2 bytes @0x695e20) stores 0x695cb0 there (@0x695ec4), width and height at
+ * 0xb0 / 0xb4 (@0x695eb0, @0x695eb8; lcd_get_width @0x658484 reads 0xb0), line length at 0x120 (and 0x124: its set_line_length @0x695034 writes both; init @0x695ed0 =
+ * width x 2), and the drawing buffer at 0x110 (lcd_mem_set_fb @0x695d9c `sw a1, 0x110(a0)`; the double-buffered create @0x696cc4 stores the online one at 0x114
+ * and gives the offline one to that setter). Any other lcd type (the 5551 special one, 24/32 bit) fails the begin_frame word and gets no blur.
+ * MB_HW x MB_HH: the half-resolution plane (4 bytes a block, calloc'd once). MB_BLUR_OFF: an SD file that turns the blur off. */
+/* EVT_SCROLL 0x152: the scroll_view's yoffset setter (0x60ff08) builds offset_change_event_init(e, 0x152, widget, new, old) and widget_dispatch es it to the scroll view
+ * (@0x60ff38..0x60ff74); it is called by scroll_view_scroll_delta_to (the drag, @0x610b9c), scroll_view_set_offset (the fling and scroll_to animations, @0x6116b4)
+ * and the property setter (@0x611dfc), every way the list's offset changes. The list scrolls under the pill, so the pill is invalidated on it (mb_on_scroll). */
+#define EVT_SCROLL 0x152
+#define EVT_BEFORE_PAINT 0x11f
+#define CANVAS_OX 0x00
+#define CANVAS_OY 0x04
+#define CANVAS_CLIP 0x10
+#define CANVAS_LCD 0x30
+#define LCD_BEGIN 0x00
+#define LCD_W 0xb0
+#define LCD_H 0xb4
+#define LCD_FB 0x110
+#define LCD_LINE 0x120
+#define LCD_565_BEGIN 0x695cb0u
+#define MB_HW 152          /* MB_W / 2 */
+#define MB_HH 28           /* MB_H / 2 */
+
+/* ---------------------------------------------------------------------------
+ * The Recently Played shelf on the Home instance of the menu (patch/recent.c, docs/modules/recent.md; the widgets are in
+ * ui/m1pod_menu.bin, tools/pod_ui.py SH_*, which reads GRID_* from this file and must equal the rest). The shelf is the Albums grid
+ * (patch/grid.c, the GRID_* geometry above: GRID_COVER covers, GRID_GAP apart, from x GRID_MARGIN, the album GRID_TITLE_H and the artist
+ * GRID_SUB_H under each, rows GRID_ROW_GAP apart) in a view of its own, SH_W (the scroll view's width) wide: a child of pod_scrollview that
+ * follows the last shown row (Settings), before the mini bar's spacer, hidden and insensitive in the asset, scrolling with the list.
+ * GRID_COLS x SH_ROWS cells, the SH_TILES (= RC_MAX) most recent albums, row-major; ceil(albums / GRID_COLS) rows, SH_H(n) high, SH_HMAX at most: the
+ * payload sets the view's height before the rows are arranged and the menu sums it into virtual_h. The 2 cells of a row end at
+ * GRID_MARGIN + 2 * GRID_COVER + GRID_GAP = 308, inside the 310 px scroll view. At the top a section header, the stock hscroll_label
+ * pod_sh_head (the translation of \"Recently Played\", SH_HEAD_PX white, one line cut with an ellipsis, insensitive) at x SH_HEAD_X,
+ * SH_HEAD_TOP from the top, SH_HEAD_W x SH_HEAD_H (its text starts 2 px in: the label's margin, so it lines up with the covers at
+ * GRID_MARGIN), then SH_HEAD_GAP of air; its ink starts 20 px below the Settings row and ends 8 px above the covers (the line box has a
+ * little slack). The first row starts at SH_TOP = SH_HEAD_TOP + SH_HEAD_H + SH_HEAD_GAP; nothing below the last artist line (SH_BOTTOM), so
+ * scrolled to the end it is MB_GAP above the pill. The covers' corners are the Albums grid's (GRID_R).
+ * RC_MAX: entries the file keeps; RC_FIRST_MS: the one-shot that starts the page timer (the menu's first paint decodes nothing);
+ * RC_TICK_MS: one cover decoded per tick; RC_TAP_PX: a release closer than this to the press (both axes) is a tap (the scroll view's own
+ * drag threshold, SC_DRAG_PX: from there on it drags). The file: RC_MAGIC line, then one line per album (tools/pod_recent.py)
+ * (the most recent first); RC_STR / RC_PATH: bytes kept per name / path (NUL included); RC_FILE_MAX: the most bytes read.
+ */
+#define SH_W 310
+#define SH_ROWS 3
+#define SH_TILES 6          /* GRID_COLS * SH_ROWS, and RC_MAX: every album the file keeps (patch/recent.c #errors if they differ) */
+#define SH_HEAD_X 10
+#define SH_HEAD_W 300
+#define SH_HEAD_TOP 17
+#define SH_HEAD_H 22
+#define SH_HEAD_PX 20
+#define SH_HEAD_GAP 5
+#define SH_TOP 44
+#define SH_BOTTOM 0
+#define SH_H(n) (SH_TOP + (n) * GRID_CELL_H + ((n) - 1) * GRID_ROW_GAP + SH_BOTTOM)   /* the shelf's height for n rows of covers: 234, 434, 634 */
+#define SH_HMAX SH_H(SH_ROWS)
+#define RC_MAX 6
+#define RC_STR 96
+#define RC_PATH 256
+#define RC_FILE_MAX 3072
+#define RC_FIRST_MS 150
+#define RC_TICK_MS 30
+#define RC_TAP_PX 10
+#define RC_RESOLVE_MS 5000   /* the menu's to-foreground resolves an album's cover key (loads the stock album list) only this long after the menu opened */
+
+
+/* ---------------------------------------------------------------------------
  * List gestures (patch/scroll.c, docs/architecture.md "List gestures"). The stock scroll_view (g_scroll_view_vtable
  * 0x97a298; every stock list is list_view > scroll_view > list_item rows) keeps its drag state in the widget:
  * scroll_view_t fields as its on_event (0x610724) and scroll_view_is_dragged (0x61064c) read them. The hook is the
@@ -396,6 +514,8 @@
 #define SC_AN_WIDGET 0x04       /* the widget it animates (widget_animator_stop reads it @0x673258) */
 #define SC_AN_RUNNING 1
 #define SC_DRAG_PX 10           /* scroll_view_is_dragged's threshold: slti .., 0xa @0x6106e0 (kept) */
+#define SC_YOFF 0x84            /* scroll_view_t yoffset (int): the setter 0x60ff08 stores it `sw s1, 0x84(s0)` @0x60ff78, the list_view layouter clamps it @0x60b250..0x60b278 (xoffset 0x80, virtual_h 0x7c) */
+#define EVT_SCROLL_END 0x151    /* widget_dispatch_simple_event(scroll_view, 0x151), the last thing the scroll animation's end handler 0x6101b8 does (@0x610238..0x610248; 0x14f before it) */
 
 /* libc constants (MIPS Linux) the payload passes to the stock libc stubs */
 #define F_OK 0
@@ -419,3 +539,32 @@
 #define PM_DIALOG_W 320
 #define PM_SV_W 310
 #define PM_BAR_W 10
+
+/* The Playlists page (patch/playlists.c, docs/modules/playlists.md). Playlists live in /mnt/data/database.db, table `playlist`: a row with
+ * id <= 100 is a playlist (getAllPlayList @0x4ec4e8: `select * from playlist where id <= 100`; its name is REC_TITLE, its id REC_ID and also
+ * REC_DISC, createPlayListItem @0x4eeca8 stores both), a row with id > 100 is a song (getMusicByPlayList @0x4eddac: `where id > 100 and
+ * cd_num=<id>`, no ORDER BY: insertion order) with the same 18 columns as a library song, so its album and artist are as they were when it was
+ * added. loadLocalClassList(CLASS_PLAYLISTS) puts the playlists in *pdeq_playlist (@0x4ee614: getAllPlayList, assigned @0x4ee63c), and
+ * (CLASS_PLAYLIST_SONGS) the songs of playlist classinfo[1] in *pdeq_showlist (@0x4ee744). The stock Playlists page opens a playlist (the
+ * shared row handler @0x53d300, mode 0): the playlist's name into nagvation_title (snprintf "%s", 0x200 @0x53d5b8), its REC_DISC into
+ * classinfo[1] (@0x53d5f4), navigator_to_with_context("allmusic_page", 0xff13). PL_MAX: ids 1..100. */
+#define CLASS_PLAYLISTS 0xf00b
+#define CLASS_PLAYLIST_SONGS 0xff13
+#define PL_MAX 100
+#define PL_SCAN 50             /* songs read per playlist for the mosaic: the first PL_SCAN, in order */
+#define PL_TILES GRID_TILES
+#define PL_MORE_MS 16
+/* The "..." menu's card (tools/pod_ui.py builds it, patch/playlists.c pl_fit sizes it): PL_MENU_ROWS rows of PL_ROW_H filling it (Now Playing's
+ * More sheet's 50 px rows, no padding), in each a 20 px glyph at PL_ICON_X and the label from PL_TEXT_X to PL_TEXT_R before the right edge. Its
+ * right edge stays at PL_CARD_RIGHT under the button; its width is the language's widest label plus PL_TEXT_X + PL_TEXT_R, at least PL_CARD_MIN,
+ * at most PL_CARD_MAX (the asset's: the widest of the 13 languages fits, test/pod/playlists.py). */
+#define PL_MENU_ROWS 4
+#define PL_CARD_RIGHT 314
+#define PL_CARD_Y 44
+#define PL_CARD_R 14
+#define PL_ROW_H 50
+#define PL_ICON_X 16
+#define PL_TEXT_X 48
+#define PL_TEXT_R 16
+#define PL_CARD_MIN 180
+#define PL_CARD_MAX 292

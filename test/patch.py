@@ -6,7 +6,8 @@ the album page, Shuffle, the library rows, the boot guard and the launcher on th
 without a device. Modelled on q2-pod's test/patch.py (Copyright (c) 2026 Diamond Bond, MIT; see NOTICE).
 
 Requires unicorn (venv) and a workdir built by tools/build.py (its podbuild/manifest.json).
-Usage: venv/bin/python -I test/patch.py WORKDIR [MODULE...]     (default: every module)
+Usage: venv/bin/python -I test/patch.py WORKDIR [MODULE[/SECTION]...]     (default: every module; SECTION: one function of
+the module's SECTIONS list, which its run(ctx) runs in order and tools/check.py runs as separate tasks)
 """
 import importlib.util, os, sys, time
 
@@ -32,7 +33,10 @@ def main():
     t0 = time.time()
     for name in wanted:
         before, t = (ctx.passed, ctx.failed), time.time()
-        load(f'podtest_{name}', os.path.join(HERE, 'pod', name + '.py')).run(ctx)
+        mod, _, section = name.partition('/')
+        m = load(f'podtest_{mod}', os.path.join(HERE, 'pod', mod + '.py'))
+        if section: next(f for f in m.SECTIONS if f.__name__ == section)(ctx)
+        else: m.run(ctx)
         print(f'{name:10} {ctx.passed - before[0]:4} passed, {ctx.failed - before[1]} failed  {time.time() - t:5.1f}s')
     print(f'{ctx.passed} passed, {ctx.failed} failed  ({time.time() - t0:.1f}s)')
     sys.exit(1 if ctx.failed else 0)

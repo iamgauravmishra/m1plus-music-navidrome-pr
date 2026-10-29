@@ -8,12 +8,13 @@ Split out of docs/ui.md. A "section N" in the text is an old section number of `
   `/mnt/data/config.ini` has `ROTATEMODE=1`, else `logo.jpg`; these are the only splash images. Stock
   files are upright 320x480 baseline JPEGs (4:4:4, Adobe YCbCr; `logo180` is `logo` turned 180°);
   `display_logo` draws 1:1 and reads libjpeg RGB, so a replacement must be 320x480, 8-bit, 3
-  components, baseline. `assets/boot-logo.svg` (q2-pod style: outlined **M1+** wordmark in `#F2F2F0`
-  (the superscript plus: 40 px arms, 7 px stroke like the M and 1, centre at 65 % of the cap height, the
-  whole group centred over POD),
-  muted **POD** in `#BDBDB8` with the centre button, centred at 47 % height) is rendered by
+  components, baseline. `assets/boot-logo.svg` (q2-pod style: just the outlined **M1+** wordmark in
+  `#F2F2F0` on black, no product name, so a rename of the launcher does not touch it: 50 px cap height
+  (y 200 to 250, centred at 47 % height), 5 px strokes, the plus a 25 px superscript whose top is flush
+  with the cap top, the whole wordmark centred horizontally (x 102 to 218); cap line, baseline, the 1's
+  stem and the plus bars on whole pixels) is rendered by
   `tools/boot_logo.py` (`brew install librsvg`; 4x box-filtered, Pillow q92 4:4:4) into the committed
-  `assets/boot-logo.jpg` (6,526 bytes) and `boot-logo180.jpg`; `mod_boot.py` checks both stock files by
+  `assets/boot-logo.jpg` (4,434 bytes) and `boot-logo180.jpg`; `mod_boot.py` checks both stock files by
   SHA-256 and each new file's frame header (q2-pod's `jpeg_size`) and keeps mode 755.
 - **Quotes.** The stock font gives U+2018/2019/201C/201D the CJK em advance (256 units against 48 for
   `'`, 90 for `"`), so "Paul’s" shows a wide gap. The step maps them to the straight glyphs, in pure

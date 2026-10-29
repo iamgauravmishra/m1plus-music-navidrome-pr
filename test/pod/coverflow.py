@@ -1,5 +1,5 @@
 """Cover Flow: the page, the cache build, the worker, the depth renderer against the host build, touch, hit tests."""
-import json, os, re, struct, sys
+import os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 

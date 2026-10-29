@@ -11,13 +11,18 @@ template, which its table clones without any row constructor:
 
   ui/localclass_page.bin     localclass_table_client row_height 60 -> 64
   ui/allmusic_page.bin       music_table_client row_height 60 -> 64; the template row (rebuilt by
-                             code, kept consistent) table_row h 60 -> 64, btn_table_row h 56 -> 60
+                             code, kept consistent) table_row h 60 -> 64, btn_table_row h 56 -> 60;
+                             navigationbar_view y 0 -> 3, h 50 -> 47 (the builder's 44 px buttons
+                             centred in the 50 px bar, as the Pod pages' navbar)
   ui/playerjumpinfo_page.bin row_height 60 -> 64; template table_row 310x64, btn_table_row 310x60,
                              view_info w 238, scrlabel_name (0,7,238,24), view_artist at y 33 h 20,
                              scrlabel_artist w 213 (the jump list's rebind sizes view_info 238x60)
   ui/album_page.bin          album_listview default_item_height 60 -> 64
   ui/playlist_page.bin       playlist_listview default_item_height 60 -> 64 (its rows are created
                              0 high, so this is their pitch)
+  ui/playset/equalizer_page.bin, ui/systemset/specfolder_page.bin (both themes)
+                             Now Playing (and the folder picker's select-all button) onto the Pod
+                             navbar's slots, docs/modules/navbar.md
 
 and page themes (both asset themes, derived from the tree's styles as tools/mod_lists.py does; run
 after it): srlabel_item_white_style and srlabel_item_gold20_style at 21 px on the pages whose title
@@ -36,7 +41,8 @@ from modlib import clone_workdir, edit_ui
 
 PITCH, BODY = 64, 60
 TINT_NAME, TINT_H = 'img_ah_tint', 450      # the album page's tint gradient (the window is 450 px high): patch/offsets.inc AH_WIN_H
-NAV_H = 44             # the album page's navbar: patch/offsets.inc AH_NAV_H
+NAV_H = 44             # the shared navbar builder's button height: patch/offsets.inc AH_NAV_H
+NAV_BAND = (0, 0, 320, 50)   # the album page's floating controls band (patch/offsets.inc AH_NAV_BAND_H): the full width, the stock builders' buttons sit in it at main's slots
 STOCK_PITCH, STOCK_BODY = 60, 56
 TEXT_W = 238           # x 60 .. 298 in a 310 px row (12 px margins, a 40 px icon + 8)
 TITLE = (0, 7, TEXT_W, 24)
@@ -77,6 +83,12 @@ def template_row(root):
 def edit_allmusic(root):
     row_height(root, 'music_table_client')
     template_row(root)
+    # the shared navbar builder makes NAV_H high buttons at y 0 (patch/rows.json AH_NAV_H); this page keeps its 50 px bar,
+    # so the bar's view starts (50 - NAV_H) / 2 down: glyphs and title centre at y 25 as on the Pod pages, the bottom line stays at 50
+    nav = one(root, 'navigationbar_view', 'view')
+    assert (nav.x, nav.y, nav.w, nav.h) == (0, 0, 320, 50), 'unexpected allmusic_page navbar'
+    nav.y = (50 - NAV_H) // 2
+    nav.h = 50 - nav.y
 
 
 def edit_jumplist(root):
@@ -94,20 +106,66 @@ def edit_jumplist(root):
 
 def edit_albuminfo(root):
     """The album page's tint (patch/albuminfo.c): ah_tint, a window sized black gradient, is the window's first child (under the
-    navbar and the list); the list_view and its scroll_view are transparent, so the window's colour (black, or the cover's tone
-    once the payload sets it) shows through the header. The stock rows keep their own black. Nothing is renamed or moved."""
+    list and the controls); the list_view and its scroll_view are transparent, so the window's colour (black, or the cover's tone
+    once the payload sets it) shows through the header. The stock rows keep their own black. Nothing is renamed or removed.
+    The floating controls (patch/offsets.inc AH_NAV_*): the navbar view is a band over the page's top (NAV_BAND, the
+    buttons' glass discs drawn by the page theme, the buttons placed by the builders' main-pinned slots, patch/rows.json), LAST in the window so it
+    paints and hit-tests over the list, which now starts at the window's top and scrolls under it."""
     assert root.type == 'window' and [c.name for c in root.children] == ['navigationbar_view', 'albuminfo_listview'], 'unexpected albuminfo_page'
     lv, sv = one(root, 'albuminfo_listview', 'list_view'), one(root, 'albuminfo_scrollview', 'scroll_view')
     for w in (lv, sv):
         for st in ('normal', 'disable', 'focused'): w.set(f'style:{st}:bg_color', '#00000000')
     tint = awtk_ui.Widget('image', 0, 0, 320, TINT_H, [('name', TINT_NAME), ('image', 'ah_tint'), ('draw_type', 'default'),
                                                        ('clickable', 'false'), ('sensitive', 'false')])
-    root.children.insert(0, tint)
-    # the shorter navbar (patch/offsets.inc AH_NAV_H; the builder's button heights are pinned in patch/rows.json): the list moves up
     nav, bar = one(root, 'navigationbar_view', 'view'), one(root, 'scroll_bar_m', 'scroll_bar_m')
     assert (nav.h, lv.y, lv.h, sv.h, bar.h) == (50, 50, 400, 400, 400), 'unexpected albuminfo_page geometry'
-    nav.h, lv.y = NAV_H, NAV_H
-    lv.h = sv.h = bar.h = TINT_H - NAV_H
+    nav.x, nav.y, nav.w, nav.h = NAV_BAND
+    lv.y = 0
+    lv.h = sv.h = bar.h = TINT_H
+    root.children = [tint, lv, nav]
+
+
+NAV_NP = (260, 0, 60, 50)   # the Pod navbar's btn_backtoplayer (tools/pod_ui.py navbar())
+
+
+def edit_equalizer(root):
+    """Settings > Equalizer: Now Playing (270, 50 wide) onto the Pod navbar's slot (docs/modules/navbar.md)."""
+    np_ = one(root, 'btn_backtoplayer', 'button')
+    assert (np_.x, np_.y, np_.w, np_.h) == (270, 0, 50, 50), 'unexpected equalizer_page Now Playing'
+    np_.x, np_.y, np_.w, np_.h = NAV_NP
+
+
+def edit_specfolder(root):
+    """Settings > Update music > a folder picker: Now Playing (279, 41 wide, img_btn_style) onto the Pod navbar's slot and the
+    select-all button (229, 38 wide) onto the Pod navbar's NAV_VIEW_X slot (214, 46 wide), as the code-built multi-select
+    buttons (an icon_at 5 glyph measured on the device lands on the Pod toggle's columns there)."""
+    np_, all_ = one(root, 'btn_backtoplayer', 'button'), one(root, 'navigation_btn_allchoice', 'button')
+    assert (np_.x, np_.y, np_.w, np_.h) == (279, 0, 41, 50), 'unexpected specfolder_page Now Playing'
+    assert (all_.x, all_.y, all_.w, all_.h) == (229, 0, 38, 50), 'unexpected specfolder_page select-all button'
+    np_.x, np_.y, np_.w, np_.h = NAV_NP
+    all_.x, all_.w = 214, 46
+    title = one(root, 'label_title', 'label')
+    if title.x == 90:   # theme1 centres the title; the Pod navbar's is at 36, 14, left aligned
+        assert (title.y, title.w, title.h) == (14, 129, 22), 'unexpected specfolder_page title'
+        title.x, title.w = 36, 180
+
+
+NAVBAR_UI_EDITS = {   # edited in both themes (each has its own file)
+    'playset/equalizer_page.bin': edit_equalizer,
+    'systemset/specfolder_page.bin': edit_specfolder,
+}
+
+
+def build_navbar_ui(work):
+    report = []
+    for rel, fn in NAVBAR_UI_EDITS.items():
+        for theme in mod_lists.THEMES:
+            path = os.path.join(work, mod_lists.RAW.format(theme=theme), 'ui', rel)
+            old, new, root = edit_ui(path, fn)
+            names = lambda d: [(w.type, w.name) for w in awtk_ui.parse(d).walk()]
+            assert names(old) == names(new), f'{rel}: a widget was added, removed or renamed'
+            report.append(f'{theme}/ui/{rel}: {len(old)} -> {len(new)} bytes')
+    return report
 
 
 UI_EDITS = {
@@ -144,7 +202,7 @@ HEAD_STYLE, HEAD_SRC = 'list_item_ahhead_style', 'list_item_notpress_style'
 ROW_STYLE, ROW_PRESSED, ROW_HAIR = 'list_item_style', '#FFFFFF33', '#FFFFFF22'   # the track rows on this page: transparent, pressed 20 % white, hairline 13 % white
 TITLE_PX, ARTIST_PX, META_PX = 22, 18, 15
 TITLE_COLOR, ARTIST_COLOR, META_COLOR = '#FFFFFF', '#AAAAAA', '#9C9C9C'   # the design's #8C8C8C is 3.8:1 on the page's #333333 pressed row: mod_theme --scan wants 4.5
-PLAY_INK, PLAY_PX = '#141414', 18          # the pill's fill is its bg_image (PLAY_BG_IMAGE): white, #BEBEBE pressed
+PLAY_INK, PLAY_PX = '#FFFFFF', 18          # the pill's fill is its bg_image (PLAY_BG_IMAGE): the mini bar's glass (mod_icons.glass_image), pressed one lighter
 PLAY_BG_IMAGE, PLAY_BG_IMAGE_DOWN, IMAGE_CENTER = 'ah_pill', 'ah_pill_down', 2   # bg_image_draw_type: DEFAULT 0, ICON 1, CENTER 2 (centred at its own size)
 TRACK_PX = 19                                                # the track rows' title and number on this page (the other pages keep 21)
 PLAY_ICON, SHUF_ICON, SHUF_ICON_DOWN = 'ah_play', 'ah_shuffle', 'ah_shuffle_down'   # tools/mod_icons.py ALBUM
@@ -182,6 +240,21 @@ def pill_layout(text_w, w=180, h=44, margin_left=None):
     icon_x = ir_x + sq // 2 - PLAY_GLYPH_W // 2               # canvas_draw_icon_in_rect: centred on the square
     rx, rw = ir_x + sq + PLAY_SPACER, ir_w - sq - PLAY_SPACER
     return icon_x, rx, (rx, rw)                               # the text is left aligned: its pen starts at the rect
+# The navbar buttons' styles the stock builders (0x526a3c, 0x524e4c) name, and the glass disc (rest, pressed, icon_at, x_offset) each shows on this page
+# (a page theme only: the artist's albums page shares the builders but not this theme). Every image is as wide as the button main's pins make it
+# (tools/mod_icons.py AH_NAV_PIECES), centred in it (icon_at 5), so the glyph centres are the Pod navbar's: search 191, multi-select 237, Now Playing 290
+# (60 px at 262: disc 269 .. 311), the select mode's add / delete / cancel in the stock 60 px buttons at 116 / 191 / 268 (146, 221, 290) and the all /
+# unselect toggle in its 50 px one (29). Back keeps its stock rule, icon_at left in a button-high square: x_offset +4 (stock -6) puts the 42 px
+# disc at x 8 .. 50 whether the builder made Back at (0, 50 high) or (3, 44 high): square centre x + h / 2 is 25 in both.
+NAV_STYLES = {'navbar_btnreturn_style': ('ah_nav_back', 'ah_nav_back_down', 1, 4),
+              'search_style': ('ah_nav_search', 'ah_nav_search_down', 5, 0),
+              'navbar_btnmulselect_style': ('ah_nav_multi', 'ah_nav_multi_down', 5, 0),
+              'navbar_btnbackplayer_style': ('ah_nav_npa', 'ah_nav_npa_down', 5, 0),
+              'navbar_btnunselect_style': ('ah_nav_unsel', 'ah_nav_unsel_down', 5, 0),
+              'navbar_btnselected_style': ('ah_nav_sel', None, 5, 0),
+              'navbar_btnadd_style': ('ah_nav_add', 'ah_nav_add_down', 5, 0),
+              'navbar_btndel_style': ('ah_nav_del', 'ah_nav_del_down', 5, 0),
+              'navbar_btncancel_style': ('ah_nav_cancel', 'ah_nav_cancel_down', 5, 0)}
 NAVBAR_TITLES = ('navbar_label_white', 'navbar_leftlabel_white', 'navbar_centerlabel_white', 'navbar_rightlabel_white')
 
 
@@ -209,6 +282,16 @@ def album_view_styles(page, base):
         s.set_color('bg_color', '#00000000')
         s.set('icon', SHUF_ICON_DOWN if state == 'pressed' else SHUF_ICON, awtk_style.T_STRING)
         page.put(s)
+    # the floating controls: the navbar buttons' own styles, overridden on this page only. Every state the glass piece (an icon: the piece
+    # is one image, tools/mod_icons.py ah_nav_images), no fill, centred in the button; pressed = the lighter piece.
+    for style, (rest, down, icon_at, x_offset) in NAV_STYLES.items():
+        for state in ('normal', 'pressed', 'over', 'focused', 'disable'):
+            s = awtk_style.Item('button', style, state)
+            s.set_color('bg_color', '#00000000'); s.set_color('border_color', '#00000000'); s.set_color('text_color', '#FFFFFF')
+            s.set('icon', down if state == 'pressed' and down else rest, awtk_style.T_STRING)
+            s.set('icon_at', icon_at, awtk_style.T_INT32)
+            if x_offset: s.set('x_offset', x_offset, awtk_style.T_INT32)
+            page.put(s)
     # the track rows (the stock list_item_style, resolved in this page's theme first): transparent, so the deep tint under the
     # list shows; the pressed band and the 1 px hairline are translucent white, which over a black page is exactly today's
     # #333333 and #222222 (51 and 34 levels of 255)
@@ -301,7 +384,7 @@ def main():
     ap.add_argument('src'); ap.add_argument('out')
     a = ap.parse_args()
     clone_workdir(a.src, a.out)
-    for line in build_ui(a.out) + build_page_themes(a.out): print('rows:', line)
+    for line in build_ui(a.out) + build_navbar_ui(a.out) + build_page_themes(a.out): print('rows:', line)
 
 
 if __name__ == '__main__': main()

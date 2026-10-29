@@ -438,6 +438,240 @@
      "label_create y"
     ]
    ]
+  },
+  {
+   "value": 46,
+   "purpose": "the builder's right-hand buttons on the Pod navbar's slots (tools/pod_ui.py NAV_VIEW_W): button_create w 50 -> 46",
+   "sites": [
+    [
+     "0x526d8c",
+     "0x24070032",
+     "albuminfo navbar builder",
+     "a3: w of the 0xf001 branch's search button"
+    ],
+    [
+     "0x526de0",
+     "0x24070032",
+     "albuminfo navbar builder",
+     "a3: w of the songsort button"
+    ],
+    [
+     "0x526e48",
+     "0x24070032",
+     "albuminfo navbar builder",
+     "a3: w of the multi-select button"
+    ],
+    [
+     "0x526f48",
+     "0x24070032",
+     "albuminfo navbar builder",
+     "a3: w of the other branches' search button"
+    ],
+    [
+     "0x531558",
+     "0x2407003c",
+     "folder navbar builder (0x5312dc)",
+     "a3: w of the multi-select button (Folders)"
+    ],
+    [
+     "0x5315ac",
+     "0x2407003c",
+     "folder navbar builder (0x5312dc)",
+     "a3: w of the search button (Folders)"
+    ],
+    [
+     "0x535454",
+     "0x2407003c",
+     "localclass navbar builder (0x535188)",
+     "a3: w of the artist-type switch (Artists branch)"
+    ],
+    [
+     "0x5356d8",
+     "0x2407003c",
+     "localclass navbar builder (0x535188)",
+     "a3: w of the search button (Genres, Composers)"
+    ],
+    [
+     "0x535554",
+     "0x2407003c",
+     "localclass navbar builder (0x535188)",
+     "a3: w of the multi-select button"
+    ],
+    [
+     "0x53d81c",
+     "0x2407003c",
+     "playlist navbar builder (0x53d5f8)",
+     "a3: w of the multi-select button (stock Playlists page)"
+    ],
+    [
+     "0x52512c",
+     "0x2407003c",
+     "album_page navbar builder (0x524e4c)",
+     "a3: w of the multi-select button (an artist's albums)"
+    ]
+   ]
+  },
+  {
+   "value": 122,
+   "purpose": "the 0xf001 branch's search button x 120 -> 122: the slot left of NAV_CF_X (168 - 46)",
+   "sites": [
+    [
+     "0x526d98",
+     "0x24050078",
+     "albuminfo navbar builder",
+     "a1: x of the search button"
+    ]
+   ]
+  },
+  {
+   "value": 168,
+   "purpose": "x 170 -> 168: the Pod navbar's NAV_CF_X slot (Albums' Cover Flow, Playlists' \"...\")",
+   "sites": [
+    [
+     "0x526dec",
+     "0x240500aa",
+     "albuminfo navbar builder",
+     "a1: x of the songsort button"
+    ],
+    [
+     "0x526f54",
+     "0x240500aa",
+     "albuminfo navbar builder",
+     "a1: x of the other branches' search button"
+    ],
+    [
+     "0x5315b8",
+     "0x240500b2",
+     "folder navbar builder (0x5312dc)",
+     "a1: x of the search button (Folders)"
+    ],
+    [
+     "0x535460",
+     "0x240500b7",
+     "localclass navbar builder (0x535188)",
+     "a1: x of the artist-type switch (Artists branch)"
+    ],
+    [
+     "0x5356e4",
+     "0x240500b7",
+     "localclass navbar builder (0x535188)",
+     "a1: x of the search button (Genres, Composers)"
+    ]
+   ]
+  },
+  {
+   "value": 214,
+   "purpose": "the multi-select button (navbar_btnmulselect_style) 46 wide at the Pod navbar's NAV_VIEW_X slot: measured on the device (a playlist's songs vs the Playlists page) its glyph lands on the Pod toggle's columns (227..245) at 214; unlike Now Playing's, no 2 px correction",
+   "sites": [
+    [
+     "0x526e54",
+     "0x240500dc",
+     "albuminfo navbar builder",
+     "a1: x of the multi-select button"
+    ],
+    [
+     "0x531564",
+     "0x240500e0",
+     "folder navbar builder (0x5312dc)",
+     "a1: x of the multi-select button (Folders)"
+    ],
+    [
+     "0x535560",
+     "0x240500e0",
+     "localclass navbar builder (0x535188)",
+     "a1: x of the multi-select button"
+    ],
+    [
+     "0x53d828",
+     "0x240500e0",
+     "playlist navbar builder (0x53d5f8)",
+     "a1: x of the multi-select button (stock Playlists page)"
+    ],
+    [
+     "0x525138",
+     "0x240500e0",
+     "album_page navbar builder (0x524e4c)",
+     "a1: x of the multi-select button (an artist's albums)"
+    ]
+   ]
+  },
+  {
+   "value": 3,
+   "purpose": "Back x 0 -> 3: navbar_btnreturn_style draws its icon (icon_at left, x_offset -6) in an h x h square at the button's left, so its centre is x + h / 2 - 6; with the builder's AH_NAV_H (44) high button, x (50 - 44) / 2 puts the chevron where the Pod navbar's 50 px Back has it (device shots: 11..19 -> 14..22)",
+   "sites": [
+    [
+     "0x526f00",
+     "0x00002825",
+     "albuminfo navbar builder",
+     "a1: x of the Back button (move $a1, $zero -> addiu $a1, $zero, 3)"
+    ]
+   ]
+  },
+  {
+   "value": 262,
+   "purpose": "Now Playing x 270 -> 262, 60 wide: navbar_btnbackplayer_style (icon_at 5) centres icon + text spacer, so with no text its glyph sits 2 px left of the button's centre; 262 puts it where the Pod navbar's btn_backtoplayer (260, 60, img_btn_style, centred) has it (device shots: 278..297 -> 280..299)",
+   "sites": [
+    [
+     "0x526ea8",
+     "0x2405010e",
+     "albuminfo navbar builder",
+     "a1: x of the Now Playing button"
+    ],
+    [
+     "0x531620",
+     "0x2405010e",
+     "folder navbar builder (0x5312dc)",
+     "a1: x of the Now Playing button (already 60 wide)"
+    ],
+    [
+     "0x5355b4",
+     "0x2405010e",
+     "localclass navbar builder (0x535188)",
+     "a1: x of the Now Playing button (already 60 wide)"
+    ],
+    [
+     "0x53d87c",
+     "0x2405010e",
+     "playlist navbar builder (0x53d5f8)",
+     "a1: x of the Now Playing button (already 60 wide)"
+    ],
+    [
+     "0x52518c",
+     "0x2405010e",
+     "album_page navbar builder (0x524e4c)",
+     "a1: x of the Now Playing button (already 60 wide)"
+    ]
+   ]
+  },
+  {
+   "value": 60,
+   "purpose": "Now Playing w 50 -> 60, as the Pod navbar's (262 .. 322: the 2 px past the screen's edge hold nothing to hit); the Search page's go button 47 -> 60 (below)",
+   "sites": [
+    [
+     "0x526e9c",
+     "0x24070032",
+     "albuminfo navbar builder",
+     "a3: w of the Now Playing button"
+    ],
+    [
+     "0x543764",
+     "0x2407002f",
+     "search_page init (navbar built inline)",
+     "a3: w of the search (go) button: the only right-hand button, so in the Now Playing slot (search_style: bg_image centred, glyph centre 290); the page's edit field lies over its left 13 px, 47 px stay"
+    ]
+   ]
+  },
+  {
+   "value": 260,
+   "purpose": "the Search page's go button x 273 -> 260 (the Pod navbar's Now Playing slot, 260 .. 320)",
+   "sites": [
+    [
+     "0x543770",
+     "0x24050111",
+     "search_page init (navbar built inline)",
+     "a1: x of the search (go) button"
+    ]
+   ]
   }
  ],
  "row_layout_calls": {

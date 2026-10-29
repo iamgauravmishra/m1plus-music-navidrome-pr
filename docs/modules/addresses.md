@@ -24,6 +24,14 @@ ordinary files; no duration column); `toolsLoadAllFile` `0x5efd98` and its inser
 `0x66a214`, `canvas_draw_text_in_rect` `0x6496a0`, `canvas_measure_text` `0x644544` (returns a float in `$f0`),
 `tk_utf8_to_utf16_ex` `0x70eb24` (`wchar_t` is 32 bit), `button_create` `0x622adc`.
 
+Pinned for the mini player bar (`docs/modules/minibar.md`, evidence there): `playpause_quick_click` `0x4cd150` (no arguments; what the lock
+screen's play button, Now Playing's and the hardware key call), `next_quick_click(e, 0)` `0x4ccf00` (reads `e->time` at `+8`, ignores a click within 1 s of
+the last one: global `0xa05a40`), `mclGetPlayStatus` `0x5d3640` (2 = playing, 3 = paused after `mclSetPause`).
+
+Pinned for the Playlists page (`docs/modules/playlists.md`): `createPlayListItem` `0x4eeca8` (the stock list, a name or NULL: the new id, -1 full, -2 exists), `loadLocalClassList(0xf00b)` the playlists into `*pdeq_playlist` `0xa045d0`
+and `(0xff13)` a playlist's songs (`classinfo[1]` = its id) into `*pdeq_showlist`, `nagvation_title` `0xa0533c`, `navigation_status` `0xa05a24`, the stock Playlists page's static Import / Export click handlers `0x53dedc` /
+`0x53dd34` (and its row handler `0x53d300`, create handler `0x53e8e4`, multi-select delete handler `0x53dbcc`, which the page does not call).
+
 ### Home icons and their conditions
 
 The Home grid is built by `home_page_init` (`0x534cd4`) -> the page builder (`0x534064`) -> the icon

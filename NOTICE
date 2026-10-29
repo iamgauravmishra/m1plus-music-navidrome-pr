@@ -50,9 +50,9 @@ NP_META_PX, NP_ARTIST_RGB, NP_ALBUM_RGB, MINIMAL_FILL, SUDO_MUTED, the inactive 
 art, and its "quiet icons" recolouring (tools/ipod.py quiet_icon, redone with PIL). No q2-pod asset
 file is copied. The look mods share tools/awtk_style.py (see the look-theme paragraph above).
 
-The boot splash (assets/boot-logo.svg, tools/boot_logo.py, docs/ui.md) adapts q2-pod's
-assets/boot-logo.svg and docs/boot.md: its palette, scale and layout, and its "POD" lettering and
-centre-button paths, copied unchanged; the "M1" outlines are new. tools/mod_boot.py's jpeg_size is
+The boot splash (assets/boot-logo.svg, tools/boot_logo.py, docs/modules/boot.md) adapts q2-pod's
+assets/boot-logo.svg and docs/boot.md: its palette and wordmark style; the "M1+" outlines are new
+and no q2-pod path is copied. tools/mod_boot.py's jpeg_size is
 q2-pod's tools/build.py jpeg_size (the splash frame-header check), and its curly-quote cmap remap
 follows q2-pod 1.0.4 (tools/build.py font_quotes), reimplemented without fontTools.
 

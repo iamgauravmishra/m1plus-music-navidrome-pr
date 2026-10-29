@@ -121,6 +121,8 @@ class Painter:
             if rad: ld.rounded_rectangle([r[0], r[1], r[0] + r[2] - 1, r[1] + r[3] - 1], radius=rad, fill=fill)
             else: ld.rectangle([c[0], c[1], c[2] - 1, c[3] - 1], fill=fill)
             im.alpha_composite(layer)
+        bgi = self.icon(wd.get('style:normal:bg_image')) if t == 'view' else None      # a glass card: drawn 1:1 at the widget's origin, straight alpha
+        if bgi: im.alpha_composite(bgi.crop((c[0] - r[0], c[1] - r[1], c[2] - r[0], c[3] - r[1])), c[:2])
         if t == 'image' and name != 'img_screensaver':
             img = synthetic_cover(r[2], r[3]) if name == 'view_img_icon' else \
                 self.icon('screens_charge' if name == 'img_battery' and charging else wd.get('image'))

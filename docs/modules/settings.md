@@ -7,7 +7,9 @@ Split out of docs/architecture.md. A "section N" in the text is an old section n
 The menu's last row opens the **Settings** page (`m1pod_settings`, the Shuffle page's machinery), whose rows are
 Main Menu, **Cover Flow** and **Home Screen** (sub-pages, below), Playback and System Settings (stock pages through the dispatcher with ids 16 and 17).
 
-**Settings > Home Screen** (`m1pod_homeset`, `pod_pages.HOMESET_PAGE`, key `Home Screen`, icon `layout-grid`): the **Start in M1+ Pod** switch (row 0, `pod_switch0`) and **Shanling Home** (row 1).
+**Settings > Home Screen** (`m1pod_homeset`, `pod_pages.HOMESET_PAGE`, key `Home Screen`, icon `layout-grid`): the **Start in M1+ Pod** switch (row 0, `pod_switch0`), the **Recent Albums** switch (row 1, `pod_switch1`, `ACT_SHELF`) and **Shanling Home** (row 2).
+**Recent Albums** shows or hides the Recently Played shelf at the top of the Home menu (`docs/modules/recent.md`): on by default, saved in `/mnt/data/m1pod-shelf` (`0` off, `1` on; a missing file or anything but `0` is on) with `recent_toggle` (atomic; a failed save changes neither the file nor the image), the image set from `recent_setting` when the page opens (`sw_slot[2]`
+in `patch/m1pod.c`); the menu reads the file again when it is back in front, so the shelf follows the switch when Settings is closed. Its label has its own key ("Recent Albums", all 13 languages: the menu item's "Recently Played" overflows the switch row in Spanish and Ukrainian).
 
 **Settings > Cover Flow** (`m1pod_cfset`, `pod_pages.CFSET_PAGE`): **Landscape** (the switch, `/mnt/data/m1pod-landscape`, as before) and **Sort** (`ACT_SORT`: the row shows its value, `Artist` or `Album`, in a grey right-aligned `pod_value<row>` label set by `widget_set_tr_text` so it follows the language; one tap toggles it, saved first, a failed save changes nothing; no sub-choice page). The setting `/mnt/data/m1pod-cfsort` (`cc_sort_artist`, `cc_sort_toggle` in `patch/covercache.c`): only `0` or `0\n` is Album; a missing, empty or any other content is Artist (the default), and reading never writes.
 
@@ -30,5 +32,5 @@ right when it opens and after every toggle; `image_base_set_image` repaints it);
 Shanling start is armed, so the foreground handler exists). **The Home instance has no top bar**: the whole
 `navigationbar_view` is hidden (`visible=false` and `sensitive=false`) and `pod_listview` moves to y `HOME_PAD` (10) and
 resizes to 320x430, its `pod_scrollview` and `scroll_bar_m` keep their widths and take the 430 px height (the
-Now Playing row replaces the bars icon; nothing happens if the navbar or the list is not found). The menu
+the mini player bar replaces the bars icon; nothing happens if the navbar or the list is not found). The menu
 opened from the icon keeps its navbar (Back, "M1+ Pod", the bars icon). No setting file = M1+ Pod.

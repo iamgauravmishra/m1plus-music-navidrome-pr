@@ -180,9 +180,32 @@ def main():
     out_ok = all(px[y][x] == rgb565(bgr565(wallpaper(x, y))) for x, y in ((19, 50), (220, 50), (100, 49), (100, 51), (300, 19), (300, 120), (299, 60)))
     print(f'  canvas_draw_hline / canvas_draw_vline, stroke #FFFFFF14: the blend on the line, nothing beside it: {"ok" if not bad and out_ok else "FAIL " + str(bad[:3])}')
     ok &= not bad and out_ok
+    # 5. the glass pill image (mb_glass.png, an RGBA bitmap with a translucent fill and an anti-aliased edge) drawn with canvas_draw_image_ex over the
+    #    wallpaper: every pixel is the straight-alpha blend of the image over the 565 pixel under it (a fully transparent one leaves it)
+    from PIL import Image
+    gimg = Image.open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'assets', 'icons', 'png', 'mb_glass.png')).convert('RGBA')
+    gw, gh = gimg.size; s.wall()
+    bmp = d.call('bitmap_create_ex', gw, gh, 0, 1)
+    buf = d.call('bitmap_lock_buffer_for_write', bmp)
+    d.u.mem_write(buf, gimg.tobytes()); d.call('bitmap_unlock_buffer', bmp)
+    gx, gy = 8, 20
+    d.call('canvas_draw_image_ex', s.canvas, bmp, 0, d.rect(gx, gy, gw, gh))     # IMAGE_DRAW_DEFAULT: 1:1
+    px = s.read(); worst = 0; bad = []; blended = 0
+    for y in range(gh):
+        for x in range(gw):
+            r, g, b, a = gimg.getpixel((x, y)); wq = rgb565(bgr565(wallpaper(gx + x, gy + y))); got = px[gy + y][gx + x]
+            want = tuple((c * a + w * (255 - a)) / 255 for c, w in zip((r, g, b), wq))
+            err = max(abs(gc - wc) for gc, wc in zip(got, want)); worst = max(worst, err)
+            blended += 0 < a < 255 and got != wq
+            if err > TOL + 4: bad.append((x, y, a, got, want))
+    outside = all(px[gy - 1][gx + x] == rgb565(bgr565(wallpaper(gx + x, gy - 1))) and px[gy + gh][gx + x] == rgb565(bgr565(wallpaper(gx + x, gy + gh))) for x in range(0, gw, 7))
+    print(f'  canvas_draw_image_ex of mb_glass.png {gw}x{gh} over the wallpaper: every pixel the alpha blend within {worst:.1f} '
+          f'({blended} translucent pixels blended), nothing outside: {"ok" if not bad and outside and blended > 5000 else "FAIL " + str(bad[:3])}')
+    ok &= not bad and outside and blended > 5000
+    shots.append(px)
     if len(sys.argv) > 2:
         from PIL import Image
-        out = Image.new('RGB', (W, 2 * H + 4), (40, 40, 40))
+        out = Image.new('RGB', (W, len(shots) * (H + 4)), (40, 40, 40))
         for i, p in enumerate(shots):
             im = Image.new('RGB', (W, H)); im.putdata([c for row in p for c in row]); out.paste(im, (0, i * (H + 4)))
         out.save(sys.argv[2]); print('wrote', sys.argv[2])

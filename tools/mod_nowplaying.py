@@ -7,7 +7,7 @@
        |   cover 264 x 264, r 12    |       slide page 1: the file is 264 px (1:1); the payload rounds the corners
  292   +----------------------------+
  296           . o .                         micro page dots (4 px)
- 305   Title                  (heart)(...)   20 px white; heart and More 44 px targets on 32 px translucent discs
+ 305   Title                  (star)(...)   20 px white; star and More 44 px targets on 32 px translucent discs
  329   Artist                              18 px #AAAAAA
  348   ================---------------        6 px rounded progress bar (ink 360..366) in the stock 30 px seek target
  379   1:23                        -3:42    14 px #AAAAAA (digits 382..391); the right one is the remaining time (patch/nowplaying.c)
@@ -79,8 +79,8 @@ SHADOW_PAD, SHADOW_SIGMA, SHADOW_DY, SHADOW_ALPHA = 24, 7.0, 4, 140
 SHADOW_SIZE = ART + 2 * SHADOW_PAD
 SLIDE_H = 352                    # slide pages 0..352 hold art, dots, title and artist; lyrics and info end at 288
 DOTS = (145, 296, 30, 4)         # 3 dots of size 4, 10 apart, centred in the window
-TITLE_Y, TITLE_H, ARTIST_Y, ARTIST_H, TEXT_W = 305, 24, 329, 22, 176   # the 46 px block is centred on the heart / More discs (y 310..346, centre 328)
-BTN, FAV_X, MORE_X, BTN_Y = 44, 204, 248, 306       # heart and More: 44 px targets right of the text, 32 px discs in the PNGs
+TITLE_Y, TITLE_H, ARTIST_Y, ARTIST_H, TEXT_W = 305, 24, 329, 22, 176   # the 46 px block is centred on the star / More discs (y 310..346, centre 328)
+BTN, FAV_X, MORE_X, BTN_Y = 44, 204, 248, 306       # star and More: 44 px targets right of the text, 32 px discs in the PNGs
 RETURN = (100, 0, 120, 44)       # the grabber pill is drawn in the button (np_grabber), over the art's top 16 px
 # The lower half's rhythm, measured on ink: artist ink bottom 344, then 16 px of air to the bar (ink 360..366), 16 to the
 # times (digits 382..391), 16 to the transport glyphs (pause bars 407..435), and 15 from their bottom to the window's

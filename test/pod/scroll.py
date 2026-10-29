@@ -8,8 +8,6 @@ import struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 SLOT = pod.SCROLL_SLOT
-ON = {'d': 0x67126c, 'm': 0x6715f4, 'u': 0x67187c}      # widget_on_pointer_down / _move / _up
-EVT = {'d': O['EVT_POINTER_DOWN'], 'm': O['EVT_POINTER_MOVE'], 'u': O['EVT_POINTER_UP']}
 CLICK = O['EVT_CLICK']
 ROW_H, ROWS, SV_W, SV_H = 64, 20, 310, 450
 KILL_SD, KILL_FLASH = '/mnt/mmc/m1pod-off', '/mnt/data/m1pod-off'
@@ -43,15 +41,6 @@ class SM(StockEventMachine):
         speed = self.word(0x759814); self.setword(sv + 0x88, speed); self.setword(sv + 0x8c, speed)   # the speed scales scroll_view_create stores
 
     # ---- the window manager's pointer events
-    def pointer(self, kind, x, y, dt=16):
-        self.t += dt
-        e = self.alloc(0x30); self.u.mem_write(e, bytes(0x30))
-        self.setword(e, EVT[kind]); self.setword(e + 4, 0x30); self.setword(e + 8, self.t)
-        self.setword(e + 0x18, x); self.setword(e + 0x1c, y)
-        self.u.mem_write(e + 0x24, bytes([0 if kind == 'u' else 1]))
-        self.log = []
-        return self.call(ON[kind], a0=self.root, a1=e, count=4000000)
-
     def play(self, steps):
         """steps: (d|m|u, x, y[, ms since the last event]); returns the rows that got a click, in order."""
         out = []
@@ -207,7 +196,7 @@ def run(ctx):
     e = c.alloc(0x30); c.u.mem_write(e, bytes(0x30))
     cost = {}
     for kind in ('m', 'd', 'u'):
-        c.setword(e, EVT[kind]); c.call(PSYMS['m1pod_scroll_event'], a0=c.sv, a1=e, count=1000); cost[kind] = c.icount
+        c.setword(e, POINTER_EVT[kind]); c.call(PSYMS['m1pod_scroll_event'], a0=c.sv, a1=e, count=1000); cost[kind] = c.icount
         expect(c.calls == [], f'an idle {kind} event: the hook calls nothing')
     expect(cost['m'] <= 16 and cost['d'] <= 40 and cost['u'] <= 20, f'hook cost per event, instructions: MOVE {cost["m"]}, idle DOWN {cost["d"]}, idle UP {cost["u"]}')
     print(f'  hook cost per event (instructions, incl. call/return): MOVE {cost["m"]}, idle DOWN {cost["d"]}, idle UP {cost["u"]}')

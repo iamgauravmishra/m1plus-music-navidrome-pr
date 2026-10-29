@@ -195,11 +195,11 @@ static void ah_set_color(unsigned color) {
     ah_bar_apply();
 }
 
-/* The cover widget's EVT_AFTER_PAINT: row 0 of the cover is window row AH_NAV_H + AH_ART_Y less how far the list is scrolled. */
+/* The cover widget's EVT_AFTER_PAINT: row 0 of the cover is window row AH_ART_Y less how far the list is scrolled (the list starts at the window's top). */
 static int ah_on_art_paint(void *ctx, void *e) {
     void *canvas = e ? *(void **)((char *)e + EVENT_PAINT_CANVAS) : (void *)0;
     void *item = ctx ? P(ctx, W_PARENT) : (void *)0, *sv = item ? P(item, W_PARENT) : (void *)0;
-    int row0 = AH_NAV_H + AH_ART_Y - (sv ? widget_get_prop_int(sv, "yoffset", 0) : 0);
+    int row0 = AH_ART_Y - (sv ? widget_get_prop_int(sv, "yoffset", 0) : 0);
     if (!canvas) return RET_OK;
     pod_corners(canvas, ah.corner, AH_CORNER, AH_ART, ah.color, row0, AH_TINT_A_TOP, AH_TINT_A_BOT, AH_TINT_ROWS);
     return RET_OK;

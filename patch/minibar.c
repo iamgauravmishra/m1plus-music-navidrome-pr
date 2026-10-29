@@ -1,0 +1,479 @@
+/* M1+ Pod mini player bar: a floating "now playing" card at the bottom of the Home instance of the menu.
+ *
+ * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
+ *
+ * No stock function is hooked. The widgets are in the menu's own asset (ui/m1pod_menu.bin, tools/pod_ui.py: pod_minibar, a
+ * hidden and insensitive view holding the card button, the title and artist labels and the play, pause and next buttons);
+ * patch/home.c calls minibar_start for the Home instance only (the menu opened from the grid icon keeps its navbar and never
+ * gets a bar). Everything here runs from the menu window's events and one page-scoped timer.
+ *
+ *   start    looks up the widgets and the stock list, registers EVT_DESTROY / EVT_WINDOW_TO_BG / EVT_WINDOW_TO_FG and the
+ *            card's EVT_AFTER_PAINT, and arms a one-shot MB_FIRST_MS later (the menu's first paint does nothing extra).
+ *            Any widget missing, any registration or the timer failing: nothing is shown or moved, the menu is as it was.
+ *   timer    mb_first (the one-shot) starts the MB_TICK_MS repeating mb_tick; both call mb_work. Only while the window is in
+ *            front: EVT_WINDOW_TO_BG removes the timer, EVT_WINDOW_TO_FG arms the one-shot again, EVT_DESTROY removes it and
+ *            frees the cover bitmap. mb_work is the only code that changes anything:
+ *              nothing queued (cc_playing NULL)  the bar is hidden (hidden and insensitive) and the list's spacer row is
+ *                                                hidden again: the menu is as it was.
+ *              a track is playing or paused      the bar shows and the list's spacer row is visible (see mb_pad). When the
+ *                                                track changed (a hash of its path, title and file name): the title and artist
+ *                                                labels and the cover. The play / pause button follows
+ *                                                mclGetPlayStatus (2 = playing, as the lock screen's refresh reads it), swapped
+ *                                                only when it changes.
+ *   cover    MB_ART (36) px, decoded on the timer, never in paint (paint draws the resident bitmap with canvas_draw_image): the album's
+ *            Cover Flow cache file when it exists (cc_url), else the /tmp file demo wrote for the playing track (COVER_SRC as
+ *            Now Playing reads it; demo writes it a little after the track changes, so for MB_SETTLE ticks the file's hash is
+ *            read again and the cover redone if it changed), else the stock placeholder disc. The box filter of
+ *            patch/covercache.c; the four MB_ART_R px corners are rounded by the bitmap's own alpha, so they show the card
+ *            in its pressed state too.
+ *   look     the card is a pre-rendered translucent glass pill (the button's bg_image mb_glass, mb_glass_down when pressed: dark
+ *            fill, sheen, rim light), the same for every track. The list runs behind it. Nothing is coloured at run time.
+ *   touch    the card opens Now Playing as the menu's Now Playing row does (on_backtoplayer_onclick); play / pause calls
+ *            playpause_quick_click and next calls next_quick_click(e, 0): the functions the lock screen's, Now Playing's and the
+ *            hardware keys' handlers call (tools/pod.py), with their own checks, toasts and notifications.
+ */
+#include "offsets.inc"
+#include "stock.h"
+#include "home.h"
+#include "covercache.h"
+#include "common.h"
+
+extern unsigned np_file_key(const char *path);       /* patch/nowplaying.c: a hash of the picture file, 0 if unreadable */
+extern const char *np_cover_file(int *busy);         /* the /tmp file of the playing track's cover, NULL for none; busy while demo makes it */
+
+#define MB_HASH_PRIME 16777619u
+
+static struct {
+    void *win, *bar, *card, *title, *artist, *play, *pause, *next, *sv, *pad;   /* the list's scroll view and its trailing spacer row */
+    unsigned timer;      /* the one-shot or the repeating timer, 0 none */
+    int fg;              /* the window is in front */
+    int shown;           /* the bar is up */
+    int playing;         /* the glyph shown: 1 pause (playing), 0 play, -1 neither set yet */
+    unsigned key;        /* the track the labels and the cover were made for, 0 none */
+    unsigned fkey;       /* the hash of the /tmp cover file the cover was made from, 0 when it was not */
+    int settle;          /* ticks left that read the /tmp file again */
+    void *bmp;           /* the cover, MB_ART x MB_ART RGBA8888 */
+    unsigned char corner[MB_ART_R * MB_ART_R];   /* the top left corner's coverage outside the arc, 0..255 */
+    unsigned *pl;        /* the backdrop blur's half-resolution plane, MB_HW x MB_HH words (heap, freed with the page) */
+    int blur;            /* the blur is registered and still allowed (a structural mismatch clears it) */
+    int fix;             /* a frame was partial: invalidate the whole pill at the next chance */
+    unsigned char x0[MB_HH];   /* per half row: the first block inside the pill */
+} mb __attribute__((section(".scratch")));
+
+/* Hidden and out of the hit test together (this AWTK's widget_find_target ignores visible). */
+static void mb_vis(void *w, int on) {
+    widget_set_visible(w, on, 0);
+    widget_set_sensitive(w, on);
+}
+
+/* ---------------------------------------------------------------------------
+ * The list: it always runs to the window's bottom, under the translucent pill. While the bar shows, the trailing spacer row pod_pad
+ * (MB_PAD high, an invisible insensitive view that is the list's last child) is visible, so the stock list_view layout (it sums every
+ * visible child's own height into virtual_h) keeps the padding at every relayout and the last row can scroll clear above the pill.
+ * patch/menu.c menu_arrange reads the spacer's visibility when it sets virtual_h. Showing or hiding it also adjusts virtual_h at once (the
+ * relayout the visibility change marks gives the same value) and keeps yoffset inside the new range.
+ */
+static void mb_pad(int on) {
+    int vh = widget_get_prop_int(mb.sv, "virtual_h", 0), max;
+    widget_set_visible(mb.pad, on, 0);   /* insensitive in the asset: it never takes a touch */
+    vh += on ? MB_PAD : -MB_PAD;
+    if (vh < 0) vh = 0;
+    widget_set_prop_int(mb.sv, "virtual_h", vh);
+    max = vh - widget_get_prop_int(mb.sv, "h", 0);   /* a shorter list may not stay scrolled past its end */
+    if (max < 0) max = 0;
+    if (widget_get_prop_int(mb.sv, "yoffset", 0) > max) widget_set_prop_int(mb.sv, "yoffset", max);
+    widget_invalidate_force(mb.sv, (void *)0);
+}
+
+static void mb_hide(void) {
+    if (!mb.shown) return;
+    mb.shown = 0;
+    mb.key = 0;
+    mb.fkey = 0;
+    mb.settle = 0;
+    mb_vis(mb.bar, 0);
+    mb_pad(0);
+}
+
+static void mb_show(void) {
+    mb_pad(1);
+    mb_vis(mb.bar, 1);
+    widget_invalidate_force(mb.bar, (void *)0);
+    mb.shown = 1;
+}
+
+/* ---------------------------------------------------------------------------
+ * The card: texts, cover (its look, the pill fill and edge, is the asset's style: nothing is coloured per track)
+ */
+
+static unsigned mb_track_key(void *t) {
+    unsigned h = cc_fnv(cc_fnv(cc_fnv(FNV_SEED, cc_str(t, REC_PATH)), cc_str(t, REC_TITLE)), cc_str(t, REC_NAME));
+    h = (h ^ *(unsigned *)((char *)t + REC_CUE_START)) * MB_HASH_PRIME;
+    return h | !h;
+}
+
+static void mb_labels(void *t) {
+    const char *title = cc_str(t, REC_TITLE);
+    if (!*title) title = cc_str(t, REC_NAME);
+    widget_set_text_utf8(mb.title, title);
+    widget_set_text_utf8(mb.artist, cc_str(t, REC_ARTIST));
+    widget_invalidate_force(mb.card, (void *)0);   /* the whole pill, not the labels' rectangles (see the blur) */
+}
+
+/* The four corners' alpha: 255 less the coverage outside the arc (the colour channels are left as they are). */
+static void mb_round(unsigned *px) {
+    unsigned k, x, y;
+    for (k = 0; k < 4; ++k)
+        for (y = 0; y < MB_ART_R; ++y)
+            for (x = 0; x < MB_ART_R; ++x) {
+                unsigned *p = px + (k & 2 ? MB_ART - 1 - y : y) * MB_ART + (k & 1 ? MB_ART - 1 - x : x);
+                *p = (*p & 0xffffff) | (255u - mb.corner[y * MB_ART_R + x]) << 24;
+            }
+}
+
+/* The playing track's cover into mb.bmp. first: a new track (the /tmp file is read again for a few ticks). */
+static void mb_cover(void *t, int first) {
+    char url[80], tmp[40];
+    const char *file = (const char *)0, *path;
+    unsigned album = *cc_str(t, REC_ALBUM) ? cc_album_key(t) : 0, *px, i;
+    int busy = 0;
+    if (!mb.bmp) {
+        mb.bmp = bitmap_create_ex(MB_ART, MB_ART, MB_ART * 4, BITMAP_RGBA8888);
+        if (mb.bmp) pod_corner_fill(mb.corner, MB_ART_R);
+    }
+    if (!mb.bmp) return;   /* no cover (the card paints none) */
+    px = (unsigned *)bitmap_lock_buffer_for_write(mb.bmp);
+    if (!px) return;
+    if (first) mb.settle = MB_SETTLE;
+    mb.fkey = 0;
+    file = album ? cc_url(url, album) : (const char *)0;
+    if (file) {
+        if (first) mb.settle = 0;   /* the cache file is the album's, not the track's: nothing to wait for */
+    } else if ((path = np_cover_file(&busy)) != (const char *)0 && !busy) {
+        mb.fkey = np_file_key(path);
+        if (mb.fkey) {
+            snprintf(tmp, sizeof tmp, "file://%s", path);
+            file = tmp;
+        }
+    }
+    if (!file || !cc_decode(mb.win, file, 1, MB_ART, 1, px)) {   /* the stock placeholder disc, as the grid's tiles have it, else flat grey */
+        for (i = 0; i < MB_ART * MB_ART; ++i) px[i] = MB_GREY;
+        cc_decode(mb.win, "p_default", 0, MB_ART, 1, px);
+    }
+    mb_round(px);
+    bitmap_unlock_buffer(mb.bmp);
+    widget_invalidate_force(mb.card, (void *)0);
+}
+
+/* Demo writes the /tmp cover a little after the track changes: look again for MB_SETTLE ticks and redo the cover if the file is new. */
+static void mb_settle(void *t) {
+    int busy = 0;
+    const char *path = np_cover_file(&busy);
+    unsigned k;
+    if (busy) return;   /* being replaced: not counted */
+    mb.settle--;
+    k = path ? np_file_key(path) : 0;
+    if (k && k != mb.fkey) mb_cover(t, 0);
+}
+
+/* The card's own EVT_AFTER_PAINT, in the card's coordinates: the resident cover. Nothing is decoded here. */
+static int mb_on_paint(void *ctx, void *e) {
+    void *canvas = e ? *(void **)((char *)e + EVENT_PAINT_CANVAS) : (void *)0;
+    int src[4], dst[4];
+    (void)ctx;
+    if (!canvas || !mb.win || !mb.bmp || !mb.shown) return RET_OK;
+    src[0] = 0, src[1] = 0, src[2] = MB_ART, src[3] = MB_ART;
+    dst[0] = MB_ART_X, dst[1] = MB_ART_Y, dst[2] = MB_ART, dst[3] = MB_ART;
+    canvas_draw_image(canvas, mb.bmp, src, dst);
+    return RET_OK;
+}
+
+/* ---------------------------------------------------------------------------
+ * The backdrop blur (EXPERIMENTAL; tools/pod_blur.py is the bit-exact model, docs/modules/minibar.md Step B)
+ *
+ * The card's EVT_BEFORE_PAINT runs after the list has painted its rows into the drawing buffer and before the glass image goes over them. The
+ * pixels of the pill's rectangle are reduced 2 x 2 into a plane of packed words (the three RGB565 channel sums in 10-bit fields), box-blurred
+ * (two 4-tap passes along the rows, two along the columns, no field can carry into the next), darkened by 1/8 and written back, inside the pill
+ * only. Fixed-point integer code, no allocation per frame (the plane is allocated once at start and freed with the page). Every precondition is
+ * checked at every call and any structural mismatch (the lcd is not the 565 memory lcd, a null or odd buffer, a pitch or size that does not fit,
+ * the rectangle off the screen) switches the blur off for the page: the glass is then drawn over the sharp rows, exactly the version without it.
+ * A frame whose clip does not cover the whole pill (a partial repaint, for instance a row's press highlight under the pill) is not blurred: the
+ * pixels outside the clip are the last frame's blurred ones, and blurring across the seam would show; the card is invalidated instead (the
+ * next tick, and at once when a button is pressed or released) so the next frame repaints all of it.
+ */
+#define MB_FLD(p) (((p) & 0xF800u) << 9 | ((p) & 0x07E0u) << 5 | ((p) & 0x1Fu))   /* RGB565 to three 10-bit fields: 20, 10, 0 */
+#define MB_MASK 0x0FF3FCFFu    /* three 8-bit fields at 0, 10, 20: the sum of four words >> 2 */
+#define MB_DARK 0x01F07C1Fu     /* three 5-bit fields at 0, 10, 20: the 8-bit fields >> 3 */
+#define MB_HALF 0x00200802u    /* 2 in each field: the rounding of every >> 2 (without it the smaller red and blue fields fall behind green: a green cast) */
+
+static unsigned mb_isqrt(unsigned n) {
+    unsigned s = 0;
+    while ((s + 1) * (s + 1) <= n) ++s;
+    return s;
+}
+
+/* Columns at the end of full row y outside the pill's arc, rounded up (tools/pod_blur.py inset). */
+static unsigned mb_inset(unsigned y) {
+    unsigned yy = y < MB_R ? y : 2 * MB_R - 1 - y, d2 = 2 * (MB_R - yy) - 1;
+    return MB_R - (mb_isqrt(4 * MB_R * MB_R - d2 * d2) >> 1);
+}
+
+static void mb_blur_init(void) {
+    unsigned hy, a, b;
+    for (hy = 0; hy < MB_HH; ++hy) {
+        a = mb_inset(2 * hy), b = mb_inset(2 * hy + 1);
+        mb.x0[hy] = (unsigned char)(((a > b ? a : b) + 2) >> 1);   /* (max inset + 1 + 1) / 2 */
+    }
+}
+
+/* One 4-tap pass over n words at v with stride (replicated edges): out[i] = (v[i-left] + .. + v[i-left+3]) / 4 per field. */
+static void mb_line(unsigned *v, int n, int stride, int left) {
+    unsigned pad[MB_HW + 5], s, *p = pad + left, *q = v, *o = v;
+    int i;
+    for (i = 0; i < n; ++i, q += stride) p[i] = *q;   /* the line, then the replicated edges */
+    for (i = 0; i < left; ++i) pad[i] = p[0];
+    for (i = n + left; i < n + 5; ++i) pad[i] = pad[n + left - 1];
+    s = pad[0] + pad[1] + pad[2] + pad[3];
+    for (p = pad, i = 0; i < n; ++i, o += stride, ++p) {
+        *o = ((s + MB_HALF) >> 2) & MB_MASK;
+        s = s - p[0] + p[4];   /* subtract first: no field borrows or carries */
+    }
+}
+
+#define MB_PEEK(p, off) (*(int *)((char *)(p) + (off)))
+
+/* The blur of the pill under canvas (translated to the card). 0: not done (see above). */
+static void mb_blur(void *canvas) {
+    char *lcd = (char *)MB_PEEK(canvas, CANVAS_LCD), *fb;
+    int ox = MB_PEEK(canvas, CANVAS_OX), oy = MB_PEEK(canvas, CANVAS_OY), w, h, pitch, hy, hx, x0;
+    unsigned *pl = mb.pl, v, px;
+    if (!lcd || !pl) return;
+    w = MB_PEEK(lcd, LCD_W), h = MB_PEEK(lcd, LCD_H), pitch = MB_PEEK(lcd, LCD_LINE);
+    fb = (char *)MB_PEEK(lcd, LCD_FB);
+    if ((unsigned)MB_PEEK(lcd, LCD_BEGIN) != LCD_565_BEGIN || !fb || ((unsigned)fb & 3) || w < MB_W || w > 2048 || h < MB_H || h > 2048 ||
+        pitch < 2 * w || pitch > 8192 || (pitch & 3) || ox < 0 || oy < 0 || (ox & 1) || ox + MB_W > w || oy + MB_H > h) {
+        mb.blur = 0;   /* not the lcd this was written for: no blur on this page */
+        return;
+    }
+    if (MB_PEEK(canvas, CANVAS_CLIP) > ox || MB_PEEK(canvas, CANVAS_CLIP + 4) > oy || MB_PEEK(canvas, CANVAS_CLIP + 8) < ox + MB_W - 1 ||
+        MB_PEEK(canvas, CANVAS_CLIP + 12) < oy + MB_H - 1) {
+        mb.fix = 1;   /* a partial repaint: the whole pill again next */
+        return;
+    }
+    fb += oy * pitch + ox * 2;
+    for (hy = 0; hy < MB_HH; ++hy)
+        for (hx = 0; hx < MB_HW; ++hx) {
+            const unsigned short *r = (const unsigned short *)(fb + 2 * hy * pitch + 4 * hx);
+            const unsigned short *q = (const unsigned short *)((const char *)r + pitch);
+            pl[hy * MB_HW + hx] = MB_FLD(r[0]) + MB_FLD(r[1]) + MB_FLD(q[0]) + MB_FLD(q[1]);
+        }
+    for (hy = 0; hy < MB_HH; ++hy) mb_line(pl + hy * MB_HW, MB_HW, 1, 2), mb_line(pl + hy * MB_HW, MB_HW, 1, 1);
+    for (hx = 0; hx < MB_HW; ++hx) mb_line(pl + hx, MB_HH, MB_HW, 2), mb_line(pl + hx, MB_HH, MB_HW, 1);
+    for (hy = 0; hy < MB_HH; ++hy) {
+        unsigned *r0 = (unsigned *)(fb + 2 * hy * pitch), *r1 = (unsigned *)((char *)r0 + pitch);
+        for (x0 = mb.x0[hy], hx = x0; hx < MB_HW - x0; ++hx) {
+            v = pl[hy * MB_HW + hx];
+            v = v - ((v >> 3) & MB_DARK) + MB_HALF;
+            px = ((v >> 22) & 0x1Fu) << 11 | ((v >> 12) & 0x3Fu) << 5 | ((v >> 2) & 0x1Fu);
+            r0[hx] = r1[hx] = px | px << 16;
+        }
+    }
+}
+
+static int mb_on_before_paint(void *ctx, void *e) {
+    void *canvas = e ? *(void **)((char *)e + EVENT_PAINT_CANVAS) : (void *)0;
+    (void)ctx;
+    if (canvas && mb.win && mb.shown && mb.blur) mb_blur(canvas);
+    return RET_OK;
+}
+
+/* The list scrolled (a drag, a fling, scroll_to: EVT_SCROLL, dispatched by every yoffset change): the scroll view invalidates its own rectangle, which ends
+ * at the list's bottom and, with the scroll bar beside it, at x 309, so the clip would not always cover the whole pill. The pill is invalidated too: the dirty region
+ * of the frame is then the union of both and always contains all of it, wherever the list's own rectangle ends. The offset is not touched, so this cannot loop. */
+static int mb_on_scroll(void *ctx, void *e) {
+    (void)ctx; (void)e;
+    if (mb.win && mb.blur && mb.shown) widget_invalidate_force(mb.card, (void *)0);
+    return RET_OK;
+}
+
+/* A press, a release or an abort on a button repaints only the button's rectangle: the whole pill is invalidated so the frame is not partial. */
+static int mb_on_touch(void *ctx, void *e) {
+    (void)ctx; (void)e;
+    if (mb.win && mb.blur) widget_invalidate_force(mb.card, (void *)0);
+    return RET_OK;
+}
+
+static void mb_glyph(void) {
+    int playing = mclGetPlayStatus() == MB_PLAYING;
+    if (playing == mb.playing) return;
+    mb.playing = playing;
+    mb_vis(mb.play, !playing);
+    mb_vis(mb.pause, playing);
+    widget_invalidate_force(mb.card, (void *)0);   /* the whole pill, not the glyph's rectangle (see the blur) */
+}
+
+/* The one thing the timer does. */
+static void mb_work(void) {
+    void *t = cc_playing();
+    unsigned key;
+    if (!t) { mb_hide(); return; }
+    if (recent_note(t)) recent_refresh();   /* the Recently Played shelf (patch/recent.c): a new album under this menu shows at once */
+    key = mb_track_key(t);
+    if (!mb.shown || key != mb.key) {
+        mb.key = key;
+        mb_labels(t);
+        mb_cover(t, 1);
+    } else if (mb.settle > 0) {
+        mb_settle(t);
+    }
+    if (!mb.shown) {
+        mb.playing = -1;
+        mb_show();
+    }
+    mb_glyph();
+    if (mb.fix) {   /* a frame under the pill was partial: the whole pill again, so the blur is not seamed */
+        mb.fix = 0;
+        widget_invalidate_force(mb.card, (void *)0);
+    }
+}
+
+/* ---------------------------------------------------------------------------
+ * The timer and the window's events
+ */
+static int mb_tick(const void *timer) {
+    (void)timer;
+    if (!mb.win || !mb.fg) { mb.timer = 0; return RET_OK; }
+    mb_work();
+    return RET_REPEAT;
+}
+
+static int mb_first(const void *timer) {
+    (void)timer;
+    mb.timer = 0;   /* this one ends with the return */
+    if (!mb.win || !mb.fg) return RET_OK;
+    mb.timer = timer_add(mb_tick, (void *)0, MB_TICK_MS);
+    if (mb.timer) mb_work();
+    return RET_OK;
+}
+
+static void mb_unarm(void) {
+    if (mb.timer) timer_remove(mb.timer);
+    mb.timer = 0;
+}
+
+static void mb_stop(void) {
+    mb_unarm();
+    if (mb.bmp) bitmap_destroy(mb.bmp);
+    if (mb.pl) free(mb.pl);
+    memset(&mb, 0, sizeof mb);
+}
+
+static int mb_on_destroy(void *ctx, void *e) {
+    (void)e;
+    if (ctx == mb.win) mb_stop();   /* an earlier window's end leaves the new one alone */
+    return RET_OK;
+}
+
+static int mb_on_background(void *ctx, void *e) {
+    (void)e;
+    if (!mb.win || ctx != mb.win) return RET_OK;
+    mb.fg = 0;
+    mb_unarm();
+    return RET_OK;
+}
+
+static int mb_on_foreground(void *ctx, void *e) {
+    (void)e;
+    if (!mb.win || ctx != mb.win) return RET_OK;
+    mb.fg = 1;
+    if (!mb.timer) mb.timer = timer_add(mb_first, (void *)0, MB_FIRST_MS);
+    return RET_OK;
+}
+
+/* ---------------------------------------------------------------------------
+ * Touch
+ */
+static int mb_on_play(void *ctx, void *e) {
+    (void)ctx; (void)e;
+    if (!mb.win) return RET_OK;
+    playpause_quick_click();
+    mb_glyph();
+    return RET_OK;
+}
+
+/* next_quick_click reads the event's time (it ignores a click within a second of the last); the click's own event is
+ * what the stock handlers pass. */
+static int mb_on_next(void *ctx, void *e) {
+    unsigned ev[4];
+    (void)ctx;
+    if (!mb.win) return RET_OK;
+    if (!e) {
+        memset(ev, 0, sizeof ev);
+        ev[2] = time_now_ms();
+        e = ev;
+    }
+    next_quick_click(e, 0);
+    mb_work();
+    return RET_OK;
+}
+
+/* The backdrop blur is optional and last: the plane, the paint handler and the press handlers. Anything missing (an SD file turns it off, no memory,
+ * a refused registration) and the page has the glass over the sharp rows. */
+static void mb_blur_setup(void) {
+    static void *const *btn[4] = {&mb.play, &mb.pause, &mb.next, &mb.sv};   /* the buttons, and the list (a row's press highlight repaints only the row) */
+    static const int ev[3] = {EVT_POINTER_DOWN, EVT_POINTER_UP, EVT_POINTER_ABORT};
+    int ok, i, j;
+    if (access(MB_BLUR_OFF, F_OK) == 0) return;
+    mb.pl = (unsigned *)calloc(MB_HW * MB_HH, sizeof(unsigned));
+    ok = mb.pl && widget_on(mb.card, EVT_BEFORE_PAINT, mb_on_before_paint, (void *)0);
+    ok = ok && widget_on(mb.sv, EVT_SCROLL, mb_on_scroll, (void *)0);
+    for (i = 0; ok && i < 4; ++i)
+        for (j = 0; ok && j < 3; ++j) ok = widget_on(*btn[i], ev[j], mb_on_touch, (void *)0) != 0;
+    if (ok) {
+        mb_blur_init();
+        mb.blur = 1;
+    } else if (mb.pl) {
+        free(mb.pl);
+        mb.pl = (unsigned *)0;
+    }
+}
+
+/* The Home instance of the menu is up (patch/home.c, after the list took the whole window). */
+void minibar_start(void *win) {
+    void *fade;
+    if (!win || home_off()) return;
+    /* the Home instance has no navbar (home.c hid it): the fade under the bar (img_nb_fade, a sibling of the list at y 50) goes with it, or it would
+     * float over the list as a dark band with a sharp top edge (V2.1oAB device). Hidden and insensitive, as the bar. */
+    fade = widget_lookup(win, "img_nb_fade", 1);
+    if (fade) {
+        widget_set_visible(fade, 0, 0);
+        widget_set_sensitive(fade, 0);
+    }
+    if (mb.win) mb_stop();   /* an earlier window that never said it was gone */
+    mb.win = win;
+    mb.bar = widget_lookup(win, "pod_minibar", 1);
+    mb.card = widget_lookup(win, "pod_mb_card", 1);
+    mb.title = widget_lookup(win, "pod_mb_title", 1);
+    mb.artist = widget_lookup(win, "pod_mb_artist", 1);
+    mb.play = widget_lookup(win, "pod_mb_play", 1);
+    mb.pause = widget_lookup(win, "pod_mb_pause", 1);
+    mb.next = widget_lookup(win, "pod_mb_next", 1);
+    mb.sv = widget_lookup(win, "pod_scrollview", 1);
+    mb.pad = widget_lookup(win, "pod_pad", 1);
+    mb.playing = -1;
+    mb.fg = 1;
+    if (!mb.bar || !mb.card || !mb.title || !mb.artist || !mb.play || !mb.pause || !mb.next || !mb.sv || !mb.pad ||
+        !widget_on(win, EVT_DESTROY, mb_on_destroy, win) || !widget_on(win, EVT_WINDOW_TO_BG, mb_on_background, win) ||
+        !widget_on(win, EVT_WINDOW_TO_FG, mb_on_foreground, win) || !widget_on(mb.card, EVT_AFTER_PAINT, mb_on_paint, (void *)0) ||
+        !widget_on(mb.card, EVT_CLICK, pod_on_player, (void *)0) || !widget_on(mb.play, EVT_CLICK, mb_on_play, (void *)0) ||
+        !widget_on(mb.pause, EVT_CLICK, mb_on_play, (void *)0) || !widget_on(mb.next, EVT_CLICK, mb_on_next, (void *)0)) {
+        mb_stop();   /* a handler that was registered finds no window of ours any more */
+        return;
+    }
+    mb.timer = timer_add(mb_first, (void *)0, MB_FIRST_MS);
+    if (!mb.timer) {
+        mb_stop();
+        return;
+    }
+    mb_blur_setup();
+}

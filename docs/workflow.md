@@ -41,8 +41,8 @@ restore package). `docs/history.md` lists the tags used so far.
 ## 2. Test
 
 ```
-venv/bin/python -I tools/check.py --tests-only   # DONE-CRITERION of a feature branch: every test, no package, no golden (~40 s)
-venv/bin/python -I tools/check.py --test albums  # selected tests only (patch modules by name, or tools, coverflow, awtk_fill, demo_diff)
+venv/bin/python -I tools/check.py --tests-only   # DONE-CRITERION of a feature branch: every test, no package, no golden (~10 s)
+venv/bin/python -I tools/check.py --test albums  # selected tests only (patch modules by name, one section as albums/toggle_tests, or tools, coverflow, awtk_fill, demo_diff)
 venv/bin/python -I tools/check.py            # DONE-CRITERION of the integration step: both packages vs test/golden.sha256, all tests
 venv/bin/python -I tools/check.py --only release --keep   # quick loop, tree left in work/check/release/
 venv/bin/python -I tools/check.py --update   # integration only, when a hash change is intended; commit test/golden.sha256
@@ -62,8 +62,11 @@ verification on synthetic archives, check.py's own pass/fail/`--update` decision
 `--update` exit non-zero and write nothing. `--update` right after a passing full run of the same files (content
 of every file but `docs/`, the README/AGENTS and the golden file; same tool versions; kept in
 `work/cache/check-last.json`) reuses that run: no rebuild, no tests, it only writes the golden file. A feature gets a
-`test/pod/<name>.py` with a `run(ctx)`; nothing else to register. The harness counts instructions per
-emulated block and traps only the mocked and watched addresses, so `icount` is exact up to the part of a block a mock skips.
+`test/pod/<name>.py` with a `run(ctx)`; nothing else to register. A module that runs for seconds lists its parts in a top-level
+`SECTIONS = [fn, ...]` (its `run` runs them in order): check.py runs each part as its own task, so no module sets the wall time. The harness counts instructions per
+emulated block and traps only the mocked and watched addresses, so `icount` is exact up to the part of a block a mock skips;
+the same block hook enforces `Machine.call`'s step limit (`count=`), because Unicorn's own `emu_start(count=)`
+hooks every instruction and made the suite about 6x slower.
 
 Previews: `tools/preview*.py` write to `out/preview/` (gitignored). The only tracked preview is
 `docs/release-preview.png`; refresh it at a release merge with

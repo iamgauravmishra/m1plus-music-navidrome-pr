@@ -80,8 +80,11 @@ def main():
     expect('--update with a failed test fails and writes nothing', check.outcome(True, True, True) == (True, False))
     expect('--update with a failed test and no change fails', check.outcome(True, False, True) == (True, False))
 
-    # check.py --test: names resolve to patch modules or the named tests; unknown names are refused
-    expect('--test resolves a patch module', check.parse_tests(['albums,tools']) == ['patch:albums', 'tools'])
+    # check.py --test: names resolve to patch modules (a module with SECTIONS: one test per section) or the named tests; unknown names are refused
+    expect('--test resolves a patch module', check.parse_tests(['home,tools']) == ['patch:home', 'tools'])
+    albums = [f'patch:albums/{s}' for s in check.sections('albums')]
+    expect('a module with SECTIONS is one test per section, by name or as patch:', len(albums) > 1 and check.parse_tests(['albums']) == check.parse_tests(['patch:albums']) == albums)
+    expect('--test runs one section', check.parse_tests([albums[1][6:]]) == [albums[1]])
     try: check.parse_tests(['nosuchtest']); refused = False
     except SystemExit: refused = True
     expect('--test refuses an unknown name', refused)

@@ -21,7 +21,7 @@ CJK = ('七里香 (Live) 周杰伦演唱会纪念专辑', '周杰伦 Jay Chou', 
 
 def variant_constants(f, outer, gap, nav=None):
     c = dict(PA.C); c.update(ah_ink.layout(f, outer, gap))
-    c['AH_TINT_ROWS'] = c['AH_NAV_H'] + c['AH_HDR_H']
+    c['AH_TINT_ROWS'] = c['AH_HDR_H']
     return c
 
 

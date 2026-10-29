@@ -8,12 +8,11 @@ the tree, binds the to-background and tap-above handlers and pins the sheet at y
 binder is called for every widget and the two handlers are registered as the stock init does, so the stock handlers are in `m.bound`
 (and every registration in `m.reg`, in order) before the hook runs, exactly as on the device, and must be there unchanged afterwards;
 the stock to-background (0x4789f0) and tap-above (0x478abc) handlers run as the real stock code."""
-import importlib.util, os, struct, sys
+import os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 import awtk_strings, awtk_style
 from awtk_text import Ttf, StbText
 
-HERE = os.path.dirname(os.path.abspath(__file__))
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
 KILL = '/mnt/mmc/m1pod-off'
 DIALOG_Y, ROW_H, SCREEN_H, SHEET_H = 130, O['PM_ROW_H'], O['PM_SCREEN_H'], O['PM_PAGE_N'] * O['PM_ROW_H']
@@ -30,14 +29,6 @@ HIDDEN1, HIDDEN2 = sorted(set(range(9)) - set(PAGE1)), sorted(set(range(9)) - se
 VT = {'dialog': LI_VT, 'list_view': LV_VT, 'scroll_view': SV_VT, 'list_item': LI_VT, 'image': IMG_VT}
 PM_TEXTS = {'More': None, 'Speed': None, 'Files below 48 kHz only': None}   # the keys the payload sets (the label each is for is in the checks)
 
-
-def sibling(name):
-    """test/pod/<name>.py as test/patch.py loaded it, or loaded here when this module runs alone."""
-    key = f'podtest_{name}'
-    if key not in sys.modules:
-        spec = importlib.util.spec_from_file_location(key, os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec); sys.modules[key] = mod; spec.loader.exec_module(mod)
-    return sys.modules[key]
 
 
 pulldown = sibling('pulldown')
@@ -89,7 +80,7 @@ class PM(pulldown.SM):
         if name == 'widget_on':
             self.reg.append((a0, a1, a2, a3))
             fails = {'pod_more': (self.nodes['pod_more'], O['EVT_CLICK']), 'pod_back': (self.nodes['pod_back'], O['EVT_CLICK']),
-                     'bg': (self.dialog, O['EVT_WINDOW_TO_BG']), 'destroy': (self.dialog, O['EVT_DESTROY'])}
+                     'bg': (self.lv, O['EVT_WINDOW_TO_BG']), 'destroy': (self.dialog, O['EVT_DESTROY'])}
             if self.bind_fail and (a0, a1) == fails[self.bind_fail] and a2 != STOCK_BG:
                 self.reg.pop(); self.calls.append(('widget_on', a0, a1, a2, 0)); u.reg_write(UC_MIPS_REG_V0, 0); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
         super()._hook(u, address, size, _)
@@ -127,8 +118,8 @@ class PM(pulldown.SM):
             for k, o in (('x', 0), ('y', 4), ('w', 8), ('h', 0xc)): self.props[(w, k)] = self.s32(w + o)
 
     def stock_kept(self):
-        """Every handler the stock init registered is still registered, first and in order (`bound` keeps only the latest per event, ours for the to-background one)."""
-        return self.stock_reg == self.reg[:len(self.stock_reg)] and all(self.bound[k] == v for k, v in self.stock_bound.items() if k[1] != O['EVT_WINDOW_TO_BG'])
+        """Every handler the stock init registered is still registered, first and in order, and still the latest for its widget and event."""
+        return self.stock_reg == self.reg[:len(self.stock_reg)] and all(self.bound[k] == v for k, v in self.stock_bound.items())
     def handlers_of(self, w, e): return [(fn, ctx) for ww, ee, fn, ctx in self.reg if (ww, ee) == (w, e)]
     def added(self): return [(self.name(w), e) for w, e, fn, ctx in self.reg[len(self.stock_reg):]]
 
@@ -169,13 +160,7 @@ class PM(pulldown.SM):
         self.sync()
     def click_more(self): self.click_row(MORE)
     def click_back(self): self.click_row(BACK)
-    def touch_at(self, kind, x, y, dt):
-        self.t += dt
-        e = self.alloc(0x30); self.u.mem_write(e, bytes(0x30))
-        self.setword(e, EVT_OF[kind]); self.setword(e + 4, 0x30); self.setword(e + 8, self.t); self.setword(e + 0x18, x); self.setword(e + 0x1c, y)
-        self.u.mem_write(e + 0x24, bytes([0 if kind == 'u' else 1]))
-        self.log = []
-        self.call(pulldown.ON[kind], a0=self.wm, a1=e, count=4000000)
+    def touch_at(self, kind, x, y, dt): self.pointer(kind, x, y, dt, root=self.wm)
     def relayout_all(self):
         self.mark(); self.relayout()
         self.sync()
@@ -186,9 +171,141 @@ class PM(pulldown.SM):
         for fn, ctx in self.handlers_of(w, kind):
             self.call(fn, a0=ctx, a1=e, count=400000); self.sync(); out.append((fn, self.top(), [c for c in self.calls if c[0] == 'window_close']))
         return out
+    def kids_of(self, w):
+        arr = self.word(w + 0x58)
+        return [self.word(self.word(arr + 8) + 4 * i) for i in range(self.word(arr))] if arr else []
+    def window_event(self, kind):
+        """A window event to the dialog as demo dispatches it (window_manager_dispatch_window_event -> widget_dispatch_recursive, the
+        words in tools/pod.py PLAYMORE_PINS): widget_foreach visits a widget, then its children if the visit returned RET_OK; a
+        widget's emitter runs its handlers newest first (emitter_on_with_tag puts a new one at the head), stops at RET_STOP (0xb) and
+        returns RET_OK after the last; a child's RET_DONE (0xa) or RET_STOP ends the walk. (widget name, handler, dialog y after it) per run."""
+        e = self.alloc(0x30); self.u.mem_write(e, bytes(0x30)); self.setword(e, kind)
+        out = []
+        def visit(w):
+            for fn, ctx in reversed(self.handlers_of(w, kind)):
+                ret = self.call(fn, a0=ctx, a1=e, count=400000); self.sync(); out.append((self.name(w), fn, self.top()))
+                if ret == 0xb: return ret
+            for c in self.kids_of(w):
+                ret = visit(c)
+                if ret in (0xa, 0xb): return ret
+            return 0
+        visit(self.dialog)
+        return out
 
 
-EVT_OF = {'d': O['EVT_POINTER_DOWN'], 'm': O['EVT_POINTER_MOVE'], 'u': O['EVT_POINTER_UP']}
+DIM = 130                                        # the asset's highlight alpha: the page under the sheet is black at 130/255
+BACKDROPS = {'black': 0, 'white under the dim': round(255 * (255 - DIM) / 255), 'pure white (no dim)': 255}   # grey levels under the glass
+
+
+def glass_checks(expect, theme, built_ui, stock_t, lum):
+    """The glass sheet (pm_sheet): the image is the generator's output, top corners transparent and bottom corners and edge opaque; the dialog
+    and every row are transparent over it, the pressed band and hairline translucent, inline in this dialog only; every label, badge and
+    chevron keeps its contrast with the glass over black, over white under the dim and over pure white, at rest and on a pressed row."""
+    import io, mod_icons
+    from PIL import Image
+    xx = os.path.join(WORK, RAW, 'images', 'xx')
+    png = lambda im: (lambda b: (im.save(b, 'PNG', optimize=True), b.getvalue())[1])(io.BytesIO())
+    gen = mod_icons.glass_image(*mod_icons.GLASS_SHEET, fill=mod_icons.GLASS_SHEET_FILL, top_only=True)
+    raw = open(os.path.join(xx, 'pm_sheet.png'), 'rb').read()
+    sheet = Image.open(os.path.join(xx, 'pm_sheet.png')).convert('RGBA')
+    w, h, r = mod_icons.GLASS_SHEET
+    expect(raw == open(os.path.join(mod_icons.PNG, 'pm_sheet.png'), 'rb').read() == png(gen) and sheet.size == (w, h) == (built_ui.w, 200),
+           f'{theme}: pm_sheet.png is the generator output byte for byte, {w}x{h} (the sheet), r {r}, top corners only')
+    a = lambda x, y: sheet.getpixel((x, y))[3]
+    expect(a(0, 0) == 0 and a(w - 1, 0) == 0 and a(0, h - 1) >= 0.7 * 255 and a(w - 1, h - 1) >= 0.7 * 255 and all(a(x, h - 1) >= 0.7 * 255 for x in range(w))
+           and a(w // 2, 0) >= 0.7 * 255 and all(a(x, y) == 0 for x in range(2) for y in range(2)),
+           f'{theme}: pm_sheet: the top corners are transparent, the bottom corners and the whole foot opaque (alpha {a(0, h - 1)})')
+    expect(all(built_ui.get(f'style:{s}:bg_image') == 'pm_sheet' and built_ui.get(f'style:{s}:bg_color') == '#00000000' and built_ui.get(f'style:{s}:border') == 'none'
+               and built_ui.get(f'style:{s}:round_radius') is None for s in ('normal', 'disable', 'focused')),
+           f'{theme}: the dialog is the pm_sheet glass image alone (no fill, no top line, no radius)')
+    lv, sv = built_ui.find('playmore_listview'), built_ui.find('playmore_scrollview')
+    expect(all(x.get(f'style:{s}:bg_color') == '#00000000' for x in (lv, sv) for s in ('normal', 'disable', 'focused')), f'{theme}: the list_view and its scroll_view are transparent')
+    states = ('normal', 'pressed', 'over', 'disable', 'focused')
+    rows = [c for c in sv.children]
+    expect(all(c.type == 'list_item' and all(c.get(f'style:{s}:bg_color') == ('#FFFFFF10' if s == 'pressed' else '#00000000') and c.get(f'style:{s}:border_color') == '#FFFFFF22' for s in states)
+               for c in rows) and len(rows) == 9,
+           f'{theme}: all nine rows: transparent in every state but pressed (#FFFFFF10, 6 % white), the hairline #FFFFFF22 (13 % white)')
+    expect(not any('pm_sheet' in str(c.props) for c in stock_t.walk()) and 'pm_sheet' not in str([p for w_ in built_ui.walk() if w_.name not in ('playmore_dialog',) for p in w_.props]),
+           f'{theme}: only the dialog itself refers to pm_sheet; the rows and every other widget carry inline styles of this dialog, no shared style name')
+    # the other pages' row styles are untouched: no ui asset but this one, and no style file, mentions the image or a transparent list_item_style
+    ui_root = os.path.join(WORK, 'rootfs/release/assets', theme, 'raw')
+    users = []
+    for base, _, files in os.walk(ui_root):
+        for f in files:
+            if f.endswith('.bin') and 'pm_sheet' in open(os.path.join(base, f), 'rb').read().decode('latin-1'): users.append(os.path.relpath(os.path.join(base, f), ui_root))
+    expect(users == ['ui/dialog/playmore_dialog.bin'], f'{theme}: pm_sheet is used by playmore_dialog.bin only ({users})')
+    ths = awtk_style.parse(open(os.path.join(ui_root, 'styles', 'default.bin'), 'rb').read())
+    its = ths.find('list_item', 'list_item_style')
+    expect(its and all((it.get('bg_color') >> 24) == 255 or it.state in ('pressed', 'over', 'disable', 'focused', 'selected') for it in its)
+           and next(it for it in its if it.state == 'normal').get('bg_color') >> 24 == 255 and next(it for it in its if it.state == 'normal').get('border_color') != 0x22FFFFFF,
+           f'{theme}: the shared list_item_style (other pages\' rows) is still opaque with its own hairline')
+    if theme != 'default': return     # the images and contrast are the same in both asset themes: measure once
+    # -- contrast: composite glass (+ the pressed band) over a flat grey, test what the row draws on it
+    th = awtk_style.parse(open(os.path.join(ui_root, 'styles', 'default.bin'), 'rb').read())
+    tc = th.find('hscroll_label', 'srlabel_item_white_style', 'normal')[0].color('text_color')[:7]
+    press = int(built_ui.find('listitem0').get('style:pressed:bg_color')[7:9], 16)
+    hexrgb = lambda s: tuple(int(s[i:i + 2], 16) for i in (1, 3, 5))
+    L = lambda c: lum('#%02X%02X%02X' % tuple(c))
+    rat = lambda c1, c2: (max(L(c1), L(c2)) + 0.05) / (min(L(c1), L(c2)) + 0.05)
+    def under(x, y, level, pressed):
+        px = sheet.getpixel((x, y)); al = px[3] / 255
+        c = [al * px[i] + (1 - al) * level for i in range(3)]
+        if pressed: c = [press / 255 * 255 + (1 - press / 255) * v for v in c]
+        return tuple(round(v) for v in c)
+    pos = {n: (i * ROW_H) for i, n in enumerate(['listitem4', 'listitem5', 'listitem2', 'pod_more'])}
+    pos.update({n: (i * ROW_H) for i, n in enumerate(['pod_back', 'listitem1', 'listitem0', 'listitem6'])})
+    texts = {'listitem4': 'scrlabel4', 'listitem5': 'scrlabel5', 'listitem2': 'scrlabel2', 'pod_more': 'pod_more_label', 'pod_back': 'pod_back_label',
+             'listitem1': 'scrlabel1', 'listitem0': 'scrlabel0', 'listitem6': 'scrlabel6'}
+    def worst(row, wname, color, level, pressed, img=None):
+        wd = built_ui.find(wname); y0 = pos[row]; best = 99
+        for y in range(wd.y, wd.y + wd.h):
+            for x in range(wd.x, min(wd.x + wd.w, 300), 2):
+                if img is not None:
+                    ix, iy = x - wd.x, y - wd.y
+                    if ix >= img.width or iy >= img.height or img.getpixel((ix, iy))[3] < 128: continue
+                    color = img.getpixel((ix, iy))[:3]
+                best = min(best, rat(color, under(x, y0 + y, level, pressed)))
+        return best
+    table = {}
+    for lname, level in BACKDROPS.items():
+        for pressed in (False, True):
+            for row, lab in texts.items():
+                col = hexrgb('#FF5A4F') if lab == 'scrlabel6' else hexrgb(tc)
+                table[lname, pressed, lab] = worst(row, lab, col, level, pressed)
+            table[lname, pressed, 'note'] = worst('listitem1', 'label1_msg', hexrgb('#AAAAAA'), level, False)
+            for badge in ('img_1x', 'img_2x'):
+                bi = Image.open(os.path.join(xx, built_ui.find(badge).get('image') + '.png')).convert('RGBA')
+                wd = built_ui.find(badge)
+                best = 99
+                for y in range(bi.height):
+                    for x in range(bi.width):
+                        p = bi.getpixel((x, y))
+                        if p[3] >= 128: best = min(best, rat(p[:3], under(wd.x + x, pos['listitem1'] + 8 + y, level, False)))
+                table[lname, pressed, badge] = best
+            for chev, row in (('pod_more_chev', 'pod_more'), ('pod_back_chev', 'pod_back')):
+                wd = built_ui.find(chev); ci = Image.open(os.path.join(xx, wd.get('image') + '.png')).convert('RGBA')
+                best = 99
+                for y in range(ci.height):
+                    for x in range(ci.width):
+                        p = ci.getpixel((x, y))
+                        if p[3] >= 128: best = min(best, rat(p[:3], under(wd.x + x, pos[row] + wd.y + y, level, pressed)))
+                table[lname, pressed, chev] = best
+    for line in sorted(set((k[0], k[1]) for k in table)):
+        print('  glass contrast', line, {k[2]: round(v, 2) for k, v in table.items() if k[:2] == line})
+    for lname in ('black', 'white under the dim'):
+        for pressed in (False, True):
+            lw = min(v for (ln, pr, lab), v in table.items() if ln == lname and pr == pressed and lab in texts.values() and lab != 'scrlabel6')
+            expect(lw >= 7, f'the white row labels keep 7:1 over the glass over {lname}, pressed={pressed} ({lw:.2f})')
+            # the red (lum 0.29) is the weak one: 4.5:1 at rest over both; pressed 4.5:1 over black (the stock sheet gave 4.85) and 3:1 where a pure white
+            # glyph lies behind the label (a highlighter-dimmed 125 grey: a transport glyph; the tone under np_tint is at most 192 x (1 - 0.58) = 81 at window row 250, 40 after the dim)
+            floor = 4.5 if (lname == 'black' or not pressed) else 3
+            expect(table[lname, pressed, 'scrlabel6'] >= floor, f'the red Delete label keeps {floor}:1 over {lname}, pressed={pressed} ({table[lname, pressed, "scrlabel6"]:.2f})')
+        expect(table[lname, False, 'note'] >= 4.5, f'the Speed note keeps 4.5:1 over {lname} ({table[lname, False, "note"]:.2f})')
+        nf = 3 if lname == 'black' else 2.5      # the unselected badges are grey outlines by design (the selected one is white)
+        expect(all(table[lname, pr, k] >= nf for pr in (False, True) for k in ('img_1x', 'img_2x', 'pod_more_chev', 'pod_back_chev')),
+               f'the badges and chevrons keep {nf}:1 over {lname}: ' + str({k[2]: round(v, 2) for k, v in table.items() if k[0] == lname and k[2] in ('img_1x', 'img_2x', 'pod_more_chev', 'pod_back_chev')}))
+    expect(all(table['pure white (no dim)', pr, lab] >= 7 for pr in (False,) for lab in texts.values() if lab != 'scrlabel6'),
+           'the white row labels keep 7:1 even over pure white with no dim (a stress case: the highlighter always dims)')
 
 
 def run(ctx):
@@ -206,7 +323,7 @@ def run(ctx):
     m = PM(); m.u.hook_add(UC_HOOK_CODE, lambda u, a, s, _: gp.append(u.reg_read(UC_MIPS_REG_GP)), begin=pod.PLAYMORE_INIT + 12, end=pod.PLAYMORE_INIT + 12)
     m.open()
     expect(gp == [pod.GP], f'the trampoline restores $gp before the stock body ({[hex(g) for g in gp]})')
-    expect(all(word(a) == old for a, old, _ in pod.PLAYMORE_PINS[1:]), 'every pinned stock word of the dialog init, its dispatcher and its two handlers is as pinned')
+    expect(all(word(a) == old for a, old, _ in pod.PLAYMORE_PINS[1:]), 'every pinned stock word of the dialog init, its dispatcher, its two handlers and the window event path is as pinned')
     pins = {a: old for a, old, _ in pod.PLAYMORE_PINS}
     expect(pins.get(0x479ce0) == 0x2405012c and pins.get(0x478a1c) == 0x24060082 and pins.get(0x479d10) == 0x24060082 and pins.get(0x478ac8) == 0x8c830004,
            'the stock to-background bind (0x12c), its widget_move(dialog, 0, 130), the init\'s widget_move and the tap-above read of dialog->y are pinned')
@@ -252,7 +369,7 @@ def run(ctx):
     fixed = dict(m.bound)
     expect(m.stock_kept(),
            'every stock handler is still bound to the same function and context after the hook, and still first in the order')
-    expect(sorted(m.added()) == sorted([('pod_more', O['EVT_CLICK']), ('pod_back', O['EVT_CLICK']), ('playmore_dialog', O['EVT_DESTROY']), ('playmore_dialog', O['EVT_WINDOW_TO_BG'])]),
+    expect(sorted(m.added()) == sorted([('pod_more', O['EVT_CLICK']), ('pod_back', O['EVT_CLICK']), ('playmore_dialog', O['EVT_DESTROY']), ('playmore_listview', O['EVT_WINDOW_TO_BG'])]),
            f'the hook adds the More click, the back click, the destroy and the to-background handlers and nothing else ({m.added()})')
     expect(not any(c[0] in ('widget_off_by_func',) for c in m.calls), 'no stock handler is taken off')
 
@@ -328,15 +445,19 @@ def run(ctx):
                f'page {page}: a tap above the sheet (y < {SHEET_Y}) closes the dialog')
         expect(up(m, SHEET_Y) == [] and up(m, SHEET_Y + 20) == [] and up(m, SCREEN_H - 1) == [], f'page {page}: a tap on the sheet does not')
 
-    # -- 5. another dialog opens over the sheet: the stock handler moves it to y 130, ours puts it back ------------------------------
+    # -- 5. another dialog opens over the sheet: the stock handler moves it to y 130, ours (on the list_view, so after it) puts it back --
     for page in (1, 2):
         m = PM(); m.open()
         if page == 2: m.click_more()
-        order = m.handlers_of(m.dialog, O['EVT_WINDOW_TO_BG'])
-        expect([fn for fn, _ in order][0] == STOCK_BG and len(order) == 2, f'page {page}: the stock to-background handler is first, ours second ({[hex(f) for f, _ in order]})')
-        ran = m.event(m.dialog, O['EVT_WINDOW_TO_BG'])
-        stock_alone = PM(); stock_alone.stock_init(); stock_alone.event(stock_alone.dialog, O['EVT_WINDOW_TO_BG'])
+        ran = m.window_event(O['EVT_WINDOW_TO_BG'])
+        expect([(n, fn) for n, fn, _ in ran] == [('playmore_dialog', STOCK_BG), ('playmore_listview', PSYMS['pm_on_bg'])],
+               f'page {page}: the stock to-background handler runs first (on the dialog), ours after it (on the list_view) ({[(n, hex(f)) for n, f, _ in ran]})')
+        expect([y for _, _, y in ran] == [DIALOG_Y, SHEET_Y], f'page {page}: the stock one moves the sheet to y {DIALOG_Y}, ours back to {SHEET_Y} ({[y for _, _, y in ran]})')
+        stock_alone = PM(); stock_alone.stock_init(); stock_alone.window_event(O['EVT_WINDOW_TO_BG'])
         expect(stock_alone.top() == DIALOG_Y and stock_alone.reg == stock_alone.stock_reg, f'page {page}: the stock handler alone moves the dialog to y {DIALOG_Y} (what the hook has to undo)')
+        on_dialog = PM(); on_dialog.open(); on_dialog.reg = [(on_dialog.dialog if (w, e) == (on_dialog.lv, O['EVT_WINDOW_TO_BG']) else w, e, fn, c) for w, e, fn, c in on_dialog.reg]
+        on_dialog.window_event(O['EVT_WINDOW_TO_BG'])
+        expect(on_dialog.top() == DIALOG_Y, f'page {page}: the same handler bound on the dialog would run before the stock one and the sheet would stay at y {DIALOG_Y} (the V2.1nN bug)')
         expect(m.top() == SHEET_Y and m.size(m.dialog) == (320, 200), f'page {page}: after both, the sheet is on the bottom again ({m.top()})')
         expect(m.shown() == (PAGE2 if page == 2 else PAGE1), f'page {page}: the rows have not moved')
         m.relayout_all()
@@ -347,7 +468,7 @@ def run(ctx):
     fn, c = m.bound[(m.dialog, O['EVT_DESTROY'])]
     m.call(fn, a0=c, a1=0, count=200000)
     m.sync(); before = m.shown(); top = m.top()
-    for w, e in ((m.rows[MORE], O['EVT_CLICK']), (m.rows[BACK], O['EVT_CLICK']), (m.dialog, O['EVT_WINDOW_TO_BG'])):
+    for w, e in ((m.rows[MORE], O['EVT_CLICK']), (m.rows[BACK], O['EVT_CLICK']), (m.lv, O['EVT_WINDOW_TO_BG'])):
         fnm, cm = m.handlers_of(w, e)[-1]
         m.call(fnm, a0=cm, a1=0, count=400000)
         expect(m.shown() == before and m.top() == top and not any(c_[0] in ('widget_move', 'widget_resize') for c_ in m.calls), f'after the destroy the {m.name(w)} handler ({e:#x}) finds no dialog of ours and touches nothing')
@@ -453,10 +574,7 @@ def run(ctx):
         lab = built_ui.find('scrlabel6')
         reds = {lab.get(f'style:{s}:text_color') for s in ('normal', 'pressed', 'over', 'disable', 'focused')}
         expect(reds == {'#FF5A4F'}, f'{theme}: the Delete label is red in every state ({reds})')
-        lum = lambda c: sum(k * (v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4) for k, v in zip((0.2126, 0.7152, 0.0722), (int(c[i:i + 2], 16) / 255 for i in (1, 3, 5))))
-        contrast = lambda a, b: (max(lum(a), lum(b)) + 0.05) / (min(lum(a), lum(b)) + 0.05)
-        expect(contrast('#FF5A4F', '#000000') >= 4.5 and contrast('#FF5A4F', built_ui.find('listitem6').get('style:pressed:bg_color')) >= 4.5,
-               f'{theme}: the red keeps 4.5:1 on the black sheet ({contrast("#FF5A4F", "#000000"):.2f}) and on the pressed row ({contrast("#FF5A4F", built_ui.find("listitem6").get("style:pressed:bg_color")):.2f})')
+        glass_checks(expect, theme, built_ui, stock_t, lum)
         expect(built_ui.find('listitem4').get('style:normal:border') == 'none' and built_ui.find('pod_back').get('style:normal:border') == 'none' and built_ui.find('listitem0').get('style:normal:border') == 'top'
                and all(built_ui.find(n).get('style:normal:border') == 'top' for n in ('listitem1', 'listitem2', 'listitem3', 'listitem5', 'listitem6', 'pod_more')),
                f'{theme}: the hairlines follow the new order (the first row of each page has none, A-B repeat has one)')

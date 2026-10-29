@@ -1,6 +1,12 @@
 """Built assets: the M1+ Pod pages are dark with light text and inside the window, the default wallpaper, the icon set and the battery art."""
-import hashlib, json, os, re, struct, sys
+import hashlib, os, re, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
+
+DARK = ('#000000', '#1E1E1E', '#2A2A2A', '#00000000')
+
+
+def is_dark(c): return c in DARK or (len(c) >= 7 and int(c[1:3], 16) < 0x40 and int(c[3:5], 16) < 0x40 and int(c[5:7], 16) < 0x40)
+def is_light(c): return len(c) >= 7 and min(int(c[1:3], 16), int(c[3:5], 16), int(c[5:7], 16)) >= 0xa0
 
 
 def run(ctx):
@@ -41,6 +47,37 @@ def run(ctx):
     expect(os.path.getsize(os.path.join(os.path.dirname(img), 'screensaver_default1.png')) == 521927, 'screensaver_default1.png is untouched')
     lock = awtk_ui.parse(open(os.path.join(ui_dir, 'screensaver_page.bin'), 'rb').read())
     expect(any(w.name == 'img_screensaver' for w in lock.walk()), 'the lock screen still has the img_screensaver the app feeds')
+
+    # 39b. The lock screen's glass card (mod_icons.glass_image, mod_lockscreen): the card's whole look is lk_card, no fill or radius of
+    #      its own; the mini bar's glass PNGs are still the generator's output byte for byte (the generator is shared); the white title
+    #      (7:1) and the #DDDDDD artist (4.5:1) hold over every pixel of their boxes with the glass over pure white and pure black.
+    import mod_icons
+    from PIL import Image
+    xx = os.path.join(assets, 'default', 'raw', 'images', 'xx')
+    card = lock.find('view_bottomview')
+    expect(all(card.get(f'style:{st}:bg_image') == 'lk_card' and card.get(f'style:{st}:bg_color') == '#00000000'
+               and card.get(f'style:{st}:round_radius') is None for st in ('normal', 'disable', 'focused')),
+           'the lock card is the lk_card glass image, no fill or radius of its own')
+    for n, pressed in (('mb_glass', False), ('mb_glass_down', True)):
+        expect(open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read() == png_of(mod_icons.glass_image(*mod_icons.GLASS, pressed))
+               and open(os.path.join(xx, n + '.png'), 'rb').read() == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read(),
+               f'{n}.png is the glass generator output, byte for byte (size {mod_icons.GLASS[:2]}, r {mod_icons.GLASS[2]})')
+    lk = Image.open(os.path.join(xx, 'lk_card.png')).convert('RGBA')
+    expect(open(os.path.join(mod_icons.PNG, 'lk_card.png'), 'rb').read() == png_of(mod_icons.glass_image(*mod_icons.GLASS_CARD, fill=mod_icons.GLASS_CARD_FILL))
+           and lk.size == (card.w, card.h) == mod_icons.GLASS_CARD[:2] and lk.getpixel((0, 0))[3] == 0 and lk.getpixel((card.w - 1, card.h - 1))[3] == 0
+           and 0.6 * 255 <= lk.getpixel((card.w // 2, card.h - 3))[3] <= 0.8 * 255,
+           f'lk_card.png is {lk.size} (the card), translucent, the corners transparent, the generator output')
+    lc = lambda im, x, y, bg: tuple(round((im.getpixel((x, y))[3] * c + (255 - im.getpixel((x, y))[3]) * bg) / 255) for c in im.getpixel((x, y))[:3])
+    hexrgb = lambda s: tuple(int(s[i:i + 2], 16) for i in (1, 3, 5))
+    worst = {}      # (label, background level) -> worst ratio over the label's box
+    for lab in ('view_scrlabel_title', 'view_scrlabel_artist'):
+        w = lock.find(lab); hexc = hexrgb(w.get('style:normal:text_color'))
+        for bg in (255, 0):
+            worst[lab, bg] = min(contrast(hexc, lc(lk, x, y, bg)) for y in range(w.y, w.y + w.h) for x in range(w.x, w.x + w.w, 2))
+    wt, wa = worst['view_scrlabel_title', 255], worst['view_scrlabel_artist', 255]
+    print(f'  lock card glass over white: title >= {wt:.2f}:1, artist >= {wa:.2f}:1; over black: {worst["view_scrlabel_title", 0]:.1f}:1, {worst["view_scrlabel_artist", 0]:.1f}:1')
+    expect(wt >= 7 and wa >= 4.5, f'over a pure white wallpaper: the white title {wt:.2f}:1 (>= 7), the #DDDDDD artist {wa:.2f}:1 (>= 4.5)')
+    expect(worst['view_scrlabel_title', 0] >= 7 and worst['view_scrlabel_artist', 0] >= 4.5, 'and over a pure black one')
 
     # 40. The icon set: every replaced stock image is the committed Tabler PNG, byte for byte; the
     #     row icons the menu and the Shuffle page use are added and every row names one of them.
@@ -221,7 +258,6 @@ def run(ctx):
     expect(demo.count(b'V2.1\0') >= 1 and build.TAG.encode() + b'\0' not in demo, 'demo still carries the stock version literal V2.1 (FW. Version), not our tag')
 
     # 51. The on/off switch (sset_on / sset_off): no text, a pill track and a round knob, the stock 57x28 canvas.
-    import io
     from PIL import Image
     import mod_theme
     for theme, names in (('default', ('sset_on', 'sset_off')), ('theme1', ('sset_on',))):

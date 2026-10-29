@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the M1+ Pod boot splash: assets/boot-logo.svg -> assets/boot-logo.jpg + assets/boot-logo180.jpg.
+"""Render the M1+ boot splash: assets/boot-logo.svg -> assets/boot-logo.jpg + assets/boot-logo180.jpg.
 
 The stock splash (images/xx/logo.jpg) is an upright 320x480 baseline JPEG, 4:4:4 YCbCr, and
 logo180.jpg is the same picture turned 180 degrees (S11logo_display_shell shows it when the screen
@@ -45,7 +45,7 @@ def preview(work, logo):
     canvas = Image.new('RGB', (3 * panel_w + 4 * gap, H + 2 * gap + 24), (40, 40, 40))
     d = ImageDraw.Draw(canvas)
     label = ImageFont.truetype(io.BytesIO(font), 15)
-    for i, (im, cap) in enumerate(((stock, 'stock logo.jpg'), (logo, 'M1+ Pod boot-logo.jpg'))):
+    for i, (im, cap) in enumerate(((stock, 'stock logo.jpg'), (logo, 'M1+ boot-logo.jpg'))):
         x = gap + i * (panel_w + gap); canvas.paste(im, (x, gap + 24)); d.text((x, gap), cap, font=label, fill=(220, 220, 220))
     x = gap + 2 * (panel_w + gap); y = gap + 24
     d.text((x, gap), 'track titles, 22 px', font=label, fill=(220, 220, 220))

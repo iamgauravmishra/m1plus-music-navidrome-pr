@@ -1,5 +1,5 @@
 """Library rows: the pinned demo edits and the restyled stock row builders."""
-import json, os, re, struct, sys
+import json, os, re, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 
@@ -34,13 +34,15 @@ def bind_normal(m, row):
 
 
 class RowMachine(Machine):
+    elf = None    # (demo's dynsym, its GOT slots of ROW_STUBS): parsed once, not per machine (0.15 s each)
+
     def __init__(self):
         super().__init__()
-        syms = pod.dynsym(DEMO)
+        if RowMachine.elf is None: RowMachine.elf = (pod.dynsym(DEMO), pod.got_slots(DEMO, ROW_STUBS))
+        syms, got = RowMachine.elf
         self.rows_names = set()
         for n in CREATE + ROW_PLAIN + ('widget_set_visible', 'widget_set_sensitive', 'widget_restack', 'widget_set_need_relayout_children'):
             if n in syms: self.handlers[syms[n]] = 'row:' + n
-        got = pod.got_slots(DEMO, ROW_STUBS)
         for n, slot in got.items(): self.handlers[self.word(slot)] = 'row:' + n
         for n in ('widget_count_children', 'widget_get_child', 'widget_get_type', 'widget_get_visible',
                   'widget_resize', 'widget_move', 'hscroll_label_set_only_focus', 'widget_set_children_layout'):
@@ -212,9 +214,15 @@ def rows_tests(expect):
            f'all {len(edits)} edits: stock word before, the patched word in the built demo')
     expect(all(int(new, 16) == 0x0c000000 | (target >> 2) for a, old, new, k in edits if k == 'call'),
            'each row-layout call is jal compact_set_row_layout')
-    expect(all(int(new, 16) == (int(old, 16) & 0xffff0000) | g['value'] for g in J['immediates']
-               for a, old, *_ in g['sites'] for e in edits if e[0] == hex(int(a, 16)) for new in (e[2],)),
-           'each immediate keeps its instruction and register, only the 16-bit value changes')
+    def imm(old, v):   # addiu rt, $zero, imm keeps its word but the low half; move rd, $zero (or / addu rd, $zero, $zero) -> addiu rd, $zero, v
+        if old >> 26 == 0 and old & 0x03e007ff in (0x25, 0x21) and (old >> 16) & 31 == 0:
+            return 0x24000000 | ((old >> 11) & 31) << 16 | v
+        return (old & 0xffff0000) | v
+    moves = [a for g in J['immediates'] for a, old, *_ in g['sites'] if int(old, 16) >> 26 == 0]
+    expect(all(int(new, 16) == imm(int(old, 16), g['value']) for g in J['immediates']
+               for a, old, *_ in g['sites'] for e in edits if e[0] == hex(int(a, 16)) for new in (e[2],))
+           and moves == ['0x526f00'],
+           'each immediate keeps its instruction and register, only the 16-bit value changes (the one move $a1, $zero, the navbar Back x, becomes addiu $a1, $zero, 3)')
     pins = [s for g in J['pinned'] for s in g['sites']]
     expect(all(w(built, int(a, 16)) == int(old, 16) for a, old, *_ in pins), f'the {len(pins)} pinned words are untouched')
     # inside the stock file length only .pdr, PH[10], the hook and these words differ from stock

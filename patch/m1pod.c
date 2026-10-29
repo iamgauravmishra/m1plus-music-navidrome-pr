@@ -23,11 +23,12 @@
 
 /* ACT_* mirror tools/pod_pages.py. */
 enum { ACT_HOME = 0, ACT_PAGE = 1, ACT_PLAYER = 2, ACT_COVER = 3, ACT_SHUFFLE = 4, ACT_ARTISTS = 8,
-       ACT_GRID = 9, ACT_STARTUP = 10, ACT_ALBUMS = 11, ACT_LANDSCAPE = 12, ACT_SORT = 13, ACT_SHOT = 14, ACT_REBUILD = 15 };
+       ACT_GRID = 9, ACT_STARTUP = 10, ACT_ALBUMS = 11, ACT_LANDSCAPE = 12, ACT_SORT = 13, ACT_SHOT = 14, ACT_REBUILD = 15, ACT_SHELF = 16, ACT_PLAYLISTS = 17 };
 
 extern void shot_start(void);    /* patch/shot.c: the Screenshot row's 5 s timer and capture */
 extern int artists_open(void);   /* patch/artists.c: the Artists list, its own page */
 extern int albums_open(void);    /* patch/albums.c: Albums, our page in the mode used last (grid or list) */
+extern int playlists_open(void); /* patch/playlists.c: Playlists, a grid of mosaics of each playlist's covers */
 extern void menu_arrange(void *win, int extras);   /* patch/menu.c: the menu / Extras rows as the saved list says */
 extern void menu_custom_opened(void *win);         /* patch/menu.c: the Main Menu page's switches and arrows */
 
@@ -111,6 +112,7 @@ static int on_row(void *ctx, void *e) {
     else if (row->action == ACT_COVER) coverflow_open();   /* patch/coverflow.c; its own page */
     else if (row->action == ACT_ARTISTS) artists_open();
     else if (row->action == ACT_ALBUMS) albums_open();
+    else if (row->action == ACT_PLAYLISTS) playlists_open();
     else if (row->action == ACT_SHUFFLE) shuffle_play(row->arg); /* patch/shuffle.c; plays, no page */
     else if (row->action == ACT_GRID) home_to_grid();      /* patch/home.c: the stock grid */
     else if (row->action == ACT_SHOT) shot_start();        /* patch/shot.c; a timer, no page */
@@ -118,23 +120,25 @@ static int on_row(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* The switch rows (Settings: Start in M1+ Pod; Settings > Cover Flow: Landscape): a tap flips the setting and the
- * row's switch image follows it. The context is the slot below, one per action, filled when the page opens. */
+/* The switch rows (Settings > Home Screen: Start in M1+ Pod and Recent Albums; Settings > Cover Flow: Landscape): a tap flips the
+ * setting and the row's switch image follows it. The context is the slot below, one per action, filled when the page opens. */
 struct swctx { int action; void *img; };
-static struct swctx sw_slot[2] __attribute__((section(".scratch")));
+static struct swctx sw_slot[3] __attribute__((section(".scratch")));
 
 static void switch_show(void *img, int on) {
     if (img) image_base_set_image(img, on ? "sset_on" : "sset_off");
 }
 
-static int switch_state(int action) { return action == ACT_STARTUP ? home_start() : coverflow_landscape(); }
+static int switch_state(int action) {
+    return action == ACT_STARTUP ? home_start() : action == ACT_SHELF ? recent_setting() : coverflow_landscape();
+}
 
 static int on_switch(void *ctx, void *e) {
     const struct swctx *s = ctx;
     int on;
     (void)e;
     if (!s) return RET_OK;
-    on = s->action == ACT_STARTUP ? home_toggle() : coverflow_landscape_toggle();   /* -1: not saved, unchanged */
+    on = s->action == ACT_STARTUP ? home_toggle() : s->action == ACT_SHELF ? recent_toggle() : coverflow_landscape_toggle();   /* -1: not saved, unchanged */
     if (on >= 0) switch_show(s->img, on);
     return RET_OK;
 }
@@ -142,7 +146,7 @@ static int on_switch(void *ctx, void *e) {
 static void bind_switch(void *win, unsigned i, const struct pod_row *row) {
     char name[24];
     void *r = widget_lookup(win, row->name, 1);
-    int k = row->action == ACT_LANDSCAPE;
+    int k = row->action == ACT_LANDSCAPE ? 1 : row->action == ACT_SHELF ? 2 : 0;
     snprintf(name, sizeof name, "pod_switch%u", i);
     sw_slot[k].action = row->action;
     sw_slot[k].img = widget_lookup(win, name, 1);
@@ -187,7 +191,7 @@ static int open_page(int index, int as_home) {
     pod_bind(win, "btn_backtoplayer", pod_on_player, (void *)0);
     for (i = 0; i < page->count; i++) {
         const struct pod_row *row = &page->rows[i];
-        if (row->action == ACT_STARTUP || row->action == ACT_LANDSCAPE) bind_switch(win, i, row);
+        if (row->action == ACT_STARTUP || row->action == ACT_LANDSCAPE || row->action == ACT_SHELF) bind_switch(win, i, row);
         else if (row->action == ACT_SORT) bind_sort(win, (unsigned)i, row);
         else pod_bind(win, row->name, on_row, row);
     }

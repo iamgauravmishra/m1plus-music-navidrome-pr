@@ -19,8 +19,10 @@
  * and anchors the sheet. Everything fallible (the widget lookups, the handlers, the labels' texts) is done before the first
  * row moves, so any failure leaves the stock seven rows (pod_more and pod_back stay hidden and insensitive in the asset).
  *
- * The stock to-background handler (0x4789f0, bound by the stock init to EVT_WINDOW_TO_BG) moves the dialog back to y 130 when
- * another dialog (the Delete confirm) opens over it; our handler, bound after it, puts the sheet back on the bottom.
+ * The stock to-background handler (0x4789f0, bound by the stock init to the dialog's EVT_WINDOW_TO_BG) moves the dialog back to
+ * y 130 when another dialog (the Delete confirm) opens over it. Ours puts the sheet back on the bottom, so it has to run after the
+ * stock one: the emitter runs the newest handler first, so it is bound on the list_view, which the window event reaches after the
+ * dialog (widget_dispatch_recursive, the widget before its children).
  *
  * Hidden rows are visible=false and sensitive=false (a hidden widget would still take touches) and are stacked after the
  * shown ones (widget_restack): the stock list_view layouter re-stacks the visible children in child order at every relayout
@@ -104,7 +106,8 @@ static int pm_on_back(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* Another dialog opened over the sheet: the stock handler (bound first) has just moved it to y 130. */
+/* Another dialog opened over the sheet: the stock handler (on the dialog, so it ran before this one on the list_view) has just
+ * moved it to y 130. */
 static int pm_on_bg(void *ctx, void *e) {
     (void)e;
     if (!pm.dlg || ctx != pm.dlg) return RET_OK;
@@ -143,7 +146,7 @@ static void pm_start(void *dlg) {
     if (widget_set_tr_text(speed_label, "Speed") != RET_OK) goto fail;   /* the stock "Multiple Speed" is wider than the room before the badges */
     if (widget_set_tr_text(note_label, "Files below 48 kHz only") != RET_OK) goto fail;
     if (!widget_on(dlg, EVT_DESTROY, pm_on_destroy, dlg)) goto fail;
-    if (!widget_on(dlg, EVT_WINDOW_TO_BG, pm_on_bg, dlg)) goto fail;
+    if (!widget_on(pm.lv, EVT_WINDOW_TO_BG, pm_on_bg, dlg)) goto fail;   /* after the stock one on the dialog (top comment) */
     if (!widget_on(pm.row[PM_MORE], EVT_CLICK, pm_on_more, dlg)) goto fail;
     if (!widget_on(pm.row[PM_BACK], EVT_CLICK, pm_on_back, dlg)) goto fail;
     pm.page = 0;

@@ -47,7 +47,9 @@ ACT_LANDSCAPE = 12  # switch row: Cover Flow opens in landscape (patch/coverflow
 ACT_SORT = 13    # value row: the album order of Cover Flow and Albums, Artist or Album; a tap toggles (patch/covercache.c)
 ACT_SHOT = 14    # the Screenshot row (Settings): a 5 s countdown, then the screen is written to /mnt/mmc/screenshots (patch/shot.c)
 ACT_REBUILD = 15 # the Rebuild Covers row (Settings > Cover Flow): a confirm dialog, then Cover Flow rebuilds every cover (patch/m1pod.c, patch/coverflow.c)
-SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE)
+ACT_SHELF = 16    # switch row: the Recently Played shelf on the Home menu (patch/recent.c)
+ACT_PLAYLISTS = 17  # open the Playlists page: a grid of mosaics of each playlist's album covers (patch/playlists.c)
+SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF)
 VALUE_ACTIONS = (ACT_SORT,)    # rows with a grey value at the right (the widget pod_value<row>)
 
 # ACT_SHUFFLE arguments (mirror the enum in patch/shuffle.c)
@@ -90,7 +92,7 @@ ITEMS = [   # item id = index; the default order, essentials first (iPod classic
     Row('Albums', ACT_ALBUMS),
     Row('Artists', ACT_ARTISTS),
     Row('Songs', ACT_HOME, HOME_MYMUSIC),
-    Row('Playlists', ACT_HOME, HOME_PLAYLIST),
+    Row('Playlists', ACT_PLAYLISTS),
     Row('Shuffle', ACT_PAGE, SHUFFLE_PAGE_INDEX),
     Row('Genres', ACT_HOME, HOME_GENRE),
     Row('Folders', ACT_HOME, HOME_FOLDER),
@@ -107,27 +109,46 @@ ITEMS = [   # item id = index; the default order, essentials first (iPod classic
     Row('Tidal', ACT_HOME, HOME_TIDAL),
     Row('CD Ripper', ACT_HOME, HOME_CDRIPPER),
 ]
-DEFAULT_VISIBLE = 7      # the first seven items show by default; every other item is in Extras
+DEFAULT_MENU = [1, 2, 3, 4, 5, 6]   # the items shown by default, in order (saved string "123456x"): Cover Flow, Albums, Artists, Songs, Playlists, Shuffle. Now Playing is not
+                                    # among them: the mini player bar of the Home instance opens it (docs/modules/minibar.md); it stays an item (Settings > Main Menu shows it, Extras lists it)
+assert all(0 <= i < len(ITEMS) for i in DEFAULT_MENU) and len(set(DEFAULT_MENU)) == len(DEFAULT_MENU)
 ID_CHARS = '012345678abcdefghi'   # the saved list's character for each item id: '0'..'8' the first nine, 'a'..'i' the nine Extras tiles
 assert len(ID_CHARS) == len(ITEMS)
-MENU_FILE_MAX = 24       # patch/menu.c reads at most this many bytes of the saved list (a list of every item is 18 characters and a newline); longer is invalid
+EXTRAS_CHAR = 'x'        # the Extras row of the menu: present = shown (right above Settings), absent = hidden. Only ever the last character of the list; not an item id (it is never reordered)
+DEFAULT_EXTRAS = True    # the default saved string is "123456x"
+MENU_FILE_MAX = 24       # patch/menu.c reads at most this many bytes of the saved list (a list of every item is 18 characters, the x and a newline); longer is invalid
 MENU = Page('m1pod_menu', 'm1pod_menu_page', 'M1+ Pod', rows=ITEMS + [
     Row('Extras', ACT_PAGE, EXTRAS_PAGE_INDEX),
     Row('Settings', ACT_PAGE, SETTINGS_PAGE_INDEX),
 ])
 
 
-def parse_menu(data):
-    """The visible items in menu order from the saved list (patch/menu.c mn_load's model), or the
-    defaults. A line of item characters (ID_CHARS), no duplicate, every one known, at most the file cap."""
+def parse_menu_full(data):
+    """(the visible items in menu order, Extras row shown) from the saved list (patch/menu.c mn_load's model), or the
+    defaults. A line of item characters (ID_CHARS), no duplicate, every one known, then optionally EXTRAS_CHAR as the
+    last character (before the newline), at most the file cap. A list without it hides Extras (an old "123456" file too)."""
     if isinstance(data, str): data = data.encode('latin-1')
-    default = list(range(DEFAULT_VISIBLE))
+    default = (list(DEFAULT_MENU), DEFAULT_EXTRAS)
     if data is None or not 0 < len(data) < MENU_FILE_MAX: return default
     body = data[:-1] if data.endswith(b'\n') else data
+    extras = body.endswith(EXTRAS_CHAR.encode())
+    if extras: body = body[:-1]
     if len(body) > len(ITEMS) or any(chr(c) not in ID_CHARS for c in body): return default
     ids = [ID_CHARS.index(chr(c)) for c in body]
     if len(set(ids)) != len(ids): return default
-    return ids
+    return ids, extras
+
+
+def parse_menu(data):
+    """The visible items in menu order of the saved list (parse_menu_full without the Extras flag)."""
+    return parse_menu_full(data)[0]
+
+
+def format_menu(ids, extras):
+    """The saved list for the shown items and the Extras flag, newline included (patch/menu.c mn_save)."""
+    return ''.join(ID_CHARS[i] for i in ids) + (EXTRAS_CHAR if extras else '') + '\n'
+
+
 # Cover Flow's own page (patch/coverflow.c fills it at runtime: the slide_menu of covers, the
 # progress/cancel pair of the first-run cache build, and the album's track list).
 COVER = Page('m1pod_cover', 'm1pod_cover_page', 'Cover Flow', kind='cover')
@@ -135,6 +156,11 @@ COVER = Page('m1pod_cover', 'm1pod_cover_page', 'Cover Flow', kind='cover')
 ARTISTS = Page('m1pod_artists', 'm1pod_artists_page', 'Artists', kind='list')
 # Albums: the grid of covers or the list (patch/albums.c draws both in one custom view); the navbar button switches the mode.
 ALBUMS = Page('m1pod_albums', 'm1pod_albums_page', 'Albums', kind='grid')
+# Playlists: the stock playlists as a grid, each a mosaic of its albums' covers (patch/playlists.c); the "..." button opens the popup menu.
+PLAYLISTS = Page('m1pod_playlists', 'm1pod_playlists_page', 'Playlists', kind='playlists')
+# The popup menu's rows (tools/pod_ui.py builds them as the buttons pl_item0 ..; patch/playlists.c binds them by that order): New, Import, Export
+# are the stock keys of the stock Playlists page's rows; Delete opens that page, whose multi-select button deletes.
+PLAYLIST_MENU = ('New playlist', 'Import playlist', 'Export playlist', 'Delete Playlists')
 SHUFFLE_PAGE = Page('m1pod_shuffle', 'm1pod_shuffle_page', 'Shuffle', rows=[
     Row('Shuffle Songs', ACT_SHUFFLE, SHUFFLE_SONGS),
     Row('Shuffle Albums', ACT_SHUFFLE, SHUFFLE_ALBUMS),
@@ -155,6 +181,7 @@ SETTINGS_PAGE = Page('m1pod_settings', 'm1pod_settings_page', 'Settings', rows=[
 # Settings > Home Screen: the Start in M1+ Pod switch (patch/home.c) and Shanling Home, the way out to the grid.
 HOMESET_PAGE = Page('m1pod_homeset', 'm1pod_homeset_page', 'Home Screen', rows=[
     Row('Start in M1+ Pod', ACT_STARTUP),
+    Row('Recent Albums', ACT_SHELF),
     Row('Shanling Home', ACT_GRID),
 ])
 
@@ -185,7 +212,7 @@ CFSET_PAGE = Page('m1pod_cfset', 'm1pod_cfset_page', 'Cover Flow', rows=[
 SORT_VALUES = ('Artist', 'Album')    # the value shown for the setting's two states (the default, Artist, first)
 
 # PAGES[0] is the entry page.
-PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, CFSET_PAGE, HOMESET_PAGE]
+PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, CFSET_PAGE, HOMESET_PAGE, PLAYLISTS]
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE
 assert PAGES[EXTRAS_PAGE_INDEX] is EXTRAS_PAGE and PAGES[MENUCFG_PAGE_INDEX] is MENUCFG_PAGE
 assert PAGES[CFSET_PAGE_INDEX] is CFSET_PAGE and PAGES[HOMESET_PAGE_INDEX] is HOMESET_PAGE

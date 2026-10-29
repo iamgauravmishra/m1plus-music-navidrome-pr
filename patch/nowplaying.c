@@ -174,7 +174,7 @@ static void np_set_color(unsigned color) {
 }
 
 /* The cover file of the source type, or NULL for a source with no JPEG file; busy is set while demo is still making it. */
-static const char *np_cover_file(int *busy) {
+const char *np_cover_file(int *busy) {   /* also the mini player bar's (patch/minibar.c) */
     int src = *(volatile int *)COVER_SRC;
     *busy = src == COVER_SRC_BUSY;
     if (src == COVER_SRC_EMBEDDED) return "/tmp/coverpic.jpg";
@@ -355,6 +355,8 @@ static void np_info(void) {
 }
 
 static void np_work(void) {
+    recent_note(cc_playing());   /* the Recently Played list (patch/recent.c): cheap while the album is the same. No stock query here: the page under
+                                  * Now Playing (a stock song list) draws and plays *pdeq_showlist; the menu's to-foreground resolves the cover key */
     np_cover();
     np_time();
     np_elapsed();

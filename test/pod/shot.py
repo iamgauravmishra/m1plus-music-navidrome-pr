@@ -1,6 +1,6 @@
 """Screenshot (patch/shot.c): the Settings row, the 5 s countdown with the status bar camera, the frame buffer read in every
 format the driver can report, the BMP bytes, numbering, the card checks, every failure path, double taps, the kill switch."""
-import os, re, struct, sys
+import os, re, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 DEFS = {}
@@ -336,7 +336,7 @@ def run(ctx):
 
     # 10. Every text goes through the stock translation: the row, the countdown and both outcomes, in all 16 tables.
     for loc in pod_i18n.ALL_TABLES:
-        T = lambda key: pod_i18n.TEXT[key][pod_i18n.table_for(loc)].encode('utf-8').decode('latin-1')
+        T = tr_of(loc)
         m = shot_machine(w=8, h=4); m.set_language(loc); r = Run(m); r.full()
         expect(r.toasts() == [T('Screenshot in 5 s'), T('Screenshot saved')], f'{loc}: the countdown and success toasts read {T("Screenshot in 5 s")!r} / {T("Screenshot saved")!r}')
         m = shot_machine(w=8, h=4); m.set_language(loc); m.fb = None; r = Run(m); r.full()

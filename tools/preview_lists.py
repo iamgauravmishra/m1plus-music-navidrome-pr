@@ -84,9 +84,10 @@ class Page:
         y = BAR
         self.icon(self.s.str('button', 'navbar_btnreturn_style', 'icon'), 0, y, 40, 50)
         self.label(title, 36, y + 14, 153, 22, 'hscroll_label', 'srlabel_leftwhite22_style')
-        if search: self.icon(self.s.str('button', 'search_style', 'bg_image'), 178, y, 60, 50)
-        self.icon(self.s.str('button', 'navbar_btnmulselect_style', 'icon'), 224, y, 60, 50)
-        self.icon(self.s.str('button', 'navbar_btnbackplayer_style', 'icon'), 270, y, 50, 50)
+        # the builder's buttons on the Pod navbar's slots (patch/rows.json): 168 / 214 (46 wide), Now Playing 260 (60 wide)
+        if search: self.icon(self.s.str('button', 'search_style', 'bg_image'), 168, y, 46, 50)
+        self.icon(self.s.str('button', 'navbar_btnmulselect_style', 'icon'), 214, y, 46, 50)
+        self.icon(self.s.str('button', 'navbar_btnbackplayer_style', 'icon'), 260, y, 60, 50)
         if line: self.rect(0, y + 49, W, 1, self.s.color('view', 'navigationbar_line_style', 'border_color', default='#666666'))
     def table_row(self, y, h, pressed=False):
         self.rect(0, y, 310, h, self.s.color('button', 'btn_tablerow_style', 'bg_color', 'pressed' if pressed else 'normal'))

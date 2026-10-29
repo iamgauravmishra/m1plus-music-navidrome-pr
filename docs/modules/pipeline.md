@@ -32,7 +32,7 @@ on anything touching extracted firmware.
 
 Source map: `patch/m1pod.c` (hook, pages, rows, the Settings switches), `patch/menu.c` (the customisable menu and the Main Menu page), `patch/covercache.c` (+ `.h`: the cover cache, tile reduction and album helpers
 Cover Flow and Albums share), `patch/coverflow.c`, `patch/albums.c`, `patch/artists.c`,
-`patch/shuffle.c`, `patch/shot.c` + `shot.h` (Screenshot), `patch/albuminfo.c` (the album view's hook), `patch/nowplaying.c` (Now Playing's hook), `patch/rows.c` + `patch/rows.json`, `patch/home.c` + `home.h`, `patch/i18n.h` (`TR()`), `patch/offsets.inc`
+`patch/shuffle.c`, `patch/shot.c` + `shot.h` (Screenshot), `patch/albuminfo.c` (the album view's hook), `patch/nowplaying.c` (Now Playing's hook), `patch/minibar.c` (the mini player bar, no hook), `patch/rows.c` + `patch/rows.json`, `patch/home.c` + `home.h`, `patch/i18n.h` (`TR()`), `patch/offsets.inc`
 (every stock offset with its evidence), `patch/link.ld`; `tools/pod.py` (build and pins),
 `tools/pod_pages.py` (pages and rows, one source of truth), `tools/pod_ui.py` (page assets), `tools/pod_i18n.py` (our texts in 13 languages), `tools/awtk_strings.py` (string table reader/writer), `tools/mod_strings.py`.
 Tests: `test/patch.py WORKDIR` runs `test/pod/<module>.py` (menu, coverflow, albums, assets, artists, rows,

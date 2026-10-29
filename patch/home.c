@@ -237,12 +237,12 @@ static void hm_add_icon(void *win) {
  * widget still takes touches) and the stock list moves up to fill the 450 px window
  * less HOME_PAD above and below (the first row starts a little below the status bar and the last one ends above the screen edge). The stock list_view's
  * children keep their widths (scroll_view and its bar); only the heights follow. Nothing is touched unless the
- * navbar and the list are both found. */
-static void hm_fill_window(void *win) {
+ * navbar and the list are both found (then 1 is returned: the mini player bar, patch/minibar.c, starts on a window laid out so). */
+static int hm_fill_window(void *win) {
     void *nb = widget_lookup(win, "navigationbar_view", 1), *lv = widget_lookup(win, "pod_listview", 1);
     static const char *const kids[] = {"pod_scrollview", "scroll_bar_m"};
     unsigned i;
-    if (!nb || !lv) return;
+    if (!nb || !lv) return 0;
     widget_set_visible(nb, 0, 0);
     widget_set_sensitive(nb, 0);
     widget_move(lv, 0, HOME_PAD);
@@ -252,6 +252,7 @@ static void hm_fill_window(void *win) {
         int w = c ? widget_get_prop_int(c, "w", 0) : 0;
         if (w > 0) widget_resize(c, w, WIN_H - 2 * HOME_PAD);
     }
+    return 1;
 }
 
 /* Called by m1pod.c for the entry page (entry = 1) and for the Settings page (settings = 1): remember the
@@ -261,7 +262,10 @@ void home_menu_opened(void *win, int settings, int entry) {
     if (entry) {
         hs.entry = win;
         if (hs.as_home) {
-            hm_fill_window(win);
+            if (hm_fill_window(win)) {   /* the mini player bar and the Recently Played shelf: this instance only */
+                minibar_start(win);
+                recent_start(win);
+            }
             hm_grid(0);
             hs.as_home = 0;
         }

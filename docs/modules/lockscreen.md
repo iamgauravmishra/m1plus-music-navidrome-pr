@@ -18,8 +18,8 @@ edits; applying it twice is refused. Digit_clock format tokens (demo's formatter
 24 h whatever the setting (the 12/24 h setting only reformats the status bar clock).
 
 Layout, top to bottom (window y): date `W, MMM D` 20 px, ink top 12 (box from `text_box`); the 68 px
-`hh:mm` clock centred (fitted to the widest digit, 159 px wide in Inter); a **translucent card** at
-16,108 288x334 (`#000000A6`, radius 18) holding the **square 264x264 cover** at 12,12 (no mask), title
+`hh:mm` clock centred (fitted to the widest digit, 159 px wide in Inter); a **glass card** at
+16,108 288x334 (the image `lk_card`, see Glass card) holding the **square 264x264 cover** at 12,12 (no mask), title
 (20 px white) and artist (16 px `#DDDDDD`) at 12,282 / 12,306 (164 wide), play and next at 180,278 /
 228,278 (48x56, off-white `np_*` glyphs via the page theme's `btn_imgplay1/pause1_style`); the swipe hint
 `img_slide` 31x14 (65 %) at 144,452; a small gauge on the date line at 274,12 (34x12 `LOCK` art; fill
@@ -28,7 +28,18 @@ the page is date, clock and gauge on the wallpaper and the whole screen swipes. 
 page theme (orange play/pause); `screens_rightslide` is replaced in both themes (premultiplied Lanczos).
 The stock battery props are restored on `pgbar_battery` (no text readout).
 
-- **Translucency works.** `bg_color` with alpha: `widget_fill_rect` (`0x66b170`) reads `bg_color` and
+- **Glass card.** The card (`view_bottomview`) has `bg_image` `lk_card` and a transparent `bg_color` in every state, no radius of its own: the same
+  pane as the Home mini player bar (`docs/modules/minibar.md`, `mod_icons.py glass_image(288, 334, 18, fill=GLASS_CARD_FILL)`: dark vertical gradient
+  `#2A2A2C` to `#1E1E20`, alpha 0.76 (the bar: 0.82; a little more see-through because only the 12 px frame and the text band show around the opaque
+  cover), 1 px rim light 30 % at the top to 8 % at the bottom, a faint inner highlight line). Committed as `assets/icons/png/lk_card.png` (2.5 KB) and
+  installed by `mod_nowplaying` with the `np_*` images. Drawn 1:1 by `canvas_draw_image_ex` (proved for the bar by `test/awtk_fill.py`), so the decoded
+  bitmap is 288 x 334 x 4 = 384,768 bytes in RAM. A 9-patch was not used: `canvas_draw_image_patch9` exists in demo (`0x647d20`) but no stock style
+  in this tree selects it (nothing pins the `bg_image_draw_type` value), and a stretched middle would smear the gradient and rim. Contrast over a pure
+  white wallpaper (the worst case): white title and `#DDDDDD` artist checked by `test/pod/assets.py` (>= 7:1 and >= 4.5:1 over every pixel of their
+  boxes, over white and over black). **Baked blur: not feasible.** The wallpaper is only the default (`screensaver_default`, `docs/modules/wallpaper.md`);
+  the user can pick any picture (`SCREENSAVERPATH` = `file://` path), and the card sits on whatever it is, so a blur baked at build time would only match the
+  default wallpaper. Blurring live needs payload code (as the bar's backdrop blur, `minibar.md`), which the boot-path rules keep off this page.
+- **Translucency works** (the flat `bg_color` fill the card had before the glass image; still how the fill API behaves). `bg_color` with alpha: `widget_fill_rect` (`0x66b170`) reads `bg_color` and
   `round_radius` and calls `canvas_fill_rect`, or `canvas_fill_rounded_rect_gradient_ex` (the
   `0x64d028` code) with a radius; the low-level fill dispatches per pixel format (`soft_fill_rect`
   `0x681440`, e.g. `0x6cfc84` sends alpha >= 0xf9 to a plain fill and less to a per-pixel blend).
@@ -40,7 +51,7 @@ The stock battery props are restored on `pgbar_battery` (no text readout).
   plus `canvas_draw_image_ex` into the widget rect, canvas clip is a rectangle, `round_radius` rounds
   only the background; only `draw_type icon` can transform), so rounding the picture would need payload
   code. The card itself is rounded and the square cover sits 12 px inside, clear of the arcs.
-  Contrast over the worst wallpaper (pure white): card (89,89,89), white title 7.0:1, `#DDDDDD` artist 5.2:1.
+  Contrast over the worst wallpaper (pure white): see Glass card.
 - **Touch.** `app_gesture` is the parent of the whole page; its `on_event` (`0x5219e0`, vtable
   `0x975654`) records the down point, grabs and compares on move and up. `view_img_icon` is
   insensitive, so a touch on the cover, the card or its text lands on `view_bottomview` (a view with no

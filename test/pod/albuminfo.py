@@ -1,9 +1,10 @@
 """The album view: the stock albuminfo_page restyled by the hook on its header builder, Shuffle, the
 year line, the cover size, hit tests; Cover Flow's first album and its last-album memory."""
-import json, os, re, struct, sys
+import os, struct, sys
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 import importlib.util
 import pod_i18n
+import mod_ipodrows, mod_icons
 from awtk_text import Ttf, StbText
 
 
@@ -340,19 +341,10 @@ def tint_tests(expect):
     expect(fills and any(f[0] & 0xffffff for f in fills), 'and in the tint\'s colour')
 
     # ---- contrast: white title >= 4.5:1, grey artist and year >= 3:1, the navbar's white glyphs >= 3:1, over every tone at the header rows
-    def lum(c):
-        def f(v):
-            v /= 255
-            return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
-        return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2])
-    def contrast(fg, bg):
-        a, b = sorted((lum(fg), lum(bg)), reverse=True)
-        return (a + 0.05) / (b + 0.05)
-    nav = O['AH_NAV_H']
+    nav = 0   # the list starts at the window's top: the header's rows are window rows (the floating controls' glyphs sit on glass: test/pod/glassbtn.py)
     rows = {'title': ((255, 255, 255), 4.5, nav + O['AH_TITLE_Y'], nav + O['AH_TITLE_Y'] + O['AH_TITLE_H']),
             'artist': ((0xAA,) * 3, 3.0, nav + O['AH_ARTIST_Y'], nav + O['AH_ARTIST_Y'] + O['AH_ARTIST_H']),
-            'year line': ((0x9C,) * 3, 3.0, nav + O['AH_META_Y'], nav + O['AH_META_Y'] + O['AH_META_H']),
-            'navbar glyphs': ((255, 255, 255), 3.0, 6, nav - 2)}
+            'year line': ((0x9C,) * 3, 3.0, nav + O['AH_META_Y'], nav + O['AH_META_Y'] + O['AH_META_H'])}
     grid = [(r, g, b) for r in range(0, 256, 51) for g in range(0, 256, 51) for b in range(0, 256, 51)] + [(255, 255, 255), (255, 240, 0), (0, 255, 255)]
     worst = {k: 99 for k in rows}
     for c in grid:
@@ -362,9 +354,9 @@ def tint_tests(expect):
                 keep = 255 - mod_icons.ah_tint_alpha(y)
                 worst[k] = min(worst[k], contrast(fg, tuple(v * keep // 255 for v in t)))
     print(f'  (album header worst contrast: { {k: round(v, 2) for k, v in worst.items()} })')
-    expect(all(worst[k] >= rows[k][1] for k in rows), f'over every tone the header keeps its contrast: title >= 4.5, artist and year line >= 3, navbar glyphs >= 3 ({ {k: round(v, 2) for k, v in worst.items()} })')
+    expect(all(worst[k] >= rows[k][1] for k in rows), f'over every tone the header keeps its contrast: title >= 4.5, artist and year line >= 3 ({ {k: round(v, 2) for k, v in worst.items()} })')
     expect((mod_icons.AH_TINT[0], mod_icons.AH_TINT[1], mod_icons.AH_TINT[2], mod_icons.AH_TINT[3]) == (O['AH_TINT_A_TOP'], O['AH_TINT_A_BOT'], O['AH_TINT_ROWS'], O['AH_WIN_H'])
-           and O['AH_TINT_ROWS'] == O['AH_NAV_H'] + O['AH_HDR_H'], 'the gradient\'s numbers are the payload\'s: the navbar plus the header, alpha 64 to 200')
+           and O['AH_TINT_ROWS'] == O['AH_HDR_H'], 'the gradient\'s numbers are the payload\'s: the header (the list starts at the window\'s top), alpha 64 to 200')
 
     # ---- corner pixels against the model on the gradient, scrolled and not
     R, S = O['AH_CORNER'], O['AH_ART']
@@ -379,7 +371,7 @@ def tint_tests(expect):
             for k in range(4):
                 for y in range(R):
                     ly = S - 1 - y if k & 2 else y
-                    keep = 255 - mod_icons.ah_tint_alpha(max(0, nav + O['AH_ART_Y'] - scroll + ly))
+                    keep = 255 - mod_icons.ah_tint_alpha(max(0, O['AH_ART_Y'] - scroll + ly))
                     shade = (t[0] * keep // 255) | (t[1] * keep // 255) << 8 | (t[2] * keep // 255) << 16
                     for x in range(R):
                         a = cov_of(x, y)
@@ -394,26 +386,84 @@ def tint_tests(expect):
     raw = _os.path.join(WORK, 'rootfs', 'release/assets/default/raw')
     ui = awtk_ui.parse(open(_os.path.join(raw, 'ui', 'albuminfo_page.bin'), 'rb').read())
     t_img = ui.children[0]
-    expect([c.name for c in ui.children] == ['img_ah_tint', 'navigationbar_view', 'albuminfo_listview'] and (t_img.x, t_img.y, t_img.w, t_img.h) == (0, 0, 320, O['AH_WIN_H'])
-           and t_img.get('sensitive') == 'false' and t_img.get('image') == 'ah_tint', 'the tint gradient is the window\'s first child, window sized and insensitive')
+    expect([c.name for c in ui.children] == ['img_ah_tint', 'albuminfo_listview', 'navigationbar_view'] and (t_img.x, t_img.y, t_img.w, t_img.h) == (0, 0, 320, O['AH_WIN_H'])
+           and t_img.get('sensitive') == 'false' and t_img.get('image') == 'ah_tint',
+           'the tint gradient is the window\'s first child, window sized and insensitive; the list is next and the navbar band LAST (over the list)')
     lv, sv = ui.find('albuminfo_listview'), ui.find('albuminfo_scrollview')
     expect(all(w.get(f'style:{s}:bg_color') == '#00000000' for w in (lv, sv) for s in ('normal', 'disable', 'focused')) and ui.get('style:normal:bg_color') == '#000000',
            'the list and its scroll view are transparent; the window itself stays black (the payload sets its colour)')
     nb, nsv = ui.find('navigationbar_view'), ui.find('albuminfo_scrollview')
-    bar = ui.find('scroll_bar_m'); lh = O['AH_WIN_H'] - O['AH_NAV_H']
-    expect(nb.h == O['AH_NAV_H'] == lv.y and (lv.h, nsv.h, bar.h) == (lh, lh, lh) and nb.y == 0 and nb.h + lv.h == O['AH_WIN_H'],
-           f'navbar {nb.h} px, the list starts under it and the window stays {O["AH_WIN_H"]} px ({lv.y}+{lv.h}; scroll view {nsv.h}, scroll bar {bar.h})')
+    bar = ui.find('scroll_bar_m'); lh = O['AH_WIN_H']
+    expect((nb.x, nb.y, nb.w, nb.h) == (0, 0, 320, O['AH_NAV_BAND_H']) == mod_ipodrows.NAV_BAND
+           and lv.y == 0 and (lv.h, nsv.h, bar.h) == (lh, lh, lh),
+           f'the navbar is a {nb.w}x{nb.h} band at ({nb.x}, {nb.y}); the list starts at the window\'s top and is {lv.h} high ({lv.y}+{lv.h}; scroll view {nsv.h}, scroll bar {bar.h})')
+    expect(O['AH_NAV_TOP'] == 44 and O['AH_ART_Y'] == O['AH_NAV_TOP'] + 6 and O['AH_NAV_BAND_H'] == 50 and O['AH_NAV_H'] == mod_ipodrows.NAV_H == 44,
+           'the header\'s top padding keeps the cover where it was (window row 50) and the band ends above it')
     import json as _json
     J = _json.load(open(_os.path.join(ROOT, 'patch', 'rows.json')))
     nav_sites = {int(a, 16): g['value'] for g in J['immediates'] for a, *_ in g['sites'] if 0x526a3c <= int(a, 16) < 0x527010}
     stock_demo_b = open(_os.path.join(paths.find_stock() or _os.path.join(_os.path.dirname(WORK), 'stock'), 'rootfs', pod.DEMO), 'rb').read()
     built_b = open(DEMO, 'rb').read()
     word = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
-    expect(sorted(nav_sites) == [0x526aec, 0x526b68, 0x526d20, 0x526d7c, 0x526e40, 0x526f44, 0x526fa4]
-           and all(word(built_b, a) & 0xffff == v and word(stock_demo_b, a) & 0xffff in (0x32, 0xe, 0x10) for a, v in nav_sites.items())
+    height_sites = [0x526aec, 0x526b68, 0x526d20, 0x526d7c, 0x526e40, 0x526f44, 0x526fa4]
+    vw, cf, vx = O['NAV_VIEW_W'], O['NAV_CF_X'], O['NAV_VIEW_X']
+    # the buttons on the Pod navbar's slots (tools/pod_ui.py navbar: 168 / 214, 46 wide; Now Playing 60 wide, 2 px right of 260 for its
+    # navbar_btnbackplayer_style glyph; Back 3 px right for its icon square of AH_NAV_H; the multi-select glyph lands on the Pod toggle's at
+    # 214 as it is; device shots): address -> (stock low half, built)
+    slot_sites = {0x526d8c: (0x32, vw), 0x526de0: (0x32, vw), 0x526e48: (0x32, vw), 0x526f48: (0x32, vw), 0x526d98: (0x78, cf - vw),
+                  0x526dec: (0xaa, cf), 0x526f54: (0xaa, cf), 0x526e54: (0xdc, vx), 0x526ea8: (0x10e, 262), 0x526e9c: (0x32, 60),
+                  0x526f00: (0x2825, (50 - O['AH_NAV_H']) // 2)}
+    expect(sorted(nav_sites) == sorted(height_sites + list(slot_sites))
+           and all(word(built_b, a) & 0xffff == v for a, v in nav_sites.items())
+           and all(word(stock_demo_b, a) & 0xffff in (0x32, 0xe, 0x10) for a in height_sites)
            and [nav_sites[a] for a in (0x526aec, 0x526d7c, 0x526e40, 0x526f44)] == [O['AH_NAV_H']] * 4
            and nav_sites[0x526d20] == nav_sites[0x526fa4] == (O['AH_NAV_H'] - 22) // 2 and nav_sites[0x526b68] == (O['AH_NAV_H'] - 20) // 2,
            'the navbar builder (0x526a3c): every button is AH_NAV_H high, the title labels centred in it (stock words checked, built words written)')
+    expect(all(word(stock_demo_b, a) & 0xffff == s and nav_sites[a] == b for a, (s, b) in slot_sites.items())
+           and word(stock_demo_b, 0x526f00) == 0x00002825 and word(built_b, 0x526f00) == 0x24050000 | nav_sites[0x526f00]
+           and (cf, vx, vw) == (168, 214, 46),
+           'the navbar builder\'s buttons sit on the Pod navbar\'s slots (122, 168, 214 x 46; Now Playing 262 x 60; Back x 3: move $a1, $zero -> addiu $a1, $zero, 3)')
+    am = awtk_ui.parse(open(_os.path.join(raw, 'ui', 'allmusic_page.bin'), 'rb').read()).find('navigationbar_view')
+    expect((am.x, am.y, am.w, am.y + am.h) == (0, (50 - O['AH_NAV_H']) // 2, 320, 50) and am.y + nav_sites[0x526fa4] == 14,
+           f'allmusic_page (Songs, a playlist\'s songs): the 50 px bar\'s view starts at y {am.y}, so the builder\'s {O["AH_NAV_H"]} px buttons and title centre as the Pod navbar\'s (title y 14)')
+    # the other stock pages' navbars (docs/modules/navbar.md): the same slots, built by their own code (folder 0x5312dc, localclass 0x535188,
+    # the Playlists page 0x53d5f8, album_page 0x524e4c, search_page's init): address -> (stock word, built value)
+    mul, srch, back = 0x240500e0, 0x2407003c, 0x2405010e
+    other = {0x531558: (srch, 46), 0x531564: (mul, vx), 0x5315ac: (srch, 46), 0x5315b8: (0x240500b2, 168), 0x531620: (back, 262),
+             0x535454: (srch, 46), 0x535460: (0x240500b7, 168), 0x5356d8: (srch, 46), 0x5356e4: (0x240500b7, 168),
+             0x535554: (srch, 46), 0x535560: (mul, vx), 0x5355b4: (back, 262),
+             0x53d81c: (srch, 46), 0x53d828: (mul, vx), 0x53d87c: (back, 262),
+             0x52512c: (srch, 46), 0x525138: (mul, vx), 0x52518c: (back, 262),
+             0x543764: (0x2407002f, 60), 0x543770: (0x24050111, 260)}
+    np_w = [0x531614, 0x5355a8, 0x53d870, 0x525180]   # the Now Playing buttons there are 60 wide in stock
+    got = {int(a, 16): g['value'] for g in J['immediates'] for a, *_ in g['sites'] if int(a, 16) in other}
+    expect(got == {a: b for a, (s, b) in other.items()}
+           and all(word(stock_demo_b, a) == s and word(built_b, a) == (s & 0xffff0000) | b for a, (s, b) in other.items())
+           and all(word(stock_demo_b, a) == word(built_b, a) == srch for a in np_w),
+           'Folders, Artists/Genres/Composers, the stock Playlists page, an artist\'s albums and Search: their navbar builders\' button x / w words are on the Pod navbar\'s slots')
+    # the stock Now Playing (navbar_btnbackplayer_style) draws its glyph 2 px left of its centre, the multi-select glyph lands on the Pod
+    # toggle's at 214 (device shots); img_btn_style / search_style buttons are centred: every right-hand glyph is on 191 / 237 / 290
+    expect(vx + vw // 2 == 237 and 168 + 46 // 2 == cf + vw // 2 == 191 and 262 + 60 // 2 - 2 == 260 + 60 // 2 == 290 and vx + vw == 260,
+           'the right-hand glyph centres are 191 (second slot), 237 (multi-select), 290 (Now Playing and Search\'s go button), as the Pod navbar\'s')
+    import mod_lists
+    th = lambda theme, page: mod_lists.parse(open(_os.path.join(WORK, 'rootfs', 'release/assets', theme, 'raw/styles', page + '.bin'), 'rb').read())
+    pages = ('folder_page', 'localclass_page', 'allmusic_page', 'playerjumpinfo_page', 'playlist_page')
+    expect(all(th(t, p).find('hscroll_label', 'srlabel_leftwhite22_style', s) is not None
+               and th(t, p).find('hscroll_label', 'srlabel_leftwhite22_style', s).get('font_size') == 20
+               for t in mod_lists.THEMES for p in pages for s in ('normal',)),
+           'the navbar title style (srlabel_leftwhite22_style, 22 px in stock) is 20 px in the page theme of every page whose builder uses it (both themes)')
+    stock_ui = _os.path.join(paths.find_stock() or _os.path.join(_os.path.dirname(WORK), 'stock'), 'rootfs', 'release/assets')
+    geo = lambda root, n: (lambda w: (w.x, w.y, w.w, w.h))(root.find(n))
+    ok = True
+    for theme in mod_lists.THEMES:
+        for rel, want in (('playset/equalizer_page.bin', {'btn_backtoplayer': ((270, 0, 50, 50), (260, 0, 60, 50))}),
+                          ('systemset/specfolder_page.bin', {'btn_backtoplayer': ((279, 0, 41, 50), (260, 0, 60, 50)),
+                                                             'navigation_btn_allchoice': ((229, 0, 38, 50), (vx, 0, vw, 50))})):
+            s_ui = awtk_ui.parse(open(_os.path.join(stock_ui, theme, 'raw/ui', rel), 'rb').read())
+            b_ui = awtk_ui.parse(open(_os.path.join(WORK, 'rootfs', 'release/assets', theme, 'raw/ui', rel), 'rb').read())
+            ok &= all(geo(s_ui, n) == a and geo(b_ui, n) == b for n, (a, b) in want.items())
+    expect(ok,
+           'Settings > Equalizer and the folder picker (both themes): Now Playing (img_btn_style) at (260, 0, 60, 50); the picker\'s select-all on the 214 slot, 46 wide')
     tint_png = Image.open(_os.path.join(raw, 'images', 'xx', 'ah_tint.png')).convert('RGBA')
     expect(tint_png.size == (320, O['AH_WIN_H']) and all(tint_png.getpixel((x, y)) == (0, 0, 0, mod_icons.ah_tint_alpha(y)) for y in range(O['AH_WIN_H']) for x in (0, 319))
            and tint_png.getpixel((5, 0))[3] == O['AH_TINT_A_TOP'] and tint_png.getpixel((5, O['AH_TINT_ROWS'] - 1))[3] == O['AH_TINT_A_BOT'] == 200 and tint_png.getpixel((5, 449))[3] == 200
@@ -454,20 +504,20 @@ def tint_tests(expect):
         for k, fg in ink.items():
             rest[k] = min(rest[k], contrast(fg, under(t, 449)))
             press[k] = min(press[k], contrast(fg, pressed_over(under(t, 449))))
-    expect(mod_icons.ah_tint_alpha(O['AH_NAV_H'] + O['AH_HDR_H']) == H == mod_icons.ah_tint_alpha(449),
-           'the track rows start where the held alpha starts (window row 348) and it holds to the bottom')
+    expect(mod_icons.ah_tint_alpha(O['AH_HDR_H']) == H == mod_icons.ah_tint_alpha(449),
+           'the track rows start where the held alpha starts (window row 344) and it holds to the bottom')
     expect(all(rest[k] >= need[k] for k in ink), f'over every tone, at rest: title >= 4.5, playing row >= 4.5, track number >= 3 ({ {k: round(v, 2) for k, v in rest.items()} })')
     expect(all(press[k] >= need[k] for k in ink), f'and on the pressed row (20 % white over the deep tint): the same floors ({ {k: round(v, 2) for k, v in press.items()} })')
     print(f'  (album list at rest, held alpha {H}: {rest}; pressed: {press}; black page pressed track number {contrast((0xAA,) * 3, (0x33,) * 3):.2f}:1)')
-    # a row scrolled up into the header's rows (the overlay is fixed in the window): the list shows from window row 50
+    # a row scrolled up into the header's rows (the overlay is fixed in the window): the list shows from window row 0 (under the floating controls)
     sc = {k: (99, None) for k in ink}
     for c in grid:
         t = mn.tone(*c)
-        for y in range(O['AH_NAV_H'], O['AH_NAV_H'] + O['AH_HDR_H']):
+        for y in range(0, O['AH_HDR_H']):
             for k, fg in ink.items():
                 v = contrast(fg, under(t, y))
                 if v < sc[k][0]: sc[k] = (v, (c, y))
-    print(f'  (album list, rows scrolled up under the list top: worst title {sc["title"][0]:.2f}:1, track number {sc["track number"][0]:.2f}:1, playing row {sc["playing row"][0]:.2f}:1 at window row {O["AH_NAV_H"]}-{O["AH_NAV_H"] + O["AH_HDR_H"]})')
+    print(f'  (album list, rows scrolled up under the list top: worst title {sc["title"][0]:.2f}:1, track number {sc["track number"][0]:.2f}:1, playing row {sc["playing row"][0]:.2f}:1 at window row 0-{O["AH_HDR_H"]})')
     expect(sc['title'][0] >= 3.0, f'a track title passing the brightest header rows keeps at least 3:1 (worst {sc["title"][0]:.2f}:1; it is not a resting place: it only passes)')
     # a black page (placeholder, All albums card, kill switch): the window is black under the black overlay; translucent white is today's grey
     blend = lambda a, base_=0: base_ + (255 - base_) * a // 255
@@ -508,12 +558,6 @@ def bar_tests(expect):
     BLACK = O['NP_BAR_STOCK']
     BG, FG = O['EVT_WINDOW_TO_BG'], O['EVT_WINDOW_TO_FG']
     red, bright = (190, 50, 55), (240, 225, 150)
-    def lum(c):
-        f = lambda v: v / 255 / 12.92 if v / 255 <= 0.03928 else ((v / 255 + 0.055) / 1.055) ** 2.4
-        return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2])
-    def contrast(fg, bg):
-        a, b = sorted((lum(fg), lum(bg)), reverse=True)
-        return (a + 0.05) / (b + 0.05)
     def model(t):   # the tone under the overlay's row 0, darkened until white glyphs keep 4.5:1 (a color_t word)
         keep = 255 - mod_icons.ah_tint_alpha(0)
         r, g, b = (v * keep // 255 for v in t)
@@ -756,6 +800,74 @@ def tone_cache_tests(expect):
     expect(not writes and sum(len(mm.seen) for mm in allm) > 100, f'no tint or cache path opens anything for writing ({writes})')
 
 
+# The page's navbar is built by TWO stock builders, both shared with stock pages (so neither is pinned for this page alone, docs/modules/navbar.md):
+# 0x526a3c (the select-mode toggles' handlers; also allmusic_page, Songs and the other song lists) makes Back, search (not for class 0xff09),
+# multi-select, Now Playing; 0x524e4c (the page's own build: albumdeinfo_listitem_layout's row loop @0x5265f4, the to-foreground handler @0x5267f0;
+# also album_page_init, an artist's albums) makes Back and, unless `songerinfoflag` (0xa04737) is set, multi-select and Now Playing (never search): what
+# a freshly opened page shows. Select mode (0xa05a24 == 1) makes unselect, add, delete, cancel in both. Their geometry is main's (the Pod navbar's
+# slots, stock select mode); the page theme draws a glass disc in each button, sized to it.
+NAV_BUILDERS = {'page build 0x524e4c': 0x524e4c, 'toggle handlers 0x526a3c': 0x526a3c}
+NAV_BUILDER = 0x526a3c
+# The classes 0x526a3c can run with (g_class_type = classinfo[0] after loadAlbumdetailList, @0x5268ec) and the two sibling branches it has for other
+# pages' classes (0xff09, 0xf001), which a page reached by an unexpected path would take.
+NAV_CLASSES = {'Albums list / grid / Cover Flow 0xf003 -> 0xff10': 0xff10, 'artist album, All songs row 0xff01 -> 0xff11': 0xff11, 'class 0xff14': 0xff14,
+               'raw 0xf003': 0xf003, 'raw 0xff01': 0xff01, 'sibling branch 0xff09': 0xff09}   # (0xf001, the Songs class' branch with search and sort, is never albuminfo's)
+# the window x each style's glyph must land on: the Pod navbar's right-hand glyph columns (191 / 237 / 290), the select mode's buttons centred in their stock
+# 60 px slots (add 116, delete 191; cancel's glass ends where Now Playing's does), the unselect toggle's disc where Back's is (8 .. 50: centre 29)
+NAV_GLYPH_X = {'search_style': 191, 'navbar_btnmulselect_style': 237, 'navbar_btnbackplayer_style': 290, 'navbar_btnadd_style': 146,
+               'navbar_btndel_style': 221, 'navbar_btncancel_style': 290, 'navbar_btnunselect_style': 29, 'navbar_btnselected_style': 29, 'navbar_btnreturn_style': 29}
+
+
+def nav_builder_buttons(cls=0xff10, select=0, builder=NAV_BUILDER, songer=0):
+    """Run a stock navbar builder in the emulator, its widget calls modelled: the widgets it makes, in order, as (type, style, x, y, w, h) in the band."""
+    m = AlbumMachine()
+    m.u.mem_write(0xa04737, bytes([songer]))
+    for n, slot in pod.got_slots(DEMO, ('deque_size',)).items(): m.handlers[m.word(slot)] = n   # libcstl's, through demo's own stubs
+    win = m.new_widget('window', 0, 0, 0, 320, 450)
+    band = m.new_widget('view', win, *mod_ipodrows.NAV_BAND)
+    m.wname[band] = 'navigationbar_view'; m.widgets['navigationbar_view'] = band
+    m.setword(pod.DATA['PDEQ_SHOWLIST'][0], m.new_deque([m.record(album='A', artist='B', title='T', name='1.flac', path='/mnt/mmc/m/1.flac', rid=1)]))
+    m.setword(pod.DATA['G_CLASS_TYPE'][0], cls)
+    m.setword(0xa05a24, select)
+    try: m.call(builder, a0=win, count=3000000)
+    except Exception as e: raise AssertionError(f'builder died: pc {m.u.reg_read(UC_MIPS_REG_PC):#x} ra {m.u.reg_read(UC_MIPS_REG_RA):#x} {e} calls {m.calls[-6:]} styles {list(m.style.values())[-4:]}')
+    out = []
+    for c in m.kids(band):
+        x, y, w, h = m.geo(c)
+        out.append((m.wtype.get(c), m.style.get(c), x, y, w, h))
+    return out
+
+
+def nav_tests(expect):
+    """Both builders run in the emulator for every select state, `songerinfoflag` and class; every button they make (main's geometry, which this page
+    must not change: the builders are shared with stock pages) gets a glass disc from the page theme that is exactly as wide as the button, so centred
+    with no rounding, and whose glyph lands on its target column (NAV_GLYPH_X); the disc fits the button's height and the band."""
+    cases = [(f'{bn}, normal, songerinfoflag {s}', dict(builder=b, songer=s)) for bn, b in NAV_BUILDERS.items() for s in (0, 1) if b == 0x524e4c or s == 0]
+    cases += [(f'0x526a3c, class {label}', dict(cls=cls)) for label, cls in NAV_CLASSES.items()]
+    cases += [(f'{bn}, select mode', dict(builder=b, select=1)) for bn, b in NAV_BUILDERS.items()]
+    sets = {}
+    band_h = mod_ipodrows.NAV_BAND[3]
+    for label, kw in cases:
+        bs = [b for b in nav_builder_buttons(**kw) if b[0] == 'button']
+        bad = []
+        for _, style, x, y, w, h in bs:
+            if style not in mod_ipodrows.NAV_STYLES: bad.append((style, 'no glass style')); continue
+            rest, down, icon_at, off = mod_ipodrows.NAV_STYLES[style]
+            iw, x0, x1, cx, _g = {**mod_icons.AH_NAV_PIECES, 'ah_nav_sel': (50, 8, 50, 29, None)}[rest]
+            if icon_at == 1:   # Back: icon_at left, the icon centred in a h x h square (x_offset +4: the Pod navbar's disc columns)
+                gx = x + h // 2 + off
+            else:
+                gx = x + w // 2 - iw // 2 + cx if iw == w else None
+            if gx != NAV_GLYPH_X[style] or h < mod_icons.GLASS_H or y + h > band_h or (iw is not None and icon_at != 1 and x + w // 2 - iw // 2 + x1 > 320):
+                bad.append((style, x, y, w, h, gx))
+        sets[label] = [b[1].replace('navbar_btn', '').replace('_style', '') for b in sorted(bs, key=lambda b: b[2]) if b[1] != 'navbar_btnreturn_style']
+        expect(bool(bs) and not bad, f'navbar builder, {label}: buttons {sets[label]} each get a disc as wide as the button, glyph on its column; off: {bad}')
+    expect(sets['page build 0x524e4c, normal, songerinfoflag 0'] == ['mulselect', 'backplayer'] and sets['page build 0x524e4c, normal, songerinfoflag 1'] == []
+           and all(len(sets[f'0x526a3c, class {l}']) == (2 if '0xff09' in l else 3) for l in NAV_CLASSES)
+           and sets['toggle handlers 0x526a3c, select mode'] == sets['page build 0x524e4c, select mode'] == ['unselect', 'add', 'del', 'cancel'],
+           'the sets: fresh page multi-select + Now Playing or none; toggle builder search (not 0xff09) + multi-select + Now Playing; select mode unselect, add, delete, cancel')
+
+
 def album_tests(expect, page, cover_asset):
     # ------------------------------------------------------------------ the hook is installed as pinned
     built = open(DEMO, 'rb').read()
@@ -815,7 +927,7 @@ def album_tests(expect, page, cover_asset):
            'everything lies inside the 310 px item (nothing is clipped, the item is not widened)')
     expect(A['AH_ART_Y'] + A['AH_ART'] < A['AH_TITLE_Y'] and A['AH_TITLE_Y'] + A['AH_TITLE_H'] <= A['AH_ARTIST_Y']
            and A['AH_ARTIST_Y'] + A['AH_ARTIST_H'] <= A['AH_META_Y'] and A['AH_META_Y'] + A['AH_META_H'] <= A['AH_BTN_Y']
-           and A['AH_BTN_Y'] + A['AH_BTN_H'] < A['AH_HDR_H'] and A['AH_ART_Y'] <= 8,
+           and A['AH_BTN_Y'] + A['AH_BTN_H'] < A['AH_HDR_H'] and A['AH_ART_Y'] == A['AH_NAV_TOP'] + 6,
            'cover, the three lines, the buttons and the track rows follow one another without overlap')
     expect(A['AH_BTN_H'] >= 44 and A['AH_SHUF_W'] >= 44 and A['AH_PLAY_W'] >= 44 and A['AH_DISC'] < A['AH_SHUF_W'] and A['AH_PILL_H'] < A['AH_BTN_H'] and A['AH_CORNER'] == 10 and A['AH_ART_X'] + A['AH_ART'] // 2 == A['AH_MID'],
            'both touch rectangles are at least 44 px each way (the disc and the pill are drawn inside them); the corners are 10 px')
@@ -828,10 +940,10 @@ def album_tests(expect, page, cover_asset):
            f'ink gaps: cover to title capitals, title baseline to artist capitals, artist baseline to year digits, year baseline to the pill {gp}')
     expect(gp['cover-title'] == gp['year-buttons'] and gp['title-artist'] == gp['artist-year'] and gp['title-artist'] < gp['cover-title'],
            'equal outer gaps, equal text gaps, the text block tighter than its frame')
-    expect(O['AH_HDR_H'] == O['AH_BTN_Y'] + O['AH_BTN_H'] + ah_ink.BOTTOM and O['AH_TINT_ROWS'] == O['AH_NAV_H'] + O['AH_HDR_H'],
+    expect(O['AH_HDR_H'] == O['AH_BTN_Y'] + O['AH_BTN_H'] + ah_ink.BOTTOM and O['AH_TINT_ROWS'] == O['AH_HDR_H'],
            'the header ends 8 px under the touch rectangles; the gradient ramp ends with it')
     import mod_ipodrows
-    expect(O['AH_NAV_H'] == 44 and mod_ipodrows.NAV_H == O['AH_NAV_H'], 'the album page navbar is 44 px (>= the 44 px touch size)')
+    expect(O['AH_NAV_H'] == 44 and mod_ipodrows.NAV_H == O['AH_NAV_H'] and mod_icons.GLASS_H <= 44, 'the shared builder\'s buttons are 44 px (>= the glass disc, >= the 44 px touch size)')
     # long titles: a title that fits is drawn centred; a longer one (Latin or CJK) is longer than the box and relies on the
     # label's ellipsis/scroll, which the stock builder sets and the test above keeps
     from awtk_text import Ttf, StbText
@@ -1001,6 +1113,7 @@ def album_tests(expect, page, cover_asset):
     expect(played(m) and played(m)[0][3] == 0xff11 and any(c[0] == 'loadSongList' and c[3] == 0xff11 for c in m.calls),
            'an artist album and the All albums card queue with class 0xff11')
     stack_tests(expect)
+    nav_tests(expect)
     tint_tests(expect)
     tone_cache_tests(expect)
     bar_tests(expect)
@@ -1018,11 +1131,24 @@ def album_tests(expect, page, cover_asset):
         return n
     hdr = node_of(item)
     hdr.w = 310
-    window = Node('albuminfo_page', 0, 0, 320, CLIENT_H, children=[
-        Node('navigationbar_view', 0, 0, 320, O['AH_NAV_H'], children=[Node('btn_return', 0, 0, 80, O['AH_NAV_H'])]),
-        Node('albuminfo_listview', 0, O['AH_NAV_H'], 320, O['AH_WIN_H'] - O['AH_NAV_H'],
-             children=[Node('albuminfo_scrollview', 0, 0, 310, O['AH_WIN_H'] - O['AH_NAV_H'], children=[hdr])])])
-    top = O['AH_NAV_H']
+    # the page as the window manager sees it: the built asset's order (tint, list, navbar band LAST) with the buttons the stock builder makes,
+    # at the built (pinned) immediates, in its creation order (search, title label, multi-select, Now Playing, Back)
+    built_demo = open(DEMO, 'rb').read()
+    imm = lambda a: struct.unpack_from('<I', built_demo, pod.fileoff(built_demo, a))[0] & 0xffff
+    nbh = imm(0x526e40)
+    sty = {'btn_cancel': 'btn_multi', 'navbar_btnreturn_style': 'btn_back', 'search_style': 'btn_search', 'navbar_btnmulselect_style': 'btn_multi', 'navbar_btnbackplayer_style': 'btn_nowplaying'}
+    def nav_buttons(builder=0x526a3c, songer=0):   # the widgets a stock builder makes (emulated), in its creation order: the topmost last
+        return [Node(sty.get(st, 'nav_title'), x, y, w, h) for _, st, x, y, w, h in nav_builder_buttons(builder=builder, songer=songer)]
+    def page_window(scroll=0, rows=0, builder=0x526a3c, songer=0):
+        h = node_of(item); h.w = 310; h.y = -scroll
+        body = [h] + [Node(f'track{i}', 0, O['AH_HDR_H'] - scroll + 64 * i, 310, 64) for i in range(rows)]
+        a = asset_tree(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/albuminfo_page.bin'))
+        node(a, 'albuminfo_scrollview').children = body
+        node(a, 'navigationbar_view').children = nav_buttons(builder, songer)
+        return a
+    window = page_window()
+    expect([c.name for c in window.children] == ['img_ah_tint', 'albuminfo_listview', 'navigationbar_view'], 'the hit-test tree is the built asset\'s: the band is the top child')
+    top = 0   # the list starts at the window's top: header rows are window rows
     by, bh, sx, sw, px, pw = O['AH_BTN_Y'], O['AH_BTN_H'], O['AH_SHUF_X'], O['AH_SHUF_W'], O['AH_PLAY_X'], O['AH_PLAY_W']
     ax, ay, aw = O['AH_ART_X'], O['AH_ART_Y'], O['AH_ART']
     for x, y, want in ((sx + sw // 2, by + bh // 2, 'btn_shuffle'), (px + pw // 2, by + bh // 2, 'btn_play'),
@@ -1038,7 +1164,49 @@ def album_tests(expect, page, cover_asset):
                        (150, O['AH_HDR_H'] - 4, 'header')):
         got = stock_target(m, window, x, top + y)
         expect(got[-1] == want and 'albuminfo_scrollview' in got, f'a touch at ({x},{y}) lands on {want} ({got})')
-    expect(stock_target(m, window, 40, 22)[-1] == 'btn_return', 'Back on the album page is still hit')
+    # the floating controls on main's slots (the stock builders' buttons, not moved by this page): each button's whole rectangle, the band's dead zone, the rows below
+    NB, BAND_H = O['AH_NAV_H'], O['AH_NAV_BAND_H']
+    title_w = max((c.w + c.x for c in node(window, 'navigationbar_view').children if c.name == 'nav_title'), default=0)   # the stock label's right edge (not pinned: shared with Hi-Res etc.)
+    slots = {'btn_back': (3, 80), 'btn_search': (168, 46), 'btn_multi': (214, 46), 'btn_nowplaying': (262, 60)}
+    bad = []
+    for name, (bx, bw) in slots.items():
+        lo = max(bx + 1, title_w + 1) if name == 'btn_search' else bx + 1   # the stock title label (created after search) lies over its left edge
+        for dx, dy in ((lo, 1), (min(bx + bw - 2, 319), 1), (lo, NB - 2), (min(bx + bw - 2, 319), NB - 2), (min(bx + bw // 2, 319), NB // 2)):
+            got = stock_target(m, window, dx, dy)
+            if got[-1] != name: bad.append((name, dx, dy, got[-1]))
+    expect(not bad, f'every corner and the centre of Back, search, multi-select and Now Playing (the toggle builder\'s, {NB} px high) lands on that button ({bad[:3]})')
+    expect(title_w <= 168 + 46 - 1 and stock_target(m, window, 169, NB // 2)[-1] in ('btn_search', 'nav_title'),
+           f'the stock title label (to x {title_w}, 147 wide, not pinned: shared with the Songs-type pages) lies over the first columns of search\'s slot only')
+    for songer, want in ((0, {'btn_multi', 'btn_nowplaying', 'btn_back'}), (1, {'btn_back'})):   # a freshly opened page: the page's own builder 0x524e4c (50 px buttons)
+        wf = page_window(0, 0, 0x524e4c, songer)
+        got = {name: stock_target(m, wf, bx + bw // 2, 22)[-1] for name, (bx, bw) in slots.items()}
+        expect({n for n, g in got.items() if g == n} == want, f'a fresh page (page builder, songerinfoflag {songer}): the buttons it makes are hit at their slots, the absent ones leave the band ({got})')
+    gap_hits = {stock_target(m, window, x, yy)[-1] for x in range(88, 160, 9) for yy in (2, 40)}
+    expect(gap_hits <= {'navigationbar_view', 'nav_title'}, f'the strip of the band between Back and the first button is the band\'s (or the stock title label\'s), nothing under it ({gap_hits})')
+    expect(all(stock_target(m, window, x, BAND_H)[-1] == 'header' for x in (20, 60, 250, 300)),
+           'right below the band the header (the list) takes touches again, under Back and the buttons too')
+    for scroll in (150, 230, 300):   # scrolled: rows pass under the band; those just below it are still reached
+        w2 = page_window(scroll, rows=3)
+        rows_at = [(i, O['AH_HDR_H'] - scroll + 64 * i) for i in range(3)]
+        hits = []
+        for i, ry in rows_at:
+            y = max(ry, BAND_H + 1) + 3
+            if y < ry + 64 and y < CLIENT_H: hits.append((i, y, stock_target(m, w2, 200, y)[-1]))
+        expect(hits and all(g == f'track{i}' for i, y, g in hits), f'scrolled {scroll}: the rows below the band take touches ({hits})')
+        under = [(y, stock_target(m, w2, 30, y)[-1]) for y in range(0, NB, 9)]
+        expect(all(g == 'btn_back' for y, g in under), f'scrolled {scroll}: Back keeps its touches over the rows that pass under it ({under})')
+    # the fallback: the hook does not run (the kill switch /mnt/mmc/m1pod-off, or the header is not the stock shape). The asset, the page theme and the
+    # builder's immediates are data, so the floating controls stay; the header is stock's (a 100 px item at the list's top: cover 100x100 at (0, 0),
+    # title (108, 10, 200, 20), artist (108, 30, 200, 18), Play all (108, 62, 90, 28), albuminfo_listitem0_layout @0x526264, album_page_init+0x174 / +0x248)
+    stock_hdr = Node('header', 0, 0, 310, 100, children=[Node('cover', 0, 0, 100, 100), Node('title', 108, 10, 200, 20), Node('artist', 108, 30, 200, 18),
+                                                         Node('btn_playall', 108, 62, 90, 28)])
+    fb = page_window(0, rows=2)
+    sv_fb = node(fb, 'albuminfo_scrollview'); sv_fb.children = [stock_hdr] + [Node(f'track{i}', 0, 100 + 64 * i, 310, 64) for i in range(2)]
+    got = {n: stock_target(m, fb, x, y)[-1] for n, (x, y) in {'back': (30, 22), 'capsule': (262 + 30, 22), 'playall': (150, 76),
+                                                              'row0': (150, 130), 'cover': (60, 70)}.items()}
+    expect(got == {'back': 'btn_back', 'capsule': 'btn_nowplaying', 'playall': 'btn_playall', 'row0': 'track0', 'cover': 'cover'},
+           f'without the hook (stock header) Back and the capsule work, Play all (y 62 .. 90, below the band that ends at y {BAND_H}) and the rows are reached ({got})')
+    expect(BAND_H <= 62, 'the stock Play all button lies wholly below the band; only the stock cover\'s and title\'s top rows lie under the pieces')
     expect(O['AH_SHUF_W'] >= 44 and O['AH_PLAY_W'] >= 44 and O['AH_BTN_H'] >= 44, 'both buttons are at least 44 px each way (docs/ui.md)')
 
     # ------------------------------------------------------------------ the cover size, the corner masks and the page theme
@@ -1091,21 +1259,20 @@ def album_tests(expect, page, cover_asset):
     rp = painted_over(m, art, ph.convert('RGB'))[1]
     expect(rp.getpixel((0, 0)) == (0, 0, 0) and rp.getpixel((S // 2, 0)) == ph.convert('RGB').getpixel((S // 2, 0)),
            'and its corners are round too')
-    for n, body in (('ah_shuffle', 0x2A), ('ah_shuffle_down', 0x44)):
+    for n in ('ah_shuffle', 'ah_shuffle_down'):   # the glass look itself: test/pod/glassbtn.py
         im = Image.open(os.path.join(IMGS, n + '.png')).convert('RGBA')
         D = O['AH_DISC']
-        expect(im.size == (D, D) and im.getpixel((0, 0))[3] == 0 and im.getpixel((D // 2, 2)) == (body, body, body, 255),
-               f'{n}: a {D} px disc (transparent corners, #{body:02X} body) with the glyph on it')
+        expect(im.size == (D, D) and im.getpixel((0, 0))[3] == 0 and (255, 255, 255, 255) in im.getdata(),
+               f'{n}: a {D} px disc (transparent corners) with the white glyph on it')
     pg = Image.open(os.path.join(IMGS, 'ah_play.png')).convert('RGBA')
     vis = pg.getchannel('A').getbbox()
     G = O['AH_PILL_GLYPH']
     expect(pg.size == (G, G) and vis and vis[0] <= 1 and vis[2] >= G - 2 and vis[3] - vis[1] >= G - 2,
            f'the play glyph is a {G} px square image with no padding (the style places it; opaque box {vis})')
-    for n, fill in (('ah_pill', 255), ('ah_pill_down', 0xBE)):
+    for n in ('ah_pill', 'ah_pill_down'):   # the glass look itself: test/pod/glassbtn.py
         im = Image.open(os.path.join(IMGS, n + '.png')).convert('RGBA'); W_, H_ = im.size
-        expect((W_, H_) == (O['AH_PLAY_W'], O['AH_PILL_H']) and im.getpixel((0, 0))[3] == 0 and im.getpixel((W_ // 2, H_ // 2)) == (fill, fill, fill, 255)
-               and im.getpixel((0, H_ // 2))[3] > 200 and im.getpixel((W_ - 1, H_ // 2))[3] > 200 and im.getpixel((W_ // 2, 0))[3] == 255 and im.getpixel((W_ // 2, H_ - 1))[3] == 255,
-               f'{n}: a {W_}x{H_} stadium (round ends, transparent corners, #{fill:02X} fill)')
+        expect((W_, H_) == (O['AH_PLAY_W'], O['AH_PILL_H']) and im.getpixel((0, 0))[3] == 0 and im.getpixel((W_ // 2, 0))[3] > 0 and im.getpixel((W_ // 2, H_ - 1))[3] > 0,
+               f'{n}: a {W_}x{H_} stadium (round ends, transparent corners)')
 
     for theme in ('default', 'theme1'):
         path = os.path.join(WORK, 'rootfs', 'release/assets', theme, 'raw/styles/albuminfo_page.bin')
@@ -1114,9 +1281,9 @@ def album_tests(expect, page, cover_asset):
         play = {i.state: i for i in th.items if (i.widget, i.style) == ('button', 'btn_ahplay_style')}
         expect(sorted(play) == states, f'{theme}: the pill style has every state')
         bad = [s for s, i in play.items() if i.color('bg_color') != '#00000000' or i.get('bg_image') != ('ah_pill_down' if s == 'pressed' else 'ah_pill')
-               or i.get('bg_image_draw_type') != O['IMAGE_DRAW_CENTER'] or i.color('text_color') != '#141414FF'
+               or i.get('bg_image_draw_type') != O['IMAGE_DRAW_CENTER'] or i.color('text_color') != '#FFFFFFFF'
                or i.get('font_size') != 18 or i.has('round_radius') or i.get('icon') != 'ah_play']
-        expect(not bad, f'{theme}: Play all is the 180x40 pill image (white, #BEBEBE pressed) drawn centred in the 44 px button, dark 18 px text and the play glyph ({bad})')
+        expect(not bad, f'{theme}: Play all is the 180x40 glass pill image (pressed one lighter) drawn centred in the 44 px button, white 18 px text and the play glyph ({bad})')
         # The glyph beside the text, not above it: AWTK's icon_at auto (0) puts the icon on top when icon height + font
         # size < the height inside the margins (16 + 18 < 44, widget_draw_icon_text @0x67235c), so the style says left (1).
         # widget_calc_icon_text_rect (@0x666f04) then makes an icon square (ir.h x ir.h at ir.x, the icon centred in it) and

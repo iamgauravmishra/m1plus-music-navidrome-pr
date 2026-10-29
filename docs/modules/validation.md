@@ -13,7 +13,7 @@ Split out of docs/architecture.md. A "section N" in the text is an old section n
   `widget_layout`, `list_view` layouter, scroll_view, paint hook, default painter, `widget_restack` and pointer path on a tree of real widget structs: a relayout after the
   arrangement, the lock screen's first frame, the pull-down with the dialog's abort / snapshot layout / foreground arrangement, the paint hook against rows out of order
   and a short canvas, the Main Menu page's arrows, each run as the V2.1mY arrangement and as the current one), `albums` (the grid: layout against the asset, the menu row and the persisted view, the first frame and paced decoding, tiles of the
-  box-filtered cover, scroll clamping by drag and fling, taps on every cell kind and gap incl. the last partial row, title ellipsis, missing
+  box-filtered cover, scroll offset / content size / clamping on demo's own list_view layouter and scroll_view (1, 8 and 4000 albums, both modes), drag, fling, tap and catch-a-coasting-list through demo's pointer code, the loader deferred while the scroll_view moves, taps on every cell kind and gap incl. the last partial row, title ellipsis, missing
   and empty cache files, 4,000 albums with the bitmaps bounded and recycled, destroy, the toggle both ways with its saved file and the decorated
   stock navbar, hit tests with demo's `widget_find_target`), `coverflow` (open with a complete
   cache, the tap that opens the stock album page with its context, Back, side taps, drag/flick/wrap/abort, close, first-run build, worker

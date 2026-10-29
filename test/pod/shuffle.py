@@ -1,5 +1,5 @@
 """Shuffle: the page rows, Songs / Albums / Folders, errors."""
-import json, os, re, struct, sys
+import os
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 

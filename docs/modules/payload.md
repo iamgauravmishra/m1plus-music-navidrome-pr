@@ -22,7 +22,7 @@ array, album copy, album header cover) is heap, allocated when the page opens an
 Current payload: 47,832 bytes. Compiled non-PIC (`clang --target=mipsel-linux-gnu -march=mips32r2
 -mabi=32 -mfp64 -mno-abicalls -fno-pic -G0 -Oz`, `-Wall -Wextra -Werror`), linked by `patch/link.ld`
 at `0xb00000` with `--gc-sections`, sources in this order: `m1pod.c covercache.c coverflow.c albums.c
-artists.c shuffle.c albuminfo.c nowplaying.c rows.c shot.c home.c`.
+artists.c shuffle.c albuminfo.c nowplaying.c minibar.c grid.c recent.c rows.c shot.c home.c`.
 
 ### $gp and the trampolines
 
@@ -38,6 +38,12 @@ function past its 3-word prologue (`lui $gp,0xa03e; ori $gp,$gp,0x3ed0; j <fn+12
   `$gp` from `$t9`. `pod.py FUNCTIONS` lists every one with its address and checks each against
   `.dynsym` before writing; `DATA` pins the exported data (`pdeq_showlist` `0xa045d8`,
   `parse_cover_mutex` `0xa04588`, `g_class_type` `0x97cad4`, `classinfo` `0xa0c768`).
+- **Stock list queries are page state.** `loadLocalClassList` / `loadAlbumList` replace `*pdeq_showlist` (and may
+  set `nagvation_title`, `classinfo`), which every stock list page draws its rows from and plays from, and which
+  their to-foreground does not read again while the class is unchanged. Run them only from the page in front
+  (its open, its tap, its own to-foreground), never from a timer or tick that runs while another page is in front:
+  a page goes quiet on `EVT_WINDOW_TO_BG` (`patch/playlists.c` `pl_on_bg`), Now Playing's tick queries nothing
+  (`docs/modules/recent.md`).
 - **libc** only through slots `demo` already imports: a stub `lui/ori $t8, slot; lw $t9,0($t8); jr
   $t9` tail-calls the resolved pointer (`pod.py LIBC`: atoi, access, open/read/write/close/fsync,
   memset/memcpy/strcmp/strcasecmp/strdup/snprintf, calloc/free, fopen/fclose/fread/fwrite/fseek/ftell,
@@ -73,7 +79,8 @@ Nothing else is hooked: no prologue is rewritten for the library rows (they are 
 section 6), and nothing runs in `platform_init` or the main loop. The only code at paint is the Now Playing
 cover widget's own `EVT_AFTER_PAINT` (section 8a), registered by hook 4 on that page's widget.
 One more site is a data word, not a code hook (section 8d): `g_scroll_view_vtable + 0x98` (`0x97a330`), the
-`on_event_before_children` slot, empty in stock, runs for touches inside a `scroll_view` only.
+`on_event_before_children` slot, empty in stock, runs for touches inside a `scroll_view` only; that includes the Albums page since its content sits in a stock `list_view > scroll_view` (the page has no drag, fling or catch code of its own; it adds
+no hook: its taps are `EVT_POINTER_*` handlers on its own content view, its loader a page-scoped timer, `docs/modules/albums.md`; payload 95,416 B).
 
 ### What the entry does (`patch/m1pod.c`)
 
@@ -87,9 +94,9 @@ Pages are defined once in `tools/pod_pages.py` (`PAGES`: menu, Cover Flow, Artis
 consumed by `pod_ui.py` (assets) and `pod.py` (the C row/page tables in `stock.h`), so a row's widget,
 label and handler cannot drift apart. Row actions: `ACT_HOME` (open a stock Home destination through
 the dispatcher with a fake numeric-named icon), `ACT_PAGE`, `ACT_PLAYER` (stock
-`on_backtoplayer_onclick`), `ACT_COVER`, `ACT_SHUFFLE`, `ACT_ARTISTS`, `ACT_ALBUMS`, `ACT_GRID`, `ACT_STARTUP`, `ACT_LANDSCAPE` (switch rows, below), `ACT_SORT` (a value row, below), `ACT_SHOT` (Screenshot, section 8c). The
+`on_backtoplayer_onclick`), `ACT_COVER`, `ACT_SHUFFLE`, `ACT_ARTISTS`, `ACT_ALBUMS`, `ACT_PLAYLISTS` (the mosaic grid, `docs/modules/playlists.md`), `ACT_GRID`, `ACT_STARTUP`, `ACT_LANDSCAPE` (switch rows, below), `ACT_SORT` (a value row, below), `ACT_SHOT` (Screenshot, section 8c). The
 menu items (`ITEMS`, the item id = the row index, default order) are Now Playing, Cover Flow, Albums (-> our page, grid or list mode, section 5a), Artists (-> our list), Songs, Playlists, Shuffle (-> Shuffle page),
-Genres, Folders, then the nine Extras tiles (ids 9-17: Favorites, Recently Added, Recently Played, Most Played, Composers, Hi-Res, Update Library, Tidal, CD Ripper; the Home ids 10, 13, 12, 11, 8, 9, 2, 1, 15 through the dispatcher; hidden by default); then Extras (-> Extras page: the same eighteen rows, of which it shows those the menu does not, in the fixed order `pod_pages.EXTRAS_ORDER`, emitted as `POD_EXTRAS_ORDER` in `stock.h`) and Settings (-> Settings page: Main Menu, Cover Flow (-> `m1pod_cfset`), Home Screen (-> `m1pod_homeset`: the Start in M1+ Pod
+Genres, Folders, then the nine Extras tiles (ids 9-17: Favorites, Recently Added, Recently Played, Most Played, Composers, Hi-Res, Update Library, Tidal, CD Ripper; the Home ids 10, 13, 12, 11, 8, 9, 2, 1, 15 through the dispatcher; hidden by default); then Extras (shown unless the saved list lacks its `x`, Settings > Main Menu; -> Extras page: the same eighteen rows, of which it shows those the menu does not, in the fixed order `pod_pages.EXTRAS_ORDER`, emitted as `POD_EXTRAS_ORDER` in `stock.h`) and Settings (-> Settings page: Main Menu, Cover Flow (-> `m1pod_cfset`), Home Screen (-> `m1pod_homeset`: the Start in M1+ Pod
 switch and Shanling Home), Playback and System Settings through the stock dispatcher with ids 16 and 17, and Screenshot, `ACT_SHOT`, section 8c: no item id, no menu character). Page layout: `docs/ui.md`. To add a
 page: add a `Page` and a row to `pod_pages.py`, rebuild (assets and tables regenerate), add a test
 module under `test/pod/`.

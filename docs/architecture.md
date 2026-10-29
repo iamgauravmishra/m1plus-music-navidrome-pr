@@ -40,6 +40,9 @@ runs from a user tap. Every patched word and stock address is pinned and the bui
 | [`modules/shuffle.md`](modules/shuffle.md) | 7 | Shuffle (`patch/shuffle.c`) |
 | [`modules/album-page.md`](modules/album-page.md) | 8 | The album view (`patch/albuminfo.c`) and the album page assets |
 | [`modules/nowplaying.md`](modules/nowplaying.md) | 8a | Now Playing (`patch/nowplaying.c`, `tools/mod_nowplaying.py`): code and look |
+| [`modules/minibar.md`](modules/minibar.md) | (new) | The mini player bar on the menu's Home instance (`patch/minibar.c`, no hook): layout, timer, stock player calls |
+| [`modules/recent.md`](modules/recent.md) | (new) | The Recently Played shelf on the menu's Home instance (`patch/recent.c`, no hook): the list file, recording, covers, taps, the rows below it |
+| [`modules/playlists.md`](modules/playlists.md) | (new) | The Playlists grid of album-cover mosaics and its "..." menu (`patch/playlists.c`, `patch/grid.c`, no hook): the stock database calls, the loader, the stock create / import / export / songs code it reuses |
 | [`modules/i18n.md`](modules/i18n.md) | 8b | Localisation (`patch/i18n.h`, `tools/pod_i18n.py`) |
 | [`modules/screenshot.md`](modules/screenshot.md) | 8c | Screenshot (`patch/shot.c`, `tools/pull_shots.py`) |
 | [`modules/gestures.md`](modules/gestures.md) | 8d | List gestures (`patch/scroll.c`) |

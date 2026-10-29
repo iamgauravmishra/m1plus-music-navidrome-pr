@@ -1,5 +1,5 @@
 """Artists: the list page and Cover Flow scoped to one artist."""
-import json, os, re, struct, sys
+import os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 
@@ -17,8 +17,8 @@ def artists_tests(expect, page, cover_asset):
     expect('stock_resume' not in m.names(), 'the Artists row no longer opens the stock page')
     P = pod_pages
     expect([(r.label, r.arg) for r in page.rows[:9] if r.action == P.ACT_HOME] ==
-           [('Songs', P.HOME_MYMUSIC), ('Playlists', P.HOME_PLAYLIST), ('Genres', P.HOME_GENRE), ('Folders', P.HOME_FOLDER)],
-           'the other library rows still open their stock Home pages; only Albums (the grid) and Artists changed')
+           [('Songs', P.HOME_MYMUSIC), ('Genres', P.HOME_GENRE), ('Folders', P.HOME_FOLDER)],
+           'the other library rows still open their stock Home pages; only Albums (the grid), Artists and Playlists (the mosaic grid) changed')
 
     # 28. The list is the stock Artists query, one stock-styled row per artist, in its order.
     m = artists_machine()
@@ -295,11 +295,11 @@ def artists_tests(expect, page, cover_asset):
         return b.x + b.w // 2, b.y + b.h // 2
     def opened(m): return [c[:1] + c[2:] if c[0] == 'albumcoverinfo_init' else c for c in m.calls   # the list handle differs per machine
                            if c[0] in ('loadAlbumList', 'albumcoverinfo_init', 'batchadd_albumcover_task', 'navigator_to_with_context')]
-    def seed(m): m.props[(m.widgets['label_title'], 'x')] = 36; m.props[(m.widgets['label_title'], 'h')] = 22
+    def seed(m): m.props[(m.widgets['label_title'], 'x')] = 58; m.props[(m.widgets['label_title'], 'h')] = 22
     m = artists_machine(); seed(m); m.call(open_, count=5000000); m.call(PSYMS['ar_on_artist'], a0=0, count=8000000)
     expect(m.props.get((m.widgets['btn_allalbums'], 'visible')) == 1 and m.props.get((m.widgets['btn_allalbums'], 'sensitive')) == 1,
            'the artist page with the card shows the button (visible and sensitive)')
-    expect(('widget_resize', m.widgets['label_title'], O['NAV_VIEW_X'] - 36, 22) in m.calls, 'the title ends where the button starts')
+    expect(('widget_resize', m.widgets['label_title'], O['NAV_VIEW_X'] - 58, 22) in m.calls, 'the title ends where the button starts')
     cx, cy = centre(m)
     got = stock_target(m, cover_page_tree(m, cover_asset), cx, cy)
     expect(got[-1] == 'btn_allalbums', f"a touch on the button's middle reaches it ({got})")

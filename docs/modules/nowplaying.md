@@ -123,7 +123,7 @@ An Apple-Music-style page on the stock `playing_page`, fitted to the 320x450 win
       |                          |
  292  +--------------------------+
  296           . o .               micro page dots: 3 x 4 px, 10 px apart
- 305  Title (20 px white)    (heart)(...)    heart, More: 44x44 targets, 32 px discs
+ 305  Title (20 px white)    (star)(...)    star, More: 44x44 targets, 32 px discs
  329  Artist (18 px #AAAAAA)
  348  =============---------------   bar 6 px (ink 360..366) in the stock 30 px target (28,348, 264 wide)
  379  1:23                    -3:42   14 px #AAAAAA: elapsed, remaining (72 px boxes, 18 high; digits 382..391)
@@ -170,8 +170,8 @@ bottom (V2.1nL: 22 / 13 / 17 / 11). `mod_nowplaying.py` places every box from th
   Without the payload (kill switch) the square art corners are darkened a little by it (9..22 %, only the corner pixels). 2.4 KB.
 - **Controls.** The grabber is the Back button (`btn_return`, `img_btn_style`, `np_grabber` / `np_grabber_down`: a 36x5
   white pill at 43 % in a 120x44 image), overlapping the top 16 px of the art (a swipe starting there goes to the button).
-  Heart (`btn_fav`) and More (`btn_more`) are `np_fav` / `np_unfav` / `np_more`, 44x44 images with a 32 px disc (`#FFFFFF1A`,
-  `#FFFFFF33` pressed) and an 18 px glyph (2.0 px stroke) baked in, **centred optically**: the middle of the glyph's box and of its silhouette's centroid (a heart's mass is in its lobes, so its box centre alone looks high) sits at the disc's centre, placed in quarter-pixel steps by an SVG translation (`mod_icons.np_glyph`). V2.1nL measured on the device: heart box 0.5 px up and left of the disc centre, centroid 1.6 px up; now box +0.5 / centroid -0.4 (optical centre +0.1) and More exactly centred; the app swaps the heart's style (`btn_imgfav_style` / `btn_imgunfav_style`) as before.
+  Favorite (`btn_fav`) and More (`btn_more`) are `np_fav` / `np_unfav` / `np_more`, 44x44 images with a 32 px glass disc (`glass_image(32, 32, 16)`, the mini bar's pane; was `#FFFFFF1A`,
+  `#FFFFFF33` pressed) and an 18 px glyph (2.0 px stroke) baked in: Lucide `star`, filled when the song is a favorite, outline when not (was `heart`; the Home grid's Favorites tile, the Extras row and the batch-add dialog use the same star). The glyph is **centred optically**: the middle of the glyph's box and of its silhouette's centroid (a star's lower points reach less far than its top one, so its box centre alone looks low) sits at the disc's centre, placed in quarter-pixel steps by an SVG translation (`mod_icons.np_glyph`; V2.1nL measured the then heart on the device 0.5 px up and left with box-only placement). More is exactly centred; the app swaps the star's style (`btn_imgfav_style` / `btn_imgunfav_style`) as before.
   Transport: prev / play / pause / next are solid shapes drawn by `tools/mod_icons.py` (`transport_mask`): rounded convex
   polygons (inset by r, dilated by r), 16x supersampled and box-downsampled, `#EEEEEC` (pressed `#8C8C8C`). Play: triangle,
   ink 29x31, 1.5 px right of centre, r = 0.10 x 31 = 3.1 px. Pause: two bars 28 tall, 8.4 wide, 10.1 apart, r = 0.30 x bar

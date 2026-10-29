@@ -9,13 +9,13 @@ Split out of docs/ui.md. A "section N" in the text is an old section number of `
 **Lucide** (lucide-static 1.61.0, ISC; `NOTICE`, `assets/icons/lucide/LICENSE`); `mod_icons.py` is the mapping table. **Sizes:** the Home grid keeps its 66 px discs, glyph canvas 38 px at stroke 1.75 (grid units); every
 list icon is a **bare** white glyph, no disc: a 24 px canvas at stroke 2.0 px absolute (the M1+ Pod rows' image is that
 canvas, the stock 40x40 settings, Folders, Playlists and CD images carry it centred); pull-down tiles: glyph 24 px, stroke 2
-grid units, "PO" / "LO" 17 px Inter; Now Playing heart and More: 32 px translucent disc, glyph ink 18 px, stroke 2.0 px, centred optically (box and centroid averaged, quarter-pixel placement); the
+grid units, "PO" / "LO" 17 px Inter; Now Playing star and More: 32 px translucent disc, glyph ink 18 px, stroke 2.0 px, centred optically (box and centroid averaged, quarter-pixel placement); the
 navbar and the other glyph buttons (`SMALL_GLYPHS`) fit a 20 px ink box (stock 22) at 2.0 px stroke, the Now Playing button
 `back_to_player` unchanged; dialog glyphs (`DIALOG_GLYPHS`) and selection marks x0.88; the "no cover" tiles' glyph is 0.52 of the
 tile; the Play all pill's play glyph is 10 px; the status bar and the transport shapes are unchanged; every touch target is
 unchanged. The list chevrons (`right_arrow`, the Main Menu's `expansion_2`, `expansion`) are `#8C8C8C`, `#6E6E6E` pressed.
 Now Playing keeps the solid PIL transport shapes. Lucide has no filled style: `name:filled` fills the outline
-shapes (heart, play, pause, skip, lock); `ellipsis` is always filled. Kept Tabler (`T:` prefix, 4 glyphs,
+shapes (star, play, pause, skip, lock); `ellipsis` is always filled. Kept Tabler (`T:` prefix, 4 glyphs,
 `assets/icons/tabler/svg/`, Tabler 3.49.0, MIT): `brand-tidal`, `circle-check` filled (selection marks: a disc
 with the tick cut out), `a-b`, `multiplier-1x`. Custom SVGs kept: `badge-hr`, `dac`, `click-wheel`,
 `gain-low/high`, `volume-3waves`; the custom guitar is gone (Lucide `guitar`); the Shanling mark is stock art.
@@ -47,7 +47,7 @@ Home icon), `guitar` (Genres), `badge-hr` (Hi-Res), `dac` (USB DAC), `volume-3wa
 (Lucide stops at two), `gain-low`/`gain-high` (tiles). Stock kept: brand art and text badges (codec badges, SyncLink, A-B), theme1 (own image files),
 the Chinese-only Home ids. Row glyphs: Now Playing the Lucide `audio-lines` wave (the navbar button's glyph), Cover Flow `gallery-horizontal`,
 Shuffle `shuffle`, Songs `music`, Albums `disc-3`, Artists `mic-vocal`, Genres `guitar`, Folders
-`folder`, Playlists `list-music`, Settings `settings`; the Settings page: Main Menu `list-checks`, Cover Flow `gallery-horizontal` (opens Settings > Cover Flow: Landscape `rotate-cw-square`, Sort `arrow-down-wide-narrow` with its value Artist / Album as grey 19 px text at the right, no chevron), Home Screen `layout-grid` (opens Settings > Home Screen: Start in M1+ Pod `house`, Shanling Home the mark below), Playback `sliders-horizontal`, System Settings `settings`, Shanling Home the Shanling mark (`pod_ic_shanling`: the brand's swoosh cut from the stock shutdown screen `images/xx/shutdown.png`, SHA-256 pinned in `tools/mod_icons.py`, isolated by whiteness, scaled to 24 px wide and thickened by a round 1.5 px dilation to a stroke of about 2 px; no glyph set involved); Extras `ellipsis` and the Extras page's rows the Home grid's glyphs (`heart`, `clock-plus`, `history`, `flame`, `feather`, `badge-hr`, `refresh-cw`, `globe`, `disc`); the Shuffle page uses the song,
+`folder`, Playlists `list-music`, Settings `settings`; the Settings page: Main Menu `list-checks`, Cover Flow `gallery-horizontal` (opens Settings > Cover Flow: Landscape `rotate-cw-square`, Sort `arrow-down-wide-narrow` with its value Artist / Album as grey 19 px text at the right, no chevron), Home Screen `layout-grid` (opens Settings > Home Screen: Start in M1+ Pod `house`, Shanling Home the mark below), Playback `sliders-horizontal`, System Settings `settings`, Shanling Home the Shanling mark (`pod_ic_shanling`: the brand's swoosh cut from the stock shutdown screen `images/xx/shutdown.png`, SHA-256 pinned in `tools/mod_icons.py`, isolated by whiteness, scaled to 24 px wide and thickened by a round 1.5 px dilation to a stroke of about 2 px; no glyph set involved); Extras `ellipsis` and the Extras page's rows the Home grid's glyphs (`star`, `clock-plus`, `history`, `flame`, `feather`, `badge-hr`, `refresh-cw`, `globe`, `disc`); the Shuffle page uses the song,
 album and folder glyphs. `ui/m1pod_menu.bin`, `m1pod_shuffle.bin`, `m1pod_settings.bin`, `m1pod_extras.bin` and `m1pod_mainmenu.bin` (and `m1pod_cfset.bin`) get the child image and hairline (title x 24 -> 56). `icons` runs late so it overrides the theme step's grey discs.
 
 ### Icon audit, round 2 (`tools/audit_images.py`)

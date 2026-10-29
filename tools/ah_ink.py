@@ -62,7 +62,7 @@ LINE_PAD = 0   # a label is its font size plus this high: the line box (descende
 BOTTOM = 8     # the touch rectangles end this far above the first track row
 
 
-def layout(f, outer, gap, art_y=6, art=160, btn_h=44, pill_h=40):
+def layout(f, outer, gap, art_y=50, art=160, btn_h=44, pill_h=40):
     """The header's AH_* rects for these ink gaps: `outer` from the cover's bottom to the title's capitals and from the year line's
     baseline to the pill's top, `gap` from the title's baseline to the artist's capitals and from the artist's baseline to the
     year line's digits. Returns {AH_TITLE_Y.. AH_HDR_H}."""

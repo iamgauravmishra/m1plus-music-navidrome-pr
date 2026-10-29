@@ -6,7 +6,7 @@ Modelled on q2-pod's test/patch.py (Copyright (c) 2026 Diamond Bond, MIT; see NO
 Requires unicorn (venv) and a workdir patched by tools/pod.py (its podbuild/manifest.json).
 test/patch.py calls init(WORKDIR) first, then loads the feature modules, which star-import this one.
 """
-import json, os, re, struct, sys
+import importlib.util, json, os, re, struct, sys
 from unicorn import Uc, UC_ARCH_MIPS, UC_MODE_MIPS32, UC_MODE_LITTLE_ENDIAN, UC_HOOK_CODE, UC_HOOK_BLOCK
 from unicorn.mips_const import (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3,
                                 UC_MIPS_REG_V0, UC_MIPS_REG_SP, UC_MIPS_REG_RA, UC_MIPS_REG_T9, UC_MIPS_REG_PC, UC_MIPS_REG_GP, UC_MIPS_REG_F0,
@@ -39,6 +39,49 @@ def init(work):
     BUILD = os.path.join(WORK, 'podbuild')
     MANIFEST = json.load(open(os.path.join(BUILD, 'manifest.json')))
     PSYMS = pod.symbols_elf(os.path.join(BUILD, 'patch.elf'))
+
+
+def sibling(name):
+    """test/pod/<name>.py (its machines and helpers) as test/patch.py loaded it, or loaded here when the caller runs alone."""
+    key = f'podtest_{name}'
+    if key not in sys.modules:
+        spec = importlib.util.spec_from_file_location(key, os.path.join(os.path.dirname(os.path.abspath(__file__)), name + '.py'))
+        mod = importlib.util.module_from_spec(spec); sys.modules[key] = mod; spec.loader.exec_module(mod)
+    return sys.modules[key]
+
+
+def tr_of(loc):
+    """key -> our text for key in loc's table, as read_cstr returns it (the UTF-8 bytes as latin-1)."""
+    t = pod_i18n.table_for(loc)
+    return lambda key: pod_i18n.TEXT[key][t].encode('utf-8').decode('latin-1')
+
+
+def asset_path(n): return os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw', 'images', 'xx', n + '.png')
+
+
+def asset_image(n):
+    """The built image images/xx/<n>.png as RGBA."""
+    from PIL import Image
+    return Image.open(asset_path(n)).convert('RGBA')
+
+
+def png_of(im):
+    """An image's PNG bytes as the build writes them (optimize=True): compare with a shipped file byte for byte."""
+    import io
+    b = io.BytesIO(); im.save(b, 'PNG', optimize=True); return b.getvalue()
+
+
+def lum(c):
+    """WCAG relative luminance of an (r, g, b) colour, 0..255 a channel, or of '#rrggbb'."""
+    if isinstance(c, str): c = tuple(int(c[i:i + 2], 16) for i in (1, 3, 5))
+    f = lambda v: v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+    return 0.2126 * f(c[0] / 255) + 0.7152 * f(c[1] / 255) + 0.0722 * f(c[2] / 255)
+
+
+def contrast(a, b):
+    """WCAG contrast ratio of two colours (either order)."""
+    hi, lo = sorted((lum(a), lum(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
 
 
 class Ctx:
@@ -117,6 +160,10 @@ class Machine:
         self.types = {}             # handle -> widget type string (widget_get_type)
         self.deques = {}            # handle -> list of record addresses
         self.showlist = []          # what loadLocalClassList leaves in *pdeq_showlist
+        self.playlists = []         # the playlist rows loadLocalClassList(0xf00b) leaves in *pdeq_playlist
+        self.playlist_songs = {}    # playlist id -> its song rows (loadLocalClassList(0xff13) with classinfo[1] = the id)
+        self.create_ret = 5         # createPlayListItem's result (-1 full, -2 exists)
+        self.dialog_name = 'Mix'    # what the keyboard dialog writes into the name (None: cancelled)
         self.album_artists = []     # the artists list while artist_type == 1 (the stock page's album-artist switch)
         self.class_lists = {}       # ... per class, where a test sets one (0xf004: the artists)
         self.tracklist = []         # what loadSongList leaves there
@@ -141,6 +188,8 @@ class Machine:
         self.watch = Traps(self)
         self.watch.update({PSYMS[n]: n for n in ('set_value', 'set_offset') if n in PSYMS})
         self.handlers[pod.HOME_INIT + 12] = 'stock_init_resume'
+        self.handlers[pod.PLAYLIST_IMPORT] = 'stock_playlist_import'   # the stock Playlists page's Import / Export click handlers
+        self.handlers[pod.PLAYLIST_EXPORT] = 'stock_playlist_export'
         # the Home guard's world (patch/home.c): flash/SD files, file descriptors, the window stack
         self.fs, self.fds, self.next_fd, self.fail = {}, {}, 3, set()
         self.dirs = {'/mnt/data'}
@@ -148,9 +197,9 @@ class Machine:
         self.timer_fail = False
         self.create_fail = set()    # widget constructors (view_create, ..) that return 0
         self.wm, self.top_main, self.home_opened, self.init_ret = 0x22000000, 0, 1, 0
-        self.icount = 0
+        self.icount, self.limit = 0, 0
         self.bitmaps, self.free_blocks = {}, {}   # bitmap_create_ex's results; destroyed data blocks to reuse
-        self.blits, self.texts, self.measures, self.glyphs = [], [], [], []
+        self.blits, self.texts, self.measures, self.glyphs, self.draw_oy = [], [], [], [], []
         self.fills, self.text_styles, self.cur_style, self.fill_color = [], [], '', 0 # canvas_fill_rect (colour, x, y, w, h); the style widget of each text
         self.destroyed, self.loads = 0, []   # bitmaps destroyed / images loaded, over the machine's life
         self.u.hook_add(UC_HOOK_BLOCK, self._block)   # icount: instructions of every block entered
@@ -176,6 +225,7 @@ class Machine:
         return out.decode('latin-1')
 
     def word(self, a): return struct.unpack('<I', self.u.mem_read(a, 4))[0]
+    def s32(self, a): return struct.unpack('<i', self.u.mem_read(a, 4))[0]
     def setword(self, a, v): self.u.mem_write(a, struct.pack('<I', v & 0xffffffff))
 
     def icon(self, name):
@@ -216,7 +266,9 @@ class Machine:
         return w
 
     # ---------------- the mocks ----------------
-    def _block(self, u, address, size, _): self.icount += size >> 2
+    def _block(self, u, address, size, _):
+        self.icount += size >> 2
+        if self.icount > self.limit: u.emu_stop()   # call()'s step limit, a block at a time
 
     def _hook(self, u, address, size, _):
         name = self.handlers.get(address)
@@ -246,7 +298,8 @@ class Machine:
             nm = self.read_cstr(a1); self.calls.append(('widget_lookup', nm))
             ret = self.widgets.get(nm, 0)
         elif name == 'widget_on':
-            self.calls.append(('widget_on', a0, a1, a2, a3)); self.bound[(a0, a1)] = (a2, a3); ret = 1
+            self.calls.append(('widget_on', a0, a1, a2, a3)); ret = 0 if a1 in self.widget_on_fail else 1
+            if ret: self.bound[(a0, a1)] = (a2, a3)
         elif name == 'widget_set_text_utf8':
             self.calls.append(('widget_set_text_utf8', a0, self.read_cstr(a1))); ret = 0
         elif name == 'locale_info':
@@ -268,6 +321,8 @@ class Machine:
         elif name == 'widget_set_visible':
             self.props[(a0, 'visible')] = a1
             self.calls.append(('widget_set_visible', a0, a1))
+        elif name == 'widget_get_visible':   # what widget_set_visible stored (a widget the test never hid or showed is visible)
+            ret = int(self.props.get((a0, 'visible'), 1))
         elif name == 'widget_set_sensitive':
             self.props[(a0, 'sensitive')] = a1
             self.calls.append(('widget_set_sensitive', a0, a1))
@@ -279,6 +334,8 @@ class Machine:
             self.calls.append(('widget_ungrab', a0, a1))
         elif name == 'widget_set_prop_int':
             self.props[(a0, self.read_cstr(a1))] = a2
+            if a0 in self.live_scroll and self.read_cstr(a1) in ('virtual_h', 'yoffset'):   # a scroll_view struct: the setters' stores (virtual_h @0x7c, yoffset @0x84)
+                self.setword(a0 + {'virtual_h': 0x7c, 'yoffset': 0x84}[self.read_cstr(a1)], a2)
             self.calls.append(('widget_set_prop_int', a0, self.read_cstr(a1), a2))
         elif name == 'widget_use_style':
             self.props[(a0, 'style')] = self.read_cstr(a1)
@@ -414,6 +471,7 @@ class Machine:
         elif name == 'canvas_draw_image':
             self.calls.append(('canvas_draw_image', a1))
             self.blits.append((a1, struct.unpack('<4i', self.u.mem_read(a2, 16)), struct.unpack('<4i', self.u.mem_read(a3, 16))))
+            if a0 and a0 == self.oy_canvas: self.draw_oy.append(struct.unpack('<i', self.u.mem_read(a0 + O['CANVAS_OY'], 4))[0])   # the canvas origin each cover was drawn at
         # ---- the Albums grid: the canvas' text calls, wide-char titles, a navbar button
         elif name == 'widget_prepare_text_style':
             self.calls.append(('widget_prepare_text_style', a0))
@@ -463,6 +521,15 @@ class Machine:
         # ---- Cover Flow: the stock library
         elif name == 'loadLocalClassList':
             self.calls.append(('loadLocalClassList', a0))
+            if a0 == O['CLASS_PLAYLISTS']:   # getAllPlayList, assigned to *pdeq_playlist
+                self.setword(pod.DATA['PDEQ_PLAYLIST'][0], self.new_deque(self.playlists))
+                u.reg_write(UC_MIPS_REG_V0, len(self.playlists)); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+                return
+            if a0 == O['CLASS_PLAYLIST_SONGS']:   # getMusicByPlayList(classinfo[1]), assigned to *pdeq_showlist
+                items = self.playlist_songs.get(self.word(pod.DATA['CLASSINFO'][0] + 4), [])
+                self.setword(pod.DATA['PDEQ_SHOWLIST'][0], self.new_deque(items))
+                u.reg_write(UC_MIPS_REG_V0, len(items)); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+                return
             items = self.class_lists.get(a0, self.showlist)
             if a0 == O['CLASS_ARTISTS'] and self.album_artists:   # GetAllAlbumArtist when artist_type == 1
                 items = self.album_artists if self.word(pod.DATA['ARTIST_TYPE'][0]) == 1 else items
@@ -507,6 +574,15 @@ class Machine:
                 ret = 0
                 u.reg_write(UC_MIPS_REG_V0, ret); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
                 return
+            if ctx == 'allmusic_page':   # the Songs page: the context is the class, a value; the playlist is in classinfo[1] and the title in nagvation_title
+                self.calls.append(('navigator_to_with_context', ctx, a1, self.word(pod.DATA['CLASSINFO'][0] + 4), self.read_cstr(pod.DATA['NAV_TITLE'][0])))
+                u.reg_write(UC_MIPS_REG_V0, 0); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+                return
+            if ctx == 'dialog/kbaddplaylist_dialog':   # modal; the name goes into the caller's buffer, 0 = accepted
+                self.calls.append(('navigator_to_with_context', ctx, self.dialog_name))
+                if self.dialog_name is not None: self.u.mem_write(a1, self.dialog_name.encode() + b'\0')
+                u.reg_write(UC_MIPS_REG_V0, 0 if self.dialog_name is not None else 1); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+                return
             self.calls.append(('navigator_to_with_context', ctx, self.word(a1 + 4),
                                self.word(a1 + 8), self.word(a1 + 12)))
             if ctx == 'playing_page':   # the queue as start_player copies it, and the class of its songs
@@ -517,6 +593,10 @@ class Machine:
             elif ctx == 'dialog/confirminfo_dialog':   # modal: the button pressed is the result (0xa Yes, else No)
                 self.calls.append(('confirm', self.read_cstr(a1 + 8), self.word(a1)))
                 ret = O['CONFIRM_YES'] if self.confirm_yes else 0
+        elif name == 'createPlayListItem':   # (the stock list, the name): the new id, -1 full, -2 exists
+            self.calls.append(('createPlayListItem', self.read_cstr(a1), len(self.deques.get(a0, [])))); ret = self.create_ret
+        elif name in ('stock_playlist_import', 'stock_playlist_export'):
+            self.calls.append((name, self.word(pod.DATA['NAVIGATION_STATUS'][0])))
         elif name == 'albumcoverinfo_init':
             self.calls.append(('albumcoverinfo_init', a0))
         elif name == 'batchadd_albumcover_task':
@@ -672,6 +752,7 @@ class Machine:
             ret = len(self.deques.get(a0, []))
         elif name == 'deque_at':
             items = self.deques.get(a0, []); ret = items[a1] if a1 < len(items) else 0
+            if a1 >= len(items): self.calls.append(('deque_at_oob', a1, len(items)))   # the device's deque_at reads past the end: a crash there
         elif name == 'deque_destroy':
             self.deques.pop(a0, None); self.calls.append(('deque_destroy',))
         # ---- Home guard: files, descriptors, the window stack
@@ -749,20 +830,30 @@ class Machine:
     canvas_mem = 0            # a canvas in emulated memory (landscape reads its font); font_mem: the font it points at
     font_mem = 0x7000f000
     glyphs = ()               # (char, size) of every font_get_glyph call
+    widget_on_fail = frozenset()   # events whose widget_on registration is refused (returns 0)
+    live_scroll = frozenset() # scroll_view structs whose virtual_h / yoffset the widget_set_prop_int mock also stores (the stock setters' stores)
+    oy_canvas = 0             # a canvas in emulated memory whose origin y (canvas_t @4) is logged in draw_oy at every canvas_draw_image
+    draw_oy = ()
     mem_geometry = False      # widget_move / widget_resize also write the widget_t (stock widget_to_local reads it)
 
-    def call(self, addr, a0=0, a1=0, count=20000, a2=0):
+    def call(self, addr, a0=0, a1=0, count=20000, a2=0, a3=0):
         self.calls = []
         self.icount = 0
         self.u.reg_write(UC_MIPS_REG_SP, STACK)
         self.u.reg_write(UC_MIPS_REG_RA, RET)
         self.u.reg_write(UC_MIPS_REG_T9, addr)
-        self.u.reg_write(UC_MIPS_REG_A0, a0 & 0xffffffff)
-        self.u.reg_write(UC_MIPS_REG_A1, a1 & 0xffffffff)
-        self.u.reg_write(UC_MIPS_REG_A2, a2 & 0xffffffff)
-        self.u.emu_start(addr, RET, count=count)
+        for r, v in ((UC_MIPS_REG_A0, a0), (UC_MIPS_REG_A1, a1), (UC_MIPS_REG_A2, a2), (UC_MIPS_REG_A3, a3)): self.u.reg_write(r, v & 0xffffffff)
+        self.limit = count   # enforced by _block: emu_start's own count hooks every instruction (~10x slower)
+        self.u.emu_start(addr, RET)
         assert self.u.reg_read(UC_MIPS_REG_PC) == RET, 'did not return to sentinel'
         return self.u.reg_read(UC_MIPS_REG_V0)
+
+    FIRE_WIN = None   # fire()'s default widget (None: the machine's window)
+
+    def fire(self, ev, win=None):
+        """The handler the payload bound with widget_on(win, ev), run as the emitter would, with no event struct."""
+        fn, ctx = self.bound[(self.FIRE_WIN or self.window if win is None else win, ev)]
+        return self.call(fn, a0=ctx, a1=0, count=8000000)
 
     def names(self): return [c[0] for c in self.calls]
 
@@ -820,6 +911,10 @@ STOCK_NOOPS = ('widget_set_focused', 'widget_set_focused_internal', 'widget_inva
                'darray_init', 'widget_off_by_func', 'darray_deinit')
 
 
+POINTER_ON = {'d': 0x67126c, 'm': 0x6715f4, 'u': 0x67187c}   # widget_on_pointer_down / _move / _up (the window manager's entry points)
+POINTER_EVT = {'d': O['EVT_POINTER_DOWN'], 'm': O['EVT_POINTER_MOVE'], 'u': O['EVT_POINTER_UP']}
+
+
 class StockEventMachine(Machine):
     """The machine with demo's pointer-event code running for real. Class attributes of a subclass: LEAVES (extra mocked
     addresses, merged over STOCK_LEAVES), EXTRA (extra mocked names the base Machine does not know, such as
@@ -829,6 +924,9 @@ class StockEventMachine(Machine):
     EXTRA = ()
     NOOPS = STOCK_NOOPS
     REAL = ()
+    WIN_Y = 0         # the window's screen y: pointer() adds it (pointer events carry screen coordinates)
+    DELIVER = False   # queue what the stock code emits (a copy: it lives on the stock stack) for the handlers the payload bound;
+                      # pointer() hands it to them after the stock code returned, in the order it was sent
 
     def __init__(self):
         super().__init__()
@@ -838,6 +936,39 @@ class StockEventMachine(Machine):
         self.u.reg_write(_STATUS, self.u.reg_read(_STATUS) | 1 << 29 | 1 << 26)   # CU1 and FR: the velocity code is floating point (-mfp64)
         self.setword(pod.GP - 0xd98, self.alloc(8))   # the GOT slot of `stdout` (the dynamic loader fills it): the debug fflush(stdout) reads through it
         self.owner, self.states, self.log, self.anims, self.end, self.t = {}, {}, [], {}, {}, 0
+        self.queue, self.fired, self.calls_all = [], [], []
+
+    def pointer(self, kind, x, y, dt=16, abort=False, root=None):
+        """One pointer event at root (the window): widget_on_pointer_down / _move / _up, or (abort) the EVT_POINTER_ABORT that
+        window_base_on_event sends on EVT_WINDOW_TO_BACKGROUND while the window is pressed (pointer_event_init(.., 0x107, ..)
+        then widget_on_pointer_up, @0x676e38). calls_all collects the calls of the event and of the handlers it reached."""
+        self.t += dt
+        e = self.alloc(0x30); self.u.mem_write(e, bytes(0x30))
+        self.setword(e, O['EVT_POINTER_ABORT'] if abort else POINTER_EVT[kind]); self.setword(e + 4, 0x30); self.setword(e + 8, self.t)
+        self.setword(e + 0x18, x); self.setword(e + 0x1c, y + self.WIN_Y)
+        self.u.mem_write(e + 0x24, bytes([0 if kind == 'u' else 1]))
+        self.queue, self.log = [], []
+        ret = self.call(POINTER_ON[kind], a0=self.root if root is None else root, a1=e, count=8000000)
+        self.calls_all += self.calls
+        if self.DELIVER: self.deliver()
+        return ret
+
+    def deliver(self):
+        """The queued events to the handlers the payload bound; fired records (owner name, event) of every one."""
+        for owner, evt, raw in self.queue:
+            self.fired.append((self.name_of(owner), evt))
+            if (owner, evt) in self.bound:
+                fn, ctx = self.bound[(owner, evt)]
+                ev = self.alloc(0x30); self.u.mem_write(ev, raw)
+                self.call(fn, a0=ctx, a1=ev, count=8000000)
+                self.calls_all += self.calls
+                self.handled()
+        self.queue = []
+
+    def handled(self):
+        """After each delivered handler: a subclass writes what the payload's mocked calls changed back into its structs."""
+
+    def name_of(self, a): return next((n for n, w in self.widgets.items() if w == a), hex(a))
 
     def call(self, *a, **k):
         try: return super().call(*a, **k)
@@ -859,7 +990,9 @@ class StockEventMachine(Machine):
         if name == 'widget_set_state': self.states[a0] = self.read_cstr(a1)
         elif name == 'event_init':
             self.u.mem_write(a0, struct.pack('<II', a1, 0x18)); self.setword(a0 + 0x10, a2)
-        elif name == 'emitter_dispatch': self.log.append(('emit', self.owner.get(a0, a0), self.word(a1) & 0xffff))
+        elif name == 'emitter_dispatch':
+            self.log.append(('emit', self.owner.get(a0, a0), self.word(a1) & 0xffff))
+            if self.DELIVER: self.queue.append((self.owner.get(a0, a0), self.word(a1) & 0xffff, bytes(self.u.mem_read(a1, 0x30))))
         elif name == 'widget_dispatch_simple_event': self.log.append(('simple', a0, a1))
         elif name == '__cmpdi2':   # libgcc: signed 64 bit compare (a1:a0 against a3:a2) -> 0 less, 1 equal, 2 greater
             s64 = lambda lo, hi: struct.unpack('<q', struct.pack('<II', lo, hi))[0]
@@ -903,11 +1036,6 @@ class StockEventMachine(Machine):
 FIND_TARGET = 0x666bdc
 CLIENT_H = 450
 STATES = ('normal', 'pressed', 'over', 'focused', 'disable', 'selected')
-DARK = ('#000000', '#1E1E1E', '#2A2A2A', '#00000000')
-
-
-def is_dark(c): return c in DARK or (len(c) >= 7 and int(c[1:3], 16) < 0x40 and int(c[3:5], 16) < 0x40 and int(c[5:7], 16) < 0x40)
-def is_light(c): return len(c) >= 7 and min(int(c[1:3], 16), int(c[3:5], 16), int(c[5:7], 16)) >= 0xa0
 F_ENABLE, F_VISIBLE, F_SENSITIVE = 1, 4, 8
 
 
@@ -1068,9 +1196,13 @@ def fnv(h, s):
     return h * 16777619 & 0xffffffff
 
 
+def album_key(artist, album):
+    """The cover cache's key of an album: FNV-1a of artist then album, never 0 (patch/covercache.c)."""
+    return fnv(fnv(O['FNV_SEED'], artist), album) or 1
+
+
 def cache_paths(m, albums):
-    return [art_file(fnv(fnv(O["FNV_SEED"], f"Artist {i}"), f"Album {i}") or 1)
-            for i in range(albums)]
+    return [art_file(album_key(f'Artist {i}', f'Album {i}')) for i in range(albums)]
 
 
 def build_state(m):

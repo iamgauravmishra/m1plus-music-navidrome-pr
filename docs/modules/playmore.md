@@ -26,8 +26,35 @@ Preview, both pages over Now Playing with the dim: `venv/bin/python -I tools/pre
   (our key, 13 translations) in a 262 px box: it fits in all 13 languages (test), so it stays visible.
 - The stock layouter keeps a row's own height: the asset has Look up artist (5) and Delete (6) at 60 px (stock: 370 px of rows in the 350 px sheet, so
   the stock list scrolled by 20 px). The payload resizes every row to `PM_ROW_H` 50, so both pages are exact and nothing scrolls.
-- The red: `#FF5A4F` is 6.8:1 on the black sheet and 4.85:1 on the pressed row (`#362221`; a label in a pressed row keeps its normal state, which is how
-  `tools/mod_theme.py --scan` counts it). The Delete glyph (`p_delete`) stays white.
+- The red: `#FF5A4F` (a label in a pressed row keeps its normal state). Its ratios are in "Glass" below. The Delete glyph (`p_delete`) stays white.
+
+## Glass
+
+The sheet is the glass of the Home mini player bar and the lock screen's card (`docs/modules/minibar.md` "Glass", `docs/modules/lockscreen.md`), like an iOS bottom sheet.
+
+- **The image.** `pm_sheet.png` (`assets/icons/png/`, 320 x 200, 2.4 KB; installed by `mod_nowplaying` with the `np_*` images) =
+  `mod_icons.glass_image(320, 200, 18, fill=GLASS_SHEET_FILL, top_only=True)`: the same pane (dark gradient `#2A2A2C` to `#1E1E20`, 1 px rim light, faint inner
+  line) with **only the top corners rounded** (r 18; `top_only` draws the shape past the foot, so the bottom corners and the foot are opaque and carry no rim
+  line: the sheet sits on the screen edge; the mini bar and the card are unchanged byte for byte). **Fill alpha 0.88** (bar 0.82, card 0.76): the labels, the
+  grey badges and the chevrons sit straight on it, and the Now Playing page (title, stars, transport glyphs) only ghosts through. It is the dialog's `bg_image` in
+  `normal` / `disable` / `focused`, `bg_color` `#00000000`, `border` `none` (the stock `#666666` top line is gone: the rim is in the image), no radius.
+- **Transparent rows, this dialog only.** The list_view and scroll_view `bg_color` `#00000000`; every one of the nine rows carries inline styles (no shared style name,
+  the global `list_item_style` and every other page untouched, test): `bg_color` transparent in every state but `pressed`, `#FFFFFF10` (6 % white), and `border_color`
+  `#FFFFFF22` (13 % white; AWTK blends a 1 px line's alpha like a fill, `test/awtk_fill.py`). The album page's 20 % band (`docs/modules/album-page.md`) would take the
+  red under 3:1 (2.14:1 over white-under-the-dim), hence 6 %. Widget names and handlers untouched.
+- **What is behind.** The highlighter dims the whole page by 130/255; the glass lies on that. Under the sheet (window rows 250..450) the tint is a tone of at most
+  192 under `np_tint` alpha >= 148 (81), 40 after the dim: nearly black; the brightest things are the transport glyphs (off-white, 125 after the dim).
+- **Contrast** (worst over each label's box, measured by `test/pod/playmore.py`): glass over black / over white under the dim (125) / over pure white with no dim
+  (a stress case the highlighter never shows): white row labels at rest 15.5 / 12.6 / 9.9, pressed 12.8 / 10.3 / 8.2 (floor 7:1 over the first two); red Delete label
+  at rest 5.53 / 4.59 / 3.63, pressed 4.66 / 3.75 / 3.01 (floor 4.5:1 at rest over both, pressed 4.5:1 over black and 3:1 over the dimmed white; the red, luminance 0.29, is
+  the weak one and sets the alpha: 0.78 gave 4.04); the Speed note `#AAAAAA` 6.93 / 5.68 / 4.46 (floor 4.5:1 over the first two); unselected badges (grey outlines
+  by design) 3.55 / 2.90 / 2.27, chevrons 5.06 / 4.20 / 3.32 at rest (floors 3:1 over black, 2.5:1 over the dimmed white).
+- **RAM.** The image decodes to 320 x 200 x 4 = 256,000 bytes (the card: 384,768, the pill 68 KB), only while the image manager holds it; not a concern. It is drawn 1:1
+  by `canvas_draw_image_ex`. A 9-patch (`bg_image_draw_type` patch3 / patch9) is not used: `canvas_draw_image_patch9` is at `0x647d20` but no style value is pinned (as for
+  the lock card), and a stretched middle would smear the gradient and rim.
+- **Kill switch / failed start.** The asset keeps its look (as with the dim): the stock seven 50-60 px rows are transparent over a 320 x 200 glass in a 350 px dialog, so
+  the rows below the glass lie directly on the dimmed page (legible, not pretty).
+- Preview: `tools/preview_playmore.py` draws the `bg_image`, the dim over the whole screen, the hairlines and a pressed Delete row: `out/preview/playmore-glass.png`.
 
 ## Positioning (the bottom sheet)
 
@@ -39,9 +66,14 @@ it to 320 x 200 (the list_view's `self_layout` `h=100%` follows). Pins touched: 
 - **Tap above closes.** The stock handler `0x478abc` (bound to `EVT_POINTER_UP` by the stock init, kept) compares the pointer's y with `dialog->y` and
   closes when it is smaller. With the sheet at y 280 that is exactly "a tap above the sheet": nothing of ours is involved (the old `pm_on_up`, which
   closed on a tap *below* a top-anchored short sheet, is gone: the sheet touches the bottom edge).
-- **Another dialog opens over it** (Delete's confirm): the window manager sends `EVT_WINDOW_TO_BG` and the stock handler `0x4789f0` moves the dialog back to
-  y 130, which would drop the sheet in mid screen. The payload binds its own handler for the same event after the stock one (handlers run in
-  registration order) and puts the sheet back on the bottom in the same dispatch, before any paint. (The stock init also adds a 200 ms timer, `0x478a48`,
+- **Another dialog opens over it** (Delete's confirm): the window manager sends `EVT_WINDOW_TO_BG` and the stock handler `0x4789f0` (on the dialog) moves
+  the dialog back to y 130, which would drop the sheet in mid screen. The payload's handler puts the sheet back on the bottom in the same dispatch, before
+  any paint, so it has to run after the stock one. **It is bound on the list_view, not on the dialog**: this AWTK's emitter runs the *newest* handler
+  first (`emitter_on_with_tag` puts a new one at the head, `0x6f466c` / `0x6f4670`), so a handler bound later on the dialog runs before the stock one
+  (V2.1nN did that: the sheet sat mid screen after the confirm). The window event goes through `widget_dispatch_recursive` (`0x678870`), whose
+  `widget_foreach` visits a widget and then its children (`0x668ae4` / `0x668af0`, if the visit returned `RET_OK`, which the dialog's emitter
+  returns after its last handler, `0x6f45a0`); the list_view is the dialog's first child and `list_view_on_event` returns `RET_OK` for the event
+  (`0x60c53c`), so its emitter runs ours right after the stock one. All pinned in `PLAYMORE_PINS`. (The stock init also adds a 200 ms timer, `0x478a48`,
   that moves the dialog to y 130 when `scr_rotateflag` is set: a screen rotation, which this firmware's UI does not do while a dialog is open; not handled.)
 - **The dim** is the dialog's own `highlight` property in the asset, `highlight="default(alpha=130)"`: the stock window manager (the function at `0x690100`, its
   `widget_get_prop(dialog, "highlight")` at `0x6901c4`) reads it when the dialog opens and builds the "default" dialog highlighter (registered at tk init, `0x68e8bc`) with `dialog_highlighter_factory`,
@@ -60,7 +92,7 @@ words and the stock handlers' words (above). The stock init (it binds every row 
 texts, binds the to-background and tap-above handlers, moves the sheet to y 130) runs first and its result is returned; then, unless the kill switch
 `/mnt/mmc/m1pod-off` exists, `pm_start` looks up the dialog's widgets by name and checks the asset is the one it knows (nine rows under the scroll_view,
 each row's parent, the four labels), sets the texts (`widget_set_tr_text`: `More` twice, `Speed`, `Files below 48 kHz only`) and registers four
-handlers (the More row's and the back header's `EVT_CLICK`, the dialog's `EVT_DESTROY` and `EVT_WINDOW_TO_BG`). **Everything fallible happens before the
+handlers (the More row's and the back header's `EVT_CLICK`, the dialog's `EVT_DESTROY` and the list_view's `EVT_WINDOW_TO_BG`). **Everything fallible happens before the
 first row moves**; any failure leaves the stock seven rows (`pod_more` and `pod_back` are `visible=false` and `sensitive=false` in the asset, so they do
 not show; a text already set stays, and fits the stock label). The state is one `.scratch` struct (handles, `page`), cleared by the destroy handler; each
 handler checks that its context is the dialog the state belongs to, so a handler a failed start left behind does nothing.
@@ -104,16 +136,19 @@ pins and `$gp`; the premise of the dim (the window manager's `highlight` read an
 370 px); page 1 and page 2 order, visibility, sensitivity, stacking, heights, sheet size and y + h = 480; every stock handler unchanged and first in order and
 only four added; hit tests per page (a tap lands on the row drawn there, no touch ever lands on a hidden widget, the badges and A-B are reachable only on
 page 2, the page 1 rows only on page 1); More -> page 2, back header -> page 1 through real taps (list_item click -> our handler), relayouts on both pages,
-repeated switching; the stock tap handler closing above the sheet and not on it, on both pages; the stock to-background handler followed by ours (the sheet
-back on the bottom, the rows unmoved); destroy and reopen (starts on page 1); kill switch, stock failure, no dialog, each missing widget, wrong parent, 7, 8
+repeated switching; the stock tap handler closing above the sheet and not on it, on both pages; the to-background window event dispatched as demo does it (the tree
+walked widget first, then its children; each emitter newest handler first, the words pinned): the stock handler on the dialog, then ours on the
+list_view (the sheet back on the bottom, the rows unmoved), and the same handler bound on the dialog leaving the sheet at y 130 (the V2.1nN bug); destroy and reopen (starts on page 1); kill switch, stock failure, no dialog, each missing widget, wrong parent, 7, 8
 or 10 children, each text and each bind failure: the stock menu, nothing moved, leftover handlers inert; the four texts in all 16 tables and their fit in 13
 languages (More before its chevron, Speed in 96 px, the note in 262 px); both asset themes (stock widgets unchanged but the speed row, highlight, hidden
-start, styles, red contrast, hairlines, the stock chevron images).
+start, styles, hairlines, the stock chevron images); the glass: `pm_sheet.png` byte for byte vs the generator, top corners transparent and the foot opaque, the
+dialog / list / rows' inline styles, no other asset uses the image and the shared `list_item_style` is still opaque, and the contrast table of "Glass" with its floors.
 
 ## Device check
 
 Open More on Now Playing: the page above the sheet is dimmed (if not, the highlight is not taking effect: the paint path is the one thing the emulator cannot
-show), four rows on the bottom edge of the screen (Look up album, Look up artist, Add to playlist, More with a grey chevron); tap above the sheet closes it; tap
+show) and the sheet is dark glass with rounded top corners, the page ghosting faintly through it, no square corner or black rectangle (the bottom corners
+sit on the screen edge); labels, badges and chevrons legible, a pressed row only faintly lighter; four rows on the bottom edge of the screen (Look up album, Look up artist, Add to playlist, More with a grey chevron); tap above the sheet closes it; tap
 More: the same sheet shows "< More", Speed (readable, the four badges tappable, the note under it), AB Repeat and a red Delete Song; tap "< More": page 1; tap
 Delete: "Delete Song?" confirm opens over the sheet and, on No, the sheet is back on the bottom as it was (no jump to the middle); speed badges and the A-B
 switch work; a new language shows the translated texts; `/mnt/mmc/m1pod-off`: the stock seven rows (dimmed by the asset).

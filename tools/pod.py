@@ -42,8 +42,8 @@ OBJCOPY = os.path.join(LLVM, 'llvm-objcopy')
 LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
-SOURCES = ['m1pod.c', 'common.c', 'menu.c', 'covercache.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'albuminfo.c', 'nowplaying.c', 'rows.c', 'shot.c', 'home.c',
-           'scroll.c', 'playmore.c']
+SOURCES = ['m1pod.c', 'common.c', 'menu.c', 'covercache.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'albuminfo.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'rows.c', 'shot.c', 'home.c',
+           'scroll.c', 'playmore.c', 'playlists.c']
 
 FLAGS = ['--target=mipsel-linux-gnu', '-march=mips32r2', '-mabi=32', '-mfp64',
          '-mno-abicalls', '-fno-pic', '-G0', '-ffreestanding', '-fno-builtin',
@@ -234,6 +234,34 @@ FUNCTIONS.update({
     'widget_get_window':       ('void *', 'void *', 0x66a9a8),
 })
 # (rows_track_number also uses label_create, widget_use_style, widget_set_sensitive and widget_set_text_utf8, above)
+# The mini player bar (patch/minibar.c, docs/modules/minibar.md): the calls the stock transport buttons make, and the play state
+# they read. The lock screen's btn_play / btn_next handlers (strcmp-bound to 0x53f964 / 0x53f900 by name @0x53f3d4 / @0x53f410) are
+# `playpause_quick_click()` / `next_quick_click(e, 0)` followed by the page's own refresh (0x53f520); Now Playing's next button
+# (@0x53c16c: `next_quick_click(e, 0)`) and the hardware keys (on_wm_keyup_fun @0x4cda78 / @0x4cdba4) call the same two. Both do
+# their own checks (queue, network source, "not found" toast) and tell the other listeners (notifyPlayStatus, dmr, Bluetooth).
+# next_quick_click reads e->time (event_t u64 @8: `lw a1, 8(a0); lw a2, 0xc(a0)` @0x4ccf2c) and ignores a click within 1000 ms of the
+# last one it took (the global 0xa05a40). mclGetPlayStatus is `lw v0, status`: 2 = playing (the lock screen refresh @0x53f82c shows
+# btn_imgpause1_style for 2 and btn_imgplay1_style for anything else), mclSetPause stores 3 (@0x5d2658), mclSetResume 2 (@0x5d26c8).
+FUNCTIONS.update({
+    'playpause_quick_click':   ('int', 'void', 0x4cd150),
+    'next_quick_click':        ('int', 'void *, int', 0x4ccf00),
+    'mclGetPlayStatus':        ('int', 'void', 0x5d3640),
+})
+# The Playlists page (patch/playlists.c, docs/modules/playlists.md): the stock playlist creation, and the click handlers of the stock Playlists
+# page's Import and Export rows (static, unnamed; ret_t (ctx, event), neither reads its arguments: each asks with the stock confirm dialog,
+# runs importPlayList / exportPlayList and tells the result in the stock message box).
+FUNCTIONS.update({
+    'createPlayListItem':      ('int', 'void *, const char *', 0x4eeca8),   # (the stock list, name or NULL): the new id, -1 full, -2 name exists
+})
+PLAYLIST_IMPORT, PLAYLIST_EXPORT = 0x53dedc, 0x53dd34
+PLAYLIST_PINS = (   # (address, stock word, what it proves)
+    (PLAYLIST_IMPORT, 0x3c1c004c, 'import click handler prologue'), (PLAYLIST_IMPORT + 4, 0x279c5ff4, 'import click handler prologue'),
+    (PLAYLIST_IMPORT + 8, 0x0399e021, 'import click handler prologue'),
+    (PLAYLIST_EXPORT, 0x3c1c004c, 'export click handler prologue'), (PLAYLIST_EXPORT + 4, 0x279c619c, 'export click handler prologue'),
+    (PLAYLIST_EXPORT + 8, 0x0399e021, 'export click handler prologue'),
+    (0x53df64, 0x8f99c2a4, 'import: lw importPlayList from the GOT'), (0x53df6c, 0x0320f809, 'import: jalr importPlayList'),
+    (0x53ddc4, 0x8f99c2a0, 'export: lw exportPlayList from the GOT'), (0x53dde8, 0x0320f809, 'export: jalr exportPlayList'),
+)
 # Stock data the payload reads or writes, by absolute address. Exported objects are checked
 # against .dynsym; the two unnamed ones carry the code that proves them.
 DATA = {
@@ -265,6 +293,12 @@ DATA = {
     # `addiu v1, v1, -0x3e9c`; its prologue `lui gp, 0x3f; addiu gp, gp, 0x7d6c`, test/pod/pulldown.py pins both words)
     'SV_VTABLE':          (0x97a298, 'g_scroll_view_vtable'),
     'LV_PAINT_HOOK':      (0x60c164, None),
+    # the Playlists page (patch/playlists.c): the stock playlist list (loadLocalClassList(0xf00b) assigns it, @0x4ee63c), the title the
+    # Songs page shows (allmusic_page_init strcpy's it @0x528a74; the Playlists row handler snprintf's the name into it @0x53d5b8) and
+    # navigation_status (0 = normal, 1 = the multi-select mode of the lists: the stock export reads it @0x53ddc0)
+    'PDEQ_PLAYLIST':      (0xa045d0, 'pdeq_playlist'),
+    'NAV_TITLE':          (0xa0533c, 'nagvation_title'),
+    'NAVIGATION_STATUS':  (0xa05a24, 'navigation_status'),
 }
 LIBC = {
     'atoi': ('int', 'const char *'), 'access': ('int', 'const char *, int'),
@@ -353,8 +387,16 @@ PLAYMORE_PINS = (   # (address, stock word, what it proves)
     (0x4d1244, 0x8f99b5d4, 'dispatcher: loads dialog_playmore_dialog_init from the GOT'),
     (0x4d124c, 0x0320f809, 'dispatcher: jalr t9'),
     (0x478ac8, 0x8c830004, 'tap handler: dialog->y'), (0x478acc, 0x8ca2001c, 'tap handler: pointer_event y (a tap above the sheet closes it)'),
-    (0x479ce0, 0x2405012c, 'init: widget_on(dialog, EVT_WINDOW_TO_BG 0x12c, 0x4789f0): the stock to-background handler (bound first, ours after it)'),
+    (0x479ce0, 0x2405012c, 'init: widget_on(dialog, EVT_WINDOW_TO_BG 0x12c, 0x4789f0): the stock to-background handler, on the dialog'),
     (0x478a1c, 0x24060082, 'to-background handler 0x4789f0: widget_move(dialog, 0, 130), which our handler undoes'),
+    # why ours is bound on the list_view and not on the dialog: a handler bound later on the dialog would run before the stock one
+    (0x6f466c, 0xac430020, 'emitter_on_with_tag: new->next = emitter->items'),
+    (0x6f4670, 0xae020000, 'emitter_on_with_tag: emitter->items = new (a handler goes to the head: the newest runs first)'),
+    (0x6f45a0, 0x00009825, 'emitter_dispatch: RET_OK after the last handler (the dialog\'s window event goes on to its children)'),
+    (0x678870, 0x0411c0c3, 'window_manager_dispatch_window_event: bal widget_dispatch_recursive (the window event reaches the children)'),
+    (0x668ae4, 0x0320f809, 'widget_foreach: visit(widget) first'),
+    (0x668af0, 0x1440000b, 'widget_foreach: then its children, if the visit returned RET_OK (the dialog before its list_view)'),
+    (0x60c53c, 0x1443fff6, 'list_view_on_event: RET_OK for an event it does not handle (0x12c reaches the list_view\'s emitter)'),
 )
 
 
@@ -435,6 +477,8 @@ def gen_stock_h(out, demo_path):
         h.append(f'#define {name} 0x{addr:x}u')
     h.append(f'#define STOCK_HOME_CLICK 0x{HOME_CLICK:x}u')   # the icon click handler stock registers per icon
     h.append(f'#define POD_ENTRY_NAME "{pod_pages.HOME_ENTRY}"')   # the added icon's widget name (a decimal id, as stock's)
+    h.append(f'#define stock_playlist_import ((int (*)(void *, void *))0x{PLAYLIST_IMPORT:x}u)')   # the stock Playlists page's Import / Export rows
+    h.append(f'#define stock_playlist_export ((int (*)(void *, void *))0x{PLAYLIST_EXPORT:x}u)')
     h.append('extern int stock_home_click_trampoline(void *, void *);')
     h.append('extern void stock_albuminfo_header_trampoline(void *);')
     h.append('extern int stock_playing_init_trampoline(void *, void *);')
@@ -445,7 +489,8 @@ def gen_stock_h(out, demo_path):
     h.append('extern int coverflow_landscape_toggle(void);')
     # the customisable menu (patch/menu.c): its item count, the default shown prefix and the row geometry
     h.append(f'#define POD_MENU_ITEMS {len(pod_pages.ITEMS)}')
-    h.append(f'#define POD_MENU_DEFAULT {pod_pages.DEFAULT_VISIBLE}')
+    h.append(f'#define POD_MENU_DEFAULT {len(pod_pages.DEFAULT_MENU)}')   # the default menu: this many items ...
+    h.append('#define POD_MENU_DEFAULT_IDS {' + ', '.join(str(i) for i in pod_pages.DEFAULT_MENU) + '}')   # ... these item ids, in order
     h.append(f'#define POD_MENU_FILE_MAX {pod_pages.MENU_FILE_MAX}')
     h.append(f'#define POD_MENU_ROWS {len(pod_pages.MENU.rows)}')
     h.append(f'#define POD_EXTRAS_ROWS {len(pod_pages.EXTRAS_PAGE.rows)}')
@@ -598,8 +643,12 @@ def patch_rows(image, ps):
         v = g['value']; check(0 <= v < 0x8000, f'bad immediate {v}')
         for a, old, *_ in g['sites']:
             a, old = int(a, 16), int(old, 16)
-            check(old >> 26 == 9 and (old >> 21) & 31 == 0, f'{a:#x}: not addiu rt, $zero, imm')
-            at(a, old); edits.append((a, old, (old & 0xffff0000) | v, 'immediate'))
+            if old & 0xffff07ff in (0x21, 0x25):   # move rd, $zero (addu / or rd, $zero, $zero) -> addiu rd, $zero, imm
+                new = 0x24000000 | ((old >> 11) & 31) << 16 | v
+            else:
+                check(old >> 26 == 9 and (old >> 21) & 31 == 0, f'{a:#x}: not addiu rt, $zero, imm nor move rd, $zero')
+                new = (old & 0xffff0000) | v
+            at(a, old); edits.append((a, old, new, 'immediate'))
     for a, old, *_ in J['row_layout_calls']['sites']:
         a, old = int(a, 16), int(old, 16)
         check(old == JALR_T9, f'{a:#x}: not jalr $t9'); at(a, old)
@@ -671,6 +720,9 @@ def patch_demo(raw, payload, ps, demo_path):
     check(BASE <= target4 < BASE + len(payload), 'playing init entry symbol outside payload')
     hook(patched, PLAYING_INIT, PLAYING_INIT_PROLOGUE, target4, 'playing_page_init')
     patch_playmore(patched, ps, len(payload))
+    for a, old, what in PLAYLIST_PINS:   # stock code the Playlists page calls: checked, not written
+        got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
+        check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     edits = patch_rows(patched, ps)
     # no row edit may touch a PIC prologue (the hooks are the only ones) or a hook site
     check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, ALBUMINFO_HEADER, PLAYING_INIT, PLAYMORE_INIT))

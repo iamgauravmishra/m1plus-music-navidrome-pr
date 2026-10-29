@@ -2,8 +2,8 @@
 """PIL mock-up of the stock album page (albuminfo_page) as the release restyles it (docs/ui.md) from a
 built tree (approximate, not AWTK; sample data): the header item (centred cover with rounded corners,
 title, artist, "year . N tracks", the round Shuffle and the Play all pill) scrolling with the stock
-rows, laid out with the AH_* numbers of patch/offsets.inc, the tree's own ui/m1pod_cover.bin navbar
-(its title transparent, as the page theme makes it) and default.ttf rasterized the stb_truetype way
+rows (the list starts at the window's top), laid out with the AH_* numbers of patch/offsets.inc, the floating glass
+controls over it (Back's disc and the capsule: the tree's own ah_nav_* images at the builder's pinned x) and default.ttf rasterized the stb_truetype way
 (tools/preview_font.py); the cover is rendered by the cover thread at 160 px and drawn 1:1, its corners
 the corners painted as the payload does (pod_corners) in black or the tint, Shuffle and the play glyph the tree's own images.
 
@@ -67,22 +67,17 @@ def corner_alpha(x, y, r=10):
     return (n * 255 + 32) // 64
 
 
-def page(work, title, album, artist, meta, cover, n, scroll=0, bg=None, C=C):
+def page(work, title, album, artist, meta, cover, n, scroll=0, bg=None, C=C, controls=True):
     """The stock albuminfo_page as the release leaves it: the restyled header item (AH_* numbers of
     patch/offsets.inc: cover, title, artist, year line, Play all and Shuffle) over the stock rows. bg (a function of the row
     below the status bar -> (r, g, b)) is the tint mock-up of tools/preview_album_tint.py: every pure black pixel of the page
     takes it, and so do the corner masks (text edges keep their dark blend: approximate)."""
     raw = os.path.join(work, preview_all.RAW)
     root = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1pod_cover.bin'), 'rb').read())
-    nav = next(w for w in root.walk() if w.name == 'navigationbar_view')
-    for w in root.walk():
-        if w.name == 'label_title': w.set('text', ''); w.set('name', 'label_title_preview')   # transparent on this page (page theme)
-    NAV = C['AH_NAV_H']   # the album page's navbar is shorter than the other pages' (ui/albuminfo_page.bin, rows.json): its buttons are as high
-    nav.h = NAV
-    for w in nav.children: w.h = NAV
-    root.children = [nav]
+    NAV = 0   # the list starts at the window's top (the floating controls, drawn at the end, sit over it)
+    root.children = []
     LW = 310   # the list_view's scroll_view (a 10 px scroll bar at the right)
-    list_h = pod_ui.CLIENT_H - NAV
+    list_h = pod_ui.CLIENT_H
     sv = Widget('scroll_view', 0, NAV, LW, list_h)
 
     def line(y, h, text, size, colour, long=False):
@@ -137,7 +132,28 @@ def page(work, title, album, artist, meta, cover, n, scroll=0, bg=None, C=C):
     layer.alpha_composite(disc, (C['AH_SHUF_X'] + (C['AH_SHUF_W'] - disc.width) // 2, y + (C['AH_BTN_H'] - disc.height) // 2))
     layer.alpha_composite(pill(painter, img, 'Play all'), (C['AH_PLAY_X'], y))
     im.alpha_composite(layer.crop(clip), clip[:2])
+    if controls: controls_over(im, img)
     return im
+
+
+BACK_ROW = ('ah_nav_back', 'back')   # Back: icon_at left in a button-high square, x_offset +4 (mod_ipodrows.NAV_STYLES)
+SETS = {   # the stock builders' buttons on main's slots (docs/modules/album-page.md): (button height, [(image, x, w)]); Back at (0, 80) x (50 high) / (3, 80) x (44 high)
+    'back only': (50, [(BACK_ROW, 0, 80)]),                                                                          # a page entered with songerinfoflag (0x524e4c)
+    'two': (50, [(BACK_ROW, 0, 80), ('ah_nav_multi', 214, 46), ('ah_nav_npa', 262, 60)]),                                # a fresh page (0x524e4c)
+    'three': (44, [(BACK_ROW, 3, 80), ('ah_nav_search', 168, 46), ('ah_nav_multi', 214, 46), ('ah_nav_npa', 262, 60)]),   # after a multi-select cycle (0x526a3c)
+    'select mode': (50, [('ah_nav_unsel', 0, 50), ('ah_nav_add', 116, 60), ('ah_nav_del', 191, 60), ('ah_nav_cancel', 268, 60)])}   # unselect + add / delete / cancel
+
+
+def controls_over(im, img, kind='three', pressed=()):
+    """The glass discs over the page (docs/modules/album-page.md): the stock builders' buttons at main's slots (SETS[kind]) in the band at the window's origin,
+    each image as wide as its button, centred in it (Back by its icon rule). `pressed` names the discs drawn lighter."""
+    h, buttons = SETS[kind]
+    for name, x, w in buttons:
+        back = isinstance(name, tuple)
+        name = name[0] if back else name
+        p = Image.open(os.path.join(img, name + ('_down' if name in pressed else '') + '.png')).convert('RGBA')
+        px = x + (h - p.width) // 2 + 4 if back else x + (w - p.width) // 2
+        im.alpha_composite(p, (px, BAR + (h - p.height) // 2))
 
 
 def pill(painter, img, text):
@@ -153,7 +169,7 @@ def pill(painter, img, text):
     out.alpha_composite(glyph, (gx, (h - glyph.height) // 2))
     d = ImageDraw.Draw(out); top = (h - 18) // 2
     for ch, pen in layout:
-        d.text((tx + pen, top + f.getmetrics()[0]), ch, font=f, fill='#141414', anchor='ls')
+        d.text((tx + pen, top + f.getmetrics()[0]), ch, font=f, fill='#FFFFFF', anchor='ls')
     return out
 
 
@@ -162,7 +178,7 @@ def pills(work, path):
     raw = os.path.join(work, preview_all.RAW)
     painter = preview_all.MenuPainter(raw); img = os.path.join(raw, 'images', 'xx')
     langs = pod_i18n.LOCALES
-    out = Image.new('RGB', (2 * 214 + 20, 12 + len(langs) // 2 * 60 + 60), (0, 0, 0)); d = ImageDraw.Draw(out)
+    out = Image.new('RGB', (2 * 214 + 20, 12 + len(langs) // 2 * 60 + 60), (58, 44, 84)); d = ImageDraw.Draw(out)   # a cover tone: glass needs colour behind it
     for i, loc in enumerate(langs):
         x, y = 10 + (i % 2) * 214, 10 + (i // 2) * 60
         p = pill(painter, img, pod_i18n.TEXT['Play all'][loc]); out.paste(p, (x, y), p)

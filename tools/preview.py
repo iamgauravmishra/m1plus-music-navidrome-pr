@@ -83,8 +83,76 @@ def artists_page(s, album_artist=False):
 
 def menu_page(s, data, home=False):
     """The menu as patch/menu.c arranges it for the saved list `data` (None: no file), 400 px under the navbar or the Home instance."""
-    names = [f'pod_row{i}' for i in P.parse_menu(data)] + [f'pod_row{len(P.ITEMS)}', f'pod_row{len(P.ITEMS) + 1}']
+    ids, extras = P.parse_menu_full(data)
+    names = [f'pod_row{i}' for i in ids] + ([f'pod_row{len(P.ITEMS)}'] if extras else []) + [f'pod_row{len(P.ITEMS) + 1}']   # Extras only when the list ends in x
     return PI.pod_page(s, 'm1pod_menu', 9, home=home, order=names).convert('RGB')
+
+
+def shelf_image(s, albums):
+    """The Recently Played shelf of ui/m1pod_menu.bin (patch/recent.c) as it shows: the section header (the label pod_sh_head, 20 px white, its text 2 px in from the label),
+    then up to SH_TILES cells of the Albums grid (patch/grid.c; geometry from offsets.inc GRID_*) row by row, 2 columns: the cover (rgb, None: the placeholder disc)
+    GRID_COVER px square with GRID_R px rounded corners (drawn 4x and reduced), the album (18 px white) and the artist (15 px #AAAAAA) under it, cut with an ellipsis to the
+    cover's width. ceil(albums / 2) rows of covers. tools/pod_ui.py's numbers."""
+    import pod_ui as U
+    k = 4
+    rows = (len(albums[:U.SH_TILES]) + U.GRID_COLS - 1) // U.GRID_COLS
+    im = Image.new('RGBA', (U.SH_W, U.SH_H(rows)), (0, 0, 0, 255))
+    s.text(im, U.SH_HEAD_X + 2, U.SH_HEAD_TOP + U.SH_HEAD_H / 2, s.clip('Recently Played', U.SH_HEAD_PX, U.SH_HEAD_W - 4), U.SH_HEAD_PX)
+    grey = tuple(int(U.SH_SUB_RGB[i:i + 2], 16) for i in (1, 3, 5))
+    for i, (album, artist, rgb) in enumerate(albums[:U.SH_TILES]):
+        x = U.GRID_MARGIN + i % U.GRID_COLS * (U.GRID_COVER + U.GRID_GAP)
+        y = U.SH_TOP + i // U.GRID_COLS * U.GRID_PITCH
+        art = PI.sample_cover(rgb, U.GRID_COVER)
+        mask = Image.new('L', (U.GRID_COVER * k, U.GRID_COVER * k), 0)
+        ImageDraw.Draw(mask).rounded_rectangle((0, 0, U.GRID_COVER * k - 1, U.GRID_COVER * k - 1), radius=U.GRID_R * k, fill=255)
+        art.putalpha(mask.resize((U.GRID_COVER, U.GRID_COVER), Image.LANCZOS))
+        im.alpha_composite(art, (x, y))
+        ty = y + U.GRID_COVER + U.GRID_TITLE_GAP
+        s.text(im, x, ty + U.GRID_TITLE_H / 2, s.clip(album, U.SH_TITLE_PX, U.GRID_COVER), U.SH_TITLE_PX)
+        s.text(im, x, ty + U.GRID_TITLE_H + U.GRID_SUB_H / 2, s.clip(artist, U.SH_SUB_PX, U.GRID_COVER), U.SH_SUB_PX, grey)
+    return im
+
+SHELF_ALBUMS = [('Kind of Blue', 'Miles Davis', (70, 110, 190)), ('Music Has the Right to Children', 'Boards of Canada', None), ('Homogenic', 'Björk', (190, 90, 120)),
+                ('Dummy', 'Portishead', (150, 120, 70)), ('Kid A', 'Radiohead', (60, 140, 150)), ('Mezzanine', 'Massive Attack', (110, 90, 130))]
+
+def minibar_page(s, title, artist, rgb, playing=True, scroll=0, blur=True, shelf=None):
+    """The menu as the Home instance with the mini player bar (patch/minibar.c) for a playing track: the list runs to the window bottom,
+    scrolled by `scroll` px (48 is the end for the default menu: 8 rows and MB_PAD of padding in 430 px), under the translucent glass pill
+    (the tree's own mb_glass.png composited as the device blends it), the cover (rgb: its colour, None: the placeholder disc) with rounded
+    corners, the title and artist cut to their boxes, the white bar glyphs. tools/pod_ui.py's numbers."""
+    import pod_ui as U
+    k = 4   # the cover's corners drawn 4x and reduced
+    base = menu_page(s, None, home=True).convert('RGBA')
+    im = Image.new('RGBA', base.size, (0, 0, 0, 255))
+    if shelf is None:
+        im.paste(base.crop((0, 10 + scroll, 320, 440)), (0, 10))
+    else:   # the Recently Played shelf (shelf: (albums,)) follows the last row (Settings) in the list's content and scrolls with it; scroll=None: to the end
+        bottom = shelf_image(s, *shelf)
+        content = Image.new('RGBA', (320, 8 * U.ROW_H + bottom.height + U.MB_PAD + 430), (0, 0, 0, 255))
+        content.paste(base.crop((0, 10, 320, 10 + 8 * U.ROW_H)), (0, 0)); content.paste(bottom, (0, 8 * U.ROW_H))
+        if scroll is None: scroll = 8 * U.ROW_H + bottom.height + U.MB_PAD - 430
+        im.paste(content.crop((0, scroll, 320, scroll + 430)), (0, 10))
+    if blur:   # the experimental backdrop blur (patch/minibar.c mb_blur) as its bit-exact model computes it, on the RGB565 pixels under the pill
+        import pod_blur
+        px = im.convert('RGB').load()
+        def get(x, y):
+            r, g, b = px[U.MB_X + x, U.MB_Y + y]; return (r >> 3) << 11 | (g >> 2) << 5 | (b >> 3)
+        for (x, y), v in pod_blur.blur(get).items():
+            r, g, b = v >> 11, v >> 5 & 63, v & 31
+            im.putpixel((U.MB_X + x, U.MB_Y + y), (r << 3 | r >> 2, g << 2 | g >> 4, b << 3 | b >> 2, 255))
+    im.alpha_composite(s.img('mb_glass'), (U.MB_X, U.MB_Y))
+    art = PI.sample_cover(rgb, U.MB_ART)
+    mask = Image.new('L', (U.MB_ART * k, U.MB_ART * k), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, U.MB_ART * k - 1, U.MB_ART * k - 1), radius=U.MB_ART_R * k, fill=255)
+    art.putalpha(mask.resize((U.MB_ART, U.MB_ART), Image.LANCZOS))
+    im.alpha_composite(art, (U.MB_X + U.MB_ART_X, U.MB_Y + U.MB_ART_Y))
+    x = U.MB_X + U.MB_TEXT_X
+    s.text(im, x, U.MB_Y + U.MB_TITLE_Y + U.MB_TITLE_H / 2, s.clip(title, U.MB_TITLE_PX, U.MB_TEXT_W), U.MB_TITLE_PX)
+    s.text(im, x, U.MB_Y + U.MB_ARTIST_Y + U.MB_ARTIST_H / 2, s.clip(artist, U.MB_ARTIST_PX, U.MB_TEXT_W), U.MB_ARTIST_PX, tuple(int(U.MB_ARTIST_RGB[i:i + 2], 16) for i in (1, 3, 5)))
+    for name, bx in (('mb_pause' if playing else 'mb_play', U.MB_PLAY_X), ('mb_next', U.MB_NEXT_X)):
+        g = s.img(name)
+        im.alpha_composite(g, (U.MB_X + bx + (U.MB_BTN_W - g.width) // 2, U.MB_Y + (U.MB_H - g.height) // 2))
+    return im.convert('RGB')
 
 def extras_page(s, data):
     """Extras: the items the saved list does not show, in the fixed grouped order (pod_pages.EXTRAS_ORDER)."""
@@ -92,12 +160,13 @@ def extras_page(s, data):
     names = [f'pod_row{i}' for i in P.EXTRAS_ORDER if i not in shown]
     return PI.pod_page(s, 'm1pod_extras', 9, order=names).convert('RGB')
 
-def mainmenu_page(s, data):
-    """The Main Menu page: the shown items in order (an arrow on each but the first), then the hidden ones, switches as saved."""
-    ids = P.parse_menu(data)
-    order = ids + [i for i in range(len(P.ITEMS)) if i not in ids]
-    return PI.pod_page(s, 'm1pod_mainmenu', 9, order=[f'pod_row{i}' for i in order],
-                       switches={f'pod_switch{i}': i in ids for i in range(len(P.ITEMS))},
+def mainmenu_page(s, data, first=0):
+    """The Main Menu page: the shown items in order (an arrow on each but the first), then the hidden ones, then the Extras row (a switch only,
+    no arrow), switches as saved; first: the row the list is scrolled to (10: the last nine rows, the Extras row at the bottom)."""
+    ids, extras = P.parse_menu_full(data)
+    order = ids + [i for i in range(len(P.ITEMS)) if i not in ids] + [len(P.ITEMS)]
+    return PI.pod_page(s, 'm1pod_mainmenu', 9, first=first, order=[f'pod_row{i}' for i in order],
+                       switches={**{f'pod_switch{i}': i in ids for i in range(len(P.ITEMS))}, f'pod_switch{len(P.ITEMS)}': extras},
                        arrows={f'pod_up{i}' for i in ids[1:]}).convert('RGB')
 
 def shot_bars(work):
@@ -129,28 +198,47 @@ def main():
     panel = lambda im, i, n: im.crop((i * im.width // n, 0, (i + 1) * im.width // n, im.height))
     home, home3 = PI.home(s, 0).convert('RGB'), PI.home(s, 2).convert('RGB')
     menu = menu_page(s, None, home=True)
+    bar1 = minibar_page(s, 'Blue in Green (Remastered, Mono Version)', 'Miles Davis', (70, 110, 190), scroll=0)
+    bar3 = minibar_page(s, 'Blue in Green (Remastered, Mono Version)', 'Miles Davis', (70, 110, 190), scroll=0, blur=False)
+    bar2 = minibar_page(s, 'Gloomy Sunday', 'Billie Holiday', None, playing=False, scroll=48)
+    bar_args = ('Blue in Green (Remastered, Mono Version)', 'Miles Davis', (70, 110, 190))
+    sh6top = minibar_page(s, *bar_args, shelf=(SHELF_ALBUMS,), scroll=0)
+    sh6 = minibar_page(s, *bar_args, shelf=(SHELF_ALBUMS,), scroll=None)
+    sh5 = minibar_page(s, *bar_args, shelf=(SHELF_ALBUMS[:5],), scroll=None)
+    sh3 = minibar_page(s, *bar_args, shelf=(SHELF_ALBUMS[:3],), scroll=None)
+    sh1 = minibar_page(s, *bar_args, shelf=(SHELF_ALBUMS[:1],), scroll=None)
+    for name, panel_im in (('shelf-home-top', sh6top), ('shelf-6-albums-end', sh6), ('shelf-5-albums-end', sh5), ('shelf-3-albums-end', sh3), ('shelf-1-album-end', sh1)):   # the panels alone, for tools/peek.py crops
+        panel_im.save(os.path.join(os.path.dirname(os.path.abspath(out)), name + '.png'))
     sett = PI.pod_page(s, 'm1pod_settings', 6).convert('RGB')
-    homeset = PI.pod_page(s, 'm1pod_homeset', 2, switches={'pod_switch0': True}).convert('RGB')
+    homeset = PI.pod_page(s, 'm1pod_homeset', 3, switches={'pod_switch0': True, 'pod_switch1': True}).convert('RGB')
     cfset = PI.pod_page(s, 'm1pod_cfset', 2, switches={'pod_switch0': False}, values={'pod_value1': 'Artist'}).convert('RGB')
     shuf = PI.pod_page(s, 'm1pod_shuffle', 3).convert('RGB')
     ctl = controls(s, work).convert('RGB')
     bars, bars_same = PI.bars_compare(s); bars = bars.convert('RGB')
-    custom = b'2301458\n'   # Albums, Artists, Now Playing, Cover Flow, Songs, Playlists, Folders: Shuffle and Genres are hidden
+    custom = b'2301458\n'   # Albums, Artists, Now Playing, Cover Flow, Songs, Playlists, Folders: Shuffle and Genres are hidden, and so is the Extras row (no x)
     mm_def, mm_cust = mainmenu_page(s, None), mainmenu_page(s, custom)
+    mm_end, mm_end_off = mainmenu_page(s, None, first=10), mainmenu_page(s, custom, first=10)   # scrolled to the end: the Extras row, on and off
     menu_cust = menu_page(s, custom)
     extras = extras_page(s, None)
     extras_cust = extras_page(s, custom)
     art0, art1 = artists_page(s).convert('RGB'), artists_page(s, True).convert('RGB')
     pad, lab = 12, 20
     cols = [('Home page 1', home), ('Home page 3: the M1+ Pod icon', home3), ('M1+ Pod menu as Home (no top bar)', menu),
+            ('Mini player bar: playing, long title', bar1), ('Mini player bar: paused, no cover', bar2), ('Mini player bar: backdrop blur off', bar3),
+            ('Home menu with the Recently Played shelf below the rows (list at the top)', sh6top), ('Scrolled to the end: the shelf above the bar, 6 albums (one with no cache file)', sh6), ('Scrolled to the end: 5 albums', sh5), ('Scrolled to the end: 3 albums', sh3),
+            ('Scrolled to the end: 1 album', sh1),
             ('Settings page', sett), ('Settings > Cover Flow (Sort: Artist)', cfset), ('Settings > Home Screen', homeset),('Shuffle page', shuf),
-            ('Settings > Main Menu (default: Genres, Folders hidden)', mm_def), ('Main Menu after customising (Shuffle, Genres hidden)', mm_cust),
-            ('The menu with that list', menu_cust), ('Extras (default: Library, then Tools)', extras),
+            ('Settings > Main Menu (default: Now Playing, Genres, Folders hidden)', mm_def), ('Main Menu after customising (Shuffle, Genres, Extras hidden)', mm_cust),
+            ('Main Menu scrolled to the end: the Extras row on (default), a switch row without an arrow', mm_end), ('Main Menu scrolled to the end: Extras off', mm_end_off),
+            ('The menu with that list', menu_cust), ('Extras (default: Now Playing, Library, then Tools)', extras),
             ('Extras with Shuffle, Genres hidden', extras_cust), ('Artists: Artist mode (toggle shows Album Artist)', art0), ('Artists: Album Artist mode (toggle shows Artist)', art1),
             ('Album page', panel(album, 0, 4)), ('Album page, long title', panel(album, 1, 4)),
             ('Artist Cover Flow', panel(cf, 2, 3)),
             ('Albums: grid view (toggle shows the list)', PI.albums_grid(s).convert('RGB')),
             ('Albums: list mode (toggle shows the grid; row 2 pressed)', PI.albums_list(s).convert('RGB')),
+            ('Playlists: a 2x2 mosaic of each playlist\'s albums (4, 2, 3, 1, 0 and 7 albums)', PI.playlists_grid(s).convert('RGB')),
+            ('Playlists: the "..." menu (New, Import, Export, Delete)', PI.playlists_grid(s, menu=True).convert('RGB')),
+            ('Playlists: list mode (toggle shows the grid; row 2 pressed)', PI.playlists_grid(s, list_mode=True).convert('RGB')),
             ('Pull-down, toggles and sliders', ctl),
             ('Status bar: real (top), pull-down default, theme1; below, their differences x16 (' + ('identical' if bars_same else 'DIFFER') + ')', bars),
             ('Lock screen over The Starry Night (playing, idle + charging)', lock),

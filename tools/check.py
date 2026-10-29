@@ -14,21 +14,21 @@ the golden hashes, run the tests.
   CHANGED (exit 1 unless --update), NEW (not in golden yet).
 - Tests, all in one process pool of os.cpu_count() workers, the slowest first (their last durations
   are kept in work/cache/test-times.json): test/patch.py (the emulated payload; one process per
-  module of test/pod/) once per distinct payload (keyed by the built demo's SHA-256),
+  module of test/pod/, or per section of a module with a top-level SECTIONS list) once per distinct payload (keyed by the built demo's SHA-256),
   test/demo_diff.py (the built demo differs from stock only where the mods say), test/coverflow.py
   (host build of the depth renderer), test/awtk_fill.py (demo's own AWTK fill code on the stock tree)
   and test/tools.py (fwtool verify, this script's decisions).
 - --tests-only: no packaging, no golden comparison, no restore build; only the release tree the tests
   need. This is the done-criterion of a feature branch (docs/workflow.md). --test NAME[,NAME] runs only
-  those tests (patch modules by name, e.g. albums or patch:albums; or tools, coverflow, awtk_fill,
-  demo_diff) and implies --tests-only; the tree is built only if a selected test needs it.
+  those tests (patch modules by name, e.g. albums or patch:albums, all its sections; one section as albums/toggle_tests;
+  or tools, coverflow, awtk_fill, demo_diff) and implies --tests-only; the tree is built only if a selected test needs it.
 - --update rewrites the golden lines of the selected targets (after you meant to change them, and
   README says so), but only when every build and test passed; otherwise it writes nothing and exits 1.
   When the last complete run of this very tree (same file contents apart from docs and the golden
   file, same tool versions) passed, --update reuses its results and only writes the golden file.
   --keep leaves work/check/<name>/ in place.
 """
-import argparse, concurrent.futures as cf, glob, hashlib, json, os, re, shutil, subprocess, sys, time
+import argparse, ast, concurrent.futures as cf, glob, hashlib, json, os, re, shutil, subprocess, sys, time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS = os.path.join(ROOT, 'tools'); TEST = os.path.join(ROOT, 'test')
@@ -40,8 +40,17 @@ CACHE = os.path.join(ROOT, 'work', 'cache')
 LAST = os.path.join(CACHE, 'check-last.json'); TIMES = os.path.join(CACHE, 'test-times.json')
 TARGETS = {'release': (build.TAG, []), 'restore': (build.RESTORE_TAG, ['--restore'])}   # name -> (tag, build.py args)
 MODULES = sorted(os.path.basename(f)[:-3] for f in glob.glob(os.path.join(TEST, 'pod', '*.py')) if not f.endswith('harness.py'))
+
+def sections(module):
+    """The names in a payload test module's top-level SECTIONS = [fn, ...] (read, not imported: no tree needed), or []."""
+    for node in ast.parse(open(os.path.join(TEST, 'pod', module + '.py')).read()).body:
+        if isinstance(node, ast.Assign) and [getattr(t, 'id', None) for t in node.targets] == ['SECTIONS']:
+            return [e.id for e in node.value.elts]
+    return []
+
+PATCH = {m: [f'patch:{m}/{s}' for s in sections(m)] or [f'patch:{m}'] for m in MODULES}   # module -> its tests: one per section, else the module
 LIGHT = ['tools', 'coverflow', 'awtk_fill']     # tests that need no built tree
-ALL_TESTS = LIGHT + ['demo_diff'] + [f'patch:{m}' for m in MODULES]
+ALL_TESTS = LIGHT + ['demo_diff'] + [t for m in MODULES for t in PATCH[m]]
 NOT_KEYED = ('docs/', 'test/golden.sha256', 'README.md', 'AGENTS.md', 'NOTICE', 'LICENSE')   # cannot change a build or a test
 
 def missing_input(name):
@@ -141,8 +150,9 @@ def save_json(p, obj):
 def test_priority(times):
     def key(name):
         if name in times: return times[name]
-        f = os.path.join(TEST, 'pod', name[6:] + '.py') if name.startswith('patch:') else os.path.join(TEST, name + '.py')
-        return os.path.getsize(f) / 5000 if os.path.exists(f) else 0     # unknown: by size
+        mod = name[6:].split('/')[0]
+        f = os.path.join(TEST, 'pod', mod + '.py') if name.startswith('patch:') else os.path.join(TEST, name + '.py')
+        return os.path.getsize(f) / 5000 / len(PATCH.get(mod, [1])) if os.path.exists(f) else 0     # unknown: by size (a section: its share)
     return key
 
 def test_cmd(name, stock, tree=None):
@@ -156,7 +166,10 @@ def test_cmd(name, stock, tree=None):
     return py + [os.path.join(TEST, 'patch.py'), tree, name[6:]]
 
 def parse_tests(spec):
-    names = [('patch:' + n if n in MODULES else n) for s in spec for n in s.split(',') if n]
+    names = []
+    for n in (n for s in spec for n in s.split(',') if n):
+        m = n[6:] if n.startswith('patch:') else n
+        names += PATCH[m] if m in PATCH else ['patch:' + m] if 'patch:' + m in ALL_TESTS else [n]   # a module: all its sections
     bad = [n for n in names if n not in ALL_TESTS]
     if bad: sys.exit(f'unknown test {", ".join(bad)}; known: {", ".join(t.replace("patch:", "") for t in ALL_TESTS)}')
     return names
@@ -226,11 +239,12 @@ def finish(a, sel, skipped, golden, builds, tests, t0, reused=False, key=None):
         changed |= st == 'CHANGED'
         print(f'{n:8} {tag:7} {st:7} {r["sha"][:12]}  {r["secs"]:3.0f}s' + (f'  (golden {g[0][:12]})' if st == 'CHANGED' else ''))
         rows.append((n, tag, r['sha']))
+    w = max([15] + [len(t['test']) for t in tests])
     for t in sorted(tests, key=lambda t: t['test']):
         ok = test_ok(t); c = t['counts']
         if not ok: bad = True; print(t['log'])
         if c: npass += c[0]; nfail += c[1]
-        print(f'test {t["test"]:15} {"PASS" if ok else "FAIL"}  {f"{c[0]} passed, {c[1]} failed" if c else ""}  {t["secs"]:.0f}s')
+        print(f'test {t["test"]:{w}} {"PASS" if ok else "FAIL"}  {f"{c[0]} passed, {c[1]} failed" if c else ""}  {t["secs"]:.0f}s')
     print(f'checks {npass} passed, {nfail} failed; {time.time() - t0:.0f}s wall')
     if key and not reused:     # remember the run of this tree for --update (results of earlier partial runs of it are kept)
         old = load_json(LAST, {}) if load_json(LAST, {}).get('key') == key else {}

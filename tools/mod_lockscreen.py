@@ -5,7 +5,7 @@ Stock lock screen: wallpaper (img_screensaver), a 70 px clock left of a battery 
 and the now-playing strip (view_bottomview). The result: date over a 68 px clock, centred at the top
 (widest-case sized, measured as AWTK lays text out); a small battery gauge right on the date line
 (tools/battery_art.py, the status bar's drawing); the now-playing block becomes a translucent card
-(bg #000000A6, radius 18) centred, with the cover square at 264 x 264, title and
+(the glass image lk_card, 288 x 334, radius 18) centred, with the cover square at 264 x 264, title and
 artist under it, play/next to their right; the swipe hint at 65 %. demo writes the cover at 264
 (four pinned addiu immediates in parseplaycover_thd, 254 -> 264), so it is drawn 1:1 here and on Now Playing. The play and
 next glyphs are the Now Playing look's off-white np_* images (mod_nowplaying must run first). The
@@ -54,7 +54,7 @@ BTN_STATES = ('normal', 'disable', 'focused', 'over', 'pressed')
 CLOCK_SIZE, CLOCK_MARGIN, DATE_SIZE, DATE_FORMAT = 68, 11, 20, 'W, MMM D'
 TOP = 12                                       # y of the date ink
 COVER_SIZE, PAD = 264, 12                      # art size (= what demo writes, and Now Playing's art) and card edge to cover
-CARD, CARD_RADIUS = '#000000A6', 18
+CARD_IMAGE = 'lk_card'                         # the glass image of the card (tools/mod_icons.py glass_image, GLASS_CARD: 288 x 334, r 18)
 SLIDE_PCT = 65                                 # swipe hint size in % of the stock 48 x 22
 TITLE_PX, ARTIST_PX = 20, 16                   # stock sizes of the strip's labels
 TITLE_RGB, ARTIST_RGB = '#FFFFFF', '#DDDDDD'
@@ -222,9 +222,11 @@ def apply(root, ttf):
     card_h = pad + cs + 6 + title_h + artist_h + 8
     card_x, card_y = (SCREEN_W - card_w) // 2, slide.y - 10 - card_h        # 10 px over the swipe hint
     strip.x, strip.y, strip.w, strip.h = card_x, card_y, card_w, card_h
-    for st in STATES:
-        strip.set(f'style:{st}:bg_color', CARD)
-        strip.set(f'style:{st}:round_radius', str(CARD_RADIUS))
+    import mod_icons
+    assert (card_w, card_h) == mod_icons.GLASS_CARD[:2], f'the card is {card_w}x{card_h}, the glass image {mod_icons.GLASS_CARD[:2]}'
+    for st in STATES:       # the glass image is the whole look (translucent fill, rim, rounded corners): nothing is filled under it
+        strip.set(f'style:{st}:bg_color', '#00000000')
+        strip.set(f'style:{st}:bg_image', CARD_IMAGE)
     icon.x, icon.y, icon.w, icon.h = pad, pad, cs, cs          # draw_type scale_auto stays: the cover is drawn 1:1
     icon.set('sensitive', 'false')                             # decorative; a touch falls through to the card
     btn_top = pad + cs + 2
@@ -284,7 +286,7 @@ def main():
     src, out = sys.argv[1:]
     clone_workdir(src, out)
     ttf = Ttf(os.path.join(out, FONT))
-    missing = [n for n in (*sum(GLYPHS.values(), ()), *NEXT_GLYPH) if not os.path.exists(os.path.join(out, IMAGES, n + '.png'))]
+    missing = [n for n in (*sum(GLYPHS.values(), ()), *NEXT_GLYPH, CARD_IMAGE) if not os.path.exists(os.path.join(out, IMAGES, n + '.png'))]
     if missing: raise SystemExit(f'{", ".join(missing)} missing (run mod_nowplaying.py first)')
     info = {}
     old, new, root = edit_ui(os.path.join(out, UI), lambda root: info.update(apply(root, ttf)))

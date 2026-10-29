@@ -30,9 +30,10 @@ second line stock's `srlabel_item_gray18_style`; hscroll_labels scroll only whil
 (`hscroll_label_set_only_focus`), which on this touch UI no row is.
 
 **The demo edits** (`patch/rows.json`, applied by `pod.py patch_rows`, every listed word checked
-against stock first; the build refuses any mismatch): 63 edits and 38 more words pinned unchanged.
-46 `addiu rt, $zero, imm` immediates (pitch, body, rebind size, cover width, the cover thread's
-thumbnail size 60 -> 52 at `0x4dd604` and the album page header cover 100 -> 160 at `0x4dd670`, title/meta boxes, Playlists labels, cover batch); 10 call sites
+against stock first; the build refuses any mismatch): 101 edits and 38 more words pinned unchanged.
+84 `addiu rt, $zero, imm` immediates (one of them, the navbar's Back x, replaces a `move rd, $zero`) (pitch, body, rebind size, cover width, the cover thread's
+thumbnail size 60 -> 52 at `0x4dd604` and the album page header cover 100 -> 160 at `0x4dd670`, title/meta boxes, Playlists labels, cover batch,
+the navbar builders' heights and right-hand buttons on the Pod navbar's slots, see `docs/modules/album-page.md` and `docs/modules/navbar.md`); 10 call sites
 where each ordinary row constructor's `jalr $t9` to `widget_set_children_layout(row, "default(...)")`
 becomes `jal compact_set_row_layout` (layout string left in the delay slot): Folders `0x5332bc`, Songs
 `0x528624`, Artists `0x53696c`, Albums `0x524494`, album tracks `0x52651c`, Playlists `0x53e6ec`,

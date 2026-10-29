@@ -11,7 +11,7 @@ keep flags, variants or code paths only to reproduce old packages.
 ```
 python3 -m venv venv && venv/bin/pip install -r requirements.txt ; brew install squashfs llvm lld
 venv/bin/python -I tools/build.py                 # the release -> out/M1Plus-<tag>-release-update.bin  (--restore: stock)
-venv/bin/python -I tools/check.py --tests-only    # DONE-CRITERION of a feature branch: all tests, no package/golden (~40 s)
+venv/bin/python -I tools/check.py --tests-only    # DONE-CRITERION of a feature branch: all tests, no package/golden (~10 s)
 venv/bin/python -I tools/check.py --test albums   # selected tests only (see check.py --help)
 venv/bin/python -I tools/check.py                 # DONE-CRITERION at integration: release + restore vs test/golden.sha256, all tests
 venv/bin/python -I tools/check.py --update        # integration only, hash change intended; reuses the passing run just before it

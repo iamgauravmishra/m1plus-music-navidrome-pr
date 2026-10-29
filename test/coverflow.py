@@ -12,7 +12,7 @@ q2-pod's test/coverflow.py (Copyright (c) 2026 Diamond Bond, MIT; see NOTICE).
 --captures writes the raw CF_VIEW_W x CF_VIEW_H frames at rest and part-way through a turn;
 --preview composes the 320x480 page around one of them (approximate: PIL, not AWTK).
 """
-import argparse, ctypes, os, re, subprocess, sys, tempfile
+import argparse, collections, ctypes, os, re, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
@@ -294,7 +294,7 @@ def main():
                     vals = {}
                     for y in range(gh):
                         for x in range(gw): vals[(x, y)] = at(f, x, y) & 0xffffff
-                    mode = max(set(vals.values()) - {0}, key=list(vals.values()).count, default=0)
+                    mode = next((v for v, _ in collections.Counter(vals.values()).most_common() if v), 0)
                     bodies.append((abs((j - REACH) * ONE - frac), mode, {p for p, v in vals.items() if v == mode},
                                    {p for p, v in vals.items() if v}))
                 shelf = render(lib, frac, flats, cfg, pw, ph)

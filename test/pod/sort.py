@@ -1,21 +1,11 @@
 """Cover Flow opens on the playing album; the album order (Settings > Cover Flow > Sort): the Artist order, the stock
 Album order, the setting file, the same order on the Albums page, and the stock row behind every album that is opened.
 (The Settings > Cover Flow page itself is tested in test/pod/menu.py, the localisation in test/pod/i18n.py.)"""
-import importlib.util, os, sys
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
-HERE = os.path.dirname(os.path.abspath(__file__))
 ALBUMS_FILE = '/mnt/data/m1pod-albums'
 LAST = '/mnt/mmc/.coverflow/album'
 SEED = O['FNV_SEED']
-
-
-def sibling(name):
-    key = f'podtest_{name}'
-    if key not in sys.modules:
-        spec = importlib.util.spec_from_file_location(key, os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec); sys.modules[key] = mod; spec.loader.exec_module(mod)
-    return sys.modules[key]
 
 
 # (album, artist) in the order the stock Albums query lists them: by album title, ASCII case aside; the "Unknown
@@ -259,7 +249,9 @@ def run(ctx):
         return [t[0][0] for t in rows if t[1] == 'label_row_title'], [t[0][0] for t in rows if t[1] == 'label_row_sub']
 
     def tap_row(m, r):
-        m.tap(40, albums.SCREEN_Y0 + r * albums.ROW + 20, fn='al_on_pointer')
+        y = albums.SCREEN_Y0 + r * albums.ROW + 20
+        m.touch('down', 40, y, 1000, fn='al_on_down'); down = list(m.calls)
+        m.touch('up', 40, y, 1080, fn='al_on_up'); m.calls = down + m.calls
         return [c[3] for c in m.calls if c[0] == 'navigator_to_with_context' and c[1] == 'albuminfo_page']
 
     m = albums_page(LIB)

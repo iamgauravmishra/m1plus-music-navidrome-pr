@@ -1,24 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="320" height="480" viewBox="0 0 320 480" role="img" aria-labelledby="title">
-  <title id="title">M1+ Pod</title>
-  <!-- M1+ Pod boot splash, upright 320x480 like the stock M1 Plus logo.jpg. Adapted from q2-pod's
-       assets/boot-logo.svg (Copyright (c) 2026 Diamond Bond, MIT; see NOTICE): same palette, scale
-       and layout. "M1" is drawn here as plain geometric outlines (7 px stems, splayed M, 70 px cap
-       height, in the spirit of q2-pod's URW Gothic Book wordmark); "POD" and its centre button are
-       q2-pod's paths, unchanged, moved by the translate below. The group (cap top 173.5 to POD
-       bottom 278.7) is centred at 47% of the height. No gradients, no fonts.
-       Render: tools/boot_logo.py (docs/look-boot.md). -->
+  <title id="title">M1+</title>
+  <!-- M1+ boot splash, upright 320x480 like the stock M1 Plus logo.jpg. Palette and wordmark style
+       adapted from q2-pod's assets/boot-logo.svg (Copyright (c) 2026 Diamond Bond, MIT; see NOTICE).
+       "M1+" is drawn as plain geometric outlines in a 70-unit cap-height space (7-unit stems, splayed
+       M, in the spirit of q2-pod's URW Gothic Book wordmark); the plus is a superscript, 35 units, its
+       top flush with the cap top. The transform scales by 5/7 to a 50 px cap (5 px strokes), cap top
+       200 to baseline 250 (centred at 47% of the height), and puts the 1 stem and the plus bars on
+       whole pixels. No gradients, no fonts.
+       Render: tools/boot_logo.py (docs/modules/boot.md). -->
   <rect width="320" height="480" fill="#000" />
-  <g fill="#F2F2F0" transform="translate(-24 0)">
+  <g fill="#F2F2F0" transform="translate(160 225) scale(0.7142857) translate(-182.1 -208.5)">
     <path d="M108.53 243.50 115.77 187.14 138.72 243.50 146.28 243.50 169.23 187.14 176.47 243.50 183.53 243.50 174.53 173.50 167.22 173.50 142.50 234.22 117.78 173.50 110.47 173.50 101.47 243.50Z" />
     <path d="M204.37 188.07 211.50 181.49 211.50 243.50 218.50 243.50 218.50 173.50 209.84 173.50 199.63 182.93Z" />
-    <path d="M226.50 194.50H266.50V201.50H250V218H243V201.50H226.50ZM243 194.50V178H250V194.50Z" />
-  </g>
-  <g transform="translate(-27.5 77.5)">
-    <g fill="#BDBDB8">
-      <path d="M164.905 201H165.941V196.814H167.929C169.329 196.814 170.085 196.632 170.715 196.17C171.387 195.68 171.751 194.826 171.751 193.79C171.751 192.6 171.303 191.662 170.519 191.2C169.875 190.808 169.091 190.654 167.761 190.654H164.905ZM165.941 195.876V191.592H167.411C168.601 191.592 169.343 191.69 169.763 191.9C170.379 192.208 170.701 192.866 170.701 193.79C170.701 194.588 170.379 195.232 169.847 195.526C169.413 195.778 168.811 195.876 167.859 195.876Z" />
-      <path d="M186.219 190.472C183.251 190.472 180.745 192.894 180.745 195.764C180.745 198.774 183.181 201.182 186.233 201.182C189.215 201.182 191.679 198.76 191.679 195.834C191.679 192.88 189.215 190.472 186.219 190.472ZM186.219 191.424C188.641 191.424 190.629 193.426 190.629 195.848C190.629 198.242 188.627 200.23 186.233 200.23C183.769 200.23 181.795 198.242 181.795 195.792C181.795 193.426 183.825 191.424 186.219 191.424Z" />
-      <path d="M201.359 201H204.145C205.699 201 206.791 200.762 207.701 200.23C209.269 199.306 210.095 197.794 210.095 195.862C210.095 193.916 209.283 192.376 207.757 191.466C206.763 190.878 205.671 190.654 203.795 190.654H201.359ZM202.395 200.062V191.592H203.837C205.391 191.592 206.413 191.802 207.169 192.25C208.359 192.978 209.045 194.28 209.045 195.82C209.045 197.178 208.513 198.368 207.561 199.138C206.735 199.796 205.671 200.062 203.837 200.062Z" />
-    </g>
-    <circle cx="186.212" cy="195.827" r="1.75" fill="#85857D" />
+    <path d="M228.30 187.50H263.30V194.50H249.30V208.50H242.30V194.50H228.30ZM242.30 187.50V173.50H249.30V187.50Z" />
   </g>
 </svg>

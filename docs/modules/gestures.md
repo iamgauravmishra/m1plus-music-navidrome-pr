@@ -8,7 +8,7 @@ A swipe on a list must never play the song under the finger, and a touch on a li
 and press nothing. This is a patch in AWTK's input path, so it is a data word, not a code hook: nothing of the stock text is
 overwritten, and it runs only for touches that land inside a `scroll_view` (every stock list is `list_view > scroll_view >
 list_item` rows; Songs, Recently Added / Played, Favorites, Most Played, playlist songs, the queue, Folders, Artists, our menu
-and settings lists, the lyrics; the Albums grid / list and Cover Flow have their own touch layer and no `scroll_view`).
+and settings lists, the lyrics, and the Albums grid / list, whose one custom content view sits in a stock `list_view > scroll_view`, `docs/modules/albums.md`; Cover Flow has its own touch layer and no `scroll_view`).
 
 **The stock paths** (all read from `demo` and run unchanged in `test/pod/scroll.py`):
 

@@ -28,7 +28,7 @@ IMG_MTIME = 1750924035            # as the other added ui files (mod_icons.py)
 
 def edit(root):
     t = root.find('label_title')
-    assert t is not None and (t.x, t.y, t.h) == (36, 14, 22), 'unexpected title geometry'
+    assert t is not None and (t.x, t.y, t.h) == (58, 14, 22), 'unexpected title geometry (tools/pod_ui.py NAV_TITLE_X: 8 px after the glass Back disc)'
     assert t.w <= 248, f'unexpected title width {t.w}'
     t.w = min(t.w, TITLE_W)   # a page with a navbar toggle (Cover Flow) already ends its title at the toggle's left edge
 

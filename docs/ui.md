@@ -38,11 +38,15 @@ layout model where one exists (`tools/awtk_text.py`, `tools/awtk_ui.py`).
 |---|---|---|
 | [`modules/lists.md`](modules/lists.md) | 4 | Library lists (`tools/mod_lists.py`) |
 | [`modules/nowplaying.md`](modules/nowplaying.md) | 4 | Now Playing look (`tools/mod_nowplaying.py`); the code half is in the same file |
+| [`modules/minibar.md`](modules/minibar.md) | (new) | The mini player bar of the menu's Home instance (`tools/pod_ui.py` `minibar()`, `patch/minibar.c`) |
+| [`modules/recent.md`](modules/recent.md) | (new) | The Recently Played shelf of the menu's Home instance (`tools/pod_ui.py` `shelf()`, `patch/recent.c`): header, covers, the list file, taps |
+| [`modules/playlists.md`](modules/playlists.md) | (new) | The Playlists page (`tools/pod_ui.py` `build_playlists_page()`, `patch/playlists.c`): the grid of mosaics, the popup menu, the navbar button |
 | [`modules/boot.md`](modules/boot.md) | 5, 8 | Boot logo, quotes, settings slides (`tools/mod_boot.py`), the settings-slide safety audit |
 | [`modules/icons.md`](modules/icons.md) | 6 | Lucide icons, icon audit (`tools/mod_icons.py`, `tools/audit_images.py`) |
 | [`modules/battery.md`](modules/battery.md) | 6 | One battery (`tools/battery_art.py`, `tools/mod_battery.py`) |
 | [`modules/rows.md`](modules/rows.md) | 7 | Library rows (assets); code half in the same file |
 | [`modules/album-page.md`](modules/album-page.md) | 7 | The album page and the other stock pages (assets) |
+| [`modules/navbar.md`](modules/navbar.md) | (new) | Every navbar on the Pod navbar's slots: the survey, the stock builders' pinned immediates, titles, the settings assets |
 | [`modules/pulldown.md`](modules/pulldown.md) | 7 | Pull-down (`tools/mod_pulldown.py`) |
 | [`modules/lockscreen.md`](modules/lockscreen.md) | 7 | Lock screen (`tools/mod_lockscreen.py`) |
 | [`modules/wallpaper.md`](modules/wallpaper.md) | 7 | Wallpaper (`tools/mod_wallpaper.py`) |

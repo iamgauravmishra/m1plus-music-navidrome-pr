@@ -1,5 +1,5 @@
 """The boot guard and the launcher: M1+ Pod as Home."""
-import json, os, re, struct, sys
+import os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 
@@ -186,9 +186,9 @@ def home_tests(expect, page):
            and (SETTINGS.rows[1].action, SETTINGS.rows[1].arg) == (pod_pages.ACT_PAGE, pod_pages.CFSET_PAGE_INDEX)
            and not [r for r in SETTINGS.rows if r.action in (pod_pages.ACT_GRID, pod_pages.ACT_STARTUP)],
            'the Settings page: Main Menu, Cover Flow and Home Screen (sub-pages), Playback and System Settings (stock pages) and Screenshot last; no launcher rows left on it')
-    expect([(r.label, r.action) for r in HOMESET.rows] == [('Start in M1+ Pod', pod_pages.ACT_STARTUP), ('Shanling Home', pod_pages.ACT_GRID)]
-           and HOMESET.title == 'Home Screen' and (start_i, grid_i) == (0, 1),
-           'the Home Screen page: titled Home Screen, rows Start in M1+ Pod (switch) and Shanling Home')
+    expect([(r.label, r.action) for r in HOMESET.rows] == [('Start in M1+ Pod', pod_pages.ACT_STARTUP), ('Recent Albums', pod_pages.ACT_SHELF), ('Shanling Home', pod_pages.ACT_GRID)]
+           and HOMESET.title == 'Home Screen' and (start_i, grid_i) == (0, 2),
+           'the Home Screen page: titled Home Screen, rows Start in M1+ Pod (switch), Recent Albums (the Recently Played shelf, switch) and Shanling Home')
     expect(page.rows[0].label == 'Now Playing' and page.rows[-1].label == 'Settings' and settings_i == len(page.rows) - 1 and len(page.rows) == 20
            and not [r for r in page.rows if r.action in (pod_pages.ACT_GRID, pod_pages.ACT_STARTUP)],
            'the menu keeps the grouped rows above one Settings row, which opens the Settings page (no launcher rows left on it)')

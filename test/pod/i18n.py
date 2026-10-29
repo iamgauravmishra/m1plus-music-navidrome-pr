@@ -1,23 +1,14 @@
 """Localisation: the string tables (reader / writer, our keys in all 16), our assets and payload texts going through
 the stock translation, every language's payload output, widths per language, glyphs in the shipped font."""
-import importlib.util, os, re, stat, struct, sys
+import os, re, stat
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 import awtk_strings, awtk_style, mod_icons, pod_i18n
 from awtk_text import Ttf, StbText
 
-HERE = os.path.dirname(os.path.abspath(__file__))
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
 SAME_AS_ENGLISH = {'Cover Flow', 'Playlists', 'Genres', 'Extras', 'Albums', 'Start in M1+ Pod', 'Artists'}   # translations that are the English word by design
 SAME_AS_ENGLISH |= {'Genre', 'Screenshot'}    # French and German write Genre the same; German and Italian say Screenshot
 
-
-def sibling(name):
-    """test/pod/<name>.py as test/patch.py loaded it, or loaded here when this module runs alone."""
-    key = f'podtest_{name}'
-    if key not in sys.modules:
-        spec = importlib.util.spec_from_file_location(key, os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec); sys.modules[key] = mod; spec.loader.exec_module(mod)
-    return sys.modules[key]
 
 
 def call_args(src, name):
@@ -134,7 +125,7 @@ def run(ctx):
     open_artists = PSYMS['artists_open']
     A = offsets()
     for loc in ALL:
-        T = lambda key: pod_i18n.TEXT[key][pod_i18n.table_for(loc)].encode('utf-8').decode('latin-1')    # as read_cstr returns it
+        T = tr_of(loc)
         text_of = lambda m, w: [c[2] for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] == w][-1:]
         tr_keys = lambda m, w: [c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == w]
         # Artists: the title follows the mode, the empty message
@@ -169,7 +160,7 @@ def run(ctx):
         expect(text_of(m, st) == [T('Preparing covers...') + ' 0/3'], f'{loc}: the progress line is the translation and the count ({text_of(m, st)})')
         # Albums grid with no library
         m = Machine(); m.set_language(loc)
-        for w in ('btn_return', 'btn_backtoplayer', 'btn_albumview', 'view_grid', 'label_status', 'label_row_title', 'label_row_sub', 'label_grid_title', 'label_grid_sub'): m.widget(w)
+        for w in ('btn_return', 'btn_backtoplayer', 'btn_albumview', 'view_grid', 'albums_scrollview', 'label_status', 'label_row_title', 'label_row_sub', 'label_grid_title', 'label_grid_sub'): m.widget(w)
         m.call(PSYMS['albums_open'], count=2000000)
         expect(text_of(m, m.widgets['label_status']) == [T('Update Local Music first')], f'{loc}: the empty Albums page')
         # Shuffle: the message boxes

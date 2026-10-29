@@ -56,7 +56,7 @@ HOME = [  # Home ids 1..17 in English order, HiFi (id 0, zh_CN only) last
     ('tidal', 'TIDAL (online only)', 'T:brand-tidal'), ('sset_updatemusic', 'Update Library', 'refresh-cw'),
     ('mymusic', 'All Songs', 'music'), ('folder', 'Folders', 'folder'), ('album', 'Albums', 'disc-3'),
     ('songer', 'Artists', 'mic-vocal'), ('genre', 'Genres', 'guitar'), ('composer', 'Composers', 'feather'),
-    ('hr', 'Hi-Res', '+badge-hr'), ('fav', 'Favorites', 'heart'), ('many', 'Most Played', 'flame'),
+    ('hr', 'Hi-Res', '+badge-hr'), ('fav', 'Favorites', 'star'), ('many', 'Most Played', 'flame'),
     ('recent', 'Recently Played', 'history'), ('recentadd', 'Recently Added', 'clock-plus'),
     ('playlist', 'Playlists', 'list-music'), ('cdripper', 'CD Ripper', 'disc'), ('playset', 'Play Settings', 'sliders-horizontal'),
     ('sysset', 'System Settings', 'settings'), ('hifimusic', 'HiFi Store (zh_CN)', 'store'),
@@ -110,9 +110,9 @@ COVER_GLYPH, COVER_FRAC = 'disc-3', 0.52      # the glyph's px as a fraction of 
 RESIZED = {'albumcover_info': 160}
 AH_TINT = (64, 200, 344, 450)   # alpha at the top row, at row AH_TINT_ROWS - 1 and below (the held deep tint, 78 % dark), the rows, the window height
 ALBUM = ['ah_tint', 'ah_play', 'ah_shuffle', 'ah_shuffle_down', 'ah_pill', 'ah_pill_down']
-AH_SHUF_DISC, AH_SHUF_DISC_DOWN, AH_SHUF_GLYPH, AH_DISC_PX = (0x2A,) * 3, (0x44,) * 3, 19, 38   # AH_DISC (patch/offsets.inc)
-AH_PLAY_GLYPH, AH_PLAY_INK = 16, (0x14,) * 3
-AH_PILL_PX, AH_PILL_FILL, AH_PILL_FILL_DOWN = (180, 40), (0xFF,) * 3, (0xBE,) * 3   # AH_PLAY_W x AH_PILL_H
+AH_SHUF_GLYPH, AH_DISC_PX = 19, 38   # AH_DISC (patch/offsets.inc)
+AH_PLAY_GLYPH, AH_PLAY_INK = 16, (0xFF,) * 3   # white glyph and text on the glass (the pill and the disc are glass_image panes, below)
+AH_PILL_PX = (180, 40)   # AH_PLAY_W x AH_PILL_H
 # M1+ Pod menu and Shuffle page rows: label -> (added image, glyph). A bare white glyph (BARE_PX canvas) left of the title.
 # '@shanling' = the brand mark cut out of a stock image (shanling_mark below), not a glyph.
 POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'audio-lines'), 'Cover Flow': ('pod_ic_coverflow', 'gallery-horizontal'),   # audio-lines: the wave of the navbar's Now Playing button
@@ -130,8 +130,9 @@ POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'audio-lines'), 'Cover Flow': (
             'Landscape': ('pod_ic_landscape', 'rotate-cw-square'), 'Sort': ('pod_ic_sort', 'arrow-down-wide-narrow'),
             'Rebuild Covers': ('pod_ic_rebuild', 'image-up'),
             # the Extras page (the stock Home tiles the menu does not repeat; glyphs as the Home grid's)
-            'Favorites': ('pod_ic_fav', 'heart'), 'Recently Added': ('pod_ic_recentadd', 'clock-plus'),
-            'Recently Played': ('pod_ic_recent', 'history'), 'Most Played': ('pod_ic_most', 'flame'),
+            'Favorites': ('pod_ic_fav', 'star'), 'Recently Added': ('pod_ic_recentadd', 'clock-plus'),
+            'Recently Played': ('pod_ic_recent', 'history'), 'Recent Albums': ('pod_ic_recent', 'history'),   # the shelf's switch (Settings > Home Screen): the same clock
+            'Most Played': ('pod_ic_most', 'flame'),
             'Composers': ('pod_ic_composers', 'feather'), 'Hi-Res': ('pod_ic_hires', '+badge-hr'),
             'Update Library': ('pod_ic_update', 'refresh-cw'), 'Tidal': ('pod_ic_tidal', 'T:brand-tidal'),
             'CD Ripper': ('pod_ic_cdripper', 'disc'), 'Screenshot': ('pod_ic_screenshot', 'camera'),
@@ -147,8 +148,18 @@ POD_UI = ['m1pod_menu', 'm1pod_shuffle', 'm1pod_settings', 'm1pod_extras', 'm1po
 NAV_VIEW = {'pod_nav_grid': 'layout-grid', 'pod_nav_list': 'list',
             'pod_nav_artist': 'mic-vocal', 'pod_nav_albumartist': 'user-star',   # the Artists page's Artist / Album Artist switch
             'pod_nav_coverflow': 'gallery-horizontal',
-            'pod_nav_allalbums': 'list-music'}   # Cover Flow's artist page: open the All albums page (all songs)   # the Albums page's Cover Flow button (the menu row's glyph)
+            'pod_nav_more': 'ellipsis',   # the Playlists page's "..." menu button
+            'pod_nav_allalbums': 'list-music'}   # Cover Flow's artist page: open the All albums page (all songs)
+# the glass piece each Pod page button is (docs/modules/navbar.md): the Albums and Playlists pages' capsule is Cover Flow / "..." (left cap), the grid / list
+# toggle (middle), Now Playing (right cap); the Artists page's is the switch (left cap) and Now Playing; the Cover Flow artist page's All albums button is a disc
+NAV_VIEW_POS = {'pod_nav_grid': 'middle', 'pod_nav_list': 'middle', 'pod_nav_artist': 'left', 'pod_nav_albumartist': 'left', 'pod_nav_coverflow': 'left',
+                'pod_nav_more': 'left', 'pod_nav_allalbums': 'only'}
 NAV_PX = 24
+# The Playlists page's "..." menu rows (tools/pod_ui.py playlist_menu, in row order): a bare white glyph left of the label, as on Now
+# Playing's More sheet's rows, drawn at PL_MENU_PX (20: the 24 px of the sheet's rows looked big beside the 18 px labels; the stroke stays 2 px).
+# New, Import, Export, Delete.
+PL_MENU_PX = 20
+PL_MENU_ICONS = (('pl_ic_new', 'list-plus'), ('pl_ic_import', 'file-input'), ('pl_ic_export', 'file-output'), ('pl_ic_delete', 'trash'))
 # Bare glyphs (no disc) on every list page: a BARE_PX canvas, stroke BARE_SW px absolute. The Pod rows' image is that
 # canvas, x 16..40 in the 52 px row, vertically centred; the title starts at POD_TEXT_X and the 1 px #222222 hairline
 # under each row starts there too (the pressed band stays full width). The stock settings pages keep their 40 x 40 images
@@ -191,7 +202,7 @@ GLYPHS = [
     ('p_abrepeat', 'T:a-b', None), ('p_add', 'list-plus', None), ('p_delete', 'trash', None),    # a-b, multiplier-1x: no Lucide glyph
     ('p_multiple', 'T:multiplier-1x', None), ('p_onlinesearch', 'globe', None),
     ('player_albuminfo', 'disc-3', None), ('player_songerinfo', 'mic-vocal', None),
-    ('batchadd_fav', 'heart', None), ('batchadd_playlist', 'list-plus', None),
+    ('batchadd_fav', 'star', None), ('batchadd_playlist', 'list-plus', None),
 ]
 GREY_GLYPHS = {'kb_visible': 0x8C, 'kb_invisible': 0x8C}     # the password eye was grey in stock
 # Sizes of the glyph images (docs/ui.md): the ink box of the navbar and the other glyph buttons is 20 of the stock 22 px
@@ -220,20 +231,25 @@ PLAYALL = {'playall': 0, 'Play_all': 0, 'playall_down': 1, 'Play_all_down': 1}  
 WIFI_LOCK = {f'wifi_{i}': i for i in range(1, 5)}                                    # secured network, level 1..4
 # Now Playing (mod_nowplaying.py copies these): name -> (glyph, canvas px or (w, h), max ink px, tone, pressed name or None
 # [, disc px]). 'pil:NAME' = the solid glyph drawn with PIL (g_play ... below; the transport glyphs, which read better than
-# Tabler's filled ones); a disc px puts a translucent white disc of that diameter behind the glyph (heart and More).
+# Tabler's filled ones); a disc px puts a glass disc (glass_image) of that diameter behind the glyph (star and More).
 NP = {'np_play': ('pil:play', 44, 0, 'fg', 'np_play_down'), 'np_pause': ('pil:pause', 44, 0, 'fg', 'np_pause_down'),
       'np_next': ('pil:next', 44, 0, 'fg', 'np_next_down'), 'np_prev': ('pil:prev', 44, 0, 'fg', 'np_prev_down'),
+      'mb_play': ('pil:mb_play', 32, 0, 'white', 'mb_play_down'), 'mb_pause': ('pil:mb_pause', 32, 0, 'white', 'mb_pause_down'),
+      'mb_next': ('pil:mb_next', (34, 24), 0, 'white', 'mb_next_down'),
+      'mb_glass': ('pil:glass', (304, 56), 0, 'fg', 'mb_glass_down'),
+      'lk_card': ('pil:glass_card', (288, 334), 0, 'fg', None),
+      'pm_sheet': ('pil:glass_sheet', (320, 200), 0, 'fg', None),
+      'pl_glass': ('pil:glass_menu', (72, 200), 0, 'fg', None),
       'np_grabber': ('pil:grabber', (120, 44), 0, 'ghost', 'np_grabber_down'),
       'np_row_playing': ('pil:wave', (40, 20), 0, 'fg', None),
       'np_random': ('shuffle', 30, 18, 'mid', None), 'np_cycle': ('repeat', 30, 18, 'mid', None),
       'np_cycle1': ('repeat-1', 30, 18, 'mid', None), 'np_order': ('repeat-off', 30, 18, 'off', None),
-      'np_fav': ('heart:filled', 44, 18, 'fg', None, 32), 'np_unfav': ('heart', 44, 18, 'fg', 'np_unfav_down', 32),
+      'np_fav': ('star:filled', 44, 18, 'fg', None, 32), 'np_unfav': ('star', 44, 18, 'fg', 'np_unfav_down', 32),
       'np_more': ('ellipsis', 44, 18, 'fg', 'np_more_down', 32), 'np_playqueue': ('list-music', 30, 18, 'mid', 'np_playqueue_down')}
 NP_FG, NP_DIM = (0xEE, 0xEE, 0xEC), (0x8C,) * 3        # q2-pod's off-white and its muted pressed grey
 NP_MID, NP_OFF = (0xC8,) * 3, (0x6E,) * 3               # the mode and queue glyphs (brighter than the secondary grey #AAAAAA); repeat-off, dimmer
-NP_TONES = {'fg': (NP_FG, 255), 'mid': (NP_MID, 255), 'off': (NP_OFF, 255), 'ghost': ((255, 255, 255), 110)}   # rgb, alpha
-NP_PRESSED = {'ghost': ((255, 255, 255), 190)}            # every other tone presses to NP_DIM
-NP_DISC_ALPHA, NP_DISC_ALPHA_DOWN = 26, 51                # #FFFFFF1A, pressed #FFFFFF33
+NP_TONES = {'fg': (NP_FG, 255), 'mid': (NP_MID, 255), 'off': (NP_OFF, 255), 'ghost': ((255, 255, 255), 110), 'white': ((255, 255, 255), 255)}   # rgb, alpha
+NP_PRESSED = {'ghost': ((255, 255, 255), 190), 'white': ((255, 255, 255), 140)}            # every other tone presses to NP_DIM
 
 SHANLING = '@shanling'
 
@@ -246,7 +262,7 @@ def is_badge(g): return g.startswith('badge:')
 def used_glyphs():
     """(Lucide names, Tabler names) of every glyph the tables use; custom ones excluded."""
     gl = [e[2] for e in HOME + SETTINGS + LISTS] + list(PULLDOWN.values()) + list(STATUS.values()) + \
-        [g for g in WIFI_LEVELS if g] + [COVER_GLYPH, POD_HOME_GLYPH, SHOT_BAR[1]] + list(NAV_VIEW.values()) + [v[1] for v in POD_ROWS.values() if v[1] != SHANLING] + \
+        [g for g in WIFI_LEVELS if g] + [COVER_GLYPH, POD_HOME_GLYPH, SHOT_BAR[1]] + list(NAV_VIEW.values()) + [g for _, g in PL_MENU_ICONS] + [v[1] for v in POD_ROWS.values() if v[1] != SHANLING] + \
         [g for _, g, _ in GLYPHS] + [g for _, g in DISCS] + [v[0] for v in NP.values() if not v[0].startswith('pil:')] + ['lock:filled']
     names = {gname(g) for g in gl if g and not is_custom(g) and not is_badge(g)}
     return sorted(n for n in names if not n.startswith('T:')), sorted(n[2:] for n in names if n.startswith('T:'))
@@ -549,9 +565,11 @@ def generate_all(sizes):
         t.alpha_composite(g, ((w - g.width) // 2, (w - g.height) // 2))
         f[n] = t if sizes[n + ':mode'] == 'RGBA' else t.convert('RGB')
     for n, g in POD_ROWS.values(): f[n] = bare_icon(g, POD_ICON)
+    for n, g in PL_MENU_ICONS: f[n] = glyph(g, PL_MENU_PX, 'bare')
     for n, g in NAV_VIEW.items():
-        f[n] = glyph_box(g, (NAV_PX, NAV_PX), NAV_K)
-        f[n + '_down'] = glyph_box(g, (NAV_PX, NAV_PX), NAV_K, (0x77,) * 3)
+        pos = NAV_VIEW_POS[n]
+        f[n] = capsule_piece(pos, g, False)
+        f[n + '_down'] = capsule_piece(pos, g, True)
     f[SHOT_BAR[0]] = fit(lambda p: glyph(SHOT_BAR[1], p, 'small'), SHOT_BAR_PX, SHOT_BAR_PX, SHOT_BAR_PX)
     # round 2: glyph images at the stock size, discs, recoloured line art, badges, pills
     for n, g, down in GLYPHS:
@@ -586,13 +604,86 @@ def album_images():
     for y in range(h): tint.paste((0, 0, 0, ah_tint_alpha(y)), (0, y, w, y + 1))
     f['ah_tint'] = tint
     g = glyph_fit('shuffle', AH_SHUF_GLYPH, AH_SHUF_GLYPH, WHITE, 0)
-    f['ah_shuffle'] = on_disc(g, AH_DISC_PX, AH_SHUF_DISC)
-    f['ah_shuffle_down'] = on_disc(g, AH_DISC_PX, AH_SHUF_DISC_DOWN)
-    f['ah_pill'] = pill(AH_PILL_PX, AH_PILL_FILL)
-    f['ah_pill_down'] = pill(AH_PILL_PX, AH_PILL_FILL_DOWN)
+    for n, pressed in (('', False), ('_down', True)):   # the mini bar's glass: a disc (r = d / 2) with the glyph, a full pill (r = h / 2)
+        d = glass_image(AH_DISC_PX, AH_DISC_PX, AH_DISC_PX // 2, pressed)
+        d.alpha_composite(g, ((AH_DISC_PX - g.width) // 2, (AH_DISC_PX - g.height) // 2)); f['ah_shuffle' + n] = d
+        f['ah_pill' + n] = glass_image(*AH_PILL_PX, AH_PILL_PX[1] // 2, pressed)
     p = glyph_fit('play:filled', AH_PLAY_GLYPH, AH_PLAY_GLYPH, AH_PLAY_INK, 0)
     f['ah_play'] = p                 # no padding: the style's icon_at left centres it in a pill-high square (mod_ipodrows.pill_layout)
+    f.update(ah_nav_images())
+    f[NB_FADE[0]] = nb_fade_image()
     return f
+
+# Glass navbar buttons (docs/modules/navbar.md): every glass piece is one image, cut to the REAL button it sits in (main's slots: the Pod pages' right-hand
+# buttons 46 wide at x 122 / 168 / 214, Now Playing 60 wide at 260, glyph centres 145 / 191 / 237 / 290), drawn by the button's `icon` centred in it. A
+# lone button is a disc (glass_image of the mini bar's pane, the white glyph on it); the Pod pages' buttons that abut (Cover Flow / "..." | toggle | Now
+# Playing) are slices of ONE capsule (r = 21) from 21 px left of the first glyph to 21 px right of Now Playing's, so the join is seamless (the slices are
+# cut from one pane, the straight parts of a pane being identical). Pressed = the lighter glass, that piece only.
+GLASS_H, GLASS_GLYPH = 42, 20                # the glass is 42 px high (y 4 .. 46 in a 50 px bar), the glyph's ink box 20 px (the navbar's NAV_K size)
+NAV_SLOT_W, NAV_PLAY_W, NAV_CAPSULE_W = 46, 60, 141   # patch/offsets.inc NAV_VIEW_W; Now Playing's button; the Albums capsule 170 .. 311 (the Artists one starts at 216)
+
+def glass_piece(w, x0, x1, glyph, glyph_cx, pressed=False, cap=None, h=GLASS_H):
+    """A w x h image whose glass covers columns [x0, x1): a disc (r = h / 2) when x1 - x0 == h, else the slice of the capsule cap = (c0, c1) (image
+    columns, c1 - c0 wide, r = h / 2, the pane glass_image(c1 - c0, ...)); `glyph` (Lucide / 'T:' Tabler name) in white centred on column glyph_cx.
+    Straight-alpha RGBA."""
+    from PIL import Image
+    c0, c1 = cap or (x0, x1)
+    out = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    out.alpha_composite(glass_image(c1 - c0, h, h // 2, pressed).crop((x0 - c0, 0, x1 - c0, h)), (x0, 0))
+    if glyph:
+        g = glyph_fit(glyph, GLASS_GLYPH, GLASS_GLYPH, WHITE, 0, 2.0)
+        out.alpha_composite(g, (glyph_cx - g.width // 2, (h - g.height) // 2))
+    return out
+
+# the capsule's pieces in the Pod pages' 46 px slots and Now Playing's 60 px button: position -> (w, glass columns, glyph centre, capsule columns)
+CAPSULE_PIECES = {'left': (NAV_SLOT_W, 2, 46, 23, (2, 2 + NAV_CAPSULE_W)), 'middle': (NAV_SLOT_W, 0, 46, 23, (-44, NAV_CAPSULE_W - 44)),
+                  'right': (NAV_PLAY_W, 0, 51, 30, (-90, 51)), 'only': (NAV_SLOT_W, 2, 44, 23, None)}
+
+def capsule_piece(position, glyph, pressed=False):
+    w, x0, x1, cx, cap = CAPSULE_PIECES[position]
+    return glass_piece(w, x0, x1, glyph, cx, pressed, cap)
+
+# image -> (width, glass columns, glyph centre, glyph): the lone discs. Back (the Pod pages' 44 px button centres it: x 8 .. 50; the album page draws it
+# in the stock Back button's icon square), Now Playing's disc (Pod pages, button x 260: glass 269 .. 311), the album page's discs in the stock builders'
+# buttons (the glyph centres on the Pod's: search / multi-select 191 / 237 in their 46 px slots, Now Playing 290 in its 60 px button at 262, the select
+# mode's add / delete 146 / 221 centred in their 60 px buttons at 116 / 191, cancel 290 in the one at 268, the all / unselect toggle 29 in its 50 px one at 0)
+AH_NAV_PIECES = {'ah_nav_back': (42, 0, 42, 21, 'chevron-left'), 'ah_nav_np': (NAV_PLAY_W, 9, 51, 30, 'audio-lines'),
+                 'ah_nav_search': (46, 2, 44, 23, 'search'), 'ah_nav_multi': (46, 2, 44, 23, 'list-checks'), 'ah_nav_npa': (NAV_PLAY_W, 7, 49, 28, 'audio-lines'),
+                 'ah_nav_add': (NAV_PLAY_W, 9, 51, 30, 'plus'), 'ah_nav_del': (NAV_PLAY_W, 9, 51, 30, 'trash'), 'ah_nav_cancel': (NAV_PLAY_W, 1, 43, 22, 'x'),
+                 'ah_nav_unsel': (50, 8, 50, 29, 'circle')}
+AH_NAV_SELECTED = ('ah_nav_sel', 'T:circle-check:filled')    # the select-all toggle's "all selected" state (a 50 px disc; no pressed image: stock has none)
+AH_NAV_RIGHT = 'ah_nav_play'                                 # Now Playing as the capsule's right cap (Pod pages)
+AH_NAV_NAMES = sorted([n + s for n in [*AH_NAV_PIECES, AH_NAV_RIGHT] for s in ('', '_down')] + [AH_NAV_SELECTED[0]])
+
+def ah_nav_images():
+    """The glass buttons' images (AH_NAV_NAMES)."""
+    f = {}
+    for suffix, pressed in (('', False), ('_down', True)):
+        for n, (w, x0, x1, cx, g) in AH_NAV_PIECES.items():
+            f[n + suffix] = glass_piece(w, x0, x1, g, cx, pressed)
+        f[AH_NAV_RIGHT + suffix] = capsule_piece('right', 'audio-lines', pressed)
+    w, x0, x1, cx, _ = (50, 8, 50, 29, 0)
+    f[AH_NAV_SELECTED[0]] = glass_piece(w, x0, x1, AH_NAV_SELECTED[1], cx)
+    assert sorted(f) == AH_NAV_NAMES
+    return f
+
+ALBUM += AH_NAV_NAMES
+
+# The soft fade under a navbar that is an opaque bar (the iOS scroll-edge look): an insensitive image over the top of the list, black at its first row
+# and transparent at its last, so rows dissolve as they scroll up under the bar. Asset only (no blur, no paint code). The curve is eased, so the rows
+# at rest stay clear: alpha 255 (1 - t)^3.6, <= 8 from row 12 down (the first row of a text page has its ink from row 15, a switch from row 12). The cover pages
+# (Albums, Playlists: covers from row 4 / 10) start with the fade hidden and show it only while scrolled (patch/albums.c, patch/playlists.c).
+NB_FADE = ('nb_fade', 320, 20)
+ALBUM.append(NB_FADE[0])
+
+def nb_fade_alpha(y, h=NB_FADE[2]):
+    return round(255 * (1 - (y + 0.5) / h) ** 3.6)
+
+def nb_fade_image():
+    from PIL import Image
+    im = Image.new('RGBA', NB_FADE[1:], (0, 0, 0, 0))
+    for y in range(NB_FADE[2]): im.paste((0, 0, 0, nb_fade_alpha(y)), (0, y, NB_FADE[1], y + 1))
+    return im
 
 def _aa(size, draw, scale=8, box=False):
     """Draw at scale x with draw(ImageDraw, s) in white on transparent, downsample (anti-aliased mask; box = a plain
@@ -612,6 +703,9 @@ PLAY_SHIFT = 1.5                    # optical centring: the ink sits this far ri
 PLAY_R = 0.10                       # corner radius, x the play height
 PAUSE_H, PAUSE_BAR_W, PAUSE_GAP, PAUSE_R = 28, 0.30, 0.36, 0.30       # height; bar width, gap (x height); radius (x bar width)
 SKIP_H, SKIP_WR, SKIP_OV, SKIP_RK = 24, 1.46, 0.18, 0.6              # ink height; total width x height; overlap x triangle width; radius x the play radius
+# The mini player bar's glyphs (patch/offsets.inc MB_*, docs/modules/minibar.md): the same shapes, bare white, drawn for the bar: pause 22 px tall, next 30 x 17,
+# play 19 x 22 (a triangle as tall as the pause bars reads a little smaller, so the ink is as tall as the pause); pressed = 55 % white
+MB_PLAY_INK, MB_PAUSE_H, MB_SKIP_H, MB_SKIP_W = (19, 22), 22, 17, 30
 
 def _inset(poly, r):
     """A convex polygon moved inward by r (vertices intersect the offset edges)."""
@@ -658,23 +752,27 @@ def transport_mask(kind, size):
     """The 'L' mask of the transport glyph `kind` (play, pause, next, prev) on a size (px or (w, h)) canvas, ink centred."""
     from PIL import Image, ImageDraw
     cw, ch = size if isinstance(size, tuple) else (size, size)
+    bar = kind.startswith('mb_')      # the mini player bar's glyphs: the same shapes at the bar's sizes (MB_*)
+    kind = kind.removeprefix('mb_')
+    play_ink, pause_h, skip_h, skip_wr = (MB_PLAY_INK, MB_PAUSE_H, MB_SKIP_H, MB_SKIP_W / MB_SKIP_H) if bar else (PLAY_INK, PAUSE_H, SKIP_H, SKIP_WR)
+    play_shift = PLAY_SHIFT * play_ink[1] / PLAY_INK[1]
     s = TSS; big = Image.new('L', (cw * s, ch * s), 0); d = ImageDraw.Draw(big)
     if kind == 'play':
-        r = PLAY_R * PLAY_INK[1]; w, h = _fit_tri(*PLAY_INK, r)
+        r = PLAY_R * play_ink[1]; w, h = _fit_tri(*play_ink, r)
         iw, ih = _tri_ink(w, h, r)
         ip = _inset(_tri(0, 0, w, h, True), r); minx, miny = min(p[0] for p in ip), min(p[1] for p in ip)
-        ox, oy = (cw - iw) / 2 + PLAY_SHIFT - (minx - r), (ch - ih) / 2 - (miny - r)
+        ox, oy = (cw - iw) / 2 + play_shift - (minx - r), (ch - ih) / 2 - (miny - r)
         _round_poly(d, _tri(ox, oy, w, h, True), r, s)
     elif kind == 'pause':
-        bh = PAUSE_H; bw, gap = PAUSE_BAR_W * bh, PAUSE_GAP * bh; x0, y0 = (cw - 2 * bw - gap) / 2, (ch - bh) / 2
+        bh = pause_h; bw, gap = PAUSE_BAR_W * bh, PAUSE_GAP * bh; x0, y0 = (cw - 2 * bw - gap) / 2, (ch - bh) / 2
         for x in (x0, x0 + bw + gap):
             d.rounded_rectangle([round(x * s), round(y0 * s), round((x + bw) * s) - 1, round((y0 + bh) * s) - 1], radius=PAUSE_R * bw * s, fill=255)
     else:
-        fwd = kind == 'next'; r = SKIP_RK * PLAY_R * PLAY_INK[1]; ink_w = SKIP_WR * SKIP_H
-        w, h = _fit_tri(ink_w / (2 - SKIP_OV), SKIP_H, r)        # first guess for one triangle ...
+        fwd = kind == 'next'; r = SKIP_RK * PLAY_R * play_ink[1]; ink_w = skip_wr * skip_h
+        w, h = _fit_tri(ink_w / (2 - SKIP_OV), skip_h, r)        # first guess for one triangle ...
         for _ in range(40):                                     # ... then the pair spans ink_w
             tw = _tri_ink(w, h, r)[0]; span = tw + (w - w * SKIP_OV)
-            w *= ink_w / span; h = _fit_tri(w, SKIP_H, r)[1]
+            w *= ink_w / span; h = _fit_tri(w, skip_h, r)[1]
         ip = _inset(_tri(0, 0, w, h, True), r); iw0, ih = _tri_ink(w, h, r)
         total = iw0 + w * (1 - SKIP_OV); minx, miny = min(p[0] for p in ip) - r, min(p[1] for p in ip) - r
         ox, oy = (cw - total) / 2 - minx, (ch - ih) / 2 - miny
@@ -725,7 +823,7 @@ NP_OPTICAL_STEP, NP_OPTICAL_MAX, NP_MARGIN = 0.25, 1.5, 3   # the glyph's sub-pi
 
 def np_glyph(g, size, ink_px, rgb):
     """Glyph g (a 2.0 px stroke, `ink_px` ink) on a size x size canvas, placed by its optical centre: the middle of the ink's
-    bounding box and of its silhouette's centroid (a heart's mass is in its lobes, so its box centre looks high), moved to
+    bounding box and of its silhouette's centroid (a star's lower points reach less far than its top one, so its box centre looks low), moved to
     the canvas centre in quarter-pixel steps by an SVG translation (not by whole pixels, which would leave up to 0.5 px)."""
     from PIL import Image
     n, solid = gname(g), is_filled(g)
@@ -745,23 +843,71 @@ def np_glyph(g, size, ink_px, rgb):
     c = Image.new('RGBA', (size, size), (0, 0, 0, 0)); c.alpha_composite(im, (off, off))
     return tint(c, rgb) if rgb != WHITE else c
 
-def np_disc(size, disc_px, alpha, g, ink, rgb):
-    """A size x size canvas: a white disc of disc_px at `alpha` centred, the glyph g (ink px) over it, centred optically."""
+# The mini player bar's glass pill (mb_glass, mb_glass_down; patch/offsets.inc MB_W x MB_H, radius MB_R = h / 2; docs/modules/minibar.md): a translucent
+# dark fill with a soft vertical sheen, a 1 px rim light that is brightest along the top arc and fades towards the bottom, and a faint inner highlight line
+# just inside the top edge. Straight-alpha RGBA, anti-aliased (8x supersampled, box filter). Pressed: a brighter fill and rim.
+GLASS = (304, 56, 28)                                         # w, h, radius
+GLASS_CARD = (288, 334, 18)                                   # the lock screen's now-playing card (mod_lockscreen.py; docs/modules/lockscreen.md)
+GLASS_SHEET = (320, 200, 18)                                  # Now Playing's More sheet (patch/playmore.c, docs/modules/playmore.md): top corners only
+GLASS_SHEET_FILL = ((0x2A, 0x2A, 0x2C), (0x1E, 0x1E, 0x20), 0.88)   # denser than the card (0.76): rows, labels and grey badges sit straight on it (docs/modules/playmore.md)
+GLASS_MENU = (72, 200, 14)    # the Playlists page's "..." menu card (patch/playlists.c, docs/modules/playlists.md): the sheet's glass, all four corners; drawn patch3_x
+                              # (the middle 24 px stretched to the card's width), as tall as the card (tools/pod_ui.py PL_CARD_H)
+GLASS_FILL = {False: ((0x2D, 0x2D, 0x2F), (0x23, 0x23, 0x25), 0.82), True: ((0x3A, 0x3A, 0x3C), (0x30, 0x30, 0x32), 0.86)}   # top rgb, bottom rgb, alpha
+GLASS_CARD_FILL = ((0x2A, 0x2A, 0x2C), (0x1E, 0x1E, 0x20), 0.76)   # the card: a little more see-through (only its 12 px frame and the text band show)
+GLASS_RIM = {False: (0.30, 0.08), True: (0.40, 0.14)}         # rim white alpha at the top and at the bottom row
+GLASS_LINE = 0.07                                             # the inner highlight's alpha at the top, fading to 0 by mid height
+
+def glass_image(w, h, r, pressed=False, fill=None, top_only=False):
+    """A w x h glass pane of corner radius r; fill = (top rgb, bottom rgb, alpha) replaces the GLASS_FILL of the state.
+    top_only: a sheet that sits on the screen's bottom edge: only the top corners are rounded, and the rim and the inner line
+    run off the bottom (no light line along the foot, the sides carry the rim down, fading)."""
+    from PIL import Image, ImageChops, ImageDraw
+    k = 8
+    def pill(inset, rad):
+        im = Image.new('L', (w * k, h * k), 0)
+        bot = (h - inset) * k - 1 + (4 * r * k if top_only else 0)       # past the canvas: the bottom corners and edge are cut off
+        ImageDraw.Draw(im).rounded_rectangle([inset * k, inset * k, (w - inset) * k - 1, bot], radius=rad * k, fill=255)
+        return im
+    def small(im): return im.resize((w, h), Image.BOX)
+    body, rim_ring = small(pill(0, r)), small(ImageChops.subtract(pill(0, r), pill(1, r - 1)))
+    line_ring = small(ImageChops.subtract(pill(1, r - 1), pill(2, r - 2)))
+    top, bot, alpha = fill or GLASS_FILL[pressed]
+    def col(y): return tuple(round(t + (b - t) * y / (h - 1)) for t, b in zip(top, bot))
+    fill = Image.new('RGBA', (w, h))
+    for y in range(h): fill.paste(col(y) + (round(255 * alpha),), (0, y, w, y + 1))
+    fill.putalpha(ImageChops.multiply(fill.getchannel('A'), body))
+    def ramp(a0, a1, span):   # a white layer through `ring`, its alpha a0 on row 0 to a1 at row `span`
+        g = Image.new('L', (w, h))
+        for y in range(h): g.paste(round(255 * (a0 + (a1 - a0) * min(y / span, 1))), (0, y, w, y + 1))
+        return g
+    def white(ring, g):
+        lay = Image.new('RGBA', (w, h), (255, 255, 255, 0)); lay.putalpha(ImageChops.multiply(ring, g)); return lay
+    out = fill
+    out = Image.alpha_composite(out, white(line_ring, ramp(GLASS_LINE, 0, h / 2)))
+    out = Image.alpha_composite(out, white(rim_ring, ramp(*GLASS_RIM[pressed], h - 1)))
+    return out
+
+def np_disc(size, disc_px, pressed, g, ink, rgb):
+    """A size x size canvas: a glass disc of disc_px (glass_image, pressed one lighter) centred, the glyph g (ink px) over it, centred optically."""
     from PIL import Image
-    d = disc(disc_px, (255, 255, 255)); d.putalpha(d.getchannel('A').point(lambda v: v * alpha // 255))
+    d = glass_image(disc_px, disc_px, disc_px // 2, pressed)
     c = Image.new('RGBA', (size, size), (255, 255, 255, 0)); o = (size - disc_px) // 2
     c.alpha_composite(d, (o, o)); c.alpha_composite(np_glyph(g, size, ink, rgb)); return c
 
 def np_images():
     """The Now Playing glyphs (mod_nowplaying.py): the tones of NP_TONES, pressed #8C8C8C (the grabber: brighter); the
-    transport glyphs are the solid PIL-drawn shapes, heart and More sit on a translucent disc, the rest Tabler."""
+    transport glyphs are the solid PIL-drawn shapes, star and More sit on a translucent disc, the rest Tabler."""
     out = {}
     for n, (g, px, ink, tone, down, *rest) in NP.items():
         for name, pressed in ((n, False), (down, True)):
             if not name: continue
-            rgb, alpha = (NP_PRESSED.get(tone) or (NP_DIM, 255)) if pressed else NP_TONES[tone]
-            if g.startswith('pil:'): out[name] = pil_glyph(g[4:], px, rgb, alpha)
-            elif rest: out[name] = np_disc(px, rest[0], NP_DISC_ALPHA_DOWN if pressed else NP_DISC_ALPHA, g, ink, rgb)
+            rgb, alpha = (NP_PRESSED.get(tone) or (NP_DIM, 255)) if pressed and not rest else NP_TONES[tone]   # a glass disc keeps its glyph at rest: the lighter pane is the feedback (#8C8C8C on it is 3.4:1)
+            if g == 'pil:glass': out[name] = glass_image(*GLASS, pressed)
+            elif g == 'pil:glass_card': out[name] = glass_image(*GLASS_CARD, fill=GLASS_CARD_FILL)
+            elif g == 'pil:glass_sheet': out[name] = glass_image(*GLASS_SHEET, fill=GLASS_SHEET_FILL, top_only=True)
+            elif g == 'pil:glass_menu': out[name] = glass_image(*GLASS_MENU, fill=GLASS_SHEET_FILL)
+            elif g.startswith('pil:'): out[name] = pil_glyph(g[4:], px, rgb, alpha)
+            elif rest: out[name] = np_disc(px, rest[0], pressed, g, ink, rgb)
             else: out[name] = glyph_fit(g, px, px, rgb, (px - ink) // 2, 1.5 if ink < 22 else None)   # the small mode / queue glyphs keep a 1.5 px stroke
     return out
 
@@ -821,7 +967,7 @@ def replaced_names():
 
 def pod_row_names(): return sorted({n for n, _ in POD_ROWS.values()})
 def nav_names(): return sorted(set(NAV_VIEW) | {n + '_down' for n in NAV_VIEW})
-def pod_names(): return sorted(set(pod_row_names()) | set(POD_HOME) | set(nav_names()) | set(ALBUM) | {SHOT_BAR[0]})
+def pod_names(): return sorted(set(pod_row_names()) | set(POD_HOME) | set(nav_names()) | set(ALBUM) | {SHOT_BAR[0]} | {n for n, _ in PL_MENU_ICONS})
 def np_names(): return sorted(set(NP) | {v[4] for v in NP.values() if v[4]})
 
 def added_rels(stock_rootfs=None, *args):
@@ -991,9 +1137,10 @@ def add_home_icon(out):
 
 def add_nav_icons(out):
     """The Albums view toggle's four images (used by ui/m1pod_albums.bin, which swaps the glyph at run time with its mode)
-    and the status bar's Screenshot camera (the hidden pod_shot image tools/pod_ui.py adds to ui/system_bar.bin)."""
+    the status bar's Screenshot camera (the hidden pod_shot image tools/pod_ui.py adds to ui/system_bar.bin) and the Playlists
+    page's menu glyphs (ui/m1pod_playlists.bin)."""
     d = os.path.join(out, IMG)
-    for n in nav_names() + [SHOT_BAR[0]]:
+    for n in nav_names() + [SHOT_BAR[0]] + [n for n, _ in PL_MENU_ICONS]:
         q = os.path.join(d, n + '.png'); assert not os.path.exists(q), f'{n}.png already in the tree'
         shutil.copyfile(os.path.join(PNG, n + '.png'), q); os.chmod(q, IMG_MODE); os.utime(q, (IMG_MTIME, IMG_MTIME))
 

@@ -1,6 +1,6 @@
 """Now Playing: the playing_page_init hook and its timer (the tint, the remaining time, the rounded corners), the tone
 formula and its contrast, the A-B marker immediates, and the geometry of the built page assets."""
-import os, random, struct, sys
+import os, random, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 import awtk_style, mod_icons, mod_lockscreen, mod_nowplaying as mn
 
@@ -14,6 +14,8 @@ EVT_DESTROY, EVT_AFTER_PAINT = O['EVT_DESTROY'], O['EVT_AFTER_PAINT']
 class NowMachine(Machine):
     """Machine plus what the Now Playing code calls: the style API, the player's position, files read through stdio,
     the stock init the hook wraps."""
+    FIRE_WIN = WIN
+
     def __init__(self):
         super().__init__()
         self.handlers[INIT + 12] = 'stock_playing_resume'
@@ -40,10 +42,6 @@ class NowMachine(Machine):
 
     def bar_color(self): return self.bar_styles[-1][2] if self.bar_styles else None
     def bar_calls(self): return [c for c in self.calls if c[0] == 'widget_set_style' and c[1] == self.bar]
-    def fire(self, ev, win=WIN):
-        fn, ctx = self.bound[(win, ev)]
-        return self.call(fn, a0=ctx, a1=0, count=2000000)
-
     def info_page(self, stock):
         """The info page's labels (name -> the text stock wrote); returns {name: handle}."""
         out = {}
@@ -114,17 +112,6 @@ class NowMachine(Machine):
     def set_texts(self): return [(c[1], c[2]) for c in self.calls if c[0] == 'widget_set_text_utf8']
     def visible(self, name): return self.props.get((self.widgets[name], 'visible'))
 
-
-def lum(c):
-    def f(v):
-        v /= 255
-        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
-    return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2])
-
-
-def contrast(fg, bg):
-    a, b = sorted((lum(fg), lum(bg)), reverse=True)
-    return (a + 0.05) / (b + 0.05)
 
 
 def run(ctx):
@@ -219,12 +206,9 @@ def run(ctx):
     expect(not any(c[0] == 'widget_invalidate_force' for c in m.calls), 'a style call that fails invalidates nothing')
 
     # ------------------------------------------------------------------ remaining time
-    # Machine.call sets a0..a2 only; the fourth argument is written by hand
     def fmt(pos, ln):
         mm = NowMachine(); out = mm.alloc(32)
-        mm.calls = []; mm.u.reg_write(UC_MIPS_REG_SP, STACK); mm.u.reg_write(UC_MIPS_REG_RA, RET); mm.u.reg_write(UC_MIPS_REG_T9, PSYMS['np_format_remaining'])
-        for r, v in ((UC_MIPS_REG_A0, out), (UC_MIPS_REG_A1, 32), (UC_MIPS_REG_A2, pos), (UC_MIPS_REG_A3, ln)): mm.u.reg_write(r, v & 0xffffffff)
-        mm.u.emu_start(PSYMS['np_format_remaining'], RET, count=100000)
+        mm.call(PSYMS['np_format_remaining'], out, 32, count=100000, a2=pos, a3=ln)
         return mm.read_cstr(out)
     cases = {(0, 0): '-0:00', (0, 1): '-0:01', (0, 59): '-0:59', (0, 60): '-1:00', (0, 265): '-4:25', (0, 3599): '-59:59', (0, 3600): '-1:00:00',
              (0, 3723): '-1:02:03', (100, 100): '-0:00', (130, 100): '-0:00', (30, 200): '-2:50',
@@ -355,10 +339,7 @@ def run(ctx):
     # ------------------------------------------------------------------ the tone
     mm = NowMachine()
     def c_tone(r, g, b):
-        mm.u.reg_write(UC_MIPS_REG_SP, STACK); mm.u.reg_write(UC_MIPS_REG_RA, RET)
-        for reg, v in ((UC_MIPS_REG_A0, r), (UC_MIPS_REG_A1, g), (UC_MIPS_REG_A2, b)): mm.u.reg_write(reg, v)
-        mm.u.emu_start(PSYMS['np_tone'], RET, count=100000)
-        v = mm.u.reg_read(UC_MIPS_REG_V0)
+        v = mm.call(PSYMS['np_tone'], r, g, count=100000, a2=b)
         return v >> 24, (v & 255, v >> 8 & 255, v >> 16 & 255)
     rng = random.Random(7)
     grid = [(r, g, b) for r in range(0, 256, 51) for g in range(0, 256, 51) for b in range(0, 256, 51)]
@@ -430,9 +411,7 @@ def run(ctx):
         while 2126 * r * r + 7152 * g * g + 722 * b * b > O['NP_BAR_LUM_MAX']: r, g, b = r * 15 >> 4, g * 15 >> 4, b * 15 >> 4
         return r, g, b
     def c_bar(t):
-        mm.u.reg_write(UC_MIPS_REG_SP, STACK); mm.u.reg_write(UC_MIPS_REG_RA, RET)
-        mm.u.reg_write(UC_MIPS_REG_A0, t[0] | t[1] << 8 | t[2] << 16); mm.u.emu_start(PSYMS['np_bar_color'], RET, count=100000)
-        v = mm.u.reg_read(UC_MIPS_REG_V0)
+        v = mm.call(PSYMS['np_bar_color'], t[0] | t[1] << 8 | t[2] << 16, count=100000)
         return v >> 24, (v & 255, v >> 8 & 255, v >> 16 & 255)
     tones = sorted({mn.tone(*c) for c in grid} | {mn.NP_NEUTRAL, mn.tone(255, 255, 255)})
     expect(all(c_bar(t) == (255, bar_model(t)) for t in tones), f'np_bar_color equals the model on {len(tones)} tones: the first row under the gradient, darkened to the luminance cap')
@@ -664,12 +643,12 @@ def run(ctx):
     expect(rect('scrlabel_title') == (28, 305, 176, 24) and rect('scrlabel_artist') == (28, 329, 176, 22), 'title and artist in the 28 px text column left of the buttons')
     expect(mn.TITLE_PX == 20 and mn.META_PX == 18 and mn.TITLE_H >= mn.TITLE_PX + 4 and mn.ARTIST_H >= mn.META_PX + 4
            and mn.TITLE_Y + mn.TITLE_H == mn.ARTIST_Y and (mn.TITLE_Y + mn.ARTIST_Y + mn.ARTIST_H) / 2 == mn.BTN_Y + mn.BTN // 2 + 0.0
-           and mn.FAV_X - mn.M >= mn.TEXT_W, 'title 20 px, artist 18 px: the 46 px block is centred on the discs (y 328) and the column ends before the heart')
+           and mn.FAV_X - mn.M >= mn.TEXT_W, 'title 20 px, artist 18 px: the 46 px block is centred on the discs (y 328) and the column ends before the star')
     from awtk_text import Ttf as _T, StbText as _S
     _t = _T(os.path.join(raw, 'fonts', 'default.ttf'))
     _w20 = lambda s: _S(_t, 20).layout(s)[1]
     expect(_w20('Hello, World') < mn.TEXT_W and _w20('A' * 40) > mn.TEXT_W and _S(_t, 20).layout('Hg')[1] > 0, 'the 20 px title measures with the pinned font: a short title fits the 176 px column, a long one is cut (ellipsis)')
-    expect(rect('btn_fav') == (204, 306, 44, 44) and rect('btn_more') == (248, 306, 44, 44), 'heart and More: 44x44 targets, 4 px apart, right edge on the 28 px margin')
+    expect(rect('btn_fav') == (204, 306, 44, 44) and rect('btn_more') == (248, 306, 44, 44), 'star and More: 44x44 targets, 4 px apart, right edge on the 28 px margin')
     expect(rect('slider_play') == (28, 348, 264, 30) and f('slider_play').get('bar_size') == '6' and f('slider_play').get('style:normal:icon') == '', 'progress: the stock 30 px target, a 6 px bar, no thumb')
     expect(rect('label_playtime')[:2] == (28, mn.TIMES_Y) and rect('np_remaining') == rect('label_playlen') and rect('label_playlen')[0] + rect('label_playlen')[2] == 292,
            'times under the bar on the margins; the remaining time sits on the total')
@@ -753,19 +732,22 @@ def run(ctx):
     expect(all(w.name not in ('img_np_scrim_lyrics', 'img_np_scrim_info') or [p for p in ui.walk() if w in p.children][0].name in ('view_lyrics', 'view_info') for w in ui.walk() if w.name),
            'the scrim is on the lyrics and info pages only: the art page keeps the full tint')
     expect(not os.path.exists(os.path.join(xx, 'np_artmask.png')) and 'img_np_artmask' not in [w.name for w in ui.walk()], 'there is no static corner mask: the payload paints the corners (square without it)')
-    def img(n): return Image.open(os.path.join(xx, n + '.png')).convert('RGBA')
-    sizes = {n: img(n).size for n in ('np_grabber', 'np_play', 'np_pause', 'np_next', 'np_prev', 'np_fav', 'np_unfav', 'np_more', 'np_random', 'np_playqueue')}
+    sizes = {n: asset_image(n).size for n in ('np_grabber', 'np_play', 'np_pause', 'np_next', 'np_prev', 'np_fav', 'np_unfav', 'np_more', 'np_random', 'np_playqueue')}
     expect(sizes['np_grabber'] == (120, 44) and sizes['np_fav'] == sizes['np_unfav'] == sizes['np_more'] == (44, 44) and sizes['np_play'] == sizes['np_pause'] == (44, 44) and sizes['np_next'] == sizes['np_prev'] == (44, 44),
            f'glyph canvases: grabber 120x44, disc glyphs 44x44, transport 44x44 ({sizes})')
-    g = img('np_grabber'); bb = g.getchannel('A').point(lambda v: 255 if v > 40 else 0).getbbox()
+    g = asset_image('np_grabber'); bb = g.getchannel('A').point(lambda v: 255 if v > 40 else 0).getbbox()
     expect(bb == (42, 11, 78, 16) and 108 <= g.getpixel((60, 13))[3] <= 110, f'the grabber pill is 36x5 at x 42, y 11 of the button, white at 43 % ({bb})')
     for n in ('np_fav', 'np_unfav', 'np_more'):
-        im = img(n); dbb = im.getchannel('A').point(lambda v: 255 if v > 2 else 0).getbbox()
-        expect(dbb == (6, 6, 38, 38) and im.getpixel((10, 22))[3] == 26 and im.getpixel((10, 22))[:3] == (255, 255, 255), f'{n}: a 32 px disc, white at #1A, in the 44 px target ({dbb})')
-    # the glyph in the disc (centre 22.0, 22.0): coverage = the glyph's share of each pixel over the 26/255 disc; sub-pixel bbox edges, centroid
+        im = asset_image(n); dbb = im.getchannel('A').point(lambda v: 255 if v > 2 else 0).getbbox()
+        expect(dbb == (6, 6, 38, 38) and im.getpixel((10, 22)) == mod_icons.glass_image(32, 32, 16).getpixel((4, 16)), f'{n}: a 32 px glass disc (test/pod/glassbtn.py) in the 44 px target ({dbb})')
+    # the glyph in the disc (centre 22.0, 22.0): coverage = the glyph's share of each pixel over the glass disc (alpha = a + A (1 - a), A the glass's own); sub-pixel bbox edges, centroid
+    glass = mod_icons.glass_image(32, 32, 16)
     def optical(n):
-        im = img(n); W_, H_ = im.size
-        c = [[max(0.0, (im.getpixel((x, y))[3] - 26) / 229) if im.getpixel((x, y))[3] > 26 else 0.0 for x in range(W_)] for y in range(H_)]
+        im = asset_image(n); W_, H_ = im.size
+        def cv(x, y):
+            A = glass.getpixel((x - 6, y - 6))[3] if 6 <= x < 38 and 6 <= y < 38 else 0
+            return max(0.0, (im.getpixel((x, y))[3] - A) / (255 - A)) if im.getpixel((x, y))[3] > A else 0.0
+        c = [[cv(x, y) for x in range(W_)] for y in range(H_)]
         cols = [max(c[y][x] for y in range(H_)) for x in range(W_)]; rows = [max(r) for r in c]
         def edges(v):
             idx = [i for i, a in enumerate(v) if a > 0.02]; return idx[0] + 1 - v[idx[0]], idx[-1] + v[idx[-1]]
@@ -776,9 +758,9 @@ def run(ctx):
     d = lambda p: max(abs(p[0] - 22), abs(p[1] - 22))
     expect(d(fb) <= 0.75 and d(fc) <= 0.75 and d(((fb[0] + fc[0]) / 2, (fb[1] + fc[1]) / 2)) <= 0.25 and d(ub) <= 0.75 and abs(ub[0] - fb[0]) < 0.3 and abs(ub[1] - fb[1]) < 0.3
            and d(mb) <= 0.25 and d(mc) <= 0.25,
-           f'heart and More are centred in their 32 px disc (optical centre = the mean of the box centre and the centroid, within 0.25 px; each within 0.75): the filled heart\'s box ({fb[0] - 22:+.2f}, {fb[1] - 22:+.2f}) and centroid ({fc[0] - 22:+.2f}, {fc[1] - 22:+.2f}), the outline\'s box ({ub[0] - 22:+.2f}, {ub[1] - 22:+.2f}) as the filled one, More ({mb[0] - 22:+.2f}, {mb[1] - 22:+.2f})')
-    cov = lambda n: img(n).getchannel('A').point(lambda v: 255 if v > 0 else 0).getbbox()      # any coverage: the ink with its anti-aliased rim
-    half = lambda n: img(n).getchannel('A').point(lambda v: 255 if v > 127 else 0).getbbox()
+           f'star and More are centred in their 32 px disc (optical centre = the mean of the box centre and the centroid, within 0.25 px; each within 0.75): the filled star\'s box ({fb[0] - 22:+.2f}, {fb[1] - 22:+.2f}) and centroid ({fc[0] - 22:+.2f}, {fc[1] - 22:+.2f}), the outline\'s box ({ub[0] - 22:+.2f}, {ub[1] - 22:+.2f}) as the filled one, More ({mb[0] - 22:+.2f}, {mb[1] - 22:+.2f})')
+    cov = lambda n: asset_image(n).getchannel('A').point(lambda v: 255 if v > 0 else 0).getbbox()      # any coverage: the ink with its anti-aliased rim
+    half = lambda n: asset_image(n).getchannel('A').point(lambda v: 255 if v > 127 else 0).getbbox()
     near = lambda b, w, h: abs(b[2] - b[0] - w) <= 1 and abs(b[3] - b[1] - h) <= 1
     pb, qb, nb, vb = cov('np_play'), cov('np_pause'), cov('np_next'), cov('np_prev')
     expect(near(pb, 29, 31) and near(qb, 27, 28) and near(nb, 35, 24) and near(vb, 35, 24) and near(half('np_play'), 29, 31),
@@ -788,10 +770,10 @@ def run(ctx):
     expect(abs(cx(pb) - 22 - 1.5) <= 1 and abs(cx(qb) - 22) <= 1 and abs(cx(nb) - 22) <= 1 and abs(cx(vb) - 22) <= 1 and all(abs((b[1] + b[3]) / 2 - 22) <= 1 for b in (pb, qb, nb, vb)),
            'every glyph is centred in its canvas (play 1.5 px right: optical centring)')
     for n in ('np_play', 'np_pause', 'np_next', 'np_prev'):
-        a = img(n).getchannel('A'); part = sum(1 for v in a.getdata() if 0 < v < 255); b = cov(n)
+        a = asset_image(n).getchannel('A'); part = sum(1 for v in a.getdata() if 0 < v < 255); b = cov(n)
         expect(part >= 60 and a.getpixel((b[0], b[1])) < 128 and a.getpixel((b[2] - 1, b[3] - 1)) < 128, f'{n}: anti-aliased ({part} partial pixels) with rounded corners (the bbox corners are not inked)')
-        expect(max(img(n).getdata(), key=lambda c: c[3])[:3] == mod_icons.NP_FG and max(img(n + '_down').getdata(), key=lambda c: c[3])[:3] == mod_icons.NP_DIM, f'{n}: off-white, pressed #8C8C8C')
-    pw = img('np_pause').getchannel('A'); row = [pw.getpixel((x, 22)) for x in range(44)]
+        expect(max(asset_image(n).getdata(), key=lambda c: c[3])[:3] == mod_icons.NP_FG and max(asset_image(n + '_down').getdata(), key=lambda c: c[3])[:3] == mod_icons.NP_DIM, f'{n}: off-white, pressed #8C8C8C')
+    pw = asset_image('np_pause').getchannel('A'); row = [pw.getpixel((x, 22)) for x in range(44)]
     runs = []; run = 0
     for v in row + [0]:
         if v > 127: run += 1
@@ -801,11 +783,11 @@ def run(ctx):
     expect(mod_lockscreen.BTN_W >= sizes['np_next'][0] and mod_lockscreen.BTN_W >= sizes['np_play'][0]
            and (mod_lockscreen.BTN_W - (pb[2] - pb[0])) // 2 + (mod_lockscreen.BTN_W - (nb[2] - nb[0])) // 2 >= 12,
            'lock screen: play and next canvases fit the 48 px targets, the inks stay >= 12 px apart')
-    mid = img('np_random'); mb = mid.getchannel('A').point(lambda v: 255 if v > 128 else 0).getbbox()
-    qg = img('np_playqueue'); qgb = qg.getchannel('A').point(lambda v: 255 if v > 128 else 0).getbbox()
+    mid = asset_image('np_random'); mb = mid.getchannel('A').point(lambda v: 255 if v > 128 else 0).getbbox()
+    qg = asset_image('np_playqueue'); qgb = qg.getchannel('A').point(lambda v: 255 if v > 128 else 0).getbbox()
     expect(max(mb[2] - mb[0], mb[3] - mb[1]) <= 18 and max(qgb[2] - qgb[0], qgb[3] - qgb[1]) <= 18
            and max(c for c in mid.getdata() if c[3] > 200)[:3] == mod_icons.NP_MID, 'the mode and queue glyphs are small (18 px) and a notch dimmer than the white transport shapes (#C8C8C8)')
-    expect(max(c for c in img('np_order').getdata() if c[3] > 200)[:3] == mod_icons.NP_OFF, 'repeat-off is dimmer still')
+    expect(max(c for c in asset_image('np_order').getdata() if c[3] > 200)[:3] == mod_icons.NP_OFF, 'repeat-off is dimmer still')
     # the style swaps the app does still land on glyphs: every page-theme icon exists
     th = awtk_style.parse(open(os.path.join(raw, 'styles', 'playing_page.bin'), 'rb').read())
     icons = {s.get('icon') for s in th.items if s.widget == 'button' and (s.get('icon') or '').startswith('np_')}

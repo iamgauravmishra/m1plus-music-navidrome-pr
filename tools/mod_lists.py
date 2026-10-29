@@ -27,7 +27,9 @@ theme mod owns that file; run this mod after it and the lists follow its colours
                            and jump-list artist line with this name, which no theme defines, so it
                            drew #444444 on #131313 until the row's data loaded
   playlist_btnitem_style   Import/Export tiles: list_item_style colours (stock pressed #2E2A19)
-  srlabel_leftwhite22_style  the queue (jump list) page's navbar title, 22 -> 20 px as every navbar title
+  srlabel_leftwhite22_style  the navbar title of the queue (jump list), the song lists (allmusic_page: Songs,
+                           a playlist's songs), Folders, Artists / Genres / Composers (localclass_page) and
+                           the stock Playlists page, 22 -> 20 px as every navbar title (docs/modules/navbar.md)
   btn_tab_style            Search tabs: grey text on the row colour, the active tab white with a
                            3 px accent underline (stock: a solid accent block, #FE7E40)
 
@@ -60,11 +62,11 @@ NAVBAR_PX = 20                               # navbar titles (mod_polish.TITLE_N
 
 # page (window name == theme name) -> page-theme recipes, in the order they are applied
 PAGES = {
-    'folder_page':         ('rows', 'title'),
-    'localclass_page':     ('rows', 'title'),
-    'allmusic_page':       ('rows', 'gray26'),
+    'folder_page':         ('rows', 'title', 'navtitle'),
+    'localclass_page':     ('rows', 'title', 'navtitle'),
+    'allmusic_page':       ('rows', 'gray26', 'navtitle'),
     'playerjumpinfo_page': ('rows', 'gray26', 'navtitle'),
-    'playlist_page':       ('tiles',),
+    'playlist_page':       ('tiles', 'navtitle'),
     'playqueue_dialog':    ('queue',),
     'search_page':         ('tabs',),
 }
@@ -80,7 +82,9 @@ PM_SPEED = {'scrlabel1': ((48, 8, 60, 20), (48, 8, 96, 20)),          # Playback
             'img_1_25x': ((172, 0, 36, 50), (188, 0, 36, 50)),        # note under them may use the whole row
             'img_1_5x': ((222, 0, 36, 50), (228, 0, 36, 50)),
             'img_2x': ((272, 0, 36, 50), (268, 0, 36, 50))}
-PM_RED = '#FF5A4F'                                  # the Delete label: 6.8:1 on the black dialog, 4.85:1 on the pressed row (#362221; a label in a pressed row stays in its normal state)
+PM_SHEET = 'pm_sheet'                               # the dialog's glass image (320 x 200, top corners r 18; tools/mod_icons.py GLASS_SHEET)
+PM_PRESSED, PM_HAIR = '#FFFFFF10', '#FFFFFF22'      # the rows over it: transparent, pressed 6 % white (a 20 % band, as the album page's, takes the red under 3:1), hairline 13 % white
+PM_RED = '#FF5A4F'                                 # the Delete label: >= 4.5:1 on the glass at rest (test/pod/playmore.py; a label in a pressed row stays in its normal state)
 QUEUE_ROW, QUEUE_BTN = 44, 40                       # the queue drawer's rows: table row, its button / label (4 px gap)
 QUEUE_NAME_PX, QUEUE_NOW_PX = 18, 20                # other rows / the playing row
 
@@ -147,7 +151,7 @@ def r_gray26(page, base, pal):
         page.put(copy(s, 'srlabel_item_gray26_style'))
 
 def r_navtitle(page, base, pal):
-    """The queue page's navbar title (the jump list, built by code with srlabel_leftwhite22_style: 22 px
+    """The navbar title the pages' builders make with srlabel_leftwhite22_style (the jump list, Songs, Folders, Artists, Playlists: 22 px
     where every other page's title is 20 px since mod_polish): the same white at the navbar size."""
     src = base.states('hscroll_label', 'srlabel_leftwhite22_style')
     assert src, 'default.bin has no srlabel_leftwhite22_style'
@@ -292,6 +296,19 @@ def edit_playmore(root, pal):
     first.set('style:normal:border', 'none')
     back.set('style:normal:border', 'none')
     ab.set('style:normal:border', 'top')
+    # the glass sheet (pm_sheet, mod_icons.glass_image top corners only): the dialog's image is its whole look (no fill, no #666666 top line:
+    # the rim is in the image), the list and its scroll view and every row are transparent over it. Inline styles of this dialog's widgets only.
+    lv = root.find('playmore_listview')
+    assert root.get('style:normal:bg_color') == '#000000' and root.get('style:normal:border') == 'top' and lv.get('style:normal:bg_color') == '#000000'
+    for st in ('normal', 'disable', 'focused'):
+        root.set(f'style:{st}:bg_color', '#00000000'); root.set(f'style:{st}:bg_image', PM_SHEET)
+        root.set(f'style:{st}:border', 'none')
+        lv.set(f'style:{st}:bg_color', '#00000000'); sv.set(f'style:{st}:bg_color', '#00000000')
+    for r in sv.children:
+        assert r.type == 'list_item' and r.get('style:normal:bg_color') == '#000000' and r.get('style:pressed:border_color') == '#666666', f'{r.name}: unexpected row style'
+        for st in ('normal', 'pressed', 'over', 'disable', 'focused'):
+            r.set(f'style:{st}:bg_color', PM_PRESSED if st == 'pressed' else '#00000000')
+            r.set(f'style:{st}:border_color', PM_HAIR)
     lab = root.find('scrlabel6')
     assert lab and lab.get('style') == 'srlabel_item_white_style' and lab.get('style:normal:text_color') is None
     for st in ('normal', 'pressed', 'over', 'disable', 'focused'): lab.set(f'style:{st}:text_color', PM_RED)
