@@ -41,8 +41,27 @@ card, then hold Previous and power on with Centre). I did not find an official M
 procedure online (Shanling only documents the normal TF-card / OTA update), so treat the button
 combination as unverified for this model.
 
-Partition hints from the kernel DTB: `kernel@40000`, `rootfs@360000`, `partition@100000`,
-`partition@900000`, `sadc@10070000`; mtd5 holds a config blob, mtd6 the OTA flag.
+**The flash layout, read on the device** (`/proc/mtd`, 2026-10-29, through a one-off diagnostic that a saved
+screenshot wrote to the card: `statfs` of the file systems and `/proc/mtd`, `/proc/cmdline`, `/proc/mounts`; not
+kept in the tree). The NAND is 128 MiB with 128 KiB erase blocks:
+
+| mtd | name | size | what it is |
+|---|---|---|---|
+| 0 | uboot | 1 MiB | the bootloader |
+| 1 | kernel | 6 MiB | the kernel `update.bin` replaces |
+| 2 | rootfs | 75 MiB | the rootfs `update.bin` replaces: squashfs, read-only (`root=/dev/mtdblock_bbt_ro2`); the release fills 50.75 MiB of it |
+| 3 | kernel2 | 6 MiB | the recovery kernel the OTA flag boots (step 6) |
+| 4 | rootfs2 | 12 MiB | the recovery kernel's own root file system |
+| 5 | userid | 128 KiB | a config blob |
+| 6 | ota | 128 KiB | the OTA flag (`ota:kernel2`) |
+| 7 | userdata | 24.75 MiB | the UBI volume `userdata`, UBIFS at `/mnt/data` (`/dev/ubi1_0`, mounted `sync`): 17.7 MiB, 16 MiB free with a library database |
+
+So the recovery system (mtd3, mtd4) is wholly separate from what `update.bin` writes (mtd1, mtd2). The partition table
+the kernel's device tree carries (8 MiB kernel, 247 MiB "rootfs" on NAND; a NOR table beside it) is not the one in
+use. The kernel command line (`console=ttyS3,115200n8 quiet mem=128M@0x0 init=/linuxrc flashtype=nand root=/dev/mtdblock_bbt_ro2
+rootfstype=squashfs ro`) shows 128 MiB of RAM and a serial console on UART3, a possible way in if a boot ever loops
+(the board's pads are not located). The rootfs partition leaves about 19 MiB above the stock image size, the limit
+`fwtool` enforces (the safety rules keep that limit).
 
 ## 2. Safety assessment
 
@@ -160,7 +179,7 @@ A plain fwtool rebuild of stock is 12 KB under the stock size, which fwtool enfo
   never mapped; `.pdr` is used by debuggers (gdb), and nothing on the rootfs is known to read it from
   disk. File size, section headers and every other byte are unchanged (cross-checked with
   pyelftools). `demo` is pinned by its stock SHA-256 (`29e23119...b3f1`). The About version string is
-  in `demo`'s `.rodata` (0x74773c) and stays `V2.1`; `tools/mod_about.py` adds the `M1+ Pod:<tag>` row to `about_page.bin`.
+  in `demo`'s `.rodata` (0x74773c) and stays `V2.1`; `tools/mod_about.py` adds the `M1+ Music:<tag>` row to `about_page.bin`.
 - **removed**, each pinned by SHA-256: `usr/bin/strace`, `strace-log-merge`, `sqlite3`, `hcidump`;
   `usr/lib/libdbus-1.so.3.19.8`; `usr/lib/lib{gio,glib,gmodule,gobject,gthread}-2.0.so.0.5400.3`
   (6,438,409 bytes). Evidence they are unused: no symlink resolves to any of them; a byte search of
@@ -204,6 +223,6 @@ of the full-precision listing against stock; with `--tailends` only 13 directory
 ## 6. The code payload
 
 `demo` has the same injectable layout as the Q2 (`ET_EXEC`, LOAD ends at va `0xa10fc8`, a spare
-final `PT_NULL` program header, `$gp = 0xa03ed0`). M1+ Pod appends a non-PIC MIPS payload at va
+final `PT_NULL` program header, `$gp = 0xa03ed0`). M1+ Music appends a non-PIC MIPS payload at va
 `0xb00000` and hooks two functions; mechanism, addresses, trampolines, kill switch and boot guard:
 `docs/architecture.md`.

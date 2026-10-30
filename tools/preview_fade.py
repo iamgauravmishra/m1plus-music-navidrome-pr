@@ -69,13 +69,13 @@ def main():
     work, out = sys.argv[1:3]
     rows = lambda items, sc: pn.row_widgets(items, 0, sc, pitch=52)
     specs = [
-        ('Albums grid, rest', 'm1pod_albums.bin', grid_content, 0, False),
-        ('Albums grid, scrolled 40', 'm1pod_albums.bin', grid_content, 40, False),
-        ('Albums list, rest', 'm1pod_albums.bin', list_content, 0, False),
-        ('Albums list, scrolled 40', 'm1pod_albums.bin', list_content, 40, False),
-        ('Settings, rest', 'm1pod_settings.bin', pn.row_widgets(pn.SETTINGS, 0, 0, pitch=52), 0, True),
-        ('Settings, scrolled 150', 'm1pod_settings.bin', pn.row_widgets(pn.SETTINGS, 0, 150, pitch=52), 150, True),
-        ('Artists, rest', 'm1pod_artists.bin', pn.row_widgets(pn.ARTISTS, 0, 0, pitch=52), 0, True),
+        ('Albums grid, rest', 'm1plus_albums.bin', grid_content, 0, False),
+        ('Albums grid, scrolled 40', 'm1plus_albums.bin', grid_content, 40, False),
+        ('Albums list, rest', 'm1plus_albums.bin', list_content, 0, False),
+        ('Albums list, scrolled 40', 'm1plus_albums.bin', list_content, 40, False),
+        ('Customize, rest', 'm1plus_customize.bin', pn.row_widgets(pn.SETTINGS, 0, 0, pitch=52), 0, True),
+        ('Customize, scrolled 150', 'm1plus_customize.bin', pn.row_widgets(pn.SETTINGS, 0, 150, pitch=52), 150, True),
+        ('Artists, rest', 'm1plus_artists.bin', pn.row_widgets(pn.ARTISTS, 0, 0, pitch=52), 0, True),
     ]
     pad, top = 10, 20
     cell_h = TOP + 130

@@ -1,12 +1,13 @@
 /* Cover cache and album helpers shared by the pages that show album art (patch/coverflow.c, patch/albums.c).
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
- * The cache design (one JPEG per album, /mnt/mmc/.coverflow/<key>-168.jpg, an empty file marking "no
+ * The cache design (one JPEG per album, /mnt/mmc/.m1plus/covers/<key>-168.jpg, an empty file marking "no
  * art") is q2-pod's, Copyright (c) 2026 Diamond Bond, MIT; see NOTICE and docs/architecture.md.
  */
 #pragma once
 
-#define ART_DIR "/mnt/mmc/.coverflow" /* the cache: <key>-168.jpg per album, an empty file for "no art" */
+#define CARD_DIR "/mnt/mmc/.m1plus"   /* the one hidden folder the payload keeps on the card: covers/ (the cache) and daily-mix/ (the Daily Mix: tracks, art); made by the writers, only while the card is mounted */
+#define ART_DIR CARD_DIR "/covers"    /* the cache: <key>-168.jpg per album, an empty file for "no art" */
 
 /* Pure pixel helpers, also built for the host (test/coverflow.py). */
 unsigned cc_fnv(unsigned h, const char *s);
@@ -27,7 +28,8 @@ const char *cc_url(char *out, unsigned key);           /* "file://<cache file>" 
 int cc_decode(void *w, const char *url, int unload, unsigned size, int box, unsigned *out);
 void *cc_copy_list(void *list);                        /* a stock list copied into a deque of our own */
 void *cc_albums(void);                                 /* the stock Albums list (getAllAlbum), copied; NULL if empty */
-int cc_open_album(void *artist_row, int index);        /* the stock Albums row sequence; 0 once the page is requested */
+int cc_open_album(void *artist_row, unsigned scope, int index);   /* the stock Albums row sequence (artist_row NULL), or that artist's (scope CLASS_ARTISTS) or composer's (CLASS_COMPOSERS); 0 once the page is requested */
+int cc_find_album(const char *album);                  /* the library Albums row with that album name (NOCASE), -1: none; cc_open_album(NULL, 0, row) opens it */
 /* The album order shared by Cover Flow and Albums (Settings > Cover Flow > Sort). The stock list is never reordered: the
  * sorted view is a permutation of its row numbers, and anything that goes back to stock (cc_open_album) takes the stock row. */
 int cc_nocase(const char *a, const char *b);           /* ASCII case-insensitive compare (SQLite NOCASE, as the stock list groups) */
@@ -61,4 +63,8 @@ void cc_build_stop(void);                               /* cancel, join (bounded
 /* Albums by distance from row `centre` (the centre, then one after, one before, ...), as the shared album order shows them
  * (`order` may be NULL): each one with a track path is added. Returns the number of jobs held after (cc_build_total). */
 int cc_build_near(void *albums, const unsigned *order, unsigned centre);
+/* The same walk in bounded steps: `*cursor` starts at 0 and is advanced; at most `batch` albums are considered (and so
+ * stat'ed) per call. 1 once the walk is complete (or the set is full), 0 when more remains. The caller keeps `centre`
+ * and the set unchanged between calls, and starts the worker only after the last step (jobs are never written while it runs). */
+int cc_build_near_step(void *albums, const unsigned *order, unsigned centre, unsigned *cursor, unsigned batch);
 #endif

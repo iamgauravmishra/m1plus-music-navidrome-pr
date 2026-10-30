@@ -237,9 +237,9 @@ def shuffle_tests(expect, menu):
     m.showlist = [one] * big
     m.calloc_fail = True
     v = m.call(play, a0=pod_pages.SHUFFLE_ALBUMS, count=COUNT)
-    expect(v == 0xffffffff and ('calloc', 12 * big, 0) in m.calls
+    expect(v == 0xffffffff and ('calloc', 16 * big, 0) in m.calls
            and not any(c[0] == 'toast' and c[1] == 'Too many songs to shuffle' for c in m.calls),
-           f'{big} songs pass the cap: the {12 * big}-byte index is the only extra allocation')
+           f'{big} songs pass the cap: the {16 * big}-byte index is the only extra allocation')
     m.calloc_fail = False
     # the cost on a real-shaped library: 128 albums of 16 tracks, every album intact
     m2 = shuffle_machine([(f'/mnt/mmc/l/{a:03d}/{t:02d}.flac', f'Album {a:03d}', 16 - t) for a in range(128)
@@ -250,6 +250,20 @@ def shuffle_tests(expect, menu):
                                               == list(range(1, 17)) for _, rs in got),
            '2048 songs in 128 albums: every album once, tracks 1-16 in order')
     print(f'  Shuffle Albums over 2048 songs (128 albums): {m2.icount:,} payload instructions')
+    # Shuffle Folders on the same size: the folder length is kept per song, not found again in every comparison
+    FOLDER_COST = {}
+    deep = '/mnt/mmc/Music/Library/Collection/Artist'
+    for tag, prefix in (('short', '/mnt/mmc/l'), ('long', deep)):
+        m3 = shuffle_machine([(f'{prefix}/{a:03d}/{t:02d}.flac', f'Album {a:03d}', 16 - t) for a in range(128) for t in range(16)])
+        v = m3.call(play, a0=pod_pages.SHUFFLE_FOLDERS, count=2000000000)
+        got = runs(m3.played[0], lambda r: field(m3, r, O['REC_PATH']).rsplit('/', 1)[0]) if m3.played else []
+        expect(v == 0 and len(got) == 128 and len({k for k, _ in got}) == 128
+               and all(len(rs) == 16 and [field(m3, r, O['REC_PATH']) for r in rs] == sorted(field(m3, r, O['REC_PATH']) for r in rs) for _, rs in got),
+               f'2048 songs in 128 {tag}-path folders: every folder once, contiguous, in file-name order')
+        print(f'  Shuffle Folders over 2048 songs ({tag} paths, {len(m3.played[0] and field(m3, m3.played[0][0], O["REC_PATH"]))} bytes): {m3.icount:,} payload instructions')
+        FOLDER_COST[tag] = m3.icount
+    expect(FOLDER_COST['short'] < 14000000 and FOLDER_COST['long'] < 30000000,
+           f'the folder length is found once per song: {FOLDER_COST["short"]:,} / {FOLDER_COST["long"]:,} instructions (26.4 M / 59.1 M before)')
     m.showlist = [one] * (big + 1)
     v = m.call(play, a0=pod_pages.SHUFFLE_SONGS, count=COUNT)
     expect(v == 0 and m.played and len(m.played[0]) == big + 1, 'Shuffle Songs plays a library of any size')
@@ -258,8 +272,8 @@ def shuffle_tests(expect, menu):
     #     shuffle) away.
     m = shuffle_machine(lib)
     expect(m.call(play, a0=7, count=COUNT) == 0xffffffff and not m.calls, 'an unknown kind does nothing')
-    m = shuffle_machine(lib); m.present.add('/mnt/mmc/m1pod-off')
-    m.call(PSYMS['m1pod_home_click'], a0=m.icon(str(pod_pages.HOME_ENTRY)), count=COUNT)
+    m = shuffle_machine(lib); m.present.add('/mnt/mmc/m1plus-off')
+    m.call(PSYMS['m1plus_home_click'], a0=m.icon(str(pod_pages.HOME_ENTRY)), count=COUNT)
     expect('stock_resume' in m.names() and 'loadLocalClassList' not in m.names() and 'window_open' not in m.names(),
            'kill switch: the entry icon is stock again, no menu, no shuffle')
 
@@ -272,7 +286,7 @@ def shuffle_page_tests(expect, menu, spi, page):
     cover = next(k for k, r in enumerate(menu.rows) if r.action == pod_pages.ACT_COVER)
     expect(menu.rows[i].label == 'Shuffle' and not any(r.action == pod_pages.ACT_SHUFFLE for r in menu.rows),
            f'the menu has one Shuffle row (row {i} of the default order, after Playlists), opening the page, and no shuffle rows of its own')
-    tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1pod_menu.bin'), 'rb').read())
+    tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_menu.bin'), 'rb').read())
     w = next((x for x in tree.walk() if x.type == 'list_item' and x.name == f'pod_row{i}'), None)
     labs = [pod_i18n.shown_english(c) for c in w.children if c.type == 'hscroll_label'] if w else []
     expect(labs == ['Shuffle'] and any(c.type == 'image' and c.get('image') == 'right_arrow' for c in w.children),
@@ -300,7 +314,7 @@ def shuffle_page_tests(expect, menu, spi, page):
         expect(m2.names() == ['navigator_back'], 'Back on the Shuffle page is navigator_back (to the menu)')
     else:
         expect(False, 'Back on the Shuffle page is bound')
-    # the page: the M1+ Pod navbar titled Shuffle, stock-styled rows exactly like the menu's, no chevrons
+    # the page: the M1+ Music navbar titled Shuffle, stock-styled rows exactly like the menu's, no chevrons
     st = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', f'release/assets/default/raw/ui/{page.key}.bin'), 'rb').read())
     title = next((x for x in st.walk() if x.name == 'label_title'), None)
     items = [x for x in st.walk() if x.type == 'list_item']
@@ -308,7 +322,7 @@ def shuffle_page_tests(expect, menu, spi, page):
     sig = lambda x: (x.get('style'), x.h, [(c.type, c.get('style'), c.x, c.y, c.h) for c in x.children if c.type == 'hscroll_label'])
     expect(title is not None and pod_i18n.shown_english(title) == 'Shuffle' and
            any(x.name == 'btn_return' for x in st.walk()) and any(x.name == 'btn_backtoplayer' for x in st.walk()),
-           'the Shuffle page has the M1+ Pod navbar: Shuffle, Back, Now Playing')
+           'the Shuffle page has the M1+ Music navbar: Shuffle, Back, Now Playing')
     expect([x.name for x in items] == ['pod_row0', 'pod_row1', 'pod_row2'] and
            [[pod_i18n.shown_english(c) for c in x.children if c.type == 'hscroll_label'] for x in items] ==
            [['Shuffle Songs'], ['Shuffle Albums'], ['Shuffle Folders']] and

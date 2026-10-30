@@ -4,7 +4,7 @@ Split out of docs/architecture.md. A "section N" in the text is an old section n
 
 ## 2. The payload
 
-M1+ Pod adds new pages to the UI app by injecting machine code into `/release/bin/demo`, the way
+M1+ Music adds new pages to the UI app by injecting machine code into `/release/bin/demo`, the way
 q2-pod does on the Shanling Q2 (MIT, `NOTICE`). The M1 Plus runs the same stack (X2000 MIPS32r2 LE,
 Linux 5.10, Buildroot glibc, AWTK, a `demo` ELF with a spare `PT_NULL` program header); only
 addresses, symbols and pages differ.
@@ -21,7 +21,7 @@ is inside the payload and shipped zeroed. Everything larger (Cover Flow's frame 
 array, album copy, album header cover) is heap, allocated when the page opens and freed on close.
 Current payload: 47,832 bytes. Compiled non-PIC (`clang --target=mipsel-linux-gnu -march=mips32r2
 -mabi=32 -mfp64 -mno-abicalls -fno-pic -G0 -Oz`, `-Wall -Wextra -Werror`), linked by `patch/link.ld`
-at `0xb00000` with `--gc-sections`, sources in this order: `m1pod.c covercache.c coverflow.c albums.c
+at `0xb00000` with `--gc-sections`, sources in this order: `m1plus.c covercache.c coverflow.c albums.c
 artists.c shuffle.c albuminfo.c nowplaying.c minibar.c grid.c recent.c rows.c shot.c home.c`.
 
 ### $gp and the trampolines
@@ -54,21 +54,21 @@ function past its 3-word prologue (`lui $gp,0xa03e; ori $gp,$gp,0x3ed0; j <fn+12
 
 1. **Home icon click dispatcher** `0x533b80` (unnamed in `.dynsym`; registered on each Home icon by
    `home_page_init` via `widget_on(icon, EVT_CLICK=0x10c, ...)`). Pinned prologue `(0x3c1c004d,
-   0x279c0350, 0x0399e021)` is overwritten with `j m1pod_home_click; nop`; resume `0x533b8c`. It opens the menu for
-   id 99 (the M1+ Pod icon) and, as the recovery fallback (section 9, Recovery), for id 1 (Tidal) while
-   `/mnt/data/m1pod-bad` exists; every other tap goes to stock.
+   0x279c0350, 0x0399e021)` is overwritten with `j m1plus_home_click; nop`; resume `0x533b8c`. It opens the menu for
+   id 99 (the M1+ Music icon) and, as the recovery fallback (section 9, Recovery), for id 1 (Tidal) while
+   `/mnt/data/m1plus-bad` exists; every other tap goes to stock.
 2. **`home_page_init`** `0x534cd4` (the boot guard, section 7). Pinned prologue `(0x3c1c004d,
-   0x279cf1fc, 0x0399e021)`, `$gp` checked, overwritten with `j m1pod_home_init; nop`; resume `0x534ce0`.
+   0x279cf1fc, 0x0399e021)`, `$gp` checked, overwritten with `j m1plus_home_init; nop`; resume `0x534ce0`.
 
 3. **`albuminfo_listitem0_layout`** `0x526264` (the album page's header builder; patch/albuminfo.c,
    section 8). Pinned prologue `(0x3c1c004e, 0x279cdc6c, 0x0399e021)`, `$gp` checked, overwritten with
-   `j m1pod_albuminfo_header; nop`; resume `0x526270`. Its only callers are `albumdeinfo_listitem_layout+0x1d0`
+   `j m1plus_albuminfo_header; nop`; resume `0x526270`. Its only callers are `albumdeinfo_listitem_layout+0x1d0`
    (`0x526564`: the list builder of `albuminfo_page_init` and of the page's to-foreground rebuild), so it
    runs only while that page builds its list: never at boot, in the main loop or during paint. The hook
    runs the stock function to completion, then restyles its four widgets; any mismatch leaves stock.
 
 4. **`playing_page_init`** `0x53d1e4` (Now Playing's init; patch/nowplaying.c, section 8a). Pinned prologue
-   `(0x3c1c004c, 0x279c6cec, 0x0399e021)`, `$gp` checked, overwritten with `j m1pod_playing_init; nop`; resume `0x53d1f0`. Its only
+   `(0x3c1c004c, 0x279c6cec, 0x0399e021)`, `$gp` checked, overwritten with `j m1plus_playing_init; nop`; resume `0x53d1f0`. Its only
    caller is the navigator's page-init dispatcher (`0x4d1b3c`, behind the cut `tools/reach.py` uses), so it runs only when
    the page is built. The hook runs the stock function to completion and returns its result, then (if it returned `RET_OK`
    for a non-null window and the kill switch is absent) starts the page timer; any failure leaves the stock page.
@@ -82,9 +82,9 @@ One more site is a data word, not a code hook (section 8d): `g_scroll_view_vtabl
 `on_event_before_children` slot, empty in stock, runs for touches inside a `scroll_view` only; that includes the Albums page since its content sits in a stock `list_view > scroll_view` (the page has no drag, fling or catch code of its own; it adds
 no hook: its taps are `EVT_POINTER_*` handlers on its own content view, its loader a page-scoped timer, `docs/modules/albums.md`; payload 95,416 B).
 
-### What the entry does (`patch/m1pod.c`)
+### What the entry does (`patch/m1plus.c`)
 
-`m1pod_home_click(icon, e)`: read the icon's name (`icon + 0x10`, stock stores the Home id as a
+`m1plus_home_click(icon, e)`: read the icon's name (`icon + 0x10`, stock stores the Home id as a
 decimal string), `atoi` it; if it is not the entry id (`POD_ENTRY_ID` = 99, the icon patch/home.c adds; Tidal, id 1, is stock), or the kill-switch
 file exists, or the page fails to open, tail into `stock_home_click_trampoline` (unchanged stock
 behaviour). Otherwise `window_open` the entry page, bind `btn_return` -> `navigator_back`,
@@ -94,16 +94,16 @@ Pages are defined once in `tools/pod_pages.py` (`PAGES`: menu, Cover Flow, Artis
 consumed by `pod_ui.py` (assets) and `pod.py` (the C row/page tables in `stock.h`), so a row's widget,
 label and handler cannot drift apart. Row actions: `ACT_HOME` (open a stock Home destination through
 the dispatcher with a fake numeric-named icon), `ACT_PAGE`, `ACT_PLAYER` (stock
-`on_backtoplayer_onclick`), `ACT_COVER`, `ACT_SHUFFLE`, `ACT_ARTISTS`, `ACT_ALBUMS`, `ACT_PLAYLISTS` (the mosaic grid, `docs/modules/playlists.md`), `ACT_GRID`, `ACT_STARTUP`, `ACT_LANDSCAPE` (switch rows, below), `ACT_SORT` (a value row, below), `ACT_SHOT` (Screenshot, section 8c). The
-menu items (`ITEMS`, the item id = the row index, default order) are Now Playing, Cover Flow, Albums (-> our page, grid or list mode, section 5a), Artists (-> our list), Songs, Playlists, Shuffle (-> Shuffle page),
-Genres, Folders, then the nine Extras tiles (ids 9-17: Favorites, Recently Added, Recently Played, Most Played, Composers, Hi-Res, Update Library, Tidal, CD Ripper; the Home ids 10, 13, 12, 11, 8, 9, 2, 1, 15 through the dispatcher; hidden by default); then Extras (shown unless the saved list lacks its `x`, Settings > Main Menu; -> Extras page: the same eighteen rows, of which it shows those the menu does not, in the fixed order `pod_pages.EXTRAS_ORDER`, emitted as `POD_EXTRAS_ORDER` in `stock.h`) and Settings (-> Settings page: Main Menu, Cover Flow (-> `m1pod_cfset`), Home Screen (-> `m1pod_homeset`: the Start in M1+ Pod
+`on_backtoplayer_onclick`), `ACT_COVER`, `ACT_SHUFFLE`, `ACT_ARTISTS` (arg 0 Artists, else the Genres / Composers tile), `ACT_ALBUMS`, `ACT_PLAYLISTS` (the mosaic grid, `docs/modules/playlists.md`), `ACT_SONGS` (the Songs page, `docs/modules/songs.md`), `ACT_GRID`, `ACT_STARTUP`, `ACT_LANDSCAPE` (switch rows, below), `ACT_SORT` (a value row, below), `ACT_SHOT` (Screenshot, section 8c), `ACT_SHELF` and `ACT_DAILY` (the shelf and Daily Mix card switches), `ACT_REGEN` (Regenerate Daily Mix: an action row without a chevron, `docs/modules/dailymix.md`). The
+menu items (`ITEMS`, the item id = the row index, default order) are Now Playing, Cover Flow, Albums (-> our page, grid or list mode, section 5a), Artists (-> our list), Songs (-> our page, `docs/modules/songs.md`), Playlists (-> our mosaic grid), Shuffle (-> Shuffle page),
+Genres (-> the Artists page on class `0xf006`), Folders, then the nine Extras tiles (ids 9-17: Favorites, Recently Added, Recently Played, Most Played, Composers, Hi-Res, Update Library, Tidal, CD Ripper; the Home ids 10, 13, 12, 11, 8, 9, 2, 1, 15: the song lists on our Songs page, Composers on our Artists page, the rest through the dispatcher, which is also every fallback; hidden by default); then Customize (item 18, saved character `j`, hidden by default) and Extras (always last; -> Extras page: a row per item, of which it lists those the menu does not show and the saved list's `-` part did not turn off, never Customize, in the fixed grouped order `pod_pages.EXTRAS_ORDER`, emitted as `POD_EXTRAS_ORDER` in `stock.h`; its navbar has the Customize button; Customize > Extras edits the `-` part). Customize (-> Customize page: Main Menu, Cover Flow (-> `m1plus_cfset`), Home Screen (-> `m1plus_homeset`: the Start in M1+ Music
 switch and Shanling Home), Playback and System Settings through the stock dispatcher with ids 16 and 17, and Screenshot, `ACT_SHOT`, section 8c: no item id, no menu character). Page layout: `docs/ui.md`. To add a
 page: add a `Page` and a row to `pod_pages.py`, rebuild (assets and tables regenerate), add a test
 module under `test/pod/`.
 
 ### Why the entry is an added icon
 
-The entry is an icon of its own, id 99 ("M1+ Pod"), which `patch/home.c` adds to the stock grid (section 9);
+The entry is an icon of its own, id 99 ("M1+ Music"), which `patch/home.c` adds to the stock grid (section 9);
 Tidal opens Tidal. The icon has no stock
 id, so it cannot be hidden in Home customisation (the grid rebuild drops it; `hm_fg` puts it back), and the
 dispatcher's bounds check (`sltiu 0x12`, `0x533ba8`) sends an id outside 0..17 to its default (nothing), so

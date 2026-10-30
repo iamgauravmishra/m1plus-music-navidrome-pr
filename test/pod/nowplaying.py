@@ -4,7 +4,7 @@ import os, random, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 import awtk_style, mod_icons, mod_lockscreen, mod_nowplaying as mn
 
-KILL = '/mnt/mmc/m1pod-off'
+KILL = '/mnt/mmc/m1plus-off'
 INIT = pod.PLAYING_INIT                   # playing_page_init
 COVER_SRC = pod.DATA['COVER_SRC'][0]
 WIN = 0x24000000
@@ -79,7 +79,11 @@ class NowMachine(Machine):
         elif name == 'fread' and a3 in self.pos:
             data = self.blobs[self.fh[1]]; n = min(a1 * a2, len(data) - self.pos[a3])
             if n: self.u.mem_write(a0, data[self.pos[a3]:self.pos[a3] + n])
-            self.pos[a3] += n; ret = n // a1
+            self.pos[a3] += n; ret = n // a1; self.calls.append(('fread', n))
+        elif name == 'fseek' and a0 in self.pos:
+            self.calls.append(('fseek',)); ret = 0
+        elif name == 'ftell' and a0 in self.pos:
+            ret = len(self.blobs[self.fh[1]])
         elif name == 'fclose' and a0 in self.pos:
             ret = 0
         if ret is not None:
@@ -123,11 +127,11 @@ def run(ctx):
 
     # ------------------------------------------------------------------ the hook is installed as pinned
     hook = MANIFEST['hook_playing']
-    expect(hook['addr'] == INIT == 0x53d1e4 and hook['target'] == PSYMS['m1pod_playing_init'], 'the manifest records the Now Playing hook and its target')
+    expect(hook['addr'] == INIT == 0x53d1e4 and hook['target'] == PSYMS['m1plus_playing_init'], 'the manifest records the Now Playing hook and its target')
     expect(pod.PLAYING_INIT_PROLOGUE == (0x3c1c004c, 0x279c6cec, 0x0399e021) and tuple(word(stock, INIT + 4 * i) for i in range(3)) == pod.PLAYING_INIT_PROLOGUE,
            'stock has the three PIC prologue words the hook pins (playing_page_init)')
-    expect((word(built, INIT), word(built, INIT + 4), word(built, INIT + 8)) == (pod.j(PSYMS['m1pod_playing_init']), 0, pod.PLAYING_INIT_PROLOGUE[2]),
-           'the built demo has `j m1pod_playing_init; nop` over the first two prologue words')
+    expect((word(built, INIT), word(built, INIT + 4), word(built, INIT + 8)) == (pod.j(PSYMS['m1plus_playing_init']), 0, pod.PLAYING_INIT_PROLOGUE[2]),
+           'the built demo has `j m1plus_playing_init; nop` over the first two prologue words')
     expect(0x4c0000 + 0x6cec + INIT == pod.GP, 'the prologue computes $gp = 0xa03ed0')
     gp = struct.unpack_from('<4I', open(os.path.join(BUILD, 'patch.bin'), 'rb').read(), PSYMS['stock_playing_init_trampoline'] - pod.BASE)
     expect(gp == (0x3c1c0000 | pod.GP >> 16, 0x379c0000 | pod.GP & 0xffff, pod.j(INIT + 12), 0), 'the trampoline restores $gp and resumes at the 4th instruction')
@@ -464,13 +468,23 @@ def run(ctx):
     m.tick(); m.tick()
     expect(m.bar_styles == [(m.bar, 'normal:bg_color', BLACK)], 'ticks while a dialog (the pull-down) covers the page, the page still the top normal window: the bar stays black')
     m.blobs['/tmp/coverpic.jpg'] = b'next track' * 30; m.images['file://' + '/tmp/coverpic.jpg'] = (2, 2, bytes([20, 200, 20, 255]) * 4); m.tick()
-    expect(m.bar_styles == [(m.bar, 'normal:bg_color', BLACK)] and len(m.styles) == 2, 'a new cover while covered recolours the page, not the bar')
+    expect(m.bar_styles == [(m.bar, 'normal:bg_color', BLACK)] and len(m.styles) == 2 and [c for c in m.calls if c[0] == 'get_playtimeandlength'],
+           'under a dialog the page is still seen: a new cover recolours the page (not the bar) and the time goes on')
     m.fire(O['EVT_WINDOW_TO_FG'])
-    expect(m.bar_color() == word_of(bar_model(mn.tone(20, 200, 20))) and len(m.bar_styles) == 2, 'EVT_WINDOW_TO_FOREGROUND: the bar takes the current cover\'s colour')
+    expect(m.bar_color() == word_of(bar_model(mn.tone(20, 200, 20))) and len(m.bar_styles) == 2 and len(m.styles) == 2,
+           'EVT_WINDOW_TO_FOREGROUND: the bar takes the current cover\'s colour with one style call')
     n = len(m.bar_styles); m.fire(O['EVT_WINDOW_TO_FG'])
     expect(len(m.bar_styles) == n + 1 and m.bar_color() == word_of(bar_model(mn.tone(20, 200, 20))), 'a repeated foreground event only sets the same colour again')
     n = len(m.bar_styles); m.tick(); m.tick()
     expect(len(m.bar_styles) == n, 'then ticks leave it (no loop)')
+    # another page on top: the tick does nothing but the bar check; foreground catches up in the event
+    m.fire(O['EVT_WINDOW_TO_BG']); m.top_main = WIN + 0x100; k = len(m.styles); m.calls = []
+    m.blobs['/tmp/coverpic.jpg'] = b'third track' * 31; m.images['file://' + '/tmp/coverpic.jpg'] = (2, 2, bytes([20, 20, 200, 255]) * 4); m.tick()
+    expect(len(m.styles) == k and not [c for c in m.calls if c[0] in ('fopen', 'get_playtimeandlength', 'widget_get_text_utf8')],
+           'a page on top: a tick reads no cover, asks no player time and reads no info label')
+    m.top_main = WIN; m.fire(O['EVT_WINDOW_TO_FG'])
+    expect(m.styles[-1][2] == word_of(mn.tone(20, 20, 200)) and m.bar_color() == word_of(bar_model(mn.tone(20, 20, 200))),
+           'back on top: the foreground event applies the cover that changed meanwhile, page and bar')
     # a handler for another page's window does nothing
     m.fire(O['EVT_WINDOW_TO_BG']); k = len(m.bar_styles)
     fn, _ = m.bound[(WIN, O['EVT_WINDOW_TO_FG'])]
@@ -524,7 +538,7 @@ def run(ctx):
         return [c for c in m.tick() if c[0] == 'widget_load_image']
     m = tone_run(); first = [s[2] for s in m.styles]
     expect(first == [word_of(mn.tone(200, 40, 40))], 'a new album: decoded as before, the tone set')
-    expect(next_cover(m, (20, 200, 20), b'cover two' * 30) == [] and [s[2] for s in m.styles] == first * 2,
+    expect(next_cover(m, (20, 200, 20), b'cover two' * 31) == [] and [s[2] for s in m.styles] == first * 2,
            'another cover file (a new hash) of the same album: the cached tone is used, nothing is decoded')
     m.tick(); expect(len(m.styles) == 2, 'and then ticks leave it')
     m.play([m.record(album='Other', artist='Miles Davis')], 0)
@@ -532,10 +546,56 @@ def run(ctx):
            'another album: decoded, and its own tone set')
     expect(next_cover(m, (30, 30, 200), b'cover four' * 30) == [] and m.styles[-1][2] == word_of(mn.tone(20, 200, 20)), 'which is cached in turn')
     m = tone_run(playing=False)
-    expect(len(next_cover(m, (20, 200, 20), b'cover two' * 30)) == 1 and m.styles[-1][2] == word_of(mn.tone(20, 200, 20)), 'no track in the queue: no key, every new cover is decoded')
+    expect(len(next_cover(m, (20, 200, 20), b'cover two' * 31)) == 1 and m.styles[-1][2] == word_of(mn.tone(20, 200, 20)), 'no track in the queue: no key, every new cover is decoded')
     m = tone_run(album='')
-    expect(len(next_cover(m, (20, 200, 20), b'cover two' * 30)) == 1 and m.styles[-1][2] == word_of(mn.tone(20, 200, 20)), 'an untagged track has no album key: no cache')
+    expect(len(next_cover(m, (20, 200, 20), b'cover two' * 31)) == 1 and m.styles[-1][2] == word_of(mn.tone(20, 200, 20)), 'an untagged track has no album key: no cache')
     expect(not [c for c in m.calls if (c[0] == 'fopen' and any(x in c[2] for x in 'wa+')) or c[0] in ('fwrite', 'write', 'open')], 'no card writes')
+    # an unchanged cover is not hashed again (review 2): the cheap look is the source type, the length and the track
+    def big_run():
+        m = NowMachine().with_bar(); m.page(); m.src(2)
+        m.play([m.record(album='Kind of Blue', artist='Miles Davis', path='/mnt/mmc/a/1.flac')], 0)
+        m.jpeg('/tmp/coverpic.jpg', data=bytes(range(256)) * 256, pix=bytes([200, 40, 40, 255]) * 4, size=(2, 2)); m.init()   # 64 KiB
+        return m
+    def reads(m): return sum(1 for c in m.calls if c[0] == 'fopen' and c[1] == '/tmp/coverpic.jpg')
+    def bytes_read(m): return sum(len(m.blobs['/tmp/coverpic.jpg']) for c in m.calls if c[0] == 'fopen')
+    m = big_run(); n = len(m.styles)
+    m.tick(count=50000000)
+    steady = m.icount
+    expect(len(m.styles) == n and steady < 20000 and not [c for c in m.calls if c[0] == 'fread'],
+           f'an unchanged cover: a tick reads none of it (was 396,187 instructions for 64 KiB, now {steady}; no fread)')
+    m.fire(O['EVT_WINDOW_TO_BG']); m.top_main = WIN + 0x100; m.calls = []
+    m.tick(count=50000000)
+    expect(m.icount < 3000 and not [c for c in m.calls if c[0] in ('fopen', 'fread', 'get_playtimeandlength', 'widget_get_text_utf8')],
+           f'a covered page: the tick does no cover, time or info work ({m.icount} instructions)')
+    # same length, another track (demo wrote a new cover): hashed; the same file again: not
+    m = big_run(); n = len(m.styles)
+    m.blobs['/tmp/coverpic.jpg'] = bytes(range(255, -1, -1)) * 256
+    m.tick(count=50000000)
+    expect(not [c for c in m.calls if c[0] == 'fread'], 'same track, same length, same source: the cheap look says unchanged (no hash)')
+    m.play([m.record(album='Kind of Blue', artist='Miles Davis', path='/mnt/mmc/a/2.flac')], 0)
+    m.tick(count=50000000)
+    expect([c for c in m.calls if c[0] == 'fread'] and not [c for c in m.calls if c[0] == 'widget_load_image'], 'another track: the file is hashed (a hit in the tone cache: no decode, same album)')
+    m.tick(count=50000000)
+    expect(not [c for c in m.calls if c[0] == 'fread'], 'and then not again')
+    m.blobs['/tmp/coverpic.jpg'] = bytes(range(256)) * 255
+    m.tick(count=50000000)
+    expect([c for c in m.calls if c[0] == 'fread'], 'another length: hashed')
+    m.src(3); m.blobs['/tmp/externpic.jpg'] = m.blobs['/tmp/coverpic.jpg']; m.present.add('/tmp/externpic.jpg')
+    m.tick(count=50000000)
+    expect([c for c in m.calls if c[0] == 'fread'], 'another source type: hashed')
+    # a cover that could not be read is looked at in full every tick until it can
+    m = NowMachine().with_bar(); m.page(); m.src(2); m.init()
+    m.tick(); m.tick()
+    expect(len([c for c in m.calls if c[0] == 'fopen']) <= 2, 'no cover file: the tick just tries to open it')
+    # covered pages catch up at once on foreground: a cover that changed while covered is applied, hash included
+    m = big_run(); m.fire(O['EVT_WINDOW_TO_BG']); m.top_main = WIN + 0x100
+    m.blobs['/tmp/coverpic.jpg'] = bytes(range(256)) * 200; m.images['file:///tmp/coverpic.jpg'] = (2, 2, bytes([20, 200, 20, 255]) * 4)
+    m.play([m.record(album='Other', artist='X', path='/mnt/mmc/a/9.flac')], 0)
+    m.tick(count=50000000)
+    expect(not [c for c in m.calls if c[0] in ('fopen', 'fread')], 'covered: the new cover is not even looked at')
+    m.top_main = WIN; m.fire(O['EVT_WINDOW_TO_FG'])
+    expect(m.styles[-1][2] == word_of(mn.tone(20, 200, 20)), 'foreground: the new cover is applied in the event itself')
+
     # the kill switch, a refused timer, refused events, a failing style call, the cover widget missing
     m = NowMachine().with_bar(); m.page(); m.present.add(KILL); m.init()
     expect(not m.bar_styles and m.names() == ['stock_playing_init', 'access'], f'kill switch: the bar is never touched, not even looked up ({m.names()})')
@@ -739,15 +799,15 @@ def run(ctx):
     expect(bb == (42, 11, 78, 16) and 108 <= g.getpixel((60, 13))[3] <= 110, f'the grabber pill is 36x5 at x 42, y 11 of the button, white at 43 % ({bb})')
     for n in ('np_fav', 'np_unfav', 'np_more'):
         im = asset_image(n); dbb = im.getchannel('A').point(lambda v: 255 if v > 2 else 0).getbbox()
-        expect(dbb == (6, 6, 38, 38) and im.getpixel((10, 22)) == mod_icons.glass_image(32, 32, 16).getpixel((4, 16)), f'{n}: a 32 px glass disc (test/pod/glassbtn.py) in the 44 px target ({dbb})')
-    # the glyph in the disc (centre 22.0, 22.0): coverage = the glyph's share of each pixel over the glass disc (alpha = a + A (1 - a), A the glass's own); sub-pixel bbox edges, centroid
-    glass = mod_icons.glass_image(32, 32, 16)
+        expect(dbb == (6, 6, 38, 38) and im.getpixel((10, 22)) == (255, 255, 255, mod_icons.NP_DISC_ALPHA) == (255, 255, 255, 26)
+               and asset_image(n + '_down' if n != 'np_fav' else 'np_unfav_down').getpixel((10, 22)) == (255, 255, 255, mod_icons.NP_DISC_ALPHA_DOWN) == (255, 255, 255, 51),
+               f'{n}: a flat 32 px disc, white at #1A (pressed #33), in the 44 px target ({dbb})')
+        far = [(x, y) for y in range(44) for x in range(44) if (x - 21.5) ** 2 + (y - 21.5) ** 2 > 16.6 ** 2]
+        expect(all(im.getpixel(p)[3] == 0 for p in far), f'{n}: transparent outside the disc')
+    # the glyph in the disc (centre 22.0, 22.0): coverage = the glyph's share of each pixel over the 26/255 disc; sub-pixel bbox edges, centroid
     def optical(n):
         im = asset_image(n); W_, H_ = im.size
-        def cv(x, y):
-            A = glass.getpixel((x - 6, y - 6))[3] if 6 <= x < 38 and 6 <= y < 38 else 0
-            return max(0.0, (im.getpixel((x, y))[3] - A) / (255 - A)) if im.getpixel((x, y))[3] > A else 0.0
-        c = [[cv(x, y) for x in range(W_)] for y in range(H_)]
+        c = [[max(0.0, (im.getpixel((x, y))[3] - 26) / 229) if im.getpixel((x, y))[3] > 26 else 0.0 for x in range(W_)] for y in range(H_)]
         cols = [max(c[y][x] for y in range(H_)) for x in range(W_)]; rows = [max(r) for r in c]
         def edges(v):
             idx = [i for i, a in enumerate(v) if a > 0.02]; return idx[0] + 1 - v[idx[0]], idx[-1] + v[idx[-1]]
@@ -759,6 +819,10 @@ def run(ctx):
     expect(d(fb) <= 0.75 and d(fc) <= 0.75 and d(((fb[0] + fc[0]) / 2, (fb[1] + fc[1]) / 2)) <= 0.25 and d(ub) <= 0.75 and abs(ub[0] - fb[0]) < 0.3 and abs(ub[1] - fb[1]) < 0.3
            and d(mb) <= 0.25 and d(mc) <= 0.25,
            f'star and More are centred in their 32 px disc (optical centre = the mean of the box centre and the centroid, within 0.25 px; each within 0.75): the filled star\'s box ({fb[0] - 22:+.2f}, {fb[1] - 22:+.2f}) and centroid ({fc[0] - 22:+.2f}, {fc[1] - 22:+.2f}), the outline\'s box ({ub[0] - 22:+.2f}, {ub[1] - 22:+.2f}) as the filled one, More ({mb[0] - 22:+.2f}, {mb[1] - 22:+.2f})')
+    dwin = lambda c: tuple(v * (255 - mn.tint_alpha(mn.BTN_Y + 22)) // 255 for v in mn.tone(*c))      # the window under the star / More row
+    dworst = min(contrast(mod_icons.NP_FG, tuple(round(b + (255 - b) * a / 255) for b in dwin(c)))
+                 for c in grid + [(255, 255, 255), (0, 0, 0)] for a in (mod_icons.NP_DISC_ALPHA, mod_icons.NP_DISC_ALPHA_DOWN))
+    expect(dworst >= 4.5, f'the off-white star / More glyph keeps 4.5:1 on the flat disc (rest or pressed fill) over the darkest and the brightest tone ({dworst:.2f}:1)')
     cov = lambda n: asset_image(n).getchannel('A').point(lambda v: 255 if v > 0 else 0).getbbox()      # any coverage: the ink with its anti-aliased rim
     half = lambda n: asset_image(n).getchannel('A').point(lambda v: 255 if v > 127 else 0).getbbox()
     near = lambda b, w, h: abs(b[2] - b[0] - w) <= 1 and abs(b[3] - b[1] - h) <= 1

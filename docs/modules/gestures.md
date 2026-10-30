@@ -46,7 +46,7 @@ and settings lists, the lyrics, and the Albums grid / list, whose one custom con
    that follows does not move the list until the 200 ms animation ends (the MOVE skips the offset while `wa` is set).
 
 **The intervention.** `g_scroll_view_vtable + 0x98` (`0x97a330`, the `on_event_before_children` slot, zero in stock) is set
-to `m1pod_scroll_event(widget, event)` (`tools/pod.py patch_scroll`; `demo_diff` allows exactly this word). It sees the event
+to `m1plus_scroll_event(widget, event)` (`tools/pod.py patch_scroll`; `demo_diff` allows exactly this word). It sees the event
 before the children:
 
 - **DOWN** on a scroll_view that has a live scroll animator (`wa != 0`, not `snap_to_page`, animator state `+0x28 == 1` running and

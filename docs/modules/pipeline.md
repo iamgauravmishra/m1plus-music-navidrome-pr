@@ -14,7 +14,7 @@ Split out of docs/architecture.md. A "section N" in the text is an old section n
 | 1 | `mod_battery.py STOCK TREE` | clones stock into the tree; unified battery in the status bar and the pull-down |
 | 2 | `mod_font.py` | Inter + Source Han Sans; runs here so every later step measures the new font |
 | 3 | `mod_space.py` | zero demo's `.pdr`, remove 10 unreferenced files (`docs/firmware.md` section 4) |
-| 4 | `pod.py` | compile the payload, append it to `demo`, install four hooks, apply the library-row edits, write the four `ui/m1pod_*.bin` |
+| 4 | `pod.py` | compile the payload, append it to `demo`, install four hooks, apply the library-row edits, write the four `ui/m1plus_*.bin` |
 | 5 | `mod_theme`, `mod_lists`, `mod_nowplaying`, `mod_boot`, `mod_ipodrows`, `mod_pulldown`, `mod_lockscreen`, `mod_wallpaper`, `mod_icons`, `mod_strings`, `mod_polish`, `mod_about` | the asset looks, in this order (`docs/ui.md`); `mod_strings` adds our translation keys to the 16 string tables (section 8b) |
 | 6 | `mod_theme.py --scan TREE STOCK` | contrast scan of the finished tree |
 | 7 | `fwtool.py repack --tailends --allow-removed ... --allow-added ...` | squashfs (LZO, 128 KiB blocks, tail ends), metadata-exact; refuses a rootfs larger than stock or any unlisted added/removed file; `verify` follows |
@@ -30,7 +30,7 @@ Toolchain for the payload: Homebrew clang/LLD/llvm-objcopy/llvm-readelf (`$LLVM_
 Apple clang has no MIPS target), unicorn 2.1.4 for the tests, mksquashfs 4.7.5. Python runs with `-I`
 on anything touching extracted firmware.
 
-Source map: `patch/m1pod.c` (hook, pages, rows, the Settings switches), `patch/menu.c` (the customisable menu and the Main Menu page), `patch/covercache.c` (+ `.h`: the cover cache, tile reduction and album helpers
+Source map: `patch/m1plus.c` (hook, pages, rows, the Settings switches), `patch/menu.c` (the customisable menu and the Main Menu page), `patch/covercache.c` (+ `.h`: the cover cache, tile reduction and album helpers
 Cover Flow and Albums share), `patch/coverflow.c`, `patch/albums.c`, `patch/artists.c`,
 `patch/shuffle.c`, `patch/shot.c` + `shot.h` (Screenshot), `patch/albuminfo.c` (the album view's hook), `patch/nowplaying.c` (Now Playing's hook), `patch/minibar.c` (the mini player bar, no hook), `patch/rows.c` + `patch/rows.json`, `patch/home.c` + `home.h`, `patch/i18n.h` (`TR()`), `patch/offsets.inc`
 (every stock offset with its evidence), `patch/link.ld`; `tools/pod.py` (build and pins),

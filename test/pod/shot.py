@@ -8,7 +8,7 @@ for _line in open(os.path.join(ROOT, 'patch', 'shot.h')):
     _m = re.match(r'#define (\w+) ("[^"]*"|\w+)\s*(?:/\*.*)?$', _line.strip())
     if _m: DEFS[_m.group(1)] = _m.group(2).strip('"') if _m.group(2).startswith('"') else int(_m.group(2), 0)
 DIR, TMP, FB = DEFS['SHOT_DIR'], DEFS['SHOT_TMP'], DEFS['SHOT_FB']
-RET_REPEAT, KILL = 8, '/mnt/mmc/m1pod-off'
+RET_REPEAT, KILL = 8, '/mnt/mmc/m1plus-off'
 
 # format name -> (bytes per pixel, (red offset, length), (green), (blue)): what the driver reports in fb_var_screeninfo
 FORMATS = {
@@ -80,6 +80,7 @@ def set_fb(m, w, h, fmt, pad=0, pages=1, page=0, seed=1, **over):
 def shot_machine(**kw):
     m = Machine()
     m.ind = m.widget('pod_shot')            # the camera in the system bar's right group
+    m.confirm_yes = True                    # Yes in the stock confirm dialog (the No tests clear it)
     m.rows = set_fb(m, kw.pop('w', 320), kw.pop('h', 480), kw.pop('fmt', 'rgb565'), **kw)
     return m
 
@@ -119,6 +120,8 @@ def run(ctx):
     P = pod_pages
     tick_ms, settle_ms, secs = DEFS['SHOT_TICK_MS'], DEFS['SHOT_SETTLE_MS'], DEFS['SHOT_SECONDS']
     TICK, GRAB = PSYMS['shot_tick'], PSYMS['shot_grab']
+    ASK, CANCEL = 'Take a screenshot in 5 s?', 'Cancel the screenshot?'
+    def asked(r): return [c[2] for c in r.log if c[1] == 'confirm']
 
     # 1. What is pinned. The format is learned the way stock learns it: lcd_linux_fb_create opens /dev/fb0 and issues
     #    ioctl 0x4602 and 0x4600 (`addiu $a1, $zero, 0x4602` @0x63953c, 0x4600 @0x639558), then mmaps the node.
@@ -134,30 +137,28 @@ def run(ctx):
            'the field indexes are those of linux/fb.h (fb_var_screeninfo 160 bytes, fb_fix_screeninfo 68; stock reads bpp @0x68, red @0x70, blue @0x88 of its copy)')
     expect(DEFS['SHOT_SECONDS'] == 5 and tick_ms == 1000 and settle_ms >= 50 and DEFS['SHOT_MAX_NUM'] == 9999, '5 s in 1 s ticks, a settle of at least three frames, numbers up to 9999')
 
-    # 2. The Settings row: the last row of the Settings page (no menu item, not on Extras, not on the Main Menu page), bound to ACT_SHOT.
-    S = P.SETTINGS_PAGE
-    item = len(S.rows) - 1
-    expect(S.rows[item].label == 'Screenshot' and S.rows[item].action == P.ACT_SHOT == 14 and item == 5
-           and [r.label for r in S.rows] == ['Main Menu', 'Cover Flow', 'Home Screen', 'Playback', 'System Settings', 'Screenshot'],
-           'Screenshot is the sixth and last row of the Settings page, after System Settings')
-    expect(not [r for page in P.PAGES if page is not S for r in page.rows if r.action == P.ACT_SHOT] and 'j' not in P.ID_CHARS,
-           'no other page has a Screenshot row, and it has no item character (menu, Extras and Main Menu page)')
-    rows_s = PSYMS[f'pod_rows_{P.SETTINGS_PAGE_INDEX}']
+    # 2. The Developer row: the only row of Customize > Developer, bound to ACT_SHOT; a tap asks first.
+    S = P.DEVELOPER_PAGE
+    item = 0
+    expect(S.key == 'm1plus_developer' and [r.label for r in S.rows] == ['Screenshot'] and S.rows[item].action == P.ACT_SHOT == 14 and P.PAGES[P.DEVELOPER_PAGE_INDEX] is S,
+           'Screenshot is the only row of the Developer page')
+    expect(not [r for page in P.PAGES if page is not S for r in page.rows if r.action == P.ACT_SHOT],
+           'no other page has a Screenshot row (menu, Extras and Main Menu page have none)')
+    rows_s = PSYMS[f'pod_rows_{P.DEVELOPER_PAGE_INDEX}']
     m = shot_machine()
-    expect((m.read_cstr(m.word(rows_s + 12 * item)), m.word(rows_s + 12 * item + 4)) == (f'pod_row{item}', P.ACT_SHOT), 'the payload row table binds pod_row5 of the Settings page to ACT_SHOT')
+    expect((m.read_cstr(m.word(rows_s + 12 * item)), m.word(rows_s + 12 * item + 4)) == ('pod_row0', P.ACT_SHOT), 'the payload row table binds pod_row0 of the Developer page to ACT_SHOT')
     m.call(PSYMS['on_row'], a0=rows_s + 12 * item)
-    expect(m.calls[-1:] == [('toast', 'Screenshot in 5 s', O['MSGINFO_KIND'], O['MSGINFO_MS'])] and ('timer_add', TICK, tick_ms) in m.calls
-           and 'window_open' not in m.names() and 'stock_resume' not in m.names(),
-           'tapping the row starts the countdown from the page: a 1 s timer and the toast, no page opens')
+    expect([c[1:] for c in m.calls if c[0] == 'confirm'] == [(ASK, O['CONFIRM_KIND_WRAP'])] and ('timer_add', TICK, tick_ms) in m.calls
+           and 'toast' not in m.names() and 'window_open' not in m.names() and 'stock_resume' not in m.names(),
+           'tapping the row asks in the stock confirm dialog (kind 5, wrapped); Yes starts the countdown: a 1 s timer, no toast, no page opens')
     ui = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui')
-    tree = awtk_ui.parse(open(os.path.join(ui, 'm1pod_settings.bin'), 'rb').read())
+    tree = awtk_ui.parse(open(os.path.join(ui, 'm1plus_developer.bin'), 'rb').read())
     row = tree.find(f'pod_row{item}')
     expect(row is not None and pod_i18n.shown_english(next(c for c in row.children if c.type == 'hscroll_label')) == 'Screenshot'
-           and next(c for c in row.children if c.name == 'pod_icon').get('image') == 'pod_ic_screenshot', 'the Settings row reads Screenshot, with the camera glyph')
-    for key in ('m1pod_extras', 'm1pod_menu', 'm1pod_mainmenu'):
+           and next(c for c in row.children if c.name == 'pod_icon').get('image') == 'pod_ic_screenshot', 'the Developer row reads Screenshot, with the camera glyph')
+    for key in ('m1plus_extras', 'm1plus_menu', 'm1plus_mainmenu', 'm1plus_customize'):
         t = awtk_ui.parse(open(os.path.join(ui, key + '.bin'), 'rb').read())
-        expect(len([w for w in t.walk() if w.type == 'hscroll_label']) >= 18
-               and not [w for w in t.walk() if w.type == 'hscroll_label' and pod_i18n.shown_english(w) == 'Screenshot'],
+        expect(not [w for w in t.walk() if w.type == 'hscroll_label' and pod_i18n.shown_english(w) == 'Screenshot'],
                f'{key} has no Screenshot row')
 
     # 3. The status bar camera: a hidden, insensitive image at the end of the right-aligned icon group, the image the icon step adds.
@@ -209,7 +210,7 @@ def run(ctx):
     im = Image.open(io.BytesIO(out)); im.load()
     expect(im.format == 'BMP' and im.size == (320, 480) and list(im.convert('RGB').getdata()) == [px for row in m.rows for px in row],
            'an independent reader (Pillow, as tools/pull_shots.py) opens the file and sees the same 320x480 picture')
-    expect(r.toasts() == ['Screenshot in 5 s', 'Screenshot saved'], f'toasts: {r.toasts()}')
+    expect(r.toasts() == ['Screenshot saved'], f'toasts: {r.toasts()}')
     expect(r.has('grab', 'munmap') and [c for c in r.log if c[1] == 'mmap'][0][3:5] == (1, 1),
            'the frame buffer is mapped read-only and shared, and unmapped')
     # the sequence: camera on at the tap, shown through the countdown; the last tick hides it and arms the grab; the grab opens the frame buffer
@@ -251,7 +252,7 @@ def run(ctx):
     def failing(setup, toast, why, ticks=5):
         m = shot_machine(w=16, h=8); setup(m)
         r = Run(m); r.full(ticks)
-        expect(r.toasts()[-1] == toast and not files(m) and TMP not in m.fs and m.props[(m.ind, 'visible')] == 0 and not m.fds and r.toasts()[0] == 'Screenshot in 5 s',
+        expect(r.toasts()[-1] == toast and not files(m) and TMP not in m.fs and m.props[(m.ind, 'visible')] == 0 and not m.fds,
                f'{why}: toast {toast!r}, no file, no temp, camera hidden, no descriptor left ({r.toasts()}, {sorted(files(m))})')
         return m, r
     def unmounted(m): m.card_mounted = False
@@ -297,25 +298,27 @@ def run(ctx):
 
     # 8. One capture at a time. A tap while one is pending (counting or waiting for the grab) does nothing at all; after it, taps work again.
     m = shot_machine(w=8, h=4); r = Run(m)
-    r.step('tap', 'shot_start'); first = len(r.log)
+    r.step('tap', 'shot_start'); m.confirm_yes = False
     r.step('tap2', 'shot_start')
-    expect(len(r.log) == first and not m.calls, 'a second tap during the countdown makes no call: no timer, no toast, no camera')
+    expect([n for n in m.names() if n != 'access'] == ['navigator_to_with_context', 'confirm'] and asked(r)[-1] == CANCEL,
+           f'a second tap during the countdown only asks whether to cancel (no new timer, toast or camera call) ({m.names()})')
     for _ in range(5): r.step('tick', 'shot_tick')
-    r.step('tap3', 'shot_start'); expect(m.calls == [], 'nor while the grab is pending')
+    r.step('tap3', 'shot_start'); expect(set(m.names()) <= {'access'}, 'nor while the grab is pending (no dialog either)')
+    m.confirm_yes = True
     r.step('grab', 'shot_grab')
-    expect(r.toasts() == ['Screenshot in 5 s', 'Screenshot saved'] and len(files(m)) == 1 and sum(c[1] == 'timer_add' for c in r.log) == 2, 'one countdown, one grab, one file')
+    expect(r.toasts() == ['Screenshot saved'] and len(files(m)) == 1 and sum(c[1] == 'timer_add' for c in r.log) == 2, 'one countdown, one grab, one file')
     r = Run(m); r.full()
-    expect(len(files(m)) == 2 and r.toasts() == ['Screenshot in 5 s', 'Screenshot saved'], 'a tap after the capture starts the next one (shot-0002)')
+    expect(len(files(m)) == 2 and r.toasts() == ['Screenshot saved'], 'a tap after the capture starts the next one (shot-0002)')
     m = shot_machine(w=8, h=4); m.timer_fail = True
     r = Run(m); r.step('tap', 'shot_start')
     expect(r.toasts() == ['Screenshot failed'] and not r.has('widget_set_visible'), 'no timer at the tap: a failure toast, the camera never shown')
     m.timer_fail = False; r.step('tap', 'shot_start')
-    expect(r.has('timer_add', TICK, tick_ms) and r.toasts()[-1] == 'Screenshot in 5 s', 'and the next tap can start (nothing was left pending)')
+    expect(r.has('timer_add', TICK, tick_ms) and m.props[(m.ind, 'visible')] == 1, 'and the next tap can start (nothing was left pending)')
     m = shot_machine(w=8, h=4); r = Run(m); r.step('tap', 'shot_start')
     for _ in range(4): r.step('tick', 'shot_tick')
     m.timer_fail = True; r.step('tick', 'shot_tick')
     expect(r.toasts()[-1] == 'Screenshot failed' and m.props[(m.ind, 'visible')] == 0 and not files(m), 'no timer for the grab: the camera is hidden again and a failure toast shows')
-    m.timer_fail = False; r.step('tap', 'shot_start'); expect(r.toasts()[-1] == 'Screenshot in 5 s', 'and the machine is idle again')
+    m.timer_fail = False; r.step('tap', 'shot_start'); expect(m.props[(m.ind, 'visible')] == 1, 'and the machine is idle again')
     m = shot_machine(w=8, h=4); del m.widgets['pod_shot']
     r = Run(m); r.full()
     expect(not r.has('widget_set_visible') and len(files(m)) == 1, 'no pod_shot in the window tree: the capture still works, without the camera')
@@ -327,19 +330,54 @@ def run(ctx):
     m = shot_machine(w=8, h=4); r = Run(m); r.step('tap', 'shot_start'); m.present.add(KILL)
     for _ in range(2): r.step('tick', 'shot_tick')
     expect(r.steps[-1] == ('tick', 0) and m.props[(m.ind, 'visible')] == 0 and not r.has('timer_add', GRAB), 'the kill switch during the countdown: the tick ends, the camera is hidden, no grab is armed')
-    r.step('tap', 'shot_start'); expect(r.toasts() == ['Screenshot in 5 s'] and not any(c[1] == 'timer_add' for c in r.log[-4:]), 'and with it still there no new countdown starts')
+    r.step('tap', 'shot_start'); expect(r.toasts() == [] and not any(c[1] == 'timer_add' for c in r.log[-4:]), 'and with it still there no new countdown starts')
     m = shot_machine(w=8, h=4); r = Run(m); r.step('tap', 'shot_start')
     for _ in range(5): r.step('tick', 'shot_tick')
     m.present.add(KILL); r.step('grab', 'shot_grab')
-    expect(not r.has('grab', 'open', FB) and not files(m) and m.props[(m.ind, 'visible')] == 0 and r.toasts() == ['Screenshot in 5 s'], 'the kill switch just before the grab: nothing is read, written or shown')
-    m.present.discard(KILL); r.step('tap', 'shot_start'); expect(r.toasts()[-1] == 'Screenshot in 5 s', 'removed again, the next tap starts normally')
+    expect(not r.has('grab', 'open', FB) and not files(m) and m.props[(m.ind, 'visible')] == 0 and r.toasts() == [], 'the kill switch just before the grab: nothing is read, written or shown')
+    m.present.discard(KILL); r.step('tap', 'shot_start'); expect(m.props[(m.ind, 'visible')] == 1, 'removed again, the next tap starts normally')
 
     # 10. Every text goes through the stock translation: the row, the countdown and both outcomes, in all 16 tables.
     for loc in pod_i18n.ALL_TABLES:
         T = tr_of(loc)
         m = shot_machine(w=8, h=4); m.set_language(loc); r = Run(m); r.full()
-        expect(r.toasts() == [T('Screenshot in 5 s'), T('Screenshot saved')], f'{loc}: the countdown and success toasts read {T("Screenshot in 5 s")!r} / {T("Screenshot saved")!r}')
+        expect(r.toasts() == [T('Screenshot saved')], f'{loc}: the success toast reads {T("Screenshot saved")!r}')
         m = shot_machine(w=8, h=4); m.set_language(loc); m.fb = None; r = Run(m); r.full()
         expect(r.toasts()[-1] == T('Screenshot failed'), f'{loc}: the failure toast')
         m = shot_machine(w=8, h=4); m.set_language(loc); m.free_mb = 1; r = Run(m); r.full()
         expect(r.toasts()[-1] == T('Storage unavailable'), f'{loc}: the storage toast')
+
+        m = shot_machine(w=8, h=4); m.set_language(loc); r = Run(m); r.step('tap', 'shot_start'); r.step('tap2', 'shot_start')
+        expect([c[2] for c in r.log if c[1] == 'confirm'] == [T(ASK), T(CANCEL)], f'{loc}: the two dialogs read {T(ASK)!r} / {T(CANCEL)!r}')
+
+    # 11. Confirm and cancel. The tap asks first; only Yes starts. While counting, a tap asks to cancel; Yes removes the tick timer.
+    m = shot_machine(w=8, h=4); m.confirm_yes = False; r = Run(m); r.step('tap', 'shot_start')
+    expect(asked(r) == [ASK] and not r.has('timer_add') and not r.has('widget_set_visible') and not r.toasts() and not r.has('timer_remove'), 'No: nothing starts, no timer, no camera, no toast')
+    m.confirm_yes = True; r.step('tap', 'shot_start')
+    expect(asked(r) == [ASK, ASK] and r.has('tap', 'timer_add', TICK, tick_ms) and m.props[(m.ind, 'visible')] == 1, 'and the next tap can still start (nothing was left pending)')
+    m = shot_machine(w=8, h=4); m.confirm_answer = 0x14; r = Run(m); r.step('tap', 'shot_start')
+    expect(not r.has('timer_add') and not r.toasts(), 'any answer but Yes (the dialog failing to open or closing) does nothing')
+    m = shot_machine(w=8, h=4); r = Run(m); r.step('tap', 'shot_start'); r.step('tick', 'shot_tick'); r.step('tick', 'shot_tick')
+    m.confirm_yes = False; r.step('tap2', 'shot_start')
+    expect(asked(r) == [ASK, CANCEL] and not r.has('timer_remove') and m.props[(m.ind, 'visible')] == 1, 'No to Cancel: the countdown goes on, camera still shown')
+    for _ in range(3): r.step('tick', 'shot_tick')
+    r.step('grab', 'shot_grab')
+    expect(len(files(m)) == 1 and r.toasts() == ['Screenshot saved'], 'and it completes as normal')
+    m = shot_machine(w=8, h=4); r = Run(m); r.step('tap', 'shot_start'); r.step('tick', 'shot_tick'); r.step('tick', 'shot_tick')
+    r.step('tap2', 'shot_start')
+    expect(asked(r) == [ASK, CANCEL] and r.has('tap2', 'timer_remove', 0x777) and m.props[(m.ind, 'visible')] == 0 and not r.toasts(), 'Yes to Cancel: the tick timer is removed, the camera hidden, no toast')
+    n = len(r.log); r.step('tap3', 'shot_start')
+    expect(asked(r)[-1] == ASK and r.has('tap3', 'timer_add', TICK, tick_ms) and m.props[(m.ind, 'visible')] == 1 and not files(m), 'back to idle: a tap asks to take again and can start; no file was written')
+    m = shot_machine(w=8, h=4); r = Run(m); r.step('tap', 'shot_start'); r.step('tick', 'shot_tick'); r.step('tap2', 'shot_start'); r.step('tap3', 'shot_start')
+    expect(asked(r) == [ASK, CANCEL, ASK] and sum(c[1] == 'timer_add' for c in r.log) == 2, 'a second countdown after a cancel is a normal one')
+    for _ in range(5): r.step('tick', 'shot_tick')
+    r.step('grab', 'shot_grab')
+    expect(len(files(m)) == 1 and r.toasts() == ['Screenshot saved'], 'and takes its picture')
+    m = shot_machine(w=8, h=4); r = Run(m); r.step('tap', 'shot_start')
+    for _ in range(5): r.step('tick', 'shot_tick')
+    n = len(asked(r)); r.step('tap2', 'shot_start')
+    expect(len(asked(r)) == n and not r.has('tap2', 'timer_remove') and set(m.names()) <= {'access'}, 'a tap during the settle phase (capture committed) shows no dialog and removes nothing')
+    r.step('grab', 'shot_grab'); expect(len(files(m)) == 1, 'the capture completes')
+    # kill switch at the tap (each tick and the grab are in section 9)
+    m = shot_machine(w=8, h=4); m.present.add(KILL); r = Run(m); r.step('tap', 'shot_start')
+    expect(not asked(r), 'kill switch present: the tap shows no dialog')

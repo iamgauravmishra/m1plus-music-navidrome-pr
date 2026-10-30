@@ -1,7 +1,7 @@
 # Mini player bar (the menu's Home instance)
 
-A floating "now playing" card at the bottom of the M1+ Pod menu when it is the Home instance (no navbar): cover, title, artist,
-play / pause and next. Code `patch/minibar.c`, widgets in `ui/m1pod_menu.bin` (`tools/pod_ui.py` `minibar()`), numbers in
+A floating "now playing" card at the bottom of the M1+ Music menu when it is the Home instance (no navbar): cover, title, artist,
+play / pause and next. Code `patch/minibar.c`, widgets in `ui/m1plus_menu.bin` (`tools/pod_ui.py` `minibar()`), numbers in
 `patch/offsets.inc` `MB_*` (equal to `pod_ui.py`'s; `test/pod/minibar.py` asserts it), tests `test/pod/minibar.py`, preview
 `tools/preview.py` (`minibar_page`). **No stock hook**: it runs from the menu window's own widgets, events and one page timer, as
 the Albums page does (`docs/modules/albums.md`). The menu opened from the grid icon keeps its navbar (it has a Now Playing button
@@ -20,7 +20,7 @@ already) and never gets a bar. The look follows Apple Music's floating mini play
 - The pill `pod_minibar` is a view that is **hidden and insensitive in the asset**.
 - **Glass.** `pod_mb_card` is a stock `button` the size of the pill whose whole look is `bg_image` `mb_glass` (pressed `mb_glass_down`) in every state, no fill, border or
   radius of its own; it is the tap target that opens Now Playing and the widget whose own `EVT_AFTER_PAINT` draws the cover. The images are generated
-  (`tools/mod_icons.py glass_image(w, h, r, pressed, fill, top_only)`, shared with the lock screen's card (`docs/modules/lockscreen.md`), the album page's Play all pill and Shuffle disc (`album-page.md`), Now Playing's star and More discs (`nowplaying.md`; `test/pod/glassbtn.py`: byte for byte, contrast >= 7:1 white / 4.5:1 off-white on white and black, rest and pressed) and, with `top_only` (top corners only), Now Playing's More sheet (`docs/modules/playmore.md` "Glass"); the pill is `GLASS` = 304, 56, 28 and
+  (`tools/mod_icons.py glass_image(w, h, r, pressed, fill, top_only)`, shared with the lock screen's card (`docs/modules/lockscreen.md`) and, with `top_only` (top corners only), Now Playing's More sheet (`docs/modules/playmore.md` "Glass"); the pill is `GLASS` = 304, 56, 28 and
   `test/pod/assets.py` pins both PNGs to the generator byte for byte; deterministic PIL, 8x supersampled, committed like the other `np_*` PNGs, installed with them: 2.2 KB each):
   304 x 56 straight-alpha RGBA, a dark translucent fill (`#2D2D2F` at the top to `#232325` at the bottom, alpha 0.82; pressed `#3A3A3C` to
   `#303032`, 0.86), a 1 px rim light (white 30 % along the top arc fading to 8 % at the bottom row; pressed 40 % to 14 %) and a faint inner highlight line
@@ -37,7 +37,7 @@ already) and never gets a bar. The look follows Apple Music's floating mini play
   parks the spacer right after the shown rows, keeps it the last child (`widget_restack`) and adds its height to `virtual_h` when `widget_get_visible` says it
   is shown; `mb_pad` also sets `virtual_h` at once and keeps `yoffset` inside the new range when the bar goes. `test/pod/pulldown.py` section 6 runs demo's own
   relayout under Unicorn (shown, `menu_arrange` again, repeated relayouts, hidden) for four saved menus; `test/pod/minibar.py` checks the hit tests: the pill takes the
-  touch over a row under it, the row just above it is reached. The default menu (8 rows = 416 px) scrolls 48 px with the bar up.
+  touch over a row under it, the row just above it is reached. A menu of 8 rows (416 px; the default menu is 6 rows, 312 px, and does not scroll) scrolls 48 px with the bar up.
 - Cover: four `MB_ART_R` px corners rounded **in the bitmap's alpha** (`pod_corner_fill`, the table of Now Playing's corners), so they show the pill in any state.
 - `pod_mb_title` / `pod_mb_artist`: `hscroll_label`s (`ellipses`, `only_parent_focus`: their parent is never focused, so they never scroll;
   `sensitive=false`), Inter Medium (the one font; see Fonts). **Contrast, worst case behind the glass**: a white row label right under the translucent fill
@@ -78,7 +78,7 @@ runs the compiled code against it.
   5551 panel the blur simply never runs.
 - **Guards, at every call**: the begin word, a non-null 4-byte aligned buffer, the lcd at least as big as the pill and at most 2048 x 2048, a pitch of at least 2 x width, at most 8192
   and a multiple of 4, an even x origin and the pill wholly on the screen. A mismatch clears `mb.blur` for the page (no blur, the glass over sharp rows: exactly the commit before). An
-  SD file `/mnt/mmc/m1pod-noblur` turns it off at start; no memory for the plane, or a refused `widget_on` of any of its ten handlers, leave it off too.
+  SD file `/mnt/mmc/m1plus-noblur` turns it off at start; no memory for the plane, or a refused `widget_on` of any of its ten handlers, leave it off too.
 - **Dirty rectangles.** AWTK repaints a dirty rectangle from the window down, so inside the clip the rows are freshly painted when the pill's before-paint runs. The blur is
   done only when the clip covers the whole pill; a partial frame (a row's press highlight that reaches under the pill) is not blurred, because the pixels outside the clip
   are the last frame's blurred ones and a blur across that edge would show a seam. Instead `mb.fix` makes the next tick invalidate the whole pill. Everything the payload
@@ -97,18 +97,18 @@ runs the compiled code against it.
   which invalidates the pill in the same frame, so the frame is row + pill and is blurred. A row wholly under the pill takes no touch (the pill does). Frames that can still be sharp:
   a partial repaint from stock code not listed here (a toast, a dialog's close, the status bar over it does not reach the pill); the next tick (500 ms at most) invalidates the pill once.
 - **Not verified on a device**: the lcd type and the double-buffer behaviour (the model is the AWTK sources and the disassembly), the cost, and how the blur looks (the model drives the
-  preview's third panel and the crops under `out/peek`). `docs/modules/device-checks.md` lists what to look at; `m1pod-noblur` is the escape hatch.
+  preview's third panel and the crops under `out/peek`). `docs/modules/device-checks.md` lists what to look at; `m1plus-noblur` is the escape hatch.
 
 ## Recording and the shelf
 
-`mb_work` also calls `recent_note(track)` (`patch/recent.c`, `docs/modules/recent.md`) before the labels: it records the playing album in `/mnt/data/m1pod-recent` when the album changed (a key compare in RAM first, nothing else on a tick that changed nothing) and, when it did, `recent_refresh()` shows
+`mb_work` also calls `recent_note(track)` (`patch/recent.c`, `docs/modules/recent.md`) before the labels: it records the playing album in `/mnt/data/m1plus-recent` when the album changed (a key compare in RAM first, nothing else on a tick that changed nothing) and, when it did, `recent_refresh()` shows
 the new album on the Recently Played shelf at the foot of the list. The shelf follows the last shown row and the spacer `pod_pad` follows the shelf (the list's last child); both add to `virtual_h` (`mb_pad` adds and removes `MB_PAD` itself, `menu_arrange` / `menu_shelf` add the shelf's own
 height: 234, 434 or 634), the default menu with both is 416 + 634 + 64 = 1114 px in the 430 px list (six albums); scrolled to the end the shelf's last line ends `MB_GAP` above the pill, as the last row did.
 
 ## Data and timer
 
 `minibar_start(win)` is called by `home_menu_opened` (patch/home.c) for the Home instance, after `hm_fill_window` laid the list out (it is not
-called when that found no navbar or list). Kill switch (`home_off()`: `/mnt/mmc/m1pod-off`, `/mnt/data/m1pod-off`): nothing is looked up.
+called when that found no navbar or list). Kill switch (`home_off()`: `/mnt/mmc/m1plus-off`, `/mnt/data/m1plus-off`): nothing is looked up.
 - **Fade.** First it hides and desensitises `img_nb_fade` (the fade under the glass navbar, `navbar.md`; at y 50 it would float over the Recently Played shelf as a dark band with a sharp top edge, since `hm_fill_window` hides the navbar but not it). Test: `test/pod/minibar.py`.
 
 - **Start** looks up the seven bar widgets and the list (the scroll bar is optional: a short custom menu has none), registers `EVT_DESTROY`,

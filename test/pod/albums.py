@@ -7,7 +7,7 @@ from unicorn import mips_const
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 SCREEN_Y0 = 30 + 50     # the grid view on the screen: under the 30 px status bar and the 50 px navbar
-ALBUMS_FILE, ALBUMS_TMP = '/mnt/data/m1pod-albums', '/mnt/data/m1pod-albums.tmp'
+ALBUMS_FILE, ALBUMS_TMP = '/mnt/data/m1plus-albums', '/mnt/data/m1plus-albums.tmp'
 COVER, GAP, MARGIN, COLS = O['GRID_COVER'], O['GRID_GAP'], O['GRID_MARGIN'], O['GRID_COLS']
 TGAP, THEIGHT, VIEW_H, TILES = O['GRID_TITLE_GAP'], O['GRID_TITLE_H'], O['GRID_VIEW_H'], O['GRID_TILES']
 RGAP, SUBH = O['GRID_ROW_GAP'], O['GRID_SUB_H']
@@ -222,7 +222,7 @@ def menu_row(page): return next(i for i, r in enumerate(page.rows) if r.label ==
 
 
 pulldown = sibling('pulldown')
-SLOT, KILL_SD = pod.SCROLL_SLOT, '/mnt/mmc/m1pod-off'
+SLOT, KILL_SD = pod.SCROLL_SLOT, '/mnt/mmc/m1plus-off'
 
 
 class SA(pulldown.SM):
@@ -240,13 +240,13 @@ class SA(pulldown.SM):
         albums_world(self, n, **world)
         self.handlers[0x742c90] = 'strcmp'      # the libc stubs the stock scroll_bar_is_mobile / scroll bar code call
         self.handlers[0x742850] = '__divdi3'
-        self.u.mem_write(SLOT, struct.pack('<I', PSYMS['m1pod_scroll_event'] if hook else 0))
+        self.u.mem_write(SLOT, struct.pack('<I', PSYMS['m1plus_scroll_event'] if hook else 0))
         if mode == 'list': self.fs[ALBUMS_FILE] = b'0\n'
         self.zv = self.alloc(0x80); self.u.mem_write(self.zv, bytes(0x80))     # a view's vtable: no entries (the stock defaults)
         self.root = self.win = self.widget(LI_VT, 0, 0, 320, 450)
         self.lv = self.widget(LV_VT, 0, self.Y0, 320, VIEW_H, self.root)
-        # the widgets and sizes are the BUILT ASSET's (m1pod_albums.bin): a scroll bar only if the asset has one, the scroll_view as wide as it says
-        tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1pod_albums.bin'), 'rb').read())
+        # the widgets and sizes are the BUILT ASSET's (m1plus_albums.bin): a scroll bar only if the asset has one, the scroll_view as wide as it says
+        tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_albums.bin'), 'rb').read())
         a_sv, a_bar = tree.find('albums_scrollview'), tree.find('scroll_bar_m')
         sw = a_sv.w
         self.sv = sv = self.widget(SV_VT, 0, 0, sw, VIEW_H, self.lv, emitter=True)
@@ -334,7 +334,7 @@ def layout_tests(ctx):
     expect(TILES >= VIEW_H // ROW + 2 + 2 + 2, f'and the {VIEW_H // ROW + 2} rows of the list, the next two and two of history')
     expect(THEIGHT >= pod_ui.GRID_ALBUM_PX + 4 and SUBH >= pod_ui.GRID_ARTIST_PX + 4 and (O['NAV_VIEW_X'], O['NAV_VIEW_W']) == (pod_ui.NAV_VIEW_X, pod_ui.NAV_VIEW_W),
            'the album and artist lines fit their fonts; the toggle geometry is shared with the asset')
-    asset = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1pod_albums.bin')
+    asset = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_albums.bin')
     tree = awtk_ui.parse(open(asset, 'rb').read())
     grid = tree.find('view_grid')
     expect(grid is not None and (grid.x, grid.y, grid.w, grid.h) == (0, 0, CW, VIEW_H) and grid.type == 'view',
@@ -396,12 +396,12 @@ def layout_tests(ctx):
     #    mode of the same page, "1" the grid; never a second window or the stock list.
     m = albums_machine(3)
     m.call(on_row, a0=rows0 + 12 * row, count=20000000)
-    expect(('window_open', 'm1pod_albums') in m.calls and 'stock_resume' not in m.names() and page_mode(m) == (0 if O['ALBUMS_DEFAULT_GRID'] else 1),
+    expect(('window_open', 'm1plus_albums') in m.calls and 'stock_resume' not in m.names() and page_mode(m) == (0 if O['ALBUMS_DEFAULT_GRID'] else 1),
            'with no setting the Albums row opens our page in the default mode')
     for data, want_list in ((b'1\n', 0), (b'0\n', 1), (b'x', 1 - O['ALBUMS_DEFAULT_GRID']), (b'', 1 - O['ALBUMS_DEFAULT_GRID'])):
         m = albums_machine(3); m.fs[ALBUMS_FILE] = data
         calls = open_grid(m)
-        expect(('window_open', 'm1pod_albums') in calls and 'stock_resume' not in m.names() and page_mode(m) == want_list,
+        expect(('window_open', 'm1plus_albums') in calls and 'stock_resume' not in m.names() and page_mode(m) == want_list,
                f'setting {data!r}: the Albums row opens our page in {"list" if want_list else "grid"} mode')
     #     a page that cannot open falls back to the stock Albums list through the Home dispatcher (Albums = id 5)
     m = albums_machine(3); m.window = 0
@@ -417,7 +417,7 @@ def layout_tests(ctx):
     m = albums_machine(30)
     calls = open_grid(m)
     names = [c[0] for c in calls]
-    expect(('window_open', 'm1pod_albums') in calls and names.count('widget_on') == 4 + 1 + 2 + 1 + 1 + 3 + 1,
+    expect(('window_open', 'm1plus_albums') in calls and names.count('widget_on') == 4 + 1 + 2 + 1 + 1 + 3 + 1,
            f'the window, Back, Now Playing, the toggle, Cover Flow, the scroll and scroll-end events of the scroll_view, foreground, background, three pointer events (down, up, abort) and the paint are bound ({names.count("widget_on")})')
     sv0, view0 = m.widgets['albums_scrollview'], m.widgets['view_grid']
     expect(all(('widget_on', sv0, O[e], PSYMS['al_on_scroll'], 0) in calls for e in ('EVT_SCROLL', 'EVT_SCROLL_END')) and not any(c[0] == 'widget_grab' for c in calls)
@@ -612,9 +612,9 @@ def layout_tests(ctx):
     m = albums_machine(30); m.widget_on_fail = frozenset({O['EVT_SCROLL']})       # the scroll events refused: the loader polls for as long as the page is up
     open_grid(m)
     expect(all(armed(tick(m)) for _ in range(20)), 'if the scroll events cannot be registered the loader keeps polling, with nothing left to load too')
-    #     kill switch: with /mnt/mmc/m1pod-off the Home entry does not open the Pod menu, so the page cannot open
-    m = albums_machine(3); m.present.add('/mnt/mmc/m1pod-off')
-    m.call(PSYMS['m1pod_home_click'], a0=m.icon(str(pod_pages.HOME_ENTRY)), count=200000)
+    #     kill switch: with /mnt/mmc/m1plus-off the Home entry does not open the Pod menu, so the page cannot open
+    m = albums_machine(3); m.present.add('/mnt/mmc/m1plus-off')
+    m.call(PSYMS['m1plus_home_click'], a0=m.icon(str(pod_pages.HOME_ENTRY)), count=200000)
     expect('window_open' not in m.names(), 'the kill switch keeps the page (and the menu) closed')
 
 
@@ -1008,7 +1008,7 @@ def toggle_tests(ctx):
     """14-16b: the grid/list toggle, persistence across opens, hit tests, the Cover Flow button."""
     expect, page = ctx.expect, ctx.page
     row, on_row, rows0 = menu_row(page), PSYMS['on_row'], PSYMS['pod_rows_0']
-    asset = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1pod_albums.bin')
+    asset = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_albums.bin')
     # 14. The toggle: switches the mode in place (no window opens or closes), saves the choice atomically, swaps the
     #     glyph, drops the tiles, keeps the first album in view.
     def glyph(m): return m.props.get((m.widgets['btn_albumview'], 'style:normal:icon'))
@@ -1076,11 +1076,11 @@ def toggle_tests(ctx):
     m.call(PSYMS['al_on_toggle'], a0=0, count=20000000)
     m.call(PSYMS['al_on_destroy'], count=2000000)
     m.calls = []; m.call(on_row, a0=rows0 + 12 * row, count=20000000)
-    expect(('window_open', 'm1pod_albums') in m.calls and glyph(m) == 'pod_nav_grid' and 'stock_resume' not in m.names(), 'after switching to the list, the next Albums row opens the list')
+    expect(('window_open', 'm1plus_albums') in m.calls and glyph(m) == 'pod_nav_grid' and 'stock_resume' not in m.names(), 'after switching to the list, the next Albums row opens the list')
     m.call(PSYMS['al_on_toggle'], a0=0, count=20000000)
     m.call(PSYMS['al_on_destroy'], count=2000000)
     m.calls = []; m.call(on_row, a0=rows0 + 12 * row, count=20000000)
-    expect(('window_open', 'm1pod_albums') in m.calls and glyph(m) == 'pod_nav_list', 'and after switching back, the grid')
+    expect(('window_open', 'm1plus_albums') in m.calls and glyph(m) == 'pod_nav_list', 'and after switching back, the grid')
     m = albums_machine(3); open_grid(m)
     m.calls = []; m.call(PSYMS['albums_open'], count=20000000)
     expect('window_open' not in m.names() and 'stock_resume' not in m.names(), 'the page that is up is neither opened twice nor replaced by the stock list')
@@ -1110,7 +1110,7 @@ def toggle_tests(ctx):
         expect(len(binds) == 1 and binds[0][3] == PSYMS['al_on_cover'], 'the Cover Flow button is bound to al_on_cover')
         m.calls = []
         m.call(PSYMS['al_on_cover'], count=5000000)
-        expect(('window_open', 'm1pod_cover') in m.calls, f'a tap opens m1pod_cover through coverflow_open (mode {mode!r})')
+        expect(('window_open', 'm1plus_cover') in m.calls, f'a tap opens m1plus_cover through coverflow_open (mode {mode!r})')
         expect(not [c for c in m.calls if c[0] in ('navigator_back', 'window_close', 'widget_destroy', 'stock_resume', 'navigator_to_with_context')]
                and m.fs.get(ALBUMS_FILE) == mode, 'and the Albums page stays underneath, untouched, its mode unchanged')
     m.calls = []
@@ -1287,6 +1287,18 @@ def key_of(i): return album_key(f'Artist {i}', f'Album {i}')
 
 
 
+def scan_all(m, limit=200):
+    """Fires the scan step until it stops re-arming itself; per tick: (cache files checked, re-armed, worker started)."""
+    ticks = []
+    for _ in range(limit):
+        new = fired(m, 'al_on_build_start', 400000000)
+        ticks.append((len([c for c in new if c[0] == 'access' and '.m1plus/covers' in c[1]]),
+                      any(c[0] == 'timer_add' and c[1] == PSYMS['al_on_build_start'] for c in new),
+                      any(c[0] == 'pthread_create' for c in new)))
+        if not ticks[-1][1]: break
+    return ticks
+
+
 def background_build_tests(ctx):
     expect = ctx.expect
     START, POLL = PSYMS['al_on_build_start'], PSYMS['al_on_build']
@@ -1296,7 +1308,7 @@ def background_build_tests(ctx):
     calls = open_grid(m)
     expect([c for c in calls if c[0] == 'timer_add' and c[1] == START] != [] and 'pthread_create' not in [c[0] for c in calls]
            and build_state(m)['jobs'] == 0, 'the open arms the one-shot start timer and starts no worker')
-    expect(not [c for c in calls if c[0] == 'access' and 'coverflow' in str(c[1:])], 'the open does not stat the cache files (the scan waits for the timer)')
+    expect(not [c for c in calls if c[0] == 'access' and '.m1plus' in str(c[1:])], 'the open does not stat the cache files (the scan waits for the timer)')
 
     # 17a. Only the albums with neither a picture nor the empty "no art" marker are jobs: 2 and 5 here (3 has its marker).
     new = fired(m, 'al_on_build_start')
@@ -1304,7 +1316,7 @@ def background_build_tests(ctx):
     expect(count_of(m, 'pthread_create') == 1 and s['running'] == 1 and s['mode'] == 0 and s['total'] == 2 and s['done'] == 0,
            f'one worker, CC_MISSING, two jobs ({s})')
     expect(jobs == [(f'/mnt/mmc/m/{i}/1.flac', key_of(i)) for i in (2, 5)], f'the jobs are the missing albums only, 2 then 5 ({jobs})')
-    expect(('mkdir', '/mnt/mmc/.coverflow') in new and [c for c in new if c[0] == 'timer_add' and c[1] == POLL], 'the cache directory is made and the poll timer runs')
+    expect(('mkdir', '/mnt/mmc/.m1plus/covers') in new and [c for c in new if c[0] == 'timer_add' and c[1] == POLL], 'the cache directory is made and the poll timer runs')
     expect(not [c for c in m.calls if c[0] in ('widget_set_visible', 'widget_set_text_utf8') and c[1] == m.widgets['label_status'] and c[2] not in (0,) and isinstance(c[2], str) and 'Preparing' in c[2]],
            'no Preparing screen: the page shows the grid')
 
@@ -1370,7 +1382,7 @@ def background_build_tests(ctx):
     expect(count_of(m, 'pthread_create') == 1 and build_state(m)['running'] == 1, 'Albums runs the worker')
     new = fired(m, 'al_on_cover', 6000000)
     names = [c[0] for c in new]
-    expect('pthread_join' in names and 'pthread_create' in names and names.index('pthread_join') < names.index('pthread_create') and ('window_open', 'm1pod_cover') in new,
+    expect('pthread_join' in names and 'pthread_create' in names and names.index('pthread_join') < names.index('pthread_create') and ('window_open', 'm1plus_cover') in new,
            'the Cover Flow button joins Albums\' worker before Cover Flow starts its own (one at a time)')
     m = albums_machine(6, missing={1, 4})
     for w in COVER_WIDGETS:
@@ -1391,7 +1403,7 @@ def background_build_tests(ctx):
     m = albums_machine(8, missing={2}); m.thread_ok = False; open_grid(m); fired(m, 'al_on_build_start')
     expect(build_state(m)['jobs'] == 0 and not [c for c in m.calls if c[0] == 'timer_add' and c[1] == POLL], 'a refused thread: the set is freed')
     m = albums_machine(8); open_grid(m); fired(m, 'al_on_build_start')
-    expect(count_of(m, 'pthread_create') == 0 and ('mkdir', '/mnt/mmc/.coverflow') not in m.calls and build_state(m)['jobs'] == 0, 'a complete cache: nothing to do, no thread, no mkdir')
+    expect(count_of(m, 'pthread_create') == 0 and ('mkdir', '/mnt/mmc/.m1plus/covers') not in m.calls and build_state(m)['jobs'] == 0, 'a complete cache: nothing to do, no thread, no mkdir')
     m = albums_machine(8, missing={2}); open_grid(m)
     m.timer_fail = True; fired(m, 'al_on_build_start')
     expect(count_of(m, 'pthread_create') == 1 and count_of(m, 'pthread_join') == 1 and build_state(m)['jobs'] == 0, 'a poll timer that cannot be made: the worker is joined and freed')
@@ -1410,13 +1422,70 @@ def background_build_tests(ctx):
     expect(not [c for c in fired(m, 'al_on_fg', 1000000) if c[0] == 'timer_add'], 'and only once while it is pending')
 
     # 17i. List mode and a big library are bounded: the job set never exceeds CC_MAX_JOBS.
-    m = albums_machine(300, cached=False); m.fs[ALBUMS_FILE] = b'0\n'; open_grid(m); fired(m, 'al_on_build_start', 400000000)
+    m = albums_machine(300, cached=False); m.fs[ALBUMS_FILE] = b'0\n'; open_grid(m); scan_all(m)
     s = build_state(m)
     expect(s['total'] == 300 and s['cap'] == 300, f'300 missing albums in list mode: 300 jobs ({s})')
     m.call(PSYMS['al_on_destroy'], count=3000000)
-    m = albums_machine(4100, cached=False); open_grid(m); fired(m, 'al_on_build_start', 900000000)
+    m = albums_machine(4100, cached=False); open_grid(m); scan_all(m)
     s = build_state(m)
     expect(s['total'] == 4000 and s['cap'] == 4000, f'4100 missing albums: the job set is bounded at CC_MAX_JOBS ({s["total"]}/{s["cap"]})')
+    m.call(PSYMS['al_on_destroy'], count=3000000)
+
+    # 17j. The scan is bounded per tick (review 1): a fully cached 1000-album library is checked 64 albums a tick, yields
+    #      between ticks, finds nothing missing, starts no worker, and a return to the page does not scan again.
+    BATCH = 64
+    m = albums_machine(1000); open_grid(m)
+    ticks = scan_all(m)
+    per = [t[0] for t in ticks]
+    expect(len(per) == 16 and max(per) <= BATCH and sum(per) == 1000, f'1000 cached albums: 16 ticks of at most {BATCH} file checks ({per})')
+    expect(all(t[1] for t in ticks[:-1]) and not ticks[-1][1], 'every tick but the last re-arms the scan timer; the last does not')
+    expect(count_of(m, 'pthread_create') == 0 and build_state(m)['jobs'] == 0, 'nothing missing: no worker, the set is freed')
+    expect(not [c for c in fired(m, 'al_on_fg', 1000000) if c[0] == 'timer_add'], 'returning to the page after a complete scan arms no rescan')
+    m.call(PSYMS['al_on_destroy'], count=3000000)
+    open_grid(m)
+    expect([c for c in m.calls if c[0] == 'timer_add' and c[1] == START], 'a new page open scans again (the library may have changed)')
+    m.call(PSYMS['al_on_destroy'], count=3000000)
+
+    # 17k. Missing albums: the order is still nearest the view first across the ticks, the worker starts after the last tick
+    #      only, and a scan that found something missing is offered again on the next foreground.
+    m = albums_machine(200, missing={0, 150, 199, 100}); open_grid(m)
+    scroll_to(m, RGAP + CELL + 2 * PITCH)   # first album in view: 6
+    ticks = scan_all(m)
+    order = [int(t.split('/')[4]) for t, _ in build_jobs(m)]
+    expect(order == [0, 100, 150, 199],f'jobs across ticks: nearest album 6 first ({order})')
+    created = [i for i, t in enumerate(ticks) if t[2]]
+    expect(created == [len(ticks) - 1], f'the worker starts in the last scan tick only ({created} of {len(ticks)})')
+    m.call(PSYMS['cc_worker'], count=5000000)
+    fired(m, 'al_on_build')
+    expect([c for c in fired(m, 'al_on_fg', 1000000) if c[0] == 'timer_add' and c[1] == START], 'an incomplete cache is offered again at foreground')
+    m.call(PSYMS['al_on_destroy'], count=3000000)
+
+    # 17l. Destroy in the middle of a scan: the timer is removed, the set freed, no worker; a late step does nothing.
+    m = albums_machine(500, missing={400}); open_grid(m)
+    fired(m, 'al_on_build_start')
+    new = fired(m, 'al_on_destroy', 3000000)
+    expect(('timer_remove', 0x777) in new and build_state(m)['jobs'] == 0 and count_of(m, 'pthread_create') == 0, 'destroy mid-scan drops the timer and the set')
+    new = fired(m, 'al_on_build_start', 1000000)
+    expect(not [c for c in new if c[0] in ('timer_add', 'pthread_create', 'access')], 'a late scan step does nothing')
+
+    # 17m. The Cover Flow button mid-scan releases the set (one worker at a time) and scans no further.
+    m = albums_machine(500, missing={400}); open_grid(m)
+    for w in COVER_WIDGETS:
+        if w not in m.widgets: m.widget(w)
+    fired(m, 'al_on_build_start')
+    expect(build_state(m)['jobs'] != 0, 'a scan under way holds the job set')
+    fired(m, 'al_on_cover', 6000000)
+    new = fired(m, 'al_on_build_start', 1000000)
+    expect(not [c for c in new if c[0] == 'access'], 'after the Cover Flow button no scan step runs')
+
+    # 17n. The worker checks the cancel flag after taking the parser mutex: no extraction, no marker, no file.
+    m = albums_machine(4, missing={1, 2}); open_grid(m); fired(m, 'al_on_build_start')
+    m.present |= {f'/mnt/mmc/m/{i}/1.flac' for i in range(4)}
+    m.on_lock = lambda: m.setword(PSYMS['cb'] + 4 * 7, 1)   # cancelled while the worker waits for the parser mutex
+    m.call(PSYMS['cc_worker'], count=5000000)
+    names = [c[0] for c in m.calls]
+    expect('lock' in names and 'unlock' in names and not [c for c in m.calls if c[0] in ('toolsGetAlbumCover', 'toolsGetExternCover', 'fopen')],
+           'cancelled while waiting for the parser: unlocked, nothing extracted, no marker written')
 
 
 SECTIONS = [layout_tests, taps_list_tests, toggle_tests, stock_widget_tests, background_build_tests]   # tools/check.py runs each as its own task

@@ -14,7 +14,7 @@ import awtk_strings, awtk_style
 from awtk_text import Ttf, StbText
 
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
-KILL = '/mnt/mmc/m1pod-off'
+KILL = '/mnt/mmc/m1plus-off'
 DIALOG_Y, ROW_H, SCREEN_H, SHEET_H = 130, O['PM_ROW_H'], O['PM_SCREEN_H'], O['PM_PAGE_N'] * O['PM_ROW_H']
 SHEET_Y = SCREEN_H - SHEET_H                     # 280: the sheet sits on the bottom of the screen
 BINDER, SPEED_INIT = 0x478b44, 0x478fd0          # the stock widget_foreach visitor (binds a row or badge by name) and the speed badge images
@@ -44,7 +44,9 @@ class PM(pulldown.SM):
         self.handlers[pod.PLAYMORE_INIT + 12] = 'stock_playmore_resume'
         self.tr_fail, self.bind_fail = set(), None
         self.init_ret = 0
-        self.reg = []                  # every widget_on, in order: (widget, event, handler, ctx)
+        self.navs = []                 # the navigator's stack: (name, window)
+        self.no_window = False         # the navigator opens no window (the top window is not the album page)
+        self.reg = []                # every widget_on, in order: (widget, event, handler, ctx)
         self.nodes = {}
         tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets', theme, 'raw/ui/dialog/playmore_dialog.bin'), 'rb').read()) if ui is None else ui
         self.dialog = self.root = self.win = self.make(tree, 0)
@@ -72,9 +74,30 @@ class PM(pulldown.SM):
             self.kids(a, [self.make(c, a) for c in w.children])
         return a
 
+    def page(self, name):
+        """A window of the navigator's stack (a name at +0x10), pushed on top."""
+        w = self.alloc(0x80); self.u.mem_write(w, bytes(0x80)); self.setword(w + 0x10, self.cstr(name))
+        self.navs = getattr(self, 'navs', []) + [(name, w)]
+        return w
+
+    def _stack_hook(self, u, name, a0):
+        """The navigator model: names in self.navs (the closes are at once; the window's destroy event is the test's to deliver)."""
+        stack = self.navs
+        ret = 0
+        if name == 'navigator_window_is_exist': ret = int(self.read_cstr(a0) in [n for n, _ in stack])
+        elif name == 'navigator_close':
+            self.calls.append(('navigator_close', self.read_cstr(a0)))
+            self.navs = [e for e in stack if e[0] != self.read_cstr(a0)]
+        elif name == 'window_manager_get_top_window': ret = stack[-1][1] if stack else 0
+        u.reg_write(UC_MIPS_REG_V0, ret); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+
     def _hook(self, u, address, size, _):
         name = self.handlers.get(address)
         a0, a1, a2, a3 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3))
+        if name in ('navigator_window_is_exist', 'navigator_close', 'window_manager_get_top_window'):
+            return self._stack_hook(u, name, a0)
+        if name == 'navigator_to_with_context' and self.read_cstr(a0) == 'albuminfo_page' and not self.no_window:
+            self.page('albuminfo_page')   # the navigator opens the page: a window on top (before the harness records the open)
         if name == 'widget_set_tr_text' and self.read_cstr(a1) in self.tr_fail:
             self.calls.append(('widget_set_tr_text', a0, self.read_cstr(a1))); u.reg_write(UC_MIPS_REG_V0, 1); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
         if name == 'widget_on':
@@ -108,7 +131,7 @@ class PM(pulldown.SM):
     def open(self, **kw):
         """The dialog opens: the stock init, then the payload's hook (which runs it again as its first step)."""
         self.stock_init()
-        ret = self.call(PSYMS['m1pod_playmore_init'], a0=self.dialog, a1=0, count=4000000)
+        ret = self.call(PSYMS['m1plus_playmore_init'], a0=self.dialog, a1=0, count=4000000)
         self.sync()
         return ret
 
@@ -119,7 +142,7 @@ class PM(pulldown.SM):
 
     def stock_kept(self):
         """Every handler the stock init registered is still registered, first and in order, and still the latest for its widget and event."""
-        return self.stock_reg == self.reg[:len(self.stock_reg)] and all(self.bound[k] == v for k, v in self.stock_bound.items())
+        return self.stock_reg == self.reg[:len(self.stock_reg)] and all(self.bound[k] == v for k, v in self.stock_bound.items() if k != (self.rows[GO_ALBUM], O['EVT_CLICK']))   # (Look up album is ours, bound after the stock one)
     def handlers_of(self, w, e): return [(fn, ctx) for ww, ee, fn, ctx in self.reg if (ww, ee) == (w, e)]
     def added(self): return [(self.name(w), e) for w, e, fn, ctx in self.reg[len(self.stock_reg):]]
 
@@ -315,9 +338,9 @@ def run(ctx):
 
     # -- 0. the hook and what it relies on -----------------------------------------------------------------------------------
     w0, w1, w2, w3 = (word(pod.PLAYMORE_INIT + 4 * i) for i in range(4))
-    expect(w0 == pod.j(PSYMS['m1pod_playmore_init']) and w1 == 0 and w2 == pod.PLAYMORE_INIT_PROLOGUE[2] and w3 == 0x10800059 == pod.PLAYMORE_PINS[0][1],
-           'dialog_playmore_dialog_init starts with j m1pod_playmore_init; nop; the trampoline resumes at its beqz a0')
-    expect(pod.PLAYMORE_INIT == 0x479cc4 and MANIFEST['hook_playmore']['addr'] == pod.PLAYMORE_INIT and MANIFEST['hook_playmore']['target'] == PSYMS['m1pod_playmore_init'],
+    expect(w0 == pod.j(PSYMS['m1plus_playmore_init']) and w1 == 0 and w2 == pod.PLAYMORE_INIT_PROLOGUE[2] and w3 == 0x10800059 == pod.PLAYMORE_PINS[0][1],
+           'dialog_playmore_dialog_init starts with j m1plus_playmore_init; nop; the trampoline resumes at its beqz a0')
+    expect(pod.PLAYMORE_INIT == 0x479cc4 and MANIFEST['hook_playmore']['addr'] == pod.PLAYMORE_INIT and MANIFEST['hook_playmore']['target'] == PSYMS['m1plus_playmore_init'],
            'the manifest records the hook')
     gp = []
     m = PM(); m.u.hook_add(UC_HOOK_CODE, lambda u, a, s, _: gp.append(u.reg_read(UC_MIPS_REG_GP)), begin=pod.PLAYMORE_INIT + 12, end=pod.PLAYMORE_INIT + 12)
@@ -369,8 +392,9 @@ def run(ctx):
     fixed = dict(m.bound)
     expect(m.stock_kept(),
            'every stock handler is still bound to the same function and context after the hook, and still first in the order')
-    expect(sorted(m.added()) == sorted([('pod_more', O['EVT_CLICK']), ('pod_back', O['EVT_CLICK']), ('playmore_dialog', O['EVT_DESTROY']), ('playmore_listview', O['EVT_WINDOW_TO_BG'])]),
-           f'the hook adds the More click, the back click, the destroy and the to-background handlers and nothing else ({m.added()})')
+    expect(sorted(m.added()) == sorted([('pod_more', O['EVT_CLICK']), ('pod_back', O['EVT_CLICK']), ('playmore_dialog', O['EVT_DESTROY']), ('playmore_listview', O['EVT_WINDOW_TO_BG']),
+                                        ('listitem4', O['EVT_CLICK'])]),
+           f'the hook adds the More click, the back click, the Look up album click, the destroy and the to-background handlers and nothing else ({m.added()})')
     expect(not any(c[0] in ('widget_off_by_func',) for c in m.calls), 'no stock handler is taken off')
 
     # -- 2. hit tests on page 1: a touch reaches the row that is drawn there, a hidden row never takes it -----------------------
@@ -493,7 +517,7 @@ def run(ctx):
     untouched(m, 'kill switch'); expect(ret == 0 and ('access', KILL) in m.calls and not any(c[0] == 'widget_lookup' for c in m.calls) and m.reg == m.stock_reg, 'kill switch: nothing but the file check after the stock init')
     m = PM(); m.init_ret = 0x10; ret = m.open()
     untouched(m, 'stock init failed'); expect(ret == 0x10 and m.names() == ['stock_playmore_resume'], 'a failed stock init: its result, nothing else')
-    m = PM(); m.call(PSYMS['m1pod_playmore_init'], a0=0, a1=0, count=200000)
+    m = PM(); m.call(PSYMS['m1plus_playmore_init'], a0=0, a1=0, count=200000)
     expect(m.names() == ['stock_playmore_resume'], 'no dialog: nothing but the stock init')
     for missing in ('pod_more', 'pod_back', 'pod_more_label', 'pod_back_label', 'scrlabel1', 'label1_msg', 'playmore_listview', 'playmore_scrollview', 'scroll_bar_m', 'listitem3'):
         m = PM(); del m.widgets[missing]; m.open(); untouched(m, f'no {missing}')
@@ -509,6 +533,81 @@ def run(ctx):
     fn, c = m.bound[(m.dialog, O['EVT_DESTROY'])]      # the destroy handler a failed start left behind does nothing
     m.call(fn, a0=c, a1=0, count=200000)
     expect(m.names() == [], 'a failed start leaves nothing to clean up: its destroy handler calls nothing')
+
+    # -- 7b. Look up album opens our album page (patch/playmore.c pm_on_lookup_album) -----------------------------------------------
+    FLAG, CLICK, DESTROY = pod.DATA['SONGER_FLAG'][0], O['EVT_CLICK'], O['EVT_DESTROY']
+    RET_STOP = O['RET_STOP']
+    def lib(m, playing='Kind of Blue', albums=('Other', 'KIND OF BLUE', 'Zed'), flag=0, pos=0):
+        """An open sheet, the library's albums (and the Unknown Album row, id -1, last), the player on a track of `playing`."""
+        m.open()
+        rows = [m.record(album=a, rid=i + 1) for i, a in enumerate(albums)] + [m.record(album='Unknown Album', rid=-1)]
+        m.class_lists[O['CLASS_ALBUMS']] = rows
+        if playing is not None: m.play([m.record(album=playing)], pos)
+        m.u.mem_write(FLAG, bytes([flag]))
+        m.page('playing_page')
+        return rows
+    def flag(m): return m.u.mem_read(FLAG, 1)[0]
+    def lookup(m):
+        """A tap on Look up album: the handler on the row is called with its context, as the emitter does; its result."""
+        fn, c = m.bound[(m.rows[GO_ALBUM], CLICK)]
+        ret = m.call(fn, a0=c, a1=0, count=4000000); m.sync()
+        return ret
+    def opened(m): return [c[2:] for c in m.calls if c[0] == 'navigator_to_with_context' and c[1] == 'albuminfo_page']
+    m = PM(); lib(m)
+    expect(m.handlers_of(m.rows[GO_ALBUM], CLICK) == [(STOCK_CLICK['listitem4'], m.dialog), (PSYMS['pm_on_lookup_album'], m.dialog)],
+           'Look up album: the stock handler first, ours bound after it (so it runs before it)')
+    ret = lookup(m)
+    expect(ret == RET_STOP and opened(m) == [(O['CLASS_ALBUMS'], 1)], f'Look up album: our album page opens on the playing album\'s row, matched without case (class 0xf003, row 1), the stock handler stopped ({ret}, {opened(m)})')
+    names = [c[0] for c in m.calls]
+    expect(('window_close', m.dialog) in m.calls and names.index('window_close') < names.index('navigator_to_with_context'), 'Look up album: the sheet is closed before the page opens')
+    expect(names.count('albumcoverinfo_init') == 1 and names.count('batchadd_albumcover_task') == 1, 'Look up album: the page is opened as the Albums grid does (cover task list, then the navigator)')
+    expect(flag(m) == 1 and [n for n, _ in m.navs] == ['playing_page', 'albuminfo_page'], f'Look up album: songerinfoflag set, the album page on top of Now Playing ({flag(m)}, {[n for n, _ in m.navs]})')
+    page = m.navs[-1][1]
+    expect(m.bound.get((page, DESTROY), (0,))[0] == PSYMS['pm_on_album_gone'], 'Look up album: the page\'s destroy is watched')
+    m.call(*(m.bound[(page, DESTROY)][0],), a0=page, a1=0, count=200000)
+    expect(flag(m) == 0, 'the page\'s destroy clears songerinfoflag')
+    # an albuminfo_page already in the stack is closed, the flag stays the new page's
+    m = PM(); lib(m); old = m.page('albuminfo_page')
+    lookup(m)
+    expect(('navigator_close', 'albuminfo_page') in m.calls and [n for n, _ in m.navs] == ['playing_page', 'albuminfo_page'] and m.navs[-1][1] != old and opened(m) == [(O['CLASS_ALBUMS'], 1)],
+           'an albuminfo_page already open is closed first, then the new one opens')
+    new = m.navs[-1][1]
+    m.call(m.bound[(new, DESTROY)][0], a0=old, a1=0, count=200000)
+    expect(flag(m) == 1, 'the destroy of the older page (it arrives late) leaves the flag of the newer one')
+    m.call(m.bound[(new, DESTROY)][0], a0=new, a1=0, count=200000)
+    expect(flag(m) == 0, 'the newer page\'s destroy clears it')
+    m.call(m.bound[(new, DESTROY)][0], a0=new, a1=0, count=200000); m.u.mem_write(FLAG, bytes([1]))
+    m.call(m.bound[(new, DESTROY)][0], a0=new, a1=0, count=200000)
+    expect(flag(m) == 1, 'a destroy twice does nothing the second time')
+    # a flag that was already set (Look up artist, its album_page still under) stays set
+    m = PM(); lib(m, flag=1); lookup(m); page = m.navs[-1][1]
+    m.call(m.bound[(page, DESTROY)][0], a0=page, a1=0, count=200000)
+    expect(flag(m) == 1, 'a flag set before the tap (an artist page below) is left set when the page ends')
+    # two taps in a row with the first page's destroy late: the second page's end restores the byte from before the first
+    m = PM(); lib(m); lookup(m); first = m.navs[-1][1]
+    lookup(m); second = m.navs[-1][1]
+    m.call(m.bound[(second, DESTROY)][0], a0=first, a1=0, count=200000)
+    expect(flag(m) == 1, 'two taps: the first page\'s late destroy does not clear the second\'s flag')
+    m.call(m.bound[(second, DESTROY)][0], a0=second, a1=0, count=200000)
+    expect(flag(m) == 0, 'two taps: the second page\'s destroy restores the byte from before the first')
+    # fallbacks: the stock handler runs (RET_OK), nothing changed
+    def stock_runs(m, what):
+        before = list(m.navs)
+        ret = lookup(m)
+        gone = [c for c in m.calls if c[0] in ('window_close', 'navigator_close', 'navigator_to_with_context', 'albumcoverinfo_init')]
+        expect(ret == 0 and not gone and flag(m) == 0 and m.navs == before, f'{what}: the stock handler runs (RET_OK), nothing closed or opened, the flag unchanged ({ret}, {gone}, {flag(m)})')
+    m = PM(); lib(m, playing=None); stock_runs(m, 'nothing playing')
+    m = PM(); lib(m, playing=''); stock_runs(m, 'a track with no album')
+    m = PM(); lib(m, playing='Not In The Library'); stock_runs(m, 'an album the library list lacks')
+    m = PM(); lib(m, playing='Unknown Album'); stock_runs(m, 'the Unknown Album row is never matched')
+    m = PM(); lib(m, albums=()); stock_runs(m, 'an empty library')
+    m = PM(); lib(m, pos=5); stock_runs(m, 'a play position outside the queue')
+    m = PM(); lib(m); m.no_window = True; lookup(m)
+    expect(flag(m) == 0 and opened(m) == [(O['CLASS_ALBUMS'], 1)], f'no album page window to watch after the open: the flag is not left set ({flag(m)})')
+    m = PM(); lib(m); m.widget_on_fail = frozenset({DESTROY}); ret = lookup(m)
+    expect(ret == RET_STOP and flag(m) == 0, f'the destroy watch refused: the page is open and the flag is not left set ({ret}, {flag(m)})')
+    m = PM(); m.present.add(KILL); m.open()
+    expect(m.handlers_of(m.rows[GO_ALBUM], CLICK) == [(STOCK_CLICK['listitem4'], m.dialog)], 'kill switch: Look up album is the stock handler alone')
 
     # -- 8. the texts in every language, and the room they have ------------------------------------------------------------------------
     stock_raw = os.path.join(paths.find_stock(paths.ZIP), RAW)
@@ -551,7 +650,7 @@ def run(ctx):
         built_ui = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets', theme, 'raw/ui/dialog/playmore_dialog.bin'), 'rb').read())
         stock_t = stock_ui if theme == 'default' else awtk_ui.parse(open(os.path.join(stock_raw, '..', '..', theme, 'raw/ui/dialog/playmore_dialog.bin'), 'rb').read())
         geo = lambda t: [(w.type, w.name, w.x, w.y, w.w, w.h) for w in t.walk() if not w.name.startswith(('pod_more', 'pod_back')) and w.name not in speed_names]
-        expect(geo(built_ui) == geo(stock_t), f'{theme}: every stock widget but the speed row\'s keeps its type, name and rectangle (the M1+ Pod ones are added)')
+        expect(geo(built_ui) == geo(stock_t), f'{theme}: every stock widget but the speed row\'s keeps its type, name and rectangle (the M1+ Music ones are added)')
         expect([(w.type, w.name) for w in built_ui.walk() if w.name in speed_names] == [(w.type, w.name) for w in stock_t.walk() if w.name in speed_names],
                f'{theme}: the speed row\'s widgets keep their type and name')
         expect([(built_ui.find(n).x, built_ui.find(n).y, built_ui.find(n).w, built_ui.find(n).h) for n in speed_names] ==

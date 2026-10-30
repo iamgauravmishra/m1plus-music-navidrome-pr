@@ -110,50 +110,61 @@ COVER_GLYPH, COVER_FRAC = 'disc-3', 0.52      # the glyph's px as a fraction of 
 RESIZED = {'albumcover_info': 160}
 AH_TINT = (64, 200, 344, 450)   # alpha at the top row, at row AH_TINT_ROWS - 1 and below (the held deep tint, 78 % dark), the rows, the window height
 ALBUM = ['ah_tint', 'ah_play', 'ah_shuffle', 'ah_shuffle_down', 'ah_pill', 'ah_pill_down']
-AH_SHUF_GLYPH, AH_DISC_PX = 19, 38   # AH_DISC (patch/offsets.inc)
-AH_PLAY_GLYPH, AH_PLAY_INK = 16, (0xFF,) * 3   # white glyph and text on the glass (the pill and the disc are glass_image panes, below)
-AH_PILL_PX = (180, 40)   # AH_PLAY_W x AH_PILL_H
-# M1+ Pod menu and Shuffle page rows: label -> (added image, glyph). A bare white glyph (BARE_PX canvas) left of the title.
+AH_SHUF_DISC, AH_SHUF_DISC_DOWN, AH_SHUF_GLYPH, AH_DISC_PX = (0x2A,) * 3, (0x44,) * 3, 19, 38   # AH_DISC (patch/offsets.inc)
+AH_PLAY_GLYPH, AH_PLAY_INK = 16, (0x14,) * 3
+AH_PILL_PX, AH_PILL_FILL, AH_PILL_FILL_DOWN = (180, 40), (0xFF,) * 3, (0xBE,) * 3   # AH_PLAY_W x AH_PILL_H
+DPAGE = ['dp_back', 'dp_back_down', 'dp_pill', 'dp_pill_down', 'dp_play', 'dp_add', 'dp_add_down', 'dp_added', 'dp_added_down']   # the Daily Mix page (patch/dailymix.c dp_*): the glass back disc (a white chevron), the white Play pill (pressed a light grey), its dark play glyph, the Add disc (Shuffle's disc and pressed colours, a plus: saves the mix as a playlist; a check once it is saved)
+DP_BACK_PX, DP_BACK_GLYPH, DP_PILL_PX, DP_PILL_INK, DP_PILL_DOWN = 40, 20, (148, 40), (0x1C, 0x1C, 0x1E), (0xD6, 0xD6, 0xD8)   # patch/offsets.inc DP_BACK_DISC, DP_PILL_H, DP_PLAY_W
+DP_ADD_GLYPH = 'plus'
+DP_ADDED_GLYPH = 'check'
+DAILY = ['dm_disc', 'dm_disc_down'] + DPAGE   # the Daily Mix card's play disc and the page's images (DPAGE) (patch/dailymix.c, tools/pod_ui.py): a 48 px glass disc with a 22 px white play glyph, one px right of centre (a triangle's weight sits left of its box)
+DM_DISC_PX, DM_PLAY_GLYPH = 48, 22     # patch/offsets.inc DM_DISC, tools/pod_dailymix.py DM_PLAY_GLYPH
+# M1+ Music menu and Shuffle page rows: label -> (added image, glyph). A bare white glyph (BARE_PX canvas) left of the title.
 # '@shanling' = the brand mark cut out of a stock image (shanling_mark below), not a glyph.
 POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'audio-lines'), 'Cover Flow': ('pod_ic_coverflow', 'gallery-horizontal'),   # audio-lines: the wave of the navbar's Now Playing button
             'Shuffle': ('pod_ic_shuffle', 'shuffle'), 'Songs': ('pod_ic_songs', 'music'),
             'Albums': ('pod_ic_albums', 'disc-3'), 'Artists': ('pod_ic_artists', 'mic-vocal'),
             'Genres': ('pod_ic_genres', 'guitar'), 'Folders': ('pod_ic_folders', 'folder'),
-            'Playlists': ('pod_ic_playlists', 'list-music'), 'Settings': ('pod_ic_settings', 'settings'), 'Extras': ('pod_ic_extras', 'ellipsis'),
+            'Playlists': ('pod_ic_playlists', 'list-music'), 'Customize': ('pod_ic_customize', 'sliders-horizontal'), 'Extras': ('pod_ic_extras', 'ellipsis'),
+            'Developer': ('pod_ic_developer', 'code'),
             'Shuffle Songs': ('pod_ic_shufsongs', 'music'), 'Shuffle Albums': ('pod_ic_shufalbums', 'disc-3'),
             'Shuffle Folders': ('pod_ic_shuffolders', 'folder'),
             # the Settings page's rows: the launcher's two, the customise page and the Cover Flow switch
-            'Shanling Home': ('pod_ic_shanling', '@shanling'), 'Start in M1+ Pod': ('pod_ic_startup', 'house'),
+            'Shanling Home': ('pod_ic_shanling', '@shanling'), 'Boot to M1+ Music': ('pod_ic_startup', 'power'),
             'Main Menu': ('pod_ic_mainmenu', 'list-checks'),
-            'Home Screen': ('pod_ic_homescreen', 'layout-grid'),   # the Settings > Home Screen row (the stock grid's glyph; Start in has the house)
+            'Home Screen': ('pod_ic_homescreen', 'house'),   # the Customize > Home Screen row (Boot to has the power glyph)
             # Settings > Cover Flow (the Settings page's Cover Flow row uses the menu's gallery disc)
             'Landscape': ('pod_ic_landscape', 'rotate-cw-square'), 'Sort': ('pod_ic_sort', 'arrow-down-wide-narrow'),
             'Rebuild Covers': ('pod_ic_rebuild', 'image-up'),
             # the Extras page (the stock Home tiles the menu does not repeat; glyphs as the Home grid's)
             'Favorites': ('pod_ic_fav', 'star'), 'Recently Added': ('pod_ic_recentadd', 'clock-plus'),
-            'Recently Played': ('pod_ic_recent', 'history'), 'Recent Albums': ('pod_ic_recent', 'history'),   # the shelf's switch (Settings > Home Screen): the same clock
+            'Recently Played': ('pod_ic_recent', 'history'), 'Recent Albums': ('pod_ic_recent', 'history'),   # the shelf's switch (Customize > Home Screen): the same clock
+            'Daily Mix': ('pod_ic_shuffle', 'shuffle'), 'Regenerate Daily Mix': ('pod_ic_update', 'refresh-cw'),   # the card's switch and its action row (Customize > Home Screen): Shuffle's and Update Library's glyphs
             'Most Played': ('pod_ic_most', 'flame'),
             'Composers': ('pod_ic_composers', 'feather'), 'Hi-Res': ('pod_ic_hires', '+badge-hr'),
             'Update Library': ('pod_ic_update', 'refresh-cw'), 'Tidal': ('pod_ic_tidal', 'T:brand-tidal'),
             'CD Ripper': ('pod_ic_cdripper', 'disc'), 'Screenshot': ('pod_ic_screenshot', 'camera'),
             # the Settings page (the menu's Settings row opens it)
-            'System Settings': ('pod_ic_settings', 'settings'), 'Playback': ('pod_ic_playset', 'sliders-horizontal')}
-# The "M1+ Pod" icon patch/home.c adds to the stock Home grid (id 99): 66x66 like the stock Home icons
-# (white click-wheel glyph on the #777777 disc, #555555 pressed), style home_m1pod_style in home_page.bin.
-POD_HOME = ('m1pod', 'm1pod_down')
-POD_HOME_GLYPH, POD_HOME_STYLE = '+click-wheel', 'home_m1pod_style'      # custom: no Lucide glyph is a click wheel
-POD_UI = ['m1pod_menu', 'm1pod_shuffle', 'm1pod_settings', 'm1pod_extras', 'm1pod_mainmenu', 'm1pod_cfset', 'm1pod_homeset']
+            'System Settings': ('pod_ic_settings', 'settings'), 'Playback': ('pod_ic_playset', 'headphones')}
+# The "M1+ Music" icon patch/home.c adds to the stock Home grid (id 99): 66x66 like the stock Home icons
+# (white Lucide smartphone glyph on the #777777 disc, #555555 pressed), style home_m1plus_style in home_page.bin.
+POD_HOME = ('m1plus', 'm1plus_down')
+POD_HOME_GLYPH, POD_HOME_STYLE = 'smartphone', 'home_m1plus_style'
+POD_UI = ['m1plus_menu', 'm1plus_shuffle', 'm1plus_customize', 'm1plus_extras', 'm1plus_mainmenu', 'm1plus_cfset', 'm1plus_homeset', 'm1plus_extrascfg', 'm1plus_developer']
 # The navbar toggles (tools/pod_ui.py NAV_VIEW_ICON, patch/albums.c, patch/artists.c): the glyph of the view a tap switches to, a plain
 # 24 px white glyph like the navbar's others (pressed #777777), added to the images.
 NAV_VIEW = {'pod_nav_grid': 'layout-grid', 'pod_nav_list': 'list',
             'pod_nav_artist': 'mic-vocal', 'pod_nav_albumartist': 'user-star',   # the Artists page's Artist / Album Artist switch
             'pod_nav_coverflow': 'gallery-horizontal',
             'pod_nav_more': 'ellipsis',   # the Playlists page's "..." menu button
-            'pod_nav_allalbums': 'list-music'}   # Cover Flow's artist page: open the All albums page (all songs)
+            'pod_nav_songs': 'list',   # Cover Flow's artist page: our Songs page on the artist's songs (the left cap, then Now Playing)
+            'pod_nav_search': 'search', 'pod_nav_songsort': 'arrow-down-wide-narrow', 'pod_nav_select': 'list-checks',
+            'pod_nav_selectl': 'list-checks',   # the Songs page's Search / Sort / Select (capsule: left, middle, middle, then Now Playing); selectl: Select as the left cap of a genre's songs (no Search: Select | Now Playing)
+            'pod_nav_customize': 'sliders-horizontal'}   # the Extras page's Customize button: the left cap of [Customize | Now Playing]
 # the glass piece each Pod page button is (docs/modules/navbar.md): the Albums and Playlists pages' capsule is Cover Flow / "..." (left cap), the grid / list
-# toggle (middle), Now Playing (right cap); the Artists page's is the switch (left cap) and Now Playing; the Cover Flow artist page's All albums button is a disc
+# toggle (middle), Now Playing (right cap); the Artists page's is the switch (left cap) and Now Playing; the Cover Flow artist page's is Songs (left cap) and Now Playing
 NAV_VIEW_POS = {'pod_nav_grid': 'middle', 'pod_nav_list': 'middle', 'pod_nav_artist': 'left', 'pod_nav_albumartist': 'left', 'pod_nav_coverflow': 'left',
-                'pod_nav_more': 'left', 'pod_nav_allalbums': 'only'}
+                'pod_nav_more': 'left', 'pod_nav_songs': 'left', 'pod_nav_search': 'left', 'pod_nav_songsort': 'middle', 'pod_nav_select': 'middle', 'pod_nav_selectl': 'left', 'pod_nav_customize': 'left'}
 NAV_PX = 24
 # The Playlists page's "..." menu rows (tools/pod_ui.py playlist_menu, in row order): a bare white glyph left of the label, as on Now
 # Playing's More sheet's rows, drawn at PL_MENU_PX (20: the 24 px of the sheet's rows looked big beside the 18 px labels; the stroke stays 2 px).
@@ -231,7 +242,7 @@ PLAYALL = {'playall': 0, 'Play_all': 0, 'playall_down': 1, 'Play_all_down': 1}  
 WIFI_LOCK = {f'wifi_{i}': i for i in range(1, 5)}                                    # secured network, level 1..4
 # Now Playing (mod_nowplaying.py copies these): name -> (glyph, canvas px or (w, h), max ink px, tone, pressed name or None
 # [, disc px]). 'pil:NAME' = the solid glyph drawn with PIL (g_play ... below; the transport glyphs, which read better than
-# Tabler's filled ones); a disc px puts a glass disc (glass_image) of that diameter behind the glyph (star and More).
+# Tabler's filled ones); a disc px puts a flat translucent white disc of that diameter behind the glyph (star and More).
 NP = {'np_play': ('pil:play', 44, 0, 'fg', 'np_play_down'), 'np_pause': ('pil:pause', 44, 0, 'fg', 'np_pause_down'),
       'np_next': ('pil:next', 44, 0, 'fg', 'np_next_down'), 'np_prev': ('pil:prev', 44, 0, 'fg', 'np_prev_down'),
       'mb_play': ('pil:mb_play', 32, 0, 'white', 'mb_play_down'), 'mb_pause': ('pil:mb_pause', 32, 0, 'white', 'mb_pause_down'),
@@ -250,6 +261,7 @@ NP_FG, NP_DIM = (0xEE, 0xEE, 0xEC), (0x8C,) * 3        # q2-pod's off-white and 
 NP_MID, NP_OFF = (0xC8,) * 3, (0x6E,) * 3               # the mode and queue glyphs (brighter than the secondary grey #AAAAAA); repeat-off, dimmer
 NP_TONES = {'fg': (NP_FG, 255), 'mid': (NP_MID, 255), 'off': (NP_OFF, 255), 'ghost': ((255, 255, 255), 110), 'white': ((255, 255, 255), 255)}   # rgb, alpha
 NP_PRESSED = {'ghost': ((255, 255, 255), 190), 'white': ((255, 255, 255), 140)}            # every other tone presses to NP_DIM
+NP_DISC_ALPHA, NP_DISC_ALPHA_DOWN = 26, 51                # the star and More disc: #FFFFFF1A, pressed #FFFFFF33
 
 SHANLING = '@shanling'
 
@@ -263,7 +275,7 @@ def used_glyphs():
     """(Lucide names, Tabler names) of every glyph the tables use; custom ones excluded."""
     gl = [e[2] for e in HOME + SETTINGS + LISTS] + list(PULLDOWN.values()) + list(STATUS.values()) + \
         [g for g in WIFI_LEVELS if g] + [COVER_GLYPH, POD_HOME_GLYPH, SHOT_BAR[1]] + list(NAV_VIEW.values()) + [g for _, g in PL_MENU_ICONS] + [v[1] for v in POD_ROWS.values() if v[1] != SHANLING] + \
-        [g for _, g, _ in GLYPHS] + [g for _, g in DISCS] + [v[0] for v in NP.values() if not v[0].startswith('pil:')] + ['lock:filled']
+        [g for _, g, _ in GLYPHS] + [v[0] for v in SONGS_IMAGES.values()] + [DP_ADD_GLYPH] + [g for _, g in DISCS] + [v[0] for v in NP.values() if not v[0].startswith('pil:')] + ['lock:filled']
     names = {gname(g) for g in gl if g and not is_custom(g) and not is_badge(g)}
     return sorted(n for n in names if not n.startswith('T:')), sorted(n[2:] for n in names if n.startswith('T:'))
 
@@ -595,6 +607,20 @@ def ah_tint_alpha(y):
     top, bot, rows, _ = AH_TINT
     return bot if y >= rows - 1 else top + ((bot - top) * y + (rows - 1) // 2) // (rows - 1)
 
+# The Songs page (patch/songs.c, docs/modules/songs.md): the glyphs of its flat pills (Play, Shuffle, Add to playlist, Delete: a 16 px canvas each, the ink at
+# most SG_INK px; Delete's is red-ish) and the tick of the sort card's current order (18 px). White except Delete's; no pressed variants (the pills are flat).
+SONGS_IMAGES = {'sg_play': ('play:filled', WHITE, 14, 16), 'sg_shuffle': ('shuffle', WHITE, 16, 16), 'sg_listplus': ('list-plus', WHITE, 16, 16),
+                'sg_trash': ('trash', (0xFF, 0x6B, 0x6B), 16, 16), 'sg_tick': ('+check', WHITE, 18, 18)}
+ALBUM += sorted(SONGS_IMAGES)
+
+def songs_images():
+    from PIL import Image
+    f = {}
+    for n, (g, rgb, ink, canvas) in SONGS_IMAGES.items():
+        c = Image.new('RGBA', (canvas, canvas), (0, 0, 0, 0)); gi = glyph_fit(g, ink, ink, rgb, 0)
+        c.alpha_composite(gi, ((canvas - gi.width) // 2, (canvas - gi.height) // 2)); f[n] = c
+    return f
+
 def album_images():
     """The album page's images (ALBUM): the tint gradient, Shuffle's disc + glyph, the pill, the play glyph."""
     from PIL import Image
@@ -604,32 +630,62 @@ def album_images():
     for y in range(h): tint.paste((0, 0, 0, ah_tint_alpha(y)), (0, y, w, y + 1))
     f['ah_tint'] = tint
     g = glyph_fit('shuffle', AH_SHUF_GLYPH, AH_SHUF_GLYPH, WHITE, 0)
-    for n, pressed in (('', False), ('_down', True)):   # the mini bar's glass: a disc (r = d / 2) with the glyph, a full pill (r = h / 2)
-        d = glass_image(AH_DISC_PX, AH_DISC_PX, AH_DISC_PX // 2, pressed)
-        d.alpha_composite(g, ((AH_DISC_PX - g.width) // 2, (AH_DISC_PX - g.height) // 2)); f['ah_shuffle' + n] = d
-        f['ah_pill' + n] = glass_image(*AH_PILL_PX, AH_PILL_PX[1] // 2, pressed)
+    f['ah_shuffle'] = on_disc(g, AH_DISC_PX, AH_SHUF_DISC)
+    f['ah_shuffle_down'] = on_disc(g, AH_DISC_PX, AH_SHUF_DISC_DOWN)
+    f['ah_pill'] = pill(AH_PILL_PX, AH_PILL_FILL)
+    f['ah_pill_down'] = pill(AH_PILL_PX, AH_PILL_FILL_DOWN)
     p = glyph_fit('play:filled', AH_PLAY_GLYPH, AH_PLAY_GLYPH, AH_PLAY_INK, 0)
     f['ah_play'] = p                 # no padding: the style's icon_at left centres it in a pill-high square (mod_ipodrows.pill_layout)
     f.update(ah_nav_images())
+    f.update(songs_images())
     f[NB_FADE[0]] = nb_fade_image()
+    g = glyph_fit('play:filled', DM_PLAY_GLYPH, DM_PLAY_GLYPH, WHITE, 0)
+    for n, pressed in (('dm_disc', False), ('dm_disc_down', True)):
+        d = glass_image(DM_DISC_PX, DM_DISC_PX, DM_DISC_PX // 2, pressed)
+        d.alpha_composite(g, ((DM_DISC_PX - g.width) // 2 + 1, (DM_DISC_PX - g.height) // 2)); f[n] = d
+    chev = glyph_fit('chevron-left', DP_BACK_GLYPH, DP_BACK_GLYPH, WHITE, 0)
+    for n, pressed in (('dp_back', False), ('dp_back_down', True)):   # the page's back disc: the same glass, a chevron optically centred (its weight sits left of its box: one px right of centre)
+        d = glass_image(DP_BACK_PX, DP_BACK_PX, DP_BACK_PX // 2, pressed)
+        d.alpha_composite(chev, ((DP_BACK_PX - chev.width) // 2 - 1, (DP_BACK_PX - chev.height) // 2)); f[n] = d
+    for n, rgb in (('dp_pill', (255, 255, 255)), ('dp_pill_down', DP_PILL_DOWN)): f[n] = solid_pill(*DP_PILL_PX, rgb)
+    f['dp_play'] = glyph_fit('play:filled', AH_PLAY_GLYPH, AH_PLAY_GLYPH, DP_PILL_INK, 0)
+    plus = glyph_fit(DP_ADD_GLYPH, AH_SHUF_GLYPH, AH_SHUF_GLYPH, WHITE, 0)   # the Shuffle glyph's box and stroke on the Shuffle disc's two greys
+    f['dp_add'] = on_disc(plus, AH_DISC_PX, AH_SHUF_DISC)
+    f['dp_add_down'] = on_disc(plus, AH_DISC_PX, AH_SHUF_DISC_DOWN)
+    tick = glyph_fit(DP_ADDED_GLYPH, AH_SHUF_GLYPH, AH_SHUF_GLYPH, WHITE, 0)   # the mix's playlist exists
+    f['dp_added'] = on_disc(tick, AH_DISC_PX, AH_SHUF_DISC)
+    f['dp_added_down'] = on_disc(tick, AH_DISC_PX, AH_SHUF_DISC_DOWN)
     return f
+
+def solid_pill(w, h, rgb):
+    """A w x h pill (corner radius h / 2) of one opaque colour, anti-aliased (8 x supersampled)."""
+    from PIL import Image, ImageDraw
+    k = 8
+    m = Image.new('L', (w * k, h * k), 0)
+    ImageDraw.Draw(m).rounded_rectangle([0, 0, w * k - 1, h * k - 1], radius=h * k // 2, fill=255)
+    im = Image.new('RGBA', (w, h), rgb + (255,)); im.putalpha(m.resize((w, h), Image.BOX)); return im
 
 # Glass navbar buttons (docs/modules/navbar.md): every glass piece is one image, cut to the REAL button it sits in (main's slots: the Pod pages' right-hand
 # buttons 46 wide at x 122 / 168 / 214, Now Playing 60 wide at 260, glyph centres 145 / 191 / 237 / 290), drawn by the button's `icon` centred in it. A
 # lone button is a disc (glass_image of the mini bar's pane, the white glyph on it); the Pod pages' buttons that abut (Cover Flow / "..." | toggle | Now
 # Playing) are slices of ONE capsule (r = 21) from 21 px left of the first glyph to 21 px right of Now Playing's, so the join is seamless (the slices are
-# cut from one pane, the straight parts of a pane being identical). Pressed = the lighter glass, that piece only.
+# cut from one pane, the straight parts of a pane being identical). Pressed: a disc is the lighter glass; a capsule slice keeps the rest glass (the
+# capsule stays one pane) with a round highlight on its glyph (NAV_PRESS_D, concentric with the cap ends: every glyph is 21 px from a cap's edge).
 GLASS_H, GLASS_GLYPH = 42, 20                # the glass is 42 px high (y 4 .. 46 in a 50 px bar), the glyph's ink box 20 px (the navbar's NAV_K size)
 NAV_SLOT_W, NAV_PLAY_W, NAV_CAPSULE_W = 46, 60, 141   # patch/offsets.inc NAV_VIEW_W; Now Playing's button; the Albums capsule 170 .. 311 (the Artists one starts at 216)
+NAV_PRESS_D, NAV_PRESS_ALPHA = 36, 0.14      # a pressed slice's highlight: a white disc 36 px across (3 px of glass above and below it), 14 % opaque
 
 def glass_piece(w, x0, x1, glyph, glyph_cx, pressed=False, cap=None, h=GLASS_H):
     """A w x h image whose glass covers columns [x0, x1): a disc (r = h / 2) when x1 - x0 == h, else the slice of the capsule cap = (c0, c1) (image
     columns, c1 - c0 wide, r = h / 2, the pane glass_image(c1 - c0, ...)); `glyph` (Lucide / 'T:' Tabler name) in white centred on column glyph_cx.
-    Straight-alpha RGBA."""
+    Pressed: a disc's glass is the lighter one, a slice's the rest glass with the round highlight under the glyph. Straight-alpha RGBA."""
     from PIL import Image
     c0, c1 = cap or (x0, x1)
     out = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-    out.alpha_composite(glass_image(c1 - c0, h, h // 2, pressed).crop((x0 - c0, 0, x1 - c0, h)), (x0, 0))
+    out.alpha_composite(glass_image(c1 - c0, h, h // 2, pressed and not cap).crop((x0 - c0, 0, x1 - c0, h)), (x0, 0))
+    if pressed and cap:
+        d = disc(NAV_PRESS_D, WHITE); d.putalpha(d.getchannel('A').point(lambda v: round(v * NAV_PRESS_ALPHA)))
+        out.alpha_composite(d, (glyph_cx - NAV_PRESS_D // 2, (h - NAV_PRESS_D) // 2))
     if glyph:
         g = glyph_fit(glyph, GLASS_GLYPH, GLASS_GLYPH, WHITE, 0, 2.0)
         out.alpha_composite(g, (glyph_cx - g.width // 2, (h - g.height) // 2))
@@ -643,14 +699,22 @@ def capsule_piece(position, glyph, pressed=False):
     w, x0, x1, cx, cap = CAPSULE_PIECES[position]
     return glass_piece(w, x0, x1, glyph, cx, pressed, cap)
 
-# image -> (width, glass columns, glyph centre, glyph): the lone discs. Back (the Pod pages' 44 px button centres it: x 8 .. 50; the album page draws it
-# in the stock Back button's icon square), Now Playing's disc (Pod pages, button x 260: glass 269 .. 311), the album page's discs in the stock builders'
-# buttons (the glyph centres on the Pod's: search / multi-select 191 / 237 in their 46 px slots, Now Playing 290 in its 60 px button at 262, the select
-# mode's add / delete 146 / 221 centred in their 60 px buttons at 116 / 191, cancel 290 in the one at 268, the all / unselect toggle 29 in its 50 px one at 0)
-AH_NAV_PIECES = {'ah_nav_back': (42, 0, 42, 21, 'chevron-left'), 'ah_nav_np': (NAV_PLAY_W, 9, 51, 30, 'audio-lines'),
-                 'ah_nav_search': (46, 2, 44, 23, 'search'), 'ah_nav_multi': (46, 2, 44, 23, 'list-checks'), 'ah_nav_npa': (NAV_PLAY_W, 7, 49, 28, 'audio-lines'),
-                 'ah_nav_add': (NAV_PLAY_W, 9, 51, 30, 'plus'), 'ah_nav_del': (NAV_PLAY_W, 9, 51, 30, 'trash'), 'ah_nav_cancel': (NAV_PLAY_W, 1, 43, 22, 'x'),
-                 'ah_nav_unsel': (50, 8, 50, 29, 'circle')}
+# image -> (width, glass columns, glyph centre, glyph, capsule columns or None): the lone discs and the album page's capsule. Back (the Pod pages' 44 px
+# button centres it: x 8 .. 50; the album page draws it in the stock Back button's icon square), Now Playing's disc (Pod pages, button x 260: glass
+# 269 .. 311), the album page's pieces in the stock builders' buttons (the glyph centres on the Pod's: search 191 in its 46 px slot at 168, a disc;
+# multi-select 237 at 214 and Now Playing 290 in its 60 px button at 262, the capsule AH_CAPSULE; the select mode's add / delete 146 / 221 centred in
+# their 60 px buttons at 116 / 191, cancel 290 in the one at 268, the all / unselect toggle 29 in its 50 px one at 0). Both builders make multi-select
+# and Now Playing together (or neither), so they are always the capsule's two caps; search (the toggle builder's only) stays a disc beside it. The
+# builders leave 2 px between them (260 .. 262): multi-select's image is 4 px wider than its button, and AWTK draws an icon centred at its own size
+# (canvas_draw_icon_in_rect 0x648f90: the rect's centre only), so it reaches from 212 to 262 and its glass meets Now Playing's.
+AH_CAPSULE = (216, 311)      # window columns: 21 px left of multi-select's glyph to 21 px right of Now Playing's (the Artists capsule's)
+AH_MULTI_W = NAV_SLOT_W + 4  # multi-select's image: 2 px over its button on each side
+AH_NAV_PIECES = {'ah_nav_back': (42, 0, 42, 21, 'chevron-left', None), 'ah_nav_close': (42, 0, 42, 21, 'x', None), 'ah_nav_np': (NAV_PLAY_W, 9, 51, 30, 'audio-lines', None),
+                 'ah_nav_search': (46, 2, 44, 23, 'search', None),
+                 'ah_nav_multi': (AH_MULTI_W, 4, AH_MULTI_W, 25, 'list-checks', (4, 4 + AH_CAPSULE[1] - AH_CAPSULE[0])),
+                 'ah_nav_npa': (NAV_PLAY_W, 0, AH_CAPSULE[1] - 262, 28, 'audio-lines', (AH_CAPSULE[0] - 262, AH_CAPSULE[1] - 262)),
+                 'ah_nav_add': (NAV_PLAY_W, 9, 51, 30, 'plus', None), 'ah_nav_del': (NAV_PLAY_W, 9, 51, 30, 'trash', None), 'ah_nav_cancel': (NAV_PLAY_W, 1, 43, 22, 'x', None),
+                 'ah_nav_unsel': (50, 8, 50, 29, 'circle', None)}
 AH_NAV_SELECTED = ('ah_nav_sel', 'T:circle-check:filled')    # the select-all toggle's "all selected" state (a 50 px disc; no pressed image: stock has none)
 AH_NAV_RIGHT = 'ah_nav_play'                                 # Now Playing as the capsule's right cap (Pod pages)
 AH_NAV_NAMES = sorted([n + s for n in [*AH_NAV_PIECES, AH_NAV_RIGHT] for s in ('', '_down')] + [AH_NAV_SELECTED[0]])
@@ -659,8 +723,8 @@ def ah_nav_images():
     """The glass buttons' images (AH_NAV_NAMES)."""
     f = {}
     for suffix, pressed in (('', False), ('_down', True)):
-        for n, (w, x0, x1, cx, g) in AH_NAV_PIECES.items():
-            f[n + suffix] = glass_piece(w, x0, x1, g, cx, pressed)
+        for n, (w, x0, x1, cx, g, cap) in AH_NAV_PIECES.items():
+            f[n + suffix] = glass_piece(w, x0, x1, g, cx, pressed, cap)
         f[AH_NAV_RIGHT + suffix] = capsule_piece('right', 'audio-lines', pressed)
     w, x0, x1, cx, _ = (50, 8, 50, 29, 0)
     f[AH_NAV_SELECTED[0]] = glass_piece(w, x0, x1, AH_NAV_SELECTED[1], cx)
@@ -887,10 +951,10 @@ def glass_image(w, h, r, pressed=False, fill=None, top_only=False):
     out = Image.alpha_composite(out, white(rim_ring, ramp(*GLASS_RIM[pressed], h - 1)))
     return out
 
-def np_disc(size, disc_px, pressed, g, ink, rgb):
-    """A size x size canvas: a glass disc of disc_px (glass_image, pressed one lighter) centred, the glyph g (ink px) over it, centred optically."""
+def np_disc(size, disc_px, alpha, g, ink, rgb):
+    """A size x size canvas: a flat white disc of disc_px at `alpha` centred, the glyph g (ink px) over it, centred optically."""
     from PIL import Image
-    d = glass_image(disc_px, disc_px, disc_px // 2, pressed)
+    d = disc(disc_px, (255, 255, 255)); d.putalpha(d.getchannel('A').point(lambda v: v * alpha // 255))
     c = Image.new('RGBA', (size, size), (255, 255, 255, 0)); o = (size - disc_px) // 2
     c.alpha_composite(d, (o, o)); c.alpha_composite(np_glyph(g, size, ink, rgb)); return c
 
@@ -901,13 +965,13 @@ def np_images():
     for n, (g, px, ink, tone, down, *rest) in NP.items():
         for name, pressed in ((n, False), (down, True)):
             if not name: continue
-            rgb, alpha = (NP_PRESSED.get(tone) or (NP_DIM, 255)) if pressed and not rest else NP_TONES[tone]   # a glass disc keeps its glyph at rest: the lighter pane is the feedback (#8C8C8C on it is 3.4:1)
+            rgb, alpha = (NP_PRESSED.get(tone) or (NP_DIM, 255)) if pressed else NP_TONES[tone]
             if g == 'pil:glass': out[name] = glass_image(*GLASS, pressed)
             elif g == 'pil:glass_card': out[name] = glass_image(*GLASS_CARD, fill=GLASS_CARD_FILL)
             elif g == 'pil:glass_sheet': out[name] = glass_image(*GLASS_SHEET, fill=GLASS_SHEET_FILL, top_only=True)
             elif g == 'pil:glass_menu': out[name] = glass_image(*GLASS_MENU, fill=GLASS_SHEET_FILL)
             elif g.startswith('pil:'): out[name] = pil_glyph(g[4:], px, rgb, alpha)
-            elif rest: out[name] = np_disc(px, rest[0], pressed, g, ink, rgb)
+            elif rest: out[name] = np_disc(px, rest[0], NP_DISC_ALPHA_DOWN if pressed else NP_DISC_ALPHA, g, ink, rgb)
             else: out[name] = glyph_fit(g, px, px, rgb, (px - ink) // 2, 1.5 if ink < 22 else None)   # the small mode / queue glyphs keep a 1.5 px stroke
     return out
 
@@ -967,11 +1031,11 @@ def replaced_names():
 
 def pod_row_names(): return sorted({n for n, _ in POD_ROWS.values()})
 def nav_names(): return sorted(set(NAV_VIEW) | {n + '_down' for n in NAV_VIEW})
-def pod_names(): return sorted(set(pod_row_names()) | set(POD_HOME) | set(nav_names()) | set(ALBUM) | {SHOT_BAR[0]} | {n for n, _ in PL_MENU_ICONS})
+def pod_names(): return sorted(set(pod_row_names()) | set(POD_HOME) | set(nav_names()) | set(ALBUM) | set(DAILY) | {SHOT_BAR[0]} | {n for n, _ in PL_MENU_ICONS})
 def np_names(): return sorted(set(NP) | {v[4] for v in NP.values() if v[4]})
 
 def added_rels(stock_rootfs=None, *args):
-    """Rootfs-relative paths of the files this step adds (fwtool --allow-added): the M1+ Pod row icons."""
+    """Rootfs-relative paths of the files this step adds (fwtool --allow-added): the M1+ Music row icons."""
     return [f'{IMG.removeprefix("rootfs/")}/{n}.png' for n in pod_names()]
 
 def sha256(b): return hashlib.sha256(b).hexdigest()
@@ -1070,14 +1134,14 @@ def apply(src, out):
     add_home_icon(out)
     add_nav_icons(out)
     add_album_icons(out)
-    print(f'icons: {n_ok} images replaced, {total_old} -> {total_new} bytes ({total_new - total_old:+d}); {n_rows} M1+ Pod row icons '
+    print(f'icons: {n_ok} images replaced, {total_old} -> {total_new} bytes ({total_new - total_old:+d}); {n_rows} M1+ Music row icons '
           f'and the Home grid icon ({POD_HOME_STYLE}) added')
 
 IMG_MODE, IMG_MTIME = 0o755, 1750924035     # as the other added images (mod_nowplaying.py)
 UI_DIR = 'rootfs/release/assets/default/raw/ui'
 
 def apply_pod_rows(out, rows):
-    """Bare glyphs on the M1+ Pod menu / Shuffle / Settings / Extras / Main Menu rows: an insensitive image at the row's
+    """Bare glyphs on the M1+ Music menu / Shuffle / Settings / Extras / Main Menu rows: an insensitive image at the row's
     left, the title at POD_TEXT_X, and the hairline under the row inset to start under the title: the theme's full-width
     one (list_item_style's bottom border) is switched off for these rows and an insensitive 1 px view, pod_hair, draws it
     from HAIR_X to the row's right edge (the pressed band stays the full-width theme colour). Row height, chevrons,
@@ -1113,14 +1177,14 @@ def apply_pod_rows(out, rows):
 HOME_STYLES = 'rootfs/release/assets/default/raw/styles/home_page.bin'
 
 def add_home_icon(out):
-    """The Home grid's "M1+ Pod" icon (patch/home.c builds the widget at run time): its two images and the image
-    style home_m1pod_style, a copy of home_tidal_style (normal/disable/focused/pressed/selected) pointing at them,
+    """The Home grid's "M1+ Music" icon (patch/home.c builds the widget at run time): its two images and the image
+    style home_m1plus_style, a copy of home_tidal_style (normal/disable/focused/pressed/selected) pointing at them,
     inserted in the stock sort order (widget type, style name) among the other home_*_style items."""
     import awtk_style
     p = os.path.join(out, HOME_STYLES)
     old = open(p, 'rb').read(); th = awtk_style.parse(old)
     assert awtk_style.serialize(th) == old, 'home_page.bin does not round-trip'
-    assert not th.find('image', POD_HOME_STYLE), 'home_m1pod_style already in the tree'
+    assert not th.find('image', POD_HOME_STYLE), 'home_m1plus_style already in the tree'
     src = th.find('image', 'home_tidal_style'); assert len(src) == 5, 'unexpected home_tidal_style'
     new = []
     for it in src:
@@ -1136,9 +1200,9 @@ def add_home_icon(out):
         shutil.copyfile(os.path.join(PNG, n + '.png'), q); os.chmod(q, IMG_MODE); os.utime(q, (IMG_MTIME, IMG_MTIME))
 
 def add_nav_icons(out):
-    """The Albums view toggle's four images (used by ui/m1pod_albums.bin, which swaps the glyph at run time with its mode)
+    """The Albums view toggle's four images (used by ui/m1plus_albums.bin, which swaps the glyph at run time with its mode)
     the status bar's Screenshot camera (the hidden pod_shot image tools/pod_ui.py adds to ui/system_bar.bin) and the Playlists
-    page's menu glyphs (ui/m1pod_playlists.bin)."""
+    page's menu glyphs (ui/m1plus_playlists.bin)."""
     d = os.path.join(out, IMG)
     for n in nav_names() + [SHOT_BAR[0]] + [n for n, _ in PL_MENU_ICONS]:
         q = os.path.join(d, n + '.png'); assert not os.path.exists(q), f'{n}.png already in the tree'
@@ -1148,7 +1212,7 @@ def add_album_icons(out):
     """The album page's images (ALBUM): the corner masks, Shuffle's disc and glyph, the play glyph; patch/albuminfo.c
     and the page theme (tools/mod_ipodrows.py) refer to them by name."""
     d = os.path.join(out, IMG)
-    for n in ALBUM:
+    for n in ALBUM + DAILY:
         q = os.path.join(d, n + '.png'); assert not os.path.exists(q), f'{n}.png already in the tree'
         shutil.copyfile(os.path.join(PNG, n + '.png'), q); os.chmod(q, IMG_MODE); os.utime(q, (IMG_MTIME, IMG_MTIME))
 

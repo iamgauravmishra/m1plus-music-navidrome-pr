@@ -1,4 +1,4 @@
-/* M1+ Pod Now Playing More menu: the stock playmore_dialog (the sheet Now Playing's More button opens: ui/dialog/
+/* M1+ Music Now Playing More menu: the stock playmore_dialog (the sheet Now Playing's More button opens: ui/dialog/
  * playmore_dialog.bin, seven list_item rows listitem0..6) as an iOS style bottom sheet with two pages.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
@@ -13,9 +13,9 @@
  * unchanged with the new y.
  *
  * One hook, dialog_playmore_dialog_init (0x479cc4): run when the dialog is built (a tap on Now Playing's More button, never
- * at boot or in the main loop). m1pod_playmore_init runs the stock init to completion (it binds every row's handler and the
+ * at boot or in the main loop). m1plus_playmore_init runs the stock init to completion (it binds every row's handler and the
  * speed / A-B widgets, which keep their stock handlers: we move rows, we do not replace behaviour; it also pins the sheet at
- * y 130) and then, unless the kill switch /mnt/mmc/m1pod-off exists and every widget of the asset is there, arranges page 1
+ * y 130) and then, unless the kill switch /mnt/mmc/m1plus-off exists and every widget of the asset is there, arranges page 1
  * and anchors the sheet. Everything fallible (the widget lookups, the handlers, the labels' texts) is done before the first
  * row moves, so any failure leaves the stock seven rows (pod_more and pod_back stay hidden and insensitive in the asset).
  *
@@ -33,10 +33,12 @@
 #include "i18n.h"
 #include "home.h"
 #include "common.h"
+#include "covercache.h"
 
 #define PM_ROWS 9     /* listitem0..6, then pod_more, pod_back */
 #define PM_MORE 7
 #define PM_BACK 8
+#define GO_ALBUM 4    /* listitem4, Look up album */
 
 /* what each page shows, top to bottom, as indices into pm.row[] */
 static const unsigned char pm_page[2][PM_PAGE_N] = {
@@ -121,6 +123,53 @@ static int pm_on_destroy(void *ctx, void *e) {
     return RET_OK;
 }
 
+/* Look up album (listitem4): our album page instead of the stock playerjumpinfo_page. Bound after the stock init, so it runs
+ * before the stock handler (0x4795cc; top comment); RET_STOP keeps the stock one from running, RET_OK lets it run. The order is
+ * the stock Look up artist's (0x4793ac): the sheet closes, an albuminfo_page already in the stack is closed, songerinfoflag is
+ * set (the page's track tap and Play all then unwind to the Now Playing that is in the stack instead of stacking a second one),
+ * the page opens. The library lookup comes first: no playing track, no album tag or no such album in the list leaves everything
+ * as it was and the stock handler runs (its own message or page). Stock clears the flag only on album_page's window event, so
+ * the new page's destroy does: pm_flag_owner is the window we set it for, so the end of an older page never clears the flag of
+ * a newer one, and pm_flag_prev is the byte before (set by a Look up artist whose album_page is still below: it stays set). */
+static void *pm_flag_owner __attribute__((section(".scratch")));
+static unsigned char pm_flag_prev __attribute__((section(".scratch")));
+
+static int pm_on_album_gone(void *ctx, void *e) {
+    (void)e;
+    if (ctx == pm_flag_owner) {
+        pm_flag_owner = (void *)0;
+        *(unsigned char *)SONGER_FLAG = pm_flag_prev;
+    }
+    return RET_OK;
+}
+
+static int pm_on_lookup_album(void *ctx, void *e) {
+    void *track, *top;
+    int row;
+    unsigned char prev;
+    (void)e;
+    if (!pm.dlg || ctx != pm.dlg) return RET_OK;
+    track = cc_playing();
+    if (!track) return RET_OK;
+    row = cc_find_album(cc_str(track, REC_ALBUM));
+    if (row < 0) return RET_OK;
+    window_close(ctx);
+    if (navigator_window_is_exist("albuminfo_page")) navigator_close("albuminfo_page");
+    prev = *(unsigned char *)SONGER_FLAG;
+    *(unsigned char *)SONGER_FLAG = 1;
+    if (cc_open_album((void *)0, 0, row) < 0) {
+        *(unsigned char *)SONGER_FLAG = prev;
+        return RET_STOP;   /* the list changed between the two reads: the sheet is closed, nothing opened */
+    }
+    top = window_manager_get_top_window(window_manager());
+    if (top && !strcmp(*(const char **)((char *)top + WIDGET_NAME), "albuminfo_page") && widget_on(top, EVT_DESTROY, pm_on_album_gone, top)) {
+        if (!pm_flag_owner) pm_flag_prev = prev;   /* an older owner still pending keeps the byte from before it */
+        pm_flag_owner = top;
+    } else
+        *(unsigned char *)SONGER_FLAG = prev;   /* cannot tell when it ends: do not leave the flag set */
+    return RET_STOP;
+}
+
 static void pm_start(void *dlg) {
     static const char *const names[PM_ROWS] = {"listitem0", "listitem1", "listitem2", "listitem3", "listitem4", "listitem5", "listitem6", "pod_more", "pod_back"};
     void *more_label, *back_label, *speed_label, *note_label;
@@ -149,6 +198,7 @@ static void pm_start(void *dlg) {
     if (!widget_on(pm.lv, EVT_WINDOW_TO_BG, pm_on_bg, dlg)) goto fail;   /* after the stock one on the dialog (top comment) */
     if (!widget_on(pm.row[PM_MORE], EVT_CLICK, pm_on_more, dlg)) goto fail;
     if (!widget_on(pm.row[PM_BACK], EVT_CLICK, pm_on_back, dlg)) goto fail;
+    if (!widget_on(pm.row[GO_ALBUM], EVT_CLICK, pm_on_lookup_album, dlg)) goto fail;
     pm.page = 0;
     pm_arrange();
     return;
@@ -157,7 +207,7 @@ fail:
 }
 
 /* The hook (tools/pod.py PLAYMORE_INIT): stock first, then ours. */
-int m1pod_playmore_init(void *dlg, void *ctx) {
+int m1plus_playmore_init(void *dlg, void *ctx) {
     int ret = stock_playmore_init_trampoline(dlg, ctx);
     if (ret == RET_OK && dlg) pm_start(dlg);
     return ret;

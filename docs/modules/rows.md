@@ -97,7 +97,7 @@ the cover task list and loops when empty; its producers are not reachable at boo
 is the thumbnail size constant (tmpfs files, read only by the Albums and Search album rows, both now 52
 px). No prologue is rewritten, the payload runs only where the patched instruction ran, `$gp` is
 reloaded by every patched caller from its stack slot (checked at all ten sites), and nothing is hidden
-or shown (hit testing unchanged). The kill switch `/mnt/mmc/m1pod-off` turns the fit off (stock layouter);
+or shown (hit testing unchanged). The kill switch `/mnt/mmc/m1plus-off` turns the fit off (stock layouter);
 the 46 immediates and 3 nops are static, so the way back from them is a stock re-flash.
 
 ## 7. Rows, pull-down, lock screen, wallpaper, polish

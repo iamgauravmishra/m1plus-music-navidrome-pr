@@ -1,8 +1,8 @@
-/* M1+ Pod Albums: the library's albums as a grid of covers or as a list, two modes of one page.
+/* M1+ Music Albums: the library's albums as a grid of covers or as a list, two modes of one page.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
- * One page, ui/m1pod_albums.bin: the navbar (Back, "Albums", Cover Flow, the mode toggle, Now Playing) over a stock list, list_view >
+ * One page, ui/m1plus_albums.bin: the navbar (Back, "Albums", Cover Flow, the mode toggle, Now Playing) over a stock list, list_view >
  * scroll_view (albums_scrollview), exactly the structure of the library lists, whose ONE child is a custom view, view_grid, that paints the
  * albums itself in its own EVT_AFTER_PAINT, as the Recently Played shelf of the menu does (patch/recent.c). There is no widget per album: a
  * library of any size costs the album deque (the stock list, copied as Cover Flow copies it) and a small ring of decoded covers. The stock
@@ -59,7 +59,7 @@
 #include "grid.h"
 
 extern int coverflow_open(void); /* patch/coverflow.c: the menu's Cover Flow row, opened over this page */
-extern int pod_home_open(int id);/* patch/m1pod.c: a stock Home destination through the dispatcher */
+extern int pod_home_open(int id);/* patch/m1plus.c: a stock Home destination through the dispatcher */
 
 #define CELL_H GRID_CELL_H              /* the cell geometry is the grid's (patch/grid.h), shared with the Recently Played shelf */
 #define PITCH GRID_PITCH
@@ -101,6 +101,11 @@ static struct {
     unsigned build_timer;
     int own, done;
     void *fade;                   /* the navbar's fade (img_nb_fade, optional): shown only while the list is scrolled */
+    /* the scan that queues the missing albums runs in AL_SCAN_BATCH steps on build_timer: scanning = a scan is under
+     * way (own set held, worker not started); scan_cur / scan_centre = the cc_build_near_step cursor and the album it
+     * is centred on; scanned = a finished scan found nothing missing (kept until the page closes: al is cleared on open) */
+    int scanning, scanned;
+    unsigned scan_cur, scan_centre;
     grid_t g;                    /* the tile ring (GRID_TILES, heap), the placeholder, the mode's cover size (g.side): patch/grid.c; LAST (test/pod/albums.py reads the fields above by index) */
 } al __attribute__((section(".scratch")));
 
@@ -332,6 +337,8 @@ static int al_on_scroll(void *ctx, void *e) {
  */
 #define AL_BUILD_START_MS 50
 #define AL_BUILD_MS 500
+#define AL_SCAN_BATCH 64   /* albums stat'ed per scan step */
+#define AL_SCAN_MS 20      /* between steps: input is served in between */
 
 /* The tiles that were shown as the placeholder for want of a cache file, and whose file exists now, try again. */
 static void al_retry(void) {
@@ -350,6 +357,7 @@ static void al_build_end(void) {
     al.build_timer = 0;
     if (al.own) cc_build_stop();
     al.own = 0;
+    al.scanning = 0;
 }
 
 static int al_on_build(const void *unused) {
@@ -368,12 +376,25 @@ static int al_on_build(const void *unused) {
     return RET_OK;
 }
 
+/* The scan in steps: the first call (the one-shot AL_BUILD_START_MS) opens the set, every call considers AL_SCAN_BATCH
+ * albums (nearest the first one in view first, as cc_build_near) and, while more remains, re-arms itself AL_SCAN_MS
+ * later so input is served between steps. The worker starts only after the last step: it never reads a job being written. */
 static int al_on_build_start(const void *unused) {
     (void)unused;
     al.build_timer = 0;
-    if (!al.view || !al.count || al.own || !cc_build_open(al.count, CC_MISSING)) return RET_OK;
-    al.own = 1;
-    cc_build_near(al.albums, al.order, (unsigned)al_first());
+    if (!al.view || !al.count) return RET_OK;
+    if (!al.scanning) {
+        if (al.own || al.scanned || !cc_build_open(al.count, CC_MISSING)) return RET_OK;
+        al.own = al.scanning = 1;
+        al.scan_cur = 0, al.scan_centre = (unsigned)al_first();
+    }
+    if (!cc_build_near_step(al.albums, al.order, al.scan_centre, &al.scan_cur, AL_SCAN_BATCH)) {
+        al.build_timer = timer_add(al_on_build_start, (void *)0, AL_SCAN_MS);
+        if (!al.build_timer) al_build_end(); /* no way to continue: nothing built, the next foreground retries */
+        return RET_OK;
+    }
+    al.scanning = 0;
+    if (!cc_build_total()) al.scanned = 1; /* everything has its file or marker: no more scans until the page is opened again */
     if (!cc_build_start()) { /* nothing missing, no card, no space, no thread: the set is already freed */
         al.own = 0;
         return RET_OK;
@@ -386,7 +407,7 @@ static int al_on_build_start(const void *unused) {
 
 /* Starts the build a moment from now unless one is going or already due. */
 static void al_build_later(void) {
-    if (al.view && al.g.tiles && !al.own && !al.build_timer) al.build_timer = timer_add(al_on_build_start, (void *)0, AL_BUILD_START_MS);
+    if (al.view && al.g.tiles && !al.own && !al.scanned && !al.build_timer) al.build_timer = timer_add(al_on_build_start, (void *)0, AL_BUILD_START_MS);
 }
 
 static int al_on_fg(void *ctx, void *e) {
@@ -447,7 +468,7 @@ static int al_on_up(void *ctx, void *e) {
     dx = al_abs(I(e, PE_X) - al.down_x);
     dy = al_abs(I(e, PE_Y) - al.down_y);
     if (dx < AL_TAP_PX && dy < AL_TAP_PX && al_item_of(e) == a)
-        cc_open_album((void *)0, (int)(al.order ? al.order[a] : (unsigned)a)); /* the stock row */
+        cc_open_album((void *)0, 0, (int)(al.order ? al.order[a] : (unsigned)a)); /* the stock row */
     return RET_OK;
 }
 
@@ -551,7 +572,7 @@ static int al_on_toggle(void *ctx, void *e) {
 static int al_open(int list) {
     if (al.win) return -1;
     memset(&al, 0, sizeof al);
-    al.win = window_open("m1pod_albums");
+    al.win = window_open("m1plus_albums");
     if (!al.win) return -1;
     al.list = list;
     widget_on(al.win, EVT_DESTROY, al_on_destroy, (void *)0);
@@ -601,7 +622,7 @@ static int al_open(int list) {
     return 0;
 }
 
-/* The M1+ Pod menu's Albums row: the mode used last (the grid on a first use). A window that will not open leaves
+/* The M1+ Music menu's Albums row: the mode used last (the grid on a first use). A window that will not open leaves
  * the stock Albums list, through the Home dispatcher. 0 once something is requested. */
 int albums_open(void) {
     int r = al_open(!al_use_grid());

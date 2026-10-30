@@ -1,4 +1,4 @@
-/* M1+ Pod rows: the stock library rows (Songs, Folders, Artists/Genres/Composers, Albums, album
+/* M1+ Music rows: the stock library rows (Songs, Folders, Artists/Genres/Composers, Albums, album
  * tracks, Playlists, Search) fitted to iPod-style rows.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).

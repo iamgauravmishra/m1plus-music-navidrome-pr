@@ -1,5 +1,5 @@
-/* M1+ Pod album view: the stock albuminfo_page (an album's tracks, opened by the stock Albums list,
- * Cover Flow, Artists and the All albums card) restyled to the M1+ Pod album page (an Apple Music style
+/* M1+ Music album view: the stock albuminfo_page (an album's tracks, opened by the stock Albums list,
+ * Cover Flow, Artists and the All albums card) restyled to the M1+ Music album page (an Apple Music style
  * detail page): a centred 160 px cover with 10 px rounded corners, the title (22 px white), the artist
  * (18 px grey) and a "year . N tracks" line (15 px) centred under it, and a row of a round Shuffle button
  * (a 38 px disc in a 44 px touch rectangle) and the stock Play all as a white 180x40 pill (in a 44 px high
@@ -37,6 +37,7 @@
 extern unsigned pod_rand(unsigned n);       /* patch/shuffle.c */
 extern void pod_toast(const char *text);
 extern void pod_set_mode(int mode);
+extern void pod_set_in_order(void);
 
 /* Open Now Playing on the queue exactly as a track row's tap does (the stock row handler @0x52569c, its tail
  * @0x5258c8..0x525970): when songerinfoflag is set and a playing_page is in the stack, the windows above it are popped
@@ -44,7 +45,7 @@ extern void pod_set_mode(int mode);
  * navigator_to_with_context("playing_page", {queue, index, class, 2}), whose init starts the player. Stock's loop
  * trusts every navigator_back to change the top window at once (true for these pages: none has a close animation);
  * a bound of AH_POP_MAX turns that trust into a limit, after which the page is opened over what is left. */
-static void ah_open_player(void *queue, int idx, int cls) {
+void pod_open_player(void *queue, int idx, int cls) {   /* (also the Daily Mix card's play disc, patch/dailymix.c) */
     struct { void *dq; int idx, cls, mode; } context;
     if (*(unsigned char *)SONGER_FLAG && navigator_window_is_exist("playing_page")) {
         void *wm = window_manager();
@@ -65,7 +66,7 @@ static void ah_open_player(void *queue, int idx, int cls) {
     navigator_to_with_context("playing_page", &context); /* playing_page_init -> start_player copies the queue */
 }
 
-/* Play all (shuffle == 0: the page's first track) and Shuffle (a random track, the stock Shuffle mode): the stock Play
+/* Play all (shuffle == 0: the page's first track, an in-order mode) and Shuffle (a random track, the stock Shuffle mode): the stock Play
  * all sequence (@0x525d48: the track on the card, loadSongList, the page's class g_class_type, which albuminfo_page_init
  * stored from classinfo[0]: 0xff10, or 0xff11 for an artist's album and the All albums card), then Now Playing the way
  * a track tap opens it. Nothing is written until the queue is ready and the track is on the card; a missing track is
@@ -90,7 +91,8 @@ static void ah_play(int shuffle) {
         if (at < n && !strcmp(P(deque_at(queue, at), REC_PATH), P(pick, REC_PATH))) idx = at;
         else if ((unsigned)found < n) idx = (unsigned)found;
         if (shuffle) pod_set_mode(MODE_SHUFFLE);
-        ah_open_player(queue, (int)idx, cls);
+        else pod_set_in_order();   /* Play all plays the album in order, even after a Shuffle */
+        pod_open_player(queue, (int)idx, cls);
     }
     deque_destroy(queue);
 }
@@ -365,7 +367,7 @@ __attribute__((noinline)) static void ah_restyle(void *item) {
 }
 
 /* The hook (tools/pod.py ALBUMINFO_HEADER): stock first, then ours. */
-void m1pod_albuminfo_header(void *item) {
+void m1plus_albuminfo_header(void *item) {
     stock_albuminfo_header_trampoline(item);
     ah_restyle(item);
 }

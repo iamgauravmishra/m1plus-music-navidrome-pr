@@ -1,4 +1,4 @@
-"""The glass navbars of OUR pages (docs/modules/navbar.md): the M1+ Pod menu and sub-pages, Albums, Artists, Playlists, Cover Flow's bar: an opaque bar, a glass Back
+"""The glass navbars of OUR pages (docs/modules/navbar.md): the M1+ Music menu and sub-pages, Albums, Artists, Playlists, Cover Flow's bar: an opaque bar, a glass Back
 disc at x 8, the title from x 58, the right-hand actions as one glass capsule on main's slots (46 px buttons at x 168 / 214, Now Playing 60 px at x 260; the glass ends
 at x 311, 21 px right of Now Playing's glyph column 290; a lone Now Playing is a disc), a soft fade under the bar. Stock pages are NOT restyled: every stock asset
 (ui, styles, images, strings) and the code-built navbars of the stock pages (their builders' bytes in demo) are byte-identical to main's build V2.1oC, pinned by the
@@ -6,18 +6,18 @@ digests in test/navbars-stock.sha256. What this work adds or changes is named in
 page's release tag)."""
 import glob, hashlib, os, sys
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
-import awtk_ui, mod_icons, pod_ui
+import awtk_strings, awtk_ui, mod_icons, pod_i18n, pod_ui
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DIGESTS = os.path.join(os.path.dirname(HERE), 'navbars-stock.sha256')
-NEW_IMAGES = ('pod_nav_', 'nb_fade', 'ah_nav_', 'pl_glass', 'pl_ic_')      # the images this work adds or changes (all ours; pl_*: the Playlists page's menu, docs/modules/playlists.md)
+NEW_IMAGES = ('pod_nav_', 'nb_fade', 'ah_', 'pl_glass', 'pl_ic_', 'sg_', 'np_', 'dm_', 'dp_', 'pod_ic_')      # the images this work adds or changes (all ours; ah_*: the album page's buttons, tint and navbar; np_*: Now Playing's glyphs and discs; pl_*: the Playlists page's menu, docs/modules/playlists.md; sg_*: the Songs page's); dm_ / dp_: the Daily Mix card and page; pod_ic_*: the menu and settings row glyphs (tools/mod_icons.py POD_ROWS)
 OUR_FILES = ('about_page.bin', 'albuminfo_page.bin')  # the About page (it carries the release tag) and the album page (its ui and theme: docs/modules/album-page.md)
 # the code-built stock navbars: (first, last + 1) of the builders' bytes in demo (the album pages' two, Folders, Artists/Genres/Composers, stock Playlists)
 BUILDERS = ((0x524e4c, 0x5251e0), (0x526a3c, 0x527010), (0x5312dc, 0x5316c0), (0x535188, 0x5357c0), (0x53d5f8, 0x53d900))
 
 
 def stock_digests(assets):
-    """{area: sha256 of the sorted (relative path, file sha256) list} over assets/ (release/assets), without our pages and images (ui/m1pod_*, NEW_IMAGES) and
+    """{area: sha256 of the sorted (relative path, file sha256) list} over assets/ (release/assets), without our pages and images (ui/m1plus_*, NEW_IMAGES) and
     OUR_FILES, and 'demo-builders': the bytes of the stock pages' navbar builders in demo."""
     out = {}
     for area in ('default/raw/ui', 'default/raw/styles', 'default/raw/images', 'default/raw/strings', 'default/raw/fonts', 'theme1'):
@@ -25,8 +25,11 @@ def stock_digests(assets):
         for f in sorted(glob.glob(os.path.join(assets, area, '**', '*'), recursive=True)):
             if not os.path.isfile(f): continue
             rel = os.path.relpath(f, assets); name = os.path.basename(f)
-            if (area.endswith('/ui') and name.startswith('m1pod_')) or name in OUR_FILES or (area.endswith('/images') and name.startswith(NEW_IMAGES)): continue
-            h.update(rel.encode() + b'\0' + hashlib.sha256(open(f, 'rb').read()).digest())
+            if (area.endswith('/ui') and name.startswith('m1plus_')) or name in OUR_FILES or (area.endswith('/images') and name.startswith(NEW_IMAGES)): continue
+            data = open(f, 'rb').read()
+            if area.endswith('/strings'):   # the string tables without OUR keys (tools/pod_i18n.py TEXT, which every feature adds to): the stock keys and their texts only
+                data = awtk_strings.serialize([kv for kv in awtk_strings.parse(data) if kv[0] not in pod_i18n.TEXT])
+            h.update(rel.encode() + b'\0' + hashlib.sha256(data).digest())
         out[area] = h.hexdigest()
     return out
 
@@ -52,13 +55,14 @@ def run(ctx):
     # ------------------------------------------------------------------ stock pages are main's
     want = dict(l.split()[::-1] for l in open(DIGESTS) if l.strip() and not l.startswith('#'))
     got = stock_digests(assets)
+    print('DBG', [os.path.relpath(f, assets) for f in glob.glob(os.path.join(assets, 'default/raw/images', '**', '*'), recursive=True) if 'pod_ic_dev' in f or 'pod_ic_home' in f or 'pod_ic_start' in f or 'pod_ic_play' in f])
     got['demo-builders'] = builder_digest(open(DEMO, 'rb').read())
-    expect(got == want, f'every stock ui / style / image / string / font file (the whole theme1 tree too) and the stock pages\' navbar builders in demo are byte-identical to main\'s build: {[k for k in got if got[k] != want.get(k)]} differ')
+    expect(got == want, f'every stock ui / style / image / string / font file (the whole theme1 tree too) and the stock pages\' navbar builders in demo are byte-identical to main\'s build: {[k for k in got if got[k] != want.get(k)]} differ ({ {k: got[k] for k in got if got[k] != want.get(k)} }: the new digests, for test/navbars-stock.sha256 when the change is intended)')
 
     # ------------------------------------------------------------------ our pages
     stock_ui = os.path.join(raw, 'ui')
-    pods = {os.path.basename(f)[:-4]: awtk_ui.parse(open(f, 'rb').read()) for f in glob.glob(os.path.join(stock_ui, 'm1pod_*.bin'))}
-    expect(len(pods) == 11, f'{len(pods)} M1+ Pod pages')
+    pods = {os.path.basename(f)[:-4]: awtk_ui.parse(open(f, 'rb').read()) for f in glob.glob(os.path.join(stock_ui, 'm1plus_*.bin'))}
+    expect(len(pods) == len(pod_pages.PAGES), f'{len(pods)} M1+ Music pages (with the Songs and Daily Mix pages)')
     D = mod_icons.GLASS_H
     slot_w, play_x, play_w = O['NAV_VIEW_W'], pod_ui.NAV_PLAY_X, pod_ui.NAV_PLAY_W
     expect((O['NAV_CF_X'], O['NAV_VIEW_X'], slot_w, play_x, play_w) == (168, 214, 46, 260, 60) == (pod_ui.NAV_CF_X, pod_ui.NAV_VIEW_X, pod_ui.NAV_VIEW_W, 260, 60),
@@ -68,28 +72,38 @@ def run(ctx):
         if nav is None: continue
         k = {c.name: c for c in nav.children}
         back, play, lbl = k['btn_return'], k['btn_backtoplayer'], k['label_title']
-        group = sorted([k[n] for n in ('btn_coverflow', 'btn_more', 'btn_albumview', 'btn_artisttype') if n in k], key=lambda c: c.x) + [play]
+        group = sorted([k[n] for n in ('btn_coverflow', 'btn_more', 'btn_albumview', 'btn_artisttype', 'btn_customize', 'btn_search', 'btn_sort', 'btn_select') if n in k], key=lambda c: c.x) + [play]
         capsule = len(group) > 1
         ok = (back.x, back.y, back.w, back.h) == (7, 0, 44, 50) and back.get('style:normal:icon') == 'ah_nav_back' and back.get('style:pressed:icon') == 'ah_nav_back_down'
         if capsule:
             pos = [mod_icons.NAV_VIEW_POS[c.get('style:normal:icon')] for c in group[:-1]]
             ok = ok and all(a.x + a.w == b.x for a, b in zip(group, group[1:])) and (play.x, play.w) == (260, 60) and play.get('style:normal:icon') == 'ah_nav_play' \
-                and all(c.w == 46 and (c.y, c.h) == (0, 50) for c in group[:-1]) and pos == (['left', 'middle'] if len(group) == 3 else ['left']) \
-                and group[0].x + (2 if pos[0] == 'left' else 0) == {3: 170, 2: 216}[len(group)]
+                and all(c.w == 46 and (c.y, c.h) == (0, 50) for c in group[:-1]) and pos == {4: ['left', 'middle', 'middle'], 3: ['left', 'middle'], 2: ['left']}[len(group)] \
+                and group[0].x + (2 if pos[0] == 'left' else 0) == {4: 124, 3: 170, 2: 216}[len(group)]
         else:
             ok = ok and (play.x, play.w, play.y, play.h) == (260, 60, 0, 50) and play.get('style:normal:icon') == 'ah_nav_np' and play.x + 9 + D == 311
         first = min(c.x for c in nav.children if c.name not in ('label_title', 'btn_return') and c.get('visible') != 'false')
         ok = ok and lbl.x == 58 and lbl.x + lbl.w <= first and back.x + (back.w - D) // 2 == 8 and (50 - D) // 2 == 4
         expect(ok, f'{name}: Back is the glass disc at x 8, y 4 (a 44 x 50 button at x 7), {"the capsule " + str([(c.name, c.x) for c in group]) + " abuts on main\'s slots and its glass ends at x 311, Now Playing its right cap" if capsule else "Now Playing the disc at x 269 .. 311"}, the title from x 58 ends before the first button')
-        if 'btn_allalbums' in k:
-            a = k['btn_allalbums']
-            expect((a.x, a.w) == (O['NAV_VIEW_X'], slot_w) and a.x + a.w <= play.x and mod_icons.NAV_VIEW_POS[a.get('style:normal:icon')] == 'only',
-                   f'{name}: the hidden All albums button is a disc on the 214 slot, ending before Now Playing\'s')
+        expect('btn_allalbums' not in k, f'{name}: no All albums button')
+        if 'btn_songs' in k:
+            s = k['btn_songs']
+            expect((s.x, s.w, s.y, s.h) == (O['NAV_VIEW_X'], slot_w, 0, 50) and s.x + s.w == play.x and s.get('visible') == 'false' and s.get('style:normal:icon') == 'pod_nav_songs'
+                   and mod_icons.NAV_VIEW_POS['pod_nav_songs'] == 'left' and play.get('style:normal:icon') == 'ah_nav_np',
+                   f'{name}: the hidden Songs button is the left cap on the 214 slot, abutting Now Playing (the disc in the asset; the code makes it the right cap)')
         fades = [c for c in root.children if c.name == pod_ui.NB_FADE_NAME]
         listed = any(c.y == 50 and c.h >= 300 for c in root.children if c.type == 'list_view')
         expect(len(fades) == (1 if listed else 0) and all((f.x, f.y, f.w, f.h) == (0, 50, 320, mod_icons.NB_FADE[2]) and f.get('sensitive') == 'false' and f.get('clickable') == 'false' and f.get('image') == 'nb_fade' for f in fades),
                f'{name}: {"one insensitive fade at (0, 50)" if listed else "no fade (no list under the bar)"}')
 
+    # only the Extras page has the Customize button: the left cap of [Customize | Now Playing] on the 214 slot, the title ending at 214
+    with_btn = sorted(name for name, root in pods.items() if any(c.name == 'btn_customize' for c in root.walk()))
+    nav = next(c for c in pods['m1plus_extras'].children if c.name == 'navigationbar_view')
+    cb = next(c for c in nav.children if c.name == 'btn_customize')
+    lb = next(c for c in nav.children if c.name == 'label_title')
+    expect(with_btn == ['m1plus_extras'] and (cb.x, cb.y, cb.w, cb.h) == (214, 0, 46, 50) and cb.get('style') == 'img_btn_style' and cb.get('enable') == 'true'
+           and cb.get('style:normal:icon') == cb.get('style:over:icon') == 'pod_nav_customize' and cb.get('style:pressed:icon') == 'pod_nav_customize_down'
+           and lb.x + lb.w == 214, 'only the Extras page has btn_customize: a 46 px button on the 214 slot with the pod_nav_customize pieces, the title ends at 214')
     # ------------------------------------------------------------------ images
     for n, pos in mod_icons.NAV_VIEW_POS.items():
         for suffix, pressed in (('', False), ('_down', True)):
@@ -113,7 +127,7 @@ def run(ctx):
         hidden_fade = fade.get('visible') == 'false' and fade.get('sensitive') == 'false'
         if any(c.name.endswith('_scrollview') and c.name[:-len('scrollview')] in ('albums_', 'playlists_') for c in root.walk()):
             ink = min(O['GRID_ROW_GAP'], O['LIST_ART_Y'])               # the grid's first cover, the list mode's first cover
-        elif name == 'm1pod_artists':
+        elif name == 'm1plus_artists':
             ink = (pod_ui.ROW_H - 21) // 2                              # its runtime rows: 21 px text centred in a ROW_H row
         else:
             sv = next((c for c in root.walk() if c.type == 'scroll_view'), None)
@@ -129,7 +143,7 @@ def run(ctx):
     # ------------------------------------------------------------------ hit tests on the built pages (demo's own widget_find_target)
     m = A.AlbumMachine()
     mark = m.next   # every hit test lays the whole page out again in scratch memory: each starts from here (nothing of a layout outlives its test)
-    for pg in ('m1pod_settings.bin', 'm1pod_artists.bin', 'm1pod_albums.bin', 'm1pod_playlists.bin'):
+    for pg in ('m1plus_customize.bin', 'm1plus_artists.bin', 'm1plus_albums.bin', 'm1plus_playlists.bin', 'm1plus_songs.bin'):
         a = asset_tree(os.path.join(stock_ui, pg))
         lst = next(c for c in a.children if c.y == 50 and c.h >= 300)
         sv = next((c for c in lst.children if c.name.endswith('scrollview')), lst)
@@ -141,5 +155,5 @@ def run(ctx):
         bad = [(x, y, tgt(x, y)) for x, y in ((8, 6), (29, 25), (49, 45)) if tgt(x, y) != 'btn_return']
         bad += [(x, y, tgt(x, y)) for x, y in ((play.x + 10, 6), (play.x + 30, 25), (311, 45)) if tgt(x, y) != 'btn_backtoplayer']
         expect(not bad, f'{pg}: the disc corners and centres of Back and Now Playing reach their buttons ({bad})')
-        expect(all(tgt(x, y) == 'row0' for x in (20, 160, 300) for y in (50, 55, 62, 69)) and all(tgt(x, y) != pod_ui.NB_FADE_NAME for x in (0, 160, 319) for y in range(50, 70)),
+        expect(all(tgt(x, y) == 'row0' for x in (20, 160, 280 if pg == 'm1plus_songs.bin' else 300) for y in (50, 55, 62, 69)) and all(tgt(x, y) != pod_ui.NB_FADE_NAME for x in (0, 160, 319) for y in range(50, 70)),
                f'{pg}: the first row takes touches through the whole fade, which never gets one')

@@ -10,7 +10,7 @@ def run(ctx):
     # 7. The menu's Cover Flow row opens the Cover Flow page.
     m = cover_machine()
     m.call(PSYMS['on_row'], a0=PSYMS['pod_rows_0'] + 12 * cover_row, count=2000000)
-    expect(('window_open', 'm1pod_cover') in m.calls, 'the Cover Flow row opens m1pod_cover')
+    expect(('window_open', 'm1plus_cover') in m.calls, 'the Cover Flow row opens m1plus_cover')
 
     # 8. Opening with a complete cache: no build, no thread, the depth shelf (its position the payload's own:
     #    no stock slide_menu, no widget per album), the touch layer, the captions set and the first album centred.
@@ -23,7 +23,7 @@ def run(ctx):
     expect(shelf_value(m) == 0 and shelf_off(m) == 0, 'the shelf starts on the first album, at rest')
     expect(('widget_set_text_utf8', m.widgets['label_album'], 'Album 0') in m.calls, 'album caption')
     expect(('widget_set_text_utf8', m.widgets['label_artist'], 'Artist 0') in m.calls, 'artist caption')
-    expect(('mkdir', '/mnt/mmc/.coverflow') not in m.calls, 'no cache directory needed when complete')
+    expect(('mkdir', '/mnt/mmc/.m1plus/covers') not in m.calls, 'no cache directory needed when complete')
 
     # 9. Tap the centre cover: the stock Albums sequence and the stock album page. The stock album
     #    list goes back into *pdeq_showlist (loadAlbumList(0xf003, 0), what album_page_init runs), the
@@ -127,7 +127,7 @@ def run(ctx):
     # 14. First run: no cache files -> jobs, a thread, the progress label and Cancel.
     m = cover_machine(albums=3, cached=False)
     m.call(cover_open, count=5000000)
-    expect(('mkdir', '/mnt/mmc/.coverflow') in m.calls, 'the cache directory is created')
+    expect(m.calls.index(('mkdir', '/mnt/mmc/.m1plus')) < m.calls.index(('mkdir', '/mnt/mmc/.m1plus/covers')), 'the card folder, then the cache directory in it, are created')
     expect('pthread_create' in m.names(), 'the build thread is started')
     expect(('widget_set_visible', m.widgets['btn_cancel'], 1) in m.calls, 'Cancel is shown')
     expect(any(c[0] == 'timer_add' for c in m.calls), 'the progress timer runs')
@@ -279,7 +279,7 @@ def run(ctx):
     #     the middle of the covers go? Hidden widgets must be insensitive (a hidden, sensitive,
     #     full-height tracks view once swallowed every touch: navbar fine, covers dead), so it
     #     reaches the touch layer.
-    asset = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1pod_cover.bin')
+    asset = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_cover.bin')
     m = cover_machine(albums=3)
     m.call(cover_open, count=5000000)
     fy = CF_FRAME_Y   # the frame's top in the window
@@ -292,7 +292,7 @@ def run(ctx):
         got = stock_target(m, cover_page_tree(m, asset), 160, y)
         expect(got[-1] == 'touch_layer', f'a touch on a caption reaches the covers (insensitive captions) ({got})')
     got = stock_target(m, cover_page_tree(m, asset), 160, CF_FRAME_Y + O['CF_VIEW_H'] + 10)
-    expect(got == ['m1pod_cover_page'], f'below the frame the artist line takes nothing ({got})')
+    expect(got == ['m1plus_cover_page'], f'below the frame the artist line takes nothing ({got})')
     # and while the cache builds, only Cancel and the navbar take touches
     m = cover_machine(albums=2, cached=False)
     m.call(cover_open, count=5000000)
@@ -599,8 +599,15 @@ def shelf_tests(ctx):
     m = cover_machine(albums=n); cols = coloured(m, n)
     m.call(PSYMS['coverflow_open'], count=20000000)
     first = loaded(m, n)
-    expect(sorted(first) == sorted({0, 1, 2, 3, 4}) and first[0] == 0,
-           f'the open decodes the centre first, the ring around it and the next one ahead ({first})')
+    attempts = [c for c in m.calls if c[0] == 'widget_load_image']
+    expect(first == [0] and len(attempts) == 2 and any(c[0] == 'timer_add' and c[1] == PSYMS['on_load'] for c in m.calls),
+           f'the open call decodes the placeholder and the centre cover only ({len(attempts)} image loads, was 6) and arms the loader ({first})')
+    rest = []
+    for _ in range(10):
+        m.call(PSYMS['on_load'], count=20000000); rest += loaded(m, n)
+        expect(len(loaded(m, n)) <= 1, 'one cover per loader tick')
+        if not any(c[0] == 'timer_add' for c in m.calls): break
+    expect(rest == [1, 2, 3, 4], f'the loader then brings the ring around it and the next one ahead, one a tick ({rest})')
     paint(m)
     expect(not any(c[0] in ('widget_load_image', 'fopen', 'access') for c in m.calls) and centre_px(m) == cols[0],
            'paint at rest loads nothing and shows the centre album')
@@ -635,7 +642,7 @@ def shelf_tests(ctx):
             if not any(c[0] == 'timer_add' for c in m.calls): break
         return got
     m = cover_machine(albums=n); coloured(m, n); put_value(m, 0)
-    m.call(PSYMS['coverflow_open'], count=20000000); paint(m)
+    m.call(PSYMS['coverflow_open'], count=20000000); step(m, 0); paint(m)
     expect(step(m, 1) == [5] and step(m, 2) == [6], 'moving on, the loader fetches only the next cover ahead (5, then 6)')
     back = step(m, 1)
     expect(back == [], f'moving back needs no visible cover again and nothing is wanted past the first album ({back})')
@@ -643,7 +650,7 @@ def shelf_tests(ctx):
 
 # Landscape (docs/ui.md "Cover Flow landscape"): the same page turned a quarter, drawn into the body under the navbar.
 LW, LH, LCX, LY = O['CFL_W'], O['CFL_H'], O['CFL_CX'], O['CFL_Y']
-LFILE, LTMP = '/mnt/data/m1pod-landscape', '/mnt/data/m1pod-landscape.tmp'
+LFILE, LTMP = '/mnt/data/m1plus-landscape', '/mnt/data/m1plus-landscape.tmp'
 LAND_RECT = (0, LY, LH, LW)                      # the landscape frame in the window: the body under the navbar
 PORTRAIT_RECT = (0, CF_FRAME_Y, O['CF_VIEW_W'], O['CF_VIEW_H'])
 NAV_NAMES = ('navigationbar_view', 'btn_return', 'btn_backtoplayer', 'label_title')
@@ -899,8 +906,8 @@ def landscape_tests(ctx, asset):
     expect(tree.find('btn_landscape') is None and not [w for w in tree.walk() if 'rotate' in str(w.props)],
            'the navbar has no landscape button (the Settings switch replaced it)')
     lbl = tree.find('label_title')
-    settings_lbl = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets/default/raw/ui/m1pod_settings.bin'), 'rb').read()).find('label_title')
-    expect((lbl.x, lbl.w) == (settings_lbl.x, settings_lbl.w) and lbl.x + lbl.w > O['NAV_VIEW_X'] and [c.name for c in tree.find('navigationbar_view').children] == ['label_title', 'btn_return', 'btn_backtoplayer', 'btn_allalbums'],
+    settings_lbl = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets/default/raw/ui/m1plus_customize.bin'), 'rb').read()).find('label_title')
+    expect((lbl.x, lbl.w) == (settings_lbl.x, settings_lbl.w) and lbl.x + lbl.w > O['NAV_VIEW_X'] and [c.name for c in tree.find('navigationbar_view').children] == ['label_title', 'btn_return', 'btn_backtoplayer', 'btn_songs'],
            'the title has the whole navbar between Back and Now Playing, as on the other pages without a toggle')
     imgs = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx')
     expect(not any(os.path.exists(os.path.join(imgs, f'pod_nav_rotate{s}.png')) for s in ('', '_down')), 'the rotate glyph images are no longer in the tree')
@@ -938,7 +945,7 @@ def rebuild_tests(ctx):
            'one job per album, in the shelf order')
     expect(('widget_set_visible', m.widgets['btn_cancel'], 1) in m.calls and ('widget_set_tr_text', m.widgets['label_status'], 'Preparing covers...') in m.calls
            and 'view' not in [c[0] for c in m.calls], 'the Preparing screen with Cancel is shown, not the covers')
-    expect(('mkdir', '/mnt/mmc/.coverflow') in m.calls, 'the cache directory is made')
+    expect(('mkdir', '/mnt/mmc/.m1plus/covers') in m.calls, 'the cache directory is made')
     on_poll = fired(m, 'on_poll', 2000000)
     expect(('widget_set_text_utf8', m.widgets['label_status'], 'Preparing covers... 0/3') in on_poll, 'the progress counts every album')
     # the worker: every file is replaced (temp, rename), none removed first

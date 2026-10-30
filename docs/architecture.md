@@ -2,7 +2,7 @@
 
 How the release is built and what its code does. The looks (assets) are in `docs/ui.md`,
 firmware facts and the space step in `docs/firmware.md`, make/test/flash in `docs/workflow.md`, the
-tag history and lessons in `docs/history.md`.
+milestones, device results and lessons in `docs/history.md`.
 
 This file is an index. The text lives in one file per module under `docs/modules/`; read the
 one you touch (and `payload.md` + `addresses.md` before searching the binary). Source comments and
@@ -21,10 +21,10 @@ runs from a user tap. Every patched word and stock address is pinned and the bui
 | Doc | Old § | What |
 |---|---|---|
 | [`modules/pipeline.md`](modules/pipeline.md) | 1 | The build pipeline: steps, order, the package, what is pinned |
-| [`modules/payload.md`](modules/payload.md) | 2 | The code payload: segment, `$gp` and trampolines, calling stock code and libc, the hooks, the entry (`patch/m1pod.c`) |
+| [`modules/payload.md`](modules/payload.md) | 2 | The code payload: segment, `$gp` and trampolines, calling stock code and libc, the hooks, the entry (`patch/m1plus.c`) |
 | [`modules/addresses.md`](modules/addresses.md) | 3 | Known addresses of stock V2.1 `demo`, the Home icons and their conditions, the library record layout |
 | [`modules/home-guard.md`](modules/home-guard.md) | 9 | Home and the boot guard (`patch/home.c`): boot sequence, grid icon, why it is safe, files and the kill switch, the window stack, recovery |
-| [`modules/settings.md`](modules/settings.md) | 9 | The launcher: Settings pages (Home Screen, Cover Flow), the album order, opening on the playing album |
+| [`modules/settings.md`](modules/settings.md) | 9 | The launcher: the Customize page and its sub-pages (Home Screen, Cover Flow, Developer), the album order, opening on the playing album |
 | [`modules/safety.md`](modules/safety.md) | 10 | Safety rules for the payload |
 | [`modules/validation.md`](modules/validation.md) | 11 | Offline validation (Unicorn harness, what the tests prove) |
 | [`modules/q2pod.md`](modules/q2pod.md) | 12 | How this maps to q2-pod |
@@ -43,7 +43,9 @@ runs from a user tap. Every patched word and stock address is pinned and the bui
 | [`modules/minibar.md`](modules/minibar.md) | (new) | The mini player bar on the menu's Home instance (`patch/minibar.c`, no hook): layout, timer, stock player calls |
 | [`modules/recent.md`](modules/recent.md) | (new) | The Recently Played shelf on the menu's Home instance (`patch/recent.c`, no hook): the list file, recording, covers, taps, the rows below it |
 | [`modules/playlists.md`](modules/playlists.md) | (new) | The Playlists grid of album-cover mosaics and its "..." menu (`patch/playlists.c`, `patch/grid.c`, no hook): the stock database calls, the loader, the stock create / import / export / songs code it reuses |
+| [`modules/songs.md`](modules/songs.md) | (new) | The Songs page: one list with sections, the A-Z rail, the sort card, Search and a select mode with Add / Delete (`patch/songs.c`, `patch/grid.c`, no hook): the data (the 8 byte index, the Initial byte, `sort_flag`), the stock multi-select calls it reuses (`batch_delete_file`, the playlist picker), the evidence |
+| [`modules/dailymix.md`](modules/dailymix.md) | (new) | The Daily Mix hero card above the shelf (`patch/dailymix.c`): card layout, art generator, the stock playlist rewrite, the once-a-day job in timer slices, files, tests |
 | [`modules/i18n.md`](modules/i18n.md) | 8b | Localisation (`patch/i18n.h`, `tools/pod_i18n.py`) |
 | [`modules/screenshot.md`](modules/screenshot.md) | 8c | Screenshot (`patch/shot.c`, `tools/pull_shots.py`) |
 | [`modules/gestures.md`](modules/gestures.md) | 8d | List gestures (`patch/scroll.c`) |
-| [`modules/menu.md`](modules/menu.md) | (ui 8) | The M1+ Pod menu and its pages (`tools/pod_ui.py`) |
+| [`modules/menu.md`](modules/menu.md) | (ui 8) | The M1+ Music menu and its pages (`tools/pod_ui.py`) |

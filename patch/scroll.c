@@ -1,4 +1,4 @@
-/* M1+ Pod list gestures: a swipe never plays a song, and a touch on a coasting list stops it.
+/* M1+ Music list gestures: a swipe never plays a song, and a touch on a coasting list stops it.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
@@ -13,7 +13,7 @@
  * (0x97a330, zero in stock), which widget_on_event_before_children (0x666c34) calls for every pointer event of a
  * scroll_view before the event goes down to its children. It runs only for touches inside a scroll_view; never at boot,
  * in paint or in the main loop. A MOVE costs two compares. No allocation, no syscall, no log: the kill switch
- * (/mnt/mmc/m1pod-off, or the flash one) is read once, at the first DOWN or UP, and the hook is a no-op for a session
+ * (/mnt/mmc/m1plus-off, or the flash one) is read once, at the first DOWN or UP, and the hook is a no-op for a session
  * that starts with it.
  *
  *  DOWN on a scroll_view whose scroll animator is running: the animator is destroyed and the stock end-of-animation
@@ -71,7 +71,7 @@ __attribute__((noinline)) static int sc_up(void *w, void *e) {
 
 /* g_scroll_view_vtable.on_event_before_children (tools/pod.py patch_scroll): widget_on_event_before_children passes the
  * widget and the event, both non-null. Anything but a pointer DOWN or UP is stock. */
-int m1pod_scroll_event(void *w, void *e) {
+int m1plus_scroll_event(void *w, void *e) {
     unsigned type = *(unsigned *)e & 0xffff;
     if (type == EVT_POINTER_DOWN) return sc_down(w, e);
     if (type == EVT_POINTER_UP) return sc_up(w, e);

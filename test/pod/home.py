@@ -1,11 +1,11 @@
-"""The boot guard and the launcher: M1+ Pod as Home."""
+"""The boot guard and the launcher: M1+ Music as Home."""
 import os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 
 # ======================= Home guard and launcher (patch/home.c) =======================
-RUN, BAD, START = '/mnt/data/m1pod-run', '/mnt/data/m1pod-bad', '/mnt/data/m1pod-start'
-KILL_SD, KILL_DATA, LOG_ON, LOG = '/mnt/mmc/m1pod-off', '/mnt/data/m1pod-off', '/mnt/mmc/m1pod-log', '/mnt/mmc/m1pod.log'
+RUN, BAD, START = '/mnt/data/m1plus-run', '/mnt/data/m1plus-bad', '/mnt/data/m1plus-start'
+KILL_SD, KILL_DATA, LOG_ON, LOG = '/mnt/mmc/m1plus-off', '/mnt/data/m1plus-off', '/mnt/mmc/m1plus-log', '/mnt/mmc/m1plus.log'
 CLEAR_MS = 5000
 # patch/home.h (V2.1jA, docs/ui.md): the menu opens as soon as Home is up
 OPEN_FIRST_MS, OPEN_MS, RETRY_MS, MAX_TRIES = 10, 10, 50, 100
@@ -15,7 +15,7 @@ HOME_WIN = 0x23000000
 
 def boot(m, win=HOME_WIN, ret=0):
     m.init_ret = ret
-    return m.call(PSYMS['m1pod_home_init'], a0=win, a1=0x55, count=3000000)
+    return m.call(PSYMS['m1plus_home_init'], a0=win, a1=0x55, count=3000000)
 
 
 def writes_atomically(m, path, tmp, data):
@@ -26,9 +26,9 @@ def writes_atomically(m, path, tmp, data):
     return flat == want and ('write', tmp, data) in m.calls and m.fs.get(path) == data
 
 
-SETTINGS, HOMESET = pod_pages.SETTINGS_PAGE, pod_pages.HOMESET_PAGE
+SETTINGS, HOMESET = pod_pages.CUSTOMIZE_PAGE, pod_pages.HOMESET_PAGE
 NAVBAR, LISTVIEW, SCROLLVIEW, SCROLLBAR = 'navigationbar_view', 'pod_listview', 'pod_scrollview', 'scroll_bar_m'
-ICON_STYLE = 'home_m1pod_style'
+ICON_STYLE = 'home_m1plus_style'
 ICON_NAME = str(pod_pages.HOME_ENTRY)
 
 
@@ -79,8 +79,8 @@ def home_tests(expect, page):
     d = open(DEMO, 'rb').read()
     off = pod.fileoff(bytearray(d), pod.HOME_INIT)
     w0, w1, w2, w3 = struct.unpack_from('<IIII', d, off)
-    expect(w0 == pod.j(PSYMS['m1pod_home_init']) and w1 == 0 and w2 == pod.HOME_INIT_PROLOGUE[2] and w3 == 0x108000f0,
-           'home_page_init starts with j m1pod_home_init; nop, and its 3rd and 4th stock words are intact')
+    expect(w0 == pod.j(PSYMS['m1plus_home_init']) and w1 == 0 and w2 == pod.HOME_INIT_PROLOGUE[2] and w3 == 0x108000f0,
+           'home_page_init starts with j m1plus_home_init; nop, and its 3rd and 4th stock words are intact')
 
     # -- 1. clean boot: stock first, then marker (synced temp + rename), the clear timer, nothing else
     m = Machine(); r = boot(m, ret=0)
@@ -112,7 +112,7 @@ def home_tests(expect, page):
     expect(RUN not in m.fs and ('unlink', RUN) in m.calls and ('fsync', '/mnt/data') in m.calls,
            'the clear timer removes the marker and syncs the directory')
     m.call(clear_cb); expect('unlink' not in m.names(), 'clearing twice touches nothing')
-    m.call(PSYMS['m1pod_home_init'], a0=HOME_WIN + 0x100, a1=0)
+    m.call(PSYMS['m1plus_home_init'], a0=HOME_WIN + 0x100, a1=0)
     expect(RUN not in m.fs and not [c for c in m.calls if c[0] == 'open'], 'a re-created Home does not arm again')
     expect([c for c in m.calls if c[0] == 'widget_on'] == [('widget_on', HOME_WIN + 0x100, 0x12d, fg_cb, HOME_WIN + 0x100)],
            'but the new Home window gets the foreground handler')
@@ -166,32 +166,36 @@ def home_tests(expect, page):
         m3 = Machine(); m3.fs = dict(m.fs); m3.fail = set(m.fail); boot(m3)
         expect(RUN in m3.fs and not m3.timers, f'{what}: and the next boot is stock again')
 
-    # -- 6. the opt-in log (SD card): off by default, on with /mnt/mmc/m1pod-log
+    # -- 6. the opt-in log (SD card): off by default, on with /mnt/mmc/m1plus-log
     m = Machine(); boot(m)
-    expect(LOG not in m.fs and not any(c[0] == 'open' and c[1] == LOG for c in m.calls), 'no log file unless the card has m1pod-log')
+    expect(LOG not in m.fs and not any(c[0] == 'open' and c[1] == LOG for c in m.calls), 'no log file unless the card has m1plus-log')
     m = Machine(); m.present.add(LOG_ON); boot(m); m.call(clear_cb)
-    expect(LOG in m.fs and b'armed' in m.fs[LOG] and b'marker cleared' in m.fs[LOG], f'with m1pod-log the events are appended ({m.fs.get(LOG)})')
+    expect(LOG in m.fs and b'armed' in m.fs[LOG] and b'marker cleared' in m.fs[LOG], f'with m1plus-log the events are appended ({m.fs.get(LOG)})')
 
     # ===================== the launcher =====================
     on_row, rowsM = PSYMS['on_row'], PSYMS['pod_rows_0']
-    rowsS = PSYMS[f'pod_rows_{pod_pages.SETTINGS_PAGE_INDEX}']
+    rowsS = PSYMS[f'pod_rows_{pod_pages.CUSTOMIZE_PAGE_INDEX}']
     rowsH = PSYMS[f'pod_rows_{pod_pages.HOMESET_PAGE_INDEX}']
     grid_i = next(i for i, r in enumerate(HOMESET.rows) if r.action == pod_pages.ACT_GRID)
     start_i = next(i for i, r in enumerate(HOMESET.rows) if r.action == pod_pages.ACT_STARTUP)
     homeset_i = next(i for i, r in enumerate(SETTINGS.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.HOMESET_PAGE_INDEX)
-    settings_i = next(i for i, r in enumerate(page.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.SETTINGS_PAGE_INDEX)
-    entry = PSYMS['m1pod_home_click']
-    expect([r.label for r in SETTINGS.rows] == ['Main Menu', 'Cover Flow', 'Home Screen', 'Playback', 'System Settings', 'Screenshot'] and
-           [r.arg for r in SETTINGS.rows[3:5]] == [pod_pages.HOME_PLAYSET, pod_pages.HOME_SYSSET] and homeset_i == 2
-           and (SETTINGS.rows[1].action, SETTINGS.rows[1].arg) == (pod_pages.ACT_PAGE, pod_pages.CFSET_PAGE_INDEX)
+    settings_i = next(i for i, r in enumerate(page.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.CUSTOMIZE_PAGE_INDEX)
+    entry = PSYMS['m1plus_home_click']
+    expect([r.label for r in SETTINGS.rows] == ['Main Menu', 'Extras', 'Home Screen', 'Cover Flow', 'Playback', 'System Settings', 'Developer'] and
+           [r.arg for r in SETTINGS.rows[4:6]] == [pod_pages.HOME_PLAYSET, pod_pages.HOME_SYSSET] and homeset_i == 2
+           and (SETTINGS.rows[3].action, SETTINGS.rows[3].arg) == (pod_pages.ACT_PAGE, pod_pages.CFSET_PAGE_INDEX)
+           and (SETTINGS.rows[1].action, SETTINGS.rows[1].arg) == (pod_pages.ACT_PAGE, pod_pages.EXTRASCFG_PAGE_INDEX)
+           and (SETTINGS.rows[6].action, SETTINGS.rows[6].arg) == (pod_pages.ACT_PAGE, pod_pages.DEVELOPER_PAGE_INDEX)
+           and [(r.label, r.action) for r in pod_pages.DEVELOPER_PAGE.rows] == [('Screenshot', pod_pages.ACT_SHOT)]
            and not [r for r in SETTINGS.rows if r.action in (pod_pages.ACT_GRID, pod_pages.ACT_STARTUP)],
-           'the Settings page: Main Menu, Cover Flow and Home Screen (sub-pages), Playback and System Settings (stock pages) and Screenshot last; no launcher rows left on it')
-    expect([(r.label, r.action) for r in HOMESET.rows] == [('Start in M1+ Pod', pod_pages.ACT_STARTUP), ('Recent Albums', pod_pages.ACT_SHELF), ('Shanling Home', pod_pages.ACT_GRID)]
-           and HOMESET.title == 'Home Screen' and (start_i, grid_i) == (0, 2),
-           'the Home Screen page: titled Home Screen, rows Start in M1+ Pod (switch), Recent Albums (the Recently Played shelf, switch) and Shanling Home')
-    expect(page.rows[0].label == 'Now Playing' and page.rows[-1].label == 'Settings' and settings_i == len(page.rows) - 1 and len(page.rows) == 20
+           'the Customize page: Main Menu, Extras, Home Screen and Cover Flow (sub-pages), Playback and System Settings (stock pages) and Developer last (its page holds Screenshot); no launcher rows left on it')
+    expect([(r.label, r.action) for r in HOMESET.rows] == [('Boot to M1+ Music', pod_pages.ACT_STARTUP), ('Recent Albums', pod_pages.ACT_SHELF), ('Daily Mix', pod_pages.ACT_DAILY),
+                                                           ('Regenerate Daily Mix', pod_pages.ACT_REGEN), ('Shanling Home', pod_pages.ACT_GRID)]
+           and HOMESET.title == 'Home Screen' and (start_i, grid_i) == (0, 4),
+           'the Home Screen page: titled Home Screen, rows Boot to M1+ Music (switch), Recent Albums (the Recently Played shelf, switch), Daily Mix (the card, switch), Regenerate Daily Mix (action) and Shanling Home')
+    expect(page.rows[0].label == 'Now Playing' and page.rows[-1].label == 'Extras' and page.rows[settings_i].label == 'Customize' and len(page.rows) == 20
            and not [r for r in page.rows if r.action in (pod_pages.ACT_GRID, pod_pages.ACT_STARTUP)],
-           'the menu keeps the grouped rows above one Settings row, which opens the Settings page (no launcher rows left on it)')
+           'the menu keeps the grouped rows, a Customize row and the Extras row last, which opens the Customize page (no launcher rows left on it)')
 
     def own(m, c): return c[1] not in {h for n, h in m.widgets.items() if n.startswith('pod_row')}   # not one of the menu's rows (patch/menu.c arranges those)
     def hid(m): return [c for c in m.calls if c[0] in ('widget_set_visible', 'widget_set_sensitive') and c[2] == 0 and own(m, c)]
@@ -216,8 +220,8 @@ def home_tests(expect, page):
 
     def tap_icon(m): m.call(entry, a0=m.icon(ICON_NAME))
 
-    # 7. the setting: missing / garbage = M1+ Pod; "0" = Shanling. Both are armed (the icon is new code on the
-    #    boot path); only M1+ Pod hides the grid and schedules the menu.
+    # 7. the setting: missing / garbage = M1+ Music; "0" = Shanling. Both are armed (the icon is new code on the
+    #    boot path); only M1+ Music hides the grid and schedules the menu.
     for content, pod_mode in ((None, True), (b'1\n', True), (b'x', True), (b'', True), (b'0\n', False), (b'0', False)):
         m = menu_machine(page)
         if content is not None: m.fs[START] = content
@@ -228,7 +232,7 @@ def home_tests(expect, page):
                f'start file {content!r}: {"the menu is scheduled and the grid hidden" if pod_mode else "no menu, the grid stays: Shanling"}')
         expect(m.names().count('view_create') == 1, f'start file {content!r}: the icon is added whatever the setting')
 
-    # I. the "M1+ Pod" icon on the stock grid
+    # I. the "M1+ Music" icon on the stock grid
     def icon_of(m, pi=-1):
         sv = m.widgets['home_sview']; last = m.children[sv][pi]; cell = m.children[last][-1]
         img, lab = m.children[cell]
@@ -245,11 +249,11 @@ def home_tests(expect, page):
            f'named "{ICON_NAME}", an id stock never uses (the dispatcher knows 0..17)')
     expect(ICON_NAME.isdigit() and int(ICON_NAME) >= O['HOME_IDS'], 'a decimal id above the stock table')
     expect(m.props.get((img, 'style')) == ICON_STYLE and ('widget_set_prop_bool', img, 'clickable', 1) in m.calls,
-           'clickable, with the style whose images are the click-wheel disc (m1pod / m1pod_down)')
+           'clickable, with the style whose images are the smartphone disc (m1plus / m1plus_down)')
     expect(('widget_on', img, O['EVT_CLICK'], pod.HOME_CLICK, img) in m.calls,
-           'the stock click handler (0x533b80, the dispatcher m1pod_home_click wraps) with the image as ctx, as stock registers it')
-    expect(('widget_set_text_utf8', lab, 'M1+ Pod') in m.calls and m.props.get((lab, 'style')) == 'label_centerwhitehome_white'
-           and ('label_set_line_wrap', lab, 1) in m.calls, 'the label "M1+ Pod" in the stock Home label style, wrapped')
+           'the stock click handler (0x533b80, the dispatcher m1plus_home_click wraps) with the image as ctx, as stock registers it')
+    expect(('widget_set_text_utf8', lab, 'M1+ Music') in m.calls and m.props.get((lab, 'style')) == 'label_centerwhitehome_white'
+           and ('label_set_line_wrap', lab, 1) in m.calls, 'the label "M1+ Music" in the stock Home label style, wrapped')
     order = [c[0] for c in m.calls if c[0] in ('rename', 'view_create', 'image_create', 'label_create', 'widget_set_visible')]
     expect(order == ['rename', 'view_create', 'image_create', 'label_create', 'widget_set_visible'],
            f'created after the marker is durable and before the grid is hidden ({order})')
@@ -417,11 +421,11 @@ def home_tests(expect, page):
     expect(('window_open', SETTINGS.key) in m.calls and switch_shows(m, start_i) is None,
            "the menu's Settings row opens the Settings page (no switch on it any more)")
     expect(not hid(m) and not moved(m), 'the Settings page keeps its navbar and list')
-    expect([c[0] for c in m.calls].count('widget_on') == 2 + len(SETTINGS.rows), 'its Back, its bars icon and its five rows are bound')
+    expect([c[0] for c in m.calls].count('widget_on') == 2 + len(SETTINGS.rows), 'its Back, its bars icon and its seven rows are bound')
     m.window = 0x20003000
     m.call(on_row, a0=rowsS + 12 * homeset_i)
     expect(('window_open', HOMESET.key) in m.calls and switch_shows(m, start_i) is True,
-           "the Home Screen row opens the Home Screen page; Start in M1+ Pod is on")
+           "the Home Screen row opens the Home Screen page; Boot to M1+ Music is on")
     expect(m.types.get(switch_image(m, start_i)) is None and not [c for c in m.calls if c[0] == 'widget_set_text_utf8'],
            'the switches are images (sset_on / sset_off): no text is set anywhere (the V2.1iM ghost text cannot come back)')
     expect(not hid(m) and not moved(m), 'the Home Screen page keeps its navbar and list')
@@ -442,7 +446,7 @@ def home_tests(expect, page):
     # 13b. recovery: while the bad note exists there is no grid icon, so Tidal (id 1) opens the menu (with Back)
     m = Machine(); m.fs[BAD] = b'1\n'; m.call(entry, a0=m.icon('1'))
     expect(('window_open', page.key) in m.calls and 'stock_resume' not in m.names(),
-           'the bad note: a tap on Tidal opens the M1+ Pod menu')
+           'the bad note: a tap on Tidal opens the M1+ Music menu')
     expect(('widget_set_visible', m.widgets.get(NAVBAR, -1), 0) not in m.calls and 'widget_move' not in m.names(),
            'and it is the normal instance (navbar and Back kept, not the Home layout)')
     m = Machine(); m.fs[BAD] = b'1\n'; m.call(entry, a0=m.icon('2'))
@@ -466,12 +470,33 @@ def home_tests(expect, page):
     tap_icon(m)
     expect(('window_open', page.key) in m.calls and ('widget_set_visible', m.widgets[NAVBAR], 0) in m.calls and
            ('widget_set_visible', m.widgets[GRID], 0) in m.calls and ('widget_move', m.widgets[LISTVIEW], 0, O['HOME_PAD']) in m.calls,
-           'the icon on the grid restores M1+ Pod as Home: no navbar, list up, grid hidden')
+           'the icon on the grid restores M1+ Music as Home: no navbar, list up, grid hidden')
     m.timers = []; m.call(fg_cb, a0=HOME_WIN)
     expect(m.timers == [(open_cb, OPEN_MS)], 'and Home in the foreground reopens the menu again (pod Home for the session)')
     # a Home Screen page without a menu below it (cannot happen from the UI): just the back
     m = armed(); m.top_main = HOME_WIN; m.call(open_cb); m.call(on_row, a0=rowsH + 12 * grid_i)
     expect(m.names() == ['widget_lookup', 'widget_set_visible', 'widget_set_sensitive', 'navigator_back'], 'no Settings window known: one navigator_back, no window_close')
+    # Customize opened from the Extras page (menu > Extras > Customize > Home Screen): that page is closed too, by handle
+    rowsE = PSYMS[f'pod_rows_{pod_pages.EXTRAS_PAGE_INDEX}']
+    extras_i = next(i for i, r in enumerate(page.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.EXTRAS_PAGE_INDEX)
+    cust_e = next(i for i, r in enumerate(pod_pages.EXTRAS_PAGE.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.CUSTOMIZE_PAGE_INDEX)
+    def via_extras():
+        m = armed(); m.top_main = HOME_WIN; m.call(open_cb)
+        m.window = 0x20002000; m.call(on_row, a0=rowsM + 12 * extras_i)
+        m.destroy = [c for c in m.calls if c[0] == 'widget_on' and c[1] == 0x20002000 and c[2] == O['EVT_DESTROY']]
+        m.window = 0x20003000; m.call(on_row, a0=rowsE + 12 * cust_e)
+        m.window = 0x20004000; m.call(on_row, a0=rowsS + 12 * homeset_i)
+        return m
+    m = via_extras(); m.call(on_row, a0=rowsH + 12 * grid_i)
+    expect(m.names() == ['widget_lookup', 'widget_set_visible', 'widget_set_sensitive', 'window_close', 'window_close', 'window_close', 'navigator_back']
+           and m.calls[3:6] == [('window_close', 0x20001000), ('window_close', 0x20002000), ('window_close', 0x20003000)],
+           f'menu > Extras > Customize > Home Screen: Shanling Home closes the menu, the Extras page and the Customize page, then the Home Screen page ({m.names()})')
+    m = via_extras()
+    destroy = m.destroy
+    expect(len(destroy) == 1, 'the Extras page registers its destroy')
+    m.call(destroy[0][3], a0=destroy[0][4]); m.call(on_row, a0=rowsH + 12 * grid_i)
+    expect(m.calls[3:5] == [('window_close', 0x20001000), ('window_close', 0x20003000)] and m.names().count('window_close') == 2,
+           'an Extras page that was destroyed is forgotten: it is not closed again')
     # the restoring open fails: back to the grid state it was in, a later tap tries again
     m = armed(); m.top_main = HOME_WIN; m.call(open_cb); settings_row(m, grid_i)
     m.window = 0
@@ -494,7 +519,7 @@ def home_tests(expect, page):
         m = armed(); m.top_main = HOME_WIN; m.call(open_cb); settings_row(m, grid_i); m.present.add(kill)
         tap_icon(m)
         expect('window_open' not in m.names(), f'{kill}: no restore')
-    # 15. Start in M1+ Pod: the persistent switch, written atomically, the switch image following
+    # 15. Boot to M1+ Music: the persistent switch, written atomically, the switch image following
     m = armed(); m.top_main = HOME_WIN; m.call(open_cb)
     settings_row(m, start_i)
     expect(m.fs.get(START) == b'0\n' and writes_atomically(m, START, START + '.tmp', b'0\n'),
@@ -503,8 +528,8 @@ def home_tests(expect, page):
     m.fs[BAD] = b'1\n'; m.timers = []
     m.call(fg_cb, a0=HOME_WIN); expect(not m.timers, 'with Shanling chosen Home in the foreground no longer reopens the menu')
     settings_row(m, start_i)
-    expect(m.fs.get(START) == b'1\n' and switch_shows(m, start_i) is True, 'switch on -> M1+ Pod: written, the switch shows on')
-    expect(BAD not in m.fs, 're-enabling M1+ Pod removes the sticky bad note')
+    expect(m.fs.get(START) == b'1\n' and switch_shows(m, start_i) is True, 'switch on -> M1+ Music: written, the switch shows on')
+    expect(BAD not in m.fs, 're-enabling M1+ Music removes the sticky bad note')
     m.fail.add(('write', START + '.tmp'))
     settings_row(m, start_i)
     expect(m.fs.get(START) == b'1\n' and switch_shows(m, start_i) is None and START + '.tmp' not in m.fs,

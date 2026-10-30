@@ -1,8 +1,8 @@
-/* M1+ Pod mini player bar: a floating "now playing" card at the bottom of the Home instance of the menu.
+/* M1+ Music mini player bar: a floating "now playing" card at the bottom of the Home instance of the menu.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
- * No stock function is hooked. The widgets are in the menu's own asset (ui/m1pod_menu.bin, tools/pod_ui.py: pod_minibar, a
+ * No stock function is hooked. The widgets are in the menu's own asset (ui/m1plus_menu.bin, tools/pod_ui.py: pod_minibar, a
  * hidden and insensitive view holding the card button, the title and artist labels and the play, pause and next buttons);
  * patch/home.c calls minibar_start for the Home instance only (the menu opened from the grid icon keeps its navbar and never
  * gets a bar). Everything here runs from the menu window's events and one page-scoped timer.

@@ -6,8 +6,8 @@ import awtk_strings, awtk_style, mod_icons, pod_i18n
 from awtk_text import Ttf, StbText
 
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
-SAME_AS_ENGLISH = {'Cover Flow', 'Playlists', 'Genres', 'Extras', 'Albums', 'Start in M1+ Pod', 'Artists'}   # translations that are the English word by design
-SAME_AS_ENGLISH |= {'Genre', 'Screenshot'}    # French and German write Genre the same; German and Italian say Screenshot
+SAME_AS_ENGLISH = {'Cover Flow', 'Playlists', 'Genres', 'Extras', 'Albums', 'Artists', '%s, %s'}   # translations that are the English word by design
+SAME_AS_ENGLISH |= {'Genre', 'Screenshot', 'Collections'}    # French and German write Genre the same; German and Italian say Screenshot; French writes Collections the same
 
 
 
@@ -64,8 +64,9 @@ def run(ctx):
         expect(all(dict(built[stub])[k] == dict(built[twin])[k] for k in pod_i18n.TEXT), f'{stub} holds {twin}\'s language')
     for k, by in pod_i18n.TEXT.items():
         counts = {loc: by[loc].count('%d') for loc in LOC}
-        expect(set(counts.values()) == ({1} if k.startswith('%d') else {0}) and all('%' not in by[l].replace('%d', '') for l in LOC),
-               f'{k!r}: %d only in the track counts, once each')
+        expect(set(counts.values()) == ({1} if k.startswith('%d') else {0}) and all('%' not in by[l].replace('%d', '').replace('%s', '') for l in LOC)
+               and all(by[l].count('%s') == k.count('%s') for l in LOC),
+               f'{k!r}: %d only in the track counts, once each; %s only in the Daily Mix templates, as often as the key has it')
     expect(sorted(pod_i18n.TEXT) == pod_i18n.KEYS and all(set(by) == set(LOC) for by in pod_i18n.TEXT.values()), 'every key has all 13 languages')
 
     # 3. Our assets: tr_text keys, no English left but the brand names.
@@ -87,9 +88,9 @@ def run(ctx):
             lab = next(c for c in tree.find(f'pod_row{i}').children if c.type == 'hscroll_label')
             expect(pod_i18n.shown_english(lab) == r.label, f'{page.key}:pod_row{i} reads {r.label!r}')
     expect(tree is not None and used, 'the pages use keys')
-    cover = awtk_ui.parse(open(os.path.join(WORK, RAW, 'ui', 'm1pod_cover.bin'), 'rb').read())
+    cover = awtk_ui.parse(open(os.path.join(WORK, RAW, 'ui', 'm1plus_cover.bin'), 'rb').read())
     expect(cover.find('btn_cancel').get('tr_text') == 'Cancel', 'the Cancel button is translated')
-    expect(pod_i18n.key_for('Settings') == 'cdrippersettings' and pod_i18n.key_for('Hi-Res') == 'hr' and pod_i18n.key_for('M1+ Pod') is None
+    expect(pod_i18n.key_for('Customize') == 'Customize' and pod_i18n.key_for('Hi-Res') == 'hr' and pod_i18n.key_for('M1+ Music') is None
            and pod_i18n.key_for('Tidal') is None and pod_i18n.key_for('Albums') == 'Albums', 'stock keys where the English is the same, brand names plain')
 
     # 4. The payload's source: nothing user-visible bypasses the translation.
@@ -100,7 +101,7 @@ def run(ctx):
         for a in call_args(src, 'widget_set_text_utf8'):
             for inner in call_args(a, 'TR'): a = a.replace(inner, '')       # a translated key inside is fine
             for lit in literal.findall(a):
-                if lit not in ('', 'M1+ Pod'): plain.append((f, lit))
+                if lit not in ('', 'M1+ Music'): plain.append((f, lit))
         for a in call_args(src, 'toast') + call_args(src, 'pod_toast'):
             if literal.search(a) and not a.startswith('TR('): plain.append((f, a))
         for name in ('TR', 'widget_set_tr_text'):
@@ -113,7 +114,7 @@ def run(ctx):
     expect(not orphans, f'every key is used by an asset or the payload: {sorted(orphans)}')
     expect({'Landscape', 'Sort', 'Artist', 'album', 'Cover Flow'} <= used | keys_in_c and 'Cover Flow landscape' not in pod_i18n.TEXT,
            'the Settings > Cover Flow page uses its keys (rows in the asset, the value by key in the payload); the old landscape row key is gone')
-    expect(all(k in sources['home.c'] for k in ('"M1+ Pod"',)), 'the Home icon keeps the brand name as plain text')
+    expect(all(k in sources['home.c'] for k in ('"M1+ Music"',)), 'the Home icon keeps the brand name as plain text')
     expect(len(re.findall(r'locale_info_tr|widget_set_tr_text', ' '.join(pod.FUNCTIONS))) == 2 and pod.FUNCTIONS['locale_info_tr'][2] == 0x658db4
            and pod.FUNCTIONS['widget_set_tr_text'][2] == 0x66f994 and pod.FUNCTIONS['locale_info'][2] == 0x6588b0, 'the three stock translation functions are pinned')
 
@@ -214,28 +215,37 @@ def run(ctx):
         lt = tree.find('label_title')
         keys = [(r.label, [c for c in tree.find(f'pod_row{i}').children if c.type == 'hscroll_label'][0].w) for i, r in enumerate(page.rows)]
         for loc in LOC:
-            if pod_i18n.key_for(page.title):
+            if pod_i18n.key_for(page.title) and page.kind != 'songs':   # the Songs page's small title is hidden by the payload where it does not fit (test/pod/songs.py)
                 w = width(tr_text(loc, pod_i18n.key_for(page.title)), title_px)
                 if w > lt.w: over.append((page.key, 'title', loc, w, lt.w))
             for english, room in keys:
                 k = pod_i18n.key_for(english)
                 if k and width(tr_text(loc, k), row_px) > room: over.append((page.key, english, loc, width(tr_text(loc, k), row_px), room))
     expect(not over, f'every menu, Extras, Shuffle, Settings and Main Menu row and every page title fits its label in all 13 languages ({over[:4]})')
+    hdr_over = []   # the section headers of the Extras and Customize > Extras pages: 16 px grey captions in labels of 274 px
+    for page in (pod_pages.EXTRAS_PAGE, pod_pages.EXTRASCFG_PAGE):
+        tree = awtk_ui.parse(open(os.path.join(WORK, RAW, 'ui', page.key + '.bin'), 'rb').read())
+        for g, title in enumerate(pod_pages.EXTRAS_TITLES):
+            cap = tree.find(f'pod_hdr_text{g}')
+            for loc in LOC:
+                w = width(tr_text(loc, pod_i18n.key_for(title)), pod_ui.HDR_PX)
+                if w > cap.w - 4: hdr_over.append((page.key, title, loc, w, cap.w))
+    expect(not hdr_over, f'every Extras section header (Play, Library, Collections, Tools) fits its label in all 13 languages at {pod_ui.HDR_PX} px ({hdr_over[:4]})')
     albums_tree = awtk_ui.parse(open(os.path.join(WORK, RAW, 'ui', pod_pages.ALBUMS.key + '.bin'), 'rb').read())
     albums_lbl, cf_btn = albums_tree.find('label_title'), albums_tree.find('btn_coverflow')
     over = [(loc, width(tr_text(loc, pod_i18n.key_for('Albums')), title_px)) for loc in LOC
             if albums_lbl.x + width(tr_text(loc, pod_i18n.key_for('Albums')), title_px) > cf_btn.x]
     expect(not over and albums_lbl.x + albums_lbl.w == cf_btn.x == A['NAV_CF_X'], f'the Albums title ends before the Cover Flow button (x {cf_btn.x}) in all languages, at {title_px} px ({over})')
-    # the artist page's title (the artist's name, set at run time) is cut at the All albums button (NAV_VIEW_X): the page's own
+    # the artist page's title (the artist's name, set at run time) is cut at the Songs button (NAV_VIEW_X): the page's own
     # title text, which shows until then, fits that room in every language
     cf_title = cover.find('label_title')
     over = [(loc, width(tr_text(loc, pod_i18n.key_for('Cover Flow')), title_px)) for loc in LOC
             if cf_title.x + width(tr_text(loc, pod_i18n.key_for('Cover Flow')), title_px) > A['NAV_VIEW_X']]
-    expect(not over, f'the Cover Flow title ends before the artist page\'s All albums button (x {A["NAV_VIEW_X"]}) in all languages ({over})')
+    expect(not over, f'the Cover Flow title ends before the artist page\'s Songs button (x {A["NAV_VIEW_X"]}) in all languages ({over})')
     over = []
     for loc in LOC:
         for key in ('Update Local Music first', 'Not enough memory', 'Storage unavailable', 'Too many songs to shuffle',
-                    'Screenshot in 5 s', 'Screenshot saved', 'Screenshot failed'):
+                    'Screenshot saved', 'Screenshot failed'):
             if width(tr_text(loc, key), msg_px) > 260: over.append((loc, key))          # the message box's line is 260 px (@0x4788a0)
         for key in ('Update Local Music first', 'Library too large', 'No albums', 'Not enough memory'):
             if width(tr_text(loc, key), 20) > cover.find('label_status').w: over.append((loc, key, 'status'))
@@ -261,10 +271,11 @@ def run(ctx):
             cur += u
             while width(cur.rstrip(), px) > maxw: lines, cur = lines + 1, cur[len(cur) // 2:]     # a unit wider than a line
         return lines
-    key = 'Rebuild all covers? This may take a few minutes.'
-    lines = {loc: wrapped(tr_text(loc, key), wrap_px, 260) for loc in LOC}
-    expect(wrap_px == 20 and max(lines.values()) <= 3, f'the Rebuild Covers confirm wraps to at most 3 lines of 260 px at {wrap_px} px in all languages ({lines})')
-    expect(all(len(pod_i18n.TEXT[key][loc].encode()) < 0x1ff for loc in LOC), 'and fits the dialog context\'s 0x200 byte text')
+    for key, what in (('Rebuild all covers? This may take a few minutes.', 'Rebuild Covers'), ('Take a screenshot in 5 s?', 'Screenshot'),
+                      ('Cancel the screenshot?', 'Cancel Screenshot')):
+        lines = {loc: wrapped(tr_text(loc, key), wrap_px, 260) for loc in LOC}
+        expect(wrap_px == 20 and max(lines.values()) <= 3, f'the {what} confirm wraps to at most 3 lines of 260 px at {wrap_px} px in all languages ({lines})')
+        expect(all(len(pod_i18n.TEXT[key][loc].encode()) < 0x1ff for loc in LOC), 'and fits the dialog context\'s 0x200 byte text')
     for loc in LOC:      # the label and the value of the Sort row do not meet: the room left of the value, and the longest value
         longest = max(width(tr_text(loc, pod_i18n.key_for(v)), pod_ui.VALUE_PX) for v in pod_pages.SORT_VALUES)
         label = width(tr_text(loc, pod_i18n.key_for('Sort')), row_px)

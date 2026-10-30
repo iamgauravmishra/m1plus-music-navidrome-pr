@@ -1,4 +1,4 @@
-/* M1+ Pod Cover Flow: the stock Local Music albums as a cover carousel inside demo.
+/* M1+ Music Cover Flow: the stock Local Music albums as a cover carousel inside demo.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
@@ -12,8 +12,8 @@
  * (keys 172/173, ringnav, scrub) are gone; a transparent touch layer of the page's own drives the
  * shelf (drag, fling, snap, tap by x): its own position in depth mode, a stock slide_menu in the flat fallback.
  *
- * No stock function is hooked. The page is opened from a row of the M1+ Pod menu (the library's
- * albums) or from a row of the M1+ Pod Artists list (one artist's
+ * No stock function is hooked. The page is opened from a row of the M1+ Music menu (the library's
+ * albums) or from a row of the M1+ Music Artists list (one artist's
  * albums, coverflow_artist: q2-pod's ARTIST_ALBUMS scope, with the stock "All songs" row as its All
  * albums card), and everything here is reached only from that page's own widgets, timers and its
  * one worker thread. A tap on the centre cover opens the stock album page (open_album; the page
@@ -43,6 +43,8 @@
 #endif
 #include "covercache.h"
 #include "common.h"
+
+extern int songs_open_artist(void *artist); /* patch/songs.c: our Songs page on all the artist's songs; -1 when it did not open */
 
 /* ===========================================================================
  * The depth renderer (q2-pod, after Rockbox PictureFlow). All integer: 16.16 turns and
@@ -281,7 +283,7 @@ enum { ARTIST_ALBUMS = 1 };         /* cf.scoped, as q2-pod's */
 
 static struct {
     void *win, *covers, *slide, *name, *artist, *status, *cancel;
-    void *all;                    /* btn_allalbums, the navbar button of the artist page (hidden unless the shelf has the card) */
+    void *songs;                  /* btn_songs, the artist page's other button: our Songs page on the artist (hidden unless the stock list had the All songs row) */
     void *input;                  /* the transparent touch layer over the covers, the frame's size */
     int land;                     /* landscape: the frame is the body under the navbar, turned a quarter */
     void *albums;                 /* our copy of the stock album rows */
@@ -293,6 +295,7 @@ static struct {
      * is album i's cache key, the library album of the same name's, so the covers are the main
      * Cover Flow's files. No saved album: the main Cover Flow's last album is left alone. */
     int scoped;
+    unsigned scope;               /* scoped: the stock class the row came from, CLASS_ARTISTS or CLASS_COMPOSERS (what loadAlbumList takes) */
     void *artist_row;
     unsigned *keys;
     int owns;                     /* this page holds the shared worker's job set (cc_build_*) */
@@ -359,8 +362,12 @@ static void *album_at(unsigned i) { return i < album_count() ? cc_row(cf.albums,
 /* The All albums card: the "All songs" row the stock artist query appends (getAlbumByArtist). */
 static int is_card(void *r) { return cf.scoped && r && I(r, REC_ID) == ID_ALL_SONGS; }
 
-/* The scoped shelf ends with the card (load_artist keeps it only with two albums or more). */
-static int has_card(void) { return cf.scoped && album_count() && is_card(album_at(album_count() - 1)); }
+/* The artist has songs: the stock list ended with the All songs row (load_artist keeps cf.albums whole, also when the card is dropped from the shelf). An
+ * artist's page only: songs_open_artist runs the artist queries (a composer's would be 0xf005 / 0xff02 -> 0xff14). */
+static int has_songs(void) {
+    unsigned n = cf.scoped && cf.scope == CLASS_ARTISTS && cf.albums ? deque_size(cf.albums) : 0;
+    return n && I(deque_at(cf.albums, n - 1), REC_ID) == ID_ALL_SONGS;
+}
 
 /* Album i's cache key; 0 (the card) has no art. */
 static unsigned key_at(unsigned i) {
@@ -952,7 +959,7 @@ static int use_land(void) {
     return n == 1 && c == '1';
 }
 
-/* The setting for the Landscape switch (patch/m1pod.c). */
+/* The setting for the Landscape switch (patch/m1plus.c). */
 int coverflow_landscape(void) { return use_land(); }
 
 /* Flip it (atomic write, patch/home.c); the new state, or -1 when it could not be saved. */
@@ -971,6 +978,20 @@ static void layout(void) {
     widget_resize(cf.input, SCREEN_W, on ? CFL_W : CF_VIEW_H);
 }
 
+/* The artist page's Songs button (the capsule's left cap at NAV_VIEW_X, as the Artists page's switch): shown, Now Playing becomes the capsule's right cap
+ * (the asset has the disc, which the main page and a composer's page keep); the title ends before the slot. */
+static void artist_nav(void) {
+    void *title = widget_lookup(cf.win, "label_title", 1), *np = widget_lookup(cf.win, "btn_backtoplayer", 1);
+    if (!cf.scoped) return;
+    show(cf.songs, has_songs());
+    if (has_songs() && np) {
+        widget_set_prop_str(np, "style:normal:icon", "ah_nav_play");
+        widget_set_prop_str(np, "style:over:icon", "ah_nav_play");
+        widget_set_prop_str(np, "style:pressed:icon", "ah_nav_play_down");
+    }
+    if (title) widget_resize(title, NAV_VIEW_X - widget_get_prop_int(title, "x", 0), widget_get_prop_int(title, "h", 0));
+}
+
 /* The covers screen: the depth frame over a touch layer, the shelf's position in cfpos; or, when the
  * frame could not be allocated, the flat fallback: a stock slide_menu with one stock image per album
  * (it commits an index; the touch layer drives it, bounded). */
@@ -980,7 +1001,7 @@ static void to_covers(void) {
     show(cf.cancel, 0);
     show(cf.covers, 1); /* the captions are never hidden, and stay insensitive (the asset): they
                          * lie over the frame's black bottom rows, so its touch layer gets the touch */
-    show(cf.all, has_card()); /* only with the card, and not while preparing */
+    artist_nav();
     if (!cf.built) {
         unsigned n = album_count(), i;
         cf.built = 1;
@@ -1018,7 +1039,9 @@ static void to_covers(void) {
         if (depth()) {
             cfpos.value = cf.album, cfpos.off = 0;
             cc_decode(cf.win, PLACEHOLDER, 0, ART_SIZE, 0, PLACE); /* the theme image */
-            fx_fill(CF_WANTED); /* the first frame's covers, decoded now rather than in paint */
+            /* only the centre cover now (one decode in the open call); the ring and the next one ahead follow, one per
+             * on_load tick. A refused timer is retried by the first paint (fx_ring finds covers missing). */
+            if (fx_fill(1) && !fx.load_timer) fx.load_timer = timer_add(on_load, (void *)0, LOAD_MS);
         } else if (value() != cf.album) {
             set_value(cf.album);
         }
@@ -1039,13 +1062,16 @@ static void open_album(int index) {
     snap_stop();
     cf.album = index;
     if (!cf.scoped) cf.saved_album = cc_album_key(r);
-    cc_open_album(cf.scoped ? cf.artist_row : (void *)0, (int)(cf.order ? cf.order[index] : (unsigned)index)); /* the stock row */
+    cc_open_album(cf.scoped ? cf.artist_row : (void *)0, cf.scope, (int)(cf.order ? cf.order[index] : (unsigned)index)); /* the stock row */
 }
 
-/* The artist page's navbar button: what a tap on the All albums card does (the card is the last row), so Back returns here. */
-static int on_all(void *ctx, void *e) {
+/* The artist page's Songs button: our Songs page on all the artist's songs, so Back returns here. A page that did not open falls back to what the All albums
+ * card does (the stock album page on the All songs row, the last of the stock list). */
+static int on_songs(void *ctx, void *e) {
     (void)ctx; (void)e;
-    if (cf.screen == CF_COVERS && has_card()) open_album((int)album_count() - 1);
+    if (cf.screen != CF_COVERS || !album_count() || !has_songs()) return RET_OK;   /* (no albums: the page shows no covers and no button) */
+    snap_stop();
+    if (songs_open_artist(deque_at(cf.artist_row, 0)) == -1) cc_open_album(cf.artist_row, cf.scope, (int)deque_size(cf.albums) - 1);
     return RET_OK;
 }
 
@@ -1134,10 +1160,44 @@ static void pick_start(void) {
  * of the library's album of the same name (getAllAlbum groups by name, ASCII case aside, as
  * strcasecmp compares), so the covers are the files the main Cover Flow built and nothing is
  * extracted twice; an album the library list lacks keys itself. */
+/* The library's album-name index (case-insensitive, the first row of a name wins), used when an artist has enough
+ * albums that one pass over the library to build it costs less than a scan per album (IDX_MIN: about a pass over the
+ * library per 24 scans). Open addressing, at most half full: a slot holds a library row + 1. */
+#define IDX_MIN 24
+static unsigned nc_hash(const char *s) { /* FNV-1a over the ASCII-folded bytes (cc_nocase's equality) */
+    unsigned h = 2166136261u;
+    for (; *s; ++s) h = (h ^ (unsigned)(*s >= 'A' && *s <= 'Z' ? *s + 32 : (unsigned char)*s)) * 16777619u;
+    return h;
+}
+
+static unsigned *name_index(void *all, unsigned m, unsigned *mask) {
+    unsigned size = 16, i, *t;
+    while (size < 2 * m) size <<= 1;
+    t = calloc(size, sizeof *t);
+    if (!t) return (unsigned *)0;
+    *mask = size - 1;
+    for (i = 0; i < m; ++i) {
+        const char *s = cc_str(deque_at(all, i), REC_ALBUM);
+        unsigned h = nc_hash(s) & *mask;
+        while (t[h] && cc_nocase(cc_str(deque_at(all, t[h] - 1), REC_ALBUM), s)) h = (h + 1) & *mask;
+        if (!t[h]) t[h] = i + 1; /* an equal name is already there from an earlier row: it stays */
+    }
+    return t;
+}
+
+static void *name_find(void *all, const unsigned *t, unsigned mask, const char *s) {
+    unsigned h = nc_hash(s) & mask;
+    for (; t[h]; h = (h + 1) & mask) {
+        void *r = deque_at(all, t[h] - 1);
+        if (!cc_nocase(cc_str(r, REC_ALBUM), s)) return r;
+    }
+    return (void *)0;
+}
+
 static int load_artist(void) {
     void *list, *all;
-    unsigned n, i, j;
-    loadAlbumList(CLASS_ARTISTS, deque_at(cf.artist_row, 0));
+    unsigned n, i, j, m, mask = 0, *ix = (unsigned *)0;
+    loadAlbumList(cf.scope, deque_at(cf.artist_row, 0));
     list = *(void **)PDEQ_SHOWLIST;
     n = list ? deque_size(list) : 0;
     if (!n || !(cf.albums = cc_copy_list(list))) return 0;
@@ -1146,16 +1206,24 @@ static int load_artist(void) {
     if (!n || n > MAX_ALBUMS) return (int)n;
     cf.keys = calloc(n, sizeof *cf.keys); /* none: each album keys itself (key_at) */
     all = cf.keys && loadLocalClassList(CLASS_ALBUMS) > 0 ? *(void **)PDEQ_SHOWLIST : (void *)0;
+    m = all ? deque_size(all) : 0;
+    if (n >= IDX_MIN && m) ix = name_index(all, m, &mask); /* none (few albums, or no memory): the scan below */
     for (i = 0; cf.keys && i < n; ++i) {
-        void *r = deque_at(cf.albums, i), *same = r;
+        void *r = deque_at(cf.albums, i), *same = r, *hit;
         if (is_card(r)) continue; /* key 0: no art */
-        for (j = 0; all && j < deque_size(all); ++j)
-            if (!strcasecmp(cc_str(deque_at(all, j), REC_ALBUM), cc_str(r, REC_ALBUM))) {
-                same = deque_at(all, j);
-                break;
-            }
+        if (ix) {
+            hit = name_find(all, ix, mask, cc_str(r, REC_ALBUM));
+            if (hit) same = hit;
+        } else {
+            for (j = 0; j < m; ++j)
+                if (!strcasecmp(cc_str(deque_at(all, j), REC_ALBUM), cc_str(r, REC_ALBUM))) {
+                    same = deque_at(all, j);
+                    break;
+                }
+        }
         cf.keys[i] = cc_album_key(same);
     }
+    free(ix);
     return (int)n;
 }
 
@@ -1213,7 +1281,7 @@ static int on_destroy(void *ctx, void *e) {
     cf.albums = cf.artist_row = (void *)0;
     cf.keys = cf.order = (unsigned *)0;
     cf.win = cf.covers = cf.slide = cf.input = cf.name = cf.artist = (void *)0;
-    cf.status = cf.cancel = cf.all = (void *)0;
+    cf.status = cf.cancel = cf.songs = (void *)0;
     cf.screen = CF_COVERS;
     cf.album = cf.scoped = cf.land = cf.built = 0;
     cfpos.value = cfpos.off = 0;
@@ -1222,7 +1290,7 @@ static int on_destroy(void *ctx, void *e) {
 
 /* The page and its widgets, everything hidden that waits for a screen; -1 if it did not open. */
 static int open_page(void) {
-    cf.win = window_open("m1pod_cover");
+    cf.win = window_open("m1plus_cover");
     if (!cf.win) return -1;
     widget_on(cf.win, EVT_DESTROY, on_destroy, (void *)0);
     pod_bind(cf.win, "btn_return", on_back, (void *)0);
@@ -1232,7 +1300,7 @@ static int open_page(void) {
     cf.artist = widget_lookup(cf.win, "label_artist", 1);
     cf.status = widget_lookup(cf.win, "label_status", 1);
     cf.cancel = pod_bind(cf.win, "btn_cancel", on_cancel, (void *)0);
-    cf.all = pod_bind(cf.win, "btn_allalbums", on_all, (void *)0); /* in the asset, hidden; the artist page shows it */
+    cf.songs = pod_bind(cf.win, "btn_songs", on_songs, (void *)0); /* in the asset, hidden; the artist page shows it */
     if (!cf.covers || !cf.name || !cf.artist || !cf.status || !cf.cancel) {
         navigator_back(); /* an asset that is not ours: leave rather than work on half a page */
         return -1;
@@ -1259,7 +1327,7 @@ static int open_covers(int n, const char *empty) {
     return 0;
 }
 
-/* The M1+ Pod menu's Cover Flow row. 0 once the page is up, -1 if it could not open (the caller
+/* The M1+ Music menu's Cover Flow row. 0 once the page is up, -1 if it could not open (the caller
  * then leaves the menu as it was). */
 int coverflow_open(void) {
     if (cf.win) return -1;
@@ -1280,13 +1348,16 @@ int coverflow_rebuild(void) {
 }
 
 /* The Artists list's row `index` of `artists` (patch/artists.c; the caller keeps its list): the
- * same page on that artist's albums, titled with the artist (q2-pod's coverflow_artist). Back
- * leaves it for the list. 0 once the page is up, -1 if it could not open. */
-int coverflow_artist(void *artists, unsigned index) {
+ * same page on that artist's albums, titled with the artist (q2-pod's coverflow_artist). scope is the
+ * list's stock class: CLASS_ARTISTS, or CLASS_COMPOSERS for a composer (loadAlbumList(0xf005, row) is
+ * getAlbumByComposer with the same last "All songs" row; the album page is then class 0xff02 -> 0xff14).
+ * Back leaves it for the list. 0 once the page is up, -1 if it could not open. */
+int coverflow_artist(void *artists, unsigned index, unsigned scope) {
     void *row = artists && index < deque_size(artists) ? deque_at(artists, index) : (void *)0, *title;
     if (cf.win || !row) return -1;
     memset(&cf, 0, sizeof cf);
     cf.scoped = ARTIST_ALBUMS;
+    cf.scope = scope == CLASS_COMPOSERS ? CLASS_COMPOSERS : CLASS_ARTISTS;
     cf.artist_row = _create_deque("stSongInfo");
     if (!cf.artist_row) return -1;
     deque_init(cf.artist_row);

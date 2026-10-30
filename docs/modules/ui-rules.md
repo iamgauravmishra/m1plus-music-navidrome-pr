@@ -26,5 +26,5 @@ Split out of docs/ui.md. A "section N" in the text is an old section number of `
 - **Text width = truncated glyph advance + 1 px per glyph** (below); use `StbText`
   (`tools/awtk_text.py`) and measure the font of the tree being built.
 - **No close animation on windows a "play from here" loop can pop** (library pages, album detail, the
-  jump list, Now Playing, M1+ Pod pages), see the slides audit in section 8.
+  jump list, Now Playing, M1+ Music pages), see the slides audit in section 8.
 - The rebuilt rootfs must not exceed stock (fwtool enforces it); one change per package where possible.

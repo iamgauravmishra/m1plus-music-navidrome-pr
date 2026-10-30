@@ -1,9 +1,9 @@
 
 # Recently Played shelf (the menu's Home instance)
 
-A section at the **foot** of the M1+ Pod menu when it is the Home instance, below the Settings row (as Apple Music's Library has "Recently Added" below its list): the albums played last as a
+A section at the **foot** of the M1+ Music menu when it is the Home instance, below the Settings row (as Apple Music's Library has "Recently Added" below its list): the albums played last as a
 **2 x 1..3 grid of covers, all six albums the file keeps, the Albums page's own grid** (`patch/grid.c`), under a "Recently Played" header, scrolling with the list. Code `patch/recent.c` (the list file, the recording, the shelf),
-`patch/grid.c` / `grid.h` (the cells, shared with the Albums page), `patch/menu.c` (`menu_shelf`, the shelf after the rows), widgets in `ui/m1pod_menu.bin` (`tools/pod_ui.py` `shelf()`), numbers in
+`patch/grid.c` / `grid.h` (the cells, shared with the Albums page), `patch/menu.c` (`menu_shelf`, the shelf after the rows), widgets in `ui/m1plus_menu.bin` (`tools/pod_ui.py` `shelf()`), numbers in
 `patch/offsets.inc` `SH_*` / `RC_*` and the Albums grid's `GRID_*` (`pod_ui.py` reads `GRID_*` from `offsets.inc`; `test/pod/recent.py` asserts the rest equal), file model `tools/pod_recent.py`, tests `test/pod/recent.py`,
 preview `tools/preview.py` (`shelf_image`, `minibar_page(shelf=..)`).
 **No stock hook, no new stock address**: it runs from the menu window's and the shelf's own widgets, events and one page timer, as the mini player bar (`docs/modules/minibar.md`) and the Albums page
@@ -29,10 +29,10 @@ The header is a stock label child of the shelf (the stock paint draws it, so the
 (below). The widest translation of the header at 20 px in the shipped font is Spanish and Ukrainian, 189 px of the label's 296 (`test/pod/recent.py` measures all 13 with `StbText`: none needs the
 ellipsis). The 20 / 8 px air is the result of measuring `tools/preview.py`'s render (`peek.py runs`): header ink 20..36 below the Settings row's hairline, covers at 44.
 
-With the shelf (six albums) and the mini player bar up the default menu (8 rows = 416 px) is 416 + 634 + 64 (`MB_PAD`) = 1114 px in a 430 px list; at the top the shelf's first row is already within a row of the
+With the shelf (six albums) and the mini player bar up a menu of 8 rows (416 px; the default menu has 6, so everything below is 104 px higher) is 416 + 634 + 64 (`MB_PAD`) = 1114 px in a 430 px list; at the top the shelf's first row is already within a row of the
 viewport (416 < 430), at the end the last row fills the bottom of the list above the pill. One album: 416 + 234 + 64 = 714 px.
 
-## The list file (`/mnt/data/m1pod-recent`, `tools/pod_recent.py` is the model)
+## The list file (`/mnt/data/m1plus-recent`, `tools/pod_recent.py` is the model)
 
 ```
 M1R2\n
@@ -96,7 +96,7 @@ Recording runs whether or not the shelf is switched on (the switch only shows or
   (`POD_ROW_H` 52) below the bottom of the viewport (`shelf y + SH_TOP + row x 200 < yoffset + h + 52`), so the rows far below the viewport wait and **the cells are made row by row, top row first** (index order, the nearest to the viewport as the list scrolls down). Bound: at the top of the default menu only row 0 (162 KB for its two covers) is resident, row 1 when the list has scrolled about 250 px, and all six (486 KB) only once the third row is within a row of the viewport (scrolled towards the end); never more than the rows within reach. `rc_next` answers "no tile waits" otherwise, so the one-shot (`rc_first`, 150 ms after start) ends without a decode and arms
   nothing for a shelf out of reach; **the list's `EVT_SCROLL`** (`rc_on_scroll`, fired by every offset change: drag, fling, scroll animation) re-checks and arms the tick when the shelf comes within a row, and the
   **to-foreground** re-checks too (`rc_apply` -> `rc_kick`), so a shelf already in view is made right then. Then **one cover per `RC_TICK_MS` (30 ms) tick**, never in paint; the tick ends itself
-  when none waits or the shelf was scrolled away again. In the default menu (8 rows, shelf at y 416) the first row is within a row of the viewport already at the top, so its two covers are made after the one-shot;
+  when none waits or the shelf was scrolled away again. In a menu of 8 rows (shelf at y 416) the first row is within a row of the viewport already at the top, so its two covers are made after the one-shot;
   in a menu of 17 shown rows (the shelf at y 988) nothing is decoded until the list is scrolled to within a row of it. Only while the window is in front: `EVT_WINDOW_TO_BG` removes the timer, `EVT_DESTROY` removes
   it and frees the grid. A window started over one that never said it was gone replaces its state.
 - **Paint** (`rc_on_paint` -> `grid_paint`, the shelf's own `EVT_AFTER_PAINT`, after the stock paint drew the header): the resident bitmaps with `canvas_draw_image` (the shared disc for a tile without a picture), then the
@@ -134,6 +134,8 @@ available without a new pin).
 
 ## The shelf after the rows (`patch/menu.c`)
 
+(The Daily Mix card's section `pod_daily`, `docs/modules/dailymix.md`, sits between the shown rows and the shelf: the shelf's y is the rows plus the section's height while the card is shown, and `virtual_h` sums both. The paragraph describes the list as it was before the card: with the section hidden, which is the default until a mix exists, nothing below changes.)
+
 The stock `list_view` layouter (`children_layouter_list_view`, `0x60b12c..`) puts every **visible** child at the running y in **child order** and sums the children's own heights into `virtual_h`
 (the model the mini bar's `pod_pad` spacer proved). So the order of the scroll view's children is: **the shown rows (menu items, Extras, Settings), the shelf, the hidden rows, the spacer `pod_pad`**
 (`mn_arrange`, the old `menu_arrange` body, restacks them with `widget_restack`; the hidden rows are skipped by the layouter, so between the shelf and the spacer they change nothing). The rows keep
@@ -147,9 +149,9 @@ the rows are at 52 n, the shelf right below them at the height its albums need, 
 snapshot's relayout and the bar coming and going change nothing. `test/pod/pulldown.py` section 6 (the spacer alone) is unchanged.
 Scrolled to the end with the bar up, the shelf's last line ends exactly `MB_GAP` above the pill (`MB_PAD` 64 below the shelf, the pill at list y 374: tested).
 
-## The setting (Settings > Home Screen > Recent Albums)
+## The setting (Customize > Home Screen > Recent Albums)
 
-A switch row (`ACT_SHELF` 16, `pod_pages.HOMESET_PAGE` row 1, the stock on/off image `sset_on` / `sset_off`), **on by default**, saved like the other switches: `/mnt/data/m1pod-shelf`, `0\n` off,
+A switch row (`ACT_SHELF` 16, `pod_pages.HOMESET_PAGE` row 1, the stock on/off image `sset_on` / `sset_off`), **on by default**, saved like the other switches: `/mnt/data/m1plus-shelf`, `0\n` off,
 `1\n` on, no file or anything but `0` = on (`recent_setting`, `recent_toggle`: `home_write_atomic`, a failed save changes neither the file nor the image). The menu reads it at start and at every to-foreground,
 so the shelf follows the switch when Settings is closed. The label is its own key **"Recent Albums"** (13 languages, `tools/pod_i18n.py`) instead of the menu item's "Recently Played": that text is too wide for the
 switch row in Spanish (202 px of 195) and Ukrainian (197 of 195); the row uses the item's clock glyph (`pod_ic_recent`).

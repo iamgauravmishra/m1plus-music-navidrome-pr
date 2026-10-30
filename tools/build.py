@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One-shot build: official zip in firmware/ -> flashable package in out/.
 
-  build.py             the release, M1+ Pod (docs/architecture.md): the asset looks (docs/ui.md) and the
+  build.py             the release, M1+ Music (docs/architecture.md): the asset looks (docs/ui.md) and the
                        code payload on the official V2.1 rootfs -> out/M1Plus-<TAG>-release-update.bin
   build.py --restore   stock images with a new version tag (the way back after a mod)
   build.py --tree-only the release tree in work/mod-release only (what the tests need; no package)
@@ -21,7 +21,7 @@ import mod_space, paths
 
 ZIP = paths.ZIP     # this checkout's firmware/, else the main checkout's (tools/paths.py)
 ZIP_SHA = 'db7bdbc42ffe6d5c1e3fdca9363edb78a01898b9a725c34793394cf6abfa33c0'
-TAG = 'V2.1oH'
+TAG = 'V2.1oV'
 RESTORE_TAG = 'V2.1R'
 # The asset steps after the payload, in order: name -> (module, extra args). Each
 # tools/<module>.py WORKDIR WORKDIR [args] edits the tree in place (venv python: Pillow, fontTools);

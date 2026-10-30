@@ -4,7 +4,7 @@ Split out of docs/architecture.md. A "section N" in the text is an old section n
 
 ## 9. Home and the boot guard (`patch/home.c`, `patch/home.h`, test `test/pod/home.py`)
 
-M1+ Pod is the Home screen at start-up. This is the only payload code that runs at start-up, and the
+M1+ Music is the Home screen at start-up. This is the only payload code that runs at start-up, and the
 recovery button combination is unverified, so everything is behind a crash marker and falls to stock.
 
 ### Boot sequence
@@ -14,26 +14,26 @@ main -> application_init -> navigator_to("home_page") -> navigator_to_with_conte
  (0x4d00c0, strcmp "home_page" @0x4d1cd8)  -> home_page_init (0x534cd4)    <- the hook
 ```
 
-`tools/reach.py` confirms this is the only route. The hook `m1pod_home_init`:
+`tools/reach.py` confirms this is the only route. The hook `m1plus_home_init`:
 
 1. **runs the stock `home_page_init` to completion** through `stock_home_init_trampoline` and returns
    its result;
 2. only if it returned `RET_OK` for a non-null window, runs `home_boot(win)`, where the state is OFF
    (stock) until everything succeeded:
-   1. **kill switch** `/mnt/mmc/m1pod-off` (SD, may not be mounted yet) or `/mnt/data/m1pod-off` -> stop;
-   2. **marker found** (`/mnt/data/m1pod-run`): the previous attempt never proved itself. Write the
-      sticky note `/mnt/data/m1pod-bad`, set `/mnt/data/m1pod-start` to `0`, remove the marker, stop.
+   1. **kill switch** `/mnt/mmc/m1plus-off` (SD, may not be mounted yet) or `/mnt/data/m1plus-off` -> stop;
+   2. **marker found** (`/mnt/data/m1plus-run`): the previous attempt never proved itself. Write the
+      sticky note `/mnt/data/m1plus-bad`, set `/mnt/data/m1plus-start` to `0`, remove the marker, stop.
       If the note cannot be written the marker stays, so every later boot is stock too;
    3. **bad note found** -> stop (sticky: a crash cannot alternate with good boots);
-   4. the setting (`/mnt/data/m1pod-start`: `0` = Shanling, missing or anything else = M1+ Pod) is read; it
+   4. the setting (`/mnt/data/m1plus-start`: `0` = Shanling, missing or anything else = M1+ Music) is read; it
       does not stop the guard: the Shanling start is armed too, because step 7 adds the grid icon;
    5. **write the marker**: temp file, `fsync`, `rename`, directory `fsync` (its open and its `fsync` must succeed: an unconfirmed
       marker is not armed on); any failure -> stop with no marker left (it is unlinked again);
    6. **arm**: a one-shot UI timer (5 s, `CLEAR_MS`) removes the marker and fsyncs the directory; with
       no timer the marker is removed at once;
-   7. **add the "M1+ Pod" icon** to the grid (`hm_add_icon`, below; any failure adds nothing), register a
+   7. **add the "M1+ Music" icon** to the grid (`hm_add_icon`, below; any failure adds nothing), register a
       Home "to foreground" handler (`EVT_WINDOW_TO_FOREGROUND` `0x12d`) on the Home window, and, when the
-      setting is M1+ Pod, hide the grid content (`app_gesture`: icon pages + bottom strip, `visible=false`
+      setting is M1+ Music, hide the grid content (`app_gesture`: icon pages + bottom strip, `visible=false`
       and `sensitive=false`; after the marker is durable) and schedule the first pod-menu open (10 ms,
       `OPEN_FIRST_MS`).
 
@@ -47,7 +47,7 @@ per icon a 154x118 `view` at column x 6 or 160 and row y 0/118/236, inside it a 
 (`image_create`, `widget_set_prop_bool "clickable"`, `widget_use_style "home_<name>_style"`,
 `widget_set_name` = the decimal id, `widget_on(image, 0x10c, 0x533b80, image)`) and a 154x36 `label` at y 92
 (`label_centerwhitehome_white`, line wrap, the name). `hm_icon_cell` makes exactly that, in that order, with
-the name `"99"`, the style `home_m1pod_style` and the text "M1+ Pod" (`widget_set_text_utf8`: no translation
+the name `"99"`, the style `home_m1plus_style` and the text "M1+ Music" (`widget_set_text_utf8`: no translation
 needed). `hm_add_icon` takes the **last page's first free slot** (cell `n` = its child count: column
 `n & 1`, row `n >> 1`; English Home's 17 icons leave slot 5 of page 3 free); a full last page gets a new
 page view (the builder makes as many as the list needs) with the icon in slot 0 and
@@ -78,7 +78,7 @@ impossible by construction:** arming needs the marker and the bad note both abse
 after arming leaves the marker, the next start writes the sticky note (or, if it cannot, leaves the
 marker) and runs stock, and every start after that finds the note or marker and runs stock: at most one
 crash, never an alternation. The pod-menu open is covered by the same marker. Costs and residual
-risks: a power-off within 5 s counts as a failed start (the next start is stock; turn **Start in M1+ Pod**
+risks: a power-off within 5 s counts as a failed start (the next start is stock; turn **Boot to M1+ Music**
 on again); a hang inside `fsync` on a broken flash filesystem would hang the UI thread before the
 marker is durable; a later misbehaviour after the 5 s window is not caught.
 
@@ -86,29 +86,28 @@ marker is durable; a later misbehaviour after the 5 s window is not caught.
 
 | path | meaning |
 |---|---|
-| `/mnt/mmc/m1pod-off` | SD kill switch: the payload does nothing at boot (no icon), the icon does nothing if it is there, the row fit is off |
-| `/mnt/data/m1pod-off` | the same in flash (cannot be created without a shell) |
-| `/mnt/data/m1pod-run` | the crash marker: exists from "armed" until 5 s later |
-| `/mnt/data/m1pod-bad` | the sticky note when a marker was found; removed by turning on **Start in M1+ Pod** |
-| `/mnt/data/m1pod-start` | the setting: `1`/missing = M1+ Pod, `0` = Shanling (temp + `fsync` + `rename`) |
-| `/mnt/data/m1pod-recent` | the albums played last, up to 6, most recent first (`patch/recent.c`; written only when the most recent album changes; malformed = empty) |
-| `/mnt/data/m1pod-shelf` | Settings > Home Screen > Recent Albums: `0` = the shelf is off, missing or anything else = on |
-| `/mnt/data/m1pod-albums` | the Albums page's mode: `1`/missing = the grid (`ALBUMS_DEFAULT_GRID`), `0` = the list (same write; section 5a) |
-| `/mnt/data/m1pod-landscape` | Cover Flow's presentation: `1` = landscape, `0`/missing = portrait (atomic write at each switch tap; section 4) |
-| `/mnt/data/m1pod-menu` | the menu's shown items in order: one character per item (`0`-`8` the menu items, `a`-`i` the Extras tiles = ids 9-17, `pod_pages.ID_CHARS`), then `x` if the menu's Extras row is shown (only ever the last character; not an item id), then `\n`; `123456x\n` is the default (the file missing; Now Playing, id 0, is an item hidden by default); a list without `x`, an old `123456` file too, hides the Extras row (no compatibility path). Read with the limits below; written atomically at each change on Settings > Main Menu |
-| `/mnt/mmc/m1pod-log` | opt-in: if this empty file exists, events are appended to `/mnt/mmc/m1pod.log` (armed, boot ok, marker found, kill switch) |
+| `/mnt/mmc/m1plus-off` | SD kill switch: the payload does nothing at boot (no icon), the icon does nothing if it is there, the row fit is off |
+| `/mnt/data/m1plus-off` | the same in flash (cannot be created without a shell) |
+| `/mnt/data/m1plus-run` | the crash marker: exists from "armed" until 5 s later |
+| `/mnt/data/m1plus-bad` | the sticky note when a marker was found; removed by turning on **Boot to M1+ Music** |
+| `/mnt/data/m1plus-start` | the setting: `1`/missing = M1+ Music, `0` = Shanling (temp + `fsync` + `rename`) |
+| `/mnt/data/m1plus-recent` | the albums played last, up to 6, most recent first (`patch/recent.c`; written only when the most recent album changes; malformed = empty) |
+| `/mnt/data/m1plus-shelf` | Customize > Home Screen > Recent Albums: `0` = the shelf is off, missing or anything else = on |
+| `/mnt/data/m1plus-albums` | the Albums page's mode: `1`/missing = the grid (`ALBUMS_DEFAULT_GRID`), `0` = the list (same write; section 5a) |
+| `/mnt/data/m1plus-landscape` | Cover Flow's presentation: `1` = landscape, `0`/missing = portrait (atomic write at each switch tap; section 4) |
+| `/mnt/data/m1plus-menu` | the menu's shown items in order, then the items turned off: one character per item (`0`-`8` the menu items, `a`-`i` the Extras tiles = ids 9-17, `j` Customize = id 18, `pod_pages.ID_CHARS`), then optionally `-` and the items turned off (not listed on the Extras page), then `\n`; `12345\n` is the default (the file missing; Now Playing, Shuffle and Customize are items hidden by default). The Extras row is not in the file: it is always the menu's last row. Read with the limits below; written atomically at each change on Customize > Main Menu or Customize > Extras |
+| `/mnt/mmc/m1plus-log` | opt-in: if this empty file exists, events are appended to `/mnt/mmc/m1plus.log` (armed, boot ok, marker found, kill switch) |
 
 The menu list is **on the boot path** (the menu is the Home screen at start-up; its asset is arranged by `menu_arrange` while it opens), so
-`patch/menu.c` reads `/mnt/data/m1pod-menu` with `open`/`read` of at most 24 bytes (`POD_MENU_FILE_MAX`) and accepts only: no
-more than eighteen characters from `012345678abcdefghi` (`j`, the retired Screenshot item of V2.1nF, is unknown: a file with it is the default list), none twice, then optionally one `x` as the last character, an optional single final newline, a file shorter than 24 bytes (an empty list, a lone
-newline, is valid: every item hidden and Extras hidden; `x` alone is valid: Extras only); a missing, empty, longer, corrupt, duplicated or unknown-id file is the default list. It
-never writes while reading, a row or the list missing from the page leaves the asset untouched (every item shown, Extras and
-Settings on the menu), and `Settings` is a row the arrangement never hides, so it stays reachable from any file (Extras is hidden only by a list without `x`).
+`patch/menu.c` reads `/mnt/data/m1plus-menu` with `open`/`read` of at most 24 bytes (`POD_MENU_FILE_MAX`) and accepts only: no
+more than nineteen characters from `012345678abcdefghij`, none twice (across both parts), at most one `-` (the items after it are turned off), Customize (`j`) never after it (it must stay reachable), an optional single final newline, a file shorter than 24 bytes (an empty list, a lone
+newline, is valid: every item hidden, nothing turned off; so is `-` alone); a missing, empty, longer, corrupt, duplicated or unknown-id file (an old `x` is unknown) is the default list with nothing off. It
+never writes while reading and a row or the list missing from the page leaves the asset untouched (every item shown, the Extras row last); Extras is a row the arrangement never hides, and Customize is an item like the others (hidden from the menu it is listed on the Extras page and can never be turned off), so Customize stays reachable from any file.
 The Main Menu page (`cm_layout` in `patch/menu.c`) re-arranges in place after every successful save: row y (shown items in menu order, then hidden in default order), switch images, arrow visible (shown rows but the first; always insensitive), then the scroll view's `yoffset` is moved just enough to keep the changed item's row in the window, and the whole window is invalidated with `widget_invalidate_force`. Click contexts are item ids (not positions), so a bound row always means its own item; a failed save leaves list and page as they were.
 
 **One tap, one action (V2.1nA).** The up arrow is a stock `button`, and stock's button answers the pointer DOWN and UP with `RET_OK`, so a tap on it also reached the row (a `list_item`) as a click: one tap moved the item up and toggled it (reproduced in `test/pod/menutap.py` on demo's own `widget_on_pointer_down/up`, `list_item` and `button` code run under Unicorn: the click log read `pod_up3, pod_row3`). Now the arrow is a picture (`sensitive=false` in the asset, and `cm_layout` keeps it insensitive; `visible` follows the shown-and-not-first rule) and has no handler. The row binds `EVT_CLICK` (`cm_on_row`) and `EVT_POINTER_DOWN` / `UP` / `ABORT` (`cm_on_touch`, the same context, the item id). The pointer event of the DOWN (and of the click, a copy of the UP's) carries screen coordinates (`PE_X` 0x18); `widget_to_local(row, pt)` (0x669b88, stock's own: it subtracts the row's and every ancestor's x, y) gives the row-local x. The arrow zone is the arrow button's rectangle, read with `widget_get_prop_int(up, "x"/"w")` (asset: x 191, w 50, the full 52 px row height; the label ends at 190, the switch starts at 241): the touch **went down** inside it on a row that has an arrow (shown, not first) -> `cm_up`; anything else (label, switch, margins, a row without an arrow) -> `cm_toggle`. The decision is made at DOWN (`cm.down` / `cm.zone`, the id + 1 of the row), so a finger that slides a few pixels out of the zone before lifting does what it started; without a DOWN of that row the click's own position decides. Pressed look: while a touch that went down in the zone is held, `widget_set_state(up, "pressed")` (0x66962c, `(widget, const char *state)`; the button's `style:pressed:icon` art `expansion_2_down`), back to `"normal"` at UP / ABORT, at the click, and at the next DOWN (a lost UP cannot leave it). A drag that starts on the arrow scrolls the list and does nothing else (the row cancels itself on an 11 px MOVE; the stock gap for a release far from the press without such a MOVE is the list gesture hook's, V2.1mV).
 The page arrangement costs a handful of widget calls (`widget_move`, `widget_set_visible`, `widget_set_sensitive`, one
-`virtual_h` / `yoffset` pair; twenty rows at most, each a constant number of calls); the Extras page hides the items the menu shows and stacks the others in the fixed `EX_ORDER`, in the same pass (it is only reachable from the menu, so it is arranged at open and needs no foreground handler; with all eighteen shown it is empty); the menu also re-arranges on `EVT_WINDOW_TO_FOREGROUND` (it comes back in front after the Main Menu page).
+`virtual_h` / `yoffset` pair; twenty rows at most, each a constant number of calls); the Extras page hides the items the menu shows and the ones turned off and stacks the others in the fixed `EX_ORDER`, in the same pass (it is only reachable from the menu, so it is arranged at open and needs no foreground handler; with all nineteen shown it is empty); the Customize > Extras page (`menu_extras_opened`) lays out the items the menu does not show the same way and a tap on a row flips that item's off flag and saves; the menu also re-arranges on `EVT_WINDOW_TO_FOREGROUND` (it comes back in front after the Main Menu or Customize > Extras page).
 
 **The stock list code under the menu's hand-placed rows (V2.1nB, `test/pod/pulldown.py` runs all of it).** The menu, Extras and Main Menu
 pages are a stock `list_view` > `scroll_view` whose rows `patch/menu.c` places by hand (`widget_move`, `widget_set_visible`, `virtual_h`), and
@@ -133,7 +132,7 @@ the stock list code assumes it owns that layout:
   gone, the first row left). The pages clear that one word (`mn_plain_paint`: only if the widget's vtable is `g_scroll_view_vtable`
   `0x97a298` and the word is exactly `0x60c164`; anything else is left as it is), so the stock default painter paints them.
 - *The Recently Played shelf.* `home_menu_opened` calls `recent_start` (patch/recent.c, `docs/modules/recent.md`) right after `minibar_start`, same conditions (the Home instance, the navbar and the list found, no kill switch). It looks up four widgets, registers eight handlers (the list's scroll event too) and arms one 150 ms one-shot,
-  and then reads one small file (`/mnt/data/m1pod-recent`, at most 3 KB, strictly parsed: anything malformed is empty) and the switch file (`/mnt/data/m1pod-shelf`, one byte), and shows the shelf if an album is recorded (`menu_shelf`: a visibility change and a move of the rows). That is inside the 5 s window of the marker but
+  and then reads one small file (`/mnt/data/m1plus-recent`, at most 3 KB, strictly parsed: anything malformed is empty) and the switch file (`/mnt/data/m1plus-shelf`, one byte), and shows the shelf if an album is recorded (`menu_shelf`: a visibility change and a move of the rows). That is inside the 5 s window of the marker but
   it decodes nothing, allocates only the grid's six tile records (about 2.4 KB, no bitmap), loads no album list and hooks nothing; covers are made one per tick by the page timer afterwards. Any failure leaves the menu as `hm_fill_window` made it. The kill switch and a missing widget stop it before any call.
 - *The mini player bar.* `home_menu_opened` calls `minibar_start` (patch/minibar.c) right after `hm_fill_window` for the Home instance only, and only when
   that laid the list out (navbar and list found). The list then is 10..440 until the bar's first work (a one-shot `MB_FIRST_MS` later, so the menu's first
@@ -149,9 +148,9 @@ the stock list code assumes it owns that layout:
   is the navbar. What reaches the page in that sequence is the relayout and the paint hook, both handled above; the tests run it with the
   window manager's own calls on the real stock code (DOWN, MOVEs, abort, snapshot layout, foreground arrange) and the first frame
   after a lock screen. What the emulation cannot show is the canvas the device gives the hook while the dialog animates (rendering is not
-  emulated), which is why the paint hook is removed instead of relied on; see `docs/history.md` V2.1nB for the device checks.
+  emulated), which is why the paint hook is removed instead of relied on; see `docs/history.md` (hardware results, mY) for the device checks.
 
-The setting is an own file, not `config.ini [M1POD]`: `write_int_config` rewrites the shared config
+The setting is an own file, not `config.ini [M1PLUS]`: `write_int_config` rewrites the shared config
 the stock app parses at start-up, and a bad write there is a boot risk.
 
 ### Window stack
@@ -170,18 +169,18 @@ one-shot timer, never inside the event, so no window opens while the manager is 
 |---|---|
 | start-up | the hook schedules the first open: menu over Home (after Now Playing's resume, once closed) |
 | go-home idle callback (`0x677a28` -> `0x6777c8`: idle timeout, USB, search, keylock, ...) and `navigator_back_to_home` | force-closes everything above Home (menu too), animates the top one; Home gets `TO_FOREGROUND` -> menu again |
-| Back on the Home menu | no navbar, so no Back button; a hardware Back would close the menu and it reopens (a flash, no loop; the loop breaks via Settings > Home Screen > Shanling Home) |
+| Back on the Home menu | no navbar, so no Back button; a hardware Back would close the menu and it reopens (a flash, no loop; the loop breaks via Customize > Home Screen > Shanling Home) |
 | Back from Now Playing / library pages opened from the menu | their `navigator_back` closes them; the menu is below and becomes top |
 | "Back to player", Shuffle's Now Playing | `window_manager_switch_to` restacks/opens `playing_page` above the menu; Back returns to it |
 | lock screen / power-off dialog cancel | fullscreen window above / a dialog closes; nothing changes |
 | "play from here" / jump-list loops (`0x525908`, `0x538ce4`) | pop with `navigator_back` until `playing_page` or `home_page`. Do not assume `playing_page` is above the menu: it is only in the stack when Now Playing was opened (or resumed) before the album page. When it is not, the album-detail Play loop (`0x525908`) can pop every pod page (album page, Albums / Cover Flow / Artists, the menu) down to `home_page`; Home then gets `TO_FOREGROUND` and `hm_fg` reopens the menu. Derived from the code, not device-verified; a change that adds a pod page to the stack must be checked against this loop. The album page's Play all and Shuffle run the same loop (`ah_open_player`, bounded to 16 pops; `test/pod/albuminfo.py` `StackMachine`) |
-| Settings > Home Screen > Shanling Home row | `grid = 1`, `window_close` of the menu and of the Settings page, `navigator_back` of the Home Screen page; `hm_fg` sees `grid` and schedules nothing |
+| Customize > Home Screen > Shanling Home row | `grid = 1`, `window_close` of the menu, of the Extras page (when Customize was opened from it) and of the Customize page, `navigator_back` of the Home Screen page; `hm_fg` sees `grid` and schedules nothing |
 
 No close animations on the pod pages and nothing in the payload loops on `navigator_back`.
 Evidence that the open order is safe and the grid is hidden before the menu appears: the grid content
 is hidden from `home_boot` on, the window under the menu is plain black (`home_page` bg `#000000`),
 every give-up (kill switch, no top window, Home never opened, `window_open` failure, a refused open timer) shows the grid
-again, and Home coming to the foreground with no menu to follow (the kill switch appeared, or Start in was switched to
+again, and Home coming to the foreground with no menu to follow (the kill switch appeared, or Boot to was switched to
 Shanling while the menu was Home) shows it too (`hm_fg`: never a blank Home), and the stock Home keeps all its widgets so every stock `widget_lookup` resolves. Hiding
 `app_gesture` assumes stock never toggles its visibility itself (it would only re-show the grid).
 
@@ -194,12 +193,12 @@ expected: the guard acts at the first boot after a failure), the SD kill switch 
 before the hook runs; use the bootloader/recovery flash of V2.1R, whose button combination is
 unverified. To re-enable after a fallback: a fallback boot is stock and adds no grid icon (the icon is new boot
 code, so it is behind the sticky note like everything else). The way back is the **recovery fallback** in the Home
-icon tap hook (not boot code): while the bad note `/mnt/data/m1pod-bad` exists, a tap on the Tidal icon (id 1)
-opens the M1+ Pod menu (the normal instance, with Back) instead of Tidal; Settings > Home Screen > **Start in M1+ Pod** (switch on) clears
+icon tap hook (not boot code): while the bad note `/mnt/data/m1plus-bad` exists, a tap on the Tidal icon (id 1)
+opens the M1+ Music menu (the normal instance, with Back) instead of Tidal; Customize > Home Screen (Customize is a menu item hidden by a saved list that does not list it; the menu's Extras row, always shown, then lists it) > **Boot to M1+ Music** (switch on) clears
 the note and sets the start file, and the next boot arms the guard again (the icon returns). Without the note,
 or with the kill switch on, Tidal is stock; if the menu cannot open, the tap falls through to stock. From a
-shell, deleting `/mnt/data/m1pod-bad` and writing `1` to `/mnt/data/m1pod-start` does the same; or reflash. Device test procedure: boot, wait 10 s past Home, power-cycle a few times (with the log: every
+shell, deleting `/mnt/data/m1plus-bad` and writing `1` to `/mnt/data/m1plus-start` does the same; or reflash. Device test procedure: boot, wait 10 s past Home, power-cycle a few times (with the log: every
 start `armed` / `boot ok`, never `marker found`); power off within 5 s of Home once (the log says
 `marker found; falling back to Shanling`, the device boots to the stock Home); then Songs/Albums/Back,
 Now Playing, Cover Flow, Shuffle, lock/unlock, idle timeout, USB mode in and out (you land on the
-menu), Settings > Home Screen > Shanling Home and back by the icon, Start in toggles and reboot, Main Menu changes and reboot, and the kill switch.
+menu), Customize > Home Screen > Shanling Home and back by the icon, Boot to M1+ Music toggles and reboot, Main Menu changes and reboot, and the kill switch.

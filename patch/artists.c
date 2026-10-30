@@ -1,4 +1,4 @@
-/* M1+ Pod Artists: the stock Local Music artists as an M1+ Pod list; a tap opens Cover Flow on that
+/* M1+ Music Artists: the stock Local Music artists as an M1+ Music list; a tap opens Cover Flow on that
  * artist's albums.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
@@ -23,7 +23,12 @@
  * artist's albums in Cover Flow and the album page) follows. Without the button or the title the page
  * still lists in the current mode.
  *
- * No stock function is hooked. The page is opened from the M1+ Pod menu's Artists row and
+ * The same page lists Genres (class 0xf006) and Composers (0xf005) for the menu's Genres and Composers rows (artists_open's argument is the stock Home tile; 0 is
+ * Artists): the title is the row's text, the Artist / Album Artist button is hidden and the order is the stock query's. A composer's tap is an artist's (Cover Flow on the
+ * composer's albums: loadAlbumList(0xf005), class 0xff02); a genre's tap lists the genre's songs on our Songs page (songs_open_genre). Where the window will not open the
+ * tile's stock page opens. docs/modules/artists.md.
+ *
+ * No stock function is hooked. The page is opened from the M1+ Music menu's Artists, Genres and Composers rows and
  * everything here runs from its own widgets; nothing of it outlives the window.
  */
 #include "offsets.inc"
@@ -31,7 +36,9 @@
 #include "covercache.h"
 #include "common.h"
 
-extern int coverflow_artist(void *artists, unsigned index); /* patch/coverflow.c */
+extern int coverflow_artist(void *artists, unsigned index, unsigned scope); /* patch/coverflow.c */
+extern int songs_open_genre(const char *name, int unknown);                 /* patch/songs.c */
+extern int pod_home_open(int id);   /* patch/m1plus.c: a stock Home destination through the dispatcher */
 
 #define ROW_H 52          /* tools/pod_ui.py ROW_H: the menu's rows */
 #define ROW_TEXT_X 24
@@ -40,10 +47,13 @@ extern int coverflow_artist(void *artists, unsigned index); /* patch/coverflow.c
 
 static struct {
     void *win, *view, *list, *status;
-    void *title, *toggle; /* label_title and btn_artisttype; either may be missing */
+    void *title, *toggle, *np; /* label_title, btn_artisttype and btn_backtoplayer; any may be missing */
     void *artists; /* our copy of the stock artist rows */
     unsigned *order;  /* stock row at each display position; NULL = stock order */
     unsigned count;
+    unsigned cls;     /* the stock class listed: CLASS_ARTISTS, CLASS_GENRES or CLASS_COMPOSERS */
+    int home;         /* its Home tile (HOME_GENRE, HOME_COMPOSER; 0 for Artists): where a window that will not open falls back */
+    const char *key;  /* the title's key of Genres and Composers */
 } ar __attribute__((section(".scratch")));
 
 /* Hidden and out of the hit test together (this AWTK's widget_find_target ignores visible). */
@@ -61,10 +71,15 @@ static const char *ar_name(void *r) {
 /* The stock row shown at display position i. */
 static unsigned ar_stock(unsigned i) { return ar.order ? ar.order[i] : i; }
 
+/* A tap: an artist's or a composer's albums in Cover Flow; a genre's songs on our Songs page (the stock row tap's classinfo and class 0xff09, songs_open_genre). */
 static int ar_on_artist(void *ctx, void *e) {
     unsigned i = (unsigned)(long)ctx;
     (void)e;
-    if (ar.artists && i < ar.count) coverflow_artist(ar.artists, ar_stock(i));
+    if (!ar.artists || i >= ar.count) return RET_OK;
+    if (ar.cls == CLASS_GENRES) {
+        void *r = deque_at(ar.artists, ar_stock(i));
+        songs_open_genre(ar_name(r), *(int *)((char *)r + REC_ID) == -1);
+    } else coverflow_artist(ar.artists, ar_stock(i), ar.cls);
     return RET_OK;
 }
 
@@ -110,6 +125,16 @@ static void ar_sort(void) {
 static void ar_mode_show(void) {
     int album = *(volatile int *)ARTIST_TYPE == 1;
     const char *icon = album ? "pod_nav_artist" : "pod_nav_albumartist";
+    if (ar.cls != CLASS_ARTISTS) {   /* Genres and Composers: the menu row's text, and no Artist / Album Artist switch (hidden and out of the hit test) */
+        if (ar.title) widget_set_tr_text(ar.title, ar.key);
+        ar_show(ar.toggle, 0);
+        if (ar.np) {   /* Now Playing is the capsule's right cap in the asset (it has the switch to its left): alone it is the glass disc, as on every page with no toggle */
+            widget_set_prop_str(ar.np, "style:normal:icon", "ah_nav_np");
+            widget_set_prop_str(ar.np, "style:over:icon", "ah_nav_np");
+            widget_set_prop_str(ar.np, "style:pressed:icon", "ah_nav_np_down");
+        }
+        return;
+    }
     if (ar.title) widget_set_tr_text(ar.title, album ? "Album Artists" : "Artists");
     if (ar.toggle) {
         widget_set_prop_str(ar.toggle, "style:normal:icon", icon);
@@ -164,13 +189,13 @@ static void ar_load(void) {
     widget_destroy_children(ar.view);
     widget_set_prop_int(ar.view, "yoffset", 0);
     widget_set_prop_int(ar.view, "virtual_h", 0);
-    list = loadLocalClassList(CLASS_ARTISTS) > 0 ? *(void **)PDEQ_SHOWLIST : (void *)0;
+    list = loadLocalClassList(ar.cls) > 0 ? *(void **)PDEQ_SHOWLIST : (void *)0;
     if (list && deque_size(list) && (ar.artists = _create_deque("stSongInfo"))) {
         deque_init(ar.artists);
         deque_assign(ar.artists, list);
         ar.count = deque_size(ar.artists);
         if (ar.count > MAX_ARTISTS) ar.count = MAX_ARTISTS;
-        ar_sort();
+        if (ar.cls == CLASS_ARTISTS) ar_sort();   /* Genres and Composers stay in the stock query's order (group by ... COLLATE NOCASE) */
     }
     if (!ar.count) {
         ar_show(ar.list, 0);
@@ -187,6 +212,7 @@ static void ar_load(void) {
 static int ar_on_toggle(void *ctx, void *e) {
     int type = *(volatile int *)ARTIST_TYPE != 1;
     (void)ctx; (void)e;
+    if (ar.cls != CLASS_ARTISTS) return RET_OK;   /* Genres and Composers have no switch (the button is hidden; a stray click changes nothing) */
     *(volatile int *)ARTIST_TYPE = type;
     write_int_config(type, "PLAYSET", "ARTISTTYPE");
     *(volatile unsigned char *)ARTIST_RELOAD = 1;
@@ -195,12 +221,20 @@ static int ar_on_toggle(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* The M1+ Pod menu's Artists row. 0 once the page is up, -1 if it could not open. */
-int artists_open(void) {
+/* The M1+ Music menu's Artists row (home 0), or Genres (HOME_GENRE) or Composers (HOME_COMPOSER): the same page on another stock class. 0 once the page is up, -1 if
+ * it could not open (Genres and Composers then open the tile's stock page, as the Songs lists do). */
+int artists_open(int home) {
     if (ar.win) return -1;
     memset(&ar, 0, sizeof ar);
-    ar.win = window_open("m1pod_artists");
-    if (!ar.win) return -1;
+    ar.cls = home == HOME_GENRE ? CLASS_GENRES : home == HOME_COMPOSER ? CLASS_COMPOSERS : CLASS_ARTISTS;
+    ar.home = ar.cls == CLASS_ARTISTS ? 0 : home;
+    ar.key = ar.cls == CLASS_GENRES ? "Genres" : "Composers";
+    ar.win = window_open("m1plus_artists");
+    if (!ar.win) {
+        int h = ar.home;
+        memset(&ar, 0, sizeof ar);
+        return h ? pod_home_open(h) : -1;
+    }
     widget_on(ar.win, EVT_DESTROY, ar_on_destroy, (void *)0);
     pod_bind(ar.win, "btn_return", pod_on_back, (void *)0);
     pod_bind(ar.win, "btn_backtoplayer", pod_on_player, (void *)0);
@@ -209,10 +243,12 @@ int artists_open(void) {
     ar.status = widget_lookup(ar.win, "label_status", 1);
     ar.title = widget_lookup(ar.win, "label_title", 1);
     ar.toggle = widget_lookup(ar.win, "btn_artisttype", 1);
+    ar.np = widget_lookup(ar.win, "btn_backtoplayer", 1);
     if (ar.toggle) widget_on(ar.toggle, EVT_CLICK, ar_on_toggle, (void *)0);
     if (!ar.list || !ar.view || !ar.status) {
+        int h = ar.home;
         navigator_back(); /* an asset that is not ours */
-        return -1;
+        return h ? pod_home_open(h) : -1;
     }
     ar_mode_show();
     ar_load();

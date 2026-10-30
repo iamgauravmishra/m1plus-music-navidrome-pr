@@ -20,7 +20,7 @@ def _rows_module():
 RowMachine = _rows_module().RowMachine
 
 HEADER_BUILDER = pod.ALBUMINFO_HEADER             # albuminfo_listitem0_layout
-KILL = '/mnt/mmc/m1pod-off'
+KILL = '/mnt/mmc/m1plus-off'
 HDR_ART = 0x4dd670                                # the cover thread's flag-1 size word
 STOCK_HEADER = {'cover': (0, 0, 100, 100), 'title': (108, 7, 200, 24), 'artist': (108, 33, 200, 20),
                 'button': (108, 62, 90, 28)}      # what the stock builder makes (@0x526264, 0x524990, 0x524a64), the title boxes as rows.json sets them
@@ -208,23 +208,23 @@ class StackMachine(StockEventMachine):
 def stack_tests(expect):
     """The stock "play from here" loop (row handler @0x52569c, loop @0x525904) against the window stack, with our pages."""
     play_all, shuffle = PSYMS['ah_on_play'], PSYMS['ah_on_shuffle']
-    pages = ['home_page', 'm1pod_menu', 'playing_page', 'm1pod_cover', 'albuminfo_page']
+    pages = ['home_page', 'm1plus_menu', 'playing_page', 'm1plus_cover', 'albuminfo_page']
     mm = StackMachine(pages)
     expect(mm.call(pod.FUNCTIONS['window_manager_get_top_window'][2], a0=mm.wmw, count=100000) == mm.top()[1],
            'the model runs demo\'s own window_manager_get_top_window: it finds the topmost visible window')
     for label, fn in (('Play all', play_all), ('Shuffle', shuffle)):
         m = StackMachine(pages); m.call(fn, count=60000000)
-        expect(m.names_() == ['home_page', 'm1pod_menu', 'playing_page'] and m.backs == 2 and m.closed.count('playing_page') == 1
+        expect(m.names_() == ['home_page', 'm1plus_menu', 'playing_page'] and m.backs == 2 and m.closed.count('playing_page') == 1
                and m.opened == ['playing_page'] and m.played and len(m.played[0]) == 4,
                f'{label} with a Now Playing under the pages: the pages above it are popped, the old Now Playing closed, a new one opened over the menu ({m.names_()}, {m.backs} back)')
         expect(m.top()[0] == 'playing_page' and 'start_player' not in m.names(), f'{label}: the player is started by the new Now Playing\'s init, not here')
-        m = StackMachine(['home_page', 'm1pod_menu', 'm1pod_albums', 'albuminfo_page']); m.call(fn, count=60000000)
-        expect(m.names_() == ['home_page', 'm1pod_menu', 'm1pod_albums', 'albuminfo_page', 'playing_page'] and m.backs == 0 and not m.closed,
+        m = StackMachine(['home_page', 'm1plus_menu', 'm1plus_albums', 'albuminfo_page']); m.call(fn, count=60000000)
+        expect(m.names_() == ['home_page', 'm1plus_menu', 'm1plus_albums', 'albuminfo_page', 'playing_page'] and m.backs == 0 and not m.closed,
                f'{label} with no Now Playing in the stack: nothing is popped, the page opens over the album page ({m.names_()})')
         m = StackMachine(pages, songer=0); m.call(fn, count=60000000)
         expect(m.names_() == pages + ['playing_page'] and m.backs == 0,
                f'{label} with songerinfoflag clear: the stock handler does not pop either, the page opens over the old one ({m.names_()})')
-        m = StackMachine(['playing_page', 'home_page', 'm1pod_menu', 'albuminfo_page']); m.call(fn, count=60000000)
+        m = StackMachine(['playing_page', 'home_page', 'm1plus_menu', 'albuminfo_page']); m.call(fn, count=60000000)
         expect(m.names_() == ['playing_page', 'home_page', 'playing_page'] and m.backs == 2,
                f'{label}: the pop stops at home_page ({m.names_()})')
     # a page with a close animation would never leave: stock's loop would spin; ours stops at AH_POP_MAX and opens anyway
@@ -805,7 +805,7 @@ def tone_cache_tests(expect):
 # multi-select, Now Playing; 0x524e4c (the page's own build: albumdeinfo_listitem_layout's row loop @0x5265f4, the to-foreground handler @0x5267f0;
 # also album_page_init, an artist's albums) makes Back and, unless `songerinfoflag` (0xa04737) is set, multi-select and Now Playing (never search): what
 # a freshly opened page shows. Select mode (0xa05a24 == 1) makes unselect, add, delete, cancel in both. Their geometry is main's (the Pod navbar's
-# slots, stock select mode); the page theme draws a glass disc in each button, sized to it.
+# slots, stock select mode); the page theme draws a glass piece centred in each button: discs, and multi-select | Now Playing as one capsule.
 NAV_BUILDERS = {'page build 0x524e4c': 0x524e4c, 'toggle handlers 0x526a3c': 0x526a3c}
 NAV_BUILDER = 0x526a3c
 # The classes 0x526a3c can run with (g_class_type = classinfo[0] after loadAlbumdetailList, @0x5268ec) and the two sibling branches it has for other
@@ -840,8 +840,10 @@ def nav_builder_buttons(cls=0xff10, select=0, builder=NAV_BUILDER, songer=0):
 
 def nav_tests(expect):
     """Both builders run in the emulator for every select state, `songerinfoflag` and class; every button they make (main's geometry, which this page
-    must not change: the builders are shared with stock pages) gets a glass disc from the page theme that is exactly as wide as the button, so centred
-    with no rounding, and whose glyph lands on its target column (NAV_GLYPH_X); the disc fits the button's height and the band."""
+    must not change: the builders are shared with stock pages) gets a glass piece from the page theme centred in the button with no rounding (as wide,
+    or multi-select's 4 px wider), whose glyph lands on its target column (NAV_GLYPH_X); the piece fits the button's height and the band. Wherever
+    multi-select and Now Playing are made, their glass is ONE capsule (mod_icons.AH_CAPSULE: multi-select's ends where Now Playing's starts), and
+    search's disc ends before it."""
     cases = [(f'{bn}, normal, songerinfoflag {s}', dict(builder=b, songer=s)) for bn, b in NAV_BUILDERS.items() for s in (0, 1) if b == 0x524e4c or s == 0]
     cases += [(f'0x526a3c, class {label}', dict(cls=cls)) for label, cls in NAV_CLASSES.items()]
     cases += [(f'{bn}, select mode', dict(builder=b, select=1)) for bn, b in NAV_BUILDERS.items()]
@@ -849,19 +851,25 @@ def nav_tests(expect):
     band_h = mod_ipodrows.NAV_BAND[3]
     for label, kw in cases:
         bs = [b for b in nav_builder_buttons(**kw) if b[0] == 'button']
-        bad = []
+        bad, glass = [], {}
         for _, style, x, y, w, h in bs:
             if style not in mod_ipodrows.NAV_STYLES: bad.append((style, 'no glass style')); continue
             rest, down, icon_at, off = mod_ipodrows.NAV_STYLES[style]
-            iw, x0, x1, cx, _g = {**mod_icons.AH_NAV_PIECES, 'ah_nav_sel': (50, 8, 50, 29, None)}[rest]
+            iw, x0, x1, cx, _g, _cap = {**mod_icons.AH_NAV_PIECES, 'ah_nav_sel': (50, 8, 50, 29, None, None)}[rest]
             if icon_at == 1:   # Back: icon_at left, the icon centred in a h x h square (x_offset +4: the Pod navbar's disc columns)
                 gx = x + h // 2 + off
-            else:
-                gx = x + w // 2 - iw // 2 + cx if iw == w else None
+            else:   # canvas_draw_icon_in_rect: the image at its own size on the rect's centre
+                left = x + w // 2 - iw // 2 if (w - iw) % 2 == 0 and iw - w in (0, 4) else None
+                gx = None if left is None else left + cx
+                if left is not None: glass[style] = (left + x0, left + x1)
             if gx != NAV_GLYPH_X[style] or h < mod_icons.GLASS_H or y + h > band_h or (iw is not None and icon_at != 1 and x + w // 2 - iw // 2 + x1 > 320):
                 bad.append((style, x, y, w, h, gx))
+        ms, np_, se = (glass.get(s) for s in ('navbar_btnmulselect_style', 'navbar_btnbackplayer_style', 'search_style'))
+        if ms or np_:
+            if not (ms and np_ and ms[1] == np_[0] and (ms[0], np_[1]) == mod_icons.AH_CAPSULE): bad.append(('capsule', ms, np_))
+            if se and se[1] >= ms[0]: bad.append(('search over the capsule', se, ms))
         sets[label] = [b[1].replace('navbar_btn', '').replace('_style', '') for b in sorted(bs, key=lambda b: b[2]) if b[1] != 'navbar_btnreturn_style']
-        expect(bool(bs) and not bad, f'navbar builder, {label}: buttons {sets[label]} each get a disc as wide as the button, glyph on its column; off: {bad}')
+        expect(bool(bs) and not bad, f'navbar builder, {label}: buttons {sets[label]} each get a glass piece centred in the button, glyph on its column, multi-select | Now Playing one capsule {mod_icons.AH_CAPSULE}; off: {bad}')
     expect(sets['page build 0x524e4c, normal, songerinfoflag 0'] == ['mulselect', 'backplayer'] and sets['page build 0x524e4c, normal, songerinfoflag 1'] == []
            and all(len(sets[f'0x526a3c, class {l}']) == (2 if '0xff09' in l else 3) for l in NAV_CLASSES)
            and sets['toggle handlers 0x526a3c, select mode'] == sets['page build 0x524e4c, select mode'] == ['unselect', 'add', 'del', 'cancel'],
@@ -873,13 +881,13 @@ def album_tests(expect, page, cover_asset):
     built = open(DEMO, 'rb').read()
     w = lambda a: struct.unpack_from('<I', built, pod.fileoff(built, a))[0]
     hook = MANIFEST['hook_albuminfo']
-    expect(hook['addr'] == HEADER_BUILDER == 0x526264 and hook['target'] == PSYMS['m1pod_albuminfo_header'],
+    expect(hook['addr'] == HEADER_BUILDER == 0x526264 and hook['target'] == PSYMS['m1plus_albuminfo_header'],
            'the manifest records the album header hook and its target')
     expect(pod.ALBUMINFO_HEADER_PROLOGUE == (0x3c1c004e, 0x279cdc6c, 0x0399e021),
            'the hook pins the three PIC prologue words of albuminfo_listitem0_layout')
-    expect((w(HEADER_BUILDER), w(HEADER_BUILDER + 4)) == (pod.j(PSYMS['m1pod_albuminfo_header']), 0)
+    expect((w(HEADER_BUILDER), w(HEADER_BUILDER + 4)) == (pod.j(PSYMS['m1plus_albuminfo_header']), 0)
            and w(HEADER_BUILDER + 8) == pod.ALBUMINFO_HEADER_PROLOGUE[2],
-           'the built demo has `j m1pod_albuminfo_header; nop` over the first two prologue words')
+           'the built demo has `j m1plus_albuminfo_header; nop` over the first two prologue words')
     expect(w(HDR_ART) == 0x241300a0, f'the header cover is rendered at 160 px ({w(HDR_ART):#010x}; stock addiu s3, zero, 0x64)')
     expect(O['AH_ART'] == 160, 'and the header shows it 1:1 (AH_ART)')
     expect(w(HDR_ART) & 0xffff == O['AH_ART'], 'the cover word is AH_ART itself')
@@ -1071,14 +1079,24 @@ def album_tests(expect, page, cover_asset):
     expect(not any(n in m.names() for n in ('timer_add', 'pthread_create', 'window_open')), 'a start leaves no timer, thread or page behind')
     m.mode = O['MODE_SHUFFLE']; m.call(shuffle, count=60000000)
     expect(not any(c[0] in ('mclSetPlayMode', 'write_int_config') for c in m.calls) and played(m), 'already in Shuffle: nothing is written')
-    # Play all: the album's first track, the play mode untouched, the same way into Now Playing
+    # Play all: the album's first track in an in-order mode, the same way into Now Playing
     m = AlbumMachine(); m.header(tracks=6); m.stock_songlist = True; m.mode = 3
     m.call(play_all, count=60000000)
     expect(played(m) == [('navigator_to_with_context', 'playing_page', 0, O['CLASS_ALBUM_TRACKS'], O['PLAY_MODE'])] and len(m.played[0]) == 6
            and m.played[1] == 0 and m.mode == 3 and not any(c[0] in ('mclSetPlayMode', 'write_int_config', 'start_player') for c in m.calls),
-           'Play all queues the album from its first track, opens Now Playing like a track tap and leaves the play mode alone')
+           'Play all queues the album from its first track, opens Now Playing like a track tap and keeps Repeat all (nothing written)')
     expect([c[0] for c in m.calls if c[0] in ('access', 'loadSongList', 'navigator_to_with_context', 'deque_destroy')]
            == ['access', 'loadSongList', 'navigator_to_with_context', 'deque_destroy'], 'access, resolve, open, free')
+    for before, after in ((0, 0), (1, 0), (2, 0), (3, 3)):
+        m = AlbumMachine(); m.header(tracks=6); m.stock_songlist = True; m.mode = before
+        m.call(play_all, count=60000000)
+        wrote = before != after
+        expect(played(m) and m.mode == after and (('write_int_config', after, 'PLAYSET', 'PLAYMODE') in m.calls) == wrote
+               and (('dmrSendPlayMode', after) in m.calls) == wrote,
+               f'Play all from mode {before}: mode {after} (Shuffle and Repeat one become List play, so Now Playing plays the album in order)')
+    m = AlbumMachine(); m.header(tracks=6); m.stock_songlist = True; m.mode = 0
+    m.call(shuffle, count=60000000); m.call(play_all, count=60000000)
+    expect(m.mode == O['MODE_ORDER'] and played(m)[-1][2] == 0, 'Shuffle, then Play all: the album from its first track in List play, not still shuffled')
     m = AlbumMachine(); m.header(tracks=3); m.stock_songlist = True
     for p in list(m.present):
         if p.startswith('/mnt/mmc/m/'): m.present.discard(p)
@@ -1195,7 +1213,7 @@ def album_tests(expect, page, cover_asset):
         expect(hits and all(g == f'track{i}' for i, y, g in hits), f'scrolled {scroll}: the rows below the band take touches ({hits})')
         under = [(y, stock_target(m, w2, 30, y)[-1]) for y in range(0, NB, 9)]
         expect(all(g == 'btn_back' for y, g in under), f'scrolled {scroll}: Back keeps its touches over the rows that pass under it ({under})')
-    # the fallback: the hook does not run (the kill switch /mnt/mmc/m1pod-off, or the header is not the stock shape). The asset, the page theme and the
+    # the fallback: the hook does not run (the kill switch /mnt/mmc/m1plus-off, or the header is not the stock shape). The asset, the page theme and the
     # builder's immediates are data, so the floating controls stay; the header is stock's (a 100 px item at the list's top: cover 100x100 at (0, 0),
     # title (108, 10, 200, 20), artist (108, 30, 200, 18), Play all (108, 62, 90, 28), albuminfo_listitem0_layout @0x526264, album_page_init+0x174 / +0x248)
     stock_hdr = Node('header', 0, 0, 310, 100, children=[Node('cover', 0, 0, 100, 100), Node('title', 108, 10, 200, 20), Node('artist', 108, 30, 200, 18),
@@ -1259,20 +1277,29 @@ def album_tests(expect, page, cover_asset):
     rp = painted_over(m, art, ph.convert('RGB'))[1]
     expect(rp.getpixel((0, 0)) == (0, 0, 0) and rp.getpixel((S // 2, 0)) == ph.convert('RGB').getpixel((S // 2, 0)),
            'and its corners are round too')
-    for n in ('ah_shuffle', 'ah_shuffle_down'):   # the glass look itself: test/pod/glassbtn.py
+    for n, body in (('ah_shuffle', 0x2A), ('ah_shuffle_down', 0x44)):
         im = Image.open(os.path.join(IMGS, n + '.png')).convert('RGBA')
         D = O['AH_DISC']
-        expect(im.size == (D, D) and im.getpixel((0, 0))[3] == 0 and (255, 255, 255, 255) in im.getdata(),
-               f'{n}: a {D} px disc (transparent corners) with the white glyph on it')
+        expect(im.size == (D, D) and im.getpixel((0, 0))[3] == 0 and im.getpixel((D // 2, 2)) == (body, body, body, 255),
+               f'{n}: a {D} px disc (transparent corners, #{body:02X} body) with the glyph on it')
     pg = Image.open(os.path.join(IMGS, 'ah_play.png')).convert('RGBA')
     vis = pg.getchannel('A').getbbox()
     G = O['AH_PILL_GLYPH']
     expect(pg.size == (G, G) and vis and vis[0] <= 1 and vis[2] >= G - 2 and vis[3] - vis[1] >= G - 2,
            f'the play glyph is a {G} px square image with no padding (the style places it; opaque box {vis})')
-    for n in ('ah_pill', 'ah_pill_down'):   # the glass look itself: test/pod/glassbtn.py
+    for n, fill in (('ah_pill', 255), ('ah_pill_down', 0xBE)):
         im = Image.open(os.path.join(IMGS, n + '.png')).convert('RGBA'); W_, H_ = im.size
-        expect((W_, H_) == (O['AH_PLAY_W'], O['AH_PILL_H']) and im.getpixel((0, 0))[3] == 0 and im.getpixel((W_ // 2, 0))[3] > 0 and im.getpixel((W_ // 2, H_ - 1))[3] > 0,
-               f'{n}: a {W_}x{H_} stadium (round ends, transparent corners)')
+        expect((W_, H_) == (O['AH_PLAY_W'], O['AH_PILL_H']) and im.getpixel((0, 0))[3] == 0 and im.getpixel((W_ // 2, H_ // 2)) == (fill, fill, fill, 255)
+               and im.getpixel((0, H_ // 2))[3] > 200 and im.getpixel((W_ - 1, H_ // 2))[3] > 200 and im.getpixel((W_ // 2, 0))[3] == 255 and im.getpixel((W_ // 2, H_ - 1))[3] == 255,
+               f'{n}: a {W_}x{H_} stadium (round ends, transparent corners, #{fill:02X} fill)')
+    def rel(v):
+        v /= 255
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+    def cr(a, b):
+        hi, lo = sorted((rel(a), rel(b)), reverse=True)
+        return (hi + 0.05) / (lo + 0.05)
+    expect(cr(0x14, 255) >= 7 and cr(0x14, 0xBE) >= 7, f'the dark #141414 text and play glyph on the white pill ({cr(0x14, 255):.1f}:1) and the pressed #BEBEBE ({cr(0x14, 0xBE):.1f}:1) keep >= 7:1')
+    expect(cr(255, 0x2A) >= 7 and cr(255, 0x44) >= 7, f'the white Shuffle glyph on the dark disc ({cr(255, 0x2A):.1f}:1) and the pressed one ({cr(255, 0x44):.1f}:1) keeps >= 7:1')
 
     for theme in ('default', 'theme1'):
         path = os.path.join(WORK, 'rootfs', 'release/assets', theme, 'raw/styles/albuminfo_page.bin')
@@ -1281,9 +1308,9 @@ def album_tests(expect, page, cover_asset):
         play = {i.state: i for i in th.items if (i.widget, i.style) == ('button', 'btn_ahplay_style')}
         expect(sorted(play) == states, f'{theme}: the pill style has every state')
         bad = [s for s, i in play.items() if i.color('bg_color') != '#00000000' or i.get('bg_image') != ('ah_pill_down' if s == 'pressed' else 'ah_pill')
-               or i.get('bg_image_draw_type') != O['IMAGE_DRAW_CENTER'] or i.color('text_color') != '#FFFFFFFF'
+               or i.get('bg_image_draw_type') != O['IMAGE_DRAW_CENTER'] or i.color('text_color') != '#141414FF'
                or i.get('font_size') != 18 or i.has('round_radius') or i.get('icon') != 'ah_play']
-        expect(not bad, f'{theme}: Play all is the 180x40 glass pill image (pressed one lighter) drawn centred in the 44 px button, white 18 px text and the play glyph ({bad})')
+        expect(not bad, f'{theme}: Play all is the 180x40 pill image (white, #BEBEBE pressed) drawn centred in the 44 px button, dark 18 px text and the play glyph ({bad})')
         # The glyph beside the text, not above it: AWTK's icon_at auto (0) puts the icon on top when icon height + font
         # size < the height inside the margins (16 + 18 < 44, widget_draw_icon_text @0x67235c), so the style says left (1).
         # widget_calc_icon_text_rect (@0x666f04) then makes an icon square (ir.h x ir.h at ir.x, the icon centred in it) and
@@ -1374,14 +1401,14 @@ def album_tests(expect, page, cover_asset):
     for last in (0, 2):
         m = cover_machine(albums=3)
         key = fnv(fnv(O['FNV_SEED'], f'Artist {last}'), f'Album {last}') or 1
-        m.files['/mnt/mmc/.coverflow/album'] = 4; m.saved_album = key
+        m.files['/mnt/mmc/.m1plus/covers/album'] = 4; m.saved_album = key
         m.call(PSYMS['coverflow_open'], count=5000000)
         expect(shelf_value(m) == last
                and ('widget_set_text_utf8', m.widgets['label_album'], f'Album {last}') in m.calls,
                f'the main Cover Flow reopens on its last album ({last})')
     m = cover_machine(albums=1); m.call(PSYMS['coverflow_open'], count=5000000)
     expect(('widget_set_text_utf8', m.widgets['label_album'], 'Album 0') in m.calls, 'a library with one album shows its captions on open')
-    tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1pod_cover.bin'), 'rb').read())
+    tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_cover.bin'), 'rb').read())
     expect('view_tracks' not in [x.name for x in tree.walk()], 'the Cover Flow asset has no track list view any more')
 
 

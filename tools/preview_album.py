@@ -73,7 +73,7 @@ def page(work, title, album, artist, meta, cover, n, scroll=0, bg=None, C=C, con
     below the status bar -> (r, g, b)) is the tint mock-up of tools/preview_album_tint.py: every pure black pixel of the page
     takes it, and so do the corner masks (text edges keep their dark blend: approximate)."""
     raw = os.path.join(work, preview_all.RAW)
-    root = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1pod_cover.bin'), 'rb').read())
+    root = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1plus_cover.bin'), 'rb').read())
     NAV = 0   # the list starts at the window's top (the floating controls, drawn at the end, sit over it)
     root.children = []
     LW = 310   # the list_view's scroll_view (a 10 px scroll bar at the right)
@@ -169,7 +169,7 @@ def pill(painter, img, text):
     out.alpha_composite(glyph, (gx, (h - glyph.height) // 2))
     d = ImageDraw.Draw(out); top = (h - 18) // 2
     for ch, pen in layout:
-        d.text((tx + pen, top + f.getmetrics()[0]), ch, font=f, fill='#FFFFFF', anchor='ls')
+        d.text((tx + pen, top + f.getmetrics()[0]), ch, font=f, fill='#141414', anchor='ls')
     return out
 
 
@@ -178,7 +178,7 @@ def pills(work, path):
     raw = os.path.join(work, preview_all.RAW)
     painter = preview_all.MenuPainter(raw); img = os.path.join(raw, 'images', 'xx')
     langs = pod_i18n.LOCALES
-    out = Image.new('RGB', (2 * 214 + 20, 12 + len(langs) // 2 * 60 + 60), (58, 44, 84)); d = ImageDraw.Draw(out)   # a cover tone: glass needs colour behind it
+    out = Image.new('RGB', (2 * 214 + 20, 12 + len(langs) // 2 * 60 + 60), (0, 0, 0)); d = ImageDraw.Draw(out)
     for i, loc in enumerate(langs):
         x, y = 10 + (i % 2) * 214, 10 + (i // 2) * 60
         p = pill(painter, img, pod_i18n.TEXT['Play all'][loc]); out.paste(p, (x, y), p)
@@ -195,7 +195,7 @@ def class_page(work, title, names, playing=None):
     (icon_artist / icon_genre / icon_composer) is hidden, the name starts at the 12 px margin and runs to the chevron
     (265 px); the playing row (gold name) has the wave marker before the chevron (name 217 px)."""
     raw = os.path.join(work, preview_all.RAW)
-    root = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1pod_cover.bin'), 'rb').read())
+    root = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1plus_cover.bin'), 'rb').read())
     nav = next(w for w in root.walk() if w.name == 'navigationbar_view')
     for w in root.walk():
         if w.name == 'label_title': w.set('text', title)

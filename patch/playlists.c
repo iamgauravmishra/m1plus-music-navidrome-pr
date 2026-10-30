@@ -1,8 +1,8 @@
-/* M1+ Pod Playlists: the stock playlists as a grid, each one a 2x2 mosaic of its albums' covers.
+/* M1+ Music Playlists: the stock playlists as a grid, each one a 2x2 mosaic of its albums' covers.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
- * One page, ui/m1pod_playlists.bin: the navbar (Back, "Playlists", a "..." button, Now Playing) over a stock list, list_view > scroll_view
+ * One page, ui/m1plus_playlists.bin: the navbar (Back, "Playlists", a "..." button, Now Playing) over a stock list, list_view > scroll_view
  * (playlists_scrollview), the structure of the Albums page (patch/albums.c, docs/modules/albums.md), whose ONE child is a custom view, view_grid,
  * that paints the cells itself in its own EVT_AFTER_PAINT through the shared grid (patch/grid.c). The stock scroll_view does the scrolling.
  * A cell is a GRID_COVER px tile, the playlist's name under it and "N tracks" under that. docs/modules/playlists.md has the whole design.
@@ -19,7 +19,8 @@
  *             decodes, and neither does the loader while the scroll_view drags or flings.
  *   modes     the navbar toggle (btn_albumview) switches the grid and the list (LIST_ROW_H rows, 52 px mosaics, patch/grid.c grid_list_paint) in place;
  *             the choice is saved in PLAYLISTS_FILE.
- *   touch     a tap on a cell or row opens the playlist in the stock songs page (allmusic_page, class 0xff13), as the stock Playlists page does.
+ *   touch     a tap on a cell or row opens the playlist in our Songs page (patch/songs.c, class 0xff13), or the stock songs page (allmusic_page) as the stock
+ *             Playlists page does when ours does not open.
  *   menu      the "..." button opens a popup card of this page (hidden, insensitive widgets shown by the payload): New playlist, Import,
  *             Export (the stock code), Delete playlists (the stock Playlists page, whose multi-select mode deletes). No hook.
  */
@@ -32,7 +33,8 @@
 #include "grid.h"
 #include "i18n.h"
 
-extern int pod_home_open(int id);   /* patch/m1pod.c: a stock Home destination through the dispatcher */
+extern int pod_home_open(int id);   /* patch/m1plus.c: a stock Home destination through the dispatcher */
+extern int songs_open_playlist(int id, const char *name);   /* patch/songs.c: our Songs page on a playlist; -1 when it did not open */
 
 #define CELL_H GRID_CELL_H
 #define PITCH GRID_PITCH
@@ -391,10 +393,12 @@ static int pl_item_of(void *e) {
     return pl_cell_at(pt[0], pt[1]);
 }
 
-/* The stock Playlists page's row handler (@0x53d300, mode 0): the name for the page's title, the id into classinfo[1], then the Songs page
- * with the playlist class. Back returns here. */
+/* Our Songs page on the playlist (patch/songs.c songs_open_playlist: its name the title, its id in classinfo[1]); a page that does not open leaves the
+ * stock Playlists page's row handler (@0x53d300, mode 0): the name for the page's title, the id into classinfo[1], then the stock Songs page with the
+ * playlist class. Back returns here. */
 static void pl_open(int i) {
     void *rec = pl_rec(i);
+    if (songs_open_playlist(I(rec, REC_DISC), cc_str(rec, REC_TITLE)) != -1) return;
     snprintf((char *)NAV_TITLE, 0x200, "%s", cc_str(rec, REC_TITLE));
     *(int *)(CLASSINFO + 4) = I(rec, REC_DISC);
     navigator_to_with_context("allmusic_page", (const void *)CLASS_PLAYLIST_SONGS);
@@ -621,7 +625,7 @@ static int pl_open_page(void) {
     int i;
     if (pl.win) return -1;
     memset(&pl, 0, sizeof pl);
-    pl.win = window_open("m1pod_playlists");
+    pl.win = window_open("m1plus_playlists");
     if (!pl.win) return -1;
     widget_on(pl.win, EVT_DESTROY, pl_on_destroy, (void *)0);
     pod_bind(pl.win, "btn_return", pod_on_back, (void *)0);
@@ -676,7 +680,7 @@ static int pl_open_page(void) {
     return 0;
 }
 
-/* The M1+ Pod menu's Playlists row. A window that will not open leaves the stock Playlists page, through the Home dispatcher. 0 once something is requested. */
+/* The M1+ Music menu's Playlists row. A window that will not open leaves the stock Playlists page, through the Home dispatcher. 0 once something is requested. */
 int playlists_open(void) {
     int r = pl_open_page();
     if (r == -1 && !pl.win) return pod_home_open(HOME_PLAYLIST);

@@ -10,7 +10,7 @@ Split out of docs/architecture.md. A "section N" in the text is an old section n
 - Every patched word, hook site, `$gp`, address and the input SHA are pinned; `pod.py` refuses to build
   on mismatch; every hook falls back to stock through its trampoline; every error path (non-entry
   icon, kill switch, `window_open` NULL because the asset could not load, null icon) calls stock.
-- Kill switch `/mnt/mmc/m1pod-off` (`access()` first) disables the entry, the guard and the row fit (the list gesture hook reads it once per session, section 8d).
+- Kill switch `/mnt/mmc/m1plus-off` (`access()` first) disables the entry, the guard and the row fit (the list gesture hook reads it once per session, section 8d).
 - On this AWTK `visible=false` does not stop hit testing (`widget_find_target_default` `0x6747d4` takes
   the first child with `flags & 9 == 9`: enable bit 0 and sensitive bit 3; `widget_set_visible` `0x66c394`
   only flips bit 2): hide = `visible=false` + `sensitive=false` (asset) or `widget_set_sensitive(w, 0)`

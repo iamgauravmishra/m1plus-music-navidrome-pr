@@ -1,8 +1,8 @@
-# SHA-256 over the sorted (path, file sha256) list of each area of release/assets in main's build V2.1oC (b7719e8), without our pages (ui/m1pod_*), the album page's ui and style files, the About page and our images (test/pod/navbars.py NEW_IMAGES); 'demo-builders': the bytes of the stock pages' navbar builders in demo (test/pod/navbars.py BUILDERS)
+# SHA-256 over the sorted (path, file sha256) list of each area of release/assets in main's build V2.1oC (b7719e8), without our string keys (the tables are hashed without tools/pod_i18n.py TEXT: every feature adds to them; the line was f8ccc34d... as file bytes), our pages (ui/m1plus_*), the album page's ui and style files, the About page and our images (test/pod/navbars.py NEW_IMAGES); 'demo-builders': the bytes of the stock pages' navbar builders in demo (test/pod/navbars.py BUILDERS)
 74d9d0284b7ecd3df390062e567fa3ca1aa8b4f7b28ad8c9f96959a1f5bde087 default/raw/ui
-0d6da45743da3b3da5e0de54f3b6ba2030933cc6b0e6c88d692e53706c9d91b0 default/raw/styles
-49e3c4e1d58fc2bff518751df8667954efcf8fd7e829fd79ec3f716f4c1d9c69 default/raw/images
-f8ccc34dd154b025a92de7cf18ec8e39a95bb40540abd2bef54aca936db9970e default/raw/strings
+214ded6b9d4defd47f78d80fff7ac76b339cdc077327dc78bbbda0425c066803 default/raw/styles
+5d9bfdb057b0d639a15d712727ca4c6fd929f3df4a77a36808c025a6a305ff74 default/raw/images
+f2e8044af8946fb8d14d7b15e0623f26b1091256935e1320c7c4c2f45a7daa0d default/raw/strings
 d6be877a2ee6f38e1f5ccbea49058be3d508695c5ed3b6fec6fe08c85bb5766b default/raw/fonts
 4d0174d6a11c25fd00777d892c89bae0d770720e53625254ca4f88a172c8de2f theme1
 4c2f718712b20b8bb61ff450b6705894011c6897e8c7a8956ed7cec363b94cc4 demo-builders

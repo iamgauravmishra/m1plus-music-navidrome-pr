@@ -4,7 +4,7 @@ make, hit tests with demo's own widget_find_target, the contrast of the text on 
 import os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
-KILL_SD, KILL_DATA = '/mnt/mmc/m1pod-off', '/mnt/data/m1pod-off'
+KILL_SD, KILL_DATA = '/mnt/mmc/m1plus-off', '/mnt/data/m1plus-off'
 WIN = 0x24000000
 S = O['MB_ART']
 EVT_DESTROY, EVT_AFTER_PAINT, EVT_CLICK = O['EVT_DESTROY'], O['EVT_AFTER_PAINT'], O['EVT_CLICK']
@@ -155,7 +155,7 @@ def word_of(rgb): return 0xff000000 | rgb[0] | rgb[1] << 8 | rgb[2] << 16
 def run(ctx):
     expect = ctx.expect
     raw = os.path.join(WORK, 'rootfs', 'release/assets/default/raw')
-    menu_asset = os.path.join(raw, 'ui', 'm1pod_menu.bin')
+    menu_asset = os.path.join(raw, 'ui', 'm1plus_menu.bin')
 
     # ------------------------------------------------------------------ constants: patch/offsets.inc and tools/pod_ui.py agree
     pairs = {'MB_X': pod_ui.MB_X, 'MB_Y': pod_ui.MB_Y, 'MB_W': pod_ui.MB_W, 'MB_H': pod_ui.MB_H, 'MB_R': pod_ui.MB_R, 'MB_GAP': pod_ui.MB_GAP,
@@ -279,7 +279,7 @@ def run(ctx):
             m.widget(n)
         return m
     m = home_machine()
-    m.call(PSYMS['m1pod_home_init'], a0=HOME_WIN, a1=0x55, count=3000000)
+    m.call(PSYMS['m1plus_home_init'], a0=HOME_WIN, a1=0x55, count=3000000)
     m.top_main = HOME_WIN; m.timers = []
     m.call(PSYMS['hm_open'], count=3000000)
     expect(m.names().count('window_open') == 1 and (PSYMS['mb_first'], O['MB_FIRST_MS']) in m.timers
@@ -287,13 +287,13 @@ def run(ctx):
            'the menu opened as Home starts the bar: the short one-shot is armed, nothing is shown yet')
     expect(('widget_resize', m.widgets['pod_listview'], 320, HOME_LIST_H) in m.calls, 'the list took the whole window (430 px), as before, and keeps it: the bar never resizes it')
     m = home_machine()
-    m.call(PSYMS['m1pod_home_init'], a0=HOME_WIN, a1=0x55, count=3000000)
+    m.call(PSYMS['m1plus_home_init'], a0=HOME_WIN, a1=0x55, count=3000000)
     m.top_main = HOME_WIN; m.timers = []; m.widgets.pop('navigationbar_view')
     m.call(PSYMS['hm_open'], count=3000000)
     expect(m.names().count('window_open') == 1 and (PSYMS['mb_first'], O['MB_FIRST_MS']) not in m.timers,
            'a Home instance whose list could not be laid out (no navbar to hide) gets no bar')
-    m = home_machine(); m.fs['/mnt/data/m1pod-bad'] = b'1\n'     # recovery: Tidal opens the normal instance, with its navbar
-    m.call(PSYMS['m1pod_home_click'], a0=m.icon('1'), count=3000000)
+    m = home_machine(); m.fs['/mnt/data/m1plus-bad'] = b'1\n'     # recovery: Tidal opens the normal instance, with its navbar
+    m.call(PSYMS['m1plus_home_click'], a0=m.icon('1'), count=3000000)
     expect(m.names().count('window_open') == 1 and (PSYMS['mb_first'], O['MB_FIRST_MS']) not in m.timers and PSYMS['mb_first'] not in [t[0] for t in m.timers]
            and 'timer_add' not in m.names(), 'the normal instance (grid icon, recovery): no bar, no timer')
 
@@ -500,10 +500,10 @@ def run(ctx):
             if (h, 'visible') in m.props: nd.flags = nd.flags & ~F_VISIBLE | (F_VISIBLE if m.props[(h, 'visible')] else 0)
             if (h, 'sensitive') in m.props: nd.flags = nd.flags & ~F_SENSITIVE | (F_SENSITIVE if m.props[(h, 'sensitive')] else 0)
         nb = node(t, 'navigationbar_view'); nb.flags &= ~(F_VISIBLE | F_SENSITIVE)
-        # the arranged rows (patch/menu.c): the default menu, then Extras and Settings, 52 px apart from y 0 (the Home list's first row is HOME_PAD
-        # down); the others are hidden and parked; the spacer row follows the shown rows (visible while the bar shows)
+        # the arranged rows (patch/menu.c): a menu long enough to scroll (Cover Flow ... Shuffle, Customize, then Extras: eight rows; the default menu is shorter),
+        # 52 px apart from y 0 (the Home list's first row is HOME_PAD down); the others are hidden and parked; the spacer row follows the shown rows (visible while the bar shows)
         sv = node(t, 'pod_scrollview')
-        shown = list(pod_pages.DEFAULT_MENU) + [len(pod_pages.ITEMS), len(pod_pages.ITEMS) + 1]
+        shown = [1, 2, 3, 4, 5, 6, pod_pages.CUSTOMIZE_ID, len(pod_pages.ITEMS)]
         for i, r in enumerate(c for c in sv.children if c.name.startswith('pod_row')):
             r.y = shown.index(i) * 52 if i in shown else 0
             if i not in shown: r.flags &= ~(F_VISIBLE | F_SENSITIVE)
@@ -525,16 +525,16 @@ def run(ctx):
     # the last menu row above the card
     rows_end = O['HOME_PAD'] + 7 * 52   # the 7th row's bottom
     p = target(m, 160, O['HOME_PAD'] + 6 * 52 + 26)
-    expect('pod_row18' in p, f'the 7th row (Extras) (y {O["HOME_PAD"] + 6 * 52}..{rows_end}) above the card is hit ({p})')
+    expect('pod_row18' in p, f'the 7th row (Customize) (y {O["HOME_PAD"] + 6 * 52}..{rows_end}) above the card is hit ({p})')
     p = target(m, 160, O['MB_Y'] - 2)
     expect('pod_minibar' not in p and p[-1] != 'pod_mb_card', f'the strip above the card is not the card ({p})')
     last_row_bottom = O['HOME_PAD'] + HOME_LIST_H - O['MB_PAD']   # the list scrolled to the end of its padded content
     expect(last_row_bottom + O['MB_GAP'] == O['MB_Y'], 'scrolled to the end, the last row ends exactly MB_GAP above the pill')
     # the list runs to the window's bottom under the pill: a row is under it, and the pill (the later sibling) takes the touch there; the row above is reached
     p = target(m, 160, O['MB_Y'] + 14)
-    expect(p[-1] == 'pod_mb_card' and 'pod_row19' not in p, f'where Settings lies under the pill the pill takes the touch ({p})')
+    expect(p[-1] == 'pod_mb_card' and 'pod_row19' not in p, f'where Extras lies under the pill the pill takes the touch ({p})')
     p = target(m, 160, O['MB_Y'] - 4)
-    expect('pod_row19' in p, f'the Settings row just above the pill is reached ({p})')
+    expect('pod_row19' in p, f'the Extras row just above the pill is reached ({p})')
     # hidden bar: the full-height list takes everything
     m = BM(); m.start(); m.first()
     t = world(m)
@@ -760,8 +760,8 @@ def run(ctx):
     expect(len(plane) == 1 and plane[0][1] == 4 * O['MB_HW'] * O['MB_HH'] and plane[0][2], f'the half-resolution plane is allocated once at start ({plane})')
     m.first(); bmp = next(iter(m.bitmaps)); m.call(PSYMS['mb_on_destroy'], a0=WIN, a1=0)
     expect(('free', plane[0][2]) in m.calls and ('bitmap_destroy', bmp) in m.calls, 'and freed with the page, with the cover bitmap')
-    m = BM(); m.placeholder(); m.status = 2; m.track(); m.cover(); m.present.add('/mnt/mmc/m1pod-noblur'); m.start(); m.first()
-    expect(not [c for c in m.calls if c[0] == 'calloc'] and m.shown('pod_minibar'), 'the SD file m1pod-noblur: no plane, no blur, the bar as before')
+    m = BM(); m.placeholder(); m.status = 2; m.track(); m.cover(); m.present.add('/mnt/mmc/m1plus-noblur'); m.start(); m.first()
+    expect(not [c for c in m.calls if c[0] == 'calloc'] and m.shown('pod_minibar'), 'the SD file m1plus-noblur: no plane, no blur, the bar as before')
     e, fb, raw = blur_world(m); paint_before(m, e)
     expect(readfb(m, fb, len(raw)) == raw and not [c for c in m.calls if c[0] == 'widget_invalidate_force'], 'and a before-paint (should it come) changes nothing')
     m = BM(); m.placeholder(); m.status = 2; m.track(); m.cover(); m.calloc_fail = True; m.start(); m.first()

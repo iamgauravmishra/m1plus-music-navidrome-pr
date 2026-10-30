@@ -5,6 +5,16 @@
 #include "offsets.inc"
 #include "stock.h"
 #include "common.h"
+#include "shot.h"
+
+/* Whether the card is mounted: its mount point is another file system than the one it is in (an unmounted /mnt/mmc is a plain directory on the internal flash). */
+int pod_card_mounted(void) {
+    unsigned a[32], b[32];
+    memset(a, 0, sizeof a);
+    memset(b, 0, sizeof b);
+    if (statfs(SHOT_CARD, a) || statfs(SHOT_PARENT, b)) return 0;
+    return !(a[0] == b[0] && a[8] == b[8] && a[9] == b[9]);   /* f_type, f_fsid (MIPS o32 statfs words 0, 8, 9): the same, nothing mounted */
+}
 
 int pod_on_back(void *ctx, void *e) {
     (void)ctx; (void)e;

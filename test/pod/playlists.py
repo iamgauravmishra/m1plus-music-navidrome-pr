@@ -17,9 +17,9 @@ SVW, CW = 310, 320
 SC_YOFF, SC_VH = O['SC_YOFF'], 0x7c
 HALF = COVER // 2
 REC_DISC = O['REC_DISC']
-UI = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1pod_playlists.bin') if WORK else None
+UI = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_playlists.bin') if WORK else None
 NAV_STATUS, CLASSINFO = pod.DATA['NAVIGATION_STATUS'][0], pod.DATA['CLASSINFO'][0]
-PL_FILE = '/mnt/data/m1pod-playlists'
+PL_FILE = '/mnt/data/m1plus-playlists'
 GREY_DISC = 0xff404040     # the stock placeholder disc of these tests (p_default, flat)
 
 
@@ -211,7 +211,7 @@ def glass_checks(expect, tree, scrim, card, items):
     ui_root = os.path.join(WORK, 'rootfs', 'release/assets')
     for base, _, files in os.walk(ui_root):
         users += [os.path.relpath(os.path.join(base, f), ui_root) for f in files if f.endswith('.bin') and b'pl_glass' in open(os.path.join(base, f), 'rb').read()]
-    expect(users == ['default/raw/ui/m1pod_playlists.bin'], f'pl_glass is used by the Playlists page only ({users})')
+    expect(users == ['default/raw/ui/m1plus_playlists.bin'], f'pl_glass is used by the Playlists page only ({users})')
     # the stock code: an inline bg_image_draw_type name is normalised by image_draw_type_find (style_normalize_value @0x65a1f4: strstr "image_draw_type"),
     # "patch3_x" is 13 in its table (@0x9050d8), canvas_draw_image_ex's case 13 (jump table @0x75ce40) calls canvas_draw_image_patch3_x (@0x647a08),
     # which keeps min(dst.w, img.w) / 3 at each end (li $v0, 3; div @0x647b0c) and stretches the middle
@@ -246,7 +246,7 @@ def run(ctx):
     expect, page = ctx.expect, ctx.page
     row = next(i for i, r in enumerate(page.rows) if r.label == 'Playlists')
     expect(page.rows[row].action == pod_pages.ACT_PLAYLISTS, 'the menu\'s Playlists row opens our page (ACT_PLAYLISTS)')
-    expect(pod_pages.PLAYLISTS in pod_pages.PAGES and pod_pages.PLAYLISTS.key == 'm1pod_playlists', 'the page is in the page table')
+    expect(pod_pages.PLAYLISTS in pod_pages.PAGES and pod_pages.PLAYLISTS.key == 'm1plus_playlists', 'the page is in the page table')
     on_row, rows0 = PSYMS['on_row'], PSYMS['pod_rows_0']
 
     # 1. The asset: the Albums page's structure with a "..." button in place of the toggles, and the hidden popup
@@ -321,7 +321,7 @@ def run(ctx):
     # 2. The menu row opens the page; a window that will not open leaves the stock Playlists page (Home id 14)
     m = PM([(1, 'Mix', [0, 1])])
     m.call(on_row, a0=rows0 + 12 * row, count=60000000)
-    expect(('window_open', 'm1pod_playlists') in m.calls and 'stock_resume' not in m.names(), 'the Playlists row opens our page')
+    expect(('window_open', 'm1plus_playlists') in m.calls and 'stock_resume' not in m.names(), 'the Playlists row opens our page')
     m = PM([(1, 'Mix', [0])]); m.window = 0
     open_page(m)
     expect(('stock_resume', '14') in m.calls, 'if the window will not open the row opens the stock Playlists page')
@@ -334,7 +334,7 @@ def run(ctx):
     lists = [(1, 'Empty', []), (2, 'One', [0]), (3, 'Two', [1, 2, 1, 2]), (4, 'Three', [3, 4, 5]), (5, 'Many', [0, 1, 2, 3, 4, 5, 6]), (6, 'Bare', [7])]
     m = PM(lists, missing=(7,))
     calls = open_page(m)
-    expect(('window_open', 'm1pod_playlists') in calls and [c for c in calls if c[0] == 'loadLocalClassList'] == [('loadLocalClassList', O['CLASS_PLAYLISTS'])],
+    expect(('window_open', 'm1plus_playlists') in calls and [c for c in calls if c[0] == 'loadLocalClassList'] == [('loadLocalClassList', O['CLASS_PLAYLISTS'])],
            'opening runs the playlist query once and not the song queries (those are the loader\'s, one a tick)')
     expect(all((m.widgets[n], O['EVT_CLICK']) in m.bound for n in ('btn_return', 'btn_backtoplayer', 'btn_more', 'btn_albumview', 'pl_scrim', 'pl_item0', 'pl_item1', 'pl_item2', 'pl_item3'))
            and (m.widgets['view_grid'], O['EVT_AFTER_PAINT']) in m.bound and (m.window, O['EVT_WINDOW_TO_FG']) in m.bound,
@@ -395,8 +395,13 @@ def run(ctx):
     blits, _, _ = settle(m)
     expect(all(near(a, b2) for a, b2 in zip(quadrants(m, cell_blit(blits, 0)), want_mosaic([0, 1]))), 'songs by another artist find their album\'s cover through the library list')
 
-    # 7. Tap: the playlist opens in the stock songs page (allmusic_page, class 0xff13) with its id in classinfo[1] and its name as the title
+    # 7. Tap: the playlist opens in our Songs page (patch/songs.c songs_open_playlist; test/pod/songs.py lists_tests has the page); a Songs window that will not
+    #    open leaves the stock songs page (allmusic_page, class 0xff13) with its id in classinfo[1] and its name as the title
     m = PM(lists, missing=(7,)); open_page(m); settle(m)
+    calls = tap(m, MARGIN + 40, RGAP + 40)
+    expect(('window_open', 'm1plus_songs') in calls and not [c for c in calls if c[0] == 'navigator_to_with_context' and c[1] == 'allmusic_page'],
+           'a tap opens the playlist in our Songs page, not the stock one')
+    m = PM(lists, missing=(7,)); m.windows['m1plus_songs'] = 0; open_page(m); settle(m)
     for i in (0, 3, 5):
         x, y = MARGIN + (i % COLS) * CPITCH + 40, RGAP + (i // COLS) * PITCH + 40
         calls = tap(m, x, y)
@@ -537,7 +542,7 @@ def run(ctx):
     alive = len(m.bitmaps)
     expect(alive == 0, f'closing the page destroys every tile and the placeholder ({alive} left)')
     open_page(m)
-    expect(('window_open', 'm1pod_playlists') in m.calls, 'and the page opens again')
+    expect(('window_open', 'm1plus_playlists') in m.calls, 'and the page opens again')
 
     # 13. List mode (the Albums page's): 64 px rows, a 52 px mosaic (quadrants of 26 px), the name and the count in the list's two text styles
     ROW, LART, LAX, LAY = O['LIST_ROW_H'], O['LIST_ART'], O['LIST_ART_X'], O['LIST_ART_Y']
@@ -570,9 +575,11 @@ def run(ctx):
     m.touch('down', 300, SCREEN_Y0 + 3 * ROW + 20, 1000, fn='pl_on_down')
     blits, texts, styles = paint(m)
     expect([f for f in m.fills if f[0] == O['LIST_PRESS']] == [(O['LIST_PRESS'], 0, 3 * ROW, 320, ROW - 1)], 'a finger down fills its row with the pressed colour')
+    m.windows['m1plus_songs'] = 0   # (our Songs page will not open: the stock one shows which playlist the tap opened)
     m.touch('up', 300, SCREEN_Y0 + 3 * ROW + 20, 1080, fn='pl_on_up')
     opened = [c for c in m.calls if c[0] == 'navigator_to_with_context' and c[1] == 'allmusic_page']
-    expect(opened == [('navigator_to_with_context', 'allmusic_page', O['CLASS_PLAYLIST_SONGS'], lists[3][0], lists[3][1])], f'a tap on row 3 opens its playlist ({opened})')
+    expect(('window_open', 'm1plus_songs') in m.calls and opened == [('navigator_to_with_context', 'allmusic_page', O['CLASS_PLAYLIST_SONGS'], lists[3][0], lists[3][1])],
+           f'a tap on row 3 opens its playlist ({opened})')
     paint(m)
     expect(not [f for f in m.fills if f[0] == O['LIST_PRESS']], 'and the fill is gone')
     calls = tap(m, 100, 5 * ROW + 70)
@@ -601,8 +608,8 @@ def run(ctx):
     fn, c = m.bound[(m.window, O['EVT_DESTROY'])]
     m.call(fn, a0=c, a1=0, count=20000000)
     open_page(m)
-    expect(glyph(m) == 'pod_nav_grid' and PL_FILE != '/mnt/data/m1pod-albums', 'the list mode is remembered when the page is opened again, in its own file')
-    m.fs['/mnt/data/m1pod-albums'] = b'1\n'; m.fs[PL_FILE] = b'junk'
+    expect(glyph(m) == 'pod_nav_grid' and PL_FILE != '/mnt/data/m1plus-albums', 'the list mode is remembered when the page is opened again, in its own file')
+    m.fs['/mnt/data/m1plus-albums'] = b'1\n'; m.fs[PL_FILE] = b'junk'
     fn, c = m.bound[(m.window, O['EVT_DESTROY'])]
     m.call(fn, a0=c, a1=0, count=20000000)
     open_page(m)

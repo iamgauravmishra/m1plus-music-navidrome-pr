@@ -7,11 +7,11 @@ Split out of docs/architecture.md and docs/ui.md. A "section N" in the text is a
 The stock `playing_page` (`ui/playing_page.bin`, restyled by `tools/mod_nowplaying.py`) gets a cover-coloured window, the
 cover's rounded corners and a remaining-time label from one hook and one page timer.
 
-**The hook** (`m1pod_playing_init`, section 2): `playing_page_init` `0x53d1e4` (`a0` the window, `a1` the context
+**The hook** (`m1plus_playing_init`, section 2): `playing_page_init` `0x53d1e4` (`a0` the window, `a1` the context
 `{queue, index, class, mode}`; it registers the page's `EVT_*` handlers with `widget_on`, starts the queue with
 `start_player` when the context's class is not `0xff`, runs `playing_choiceshowpage` and `player_timer_start`, returns 0, or `0x10` for a null window).
 The hook calls it through `stock_playing_init_trampoline` and returns its result; with `RET_OK`, a window and no
-`/mnt/mmc/m1pod-off`, `np_start` runs: it finds `np_remaining` and `label_playlen` (a missing one turns the time off, not the tint),
+`/mnt/mmc/m1plus-off`, `np_start` runs: it finds `np_remaining` and `label_playlen` (a missing one turns the time off, not the tint),
 registers `EVT_DESTROY` on the window (`np_on_destroy`, context the window), adds a **repeating 500 ms timer** (`np_tick`, answering
 `RET_REPEAT` 8 as the stock page timer `0x53cf48` does; a refused timer or `widget_on` leaves the page stock), registers
 `np_on_art_paint` on `img_playcover` (`EVT_AFTER_PAINT`) and runs one tick at once. State is one 176-byte `.scratch` struct
@@ -62,6 +62,19 @@ only if both registered (`np.barok`) and after the timer exists. `np_on_backgrou
 `np.fg` and tints. `np_set_color` re-tints when the cover's colour changes. The tick's `np_bar_sync` covers a missed event: the bar is
 ours only while `window_manager_get_top_main_window` is the page (black when another normal window is on top, tinted again when the
 page is on top and `np.fg`; a dialog leaves the top normal window as it is, which is why `np.fg` stays 0 after its background event).
+**Hidden page, unchanged cover.** While another page is the top normal window (`np_bar_sync` returns `pod_is_top`), `np.fg` is 0
+and both window events are registered (`np.barok`), `np_tick` runs only `np_bar_sync` (the bar cleanup) and does no cover, time or
+info work: a page above it costs a few hundred instructions a tick instead of a full cover read. A dialog (the pull-down) also clears
+`np.fg` but leaves the page the top normal window and partly visible, so under it the remaining time, the info lines and the tint go on. `np_on_foreground` runs `np_work` itself before it sets `np.fg` and tints
+(one bar style call for a changed colour), so the page is current when it reappears. When in front, `np_cover` first takes the cheap
+look `np_cover_sig` (no byte of the cover is read: `fopen`/`fseek`/`ftell` for the length, a hash of the source type, that length and
+the playing track's path; no `stat`, which the payload does not import) and skips the hash while it equals `np.sig`, the signature at
+the last full hash, and a real colour is held (`np.key` neither 0 nor neutral). Any difference, or an unreadable file, takes the full
+`np_file_key` as before. This relies on demo writing a new cover per track change (and via the busy state, which is not hashed); a
+same-length, same-source cover swapped under the same track without a pass the tick could see would be missed until the track
+changes. Measured (Unicorn, 64 KiB cover): 396,187 instructions and 64 KiB read per tick before; after, an unchanged tick reads nothing
+and a covered tick is under 3,000 instructions with no cover, time or info calls (`test/pod/nowplaying.py`).
+
 `np_stop` (destroy, or a new page over a live one) sets black before it removes the timer and clears the state, so every exit path restores
 the stock colour; `np.bar` records that the bar is ours. Black is set by the same style call (the bar keeps a mutable style
 overriding the asset's `#000000`). No new hook, no paint or main-loop code; the kill switch, a refused timer, a refused window
@@ -150,7 +163,7 @@ bottom (V2.1nL: 22 / 13 / 17 / 11). `mod_nowplaying.py` places every box from th
   darkened until its luminance allows it, so for a bright cover (value over about 150) the bar is darker than the page's first
   row (a visible step of up to 55 per channel at the brightest) and the unlit Wi-Fi arcs (`#666666`) fade into it. Black comes
   back when the page goes behind another window (page, dialog, the pull-down), is closed, or on any failure; it is re-tinted
-  when the page is in front again. There is no separate switch: `/mnt/mmc/m1pod-off` turns all of the page's code off, the bar
+  when the page is in front again. There is no separate switch: `/mnt/mmc/m1plus-off` turns all of the page's code off, the bar
   included. Whether it looks right is a device question.
 - **The cover is 1:1.** AWTK scales an image by nearest neighbour, so the art is drawn at the size of the file:
   demo writes `/tmp/coverpic.jpg` / `/tmp/externpic.jpg` at **264** (four pinned immediates, section 7, Lock screen: "The cover
@@ -170,8 +183,8 @@ bottom (V2.1nL: 22 / 13 / 17 / 11). `mod_nowplaying.py` places every box from th
   Without the payload (kill switch) the square art corners are darkened a little by it (9..22 %, only the corner pixels). 2.4 KB.
 - **Controls.** The grabber is the Back button (`btn_return`, `img_btn_style`, `np_grabber` / `np_grabber_down`: a 36x5
   white pill at 43 % in a 120x44 image), overlapping the top 16 px of the art (a swipe starting there goes to the button).
-  Favorite (`btn_fav`) and More (`btn_more`) are `np_fav` / `np_unfav` / `np_more`, 44x44 images with a 32 px glass disc (`glass_image(32, 32, 16)`, the mini bar's pane; was `#FFFFFF1A`,
-  `#FFFFFF33` pressed) and an 18 px glyph (2.0 px stroke) baked in: Lucide `star`, filled when the song is a favorite, outline when not (was `heart`; the Home grid's Favorites tile, the Extras row and the batch-add dialog use the same star). The glyph is **centred optically**: the middle of the glyph's box and of its silhouette's centroid (a star's lower points reach less far than its top one, so its box centre alone looks low) sits at the disc's centre, placed in quarter-pixel steps by an SVG translation (`mod_icons.np_glyph`; V2.1nL measured the then heart on the device 0.5 px up and left with box-only placement). More is exactly centred; the app swaps the star's style (`btn_imgfav_style` / `btn_imgunfav_style`) as before.
+  Favorite (`btn_fav`) and More (`btn_more`) are `np_fav` / `np_unfav` / `np_more`, 44x44 images with a flat 32 px translucent white disc (`#FFFFFF1A`,
+  `#FFFFFF33` pressed; not glass, `np_disc`) and an 18 px glyph (2.0 px stroke) baked in: Lucide `star`, filled when the song is a favorite, outline when not (was `heart`; the Home grid's Favorites tile, the Extras row and the batch-add dialog use the same star). The glyph is **centred optically**: the middle of the glyph's box and of its silhouette's centroid (a star's lower points reach less far than its top one, so its box centre alone looks low) sits at the disc's centre, placed in quarter-pixel steps by an SVG translation (`mod_icons.np_glyph`; V2.1nL measured the then heart on the device 0.5 px up and left with box-only placement). More is exactly centred; the app swaps the star's style (`btn_imgfav_style` / `btn_imgunfav_style`) as before.
   Transport: prev / play / pause / next are solid shapes drawn by `tools/mod_icons.py` (`transport_mask`): rounded convex
   polygons (inset by r, dilated by r), 16x supersampled and box-downsampled, `#EEEEEC` (pressed `#8C8C8C`). Play: triangle,
   ink 29x31, 1.5 px right of centre, r = 0.10 x 31 = 3.1 px. Pause: two bars 28 tall, 8.4 wide, 10.1 apart, r = 0.30 x bar

@@ -5,8 +5,9 @@ Split out of docs/architecture.md and docs/ui.md. A "section N" in the text is a
 ## 8. The album view (`patch/albuminfo.c`, test `test/pod/albuminfo.py`)
 
 There is one album view: the stock `albuminfo_page` (an album's tracks), restyled. It opens from the
-stock Albums list, from the Albums grid (section 5a), from Cover Flow (main and per artist), from Artists through Cover Flow and from the
-All albums card, always through `navigator_to_with_context("albuminfo_page", class | row << 16)` with
+stock Albums list, from the Albums grid (section 5a), from Cover Flow (main and per artist), from Artists through Cover Flow, from the
+All albums card and from Now Playing's More sheet (Look up album, `patch/playmore.c`: it closes the sheet and any open album page, sets `songerinfoflag`
+and opens the playing album's row), always through `navigator_to_with_context("albuminfo_page", class | row << 16)` with
 `*pdeq_showlist` holding the album list the row came from (section 3: the stock Albums handler's
 sequence; Cover Flow and the card repeat it, `coverflow.c open_album`). The stock page loads the
 tracks itself (`loadAlbumdetailList`: class `0xf003` -> `0xff10`, an artist's album and the All songs
@@ -42,24 +43,28 @@ toggles' handlers; also `allmusic_page`) makes Back (3, 80 x 44), search (168, 4
 unselect (0, 50), add / delete / cancel (116 / 191 / 268, 60 wide); `0x524e4c` (a fresh page: `albumdeinfo_listitem_layout`'s row loop `0x5265f4` and the to-foreground
 handler `0x5267f0`; also `album_page_init`, an artist's albums) makes the same without search, 50 px high (Back at x 0), and none of multi-select / Now Playing when
 `songerinfoflag` (`0xa04737`) is set. The page theme (`mod_ipodrows.NAV_STYLES`, both themes; a page theme only, so the artist's albums page keeps its look) overrides the
-nine navbar button styles: each state shows ONE glass disc (`mod_icons.AH_NAV_PIECES`), sized to the real button (46 / 60 / 50 px wide, 42 high, centred), so the glyph
-centres are the Pod navbar's 191 / 237 / 290 (Now Playing at 262: disc 269 .. 311), select mode's add / delete 146 / 221 and cancel 290, the unselect toggle 29; Back keeps
-its stock rule (`icon_at` left in a button-high square) with `x_offset` +4, so the 42 px disc is at x 8 .. 50 from either builder. Pressed = the lighter glass. The
-search style's opaque black fill is gone on this page. `test/pod/albuminfo.py` `nav_tests` runs both builders in the emulator for every select state, `songerinfoflag` and
-class and checks every button against these numbers; the hit-test tests use the built asset and the emulated buttons.
-**Not a capsule.** An earlier design (V2.1nWC, branch `albums-nobar`) made the right-hand actions ONE capsule by pinning both builders to a 44 px pitch and choosing the
-slice by style name (a `words` pin on `0x52515c` / `0x526cfc`). On main's slots that needs changes to the shared builders that alter stock pages (Songs, an artist's albums):
-Now Playing (262) leaves a 2 px gap after multi-select (260), the select mode's stock buttons are 75 px apart, and multi-select is the middle slice in one builder and the
-left cap in the other under ONE style name. So the buttons are lone discs (a 4 px gap on the 46 px pitch); the capsule is kept on our own pages (`navbar.md`).
+nine navbar button styles: each state shows ONE glass piece (`mod_icons.AH_NAV_PIECES`, 42 high), centred in the real button, so the glyph centres are the Pod navbar's
+191 / 237 / 290, select mode's add / delete 146 / 221 and cancel 290, the unselect toggle 29; Back keeps its stock rule (`icon_at` left in a button-high square) with
+`x_offset` +4, so the 42 px disc is at x 8 .. 50 from either builder. The search style's opaque black fill is gone on this page. `test/pod/albuminfo.py` `nav_tests` runs
+both builders in the emulator for every select state, `songerinfoflag` and class and checks every button against these numbers; the hit-test tests use the built asset and
+the emulated buttons.
+**The capsule.** Multi-select and Now Playing are ONE glass capsule, x 216 .. 311 (`mod_icons.AH_CAPSULE`, the Artists page's columns), as the right-hand actions on our
+own pages (`navbar.md`); search, which only the toggle builder makes (after a select cycle), is a lone disc beside it (170 .. 212, the usual 4 px gap); the select mode's
+buttons are discs (the stock buttons are 75 px apart). It is images only, no builder changes: both builders make multi-select and Now Playing together or neither, so they
+are always the left and right cap, whichever builder ran. The builders leave 2 px between them (multi-select 214 .. 260, Now Playing 262 .. 322): multi-select's image is
+50 px, 4 wider than its button, and AWTK draws an icon at its own size on the rect's centre (`canvas_draw_icon_in_rect` `0x648f90` takes only the centre, then
+`canvas_draw_icon`; no scaling, no clip), so it spans 212 .. 262 (its first 4 columns transparent) and its glass meets Now Playing's at 262. A press repaints only its
+button's rect, which holds the whole round highlight (`navbar.md`), so the 2 px outside it never change. Pressed: the lone discs are the lighter glass, the caps the round
+highlight. (An earlier design, V2.1nWC, made a capsule of all three by pinning both builders to a 44 px pitch, which changed stock pages that share them.)
 Known quirks inherited from main: a fresh page's buttons are 50 high and the toggle builder's 44, so the discs sit 3 px higher after a select cycle; the stock title label (147
 wide, not pinned) lies over the first 15 px of search's slot. **Dissolve:** none (glass over sharp rows). **Fallback** (kill switch or an unrecognised header): the controls
 are data and stay; the stock 100 px header leaves Play all (y 62 ..) and the rows clear of the band (tested).
 
-**The hook** (`m1pod_albuminfo_header`, section 2): `albuminfo_listitem0_layout` `0x526264` builds the
+**The hook** (`m1plus_albuminfo_header`, section 2): `albuminfo_listitem0_layout` `0x526264` builds the
 header, called only from the page's list builder (init and the to-foreground rebuild), so a rebuilt page is
 restyled again. The hook runs the stock function first (a 100 px `list_item` with, in this order, the
 `img_albumcover_m` image, the title and artist `hscroll_label`s and the Play all `button`), then, unless the
-kill switch `/mnt/mmc/m1pod-off` exists or the item is not exactly that shape (four children of those
+kill switch `/mnt/mmc/m1plus-off` exists or the item is not exactly that shape (four children of those
 types), creates the two new widgets first (the year line `hscroll_label`, the Shuffle `button`); if any fails it destroys the ones it made and leaves stock; otherwise it moves and resizes the stock
 widgets to the numbers above (`AH_*` in `offsets.inc`), gives the title, artist and Play all their page styles
 and the Play all the text "Play all" (stock draws an orange image with its text baked in; the stock style
@@ -122,7 +127,7 @@ cover (240, 225, 150) is 8 levels, the worst grid tone (131, 192, 192) is 34 lev
 (`cc_key_of(artist, album)`, FNV-1a of artist then album, the Cover Flow cache file's name) made from the names the stock header itself shows:
 `classinfo + 0xd` (title) and `classinfo + 0x10d` (artist; `+0x20d` when `g_class_type` is `0xff14`, `0x524b00`). An empty album name has no key.
 At the header build, `ah_cached` (before the poll would start, never for the All albums card): 1. a **hit** sets the tint there and then (no timer, no decode);
-2. a **miss** with `/mnt/mmc/.coverflow/<key>-168.jpg` decodes that one file (168 px, a few ms), sets the tint and inserts; 3. the file there but **empty**
+2. a **miss** with `/mnt/mmc/.m1plus/covers/<key>-168.jpg` decodes that one file (168 px, a few ms), sets the tint and inserts; 3. the file there but **empty**
 (Cover Flow's "no art" marker): the page stays black, no timer; 4. no file (or one that does not decode): today's poll of the stock cover file
 (`ah_tick`), which inserts when it resolves. For an artist's album the key is the artist-page artist rather than the album row's own artist, so a compilation
 may miss the file (it then polls; never a wrong tone, only a miss). **Consistency:** both pages take `pod_tone` of the `cc_box` average of the centred square
@@ -135,9 +140,9 @@ poll and insert, marker, All albums, kill switch, class `0xff14`, LRU and bounds
 **Styles** are the page theme's (`styles/albuminfo_page.bin`, both asset themes, `tools/mod_ipodrows.py`):
 `srlabel_ahtitle_style` / `srlabel_ahartist_style` / `srlabel_ahmeta_style` (the stock white and grey lines
 centred at 22 / 18 / 15 px, `#FFFFFF` / `#AAAAAA` / `#9C9C9C`: the design's `#8C8C8C` is 3.8:1 on the page's
-pressed row and `mod_theme --scan` wants 4.5), `btn_ahplay_style` (`bg_image` `ah_pill` / `ah_pill_down`, 180x40 glass pills (`glass_image(180, 40, 20, pressed)`, the mini bar's pane) drawn centred, 18 px
-white text, white `ah_play` glyph; pressed = the lighter glass) and `btn_ahshuf_style` (no fill, the icon is the disc itself:
-`ah_shuffle`, `ah_shuffle_down`, 38 px glass discs (`glass_image(38, 38, 19, pressed)`) with the white Lucide shuffle glyph; so the circle is anti-aliased
+pressed row and `mod_theme --scan` wants 4.5), `btn_ahplay_style` (`bg_image` `ah_pill` / `ah_pill_down`, 180x40 stadium images drawn centred, 18 px
+`#141414` text, icon `ah_play`, `#BEBEBE` pressed) and `btn_ahshuf_style` (no fill, the icon is the disc itself:
+`ah_shuffle`, `ah_shuffle_down`, 38 px images with the Lucide shuffle glyph; so the circle is anti-aliased
 whether or not this AWTK rounds fills). `ah_play` has no padding: the style's `icon_at` left centres it in a 44 px square,
 the text is drawn left aligned beside it, and the hook sets the pill's `margin_left` inline from `widget_measure_text` (`0x66c7e0`)
 and `widget_get_text` (`0x667ea4`) through `widget_set_style` (`ah_centre_pill`; docs/ui.md). The same file makes the navbar title labels' (`navbar_*label_white`) text transparent on this page
@@ -160,7 +165,7 @@ toast "Storage unavailable", the page stays), `loadSongList(queue, name, cue, g_
 `0xff11` for an artist's album and the card); Shuffle sets the stock Shuffle mode first (`pod_set_mode`:
 `mclSetPlayMode`, `notifyPlayMode`, `dmrSendPlayMode`, `write_int_config`; nothing is written when already
 Shuffle; the queue is this album alone so stock Shuffle shuffles exactly the album, and the mode stays Shuffle
-afterwards), Play all leaves the mode alone. A queue that does not resolve starts nothing, changes nothing and
+afterwards); Play all sets an in-order mode (`pod_set_in_order`: Shuffle and Repeat one become List play, List play and Repeat all are kept, nothing written when unchanged), so after a Shuffle, Play all plays the album in order and Now Playing shows it. A queue that does not resolve starts nothing, changes nothing and
 is freed. **Opening Now Playing** (`ah_open_player`) is the tail of the stock row handler `0x52569c` (a track
 tap, `0x5258c8..0x525970`): if `songerinfoflag` (`0xa04737`) is set and `navigator_window_is_exist("playing_page")`,
 the loop `0x525904..0x5259d8` pops with `navigator_back` every window above the topmost `playing_page` and
@@ -174,7 +179,7 @@ simply opens over the album page, exactly as a track tap does, so Back from Now 
 handler `0x525d48` (bound by the stock builder with the item as context) is removed with `widget_off_by_func` and ours bound
 in its place. `test/pod/albuminfo.py` runs the handlers against a window stack (`StackMachine`: demo's own
 `window_manager_get_top_window` over a window manager laid out in emulated memory, the rest of the stack calls modelled,
-including a window that stays after `navigator_back`). `pod_rand`, `pod_toast`, `pod_set_mode` are three exports at the end of
+including a window that stays after `navigator_back`). `pod_rand`, `pod_toast`, `pod_set_mode`, `pod_set_in_order` are four exports at the end of
 `patch/shuffle.c`.
 
 **The cover.** The stock header cover is `/tmp/abp/<md5>1.jpg`, rendered by the cover thread
@@ -212,8 +217,8 @@ songs, the queue. Approximate mock-ups, as above.
   Flow) and the All albums card; the header is restyled to the design in `docs/modules/album-page.md`
   (an Apple Music style detail page: a centred 160 px cover rendered 1:1 with 10 px rounded corners, then
   centred on the screen a 22 px white title, an 18 px `#AAAAAA` artist, a 15 px `#9C9C9C` "year . N tracks"
-  line, and a row of a round 38 px Shuffle disc with the Lucide glyph and a 180x40 glass Play all pill (the tint shows through it; on a black page, no art, it is a dark grey pill: acceptable, as the bar over black) with a white
-  16 px play glyph and 18 px text (both in 44 px high touch rectangles); no "..." button; the navbar is the floating glass controls of `docs/modules/album-page.md`: a Back disc and a capsule of search, multi-select and Now Playing; its title is transparent). The cover's corners are painted in the
+  line, and a row of a round 38 px dark grey Shuffle disc with the Lucide glyph and a 180x40 white Play all pill with a dark
+  16 px play glyph and 18 px text (both in 44 px high touch rectangles; solid, not glass); no "..." button; the navbar is the floating glass controls of `docs/modules/album-page.md`: a Back disc, a search disc (after a select cycle) and a capsule of multi-select and Now Playing; its title is transparent). The cover's corners are painted in the
   page's colour from the cover's after-paint (black, or the cover tint of the Cover tint paragraph); a cover smaller than the box (a small embedded image) sits
   centred with square corners. The sizes and positions are in code (the hook
   moves the stock widgets, `AH_*`); the look is the page theme `styles/albuminfo_page.bin`
@@ -243,10 +248,11 @@ songs, the queue. Approximate mock-ups, as above.
 - **Artists, Genres, Composers** (stock `localclass_page`): the per-page placeholder disc (`icon_artist` / `icon_genre` /
   `icon_composer`, the same on every row) is hidden, so the name starts at the 12 px margin and runs to the chevron (265 px,
   was 217). The artist or genre that is playing shows the wave marker before the chevron (name 217 px). Panel: `tools/preview_album.py`.
-- **A playlist's songs** are the Songs page (`allmusic_page`, class `0xff13`, the playlist's name as the
-  navbar title): the same 64 px rows and navbar as every library list. The stock page has no header and
-  no Play all button, so there is nothing to restyle beyond that; a header with Play all and Shuffle would
-  need a hook on that page's init.
+- **A playlist's songs** (the stock `allmusic_page`, class `0xff13`, the playlist's name as the navbar title):
+  the same 64 px rows and navbar as every library list, no header and no Play all button. The Pod's Playlists
+  page no longer opens it (it opens our Songs page with the large title and Play / Shuffle, no hook:
+  `docs/modules/songs.md` "The other lists"); it is reached from the stock Playlists page and as that page's
+  fallback.
 - **The queue drawer** (`ui/dialog/playqueue_dialog.bin`, no preview): the 240x450
   panel that slides in from the right over Now Playing (opened by name from `playerjumpinfo_page_init` `0x53b17c` and
   `0x4d126c`; `dialog_playqueue_dialog_init` `0x47a7cc`). Its rows are cloned from a template (`queue_table_row`) by the stock table code, `row_height` read

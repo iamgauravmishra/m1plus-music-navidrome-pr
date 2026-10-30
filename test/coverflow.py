@@ -122,7 +122,7 @@ def layout():
 
 def preview(frame, path, album='Kind of Blue', artist='Miles Davis', title='Cover Flow'):
     """The whole 320x480 page around a rendered frame: status bar gap, navbar, captions, laid out
-    as tools/pod_ui.py builds ui/m1pod_cover.bin (the window starts under the 30 px status bar,
+    as tools/pod_ui.py builds ui/m1plus_cover.bin (the window starts under the 30 px status bar,
     drawn here as black). Approximate."""
     from PIL import Image, ImageDraw, ImageFont
     page = Image.new('RGB', (320, 480), (0, 0, 0))

@@ -3,8 +3,8 @@ Album order, the setting file, the same order on the Albums page, and the stock 
 (The Settings > Cover Flow page itself is tested in test/pod/menu.py, the localisation in test/pod/i18n.py.)"""
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
-ALBUMS_FILE = '/mnt/data/m1pod-albums'
-LAST = '/mnt/mmc/.coverflow/album'
+ALBUMS_FILE = '/mnt/data/m1plus-albums'
+LAST = '/mnt/mmc/.m1plus/covers/album'
 SEED = O['FNV_SEED']
 
 
@@ -126,7 +126,7 @@ def run(ctx):
     # ===================== 4. memory and size limits =====================
     m = lib_machine(small); m.calloc_fail = True
     m.call(cover_open, count=10000000)
-    expect(('window_open', 'm1pod_cover') in m.calls and shelf_value(m) == 0 and caption(m, 'label_album') == ['Alpha'],
+    expect(('window_open', 'm1plus_cover') in m.calls and shelf_value(m) == 0 and caption(m, 'label_album') == ['Alpha'],
            'with no memory for the order the page still opens, on the stock order (the flat covers stand in)')
     m = lib_machine(small); m.call(cover_open, count=10000000); m.call(PSYMS['on_destroy'], count=2000000)
     freed = [c for c in m.calls if c[0] == 'free']
@@ -199,7 +199,7 @@ def run(ctx):
     # the playing album is also found when the cache is being built (the preparing screen, then the covers)
     m = cover_machine(albums=0, sort='default', cached=False); fill(m, LIB)
     for c in list(m.present):
-        if c.startswith('/mnt/mmc/.coverflow/'): m.present.discard(c)
+        if c.startswith('/mnt/mmc/.m1plus/covers/'): m.present.discard(c)
     m.play([rec(m, 'Kind of Blue', 'Miles Davis')], 0)
     m.call(cover_open, count=30000000)
     expect(('pthread_create',) in m.calls, 'a library with no cache starts the build')
@@ -275,7 +275,7 @@ def run(ctx):
            f'Albums (grid): the same order, two to a row ({[c[2] for c in cells][:4]})')
     # an empty library, and the page's memory
     m = albums.albums_machine(0, sort='artist'); albums.open_grid(m)
-    expect(('window_open', 'm1pod_albums') in m.calls and ('widget_set_tr_text', m.widgets['label_status'], 'Update Local Music first') in m.calls,
+    expect(('window_open', 'm1plus_albums') in m.calls and ('widget_set_tr_text', m.widgets['label_status'], 'Update Local Music first') in m.calls,
            'no albums: no order, the message')
     m = albums_page(LIB); m.call(PSYMS['al_on_destroy'], count=2000000)
     expect(any(c[0] == 'free' for c in m.calls), 'closing the Albums page frees the order')

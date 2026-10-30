@@ -1,4 +1,4 @@
-/* M1+ Pod texts in the language the player is set to: the stock translation (docs/architecture.md
+/* M1+ Music texts in the language the player is set to: the stock translation (docs/architecture.md
  * "Localisation"). A key is looked up in the current strings/<lang>_<COUNTRY>.bin by locale_info_tr
  * (0x658db4, a binary search); a key the table lacks (or no table at all) comes back unchanged, and our
  * keys are their English text, so the worst case is English. widget_set_tr_text (0x66f994) keeps the key

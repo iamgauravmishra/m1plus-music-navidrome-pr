@@ -202,7 +202,7 @@ HEAD_STYLE, HEAD_SRC = 'list_item_ahhead_style', 'list_item_notpress_style'
 ROW_STYLE, ROW_PRESSED, ROW_HAIR = 'list_item_style', '#FFFFFF33', '#FFFFFF22'   # the track rows on this page: transparent, pressed 20 % white, hairline 13 % white
 TITLE_PX, ARTIST_PX, META_PX = 22, 18, 15
 TITLE_COLOR, ARTIST_COLOR, META_COLOR = '#FFFFFF', '#AAAAAA', '#9C9C9C'   # the design's #8C8C8C is 3.8:1 on the page's #333333 pressed row: mod_theme --scan wants 4.5
-PLAY_INK, PLAY_PX = '#FFFFFF', 18          # the pill's fill is its bg_image (PLAY_BG_IMAGE): the mini bar's glass (mod_icons.glass_image), pressed one lighter
+PLAY_INK, PLAY_PX = '#141414', 18          # the pill's fill is its bg_image (PLAY_BG_IMAGE): white, #BEBEBE pressed
 PLAY_BG_IMAGE, PLAY_BG_IMAGE_DOWN, IMAGE_CENTER = 'ah_pill', 'ah_pill_down', 2   # bg_image_draw_type: DEFAULT 0, ICON 1, CENTER 2 (centred at its own size)
 TRACK_PX = 19                                                # the track rows' title and number on this page (the other pages keep 21)
 PLAY_ICON, SHUF_ICON, SHUF_ICON_DOWN = 'ah_play', 'ah_shuffle', 'ah_shuffle_down'   # tools/mod_icons.py ALBUM
@@ -241,9 +241,9 @@ def pill_layout(text_w, w=180, h=44, margin_left=None):
     rx, rw = ir_x + sq + PLAY_SPACER, ir_w - sq - PLAY_SPACER
     return icon_x, rx, (rx, rw)                               # the text is left aligned: its pen starts at the rect
 # The navbar buttons' styles the stock builders (0x526a3c, 0x524e4c) name, and the glass disc (rest, pressed, icon_at, x_offset) each shows on this page
-# (a page theme only: the artist's albums page shares the builders but not this theme). Every image is as wide as the button main's pins make it
-# (tools/mod_icons.py AH_NAV_PIECES), centred in it (icon_at 5), so the glyph centres are the Pod navbar's: search 191, multi-select 237, Now Playing 290
-# (60 px at 262: disc 269 .. 311), the select mode's add / delete / cancel in the stock 60 px buttons at 116 / 191 / 268 (146, 221, 290) and the all /
+# (a page theme only: the artist's albums page shares the builders but not this theme). Every image is centred in the button main's pins make it
+# (tools/mod_icons.py AH_NAV_PIECES; icon_at 5), so the glyph centres are the Pod navbar's: search 191 (a disc), multi-select 237 and Now Playing 290
+# (60 px at 262), one capsule 216 .. 311 (multi-select's image 4 px wider than its button, to meet Now Playing's), the select mode's add / delete / cancel in the stock 60 px buttons at 116 / 191 / 268 (146, 221, 290) and the all /
 # unselect toggle in its 50 px one (29). Back keeps its stock rule, icon_at left in a button-high square: x_offset +4 (stock -6) puts the 42 px
 # disc at x 8 .. 50 whether the builder made Back at (0, 50 high) or (3, 44 high): square centre x + h / 2 is 25 in both.
 NAV_STYLES = {'navbar_btnreturn_style': ('ah_nav_back', 'ah_nav_back_down', 1, 4),
@@ -283,7 +283,7 @@ def album_view_styles(page, base):
         s.set('icon', SHUF_ICON_DOWN if state == 'pressed' else SHUF_ICON, awtk_style.T_STRING)
         page.put(s)
     # the floating controls: the navbar buttons' own styles, overridden on this page only. Every state the glass piece (an icon: the piece
-    # is one image, tools/mod_icons.py ah_nav_images), no fill, centred in the button; pressed = the lighter piece.
+    # is one image, tools/mod_icons.py ah_nav_images), no fill, centred in the button; pressed = the lighter disc, or a cap's round highlight.
     for style, (rest, down, icon_at, x_offset) in NAV_STYLES.items():
         for state in ('normal', 'pressed', 'over', 'focused', 'disable'):
             s = awtk_style.Item('button', style, state)

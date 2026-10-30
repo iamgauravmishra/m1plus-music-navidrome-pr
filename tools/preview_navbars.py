@@ -115,13 +115,29 @@ def page_panel(work, rel, rows, scroll=0, pitch=52, subs=False, extra=None):
 
 def cf_bar(work):
     raw = tree(work)
-    root = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1pod_cover.bin'), 'rb').read())
+    root = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1plus_cover.bin'), 'rb').read())
     for c in list(root.children):
         if c.name not in ('navigationbar_view',): root.children.remove(c)
     for w in root.walk():
         if w.name == 'label_title': w.set('text', 'Cover Flow')
     p = NavPainter(raw)
     return p.render(root, 0).crop((0, 0, W, BAR + 120))
+
+
+def cf_artist_bar(work, title='Miles Davis'):
+    """Cover Flow on an artist as patch/coverflow.c artist_nav leaves it: Songs shown (the capsule's left cap), Now Playing's icons the right cap, the title to 214."""
+    raw = tree(work)
+    root = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1plus_cover.bin'), 'rb').read())
+    for c in list(root.children):
+        if c.name not in ('navigationbar_view',): root.children.remove(c)
+    names = {w.name for w in root.walk()}
+    for w in root.walk():
+        if w.name == 'label_title': w.set('text', title); w.w = 214 - w.x
+        elif w.name == 'btn_songs': w.set('visible', 'true'); w.set('sensitive', 'true')
+        elif w.name == 'btn_backtoplayer' and 'btn_songs' in names:
+            for k in ('normal', 'over'): w.set(f'style:{k}:icon', 'ah_nav_play')
+            w.set('style:pressed:icon', 'ah_nav_play_down')
+    return NavPainter(raw).render(root, 0).crop((0, 0, W, BAR + 120))
 
 
 def label(im, text):
@@ -131,7 +147,7 @@ def label(im, text):
 def home_panel(work, ghost, scroll=0):
     """The menu as the Home instance (patch/home.c: navbar hidden, list from y 10, 430 high): with the fade left visible (ghost, V2.1oAB) or hidden with the bar."""
     raw = tree(work)
-    root = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1pod_menu.bin'), 'rb').read())
+    root = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1plus_menu.bin'), 'rb').read())
     nb = next(c for c in root.children if c.name == 'navigationbar_view'); root.children.remove(nb)
     lst = next(c for c in root.children if c.name == 'pod_listview'); lst.y, lst.h = 10, 430
     for c in list(root.children):
@@ -162,13 +178,14 @@ WORK_STOCK = None
 def build_panels(work, new):
     sc = 150
     panels = [
-        ('Menu (grid-icon instance)', page_panel(work, 'm1pod_menu.bin', SETTINGS)),
-        ('Settings', page_panel(work, 'm1pod_settings.bin', SETTINGS)),
-        ('Artists', page_panel(work, 'm1pod_artists.bin', ARTISTS)),
-        ('Albums (grid page)', page_panel(work, 'm1pod_albums.bin', [])),
-        ('Playlists', page_panel(work, 'm1pod_playlists.bin', ARTISTS)),
+        ('Menu (grid-icon instance)', page_panel(work, 'm1plus_menu.bin', SETTINGS)),
+        ('Customize', page_panel(work, 'm1plus_customize.bin', SETTINGS)),
+        ('Artists', page_panel(work, 'm1plus_artists.bin', ARTISTS)),
+        ('Albums (grid page)', page_panel(work, 'm1plus_albums.bin', [])),
+        ('Playlists', page_panel(work, 'm1plus_playlists.bin', ARTISTS)),
         ('Cover Flow bar', cf_bar(work)),
-        ('Settings, scrolled', page_panel(work, 'm1pod_settings.bin', SETTINGS, scroll=sc)),
+        ('Cover Flow, an artist', cf_artist_bar(work)),
+        ('Customize, scrolled', page_panel(work, 'm1plus_customize.bin', SETTINGS, scroll=sc)),
         ('Home instance, scrolled', home_panel(work, ghost=False, scroll=sc)),
         ("Songs page (main's, unchanged)", allmusic_panel(work)),
     ]

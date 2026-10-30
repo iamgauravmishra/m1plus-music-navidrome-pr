@@ -1,6 +1,6 @@
 # Navbars: one reference, every page on it
 
-Goal: moving between pages never makes the Back arrow, the title or the right-hand icons jump. The reference is the M1+ Pod pages' navbar
+Goal: moving between pages never makes the Back arrow, the title or the right-hand icons jump. The reference is the M1+ Music pages' navbar
 (`tools/pod_ui.py` `navbar()`, window coordinates inside the 50 px bar):
 
 | Element | Reference |
@@ -34,7 +34,7 @@ unreliable there: `cdripper_page_init+...`, `home_page_init+...`, `playing_page_
 
 | Page (how reached) | Source | Before | Fix |
 |---|---|---|---|
-| M1+ Pod pages: Menu, Albums, Playlists, Artists, Cover Flow's artist/albums page, Extras, Settings, Main Menu, Shuffle, Cover Flow settings | assets `m1pod_*.bin` (`pod_ui.navbar()`) | the reference | none |
+| M1+ Music pages: Menu, Albums, Playlists, Artists, Cover Flow's artist/albums page, Extras, Settings, Main Menu, Shuffle, Cover Flow settings | assets `m1plus_*.bin` (`pod_ui.navbar()`) | the reference | none |
 | Settings pages `systemset/*` (33), `playset/*` (all but Equalizer), `audiosetting_page`: Back 80, title (36, 14) 20 px, Now Playing (260, 0, 60, 50) | assets | on the reference | none |
 | Settings > Equalizer (`playset/equalizer_page`), both themes | asset | Now Playing (270, 0, 50, 50): glyph 295 | Now Playing (260, 0, 60, 50): `mod_ipodrows.edit_equalizer` |
 | Update music > folder picker (`systemset/specfolder_page`), both themes | asset | Now Playing (279, 0, 41, 50): glyph 299; select-all (229, 0, 38, 50), `icon_at` 5: glyph 246; theme1 title x 90 | Now Playing (260, 0, 60, 50); select-all (214, 0, 46, 50), the multi-select slot; theme1 title (36, 14, 180, 22): `mod_ipodrows.edit_specfolder` |
@@ -59,7 +59,7 @@ the builder 0x52c5e8), USB mode.
   It is a transient mode with a different set of buttons and no Pod counterpart; moving it would need new slots for three actions.
 - **The Artists branch of `localclass_page`** keeps its artist-type switch on the 168 slot (the Pod's own Artists page has its `btn_artisttype`
   at 214): the multi-select button is built by code the Artists and Genres branches share, so only one of them can take 214. The stock Artists page
-  is not reached from the Pod menu (the Pod's Artists page is `m1pod_artists`).
+  is not reached from the Pod menu (the Pod's Artists page is `m1plus_artists`).
 - **Search's Back** is 33 wide (the stock edit field starts at x 33 in the asset). The glyph is on the reference; the touch target stays.
 - Title widths of the code-built labels stay stock (153 Folders, 147 Genres, 200 Playlists ...): they only decide where a long title ends.
   Nothing is hooked: every change is a pinned immediate of a button builder (`patch/rows.json`), a page theme or an asset rectangle.
@@ -74,9 +74,9 @@ the builder 0x52c5e8), USB mode.
 - Tests: `test/pod/albuminfo.py` (`tint_tests`: every navbar immediate against stock and built, the glyph-centre arithmetic, the page
   themes' title size, the asset rectangles against stock and built) and `test/pod/rows.py` (every `rows.json` word).
 
-## Glass navbars on our pages (and the album page's discs)
+## Glass navbars on our pages (and the album page's glass)
 
-Scope: **only the M1+ Pod pages** (menu, Settings and sub-pages, Main Menu, Home Screen, Cover Flow settings, Shuffle, Extras, Albums, Artists, Playlists, Cover Flow's
+Scope: **only the M1+ Music pages** (menu, Settings and sub-pages, Main Menu, Home Screen, Cover Flow settings, Shuffle, Extras, Albums, Artists, Playlists, Cover Flow's
 bar) and, through its page theme, the album page (`album-page.md`). Stock pages keep main's title bars on main's slots: the shared `return` / `back_to_player` images, the
 navbar styles and every stock ui / style / image file and builder are byte-identical to main's build (`test/pod/navbars.py`, digests in `test/navbars-stock.sha256`).
 
@@ -88,12 +88,18 @@ actions as **one glass capsule on main's slots**, a soft fade under the bar. Not
 |---|---|
 | Albums | Cover Flow 168 (left cap), grid / list toggle 214 (middle), Now Playing 260 (right cap `ah_nav_play`) |
 | Playlists | "..." 168 (left cap), toggle 214 (middle), Now Playing 260 |
+| Songs | Search 122 (left cap), Sort 168 and Select 214 (middles), Now Playing 260: a capsule of four, glass 124 .. 311 (`docs/modules/songs.md`); the title (small, shown when the large one has scrolled away) ends at 122. The other lists on that page (Favourites ..., a playlist) have no Sort: Search 168 (left cap), Select 214, Now Playing 260, the title ends at 168 |
+| Songs, a genre's songs (class `0xff09`) | no Search, no Sort: Select 214 (left cap `pod_nav_selectl`, set at run time), Now Playing 260 (right cap): a capsule of two, glass 216 .. 311 (the stock builder leaves Search out for this class); the title ends at 214 |
 | Artists | Artist / Album Artist switch 214 (left cap), Now Playing 260 |
-| Cover Flow | Now Playing disc `ah_nav_np` at 260 (glass 269 .. 311); hidden All albums disc on the 214 slot (glass 216 .. 258) |
+| Extras (`m1plus_extras`) | Customize 214 (left cap `pod_nav_customize`, Lucide `sliders-horizontal`; opens the Customize page), Now Playing 260 (right cap): glass 216 .. 311; the title ends at 214. Customize > Extras and the other pages have no button |
+| Genres, Composers (the Artists page on another class) | the switch is hidden (`visible=false` and `sensitive=false`) and Now Playing, which the asset builds as the capsule's right cap, is set at run time to the glass disc `ah_nav_np` (`_down` pressed), as on every page with no toggle; the title ends at 214 |
+| Cover Flow | main page and a composer's page: Now Playing disc `ah_nav_np` at 260 (glass 269 .. 311). An artist page with songs: the capsule Songs (`btn_songs`, Lucide `list`, left cap, x 214) \| Now Playing (`ah_nav_play` set at run time), glass 216 .. 311, the Artists page's shape |
 | menu, Settings, sub-pages | Now Playing disc |
+| album page (stock builders, page theme) | multi-select 214 (left cap, a 50 px image over its 46 px button) and Now Playing 262 (right cap): glass 216 .. 311; search 168 a disc (`album-page.md`) |
 
 **Capsule on the real slots.** Every image is cut to the button it sits in (46 / 46 / 60 px, 42 high), centred by `img_btn_style`: slices of ONE 141 px capsule (glass x 170 .. 311,
-radius 21), so adjacent pieces abut exactly (tested: the three glue into the capsule byte for byte) and the glass ends 21 px right of Now Playing's glyph column 290.
+radius 21), so adjacent pieces abut exactly (tested: the three glue into the capsule byte for byte) and the glass ends 21 px right of Now Playing's glyph column 290. The Songs page's capsule starts at the 122 slot (187 px, glass 124 .. 311, Search | Sort | Select | Now Playing): the same left cap, middles and right cap (a pane's straight parts and ends do not depend on its width), tested to glue byte for byte (`test/pod/glassbtn.py`). Select mode swaps Back's glyph for `ah_nav_close` (a 42 px disc with an x) and hides the capsule.
+**Pressed.** A lone disc is the lighter glass. A capsule piece keeps the rest glass (the capsule stays one pane, no lit block with square ends) with a **round highlight** on its glyph: a white disc of 36 px at 14 % (`NAV_PRESS_D`, `NAV_PRESS_ALPHA`), concentric with the cap ends (every glyph is 21 px from a cap's edge), 3 px of glass above and below, inside its own button (`test/pod/glassbtn.py`).
 Glyph columns 191 / 237 / 290 as main's. A left cap's first 2 px are transparent (170 = 191 - 21); the Artists capsule starts at 216.
 
 **The fade.** Nothing is darkened at rest (scroll offset 0; test `navbars.py`, alpha <= 8 over each page's first content): `nb_fade.png` 320 x 20, black, alpha 255 (1 - t)^3.6 (<= 8 from row 12: a text page's first row has its ink from row 15, a switch from row 12). The cover pages (Albums grid / list, Playlists: covers from row 10 / 4) build the fade **hidden** and `al_fade` / `pl_fade` (`patch/albums.c`, `patch/playlists.c`, from the scroll view's EVT_SCROLL they already hold and after a mode switch) show it only while `yoffset > 0`; visible only, it stays insensitive; no `img_nb_fade` = nothing happens (hidden). Preview: `tools/preview_fade.py`. An insensitive, unclickable `img_nb_fade` at (0, 50) right

@@ -1,10 +1,11 @@
-/* Stock M1 Plus V2.1 layout and ABI constants shared by patch/m1pod.c and test/patch.py.
+/* Stock M1 Plus V2.1 layout and ABI constants shared by patch/m1plus.c and test/patch.py.
  * The test harness parses the #defines in this file, so a change cannot leave the mocks behind.
  * Structure follows q2-pod's patch/offsets.inc (Copyright (c) 2026 Diamond Bond, MIT); the values
  * are the M1 Plus's own, read from demo with tools/dis.py. */
 #define W_NAME 0x10       /* widget_t name; the Home dispatcher reads only this: lw $a0, 0x10($a0) @0x533ba4 */
 #define EVT_CLICK 0x10c   /* Home icons register their click with this type: widget_on @0x533f78 */
 #define RET_OK 0
+#define RET_STOP 11       /* an emitter handler's result that ends the dispatch: no older handler runs (emitter_dispatch cmp 0xb @0x6f450c) */
 #define HOME_IDS 18       /* the Home dispatcher's jump table covers 0..17: sltiu $v1, $v0, 0x12 @0x533ba8 */
 /* Home item ids (config.ini [MAIN] HOMEMENU; names from the table at 0x97c940, get_homemenu_showinfo).
  * Which ids reach Home is decided by reset_homemenu_index/load_home_menu: id 0 only when the
@@ -72,6 +73,8 @@
  * which leaves 0xff11 (getMusicByAlbumAnd[Album]Songer, @0x4ee858) in classinfo[0]. */
 #define CLASS_ARTISTS 0xf004
 #define CLASS_ARTIST_ALBUMS 0xff01
+#define CLASS_ARTIST_SONGS 0xff11   /* what loadAlbumdetailList(0xff01, the All songs row) leaves in classinfo[0]: every song of the artist (patch/songs.c) */
+#define CLASSINFO_SIZE 0x390        /* the browsing record loadAlbumList memsets (@0x4ee8d8): the artist list's whole state, which every other query overwrites */
 #define ID_ALL_SONGS -2    /* REC_ID of the "All songs" row getAlbumByArtist appends last (@0x4eae30); its tracks are all the artist's songs (classinfo[8] = 1, @0x4eebec) */
 
 /* Cover Flow geometry, 320x480 portrait: a CF_VIEW_W x CF_VIEW_H frame under the 50 px navbar.
@@ -148,7 +151,7 @@
 #define IMAGE_SCALE_AUTO 4      /* image_draw_type_t, as the stock cover rows use */
 #define IMAGE_DRAW_CENTER 2     /* centred at its own size (DEFAULT 0, ICON 1, CENTER 2, SCALE 3, SCALE_AUTO 4) */
 
-/* Cover Flow page geometry (the ui/m1pod_cover.bin asset must match; tools/pod_ui.py) */
+/* Cover Flow page geometry (the ui/m1plus_cover.bin asset must match; tools/pod_ui.py) */
 #define CF_COVER_Y 89      /* view_covers' y in the window (NAVBAR_H + 39) */
 
 /* ---------------------------------------------------------------------------
@@ -290,7 +293,7 @@
  * between them, centred (GRID_MARGIN each side: (320 - 2 * 144 - 8) / 2 = 12); under each cover the album
  * (GRID_TITLE_H high, GRID_TITLE_GAP below the cover) and the artist (GRID_SUB_H high), each one line; rows
  * GRID_ROW_GAP apart; the first row GRID_ROW_GAP below the top and the last GRID_ROW_GAP above the bottom. The
- * view is the 400 px under the 50 px navbar (ui/m1pod_albums.bin, tools/pod_ui.py). GRID_TILES covers stay decoded
+ * view is the 400 px under the 50 px navbar (ui/m1plus_albums.bin, tools/pod_ui.py). GRID_TILES covers stay decoded
  * (memory: GRID_TILES * GRID_COVER^2 * 4 = 0.99 MB at most, plus the placeholder).
  * ALBUMS_DEFAULT_GRID is the mode a first use opens (1 grid, 0 list); the choice is then the setting file
  * ALBUMS_FILE. The navbar toggle button is NAV_VIEW_W wide. On the Pod pages (Albums, Artists, Cover Flow's
@@ -386,7 +389,7 @@
 
 /* ---------------------------------------------------------------------------
  * The mini player bar on the Home instance of the menu (patch/minibar.c, docs/modules/minibar.md; the widgets are in
- * ui/m1pod_menu.bin, tools/pod_ui.py MB_*, which must equal these). Apple Music's floating mini player: a full pill in the 450 px
+ * ui/m1plus_menu.bin, tools/pod_ui.py MB_*, which must equal these). Apple Music's floating mini player: a full pill in the 450 px
  * window, MB_W x MB_H at (MB_X, MB_Y), corner radius MB_R = MB_H / 2, a pre-rendered translucent glass image (mb_glass, mb_glass_down:
  * dark fill, sheen, rim light; the card button's bg_image; not tinted by the album). The cover is MB_ART px square, MB_ART_X from the pill's left and MB_ART_Y from its top, its
  * four corners MB_ART_R px (alpha in the bitmap). Title (17 px white) and artist (16 px, light grey) are hscroll_labels MB_TEXT_W wide
@@ -453,7 +456,7 @@
 
 /* ---------------------------------------------------------------------------
  * The Recently Played shelf on the Home instance of the menu (patch/recent.c, docs/modules/recent.md; the widgets are in
- * ui/m1pod_menu.bin, tools/pod_ui.py SH_*, which reads GRID_* from this file and must equal the rest). The shelf is the Albums grid
+ * ui/m1plus_menu.bin, tools/pod_ui.py SH_*, which reads GRID_* from this file and must equal the rest). The shelf is the Albums grid
  * (patch/grid.c, the GRID_* geometry above: GRID_COVER covers, GRID_GAP apart, from x GRID_MARGIN, the album GRID_TITLE_H and the artist
  * GRID_SUB_H under each, rows GRID_ROW_GAP apart) in a view of its own, SH_W (the scroll view's width) wide: a child of pod_scrollview that
  * follows the last shown row (Settings), before the mini bar's spacer, hidden and insensitive in the asset, scrolling with the list.
@@ -568,3 +571,230 @@
 #define PL_TEXT_R 16
 #define PL_CARD_MIN 180
 #define PL_CARD_MAX 292
+
+/* ---------------------------------------------------------------------------
+ * The Songs page (patch/songs.c, docs/modules/songs.md; the widgets are in ui/m1plus_songs.bin, tools/pod_ui.py SG_*, which reads this file and must equal it).
+ * The library as one list under the glass navbar: the content view (view_grid, inside the stock list_view > scroll_view, as the Albums page) holds, from its top,
+ * the large title (a label, SG_TITLE_PX px, x SG_TITLE_X, SG_TITLE_H high), the Play and Shuffle pills (real flat buttons, SG_PILL_W x SG_PILL_H at x SG_PILL_X0
+ * and SG_PILL_X1, y SG_PILL_Y, corner radius SG_PILL_R; the glyph and the label are centred as a pair SG_PILL_GAP apart) and from y SG_TOP the songs: with the
+ * stock Title order (sort_flag 0) in sections, each a SG_HDR_H high header (the letter SG_HDR_PX px white at x SG_HDR_X on the page's black, no band, as the Recently Played
+ * shelf's header; only the pinned copy is filled, SG_HDR_BG, so the rows scrolling under it are hidden) and its rows; in any other order the rows only. A row is LIST_ROW_H high as the library rows (the cover LIST_ART at (LIST_ART_X, LIST_ART_Y), the title at
+ * LIST_TITLE_Y, the artist at LIST_SUB_Y, from x LIST_TEXT_X to SG_TEXT_END, the hairline from there); in select mode every row's content moves SG_SEL_COL right and
+ * a SG_MARK px mark (the stock `selected` / `unselect` images) sits in the column. The pinned header (the section the window's top is in) is painted over the
+ * rows and pushed up by the next one. The rail (a widget of its own, x SG_RAIL_X, SG_RAIL_W wide, as high as the drawn span plus SG_RAIL_PAD above and below and centred on the list,
+ * outside the scroll_view so a touch on it never starts a drag; letters and dots are aligned from the font's metrics, SG_RAIL_INK2 and SG_RAIL_DX of stock.h): a compact index like the stock Songs page's (its A * . . F . . K image, search_icon.png): items SG_RAIL_PITCH px apart centred on x SG_RAIL_CX and
+ * vertically on the list, at most SG_RAIL_ITEMS of them (SG_RAIL_PITCH x SG_RAIL_ITEMS px); the sections' letters, all of them when they fit, else every k-th (the first and
+ * last always) with a SG_RAIL_DOT px dot between two letters; a finger's position along the drawn span is mapped to ALL the sections; the touched letter (when it is a drawn
+ * one) on a SG_RAIL_DISC px disc (SG_ACCENT) with a black letter; a SG_BUBBLE px bubble (a widget) shows the real letter. In select mode a SG_BAR_H high bar at the window's
+ * bottom holds the Add to playlist and Delete pills. The navbar's title shows from scroll offset SG_COLLAPSE on (the large title has gone). HOME_MYMUSIC: the stock
+ * Songs page's Home id, where a window that will not open falls back. SG_MAX_SEC: room for the sections (one per rank: "#" and A..Z, patch/songs.c SG_RANKS). SG_BUILD_N: the songs either side
+ * of the first one in view the background cover build looks at; SG_BUILD_MOVE the distance the page has to scroll before it looks again.
+ * The stock multi-select's selection vector is `*0xa045e0` (SEL_VEC in tools/pod.py); the picker the stock Add button opens is playlist_page with the context
+ * (1 << 16 | class), where it adds the selection to the row's playlist and closes itself (@0x53d300, mode 1).
+ */
+#define HOME_MYMUSIC 3
+/* The same page lists the other stock song lists (docs/modules/songs.md "The other lists"): the Home tiles the menu rows name (tools/pod_pages.py HOME_*, where a window
+ * that will not open falls back) and the loadLocalClassList class of each (docs/modules/addresses.md; CLASS_RECENT, CLASS_OFTEN, CLASS_FAV, CLASS_PLAYLIST_SONGS are
+ * defined with their first users). SG_NAME_MAX: the wide chars of a list's title (a playlist's name) the ellipsis fit looks at. */
+#define HOME_HIRES 9
+#define HOME_FAV 10
+#define HOME_MOST 11
+#define HOME_RECENT 12
+#define HOME_RECENTADD 13
+#define CLASS_HIRES 0xf002
+#define CLASS_RECENTADD 0xf009
+#define SG_NAME_MAX 128
+#define REC_INITIAL 0x54      /* stSongInfo: the songtable's Initial column (15), a byte: the ASCII code of '*' (a title that starts with a digit), 'A'..'Z' (the first letter, a CJK character as its pinyin initial) or '#' (anything else); written by the scan (@0x5edcb8), read by the row callback (@0x4e936c) and copied by 0x5db54c (@0x5db9ac); 0 = never written */
+#define NAV_TITLE_X 58           /* the glass navbars' title (tools/pod_ui.py NAV_TITLE_X) */
+#define NAV_SEARCH_X 122        /* the Songs page's capsule starts here: Search 122, Sort 168, Select 214, Now Playing 260 */
+#define SG_SELALL_X 208         /* the select mode's Select All text button (to the right edge) */
+#define SG_TITLE_X 12
+#define SG_TITLE_H 52
+#define SG_PILL_Y 52
+#define SG_PILL_H 40
+#define SG_PILL_W 129
+#define SG_PILL_X0 10
+#define SG_PILL_X1 149
+#define SG_BAR_PILL_W 145        /* the select bar's pills (Add to Playlist needs the room; the bar is below the rail, whose touch column ends at the bar's top) */
+#define SG_BAR_PILL_X1 165
+#define SG_PILL_R 20
+#define SG_PILL_GLYPH 16
+#define SG_PILL_GAP 8
+#define SG_PILL_PX_SMALL 16     /* a pill label too wide beside its glyph at 18 px is drawn at this size (patch/songs.c sg_centre_pill) */
+#define SG_TOP 104
+#define SG_HDR_H 28
+#define SG_HDR_X 10
+#define SG_HDR_BG 0xff000000u
+#define SG_TEXT_END 296
+#define SG_SEL_COL 30
+#define SG_MARK 26
+#define SG_RAIL_X 284        /* the touch column: x 284..320, 36 wide; the drawn letters and dots stay centred on x SG_RAIL_CX */
+#define SG_RAIL_W 36
+#define SG_RAIL_CX 310
+#define SG_RAIL_PAD 12       /* the widget is the drawn span plus this much above and below: a tap further from the span reaches the row */
+#define SG_RAIL_TEXT_W 24    /* the letters' rect (centred on SG_RAIL_CX, shifted by SG_RAIL_DX, which pod.py derives from the tree's font into stock.h with SG_RAIL_INK2) */
+#define SG_LIST_Y 50         /* the list's top in the window (the navbar's height) */
+#define SG_RAIL_PITCH 13
+#define SG_RAIL_ITEMS 20
+#define SG_RAIL_DOT 4
+#define SG_RAIL_DOT_RGB 0xff8a8a8au
+#define SG_RAIL_DISC 16
+#define SG_ACCENT 0xffeceeeeu
+#define SG_BUBBLE 110
+#define SG_BAR_H 64
+#define SG_MAX_SEC 28
+#define SG_COLLAPSE 46
+#define SG_BUILD_N 64
+#define SG_BUILD_MOVE 32
+#define SG_MORE_MS 16
+#define SG_SORT_ROWS 5
+#define SG_FOOT_H 52            /* the song count under the last row ("25 songs"): this much content, the text box SG_FOOT_GAP below the row, SG_FOOT_TEXT_H high, from x SG_HDR_X */
+#define SG_FOOT_GAP 14
+#define SG_FOOT_TEXT_H 20
+#define SG_FOOT_PX 15           /* the album page's meta line (srlabel_ahmeta_style colour #9C9C9C) */
+#define PICKER_ADD 0x10000     /* the stock playlist picker's context is PICKER_ADD | the class listed (the stock Add button @0x52817c: lui 1, or g_class_type) */
+#define CONFIRM_KIND_DELETE 3
+#define CONFIRM_DELETE_LIBRARY 0xa
+#define CONFIRM_DELETE_FILE 0x14
+/* The Daily Mix card of the menu's Home instance (patch/dailymix.c, docs/modules/dailymix.md; tools/pod_dailymix.py DM_* are the same numbers, test/pod/dailymix.py
+ * asserts it). The section pod_daily (SH_W x DM_SEC_H, a child of the list's scroll view between the shown rows and the Recently Played shelf, hidden and
+ * insensitive in the asset): the header pod_dm_head (the shelf's, SH_HEAD_*), the card pod_dm_card (DM_W x DM_H at DM_X, DM_TOP: the shelf's two covers' extent;
+ * it paints the art and the text itself), the glass play disc pod_dm_play (DM_DISC square at DM_DISC_X, DM_DISC_Y in the card, a later sibling of the card so it
+ * takes its own touches) and two hidden labels that carry the text styles (pod_dm_title 36 px white, pod_dm_sub 16 px #EBEBEB). Text lines: the title in two
+ * boxes DM_TITLE_PITCH high at DM_TITLE_Y1 / Y2 (x DM_PAD, DM_TITLE_W wide), the artists in DM_SUB_LINES lines DM_SUB_PITCH apart from DM_SUB_Y, DM_SUB_W wide.
+ * The art generator: the scrim ramps in over DM_RAMP rows above DM_ZONE_Y (the first title row). Timing: DM_FIRST_MS after the menu opens the card's files are
+ * read; a new mix is made only DM_START_MS after it opened, in slices on the page timer (DM_TICK_MS): DM_SLICE songs a tick, DM_ROWS art rows a tick, DM_ADD
+ * playlist songs a tick. DM_LIB_MAX / DM_OFT_MAX / DM_FAV_MAX bound the library, the Most Played and the Favourites lists read; DM_REC_MAX the recent list (the
+ * stock keeps 100). Files: the mix (DM_FILE_MAX bytes at most, names DM_NAME bytes) and the art (a 16 byte header and DM_W x DM_H RGB565 words). */
+#define CLASS_RECENT 0xf007   /* loadLocalClassList: getAllRecentRecord (newest first, the last 100), getAllOftenRecord (Most Played), getAllFav, getAllPlayList (into *pdeq_playlist) */
+#define CLASS_OFTEN 0xf008
+#define CLASS_FAV 0xf00a
+#define CLASSINFO_ARG 4        /* classinfo[1], the playlist id the Songs page lists (the row tap stores it @0x53d5f4) */
+/* Genres and Composers on the Artists page (patch/artists.c, docs/modules/artists.md): the stock Home tiles (where a window that will not open falls back) and the
+ * loadLocalClassList class of each (getAllGenre, getAllComposer). A composer's tap is the artist's: loadAlbumList(0xf005, row) leaves class 0xff02 (getAlbumByComposer,
+ * the composer's name at classinfo + 0x20d, an "All songs" row last) and its albums' tracks are 0xff14. A genre's tap (the stock row handler @0x535c4c) opens the songs
+ * of the genre: class 0xff09 in classinfo[0], the name at classinfo + 0x30d (0x80 bytes), the byte classinfo + 0xc = the row is "Unknown Genre" (id -1). */
+#define HOME_GENRE 7
+#define HOME_COMPOSER 8
+#define CLASS_COMPOSERS 0xf005
+#define CLASS_GENRES 0xf006
+#define CLASS_COMPOSER_ALBUMS 0xff02
+#define CLASS_GENRE_SONGS 0xff09
+#define CLASSINFO_GENRE 0x30d
+#define CLASSINFO_GENRE_SIZE 0x80
+#define CLASSINFO_GENRE_UNKNOWN 0xc
+#define NAV_TITLE_SIZE 0x200
+#define DM_X 12
+#define DM_W 296
+#define DM_H 220
+#define DM_R 12
+#define DM_TOP 44
+#define DM_BOTTOM 8
+#define DM_SEC_H 272
+#define DM_PAD 18
+#define DM_TITLE_PX 36
+#define DM_TITLE_PITCH 38
+#define DM_TITLE_W 260
+#define DM_TITLE_Y1 84
+#define DM_TITLE_Y2 122
+#define DM_SUB_PX 16
+#define DM_SUB_PITCH 20
+#define DM_SUB_LINES 2
+#define DM_SUB_Y 164
+#define DM_SUB_W 204
+#define DM_DISC 48
+#define DM_DISC_X 234
+#define DM_DISC_Y 158
+#define DM_MAX_NAMES 3
+#define DM_ZONE_Y 84
+#define DM_RAMP 110
+#define DM_FIRST_MS 150
+#define DM_TICK_MS 30
+#define DM_START_MS 8000
+#define DM_SLICE 1536
+#define DM_ROWS 20
+#define DM_LIB_MAX 12288
+#define DM_OFT_MAX 8192
+#define DM_FAV_MAX 4096
+#define DM_REC_MAX 100
+#define DM_FILE_MAX 8192
+#define DM_NAME 96
+#define DM_PATH 256              /* a song path in the mix file: 1 .. DM_PATH - 1 bytes */
+#define DM_ART_HEAD 16
+/* The Daily Mix page (patch/dailymix.c dp_*, ui/m1plus_dailymix.bin, tools/pod_dailymix.py DP_* are the same numbers, test/pod/dailymix.py and dmpage.py assert it): an Apple
+ * Music playlist page. The window is the list (list_view > scroll_view, DP_VIEW_H = 450 from the window top, no navbar); its one content view paints, in window
+ * coordinates, the art (DP_W x DP_ART_H, full width, its last DP_FADE rows fading into the page's solid tint), the centred lines (title DP_TITLE_PX at DP_TITLE_Y,
+ * "Made for You" DP_SUB_PX at DP_SUB_Y, the Updated line DP_UPD_PX at DP_UPD_Y: label boxes their font size high, x DP_TEXT_X, DP_TEXT_W wide), then the two buttons
+ * (the Shuffle disc DP_SHUF_W x DP_BTN_H at DP_SHUF_X and the Play pill DP_PLAY_W x DP_BTN_H at DP_PLAY_X, both at DP_BTN_Y; the pill is drawn DP_PILL_H high, the
+ * glyph DP_PILL_GLYPH + DP_PILL_GAP + the text centred in it), the description (up to DP_DESC_LINES lines DP_DESC_PITCH apart from DP_DESC_Y, DP_TEXT_W wide), and the
+ * songs from y rows_y = DP_DESC_Y + lines * DP_DESC_PITCH + DP_DESC_BELOW, LIST_ROW_H each, exactly the Albums list's: the LIST_ART px cover at LIST_ART_X
+ * (LIST_ART_Y down, LIST_R corners), the title and artist (LIST_TITLE_Y / LIST_SUB_Y) at LIST_TEXT_X, LIST_TEXT_W wide, a hairline from LIST_TEXT_X
+ * on. The tint: the art's last row averaged, its brightest channel lifted to DP_V_MIN, darkened by 15/16 steps until its 16 bit luminance is at most DP_LUM_MAX, snapped to
+ * 565; the grey and accent lines are the tint lightened by DP_GREY_K / DP_ACC_K of 256 towards white. DP_BACK_*: the glass back disc (DP_BACK_DISC) in its DP_BACK_BTN touch square. */
+#define DP_W 320
+#define DP_ART_H 180
+#define DP_FADE 60
+#define DP_HOLD 4               /* the last rows of the art are the tint's own word: the fade reaches it DP_HOLD rows before the end */
+#define DP_VIEW_H 450
+#define DP_BACK_BTN 44
+#define DP_BACK_X 8
+#define DP_BACK_Y 8
+#define DP_BACK_DISC 40
+#define DP_TEXT_X 16
+#define DP_TEXT_W 288
+#define DP_TITLE_PX 24
+#define DP_SUB_PX 17
+#define DP_UPD_PX 14
+#define DP_DESC_PX 15
+#define DP_TITLE_Y 193
+#define DP_SUB_Y 218
+#define DP_UPD_Y 239
+#define DP_BTN_Y 263
+#define DP_BTN_H 44
+#define DP_SHUF_X 33            /* Shuffle disc | Play pill | Add disc, symmetric about x 160: drawn 38 px discs and a 148 px pill 12 px apart (36 .. 284) */
+#define DP_SHUF_W 44
+#define DP_PLAY_X 86
+#define DP_PLAY_W 148
+#define DP_ADD_X 243            /* the Add disc (saves the mix as a stock playlist), the Shuffle disc mirrored: DP_SHUF_X + DP_ADD_X + DP_ADD_W = 320 */
+#define DP_ADD_W 44
+#define DP_PILL_H 40
+#define DP_PILL_GLYPH 16
+#define DP_PILL_GAP 8
+#define DP_DESC_Y 317
+#define DP_DESC_PITCH 20
+#define DP_DESC_LINES 2
+#define DP_DESC_BELOW 14
+#define DP_ROWS_Y 371           /* DP_DESC_Y + DP_DESC_LINES * DP_DESC_PITCH + DP_DESC_BELOW: the first song's row (the description reserves two lines in every language) */
+#define DP_BOTTOM 16
+#define DP_V_MIN 48
+#define DP_LUM_MAX 4588
+#define DP_PILL_INK 0x1e1c1cu     /* the pill's dark text (the glyph image dp_play is the same colour): #1C1C1E as r | g << 8 | b << 16 */
+#define DP_GREY_K 184
+#define DP_ACC_K 208
+#define DP_ROWS_MAX 64          /* songs the page keeps (the mix has MIX_SONGS; a playlist of ours cannot have more, but a rename-proof id could meet a longer one) */
+#define DP_PRESS 0x33ffffffu    /* a pressed row: 20 % white over the tint */
+#define DP_HAIR 0x22ffffffu     /* the hairline under a row: 13 % white */
+#define DP_MORE_MS 16           /* the cover loader's tick (the Albums list's) */
+/* The mix (tools/pod_mix.py is the model, test/pod/dailymix.py compares it with the compiled code): MIX_SONGS songs from a library of at least MIX_MIN_LIB
+ * playable songs (else no mix), at most MIX_PER_ARTIST of one artist and MIX_PER_ALBUM of one album; when that leaves the mix short, MIX_PER_ARTIST2 and
+ * MIX_PER_ALBUM2, then no limit (a library of few artists or albums still gets a full mix); an untagged artist or album is the song's folder; fewer than
+ * MIX_MIN_SONGS whose files exist: no mix. Score = MIX_W_PLAYS * lg(plays, capped at MIX_PLAYS_CAP) + MIX_W_ARTIST * lg(the artist's
+ * plays over the library, capped at MIX_ARTIST_CAP) + novelty (MIX_NOVEL0 never played, MIX_NOVEL1 once) + MIX_W_FAV if a favourite - MIX_W_RECENT * (100 - position)
+ * / 100 for a song among the last 100 played (position 0 = the last one) + a day-seeded jitter of 0 .. MIX_JITTER - 1; lg(n) = 16 * log2(1 + n) in fixed point. */
+#define MIX_SONGS 25
+#define MIX_MIN_SONGS 10
+#define MIX_PER_ARTIST 2
+#define MIX_PER_ALBUM 2
+#define MIX_PER_ARTIST2 4
+#define MIX_PER_ALBUM2 3
+#define MIX_MIN_LIB 50
+#define MIX_W_PLAYS 4
+#define MIX_W_ARTIST 2
+#define MIX_NOVEL0 60
+#define MIX_NOVEL1 30
+#define MIX_W_FAV 50
+#define MIX_W_RECENT 160
+#define MIX_JITTER 128
+#define MIX_PLAYS_CAP 200
+#define MIX_ARTIST_CAP 4000
+#define MIX_ALBUMS 3

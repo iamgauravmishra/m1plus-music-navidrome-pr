@@ -1,9 +1,9 @@
-/* M1+ Pod Recently Played: the albums played last, recorded by the payload, and a shelf of their covers at the foot of the Home instance
+/* M1+ Music Recently Played: the albums played last, recorded by the payload, and a shelf of their covers at the foot of the Home instance
  * of the menu (docs/modules/recent.md): the Albums grid's cells (patch/grid.c) for the six albums the file keeps, 2 x 1..3.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
- * No stock function is hooked. The shelf is a widget of the menu's own asset (ui/m1pod_menu.bin, tools/pod_ui.py shelf(): pod_shelf, a
+ * No stock function is hooked. The shelf is a widget of the menu's own asset (ui/m1plus_menu.bin, tools/pod_ui.py shelf(): pod_shelf, a
  * view that follows the last shown row (Settings) in the list's scroll view, hidden and insensitive; at its top the section header pod_sh_head, a stock
  * hscroll_label with the translation of "Recently Played" (the stock paint draws it, language included; it is insensitive, so a touch
  * on it falls to the shelf, which has no tile there), and two hidden labels that carry the two text styles of the tiles);
@@ -23,7 +23,7 @@
  *
  * The shelf. recent_start looks the widgets up, registers EVT_DESTROY / EVT_WINDOW_TO_BG / EVT_WINDOW_TO_FG on the window and the
  * shelf's EVT_AFTER_PAINT, pointer events and the list's EVT_SCROLL, arms a one-shot RC_FIRST_MS later and, when the list holds an
- * album and the Settings > Home Screen switch (SHELF_FILE) is on, sizes the shelf (ceil(albums / 2) rows of covers) and shows it (menu_shelf in patch/menu.c: visible and sensitive together, virtual_h grows). Any widget missing, any registration
+ * album and the Customize > Home Screen switch (SHELF_FILE) is on, sizes the shelf (ceil(albums / 2) rows of covers) and shows it (menu_shelf in patch/menu.c: visible and sensitive together, virtual_h grows). Any widget missing, any registration
  * or the timer failing: nothing is shown or moved, the menu is as it was. The menu's first paint decodes nothing.
  *   cells    the Albums grid's (patch/grid.c, the GRID_* geometry): cell i shows entry i, GRID_COVER px covers with GRID_R px rounded corners in
  *            the bitmap's own alpha (the Albums page's are square), the album and artist cut with an ellipsis once, a shared placeholder disc.
@@ -66,7 +66,7 @@ static struct {
     unsigned timer;         /* the one-shot or the decode tick, 0 none */
     int fg;                 /* the window is in front */
     int warm;               /* the one-shot after start has run */
-    int on;                 /* Settings > Home Screen > Recent Albums */
+    int on;                 /* Customize > Home Screen > Recent Albums */
     int shown;              /* the shelf is up */
     int noscroll;           /* the scroll event could not be registered: the covers are made as soon as the shelf is shown */
     unsigned t0;            /* time_now_ms at start: the album list is not loaded for covers before RC_RESOLVE_MS after it */
@@ -238,7 +238,7 @@ int recent_note(void *t) {
 }
 
 /* ---------------------------------------------------------------------------
- * The setting (Settings > Home Screen > Recent Albums): the file holds "0" for off, anything else or no file is on.
+ * The setting (Customize > Home Screen > Recent Albums): the file holds "0" for off, anything else or no file is on.
  */
 int recent_setting(void) {
     char c = 0;
@@ -448,7 +448,7 @@ static void rc_open(int i) {
     if (!albums) return;
     row = rc_find(albums, e, 1);
     deque_destroy(albums);
-    if (row >= 0) cc_open_album((void *)0, row);
+    if (row >= 0) cc_open_album((void *)0, 0, row);
 }
 
 /* The cover key from the stock album row: the Cover Flow cache files are named by the album ROW's key (the artist of the album's first

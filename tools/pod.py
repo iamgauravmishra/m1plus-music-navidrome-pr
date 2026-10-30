@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile the M1+ Pod payload, install its hook into demo, and add the page assets.
+"""Compile the M1+ Music payload, install its hook into demo, and add the page assets.
 
 Runs on a workdir that already has the battery, lock screen and space mods applied (so demo's
 .pdr is zeroed); it patches that demo and writes the new ui/*.bin. The injection mirrors q2-pod
@@ -11,7 +11,7 @@ project needs:
   * appended to demo through its final PT_NULL program header, rewritten to a PT_LOAD (RWX) at
     0xb00000; the payload keeps no .bss, so memsz == filesz and nothing else moves;
   * the Home icon click dispatcher's 3-word PIC prologue (checked) is overwritten with `j
-    m1pod_home_click; nop`; a trampoline restores $gp (0xa03ed0) and resumes the stock function at
+    m1plus_home_click; nop`; a trampoline restores $gp (0xa03ed0) and resumes the stock function at
     its 4th instruction, so the payload can still call it (open a stock Home destination, or fall
     through for every non-entry tap);
   * stock functions are reached through absolute-address macros, libc only through demo's own GOT
@@ -42,8 +42,8 @@ OBJCOPY = os.path.join(LLVM, 'llvm-objcopy')
 LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
-SOURCES = ['m1pod.c', 'common.c', 'menu.c', 'covercache.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'albuminfo.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'rows.c', 'shot.c', 'home.c',
-           'scroll.c', 'playmore.c', 'playlists.c']
+SOURCES = ['m1plus.c', 'common.c', 'menu.c', 'covercache.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'albuminfo.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'rows.c', 'shot.c', 'home.c',
+           'scroll.c', 'playmore.c', 'playlists.c', 'songs.c']
 
 FLAGS = ['--target=mipsel-linux-gnu', '-march=mips32r2', '-mabi=32', '-mfp64',
          '-mno-abicalls', '-fno-pic', '-G0', '-ffreestanding', '-fno-builtin',
@@ -64,18 +64,18 @@ HOME_CLICK = 0x533b80
 HOME_CLICK_PROLOGUE = (0x3c1c004d, 0x279c0350, 0x0399e021)  # lui/addiu $gp; addu $gp,$gp,$t9
 
 # The second hook (the boot guard): home_page_init, run once when the Home window
-# is created at start-up. m1pod_home_init runs the stock function to completion, then the boot guard.
+# is created at start-up. m1plus_home_init runs the stock function to completion, then the boot guard.
 HOME_INIT = 0x534cd4
 HOME_INIT_PROLOGUE = (0x3c1c004d, 0x279cf1fc, 0x0399e021)
 
 # The third hook (patch/albuminfo.c): albuminfo_listitem0_layout, which builds the album page's
 # header item. It is called only from the album page's list builder (albuminfo_page_init and its
-# to-foreground rebuild), never at boot; m1pod_albuminfo_header runs the stock function first.
+# to-foreground rebuild), never at boot; m1plus_albuminfo_header runs the stock function first.
 ALBUMINFO_HEADER = 0x526264
 ALBUMINFO_HEADER_PROLOGUE = (0x3c1c004e, 0x279cdc6c, 0x0399e021)
 
 # The fourth hook (patch/nowplaying.c): playing_page_init, the Now Playing page's init (called by the navigator's
-# page-init dispatcher only when the page is built, never at boot). m1pod_playing_init runs the stock function
+# page-init dispatcher only when the page is built, never at boot). m1plus_playing_init runs the stock function
 # first, then starts the page-scoped tint and remaining-time timer.
 PLAYING_INIT = 0x53d1e4
 PLAYING_INIT_PROLOGUE = (0x3c1c004c, 0x279c6cec, 0x0399e021)
@@ -95,6 +95,7 @@ FUNCTIONS = {
     'widget_get_prop_str':     ('const char *', 'void *, const char *, const char *', 0x6685e0),
     'widget_set_prop_str':     ('int', 'void *, const char *, const char *', 0x66f8a8),
     'widget_set_sensitive':    ('int', 'void *, int', 0x666b9c),
+    'widget_set_opacity':      ('int', 'void *, int', 0x669140),   # (the Regenerate Daily Mix row, dimmed: opacity byte +0x34, widget_paint's global alpha)
     'widget_use_style':        ('int', 'void *, const char *', 0x66aa64),
     'hscroll_label_create':    ('void *', 'void *, int, int, int, int', 0x60a700),
     'hscroll_label_set_only_parent_focus': ('int', 'void *, int', 0x6092e8),
@@ -143,6 +144,7 @@ FUNCTIONS = {
     # Cover Flow data: the stock library queries and the art extractors
     'loadLocalClassList':      ('int', 'int', 0x4ee504),
     'loadAlbumList':           ('int', 'int, void *', 0x4ee8d8),   # Artists: an artist's albums (album_page_init)
+    'loadAlbumdetailList':     ('int', 'int, void *', 0x4eea98),   # an album row (a RECORD pointer, not an index) to its songs: loadLocalClassList(0xff11) for the All songs row
     'loadSongList':            ('int', 'void *, const char *, int, int', 0x4e2ce0),
     'navigator_to_with_context': ('int', 'const char *, const void *', 0x4d1d48),
     'toolsGetAlbumCover':      ('int', 'const char *, const char *, int, int', 0x5eaee0),
@@ -169,7 +171,7 @@ FUNCTIONS = {
     'widget_resize':           ('int', 'void *, int, int', 0x66d13c),
     'widget_move':             ('int', 'void *, int, int', 0x66cfc0),
     'hscroll_label_set_only_focus': ('int', 'void *, int', 0x60929c),
-    # The M1+ Pod icon on the Home grid (patch/home.c): what the stock icon builder 0x533d8c calls per icon
+    # The M1+ Music icon on the Home grid (patch/home.c): what the stock icon builder 0x533d8c calls per icon
     # (view_create, image_create, widget_set_prop_bool "clickable", widget_use_style, widget_set_name, widget_on,
     # label_create, label_set_line_wrap), plus the page/indicator calls of the page builder 0x534064
     'view_create':             ('void *', 'void *, int, int, int, int', 0x6346f0),
@@ -228,6 +230,7 @@ FUNCTIONS.update({
 # Play all handler (@0x525d48, which stays on the page) off the button
 FUNCTIONS.update({
     'navigator_window_is_exist':  ('int', 'const char *', 0x4d2040),
+    'navigator_close':         ('int', 'const char *', 0x4d2118),   # closes the named page (Now Playing's Look up album / artist, patch/playmore.c)
     'window_manager_get_top_window': ('void *', 'void *', 0x6775c4),
     'widget_off_by_func':      ('int', 'void *, int, void *, void *', 0x666ec0),
     # the album page's tint (patch/albuminfo.c): the page window the header's item is in
@@ -252,7 +255,37 @@ FUNCTIONS.update({
 # runs importPlayList / exportPlayList and tells the result in the stock message box).
 FUNCTIONS.update({
     'createPlayListItem':      ('int', 'void *, const char *', 0x4eeca8),   # (the stock list, name or NULL): the new id, -1 full, -2 name exists
+    # The Daily Mix page's Add disc (patch/dailymix.c dp_save, docs/modules/dailymix.md): the playlist-table calls of the stock batch add (batch_add_file @0x4da7dc, class
+    # 0xf001 -> 0xf00b: @0x4db34c..0x4db3d0), made per song in the mix's order. All three are thin wrappers over toolsGetMaxId / toolsCheckExist / toolsInsertDbTable on
+    # "playlist" in /mnt/data/database.db.
+    'checkPlayListExist':      ('int', 'void *, int', 0x4ee1a8),            # (song record, playlist id): 1 = that song is already in it
+    'getPlayListMaxId':        ('int', 'void', 0x4ee184),                   # the largest id in the table (the new song row's id is max(100, that) + 1)
+    'addPlayList':             ('int', 'void *', 0x4ee1cc),                 # (song record: id REC_ID, playlist id REC_DISC): inserts the row, 1 = done
 })
+# The Songs page (patch/songs.c, docs/modules/songs.md): the stock multi-select's selection vector (`*0xa045e0`, a vector<int> indexed by the row of
+# *pdeq_showlist, 1 = selected: select_recordinit(n) clears it and pushes n zeros, set_selectindex(i) toggles v[i] and returns 1) and the stock batch
+# delete (batch_delete_file(class, list, selection, 0, delete_file): the generic loop for 0xf001, deleteMusicFromMusicDb per selected row, remove_file when
+# the flag is set, and `*0xa05a5a = 1` at the end). All of them touch no widget (docs/modules/songs.md has the evidence).
+FUNCTIONS.update({
+    'select_recordinit':       ('void', 'int', 0x4da3b0),
+    'set_selectindex':         ('int', 'int', 0x4da434),
+    'batch_delete_file':       ('int', 'int, void *, void *, int, int', 0x4e1408),
+})
+SONGS_PINS = (   # (address, stock word, what it proves): prologues are `lui $gp, hi; addiu $gp, $gp, lo; addu $gp, $gp, $t9`
+    (0x4da3b0, 0x3c1c0053, 'select_recordinit prologue'), (0x4da3b4, 0x279c9b20, 'select_recordinit prologue'), (0x4da3b8, 0x0399e021, 'select_recordinit prologue'),
+    (0x4da3bc, 0x0480001b, 'select_recordinit: bltz a0 (a negative count does nothing)'),
+    (0x4da3a0, 0x8f82ac50, 'clear_selectrecord: lw v0, GOT 0xa045e0 (SEL_VEC: the selection vector\'s pointer)'), (0x4da3ac, 0x8c440000, 'clear_selectrecord: a0 = *SEL_VEC, vector_clear(a0)'),
+    (0x4da434, 0x3c1c0053, 'set_selectindex prologue'), (0x4da438, 0x279c9a9c, 'set_selectindex prologue'), (0x4da43c, 0x0399e021, 'set_selectindex prologue'),
+    (0x4e1408, 0x3c1c0052, 'batch_delete_file prologue'), (0x4e140c, 0x279c2ac8, 'batch_delete_file prologue'), (0x4e1410, 0x0399e021, 'batch_delete_file prologue'),
+    (0x4e1418, 0x3402f00c, 'batch_delete_file: class < 0xf00c (the jump tables\' range)'),
+    (0x4d1d80, 0x3c1c0053, 'navigator_to prologue'), (0x4d1d90, 0x1000ffed, 'navigator_to: b navigator_to_with_context (0x4d1d48)'), (0x4d1d94, 0x00002825, 'navigator_to: with a1 = 0 (the delay slot)'),
+    (0x52704c, 0x3c1c004e, 'the Songs page\'s search click handler prologue'), (0x52705c, 0x8f848020, 'search handler: lw a0, GOT page'),
+    (0x527070, 0x24849e00, 'search handler: a0 = "search_page" (navigator_to("search_page"), no context, nothing set first)'),
+    (0x527014, 0x3c1c004e, 'the Songs page\'s sort click handler prologue'), (0x527038, 0x24849db0, 'sort handler: a0 = "dialog/sortselect_dialog" (navigator_to, no context)'),
+    (0x47d1a8, 0x24c64f90, 'sortselect row handler 0x47d114: a2 = "SORTSELECT"'), (0x47d1ac, 0x24a54540, 'sortselect row handler: a1 = "SYSSET"'),
+    (0x47d1b0, 0x8c640000, 'sortselect row handler: a0 = sortMenu[i] (0x97c770: 0 1 2 3 4)'), (0x47d1b4, 0x0320f809, 'sortselect row handler: jalr write_int_config'),
+    (0x47d1b8, 0xae640000, 'sortselect row handler: sw a0, (s3) in the delay slot: sort_flag (0xa059d4) = the choice'),
+)
 PLAYLIST_IMPORT, PLAYLIST_EXPORT = 0x53dedc, 0x53dd34
 PLAYLIST_PINS = (   # (address, stock word, what it proves)
     (PLAYLIST_IMPORT, 0x3c1c004c, 'import click handler prologue'), (PLAYLIST_IMPORT + 4, 0x279c5ff4, 'import click handler prologue'),
@@ -261,6 +294,14 @@ PLAYLIST_PINS = (   # (address, stock word, what it proves)
     (PLAYLIST_EXPORT + 8, 0x0399e021, 'export click handler prologue'),
     (0x53df64, 0x8f99c2a4, 'import: lw importPlayList from the GOT'), (0x53df6c, 0x0320f809, 'import: jalr importPlayList'),
     (0x53ddc4, 0x8f99c2a0, 'export: lw exportPlayList from the GOT'), (0x53dde8, 0x0320f809, 'export: jalr exportPlayList'),
+    (0x4eeca8, 0x3c1c0051, 'createPlayListItem prologue'), (0x4eecac, 0x279c5228, 'createPlayListItem prologue'), (0x4eecb0, 0x0399e021, 'createPlayListItem prologue'),
+    (0x4ee184, 0x3c1c0051, 'getPlayListMaxId prologue'), (0x4ee188, 0x279c5d4c, 'getPlayListMaxId prologue'), (0x4ee18c, 0x0399e021, 'getPlayListMaxId prologue'),
+    (0x4ee1a8, 0x3c1c0051, 'checkPlayListExist prologue'), (0x4ee1ac, 0x279c5d28, 'checkPlayListExist prologue'), (0x4ee1b0, 0x0399e021, 'checkPlayListExist prologue'),
+    (0x4ee1cc, 0x3c1c0051, 'addPlayList prologue'), (0x4ee1d0, 0x279c5d04, 'addPlayList prologue'), (0x4ee1d4, 0x0399e021, 'addPlayList prologue'),
+    (0x4db34c, 0x04114b96, 'batch_add_file (class 0xf00b): bal checkPlayListExist(rec, playlist id)'), (0x4db360, 0x04114b88, 'batch_add_file: bal getPlayListMaxId'),
+    (0x4db380, 0x24030064, 'batch_add_file: v1 = 100'), (0x4db384, 0x2a640064, 'batch_add_file: slti a0, max, 100'), (0x4db38c, 0x0264180a, 'batch_add_file: movz v1, max, a0 (max(100, max))'),
+    (0x4db3a4, 0xac430000, 'batch_add_file: rec.id (REC_ID) = max(100, max) + 1'), (0x4db3c0, 0xac430040, 'batch_add_file: rec.cd_num (REC_DISC) = the playlist id'),
+    (0x4db3d0, 0x8f99b810, 'batch_add_file: lw addPlayList from the GOT (the delay slot of the jump to 0x4daff8)'), (0x4daff8, 0x0320f809, 'batch_add_file: jalr addPlayList(rec)'),
 )
 # Stock data the payload reads or writes, by absolute address. Exported objects are checked
 # against .dynsym; the two unnamed ones carry the code that proves them.
@@ -299,9 +340,16 @@ DATA = {
     'PDEQ_PLAYLIST':      (0xa045d0, 'pdeq_playlist'),
     'NAV_TITLE':          (0xa0533c, 'nagvation_title'),
     'NAVIGATION_STATUS':  (0xa05a24, 'navigation_status'),
+    # the Songs page (patch/songs.c): sort_flag, the list order of class 0xf001 (0 alphabetical, 1 file name, 2 file format, 3 newest first, 4 oldest first;
+    # getAllMusic dispatches on it, config_init reads it from [SYSSET] SORTSELECT, the sort dialog's row handler @0x47d114 stores it and writes the key)
+    'SORT_FLAG':          (0xa059d4, 'sort_flag'),
+    # the stock multi-select's selection: a pointer to a vector<int> (created once at start-up, ~0x50bb34) indexed by the row of *pdeq_showlist, 1 = selected
+    'SEL_VEC':            (0xa045e0, None),
 }
 LIBC = {
     'atoi': ('int', 'const char *'), 'access': ('int', 'const char *, int'),
+    # the Daily Mix's day number (patch/dailymix.c dm_today): the wall clock and its local calendar fields (struct tm: seconds, minutes, hours, mday, mon, year first)
+    'time': ('long', 'long *'), 'localtime': ('const int *', 'const long *'),
     # Home (patch/home.c): the marker, the setting and the opt-in log
     'open': ('int', 'const char *, int, int'), 'read': ('int', 'int, void *, unsigned'),
     'write': ('int', 'int, const void *, unsigned'), 'close': ('int', 'int'), 'fsync': ('int', 'int'),
@@ -333,7 +381,7 @@ LIBC = {
 # ---- List gestures (patch/scroll.c, docs/architecture.md "List gestures") --------------------------------------------
 # Not a code hook: widget_on_event_before_children (0x666c34) calls vtable[0x98] of a widget with every pointer event
 # before its children see it, and g_scroll_view_vtable's slot is zero in stock (a no-op). The build writes
-# m1pod_scroll_event into that one data word. The stock functions and fields the payload relies on are pinned below.
+# m1plus_scroll_event into that one data word. The stock functions and fields the payload relies on are pinned below.
 SCROLL_VTABLE = 0x97a298            # g_scroll_view_vtable (.dynsym)
 SCROLL_SLOT = SCROLL_VTABLE + 0x98  # on_event_before_children: 0 in stock
 SCROLL_DONE = 0x6101b8              # scroll_view's EVT_ANIM_END handler (static): wa = 0, the scroll end events; ret_t (ctx = widget, event)
@@ -376,7 +424,7 @@ SCROLL_PINS = (
 # ---- Now Playing's More dialog (patch/playmore.c, docs/modules/playmore.md) -------------------------------------------
 # dialog_playmore_dialog_init, the init of dialog/playmore_dialog: called only by the navigator's dialog-init dispatcher
 # (0x4d1244 .. 0x4d124c, behind the strcmp with "dialog/playmore_dialog"), when Now Playing's More button opens the dialog.
-# m1pod_playmore_init runs the stock init to completion (it binds every row and pins the dialog at y 130), then re-orders
+# m1plus_playmore_init runs the stock init to completion (it binds every row and pins the dialog at y 130), then re-orders
 # the rows; any mismatch leaves the stock menu.
 PLAYMORE_INIT = 0x479cc4
 PLAYMORE_INIT_PROLOGUE = (0x3c1c0059, 0x279ca20c, 0x0399e021)
@@ -401,7 +449,7 @@ PLAYMORE_PINS = (   # (address, stock word, what it proves)
 
 
 def patch_playmore(image, ps, payload_len):
-    target = ps['m1pod_playmore_init']
+    target = ps['m1plus_playmore_init']
     check(BASE <= target < BASE + payload_len, 'playmore entry symbol outside payload')
     for a, old, what in PLAYMORE_PINS:
         got = struct.unpack_from('<I', image, fileoff(image, a))[0]
@@ -493,12 +541,20 @@ def gen_stock_h(out, demo_path):
     h.append('#define POD_MENU_DEFAULT_IDS {' + ', '.join(str(i) for i in pod_pages.DEFAULT_MENU) + '}')   # ... these item ids, in order
     h.append(f'#define POD_MENU_FILE_MAX {pod_pages.MENU_FILE_MAX}')
     h.append(f'#define POD_MENU_ROWS {len(pod_pages.MENU.rows)}')
+    h.append(f'#define POD_CUSTOMIZE_ID {pod_pages.CUSTOMIZE_ID}')
     h.append(f'#define POD_EXTRAS_ROWS {len(pod_pages.EXTRAS_PAGE.rows)}')
     h.append('#define POD_EXTRAS_ORDER {' + ', '.join(str(i) for i in pod_pages.EXTRAS_ORDER) + '}')   # the Extras page's rows (item ids) top to bottom
+    h.append(f'#define POD_EXTRAS_GROUPS {len(pod_pages.EXTRAS_GROUPS)}')   # the Extras page's titled groups (section headers pod_hdr0 ..) ...
+    h.append('#define POD_EXTRAS_GROUP {' + ', '.join(str(g) for g in pod_pages.EXTRAS_GROUP_OF) + '}')   # ... the group of each item id ...
+    h.append(f'#define POD_EXTRAS_HDR_H {pod_pages.HDR_H}')   # ... and a header's height
     h.append(f'#define POD_ROW_H {pod_ui.ROW_H}')
+    # the Songs rail's alignment, from the tree's own font (tools/pod_ui.py rail_metrics): twice the cap ink's centre within an item, and each letter's rect shift
+    ink2, dx = pod_ui.rail_metrics(os.path.join(os.path.dirname(os.path.dirname(demo_path)), 'assets/default/raw/fonts/default.ttf'))
+    h.append(f'#define SG_RAIL_INK2 {ink2}')
+    h.append('#define SG_RAIL_DX {' + ', '.join(str(d) for d in dx) + '}   /* "#", A..Z */')
     h.append('extern int shuffle_play(int);')
     (out / 'stock.h').write_text('\n'.join(h) + '\n')
-    # The page and row tables, included by patch/m1pod.c alone.
+    # The page and row tables, included by patch/m1plus.c alone.
     h = ['/* Generated by tools/pod.py from tools/pod_pages.py; do not edit. */', '#pragma once']
     pages = pod_pages.PAGES
     for pi, page in enumerate(pages):
@@ -516,9 +572,11 @@ def gen_stock_h(out, demo_path):
     h.append(f'#define POD_ENTRY_ID {pod_pages.HOME_ENTRY}')
     h.append('#define POD_ENTRY_PAGE 0')
     h.append('#define POD_MENU_PAGE 0')
-    h.append(f'#define POD_SETTINGS_PAGE {pod_pages.SETTINGS_PAGE_INDEX}')
+    h.append(f'#define POD_CUSTOMIZE_PAGE {pod_pages.CUSTOMIZE_PAGE_INDEX}')
     h.append(f'#define POD_EXTRAS_PAGE {pod_pages.EXTRAS_PAGE_INDEX}')
     h.append(f'#define POD_MENUCFG_PAGE {pod_pages.MENUCFG_PAGE_INDEX}')
+    h.append(f'#define POD_EXTRASCFG_PAGE {pod_pages.EXTRASCFG_PAGE_INDEX}')
+    h.append(f'#define POD_DEVELOPER_PAGE {pod_pages.DEVELOPER_PAGE_INDEX}')
     (out / 'pages.h').write_text('\n'.join(h) + '\n')
     return slots
 
@@ -573,13 +631,13 @@ def compile_payload(out, demo_path):
         objs.append(obj)
     run(CLANG, *FLAGS, '-c', out / 'pod_asm.S', '-o', out / 'pod_asm.o')
     # compact_set_row_layout is reached only from the patched stock call sites, so keep it
-    keep = ['--undefined=compact_set_row_layout', '--undefined=m1pod_home_init',
-            '--undefined=stock_home_init_trampoline', '--undefined=m1pod_albuminfo_header',
-            '--undefined=stock_albuminfo_header_trampoline', '--undefined=m1pod_playing_init',
-            '--undefined=stock_playing_init_trampoline', '--undefined=m1pod_scroll_event',
-            '--undefined=m1pod_playmore_init', '--undefined=stock_playmore_init_trampoline']
+    keep = ['--undefined=compact_set_row_layout', '--undefined=m1plus_home_init',
+            '--undefined=stock_home_init_trampoline', '--undefined=m1plus_albuminfo_header',
+            '--undefined=stock_albuminfo_header_trampoline', '--undefined=m1plus_playing_init',
+            '--undefined=stock_playing_init_trampoline', '--undefined=m1plus_scroll_event',
+            '--undefined=m1plus_playmore_init', '--undefined=stock_playmore_init_trampoline']
     run(LD, '-m', 'elf32ltsmip', '--gc-sections', '-T', os.path.join(PATCH, 'link.ld'),
-        '-e', 'm1pod_home_click', '--undefined=m1pod_home_click', '--undefined=stock_home_click_trampoline',
+        '-e', 'm1plus_home_click', '--undefined=m1plus_home_click', '--undefined=stock_home_click_trampoline',
         *keep, *objs, out / 'pod_asm.o', '-o', out / 'patch.elf')
     run(OBJCOPY, '-O', 'binary', out / 'patch.elf', out / 'patch.bin')
     ps = symbols_elf(out / 'patch.elf')
@@ -694,9 +752,9 @@ def hook(patched, addr, prologue_pinned, target, what):
 
 
 def patch_scroll(image, ps, payload_len, demo_path):
-    """List gestures: check every pinned word and the vtable symbol, then write m1pod_scroll_event into the (empty)
+    """List gestures: check every pinned word and the vtable symbol, then write m1plus_scroll_event into the (empty)
     on_event_before_children slot of g_scroll_view_vtable. Returns [slot address, old, new]."""
-    target = ps['m1pod_scroll_event']
+    target = ps['m1plus_scroll_event']
     check(BASE <= target < BASE + payload_len, 'scroll entry symbol outside payload')
     check(dynsym(demo_path).get('g_scroll_view_vtable') == SCROLL_VTABLE, 'g_scroll_view_vtable moved')
     for a, old, what in SCROLL_PINS:
@@ -708,19 +766,19 @@ def patch_scroll(image, ps, payload_len, demo_path):
 
 def patch_demo(raw, payload, ps, demo_path):
     patched = bytearray(raw)
-    target, target2 = ps['m1pod_home_click'], ps['m1pod_home_init']
+    target, target2 = ps['m1plus_home_click'], ps['m1plus_home_init']
     check(BASE <= target < BASE + len(payload), 'entry symbol outside payload')
     check(BASE <= target2 < BASE + len(payload), 'home init entry symbol outside payload')
     hook(patched, HOME_CLICK, HOME_CLICK_PROLOGUE, target, 'home click')
     hook(patched, HOME_INIT, HOME_INIT_PROLOGUE, target2, 'home_page_init')
-    target3 = ps['m1pod_albuminfo_header']
+    target3 = ps['m1plus_albuminfo_header']
     check(BASE <= target3 < BASE + len(payload), 'album header entry symbol outside payload')
     hook(patched, ALBUMINFO_HEADER, ALBUMINFO_HEADER_PROLOGUE, target3, 'albuminfo_listitem0_layout')
-    target4 = ps['m1pod_playing_init']
+    target4 = ps['m1plus_playing_init']
     check(BASE <= target4 < BASE + len(payload), 'playing init entry symbol outside payload')
     hook(patched, PLAYING_INIT, PLAYING_INIT_PROLOGUE, target4, 'playing_page_init')
     patch_playmore(patched, ps, len(payload))
-    for a, old, what in PLAYLIST_PINS:   # stock code the Playlists page calls: checked, not written
+    for a, old, what in PLAYLIST_PINS + SONGS_PINS:   # stock code the Playlists and Songs pages call: checked, not written
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     edits = patch_rows(patched, ps)
@@ -752,22 +810,22 @@ def main():
     pod_ui.add_shot_indicator(rootfs)     # the hidden camera in ui/system_bar.bin (patch/shot.c)
     manifest = {
         'base': BASE, 'gp': GP, 'payload_len': len(payload),
-        'payload_sha256': sha(payload), 'scratch_bytes': scratch, 'entry_symbol': ps['m1pod_home_click'],
-        'segment_file_off': seg_off, 'hook': {'addr': HOME_CLICK, 'target': ps['m1pod_home_click']},
-        'hook_init': {'addr': HOME_INIT, 'target': ps['m1pod_home_init']},
-        'hook_albuminfo': {'addr': ALBUMINFO_HEADER, 'target': ps['m1pod_albuminfo_header']},
-        'hook_playing': {'addr': PLAYING_INIT, 'target': ps['m1pod_playing_init']},
-        'hook_playmore': {'addr': PLAYMORE_INIT, 'target': ps['m1pod_playmore_init']},
-        'scroll_slot': {'addr': SCROLL_SLOT, 'target': ps['m1pod_scroll_event']}, 'scroll_edit': scroll,
+        'payload_sha256': sha(payload), 'scratch_bytes': scratch, 'entry_symbol': ps['m1plus_home_click'],
+        'segment_file_off': seg_off, 'hook': {'addr': HOME_CLICK, 'target': ps['m1plus_home_click']},
+        'hook_init': {'addr': HOME_INIT, 'target': ps['m1plus_home_init']},
+        'hook_albuminfo': {'addr': ALBUMINFO_HEADER, 'target': ps['m1plus_albuminfo_header']},
+        'hook_playing': {'addr': PLAYING_INIT, 'target': ps['m1plus_playing_init']},
+        'hook_playmore': {'addr': PLAYMORE_INIT, 'target': ps['m1plus_playmore_init']},
+        'scroll_slot': {'addr': SCROLL_SLOT, 'target': ps['m1plus_scroll_event']}, 'scroll_edit': scroll,
         'zeroed_demo_sha256': ZEROED_DEMO_SHA, 'patched_demo_sha256': sha(patched),
         'assets': assets, 'entry_home_id': pod_pages.HOME_ENTRY,
         'row_edits': edits, 'row_fit': ps['compact_set_row_layout'],
     }
     (build / 'manifest.json').write_text(json.dumps(manifest, indent=1) + '\n')
-    print(f'payload {len(payload)} bytes ({scratch} .scratch) @ {BASE:#x} (entry {ps["m1pod_home_click"]:#x}), '
+    print(f'payload {len(payload)} bytes ({scratch} .scratch) @ {BASE:#x} (entry {ps["m1plus_home_click"]:#x}), '
           f'hook @ {HOME_CLICK:#x}, boot guard hook @ {HOME_INIT:#x} (home_page_init), '
           f'album header hook @ {ALBUMINFO_HEADER:#x}, Now Playing init hook @ {PLAYING_INIT:#x}, '
-          f'scroll_view before-children slot @ {SCROLL_SLOT:#x} -> {ps["m1pod_scroll_event"]:#x}')
+          f'scroll_view before-children slot @ {SCROLL_SLOT:#x} -> {ps["m1plus_scroll_event"]:#x}')
     kinds = {k: sum(e[3] == k for e in edits) for k in ('immediate', 'call', 'nop')}
     print(f'  rows: {len(edits)} pinned edits ({kinds["immediate"]} immediates, {kinds["call"]} row-layout '
           f'calls -> compact_set_row_layout @ {ps["compact_set_row_layout"]:#x}, {kinds["nop"]} rebind resizes nopped)')

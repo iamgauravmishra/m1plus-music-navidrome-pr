@@ -1,8 +1,8 @@
-/* M1+ Pod Screenshot: a developer's screen grab from the Extras page (docs/architecture.md "Screenshot").
+/* M1+ Music Screenshot: a developer's screen grab from the Extras page (docs/architecture.md "Screenshot").
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
- * A tap on the Screenshot row starts a payload-owned countdown (SHOT_SECONDS, one stock timer, so the user can
+ * A tap on the Screenshot row (Customize > Developer) asks in the stock confirm dialog; Yes starts a payload-owned countdown (SHOT_SECONDS, one stock timer, so the user can
  * leave the page and go where the picture should be), shows a camera in the status bar while it runs, and then
  * writes what is on the panel to /mnt/mmc/screenshots/shot-NNNN.bmp (24 bit, bottom-up). No stock function is
  * hooked and nothing runs unless that row was tapped: no thread, no paint hook, no main loop work; the timers exist only
@@ -27,19 +27,22 @@
 #include "offsets.inc"
 #include "stock.h"
 #include "home.h"
+#include "common.h"
 #include "i18n.h"
 #include "shot.h"
 
 #define BMP_HEADER 54
 
 extern void pod_toast(const char *text);   /* patch/shuffle.c: the stock message box */
+extern int pod_confirm(const char *text);  /* patch/m1plus.c: the stock confirm dialog, wrapped text, modal; nonzero for Yes */
 
-enum { SH_IDLE, SH_COUNT, SH_GRAB };       /* nothing pending, counting down, waiting for the repaint */
+enum { SH_IDLE, SH_ASK, SH_COUNT, SH_ASK_CANCEL, SH_GRAB };   /* nothing pending, asking to start, counting down, asking to cancel, waiting for the repaint */
 enum { R_OK, R_STORAGE, R_FAIL };          /* a saved file; no card / no room; the frame buffer or the write */
 
 static struct {
     int phase;
     int left;        /* countdown ticks to go */
+    unsigned timer;  /* the tick timer while it runs, else 0 */
 } sh __attribute__((section(".scratch")));
 
 /* The status bar camera, found by name from the window manager (it is a child of the system bar's right group, hidden
@@ -52,6 +55,7 @@ static void indicator(int on) {
 static void finish(void) {
     indicator(0);
     sh.phase = SH_IDLE;
+    sh.timer = 0;
 }
 
 /* 8 bit value of the len bit channel field at off of px (len 4..8, the bits replicated like the stock expansion). */
@@ -90,11 +94,8 @@ static unsigned next_number(char *path, unsigned n) {
 
 /* Whether the card is mounted (its mount point is another file system than the one it is in) and has room for the file. */
 static int storage_ok(unsigned bytes) {
-    unsigned a[32], b[32];
-    memset(a, 0, sizeof a);
-    memset(b, 0, sizeof b);
-    if (statfs(SHOT_CARD, a) || statfs(SHOT_PARENT, b)) return 0;
-    if (a[0] == b[0] && a[8] == b[8] && a[9] == b[9]) return 0;   /* f_type, f_fsid (MIPS o32 statfs words 0, 8, 9): the same, nothing mounted */
+    unsigned a[32];
+    if (!pod_card_mounted()) return 0;
     mkdir(SHOT_DIR, 0755);
     if (access(SHOT_DIR, F_OK) || statfs(SHOT_DIR, a)) return 0;
     return (unsigned long long)a[7] * a[1] >= ((unsigned long long)SHOT_MIN_FREE_MB << 20) + bytes;   /* f_bavail * f_bsize */
@@ -184,6 +185,7 @@ static int shot_tick(const void *timer) {
     if (home_off()) { finish(); return RET_OK; }
     if (--sh.left > 0) return RET_REPEAT;
     indicator(0);                                    /* out of the frame before it is read */
+    sh.timer = 0;                                    /* this timer ends below */
     sh.phase = SH_GRAB;
     if (!timer_add(shot_grab, (void *)0, SHOT_SETTLE_MS)) {
         finish();
@@ -192,15 +194,34 @@ static int shot_tick(const void *timer) {
     return RET_OK;                                   /* this timer ends */
 }
 
-/* The Screenshot row was tapped (patch/m1pod.c on_row). One capture at a time: a tap while one is pending does nothing. */
+/* The Screenshot row was tapped (patch/m1plus.c on_row). Idle: the stock confirm dialog asks, Yes starts the countdown.
+ * Counting: the dialog asks to cancel, Yes removes the tick timer. The dialog is modal and the main loop runs under it, so
+ * the phase is looked at again after it returns. One capture at a time; in the settle phase the capture is committed and the
+ * tap does nothing. */
 void shot_start(void) {
-    if (sh.phase != SH_IDLE || home_off()) return;
-    if (!timer_add(shot_tick, (void *)0, SHOT_TICK_MS)) {
+    if (home_off()) return;
+    if (sh.phase == SH_COUNT) {
+        sh.phase = SH_ASK_CANCEL;
+        if (pod_confirm(TR("Cancel the screenshot?")) && sh.phase == SH_ASK_CANCEL) {
+            if (sh.timer) timer_remove(sh.timer);
+            sh.timer = 0;
+            finish();
+        } else if (sh.phase == SH_ASK_CANCEL) sh.phase = SH_COUNT;
+        return;
+    }
+    if (sh.phase != SH_IDLE) return;
+    sh.phase = SH_ASK;
+    if (!pod_confirm(TR("Take a screenshot in 5 s?")) || home_off()) {
+        sh.phase = SH_IDLE;
+        return;
+    }
+    sh.timer = timer_add(shot_tick, (void *)0, SHOT_TICK_MS);
+    if (!sh.timer) {
+        sh.phase = SH_IDLE;
         pod_toast(TR("Screenshot failed"));
         return;
     }
     sh.phase = SH_COUNT;
     sh.left = SHOT_SECONDS;
     indicator(1);
-    pod_toast(TR("Screenshot in 5 s"));
 }

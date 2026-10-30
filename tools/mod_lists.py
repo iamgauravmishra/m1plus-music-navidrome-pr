@@ -2,7 +2,7 @@
 """iPod-style library lists for the Shanling M1 Plus (asset-only: page styles and ui/*.bin).
 
 The library pages (Folders, Artists/Genres/Composers, Songs, Albums, Album detail, Playlists, Search,
-the Now Playing "jump" list) and the dialogs they open are restyled to the look of the M1+ Pod menu:
+the Now Playing "jump" list) and the dialogs they open are restyled to the look of the M1+ Music menu:
 black page, rows that are stock `list_item_style` tiles, white left-aligned titles (21 px where the
 row's label box is tall enough), grey secondary text, the stock right chevron, one pressed colour.
 
@@ -20,7 +20,7 @@ theme mod owns that file; run this mod after it and the lists follow its colours
 
   btn_tablerow_style       every state copied from default, bg_color taken from list_item_style's
                            same state: the table rows (Folders, Artists, Songs, jump list) always
-                           match the list_item_style rows (Albums, Playlists, Search, M1+ Pod menu)
+                           match the list_item_style rows (Albums, Playlists, Search, M1+ Music menu)
   srlabel_item_white/gold20_style  21 px on the single-line pages (Folders, Artists; label box
                            56-60 px tall); the two-line rows keep 20 px in their 20 px boxes
   srlabel_item_gray26_style  defined (copy of srlabel_item_gray18_style): stock creates the Songs
@@ -57,7 +57,7 @@ RAW = 'rootfs/release/assets/{theme}/raw'
 THEMES = ('default', 'theme1')               # asset themes; theme1 only overrides a few files
 STYLE_MODE = 0o744                           # stock styles/*.bin mode
 STYLE_MTIME = 1750924035                     # a stock asset mtime: added files build deterministically
-TITLE_PX = 21                                # the M1+ Pod menu's row text (srlabel_leftwhite21_style)
+TITLE_PX = 21                                # the M1+ Music menu's row text (srlabel_leftwhite21_style)
 NAVBAR_PX = 20                               # navbar titles (mod_polish.TITLE_NEW)
 
 # page (window name == theme name) -> page-theme recipes, in the order they are applied

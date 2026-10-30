@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Build the M1+ Pod page assets (ui/*.bin) from tools/pod_pages.py.
+"""Build the M1+ Music page assets (ui/*.bin) from tools/pod_pages.py.
 
 These are new AWTK UI files, not edits of stock ones, so they are added to the rootfs (fwtool
 repack --allow-added lists them). Each page is a window with a stock-styled navigation bar (title,
 Back, Now Playing) over a column of touch-friendly row buttons; the hello page shows a label
-instead. Row widget names are pod_row0, pod_row1, ... so patch/m1pod.c can bind them by name.
+instead. Row widget names are pod_row0, pod_row1, ... so patch/m1plus.c can bind them by name.
 
 Layout follows q2-pod's iPod menu (docs/ipod.md) adapted to 320x480 touch, inside the 450 px a
 normal window gets under the 30 px status bar: a 50 px navbar over a stock-structured scrolling
@@ -63,7 +63,7 @@ NAV_PLAY_X, NAV_PLAY_W = 260, 60     # Now Playing: main's button; its image is 
 NAV_TITLE_END = NAV_PLAY_X            # a title with no toggle ends before Now Playing's button (its disc starts at 269)
 
 
-NAV_ALL_ICON = 'pod_nav_allalbums'
+NAV_SONGS_ICON = 'pod_nav_songs'
 NB_FADE_NAME, NB_FADE_H = 'img_nb_fade', 20     # the soft fade under the bar (tools/mod_icons.py NB_FADE; mod_ipodrows.NB_FADE_NAME)
 
 
@@ -76,16 +76,23 @@ def nav_fade(shown=True):
     return w
 
 
-def navbar(title, toggle=None, coverflow=False, allalbums=False, more=False):
+SONGS_BUTTONS = (('btn_search', 'pod_nav_search', 122), ('btn_sort', 'pod_nav_songsort', 168), ('btn_select', 'pod_nav_select', 214))   # the Songs page's capsule, the stock Songs page's order: Search, Sort, Select, then Now Playing
+NAV_SEARCH_X = SONGS_BUTTONS[0][2]
+
+
+NAV_CUSTOMIZE_ICON = 'pod_nav_customize'   # the Extras page's Customize button: the capsule's left cap on the 214 slot (tools/mod_icons.py)
+
+
+def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, songs=False, customize=False):
     nb = Widget('view', 0, 0, SCREEN_W, NAVBAR_H, [('name', 'navigationbar_view')])
     # a title runs under a toggle's button no further than the button's left edge
-    right = NAV_CF_X if coverflow or more else NAV_VIEW_X if toggle else NAV_TITLE_END
+    right = NAV_SEARCH_X if songs else NAV_CF_X if coverflow or more else NAV_VIEW_X if toggle or customize else NAV_TITLE_END
     lbl = Widget('label', NAV_TITLE_X, 14, right - NAV_TITLE_X, 22,
                  [('name', 'label_title'), ('style', 'navbar_label_white'), ('length', '31'), pod_i18n.text_prop(title)])
     ret = Widget('button', NAV_BACK_X, 0, NAV_BACK_W, NAVBAR_H, [
         ('name', 'btn_return'), ('enable', 'true'), ('style', 'img_btn_style'),
         ('style:over:icon', 'ah_nav_back'), ('style:normal:icon', 'ah_nav_back'), ('style:pressed:icon', 'ah_nav_back_down')])
-    img = 'ah_nav_play' if toggle or coverflow or more else 'ah_nav_np'   # a toggle / button makes Now Playing the capsule's right cap; else a disc
+    img = 'ah_nav_play' if toggle or coverflow or more or songs or customize else 'ah_nav_np'   # a toggle / button makes Now Playing the capsule's right cap; else a disc
     player = Widget('button', NAV_PLAY_X, 0, NAV_PLAY_W, NAVBAR_H, [
         ('name', 'btn_backtoplayer'), ('enable', 'true'), ('style', 'img_btn_style'),
         ('style:pressed:icon', img + '_down'), ('style:normal:icon', img), ('style:over:icon', img)])
@@ -95,6 +102,10 @@ def navbar(title, toggle=None, coverflow=False, allalbums=False, more=False):
         nb.children.append(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
             ('name', TOGGLE_NAME[toggle]), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', icon + '_down'), ('style:normal:icon', icon), ('style:over:icon', icon)]))
+    if customize:   # the Extras page's Customize button (patch/m1plus.c opens the Customize page on its tap)
+        nb.children.append(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
+            ('name', 'btn_customize'), ('enable', 'true'), ('style', 'img_btn_style'),
+            ('style:pressed:icon', NAV_CUSTOMIZE_ICON + '_down'), ('style:normal:icon', NAV_CUSTOMIZE_ICON), ('style:over:icon', NAV_CUSTOMIZE_ICON)]))
     if coverflow:
         nb.children.append(Widget('button', NAV_CF_X, 0, NAV_CF_W, NAVBAR_H, [
             ('name', 'btn_coverflow'), ('enable', 'true'), ('style', 'img_btn_style'),
@@ -103,10 +114,15 @@ def navbar(title, toggle=None, coverflow=False, allalbums=False, more=False):
         nb.children.append(Widget('button', NAV_CF_X, 0, NAV_CF_W, NAVBAR_H, [
             ('name', 'btn_more'), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', 'pod_nav_more_down'), ('style:normal:icon', 'pod_nav_more'), ('style:over:icon', 'pod_nav_more')]))
-    if allalbums:   # Cover Flow's artist page (patch/coverflow.c shows it, and shortens the title, only there)
-        nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
-            ('name', 'btn_allalbums'), ('enable', 'true'), ('style', 'img_btn_style'),
-            ('style:pressed:icon', NAV_ALL_ICON + '_down'), ('style:normal:icon', NAV_ALL_ICON), ('style:over:icon', NAV_ALL_ICON)])))
+    if songs:   # Search, Sort, Select: three pieces of the capsule that ends in Now Playing (x 124 .. 311, glass; docs/modules/navbar.md)
+        for name, icon, x in SONGS_BUTTONS:
+            nb.children.append(Widget('button', x, 0, NAV_VIEW_W, NAVBAR_H, [
+                ('name', name), ('enable', 'true'), ('style', 'img_btn_style'),
+                ('style:pressed:icon', icon + '_down'), ('style:normal:icon', icon), ('style:over:icon', icon)]))
+    if artist_songs:   # Cover Flow's artist page (patch/coverflow.c shows it, makes Now Playing the right cap, and shortens the title, only there)
+        nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [   # the capsule's left cap: opens our Songs page on the artist's songs
+            ('name', 'btn_songs'), ('enable', 'true'), ('style', 'img_btn_style'),
+            ('style:pressed:icon', NAV_SONGS_ICON + '_down'), ('style:normal:icon', NAV_SONGS_ICON), ('style:over:icon', NAV_SONGS_ICON)])))
     return nb
 
 
@@ -124,7 +140,7 @@ def switch_image(name, w, h, on):
         ('name', name), ('image', 'sset_on' if on else 'sset_off'), ('draw_type', 'default'), ('sensitive', 'false')])
 
 
-VALUE_W, VALUE_PX = 110, 19                      # a value row's grey value (Settings > Cover Flow > Sort): right aligned, 12 px margin
+VALUE_W, VALUE_PX = 110, 19                      # a value row's grey value (Customize > Cover Flow > Sort): right aligned, 12 px margin
 
 
 def value_x(w): return w - SWITCH_MARGIN - VALUE_W
@@ -222,7 +238,7 @@ def build_cover_page(page):
     patch/offsets.inc."""
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
-    root.children.append(navbar(page.title, allalbums=True))
+    root.children.append(navbar(page.title, artist_songs=True))
     fy, ay, ah, ry, rh = cover_layout()
     frame = Widget('view', 0, fy, SCREEN_W, COVER_FRAME_H, [('name', 'view_covers')])
     styled(frame, ('normal',), 'bg_color', '#000000')
@@ -246,13 +262,13 @@ def build_cover_page(page):
     return root
 
 
-def stock_list(rows, scroll):
+def stock_list(rows, scroll, top=NAVBAR_H):
     """The structure and properties of systemset/sysset_page.bin's list, the stock scrolling list:
     list_view (default_item_height, black in every state) > scroll_view (310 wide when a bar is
     there, the speed scales) + scroll_bar_m (10 px, max 1000) at the right."""
-    list_h = CLIENT_H - NAVBAR_H
+    list_h = CLIENT_H - top
     sv_w = SCREEN_W - 10 if scroll else SCREEN_W
-    lv = Widget('list_view', 0, NAVBAR_H, SCREEN_W, list_h, [
+    lv = Widget('list_view', 0, top, SCREEN_W, list_h, [
         ('name', 'pod_listview'), ('default_item_height', str(ROW_H))])
     for st in ('normal', 'disable', 'focused'):
         lv.set(f'style:{st}:bg_color', '#000000')
@@ -262,7 +278,7 @@ def stock_list(rows, scroll):
     sv = Widget('scroll_view', 0, 0, sv_w, list_h, [
         ('name', 'pod_scrollview'), ('yspeed_scale', '1'), ('xspeed_scale', '1')])
     for i, r in enumerate(rows):
-        chevron = r.action not in (pod_pages.ACT_PLAYER, pod_pages.ACT_SHUFFLE) + pod_pages.SWITCH_ACTIONS + pod_pages.VALUE_ACTIONS   # rows that play, switch or show a value: no chevron
+        chevron = r.action not in pod_pages.NO_CHEVRON_ACTIONS + pod_pages.SWITCH_ACTIONS + pod_pages.VALUE_ACTIONS   # rows that play, act in place, switch or show a value: no chevron
         switch = (f'pod_switch{i}', False) if r.action in pod_pages.SWITCH_ACTIONS else None   # the payload sets the state at open
         value = (f'pod_value{i}', pod_pages.SORT_VALUES[0]) if r.action in pod_pages.VALUE_ACTIONS else None   # ... and the value
         sv.children.append(row_item(f'pod_row{i}', i * ROW_H, r.label, chevron, ROW_H, sv_w, switch, value))
@@ -382,6 +398,229 @@ def build_playlists_page(page):
     return root
 
 
+# The Songs page (patch/songs.c, docs/modules/songs.md): the Albums structure (a stock list holding the one content view that paints the rows, headers and
+# pinned header itself) under the glass navbar (Back, the small title, Search / Sort / Select / Now Playing), with the page's own widgets: in the content view the
+# large title and the Play / Shuffle pills (real flat buttons: they scroll with the list); over the list the rail (a view of its own, outside the scroll_view, so a
+# touch on it never starts a drag) and the letter bubble (insensitive); the sort card (a scrim and the Playlists card's look) and, hidden until select mode, the
+# bar with the Add to playlist and Delete pills and the navbar's Select All text. Everything that is shown later starts hidden AND insensitive.
+SG_TITLE_PX, SG_HDR_PX, SG_RAIL_PX, SG_BUBBLE_PX, SG_PILL_PX = 32, 20, 12, 56, 18
+SG_PILL_RGB, SG_PILL_DOWN_RGB, SG_PILL_OFF_RGB = '#1E1E1E', '#333333', '#141414'   # flat: no glass
+SG_FOOT_RGB = '#9C9C9C'   # the song count under the last row: the album page's meta line colour (mod_ipodrows.META_COLOR)
+SG_CARD_ROWS = len(pod_pages.SORT_MENU)
+
+
+RAIL_INK_MIN = 64   # a pixel is "ink" from 25 % coverage up (the antialiased fringe of the outline's bbox is not)
+
+
+def rail_ink(font, px, ch):
+    """(first, last + 1) of the rows and of the columns of ch's ink, y from the top of the 12 px text box (the baseline is int(ascender * scale) below it) and x from the pen."""
+    g = font.glyph(ch)
+    x0, y0, w, h, rows = font.bitmap(g, px)
+    ys = [i for i, r in enumerate(rows) if max(r) >= RAIL_INK_MIN]
+    xs = [i for i in range(w) if max(r[i] for r in rows) >= RAIL_INK_MIN]
+    base = font.baseline(px)
+    return (base + y0 + ys[0], base + y0 + ys[-1] + 1), (x0 + xs[0], x0 + xs[-1] + 1)
+
+
+def rail_metrics(font_path):
+    """What the payload needs of the tree's own font to align the rail's dots, disc and letters (patch/songs.c sg_on_rail_paint, docs/modules/songs.md "Alignment"):
+    (ink2, dx). AWTK's canvas_draw_text_in_rect puts a text of measured width lw (the truncated advances + 1 px per glyph) at rect.x + (rect.w - lw) / 2 (integer),
+    and the text box of a 13 px item is (13 - 12) / 2 = 0 below the item's top with the baseline int(ascender * scale) lower. ink2 = twice the height of the cap
+    ink's centre within the item (A..Z share the cap height; the 'H' gives it), so dots and discs are placed from it. dx[k] (k 0 for '#', 1..26 for A..Z) is the
+    integer shift of the letter's rect, in a SG_RAIL_TEXT_W wide rect centred on the dot's x, that puts the ink's centre on that x within half a pixel."""
+    from stb_raster import StbFont
+    from awtk_text import Ttf, StbText
+    o = OFFSETS
+    px, font, st = SG_RAIL_PX, StbFont(font_path), StbText(Ttf(font_path), SG_RAIL_PX)
+    top = (o['SG_RAIL_PITCH'] - px) // 2
+    (a, b), _ = rail_ink(font, px, 'H')
+    ink2 = 2 * top + a + b
+    dx = []
+    for ch in '#ABCDEFGHIJKLMNOPQRSTUVWXYZ':
+        _, (lo, hi) = rail_ink(font, px, ch)
+        e = o['SG_RAIL_TEXT_W'] / 2 - ((o['SG_RAIL_TEXT_W'] - st.layout(ch)[1]) // 2 + (lo + hi) / 2)   # how far the ink's centre is left of the rect's centre
+        d = int(e)
+        if abs(e - d) > 0.5: d += 1 if e > 0 else -1
+        dx.append(d)
+    return ink2, dx
+# the sort card: flat (the toolbar alone is glass), the Playlists menu's rhythm (PL_ROW_H rows, no padding, right edge PL_CARD_RIGHT, y PL_CARD_Y, radius PL_CARD_R)
+SG_CARD_W, SG_LABEL_X = 268, 16
+SG_CARD_X = PL_CARD_RIGHT - SG_CARD_W
+SG_CARD_H = SG_CARD_ROWS * PL_ROW_H
+SG_TICK_W = 18
+SG_SELALL_X, SG_SELALL_W = 208, 104     # the select mode's "Select All" text, right aligned to a 8 px margin
+
+
+def sg_pill(name, x, y, text, icon, ink='#FFFFFF', w=None):
+    """A flat pill: the button's fill with round_radius (the stock dialogs' buttons do the same), the glyph and the 18 px label, which the payload centres as a pair."""
+    o = OFFSETS
+    b = Widget('button', x, y, w or o['SG_PILL_W'], o['SG_PILL_H'], [('name', name), ('enable', 'true'), pod_i18n.text_prop(text)])
+    for st in STATES:
+        styled(b, (st,), 'bg_color', SG_PILL_DOWN_RGB if st == 'pressed' else SG_PILL_OFF_RGB if st == 'disable' else SG_PILL_RGB)
+        styled(b, (st,), 'text_color', '#666666' if st == 'disable' else ink)
+        styled(b, (st,), 'font_size', str(SG_PILL_PX))
+        styled(b, (st,), 'border_width', '0')
+        styled(b, (st,), 'border_color', '#00000000')
+        styled(b, (st,), 'round_radius', str(o['SG_PILL_R']))
+        styled(b, (st,), 'icon', icon)
+    return b
+
+
+def sort_card():
+    """(scrim, card): the sort order card under the Sort button, flat #2C2C2E with #3A3A3C pressed rows on the Playlists menu's rhythm (PL_ROW_H rows, no padding):
+    the five stock labels and, at the right of each, the tick image that is shown on the current order."""
+    scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', 'sg_scrim'), ('enable', 'true')]))
+    for st in STATES:
+        styled(scrim, (st,), 'bg_color', '#00000000')
+        styled(scrim, (st,), 'text_color', '#FFFFFF')
+        styled(scrim, (st,), 'border_width', '0')
+        styled(scrim, (st,), 'border_color', '#00000000')
+    card = hidden(Widget('view', SG_CARD_X, PL_CARD_Y, SG_CARD_W, SG_CARD_H, [('name', 'sg_card')]))
+    for st in STATES:
+        styled(card, (st,), 'bg_color', '#2C2C2E')
+        styled(card, (st,), 'border_width', '0')
+        styled(card, (st,), 'round_radius', str(PL_CARD_R))
+    for i, key in enumerate(pod_pages.SORT_MENU):
+        item = Widget('button', 0, i * PL_ROW_H, SG_CARD_W, PL_ROW_H, [('name', f'sg_item{i}'), ('enable', 'true')])
+        for st in STATES:
+            styled(item, (st,), 'bg_color', '#3A3A3C' if st == 'pressed' else '#00000000')
+            styled(item, (st,), 'text_color', '#FFFFFF')
+            styled(item, (st,), 'border_width', '0')
+            styled(item, (st,), 'border_color', '#00000000')
+        lab = Widget('hscroll_label', SG_LABEL_X, 0, SG_CARD_W - 2 * SG_LABEL_X - SG_TICK_W - 8, PL_ROW_H, [
+            ('name', f'sg_label{i}'), pod_i18n.text_prop(pod_i18n.english(key)), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+        for st in ('normal', 'disable', 'focused'):
+            styled(lab, (st,), 'font_size', str(PL_LABEL_PX))
+            styled(lab, (st,), 'text_color', '#FFFFFF')
+            styled(lab, (st,), 'text_align_h', 'left')
+            styled(lab, (st,), 'text_align_v', 'middle')
+        item.children.append(lab)
+        item.children.append(hidden(Widget('image', SG_CARD_W - SG_LABEL_X - SG_TICK_W, (PL_ROW_H - SG_TICK_W) // 2, SG_TICK_W, SG_TICK_W, [
+            ('name', f'sg_tick{i}'), ('image', 'sg_tick'), ('draw_type', 'default')])))
+        card.children.append(item)
+    return scrim, card
+
+
+def build_songs_page(page):
+    o = OFFSETS
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    nb = navbar(page.title, songs=True)
+    nb.children[0].set('visible', 'false')   # the small title: the payload shows it once the large title has scrolled away
+    nb.children.append(hidden(Widget('button', SG_SELALL_X, 0, SG_SELALL_W, NAVBAR_H, [('name', 'btn_selall'), ('enable', 'true'), pod_i18n.text_prop('Select All')])))
+    sa = nb.children[-1]
+    for st in STATES:   # select mode's text button: flat, right aligned
+        styled(sa, (st,), 'bg_color', '#00000000')
+        styled(sa, (st,), 'text_color', '#777777' if st == 'pressed' else '#FFFFFF')
+        styled(sa, (st,), 'font_size', '18')
+        styled(sa, (st,), 'border_width', '0')
+        styled(sa, (st,), 'border_color', '#00000000')
+        styled(sa, (st,), 'text_align_h', 'right')
+        styled(sa, (st,), 'margin_right', '8')
+    root.children.append(nb)
+    lv = stock_list([], True)
+    lv.set('name', 'songs_listview')
+    sv = lv.children[0]
+    sv.set('name', 'songs_scrollview')
+    grid = Widget('view', 0, 0, SCREEN_W, GRID_VIEW_H, [('name', 'view_grid')])
+    styled(grid, ('normal',), 'bg_color', '#000000')
+    title = Widget('label', o['SG_TITLE_X'], 0, 250, o['SG_TITLE_H'], [('name', 'sg_title'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])
+    styled(title, ('normal',), 'text_color', '#FFFFFF')
+    styled(title, ('normal',), 'font_size', str(SG_TITLE_PX))
+    styled(title, ('normal',), 'text_align_h', 'left')
+    styled(title, ('normal',), 'text_align_v', 'middle')
+    foot = label('sg_foot', o['SG_HDR_X'], 0, SCREEN_W - 2 * o['SG_HDR_X'], o['SG_FOOT_TEXT_H'], '', o['SG_FOOT_PX'], SG_FOOT_RGB, 'left')   # the song count: the payload sets the text and puts it under the last row
+    foot.set('sensitive', 'false')
+    styled(foot, ('normal',), 'text_align_v', 'middle')
+    grid.children = [title, sg_pill('btn_play', o['SG_PILL_X0'], o['SG_PILL_Y'], 'Play', 'sg_play'),
+                     sg_pill('btn_shuffle', o['SG_PILL_X1'], o['SG_PILL_Y'], 'Shuffle', 'sg_shuffle'), foot]
+    sv.children.append(grid)
+    root.children.append(lv)
+    root.children.append(nav_fade(shown=False))   # patch/songs.c shows it while yoffset > 0 (at rest it would darken the large title)
+    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, '#FFFFFF')))
+    for name, px, colour, align in (('label_row_title', LIST_TITLE_PX, '#FFFFFF', 'left'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA', 'left'),
+                                    ('label_hdr', SG_HDR_PX, '#FFFFFF', 'left'), ('label_rail', SG_RAIL_PX, '#EEEEEC', 'center'), ('label_rail_on', SG_RAIL_PX, '#000000', 'center')):
+        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, align))   # text styles only (widget_prepare_text_style); never shown
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+        if name == 'label_rail_on': styled(lab, ('normal', 'pressed', 'disable', 'focused'), 'bg_color', '#EEEEEC')   # the letter on the disc: black on the accent (the contrast scan reads the label's own background)
+        root.children.append(lab)
+    rail = Widget('view', o['SG_RAIL_X'], NAVBAR_H, o['SG_RAIL_W'], GRID_VIEW_H, [('name', 'sg_rail')])   # transparent; the payload paints the letters
+    for st in STATES: styled(rail, (st,), 'bg_color', '#00000000')
+    root.children.append(rail)
+    bubble = hidden(Widget('view', (SCREEN_W - o['SG_BUBBLE']) // 2, NAVBAR_H + (GRID_VIEW_H - o['SG_BUBBLE']) // 2, o['SG_BUBBLE'], o['SG_BUBBLE'], [('name', 'sg_bubble')]))
+    for st in STATES:   # the look tools/mod_lists.py gives the stock view_letter: a dark rounded square with a white letter
+        styled(bubble, (st,), 'bg_color', '#262626')
+        styled(bubble, (st,), 'round_radius', '14')
+        styled(bubble, (st,), 'border_color', '#3A3A3A')
+        styled(bubble, (st,), 'border_width', '1')
+    letter = Widget('label', 0, 0, o['SG_BUBBLE'], o['SG_BUBBLE'], [('name', 'sg_bubble_letter'), ('text', ''), ('sensitive', 'false')])
+    for st in ('normal', 'disable', 'focused'):
+        styled(letter, (st,), 'text_color', '#FFFFFF')
+        styled(letter, (st,), 'font_size', str(SG_BUBBLE_PX))
+        styled(letter, (st,), 'text_align_h', 'center')
+        styled(letter, (st,), 'text_align_v', 'middle')
+    bubble.children.append(letter)
+    root.children.append(bubble)
+    bar = hidden(Widget('view', 0, CLIENT_H - o['SG_BAR_H'], SCREEN_W, o['SG_BAR_H'], [('name', 'sg_bar')]))
+    for st in STATES: styled(bar, (st,), 'bg_color', '#000000')
+    line = Widget('view', 0, 0, SCREEN_W, 1, [('name', 'sg_bar_line'), ('sensitive', 'false')])
+    for st in STATES: styled(line, (st,), 'bg_color', '#222222')
+    py = (o['SG_BAR_H'] - o['SG_PILL_H']) // 2
+    bar.children = [line, sg_pill('sg_add', o['SG_PILL_X0'], py, 'Add to Playlist', 'sg_listplus', w=o['SG_BAR_PILL_W']),
+                    sg_pill('sg_del', o['SG_BAR_PILL_X1'], py, 'Delete', 'sg_trash', w=o['SG_BAR_PILL_W'])]
+    root.children.append(bar)
+    root.children.extend(sort_card())   # last: above everything
+    return root
+
+
+# The Daily Mix page (patch/dailymix.c dp_*, docs/modules/dailymix.md "The page"; tools/pod_dailymix.py DP_* and patch/offsets.inc carry the numbers): no navbar. The list is the
+# whole 450 px window (list_view > scroll_view + the mobile scroll bar, the library lists' structure) holding one content view, view_dm, that paints the art, the texts and the
+# songs itself (as the Albums page's view_grid) and holds the three widgets that need images or touches: the Shuffle disc, the white Play pill and the pill's dark play glyph
+# (insensitive: the pill takes the tap). A floating glass back disc (btn_return, the window's last child: fixed, over the list) is the only control outside the list.
+# Seven hidden, insensitive labels carry the text styles (the payload sets their colours from the tint). label_title (hidden) is the page's title: the i18n and asset tests
+# read it from every page; nothing shows it. The window, the list and the view are black here: the payload sets the tint on all of them (black is the fallback).
+DP_STYLES = (('label_dp_title', 'DP_TITLE_PX', '#FFFFFF', 'center'), ('label_dp_sub', 'DP_SUB_PX', '#FFFFFF', 'center'), ('label_dp_upd', 'DP_UPD_PX', '#FFFFFF', 'center'),
+             ('label_dp_desc', 'DP_DESC_PX', '#FFFFFF', 'left'), ('label_dp_play', 'DP_PLAY_PX', '#FFFFFF', 'left'), ('label_dp_row', 'DP_ROW_PX', '#FFFFFF', 'left'),
+             ('label_dp_artist', 'DP_ARTIST_PX', '#FFFFFF', 'left'))
+DP_PLAY_PX, DP_ROW_PX, DP_ARTIST_PX = 18, LIST_TITLE_PX, LIST_SUB_PX
+
+
+def build_dailymix_page(page):
+    import pod_dailymix as D
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    lv = stock_list([], True, top=0)
+    lv.set('name', 'dp_listview')
+    sv = lv.children[0]
+    sv.set('name', 'dp_scrollview')
+    styled(sv, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    view = Widget('view', 0, 0, SCREEN_W, D.DP_VIEW_H, [('name', 'view_dm')])   # the content: the payload sizes it to the header and the songs
+    styled(view, ('normal',), 'bg_color', '#000000')
+    view.children = [
+        Widget('button', D.DP_SHUF_X, D.DP_BTN_Y, D.DP_SHUF_W, D.DP_BTN_H, [
+            ('name', 'btn_dp_shuffle'), ('enable', 'true'), ('style', 'img_btn_style'),
+            ('style:pressed:icon', 'ah_shuffle_down'), ('style:normal:icon', 'ah_shuffle'), ('style:over:icon', 'ah_shuffle')]),
+        Widget('button', D.DP_PLAY_X, D.DP_BTN_Y, D.DP_PLAY_W, D.DP_BTN_H, [
+            ('name', 'btn_dp_play'), ('enable', 'true'), ('style', 'img_btn_style'),
+            ('style:pressed:icon', 'dp_pill_down'), ('style:normal:icon', 'dp_pill'), ('style:over:icon', 'dp_pill')]),
+        Widget('image', D.DP_PLAY_X + (D.DP_PLAY_W - D.DP_PILL_GLYPH) // 2, D.DP_BTN_Y + (D.DP_BTN_H - D.DP_PILL_GLYPH) // 2, D.DP_PILL_GLYPH, D.DP_PILL_GLYPH, [
+            ('name', 'img_dp_glyph'), ('image', 'dp_play'), ('draw_type', 'center'), ('sensitive', 'false')]),
+        Widget('button', D.DP_ADD_X, D.DP_BTN_Y, D.DP_ADD_W, D.DP_BTN_H, [   # saves the mix as a stock playlist (Shuffle's disc mirrored, a plus)
+            ('name', 'btn_dp_add'), ('enable', 'true'), ('style', 'img_btn_style'),
+            ('style:pressed:icon', 'dp_add_down'), ('style:normal:icon', 'dp_add'), ('style:over:icon', 'dp_add')])]
+    sv.children.append(view)
+    root.children.append(lv)
+    root.children.append(Widget('button', D.DP_BACK_X, D.DP_BACK_Y, D.DP_BACK_BTN, D.DP_BACK_BTN, [
+        ('name', 'btn_return'), ('enable', 'true'), ('style', 'img_btn_style'),
+        ('style:pressed:icon', 'dp_back_down'), ('style:normal:icon', 'dp_back'), ('style:over:icon', 'dp_back')]))
+    for name, px, colour, align in DP_STYLES:
+        lab = hidden(label(name, 0, 0, 10, 10, '', globals()[px] if px in globals() else getattr(D, px), colour, align))
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+        root.children.append(lab)
+    root.children.append(hidden(Widget('label', 36, 14, 200, 22, [('name', 'label_title'), ('style', 'navbar_label_white'), pod_i18n.text_prop(page.title)])))
+    return root
+
+
 def build_menucfg_page(page):
     """The Main Menu page (patch/menu.c): a row per menu item in the default order, each with an up arrow (a stock
     button with the stock chevron-up art, expansion_2, insensitive: a picture, the row decides by the tap position)
@@ -399,10 +638,53 @@ def build_menucfg_page(page):
             ('name', f'pod_up{i}'), ('enable', 'true'), ('sensitive', 'false'), ('style', 'img_btn_style'),
             ('style:pressed:icon', 'expansion_2_down'), ('style:normal:icon', 'expansion_2'), ('style:over:icon', 'expansion_2')]))
         sv.children.append(row)
-    # the 19th row, last: the menu's Extras row (shown right above Settings, as saved by the list's trailing 'x'); a switch only,
-    # no up arrow and no pod_up widget: it is never reordered
-    n = len(pod_pages.ITEMS)
-    sv.children.append(row_item(f'pod_row{n}', n * ROW_H, 'Extras', False, ROW_H, sv.w, (f'pod_switch{n}', pod_pages.DEFAULT_EXTRAS)))
+    root.children.append(lv)
+    root.children.append(nav_fade())
+    return root
+
+
+# The Extras page's section headers (patch/menu.c mn_extras; iOS grouped-list captions): one per group of pod_pages.EXTRAS_GROUPS, pod_hdr0 ..,
+# a plain view HDR_H (40) high, shorter than a row, the child of the list's scroll_view like a row (the stock list_view layouter keeps the height of a child that is not
+# a row, as it does the shelf's, and sums it). The caption is a stock hscroll_label (never scrolls, ellipsis) in the style of the Home menu's "Made for You" heading
+# (pod_dm_head) and the Recently Played shelf's: x 10, 20 px, white (SH_HEAD_X, SH_HEAD_PX, SH_TITLE_RGB, defined below; test/pod/menu.py asserts they agree), left aligned,
+# so every section heading of the Music pages sits on one left edge. Insensitive always and hidden in the asset (the payload shows it by visible alone): never a touch target, and no list_item (no press visual, no
+# chevron or icon). The label is 22 px high in the strip's bottom 26 px.
+HDR_X, HDR_PX, HDR_RGB = 10, 20, '#FFFFFF'
+HDR_LABEL_Y, HDR_LABEL_H = 14, 22
+HDR_NAMES = tuple(f'pod_hdr{g}' for g in range(len(pod_pages.EXTRAS_GROUPS)))
+
+
+def extras_headers(w):
+    """The hidden, insensitive section headers of the Extras page and of Customize > Extras, for a list `w` wide."""
+    out = []
+    for g, title in enumerate(pod_pages.EXTRAS_TITLES):
+        hdr = hidden(Widget('view', 0, 0, w, pod_pages.HDR_H, [('name', f'pod_hdr{g}')]))
+        styled(hdr, ('normal', 'disable', 'focused', 'pressed', 'over', 'selected'), 'bg_color', '#000000')
+        lab = Widget('hscroll_label', HDR_X, HDR_LABEL_Y, w - HDR_X - 12, HDR_LABEL_H, [
+            ('name', f'pod_hdr_text{g}'), pod_i18n.text_prop(title), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+        for st in ('normal', 'disable', 'focused'):
+            styled(lab, (st,), 'font_size', str(HDR_PX))
+            styled(lab, (st,), 'text_color', HDR_RGB)
+            styled(lab, (st,), 'text_align_h', 'left')
+            styled(lab, (st,), 'text_align_v', 'middle')
+        hdr.children.append(lab)
+        out.append(hdr)
+    return out
+
+
+def build_extrascfg_page(page):
+    """Customize > Extras (patch/menu.c menu_extras_opened): a switch row (the whole row toggles) per item but Customize, in id order
+    like the Extras page's asset, all on. The payload shows only the items the menu does not show, stacked in EXTRAS_ORDER, and sets the
+    switches from the saved list. No up arrows: the order is fixed."""
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    root.children.append(navbar(page.title))
+    lv = stock_list([], True)
+    sv = lv.children[0]
+    for i, r in enumerate(pod_pages.ITEMS):
+        if i == pod_pages.CUSTOMIZE_ID: continue
+        sv.children.append(row_item(f'pod_row{i}', i * ROW_H, r.label, False, ROW_H, sv.w, (f'pod_switch{i}', True)))
+    sv.children += extras_headers(sv.w)   # after the rows: the payload stacks them in place
     root.children.append(lv)
     root.children.append(nav_fade())
     return root
@@ -497,27 +779,69 @@ def shelf():
     return sh
 
 
+# The Daily Mix section of the menu's Home instance (patch/dailymix.c, docs/modules/dailymix.md; the DM_* numbers are tools/pod_dailymix.py's, patch/offsets.inc has the
+# same): a view the width of the list between the shown rows and the Recently Played shelf, hidden and insensitive until the payload has a mix to show. The header
+# pod_dm_head is the shelf's (a stock hscroll_label, the key "Made for You"); the card pod_dm_card (DM_W x DM_H at DM_X, DM_TOP) paints the art and the text itself
+# (its own EVT_AFTER_PAINT) and takes the taps that open the playlist; the play disc pod_dm_play is a stock button over its corner (a later sibling, so it takes its own
+# touches) whose look is the glass images dm_disc / dm_disc_down; the two hidden labels only carry the title (36 px white) and artists (16 px #EBEBEB) text styles.
+DM_NAMES = ('pod_daily', 'pod_dm_head', 'pod_dm_card', 'pod_dm_play', 'pod_dm_title', 'pod_dm_sub')
+DM_DISC_IMAGE = 'dm_disc'
+
+
+def daily():
+    import pod_dailymix as D
+    sec = hidden(Widget('view', 0, 0, D.DM_W_VIEW, D.DM_SEC_H, [('name', 'pod_daily')]))
+    styled(sec, ('normal', 'disable', 'focused', 'pressed', 'over', 'selected'), 'bg_color', '#000000')
+    head = Widget('hscroll_label', D.DM_HEAD_X, D.DM_HEAD_TOP, D.DM_HEAD_W, D.DM_HEAD_H, [
+        ('name', 'pod_dm_head'), pod_i18n.text_prop('Made for You'), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+    for st in ('normal', 'disable', 'focused'):
+        styled(head, (st,), 'font_size', str(D.DM_HEAD_PX))
+        styled(head, (st,), 'text_color', SH_TITLE_RGB)
+        styled(head, (st,), 'text_align_h', 'left')
+        styled(head, (st,), 'text_align_v', 'middle')
+    card = Widget('view', D.DM_X, D.DM_TOP, D.DM_W, D.DM_H, [('name', 'pod_dm_card')])
+    styled(card, ('normal', 'disable', 'focused', 'pressed', 'over', 'selected'), 'bg_color', '#000000')
+    play = Widget('button', D.DM_X + D.DM_DISC_X, D.DM_TOP + D.DM_DISC_Y, D.DM_DISC, D.DM_DISC, [
+        ('name', 'pod_dm_play'), ('enable', 'true'), ('style', 'img_btn_style'),
+        ('style:pressed:icon', DM_DISC_IMAGE + '_down'), ('style:normal:icon', DM_DISC_IMAGE), ('style:over:icon', DM_DISC_IMAGE)])
+    sec.children = [head, card, play]
+    for name, px, colour in (('pod_dm_title', D.DM_TITLE_PX, '#FFFFFF'), ('pod_dm_sub', D.DM_SUB_PX, '#%02X%02X%02X' % D.SUB_RGB)):
+        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+        sec.children.append(lab)
+    return sec
+
+
 def build_page(page):
     if page.kind == 'menucfg':
         return build_menucfg_page(page)
+    if page.kind == 'extrascfg':
+        return build_extrascfg_page(page)
     if page.kind == 'grid':
         return build_grid_page(page)
     if page.kind == 'playlists':
         return build_playlists_page(page)
+    if page.kind == 'songs':
+        return build_songs_page(page)
+    if page.kind == 'dailymix':
+        return build_dailymix_page(page)
     if page.kind == 'cover':
         return build_cover_page(page)
     if page.kind == 'list':
         return build_list_page(page)
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
-    root.children.append(navbar(page.title))
+    root.children.append(navbar(page.title, customize=page is pod_pages.EXTRAS_PAGE))
     lv = stock_list(page.rows, len(page.rows) * ROW_H > CLIENT_H - NAVBAR_H)
     root.children.append(lv)
     root.children.append(nav_fade())
+    if page is pod_pages.EXTRAS_PAGE:   # the group headers, after the rows (the payload shows the ones whose group has a row and stacks them in place)
+        lv.children[0].children += extras_headers(lv.children[0].w)
     if page is pod_pages.MENU:   # the mini player bar (shown by the payload, on the Home instance only) and the list's padding under it
         sv = lv.children[0]
         assert sv.w == SH_W
-        sv.children.append(shelf())   # after the rows (the payload moves it below the last shown row and shows it when there are albums to show)
+        sv.children.append(daily())   # after the rows, before the shelf: the Daily Mix card (the payload moves it below the last shown row and shows it when there is a mix)
+        sv.children.append(shelf())   # then the shelf (the payload moves it below the last shown row and shows it when there are albums to show)
         sv.children.append(hidden(Widget('view', 0, len(page.rows) * ROW_H, sv.w, MB_PAD, [('name', 'pod_pad')])))   # last child; the payload shows it with the bar
         root.children.append(minibar())
     return root

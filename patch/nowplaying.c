@@ -1,10 +1,10 @@
-/* M1+ Pod Now Playing: the stock playing_page (ui/playing_page.bin, tools/mod_nowplaying.py) gets a cover-tinted
+/* M1+ Music Now Playing: the stock playing_page (ui/playing_page.bin, tools/mod_nowplaying.py) gets a cover-tinted
  * background, rounded cover corners that match it, and a remaining-time label that the assets cannot give it.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
  * One hook, playing_page_init (0x53d1e4): the page's init, run when Now Playing is built, never at boot or in the
- * main loop. It runs the stock function to completion and then, unless the kill switch /mnt/mmc/m1pod-off exists,
+ * main loop. It runs the stock function to completion and then, unless the kill switch /mnt/mmc/m1plus-off exists,
  * starts a page-scoped 500 ms timer (np_tick) and registers EVT_DESTROY on the window, which removes the timer.
  * The timer does three things and nothing else:
  *   - the tint: demo writes the track's cover to /tmp/coverpic.jpg or /tmp/externpic.jpg (parseplaycover_thd,
@@ -40,6 +40,7 @@ static struct {
     unsigned pdone;        /* the hash of the text label_playtime held after our last look */
     unsigned timer;        /* the repeating np_tick timer */
     unsigned key;          /* what the colour was last made from: 0 nothing yet, NP_KEY_NEUTRAL, or a file's hash */
+    unsigned sig;          /* np_cover_sig at the last full hash: while it is unchanged the file is not hashed again */
     unsigned color;        /* the window's bg_color as 0x00BBGGRR (what the corners are painted from) */
     int shown;             /* the seconds np_remaining shows, -1 none */
     int own;               /* 1: np_remaining is the visible label, 0: label_playlen is */
@@ -157,10 +158,11 @@ static void np_bar_black(void) {
 
 /* The timer's check, for what the events missed: the bar is ours only while the page is the top normal window. A dialog
  * (the pull-down) is not a normal window; its EVT_WINDOW_TO_BACKGROUND has cleared np.fg. */
-static void np_bar_sync(void) {
+static int np_bar_sync(void) {
     int top = pod_is_top(np.win);
     if (np.bar && !top) np_bar_black();
     else if (!np.bar && top) np_bar_apply();
+    return top;
 }
 
 static void np_set_color(unsigned color) {
@@ -182,10 +184,31 @@ const char *np_cover_file(int *busy) {   /* also the mini player bar's (patch/mi
     return (const char *)0;
 }
 
+/* The cheap look at the cover (no byte of it is read): a hash of the source type, the file's length (fseek/ftell) and the
+ * playing track's path. demo writes a new cover for every track change (and passes through the busy state first), so while
+ * all three are as at the last full hash the file is taken as unchanged; any difference sends it to np_file_key. 0: the
+ * file cannot be opened (a full look, which tries again too). */
+unsigned np_hash(const char *s);
+__attribute__((noinline)) unsigned np_cover_sig(const char *path, int src) {
+    void *f = fopen(path, "rb");
+    void *track;
+    long size;
+    unsigned h;
+    if (!f) return 0;
+    size = !fseek(f, 0, 2) ? ftell(f) : -1;
+    fclose(f);
+    if (size <= 0) return 0;
+    track = cc_playing();
+    h = np_hash(track ? cc_str(track, REC_PATH) : "");
+    h = (h ^ (unsigned)size) * 16777619u;
+    h = (h ^ (unsigned)src) * 16777619u;
+    return h | !h;
+}
+
 static void np_cover(void) {
     int busy;
     const char *path = np_cover_file(&busy);
-    unsigned key, px, album, tone;
+    unsigned key, sig, px, album, tone;
     char url[40];
     void *track;
     if (busy) return; /* the file is being replaced: keep the colour */
@@ -193,9 +216,13 @@ static void np_cover(void) {
         if (np.key != NP_KEY_NEUTRAL) np.key = NP_KEY_NEUTRAL, np_set_color(NP_NEUTRAL);
         return;
     }
+    sig = np_cover_sig(path, *(volatile int *)COVER_SRC);
+    if (sig && sig == np.sig && np.key && np.key != NP_KEY_NEUTRAL) return; /* same source, length and track as at the last full hash */
     key = np_file_key(path);
-    if (!key || key == np.key) return; /* unreadable: try again next tick; unchanged: nothing to do */
+    if (!key) return; /* unreadable: try again next tick */
     if (*(volatile int *)COVER_SRC == COVER_SRC_BUSY) return; /* demo started over while we read */
+    np.sig = sig;
+    if (key == np.key) return; /* unchanged: nothing to do */
     np.key = key;
     track = cc_playing();   /* the track's album: its tone may be known (the album page's, an earlier play); an untagged one has no key */
     album = track && *cc_str(track, REC_ALBUM) ? cc_album_key(track) : 0;
@@ -366,7 +393,9 @@ static void np_work(void) {
 static int np_tick(const void *timer) {
     (void)timer;
     if (!np.win) return RET_OK; /* not ours any more: a timer that returns RET_OK ends */
-    np_bar_sync();
+    /* another page on top: nothing of this one is seen, np_on_foreground catches up. A dialog (the pull-down) also clears np.fg
+     * but leaves the page the top normal window and partly visible, so the work goes on under it. */
+    if (!np_bar_sync() && np.barok && !np.fg) return RET_REPEAT;
     np_work();
     return RET_REPEAT;
 }
@@ -397,6 +426,7 @@ static int np_on_background(void *ctx, void *e) {
 static int np_on_foreground(void *ctx, void *e) {
     (void)e;
     if (!np.win || ctx != np.win) return RET_OK;
+    np_work(); /* the page is current when it reappears (fg still 0: a new colour tints the bar once, below) */
     np.fg = 1;
     np_bar_apply();
     return RET_OK;
@@ -432,7 +462,7 @@ static void np_start(void *win) {
 }
 
 /* The hook (tools/pod.py PLAYING_INIT): stock first, then ours. */
-int m1pod_playing_init(void *win, void *ctx) {
+int m1plus_playing_init(void *win, void *ctx) {
     int ret = stock_playing_init_trampoline(win, ctx);
     if (ret == RET_OK && win) np_start(win);
     return ret;

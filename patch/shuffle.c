@@ -1,4 +1,4 @@
-/* M1+ Pod Shuffle: Shuffle Songs, Shuffle Albums and Shuffle Folders from the M1+ Pod menu.
+/* M1+ Music Shuffle: Shuffle Songs, Shuffle Albums and Shuffle Folders from the M1+ Music menu.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
@@ -11,8 +11,8 @@
  * file installs none: Shuffle Albums/Folders build the whole queue up front, in its play order,
  * and hand it to the stock player in a sequential mode (docs/architecture.md).
  *
- * No stock function is hooked. Everything here runs from a tap on a row of the M1+ Pod menu
- * (patch/m1pod.c on_row), once, on the UI thread, and returns: no timer, no thread, no state kept
+ * No stock function is hooked. Everything here runs from a tap on a row of the M1+ Music menu
+ * (patch/m1plus.c on_row), once, on the UI thread, and returns: no timer, no thread, no state kept
  * between taps except the random generator's word.
  *
  * The stock path is the Songs page's: loadLocalClassList(0xf001) (getAllMusic into
@@ -74,6 +74,12 @@ static void set_mode(int mode) {
     write_int_config(mode, "PLAYSET", "PLAYMODE");
 }
 
+/* A mode that plays a queue in order: List play or Repeat all are kept, Shuffle and Repeat one become List play. */
+static void set_in_order(void) {
+    int mode = mclGetPlayMode();
+    set_mode(mode == MODE_SHUFFLE || mode == MODE_REPEAT_ONE ? MODE_ORDER : mode);
+}
+
 /* ---------------------------------------------------------------------------
  * Album and folder order. One index entry per queued song; a heapsort (no libc callback into the
  * payload) groups them, the groups get a random rank, a second sort puts them in play order, and
@@ -83,6 +89,7 @@ typedef struct {
     void *rec;      /* the song's record inside the queue */
     unsigned group; /* pass 2: the group's random rank; while permuting, ~0 once placed */
     unsigned idx;   /* its position in the queue as loadSongList built it */
+    unsigned dir;   /* Shuffle Folders: the length of its path's folder (dir_len), computed once */
 } entry;
 typedef int (*cmp_fn)(const entry *, const entry *);
 
@@ -123,23 +130,23 @@ static unsigned dir_len(const char *p) {
         if (p[i] == '/') n = i;
     return n;
 }
-static int dir_cmp(const char *a, const char *b) {
-    unsigned la = dir_len(a), lb = dir_len(b), i;
+static int dir_cmp(const char *a, unsigned la, const char *b, unsigned lb) {
+    unsigned i;
     for (i = 0; i < la && i < lb; ++i)
         if (a[i] != b[i]) return (unsigned char)a[i] - (unsigned char)b[i];
     return (int)la - (int)lb;
 }
 
-static int key_cmp(void *a, void *b) {
-    return by_folder ? dir_cmp(str(a, REC_PATH), str(b, REC_PATH))
-                     : nocase(str(a, REC_ALBUM), str(b, REC_ALBUM));
+static int key_cmp(const entry *a, const entry *b) {
+    return by_folder ? dir_cmp(str(a->rec, REC_PATH), a->dir, str(b->rec, REC_PATH), b->dir)
+                     : nocase(str(a->rec, REC_ALBUM), str(b->rec, REC_ALBUM));
 }
 
 static int by_index(const entry *a, const entry *b) { return a->idx < b->idx ? -1 : a->idx != b->idx; }
 
 /* Pass 1: groups together, each in queue order. */
 static int group_cmp(const entry *a, const entry *b) {
-    int d = key_cmp(a->rec, b->rec);
+    int d = key_cmp(a, b);
     return d ? d : by_index(a, b);
 }
 
@@ -168,10 +175,13 @@ static int group_order(void *queue, unsigned n, int folders) {
     char tmp[REC_SIZE];
     if (!v) return 0;
     by_folder = folders;
-    for (i = 0; i < n; ++i) v[i].rec = deque_at(queue, i), v[i].idx = i;
+    for (i = 0; i < n; ++i) {
+        v[i].rec = deque_at(queue, i), v[i].idx = i;
+        if (folders) v[i].dir = dir_len(str(v[i].rec, REC_PATH)); /* once per song, not on every comparison */
+    }
     sort(v, n, group_cmp);
     for (i = 0; i < n; ++i) { /* number the groups, in sorted order */
-        if (i && key_cmp(v[i - 1].rec, v[i].rec)) ++groups;
+        if (i && key_cmp(&v[i - 1], &v[i])) ++groups;
         v[i].group = groups;
     }
     ++groups;
@@ -217,7 +227,7 @@ static int group_order(void *queue, unsigned n, int folders) {
 int shuffle_play(int kind) {
     void *list, *queue, *pick, *first;
     unsigned n, at = 0, idx = 0;
-    int found, mode;
+    int found;
     struct {
         void *dq;
         int idx, cls, mode;
@@ -261,12 +271,9 @@ int shuffle_play(int kind) {
     }
     /* Shuffle Songs is stock Shuffle over the whole library: it draws every next song from the
      * songs not played yet and starts again when they are all played. Albums and folders play
-     * the queue in order: List play or Repeat all are kept, Shuffle and Repeat one become List
-     * play. */
-    mode = mclGetPlayMode();
-    if (kind == SHUFFLE_SONGS) mode = MODE_SHUFFLE;
-    else if (mode == MODE_SHUFFLE || mode == MODE_REPEAT_ONE) mode = MODE_ORDER;
-    set_mode(mode);
+     * the queue in order. */
+    if (kind == SHUFFLE_SONGS) set_mode(MODE_SHUFFLE);
+    else set_in_order();
     *(int *)G_CLASS_TYPE = CLASS_ALL_SONGS; /* as allmusic_page_init leaves it (@0x5289e8) */
     context.dq = queue, context.idx = (int)idx, context.cls = CLASS_ALL_SONGS, context.mode = PLAY_MODE;
     navigator_to_with_context("playing_page", &context); /* start_player copies the queue */
@@ -274,8 +281,10 @@ int shuffle_play(int kind) {
     return 0;
 }
 
-/* The album page's Play and Shuffle buttons (patch/coverflow.c, docs/ui.md) use the same
- * generator, message box and play-mode setter as the rows above. */
+/* The album page's and the Songs page's Play and Shuffle buttons (patch/albuminfo.c, patch/songs.c)
+ * use the same generator, message box and play-mode setters as the rows above: Shuffle sets stock
+ * Shuffle, Play the in-order mode, so Now Playing plays what was asked for. */
 unsigned pod_rand(unsigned n) { return rand_below(n); }
 void pod_toast(const char *text) { toast(text); }
 void pod_set_mode(int mode) { set_mode(mode); }
+void pod_set_in_order(void) { set_in_order(); }

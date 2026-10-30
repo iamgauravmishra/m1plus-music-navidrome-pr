@@ -12,9 +12,9 @@ import pod_recent
 
 pulldown, minibar, nowplaying = sibling('pulldown'), sibling('minibar'), sibling('nowplaying')
 
-RECENT, RECENT_TMP = '/mnt/data/m1pod-recent', '/mnt/data/m1pod-recent.tmp'
-SHELF_SET, SHELF_TMP = '/mnt/data/m1pod-shelf', '/mnt/data/m1pod-shelf.tmp'
-KILL_SD, KILL_DATA = '/mnt/mmc/m1pod-off', '/mnt/data/m1pod-off'
+RECENT, RECENT_TMP = '/mnt/data/m1plus-recent', '/mnt/data/m1plus-recent.tmp'
+SHELF_SET, SHELF_TMP = '/mnt/data/m1plus-shelf', '/mnt/data/m1plus-shelf.tmp'
+KILL_SD, KILL_DATA = '/mnt/mmc/m1plus-off', '/mnt/data/m1plus-off'
 WIN = 0x24000000
 EVT_DESTROY, EVT_AFTER_PAINT, EVT_CLICK = O['EVT_DESTROY'], O['EVT_AFTER_PAINT'], O['EVT_CLICK']
 EVT_BG, EVT_FG = O['EVT_WINDOW_TO_BG'], O['EVT_WINDOW_TO_FG']
@@ -68,11 +68,11 @@ class ST(pulldown.SM):
     scroll_view code on top and the payload opened on it: the stock calls the shelf makes are mocked or the real ones, as the pulldown test has them."""
     DELIVER = True
 
-    def __init__(self, entries=None, setting=None, bar=False, start=True, saved=b'123456x\n', hook=True, end=True):
+    def __init__(self, entries=None, setting=None, bar=False, start=True, saved=b'123456j\n', hook=True, end=True):
         super().__init__(True)
         self.at_end = end            # start() scrolls the list to its end (the shelf is at the bottom) so the tiles are in view
         CUR[0] = self
-        self.u.mem_write(0x97a330, struct.pack('<I', PSYMS['m1pod_scroll_event'] if hook else 0))   # the list gesture hook, as built (patch/scroll.c)
+        self.u.mem_write(0x97a330, struct.pack('<I', PSYMS['m1plus_scroll_event'] if hook else 0))   # the list gesture hook, as built (patch/scroll.c)
         self.build(pad=True)
         self.zv = self.alloc(0x80); self.u.mem_write(self.zv, bytes(0x80))   # a view: no vtable entries (the stock defaults)
         sv = self.sv
@@ -286,7 +286,7 @@ def file_and_layout_tests(ctx):
     """The constants, the asset, the file, recording, start and the ticks, the timer, the shelf with demo's own layouter, hit tests."""
     expect = ctx.expect
     raw = os.path.join(WORK, 'rootfs', 'release/assets/default/raw')
-    menu_asset = os.path.join(raw, 'ui', 'm1pod_menu.bin')
+    menu_asset = os.path.join(raw, 'ui', 'm1plus_menu.bin')
 
     # ------------------------------------------------------------------ constants: patch/offsets.inc, tools/pod_ui.py and tools/pod_recent.py agree
     ui_names = ('SH_W', 'SH_TILES', 'SH_TOP', 'GRID_R', 'SH_BOTTOM', 'SH_HEAD_X', 'SH_HEAD_W', 'SH_HEAD_TOP', 'SH_HEAD_H', 'SH_HEAD_PX', 'SH_HEAD_GAP')
@@ -315,8 +315,8 @@ def file_and_layout_tests(ctx):
     ui = awtk_ui.parse(open(menu_asset, 'rb').read())
     sv_n = ui.find('pod_scrollview')
     kids = [c.name for c in sv_n.children]
-    expect(kids[-2:] == ['pod_shelf', 'pod_pad'] and kids[:-2] == [f'pod_row{i}' for i in range(len(pod_pages.MENU.rows))],
-           f'the rows, then the shelf (below the last row), the spacer is last ({kids[:3]}..{kids[-2:]})')
+    expect(kids[-3:] == ['pod_daily', 'pod_shelf', 'pod_pad'] and kids[:-3] == [f'pod_row{i}' for i in range(len(pod_pages.MENU.rows))],
+           f'the rows, then the Daily Mix section, the shelf (below the last row), the spacer is last ({kids[:3]}..{kids[-3:]})')
     sh = sv_n.find('pod_shelf')
     expect(sh.type == 'view' and (sh.x, sh.y, sh.w, sh.h) == (0, 0, O['SH_W'], SH_H3) and sh.get('visible') == 'false' and sh.get('sensitive') == 'false'
            and sh.get('style:normal:bg_color') == '#000000', 'pod_shelf is a 310 x 182 view after the rows, hidden and insensitive in the asset, black')
@@ -582,7 +582,7 @@ def file_and_layout_tests(ctx):
     def layout_errors(m, shown, bar, shelf=True, na=3, extras=True):
         """What is wrong with the page ([]: nothing): the shown rows in order from y 0, virtual_h, the children stacked the shown rows,
         the shelf, the hidden rows, the spacer last, the shelf right below the last shown row, the spacer row after the shelf."""
-        want = shown + ([18] if extras else []) + [19]   # the Extras row (18) only when the saved list ends in x; Settings (19) always
+        want = shown + ([18] if extras else []) + [19]   # Customize (18) only when the saved list shows it; Extras (19) always, last
         n, errs = len(want), []
         vh = n * ROW_H + (shh(na) if shelf else 0) + (MB_PAD if bar else 0)
         if not (m.order() == want and m.row_ys() == {i: p * ROW_H for p, i in enumerate(want)} and m.vh() == vh):
@@ -593,9 +593,9 @@ def file_and_layout_tests(ctx):
         if m.y_of(m.shelf) != n * ROW_H: errs.append(f'the shelf at y {m.y_of(m.shelf)}')
         if bar and shelf and not (m.y_of(m.pad) == n * ROW_H + shh(na) and m.is_visible(m.pad)): errs.append(f'the spacer at y {m.y_of(m.pad)}')
         return errs
-    # the saved lists: the default, none, a reordered one, the same with the Extras row hidden (Settings follows the items, the shelf Settings);
+    # the saved lists: the default, none, a reordered one, the same without Customize (Extras follows the items, the shelf Extras);
     # the shelf's own heights for 1 to 6 albums are the grid's tests below
-    for saved, shown, xs in ((b'123456x\n', [1, 2, 3, 4, 5, 6], True), (b'x\n', [], True), (b'6502x\n', [6, 5, 0, 2], True), (b'6502\n', [6, 5, 0, 2], False)):
+    for saved, shown, xs in ((b'123456j\n', [1, 2, 3, 4, 5, 6], True), (b'j\n', [], True), (b'6502j\n', [6, 5, 0, 2], True), (b'6502\n', [6, 5, 0, 2], False)):
         for bar in (False, True):
             for na in (0, 1, 6):
                 m = ST(ents(na) if na else None, bar=bar, saved=saved, end=False)
@@ -667,9 +667,9 @@ def file_and_layout_tests(ctx):
         p = m.target(x, sh_y + y)
         expect(p[-1] == 'pod_shelf', f'{what}: still the shelf (its handler decides there is no tile) ({p})')
     p = m.target(160, sh_y - 1)
-    expect(p[-1] == 'pod_row19', f'the pixel row above the shelf is the Settings row ({p})')
+    expect(p[-1] == 'pod_row19', f'the pixel row above the shelf is the Extras row ({p})')
     p = m.target(160, sh_y - ROW_H - 1)
-    expect(p[-1] == 'pod_row18', f'and the row above it (Extras) ({p})')
+    expect(p[-1] == 'pod_row18', f'and the row above it (Customize) ({p})')
     p = m.target(160, 5)
     expect(p[-1] == 'window', 'above the list (the 10 px of air) the window')
     sh_y = scroll_to(m, m.vh() - 430 + 200)       # scrolled to the end: the shelf's last pixel rows end the list
@@ -689,7 +689,7 @@ def file_and_layout_tests(ctx):
     p = m.target(tile_x(1) + 48, sh_y + 20)
     expect(p[-1] == 'pod_shelf', f'scrolled 100 px: the shelf\'s top is at window y {sh_y} and its header is the shelf\'s ({p})')
     p = m.target(160, sh_y - 5)
-    expect(p[-1] == 'pod_row19', f'with the Settings row above it ({p})')
+    expect(p[-1] == 'pod_row19', f'with the Extras row above it ({p})')
     # the mini bar's pill still takes its area (it is a later sibling of the list); the shelf partly under it (list at the top) does not reach it
     m = covered(ST(ents(3), bar=True, end=False))
     p = m.target(160, O['MB_Y'] + O['MB_H'] // 2)
@@ -779,7 +779,7 @@ def grid_and_tap_tests(ctx):
     expect(len(m.bitmaps) == 6, 'at the end of the list the third row is made: all six covers (486 KB) are resident only then')
 
     # ------------------------------------------------------------------ the covers are made once the shelf is in view or about to be (it is at the bottom of a long list)
-    LONG = b'012345678abcdefghx\n'      # 17 shown items + Extras + Settings: the shelf is at y 988, far below a 430 px viewport
+    LONG = b'012345678abcdefghj\n'      # 18 shown items (Customize last) + Extras: the shelf is at y 988, far below a 430 px viewport
     EV_SCROLL = O['EVT_SCROLL']
     m = covered(ST(ents(3), saved=LONG, end=False))
     expect(m.y_of(m.shelf) == 19 * ROW_H and m.timers == [(PSYMS['rc_first'], O['RC_FIRST_MS'])], f'a long menu: the shelf is far below the viewport, the one-shot is armed as always ({m.y_of(m.shelf)}, {m.timers})')
@@ -856,7 +856,7 @@ def grid_and_tap_tests(ctx):
         expect(m.opened() == [], f'a tap on {what} opens nothing')
     expect(not [c for c in m.calls_all if c[0] == 'loadLocalClassList'], 'and does not even load the album list')
     m.setword(m.sv + 0x84, 300); m.tap(cx(0), sy(-20))
-    expect(m.opened() == [] and ('pod_row19', EVT_CLICK) in m.fired, f'a tap just above the shelf is the Settings row\'s ({m.fired})')
+    expect(m.opened() == [] and ('pod_row19', EVT_CLICK) in m.fired, f'a tap just above the shelf is the Extras row\'s ({m.fired})')
     m = covered(ST(ents(2))); library(m); m.tap(tile_x(1) + SH_COVER - 1, sy(SH_TOP + 48))
     expect(m.opened() != [], 'the last pixel column of a cover is the tile\'s')
     m.tap(tile_x(1) + SH_COVER, sy(SH_TOP + 48)); n_ = len(m.opened())
@@ -994,7 +994,7 @@ def refresh_and_fallback_tests(ctx):
     # an album again: the shelf is back, one tick, and the rows go down
     m.fs[RECENT] = pod_recent.dump(ents(2)); m.timers = []; m.fire(EVT_FG); m.relayout()
     expect(m.shelf_up() and m.y_of(m.shelf) == 8 * ROW_H and m.timers == [(PSYMS['rc_tick'], O['RC_TICK_MS'])], 'an album again: the shelf and the rows below it are back, the covers are queued')
-    # the switch (Settings > Home Screen)
+    # the switch (Customize > Home Screen)
     m = covered(ST(ents(3))); m.decode_all()
     m.fs[SHELF_SET] = b'0\n'; m.calls = []; m.fire(EVT_FG); m.relayout()
     expect(not m.shelf_up() and m.row_ys()[1] == 0, 'the switch off: the shelf is hidden and insensitive, the rows go back up')
@@ -1018,11 +1018,11 @@ def refresh_and_fallback_tests(ctx):
     m.fire(EVT_BG); m.calls = []; m.call(PSYMS['recent_refresh'], count=8000000)
     expect(m.names() == [], 'a menu that is not in front is left alone by the refresh (it reads the file when it comes back)')
 
-    # ------------------------------------------------------------------ the Settings > Home Screen switch
+    # ------------------------------------------------------------------ the Customize > Home Screen switch
     homeset = pod_pages.HOMESET_PAGE
     shelf_i = next(i for i, r in enumerate(homeset.rows) if r.action == pod_pages.ACT_SHELF)
     start_i = next(i for i, r in enumerate(homeset.rows) if r.action == pod_pages.ACT_STARTUP)
-    homeset_i = next(i for i, r in enumerate(pod_pages.SETTINGS_PAGE.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.HOMESET_PAGE_INDEX)
+    homeset_i = next(i for i, r in enumerate(pod_pages.CUSTOMIZE_PAGE.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.HOMESET_PAGE_INDEX)
     expect([(r.label, r.action) for r in homeset.rows][1] == ('Recent Albums', pod_pages.ACT_SHELF) and pod_pages.ACT_SHELF in pod_pages.SWITCH_ACTIONS and pod_pages.ACT_SHELF == 16,
            'the Home Screen page has a switch row "Recent Albums", the second one')
     expect('Recent Albums' in pod_i18n.TEXT and all(pod_i18n.TEXT['Recent Albums'][l] for l in pod_i18n.LOCALES) and len(pod_i18n.TEXT['Recent Albums']) == 13,
@@ -1030,11 +1030,12 @@ def refresh_and_fallback_tests(ctx):
     hs = awtk_ui.parse(open(os.path.join(raw, 'ui', homeset.key + '.bin'), 'rb').read())
     row = next(w for w in hs.walk() if w.name == f'pod_row{shelf_i}')
     expect(row.find(f'pod_switch{shelf_i}') is not None and any(c.get('tr_text') == 'Recent Albums' for c in row.walk()), 'its asset row is a switch row with the label')
-    def settings_machine(content=None):
+    def settings_machine(content=None, daily=None):
         sm = Machine()
         for n in ['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(homeset.rows))] + [f'pod_switch{i}' for i in range(len(homeset.rows))]: sm.widget(n)
         if content is not None: sm.fs[SHELF_SET] = content
-        sm.call(PSYMS['on_row'], a0=PSYMS[f'pod_rows_{pod_pages.SETTINGS_PAGE_INDEX}'] + 12 * homeset_i, count=3000000)
+        if daily is not None: sm.fs['/mnt/data/m1plus-daily'] = daily   # (patch/home.h DAILY_SET_FILE)
+        sm.call(PSYMS['on_row'], a0=PSYMS[f'pod_rows_{pod_pages.CUSTOMIZE_PAGE_INDEX}'] + 12 * homeset_i, count=3000000)
         return sm
     def image_of(sm, i):
         got = [c[2] for c in sm.calls if c[0] == 'image_base_set_image' and c[1] == sm.widgets[f'pod_switch{i}']]
@@ -1053,7 +1054,19 @@ def refresh_and_fallback_tests(ctx):
         expect(image_of(sm, shelf_i) == ('sset_on' if on else 'sset_off'), f'file {content!r}: the page opens with the switch {"on" if on else "off"}')
     sm = settings_machine(); sm.click(f'pod_row{shelf_i}')
     sm.click(f'pod_row{start_i}')
-    expect(sm.fs.get(SHELF_SET) == b'0\n' and image_of(sm, shelf_i) is None, 'tapping Start in M1+ Pod leaves this switch alone')
+    expect(sm.fs.get(SHELF_SET) == b'0\n' and image_of(sm, shelf_i) is None, 'tapping Boot to M1+ Music leaves this switch alone')
+    # Regenerate Daily Mix (patch/m1plus.c regen_show): dimmed (40 % opacity) and insensitive while no mix can be made; the Daily Mix switch updates it in place
+    regen_i = next(i for i, r in enumerate(homeset.rows) if r.action == pod_pages.ACT_REGEN)
+    daily_i = next(i for i, r in enumerate(homeset.rows) if r.action == pod_pages.ACT_DAILY)
+    regen_state = lambda sm: (sm.props.get((sm.widgets[f'pod_row{regen_i}'], 'opacity')), sm.props.get((sm.widgets[f'pod_row{regen_i}'], 'sensitive')))
+    sm = settings_machine()
+    expect(regen_state(sm) == (255, 1), 'the Daily Mix switch on: Regenerate Daily Mix opens at full opacity and tappable')
+    sm.click(f'pod_row{daily_i}')
+    expect(regen_state(sm) == (102, 0), 'the switch tapped off: Regenerate is dimmed and insensitive at once')
+    sm.click(f'pod_row{daily_i}')
+    expect(regen_state(sm) == (255, 1), '... and back when it is on again')
+    sm = settings_machine(daily=b'0\n')
+    expect(regen_state(sm) == (102, 0), 'the page opened with the switch off: Regenerate is dimmed')
 
     # ------------------------------------------------------------------ every failure falls back to the plain menu
     plain_ys = ST(None).row_ys()
@@ -1111,22 +1124,22 @@ def refresh_and_fallback_tests(ctx):
         if entries: m.fs[RECENT] = pod_recent.dump(ents(3))
         return m
     m = home_machine()
-    m.call(PSYMS['m1pod_home_init'], a0=HOME_WIN, a1=0x55, count=3000000)
+    m.call(PSYMS['m1plus_home_init'], a0=HOME_WIN, a1=0x55, count=3000000)
     m.top_main = HOME_WIN; m.timers = []
     m.call(PSYMS['hm_open'], count=6000000)
     expect((PSYMS['rc_first'], O['RC_FIRST_MS']) in m.timers and (PSYMS['mb_first'], O['MB_FIRST_MS']) in m.timers
            and ('widget_on', m.window, EVT_DESTROY, PSYMS['rc_on_destroy'], m.window) in m.calls and ('widget_set_visible', m.widgets['pod_shelf'], 1) in m.calls,
            'the menu opened as Home starts the shelf after the bar: its one-shot is armed and the shelf is up')
     expect(not [c for c in m.calls if c[0] in ('bitmap_create_ex', 'widget_load_image', 'loadLocalClassList')], 'and the menu\'s first paint has nothing decoded or loaded')
-    m = home_machine(); m.call(PSYMS['m1pod_home_init'], a0=HOME_WIN, a1=0x55, count=3000000); m.top_main = HOME_WIN; m.timers = []; m.widgets.pop('navigationbar_view')
+    m = home_machine(); m.call(PSYMS['m1plus_home_init'], a0=HOME_WIN, a1=0x55, count=3000000); m.top_main = HOME_WIN; m.timers = []; m.widgets.pop('navigationbar_view')
     m.call(PSYMS['hm_open'], count=6000000)
     expect(m.names().count('window_open') == 1 and (PSYMS['rc_first'], O['RC_FIRST_MS']) not in m.timers, 'a Home instance whose list could not be laid out gets no shelf')
-    m = home_machine(); m.fs['/mnt/data/m1pod-bad'] = b'1\n'                 # recovery: Tidal opens the normal instance
-    m.call(PSYMS['m1pod_home_click'], a0=m.icon('1'), count=3000000)
+    m = home_machine(); m.fs['/mnt/data/m1plus-bad'] = b'1\n'                 # recovery: Tidal opens the normal instance
+    m.call(PSYMS['m1plus_home_click'], a0=m.icon('1'), count=3000000)
     expect(m.names().count('window_open') == 1 and PSYMS['rc_first'] not in [t[0] for t in m.timers] and ('widget_set_visible', m.widgets['pod_shelf'], 1) not in m.calls,
            'the normal instance (grid icon, recovery): no shelf, no timer')
     m = home_machine(False)
-    m.call(PSYMS['m1pod_home_init'], a0=HOME_WIN, a1=0x55, count=3000000); m.top_main = HOME_WIN; m.timers = []; m.call(PSYMS['hm_open'], count=6000000)
+    m.call(PSYMS['m1plus_home_init'], a0=HOME_WIN, a1=0x55, count=3000000); m.top_main = HOME_WIN; m.timers = []; m.call(PSYMS['hm_open'], count=6000000)
     expect(('widget_set_visible', m.widgets['pod_shelf'], 1) not in m.calls and (PSYMS['rc_first'], O['RC_FIRST_MS']) in m.timers, 'nothing recorded yet: the page is set up, the shelf stays hidden')
 
     # ------------------------------------------------------------------ recording from the places that see the playing track

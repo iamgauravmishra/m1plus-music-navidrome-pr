@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """UI polish, asset-only (V2.1jA `polish`, docs/ui.md): the geometry fixes that are not images.
 
-M1+ Pod page titles: the pod pages (m1pod_menu / shuffle / settings / artists / cover) were built with a 248 px wide
+M1+ Music page titles: the pod pages (m1plus_menu / shuffle / settings / artists / cover) were built with a 248 px wide
 `label_title` at x 36, which runs under the "back to player" button (x 260..320, bars icon at 278). Stock
 titles are 200 px wide at the same x 36, y 14, h 22 (44 of 53 stock pages), so a long title (an artist
 name on the Artists Cover Flow) is cut at the same place as everywhere else and never touches the icon.
@@ -21,7 +21,7 @@ import awtk_style
 from modlib import clone_workdir, edit_ui
 
 UI = 'rootfs/release/assets/default/raw/ui'
-PAGES = ('m1pod_menu', 'm1pod_shuffle', 'm1pod_settings', 'm1pod_extras', 'm1pod_artists', 'm1pod_cover', 'm1pod_cfset', 'm1pod_homeset')
+PAGES = ('m1plus_menu', 'm1plus_shuffle', 'm1plus_customize', 'm1plus_extras', 'm1plus_artists', 'm1plus_cover', 'm1plus_cfset', 'm1plus_homeset', 'm1plus_extrascfg', 'm1plus_developer')
 TITLE_W = 200                     # the stock navbar title width
 IMG_MTIME = 1750924035            # as the other added ui files (mod_icons.py)
 
@@ -61,7 +61,7 @@ def apply(out):
         p = os.path.join(out, UI, k + '.bin')
         if os.path.exists(p):
             edit_ui(p, edit); os.utime(p, (IMG_MTIME, IMG_MTIME)); n += 1
-    print(f'polish: label_title {TITLE_W} px wide on {n} M1+ Pod pages')
+    print(f'polish: label_title {TITLE_W} px wide on {n} M1+ Music pages')
 
 
 if __name__ == '__main__':

@@ -4,7 +4,7 @@ Split out of docs/architecture.md. A "section N" in the text is an old section n
 
 ## 7. Shuffle (`patch/shuffle.c`)
 
-The Shuffle page (`ui/m1pod_shuffle.bin`, opened by the menu's one Shuffle row as in q2-pod's Library)
+The Shuffle page (`ui/m1plus_shuffle.bin`, opened by the menu's one Shuffle row as in q2-pod's Library)
 has three rows: **Shuffle Songs** (the library, stock Shuffle mode, from a random song), **Shuffle
 Albums** (albums in random order, each in track order), **Shuffle Folders** (folders in random order,
 each in file-name order). One call `shuffle_play(kind)`, no timer, thread or page left behind.
@@ -27,14 +27,16 @@ mode is set if needed; `navigator_to_with_context("playing_page", {queue, index,
   hook on the playback path. Group: albums by name with ASCII case folded (SQLite NOCASE, as the Albums
   list groups; no-album songs one group); folders by path up to the last `/`. Groups in Fisher-Yates
   order; inside an album disc, then track (`getMusicByAlbum` comparator `0x4e9020`), then path, then
-  CUE start; inside a folder path, then CUE start. Two heapsorts over a 12-byte index
-  `{record, group, position}` (no libc `qsort`), then the queue's records are permuted in place
+  CUE start; inside a folder path, then CUE start. Two heapsorts over a 16-byte index
+  `{record, group, position, dir}` (no libc `qsort`; `dir` is a path's folder length, found once per song in
+  `group_order` for Shuffle Folders and used by every folder comparison and group boundary, 2048 songs: 26.4 M -> 10.6 M
+  payload instructions with 22-byte paths, 59.1 M -> 23.7 M with 52-byte paths; folder equality, file-name order and CUE-start ties are unchanged), then the queue's records are permuted in place
   (cycle-following), so every string stays owned by one slot. Peak memory is what tapping a song in
-  Songs uses plus the index (768 KB at the cap).
+  Songs uses plus the index (1 MB at the cap; a refused allocation still toasts "Not enough memory" and leaves the queue untouched).
 - **Play mode** is the stock setting changed as Play settings does (`0x49fc78`): `mclSetPlayMode(m)`,
   `notifyPlayMode()`, `dmrSendPlayMode(m)`, `write_int_config(m, "PLAYSET", "PLAYMODE")`; nothing is
   written when already right. Values 0 List play, 1 Repeat one, 2 Shuffle, 3 Repeat all. Songs -> 2;
-  Albums/Folders: 1 and 2 -> 0, 0 and 3 kept. The mode stays afterwards (q2-pod restores it with a hook
+  Albums/Folders: 1 and 2 -> 0, 0 and 3 kept (`set_in_order`, exported as `pod_set_in_order` for the Play buttons of the album page, the Songs page and the Daily Mix, so Play after a Shuffle plays in order). The mode stays afterwards (q2-pod restores it with a hook
   on the queue load; not ported).
 - **Limits** (stock one-line message box `dialog/msginfo_dialog`, kind 1, 2 s; nothing played, mode
   untouched): "Update Local Music first" (empty), "Storage unavailable" (first file missing), "Too many

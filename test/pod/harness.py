@@ -88,7 +88,7 @@ class Ctx:
     """What a feature module's run(ctx) gets: the entry page, the built cover asset, and expect()."""
     def __init__(self, work):
         self.work, self.page = work, pod_pages.PAGES[0]
-        self.cover_asset = os.path.join(work, 'rootfs', 'release/assets/default/raw/ui/m1pod_cover.bin')
+        self.cover_asset = os.path.join(work, 'rootfs', 'release/assets/default/raw/ui/m1plus_cover.bin')
         self.passed = self.failed = 0
 
     def expect(self, cond, msg):
@@ -106,13 +106,13 @@ def offsets():
 
 
 O = offsets()
-# Cover Flow's page layout as tools/pod_ui.py builds ui/m1pod_cover.bin
+# Cover Flow's page layout as tools/pod_ui.py builds ui/m1plus_cover.bin
 CF_FRAME_Y, CF_ALBUM_Y, CF_ALBUM_H, CF_ARTIST_Y, CF_ARTIST_H = pod_ui.cover_layout()
 
 
 def art_file(key):
     """The thumbnail cache file of an album key: <key>-168.jpg (the size is in the name)."""
-    return f'/mnt/mmc/.coverflow/{key:08x}-{O["ART_SIZE"]}.jpg'
+    return f'/mnt/mmc/.m1plus/covers/{key:08x}-{O["ART_SIZE"]}.jpg'
 REC_SIZE = 0x58
 
 
@@ -154,6 +154,7 @@ class Machine:
         self.present = set()        # paths access() finds
         self.files = {}             # path -> size, for fopen/ftell
         self.window = 0x20001000    # window_open's result (0 = failure)
+        self.windows = {}           # ... for the windows named here (a page that opens another: one of them can fail)
         self.widgets = {}           # name -> handle; lookups miss if absent
         self.props = {}             # (handle, prop) -> int, for widget_get_prop_int
         self.children = {}          # parent handle -> [child handles]
@@ -162,12 +163,18 @@ class Machine:
         self.showlist = []          # what loadLocalClassList leaves in *pdeq_showlist
         self.playlists = []         # the playlist rows loadLocalClassList(0xf00b) leaves in *pdeq_playlist
         self.playlist_songs = {}    # playlist id -> its song rows (loadLocalClassList(0xff13) with classinfo[1] = the id)
+        self.genre_songs = {}       # (genre name, Unknown Genre byte) -> its song rows (loadLocalClassList(0xff09) with classinfo[0], classinfo + 0x30d, classinfo + 0xc as the stock row tap leaves them)
         self.create_ret = 5         # createPlayListItem's result (-1 full, -2 exists)
+        self.pl_names = set()       # playlist names createPlayListItem answers -2 for (a test sets them)
+        self.pl_rows = []           # the playlist table's song rows addPlayList was given: (row id, playlist id, path, title); checkPlayListExist / getPlayListMaxId read them
+        self.pl_created = []        # (name, id) of the playlists createPlayListItem made (a result >= 0)
+        self.clobber = False        # createPlayListItem leaves the browsing class, classinfo[0..1] and the navigation title changed (a test of "put back")
         self.dialog_name = 'Mix'    # what the keyboard dialog writes into the name (None: cancelled)
         self.album_artists = []     # the artists list while artist_type == 1 (the stock page's album-artist switch)
         self.class_lists = {}       # ... per class, where a test sets one (0xf004: the artists)
         self.tracklist = []         # what loadSongList leaves there
         self.artist_albums = {}     # artist name -> its album rows (loadAlbumList 0xf004)
+        self.artist_songs = {}      # artist name -> all its song rows (loadLocalClassList(0xff11) after loadAlbumdetailList on the All songs row)
         self.free_mb = 1024
         self.thread_ok = True
         self.confirm_yes = False    # the answer of the stock confirm dialog (dialog/confirminfo_dialog)
@@ -202,7 +209,8 @@ class Machine:
         self.blits, self.texts, self.measures, self.glyphs, self.draw_oy = [], [], [], [], []
         self.fills, self.text_styles, self.cur_style, self.fill_color = [], [], '', 0 # canvas_fill_rect (colour, x, y, w, h); the style widget of each text
         self.destroyed, self.loads = 0, []   # bitmaps destroyed / images loaded, over the machine's life
-        self.u.hook_add(UC_HOOK_BLOCK, self._block)   # icount: instructions of every block entered
+        self.tm_buf = 0                     # the struct tm localtime answers with (patch/dailymix.c)
+        self.block_hook = self.u.hook_add(UC_HOOK_BLOCK, self._block)   # icount: instructions of every block entered (a test that does not count can hook_del it: it is most of the time)
 
     # ---------------- memory helpers ----------------
     def alloc(self, n):
@@ -254,6 +262,12 @@ class Machine:
         self.setword(r + O['REC_PATH'], 0); self.setword(r + O['REC_TYPE'], 4)
         return r
 
+    def artist_query(self):
+        """loadLocalClassList(0xff11) as stock reads the record: the all-songs flag (+8) and the artist (+0x10d)."""
+        ci = pod.DATA['CLASSINFO'][0]
+        if not self.u.mem_read(ci + O['CLASSINFO_ALL_SONGS'], 1)[0]: return []
+        return list(self.artist_songs.get(self.read_cstr(ci + O['CLASSINFO_ARTIST']), []))
+
     def new_deque(self, items=()):
         h = self.alloc(8)
         self.deques[h] = list(items)
@@ -291,7 +305,7 @@ class Machine:
             p = self.read_cstr(a0); ret = 0 if p in self.present or p in self.fs else -1
             self.calls.append(('access', p))
         elif name == 'window_open':
-            self.calls.append(('window_open', self.read_cstr(a0))); ret = self.window
+            nm = self.read_cstr(a0); self.calls.append(('window_open', nm)); ret = self.windows.get(nm, self.window)
         elif name == 'widget_get_window':   # the page window of a widget (a test sets page_window; none: the widget is in no window)
             ret = self.page_window
         elif name == 'widget_lookup':
@@ -326,6 +340,9 @@ class Machine:
         elif name == 'widget_set_sensitive':
             self.props[(a0, 'sensitive')] = a1
             self.calls.append(('widget_set_sensitive', a0, a1))
+        elif name == 'widget_set_opacity':
+            self.props[(a0, 'opacity')] = a1 & 0xff
+            self.calls.append(('widget_set_opacity', a0, a1 & 0xff))
         elif name == 'widget_set_state':
             self.calls.append(('widget_set_state', a0, self.read_cstr(a1)))
         elif name == 'widget_grab':
@@ -530,6 +547,18 @@ class Machine:
                 self.setword(pod.DATA['PDEQ_SHOWLIST'][0], self.new_deque(items))
                 u.reg_write(UC_MIPS_REG_V0, len(items)); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
                 return
+            if a0 == O['CLASS_GENRE_SONGS']:   # getMusicByGenre(classinfo + 0x30d), or every song of an unknown genre; only when classinfo[0] is the class, as the stock row tap leaves it
+                ci = pod.DATA['CLASSINFO'][0]
+                key = (self.read_cstr(ci + O['CLASSINFO_GENRE']), self.u.mem_read(ci + O['CLASSINFO_GENRE_UNKNOWN'], 1)[0])
+                items = self.genre_songs.get(key, []) if self.word(ci) == O['CLASS_GENRE_SONGS'] else []
+                self.setword(pod.DATA['PDEQ_SHOWLIST'][0], self.new_deque(items))
+                u.reg_write(UC_MIPS_REG_V0, len(items)); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+                return
+            if a0 == O['CLASS_ARTIST_SONGS']:   # getMusicByAlbumAndAlbumSonger: from the browsing record alone (all-songs flag +8, artist +0x10d)
+                items = self.artist_query()
+                self.setword(pod.DATA['PDEQ_SHOWLIST'][0], self.new_deque(items))
+                u.reg_write(UC_MIPS_REG_V0, len(items)); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+                return
             items = self.class_lists.get(a0, self.showlist)
             if a0 == O['CLASS_ARTISTS'] and self.album_artists:   # GetAllAlbumArtist when artist_type == 1
                 items = self.album_artists if self.word(pod.DATA['ARTIST_TYPE'][0]) == 1 else items
@@ -549,7 +578,19 @@ class Machine:
             items = list(self.artist_albums.get(artist, []))
             if artist in self.artist_albums: items.append(self.all_songs(artist))
             self.setword(pod.DATA['PDEQ_SHOWLIST'][0], self.new_deque(items))
-            self.setword(pod.DATA['CLASSINFO'][0], O['CLASS_ARTIST_ALBUMS'])
+            self.u.mem_write(pod.DATA['CLASSINFO'][0], bytes(O['CLASSINFO_SIZE']))   # memset, as stock
+            self.setword(pod.DATA['CLASSINFO'][0], O['CLASS_COMPOSER_ALBUMS'] if a0 == O['CLASS_COMPOSERS'] else O['CLASS_ARTIST_ALBUMS'])
+            if a0 == O['CLASS_ARTISTS']: self.u.mem_write(pod.DATA['CLASSINFO'][0] + O['CLASSINFO_ARTIST'], artist.encode() + b'\0')
+            ret = len(items)
+        elif name == 'loadAlbumdetailList':
+            # loadAlbumdetailList(0xff01, album row POINTER): the all-songs flag (+8) and the album text (+0xd) into the record, class 0xff11, then that class's query
+            self.calls.append(('loadAlbumdetailList', a0, a1))
+            ci = pod.DATA['CLASSINFO'][0]
+            self.u.mem_write(ci + O['CLASSINFO_ALL_SONGS'], bytes([1 if self.word(a1 + O['REC_ID']) == 0xfffffffe else 0]))
+            self.u.mem_write(ci + O['CLASSINFO_ALBUM'], self.read_cstr(self.word(a1 + O['REC_ALBUM'])).encode() + b'\0')
+            self.setword(ci, O['CLASS_ARTIST_SONGS'])
+            items = self.artist_query()
+            self.setword(pod.DATA['PDEQ_SHOWLIST'][0], self.new_deque(items))
             ret = len(items)
         elif name == 'loadSongList':
             self.calls.append(('loadSongList', self.read_cstr(a1), a2, a3))
@@ -578,6 +619,10 @@ class Machine:
                 self.calls.append(('navigator_to_with_context', ctx, a1, self.word(pod.DATA['CLASSINFO'][0] + 4), self.read_cstr(pod.DATA['NAV_TITLE'][0])))
                 u.reg_write(UC_MIPS_REG_V0, 0); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
                 return
+            if ctx in ('search_page', 'playlist_page'):   # the Songs page's Search (no context) and the stock playlist picker (a value: the add context)
+                self.calls.append(('navigator_to_with_context', ctx, a1))
+                u.reg_write(UC_MIPS_REG_V0, 0); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+                return
             if ctx == 'dialog/kbaddplaylist_dialog':   # modal; the name goes into the caller's buffer, 0 = accepted
                 self.calls.append(('navigator_to_with_context', ctx, self.dialog_name))
                 if self.dialog_name is not None: self.u.mem_write(a1, self.dialog_name.encode() + b'\0')
@@ -590,11 +635,23 @@ class Machine:
                 self.played = (q, self.word(a1 + 4))
             elif ctx == 'dialog/msginfo_dialog':
                 self.calls.append(('toast', self.read_cstr(a1 + 8), self.word(a1), self.word(a1 + 4)))
-            elif ctx == 'dialog/confirminfo_dialog':   # modal: the button pressed is the result (0xa Yes, else No)
+            elif ctx == 'dialog/confirminfo_dialog':   # modal: the button pressed is the result (0xa Yes, else No; confirm_answer: any other value)
                 self.calls.append(('confirm', self.read_cstr(a1 + 8), self.word(a1)))
-                ret = O['CONFIRM_YES'] if self.confirm_yes else 0
+                ret = self.confirm_answer if self.confirm_answer is not None else O['CONFIRM_YES'] if self.confirm_yes else 0
         elif name == 'createPlayListItem':   # (the stock list, the name): the new id, -1 full, -2 exists
-            self.calls.append(('createPlayListItem', self.read_cstr(a1), len(self.deques.get(a0, [])))); ret = self.create_ret
+            self.calls.append(('createPlayListItem', self.read_cstr(a1), len(self.deques.get(a0, [])))); ret = -2 if self.read_cstr(a1) in self.pl_names else self.create_ret
+            if ret >= 0: self.pl_created.append((self.read_cstr(a1), ret))
+            if self.clobber:   # what the stock calls may leave behind: the browsing class, classinfo[0..1], the navigation title
+                self.setword(pod.DATA['G_CLASS_TYPE'][0], 0xf00b); self.setword(pod.DATA['CLASSINFO'][0], 0xdead); self.setword(pod.DATA['CLASSINFO'][0] + 4, 77)
+                self.u.mem_write(pod.DATA['NAV_TITLE'][0], b'clobbered\0')
+        elif name == 'checkPlayListExist':   # (song record, playlist id): 1 = that path is already in that playlist
+            path = self.read_cstr(self.word(a0 + O['REC_PATH'])); self.calls.append(('checkPlayListExist', path, a1))
+            ret = int(any(r[1] == a1 and r[2] == path for r in self.pl_rows))
+        elif name == 'getPlayListMaxId':
+            self.calls.append(('getPlayListMaxId',)); ret = max([r[0] for r in self.pl_rows], default=0)
+        elif name == 'addPlayList':   # (song record): the row's id is REC_ID, its playlist REC_DISC
+            row = (self.s32(a0 + O['REC_ID']), self.s32(a0 + O['REC_DISC']), self.read_cstr(self.word(a0 + O['REC_PATH'])), self.read_cstr(self.word(a0 + O['REC_TITLE'])))
+            self.pl_rows.append(row); self.calls.append(('addPlayList',) + row); ret = 1
         elif name in ('stock_playlist_import', 'stock_playlist_export'):
             self.calls.append((name, self.word(pod.DATA['NAVIGATION_STATUS'][0])))
         elif name == 'albumcoverinfo_init':
@@ -645,7 +702,7 @@ class Machine:
             self.deques.setdefault(a0, []).append(a1); self.calls.append(('_deque_push_back', a0, a1))
         elif name == 'strdup':
             s = self.read_cstr(a0); a = self.malloc(len(s) + 1)
-            self.u.mem_write(a, s.encode() + b'\0'); ret = a
+            self.u.mem_write(a, s.encode('latin-1') + b'\0'); ret = a   # (read_cstr shows bytes as latin-1 characters)
         elif name == 'snprintf':
             fmt = self.read_cstr(a2)
             args = [a3] + [stack(i) for i in range(0, 6)]
@@ -667,7 +724,7 @@ class Machine:
             self.calls.append(('snprintf', out))
         elif name == 'calloc':
             n = a0 * a1
-            if self.heap + n >= HEAP + HEAP_SIZE or self.calloc_fail: ret = 0
+            if self.heap + n >= HEAP + HEAP_SIZE or self.calloc_fail or (self.calloc_fail_size and n == self.calloc_fail_size): ret = 0
             else:
                 ret = self.malloc(n); self.u.mem_write(ret, bytes(n))
             self.calls.append(('calloc', n, ret))
@@ -707,7 +764,7 @@ class Machine:
         elif name == 'mkdir':
             p = self.read_cstr(a0); self.calls.append(('mkdir', p))
             if ('mkdir', p) in self.fail: ret = -1
-            else: self.present.add(p)
+            else: self.present.add(p); self.dirs.add(p)
         elif name == 'statfs':
             # o32 struct statfs: f_type, f_bsize, .., f_bavail (word 7), f_fsid (words 8, 9). The card is its own file system
             # (type, fsid) unless a test unmounts it; everything else is the root file system.
@@ -739,6 +796,7 @@ class Machine:
             self.calls.append(('pthread_join',))
         elif name == 'pthread_mutex_lock':
             self.calls.append(('lock', a0))
+            if getattr(self, 'on_lock', None): self.on_lock()   # a test's way to act while the lock is "waited for"
         elif name == 'pthread_mutex_unlock':
             self.calls.append(('unlock', a0))
         elif name == '_create_deque':
@@ -763,6 +821,7 @@ class Machine:
             elif p == '/dev/fb0':
                 if self.fb: ret = self.next_fd; self.fds[ret] = [p, fl, 0]; self.next_fd += 1
                 else: ret = -1
+            elif fl & 0x100 and p.startswith('/mnt/mmc/.m1plus/') and p.rsplit('/', 1)[0] not in self.dirs: ret = -1   # no such directory (the Daily Mix's folder, or the card folder above it)
             elif p in self.dirs: ret = self.next_fd; self.fds[ret] = [p, fl, 0]; self.next_fd += 1
             elif p in self.fs or fl & 0x100:
                 if fl & 0x200 or p not in self.fs: self.fs[p] = b''
@@ -790,6 +849,16 @@ class Machine:
             self.calls.append(('get_top_main_window', a0)); ret = self.top_main
         elif name == 'widget_is_window_opened':
             ret = self.home_opened
+        # ---- the Daily Mix (patch/dailymix.c): the wall clock
+        elif name == 'time':
+            ret = self.wall
+            if a0: self.setword(a0, ret)
+        elif name == 'localtime':
+            import time as _t
+            tm = _t.gmtime(self.u.mem_read(a0, 4) and struct.unpack('<I', bytes(self.u.mem_read(a0, 4)))[0] + self.tz)
+            if not self.tm_buf: self.tm_buf = self.alloc(0x40)
+            self.u.mem_write(self.tm_buf, struct.pack('<9i', tm.tm_sec, tm.tm_min, tm.tm_hour, tm.tm_mday, tm.tm_mon - 1, tm.tm_year - 1900, (tm.tm_wday + 1) % 7, tm.tm_yday - 1, 0))
+            ret = self.tm_buf
         elif name == 'stock_init_resume':
             self.calls.append(('stock_init_resume', a0, a1)); ret = self.init_ret
         else:
@@ -821,8 +890,11 @@ class Machine:
     mode = 0                 # mclGetPlayMode
     play_pos = -1            # mclGetPlayPos: the playing track's index in the play queue (*PLAY_QUEUE), -1 for none
     seed = 12345             # toolsRandnum
+    wall = 1800000000        # time(): the wall clock, seconds (2027-01-15 08:00 UTC); tz: seconds localtime adds
+    tz = 0
     clock = 1                # time_now_ms
     calloc_fail = False
+    calloc_fail_size = 0           # a calloc of exactly this many bytes is refused (one allocation, not all)
     played = None            # (queue records, index) handed to playing_page
     page_window = 0          # what widget_get_window answers
     bitmap = None
@@ -834,6 +906,7 @@ class Machine:
     live_scroll = frozenset() # scroll_view structs whose virtual_h / yoffset the widget_set_prop_int mock also stores (the stock setters' stores)
     oy_canvas = 0             # a canvas in emulated memory whose origin y (canvas_t @4) is logged in draw_oy at every canvas_draw_image
     draw_oy = ()
+    confirm_answer = None     # what the stock confirm dialog returns when a test wants a value other than Yes / No (the Songs delete's 0x14)
     mem_geometry = False      # widget_move / widget_resize also write the widget_t (stock widget_to_local reads it)
 
     def call(self, addr, a0=0, a1=0, count=20000, a2=0, a3=0):
@@ -925,6 +998,7 @@ class StockEventMachine(Machine):
     NOOPS = STOCK_NOOPS
     REAL = ()
     WIN_Y = 0         # the window's screen y: pointer() adds it (pointer events carry screen coordinates)
+    DELIVER_COUNT = 8000000   # the instruction budget of each handler deliver() calls
     DELIVER = False   # queue what the stock code emits (a copy: it lives on the stock stack) for the handlers the payload bound;
                       # pointer() hands it to them after the stock code returned, in the order it was sent
 
@@ -960,7 +1034,7 @@ class StockEventMachine(Machine):
             if (owner, evt) in self.bound:
                 fn, ctx = self.bound[(owner, evt)]
                 ev = self.alloc(0x30); self.u.mem_write(ev, raw)
-                self.call(fn, a0=ctx, a1=ev, count=8000000)
+                self.call(fn, a0=ctx, a1=ev, count=self.DELIVER_COUNT)
                 self.calls_all += self.calls
                 self.handled()
         self.queue = []
@@ -1167,10 +1241,10 @@ def covered(rects, r, step=2):
 
 
 COVER_WIDGETS = ['btn_return', 'btn_backtoplayer', 'btn_cancel', 'navigationbar_view', 'view_covers',
-                 'label_album', 'label_artist', 'label_status', 'label_title', 'btn_allalbums']
+                 'label_album', 'label_artist', 'label_status', 'label_title', 'btn_songs']
 
 
-CFSORT_FILE, CFSORT_TMP = '/mnt/data/m1pod-cfsort', '/mnt/data/m1pod-cfsort.tmp'   # patch/home.h
+CFSORT_FILE, CFSORT_TMP = '/mnt/data/m1plus-cfsort', '/mnt/data/m1plus-cfsort.tmp'   # patch/home.h
 
 
 def cover_machine(albums=3, tracks=2, cached=True, sort='album'):
@@ -1238,7 +1312,10 @@ def artist_rec(m, name, rid):
     return m.record(album='', artist=name, path='', title=name, name='', rid=rid)
 
 
-def artists_machine(artists=('Miles Davis', 'Nina Simone', 'Unknown Artist')):
+COMPOSER_ALBUMS = {'Bach': ['Goldberg Variations', 'Cello Suites'], 'Mozart': ['Requiem'], 'Unknown Composer': []}
+
+
+def artists_machine(artists=('Miles Davis', 'Nina Simone', 'Unknown Artist'), composers=(), genres=()):
     """A machine with the Artists page's widgets, the stock artist list (class 0xf004), each
     artist's albums (loadAlbumList) and the library album list (getAllAlbum). Miles Davis has
     three albums, one of them (Jazz Hits) filed under Various Artists in the library list; Nina
@@ -1249,8 +1326,15 @@ def artists_machine(artists=('Miles Davis', 'Nina Simone', 'Unknown Artist')):
     m.album_artists = [artist_rec(m, a, i + 1) for i, a in enumerate(('Various Artists', 'Miles Davis'))]
     m.class_lists[O['CLASS_ARTISTS']] = [artist_rec(m, a, -1 if a == 'Unknown Artist' else i + 1)
                                          for i, a in enumerate(artists)]
+    # Genres and Composers (opt in): the stock lists (class 0xf006, 0xf005: the name in REC_TITLE, the Unknown row id -1) and each composer's albums (loadAlbumList(0xf005))
+    if composers:
+        m.class_lists[O['CLASS_COMPOSERS']] = [artist_rec(m, c, -1 if c.startswith('Unknown') else i + 1) for i, c in enumerate(composers)]
+    if genres:
+        m.class_lists[O['CLASS_GENRES']] = [artist_rec(m, g, -1 if g.startswith('Unknown') else i + 1) for i, g in enumerate(genres)]
     albums = {'Miles Davis': ['Kind of Blue', 'Jazz Hits', 'Bitches Brew'], 'Nina Simone': ['Pastel Blues'],
               'Unknown Artist': []}
+    albums.update({c: COMPOSER_ALBUMS.get(c, []) for c in composers})
+    artists = tuple(artists) + tuple(composers)
     library = []   # getAllAlbum's rows: one per album name
     for artist, names in albums.items():
         if artist not in artists: continue

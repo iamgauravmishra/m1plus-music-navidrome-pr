@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""The translations of every text M1+ Pod adds (docs/ui.md "Localisation").
+"""The translations of every text M1+ Music adds (docs/ui.md "Localisation").
 
 The stock app translates through AWTK: a widget's `tr_text` is a key into strings/<lang>_<COUNTRY>.bin
 (locale_info_tr 0x658db4, a binary search by strcmp; a key the table lacks comes back unchanged).
-M1+ Pod's texts use two kinds of key:
+M1+ Music's texts use two kinds of key:
 
   * STOCK    a key the stock tables already carry with a good translation in every language (checked by
              test/pod/i18n.py against the shipped tables): used as it is.
   * TEXT     our own keys. The key IS the English text, so a missing table or entry shows English, which is
              also the text of en_US. tools/mod_strings.py adds these to all 16 tables.
 
-Brand names stay as they are (M1+ Pod, Tidal, Shanling inside a longer text). Locales: the language menu
+Brand names stay as they are (M1+ Music, Tidal, Shanling inside a longer text). Locales: the language menu
 reaches 13 tables (switch_language 0x4cca40: zh_CN is the default, then zh_HK en_US ja_JP ko_KR fr_FR ge_DE
 sp_ES it_IT th_TH po_PL ru_RU uk_UK); de_DE, es_ES and pl_PL are 11-entry stubs of the CD ripper strings
 that nothing loads: they get our keys as their twin's text (ge_DE, sp_ES, po_PL = German, Spanish, Polish).
@@ -24,7 +24,6 @@ ALL_TABLES = sorted(LOCALES + list(TWINS))
 
 # Stock keys used as they are: key -> the English text of en_US (the test compares it with the shipped table).
 STOCK = {
-    'cdrippersettings': 'Settings',
     'hr': 'Hi-Res',
     'sset_updatemusic': 'Update Library',
     'cdripper': 'CD Ripper',
@@ -34,6 +33,16 @@ STOCK = {
     'playlist_export': 'Export playlist',
     'msg_playlistfull': 'Playlist Is Full',        # the message boxes of a New playlist that cannot be made (the stock create handler's)
     'msg_playlistexist': 'Playlist Already Exists',
+    'msg_addplaylistsuccess': 'Added To Playlist',   # the Daily Mix page's Add disc and the stock playlist picker (@0x53d51c) after a successful add
+    'sort_alphabet': 'Alphabetical',           # the Songs page's sort card: the stock sort dialog's five labels, in sort_flag order (patch/songs.c)
+    'sort_filename': 'File name',
+    'sort_format': 'File format',
+    'sort_time_desc': 'Time added (descending)',
+    'sort_time_asc': 'Time added (ascending)',
+    'msg_delsong': 'Delete Song?',             # its confirm dialog and the stock message boxes it shows
+    'msg_delsongfailed': 'Failed To Delete Song',
+    'msg_delsongsuccess': 'Song Deleted',
+    'msg_addfailed': 'Adding Failed',
 }
 
 _L = LOCALES[1:]    # the order of the translations below (English is the key)
@@ -78,8 +87,12 @@ TEXT = dict([
        'Menú principal', 'Menu principale', 'เมนูหลัก', 'Menu główne', 'Главное меню', 'Головне меню'),
     _t('Home Screen', '主屏幕', '主畫面', 'ホーム画面', '홈 화면', "Écran d'accueil", 'Startbildschirm',
        'Pantalla de inicio', 'Schermata Home', 'หน้าจอหลัก', 'Ekran główny', 'Главный экран', 'Головний екран'),
-    _t('Start in M1+ Pod','启动进入 M1+ Pod', '啟動進入 M1+ Pod', '起動時に M1+ Pod', '시작 시 M1+ Pod', 'Démarrer en M1+ Pod', 'Start in M1+ Pod',
-       'Iniciar en M1+ Pod', 'Avvia in M1+ Pod', 'เริ่มที่ M1+ Pod', 'Start w M1+ Pod', 'Запуск в M1+ Pod', 'Запуск у M1+ Pod'),
+    _t('Boot to M1+ Music', '开机进入 M1+ Music', '開機進入 M1+ Music', '起動時に M1+ Music', '부팅 시 M1+ Music', 'Démarrer M1+ Music', 'Start mit M1+ Music',
+       'Iniciar en M1+ Music', 'Avvio in M1+ Music', 'บูตเข้า M1+ Music', 'Start w M1+ Music', 'Запуск в M1+ Music', 'Запуск у M1+ Music'),
+    _t('Customize', '自定义', '自訂', 'カスタマイズ', '사용자 지정', 'Personnaliser', 'Anpassen',
+       'Personalizar', 'Personalizza', 'ปรับแต่ง', 'Dostosuj', 'Настройка', 'Персоналізація'),
+    _t('Developer', '开发者', '開發者', '開発者向け', '개발자', 'Développeur', 'Entwickler',
+       'Desarrollador', 'Sviluppatore', 'นักพัฒนา', 'Programista', 'Разработчик', 'Розробник'),
     _t('Playback', '播放', '播放', '再生', '재생', 'Lecture', 'Wiedergabe',
        'Reproducción', 'Riproduzione', 'การเล่น', 'Odtwarzanie', 'Воспроизведение', 'Відтворення'),
     _t('System Settings', '系统设置', '系統設定', 'システム設定', '시스템 설정', 'Réglages système', 'Systemeinstellungen',
@@ -92,7 +105,7 @@ TEXT = dict([
        'Añadidos recientemente', 'Aggiunti di recente', 'เพิ่มล่าสุด', 'Ostatnio dodane', 'Недавно добавленные', 'Нещодавно додані'),
     _t('Recently Played', '最近播放', '最近播放', '最近再生した曲', '최근 재생', 'Lus récemment', 'Zuletzt gespielt',
        'Reproducido hace poco', 'Riprodotti di recente', 'เล่นล่าสุด', 'Ostatnio odtwarzane', 'Недавно слушали', 'Нещодавно відтворені'),
-    # Settings > Home Screen > the Recently Played shelf's switch (patch/recent.c). Its own wording: the menu item's text above is too
+    # Customize > Home Screen > the Recently Played shelf's switch (patch/recent.c). Its own wording: the menu item's text above is too
     # wide for the switch row in Spanish and Ukrainian, and the shelf shows albums
     _t('Recent Albums', '最近专辑', '最近專輯', '最近のアルバム', '최근 앨범', 'Albums récents', 'Letzte Alben',
        'Álbumes recientes', 'Album recenti', 'อัลบั้มล่าสุด', 'Ostatnie albumy', 'Недавние альбомы', 'Нещодавні альбоми'),
@@ -153,6 +166,15 @@ TEXT = dict([
        'Eliminar listas', 'Elimina playlist', 'ลบเพลย์ลิสต์', 'Usuń playlisty', 'Удалить плейлисты', 'Видалити плейлисти'),
     _t('No playlists', '没有歌单', '沒有歌單', 'プレイリストがありません', '재생 목록 없음', 'Aucune playlist', 'Keine Playlists',
        'No hay listas', 'Nessuna playlist', 'ไม่มีเพลย์ลิสต์', 'Brak playlist', 'Нет плейлистов', 'Немає плейлистів'),
+    # The song count under the last row of the Songs page and its lists (patch/songs.c sg_foot_text; chosen by n == 1 as the track count above;
+    # pl, ru, uk the label form that needs no plural)
+    _t('%d song', '%d 首歌曲', '%d 首歌曲', '%d 曲', '%d곡', '%d titre', '%d Titel',
+       '%d canción', '%d brano', '%d เพลง', 'Utwory: %d', 'Песен: %d', 'Пісень: %d'),
+    _t('%d songs', '%d 首歌曲', '%d 首歌曲', '%d 曲', '%d곡', '%d titres', '%d Titel',
+       '%d canciones', '%d brani', '%d เพลง', 'Utwory: %d', 'Песен: %d', 'Пісень: %d'),
+    # the Songs page's line for an empty list (Favourites, a playlist ...; the library's empty line is "Update Local Music first")
+    _t('No songs', '没有歌曲', '沒有歌曲', '曲がありません', '노래 없음', 'Aucun titre', 'Keine Titel',
+       'Sin canciones', 'Nessun brano', 'ไม่มีเพลง', 'Brak utworów', 'Нет песен', 'Немає пісень'),
     # Now Playing's info page labels (patch/nowplaying.c np_info): stock's "Genres" (the plural tab name) and "Era"
     # (a decade in several tables, "age" in Korean) become "Genre: ..." and "Year: ..."
     _t('Genre', '风格', '風格', 'ジャンル', '장르', 'Genre', 'Genre',
@@ -162,8 +184,12 @@ TEXT = dict([
     # Screenshot (the Extras row; the toasts of patch/shot.c: the countdown is the fixed 5 s of SHOT_SECONDS)
     _t('Screenshot', '截图', '截圖', 'スクリーンショット', '스크린샷', "Capture d'écran", 'Screenshot',
        'Captura de pantalla', 'Screenshot', 'ภาพหน้าจอ', 'Zrzut ekranu', 'Скриншот', 'Знімок екрана'),
-    _t('Screenshot in 5 s', '5 秒后截图', '5 秒後截圖', '5秒後にスクリーンショット', '5초 후 스크린샷', 'Capture dans 5 s', 'Screenshot in 5 s.',
-       'Captura en 5 s', 'Screenshot tra 5 s', 'ภาพหน้าจอใน 5 วินาที', 'Zrzut za 5 s', 'Скриншот через 5 с', 'Знімок через 5 с'),
+    _t('Take a screenshot in 5 s?', '5 秒后截图？', '5 秒後截圖？', '5秒後にスクリーンショットを撮りますか？', '5초 후 스크린샷을 찍을까요?',
+       'Prendre une capture dans 5 s ?', 'Screenshot in 5 s aufnehmen?', '¿Hacer una captura en 5 s?', 'Fare uno screenshot tra 5 s?',
+       'ถ่ายภาพหน้าจอใน 5 วินาทีไหม', 'Zrobić zrzut ekranu za 5 s?', 'Сделать скриншот через 5 с?', 'Зробити знімок через 5 с?'),
+    _t('Cancel the screenshot?', '取消截图？', '取消截圖？', 'スクリーンショットを取り消しますか？', '스크린샷을 취소할까요?',
+       'Annuler la capture ?', 'Screenshot abbrechen?', '¿Cancelar la captura?', 'Annullare lo screenshot?',
+       'ยกเลิกการถ่ายภาพหน้าจอไหม', 'Anulować zrzut ekranu?', 'Отменить скриншот?', 'Скасувати знімок?'),
     _t('Screenshot saved', '截图已保存', '截圖已儲存', 'スクリーンショットを保存', '스크린샷 저장됨', 'Capture enregistrée', 'Screenshot gespeichert',
        'Captura guardada', 'Screenshot salvato', 'บันทึกภาพหน้าจอแล้ว', 'Zrzut zapisany', 'Скриншот сохранён', 'Знімок збережено'),
     _t('Screenshot failed', '截图失败', '截圖失敗', 'スクリーンショット失敗', '스크린샷 실패', 'Échec de la capture', 'Screenshot fehlgeschlagen',
@@ -174,9 +200,62 @@ TEXT = dict([
        'Más', 'Altro', 'เพิ่มเติม', 'Więcej', 'Ещё', 'Ще'),
     _t('Speed', '倍速', '倍速', '再生速度', '재생 속도', 'Vitesse', 'Tempo',
        'Velocidad', 'Velocità', 'ความเร็ว', 'Prędkość', 'Скорость', 'Швидкість'),
+    # The Songs page (patch/songs.c): the Play pill (Shuffle is above), the select mode's navbar ("N Selected", the Select All text button) and its
+    # Delete pill. The count goes where %d is (the payload puts the number there). Add to playlist is the stock key (STOCK).
+    _t('Play', '播放', '播放', '再生', '재생', 'Lire', 'Abspielen',
+       'Reproducir', 'Riproduci', 'เล่น', 'Odtwórz', 'Играть', 'Грати'),
+    _t('Select All', '全选', '全選', 'すべて選択', '모두 선택', 'Tout choisir', 'Alle wählen',
+       'Todo', 'Tutti', 'เลือกทั้งหมด', 'Wszystko', 'Выбрать все', 'Вибрати все'),
+    _t('Add to Playlist', '加入歌单', '加入歌單', 'リストに追加', '목록에 추가', 'Ajouter', 'Hinzufügen',
+       'Añadir', 'Aggiungi', 'เพิ่ม', 'Dodaj', 'Добавить', 'Додати'),   # (the stock key's texts are longer than the select bar's 145 px pill holds beside its glyph: German 30 characters, Japanese 144 px)
+    _t('Delete', '删除', '刪除', '削除', '삭제', 'Supprimer', 'Löschen',
+       'Eliminar', 'Elimina', 'ลบ', 'Usuń', 'Удалить', 'Видалити'),
+    _t('%d Selected', '已选 %d 项', '已選 %d 項', '%d 件選択', '%d개 선택', '%d choisis', '%d gewählt',
+       '%d elegidas', '%d scelti', 'เลือก %d', 'Wybrano: %d', 'Выбрано: %d', 'Вибрано: %d'),
     _t('Files below 48 kHz only', '仅对 48kHz 以下有效', '僅對 48kHz 以下有效', '48kHz未満のみ', '48kHz 미만 파일만', 'Fichiers < 48 kHz seulement', 'Nur Dateien unter 48 kHz',
        'Solo archivos bajo 48 kHz', 'Solo file sotto 48 kHz', 'เฉพาะไฟล์ต่ำกว่า 48 kHz', 'Tylko pliki poniżej 48 kHz', 'Только файлы ниже 48 кГц', 'Лише файли нижче 48 кГц'),
+    # The Daily Mix card of the Home menu (patch/dailymix.c, docs/modules/dailymix.md): the section header (the Recently Played shelf's style), the card title AND the
+    # Customize > Home Screen switch row ("Daily Mix": the card breaks it at its first space into two lines, a word with no space is one line on the bottom one),
+    # the action row, the card's artists line ("%s and more": a printf template of one %s) and the join of two names ("%s, %s": applied name by name). Not literal in every language
+    # (fr "Mix du jour", de "Tagesmix", it "Mix del giorno", ru "Микс дня"); they want a native-speaker pass.
+    _t('Made for You', '为你推荐', '為你推薦', 'あなたへのおすすめ', '맞춤 추천', 'Pour vous', 'Für dich',
+       'Para ti', 'Per te', 'สำหรับคุณ', 'Dla Ciebie', 'Для вас', 'Для вас'),
+    _t('Daily Mix', '每日精选', '每日精選', 'デイリー ミックス', '데일리 믹스', 'Mix du jour', 'Tagesmix',
+       'Mix diario', 'Mix del giorno', 'มิกซ์ประจำวัน', 'Miks dnia', 'Микс дня', 'Мікс дня'),
+    _t('Regenerate Daily Mix', '重新生成每日精选', '重新產生每日精選', 'デイリー ミックス再生成', '데일리 믹스 다시 만들기', 'Régénérer le Mix du jour', 'Tagesmix neu erstellen',
+       'Regenerar Mix diario', 'Rigenera Mix del giorno', 'สร้างมิกซ์ประจำวันใหม่', 'Odśwież Miks dnia', 'Обновить Микс дня', 'Оновити Мікс дня'),
+    _t('%s and more', '%s等', '%s等', '%s など', '%s 등', '%s et plus', '%s und mehr',
+       '%s y más', '%s e altri', '%s และอื่นๆ', '%s i inni', '%s и другие', '%s та інші'),
+    _t('%s, %s', *('%s、%s', '%s、%s', '%s、%s') + ('%s, %s',) * 9),
+    # The Daily Mix page (patch/dailymix.c dp_*, docs/modules/dailymix.md "The page"): the Updated line under the subtitle (today, yesterday, else "Updated <ISO date>": the date is
+    # YYYY-MM-DD in every language, so no month names), the white pill's text, and the description under the buttons (two lines of 288 px at 15 px in every language).
+    # A native-speaker pass is wanted.
+    _t('Updated today', '今天更新', '今天更新', '今日更新', '오늘 업데이트됨', 'Mis à jour aujourd\'hui', 'Heute aktualisiert',
+       'Actualizado hoy', 'Aggiornato oggi', 'อัปเดตวันนี้', 'Zaktualizowano dzisiaj', 'Обновлено сегодня', 'Оновлено сьогодні'),
+    _t('Updated yesterday', '昨天更新', '昨天更新', '昨日更新', '어제 업데이트됨', 'Mis à jour hier', 'Gestern aktualisiert',
+       'Actualizado ayer', 'Aggiornato ieri', 'อัปเดตเมื่อวาน', 'Zaktualizowano wczoraj', 'Обновлено вчера', 'Оновлено вчора'),
+    _t('Updated %s', '%s 更新', '%s 更新', '%s に更新', '%s 업데이트됨', 'Mis à jour le %s', 'Aktualisiert am %s',
+       'Actualizado el %s', 'Aggiornato il %s', 'อัปเดต %s', 'Zaktualizowano %s', 'Обновлено %s', 'Оновлено %s'),
+    _t('Play', '播放', '播放', '再生', '재생', 'Lecture', 'Wiedergabe',
+       'Reproducir', 'Riproduci', 'เล่น', 'Odtwórz', 'Играть', 'Грати'),
+    _t('Songs you love and some to rediscover, made fresh every day.', '你喜爱的歌曲，加上一些值得重新发现的好歌，每天为你更新。',
+       '你喜愛的歌曲，加上一些值得重新發現的好歌，每天為你更新。', 'お気に入りの曲と、もう一度聴きたい曲を、毎日お届けします。',
+       '좋아하는 노래와 다시 들어볼 노래를 매일 새롭게 만들어 드려요.', 'Les titres que vous aimez et des pépites à redécouvrir, renouvelés chaque jour.',
+       'Songs, die du liebst, und einige zum Wiederentdecken – jeden Tag neu.', 'Canciones que te encantan y otras para redescubrir, renovadas cada día.',
+       'Brani che ami e altri da riscoprire, rinnovati ogni giorno.', 'เพลงที่คุณรักและเพลงให้ค้นพบใหม่ สร้างสรรค์ใหม่ทุกวัน',
+       'Utwory, które kochasz, i kilka do odkrycia na nowo, odświeżane codziennie.', 'Песни, которые вы любите, и несколько для нового открытия: каждый день заново.',
+       'Пісні, які ви любите, і кілька для нового відкриття: щодня наново.'),
+    # The section headers of the Extras page and Customize > Extras (pod_pages.EXTRAS_GROUPS): Play is the key above. The stock tables have no key for these
+    # (their "Library" is part of longer texts). Library follows the terms of the stock tables (曲库, Datenbank, librería ...). A native-speaker pass is wanted.
+    _t('Library', '曲库', '曲庫', 'ライブラリ', '라이브러리', 'Bibliothèque', 'Datenbank',
+       'Librería', 'Libreria', 'คลังเพลง', 'Biblioteka', 'Библиотека', 'Медіатека'),
+    _t('Collections', '合集', '合集', 'コレクション', '컬렉션', 'Collections', 'Sammlungen',
+       'Colecciones', 'Raccolte', 'คอลเลกชัน', 'Kolekcje', 'Коллекции', 'Колекції'),
+    _t('Tools', '工具', '工具', 'ツール', '도구', 'Outils', 'Werkzeuge',
+       'Herramientas', 'Strumenti', 'เครื่องมือ', 'Narzędzia', 'Инструменты', 'Інструменти'),
 ])
+DPAGE_KEYS = ('Updated today', 'Updated yesterday', 'Updated %s', 'Play', 'Songs you love and some to rediscover, made fresh every day.')   # the Daily Mix page's keys
+DAILY_KEYS =('Made for You', 'Daily Mix', 'Regenerate Daily Mix', '%s and more', '%s, %s')     # the card's keys (tools/pod_dailymix.py TEXT)
 
 KEYS = sorted(TEXT)
 
@@ -186,7 +265,7 @@ def english(key):
     return TEXT[key]['en_US'] if key in TEXT else STOCK[key]
 
 
-BRANDS = ('M1+ Pod', 'Tidal')     # shown as they are, no key
+BRANDS = ('M1+ Music', 'Tidal')     # shown as they are, no key
 
 
 def key_for(english):

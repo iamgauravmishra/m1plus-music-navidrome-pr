@@ -4,7 +4,7 @@ The sheet Now Playing's "..." button opens is the stock `dialog/playmore_dialog`
 y 130: `list_view` `playmore_listview` > `scroll_view` `playmore_scrollview` > `list_item` rows `listitem0..6`, the scroll bar
 `scroll_bar_m`). Stock order and rows: A-B repeat (0, a switch `img_switch`), Playback speed (1, the badges `img_1x`, `img_1_25x`,
 `img_1_5x`, `img_2x` and `label1_msg`), Add to playlist (2), Online search (3), Look up album (4), Look up artist (5), Delete song (6).
-M1+ Pod makes it an iOS style bottom sheet with two pages.
+M1+ Music makes it an iOS style bottom sheet with two pages.
 
 Preview, both pages over Now Playing with the dim: `venv/bin/python -I tools/preview_playmore.py work/mod-release out/preview/playmore.png` (not tracked).
 
@@ -16,8 +16,20 @@ Preview, both pages over Now Playing with the dim: `venv/bin/python -I tools/pre
   ellipsis glyph, the label, the stock grey chevron-right `right_arrow` at its right).
 - **Page 2** (a tap on More): a header row **< More** (`pod_back`: the stock chevron-left `return`, the label "More"; a tap returns to page 1), then
   Playback speed (1), A-B repeat (0) and **Delete song** (6, its label red `#FF5A4F`). The stock rows keep their own handlers (speed badges,
-  A-B switch, delete, add to playlist, look up album / artist): the payload moves rows, it replaces no behaviour. Switching only swaps which
+  A-B switch, delete, add to playlist, look up artist): the payload moves rows, it replaces no behaviour but one (next item). Switching only swaps which
   rows are visible and sensitive: the sheet never resizes, there is no slide.
+- **Look up album opens our album page** (`pm_on_lookup_album`, a click handler on `listitem4` bound after the stock init, so the emitter runs it first;
+  RET_STOP (11, `emitter_dispatch` @0x6f450c) keeps the stock one, RET_OK lets it run). The stock handler (0x4795cc) opened `playerjumpinfo_page`. Ours reads
+  the playing track (`cc_playing`) and looks its album up in the library Albums list (`cc_find_album`: `loadAlbumList(0xf003)`, album name compared
+  ASCII case-insensitively as the list groups, the Unknown Album row never matches) BEFORE changing anything; found: it does what the stock Look up artist
+  (0x4793ac) does: `window_close` the sheet, `navigator_close("albuminfo_page")` if one is in the stack (0x4d2118), set `songerinfoflag` (0xa04737),
+  `cc_open_album(NULL, 0, row)` (the Albums grid's sequence, class 0xf003 | row << 16). With the flag set, a track tap or Play all on that page unwinds
+  to the Now Playing already in the stack and closes it before opening the new one (no second Now Playing, `docs/modules/album-page.md`), and the
+  page's navbar has no multi-select and no Now Playing button; Back returns to Now Playing. Stock clears the flag only on `album_page`'s window event
+  (0x522c64), so a destroy handler on the new page clears it (restoring the byte as it was: a Look up artist page below keeps it set); the window it was set for is
+  remembered, so an older page's late destroy never clears a newer page's flag. Nothing playing, a track without an album tag, or an album the list lacks:
+  RET_OK, nothing closed or opened, the stock handler runs (its message / page). A page window that cannot be found or watched after the open: the flag is not left set.
+  The kill switch skips all of it (the stock handler alone).
 - **Online search** (3) is never shown (`visible=false` and `sensitive=false`).
 - **Playback speed's row.** The stock label box is 60 px wide (the badges start at x 122), so "Multiple Speed" was cut. The label now reads **Speed**
   (our key `Speed`, set by the payload after the stock binder wrote `player_multiple`; 13 translations, `tools/pod_i18n.py`), its box is 96 px
@@ -85,12 +97,12 @@ it to 320 x 200 (the list_view's `self_layout` `h=100%` follows). Pins touched: 
 ## The hook
 
 `dialog_playmore_dialog_init` `0x479cc4`, pinned prologue `(0x3c1c0059, 0x279ca20c, 0x0399e021)` (`$gp` checked), overwritten with
-`j m1pod_playmore_init; nop`; the trampoline resumes at `0x479cd0` (`beqz $a0`). It is called only by the navigator's dialog-init dispatcher
+`j m1plus_playmore_init; nop`; the trampoline resumes at `0x479cd0` (`beqz $a0`). It is called only by the navigator's dialog-init dispatcher
 (`0x4d1244` / `0x4d124c`, behind the `strcmp` with `"dialog/playmore_dialog"` `0x749f78`), when the sheet is built; `tools/reach.py` finds it
 only behind the navigator cut (`0x4d00c0`), so it never runs at boot or in the main loop. `tools/pod.py` `PLAYMORE_PINS` also pins the dispatcher's
 words and the stock handlers' words (above). The stock init (it binds every row and badge through the `widget_foreach` visitor `0x478b44`, sets the
 texts, binds the to-background and tap-above handlers, moves the sheet to y 130) runs first and its result is returned; then, unless the kill switch
-`/mnt/mmc/m1pod-off` exists, `pm_start` looks up the dialog's widgets by name and checks the asset is the one it knows (nine rows under the scroll_view,
+`/mnt/mmc/m1plus-off` exists, `pm_start` looks up the dialog's widgets by name and checks the asset is the one it knows (nine rows under the scroll_view,
 each row's parent, the four labels), sets the texts (`widget_set_tr_text`: `More` twice, `Speed`, `Files below 48 kHz only`) and registers four
 handlers (the More row's and the back header's `EVT_CLICK`, the dialog's `EVT_DESTROY` and the list_view's `EVT_WINDOW_TO_BG`). **Everything fallible happens before the
 first row moves**; any failure leaves the stock seven rows (`pod_more` and `pod_back` are `visible=false` and `sensitive=false` in the asset, so they do
@@ -151,4 +163,4 @@ show) and the sheet is dark glass with rounded top corners, the page ghosting fa
 sit on the screen edge); labels, badges and chevrons legible, a pressed row only faintly lighter; four rows on the bottom edge of the screen (Look up album, Look up artist, Add to playlist, More with a grey chevron); tap above the sheet closes it; tap
 More: the same sheet shows "< More", Speed (readable, the four badges tappable, the note under it), AB Repeat and a red Delete Song; tap "< More": page 1; tap
 Delete: "Delete Song?" confirm opens over the sheet and, on No, the sheet is back on the bottom as it was (no jump to the middle); speed badges and the A-B
-switch work; a new language shows the translated texts; `/mnt/mmc/m1pod-off`: the stock seven rows (dimmed by the asset).
+switch work; a new language shows the translated texts; `/mnt/mmc/m1plus-off`: the stock seven rows (dimmed by the asset).

@@ -8,6 +8,7 @@
 
 int pod_on_back(void *ctx, void *e);     /* click handler: navigator_back() */
 int pod_on_player(void *ctx, void *e);   /* click handler: the stock "back to the player" button */
+int pod_card_mounted(void);              /* the SD card is mounted (statfs: /mnt/mmc is another file system than /mnt); never write under /mnt/mmc otherwise */
 int pod_is_type(void *w, const char *type);   /* w is a widget of exactly this type name */
 /* Bind fn to EVT_CLICK of the widget called name in win (ctx passed through); returns the widget, NULL if
  * the page has none (or fn is NULL). */

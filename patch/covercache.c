@@ -3,7 +3,7 @@
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE). The cache design follows q2-pod's patch/coverflow.c,
  * Copyright (c) 2026 Diamond Bond, MIT (https://github.com/DiamondBond/q2-pod); see NOTICE.
  *
- * One JPEG per album, /mnt/mmc/.coverflow/<key>-168.jpg, written by the one worker thread below (started by
+ * One JPEG per album, /mnt/mmc/.m1plus/covers/<key>-168.jpg, written by the one worker thread below (started by
  * Cover Flow's Preparing screen, its Rebuild Covers, or the Albums page in the background); key = FNV-1a of the artist then the album, so the same album has the same file
  * wherever it is listed. Readers decode through the stock image loader (JPEG and PNG to RGBA8888) and
  * reduce the centred square to the size they draw: nearest for Cover Flow's depth textures, an area
@@ -199,10 +199,10 @@ void *cc_albums(void) {
  * waits forever and the header keeps its placeholder. batchadd_albumcover_task(0, 0) queues nothing (the
  * page clears and refills the task list itself) and sets the state to 1; the page's own 500 ms timer
  * (@0x5261d8) then picks the finished /tmp/abp file up. Returns -1 when the row is not in the list. */
-int cc_open_album(void *artist_row, int index) {
+int cc_open_album(void *artist_row, unsigned scope, int index) {
     void *list;
-    unsigned cls = artist_row ? CLASS_ARTIST_ALBUMS : CLASS_ALBUMS;
-    if (artist_row) loadAlbumList(CLASS_ARTISTS, deque_at(artist_row, 0));
+    unsigned cls = !artist_row ? CLASS_ALBUMS : scope == CLASS_COMPOSERS ? CLASS_COMPOSER_ALBUMS : CLASS_ARTIST_ALBUMS;
+    if (artist_row) loadAlbumList(scope == CLASS_COMPOSERS ? CLASS_COMPOSERS : CLASS_ARTISTS, deque_at(artist_row, 0));
     else loadAlbumList(CLASS_ALBUMS, (void *)0);
     list = *(void **)PDEQ_SHOWLIST;
     if (!list || (unsigned)index >= deque_size(list)) return -1;
@@ -210,6 +210,24 @@ int cc_open_album(void *artist_row, int index) {
     batchadd_albumcover_task(0, 0); /* no row queued: it only ends as stock's Albums list does, taskstate = 1 */
     navigator_to_with_context("albuminfo_page", (const void *)(cls | (unsigned)index << 16));
     return 0;
+}
+
+/* The row of the library's album list (the stock Albums rows, class 0xf003) whose album is `album` (ASCII case-insensitive:
+ * the list groups by album COLLATE NOCASE, so there is one row per name; "Unknown Album", id -1, is never matched), or -1 when
+ * the name is empty or no row has it. Loads the list into *PDEQ_SHOWLIST as cc_open_album does and changes nothing else; the
+ * row number is what cc_open_album(NULL, 0, row) opens (it loads the list again). */
+int cc_find_album(const char *album) {
+    void *list;
+    unsigned i, n;
+    if (!album || !*album) return -1;
+    loadAlbumList(CLASS_ALBUMS, (void *)0);
+    list = *(void **)PDEQ_SHOWLIST;
+    n = list ? deque_size(list) : 0;
+    for (i = 0; i < n; i++) {
+        void *r = deque_at(list, i);
+        if (*(int *)((char *)r + REC_ID) != -1 && !cc_nocase(cc_str(r, REC_ALBUM), album)) return (int)i;
+    }
+    return -1;
 }
 
 /* ---------------------------------------------------------------------------
@@ -361,6 +379,10 @@ static void build_art(const job_t *j) {
     cc_path(dst, sizeof dst, j->key, "");
     cc_path(tmp, sizeof tmp, j->key, ".tmp");
     pthread_mutex_lock((void *)PARSE_COVER_MUTEX);
+    if (cb.cancelled) {                 /* cancelled while waiting for the parser: no extraction, no marker */
+        pthread_mutex_unlock((void *)PARSE_COVER_MUTEX);
+        return;
+    }
     ok = toolsGetAlbumCover(j->track, tmp, ART_SIZE, ART_SIZE) == 1 ||
          toolsGetExternCover(j->track, tmp, ART_SIZE, ART_SIZE) == 1;
     pthread_mutex_unlock((void *)PARSE_COVER_MUTEX);
@@ -430,6 +452,7 @@ int cc_build_start(void) {
         cc_build_stop(); /* nothing to build: free the job array */
         return 0;
     }
+    mkdir(CARD_DIR, 0755);   /* the folder, then the cache in it (EEXIST is fine) */
     mkdir(ART_DIR, 0755);
     if (!card_space(ART_DIR) || pthread_create(&cb.thread, (void *)0, cc_worker, (void *)0)) {
         cc_build_stop(); /* no card, no space, or no thread: the caller shows what is cached already */
@@ -444,20 +467,26 @@ int cc_build_total(void) { return cb.total; }
 int cc_build_running(void) { return cb.running; }
 int cc_build_busy(void) { return cb.jobs != (job_t *)0; }
 
-int cc_build_near(void *albums, const unsigned *order, unsigned centre) {
-    unsigned n = albums ? deque_size(albums) : 0, d, i;
-    if (!n) return cb.total;
-    if (centre >= n) centre = n - 1;
-    for (d = 0; d < n; ++d) {
-        unsigned k;
-        for (k = 0; k < 2; ++k) {   /* the row d after the centre, then d before it (d = 0 once) */
-            void *r;
-            if (k ? !d || d > centre : centre + d >= n) continue;
-            i = k ? centre - d : centre + d;
-            r = cc_row(albums, order, i);
-            if (cc_build_add(cc_str(r, REC_PATH), cc_album_key(r)) < 0) return cb.total;
-        }
+int cc_build_near_step(void *albums, const unsigned *order, unsigned centre, unsigned *cursor, unsigned batch) {
+    unsigned n = albums ? deque_size(albums) : 0, c = *cursor, left = batch;
+    if (centre >= n) centre = n ? n - 1 : 0;
+    while ((c >> 1) < n && left) {      /* the cursor is 2 x distance + (0 after the centre, 1 before it) */
+        unsigned d = c >> 1, k = c & 1, i;
+        void *r;
+        ++c;
+        if (k ? !d || d > centre : centre + d >= n) continue;   /* out of range or d = 0 twice: free */
+        i = k ? centre - d : centre + d;
+        r = cc_row(albums, order, i);
+        --left;
+        if (cc_build_add(cc_str(r, REC_PATH), cc_album_key(r)) < 0) c = n << 1;   /* full: done */
     }
+    *cursor = c;
+    return (c >> 1) >= n;
+}
+
+int cc_build_near(void *albums, const unsigned *order, unsigned centre) {
+    unsigned c = 0;
+    cc_build_near_step(albums, order, centre, &c, ~0u);
     return cb.total;
 }
 #endif /* CF_HOST */

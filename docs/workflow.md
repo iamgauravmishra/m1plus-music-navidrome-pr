@@ -36,7 +36,7 @@ whose metadata changed or that were removed, `~` for same metadata but different
 Version tags: must contain a capital `V`, must not equal the installed version (the updater refuses
 it), so every package you flash needs a tag that is not installed: bump `TAG` in `tools/build.py`
 before a build you intend to flash (format `V2.1` + series letter + capital letters; `V2.1R` is the
-restore package). `docs/history.md` lists the tags used so far.
+restore package). `git log --oneline --grep V2.1` shows the release tags used so far (integration commits start with the tag).
 
 ## 2. Test
 
@@ -86,17 +86,19 @@ Previews: `tools/preview*.py` write to `out/preview/` (gitignored). The only tra
 - Then `tools/check.py --tests-only` on a feature branch; at integration `tools/check.py`, and a changed package
   hash means a new tag and `--update` (below).
 - **A UI bug starts with a reproducer**: a stock-code emulation test (`test/pod/`, `test/awtk_fill.py`) that fails, or a
-  device screenshot (Settings > Screenshot, then `tools/pull_shots.py`; look with `tools/peek.py`). Previews
+  device screenshot (Customize > Developer > Screenshot, then `tools/pull_shots.py`; look with `tools/peek.py`). Previews
   (`tools/preview*.py`) must use the shared AWTK layout model where one exists (`awtk_text.py`, `awtk_ui.py`,
   `statusbar.py`) so they show what the device will; a bug found only on the device gets a test before the fix.
 
 ### Branches and integration
 
 Feature branches never touch what two branches would both change: no `TAG` bump, no `test/golden.sha256`, no
-`docs/history.md` row, no README status line. Their done-criterion is `check.py --tests-only` (all tests pass)
+`docs/history.md` edit, no README status line. Their done-criterion is `check.py --tests-only` (all tests pass)
 plus the docs of the feature in `docs/modules/`. Only the **integration step** (merging into the release branch)
 bumps `TAG` in `tools/build.py`, runs `check.py` and `check.py --update` (the second reuses the first: seconds),
-commits `test/golden.sha256`, writes one `docs/history.md` row for the tag and updates the README status. A
+commits `test/golden.sha256`, sets the README status line (one line naming the current release) and, only for a notable or accepted
+release, adds a milestone line to `docs/history.md` (plus any new device finding or lesson there; per-tag details
+are the commit message). A
 branch that merged a golden or history conflict resolves it by taking the integration branch's file and
 rerunning `--update`, never by editing hashes by hand.
 
@@ -123,18 +125,18 @@ the player restarts by itself. The player does not delete `update.bin`; overwrit
 First time only: flash the restore package. It reinstalls the stock kernel and rootfs byte for byte,
 so it proves the package path with nothing new on the device.
 
-Before flashing you may pre-place an empty file `m1pod-off` at the root of the SD card to keep the
+Before flashing you may pre-place an empty file `m1plus-off` at the root of the SD card to keep the
 payload disabled (the entry icon then behaves exactly as stock; the boot guard and row fit are off
-too). Delete it to enable M1+ Pod.
+too). Delete it to enable M1+ Music.
 
 ### Device checklist for the release
 
-- boots to M1+ Pod as the Home screen; About still reads V2.1; sleep, wake, reboot; "Shanling Home"
-  row shows the stock grid, the "Start in M1+ Pod" switch changes the start-up setting and survives a reboot;
+- boots to M1+ Music as the Home screen; About still reads V2.1; sleep, wake, reboot; "Shanling Home"
+  row shows the stock grid, the "Boot to M1+ Music" switch changes the start-up setting and survives a reboot;
   Settings > Cover Flow > Landscape opens Cover Flow in that orientation, Sort (Artist / Album) orders Cover Flow and Albums
   and survives a reboot, Cover Flow opens on the playing album; Main Menu: the switches and up arrows change the
   menu (and Extras) on going back, survive a reboot, and Extras and Settings stay on the menu
-- the Tidal icon on the stock grid opens M1+ Pod (it is the hooked entry)
+- the Tidal icon on the stock grid opens M1+ Music (it is the hooked entry)
 - menu rows (Now Playing, Cover Flow, Albums, Artists, Songs, Playlists, Shuffle, Extras, Settings) open their pages; Back returns; icons on every row; lists scroll, a drag does not open a row
 - Cover Flow: first run builds the cache (Cancel works), covers swipe and flick, side tap glides, centre
   tap opens the stock album page (centred 160 px cover with rounded corners, year and track count, round Shuffle, Play all pill; check on
@@ -147,20 +149,20 @@ too). Delete it to enable M1+ Pod.
 - Now Playing (V2.1mB, not yet seen on the device: the window takes the cover's colour within a second of a track change and goes
   neutral for a track without a cover; the 264 px cover is sharp with round corners that match the colour; the remaining time reads
   `-mm:ss` and counts down; the bar is 6 px and round; the A-B repeat markers sit under the bar; heart, More and the grabber work,
-  a swipe on the art changes pages; with `m1pod-off` the page is square, black-grey and shows the total), lock screen (264 px cover on a translucent card, small battery gauge, play/next work,
+  a swipe on the art changes pages; with `m1plus-off` the page is square, black-grey and shows the total), lock screen (264 px cover on a translucent card, small battery gauge, play/next work,
   swipe from anywhere, nothing queued: date + clock only; Starry Night wallpaper by default), pull-down
   tiles and battery icon, boot logo, settings page slides
-- language (V2.1mD): in System Settings > Language pick e.g. Russian, Japanese, German: the menu, Extras, Settings, Shuffle, Main Menu, Cover Flow, Artists and Albums pages, the album page buttons and count and the messages are in that language (open pages change on the spot); previews of the pages in other languages: `tools/preview_locales.py`; English again afterwards
-- Screenshot (V2.1mT, not yet seen on the device): Settings > Screenshot toasts "Screenshot in 5 s" and a camera shows in the status bar (right of Wi-Fi, no overlap with the clock in 12 h and 24 h mode); leave the page, wait: the camera goes, a second later "Screenshot saved", and `screenshots/shot-0001.bmp` on the card is the screen you left it on, status bar included and without the camera; tapping the row twice during the countdown does nothing extra; with the card out, "Storage unavailable"; the picture's colours are right (if not, the driver's format differs from what the tests cover: see `docs/modules/screenshot.md`)
+- language (V2.1mD): in System Settings > Language pick e.g. Russian, Japanese, German: the menu, Extras, Customize, Shuffle, Main Menu, Cover Flow, Artists and Albums pages, the album page buttons and count and the messages are in that language (open pages change on the spot); previews of the pages in other languages: `tools/preview_locales.py`; English again afterwards
+- Screenshot (V2.1mT; the confirm dialog not yet seen on the device): Customize > Developer > Screenshot asks "Take a screenshot in 5 s?" (Cancel does nothing); OK, and a camera shows in the status bar (right of Wi-Fi, no overlap with the clock in 12 h and 24 h mode); leave the page, wait: the camera goes, a second later "Screenshot saved", and `screenshots/shot-0001.bmp` on the card is the screen you left it on, status bar included and without the camera; tapping the row again during the countdown asks "Cancel the screenshot?" (OK: the camera goes and nothing is saved; Cancel: the countdown goes on); with the card out, "Storage unavailable"; the picture's colours are right (if not, the driver's format differs from what the tests cover: see `docs/modules/screenshot.md`)
 - list gestures (V2.1mV; any long list: Songs, Recently Added, the queue, Folders): a quick flick up and down never starts a song and the
   list flings as before; a slow drag scrolls and starts nothing; drag out and back to the start and release: nothing plays; a touch while
   the list is still coasting stops it and plays nothing (the same finger then drags it); a plain tap (also a long press, held still) still plays the row;
-  Settings > Main Menu: the switches and arrows still work; Now Playing's lyrics: a tap right as a line scrolls may need a second tap
-- the kill switch: `m1pod-off` on the card makes the entry icon open Tidal again
+  Customize > Main Menu: the switches and arrows still work; Now Playing's lyrics: a tap right as a line scrolls may need a second tap
+- the kill switch: `m1plus-off` on the card makes the entry icon open Tidal again
 
 ### Screenshots
 
-To capture a real screen: Settings > Screenshot, go to the page you want within 5 s,
+To capture a real screen: Customize > Developer > Screenshot, OK, go to the page you want within 5 s,
 wait for "Screenshot saved". The file is `/mnt/mmc/screenshots/shot-NNNN.bmp` (24 bit BMP, the whole 320 x 480 panel, next free number). Put
 the card in the Mac and run `venv/bin/python -I tools/pull_shots.py` (reads `/Volumes/*/screenshots`, or give it the card's path):
 the new files appear in `out/shots/` as PNG. The kill switch disables it like the rest of the payload. Details: `docs/modules/screenshot.md`.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""M1+ Pod's texts in every language: our translation keys added to all 16 string tables (asset-only).
+"""M1+ Music's texts in every language: our translation keys added to all 16 string tables (asset-only).
 
-The pages we add (ui/m1pod_*.bin) and the payload show their texts through the stock translation:
+The pages we add (ui/m1plus_*.bin) and the payload show their texts through the stock translation:
 `tr_text = key` in an asset, widget_set_tr_text / locale_info_tr in the payload (docs/architecture.md
 "Localisation"). Stock keys are used as they are (tools/pod_i18n.py STOCK); the texts the stock tables have
 no good key for are our own keys (the key is the English text), added here to strings/<lang>_<COUNTRY>.bin
@@ -45,6 +45,7 @@ def check_texts(font):
             t = by[loc]
             check(t and t == t.strip() and all(ord(c) >= 0x20 for c in t), f'{key!r} {loc}: empty or untidy text {t!r}')
             if key.startswith('%d'): check(t.count('%d') == 1 and '%' not in t.replace('%d', ''), f'{key!r} {loc}: need exactly one %d in {t!r}')
+            elif '%s' in key: check(t.count('%s') == key.count('%s') and '%' not in t.replace('%s', ''), f'{key!r} {loc}: need exactly {key.count("%s")} x %s in {t!r}')   # the Daily Mix card's templates
             else: check('%' not in t, f'{key!r} {loc}: unexpected % in {t!r}')
             for c in t:
                 if c != ' ': check(probe.box(c) is not None, f'{key!r} {loc}: no glyph with ink for U+{ord(c):04X} {c!r} in the shipped font')

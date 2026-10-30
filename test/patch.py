@@ -29,7 +29,7 @@ def main():
     harness = load('harness', os.path.join(HERE, 'pod', 'harness.py'))
     harness.init(work)
     ctx = harness.Ctx(work)
-    print(f'harness: entry {harness.PSYMS["m1pod_home_click"]:#x}, hook {harness.MANIFEST["hook"]}')
+    print(f'harness: entry {harness.PSYMS["m1plus_home_click"]:#x}, hook {harness.MANIFEST["hook"]}')
     t0 = time.time()
     for name in wanted:
         before, t = (ctx.passed, ctx.failed), time.time()

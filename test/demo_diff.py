@@ -20,7 +20,7 @@ HOME_INIT = (0x534cd4, 8)   # home_page_init: the boot guard's hook (docs/archit
 ALBUMINFO = (0x526264, 8)   # albuminfo_listitem0_layout: the album header hook (patch/albuminfo.c)
 PLAYING = (0x53d1e4, 8)     # playing_page_init: the Now Playing hook (patch/nowplaying.c)
 PLAYMORE = (0x479cc4, 8)    # dialog_playmore_dialog_init: the More menu hook (patch/playmore.c)
-SCROLL_SLOT = (0x97a330, 4) # g_scroll_view_vtable.on_event_before_children: 0 in stock, the payload's m1pod_scroll_event (patch/scroll.c)
+SCROLL_SLOT = (0x97a330, 4) # g_scroll_view_vtable.on_event_before_children: 0 in stock, the payload's m1plus_scroll_event (patch/scroll.c)
 COVER = 264                 # the cover size demo writes (tools/mod_lockscreen.py, Now Playing's art)
 COVER_IMM = (0x4df1dc, 0x4df1e0, 0x4df21c, 0x4df220)
 

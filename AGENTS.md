@@ -9,7 +9,7 @@ keep flags, variants or code paths only to reproduce old packages.
 ## Setup, build, test, flash
 
 ```
-python3 -m venv venv && venv/bin/pip install -r requirements.txt ; brew install squashfs llvm lld
+uv venv -p 3.15 venv && uv pip install -p venv -r requirements.txt ; brew install uv squashfs llvm lld
 venv/bin/python -I tools/build.py                 # the release -> out/M1Plus-<tag>-release-update.bin  (--restore: stock)
 venv/bin/python -I tools/check.py --tests-only    # DONE-CRITERION of a feature branch: all tests, no package/golden (~10 s)
 venv/bin/python -I tools/check.py --test albums   # selected tests only (see check.py --help)
@@ -21,7 +21,7 @@ venv/bin/python -I tools/flash_sd.py out/<package>.bin    # verified copy to the
 
 Details: `docs/workflow.md` (build, test, flash, device checklist), `docs/architecture.md` and
 `docs/ui.md` (indexes: one file per module in `docs/modules/`: read only the one you touch, plus
-`payload.md` and `addresses.md` before searching the binary), `docs/history.md` (tags, hardware
+`payload.md` and `addresses.md` before searching the binary), `docs/history.md` (milestones, hardware
 results, lessons), `docs/firmware.md` (firmware facts, space step).
 The firmware zip goes in `firmware/` (SHA-256 pinned in `tools/build.py`); `tools/mod_font.py --fetch`
 gets the Source Han Sans zip.
@@ -38,9 +38,12 @@ gets the Source Han Sans zip.
   Stage with `git add <paths>`, never `-A`; never commit `venv/`.
 - **UI bugs** start with a reproducer (a stock-code emulation test, or a device screenshot via Settings >
   Screenshot + `tools/pull_shots.py`); previews must use the shared AWTK layout model where one exists.
-- **Worktrees:** gitignored inputs (firmware zip, `venv/`, `fonts/`, `work/stock`) resolve from the
-  main checkout automatically (`tools/paths.py`; `python3 -I tools/paths.py` shows what it found).
-  No symlinks. `work/` and `out/` are per worktree; never write into the main checkout or another worktree.
+- **Python env:** prefer `uv` over `python3 -m venv` / `pip` (same `venv/`, under a second). Keep
+  Python 3.15: the golden hashes were made with it. Add a dependency to `requirements.txt`, not ad hoc.
+- **Worktrees:** a new worktree first creates its own `venv/` with the setup line above, so
+  `venv/bin/python` is always relative; never call the main checkout's venv by absolute path. The other
+  gitignored inputs (firmware zip, `fonts/`, `work/stock`) resolve from the main checkout automatically
+  (`tools/paths.py`; `python3 -I tools/paths.py` shows what it found). No symlinks. `work/` and `out/` are per worktree; never write into the main checkout or another worktree.
 - Builds are deterministic. `tools/check.py` compares both packages to `test/golden.sha256`; a CHANGED
   package you did not mean to touch is a bug.
 
@@ -53,15 +56,16 @@ equals the installed one, so each flashed package needs a new tag.
 status line** (every branch doing so conflicts on merge). Their done-criterion is `check.py --tests-only`
 (all tests pass) and the feature's docs in `docs/modules/`. Only the **integration step** (merge into the
 release branch) bumps `TAG` in `tools/build.py` (the one source; `check.py` and `preview.py` read it),
-runs `check.py` then `check.py --update`, commits the golden, adds one `docs/history.md` row and the
-README status. A golden or history conflict is resolved by taking the integration side and rerunning, not by hand.
+runs `check.py` then `check.py --update`, commits the golden and sets the README status line (one line
+naming the current release). `docs/history.md` is not a per-tag log (git is): add a milestone line only for a
+notable or accepted release, and any new device finding or lesson. A golden or history conflict is resolved by taking the integration side and rerunning, not by hand.
 
 ## Safety rules (do not relax)
 
 - Only kernel and rootfs are flashed; bootloader and recovery kernel are never written. The recovery
   button combo is unverified, so a boot loop is the worst case. `docs/workflow.md`.
 - Boot-path code is the boot guard only (`patch/home.c`, behind a crash marker); one more hook on the
-  Home icon tap handler (the M1+ Pod icon, plus the Tidal-icon recovery fallback while the bad note exists), one on the album page's header builder (runs only while that page builds; it gives that page's cover a paint hook for its corners and one page-scoped timer for the cover tint, and the page's window events that tint the status bar), one on Now Playing's init (a page-scoped timer, and the cover widget's own after-paint for its corners), one on the More dialog's init (arranges its rows once, then only on a tap on its More row or back header, and when another dialog covers it), and the empty on_event_before_children slot of `g_scroll_view_vtable` (touches in a list); nothing else at paint or in the main loop. The SD file `/mnt/mmc/m1pod-off`
+  Home icon tap handler (the M1+ Music icon, plus the Tidal-icon recovery fallback while the bad note exists), one on the album page's header builder (runs only while that page builds; it gives that page's cover a paint hook for its corners and one page-scoped timer for the cover tint, and the page's window events that tint the status bar), one on Now Playing's init (a page-scoped timer, and the cover widget's own after-paint for its corners), one on the More dialog's init (arranges its rows once, then only on a tap on its More row or back header, and when another dialog covers it), and the empty on_event_before_children slot of `g_scroll_view_vtable` (touches in a list); nothing else at paint or in the main loop. The SD file `/mnt/mmc/m1plus-off`
   disables the payload. `docs/architecture.md`.
 - Pin every patched word and stock address; refuse to build on mismatch; every hook falls back to stock.
 - Never rename or delete a widget the app looks up by name; restyle, move or hide it.

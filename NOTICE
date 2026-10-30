@@ -1,7 +1,7 @@
 m1plus-mod
 ==========
 
-The M1+ Pod payload (patch/, tools/pod*.py, test/patch.py) is modelled closely on q2-pod, a
+The M1+ Music payload (patch/, tools/pod*.py, test/patch.py) is modelled closely on q2-pod, a
 coherent firmware mod for the Shanling Q2:
 
     q2-pod -- https://github.com/DiamondBond/q2-pod

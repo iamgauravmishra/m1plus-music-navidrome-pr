@@ -14,7 +14,7 @@ The menu's Albums row (`ACT_ALBUMS`) opens our one Albums page in the mode used 
   its rows with `grid_blit` / `grid_text`), the loader's timer and policy (which cell next), the background build and the taps (the scrolling and the touch are the stock scroll_view's). It makes its grid with the shelf's rounded corners (`round` = `GRID_R`, 8 px, blended into the black page once per tile so the tiles stay opaque and a frame blends nothing; the list mode's 52 px covers get `LIST_R` (4 px) corners cut in the bitmap's alpha instead (`grid_t.blend` 1: the tile is not opaque, so a pressed row's `LIST_PRESS` fill shows behind them), `al_shape` = `grid_shape` for the mode, called at open and by `al_set_mode` after `grid_drop`: a mode switch in place remakes the tiles in the new size and shape; formerly `round` 0
   ). The page's state struct `al` keeps `grid_t g` as its last member (the tests read the page's state through its handlers, not by index). Payload size 96,488 B before the extraction, 97,816 B with only the extraction
   (the generalised calls, a 256 B corner table), 95,352 B with the shelf using the same code (the shelf's own copy of the tile code is gone); 95,912 B with the loader deferral (below), **95,416 B** once the stock scroll_view does the scrolling (the custom drag, velocity and fling code is gone).
-- **Page** `ui/m1pod_albums.bin` (`kind='grid'`, `tools/pod_ui.py`): the glass navbar (docs/modules/navbar.md: Back disc, "Albums", Now Playing)
+- **Page** `ui/m1plus_albums.bin` (`kind='grid'`, `tools/pod_ui.py`): the glass navbar (docs/modules/navbar.md: Back disc, "Albums", Now Playing)
   plus `btn_albumview` (x 214, 46x50, flush left of Now Playing, `img_btn_style`, the `pod_nav_list` glyph: the view a tap switches to) and
   `btn_coverflow` (`NAV_CF_X` 168, 46x50, flush left of the toggle, the `pod_nav_coverflow` glyph; the title label ends at 168; `al_on_cover` calls
   `coverflow_open`, the menu row's function, over the page: nothing of the Albums page closes, so Cover Flow's Back returns to it), then **the library lists' structure**: `albums_listview`
@@ -73,8 +73,14 @@ The menu's Albums row (`ACT_ALBUMS`) opens our one Albums page in the mode used 
   `patch/covercache.c` (`cc_build_*`, `docs/modules/coverflow.md`) while the page is up: no Preparing screen, no blocking.
   `al_open` only arms a one-shot timer (`AL_BUILD_START_MS` 50 ms): the scan stats every album's file, so it is not part of
   opening. `al_on_build_start` opens a `CC_MISSING` set (refused if Cover Flow or anything holds the worker: then nothing
-  starts), queues the albums with `cc_build_near(albums, order, al_first())`: nearest the first album in view first (that
-  album, then one after, one before, ... in the displayed order; at most `CC_MAX_JOBS` 4000), and starts the thread. The poll
+  starts) and scans in **bounded steps**: each call considers `AL_SCAN_BATCH` 64 albums with `cc_build_near_step(albums, order,
+  centre, &cursor, 64)` (centre = `al_first()` at the start of the scan; nearest the first album in view first: that album,
+  then one after, one before, ... in the displayed order; at most `CC_MAX_JOBS` 4000) and, while more remains, re-arms
+  itself `AL_SCAN_MS` 20 ms later, so input is served between steps (4000 albums: 63 steps instead of one callback with
+  4000 `access` calls). The worker starts only after the last step, so it never reads a job slot being written. A scan that
+  found nothing missing sets `al.scanned`: `al_build_later` (foreground) then arms nothing for the rest of this page's life;
+  a new page open clears `al` and scans again (the library may have changed). A scan that queued jobs is offered again at the
+  next foreground. Destroy, the Cover Flow button and a refused timer release the half-scanned set (`al_build_end`). The poll
   (`al_on_build`, `AL_BUILD_MS` 500 ms, page-scoped, re-armed while the worker runs) reads the done counter; when it advanced,
   `al_retry` lets every tile that showed the placeholder because it found no file (`art == 2`) try again if its file exists
   now (it sets `art = 0` and `al_kick`s the loader, which decodes one per 16 ms tick as always); when done is total the set is
@@ -118,7 +124,7 @@ The menu's Albums row (`ACT_ALBUMS`) opens our one Albums page in the mode used 
   (`pod_nav_grid` in list mode, `pod_nav_list` in grid mode; the same `widget_set_prop_str` pattern as the Artists toggle), invalidate the view, and
   save the mode (`home_write_atomic`). Nothing is opened, so nothing can be left behind. If the page's asset lacks the two style labels the
   page leaves again (`navigator_back`) as it does without `view_grid`.
-- **Persistence.** `/mnt/data/m1pod-albums`: `1` the grid, `0` the list, missing or anything else
+- **Persistence.** `/mnt/data/m1plus-albums`: `1` the grid, `0` the list, missing or anything else
   `ALBUMS_DEFAULT_GRID`; written as the Start-in setting is (`home_write_atomic`: temp file, `fsync`, `rename`, directory
   `fsync`) at every toggle. The menu's Albums row (`albums_open`) opens the page in that mode. If the window cannot open at all it opens the
   **stock Albums list** through the Home dispatcher (id 5, `pod_home_open`); the stock list stays reachable from Shanling Home, unmodified.
@@ -134,11 +140,11 @@ The menu's Albums row (`ACT_ALBUMS`) opens our one Albums page in the mode used 
   this was checked on the device. Unicorn cannot judge the real frame time of 7 rows (about 6,000 payload instructions steady, plus 7 blits, 14 text
   runs, 14 fills), nor the stock text and fill calls.
 
-### The Albums page (`ui/m1pod_albums.bin`, `docs/modules/albums.md`)
+### The Albums page (`ui/m1plus_albums.bin`, `docs/modules/albums.md`)
 
 (the two Albums panels of `docs/release-preview.png`, grid and list mode with row 2 pressed: `PI.albums_grid` / `PI.albums_list` in `tools/preview_icons.py`, sample covers.)
 The Albums row opens this page in the mode used last (first use: the grid, `ALBUMS_DEFAULT_GRID`); the stock Albums list is not part of it
-(it stays under Settings > Home Screen > Shanling Home, unmodified).
+(it stays under Customize > Home Screen > Shanling Home, unmodified).
 The grid mode is the standard navbar over a stock list (320x400, scrolled by the stock scroll_view like the library lists) holding one `view_grid`: two 144 px covers a row, 8 px between them and 12 px
 margins (Apple Music style), the album in 18 px white and under it the artist in 15 px `#AAAAAA`, one line each (cut with an ellipsis at the
 cover's width, left-aligned; a 22 px and a 20 px line, 4 px under the cover), so a tile is 190 px tall; 10 px between rows, the first row 10 px from the navbar and the last 10 px from the bottom

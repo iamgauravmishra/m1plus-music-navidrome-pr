@@ -4,18 +4,24 @@ Split out of docs/architecture.md. A "section N" in the text is an old section n
 
 ## 8c. Screenshot (`patch/shot.c`, `patch/shot.h`, test `test/pod/shot.py`, `tools/pull_shots.py`)
 
-A developer's screen grab, the last row of the Settings page (`ACT_SHOT`; V2.1nF and before: the Extras item 18, character `j`, which a saved menu file may no longer contain). No stock function is hooked, nothing
+A developer's screen grab, the only row of Customize > Developer (`ACT_SHOT`, page `m1plus_developer`). No stock function is hooked, nothing
 runs on the boot path, in the main loop or at paint, and there is no thread: a tap starts a payload-owned countdown, and the only
-code that runs afterwards is two timer callbacks. The kill switch `/mnt/mmc/m1pod-off` is checked at the tap, at every tick and
+code that runs afterwards is two timer callbacks. The kill switch `/mnt/mmc/m1plus-off` is checked at the tap, at every tick and
 before the grab (the camera is hidden and nothing is read or written when it appears mid-way).
 
-- **Sequence.** The tap (one capture at a time: a tap while one is pending does nothing) adds a 1 s stock timer (`timer_add`
-  `0x663530`, pinned), shows the camera in the status bar and toasts "Screenshot in 5 s" (the stock message box through
-  `pod_toast`). Four ticks return `RET_REPEAT`; the fifth hides the camera (`widget_set_visible`, which invalidates it and relayouts the group)
+- **Confirm and cancel.** A tap on the idle row opens the stock confirm dialog (`pod_confirm` in `patch/m1plus.c`, shared with Rebuild
+  Covers: `dialog/confirminfo_dialog`, kind 5 wrapped text, modal, `CONFIRM_YES` for Yes) asking "Take a screenshot in 5 s?"; only Yes
+  starts, anything else (No, the dialog failing to open) does nothing. A tap while the countdown runs asks "Cancel the screenshot?"; Yes
+  removes the tick timer by its id (`timer_remove` `0x66360c`, already pinned, called from the tap, never from inside the timer's own
+  callback), hides the camera and returns to idle; No leaves the countdown running. The dialog is modal, so ticks may run under it:
+  the phase is looked at again when it returns, and a countdown that ended meanwhile is not cancelled (its timer is gone). A tap in the settle phase (capture
+  committed) shows nothing. The kill switch is checked at the tap, so no dialog opens with it present.
+- **Sequence.** Yes on the first dialog adds a 1 s stock timer (`timer_add`
+  `0x663530`, pinned) and shows the camera in the status bar (no toast: the dialog was the notice). Four ticks return `RET_REPEAT`; the fifth hides the camera (`widget_set_visible`, which invalidates it and relayouts the group)
   and returns `RET_OK`, which ends that timer, after arming a one-shot of `SHOT_SETTLE_MS` (120 ms, a few frames for the main loop to
   repaint). That one reads the panel, writes the file and then toasts "Screenshot saved", "Storage unavailable" (no card, no
   room, no directory) or "Screenshot failed" (the frame buffer, the number scan, a write): the toast follows the capture so it is not in
-  the picture. A refused timer at either step is a failure toast with the camera hidden. The user leaves the Settings page during
+  the picture. A refused timer at either step is a failure toast with the camera hidden. The user leaves the Developer page during
   the 5 s; the state is the payload's own, not the page's.
 - **Why the frame buffer.** It is what is on screen: status bar, dialogs, Cover Flow's own drawing. `widget_take_snapshot_rect`
   (`0x671cb8`) repaints a widget tree into a new RGBA bitmap through `widget_paint_with_clip` and the window manager's paint,

@@ -10,7 +10,7 @@ from harness import *   # noqa: F401,F403  (test/patch.py initialises the harnes
 SLOT = pod.SCROLL_SLOT
 CLICK = O['EVT_CLICK']
 ROW_H, ROWS, SV_W, SV_H = 64, 20, 310, 450
-KILL_SD, KILL_FLASH = '/mnt/mmc/m1pod-off', '/mnt/data/m1pod-off'
+KILL_SD, KILL_FLASH = '/mnt/mmc/m1plus-off', '/mnt/data/m1plus-off'
 
 
 
@@ -20,7 +20,7 @@ class SM(StockEventMachine):
 
     def __init__(self, hooked):
         super().__init__()
-        self.u.mem_write(SLOT, struct.pack("<I", PSYMS["m1pod_scroll_event"] if hooked else 0))
+        self.u.mem_write(SLOT, struct.pack("<I", PSYMS["m1plus_scroll_event"] if hooked else 0))
 
     def build(self, yslide=1, xslide=0, snap=0, button=False):
         """root > list_view > scroll_view > ROWS list_item rows; row 0 also holds a switch image and, with button, an up-arrow button."""
@@ -69,12 +69,12 @@ def run(ctx):
     expect = ctx.expect
     # -- the data word and everything the payload relies on
     d = open(DEMO, 'rb').read(); image = bytearray(d)
-    expect(struct.unpack_from('<I', d, pod.fileoff(image, SLOT))[0] == PSYMS['m1pod_scroll_event'] and 0xb00000 <= PSYMS['m1pod_scroll_event'] < 0xb00000 + MANIFEST['payload_len'],
-           'the built demo has m1pod_scroll_event in the on_event_before_children slot of g_scroll_view_vtable')
-    expect(MANIFEST['scroll_edit'] == [hex(SLOT), '0x0', hex(PSYMS['m1pod_scroll_event'])], 'the manifest records the one data word')
+    expect(struct.unpack_from('<I', d, pod.fileoff(image, SLOT))[0] == PSYMS['m1plus_scroll_event'] and 0xb00000 <= PSYMS['m1plus_scroll_event'] < 0xb00000 + MANIFEST['payload_len'],
+           'the built demo has m1plus_scroll_event in the on_event_before_children slot of g_scroll_view_vtable')
+    expect(MANIFEST['scroll_edit'] == [hex(SLOT), '0x0', hex(PSYMS['m1plus_scroll_event'])], 'the manifest records the one data word')
     for a, old, what in pod.SCROLL_PINS:   # every pinned word is still the stock word, but the slot itself
         got = struct.unpack_from('<I', d, pod.fileoff(image, a))[0]
-        expect(got == (PSYMS['m1pod_scroll_event'] if a == SLOT else old), f'pinned {a:#x} ({what})')
+        expect(got == (PSYMS['m1plus_scroll_event'] if a == SLOT else old), f'pinned {a:#x} ({what})')
 
     # -- 1. a swipe never plays a song --------------------------------------------------------------------------------
     holes = [   # the stock app clicks the row under the press in every one of these; each row cancels itself only on a MOVE of 11 px or more
@@ -196,7 +196,7 @@ def run(ctx):
     e = c.alloc(0x30); c.u.mem_write(e, bytes(0x30))
     cost = {}
     for kind in ('m', 'd', 'u'):
-        c.setword(e, POINTER_EVT[kind]); c.call(PSYMS['m1pod_scroll_event'], a0=c.sv, a1=e, count=1000); cost[kind] = c.icount
+        c.setword(e, POINTER_EVT[kind]); c.call(PSYMS['m1plus_scroll_event'], a0=c.sv, a1=e, count=1000); cost[kind] = c.icount
         expect(c.calls == [], f'an idle {kind} event: the hook calls nothing')
     expect(cost['m'] <= 16 and cost['d'] <= 40 and cost['u'] <= 20, f'hook cost per event, instructions: MOVE {cost["m"]}, idle DOWN {cost["d"]}, idle UP {cost["u"]}')
     print(f'  hook cost per event (instructions, incl. call/return): MOVE {cost["m"]}, idle DOWN {cost["d"]}, idle UP {cost["u"]}')

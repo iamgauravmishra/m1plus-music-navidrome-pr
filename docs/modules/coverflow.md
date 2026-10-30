@@ -38,7 +38,7 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
   `widget_load_image` is not known to be thread-safe, so the preparation worker never calls it),
   nearest first: the centre, the ring alternately ahead of and behind the travel, then the next cover
   ahead; a slot is reused from the cover farthest from the centre that is not wanted, so the one just
-  left behind survives a reversal (9 slots for 8 wanted). No shelf wants anything past its ends. The first frame's covers are decoded when the shelf is built. Each decode still blocks the
+  left behind survives a reversal (9 slots for 8 wanted). No shelf wants anything past its ends. Only the centre cover is decoded when the shelf is built (`to_covers`: one `fx_fill(1)`, so the open call makes two image loads, the placeholder and the centre, instead of the whole wanted set of up to nine); the ring and the next one ahead follow one per `on_load` tick (armed there, or by the first paint if the timer was refused). The Preparing screen flow is unchanged (a progressive shelf while missing art builds is not done: placeholders count as resident today). Each decode still blocks the
   UI thread for its length; not measured on the device: measure before considering a decoding worker
   (that needs a reviewed thread-safe decoder publishing finished buffers).
 - **Touch.** A transparent full-size touch layer (a `view` inside `view_covers`, over the flat
@@ -68,7 +68,7 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
   does (`slide_menu_set_value` `0x61399c`, tail call `0x613a1c`). So every offset change and album change calls
   `widget_invalidate_force` on the touch layer, which is always the frame's rectangle (`redraw()`). Tests model this (`dirty_rects` / `abs_rect` in `test/pod/harness.py`).
 - **Landscape.** The page, main or per artist, opens in a landscape presentation in
-  the 320 x 400 body under the navbar when **Settings > Cover Flow > Landscape** is on (the switch row of `m1pod_cfset`; nothing changes the presentation while the page is open); no global
+  the 320 x 400 body under the navbar when **Settings > Cover Flow > Landscape** is on (the switch row of `m1plus_cfset`; nothing changes the presentation while the page is open); no global
   LCD orientation changes. The navbar is untouched in both (Back, the title, Now Playing). The content is turned 90 degrees **clockwise** on the screen (its top edge at the screen's right: the
   player is held turned counter-clockwise, the status bar and navbar then a strip on the left; the direction is the
   map in `turned()` / `where()` / `coverflow_render`), the carousel runs along the 400 px side. `cfg_t` (`cf_portrait`,
@@ -91,7 +91,7 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
   pointer back (`widget_to_local` on the touch layer, x = y_local, y = 319 - x_local), so drags and flings along the long
   side move the shelf as in portrait, a tap on the centre cover (`|x - 200| < 84`) opens the album by
   `open_album` (stock sequence, cover thread released), a side tap brings that cover in. Persistence:
-  `/mnt/data/m1pod-landscape` (`1` landscape, anything else or missing portrait; written atomically by the switch
+  `/mnt/data/m1plus-landscape` (`1` landscape, anything else or missing portrait; written atomically by the switch
   (`coverflow_landscape_toggle`), read when the covers screen is first built (`use_land`); shared by the main and artist pages). Without a depth frame (flat fallback) there is
   no landscape, whatever the setting says. A commit redraws the frame (the captions are in it).
 - **Captions.** `label_album` / `label_artist` are `hscroll_label`s configured as Now Playing's info
@@ -100,17 +100,17 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
   (`hscroll_label` paint `0x609cbc` -> `hscroll_label_start`; setting text resets the scroll `0x60a49c`).
   They are insensitive and never hidden: they lie over the frame's black rows, so a tap on the album
   name reaches the touch layer and opens the album. There is no hint line.
-- **All albums button.** The page asset carries `btn_allalbums` in the shared navbar slot (x `NAV_VIEW_X` 214, w `NAV_VIEW_W` 46, left of Now Playing),
-  the Lucide `list-music` glyph (`pod_nav_allalbums`, `_down`; `NAV_VIEW` in `tools/mod_icons.py`), hidden and insensitive in the asset. Only the
-  artist page (`cf.scoped`) shows it, and only from `to_covers` and only if the shelf has the All albums card (`has_card()`: the last row is the stock All songs
-  row, kept when the artist has two albums or more): an artist with one album or none has no button, the main Cover Flow never does, and the Preparing screen
-  does not (it appears when the covers do). `coverflow_artist` shortens `label_title` to end at the button (`NAV_VIEW_X`); the main page's title keeps the full
-  width. A tap (`on_all`, guarded by the covers screen and the card) is `open_album(last)`, the card tap's own call: the same row, so Back returns to the
-  artist's covers. Landscape keeps the navbar, so the button works there too.
+- **Songs button.** The artist page's navbar is one glass capsule, **Songs | Now Playing** (glass 216 .. 311, the Artists page's switch + Now Playing), the same for one album or many (there is no
+  All albums button; the All albums card on the shelf stays). `btn_songs` (Lucide `list`, `pod_nav_songs`, a left cap) is in the asset at x `NAV_VIEW_X` 214, w 46, hidden and insensitive, and
+  opens **our Songs page on all the artist's songs** (`songs_open_artist`, docs/modules/songs.md "The other lists"); Back returns to the covers. `artist_nav` (from `to_covers`) shows it for every
+  artist whose stock list had the All songs row (`has_songs()`: `cf.albums` keeps the full stock copy also when the card is dropped) and then sets `btn_backtoplayer`'s icons to the right cap
+  (`ah_nav_play`, `_down`; the asset keeps the disc `ah_nav_np`, which the main Cover Flow and a composer's page keep: `songs_open_artist` runs the artist queries, a composer's songs would be
+  `0xf005` / `0xff02` -> `0xff14`, not done). Not shown while preparing, nor for "No albums". On an artist page (`cf.scoped`) the title ends at 214 (`coverflow_artist` and `artist_nav`); the main
+  page keeps its full width. `on_songs` is guarded by the covers screen and a non-empty shelf; if the page does not open it does what the card does (`cc_open_album` on the All songs row).
 - **Start index.** The stock `slide_menu` starts on item 1, not 0; the page always sets the start
   album (`cfpos.value`, or `slide_menu_set_value` in the flat fallback), so an artist's page opens on its first album, a
   one-album shelf has its captions on open, and the main page keeps its last-album memory
-  (`/mnt/mmc/.coverflow/album`, including album 0).
+  (`/mnt/mmc/.m1plus/covers/album`, including album 0).
 - **The album.** Tapping the centre cover opens the stock `albuminfo_page` (section 8), as a stock
   Albums row does (`cc_open_album`, `patch/covercache.c`, the same call the Albums grid makes): `loadAlbumList(0xf003, 0)` puts the stock album list back into `*pdeq_showlist` (the
   page's own copy was made from the same query, so the row is the same), `albumcoverinfo_init` rebuilds
@@ -118,7 +118,7 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
   opens the page. The queries repeat on every tap (the page may have been left through Now Playing, and
   anything may have reused the list or the browsing record). Back from the album page returns to the
   covers; the page keeps no track list, header or play code of its own.
-- **Cache.** The page keeps its own `/mnt/mmc/.coverflow/<key>-168.jpg` thumbnails (the size is in the
+- **Cache.** The page keeps its own `/mnt/mmc/.m1plus/covers/<key>-168.jpg` thumbnails (the size is in the
   name; key = FNV-1a of artist then album, never 0; the key, path, decode and reduce helpers are in
   `patch/covercache.c`, which the Albums grid reads the same files through). The stock cache `/mnt/mmc/.downpic` is keyed by an
   MD5 the payload cannot reproduce and holds 90 px images, so Cover Flow only reads through the stock
@@ -129,8 +129,12 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
   exists), `cc_build_start()` makes the cache directory, checks 16 MB free (`statfs`) and starts the one pthread (`cc_worker` runs
   `build_art`), `cc_build_done()` / `cc_build_total()` are the polled counters, `cc_build_stop()` cancels, joins (bounded by
   one album) and frees. The thread touches only its jobs (strings copied on the UI thread), three `volatile` counters, files under
-  `.coverflow` and the two stock art calls under `parse_cover_mutex` (`0xa04588`, the lock every stock caller holds;
-  `parseplaycover_thd` takes the same one); never a widget, a deque or the image manager. Each file is written to `.tmp` and
+  `.m1plus/covers` and the two stock art calls under `parse_cover_mutex` (`0xa04588`, the lock every stock caller holds;
+  `parseplaycover_thd` takes the same one); never a widget, a deque or the image manager. `build_art` checks the cancel flag again
+  after taking that mutex (a Back that waited behind a stock parse skips the extraction). `cc_build_near_step` is the resumable
+  nearest-first walk the Albums page uses to scan in 64-album steps (`docs/modules/albums.md`); Cover Flow's own `start_build`
+  stays one synchronous pass (it runs before the Preparing screen is shown, whose state machine has no scan state, and the
+  screen is the expected wait there; making it incremental would add a screen state for no change in what the user sees). Each file is written to `.tmp` and
   renamed; both extractors failing leaves an empty marker (not retried; none is written over a file that exists); a vanished
   track leaves none, and neither does a thumbnail that was extracted but could not be published (a failed rename: the next open
   retries). This page owns its set only while `cf.owns` (`build_end`). If the progress timer cannot be created (at the start or
@@ -149,4 +153,4 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
   same set; its Cover Flow button stops its own build before opening this page, and a page that finds the set taken starts nothing.
 - **Not ported from q2-pod:** Sort and Refresh cards, the rated scope, A-Z jump, the album split by
   album-artist/folder, the audiobook filter, the ffmpeg WebP fallback, wheel/ringnav. To clear the
-  cache delete `/mnt/mmc/.coverflow` from a computer.
+  cache delete `/mnt/mmc/.m1plus/covers` from a computer.

@@ -543,7 +543,7 @@ def apply_home(root):
     strip.set('style:normal:border_color', '#222222')
     strip.set('style:normal:border_width', '1')
     assert artist.get('style:normal:text_color') == '#FFFFFF'
-    artist.set('style:normal:text_color', '#AAAAAA')       # stock secondary grey, as the M1+ Pod pages
+    artist.set('style:normal:text_color', '#AAAAAA')       # stock secondary grey, as the M1+ Music pages
     assert dots.get('style:normal:selected_fg_color') == '#FFFFFF' and dots.get('style:normal:fg_color') == '#666666'
     dots.set('style:normal:selected_fg_color', '#EEEEEE')  # q2-pod's page dots
     dots.set('style:normal:fg_color', '#555555')

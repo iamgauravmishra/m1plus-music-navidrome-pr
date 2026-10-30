@@ -48,7 +48,7 @@ def kinds():
     for n, _, g in M.HOME + M.SETTINGS + M.LISTS:
         if g is None: k[n] = 'K'
         elif M.is_custom(g): k[n] = 'C'; k[n + '_down'] = 'C'
-    k['m1pod'] = 'C'
+    k['m1plus'] = 'C'
     for n, g in list(M.PULLDOWN.items()) + list(M.STATUS.items()):
         if M.is_custom(g): k[n] = 'C'
     return k
@@ -107,10 +107,10 @@ def bars_compare(s):
     return out, all(not d.getbbox() for d in diffs)
 
 def home(s, page):
-    """A Home page (English: ids 1..17, 6 per page). The sixth slot of page 3 is the M1+ Pod icon patch/home.c adds
+    """A Home page (English: ids 1..17, 6 per page). The sixth slot of page 3 is the M1+ Music icon patch/home.c adds
     (after side); the stock side shows the HiFi store there (zh_CN only), the way the old preview did."""
     im = Image.new('RGBA', (W, 330), (0, 0, 0, 255)); status_bar(s, im)
-    tiles = [t for t in M.HOME if t[0] != 'hifimusic'] + [('m1pod' if s.after else 'hifimusic', 'M1+ Pod', None)]
+    tiles = [t for t in M.HOME if t[0] != 'hifimusic'] + [('m1plus' if s.after else 'hifimusic', 'M1+ Music', None)]
     for i, (n, label, g) in enumerate(tiles[page * 6:(page + 1) * 6]):
         cx, cy = 60 + (i % 3) * 100, BAR + 24 + (i // 3) * 140
         if n == 'hifimusic': label = 'HiFi (zh_CN)'
@@ -162,17 +162,18 @@ def home_pad():
     m = re.search(r'#define HOME_PAD (\d+)', open(os.path.join(M.ROOT, 'patch', 'offsets.inc')).read())
     return int(m.group(1))
 
-def pod_page(s, key, tree_rows=8, home=False, first=0, title=None, icon=None, order=None, switches=None, arrows=None, values=None):
-    """A mock of an M1+ Pod rows page from the tree's ui asset: navbar title, then each list_item row
+def pod_page(s, key, tree_rows=8, home=False, first=0, title=None, icon=None, order=None, switches=None, arrows=None, values=None, root=None):
+    """A mock of an M1+ Music rows page from the tree's ui asset: navbar title, then each list_item row
     (icon image, label, chevron) on black with the 1 px #222222 hairline. home=True: the Home instance of the
     menu, no navbar at all (the payload hides it) and the list from y HOME_PAD to HOME_PAD above the 450 px window's bottom.
     title / icon: what the payload sets at run time (the Artists page's title and toggle glyph); the toggle button, if the
     asset has one (btn_artisttype), is drawn centred in its place.
     order: the row names top to bottom as patch/menu.c arranged them (hidden rows are left out; default: the asset's order);
     switches: {switch image name: on} (the Settings and Main Menu pages set them at run time); arrows: the up-arrow buttons shown;
-    values: {value label name: text} (the Cover Flow settings page's Sort value, as the payload sets it)."""
+    values: {value label name: text} (the Cover Flow settings page's Sort value, as the payload sets it).
+    root: a widget tree to draw instead of the tree's own file (a design preview of a page the build does not have yet)."""
     import awtk_ui
-    root = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', key + '.bin'), 'rb').read())
+    root = root or awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', key + '.bin'), 'rb').read())
     pad = home_pad()
     top = pad if home else 50
     im = Image.new('RGBA', (W, 450 if home else 50 + tree_rows * 52), (0, 0, 0, 255)); d = ImageDraw.Draw(im)
@@ -181,17 +182,29 @@ def pod_page(s, key, tree_rows=8, home=False, first=0, title=None, icon=None, or
         title = title or s.shown(lt)
         s.text(im, 36, 25, s.clip(title, title_px(s.tree), lt.w), title_px(s.tree))
         im.alpha_composite(s.img('return'), (14, 14))
-        im.alpha_composite(s.img('back_to_player'), (278, 13))
-        tog = next((w for w in root.walk() if w.name == 'btn_artisttype'), None)
-        if tog:
+        tog = next((w for w in root.walk() if w.name in ('btn_artisttype', 'btn_customize')), None)
+        if tog and icon != '':   # a capsule piece on the 214 slot: Now Playing is its right cap (ah_nav_play, the whole 60 x 50 button), else the stock glyph
+            np_ = s.img('ah_nav_play'); im.alpha_composite(np_, (260 + (60 - np_.width) // 2, (50 - np_.height) // 2))
+        else: im.alpha_composite(s.img('back_to_player'), (278, 13))
+        if tog and icon != '':   # icon '': the payload hides the toggle (Genres, Composers)
             ic = s.img(icon or tog.get('style:normal:icon'))
             im.alpha_composite(ic, (tog.x + (tog.w - ic.width) // 2, (tog.h - ic.height) // 2))
     items = [w for w in root.walk() if w.type == 'list_item']
-    if order is not None: items = [next(w for w in items if w.name == n) for n in order]
-    items = items[first:first + tree_rows]
+    if order is not None:   # (the Extras pages' order also names section headers, pod_hdr<group>: plain views, tools/pod_ui.py extras_headers)
+        named = {w.name: w for w in root.walk()}
+        items = [named[n] for n in order]
+    items = items[first:first + tree_rows + sum(1 for w in items if w.type != 'list_item')]   # a header takes no row of the panel's height
+    yy = top
     for k, r in enumerate(items):
-        y = top + (k * 52 if order is not None else r.y - (items[0].y if first else 0))
+        y = yy if order is not None else top + r.y - (items[0].y if first else 0)
         if y >= im.height: break
+        if r.type != 'list_item':   # a section header: its caption (a small grey label) on the strip, r.h high
+            cap = r.children[0]
+            s.text(im, cap.x, y + cap.y + cap.h / 2, s.clip(s.shown(cap), int(cap.get('style:normal:font_size')), cap.w), int(cap.get('style:normal:font_size')),
+                   tuple(int(cap.get('style:normal:text_color')[i:i + 2], 16) for i in (1, 3, 5)))
+            yy += r.h
+            continue
+        yy += 52
         hair = next((c for c in r.children if c.name == 'pod_hair'), None)     # the rows' own inset hairline, else the theme's full-width one
         d.rectangle(((hair.x if hair else 0), y + 51, W - 1, y + 51), fill=(0x22, 0x22, 0x22))
         for c in r.children:
@@ -261,7 +274,7 @@ def rounded(c, r, k=4):
     return c
 
 def albums_grid(s, scroll=0):
-    """ui/m1pod_albums.bin as patch/albums.c paints it: GRID_COLS covers a row, a one-line title (ellipsis) under each."""
+    """ui/m1plus_albums.bin as patch/albums.c paints it: GRID_COLS covers a row, a one-line title (ellipsis) under each."""
     o = offsets(); W_, H_ = 320, 450
     im = Image.new('RGBA', (W_, H_), (0, 0, 0, 255)); albums_navbar(s, im, 'list')
     cover, gap, m, tg, th, sh = o['GRID_COVER'], o['GRID_GAP'], o['GRID_MARGIN'], o['GRID_TITLE_GAP'], o['GRID_TITLE_H'], o['GRID_SUB_H']
@@ -299,11 +312,11 @@ def mosaic(rgbs, size, r):
     return rounded(im, r)
 
 def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1):
-    """ui/m1pod_playlists.bin as patch/playlists.c paints it: the Albums grid's cells (a mosaic cover, the playlist's name in 18 px, "N tracks" in
+    """ui/m1plus_playlists.bin as patch/playlists.c paints it: the Albums grid's cells (a mosaic cover, the playlist's name in 18 px, "N tracks" in
     15 px #AAAAAA) under a navbar with the "..." button; menu=True: the popup card open (row `pressed` held down) under the button."""
     import awtk_ui
     o = offsets(); W_, H_ = 320, 450
-    root = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', 'm1pod_playlists.bin'), 'rb').read())
+    root = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', 'm1plus_playlists.bin'), 'rb').read())
     im = Image.new('RGBA', (W_, H_), (0, 0, 0, 255))
     s.text(im, 36, 25, s.shown(root.find('label_title')), title_px(s.tree))
     im.alpha_composite(s.img('return'), (14, 14)); im.alpha_composite(s.img('back_to_player'), (278, 13))
@@ -369,7 +382,7 @@ def card_rgba(c):
     return tuple(int(c[i:i + 2], 16) for i in range(1, len(c), 2)) + ((255,) if len(c) == 7 else ())
 
 def albums_list(s, pressed=1):
-    """ui/m1pod_albums.bin in list mode as patch/albums.c paints it: LIST_ROW_H rows, a LIST_ART px cover, the album (21 px)
+    """ui/m1plus_albums.bin in list mode as patch/albums.c paints it: LIST_ROW_H rows, a LIST_ART px cover, the album (21 px)
     and the artist (18 px, #AAAAAA) cut with an ellipsis at LIST_TEXT_W, a hairline under each row, row `pressed` held down."""
     o = offsets(); H_ = 450
     im = Image.new('RGBA', (W, H_), (0, 0, 0, 255)); d = ImageDraw.Draw(im); albums_navbar(s, im, 'grid')
@@ -403,9 +416,9 @@ def zoom_strip(s):
 def main():
     before, after, out = sys.argv[1:4]
     sides = [('stock', Side(before, False)), ('release (Tabler Icons)', Side(after, True))]
-    sections = [('Home page 1', lambda s: home(s, 0)), ('Home page 2', lambda s: home(s, 1)), ('Home page 3 (after: with the M1+ Pod icon)', lambda s: home(s, 2)),
-                ('M1+ Pod menu (opened from the grid icon)', lambda s: pod_page(s, 'm1pod_menu', 8)), ('M1+ Pod > Settings page', lambda s: pod_page(s, 'm1pod_settings', 6)),
-                ('M1+ Pod > Shuffle page', lambda s: pod_page(s, 'm1pod_shuffle', 3)),
+    sections = [('Home page 1', lambda s: home(s, 0)), ('Home page 2', lambda s: home(s, 1)), ('Home page 3 (after: with the M1+ Music icon)', lambda s: home(s, 2)),
+                ('M1+ Music menu (opened from the grid icon)', lambda s: pod_page(s, 'm1plus_menu', 8)), ('M1+ Music > Customize page', lambda s: pod_page(s, 'm1plus_customize', 7)),
+                ('M1+ Music > Shuffle page', lambda s: pod_page(s, 'm1plus_shuffle', 3)),
                 ('Settings icons (46)', settings), ('Pull-down', pulldown), ('List placeholders', lists)]
     pad = 14
     heights = [330, 330, 330, 50 + 8 * 52, 50 + 4 * 52, 50 + 3 * 52, 7 * 45 + 6, 290, 70]

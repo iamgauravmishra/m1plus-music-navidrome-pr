@@ -3,6 +3,7 @@
 
   dis.py sym  ELF NAME...          disassemble functions by (dyn)symbol name
   dis.py addr ELF ADDR [LEN]       disassemble a range
+  dis.py words ELF ADDR [COUNT]    the raw instruction words (to pin them)
   dis.py xref ELF STRING...        find lui/addiu(ori) pairs referencing the address of a NUL-terminated string
   dis.py strxref ELF ADDR          find code referencing an absolute address
   dis.py callers ELF ADDR|SYM      every call site (jal/j/bal, jalr through a register or the GOT) and every
@@ -220,6 +221,9 @@ if __name__ == '__main__':
     elif cmd == 'addr':
         va = int(sys.argv[3], 0); sz = int(sys.argv[4], 0) if len(sys.argv) > 4 else 0x200
         b.dis(va, sz)
+    elif cmd == 'words':   # raw words, to pin: ADDR [COUNT]
+        va = int(sys.argv[3], 0); n = int(sys.argv[4], 0) if len(sys.argv) > 4 else 4
+        for i in range(n): print(f'{va + 4 * i:#x}  {struct.unpack("<I", b.read(va + 4 * i, 4))[0]:#010x}')
     elif cmd == 'xref':
         for s in sys.argv[3:]:
             for a in b.find_str(s):

@@ -15,7 +15,7 @@ theme** is modded: theme1 (accent salmon `#FA7268`, its own image files) keeps i
 | role | colour | stock |
 |---|---|---|
 | row surface | `#000000` | `#131313` |
-| row hairline | `#222222`, 1 px bottom (M1+ Pod rows: from x 56, under the title) | 4 px black gap |
+| row hairline | `#222222`, 1 px bottom (M1+ Music rows: from x 56, under the title) | 4 px black gap |
 | pressed row / key | `#333333` | `#362221` (default), `#2E2A1A` (theme1) |
 | title text | `#FFFFFF` | same |
 | former accent text | `#FFFFFF` | `#FE7E40` / `#FA7268` |

@@ -4,7 +4,7 @@
 
   preview_playlists.py WORKDIR OUT.png [--lang CODE]
 
-WORKDIR is a built tree (work/mod-release). The page is ui/m1pod_playlists.bin drawn by preview_icons.playlists_grid (the Albums grid's cell
+WORKDIR is a built tree (work/mod-release). The page is ui/m1plus_playlists.bin drawn by preview_icons.playlists_grid (the Albums grid's cell
 model, the mosaic composed as grid_mosaic does); the covers are stand-in gradients.
 """
 import argparse, os, sys

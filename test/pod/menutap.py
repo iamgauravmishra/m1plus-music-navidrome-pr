@@ -1,5 +1,5 @@
 """Taps on the Main Menu page (patch/menu.c): demo's own widget pointer dispatch, list_item, button and scroll_view code,
-executed under Unicorn on a tree of real widget structs laid out from the built asset (ui/m1pod_mainmenu.bin), with
+executed under Unicorn on a tree of real widget structs laid out from the built asset (ui/m1plus_mainmenu.bin), with
 the payload's click handlers bound by menu_custom_opened. Only the leaves are mocked (the emitter: an emitted event is
 queued with a copy of its bytes and handed to the handlers the payload bound, after the stock event code returned;
 timers, animators, widget states). One tap must do one thing: a tap on the up arrow zone moves the item up and does not
@@ -10,7 +10,7 @@ from harness import *   # noqa: F401,F403  (test/patch.py initialises the harnes
 VT = {'list_view': LV_VT, 'scroll_view': SV_VT, 'list_item': LI_VT, 'button': BTN_VT, 'image': IMG_VT, 'window': LV_VT}
 CLICK = O['EVT_CLICK']
 WIN_Y = 30                       # the window sits under the 30 px system bar: screen y = window y + 30
-MENU_FILE = '/mnt/data/m1pod-menu'
+MENU_FILE = '/mnt/data/m1plus-menu'
 F_VIS, F_SENS = 4, 8
 
 
@@ -20,7 +20,7 @@ class TapMachine(StockEventMachine):
 
     def __init__(self, data=None):
         super().__init__()
-        self.u.mem_write(0x97a330, struct.pack('<I', PSYMS['m1pod_scroll_event']))   # the list gesture hook, as built (patch/scroll.c)
+        self.u.mem_write(0x97a330, struct.pack('<I', PSYMS['m1plus_scroll_event']))   # the list gesture hook, as built (patch/scroll.c)
         self.widgets = {}
         self.tree = asset_tree_raw()
         self.n = len(pod_pages.ITEMS)
@@ -72,8 +72,8 @@ class TapMachine(StockEventMachine):
         self.window = win
 
     def on_open(self):
-        on_row = PSYMS['on_row']; rows_s = PSYMS[f'pod_rows_{pod_pages.SETTINGS_PAGE_INDEX}']
-        mm_i = next(i for i, r in enumerate(pod_pages.SETTINGS_PAGE.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.MENUCFG_PAGE_INDEX)
+        on_row = PSYMS['on_row']; rows_s = PSYMS[f'pod_rows_{pod_pages.CUSTOMIZE_PAGE_INDEX}']
+        mm_i = next(i for i, r in enumerate(pod_pages.CUSTOMIZE_PAGE.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.MENUCFG_PAGE_INDEX)
         self.call(on_row, a0=rows_s + 12 * mm_i, count=3000000)
         self.sync()
 
@@ -101,7 +101,7 @@ class TapMachine(StockEventMachine):
 
 def asset_tree_raw():
     import awtk_ui
-    return awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui', 'm1pod_mainmenu.bin'), 'rb').read())
+    return awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui', 'm1plus_mainmenu.bin'), 'rb').read())
 
 
 def run(ctx):
@@ -124,30 +124,30 @@ def run(ctx):
     m = TapMachine()
     m.tap(ax + aw // 2, y_at(3))
     expect(m.clicked() == ['pod_row3'], f'the click is the row\'s alone, the arrow is no target ({m.clicked()})')
-    expect(m.file() == b'132456x\n', f'a tap in the middle of the arrow moves the item up and nothing else ({m.file()!r}, clicks {m.clicked()})')
+    expect(m.file() == b'13245\n', f'a tap in the middle of the arrow moves the item up and nothing else ({m.file()!r}, clicks {m.clicked()})')
     for edge, what in ((ax, 'the first pixel'), (ax + aw - 1, 'the last pixel')):
         m = TapMachine(); m.tap(edge, y_at(3))
-        expect(m.file() == b'132456x\n', f'a tap on {what} of the zone (x {edge}) moves up only ({m.file()!r})')
+        expect(m.file() == b'13245\n', f'a tap on {what} of the zone (x {edge}) moves up only ({m.file()!r})')
     # 2. everywhere else on the row: toggle only
     for x, what in ((ax - 1, 'one pixel left of the zone'), (ax + aw, 'one pixel right of the zone'), (lab0.x + 10, 'the label'),
                     (sw0.x + sw0.w // 2, 'the switch'), (4, 'the left edge'), (sw0.x + sw0.w + 5, 'the right margin')):
         m = TapMachine(); m.tap(x, y_at(3))
-        expect(m.file() == b'12456x\n', f'a tap on {what} (x {x}) toggles the item off and moves nothing ({m.file()!r})')
+        expect(m.file() == b'1245\n', f'a tap on {what} (x {x}) toggles the item off and moves nothing ({m.file()!r})')
     # 3. no arrow: the first shown row and a hidden row take the tap in the zone as a toggle
     m = TapMachine(); m.tap(ax + aw // 2, y_at(1))
-    expect(m.file() == b'23456x\n', f'the first shown row has no arrow: a tap in the zone toggles it ({m.file()!r})')
-    m = TapMachine(); m.tap(ax + aw // 2, y_at(7))
-    expect(m.file() == b'1234567x\n', f'a hidden row: a tap in the zone toggles it on ({m.file()!r})')
+    expect(m.file() == b'2345\n', f'the first shown row has no arrow: a tap in the zone toggles it ({m.file()!r})')
     m = TapMachine(); m.tap(ax + aw // 2, y_at(0))
-    expect(m.file() == b'1234560x\n', f'Now Playing, hidden by default: a tap in the zone shows it at the end ({m.file()!r})')
+    expect(m.file() == b'123450\n', f'a hidden row: a tap in the zone toggles it on ({m.file()!r})')
+    m = TapMachine(); m.tap(ax + aw // 2, y_at(0))
+    expect(m.file() == b'123450\n', f'Now Playing, hidden by default: a tap in the zone shows it at the end ({m.file()!r})')
     # 4. one tap, one action, and the live re-arrange ran: the moved item is now where the item above was, the other moved down
     m = TapMachine(); m.tap(ax + aw // 2, y_at(3))
     expect(m.row_y(3) == 1 * pod_ui.ROW_H and m.row_y(2) == 2 * pod_ui.ROW_H, 'the page re-arranged at once after the arrow tap')
     y = y_at(3)    # item 3 now sits one row higher: its arrow zone is there, the item below it (2) now has an arrow too
     m.tap(ax + aw // 2, y)
-    expect(m.file() == b'312456x\n', f'the click context is the item: the arrow of the item that moved moves that item again, to the top ({m.file()!r})')
+    expect(m.file() == b'31245\n', f'the click context is the item: the arrow of the item that moved moves that item again, to the top ({m.file()!r})')
     m.tap(ax + aw // 2, y_at(3))
-    expect(m.file() == b'12456x\n', 'and now first, without an arrow: the same spot toggles it')
+    expect(m.file() == b'1245\n', 'and now first, without an arrow: the same spot toggles it')
     # 5. a drag that starts on the arrow does nothing
     for name, steps in (('a swipe: moves of 25 and 50 px, the finger up 70 px away', [('d', ax + 10, y_at(3), 0), ('m', ax + 10, y_at(3) + 25), ('m', ax + 10, y_at(3) + 50), ('u', ax + 10, y_at(3) + 70, 40)]),
                         ('out and back', [('d', ax + 10, y_at(3), 0), ('m', ax + 10, y_at(3) + 40), ('m', ax + 10, y_at(3) + 2), ('u', ax + 10, y_at(3) + 2, 40)]),
@@ -159,7 +159,7 @@ def run(ctx):
     m.play([('d', ax + 10, y_at(3), 0)])
     expect(m.states.get(up3) == 'pressed', 'a DOWN in the zone: the arrow shows pressed')
     m.play([('u', ax + 10, y_at(3), 60)])
-    expect(m.states.get(up3) == 'normal' and m.file() == b'132456x\n', 'and the UP: normal again, the item moved')
+    expect(m.states.get(up3) == 'normal' and m.file() == b'13245\n', 'and the UP: normal again, the item moved')
     m = TapMachine(); up3 = m.widgets['pod_up3']
     m.tap(20, y_at(3))
     expect(up3 not in m.states, 'a DOWN outside the zone never touches the arrow')

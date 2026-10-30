@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """PIL mock-up of Cover Flow (docs/ui.md) from a finished tree: a long title, a title that fits, and
 the artist-scoped shelf. The covers are the real depth renderer (test/coverflow.py's host build of
-patch/coverflow.c); the page is the tree's own ui/m1pod_cover.bin, its text rasterized from the
+patch/coverflow.c); the page is the tree's own ui/m1plus_cover.bin, its text rasterized from the
 tree's default.ttf the stb_truetype way (tools/preview_font.py). Approximate, not AWTK; sample data.
 
 A caption wider than its box is drawn as an hscroll_label shows it when it starts to scroll: from
@@ -26,9 +26,9 @@ HSCROLL_MARGIN = 2
 
 
 def page(work, album, artist, title, ring, frac=0):
-    """The tree's ui/m1pod_cover.bin with its captions filled and the rendered frame in view_covers."""
+    """The tree's ui/m1plus_cover.bin with its captions filled and the rendered frame in view_covers."""
     raw = os.path.join(work, preview_all.RAW)
-    root = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1pod_cover.bin'), 'rb').read())
+    root = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1plus_cover.bin'), 'rb').read())
     ttf = Ttf(os.path.join(raw, 'fonts', 'default.ttf'))
     for w in root.walk():   # renamed: the Now Playing painter has sample text for label_album
         text = {'label_title': title, 'label_album': album, 'label_artist': artist}.get(w.name)
@@ -61,7 +61,7 @@ def landscape(work, album='Kind of Blue', artist='Miles Davis'):
     from stb_raster import StbFont
     raw = os.path.join(work, preview_all.RAW)
     font = StbFont(os.path.join(raw, 'fonts', 'default.ttf'))
-    root = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1pod_cover.bin'), 'rb').read())
+    root = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1plus_cover.bin'), 'rb').read())
     for w in root.walk():   # the caption labels are hidden in landscape (renamed: the painter has sample text for them)
         if w.name in ('label_album', 'label_artist'): w.set('text', ''); w.set('name', w.name + '_preview')
     page_im = preview_all.MenuPainter(raw).render(root, 0).convert('RGBA')

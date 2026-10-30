@@ -8,10 +8,10 @@ System Settings > About keeps its seven stock rows. FW. Version is the literal `
 (0x74773c, set by `systemset_about_page_init` 0x4a170c's widget walk), which this tree never patches, so it
 already shows the stock firmware version; the package tag in `firmware_v20.info` is not shown. One more
 `list_item` (`listitem7` > `hscroll_label scrlabel7`, a clone of the FW. Version row, the stock walk ignores
-names it does not know) is inserted right below it with the fixed text `M1+ Pod:<TAG>` (`TAG` from
+names it does not know) is inserted right below it with the fixed text `M1+ Music:<TAG>` (`TAG` from
 `tools/build.py`, passed to the step). The brand is not translated; the format is the stock `label:value`. No
-hook, nothing at run time. Product name: the user sees "M1+ Pod"; internal names (`m1pod-*` files, `m1pod_*.bin`,
-widget and C identifiers) keep `m1pod` so settings and the kill switch carry over.
+hook, nothing at run time. Product name: the user sees "M1+ Music"; internal names (`m1plus-*` files, `m1plus_*.bin`,
+widget and C identifiers) are `m1plus`.
 ### Polish (`tools/mod_polish.py`)
 
 - navbar title size 22 -> 20 px (`navbar_label_white`, `navbar_centerlabel_white`, all states, both

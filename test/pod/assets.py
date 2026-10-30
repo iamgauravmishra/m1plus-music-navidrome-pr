@@ -1,4 +1,4 @@
-"""Built assets: the M1+ Pod pages are dark with light text and inside the window, the default wallpaper, the icon set and the battery art."""
+"""Built assets: the M1+ Music pages are dark with light text and inside the window, the default wallpaper, the icon set and the battery art."""
 import hashlib, os, re, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
@@ -15,7 +15,7 @@ def run(ctx):
 
     # 25. Contrast in the built assets: every button we style inline has a dark background and
     #     light text in every widget state (theme-styled navbar buttons excepted).
-    for asset_name in ('m1pod_menu.bin', 'm1pod_cover.bin', 'm1pod_artists.bin', 'm1pod_shuffle.bin', 'm1pod_settings.bin', 'm1pod_cfset.bin', 'm1pod_homeset.bin'):
+    for asset_name in ('m1plus_menu.bin', 'm1plus_cover.bin', 'm1plus_artists.bin', 'm1plus_shuffle.bin', 'm1plus_customize.bin', 'm1plus_cfset.bin', 'm1plus_homeset.bin'):
         tree = awtk_ui.parse(open(os.path.join(ui_dir, asset_name), 'rb').read())
         for w in tree.walk():
             if w.type == 'list_item':   # rows: stock's widget and theme styles, as sysset's rows
@@ -93,7 +93,7 @@ def run(ctx):
            'the status bar battery images are battery_art.png(STATUS)')
     added = mod_icons.pod_names()
     expect(all(open(os.path.join(img_dir, n + '.png'), 'rb').read() == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read() for n in added),
-           f'the {len(added)} M1+ Pod row icons are added from the committed PNGs')
+           f'the {len(added)} M1+ Music row icons are added from the committed PNGs')
     used = set()
     for key in mod_icons.POD_UI:
         tree = awtk_ui.parse(open(os.path.join(ui_dir, key + '.bin'), 'rb').read())
@@ -118,7 +118,7 @@ def run(ctx):
     items = th.find('image', mod_icons.POD_HOME_STYLE)
     expect([i.state for i in items] == [i.state for i in th.find('image', 'home_tidal_style')] and
            all(i.get('bg_image') == mod_icons.POD_HOME[i.state == 'pressed'] for i in items),
-           'home_m1pod_style has the five states of the stock icon styles: m1pod, m1pod_down when pressed')
+           'home_m1plus_style has the five states of the stock icon styles: m1plus, m1plus_down when pressed')
     expect(th.items.index(items[-1]) + 1 == min(k for k, i in enumerate(th.items) if i.widget == 'image' and i.style > mod_icons.POD_HOME_STYLE) and
            th.find('image', 'home_tidal_style')[0].get('bg_image') == 'tidal',
            'inserted in the stock sort order, and the Tidal icon keeps its image names')
@@ -161,13 +161,16 @@ def run(ctx):
     ink = [p for p in mark.getdata() if p[3] > 200]; bb = mark.getchannel('A').getbbox()
     expect(len(ink) > 60 and mark.size == (24, 24) and bb[2] - bb[0] == 24 and all(p[:3] == (255, 255, 255) for p in ink),
            f'the mark is white ink 24 px wide, thickened to about 2 px strokes ({len(ink)} solid px, box {bb})')
-    expect({'Main Menu', 'Cover Flow', 'Landscape', 'Sort', 'Start in M1+ Pod', 'Playback'} <= set(mod_icons.POD_ROWS)
-           and not {'Play Settings', 'Start in: M1+ Pod', 'Cover Flow landscape'} & set(mod_icons.POD_ROWS)
-           and not any(k.startswith('pod_nav_rotate') for k in mod_icons.NAV_VIEW), 'icons exist for the Settings rows and the Cover Flow page\'s, none for the old labels or the removed rotate button')
-    expect(mod_icons.POD_ROWS['Home Screen'][1] == 'layout-grid' and mod_icons.POD_ROWS['Start in M1+ Pod'][1] == 'house'
-           and 'm1pod_homeset' in mod_icons.POD_UI, 'Settings > Home Screen: the grid glyph for its row, the house for Start in')
+    expect({'Main Menu', 'Cover Flow', 'Landscape', 'Sort', 'Boot to M1+ Music', 'Playback', 'Customize', 'Developer'} <= set(mod_icons.POD_ROWS)
+           and not {'Play Settings', 'Start in: M1+ Music', 'Start in M1+ Music', 'Settings', 'Cover Flow landscape'} & set(mod_icons.POD_ROWS)
+           and not any(k.startswith('pod_nav_rotate') for k in mod_icons.NAV_VIEW), 'icons exist for the Customize rows and the Cover Flow page\'s, none for the old labels or the removed rotate button')
+    expect(mod_icons.POD_ROWS['Customize'][1] == 'sliders-horizontal' and mod_icons.POD_ROWS['Home Screen'][1] == 'house'
+           and mod_icons.POD_ROWS['Boot to M1+ Music'][1] == 'power' and mod_icons.POD_ROWS['Playback'][1] == 'headphones'
+           and mod_icons.POD_ROWS['Developer'][1] == 'code'
+           and {'m1plus_homeset', 'm1plus_extrascfg', 'm1plus_developer'} <= set(mod_icons.POD_UI),
+           'Customize sliders-horizontal, Home Screen house, Boot to power, Playback headphones, Developer code; the new pages get their icons')
     expect(mod_icons.POD_ROWS['Landscape'][1] == 'rotate-cw-square' and mod_icons.POD_ROWS['Sort'][1] == 'arrow-down-wide-narrow'
-           and mod_icons.POD_ROWS['Cover Flow'][1] == 'gallery-horizontal' and 'm1pod_cfset' in mod_icons.POD_UI,
+           and mod_icons.POD_ROWS['Cover Flow'][1] == 'gallery-horizontal' and 'm1plus_cfset' in mod_icons.POD_UI,
            'Settings > Cover Flow: the gallery row (also the menu\'s), the rotate glyph for Landscape, arrow-down-wide-narrow for Sort')
     lock_imgs = {n: open(os.path.join(img_dir, n + '.png'), 'rb').read() for n in ('screens_battery', 'screens_charge', 'screens_lowbattery')}
     expect(all(lock_imgs[n] == battery_art.png(battery_art.LOCK, s) for n, s in
@@ -222,23 +225,26 @@ def run(ctx):
                and all(i.color('text_color') == '#FFFFFFFF' for i in gold) and all(i.color('text_color') != '#FFFFFFFF' for i in white),
                f'{theme}: other rows muted 18 px, the playing row white 20 px')
 
-    # 41. The product name and the About row. "M1+ Pod" is what the user sees: no "M1 Pod" is left in our ui files, the
-    #     16 string tables, demo's payload or the Home icon; the internal names keep m1pod. About keeps its seven stock
-    #     rows in their order (FW. Version still the stock literal) and gets "M1+ Pod:<TAG>" right below FW. Version.
+    # 41. The product name and the About row. "M1+ Music" is what the user sees: no old name ("M1 Pod", "M1+ Pod") is left
+    #     in our ui files, the 16 string tables, demo's payload or the Home icon; the internal name is m1plus (m1pod is gone). About keeps
+    #     its seven stock rows in their order (FW. Version still the stock literal) and gets "M1+ Music:<TAG>" right below FW. Version.
     import build, mod_about
     from awtk_text import Ttf, awtk_width
     raw = os.path.join(WORK, 'rootfs', 'release/assets/default/raw')
-    stale = [f for f in sorted(os.listdir(os.path.join(raw, 'ui'))) if f.startswith('m1pod_')
-             and b'M1 Pod' in open(os.path.join(raw, 'ui', f), 'rb').read()]
-    stale += [f for f in sorted(os.listdir(os.path.join(raw, 'strings'))) if b'M1 Pod' in open(os.path.join(raw, 'strings', f), 'rb').read()]
+    old_names = (b'M1 Pod', b'M1+ Pod')
+    has_old = lambda p: any(n in open(p, 'rb').read() for n in old_names)
+    stale = sorted(os.path.relpath(os.path.join(d, f), raw) for sub in ('ui', 'strings') for d, _, fs in os.walk(os.path.join(raw, sub))
+                   for f in fs if has_old(os.path.join(d, f)))
     demo = open(os.path.join(WORK, 'rootfs', 'release/bin/demo'), 'rb').read()
-    expect(not stale and b'M1 Pod' not in demo and demo.count(b'M1+ Pod\0') >= 1,
-           f'no user-visible "M1 Pod" is left in the m1pod ui files, the string tables or demo ({stale})')
-    menu = awtk_ui.parse(open(os.path.join(ui_dir, 'm1pod_menu.bin'), 'rb').read())
-    expect(b'M1+ Pod' in open(os.path.join(ui_dir, 'm1pod_menu.bin'), 'rb').read() and menu.find('label_title') is not None,
-           'the menu navbar title is M1+ Pod')
-    expect(os.path.exists(os.path.join(ui_dir, 'm1pod_menu.bin')) and b'/mnt/data/m1pod-start' in demo and b'/mnt/mmc/m1pod-off' in demo,
-           'the internal names are unchanged: m1pod_menu.bin, /mnt/data/m1pod-start, /mnt/mmc/m1pod-off')
+    expect(not stale and not any(n in demo for n in old_names) and demo.count(b'M1+ Music\0') >= 1,
+           f'no user-visible old name (M1 Pod, M1+ Pod) is left in our ui files, the string tables or demo ({stale})')
+    menu = awtk_ui.parse(open(os.path.join(ui_dir, 'm1plus_menu.bin'), 'rb').read())
+    expect(b'M1+ Music' in open(os.path.join(ui_dir, 'm1plus_menu.bin'), 'rb').read() and menu.find('label_title') is not None,
+           'the menu navbar title is M1+ Music')
+    expect(os.path.exists(os.path.join(ui_dir, 'm1plus_menu.bin')) and b'/mnt/data/m1plus-start' in demo and b'/mnt/mmc/m1plus-off' in demo,
+           'the internal name is m1plus: m1plus_menu.bin, /mnt/data/m1plus-start, /mnt/mmc/m1plus-off')
+    old_files = sorted(os.path.relpath(os.path.join(d, f), raw) for d, _, fs in os.walk(raw) for f in fs if 'm1pod' in f)
+    expect(not old_files and b'm1pod' not in demo, f'the old internal name m1pod is gone: no asset is named so, demo has no such string ({old_files})')
     about = awtk_ui.parse(open(os.path.join(ui_dir, 'systemset/about_page.bin'), 'rb').read())
     view = about.find('about_scrollview')
     names = [c.name for c in view.children]
@@ -247,8 +253,8 @@ def run(ctx):
     new, fw = view.find('listitem7'), view.find('listitem1')
     nl, fl = new.children[0], fw.children[0]
     expect(re.fullmatch(r'V2\.1[a-z][A-Z]+', build.TAG) is not None, f'the tag comes from tools/build.py ({build.TAG})')
-    expect(nl.name == 'scrlabel7' and nl.get('text') == f'M1+ Pod:{build.TAG}' == mod_about.row_text(build.TAG),
-           f'the About row reads M1+ Pod:{build.TAG}')
+    expect(nl.name == 'scrlabel7' and nl.get('text') == f'M1+ Music:{build.TAG}' == mod_about.row_text(build.TAG),
+           f'the About row reads M1+ Music:{build.TAG}')
     expect(new.get('style') == fw.get('style') and (nl.type, nl.x, nl.y, nl.w, nl.h) == (fl.type, fl.x, fl.y, fl.w, fl.h)
            and nl.get('style') == fl.get('style') == 'srlabel_leftwhite21_style' and fl.get('text') is None,
            'the new row is the FW. Version row cloned (same styles and geometry); the stock label stays text-less (code sets it)')

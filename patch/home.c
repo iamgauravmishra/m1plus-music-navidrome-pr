@@ -1,4 +1,4 @@
-/* M1+ Pod as Home: the boot guard and the launcher. docs/architecture.md has the design and the
+/* M1+ Music as Home: the boot guard and the launcher. docs/architecture.md has the design and the
  * recovery plan.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE). The crash marker follows q2-pod (Copyright (c)
@@ -10,15 +10,15 @@
  *
  *   1. state = OFF (stock behaviour) until everything below has succeeded;
  *   2. a kill-switch file (SD or flash) -> stop;
- *   3. the crash marker /mnt/data/m1pod-run exists -> the previous attempt never proved itself:
+ *   3. the crash marker /mnt/data/m1plus-run exists -> the previous attempt never proved itself:
  *      write the sticky bad note, switch the setting to Shanling, remove the marker (if the note
  *      cannot be written the marker stays, so the next boot is stock too) and stop;
  *   4. the bad note exists -> stop;
  *   5. write the marker (temp file, fsync, rename, directory fsync); any failure -> stop;
  *   6. arm: a one-shot UI timer removes the marker CLEAR_MS later (the boot completed);
- *   7. add the "M1+ Pod" icon to the stock grid (whatever the setting says; a failure adds nothing),
+ *   7. add the "M1+ Music" icon to the stock grid (whatever the setting says; a failure adds nothing),
  *      register a Home "to foreground" handler (it re-adds the icon if the stock code rebuilt the grid) and,
- *      when the setting says M1+ Pod, schedule the first pod-menu open.
+ *      when the setting says M1+ Music, schedule the first pod-menu open.
  *
  * A Shanling start is armed too (marker, clear timer) because the icon is new code on the boot path; it
  * only opens nothing. Every failure path leaves the stock Home as it was. The kill switch and the setting are checked again before every later open.
@@ -32,14 +32,15 @@ enum { H_NEW = 0, H_OFF, H_ARMED, H_PROVEN };
 
 static struct {
     int state;
-    int start;        /* the setting: 1 = start in M1+ Pod */
+    int start;        /* the setting: 1 = start in M1+ Music */
     int grid;         /* the user chose the stock grid for this session */
     int pending;      /* an open timer is scheduled */
-    void *entry;      /* the entry menu window (the Settings page opens over it) */
+    void *entry;      /* the entry menu window (the Customize page opens over it) */
     int tries;
     int as_home;      /* the menu being opened is the Home instance: its Back is hidden */
     void *home;       /* the stock Home window */
-    void *menu;       /* the Settings page window (it opens over the entry menu) */
+    void *menu;       /* the Customize page window (it opens over the entry menu, or over the Extras page) */
+    void *extras;     /* the Extras page window while it is open (Customize can be opened from it); cleared by its destroy */
 } hs __attribute__((section(".scratch")));
 
 static int hm_exists(const char *p) { return access(p, F_OK) == 0; }
@@ -67,7 +68,7 @@ int home_write_atomic(const char *path, const char *tmp, const char *data) {
     return hm_sync_dir();
 }
 
-/* Opt-in log on the SD card: only when /mnt/mmc/m1pod-log exists. Best effort. */
+/* Opt-in log on the SD card: only when /mnt/mmc/m1plus-log exists. Best effort. */
 static void hm_log(const char *s) {
     int fd;
     if (!hm_exists(LOG_ENABLE)) return;
@@ -86,13 +87,13 @@ static void hm_clear_marker(void) {
 }
 
 /* A marker at boot: the last attempt never proved itself. Record it (the bad note is sticky: no
- * later boot arms again until the user re-enables M1+ Pod) and fall back to Shanling. If the note
+ * later boot arms again until the user re-enables M1+ Music) and fall back to Shanling. If the note
  * cannot be written the marker stays, so every following boot is stock as well. */
 static void hm_record_failure(void) {
     if (home_write_atomic(BAD_NOTE, BAD_TMP, "1\n") != 0) return;
     home_write_atomic(START_FILE, START_TMP, "0\n");
     hm_clear_marker();
-    hm_log("m1pod: marker found; falling back to Shanling");
+    hm_log("m1plus: marker found; falling back to Shanling");
 }
 
 /* The boot completed: remove the marker (UI thread, CLEAR_MS after the hook). */
@@ -101,12 +102,12 @@ static int hm_clear(const void *unused) {
     if (hs.state == H_ARMED) {
         hm_clear_marker();
         hs.state = H_PROVEN;
-        hm_log("m1pod: boot ok, marker cleared");
+        hm_log("m1plus: boot ok, marker cleared");
     }
     return RET_OK;
 }
 
-static int hm_read_start(void) {   /* the setting; anything but "0", or no file, is M1+ Pod */
+static int hm_read_start(void) {   /* the setting; anything but "0", or no file, is M1+ Music */
     char c = 0;
     int fd = open(START_FILE, O_RDONLY, 0), n;
     if (fd < 0) return 1;
@@ -119,10 +120,10 @@ static void hm_arm(void) {
     hs.state = H_OFF;
     hs.start = 1;
     hs.start = hm_read_start() && !hm_exists(BAD_NOTE);   /* what the menu shows, whatever happens below */
-    if (home_off()) { hm_log("m1pod: kill switch"); return; }
+    if (home_off()) { hm_log("m1plus: kill switch"); return; }
     if (hm_exists(MARKER)) { hm_record_failure(); return; }
-    if (hm_exists(BAD_NOTE)) { hm_log("m1pod: an earlier boot failed; stock until re-enabled"); return; }
-    if (!hs.start) hm_log("m1pod: starting in Shanling");
+    if (hm_exists(BAD_NOTE)) { hm_log("m1plus: an earlier boot failed; stock until re-enabled"); return; }
+    if (!hs.start) hm_log("m1plus: starting in Shanling");
     if (home_write_atomic(MARKER, MARKER_TMP, "1\n") != 0) {
         unlink(MARKER);   /* the rename may have happened without a durable directory entry: stay stock, leave no marker (if the
                            * removal is lost too, the next boot finds the marker and falls back to Shanling: fail closed) */
@@ -130,7 +131,7 @@ static void hm_arm(void) {
     }
     if (!timer_add(hm_clear, (void *)0, CLEAR_MS)) { hm_clear_marker(); return; }
     hs.state = H_ARMED;
-    hm_log("m1pod: armed");
+    hm_log("m1plus: armed");
 }
 
 static int hm_ready(void) { return hs.state == H_ARMED || hs.state == H_PROVEN; }
@@ -156,7 +157,7 @@ static int hm_open(const void *unused) {
         return RET_OK;
     }
     hs.as_home = 1;
-    if (m1pod_open_entry() != 0) { hs.as_home = 0; hm_grid(1); }
+    if (m1plus_open_entry() != 0) { hs.as_home = 0; hm_grid(1); }
     return RET_OK;
 }
 
@@ -178,7 +179,7 @@ static int hm_fg(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* The stock grid's content (gesture > icon pages + the bottom strip) is hidden while M1+ Pod is Home, so
+/* The stock grid's content (gesture > icon pages + the bottom strip) is hidden while M1+ Music is Home, so
  * the window under the menu is plain black and the grid never flashes (V2.1jA, docs/ui.md). Hidden and
  * insensitive; the widgets stay (stock looks them up by name). */
 static void hm_grid(int show) {
@@ -188,10 +189,10 @@ static void hm_grid(int show) {
     widget_set_sensitive(g, show);
 }
 
-/* The "M1+ Pod" icon on the stock grid: a clone of what the stock icon builder (0x533d8c) makes per icon, in
+/* The "M1+ Music" icon on the stock grid: a clone of what the stock icon builder (0x533d8c) makes per icon, in
  * the same calls and order: a 154x118 view in the page, the 66x66 clickable image named by its id with
- * the style home_m1pod_style (tools/mod_icons.py: the click-wheel disc, its _down) and the stock click
- * handler 0x533b80 with the image as ctx (m1pod_home_click maps the id to the pod menu), and the centred
+ * the style home_m1plus_style (tools/mod_icons.py: the smartphone disc, its _down) and the stock click
+ * handler 0x533b80 with the image as ctx (m1plus_home_click maps the id to the pod menu), and the centred
  * white label. Returns the cell or 0; a partial cell is destroyed again. */
 static void *hm_icon_cell(void *page, unsigned slot) {
     void *cell = view_create(page, (int)(ICON_X0 + (slot & 1) * ICON_W), (int)((slot >> 1) * ICON_H), ICON_W, ICON_H);
@@ -199,12 +200,12 @@ static void *hm_icon_cell(void *page, unsigned slot) {
     void *label = img ? label_create(cell, 0, ICON_LABEL_Y, ICON_W, ICON_LABEL_H) : (void *)0;
     if (!label) { if (cell) widget_destroy(cell); return (void *)0; }
     widget_set_prop_bool(img, "clickable", 1);
-    widget_use_style(img, "home_m1pod_style");
+    widget_use_style(img, "home_m1plus_style");
     widget_set_name(img, POD_ENTRY_NAME);
     widget_on(img, EVT_CLICK, (void *)STOCK_HOME_CLICK, img);
     widget_use_style(label, "label_centerwhitehome_white");
     label_set_line_wrap(label, 1);
-    widget_set_text_utf8(label, "M1+ Pod");
+    widget_set_text_utf8(label, "M1+ Music");
     return cell;
 }
 
@@ -255,9 +256,9 @@ static int hm_fill_window(void *win) {
     return 1;
 }
 
-/* Called by m1pod.c for the entry page (entry = 1) and for the Settings page (settings = 1): remember the
+/* Called by m1plus.c for the entry page (entry = 1) and for the Customize page (settings = 1): remember the
  * windows; the entry page as the Home instance loses its navbar (the Now Playing row replaces the bars icon;
- * the Settings > Home Screen > Shanling Home row is the way out). */
+ * the Customize > Home Screen > Shanling Home row is the way out). */
 void home_menu_opened(void *win, int settings, int entry) {
     if (entry) {
         hs.entry = win;
@@ -265,6 +266,7 @@ void home_menu_opened(void *win, int settings, int entry) {
             if (hm_fill_window(win)) {   /* the mini player bar and the Recently Played shelf: this instance only */
                 minibar_start(win);
                 recent_start(win);
+                dailymix_start(win);
             }
             hm_grid(0);
             hs.as_home = 0;
@@ -273,8 +275,23 @@ void home_menu_opened(void *win, int settings, int entry) {
     if (settings) hs.menu = win;
 }
 
-/* The M1+ Pod icon was tapped on the stock grid. After "Shanling Home" (grid flag set, setting M1+ Pod) it
- * restores M1+ Pod as Home for the session: the menu opens as the Home instance. Returns 1 if so. */
+/* The destroy of the Extras page: forget its handle (it may be closed long before Customize is opened from the menu). */
+static int hm_extras_gone(void *ctx, void *e) {
+    (void)e;
+    if (hs.extras == ctx) hs.extras = (void *)0;
+    return RET_OK;
+}
+
+/* Called by m1plus.c for the Extras page: Customize can be opened from it (when the menu does not list Customize),
+ * so the stack under the Home Screen page can be menu > Extras > Customize. A failed handler registration forgets
+ * the window again, so a handle that nothing clears is never kept. */
+void home_extras_opened(void *win) {
+    hs.extras = win;
+    if (!widget_on(win, EVT_DESTROY, hm_extras_gone, win)) hs.extras = (void *)0;
+}
+
+/* The M1+ Music icon was tapped on the stock grid. After "Shanling Home" (grid flag set, setting M1+ Music) it
+ * restores M1+ Music as Home for the session: the menu opens as the Home instance. Returns 1 if so. */
 int home_restore(void) {
     if (!hs.grid || !hs.home || !hs.start || !hm_ready() || home_off()) return 0;
     hs.grid = 0;
@@ -282,29 +299,30 @@ int home_restore(void) {
     return 1;
 }
 
-/* The restoring open failed (m1pod.c): back to the grid state it was in. */
+/* The restoring open failed (m1plus.c): back to the grid state it was in. */
 void home_restore_failed(int restored) {
     if (!restored) return;
     hs.as_home = 0;
     hs.grid = 1;
 }
 
-/* "Shanling Home" (on the Settings > Home Screen page): show the stock grid, keep it for this session, and
- * close the pages above Home: the menu and the Settings page under the Home Screen page first (by handle: a
+/* "Shanling Home" (on the Customize > Home Screen page): show the stock grid, keep it for this session, and
+ * close the pages above Home: the menu, the Extras page (when Customize was opened from it) and the Customize page under the Home Screen page first (by handle: a
  * second back right after the first would find the closing page), then the Home Screen page itself. */
 int home_to_grid(void) {
     hs.grid = 1;
     hm_grid(1);
     if (hs.entry && hs.menu && hs.entry != hs.menu) window_close(hs.entry);
+    if (hs.extras && hs.menu && widget_is_window_opened(hs.extras)) window_close(hs.extras);
     if (hs.menu) window_close(hs.menu);
-    hs.entry = hs.menu = (void *)0;
+    hs.entry = hs.menu = hs.extras = (void *)0;
     navigator_back();
     return RET_OK;
 }
 
 int home_start(void) { return hs.start; }
 
-/* "Start in M1+ Pod": flip the persistent setting (takes effect at the next start). The new state, or -1. */
+/* "Boot to M1+ Music": flip the persistent setting (takes effect at the next start). The new state, or -1. */
 int home_toggle(void) {
     int next = !hs.start;
     if (home_write_atomic(START_FILE, START_TMP, next ? "1\n" : "0\n") != 0) return -1;
@@ -327,7 +345,7 @@ void home_boot(void *win) {
 }
 
 /* Installed over home_page_init's PIC prologue (tools/pod.py HOME_INIT). */
-int m1pod_home_init(void *win, void *ctx) {
+int m1plus_home_init(void *win, void *ctx) {
     int r = stock_home_init_trampoline(win, ctx);
     if (r == RET_OK && win) home_boot(win);   /* a stock init that failed leaves everything stock */
     return r;
