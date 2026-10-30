@@ -155,7 +155,7 @@ POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'audio-lines'), 'Cover Flow': (
             'Most Played': ('pod_ic_most', 'flame'),
             'Composers': ('pod_ic_composers', 'feather'), 'Hi-Res': ('pod_ic_hires', '+badge-hr'),
             'Update Library': ('pod_ic_update', 'refresh-cw'), 'Tidal': ('pod_ic_tidal', 'T:brand-tidal'),
-            'CD Ripper': ('pod_ic_cdripper', 'disc'), 'Pod': ('pod_ic_ipod', 'circle'), 'Podcasts': ('pod_ic_podcasts', 'podcast'), 'Screenshot': ('pod_ic_screenshot', 'camera'), 'Cassette Mode': ('pod_ic_tape', '+cassette-tape'), 'Cassette Theme': ('pod_ic_tape', '+cassette-tape'),
+            'CD Ripper': ('pod_ic_cdripper', 'disc'), 'Pod': ('pod_ic_ipod', 'circle'), 'Podcasts': ('pod_ic_podcasts', 'podcast'), 'Screenshot': ('pod_ic_screenshot', 'camera'), 'Network Probe': ('pod_ic_netprobe', 'globe'), 'Cassette Mode': ('pod_ic_tape', '+cassette-tape'), 'Cassette Theme': ('pod_ic_tape', '+cassette-tape'),
             # the Settings page (the menu's Settings row opens it)
             'System Settings': ('pod_ic_settings', 'settings'), 'Playback': ('pod_ic_playset', 'headphones')}
 # The "M1+ Music" icon patch/home.c adds to the stock Home grid (id 99): 66x66 like the stock Home icons
@@ -172,11 +172,12 @@ NAV_VIEW = {'pod_nav_grid': 'layout-grid', 'pod_nav_list': 'list',
             'pod_nav_songs': 'list',   # Cover Flow's artist page: our Songs page on the artist's songs (the left cap, then Now Playing)
             'pod_nav_search': 'search', 'pod_nav_songsort': 'arrow-down-wide-narrow', 'pod_nav_select': 'list-checks',
             'pod_nav_selectl': 'list-checks',   # the Songs page's Search / Sort / Select (capsule: left, middle, middle, then Now Playing); selectl: Select as the left cap of a genre's songs (no Search: Select | Now Playing)
-            'pod_nav_customize': 'sliders-horizontal'}   # the Extras page's Customize button: the left cap of [Customize | Now Playing]
+            'pod_nav_customize': 'sliders-horizontal',   # the Extras page's Customize button: the left cap of [Customize | Now Playing]
+            'pod_nav_feeds': '+rss'}   # the Podcasts page's Feeds button (Lucide rss, as a custom svg: assets/icons/custom/rss.svg): the left cap of [Feeds | Now Playing]
 # the glass piece each Pod page button is (docs/modules/navbar.md): the Albums and Playlists pages' capsule is Cover Flow / "..." (left cap), the grid / list
 # toggle (middle), Now Playing (right cap); the Artists page's is the switch (left cap) and Now Playing; the Cover Flow artist page's is Songs (left cap) and Now Playing
 NAV_VIEW_POS = {'pod_nav_grid': 'middle', 'pod_nav_list': 'middle', 'pod_nav_artist': 'left', 'pod_nav_albumartist': 'left', 'pod_nav_coverflow': 'left',
-                'pod_nav_more': 'left', 'pod_nav_songs': 'left', 'pod_nav_search': 'left', 'pod_nav_songsort': 'middle', 'pod_nav_select': 'middle', 'pod_nav_selectl': 'left', 'pod_nav_customize': 'left'}
+                'pod_nav_more': 'left', 'pod_nav_songs': 'left', 'pod_nav_search': 'left', 'pod_nav_songsort': 'middle', 'pod_nav_select': 'middle', 'pod_nav_selectl': 'left', 'pod_nav_customize': 'left', 'pod_nav_feeds': 'left'}
 NAV_PX = 24
 # The Playlists page's "..." menu rows (tools/pod_ui.py playlist_menu, in row order): a bare white glyph left of the label, as on Now
 # Playing's More sheet's rows, drawn at PL_MENU_PX (20: the 24 px of the sheet's rows looked big beside the 18 px labels; the stroke stays 2 px).

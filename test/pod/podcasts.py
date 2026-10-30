@@ -125,8 +125,8 @@ class PM(ListMachine):
     def show(self, a):
         raw = bytes(self.u.mem_read(a, O['PC_SHOW_SIZE']))
         cs = lambda b: b.split(b'\0', 1)[0].decode('utf-8', 'replace')
-        n, h, fresh = struct.unpack_from('<3I', raw, O['PC_SH_COUNT'])
-        return dict(dir=cs(raw[:128]), title=cs(raw[128:224]), cover=cs(raw[224:352]), feed=cs(raw[352:512]), image=cs(raw[512:672]), count=n, hash=h, fresh=fresh)
+        n, h, fresh, checked = struct.unpack_from('<4I', raw, O['PC_SH_COUNT'])
+        return dict(dir=cs(raw[:128]), title=cs(raw[128:224]), cover=cs(raw[224:352]), feed=cs(raw[O['PC_SH_FEED']:O['PC_SH_IMAGE']]), image=cs(raw[O['PC_SH_IMAGE']:O['PC_SH_COUNT']]), count=n, hash=h, fresh=fresh, checked=checked)
 
     # ---- the payload's entry points
     def parse_eps(self, text, mx=300):
@@ -598,8 +598,8 @@ def cover_tests(ctx):
 
 
 # ---- the page
-PG_WIDGETS = ['podcasts_listview', 'view_grid', 'label_status', 'label_title', 'img_nb_fade', 'label_row_title', 'label_row_sub', 'label_row_dim', 'label_row_acc',
-              'btn_return', 'btn_backtoplayer']
+PG_WIDGETS = ['podcasts_listview', 'view_grid', 'label_status', 'label_title', 'img_nb_fade', 'label_row_title', 'label_row_sub', 'label_row_dim', 'label_row_acc', 'label_row_act',
+              'btn_return', 'btn_backtoplayer', 'btn_feeds', 'pod_pd_scrim', 'pod_pd_card', 'pod_pd_title', 'pod_pd_name', 'pod_pd_track', 'pod_pd_fill', 'pod_pd_count', 'pod_pd_cancel']
 T0 = 1700000000   # 2023-11-14 22:13:20 UTC
 DAY = 86400
 
@@ -615,8 +615,8 @@ def page_card(m):
     m.load_image = 0
 
 
-def page_machine(card=page_card):
-    m = PM()
+def page_machine(card=page_card, cls=None):
+    m = (cls or PM)()
     if card: card(m)
     for n in PG_WIDGETS: m.widget(n)
     win, lv, sv, view = m.alloc(0x80), m.widgets['podcasts_listview'], m.alloc(0x180), m.widgets['view_grid']
@@ -633,8 +633,8 @@ def page_machine(card=page_card):
     return m
 
 
-def opened(card=page_card):
-    m = page_machine(card)
+def opened(card=page_card, cls=None):
+    m = page_machine(card, cls)
     assert m.call(PSYMS['podcasts_open'], count=40000000) == 0
     return m
 
@@ -733,7 +733,7 @@ def open_tests(ctx):
     m3 = page_machine(lambda mm: mm.folder('/mnt/mmc/Music'))
     m3.call(PSYMS['podcasts_open'], count=40000000)
     st = m3.widgets['label_status']
-    expect(('widget_set_tr_text', st, 'No podcasts. Copy a folder for each show into Podcasts on the card.') in m3.calls and m3.props.get((st, 'visible')) == 1 and m3.props.get((m3.view, 'visible')) == 0
+    expect(('widget_set_tr_text', st, 'No podcasts. Copy a folder for each show into Podcasts on the card, or subscribe in Feeds, at the top right.') in m3.calls and m3.props.get((st, 'visible')) == 1 and m3.props.get((m3.view, 'visible')) == 0
            and ('label_set_line_wrap', st, 1) in m3.calls, 'no Podcasts folder: the hint (two lines) shows, the list is hidden')
     m4 = page_machine(lambda mm: mm.folder(ROOT))
     m4.call(PSYMS['podcasts_open'], count=40000000)
@@ -826,9 +826,8 @@ def level_tests(ctx):
     expect([t for t, _ in texts] == ['Alpha Show', 'ep2', 'ep1'], f'the files\' names are the titles when there is no metadata ({[t for t, _ in texts]})')
     # a show with nothing downloaded
     m = opened(lambda mm: (page_card(mm), mm.put(f'{ROOT}/MetaOnly/.episodes', (EPS_HEAD + 'g=m1\tp=9\tf=m1.mp3\tt=Not yet\tu=https://e.example/m1\n').encode())))
-    tap(m, 150, 2 * ROW + 10)
-    expect(m.props.get((m.widgets['label_status'], 'visible')) == 1 and ('widget_set_tr_text', m.widgets['label_status'], 'No downloaded episodes') in m.calls and title_text(m) == 'MetaOnly',
-           'a show with metadata and no file: "No downloaded episodes"')
+    expect([t for t, _ in drawn(m, style='label_row_title')] == ['Alpha Show', 'bravo'] and m.props.get((m.sv, 'virtual_h')) == 2 * ROW,
+           'a show with metadata and no file is not on the Shows level (the offline library: Feeds lists it)')
     click(m, 'btn_return')
     expect(m.props.get((m.widgets['label_status'], 'visible')) == 0 and m.props.get((m.view, 'visible')) == 1, 'Back brings the shows back')
 
@@ -964,11 +963,17 @@ def asset_tests(ctx):
     expect(lv is not None and lv.y == pod_ui.NAVBAR_H and lv.y + lv.h == 450 and [c.type for c in lv.children] == ['scroll_view', 'scroll_bar_m'], 'list_view (50-450) > scroll_view + scroll_bar_m, as stock')
     sv = lv.children[0]
     expect(sv.name == 'podcasts_scrollview' and [c.name for c in sv.children] == ['view_grid'] and sv.w == 310, 'the scroll_view holds the one content view')
-    for name in ('label_status', 'img_nb_fade', 'label_row_title', 'label_row_sub', 'label_row_dim', 'label_row_acc'):
+    for name in ('label_status', 'img_nb_fade', 'label_row_title', 'label_row_sub', 'label_row_dim', 'label_row_acc', 'label_row_act'):
         w = tree.find(name)
         expect(w is not None and w.get('visible') == 'false' and w.get('sensitive') == 'false', f'{name} starts hidden and insensitive')
     nav = tree.find('navigationbar_view')
-    expect([c.name for c in nav.children] == ['label_title', 'btn_return', 'btn_backtoplayer'] and tree.find('label_title').get('tr_text') == 'Podcasts', 'the plain navbar: title, Back, Now Playing')
+    expect([c.name for c in nav.children] == ['label_title', 'btn_return', 'btn_backtoplayer', 'btn_feeds'] and tree.find('label_title').get('tr_text') == 'Podcasts',
+           'the navbar: title, Back, Now Playing and the Feeds button (the capsule\'s left cap)')
+    fb, npb = tree.find('btn_feeds'), tree.find('btn_backtoplayer')
+    expect(fb.x == pod_ui.NAV_VIEW_X and fb.get('style:normal:icon') == 'pod_nav_feeds' and fb.get('style:pressed:icon') == 'pod_nav_feeds_down' and npb.get('style:normal:icon') == 'ah_nav_play'
+           and tree.find('label_title').x + tree.find('label_title').w <= fb.x, 'Feeds is the left cap of the capsule that ends in Now Playing; the title stops at its left edge')
+    expect(os.path.isfile(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx/pod_nav_feeds.png')) and os.path.isfile(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx/pod_nav_feeds_down.png')),
+           'the Feeds glyph (Lucide rss) is in the tree, normal and pressed')
     expect(tree.find('label_status').h >= 60, 'the hint has room for two lines')
     # the colours of the text styles on the black page
     expect(pod_ui.PC_DIM_RGB == '#8E8E93' and contrast(pod_ui.PC_DIM_RGB, '#000000') > 4.5 and contrast(pod_ui.PC_ACCENT_RGB, '#000000') > 4.5, 'the played title and the speed read on black (4.5:1)')

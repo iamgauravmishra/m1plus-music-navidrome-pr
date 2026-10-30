@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<rss version="2.0"
+  xmlns:atom="http://www.w3.org/2005/Atom"
+  xmlns:cc="http://web.resource.org/cc/"
+  xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"
+  xmlns:media="http://search.yahoo.com/mrss/"
+  xmlns:content="http://purl.org/rss/1.0/modules/content/"
+  xmlns:podcast="https://podcastindex.org/namespace/1.0"
+  xmlns:googleplay="http://www.google.com/schemas/play-podcasts/1.0"
+  xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+  xmlns:libsyn="https://rss.libsyn.com/ns.xml">
+
+  <channel>
+    <atom:link href="https://rss.libsyn.com/shows/254861/destinations/1928300.xml" rel="self" type="application/rss+xml"/>
+    <title>All-In with Chamath, Jason, Sacks &amp; Friedberg</title>
+    <pubDate>Thu, 29 Oct 2026 21:29:25 +0000</pubDate>
+    <lastBuildDate>Thu, 29 Oct 2026 21:29:25 +0000</lastBuildDate>
+    <generator>Libsyn RSSgen 1.0</generator>
+    <libsyn:show-id>254861</libsyn:show-id>
+    
+    <libsyn:last-updated>2026-04-01T00:46:08Z</libsyn:last-updated>
+    
+    <link>http://allinchamathjason.libsyn.com/website</link>
+    <language>en</language>
+    <copyright><![CDATA[]]></copyright>
+    <docs>http://allinchamathjason.libsyn.com/website</docs>
+    <itunes:summary><![CDATA[Industry veterans, degenerate gamblers & besties Chamath Palihapitiya, Jason Calacanis, David Sacks & David Friedberg cover all things economic, tech, political, social & poker.]]></itunes:summary>
+    <image>
+      <url>https://static.libsyn.com/p/assets/a/9/c/b/a9cb4d1dadb1ea21/all-in_logo.png</url>
+      <title>All-In with Chamath, Jason, Sacks &amp; Friedberg</title>
+      <link><![CDATA[http://allinchamathjason.libsyn.com/website]]></link>
+    </image>
+    <itunes:author>All-In Podcast, LLC</itunes:author>
+		<itunes:category text="Technology" />
+<itunes:category text="Business">
+  <itunes:category text="Entrepreneurship" />
+</itunes:category>
+    <itunes:image href="https://static.libsyn.com/p/assets/a/9/c/b/a9cb4d1dadb1ea21/all-in_logo.png" />
+    <itunes:explicit>false</itunes:explicit>
+    <itunes:owner>
+      <itunes:name>All-In Podcast, LLC</itunes:name>
+      <itunes:email>theallinpod@gmail.com</itunes:email>
+    </itunes:owner>
+    <description><![CDATA[Industry veterans, degenerate gamblers & besties Chamath Palihapitiya, Jason Calacanis, David Sacks & David Friedberg cover all things economic, tech, political, social & poker.]]></description>
+    
+    <itunes:type>episodic</itunes:type>
+    
+
+    <itunes:keywords />
+
+    
+
+    
+    <podcast:locked owner="theallinpod@gmail.com">no</podcast:locked>
+    
+    
+    
+    
+    
+    <item>
+      <title>WHOOP CEO, Will Ahmed: 50B Hours of Health Data, a 4 Million Member Data Moat, &amp; the FDA Fight</title>
+      <itunes:title>WHOOP CEO, Will Ahmed: 50B Hours of Health Data, a 4 Million Member Data Moat, &amp;amp; the FDA Fight</itunes:title>
+      <pubDate>Thu, 29 Oct 2026 21:26:00 +0000</pubDate>
+      <guid isPermaLink="false"><![CDATA[25ed3987-a02b-434e-8a71-ed74bad8e863]]></guid>
+      <link><![CDATA[https://allinchamathjason.libsyn.com/whoop-ceo-will-ahmed-50b-hours-of-health-data-a-4-million-member-data-moat-the-fda-fight]]></link>
+      <description><![CDATA[<p dir="ltr">(0:00) Welcome Will Ahmed, CEO of WHOOP</p> <p dir="ltr">(0:59) WHOOP's $500 Hardware Problem & the Subscription Pivot</p> <p dir="ltr">(6:59) Inside 50 Billion Hours of 24/7 Health Data</p> <p dir="ltr">(19:31) WHOOP's AI Coach, Journal Insights & GLP-1 Tracking</p> <p dir="ltr">(34:57) WHOOP vs. the FDA & Competitor Wearables</p> <p dir="ltr">(44:33) Lightning Round & LeBron James becomes a WHOOP Ambassador</p> <p><strong> </strong></p> <p dir="ltr">Thanks to our partners for making this possible!</p> <p><strong> </strong></p> <p dir="ltr">As wealth grows, complexity compounds. Between investments, tax strategy and estate planning, coordinating it all can feel like a full-time job. Creative Planning can help with the heavy lifting. Learn more at <a href= "https://t.co/cnQMdfafb7">https://CreativePlanning.com/AllIn</a> </p> <p><strong> </strong></p> <p dir="ltr">Starting a business? Northwest Registered Agent gives you everything you need to build a complete Business Identity including free tools and built-in privacy. Get more at <a href= "https://www.northwestregisteredagent.com/ALLINFREE">https://www.northwestregisteredagent.com/ALLINFREE</a> </p> <p><strong><br /> <br /></strong></p> <p dir="ltr">Follow Will:</p> <p dir="ltr">https://x.com/willahmed</p> <p><strong> </strong></p> <p dir="ltr">Follow the besties: </p> <p dir="ltr">https://x.com/chamath</p> <p dir="ltr">https://x.com/Jason</p> <p dir="ltr">https://x.com/DavidSacks</p> <p dir="ltr">https://x.com/friedberg</p> <p><strong> </strong></p> <p dir="ltr">Follow on X:</p> <p dir="ltr">https://x.com/theallinpod</p> <p><strong> </strong></p> <p dir="ltr">Follow on Instagram:</p> <p dir="ltr">https://www.instagram.com/theallinpod</p> <p><strong> </strong></p> <p dir="ltr">Follow on TikTok:</p> <p dir="ltr">https://www.tiktok.com/@allin</p> <p><strong> </strong></p> <p dir="ltr">Follow on LinkedIn: </p> <p dir="ltr">https://www.linkedin.com/company/allinpod</p> <p><strong> </strong></p> <p dir="ltr">Intro Music Credit:</p> <p dir="ltr">https://rb.gy/tppkzl</p> <p dir="ltr">https://x.com/yung_spielburg</p> <p><strong> </strong></p> <p dir="ltr">Intro Video Credit:</p> <p dir="ltr">https://x.com/TheZachEffect</p> <p><strong> </strong></p> <p dir="ltr">#allin #tech #news</p> <p> </p>]]></description>
+      
+      <content:encoded><![CDATA[<p dir="ltr">(0:00) Welcome Will Ahmed, CEO of WHOOP</p> <p dir="ltr">(0:59) WHOOP's $500 Hardware Problem & the Subscription Pivot</p> <p dir="ltr">(6:59) Inside 50 Billion Hours of 24/7 Health Data</p> <p dir="ltr">(19:31) WHOOP's AI Coach, Journal Insights & GLP-1 Tracking</p> <p dir="ltr">(34:57) WHOOP vs. the FDA & Competitor Wearables</p> <p dir="ltr">(44:33) Lightning Round & LeBron James becomes a WHOOP Ambassador</p> <p> </p> <p dir="ltr">Thanks to our partners for making this possible!</p> <p> </p> <p dir="ltr">As wealth grows, complexity compounds. Between investments, tax strategy and estate planning, coordinating it all can feel like a full-time job. Creative Planning can help with the heavy lifting. Learn more at <a href= "https://t.co/cnQMdfafb7">https://CreativePlanning.com/AllIn</a> </p> <p> </p> <p dir="ltr">Starting a business? Northwest Registered Agent gives you everything you need to build a complete Business Identity including free tools and built-in privacy. Get more at <a href= "https://www.northwestregisteredagent.com/ALLINFREE">https://www.northwestregisteredagent.com/ALLINFREE</a> </p> <p> </p> <p dir="ltr">Follow Will:</p> <p dir="ltr">https://x.com/willahmed</p> <p> </p> <p dir="ltr">Follow the besties: </p> <p dir="ltr">https://x.com/chamath</p> <p dir="ltr">https://x.com/Jason</p> <p dir="ltr">https://x.com/DavidSacks</p> <p dir="ltr">https://x.com/friedberg</p> <p> </p> <p dir="ltr">Follow on X:</p> <p dir="ltr">https://x.com/theallinpod</p> <p> </p> <p dir="ltr">Follow on Instagram:</p> <p dir="ltr">https://www.instagram.com/theallinpod</p> <p> </p> <p dir="ltr">Follow on TikTok:</p> <p dir="ltr">https://www.tiktok.com/@allin</p> <p> </p> <p dir="ltr">Follow on LinkedIn: </p> <p dir="ltr">https://www.linkedin.com/company/allinpod</p> <p> </p> <p dir="ltr">Intro Music Credit:</p> <p dir="ltr">https://rb.gy/tppkzl</p> <p dir="ltr">https://x.com/yung_spielburg</p> <p> </p> <p dir="ltr">Intro Video Credit:</p> <p dir="ltr">https://x.com/TheZachEffect</p> <p> </p> <p dir="ltr">#allin #tech #news</p> <p> </p>]]></content:encoded>
+      
+      
+      <enclosure url="https://dts.podtrac.com/redirect.mp3/traffic.libsyn.com/secure/allinchamathjason/88_AUDIO_WILL_AHMED_INT.mp3?dest-id=1928300" length="80571999" type="audio/mpeg" />
+      <itunes:duration>55:39</itunes:duration>
+      <itunes:explicit>false</itunes:explicit>
+      
+      
+      <itunes:keywords />
+      
+      
+      
+      <itunes:image href="https://static.libsyn.com/p/assets/a/7/3/9/a73958ffcc02ae365f2e77a3093c12a1/signal-2026-10-29-17-06-43-868.jpg" />
+      
+      
+      <itunes:episodeType>full</itunes:episodeType>
+      
+      
+      
+
+      <libsyn:item-id>43557939</libsyn:item-id>
+      
+      <libsyn:last-updated>2026-10-29T21:29:24Z</libsyn:last-updated>
+      
+      
+    </item>
+    
+    <item>
+      <title>AI Cyber Panic, Ken Griffin's Bubble Warning, The Fall of France?</title>
+      <itunes:title>AI Cyber Panic, Ken Griffin&#39;s Bubble Warning, The Fall of France?</itunes:title>
+      <pubDate>Fri, 23 Oct 2026 23:08:00 +0000</pubDate>
+      <guid isPermaLink="false"><![CDATA[8173444f-00cd-4027-8d2f-c9e911ae2a95]]></guid>
+      <link><![CDATA[https://allinchamathjason.libsyn.com/ai-cyber-panic-ken-griffins-bubble-warning-the-fall-of-france]]></link>
+      <description><![CDATA[<p>(0:00) Bestie intros!</p> <p>(0:11) Ken Griffin's AI bubble warning</p> <p>(8:19) Palo Alto Networks CEO Nikesh Arora joins</p> <p>(14:24) AI Cyber panic: PHP exploits and the tumultuous year ahead</p> <p>(44:17) France on the brink: Riots, immigration referendum, debt crisis</p> <p>(1:31:49) Trump's second half strategy, Press Secretary J-Cal?</p> <p>Follow Nikesh:</p> <p><a href= "https://x.com/nikesharora">https://x.com/nikesharora</a></p> <p>Follow the besties:</p> <p><a href="https://x.com/chamath">https://x.com/chamath</a></p> <p><a href="https://x.com/Jason">https://x.com/Jason</a></p> <p><a href= "https://x.com/DavidSacks">https://x.com/DavidSacks</a></p> <p><a href= "https://x.com/friedberg">https://x.com/friedberg</a></p> <p>Follow on X:</p> <p><a href= "https://x.com/theallinpod">https://x.com/theallinpod</a></p> <p>Follow on Instagram:</p> <p><a href= "https://www.instagram.com/theallinpod">https://www.instagram.com/theallinpod</a></p> <p>Follow on TikTok:</p> <p><a href= "https://www.tiktok.com/@allin">https://www.tiktok.com/@allin</a></p> <p>Follow on LinkedIn:</p> <p><a href= "https://www.linkedin.com/company/allinpod">https://www.linkedin.com/company/allinpod</a></p> <p>Intro Music Credit:</p> <p><a href="https://rb.gy/tppkzl">https://rb.gy/tppkzl</a></p> <p><a href= "https://x.com/yung_spielburg">https://x.com/yung_spielburg</a></p> <p>Intro Video Credit:</p> <p><a href= "https://x.com/TheZachEffect">https://x.com/TheZachEffect</a></p> <p>Referenced in the show:</p> <p><a href= "https://www.bloomberg.com/news/articles/2026-10-20/ken-griffin-says-ai-almost-certainly-in-a-bubble-right-now"> https://www.bloomberg.com/news/articles/2026-10-20/ken-griffin-says-ai-almost-certainly-in-a-bubble-right-now</a></p> <p><a href= "https://x.com/chamath/status/2112757725369348417">https://x.com/chamath/status/2112757725369348417</a></p> <p><a href= "https://abcnews.com/Technology/urgent-security-fix-issued-code-vital-estimated-70/story?id=137447718"> https://abcnews.com/Technology/urgent-security-fix-issued-code-vital-estimated-70/story?id=137447718</a></p> <p><a href= "https://thephp.foundation/blog/2026/10/21/todays-php-security-release-and-how-were-strengthening-php-security"> https://thephp.foundation/blog/2026/10/21/todays-php-security-release-and-how-were-strengthening-php-security</a></p> <p><a href= "https://x.com/eastdakota/status/2113079352682570051">https://x.com/eastdakota/status/2113079352682570051</a></p> <p><a href= "https://x.com/nsacyber/status/2112903220209098897">https://x.com/nsacyber/status/2112903220209098897</a></p> <p><a href= "https://abliteration.ai">https://abliteration.ai</a></p> <p><a href= "https://www.nytimes.com/2026/10/21/world/europe/macron-trump-france-protests.html"> https://www.nytimes.com/2026/10/21/world/europe/macron-trump-france-protests.html</a></p> <p><a href= "https://www.reuters.com/world/europe/french-10-year-bond-yields-hit-5-highest-since-2002-2026-10-21"> https://www.reuters.com/world/europe/french-10-year-bond-yields-hit-5-highest-since-2002-2026-10-21</a></p> <p><a href= "https://www.wsj.com/finance/investing/french-government-bond-yields-rise-spread-widens-as-treasury-yields-fall-e67fc4cd"> https://www.wsj.com/finance/investing/french-government-bond-yields-rise-spread-widens-as-treasury-yields-fall-e67fc4cd</a></p> <p><a href= "https://x.com/visegrad24/status/2111542897598455888">https://x.com/visegrad24/status/2111542897598455888</a></p> <p><a href= "https://polymarket.com/event/france-declares-state-of-emergency-byptptpt"> https://polymarket.com/event/france-declares-state-of-emergency-byptptpt</a></p> <p><a href= "https://polymarket.com/event/moodys-or-sp-downgrades-france-byptptpt"> https://polymarket.com/event/moodys-or-sp-downgrades-france-byptptpt</a></p> <p><a href= "https://x.com/GOP_is_Gutless/status/2112157762981347373">https://x.com/GOP_is_Gutless/status/2112157762981347373</a></p>]]></description>
+      
+      <content:encoded><![CDATA[<p>(0:00) Bestie intros!</p> <p>(0:11) Ken Griffin's AI bubble warning</p> <p>(8:19) Palo Alto Networks CEO Nikesh Arora joins</p> <p>(14:24) AI Cyber panic: PHP exploits and the tumultuous year ahead</p> <p>(44:17) France on the brink: Riots, immigration referendum, debt crisis</p> <p>(1:31:49) Trump's second half strategy, Press Secretary J-Cal?</p> <p>Follow Nikesh:</p> <p><a href= "https://x.com/nikesharora">https://x.com/nikesharora</a></p> <p>Follow the besties:</p> <p><a href="https://x.com/chamath">https://x.com/chamath</a></p> <p><a href="https://x.com/Jason">https://x.com/Jason</a></p> <p><a href= "https://x.com/DavidSacks">https://x.com/DavidSacks</a></p> <p><a href= "https://x.com/friedberg">https://x.com/friedberg</a></p> <p>Follow on X:</p> <p><a href= "https://x.com/theallinpod">https://x.com/theallinpod</a></p> <p>Follow on Instagram:</p> <p><a href= "https://www.instagram.com/theallinpod">https://www.instagram.com/theallinpod</a></p> <p>Follow on TikTok:</p> <p><a href= "https://www.tiktok.com/@allin">https://www.tiktok.com/@allin</a></p> <p>Follow on LinkedIn:</p> <p><a href= "https://www.linkedin.com/company/allinpod">https://www.linkedin.com/company/allinpod</a></p> <p>Intro Music Credit:</p> <p><a href="https://rb.gy/tppkzl">https://rb.gy/tppkzl</a></p> <p><a href= "https://x.com/yung_spielburg">https://x.com/yung_spielburg</a></p> <p>Intro Video Credit:</p> <p><a href= "https://x.com/TheZachEffect">https://x.com/TheZachEffect</a></p> <p>Referenced in the show:</p> <p><a href= "https://www.bloomberg.com/news/articles/2026-10-20/ken-griffin-says-ai-almost-certainly-in-a-bubble-right-now"> https://www.bloomberg.com/news/articles/2026-10-20/ken-griffin-says-ai-almost-certainly-in-a-bubble-right-now</a></p> <p><a href= "https://x.com/chamath/status/2112757725369348417">https://x.com/chamath/status/2112757725369348417</a></p> <p><a href= "https://abcnews.com/Technology/urgent-security-fix-issued-code-vital-estimated-70/story?id=137447718"> https://abcnews.com/Technology/urgent-security-fix-issued-code-vital-estimated-70/story?id=137447718</a></p> <p><a href= "https://thephp.foundation/blog/2026/10/21/todays-php-security-release-and-how-were-strengthening-php-security"> https://thephp.foundation/blog/2026/10/21/todays-php-security-release-and-how-were-strengthening-php-security</a></p> <p><a href= "https://x.com/eastdakota/status/2113079352682570051">https://x.com/eastdakota/status/2113079352682570051</a></p> <p><a href= "https://x.com/nsacyber/status/2112903220209098897">https://x.com/nsacyber/status/2112903220209098897</a></p> <p><a href= "https://abliteration.ai">https://abliteration.ai</a></p> <p><a href= "https://www.nytimes.com/2026/10/21/world/europe/macron-trump-france-protests.html"> https://www.nytimes.com/2026/10/21/world/europe/macron-trump-france-protests.html</a></p> <p><a href= "https://www.reuters.com/world/europe/french-10-year-bond-yields-hit-5-highest-since-2002-2026-10-21"> https://www.reuters.com/world/europe/french-10-year-bond-yields-hit-5-highest-since-2002-2026-10-21</a></p> <p><a href= "https://www.wsj.com/finance/investing/french-government-bond-yields-rise-spread-widens-as-treasury-yields-fall-e67fc4cd"> https://www.wsj.com/finance/investing/french-government-bond-yields-rise-spread-widens-as-treasury-yields-fall-e67fc4cd</a></p> <p><a href= "https://x.com/visegrad24/status/2111542897598455888">https://x.com/visegrad24/status/2111542897598455888</a></p> <p><a href= "https://polymarket.com/event/france-declares-state-of-emergency-byptptpt"> https://polymarket.com/event/france-declares-state-of-emergency-byptptpt</a></p> <p><a href= "https://polymarket.com/event/moodys-or-sp-downgrades-france-byptptpt"> https://polymarket.com/event/moodys-or-sp-downgrades-france-byptptpt</a></p> <p><a href= "https://x.com/GOP_is_Gutless/status/2112157762981347373">https://x.com/GOP_is_Gutless/status/2112157762981347373</a></p>]]></content:encoded>
+      
+      
+      <enclosure url="https://dts.podtrac.com/redirect.mp3/traffic.libsyn.com/secure/allinchamathjason/ALLIN-E294_Ch.mp3?dest-id=1928300" length="148855457" type="audio/mpeg" />
+      <itunes:duration>01:43:23</itunes:duration>
+      <itunes:explicit>false</itunes:explicit>
+      
+      
+      <itunes:keywords />
+      
+      
+      
+      <itunes:image href="https://static.libsyn.com/p/assets/a/a/d/5/aad5ad1303ccae075f2e77a3093c12a1/1_Pod_E294.png" />
+      
+      
+      <itunes:episodeType>full</itunes:episodeType>
+      
+      
+      
+
+      <libsyn:item-id>43429824</libsyn:item-id>
+      
+      <libsyn:last-updated>2026-10-23T23:52:33Z</libsyn:last-updated>
+      
+      
+    </item>
+    
+    <item>
+      <title>Arvind Krishna &amp; Nikesh Arora: Quantum Threat, Open vs Frontier AI, AI Cyber Warfare &amp; SaaS Collapse</title>
+      <itunes:title>Arvind Krishna &amp;amp; Nikesh Arora: Quantum Threat, Open vs Frontier AI, AI Cyber Warfare &amp;amp; SaaS Collapse</itunes:title>
+      <pubDate>Wed, 21 Oct 2026 23:42:00 +0000</pubDate>
+      <guid isPermaLink="false"><![CDATA[21690ac7-0a5e-4f6b-84e3-91f41bbb7680]]></guid>
+      <link><![CDATA[https://allinchamathjason.libsyn.com/arvind-krishna-nikesh-arora-quantum-threat-open-vs-frontier-ai-ai-cyber-warfare-saas-collapse]]></link>
+      <description><![CDATA[<p dir="ltr">(0:00) Arvind Krishna & Nikesh Arora talk about Quantum Computing's Threat to Encryption</p> <p dir="ltr">(9:07) Open Weight vs. Frontier AI Models</p> <p dir="ltr">(18:07) AI and Cyber Warfare</p> <p dir="ltr">(21:14) AI Regulation and the Global AI Arms Race</p> <p dir="ltr">(30:32) Vertical Integration and Software Consolidation</p> <p><strong> </strong></p> <p dir="ltr">Follow Nikesh:</p> <p dir="ltr">https://x.com/nikesharora</p> <p><strong> </strong></p> <p dir="ltr">Follow Arvind:</p> <p dir="ltr">https://x.com/ArvindKrishna</p> <p><strong> </strong></p> <p dir="ltr">Follow the besties: </p> <p dir="ltr">https://x.com/chamath</p> <p dir="ltr">https://x.com/Jason</p> <p dir="ltr">https://x.com/DavidSacks</p> <p dir="ltr">https://x.com/friedberg</p> <p><strong> </strong></p> <p dir="ltr">Follow on X:</p> <p dir="ltr">https://x.com/theallinpod</p> <p><strong> </strong></p> <p dir="ltr">Follow on Instagram:</p> <p dir="ltr">https://www.instagram.com/theallinpod</p> <p><strong> </strong></p> <p dir="ltr">Follow on TikTok:</p> <p dir="ltr">https://www.tiktok.com/@allin</p> <p><strong> </strong></p> <p dir="ltr">Follow on LinkedIn: </p> <p dir="ltr">https://www.linkedin.com/company/allinpod</p> <p><strong> </strong></p> <p dir="ltr">Intro Music Credit:</p> <p dir="ltr">https://rb.gy/tppkzl</p> <p dir="ltr">https://x.com/yung_spielburg</p> <p><strong> </strong></p> <p dir="ltr">Intro Video Credit:</p> <p dir="ltr">https://x.com/TheZachEffect</p> <p><strong> </strong></p> <p dir="ltr">#allin #tech #news</p> <p> </p>]]></description>
+      
+      <content:encoded><![CDATA[<p dir="ltr">(0:00) Arvind Krishna & Nikesh Arora talk about Quantum Computing's Threat to Encryption</p> <p dir="ltr">(9:07) Open Weight vs. Frontier AI Models</p> <p dir="ltr">(18:07) AI and Cyber Warfare</p> <p dir="ltr">(21:14) AI Regulation and the Global AI Arms Race</p> <p dir="ltr">(30:32) Vertical Integration and Software Consolidation</p> <p> </p> <p dir="ltr">Follow Nikesh:</p> <p dir="ltr">https://x.com/nikesharora</p> <p> </p> <p dir="ltr">Follow Arvind:</p> <p dir="ltr">https://x.com/ArvindKrishna</p> <p> </p> <p dir="ltr">Follow the besties: </p> <p dir="ltr">https://x.com/chamath</p> <p dir="ltr">https://x.com/Jason</p> <p dir="ltr">https://x.com/DavidSacks</p> <p dir="ltr">https://x.com/friedberg</p> <p> </p> <p dir="ltr">Follow on X:</p> <p dir="ltr">https://x.com/theallinpod</p> <p> </p> <p dir="ltr">Follow on Instagram:</p> <p dir="ltr">https://www.instagram.com/theallinpod</p> <p> </p> <p dir="ltr">Follow on TikTok:</p> <p dir="ltr">https://www.tiktok.com/@allin</p> <p> </p> <p dir="ltr">Follow on LinkedIn: </p> <p dir="ltr">https://www.linkedin.com/company/allinpod</p> <p> </p> <p dir="ltr">Intro Music Credit:</p> <p dir="ltr">https://rb.gy/tppkzl</p> <p dir="ltr">https://x.com/yung_spielburg</p> <p> </p> <p dir="ltr">Intro Video Credit:</p> <p dir="ltr">https://x.com/TheZachEffect</p> <p> </p> <p dir="ltr">#allin #tech #news</p> <p> </p>]]></content:encoded>
+      
+      
+      <enclosure url="https://dts.podtrac.com/redirect.mp3/traffic.libsyn.com/secure/allinchamathjason/88_AUDIO_NikeshArvink.mp3?dest-id=1928300" length="58024310" type="audio/mpeg" />
+      <itunes:duration>40:00</itunes:duration>
+      <itunes:explicit>false</itunes:explicit>
+      
+      
+      <itunes:keywords />
+      
+      
+      
+      <itunes:image href="https://static.libsyn.com/p/assets/3/9/0/4/3904e785e65853035f2e77a3093c12a1/All-In_Audio_Thumbnails_1.jpg" />
+      
+      
+      <itunes:episodeType>full</itunes:episodeType>
+      
+      
+      
+
+      <libsyn:item-id>43394954</libsyn:item-id>
+      
+      <libsyn:last-updated>2026-10-21T23:43:04Z</libsyn:last-updated>
+      
+      
+    </item>
+</channel></rss>

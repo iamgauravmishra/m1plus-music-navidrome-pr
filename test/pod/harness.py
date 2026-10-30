@@ -10,7 +10,7 @@ import importlib.util, json, os, re, struct, sys
 from unicorn import Uc, UC_ARCH_MIPS, UC_MODE_MIPS32, UC_MODE_LITTLE_ENDIAN, UC_HOOK_CODE, UC_HOOK_BLOCK
 from unicorn.mips_const import (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3,
                                 UC_MIPS_REG_V0, UC_MIPS_REG_SP, UC_MIPS_REG_RA, UC_MIPS_REG_T9, UC_MIPS_REG_PC, UC_MIPS_REG_GP, UC_MIPS_REG_F0,
-                                UC_MIPS_REG_CP0_STATUS as _STATUS)
+                                UC_MIPS_REG_CP0_STATUS as _STATUS, UC_MIPS_REG_0, UC_MIPS_REG_31)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TOOLS = os.path.join(ROOT, 'tools')
@@ -190,6 +190,9 @@ class Machine:
         self.artist_songs = {}      # artist name -> all its song rows (loadLocalClassList(0xff11) after loadAlbumdetailList on the All songs row)
         self.free_mb = 1024
         self.thread_ok = True
+        self.thread = None          # (start routine, argument) of the last pthread_create
+        self.curl, self.curl_site, self.curl_last = {}, None, {}   # the network probe (patch/probe.c): handle -> options set; the scripted server; handle -> what the last request returned
+        self.pipes, self.fgets_pos = {}, {}   # popen handle -> output lines left; fgets position in a file's text
         self.confirm_yes = False    # the answer of the stock confirm dialog (dialog/confirminfo_dialog)
         self.album_cover = 0        # toolsGetAlbumCover's result
         self.extern_cover = 0
@@ -743,7 +746,7 @@ class Machine:
             self.u.mem_write(a, s.encode('latin-1') + b'\0'); ret = a   # (read_cstr shows bytes as latin-1 characters)
         elif name == 'snprintf':
             fmt = self.read_cstr(a2)
-            args = [a3] + [stack(i) for i in range(0, 6)]
+            args = [a3] + [stack(i) for i in range(0, 10)]
             out, ai = '', 0
             i = 0
             while i < len(fmt):
@@ -834,7 +837,7 @@ class Machine:
         elif name == 'pthread_create':
             self.calls.append(('pthread_create',))
             ret = 0 if self.thread_ok else 11
-            if self.thread_ok: self.setword(a0, 0x1234)
+            if self.thread_ok: self.setword(a0, 0x1234); self.thread = (a2, a3)
         elif name == 'pthread_join':
             self.calls.append(('pthread_join',))
         elif name == 'pthread_mutex_lock':
@@ -905,10 +908,95 @@ class Machine:
             ret = self.tm_buf
         elif name == 'stock_init_resume':
             self.calls.append(('stock_init_resume', a0, a1)); ret = self.init_ret
+        # ---- the network probe (patch/probe.c): libcurl's easy interface, the shell and a worker thread
+        elif name == 'get_wifisignal':
+            ret = self.wifi; self.calls.append(('get_wifisignal',))
+        elif name == 'curl_global_init':
+            self.calls.append(('curl_global_init', a0))
+        elif name == 'curl_easy_init':
+            ret = self.alloc(8); self.curl[ret] = {}; self.calls.append(('curl_easy_init',))
+        elif name == 'curl_easy_setopt':
+            self.curl[a0][a1] = self.read_cstr(a2) if a1 in (10002, 10007, 10018, 10065, 10102) else a2   # URL, RANGE, USERAGENT, CAINFO, ACCEPT_ENCODING: strings
+        elif name == 'curl_easy_perform':
+            ret = self.curl_perform(a0)
+        elif name == 'curl_easy_getinfo':
+            v = self.curl_last[a0].get(a1, 0)
+            if a1 in (0x100001, 0x100020): self.setword(a2, self.cstr(v) if v else 0)
+            elif a1 >> 20 == 6: self.u.mem_write(a2, struct.pack('<Q', v))
+            else: self.setword(a2, v)
+        elif name == 'curl_easy_cleanup':
+            self.calls.append(('curl_easy_cleanup', a0)); self.curl.pop(a0, None)
+        elif name == 'curl_easy_strerror':
+            ret = self.cstr(f'curl error {a0}')
+        elif name == 'pthread_detach':
+            self.calls.append(('pthread_detach', a0))
+        elif name == 'sleep':
+            self.calls.append(('sleep', a0)); self.wall += a0
+        elif name == 'popen':
+            cmd = self.read_cstr(a0); self.calls.append(('popen', cmd, self.read_cstr(a1)))
+            ret = self.alloc(4); self.pipes[ret] = list(self.shell(cmd))
+        elif name == 'pclose':
+            self.calls.append(('pclose',)); self.pipes.pop(a0, None)
+        elif name == 'fgets':   # a pipe's next line, or the next line of the file fopen opened (its text in self.fs, read from where the last call stopped)
+            if a2 in self.pipes:
+                line = self.pipes[a2].pop(0) if self.pipes[a2] else None
+            else:
+                text = self.fs.get(self.fh[1], b''); pos = self.fgets_pos.get(a2, 0)
+                line = None if pos >= len(text) else text[pos:text.index(b'\n', pos) + 1 if b'\n' in text[pos:] else len(text)]
+                if line is not None: self.fgets_pos[a2] = pos + len(line)
+            if line is not None:
+                line = line[:a1 - 1]; self.u.mem_write(a0, (line.encode() if isinstance(line, str) else line) + b'\0'); ret = a0
         else:
             raise AssertionError(f'unmocked call {name} at {address:#x}')
         u.reg_write(UC_MIPS_REG_V0, ret & 0xffffffff)
         u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+
+    def shell(self, cmd):
+        """The output lines of a shell command the probe runs (a test sets self.shell_out: command -> lines; others print nothing)."""
+        return getattr(self, 'shell_out', {}).get(cmd[:-5] if cmd.endswith(' 2>&1') else cmd, [])
+
+    def nested(self, fn, *args):
+        """Payload code run from inside a mock (a libcurl callback): the registers are saved, the frame is below the caller's, and the
+        caller continues afterwards. Returns $v0."""
+        u = self.u
+        saved = [u.reg_read(r) for r in range(UC_MIPS_REG_0, UC_MIPS_REG_31 + 1)] + [u.reg_read(UC_MIPS_REG_PC)]
+        sp = (u.reg_read(UC_MIPS_REG_SP) - 0x400) & ~7
+        for r, v in zip((UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3), args): u.reg_write(r, v & 0xffffffff)
+        for i, v in enumerate(args[4:]): self.setword(sp + 16 + 4 * i, v)
+        u.reg_write(UC_MIPS_REG_SP, sp); u.reg_write(UC_MIPS_REG_RA, RET); u.reg_write(UC_MIPS_REG_T9, fn)
+        u.emu_start(fn, RET)
+        ret = u.reg_read(UC_MIPS_REG_V0)
+        for r, v in zip(list(range(UC_MIPS_REG_0, UC_MIPS_REG_31 + 1)) + [UC_MIPS_REG_PC], saved): u.reg_write(r, v)
+        return ret
+
+    def curl_perform(self, h):
+        """curl_easy_perform against the scripted server self.curl_site(url, options) -> a dict: rc, code, body, chunk (bytes per write
+        callback), dbg ((type, text) pairs for the debug callback), eff, ip, redirects, verify, err and the times in microseconds (dns, conn, tls,
+        first, total). The payload's write callback runs for every chunk and its debug callback for every line, inside this call."""
+        o = self.curl[h]
+        r = {'rc': 0, 'code': 200, 'body': b'', 'chunk': 16384, 'dbg': [], 'eff': o[10002], 'ip': '93.184.216.34', 'redirects': 0, 'verify': 0, 'err': '',
+             'dns': 1000, 'conn': 2000, 'tls': 3000, 'first': 4000, 'total': 5000, **(self.curl_site(o[10002], o) if self.curl_site else {'rc': 6})}
+        for typ, text in r['dbg']:
+            buf = self.cstr(text); self.nested(o[20094], h, typ, buf, len(text.encode()), o[10095])
+        body, rc, sent = r['body'], r['rc'], 0
+        buf = self.alloc(r['chunk'] + 1)
+        total = r.get('length', len(body))   # the answer's length as the server gave it (0: unknown)
+
+        def xfer(sent):
+            """libcurl's transfer-info callback (CURLOPT_XFERINFOFUNCTION, 64-bit counts: o32 puts each pair in even registers / stack words); the test's r['xfer'](url, sent, total) runs first. Non-zero aborts."""
+            if r.get('xfer'): r['xfer'](o[10002], sent, total)
+            if not o.get(20219): return 0
+            return self.nested(o[20219], o.get(10057, 0), 0, total & 0xffffffff, total >> 32, sent & 0xffffffff, sent >> 32, 0, 0, 0, 0)
+        if r['rc'] == 0 and xfer(0): rc = 42   # CURLE_ABORTED_BY_CALLBACK
+        for i in range(0, len(body) if rc == 0 else 0, r['chunk']):
+            part = body[i:i + r['chunk']]; self.u.mem_write(buf, part); sent += len(part)
+            if self.nested(o[20011], buf, 1, len(part), o[10001]) != len(part): rc = 23; break   # CURLE_WRITE_ERROR: the callback cut the transfer off
+            if xfer(sent): rc = 42; break
+        self.calls.append(('curl_perform', o[10002], rc))
+        if r['err']: self.u.mem_write(o[10010], r['err'].encode() + b'\0')
+        self.curl_last[h] = {0x200002: r['code'], 0x200014: r['redirects'], 0x20000d: r['verify'], 0x100001: r['eff'], 0x100020: r['ip'], 0x600008: sent,
+                             0x600032: r['total'], 0x600033: r['dns'], 0x600034: r['conn'], 0x600038: r['tls'], 0x600036: r['first']}
+        return rc
 
     def set_language(self, table):
         """Make the mocked stock translation answer in a language (a strings table name such as 'ru_RU'): our keys from
@@ -934,6 +1022,7 @@ class Machine:
     mode = 0                 # mclGetPlayMode
     play_pos = -1            # mclGetPlayPos: the playing track's index in the play queue (*PLAY_QUEUE), -1 for none
     seed = 12345             # toolsRandnum
+    wifi = 4                 # stock get_wifisignal: -1 not connected, else the level 2..5
     wall = 1800000000        # time(): the wall clock, seconds (2027-01-15 08:00 UTC); tz: seconds localtime adds
     tz = 0
     clock = 1                # time_now_ms

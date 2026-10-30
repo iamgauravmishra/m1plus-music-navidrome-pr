@@ -598,6 +598,12 @@
 #define PL_TEXT_R 16
 #define PL_CARD_MIN 180
 #define PL_CARD_MAX 292
+/* The Podcasts refresh dialog (tools/pod_ui.py podcasts_dialog, patch/podcasts.c pg_dlg_*): the Playlists card's glass, PD_CARD_W wide and exactly as high as that image (4 rows of 50),
+ * centred in the 450 px client area; the progress bar is PD_BAR_W wide (the fill's width is the payload's) and PD_BAR_H high; the Cancel row fills the card's last PL_ROW_H. */
+#define PD_CARD_W 280
+#define PD_CARD_H 200
+#define PD_BAR_W 240
+#define PD_BAR_H 6
 
 /* ---------------------------------------------------------------------------
  * The Songs page (patch/songs.c, docs/modules/songs.md; the widgets are in ui/m1plus_songs.bin, tools/pod_ui.py SG_*, which reads this file and must equal it).
@@ -917,7 +923,7 @@
  * are pcmodel.c, the page is podcasts.c. pc_ep_t / pc_show_t are the model's records (test/pod/podcasts.py reads them by these offsets; pcmodel.c asserts the sizes). */
 #define PC_FILE 128               /* a file or folder name, the NUL included (a longer name is skipped: it would not fit the path buffers) */
 #define PC_TITLE 96               /* a title, UTF-8 bytes with the NUL (cut before a continuation byte) */
-#define PC_URL 160                /* a feed or image url of the show file (kept for the subscribe phase; not used by P0) */
+#define PC_URL 320                /* a feed or image url of the show file (the feed url the refresh fetches: a longer one is refused at import) */
 #define PC_MAX_EPS 300            /* episodes of one show the model holds (newest kept) */
 #define PC_MAX_SHOWS 40           /* shows the page lists */
 #define PC_EP_SIZE 248            /* pc_ep_t: file[PC_FILE] title[PC_TITLE] guid pub dur length hash state */
@@ -931,14 +937,15 @@
 #define PC_LOCAL 0                /* pc_ep_t.state: the file is on the card */
 #define PC_PART 1                 /* a .part file only (a download under way or cut off) */
 #define PC_REMOTE 2               /* metadata only: not downloaded */
-#define PC_SHOW_SIZE 684          /* pc_show_t: dir[PC_FILE] title[PC_TITLE] cover[PC_FILE] feed[PC_URL] image[PC_URL] count hash fresh */
+#define PC_SHOW_SIZE 1008         /* pc_show_t: dir[PC_FILE] title[PC_TITLE] cover[PC_FILE] feed[PC_URL] image[PC_URL] count hash fresh checked */
 #define PC_SH_TITLE 128
 #define PC_SH_COVER 224
 #define PC_SH_FEED 352
-#define PC_SH_IMAGE 512
-#define PC_SH_COUNT 672
-#define PC_SH_HASH 676
-#define PC_SH_NEW 680             /* episodes with no saved place and not played (the dot count), set by pc_load_show_counts */
+#define PC_SH_IMAGE 672
+#define PC_SH_COUNT 992
+#define PC_SH_HASH 996
+#define PC_SH_CHECKED 1004        /* seconds since 1970 of the last successful refresh (the show file's checked=), 0 = never */
+#define PC_SH_NEW 1000            /* episodes with no saved place and not played (the dot count), set by pc_load_show_counts */
 #define PC_RING_SLOTS 512         /* places kept (q2-pod's ring size); a slot is 16 bytes: hash, pos, len, flags */
 #define PC_SLOT_SIZE 16
 #define PC_RING_HEAD 8            /* "PCR1" and the slot count */

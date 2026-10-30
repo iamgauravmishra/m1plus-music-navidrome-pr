@@ -55,6 +55,7 @@ ACT_REGEN = 20   # action row (no chevron, like the Shuffle rows): make today's 
 ACT_LIST = 21    # open a stock song list on the Songs page (patch/songs.c songs_open_list; arg = its HOME_* tile, where a window that will not open falls back)
 ACT_IPOD = 22    # open the Pod, the virtual iPod Classic page: a fullscreen window with a touch click wheel (patch/ipod.c ipod_open)
 ACT_PODCASTS = 23   # open the Podcasts page: the shows in /mnt/mmc/Podcasts and their episodes (patch/podcasts.c podcasts_open)
+ACT_NETPROBE = 25 # the Network Probe row (Developer): a thread checks HTTPS, Wi-Fi, the clock, RAM and the screen-off soak, and logs to /mnt/mmc/m1plus-probe.log (patch/probe.c)
 ACT_CTHEME = 24  # value row: the Cassette Mode page's theme, Normal, Chrome or Metal; a tap cycles it (patch/tape.c tape_theme_cycle)
 SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
@@ -210,9 +211,10 @@ CUSTOMIZE_PAGE = Page('m1plus_customize', 'm1plus_customize_page', 'Customize', 
 ])
 
 # Customize > Developer: the developer's tools. Screenshot: a confirm dialog, then a 5 s countdown (cancellable), then the screen
-# is written to the card (patch/shot.c).
+# is written to the card (patch/shot.c). Network Probe: a confirm dialog, then one worker thread logs what the network stack can do to the card (patch/probe.c).
 DEVELOPER_PAGE = Page('m1plus_developer', 'm1plus_developer_page', 'Developer', rows=[
     Row('Screenshot', ACT_SHOT),
+    Row('Network Probe', ACT_NETPROBE),
 ])
 
 # Customize > Home Screen: the Boot to M1+ Music switch (patch/home.c), the Recent Albums and Daily Mix switches (the shelf and the card of the Home menu), Regenerate

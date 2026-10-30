@@ -140,8 +140,8 @@ def run(ctx):
     # 2. The Developer row: the only row of Customize > Developer, bound to ACT_SHOT; a tap asks first.
     S = P.DEVELOPER_PAGE
     item = 0
-    expect(S.key == 'm1plus_developer' and [r.label for r in S.rows] == ['Screenshot'] and S.rows[item].action == P.ACT_SHOT == 14 and P.PAGES[P.DEVELOPER_PAGE_INDEX] is S,
-           'Screenshot is the only row of the Developer page')
+    expect(S.key == 'm1plus_developer' and [r.label for r in S.rows] == ['Screenshot', 'Network Probe'] and S.rows[item].action == P.ACT_SHOT == 14 and P.PAGES[P.DEVELOPER_PAGE_INDEX] is S,
+           'Screenshot is the first row of the Developer page (Network Probe the second)')
     expect(not [r for page in P.PAGES if page is not S for r in page.rows if r.action == P.ACT_SHOT],
            'no other page has a Screenshot row (menu, Extras and Main Menu page have none)')
     rows_s = PSYMS[f'pod_rows_{P.DEVELOPER_PAGE_INDEX}']
