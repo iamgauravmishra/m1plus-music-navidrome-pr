@@ -104,6 +104,10 @@ The state is page-scoped (`ah`, one page): `ah_tint_start` (from the header hook
 `EVT_DESTROY` on it (`ah_on_destroy` removes the timer and clears the state) and starts a `AH_TICK_MS` 300 timer (`ah_tick`) that waits for
 the cover thread: when the cover widget's (looked up by name each tick: a rebuilt header made a new one) `image` property is a `file://`
 url (stock's refresh timer `0x5261d8` sets it) that exists, `cc_decode` box-averages it, `ah_set_color` sets the colour and the timer ends.
+A tick works only while the page is in front (`ah.fg`) and the screen is lit (`pod_screen_lit`); otherwise it only repeats (no lookup,
+no decode, no try counted), so a cover that resolves under another page tints it, and the bar, on the first tick back in front. The poll
+gives up (`ah_spent`: the timer ends, the page stays black, a rebuilt header starts no new one) after `AH_TICK_MAX` 100 working ticks (30 s
+in front without a cover) or `AH_DECODE_MAX` 3 cover files that do not decode.
 The placeholder disc, an album without art, the All albums card (never a timer) and a refused timer or decode leave the page black; a page with
 no window gets no tint but the painted corners; the kill switch skips the hook. A header built again for the same page keeps the colour
 and starts no timer.

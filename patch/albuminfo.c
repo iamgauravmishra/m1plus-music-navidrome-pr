@@ -156,13 +156,15 @@ static void ah_meta(char *out, unsigned size, int n) {
  * painted over in the colour the window has behind them, anti-aliased (pod_corners, the table Now Playing's corners use), from the
  * cover widget's own EVT_AFTER_PAINT, so they are exact on black and on a tint. The window colour is black until the page shows
  * a real cover (the image property of img_albumcover_m is a file:// url: the cover thread has rendered /tmp/abp/<md5>1.jpg, the
- * stock refresh timer 0x5261d8 set it); then a page timer decodes the file, box-averages it (cc_decode, as Now Playing's tint
- * does) and sets the window's bg_color to pod_tone of that, under the static gradient image of the asset (ah_tint). The
- * placeholder disc, the All albums card and a page without a window stay black. One page at a time (ah.win); the timer and the
- * state go with the window's EVT_DESTROY. The header may be built again (to-foreground): the state is kept for the same window. */
+ * stock refresh timer 0x5261d8 set it); then a page timer (working only in front with the screen lit, and for a bounded number of
+ * tries, ah_spent) decodes the file, box-averages it (cc_decode, as Now Playing's tint does) and sets the window's bg_color to
+ * pod_tone of that, under the static gradient image of the asset (ah_tint). The placeholder disc, the All albums card and a
+ * page without a window stay black. One page at a time (ah.win); the timer and the state go with the window's EVT_DESTROY. The
+ * header may be built again (to-foreground): the state is kept for the same window. */
 static struct {
     void *win; /* the page window the state belongs to, 0 none */
-    unsigned timer; /* the polling timer, 0 none (never started, or the tint is done) */
+    unsigned timer; /* the polling timer, 0 none (never started, the tint is done, or given up) */
+    unsigned tries, fails; /* ticks that looked for the cover, cover files that did not decode */
     unsigned color; /* the window's bg_color as 0x00BBGGRR: black until tinted */
     int tinted;
     int fg; /* 1 from the page's start and EVT_WINDOW_TO_FOREGROUND, 0 after EVT_WINDOW_TO_BACKGROUND */
@@ -280,17 +282,26 @@ static void ah_work(void) {
     for (i = 0; i < 7; ++i)
         if (url[i] != scheme[i]) return; /* the placeholder disc ("albumcover_info"): nothing to tint from */
     if (access(url + 7, F_OK) != 0) return;
-    if (cc_decode(ah.win, url, 1, 1, 1, &px)) ah_tone(px); /* the corners follow from their next paint */
+    if (cc_decode(ah.win, url, 1, 1, 1, &px))
+        ah_tone(px); /* the corners follow from their next paint */
+    else
+        ++ah.fails;
 }
 
+/* The poll gave up: no cover within AH_TICK_MAX working ticks, or AH_DECODE_MAX files that do not decode. The page stays black. */
+static int ah_spent(void) { return ah.tries >= AH_TICK_MAX || ah.fails >= AH_DECODE_MAX; }
+
+/* Works only while the page is in front and the screen is lit (nothing of it is seen otherwise); a skipped tick is not a try. */
 static int ah_tick(const void *timer) {
     (void)timer;
-    if (!ah.win || ah.tinted) { /* gone, or done: the timer ends */
+    if (!ah.win || ah.tinted || ah_spent()) { /* gone, done, or given up: the timer ends */
         ah.timer = 0;
         return RET_OK;
     }
+    if (!ah.fg || !pod_screen_lit()) return RET_REPEAT;
+    ++ah.tries;
     ah_work();
-    if (ah.tinted) {
+    if (ah.tinted || ah_spent()) {
         ah.timer = 0;
         return RET_OK;
     }
@@ -315,7 +326,8 @@ static void ah_tint_start(void *item, void *art) {
         ah.barok = widget_on(win, EVT_WINDOW_TO_BG, ah_on_background, win) &&
                    widget_on(win, EVT_WINDOW_TO_FG, ah_on_foreground, win);
     }
-    if (*(unsigned char *)(CLASSINFO + CLASSINFO_ALL_SONGS) || ah.tinted || ah.timer) return; /* the card stays black */
+    if (*(unsigned char *)(CLASSINFO + CLASSINFO_ALL_SONGS) || ah.tinted || ah.timer || ah_spent())
+        return; /* the card stays black */
     if (ah_cached()) return;
     ah.timer = timer_add(ah_tick, (void *)0, AH_TICK_MS);
     if (ah.timer) ah_work();
