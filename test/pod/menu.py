@@ -228,8 +228,9 @@ DEF_EXTRAS = ['Now Playing', 'Shuffle', 'Pod', 'Genres', 'Composers', 'Folders',
               'Update Library', 'CD Ripper', 'Tidal']
 
 
-def open_menu(data=None, rows=MENU_ROWS, present=()):
+def open_menu(data=None, rows=MENU_ROWS, present=(), count=False):
     m = page_machine(rows)
+    if count: m.count()
     if data is not None: m.fs[MENU_FILE] = data
     m.call(PSYMS['m1plus_home_click'], a0=m.icon(str(pod_pages.HOME_ENTRY)), count=3000000)
     return m
@@ -339,7 +340,7 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
            b'1-2 \n', b'1-x\n', b'1-9\n', b'-0123456789', b'012345678-abcdefghij\n', b'012345678-abcdefgh0\n', b'0123456-abcdefghij1\n', b'012345678-abcdefghi-\n',
            b'0123456789-abcdefghij', b'012345678abcdefghi-j\n', b'012345678abcdefghij-\n\n']
     for data in bad:
-        m = open_menu(data)
+        m = open_menu(data, count=True)
         expect(shown_order(m) == default and P.parse_menu(data) == P.DEFAULT_MENU
                and P.parse_menu_full(data) == (P.DEFAULT_MENU, []), f'saved {data[:20]!r} ({len(data)} bytes): the default menu, nothing turned off')
         expect(m.icount < 200000, f'saved {len(data)} bytes: read is bounded, the open stays cheap ({m.icount} instructions)')
@@ -382,9 +383,9 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
            'the Python model: "<shown>[-<off>]", the default 12345, the off part in the Extras order, Customize never off, the longest list fits the file cap')
     m = open_menu(b'0\n'); m.fs[MENU_FILE] = b'0\n'
     expect(m.fs[MENU_FILE] == b'0\n', 'a valid list is never rewritten by reading it')
-    m = open_menu(b'lkjihgfedcba876543210\n')
+    m = open_menu(b'lkjihgfedcba876543210\n', count=True)
     expect(m.icount < 200000, f'the longest valid list: arranging twenty-one rows stays cheap ({m.icount} instructions)')
-    m = open_menu(b'876543210-abcdefghi\n')
+    m = open_menu(b'876543210-abcdefghi\n', count=True)
     expect(m.icount < 200000, f'a long list with a long off part: arranging stays cheap ({m.icount} instructions)')
 
     # 11b. A page that is not ours (a row or the list missing) is left exactly as the asset has it

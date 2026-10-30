@@ -132,7 +132,7 @@ def run(ctx):
     freed = [c for c in m.calls if c[0] == 'free']
     expect(freed, 'closing the page frees what it allocated (the order included)')
     big = [(f'Album {i:04d}', f'Artist {(i * 37) % 4000:04d}') for i in range(4000)]
-    m = lib_machine(big); m.call(cover_open, count=200000000)
+    m = lib_machine(big).count(); m.call(cover_open, count=200000000)
     spent = m.icount
     shown, rows = shelf(m, 4000, step=401)
     mdl = model(big)

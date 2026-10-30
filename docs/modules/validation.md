@@ -8,7 +8,7 @@ integration. Commands, receipts and golden acceptance are defined in [workflow](
 | Test | Evidence |
 |---|---|
 | `test/patch.py`, `test/pod/*.py` | Execute the compiled MIPS payload under Unicorn with stock calls/libc mocked; selected tests also run stock constructors, layout and pointer code |
-| `test/pod/harness.py` | Load the final binary and ELF symbols; reject stale or changed source/binary identities; model widgets, stock services and watched memory |
+| `test/pod/harness.py` | Load the final binary and ELF symbols; reject stale or changed source/binary identities; model widgets, stock services and watched memory. Instruction counting is opt-in (`m.count()` before a measured call; `icount` on a machine that does not count is an error): its block hook is most of the emulation time, and an uncounted call has no step limit (a runaway ends at check.py's per-test timeout) |
 | `test/coverflow.py` | Compile the renderer/cache helpers for the host; check geometry, compositing, sampling and filters |
 | `test/demo_diff.py` | Limit stock-binary changes to the pinned edits, program header and appended payload |
 | `test/awtk_fill.py` | Exercise stock fill, image-scaling and transparency code |

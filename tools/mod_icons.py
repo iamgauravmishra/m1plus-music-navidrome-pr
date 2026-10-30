@@ -333,11 +333,26 @@ def build_svg(name, style, px, sw, solid, dx=0.0, dy=0.0, margin=0):
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{tot}" height="{tot}" viewBox="{vb}">'
             f'<g transform="translate({tx:.4f} {ty:.4f})" {g}>{body}</g></svg>')
 
+RSVG_CACHE = os.path.join(paths.ROOT, 'work', 'cache', 'rsvg')   # rsvg-convert's PNG by (version, svg, px), beside work/cache/build; M1_NO_CACHE skips it
+_rsvg_version = None
+
 def _rsvg(svg, px):
+    global _rsvg_version
     from PIL import Image
-    r = subprocess.run(['rsvg-convert', '-w', str(px), '-h', str(px), '-f', 'png'], input=svg.encode(),
-                       capture_output=True, check=True)
-    return Image.open(io.BytesIO(r.stdout)).convert('RGBA')
+    if _rsvg_version is None:
+        _rsvg_version = subprocess.run(['rsvg-convert', '--version'], capture_output=True, check=True).stdout
+    key = hashlib.sha256(b'\0'.join((_rsvg_version, svg.encode(), str(px).encode()))).hexdigest()
+    path = os.path.join(RSVG_CACHE, key[:2], key + '.png')
+    if os.environ.get('M1_NO_CACHE') or not os.path.isfile(path):
+        png = subprocess.run(['rsvg-convert', '-w', str(px), '-h', str(px), '-f', 'png'], input=svg.encode(),
+                             capture_output=True, check=True).stdout
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = f'{path}.{os.getpid()}.tmp'
+        with open(tmp, 'wb') as f: f.write(png)
+        os.replace(tmp, path)   # atomic: parallel tests may render the same glyph
+    else:
+        png = open(path, 'rb').read()
+    return Image.open(io.BytesIO(png)).convert('RGBA')
 
 def _crisp(im):
     a = im.getchannel('A').tobytes(); tot = sum(a) or 1

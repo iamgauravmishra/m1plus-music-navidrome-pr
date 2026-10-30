@@ -960,7 +960,7 @@ def big_library_tests(ctx):
     """17. A library of 20,000 songs: the index, the content height, the clamp, the rail jump, the ring, the cost of opening."""
     expect = ctx.expect
     big_titles = [f'{chr(65 + i * 26 // 20000)}{i:05d}' for i in range(20000)]
-    m = songs_machine(big_titles, big=True, cached=False)
+    m = songs_machine(big_titles, big=True, cached=False).count()
     m.class_lists[O['CLASS_ALBUMS']] = []
     open_page(m)
     biglay = Layout([t[0] for t in big_titles])

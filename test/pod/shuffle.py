@@ -220,7 +220,7 @@ def shuffle_tests(expect, menu):
 
     # 35. A huge library: Albums/Folders refuse past SHUFFLE_MAX songs before copying anything;
     #     Songs is the stock Songs path and has no cap of its own.
-    m = shuffle_machine([])
+    m = shuffle_machine([]).count()   # the step limit stops a sort past the cap
     one = song(m, '/mnt/mmc/big/01.flac', 'Big', 1)
     m.present.add('/mnt/mmc/big/01.flac')
     big = O['SHUFFLE_MAX']
@@ -243,7 +243,7 @@ def shuffle_tests(expect, menu):
     m.calloc_fail = False
     # the cost on a real-shaped library: 128 albums of 16 tracks, every album intact
     m2 = shuffle_machine([(f'/mnt/mmc/l/{a:03d}/{t:02d}.flac', f'Album {a:03d}', 16 - t) for a in range(128)
-                          for t in range(16)])
+                          for t in range(16)]).count()
     v = m2.call(play, a0=pod_pages.SHUFFLE_ALBUMS, count=2000000000)
     got = runs(m2.played[0], lambda r: field(m2, r, O['REC_ALBUM'])) if m2.played else []
     expect(v == 0 and len(got) == 128 and all(len(rs) == 16 and [m2.word(r + O['REC_TRACK']) for r in rs]
@@ -254,7 +254,7 @@ def shuffle_tests(expect, menu):
     FOLDER_COST = {}
     deep = '/mnt/mmc/Music/Library/Collection/Artist'
     for tag, prefix in (('short', '/mnt/mmc/l'), ('long', deep)):
-        m3 = shuffle_machine([(f'{prefix}/{a:03d}/{t:02d}.flac', f'Album {a:03d}', 16 - t) for a in range(128) for t in range(16)])
+        m3 = shuffle_machine([(f'{prefix}/{a:03d}/{t:02d}.flac', f'Album {a:03d}', 16 - t) for a in range(128) for t in range(16)]).count()
         v = m3.call(play, a0=pod_pages.SHUFFLE_FOLDERS, count=2000000000)
         got = runs(m3.played[0], lambda r: field(m3, r, O['REC_PATH']).rsplit('/', 1)[0]) if m3.played else []
         expect(v == 0 and len(got) == 128 and len({k for k, _ in got}) == 128

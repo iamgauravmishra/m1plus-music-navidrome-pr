@@ -65,7 +65,7 @@ class BM(Machine):
         elif name == 'fclose' and a0 in self.pos:
             ret = 0
         if ret is not None:
-            self.icount += 1
+            self._icount += 1
             u.reg_write(UC_MIPS_REG_V0, ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
             return
         return super()._hook(u, address, size, _)
@@ -634,7 +634,7 @@ def run(ctx):
     def shown_bar(**kw):
         m = BM(**kw); m.placeholder(); m.status = 2; m.track(); m.cover(); m.start(); m.first()
         return m
-    def paint_before(m, e): m.call(PSYMS['mb_on_before_paint'], a0=0, a1=e, count=5000000); return m.icount
+    def paint_before(m, e): m.count().call(PSYMS['mb_on_before_paint'], a0=0, a1=e, count=5000000); return m.icount
     def readfb(m, fb, n): return bytes(m.u.mem_read(fb, n))
     def expected(raw, pitch=2 * FBW, ox=OX, oy=OY):
         out = bytearray(raw)

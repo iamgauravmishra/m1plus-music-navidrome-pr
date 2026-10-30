@@ -192,7 +192,7 @@ def run(ctx):
     probe([('d', 100, 200, 0), ('u', 100, 280, 40)] + [('d', 100, 200, 100), ('u', 100, 270, 40)])
     expect(len(seen) == 2, 'and never again')
     # instructions of the hook itself (called directly, on a fresh list)
-    c = SM(True); c.build()
+    c = SM(True).count(); c.build()
     e = c.alloc(0x30); c.u.mem_write(e, bytes(0x30))
     cost = {}
     for kind in ('m', 'd', 'u'):

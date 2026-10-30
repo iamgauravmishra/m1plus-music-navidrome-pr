@@ -87,7 +87,7 @@ class NowMachine(Machine):
         elif name == 'fclose' and a0 in self.pos:
             ret = 0
         if ret is not None:
-            self.icount += 1
+            self._icount += 1
             u.reg_write(UC_MIPS_REG_V0, ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
             return
         return super()._hook(u, address, size, _)
@@ -573,7 +573,7 @@ def run(ctx):
         return m
     def reads(m): return sum(1 for c in m.calls if c[0] == 'fopen' and c[1] == '/tmp/coverpic.jpg')
     def bytes_read(m): return sum(len(m.blobs['/tmp/coverpic.jpg']) for c in m.calls if c[0] == 'fopen')
-    m = big_run(); n = len(m.styles)
+    m = big_run().count(); n = len(m.styles)
     m.tick(count=50000000)
     steady = m.icount
     expect(len(m.styles) == n and steady < 20000 and not [c for c in m.calls if c[0] == 'fread'],

@@ -1320,7 +1320,7 @@ def refresh_and_fallback_tests(ctx):
     # the cost: the payload's own instructions of a to-foreground that resolves one entry against a library of n albums (the stock query itself is not emulated)
     cost = {}
     for n in (100, 1000, 4000):
-        m = ST([entry('A', 'Last One')], start=False); m.clock = 1000
+        m = ST([entry('A', 'Last One')], start=False).count(); m.clock = 1000
         library(m, rows=[(f'Album {i}', 'V', f'/m/{i}.flac') for i in range(n - 1)] + [('Last One', 'V', '/m/z.flac')])
         m.start(); m.clock = 1000 + O['RC_RESOLVE_MS']; m.fire(EVT_FG); cost[n] = m.icount
         expect(n != 4000 or pod_recent.parse(m.fs[RECENT])[0][1] == album_key('V', 'Last One'), 'the last row of 4000 albums resolves')

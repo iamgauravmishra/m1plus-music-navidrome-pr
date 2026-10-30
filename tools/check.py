@@ -198,7 +198,7 @@ def main():
             for f in cf.as_completed(pending):
                 r = f.result(); tests.append(r)
                 print(f'{r["test"]}: {"PASS" if test_ok(r) else "FAIL " + workflow.exit_description(r["rc"])} ({r["secs"]:.1f}s)', flush=True)
-        workflow.write(TIMES, {**times, **{t['test']: t['secs'] for t in tests}})
+        workflow.write(TIMES, {n: s for n, s in {**times, **{t['test']: t['secs'] for t in tests}}.items() if n in ALL_TESTS})   # names no longer run are dropped
         tests_passed = len(tests) == len(names) and all(test_ok(t) for t in tests)
         if workflow.input_key() != key: tests_passed = False
         if tests_passed and (a.dev or 'release' in sel):

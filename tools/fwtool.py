@@ -179,7 +179,7 @@ def cmd_repack(a):
     cmd = ['true'] if a.reuse_squashfs else ['mksquashfs', rootfs, out_sq, '-noappend', '-no-xattrs', '-all-root', '-pseudo-override', '-pf', pf,
            '-comp', sb['compression'], '-b', str(sb['block_size']), '-mkfs-time', str(sb['mkfs_time']),
            '-root-time', ra['time'], '-root-mode', ra['mode'], '-root-uid', ra['uid'], '-root-gid', ra['gid'],
-           '-processors', '1', '-no-progress', '-quiet']
+           '-no-progress', '-quiet']   # every core: mksquashfs 4.4+ writes the same image at any thread count (the golden hash checks it)
     if sb['compression'] == 'lzo' and not a.reuse_squashfs: cmd += ['-Xcompression-level', '9']
     if a.tailends and not a.reuse_squashfs: cmd += ['-tailends']   # pack file tails into fragments too (data layout only)
     run(cmd)
