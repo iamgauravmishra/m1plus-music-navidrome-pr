@@ -290,7 +290,8 @@
  * Only a real cover tints (the page's image is a file:// url): the placeholder disc and the All albums card stay black. The
  * cover's corners are painted in the colour behind them from its after-paint (the cover is AH_ART_Y below the header's top,
  * the header scrolls: window row = AH_ART_Y - yoffset + cover row). AH_TICK_MS: the poll that waits for the cover
- * thread's file.
+ * thread's file; it works only while the page is in front and the screen is lit, and gives up (the page stays black) after
+ * AH_TICK_MAX such ticks (30 s) or AH_DECODE_MAX cover files that do not decode.
  * The floating controls (docs/modules/album-page.md): the stock navbar view is a band over the top of the page, AH_NAV_W x AH_NAV_BAND_H at the
  * window's origin, last in the window (above the list, which starts at the window's top and is AH_WIN_H high); the stock builders'
  * buttons (main's slots, docs/modules/navbar.md; AH_NAV_H high in 0x526a3c) draw glass discs through the page theme. The header's first
@@ -303,6 +304,8 @@
 #define AH_TINT_A_BOT 200
 #define AH_TINT_ROWS 344        /* AH_HDR_H: the ramp ends with the header */
 #define AH_TICK_MS 300
+#define AH_TICK_MAX 100
+#define AH_DECODE_MAX 3
 /* The tone cache (patch/common.c): entries of {key, tone, stamp}, 12 bytes each. The album page names its album as the stock
  * header does: classinfo + 0xd the title, the artist at +0x10d (+0x20d when g_class_type is 0xff14, @0x524b00). */
 #define TONE_CACHE_N 64

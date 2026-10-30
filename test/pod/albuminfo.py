@@ -303,7 +303,34 @@ def tint_tests(expect):
     m, item, art = tint_machine(covers['red']); m.present.discard('/tmp/abp/c1.jpg')
     expect(m.call(tick, count=3000000) == O['RET_REPEAT'] and not styles(m), 'a cover url whose file is not there (yet): nothing')
     m, item, art = tint_machine(covers['red']); m.load_image = 1
-    expect(m.call(tick, count=3000000) == O['RET_REPEAT'] and not styles(m), 'a file that does not decode: nothing, polling goes on')
+    rets = [m.call(tick, count=3000000) for _ in range(O['AH_DECODE_MAX'])]
+    loads = lambda m: sum(c[0] == 'widget_load_image' for c in m.calls)
+    expect(rets == [O['RET_REPEAT']] * (O['AH_DECODE_MAX'] - 1) + [0] and not styles(m),
+           f'a file that does not decode: nothing, and the timer gives up after {O["AH_DECODE_MAX"]} tries ({rets})')
+    m.call(tick, count=3000000)
+    expect(not loads(m) and not styles(m), 'a tick after giving up decodes nothing')
+    # the placeholder disc for good: the timer gives up after AH_TICK_MAX working ticks
+    m, item, art = tint_machine()
+    rets = [m.call(tick, count=3000000) for _ in range(O['AH_TICK_MAX'])]
+    expect(rets[:-1] == [O['RET_REPEAT']] * (O['AH_TICK_MAX'] - 1) and rets[-1] == 0 and not styles(m),
+           f'no cover in {O["AH_TICK_MAX"]} ticks: the timer ends, the page stays black')
+    m.calls.clear(); m.real_cover(art, covers['red']); m.call(tick, count=3000000)
+    expect(not styles(m) and 'widget_lookup' not in m.names(), 'after giving up: no lookup, no tint')
+    # in the background or with the screen dark: no work, no try counted; back in front the cover tints
+    m, item, art = tint_machine(covers['red']); m.fire(O['EVT_WINDOW_TO_BG']); m.calls.clear(); m.styled.clear()
+    rets = [m.call(tick, count=3000000) for _ in range(O['AH_TICK_MAX'] + 5)]
+    expect(set(rets) == {O['RET_REPEAT']} and not styles(m) and not [c for c in m.calls if c[0] in ('widget_lookup', 'widget_load_image')],
+           'a page in the background: the timer keeps waiting, no lookup, no decode, no tries used')
+    m.fire(O['EVT_WINDOW_TO_FG'])
+    expect(m.call(tick, count=3000000) == 0 and styles(m) == [(m.page_window, 'normal:bg_color', tone_word(covers['red']))],
+           'back in front: the next tick tints the page and the timer ends')
+    m, item, art = tint_machine(covers['red']); m.screen(0); m.calls.clear(); m.styled.clear()
+    rets = [m.call(tick, count=3000000) for _ in range(O['AH_TICK_MAX'] + 5)]
+    expect(set(rets) == {O['RET_REPEAT']} and not styles(m) and not [c for c in m.calls if c[0] in ('widget_lookup', 'widget_load_image')],
+           'the screen dark: the timer keeps waiting, no lookup, no decode, no tries used')
+    m.screen(1)
+    expect(m.call(tick, count=3000000) == 0 and styles(m) == [(m.page_window, 'normal:bg_color', tone_word(covers['red']))],
+           'the screen lit again: the next tick tints the page')
     # no timer: no tint (the page stays black); no window: no state at all, the corners are still painted
     m = AlbumMachine(); m.timer_fail = True; item = m.header(); art = m.kids(item)[0]
     expect(paint_corners(m, art) and all(f[0] & 0xffffff == 0 for f in m.fills), 'a refused timer: the page stays black, its corners are painted all the same')
@@ -640,12 +667,12 @@ def bar_tests(expect):
     # an event whose context is not the current window changes nothing
     n = len(m.bar_styles()); fn = m.bound[win][BG][0]; m.call(fn, a0=win + 4, a1=0, count=100000)
     expect(len(m.bar_styles()) == n, 'a window event of another page changes nothing')
-    # a tint that arrives while the page is covered: the window colours, the bar waits for the foreground
+    # a cover that arrives while the page is covered: nothing until the page is in front, then the page and the bar together
     m, item, art = page(None); win = m.page_window; m.fire(BG)
     m.real_cover(art, red); m.call(tick, count=3000000)
-    expect(not m.bar_styles() and [s for s in m.styled if s[0] == win], 'a cover that resolves while the page is covered tints the page, not the bar')
-    m.fire(FG)
-    expect(m.bar_styles() == [model(t)], 'and the bar follows when the page is in front again')
+    expect(not m.bar_styles() and not [s for s in m.styled if s[0] == win], 'a cover that resolves while the page is covered: no tint yet')
+    m.fire(FG); m.call(tick, count=3000000)
+    expect(m.bar_styles() == [model(t)] and [s for s in m.styled if s[0] == win], 'the first tick in front tints the page and the bar')
 
     # destroy
     m, item, art = page(red); win = m.page_window; m.styled.clear()
