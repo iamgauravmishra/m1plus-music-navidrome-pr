@@ -25,7 +25,7 @@ Follow the [installation guide](docs/install.md) for preparation, updates and re
 <details>
 <summary>Release status</summary>
 
-Status: the release is V2.1pD (pC + the album page's cover-tint poll works only in front with the screen lit and gives up after bounded tries; pC: the Pod polished after iPlayr, test build pAPE flashed). Milestones, hardware results and lessons:
+Status: the release is V2.1pE (pD + playlist mosaics look a repeated album up once, cover-file checks one call lighter; pD: the album page's cover-tint poll works only in front with the screen lit and gives up after bounded tries). Milestones, hardware results and lessons:
 `docs/history.md`; per-tag details are in git.
 
 </details>

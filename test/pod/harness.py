@@ -172,6 +172,7 @@ class Machine:
         self.children = {}          # parent handle -> [child handles]
         self.types = {}             # handle -> widget type string (widget_get_type)
         self.deques = {}            # handle -> list of record addresses
+        self.deque_reads = {}       # handle -> deque_at calls on it
         self.showlist = []          # what loadLocalClassList leaves in *pdeq_showlist
         self.playlists = []         # the playlist rows loadLocalClassList(0xf00b) leaves in *pdeq_playlist
         self.playlist_songs = {}    # playlist id -> its song rows (loadLocalClassList(0xff13) with classinfo[1] = the id)
@@ -852,6 +853,7 @@ class Machine:
             ret = len(self.deques.get(a0, []))
         elif name == 'deque_at':
             items = self.deques.get(a0, []); ret = items[a1] if a1 < len(items) else 0
+            self.deque_reads[a0] = self.deque_reads.get(a0, 0) + 1
             if a1 >= len(items): self.calls.append(('deque_at_oob', a1, len(items)))   # the device's deque_at reads past the end: a crash there
         elif name == 'deque_destroy':
             self.deques.pop(a0, None); self.calls.append(('deque_destroy',))

@@ -562,6 +562,12 @@ def run(ctx):
     m = PM([(1, 'Comp', [0, 1])], other_artist=(0, 1)); open_page(m)
     blits, _, _ = settle(m)
     expect(all(near(a, b2) for a, b2 in zip(quadrants(m, cell_blit(blits, 0)), want_mosaic([0, 1]))), 'songs by another artist find their album\'s cover through the library list')
+    # ... and only once per album: a song whose key was looked at already (its cover is in, or it had none) does not walk the library list again
+    m = PM([(1, 'Repeat', [30] * 20 + [39] * 10)], albums=40, missing=(39,)); open_page(m)
+    blits, _, _ = settle(m)
+    reads = sum(n for h, n in m.deque_reads.items() if len(m.deques.get(h, [])) == 40)
+    expect(reads <= 40, f'repeated albums look the library up once: one pass for the coverless album, none for the repeats ({reads} reads)')
+    expect(all(near(a, b2) for a, b2 in zip(quadrants(m, cell_blit(blits, 0)), want_mosaic([30]))), 'the repeated album still fills the tile')
 
     # 7. Tap: the playlist opens in our Songs page (patch/songs.c songs_open_playlist; test/pod/songs.py lists_tests has the page); a Songs window that will not
     #    open leaves the stock songs page (allmusic_page, class 0xff13) with its id in classinfo[1] and its name as the title
