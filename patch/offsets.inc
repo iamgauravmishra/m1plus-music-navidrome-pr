@@ -97,7 +97,7 @@
 #define CF_BRIGHT2 128
 #define CF_REFLECT 26
 #define CF_REFLECT_TOP 64
-/* The iPod page's Cover Flow screen (patch/ipod_cf.c, docs/modules/ipod-coverflow.md): the same depth renderer, scaled by 112 / 168 (0.667) for the 320 x 240 screen under the title bar:
+/* The iPod page's Cover Flow screen (patch/ipod_cf.c, docs/modules/ipod-coverflow.md): the same depth renderer, scaled by 128 / 168 (0.762) for the 320 x 240 screen under the title bar:
  * a 320 x IPCF_FRAME_H frame on white (IPCF_BG; r | g << 8 | b << 16) drawn at y IPCF_FRAME_Y (= IP_BAR_H), the centre cover IPCF_ART px at IPCF_TOP, seen from IPCF_EYE, the first side cover IPCF_X1 out and IPCF_Z1 back, the rest IPCF_XS / IPCF_ZS
  * apart; IPCF_REFLECT px of reflection; the cover three out keeps IPCF_TAIL of 256 (seven covers show). The two caption lines start at IPCF_CAP_Y, IPCF_CAP_H high each. The
  * slide eases to the target album: each IPCF_FRAME_MS tick covers dt / (dt + IPCF_TAU_MS) of what is left, ends within IPCF_DONE (1/64 album), and never starts more than
@@ -105,14 +105,14 @@
 #define IPCF_FRAME_Y 24
 #define IPCF_FRAME_H 168
 #define IPCF_BG 0xffffff
-#define IPCF_ART 112
-#define IPCF_TOP 20
-#define IPCF_EYE 208
-#define IPCF_X1 74
-#define IPCF_XS 32
-#define IPCF_Z1 64
-#define IPCF_ZS 15
-#define IPCF_REFLECT 34
+#define IPCF_ART 128
+#define IPCF_TOP 18
+#define IPCF_EYE 238
+#define IPCF_X1 84
+#define IPCF_XS 37
+#define IPCF_Z1 73
+#define IPCF_ZS 17
+#define IPCF_REFLECT 20
 #define IPCF_TAIL 72
 #define IPCF_CAP_Y 192
 #define IPCF_CAP_H 22
@@ -842,9 +842,11 @@
 #define IP_H 480
 #define IP_SCREEN_H 240
 #define IP_BAR_H 24
-#define IP_ROW_H 27
-#define IP_ROWS 8                 /* (240 - 24) / 27 */
-#define IP_SPLIT_X 180            /* the main menu's list ends here; the cover pane is right of it (the iPod 6G split screen) */
+#define IP_ROW_H 30               /* a text row: 18 px bold text */
+#define IP_ROWS 7                 /* 24 + 7 x 30 = 234 of the 240 px: no partial row */
+#define IP_TALL_H 54              /* a cover row (Albums, Songs, Playlists): a 52 px cover, 18 px bold title over a 16 px subtitle */
+#define IP_TALL_ROWS 4            /* 24 + 4 x 54 = 240 */
+#define IP_SPLIT_X 160            /* split menu and cover pane */
 #define IP_WHEEL_X 50
 #define IP_WHEEL_Y 250
 #define IP_WHEEL_D 220
@@ -861,36 +863,52 @@
 #define IP_PAUSE_MS 250           /* a gap this long between two moves resets the speed and the tier */
 #define IP_TIER_MS 500            /* held above IP_FAST this long climbs one tier */
 #define IP_TAP_PX 12              /* a touch that travels less than this and turns no step is a tap */
-#define IP_ART 112                /* the Now Playing screen's picture */
+#define IP_LONG_MS 500            /* MENU held this long pops to the main menu (the reference's long press) */
+#define IP_ART 150                /* the Now Playing screen's picture */
 #define IP_TICK_MS 500
 #define IP_FIRST_MS 50
-#define IP_DEPTH 6
-#define IP_TEXT_X 10
+#define IP_DEPTH 7
+#define IP_TEXT_X 8
 #define IP_SEL_TOP 0xf7b15fu      /* the classic blue selection: #5FB1F7 to #0C62D2, top to bottom (as r | g << 8 | b << 16) */
 #define IP_SEL_BOT 0xd2620cu
 #define IP_BAR_TOP 0xf7f5f4u      /* the title bar: #F4F5F7 to #B4B8C0 */
 #define IP_BAR_BOT 0xc0b8b4u
 #define IP_BODY 0xcec9c6u         /* the window's colour behind the wheel: #C6C9CE */
 #define IP_PANE 0xf5f3f2u         /* the cover pane: #F2F3F5 */
-#define IP_NP_ART_X 12
-#define IP_NP_ART_Y 36
-#define IP_NP_TEXT_X 136
-#define IP_NP_BAR_Y 188
-#define IP_NP_BAR_H 10
-/* The main menu's cover pane, q2-pod's Split Home pan (patch/ipod.c, docs/modules/ipod.md "The cover pane"): the pane is right of the 1 px hairline at IP_SPLIT_X, under the title bar.
- * One cover, scaled once to IP_PANE_ART (the pane's height zoomed 110%, q2-pod DRIFT_ZOOM_PCT), is copied 1:1 into it: each axis a linear ping-pong across the zoom's margin
- * (IP_PANE_R px), in whole pixels, so nothing is resampled while it moves. q2-pod's DRIFT_* values; ticks are IP_DRIFT_MS long. */
-#define IP_PANE_X 181             /* IP_SPLIT_X + 1 */
-#define IP_PANE_W 139             /* 320 - IP_PANE_X */
-#define IP_PANE_H 216             /* IP_SCREEN_H - IP_BAR_H */
-#define IP_PANE_ART 238           /* the cover's bitmap, square: IP_PANE_H * 110 / 100, rounded up */
-#define IP_PANE_R 22              /* IP_PANE_ART - IP_PANE_H: the pan's range on each axis */
+#define IP_NP_ART_X 10
+#define IP_NP_ART_Y 30
+#define IP_NP_REFLECT 20          /* rows of the cover's reflection under it (30 % fading to 0): cover y 30 .. 180, reflection to 200, the bar from 208 */
+#define IP_MODE_PX 16             /* the play mode mark (shuffle, repeat, repeat one): a 16 px image, right edge at x 312, top y 28 (the reference's 13 pt heavy SF symbols) */
+#define IP_PLAY_PX 14             /* the playing track speaker (Lucide volume-2) in a plain song list: right aligned at IP_W - IP_TEXT_X, centred in its row */
+#define IP_MODE_X 296
+#define IP_MODE_Y 28
+#define IP_NP_TEXT_X 176
+#define IP_NP_BAR_Y 208
+#define IP_NP_BAR_H 14            /* the progress track: 14 px, x 58 .. 262 between 50 px time columns (8 px apart), with a short reflection (IP_NP_BAR_REFLECT) under it */
+#define IP_NP_TRACK_X 58
+#define IP_NP_TRACK_W 204
+#define IP_NP_BAR_REFLECT 6
+/* The split pages' cover pane (patch/ipod.c, docs/modules/ipod.md "The cover pane"): the pane starts flush at IP_SPLIT_X (no rule between the white menu and the cover), under the title bar.
+ * Covers are scaled once to IP_PANE_ART (the pane's height zoomed 110%) and copied 1:1 into it: a linear pan across the zoom's margin
+ * (IP_PANE_R px), in whole pixels, so nothing is resampled while it moves; the next cover cross-fades in every IP_PANE_HOLD_MS. */
+#define IP_PANE_X 160
+#define IP_PANE_W 160
+#define IP_SHADOW_W 10            /* the white menu casts a soft shadow on the pane's left edge (a real iPod's, iPlayr's radius 8, offset 4): IP_SHADOW_W columns, black, 52 % at the edge falling to 0 (the table in ip_shadow_alpha) */
+#define IP_PANE_H 240
+#define IP_PANE_ART 264
+#define IP_PANE_R 24
 #define IP_PANE_TRIES 48          /* random albums looked at (one cache file test each) for the cover shown while nothing with a cached cover plays */
 #define IP_DRIFT_MS 100           /* the page timer's interval while the cover pans on the main menu (IP_TICK_MS otherwise) */
-#define IP_DRIFT_X_MS 20000       /* one sweep across the range, x and y (2 * X * Y fits 32 bits) */
-#define IP_DRIFT_Y_MS 26000
+#define IP_PANE_KEYS 8            /* the random albums that rotate through the pane */
+#define IP_PANE_PAN_MS 7500       /* each cover pans linearly across the margin in this time, every other one the other way (the reference's 7.5 s, +-8% of the pane) */
+#define IP_PANE_HOLD_MS 6000      /* the next cover starts to fade in this long after the last one did */
+#define IP_PANE_FADE_MS 1500      /* the cross-fade, ease in and out */
+#define IP_PANE_NEXT_MS 3000      /* the next cover is decoded this long after the last fade began (a tick of its own, well before the next fade) */
+#define IP_PANE_SHARP_MS 4000     /* the playing album's full-resolution file is trusted this long after a track change even when demo was not seen making it (a stale file of the last track is never shown) */
+#define IP_FADE_TICK_MS 50        /* the timer's interval during a cross-fade (each frame is one pass over the 160 x 240 pane with two interpolations and a mix) */
+#define IP_PAN_MS 40              /* ... and while the cover pans: a steady 25 frames a second, each a sub-pixel step (IP_DRIFT_MS stays the pace of the other fast jobs) */
 #define IP_DRIFT_MAX_MS 250       /* a step is capped at this, so a stalled loop never jumps */
-#define IP_DRIFT_LOOK 5           /* while the pan ticks, the clock / battery / track look runs every this many ticks (0.5 s) */
+#define IP_DRIFT_LOOK 12          /* while the pan ticks, the clock / battery / track look runs every this many ticks (about half a second) */
 
 /* Podcasts (patch/pcmodel.c, patch/podcasts.c, docs/modules/podcasts.md). Files the user copies to /mnt/mmc/Podcasts/<Show>/; the episode model, the resume ring and the speeds
  * are pcmodel.c, the page is podcasts.c. pc_ep_t / pc_show_t are the model's records (test/pod/podcasts.py reads them by these offsets; pcmodel.c asserts the sizes). */

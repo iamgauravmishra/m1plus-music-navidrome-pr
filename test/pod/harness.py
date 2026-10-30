@@ -50,6 +50,11 @@ def sibling(name):
     return sys.modules[key]
 
 
+def jpeg_header(side):
+    """The first bytes of a JPEG of side x side (SOI, JFIF, a baseline SOF0): all the payload's size check reads."""
+    return b'\xff\xd8' + b'\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00' + b'\xff\xc0\x00\x11\x08' + struct.pack('>HH', side, side) + b'\x03\x01\x22\x00\x02\x11\x01\x03\x11\x01' + bytes(64)
+
+
 def tr_of(loc):
     """key -> our text for key in loc's table, as read_cstr returns it (the UTF-8 bytes as latin-1)."""
     t = pod_i18n.table_for(loc)
@@ -383,6 +388,8 @@ class Machine:
             self.children[a0] = []; self.calls.append(('widget_destroy_children', a0))
         elif name == 'widget_invalidate_force':
             self.calls.append(('widget_invalidate_force', a0))
+            if not hasattr(self, 'inval'): self.inval = []
+            self.inval.append((a0, struct.unpack('<4i', u.mem_read(a1, 16)) if a1 else None))   # the rectangle it was given (widget coordinates), None: the whole widget
         elif name == 'widget_factory':
             ret = 0x21000000
         elif name == 'widget_factory_create_widget':
@@ -689,7 +696,9 @@ class Machine:
         elif name == 'toolsGetAlbumCover':
             self.cover_size = (a2, a3)   # the thumbnail's requested size
             self.calls.append(('toolsGetAlbumCover', self.read_cstr(a0), self.read_cstr(a1)))
-            if self.album_cover: self.files[self.read_cstr(a1)] = 4096
+            if self.album_cover:
+                self.files[self.read_cstr(a1)] = 4096; self.present.add(self.read_cstr(a1))
+                if getattr(self, 'art_px', None): self.contents = getattr(self, 'contents', {}); self.contents[self.read_cstr(a1)] = jpeg_header(self.art_px)   # the stock encoder's output: fitted inside the request, never upscaled
             ret = self.album_cover
         elif name == 'toolsGetExternCover':
             self.calls.append(('toolsGetExternCover', self.read_cstr(a0), self.read_cstr(a1)))
@@ -749,8 +758,13 @@ class Machine:
         elif name == 'ftell':
             ret = self.files.get(self.fh[1], 0)
         elif name == 'fread':
-            self.u.mem_write(a0, struct.pack('<I', self.saved_album) if self.files.get(self.fh[1]) else b'\0' * 4)
-            ret = 1 if self.files.get(self.fh[1]) else 0
+            data = getattr(self, 'contents', {}).get(self.fh[1])
+            if data is not None:   # a file with real bytes (a test's JPEG header): size * count of them, from the start
+                chunk = data[:a1 * a2]; self.u.mem_write(a0, chunk) if chunk else None
+                ret = len(chunk) // a1 if a1 else 0
+            else:
+                self.u.mem_write(a0, struct.pack('<I', self.saved_album) if self.files.get(self.fh[1]) else b'\0' * 4)
+                ret = 1 if self.files.get(self.fh[1]) else 0
             self.calls.append(('fread', ret))
         elif name == 'fwrite':
             self.calls.append(('fwrite', self.word(a0))); ret = 1

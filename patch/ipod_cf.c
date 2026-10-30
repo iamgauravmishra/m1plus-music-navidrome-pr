@@ -8,7 +8,7 @@
  *
  *   renderer   Cover Flow's own depth renderer (patch/coverflow.c coverflow_render, header coverflow.h), with a shelf scaled to the 240 px screen (IPCF_*
  *              in offsets.inc) and seven covers visible (cfg.tail). The textures are the 168 px cache files (/mnt/mmc/.m1plus/covers, patch/covercache.c) the
- *              Cover Flow page and the Albums grid share; the placeholder is the stock disc.
+ *              Cover Flow page and the Albums grid share; the placeholder is the Pod's own (`ipod_placeholder`, the iTunes one).
  *   textures   8 slots (the 7 of the ring and a spare), decoded one a tick on the page's timer (UI thread, cc_decode), nearest the centre first, the side
  *              the slide is moving towards first. Paint renders from what is resident and never decodes, queries or touches a file.
  *   slide      pos / target in 16.16 album units: the wheel moves the target (ipcf_goto), each fast tick closes dt / (dt + IPCF_TAU_MS) of the gap.
@@ -20,6 +20,14 @@
 #include "coverflow.h"
 #include "common.h"
 #include "i18n.h"
+#include "ipod_theme.h"
+#include "ipod_render.h"
+#undef widget_prepare_text_style
+#undef canvas_draw_text_in_rect
+#undef canvas_draw_image
+#define widget_prepare_text_style ip_render_prepare
+#define canvas_draw_text_in_rect ip_render_text
+#define canvas_draw_image ip_render_image
 
 extern unsigned ip_fit(void *canvas, unsigned *s, int maxw);   /* patch/ipod.c: the wide string cut with an ellipsis to maxw px */
 
@@ -42,6 +50,7 @@ static struct {
     int drawn, dc, dfrac;           /* the position the frame holds, once drawn */
     void *list;                     /* the stock list and its size the frame was drawn from */
     unsigned count;
+    unsigned bg;
     unsigned t0;                    /* the last time the slide moved (ms) */
 } ipcf __attribute__((section(".scratch")));
 
@@ -66,7 +75,7 @@ int ipcf_open(void *win) {
     *(unsigned short *)((char *)ipcf.frame + BITMAP_FLAGS) |= 1;   /* OPAQUE: every pixel is */
     p = PLACE;
     for (i = 0; i < TEXELS; ++i) p[i] = 0xff2b2b2bu;   /* until the theme's disc loads */
-    cc_decode(win, "p_default", 0, ART_SIZE, 1, p);
+    cc_decode(win, "ipod_placeholder", 0, ART_SIZE, 1, p);
     ipcf.dir = 1, ipcf.more = 1;
     return 1;
 }
@@ -206,16 +215,20 @@ void ipcf_paint(void *canvas, void *list, unsigned count, void *style) {
     if (c >= (int)count) c = (int)count - 1;
     frac = ipcf.pos - (c << 16);
     if (list != ipcf.list || count != ipcf.count) ipcf.list = list, ipcf.count = count, ipcf.drawn = 0;
-    if (!ipcf.drawn || c != ipcf.dc || frac != ipcf.dfrac) {
+    if (!ipcf.drawn || c != ipcf.dc || frac != ipcf.dfrac || ipcf.bg != ip_theme_colors()->bg) {
+        cfg_t themed;
+        memcpy(&themed, &shelf, sizeof themed);
         unsigned *d = (unsigned *)bitmap_lock_buffer_for_write(ipcf.frame);
         if (!d) return;
         for (j = 0; j < CF_RING; ++j) {
             int a = c + j - CF_REACH;
             ring[j] = a >= 0 && a < (int)count ? tex_of(list, count, a) : (const unsigned *)0;
         }
-        coverflow_render(&shelf, d, (int)(bitmap_get_line_length(ipcf.frame) / 4), frac, ring);
+        themed.bg = ip_theme_colors()->bg;
+        coverflow_render(&themed, d, (int)(bitmap_get_line_length(ipcf.frame) / 4), frac, ring);
         bitmap_unlock_buffer(ipcf.frame);
         ipcf.drawn = 1, ipcf.dc = c, ipcf.dfrac = frac;
+        ipcf.bg = themed.bg;
     }
     src[0] = 0, src[1] = 0, src[2] = IP_W, src[3] = IPCF_FRAME_H;
     dst[0] = 0, dst[1] = IPCF_FRAME_Y, dst[2] = IP_W, dst[3] = IPCF_FRAME_H;

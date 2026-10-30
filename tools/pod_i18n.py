@@ -25,6 +25,7 @@ ALL_TABLES = sorted(LOCALES + list(TWINS))
 # Stock keys used as they are: key -> the English text of en_US (the test compares it with the shipped table).
 STOCK = {
     'cdrippersettings': 'Settings',   # the Pod's Settings row and level title (patch/ipod.c)
+    'local_allsong': 'All Songs',     # the first row of an artist's album list and the title of its songs (patch/ipod.c); the stock All Songs, translated in every table
     'hr': 'Hi-Res',
     'sset_updatemusic': 'Update Library',
     'cdripper': 'CD Ripper',
@@ -61,6 +62,12 @@ def _t(key, *texts, **by):
 
 #       zh_CN    zh_HK    ja_JP    ko_KR    fr_FR    ge_DE    sp_ES    it_IT    th_TH    po_PL    ru_RU    uk_UK
 TEXT = dict([
+    _t('Appearance', '外观', '外觀', '外観', '화면 모드', 'Apparence', 'Darstellung',
+       'Apariencia', 'Aspetto', 'รูปแบบหน้าจอ', 'Wygląd', 'Оформление', 'Вигляд'),
+    _t('Light', '浅色', '淺色', 'ライト', '밝게', 'Clair', 'Hell',
+       'Claro', 'Chiaro', 'สว่าง', 'Jasny', 'Светлая', 'Світла'),
+    _t('Dark', '深色', '深色', 'ダーク', '어둡게', 'Sombre', 'Dunkel',
+       'Oscuro', 'Scuro', 'มืด', 'Ciemny', 'Тёмная', 'Темна'),
     _t('Now Playing', '正在播放', '正在播放', '再生中', '지금 재생 중', 'En lecture', 'Jetzt läuft',
        'Reproduciendo', 'In riproduzione', 'กำลังเล่น', 'Teraz gra', 'Сейчас играет', 'Зараз грає'),
     _t('Cover Flow', '封面流', '封面流', 'カバーフロー', '커버 플로우', 'Cover Flow', 'Cover Flow',
@@ -141,6 +148,10 @@ TEXT = dict([
        'Librería demasiado grande', 'Libreria troppo grande', 'รายการเพลงมากเกินไป', 'Biblioteka jest za duża', 'Библиотека слишком велика', 'Медіатека завелика'),
     _t('No albums', '没有专辑', '沒有專輯', 'アルバムがありません', '앨범 없음', 'Aucun album', 'Keine Alben',
        'Sin álbumes', 'Nessun album', 'ไม่มีอัลบั้ม', 'Brak albumów', 'Нет альбомов', 'Немає альбомів'),
+    _t('No artists', '没有艺术家', '沒有藝術家', 'アーティストがありません', '아티스트 없음', 'Aucun artiste', 'Keine Künstler',
+       'Sin artistas', 'Nessun artista', 'ไม่มีศิลปิน', 'Brak wykonawców', 'Нет исполнителей', 'Немає виконавців'),
+    _t('Music', '音乐', '音樂', 'ミュージック', '음악', 'Musique', 'Musik',
+       'Música', 'Musica', 'เพลง', 'Muzyka', 'Музыка', 'Музика'),
     # the Settings > Cover Flow sub-page (landscape switch; sort order, valued Artist or Album: "Album" is the stock key 'album')
     _t('Landscape', '横屏', '橫向', '横向き', '가로 모드', 'Paysage', 'Querformat',
        'Horizontal', 'Orizzontale', 'แนวนอน', 'Poziomo', 'Горизонтально', 'Горизонтально'),
@@ -191,8 +202,6 @@ TEXT = dict([
        'Una', 'Uno', 'เพลงเดียว', 'Jeden', 'Один', 'Один'),
     _t('All', '全部', '全部', 'すべて', '전체', 'Tous', 'Alle',
        'Todo', 'Tutti', 'ทั้งหมด', 'Wszystkie', 'Все', 'Усі'),
-    _t('About', '关于', '關於', '情報', '정보', 'À propos', 'Info',
-       'Acerca de', 'Info', 'เกี่ยวกับ', 'Informacje', 'О плеере', 'Про плеєр'),
     # Podcasts (patch/podcasts.c, docs/modules/podcasts.md): the Extras item and the page's title, the two empty lines, the counts, the grey line of an episode
     _t('Podcasts', '播客', '播客', 'ポッドキャスト', '팟캐스트', 'Podcasts', 'Podcasts',
        'Pódcast', 'Podcast', 'พอดแคสต์', 'Podcasty', 'Подкасты', 'Подкасти'),

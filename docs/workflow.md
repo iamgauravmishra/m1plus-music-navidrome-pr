@@ -68,9 +68,8 @@ emulated block and traps only the mocked and watched addresses, so `icount` is e
 the same block hook enforces `Machine.call`'s step limit (`count=`), because Unicorn's own `emu_start(count=)`
 hooks every instruction and made the suite about 6x slower.
 
-Previews: `tools/preview*.py` write to `out/preview/` (gitignored). The only tracked preview is
-`docs/release-preview.png`; refresh it at a release merge with
-`venv/bin/python -I tools/preview.py WORKDIR docs/release-preview.png`.
+Previews: `tools/preview*.py` write to `out/preview/` (gitignored). Generate the release sheet with
+`venv/bin/python -I tools/preview.py WORKDIR`. Release packages and generated previews stay out of Git.
 
 ## 3. Change something
 

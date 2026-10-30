@@ -119,10 +119,13 @@ DP_ADD_GLYPH = 'plus'
 DP_ADDED_GLYPH = 'check'
 DAILY = ['dm_disc', 'dm_disc_down'] + DPAGE   # the Daily Mix card's play disc and the page's images (DPAGE) (patch/dailymix.c, tools/pod_ui.py): a 48 px glass disc with a 22 px white play glyph, one px right of centre (a triangle's weight sits left of its box)
 DM_DISC_PX, DM_PLAY_GLYPH = 48, 22     # patch/offsets.inc DM_DISC, tools/pod_dailymix.py DM_PLAY_GLYPH
-# The iPod page's click wheel (patch/ipod.c, docs/modules/ipod.md): one 220 px image, a light ring with a 90 px centre button and the four labels drawn in; the corners are transparent
+# The iPod page's click wheel (patch/ipod.c, docs/modules/ipod.md): light/dark 220 px images, a ring with a 90 px centre button and the four labels drawn in; the corners are transparent
 # (the window's colour shows). IP_WHEEL_D / IP_HUB_R in patch/offsets.inc are these numbers (test/pod/ipod.py checks them).
-IPOD = ['ipod_wheel']
+IPOD = ['ipod_wheel', 'ipod_wheel_dark', 'ipod_mode_shuffle', 'ipod_mode_repeat', 'ipod_mode_repeat1', 'ipod_playing', 'ipod_placeholder']
 IPOD_WHEEL_D, IPOD_HUB_R = 220, 45
+IPOD_PLACEHOLDER = os.path.join(ROOT, 'assets', 'icons', 'ipod-placeholder-256.png')   # the user-supplied iTunes Cover Flow placeholder (1200 px), scaled once to 256 px with a good filter; the Pod's one cover for anything without art
+IPOD_MODE_SRC = 32    # the Now Playing mode marks are drawn at 2 x (IP_MODE_PX = 16) and reduced by the payload (patch/offsets.inc)
+IP_PLAY_SRC = 14
 DAILY = DAILY + IPOD
 # The Tape page (patch/tape.c, docs/modules/tape.md): the More dialog's row icon and the page's four pictures (tools/tape_art.py draws them; the page is landscape, the pictures are turned for the portrait panel).
 import tape_art
@@ -665,12 +668,18 @@ def album_images():
     f['dp_added'] = on_disc(tick, AH_DISC_PX, AH_SHUF_DISC)
     f['dp_added_down'] = on_disc(tick, AH_DISC_PX, AH_SHUF_DISC_DOWN)
     f['ipod_wheel'] = ipod_wheel()
+    f['ipod_wheel_dark'] = ipod_wheel(dark=True)
+    for n, g in (('ipod_mode_shuffle', 'shuffle'), ('ipod_mode_repeat', 'repeat'), ('ipod_mode_repeat1', 'repeat-1')):   # patch/ipod.c ip_mode_bitmap: a heavy white glyph at 32 px, 16 px after the box filter
+        f[n] = glyph_fit(g, IPOD_MODE_SRC, IPOD_MODE_SRC, WHITE, 2, 4.0)
+    from PIL import Image
+    f['ipod_playing'] = glyph_fit('volume-2', 2 * IP_PLAY_SRC, 2 * IP_PLAY_SRC, WHITE, 2, 4.0)   # patch/ipod.c: the playing track's speaker, a heavy white glyph at 28 px, 14 px after the box filter
+    f['ipod_placeholder'] = Image.open(IPOD_PLACEHOLDER).convert('RGB')   # the Pod's cover for anything without art (docs/modules/ipod.md)
     import tape_art
     f.update(tape_art.images())
     return f
 
-def ipod_wheel():
-    """The click wheel: a ring (a light vertical gradient inside a darker 1 px rim) with a centre button, drawn at 4 x and reduced; the labels MENU, |<<, >>| and >|| on the ring."""
+def ipod_wheel(dark=False):
+    """The click wheel: a light or charcoal ring (a vertical gradient inside a 1 px rim) with a centre button, drawn at 4 x and reduced; the labels MENU, |<<, >>| and >|| on the ring."""
     from PIL import Image, ImageDraw, ImageFont
     k, d, hr = 4, IPOD_WHEEL_D, IPOD_HUB_R
     r = d // 2
@@ -684,9 +693,13 @@ def ipod_wheel():
         rm = Image.new('RGBA', big.size, (0, 0, 0, 0)); ImageDraw.Draw(rm).ellipse((r * k - radius * k, r * k - radius * k, r * k + radius * k - 1, r * k + radius * k - 1), fill=rim + (255,))
         inner = Image.new('L', big.size, 0); ImageDraw.Draw(inner).ellipse((r * k - radius * k + k, r * k - radius * k + k, r * k + radius * k - k - 1, r * k + radius * k - k - 1), fill=255)
         big.alpha_composite(rm); big.paste(g, (0, 0), inner)
-    grad(r, (0xFA,) * 3, (0xDC,) * 3, (0xA8, 0xAB, 0xB0))
-    grad(hr, (0xEE,) * 3, (0xCF,) * 3, (0xB0,) * 3)
-    lab = (0x86,) * 3 + (255,); dr = ImageDraw.Draw(big); mid = (r + hr) * k // 2; g = 5 * k; cx = cy = r * k
+    if dark:
+        grad(r, (0x25, 0x25, 0x26), (0x1D, 0x1D, 0x1E), (0x14, 0x14, 0x15))
+        grad(hr, (0x36, 0x36, 0x38), (0x2A, 0x2A, 0x2C), (0x0C, 0x0C, 0x0D))
+    else:
+        grad(r, (0xF6,) * 3, (0xEE,) * 3, (0xA8, 0xAB, 0xB0))
+        grad(hr, (0xEE,) * 3, (0xCF,) * 3, (0xB0,) * 3)
+    lab = ((0xFF,) * 3 if dark else (0x9F, 0xA9, 0xB3)) + (255,); dr = ImageDraw.Draw(big); mid = (r + hr) * k // 2; g = 5 * k; cx = cy = r * k
     for sx in (-1, 1):   # |<< and >>|: two triangles pointing along sx, then the bar
         x = cx + sx * mid
         for xc in (x - 3 * k, x + 3 * k):
@@ -697,7 +710,7 @@ def ipod_wheel():
     dr.polygon([(cx - 8 * k, by - 5 * k), (cx - 8 * k, by + 5 * k), (cx - 1 * k, by)], fill=lab)
     dr.rectangle((cx + 2 * k, by - 5 * k, cx + 4 * k, by + 5 * k), fill=lab); dr.rectangle((cx + 6 * k, by - 5 * k, cx + 8 * k, by + 5 * k), fill=lab)
     out = big.resize((d, d), Image.LANCZOS)
-    f = ImageFont.truetype(TILE_FONT, 14); bb = f.getbbox('MENU')
+    f = ImageFont.truetype(TILE_FONT, 16); bb = f.getbbox('MENU')
     ImageDraw.Draw(out).text((r - (bb[2] - bb[0]) / 2 - bb[0], r - mid // k - (bb[3] - bb[1]) / 2 - bb[1]), 'MENU', font=f, fill=lab)
     return out
 

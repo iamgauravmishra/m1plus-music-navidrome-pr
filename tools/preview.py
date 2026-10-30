@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The release sheet (out/preview/release-preview.png; docs/release-preview.png at a release): PIL mock-up of the release's screens (docs/ui.md), drawn by the look
+"""The release sheet (out/preview/release-preview.png, gitignored): PIL mock-up of the release's screens (docs/ui.md), drawn by the look
 previews from one finished tree. Approximate, not AWTK; sample data.
 
   Home pages 1 and 3 (Tabler icons, the M1+ Music icon) + status bar     preview_icons.home
@@ -11,8 +11,7 @@ previews from one finished tree. Approximate, not AWTK; sample data.
   pull-down (the tree's dropdown_dialog.bin, real captions) and the toggle / slider art   controls()
   status bar / lock screen battery at 8x         preview_battery
 
-Usage: venv/bin/python -I tools/preview.py WORKDIR [OUT.png]     (default out/preview/release-preview.png, gitignored;
-the one tracked sheet is refreshed with `... WORKDIR docs/release-preview.png`, docs/workflow.md)
+Usage: venv/bin/python -I tools/preview.py WORKDIR [OUT.png]     (default out/preview/release-preview.png, gitignored)
 """
 import os, subprocess, sys, tempfile
 from PIL import Image, ImageDraw

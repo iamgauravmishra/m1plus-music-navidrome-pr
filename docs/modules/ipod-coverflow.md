@@ -9,12 +9,12 @@ No new hook, widget, timer or event: the screen is a level of the iPod page, pai
 
 ## What is on the screen
 
-The 320 x 240 screen is white under the iPod's own title bar (`ip_paint_bar`: **Cover Flow** on the left, the play glyph and the battery on the right; `ip_title` K_CF), as on every iPod level (the real iPod's Cover Flow is black and full screen; the user asked for the classic white page with the bar):
+The 320 x 240 screen follows Pod's Light/Dark appearance under its own title bar (`ip_paint_bar`: **Cover Flow** on the left, the play glyph and battery on the right; `ip_title` K_CF). The light appearance keeps the classic white page with the bar; Dark uses the Pod dark background, including the distance fade and reflections:
 
-- **The covers**, a 320 x 168 frame (`IPCF_FRAME_H`) drawn at y 24 under the bar (`IPCF_FRAME_Y`) on white (`IPCF_BG`). The centre cover faces you at 112 px (`IPCF_ART`) with its top at frame y 20 (screen y 44 .. 156, its middle at 100: the shelf with its reflection is centred near the middle of the 216 px under the bar, a 12 px move down from before; the web iPod Classic, ipod-classic-js's CoverFlowView, is the proportions reference: covers 20 px from the top and the text 16 px from the bottom, an 8 em cover, side covers turned about 70 degrees; numbers only, no code taken); the covers on either side turn 60 degrees
-  inward, overlap, step back and fade towards white; each has a reflection (34 px at the centre, `IPCF_REFLECT`) fading into the white. **Seven covers show**: the centre and three either side
+- **The covers**, a 320 x 168 frame (`IPCF_FRAME_H`) drawn at y 24 under the bar (`IPCF_FRAME_Y`) on white (`IPCF_BG`). The centre cover faces you at 128 px (`IPCF_ART`, 14 % larger than before) with its top at frame y 18 (screen y 42 .. 170, its middle at 106, so there are 18 px of air under the title bar: the shelf with its reflection is centred near the middle of the 216 px under the bar, a 12 px move down from before; the web iPod Classic, ipod-classic-js's CoverFlowView, is the proportions reference: covers near the top and the text at the bottom, an 8 em cover, side covers turned about 70 degrees; numbers only, no code taken); the covers on either side turn 60 degrees
+  inward, overlap, step back and fade towards white; each has a reflection (20 px at the centre, `IPCF_REFLECT`, ending at screen y 190, above the captions) fading into the white. **Seven covers show**: the centre and three either side
   (the one three out at `IPCF_TAIL` 72 of 256 brightness, fading out by 3.5 out; the full-screen page shows five and a half).
-- **Under the covers** the album title (y 192, 17 px black) over the artist (y 214), both centred and cut with an ellipsis (`label_ip_row`'s style: the iPod page's list text; the last line ends at y 236 of 240).
+- **Under the covers** the album title (y 192, 18 px black) over the artist (y 214, the same style), both centred and cut with an ellipsis (`label_ip_row`'s style: the iPod page's list text; the last line ends at y 236 of 240).
   They follow the covers: the album under the centre cover, which changes as the slide passes the half-way point. No scrolling text.
 - The title bar is the page's (the title, the play state, the battery); the wheel below has MENU, `|<<`, `>>|`, `>||`.
 
@@ -24,9 +24,9 @@ The 320 x 240 screen is white under the iPod's own title bar (`ip_paint_bar`: **
 `patch/coverflow.h` and got two fields, `tail` and `bg` (last) (0 = the stock fade, CF_BRIGHT2 at two out and gone at three; the iPod's `IPCF_TAIL` keeps the cover three out dim and fades it
 out by 3.5 out, so seven covers show with no pop at the ring's edge). The two stock shelves leave `tail` and `bg` 0, so their frames are unchanged (`test/coverflow.py`). `bg` 0 is over black; the iPod shelf's `IPCF_BG` 0xffffff makes the distance fade
 transparency (coverage x brightness; a faded cover is not opaque, so it hides nothing behind it) and composites the frame over white at the end (`docs/modules/coverflow.md`). The iPod shelf is Cover
-Flow's scaled by 112 / 168: eye 208, first side cover 74 out and 64 back, the rest 32 / 15 apart, centre top 8. The textures are the **168 px cache files** the Cover Flow page and the
+Flow's scaled by 128 / 168: eye 238, first side cover 84 out and 73 back, the rest 37 / 17 apart, centre top 18. The textures are the **168 px cache files** the Cover Flow page and the
 Albums grid share (`/mnt/mmc/.m1plus/covers/<key>-168.jpg`, `patch/covercache.c`): drawn smaller than their size, nearest neighbour as there; an album with no cached cover (or a
-cache not built yet) shows the stock disc. Cover Flow here never builds the cache (open the Cover Flow page or the Albums page once).
+cache not built yet) shows the Pod placeholder (`ipod_placeholder`, docs/modules/ipod.md "The placeholder cover"). Cover Flow here never builds the cache (open the Cover Flow page or the Albums page once).
 
 **Memory**: the frame 215 KB and 9 textures of 168^2 x 4 (1.0 MB: 8 slots and the placeholder), one `calloc` at entry, freed when Cover Flow is left (MENU) and at destroy. If a
 bitmap or the block does not come, the row opens the existing full-screen Cover Flow page instead (`coverflow_open`: the old behaviour is the fallback).
@@ -57,12 +57,13 @@ runs (`docs/modules/ipod.md`), and **while Cover Flow is in front and busy** (th
 place (`ip_want_ms`) and set in place with `timer_modify` (`ip_retime`: from the wheel handlers, `ip_push` / `ip_pop`, and the end of every tick); the timer is never removed or added while
 the page lives. A fast tick runs the slow look (the battery, the play state, the track) only every `IP_DRIFT_LOOK` ticks. Leaving Cover Flow (MENU, or a track list above it): the main menu's or
 the list's interval; the background, the destroy: the timer is gone as before.
-timer is gone as before.
 
 **Decoding** is on the same tick, one cover per tick (`cc_decode`, UI thread, as Cover Flow's `on_load`): nearest the centre first, then alternately on the side the slide is
 moving towards and the other, 7 wanted (the ring) in 8 slots; a slot is reused from the cover farthest from the centre. A slot is keyed by the album key (`cc_album_key`), so a
 re-read of the list does not drop what was decoded. **Paint** renders from what is resident only (the placeholder for the rest): it never decodes, never queries, never allocates; an
-unchanged position reuses the frame (the render, about 2.4 M payload instructions under Unicorn, only when the position or a texture changed; the page's own render is 3.5 M).
+unchanged position reuses the frame (the render, about 2.4 M payload instructions under Unicorn, only when the position, a texture or the appearance background changed; the page's own render is 3.5 M). The per-frame shelf configuration copies the selected Pod background without changing the other Cover Flow pages. Captions use the themed Pod text styles.
+
+Entering or leaving this screen also uses the Pod's 200 ms full-width navigation slide (`ipod_render.c`, `docs/modules/ipod.md`). The outgoing display model owns a clone of the frame before Cover Flow's buffers can be freed; its image data is not borrowed across page changes. Decoding pauses during the page slide and resumes on the existing page timer afterward.
 
 ## What was reused, what is new
 
@@ -82,7 +83,7 @@ pace), `ip_pop` (closes Cover Flow), `ip_step` (the `K_CF` branch), `ip_select` 
 ## Device checklist
 
 - iPod > Cover Flow: a white screen with the iPod title bar (Cover Flow), the centre cover, three covers either side tilted, overlapping and paler with distance, their reflections, the album and the artist centred under it;
-  the first frame may show the stock disc for a moment, then the real covers fill in nearest first (about 0.25 s). Albums with no cached cover show the disc.
+  the first frame may show the placeholder for a moment, then the real covers fill in nearest first (about 0.25 s). Albums with no cached cover show the placeholder.
 - Wheel: one album per 15 degrees, the slide eases (about 150 ms, no stutter, the covers do not tear or flicker), the caption changes as the cover passes the middle; on a long
   library a sustained fast turn speeds up (the tiers); at the first and last album the wheel does nothing (no bounce); reversing does not jump. The music does not stutter
   during the slide or while covers decode (the decode is one cover per 33 ms tick: if it does, make it every other tick).

@@ -6,9 +6,8 @@ theme, lists, nowplaying, boot, rows, pulldown, lockscreen, wallpaper, icons, po
 step pins the stock bytes it replaces by SHA-256, keeps every widget name and refuses to apply twice.
 Style is q2-pod's Minimal / iPod (MIT, `NOTICE`) fitted to the 320x480 portrait touchscreen.
 
-![the release](release-preview.png)
-`docs/release-preview.png` is the one tracked preview (`tools/preview.py WORKDIR [OUT.png]`, default
-`out/preview/release-preview.png`, gitignored; the tracked sheet is refreshed only at a release, `docs/workflow.md`):
+Generate the release preview with `tools/preview.py WORKDIR [OUT.png]` (default
+`out/preview/release-preview.png`, gitignored; `docs/workflow.md`). The sheet shows:
 Home pages 1 and 3 (the M1+ Music icon), the M1+ Music menu as Home (no top bar), the Settings, Main Menu, Shuffle and
 Extras pages, the Artists toggle, the album page, an artist's Cover Flow (and the landscape one), the Albums grid and
 list, the pull-down with the toggle and slider art (`controls()`), the lock screen (playing; idle on the charger) and

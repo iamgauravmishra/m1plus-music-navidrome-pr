@@ -118,7 +118,7 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
   opens the page. The queries repeat on every tap (the page may have been left through Now Playing, and
   anything may have reused the list or the browsing record). Back from the album page returns to the
   covers; the page keeps no track list, header or play code of its own.
-- **Cache.** The page keeps its own `/mnt/mmc/.m1plus/covers/<key>-168.jpg` thumbnails (the size is in the
+- **Cache.** (The cache has one size, 168; the Pod's cover pane needs 264 and gets it without a second tier of files: from demo's own full-resolution file for the playing track and, for its random rotation, from one transient extraction into `/tmp/m1plus-pane.jpg` by this builder's worker (`cc_build_add_file`: no cache file, no marker), docs/modules/ipod.md "The cover pane".) The page keeps its own `/mnt/mmc/.m1plus/covers/<key>-168.jpg` thumbnails (the size is in the
   name; key = FNV-1a of artist then album, never 0; the key, path, decode and reduce helpers are in
   `patch/covercache.c`, which the Albums grid reads the same files through). The stock cache `/mnt/mmc/.downpic` is keyed by an
   MD5 the payload cannot reproduce and holds 90 px images, so Cover Flow only reads through the stock

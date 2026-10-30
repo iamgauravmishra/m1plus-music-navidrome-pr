@@ -711,10 +711,11 @@ def build_dailymix_page(page):
 
 # The iPod page (patch/ipod.c, docs/modules/ipod.md; the numbers are patch/offsets.inc IP_*): a fullscreen window (the lock screen's `fullscreen = true`, so the stock status bar is not drawn and
 # the window is 320 x 480) in the wheel's body colour. ipod_screen (320 x 240) is painted by the payload in its own EVT_AFTER_PAINT and takes no touch (insensitive); ipod_wheel
-# (220 x 220, the touch target: the payload does the circle's hit test and grabs the touch) holds the wheel picture as an insensitive image child. Eight hidden, insensitive labels
+# (220 x 220, the touch target: the payload does the circle's hit test and grabs the touch) holds the wheel picture as an insensitive image child. Ten hidden, insensitive labels
 # only carry the text styles. label_title (hidden) is the page's title for the i18n and asset tests.
-IP_STYLES = (('label_ip_row', 17, '#000000', 'left'), ('label_ip_sel', 17, '#FFFFFF', 'left'), ('label_ip_title', 16, '#000000', 'left'),
-             ('label_ip_small', 14, '#666666', 'left'), ('label_ip_np1', 18, '#000000', 'left'), ('label_ip_np2', 16, '#666666', 'left'), ('label_ip_time', 14, '#666666', 'right'))
+IP_STYLES = (('label_ip_row', 18, '#000000', 'left'), ('label_ip_sel', 18, '#FFFFFF', 'left'), ('label_ip_title', 16, '#000000', 'left'),
+             ('label_ip_small', 16, '#666666', 'left'), ('label_ip_subsel', 16, '#FFFFFF', 'left'), ('label_ip_np1', 18, '#000000', 'left'), ('label_ip_np2', 16, '#666666', 'left'), ('label_ip_time', 15, '#000000', 'right'),
+             ('label_ip_val', 16, '#0C62D2', 'left'), ('label_ip_np3', 14, '#666666', 'left'))
 
 
 def build_ipod_page(page):
@@ -732,7 +733,7 @@ def build_ipod_page(page):
     for name, px, colour, align in IP_STYLES:
         lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, align))
         styled(lab, ('normal',), 'text_align_v', 'middle')
-        (blue if name == 'label_ip_sel' else light).children.append(lab)
+        (blue if name in ('label_ip_sel', 'label_ip_subsel') else light).children.append(lab)
     blue.children.append(hidden(Widget('label', 36, 14, 200, 22, [('name', 'label_title'), ('style', 'navbar_label_white'), pod_i18n.text_prop(page.title)])))
     root.children += [light, blue]
     return root

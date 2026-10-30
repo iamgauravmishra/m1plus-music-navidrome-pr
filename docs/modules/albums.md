@@ -143,7 +143,7 @@ The menu's Albums row (`ACT_ALBUMS`) opens our one Albums page in the mode used 
 
 ### The Albums page (`ui/m1plus_albums.bin`, `docs/modules/albums.md`)
 
-(the two Albums panels of `docs/release-preview.png`, grid and list mode with row 2 pressed: `PI.albums_grid` / `PI.albums_list` in `tools/preview_icons.py`, sample covers.)
+(the two Albums panels of `out/preview/release-preview.png`, grid and list mode with row 2 pressed: `PI.albums_grid` / `PI.albums_list` in `tools/preview_icons.py`, sample covers.)
 The Albums row opens this page in the mode used last (first use: the grid, `ALBUMS_DEFAULT_GRID`); the stock Albums list is not part of it
 (it stays under Customize > Home Screen > Shanling Home, unmodified).
 The grid mode is the standard navbar over a stock list (320x400, scrolled by the stock scroll_view like the library lists) holding one `view_grid`: two 144 px covers a row, 8 px between them and 12 px

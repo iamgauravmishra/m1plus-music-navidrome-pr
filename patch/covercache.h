@@ -55,7 +55,8 @@ enum { CC_MISSING = 0, CC_REBUILD = 1 };
 #define CC_MAX_JOBS 4000                                /* the job array is bounded (Cover Flow's MAX_ALBUMS) */
 int cc_build_open(unsigned capacity, int mode);         /* 1: an empty job set held; 0: another set is held, or no memory */
 int cc_build_add(const char *track, unsigned key);      /* 1 added; 0 skipped (CC_MISSING and the file exists); -1 full or no memory */
-int cc_build_start(void);                               /* 1: the worker runs. 0: nothing to build, card full (MIN_FREE_MB), or no thread: the set is freed */
+int cc_build_add_file(const char *track, const char *dst, unsigned px);   /* a transient job instead: the album's art fitted inside px x px (never upscaled; kept only when its longer side is px) into the file dst through dst.tmp, no cache file, no marker (the Pod's cover pane, docs/modules/ipod.md) */
+int cc_build_start(void);                             /* 1: the worker runs. 0: nothing to build, card full (MIN_FREE_MB), or no thread: the set is freed */
 int cc_build_done(void);                                /* albums finished so far (advances as files appear) */
 int cc_build_total(void);
 int cc_build_running(void);                             /* a thread was started and the set is not stopped yet */

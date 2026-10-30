@@ -352,8 +352,14 @@ void *cc_playing(void) {
 
 typedef struct {
     char *track; /* the album's first track, copied so the thread never reads stock deques */
-    unsigned key;
+    unsigned key; /* 0: the one transient job (xf below), not a cache job (cc_build_add refuses key 0) */
 } job_t;
+
+/* The one transient extraction a set may hold instead of cache jobs (cc_build_add_file): where it writes and how big. Set before the worker starts, read only by it. */
+static struct {
+    char dst[80];
+    unsigned px;
+} xf __attribute__((section(".scratch")));
 
 static struct {
     job_t *jobs;
@@ -372,10 +378,56 @@ static int card_space(const char *dir) {
            (unsigned long long)fs[7] * fs[1] >= (unsigned long long)MIN_FREE_MB << 20;
 }
 
+/* The longer side of the JPEG at path (its SOF marker, in the first 4 KB: the stock encoder's files have a short header), 0 when it cannot be read. */
+static unsigned jpeg_long_side(const char *path) {
+    unsigned char b[4096];
+    unsigned n, i = 2, w, h;
+    void *f = fopen(path, "rb");
+    if (!f) return 0;
+    n = (unsigned)fread(b, 1, sizeof b, f);
+    fclose(f);
+    if (n < 4 || b[0] != 0xff || b[1] != 0xd8) return 0;
+    while (i + 9 < n) {
+        unsigned m;
+        if (b[i] != 0xff) { ++i; continue; }
+        m = b[i + 1];
+        if (m == 0xff) { ++i; continue; }
+        if (m >= 0xc0 && m <= 0xcf && m != 0xc4 && m != 0xc8 && m != 0xcc) {
+            h = (unsigned)b[i + 5] << 8 | b[i + 6], w = (unsigned)b[i + 7] << 8 | b[i + 8];
+            return w > h ? w : h;
+        }
+        if (m == 0xd8 || (m >= 0xd0 && m <= 0xd7) || m == 0x01) { i += 2; continue; }
+        i += 2 + ((unsigned)b[i + 2] << 8 | b[i + 3]);
+    }
+    return 0;
+}
+
+/* A transient extraction (the Pod's cover pane, docs/modules/ipod.md): the album's art, fitted inside px x px by the stock art call (never upscaled), into xf.dst through
+ * dst.tmp and a rename. A picture whose longer side is under px (a small source) is not kept, and nothing else is written: no cache file, no marker. */
+static void build_file(const job_t *j) {
+    char tmp[96];
+    int ok;
+    snprintf(tmp, sizeof tmp, "%s.tmp", xf.dst);
+    if (access(j->track, F_OK)) return;
+    pthread_mutex_lock((void *)PARSE_COVER_MUTEX);
+    if (cb.cancelled) {
+        pthread_mutex_unlock((void *)PARSE_COVER_MUTEX);
+        return;
+    }
+    ok = toolsGetAlbumCover(j->track, tmp, xf.px, xf.px) == 1 || toolsGetExternCover(j->track, tmp, xf.px, xf.px) == 1;
+    pthread_mutex_unlock((void *)PARSE_COVER_MUTEX);
+    if (ok && jpeg_long_side(tmp) >= xf.px) {
+        if (rename(tmp, xf.dst)) unlink(tmp);
+        return;
+    }
+    unlink(tmp);
+}
+
 static void build_art(const job_t *j) {
     char dst[64], tmp[64];
     int ok;
     void *f;
+    if (!j->key) { build_file(j); return; }
     if (access(j->track, F_OK)) return; /* storage gone: no marker, the next open retries */
     cc_path(dst, sizeof dst, j->key, "");
     cc_path(tmp, sizeof tmp, j->key, ".tmp");
@@ -429,6 +481,22 @@ int cc_build_add(const char *track, unsigned key) {
     if (!j->track) return -1;
     j->key = key;
     ++cb.total;
+    return 1;
+}
+
+
+int cc_build_add_file(const char *track, const char *dst, unsigned px) {
+    unsigned n;
+    job_t *j;
+    if (!cb.jobs || cb.running || cb.total || !track || !*track || !dst || !*dst || !px) return 0;
+    j = &cb.jobs[0];
+    j->track = strdup(track);
+    if (!j->track) return -1;
+    j->key = 0;
+    for (n = 0; dst[n] && n < sizeof xf.dst - 5; ++n) xf.dst[n] = dst[n];   /* (a path that does not fit is cut: the callers' is short) */
+    xf.dst[n] = 0;
+    xf.px = px;
+    cb.total = 1;
     return 1;
 }
 

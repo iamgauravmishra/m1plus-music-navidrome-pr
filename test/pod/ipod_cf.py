@@ -40,11 +40,15 @@ def machine(n=12, art=True, **kw):
 
 def enter(m):
     m.tap(CX, CY)
+    m.tap(CX, CY)
     return m
 
 
 def paint(m):
     """One paint of the screen: (texts, fills, blits, the names of the calls it made)."""
+    if m.call(PSYMS['ip_render_active']):
+        m.clock += 301
+        m.call(PSYMS['ip_tick'], count=80000000)
     ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
     m.texts, m.fills, m.blits, m.text_styles = [], [], [], []
     m.call(PSYMS['ip_on_paint'], a0=0, a1=ev, count=80000000)
@@ -232,7 +236,7 @@ def anim_tests(ctx):
     m.calls = []
     m.turn(0, STEP_DEG + 3)
     calls = list(m.calls)
-    expect(MODS(calls) == [FAST] and not SWAPS(calls), f'a step sets the page\'s one timer from 500 to 33 ms in place ({MODS(calls)})')
+    expect(MODS(calls)[-1:] == [FAST] and set(MODS(calls)) <= {FAST, O['IP_DRIFT_MS']} and not SWAPS(calls), f'a step sets the page\'s one timer from 500 to 33 ms in place (a touch on the MENU sector first watches for its long press at 100 ms) ({MODS(calls)})')
     pos0, target = state(m)
     expect(target == 1 << 16 and pos0 == 0, 'the slide is at album 0 and goes to album 1')
     # the slide: monotone, eases out, lands exactly, ends with the swap back
@@ -282,7 +286,7 @@ def track_tests(ctx):
     texts, fills, blits, names = paint(m)
     rows = ip.rows_of(texts)
     expect(rows == ['Album 2 0', 'Album 2 1', 'Album 2 2'], f'an iPod list of the album\'s tracks ({rows})')
-    expect(texts and any(t == 'M1+ Music' for t, _ in texts), 'with the iPod title bar')
+    expect(any(t == 'Album 2' and r[1] < BARH for t, r in texts), 'with the iPod title bar, naming the album')
     expect(FAST not in MODS(m.calls) and not SWAPS(m.calls), 'the page is at its slow pace on the list')
     # a track: wheel one, centre plays it
     m.turn(0, STEP_DEG + 3)
@@ -307,8 +311,9 @@ def track_tests(ctx):
     m.tap(x, y)
     expect(any(c[0] == 'bitmap_destroy' for c in m.calls) and any(c[0] == 'free' for c in m.calls), 'MENU from Cover Flow: the iPod main menu; the frame and the textures are freed')
     texts = paint(m)[0]
-    expect('M1+ Music' in [t for t, _ in texts] and ip.rows_of(texts) == [m.tr(k) for k in ip.MAIN_KEYS], 'the main menu is back, the Cover Flow row selected')
+    expect('Music' in [t for t, _ in texts] and ip.rows_of(texts) == [m.tr(k) for k in ip.MUSIC_KEYS], 'the Music menu is back, the Cover Flow row selected')
     expect(m.names().count('navigator_back') == 0, 'the page stays open')
+    m.tap(x, y)
     m.tap(x, y)
     expect(m.names().count('navigator_back') == 1, 'MENU on the main menu closes the page')
     # a tap in the corner of the wheel / the ring: |<< >>| >||
@@ -323,7 +328,7 @@ def track_tests(ctx):
     m.turn(0, STEP_DEG * 3 + 3); m.calls = []
     x, y = m.polar(0, 85); m.tap(x, y)
     mods = MODS(m.calls)
-    expect(mods and mods[-1] in (TICK, O['IP_DRIFT_MS']) and not SWAPS(m.calls), f'MENU while it slides: the one timer leaves 33 ms in place, for the main menu\'s pace ({mods})')
+    expect(mods and mods[-1] in (TICK, O['IP_DRIFT_MS'], O['IP_PAN_MS']) and not SWAPS(m.calls), f'MENU while it slides: the one timer leaves 33 ms in place, for the main menu\'s pace ({mods})')
     # an album with no cached cover shows the placeholder, the rest still work
     m = machine(4, art=False); enter(m)
     for _ in range(10): tick(m)
@@ -335,10 +340,10 @@ def track_tests(ctx):
 def life_tests(ctx):
     expect = ctx.expect
     m = machine(); m.calloc_fail = True
-    m.tap(CX, CY)
+    enter(m)
     expect(m.opened == ['coverflow_open'] and 'bitmap_destroy' in m.names(), f'no memory for the textures: the frame goes again and the existing Cover Flow page opens instead ({m.opened})')
     m = machine(); m.bitmap_ok = False
-    m.tap(CX, CY)
+    enter(m)
     expect(m.opened == ['coverflow_open'], 'no frame bitmap: the same fallback')
     m = machine(); enter(m)
     for _ in range(3): tick(m)
@@ -368,7 +373,7 @@ def i18n_tests(ctx):
     missing = [k for k in keys if k not in pod_i18n.TEXT and k not in pod_i18n.STOCK]
     expect(keys == {'No songs'} and not missing, f'the screen\'s texts are keys that exist ({keys}, missing {missing})')
     # the geometry in offsets.inc is one shelf: the three caption lines and the reflection fit the 240 px screen, the frame the covers and their reflection
-    expect(abs((O['IPCF_FRAME_Y'] + O['IPCF_TOP'] + O['IPCF_ART'] // 2) - 100) <= 2 and O['IP_SCREEN_H'] - (O['IPCF_CAP_Y'] + 2 * O['IPCF_CAP_H']) >= 4, 'the centre cover sits about 100 px down the 240 px screen, the captions end at least 4 px above its bottom edge')
+    expect(abs((O['IPCF_FRAME_Y'] + O['IPCF_TOP'] + O['IPCF_ART'] // 2) - 106) <= 2 and O['IP_SCREEN_H'] - (O['IPCF_CAP_Y'] + 2 * O['IPCF_CAP_H']) >= 4, 'the centre cover sits 106 px down (18 px of air under the title bar) the 240 px screen, the captions end at least 4 px above its bottom edge')
     top, art, refl, cap, caph = O['IPCF_TOP'], O['IPCF_ART'], O['IPCF_REFLECT'], O['IPCF_CAP_Y'], O['IPCF_CAP_H']
     expect(top + art + refl <= O['IPCF_FRAME_H'] and O['IPCF_FRAME_Y'] + O['IPCF_FRAME_H'] <= cap and cap + 2 * caph <= O['IP_SCREEN_H'], 'the covers and their reflection end inside the frame, the frame under the title bar, the two caption lines inside the 240 px screen')
     expect(O['IPCF_FRAME_MS'] < O['IP_TICK_MS'] and O['IPCF_NEAR'] < 7, 'the slide runs at 33 ms against the 500 ms rest; a far jump lands inside the ring of seven')
