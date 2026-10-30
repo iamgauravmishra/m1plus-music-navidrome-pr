@@ -134,7 +134,7 @@ const char *cc_url(char *out, unsigned key) {
     if (!key) return (const char *)0;
     memcpy(out, "file://", 8);
     cc_path(out + 7, 73, key, "");
-    return !access(out + 7, F_OK) && cc_file_size(out + 7) > 0 ? out : (const char *)0;
+    return cc_file_size(out + 7) > 0 ? out : (const char *)0; /* a missing file does not open: -1 */
 }
 
 /* A decoded image reduced to size x size over black. Only the four 32-bit formats; the stock loader
