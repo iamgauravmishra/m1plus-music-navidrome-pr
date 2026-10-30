@@ -154,22 +154,31 @@ def scrim_alpha(y, a64):
     return s * a64 // 64                       # 0..256 * a64/64 -> /256 alpha
 
 
+def quantise_channel(c, t, bits):
+    step = 256 >> bits
+    v = min(255, max(0, c + (t * step - 15 * step // 2) // 16))
+    q = v >> (8 - bits)
+    return (q << (8 - bits)) | (q >> (2 * bits - 8))
+
+
+# quantise_channel by Bayer value and channel value 0..511 (the page fade's half step can lift a channel past 255): quantise clamps into it,
+# render_rows indexes directly (its scrim only darkens a 0..255 channel)
+Q5, Q6 = ([[quantise_channel(c, t, bits) for c in range(512)] for t in range(16)] for bits in (5, 6))
+
+
 def quantise(px, x, y):
     t = BAYER[y & 3][x & 3]
-    out = []
-    for c, bits in zip(px, (5, 6, 5)):
-        step = 256 >> bits
-        v = min(255, max(0, c + (t * step - 15 * step // 2) // 16))
-        q = v >> (8 - bits)
-        out.append((q << (8 - bits)) | (q >> (2 * bits - 8)))
-    return tuple(out)
+    return tuple(q[min(511, max(0, c))] for q, c in zip((Q5[t], Q6[t], Q5[t]), px))   # clamped as quantise_channel would
 
 
 def render_rows(f, a64, w=DM_W, h=DM_H):
     rows = []
     for y in range(h):
-        a = scrim_alpha(y, a64)
-        rows.append([quantise(tuple(c - (c * a >> 8) for c in f[y][x]), x, y) for x in range(w)])
+        a = scrim_alpha(y, a64); bayer = BAYER[y & 3]; fy = f[y]; row = []
+        for x in range(w):
+            r, g, b = fy[x]; t = bayer[x & 3]
+            row.append((Q5[t][r - (r * a >> 8)], Q6[t][g - (g * a >> 8)], Q5[t][b - (b * a >> 8)]))
+        rows.append(row)
     return rows
 
 

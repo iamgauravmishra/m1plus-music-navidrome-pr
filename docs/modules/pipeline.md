@@ -13,7 +13,7 @@ environment; this module only resolves data. Everyday commands: [`../workflow.md
 | 3 | `mod_space.py` | zero demo's `.pdr`, remove 10 unreferenced files (`docs/firmware.md` section 4) |
 | 4 | `pod.py` | compile the payload, append it to `demo`, install the pinned hooks, apply the library-row edits and write the custom page assets |
 | 5 | `mod_theme`, `mod_lists`, `mod_nowplaying`, `mod_boot`, `mod_ipodrows`, `mod_pulldown`, `mod_lockscreen`, `mod_wallpaper`, `mod_icons`, `mod_strings`, `mod_polish`, `mod_about` | the asset looks, in this order (`docs/ui.md`); `mod_strings` adds our translation keys to the 16 string tables (section 8b) |
-| 6 | `mod_theme.py --scan TREE STOCK` | contrast scan of the finished tree |
+| 6 | `mod_theme.py --scan TREE STOCK` | contrast scan of the finished tree (a pass is cached with the steps) |
 | 7 | `fwtool.py repack --tailends --allow-removed ... --allow-added ...` | squashfs (LZO, 128 KiB blocks, tail ends), metadata-exact; refuses a rootfs larger than stock or any unlisted added/removed file; `verify` follows |
 
 Each step lists the files it adds through an `added_rels()` function, which `build.py` passes to

@@ -484,7 +484,7 @@ def layout_tests(ctx):
     expect(corners == [0xff000000] * 4 and inner == [colour(0)] * 4 and all(v >> 24 == 255 for v in tile),
            f'the grid\'s covers have the shelf\'s rounded corners (GRID_R = {R}), blended into the black page; every pixel stays opaque')
     expect(struct.unpack('<H', m.u.mem_read(first + O['BITMAP_FLAGS'], 2))[0] & 1, 'tiles are flagged opaque (a plain blit)')
-    paint(m); steady = m.icount
+    m.count(); paint(m); steady = m.icount
     expect('widget_load_image' not in m.names() and 'bitmap_create_ex' not in m.names() and not m.measures,
            'a steady frame decodes, allocates and measures nothing')
     print(f'  grid frame: {steady:,} payload instructions steady (4 cells), {TILES} tiles of {COVER}x{COVER}')
@@ -493,7 +493,7 @@ def layout_tests(ctx):
     url = 'file://' + next(iter(m.cache_index))
     half = bytes((255, 0, 0, 255)) * (ART // 2) + bytes((0, 0, 255, 255)) * (ART // 2)
     m.images[url] = (ART, ART, half * ART)
-    open_grid(m); settle(m)
+    m.count(); open_grid(m); settle(m)
     data = m.bitmaps[m.blits[0][0]][0]
     row0 = struct.unpack(f'<{COVER}I', bytes(m.u.mem_read(data + 40 * COVER * 4, COVER * 4)))
     expect(set(row0[:COVER // 2]) == {0xff0000ff} and set(row0[COVER // 2:]) == {0xffff0000},
@@ -771,7 +771,7 @@ def taps_list_tests(ctx):
 
     # 10. A large library: the work per frame and the memory do not grow with it.
     n = 4000
-    m = albums_machine(n)
+    m = albums_machine(n).count()
     open_grid(m)
     opened_cost = m.icount
     expect(sum(1 for c in m.calls if c[0] == 'calloc') <= 3, 'opening a library of 4000 allocates its list copy and one tile ring')
@@ -845,7 +845,7 @@ def taps_list_tests(ctx):
     lt, LR = struct.unpack(f'<{bw * bh}I', bytes(m.u.mem_read(data, bw * bh * 4))), O['LIST_R']
     expect((bw, bh) == (LART, LART) and {lt[y * bw + x] for y in range(bh) for x in range(bw) if not (min(x, bw - 1 - x) < LR and min(y, bh - 1 - y) < LR)} == {colour(0)},
            f'row 0\'s cover is its cache picture reduced to {LART}x{LART} (its rounded corners aside)')
-    paint(m)
+    m.count(); paint(m)
     expect('widget_load_image' not in m.names() and 'bitmap_create_ex' not in m.names() and not m.measures,
            'a steady list frame decodes, allocates and measures nothing')
     print(f'  list frame: {m.icount:,} payload instructions steady (7 rows)')

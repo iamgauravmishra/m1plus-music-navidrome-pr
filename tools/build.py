@@ -70,7 +70,10 @@ def make_tree(stock, mod, cache, tag=TAG):
         run(os.path.join(TOOLS, module + '.py'), mod, mod, *args)
         if bc.ENABLED:
             changed, removed, _ = bc.delta_since(before, mod); bc.store_delta(prev, mod, changed, removed)
-    run(os.path.join(TOOLS, 'mod_theme.py'), '--scan', mod, stock)         # contrast scan of the finished tree
+    t = time.time(); prev = bc.step_key(prev, 'mod_theme', ['--scan'])     # contrast scan of the finished tree: a pass is kept as an empty step
+    if bc.have_step(prev): stage_report('mod_theme --scan', t, True); return
+    run(os.path.join(TOOLS, 'mod_theme.py'), '--scan', mod, stock)
+    if bc.ENABLED: bc.store_delta(prev, mod, [], [])
 
 def pack_args(stock):
     """The --allow-added / --allow-removed flags of the release repack."""
@@ -92,6 +95,7 @@ def main():
     if a.dev and a.restore: ap.error('--dev and --restore are mutually exclusive')
     if a.out and not a.dev: ap.error('--out requires --dev')
     if a.tree_only and a.pack_only: ap.error('choose --tree-only or --pack-only')
+    if a.no_cache: os.environ['M1_NO_CACHE'] = '1'   # the steps' own caches too (mod_icons' rsvg renders)
     if sys.version_info[:2] != (3, 15): sys.exit('Python 3.15 is required; run with uv run python -I')
     if not os.path.exists(ZIP): sys.exit(f'missing {ZIP}')
     if sha256(ZIP) != ZIP_SHA: sys.exit('firmware zip SHA-256 mismatch: not the pinned V2.1 package')

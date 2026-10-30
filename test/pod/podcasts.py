@@ -1201,8 +1201,8 @@ def tag_tests(ctx):
     m = ID3(); m.parse(p, record=m.record(album='S', artist='S', path=p, title='E', name='ep1.mp3'))
     expect(m.read_cstr(i) == p, 'the struct\'s key is the path, as strcpy left it')
     # no work for music at boot: the hook is a copy and a prefix test (instructions)
-    m = ID3(); m.parse(mp, title='T')
-    m2 = ID3(stock=True); m2.parse(mp, title='T')
+    m = ID3().count(); m.parse(mp, title='T')
+    m2 = ID3(stock=True).count(); m2.parse(mp, title='T')
     expect(m.icount - m2.icount < 1000, f'a plain path costs {m.icount - m2.icount} instructions more than stock')
     # a record that is not the one playing (the path differs): not trusted, the show folder only
     m = ID3(); rec = m.record(album='X', artist='X', path='/mnt/mmc/Podcasts/Other/zz.mp3', title='Wrong', name='zz.mp3')

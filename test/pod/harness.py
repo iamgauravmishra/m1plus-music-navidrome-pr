@@ -216,14 +216,30 @@ class Machine:
         self.timer_fail = False
         self.create_fail = set()    # widget constructors (view_create, ..) that return 0
         self.wm, self.top_main, self.home_opened, self.init_ret = 0x22000000, 0, 1, 0
-        self.icount, self.limit = 0, 0
+        self._icount, self.limit, self.counting = 0, 0, False
         self.bitmaps, self.free_blocks = {}, {}   # bitmap_create_ex's results; destroyed data blocks to reuse
         self.blits, self.texts, self.measures, self.glyphs, self.draw_oy = [], [], [], [], []
         self.fills, self.text_styles, self.cur_style, self.fill_color = [], [], '', 0 # canvas_fill_rect (colour, x, y, w, h); the style widget of each text
         self.destroyed, self.loads = 0, []   # bitmaps destroyed / images loaded, over the machine's life
         self.locked, self.load_into = 0, []  # the bitmap last locked for writing / (url, that bitmap) per image load: which bitmap a decode was for
         self.tm_buf = 0                     # the struct tm localtime answers with (patch/dailymix.c)
-        self.block_hook = self.u.hook_add(UC_HOOK_BLOCK, self._block)   # icount: instructions of every block entered (a test that does not count can hook_del it: it is most of the time)
+        if self.COUNT: self.count()
+
+    def count(self):
+        """Count instructions from now on (icount, and call()'s step limit): a block hook, which is most of the emulation time."""
+        if not self.counting:
+            self.u.hook_add(UC_HOOK_BLOCK, self._block); self.counting = True
+            self.u.ctl_flush_tb()   # blocks translated before the hook would run without it
+        return self
+
+    @property
+    def icount(self):
+        """The instructions of the last call; reading it on a machine that does not count is an error, not 0."""
+        assert self.counting, 'icount of a machine that does not count: m.count() first'
+        return self._icount
+
+    @icount.setter
+    def icount(self, v): self._icount = v
 
     # ---------------- memory helpers ----------------
     def alloc(self, n):
@@ -294,8 +310,8 @@ class Machine:
 
     # ---------------- the mocks ----------------
     def _block(self, u, address, size, _):
-        self.icount += size >> 2
-        if self.icount > self.limit: u.emu_stop()   # call()'s step limit, a block at a time
+        self._icount += size >> 2
+        if self._icount > self.limit: u.emu_stop()   # call()'s step limit, a block at a time
 
     def _hook(self, u, address, size, _):
         name = self.handlers.get(address)
@@ -935,16 +951,17 @@ class Machine:
     draw_oy = ()
     confirm_answer = None     # what the stock confirm dialog returns when a test wants a value other than Yes / No (the Songs delete's 0x14)
     mem_geometry = False      # widget_move / widget_resize also write the widget_t (stock widget_to_local reads it)
+    COUNT = False             # count from the start (count()); otherwise call() has no step limit
 
     def call(self, addr, a0=0, a1=0, count=20000, a2=0, a3=0):
         self.calls = []
-        self.icount = 0
+        self._icount = 0
         self.u.reg_write(UC_MIPS_REG_SP, STACK)
         self.u.reg_write(UC_MIPS_REG_RA, RET)
         self.u.reg_write(UC_MIPS_REG_T9, addr)
         for r, v in ((UC_MIPS_REG_A0, a0), (UC_MIPS_REG_A1, a1), (UC_MIPS_REG_A2, a2), (UC_MIPS_REG_A3, a3)): self.u.reg_write(r, v & 0xffffffff)
         self.limit = count   # enforced by _block: emu_start's own count hooks every instruction (~10x slower)
-        self.u.emu_start(addr, RET)
+        self.u.emu_start(addr, RET)   # uncounted: no step limit; a runaway is check.py's per-test timeout
         assert self.u.reg_read(UC_MIPS_REG_PC) == RET, 'did not return to sentinel'
         return self.u.reg_read(UC_MIPS_REG_V0)
 

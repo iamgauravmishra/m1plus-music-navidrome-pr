@@ -9,8 +9,9 @@ CHEV_X, CHEV_W, CHEV_H = 262, 10, 16
 SCREEN_Y0, SC_YOFF = 80, O['SC_YOFF']   # the list's top on the screen (30 px system bar + 50 px navbar)
 
 
-def artists_tests(expect, page, cover_asset):
+def artists_tests(ctx):
     """The menu's Artists row, the Artists page and Cover Flow scoped to one artist."""
+    expect, page, cover_asset = ctx.expect, ctx.page, ctx.cover_asset
     import awtk_ui
     row = artists_row(page)
     open_ = PSYMS['artists_open']
@@ -525,7 +526,7 @@ def page_tests(expect, cover_asset):
 
     # 32a. 5000 artists (the old page stopped at 2000: one widget each): the rows are painted, the sections and the rail work, the cost is bounded
     big = [f'{chr(65 + i % 26)}{chr(97 + (i * 7) % 26)}{i:05d}' for i in range(5000)]
-    m = artists_machine(big); m.call(open_, count=900000000)
+    m = artists_machine(big).count(); m.call(open_, count=900000000)
     spent = m.icount
     mod = Model(sort_model(big)[0])
     expect(m.props.get((m.sv, 'virtual_h')) == mod.content() and len(mod.secs) == 26, f'5000 artists: {mod.content()} px of content in 26 sections, none dropped')
@@ -566,7 +567,8 @@ def sort_model(names):
     return [names[k] for k in out], out
 
 
-def sort_tests(expect):
+def sort_tests(ctx):
+    expect = ctx.expect
     open_ = PSYMS['artists_open']
     # 40. The sort: the album Artist order's rule (ASCII case aside, a leading "The " dropped, ties stable).
     stock = ['the Beatles', 'Zed', 'The Who', 'Theo', 'Them', 'Abba', 'Beach Boys', 'THE ROLLING STONES', 'The', 'The ',
@@ -627,7 +629,7 @@ def sort_tests(expect):
     # 43. Bounds: a large library is capped as before, the sort is bounded and its memory freed on closing.
     big = [f'Artist {(i * 37) % 3000:04d}' for i in range(3000)]
     big[10] = 'The ' + big[10]
-    m = artists_machine(big); m.call(open_, count=300000000)
+    m = artists_machine(big).count(); m.call(open_, count=300000000)
     spent, callocs = m.icount, [c for c in m.calls if c[0] == 'calloc']
     got = shown(m)
     cap = 3000   # (the page lists up to MAX_ARTISTS 20000 now that no widget is made per row)
@@ -651,10 +653,11 @@ def sort_tests(expect):
     expect(m.call(open_, count=2000000) == 0xffffffff and 'navigator_back' in m.names(), 'no memory for the ring: the page closes')
 
 
-def index_tests(expect):
+def index_tests(ctx):
     """An artist's albums take the cache key of the library's album of the same name (ASCII case folded, the FIRST
     library row of a name), through an index when there are IDX_MIN or more of them and a scan below that. Both give the
     same keys; the index does far less work on a big library."""
+    expect = ctx.expect
     ascii_fold = lambda s: ''.join(c.lower() if c.isascii() else c for c in s)
     def keys(m, n):   # cf.keys: the word of cf that holds the n-key calloc (no struct offset assumed)
         made = {c[2] for c in m.calls if c[0] == 'calloc' and c[1] == 4 * n and c[2]}
@@ -682,7 +685,7 @@ def index_tests(expect):
             exp.append(fnv(fnv(O['FNV_SEED'], a), nm) or 1)
         return m, exp + [0]                                # the All albums card: key 0
     for lib_n, k in ((1000, 16), (1000, 30), (1000, 200), (40, 30)):
-        m, exp = build(lib_n, k)
+        m, exp = build(lib_n, k); m.count()
         m.call(PSYMS['artists_open'], count=5000000)
         m.call(PSYMS['ar_open'], a0=0, count=900000000)
         got = keys(m, len(exp))
@@ -692,7 +695,7 @@ def index_tests(expect):
         frees = [c[1] for c in m.calls if c[0] == 'free']
         expect(bool(idx) == (k >= 24 and lib_n == 1000) and all(c[2] in frees for c in idx), f'{k} albums: the index is built only from 24 albums up, and freed')
     # no memory for the index: the scan gives the same keys
-    m, exp = build(1000, 200)
+    m, exp = build(1000, 200); m.count()
     m.calloc_fail_size = 4 * 2048
     m.call(PSYMS['artists_open'], count=5000000)
     m.call(PSYMS['ar_open'], a0=0, count=900000000)
@@ -836,8 +839,8 @@ def genre_composer_tests(ctx):
     expect(any(c[0] == 'widget_set_text_utf8' and c[2] == 'No albums' for c in m.calls), 'a composer without albums says No albums')
 
 
+SECTIONS = [artists_tests, genre_composer_tests, index_tests, sort_tests]
+
+
 def run(ctx):
-    artists_tests(ctx.expect, ctx.page, ctx.cover_asset)
-    genre_composer_tests(ctx)
-    index_tests(ctx.expect)
-    sort_tests(ctx.expect)
+    for f in SECTIONS: f(ctx)

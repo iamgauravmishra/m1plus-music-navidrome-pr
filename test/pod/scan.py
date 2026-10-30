@@ -15,6 +15,7 @@ SHOWN = ('Music', 'Deezer', 'Podcasts', 'a.b', 'x.', 'lost+found2', 'Albums .old
 
 class Walk(Machine):
     """Stock's name test at 0x5ea69c, run for real; its callees (strcmp) are the base machine's mocks."""
+    COUNT = True   # test() runs emu_start itself: the block hook is its step limit
     def __init__(self, stock=False):
         super().__init__()
         self.handlers[self.word(pod.GP + GOT_STRCMP)] = 'strcmp'
@@ -71,6 +72,7 @@ def scan_tests(ctx):
 
 class QueryMachine(Machine):
     """The payload's Library query hooks run against SQLite: the stock functions behind the trampolines are an in-memory database (modelled on q2-pod's LibraryQueryMachine)."""
+    COUNT = True
     TRAMPS = {'stock_dbquery_trampoline': 'db', 'stock_sorted_query_trampoline': 'sorted'}
 
     def __init__(self, rows):

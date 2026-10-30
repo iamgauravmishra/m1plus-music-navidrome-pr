@@ -219,7 +219,7 @@ def run(ctx):
 
     # 20. The depth renderer on the real MIPS code: paint the covers and compare the frame with
     #     the host build of the same renderer (test/coverflow.py), pixel for pixel.
-    m = cover_machine(albums=5)
+    m = cover_machine(albums=5).count()
     m.call(cover_open, count=5000000)
     put_value(m, 2)
     put_off(m, O['CF_VIEW_H'] // 4)      # a quarter of a step into a drag
@@ -578,7 +578,7 @@ def shelf_tests(ctx):
     # S2. A large library: no widget per album at open, and a drag step costs the same as on a small shelf.
     costs = {}
     for n in (5, 1000):
-        m = cover_machine(albums=n); m.call(PSYMS['coverflow_open'], count=80000000)
+        m = cover_machine(albums=n).count(); m.call(PSYMS['coverflow_open'], count=80000000)
         expect(not any(c[0] in stock_shelf for c in m.calls), f'{n} albums: no slide_menu, no image per album')
         m.touch('down', 200, t=1000); m.touch('move', 150, t=1100)
         costs[n] = m.icount
@@ -831,7 +831,7 @@ def landscape_tests(ctx, asset):
 
     # 30. Paint in landscape: the covers are the host renderer's turned frame, the captions drawn into it, the whole
     #     frame blitted over the touch layer, which is exactly the frame's rectangle in the window.
-    m = land_machine(albums=5, saved=b'1\n')
+    m = land_machine(albums=5, saved=b'1\n').count()
     put_value(m, 2); put_off(m, O['CF_VIEW_H'] // 4)
     m.call(PSYMS['on_changed'], count=2000000)
     m.glyphs.clear(); paint_canvas(m)
@@ -889,7 +889,7 @@ def landscape_tests(ctx, asset):
     m.glyphs.clear(); paint_canvas(m)
     expect(''.join(chr(c) for c, s in m.glyphs if s == 22).startswith('Album 1') and 'canvas_draw_image' in m.names(),
            'a commit redraws the frame with the new album\'s caption')
-    m = land_machine(albums=5)
+    m = land_machine(albums=5).count()
     put_value(m, 2); put_off(m, O['CF_VIEW_H'] // 4)
     paint_canvas(m)
     print(f'  portrait frame: {m.icount:,} payload instructions; landscape {land_icount:,} ({land_icount / m.icount:.2f}x)')

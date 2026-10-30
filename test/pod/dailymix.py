@@ -55,7 +55,7 @@ class DM(recent.ST):
     """The Home instance of the menu with the Daily Mix section (the asset's children: header, card, glass disc, two style labels) between the rows and the shelf."""
     def __init__(self, count=False, **kw):
         super().__init__(start=False, **kw)
-        if not count: self.u.hook_del(self.block_hook)   # no instruction counting (icount stays 0): the emulation is several times faster
+        if count: self.count()   # only a test that measures counts: the emulation is several times faster
         self.u.mem_map(SCRATCH + 0x100000, 0x800000)   # room for the records of a large library
         sv = self.sv
         self.daily = self.widget(self.zv, 0, 0, U.SH_W, D.DM_SEC_H, sv, emitter=True)
@@ -88,12 +88,12 @@ class DM(recent.ST):
         return list(self.calls)
 
     def ticks(self, limit=400, per=60000000):
-        """dm_tick until the timer is not armed again; the instructions of each tick."""
+        """dm_tick until the timer is not armed again; the instructions of each tick (None each on a machine that does not count)."""
         costs, self.tick_log = [], []
         for _ in range(limit):
             self.call(PSYMS['dm_tick'], a0=0, count=per)
             self.tick_log.append(list(self.calls))
-            costs.append(self.icount)
+            costs.append(self.icount if self.counting else None)
             if 'timer_add' not in self.names(): return costs
         raise AssertionError('the tick never ended')
 
