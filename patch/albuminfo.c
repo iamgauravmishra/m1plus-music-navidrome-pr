@@ -34,7 +34,7 @@
 #define P(r, off) (*(char **)((char *)(r) + (off)))
 #define I(r, off) (*(int *)((char *)(r) + (off)))
 
-extern unsigned pod_rand(unsigned n);       /* patch/shuffle.c */
+extern unsigned pod_rand(unsigned n); /* patch/shuffle.c */
 extern void pod_toast(const char *text);
 extern void pod_set_mode(int mode);
 extern void pod_set_in_order(void);
@@ -45,8 +45,11 @@ extern void pod_set_in_order(void);
  * navigator_to_with_context("playing_page", {queue, index, class, 2}), whose init starts the player. Stock's loop
  * trusts every navigator_back to change the top window at once (true for these pages: none has a close animation);
  * a bound of AH_POP_MAX turns that trust into a limit, after which the page is opened over what is left. */
-void pod_open_player(void *queue, int idx, int cls) {   /* (also the Daily Mix card's play disc, patch/dailymix.c) */
-    struct { void *dq; int idx, cls, mode; } context;
+void pod_open_player(void *queue, int idx, int cls) { /* (also the Daily Mix card's play disc, patch/dailymix.c) */
+    struct {
+        void *dq;
+        int idx, cls, mode;
+    } context;
     if (*(unsigned char *)SONGER_FLAG && navigator_window_is_exist("playing_page")) {
         void *wm = window_manager();
         int i;
@@ -88,17 +91,31 @@ static void ah_play(int shuffle) {
     found = loadSongList(queue, P(pick, REC_NAME), I(pick, REC_CUE_START), cls);
     n = deque_size(queue);
     if (found >= 0 && n) { /* a duplicate file name resolves to its first copy: the drawn row wins */
-        if (at < n && !strcmp(P(deque_at(queue, at), REC_PATH), P(pick, REC_PATH))) idx = at;
-        else if ((unsigned)found < n) idx = (unsigned)found;
-        if (shuffle) pod_set_mode(MODE_SHUFFLE);
-        else pod_set_in_order();   /* Play all plays the album in order, even after a Shuffle */
+        if (at < n && !strcmp(P(deque_at(queue, at), REC_PATH), P(pick, REC_PATH)))
+            idx = at;
+        else if ((unsigned)found < n)
+            idx = (unsigned)found;
+        if (shuffle)
+            pod_set_mode(MODE_SHUFFLE);
+        else
+            pod_set_in_order(); /* Play all plays the album in order, even after a Shuffle */
         pod_open_player(queue, (int)idx, cls);
     }
     deque_destroy(queue);
 }
 
-static int ah_on_shuffle(void *ctx, void *e) { (void)ctx; (void)e; ah_play(1); return RET_OK; }
-static int ah_on_play(void *ctx, void *e) { (void)ctx; (void)e; ah_play(0); return RET_OK; }
+static int ah_on_shuffle(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    ah_play(1);
+    return RET_OK;
+}
+static int ah_on_play(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    ah_play(0);
+    return RET_OK;
+}
 
 /* "8 tracks" in the player's language: the key by n == 1 ("%d track" / "%d tracks"; a language with more
  * plural forms words both the same), the number put where the translation has its %d. The table's text is
@@ -112,7 +129,8 @@ static unsigned ah_count(char *out, unsigned size, int n) {
         if (f[0] == '%' && f[1] == 'd') {
             while (d && o + 1 < size) out[o++] = digits[--d];
             f += 2;
-        } else out[o++] = *f++;
+        } else
+            out[o++] = *f++;
     }
     out[o] = 0;
     return o;
@@ -143,14 +161,14 @@ static void ah_meta(char *out, unsigned size, int n) {
  * placeholder disc, the All albums card and a page without a window stay black. One page at a time (ah.win); the timer and the
  * state go with the window's EVT_DESTROY. The header may be built again (to-foreground): the state is kept for the same window. */
 static struct {
-    void *win;                                  /* the page window the state belongs to, 0 none */
-    unsigned timer;                             /* the polling timer, 0 none (never started, or the tint is done) */
-    unsigned color;                             /* the window's bg_color as 0x00BBGGRR: black until tinted */
+    void *win; /* the page window the state belongs to, 0 none */
+    unsigned timer; /* the polling timer, 0 none (never started, or the tint is done) */
+    unsigned color; /* the window's bg_color as 0x00BBGGRR: black until tinted */
     int tinted;
-    int fg;                                     /* 1 from the page's start and EVT_WINDOW_TO_FOREGROUND, 0 after EVT_WINDOW_TO_BACKGROUND */
-    int barok;                                  /* 1: both window events are registered, so the status bar may be tinted (else never) */
-    int bar;                                    /* 1: the status bar's bg_color is ours and must go back to black */
-    unsigned key;                              /* the album's cache key (cc_album_key of its names), 0 none */
+    int fg; /* 1 from the page's start and EVT_WINDOW_TO_FOREGROUND, 0 after EVT_WINDOW_TO_BACKGROUND */
+    int barok; /* 1: both window events are registered, so the status bar may be tinted (else never) */
+    int bar; /* 1: the status bar's bg_color is ours and must go back to black */
+    unsigned key; /* the album's cache key (cc_album_key of its names), 0 none */
     unsigned char corner[AH_CORNER * AH_CORNER];
 } ah __attribute__((section(".scratch")));
 
@@ -161,7 +179,7 @@ static struct {
 static void ah_bar_apply(void) {
     if (ah.barok && ah.fg && ah.tinted &&
         pod_bar_tint(ah.win, pod_shade(ah.color, 0, AH_TINT_A_TOP, AH_TINT_A_BOT, AH_TINT_ROWS)))
-        ah.bar = 1;   /* a failed call keeps what the bar has (and owes) */
+        ah.bar = 1; /* a failed call keeps what the bar has (and owes) */
 }
 
 __attribute__((noinline)) static void ah_bar_black(void) {
@@ -244,7 +262,7 @@ static int ah_cached(void) {
         return ah.tinted;
     }
     size = cc_file_size(cc_path(path, sizeof path, ah.key, ""));
-    if (size == 0) return 1;   /* the "no art" marker */
+    if (size == 0) return 1; /* the "no art" marker */
     if (size > 0 && cc_url(url, ah.key) && cc_decode(ah.win, url, 1, 1, 1, &px)) {
         ah_tone(px);
         return ah.tinted;
@@ -260,7 +278,7 @@ static void ah_work(void) {
     const char *scheme = "file://";
     unsigned i;
     for (i = 0; i < 7; ++i)
-        if (url[i] != scheme[i]) return;   /* the placeholder disc ("albumcover_info"): nothing to tint from */
+        if (url[i] != scheme[i]) return; /* the placeholder disc ("albumcover_info"): nothing to tint from */
     if (access(url + 7, F_OK) != 0) return;
     if (cc_decode(ah.win, url, 1, 1, 1, &px)) ah_tone(px); /* the corners follow from their next paint */
 }
@@ -272,7 +290,10 @@ static int ah_tick(const void *timer) {
         return RET_OK;
     }
     ah_work();
-    if (ah.tinted) { ah.timer = 0; return RET_OK; }
+    if (ah.tinted) {
+        ah.timer = 0;
+        return RET_OK;
+    }
     return RET_REPEAT;
 }
 
@@ -280,14 +301,19 @@ static int ah_tick(const void *timer) {
 static void ah_tint_start(void *item, void *art) {
     void *win = widget_get_window(item);
     if (ah.win && ah.win != win) ah_stop();
-    if (!ah.corner[0]) pod_corner_fill(ah.corner, AH_CORNER);   /* the corners are ours in any case: black without a tint */
+    if (!ah.corner[0])
+        pod_corner_fill(ah.corner, AH_CORNER); /* the corners are ours in any case: black without a tint */
     widget_on(art, EVT_AFTER_PAINT, ah_on_art_paint, art);
     if (!win) return;
     if (!ah.win) {
         ah.win = win;
-        if (!widget_on(win, EVT_DESTROY, ah_on_destroy, win)) { ah.win = 0; return; }
+        if (!widget_on(win, EVT_DESTROY, ah_on_destroy, win)) {
+            ah.win = 0;
+            return;
+        }
         ah.fg = 1;
-        ah.barok = widget_on(win, EVT_WINDOW_TO_BG, ah_on_background, win) && widget_on(win, EVT_WINDOW_TO_FG, ah_on_foreground, win);
+        ah.barok = widget_on(win, EVT_WINDOW_TO_BG, ah_on_background, win) &&
+                   widget_on(win, EVT_WINDOW_TO_FG, ah_on_foreground, win);
     }
     if (*(unsigned char *)(CLASSINFO + CLASSINFO_ALL_SONGS) || ah.tinted || ah.timer) return; /* the card stays black */
     if (ah_cached()) return;
@@ -361,7 +387,8 @@ __attribute__((noinline)) static void ah_restyle(void *item) {
     widget_use_style(artist, "srlabel_ahartist_style");
     widget_move(artist, AH_TEXT_X, AH_ARTIST_Y);
     widget_resize(artist, AH_TEXT_W, AH_ARTIST_H);
-    widget_use_style(item, "list_item_ahhead_style"); /* transparent: the window's colour and the tint gradient show through */
+    widget_use_style(
+        item, "list_item_ahhead_style"); /* transparent: the window's colour and the tint gradient show through */
     widget_resize(item, widget_get_prop_int(item, "w", 0), AH_HDR_H);
     ah_tint_start(item, art);
 }

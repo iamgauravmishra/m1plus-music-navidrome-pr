@@ -1,8 +1,6 @@
 # The album page
 
-Split out of docs/architecture.md and docs/ui.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
-
-## 8. The album view (`patch/albuminfo.c`, test `test/pod/albuminfo.py`)
+**Sources:** `patch/albuminfo.c`, test `test/pod/albuminfo.py`.
 
 There is one album view: the stock `albuminfo_page` (an album's tracks), restyled. It opens from the
 stock Albums list, from the Albums grid (section 5a), from Cover Flow (main and per artist), from Artists through Cover Flow, from the
@@ -207,7 +205,7 @@ shows the placeholder disc until the thread has rendered the file, as from the A
 
 Not done: a duration, a current-track marker in the track rows (the stock page marks nothing).
 
-### The album page and the other stock pages (assets; the code half is `docs/modules/album-page.md`)
+## The album page and the other stock pages (assets; the code half is `docs/modules/album-page.md`)
 
 `tools/preview_stock.py WORKDIR OUT.png`: the Albums list and the album
 page it opens, Cover Flow on an artist and the same page opened by the All albums card, a playlist's

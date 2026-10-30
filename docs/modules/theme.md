@@ -1,10 +1,6 @@
 # Theme
 
-Split out of docs/ui.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
-
-## 4. Theme, lists, Now Playing
-
-### Minimal theme (`tools/mod_theme.py`, `tools/awtk_style.py`)
+## Minimal theme (`tools/mod_theme.py`, `tools/awtk_style.py`)
 
 `styles/*.bin` is AWTK's compiled theme: a 12-byte header (`fd fc fb fa`, version 0, item count), one
 100-byte item per (state, style name, widget type) with the offset of its property block, then blocks

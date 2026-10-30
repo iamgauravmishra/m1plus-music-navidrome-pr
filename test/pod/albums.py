@@ -779,9 +779,9 @@ def taps_list_tests(ctx):
     settle(m)
     rows = (n + COLS - 1) // COLS
     mx = RGAP + rows * PITCH - VIEW_H
-    last, loaded, peak = 0, [len(m.bitmaps)], 0
+    loaded, peak = [len(m.bitmaps)], 0
     for target in (mx // 2, mx, 0):
-        scroll_to(m, target); last = target
+        scroll_to(m, target)
         blits, texts = settle(m)
         expect(dsts(blits) == want_dsts(reference(target, n)), f'4000 albums, scroll {target}: the frame is the visible cells only ({len(blits)})')
         expect(len(m.bitmaps) <= TILES + 1, f'live bitmaps stay within {TILES} tiles + the placeholder ({len(m.bitmaps)})')
@@ -996,9 +996,9 @@ def taps_list_tests(ctx):
     m.call(PSYMS['al_on_toggle'], a0=0, count=20000000); l1 = shape_of(m)
     expect(is_grid(g1) and is_list(l1), f'opened as the grid and switched to the list, the list gets its own corners, not the grid\'s ({g1}, {l1})')
     m = albums_machine(4000); m.fs[ALBUMS_FILE] = b'0\n'; open_grid(m); settle(m)
-    mx, last = 4000 * ROW - VIEW_H, 0
+    mx = 4000 * ROW - VIEW_H
     for target in (mx // 2, mx, 0):
-        scroll_to(m, target); last = target; settle(m)
+        scroll_to(m, target); settle(m)
         expect(len(m.bitmaps) <= TILES + 1, f'list of 4000: live bitmaps stay within {TILES} tiles + the placeholder ({len(m.bitmaps)})')
     m.call(PSYMS['al_on_destroy'], count=2000000)
     expect(len(m.bitmaps) == 0, 'closing the list frees every bitmap')

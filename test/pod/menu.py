@@ -76,7 +76,7 @@ def run(ctx):
         expect(f'pod_row{i}' in got and 'pod_scrollview' in got and 'pod_icon' not in got,
                f'menu row {i} is hit through the scroll view ({got})')
     expect(len(rows) == len(page.rows), 'every menu row is in the scroll view')
-    expect(lv and lv.y + lv.h == CLIENT_H, f'the menu list ends at the window bottom (450), not off-screen')
+    expect(lv and lv.y + lv.h == CLIENT_H, 'the menu list ends at the window bottom (450), not off-screen')
     content = max(r.y + r.h for r in rows)
     expect(content > sv.h and len(visible) < len(rows),
            f'{len(rows)} 52 px rows ({content} px) overflow the 400 px list, so it scrolls')
@@ -563,7 +563,6 @@ def settings_tests(ctx, on_row, rows0):
     expect, P = ctx.expect, pod_pages
     S = P.CUSTOMIZE_PAGE
     rows_s = PSYMS[f'pod_rows_{P.CUSTOMIZE_PAGE_INDEX}']
-    sw = lambda i: f'pod_switch{i}'
     mm_i = next(i for i, r in enumerate(S.rows) if r.action == P.ACT_PAGE and r.arg == P.MENUCFG_PAGE_INDEX)
     cf_i = next(i for i, r in enumerate(S.rows) if r.action == P.ACT_PAGE and r.arg == P.CFSET_PAGE_INDEX)
     settings_i = next(i for i, r in enumerate(P.MENU.rows) if r.action == P.ACT_PAGE and r.arg == P.CUSTOMIZE_PAGE_INDEX)

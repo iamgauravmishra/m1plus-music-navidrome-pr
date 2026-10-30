@@ -1,14 +1,23 @@
 # Known addresses of stock V2.1 demo
 
-Split out of docs/architecture.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
+**Sources:** stock V2.1 `demo`.
 
-## 3. Known addresses (stock V2.1 `demo`)
+Payload `PT_LOAD`: `0xb00000`; `$gp`: `0xa03ed0`. `tools/pod.py` is the authoritative pin list.
+Use `tools/stock.py` or `tools/disasm.py` to inspect it; see [payload](payload.md) for prologues,
+resumes and call boundaries.
 
-Payload `PT_LOAD` `0xb00000`; `$gp = 0xa03ed0`; hooks `0x533b80` (Home icon dispatcher, registered
-through `widget_on`, GOT slot `0x9fe700`), `0x534cd4` (`home_page_init`) and `0x526264`
-(`albuminfo_listitem0_layout`) and `0x53d1e4` (`playing_page_init`). `.pdr` is zeroed in `demo`
-only; the About FW. Version stays `V2.1` and a row `M1+ Music:<tag>` follows it (asset-only, `tools/mod_about.py`, no hook). Find more with `tools/dis.py` (`sym`, `addr`, `xref`,
-`strxref`, `callers`, `strings-xref`, `full`).
+| Site | Address |
+|---|---|
+| Home icon dispatcher | `0x533b80` (`widget_on`; GOT slot `0x9fe700`) |
+| `home_page_init` | `0x534cd4` |
+| `albuminfo_listitem0_layout` | `0x526264` |
+| `playing_page_init` | `0x53d1e4` |
+| `dialog_playmore_dialog_init` | `0x479cc4` |
+| `get_id3info` tag-copy call | `0x4dff4c` |
+| Empty `scroll_view` event slot | `0x97a330` |
+
+Only `demo`'s unloaded `.pdr` is zeroed. Stock About stays `V2.1`; `tools/mod_about.py` adds
+the separate `M1+ Music:<tag>` row without a hook.
 
 Pinned stock functions, beyond those in the sections below: `widget_lookup` `0x666a74`, `widget_on`
 `0x666d20`, `widget_set_text_utf8` `0x66f720`, `navigator_back` `0x4d20dc`, `on_backtoplayer_onclick`
@@ -43,7 +52,7 @@ the delete handler `0x527f48`, the add handler `0x5280c0` (`dialog/batchadd_dial
 
 The More sheet's rows (`playmore_dialog`, bound by the binder `0x478b44` with `widget_on(row, 0x10c, handler, dlg)`): Look up album `0x4795cc` (empty album string at `0xa0d88c + 0x404` -> the msginfo error via `0x479544`; else `window_close(dlg)`, fills the browsing record `0xa0c768` and `navigator_to("playerjumpinfo_page")`), Look up artist `0x4793ac` (`window_close(dlg)`, `navigator_close` `0x4d2118` of `album_page` and of `albuminfo_page` when `navigator_window_is_exist`, `songerinfoflag` `0xa04737` = 1, `navigator_to_with_context("album_page")`); `songerinfoflag` is cleared only by `album_page`'s window event handler `0x522c64` (bound @0x5248a0). `patch/playmore.c` replaces the album handler (docs/modules/playmore.md).
 
-### Home icons and their conditions
+## Home icons and their conditions
 
 The Home grid is built by `home_page_init` (`0x534cd4`) -> the page builder (`0x534064`) -> the icon
 builder (`0x533d8c`), which walks a `deque` of 8-byte records `{int id; char shown; ...}` at
@@ -90,7 +99,7 @@ Chinese the default case): 0 (and anything outside 1-12) `zh_CN`, 1 `zh_HK`, 2 `
 `ko_KR`, 5 `fr_FR`, 6 `ge_DE`, 7 `sp_ES`, 8 `it_IT`, 9 `th_TH`, 10 `po_PL`, 11 `ru_RU`, 12 `uk_UK`. The
 HiFi icon exists only in Simplified Chinese; in English the default list is ids `1..17`.
 
-### The stock library flow (record layout)
+## The stock library flow (record layout)
 
 Browsing records are `stSongInfo` (0x58 bytes, `REC_*` in `offsets.inc`; read from the row callback
 `0x4e93c8` / `0x4e908c`): `REC_ID`, `REC_TITLE` `+0x10` (an artist row's name too), `REC_ALBUM`,
@@ -130,7 +139,7 @@ Stock queries the payload runs:
 | the Daily Mix page (`dp_*`, docs/modules/dailymix.md "The page") | **no new address**: it uses calls already pinned above (`window_open` `0x679fd4`, `widget_set_style` `0x66c448` for the tint, `widget_move`, `widget_measure_text` `0x66c7e0`, the canvas calls, `loadLocalClassList(0xf001)` for the library, `loadSongList`, `_deque_push_back`); the asset is ours (`ui/m1plus_dailymix.bin`) | |
 | the stock import sequence (`importPlayList` `0x4ef394`; the Daily Mix does not use it, but its files must never be importable: it reads only `/mnt/mmc/_explaylist_data` through `toolsGetDirectoryM3u8` `0x5e9794`, names ending `.m3u8` / `.m3u`; `checkPlayListExist`, `getPlayListMaxId` and `addPlayList` below ARE pinned since the Daily Mix page's Add disc, `docs/modules/dailymix.md` "The Add disc"; `deletePlaylist`, `deleteAllMusicByPlaylist` are not) | per playlist file: `checkPlayListByName` -> `deletePlaylist(id)` `0x4edf98` + `deleteAllMusicByPlaylist(id)` `0x4edfdc` + `loadLocalClassList(0xf00b)`; `createPlayListItem`; then per song `checkPlayListExist(rec, id)` `0x4ee1a8` (1 = already in), `getPlayListMaxId()` `0x4ee184` (the row id is `max(100, that) + 1`, `0x4ef614..0x4ef62c`), `get_songid3_info` `0x4da694` (tags from the file; the Daily Mix has them from the library), `addPlayList(rec)` `0x4ee1cc` (= `toolsInsertDbTable(rec, "playlist", db, 1)` `0x5ee2fc`: the row keeps `rec + 0`; strings `+8 +0xc +0x10 +0x14 +0x18 +0x1c +0x20 +0x24`, ints `+0x30 +0x3c +0x40 +0x48 +0x4c +0x50`, byte `+0x54`; returns 1). Addresses from the disassembly (no longer pinned by a test) | `0x4ef4b0..0x4ef83c` |
 
-### Deleting by class
+## Deleting by class
 
 `batch_delete_file(class, list, selection, 0, delete_file)` (`0x4e1408`, pinned) is what every stock list's Delete runs, with `g_class_type` (the `allmusic_page` handler
 `0x527f48`, after the one confirm dialog for all classes: `0xa` the list only, `0x14` with the file). It dispatches on the class: `0xf003..0xf00b` through the jump table
@@ -148,7 +157,7 @@ runs one table delete per marked row and then `remove_file` `0x4e1264` (`access`
 
 Screen state: exported byte `backlight_status` at `0x97cae4` is pinned in `tools/pod.py`. Stock `awake_screen` sets it to 1 before enabling the framebuffer; zero means off. Existing page-owned timers use it to defer visual work.
 
-### Library scan and queries (patch/common.c `pod_scan_dir`, patch/pcmodel.c `pc_library_query`; `SCAN_PINS`, `QUERY_PINS` in tools/pod.py)
+## Library scan and queries (patch/common.c `pod_scan_dir`, patch/pcmodel.c `pc_library_query`; `SCAN_PINS`, `QUERY_PINS` in tools/pod.py)
 
 | What | Address | Evidence |
 |---|---|---|
@@ -159,7 +168,7 @@ Screen state: exported byte `backlight_status` at `0x97cae4` is pinned in `tools
 | `toolsQueryDbTableAndSort` | `0x5ee9ac` | prologue `(0x3c1c0041, 0x279c5524, 0x0399e021)`; callers `sort_filename` `0x4ea18c`, `sort_format` `0x4ea218` (via `getAllMusic`); hooked: `pc_sorted_query` |
 | the SQL texts | `0x74ba4c`.. | `"songtable"` `0x74ba4c`, `"myfav"` `0x74ba58`, formats from `0x74ba6c` (`select * from %s ...`) to `0x74c510`; sprintf'd by the `getAll*` / `getMusicBy*` wrappers; `toolsCheckItemExist` `0x5ef578` (the scan's duplicate check) runs its own `sqlite3_exec` |
 
-### Podcasts (patch/pcmodel.c, `PODCAST_PINS` in tools/pod.py)
+## Podcasts (patch/pcmodel.c, `PODCAST_PINS` in tools/pod.py)
 
 | What | Address | Evidence |
 |---|---|---|

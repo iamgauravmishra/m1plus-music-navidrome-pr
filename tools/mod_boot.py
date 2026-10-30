@@ -47,8 +47,8 @@ def check(ok, msg):
 # ---- logo ---------------------------------------------------------------------------------------
 
 def jpeg_size(b):
-    """Frame-header check of a splash JPEG, returns (w, h). From q2-pod tools/build.py jpeg_size
-    (MIT, Diamond Bond): display_logo indexes libjpeg's output as RGB triples, so only an 8-bit,
+    """Frame-header check of a splash JPEG, returns (w, h). The same check as q2-pod's
+    tools/build.py jpeg_size: display_logo indexes libjpeg's output as RGB triples, so only an 8-bit,
     three-component baseline (SOF0) JPEG is safe; grayscale, CMYK and progressive are refused."""
     check(b[:2] == b'\xff\xd8', 'logo must be a JPEG')
     i = 2

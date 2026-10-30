@@ -283,7 +283,6 @@ def shuffle_page_tests(expect, menu, spi, page):
     import awtk_ui
     rows0 = PSYMS['pod_rows_0']
     i = next(k for k, r in enumerate(menu.rows) if r.action == pod_pages.ACT_PAGE and r.arg == spi)
-    cover = next(k for k, r in enumerate(menu.rows) if r.action == pod_pages.ACT_COVER)
     expect(menu.rows[i].label == 'Shuffle' and not any(r.action == pod_pages.ACT_SHUFFLE for r in menu.rows),
            f'the menu has one Shuffle row (row {i} of the default order, after Playlists), opening the page, and no shuffle rows of its own')
     tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_menu.bin'), 'rb').read())

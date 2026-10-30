@@ -4,10 +4,9 @@
 The same patch/coverflow.c and patch/covercache.c that go into the payload are compiled for the host with
 -DCF_HOST (which drops everything that talks to demo) and driven through ctypes, so the geometry, the
 compositing, the texture sampling, the grid's box-filter tile reduction and the cache key are tested without
-a device. Modelled on
-q2-pod's test/coverflow.py (Copyright (c) 2026 Diamond Bond, MIT; see NOTICE).
+a device. Modelled on q2-pod's test/coverflow.py.
 
-  venv/bin/python -I test/coverflow.py [--captures DIR] [--preview PNG]
+  uv run python -I test/coverflow.py [--captures DIR] [--preview PNG]
 
 --captures writes the raw CF_VIEW_W x CF_VIEW_H frames at rest and part-way through a turn;
 --preview composes the 320x480 page around one of them (approximate: PIL, not AWTK).

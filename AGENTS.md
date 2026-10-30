@@ -9,17 +9,23 @@ keep flags, variants or code paths only to reproduce old packages.
 ## Setup, build, test, flash
 
 ```
-uv venv -p 3.15 venv && uv pip install -p venv -r requirements.txt ; brew install uv squashfs llvm lld
-venv/bin/python -I tools/build.py                 # the release -> out/M1Plus-<tag>-release-update.bin  (--restore: stock)
-venv/bin/python -I tools/check.py --tests-only    # DONE-CRITERION of a feature branch: all tests, no package/golden (~10 s)
-venv/bin/python -I tools/check.py --test albums   # selected tests only (see check.py --help)
-venv/bin/python -I tools/check.py                 # DONE-CRITERION at integration: release + restore vs test/golden.sha256, all tests
-venv/bin/python -I tools/check.py --update        # integration only, hash change intended; reuses the passing run just before it
-venv/bin/python -I tools/fwtool.py verify|diff|info ...   # package inspection
-venv/bin/python -I tools/flash_sd.py out/<package>.bin    # verified copy to the card, eject (--dry-run, --no-eject)
+brew install uv squashfs llvm lld
+make setup                      # uv sync --locked, Python 3.15 in this checkout's .venv
+make doctor                     # pinned inputs, native tools and Unicorn execution
+make lint                       # Ruff bug checks on the Python (test, dev and check run it first)
+make test                       # feature done-criterion: all tests, no package/golden
+make test TEST=albums            # selected tests; uv run python -I tools/check.py --list lists them
+make dev                        # fresh dev tag, full tests and a retained package; no tracked version edit
+make preview                    # latest tested dev build (BUILD=out/dev/<tag> selects another)
+make flash                      # verified SD copy of that tested package; on-device update stays manual
+make check                      # integration: release + restore vs goldens, all tests
+make accept                     # integration only; accepts complete matching results
+uv run python -I tools/build.py --restore
+uv run python -I tools/fwtool.py verify|diff|info ...
 ```
 
-Details: `docs/workflow.md` (build, test, flash, device checklist), `docs/architecture.md` and
+Guides: `docs/README.md` (index), `docs/install.md` (install/restore), `docs/guide.md` (user controls),
+`docs/workflow.md` (development), `docs/architecture.md` and
 `docs/ui.md` (indexes: one file per module in `docs/modules/`: read only the one you touch, plus
 `payload.md` and `addresses.md` before searching the binary), `docs/history.md` (milestones, hardware
 results, lessons), `docs/firmware.md` (firmware facts, space step).
@@ -29,6 +35,8 @@ gets the Source Han Sans zip.
 ## Working rules
 
 - Run builds and tests in the **foreground** (a build is seconds); never background and sleep-poll.
+- C formatting: `make format`, then `make format-check`; `.clang-format` is the style definition.
+- Python lint: `make lint` (Ruff, bug rules only; `make test` runs it). Do not run `ruff format`.
 - `python -I` on anything that touches extracted firmware or downloads; never execute code from
   them or from the q2-pod clone (read and copy reviewed code).
 - **Command shape** (worktrees refuse anything else): no heredoc scripts (`cat > f <<EOF`, `python - <<EOF`); no
@@ -38,12 +46,12 @@ gets the Source Han Sans zip.
   Stage with `git add <paths>`, never `-A`; never commit `venv/`.
 - **UI bugs** start with a reproducer (a stock-code emulation test, or a device screenshot via Settings >
   Screenshot + `tools/pull_shots.py`); previews must use the shared AWTK layout model where one exists.
-- **Python env:** prefer `uv` over `python3 -m venv` / `pip` (same `venv/`, under a second). Keep
-  Python 3.15: the golden hashes were made with it. Add a dependency to `requirements.txt`, not ad hoc.
-- **Worktrees:** a new worktree first creates its own `venv/` with the setup line above, so
-  `venv/bin/python` is always relative; never call the main checkout's venv by absolute path. The other
+- **Python env:** use `uv run python -I` or the Makefile; `uv sync --locked` owns this checkout's
+  `.venv`. Keep Python 3.15. Add dependencies to `pyproject.toml` and update `uv.lock`, not ad hoc.
+- **Worktrees:** first run `make setup` to create the worktree's own environment. Never borrow
+  another checkout's interpreter. The other
   gitignored inputs (firmware zip, `fonts/`, `work/stock`) resolve from the main checkout automatically
-  (`tools/paths.py`; `python3 -I tools/paths.py` shows what it found). No symlinks. `work/` and `out/` are per worktree; never write into the main checkout or another worktree.
+  (`tools/paths.py`; `uv run python -I tools/paths.py` shows what it found). No symlinks. `work/` and `out/` are per worktree; never write into the main checkout or another worktree.
 - Builds are deterministic. `tools/check.py` compares both packages to `test/golden.sha256`; a CHANGED
   package you did not mean to touch is a bug.
 
@@ -51,6 +59,10 @@ gets the Source Han Sans zip.
 
 Format `V2.1` + lowercase series + capital letters. The updater refuses a package whose version
 equals the installed one, so each flashed package needs a new tag.
+
+`make dev` reserves series `z`: four checkout-namespace letters plus four local counter letters.
+Keep `.dev-number.json` (gitignored); do not reset it or reuse a dev output directory. It never
+changes `TAG`. Dev artifacts and test receipts stay together under `out/dev/<tag>`.
 
 **Feature branches do not bump `TAG`, update `test/golden.sha256`, edit `docs/history.md` or the README
 status line** (every branch doing so conflicts on merge). Their done-criterion is `check.py --tests-only`
@@ -80,11 +92,11 @@ notable or accepted release, and any new device finding or lesson. A golden or h
 ## Reverse engineering
 
 Read `docs/modules/addresses.md` (known addresses, pinned functions and offsets) before searching the
-binary; `tools/stock.py` wraps the common searches (strings, symbols, ui trees, images). Helpers: `tools/dis.py sym|addr|xref|strxref|callers|strings-xref|full ELF ...` (`full` caches
+binary; `tools/stock.py` wraps the common searches (strings, symbols, ui trees, images). Helpers: `tools/disasm.py sym|addr|xref|strxref|callers|strings-xref|full ELF ...` (`full` caches
 the annotated disassembly in `work/cache/`, keyed by SHA-256), `tools/elfinfo.py`, `tools/awtk_ui.py`,
 `tools/reach.py` (boot-path reachability of pinned edits).
 
 ## Preferences
 
-- Borrow from q2-pod (github.com/DiamondBond/q2-pod, MIT) with attribution in `NOTICE`; clone it outside the repo.
+- q2-pod (github.com/DiamondBond/q2-pod) is acknowledged in the README. Preserve any file-specific attribution when borrowing code; clone it outside the repo.
 - No Bluetooth work. `hciplayer` patching is deferred.

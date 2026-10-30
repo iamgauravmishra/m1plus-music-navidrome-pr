@@ -15,9 +15,10 @@ reference/
 /preview/
 /previews/
 /docs/*preview*.png
-# no trailing slash: also ignores a venv symlink (worktrees link to the main checkout's venv)
+# Each checkout creates its own environment.
 venv
 .venv
+.dev-number.json
 __pycache__/
 *.pyc
 .DS_Store

@@ -105,7 +105,7 @@ def asset_tree_raw():
 
 
 def run(ctx):
-    expect, P = ctx.expect, pod_pages
+    expect = ctx.expect
     m = TapMachine()
     t = m.tree
     row0 = next(w for w in t.walk() if w.name == 'pod_row0')

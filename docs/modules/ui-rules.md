@@ -1,9 +1,5 @@
 # Rules every UI step follows
 
-Split out of docs/ui.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
-
-## 1. Rules every UI step follows
-
 - **Names stay.** Never rename or delete a widget the app looks up by name (`widget_lookup(win, name,
   TRUE)`, recursive, so reparenting is safe); restyle, move or hide it.
 - **Hit testing ignores `visible`.** Hide = `visible=false` + `sensitive=false`; decorative overlays

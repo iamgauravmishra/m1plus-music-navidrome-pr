@@ -1,13 +1,12 @@
 # Home, the boot guard and the window stack
 
-Split out of docs/architecture.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
+**Sources:** `patch/home.c`, `patch/home.h`, test `test/pod/home.py`.
 
-## 9. Home and the boot guard (`patch/home.c`, `patch/home.h`, test `test/pod/home.py`)
+`home_page_init` starts M1+ Music behind a durable crash marker and falls back to stock on
+failure. It is the startup UI hook; the separately constrained podcast tag-reader hook can
+also run through Memory Playback. See [payload safety](safety.md). Recovery buttons remain unverified.
 
-M1+ Music is the Home screen at start-up. This is the only payload code that runs at start-up, and the
-recovery button combination is unverified, so everything is behind a crash marker and falls to stock.
-
-### Boot sequence
+## Boot sequence
 
 ```
 main -> application_init -> navigator_to("home_page") -> navigator_to_with_context -> page-init dispatcher
@@ -37,7 +36,7 @@ main -> application_init -> navigator_to("home_page") -> navigator_to_with_conte
       and `sensitive=false`; after the marker is durable) and schedule the first pod-menu open (10 ms,
       `OPEN_FIRST_MS`).
 
-#### The grid icon (`hm_add_icon`, `hm_icon_cell`)
+### The grid icon (`hm_add_icon`, `hm_icon_cell`)
 
 The stock page builder `0x534064` (called from `home_page_init` at `0x534de4`, and again from the Home
 foreground handler `0x534860` when the icon list changed) looks up `home_sview` (a `slide_view`) and
@@ -70,11 +69,11 @@ window above Home closes but not at start-up (the first open dispatches `WILL_OP
 lets the same function register an extra `0x12d` handler with `widget_on`, so the foreground path
 needs no second prologue hook.
 
-### Why it is safe
+## Guard guarantees and limits
 
-The stock function runs first and completely; our code runs after it and only on success. Any failure
-(no file access, failing `fsync`, no timer, a kill file) leaves the boot stock. **A boot loop is
-impossible by construction:** arming needs the marker and the bad note both absent; a start that dies
+The stock function completes before payload work. File/timer failures or a kill file leave
+startup stock. **The guard prevents repeated startup attempts after a marked failure:** arming needs
+the marker and bad note absent; a start that dies
 after arming leaves the marker, the next start writes the sticky note (or, if it cannot, leaves the
 marker) and runs stock, and every start after that finds the note or marker and runs stock: at most one
 crash, never an alternation. The pod-menu open is covered by the same marker. Costs and residual
@@ -82,7 +81,7 @@ risks: a power-off within 5 s counts as a failed start (the next start is stock;
 on again); a hang inside `fsync` on a broken flash filesystem would hang the UI thread before the
 marker is durable; a later misbehaviour after the 5 s window is not caught.
 
-### Files and the kill switch
+## Files and the kill switch
 
 | path | meaning |
 |---|---|
@@ -153,7 +152,7 @@ the stock list code assumes it owns that layout:
 The setting is an own file, not `config.ini [M1PLUS]`: `write_int_config` rewrites the shared config
 the stock app parses at start-up, and a bad write there is a boot risk.
 
-### Window stack
+## Window stack
 
 The pod menu is not the bottom window: stock code looks Home up by name (`home_page`; the "play from
 here" loops stop at it, `navigator_back_to_home` closes down to it), so the menu is opened with
@@ -184,7 +183,7 @@ again, and Home coming to the foreground with no menu to follow (the kill switch
 Shanling while the menu was Home) shows it too (`hm_fg`: never a blank Home), and the stock Home keeps all its widgets so every stock `widget_lookup` resolves. Hiding
 `app_gesture` assumes stock never toggles its visibility itself (it would only re-show the grid).
 
-### Recovery
+## Recovery
 
 Any bad state: reflash a stock image (`tools/build.py --restore`, V2.1R); it does not touch
 `/mnt/data` where the marker and settings live, and nothing stock reads them. A start that cannot

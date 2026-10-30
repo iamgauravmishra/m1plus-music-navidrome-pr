@@ -1,265 +1,227 @@
 #!/usr/bin/env python3
-"""The done-criterion for every change: build the release and the restore package, compare them to
-the golden hashes, run the tests.
+"""Test features, produce a tested dev package, or validate integration.
 
-  venv/bin/python -I tools/check.py [--only release|restore] [--no-tests] [--update] [--keep]
-                                    [--tests-only] [--test NAME[,NAME]]
+  make test [TEST=albums]     tree + tests; no package or goldens
+  make dev                    one dev tree + full tests + verified package
+  make check                  release + restore + full tests vs goldens
+  make accept                 accept goldens after complete integration validation
 
-- Builds both packages in parallel, each in its own work/out dirs under work/check/ (M1_WORK /
-  M1_OUT, tools/paths.py). A target whose optional input is missing (Source Han Sans zip, LLVM) is
-  SKIPPED with the reason, not failed. The release is built in two halves: the tree (tools/build.py
-  --tree-only; the asset stages come from work/cache/build when their inputs are unchanged,
-  tools/buildcache.py) and then the package (--pack-only), which runs while the tests already run.
-- Compares each package's SHA-256 with test/golden.sha256 (`<sha256>  <tag>  <name>`): MATCH,
-  CHANGED (exit 1 unless --update), NEW (not in golden yet).
-- Tests, all in one process pool of os.cpu_count() workers, the slowest first (their last durations
-  are kept in work/cache/test-times.json): test/patch.py (the emulated payload; one process per
-  module of test/pod/, or per section of a module with a top-level SECTIONS list) once per distinct payload (keyed by the built demo's SHA-256),
-  test/demo_diff.py (the built demo differs from stock only where the mods say), test/coverflow.py
-  (host build of the depth renderer), test/awtk_fill.py (demo's own AWTK fill code on the stock tree)
-  and test/tools.py (fwtool verify, this script's decisions).
-- --tests-only: no packaging, no golden comparison, no restore build; only the release tree the tests
-  need. This is the done-criterion of a feature branch (docs/workflow.md). --test NAME[,NAME] runs only
-  those tests (patch modules by name, e.g. albums or patch:albums, all its sections; one section as albums/toggle_tests;
-  or tools, coverflow, awtk_fill, demo_diff) and implies --tests-only; the tree is built only if a selected test needs it.
-- --update rewrites the golden lines of the selected targets (after you meant to change them, and
-  README says so), but only when every build and test passed; otherwise it writes nothing and exits 1.
-  When the last complete run of this very tree (same file contents apart from docs and the golden
-  file, same tool versions) passed, --update reuses its results and only writes the golden file.
-  --keep leaves work/check/<name>/ in place.
+Logs and failed trees are retained. --list lists tests. --jobs and --timeout control
+concurrency and the per-test wall limit. Native crashes include their signal.
 """
-import argparse, ast, concurrent.futures as cf, glob, hashlib, json, os, re, shutil, subprocess, sys, time
+import argparse, ast, concurrent.futures as cf, glob, os, re, shutil, sys, time
+from pathlib import Path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS = os.path.join(ROOT, 'tools'); TEST = os.path.join(ROOT, 'test')
-GOLDEN = os.path.join(TEST, 'golden.sha256')
 sys.path.insert(0, TOOLS)
-import build, buildcache, paths   # noqa: E402
+import build, paths, workflow
 
-CACHE = os.path.join(ROOT, 'work', 'cache')
-LAST = os.path.join(CACHE, 'check-last.json'); TIMES = os.path.join(CACHE, 'test-times.json')
-TARGETS = {'release': (build.TAG, []), 'restore': (build.RESTORE_TAG, ['--restore'])}   # name -> (tag, build.py args)
-MODULES = sorted(os.path.basename(f)[:-3] for f in glob.glob(os.path.join(TEST, 'pod', '*.py')) if not f.endswith('harness.py'))
+GOLDEN = os.path.join(TEST, 'golden.sha256')
+CACHE = Path(ROOT) / 'work/cache'
+LAST = CACHE / 'check-last.json'; TIMES = CACHE / 'test-times.json'
+TARGETS = {'release': (build.TAG, []), 'restore': (build.RESTORE_TAG, ['--restore'])}
+MODULES = sorted(Path(f).stem for f in glob.glob(os.path.join(TEST, 'pod', '*.py')) if not f.endswith('harness.py'))
+
 
 def sections(module):
-    """The names in a payload test module's top-level SECTIONS = [fn, ...] (read, not imported: no tree needed), or []."""
-    for node in ast.parse(open(os.path.join(TEST, 'pod', module + '.py')).read()).body:
+    for node in ast.parse(Path(TEST, 'pod', module + '.py').read_text()).body:
         if isinstance(node, ast.Assign) and [getattr(t, 'id', None) for t in node.targets] == ['SECTIONS']:
             return [e.id for e in node.value.elts]
     return []
 
-PATCH = {m: [f'patch:{m}/{s}' for s in sections(m)] or [f'patch:{m}'] for m in MODULES}   # module -> its tests: one per section, else the module
-LIGHT = ['tools', 'coverflow', 'awtk_fill']     # tests that need no built tree
+
+PATCH = {m: [f'patch:{m}/{s}' for s in sections(m)] or [f'patch:{m}'] for m in MODULES}
+LIGHT = ['tools', 'coverflow', 'awtk_fill']
 ALL_TESTS = LIGHT + ['demo_diff'] + [t for m in MODULES for t in PATCH[m]]
-NOT_KEYED = ('docs/', 'test/golden.sha256', 'README.md', 'AGENTS.md', 'NOTICE', 'LICENSE')   # cannot change a build or a test
 
-def missing_input(name):
-    if not os.path.exists(paths.ZIP): return f'missing {paths.ZIP}'
-    if not shutil.which('mksquashfs'): return 'mksquashfs not on PATH (brew install squashfs)'
-    if name == 'release':
-        for env, d, what in (('LLVM_BIN', '/opt/homebrew/opt/llvm/bin', 'LLVM'), ('LLD_BIN', '/opt/homebrew/opt/lld/bin', 'LLD')):
-            if not os.path.isdir(os.environ.get(env, d)): return f'{what} not found (brew install llvm lld)'
-        if not os.path.exists(paths.SHS_ZIP): return 'fonts/09_SourceHanSansSC.zip missing (venv/bin/python -I tools/mod_font.py --fetch)'
-    return None
-
-sha256 = buildcache.file_sha
-
-def sh(cmd, env=None):
-    r = subprocess.run(cmd, capture_output=True, text=True, env=env)
-    return r.returncode, r.stdout + r.stderr
 
 def counts(text):
     m = re.findall(r'(\d+) passed, (\d+) failed', text)
-    return (int(m[-1][0]), int(m[-1][1])) if m else None
+    return tuple(map(int, m[-1])) if m else None
 
-def env_for(base): return dict(os.environ, M1_WORK=os.path.join(base, 'work'), M1_OUT=os.path.join(base, 'out'))   # M1_NO_CACHE passes through
-def base_of(name): return os.path.join(paths.ROOT, 'work', 'check', name)
 
-def build_tree(name):
-    """Worker (own process): the release tree in work/check/<name>/work/mod-*, no package."""
-    t0 = time.time(); base = base_of(name)
-    shutil.rmtree(base, ignore_errors=True)
-    res = {'name': name, 'error': None, 'log': '', 'base': base}
-    rc, log = sh([paths.VENV_PY, '-I', os.path.join(TOOLS, 'build.py'), '--tree-only', *TARGETS[name][1]], env_for(base))
-    if rc: res['error'] = 'build failed'; res['log'] = log[-1500:]
-    mods = glob.glob(os.path.join(base, 'work', 'mod-*'))
-    if not rc and mods and os.path.exists(os.path.join(mods[0], 'podbuild', 'manifest.json')):
-        res['tree'] = mods[0]
-        res['payload'] = json.load(open(os.path.join(mods[0], 'podbuild', 'manifest.json')))['patched_demo_sha256']
-    res['secs'] = time.time() - t0
-    return res
+def test_ok(t): return t['rc'] == 0 and (t['counts'] is None or t['counts'][1] == 0)
+def outcome(bad, changed, update): return bad or (changed and not update), update and not bad
+def tree_key(): return workflow.input_key()
 
-def build_pack(name, flags):
-    """Worker: the package of a built tree (--pack-only) or, for the restore, the whole build."""
-    t0 = time.time(); base = base_of(name)
-    if not flags: shutil.rmtree(base, ignore_errors=True)
-    res = {'name': name, 'sha': None, 'error': None, 'log': '', 'pack': True}
-    rc, log = sh([paths.VENV_PY, '-I', os.path.join(TOOLS, 'build.py'), *flags], env_for(base))
-    pk = glob.glob(os.path.join(base, 'out', '*.bin'))
-    if rc or len(pk) != 1: res['error'] = 'build failed' if rc else f'{len(pk)} packages'; res['log'] = log[-1500:]
-    else: res['sha'] = sha256(pk[0])
-    res['secs'] = time.time() - t0
-    return res
-
-def run_test(name, cmd, key=None):
-    t0 = time.time(); rc, log = sh(cmd); c = counts(log)
-    return {'test': name, 'key': key, 'rc': rc, 'counts': c, 'log': log[-2500:], 'secs': time.time() - t0}
-
-def test_ok(t):
-    """A test passed: exit 0 and no failure count (a crash or a non-zero exit never passes, counts or not)."""
-    return t['rc'] == 0 and (t['counts'] is None or t['counts'][1] == 0)
-
-def outcome(bad, changed, update):
-    """(exit failure, write the golden file). A build or test failure always fails and never updates the
-    golden hashes; a changed hash fails unless --update accepts it."""
-    return bad or (changed and not update), update and not bad
 
 def read_golden():
     g = {}
-    if os.path.exists(GOLDEN):
-        for line in open(GOLDEN):
+    if os.path.isfile(GOLDEN):
+        for line in Path(GOLDEN).read_text().splitlines():
             p = line.split()
-            if len(p) >= 3 and not line.startswith('#'): g[p[2]] = (p[0], p[1])
+            if len(p) == 3 and not line.startswith('#'): g[p[2]] = (p[0], p[1])
     return g
 
-# ---------------------------------------------------------------- last-run record (the --update shortcut)
-def tree_key():
-    """Identifies this tree's build and test inputs: the content of every tracked or untracked (not
-    ignored) file except docs and the golden file, plus the tool versions. Content, not git state, so
-    a commit or an amend of the same files keeps it."""
-    r = subprocess.run(['git', '-C', ROOT, 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], capture_output=True, text=True)
-    if r.returncode: return None
-    parts = []
-    for rel in sorted(set(x for x in r.stdout.split('\0') if x)):
-        p = os.path.join(ROOT, rel)
-        if rel.startswith(NOT_KEYED) or not os.path.isfile(p): continue
-        parts += [rel, sha256(p)]
-    tools = [buildcache.versions()]
-    for cmd in (['mksquashfs', '-version'], [os.path.join(os.environ.get('LLVM_BIN', '/opt/homebrew/opt/llvm/bin'), 'clang'), '--version']):
-        try: tools.append(subprocess.run(cmd, capture_output=True, text=True).stdout.splitlines()[0])
-        except (OSError, IndexError): tools.append('none')
-    return buildcache.H(*parts, *tools)
-
-def load_json(p, default):
-    try: return json.load(open(p))
-    except (OSError, ValueError): return default
-
-def save_json(p, obj):
-    os.makedirs(os.path.dirname(p), exist_ok=True); json.dump(obj, open(p, 'w'))
-
-def test_priority(times):
-    def key(name):
-        if name in times: return times[name]
-        mod = name[6:].split('/')[0]
-        f = os.path.join(TEST, 'pod', mod + '.py') if name.startswith('patch:') else os.path.join(TEST, name + '.py')
-        return os.path.getsize(f) / 5000 / len(PATCH.get(mod, [1])) if os.path.exists(f) else 0     # unknown: by size (a section: its share)
-    return key
-
-def test_cmd(name, stock, tree=None):
-    py = [paths.VENV_PY, '-I']
-    if name == 'tools': return py + [os.path.join(TEST, 'tools.py')]
-    if name == 'coverflow': return py + [os.path.join(TEST, 'coverflow.py')]
-    if name == 'awtk_fill': return py + [os.path.join(TEST, 'awtk_fill.py'), stock]
-    if name == 'demo_diff':
-        return py + [os.path.join(TEST, 'demo_diff.py'), os.path.join(stock, 'rootfs', 'release', 'bin', 'demo'),
-                     os.path.join(tree, 'rootfs', 'release', 'bin', 'demo')]
-    return py + [os.path.join(TEST, 'patch.py'), tree, name[6:]]
 
 def parse_tests(spec):
     names = []
     for n in (n for s in spec for n in s.split(',') if n):
-        m = n[6:] if n.startswith('patch:') else n
-        names += PATCH[m] if m in PATCH else ['patch:' + m] if 'patch:' + m in ALL_TESTS else [n]   # a module: all its sections
+        m = n.removeprefix('patch:')
+        names += PATCH[m] if m in PATCH else ['patch:' + m] if 'patch:' + m in ALL_TESTS else [n]
     bad = [n for n in names if n not in ALL_TESTS]
-    if bad: sys.exit(f'unknown test {", ".join(bad)}; known: {", ".join(t.replace("patch:", "") for t in ALL_TESTS)}')
-    return names
+    if bad: raise SystemExit(f'unknown test {", ".join(bad)}; use --list')
+    if not names: raise SystemExit('empty test selection; use --list')
+    return list(dict.fromkeys(names))
+
+
+def test_cmd(name, stock, tree=None):
+    py = [sys.executable, '-I']
+    if name in ('tools', 'coverflow'): return py + [os.path.join(TEST, name + '.py')]
+    if name == 'awtk_fill': return py + [os.path.join(TEST, 'awtk_fill.py'), stock]
+    if name == 'demo_diff':
+        return py + [os.path.join(TEST, 'demo_diff.py'), os.path.join(stock, 'rootfs/release/bin/demo'),
+                     str(Path(tree) / 'rootfs/release/bin/demo')]
+    return py + [os.path.join(TEST, 'patch.py'), str(tree), name[6:]]
+
+
+def run_test(name, cmd, logdir, timeout):
+    start = time.monotonic(); logfile = Path(logdir) / (name.replace(':', '-').replace('/', '-') + '.log')
+    rc, log = workflow.run_logged(cmd, logfile, timeout)
+    return {'test': name, 'rc': rc, 'counts': counts(log), 'log': log[-2500:],
+            'logfile': str(logfile), 'cmd': cmd, 'secs': time.monotonic() - start}
+
+
+def run_build(flags, logfile, env=None):
+    cmd = [sys.executable, '-I', os.path.join(TOOLS, 'build.py'), *map(str, flags)]
+    rc, log = workflow.run_logged(cmd, logfile, env=env)
+    if rc: raise SystemExit(f'build {workflow.exit_description(rc)}; log: {logfile}\n{log[-2500:]}')
+    print(f'build ready; log: {logfile}', flush=True)
+
+
+def expected_results(names, tests):
+    found = {t['test']: t for t in tests}
+    return [found.get(n, {'test': n, 'rc': 125, 'counts': None, 'log': 'required test did not run',
+                          'secs': 0, 'logfile': '(no log)', 'cmd': []}) for n in names]
+
+
+def finish(a, sel, skipped, golden, builds, tests, t0, reused=False, key=None):
+    """Single gate for integration, tests-only and dev receipts; never bless missing work."""
+    tests = expected_results(a.expected, tests)
+    bad = bool(skipped); changed = False; rows = []
+    for n in sel:
+        if n in skipped: print(f'{n}: BLOCKED {skipped[n]}'); continue
+        r = builds.get(n)
+        if not r or r.get('error'):
+            bad = True; print(f'{n}: ERROR {(r or {}).get("error", "required build did not run")}'); continue
+        if a.tests_only: continue
+        g = golden.get(n); status = 'NEW' if not g else 'MATCH' if g == (r['sha'], TARGETS[n][0]) else 'CHANGED'
+        changed |= status != 'MATCH'
+        print(f'{n}: {status} {r["sha"]}')
+        rows.append((n, TARGETS[n][0], r['sha']))
+    assertions = [0, 0]; failed = crashed = 0
+    for t in tests:
+        if t['counts']:
+            for i in (0, 1): assertions[i] += t['counts'][i]
+        if not test_ok(t):
+            failed += 1; crashed += t['rc'] < 0; bad = True
+            print(f'{t["test"]}: FAIL ({workflow.exit_description(t["rc"])}); log: {t.get("logfile", "(no log)")}')
+            print('command:', repr(t.get('cmd', []))); print(t['log'])
+    if key and workflow.input_key() != key:
+        bad = True; print('ERROR: source or environment changed during this run; results cannot certify this build')
+    print(f'tasks {len(tests) - failed} passed, {failed} failed ({crashed} crashed); '
+          f'assertions {assertions[0]} passed, {assertions[1]} failed; {time.monotonic() - t0:.1f}s wall')
+    if a.update and (a.no_tests or set(sel) != set(TARGETS) or set(a.expected) != set(ALL_TESTS)):
+        bad = True; print('ERROR: golden acceptance requires both packages and the complete test suite')
+    if key and not reused and not a.tests_only and not a.no_tests and not bad and not a.dev:
+        workflow.write(LAST, {'key': key, 'builds': builds, 'tests': tests, 'expected': a.expected})
+    fail, write = outcome(bad, changed, a.update)
+    if write:
+        for n, tag, sha in rows: golden[n] = (sha, tag)
+        Path(GOLDEN).write_text(''.join(f'{golden[n][0]}  {golden[n][1]}  {n}\n' for n in TARGETS))
+        print('updated test/golden.sha256')
+    return 1 if fail else 0
+
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--only', nargs='+', choices=list(TARGETS)); ap.add_argument('--no-tests', action='store_true')
-    ap.add_argument('--keep', action='store_true'); ap.add_argument('--update', action='store_true')
-    ap.add_argument('--tests-only', action='store_true'); ap.add_argument('--test', nargs='+', metavar='NAME[,NAME]')
-    ap.add_argument('--no-cache', action='store_true', help='ignore work/cache/build (a cold build)')
-    a = ap.parse_args(); t0 = time.time()
+    ap.add_argument('--update', action='store_true'); ap.add_argument('--tests-only', action='store_true')
+    ap.add_argument('--test', nargs='+', metavar='NAME[,NAME]'); ap.add_argument('--list', action='store_true')
+    ap.add_argument('--dev', action='store_true', help='build, fully test and package one development artifact')
+    ap.add_argument('--clean', action='store_true', help='remove retained integration/test scratch files')
+    ap.add_argument('--no-cache', action='store_true')
+    ap.add_argument('--jobs', type=int, default=min(8, os.cpu_count() or 4))
+    ap.add_argument('--timeout', type=int, default=300, help='seconds per test (default 300)')
+    a = ap.parse_args()
+    if a.list:
+        print('\n'.join(t.removeprefix('patch:') for t in ALL_TESTS)); return 0
+    if a.jobs < 1 or a.timeout < 1: ap.error('--jobs and --timeout must be positive')
+    if a.test: a.tests_only = True
+    if a.tests_only and (a.update or a.no_tests or a.only): ap.error('--tests-only/--test cannot combine with --update, --no-tests or --only')
+    if a.update and (a.no_tests or a.only): ap.error('--update requires the full integration scope, including tests')
+    if a.dev and (a.tests_only or a.update or a.no_tests or a.only): ap.error('--dev always builds and tests the complete development package')
     if a.no_cache: os.environ['M1_NO_CACHE'] = '1'
     selected = parse_tests(a.test) if a.test else None
-    if selected: a.tests_only = True
-    if a.tests_only and (a.update or a.no_tests): sys.exit('--tests-only/--test cannot be combined with --update or --no-tests')
-    stock = paths.find_stock() or os.path.join(paths.WORK, 'stock')
-    run_names = [] if a.no_tests else [t for t in ALL_TESTS if not selected or t in selected]
-    if 'awtk_fill' in run_names and not os.path.exists(os.path.join(stock, 'rootfs')): run_names.remove('awtk_fill')
-    follow = [t for t in run_names if t == 'demo_diff' or t.startswith('patch:')]     # the tests that need the release tree
-    sel = (['release'] if follow else []) if a.tests_only else [n for n in TARGETS if not a.only or n in a.only]
-    golden = read_golden(); skipped = {n: missing_input(n) for n in sel if missing_input(n)}
-    todo = [n for n in sel if n not in skipped]
-    key = None if a.tests_only else tree_key()
+    names = [] if a.no_tests else selected or (LIGHT if a.only == ['restore'] else ALL_TESTS)
+    a.expected = names
+    with workflow.lock('check'):
+        if a.clean:
+            with workflow.lock('build'): shutil.rmtree(Path(ROOT) / 'work/check', ignore_errors=True)
+            print('removed work/check; dev artifacts, version counter and caches kept')
+            return 0
+        start = time.monotonic(); key = workflow.input_key()
+        sel = [] if a.tests_only or a.dev else a.only or list(TARGETS)
+        golden = read_golden(); builds = {}; tests = []
+        base = workflow.new_dev_dir() if a.dev else Path(ROOT) / 'work/check'
+        logs = base / 'logs'; logs.mkdir(parents=True, exist_ok=True)
+        print(f'run: {base}; {len(names)} tests, {a.jobs} workers', flush=True)
+        if any(n == 'awtk_fill' or n.startswith('patch:') for n in names):
+            rc, log = workflow.run_logged([sys.executable, '-I', os.path.join(TOOLS, 'doctor.py'), '--emulator'], logs / 'emulator.log', 15)
+            if rc:
+                raise SystemExit(f'Unicorn execution failed ({workflow.exit_description(rc)}); log: {logs / "emulator.log"}\n'
+                                 'The sandbox may prohibit native JIT execution. Run make doctor in a permitted native environment.\n' + log[-1500:])
+        last = workflow.read(LAST)
+        if a.update and last.get('key') == key and last.get('expected') == ALL_TESTS \
+                and set(last.get('builds', {})) == set(TARGETS) and all(test_ok(t) for t in last.get('tests', [])) \
+                and all(Path(r['package']).is_file() and workflow.sha(r['package']) == r['sha'] for r in last['builds'].values()):
+            print('reusing complete validated integration artifacts')
+            return finish(a, sel, {}, golden, last['builds'], last['tests'], start, reused=True, key=key)
+        stock = paths.find_stock()
+        if not stock and ('awtk_fill' in names or sel or a.dev or any(n.startswith('patch:') or n == 'demo_diff' for n in names)):
+            run_build(['--restore', '--tree-only'], logs / 'stock.log')
+            stock = paths.find_stock()
+        stock = stock or os.path.join(paths.WORK, 'stock')
+        needs_tree = a.dev or 'release' in sel or any(n.startswith('patch:') or n == 'demo_diff' for n in names)
+        tree = None
+        env = dict(os.environ, M1_WORK=str(base / 'release/work'), M1_OUT=str(base / 'release/out'))
+        flags = ['--dev', '--out', base] if a.dev else []
+        if needs_tree:
+            run_build([*flags, '--tree-only'], logs / 'tree.log', env)
+            tree = base / 'tree' if a.dev else base / 'release/work/mod-release'
+            workflow.validate_tree(tree)
+        times = workflow.read(TIMES)
+        with cf.ThreadPoolExecutor(max_workers=a.jobs) as ex:
+            pending = {ex.submit(run_test, n, test_cmd(n, stock, tree), logs, a.timeout): n
+                       for n in sorted(names, key=lambda n: times.get(n, 0), reverse=True)}
+            for f in cf.as_completed(pending):
+                r = f.result(); tests.append(r)
+                print(f'{r["test"]}: {"PASS" if test_ok(r) else "FAIL " + workflow.exit_description(r["rc"])} ({r["secs"]:.1f}s)', flush=True)
+        workflow.write(TIMES, {**times, **{t['test']: t['secs'] for t in tests}})
+        tests_passed = len(tests) == len(names) and all(test_ok(t) for t in tests)
+        if workflow.input_key() != key: tests_passed = False
+        if tests_passed and (a.dev or 'release' in sel):
+            run_build([*flags, '--pack-only'], logs / 'package.log', env)
+            package = base / 'update.bin' if a.dev else base / 'release/out' / f'M1Plus-{build.TAG}-release-update.bin'
+            if not a.dev: builds['release'] = {'sha': workflow.sha(package), 'package': str(package)}
+        elif 'release' in sel: builds['release'] = {'error': 'tests failed; package not produced'}
+        if 'restore' in sel:
+            restore_env = dict(os.environ, M1_WORK=str(base / 'restore/work'), M1_OUT=str(base / 'restore/out'))
+            run_build(['--restore'], logs / 'restore.log', restore_env)
+            package = base / 'restore/out' / f'M1Plus-{build.RESTORE_TAG}-stock-restore-update.bin'
+            builds['restore'] = {'sha': workflow.sha(package), 'package': str(package)}
+        if a.dev:
+            m = workflow.read(tree / 'build.json')
+            passed = tests_passed and bool(m.get('package_sha256')) and workflow.input_key() == key
+            workflow.write(base / 'results.json', {'passed': passed, 'scope': 'full', 'inputs': key, 'tree': m['tree'],
+                                                  'package_sha256': m.get('package_sha256'), 'expected': names, 'tests': tests})
+            if passed:
+                workflow.tested_package(base)
+                workflow.write(Path(ROOT) / 'out/dev/latest.json', {'build': str(base)})
+                print(f'tested dev package: {base} ({m["tag"]}); next: make flash', flush=True)
+        else: passed = True
+        return max(finish(a, sel, {}, golden, builds, tests, start, key=key), 0 if passed else 1)
 
-    # --update right after a complete run of this very tree that passed: reuse it, only the golden file is written
-    last = load_json(LAST, {})
-    if a.update and key and last.get('key') == key and all(last['builds'].get(n, {}).get('sha') for n in todo) \
-            and all(t in last['tests'] and test_ok(last['tests'][t]) for t in run_names):
-        print(f'reusing the passing run of this tree ({time.strftime("%H:%M:%S", time.localtime(last["time"]))}); no rebuild, no tests')
-        return finish(a, sel, skipped, golden, {n: last['builds'][n] for n in todo}, [last['tests'][t] for t in run_names], t0, reused=True)
 
-    times = load_json(TIMES, {}); prio = test_priority(times)
-    builds, tests = {}, []
-    with cf.ProcessPoolExecutor(max_workers=os.cpu_count() or 4) as ex:
-        pending = {ex.submit(build_tree, n) if n == 'release' else ex.submit(build_pack, n, TARGETS[n][1]) for n in todo}
-        pending |= {ex.submit(run_test, t, test_cmd(t, stock)) for t in sorted((t for t in run_names if t in LIGHT), key=prio, reverse=True)}
-        tree_secs = 0
-        while pending:
-            done, pending = cf.wait(pending, return_when=cf.FIRST_COMPLETED)
-            for f in done:
-                r = f.result()
-                if 'test' in r: tests.append(r); continue
-                if r['name'] == 'release' and not r.get('pack'):      # the tree is ready: tests and package start together
-                    tree_secs = r['secs']
-                    if not r['error'] and not r.get('tree'): r['error'] = 'no payload manifest in the tree'
-                    if r['error'] or a.tests_only: builds['release'] = r
-                    if r['error']: continue
-                    if not a.tests_only: pending.add(ex.submit(build_pack, 'release', ['--pack-only']))
-                    pending |= {ex.submit(run_test, t, test_cmd(t, stock, r['tree']), r['payload']) for t in sorted(follow, key=prio, reverse=True)}
-                    continue
-                if r['name'] == 'release': r['secs'] += tree_secs
-                builds[r['name']] = r
-    save_json(TIMES, {**times, **{t['test']: round(t['secs'], 1) for t in tests}})
-    results = {t['test']: t for t in tests}
-    finish(a, sel, skipped, golden, {n: builds[n] for n in todo}, [results[t] for t in run_names if t in results], t0, key=key)
-
-def finish(a, sel, skipped, golden, builds, tests, t0, reused=False, key=None):
-    bad = changed = False; npass = nfail = 0; rows = []   # bad: a build or test failed; changed: a hash differs from golden
-    for n in sel:
-        tag = TARGETS[n][0]
-        if n in skipped: print(f'{n:8} {tag:7} SKIPPED: {skipped[n]}'); continue
-        if n not in builds: continue
-        r = builds[n]
-        if r.get('error'): bad = True; print(f'{n:8} {tag:7} ERROR {r["error"]}\n{r["log"]}'); continue
-        if a.tests_only: print(f'{n:8} {tag:7} tree built  {r["secs"]:3.0f}s'); continue
-        g = golden.get(n); st = 'NEW' if not g else 'MATCH' if g[0] == r['sha'] else 'CHANGED'
-        changed |= st == 'CHANGED'
-        print(f'{n:8} {tag:7} {st:7} {r["sha"][:12]}  {r["secs"]:3.0f}s' + (f'  (golden {g[0][:12]})' if st == 'CHANGED' else ''))
-        rows.append((n, tag, r['sha']))
-    w = max([15] + [len(t['test']) for t in tests])
-    for t in sorted(tests, key=lambda t: t['test']):
-        ok = test_ok(t); c = t['counts']
-        if not ok: bad = True; print(t['log'])
-        if c: npass += c[0]; nfail += c[1]
-        print(f'test {t["test"]:{w}} {"PASS" if ok else "FAIL"}  {f"{c[0]} passed, {c[1]} failed" if c else ""}  {t["secs"]:.0f}s')
-    print(f'checks {npass} passed, {nfail} failed; {time.time() - t0:.0f}s wall')
-    if key and not reused:     # remember the run of this tree for --update (results of earlier partial runs of it are kept)
-        old = load_json(LAST, {}) if load_json(LAST, {}).get('key') == key else {}
-        save_json(LAST, {'key': key, 'time': time.time(),
-                         'builds': {**old.get('builds', {}), **{n: {k: v for k, v in builds[n].items() if k in ('sha', 'secs', 'error', 'log')} for n in builds}},
-                         'tests': {**old.get('tests', {}), **{t['test']: {k: t[k] for k in ('test', 'key', 'rc', 'counts', 'log', 'secs')} for t in tests}}})
-    fail, write = outcome(bad, changed, a.update)
-    if write:
-        for n, tag, sha in rows: golden[n] = (sha, tag)
-        with open(GOLDEN, 'w') as f:
-            for n in TARGETS:
-                if n in golden: f.write(f'{golden[n][0]}  {golden[n][1]}  {n}\n')
-        print(f'updated {os.path.relpath(GOLDEN, ROOT)}')
-    elif a.update: print('NOT updating the golden file: a build or test failed')
-    if not a.keep and not reused: shutil.rmtree(os.path.join(paths.ROOT, 'work', 'check'), ignore_errors=True)
-    sys.exit(1 if fail else 0)
-
-if __name__ == '__main__': main()
+if __name__ == '__main__': sys.exit(main())

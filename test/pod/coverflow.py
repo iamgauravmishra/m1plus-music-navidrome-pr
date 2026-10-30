@@ -74,7 +74,7 @@ def run(ctx):
     m.tap(O['CF_CX'] + 100)      # the right-hand neighbour
     expect('navigator_to_with_context' not in m.names(), 'a side cover opens no album')
     m.settle()
-    expect(('set_value', 1) in m.calls, f'a right-hand tap brings the next album to the centre')
+    expect(('set_value', 1) in m.calls, 'a right-hand tap brings the next album to the centre')
     expect(shelf_off(m) == 0, 'the offset is back to 0 after the commit')
 
     # 12b. A slow drag to the left by a little more than DRAG_PX moves one album on; the shelf
@@ -387,7 +387,7 @@ def gesture_tests(ctx):
 
     # G2. A release far from the press with no MOVE in between is a drag, not a tap.
     m = page()
-    m.touch('down', 200, t=1000); m.touch('up', 100, t=1300); calls = list(m.calls); m.settle()
+    m.touch('down', 200, t=1000); m.touch('up', 100, t=1300); m.settle()
     expect(not opened(m) and 1 in values(m), f'DOWN at 200, UP at 100, no MOVE: no album opens, the shelf moves on one ({values(m)})')
 
     # G3. The release's own travel counts (sparse MOVE events): 40 px by the last MOVE, 80 px by the release.
@@ -474,7 +474,6 @@ def gesture_tests(ctx):
     # B. The shelf has ends (every shelf, main and per artist, one bounded path): no wrap, a rubber band past the end
     #    (half speed, saturating at OVER_NUM / OVER_DEN of a cover) and the eased snap springing back; flings stop at the ends.
     cap = h * O['OVER_NUM'] // O['OVER_DEN']
-    offs_of = lambda m: [signed(c[1]) for c in m.calls if c[0] == 'set_offset']
     for albums, value, sign, name in ((5, 0, +1, 'the first album'), (5, 4, -1, 'the last album'), (1, 0, +1, 'a one-album shelf (right)'), (1, 0, -1, 'a one-album shelf (left)')):
         m = page(albums, value)
         x0 = 100 if sign > 0 else 260
@@ -559,7 +558,7 @@ def centre_px(m):
 
 def shelf_tests(ctx):
     expect = ctx.expect
-    h, cx = O['CF_VIEW_H'], O['CF_CX']
+    cx = O['CF_CX']
     stock_shelf = ('slide_menu', 'slide_menu_set_value', 'image_create', 'widget_layout_children')
 
     # S1. Depth mode never drives a stock widget as the shelf moves: a drag, its snap and the commit only change

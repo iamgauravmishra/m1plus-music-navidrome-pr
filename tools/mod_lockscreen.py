@@ -33,12 +33,12 @@ text out (tools/awtk_text.py), not as summed advances.
 Usage: mod_lockscreen.py SRC_WORKDIR OUT_WORKDIR
   (OUT_WORKDIR == SRC_WORKDIR edits in place; OUT_WORKDIR is otherwise cloned from SRC_WORKDIR.)
 """
-import math, os, stat, struct, sys
+import os, stat, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_ui
 import battery_art
 from awtk_text import Ttf, awtk_width, fit_size, worst_case_text
-from modlib import clone_workdir, edit_ui, write_keep_mode
+from modlib import clone_workdir, edit_ui
 
 from awtk_ui import RAW
 UI = f'{RAW}/ui/screensaver_page.bin'

@@ -1,12 +1,8 @@
 # Icons
 
-Split out of docs/ui.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
+## Lucide icons (`tools/mod_icons.py`)
 
-## 6. Icons and the battery
-
-### Lucide icons (`tools/mod_icons.py`)
-
-**Lucide** (lucide-static 1.61.0, ISC; `NOTICE`, `assets/icons/lucide/LICENSE`); `mod_icons.py` is the mapping table. **Sizes:** the Home grid keeps its 66 px discs, glyph canvas 38 px at stroke 1.75 (grid units); every
+**Lucide** (lucide-static 1.61.0, ISC; `README.md`, `assets/icons/lucide/LICENSE`); `mod_icons.py` is the mapping table. **Sizes:** the Home grid keeps its 66 px discs, glyph canvas 38 px at stroke 1.75 (grid units); every
 list icon is a **bare** white glyph, no disc: a 24 px canvas at stroke 2.0 px absolute (the M1+ Music rows' image is that
 canvas, the stock 40x40 settings, Folders, Playlists and CD images carry it centred); pull-down tiles: glyph 24 px, stroke 2
 grid units, "PO" / "LO" 17 px Inter; Now Playing star and More: 32 px translucent disc, glyph ink 18 px, stroke 2.0 px, centred optically (box and centroid averaged, quarter-pixel placement); the
@@ -22,7 +18,7 @@ with the tick cut out), `a-b`, `multiplier-1x`. Custom SVGs kept: `badge-hr`, `d
 `mod_icons.py --fetch TGZ` takes either pinned tarball (Lucide to `assets/icons/lucide/svg/`, Tabler to
 `assets/icons/tabler/svg/`); PNGs: `assets/icons/png/`.
 
-**Sources.** Both sets (Tabler: `@tabler/icons` 3.49.0, MIT, (c) Pawel Kuna; `NOTICE`, `assets/icons/tabler/LICENSE`)
+**Sources.** Both sets (Tabler: `@tabler/icons` 3.49.0, MIT, (c) Pawel Kuna; `assets/icons/tabler/LICENSE`)
 are pinned by the npm tarball's SHA-256 (`mod_icons.py --fetch TGZ` copies the SVGs it uses, parsed as
 data with whitelisted tags and attributes). Committed: the used SVGs (`assets/icons/lucide/svg/`),
 custom SVGs (`assets/icons/custom/`) and the generated PNGs (`assets/icons/png/`, 318 files);
@@ -50,7 +46,7 @@ Shuffle `shuffle`, Songs `music`, Albums `disc-3`, Artists `mic-vocal`, Genres `
 `folder`, Playlists `list-music`, Customize `sliders-horizontal` (was Settings `settings`; `settings` is now System Settings only); the Customize page: Main Menu `list-checks`, Extras `ellipsis`, Cover Flow `gallery-horizontal` (opens Customize > Cover Flow: Landscape `rotate-cw-square`, Sort `arrow-down-wide-narrow` with its value Artist / Album as grey 19 px text at the right, no chevron), Home Screen `house` (opens Customize > Home Screen: Boot to M1+ Music `power`, Shanling Home the mark below), Playback `headphones`, System Settings `settings`, Developer `code` (opens Customize > Developer: Screenshot), Shanling Home the Shanling mark (`pod_ic_shanling`: the brand's swoosh cut from the stock shutdown screen `images/xx/shutdown.png`, SHA-256 pinned in `tools/mod_icons.py`, isolated by whiteness, scaled to 24 px wide and thickened by a round 1.5 px dilation to a stroke of about 2 px; no glyph set involved); Extras `ellipsis` and the Extras page's rows the Home grid's glyphs (`star`, `clock-plus`, `history`, `flame`, `feather`, `badge-hr`, `refresh-cw`, `globe`, `disc`); the Shuffle page uses the song,
 album and folder glyphs. `ui/m1plus_menu.bin`, `m1plus_shuffle.bin`, `m1plus_settings.bin`, `m1plus_extras.bin` and `m1plus_mainmenu.bin` (and `m1plus_cfset.bin`) get the child image and hairline (title x 24 -> 56). `icons` runs late so it overrides the theme step's grey discs.
 
-### Icon audit, round 2 (`tools/audit_images.py`)
+## Icon audit, round 2 (`tools/audit_images.py`)
 
 `audit_images.py [STOCK [TREE]]` lists every `images/xx` file referenced by a `ui/**/*.bin` property, a style
 file or a name string in `demo` (560 files), and with TREE only those still byte-identical to stock. Before
@@ -62,7 +58,7 @@ round 2, 429 were stock; round 2 changed 110 stock files plus the `np_*` glyphs 
 | bare glyph (40x40) | 24 of those | Folders rows (16 audio formats share `file-music`, SD, USB), Playlists page (New, Import, Export), CD track dialog (custom `guitar`, microphone, calendar) |
 | custom SVG | 2 uses | `guitar` (Genres, CD genre); round 1 customs unchanged |
 | Tabler `multiplier-1x` | 1 | `p_multiple` (28x28): the icon of the playback-speed row in the Now Playing more dialog (`playmore_dialog`, beside the 1.0X / 1.25X / 1.5X / 2.0X badges). The Play Settings list has no speed row, so there is no 40 px disc icon for it |
-| Lucide (ISC) | 2 | `back_to_player` / `back_to_player_down` the navbar's go-to-Now-Playing icon, Lucide `audio-lines` (`assets/icons/lucide/`, lucide-static 1.61.0, tarball SHA-256 `62773cd2...ba75f1`, licence beside it, `NOTICE`), 23x24 like search, 2 px stroke, pressed `#777777`. The button is a static `img_btn_style` image pair (names without digits, no frame swap in `demo`: the only other `playing_*` names are the loading spinner `playing_wait_1..12` and the list's `icon_playing` disc) |
+| Lucide (ISC) | 2 | `back_to_player` / `back_to_player_down` the navbar's go-to-Now-Playing icon, Lucide `audio-lines` (`assets/icons/lucide/`, lucide-static 1.61.0, tarball SHA-256 `62773cd2...ba75f1`, licence beside it, `README.md`), 23x24 like search, 2 px stroke, pressed `#777777`. The button is a static `img_btn_style` image pair (names without digits, no frame swap in `demo`: the only other `playing_*` names are the loading spinner `playing_wait_1..12` and the list's `icon_playing` disc) |
 | stock recoloured white | 9 | equaliser preset instruments (`eq_*`), the line art is kept |
 | drawn (Inter text / Lucide glyph) | 14 | speed badges (8), Play all pills (4: off-white pill, dark text), secured Wi-Fi rows (4: fan + lock) |
 | orange to neutral | 15 | toggles, slider fills and thumbs, default covers (section 4, "Accents in images") |

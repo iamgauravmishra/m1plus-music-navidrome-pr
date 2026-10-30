@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
 """Copy a package to the player's TF card as update.bin, with the checks that have been skipped before.
 
-  python3 -I tools/flash_sd.py PACKAGE [--volume /Volumes/Music] [--force] [--dry-run] [--no-eject]
+  make flash [BUILD=latest] [VOLUME=/Volumes/Music] [DRY_RUN=1]
+  uv run python -I tools/flash_sd.py PACKAGE [--dry-run] [--no-eject]
 
 Refuses unless
   - `fwtool verify` passes on PACKAGE, and
-  - PACKAGE's SHA-256 is in test/golden.sha256 (tools/check.py: that variant builds the golden
-    bytes), or you pass --force (you ran check.py and it is a deliberate CHANGED/NEW);
+  - PACKAGE's SHA-256 is in test/golden.sha256, or --build selects a complete, matching dev test receipt;
   - the volume is a card: `diskutil info` Protocol is Secure Digital or USB, it holds the player's
     .downpic or Music folder, and it is not the SanDisk Extreme USB SSD.
 Then shows the update.bin already on the card (version = firmware_v20.info line 2, SHA-256), copies
 with `cp -X` (no AppleDouble), removes ._update.bin, syncs, re-hashes and compares, prints the
 version found on the card, and ejects (--no-eject to keep it mounted). macOS only.
 """
-import argparse, hashlib, os, re, subprocess, sys, tarfile
+import argparse, hashlib, os, subprocess, sys, tarfile
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import workflow
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GOLDEN = os.path.join(ROOT, 'test', 'golden.sha256')
@@ -55,11 +57,18 @@ def check_volume(vol):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('package'); ap.add_argument('--volume', default='/Volumes/Music')
-    ap.add_argument('--force', action='store_true', help='skip the golden gate for a package check.py just built (verify and the card checks stay)')
+    source = ap.add_mutually_exclusive_group(required=True)
+    source.add_argument('package', nargs='?', help='an accepted release/restore package')
+    source.add_argument('--build', help='a fully tested dev build directory, or latest')
+    ap.add_argument('--volume', default='/Volumes/Music')
     ap.add_argument('--dry-run', action='store_true'); ap.add_argument('--no-eject', action='store_true')
     a = ap.parse_args()
-    pkg = os.path.abspath(a.package)
+    receipt = None
+    if a.build:
+        pkg, receipt = workflow.tested_package(a.build)
+        pkg = str(pkg)
+        print(f'dev build: {os.path.dirname(pkg)} ({receipt["tag"]})')
+    else: pkg = os.path.abspath(a.package)
     if not os.path.exists(pkg): sys.exit(f'missing {pkg}')
     r = subprocess.run([sys.executable, '-I', os.path.join(ROOT, 'tools', 'fwtool.py'), 'verify', pkg], capture_output=True, text=True)
     if r.returncode: sys.exit(f'fwtool verify FAILED:\n{r.stdout}{r.stderr}')
@@ -67,8 +76,8 @@ def main():
     g = golden_for(sha)
     print(f'package: {os.path.basename(pkg)}\n  version {ver}  sha256 {sha}\n  fwtool verify: OK')
     if g: print(f'  golden: MATCH ({g[1]}, {g[0]})')
-    elif a.force: print('  golden: not matched, continuing (--force)')
-    else: sys.exit('refusing: this package is not in test/golden.sha256. Run tools/check.py (and --update if the change is intended), or pass --force')
+    elif receipt and ver == receipt['tag']: print('  full dev test receipt: MATCH')
+    else: sys.exit('refusing: no matching release golden. For development use make dev, then make flash.')
     check_volume(a.volume)
     dst = os.path.join(a.volume, 'update.bin')
     if os.path.exists(dst):

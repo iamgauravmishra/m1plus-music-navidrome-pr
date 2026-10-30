@@ -13,7 +13,7 @@ of what it wrote starts the chain for the steps after it. A hit applies the stor
 result is byte-identical to a run (tools/check.py compares the package to the golden hash).
 Disable with M1_NO_CACHE=1 or build.py --no-cache.
 """
-import ast, hashlib, importlib.metadata as md, json, os, shutil, subprocess, sys
+import ast, hashlib, importlib.metadata as md, json, os, shutil, subprocess, sys, tempfile
 
 import paths
 
@@ -64,7 +64,7 @@ def code_sha(*modules):
     for m in modules: files.update(closure(m))
     return H(*[x for m in sorted(files) for x in (m, file_sha(files[m]))])
 
-FORMAT = 2     # bump when the stored layout or the change detection changes (old entries are then never hit)
+FORMAT = 3
 
 def versions():
     out = [f'format {FORMAT}', sys.version]
@@ -80,7 +80,9 @@ def data_sha():
     return H(dir_sha(os.path.join(paths.ROOT, 'assets')), dir_sha(os.path.join(paths.ROOT, 'patch')), *extra)
 
 def base_key(zip_sha, *modules):
-    return H('base', zip_sha, code_sha(*modules), data_sha(), versions())
+    # Battery art and space recovery use only Python code and stock. The font stage
+    # additionally reads assets/fonts. A payload edit must not rebuild the font.
+    return H('base', zip_sha, code_sha(*modules), dir_sha(os.path.join(paths.ROOT, 'assets/fonts')), versions())
 
 def step_key(prev, module, args):
     return H('step', prev, code_sha(module), json.dumps(args), data_sha(), versions())
@@ -110,8 +112,15 @@ def delta_sha(root, changed, removed):
              'removed', *sorted(removed))
 
 def _write_atomic(entry, fill):
-    tmp = entry + '.tmp'; shutil.rmtree(tmp, ignore_errors=True); os.makedirs(tmp)
-    fill(tmp); shutil.rmtree(entry, ignore_errors=True); os.rename(tmp, entry)
+    os.makedirs(os.path.dirname(entry), exist_ok=True)
+    tmp = tempfile.mkdtemp(prefix='.tmp-', dir=os.path.dirname(entry))
+    try:
+        fill(tmp)
+        if not os.path.exists(entry):
+            try: os.rename(tmp, entry)
+            except OSError:
+                if not os.path.isdir(entry): raise
+    finally: shutil.rmtree(tmp, ignore_errors=True)
 
 def store_delta(key, root, changed, removed):
     def fill(tmp):
@@ -155,5 +164,5 @@ def store_base(key, mod):
     if not ENABLED: return
     root = os.path.join(CACHE, 'base')
     _write_atomic(os.path.join(root, key), lambda tmp: clone(mod, os.path.join(tmp, 'tree')))
-    olds = sorted((os.path.getmtime(os.path.join(root, d)), d) for d in os.listdir(root) if not d.endswith('.tmp'))
+    olds = sorted((os.path.getmtime(os.path.join(root, d)), d) for d in os.listdir(root) if not d.startswith('.tmp-'))
     for _, d in olds[:-KEEP_BASES]: shutil.rmtree(os.path.join(root, d), ignore_errors=True)

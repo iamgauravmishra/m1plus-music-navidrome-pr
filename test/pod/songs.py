@@ -6,7 +6,6 @@ the sort card (sort_flag as the stock dialog writes it), Search, the select mode
 playlist picker), a stock list replaced under the page, the title that collapses into the navbar, the pills' centring and a library of 20,000 songs."""
 import os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
-from unicorn.mips_const import UC_MIPS_REG_F0
 
 SCREEN_Y0 = 30 + 50
 TOP, HDR, ROW, VIEW_H, TILES, FOOT = O['SG_TOP'], O['SG_HDR_H'], O['LIST_ROW_H'], O['GRID_VIEW_H'], O['GRID_TILES'], O['SG_FOOT_H']
@@ -282,7 +281,6 @@ def asset_tests(ctx):
     # 1. The asset
     tree = ui()
     f = tree.find
-    nav = f('navigationbar_view')
     expect([(f(n).x, f(n).w, f(n).h) for n in ('btn_search', 'btn_sort', 'btn_select', 'btn_backtoplayer')] == [(122, 46, 50), (168, 46, 50), (214, 46, 50), (260, 60, 50)]
            and O['NAV_SEARCH_X'] == pod_ui.NAV_SEARCH_X == 122, 'the navbar: Search 122, Sort 168, Select 214 (46 wide, the stock Songs page\'s order), Now Playing 260')
     expect([f(n).get('style:normal:icon') for n in ('btn_search', 'btn_sort', 'btn_select', 'btn_backtoplayer')] == ['pod_nav_search', 'pod_nav_songsort', 'pod_nav_select', 'ah_nav_play']
@@ -561,7 +559,6 @@ def rail_tests(ctx):
     expect(px[0] == O['SG_ACCENT'] and px[1] >> 24 == 0 and px[2] >> 24 > 100, f'the disc is #EEEEEC with its corners cut ({[hex(p) for p in px]})')
     rail_touch('move', 9)
     expect(off_of(m) == min(lay.hdr_y(9), lay.content() - VIEW_H) and m.wtext[m.widgets['sg_bubble_letter']] == lay.secs[9][1], 'dragging down to another letter jumps again')
-    n_set = sum(1 for c in m.calls if c[0] == 'widget_set_prop_int' and c[2] == 'yoffset')
     rail_touch('move', 9, 0.8)
     expect(not any(c[0] == 'widget_set_prop_int' and c[2] == 'yoffset' for c in m.calls), 'moving inside the same letter does nothing')
     touch(m, 'move', 306, SCREEN_Y0 + VIEW_H + 40, 'sg_on_rail')
@@ -572,7 +569,6 @@ def rail_tests(ctx):
     expect(('widget_ungrab', m.window, m.rail) in m.calls and vis(m, 'sg_bubble')[0] == 0, 'the release lets go and hides the bubble')
     blits, texts, styles = rail_paint(m)
     expect(not blits and all(s == 'label_rail' for s in styles), 'and the disc and the black letter are gone')
-    calls_before = list(m.calls)
     rail_touch('move', 3)
     expect(not any(c[0] == 'widget_set_prop_int' for c in m.calls), 'a stray move with no touch down does nothing')
     # the stock hit test (window coordinates, the geometry the payload left): a touch on the rail's column within its span plus the 12 px margins reaches the rail, never
@@ -991,7 +987,6 @@ def big_library_tests(ctx):
     expect(last and last[-1] == big_titles[-1], f'the end of the list paints its last row ({last[-1] if last else None})')
     scroll_to(m, 640_000)
     blits, texts, styles, fills = settle(m)
-    mid = Layout.row_y
     expect(blits and all(0 <= b[2][1] < VIEW_H for b in blits if b[2][2] == 52), 'a paint half way down (offset 640,000) draws rows at window coordinates')
     scroll_to(m, 0)
     blits, texts, styles, fills = settle(m)
@@ -1135,7 +1130,7 @@ def lists_tests(ctx):
 
     # A playlist's header (docs/modules/songs.md "A playlist's header"): the Playlists page's 2 x 2 mosaic (patch/grid.c, one source a tick), the name and the count under
     # it, the pills and the rows lower, the large title gone, the small title once the name has scrolled away; other lists keep the large title
-    PHT, PHC = O['PH_TOP'], O['PH_COVER']
+    PHC = O['PH_COVER']
     def head_blits(blits): return [b for b in blits if b[2][2] == PHC]
     def quad(m, bmp): return [pixel(m, bmp, x, y) for x, y in ((PHC // 4, PHC // 4), (3 * PHC // 4, PHC // 4), (PHC // 4, 3 * PHC // 4), (3 * PHC // 4, 3 * PHC // 4))]
     m = list_machine(titles); m.playlist_songs = {7: list(m.songs[:5])}

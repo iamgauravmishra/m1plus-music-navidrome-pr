@@ -1,4 +1,4 @@
-/* M1+ Music payload layout. Derived from q2-pod patch/link.ld (Copyright (c) 2026 Diamond Bond, MIT).
+/* M1+ Music payload layout. Follows the layout of q2-pod's patch/link.ld.
  * Everything lives in one file-backed PT_LOAD at 0xb00000 (tools/pod.py append_payload): code,
  * read-only data, initialised data and the zero-filled .scratch state. The segment's memory size
  * equals its file size, because .scratch is PROGBITS in the file; tools/pod.py rejects a non-empty

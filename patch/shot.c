@@ -33,16 +33,23 @@
 
 #define BMP_HEADER 54
 
-extern void pod_toast(const char *text);   /* patch/shuffle.c: the stock message box */
-extern int pod_confirm(const char *text);  /* patch/m1plus.c: the stock confirm dialog, wrapped text, modal; nonzero for Yes */
+extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
+extern int
+pod_confirm(const char *text); /* patch/m1plus.c: the stock confirm dialog, wrapped text, modal; nonzero for Yes */
 
-enum { SH_IDLE, SH_ASK, SH_COUNT, SH_ASK_CANCEL, SH_GRAB };   /* nothing pending, asking to start, counting down, asking to cancel, waiting for the repaint */
-enum { R_OK, R_STORAGE, R_FAIL };          /* a saved file; no card / no room; the frame buffer or the write */
+enum {
+    SH_IDLE,
+    SH_ASK,
+    SH_COUNT,
+    SH_ASK_CANCEL,
+    SH_GRAB
+}; /* nothing pending, asking to start, counting down, asking to cancel, waiting for the repaint */
+enum { R_OK, R_STORAGE, R_FAIL }; /* a saved file; no card / no room; the frame buffer or the write */
 
 static struct {
     int phase;
-    int left;        /* countdown ticks to go */
-    unsigned timer;  /* the tick timer while it runs, else 0 */
+    int left; /* countdown ticks to go */
+    unsigned timer; /* the tick timer while it runs, else 0 */
 } sh __attribute__((section(".scratch")));
 
 /* The status bar camera, found by name from the window manager (it is a child of the system bar's right group, hidden
@@ -65,21 +72,27 @@ static unsigned chan(unsigned px, unsigned off, unsigned len) {
 }
 
 static void put32(unsigned char *p, unsigned v) {
-    p[0] = (unsigned char)v; p[1] = (unsigned char)(v >> 8); p[2] = (unsigned char)(v >> 16); p[3] = (unsigned char)(v >> 24);
+    p[0] = (unsigned char)v;
+    p[1] = (unsigned char)(v >> 8);
+    p[2] = (unsigned char)(v >> 16);
+    p[3] = (unsigned char)(v >> 24);
 }
 
 /* The 54 byte header of a w x h, 24 bit, bottom-up BMP whose rows are `stride` bytes. */
 static void bmp_header(unsigned char *p, unsigned w, unsigned h, unsigned stride) {
     memset(p, 0, BMP_HEADER);
-    p[0] = 'B'; p[1] = 'M';
+    p[0] = 'B';
+    p[1] = 'M';
     put32(p + 2, BMP_HEADER + stride * h);
     put32(p + 10, BMP_HEADER);
-    put32(p + 14, 40);                       /* BITMAPINFOHEADER */
-    put32(p + 18, w); put32(p + 22, h);
-    p[26] = 1;                               /* planes */
+    put32(p + 14, 40); /* BITMAPINFOHEADER */
+    put32(p + 18, w);
+    put32(p + 22, h);
+    p[26] = 1; /* planes */
     p[28] = 24;
     put32(p + 34, stride * h);
-    put32(p + 38, 2835); put32(p + 42, 2835);   /* 72 dpi */
+    put32(p + 38, 2835);
+    put32(p + 42, 2835); /* 72 dpi */
 }
 
 /* The next free shot-NNNN.bmp in the directory; 0 when all SHOT_MAX_NUM exist. */
@@ -98,11 +111,13 @@ static int storage_ok(unsigned bytes) {
     if (!pod_card_mounted()) return 0;
     mkdir(SHOT_DIR, 0755);
     if (access(SHOT_DIR, F_OK) || statfs(SHOT_DIR, a)) return 0;
-    return (unsigned long long)a[7] * a[1] >= ((unsigned long long)SHOT_MIN_FREE_MB << 20) + bytes;   /* f_bavail * f_bsize */
+    return (unsigned long long)a[7] * a[1] >=
+           ((unsigned long long)SHOT_MIN_FREE_MB << 20) + bytes; /* f_bavail * f_bsize */
 }
 
 /* The frame at fb (rows `line` bytes apart, `bytes` per pixel, channels at the offsets / lengths in c) as the BMP. */
-static int write_bmp(const unsigned char *fb, unsigned w, unsigned h, unsigned line, unsigned bytes, const unsigned *c) {
+static int write_bmp(const unsigned char *fb, unsigned w, unsigned h, unsigned line, unsigned bytes,
+                     const unsigned *c) {
     unsigned char hdr[BMP_HEADER], row[SHOT_MAX_DIM * 3 + 4];
     unsigned stride = (w * 3 + 3) & ~3u, y, x;
     char path[48];
@@ -111,10 +126,10 @@ static int write_bmp(const unsigned char *fb, unsigned w, unsigned h, unsigned l
     if (!next_number(path, sizeof path)) return R_FAIL;
     fd = open(SHOT_TMP, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0) return R_STORAGE;
-    memset(row, 0, sizeof row);                      /* the pad bytes of a row stay zero */
+    memset(row, 0, sizeof row); /* the pad bytes of a row stay zero */
     bmp_header(hdr, w, h, stride);
     ok = write(fd, hdr, BMP_HEADER) == BMP_HEADER;
-    for (y = h; ok && y--;) {                        /* bottom-up */
+    for (y = h; ok && y--;) { /* bottom-up */
         const unsigned char *s = fb + y * line;
         unsigned char *o = row;
         for (x = 0; x < w; x++, s += bytes, o += 3) {
@@ -128,7 +143,7 @@ static int write_bmp(const unsigned char *fb, unsigned w, unsigned h, unsigned l
     ok = ok && fsync(fd) == 0;
     ok = (close(fd) == 0) && ok;
     if (!ok || rename(SHOT_TMP, path)) {
-        unlink(SHOT_TMP);                            /* no partial file */
+        unlink(SHOT_TMP); /* no partial file */
         return R_FAIL;
     }
     return R_OK;
@@ -147,10 +162,18 @@ static int capture(void) {
         close(fd);
         return R_FAIL;
     }
-    w = v[FBV_XRES]; h = v[FBV_YRES]; bpp = v[FBV_BPP]; line = f[FBF_LINE_LENGTH]; yoff = v[FBV_YOFFSET]; len = f[FBF_SMEM_LEN];
-    for (i = 0; i < 3; i++) {                        /* red, green, blue: 4..8 bit fields inside the pixel */
+    w = v[FBV_XRES];
+    h = v[FBV_YRES];
+    bpp = v[FBV_BPP];
+    line = f[FBF_LINE_LENGTH];
+    yoff = v[FBV_YOFFSET];
+    len = f[FBF_SMEM_LEN];
+    for (i = 0; i < 3; i++) { /* red, green, blue: 4..8 bit fields inside the pixel */
         unsigned off = v[FBV_RED + 3 * i], n = v[FBV_RED + 3 * i + 1];
-        if (n < 4 || n > 8 || off + n > bpp) { close(fd); return R_FAIL; }
+        if (n < 4 || n > 8 || off + n > bpp) {
+            close(fd);
+            return R_FAIL;
+        }
     }
     if (!w || !h || w > SHOT_MAX_DIM || h > SHOT_MAX_DIM || (bpp != 16 && bpp != 24 && bpp != 32) ||
         line < w * (bpp / 8) || yoff + h > v[FBV_YRES_VIRTUAL] || (unsigned long long)(yoff + h) * line > len) {
@@ -158,7 +181,7 @@ static int capture(void) {
         return R_FAIL;
     }
     map = mmap((void *)0, len, PROT_READ, MAP_SHARED, fd, 0);
-    close(fd);                                       /* the mapping outlives the descriptor */
+    close(fd); /* the mapping outlives the descriptor */
     if (map == (const unsigned char *)MAP_FAILED) return R_FAIL;
     rc = write_bmp(map + yoff * line, w, h, line, bpp / 8, v + FBV_RED);
     munmap((void *)map, len);
@@ -170,28 +193,37 @@ static int shot_grab(const void *timer) {
     const char *msg;
     int rc;
     (void)timer;
-    if (home_off()) { finish(); return RET_OK; }
+    if (home_off()) {
+        finish();
+        return RET_OK;
+    }
     rc = capture();
     finish();
-    if (rc == R_OK) msg = TR("Screenshot saved");
-    else if (rc == R_STORAGE) msg = TR("Storage unavailable");
-    else msg = TR("Screenshot failed");
+    if (rc == R_OK)
+        msg = TR("Screenshot saved");
+    else if (rc == R_STORAGE)
+        msg = TR("Storage unavailable");
+    else
+        msg = TR("Screenshot failed");
     pod_toast(msg);
     return RET_OK;
 }
 
 static int shot_tick(const void *timer) {
     (void)timer;
-    if (home_off()) { finish(); return RET_OK; }
+    if (home_off()) {
+        finish();
+        return RET_OK;
+    }
     if (--sh.left > 0) return RET_REPEAT;
-    indicator(0);                                    /* out of the frame before it is read */
-    sh.timer = 0;                                    /* this timer ends below */
+    indicator(0); /* out of the frame before it is read */
+    sh.timer = 0; /* this timer ends below */
     sh.phase = SH_GRAB;
     if (!timer_add(shot_grab, (void *)0, SHOT_SETTLE_MS)) {
         finish();
         pod_toast(TR("Screenshot failed"));
     }
-    return RET_OK;                                   /* this timer ends */
+    return RET_OK; /* this timer ends */
 }
 
 /* The Screenshot row was tapped (patch/m1plus.c on_row). Idle: the stock confirm dialog asks, Yes starts the countdown.
@@ -206,7 +238,8 @@ void shot_start(void) {
             if (sh.timer) timer_remove(sh.timer);
             sh.timer = 0;
             finish();
-        } else if (sh.phase == SH_ASK_CANCEL) sh.phase = SH_COUNT;
+        } else if (sh.phase == SH_ASK_CANCEL)
+            sh.phase = SH_COUNT;
         return;
     }
     if (sh.phase != SH_IDLE) return;

@@ -282,7 +282,6 @@ def menu_tests(ctx):
     expect(P.EXTRAS_ORDER.index(item) == P.EXTRAS_GROUPS[0][1].index('Pod') and P.parse_menu_full(b'123456k\n') == ([1, 2, 3, 4, 5, 6, 19], []) and P.format_menu([1, 2, 19]) == '12k\n',
            'Extras lists it in the Play group, after Now Playing and Shuffle; the saved list carries it as k')
     expect(pod_i18n.key_for('Pod') is None and 'Pod' in pod_i18n.BRANDS, 'the label is the brand name "iPod", a plain text in every language (as M1+ Music and Tidal)')
-    page = P.MENU
     rows0 = PSYMS['pod_rows_0']
     m = IM()
     m.widgets = {n: 0x30000000 + i for i, n in enumerate(['btn_return', 'btn_backtoplayer'])}
@@ -1026,7 +1025,7 @@ def feel_tests(ctx):
     m = songs(3000); d = Drag(m, 0)
     for _ in range(30): d.go(6, 16)
     expect(song_sel(m) == 12, f'a fast turn (375 deg/s): the first half second is one row per 15 degrees (row {song_sel(m)} = 12)')
-    sels, prev, deltas = [], 12, []
+    prev, deltas = 12, []
     for _ in range(300):
         d.go(6, 16); s = song_sel(m); deltas.append(s - prev); prev = s
         if s >= 2999: break
@@ -1160,7 +1159,7 @@ def pane_tests(ctx):
     expect(('loadLocalClassList', O['CLASS_ALBUMS']) in c and len(first) == 1 and first[0] in range(8), f'tick 1: a random album with a cached cover is decoded ({first})')
     expect(('bitmap_create_ex', ART, ART) in [x[:3] for x in c], f'into a {ART} px bitmap (the pane\'s height zoomed 110%)')
     # sub-pixel pan: every frame is the reference lerp of the source at the pan's place, which advances a little every tick
-    ok_all, ps, frames, before = True, [], [], len([x for x in m.calls if x[0] == 'bitmap_create_ex'])
+    ok_all, ps, frames = True, [], []
     for n in range(1, 101):
         c = tick(m, FAST)
         ok, bad, p = expect_frame(m, n * FAST, n)
@@ -1483,7 +1482,7 @@ def transition_tests(ctx):
 def pane_sharp_tests(ctx):
     """The cover pane's sharper sources (docs/modules/ipod.md "The cover pane"): the playing album from demo's full-resolution file, the rotation from one transient extraction."""
     expect = ctx.expect
-    ART, FAST = O['IP_PANE_ART'], O['IP_PAN_MS']
+    ART = O['IP_PANE_ART']
     TMP = '/tmp/m1plus-pane.jpg'
     COVER_SRC = pod.DATA['COVER_SRC'][0]
     def solid(rgb): return (264, 264, bytes(rgb + (255,)) * (264 * 264))

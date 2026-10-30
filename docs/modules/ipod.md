@@ -1,13 +1,17 @@
-# The virtual iPod Classic (`patch/ipod.c`)
+# Virtual iPod
 
-A fullscreen page that looks and steers like an iPod Classic: the iPod screen on the upper 240 px, a touch click wheel on the lower 240 px. Entry: the
-**Pod** item of the M1+ Music menu (hidden by default, like Now Playing; named Pod, not iPod, on the device; the code keeps `ipod` / `IP_*`). Source: `patch/ipod.c`, the asset `ui/m1plus_ipod.bin` (`tools/pod_ui.py`
-`build_ipod_page`), the wheel picture `ipod_wheel.png` (`tools/mod_icons.py` `ipod_wheel`), the numbers `IP_*` in `patch/offsets.inc`, tests
-`test/pod/ipod.py`. `tools/preview_ipod.py` renders light/dark menus, library rows and Now Playing, a transition contact sheet and GIF (slide, split open and close), the cross-fading cover pane and the reference palette from the built font and assets. This polish still needs device inspection (see the checklist).
+The optional Pod item opens a fullscreen iPod Classic-style page: a 240 px display above a
+240 px touch-wheel area. It is hidden from the main menu by default. Code keeps the `ipod`
+and `IP_*` names; the device label is Pod. Hardware validation is tracked in the checklist.
 
-No new hook, nothing at boot, nothing in paint or the main loop beyond what the safety rules list. The page uses only what Albums, Songs, the mini
-player bar and Cover Flow already use: a window opened with `window_open`, one view's own `EVT_AFTER_PAINT`, the pointer events of a view with
-`widget_grab`, the window's `EVT_WINDOW_TO_BG` / `TO_FG` / `EVT_DESTROY`, and **one page-scoped timer**.
+Sources: `patch/ipod.c`, `tools/pod_ui.py` (`build_ipod_page`, `ui/m1plus_ipod.bin`),
+`tools/mod_icons.py` (`ipod_wheel`) and `IP_*` in `offsets.inc`. Tests: `test/pod/ipod.py`;
+preview: `tools/preview_ipod.py` (light/dark menus, library rows, Now Playing, a transition
+contact sheet and GIF, the cross-fading cover pane and the reference palette).
+
+The page adds no stock hook or boot work. It owns its `EVT_AFTER_PAINT`, pointer grab,
+foreground/background/destroy events and one page timer, using stock calls already shared
+with Albums, Songs, the mini player and Cover Flow.
 
 ## Layout (320 x 480, `IP_*`)
 
@@ -176,7 +180,7 @@ and frees the cover. State is one struct in `.scratch`, cleared at open and dest
 ## Now Playing: the iPod's cycle, why not
 
 The wish: centre press on Now Playing cycles default -> scrubber (the wheel seeks 1, 2, 3, 5 s a step) -> shuffle -> rating; on the default screen the wheel changes the volume. Candidates found in the stock `demo`
-(`tools/stock.py`, `tools/dis.py`), none of them used:
+(`tools/stock.py`, `tools/disasm.py`), none of them used:
 
 - **Seek:** `seek_time(int secs)` `0x4e0544` (a0 + the playing record's cue start at `+0x48` -> `dmrSendPause`, `mclSetSeek` `0x5d26dc`; paused (status 3) also `set_outputchannel` + `mclSetResume`; then a **busy loop of up to 200
   x `usleep(10000)`** polling `get_playtimeandlength` until the position is within 1 s of the target, then `dmrSendPlay`). The loop **blocks the UI thread for up to 2 s** (per call; a wheel step is a call), which is
@@ -222,8 +226,7 @@ A setting **Clicker** On / Off, default **On**. A click is a ~3 ms transient (a 
 - **Apple's Music 404-page iPod** (a web page that mimics the wheel): the ideas of a reversal threshold, a dead zone judged on the chord of a move rather than the point, a
   smoothed angular speed with a threshold, tiers of rows per step that climb with the time held fast, and a nudge at the end of a list. Its code is proprietary: nothing is
   copied, and only its numbers are followed (tiers 1, 2, 3, 5, 8, 13, 21, 34; speed clamp 400 degrees a second; smoothing 0.15; 180 degrees a second; 500 ms a tier; 250 ms reset).
-- **q2-pod** (MIT, `patch/navigation.c`, read for its end bump): nothing was borrowed (the bump tried here was our own, and is gone).
-  `NOTICE` is unchanged for this reason.
+- **q2-pod** (`patch/navigation.c`, read for its end bump): nothing was borrowed (the bump tried here was our own, and is gone).
 - **iPlayr / keremersu35/ipod-player**, inspected at `76f9a730db27d0ce281e89a46db018c432178e6c`: the equal-width split menu with a full-height cover pane, primary black and secondary grey text, glossy materials and light/dark appearance informed the first polish; its title bar, battery, selection, Now Playing, 280 ms slides, split open, long-press MENU and artwork pane timing followed it in the second (values, metrics, timings and behaviour; the repository has no licence, so nothing else). No reference code or media was copied or executed. The navigation display model and timer integration are specific to this firmware.
 
 ## Addresses used

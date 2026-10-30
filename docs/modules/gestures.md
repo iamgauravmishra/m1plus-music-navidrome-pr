@@ -1,8 +1,6 @@
 # List gestures
 
-Split out of docs/architecture.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
-
-## 8d. List gestures (`patch/scroll.c`, test `test/pod/scroll.py`)
+**Sources:** `patch/scroll.c`, test `test/pod/scroll.py`.
 
 A swipe on a list must never play the song under the finger, and a touch on a list that is still coasting must stop it
 and press nothing. This is a patch in AWTK's input path, so it is a data word, not a code hook: nothing of the stock text is

@@ -18,7 +18,7 @@ import os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from PIL import Image, ImageDraw
-import build, paths, mod_nowplaying, preview_icons as PI
+import build, paths, preview_icons as PI
 from tape_art import *   # the drawing code, shared with the build (tools/tape_art.py)
 
 def strip(im):
@@ -37,9 +37,9 @@ def bold(s, im, x, y, text, px, rgb, anchor='l'):
     s.text(im, x, y, text, px, rgb, anchor); s.text(im, x + 1, y, text, px, rgb, anchor)
 
 def frame(s, f):
-    t = THEMES[f['theme']]; tone = mod_nowplaying.tone(*f['cover'])
+    t = THEMES[f['theme']]
     im = compose(f, t)
-    d = ImageDraw.Draw(im); ink, sub = t['ink'], t['sub']
+    ink, sub = t['ink'], t['sub']
     # written on the index lines
     s.text(im, 40, 49, s.clip(f["title"], 22, 388), 22, ink)
     s.text(im, 40, 70, s.clip(f["artist"], 16, 388), 16, ink)

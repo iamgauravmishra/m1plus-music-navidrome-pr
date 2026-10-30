@@ -8,14 +8,14 @@ A caption wider than its box is drawn as an hscroll_label shows it when it start
 its left margin, clipped to its box (it then scrolls back and forth, pausing 3 s at each end). Its
 AWTK width (tools/awtk_text.StbText: truncated advances + 1 px per glyph) is printed.
 
-Usage: venv/bin/python -I tools/preview_cover.py WORKDIR OUT.png [LANDSCAPE.png]
+Usage: uv run python -I tools/preview_cover.py WORKDIR OUT.png [LANDSCAPE.png]
 """
 import argparse, os, sys, tempfile
 from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_ui
 import preview_font   # noqa: F401  (redirects the painters' text to stb_raster, the tree's font)
-import preview_all, pod_ui
+import preview_layout, pod_ui
 from awtk_text import Ttf, StbText
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'test'))
 import coverflow as hostcf  # noqa: E402
@@ -27,7 +27,7 @@ HSCROLL_MARGIN = 2
 
 def page(work, album, artist, title, ring, frac=0):
     """The tree's ui/m1plus_cover.bin with its captions filled and the rendered frame in view_covers."""
-    raw = os.path.join(work, preview_all.RAW)
+    raw = os.path.join(work, preview_layout.RAW)
     root = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1plus_cover.bin'), 'rb').read())
     ttf = Ttf(os.path.join(raw, 'fonts', 'default.ttf'))
     for w in root.walk():   # renamed: the Now Playing painter has sample text for label_album
@@ -40,7 +40,7 @@ def page(work, album, artist, title, ring, frac=0):
                 if tw > w.w: w.x, w.w = w.x + (w.w - tw) // 2, tw
             w.set('text', text); w.set('name', w.name + '_preview')
             if w.type == 'hscroll_label': w.remove('ellipses')   # as it shows while it scrolls
-    im = preview_all.MenuPainter(raw).render(root, 0)
+    im = preview_layout.MenuPainter(raw).render(root, 0)
     with tempfile.TemporaryDirectory() as tmp:
         lib = hostcf.build(tmp)
         tex = [None if t is None else hostcf.texture(*t) for t in ring]
@@ -59,12 +59,12 @@ def landscape(work, album='Kind of Blue', artist='Miles Davis'):
     the 320 x 400 body under the navbar, the captions in the tree's font as patch/coverflow.c lays them (centred, 22 px
     white over 18 px grey). Approximate, like the rest."""
     from stb_raster import StbFont
-    raw = os.path.join(work, preview_all.RAW)
+    raw = os.path.join(work, preview_layout.RAW)
     font = StbFont(os.path.join(raw, 'fonts', 'default.ttf'))
     root = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1plus_cover.bin'), 'rb').read())
     for w in root.walk():   # the caption labels are hidden in landscape (renamed: the painter has sample text for them)
         if w.name in ('label_album', 'label_artist'): w.set('text', ''); w.set('name', w.name + '_preview')
-    page_im = preview_all.MenuPainter(raw).render(root, 0).convert('RGBA')
+    page_im = preview_layout.MenuPainter(raw).render(root, 0).convert('RGBA')
     with tempfile.TemporaryDirectory() as tmp:
         lib = hostcf.build(tmp)
         shelf = [hostcf.texture(c, mark=i == 3) for i, c in enumerate(
@@ -79,7 +79,7 @@ def landscape(work, album='Kind of Blue', artist='Miles Davis'):
 
 def widths(work):
     """AWTK widths of the sample captions in the tree's font against the caption boxes."""
-    ttf = Ttf(os.path.join(work, preview_all.RAW, 'fonts', 'default.ttf'))
+    ttf = Ttf(os.path.join(work, preview_layout.RAW, 'fonts', 'default.ttf'))
     box = pod_ui.SCREEN_W - 2 * pod_ui.CAPTION_X - 2 * HSCROLL_MARGIN
     out = []
     for text, px in ((LONG, 22), (LONG_ARTIST, 18), ('Kind of Blue', 22), ('Miles Davis', 18)):

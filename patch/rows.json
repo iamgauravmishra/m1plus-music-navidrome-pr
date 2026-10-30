@@ -1,5 +1,5 @@
 {
- "_about": "Pinned demo edits of the stock library rows (tools/pod.py, payload feature rows, stage H; docs/architecture.md). Mapped from q2-pod patch/ipod.json + tools/ipod.py + patch/navigation.c (Copyright (c) 2026 Diamond Bond, MIT; see NOTICE) to the M1 Plus V2.1 demo. Every word is [address, stock word, function, note] and is checked before anything is written. immediates: addiu rt, $zero, imm -> (word & 0xffff0000) | value. row_layout_calls: jalr $t9 (widget_set_children_layout, a0 = the row, a1 = the layout string in the delay slot) -> jal compact_set_row_layout. nops: a rebind's widget_resize call -> nop. pinned: checked, unchanged.",
+ "_about": "Pinned demo edits of the stock library rows (tools/pod.py, payload feature rows, stage H; docs/architecture.md). Mapped from q2-pod patch/ipod.json + tools/ipod.py + patch/navigation.c to the M1 Plus V2.1 demo. Every word is [address, stock word, function, note] and is checked before anything is written. immediates: addiu rt, $zero, imm -> (word & 0xffff0000) | value. row_layout_calls: jalr $t9 (widget_set_children_layout, a0 = the row, a1 = the layout string in the delay slot) -> jal compact_set_row_layout. nops: a rebind's widget_resize call -> nop. pinned: checked, unchanged.",
  "immediates": [
   {
    "value": 64,

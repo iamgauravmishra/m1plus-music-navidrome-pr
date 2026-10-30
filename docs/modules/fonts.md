@@ -1,8 +1,6 @@
 # Font
 
-Split out of docs/ui.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
-
-## 3. Font (`tools/mod_font.py`, `tools/font_inter.py`)
+**Sources:** `tools/mod_font.py`, `tools/font_inter.py`.
 
 One file, `release/assets/default/raw/fonts/default.ttf` ("微软雅黑+Arial", 256 units/em, 9.4 MB),
 rewritten by code point; unitsPerEm, hhea ascender/descender/lineGap and OS/2 stay, so every layout

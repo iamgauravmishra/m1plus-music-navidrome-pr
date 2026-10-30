@@ -9,7 +9,7 @@ preview_nowplaying, preview_lockscreen); only their text is redirected to tools/
 rasterizes each tree's default.ttf as AWTK's stb_truetype backend does (no hinting, truncated
 advances, font_size = ascender - descender). Layout and blending stay approximate (not AWTK).
 
-Usage: venv/bin/python -I tools/preview_font.py STOCK_WORKDIR NEW_WORKDIR OUT.png [--labels "A|B"]
+Usage: uv run python -I tools/preview_font.py STOCK_WORKDIR NEW_WORKDIR OUT.png [--labels "A|B"]
 """
 import argparse, os, sys
 from PIL import Image, ImageColor, ImageDraw

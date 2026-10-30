@@ -1,7 +1,7 @@
 /* M1+ Music Podcasts: the shows on the card and their episodes, one page with two levels.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
- * Resume, played marks and speed per show follow q2-pod (Copyright (c) 2026 Diamond Bond, MIT, https://github.com/DiamondBond/q2-pod; see NOTICE); the data is patch/pcmodel.c's.
+ * Resume, played marks and speed per show follow q2-pod; the data is patch/pcmodel.c's.
  *
  * ui/m1plus_podcasts.bin is the Albums page's structure (docs/modules/albums.md): the navbar over a stock list, list_view > scroll_view, whose ONE child, view_grid, paints
  * the rows itself in its EVT_AFTER_PAINT (no widget per row), so a show of hundreds of episodes costs a tile ring. The window is opened by the Extras item Podcasts and has two
@@ -25,8 +25,8 @@
 #include "i18n.h"
 #include "podcasts.h"
 
-extern void pod_toast(const char *text);   /* patch/shuffle.c: the stock message box */
-extern void pod_set_in_order(void);        /* patch/shuffle.c: Shuffle and Repeat one become List play */
+extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
+extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one become List play */
 
 #define I(w, off) (*(int *)((char *)(w) + (off)))
 #define B(w, off) (*(unsigned char *)((char *)(w) + (off)))
@@ -38,34 +38,37 @@ extern void pod_set_in_order(void);        /* patch/shuffle.c: Shuffle and Repea
 #define PG_TAP_PX SC_DRAG_PX
 #define PG_DOT_X 12
 #define PG_TEXT_X 34
-#define PG_TEXT_W 274            /* to the 12 px right margin */
+#define PG_TEXT_W 274 /* to the 12 px right margin */
 #define PG_BOTTOM 12
 #define PG_HDR_TEXT_X 124
 #define PG_HDR_TEXT_W 184
-#define PG_SPEED_Y 82            /* the speed text's top in the header; its touch area is PG_SPEED_H high from there */
+#define PG_SPEED_Y 82 /* the speed text's top in the header; its touch area is PG_SPEED_H high from there */
 #define PG_SPEED_H 34
-#define PG_DOT_RGB 0xff840au     /* #0A84FF as the RGBA bitmap word's colour bytes (r, g, b order in a little-endian word: 0xBBGGRR) */
+#define PG_DOT_RGB \
+    0xff840au /* #0A84FF as the RGBA bitmap word's colour bytes (r, g, b order in a little-endian word: 0xBBGGRR) */
 #define PG_REC_SIZE 0x58
 
 enum { L_SHOWS = 0, L_EPS = 1 };
 
 static struct {
     void *win, *view, *sv, *status, *title, *fade;
-    void *st_title, *st_sub, *st_dim, *st_acc;   /* hidden labels whose styles are the row title, the grey line, a played title and the speed */
+    void *st_title, *st_sub, *st_dim,
+        *st_acc; /* hidden labels whose styles are the row title, the grey line, a played title and the speed */
     char root[PC_FILE + 20];
     pc_show_t *shows;
     int nshows;
-    pc_ep_t *eps;                 /* the downloaded episodes of the show open, newest first */
+    pc_ep_t *eps; /* the downloaded episodes of the show open, newest first */
     int neps;
-    int level, sel, show_off;     /* the level, the show open, the Shows list's offset to come back to */
-    int press, down, down_x, down_y;   /* the row under the finger + 1; the row a press began on + 1 (0 none; a header hit is -1) and where */
+    int level, sel, show_off; /* the level, the show open, the Shows list's offset to come back to */
+    int press, down, down_x,
+        down_y; /* the row under the finger + 1; the row a press began on + 1 (0 none; a header hit is -1) and where */
     int fg, noscroll;
-    unsigned rev;                 /* pc_rev() the rows were made at */
+    unsigned rev; /* pc_rev() the rows were made at */
     unsigned timer, load_timer;
-    void *dot;                    /* the unplayed dot's bitmap */
-    grid_tile_t spd;              /* the speed text of the Show header */
-    grid_t g;                     /* the tiles: a show's cover and texts, an episode's texts (ckey = its state + 1) */
-    grid_t hg;                    /* the Show header's cover (one tile) and its name and count */
+    void *dot; /* the unplayed dot's bitmap */
+    grid_tile_t spd; /* the speed text of the Show header */
+    grid_t g; /* the tiles: a show's cover and texts, an episode's texts (ckey = its state + 1) */
+    grid_t hg; /* the Show header's cover (one tile) and its name and count */
 } pg __attribute__((section(".scratch")));
 
 static void pg_show(void *w, int on) {
@@ -80,7 +83,11 @@ static void pg_redraw(void) { widget_invalidate_force(pg.sv, (void *)0); }
 
 static int pg_count(void) { return pg.level == L_SHOWS ? pg.nshows : pg.neps; }
 static int pg_top(void) { return pg.level == L_SHOWS ? 0 : PC_HDR_H; }
-static int pg_content(void) { return pg_count() ? pg_top() + pg_count() * PC_ROW_H + (pg.level == L_EPS ? PG_BOTTOM : 0) : pg.level == L_EPS ? PC_HDR_H : 0; }
+static int pg_content(void) {
+    return pg_count()          ? pg_top() + pg_count() * PC_ROW_H + (pg.level == L_EPS ? PG_BOTTOM : 0)
+           : pg.level == L_EPS ? PC_HDR_H
+                               : 0;
+}
 
 static void pg_size(void) {
     int h = pg_content();
@@ -102,14 +109,17 @@ static void pg_span(int *r0, int *r1) {
  * Texts and tiles
  */
 static void pg_sub_of(const pc_ep_t *e, unsigned *state, char *out, unsigned size) {
-    static const char sep[] = " \xc2\xb7 ";   /* " · " */
+    static const char sep[] = " \xc2\xb7 "; /* " · " */
     char date[48], tail[40];
     unsigned pos, len, total, mins = 0, o = 0, k;
     int s = pc_state(e->hash, &pos, &len);
     total = len ? len : e->dur;
     tail[0] = 0;
     date[0] = 0;
-    if (e->pub) pc_when(e->pub, (unsigned)time((long *)0), date, sizeof date);   /* the date is made again whenever the tiles are (the page opens, comes back to the front) */
+    if (e->pub)
+        pc_when(
+            e->pub, (unsigned)time((long *)0), date,
+            sizeof date); /* the date is made again whenever the tiles are (the page opens, comes back to the front) */
     if (s == PC_DONE) {
         const char *t = TR("Played");
         for (k = 0; t[k] && k + 1 < sizeof tail; ++k) tail[k] = t[k];
@@ -167,7 +177,7 @@ static void pg_header_texts(void) {
     int mode = pc_speed_get(s->hash);
     grid_tile_t *t = &pg.hg.tiles[0];
     pc_fmt(count, sizeof count, TR(pg.neps == 1 ? "%d episode" : "%d episodes"), (unsigned)pg.neps);
-    grid_set(t, s->title, count, 0);   /* (the cover in the tile stays) */
+    grid_set(t, s->title, count, 0); /* (the cover in the tile stays) */
     t->fit = 0, t->tw = t->aw = 0;
     memset(&pg.spd, 0, sizeof pg.spd);
     grid_set(&pg.spd, name[mode], "", 0);
@@ -180,20 +190,22 @@ static void pg_paint_shows(void *canvas) {
     int r0, r1;
     pg_span(&r0, &r1);
     if (r1 < r0) return;
-    grid_list_paint(canvas, &pg.g, pg.st_title, pg.st_sub, r0, r1, pg_off(), GRID_VIEW_H, pg.press, 0, pg_tile_of, (void *)0);
+    grid_list_paint(canvas, &pg.g, pg.st_title, pg.st_sub, r0, r1, pg_off(), GRID_VIEW_H, pg.press, 0, pg_tile_of,
+                    (void *)0);
 }
 
 static void pg_paint_eps(void *canvas) {
     int r0, r1, r, off = pg_off(), pass;
     grid_tile_t *h = &pg.hg.tiles[0];
-    if (off < PC_HDR_H) {   /* the header: cover, name, count, speed */
+    if (off < PC_HDR_H) { /* the header: cover, name, count, speed */
         grid_blit(canvas, &pg.hg, h, 16, 16 - off, GRID_VIEW_H);
         widget_prepare_text_style(pg.st_title, canvas);
         grid_text(canvas, h, 0, PG_HDR_TEXT_X, 22 - off, PG_HDR_TEXT_W, LIST_TITLE_H, GRID_VIEW_H);
         widget_prepare_text_style(pg.st_sub, canvas);
         grid_text(canvas, h, 1, PG_HDR_TEXT_X, 50 - off, PG_HDR_TEXT_W, LIST_SUB_H, GRID_VIEW_H);
         widget_prepare_text_style(pg.st_acc, canvas);
-        grid_text(canvas, &pg.spd, 0, PG_HDR_TEXT_X, PG_SPEED_Y + (PG_SPEED_H - LIST_SUB_H) / 2 - off, PG_HDR_TEXT_W, LIST_SUB_H, GRID_VIEW_H);
+        grid_text(canvas, &pg.spd, 0, PG_HDR_TEXT_X, PG_SPEED_Y + (PG_SPEED_H - LIST_SUB_H) / 2 - off, PG_HDR_TEXT_W,
+                  LIST_SUB_H, GRID_VIEW_H);
     }
     pg_span(&r0, &r1);
     if (r1 < r0) return;
@@ -202,7 +214,7 @@ static void pg_paint_eps(void *canvas) {
         int y = PC_HDR_H + r * PC_ROW_H - off;
         if (pg.press == r + 1) az_fill(canvas, 0, y, y + PC_ROW_H - 1, PG_W, LIST_PRESS);
         az_fill(canvas, PG_TEXT_X, y + PC_ROW_H - 1, y + PC_ROW_H, PG_W - PG_TEXT_X, LIST_HAIR);
-        if (pg.dot && t->ckey != PC_DONE + 1) {   /* the unplayed dot (a started episode too) */
+        if (pg.dot && t->ckey != PC_DONE + 1) { /* the unplayed dot (a started episode too) */
             int src[4], dst[4], top = y + (PC_ROW_H - PC_DOT) / 2;
             if (top >= 0 && top + PC_DOT <= GRID_VIEW_H) {
                 src[0] = src[1] = 0, src[2] = src[3] = PC_DOT;
@@ -211,13 +223,15 @@ static void pg_paint_eps(void *canvas) {
             }
         }
     }
-    for (pass = 0; pass < 3; ++pass) {   /* titles, played titles, grey lines: one text style at a time */
+    for (pass = 0; pass < 3; ++pass) { /* titles, played titles, grey lines: one text style at a time */
         widget_prepare_text_style(pass == 0 ? pg.st_title : pass == 1 ? pg.st_dim : pg.st_sub, canvas);
         for (r = r0; r <= r1; ++r) {
             grid_tile_t *t = pg_tile(r);
             int y = PC_HDR_H + r * PC_ROW_H - off, played = t->ckey == PC_DONE + 1;
-            if (pass == 2) grid_text(canvas, t, 1, PG_TEXT_X, y + LIST_SUB_Y, PG_TEXT_W, LIST_SUB_H, GRID_VIEW_H);
-            else if ((pass == 1) == played) grid_text(canvas, t, 0, PG_TEXT_X, y + LIST_TITLE_Y, PG_TEXT_W, LIST_TITLE_H, GRID_VIEW_H);
+            if (pass == 2)
+                grid_text(canvas, t, 1, PG_TEXT_X, y + LIST_SUB_Y, PG_TEXT_W, LIST_SUB_H, GRID_VIEW_H);
+            else if ((pass == 1) == played)
+                grid_text(canvas, t, 0, PG_TEXT_X, y + LIST_TITLE_Y, PG_TEXT_W, LIST_TITLE_H, GRID_VIEW_H);
         }
     }
 }
@@ -228,8 +242,10 @@ static int pg_on_paint(void *ctx, void *e) {
     (void)ctx;
     if (!canvas || !pg.view || !pg.g.tiles) return RET_OK;
     I(canvas, CANVAS_OY) += off;
-    if (pg.level == L_SHOWS && pg.nshows) pg_paint_shows(canvas);
-    else if (pg.level == L_EPS && pg.hg.tiles) pg_paint_eps(canvas);
+    if (pg.level == L_SHOWS && pg.nshows)
+        pg_paint_shows(canvas);
+    else if (pg.level == L_EPS && pg.hg.tiles)
+        pg_paint_eps(canvas);
     I(canvas, CANVAS_OY) -= off;
     return RET_OK;
 }
@@ -250,8 +266,9 @@ static void pg_make_dot(void) {
         for (x = 0; x < PC_DOT; ++x) {
             for (n = 0, i = 0; i < 4; ++i)
                 for (j = 0; j < 4; ++j) {
-                    int dx = x * 8 + 2 * j + 1 - PC_DOT * 4, dy = y * 8 + 2 * i + 1 - PC_DOT * 4;   /* eighths of a pixel from the centre */
-                    if (dx * dx + dy * dy <= (PC_DOT * 4 - 4) * (PC_DOT * 4 - 4)) ++n;   /* the disc is 11 px across */
+                    int dx = x * 8 + 2 * j + 1 - PC_DOT * 4,
+                        dy = y * 8 + 2 * i + 1 - PC_DOT * 4; /* eighths of a pixel from the centre */
+                    if (dx * dx + dy * dy <= (PC_DOT * 4 - 4) * (PC_DOT * 4 - 4)) ++n; /* the disc is 11 px across */
                 }
             px[y * PC_DOT + x] = (unsigned)(n * 255 / 16) << 24 | PG_DOT_RGB;
         }
@@ -329,8 +346,10 @@ static int pg_on_load(const void *unused) {
  */
 static void pg_title(const char *key, const char *text) {
     if (!pg.title) return;
-    if (key) az_fit(pg.title, TR(key));
-    else az_fit(pg.title, text);
+    if (key)
+        az_fit(pg.title, TR(key));
+    else
+        az_fit(pg.title, text);
 }
 
 static void pg_empty(const char *key) {
@@ -346,7 +365,8 @@ static void pg_fade(void) {
 }
 
 static int pg_on_scroll(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     if (!pg.win) return RET_OK;
     pg_fade();
     pg_kick();
@@ -402,7 +422,8 @@ static void pg_open_show(int i) {
     pg_title((const char *)0, pg.shows[i].title);
     pg_show(pg.view, 1);
     pg_show(pg.status, 0);
-    if (!m) pg_empty("No downloaded episodes");   /* (a show with a metadata file and no file yet: the subscribe phase's) */
+    if (!m)
+        pg_empty("No downloaded episodes"); /* (a show with a metadata file and no file yet: the subscribe phase's) */
     grid_shape(&pg.g, LIST_ART, LIST_R, 1);
     grid_shape(&pg.hg, PC_HDR_ART, 10, 0);
     grid_placeholder(&pg.hg);
@@ -415,9 +436,12 @@ static void pg_open_show(int i) {
 }
 
 static int pg_on_back(void *ctx, void *e) {
-    (void)ctx; (void)e;
-    if (pg.win && pg.level == L_EPS) pg_load_shows();
-    else navigator_back();
+    (void)ctx;
+    (void)e;
+    if (pg.win && pg.level == L_EPS)
+        pg_load_shows();
+    else
+        navigator_back();
     return RET_OK;
 }
 
@@ -479,7 +503,7 @@ static void pg_play(int at) {
         unsigned rec[PG_REC_SIZE / 4];
         char p[PC_FILE * 2 + 40];
         if (!pg_path(&pg.eps[i], p, sizeof p)) {
-            if (i < at) --at;   /* a name that does not fit: skipped (the model refused such names; this is the belt) */
+            if (i < at) --at; /* a name that does not fit: skipped (the model refused such names; this is the belt) */
             continue;
         }
         pg_record(rec, &pg.eps[i], p);
@@ -497,7 +521,7 @@ static void pg_play(int at) {
     pod_set_in_order();
     *(int *)G_CLASS_TYPE = 1;
     context.dq = queue, context.idx = at, context.cls = 1, context.mode = PLAY_MODE;
-    navigator_to_with_context("playing_page", &context);   /* start_player copies the queue */
+    navigator_to_with_context("playing_page", &context); /* start_player copies the queue */
     deque_destroy(queue);
 }
 
@@ -510,7 +534,10 @@ static int pg_item_of(void *e, int *x) {
     widget_to_local(pg.view, pt);
     *x = pt[0];
     y = pt[1] - pg_top();
-    if (pg.level == L_EPS && pt[1] < PC_HDR_H) return pt[0] >= PG_HDR_TEXT_X && pt[1] >= PG_SPEED_Y && pt[1] < PG_SPEED_Y + PG_SPEED_H ? -2 : -1;   /* the speed, or the header */
+    if (pg.level == L_EPS && pt[1] < PC_HDR_H)
+        return pt[0] >= PG_HDR_TEXT_X && pt[1] >= PG_SPEED_Y && pt[1] < PG_SPEED_Y + PG_SPEED_H
+                   ? -2
+                   : -1; /* the speed, or the header */
     if (y < 0) return -1;
     y /= PC_ROW_H;
     return y < pg_count() ? y : -1;
@@ -530,7 +557,8 @@ static int pg_on_down(void *ctx, void *e) {
     a = pg_item_of(e, &x);
     pg.down = a == -1 ? 0 : a == -2 ? -2 : a + 1;
     pg.down_x = I(e, PE_X), pg.down_y = I(e, PE_Y);
-    if (a >= 0 && !(pg.level == L_EPS && x < PG_TEXT_X)) pg_set_press(a + 1);   /* (the dot column is its own button: no row fill) */
+    if (a >= 0 && !(pg.level == L_EPS && x < PG_TEXT_X))
+        pg_set_press(a + 1); /* (the dot column is its own button: no row fill) */
     return RET_OK;
 }
 
@@ -549,7 +577,8 @@ static void pg_speed_cycle(void) {
     int mode = (pc_speed_get(s->hash) + 1) % PC_SPEEDS;
     if (!pc_speed_set(s->hash, mode)) pod_toast(TR("Storage unavailable"));
     pg_header_texts();
-    pc_speed_apply(s->hash);   /* an episode of this show that plays: the decoder takes it at the next start; the stock page shows it */
+    pc_speed_apply(
+        s->hash); /* an episode of this show that plays: the decoder takes it at the next start; the stock page shows it */
     pg_redraw();
 }
 
@@ -564,15 +593,19 @@ static int pg_on_up(void *ctx, void *e) {
     if (a == -2) {
         if (same == -2) pg_speed_cycle();
     } else if (same == a - 1) {
-        if (pg.level == L_SHOWS) pg_open_show(same);
-        else if (x < PG_TEXT_X) pg_toggle(same);
-        else pg_play(same);
+        if (pg.level == L_SHOWS)
+            pg_open_show(same);
+        else if (x < PG_TEXT_X)
+            pg_toggle(same);
+        else
+            pg_play(same);
     }
     return RET_OK;
 }
 
 static int pg_on_abort(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     pg.down = 0;
     pg_set_press(0);
     return RET_OK;
@@ -588,7 +621,8 @@ static int pg_tick(const void *timer) {
         return RET_OK;
     }
     pc_note(cc_playing());
-    if (pod_screen_lit() && pg.level == L_EPS && pc_rev() != pg.rev) {   /* a place or a mark changed: the grey lines are made again */
+    if (pod_screen_lit() && pg.level == L_EPS &&
+        pc_rev() != pg.rev) { /* a place or a mark changed: the grey lines are made again */
         pg.rev = pc_rev();
         grid_drop(&pg.g);
         pg_redraw();
@@ -601,10 +635,11 @@ static void pg_arm(void) {
 }
 
 static int pg_on_fg(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     pg.fg = 1;
     pg_arm();
-    if (pg.level == L_EPS) {   /* the grey lines are made again: a place may have changed, and "4h ago" is a time later */
+    if (pg.level == L_EPS) { /* the grey lines are made again: a place may have changed, and "4h ago" is a time later */
         pg.rev = pc_rev();
         grid_drop(&pg.g);
         pg_redraw();
@@ -614,7 +649,8 @@ static int pg_on_fg(void *ctx, void *e) {
 }
 
 static int pg_on_bg(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     pg.fg = 0;
     if (pg.timer) timer_remove(pg.timer);
     if (pg.load_timer) timer_remove(pg.load_timer);
@@ -626,7 +662,8 @@ static int pg_on_bg(void *ctx, void *e) {
 }
 
 static int pg_on_destroy(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     if (pg.timer) timer_remove(pg.timer);
     if (pg.load_timer) timer_remove(pg.load_timer);
     pc_flush();
@@ -658,12 +695,13 @@ int podcasts_open(void) {
     pg.st_dim = widget_lookup(pg.win, "label_row_dim", 1);
     pg.st_acc = widget_lookup(pg.win, "label_row_acc", 1);
     if (!pg.view || !pg.sv || !pg.status || !pg.title || !pg.st_title || !pg.st_sub || !pg.st_dim || !pg.st_acc) {
-        navigator_back();   /* an asset that is not ours */
+        navigator_back(); /* an asset that is not ours */
         return -1;
     }
     label_set_line_wrap(pg.status, 1);
     pg.shows = calloc(PC_MAX_SHOWS, sizeof *pg.shows);
-    if (!pg.shows || !grid_init(&pg.g, pg.win, PC_TILES, LIST_ART, LIST_R) || !grid_init(&pg.hg, pg.win, 1, PC_HDR_ART, 10)) {
+    if (!pg.shows || !grid_init(&pg.g, pg.win, PC_TILES, LIST_ART, LIST_R) ||
+        !grid_init(&pg.hg, pg.win, 1, PC_HDR_ART, 10)) {
         pg_empty("Not enough memory");
         return 0;
     }
@@ -671,7 +709,8 @@ int podcasts_open(void) {
     pc_root(pg.root);
     pg_make_dot();
     pg.fg = 1;
-    pg.noscroll = !widget_on(pg.sv, EVT_SCROLL, pg_on_scroll, (void *)0) || !widget_on(pg.sv, EVT_SCROLL_END, pg_on_scroll, (void *)0);
+    pg.noscroll = !widget_on(pg.sv, EVT_SCROLL, pg_on_scroll, (void *)0) ||
+                  !widget_on(pg.sv, EVT_SCROLL_END, pg_on_scroll, (void *)0);
     widget_on(pg.win, EVT_WINDOW_TO_FG, pg_on_fg, (void *)0);
     widget_on(pg.win, EVT_WINDOW_TO_BG, pg_on_bg, (void *)0);
     widget_on(pg.view, EVT_POINTER_DOWN, pg_on_down, (void *)0);

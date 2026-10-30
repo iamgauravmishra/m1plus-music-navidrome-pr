@@ -3,8 +3,7 @@
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  * The injection scheme -- a non-PIC payload in an appended PT_LOAD at 0xb00000, checked PIC-prologue
  * jumps, a $gp-restoring trampoline, stock functions reached through absolute-address macros, and
- * libc only through demo's own GOT slots -- follows q2-pod, Copyright (c) 2026 Diamond Bond, MIT
- * (https://github.com/DiamondBond/q2-pod); see NOTICE.
+ * libc only through demo's own GOT slots -- follows q2-pod's design (https://github.com/DiamondBond/q2-pod).
  *
  * Exactly one stock function is hooked: the Home screen's icon click dispatcher (0x533b80, unnamed,
  * registered per icon during home_page_init). It runs only when the user taps a Home icon -- never
@@ -22,30 +21,53 @@
 #include "offsets.inc"
 
 /* ACT_* mirror tools/pod_pages.py. */
-enum { ACT_HOME = 0, ACT_PAGE = 1, ACT_PLAYER = 2, ACT_COVER = 3, ACT_SHUFFLE = 4, ACT_ARTISTS = 8,
-       ACT_GRID = 9, ACT_STARTUP = 10, ACT_ALBUMS = 11, ACT_LANDSCAPE = 12, ACT_SORT = 13, ACT_SHOT = 14, ACT_REBUILD = 15, ACT_SHELF = 16,
-       ACT_PLAYLISTS = 17, ACT_SONGS = 18, ACT_DAILY = 19, ACT_REGEN = 20, ACT_LIST = 21, ACT_IPOD = 22, ACT_PODCASTS = 23, ACT_CTHEME = 24 };
+enum {
+    ACT_HOME = 0,
+    ACT_PAGE = 1,
+    ACT_PLAYER = 2,
+    ACT_COVER = 3,
+    ACT_SHUFFLE = 4,
+    ACT_ARTISTS = 8,
+    ACT_GRID = 9,
+    ACT_STARTUP = 10,
+    ACT_ALBUMS = 11,
+    ACT_LANDSCAPE = 12,
+    ACT_SORT = 13,
+    ACT_SHOT = 14,
+    ACT_REBUILD = 15,
+    ACT_SHELF = 16,
+    ACT_PLAYLISTS = 17,
+    ACT_SONGS = 18,
+    ACT_DAILY = 19,
+    ACT_REGEN = 20,
+    ACT_LIST = 21,
+    ACT_IPOD = 22,
+    ACT_PODCASTS = 23,
+    ACT_CTHEME = 24
+};
 
-extern void shot_start(void);    /* patch/shot.c: the Screenshot row: confirm, 5 s countdown, capture; or cancel */
-extern int artists_open(int home);   /* patch/artists.c: the Artists list, its own page; arg HOME_GENRE / HOME_COMPOSER: Genres / Composers on it */
-extern int albums_open(void);    /* patch/albums.c: Albums, our page in the mode used last (grid or list) */
+extern void shot_start(void); /* patch/shot.c: the Screenshot row: confirm, 5 s countdown, capture; or cancel */
+extern int artists_open(
+    int home); /* patch/artists.c: the Artists list, its own page; arg HOME_GENRE / HOME_COMPOSER: Genres / Composers on it */
+extern int albums_open(void); /* patch/albums.c: Albums, our page in the mode used last (grid or list) */
 extern int playlists_open(void); /* patch/playlists.c: Playlists, a grid of mosaics of each playlist's covers */
-extern int ipod_open(void);      /* patch/ipod.c: the virtual iPod Classic, a fullscreen page with a touch click wheel */
-extern int podcasts_open(void);  /* patch/podcasts.c: the shows on the card and their episodes */
-extern int songs_open(void);     /* patch/songs.c: Songs, the library as one list with sections and a jump rail */
-extern int songs_open_list(int home); /* patch/songs.c: another stock song list (Favourites ...) on the same page; arg = its Home tile */
-extern void menu_arrange(void *win, int extras);   /* patch/menu.c: the menu / Extras rows as the saved list says */
-extern void menu_custom_opened(void *win);         /* patch/menu.c: the Main Menu page's switches and arrows */
-extern void menu_extras_opened(void *win);         /* patch/menu.c: the Customize > Extras page's switches */
+extern int ipod_open(void); /* patch/ipod.c: the virtual iPod Classic, a fullscreen page with a touch click wheel */
+extern int podcasts_open(void); /* patch/podcasts.c: the shows on the card and their episodes */
+extern int songs_open(void); /* patch/songs.c: Songs, the library as one list with sections and a jump rail */
+extern int songs_open_list(
+    int home); /* patch/songs.c: another stock song list (Favourites ...) on the same page; arg = its Home tile */
+extern void menu_arrange(void *win, int extras); /* patch/menu.c: the menu / Extras rows as the saved list says */
+extern void menu_custom_opened(void *win); /* patch/menu.c: the Main Menu page's switches and arrows */
+extern void menu_extras_opened(void *win); /* patch/menu.c: the Customize > Extras page's switches */
 
 struct pod_row {
-    const char *name;   /* row widget name in the asset (pod_row0, pod_row1, ...) */
-    int action;         /* ACT_* */
-    int arg;            /* HOME_* id, or a page index */
+    const char *name; /* row widget name in the asset (pod_row0, pod_row1, ...) */
+    int action; /* ACT_* */
+    int arg; /* HOME_* id, or a page index */
 };
 
 struct pod_page {
-    const char *asset;              /* window resource name (ui/<asset>.bin) */
+    const char *asset; /* window resource name (ui/<asset>.bin) */
     const struct pod_row *rows;
     int count;
 };
@@ -55,21 +77,23 @@ struct pod_page {
  * stage's POD_PAGES/POD_PAGE_COUNT tables and the constants POD_ENTRY_ID and POD_ENTRY_PAGE. */
 #include "stock.h"
 #include "pages.h"
-#include "covercache.h"   /* the Sort setting (cc_sort_artist, cc_sort_toggle) */
-
+#include "covercache.h" /* the Sort setting (cc_sort_artist, cc_sort_toggle) */
 
 /* The stock Home dispatcher reads only the clicked icon's name (widget_t + W_NAME): it atoi()s it
  * to a Home id and opens that destination. A fake icon with a numeric name reuses it to open any
  * stock Home page without touching the real widget tree. */
-struct fake_icon { char pad[W_NAME]; const char *name; };
+struct fake_icon {
+    char pad[W_NAME];
+    const char *name;
+};
 
-static const char HOME_NAMES[18][3] = {"0", "1", "2", "3", "4", "5", "6", "7", "8",
-                                        "9", "10", "11", "12", "13", "14", "15", "16", "17"};
+static const char HOME_NAMES[18][3] = {"0", "1",  "2",  "3",  "4",  "5",  "6",  "7",  "8",
+                                       "9", "10", "11", "12", "13", "14", "15", "16", "17"};
 
 #include "home.h"
 #include "common.h"
 #include "i18n.h"
-static int pod_off(void) { return home_off(); }   /* the SD file and the flash one */
+static int pod_off(void) { return home_off(); } /* the SD file and the flash one */
 
 static int home_open(int id) {
     struct fake_icon icon;
@@ -87,7 +111,8 @@ static int open_page(int index, int as_home);
 
 /* The Extras page's Customize button: the page a Customize row opens (ACT_PAGE), over the Extras page (patch/home.c knows it for the Shanling Home exit). */
 static int on_customize(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     open_page(POD_CUSTOMIZE_PAGE, 0);
     return RET_OK;
 }
@@ -102,7 +127,7 @@ static int on_menu_fg(void *ctx, void *e) {
  * reset and the Bluetooth reconnect use) with a wrapped message; the call is modal and returns CONFIRM_YES for Yes.
  * No (or the dialog failing to open) does nothing at all; Yes opens Cover Flow on its Preparing screen with every
  * cover extracted again (coverflow_rebuild). */
-int pod_confirm(const char *s) {   /* also patch/shot.c: Take / Cancel the screenshot */
+int pod_confirm(const char *s) { /* also patch/shot.c: Take / Cancel the screenshot */
     struct {
         int kind, ms;
         char text[MSGINFO_TEXT], text2[MSGINFO_TEXT];
@@ -122,28 +147,47 @@ static int on_row(void *ctx, void *e) {
     const struct pod_row *row = ctx;
     (void)e;
     if (!row) return RET_OK;
-    if (row->action == ACT_HOME) home_open(row->arg);
-    else if (row->action == ACT_PAGE) open_page(row->arg, 0);
-    else if (row->action == ACT_PLAYER) on_backtoplayer_onclick((void *)0, (void *)0);
-    else if (row->action == ACT_COVER) coverflow_open();   /* patch/coverflow.c; its own page */
-    else if (row->action == ACT_ARTISTS) artists_open(row->arg);
-    else if (row->action == ACT_ALBUMS) albums_open();
-    else if (row->action == ACT_PLAYLISTS) playlists_open();
-    else if (row->action == ACT_SONGS) songs_open();
-    else if (row->action == ACT_IPOD) ipod_open();
-    else if (row->action == ACT_PODCASTS) podcasts_open();
-    else if (row->action == ACT_LIST) songs_open_list(row->arg);
-    else if (row->action == ACT_SHUFFLE) shuffle_play(row->arg); /* patch/shuffle.c; plays, no page */
-    else if (row->action == ACT_GRID) home_to_grid();      /* patch/home.c: the stock grid */
-    else if (row->action == ACT_SHOT) shot_start();        /* patch/shot.c; a timer, no page */
-    else if (row->action == ACT_REBUILD) rebuild_ask();    /* a confirm dialog, then Cover Flow rebuilds */
-    else if (row->action == ACT_REGEN) dailymix_regen();   /* patch/dailymix.c: no page, no message; the card is made again when the Home menu is back in front */
+    if (row->action == ACT_HOME)
+        home_open(row->arg);
+    else if (row->action == ACT_PAGE)
+        open_page(row->arg, 0);
+    else if (row->action == ACT_PLAYER)
+        on_backtoplayer_onclick((void *)0, (void *)0);
+    else if (row->action == ACT_COVER)
+        coverflow_open(); /* patch/coverflow.c; its own page */
+    else if (row->action == ACT_ARTISTS)
+        artists_open(row->arg);
+    else if (row->action == ACT_ALBUMS)
+        albums_open();
+    else if (row->action == ACT_PLAYLISTS)
+        playlists_open();
+    else if (row->action == ACT_SONGS)
+        songs_open();
+    else if (row->action == ACT_IPOD)
+        ipod_open();
+    else if (row->action == ACT_PODCASTS)
+        podcasts_open();
+    else if (row->action == ACT_LIST)
+        songs_open_list(row->arg);
+    else if (row->action == ACT_SHUFFLE)
+        shuffle_play(row->arg); /* patch/shuffle.c; plays, no page */
+    else if (row->action == ACT_GRID)
+        home_to_grid(); /* patch/home.c: the stock grid */
+    else if (row->action == ACT_SHOT)
+        shot_start(); /* patch/shot.c; a timer, no page */
+    else if (row->action == ACT_REBUILD)
+        rebuild_ask(); /* a confirm dialog, then Cover Flow rebuilds */
+    else if (row->action == ACT_REGEN)
+        dailymix_regen(); /* patch/dailymix.c: no page, no message; the card is made again when the Home menu is back in front */
     return RET_OK;
 }
 
 /* The switch rows (Customize > Home Screen: Boot to M1+ Music, Recent Albums and Daily Mix; Customize > Cover Flow: Landscape): a tap flips the
  * setting and the row's switch image follows it. The context is the slot below, one per action, filled when the page opens. */
-struct swctx { int action; void *img; };
+struct swctx {
+    int action;
+    void *img;
+};
 static struct swctx sw_slot[4] __attribute__((section(".scratch")));
 
 static void switch_show(void *img, int on) {
@@ -152,7 +196,8 @@ static void switch_show(void *img, int on) {
 
 /* Customize > Home Screen > Regenerate Daily Mix: dimmed and not tappable while no mix can be made (the Daily Mix switch off, or a library under
  * MIX_MIN_LIB songs); the Daily Mix switch updates it in place. */
-#define REGEN_DIM 102   /* 40 % opacity: the stock paint draws the row, its icon and label through the canvas global alpha */
+#define REGEN_DIM \
+    102 /* 40 % opacity: the stock paint draws the row, its icon and label through the canvas global alpha */
 static void *regen_row __attribute__((section(".scratch")));
 
 static void regen_show(void) {
@@ -163,7 +208,10 @@ static void regen_show(void) {
 }
 
 static int switch_state(int action) {
-    return action == ACT_STARTUP ? home_start() : action == ACT_SHELF ? recent_setting() : action == ACT_DAILY ? dailymix_setting() : coverflow_landscape();
+    return action == ACT_STARTUP ? home_start()
+           : action == ACT_SHELF ? recent_setting()
+           : action == ACT_DAILY ? dailymix_setting()
+                                 : coverflow_landscape();
 }
 
 static int on_switch(void *ctx, void *e) {
@@ -171,7 +219,10 @@ static int on_switch(void *ctx, void *e) {
     int on;
     (void)e;
     if (!s) return RET_OK;
-    on = s->action == ACT_STARTUP ? home_toggle() : s->action == ACT_SHELF ? recent_toggle() : s->action == ACT_DAILY ? dailymix_toggle() : coverflow_landscape_toggle();   /* -1: not saved, unchanged */
+    on = s->action == ACT_STARTUP ? home_toggle()
+         : s->action == ACT_SHELF ? recent_toggle()
+         : s->action == ACT_DAILY ? dailymix_toggle()
+                                  : coverflow_landscape_toggle(); /* -1: not saved, unchanged */
     if (on >= 0) switch_show(s->img, on);
     if (s->action == ACT_DAILY) regen_show();
     return RET_OK;
@@ -193,11 +244,13 @@ static void bind_switch(void *win, unsigned i, const struct pod_row *row) {
 static void *sort_label __attribute__((section(".scratch")));
 
 static void sort_show(void) {
-    if (sort_label) widget_set_tr_text(sort_label, cc_sort_artist() ? "Artist" : "album");   /* "album": the stock key for Album */
+    if (sort_label)
+        widget_set_tr_text(sort_label, cc_sort_artist() ? "Artist" : "album"); /* "album": the stock key for Album */
 }
 
 static int on_sort(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     if (cc_sort_toggle() >= 0) sort_show();
     return RET_OK;
 }
@@ -214,8 +267,8 @@ static void bind_sort(void *win, unsigned i, const struct pod_row *row) {
 /* Customize > Cassette Mode > Cassette Theme: the row shows the theme (Normal, Chrome or Metal) in its grey value label and a tap goes on to the next (saved first: a failed save
  * leaves the theme and the label as they were). The Tape page reads the saved theme when it opens (patch/tape.c). */
 static void *ctheme_label __attribute__((section(".scratch")));
-extern int tape_theme(void);          /* patch/tape.c: the saved theme, 0 Normal (the default), 1 Chrome, 2 Metal */
-extern int tape_theme_cycle(void);    /* the next one, saved atomically; the new theme or -1 */
+extern int tape_theme(void); /* patch/tape.c: the saved theme, 0 Normal (the default), 1 Chrome, 2 Metal */
+extern int tape_theme_cycle(void); /* the next one, saved atomically; the new theme or -1 */
 
 static void ctheme_show(void) {
     static const char *const name[3] = {"Normal", "Chrome", "Metal"};
@@ -223,7 +276,8 @@ static void ctheme_show(void) {
 }
 
 static int on_ctheme(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     if (tape_theme_cycle() >= 0) ctheme_show();
     return RET_OK;
 }
@@ -251,23 +305,30 @@ static int open_page(int index, int as_home) {
     pod_bind(win, "btn_backtoplayer", pod_on_player, (void *)0);
     for (i = 0; i < page->count; i++) {
         const struct pod_row *row = &page->rows[i];
-        if (row->action == ACT_STARTUP || row->action == ACT_LANDSCAPE || row->action == ACT_SHELF || row->action == ACT_DAILY) bind_switch(win, i, row);
-        else if (row->action == ACT_SORT) bind_sort(win, (unsigned)i, row);
-        else if (row->action == ACT_CTHEME) bind_ctheme(win, (unsigned)i, row);
-        else pod_bind(win, row->name, on_row, row);
+        if (row->action == ACT_STARTUP || row->action == ACT_LANDSCAPE || row->action == ACT_SHELF ||
+            row->action == ACT_DAILY)
+            bind_switch(win, i, row);
+        else if (row->action == ACT_SORT)
+            bind_sort(win, (unsigned)i, row);
+        else if (row->action == ACT_CTHEME)
+            bind_ctheme(win, (unsigned)i, row);
+        else
+            pod_bind(win, row->name, on_row, row);
         if (row->action == ACT_REGEN) regen_row = widget_lookup(win, row->name, 1), regen_show();
     }
     if (index == POD_MENU_PAGE) {
         menu_arrange(win, 0);
-        widget_on(win, EVT_WINDOW_TO_FG, on_menu_fg, win);   /* back in front after the Main Menu page: arrange again */
+        widget_on(win, EVT_WINDOW_TO_FG, on_menu_fg, win); /* back in front after the Main Menu page: arrange again */
     } else if (index == POD_EXTRAS_PAGE) {
         menu_arrange(win, 1);
         home_extras_opened(win);
-        pod_bind(win, "btn_customize", on_customize, (void *)0);   /* the navbar's Customize button (a missing one: stock-safe, nothing happens) */
-    }
-    else if (index == POD_MENUCFG_PAGE) menu_custom_opened(win);
-    else if (index == POD_EXTRASCFG_PAGE) menu_extras_opened(win);
-    {   /* the Customize page is the way out to the grid; the menu may be the Home instance (no navbar) */
+        pod_bind(win, "btn_customize", on_customize,
+                 (void *)0); /* the navbar's Customize button (a missing one: stock-safe, nothing happens) */
+    } else if (index == POD_MENUCFG_PAGE)
+        menu_custom_opened(win);
+    else if (index == POD_EXTRASCFG_PAGE)
+        menu_extras_opened(win);
+    { /* the Customize page is the way out to the grid; the menu may be the Home instance (no navbar) */
         int entry = as_home && index == POD_ENTRY_PAGE;
         if (index == POD_CUSTOMIZE_PAGE || entry) home_menu_opened(win, index == POD_CUSTOMIZE_PAGE, entry);
     }
@@ -290,7 +351,7 @@ int m1plus_home_click(void *icon, void *e) {
     const char *name = icon ? *(const char **)((char *)icon + W_NAME) : (const char *)0;
     int id = (name && name[0]) ? atoi(name) : -1;
     if (id == POD_ENTRY_ID && !pod_off()) {
-        int restored = home_restore();   /* after "Shanling Home": this tap makes M1+ Music Home again */
+        int restored = home_restore(); /* after "Shanling Home": this tap makes M1+ Music Home again */
         if (open_page(POD_ENTRY_PAGE, 1) == 0) return RET_OK;
         home_restore_failed(restored);
     } else if (recovery_tap(id) && !pod_off()) {

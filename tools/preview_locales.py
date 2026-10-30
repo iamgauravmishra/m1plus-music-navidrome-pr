@@ -3,14 +3,13 @@
 languages, drawn from a finished tree's own ui files, strings tables and font (docs/ui.md "Localisation").
 Approximate (PIL, not AWTK): labels that do not fit are cut with an ellipsis, as an idle hscroll_label shows them.
 
-Usage: venv/bin/python -I tools/preview_locales.py WORKDIR [TABLE ...]     (default: zh_CN ja_JP ge_DE ru_RU; TABLE is a
+Usage: uv run python -I tools/preview_locales.py WORKDIR [TABLE ...]     (default: zh_CN ja_JP ge_DE ru_RU; TABLE is a
 strings table name such as ru_RU; output in out/preview/, gitignored)
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PIL import Image, ImageDraw
 import build, preview, preview_icons as PI
-import pod_pages as P
 
 DEFAULT = ['zh_CN', 'ja_JP', 'ge_DE', 'ru_RU']
 
@@ -24,7 +23,7 @@ def sheet(work, table):
               ('Customize > Cover Flow', PI.pod_page(s, 'm1plus_cfset', 2, switches={'pod_switch0': False}).convert('RGB')),
               ('Shuffle', PI.pod_page(s, 'm1plus_shuffle', 3).convert('RGB')),
               ('Main Menu', preview.mainmenu_page(s, None))]
-    pad, lab = 12, 20
+    pad = 12
     wid = sum(im.width for _, im in panels) + pad * (len(panels) + 1)
     hei = max(im.height for _, im in panels) + 44 + pad
     out = Image.new('RGB', (wid, hei), (0x2A, 0x2A, 0x2A)); d = ImageDraw.Draw(out)

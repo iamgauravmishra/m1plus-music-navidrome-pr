@@ -20,41 +20,42 @@
  */
 #pragma once
 
-#define GRID_TEXT 48                       /* wide chars kept per text, the NUL included */
+#define GRID_TEXT 48 /* wide chars kept per text, the NUL included */
 #define GRID_CELL_H (GRID_COVER + GRID_TITLE_GAP + GRID_TITLE_H + GRID_SUB_H)
-#define GRID_PITCH (GRID_CELL_H + GRID_ROW_GAP)   /* row to row */
+#define GRID_PITCH (GRID_CELL_H + GRID_ROW_GAP) /* row to row */
 #define GRID_COL_PITCH (GRID_COVER + GRID_GAP)
-#define GRID_LIST_W 320                    /* the list mode's fills: the content view's width */
+#define GRID_LIST_W 320 /* the list mode's fills: the content view's width */
 #define GRID_FIT_TITLE 1
 #define GRID_FIT_ARTIST 2
-#define GRID_PLACEHOLDER "p_default"       /* the stock 254 px disc, as Cover Flow's */
+#define GRID_PLACEHOLDER "p_default" /* the stock 254 px disc, as Cover Flow's */
 #define GRID_GREY 0xff2b2b2bu
-#define GRID_MAX_ROUND 16                  /* the largest corner radius */
+#define GRID_MAX_ROUND 16 /* the largest corner radius */
 
 typedef struct {
-    int album;         /* the user's album number + 1; 0 = free */
+    int album; /* the user's album number + 1; 0 = free */
     unsigned stamp;
-    unsigned ckey;     /* the cover key (cc_album_key of the album row: the cache file's name) */
-    void *bmp;         /* the cover, side x side RGBA, once decoded */
-    int art;           /* 0 not tried, 1 bmp is the cover, 2 no cache file / no picture: the placeholder */
-    int fit;           /* GRID_FIT_*: which texts have been cut to their width */
-    int tw, aw;        /* title / artist length, in wide chars */
+    unsigned ckey; /* the cover key (cc_album_key of the album row: the cache file's name) */
+    void *bmp; /* the cover, side x side RGBA, once decoded */
+    int art; /* 0 not tried, 1 bmp is the cover, 2 no cache file / no picture: the placeholder */
+    int fit; /* GRID_FIT_*: which texts have been cut to their width */
+    int tw, aw; /* title / artist length, in wide chars */
     unsigned title[GRID_TEXT], artist[GRID_TEXT];
-    unsigned qkey[4];  /* a mosaic tile (grid_mosaic): the distinct cover keys, nq of them (0..4), qi of them already placed in bmp */
+    unsigned qkey
+        [4]; /* a mosaic tile (grid_mosaic): the distinct cover keys, nq of them (0..4), qi of them already placed in bmp */
     int nq, qi;
 } grid_tile_t;
 
 typedef struct {
-    void *win;                     /* the page's window (the image loader wants one) */
-    void *st_title, *st_sub;       /* the hidden labels whose styles are the album and artist text styles */
-    int side;                      /* the cover size (GRID_COVER, or the Albums list mode's) */
-    int round;                     /* corner radius in px, 0: square */
-    int blend;                     /* 1: the corners are cut in the bitmap's alpha (drawn over a background that changes, the Albums list's
+    void *win; /* the page's window (the image loader wants one) */
+    void *st_title, *st_sub; /* the hidden labels whose styles are the album and artist text styles */
+    int side; /* the cover size (GRID_COVER, or the Albums list mode's) */
+    int round; /* corner radius in px, 0: square */
+    int blend; /* 1: the corners are cut in the bitmap's alpha (drawn over a background that changes, the Albums list's
                                     * pressed row); 0: blended into black once, the tile opaque (both grids lie on black) */
-    unsigned char corner[GRID_MAX_ROUND * GRID_MAX_ROUND];   /* the top left corner's coverage outside the arc, 0..255 */
-    grid_tile_t *tiles;            /* n tiles, heap */
+    unsigned char corner[GRID_MAX_ROUND * GRID_MAX_ROUND]; /* the top left corner's coverage outside the arc, 0..255 */
+    grid_tile_t *tiles; /* n tiles, heap */
     int n;
-    void *placeholder;             /* bitmap of the disc */
+    void *placeholder; /* bitmap of the disc */
     unsigned clock;
 } grid_t;
 
@@ -63,8 +64,8 @@ int grid_init(grid_t *g, void *win, int n, int side, int round);
 /* The cover size and corners (round clamped to GRID_MAX_ROUND; blend as above). Call grid_drop first when tiles exist: they were made for the old shape. */
 void grid_shape(grid_t *g, int side, int round, int blend);
 void grid_free(grid_t *g);
-void grid_drop(grid_t *g);                      /* every tile and the placeholder dropped (the cover size changes) */
-void grid_placeholder(grid_t *g);               /* the placeholder bitmap: the theme's disc reduced like a cover, else flat grey */
+void grid_drop(grid_t *g); /* every tile and the placeholder dropped (the cover size changes) */
+void grid_placeholder(grid_t *g); /* the placeholder bitmap: the theme's disc reduced like a cover, else flat grey */
 void grid_free_art(grid_tile_t *t);
 
 grid_tile_t *grid_find(grid_t *g, int album);
@@ -97,8 +98,8 @@ void grid_text(void *canvas, grid_tile_t *t, int pass, int x, int y, int w, int 
 /* The list mode's rows [r0, r1] (row r is tile_of(ctx, r)) of a view scrolled `off` px: the pressed fill (row press - 1, 0 none), the cover, the hairline,
  * then the titles (style label st_title) and the subtitles (st_sub), each drawn only when wholly inside view_h. Shared by the Albums and Playlists lists. shift: the
  * cover, the texts (and their width) move right by it (the Playlists page's select mode makes room for the mark; 0 elsewhere); the pressed fill and the hairline stay. */
-void grid_list_paint(void *canvas, grid_t *g, void *st_title, void *st_sub, int r0, int r1, int off, int view_h, int press, int shift,
-                     grid_tile_t *(*tile_of)(void *, int), void *ctx);
+void grid_list_paint(void *canvas, grid_t *g, void *st_title, void *st_sub, int r0, int r1, int off, int view_h,
+                     int press, int shift, grid_tile_t *(*tile_of)(void *, int), void *ctx);
 
 /* A playlist's mosaic: the first (up to) four distinct albums of its songs that have a Cover Flow cache file, as cache keys in key[4], and how many (0..4). From the
  * first PL_SCAN songs of the list `songs` (a stock song list); the key is the cc_album_key of the song (its artist and album as the playlist stored them), and when
@@ -107,4 +108,5 @@ void grid_list_paint(void *canvas, grid_t *g, void *st_title, void *st_sub, int 
 int grid_mosaic_keys(void *songs, void *albums, unsigned *key);
 
 /* Cells [first, last): the covers, then the albums, then the artists. tile_of(ctx, a) gives cell a's tile. */
-void grid_paint(void *canvas, grid_t *g, int first, int last, int origin_y, int view_h, grid_tile_t *(*tile_of)(void *, int), void *ctx);
+void grid_paint(void *canvas, grid_t *g, int first, int last, int origin_y, int view_h,
+                grid_tile_t *(*tile_of)(void *, int), void *ctx);

@@ -8,7 +8,7 @@ top. The ink the eye measures a gap from: the top of the capitals / digits (CAP,
 baseline itself (descenders hang below it and are not counted: a gap is read between the lines' bodies). A pixel counts as ink from
 coverage INK_MIN (half).
 
-Usage: venv/bin/python -I tools/ah_ink.py WORKDIR     (prints the measured numbers of each line size, and the header's gaps)
+Usage: uv run python -I tools/ah_ink.py WORKDIR     (prints the measured numbers of each line size, and the header's gaps)
 """
 import os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

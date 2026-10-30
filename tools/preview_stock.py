@@ -7,7 +7,7 @@ drawn from one finished tree. Approximate, not AWTK; sample data.
   a playlist's songs                               the Songs page (allmusic_page) with the q2-pod rows
   the queue (Now Playing list)                     playerjumpinfo_page: the playing row has the wave marker at the right end
 
-Usage: venv/bin/python -I tools/preview_stock.py WORKDIR OUT.png
+Usage: uv run python -I tools/preview_stock.py WORKDIR OUT.png
 """
 import argparse, os, sys
 from PIL import Image, ImageDraw

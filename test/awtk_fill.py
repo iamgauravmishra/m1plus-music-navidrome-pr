@@ -16,7 +16,7 @@ Answers three questions about this AWTK build with its real code, not with assum
 
 libc and libm are mocked (malloc, memset, memcpy, sqrtf, sinf, operator new ...); system_info()
 gets a zeroed block; the lcd is lcd_mem_bgr565_create_single_fb (the device's pixel format).
-Usage: venv/bin/python -I test/awtk_fill.py WORKDIR [OUT.png]     (any tree: stock or modded demo)
+Usage: uv run python -I test/awtk_fill.py WORKDIR [OUT.png]     (any tree: stock or modded demo)
 """
 import math, os, struct, sys
 from elftools.elf.elffile import ELFFile

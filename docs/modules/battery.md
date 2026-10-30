@@ -1,8 +1,6 @@
 # The battery art
 
-Split out of docs/ui.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
-
-### One battery (`tools/battery_art.py`, `tools/mod_battery.py`, lock screen step)
+## One battery (`tools/battery_art.py`, `tools/mod_battery.py`, lock screen step)
 
 The app swaps `img_battery`'s image between `bar_power`, `bar_charge` (charging) and `bar_lowpower`
 (capacity 0 only, `bgtz` `0x475c94`) and feeds `pgbar_battery` the capacity (100 when charge is done),

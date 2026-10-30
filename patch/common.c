@@ -11,7 +11,9 @@
 /* The library scan's folder walk (tools/pod.py SCAN_SITE, docs/modules/payload.md hook 6): stock skips a directory entry when strcmp(name, ".") is 0 (and then ".." and a list of
  * system folders); the call is replaced by `jal pod_scan_dir`, whose delay slot still loads a1 = ".". A hidden folder (a name starting with '.') counts as a match, so
  * /mnt/mmc/.m1plus/ (our cache, covers and downloads) never joins Songs and Albums; anything else is stock's strcmp. (q2-pod's ringnav_scan_dir.) */
-__attribute__((noinline)) int pod_scan_dir(const char *name, const char *dot) { return name[0] == '.' ? 0 : strcmp(name, dot); }
+__attribute__((noinline)) int pod_scan_dir(const char *name, const char *dot) {
+    return name[0] == '.' ? 0 : strcmp(name, dot);
+}
 
 int pod_screen_lit(void) { return *(volatile unsigned char *)BACKLIGHT_STATUS != 0; }
 
@@ -21,17 +23,20 @@ int pod_card_mounted(void) {
     memset(a, 0, sizeof a);
     memset(b, 0, sizeof b);
     if (statfs(SHOT_CARD, a) || statfs(SHOT_PARENT, b)) return 0;
-    return !(a[0] == b[0] && a[8] == b[8] && a[9] == b[9]);   /* f_type, f_fsid (MIPS o32 statfs words 0, 8, 9): the same, nothing mounted */
+    return !(a[0] == b[0] && a[8] == b[8] &&
+             a[9] == b[9]); /* f_type, f_fsid (MIPS o32 statfs words 0, 8, 9): the same, nothing mounted */
 }
 
 int pod_on_back(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     navigator_back();
     return RET_OK;
 }
 
 int pod_on_player(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     on_backtoplayer_onclick((void *)0, (void *)0);
     return RET_OK;
 }
@@ -79,7 +84,7 @@ static void *bar_find(void) {
     if (!wm) return (void *)0;
     for (n = widget_count_children(wm), i = 0; i < n; ++i) {
         w = widget_get_child(wm, i);
-        if (pod_is_type(w, "system_bar")) return w;   /* the navbar is "system_bar_bottom" */
+        if (pod_is_type(w, "system_bar")) return w; /* the navbar is "system_bar_bottom" */
     }
     return (void *)0;
 }
@@ -96,7 +101,7 @@ static int bar_set(unsigned color) {
 }
 
 __attribute__((noinline)) int pod_bar_tint(void *win, unsigned color) {
-    if (!win || !bar_set(pod_bar_color(color))) return 0;   /* a failed call keeps what the bar has (and owes) */
+    if (!win || !bar_set(pod_bar_color(color))) return 0; /* a failed call keeps what the bar has (and owes) */
     bar_owner = win;
     return 1;
 }
@@ -114,7 +119,9 @@ __attribute__((noinline)) int pod_is_top(void *win) {
 
 /* The tone cache: album key (cc_album_key) -> pod_tone word, RAM only, fixed size, least recently used out. Both pages look
  * an album up before they decode a cover; a miss is decoded once and inserted. A key is never 0 (0 marks a free entry). */
-static struct { unsigned key, tone, used; } tone_tab[TONE_CACHE_N] __attribute__((section(".scratch")));
+static struct {
+    unsigned key, tone, used;
+} tone_tab[TONE_CACHE_N] __attribute__((section(".scratch")));
 static unsigned tone_clock __attribute__((section(".scratch")));
 
 __attribute__((noinline)) int pod_tone_get(unsigned key, unsigned *tone) {
@@ -133,8 +140,14 @@ __attribute__((noinline)) void pod_tone_put(unsigned key, unsigned tone) {
     unsigned i, at = 0;
     if (!key) return;
     for (i = 0; i < TONE_CACHE_N; ++i) {
-        if (tone_tab[i].key == key) { at = i; break; }   /* the same album again: replaced in place */
-        if (!tone_tab[i].key) { at = i; break; }          /* the first free entry */
+        if (tone_tab[i].key == key) {
+            at = i;
+            break;
+        } /* the same album again: replaced in place */
+        if (!tone_tab[i].key) {
+            at = i;
+            break;
+        } /* the first free entry */
         if (tone_tab[i].used < tone_tab[at].used) at = i; /* else the least recently used */
     }
     tone_tab[at].key = key, tone_tab[at].tone = tone, tone_tab[at].used = ++tone_clock;
@@ -145,7 +158,8 @@ __attribute__((noinline)) unsigned pod_alpha(unsigned y, unsigned a_top, unsigne
     return a_top + ((a_bot - a_top) * y + (rows - 1) / 2) / (rows - 1);
 }
 
-__attribute__((noinline)) unsigned pod_shade(unsigned color, unsigned y, unsigned a_top, unsigned a_bot, unsigned rows) {
+__attribute__((noinline)) unsigned pod_shade(unsigned color, unsigned y, unsigned a_top, unsigned a_bot,
+                                             unsigned rows) {
     unsigned keep = 255 - pod_alpha(y, a_top, a_bot, rows);
     return (color & 255) * keep / 255 | (color >> 8 & 255) * keep / 255 << 8 | (color >> 16 & 255) * keep / 255 << 16;
 }
@@ -165,8 +179,8 @@ __attribute__((noinline)) void pod_corner_fill(unsigned char *tab, unsigned r) {
         }
 }
 
-__attribute__((noinline)) void pod_corners(void *canvas, const unsigned char *tab, unsigned r, unsigned side, unsigned color,
-                                           int row0, unsigned a_top, unsigned a_bot, unsigned rows) {
+__attribute__((noinline)) void pod_corners(void *canvas, const unsigned char *tab, unsigned r, unsigned side,
+                                           unsigned color, int row0, unsigned a_top, unsigned a_bot, unsigned rows) {
     unsigned k, x, y;
     for (k = 0; k < 4; ++k)
         for (y = 0; y < r; ++y) {
@@ -190,10 +204,12 @@ void pod_centre_pill(void *btn, int pw) {
     const unsigned *text = widget_get_text(btn);
     float w = text && *text ? widget_measure_text(btn, text) : 0.0f;
     int tw = (int)(w + 0.999f), margin, i, j;
-    unsigned v[4], val[5];   /* value_t: type at 0, the uint32 at 8 */
+    unsigned v[4], val[5]; /* value_t: type at 0, the uint32 at 8 */
     char name[32];
-    if (!text || !*text) return;   /* (a text that cannot be measured is taken as 0 px wide: the glyph is still put at the left, not above the text as the automatic icon position would) */
-    if (tw > pw - (SG_PILL_H - SG_PILL_GLYPH) / 2 - SG_PILL_GLYPH - SG_PILL_GAP) {   /* too wide beside the glyph (ru "Перемешать"): the label steps down to
+    if (!text || !*text)
+        return; /* (a text that cannot be measured is taken as 0 px wide: the glyph is still put at the left, not above the text as the automatic icon position would) */
+    if (tw > pw - (SG_PILL_H - SG_PILL_GLYPH) / 2 - SG_PILL_GLYPH -
+                 SG_PILL_GAP) { /* too wide beside the glyph (ru "Перемешать"): the label steps down to
                                                                                       * SG_PILL_PX_SMALL, as an iOS button shrinks its title, and is measured again */
         for (i = 0; i < 5; ++i) {
             unsigned k = 0, m = 0;
@@ -210,7 +226,9 @@ void pod_centre_pill(void *btn, int pw) {
     }
     margin = (pw - (SG_PILL_GLYPH + SG_PILL_GAP + tw)) / 2 - (SG_PILL_H - SG_PILL_GLYPH) / 2;
     if (margin < 0) margin = 0;
-    val[0] = (unsigned)margin, val[1] = 1, val[2] = 0, val[3] = (unsigned)(SG_PILL_GAP - (SG_PILL_H - SG_PILL_GLYPH) / 2), val[4] = 2;   /* icon_at left, text_align_h left */
+    val[0] = (unsigned)margin, val[1] = 1, val[2] = 0,
+    val[3] = (unsigned)(SG_PILL_GAP - (SG_PILL_H - SG_PILL_GLYPH) / 2),
+    val[4] = 2; /* icon_at left, text_align_h left */
     for (j = 0; j < 5; ++j) {
         memset(v, 0, sizeof v);
         value_set_uint32(v, val[j]);
@@ -244,7 +262,8 @@ void *pod_make_mark(void *win, const char *name) {
     for (y = 0; ok && y < SG_MARK; ++y)
         for (x = 0; x < SG_MARK; ++x) {
             for (n = 0, i = 0; i < 8; ++i)
-                for (j = 0; j < 8; ++j) {   /* (coordinates doubled: the sample centres are odd, the circle's centre is c) */
+                for (j = 0; j < 8;
+                     ++j) { /* (coordinates doubled: the sample centres are odd, the circle's centre is c) */
                     int dx = (int)(2 * (x * 8 + i) + 1) - (int)c, dy = (int)(2 * (y * 8 + j) + 1) - (int)c;
                     n += (unsigned)(dx * dx + dy * dy) <= rr * rr;
                 }

@@ -1,11 +1,12 @@
-# Mini player bar (the menu's Home instance)
+# Mini player
 
-A floating "now playing" card at the bottom of the M1+ Music menu when it is the Home instance (no navbar): cover, title, artist,
-play / pause and next. Code `patch/minibar.c`, widgets in `ui/m1plus_menu.bin` (`tools/pod_ui.py` `minibar()`), numbers in
-`patch/offsets.inc` `MB_*` (equal to `pod_ui.py`'s; `test/pod/minibar.py` asserts it), tests `test/pod/minibar.py`, preview
-`tools/preview.py` (`minibar_page`). **No stock hook**: it runs from the menu window's own widgets, events and one page timer, as
-the Albums page does (`docs/modules/albums.md`). The menu opened from the grid icon keeps its navbar (it has a Now Playing button
-already) and never gets a bar. The look follows Apple Music's floating mini player (iOS 26, dark).
+The Home menu's floating card shows cover, title, artist, play/pause and next. The normal
+menu keeps its navbar and has no mini player. Window/widget events and one page timer drive
+the bar; it adds no stock hook.
+
+Sources: `patch/minibar.c`, `tools/pod_ui.py` (`minibar()` in `ui/m1plus_menu.bin`) and `MB_*`
+in `offsets.inc`. Tests check the shared geometry: `test/pod/minibar.py`. Preview:
+`tools/preview.py` (`minibar_page`). The visual reference is Apple Music's floating dark mini player.
 
 ## Layout (window y; the window is 450 px; `tools/pod_ui.py` MB_*, `patch/offsets.inc` MB_*)
 

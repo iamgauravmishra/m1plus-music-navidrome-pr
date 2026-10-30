@@ -1,38 +1,75 @@
-# Customize pages and the launcher
+# Customize and launcher
 
-Split out of docs/architecture.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
+Sources: `patch/m1plus.c`, `patch/home.c`, `patch/covercache.c`, `patch/tape.c` and
+`tools/pod_pages.py`. User instructions are in the [guide](../guide.md#customize).
 
-### The launcher
+Customize is item 18 (`j`), hidden from the main menu by default. The Extras navbar always
+provides access, and it cannot be turned off. Its rows open Main Menu, Extras, Home Screen,
+Cover Flow, Cassette Mode, Playback, System Settings and Developer. The two stock settings
+pages use Home dispatcher IDs 16 and 17; Developer contains Screenshot.
 
-The menu's **Customize** item (the stock System Settings keeps its own name; icon `sliders-horizontal`; menu item 19 (the Pod is 20), saved-list character `j`, shown by default, last of the default items; hidden from the menu it is listed on the Extras page, where it cannot be turned off) opens the **Customize** page (`m1plus_customize`, `pod_pages.CUSTOMIZE_PAGE`, the Shuffle page's machinery), whose rows are
-**Main Menu** (`list-checks`), **Extras** (`ellipsis`; which hidden items the Extras page lists), **Home Screen** (`house`) and **Cover Flow** (sub-pages, below), **Playback** (`headphones`) and **System Settings** (`settings`) (stock pages through the dispatcher with ids 16 and 17) and **Developer** (`code`; its page `m1plus_developer`, `pod_pages.DEVELOPER_PAGE`, holds the **Screenshot** row, `docs/modules/screenshot.md`).
+## Persisted choices
 
-**Customize > Home Screen** (`m1plus_homeset`, `pod_pages.HOMESET_PAGE`, key `Home Screen`, icon `house`): the **Boot to M1+ Music** switch (row 0, `pod_switch0`, icon `power`), the **Recent Albums** switch (row 1, `pod_switch1`, `ACT_SHELF`), the **Daily Mix** switch (row 2, `pod_switch2`, `ACT_DAILY`: the card of `docs/modules/dailymix.md`, `/mnt/data/m1plus-daily`, `0` off, anything else or no file on, `dailymix_setting` / `dailymix_toggle` like the shelf's), **Regenerate Daily Mix** (row 3, `ACT_REGEN`, an action row **without a chevron** like the Shuffle rows: one tap asks for today's mix again with a new seed, no page and no message, `dailymix_regen`; the Home menu makes it when it is next in front, so the card is new when Settings closes) and **Shanling Home** (row 4).
-**Recent Albums** shows or hides the Recently Played shelf at the top of the Home menu (`docs/modules/recent.md`): on by default, saved in `/mnt/data/m1plus-shelf` (`0` off, `1` on; a missing file or anything but `0` is on) with `recent_toggle` (atomic; a failed save changes neither the file nor the image), the image set from `recent_setting` when the page opens (`sw_slot[2]`
-in `patch/m1plus.c`); the menu reads the file again when it is back in front, so the shelf follows the switch when Customize is closed. Its label has its own key ("Recent Albums", all 13 languages: the menu item's "Recently Played" overflows the switch row in Spanish and Ukrainian). The Daily Mix switch is the same machinery (`sw_slot[3]`).
+Switches and value rows save before updating their image/label. A failed atomic save leaves
+the file and displayed state unchanged. Reading settings never writes them.
 
-**Customize > Cover Flow** (`m1plus_cfset`, `pod_pages.CFSET_PAGE`): **Landscape** (the switch, `/mnt/data/m1plus-landscape`, as before) and **Sort** (`ACT_SORT`: the row shows its value, `Artist` or `Album`, in a grey right-aligned `pod_value<row>` label set by `widget_set_tr_text` so it follows the language; one tap toggles it, saved first, a failed save changes nothing; no sub-choice page). The setting `/mnt/data/m1plus-cfsort` (`cc_sort_artist`, `cc_sort_toggle` in `patch/covercache.c`): only `0` or `0\n` is Album; a missing, empty or any other content is Artist (the default), and reading never writes.
+| Setting | File under `/mnt/data/` | Values/default |
+|---|---|---|
+| Boot to M1+ Music | `m1plus-start` | `0` stock Home; missing/other enables M1+ Music |
+| Recent Albums | `m1plus-shelf` | `0` off; missing/other on |
+| Daily Mix | `m1plus-daily` | `0` off; missing/other on |
+| Landscape | `m1plus-landscape` | `1` landscape; default portrait |
+| Album sort | `m1plus-cfsort` | `0` or `0\n` Album; missing/other Artist |
+| Cassette Theme | `m1plus-tapetheme` | `1` Chrome, `2` Metal, optional newline; missing/other Normal |
 
-**Customize > Cassette Mode** (`m1plus_tapeset`, `pod_pages.CASSETTE_PAGE`, row after Cover Flow, cassette glyph `pod_ic_tape`) has one row, **Cassette Theme** (`ACT_CTHEME` 24, after Podcasts' 23; a value row like Sort: the grey value is Normal, Chrome or Metal, set by key so it follows the language; one tap goes to the next and wraps, saved first, a failed save changes nothing). The setting `/mnt/data/m1plus-tapetheme` (`tape_theme`, `tape_theme_cycle` in `patch/tape.c`): `1` Chrome, `2` Metal, each with an optional newline; a missing, empty or any other content is Normal (the default), reading never writes. The Tape page reads it when it opens (`docs/modules/tape.md`). Keys `Cassette Mode`, `Cassette Theme`, `Normal`, `Chrome`, `Metal` in 13 languages. Customize now has eight rows and scrolls (the Ukrainian System Settings was shortened to fit its narrower label).
+Home Screen also has Regenerate Daily Mix and Shanling Home. Regenerate is an action without
+a chevron: it requests a new seed, and the Home page rebuilds when next foregrounded. Shelf
+and mix visibility are reread when returning to Home. The separate Recent Albums translation
+fits switch rows where Recently Played would overflow.
 
-**Customize > Cover Flow > Rebuild Covers** (`ACT_REBUILD` 15, icon Lucide `image-up` `pod_ic_rebuild`, key `Rebuild Covers`; an action row like Screenshot, with its chevron): a tap runs `rebuild_ask` (`patch/m1plus.c`), which opens the **stock confirm dialog** `dialog/confirminfo_dialog` through `navigator_to_with_context` (the one the equaliser reset `on_eqreset_onclick` `0x49dd6c` and the Bluetooth reconnect use). Its context is the msginfo layout `{kind, ms, text[0x200], text2[0x200]}`: kind 5 is a centred white 20 px **word-wrapped** label (260 x 80 at y 25, `dialog_confirminfo_dialog_init` `0x472cec`, the branch at `0x472e1c`; kind 1, the equaliser's, is a one-line hscroll label that would scroll this long text), the text at +8 is `TR("Rebuild all covers? This may take a few minutes.")` (a key of ours, translated in all 16 tables, at most three lines at 260 px in every language, test). The call is modal and returns `CONFIRM_YES` 0xa for the Yes button (`btn_enter`); anything else (No, `btn_cancel`) does nothing at all. Yes calls `coverflow_rebuild` (`docs/modules/coverflow.md`): Cover Flow on its Preparing screen with every cover extracted again, the no-art markers included; Cancel/Back leave a complete cache. Kind 5 and the dialog's look are inferred from the stock code, not yet seen on the device.
+Cassette Theme cycles Normal → Chrome → Metal. `tape_theme` reads it when the Tape page opens;
+a change affects the next open. Value labels use translation keys, not fixed English text.
 
-**The album order** (`cc_album_order`). Album = the stock list as it is (`getAllAlbum`: by album title, ASCII case-insensitive). Artist = the row's artist (`songer`, the album's representative track: the album query does not fetch the album artist, so there is no album-artist fallback to apply), then album title, each ASCII case-folded with a leading `The ` dropped (`A `/`An ` are not), ties by the stock position; the Unknown Album row (id -1) is last. The stock deque is never reordered: the page holds `order[]` (stock row numbers, a heapsort, no libc callback; about 25 M instructions for 4000 albums on open) and every access goes through `cc_row`; whatever returns to stock (`cc_open_album`) gets the stock row, `order[i]`. Cover Flow sorts a library of at most `MAX_ALBUMS`; the Albums page (grid and list) uses the same call; the per-artist Cover Flow is not re-sorted (its stock order is album title, `group by album COLLATE NOCASE`, not chronological). Cache keys are unaffected (key = album's artist + title).
+## Rebuild Covers
 
-**Opening on the playing album** (`find_playing`, once, at open, no polling). `cc_playing()`: `mclGetPlayPos` `0x5d4290` (the position, -1 none) and the play queue, a `deque_t *` in the data word `PLAY_QUEUE` `0xa0394c`; the track is `deque_at(*PLAY_QUEUE, pos)` when `0 <= pos < deque_size` (the same test and accessors as `get_playtimeandlength` `0x4e015c`, the lock screen refresh `0x53f718` and the queue drawer). Its album (`REC_ALBUM`; empty = no match) is matched first by `cc_album_key` (FNV of artist then album), else by album title ignoring ASCII case (a compilation's tracks do not share the album row's artist). Found: that cover is centred (main page, or the artist page when the artist's list has the album); otherwise the saved `LAST_ALBUM`, else the first, as before.
-Shanling Home shows the stock grid for the rest of the session (nothing re-opens the pod menu while it is on):
-it sets `grid`, shows the grid, closes the menu, the Extras page (only when Customize was opened from it: `home_extras_opened` records that window and its destroy forgets it, so a closed Extras page is never closed again) and the Customize page under the Home Screen page by handle
-(`window_close(hs.entry)`, `window_close(hs.extras)`, `window_close(hs.menu)`: a second `navigator_back` straight after the first would find
-the closing page) and then closes the Home Screen page with `navigator_back`; with no known window below it is one `navigator_back`. Tapping the **M1+ Music icon**
-(id 99) on the grid, when the setting is M1+ Music and the payload is armed, clears the flag and opens the menu as
-the Home instance; a failing open restores the previous state. With the switch off ("Shanling") the icon opens a normal
-menu. **Boot to M1+ Music** is a switch row: a tap runs `home_toggle`, which flips the persistent setting (`/mnt/data/m1plus-start`, the
-same semantics and the same atomic write as before; it returns the new state or -1 for a failed write, which leaves the file and the switch
-alone) and `patch/m1plus.c` sets the row's stock `sset_on` / `sset_off` image (`pod_switchN`, found by name; at open it shows `home_start()`).
-The switch rows' click ctx is a small slot (action, image) in `.scratch` filled when the Home Screen page opens (the switch image is the page's own, so the state is
-right when it opens and after every toggle; `image_base_set_image` repaints it); `home_menu_opened` records the Customize window for Shanling Home. The boot guard is untouched. Toggling to M1+ Music takes effect at the next Home foreground event (a
-Shanling start is armed, so the foreground handler exists). **The Home instance has no top bar**: the whole
-`navigationbar_view` is hidden (`visible=false` and `sensitive=false`) and `pod_listview` moves to y `HOME_PAD` (10) and
-resizes to 320x430, its `pod_scrollview` and `scroll_bar_m` keep their widths and take the 430 px height (the
-the mini player bar replaces the bars icon; nothing happens if the navbar or the list is not found). The menu
-opened from the icon keeps its navbar (Back, "M1+ Music", the bars icon). No setting file = M1+ Music.
+`ACT_REBUILD` calls `rebuild_ask`, which opens stock `dialog/confirminfo_dialog` through
+`navigator_to_with_context`. The context is `{kind, ms, text[0x200], text2[0x200]}`; text starts
+at +8. Kind 5 gives wrapped 20 px text in a 260 × 80 box at y 25. Kind 1 scrolls one line and
+must not be used for this message. Evidence: `dialog_confirminfo_dialog_init` `0x472cec`,
+branch `0x472e1c`; stock equalizer reset `on_eqreset_onclick` `0x49dd6c` uses the same dialog.
+
+Only `CONFIRM_YES` (`0xa`, `btn_enter`) starts `coverflow_rebuild`; No or a failed dialog does
+nothing. The translated message is checked in all 16 tables. Rebuild opens Preparing and
+regenerates covers, including no-art markers; Cancel/Back retains completed cache entries.
+The kind-5 appearance still needs device confirmation.
+
+## Album ordering and initial selection
+
+`cc_album_order` keeps the stock deque unchanged and creates an `order[]` of stock row numbers:
+
+- **Album:** stock title order, ASCII case-insensitive.
+- **Artist:** representative track's `songer`, then album title; ASCII case-folded with a
+  leading `The ` removed, ties resolved by stock position. There is no album-artist fallback
+  because the query does not fetch that field. Unknown Album (ID -1) goes last.
+
+The permutation uses heapsort; access goes through `cc_row`, and stock album opens receive
+`order[i]`. Albums and main Cover Flow share it. Per-artist Cover Flow retains its stock album
+title order. Cache keys remain artist + album title.
+
+At open, `find_playing` checks `cc_playing`: `mclGetPlayPos` `0x5d4290` and `PLAY_QUEUE`
+`0xa0394c`, bounded by `deque_size`. It matches the album by `cc_album_key` (FNV of artist/title),
+then title ignoring ASCII case for compilations. Selection priority is playing album, saved
+`LAST_ALBUM`, then first album. This is a one-time lookup, not polling.
+
+## Shanling Home and startup
+
+Shanling Home sets the session's `grid` flag, shows the stock grid and closes the recorded menu,
+Extras and Customize windows by handle before navigating back from Home Screen. It does not
+issue repeated `navigator_back` calls against a closing window. Destroy handlers forget the
+recorded handles.
+
+When startup is enabled and the guard is armed, tapping grid icon 99 clears `grid` and opens
+the Home menu instance; a failed open restores the prior state. With startup disabled, it opens
+the normal instance. The Home instance hides the navbar (invisible and insensitive) and uses
+`HOME_PAD` 10 with a 430 px list. The normal instance retains Back, title and Now Playing.
+Missing widgets leave the stock layout. See [boot guard](home-guard.md) for startup safety.

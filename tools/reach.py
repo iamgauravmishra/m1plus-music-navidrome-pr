@@ -6,7 +6,7 @@ check for pinned demo edits (docs/architecture.md, "Safety").
 
 Functions are the .dynsym function symbols plus every PIC prologue (lui $gp / addiu $gp / addu $gp,
 $gp, $t9) in .text. F -> G is an edge whenever F's code produces G's start address in any way
-tools/dis.py tracks: a jal/bal target, a GOT load, a lui/addiu or lui/ori pair (so a callback F only
+tools/disasm.py tracks: a jal/bal target, a GOT load, a lui/addiu or lui/ori pair (so a callback F only
 registers counts as called, too). From the roots (main and platform_init: everything that runs at
 start-up, including every handler and thread they register) it walks every edge except into the
 --cut functions (the navigator's open-by-name dispatcher, through which every page init runs when a
@@ -14,11 +14,8 @@ page is opened), and reports, for each ADDR, its function and whether it is reac
 one shortest chain if so.
 """
 import argparse, bisect, collections, os, struct, sys
-from elftools.elf.elffile import ELFFile   # before tools/ joins sys.path: our dis.py shadows stdlib dis
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import importlib.util
-_spec = importlib.util.spec_from_file_location('m1dis', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dis.py'))
-m1dis = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(m1dis)
+import disasm as m1dis
 
 PROLOGUE = (0x3c1c0000, 0x279c0000, 0x0399e021)   # lui $gp, hi; addiu $gp, $gp, lo; addu $gp, $gp, $t9
 

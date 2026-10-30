@@ -2,9 +2,8 @@
 """Compile the M1+ Music payload, install its hook into demo, and add the page assets.
 
 Runs on a workdir that already has the battery, lock screen and space mods applied (so demo's
-.pdr is zeroed); it patches that demo and writes the new ui/*.bin. The injection mirrors q2-pod
-(tools/build.py, Copyright (c) 2026 Diamond Bond, MIT; see NOTICE), reduced to the one hook this
-project needs:
+.pdr is zeroed); it patches that demo and writes the new ui/*.bin. The injection follows q2-pod's
+design (its tools/build.py), reduced to the one hook this project needs:
 
   * payload compiled non-PIC (clang --target=mipsel-linux-gnu -march=mips32r2 -mabi=32 -mfp64
     -mno-abicalls -fno-pic -G0 -Oz), linked at 0xb00000 by patch/link.ld, objcopy'd to patch.bin;
@@ -25,8 +24,8 @@ by value/SHA before anything is written.
 
 Usage: pod.py WORKDIR
 """
-import argparse, hashlib, json, os, pathlib, stat, struct, subprocess, sys
-from elftools.elf.elffile import ELFFile   # before tools/ joins sys.path: our dis.py shadows stdlib dis
+import argparse, hashlib, json, os, pathlib, re, stat, struct, subprocess, sys
+from elftools.elf.elffile import ELFFile
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import pod_pages, pod_ui
 from build import TAG   # the About row of the iPod page shows it (patch/ipod.c M1PLUS_TAG)
@@ -721,7 +720,7 @@ def symbols_elf(path):
     return out
 
 
-def compile_payload(out, demo_path):
+def compile_payload(out, demo_path, tag=TAG):
     out = pathlib.Path(out)
     slots = gen_stock_h(out, demo_path)
     gen_scroll_h(out)
@@ -729,7 +728,7 @@ def compile_payload(out, demo_path):
     objs = []
     for src in SOURCES:
         obj = out / (src + '.o')
-        run(CLANG, *FLAGS, f'-DM1PLUS_TAG="{TAG}"', '-I', out, '-I', PATCH, '-c', os.path.join(PATCH, src), '-o', obj)
+        run(CLANG, *FLAGS, f'-DM1PLUS_TAG="{tag}"', '-I', out, '-I', PATCH, '-c', os.path.join(PATCH, src), '-o', obj)
         objs.append(obj)
     run(CLANG, *FLAGS, '-c', out / 'pod_asm.S', '-o', out / 'pod_asm.o')
     # compact_set_row_layout is reached only from the patched stock call sites, so keep it
@@ -908,13 +907,15 @@ def patch_demo(raw, payload, ps, demo_path):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('workdir')
+    ap.add_argument('--tag', default=TAG)
     a = ap.parse_args()
     rootfs = os.path.join(a.workdir, 'rootfs')
     demo_path = os.path.join(rootfs, DEMO)
     raw = open(demo_path, 'rb').read()
     check(sha(raw) == ZEROED_DEMO_SHA, f'demo is not the .pdr-zeroed stock V2.1 binary (got {sha(raw)})')
     build = pathlib.Path(a.workdir) / 'podbuild'; build.mkdir(exist_ok=True)
-    ps, payload, scratch = compile_payload(build, demo_path)
+    check(re.fullmatch(r'V2\.1[a-z][A-Z]+', a.tag) is not None and len(a.tag) <= 31, 'invalid build tag')
+    ps, payload, scratch = compile_payload(build, demo_path, a.tag)
     patched, seg_off, edits, scroll = patch_demo(raw, payload, ps, demo_path)
     # keep demo's permission bits
     mode = stat.S_IMODE(os.stat(demo_path).st_mode)

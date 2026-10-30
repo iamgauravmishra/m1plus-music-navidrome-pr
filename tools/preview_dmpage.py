@@ -3,7 +3,7 @@
 cool, grey), the language with the widest lines, songs without a cover, a pressed row. Approximate, not AWTK; sample data; every number is tools/pod_dailymix.py DP_* and
 patch/offsets.inc LIST_*, the art and the tint the model's (pod_dailymix.page_art, which the test compares with the compiled code pixel for pixel).
 
-  venv/bin/python -I tools/preview_dmpage.py WORKDIR [OUTDIR]       (WORKDIR: the built release tree, work/mod-release; default OUTDIR out/dailymix-page)
+  uv run python -I tools/preview_dmpage.py WORKDIR [OUTDIR]       (WORKDIR: the built release tree, work/mod-release; default OUTDIR out/dailymix-page)
 """
 import os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -33,7 +33,6 @@ def page_image(s, tones, seed=SEED, loc='en_US', off=0, songs=SONGS, pressed=Non
     h = D.DP_ROWS_Y + n * O['LIST_ROW_H'] + D.DP_BOTTOM
     c = Image.new('RGBA', (D.DP_W, max(h, D.DP_VIEW_H)), tint + (255,))
     c.paste(D.to_image(rows), (0, 0))
-    d = ImageDraw.Draw(c)
     tr = lambda k: D.tr(loc, k) if k in D.TEXT else pod_i18n.TEXT[k][loc]
     def line(text, y, px, rgb, box_h=None, cx=160, room=D.DP_TEXT_W):
         text = s.clip(text, px, room)

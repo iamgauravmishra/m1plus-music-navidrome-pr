@@ -3,7 +3,7 @@
 content under it (cover squares at the Albums geometry, text rows), and the fade drawn from the formula: BEFORE = alpha 255 (1 - t)^2.2 on every page, always; AFTER = (1 - t)^3.6,
 and on Albums (grid and list) only while the page is scrolled. Approximate, not AWTK.
 
-Usage: venv/bin/python -I tools/preview_fade.py WORKDIR OUT.png      (WORKDIR: a built tree; WORK/rootfs/release/assets/default/raw)"""
+Usage: uv run python -I tools/preview_fade.py WORKDIR OUT.png      (WORKDIR: a built tree; WORK/rootfs/release/assets/default/raw)"""
 import os, sys
 from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -67,7 +67,6 @@ def panel(work, rel, content, scroll, after, shown_at_rest):
 
 def main():
     work, out = sys.argv[1:3]
-    rows = lambda items, sc: pn.row_widgets(items, 0, sc, pitch=52)
     specs = [
         ('Albums grid, rest', 'm1plus_albums.bin', grid_content, 0, False),
         ('Albums grid, scrolled 40', 'm1plus_albums.bin', grid_content, 40, False),

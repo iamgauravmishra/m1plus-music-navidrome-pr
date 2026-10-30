@@ -14,8 +14,6 @@ def artists_tests(expect, page, cover_asset):
     import awtk_ui
     row = artists_row(page)
     open_ = PSYMS['artists_open']
-    asset = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_artists.bin')
-
     page_tests(expect, cover_asset)
 
     # 27. The menu's Artists row opens our list, not the stock Artists page; nothing else moved.
@@ -633,7 +631,7 @@ def sort_tests(expect):
     spent, callocs = m.icount, [c for c in m.calls if c[0] == 'calloc']
     got = shown(m)
     cap = 3000   # (the page lists up to MAX_ARTISTS 20000 now that no widget is made per row)
-    expect(len(got) == cap and got == sort_model(big[:cap])[0], f'3000 artists: all are listed, sorted')
+    expect(len(got) == cap and got == sort_model(big[:cap])[0], '3000 artists: all are listed, sorted')
     print(f'  sort of {cap} artists on open: {spent:,} payload instructions')
     expect(spent < 150000000, f'the sort and the rows are bounded ({spent:,} payload instructions)')
     expect(sorted(c[1] for c in callocs if c[1] in (cap * 4,)) == [cap * 4] * 3, 'three arrays of 4 bytes per artist: the order, the row pointers, the sections\' scratch (the ranks are a byte each)')
@@ -712,7 +710,6 @@ def genre_composer_tests(ctx):
     of the menu row, the Artist / Album Artist switch gone (hidden and insensitive, a stray click does nothing), a genre's tap on our Songs page, a composer's in Cover
     Flow (loadAlbumList(0xf005): class 0xff02), and the fallbacks to the tile's stock page."""
     expect, page, P = ctx.expect, ctx.page, pod_pages
-    import awtk_ui
     on_row, rows0, open_ = PSYMS['on_row'], PSYMS['pod_rows_0'], PSYMS['artists_open']
     asset = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_artists.bin')
     CI = pod.DATA['CLASSINFO'][0]
@@ -728,7 +725,7 @@ def genre_composer_tests(ctx):
     for label, home, cls, names in (('Genres', P.HOME_GENRE, 0xf006, ('Rock', 'jazz', '周', 'Unknown Genre')),
                                     ('Composers', P.HOME_COMPOSER, 0xf005, ('Mozart', 'Bach', 'The Beatles', 'Unknown Composer'))):
         m = artists_machine(genres=names if cls == 0xf006 else (), composers=names if cls == 0xf005 else ())
-        r = m.call(on_row, a0=rows0 + 12 * row[label], count=20000000)
+        m.call(on_row, a0=rows0 + 12 * row[label], count=20000000)
         calls = list(m.calls)
         title, tog = m.widgets['label_title'], m.widgets['btn_artisttype']
         expect(('window_open', 'm1plus_artists') in calls and [c[1] for c in calls if c[0] == 'loadLocalClassList'] == [cls] and 'stock_resume' not in m.names(),

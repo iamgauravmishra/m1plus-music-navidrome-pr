@@ -16,7 +16,7 @@ import importlib.util, os, random, struct, sys
 from unicorn import mips_const
 from unicorn.mips_const import UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3, UC_MIPS_REG_V0, UC_MIPS_REG_PC, UC_MIPS_REG_RA, UC_MIPS_REG_F0
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
-import awtk_ui, mod_icons, pod_dailymix as D, pod_mix as X, pod_ui as U, pod_i18n, ah_ink
+import awtk_ui, mod_icons, pod_dailymix as D, pod_mix as X, pod_i18n, ah_ink
 from awtk_text import Ttf, StbText
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -355,7 +355,6 @@ def run(ctx):
     for n in range(12): m.cover(m.songs[n]['artist'], m.songs[n]['album'], (60 + n * 10, 120, 200 - n * 8))
     before_bmps = set(m.bitmaps)
     calls = m.card_tap()
-    cn = [c[0] for c in calls]
     cost_open = m.icount
     expect([c for c in calls if c[0] == 'window_open'] == [('window_open', 'm1plus_dailymix')] and not [c for c in calls if c[0] == 'navigator_to_with_context'],
            f'a tap on the card opens ui/m1plus_dailymix.bin and not the stock Songs page ({[c[:2] for c in calls if c[0] in ("window_open", "navigator_to_with_context")]})')
@@ -775,7 +774,6 @@ def run(ctx):
     expect(sorted(pod_i18n.DPAGE_KEYS) == sorted(k for k in pod_i18n.TEXT if k in ('Updated today', 'Updated yesterday', 'Updated %s', 'Play', 'Songs you love and some to rediscover, made fresh every day.')) and all(set(pod_i18n.TEXT[k]) == set(D.LOCALES) for k in pod_i18n.DPAGE_KEYS)
            and all(pod_i18n.TEXT['Updated %s'][l].count('%s') == 1 for l in D.LOCALES), 'five new keys in all 13 languages, the date template with one %s')
     # the Updated line
-    import datetime
     today = m.wall // 86400
     iso = lambda d: (datetime.date(1970, 1, 1) + datetime.timedelta(days=d)).isoformat()
     for delta, want_ in ((0, 'Updated today'), (1, 'Updated yesterday'), (2, f'Updated {iso(today - 2)}'), (40, f'Updated {iso(today - 40)}'), (400, f'Updated {iso(today - 400)}'), (-3, 'Updated today')):

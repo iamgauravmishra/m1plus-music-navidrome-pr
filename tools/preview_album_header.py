@@ -5,7 +5,7 @@ a long title, a CJK title, at 1:1; below, the tinted pages' header at 2x. Every 
 tools/preview_album.py (AWTK is not run), the text rasterized the stb_truetype way from the tree's default.ttf. The captions give
 each variant's vertical gaps in px of ink (capitals / digits to the neighbouring baseline or edge), as the test measures them.
 
-Usage: venv/bin/python -I tools/preview_album_header.py WORKDIR OUT.png
+Usage: uv run python -I tools/preview_album_header.py WORKDIR OUT.png
 """
 import os, sys
 from PIL import Image, ImageDraw

@@ -2,8 +2,7 @@
 """iPod-style library rows, the asset half (V2.1gB, docs/architecture.md). The code half is the payload
 feature 'rows' (patch/rows.c, the pinned demo edits in patch/rows.json, tools/pod.py).
 
-After q2-pod's restyle of the stock list pages (patch/ipod.json, tools/ipod.py; Copyright (c) 2026
-Diamond Bond, MIT; see NOTICE): every library row is PITCH = 64 px, its body BODY = 60 px (the
+After q2-pod's restyle of the stock list pages (patch/ipod.json, tools/ipod.py): every library row is PITCH = 64 px, its body BODY = 60 px (the
 Folders page already is, and its offset maths divides by 64 with a shift, so 64 it is everywhere),
 titles 21 px in 24 px boxes, the grey second line 18 px. demo's row constructors make the rows
 (patched in demo); what an asset decides is the pitch the lists step by, and the jump list's row

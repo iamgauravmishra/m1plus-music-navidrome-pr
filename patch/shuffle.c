@@ -3,8 +3,7 @@
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
  * After q2-pod's Shuffle page (patch/navigation.c shuffle_play / shuffle_songs / shuffle_groups,
- * patch/playback.c rand_below / shuffle / make_order), Copyright (c) 2026 Diamond Bond, MIT
- * (https://github.com/DiamondBond/q2-pod); see NOTICE. The xorshift32 generator and its seeding,
+ * patch/playback.c rand_below / shuffle / make_order). The xorshift32 generator and its seeding,
  * the Fisher-Yates shuffle of the groups, the group orders (an album's disc, then track, then
  * path; a folder's path) and the user-facing messages follow q2-pod. q2-pod keeps the groups
  * together at play time with hooks in the stock player (mclNextSong, mclLoadPlayList, ...); this
@@ -87,10 +86,10 @@ static void set_in_order(void) {
  * the queue's own records are then permuted in place, so no second copy of the library is made.
  */
 typedef struct {
-    void *rec;      /* the song's record inside the queue */
+    void *rec; /* the song's record inside the queue */
     unsigned group; /* pass 2: the group's random rank; while permuting, ~0 once placed */
-    unsigned idx;   /* its position in the queue as loadSongList built it */
-    unsigned dir;   /* Shuffle Folders: the length of its path's folder (dir_len), computed once */
+    unsigned idx; /* its position in the queue as loadSongList built it */
+    unsigned dir; /* Shuffle Folders: the length of its path's folder (dir_len), computed once */
 } entry;
 typedef int (*cmp_fn)(const entry *, const entry *);
 
@@ -248,7 +247,8 @@ int shuffle_play(int kind) {
     if (kind == SHUFFLE_SONGS) {
         unsigned tries;
         at = rand_below(n);
-        for (tries = 0; tries < 50 && pc_is_path(str(deque_at(list, at), REC_PATH)); ++tries) at = rand_below(n);   /* podcasts stay out of the shuffle (patch/pcmodel.c) */
+        for (tries = 0; tries < 50 && pc_is_path(str(deque_at(list, at), REC_PATH)); ++tries)
+            at = rand_below(n); /* podcasts stay out of the shuffle (patch/pcmodel.c) */
     }
     pick = deque_at(list, at);
     queue = _create_deque("stSongInfo");
@@ -261,10 +261,12 @@ int shuffle_play(int kind) {
         /* loadSongList finds a song by file name and CUE start, so a duplicate name (01.flac in
          * every album) would always start at the first; the drawn row's own index wins when it is
          * the same song */
-        if (at < n && !strcmp(str(deque_at(queue, at), REC_PATH), str(pick, REC_PATH))) idx = at;
-        else if (found >= 0 && (unsigned)found < n) idx = (unsigned)found;
+        if (at < n && !strcmp(str(deque_at(queue, at), REC_PATH), str(pick, REC_PATH)))
+            idx = at;
+        else if (found >= 0 && (unsigned)found < n)
+            idx = (unsigned)found;
     }
-    if (n) {   /* the podcast files are taken out of the queue (a copy, made only when there are any), then the albums and folders are put in their play order */
+    if (n) { /* the podcast files are taken out of the queue (a copy, made only when there are any), then the albums and folders are put in their play order */
         int at_i = (int)idx;
         queue = pc_strip(queue, &at_i);
         idx = (unsigned)at_i;
@@ -288,8 +290,10 @@ int shuffle_play(int kind) {
     /* Shuffle Songs is stock Shuffle over the whole library: it draws every next song from the
      * songs not played yet and starts again when they are all played. Albums and folders play
      * the queue in order. */
-    if (kind == SHUFFLE_SONGS) set_mode(MODE_SHUFFLE);
-    else set_in_order();
+    if (kind == SHUFFLE_SONGS)
+        set_mode(MODE_SHUFFLE);
+    else
+        set_in_order();
     *(int *)G_CLASS_TYPE = CLASS_ALL_SONGS; /* as allmusic_page_init leaves it (@0x5289e8) */
     context.dq = queue, context.idx = (int)idx, context.cls = CLASS_ALL_SONGS, context.mode = PLAY_MODE;
     navigator_to_with_context("playing_page", &context); /* start_player copies the queue */

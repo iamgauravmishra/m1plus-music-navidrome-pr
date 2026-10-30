@@ -53,29 +53,32 @@
 #define RC_MAGIC_LEN 5
 
 typedef struct {
-    unsigned key;                 /* the album's identity (rc_id: its title, ASCII case folded, as getAllAlbum groups albums), never 0 */
-    unsigned ckey;                /* the Cover Flow cache key of its cover (cc_album_key): the album row's once res, else the playing track's */
-    int res;                      /* ckey (and the artist) come from the stock album row */
+    unsigned
+        key; /* the album's identity (rc_id: its title, ASCII case folded, as getAllAlbum groups albums), never 0 */
+    unsigned
+        ckey; /* the Cover Flow cache key of its cover (cc_album_key): the album row's once res, else the playing track's */
+    int res; /* ckey (and the artist) come from the stock album row */
     char album[RC_STR], artist[RC_STR], path[RC_PATH];
 } ent_t;
 
 static struct {
     ent_t ent[RC_MAX];
-    unsigned n;             /* albums held, most recent first */
-    int loaded;             /* ent holds the file's content (the first note reads it) */
+    unsigned n; /* albums held, most recent first */
+    int loaded; /* ent holds the file's content (the first note reads it) */
     void *win, *shelf, *sv, *st_title, *st_sub;
-    unsigned timer;         /* the one-shot or the decode tick, 0 none */
-    int fg;                 /* the window is in front */
-    int warm;               /* the one-shot after start has run */
-    int on;                 /* Customize > Home Screen > Recent Albums */
-    int shown;              /* the shelf is up */
-    int noscroll;           /* the scroll event could not be registered: the covers are made as soon as the shelf is shown */
-    unsigned t0;            /* time_now_ms at start: the album list is not loaded for covers before RC_RESOLVE_MS after it */
-    unsigned tried[RC_MAX], tried_n;   /* identities the album list had no row for (not asked again while the page lives) */
-    int down;               /* the tile a press began on, + 1; 0 none */
-    int down_x, down_y;     /* where it began (screen coordinates) */
-    grid_t g;               /* the tiles (SH_TILES, cell i shows entry i), the placeholder, the rounded corners: patch/grid.c */
-    unsigned id[SH_TILES];  /* the identity of the album each tile was made for */
+    unsigned timer; /* the one-shot or the decode tick, 0 none */
+    int fg; /* the window is in front */
+    int warm; /* the one-shot after start has run */
+    int on; /* Customize > Home Screen > Recent Albums */
+    int shown; /* the shelf is up */
+    int noscroll; /* the scroll event could not be registered: the covers are made as soon as the shelf is shown */
+    unsigned t0; /* time_now_ms at start: the album list is not loaded for covers before RC_RESOLVE_MS after it */
+    unsigned tried[RC_MAX],
+        tried_n; /* identities the album list had no row for (not asked again while the page lives) */
+    int down; /* the tile a press began on, + 1; 0 none */
+    int down_x, down_y; /* where it began (screen coordinates) */
+    grid_t g; /* the tiles (SH_TILES, cell i shows entry i), the placeholder, the rounded corners: patch/grid.c */
+    unsigned id[SH_TILES]; /* the identity of the album each tile was made for */
 } rc __attribute__((section(".scratch")));
 
 /* ---------------------------------------------------------------------------
@@ -110,7 +113,7 @@ static int rc_field(const char **pp, const char *stop, char end, char *out, unsi
         if (rc_bad((unsigned char)*p) || n + 1 >= max) return -1;
         out[n++] = *p++;
     }
-    if (p >= stop) return -1;   /* no end byte: the file stops inside the line */
+    if (p >= stop) return -1; /* no end byte: the file stops inside the line */
     out[n] = 0;
     *pp = p + 1;
     return (int)n;
@@ -130,15 +133,23 @@ static void rc_load(void) {
     close(fd);
     if (n < RC_MAGIC_LEN || n > RC_FILE_MAX) return;
     stop = buf + n;
-    for (i = 0; i < RC_MAGIC_LEN; ++i) if (buf[i] != RC_MAGIC[i]) return;
+    for (i = 0; i < RC_MAGIC_LEN; ++i)
+        if (buf[i] != RC_MAGIC[i]) return;
     p += RC_MAGIC_LEN;
     while (ok && p < stop) {
         ent_t *e = &rc.ent[rc.n];
-        if (rc.n >= RC_MAX || stop - p < 21) { ok = 0; break; }
-        key = rc_hex8(p);   /* identity, tab, cover key, tab, 0 or 1, tab */
+        if (rc.n >= RC_MAX || stop - p < 21) {
+            ok = 0;
+            break;
+        }
+        key = rc_hex8(p); /* identity, tab, cover key, tab, 0 or 1, tab */
         ckey = rc_hex8(p + 9);
-        if (!key || !ckey || p[8] != '\t' || p[17] != '\t' || (p[18] != '0' && p[18] != '1') || p[19] != '\t') { ok = 0; break; }
-        for (j = 0; j < rc.n; ++j) if (rc.ent[j].key == key) ok = 0;
+        if (!key || !ckey || p[8] != '\t' || p[17] != '\t' || (p[18] != '0' && p[18] != '1') || p[19] != '\t') {
+            ok = 0;
+            break;
+        }
+        for (j = 0; j < rc.n; ++j)
+            if (rc.ent[j].key == key) ok = 0;
         e->res = p[18] == '1';
         p += 20;
         e->key = key;
@@ -201,7 +212,8 @@ static void rc_copy(char *out, unsigned size, const char *s) {
  * the tracks are, so this is the same album exactly when the stock list has one row for both: a compilation's every track is one album. */
 static unsigned rc_id(const char *album) {
     unsigned h = FNV_SEED;
-    for (; *album; ++album) h = (h ^ (unsigned char)((unsigned char)*album - 'A' < 26u ? *album + 32 : *album)) * 16777619u;
+    for (; *album; ++album)
+        h = (h ^ (unsigned char)((unsigned char)*album - 'A' < 26u ? *album + 32 : *album)) * 16777619u;
     return h | !h;
 }
 
@@ -210,33 +222,38 @@ int recent_note(void *t) {
     const char *album;
     unsigned key, i, at;
     ent_t e;
-    pc_note(t);   /* Podcasts: the place, the played mark, the speed (patch/pcmodel.c); every page that sees the playing track on a timer calls this */
+    pc_note(
+        t); /* Podcasts: the place, the played mark, the speed (patch/pcmodel.c); every page that sees the playing track on a timer calls this */
     if (!t) return 0;
-    if (pc_is_path(cc_str(t, REC_PATH))) return 0;   /* an episode is not an album of the shelf */
+    if (pc_is_path(cc_str(t, REC_PATH))) return 0; /* an episode is not an album of the shelf */
     album = cc_str(t, REC_ALBUM);
-    if (!*album) return 0;   /* an untagged album is not recorded */
+    if (!*album) return 0; /* an untagged album is not recorded */
     key = rc_id(album);
-    if (rc.loaded && rc.n && rc.ent[0].key == key) return 0;   /* the common case: nothing changed, nothing read */
+    if (rc.loaded && rc.n && rc.ent[0].key == key) return 0; /* the common case: nothing changed, nothing read */
     if (!rc.loaded) rc_load();
     if (rc.n && rc.ent[0].key == key) return 0;
-    for (at = 0; at < rc.n && rc.ent[at].key != key; ++at) {}
-    if (at < rc.n) {   /* an album already in the list moves to the front as it is (a resolved cover key and artist stay) */
+    for (at = 0; at < rc.n && rc.ent[at].key != key; ++at) {
+    }
+    if (at <
+        rc.n) { /* an album already in the list moves to the front as it is (a resolved cover key and artist stay) */
         memcpy(&e, &rc.ent[at], sizeof e);
     } else {
         e.key = key;
-        e.ckey = cc_album_key(t);   /* the track's own key until the stock album row says better (rc_resolve) */
+        e.ckey = cc_album_key(t); /* the track's own key until the stock album row says better (rc_resolve) */
         e.res = 0;
         rc_copy(e.album, sizeof e.album, album);
         rc_copy(e.artist, sizeof e.artist, cc_str(t, REC_ARTIST));
         rc_copy(e.path, sizeof e.path, cc_str(t, REC_PATH));
     }
-    if (at == rc.n) {   /* a new album: the oldest one goes when the list is full */
+    if (at == rc.n) { /* a new album: the oldest one goes when the list is full */
         if (rc.n < RC_MAX) ++rc.n;
         at = rc.n - 1;
     }
-    for (i = at; i > 0; --i) memcpy(&rc.ent[i], &rc.ent[i - 1], sizeof e);   /* (an explicit call: the payload links no compiler-made memcpy) */
+    for (i = at; i > 0; --i)
+        memcpy(&rc.ent[i], &rc.ent[i - 1],
+               sizeof e); /* (an explicit call: the payload links no compiler-made memcpy) */
     memcpy(&rc.ent[0], &e, sizeof e);
-    rc_save();   /* a failed write is tried again with the next album change; the list in RAM is current */
+    rc_save(); /* a failed write is tried again with the next album change; the list in RAM is current */
     return 1;
 }
 
@@ -262,7 +279,8 @@ int recent_toggle(void) {
  */
 static const ent_t *rc_ent(unsigned key) {
     unsigned i;
-    for (i = 0; key && i < rc.n; ++i) if (rc.ent[i].key == key) return &rc.ent[i];
+    for (i = 0; key && i < rc.n; ++i)
+        if (rc.ent[i].key == key) return &rc.ent[i];
     return (const ent_t *)0;
 }
 
@@ -286,7 +304,7 @@ static void rc_tiles(void) {
             if (!(used >> j & 1) && oid[j] == e->key && old[j].ckey == e->ckey) {
                 used |= 1u << j;
                 memcpy(&rc.g.tiles[i], &old[j], sizeof old[j]);
-                if (old[j].art == 2 && cc_url(url, e->ckey)) rc.g.tiles[i].art = 0;   /* the cover exists now */
+                if (old[j].art == 2 && cc_url(url, e->ckey)) rc.g.tiles[i].art = 0; /* the cover exists now */
                 break;
             }
         if (j == SH_TILES) grid_set(&rc.g.tiles[i], e->album, e->artist, e->ckey);
@@ -294,16 +312,17 @@ static void rc_tiles(void) {
         rc.id[i] = e->key;
     }
     for (j = 0; j < SH_TILES; ++j)
-        if (!(used >> j & 1)) grid_free_art(&old[j]);   /* the bitmaps of the tiles that were not kept */
+        if (!(used >> j & 1)) grid_free_art(&old[j]); /* the bitmaps of the tiles that were not kept */
 }
 
 /* The cover of tile i (patch/grid.c: the album's cache file box-reduced to the cell's size, else the placeholder disc). */
 static void rc_make(unsigned i) {
     grid_art(&rc.g, &rc.g.tiles[i]);
-    if (rc.g.tiles[i].art == 2 && !rc.g.placeholder) grid_placeholder(&rc.g);   /* the disc is made when a tile needs it (one bitmap shared by the tiles without a cover) */
+    if (rc.g.tiles[i].art == 2 && !rc.g.placeholder)
+        grid_placeholder(
+            &rc.g); /* the disc is made when a tile needs it (one bitmap shared by the tiles without a cover) */
     widget_invalidate_force(rc.shelf, (void *)0);
 }
-
 
 /* The shelf lies below the list, so a cell's cover is made only once the cell is in view or about to be: its top is less than one row
  * (POD_ROW_H) below the bottom of the viewport. Row by row, so the rows still far below the viewport wait (at most the rows within reach
@@ -317,7 +336,7 @@ static int rc_near(int i) {
 
 static int rc_next(void) {
     unsigned i;
-    if (!rc.shown) return -1;   /* a shelf that is not shown needs no covers */
+    if (!rc.shown) return -1; /* a shelf that is not shown needs no covers */
     for (i = 0; i < SH_TILES; ++i)
         if (rc.g.tiles && rc.g.tiles[i].album && !rc.g.tiles[i].art && rc_near((int)i)) return (int)i;
     return -1;
@@ -342,12 +361,18 @@ static int rc_dark(const void *timer);
 
 static int rc_tick(const void *timer) {
     (void)timer;
-    if (!rc.win || !rc.fg) { rc.timer = 0; return RET_OK; }
+    if (!rc.win || !rc.fg) {
+        rc.timer = 0;
+        return RET_OK;
+    }
     if (!pod_screen_lit()) {
         rc.timer = timer_add(rc_dark, (void *)0, POD_DARK_MS);
         return RET_OK;
     }
-    if (!rc_work()) { rc.timer = 0; return RET_OK; }   /* nothing left: the timer ends with the return */
+    if (!rc_work()) {
+        rc.timer = 0;
+        return RET_OK;
+    } /* nothing left: the timer ends with the return */
     return RET_REPEAT;
 }
 
@@ -366,11 +391,12 @@ static int rc_dark(const void *timer) {
 
 static int rc_first(const void *timer) {
     (void)timer;
-    rc.timer = 0;   /* this one ends with the return */
+    rc.timer = 0; /* this one ends with the return */
     if (!rc.win || !rc.fg) return RET_OK;
     rc.warm = 1;
     if (rc_next() < 0) return RET_OK;
-    if (!pod_screen_lit()) rc.timer = timer_add(rc_dark, (void *)0, POD_DARK_MS);
+    if (!pod_screen_lit())
+        rc.timer = timer_add(rc_dark, (void *)0, POD_DARK_MS);
     else {
         rc.timer = timer_add(rc_tick, (void *)0, RC_TICK_MS);
         if (rc.timer && !rc_work()) rc_unarm();
@@ -387,7 +413,8 @@ static void rc_kick(void) {
 
 /* The list scrolled (EVT_SCROLL of the scroll view, every offset change): the shelf may have come within a row of the viewport. */
 static int rc_on_scroll(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     if (rc.win) rc_kick();
     return RET_OK;
 }
@@ -398,7 +425,10 @@ static int rc_on_scroll(void *ctx, void *e) {
 static void rc_apply(void) {
     int want = rc.on && rc.n > 0;
     rc_tiles();
-    if (want) widget_resize(rc.shelf, SH_W, SH_H((rc_cells() + GRID_COLS - 1) / GRID_COLS));   /* ceil(albums / 2) rows of covers: set before the rows are arranged */
+    if (want)
+        widget_resize(rc.shelf, SH_W,
+                      SH_H((rc_cells() + GRID_COLS - 1) /
+                           GRID_COLS)); /* ceil(albums / 2) rows of covers: set before the rows are arranged */
     if (want || want != rc.shown) menu_shelf(rc.win, want);
     rc.shown = want;
     if (want) {
@@ -437,14 +467,13 @@ static int rc_pe(void *e, int field) { return *(int *)((char *)e + field); }
 
 /* The tile under the shelf point (x, y), or -1: the cover and the two lines under it; the margins, the gaps between tiles and the air
  * above and below are dead, and so is a place with no album. */
-static int rc_tile_at(int x, int y) {
-    return grid_cell_at(x, y, SH_TOP, rc_cells());
-}
+static int rc_tile_at(int x, int y) { return grid_cell_at(x, y, SH_TOP, rc_cells()); }
 
 static int rc_local(void *e) {
     int pt[2];
     pt[0] = rc_pe(e, PE_X), pt[1] = rc_pe(e, PE_Y);
-    widget_to_local(rc.shelf, pt);   /* screen to shelf: the window sits under the 30 px status bar, the list may be scrolled */
+    widget_to_local(rc.shelf,
+                    pt); /* screen to shelf: the window sits under the 30 px status bar, the list may be scrolled */
     return rc_tile_at(pt[0], pt[1]);
 }
 
@@ -485,7 +514,8 @@ static void rc_open(int i) {
  * file is written once more. */
 static int rc_tried(unsigned id) {
     unsigned i;
-    for (i = 0; i < RC_MAX; ++i) if (rc.tried[i] == id) return 1;
+    for (i = 0; i < RC_MAX; ++i)
+        if (rc.tried[i] == id) return 1;
     return 0;
 }
 
@@ -531,7 +561,8 @@ static int rc_on_up(void *ctx, void *e) {
 }
 
 static int rc_on_abort(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     rc.down = 0;
     return RET_OK;
 }
@@ -547,7 +578,7 @@ static void rc_stop(void) {
 
 static int rc_on_destroy(void *ctx, void *e) {
     (void)e;
-    if (ctx == rc.win) rc_stop();   /* an earlier window's end leaves the new one alone */
+    if (ctx == rc.win) rc_stop(); /* an earlier window's end leaves the new one alone */
     return RET_OK;
 }
 
@@ -568,7 +599,8 @@ static int rc_on_foreground(void *ctx, void *e) {
     rc_load();
     rc.on = recent_setting();
     rc_apply();
-    if (rc.on && (unsigned)time_now_ms() - rc.t0 >= RC_RESOLVE_MS) {   /* one unresolved album per to-foreground, never in the boot window */
+    if (rc.on && (unsigned)time_now_ms() - rc.t0 >=
+                     RC_RESOLVE_MS) { /* one unresolved album per to-foreground, never in the boot window */
         unsigned i;
         for (i = 0; i < rc.n && i < SH_TILES; ++i)
             if (!rc.ent[i].res && !rc_tried(rc.ent[i].key)) {
@@ -583,19 +615,23 @@ static int rc_on_foreground(void *ctx, void *e) {
 /* The Home instance of the menu is up (patch/home.c, after the list took the whole window). */
 void recent_start(void *win) {
     if (!win || home_off()) return;
-    if (rc.win) rc_stop();   /* an earlier window that never said it was gone */
+    if (rc.win) rc_stop(); /* an earlier window that never said it was gone */
     rc.win = win;
     rc.shelf = widget_lookup(win, "pod_shelf", 1);
     rc.sv = widget_lookup(win, "pod_scrollview", 1);
-    rc.st_title = widget_lookup(win, "pod_sh_title", 1);   /* (the header pod_sh_head is the asset's own label; the payload needs nothing of it) */
+    rc.st_title =
+        widget_lookup(win, "pod_sh_title",
+                      1); /* (the header pod_sh_head is the asset's own label; the payload needs nothing of it) */
     rc.st_sub = widget_lookup(win, "pod_sh_sub", 1);
     rc.fg = 1;
-    if (!rc.shelf || !rc.sv || !rc.st_title || !rc.st_sub ||
-        !widget_on(win, EVT_DESTROY, rc_on_destroy, win) || !widget_on(win, EVT_WINDOW_TO_BG, rc_on_background, win) ||
-        !widget_on(win, EVT_WINDOW_TO_FG, rc_on_foreground, win) || !widget_on(rc.shelf, EVT_AFTER_PAINT, rc_on_paint, (void *)0) ||
-        !widget_on(rc.shelf, EVT_POINTER_DOWN, rc_on_down, (void *)0) || !widget_on(rc.shelf, EVT_POINTER_UP, rc_on_up, (void *)0) ||
+    if (!rc.shelf || !rc.sv || !rc.st_title || !rc.st_sub || !widget_on(win, EVT_DESTROY, rc_on_destroy, win) ||
+        !widget_on(win, EVT_WINDOW_TO_BG, rc_on_background, win) ||
+        !widget_on(win, EVT_WINDOW_TO_FG, rc_on_foreground, win) ||
+        !widget_on(rc.shelf, EVT_AFTER_PAINT, rc_on_paint, (void *)0) ||
+        !widget_on(rc.shelf, EVT_POINTER_DOWN, rc_on_down, (void *)0) ||
+        !widget_on(rc.shelf, EVT_POINTER_UP, rc_on_up, (void *)0) ||
         !widget_on(rc.shelf, EVT_POINTER_ABORT, rc_on_abort, (void *)0)) {
-        rc_stop();   /* a handler that was registered finds no window of ours any more */
+        rc_stop(); /* a handler that was registered finds no window of ours any more */
         return;
     }
     rc.timer = timer_add(rc_first, (void *)0, RC_FIRST_MS);
@@ -605,12 +641,13 @@ void recent_start(void *win) {
     }
     rc.noscroll = !widget_on(rc.sv, EVT_SCROLL, rc_on_scroll, (void *)0);
     rc.t0 = (unsigned)time_now_ms();
-    if (!grid_init(&rc.g, win, SH_TILES, GRID_COVER, GRID_R)) {   /* the Albums grid's cells, the covers' corners rounded (GRID_R px) */
+    if (!grid_init(&rc.g, win, SH_TILES, GRID_COVER,
+                   GRID_R)) { /* the Albums grid's cells, the covers' corners rounded (GRID_R px) */
         rc_stop();
         return;
     }
     rc.g.st_title = rc.st_title, rc.g.st_sub = rc.st_sub;
     rc_load();
     rc.on = recent_setting();
-    rc_apply();   /* the shelf is up (with its texts) from the first paint; the covers come with the ticks */
+    rc_apply(); /* the shelf is up (with its texts) from the first paint; the covers come with the ticks */
 }

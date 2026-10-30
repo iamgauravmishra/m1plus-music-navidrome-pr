@@ -34,20 +34,20 @@
 #include "scroll.h"
 #include "podcasts.h"
 
-extern void pod_open_player(void *queue, int idx, int cls);   /* patch/albuminfo.c */
-extern void pod_toast(const char *text);                       /* patch/shuffle.c */
-extern unsigned pod_rand(unsigned n);                          /* patch/shuffle.c */
-extern void pod_set_mode(int mode);                            /* patch/shuffle.c: the stock play mode (patch/albuminfo.c uses it for Shuffle) */
-extern void pod_set_in_order(void);                            /* patch/shuffle.c: Shuffle and Repeat one become List play (Play) */
+extern void pod_open_player(void *queue, int idx, int cls); /* patch/albuminfo.c */
+extern void pod_toast(const char *text); /* patch/shuffle.c */
+extern unsigned pod_rand(unsigned n); /* patch/shuffle.c */
+extern void pod_set_mode(int mode); /* patch/shuffle.c: the stock play mode (patch/albuminfo.c uses it for Shuffle) */
+extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one become List play (Play) */
 
 #define P(r, off) (*(char **)((char *)(r) + (off)))
 #define I(r, off) (*(int *)((char *)(r) + (off)))
 #define DM_GREY 0xff1c1c1eu
-#define DM_TEXT 48                         /* wide chars of a title line */
-#define DM_STEXT 160                       /* wide chars of an artists line */
-#define DM_LINES 16                        /* most lines a wrap may need before it is given up */
+#define DM_TEXT 48 /* wide chars of a title line */
+#define DM_STEXT 160 /* wide chars of an artists line */
+#define DM_LINES 16 /* most lines a wrap may need before it is given up */
 #define DM_DIV255(t) (((t) + 1 + ((t) >> 8)) >> 8)
-#define DM_L_MIN 153                       /* HLS lightness bounds of a prepared tone in 1/510: 0.30, 0.56 (colourful); 0.25, 0.66 (grey) */
+#define DM_L_MIN 153 /* HLS lightness bounds of a prepared tone in 1/510: 0.30, 0.56 (colourful); 0.25, 0.66 (grey) */
 #define DM_L_MAX 286
 #define DM_G_MIN 127
 #define DM_G_MAX 337
@@ -57,13 +57,13 @@ extern void pod_set_in_order(void);                            /* patch/shuffle.
 
 /* tools/pod_dailymix.py --c-table (test/pod/dailymix.py compares it): sRGB to linear light, 16 bit */
 static const unsigned short dm_lin[256] = {
-    0, 20, 40, 60, 80, 99, 119, 139, 159, 179, 199, 219, 241, 264, 288, 313,
-    340, 367, 396, 427, 458, 491, 526, 562, 599, 637, 677, 718, 761, 805, 851, 898,
-    947, 997, 1048, 1101, 1156, 1212, 1270, 1330, 1391, 1453, 1517, 1583, 1651, 1720, 1790, 1863,
-    1937, 2013, 2090, 2170, 2250, 2333, 2418, 2504, 2592, 2681, 2773, 2866, 2961, 3058, 3157, 3258,
-    3360, 3464, 3570, 3678, 3788, 3900, 4014, 4129, 4247, 4366, 4488, 4611, 4736, 4864, 4993, 5124,
-    5257, 5392, 5530, 5669, 5810, 5953, 6099, 6246, 6395, 6547, 6700, 6856, 7014, 7174, 7335, 7500,
-    7666, 7834, 8004, 8177, 8352, 8528, 8708, 8889, 9072, 9258, 9445, 9635, 9828, 10022, 10219, 10417,
+    0,     20,    40,    60,    80,    99,    119,   139,   159,   179,   199,   219,   241,   264,   288,   313,
+    340,   367,   396,   427,   458,   491,   526,   562,   599,   637,   677,   718,   761,   805,   851,   898,
+    947,   997,   1048,  1101,  1156,  1212,  1270,  1330,  1391,  1453,  1517,  1583,  1651,  1720,  1790,  1863,
+    1937,  2013,  2090,  2170,  2250,  2333,  2418,  2504,  2592,  2681,  2773,  2866,  2961,  3058,  3157,  3258,
+    3360,  3464,  3570,  3678,  3788,  3900,  4014,  4129,  4247,  4366,  4488,  4611,  4736,  4864,  4993,  5124,
+    5257,  5392,  5530,  5669,  5810,  5953,  6099,  6246,  6395,  6547,  6700,  6856,  7014,  7174,  7335,  7500,
+    7666,  7834,  8004,  8177,  8352,  8528,  8708,  8889,  9072,  9258,  9445,  9635,  9828,  10022, 10219, 10417,
     10619, 10822, 11028, 11235, 11446, 11658, 11873, 12090, 12309, 12530, 12754, 12980, 13209, 13440, 13673, 13909,
     14146, 14387, 14629, 14874, 15122, 15371, 15623, 15878, 16135, 16394, 16656, 16920, 17187, 17456, 17727, 18001,
     18277, 18556, 18837, 19121, 19407, 19696, 19987, 20281, 20577, 20876, 21177, 21481, 21787, 22096, 22407, 22721,
@@ -72,8 +72,7 @@ static const unsigned short dm_lin[256] = {
     34544, 34948, 35355, 35764, 36176, 36591, 37008, 37429, 37852, 38278, 38706, 39138, 39572, 40009, 40449, 40891,
     41337, 41785, 42236, 42690, 43147, 43606, 44069, 44534, 45002, 45473, 45947, 46423, 46903, 47385, 47871, 48359,
     48850, 49344, 49841, 50341, 50844, 51349, 51858, 52369, 52884, 53401, 53921, 54445, 54971, 55500, 56032, 56567,
-    57105, 57646, 58190, 58737, 59287, 59840, 60396, 60955, 61517, 62082, 62650, 63221, 63795, 64372, 64952, 65535
-};
+    57105, 57646, 58190, 58737, 59287, 59840, 60396, 60955, 61517, 62082, 62650, 63221, 63795, 64372, 64952, 65535};
 
 /* ---------------------------------------------------------------------------
  * Small helpers (the payload links no libc string functions but those in stock.h)
@@ -134,7 +133,8 @@ static void dm_copy(char *out, unsigned size, const char *s) {
 
 static int dm_read(const char *path, void *buf, unsigned max) {
     int fd, n;
-    if (!pod_card_mounted()) return -1;   /* no card: no mix (an unmounted /mnt/mmc is a directory on the internal flash) */
+    if (!pod_card_mounted())
+        return -1; /* no card: no mix (an unmounted /mnt/mmc is a directory on the internal flash) */
     fd = open(path, O_RDONLY, 0);
     if (fd < 0) return -1;
     n = read(fd, buf, max);
@@ -145,8 +145,9 @@ static int dm_read(const char *path, void *buf, unsigned max) {
 /* Temp file, fsync, rename onto the target, fsync of the directory (patch/home.c home_write_atomic, for two parts that may hold zero bytes). 0 on success. */
 static int dm_write_atomic(const char *path, const char *tmp, const void *a, unsigned na, const void *b, unsigned nb) {
     int fd, ok, d;
-    if (!pod_card_mounted()) return -1;   /* never write to the internal flash under the mount point */
-    mkdir(CARD_DIR, 0755);                 /* the card folder, then the Daily Mix's own (EEXIST is fine; a failure shows in the open below) */
+    if (!pod_card_mounted()) return -1; /* never write to the internal flash under the mount point */
+    mkdir(CARD_DIR,
+          0755); /* the card folder, then the Daily Mix's own (EEXIST is fine; a failure shows in the open below) */
     mkdir(MIX_DIR, 0755);
     fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0) return -1;
@@ -181,25 +182,49 @@ static unsigned dm_today(void) {
 /* ---------------------------------------------------------------------------
  * The state. dm is the card on the Home window; the job is the mix being made (heap, only while it runs).
  */
-typedef struct { int cx, cy; unsigned r2; int t[3]; } blob_t;
-typedef struct { unsigned *key; unsigned short *val; unsigned mask; } ht_t;
+typedef struct {
+    int cx, cy;
+    unsigned r2;
+    int t[3];
+} blob_t;
+typedef struct {
+    unsigned *key;
+    unsigned short *val;
+    unsigned mask;
+} ht_t;
 typedef struct {
     int score;
     unsigned path, artist, album;
     unsigned short plays, idx;
     unsigned char rec, fav, ca, cb, used;
 } cand_t;
-typedef struct { unsigned char raw[REC_SIZE]; } pick_t;
+typedef struct {
+    unsigned char raw[REC_SIZE];
+} pick_t;
 
 static void dm_apply(void);
 
-enum { PH_OFT, PH_REC, PH_FAV, PH_LIB, PH_SCORE, PH_PICK, PH_COPY, PH_ALBUM, PH_FIELD, PH_BRIGHT, PH_RENDER, PH_COMMIT, PH_SAVE };
+enum {
+    PH_OFT,
+    PH_REC,
+    PH_FAV,
+    PH_LIB,
+    PH_SCORE,
+    PH_PICK,
+    PH_COPY,
+    PH_ALBUM,
+    PH_FIELD,
+    PH_BRIGHT,
+    PH_RENDER,
+    PH_COMMIT,
+    PH_SAVE
+};
 #define PH_LAST PH_SAVE
 
 typedef struct {
     int phase, manual, art_only, failed;
-    unsigned pos, n;                    /* progress inside the phase; the size of the list being read */
-    void *dq;                           /* the stock list being read in slices (and its guard: size, first and last record) */
+    unsigned pos, n; /* progress inside the phase; the size of the list being read */
+    void *dq; /* the stock list being read in slices (and its guard: size, first and last record) */
     void *first, *last;
     unsigned day, seed, aseed, regen;
     ht_t oft, fav, art;
@@ -207,15 +232,15 @@ typedef struct {
     cand_t *c;
     unsigned nc, nlib;
     unsigned short pick[MIX_SONGS];
-    unsigned npick, lvl;                /* the picks; the step of the limits (dm_cap_*) */
-    pick_t *pk;                         /* the picked records, copied (strings strdup'ed) */
+    unsigned npick, lvl; /* the picks; the step of the limits (dm_cap_*) */
+    pick_t *pk; /* the picked records, copied (strings strdup'ed) */
     char name[DM_MAX_NAMES][DM_NAME];
     unsigned nname;
-    unsigned alb[MIX_ALBUMS], nalb;     /* the cover keys of the top albums */
-    const char *title[MIX_ALBUMS];      /* ... and their titles (inside pk) */
-    unsigned tone[4], ntone;            /* r | g << 8 | b << 16 */
-    unsigned char *fld;                 /* the blob field, 3 bytes a pixel */
-    unsigned short *px;                 /* the art, RGB565 */
+    unsigned alb[MIX_ALBUMS], nalb; /* the cover keys of the top albums */
+    const char *title[MIX_ALBUMS]; /* ... and their titles (inside pk) */
+    unsigned tone[4], ntone; /* r | g << 8 | b << 16 */
+    unsigned char *fld; /* the blob field, 3 bytes a pixel */
+    unsigned short *px; /* the art, RGB565 */
     blob_t bl[4];
     unsigned nbl;
     int base[3];
@@ -234,7 +259,7 @@ static struct {
     unsigned tone[4], ntone;
     char name[DM_MAX_NAMES][DM_NAME];
     unsigned nname;
-    char *paths;                        /* the songs' paths in play order, NUL separated (heap, count of them) */
+    char *paths; /* the songs' paths in play order, NUL separated (heap, count of them) */
     void *bmp;
     int down, down_x, down_y;
     unsigned fail_day;
@@ -247,8 +272,10 @@ static struct {
     job_t *job;
 } dm __attribute__((section(".scratch")));
 
-static int dm_regen_req __attribute__((section(".scratch")));   /* Regenerate Daily Mix was asked (survives the Home window) */
-static int dm_small __attribute__((section(".scratch")));       /* the last job found fewer than MIX_MIN_LIB songs: Regenerate is off until a job finds enough */
+static int dm_regen_req
+    __attribute__((section(".scratch"))); /* Regenerate Daily Mix was asked (survives the Home window) */
+static int dm_small __attribute__((section(
+    ".scratch"))); /* the last job found fewer than MIX_MIN_LIB songs: Regenerate is off until a job finds enough */
 
 /* ---------------------------------------------------------------------------
  * The setting: the file holds "0" for off, anything else or no file is on.
@@ -269,9 +296,7 @@ int dailymix_toggle(void) {
 
 /* Regenerate Daily Mix can make a mix: the switch is on and the library was not too small (Settings dims the row otherwise). A day's first job reads the
  * library again, so songs added since are seen the next day or after a restart. */
-int dailymix_can_regen(void) {
-    return dailymix_setting() && !dm_small;
-}
+int dailymix_can_regen(void) { return dailymix_setting() && !dm_small; }
 
 void dailymix_regen(void) {
     if (!dailymix_can_regen()) return;
@@ -320,7 +345,8 @@ static int dm_load(void) {
     const char *ps;
     if (n < 6 || n > DM_FILE_MAX) return 0;
     stop = buf + n;
-    for (k = 0; k < 5; ++k) if (buf[k] != "M1X2\n"[k]) return 0;
+    for (k = 0; k < 5; ++k)
+        if (buf[k] != "M1X2\n"[k]) return 0;
     if (stop[-1] != '\n') return 0;
     p += 5;
     day = dm_dec(&p, stop, '\t');
@@ -331,16 +357,19 @@ static int dm_load(void) {
     regen = dm_dec(&p, stop, '\t');
     count = dm_dec(&p, stop, '\n');
     if (regen < 0 || regen > 255 || count < MIX_MIN_SONGS || count > MIX_SONGS) return 0;
-    for (;;) {   /* 2..4 tones of six hex digits, a space between, a newline after */
+    for (;;) { /* 2..4 tones of six hex digits, a space between, a newline after */
         if (nt == 4 || stop - p < 7 || !dm_hex(p, 6, &v)) return 0;
-        tone[nt++] = v >> 16 | (v & 0xff00) | (v & 0xff) << 16;   /* rrggbb to r | g << 8 | b << 16 */
+        tone[nt++] = v >> 16 | (v & 0xff00) | (v & 0xff) << 16; /* rrggbb to r | g << 8 | b << 16 */
         p += 6;
-        if (*p == '\n') { ++p; break; }
+        if (*p == '\n') {
+            ++p;
+            break;
+        }
         if (*p != ' ') return 0;
         ++p;
     }
     if (nt < 2) return 0;
-    for (;;) {   /* 1..3 names, a tab between, a newline after (the last byte of the file) */
+    for (;;) { /* 1..3 names, a tab between, a newline after (the last byte of the file) */
         unsigned len = 0;
         if (nn == DM_MAX_NAMES) return 0;
         while (p < stop && *p != '\t' && *p != '\n') {
@@ -352,7 +381,9 @@ static int dm_load(void) {
         if (*p++ == '\n') break;
     }
     ps = p;
-    for (i = 0; i < (unsigned)count; ++i) {   /* the songs' paths in play order, one a line (1 .. DM_PATH - 1 bytes, no control byte), the last line ends the file */
+    for (
+        i = 0; i < (unsigned)count;
+        ++i) { /* the songs' paths in play order, one a line (1 .. DM_PATH - 1 bytes, no control byte), the last line ends the file */
         for (len = 0; p < stop && *p != '\n'; ++p, ++len)
             if (dm_bad((unsigned char)*p) || len + 1 >= DM_PATH) return 0;
         if (!len || p >= stop) return 0;
@@ -379,7 +410,8 @@ static void dm_put(char **o, const char *end, const char *s) {
 static void dm_putdec(char **o, const char *end, unsigned v) {
     char t[12];
     unsigned n = 0;
-    do t[n++] = (char)('0' + v % 10), v /= 10; while (v);
+    do t[n++] = (char)('0' + v % 10), v /= 10;
+    while (v);
     while (n && *o < end) *(*o)++ = t[--n];
 }
 
@@ -418,12 +450,15 @@ static void dm_prep(unsigned tone, int *out) {
 }
 
 /* The blobs and the base of tones[0..n) for the seed on a w x h field (pod_dailymix.blobs / field): the card's (DM_W x DM_H) and the page's (DP_W x DP_ART_H). */
-static void dm_blobs_wh(const unsigned *tone, unsigned n, unsigned aseed, unsigned w, unsigned h, int *base, blob_t *bl) {
+static void dm_blobs_wh(const unsigned *tone, unsigned n, unsigned aseed, unsigned w, unsigned h, int *base,
+                        blob_t *bl) {
     int prep[4][3], i, dark = 0;
     unsigned st = aseed ? aseed : 0x9E3779B9u, k;
     for (k = 0; k < n; ++k) dm_prep(tone[k], prep[k]);
     for (k = 1; k < n; ++k)
-        if (dm_lum((unsigned)prep[k][0], (unsigned)prep[k][1], (unsigned)prep[k][2]) < dm_lum((unsigned)prep[dark][0], (unsigned)prep[dark][1], (unsigned)prep[dark][2])) dark = (int)k;
+        if (dm_lum((unsigned)prep[k][0], (unsigned)prep[k][1], (unsigned)prep[k][2]) <
+            dm_lum((unsigned)prep[dark][0], (unsigned)prep[dark][1], (unsigned)prep[dark][2]))
+            dark = (int)k;
     for (i = 0; i < 3; ++i) base[i] = prep[dark][i] * 5 / 10;
     for (k = 0; k < n; ++k) {
         unsigned a, b, c, R;
@@ -463,9 +498,7 @@ static void dm_field_wh(unsigned char *o, unsigned y, unsigned w, const int *bas
     }
 }
 
-static void dm_field_row(job_t *j, unsigned y) {
-    dm_field_wh(j->fld + y * DM_W * 3, y, DM_W, j->base, j->bl, j->nbl);
-}
+static void dm_field_row(job_t *j, unsigned y) { dm_field_wh(j->fld + y * DM_W * 3, y, DM_W, j->base, j->bl, j->nbl); }
 
 /* The scrim's alpha (0..256) on row y: 0 DM_RAMP rows above the text zone, a smoothstep up to a64 / 64 at its top and below. */
 static unsigned dm_scrim(unsigned y, unsigned a64) {
@@ -495,7 +528,8 @@ static unsigned dm_render_row(job_t *j, unsigned y, unsigned a64) {
     unsigned a = dm_scrim(y, a64), x, mx = 0;
     for (x = 0; x < DM_W; ++x, f += 3) {
         unsigned t = dm_bayer[y & 3][x & 3], er, eg, eb, qr, qg, qb, l;
-        int r = f[0] - (int)((unsigned)f[0] * a >> 8), g = f[1] - (int)((unsigned)f[1] * a >> 8), b = f[2] - (int)((unsigned)f[2] * a >> 8);
+        int r = f[0] - (int)((unsigned)f[0] * a >> 8), g = f[1] - (int)((unsigned)f[1] * a >> 8),
+            b = f[2] - (int)((unsigned)f[2] * a >> 8);
         qr = dm_quant(r, t, 8, 5, &er);
         qg = dm_quant(g, t, 4, 6, &eg);
         qb = dm_quant(b, t, 8, 5, &eb);
@@ -520,9 +554,11 @@ static void dm_fill_bitmap(const unsigned short *px) {
     for (k = 0; k < 4; ++k)
         for (y = 0; y < DM_R; ++y)
             for (x = 0; x < DM_R; ++x) {
-                unsigned *p = d + (k & 2 ? DM_H - 1 - y : y) * DM_W + (k & 1 ? DM_W - 1 - x : x), a = 255u - dm.corner[y * DM_R + x];
+                unsigned *p = d + (k & 2 ? DM_H - 1 - y : y) * DM_W + (k & 1 ? DM_W - 1 - x : x),
+                         a = 255u - dm.corner[y * DM_R + x];
                 if (a == 255) continue;
-                *p = 0xff000000u | DM_DIV255((*p & 255) * a) | DM_DIV255((*p >> 8 & 255) * a) << 8 | DM_DIV255((*p >> 16 & 255) * a) << 16;
+                *p = 0xff000000u | DM_DIV255((*p & 255) * a) | DM_DIV255((*p >> 8 & 255) * a) << 8 |
+                     DM_DIV255((*p >> 16 & 255) * a) << 16;
             }
     bitmap_unlock_buffer(dm.bmp);
 }
@@ -620,15 +656,14 @@ static job_t *dm_job_new(void) {
 }
 
 /* The stock list of a class, or NULL when it is empty. Every read replaces *pdeq_showlist (the Songs page's own call). */
-static void *dm_list(unsigned cls) {
-    return loadLocalClassList((int)cls) > 0 ? *(void **)PDEQ_SHOWLIST : (void *)0;
-}
+static void *dm_list(unsigned cls) { return loadLocalClassList((int)cls) > 0 ? *(void **)PDEQ_SHOWLIST : (void *)0; }
 
 /* The job keeps a list across ticks: a different one, or one of another size, ends the job. */
 static int dm_guard(job_t *j) {
     void *dq = *(void **)PDEQ_SHOWLIST;
     unsigned n = dq ? deque_size(dq) : 0;
-    if (!j->dq || dq != j->dq || n != j->n || (n && (deque_at(dq, 0) != j->first || deque_at(dq, n - 1) != j->last))) return 0;
+    if (!j->dq || dq != j->dq || n != j->n || (n && (deque_at(dq, 0) != j->first || deque_at(dq, n - 1) != j->last)))
+        return 0;
     return 1;
 }
 
@@ -663,7 +698,8 @@ static int dm_path_ok(const char *p) {
 }
 
 static int dm_eq(const unsigned char *a, const char *b, unsigned n) {
-    while (n--) if (*a++ != (unsigned char)*b++) return 0;
+    while (n--)
+        if (*a++ != (unsigned char)*b++) return 0;
     return 1;
 }
 
@@ -671,7 +707,10 @@ static int dm_eq(const unsigned char *a, const char *b, unsigned n) {
 static int dm_ph_oft(job_t *j) {
     unsigned from, to, k, lim;
     if (!j->dq) {
-        if (!dm_open_list(j, CLASS_OFTEN, DM_OFT_MAX)) { j->phase = PH_REC; return 1; }   /* nothing was ever played: no plays */
+        if (!dm_open_list(j, CLASS_OFTEN, DM_OFT_MAX)) {
+            j->phase = PH_REC;
+            return 1;
+        } /* nothing was ever played: no plays */
         lim = j->n < DM_OFT_MAX ? j->n : DM_OFT_MAX;
         if (!ht_init(&j->oft, lim)) return 0;
         return 1;
@@ -691,7 +730,10 @@ static int dm_ph_oft(job_t *j) {
 
 static int dm_ph_rec(job_t *j) {
     unsigned k;
-    if (!dm_open_list(j, CLASS_RECENT, DM_REC_MAX)) { j->dq = (void *)0, j->phase = PH_FAV; return 1; }
+    if (!dm_open_list(j, CLASS_RECENT, DM_REC_MAX)) {
+        j->dq = (void *)0, j->phase = PH_FAV;
+        return 1;
+    }
     for (k = 0; k < j->n && k < DM_REC_MAX; ++k) j->rec[j->nrec++] = dm_path_hash(cc_str(deque_at(j->dq, k), REC_PATH));
     j->dq = (void *)0, j->phase = PH_FAV;
     return 1;
@@ -700,7 +742,10 @@ static int dm_ph_rec(job_t *j) {
 static int dm_ph_fav(job_t *j) {
     unsigned from, to, k, lim;
     if (!j->dq) {
-        if (!dm_open_list(j, CLASS_FAV, DM_FAV_MAX)) { j->phase = PH_LIB; return 1; }
+        if (!dm_open_list(j, CLASS_FAV, DM_FAV_MAX)) {
+            j->phase = PH_LIB;
+            return 1;
+        }
         lim = j->n < DM_FAV_MAX ? j->n : DM_FAV_MAX;
         return ht_init(&j->fav, lim);
     }
@@ -718,7 +763,7 @@ static int dm_ph_fav(job_t *j) {
 static int dm_ph_lib(job_t *j) {
     unsigned from, to, k, lim, i;
     if (!j->dq) {
-        if (!dm_open_list(j, CLASS_ALL_SONGS, DM_LIB_MAX)) {   /* an empty library: no mix */
+        if (!dm_open_list(j, CLASS_ALL_SONGS, DM_LIB_MAX)) { /* an empty library: no mix */
             dm_small = 1;
             return 0;
         }
@@ -735,7 +780,8 @@ static int dm_ph_lib(job_t *j) {
         const char *path = cc_str(r, REC_PATH);
         cand_t *c;
         unsigned short *s;
-        if (I(r, REC_TYPE) != 8 || !*path || pc_is_path(path)) continue;   /* (a podcast episode is no candidate for the mix) */
+        if (I(r, REC_TYPE) != 8 || !*path || pc_is_path(path))
+            continue; /* (a podcast episode is no candidate for the mix) */
         c = &j->c[j->nc++];
         c->path = dm_path_hash(path);
         c->artist = dm_tag(cc_str(r, REC_ARTIST), path);
@@ -744,13 +790,16 @@ static int dm_ph_lib(job_t *j) {
         s = ht_slot(&j->oft, c->path, 0);
         c->plays = s ? *s : 0;
         for (i = 0; i < j->nrec; ++i)
-            if (j->rec[i] == c->path) { c->rec = (unsigned char)(i + 1); break; }
+            if (j->rec[i] == c->path) {
+                c->rec = (unsigned char)(i + 1);
+                break;
+            }
         c->fav = ht_slot(&j->fav, c->path, 0) != (unsigned short *)0;
         ht_add(&j->art, c->artist, c->plays);
     }
     if (j->pos >= lim) {
         dm_small = j->nc < MIX_MIN_LIB;
-        if (dm_small) return 0;   /* too few songs for a mix worth a card */
+        if (dm_small) return 0; /* too few songs for a mix worth a card */
         j->dq = (void *)0, j->pos = 0, j->phase = PH_SCORE;
         ht_free(&j->oft);
         ht_free(&j->fav);
@@ -760,9 +809,12 @@ static int dm_ph_lib(job_t *j) {
 
 static int dm_score(const cand_t *c, unsigned atot, unsigned seed) {
     unsigned p = c->plays;
-    int v = (int)(MIX_W_PLAYS * dm_lg(p < MIX_PLAYS_CAP ? p : MIX_PLAYS_CAP) + MIX_W_ARTIST * dm_lg(atot < MIX_ARTIST_CAP ? atot : MIX_ARTIST_CAP));
-    if (!p) v += MIX_NOVEL0;
-    else if (p == 1) v += MIX_NOVEL1;
+    int v = (int)(MIX_W_PLAYS * dm_lg(p < MIX_PLAYS_CAP ? p : MIX_PLAYS_CAP) +
+                  MIX_W_ARTIST * dm_lg(atot < MIX_ARTIST_CAP ? atot : MIX_ARTIST_CAP));
+    if (!p)
+        v += MIX_NOVEL0;
+    else if (p == 1)
+        v += MIX_NOVEL1;
     if (c->fav) v += MIX_W_FAV;
     if (c->rec) v -= MIX_W_RECENT * (100 - (c->rec - 1)) / 100;
     return v + (int)(dm_xs(dm_xs((c->path ^ seed) | 1)) & (MIX_JITTER - 1));
@@ -784,7 +836,8 @@ static int dm_ph_score(job_t *j) {
 }
 
 /* The per-artist and per-album limits, loosened a step each time the mix would stay short (the last step is no limit: ca, cb stay below MIX_SONGS). */
-static const unsigned char dm_cap_artist[3] = {MIX_PER_ARTIST, MIX_PER_ARTIST2, 255}, dm_cap_album[3] = {MIX_PER_ALBUM, MIX_PER_ALBUM2, 255};
+static const unsigned char dm_cap_artist[3] = {MIX_PER_ARTIST, MIX_PER_ARTIST2, 255},
+                           dm_cap_album[3] = {MIX_PER_ALBUM, MIX_PER_ALBUM2, 255};
 
 /* The best candidate that is not taken and keeps the limits of step j->lvl (the first of equal scores), or -1. */
 static int dm_best(job_t *j) {
@@ -798,7 +851,9 @@ static int dm_best(job_t *j) {
     return best;
 }
 
-static int dm_same_artist(const job_t *j, unsigned a, unsigned b) { return j->c[j->pick[a]].artist == j->c[j->pick[b]].artist; }
+static int dm_same_artist(const job_t *j, unsigned a, unsigned b) {
+    return j->c[j->pick[a]].artist == j->c[j->pick[b]].artist;
+}
 
 static int dm_adj_bad(const job_t *j, unsigned t) { return t > 0 && t < j->npick && dm_same_artist(j, t, t - 1); }
 
@@ -849,11 +904,12 @@ static void dm_ranked(const job_t *j, int artist, unsigned n, unsigned *first) {
     for (i = 0; i < j->npick; ++i) {
         const char *s = cc_str(j->pk[i].raw, artist ? REC_ARTIST : REC_ALBUM);
         unsigned h = dm_fold(s);
-        for (k = 0; k < m && key[k] != h; ++k) {}
+        for (k = 0; k < m && key[k] != h; ++k) {
+        }
         if (k == m) key[m] = h, cnt[m] = 0, at[m] = i, ++m;
         ++cnt[k];
     }
-    for (i = 1; i < m; ++i) {   /* insertion sort by count, stable */
+    for (i = 1; i < m; ++i) { /* insertion sort by count, stable */
         unsigned kc = cnt[i], kk = key[i], ka = at[i];
         for (k = i; k > 0 && cnt[k - 1] < kc; --k) cnt[k] = cnt[k - 1], key[k] = key[k - 1], at[k] = at[k - 1];
         cnt[k] = kc, key[k] = kk, at[k] = ka;
@@ -874,12 +930,13 @@ static int dm_ph_copy(job_t *j) {
         const cand_t *c = &j->c[j->pick[i]];
         void *r = deque_at(dq, c->idx);
         const char *path = r ? cc_str(r, REC_PATH) : "";
-        if (!r || dm_path_hash(path) != c->path) return 0;   /* the library changed under the job */
-        if (!dm_path_ok(path) || access(path, F_OK)) continue;   /* (the mix file holds the path: one the file cannot hold is as good as missing) */
+        if (!r || dm_path_hash(path) != c->path) return 0; /* the library changed under the job */
+        if (!dm_path_ok(path) || access(path, F_OK))
+            continue; /* (the mix file holds the path: one the file cannot hold is as good as missing) */
         dm_rec_copy(&pk[kept], r);
         ++kept;
     }
-    j->npick = kept;   /* (dm_free_picks frees the strings of the kept ones) */
+    j->npick = kept; /* (dm_free_picks frees the strings of the kept ones) */
     if (kept < MIX_MIN_SONGS) return 0;
     j->aseed = (j->seed ^ dm_path_hash(cc_str(pk[0].raw, REC_PATH)));
     dm_ranked(j, 1, DM_MAX_NAMES, top);
@@ -888,7 +945,7 @@ static int dm_ph_copy(job_t *j) {
         dm_copy(j->name[j->nname], DM_NAME, cc_str(pk[top[i]].raw, REC_ARTIST));
         if (j->name[j->nname][0]) ++j->nname;
     }
-    if (!j->nname) {   /* untagged: the library's own word for it, so the card has a line */
+    if (!j->nname) { /* untagged: the library's own word for it, so the card has a line */
         dm_copy(j->name[0], DM_NAME, TR("Daily Mix"));
         j->nname = 1;
     }
@@ -901,18 +958,22 @@ static int dm_ph_copy(job_t *j) {
 
 /* The tones of the top albums' covers: the cover keys from the stock album list once, then a tone a tick (the tone cache of the album page, else one decode of the
  * cover in the Cover Flow cache). Fewer than two tones are completed from a fixed palette. */
-static const unsigned dm_palette[4] = {70 | 110 << 8 | 190u << 16, 190 | 90 << 8 | 120u << 16, 60 | 140 << 8 | 150u << 16, 150 | 120 << 8 | 70u << 16};
+static const unsigned dm_palette[4] = {70 | 110 << 8 | 190u << 16, 190 | 90 << 8 | 120u << 16,
+                                       60 | 140 << 8 | 150u << 16, 150 | 120 << 8 | 70u << 16};
 
 static int dm_ph_album(job_t *j) {
     unsigned i, k;
-    if (j->pos == 0) {   /* the cover keys */
+    if (j->pos == 0) { /* the cover keys */
         void *albums = j->nalb ? cc_albums() : (void *)0;
         unsigned n = albums ? deque_size(albums) : 0;
         for (i = 0; i < j->nalb; ++i) {
             j->alb[i] = 0;
             for (k = 0; *j->title[i] && k < n; ++k) {
                 void *r = deque_at(albums, k);
-                if (I(r, REC_ID) != -1 && !cc_nocase(cc_str(r, REC_ALBUM), j->title[i])) { j->alb[i] = cc_album_key(r); break; }
+                if (I(r, REC_ID) != -1 && !cc_nocase(cc_str(r, REC_ALBUM), j->title[i])) {
+                    j->alb[i] = cc_album_key(r);
+                    break;
+                }
             }
         }
         if (albums) deque_destroy(albums);
@@ -927,15 +988,17 @@ static int dm_ph_album(job_t *j) {
         const char *file;
         j->pos++;
         if (!j->alb[i]) return 1;
-        if (pod_tone_get(j->alb[i], &tone)) j->tone[j->ntone++] = tone & 0xffffff;
-        else if (dm.win && (file = cc_url(url, j->alb[i])) != (const char *)0 && cc_decode(dm.win, file, 1, 1, 1, &px)) {
+        if (pod_tone_get(j->alb[i], &tone))
+            j->tone[j->ntone++] = tone & 0xffffff;
+        else if (dm.win && (file = cc_url(url, j->alb[i])) != (const char *)0 &&
+                 cc_decode(dm.win, file, 1, 1, 1, &px)) {
             tone = pod_tone(px & 255, px >> 8 & 255, px >> 16 & 255);
             pod_tone_put(j->alb[i], tone);
             j->tone[j->ntone++] = tone & 0xffffff;
         }
         return 1;
     }
-    if (j->ntone < 2) {   /* no covers (or one): the fixed palette completes the tones to three, starting at seed % 4 */
+    if (j->ntone < 2) { /* no covers (or one): the fixed palette completes the tones to three, starting at seed % 4 */
         k = 3 - j->ntone;
         for (i = 0; i < k; ++i) j->tone[j->ntone + i] = dm_palette[(j->seed % 4 + i) % 4];
         j->ntone = 3;
@@ -975,11 +1038,14 @@ static int dm_ph_bright(job_t *j) {
     }
     j->pos = end;
     if (end < DM_H) return 1;
-    limit = (int)((dm_lum(0xeb, 0xeb, 0xeb) + 3277) * 10 / 47) - 3277;   /* the brightest background luminance under #EBEBEB at 4.7:1 */
+    limit = (int)((dm_lum(0xeb, 0xeb, 0xeb) + 3277) * 10 / 47) -
+            3277; /* the brightest background luminance under #EBEBEB at 4.7:1 */
     j->limit = (unsigned)limit;
     for (j->a64 = DM_A64_MIN; j->a64 < DM_A64_START_MAX; ++j->a64) {
         s = 256 * j->a64 / 64;
-        if ((int)dm_lum(j->bright[0] - (j->bright[0] * s >> 8), j->bright[1] - (j->bright[1] * s >> 8), j->bright[2] - (j->bright[2] * s >> 8)) <= limit) break;
+        if ((int)dm_lum(j->bright[0] - (j->bright[0] * s >> 8), j->bright[1] - (j->bright[1] * s >> 8),
+                        j->bright[2] - (j->bright[2] * s >> 8)) <= limit)
+            break;
     }
     j->pos = 0, j->maxlum = 0, j->phase = PH_RENDER;
     return 1;
@@ -994,7 +1060,7 @@ static int dm_ph_render(job_t *j) {
     }
     j->pos = end;
     if (end < DM_H) return 1;
-    if (j->maxlum > j->limit && j->a64 < DM_A64_MAX) {   /* too bright for the text: one more step of scrim, again */
+    if (j->maxlum > j->limit && j->a64 < DM_A64_MAX) { /* too bright for the text: one more step of scrim, again */
         ++j->a64, j->pos = 0, j->maxlum = 0;
         return 1;
     }
@@ -1014,7 +1080,8 @@ static void *dm_ensure_bitmap(void) {
             bitmap_destroy(b);
             b = (void *)0;
         } else if (b) {
-            *(unsigned short *)((char *)b + BITMAP_FLAGS) |= 1;   /* opaque: every pixel is, the corners are blended into black */
+            *(unsigned short *)((char *)b + BITMAP_FLAGS) |=
+                1; /* opaque: every pixel is, the corners are blended into black */
             bitmap_unlock_buffer(b);
         }
         dm.bmp = b;
@@ -1058,7 +1125,7 @@ static int dm_load_art(void) {
         dm_fill_bitmap((const unsigned short *)(buf + DM_ART_HEAD));
         widget_invalidate_force(dm.card, (void *)0);
     }
-    if (!ok) dm.load = 2;   /* no art (or a bad file): made again from the mix's tones and seed */
+    if (!ok) dm.load = 2; /* no art (or a bad file): made again from the mix's tones and seed */
     free(buf);
     return ok;
 }
@@ -1086,7 +1153,8 @@ static int dm_ph_commit(job_t *j) {
     dm_putdec(&o, end, j->npick), dm_put(&o, end, "\n");
     for (i = 0; i < j->ntone; ++i) {
         if (i) dm_put(&o, end, " ");
-        dm_puthex(&o, end, j->tone[i] & 255, 2), dm_puthex(&o, end, j->tone[i] >> 8 & 255, 2), dm_puthex(&o, end, j->tone[i] >> 16 & 255, 2);
+        dm_puthex(&o, end, j->tone[i] & 255, 2), dm_puthex(&o, end, j->tone[i] >> 8 & 255, 2),
+            dm_puthex(&o, end, j->tone[i] >> 16 & 255, 2);
     }
     dm_put(&o, end, "\n");
     for (i = 0; i < j->nname; ++i) {
@@ -1094,11 +1162,16 @@ static int dm_ph_commit(job_t *j) {
         dm_put(&o, end, j->name[i]);
     }
     dm_put(&o, end, "\n");
-    for (i = 0; i < j->npick; ++i) dm_put(&o, end, cc_str(j->pk[i].raw, REC_PATH)), dm_put(&o, end, "\n");   /* (every path was checked by dm_path_ok in the copy phase: the file holds them all) */
+    for (i = 0; i < j->npick; ++i)
+        dm_put(&o, end, cc_str(j->pk[i].raw, REC_PATH)),
+            dm_put(&o, end,
+                   "\n"); /* (every path was checked by dm_path_ok in the copy phase: the file holds them all) */
     *o = 0;
     if (dm_write_atomic(MIX_FILE, MIX_TMP, buf, (unsigned)(o - buf), (const void *)0, 0) != 0) return 0;
-    dm_save_art(j);   /* (after the mix file: a failed mix file leaves yesterday's art file alone; a failed art file costs the next start a re-render) */
-    if (!dm_load()) return 0;   /* the file read back is the state: day, seed, tones, names and the paths (a file the reader refuses is no mix) */
+    dm_save_art(
+        j); /* (after the mix file: a failed mix file leaves yesterday's art file alone; a failed art file costs the next start a re-render) */
+    if (!dm_load())
+        return 0; /* the file read back is the state: day, seed, tones, names and the paths (a file the reader refuses is no mix) */
     dm.have = 1, dm.laid = 0;
     if (dm_ensure_bitmap()) dm_fill_bitmap(j->px);
     dm_apply();
@@ -1116,21 +1189,21 @@ static unsigned dm_seed_for(unsigned day, unsigned regen) {
 static void dm_job_start(int art_only) {
     job_t *j = dm_job_new();
     unsigned k;
-    if (!j) {   /* no memory: not tried again before tomorrow or a restart */
+    if (!j) { /* no memory: not tried again before tomorrow or a restart */
         dm.fail_day = dm_today();
         dm_regen_req = 0;
         if (art_only) dm.load = 0;
         return;
     }
     j->art_only = art_only;
-    if (art_only) {   /* the art again from the mix's own tones and seed */
+    if (art_only) { /* the art again from the mix's own tones and seed */
         for (k = 0; k < dm.ntone; ++k) j->tone[k] = dm.tone[k];
         j->ntone = dm.ntone, j->seed = dm.seed, j->aseed = dm.aseed, j->phase = PH_FIELD;
     } else {
         j->day = dm_today();
         j->manual = dm_regen_req > 0;
         dm_regen_req = 0;
-        if (!j->day) {   /* the clock is not set: no day to make a mix for */
+        if (!j->day) { /* the clock is not set: no day to make a mix for */
             free(j);
             return;
         }
@@ -1145,23 +1218,52 @@ static void dm_step(void) {
     job_t *j = dm.job;
     int ok = 0;
     switch (j->phase) {
-    case PH_OFT: ok = dm_ph_oft(j); break;
-    case PH_REC: ok = dm_ph_rec(j); break;
-    case PH_FAV: ok = dm_ph_fav(j); break;
-    case PH_LIB: ok = dm_ph_lib(j); break;
-    case PH_SCORE: ok = dm_ph_score(j); break;
-    case PH_PICK: ok = dm_ph_pick(j); break;
-    case PH_COPY: ok = dm_ph_copy(j); break;
-    case PH_ALBUM: ok = dm_ph_album(j); break;
-    case PH_FIELD: ok = dm_ph_field(j); break;
-    case PH_BRIGHT: ok = dm_ph_bright(j); break;
-    case PH_RENDER: ok = dm_ph_render(j); break;
-    case PH_COMMIT: ok = dm_ph_commit(j); break;
-    case PH_SAVE: ok = dm_ph_save(j); break;
-    default: break;
+    case PH_OFT:
+        ok = dm_ph_oft(j);
+        break;
+    case PH_REC:
+        ok = dm_ph_rec(j);
+        break;
+    case PH_FAV:
+        ok = dm_ph_fav(j);
+        break;
+    case PH_LIB:
+        ok = dm_ph_lib(j);
+        break;
+    case PH_SCORE:
+        ok = dm_ph_score(j);
+        break;
+    case PH_PICK:
+        ok = dm_ph_pick(j);
+        break;
+    case PH_COPY:
+        ok = dm_ph_copy(j);
+        break;
+    case PH_ALBUM:
+        ok = dm_ph_album(j);
+        break;
+    case PH_FIELD:
+        ok = dm_ph_field(j);
+        break;
+    case PH_BRIGHT:
+        ok = dm_ph_bright(j);
+        break;
+    case PH_RENDER:
+        ok = dm_ph_render(j);
+        break;
+    case PH_COMMIT:
+        ok = dm_ph_commit(j);
+        break;
+    case PH_SAVE:
+        ok = dm_ph_save(j);
+        break;
+    default:
+        break;
     }
-    if (ok == 2) dm_job_end(0);
-    else if (!ok) dm_job_end(1);
+    if (ok == 2)
+        dm_job_end(0);
+    else if (!ok)
+        dm_job_end(1);
 }
 
 /* ---------------------------------------------------------------------------
@@ -1181,8 +1283,10 @@ static int dm_fit(void *canvas, unsigned *s, int maxw) {
         while (lo < hi) {
             unsigned mid = (lo + hi + 1) / 2, keep = s[mid];
             s[mid] = ELLIPSIS;
-            if (dm_w(canvas, s, mid + 1) <= maxw) lo = mid;
-            else hi = mid - 1;
+            if (dm_w(canvas, s, mid + 1) <= maxw)
+                lo = mid;
+            else
+                hi = mid - 1;
             s[mid] = keep;
         }
         s[lo] = ELLIPSIS;
@@ -1192,11 +1296,11 @@ static int dm_fit(void *canvas, unsigned *s, int maxw) {
     return (int)len;
 }
 
-static void dm_wide(unsigned *dst, unsigned cap, const char *s, unsigned n) {
-    tk_utf8_to_utf16_ex(s, n, dst, cap);
-}
+static void dm_wide(unsigned *dst, unsigned cap, const char *s, unsigned n) { tk_utf8_to_utf16_ex(s, n, dst, cap); }
 
-static int dm_cjk(unsigned c) { return (c >= 0x2e80 && c <= 0xffef) || (c >= 0x0e00 && c <= 0x0e7f) || (c >= 0xac00 && c <= 0xd7af); }
+static int dm_cjk(unsigned c) {
+    return (c >= 0x2e80 && c <= 0xffef) || (c >= 0x0e00 && c <= 0x0e7f) || (c >= 0xac00 && c <= 0xd7af);
+}
 
 /* The width of t[s..e) without its trailing spaces. */
 static int dm_wr(void *canvas, const unsigned *t, unsigned s, unsigned e) {
@@ -1212,14 +1316,16 @@ static int dm_wrap(void *canvas, const unsigned *t, unsigned n, int room, int ma
     int nl = 0;
     while (i < n) {
         as = i;
-        if (dm_cjk(t[i]) || t[i] == ' ') ae = i + 1;
+        if (dm_cjk(t[i]) || t[i] == ' ')
+            ae = i + 1;
         else {
             ae = i;
             while (ae < n && t[ae] != ' ' && !dm_cjk(t[ae])) ++ae;
             if (ae < n && t[ae] == ' ') ++ae;
         }
         i = ae;
-        if (dm_wr(canvas, t, cs, ae) <= room && ce >= cs) {   /* the unit joins the line (cs == ce: an empty line starts at this unit) */
+        if (dm_wr(canvas, t, cs, ae) <= room &&
+            ce >= cs) { /* the unit joins the line (cs == ce: an empty line starts at this unit) */
             if (cs == ce) cs = as;
             ce = ae;
             continue;
@@ -1248,7 +1354,8 @@ static unsigned dm_subst(char *out, unsigned size, const char *tpl, const char *
         if (tpl[0] == '%' && tpl[1] == 's' && used < 2) {
             dm_put(&o, end, used++ ? b : a);
             ++tpl;
-        } else *o++ = *tpl;
+        } else
+            *o++ = *tpl;
     }
     *o = 0;
     return (unsigned)(o - out);
@@ -1288,7 +1395,8 @@ static void dm_artist_lines(void *canvas) {
     for (n = dm.nname < DM_MAX_NAMES ? dm.nname : DM_MAX_NAMES; n >= 1; --n) {
         len = dm_names_text(utf, sizeof utf, n);
         dm_wide(wide, DM_STEXT * 2, utf, len);
-        for (len = 0; wide[len]; ++len) {}
+        for (len = 0; wide[len]; ++len) {
+        }
         nl = dm_wrap(canvas, wide, len, DM_SUB_W, DM_SUB_LINES, ls, le);
         if (nl) {
             dm_set_sub(wide, ls, le, nl);
@@ -1297,11 +1405,13 @@ static void dm_artist_lines(void *canvas) {
     }
     len = dm_names_text(utf, sizeof utf, 1);
     dm_wide(wide, DM_STEXT * 2, utf, len);
-    for (len = 0; wide[len]; ++len) {}
+    for (len = 0; wide[len]; ++len) {
+    }
     nl = dm_wrap(canvas, wide, len, DM_SUB_W, DM_LINES, ls, le);
-    if (!nl) {   /* a unit wider than the line: the first name alone */
+    if (!nl) { /* a unit wider than the line: the first name alone */
         dm_wide(wide, DM_STEXT * 2, dm.name[0], dm_len(dm.name[0]));
-        for (len = 0; wide[len]; ++len) {}
+        for (len = 0; wide[len]; ++len) {
+        }
         ls[0] = 0, le[0] = len, nl = 1;
     }
     dm_set_sub(wide, ls, le, nl);
@@ -1402,7 +1512,7 @@ static unsigned dm_mix_find(void *dq, const char *const *paths, unsigned np, uns
     return found;
 }
 
-static int dp_open(void);   /* the page (below): 0 once it is up or already open */
+static int dp_open(void); /* the page (below): 0 once it is up or already open */
 
 /* The card's tap: the page. (A tap that cannot open it does nothing; with no song of the mix left on the card, the usual message.) */
 static void dm_open(void) {
@@ -1423,8 +1533,10 @@ static void dm_play_at(const char *const *paths, unsigned np, const char *want, 
     for (i = 0; lib && i < np; ++i)
         if (at[i] != ~0u && !access(paths[i], F_OK)) sel[m] = paths[i], at[m++] = at[i];
     if (want)
-        for (k = 0; k < m && strcmp(sel[k], want); ++k) {}
-    else if (shuffle && m) k = pod_rand(m);
+        for (k = 0; k < m && strcmp(sel[k], want); ++k) {
+        }
+    else if (shuffle && m)
+        k = pod_rand(m);
     if (k >= m) {
         pod_toast(TR("Storage unavailable"));
         return;
@@ -1446,8 +1558,10 @@ static void dm_play_at(const char *const *paths, unsigned np, const char *want, 
             ++count;
         }
         if (count) {
-            if (shuffle) pod_set_mode(MODE_SHUFFLE);
-            else if (!want) pod_set_in_order();   /* Play plays the mix in order, even after a Shuffle; a row tap keeps the mode */
+            if (shuffle)
+                pod_set_mode(MODE_SHUFFLE);
+            else if (!want)
+                pod_set_in_order(); /* Play plays the mix in order, even after a Shuffle; a row tap keeps the mode */
             pod_open_player(mixq, (int)start, CLASS_ALL_SONGS);
         }
         deque_destroy(mixq);
@@ -1463,7 +1577,8 @@ static void dm_play(void) {
 }
 
 static int dm_on_play(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     if (dm.win && dm.shown) dm_play();
     return RET_OK;
 }
@@ -1493,7 +1608,8 @@ static int dm_on_up(void *ctx, void *e) {
 }
 
 static int dm_on_abort(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     dm.down = 0;
     return RET_OK;
 }
@@ -1511,7 +1627,7 @@ static void dm_apply(void) {
 /* A mix is wanted: the switch is on and the day has no mix yet (or Regenerate asked for one). A day that failed is not tried again before the next day. */
 static int dm_need(void) {
     unsigned today;
-    if (!dm.on || !pod_card_mounted()) return 0;   /* no card, no mix */
+    if (!dm.on || !pod_card_mounted()) return 0; /* no card, no mix */
     if (dm_regen_req) return 1;
     today = dm_today();
     if (!today || dm.fail_day == today) return 0;
@@ -1528,11 +1644,13 @@ static int dm_tick(const void *timer);
 static void dm_kick(void) {
     unsigned ms, waited;
     if (dm.timer || !dm.win || !dm.fg) return;
-    if (dm.job || (dm.load && dm.on)) ms = DM_TICK_MS;   /* (with the card off its art waits: nothing is read or made) */
+    if (dm.job || (dm.load && dm.on))
+        ms = DM_TICK_MS; /* (with the card off its art waits: nothing is read or made) */
     else if (dm_need()) {
         waited = (unsigned)time_now_ms() - dm.t0;
-        ms = waited >= DM_START_MS ? DM_TICK_MS : DM_START_MS - waited;   /* never inside the boot guard's window */
-    } else return;
+        ms = waited >= DM_START_MS ? DM_TICK_MS : DM_START_MS - waited; /* never inside the boot guard's window */
+    } else
+        return;
     if (!pod_screen_lit() && ms < POD_DARK_MS) ms = POD_DARK_MS;
     dm.timer = timer_add(dm_tick, (void *)0, ms);
 }
@@ -1557,7 +1675,7 @@ static void dm_work(void) {
 
 static int dm_tick(const void *timer) {
     (void)timer;
-    dm.timer = 0;   /* this one ends with the return */
+    dm.timer = 0; /* this one ends with the return */
     if (!dm.win || !dm.fg) return RET_OK;
     if (pod_screen_lit()) dm_work();
     dm_kick();
@@ -1578,7 +1696,7 @@ static void dm_stop(void) {
 
 static int dm_on_destroy(void *ctx, void *e) {
     (void)e;
-    if (ctx == dm.win) dm_stop();   /* an earlier window's end leaves the new one alone */
+    if (ctx == dm.win) dm_stop(); /* an earlier window's end leaves the new one alone */
     return RET_OK;
 }
 
@@ -1613,7 +1731,7 @@ static int dm_on_foreground(void *ctx, void *e) {
 /* The Home instance of the menu is up (patch/home.c, after the list took the whole window). */
 void dailymix_start(void *win) {
     if (!win || home_off()) return;
-    if (dm.win) dm_stop();   /* an earlier window that never said it was gone */
+    if (dm.win) dm_stop(); /* an earlier window that never said it was gone */
     dm.win = win;
     dm.sec = widget_lookup(win, "pod_daily", 1);
     dm.card = widget_lookup(win, "pod_dm_card", 1);
@@ -1624,10 +1742,13 @@ void dailymix_start(void *win) {
     dm.fg = 1;
     if (!dm.sec || !dm.card || !dm.disc || !dm.sv || !dm.st_title || !dm.st_sub ||
         !widget_on(win, EVT_DESTROY, dm_on_destroy, win) || !widget_on(win, EVT_WINDOW_TO_BG, dm_on_background, win) ||
-        !widget_on(win, EVT_WINDOW_TO_FG, dm_on_foreground, win) || !widget_on(dm.card, EVT_AFTER_PAINT, dm_on_paint, (void *)0) ||
-        !widget_on(dm.card, EVT_POINTER_DOWN, dm_on_down, (void *)0) || !widget_on(dm.card, EVT_POINTER_UP, dm_on_up, (void *)0) ||
-        !widget_on(dm.card, EVT_POINTER_ABORT, dm_on_abort, (void *)0) || !widget_on(dm.disc, EVT_CLICK, dm_on_play, (void *)0)) {
-        dm_stop();   /* a handler that was registered finds no window of ours any more */
+        !widget_on(win, EVT_WINDOW_TO_FG, dm_on_foreground, win) ||
+        !widget_on(dm.card, EVT_AFTER_PAINT, dm_on_paint, (void *)0) ||
+        !widget_on(dm.card, EVT_POINTER_DOWN, dm_on_down, (void *)0) ||
+        !widget_on(dm.card, EVT_POINTER_UP, dm_on_up, (void *)0) ||
+        !widget_on(dm.card, EVT_POINTER_ABORT, dm_on_abort, (void *)0) ||
+        !widget_on(dm.disc, EVT_CLICK, dm_on_play, (void *)0)) {
+        dm_stop(); /* a handler that was registered finds no window of ours any more */
         return;
     }
     pod_corner_fill(dm.corner, DM_R);
@@ -1652,30 +1773,32 @@ void dailymix_start(void *win) {
  * No stock hook. Everything is freed with the window. The songs are the mix file's paths found in the library (copied: the stock list is replaced by every other query).
  */
 #define DP_TAP_PX SC_DRAG_PX
-#define DP_AHEAD 2                       /* rows loaded beyond the view in the scroll direction */
-#define DP_DESC_WIDE 160                 /* wide chars of the description (DM_STEXT) */
+#define DP_AHEAD 2 /* rows loaded beyond the view in the scroll direction */
+#define DP_DESC_WIDE 160 /* wide chars of the description (DM_STEXT) */
 
 static struct {
     void *win, *lv, *sv, *view, *shuf, *play, *glyph, *add;
-    void *st_title, *st_sub, *st_upd, *st_desc, *st_play, *st_row, *st_artist;   /* hidden labels: the text styles */
-    pick_t *rows;                        /* the mix's songs that are in the library and on the card, copied (strings strdup'ed), in the mix's order */
+    void *st_title, *st_sub, *st_upd, *st_desc, *st_play, *st_row, *st_artist; /* hidden labels: the text styles */
+    pick_t *
+        rows; /* the mix's songs that are in the library and on the card, copied (strings strdup'ed), in the mix's order */
     unsigned n;
-    unsigned day;                        /* the mix's day (the Updated line) */
-    void *art;                           /* the art (RGBA, DP_W x DP_ART_H) */
-    unsigned tint, grey, accent;         /* 0x00BBGGRR */
-    unsigned barc;                       /* the art's top row (0x00BBGGRR): the status bar's colour, darkened by pod_bar_color */
-    int barok, bar;                      /* the window's foreground and background events are registered; the bar's colour is ours */
+    unsigned day; /* the mix's day (the Updated line) */
+    void *art; /* the art (RGBA, DP_W x DP_ART_H) */
+    unsigned tint, grey, accent; /* 0x00BBGGRR */
+    unsigned barc; /* the art's top row (0x00BBGGRR): the status bar's colour, darkened by pod_bar_color */
+    int barok, bar; /* the window's foreground and background events are registered; the bar's colour is ours */
     int laid, glyph_x, text_x, text_w;
     unsigned tl[DM_TEXT], sl[DM_TEXT], ul[DM_TEXT], pl[DM_TEXT];
     int tlen, slen, ulen, plen;
     unsigned dl[DP_DESC_LINES][DP_DESC_WIDE];
     int dlen[DP_DESC_LINES], dn;
-    unsigned key[DP_ROWS_MAX];           /* the cover cache key of each song's album */
-    int press, down, down_x, down_y;     /* the row under the finger + 1 / the row a press began on + 1 and where */
+    unsigned key[DP_ROWS_MAX]; /* the cover cache key of each song's album */
+    int press, down, down_x, down_y; /* the row under the finger + 1 / the row a press began on + 1 and where */
     int seen, dir, noscroll;
-    int saved, away;                     /* the mix's playlist exists (the Add disc shows a check); the window went to the back since it was looked up */
+    int saved,
+        away; /* the mix's playlist exists (the Add disc shows a check); the window went to the back since it was looked up */
     unsigned more_timer;
-    grid_t g;                            /* the 52 px cover ring (patch/grid.c), the placeholder */
+    grid_t g; /* the 52 px cover ring (patch/grid.c), the placeholder */
 } dp __attribute__((section(".scratch")));
 
 static int dp_off(void) { return dp.sv ? I(dp.sv, SC_YOFF) : 0; }
@@ -1706,7 +1829,7 @@ static unsigned dp_tint(unsigned avg) {
     if (v < DP_V_MIN) {
         for (i = 0; i < 3; ++i) c[i] = v ? DP_V_MIN * c[i] / v : DP_V_MIN;
     }
-    for (;;) {   /* the cap is checked on what the panel shows (the snap can lift a channel by a few levels) */
+    for (;;) { /* the cap is checked on what the panel shows (the snap can lift a channel by a few levels) */
         unsigned s = dp_snap(c);
         if (dm_lum(s & 255, s >> 8 & 255, s >> 16 & 255) <= DP_LUM_MAX) return s;
         for (i = 0; i < 3; ++i) c[i] = c[i] * 15 >> 4;
@@ -1743,7 +1866,7 @@ static void dp_art(void) {
         for (i = 0; i < 3; ++i) avg[i] += row[x * 3 + i];
     dp.tint = dp_tint(avg[0] / DP_W | avg[1] / DP_W << 8 | avg[2] / DP_W << 16);
     dp.grey = dp_pale(dp.tint, DP_GREY_K), dp.accent = dp_pale(dp.tint, DP_ACC_K);
-    dm_field_wh(row, 0, DP_W, base, bl, dm.ntone);   /* the top row: where the status bar meets the page */
+    dm_field_wh(row, 0, DP_W, base, bl, dm.ntone); /* the top row: where the status bar meets the page */
     for (i = 0; i < 3; ++i) avg[i] = 0;
     for (x = 0; x < DP_W; ++x)
         for (i = 0; i < 3; ++i) avg[i] += row[x * 3 + i];
@@ -1757,7 +1880,7 @@ static void dp_art(void) {
         bitmap_destroy(dp.art);
         dp.art = (void *)0;
     } else if (dp.art) {
-        *(unsigned short *)((char *)dp.art + BITMAP_FLAGS) |= 1;   /* opaque */
+        *(unsigned short *)((char *)dp.art + BITMAP_FLAGS) |= 1; /* opaque */
         for (y = 0; y < DP_ART_H; ++y) {
             unsigned s = dp_fade((int)y);
             if (s >= 256) {
@@ -1768,7 +1891,9 @@ static void dp_art(void) {
             for (x = 0; x < DP_W; ++x) {
                 const unsigned char *f = row + x * 3;
                 unsigned t = dm_bayer[y & 3][x & 3], er, eg, eb;
-                dm_quant(f[0] + (((int)tc[0] - f[0]) * (int)s >> 8) + ((4 * (int)s + 128) >> 8), t, 8, 5, &er);   /* + up to half a step as the fade completes: the 565 floor would leave the faded rows darker than the tint */
+                dm_quant(
+                    f[0] + (((int)tc[0] - f[0]) * (int)s >> 8) + ((4 * (int)s + 128) >> 8), t, 8, 5,
+                    &er); /* + up to half a step as the fade completes: the 565 floor would leave the faded rows darker than the tint */
                 dm_quant(f[1] + (((int)tc[1] - f[1]) * (int)s >> 8) + ((2 * (int)s + 128) >> 8), t, 4, 6, &eg);
                 dm_quant(f[2] + (((int)tc[2] - f[2]) * (int)s >> 8) + ((4 * (int)s + 128) >> 8), t, 8, 5, &eb);
                 d[y * DP_W + x] = 0xff000000u | er | eg << 8 | eb << 16;
@@ -1815,7 +1940,7 @@ static void dp_desc(void *canvas) {
     dp_wide(wide, DP_DESC_WIDE, t);
     while (wide[n]) ++n;
     nl = dm_wrap(canvas, wide, n, DP_TEXT_W, DM_LINES, ls, le);
-    if (!nl) ls[0] = 0, le[0] = n, nl = 1;   /* a unit wider than the line: one line, cut with an ellipsis */
+    if (!nl) ls[0] = 0, le[0] = n, nl = 1; /* a unit wider than the line: one line, cut with an ellipsis */
     dp.dn = nl < DP_DESC_LINES ? nl : DP_DESC_LINES;
     for (i = 0; i < dp.dn; ++i) {
         e = i == dp.dn - 1 && nl > dp.dn ? n : le[i];
@@ -1876,8 +2001,10 @@ static void dp_row_window(int *r0, int *r1) {
 static void dp_window(int *lo, int *hi) {
     int r0, r1;
     dp_row_window(&r0, &r1);
-    if (dp.dir < 0) r0 -= DP_AHEAD;
-    else r1 += DP_AHEAD;
+    if (dp.dir < 0)
+        r0 -= DP_AHEAD;
+    else
+        r1 += DP_AHEAD;
     if (r0 < 0) r0 = 0;
     if (r1 > (int)dp.n - 1) r1 = (int)dp.n - 1;
     *lo = r0, *hi = r1;
@@ -1934,7 +2061,8 @@ static void dp_paint_header(void *canvas, int s) {
     widget_prepare_text_style(dp.st_play, canvas);
     dp_line(canvas, dp.pl, dp.plen, dp.text_x, DP_BTN_Y + (DP_BTN_H - DP_PILL_H) / 2 - s, dp.text_w, DP_PILL_H);
     widget_prepare_text_style(dp.st_desc, canvas);
-    for (i = 0; i < dp.dn; ++i) dp_line(canvas, dp.dl[i], dp.dlen[i], DP_TEXT_X, DP_DESC_Y + i * DP_DESC_PITCH - s, DP_TEXT_W, DP_DESC_PITCH);
+    for (i = 0; i < dp.dn; ++i)
+        dp_line(canvas, dp.dl[i], dp.dlen[i], DP_TEXT_X, DP_DESC_Y + i * DP_DESC_PITCH - s, DP_TEXT_W, DP_DESC_PITCH);
 }
 
 static void dp_paint_rows(void *canvas, int s) {
@@ -1947,10 +2075,11 @@ static void dp_paint_rows(void *canvas, int s) {
         grid_blit(canvas, &dp.g, t, LIST_ART_X, y + LIST_ART_Y, DP_VIEW_H);
         dp_fill(canvas, LIST_TEXT_X, y + LIST_ROW_H - 1, DP_W - LIST_TEXT_X, y + LIST_ROW_H, DP_HAIR);
     }
-    for (pass = 0; pass < 2; ++pass) {   /* titles, then artists: one text style at a time */
+    for (pass = 0; pass < 2; ++pass) { /* titles, then artists: one text style at a time */
         widget_prepare_text_style(pass ? dp.st_artist : dp.st_row, canvas);
         for (r = r0; r <= r1; ++r)
-            grid_text(canvas, dp_tile(r), pass, LIST_TEXT_X, DP_ROWS_Y + r * LIST_ROW_H - s + (pass ? LIST_SUB_Y : LIST_TITLE_Y), LIST_TEXT_W,
+            grid_text(canvas, dp_tile(r), pass, LIST_TEXT_X,
+                      DP_ROWS_Y + r * LIST_ROW_H - s + (pass ? LIST_SUB_Y : LIST_TITLE_Y), LIST_TEXT_W,
                       pass ? LIST_SUB_H : LIST_TITLE_H, DP_VIEW_H);
     }
 }
@@ -1982,7 +2111,7 @@ static int dp_next_load(void) {
         if (t && t->art) continue;
         top = DP_ROWS_Y + a * LIST_ROW_H - s;
         d = dp_abs(top + LIST_ROW_H / 2 - DP_VIEW_H / 2);
-        if (top >= DP_VIEW_H || top + LIST_ROW_H <= 0) d += 100000;   /* ahead of the view */
+        if (top >= DP_VIEW_H || top + LIST_ROW_H <= 0) d += 100000; /* ahead of the view */
         if (d < bd) bd = d, best = a;
     }
     return best;
@@ -1999,7 +2128,8 @@ static int dp_moving(void) {
 }
 
 static void dp_kick(void) {
-    if (!dp.more_timer && dp.view && (dp.noscroll || dp_next_load() >= 0)) dp.more_timer = timer_add(dp_on_load, (void *)0, DP_MORE_MS);
+    if (!dp.more_timer && dp.view && (dp.noscroll || dp_next_load() >= 0))
+        dp.more_timer = timer_add(dp_on_load, (void *)0, DP_MORE_MS);
 }
 
 static void dp_dir(void) {
@@ -2014,7 +2144,7 @@ static int dp_on_load(const void *unused) {
     dp.more_timer = 0;
     if (!dp.view) return RET_OK;
     dp_dir();
-    if (dp_moving()) {   /* nothing is decoded while it moves: look again next tick */
+    if (dp_moving()) { /* nothing is decoded while it moves: look again next tick */
         dp_kick();
         return RET_OK;
     }
@@ -2029,7 +2159,8 @@ static int dp_on_load(const void *unused) {
 }
 
 static int dp_on_scroll(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     if (!dp.view) return RET_OK;
     dp_dir();
     dp_kick();
@@ -2089,7 +2220,8 @@ static int dp_on_up(void *ctx, void *e) {
 
 /* The scroll_view took the gesture as a drag (it aborts its children's press), or the window went to the background. */
 static int dp_on_abort(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     dp.down = 0;
     dp_set_press(0);
     return RET_OK;
@@ -2099,7 +2231,8 @@ static int dp_on_abort(void *ctx, void *e) {
  * Playing tint it; the stock black comes back when the page goes to the background or closes, and only while the bar is still ours (pod_bar_black: Now Playing
  * opened by Play keeps its own colour). Only when both window events are registered, so every way out restores it. */
 static void dp_bar_apply(void) {
-    if (dp.win && dp.barok && pod_bar_tint(dp.win, dp.barc)) dp.bar = 1;   /* a failed call keeps what the bar has (and owes) */
+    if (dp.win && dp.barok && pod_bar_tint(dp.win, dp.barc))
+        dp.bar = 1; /* a failed call keeps what the bar has (and owes) */
 }
 
 static void dp_bar_black(void) {
@@ -2116,7 +2249,10 @@ static void dp_name(char *name, unsigned size) {
 }
 
 /* What the stock playlist calls change and the page puts back: the browsing class, classinfo[0..1], the navigation title. */
-typedef struct { int cls, ci[2]; char title[NAV_TITLE_SIZE]; } dp_state_t;
+typedef struct {
+    int cls, ci[2];
+    char title[NAV_TITLE_SIZE];
+} dp_state_t;
 
 static void dp_keep(dp_state_t *s) {
     s->cls = *(int *)G_CLASS_TYPE;
@@ -2158,8 +2294,9 @@ static void dp_look(void) {
 }
 
 static int dp_on_foreground(void *ctx, void *e) {
-    (void)ctx; (void)e;
-    dp.laid = 0;   /* the language, or the day, may have changed */
+    (void)ctx;
+    (void)e;
+    dp.laid = 0; /* the language, or the day, may have changed */
     if (dp.away) {
         dp.away = 0;
         dp_look();
@@ -2172,7 +2309,7 @@ static int dp_on_foreground(void *ctx, void *e) {
 static int dp_on_background(void *ctx, void *e) {
     dp.away = 1;
     dp_bar_black();
-    return dp_on_abort(ctx, e);   /* and a press in progress ends */
+    return dp_on_abort(ctx, e); /* and a press in progress ends */
 }
 
 /* The Add disc: the mix as a NEW stock playlist named dp_name, its songs in the mix's order; once it exists (dp_look, or this tap) the disc is a check and a tap only says so
@@ -2207,9 +2344,12 @@ static void dp_save(void) {
     loadLocalClassList(CLASS_PLAYLISTS);
     list = *(void **)PDEQ_PLAYLIST;
     r = list ? createPlayListItem(list, name) : -3;
-    if (r == -3) msg = "msg_addfailed";
-    else if (r == -1) msg = "msg_playlistfull";
-    else if (r < 0) msg = "msg_playlistexist";
+    if (r == -3)
+        msg = "msg_addfailed";
+    else if (r == -1)
+        msg = "msg_playlistfull";
+    else if (r < 0)
+        msg = "msg_playlistexist";
     else {
         for (i = 0; i < dp.n; ++i) {
             int mx;
@@ -2224,14 +2364,29 @@ static void dp_save(void) {
         msg = added ? "msg_addplaylistsuccess" : "msg_addfailed";
     }
     dp_put_back(&s);
-    if (r >= 0 || r == -2) dp_mark(1);   /* made now, or made before: the name is taken either way */
+    if (r >= 0 || r == -2) dp_mark(1); /* made now, or made before: the name is taken either way */
     pod_toast(TR(msg));
 }
 
-static int dp_on_add(void *ctx, void *e) { (void)ctx; (void)e; dp_save(); return RET_OK; }
+static int dp_on_add(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    dp_save();
+    return RET_OK;
+}
 
-static int dp_on_play(void *ctx, void *e) { (void)ctx; (void)e; dp_play((const char *)0, 0); return RET_OK; }
-static int dp_on_shuffle(void *ctx, void *e) { (void)ctx; (void)e; dp_play((const char *)0, 1); return RET_OK; }
+static int dp_on_play(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    dp_play((const char *)0, 0);
+    return RET_OK;
+}
+static int dp_on_shuffle(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    dp_play((const char *)0, 1);
+    return RET_OK;
+}
 
 /* Everything the page holds is freed. A window that is already gone (or never was ours) is not this page: the destroy event carries the window it was registered on. */
 static void dp_release(void) {
@@ -2246,7 +2401,7 @@ static void dp_release(void) {
 
 static int dp_on_destroy(void *ctx, void *e) {
     (void)e;
-    if (ctx == dp.win) {   /* an earlier window's end leaves a newer page alone */
+    if (ctx == dp.win) { /* an earlier window's end leaves a newer page alone */
         dp_bar_black();
         dp_release();
     }
@@ -2294,7 +2449,7 @@ static int dp_open(void) {
     dp.day = dm.day;
     dp_songs();
     if (!dp.n) {
-        if (dp.rows) pod_toast(TR("Storage unavailable"));   /* (no memory for the rows: nothing, no message) */
+        if (dp.rows) pod_toast(TR("Storage unavailable")); /* (no memory for the rows: nothing, no message) */
         free(dp.rows);
         memset(&dp, 0, sizeof dp);
         return -1;
@@ -2321,13 +2476,15 @@ static int dp_open(void) {
     dp.st_play = widget_lookup(dp.win, "label_dp_play", 1);
     dp.st_row = widget_lookup(dp.win, "label_dp_row", 1);
     dp.st_artist = widget_lookup(dp.win, "label_dp_artist", 1);
-    if (!dp.lv || !dp.sv || !dp.view || !dp.shuf || !dp.play || !dp.glyph || !dp.add || !dp.st_title || !dp.st_sub || !dp.st_upd || !dp.st_desc || !dp.st_play || !dp.st_row ||
-        !dp.st_artist || !grid_init(&dp.g, dp.win, GRID_TILES, LIST_ART, 0)) {
-        navigator_back();   /* an asset that is not ours, or no memory for the ring: the window goes again, the caller opens the stock list */
+    if (!dp.lv || !dp.sv || !dp.view || !dp.shuf || !dp.play || !dp.glyph || !dp.add || !dp.st_title || !dp.st_sub ||
+        !dp.st_upd || !dp.st_desc || !dp.st_play || !dp.st_row || !dp.st_artist ||
+        !grid_init(&dp.g, dp.win, GRID_TILES, LIST_ART, 0)) {
+        navigator_back(); /* an asset that is not ours, or no memory for the ring: the window goes again, the caller opens the stock list */
         dp_release();
         return -1;
     }
-    grid_shape(&dp.g, LIST_ART, LIST_R, 1);   /* the corners are cut in the alpha: the pressed row's fill shows behind them */
+    grid_shape(&dp.g, LIST_ART, LIST_R,
+               1); /* the corners are cut in the alpha: the pressed row's fill shows behind them */
     grid_placeholder(&dp.g);
     dp_art();
     dp_color(dp.win, "normal:bg_color", dp.tint);
@@ -2342,7 +2499,8 @@ static int dp_open(void) {
     widget_resize(dp.view, DP_W, dp_content());
     widget_set_prop_int(dp.sv, "virtual_h", dp_content());
     dp.dir = 1;
-    dp.noscroll = !widget_on(dp.sv, EVT_SCROLL, dp_on_scroll, (void *)0) || !widget_on(dp.sv, EVT_SCROLL_END, dp_on_scroll, (void *)0);
+    dp.noscroll = !widget_on(dp.sv, EVT_SCROLL, dp_on_scroll, (void *)0) ||
+                  !widget_on(dp.sv, EVT_SCROLL_END, dp_on_scroll, (void *)0);
     widget_on(dp.play, EVT_CLICK, dp_on_play, (void *)0);
     widget_on(dp.shuf, EVT_CLICK, dp_on_shuffle, (void *)0);
     widget_on(dp.add, EVT_CLICK, dp_on_add, (void *)0);
@@ -2353,7 +2511,7 @@ static int dp_open(void) {
     widget_on(dp.view, EVT_POINTER_UP, dp_on_up, (void *)0);
     widget_on(dp.view, EVT_POINTER_ABORT, dp_on_abort, (void *)0);
     widget_on(dp.view, EVT_AFTER_PAINT, dp_on_paint, (void *)0);
-    dp_bar_apply();   /* the page is in front */
+    dp_bar_apply(); /* the page is in front */
     dp_kick();
     return 0;
 }

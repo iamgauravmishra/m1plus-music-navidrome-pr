@@ -10,7 +10,7 @@ def is_light(c): return len(c) >= 7 and min(int(c[1:3], 16), int(c[3:5], 16), in
 
 
 def run(ctx):
-    expect, page = ctx.expect, ctx.page
+    expect = ctx.expect
     ui_dir = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui')
 
     # 25. Contrast in the built assets: every button we style inline has a dark background and

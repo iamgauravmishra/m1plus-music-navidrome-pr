@@ -25,34 +25,41 @@
 #include "common.h"
 #include "covercache.h"
 
-#define FRAME_W 320   /* the frame is TP_H wide (columns) and TP_W tall (rows) */
+#define FRAME_W 320 /* the frame is TP_H wide (columns) and TP_W tall (rows) */
 
 enum { F_TITLE, F_ARTIST, F_ALBUM, F_TIMES, F_BIG, F_MODEL, F_STATUS, F_N };
-enum { C_INK, C_SUB, C_BAND, C_PRINT };    /* a field's colour: the theme's title / artist ink, album / times / status ink, the band's ink (the big A), the print (the model name) */
+enum {
+    C_INK,
+    C_SUB,
+    C_BAND,
+    C_PRINT
+}; /* a field's colour: the theme's title / artist ink, album / times / status ink, the band's ink (the big A), the print (the model name) */
 
 /* The themes, in the order of the saved value (tools/tape_art.py THEME_NAMES, THEMES; test/pod/tape.py draws every one from the python table and compares): the picture names
  * (tape_shell_<name>, tape_hubs_<name>, tape_marks_<name>), the colours as r | g << 8 | b << 16, the model name printed on the label. */
 #define TP_THEMES 3
 static const char *const theme_name[TP_THEMES] = {"normal", "chrome", "metal"};
-static const unsigned theme_rgb[TP_THEMES][4] = {{0x2a1f1bu, 0x62524au, 0xffffffu, 0xbe783cu}, {0x181412u, 0x483e3au, 0xffffffu, 0x3a3ac0u}, {0x5eb2d9u, 0x4888a8u, 0x5eb2d9u, 0x5eb2d9u}};
+static const unsigned theme_rgb[TP_THEMES][4] = {{0x2a1f1bu, 0x62524au, 0xffffffu, 0xbe783cu},
+                                                 {0x181412u, 0x483e3au, 0xffffffu, 0x3a3ac0u},
+                                                 {0x5eb2d9u, 0x4888a8u, 0x5eb2d9u, 0x5eb2d9u}};
 static const char *const theme_model[TP_THEMES] = {"TYPE I NORMAL", "TYPE II CHROME", "TYPE IV METAL"};
 
 struct field {
-    short x, y;                       /* the pen's start, or the right end / middle by `anchor`; y is the line's vertical middle */
-    unsigned char px, anchor, bold;   /* font size; 'l', 'r', 'm' */
-    unsigned short room;              /* the width the text is cut to */
-    short x0, y0, x1, y1;             /* the rectangle the field restores and clips to (x1, y1 exclusive) */
-    unsigned char rgb;                /* C_* */
+    short x, y; /* the pen's start, or the right end / middle by `anchor`; y is the line's vertical middle */
+    unsigned char px, anchor, bold; /* font size; 'l', 'r', 'm' */
+    unsigned short room; /* the width the text is cut to */
+    short x0, y0, x1, y1; /* the rectangle the field restores and clips to (x1, y1 exclusive) */
+    unsigned char rgb; /* C_* */
 };
 
 /* tools/tape_art.py TEXT; the numbers are checked by test/pod/tape.py */
 static const struct field fields[F_N] = {
-    [F_TITLE]  = {47, 49, 22, 'l', 0, 388, 43, 37, 439, 62, C_INK},
+    [F_TITLE] = {47, 49, 22, 'l', 0, 388, 43, 37, 439, 62, C_INK},
     [F_ARTIST] = {47, 70, 16, 'l', 0, 388, 43, 62, 439, 83, C_INK},
-    [F_ALBUM]  = {47, 89, 13, 'l', 0, 190, 43, 83, 243, 99, C_SUB},
-    [F_TIMES]  = {435, 89, 12, 'r', 0, 100, 325, 83, 439, 99, C_SUB},
-    [F_BIG]    = {65, 146, 54, 'm', 1, 400, 39, 112, 97, 182, C_BAND},
-    [F_MODEL]  = {47, 206, 12, 'l', 0, 130, 41, 195, 175, 218, C_PRINT},   /* the fine print: type and grade */
+    [F_ALBUM] = {47, 89, 13, 'l', 0, 190, 43, 83, 243, 99, C_SUB},
+    [F_TIMES] = {435, 89, 12, 'r', 0, 100, 325, 83, 439, 99, C_SUB},
+    [F_BIG] = {65, 146, 54, 'm', 1, 400, 39, 112, 97, 182, C_BAND},
+    [F_MODEL] = {47, 206, 12, 'l', 0, 130, 41, 195, 175, 218, C_PRINT}, /* the fine print: type and grade */
     [F_STATUS] = {435, 206, 12, 'r', 0, 212, 219, 195, 441, 219, C_SUB},
 };
 #define STATUS_W 212
@@ -66,24 +73,25 @@ typedef struct {
 
 static struct {
     void *win, *view, *st_font;
-    int theme;                                 /* the saved theme when the page opened */
-    void *frame, *base, *top, *hubs, *marks, *screw;   /* RGBA8888 bitmaps in the frame's orientation (the images are made turned) */
-    unsigned short *lut;                       /* sqrt(d2h) * 8 for d2h < TP_LUT_N: a distance in 1/16 px */
+    int theme; /* the saved theme when the page opened */
+    void *frame, *base, *top, *hubs, *marks,
+        *screw; /* RGBA8888 bitmaps in the frame's orientation (the images are made turned) */
+    unsigned short *lut; /* sqrt(d2h) * 8 for d2h < TP_LUT_N: a distance in 1/16 px */
     unsigned timer, ival;
     int fg;
     /* what the page shows now */
-    unsigned key;                              /* the playing track (a hash), 0 none, ~0 not looked at yet */
+    unsigned key; /* the playing track (a hash), 0 none, ~0 not looked at yet */
     int playing, repeat, pos, len;
     char title[96], artist[64], album[64], fmt[8], times[24];
-    int batt, charging, vol, hh, mm;           /* batt -1: no bar */
-    int rs, rt;                                /* the packs' radii, 1/16 px; -1: not drawn yet */
-    unsigned ang[2];                           /* the hubs' turn, 1/16 degree, 0 .. 959 (60 degrees: six teeth) */
-    int hub[2];                                /* the hub frame drawn */
+    int batt, charging, vol, hh, mm; /* batt -1: no bar */
+    int rs, rt; /* the packs' radii, 1/16 px; -1: not drawn yet */
+    unsigned ang[2]; /* the hubs' turn, 1/16 degree, 0 .. 959 (60 degrees: six teeth) */
+    int hub[2]; /* the hub frame drawn */
     unsigned t_last;
-    unsigned pending;                          /* fields to draw at the next paint */
-    int dx0, dy0, dx1, dy1;                    /* the landscape rectangle changed since the last invalidate (empty: dx1 <= dx0) */
+    unsigned pending; /* fields to draw at the next paint */
+    int dx0, dy0, dx1, dy1; /* the landscape rectangle changed since the last invalidate (empty: dx1 <= dx0) */
     /* the touch */
-    int touch, pressed, sx, sy;                /* a touch is down; the close screw is held; where it began (landscape) */
+    int touch, pressed, sx, sy; /* a touch is down; the close screw is held; where it began (landscape) */
 } tp __attribute__((section(".scratch")));
 
 /* ---------------------------------------------------------------------------
@@ -91,17 +99,20 @@ static struct {
  */
 static unsigned *tp_pix(unsigned *d, int pitch, int x, int y) { return d + x * pitch + (TP_H - 1 - y); }
 
-static unsigned tp_mix(unsigned v, unsigned c, unsigned a) {   /* c over v by a (of 255), opaque result */
+static unsigned tp_mix(unsigned v, unsigned c, unsigned a) { /* c over v by a (of 255), opaque result */
     unsigned w = a + (a >> 7);
-    return 0xff000000u | (((v & 0xff00ffu) * (256 - w) + (c & 0xff00ffu) * w) >> 8 & 0xff00ffu) | (((v & 0xff00u) * (256 - w) + (c & 0xff00u) * w) >> 8 & 0xff00u);
+    return 0xff000000u | (((v & 0xff00ffu) * (256 - w) + (c & 0xff00ffu) * w) >> 8 & 0xff00ffu) |
+           (((v & 0xff00u) * (256 - w) + (c & 0xff00u) * w) >> 8 & 0xff00u);
 }
 
 __attribute__((noinline)) unsigned tp_isqrt(unsigned v) {
     unsigned r = 0, bit = 1u << 30;
     while (bit > v) bit >>= 2;
     while (bit) {
-        if (v >= r + bit) v -= r + bit, r = (r >> 1) + bit;
-        else r >>= 1;
+        if (v >= r + bit)
+            v -= r + bit, r = (r >> 1) + bit;
+        else
+            r >>= 1;
         bit >>= 2;
     }
     return r;
@@ -118,7 +129,8 @@ static void *tp_load(const char *name, unsigned w, unsigned h) {
     if (widget_load_image(tp.win, name, bitmap)) return (void *)0;
     format = (unsigned)(*(unsigned short *)((char *)bitmap + BITMAP_FORMAT)) - 1u;
     bmp = (void *)0;
-    data = format < 4 && bitmap[0] == w && bitmap[1] == h ? bitmap_lock_buffer_for_read(bitmap) : (const unsigned char *)0;
+    data =
+        format < 4 && bitmap[0] == w && bitmap[1] == h ? bitmap_lock_buffer_for_read(bitmap) : (const unsigned char *)0;
     if (data) {
         stride = bitmap_get_line_length(bitmap);
         bmp = bitmap_create_ex(w, h, w * 4, BITMAP_RGBA8888);
@@ -127,7 +139,8 @@ static void *tp_load(const char *name, unsigned w, unsigned h) {
             for (y = 0; y < h; ++y) {
                 const unsigned char *s = data + y * stride;
                 for (x = 0; x < w; ++x, s += 4)
-                    out[y * w + x] = (unsigned)s[at[format][0]] | (unsigned)s[at[format][1]] << 8 | (unsigned)s[at[format][2]] << 16 | (unsigned)s[at[format][3]] << 24;
+                    out[y * w + x] = (unsigned)s[at[format][0]] | (unsigned)s[at[format][1]] << 8 |
+                                     (unsigned)s[at[format][2]] << 16 | (unsigned)s[at[format][3]] << 24;
             }
             ok = 1;
         }
@@ -151,7 +164,8 @@ static void tp_free(void) {
  * Dirty rectangles (landscape) and the invalidate (frame coordinates: column 319 - y1 + 1, row x0)
  */
 static void tp_dirty(int x0, int y0, int x1, int y1) {
-    if (tp.dx1 <= tp.dx0) tp.dx0 = x0, tp.dy0 = y0, tp.dx1 = x1, tp.dy1 = y1;
+    if (tp.dx1 <= tp.dx0)
+        tp.dx0 = x0, tp.dy0 = y0, tp.dx1 = x1, tp.dy1 = y1;
     else {
         if (x0 < tp.dx0) tp.dx0 = x0;
         if (y0 < tp.dy0) tp.dy0 = y0;
@@ -171,10 +185,10 @@ static void tp_flush(void) {
 /* ---------------------------------------------------------------------------
  * The reels: base, tape pack, tape_top, hub, per landscape pixel
  */
-#define PK_BODY 0xff0e1624u   /* near-black brown #24160E */
+#define PK_BODY 0xff0e1624u /* near-black brown #24160E */
 #define PK_EDGE 0xff05080cu
-#define PK_WIND 0xff101928u   /* the windings are 1/3 px lines in the mock: a third of the way to #2E1C12 */
-#define PK_LIGHT 0xff304a6au  /* the sheen: two soft lobes on the circle, upper left (the stronger) and lower right */
+#define PK_WIND 0xff101928u /* the windings are 1/3 px lines in the mock: a third of the way to #2E1C12 */
+#define PK_LIGHT 0xff304a6au /* the sheen: two soft lobes on the circle, upper left (the stronger) and lower right */
 #define PK_LIGHT2 0xff1c2a3eu
 
 /* The pack of radius R (1/16 px) at distance d (1/16 px) laid over `under`; the pixel at (dx, dy) half pixels from the centre decides the highlight's sector (upper left, 190 to 240 degrees). */
@@ -184,22 +198,34 @@ static unsigned tp_pack(unsigned under, int d, int R, int dx, int dy) {
     if (d < 0 || d > R + 8) return under;
     cov = R + 8 - d;
     if (cov > 16) cov = 16;
-    if (d >= R - 16) c = PK_EDGE;
-    else if (d >= R - 80 && d < R - 48 && -1008 * dy + 178 * dx >= 0 && -887 * dx + 512 * dy >= 0) c = PK_LIGHT;
-    else if (d >= R - 80 && d < R - 48 && 1008 * dy - 178 * dx >= 0 && 887 * dx - 512 * dy >= 0) c = PK_LIGHT2;
-    else if (d >= 16 * (TP_HUB_R + 2) && (d - 16 * (TP_HUB_R + 2)) % 48 < 16) c = PK_WIND;
-    else c = PK_BODY;
+    if (d >= R - 16)
+        c = PK_EDGE;
+    else if (d >= R - 80 && d < R - 48 && -1008 * dy + 178 * dx >= 0 && -887 * dx + 512 * dy >= 0)
+        c = PK_LIGHT;
+    else if (d >= R - 80 && d < R - 48 && 1008 * dy - 178 * dx >= 0 && 887 * dx - 512 * dy >= 0)
+        c = PK_LIGHT2;
+    else if (d >= 16 * (TP_HUB_R + 2) && (d - 16 * (TP_HUB_R + 2)) % 48 < 16)
+        c = PK_WIND;
+    else
+        c = PK_BODY;
     return cov >= 16 ? c : tp_mix(under, c, (unsigned)cov * 255 / 16);
 }
 
 static int tp_in_clear(int x, int y) {
-    int qx = x < TP_CLEAR_X0 + TP_CLEAR_R ? TP_CLEAR_X0 + TP_CLEAR_R : x > TP_CLEAR_X1 - 1 - TP_CLEAR_R ? TP_CLEAR_X1 - 1 - TP_CLEAR_R : x;
-    int qy = y < TP_CLEAR_Y0 + TP_CLEAR_R ? TP_CLEAR_Y0 + TP_CLEAR_R : y > TP_CLEAR_Y1 - 1 - TP_CLEAR_R ? TP_CLEAR_Y1 - 1 - TP_CLEAR_R : y;
+    int qx = x < TP_CLEAR_X0 + TP_CLEAR_R       ? TP_CLEAR_X0 + TP_CLEAR_R
+             : x > TP_CLEAR_X1 - 1 - TP_CLEAR_R ? TP_CLEAR_X1 - 1 - TP_CLEAR_R
+                                                : x;
+    int qy = y < TP_CLEAR_Y0 + TP_CLEAR_R       ? TP_CLEAR_Y0 + TP_CLEAR_R
+             : y > TP_CLEAR_Y1 - 1 - TP_CLEAR_R ? TP_CLEAR_Y1 - 1 - TP_CLEAR_R
+                                                : y;
     if (x < TP_CLEAR_X0 || x >= TP_CLEAR_X1 || y < TP_CLEAR_Y0 || y >= TP_CLEAR_Y1) return 0;
     return (x - qx) * (x - qx) + (y - qy) * (y - qy) <= TP_CLEAR_R * TP_CLEAR_R;
 }
 
-static int tp_dist(int x, int y, int cx, int *dx, int *dy) {   /* the pixel's centre from the reel's centre: half pixels, and the distance in 1/16 px (-1: past the table) */
+static int tp_dist(
+    int x, int y, int cx, int *dx,
+    int *
+        dy) { /* the pixel's centre from the reel's centre: half pixels, and the distance in 1/16 px (-1: past the table) */
     unsigned d2;
     *dx = 2 * (x - cx) + 1, *dy = 2 * (y - TP_REEL_Y) + 1;
     d2 = (unsigned)(*dx * *dx + *dy * *dy);
@@ -209,7 +235,8 @@ static int tp_dist(int x, int y, int cx, int *dx, int *dy) {   /* the pixel's ce
 /* The pixel at landscape (x, y) of the window area as it is now: the shell, the packs where the holes or the window show them, the overlay. */
 static unsigned tp_reel_px(const unsigned *base, const unsigned *top, int x, int y) {
     unsigned c = *tp_pix((unsigned *)base, FRAME_W, x, y), a;
-    int dx0, dy0, dx1, dy1, d0 = tp_dist(x, y, TP_REEL_X0, &dx0, &dy0), d1 = tp_dist(x, y, TP_REEL_X1, &dx1, &dy1), clear = tp_in_clear(x, y);
+    int dx0, dy0, dx1, dy1, d0 = tp_dist(x, y, TP_REEL_X0, &dx0, &dy0), d1 = tp_dist(x, y, TP_REEL_X1, &dx1, &dy1),
+                            clear = tp_in_clear(x, y);
     const unsigned *t;
     if (clear || (d0 >= 0 && d0 <= 16 * TP_HOLE_R)) c = tp_pack(c, d0, tp.rs, dx0, dy0);
     if (clear || (d1 >= 0 && d1 <= 16 * TP_HOLE_R)) c = tp_pack(c, d1, tp.rt, dx1, dy1);
@@ -222,10 +249,13 @@ static unsigned tp_reel_px(const unsigned *base, const unsigned *top, int x, int
 }
 
 /* A sprite of a sheet of cells `cell` px square, stacked, turned: cell i's landscape pixel (u, v). */
-static unsigned tp_sprite(const unsigned *sheet, int cell, int i, int u, int v) { return sheet[(i * cell + u) * cell + (cell - 1 - v)]; }
+static unsigned tp_sprite(const unsigned *sheet, int cell, int i, int u, int v) {
+    return sheet[(i * cell + u) * cell + (cell - 1 - v)];
+}
 
 /* The reels' pixels of the landscape rectangle (x0, y0, x1, y1) into the frame, and the hubs over them where they reach. */
-static void tp_reel_rect(unsigned *f, int pitch, const unsigned *base, const unsigned *top, const unsigned *hubs, int x0, int y0, int x1, int y1) {
+static void tp_reel_rect(unsigned *f, int pitch, const unsigned *base, const unsigned *top, const unsigned *hubs,
+                         int x0, int y0, int x1, int y1) {
     int x, y, k;
     for (x = x0; x < x1; ++x)
         for (y = y0; y < y1; ++y) *tp_pix(f, pitch, x, y) = tp_reel_px(base, top, x, y);
@@ -266,17 +296,31 @@ static void tp_reels(int all) {
 }
 
 /* The printed play / pause mark, the repeat arrow and the close screw (pressed: its darker, turned sprite): the band restored under them, the sprite over it. */
-static void tp_marks(unsigned which) {   /* which: bit 0 the play / pause mark, 1 the repeat arrow, 2 the close screw */
+static void tp_marks(unsigned which) { /* which: bit 0 the play / pause mark, 1 the repeat arrow, 2 the close screw */
     unsigned *f = (unsigned *)bitmap_lock_buffer_for_write(tp.frame);
-    const unsigned *base = (const unsigned *)bitmap_lock_buffer_for_read(tp.base), *m = (const unsigned *)bitmap_lock_buffer_for_read(tp.marks), *sc = (const unsigned *)bitmap_lock_buffer_for_read(tp.screw);
+    const unsigned *base = (const unsigned *)bitmap_lock_buffer_for_read(tp.base),
+                   *m = (const unsigned *)bitmap_lock_buffer_for_read(tp.marks),
+                   *sc = (const unsigned *)bitmap_lock_buffer_for_read(tp.screw);
     int i, u, v;
     if (f && base && m && sc) {
         for (i = 0; i < 3; ++i) {
-            int mx = i == 2 ? TP_SCREW_X : i ? TP_REPEAT_X : TP_PLAY_X, my = i == 2 ? TP_SCREW_Y : i ? TP_REPEAT_Y : TP_PLAY_Y, cell = i ? 2 : tp.playing ? 0 : 1;
+            int mx = i == 2 ? TP_SCREW_X
+                     : i    ? TP_REPEAT_X
+                            : TP_PLAY_X,
+                my = i == 2 ? TP_SCREW_Y
+                     : i    ? TP_REPEAT_Y
+                            : TP_PLAY_Y,
+                cell = i            ? 2
+                       : tp.playing ? 0
+                                    : 1;
             if (!(which >> i & 1)) continue;
             for (u = 0; u < TP_MARK_PX; ++u)
                 for (v = 0; v < TP_MARK_PX; ++v) {
-                    unsigned *p = tp_pix(f, FRAME_W, mx + u, my + v), s = (i == 1 && !tp.repeat) || (i == 2 && !tp.pressed) ? 0 : (i == 2 ? tp_sprite(sc, TP_MARK_PX, 0, u, v) : tp_sprite(m, TP_MARK_PX, cell, u, v));
+                    unsigned *p = tp_pix(f, FRAME_W, mx + u, my + v),
+                             s = (i == 1 && !tp.repeat) || (i == 2 && !tp.pressed)
+                                     ? 0
+                                     : (i == 2 ? tp_sprite(sc, TP_MARK_PX, 0, u, v)
+                                               : tp_sprite(m, TP_MARK_PX, cell, u, v));
                     *p = *tp_pix((unsigned *)base, FRAME_W, mx + u, my + v);
                     if (s >> 24) *p = tp_mix(*p, s, s >> 24);
                 }
@@ -317,11 +361,13 @@ static void tp_field(unsigned *f, const unsigned *base, void *font, int id, cons
     if (!n) return;
     tk_utf8_to_utf16_ex(utf8, n, wide, 63);
     wide[63] = 0;
-    for (n = 0; wide[n]; ++n) {}
+    for (n = 0; wide[n]; ++n) {
+    }
     w = tp_width(font, px, wide, (int)n);
     if (w > fd->room) {
         int ell = tp_adv(font, px, ELLIPSIS), keep = 0;
-        for (w = 0, i = 0; i < n && w + tp_adv(font, px, wide[i]) + ell <= fd->room; ++i) w += tp_adv(font, px, wide[i]);
+        for (w = 0, i = 0; i < n && w + tp_adv(font, px, wide[i]) + ell <= fd->room; ++i)
+            w += tp_adv(font, px, wide[i]);
         keep = (int)i;
         wide[keep] = ELLIPSIS, n = (unsigned)keep + 1, w += ell;
     }
@@ -357,11 +403,16 @@ static void tp_status(void *font, char *out, unsigned size, unsigned *px) {
     snprintf(parts[2], sizeof parts[2], "%02d:%02d", tp.hh, tp.mm);
     for (p = 12;; p = 11)
         for (form = 0; form < 3; ++form) {
-            if (tp.batt < 0) snprintf(out, size, "VOL %d", tp.vol);
-            else if (form == 0) snprintf(out, size, "%s%s%s%s%s%s%s", parts[0], tp.fmt[0] ? " | " : "", tp.fmt, " | ", parts[2], " | ", batt);
-            else if (form == 1) snprintf(out, size, "%s%s%s | %s", parts[0], tp.fmt[0] ? " | " : "", tp.fmt, batt);
-            else snprintf(out, size, "%s | %s", parts[0], batt);
-            for (n = 0; out[n]; ++n) wide[n] = (unsigned char)out[n];   /* ASCII only */
+            if (tp.batt < 0)
+                snprintf(out, size, "VOL %d", tp.vol);
+            else if (form == 0)
+                snprintf(out, size, "%s%s%s%s%s%s%s", parts[0], tp.fmt[0] ? " | " : "", tp.fmt, " | ", parts[2], " | ",
+                         batt);
+            else if (form == 1)
+                snprintf(out, size, "%s%s%s | %s", parts[0], tp.fmt[0] ? " | " : "", tp.fmt, batt);
+            else
+                snprintf(out, size, "%s | %s", parts[0], batt);
+            for (n = 0; out[n]; ++n) wide[n] = (unsigned char)out[n]; /* ASCII only */
             if (tp_width(font, p, wide, (int)n) <= STATUS_W || (p == 11 && form == 2)) {
                 *px = p;
                 return;
@@ -386,19 +437,31 @@ static int tp_on_paint(void *ctx, void *e) {
             for (i = 0; i < F_N; ++i) {
                 if (!(tp.pending >> i & 1)) continue;
                 switch (i) {
-                case F_TITLE: tp_field(f, base, font, i, tp.title, fields[i].px); break;
-                case F_ARTIST: tp_field(f, base, font, i, tp.artist, fields[i].px); break;
-                case F_ALBUM: tp_field(f, base, font, i, tp.album, fields[i].px); break;
-                case F_TIMES: tp_field(f, base, font, i, tp.times, fields[i].px); break;
-                case F_BIG: tp_field(f, base, font, i, "A", fields[i].px); break;
-                case F_MODEL: tp_field(f, base, font, i, theme_model[tp.theme], fields[i].px); break;
+                case F_TITLE:
+                    tp_field(f, base, font, i, tp.title, fields[i].px);
+                    break;
+                case F_ARTIST:
+                    tp_field(f, base, font, i, tp.artist, fields[i].px);
+                    break;
+                case F_ALBUM:
+                    tp_field(f, base, font, i, tp.album, fields[i].px);
+                    break;
+                case F_TIMES:
+                    tp_field(f, base, font, i, tp.times, fields[i].px);
+                    break;
+                case F_BIG:
+                    tp_field(f, base, font, i, "A", fields[i].px);
+                    break;
+                case F_MODEL:
+                    tp_field(f, base, font, i, theme_model[tp.theme], fields[i].px);
+                    break;
                 default:
                     tp_status(font, line, sizeof line, &px);
                     tp_field(f, base, font, i, line, px);
                 }
             }
             tp.pending = 0;
-            tp.dx0 = tp.dy0 = tp.dx1 = tp.dy1 = 0;   /* the fields' rectangles were asked for by tp_update */
+            tp.dx0 = tp.dy0 = tp.dx1 = tp.dy1 = 0; /* the fields' rectangles were asked for by tp_update */
         }
         if (f) bitmap_unlock_buffer(tp.frame);
         if (base) bitmap_unlock_buffer(tp.base);
@@ -423,7 +486,7 @@ static int tp_battery(int *charging) {
     return widget_get_prop_int(pg, "value", 0);
 }
 
-static int tp_volume(void) {   /* the status bar's label_volume text, read only (never set) */
+static int tp_volume(void) { /* the status bar's label_volume text, read only (never set) */
     void *bar = *(void **)SYSTEM_BAR, *lab = bar ? widget_lookup(bar, "label_volume", 1) : (void *)0;
     char buf[16];
     int v = 0, i;
@@ -437,18 +500,21 @@ static int tp_volume(void) {   /* the status bar's label_volume text, read only 
 static void tp_copy(char *dst, unsigned size, const char *s) {
     unsigned n = 0;
     while (s[n] && n + 1 < size) dst[n] = s[n], ++n;
-    while (n && ((unsigned char)s[n] & 0xc0) == 0x80 && s[n]) --n;   /* a cut never leaves half a UTF-8 character */
+    while (n && ((unsigned char)s[n] & 0xc0) == 0x80 && s[n]) --n; /* a cut never leaves half a UTF-8 character */
     dst[n] = 0;
 }
 
-static void tp_format(char *out, const char *path) {   /* the file extension, upper case, at most 4 characters: what the track's information gives */
+static void tp_format(
+    char *out,
+    const char *path) { /* the file extension, upper case, at most 4 characters: what the track's information gives */
     unsigned n = 0, dot = 0, i, k = 0;
     while (path[n]) {
         if (path[n] == '.') dot = n + 1;
         if (path[n] == '/') dot = 0;
         ++n;
     }
-    for (i = dot; dot && path[i] && k < 4; ++i) out[k++] = path[i] >= 'a' && path[i] <= 'z' ? (char)(path[i] - 32) : path[i];
+    for (i = dot; dot && path[i] && k < 4; ++i)
+        out[k++] = path[i] >= 'a' && path[i] <= 'z' ? (char)(path[i] - 32) : path[i];
     out[k] = 0;
 }
 
@@ -459,9 +525,10 @@ static unsigned tp_track_key(void *t) {
 
 /* The packs' radii in 1/16 px at pos / len: r_supply^2 + r_takeup^2 = 66^2 + 16^2, the take-up's area growing in step. */
 __attribute__((noinline)) void tp_radii(int pos, int len, int *rs, int *rt) {
-    unsigned p = len > 0 ? (unsigned)pos * 65536u / (unsigned)len : 0, take2;   /* pos <= len <= 65535: fits 32 bits */
+    unsigned p = len > 0 ? (unsigned)pos * 65536u / (unsigned)len : 0, take2; /* pos <= len <= 65535: fits 32 bits */
     if (p > 65536u) p = 65536u;
-    take2 = TP_PACK_MIN * TP_PACK_MIN * 256u + (unsigned)((TP_PACK_MAX * TP_PACK_MAX - TP_PACK_MIN * TP_PACK_MIN) * p >> 8);
+    take2 =
+        TP_PACK_MIN * TP_PACK_MIN * 256u + (unsigned)((TP_PACK_MAX * TP_PACK_MAX - TP_PACK_MIN * TP_PACK_MIN) * p >> 8);
     *rt = (int)tp_isqrt(take2);
     *rs = (int)tp_isqrt((TP_PACK_MAX * TP_PACK_MAX + TP_PACK_MIN * TP_PACK_MIN) * 256u - take2);
 }
@@ -469,14 +536,16 @@ __attribute__((noinline)) void tp_radii(int pos, int len, int *rs, int *rt) {
 /* One look at everything: updates the state, draws what is not text into the frame, marks the text to redraw and what to invalidate. */
 static void tp_update(int force) {
     void *t = cc_playing();
-    int pos = 0, len = 0, charging, batt, vol, playing = mclGetPlayStatus() == 2, mode = mclGetPlayMode(), repeat = mode == MODE_REPEAT_ONE || mode == MODE_REPEAT_ALL;
+    int pos = 0, len = 0, charging, batt, vol, playing = mclGetPlayStatus() == 2, mode = mclGetPlayMode(),
+        repeat = mode == MODE_REPEAT_ONE || mode == MODE_REPEAT_ALL;
     int rs, rt, k, all = 0, hubs = 0, marks = 0, i;
     unsigned key = t ? tp_track_key(t) : 0, now = time_now_ms(), dt = now - tp.t_last;
     long secs = time((long *)0);
     const int *tm = secs > 1577836800L ? localtime(&secs) : (const int *)0;
     int hh = tm ? tm[2] : 0, mm = tm ? tm[1] : 0;
     if (force) tp.key = ~0u, tp.rs = -1;
-    if (!tp.t_last || dt > 250) dt = tp.t_last ? 250 : 0;   /* the first look turns nothing; a stalled loop never jumps the reels */
+    if (!tp.t_last || dt > 250)
+        dt = tp.t_last ? 250 : 0; /* the first look turns nothing; a stalled loop never jumps the reels */
     tp.t_last = now | !now;
     if (!t || get_playtimeandlength(&pos, &len) != 1 || len <= 0) pos = len = 0;
     if (pos < 0) pos = 0;
@@ -496,7 +565,8 @@ static void tp_update(int force) {
     }
     if (pos != tp.pos || len != tp.len) {
         tp.pos = pos, tp.len = len;
-        snprintf(tp.times, sizeof tp.times, "%d:%02d  -%d:%02d", pos / 60, pos % 60, (len - pos) / 60, (len - pos) % 60);
+        snprintf(tp.times, sizeof tp.times, "%d:%02d  -%d:%02d", pos / 60, pos % 60, (len - pos) / 60,
+                 (len - pos) % 60);
         tp.pending |= 1u << F_TIMES;
     }
     batt = tp_battery(&charging);
@@ -508,16 +578,19 @@ static void tp_update(int force) {
     if (force) tp.pending = (1u << F_N) - 1, marks = 1;
     if (playing != tp.playing || repeat != tp.repeat) tp.playing = playing, tp.repeat = repeat, marks = 1;
     tp_radii(pos, len, &rs, &rt);
-    if (tp.rs < 0 || rs - tp.rs >= 4 || tp.rs - rs >= 4 || rt - tp.rt >= 4 || tp.rt - rt >= 4) tp.rs = rs, tp.rt = rt, all = 1;
+    if (tp.rs < 0 || rs - tp.rs >= 4 || tp.rs - rs >= 4 || rt - tp.rt >= 4 || tp.rt - rt >= 4)
+        tp.rs = rs, tp.rt = rt, all = 1;
     if (playing)
         for (k = 0; k < 2; ++k) {
-            unsigned r = (unsigned)(k ? tp.rt : tp.rs), step = dt * 1229u / (r ? r : 1), a = tp.ang[k] + 1920u * 2 - step % 1920u;   /* 1920 sixteenths: the 120 degree cycle of the 3-spoke drive */
+            unsigned r = (unsigned)(k ? tp.rt : tp.rs), step = dt * 1229u / (r ? r : 1),
+                     a = tp.ang[k] + 1920u * 2 -
+                         step % 1920u; /* 1920 sixteenths: the 120 degree cycle of the 3-spoke drive */
             tp.ang[k] = a % 1920u;
             if ((int)(tp.ang[k] / 80) != tp.hub[k]) tp.hub[k] = (int)(tp.ang[k] / 80), hubs = 1;
         }
     if (all || hubs) tp_reels(all);
     if (marks) tp_marks(7);
-    for (i = 0; i < F_N; ++i)   /* the text is drawn by the paint (it has the font); its rectangles are asked for now */
+    for (i = 0; i < F_N; ++i) /* the text is drawn by the paint (it has the font); its rectangles are asked for now */
         if (tp.pending >> i & 1) tp_dirty(fields[i].x0, fields[i].y0, fields[i].x1, fields[i].y1);
     tp_flush();
 }
@@ -525,7 +598,9 @@ static void tp_update(int force) {
 /* ---------------------------------------------------------------------------
  * The timer, the window's events
  */
-static unsigned tp_want_ms(void) { return !pod_screen_lit() ? POD_DARK_MS : tp.playing ? TP_PLAY_MS : TP_IDLE_MS; }   /* screen off: a slow check, no visual work (docs/modules/tape.md "Idle power") */
+static unsigned tp_want_ms(void) {
+    return !pod_screen_lit() ? POD_DARK_MS : tp.playing ? TP_PLAY_MS : TP_IDLE_MS;
+} /* screen off: a slow check, no visual work (docs/modules/tape.md "Idle power") */
 
 static void tp_retime(void) {
     unsigned want = tp_want_ms();
@@ -541,7 +616,9 @@ static int tp_tick(const void *timer) {
         tp.timer = 0;
         return RET_OK;
     }
-    if (pod_screen_lit()) tp_update(0);   /* dark: no reels, no text, no invalidation; the first lit tick looks at everything (dt is capped, the text compares with what it shows) */
+    if (pod_screen_lit())
+        tp_update(
+            0); /* dark: no reels, no text, no invalidation; the first lit tick looks at everything (dt is capped, the text compares with what it shows) */
     tp_retime();
     return RET_REPEAT;
 }
@@ -550,7 +627,7 @@ static int tp_first(const void *timer) {
     (void)timer;
     tp.timer = 0;
     if (!tp.win || !tp.fg) return RET_OK;
-    if (!pod_screen_lit()) {   /* opened with the screen off: the first full draw waits for the light */
+    if (!pod_screen_lit()) { /* opened with the screen off: the first full draw waits for the light */
         tp.timer = timer_add(tp_first, (void *)0, POD_DARK_MS);
         return RET_OK;
     }
@@ -565,7 +642,7 @@ static void tp_unarm(void) {
     tp.timer = 0;
 }
 
-static void tp_release(void) {   /* the touch is over (or never was): the close screw is let go */
+static void tp_release(void) { /* the touch is over (or never was): the close screw is let go */
     int was = tp.pressed;
     tp.touch = tp.pressed = 0;
     if (was && tp.frame) tp_marks(4), tp_flush();
@@ -590,7 +667,7 @@ static int tp_on_foreground(void *ctx, void *e) {
 
 static int tp_on_destroy(void *ctx, void *e) {
     (void)e;
-    if (ctx != tp.win) return RET_OK;   /* an earlier window's end leaves a newer page alone */
+    if (ctx != tp.win) return RET_OK; /* an earlier window's end leaves a newer page alone */
     tp_unarm();
     tp_free();
     memset(&tp, 0, sizeof tp);
@@ -607,7 +684,9 @@ static void tp_local(void *e, int *x, int *y) {
     *x = pt[1], *y = TP_H - 1 - pt[0];
 }
 
-static int tp_in_close(int x, int y) { return x >= TP_CLOSE_X0 && x < TP_CLOSE_X1 && y >= TP_CLOSE_Y0 && y < TP_CLOSE_Y1; }
+static int tp_in_close(int x, int y) {
+    return x >= TP_CLOSE_X0 && x < TP_CLOSE_X1 && y >= TP_CLOSE_Y0 && y < TP_CLOSE_Y1;
+}
 
 /* DOWN, UP and ABORT of the view; nothing else is bound and nothing is grabbed (a MOVE is never consumed here: the stock pull-down from the top edge reads the drag itself). */
 static int tp_on_touch(void *ctx, void *e) {
@@ -625,7 +704,7 @@ static int tp_on_touch(void *ctx, void *e) {
         tp_local(e, &x, &y);
         dx = x - tp.sx, dy = y - tp.sy;
         tp_release();
-        if (close) {   /* began on the screw: ends on it, it closes; the finger left it, nothing */
+        if (close) { /* began on the screw: ends on it, it closes; the finger left it, nothing */
             if (tp_in_close(x, y)) navigator_back();
         } else if ((dx < 0 ? -dx : dx) < TP_TAP_PX && (dy < 0 ? -dy : dy) < TP_TAP_PX) {
             playpause_quick_click();
@@ -675,7 +754,7 @@ int tape_open(void) {
     if (tp.view && tp.st_font) {
         unsigned *f, d2;
         char name[32];
-        tp.theme = tape_theme();   /* read once: a change in Customize shows the next time the page opens */
+        tp.theme = tape_theme(); /* read once: a change in Customize shows the next time the page opens */
         snprintf(name, sizeof name, "tape_shell_%s", theme_name[tp.theme]);
         tp.base = tp_load(name, TP_H, TP_W);
         snprintf(name, sizeof name, "tape_hubs_%s", theme_name[tp.theme]);
@@ -698,7 +777,7 @@ int tape_open(void) {
         if (f) bitmap_unlock_buffer(tp.frame);
         if (f && tp.top && tp.hubs && tp.marks && tp.screw && tp.lut) {
             for (d2 = 0; d2 < TP_LUT_N; ++d2) tp.lut[d2] = (unsigned short)tp_isqrt(d2 << 6);
-            tp.ang[1] = 400, tp.hub[1] = 400 / 80;   /* the reels do not start in step */
+            tp.ang[1] = 400, tp.hub[1] = 400 / 80; /* the reels do not start in step */
             tp.fg = 1;
             tp.rs = tp.rt = -1;
             tp.key = ~0u;
@@ -713,8 +792,8 @@ int tape_open(void) {
             return 0;
         }
     }
-    tp_free();   /* an asset that is not ours, or no memory: the window goes again */
-    tp.win = (void *)0;   /* (its destroy handler leaves a newer page alone) */
+    tp_free(); /* an asset that is not ours, or no memory: the window goes again */
+    tp.win = (void *)0; /* (its destroy handler leaves a newer page alone) */
     navigator_back();
     memset(&tp, 0, sizeof tp);
     return -1;

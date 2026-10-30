@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="320" height="480" viewBox="0 0 320 480" role="img" aria-labelledby="title">
   <title id="title">M1+</title>
   <!-- M1+ boot splash, upright 320x480 like the stock M1 Plus logo.jpg. Palette and wordmark style
-       adapted from q2-pod's assets/boot-logo.svg (Copyright (c) 2026 Diamond Bond, MIT; see NOTICE).
+       after q2-pod's boot logo.
        "M1+" is drawn as plain geometric outlines in a 70-unit cap-height space (7-unit stems, splayed
        M, in the spirit of q2-pod's URW Gothic Book wordmark); the plus is a superscript, 35 units, its
        top flush with the cap top. The transform scales by 5/7 to a 50 px cap (5 px strokes), cap top

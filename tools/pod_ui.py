@@ -13,7 +13,7 @@ Cover Flow's page has its own layout.
 
 Usage: pod_ui.py WORKDIR   (writes ui/*.bin into WORKDIR/rootfs; prints the files)
 """
-import argparse, os, stat, sys
+import argparse, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_ui
 from awtk_ui import Widget

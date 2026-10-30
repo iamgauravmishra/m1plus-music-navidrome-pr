@@ -91,7 +91,6 @@ def selection(im, y, h, th, x1=W):
     d = ImageDraw.Draw(im); d.line((0, y, x1 - 1, y), fill=(154, 221, 248, 255)); d.line((0, y + h - 1, x1 - 1, y + h - 1), fill=(21, 79, 129, 255))
 
 def rows(s, im, th, items, y0, rh, sel, x1=W, px=16, chev=True, tag=None, x=8):
-    d = ImageDraw.Draw(im)
     for i, t in enumerate(items):
         y = y0 + i * rh
         fg = th.fg
@@ -311,7 +310,6 @@ def frame(s, th, screen, sh, bar=False):
     im = Image.new('RGBA', (W, H), (0, 0, 0, 255))
     if bar: PI.status_bar(s, im)
     im.alpha_composite(screen, (0, top))
-    reg = H - top - sh
     ImageDraw.Draw(im).rectangle((0, top + sh, W - 1, H - 1), fill=th.body + (255,))
     im.alpha_composite(s.img('ipod_wheel_dark' if th.dark else 'ipod_wheel'), (50, 250))
     return im

@@ -1,41 +1,60 @@
-# Device checks for the looks
+# Device checks
 
-Split out of docs/ui.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
+Record the build tag, device/card, result (pass/fail/untested) and capture for each applicable
+check. This is a checklist, not a record of completed testing. Historical observations stay
+in [history](../history.md); feature modules retain their detailed edge cases.
 
-## 9. Device checks for the looks
+## Common checks
 
-Boot splash upright (and after a 180° rotation); no text hole, tofu or jitter in the new font at
-16/18/20/21 px; digits and clocks do not jitter; CJK, Cyrillic, Vietnamese, Thai titles; curly quotes
-proper; status bar clear of Bluetooth in 12 h mode; settings rows black with hairlines and grey discs,
-slides in and out; lists and Search as described; Now Playing as in section 4; lock screen
-card translucent without notches, 264 px cover sharp, gauge small, hint small, touch rules; pull-down
-tiles rings, captions fit; Home menu without grid flash, title or Back; theme1 returns the stock look.
-Albums page (not yet seen on the device): the grid as before (covers sharp and aligned in two columns, album and artist one line each with the ellipsis, scrolling
-follows the finger and coasts, a tap opens the album page, Back returns to the same place); the toggle switches to the list and back in place, at the same first
-album, without a flash, and the Albums row then opens the last mode (also after a reboot); list rows: 52 px cover, album, artist, hairline, pressed `#333333`
-under the finger only, a long title or artist ends in an ellipsis before the right margin; an album without a cached cover shows the disc in both modes.
-Mini player bar (`docs/modules/minibar.md`, not yet seen on the device): nothing queued at boot: the menu as before; play something: the bar shows within
-a second, the list scrolls behind it (rows show through the glass, the last row scrolls clear above it), the cover is sharp with rounded corners, the pill is a translucent dark glass pill with a light rim, brighter on its top arc, the same for every track (white bar glyphs, a pressed pill a little lighter, the cover 36 px at the pill's left
-curve), long titles end in an ellipsis before the buttons and do not scroll; play / pause toggles the sound and the glyph (also when paused from the
-headset key or Now Playing); next skips and the title follows within the tick (a second next within a second is ignored, as on the lock screen); a tap on
-the card opens Now Playing and Back returns with the bar current; the pull-down over the menu and a dialog do not leave the bar stuck; the menu opened
-from the grid icon (Home, Customize > Home Screen) has no bar; Customize > Home Screen > Shanling Home and back leave no bar on the grid.
-Backdrop blur (experimental, `docs/modules/minibar.md`): the rows behind the glass are blurred and slightly darker, not sharp, with no rectangular patch at the pill's rounded ends and no seam
-or colour cast; scrolling the list under the pill stays smooth (about 0.6 ms of blur a frame is the estimate); pressing play or next, a track change and a pause show no flash of sharp rows;
-pressing a row just above the pill shows at most one frame of sharp rows inside the pill. With `/mnt/mmc/m1plus-noblur` on the card the glass is over sharp rows (the pre-blur look). If the panel is
-`bgra5551` (it reports a 1 bit alpha) the blur is simply absent: that is the answer to "which lcd".
-Recently Played shelf (`docs/modules/recent.md`, not yet seen on the device): play two or three albums (from the Albums page, Cover Flow, the album page), return to the Home menu: the shelf shows at the foot of the list, below the Settings row, under a white "Recently Played" header
-(20 px, starting where the covers start, about 20 px below the Settings row, 8 px above the covers), the albums in the order played with the latest first as the Albums page's grid, 2 columns of 144 px covers with rounded corners (one row for one or two albums, two for three or four, three for five or six), the album (white, 18 px) and the artist (grey, 15 px) under each ending in an ellipsis; scrolled to the end the artist line sits just above the mini bar; the covers are made only when the shelf is scrolled into view (or within a row of it), one after the other, with no hitch while scrolling the list towards it; the rows above never jump when the shelf appears or goes; an album without a cached cover shows the disc until the Albums page has built it (then a to-foreground, i.e. after leaving and returning, shows it). The list scrolls with the shelf (a drag that starts on a
-cover or a caption scrolls it; a tap opens the album page, Back returns; a swipe never opens an album; a touch that stops a coasting list opens nothing); the last row still scrolls clear above the mini bar. Keep playing a new album with the menu in front: its cover appears first within a second. Play a compilation (or an album whose tracks have different artist tags) through several tracks: ONE shelf entry, not copies; its cover is the album's (the disc only until the album list has been read: after the first Now Playing tick of a new album, or a leave-and-return of the menu 5 s or more after boot; note any hitch when that list loads on a large library). Delete a cover cache file or the album: the disc, a tap still behaves as described.
-Customize > Home Screen > Recent Albums off: the shelf is gone and the rows are as before; on: it is back with its covers. An album deleted from the library: its tile shows, a tap does nothing. Reboot: the shelf is still there (`/mnt/data/m1plus-recent`); no shelf on the menu opened from the grid icon; a first boot with no history shows no shelf. Listen for any stutter while scrolling the list with the shelf (each cover is 96 x 96 RGBA, 110 KB in all).
-Songs page (`docs/modules/songs.md`, not yet seen on the device): the Songs row opens it with a large "Songs" title and two flat pills (Play, Shuffle: glyph and label centred as a pair, pressed lighter) and no flash;
-sections (a 28 px header: the bare 20 px white letter on black, as the Recently Played header; the Shuffle pill ends at x 290, clear of the rail) with 64 px rows (52 px cover, title, artist, both ending in an ellipsis before the rail, a hairline from x 74); the header of the section at the top stays pinned and the next one pushes it up; the navbar
-shows the glass capsule of four (Search, Sort, Select, Now Playing) and the small title appears once the large one has scrolled away (not in Spanish); the rail on the right: a compact index like the stock page's ("# C F I L O R U X Z" with dots between for 27 sections, about 250 px, centred; "#" first: the stock sort puts digits and symbols first), a touch or a drag on it jumps the list through every section (also the ones with no drawn letter),
-a drawn touched letter on a light disc and the 110 px bubble in the middle, the list never starts a drag from the rail, a coasting list is stopped by it; Sort: the card under the button (flat), the current order ticked, a choice re-reads the list from the top and the choice survives a
-reboot, only Alphabetical has sections and the rail; Search opens the stock search and Back returns to the same list; a tap on a row plays it (Now Playing, the queue is the list), Play from the first song, Shuffle in Shuffle mode; Select: the x, "N Selected", Select All, marks left of the covers, the bar's two
-pills, the rail still there; Add to Playlist opens the stock playlist picker and a tap adds the marked songs and returns to the list; Delete asks (library only / with the files) and the songs are gone from the list afterwards (also the playing one: the player stops); a library of thousands scrolls
-and jumps smoothly, covers load a few at a time after a stop, none while the finger moves.
-Daily Mix card (`docs/modules/dailymix.md`, not yet seen on the device): leave the Home menu open for 10 s or more on the first visit of a day (or tap Customize > Home Screen > Regenerate Daily Mix and go Back): no hitch in the list while it works (the mix is made in about 80 timer slices, none over a few ms in the emulator; a large library's stock queries are the unknown), then the "Made for You" header and a 296 x 220 card appear between the rows and Recently Played with a soft gradient from the top albums' covers (the card appears without a jump of the rows below it; the text is white and readable on any gradient), "Daily / Mix" in two big lines, the top artists in up to two grey lines ("A, B, C and more"), a glass play disc at the lower right; the card's corners are round. A tap on the card opens the Daily Mix page (full-width art fading into the tint, the status bar in the art's top colour, "Daily Mix" / "Made for You" / "Updated today", Shuffle and the white Play pill, the 25 songs as Albums list rows; no artist more than twice, no two songs of an artist in a row); a row plays the mix from it, Back returns to the same scroll place; the disc starts the first song and opens Now Playing. No "Daily Mix" appears in Playlists or the Add to playlist sheet (an old one from earlier test builds stays until deleted there). Next day: a new mix and a new card. Regenerate Daily Mix (no chevron on its row, no message): after Back the card is a different mix. Customize > Home Screen > Daily Mix off: the section is gone and the shelf moves up; on: it is back at once. Reboot: the card is there at once (`/mnt/mmc/.m1plus/daily-mix/tracks` and `art`: each SD card carries its own mix). Swap the SD card for one with another library: after the Home menu is opened again the old mix is gone and a new one is made after about 8 s (or that card's own mix shows at once); put the first card back: its mix is there. With no card the Home menu shows no Daily Mix section and `/mnt/data` gets no mix file. The `m1plus-mix*` files of earlier builds in `/mnt/data` are unused and can be deleted. With no cover cache the gradient is the fixed blue / rose / teal palette. The look of the gradient on the real panel (RGB565 dither, banding), the 36 px title in AWTK and the cost of the stock library queries on a large library are the things to judge.
-Album page capsule and pressed glass (`docs/modules/album-page.md`, `docs/modules/navbar.md`, not yet seen on the device): a freshly opened album shows Back and ONE glass capsule of multi-select and Now Playing (x 216 .. 311), no seam or dark line between them; after a select cycle a search disc appears left of it with a 4 px gap, the capsule unchanged. Pressing a capsule button (here and on Albums, Playlists, Artists, Songs) shows a round lighter highlight under its glyph only, the capsule's outline unchanged; after the release no trace remains, also in the 2 px between multi-select and Now Playing (scroll the list a little to repaint and compare).
-Podcasts (`docs/modules/podcasts.md`, not yet seen on the device): the checklist is in that file (scan, dates, resume jump, speed, covers).
-Fallback: `tools/build.py --restore`.
+| ID | Check |
+|---|---|
+| SYS-01 | Boot, sleep/wake and reboot; switch startup, return to Shanling Home and reopen M1+ Music; verify the kill switch |
+| UI-01 | Upright boot logo; readable fonts at 16/18/20/21 px; stable digits/clocks; CJK, Cyrillic, Vietnamese, Thai and curly quotes |
+| UI-02 | Status bar in 12/24 h mode with wireless icons; captions fit; settings slides, pull-down and stock theme behave correctly |
+| INPUT-01 | Tap, slow drag, flick, drag out-and-back, abort and catch a coasting list; scrolling must not open/play a row |
+| CAP-01 | Confirm/cancel a screenshot, leave the page, check indicator and captured colours; test missing/full card |
+
+## Library and playback
+
+- **ALB-01 — Albums:** switch grid/list in place, retain the first visible album and mode after
+  reboot, and return from an album to the same position. Check long labels, missing covers,
+  pressed rows, sharp tiles and a large library. [Details](albums.md)
+- **CF-01 — Cover Flow:** portrait/landscape, artist scope, ends, drag/fling/snap, side/centre
+  taps, first cache build, cancel and rebuild. The navbar stays usable. [Details](coverflow.md)
+- **SONG-01 — Songs:** title collapse, pinned letters, all rail sections/bubble, search, each
+  sort, select-all, add/delete and return position. Check a large library; covers load after
+  scrolling stops. [Details](songs.md)
+- **NAV-01 — Album/navbar:** one seamless capsule, contained pressed highlights and no leftover
+  pixels in button gaps. Play all resets in-order mode; Shuffle and track taps use the expected
+  queue. Look up album returns correctly to Now Playing. [Album](album-page.md), [navbars](navbar.md)
+- **PLAY-01 — Now Playing/lock screen:** sharp rounded covers, tint changes, neutral missing
+  art, remaining time, transport/favorite/More controls, translucent card and swipe behaviour.
+  Check idle/no-queue and charging states. [Now Playing](nowplaying.md), [lock screen](lockscreen.md)
+
+## Home content
+
+- **HOME-01 — Mini player:** absent with no queue and on the normal menu; appears within a
+  tick for playback. Check long titles, transport/track updates, Now Playing return, dialogs,
+  pull-down and the final row scrolling clear above it. [Details](minibar.md)
+- **HOME-02 — Blur:** smooth scrolling and track changes, rounded glass without seams/colour
+  casts or persistent sharp patches. Compare `m1plus-noblur`; BGRA5551 intentionally omits blur.
+- **HOME-03 — Recently Played:** newest-first covers, one entry for compilations, one to three
+  rows without layout jumps, lazy cover loads and no stutter. Check missing/deleted albums,
+  taps versus drags, coasting catch, setting persistence and reboot. [Details](recent.md)
+- **HOME-04 — Daily Mix:** responsive creation/regeneration, readable card over varied palettes,
+  expected songs/artist limits, play/shuffle/track taps and correct detail page. Check settings,
+  reboot, card swap/no card, missing covers and Add-to-playlist behaviour. [Details](dailymix.md)
+
+## Extras
+
+- **EXTRA-01:** playlist grid/list and actions; Artists/Album Artists, Genres and Composers;
+  menu show/hide/reorder and empty Extras groups; translated text fits.
+- **EXTRA-02:** local podcast scan, dates, resume, played marks, speed and covers.
+  [Podcast checklist](podcasts.md#device-checks-not-run-on-a-device)
+- **EXTRA-03:** virtual iPod wheel/navigation/playback and embedded Cover Flow.
+  [iPod checklist](ipod.md#device-checklist)
+- **EXTRA-04:** Cassette Mode orientation, text, theme, progress/reels, pause/resume, close
+  and dark-screen timer behaviour. [Cassette checklist](tape.md#device-checklist-first-flash)
+
+For captures use Customize → Developer → Screenshot, then `tools/pull_shots.py --build latest`.
+See [installation/restore](../install.md) and [capture details](screenshot.md).

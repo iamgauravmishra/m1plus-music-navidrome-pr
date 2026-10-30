@@ -186,7 +186,7 @@ class StackMachine(StockEventMachine):
     def _hook(self, u, address, size, _):
         name = self.handlers.get(address)
         if name not in self.MOCK: return super()._hook(u, address, size, _)
-        a0, a1 = u.reg_read(UC_MIPS_REG_A0), u.reg_read(UC_MIPS_REG_A1)
+        a0 = u.reg_read(UC_MIPS_REG_A0)
         ret = 0
         if name == 'window_manager': ret = self.wmw
         elif name == 'navigator_window_is_exist': ret = int(self.read_cstr(a0) in self.names_())
@@ -325,7 +325,7 @@ def tint_tests(expect):
     expect(m.call(tick, count=3000000) == 0 and not styles(m) and not [c for c in m.calls if c[0] in ('widget_lookup', 'widget_load_image')],
            'a tick after the destroy does nothing (no lookup, no decode, no style)')
     # a new page replaces an old one that never said it was gone: the old timer goes, a new one starts
-    m, item, art = tint_machine(); first = m.page_window
+    m, item, art = tint_machine()
     parent = m.new_widget('scroll_view', 0, 0, 0, 310, 400); it2 = m.new_widget('list_item', parent, 0, 0, 0, 100); m.props[(it2, 'w')] = 310
     m.page_window = m.new_widget('window', 0, 0, 0, 320, 450); m.sv = parent
     m.call(HEADER_BUILDER, a0=it2, count=2000000)
@@ -571,7 +571,7 @@ def bar_tests(expect):
     inval = lambda m: sum(c[0] == 'widget_invalidate_force' and c[1] == m.bar for c in m.calls)
 
     # the colour: the page's row 0 under the overlay, capped for the white glyphs, on every tone
-    m = AlbumMachine(); out = []
+    m = AlbumMachine()
     tones = sorted({mn.tone(r, g, b) for r in range(0, 256, 51) for g in range(0, 256, 51) for b in range(0, 256, 51)} | {mn.tone(255, 255, 255), mn.tone(255, 240, 0)})
     def c_bar(t):
         return m.call(PSYMS['pod_bar_color'], a0=t[0] | t[1] << 8 | t[2] << 16, count=100000)
@@ -954,7 +954,6 @@ def album_tests(expect, page, cover_asset):
     expect(O['AH_NAV_H'] == 44 and mod_ipodrows.NAV_H == O['AH_NAV_H'] and mod_icons.GLASS_H <= 44, 'the shared builder\'s buttons are 44 px (>= the glass disc, >= the 44 px touch size)')
     # long titles: a title that fits is drawn centred; a longer one (Latin or CJK) is longer than the box and relies on the
     # label's ellipsis/scroll, which the stock builder sets and the test above keeps
-    from awtk_text import Ttf, StbText
     font = Ttf(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/fonts/default.ttf'))
     tw = lambda s, px: StbText(font, px).layout(s)[1]
     expect(tw('Kind of Blue', 22) < A['AH_TEXT_W'] and tw('Miles Davis', 18) < A['AH_TEXT_W'],
@@ -1151,9 +1150,6 @@ def album_tests(expect, page, cover_asset):
     hdr.w = 310
     # the page as the window manager sees it: the built asset's order (tint, list, navbar band LAST) with the buttons the stock builder makes,
     # at the built (pinned) immediates, in its creation order (search, title label, multi-select, Now Playing, Back)
-    built_demo = open(DEMO, 'rb').read()
-    imm = lambda a: struct.unpack_from('<I', built_demo, pod.fileoff(built_demo, a))[0] & 0xffff
-    nbh = imm(0x526e40)
     sty = {'btn_cancel': 'btn_multi', 'navbar_btnreturn_style': 'btn_back', 'search_style': 'btn_search', 'navbar_btnmulselect_style': 'btn_multi', 'navbar_btnbackplayer_style': 'btn_nowplaying'}
     def nav_buttons(builder=0x526a3c, songer=0):   # the widgets a stock builder makes (emulated), in its creation order: the topmost last
         return [Node(sty.get(st, 'nav_title'), x, y, w, h) for _, st, x, y, w, h in nav_builder_buttons(builder=builder, songer=songer)]

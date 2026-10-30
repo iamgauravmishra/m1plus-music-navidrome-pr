@@ -1,8 +1,6 @@
 # Shuffle
 
-Split out of docs/architecture.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
-
-## 7. Shuffle (`patch/shuffle.c`)
+**Sources:** `patch/shuffle.c`.
 
 The Shuffle page (`ui/m1plus_shuffle.bin`, opened by the menu's one Shuffle row as in q2-pod's Library)
 has three rows: **Shuffle Songs** (the library, stock Shuffle mode, from a random song), **Shuffle

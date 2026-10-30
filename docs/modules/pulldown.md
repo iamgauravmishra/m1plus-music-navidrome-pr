@@ -1,8 +1,6 @@
 # Pull-down
 
-Split out of docs/ui.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
-
-### Pull-down (`tools/mod_pulldown.py`, `mod_icons.py`)
+## Pull-down (`tools/mod_pulldown.py`, `mod_icons.py`)
 
 Runs after the font step on `ui/dialog/dropdown_dialog.bin` (default and theme1; no style file):
 its status bar (`view_sysbar`) is laid out from the same table as the real bar (`tools/statusbar.py`, section 4: volume number

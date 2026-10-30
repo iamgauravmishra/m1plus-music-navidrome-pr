@@ -1,7 +1,7 @@
 """Shared by the payload tests (test/pod/*.py): the Unicorn machine that runs the real compiled
 payload with the stock functions and libc it calls mocked, the widget-tree hit testing that runs
 demo's own widget_find_target, the machine factories and the host render of the depth renderer.
-Modelled on q2-pod's test/patch.py (Copyright (c) 2026 Diamond Bond, MIT; see NOTICE).
+Modelled on q2-pod's test/patch.py.
 
 Requires unicorn (venv) and a workdir patched by tools/pod.py (its podbuild/manifest.json).
 test/patch.py calls init(WORKDIR) first, then loads the feature modules, which star-import this one.
@@ -38,6 +38,12 @@ def init(work):
     DEMO = os.path.join(WORK, 'rootfs', pod.DEMO)
     BUILD = os.path.join(WORK, 'podbuild')
     MANIFEST = json.load(open(os.path.join(BUILD, 'manifest.json')))
+    import workflow, build
+    final = workflow.read(os.path.join(work, 'build.json'))
+    if final.get('sources') != workflow.source_key() or final.get('demo_sha256') != workflow.sha(DEMO) \
+            or final.get('elf_sha256') != workflow.sha(os.path.join(BUILD, 'patch.elf')):
+        raise SystemExit('stale or modified test tree; rebuild with make test or make dev')
+    build.TAG = pod.TAG = final['tag']
     PSYMS = pod.symbols_elf(os.path.join(BUILD, 'patch.elf'))
 
 
@@ -1219,7 +1225,6 @@ class Node:
 
 def asset_tree(path, names=None):
     """A Node tree from a built ui/*.bin, its flags from the asset's visible/sensitive/enable."""
-    import awtk_ui
     def conv(w):
         f = F_ENABLE | F_VISIBLE | F_SENSITIVE
         if w.get('visible') == 'false': f &= ~F_VISIBLE

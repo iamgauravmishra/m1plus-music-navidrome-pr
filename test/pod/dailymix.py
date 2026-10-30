@@ -12,7 +12,7 @@ scroll_view and pointer code) with the stock library, playlist table, clock and 
   text          the title and artists lines in 13 languages against the Python wrap
   touch         the card opens the playlist's songs, the disc plays them, a rename and a reused id
   menu          the section in the list: order, heights, hidden / shown, the shelf below it, the scroll position"""
-import importlib.util, os, random, struct, sys
+import importlib.util, os, random, re, struct, sys
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 import awtk_ui, mod_icons, pod_dailymix as D, pod_mix as X, pod_ui as U
 from awtk_text import Ttf, StbText, awtk_width
@@ -237,7 +237,9 @@ def run(ctx):
            'the mix is never a stock playlist but the one-off copy the Add disc saves: the playlist-table calls, the playlist list and the title / classinfo handling exist only in the Add disc code (dp_name .. dp_save: the lookup that shows its check, the save; no delete, no marker, no stock page, the job never touches them)')
     expect(all(n in pod.FUNCTIONS for n in ('createPlayListItem', 'checkPlayListExist', 'getPlayListMaxId', 'addPlayList')) and not [n for n in ('deletePlaylist', 'deleteAllMusicByPlaylist') if n in pod.FUNCTIONS],
            'tools/pod.py pins exactly the four calls the Add disc needs')
-    expect(D.c_table() in src, 'patch/dailymix.c carries the sRGB table of tools/pod_dailymix.py --c-table')
+    table = re.search(r'static\s+const\s+unsigned\s+short\s+dm_lin\s*\[\s*256\s*\]\s*=\s*\{([^}]*)\}', src, re.S)
+    expect(table is not None and [int(n) for n in re.findall(r'\d+', table.group(1))] == D.LIN16,
+           'patch/dailymix.c carries every sRGB table value from tools/pod_dailymix.py --c-table')
     expect(len(set(D.LIN16)) > 200 and D.LIN16[0] == 0 and D.LIN16[255] == 65535 and D.lum16((255, 255, 255)) == 65535, 'the table runs from 0 to 65535, white\'s luminance is 1.0')
 
     # ===== 2. the generator, the design checks (Python)
@@ -316,9 +318,7 @@ def run(ctx):
            and sec.find('pod_dm_title').get('style:normal:font_size') == '36' and sec.find('pod_dm_sub').get('style:normal:font_size') == '16'
            and sec.find('pod_dm_sub').get('style:normal:text_color') == '#EBEBEB', 'the style labels are hidden, insensitive, 36 px white and 16 px #EBEBEB')
     xx = os.path.join(raw, 'images', 'xx')
-    import io
     from PIL import Image
-    png_of = lambda im: (lambda bio: (im.save(bio, 'PNG', optimize=True), bio.getvalue())[1])(io.BytesIO())
     for n, pressed in (('dm_disc', False), ('dm_disc_down', True)):
         im = Image.open(os.path.join(xx, n + '.png')).convert('RGBA')
         ref = mod_icons.glass_image(48, 48, 24, pressed)
@@ -416,7 +416,7 @@ def run(ctx):
     arts += [([tuple(rnd.randrange(256) for _ in range(3)) for _ in range(rnd.randrange(2, 5))], rnd.getrandbits(32) | 1) for _ in range(1)]
     worst_cost, total_cost, nart = 0, 0, 0
     ma = DM(count=True)
-    ok_all, bad = True, []
+    bad = []
     for k, (tn, seed) in enumerate(arts):
         mix = X.dump_mix(day0, 0x1111, seed & 0xffffffff, 0, tn, ['Radiohead'], PATHS)
         ma.fs[MIX] = mix; ma.fs.pop(ART, None); ma.hide_all(); ma.start_dm(); ma.clock = 1
@@ -529,7 +529,7 @@ def run(ctx):
     mdl1, picks1, seed1, aseed1 = expect_mix(None, songs, plays, rec_, fav, day, 1)
     pm = X.parse_mix(m.fs[MIX])
     expect(pm and pm[1] == seed1 and pm[3] == 1 and pm[1] != X.seed_for(day, 0) and mpaths(m) == [mdl1[i]['path'] for i in picks1] and picks1 != picks,
-           f'regeneration (asked twice): seed of (day, 1), regen count 1, the model\'s other picks, the file replaced')
+           'regeneration (asked twice): seed of (day, 1), regen count 1, the model\'s other picks, the file replaced')
     m.call(PSYMS['dm_tick'], a0=0, count=2000000)
     expect('timer_add' not in m.names(), 'and nothing more is asked of the next tick')
     m = fresh(setting=b'0\n'); m.call(PSYMS['dm_tick'], a0=0, count=2000000)   # (the one-shot of the start, which arms nothing with the card off)

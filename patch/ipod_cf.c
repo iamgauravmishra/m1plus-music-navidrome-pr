@@ -29,29 +29,31 @@
 #define canvas_draw_text_in_rect ip_render_text
 #define canvas_draw_image ip_render_image
 
-extern unsigned ip_fit(void *canvas, unsigned *s, int maxw);   /* patch/ipod.c: the wide string cut with an ellipsis to maxw px */
+extern unsigned ip_fit(void *canvas, unsigned *s,
+                       int maxw); /* patch/ipod.c: the wide string cut with an ellipsis to maxw px */
 
 #define I(w, off) (*(int *)((char *)(w) + (off)))
 #define IPCF_SLOTS (CF_RING + 1)
 #define TEXELS (ART_SIZE * ART_SIZE)
 #define PLACE (ipcf.tex + IPCF_SLOTS * TEXELS)
 
-static const cfg_t shelf = {IP_W, IPCF_FRAME_H, IP_W / 2, IPCF_TOP, IPCF_ART, IPCF_EYE, IPCF_X1, IPCF_XS, IPCF_Z1, IPCF_ZS, IPCF_REFLECT, 0, IPCF_TAIL, IPCF_BG};
+static const cfg_t shelf = {IP_W,    IPCF_FRAME_H, IP_W / 2, IPCF_TOP,     IPCF_ART, IPCF_EYE,  IPCF_X1,
+                            IPCF_XS, IPCF_Z1,      IPCF_ZS,  IPCF_REFLECT, 0,        IPCF_TAIL, IPCF_BG};
 
 static struct {
-    int pos, target;                /* the slide's position and where it goes, 16.16 albums (first: test/pod/ipod_cf.py reads them) */
+    int pos, target; /* the slide's position and where it goes, 16.16 albums (first: test/pod/ipod_cf.py reads them) */
     void *win, *frame;
-    unsigned *tex;                  /* IPCF_SLOTS textures, then the placeholder */
-    unsigned key[IPCF_SLOTS];       /* the album key each slot holds, 0 empty */
-    int idx[IPCF_SLOTS];            /* the album's row when it was decoded (only to pick the farthest slot to reuse) */
-    const unsigned *art[IPCF_SLOTS];/* its texture: the slot's own, or the placeholder (the album has no art) */
-    int dir;                        /* the way it last went: 1 towards later albums, -1 back */
-    int more;                       /* a wanted cover is not decoded yet */
-    int drawn, dc, dfrac;           /* the position the frame holds, once drawn */
-    void *list;                     /* the stock list and its size the frame was drawn from */
+    unsigned *tex; /* IPCF_SLOTS textures, then the placeholder */
+    unsigned key[IPCF_SLOTS]; /* the album key each slot holds, 0 empty */
+    int idx[IPCF_SLOTS]; /* the album's row when it was decoded (only to pick the farthest slot to reuse) */
+    const unsigned *art[IPCF_SLOTS]; /* its texture: the slot's own, or the placeholder (the album has no art) */
+    int dir; /* the way it last went: 1 towards later albums, -1 back */
+    int more; /* a wanted cover is not decoded yet */
+    int drawn, dc, dfrac; /* the position the frame holds, once drawn */
+    void *list; /* the stock list and its size the frame was drawn from */
     unsigned count;
     unsigned bg;
-    unsigned t0;                    /* the last time the slide moved (ms) */
+    unsigned t0; /* the last time the slide moved (ms) */
 } ipcf __attribute__((section(".scratch")));
 
 void ipcf_close(void) {
@@ -72,9 +74,9 @@ int ipcf_open(void *win) {
         ipcf_close();
         return 0;
     }
-    *(unsigned short *)((char *)ipcf.frame + BITMAP_FLAGS) |= 1;   /* OPAQUE: every pixel is */
+    *(unsigned short *)((char *)ipcf.frame + BITMAP_FLAGS) |= 1; /* OPAQUE: every pixel is */
     p = PLACE;
-    for (i = 0; i < TEXELS; ++i) p[i] = 0xff2b2b2bu;   /* until the theme's disc loads */
+    for (i = 0; i < TEXELS; ++i) p[i] = 0xff2b2b2bu; /* until the theme's disc loads */
     cc_decode(win, "ipod_placeholder", 0, ART_SIZE, 1, p);
     ipcf.dir = 1, ipcf.more = 1;
     return 1;
@@ -133,7 +135,9 @@ static int fill(void *list, unsigned count, int c) {
             }
         ipcf.key[slot] = key, ipcf.idx[slot] = a;
         file = cc_url(url, key);
-        ipcf.art[slot] = file && cc_decode(ipcf.win, file, 1, ART_SIZE, 0, ipcf.tex + slot * TEXELS) ? ipcf.tex + slot * TEXELS : PLACE;   /* no art, or no cache file yet */
+        ipcf.art[slot] = file && cc_decode(ipcf.win, file, 1, ART_SIZE, 0, ipcf.tex + slot * TEXELS)
+                             ? ipcf.tex + slot * TEXELS
+                             : PLACE; /* no art, or no cache file yet */
         done = 1;
     }
     if (done) ipcf.drawn = 0;
@@ -150,8 +154,10 @@ void ipcf_goto(int sel) {
     if (!ipcf.frame) return;
     if (ipcf.pos == ipcf.target) ipcf.t0 = time_now_ms();
     ipcf.target = t;
-    if (d > IPCF_NEAR << 16) ipcf.pos = t - (IPCF_NEAR << 16);
-    else if (d < -(IPCF_NEAR << 16)) ipcf.pos = t + (IPCF_NEAR << 16);
+    if (d > IPCF_NEAR << 16)
+        ipcf.pos = t - (IPCF_NEAR << 16);
+    else if (d < -(IPCF_NEAR << 16))
+        ipcf.pos = t + (IPCF_NEAR << 16);
     if (d) ipcf.dir = d < 0 ? -1 : 1;
     ipcf.drawn = 0;
 }
@@ -176,7 +182,8 @@ int ipcf_tick(void *list, unsigned count) {
         c = (ipcf.pos + CF_ONE / 2) >> 16;
         if (c >= (int)count) c = (int)count - 1;
         if (fill(list, count, c)) changed = 1;
-    } else ipcf.more = 0;
+    } else
+        ipcf.more = 0;
     return changed;
 }
 

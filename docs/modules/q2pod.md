@@ -1,18 +1,16 @@
-# How this maps to q2-pod
+# q2-pod design reference
 
-Split out of docs/architecture.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
+M1+ Music is inspired by q2-pod. Both devices use an Ingenic/MTouch/AWTK stack, but the M1 Plus
+has different stock addresses, page assets and touchscreen controls. Never reuse a Q2 address
+or patch word without checking the pinned M1 Plus binary.
 
-## 12. How this maps to q2-pod
-
-| q2-pod | here |
+| Mechanism | M1 Plus source |
 |---|---|
-| `tools/build.py` `append_payload`, `HOOKS`, `patch_word`, `fileoff`, prologue checks | `tools/pod.py` |
-| `tools/peq.py` `compile_common` (GOT stubs, FLAGS, trampoline) | `tools/pod.py` `gen_asm` / `compile_payload` |
-| `patch/link.ld`, `patch/offsets.inc` | `patch/link.ld`, `patch/offsets.inc`, `tools/pod_pages.py` |
-| `patch/navigation.c` | `patch/m1plus.c`, `shuffle.c`, `artists.c` |
-| `patch/coverflow.c` (wheel-driven) | `patch/coverflow.c` (renderer and cache design, touch-driven, this model's queries) |
-| `patch/ipod.json`, `compact_row_layout` | `patch/rows.json`, `patch/rows.c` |
-| `test/coverflow.py`, `test/patch.py` | `test/coverflow.py`, `test/patch.py` + `test/pod/` |
+| Payload segment, pinned edits, GOT stubs and trampolines | `tools/pod.py`, `patch/link.ld` |
+| Stock layouts and page definitions | `patch/offsets.inc`, `tools/pod_pages.py` |
+| Cover Flow rendering and cache | `patch/coverflow.c`, `patch/covercache.c` |
+| Library row edits | `patch/rows.json`, `patch/rows.c` |
+| Host/MIPS testing | `test/coverflow.py`, `test/patch.py`, `test/pod/` |
 
-q2-pod hooks dozens of sites for a full scroll-wheel reskin; M1+ Music hooks one user-initiated site, one
-guarded start-up site, the album page's header builder and Now Playing's init (reached only while those pages build), and adds pages.
+The README acknowledges q2-pod; file-specific notices identify borrowed material. The
+[payload](payload.md) and [safety](safety.md) documents define this project's allowed hooks.

@@ -35,17 +35,19 @@
 #define I(w, off) (*(int *)((char *)(w) + (off)))
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 
-static int sc_state __attribute__((section(".scratch")));   /* 0 not read yet, 1 on, 2 kill switch */
+static int sc_state __attribute__((section(".scratch"))); /* 0 not read yet, 1 on, 2 kill switch */
 
 static int sc_off(void) {
     if (!sc_state) sc_state = home_off() ? 2 : 1;
     return sc_state != 1;
 }
 
-__attribute__((noinline)) static int sc_down(void *w, void *e) {   /* noinline: a MOVE (the common event) stays frameless */
+__attribute__((noinline)) static int sc_down(void *w,
+                                             void *e) { /* noinline: a MOVE (the common event) stays frameless */
     void *wa = P(w, SC_WA);
     if (!wa || B(w, SC_SNAP) || sc_off()) return RET_OK;
-    if (I(wa, SC_AN_STATE) != SC_AN_RUNNING || P(wa, SC_AN_WIDGET) != w) return RET_OK;   /* not a live animator of this list: stock */
+    if (I(wa, SC_AN_STATE) != SC_AN_RUNNING || P(wa, SC_AN_WIDGET) != w)
+        return RET_OK; /* not a live animator of this list: stock */
     widget_animator_destroy(wa);
     stock_scroll_done(w, (void *)0);
     widget_dispatch(w, e);
@@ -63,7 +65,8 @@ __attribute__((noinline)) static int sc_up(void *w, void *e) {
     d = B(w, SC_YSLIDE) ? dy : 0;
     if (B(w, SC_XSLIDE) && dx > d) d = dx;
     if (d < SC_DRAG_PX || sc_off()) return RET_OK;
-    for (i = 0; i < 12; i++) ev[i] = ((unsigned *)e)[i];   /* the stock MOVE path's copy of the pointer event (0x30 bytes) */
+    for (i = 0; i < 12; i++)
+        ev[i] = ((unsigned *)e)[i]; /* the stock MOVE path's copy of the pointer event (0x30 bytes) */
     ev[0] = EVT_POINTER_ABORT;
     widget_dispatch_event_to_target_recursive(w, ev);
     return RET_OK;

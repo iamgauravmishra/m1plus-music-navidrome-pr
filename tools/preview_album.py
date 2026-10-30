@@ -13,7 +13,7 @@ scrolled up so the header leaves. The track rows show the number in its own #AAA
 (rows_track_number). Two more panels show the Composers / Artists list (class_page): no placeholder icon, the name at the
 12 px margin, the playing row's wave before the chevron (rows_track_icon).
 
-Usage: venv/bin/python -I tools/preview_album.py WORKDIR OUT.png
+Usage: uv run python -I tools/preview_album.py WORKDIR OUT.png
 """
 import argparse, os, re, sys
 from PIL import Image, ImageDraw
@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_ui
 from awtk_ui import Widget
 import preview_font   # noqa: F401  (redirects the painters' text to stb_raster, the tree's font)
-import preview_all, pod_ui, pod_i18n, mod_ipodrows
+import preview_layout, pod_ui, pod_i18n, mod_ipodrows
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'test'))
 
@@ -72,7 +72,7 @@ def page(work, title, album, artist, meta, cover, n, scroll=0, bg=None, C=C, con
     patch/offsets.inc: cover, title, artist, year line, Play all and Shuffle) over the stock rows. bg (a function of the row
     below the status bar -> (r, g, b)) is the tint mock-up of tools/preview_album_tint.py: every pure black pixel of the page
     takes it, and so do the corner masks (text edges keep their dark blend: approximate)."""
-    raw = os.path.join(work, preview_all.RAW)
+    raw = os.path.join(work, preview_layout.RAW)
     root = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1plus_cover.bin'), 'rb').read())
     NAV = 0   # the list starts at the window's top (the floating controls, drawn at the end, sit over it)
     root.children = []
@@ -102,7 +102,7 @@ def page(work, title, album, artist, meta, cover, n, scroll=0, bg=None, C=C, con
         lab.set('style:normal:font_size', '19')   # the page theme's TRACK_PX
         row.children = [num, lab]; sv.children.append(row)
     root.children.append(sv)
-    painter = preview_all.MenuPainter(raw)
+    painter = preview_layout.MenuPainter(raw)
     im = painter.render(root, 0)
     if bg:
         px = im.load()
@@ -113,7 +113,6 @@ def page(work, title, album, artist, meta, cover, n, scroll=0, bg=None, C=C, con
     oy = BAR + NAV - scroll
     clip = (0, BAR + NAV, W, BAR + NAV + list_h)
     layer = Image.new('RGBA', im.size)
-    ld = ImageDraw.Draw(layer)
     S, R = C['AH_ART'], C['AH_CORNER']
     img = os.path.join(raw, 'images', 'xx')
     if cover is None: cover = Image.open(os.path.join(img, 'albumcover_info.png'))   # no cover: the 160 px placeholder
@@ -175,8 +174,8 @@ def pill(painter, img, text):
 
 def pills(work, path):
     """The pill in every language (the strip next to the page previews)."""
-    raw = os.path.join(work, preview_all.RAW)
-    painter = preview_all.MenuPainter(raw); img = os.path.join(raw, 'images', 'xx')
+    raw = os.path.join(work, preview_layout.RAW)
+    painter = preview_layout.MenuPainter(raw); img = os.path.join(raw, 'images', 'xx')
     langs = pod_i18n.LOCALES
     out = Image.new('RGB', (2 * 214 + 20, 12 + len(langs) // 2 * 60 + 60), (0, 0, 0)); d = ImageDraw.Draw(out)
     for i, loc in enumerate(langs):
@@ -194,7 +193,7 @@ def class_page(work, title, names, playing=None):
     """The stock Artists / Genres / Composers page (localclass_page) as the release leaves it: the class placeholder
     (icon_artist / icon_genre / icon_composer) is hidden, the name starts at the 12 px margin and runs to the chevron
     (265 px); the playing row (gold name) has the wave marker before the chevron (name 217 px)."""
-    raw = os.path.join(work, preview_all.RAW)
+    raw = os.path.join(work, preview_layout.RAW)
     root = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1plus_cover.bin'), 'rb').read())
     nav = next(w for w in root.walk() if w.name == 'navigationbar_view')
     for w in root.walk():
@@ -213,7 +212,7 @@ def class_page(work, title, names, playing=None):
         row.children.append(Widget('image', 285, 0, 13, 60, [('image', 'right_arrow'), ('draw_type', 'icon')]))
         sv.children.append(row)
     root.children.append(sv)
-    return preview_all.MenuPainter(raw).render(root, 0)
+    return preview_layout.MenuPainter(raw).render(root, 0)
 
 
 def main():

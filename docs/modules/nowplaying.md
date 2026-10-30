@@ -1,8 +1,6 @@
 # Now Playing
 
-Split out of docs/architecture.md and docs/ui.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
-
-## 8a. Now Playing (`patch/nowplaying.c`, test `test/pod/nowplaying.py`; the look is `docs/modules/nowplaying.md`)
+**Sources:** `patch/nowplaying.c`, `tools/mod_nowplaying.py`, `test/pod/nowplaying.py`.
 
 The stock `playing_page` (`ui/playing_page.bin`, restyled by `tools/mod_nowplaying.py`) gets a cover-coloured window, the
 cover's rounded corners and a remaining-time label from one hook and one page timer.
@@ -126,7 +124,7 @@ the window; no stock memory is written (the style and the labels go through the 
 prologues and call sites (nine more words). Neither function is reachable from `main` / `platform_init` (`tools/reach.py`).
 Not verified on the device: the style call's repaint, the slider's `round_radius`, the corner fills over the real canvas, the look of the 4 px dots.
 
-### Now Playing (`tools/mod_nowplaying.py`, `patch/nowplaying.c`)
+## Now Playing (`tools/mod_nowplaying.py`, `patch/nowplaying.c`)
 
 An Apple-Music-style page on the stock `playing_page`, fitted to the 320x450 window (`tools/preview_nowplaying.py` draws it from a built tree):
 

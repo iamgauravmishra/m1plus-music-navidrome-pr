@@ -1,0 +1,27 @@
+[project]
+name = "m1plus-mod"
+version = "0.0.0"
+requires-python = ">=3.15,<3.16"
+dependencies = [
+    "capstone==5.0.9",
+    "pyelftools==0.33",
+    "pillow==13.0.0",
+    "fonttools==4.67.0",
+    "unicorn==2.1.4",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "ruff==0.17.3",
+]
+
+[tool.ruff.lint]
+select = ["F", "E9"]
+
+[tool.ruff.lint.per-file-ignores]
+"test/pod/*.py" = ["F403", "F405"]
+"test/pod/harness.py" = ["F401"]  # its imports are re-exported to the tests through `from harness import *`
+"tools/preview_tape.py" = ["F403", "F405"]

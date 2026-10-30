@@ -120,7 +120,7 @@ Stock `get_id3info` (`0x4dfd58`, run by `start_player` and at each track change)
 player would seek in the file). It then copies the parsed path into the struct (`jalr strcpy` at `0x4dff4c`: the cache key), and builds `song_name` / `song_artist` from the struct: an empty title becomes the file name, an empty
 artist "Unknown" (`0x7466e8`). Tag-less episodes therefore showed "Unknown" and the raw tag title. (A timer route that wrote the globals and the labels from `pc_note` was tried and removed: it lagged a tick and left the lock screen alone.)
 
-**The hook** (hook 5 of `docs/modules/payload.md`, after q2-pod's `ID3_PATH` / `ringnav_id3_path`, `NOTICE`): the `jalr` at `0x4dff4c` becomes `jal pc_id3_path`; the delay slot still loads `a1` = the record's path, `a0` is the struct, `s0` the record.
+**The hook** (hook 5 of `docs/modules/payload.md`, after q2-pod's `ID3_PATH` / `ringnav_id3_path`, `README.md`): the `jalr` at `0x4dff4c` becomes `jal pc_id3_path`; the delay slot still loads `a1` = the record's path, `a0` is the struct, `s0` the record.
 `pc_id3_path(info, path)` copies the path (bounded at 0x3ff: the CUE start follows) and returns `info`, exactly stock's `strcpy`; then, **only for a path under `/mnt/mmc/Podcasts/`** (any case) **and without the kill switch**
 (`/mnt/mmc/m1plus-off`, `/mnt/data/m1plus-off`): if the playing record (`cc_playing`, the same queue row get_id3info read; its path must match) has a title and an artist that is not empty or "Unknown", title / artist / album come from it
 (a record queued by the Podcasts page: the episode title from `.episodes`, else the file name; the show title from `.show`, else the folder as artist and album); otherwise the tags stay as stock found them except an empty or "Unknown"

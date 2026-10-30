@@ -1,6 +1,12 @@
-# Playlists (grid of mosaics)
+# Playlists
 
-Not in the old section numbering (a feature added after V2.1oA). Code: `patch/playlists.c`, `patch/grid.c` (`grid_mosaic`), the page `tools/pod_ui.py` (`build_playlists_page`), the row `tools/pod_pages.py` (`PLAYLISTS`, `ACT_PLAYLISTS`), the preview `tools/preview_playlists.py`, the test `test/pod/playlists.py`. **No hook.** The menu's Playlists row (`ACT_PLAYLISTS`, formerly Home id 14, the stock `playlist_page`) opens `ui/m1plus_playlists.bin`; a window that will not open falls back to the stock page through the Home dispatcher (`pod_home_open(14)`), which also stays reachable from Shanling Home.
+The menu opens `ui/m1plus_playlists.bin` through `ACT_PLAYLISTS`. It adds no hook. A failed
+window open falls back through `pod_home_open(14)` to stock `playlist_page`, which remains
+available from Shanling Home.
+
+Sources: `patch/playlists.c`, `patch/grid.c` (`grid_mosaic`), `tools/pod_ui.py`
+(`build_playlists_page`) and `tools/pod_pages.py` (`PLAYLISTS`, `ACT_PLAYLISTS`).
+Tests: `test/pod/playlists.py`; preview: `tools/preview_playlists.py`.
 
 ## What the user sees
 
@@ -45,4 +51,4 @@ The asset (structure, hidden and insensitive popup, button geometry, labels in t
 
 Everything above is checked on the emulated payload and the real stock code where the harness runs it; not seen on the device: the popup's glass card (`patch3_x` stretching `pl_glass` to the fitted width, the scrim's dim, the hairlines) and its row hit-testing, the keyboard dialog opening from a click handler of our page (the stock page does the same from its own), the stock import / export dialogs over our page, the "..." glyph's look, the time of a scan on a large playlist table (one `select ... where id > 100 and cd_num=` per playlist, one a 16 ms tick), the select mode (its look: the marks at the covers' corner, the pill across the bar; the stock confirm dialog kind 1 and `batch_delete_file(0xf00b, ...)` called from our page: read from the disassembly and run in the emulation with the call mocked, never run for real) and the stock Playlists page as its fallback.
 
-Preview: `venv/bin/python -I tools/preview_playlists.py work/mod-release out/preview/playlists.png` (also two panels of `tools/preview.py`).
+Preview: `uv run python -I tools/preview_playlists.py work/mod-release out/preview/playlists.png` (also two panels of `tools/preview.py`).

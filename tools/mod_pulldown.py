@@ -28,7 +28,7 @@ tree's own font, so it must run after the font step:
 
 Usage: mod_pulldown.py SRC_WORKDIR OUT_WORKDIR     (OUT == SRC edits in place)
 """
-import argparse, os, re, sys
+import argparse, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import statusbar
 from modlib import clone_workdir, edit_ui

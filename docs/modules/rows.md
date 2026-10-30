@@ -1,8 +1,6 @@
 # Library rows
 
-Split out of docs/architecture.md and docs/ui.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
-
-## 6. Library rows (`patch/rows.c`, `patch/rows.json`)
+**Sources:** `patch/rows.c`, `patch/rows.json`.
 
 q2-pod's restyle of the stock library pages (from its `patch/ipod.json`, `compact_set_row_layout` /
 `compact_row_layout`): Songs (and Hi-Res, Favourites, Recent, Most played, a playlist's songs),
@@ -100,9 +98,7 @@ reloaded by every patched caller from its stack slot (checked at all ten sites),
 or shown (hit testing unchanged). The kill switch `/mnt/mmc/m1plus-off` turns the fit off (stock layouter);
 the 46 immediates and 3 nops are static, so the way back from them is a stock re-flash.
 
-## 7. Rows, pull-down, lock screen, wallpaper, polish
-
-### Library rows (assets; the code half is `docs/modules/rows.md`)
+## Row assets
 
 `tools/mod_ipodrows.py` edits the five row `ui/*.bin` (`localclass_page`, `allmusic_page`,
 `playerjumpinfo_page`, `album_page`, `playlist_page`: `row_height` / `default_item_height` 60 -> 64 and the jump list's template row) and the page

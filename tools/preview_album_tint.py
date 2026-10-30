@@ -9,7 +9,7 @@ replaced by that colour per row (so text edges keep a dark blend: approximate), 
 and the pressed row's band are redrawn as the album page's translucent white (rows_look). Every page is shown scrolled 150 px (the header's
 lower part and four rows, the second pressed); the status bar sheet (BAR.png) has its own page.
 
-Usage: venv/bin/python -I tools/preview_album_tint.py WORKDIR OUT.png [BAR.png]
+Usage: uv run python -I tools/preview_album_tint.py WORKDIR OUT.png [BAR.png]
 With BAR.png also the status bar sheet: the bar in the page's top-edge colour over the red and bright pages, at rest and scrolled.
 """
 import os, sys
@@ -106,8 +106,8 @@ def split_sheet(work, out):
 
 
 def PA_IMG(work):
-    import preview_all
-    return os.path.join(work, preview_all.RAW, 'images', 'xx')
+    import preview_layout
+    return os.path.join(work, preview_layout.RAW, 'images', 'xx')
 
 
 def main():

@@ -4,8 +4,8 @@ import os, re, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 DEFS = {}
-for _line in open(os.path.join(ROOT, 'patch', 'shot.h')):
-    _m = re.match(r'#define (\w+) ("[^"]*"|\w+)\s*(?:/\*.*)?$', _line.strip())
+for _line in open(os.path.join(ROOT, 'patch', 'shot.h')).read().replace('\\\n', ' ').splitlines():
+    _m = re.match(r'#define\s+(\w+)\s+("[^"]*"|\w+)\s*(?:/\*.*)?$', _line.strip())
     if _m: DEFS[_m.group(1)] = _m.group(2).strip('"') if _m.group(2).startswith('"') else int(_m.group(2), 0)
 DIR, TMP, FB = DEFS['SHOT_DIR'], DEFS['SHOT_TMP'], DEFS['SHOT_FB']
 RET_REPEAT, KILL = 8, '/mnt/mmc/m1plus-off'
@@ -118,7 +118,7 @@ def files(m): return {p: d for p, d in m.fs.items() if p.startswith(DIR)}
 def run(ctx):
     expect = ctx.expect
     P = pod_pages
-    tick_ms, settle_ms, secs = DEFS['SHOT_TICK_MS'], DEFS['SHOT_SETTLE_MS'], DEFS['SHOT_SECONDS']
+    tick_ms, settle_ms = DEFS['SHOT_TICK_MS'], DEFS['SHOT_SETTLE_MS']
     TICK, GRAB = PSYMS['shot_tick'], PSYMS['shot_grab']
     ASK, CANCEL = 'Take a screenshot in 5 s?', 'Cancel the screenshot?'
     def asked(r): return [c[2] for c in r.log if c[1] == 'confirm']

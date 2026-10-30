@@ -1,10 +1,8 @@
 # Cover Flow
 
-Split out of docs/architecture.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
+**Sources:** `patch/coverflow.c`, test `test/pod/coverflow.py`, `test/coverflow.py`.
 
-## 4. Cover Flow (`patch/coverflow.c`, test `test/pod/coverflow.py`, `test/coverflow.py`)
-
-A cover carousel over the stock Local Music albums, ported from q2-pod's `patch/coverflow.c` to the
+A cover carousel over the stock Local Music albums, after q2-pod's Cover Flow design, for the
 320x480 touchscreen (wheel-only parts gone). Opened from the menu's Cover Flow row; adds no hook:
 everything runs from the page's own widgets, one timer and one worker thread. Also opened per artist
 (section 5).

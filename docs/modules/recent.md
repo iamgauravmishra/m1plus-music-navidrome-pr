@@ -1,13 +1,16 @@
+# Recently Played
 
-# Recently Played shelf (the menu's Home instance)
+The Home menu shows up to six recent albums in a two-column shelf below Daily Mix. Covers use
+the shared Albums grid, with album and artist labels. The shelf scrolls with the menu and is
+absent from the normal menu instance.
 
-A section at the **foot** of the M1+ Music menu when it is the Home instance, below the Settings row (as Apple Music's Library has "Recently Added" below its list): the albums played last as a
-**2 x 1..3 grid of covers, all six albums the file keeps, the Albums page's own grid** (`patch/grid.c`), under a "Recently Played" header, scrolling with the list. Code `patch/recent.c` (the list file, the recording, the shelf),
-`patch/grid.c` / `grid.h` (the cells, shared with the Albums page), `patch/menu.c` (`menu_shelf`, the shelf after the rows), widgets in `ui/m1plus_menu.bin` (`tools/pod_ui.py` `shelf()`), numbers in
-`patch/offsets.inc` `SH_*` / `RC_*` and the Albums grid's `GRID_*` (`pod_ui.py` reads `GRID_*` from `offsets.inc`; `test/pod/recent.py` asserts the rest equal), file model `tools/pod_recent.py`, tests `test/pod/recent.py`,
-preview `tools/preview.py` (`shelf_image`, `minibar_page(shelf=..)`).
-**No stock hook, no new stock address**: it runs from the menu window's and the shelf's own widgets, events and one page timer, as the mini player bar (`docs/modules/minibar.md`) and the Albums page
-do. The menu opened from the grid icon (the normal instance, with its navbar) never gets a shelf.
+Sources: `patch/recent.c` (recording/file/shelf), `patch/grid.c` and `grid.h` (cells),
+`patch/menu.c` (`menu_shelf`), and `tools/pod_ui.py` (`shelf()`). Constants: `SH_*`, `RC_*`
+and `GRID_*` in `offsets.inc`. File model: `tools/pod_recent.py`; tests: `test/pod/recent.py`;
+preview: `tools/preview.py` (`shelf_image`, `minibar_page`).
+
+The feature adds no stock hook or address. It uses its window/widgets, events and one page
+timer. See the final section for the boundary between emulation evidence and device testing.
 
 ## Layout (shelf-local y; `tools/pod_ui.py` SH_*, `patch/offsets.inc` SH_* and GRID_*)
 

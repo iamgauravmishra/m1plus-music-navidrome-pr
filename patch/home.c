@@ -1,8 +1,7 @@
 /* M1+ Music as Home: the boot guard and the launcher. docs/architecture.md has the design and the
  * recovery plan.
  *
- * Copyright (c) 2026 Xin. MIT licence (see LICENSE). The crash marker follows q2-pod (Copyright (c)
- * 2026 Diamond Bond, MIT, https://github.com/DiamondBond/q2-pod; see NOTICE).
+ * Copyright (c) 2026 Xin. MIT licence (see LICENSE). The crash marker follows q2-pod's design.
  *
  * This is the only payload code that runs at start-up. One stock function is hooked for it,
  * home_page_init (0x534cd4, called once through the navigator's page-init dispatcher when the Home
@@ -27,25 +26,29 @@
 #include "stock.h"
 #include "home.h"
 
-
 enum { H_NEW = 0, H_OFF, H_ARMED, H_PROVEN };
 
 static struct {
     int state;
-    int start;        /* the setting: 1 = start in M1+ Music */
-    int grid;         /* the user chose the stock grid for this session */
-    int pending;      /* an open timer is scheduled */
-    void *entry;      /* the entry menu window (the Customize page opens over it) */
+    int start; /* the setting: 1 = start in M1+ Music */
+    int grid; /* the user chose the stock grid for this session */
+    int pending; /* an open timer is scheduled */
+    void *entry; /* the entry menu window (the Customize page opens over it) */
     int tries;
-    int as_home;      /* the menu being opened is the Home instance: its Back is hidden */
-    void *home;       /* the stock Home window */
-    void *menu;       /* the Customize page window (it opens over the entry menu, or over the Extras page) */
-    void *extras;     /* the Extras page window while it is open (Customize can be opened from it); cleared by its destroy */
+    int as_home; /* the menu being opened is the Home instance: its Back is hidden */
+    void *home; /* the stock Home window */
+    void *menu; /* the Customize page window (it opens over the entry menu, or over the Extras page) */
+    void
+        *extras; /* the Extras page window while it is open (Customize can be opened from it); cleared by its destroy */
 } hs __attribute__((section(".scratch")));
 
 static int hm_exists(const char *p) { return access(p, F_OK) == 0; }
 
-static unsigned hm_len(const char *s) { unsigned n = 0; while (s[n]) n++; return n; }
+static unsigned hm_len(const char *s) {
+    unsigned n = 0;
+    while (s[n]) n++;
+    return n;
+}
 
 /* fsync of the data directory: 0 only when the directory entry changes are durable. */
 static int hm_sync_dir(void) {
@@ -64,7 +67,10 @@ int home_write_atomic(const char *path, const char *tmp, const char *data) {
     if (fd < 0) return -1;
     ok = write(fd, data, n) == (int)n && fsync(fd) == 0;
     ok = (close(fd) == 0) && ok;
-    if (!ok || rename(tmp, path) != 0) { unlink(tmp); return -1; }
+    if (!ok || rename(tmp, path) != 0) {
+        unlink(tmp);
+        return -1;
+    }
     return hm_sync_dir();
 }
 
@@ -107,7 +113,7 @@ static int hm_clear(const void *unused) {
     return RET_OK;
 }
 
-static int hm_read_start(void) {   /* the setting; anything but "0", or no file, is M1+ Music */
+static int hm_read_start(void) { /* the setting; anything but "0", or no file, is M1+ Music */
     char c = 0;
     int fd = open(START_FILE, O_RDONLY, 0), n;
     if (fd < 0) return 1;
@@ -119,17 +125,30 @@ static int hm_read_start(void) {   /* the setting; anything but "0", or no file,
 static void hm_arm(void) {
     hs.state = H_OFF;
     hs.start = 1;
-    hs.start = hm_read_start() && !hm_exists(BAD_NOTE);   /* what the menu shows, whatever happens below */
-    if (home_off()) { hm_log("m1plus: kill switch"); return; }
-    if (hm_exists(MARKER)) { hm_record_failure(); return; }
-    if (hm_exists(BAD_NOTE)) { hm_log("m1plus: an earlier boot failed; stock until re-enabled"); return; }
+    hs.start = hm_read_start() && !hm_exists(BAD_NOTE); /* what the menu shows, whatever happens below */
+    if (home_off()) {
+        hm_log("m1plus: kill switch");
+        return;
+    }
+    if (hm_exists(MARKER)) {
+        hm_record_failure();
+        return;
+    }
+    if (hm_exists(BAD_NOTE)) {
+        hm_log("m1plus: an earlier boot failed; stock until re-enabled");
+        return;
+    }
     if (!hs.start) hm_log("m1plus: starting in Shanling");
     if (home_write_atomic(MARKER, MARKER_TMP, "1\n") != 0) {
-        unlink(MARKER);   /* the rename may have happened without a durable directory entry: stay stock, leave no marker (if the
+        unlink(
+            MARKER); /* the rename may have happened without a durable directory entry: stay stock, leave no marker (if the
                            * removal is lost too, the next boot finds the marker and falls back to Shanling: fail closed) */
         return;
     }
-    if (!timer_add(hm_clear, (void *)0, CLEAR_MS)) { hm_clear_marker(); return; }
+    if (!timer_add(hm_clear, (void *)0, CLEAR_MS)) {
+        hm_clear_marker();
+        return;
+    }
     hs.state = H_ARMED;
     hm_log("m1plus: armed");
 }
@@ -146,26 +165,39 @@ static int hm_open(const void *unused) {
     (void)unused;
     hs.pending = 0;
     if (!hm_ready() || hs.grid || !hs.start || !hs.home) return RET_OK;
-    if (home_off()) { hm_grid(1); return RET_OK; }
+    if (home_off()) {
+        hm_grid(1);
+        return RET_OK;
+    }
     wm = window_manager();
     top = wm ? window_manager_get_top_main_window(wm) : (void *)0;
-    if (!top) { hm_grid(1); return RET_OK; }
-    if (top != hs.home) return RET_OK;   /* that window's close brings Home to the foreground again */
+    if (!top) {
+        hm_grid(1);
+        return RET_OK;
+    }
+    if (top != hs.home) return RET_OK; /* that window's close brings Home to the foreground again */
     if (!widget_is_window_opened(hs.home)) {
-        if (++hs.tries < MAX_TRIES && timer_add(hm_open, (void *)0, RETRY_MS)) hs.pending = 1;
-        else hm_grid(1);                  /* never opened: show the stock grid */
+        if (++hs.tries < MAX_TRIES && timer_add(hm_open, (void *)0, RETRY_MS))
+            hs.pending = 1;
+        else
+            hm_grid(1); /* never opened: show the stock grid */
         return RET_OK;
     }
     hs.as_home = 1;
-    if (m1plus_open_entry() != 0) { hs.as_home = 0; hm_grid(1); }
+    if (m1plus_open_entry() != 0) {
+        hs.as_home = 0;
+        hm_grid(1);
+    }
     return RET_OK;
 }
 
 static void hm_schedule(unsigned ms) {
     if (hs.pending || hs.grid || !hs.start || !hm_ready() || home_off()) return;
     hs.tries = 0;
-    if (timer_add(hm_open, (void *)0, ms)) hs.pending = 1;
-    else hm_grid(1);                      /* no timer, no menu: the stock grid, never a blank Home */
+    if (timer_add(hm_open, (void *)0, ms))
+        hs.pending = 1;
+    else
+        hm_grid(1); /* no timer, no menu: the stock grid, never a blank Home */
 }
 
 /* Home came to the foreground again: a window above it closed (Back, go-home, USB, lock screen, ..). Whenever no
@@ -174,7 +206,8 @@ static void hm_schedule(unsigned ms) {
 static int hm_fg(void *ctx, void *e) {
     (void)e;
     if (!hs.pending && (home_off() || !hs.start)) hm_grid(1);
-    if (!home_off() && !widget_lookup(ctx, POD_ENTRY_NAME, 1)) hm_add_icon(ctx);   /* the stock code rebuilt the grid (Home customisation) */
+    if (!home_off() && !widget_lookup(ctx, POD_ENTRY_NAME, 1))
+        hm_add_icon(ctx); /* the stock code rebuilt the grid (Home customisation) */
     hm_schedule(OPEN_MS);
     return RET_OK;
 }
@@ -198,7 +231,10 @@ static void *hm_icon_cell(void *page, unsigned slot) {
     void *cell = view_create(page, (int)(ICON_X0 + (slot & 1) * ICON_W), (int)((slot >> 1) * ICON_H), ICON_W, ICON_H);
     void *img = cell ? image_create(cell, ICON_IMG_X, ICON_IMG_Y, ICON_IMG, ICON_IMG) : (void *)0;
     void *label = img ? label_create(cell, 0, ICON_LABEL_Y, ICON_W, ICON_LABEL_H) : (void *)0;
-    if (!label) { if (cell) widget_destroy(cell); return (void *)0; }
+    if (!label) {
+        if (cell) widget_destroy(cell);
+        return (void *)0;
+    }
     widget_set_prop_bool(img, "clickable", 1);
     widget_use_style(img, "home_m1plus_style");
     widget_set_name(img, POD_ENTRY_NAME);
@@ -225,11 +261,17 @@ static void hm_add_icon(void *win) {
     page = widget_get_child(sv, pages - 1);
     if (!hm_is(page, "view")) return;
     n = widget_count_children(page);
-    if (n < ICONS_PER_PAGE) { hm_icon_cell(page, n); return; }
+    if (n < ICONS_PER_PAGE) {
+        hm_icon_cell(page, n);
+        return;
+    }
     if (n > ICONS_PER_PAGE) return;
     page = view_create(sv, 0, 0, PAGE_W, PAGE_H);
     if (!page) return;
-    if (!hm_icon_cell(page, 0)) { widget_destroy(page); return; }
+    if (!hm_icon_cell(page, 0)) {
+        widget_destroy(page);
+        return;
+    }
     ind = widget_lookup(win, "home_sindicator", 1);
     if (ind) slide_indicator_set_max(ind, pages + 1);
 }
@@ -263,7 +305,7 @@ void home_menu_opened(void *win, int settings, int entry) {
     if (entry) {
         hs.entry = win;
         if (hs.as_home) {
-            if (hm_fill_window(win)) {   /* the mini player bar and the Recently Played shelf: this instance only */
+            if (hm_fill_window(win)) { /* the mini player bar and the Recently Played shelf: this instance only */
                 minibar_start(win);
                 recent_start(win);
                 dailymix_start(win);
@@ -335,10 +377,10 @@ void home_boot(void *win) {
     if (hs.state == H_NEW) hm_arm();
     if (hm_ready()) {
         hs.home = win;
-        hm_add_icon(win);                /* after the marker, in the guard's path; a failure adds nothing */
+        hm_add_icon(win); /* after the marker, in the guard's path; a failure adds nothing */
         widget_on(win, EVT_WINDOW_TO_FG, hm_fg, win);
         if (hs.start) {
-            hm_grid(0);                  /* no grid flash behind the menu */
+            hm_grid(0); /* no grid flash behind the menu */
             hm_schedule(OPEN_FIRST_MS);
         }
     }
@@ -347,6 +389,6 @@ void home_boot(void *win) {
 /* Installed over home_page_init's PIC prologue (tools/pod.py HOME_INIT). */
 int m1plus_home_init(void *win, void *ctx) {
     int r = stock_home_init_trampoline(win, ctx);
-    if (r == RET_OK && win) home_boot(win);   /* a stock init that failed leaves everything stock */
+    if (r == RET_OK && win) home_boot(win); /* a stock init that failed leaves everything stock */
     return r;
 }

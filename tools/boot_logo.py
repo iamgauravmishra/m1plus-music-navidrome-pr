@@ -12,7 +12,7 @@ both JPEGs are encoded from that one raster, then checked with mod_boot.jpeg_siz
                                     the stock vs the quote-fixed default.ttf, to /tmp/boot-preview.png
                                     (WORKDIR = an unpacked stock tree, e.g. work/stock)
 
-Run with the repo venv: venv/bin/python -I tools/boot_logo.py  (brew install librsvg for rsvg-convert).
+Run with the repo venv: uv run python -I tools/boot_logo.py  (brew install librsvg for rsvg-convert).
 The JPEGs are committed; the firmware build only copies them (tools/mod_boot.py).
 """
 import argparse, io, os, subprocess, sys

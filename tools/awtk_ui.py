@@ -10,7 +10,7 @@ Usage:
   awtk_ui.py dump FILE.bin            print the widget tree
   awtk_ui.py roundtrip FILE.bin...    verify parse->serialize reproduces bytes
 """
-import struct, sys, json
+import struct, sys
 
 MAGIC = 0x11221212
 RAW = 'rootfs/release/assets/default/raw'     # the app's resources inside an extracted work tree (ui/, styles/, images/, fonts/, strings/)

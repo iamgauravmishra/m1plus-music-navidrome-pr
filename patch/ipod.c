@@ -35,13 +35,14 @@
 #include "i18n.h"
 #include "podcasts.h"
 
-extern unsigned np_file_key(const char *path);       /* patch/nowplaying.c: a hash of the picture file, 0 if unreadable */
-extern const char *np_cover_file(int *busy);         /* the /tmp file of the playing track's cover, NULL for none; busy while demo makes it */
-extern void pod_toast(const char *text);             /* patch/shuffle.c: the stock message box */
-extern int pod_open_settings(void);                  /* patch/m1plus.c: the Settings page */
-extern unsigned pod_rand(unsigned n);                /* patch/shuffle.c: the shuffle generator (seeded once) */
-extern void pod_set_mode(int mode);                  /* patch/shuffle.c: the stock play mode, set as the Play settings page does */
-extern void pod_set_in_order(void);                  /* patch/shuffle.c: Shuffle and Repeat one become List play */
+extern unsigned np_file_key(const char *path); /* patch/nowplaying.c: a hash of the picture file, 0 if unreadable */
+extern const char *
+np_cover_file(int *busy); /* the /tmp file of the playing track's cover, NULL for none; busy while demo makes it */
+extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
+extern int pod_open_settings(void); /* patch/m1plus.c: the Settings page */
+extern unsigned pod_rand(unsigned n); /* patch/shuffle.c: the shuffle generator (seeded once) */
+extern void pod_set_mode(int mode); /* patch/shuffle.c: the stock play mode, set as the Play settings page does */
+extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one become List play */
 /* patch/ipod_cf.c: the Cover Flow screen (level K_CF: the albums list drawn as covers; docs/modules/ipod-coverflow.md) */
 extern int ipcf_open(void *win), ipcf_up(void), ipcf_busy(void), ipcf_tick(void *list, unsigned count);
 extern void ipcf_close(void), ipcf_goto(int sel), ipcf_paint(void *canvas, void *list, unsigned count, void *style);
@@ -49,25 +50,42 @@ extern void ipcf_close(void), ipcf_goto(int sel), ipcf_paint(void *canvas, void 
 #define I(w, off) (*(int *)((char *)(w) + (off)))
 #define ART_GREY 0xff2b2b2bu
 
-enum { K_MAIN, K_MUSIC, K_ALBUMS, K_ARTISTS, K_SONGS, K_PLAYLISTS, K_ARTIST_ALBUMS, K_TRACKS, K_PL_TRACKS, K_NOW, K_SETTINGS, K_CF };
+enum {
+    K_MAIN,
+    K_MUSIC,
+    K_ALBUMS,
+    K_ARTISTS,
+    K_SONGS,
+    K_PLAYLISTS,
+    K_ARTIST_ALBUMS,
+    K_TRACKS,
+    K_PL_TRACKS,
+    K_NOW,
+    K_SETTINGS,
+    K_CF
+};
 enum { S_SHUFFLE, S_REPEAT, S_APPEARANCE, S_COUNT };
 enum { M_COVER, M_ALBUMS, M_ARTISTS, M_SONGS, M_PLAYLISTS, M_SHUFFLE, M_COUNT };
 enum { ROOT_MUSIC, ROOT_COVER, ROOT_SHUFFLE, ROOT_NOW, ROOT_SETTINGS, ROOT_COUNT };
 enum { R_NONE, R_CENTRE, R_RING };
 
-static const char *const MAIN_KEYS[ROOT_COUNT] = {"Music", "Cover Flow", "Shuffle Songs", "Now Playing", "cdrippersettings"};
-static const char *const MUSIC_KEYS[M_COUNT] = {"Cover Flow", "Albums", "Artists", "Songs", "Playlists", "Shuffle Songs"};
+static const char *const MAIN_KEYS[ROOT_COUNT] = {"Music", "Cover Flow", "Shuffle Songs", "Now Playing",
+                                                  "cdrippersettings"};
+static const char *const MUSIC_KEYS[M_COUNT] = {"Cover Flow", "Albums",    "Artists",
+                                                "Songs",      "Playlists", "Shuffle Songs"};
 static const char *const SET_KEYS[S_COUNT] = {"Shuffle", "Repeat", "Appearance"};
-static const char *const MODE_ICONS[4] = {"ipod_mode_shuffle", "ipod_mode_repeat", "ipod_mode_repeat1", "ipod_playing"};   /* the play mode marks, then the playing track's speaker */
+static const char *const MODE_ICONS[4] = {"ipod_mode_shuffle", "ipod_mode_repeat", "ipod_mode_repeat1",
+                                          "ipod_playing"}; /* the play mode marks, then the playing track's speaker */
 static void *ip_mode_bitmap(int i);
-#define IP_NP_GONE 3              /* looks without a current track before Now Playing says Not Playing */
+#define IP_NP_GONE 3 /* looks without a current track before Now Playing says Not Playing */
 
 struct lvl {
     int kind, sel, top;
-    char title[40];               /* the title bar's text for a list opened from a record (an album, an artist, a playlist); empty: the level's own name */
+    char title
+        [40]; /* the title bar's text for a list opened from a record (an album, an artist, a playlist); empty: the level's own name */
 };
 
-#define IP_ROW_ART 54                 /* the cover fills the row exactly (IP_TALL_H): stacked covers leave no seam */
+#define IP_ROW_ART 54 /* the cover fills the row exactly (IP_TALL_H): stacked covers leave no seam */
 struct row_art {
     void *bmp;
     int kind, index;
@@ -77,66 +95,75 @@ struct row_art {
 
 static struct {
     void *win, *screen, *wheel;
-    void *st_row, *st_sel, *st_title, *st_small, *st_subsel, *st_np1, *st_np2, *st_time, *st_val, *st_np3;   /* hidden labels: the text styles */
+    void *st_row, *st_sel, *st_title, *st_small, *st_subsel, *st_np1, *st_np2, *st_time, *st_val,
+        *st_np3; /* hidden labels: the text styles */
     struct lvl st[IP_DEPTH];
-    int depth;                    /* index of the level in front */
-    void *list;                   /* the stock list the front level's rows are read from (valid while it is still the current one) */
+    int depth; /* index of the level in front */
+    void *list; /* the stock list the front level's rows are read from (valid while it is still the current one) */
     void *first;
     unsigned count;
-    int cls;                      /* the class of the tracks listed (stock: classinfo[0] after the query) */
+    int cls; /* the class of the tracks listed (stock: classinfo[0] after the query) */
     unsigned timer;
     int fg;
     /* the wheel */
-    int touch;                    /* R_NONE, R_CENTRE, R_RING */
-    int sx, sy, lx, ly;           /* the start and the last point, wheel coordinates relative to the centre */
-    int last, acc;                /* the last angle (sixteenths of a degree) and the unspent turn */
-    int turned, far;              /* a step was made / the finger travelled IP_TAP_PX or more */
-    int menu_zone, long_done;     /* the touch began on the MENU sector; a long press already popped to the main menu */
-    unsigned down_t;              /* the time of that touch (ms) */
-    int dir, rev;                 /* the committed turn direction (+1 / -1, 0 none) and the reverse travel since (sixteenths) */
-    int speed, fast;              /* smoothed angular speed (sixteenths a second); whether it has been above IP_FAST since fast_t0 */
-    unsigned lt, fast_t0;         /* the time of the last move; the time the speed went above IP_FAST (event times, ms) */
+    int touch; /* R_NONE, R_CENTRE, R_RING */
+    int sx, sy, lx, ly; /* the start and the last point, wheel coordinates relative to the centre */
+    int last, acc; /* the last angle (sixteenths of a degree) and the unspent turn */
+    int turned, far; /* a step was made / the finger travelled IP_TAP_PX or more */
+    int menu_zone, long_done; /* the touch began on the MENU sector; a long press already popped to the main menu */
+    unsigned down_t; /* the time of that touch (ms) */
+    int dir, rev; /* the committed turn direction (+1 / -1, 0 none) and the reverse travel since (sixteenths) */
+    int speed, fast; /* smoothed angular speed (sixteenths a second); whether it has been above IP_FAST since fast_t0 */
+    unsigned lt, fast_t0; /* the time of the last move; the time the speed went above IP_FAST (event times, ms) */
     /* what the screen shows besides the lists, and the signature of it */
-    void *art, *np_refl;          /* the decoded square cover, and its reflection (IP_ART x IP_NP_REFLECT, made with it) */
-    void *shadow;                 /* the menu half's shadow on the pane (IP_SHADOW_W x IP_PANE_H, straight-alpha black), made at open */
-    int no_shadow;                /* a pass of the split close that must not draw it (the right half moves apart from the menu) */
-    int np_valid;                 /* np_refl holds the current cover's reflection */
-    unsigned track;               /* the track the cover was made for (a hash), 0 none */
-    unsigned fkey;                /* the hash of the /tmp cover file it was made from, 0 when it was not */
+    void *art, *np_refl; /* the decoded square cover, and its reflection (IP_ART x IP_NP_REFLECT, made with it) */
+    void *shadow; /* the menu half's shadow on the pane (IP_SHADOW_W x IP_PANE_H, straight-alpha black), made at open */
+    int no_shadow; /* a pass of the split close that must not draw it (the right half moves apart from the menu) */
+    int np_valid; /* np_refl holds the current cover's reflection */
+    unsigned track; /* the track the cover was made for (a hash), 0 none */
+    unsigned fkey; /* the hash of the /tmp cover file it was made from, 0 when it was not */
     int settle;
-    int now_shown;                /* the main menu has its Now Playing row (something plays or is paused) */
-    int np_have, np_gone, np_pos, np_len;   /* Now Playing: the text of the last track is kept, looks without a track, the last valid position and length ... */
-    unsigned np_key;              /* ... and the track (ip.track) they belong to */
-    char np_text[3][64];          /* title, artist, album of the last track */
-    void *mode_bmp[4];            /* the play mode marks (ip_mode_bitmap), made on first use */
-    unsigned mode_tried;          /* bit i: mark i was tried (a failure is not retried) */
-    unsigned ival;               /* the page timer's interval now (IPCF_FRAME_MS, IP_DRIFT_MS or IP_TICK_MS); timer_modify changes it */
-    unsigned lookn;               /* fast ticks since the last ip_look */
+    int now_shown; /* the main menu has its Now Playing row (something plays or is paused) */
+    int np_have, np_gone, np_pos,
+        np_len; /* Now Playing: the text of the last track is kept, looks without a track, the last valid position and length ... */
+    unsigned np_key; /* ... and the track (ip.track) they belong to */
+    char np_text[3][64]; /* title, artist, album of the last track */
+    void *mode_bmp[4]; /* the play mode marks (ip_mode_bitmap), made on first use */
+    unsigned mode_tried; /* bit i: mark i was tried (a failure is not retried) */
+    unsigned
+        ival; /* the page timer's interval now (IPCF_FRAME_MS, IP_DRIFT_MS or IP_TICK_MS); timer_modify changes it */
+    unsigned lookn; /* fast ticks since the last ip_look */
     struct row_art rows[4];
-    int row_worker;               /* only stop the shared builder when this page owns it */
+    int row_worker; /* only stop the shared builder when this page owns it */
     /* the split pages' cover pane: two cover slots, each panning slowly, cross-faded every IP_PANE_HOLD_MS (the reference's artwork pane) */
     struct {
-        void *bmp[2];             /* the covers, IP_PANE_ART square RGBA each, made on first use */
-        void *mix;                /* the pane-sized frame of a cross-fade (both covers mixed on the timer, never in paint) */
-        int have[2];              /* bmp[i] holds key[i]'s cover (or the disc) */
-        unsigned key[2];          /* the album each slot shows (0 = the placeholder, still) */
-        unsigned ms[2];           /* each slot's pan phase: time since it began, ms */
-        int rev[2];               /* the pan runs from the right to the left (every other cover) */
+        void *bmp[2]; /* the covers, IP_PANE_ART square RGBA each, made on first use */
+        void *mix; /* the pane-sized frame of a cross-fade (both covers mixed on the timer, never in paint) */
+        int have[2]; /* bmp[i] holds key[i]'s cover (or the disc) */
+        unsigned key[2]; /* the album each slot shows (0 = the placeholder, still) */
+        unsigned ms[2]; /* each slot's pan phase: time since it began, ms */
+        int rev[2]; /* the pan runs from the right to the left (every other cover) */
         int cur, fading, next_ready, picked, mix_ok, mix_bad;
-        unsigned fade_ms, cycle;  /* time since the cross-fade began; time since the last one began (the next is due at IP_PANE_HOLD_MS) */
-        unsigned t0, bad;         /* the time of the last step; an album whose cover would not decode (not tried again) */
-        unsigned pk;              /* the playing album's key the last look saw, and whether it has a cached cover */
+        unsigned fade_ms,
+            cycle; /* time since the cross-fade began; time since the last one began (the next is due at IP_PANE_HOLD_MS) */
+        unsigned t0, bad; /* the time of the last step; an album whose cover would not decode (not tried again) */
+        unsigned pk; /* the playing album's key the last look saw, and whether it has a cached cover */
         int pk_art;
-        unsigned rot[IP_PANE_KEYS];   /* the random albums with a cached cover that rotate while nothing with one plays; drawn once a visit of the main menu */
+        unsigned rot
+            [IP_PANE_KEYS]; /* the random albums with a cached cover that rotate while nothing with one plays; drawn once a visit of the main menu */
         int rot_n, rot_i;
-        char rot_trk[IP_PANE_KEYS][96];   /* the first track of each rotation album: the extractor's input */
-        unsigned char lvl[2];     /* where slot s' picture came from: 0 the 168 px cache file, 1 demo's full-resolution file of the playing track, 2 a transient extraction (both box-filtered to IP_PANE_ART) */
-        int xfer, worker;         /* xfer: 1 a transient extraction of the next rotation cover runs on the shared worker, 2 it finished; worker: this page holds the job set */
-        unsigned xfer_key, up_wait, trk_ms, trk;   /* the playing track's key as the pane last saw it; * the album it is for; ms until the sharp picture of the playing album is looked for again; when the track last changed */
-        int busy_seen, upgrade;   /* demo was seen making a cover since the track changed; the next fade is the same album sharpened (same phase) */
-        int px;                   /* the shown slot's pan place the frame was built at, in 1/256 px (0 .. IP_PANE_R * 256) */
+        char rot_trk[IP_PANE_KEYS][96]; /* the first track of each rotation album: the extractor's input */
+        unsigned char lvl
+            [2]; /* where slot s' picture came from: 0 the 168 px cache file, 1 demo's full-resolution file of the playing track, 2 a transient extraction (both box-filtered to IP_PANE_ART) */
+        int xfer,
+            worker; /* xfer: 1 a transient extraction of the next rotation cover runs on the shared worker, 2 it finished; worker: this page holds the job set */
+        unsigned xfer_key, up_wait, trk_ms,
+            trk; /* the playing track's key as the pane last saw it; * the album it is for; ms until the sharp picture of the playing album is looked for again; when the track last changed */
+        int busy_seen,
+            upgrade; /* demo was seen making a cover since the track changed; the next fade is the same album sharpened (same phase) */
+        int px; /* the shown slot's pan place the frame was built at, in 1/256 px (0 .. IP_PANE_R * 256) */
     } pane;
-    unsigned sig[5];            /* the last painted values of the timer's look: battery, play state, track, position, queue */
+    unsigned sig[5]; /* the last painted values of the timer's look: battery, play state, track, position, queue */
 } ip __attribute__((section(".scratch")));
 
 /* ---------------------------------------------------------------------------
@@ -148,7 +175,8 @@ static unsigned ip_len(const char *s) {
     return n;
 }
 
-static unsigned ip_lerp(unsigned a, unsigned b, int i, int n) {   /* the colour a .. b (r | g << 8 | b << 16) at i of n - 1 */
+static unsigned ip_lerp(unsigned a, unsigned b, int i,
+                        int n) { /* the colour a .. b (r | g << 8 | b << 16) at i of n - 1 */
     unsigned c = 0, k;
     for (k = 0; k < 24; k += 8) {
         int x = (int)(a >> k & 255), y = (int)(b >> k & 255);
@@ -157,13 +185,12 @@ static unsigned ip_lerp(unsigned a, unsigned b, int i, int n) {   /* the colour 
     return c;
 }
 
-static void ip_fill(void *canvas, int x, int y, int w, int h, unsigned rgb) {
-    ip_render_fill(canvas, x, y, w, h, rgb);
-}
+static void ip_fill(void *canvas, int x, int y, int w, int h, unsigned rgb) { ip_render_fill(canvas, x, y, w, h, rgb); }
 
 static unsigned ip_stops(const unsigned *c, const unsigned char *at, int n, int y, int h) {
     int p = h > 1 ? y * 100 / (h - 1) : 0, i;
-    for (i = 1; i < n && p > at[i]; ++i) {}
+    for (i = 1; i < n && p > at[i]; ++i) {
+    }
     if (i >= n) return c[n - 1];
     return ip_lerp(c[i - 1], c[i], p - at[i - 1], at[i] - at[i - 1] + 1);
 }
@@ -172,7 +199,8 @@ static void ip_selection(void *canvas, int w, int y, int h) {
     static const unsigned colors[] = {0xe3ab3eu, 0xe0a037u, 0xdc972cu, 0xd68c21u, 0xd38415u};
     static const unsigned char at[] = {0, 25, 50, 75, 100};
     int i;
-    for (i = 0; i < h; ++i) ip_fill(canvas, 0, y + i, w, 1, i == 0 ? 0xf8dd9au : i == h - 1 ? 0x814f15u : ip_stops(colors, at, 5, i, h));
+    for (i = 0; i < h; ++i)
+        ip_fill(canvas, 0, y + i, w, 1, i == 0 ? 0xf8dd9au : i == h - 1 ? 0x814f15u : ip_stops(colors, at, 5, i, h));
 }
 
 static void ip_header(void *canvas, int w) {
@@ -196,11 +224,16 @@ static void ip_redraw_pane(void) {
 }
 
 /* The main menu's Now Playing row is there only while something plays or is paused (the reference's). Rows after it move up when it is hidden. */
-static int ip_now_shown(void) { int s = mclGetPlayStatus(); return s == 2 || s == 3; }
+static int ip_now_shown(void) {
+    int s = mclGetPlayStatus();
+    return s == 2 || s == 3;
+}
 static int ip_root_id(int row) { return row >= ROOT_NOW && !ip_now_shown() ? row + 1 : row; }
 
 static int ip_is_list(int kind) { return kind != K_MAIN && kind != K_MUSIC && kind != K_NOW && kind != K_SETTINGS; }
-static int ip_tall(int kind) { return kind == K_ALBUMS || kind == K_ARTIST_ALBUMS || kind == K_PLAYLISTS; }   /* cover rows; song lists are plain text rows */
+static int ip_tall(int kind) {
+    return kind == K_ALBUMS || kind == K_ARTIST_ALBUMS || kind == K_PLAYLISTS;
+} /* cover rows; song lists are plain text rows */
 static int ip_split(int kind) { return kind == K_MAIN || kind == K_MUSIC || kind == K_SETTINGS; }
 static int ip_is_tracks(int kind) { return kind == K_SONGS || kind == K_TRACKS || kind == K_PL_TRACKS; }
 static struct lvl *ip_top(void) { return &ip.st[ip.depth]; }
@@ -216,8 +249,10 @@ unsigned ip_fit(void *canvas, unsigned *s, int maxw) {
         while (lo < hi) {
             unsigned mid = (lo + hi + 1) / 2, keep = s[mid];
             s[mid] = ellipsis;
-            if ((int)(canvas_measure_text(canvas, s, mid + 1) + 0.999f) <= maxw) lo = mid;
-            else hi = mid - 1;
+            if ((int)(canvas_measure_text(canvas, s, mid + 1) + 0.999f) <= maxw)
+                lo = mid;
+            else
+                hi = mid - 1;
             s[mid] = keep;
         }
         s[lo] = ellipsis;
@@ -244,15 +279,18 @@ static void ip_text(void *canvas, const char *utf8, int x, int y, int w, int h) 
  * 0.1 degree), in Q10; the octants are folded onto it. Pure integer code, so the emulation tests check it against math.atan2.
  */
 __attribute__((noinline)) int ip_angle(int dx, int dy) {
-    unsigned ax = (unsigned)(dx < 0 ? -dx : dx), ay = (unsigned)(dy < 0 ? -dy : dy), lo = ax < ay ? ax : ay, hi = ax < ay ? ay : ax, t, d, a;
+    unsigned ax = (unsigned)(dx < 0 ? -dx : dx), ay = (unsigned)(dy < 0 ? -dy : dy), lo = ax < ay ? ax : ay,
+             hi = ax < ay ? ay : ax, t, d, a;
     if (!hi) return 0;
-    t = (lo << 10) / hi;                          /* tan of the angle from the nearer axis, Q10, 0 .. 1024 */
+    t = (lo << 10) / hi; /* tan of the angle from the nearer axis, Q10, 0 .. 1024 */
     d = 1024 + ((288u * t * t) >> 20);
-    a = (t << 10) / d;                            /* radians, Q10 */
-    a = a * 917u >> 10;                           /* sixteenths of a degree: 16 * 180 / pi = 917.7 */
+    a = (t << 10) / d; /* radians, Q10 */
+    a = a * 917u >> 10; /* sixteenths of a degree: 16 * 180 / pi = 917.7 */
     /* a = atan(lo / hi): the angle from the vertical axis when |dx| <= |dy|, else from the horizontal one. dy < 0 is up; 90 degrees = 1440 (right), 270 = 4320 (left) */
-    if (ax > ay) a = dx > 0 ? (dy < 0 ? 1440 - a : 1440 + a) : (dy < 0 ? 4320 + a : 4320 - a);
-    else a = dy < 0 ? (dx >= 0 ? a : 5760 - a) : (dx >= 0 ? 2880 - a : 2880 + a);
+    if (ax > ay)
+        a = dx > 0 ? (dy < 0 ? 1440 - a : 1440 + a) : (dy < 0 ? 4320 + a : 4320 - a);
+    else
+        a = dy < 0 ? (dx >= 0 ? a : 5760 - a) : (dx >= 0 ? 2880 - a : 2880 + a);
     return (int)(a % 5760u);
 }
 
@@ -277,9 +315,7 @@ __attribute__((noinline)) int ip_chord_near(int ax, int ay, int bx, int by) {
 }
 
 /* The wheel's memory of a drag goes (a new target or list, a new touch): the unspent turn, the direction, the speed, the tier. */
-static void ip_wheel_reset(void) {
-    ip.acc = ip.dir = ip.rev = ip.speed = ip.fast = 0;
-}
+static void ip_wheel_reset(void) { ip.acc = ip.dir = ip.rev = ip.speed = ip.fast = 0; }
 
 /* ---------------------------------------------------------------------------
  * The stock lists
@@ -292,7 +328,8 @@ static int ip_stock_index(int kind, void *list, int i) {
     unsigned n, k;
     if (kind != K_ARTIST_ALBUMS || !list) return i;
     n = deque_size(list);
-    for (k = 0; k < n && I(deque_at(list, k), REC_ID) != ID_ALL_SONGS; ++k) {}
+    for (k = 0; k < n && I(deque_at(list, k), REC_ID) != ID_ALL_SONGS; ++k) {
+    }
     if (k >= n) return i;
     return i == 0 ? (int)k : i - 1 < (int)k ? i - 1 : i;
 }
@@ -311,10 +348,19 @@ static int ip_run(int d) {
     struct lvl *l = &ip.st[d];
     void *par;
     switch (l->kind) {
-    case K_ALBUMS: case K_CF: loadLocalClassList(CLASS_ALBUMS); break;
-    case K_ARTISTS: loadLocalClassList(CLASS_ARTISTS); break;
-    case K_SONGS: loadLocalClassList(CLASS_ALL_SONGS); break;
-    case K_PLAYLISTS: loadLocalClassList(CLASS_PLAYLISTS); break;
+    case K_ALBUMS:
+    case K_CF:
+        loadLocalClassList(CLASS_ALBUMS);
+        break;
+    case K_ARTISTS:
+        loadLocalClassList(CLASS_ARTISTS);
+        break;
+    case K_SONGS:
+        loadLocalClassList(CLASS_ALL_SONGS);
+        break;
+    case K_PLAYLISTS:
+        loadLocalClassList(CLASS_PLAYLISTS);
+        break;
     case K_ARTIST_ALBUMS:
         if (d < 1 || !ip_run(d - 1)) return 0;
         par = ip_stock_list(ip.st[d - 1].kind);
@@ -325,26 +371,33 @@ static int ip_run(int d) {
         if (d < 1 || !ip_run(d - 1)) return 0;
         par = ip_stock_list(ip.st[d - 1].kind);
         if (!par || (unsigned)ip.st[d - 1].sel >= deque_size(par)) return 0;
-        if (ip.st[d - 1].kind == K_ARTISTS) {   /* an artist with one album: its songs, the album list skipped (loadAlbumList, then the album's own record) */
+        if (ip.st[d - 1].kind ==
+            K_ARTISTS) { /* an artist with one album: its songs, the album list skipped (loadAlbumList, then the album's own record) */
             unsigned k, n;
             void *alb = (void *)0;
             loadAlbumList(CLASS_ARTISTS, deque_at(par, (unsigned)ip.st[d - 1].sel));
             par = *(void **)PDEQ_SHOWLIST;
             n = par ? deque_size(par) : 0;
-            for (k = 0; k < n && !alb; ++k) if (I(deque_at(par, k), REC_ID) != ID_ALL_SONGS) alb = deque_at(par, k);
+            for (k = 0; k < n && !alb; ++k)
+                if (I(deque_at(par, k), REC_ID) != ID_ALL_SONGS) alb = deque_at(par, k);
             if (!alb) return 0;
             loadAlbumdetailList(CLASS_ARTIST_ALBUMS, alb);
-        } else loadAlbumdetailList(ip.st[d - 1].kind == K_ALBUMS || ip.st[d - 1].kind == K_CF ? CLASS_ALBUMS : CLASS_ARTIST_ALBUMS, ip_rec(ip.st[d - 1].kind, par, ip.st[d - 1].sel));
-        *(int *)G_CLASS_TYPE = *(int *)CLASSINFO;   /* as albuminfo_page_init leaves it */
+        } else
+            loadAlbumdetailList(ip.st[d - 1].kind == K_ALBUMS || ip.st[d - 1].kind == K_CF ? CLASS_ALBUMS
+                                                                                           : CLASS_ARTIST_ALBUMS,
+                                ip_rec(ip.st[d - 1].kind, par, ip.st[d - 1].sel));
+        *(int *)G_CLASS_TYPE = *(int *)CLASSINFO; /* as albuminfo_page_init leaves it */
         break;
     case K_PL_TRACKS:
         if (d < 1 || !ip_run(d - 1)) return 0;
         par = ip_stock_list(K_PLAYLISTS);
         if (!par || (unsigned)ip.st[d - 1].sel >= deque_size(par)) return 0;
-        *(int *)(CLASSINFO + CLASSINFO_ARG) = I(deque_at(par, (unsigned)ip.st[d - 1].sel), REC_DISC);   /* what the stock row tap leaves (@0x53d5f4) */
+        *(int *)(CLASSINFO + CLASSINFO_ARG) =
+            I(deque_at(par, (unsigned)ip.st[d - 1].sel), REC_DISC); /* what the stock row tap leaves (@0x53d5f4) */
         loadLocalClassList(CLASS_PLAYLIST_SONGS);
         break;
-    default: return 1;
+    default:
+        return 1;
     }
     return ip_stock_list(l->kind) != (void *)0;
 }
@@ -358,7 +411,10 @@ static void ip_load(void) {
     if (!ip_is_list(l->kind)) return;
     if (ip_run(ip.depth) && (list = ip_stock_list(l->kind)) != (void *)0) {
         ip.list = list, ip.count = deque_size(list), ip.first = ip.count ? deque_at(list, 0) : (void *)0;
-        ip.cls = ip_is_tracks(l->kind) ? (l->kind == K_SONGS ? CLASS_ALL_SONGS : l->kind == K_PL_TRACKS ? CLASS_PLAYLIST_SONGS : *(int *)CLASSINFO) : 0;
+        ip.cls = ip_is_tracks(l->kind) ? (l->kind == K_SONGS       ? CLASS_ALL_SONGS
+                                          : l->kind == K_PL_TRACKS ? CLASS_PLAYLIST_SONGS
+                                                                   : *(int *)CLASSINFO)
+                                       : 0;
     }
     if (l->sel >= (int)ip.count) l->sel = ip.count ? (int)ip.count - 1 : 0;
     if (l->top > l->sel) l->top = l->sel;
@@ -381,9 +437,11 @@ static const char *ip_row_text(int kind, int i) {
     if (kind == K_SETTINGS) return TR(SET_KEYS[i]);
     rec = ip_rec(kind, ip.list, i);
     if (kind == K_ALBUMS || kind == K_ARTIST_ALBUMS) {
-        if (I(rec, REC_ID) == ID_ALL_SONGS) return TR(kind == K_ARTIST_ALBUMS ? "local_allsong" : "All albums");   /* the stock "All Songs" */
+        if (I(rec, REC_ID) == ID_ALL_SONGS)
+            return TR(kind == K_ARTIST_ALBUMS ? "local_allsong" : "All albums"); /* the stock "All Songs" */
         s = cc_str(rec, REC_ALBUM);
-    } else if (kind == K_ARTISTS || kind == K_PLAYLISTS) s = cc_str(rec, REC_TITLE);
+    } else if (kind == K_ARTISTS || kind == K_PLAYLISTS)
+        s = cc_str(rec, REC_TITLE);
     else {
         s = cc_str(rec, REC_TITLE);
         if (!*s) s = cc_str(rec, REC_NAME);
@@ -391,7 +449,12 @@ static const char *ip_row_text(int kind, int i) {
     return *s ? s : "-";
 }
 
-static int ip_rows(void) { return ip_top()->kind == K_MAIN ? ROOT_COUNT - !ip_now_shown() : ip_top()->kind == K_MUSIC ? M_COUNT : ip_top()->kind == K_SETTINGS ? S_COUNT : (int)ip.count; }
+static int ip_rows(void) {
+    return ip_top()->kind == K_MAIN       ? ROOT_COUNT - !ip_now_shown()
+           : ip_top()->kind == K_MUSIC    ? M_COUNT
+           : ip_top()->kind == K_SETTINGS ? S_COUNT
+                                          : (int)ip.count;
+}
 
 /* ---------------------------------------------------------------------------
  * The cover (decoded on the timer, never in paint) and the battery reading
@@ -439,7 +502,7 @@ static void ip_cover(void *t, int first) {
             file = tmp;
         }
     }
-    if (!file || !cc_decode(ip.win, file, 1, IP_ART, 1, px)) {   /* the placeholder, else flat grey */
+    if (!file || !cc_decode(ip.win, file, 1, IP_ART, 1, px)) { /* the placeholder, else flat grey */
         for (i = 0; i < IP_ART * IP_ART; ++i) px[i] = ART_GREY;
         cc_decode(ip.win, "ipod_placeholder", 0, IP_ART, 1, px);
     }
@@ -472,7 +535,11 @@ static void ip_rows_stop(void) {
 
 static void ip_row_reset(struct row_art *a) {
     unsigned j;
-    for (j = 0; j < 4; ++j) { if (a->path[j]) free(a->path[j]); a->path[j] = (char *)0; a->key[j] = 0; }
+    for (j = 0; j < 4; ++j) {
+        if (a->path[j]) free(a->path[j]);
+        a->path[j] = (char *)0;
+        a->key[j] = 0;
+    }
     a->parts = a->drawn = a->waiting = 0;
 }
 
@@ -481,7 +548,8 @@ static void ip_row_source(struct row_art *a, void *rec) {
     unsigned key = cc_album_key(rec), j;
     const char *path = cc_str(rec, REC_PATH);
     if (!*path || a->parts >= 4) return;
-    for (j = 0; j < a->parts; ++j) if (a->key[j] == key) return;
+    for (j = 0; j < a->parts; ++j)
+        if (a->key[j] == key) return;
     a->key[a->parts] = key;
     a->path[a->parts] = strdup(path);
     ++a->parts;
@@ -499,36 +567,48 @@ static void ip_row_prepare(struct row_art *a, int kind, int index, unsigned id, 
         n = songs ? deque_size(songs) : 0;
         for (i = 0; i < n && i < 16 && a->parts < 4; ++i) ip_row_source(a, deque_at(songs, i));
         /* PDEQ_PLAYLIST remains the foreground list. No borrowed song pointer survives. */
-    } else if (I(rec, REC_ID) != ID_ALL_SONGS) ip_row_source(a, rec);
+    } else if (I(rec, REC_ID) != ID_ALL_SONGS)
+        ip_row_source(a, rec);
     if (!a->parts) a->parts = 1;
 }
 
 /* Decode one visible part per tick. Paint only copies these bounded, page-owned bitmaps. */
 static int ip_row_decode(struct row_art *a, unsigned part) {
-    static const unsigned char quad[5][4] = {{0,0,0,0}, {0,0,0,0}, {0,1,1,0}, {0,1,2,0}, {0,1,2,3}};
+    static const unsigned char quad[5][4] = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 1, 1, 0}, {0, 1, 2, 0}, {0, 1, 2, 3}};
     char url[80], path[80];
     const char *file = a->key[part] ? cc_url(url, a->key[part]) : (const char *)0;
     unsigned *px, temp[27 * 27], j, q, x, y, side = a->parts == 1 ? IP_ROW_ART : IP_ROW_ART / 2;
     int missing = a->key[part] && cc_file_size(cc_path(path, sizeof path, a->key[part], "")) < 0;
     if (!a->bmp) a->bmp = bitmap_create_ex(IP_ROW_ART, IP_ROW_ART, IP_ROW_ART * 4, BITMAP_RGBA8888);
-    if (!a->bmp) { a->drawn |= 1u << part; return 0; }
+    if (!a->bmp) {
+        a->drawn |= 1u << part;
+        return 0;
+    }
     px = (unsigned *)bitmap_lock_buffer_for_write(a->bmp);
-    if (!px) { a->drawn |= 1u << part; return 0; }
-    if (!a->drawn) for (j = 0; j < IP_ROW_ART * IP_ROW_ART; ++j) px[j] = 0xff4a4a4au;
+    if (!px) {
+        a->drawn |= 1u << part;
+        return 0;
+    }
+    if (!a->drawn)
+        for (j = 0; j < IP_ROW_ART * IP_ROW_ART; ++j) px[j] = 0xff4a4a4au;
     if (side == IP_ROW_ART) {
         if (!cc_decode(ip.win, file ? file : "ipod_placeholder", file != (const char *)0, side, 1, px))
             for (j = 0; j < IP_ROW_ART * IP_ROW_ART; ++j) px[j] = 0xff4a4a4au;
     } else {
         for (j = 0; j < side * side; ++j) temp[j] = 0xff4a4a4au;
         cc_decode(ip.win, file ? file : "ipod_placeholder", file != (const char *)0, side, 1, temp);
-        for (q = 0; q < 4; ++q) if (quad[a->parts][q] == part)
-            for (y = 0; y < side; ++y) for (x = 0; x < side; ++x)
-                px[(y + (q / 2) * side) * IP_ROW_ART + x + (q % 2) * side] = temp[y * side + x];
+        for (q = 0; q < 4; ++q)
+            if (quad[a->parts][q] == part)
+                for (y = 0; y < side; ++y)
+                    for (x = 0; x < side; ++x)
+                        px[(y + (q / 2) * side) * IP_ROW_ART + x + (q % 2) * side] = temp[y * side + x];
     }
     bitmap_unlock_buffer(a->bmp);
     a->drawn |= 1u << part;
-    if (missing && a->path[part]) a->waiting |= 1u << part;
-    else a->waiting &= ~(1u << part);
+    if (missing && a->path[part])
+        a->waiting |= 1u << part;
+    else
+        a->waiting &= ~(1u << part);
     return 1;
 }
 
@@ -551,9 +631,10 @@ static void ip_rows_build(void) {
         if (ip.rows[i].kind == kind && ip.rows[i].index == ip_top()->top + i && ip.rows[i].waiting) break;
     if (i == n || !cc_build_open(16, CC_MISSING)) return;
     ip.row_worker = 1;
-    for (i = 0; i < n; ++i) if (ip.rows[i].kind == kind && ip.rows[i].index == ip_top()->top + i)
-        for (j = 0; j < ip.rows[i].parts; ++j)
-            if (ip.rows[i].waiting & (1u << j)) cc_build_add(ip.rows[i].path[j], ip.rows[i].key[j]);
+    for (i = 0; i < n; ++i)
+        if (ip.rows[i].kind == kind && ip.rows[i].index == ip_top()->top + i)
+            for (j = 0; j < ip.rows[i].parts; ++j)
+                if (ip.rows[i].waiting & (1u << j)) cc_build_add(ip.rows[i].path[j], ip.rows[i].key[j]);
     if (!cc_build_start()) ip.row_worker = 0;
 }
 
@@ -562,7 +643,10 @@ static int ip_rows_tick(void) {
     unsigned j;
     if (!pod_is_top(ip.win)) return 0;
     if (ip.row_worker && cc_build_done() >= cc_build_total()) ip_rows_stop();
-    if (!ip_tall(kind) || !ip_valid()) { ip_rows_stop(); return 0; }
+    if (!ip_tall(kind) || !ip_valid()) {
+        ip_rows_stop();
+        return 0;
+    }
     for (i = 0; i < 4 && ip_top()->top + i < (int)ip.count; ++i) {
         struct row_art *a = &ip.rows[i];
         int index = ip_top()->top + i;
@@ -589,11 +673,15 @@ static int ip_rows_tick(void) {
 static void ip_rows_free(void) {
     int i;
     ip_rows_stop();
-    for (i = 0; i < 4; ++i) { ip_row_reset(&ip.rows[i]); if (ip.rows[i].bmp) bitmap_destroy(ip.rows[i].bmp); ip.rows[i].bmp = (void *)0; }
+    for (i = 0; i < 4; ++i) {
+        ip_row_reset(&ip.rows[i]);
+        if (ip.rows[i].bmp) bitmap_destroy(ip.rows[i].bmp);
+        ip.rows[i].bmp = (void *)0;
+    }
 }
 
-
-static void ip_pane_reset(void) {   /* a split page comes back as the main menu: new random covers, and the playing album's cover looked up again (it may be cached since) */
+static void ip_pane_reset(
+    void) { /* a split page comes back as the main menu: new random covers, and the playing album's cover looked up again (it may be cached since) */
     ip.pane.picked = ip.pane.pk_art = 0;
     ip.pane.pk = 0;
 }
@@ -608,8 +696,10 @@ static int ip_pane_pick(unsigned *keys, char (*trks)[96]) {
         void *rec = deque_at(list, pod_rand(n));
         if (!rec || I(rec, REC_ID) == ID_ALL_SONGS || !*cc_str(rec, REC_ALBUM)) continue;
         key = cc_album_key(rec);
-        for (j = 0; j < (unsigned)got && keys[j] != key; ++j) {}
-        if (j == (unsigned)got && cc_url(url, key)) snprintf(trks[got], 96, "%s", cc_str(rec, REC_PATH)), keys[got++] = key;
+        for (j = 0; j < (unsigned)got && keys[j] != key; ++j) {
+        }
+        if (j == (unsigned)got && cc_url(url, key))
+            snprintf(trks[got], 96, "%s", cc_str(rec, REC_PATH)), keys[got++] = key;
     }
     return got;
 }
@@ -620,10 +710,10 @@ static unsigned ip_pane_want(void) {
     void *t = cc_playing();
     unsigned k = t && *cc_str(t, REC_ALBUM) ? cc_album_key(t) : 0;
     if (k != ip.pane.pk) ip.pane.pk = k, ip.pane.pk_art = k && cc_url(url, k);
-    if (!ip.pane.picked) ip.pane.rot_n = ip_pane_pick(ip.pane.rot, ip.pane.rot_trk), ip.pane.rot_i = 0, ip.pane.picked = 1;
+    if (!ip.pane.picked)
+        ip.pane.rot_n = ip_pane_pick(ip.pane.rot, ip.pane.rot_trk), ip.pane.rot_i = 0, ip.pane.picked = 1;
     return ip.pane.pk_art && ip.pane.pk != ip.pane.bad ? ip.pane.pk : 0;
 }
-
 
 /* The pan of slot s in 1/256 px: a linear sweep of IP_PANE_R px across the cover's margin in IP_PANE_PAN_MS (the reference's 7.5 s), every other cover the other way; the
  * placeholder stands still. The frame is built at this fraction (ip_pane_frame), so the drift moves a little each frame and never in whole-pixel jumps. */
@@ -634,7 +724,6 @@ static int ip_pane_pos(int s) {
     pos = IP_PANE_R * 256 * (t < IP_PANE_PAN_MS ? t : 2 * IP_PANE_PAN_MS - t) / IP_PANE_PAN_MS;
     return (int)(ip.pane.rev[s] ? IP_PANE_R * 256 - pos : pos);
 }
-
 
 /* The pane needs IP_PANE_ART px, the cache's files are 168: a cover from them is stretched 1.57 times and reads soft. Two sharper sources, both decoded straight to IP_PANE_ART
  * with the box filter, each on a tick of its own and never during a fade:
@@ -697,8 +786,9 @@ static int ip_pane_decode(int s, unsigned key, int transient) {
         snprintf(url, sizeof url, "file://%s", np_cover_file(&busy));
         ok = cc_decode(ip.win, url, 1, IP_PANE_ART, 1, px), lvl = 1;
     }
-    if (!ok && key && (file = cc_url(url, key)) != (const char *)0) ok = cc_decode(ip.win, file, 1, IP_PANE_ART, 1, px), lvl = 0;
-    if (!ok) {   /* the placeholder, else flat grey */
+    if (!ok && key && (file = cc_url(url, key)) != (const char *)0)
+        ok = cc_decode(ip.win, file, 1, IP_PANE_ART, 1, px), lvl = 0;
+    if (!ok) { /* the placeholder, else flat grey */
         for (i = 0; i < IP_PANE_ART * IP_PANE_ART; ++i) px[i] = ART_GREY;
         cc_decode(ip.win, "ipod_placeholder", 0, IP_PANE_ART, 1, px);
         if (key) ip.pane.bad = key;
@@ -711,7 +801,8 @@ static int ip_pane_decode(int s, unsigned key, int transient) {
 
 /* u + (v - u) * f / 256 per colour channel (f 0 .. 255), the R / B lane pair and the G lane at once. */
 static unsigned ip_lerp8(unsigned u, unsigned v, unsigned f) {
-    return ((((u & 0xff00ffu) * (256 - f) + (v & 0xff00ffu) * f) >> 8) & 0xff00ffu) | ((((u & 0xff00u) * (256 - f) + (v & 0xff00u) * f) >> 8) & 0xff00u);
+    return ((((u & 0xff00ffu) * (256 - f) + (v & 0xff00ffu) * f) >> 8) & 0xff00ffu) |
+           ((((u & 0xff00u) * (256 - f) + (v & 0xff00u) * f) >> 8) & 0xff00u);
 }
 
 /* One pane frame, built on the timer into the page's own IP_PANE_W x IP_PANE_H bitmap (paint only copies it): each row of the cover's window at the pan's place in 1/256 px,
@@ -724,7 +815,7 @@ static void ip_pane_frame(void) {
     ip.pane.mix_ok = 0;
     if (!ip.pane.mix) ip.pane.mix = bitmap_create_ex(IP_PANE_W, IP_PANE_H, IP_PANE_W * 4, BITMAP_RGBA8888);
     if (!ip.pane.mix) {
-        ip.pane.mix_bad = 1;   /* no frame bitmap: paint falls back to the whole-pixel window of the cover */
+        ip.pane.mix_bad = 1; /* no frame bitmap: paint falls back to the whole-pixel window of the cover */
         return;
     }
     if (!ip.pane.bmp[c] || (ip.pane.fading && !ip.pane.bmp[o])) return;
@@ -733,14 +824,15 @@ static void ip_pane_frame(void) {
     if (ip.pane.fading) {
         p = ip.pane.fade_ms * 1024 / IP_PANE_FADE_MS;
         if (p > 1023) p = 1023;
-        al = ((p * p / 1024) * (3072 - 2 * p) / 1024) * 256 / 1024;   /* 0 .. 255 */
+        al = ((p * p / 1024) * (3072 - 2 * p) / 1024) * 256 / 1024; /* 0 .. 255 */
     }
     a = (const unsigned *)bitmap_lock_buffer_for_read(ip.pane.bmp[c]);
     if (ip.pane.fading) b = (const unsigned *)bitmap_lock_buffer_for_read(ip.pane.bmp[o]);
     d = (unsigned *)bitmap_lock_buffer_for_write(ip.pane.mix);
     if (a && d && (b || !ip.pane.fading)) {
         for (y = 0; y < IP_PANE_H; ++y) {
-            const unsigned *ra = a + (y + IP_PANE_R / 2) * IP_PANE_ART + xa, *rb = b ? b + (y + IP_PANE_R / 2) * IP_PANE_ART + xb : ra;
+            const unsigned *ra = a + (y + IP_PANE_R / 2) * IP_PANE_ART + xa,
+                           *rb = b ? b + (y + IP_PANE_R / 2) * IP_PANE_ART + xb : ra;
             unsigned *row = d + y * IP_PANE_W;
             for (x = 0; x < IP_PANE_W; ++x) {
                 unsigned u = ip_lerp8(ra[x], ra[x + 1], fa);
@@ -767,21 +859,24 @@ static int ip_pane_advance(void) {
     ip.pane.t0 = now;
     if (step > IP_DRIFT_MAX_MS) step = IP_DRIFT_MAX_MS;
     want = ip_pane_want();
-    {   /* a new track: demo makes its cover file again; the pane trusts the file only after seeing that (or IP_PANE_SHARP_MS later), never a stale one of the last track */
+    { /* a new track: demo makes its cover file again; the pane trusts the file only after seeing that (or IP_PANE_SHARP_MS later), never a stale one of the last track */
         void *pt = cc_playing();
         unsigned tk = pt ? ip_track_key(pt) : 0;
         if (tk != ip.pane.trk) {
-            if (ip.pane.trk != ~0u) ip.pane.trk_ms = now;   /* (the first sight of a track after the page opened: its file is taken as current) */
+            if (ip.pane.trk != ~0u)
+                ip.pane.trk_ms =
+                    now; /* (the first sight of a track after the page opened: its file is taken as current) */
             ip.pane.trk = tk, ip.pane.busy_seen = 0;
         }
         if (*(volatile int *)COVER_SRC == COVER_SRC_BUSY) ip.pane.busy_seen = 1;
     }
-    if (want && ip.pane.xfer) ip_pane_xfer_stop();   /* something plays now: the rotation's extraction is not needed */
-    if (ip.pane.xfer == 1 && ip.pane.worker && cc_build_done() >= cc_build_total()) {   /* the worker finished: join it, the file (if any) is decoded below */
+    if (want && ip.pane.xfer) ip_pane_xfer_stop(); /* something plays now: the rotation's extraction is not needed */
+    if (ip.pane.xfer == 1 && ip.pane.worker &&
+        cc_build_done() >= cc_build_total()) { /* the worker finished: join it, the file (if any) is decoded below */
         cc_build_stop();
         ip.pane.worker = 0, ip.pane.xfer = 2;
     }
-    if (!ip.pane.have[c]) {   /* the first cover: no fade */
+    if (!ip.pane.have[c]) { /* the first cover: no fade */
         ip_pane_decode(c, want ? want : ip.pane.rot_n ? ip.pane.rot[0] : 0, 0);
         ip.pane.ms[c] = ip.pane.cycle = 0, ip.pane.rev[c] = 0, ip.pane.rot_i = 1;
         return 1;
@@ -799,8 +894,11 @@ static int ip_pane_advance(void) {
         ip.pane.next_ready = ip_pane_decode(o, want, 0);
         return 1;
     }
-    if (want && want == ip.pane.key[c] && ip.pane.lvl[c] < 1 && !ip.pane.next_ready) {   /* the playing album is on screen from the 168 px file: look for demo's sharp one twice a second */
-        if (ip.pane.up_wait > step) ip.pane.up_wait -= step;
+    if (want && want == ip.pane.key[c] && ip.pane.lvl[c] < 1 &&
+        !ip.pane
+             .next_ready) { /* the playing album is on screen from the 168 px file: look for demo's sharp one twice a second */
+        if (ip.pane.up_wait > step)
+            ip.pane.up_wait -= step;
         else {
             ip.pane.up_wait = 500;
             if (ip_pane_sharp_ready()) {
@@ -809,7 +907,7 @@ static int ip_pane_advance(void) {
             }
         }
     }
-    if (ip.pane.xfer == 2) {   /* the extraction is done: decode it into the other slot, on this tick */
+    if (ip.pane.xfer == 2) { /* the extraction is done: decode it into the other slot, on this tick */
         ip.pane.xfer = 0;
         ip.pane.next_ready = ip_pane_decode(o, ip.pane.xfer_key, 1);
         return 1;
@@ -819,10 +917,14 @@ static int ip_pane_advance(void) {
         int t, ti = 0;
         for (t = 0; t < ip.pane.rot_n && !k; ++t) {
             unsigned cand = ip.pane.rot[(ip.pane.rot_i + t) % ip.pane.rot_n];
-            if (cand != ip.pane.key[c] && cand != ip.pane.bad) k = cand, ti = (ip.pane.rot_i + t) % ip.pane.rot_n, ip.pane.rot_i = (ip.pane.rot_i + t + 1) % ip.pane.rot_n;
+            if (cand != ip.pane.key[c] && cand != ip.pane.bad)
+                k = cand, ti = (ip.pane.rot_i + t) % ip.pane.rot_n,
+                ip.pane.rot_i = (ip.pane.rot_i + t + 1) % ip.pane.rot_n;
         }
         if (k) {
-            if (ip_pane_xfer_start(ip.pane.rot_trk[ti])) {   /* the sharp picture comes from the shared worker; the tick that sees it done decodes it */
+            if (ip_pane_xfer_start(
+                    ip.pane.rot_trk
+                        [ti])) { /* the sharp picture comes from the shared worker; the tick that sees it done decodes it */
                 ip.pane.xfer = 1, ip.pane.xfer_key = k;
                 return 0;
             }
@@ -832,8 +934,11 @@ static int ip_pane_advance(void) {
     }
     if (ip.pane.next_ready && (want || ip.pane.upgrade || ip.pane.cycle >= IP_PANE_HOLD_MS)) {
         ip.pane.fading = 1, ip.pane.fade_ms = 0, ip.pane.next_ready = 0;
-        if (ip.pane.upgrade) ip.pane.ms[o] = ip.pane.ms[c], ip.pane.rev[o] = ip.pane.rev[c], ip.pane.upgrade = 0;   /* the same album sharpened: the same place */
-        else ip.pane.ms[o] = 0, ip.pane.rev[o] = !ip.pane.rev[c], ip.pane.cycle = 0;
+        if (ip.pane.upgrade)
+            ip.pane.ms[o] = ip.pane.ms[c], ip.pane.rev[o] = ip.pane.rev[c],
+            ip.pane.upgrade = 0; /* the same album sharpened: the same place */
+        else
+            ip.pane.ms[o] = 0, ip.pane.rev[o] = !ip.pane.rev[c], ip.pane.cycle = 0;
         return 1;
     }
     return 0;
@@ -846,12 +951,14 @@ static int ip_pane_step(void) {
     changed = ip_pane_advance();
     if (!ip.pane.have[ip.pane.cur]) return changed;
     pos = ip_pane_pos(ip.pane.cur);
-    if (!ip.pane.mix_bad && (changed || !ip.pane.mix_ok || ip.pane.fading || pos != ip.pane.px)) {   /* the frame at the new place */
+    if (!ip.pane.mix_bad &&
+        (changed || !ip.pane.mix_ok || ip.pane.fading || pos != ip.pane.px)) { /* the frame at the new place */
         ip_pane_frame();
         ip.pane.px = pos;
         return 1;
     }
-    if (ip.pane.mix_bad && (changed || pos >> 8 != ip.pane.px >> 8)) {   /* no frame bitmap: the whole-pixel window moves */
+    if (ip.pane.mix_bad &&
+        (changed || pos >> 8 != ip.pane.px >> 8)) { /* no frame bitmap: the whole-pixel window moves */
         ip.pane.px = pos;
         return 1;
     }
@@ -861,14 +968,19 @@ static int ip_pane_step(void) {
 /* The interval the page's one timer should have: IPCF_FRAME_MS while the Cover Flow level in front slides or decodes (ipod_cf.c); IP_DRIFT_MS while the cover pans
  * (the main menu is the level, the page is in front, and the pane has a cover or is still being made); IP_TICK_MS otherwise (the disc: the slow look still finds a new cover). */
 static unsigned ip_want_ms(void) {
-    if (ip.fg && !pod_screen_lit()) return POD_DARK_MS;   /* the screen is off: no visual work (the idle-power rule of the other pages) */
+    if (ip.fg && !pod_screen_lit())
+        return POD_DARK_MS; /* the screen is off: no visual work (the idle-power rule of the other pages) */
     if (ip.fg && pod_is_top(ip.win) && ip_render_active()) return IPCF_FRAME_MS;
-    if (ip.fg && ip.touch == R_RING && ip.menu_zone && !ip.long_done && ip.depth > 0) return IP_DRIFT_MS;   /* watching for the long press of MENU */
+    if (ip.fg && ip.touch == R_RING && ip.menu_zone && !ip.long_done && ip.depth > 0)
+        return IP_DRIFT_MS; /* watching for the long press of MENU */
     if (ip.fg && pod_is_top(ip.win) && ip_rows_more()) return IPCF_FRAME_MS;
     if (ip.fg && pod_is_top(ip.win) && ip.row_worker) return IP_DRIFT_MS;
     if (ip.fg && ip_top()->kind == K_CF && ipcf_busy()) return IPCF_FRAME_MS;
     if (ip_split(ip_top()->kind) && ip.fg && ip.pane.fading && pod_is_top(ip.win)) return IP_FADE_TICK_MS;
-    return ip_split(ip_top()->kind) && ip.fg && (!ip.pane.have[ip.pane.cur] || ip.pane.key[ip.pane.cur] || ip.pane.rot_n) && pod_is_top(ip.win) ? IP_PAN_MS : IP_TICK_MS;
+    return ip_split(ip_top()->kind) && ip.fg &&
+                   (!ip.pane.have[ip.pane.cur] || ip.pane.key[ip.pane.cur] || ip.pane.rot_n) && pod_is_top(ip.win)
+               ? IP_PAN_MS
+               : IP_TICK_MS;
 }
 
 static void ip_retime(void) {
@@ -901,23 +1013,29 @@ static int ip_look(void) {
     sig[1] = (unsigned)mclGetPlayStatus();
     sig[2] = t ? ip_track_key(t) : 0;
     ip.np_gone = t ? 0 : ip.np_gone + 1;
-    if (!t && ip.np_gone == IP_NP_GONE && ip.np_have) ip.np_have = 0, changed = 1;   /* the player really has no track: Now Playing says so */
+    if (!t && ip.np_gone == IP_NP_GONE && ip.np_have)
+        ip.np_have = 0, changed = 1; /* the player really has no track: Now Playing says so */
     sig[3] = 0;
-    if (ip_now_shown() != ip.now_shown) {   /* the Now Playing row came or went: the root's cursor stays on the same item */
+    if (ip_now_shown() !=
+        ip.now_shown) { /* the Now Playing row came or went: the root's cursor stays on the same item */
         struct lvl *root = &ip.st[0];
         ip.now_shown = ip_now_shown();
-        if (ip.now_shown && root->sel >= ROOT_NOW) root->sel++;
-        else if (!ip.now_shown && root->sel > ROOT_NOW) root->sel--;
+        if (ip.now_shown && root->sel >= ROOT_NOW)
+            root->sel++;
+        else if (!ip.now_shown && root->sel > ROOT_NOW)
+            root->sel--;
         if (root->sel > ROOT_COUNT - !ip.now_shown - 1) root->sel = ROOT_COUNT - !ip.now_shown - 1;
         changed = 1;
     }
-    if (ip_top()->kind == K_NOW && t && get_playtimeandlength(&pos, &len) == 1) sig[3] = (unsigned)(pos + 1) * 4099u ^ (unsigned)len;
+    if (ip_top()->kind == K_NOW && t && get_playtimeandlength(&pos, &len) == 1)
+        sig[3] = (unsigned)(pos + 1) * 4099u ^ (unsigned)len;
     sig[4] = (q ? deque_size(q) : 0) ^ ((unsigned)mclGetPlayMode() << 24);
-    if (sig[2] != ip.track && (t || !ip.np_have)) {   /* (no track for a moment, the last one still shown: its cover stays, not the disc) */
+    if (sig[2] != ip.track &&
+        (t || !ip.np_have)) { /* (no track for a moment, the last one still shown: its cover stays, not the disc) */
         ip.track = sig[2];
         ip_cover(t, 1);
         changed = 1;
-    } else if (ip.settle > 0 && t) {   /* demo writes the /tmp cover a little after the track changes */
+    } else if (ip.settle > 0 && t) { /* demo writes the /tmp cover a little after the track changes */
         int busy = 0;
         const char *path = np_cover_file(&busy);
         unsigned k;
@@ -944,17 +1062,21 @@ static void ip_chevron(void *canvas, int x, int ymid, unsigned rgb) {
  * fill in two bands of five rows, the lit top half and the darker bottom half, inside the 1 px outline. */
 #define BGR(c) ((((c) & 0xffu) << 16) | ((c) & 0xff00u) | (((c) >> 16) & 0xffu))
 static void ip_battery_glyph(void *canvas, int x, int y) {
-    static const unsigned green[10] = {BGR(0xa4d08au), BGR(0xdcf8c7u), BGR(0xc9ecb0u), BGR(0xa5e07fu), BGR(0xa1de7du), BGR(0x6bab46u), BGR(0x4e932cu), BGR(0x539831u), BGR(0x5fa53eu), BGR(0x539831u)};
-    static const unsigned red[10] = {BGR(0xd17f6bu), BGR(0xf0b2a8u), BGR(0xe89d90u), BGR(0xe87259u), BGR(0xe67357u), BGR(0xb74124u), BGR(0xa3300bu), BGR(0xa7340fu), BGR(0xb3421cu), BGR(0xa73410u)};
+    static const unsigned green[10] = {BGR(0xa4d08au), BGR(0xdcf8c7u), BGR(0xc9ecb0u), BGR(0xa5e07fu), BGR(0xa1de7du),
+                                       BGR(0x6bab46u), BGR(0x4e932cu), BGR(0x539831u), BGR(0x5fa53eu), BGR(0x539831u)};
+    static const unsigned red[10] = {BGR(0xd17f6bu), BGR(0xf0b2a8u), BGR(0xe89d90u), BGR(0xe87259u), BGR(0xe67357u),
+                                     BGR(0xb74124u), BGR(0xa3300bu), BGR(0xa7340fu), BGR(0xb3421cu), BGR(0xa73410u)};
     static const unsigned char at[] = {0, 50, 100};
     const struct ip_theme_palette *p = ip_theme_colors();
     int charging, pct = ip_battery(&charging), w, i;
     for (i = 1; i < 11; ++i) ip_fill(canvas, x + 1, y + i, 22, 1, ip_stops(p->battery_empty, at, 3, i - 1, 10));
     if (pct >= 0) {
         w = 22 * (pct > 100 ? 100 : pct) / 100;
-        for (i = 0; i < 10 && w > 0; ++i) ip_fill(canvas, x + 1, y + 1 + i, w, 1, (pct <= 20 && !charging ? red : green)[i]);
+        for (i = 0; i < 10 && w > 0; ++i)
+            ip_fill(canvas, x + 1, y + 1 + i, w, 1, (pct <= 20 && !charging ? red : green)[i]);
     }
-    ip_fill(canvas, x, y, 24, 1, p->battery_edge), ip_fill(canvas, x, y + 11, 24, 1, p->battery_edge), ip_fill(canvas, x, y, 1, 12, p->battery_edge), ip_fill(canvas, x + 23, y, 1, 12, p->battery_edge);
+    ip_fill(canvas, x, y, 24, 1, p->battery_edge), ip_fill(canvas, x, y + 11, 24, 1, p->battery_edge),
+        ip_fill(canvas, x, y, 1, 12, p->battery_edge), ip_fill(canvas, x + 23, y, 1, 12, p->battery_edge);
     ip_fill(canvas, x + 24, y + 3, 3, 5, p->battery_edge);
 }
 
@@ -964,22 +1086,33 @@ static void ip_play_glyph(void *canvas, int x, int y) {
     int st = mclGetPlayStatus() == 2 ? 1 : mclGetPlayStatus() == 3 ? 2 : 0, r;
     for (r = 0; st && r < 14; ++r) {
         unsigned c = ip_lerp(IP_SEL_TOP, IP_SEL_BOT, r, 14);
-        if (st == 1) ip_fill(canvas, x + 1, y + r, ((r < 13 - r ? r : 13 - r) + 1) * 10 / 7, 1, c);
-        else ip_fill(canvas, x + 1, y + r, 4, 1, c), ip_fill(canvas, x + 7, y + r, 4, 1, c);
+        if (st == 1)
+            ip_fill(canvas, x + 1, y + r, ((r < 13 - r ? r : 13 - r) + 1) * 10 / 7, 1, c);
+        else
+            ip_fill(canvas, x + 1, y + r, 4, 1, c), ip_fill(canvas, x + 7, y + r, 4, 1, c);
     }
 }
 
 static const char *ip_title(int kind) {
     switch (kind) {
-    case K_MUSIC: return TR("Music");
-    case K_ALBUMS: return TR("Albums");
-    case K_ARTISTS: return TR("Artists");
-    case K_SONGS: return TR("Songs");
-    case K_PLAYLISTS: return TR("Playlists");
-    case K_NOW: return TR("Now Playing");
-    case K_CF: return TR("Cover Flow");
-    case K_SETTINGS: return TR("cdrippersettings");
-    default: return "Pod";   /* the page's own name, a brand like the Extras item's label: plain in every language (pod_i18n.BRANDS) */
+    case K_MUSIC:
+        return TR("Music");
+    case K_ALBUMS:
+        return TR("Albums");
+    case K_ARTISTS:
+        return TR("Artists");
+    case K_SONGS:
+        return TR("Songs");
+    case K_PLAYLISTS:
+        return TR("Playlists");
+    case K_NOW:
+        return TR("Now Playing");
+    case K_CF:
+        return TR("Cover Flow");
+    case K_SETTINGS:
+        return TR("cdrippersettings");
+    default:
+        return "Pod"; /* the page's own name, a brand like the Extras item's label: plain in every language (pod_i18n.BRANDS) */
     }
 }
 
@@ -989,10 +1122,11 @@ static void ip_paint_bar(void *canvas, int kind) {
     ip_header(canvas, right);
     /* One centre line, y 11.5 (rows 7 .. 16): the glyphs are 10 px from y 7; the text box starts at y 1, because AWTK's metric centring in the 23 px
      * box put the caps 1 px high on the device (shot-0014: caps 6 .. 15). */
-    ip_play_glyph(canvas, right - 8 - 27 - 8 - 12, IP_BAR_H / 2 - 7);   /* 8 px before the battery, 8 px from the edge */
+    ip_play_glyph(canvas, right - 8 - 27 - 8 - 12, IP_BAR_H / 2 - 7); /* 8 px before the battery, 8 px from the edge */
     ip_battery_glyph(canvas, right - 8 - 27, IP_BAR_H / 2 - 6);
-    widget_prepare_text_style(ip.st_title, canvas);   /* left, 16 px */
-    ip_text(canvas, ip_top()->title[0] ? ip_top()->title : ip_title(kind), IP_TEXT_X, 1, right - 8 - 27 - 8 - 12 - 6 - IP_TEXT_X, IP_BAR_H - 1);
+    widget_prepare_text_style(ip.st_title, canvas); /* left, 16 px */
+    ip_text(canvas, ip_top()->title[0] ? ip_top()->title : ip_title(kind), IP_TEXT_X, 1,
+            right - 8 - 27 - 8 - 12 - 6 - IP_TEXT_X, IP_BAR_H - 1);
 }
 
 /* The shadow the white menu casts on the pane (the real iPod's, and iPlayr's .shadow(black 0.7, radius 8, x 4) on the menu's background): IP_SHADOW_W columns of black from the pane's
@@ -1009,9 +1143,10 @@ static void ip_shadow_make(void) {
         ip.shadow = (void *)0;
         return;
     }
-    for (y = 0; y < IP_PANE_H; ++y) for (x = 0; x < IP_SHADOW_W; ++x) px[y * IP_SHADOW_W + x] = (unsigned)ip_shadow_alpha[x] << 24;
+    for (y = 0; y < IP_PANE_H; ++y)
+        for (x = 0; x < IP_SHADOW_W; ++x) px[y * IP_SHADOW_W + x] = (unsigned)ip_shadow_alpha[x] << 24;
     bitmap_unlock_buffer(ip.shadow);
-    ip_render_edge(ip.shadow);   /* in a split slide it moves with the menu half, not the pane */
+    ip_render_edge(ip.shadow); /* in a split slide it moves with the menu half, not the pane */
 }
 
 /* The cover pane of the main menu (the iPod 6G split screen), flush against the white menu (no rule): a pane-sized window of the cover's bitmap at the pan's place, copied 1:1 (source and destination the same
@@ -1020,14 +1155,16 @@ static void ip_paint_pane(void *canvas) {
     int src[4], dst[4];
     ip_fill(canvas, IP_SPLIT_X, 0, IP_W - IP_SPLIT_X, IP_SCREEN_H, ip_theme_colors()->pane);
     dst[0] = IP_PANE_X, dst[1] = 0, dst[2] = IP_PANE_W, dst[3] = IP_PANE_H;
-    if (ip.pane.mix_ok && ip.pane.mix) {   /* the frame built on the timer at the sub-pixel place (the cross-fade included): a 1:1 copy */
+    if (ip.pane.mix_ok &&
+        ip.pane.mix) { /* the frame built on the timer at the sub-pixel place (the cross-fade included): a 1:1 copy */
         src[0] = src[1] = 0, src[2] = IP_PANE_W, src[3] = IP_PANE_H;
         canvas_draw_image(canvas, ip.pane.mix, src, dst);
     } else if (ip.pane.have[ip.pane.cur] && ip.pane.bmp[ip.pane.cur]) {
-        src[0] = (IP_PANE_ART - IP_PANE_W - IP_PANE_R) / 2 + (ip_pane_pos(ip.pane.cur) >> 8), src[1] = IP_PANE_R / 2, src[2] = IP_PANE_W, src[3] = IP_PANE_H;
+        src[0] = (IP_PANE_ART - IP_PANE_W - IP_PANE_R) / 2 + (ip_pane_pos(ip.pane.cur) >> 8), src[1] = IP_PANE_R / 2,
+        src[2] = IP_PANE_W, src[3] = IP_PANE_H;
         canvas_draw_image(canvas, ip.pane.bmp[ip.pane.cur], src, dst);
     }
-    if (ip.shadow && !ip.no_shadow) {   /* the menu's shadow on the pane's left edge */
+    if (ip.shadow && !ip.no_shadow) { /* the menu's shadow on the pane's left edge */
         src[0] = src[1] = 0, src[2] = IP_SHADOW_W, src[3] = IP_PANE_H;
         dst[0] = IP_PANE_X, dst[2] = IP_SHADOW_W;
         canvas_draw_image(canvas, ip.shadow, src, dst);
@@ -1073,8 +1210,8 @@ static void ip_paint_list(void *canvas, int kind) {
     void *playing = ip_is_tracks(kind) ? cc_playing() : (void *)0;
     int i, fixed = ip_split(kind), n = ip.list || fixed ? ip_rows() : 0, right = fixed ? IP_SPLIT_X : IP_W, pass, y;
     int tall = ip_tall(kind), h = tall ? IP_TALL_H : IP_ROW_H, visible = tall ? IP_TALL_ROWS : IP_ROWS;
-    if (!fixed && !ip_valid()) n = 0;   /* a stale list is never read */
-    for (pass = 0; pass < 2; ++pass) {   /* the unselected rows, then the selected one: one text style at a time */
+    if (!fixed && !ip_valid()) n = 0; /* a stale list is never read */
+    for (pass = 0; pass < 2; ++pass) { /* the unselected rows, then the selected one: one text style at a time */
         widget_prepare_text_style(pass ? ip.st_sel : ip.st_row, canvas);
         for (i = 0; i < visible && l->top + i < n; ++i) {
             int idx = l->top + i, sel = idx == l->sel, vw = 0, chev = !ip_is_tracks(kind);
@@ -1082,33 +1219,43 @@ static void ip_paint_list(void *canvas, int kind) {
             if (sel != pass) continue;
             y = IP_BAR_H + i * h;
             if (sel) ip_selection(canvas, right, y, h);
-            if (val) {   /* blue on white, white on the selection (the reference's value colours) */
+            if (val) { /* blue on white, white on the selection (the reference's value colours) */
                 widget_prepare_text_style(sel ? ip.st_subsel : ip.st_val, canvas);
                 vw = ip_text_right(canvas, val, right - IP_TEXT_X, y, h), chev = 0;
                 widget_prepare_text_style(pass ? ip.st_sel : ip.st_row, canvas);
             }
-            ip_text(canvas, ip_row_text(kind, idx), tall ? IP_ROW_ART + 8 : IP_TEXT_X, y + (tall ? 4 : 0), vw ? right - IP_TEXT_X - IP_TEXT_X - vw - 12 : right - IP_TEXT_X - 22 - (tall ? IP_ROW_ART + 8 : 0), IP_ROW_H);
+            ip_text(canvas, ip_row_text(kind, idx), tall ? IP_ROW_ART + 8 : IP_TEXT_X, y + (tall ? 4 : 0),
+                    vw ? right - IP_TEXT_X - IP_TEXT_X - vw - 12 : right - IP_TEXT_X - 22 - (tall ? IP_ROW_ART + 8 : 0),
+                    IP_ROW_H);
             if (tall) {
                 struct row_art *a = &ip.rows[i];
                 int src[4] = {0, 0, IP_ROW_ART, IP_ROW_ART}, dst[4] = {0, y, IP_ROW_ART, IP_ROW_ART};
                 void *rec = ip_rec(kind, ip.list, idx);
                 char sub[256];
                 unsigned identity = kind == K_PLAYLISTS ? (unsigned)I(rec, REC_DISC) : cc_album_key(rec);
-                if (a->bmp && a->kind == kind && a->index == idx && a->id == identity && a->drawn) canvas_draw_image(canvas, a->bmp, src, dst);
-                else ip_fill(canvas, 0, y, IP_ROW_ART, IP_ROW_ART, ip_theme_colors()->rule);
-                if (kind == K_PLAYLISTS) snprintf(sub, sizeof sub, "%s", TR("Playlists"));
-                else snprintf(sub, sizeof sub, "%s", cc_str(rec, REC_ARTIST));
+                if (a->bmp && a->kind == kind && a->index == idx && a->id == identity && a->drawn)
+                    canvas_draw_image(canvas, a->bmp, src, dst);
+                else
+                    ip_fill(canvas, 0, y, IP_ROW_ART, IP_ROW_ART, ip_theme_colors()->rule);
+                if (kind == K_PLAYLISTS)
+                    snprintf(sub, sizeof sub, "%s", TR("Playlists"));
+                else
+                    snprintf(sub, sizeof sub, "%s", cc_str(rec, REC_ARTIST));
                 widget_prepare_text_style(sel ? ip.st_subsel : ip.st_small, canvas);
                 ip_text(canvas, sub, IP_ROW_ART + 8, y + 30, right - IP_TEXT_X - 22 - IP_ROW_ART - 8, 20);
                 widget_prepare_text_style(pass ? ip.st_sel : ip.st_row, canvas);
             }
-            if (sel && chev) ip_chevron(canvas, right - 14, y + h / 2, 0xffffffu);   /* as the iPod: only the selected row has one */
+            if (sel && chev)
+                ip_chevron(canvas, right - 14, y + h / 2, 0xffffffu); /* as the iPod: only the selected row has one */
             if (!sel && playing && ip_is_tracks(kind)) {
                 void *rec = deque_at(ip.list, (unsigned)idx);
                 const char *path = cc_str(rec, REC_PATH);
-                if (*path && !strcmp(path, cc_str(playing, REC_PATH)) && I(rec, REC_CUE_START) == I(playing, REC_CUE_START)) {   /* the speaker: the playing track, right aligned */
+                if (*path && !strcmp(path, cc_str(playing, REC_PATH)) &&
+                    I(rec, REC_CUE_START) ==
+                        I(playing, REC_CUE_START)) { /* the speaker: the playing track, right aligned */
                     void *bmp = ip_mode_bitmap(3);
-                    int src[4] = {0, 0, IP_PLAY_PX, IP_PLAY_PX}, dst[4] = {IP_W - IP_TEXT_X - IP_PLAY_PX, y + (h - IP_PLAY_PX) / 2, IP_PLAY_PX, IP_PLAY_PX};
+                    int src[4] = {0, 0, IP_PLAY_PX, IP_PLAY_PX},
+                        dst[4] = {IP_W - IP_TEXT_X - IP_PLAY_PX, y + (h - IP_PLAY_PX) / 2, IP_PLAY_PX, IP_PLAY_PX};
                     if (bmp) canvas_draw_image(canvas, bmp, src, dst);
                 }
             }
@@ -1116,7 +1263,12 @@ static void ip_paint_list(void *canvas, int kind) {
     }
     if (!fixed && n == 0 && ip_valid()) {
         widget_prepare_text_style(ip.st_small, canvas);
-        ip_text(canvas, TR(kind == K_ALBUMS || kind == K_ARTIST_ALBUMS ? "No albums" : kind == K_ARTISTS ? "No artists" : kind == K_PLAYLISTS ? "No playlists" : "No songs"), IP_TEXT_X, IP_BAR_H, IP_W - 2 * IP_TEXT_X, IP_ROW_H);
+        ip_text(canvas,
+                TR(kind == K_ALBUMS || kind == K_ARTIST_ALBUMS ? "No albums"
+                   : kind == K_ARTISTS                         ? "No artists"
+                   : kind == K_PLAYLISTS                       ? "No playlists"
+                                                               : "No songs"),
+                IP_TEXT_X, IP_BAR_H, IP_W - 2 * IP_TEXT_X, IP_ROW_H);
     }
 }
 
@@ -1131,14 +1283,23 @@ static void *ip_mode_bitmap(int i) {
     ip.mode_bmp[i] = bitmap_create_ex(size, size, size * 4, BITMAP_RGBA8888);
     px = ip.mode_bmp[i] ? (unsigned *)bitmap_lock_buffer_for_write(ip.mode_bmp[i]) : (unsigned *)0;
     if (!px) return (void *)0;
-    for (k = 0; k < size * size; ++k)   /* the marks in the mark colour; the speaker in the title bar glyph's blue, a row at a time down its gradient */
-        px[k] = 0xff000000u | ip_lerp(ip_theme_colors()->bg, i == 3 ? ip_lerp(IP_SEL_TOP, IP_SEL_BOT, (int)(k / size), (int)size) : ip_theme_colors()->mode, (int)(tmp[k] & 255), 256);
+    for (
+        k = 0; k < size * size;
+        ++k) /* the marks in the mark colour; the speaker in the title bar glyph's blue, a row at a time down its gradient */
+        px[k] = 0xff000000u |
+                ip_lerp(ip_theme_colors()->bg,
+                        i == 3 ? ip_lerp(IP_SEL_TOP, IP_SEL_BOT, (int)(k / size), (int)size) : ip_theme_colors()->mode,
+                        (int)(tmp[k] & 255), 256);
     bitmap_unlock_buffer(ip.mode_bmp[i]);
     return ip.mode_bmp[i];
 }
 
 static void ip_mode_draw(void *canvas, int mode) {
-    int i = mode == MODE_SHUFFLE ? 0 : mode == MODE_REPEAT_ALL ? 1 : mode == MODE_REPEAT_ONE ? 2 : -1, src[4] = {0, 0, IP_MODE_PX, IP_MODE_PX}, dst[4] = {IP_MODE_X, IP_MODE_Y, IP_MODE_PX, IP_MODE_PX};
+    int i = mode == MODE_SHUFFLE      ? 0
+            : mode == MODE_REPEAT_ALL ? 1
+            : mode == MODE_REPEAT_ONE ? 2
+                                      : -1,
+        src[4] = {0, 0, IP_MODE_PX, IP_MODE_PX}, dst[4] = {IP_MODE_X, IP_MODE_Y, IP_MODE_PX, IP_MODE_PX};
     void *bmp = i >= 0 ? ip_mode_bitmap(i) : (void *)0;
     if (bmp) canvas_draw_image(canvas, bmp, src, dst);
 }
@@ -1146,10 +1307,13 @@ static void ip_mode_draw(void *canvas, int mode) {
 /* One row (i of IP_NP_BAR_H) of the progress bar at screen row y: the 18 px track is white with its top and bottom edges shaded in, the fill the reference's six-stop
  * glossy blue over the whole height; `alpha` (255 opaque) mixes it into the screen colour, for the reflection under the bar. */
 static void ip_bar_row(void *canvas, int y, int i, int fw, int alpha) {
-    static const unsigned blue[] = {BGR(0x86abffu), BGR(0x6b99f5u), BGR(0x3d89ebu), BGR(0x3698f9u), BGR(0x37b0ffu), BGR(0x5cbbffu)};
+    static const unsigned blue[] = {BGR(0x86abffu), BGR(0x6b99f5u), BGR(0x3d89ebu),
+                                    BGR(0x3698f9u), BGR(0x37b0ffu), BGR(0x5cbbffu)};
     static const unsigned char at[] = {0, 20, 58, 58, 82, 100};
     unsigned bg = ip_theme_colors()->bg, edge = ip_theme_colors()->progress_edge;
-    int grey = 255 - (i < 4 ? (4 - i) * 10 : i > 10 ? (i - 10) * 6 : 0);   /* the shading of the track's top and bottom edges */
+    int grey = 255 - (i < 4    ? (4 - i) * 10
+                      : i > 10 ? (i - 10) * 6
+                               : 0); /* the shading of the track's top and bottom edges */
     unsigned track = (unsigned)grey * 0x010101u, fill = ip_stops(blue, at, 6, i, IP_NP_BAR_H);
     if (i == 0 || i == IP_NP_BAR_H - 1) track = edge;
     if (alpha < 255) track = ip_lerp(bg, track, alpha, 256), fill = ip_lerp(bg, fill, alpha, 256);
@@ -1182,12 +1346,12 @@ static void ip_paint_now(void *canvas) {
         return;
     }
     ip_mode_draw(canvas, mclGetPlayMode());
-    if (ip.art) {   /* the cover, flat and square: a straight copy */
+    if (ip.art) { /* the cover, flat and square: a straight copy */
         src[0] = 0, src[1] = 0, src[2] = IP_ART, src[3] = IP_ART;
         dst[0] = IP_NP_ART_X, dst[1] = IP_NP_ART_Y, dst[2] = IP_ART, dst[3] = IP_ART;
         canvas_draw_image(canvas, ip.art, src, dst);
     }
-    if (ip.np_refl && ip.np_valid) {   /* and its reflection, made once with the cover */
+    if (ip.np_refl && ip.np_valid) { /* and its reflection, made once with the cover */
         src[0] = 0, src[1] = 0, src[2] = IP_ART, src[3] = IP_NP_REFLECT;
         dst[0] = IP_NP_ART_X, dst[1] = IP_NP_ART_Y + IP_ART, dst[2] = IP_ART, dst[3] = IP_NP_REFLECT;
         canvas_draw_image(canvas, ip.np_refl, src, dst);
@@ -1198,23 +1362,29 @@ static void ip_paint_now(void *canvas) {
     widget_prepare_text_style(ip.st_np2, canvas);
     ip_text(canvas, ip.np_text[1], IP_NP_TEXT_X, 87, IP_W - IP_NP_TEXT_X - 8, 22);
     ip_text(canvas, ip.np_text[2], IP_NP_TEXT_X, 108, IP_W - IP_NP_TEXT_X - 8, 22);
-    if (queue) {   /* the place in the queue: "3 / 12" (the translation table allows one %d a text, so no "3 of 12") */
+    if (queue) { /* the place in the queue: "3 / 12" (the translation table allows one %d a text, so no "3 of 12") */
         n = (int)deque_size(queue);
         snprintf(line, sizeof line, "%d / %d", mclGetPlayPos() + 1, n);
         widget_prepare_text_style(ip.st_np3, canvas);
         ip_text(canvas, line, IP_NP_TEXT_X, 132, IP_W - IP_NP_TEXT_X - 8, 20);
     }
     ok = get_playtimeandlength(&pos, &len) == 1 && len > 0;
-    if (ok) ip.np_pos = pos, ip.np_len = len, ip.np_key = ip.track;
-    else len = ip.np_len, pos = ip.np_key == ip.track ? ip.np_pos : 0;   /* no time now: the last length; the position of this track, else 0 */
+    if (ok)
+        ip.np_pos = pos, ip.np_len = len, ip.np_key = ip.track;
+    else
+        len = ip.np_len, pos = ip.np_key == ip.track
+                                   ? ip.np_pos
+                                   : 0; /* no time now: the last length; the position of this track, else 0 */
     if (pos < 0) pos = 0;
     if (pos > len) pos = len;
     fw = len > 0 ? IP_NP_TRACK_W * pos / len : 0;
     for (i = 0; i < IP_NP_BAR_H; ++i) ip_bar_row(canvas, IP_NP_BAR_Y + i, i, fw, 255);
-    for (i = 0; i < IP_NP_BAR_REFLECT; ++i) ip_bar_row(canvas, IP_NP_BAR_Y + IP_NP_BAR_H + i, IP_NP_BAR_H - 1 - i, fw, (IP_NP_BAR_REFLECT - i) * 77 / IP_NP_BAR_REFLECT);
+    for (i = 0; i < IP_NP_BAR_REFLECT; ++i)
+        ip_bar_row(canvas, IP_NP_BAR_Y + IP_NP_BAR_H + i, IP_NP_BAR_H - 1 - i, fw,
+                   (IP_NP_BAR_REFLECT - i) * 77 / IP_NP_BAR_REFLECT);
     snprintf(a, sizeof a, "%02d:%02d", pos / 60, pos % 60);
     snprintf(b, sizeof b, "-%02d:%02d", (len - pos) / 60, (len - pos) % 60);
-    widget_prepare_text_style(ip.st_time, canvas);   /* 15 px black, in 50 px side columns */
+    widget_prepare_text_style(ip.st_time, canvas); /* 15 px black, in 50 px side columns */
     ip_text_edge(canvas, a, 8, 1, IP_NP_BAR_Y - 4, 22);
     ip_text_edge(canvas, b, IP_W - 8, 0, IP_NP_BAR_Y - 4, 22);
 }
@@ -1223,9 +1393,13 @@ static void ip_paint_current(void *canvas) {
     int kind = ip_top()->kind;
     ip_fill(canvas, 0, 0, IP_W, IP_SCREEN_H, ip_theme_colors()->bg);
     if (ip_split(kind)) ip_paint_pane(canvas);
-    if (kind == K_CF) ipcf_paint(canvas, ip_valid() ? ip.list : (void *)0, ip_valid() ? ip.count : 0, ip.st_row);   /* the covers on white under the bar (patch/ipod_cf.c) */
-    else if (kind == K_NOW) ip_paint_now(canvas);
-    else ip_paint_list(canvas, kind);
+    if (kind == K_CF)
+        ipcf_paint(canvas, ip_valid() ? ip.list : (void *)0, ip_valid() ? ip.count : 0,
+                   ip.st_row); /* the covers on white under the bar (patch/ipod_cf.c) */
+    else if (kind == K_NOW)
+        ip_paint_now(canvas);
+    else
+        ip_paint_list(canvas, kind);
     ip_paint_bar(canvas, kind);
 }
 
@@ -1274,7 +1448,7 @@ static int ip_paint_split(void *canvas, const int *saved, int old_dx, int new_dx
         ip_paint_current(canvas);
         ip_render_end();
         ip_paint_range(canvas, saved, -new_dx, IP_SPLIT_X - new_dx, IP_W);
-        ip.no_shadow = 1;   /* the shadow belongs to the menu half */
+        ip.no_shadow = 1; /* the shadow belongs to the menu half */
         ip_render_begin();
         ip_paint_current(canvas);
         ip_render_end();
@@ -1290,8 +1464,11 @@ static int ip_on_paint(void *ctx, void *e) {
     if (!canvas || !ip.win) return RET_OK;
     saved[0] = I(canvas, CANVAS_OX), saved[1] = I(canvas, CANVAS_OY);
     for (i = 0; i < 4; ++i) saved[i + 2] = I(canvas, CANVAS_CLIP + i * 4);
-    if (!ip_render_active() && ip_split(ip_top()->kind) && saved[2] >= saved[0] + IP_SPLIT_X) {   /* only the pane's rectangle is dirty (a pan or fade frame): the menu is not painted again, */
-        ip_paint_pane(canvas);                                                                      /* and the recorded model of the whole page is left as it is */
+    if (!ip_render_active() && ip_split(ip_top()->kind) &&
+        saved[2] >=
+            saved[0] +
+                IP_SPLIT_X) { /* only the pane's rectangle is dirty (a pan or fade frame): the menu is not painted again, */
+        ip_paint_pane(canvas); /* and the recorded model of the whole page is left as it is */
         return RET_OK;
     }
     if (ip_render_split()) {
@@ -1304,7 +1481,7 @@ static int ip_on_paint(void *ctx, void *e) {
     if (ip_render_active()) {
         int width = ip_render_width();
         ip_render_offsets(&old_dx, &new_dx);
-        if (width == IP_SPLIT_X) ip_paint_pane(canvas);  /* stationary right pane between split menus */
+        if (width == IP_SPLIT_X) ip_paint_pane(canvas); /* stationary right pane between split menus */
         ip_paint_scope(canvas, saved, old_dx, width);
         ip_render_out(canvas, 2);
         ip_paint_scope(canvas, saved, new_dx, width);
@@ -1333,25 +1510,28 @@ static int ip_slide_width(int from, int to) {
 static void ip_push(int kind) {
     if (ip.depth + 1 >= IP_DEPTH) return;
     ip_render_transition(1, ip_slide_width(ip_top()->kind, kind));
-    { struct lvl *nl = &ip.st[++ip.depth]; nl->kind = kind, nl->sel = nl->top = 0, nl->title[0] = 0; }
+    {
+        struct lvl *nl = &ip.st[++ip.depth];
+        nl->kind = kind, nl->sel = nl->top = 0, nl->title[0] = 0;
+    }
     ip_wheel_reset();
     ip_load();
     ip_redraw();
-    ip_retime();   /* the pace of the new level: Cover Flow's frames, else the pan stops */
+    ip_retime(); /* the pace of the new level: Cover Flow's frames, else the pan stops */
 }
 
 static void ip_pop(void) {
     if (ip.depth == 0) {
         ip_render_cancel();
-        navigator_back();   /* MENU on the main menu closes the page */
+        navigator_back(); /* MENU on the main menu closes the page */
         return;
     }
     ip_render_transition(-1, ip_slide_width(ip_top()->kind, ip.st[ip.depth - 1].kind));
-    if (ip_top()->kind == K_CF) ipcf_close();   /* Cover Flow's frame and textures go */
+    if (ip_top()->kind == K_CF) ipcf_close(); /* Cover Flow's frame and textures go */
     ip.depth--;
     ip_wheel_reset();
     ip_load();
-    if (ip.depth == 0) ip_pane_reset();   /* back on the main menu: a new random cover, the playing one looked up again */
+    if (ip.depth == 0) ip_pane_reset(); /* back on the main menu: a new random cover, the playing one looked up again */
     ip_redraw();
     ip_retime();
 }
@@ -1361,7 +1541,8 @@ static void ip_pop_root(void) {
     int d;
     if (ip.depth == 0) return;
     ip_render_transition(-1, ip_slide_width(ip_top()->kind, K_MAIN));
-    for (d = ip.depth; d > 0; --d) if (ip.st[d].kind == K_CF) ipcf_close();
+    for (d = ip.depth; d > 0; --d)
+        if (ip.st[d].kind == K_CF) ipcf_close();
     ip.depth = 0;
     ip_wheel_reset();
     ip_load();
@@ -1376,20 +1557,23 @@ static void ip_step(int dir, int rows) {
     struct lvl *l = ip_top();
     if (ip_render_active()) ip_render_cancel();
     int n, want;
-    if (l->kind == K_NOW) return;   /* nothing turns on Now Playing in this version (docs/modules/ipod.md) */
+    if (l->kind == K_NOW) return; /* nothing turns on Now Playing in this version (docs/modules/ipod.md) */
     if (l->kind != K_MAIN && l->kind != K_MUSIC && l->kind != K_SETTINGS && !ip_ensure()) return;
     n = ip_rows();
     if (n <= 0) return;
     want = l->sel + dir * rows;
     want = want < 0 ? 0 : want >= n ? n - 1 : want;
-    if (l->kind == K_CF) {   /* the slide goes to the album (ipod_cf.c), the pace is the animation's; at an end nothing happens */
+    if (l->kind ==
+        K_CF) { /* the slide goes to the album (ipod_cf.c), the pace is the animation's; at an end nothing happens */
         if (want != l->sel) l->sel = want, ipcf_goto(want), ip_retime(), ip_redraw();
         return;
     }
     l->sel = want;
     if (l->sel < l->top) l->top = l->sel;
-    { int visible = ip_tall(l->kind) ? IP_TALL_ROWS : IP_ROWS;
-      if (l->sel >= l->top + visible) l->top = l->sel - visible + 1; }
+    {
+        int visible = ip_tall(l->kind) ? IP_TALL_ROWS : IP_ROWS;
+        if (l->sel >= l->top + visible) l->top = l->sel - visible + 1;
+    }
     ip_redraw();
 }
 
@@ -1408,18 +1592,23 @@ static void ip_play(int at, int shuffle) {
     queue = _create_deque("stSongInfo");
     if (!queue) return;
     deque_init(queue);
-    if (ip_top()->kind == K_PL_TRACKS) {   /* the playlist's id goes back into classinfo[1], as the stock row tap leaves it (the Songs page does the same before every play) */
+    if (ip_top()->kind ==
+        K_PL_TRACKS) { /* the playlist's id goes back into classinfo[1], as the stock row tap leaves it (the Songs page does the same before every play) */
         void *pl = ip_stock_list(K_PLAYLISTS);
         int row = ip.st[ip.depth - 1].sel;
-        if (pl && (unsigned)row < deque_size(pl)) *(int *)(CLASSINFO + CLASSINFO_ARG) = I(deque_at(pl, (unsigned)row), REC_DISC);
+        if (pl && (unsigned)row < deque_size(pl))
+            *(int *)(CLASSINFO + CLASSINFO_ARG) = I(deque_at(pl, (unsigned)row), REC_DISC);
     }
     found = loadSongList(queue, cc_str(pick, REC_NAME), I(pick, REC_CUE_START), ip.cls);
     n = deque_size(queue);
-    if (n) {   /* the row's own index wins over a duplicate file name (the Songs page's rule) */
-        if ((unsigned)at < n && !strcmp(cc_str(deque_at(queue, (unsigned)at), REC_PATH), cc_str(pick, REC_PATH))) idx = (unsigned)at;
-        else if (found >= 0 && (unsigned)found < n) idx = (unsigned)found;
+    if (n) { /* the row's own index wins over a duplicate file name (the Songs page's rule) */
+        if ((unsigned)at < n && !strcmp(cc_str(deque_at(queue, (unsigned)at), REC_PATH), cc_str(pick, REC_PATH)))
+            idx = (unsigned)at;
+        else if (found >= 0 && (unsigned)found < n)
+            idx = (unsigned)found;
     }
-    if (shuffle && n) {   /* Shuffle Songs leaves the podcast episodes out (patch/pcmodel.c; the queue itself when there are none) */
+    if (shuffle &&
+        n) { /* Shuffle Songs leaves the podcast episodes out (patch/pcmodel.c; the queue itself when there are none) */
         int at_i = (int)idx;
         queue = pc_strip(queue, &at_i);
         idx = (unsigned)at_i;
@@ -1436,7 +1625,9 @@ static void ip_play(int at, int shuffle) {
         return;
     }
     *(int *)G_CLASS_TYPE = ip.cls;
-    if (shuffle) pod_set_mode(MODE_SHUFFLE);   /* Shuffle Songs: stock Shuffle over the whole queue, as the Shuffle page sets it (patch/shuffle.c) */
+    if (shuffle)
+        pod_set_mode(
+            MODE_SHUFFLE); /* Shuffle Songs: stock Shuffle over the whole queue, as the Shuffle page sets it (patch/shuffle.c) */
     start_player(queue, (int)idx, ip.cls, PLAY_MODE);
     *(unsigned char *)FORCE_REFRESH = 1;
     deque_destroy(queue);
@@ -1461,9 +1652,14 @@ static void ip_shuffle_all(void) {
 static void ip_settings_select(int row) {
     int mode = mclGetPlayMode();
     if (row == S_SHUFFLE) {
-        if (mode == MODE_SHUFFLE) pod_set_in_order();
-        else pod_set_mode(MODE_SHUFFLE);
-    } else if (row == S_REPEAT) pod_set_mode(mode == MODE_REPEAT_ONE ? MODE_REPEAT_ALL : mode == MODE_REPEAT_ALL ? MODE_ORDER : MODE_REPEAT_ONE);
+        if (mode == MODE_SHUFFLE)
+            pod_set_in_order();
+        else
+            pod_set_mode(MODE_SHUFFLE);
+    } else if (row == S_REPEAT)
+        pod_set_mode(mode == MODE_REPEAT_ONE   ? MODE_REPEAT_ALL
+                     : mode == MODE_REPEAT_ALL ? MODE_ORDER
+                                               : MODE_REPEAT_ONE);
     else if (row == S_APPEARANCE && ip_theme_toggle() >= 0) {
         ip_render_cancel();
         ip_theme_apply(ip.win, widget_lookup(ip.win, "ipod_wheel_img", 1));
@@ -1479,7 +1675,7 @@ static void ip_push_titled(int kind, const char *title) {
     char t[40];
     unsigned n = 0;
     while (title[n] && n < sizeof t - 1) t[n] = title[n], ++n;
-    while (n && title[n] && (title[n] & 0xc0) == 0x80) --n;   /* not in the middle of a character */
+    while (n && title[n] && (title[n] & 0xc0) == 0x80) --n; /* not in the middle of a character */
     t[n] = 0;
     ip_push(kind);
     if (ip_top()->kind == kind && !ip_top()->title[0]) memcpy(ip_top()->title, t, n + 1);
@@ -1500,10 +1696,16 @@ static void ip_open_artist(int row) {
     for (k = 0; k < n; ++k) {
         void *r = deque_at(list, k);
         if (I(r, REC_ID) == ID_ALL_SONGS) continue;
-        if (!albums++) { s = cc_str(r, REC_ALBUM); for (i = 0; s[i] && i < sizeof album - 1; ++i) album[i] = s[i]; album[i] = 0; }
+        if (!albums++) {
+            s = cc_str(r, REC_ALBUM);
+            for (i = 0; s[i] && i < sizeof album - 1; ++i) album[i] = s[i];
+            album[i] = 0;
+        }
     }
-    if (albums == 1) ip_push_titled(K_TRACKS, album);   /* the real iPod names the page for the album */
-    else ip_push_titled(K_ARTIST_ALBUMS, name);
+    if (albums == 1)
+        ip_push_titled(K_TRACKS, album); /* the real iPod names the page for the album */
+    else
+        ip_push_titled(K_ARTIST_ALBUMS, name);
 }
 
 static void ip_select(void) {
@@ -1521,38 +1723,60 @@ static void ip_select(void) {
     }
     if (kind == K_MAIN) {
         int row = ip_root_id(l->sel);
-        if (row == ROOT_MUSIC) ip_push(K_MUSIC);
+        if (row == ROOT_MUSIC)
+            ip_push(K_MUSIC);
         else if (row == ROOT_COVER) {
-            if (ipcf_open(ip.win)) ip_push(K_CF);
-            else coverflow_open();
-        }
-        else if (row == ROOT_SHUFFLE) ip_shuffle_all();
-        else if (row == ROOT_NOW) ip_push(K_NOW);
-        else if (row == ROOT_SETTINGS) ip_push(K_SETTINGS);
+            if (ipcf_open(ip.win))
+                ip_push(K_CF);
+            else
+                coverflow_open();
+        } else if (row == ROOT_SHUFFLE)
+            ip_shuffle_all();
+        else if (row == ROOT_NOW)
+            ip_push(K_NOW);
+        else if (row == ROOT_SETTINGS)
+            ip_push(K_SETTINGS);
         return;
     }
     if (kind == K_MUSIC) {
         switch (l->sel) {
-        case M_COVER:   /* Cover Flow inside the iPod screen (ipod_cf.c); no memory for its frame: the existing Cover Flow page, over this one */
-            if (ipcf_open(ip.win)) ip_push(K_CF);
-            else coverflow_open();
+        case M_COVER: /* Cover Flow inside the iPod screen (ipod_cf.c); no memory for its frame: the existing Cover Flow page, over this one */
+            if (ipcf_open(ip.win))
+                ip_push(K_CF);
+            else
+                coverflow_open();
             break;
-        case M_ALBUMS: ip_push(K_ALBUMS); break;
-        case M_ARTISTS: ip_push(K_ARTISTS); break;
-        case M_SONGS: ip_push(K_SONGS); break;
-        case M_PLAYLISTS: ip_push(K_PLAYLISTS); break;
-        case M_SHUFFLE: ip_shuffle_all(); break;   /* Shuffle Songs: stock Shuffle over the library, the iPod's own Now Playing */
+        case M_ALBUMS:
+            ip_push(K_ALBUMS);
+            break;
+        case M_ARTISTS:
+            ip_push(K_ARTISTS);
+            break;
+        case M_SONGS:
+            ip_push(K_SONGS);
+            break;
+        case M_PLAYLISTS:
+            ip_push(K_PLAYLISTS);
+            break;
+        case M_SHUFFLE:
+            ip_shuffle_all();
+            break; /* Shuffle Songs: stock Shuffle over the library, the iPod's own Now Playing */
         }
         return;
     }
     if (!ip_ensure() || !ip.count) return;
-    if (ip_is_tracks(kind)) ip_play(l->sel, 0);
-    else if (kind == K_ALBUMS || kind == K_CF || kind == K_ARTIST_ALBUMS) {   /* Cover Flow's centre button: the album's tracks */
+    if (ip_is_tracks(kind))
+        ip_play(l->sel, 0);
+    else if (kind == K_ALBUMS || kind == K_CF ||
+             kind == K_ARTIST_ALBUMS) { /* Cover Flow's centre button: the album's tracks */
         void *rec = ip_rec(kind, ip.list, l->sel);
-        ip_push_titled(K_TRACKS, I(rec, REC_ID) == ID_ALL_SONGS ? TR(kind == K_ARTIST_ALBUMS ? "local_allsong" : "All albums") : cc_str(rec, REC_ALBUM));
-    }
-    else if (kind == K_ARTISTS) ip_open_artist(l->sel);
-    else if (kind == K_PLAYLISTS) ip_push_titled(K_PL_TRACKS, cc_str(deque_at(ip.list, (unsigned)l->sel), REC_TITLE));
+        ip_push_titled(K_TRACKS, I(rec, REC_ID) == ID_ALL_SONGS
+                                     ? TR(kind == K_ARTIST_ALBUMS ? "local_allsong" : "All albums")
+                                     : cc_str(rec, REC_ALBUM));
+    } else if (kind == K_ARTISTS)
+        ip_open_artist(l->sel);
+    else if (kind == K_PLAYLISTS)
+        ip_push_titled(K_PL_TRACKS, cc_str(deque_at(ip.list, (unsigned)l->sel), REC_TITLE));
 }
 
 /* previous / next: the stock functions the Now Playing buttons and the hardware keys call (a click within a second of the last is ignored by stock). */
@@ -1563,8 +1787,10 @@ static void ip_skip(int next, void *e) {
         ev[2] = time_now_ms();
         e = ev;
     }
-    if (next) next_quick_click(e, 0);
-    else prev_quick_click(e, 0);
+    if (next)
+        next_quick_click(e, 0);
+    else
+        prev_quick_click(e, 0);
     if (ip_look()) ip_redraw();
 }
 
@@ -1610,7 +1836,8 @@ static void ip_turn_move(int x, int y, unsigned now) {
     mag = d < 0 ? -d : d;
     dt = (int)(now - ip.lt);
     ip.lt = now;
-    if (dt > IP_PAUSE_MS || dt < 0) ip.speed = ip.fast = 0;
+    if (dt > IP_PAUSE_MS || dt < 0)
+        ip.speed = ip.fast = 0;
     else if (dt > 0) {
         int inst = mag * 1000 / dt;
         if (inst > IP_VMAX) inst = IP_VMAX;
@@ -1623,7 +1850,7 @@ static void ip_turn_move(int x, int y, unsigned now) {
         ip.dir = -ip.dir, ip.rev = 0, ip.acc = 0, ip.speed = ip.fast = 0;
         return;
     }
-    if (ip.rev) {   /* travel back in the committed direction first takes back the swallowed reverse travel (a jitter nets zero) */
+    if (ip.rev) { /* travel back in the committed direction first takes back the swallowed reverse travel (a jitter nets zero) */
         int back = mag < ip.rev ? mag : ip.rev;
         ip.rev -= back, mag -= back;
         d = d < 0 ? -mag : mag;
@@ -1632,7 +1859,8 @@ static void ip_turn_move(int x, int y, unsigned now) {
     if (ip.speed > IP_FAST) {
         if (!ip.fast) ip.fast = 1, ip.fast_t0 = now;
         idx = (int)((now - ip.fast_t0) / IP_TIER_MS);
-    } else ip.fast = 0;
+    } else
+        ip.fast = 0;
     rows = ip_tier_rows(ip_rows(), idx);
     while (ip.acc >= IP_STEP) ip.acc -= IP_STEP, ip.turned = 1, ip_step(1, rows);
     while (ip.acc <= -IP_STEP) ip.acc += IP_STEP, ip.turned = 1, ip_step(-1, rows);
@@ -1647,7 +1875,7 @@ static int ip_on_wheel(void *ctx, void *e) {
         ip_local(e, &x, &y);
         r2 = x * x + y * y;
         ip_release();
-        if (r2 > IP_RING_R * IP_RING_R) return RET_OK;   /* the square's corners are not the wheel */
+        if (r2 > IP_RING_R * IP_RING_R) return RET_OK; /* the square's corners are not the wheel */
         ip.touch = r2 < IP_HUB_R * IP_HUB_R ? R_CENTRE : R_RING;
         ip.sx = ip.lx = x, ip.sy = ip.ly = y;
         ip.last = ip_angle(x, y), ip.turned = ip.far = 0, ip.lt = (unsigned)I(e, 8);
@@ -1669,18 +1897,27 @@ static int ip_on_wheel(void *ctx, void *e) {
         ip_local(e, &x, &y);
         if ((x - sx) * (x - sx) + (y - sy) * (y - sy) >= IP_TAP_PX * IP_TAP_PX) far = 1;
         ip_release();
-        if (was_long) { ip_retime(); return RET_OK; }
-        if (!turned && !far && ip.menu_zone && held >= IP_LONG_MS) {   /* the long press, when the timer had not seen it yet (on the main menu it closes nothing) */
+        if (was_long) {
+            ip_retime();
+            return RET_OK;
+        }
+        if (!turned && !far && ip.menu_zone &&
+            held >=
+                IP_LONG_MS) { /* the long press, when the timer had not seen it yet (on the main menu it closes nothing) */
             ip_pop_root();
             return RET_OK;
         }
         ip_retime();
         if (turned || far) return RET_OK;
-        if (touch == R_CENTRE) ip_select();
+        if (touch == R_CENTRE)
+            ip_select();
         else if ((sy < 0 ? -sy : sy) > (sx < 0 ? -sx : sx)) {
-            if (sy < 0) ip_pop();   /* MENU */
-            else playpause_quick_click(), ip_look(), ip_redraw();
-        } else ip_skip(sx > 0, e);
+            if (sy < 0)
+                ip_pop(); /* MENU */
+            else
+                playpause_quick_click(), ip_look(), ip_redraw();
+        } else
+            ip_skip(sx > 0, e);
     } else if (type == EVT_POINTER_ABORT) {
         ip_release();
     }
@@ -1697,11 +1934,12 @@ static int ip_tick(const void *timer) {
         ip.timer = 0;
         return RET_OK;
     }
-    if (ip.touch == R_RING && ip.menu_zone && !ip.long_done && !ip.turned && !ip.far && ip.depth > 0 && time_now_ms() - ip.down_t >= IP_LONG_MS) {
-        ip.long_done = 1;   /* MENU held: back to the main menu */
+    if (ip.touch == R_RING && ip.menu_zone && !ip.long_done && !ip.turned && !ip.far && ip.depth > 0 &&
+        time_now_ms() - ip.down_t >= IP_LONG_MS) {
+        ip.long_done = 1; /* MENU held: back to the main menu */
         ip_pop_root();
     }
-    if (!pod_screen_lit()) {   /* the screen is off: no pan, no cover work, no repaint (the idle-power rule); the next lit tick looks again */
+    if (!pod_screen_lit()) { /* the screen is off: no pan, no cover work, no repaint (the idle-power rule); the next lit tick looks again */
         ip_pane_xfer_stop();
         ip_retime();
         return RET_REPEAT;
@@ -1711,19 +1949,24 @@ static int ip_tick(const void *timer) {
         if (ip_render_active()) return RET_REPEAT;
         finished = 1;
     }
-    if (!ip_valid() && pod_is_top(ip.win)) {   /* another query replaced the stock list under the page: read it again (the Songs page's stale timer) */
+    if (!ip_valid() &&
+        pod_is_top(
+            ip.win)) { /* another query replaced the stock list under the page: read it again (the Songs page's stale timer) */
         ip_load();
         ip_redraw();
     }
     if (ip_rows_tick()) ip_redraw();
-    if (ip_top()->kind == K_CF && ip_valid() && ipcf_tick(ip.list, ip.count)) ip_redraw();   /* Cover Flow slides and decodes on this timer (ipod_cf.c) */
-    if ((ip.pane.worker || ip.pane.xfer) && !(ip_split(ip_top()->kind) && pod_is_top(ip.win))) ip_pane_xfer_stop();   /* the pane is not in front: its extraction goes (joined, bounded by one album) */
-    if (ip_pane_step()) ip_redraw_pane();   /* the cover pane of a split page: only its rectangle is invalidated */
-    if (finished || ip.ival == IP_TICK_MS || ++ip.lookn >= IP_DRIFT_LOOK) {   /* refresh playback as soon as a transition finishes */
+    if (ip_top()->kind == K_CF && ip_valid() && ipcf_tick(ip.list, ip.count))
+        ip_redraw(); /* Cover Flow slides and decodes on this timer (ipod_cf.c) */
+    if ((ip.pane.worker || ip.pane.xfer) && !(ip_split(ip_top()->kind) && pod_is_top(ip.win)))
+        ip_pane_xfer_stop(); /* the pane is not in front: its extraction goes (joined, bounded by one album) */
+    if (ip_pane_step()) ip_redraw_pane(); /* the cover pane of a split page: only its rectangle is invalidated */
+    if (finished || ip.ival == IP_TICK_MS ||
+        ++ip.lookn >= IP_DRIFT_LOOK) { /* refresh playback as soon as a transition finishes */
         ip.lookn = 0;
         if (ip_look()) ip_redraw();
     }
-    ip_retime();   /* one timer, its interval changed in place (timer_modify): never removed or added while the page lives */
+    ip_retime(); /* one timer, its interval changed in place (timer_modify): never removed or added while the page lives */
     return RET_REPEAT;
 }
 
@@ -1759,9 +2002,9 @@ static int ip_on_foreground(void *ctx, void *e) {
     if (!ip.win || ctx != ip.win) return RET_OK;
     ip.fg = 1;
     ip_render_cancel();
-    ip_load();   /* another page may have queried (the Playlists a stock page opened, Cover Flow ...): the list is read again */
-    if (ip.depth == 0) ip_pane_reset();   /* ... and the main menu has a new random cover */
-    ip.sig[0] = ip.sig[1] = ip.sig[2] = ip.sig[3] = ip.sig[4] = ~0u;   /* ... and the screen is painted fresh */
+    ip_load(); /* another page may have queried (the Playlists a stock page opened, Cover Flow ...): the list is read again */
+    if (ip.depth == 0) ip_pane_reset(); /* ... and the main menu has a new random cover */
+    ip.sig[0] = ip.sig[1] = ip.sig[2] = ip.sig[3] = ip.sig[4] = ~0u; /* ... and the screen is painted fresh */
     if (!ip.timer) ip.timer = timer_add(ip_first, (void *)0, IP_FIRST_MS);
     ip_redraw();
     return RET_OK;
@@ -1769,7 +2012,7 @@ static int ip_on_foreground(void *ctx, void *e) {
 
 static int ip_on_destroy(void *ctx, void *e) {
     (void)e;
-    if (ctx != ip.win) return RET_OK;   /* an earlier window's end leaves a newer page alone */
+    if (ctx != ip.win) return RET_OK; /* an earlier window's end leaves a newer page alone */
     ip_unarm();
     ip_render_close();
     if (ip.touch != R_NONE) widget_ungrab(ip.win, ip.wheel);
@@ -1781,7 +2024,8 @@ static int ip_on_destroy(void *ctx, void *e) {
     if (ip.pane.bmp[1]) bitmap_destroy(ip.pane.bmp[1]);
     if (ip.pane.mix) bitmap_destroy(ip.pane.mix);
     if (ip.shadow) bitmap_destroy(ip.shadow);
-    for (int m = 0; m < 4; ++m) if (ip.mode_bmp[m]) bitmap_destroy(ip.mode_bmp[m]);
+    for (int m = 0; m < 4; ++m)
+        if (ip.mode_bmp[m]) bitmap_destroy(ip.mode_bmp[m]);
     ipcf_close();
     memset(&ip, 0, sizeof ip);
     return RET_OK;
@@ -1809,9 +2053,10 @@ int ipod_open(void) {
     ip.st_time = widget_lookup(ip.win, "label_ip_time", 1);
     ip.st_val = widget_lookup(ip.win, "label_ip_val", 1);
     ip.st_np3 = widget_lookup(ip.win, "label_ip_np3", 1);
-    if (!ip.screen || !ip.wheel || !ip.st_row || !ip.st_sel || !ip.st_title || !ip.st_small || !ip.st_subsel || !ip.st_np1 || !ip.st_np2 || !ip.st_time || !ip.st_val || !ip.st_np3) {
-        navigator_back();   /* an asset that is not ours: the window goes again */
-        ip.win = (void *)0;   /* (its destroy handler leaves a newer page alone) */
+    if (!ip.screen || !ip.wheel || !ip.st_row || !ip.st_sel || !ip.st_title || !ip.st_small || !ip.st_subsel ||
+        !ip.st_np1 || !ip.st_np2 || !ip.st_time || !ip.st_val || !ip.st_np3) {
+        navigator_back(); /* an asset that is not ours: the window goes again */
+        ip.win = (void *)0; /* (its destroy handler leaves a newer page alone) */
         memset(&ip, 0, sizeof ip);
         return -1;
     }
@@ -1823,7 +2068,7 @@ int ipod_open(void) {
     ip_render_open();
     ip_shadow_make();
     ip.st[0].kind = K_MAIN;
-    ip.track = ~0u;   /* the first look makes the cover (the placeholder when nothing plays) */
+    ip.track = ~0u; /* the first look makes the cover (the placeholder when nothing plays) */
     ip.fg = 1;
     widget_on(ip.win, EVT_WINDOW_TO_BG, ip_on_background, ip.win);
     widget_on(ip.win, EVT_WINDOW_TO_FG, ip_on_foreground, ip.win);

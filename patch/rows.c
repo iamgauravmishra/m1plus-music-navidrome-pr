@@ -2,9 +2,8 @@
  * tracks, Playlists, Search) fitted to iPod-style rows.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
- * compact_set_row_layout / compact_row_layout are q2-pod's (patch/navigation.c, Copyright (c) 2026
- * Diamond Bond, MIT, https://github.com/DiamondBond/q2-pod; see NOTICE), ported to this demo's
- * ABI (patch/offsets.inc) and rows (docs/architecture.md).
+ * compact_set_row_layout / compact_row_layout follow the design of q2-pod's compact rows, written for
+ * this demo's ABI (patch/offsets.inc) and rows (docs/modules/rows.md).
  *
  * How it is reached: tools/pod.py rewrites each ordinary row constructor's own call
  * `jalr $t9` (widget_set_children_layout(row, "default(...)")) into `jal compact_set_row_layout`
@@ -37,7 +36,6 @@
 #include "home.h"
 #include "common.h"
 
-
 typedef int (*layout_fn)(void *, void *);
 
 #define I(w, off) (*(int *)((char *)(w) + (off)))
@@ -52,11 +50,17 @@ static void *find_title(void *row, unsigned count, void **text) {
     for (i = 0; i < count; i++) {
         void *child = widget_get_child(row, i);
         if (!child) continue;
-        if (pod_is_type(child, "hscroll_label")) { *text = child; return child; }
+        if (pod_is_type(child, "hscroll_label")) {
+            *text = child;
+            return child;
+        }
         n = widget_count_children(child);
         for (j = 0; j < n && j < ROW_MAX_CHILDREN; j++) {
             void *label = widget_get_child(child, j);
-            if (pod_is_type(label, "hscroll_label")) { *text = child; return label; }
+            if (pod_is_type(label, "hscroll_label")) {
+                *text = child;
+                return label;
+            }
         }
     }
     return (void *)0;
@@ -86,7 +90,7 @@ static int compact_row_layout(void *layout, void *row) {
         }
         fit(text, width);
         hscroll_label_set_only_focus(title, 1);
-        if (text != title) {   /* a text container: its lines (labels and views) end where it does */
+        if (text != title) { /* a text container: its lines (labels and views) end where it does */
             n = widget_count_children(text);
             for (j = 0; j < n && j < ROW_MAX_CHILDREN; j++) {
                 void *line = widget_get_child(text, j);
@@ -100,10 +104,13 @@ static int compact_row_layout(void *layout, void *row) {
         }
     }
     list_item = pod_is_type(row, "list_item") && I(row, W_H) > 2 * ROW_SEPARATOR;
-    if (list_item) { h = I(row, W_H); I(row, W_H) = h - ROW_SEPARATOR; }
+    if (list_item) {
+        h = I(row, W_H);
+        I(row, W_H) = h - ROW_SEPARATOR;
+    }
     ret = stock(layout, row);
     if (list_item) I(row, W_H) = h;
-    if (margin == 0) {   /* x=0 rows: the cover (the first visible child) gets its inset */
+    if (margin == 0) { /* x=0 rows: the cover (the first visible child) gets its inset */
         for (i = 0; i < count; i++) {
             void *child = widget_get_child(row, i);
             if (!child || !widget_get_visible(child)) continue;
@@ -112,7 +119,7 @@ static int compact_row_layout(void *layout, void *row) {
             break;
         }
     }
-    if (title && text != title) {   /* a line's own view (laid out by now): its last label to its end */
+    if (title && text != title) { /* a line's own view (laid out by now): its last label to its end */
         n = widget_count_children(text);
         for (j = 0; j < n && j < ROW_MAX_CHILDREN; j++) {
             void *view = widget_get_child(text, j), *last = (void *)0;
@@ -140,7 +147,7 @@ int compact_set_row_layout(void *row, const char *params) {
     layout = P(row, W_CHILDREN_LAYOUT);
     if (!layout || P(layout, LAYOUT_VTABLE) != (void *)DEFAULT_LAYOUT_VTABLE) return ret;
     if (((const unsigned *)DEFAULT_LAYOUT_VTABLE)[LAYOUT_SLOT] != DEFAULT_LAYOUT_FN) return ret;
-    if (access(KILL_SD, F_OK) == 0) return ret;   /* kill switch: the stock layout */
+    if (access(KILL_SD, F_OK) == 0) return ret; /* kill switch: the stock layout */
     if (!row_vtable[0]) {
         memcpy(row_vtable, (const void *)DEFAULT_LAYOUT_VTABLE, sizeof row_vtable);
         row_vtable[LAYOUT_SLOT] = (unsigned)compact_row_layout;
@@ -163,8 +170,8 @@ int compact_set_row_layout(void *row, const char *params) {
  * right end. Rebinding a recycled row sets either state again. Rows that name a place, not a
  * track (folder, playlist, card, USB), keep their icon. Kill switch: stock behaviour. */
 static int is_place_icon(const char *name) {
-    return strcmp(name, "icon_folder") == 0 || strcmp(name, "icon_playlist") == 0 ||
-           strcmp(name, "icon_tf") == 0 || strcmp(name, "icon_otg") == 0;
+    return strcmp(name, "icon_folder") == 0 || strcmp(name, "icon_playlist") == 0 || strcmp(name, "icon_tf") == 0 ||
+           strcmp(name, "icon_otg") == 0;
 }
 
 /* Replaces the text setter call (label, the text "N title") in the album detail track row's label builder
@@ -182,26 +189,37 @@ __attribute__((used, retain)) void rows_track_number(void *title, const char *te
     void *row, *num = (void *)0;
     unsigned n, i, at = 0, len;
     int width;
-    if (!title || !text || access(KILL_SD, F_OK) == 0) { widget_set_text_utf8(title, text); return; }
+    if (!title || !text || access(KILL_SD, F_OK) == 0) {
+        widget_set_text_utf8(title, text);
+        return;
+    }
     while (*p >= '0' && *p <= '9') p++;
     len = (unsigned)(p - text);
     row = P(title, W_PARENT);
-    if (!len || len > 3 || *p != ' ' || !row) { widget_set_text_utf8(title, text); return; }
+    if (!len || len > 3 || *p != ' ' || !row) {
+        widget_set_text_utf8(title, text);
+        return;
+    }
     n = widget_count_children(row);
     for (i = 0; i < n && i < ROW_MAX_CHILDREN; i++) {
         void *c = widget_get_child(row, i);
-        if (c == title) at = i;
-        else if (pod_is_type(c, "label")) num = c;
+        if (c == title)
+            at = i;
+        else if (pod_is_type(c, "label"))
+            num = c;
     }
     width = len > 2 ? ROW_NUM_W3 : ROW_NUM_W;
     if (!num) {
         num = label_create(row, 0, 0, width, I(title, W_H));
-        if (!num) { widget_set_text_utf8(title, text); return; }
+        if (!num) {
+            widget_set_text_utf8(title, text);
+            return;
+        }
         widget_use_style(num, ROW_NUM_STYLE);
         widget_set_sensitive(num, 0);
-        widget_restack(num, at);   /* last child now: before the title */
+        widget_restack(num, at); /* last child now: before the title */
     } else {
-        widget_resize(num, width, I(num, W_H));   /* a recycled row: this number's column (no-op when unchanged) */
+        widget_resize(num, width, I(num, W_H)); /* a recycled row: this number's column (no-op when unchanged) */
     }
     memcpy(digits, text, len);
     digits[len] = 0;
@@ -227,12 +245,15 @@ __attribute__((used, retain)) void rows_track_icon(void *img, const char *name) 
          * width), showing a 40 x 20 image whose wave sits at its right end, drawn centred. */
         image_base_set_image(img, ROW_MARKER_IMAGE);
         image_set_draw_type(img, IMAGE_DRAW_CENTER);
-        if (widget_get_child(row, end) != img) { widget_restack(img, end); moved = 1; }
+        if (widget_get_child(row, end) != img) {
+            widget_restack(img, end);
+            moved = 1;
+        }
     } else if (!show && n > 1 && widget_get_child(row, end) == img) {
-        widget_restack(img, end - 1);   /* back before the text (the flow is: check box, icon, text) */
+        widget_restack(img, end - 1); /* back before the text (the flow is: check box, icon, text) */
         moved = 1;
     }
-    if (!widget_get_visible(img) == !show) {   /* already as wanted: no relayout (unless the flow changed) */
+    if (!widget_get_visible(img) == !show) { /* already as wanted: no relayout (unless the flow changed) */
         if (moved) widget_set_need_relayout_children(row);
         return;
     }

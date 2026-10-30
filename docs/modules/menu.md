@@ -1,75 +1,80 @@
-# M1+ Music page layout (the menu and its pages)
+# Menu and Extras layout
 
-Split out of docs/ui.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
+Sources: `tools/pod_pages.py` defines rows/actions; `tools/pod_ui.py` builds assets;
+`patch/menu.c` arranges them at runtime. Tests compare the Python and C models and run stock
+layout/hit-testing. User instructions are in the [guide](../guide.md#home-and-menus).
 
-## 8. M1+ Music page layout (`tools/pod_ui.py`)
+## Menu instances
 
-The release sheet: Home page 3 with the M1+ Music icon in its free slot, the menu as the Home instance (no top bar: the
-mini player bar (docs/modules/minibar.md) and, when the user shows it, the Now Playing row take the bars icon's place, the list starts at y 10 and ends at y 440 (`HOME_PAD`, a little air above the first and below the last row; it scrolls to the last row) and the Customize page it opens.
-The menu opened from the grid icon is the same page with its navbar (Back, "M1+ Music", the bars icon).
-**The mini player bar** (`docs/modules/minibar.md`): the Home instance also holds the hidden `pod_minibar` view (a glass pill, 8,384 304x56, `tools/pod_ui.py` `minibar()`, the last
-child of the window, hidden and insensitive in the asset) and a hidden trailing spacer row `pod_pad` (64 px) in the list; while a track is queued the payload shows both: the
-list still runs to y 440 behind the translucent pill and the spacer is the bottom padding, so the last row scrolls clear above it (`menu_arrange` adds its height to `virtual_h`).
-The normal instance never shows them.
-**The Recently Played shelf** (`docs/modules/recent.md`): the child of `pod_scrollview` after the last shown row is the hidden, insensitive `pod_shelf` view (310 wide, 234, 434 or 634 high, one to three rows: the header "Recently Played", then the Albums grid's 2 x 1..3 cells of 144 px covers with album and artist, the six albums the file keeps,
-`tools/pod_ui.py` `shelf()`). While the payload shows it (the Home instance, an album recorded, Customize > Home Screen > Recent Albums on) it sits right below the last row (y = shown rows x 52; the rows keep their places, so a list at the top never jumps) and `virtual_h` includes its own height:
-`menu_arrange` stacks the children as the shown rows, **the Daily Mix section `pod_daily` (`docs/modules/dailymix.md`: DM_SEC_H = 272 high, the card of the day's mix, right below the last row while it is shown)**, the shelf, the hidden rows, the spacer, puts the shelf after the section and the spacer after the shelf and reads the section's, the shelf's and the spacer's visibility and height; `menu_daily` and `menu_shelf` (one `mn_section`) show, size or hide a section and arrange again keeping the scroll position. A hidden section or shelf is skipped by the stock layouter, so the menu is as before.
+| Instance | Layout |
+|---|---|
+| Home | No navbar; list y 10–440. Daily Mix, Recently Played and the mini player may be shown |
+| Normal | 50 px navbar with Back, title and Now Playing; no Home-only sections or mini player |
 
-Each page is a window with the stock navbar (50 px: `label_title` x 36 y 14 200x22 after the polish step (248 in `pod_ui.py`), `navbar_label_white`,
-Back `btn_return` 0,0 80x50, Now Playing `btn_backtoplayer` 260,0 60x50) over a stock-structured
-list: `list_view` (`default_item_height` 52, black in every state) > `scroll_view` (310 wide with the
-scroll bar, speeds scaled) + `scroll_bar_m` (10 px, max 1000, only when rows overflow 400 px), 52 px
-rows built like stock's scrolling rows (`list_item` `list_item_style` holding an `hscroll_label`
-`srlabel_leftwhite21_style`, `only_parent_focus`, ellipses, text x 24 -> 64 with the icon; the
-`right_arrow` image for rows that navigate, not for Now Playing, Shuffle rows or the switch rows).
-**The menu is customisable (`patch/menu.c`).** The asset holds a row for each of twenty items in the default
-order (Now Playing, Cover Flow, Albums, Artists, Songs, Playlists, Shuffle, Genres, Folders, then the Extras tiles Favorites,
-Recently Added, Recently Played, Most Played, Composers, Hi-Res, Update Library, Tidal, CD Ripper, Customize, and the Pod last; the item id is the row
-index) followed by the **Extras row** (the 21st row, `pod_row20`: always shown, always the last row of the menu, not an item, never hidden, moved or turned off); at open the payload hides the rows the saved list leaves out (`visible=false` and
-`sensitive=false`, parked at y 0), moves the shown ones to y = position x 52 and sets the list's `virtual_h` and offset
-(the Artists list does the same for its rows), so the scrolling height, the hit test, the stock press visuals and the scroll
-bar follow the shown rows. The menu arranges again each time it is back in front (from any page it opened) and keeps its scroll position, clamped to the new range: Back returns to the row the user left. Default: Cover Flow, Albums, Artists, Songs, Playlists, then Extras (`pod_pages.DEFAULT_MENU`, saved string `12345`): a minimal menu. Now Playing is hidden by default, because the mini player bar of the Home instance opens it, and so are Shuffle, Customize and the Pod (item 19, `k`, the virtual iPod of `docs/modules/ipod.md`; Extras lists it in Play); Customize > Main Menu can show any of them, and Extras lists them; 6 shown rows are 312 px, so the
-menu does not scroll (400 px visible with the navbar, 430 px on the Home instance without the bar, 366 px with it; a longer menu scrolls). **Customize is an item like the others** (id 18, saved character `j`, `pod_pages.CUSTOMIZE_ID`): it can be shown in the menu and moved on Customize > Main Menu; hidden (the default), it is reachable from the Customize button in the Extras page's navbar (below), and can never be turned off, so it stays reachable. **Extras is always the last row of the menu.** The saved list
-is `/mnt/data/m1plus-menu`: `<shown ids in order>[-<off ids>]` and a newline, one character per item (`0`-`8`, then `a`-`i` for the Extras tiles, `j` Customize, `k` the Pod). The characters after the optional `-` are the items **turned off**: the Extras page does not list them (Customize > Extras, below). `12345` is the default.
-The rule (`pod_pages.parse_menu_full` returns `(shown ids, off ids)`, `patch/menu.c` `mn_load` is the C twin, `test/pod/menu.py` checks the two against each other on a corpus and on random lists; see `docs/modules/home-guard.md`): only item characters, no id twice (in either part or across them), at most one `-`, Customize never after the `-`, a file shorter than 24 bytes, one optional final newline. Anything else (an unknown character, an old `x`, two `-`, an id in both parts, `j` in the off part) is invalid and gives the default list with nothing off; there is no compatibility path. An empty list, a lone newline or a lone `-` is valid (every item hidden, nothing off; the menu is just the Extras row). An item shown in the menu is never off: Customize > Main Menu clears its flag when it shows an item, so an item hidden again is back on the Extras page. `pod_pages.format_menu` writes the off part in the Extras order, which `mn_save` also does.
-**Customize > Developer > Screenshot** (Lucide `camera` as a bare glyph; a developer's tool, not a menu item: it is not on Extras or the Main Menu
-page): a tap asks first (the stock confirm dialog, "Take a screenshot in 5 s?"), OK starts the 5 s countdown of `docs/modules/screenshot.md`, and a tap while it runs asks "Cancel the screenshot?". The **status bar** shows a 16 px
-white camera (`pod_bar_shot`) while it runs: the last, right-most icon of the right-aligned group, against the battery outline; the Bluetooth,
-SyncLink and Wi-Fi icons shift 20 px left to make room and come back when it is hidden (`test/pod/shot.py` checks the ink stays clear of the
-12 h and 24 h clock; the release sheet shows both). The camera widget (`pod_shot`, hidden and insensitive) is in the real bar only: the pull-down's
-copy of the bar (`tools/statusbar.py`) has none, and the bar test (assets section 52) skips exactly that one widget. The toasts are the stock message box: "Screenshot saved", "Screenshot failed"
-and the existing "Storage unavailable" (16 tables, `tools/pod_i18n.py`).
-The **Customize** page (`m1plus_customize`, 7 rows, fits without a bar; the menu's Customize item opens it): Main Menu (opens the customise page), Extras (Customize > Extras, below), Home Screen (its sub-page, `m1plus_homeset`: Boot to M1+ Music, a row with the stock on/off switch image, `sset_on` / `sset_off` 57 x 28 at x 251 as the stock
-Power and Display pages, whose tap flips it and the image follows, Recent Albums, a switch row of the same kind that shows or hides the Recently Played shelf of the Home menu (on by default), and Shanling Home, which shows the stock grid), Cover Flow
-(its sub-page: the Landscape switch and Sort), Playback (the stock Play settings page), System Settings (kept: it reads as the pair of Playback), Developer (Screenshot). **Customize > Main Menu**
-(`m1plus_mainmenu`, twenty rows, the stock list, scrolling: the nine menu items, the nine Extras tiles, Customize and the Pod, all selectable; there is no Extras row, the menu always shows it): a row per item with the switch (the whole row is the target) and, on the shown
-items but the first, an up arrow (the stock chevron-up art, `expansion_2`, on an insensitive button 50 px wide, left of the switch: a picture; the row
-takes every tap and a tap that begins on the arrow's rectangle, x 191..240 of the row, moves the item one place up, a tap anywhere else toggles it; the arrow
-shows its pressed art while held) that
-moves the item one place up; the shown items come first in menu order, the hidden ones below them in the default order, and a
-switch shows an item at the end of the menu (clearing its off flag). Touch reordering by arrows rather than drag-to-reorder: the stock list drags
-to scroll, and a press-and-drag reorder needs custom gesture code on a page that must always work; an arrow is a 50 x 52 px
-target, and one tap is one saved step. Changes are saved at once and the menu re-arranges itself when it is
-in front again. The Extras page (`m1plus_extras`, the same machinery, 19 rows: a row for every item, which the payload
-shows only for the items the menu does not show and the list did not turn off; an item shown in the menu leaves the page; icons as the Home grid's) is in a **fixed order, the same in every language**, in four titled groups (`pod_pages.EXTRAS_GROUPS`, `EXTRAS_ORDER` is the flattened list; the order is deliberate, not alphabetical): **Play** (Now Playing, Shuffle), **Library** (Albums, Artists, Songs, Playlists, Cover Flow, Genres, Composers, Folders), **Collections** (Favorites, Recently Played, Recently Added, Most Played, Hi-Res) and **Tools** (Update Library, CD Ripper, Tidal). **Customize is in no group and never listed** (`EXTRAS_GROUP_OF` gives it the sentinel group, `EXTRAS_ORDER` ends with it, `mn_listed` refuses it; its asset row stays for the index, hidden and insensitive): the Extras page's navbar has a **Customize button** instead, `btn_customize` (Lucide `sliders-horizontal`, the left cap `pod_nav_customize` / `_down` on the 214 slot; Now Playing is the right cap, one glass capsule as on the Artists page; the title ends at 214; only this page has it). `open_page` binds its click (`on_customize`): it opens the Customize page as the Customize row does (`open_page(POD_CUSTOMIZE_PAGE)`, so Shanling Home's exit closes entry, Extras and Customize as before); a missing button binds nothing. With the default menu the page reads Play: Now Playing, Shuffle; Library: Genres, Composers, Folders; Collections: all five; Tools: all three, 13 rows.
-**Section headers.** Each group has a header, `pod_hdr0..3` (`tools/pod_ui.py` `extras_headers`): a plain `view` 40 px high (`pod_pages.HDR_H`, shorter than a 52 px row) holding the title as an `hscroll_label` (never scrolls, ellipsis) of 20 px white text in the style of the Home menu's "Made for You" heading (`pod_dm_head`; x 10, `SH_HEAD_X` / `SH_HEAD_PX` / `SH_TITLE_RGB`, tested equal), left aligned, with its box in the strip's lower part. It is not a `list_item`: no press visual, chevron or icon, and it is `visible=false` and `sensitive=false` in the asset and always insensitive (the payload shows it by `visible` alone), so a touch on it reaches no row and no header, only the list (which scrolls). A header shows only while its group has a shown row, right above it; a hidden one is `visible=false`, parked at y 0 and restacked last. The titles are the keys Play, Library, Collections, Tools (13 languages, `tools/pod_i18n.py`; the stock tables have no key for the last three) and fit in all of them (`test/pod/i18n.py`).
-The payload (`mn_extras`) stacks the page's children in display order (`widget_restack`: the shown headers and rows, then the hidden headers, then the hidden rows), so a stock relayout keeps it. The stock `list_view` layouter keeps the height of a child that is not a row (the Daily Mix section, the shelf and the spacer already rely on it; `test/pod/pulldown.py` runs the real layouter on the Extras page with its headers), so each shown child is at the running sum of the heights above it and `virtual_h` is that sum (`pod_pages.extras_display` / `extras_layout` are the Python model, tested against the C over random saved lists). A missing header widget just leaves that group without one. The page lists the stock Home tiles the menu does not repeat, each opened through its Home id: Update Library, Tidal, CD Ripper (ids 2, 1, 15) through the stock dispatcher; Favorites, Recently Added, Recently Played, Most Played, Hi-Res (ids 10, 13, 12, 11, 9: `ACT_LIST`) on our Songs page and Composers (id 8: `ACT_ARTISTS` with the tile as its argument, as the Genres item) on our Artists page, each falling back to the tile's stock page through the dispatcher when its window will not open (Extras itself `dots`; HiFi, id 0, exists only in Simplified Chinese and is left out). The **Genres** item and the Composers tile open the Artists page on another class (`docs/modules/artists.md`): the title is the row's text and the Artist / Album Artist button is hidden. The Artists page has its Artist / Album Artist switch in the navbar (`btn_artisttype`, the toggle slot below): the title reads "Artists" or "Album Artists" and the glyph is the other mode's (Tabler `microphone-2` for Artist, `user-star` for Album Artist, 24 px white, pressed `#777777`); the list starts right under the navbar. The artists are listed A to Z in both modes, by the rule of the album Artist order (ASCII case ignored, a leading "The " dropped, so "The Beatles" is under B; "Them" and "Theo" are not stripped; equal names keep the stock order). A name that starts with a non-ASCII byte (CJK, Cyrillic, accented capital, ...) and the "Unknown Artist" row stay where the stock list put them, and only the runs of ASCII-initial names between them are sorted. The page has no section headers or index letters. Names `pod_row0..N`, `pod_listview`, `pod_scrollview`, `scroll_bar_m`.
-**Customize > Extras** (`m1plus_extrascfg`, the same groups and section headers as the Extras page, without Customize; the Tools header shows while any of its rows does, `EXTRASCFG_PAGE`, opened by the Customize page's Extras row; `menu_extras_opened`): the page that decides which of the items the menu does not show sit on Extras at all. A stock-list switch row per item except Customize (18 rows `pod_row0..17` / `pod_switch0..17`, the whole row toggles, the same `sset_on` / `sset_off` image as the Main Menu page, no arrow), all on in the asset; the payload shows only the items the menu does not show (shown ones are `visible=false` + `sensitive=false`, parked at y 0, restacked last), stacked in the Extras order, and sets each switch from the saved list: **on = listed on Extras, off = turned off**, the item's character in the part after the `-`. A tap saves at once (`mn_save`: atomic write, a failed one is undone and the switch stays); the rows do not move on a tap, and the Extras page reads the file again whenever it opens. Customize has no row: it is never turned off.
-Everything the page hides starts `visible=false` and `sensitive=false` (`label_status`, `btn_cancel`).
-Cover Flow landscape (chosen by Customize > Cover Flow > Landscape; the release sheet's last panel, 480 x 320 as seen): with the
-switch on the page opens as a 400 x 320 view in the 320 x 400 body under the navbar (the navbar has no rotate button and its
-title has the whole width; the setting is read when the page opens)
-landscape view, the content turned 90 degrees clockwise on the screen (the player held turned counter-clockwise): the
-carousel along the long side with the same 168 px covers as portrait (no zoom) and more of the neighbours, the album
-(22 px white) and artist (18 px grey) captions centred under the reflections (long names cut with an ellipsis, no
-scrolling). The status bar and the navbar stay as they are, a portrait strip on the left as the player is held: Back and
-Now Playing work in both presentations, and nothing is drawn over the covers.
-The choice is remembered like the Albums view's. Details: `docs/modules/coverflow.md`.
-Cover Flow's page: `view_covers` 0,89 320x276; captions `label_album` 16,318 288x34
-(22 px) and `label_artist` 16,352 288x28 (18 px) as scrolling `hscroll_label`s; block centred in the
-400 px under the navbar (art top at y 120, 70 px above it and below the artist line); a progress
-`label_status` 10,210 and `btn_cancel` 100,260 120x46 for the first-run build. These must match the
-`CF_*` constants in `patch/offsets.inc`. (The page has no track list: an album opens the stock album
-page, section 7.)
+Both use stock `list_view > scroll_view` with `scroll_bar_m`, 52 px `list_item` rows and the
+stock row theme. The asset contains one row per `ITEMS` entry, then Extras. Never hard-code the
+row count: Pod and Podcasts are items too.
 
-**Podcasts item.** Item id 20 (saved character `l`), after the Pod; in the **Library** group of the Extras pages (last, after Folders), hidden from the menu by default; its row opens `m1plus_podcasts` (`patch/podcasts.c`, `docs/modules/podcasts.md`).
+Default shown IDs are `12345`: Cover Flow, Albums, Artists, Songs and Playlists. Extras is
+always visible and last. Customize (ID 18, `j`) is hidden by default and stays reachable from
+the Extras navbar. Pod is ID 19 (`k`), Podcasts ID 20 (`l`). Their actions/pages are defined
+once in `pod_pages.py`.
+
+Hidden rows are invisible, insensitive, parked at y 0 and restacked after shown children.
+`menu_arrange` sets positions, `virtual_h` and a clamped scroll offset, preserving the user's
+place when a page returns to the foreground. The scroll bar and hit tests follow that layout.
+
+## Home content
+
+Child order is shown rows, Daily Mix section, Recently Played shelf, hidden rows, spacer.
+`menu_daily` and `menu_shelf` share `mn_section` to show/resize/hide their section and arrange
+again without losing scroll position. A hidden section contributes no height.
+
+The mini player is the window's last child: hidden/insensitive `pod_minibar`, at (8, 384),
+304 × 56. A queued track shows it and the 64 px `pod_pad` spacer, letting the final list item
+scroll above the floating pill. Details: [mini player](minibar.md), [Daily Mix](dailymix.md)
+and [Recently Played](recent.md).
+
+## Saved menu
+
+`/mnt/data/m1plus-menu` contains `<shown IDs in order>[-<off IDs>]` with an optional final
+newline. Characters are `ID_CHARS` (`0`–`8`, then `a`–`l`); total file length must be nonzero
+and less than `MENU_FILE_MAX` (24 bytes).
+
+- Each ID may appear once across both parts; at most one `-` is allowed.
+- Customize cannot be off. Unknown characters, duplicates or oversized/missing data select
+  the default menu with no off items.
+- An empty body represented by a newline, or `-`, is valid: only Extras is shown.
+- Showing an item clears its off flag; hiding it again returns it to Extras.
+
+`parse_menu_full` and `mn_load` implement the same rules; tests compare a corpus and random
+inputs. `format_menu`/`mn_save` serialize off IDs in Extras order. Saves are atomic; failures
+restore the prior state. There is no legacy-format parser.
+
+## Extras and its settings
+
+`EXTRAS_GROUPS` defines Play, Library, Collections and Tools. Extras shows items absent from
+the main menu unless they are off; empty groups have no header. Each `pod_hdr0..3` is a 40 px
+insensitive view with 20 px white text, not a clickable row. Shown headers/rows are restacked
+in display order; hidden children follow. A missing header only removes that heading.
+
+The navbar's `btn_customize` replaces the menu's Customize row on this page. It opens the
+same Customize page, and failure to find it binds nothing. Existing names such as
+`pod_rowN`, `pod_listview`, `pod_scrollview` and `scroll_bar_m` remain unchanged.
+
+Customize → Extras lists only items hidden from the main menu, with switches for whether
+they appear on Extras. Customize has no off switch. Rows stay in place while toggled; Extras
+rereads the file when foregrounded. Both pages use `extras_display`/`extras_layout` and the C
+equivalents; stock relayout is tested with headers and variable-height sections.
+
+Stock destinations retain Home-dispatch fallback. Collection rows use the Songs page;
+Genres/Composers use the Artists page; Update Library, Tidal and CD Ripper use stock pages.
+See [Songs](songs.md), [Artists](artists.md) and [settings](settings.md).
+
+## Other page assets
+
+The navbar, icon slots and title widths follow [navbars](navbar.md). Cover Flow's
+`view_covers`, caption/progress/cancel widgets must match `CF_*` in `offsets.inc`; landscape
+rotates content inside the body without rotating the navbar. See [Cover Flow](coverflow.md).
+Screenshot is a Developer action, not a menu item; its indicator/countdown is documented
+in [Screenshot](screenshot.md).

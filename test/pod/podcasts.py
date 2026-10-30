@@ -767,7 +767,6 @@ def level_tests(ctx):
     expect(title_text(m) == 'bravo' and m.props.get((m.sv, 'virtual_h')) == HDR + 3 * ROW + 12 and m.props.get((m.sv, 'yoffset')) == 0,
            f'a tap on bravo: the navbar title is the show, the content a header, three rows and the air under them ({m.props.get((m.sv, "virtual_h"))}), at the top')
     texts = drawn(m)
-    sty = lambda s: [t for t in drawn(m, style=s)]
     head = [t for t in drawn(m, style='label_row_title') if t[1][1] < HDR]
     expect(head == [('bravo', (124, 22, 184, 24))], f'the header: the name at (124, 22) ({head})')
     expect([t for t in drawn(m, style='label_row_sub') if t[1][1] < HDR] == [('3 episodes', (124, 50, 184, 20))], 'and the count under it')
@@ -910,7 +909,6 @@ def lifecycle_tests(ctx):
     """The page timer, the window's events, the places noted from the page, the destroy."""
     expect = ctx.expect
     m = opened()
-    t0 = [c for c in m.calls if c[0] == 'timer_add']
     rec = m.track(f'{ROOT}/bravo/b3.mp3'); m.pt = (400, 3600, 1); m.clock += 40000
     r = m.call(PSYMS['pg_tick'], a0=0, count=40000000)
     expect(r == O['RET_REPEAT'] and m.state(pc_hash(f'{ROOT}/bravo/b3.mp3')) == (1, 400, 3600), 'the page\'s timer notes the playing episode\'s place and goes on')
@@ -1203,7 +1201,7 @@ def tag_tests(ctx):
     m = ID3(); m.parse(p, record=m.record(album='S', artist='S', path=p, title='E', name='ep1.mp3'))
     expect(m.read_cstr(i) == p, 'the struct\'s key is the path, as strcpy left it')
     # no work for music at boot: the hook is a copy and a prefix test (instructions)
-    m = ID3(); m.parse(mp, title='T'); n_music = m.icount
+    m = ID3(); m.parse(mp, title='T')
     m2 = ID3(stock=True); m2.parse(mp, title='T')
     expect(m.icount - m2.icount < 1000, f'a plain path costs {m.icount - m2.icount} instructions more than stock')
     # a record that is not the one playing (the path differs): not trusted, the show folder only

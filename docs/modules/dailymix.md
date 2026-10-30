@@ -1,15 +1,19 @@
+# Daily Mix
 
-# Daily Mix card (the menu's Home instance)
+The Home menu shows a Made for You card above Recently Played. It contains generated gradient
+art, the mix title/artists and a play disc. A tap opens the detail page or starts playback.
+The mix is a file of song paths regenerated from listening history once a day; it becomes a
+stock playlist only when the user saves a copy with the detail page's Add action. Existing
+playlists from older builds are not automatically removed. The normal menu has no mix card.
 
-An Apple Music "Top Picks for You" style card on the Home instance of the M1+ Music menu: a section **"Made for You"** right **above** the Recently Played shelf (rows, Made for You, Recently Played, the mini bar's
-spacer) holding **one full-width card** with a generated soft gradient, the title "Daily Mix", the top artists, and a glass play disc. The card opens the Daily Mix page and plays the mix; the mix is a **file of song paths** that the device
-rewrites once a day from what the user plays. **The mix is never a stock playlist, except the copy the user saves with the page's Add disc** (one playlist per mix, "Daily Mix 2026-10-29", see "The Add disc"; the job and the card never make or touch a stock playlist), so the
-Playlists page lists a Daily Mix only after such a tap (a "Daily Mix" playlist an earlier test build made stays until the user deletes it on the Playlists page: there is no cleanup code). The normal (non-Home) menu never shows it.
-Code `patch/dailymix.c` (the files, the once-a-day job, the art, the card, the touch), `patch/menu.c` (`menu_daily`, the section in the list), widgets in `ui/m1plus_menu.bin` (`tools/pod_ui.py` `daily()`),
-numbers in `patch/offsets.inc` `DM_*` / `MIX_*` (`tools/pod_dailymix.py` and `tools/pod_mix.py` read or equal them; `test/pod/dailymix.py` asserts it), the models `tools/pod_dailymix.py` (geometry, the art generator
-and the text fitting, integers only) and `tools/pod_mix.py` (the selection and the two files), the texts in `tools/pod_i18n.py`, the glass disc images `dm_disc` / `dm_disc_down` (`tools/mod_icons.py` `DAILY`),
-Settings rows in `tools/pod_pages.py` (`ACT_DAILY`, `ACT_REGEN`), previews `tools/preview_dailymix.py` (`venv/bin/python -I tools/preview_dailymix.py work/mod-release` writes `out/dailymix/`), tests `test/pod/dailymix.py`.
-**No stock hook, no new boot-path code**: the card runs from the menu window's and its own widgets, their events and one page timer (as `recent.c` and `minibar.c`); the stock calls it adds are pinned below.
+Sources: `patch/dailymix.c`, `patch/menu.c` (`menu_daily`), `tools/pod_ui.py` (`daily()`),
+`tools/pod_pages.py` (`ACT_DAILY`, `ACT_REGEN`) and `tools/mod_icons.py` (`DAILY`). Geometry and
+selection use `DM_*` / `MIX_*` in `offsets.inc`; Python models are `tools/pod_dailymix.py`
+and `tools/pod_mix.py`. Texts are in `pod_i18n.py`. Tests: `test/pod/dailymix.py` and
+`test/pod/dmpage.py`; previews: `preview_dailymix.py`, `preview_dmpage.py`.
+
+No stock hook or boot work is added. Window/widget events and a page-owned timer drive the
+job and card. Detailed formats, phases and failure rules follow.
 
 ## Layout (section-local y; `tools/pod_dailymix.py` DM_*, `patch/offsets.inc` DM_*)
 

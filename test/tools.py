@@ -2,13 +2,16 @@
 """Tests of the build tooling itself (no firmware needed): fwtool's package verification on synthetic
 update files and check.py's pass/fail/--update decisions.
 
-  venv/bin/python -I test/tools.py
+  uv run python -I test/tools.py
 """
-import hashlib, io, os, sys, tarfile, tempfile
+import argparse, contextlib, hashlib, io, os, signal, subprocess, sys, tarfile, tempfile, time
+from pathlib import Path
+from unittest.mock import patch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
 import fwtool, check   # noqa: E402
+import workflow, buildcache
 
 ok = fail = 0
 
@@ -41,6 +44,89 @@ def problems(**kw):
     with tempfile.TemporaryDirectory() as td:
         p = os.path.join(td, 'u.bin'); make(p, **kw)
         return fwtool.verify_package(p)[0]
+
+
+def workflow_tests():
+    def refused(fn):
+        try: fn(); return False
+        except SystemExit: return True
+
+    # Exercise the gate with a synthetic golden file. No real packages or goldens are changed.
+    with tempfile.TemporaryDirectory() as td:
+        golden = Path(td) / 'golden'
+        def gate(expected=(), tests=(), builds=None, skipped=None, update=False, no_tests=False, sel=()):
+            args = argparse.Namespace(expected=list(expected), tests_only=False, update=update, no_tests=no_tests, dev=False)
+            with patch.object(check, 'GOLDEN', str(golden)), contextlib.redirect_stdout(io.StringIO()):
+                return check.finish(args, list(sel), skipped or {}, {}, builds or {}, list(tests), time.monotonic())
+        expect('missing required task fails', gate(expected=['tools']) == 1)
+        expect('skipped required build fails', gate(sel=['release'], skipped={'release': 'missing firmware'}) == 1)
+        expect('missing required build fails', gate(sel=['release']) == 1)
+        builds = {n: {'sha': 'a' * 64} for n in check.TARGETS}
+        expect('NEW package requires acceptance', gate(sel=['release'], builds=builds) == 1)
+        expect('no-tests cannot accept golden', gate(sel=list(builds), builds=builds, update=True, no_tests=True) == 1 and not golden.exists())
+        expect('missing test cannot accept golden', gate(sel=list(builds), builds=builds, update=True, expected=check.ALL_TESTS) == 1 and not golden.exists())
+        tests = [{'test': n, 'rc': 0, 'counts': None, 'secs': 0, 'log': ''} for n in check.ALL_TESTS]
+        expect('complete passing integration can accept synthetic golden', gate(sel=list(builds), builds=builds, update=True,
+               expected=check.ALL_TESTS, tests=tests) == 0 and len(golden.read_text().splitlines()) == 2)
+        crashed = [{'test': 'tools', 'rc': -signal.SIGILL, 'counts': None, 'secs': 0, 'log': ''}]
+        expect('native crash without assertion output fails', gate(expected=['tools'], tests=crashed) == 1)
+
+    for args in (['--update', '--no-tests'], ['--update', '--only', 'release'], ['--dev', '--test', 'tools']):
+        r = subprocess.run([sys.executable, '-I', os.path.join(ROOT, 'tools/check.py'), *args], capture_output=True)
+        expect('invalid validation scope rejected: ' + ' '.join(args), r.returncode == 2)
+    expect('empty test selection refused', refused(lambda: check.parse_tests([','])))
+    expect('SIGILL named in diagnostics', workflow.exit_description(-signal.SIGILL) == 'SIGILL')
+
+    with tempfile.TemporaryDirectory() as td, patch.object(workflow, 'ROOT', Path(td)):
+        with workflow.lock('test'):
+            expect('overlapping checkout command refused', refused(lambda: workflow.lock('test').__enter__()))
+        fake = subprocess.CompletedProcess([], 0, stdout='worktree ' + td + '\n')
+        with patch.object(workflow.subprocess, 'run', return_value=fake):
+            first, second = workflow.dev_tag(), workflow.dev_tag()
+        expect('dev tags unique, same namespace, valid format', first != second and first[:-4] == second[:-4]
+               and __import__('re').fullmatch(r'V2\.1z[A-Z]{8}', second) is not None)
+        expect('dev counter persisted locally', workflow.read(Path(td) / '.dev-number.json')['number'] == 2)
+        expect('dev counter exhaustion refused', refused(lambda: workflow.letters(26**4, 4)))
+
+    with tempfile.TemporaryDirectory() as td:
+        tree = Path(td) / 'tree'; (tree / 'rootfs').mkdir(parents=True)
+        asset = tree / 'rootfs/asset'; asset.write_bytes(b'original')
+        key = workflow.tree_key(tree)
+        m = {'tree': key, 'inputs': 'inputs', 'mode': 'dev', 'tag': 'V2.1zTESTAAAB'}
+        package = Path(td) / 'update.bin'; package.write_bytes(b'package')
+        m['package_sha256'] = workflow.sha(package); workflow.write(tree / 'build.json', m)
+        expect('stale source prevents packing', refused(lambda: workflow.validate_tree(tree)))
+        r = {'passed': True, 'scope': 'full', 'expected': ['tools'], 'tests': [{'test': 'tools', 'rc': 0, 'counts': None}],
+             'inputs': 'inputs', 'tree': key, 'package_sha256': m['package_sha256']}
+        workflow.write(Path(td) / 'results.json', r)
+        with patch.object(check, 'ALL_TESTS', ['tools']):
+            expect('matching test receipt selects exact package', workflow.tested_package(td)[0] == package.resolve())
+            package.write_bytes(b'tampered')
+            expect('modified package rejected', refused(lambda: workflow.tested_package(td)))
+            package.write_bytes(b'package'); r['tests'] = []; workflow.write(Path(td) / 'results.json', r)
+            expect('passed boolean without test coverage rejected', refused(lambda: workflow.tested_package(td)))
+            workflow.write(Path(td) / 'results.json', r | {'tests': [{'test': 'tools', 'rc': 0, 'counts': None}]})
+            asset.write_bytes(b'modified')
+            expect('modified tested tree rejected', refused(lambda: workflow.tested_package(td)))
+
+    with tempfile.TemporaryDirectory() as td:
+        rc, _ = workflow.run_logged([sys.executable, '-I', __file__, '--signal-child'], Path(td) / 'signal.log')
+        expect('signal return code preserved in worker', rc == -signal.SIGTERM)
+        rc, log = workflow.run_logged([sys.executable, '-I', __file__, '--timeout-child'], Path(td) / 'timeout.log', timeout=0.1)
+        expect('hung test killed with a recorded timeout', rc == 124 and 'TIMEOUT' in log)
+
+    # Payload data is downstream of the cached battery/font/space base.
+    with patch.object(buildcache, 'data_sha', side_effect=AssertionError('payload dependency in base')):
+        expect('base key excludes payload data', bool(buildcache.base_key('stock', 'mod_battery', 'mod_font', 'mod_space')))
+    import pull_shots
+    from PIL import Image
+    with tempfile.TemporaryDirectory() as td:
+        bmp = Path(td) / 'shot-0001.bmp'; out = Path(td) / 'shots'
+        Image.new('RGB', (1, 1), 'red').save(bmp)
+        expect('first screenshot imported', pull_shots.import_shot(bmp, out))
+        expect('identical screenshot deduplicated', not pull_shots.import_shot(bmp, out))
+        Image.new('RGB', (1, 1), 'blue').save(bmp)
+        expect('reused screenshot number preserves both images', pull_shots.import_shot(bmp, out) and len(list(out.glob('*.png'))) == 2)
 
 
 def main():
@@ -116,8 +202,12 @@ def main():
         expect('sub: ambiguous OLD refused', sub('x = 1', 'x = 3') == 1 and open(f).read() == 'x = 1\nx = 1\ny = 2\n')
         expect('sub: missing OLD refused', sub('z', 'w') == 1)
         expect('sub: --all replaces every occurrence', sub('x = 1', 'x = 3', '--all') == 0 and open(f).read() == 'x = 3\nx = 3\ny = 2\n')
+    workflow_tests()
     print(f'{ok} passed, {fail} failed')
     sys.exit(1 if fail else 0)
 
 
-if __name__ == '__main__': main()
+if __name__ == '__main__':
+    if sys.argv[1:] == ['--signal-child']: os.kill(os.getpid(), signal.SIGTERM)
+    elif sys.argv[1:] == ['--timeout-child']: time.sleep(10)
+    else: main()

@@ -1,8 +1,6 @@
 # About row and polish
 
-Split out of docs/ui.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
-
-### About (`tools/mod_about.py`)
+## About (`tools/mod_about.py`)
 
 System Settings > About keeps its seven stock rows. FW. Version is the literal `V2.1` in demo's `.rodata`
 (0x74773c, set by `systemset_about_page_init` 0x4a170c's widget walk), which this tree never patches, so it
@@ -12,7 +10,7 @@ names it does not know) is inserted right below it with the fixed text `M1+ Musi
 `tools/build.py`, passed to the step). The brand is not translated; the format is the stock `label:value`. No
 hook, nothing at run time. Product name: the user sees "M1+ Music"; internal names (`m1plus-*` files, `m1plus_*.bin`,
 widget and C identifiers) are `m1plus`.
-### Polish (`tools/mod_polish.py`)
+## Polish (`tools/mod_polish.py`)
 
 - navbar title size 22 -> 20 px (`navbar_label_white`, `navbar_centerlabel_white`, all states, both
   themes; `leftlabel`/`rightlabel` were 20); box (y 14, h 22) and middle alignment unchanged;

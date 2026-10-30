@@ -1,8 +1,7 @@
 /* M1+ Music Podcasts, the model: the shows and episodes on the card, the resume ring, the per-show speeds and the timer hook (pc_note).
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
- * The resume ring, the jump to a saved place a moment after an episode starts and the speed per folder follow q2-pod (Copyright (c) 2026 Diamond Bond, MIT,
- * https://github.com/DiamondBond/q2-pod; see NOTICE): its Resume and Podcasts sections. docs/modules/podcasts.md has the formats, the evidence and the approximations.
+ * The resume ring, the jump to a saved place a moment after an episode starts and the speed per folder follow q2-pod: its Resume and Podcasts sections. docs/modules/podcasts.md has the formats, the evidence and the approximations.
  *
  * One hook (pc_id3_path, below). Nothing else here runs by itself: the page (patch/podcasts.c) calls the model from its own events, and pc_note is called by the timers that already look at the
  * playing track (recent_note: Now Playing's tick, the mini player bar's, the Podcasts page's). So a place is saved only while one of those pages is in front.
@@ -19,7 +18,8 @@
 
 _Static_assert(sizeof(pc_ep_t) == PC_EP_SIZE, "pc_ep_t");
 _Static_assert(sizeof(pc_show_t) == PC_SHOW_SIZE, "pc_show_t");
-_Static_assert(__builtin_offsetof(pc_ep_t, hash) == PC_EP_HASH && __builtin_offsetof(pc_show_t, hash) == PC_SH_HASH, "offsets");
+_Static_assert(__builtin_offsetof(pc_ep_t, hash) == PC_EP_HASH && __builtin_offsetof(pc_show_t, hash) == PC_SH_HASH,
+               "offsets");
 
 #define PM_ROOT "/mnt/mmc"
 #define PM_STATE_DIR CARD_DIR "/podcasts"
@@ -27,10 +27,10 @@ _Static_assert(__builtin_offsetof(pc_ep_t, hash) == PC_EP_HASH && __builtin_offs
 #define PM_RING_TMP PM_STATE_DIR "/resume.tmp"
 #define PM_SPEED_FILE PM_STATE_DIR "/speed"
 #define PM_SPEED_TMP PM_STATE_DIR "/speed.tmp"
-#define PM_DNAME 11            /* struct dirent (32-bit, MIPS o32): d_ino, d_off, d_reclen (2), d_type (1), d_name at 11 */
+#define PM_DNAME 11 /* struct dirent (32-bit, MIPS o32): d_ino, d_off, d_reclen (2), d_type (1), d_name at 11 */
 #define PM_PATH 400
-#define PM_MAX_FILES 400       /* files looked at in one show folder */
-#define PM_META_MAX 65536      /* bytes of a metadata file read */
+#define PM_MAX_FILES 400 /* files looked at in one show folder */
+#define PM_META_MAX 65536 /* bytes of a metadata file read */
 #define PM_LINE_MAX 4096
 
 /* ---------------------------------------------------------------------------
@@ -111,7 +111,8 @@ void pc_fmt(char *out, unsigned size, const char *fmt, unsigned n) {
         if (fmt[0] == '%' && fmt[1] == 'd') {
             for (i = k; i && o + 1 < size; --i) out[o++] = num[i - 1];
             ++fmt;
-        } else out[o++] = *fmt;
+        } else
+            out[o++] = *fmt;
     }
     out[o] = 0;
 }
@@ -120,7 +121,8 @@ void pc_fmt(char *out, unsigned size, const char *fmt, unsigned n) {
  * now and pub are seconds since 1970 (UTC); the calendar is the local one the status bar clock keeps (localtime). A clock that was never set (before 2024) or a date more than a
  * minute ahead of it gives the absolute form. The month texts are keys with their one %d ("Oct %d": the order of month and day is the language's). */
 void pc_when(unsigned pub, unsigned now, char *out, unsigned size) {
-    static const char *const mon[12] = {"Jan %d", "Feb %d", "Mar %d", "Apr %d", "May %d", "Jun %d", "Jul %d", "Aug %d", "Sep %d", "Oct %d", "Nov %d", "Dec %d"};
+    static const char *const mon[12] = {"Jan %d", "Feb %d", "Mar %d", "Apr %d", "May %d", "Jun %d",
+                                        "Jul %d", "Aug %d", "Sep %d", "Oct %d", "Nov %d", "Dec %d"};
     long t = (long)pub, n = (long)now;
     int tm[9], i, year_now;
     const int *p;
@@ -130,16 +132,21 @@ void pc_when(unsigned pub, unsigned now, char *out, unsigned size) {
     year_now = p ? p[5] + 1900 : 0;
     if (year_now >= 2024 && pub <= now + 60) {
         d = pub >= now ? 0 : now - pub;
-        if (d < 60) pm_cpy(out, size, TR("Just now"));
-        else if (d < 3600) pc_fmt(out, size, TR("%dm ago"), d / 60);
-        else if (d < 86400) pc_fmt(out, size, TR("%dh ago"), d / 3600);
-        else if (d < 7 * 86400) pc_fmt(out, size, TR("%dd ago"), d / 86400);
-        else d = 0;
+        if (d < 60)
+            pm_cpy(out, size, TR("Just now"));
+        else if (d < 3600)
+            pc_fmt(out, size, TR("%dm ago"), d / 60);
+        else if (d < 86400)
+            pc_fmt(out, size, TR("%dh ago"), d / 3600);
+        else if (d < 7 * 86400)
+            pc_fmt(out, size, TR("%dd ago"), d / 86400);
+        else
+            d = 0;
         if (out[0]) return;
     }
     p = localtime(&t);
     if (!p) return;
-    for (i = 0; i < 9; ++i) tm[i] = p[i];   /* (localtime's one buffer) */
+    for (i = 0; i < 9; ++i) tm[i] = p[i]; /* (localtime's one buffer) */
     pc_fmt(out, size, TR(mon[tm[4] < 0 || tm[4] > 11 ? 0 : tm[4]]), (unsigned)tm[3]);
     if (tm[5] + 1900 != year_now) {
         char yr[24];
@@ -203,7 +210,8 @@ int pc_root(char *out) {
 /* The path of a show's file: root/dir/name into out. */
 static int pm_join(char *out, unsigned size, const char *root, const char *dir, const char *name) {
     pm_cpy(out, size, root);
-    return pm_cat(out, size, "/") && pm_cat(out, size, dir) && (!name || (pm_cat(out, size, "/") && pm_cat(out, size, name)));
+    return pm_cat(out, size, "/") && pm_cat(out, size, dir) &&
+           (!name || (pm_cat(out, size, "/") && pm_cat(out, size, name)));
 }
 
 /* Up to cap bytes of a file into a heap buffer (NUL after the data); NULL when it cannot be read or is empty. *n is the length. */
@@ -256,7 +264,9 @@ int pc_parse_eps(const char *buf, unsigned n, pc_ep_t *out, int max) {
         if (!len || p[0] == '#' || len > PM_LINE_MAX) continue;
         memset(e, 0, sizeof *e);
         e->state = PC_REMOTE;
-        while (at < len) {   /* tab separated key=value fields: g guid, p pubDate, d duration, l enclosure length, f file, t title (u url and x description are the subscribe phase's) */
+        while (
+            at <
+            len) { /* tab separated key=value fields: g guid, p pubDate, d duration, l enclosure length, f file, t title (u url and x description are the subscribe phase's) */
             const char *f = p + at;
             unsigned flen = 0;
             while (at + flen < len && f[flen] != '\t') ++flen;
@@ -264,16 +274,29 @@ int pc_parse_eps(const char *buf, unsigned n, pc_ep_t *out, int max) {
                 const char *v = f + 2;
                 unsigned vlen = flen - 2;
                 switch (f[0]) {
-                case 'g': e->guid = vlen ? pm_fnv_n(v, vlen) : 0, any |= vlen != 0; break;
-                case 'p': e->pub = pm_num(v, vlen); break;
-                case 'd': e->dur = pm_num(v, vlen); break;
-                case 'l': e->length = pm_num(v, vlen); break;
+                case 'g':
+                    e->guid = vlen ? pm_fnv_n(v, vlen) : 0, any |= vlen != 0;
+                    break;
+                case 'p':
+                    e->pub = pm_num(v, vlen);
+                    break;
+                case 'd':
+                    e->dur = pm_num(v, vlen);
+                    break;
+                case 'l':
+                    e->length = pm_num(v, vlen);
+                    break;
                 case 'f':
                     if (vlen && vlen < PC_FILE) pm_cpy_n(e->file, PC_FILE, v, (int)vlen), any = 1;
                     break;
-                case 't': pm_cpy_n(e->title, PC_TITLE, v, (int)vlen), any |= vlen != 0; break;
-                case 'u': any |= vlen != 0; break;
-                default: break;
+                case 't':
+                    pm_cpy_n(e->title, PC_TITLE, v, (int)vlen), any |= vlen != 0;
+                    break;
+                case 'u':
+                    any |= vlen != 0;
+                    break;
+                default:
+                    break;
                 }
             }
             at += flen + 1;
@@ -288,9 +311,12 @@ int pc_parse_show(const char *buf, unsigned n, pc_show_t *show) {
     if (!pm_header(buf, n, "M1PLUS-SHOW 1", &p)) return 0;
     for (; p < stop; p = next) {
         unsigned len = pm_line(p, stop, &next);
-        if (len >= 6 && pm_ieq_n(p, "title=", 6)) pm_cpy_n(show->title, PC_TITLE, p + 6, (int)len - 6);
-        else if (len >= 5 && pm_ieq_n(p, "feed=", 5)) pm_cpy_n(show->feed, PC_URL, p + 5, (int)len - 5);
-        else if (len >= 6 && pm_ieq_n(p, "image=", 6)) pm_cpy_n(show->image, PC_URL, p + 6, (int)len - 6);
+        if (len >= 6 && pm_ieq_n(p, "title=", 6))
+            pm_cpy_n(show->title, PC_TITLE, p + 6, (int)len - 6);
+        else if (len >= 5 && pm_ieq_n(p, "feed=", 5))
+            pm_cpy_n(show->feed, PC_URL, p + 5, (int)len - 5);
+        else if (len >= 6 && pm_ieq_n(p, "image=", 6))
+            pm_cpy_n(show->image, PC_URL, p + 6, (int)len - 6);
     }
     return 1;
 }
@@ -301,7 +327,8 @@ int pc_parse_show(const char *buf, unsigned n, pc_show_t *show) {
 
 /* A cover picture's name: the rank of the best (0 is best), or -1. */
 static int pm_cover_rank(const char *name) {
-    static const char *const names[] = {"cover.jpg", "cover.png", "cover.jpeg", "folder.jpg", "folder.png", "folder.jpeg"};
+    static const char *const names[] = {"cover.jpg",  "cover.png",  "cover.jpeg",
+                                        "folder.jpg", "folder.png", "folder.jpeg"};
     unsigned i, n = pm_len(name);
     for (i = 0; i < sizeof names / sizeof *names; ++i)
         if (pm_len(names[i]) == n && pm_ieq_n(name, names[i], n)) return (int)i;
@@ -333,7 +360,7 @@ static int pm_summary(const char *root, pc_show_t *s) {
         char full[PM_PATH];
         int rank;
         if (!*name) continue;
-        if (name[0] == '.') {   /* the metadata files; any other dot file is not ours */
+        if (name[0] == '.') { /* the metadata files; any other dot file is not ours */
             if (pm_eq(name, ".episodes") || pm_eq(name, ".show")) meta = 1;
             continue;
         }
@@ -374,7 +401,7 @@ int pc_scan_shows(pc_show_t *out, int max) {
     }
     closedir(d);
     order = count > 1 ? calloc((unsigned)count, sizeof *order) : (unsigned *)0;
-    if (order) {   /* sorted by title, a leading "The " aside; without memory the folders stay in the card's order */
+    if (order) { /* sorted by title, a leading "The " aside; without memory the folders stay in the card's order */
         pc_show_t *copy = calloc((unsigned)count, sizeof *copy);
         if (copy) {
             memcpy(copy, out, (unsigned)count * sizeof *copy);
@@ -469,7 +496,7 @@ static int pm_merge(pc_ep_t *eps, int nm, int cap, const pm_file_t *files, int n
 /* The folder's files with their modification times: audio and .part files, at most max. */
 static int pm_files(const char *root, const char *dir, pm_file_t *files, int max) {
     char path[PM_PATH];
-    unsigned st[40];   /* struct stat (MIPS o32, 144 bytes): st_mtime at +0x40 */
+    unsigned st[40]; /* struct stat (MIPS o32, 144 bytes): st_mtime at +0x40 */
     void *d;
     char *ent;
     int n = 0;
@@ -504,7 +531,8 @@ int pc_load_show(const pc_show_t *show, pc_ep_t *out, int max) {
         return 0;
     }
     nf = pm_files(root, show->dir, files, PM_MAX_FILES);
-    if (pm_join(path, sizeof path, root, show->dir, ".episodes") && (buf = pm_slurp(path, PM_META_MAX, &got)) != (char *)0) {
+    if (pm_join(path, sizeof path, root, show->dir, ".episodes") &&
+        (buf = pm_slurp(path, PM_META_MAX, &got)) != (char *)0) {
         nm = pc_parse_eps(buf, got, work, PC_MAX_EPS);
         free(buf);
     }
@@ -518,7 +546,7 @@ int pc_load_show(const pc_show_t *show, pc_ep_t *out, int max) {
         for (i = 0; i < n; ++i) memcpy(&out[i], &work[order[i]], sizeof *out);
     } else {
         if (n > max) n = max;
-        memcpy(out, work, (unsigned)n * sizeof *out);   /* no memory to sort in: the entries in file order */
+        memcpy(out, work, (unsigned)n * sizeof *out); /* no memory to sort in: the entries in file order */
     }
     free(order);
     free(files);
@@ -553,7 +581,9 @@ unsigned pc_show_of(const char *path) {
 }
 
 static unsigned pm_be16(const unsigned char *b) { return (unsigned)b[0] << 8 | b[1]; }
-static unsigned pm_be32(const unsigned char *b) { return (unsigned)b[0] << 24 | (unsigned)b[1] << 16 | (unsigned)b[2] << 8 | b[3]; }
+static unsigned pm_be32(const unsigned char *b) {
+    return (unsigned)b[0] << 24 | (unsigned)b[1] << 16 | (unsigned)b[2] << 8 | b[3];
+}
 
 int pc_cover_ok(const char *path) {
     unsigned char b[32];
@@ -565,16 +595,16 @@ int pc_cover_ok(const char *path) {
         fclose(f);
         return 0;
     }
-    if (b[0] == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G') {   /* PNG: IHDR's width and height at 16 and 20 */
+    if (b[0] == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G') { /* PNG: IHDR's width and height at 16 and 20 */
         w = pm_be32(b + 16), h = pm_be32(b + 20);
-    } else if (b[0] == 0xff && b[1] == 0xd8) {   /* JPEG: the segments up to a start-of-frame */
+    } else if (b[0] == 0xff && b[1] == 0xd8) { /* JPEG: the segments up to a start-of-frame */
         long at = 2;
         while (steps++ < 64) {
             unsigned len, marker;
             if (fseek(f, at, 0) || fread(b, 1, 4, f) != 4) break;
             if (b[0] != 0xff) break;
             marker = b[1];
-            if (marker == 0xff) {   /* fill byte */
+            if (marker == 0xff) { /* fill byte */
                 ++at;
                 continue;
             }
@@ -601,7 +631,7 @@ int pc_cover_ok(const char *path) {
  * The ring of places, on the card: PM_RING_FILE is "PCR1", the slot count (a word), then the slots, most recent first
  */
 typedef struct {
-    unsigned hash, pos, len, flags;   /* flags: 1 = played */
+    unsigned hash, pos, len, flags; /* flags: 1 = played */
 } slot_t;
 
 static struct {
@@ -609,18 +639,19 @@ static struct {
     unsigned n;
     int loaded, dirty;
     unsigned rev;
-    unsigned sp[2 + PC_SPEED_SLOTS * 2];   /* the speeds: "PCS1", count, then (show hash, mode) pairs */
+    unsigned sp[2 + PC_SPEED_SLOTS * 2]; /* the speeds: "PCS1", count, then (show hash, mode) pairs */
     int sp_loaded;
 } pm __attribute__((section(".scratch")));
 
 static struct {
-    unsigned cur;        /* ring key of the episode the player is on (0: not a podcast) */
-    int pos, len;        /* what the last look saw */
-    int pend;            /* a jump to pend_pos is due */
+    unsigned cur; /* ring key of the episode the player is on (0: not a podcast) */
+    int pos, len; /* what the last look saw */
+    int pend; /* a jump to pend_pos is due */
     unsigned pend_pos, pend_ms, hold_ms;
     unsigned save_ms;
-    unsigned apply_ms;   /* when the page last set the speed for an episode about to start (the music of before is seen playing until it does) */
-    int speed_on, orig;  /* we changed playspeed_mode; the mode it was */
+    unsigned
+        apply_ms; /* when the page last set the speed for an episode about to start (the music of before is seen playing until it does) */
+    int speed_on, orig; /* we changed playspeed_mode; the mode it was */
 } pcs __attribute__((section(".scratch")));
 
 static int pm_save(const char *path, const char *tmp, const void *head, unsigned hn, const void *body, unsigned bn) {
@@ -648,7 +679,7 @@ static void pm_ring_load(void) {
     if (!pm.s) return;
     fd = open(PM_RING_FILE, O_RDONLY, 0);
     if (fd < 0) return;
-    if (read(fd, head, 8) == 8 && head[0] == 0x31524350u && head[1] <= PC_RING_SLOTS &&   /* "PCR1" */
+    if (read(fd, head, 8) == 8 && head[0] == 0x31524350u && head[1] <= PC_RING_SLOTS && /* "PCR1" */
         read(fd, pm.s, head[1] * sizeof *pm.s) == (int)(head[1] * sizeof *pm.s))
         pm.n = head[1];
     close(fd);
@@ -658,7 +689,8 @@ void pc_flush(void) {
     unsigned head[2];
     if (!pm.dirty || !pm.s) return;
     head[0] = 0x31524350u, head[1] = pm.n;
-    if (pm_save(PM_RING_FILE, PM_RING_TMP, head, 8, pm.s, pm.n * (unsigned)sizeof *pm.s) == 0) pm.dirty = 0;   /* a failed write is tried again with the next change */
+    if (pm_save(PM_RING_FILE, PM_RING_TMP, head, 8, pm.s, pm.n * (unsigned)sizeof *pm.s) == 0)
+        pm.dirty = 0; /* a failed write is tried again with the next change */
     pcs.save_ms = time_now_ms();
 }
 
@@ -679,7 +711,8 @@ static slot_t *pm_front(unsigned hash, int create) {
         keep.hash = hash;
         if (pm.n < PC_RING_SLOTS) ++pm.n;
         at = (int)pm.n - 1;
-    } else memcpy(&keep, &pm.s[at], sizeof keep);
+    } else
+        memcpy(&keep, &pm.s[at], sizeof keep);
     if (at > 0) memmove(&pm.s[1], &pm.s[0], (unsigned)at * sizeof *pm.s);
     memcpy(&pm.s[0], &keep, sizeof keep);
     return &pm.s[0];
@@ -703,11 +736,13 @@ static void pm_set(unsigned hash, unsigned pos, unsigned len) {
     slot_t *s;
     pm_ring_load();
     if (!pm.s) return;
-    if (len && (pos + PC_EDGE_S >= len || pos * 100u >= len * 95u)) {   /* played */
+    if (len && (pos + PC_EDGE_S >= len || pos * 100u >= len * 95u)) { /* played */
         s = pm_front(hash, 1);
         if (s->flags == 1 && !s->pos && s->len == len) return;
         s->pos = 0, s->flags = 1, s->len = len;
-    } else if (pos < PC_EDGE_S) {   /* the first seconds are not a place: nothing is saved (one saved before stays: a jump to it may be due, or the episode was only restarted) */
+    } else if (
+        pos <
+        PC_EDGE_S) { /* the first seconds are not a place: nothing is saved (one saved before stays: a jump to it may be due, or the episode was only restarted) */
         return;
     } else {
         s = pm_front(hash, 1);
@@ -726,10 +761,11 @@ void pc_mark(unsigned hash, int played) {
     if (played) {
         slot_t *s = pm_front(hash, 1);
         s->pos = 0, s->flags = 1;
-    } else if (at >= 0) {   /* new again: the slot goes */
+    } else if (at >= 0) { /* new again: the slot goes */
         memmove(&pm.s[at], &pm.s[at + 1], (pm.n - (unsigned)at - 1) * sizeof *pm.s);
         --pm.n;
-    } else return;
+    } else
+        return;
     pm.dirty = 1;
     ++pm.rev;
     pc_flush();
@@ -753,7 +789,7 @@ static void pm_speed_load(void) {
     if (fd < 0) return;
     {
         unsigned head[2];
-        if (read(fd, head, 8) == 8 && head[0] == 0x31534350u && head[1] <= PC_SPEED_SLOTS &&   /* "PCS1" */
+        if (read(fd, head, 8) == 8 && head[0] == 0x31534350u && head[1] <= PC_SPEED_SLOTS && /* "PCS1" */
             read(fd, pm.sp + 2, head[1] * 8) == (int)(head[1] * 8)) {
             pm.sp[0] = head[0], pm.sp[1] = head[1];
         }
@@ -777,15 +813,19 @@ int pc_speed_set(unsigned show, int mode) {
     pm_speed_load();
     memcpy(saved, pm.sp, sizeof saved);
     if (pm.sp[0] != 0x31534350u) pm.sp[0] = 0x31534350u, pm.sp[1] = 0;
-    for (at = 0; at < pm.sp[1] && pm.sp[2 + 2 * at] != show; ++at) {}
-    if (at == pm.sp[1]) {   /* a new show: the oldest goes when the table is full */
-        if (pm.sp[1] < PC_SPEED_SLOTS) ++pm.sp[1];
-        else for (i = 1; i < pm.sp[1]; ++i) pm.sp[2 + 2 * (i - 1)] = pm.sp[2 + 2 * i], pm.sp[3 + 2 * (i - 1)] = pm.sp[3 + 2 * i];
+    for (at = 0; at < pm.sp[1] && pm.sp[2 + 2 * at] != show; ++at) {
+    }
+    if (at == pm.sp[1]) { /* a new show: the oldest goes when the table is full */
+        if (pm.sp[1] < PC_SPEED_SLOTS)
+            ++pm.sp[1];
+        else
+            for (i = 1; i < pm.sp[1]; ++i)
+                pm.sp[2 + 2 * (i - 1)] = pm.sp[2 + 2 * i], pm.sp[3 + 2 * (i - 1)] = pm.sp[3 + 2 * i];
         at = pm.sp[1] - 1;
     }
     pm.sp[2 + 2 * at] = show, pm.sp[3 + 2 * at] = (unsigned)mode;
     if (pm_save(PM_SPEED_FILE, PM_SPEED_TMP, pm.sp, 8, pm.sp + 2, pm.sp[1] * 8) == 0) return 1;
-    memcpy(pm.sp, saved, sizeof saved);   /* not saved: the old table stays */
+    memcpy(pm.sp, saved, sizeof saved); /* not saved: the old table stays */
     return 0;
 }
 
@@ -793,7 +833,8 @@ void pc_speed_apply(unsigned show) {
     int mode = pc_speed_get(show), cur = *(volatile int *)PLAYSPEED_MODE;
     if (!pcs.speed_on) pcs.orig = cur;
     if (mode != cur) {
-        *(volatile int *)PLAYSPEED_MODE = mode;   /* what the stock Multiple Speed page shows and config_mplayer sends at the next player set-up */
+        *(volatile int *)PLAYSPEED_MODE =
+            mode; /* what the stock Multiple Speed page shows and config_mplayer sends at the next player set-up */
         mclSetPlaySpeed(mode);
     }
     pcs.speed_on = mode != pcs.orig;
@@ -823,23 +864,28 @@ __attribute__((noinline)) char *pc_id3_path(char *info, const char *path) {
     void *rec;
     const char *s, *p;
     unsigned n = 0;
-    while (n < 0x3ff && path[n]) info[n] = path[n], ++n;   /* stock: strcpy(info, path); the field is 0x400 bytes (the CUE start follows it) */
+    while (n < 0x3ff && path[n])
+        info[n] = path[n], ++n; /* stock: strcpy(info, path); the field is 0x400 bytes (the CUE start follows it) */
     info[n] = 0;
     if (!pc_is_path(path) || home_off()) return info;
     p = path + sizeof PM_ROOT "/podcasts/" - 1;
-    for (n = 0; p[n] != '/'; ++n) {}
+    for (n = 0; p[n] != '/'; ++n) {
+    }
     pm_cpy_n(show, sizeof show, p, (int)n);
     rec = cc_playing();
-    if (rec && !pm_eq(cc_str(rec, REC_PATH), path)) rec = (void *)0;   /* (the record get_id3info read is the playing one; anything else is not trusted) */
+    if (rec && !pm_eq(cc_str(rec, REC_PATH), path))
+        rec = (void *)0; /* (the record get_id3info read is the playing one; anything else is not trusted) */
     s = rec ? cc_str(rec, REC_ARTIST) : "";
-    if (rec && *cc_str(rec, REC_TITLE) && !pm_empty_or_unknown(s)) {   /* our own record: the episode title from .episodes (else the file name), the show */
+    if (rec && *cc_str(rec, REC_TITLE) &&
+        !pm_empty_or_unknown(s)) { /* our own record: the episode title from .episodes (else the file name), the show */
         pm_cpy(title, 0x200, cc_str(rec, REC_TITLE));
         pm_cpy(artist, 0x100, s);
         s = cc_str(rec, REC_ALBUM);
         pm_cpy(album, 0x100, *s ? s : artist);
         return info;
     }
-    if (pm_empty_or_unknown(artist)) pm_cpy(artist, 0x100, show);   /* the tags as stock had them, the show for what they lack */
+    if (pm_empty_or_unknown(artist))
+        pm_cpy(artist, 0x100, show); /* the tags as stock had them, the show for what they lack */
     if (!*album) pm_cpy(album, 0x100, artist);
     return info;
 }
@@ -858,7 +904,7 @@ void pc_note(void *t) {
     const char *path = t ? cc_str(t, REC_PATH) : "";
     unsigned h = pc_is_path(path) ? pc_hash(path) : 0, now;
     int pos = 0, len = 0;
-    if (!h && !pcs.cur && !pcs.speed_on) return;   /* music, as before: nothing to look at */
+    if (!h && !pcs.cur && !pcs.speed_on) return; /* music, as before: nothing to look at */
     now = time_now_ms();
     if (h != pcs.cur) {
         if (pcs.cur) pm_leave();
@@ -869,13 +915,14 @@ void pc_note(void *t) {
             if (pc_state(h, &p, &l) == PC_PROGRESS && p >= PC_EDGE_S) pcs.pend = 1, pcs.pend_pos = p, pcs.pend_ms = now;
         }
     }
-    if (!h) {   /* music again: the speed we changed goes back, unless the page has just set one for an episode that has not started yet */
+    if (!h) { /* music again: the speed we changed goes back, unless the page has just set one for an episode that has not started yet */
         if (pcs.speed_on && now - pcs.apply_ms > PC_SEEK_WAIT_MS) pm_speed_back();
         return;
     }
     if (get_playtimeandlength(&pos, &len) != 1 || len <= 0 || pos < 0) return;
-    if (pcs.pend) {   /* the saved place: jump to it once, while the episode has just started and plays; meanwhile nothing is recorded (the first seconds would forget it) */
-        if (now - pcs.pend_ms > PC_SEEK_WAIT_MS || (unsigned)pos >= pcs.pend_pos) pcs.pend = 0;
+    if (pcs.pend) { /* the saved place: jump to it once, while the episode has just started and plays; meanwhile nothing is recorded (the first seconds would forget it) */
+        if (now - pcs.pend_ms > PC_SEEK_WAIT_MS || (unsigned)pos >= pcs.pend_pos)
+            pcs.pend = 0;
         else if (pos >= 1 && pos < PC_SEEK_MAX && mclGetPlayStatus() == MB_PLAYING) {
             seek_time((int)pcs.pend_pos);
             pcs.pend = 0;
@@ -883,7 +930,8 @@ void pc_note(void *t) {
         }
         if (pcs.pend) return;
     }
-    if (pcs.hold_ms && (int)(now - pcs.hold_ms) < 0) return;   /* just jumped: the player's second may still be the old one */
+    if (pcs.hold_ms && (int)(now - pcs.hold_ms) < 0)
+        return; /* just jumped: the player's second may still be the old one */
     pcs.hold_ms = 0;
     pcs.pos = pos, pcs.len = len;
     pm_set(h, (unsigned)pos, (unsigned)len);
@@ -930,16 +978,19 @@ void *pc_strip(void *queue, int *idx) {
  * untouched; no file I/O, no allocation, a 1 KB buffer on the caller's stack.
  */
 #define PQ_BUF 1024
-static const char pq_head[] = " from (select * from songtable where ifnull(fileurl,'') not like '" PM_ROOT "/podcasts/%')";
+static const char pq_head[] =
+    " from (select * from songtable where ifnull(fileurl,'') not like '" PM_ROOT "/podcasts/%')";
 
 /* sql with " from songtable" replaced by the filtered subquery, in out; 0 when sql is not such a select or does not fit */
 static char *pq_filter(char *out, const char *sql) {
     static const char tbl[] = " from songtable", sel[] = "select ";
     unsigned i, n, m = sizeof pq_head - 1, len;
     if (!sql) return 0;
-    for (i = 0; i < sizeof sel - 1; ++i) if (sql[i] != sel[i]) return 0;
+    for (i = 0; i < sizeof sel - 1; ++i)
+        if (sql[i] != sel[i]) return 0;
     for (n = 0; sql[n]; ++n) {
-        for (i = 0; i < sizeof tbl - 1 && sql[n + i] == tbl[i]; ++i) {}
+        for (i = 0; i < sizeof tbl - 1 && sql[n + i] == tbl[i]; ++i) {
+        }
         if (i == sizeof tbl - 1 && (sql[n + i] == 0 || sql[n + i] == ' ' || sql[n + i] == ';')) break;
     }
     if (!sql[n]) return 0;

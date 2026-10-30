@@ -4,16 +4,20 @@
  */
 #pragma once
 
-#define ELLIPSIS 0x2026   /* U+2026 HORIZONTAL ELLIPSIS, the wide char texts are cut with */
+#define ELLIPSIS 0x2026 /* U+2026 HORIZONTAL ELLIPSIS, the wide char texts are cut with */
 #define POD_DARK_MS 1000
 
-int pod_screen_lit(void);                 /* stock backlight state */
+int pod_screen_lit(void); /* stock backlight state */
 
-int pod_on_back(void *ctx, void *e);     /* click handler: navigator_back() */
-int pod_on_player(void *ctx, void *e);   /* click handler: the stock "back to the player" button */
-int pod_scan_dir(const char *name, const char *dot);   /* the library scan's strcmp(name, ".") replacement: 0 for any name starting with '.' (docs/modules/payload.md hook 6) */
-int pod_card_mounted(void);             /* the SD card is mounted (statfs: /mnt/mmc is another file system than /mnt); never write under /mnt/mmc otherwise */
-int pod_is_type(void *w, const char *type);   /* w is a widget of exactly this type name */
+int pod_on_back(void *ctx, void *e); /* click handler: navigator_back() */
+int pod_on_player(void *ctx, void *e); /* click handler: the stock "back to the player" button */
+int pod_scan_dir(
+    const char *name,
+    const char *
+        dot); /* the library scan's strcmp(name, ".") replacement: 0 for any name starting with '.' (docs/modules/payload.md hook 6) */
+int pod_card_mounted(
+    void); /* the SD card is mounted (statfs: /mnt/mmc is another file system than /mnt); never write under /mnt/mmc otherwise */
+int pod_is_type(void *w, const char *type); /* w is a widget of exactly this type name */
 /* Bind fn to EVT_CLICK of the widget called name in win (ctx passed through); returns the widget, NULL if
  * the page has none (or fn is NULL). */
 

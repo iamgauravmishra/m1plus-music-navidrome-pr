@@ -7,15 +7,15 @@ label's margin_left, read the way tools/mod_ipodrows.py pill_layout reads the ic
 from margin_left, shifted by x_offset), the images, default.ttf rasterized the stb way (tools/preview_font.py). The Songs pages' buttons are code-built:
 their rectangles are the builder's (stock immediates, or the pinned ones in patch/offsets.inc) and their images the page theme's.
 
-Usage: venv/bin/python -I tools/preview_navbars.py OLD_WORKDIR NEW_WORKDIR OUT.png      (workdirs: a stock tree or a built one: WORK/rootfs/release/assets/default/raw)
+Usage: uv run python -I tools/preview_navbars.py OLD_WORKDIR NEW_WORKDIR OUT.png      (workdirs: a stock tree or a built one: WORK/rootfs/release/assets/default/raw)
 """
 import os, re, sys
 from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import awtk_ui, awtk_style
+import awtk_ui
 from awtk_ui import Widget
 import preview_font   # noqa: F401  (redirects the painters' text to stb_raster, the tree's font)
-import preview_all, preview_nowplaying
+import preview_layout
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAWREL = 'rootfs/release/assets/default/raw'
@@ -38,7 +38,7 @@ SETTINGS = ['Wi-Fi', 'Bluetooth', 'Display', 'Sound', 'Theme', 'Language', 'Date
 ARTISTS = ['A Tribe Called Quest', 'Art Blakey', 'Bill Evans', 'Charles Mingus', 'Dave Brubeck', 'Herbie Hancock', 'John Coltrane', 'Miles Davis', 'Nina Simone']
 
 
-class NavPainter(preview_all.MenuPainter):
+class NavPainter(preview_layout.MenuPainter):
     """MenuPainter with the navbar's icon rule and the label margin, read from the tree's own theme."""
     def margin(self, wd, key, default):
         v = self.prop(wd, key)
@@ -56,7 +56,7 @@ class NavPainter(preview_all.MenuPainter):
                 try: super().walk(im, wd, ox, oy, clip, page, root)
                 finally: wd.x -= sh; wd.w += sh
                 return
-            if wd.type == 'list_item':   # preview_all's row painter has no hairline inset: rows are drawn by rows()
+            if wd.type == 'list_item':   # preview_layout's row painter has no hairline inset: rows are drawn by rows()
                 super().walk(im, wd, ox, oy, clip, page, root); return
             super().walk(im, wd, ox, oy, clip, page, root)
         finally:

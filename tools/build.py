@@ -8,16 +8,17 @@
   build.py --pack-only package an existing work/mod-release tree (the second half of a full build)
   build.py --no-cache  ignore work/cache/build (tools/buildcache.py; same as M1_NO_CACHE=1)
 
-The updater refuses a package whose version equals the installed one: bump TAG for every package
-that is flashed (docs/workflow.md). Pins the official zip by SHA-256 so a wrong or corrupted input
+Use --dev for a fresh test tag; only integration edits release TAG (docs/workflow.md).
+Pins the official zip by SHA-256 so a wrong or corrupted input
 is refused. Every stage prints its time; "cached" marks a stage reused from work/cache/build.
 """
-import argparse, hashlib, importlib, os, subprocess, sys, time, zipfile, shutil
+import argparse, hashlib, importlib, os, re, subprocess, sys, time, zipfile, shutil
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS = os.path.join(ROOT, 'tools')
 sys.path.insert(0, TOOLS)
-import mod_space, paths
+import mod_space, paths, workflow
+from pathlib import Path
 
 ZIP = paths.ZIP     # this checkout's firmware/, else the main checkout's (tools/paths.py)
 ZIP_SHA = 'db7bdbc42ffe6d5c1e3fdca9363edb78a01898b9a725c34793394cf6abfa33c0'
@@ -40,12 +41,12 @@ def sha256(p):
 
 # the steps need Pillow, fontTools or pyelftools: run them with the repo venv
 def run(*cmd):
-    t = time.time(); subprocess.run([paths.VENV_PY, '-I', *cmd], check=True)
+    t = time.time(); subprocess.run([sys.executable, '-I', *cmd], check=True)
     print(f'  [{time.time() - t:5.1f}s] {os.path.basename(cmd[0])}', flush=True)
 
 def stage_report(what, t, cached): print(f'  [{time.time() - t:5.1f}s] {what}{" (cached)" if cached else ""}', flush=True)
 
-def make_tree(stock, mod, cache):
+def make_tree(stock, mod, cache, tag=TAG):
     """stock -> the finished release tree, every stage through tools/buildcache.py."""
     import buildcache as bc
     bc.ENABLED = bc.ENABLED and cache
@@ -58,10 +59,11 @@ def make_tree(stock, mod, cache):
         bc.store_base(key, mod)
     stage_report('base: battery, font, space', t, cached)
     before = bc.snap(mod)
-    run(os.path.join(TOOLS, 'pod.py'), mod)                                # patch demo + add assets (always runs)
+    run(os.path.join(TOOLS, 'pod.py'), mod, '--tag', tag)
     changed, removed, _ = bc.delta_since(before, mod)
     prev = bc.H('pod', key, bc.delta_sha(mod, changed, removed))
     for module, args in STEPS:
+        if module == 'mod_about': args = [tag]
         t = time.time(); prev = bc.step_key(prev, module, args)
         if bc.have_step(prev): bc.apply_delta(prev, mod); stage_report(module, t, True); continue
         before = bc.snap(mod)
@@ -84,7 +86,13 @@ def main():
     ap.add_argument('--restore', action='store_true')
     ap.add_argument('--tree-only', action='store_true'); ap.add_argument('--pack-only', action='store_true')
     ap.add_argument('--no-cache', action='store_true')
+    ap.add_argument('--dev', action='store_true', help='allocate a development tag without editing TAG')
+    ap.add_argument('--out', type=Path, help='dev artifact directory (tree, update.bin, logs and receipts)')
     a = ap.parse_args()
+    if a.dev and a.restore: ap.error('--dev and --restore are mutually exclusive')
+    if a.out and not a.dev: ap.error('--out requires --dev')
+    if a.tree_only and a.pack_only: ap.error('choose --tree-only or --pack-only')
+    if sys.version_info[:2] != (3, 15): sys.exit('Python 3.15 is required; run with uv run python -I')
     if not os.path.exists(ZIP): sys.exit(f'missing {ZIP}')
     if sha256(ZIP) != ZIP_SHA: sys.exit('firmware zip SHA-256 mismatch: not the pinned V2.1 package')
     work, outdir = paths.WORK, paths.OUT; os.makedirs(work, exist_ok=True); os.makedirs(outdir, exist_ok=True)
@@ -96,19 +104,46 @@ def main():
         run(os.path.join(TOOLS, 'fwtool.py'), 'unpack', os.path.join(work, name), stock)
     fwtool = os.path.join(TOOLS, 'fwtool.py')
     if a.restore:
+        if a.tree_only: return
         out = os.path.join(outdir, f'M1Plus-{RESTORE_TAG}-stock-restore-update.bin')
         run(fwtool, 'repack', stock, out, '--version', RESTORE_TAG, '--reuse-squashfs',
             '--build-dir', os.path.join(work, 'build-restore'))
     else:
-        mod = os.path.join(work, 'mod-release')
-        if not a.pack_only: make_tree(stock, mod, not a.no_cache)
+        directory = (a.out.resolve() if a.out else workflow.new_dev_dir()) if a.dev else None
+        if a.dev and a.pack_only and not a.out: ap.error('--dev --pack-only requires --out')
+        mod = str(directory / 'tree') if a.dev else os.path.join(work, 'mod-release')
+        manifest = Path(mod) / 'build.json'
+        if a.pack_only:
+            record = workflow.validate_tree(mod)
+            tag = record['tag']
+            if record['mode'] != ('dev' if a.dev else 'release'): sys.exit('build mode differs from the tree manifest')
+            if not a.dev and tag != TAG: sys.exit('release TAG differs from the built tree; rebuild it')
+        else:
+            if a.dev and manifest.exists(): sys.exit('dev directory already contains a build; use a fresh directory')
+            tag = directory.name if a.dev else TAG
+            if a.dev and not re.fullmatch(r'V2\.1z[A-Z]{8}', tag):
+                sys.exit('dev output directory must use an allocated development tag')
+            inputs = workflow.input_key()
+            make_tree(stock, mod, not a.no_cache, tag)
+            if workflow.input_key() != inputs: sys.exit('source changed during the build; rebuild before testing or packing')
+            record = {'tag': tag, 'mode': 'dev' if a.dev else 'release', 'inputs': inputs, 'sources': workflow.source_key(),
+                      'demo_sha256': workflow.sha(Path(mod) / 'rootfs/release/bin/demo'),
+                      'elf_sha256': workflow.sha(Path(mod) / 'podbuild/patch.elf'),
+                      'environment': workflow.environment(), 'tree': workflow.tree_key(mod)}
+            workflow.write(manifest, record)
+        print(f'build: {directory or mod} ({tag})', flush=True)
         if a.tree_only: return
         removed, added = pack_args(stock)
-        out = os.path.join(outdir, f'M1Plus-{TAG}-release-update.bin')
-        run(fwtool, 'repack', mod, out, '--version', TAG, '--tailends', *removed, *added)
+        out = str(directory / 'update.bin') if a.dev else os.path.join(outdir, f'M1Plus-{tag}-release-update.bin')
+        run(fwtool, 'repack', mod, out, '--version', tag, '--tailends', *removed, *added)
         shutil.rmtree(os.path.join(mod, 'build'), ignore_errors=True)
         # keep mod/podbuild (manifest + patch.elf) so test/patch.py can run against the built tree
     run(fwtool, 'verify', out)
+    if not a.restore:
+        workflow.validate_tree(mod)
+        record['package_sha256'] = sha256(out)
+        workflow.write(manifest, record)
     print('->', out)
 
-if __name__ == '__main__': main()
+if __name__ == '__main__':
+    with workflow.lock('build'): main()

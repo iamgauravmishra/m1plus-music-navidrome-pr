@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """MIPS32 LE disassembly helper (capstone + pyelftools) for the Shanling 'demo' binary.
 
-  dis.py sym  ELF NAME...          disassemble functions by (dyn)symbol name
-  dis.py addr ELF ADDR [LEN]       disassemble a range
-  dis.py words ELF ADDR [COUNT]    the raw instruction words (to pin them)
-  dis.py xref ELF STRING...        find lui/addiu(ori) pairs referencing the address of a NUL-terminated string
-  dis.py strxref ELF ADDR          find code referencing an absolute address
-  dis.py callers ELF ADDR|SYM      every call site (jal/j/bal, jalr through a register or the GOT) and every
+  disasm.py sym  ELF NAME...          disassemble functions by (dyn)symbol name
+  disasm.py addr ELF ADDR [LEN]       disassemble a range
+  disasm.py words ELF ADDR [COUNT]    the raw instruction words (to pin them)
+  disasm.py xref ELF STRING...        find lui/addiu(ori) pairs referencing the address of a NUL-terminated string
+  disasm.py strxref ELF ADDR          find code referencing an absolute address
+  disasm.py callers ELF ADDR|SYM      every call site (jal/j/bal, jalr through a register or the GOT) and every
                                    load of the address (lui/addiu/ori, GOT slot), from a scan of all of .text
-  dis.py strings-xref ELF "TEXT"   strings containing TEXT -> the functions that load their address
-  dis.py full ELF                  write the whole .text, annotated, to work/cache/<elf name>.dis (keyed by
+  disasm.py strings-xref ELF "TEXT"   strings containing TEXT -> the functions that load their address
+  disasm.py full ELF                  write the whole .text, annotated, to work/cache/<elf name>.dis (keyed by
                                    the ELF's SHA-256; callers / strings-xref reuse it, grep it freely)
 Each cached line ends in =0xVALUE when it calls or loads that value, so `grep '=0x533b80$'` finds callers.
 Calls (jal / jalr via GOT loads) are annotated with symbol names where possible.

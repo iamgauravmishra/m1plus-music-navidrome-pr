@@ -19,7 +19,7 @@ tone), under a static black gradient (np_tint.png, alpha 0.15 at the top to 0.92
 first child of view_local. The album line, the "3/12" index and the quality line are not on the art page: label_album
 stays on the info page, label_index is hidden at 0x0 like img_hr, label_info stays on the info page.
 
-What demo drives here, by name (dis.py xref, docs/ui.md): scrlabel_title, scrlabel_artist, img_playcover,
+What demo drives here, by name (disasm.py xref, docs/ui.md): scrlabel_title, scrlabel_artist, img_playcover,
 label_index ("%d/%d"), label_info, label_album/genre/year/size/location ("%s:%s"), label_playtime, label_playlen,
 slider_play, img_repeata/b (moved by code to x = 12 + pos*296/len, y = 364; five pinned immediates make it x =
 28 + pos*264/len, y = 370: the bar's centre + 7), img_hr, img_mqa, btn_fav/more/playmode/prev/play/next/queue/
@@ -37,7 +37,7 @@ Files (every image is new and referenced only from these two files):
 Usage: mod_nowplaying.py SRC_WORKDIR OUT_WORKDIR
   OUT_WORKDIR == SRC_WORKDIR edits in place.
 """
-import os, shutil, stat, struct, sys
+import os, shutil, struct, sys
 from math import erf, sqrt
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_ui, awtk_style, mod_icons

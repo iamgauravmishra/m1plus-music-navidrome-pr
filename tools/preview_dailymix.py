@@ -2,13 +2,13 @@
 """Previews of the Daily Mix hero card (docs/modules/dailymix.md): the card at 1x and 2x, in the Home layout (rows, the new section, the Recently
 Played shelf, the mini bar), six palettes, every language, and Customize > Home Screen with the proposed rows. Approximate, not AWTK; sample data.
 
-  venv/bin/python -I tools/preview_dailymix.py WORKDIR [OUTDIR]       (WORKDIR: the built release tree, work/mod-release; default OUTDIR out/dailymix)
+  uv run python -I tools/preview_dailymix.py WORKDIR [OUTDIR]       (WORKDIR: the built release tree, work/mod-release; default OUTDIR out/dailymix)
 """
 import os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from PIL import Image, ImageDraw
-import preview, preview_icons as PI, pod_dailymix as D, pod_ui as U, mod_icons as M, awtk_ui
+import preview, preview_icons as PI, pod_dailymix as D, mod_icons as M, awtk_ui
 from awtk_text import Ttf, awtk_width
 
 RAW = awtk_ui.RAW

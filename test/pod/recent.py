@@ -964,7 +964,7 @@ def refresh_and_fallback_tests(ctx):
     m = covered(ST(ents(3))); library(m)
     rgb_cover(m, 3, (250, 250, 20))
     m.decode_all()
-    bm = list(m.bitmaps); loads0 = len(m.loads)
+    bm = list(m.bitmaps)
     m.fs[RECENT] = pod_recent.dump([entry(*ALBUMS[3])] + ents(2)); m.timers = []; m.calls = []
     m.fire(EVT_FG)
     expect(m.names().count('open') >= 1 and 'widget_load_image' not in m.names() and 'bitmap_create_ex' not in m.names() and m.names().count('bitmap_destroy') == 1, 'to-foreground reads the file again and decodes nothing in the event; the cover of the album that dropped out is freed')

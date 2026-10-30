@@ -31,11 +31,11 @@ keep their stock outline, and the vertical metrics are stock.
 
 Usage: mod_font.py SRC_WORKDIR OUT_WORKDIR
        mod_font.py --fetch            download the pinned Source Han Sans SC zip into fonts/
-Needs fontTools (requirements.txt). OUT_WORKDIR == SRC_WORKDIR edits in place.
+Needs fontTools (uv sync). OUT_WORKDIR == SRC_WORKDIR edits in place.
 """
 import argparse, hashlib, io, os, struct, sys, zipfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from modlib import clone_workdir, edit_ui, write_keep_mode
+from modlib import clone_workdir, write_keep_mode
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FONT = 'rootfs/release/assets/default/raw/fonts/default.ttf'

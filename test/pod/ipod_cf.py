@@ -2,7 +2,7 @@
 textures, the albums query, nothing of the old Cover Flow page), what paints (the iPod title bar, white, the shared depth renderer's frame, the album and artist under the centre cover, seven
 covers), the wheel (one album a step, the tiers on a long list, the hard stop at the ends), the slide's animation on the page's ONE timer (set to 33 ms in place while it slides
 and decodes, back to 500 ms), the centre button (the album's tracks, a track plays), MENU on every level, the skip keys, and the failure paths. Paint never queries."""
-import os, re, struct
+import os, re
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 ip = sibling('ipod')

@@ -1,8 +1,7 @@
 /* M1+ Music Artists: the stock Local Music artists as an A-Z list in the Songs page's manner; a tap opens Cover Flow on that artist's albums.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
- * The artist-to-Cover-Flow flow follows q2-pod (Copyright (c) 2026 Diamond Bond, MIT,
- * https://github.com/DiamondBond/q2-pod; see NOTICE): its Artists list hands an artist's albums to
+ * The artist-to-Cover-Flow flow follows q2-pod: its Artists list hands an artist's albums to
  * coverflow_artist. On the M1 Plus the list is our own page instead of a hooked stock one.
  *
  * The list is the stock Artists list, sorted as the album Artist order is (ar_sort below):
@@ -41,42 +40,48 @@
 #include "i18n.h"
 
 extern int coverflow_artist(void *artists, unsigned index, unsigned scope); /* patch/coverflow.c */
-extern int songs_open_genre(const char *name, int unknown);                 /* patch/songs.c */
-extern int pod_home_open(int id);   /* patch/m1plus.c: a stock Home destination through the dispatcher */
+extern int songs_open_genre(const char *name, int unknown); /* patch/songs.c */
+extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
 
 #define I(w, off) (*(int *)((char *)(w) + (off)))
 
-#define AR_ROW 52         /* tools/pod_ui.py ROW_H: the menu's rows (the Artists rows were 52 px before the page took the Songs page's structure) */
-#define AR_TOP SG_TITLE_H /* the content y of the first header: right under the large title's row (Songs has the pills there too) */
-#define AR_BOTTOM 12      /* air under the last row */
+#define AR_ROW \
+    52 /* tools/pod_ui.py ROW_H: the menu's rows (the Artists rows were 52 px before the page took the Songs page's structure) */
+#define AR_TOP \
+    SG_TITLE_H /* the content y of the first header: right under the large title's row (Songs has the pills there too) */
+#define AR_BOTTOM 12 /* air under the last row */
 #define AR_TEXT_X 24
-#define AR_TEXT_Y ((AR_ROW - LIST_TITLE_H) / 2)      /* the name's 24 px box (LIST_TITLE_H), centred in the row: a text is drawn only when its box is wholly inside the window, as every text of the Songs page */
+#define AR_TEXT_Y \
+    ((AR_ROW - LIST_TITLE_H) / \
+     2) /* the name's 24 px box (LIST_TITLE_H), centred in the row: a text is drawn only when its box is wholly inside the window, as every text of the Songs page */
 #define AR_TEXT_H LIST_TITLE_H
-#define AR_TEXT_END 252   /* the names are cut here: the chevron stands between this and the rail's touch column (x 284) */
+#define AR_TEXT_END \
+    252 /* the names are cut here: the chevron stands between this and the rail's touch column (x 284) */
 #define AR_CHEV_X 262
-#define AR_CHEV_W 10      /* the chevron's bitmap, drawn by ar_make_chevron */
+#define AR_CHEV_W 10 /* the chevron's bitmap, drawn by ar_make_chevron */
 #define AR_CHEV_H 16
 #define AR_CHEV_RGB 0x8a8a8a
-#define AR_W 320          /* the content's width: the list_view's (the scroll_view clips at 310) */
+#define AR_W 320 /* the content's width: the list_view's (the scroll_view clips at 310) */
 #define MAX_ARTISTS 20000 /* one byte of rank and four of order each, no widget: bounded by the stock list's own size */
-#define AR_TILES (GRID_VIEW_H / AR_ROW + 6)   /* the text ring: the rows in view, two beyond and the history */
+#define AR_TILES (GRID_VIEW_H / AR_ROW + 6) /* the text ring: the rows in view, two beyond and the history */
 
 static struct {
     void *win, *view, *sv, *list, *status;
-    void *title, *big, *toggle, *np, *fade, *st_title;   /* label_title (the navbar's), ar_title (the large one), btn_artisttype, btn_backtoplayer, img_nb_fade, the row text style; any may be missing */
+    void *title, *big, *toggle, *np, *fade,
+        *st_title; /* label_title (the navbar's), ar_title (the large one), btn_artisttype, btn_backtoplayer, img_nb_fade, the row text style; any may be missing */
     void *artists; /* our copy of the stock artist rows */
-    unsigned *order;  /* stock row at each display position; NULL = stock order */
-    unsigned char *rank;   /* the section rank of each display position */
+    unsigned *order; /* stock row at each display position; NULL = stock order */
+    unsigned char *rank; /* the section rank of each display position */
     unsigned count;
-    unsigned cls;     /* the stock class listed: CLASS_ARTISTS, CLASS_GENRES or CLASS_COMPOSERS */
-    int home;         /* its Home tile (HOME_GENRE, HOME_COMPOSER; 0 for Artists): where a window that will not open falls back */
-    const char *key;  /* the title's key: Artists, Album Artists, Genres, Composers */
-    void *chev;       /* the chevron bitmap */
-    int press;        /* the row under the finger, + 1 */
-    int down, down_x, down_y;   /* the row a press began on, + 1, and where */
+    unsigned cls; /* the stock class listed: CLASS_ARTISTS, CLASS_GENRES or CLASS_COMPOSERS */
+    int home; /* its Home tile (HOME_GENRE, HOME_COMPOSER; 0 for Artists): where a window that will not open falls back */
+    const char *key; /* the title's key: Artists, Album Artists, Genres, Composers */
+    void *chev; /* the chevron bitmap */
+    int press; /* the row under the finger, + 1 */
+    int down, down_x, down_y; /* the row a press began on, + 1, and where */
     int title_on, noscroll;
     az_t al;
-    grid_t g;         /* the text ring (no covers) */
+    grid_t g; /* the text ring (no covers) */
 } ar __attribute__((section(".scratch")));
 
 /* Hidden and out of the hit test together (this AWTK's widget_find_target ignores visible). */
@@ -98,12 +103,14 @@ static const char *ar_name(void *r) {
 static unsigned ar_stock(unsigned i) { return ar.order ? ar.order[i] : i; }
 
 /* A tap: an artist's or a composer's albums in Cover Flow; a genre's songs on our Songs page (the stock row tap's classinfo and class 0xff09, songs_open_genre). */
-static __attribute__((noinline)) int ar_open(unsigned i) {   /* (a symbol of its own: the tests call it with a display position) */
+static __attribute__((noinline)) int
+ar_open(unsigned i) { /* (a symbol of its own: the tests call it with a display position) */
     if (!ar.artists || i >= ar.count) return RET_OK;
     if (ar.cls == CLASS_GENRES) {
         void *r = deque_at(ar.artists, ar_stock(i));
         songs_open_genre(ar_name(r), *(int *)((char *)r + REC_ID) == -1);
-    } else coverflow_artist(ar.artists, ar_stock(i), ar.cls);
+    } else
+        coverflow_artist(ar.artists, ar_stock(i), ar.cls);
     return RET_OK;
 }
 
@@ -137,9 +144,10 @@ static void ar_sort(void) {
     }
     for (i = 0; i < ar.count; ++i) ar.order[i] = i, ar_rec[i] = deque_at(ar.artists, i);
     for (i = 0; i < ar.count;) {
-        for (s = i; i < ar.count && ar_sortable(ar_rec[i]); ++i) {}
+        for (s = i; i < ar.count && ar_sortable(ar_rec[i]); ++i) {
+        }
         if (i - s > 1) cc_heapsort(ar.order + s, i - s, ar_cmp);
-        if (i == s) ++i;   /* a fixed row */
+        if (i == s) ++i; /* a fixed row */
     }
     free(ar_rec);
     ar_rec = (void **)0;
@@ -156,7 +164,9 @@ static void ar_sections(void) {
     if (!ar.rank) return;
     for (i = 0; i < ar.count; ++i) {
         void *r = deque_at(ar.artists, ar_stock(i));
-        ar.rank[i] = *(int *)((char *)r + REC_ID) == -1 && i ? (unsigned char)prev : (unsigned char)az_rank_of((unsigned char)*cc_name_key(ar_name(r)));
+        ar.rank[i] = *(int *)((char *)r + REC_ID) == -1 && i
+                         ? (unsigned char)prev
+                         : (unsigned char)az_rank_of((unsigned char)*cc_name_key(ar_name(r)));
         prev = ar.rank[i];
     }
     az_sections(&ar.al, ar.rank, 1);
@@ -188,10 +198,11 @@ static void ar_title_update(void) {
 static void ar_mode_show(void) {
     int album = *(volatile int *)ARTIST_TYPE == 1;
     const char *icon = album ? "pod_nav_artist" : "pod_nav_albumartist";
-    if (ar.cls != CLASS_ARTISTS) {   /* Genres and Composers: the menu row's text, and no Artist / Album Artist switch (hidden and out of the hit test) */
+    if (ar.cls !=
+        CLASS_ARTISTS) { /* Genres and Composers: the menu row's text, and no Artist / Album Artist switch (hidden and out of the hit test) */
         ar_title_text(ar.cls == CLASS_GENRES ? "Genres" : "Composers");
         ar_show(ar.toggle, 0);
-        if (ar.np) {   /* Now Playing is the capsule's right cap in the asset (it has the switch to its left): alone it is the glass disc, as on every page with no toggle */
+        if (ar.np) { /* Now Playing is the capsule's right cap in the asset (it has the switch to its left): alone it is the glass disc, as on every page with no toggle */
             widget_set_prop_str(ar.np, "style:normal:icon", "ah_nav_np");
             widget_set_prop_str(ar.np, "style:over:icon", "ah_nav_np");
             widget_set_prop_str(ar.np, "style:pressed:icon", "ah_nav_np_down");
@@ -202,7 +213,8 @@ static void ar_mode_show(void) {
     if (ar.toggle) {
         widget_set_prop_str(ar.toggle, "style:normal:icon", icon);
         widget_set_prop_str(ar.toggle, "style:over:icon", icon);
-        widget_set_prop_str(ar.toggle, "style:pressed:icon", album ? "pod_nav_artist_down" : "pod_nav_albumartist_down");
+        widget_set_prop_str(ar.toggle, "style:pressed:icon",
+                            album ? "pod_nav_artist_down" : "pod_nav_albumartist_down");
         widget_invalidate_force(ar.toggle, (void *)0);
     }
 }
@@ -236,8 +248,10 @@ static void ar_paint_rows(void *canvas) {
         }
     }
     widget_prepare_text_style(ar.st_title, canvas);
-    for (r = r0; r <= r1; ++r) grid_text(canvas, ar_tile(r), 0, AR_TEXT_X, az_row_y(&ar.al, r) - off + AR_TEXT_Y, AR_TEXT_END - AR_TEXT_X, AR_TEXT_H, GRID_VIEW_H);
-    az_paint_heads(&ar.al, canvas);   /* the section letters, then over everything the pinned band and its letter */
+    for (r = r0; r <= r1; ++r)
+        grid_text(canvas, ar_tile(r), 0, AR_TEXT_X, az_row_y(&ar.al, r) - off + AR_TEXT_Y, AR_TEXT_END - AR_TEXT_X,
+                  AR_TEXT_H, GRID_VIEW_H);
+    az_paint_heads(&ar.al, canvas); /* the section letters, then over everything the pinned band and its letter */
 }
 
 static int ar_on_paint(void *ctx, void *e) {
@@ -253,12 +267,15 @@ static int ar_on_paint(void *ctx, void *e) {
 
 /* The chevron: a stroke of two segments (the stock right_arrow is 13 x 22 and our image loader only makes squares), antialiased by 4 x 4 samples per pixel, in the
  * alpha of a grey bitmap (the rail's disc is made the same way). Coordinates are eighths of a pixel. */
-static int ar_seg2(int px, int py, int ax, int ay, int bx, int by) {   /* the squared distance of (px, py) to the segment a-b */
+static int ar_seg2(int px, int py, int ax, int ay, int bx,
+                   int by) { /* the squared distance of (px, py) to the segment a-b */
     int dx = bx - ax, dy = by - ay, n = (px - ax) * dx + (py - ay) * dy, d = dx * dx + dy * dy, cx, cy, cr;
-    if (n <= 0) cx = px - ax, cy = py - ay;
-    else if (n >= d) cx = px - bx, cy = py - by;
+    if (n <= 0)
+        cx = px - ax, cy = py - ay;
+    else if (n >= d)
+        cx = px - bx, cy = py - by;
     else {
-        cr = (px - ax) * dy - (py - ay) * dx;   /* the cross product: distance = |cr| / sqrt(d) */
+        cr = (px - ax) * dy - (py - ay) * dx; /* the cross product: distance = |cr| / sqrt(d) */
         return cr * cr / d;
     }
     return cx * cx + cy * cy;
@@ -282,7 +299,7 @@ static void ar_make_chevron(void) {
                     int sx = x * 8 + 2 * j + 1, sy = y * 8 + 2 * i + 1;
                     d = ar_seg2(sx, sy, 14, 14, 68, 64);
                     if (ar_seg2(sx, sy, 68, 64, 14, 114) < d) d = ar_seg2(sx, sy, 68, 64, 14, 114);
-                    if (d <= 64) ++n;   /* half the stroke's width: 1 px */
+                    if (d <= 64) ++n; /* half the stroke's width: 1 px */
                 }
             px[y * AR_CHEV_W + x] = (unsigned)(n * 255 / 16) << 24 | AR_CHEV_RGB;
         }
@@ -323,12 +340,15 @@ static int ar_on_up(void *ctx, void *e) {
     ar.down = 0;
     ar_set_press(0);
     if (a < 0 || !e || !ar.view) return RET_OK;
-    if (ar_abs(I(e, PE_X) - ar.down_x) < SC_DRAG_PX && ar_abs(I(e, PE_Y) - ar.down_y) < SC_DRAG_PX && ar_item_of(e) == a) ar_open((unsigned)a);
+    if (ar_abs(I(e, PE_X) - ar.down_x) < SC_DRAG_PX && ar_abs(I(e, PE_Y) - ar.down_y) < SC_DRAG_PX &&
+        ar_item_of(e) == a)
+        ar_open((unsigned)a);
     return RET_OK;
 }
 
 static int ar_on_abort(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     ar.down = 0;
     ar_set_press(0);
     return RET_OK;
@@ -347,7 +367,8 @@ static int ar_on_rail_paint(void *ctx, void *e) {
 }
 
 static int ar_on_scroll(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     if (ar.view) ar_title_update();
     return RET_OK;
 }
@@ -358,7 +379,8 @@ static int ar_on_bg(void *ctx, void *e) {
 }
 
 static int ar_on_destroy(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     if (ar.artists) deque_destroy(ar.artists);
     grid_free(&ar.g);
     az_free(&ar.al);
@@ -389,7 +411,8 @@ static void ar_load(void) {
         deque_assign(ar.artists, list);
         ar.count = deque_size(ar.artists);
         if (ar.count > MAX_ARTISTS) ar.count = MAX_ARTISTS;
-        if (ar.cls == CLASS_ARTISTS) ar_sort();   /* Genres and Composers stay in the stock query's order (group by ... COLLATE NOCASE) */
+        if (ar.cls == CLASS_ARTISTS)
+            ar_sort(); /* Genres and Composers stay in the stock query's order (group by ... COLLATE NOCASE) */
     }
     ar.al.count = (int)ar.count;
     if (ar.count) ar_sections();
@@ -408,8 +431,10 @@ static void ar_load(void) {
 /* The button: flip the stock setting the way the stock switch does, then list again. */
 static int ar_on_toggle(void *ctx, void *e) {
     int type = *(volatile int *)ARTIST_TYPE != 1;
-    (void)ctx; (void)e;
-    if (ar.cls != CLASS_ARTISTS) return RET_OK;   /* Genres and Composers have no switch (the button is hidden; a stray click changes nothing) */
+    (void)ctx;
+    (void)e;
+    if (ar.cls != CLASS_ARTISTS)
+        return RET_OK; /* Genres and Composers have no switch (the button is hidden; a stray click changes nothing) */
     *(volatile int *)ARTIST_TYPE = type;
     write_int_config(type, "PLAYSET", "ARTISTTYPE");
     *(volatile unsigned char *)ARTIST_RELOAD = 1;
@@ -452,8 +477,8 @@ int artists_open(int home) {
     ar.al.bubble = widget_lookup(ar.win, "sg_bubble", 1);
     ar.al.bubble_letter = widget_lookup(ar.win, "sg_bubble_letter", 1);
     if (ar.toggle) widget_on(ar.toggle, EVT_CLICK, ar_on_toggle, (void *)0);
-    if (!ar.list || !ar.sv || !ar.view || !ar.status || !ar.st_title || !ar.al.st_hdr || !ar.al.st_rail || !ar.al.st_rail_on || !ar.al.rail || !ar.al.bubble ||
-        !ar.al.bubble_letter) {
+    if (!ar.list || !ar.sv || !ar.view || !ar.status || !ar.st_title || !ar.al.st_hdr || !ar.al.st_rail ||
+        !ar.al.st_rail_on || !ar.al.rail || !ar.al.bubble || !ar.al.bubble_letter) {
         int h = ar.home;
         navigator_back(); /* an asset that is not ours */
         return h ? pod_home_open(h) : -1;
@@ -466,8 +491,12 @@ int artists_open(int home) {
     }
     az_make_disc(&ar.al);
     ar_make_chevron();
-    ar.noscroll = !widget_on(ar.sv, EVT_SCROLL, ar_on_scroll, (void *)0) || !widget_on(ar.sv, EVT_SCROLL_END, ar_on_scroll, (void *)0);
-    if (ar.noscroll && ar.title) widget_set_visible(ar.title, 1, 0);   /* the large title's collapse needs the scroll events: without them the navbar keeps its title */
+    ar.noscroll = !widget_on(ar.sv, EVT_SCROLL, ar_on_scroll, (void *)0) ||
+                  !widget_on(ar.sv, EVT_SCROLL_END, ar_on_scroll, (void *)0);
+    if (ar.noscroll && ar.title)
+        widget_set_visible(
+            ar.title, 1,
+            0); /* the large title's collapse needs the scroll events: without them the navbar keeps its title */
     ar.title_on = ar.noscroll;
     widget_on(ar.win, EVT_WINDOW_TO_BG, ar_on_bg, (void *)0);
     widget_on(ar.view, EVT_POINTER_DOWN, ar_on_down, (void *)0);

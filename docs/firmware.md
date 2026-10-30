@@ -9,7 +9,7 @@ db7bdbc42ffe6d5c1e3fdca9363edb78a01898b9a725c34793394cf6abfa33c0  M1 Plus Firmwa
 8794ca4bbbf0ee70b4c23ca6ade589cf61d7213170164d9dc9e6aedb96be0db1  recovery-update/rootfs.squashfs
 ```
 
-## 1. Is it moddable? Yes, and it is the same stack as the Q2
+## 1. Stock format and updater
 
 | | Shanling M1 Plus V2.1 | Shanling Q2 (q2-pod base V1.32) |
 |---|---|---|
@@ -23,7 +23,7 @@ db7bdbc42ffe6d5c1e3fdca9363edb78a01898b9a725c34793394cf6abfa33c0  M1 Plus Firmwa
 | Signing | none, MD5 only | none |
 
 `update.bin` is not encrypted or signed. The device-side updater (`update_firmware` in `demo`,
-disassembled with `tools/dis.py`) does exactly this:
+disassembled with `tools/disasm.py`) does exactly this:
 
 1. `tar xvf /mnt/mmc/update.bin -C <tmp>` ; `sync`
 2. read 4 lines of `firmware_v20.info`
@@ -33,13 +33,9 @@ disassembled with `tools/dis.py`) does exactly this:
 5. MD5 of `recovery-update/xImage` and `rootfs.squashfs` must match lines 3 and 4
 6. `flash_erase /dev/mtd6` ; write marker `ota:kernel2` to mtd6 with `nandwrite` ; reboot
 
-The actual flashing is then done by a separate recovery kernel ("kernel2") that lives in its own
-flash partition. **That recovery kernel and the bootloader are not part of update.bin and are
-never rewritten by it**, which is the main reason this is relatively safe: a bad rootfs can be
-replaced by flashing again, the same way q2-pod documents for the Q2 (recovery-update folder on the
-card, then hold Previous and power on with Centre). I did not find an official M1 Plus recovery
-procedure online (Shanling only documents the normal TF-card / OTA update), so treat the button
-combination as unverified for this model.
+The separate `kernel2` recovery system performs the flash. **The recovery kernel and bootloader
+are absent from `update.bin` and remain unchanged.** The M1 Plus recovery button combination is
+unverified; the Q2's documented sequence must not be assumed to work on this model.
 
 **The flash layout, read on the device** (`/proc/mtd`, 2026-10-29, through a one-off diagnostic that a saved
 screenshot wrote to the card: `statfs` of the file systems and `/proc/mtd`, `/proc/cmdline`, `/proc/mounts`; not
@@ -65,19 +61,15 @@ rootfstype=squashfs ro`) shows 128 MiB of RAM and a serial console on UART3, a p
 
 ## 2. Safety assessment
 
-Relatively safe, with the usual caveats:
-
 - Only kernel and rootfs are flashed; bootloader + recovery kernel stay stock.
 - The rootfs is read-only squashfs, so a mod cannot corrupt itself at runtime.
 - The watchdog script in the stock rootfs reboots the device if `demo` is not running, so a
-  crashing UI gives a reboot loop, not a dead device. Recovery flashing fixes it.
+  crashing UI can cause a reboot loop. The recovery button path remains unverified.
 - Keep the rebuilt `rootfs.squashfs` no larger than stock (fwtool enforces this).
 - Charge the battery first and do not pull the card during the update.
-- Residual risks: the recovery button combo for M1 Plus is unverified, and my rebuilt squashfs is
-  recompressed (same content, same metadata, verified with a full-precision listing diff, but not
-  byte-identical to stock because mksquashfs output differs). The space step (section 4) zeroes
-  bytes of `demo` that are never loaded and removes files nothing references; it is not
-  hardware-tested.
+- Repacking changes compressed bytes; packing checks stock metadata, allowed file changes and
+  size. Restore packages reuse stock squashfs unchanged. Device findings, including the flashed
+  space step, are recorded in [history](history.md).
 
 ## 3. The battery widgets (what the release mod relies on)
 
@@ -99,7 +91,7 @@ string stays "V2.1". Consequences:
 ## 3b. The lock screen page (ui/screensaver_page.bin): what the app does with it
 
 What `demo` does with this page (`screensaver_page_init` and the static handlers after
-`poweroff_page_init`, read with `dis.py`):
+`poweroff_page_init`, read with `disasm.py`):
 
 - at init a `widget_foreach` visitor matches names: `img_screensaver` gets the wallpaper
   (`screensaver_default` or `file://` + the custom picture), `view_timeinfo` is shown or hidden by the
@@ -116,7 +108,7 @@ What `demo` does with this page (`screensaver_page_init` and the static handlers
 - `dclock_time` and `dclock_date` are never looked up and their format is never changed (the strings
   are not in `demo` at all).
 
-`dis.py xref` now resumes after undecodable words in `.text` and sees call arguments set in branch
+`disasm.py xref` now resumes after undecodable words in `.text` and sees call arguments set in branch
 delay slots; before that it reported 0 references for most strings.
 
 12/24 h: `demo` calls `digit_clock_set_format` in two places only: the date-time settings row
@@ -202,17 +194,9 @@ the mod's own files.
 
 ## 5. Rebuilding
 
-`python3 -I tools/build.py` does it all from the pinned zip in `firmware/` (`docs/workflow.md`). By hand,
-the pieces:
-
-```
-python3 -I tools/fwtool.py unpack "work/M1 Plus Firmware V2.1/update.bin" work/stock
-python3 -I tools/fwtool.py repack work/mod-x out/x-update.bin --version V2.1xY --tailends --allow-removed usr/bin/strace ...
-python3 -I tools/fwtool.py verify out/x-update.bin
-python3 -I tools/awtk_ui.py dump work/stock/rootfs/release/assets/default/raw/ui/system_bar.bin
-venv/bin/python -I tools/dis.py sym work/stock/rootfs/release/bin/demo update_firmware
-venv/bin/python -I tools/dis.py xref work/stock/rootfs/release/bin/demo pgbar_battery
-```
+Use the [development guide](workflow.md) for build, inspection and validation commands.
+`tools/build.py` owns the pipeline; `tools/fwtool.py` provides unpack/repack/verify/diff,
+and `tools/stock.py` wraps stock UI and disassembly searches.
 
 fwtool rebuilds the squashfs with the stock parameters (lzo, 128 KiB, mkfs time) and re-applies
 every stock inode's mode/uid/gid/mtime from the `unsquashfs -pf` dump (macOS cannot preserve
@@ -224,5 +208,6 @@ of the full-precision listing against stock; with `--tailends` only 13 directory
 
 `demo` has the same injectable layout as the Q2 (`ET_EXEC`, LOAD ends at va `0xa10fc8`, a spare
 final `PT_NULL` program header, `$gp = 0xa03ed0`). M1+ Music appends a non-PIC MIPS payload at va
-`0xb00000` and hooks two functions; mechanism, addresses, trampolines, kill switch and boot guard:
-`docs/architecture.md`.
+`0xb00000` through the pinned sites described in [payload](modules/payload.md). That reference
+defines the trampolines, kill switch and allowed entry points; do not infer hook counts from
+older release notes.

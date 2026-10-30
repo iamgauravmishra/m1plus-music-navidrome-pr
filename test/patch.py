@@ -3,10 +3,10 @@
 and libc it calls mocked (test/pod/harness.py), one module per feature (test/pod/<name>.py, each
 with a run(ctx)). Proves the hook's entry/fall-through logic, the trampoline, Cover Flow, Artists,
 the album page, Shuffle, the library rows, the boot guard and the launcher on the actual MIPS code,
-without a device. Modelled on q2-pod's test/patch.py (Copyright (c) 2026 Diamond Bond, MIT; see NOTICE).
+without a device. Modelled on q2-pod's test/patch.py.
 
 Requires unicorn (venv) and a workdir built by tools/build.py (its podbuild/manifest.json).
-Usage: venv/bin/python -I test/patch.py WORKDIR [MODULE[/SECTION]...]     (default: every module; SECTION: one function of
+Usage: uv run python -I test/patch.py WORKDIR [MODULE[/SECTION]...]     (default: every module; SECTION: one function of
 the module's SECTIONS list, which its run(ctx) runs in order and tools/check.py runs as separate tasks)
 """
 import importlib.util, os, sys, time

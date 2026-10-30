@@ -1,7 +1,7 @@
 """The library scan's folder walk (patch/common.c pod_scan_dir, tools/pod.py SCAN_SITE, docs/modules/payload.md hook 6): stock's folder lister (0x5ea364) skips a directory whose
 name is "." or ".." or a short list of system folders, and walks every other dot-folder. The build replaces its `jalr strcmp(name, ".")` (0x5ea6a8) by `jal pod_scan_dir`;
 the stock code from the name test (0x5ea69c) runs for real under Unicorn, stock and built, and must skip every hidden folder in the build only. Modelled on q2-pod's
-ringnav_scan_dir test (test/patch.py; Copyright (c) 2026 Diamond Bond, MIT)."""
+ringnav_scan_dir test (test/patch.py)."""
 import os, struct
 import paths
 from unicorn.mips_const import UC_MIPS_REG_S0, UC_MIPS_REG_GP

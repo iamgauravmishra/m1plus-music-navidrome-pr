@@ -1,8 +1,18 @@
-# Songs (the library as one list, and the other song lists)
+# Songs
 
-Not in the old section numbering (a feature added after V2.1oD). Code: `patch/songs.c` (with `patch/grid.c`, `patch/covercache.c`, `patch/shuffle.c` and `patch/scroll.h` as the Albums page uses them), the page `tools/pod_ui.py` (`build_songs_page`, `navbar(songs=True)`), the rows `tools/pod_pages.py` (`SONGS`, `ACT_SONGS`, `ACT_LIST`, `SORT_MENU`), the images `tools/mod_icons.py` (`SONGS_IMAGES`, the Songs capsule pieces), the constants `patch/offsets.inc` (`SG_*`), the preview `tools/preview_songs.py`, the test `test/pod/songs.py`. **No hook.** The menu's Songs row (`ACT_SONGS`, formerly Home id 3, the stock `allmusic_page` with class `0xf001`) opens `ui/m1plus_songs.bin`; a window that will not open falls back to the stock Songs page through the Home dispatcher (`pod_home_open(3)`), which also stays reachable from Shanling Home. The kill switch (`/mnt/mmc/m1plus-off`) disables the entry to the menu; nothing of this page runs without it.
+The menu's Songs action opens `ui/m1plus_songs.bin`. Failure falls back through
+`pod_home_open(3)` to stock `allmusic_page` (class `0xf001`), also reachable from Shanling Home.
+The page adds no hook; the menu's kill-switch entry check prevents opening it while disabled.
 
-**Shared code.** The sections' labelling, the geometry of a list with headers, the header letters and the pinned header, the rail (plan, fit, paint, grab and jump, the bubble, the disc) and the title fit moved to `patch/azlist.c` (`az_*`, `docs/modules/artists.md` "Shared furniture") when the Artists, Genres and Composers page took this page's structure; the pills' centring and the select marks (`pod_centre_pill`, `pod_make_mark`, `patch/common.c`) are shared with the Playlists page's select mode; this page's `sg_*` names are thin wrappers (`sg_on_rail`, `sg_on_rail_paint`, `sg_row_y` ...) over an `az_t` (`sg.al`), and behaviour, asset and tests are unchanged. Everything below that says "sg_rail_plan", "sg_sections", "sg_jump" etc. is `az_rail_plan`, `az_sections`, `az_jump` now.
+Sources: `patch/songs.c`, shared grid/cache/shuffle/scroll helpers, `tools/pod_ui.py`
+(`build_songs_page`, `navbar(songs=True)`), `tools/pod_pages.py` (`SONGS`, `ACT_SONGS`,
+`ACT_LIST`, `SORT_MENU`), `tools/mod_icons.py` (`SONGS_IMAGES`) and `SG_*` in `offsets.inc`.
+Tests: `test/pod/songs.py`; preview: `tools/preview_songs.py`.
+
+Sections, pinned headers, rail/bubble and title fitting are shared through `patch/azlist.c`
+(`az_t sg.al`). Pills and selection marks use `patch/common.c`, shared with Playlists.
+Older `sg_rail_plan`, `sg_sections` and `sg_jump` references below correspond to the shared
+`az_rail_plan`, `az_sections` and `az_jump` implementations.
 
 ## What the user sees
 

@@ -1,23 +1,30 @@
-# The Tape page (`patch/tape.c`, `tools/tape_art.py`)
+# Cassette Mode
 
-**Status: implemented, not seen on a device** (first build, test builds V2.1oXTP, V2.1oXTQ; the device checklist is at the end). A full-screen, **landscape** cassette Now Playing page in the
-manner of Sony's cassette screensaver (NW-A100 / NW-ZX500) and FiiO's Tape mode: the cassette fills the screen and the reels turn while playing. Generic art only: no brand names, marks
-or logos. Opened from the **Cassette Mode row** (the page is called Tape in the code) on page 1 of Now Playing's More sheet (above More, `docs/modules/playmore.md`); closed by a tap on the top left screw. No hook, nothing at
-boot, one page-scoped timer, like the Pod (`docs/modules/ipod.md`). Source: `patch/tape.c`, the drawing code `tools/tape_art.py` (shared by the mock `tools/preview_tape.py` and the build),
-the asset `ui/m1plus_tape.bin` (`tools/pod_ui.py` `build_tape_page`), the pictures `tape_top`, `tape_screw` and, for each theme, `tape_shell_<theme>`, `tape_hubs_<theme>`, `tape_marks_<theme>` (`tools/mod_icons.py`, `assets/icons/png`), the numbers
-`TP_*` in `patch/offsets.inc`, tests `test/pod/tape.py`. The look is the approved mock `tools/preview_tape.py` (frames `out/preview/tape-1..4.png`); the emulated device frames are written by the
-test to `out/preview/tape-emu-*.png`.
+A fullscreen 480 × 320 cassette-style Now Playing page, opened from page 1 of the More sheet.
+Tap the cassette to pause/resume; tap the top-left screw to close. It adds no hook or boot work
+and owns one page timer. Art is generic, without brand names or logos. The visual references
+are Sony's NW-A100/NW-ZX500 cassette screen and FiiO Tape mode.
 
-**Left out** (follow-ups): the cover's tone on the band (the band is the theme's own colour); the tap control strip; long-press rewind / fast-forward (no stock seek path is pinned and safe,
-`docs/modules/ipod.md` "Now Playing: the iPod's cycle, why not"); swipes to skip tracks (removed, below: **the other four screws could later become previous / next**); the lock-screen skin; the
-hardware back key (the Pod has none either).
+Sources: `patch/tape.c`, `tools/tape_art.py`, `tools/pod_ui.py` (`build_tape_page`),
+`tools/mod_icons.py`, and `TP_*` in `offsets.inc`. Tests: `test/pod/tape.py`; preview:
+`tools/preview_tape.py`. Emulated frames are written to `out/preview/tape-emu-*.png`.
+The release status records flashed builds; use the final checklist for validation of a new build.
 
-**Themes and the setting.** Three themes ship, Normal (default), Chrome and Metal (`tape_art.THEMES`, `THEME_NAMES` is the saved order). **Customize > Cassette Mode > Cassette Theme** (page
-`m1plus_tapeset`, a value row like Cover Flow's Sort: the value is Normal, Chrome or Metal, a tap goes to the next, wrapping) is saved as one character in `/mnt/data/m1plus-tapetheme`
-(`0\n`, `1\n`, `2\n`; `tape_theme_cycle` writes it atomically, a failed write changes neither file nor label); reading (`tape_theme`) accepts `1` or `2` with an optional newline and **anything else, an
-empty or a missing file is Normal**. The page reads it **once when it opens** (a change shows the next time). Shared by the themes (stored once): `tape_top` (rings, scale) and `tape_screw`.
-Per theme: the shell, the hub frames, the marks (the band's ink), the text colours and the fine print (`TYPE I NORMAL` / `TYPE II CHROME` / `TYPE IV METAL`, small, in the print's mid tone; the table in `tape.c`). The big model name is gone (material pass, below).
-Rootfs cost (PNG bytes, `fwtool` enforces the stock size and the build passed; material pass V2.1oXTR): Normal 225,891, Chrome 223,803, Metal 232,664 (shell about 206-214 KB, 24 hub frames about 17 KB, marks 0.4-0.6 KB; the two added themes cost 456,467), shared 8,187 (`tape_top` 7,318, `tape_screw` 869), row icon 309; the build's squashfs is 53,948,429 bytes used (stock image 55,738,368), about 1.79 MB of the space step's headroom is left (V2.1oXTQ: 53,898,032).
+## Themes and assets
+
+Customize → Cassette Mode → Cassette Theme cycles Normal, Chrome and Metal. The order is
+`tape_art.THEME_NAMES`; `/mnt/data/m1plus-tapetheme` stores `0\n`, `1\n` or `2\n` atomically.
+`tape_theme` accepts `1`/`2` with an optional newline and defaults to Normal for all other data.
+A failed save changes neither file nor label. The Tape page reads the setting once at open.
+
+Shared assets are `tape_top` and `tape_screw`. Each theme has `tape_shell_<theme>`,
+`tape_hubs_<theme>` and `tape_marks_<theme>`, plus text colours and TYPE I NORMAL / TYPE II CHROME /
+TYPE IV METAL fine print. Current sizes and rootfs headroom come from the build output;
+`fwtool` enforces the stock limit.
+
+Cover-derived band tint, a control strip, rewind/fast-forward, track-skip swipes, a lock-screen
+skin and hardware Back handling are not implemented. Seek needs a reviewed stock path; see
+[virtual iPod limits](ipod.md#now-playing-the-ipods-cycle-why-not).
 
 ## Landscape and rotation
 

@@ -406,7 +406,6 @@ def run(ctx):
     expect([c for c in m.calls if c[0] == 'image_base_set_image'] == [('image_base_set_image', m.nodes['pod_glass'], 'pm_sheet5')], 'the More chevron is a fixed image: the only picture set is the glass (page 1\'s pm_sheet5)')
     names = [c[1] for c in m.calls if c[0] == 'widget_lookup']
     expect(all(n in names for n in ('listitem0', 'listitem6', 'pod_more', 'pod_back', 'pod_tape', 'pod_more_label', 'pod_back_label', 'pod_tape_label', 'scrlabel1', 'label1_msg')), 'the rows and labels are found by their names')
-    fixed = dict(m.bound)
     expect(m.stock_kept(),
            'every stock handler is still bound to the same function and context after the hook, and still first in the order')
     expect(sorted(m.added()) == sorted([('pod_more', O['EVT_CLICK']), ('pod_back', O['EVT_CLICK']), ('pod_tape', O['EVT_CLICK']), ('playmore_dialog', O['EVT_DESTROY']), ('playmore_listview', O['EVT_WINDOW_TO_BG']),

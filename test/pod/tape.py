@@ -15,7 +15,6 @@ The emulated frames are written to out/preview/tape-emu-*.png (what the panel wo
 import math, os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 import mod_icons, tape_art
-from awtk_text import Ttf, StbText
 from PIL import Image
 
 UI = os.path.join('rootfs', 'release/assets/default/raw/ui/m1plus_tape.bin')
@@ -487,7 +486,6 @@ def draw_tests(ctx):
     ink = [(x, y) for x in range(*tape_art.TEXT['title']['rect'][::2]) for y in range(*tape_art.TEXT['title']['rect'][1::2]) if got.getpixel((x, y)) != shell_land().getpixel((x, y))]
     expect(len(ink) > 100, f'the title has ink ({len(ink)} pixels)')
     expect(all(m.pixel(x, y) == got.getpixel((x, y)) for x, y in ink[:200]), 'every inked landscape pixel is at the frame\'s (column 319 - y, row x)')
-    fb = m.frame_bitmap()
     raw = m.frame()
     expect(all(tuple(raw[(x * 320 + 319 - y) * 4:(x * 320 + 319 - y) * 4 + 4]) == got.getpixel((x, y)) for x, y in ink[:200]), 'in the bitmap\'s own memory: row x, column 319 - y (the quarter turn Cover Flow\'s captions use)')
     # the picture really is landscape: the title reads left to right along the frame's rows (x), the glyph tops are at the frame's right (y small -> column large)
@@ -563,7 +561,6 @@ def reel_tests(ctx):
     bad = [(x, y, land[x, y], sh[x, y]) for x, y in outside if land[x, y] != sh[x, y]]
     expect(len(outside) > 6000 and not bad, f'outside the holes and the window the shell shows ({len(outside)} pixels: no tape on the label; {len(bad)} differ {bad[:3]})')
     # the full take-up pack (66 px) fills the right half of the clear window up to its edge, and the empty supply pack (16 px) leaves the left part of the window clear
-    clear_px = lambda x: land[x, 147 + 20]
     expect(all(land[x, 160][:3] != sh[x, 160][:3] for x in range(286, 298)), 'the full take-up pack covers the clear window\'s right end (x 286 .. 298: 50 to 62 px from its centre)')
     expect(all(land[x, 160] == sh[x, 160] or top[x - T[0], 160 - T[1]][3] for x in range(185, 270) if (2 * (x - 132) + 1) ** 2 > (2 * 20) ** 2 * 4), 'the empty supply pack (16 px) leaves the left part of the window as the plastic shows it')
     m = machine(font=font, status=3, pos=0, length=562); m.open(); m.timers = []; settle(m)
@@ -875,7 +872,6 @@ def paint_tests(ctx):
     m = machine(font=real_font())
     m.open(); m.timers = []; m.first()
     b = m.paint()
-    fr = m.frame_bitmap()
     expect(len(b) == 1 and b[0][1] == (0, 0, 320, 480) and b[0][2] == (0, 0, 320, 480), f'paint copies the whole frame 1:1 in one blit (the canvas clips it to the dirty rectangle): {b}')
     expect(not any(c[0] in ('widget_load_image', 'bitmap_create_ex', 'timer_add') for c in m.calls), 'paint decodes nothing, makes no bitmap and no timer')
     c0 = m.glyph_calls; m.paint()
@@ -890,7 +886,6 @@ def paint_tests(ctx):
     # the first rectangle covers the whole label: the picture that was blank is complete after one paint
     m4 = machine(font=real_font()); m4.open(); m4.timers = []; m4.first()
     r = m4.rects[0]
-    L = tape_art.LABEL
     expect(r[0] <= 320 - 220 + 1 and r[0] + r[2] >= 320 - 62 and r[1] <= 32 and r[1] + r[3] >= 439, f'the first look asks for the reels, the marks and the text fields: {r}')
 
 
@@ -1031,7 +1026,6 @@ def symmetry_tests(ctx):
     lit = [x for x in range(0, 480) if sum(sh[x, 160]) > sum(A.BG) + 60]
     expect(lit and abs(lit[0] + lit[-1] - 479) <= 8, f'the body\'s lit outline at y 160 spans {lit[0]} .. {lit[-1]}: centred on x 240 (a few px of the drop shadow aside)')
     # the knurl: its cell grid is aligned the same on both sides (4 px pitch from x 0), and the unknurled rim band is as wide each side
-    kn = [x for x in range(0, 480) if sh[x, 270] != sh[x, 271] or True]
     expect(480 % 4 == 0 and (A.CASS[0] - 5) % 4 == 0, 'the knurl grid starts at x 0 and 480 is a whole number of cells: the cells mirror about x 240')
 
 

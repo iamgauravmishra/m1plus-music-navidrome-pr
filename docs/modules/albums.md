@@ -1,8 +1,6 @@
 # Albums (grid and list)
 
-Split out of docs/architecture.md and docs/ui.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
-
-## 5a. Albums (`patch/albums.c`, `patch/covercache.c`, test `test/pod/albums.py`, host test `test/coverflow.py`)
+**Sources:** `patch/albums.c`, `patch/covercache.c`, test `test/pod/albums.py`, host test `test/coverflow.py`.
 
 The menu's Albums row (`ACT_ALBUMS`) opens our one Albums page in the mode used last: a **grid** of covers or a **list**
 (the stock Albums list is not used from here); one navbar button switches the mode in place, the choice is persisted.
@@ -141,7 +139,7 @@ The menu's Albums row (`ACT_ALBUMS`) opens our one Albums page in the mode used 
   this was checked on the device. Unicorn cannot judge the real frame time of 7 rows (about 6,000 payload instructions steady, plus 7 blits, 14 text
   runs, 14 fills), nor the stock text and fill calls.
 
-### The Albums page (`ui/m1plus_albums.bin`, `docs/modules/albums.md`)
+## The Albums page (`ui/m1plus_albums.bin`, `docs/modules/albums.md`)
 
 (the two Albums panels of `out/preview/release-preview.png`, grid and list mode with row 2 pressed: `PI.albums_grid` / `PI.albums_list` in `tools/preview_icons.py`, sample covers.)
 The Albums row opens this page in the mode used last (first use: the grid, `ALBUMS_DEFAULT_GRID`); the stock Albums list is not part of it

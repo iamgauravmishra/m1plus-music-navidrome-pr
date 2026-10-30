@@ -2,12 +2,12 @@
 """out/preview/cassette-setting.png: Customize (with its new Cassette Mode row) and the Cassette Mode page with the Cassette Theme row in its three states (Normal, Chrome,
 Metal), drawn from a finished tree's own ui files, strings and font (docs/modules/settings.md). Approximate (PIL, not AWTK).
 
-Usage: venv/bin/python -I tools/preview_cassette_setting.py WORKDIR [OUT.png]     (en_US; default out/preview/cassette-setting.png)
+Usage: uv run python -I tools/preview_cassette_setting.py WORKDIR [OUT.png]     (en_US; default out/preview/cassette-setting.png)
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PIL import Image, ImageDraw
-import build, paths, preview_icons as PI, pod_pages as P
+import build, preview_icons as PI, pod_pages as P
 
 
 def main():

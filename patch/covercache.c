@@ -1,7 +1,6 @@
 /* The cover cache and the album helpers Cover Flow and the Albums grid share.
  *
- * Copyright (c) 2026 Xin. MIT licence (see LICENSE). The cache design follows q2-pod's patch/coverflow.c,
- * Copyright (c) 2026 Diamond Bond, MIT (https://github.com/DiamondBond/q2-pod); see NOTICE.
+ * Copyright (c) 2026 Xin. MIT licence (see LICENSE). The cache design follows q2-pod's Cover Flow.
  *
  * One JPEG per album, /mnt/mmc/.m1plus/covers/<key>-168.jpg, written by the one worker thread below (started by
  * Cover Flow's Preparing screen, its Rebuild Covers, or the Albums page in the background); key = FNV-1a of the artist then the album, so the same album has the same file
@@ -32,13 +31,17 @@ static inline __attribute__((always_inline)) void over_black(const unsigned char
                                                              unsigned bo, unsigned ao, unsigned *r, unsigned *g,
                                                              unsigned *b) {
     unsigned a = px[ao];
-    if (a == 255) *r += px[ro], *g += px[go], *b += px[bo];
-    else *r += px[ro] * a / 255, *g += px[go] * a / 255, *b += px[bo] * a / 255;
+    if (a == 255)
+        *r += px[ro], *g += px[go], *b += px[bo];
+    else
+        *r += px[ro] * a / 255, *g += px[go] * a / 255, *b += px[bo] * a / 255;
 }
 
 /* floor((start + n * inc) / den) for n = 0, 1, 2, ..., exactly, without a division per step: the quotient and the
  * remainder advance together. A row's x mapping costs two divisions instead of one per pixel. */
-typedef struct { unsigned q, r, dq, dr, den; } stepper_t;
+typedef struct {
+    unsigned q, r, dq, dr, den;
+} stepper_t;
 
 static inline __attribute__((always_inline)) void step_init(stepper_t *s, unsigned start, unsigned inc, unsigned den) {
     s->q = start / den, s->r = start % den, s->dq = inc / den, s->dr = inc % den, s->den = den;
@@ -56,7 +59,7 @@ void cc_sample(const unsigned char *data, unsigned w, unsigned h, unsigned strid
     for (y = 0; y < size; ++y) {
         const unsigned char *line = base + y * side / size * stride;
         stepper_t sx;
-        step_init(&sx, 0, side, size);   /* x * side / size */
+        step_init(&sx, 0, side, size); /* x * side / size */
         for (x = 0; x < size; ++x, step_next(&sx)) {
             unsigned r = 0, g = 0, b = 0;
             over_black(line + sx.q * 4, ro, go, bo, ao, &r, &g, &b);
@@ -68,8 +71,8 @@ void cc_sample(const unsigned char *data, unsigned w, unsigned h, unsigned strid
 /* Every destination pixel is the plain average of the source pixels its box covers (from the floor of
  * its start to the ceiling of its end, so neighbouring boxes share an edge pixel at a fractional ratio):
  * a 168 px cover reduced to 92 reads cleanly where nearest sampling would shimmer. */
-void cc_box(const unsigned char *data, unsigned w, unsigned h, unsigned stride, const unsigned char *at,
-            unsigned size, unsigned *out) {
+void cc_box(const unsigned char *data, unsigned w, unsigned h, unsigned stride, const unsigned char *at, unsigned size,
+            unsigned *out) {
     unsigned side = w < h ? w : h, x, y, i, j, ro = at[0], go = at[1], bo = at[2], ao = at[3];
     const unsigned char *base = data + (h - side) / 2 * stride + (w - side) / 2 * 4;
     for (y = 0; y < size; ++y) {
@@ -77,8 +80,8 @@ void cc_box(const unsigned char *data, unsigned w, unsigned h, unsigned stride, 
         stepper_t s0, s1;
         if (y1 > side) y1 = side;
         if (y1 <= y0) y1 = y0 + 1;
-        step_init(&s0, 0, side, size);                   /* x * side / size */
-        step_init(&s1, side + size - 1, side, size);     /* ((x + 1) * side + size - 1) / size */
+        step_init(&s0, 0, side, size); /* x * side / size */
+        step_init(&s1, side + size - 1, side, size); /* ((x + 1) * side + size - 1) / size */
         for (x = 0; x < size; ++x, step_next(&s0), step_next(&s1)) {
             unsigned x0 = s0.q, x1 = s1.q, r = 0, g = 0, b = 0, n;
             if (x1 > side) x1 = side;
@@ -202,8 +205,10 @@ void *cc_albums(void) {
 int cc_open_album(void *artist_row, unsigned scope, int index) {
     void *list;
     unsigned cls = !artist_row ? CLASS_ALBUMS : scope == CLASS_COMPOSERS ? CLASS_COMPOSER_ALBUMS : CLASS_ARTIST_ALBUMS;
-    if (artist_row) loadAlbumList(scope == CLASS_COMPOSERS ? CLASS_COMPOSERS : CLASS_ARTISTS, deque_at(artist_row, 0));
-    else loadAlbumList(CLASS_ALBUMS, (void *)0);
+    if (artist_row)
+        loadAlbumList(scope == CLASS_COMPOSERS ? CLASS_COMPOSERS : CLASS_ARTISTS, deque_at(artist_row, 0));
+    else
+        loadAlbumList(CLASS_ALBUMS, (void *)0);
     list = *(void **)PDEQ_SHOWLIST;
     if (!list || (unsigned)index >= deque_size(list)) return -1;
     albumcoverinfo_init(list);
@@ -287,7 +292,7 @@ void cc_heapsort(unsigned *v, unsigned n, int (*cmp)(unsigned, unsigned)) {
     }
 }
 
-static void **so_rec __attribute__((section(".scratch")));   /* the rows being sorted, by stock number */
+static void **so_rec __attribute__((section(".scratch"))); /* the rows being sorted, by stock number */
 
 static int so_cmp(unsigned a, unsigned b) {
     void *ra = so_rec[a], *rb = so_rec[b];
@@ -304,7 +309,7 @@ int cc_sort_artist(void) {
     if (fd < 0) return 1;
     n = read(fd, b, sizeof b);
     close(fd);
-    return !(n >= 1 && b[0] == '0' && (n == 1 || (n == 2 && b[1] == '\n')));   /* only "0" / "0\n" is Album */
+    return !(n >= 1 && b[0] == '0' && (n == 1 || (n == 2 && b[1] == '\n'))); /* only "0" / "0\n" is Album */
 }
 
 int cc_sort_toggle(void) {
@@ -374,8 +379,7 @@ static struct {
 static int card_space(const char *dir) {
     unsigned fs[32];
     memset(fs, 0, sizeof fs);
-    return !statfs(dir, fs) &&
-           (unsigned long long)fs[7] * fs[1] >= (unsigned long long)MIN_FREE_MB << 20;
+    return !statfs(dir, fs) && (unsigned long long)fs[7] * fs[1] >= (unsigned long long)MIN_FREE_MB << 20;
 }
 
 /* The longer side of the JPEG at path (its SOF marker, in the first 4 KB: the stock encoder's files have a short header), 0 when it cannot be read. */
@@ -389,14 +393,23 @@ static unsigned jpeg_long_side(const char *path) {
     if (n < 4 || b[0] != 0xff || b[1] != 0xd8) return 0;
     while (i + 9 < n) {
         unsigned m;
-        if (b[i] != 0xff) { ++i; continue; }
+        if (b[i] != 0xff) {
+            ++i;
+            continue;
+        }
         m = b[i + 1];
-        if (m == 0xff) { ++i; continue; }
+        if (m == 0xff) {
+            ++i;
+            continue;
+        }
         if (m >= 0xc0 && m <= 0xcf && m != 0xc4 && m != 0xc8 && m != 0xcc) {
             h = (unsigned)b[i + 5] << 8 | b[i + 6], w = (unsigned)b[i + 7] << 8 | b[i + 8];
             return w > h ? w : h;
         }
-        if (m == 0xd8 || (m >= 0xd0 && m <= 0xd7) || m == 0x01) { i += 2; continue; }
+        if (m == 0xd8 || (m >= 0xd0 && m <= 0xd7) || m == 0x01) {
+            i += 2;
+            continue;
+        }
         i += 2 + ((unsigned)b[i + 2] << 8 | b[i + 3]);
     }
     return 0;
@@ -427,12 +440,15 @@ static void build_art(const job_t *j) {
     char dst[64], tmp[64];
     int ok;
     void *f;
-    if (!j->key) { build_file(j); return; }
+    if (!j->key) {
+        build_file(j);
+        return;
+    }
     if (access(j->track, F_OK)) return; /* storage gone: no marker, the next open retries */
     cc_path(dst, sizeof dst, j->key, "");
     cc_path(tmp, sizeof tmp, j->key, ".tmp");
     pthread_mutex_lock((void *)PARSE_COVER_MUTEX);
-    if (cb.cancelled) {                 /* cancelled while waiting for the parser: no extraction, no marker */
+    if (cb.cancelled) { /* cancelled while waiting for the parser: no extraction, no marker */
         pthread_mutex_unlock((void *)PARSE_COVER_MUTEX);
         return;
     }
@@ -441,11 +457,11 @@ static void build_art(const job_t *j) {
     pthread_mutex_unlock((void *)PARSE_COVER_MUTEX);
     if (ok && cc_file_size(tmp) > 0) {
         if (rename(tmp, dst)) unlink(tmp); /* extracted but not published: no marker, the next open retries */
-        return;                            /* (a rebuild's rename replaces the old picture or marker) */
+        return; /* (a rebuild's rename replaces the old picture or marker) */
     }
     unlink(tmp);
     if (access(j->track, F_OK)) return;
-    if (!access(dst, F_OK)) return;        /* a rebuild that finds no art keeps the file it has */
+    if (!access(dst, F_OK)) return; /* a rebuild that finds no art keeps the file it has */
     f = fopen(dst, "w"); /* an empty file marks "no art": the placeholder shows, no retry */
     if (f) fclose(f);
 }
@@ -484,7 +500,6 @@ int cc_build_add(const char *track, unsigned key) {
     return 1;
 }
 
-
 int cc_build_add_file(const char *track, const char *dst, unsigned px) {
     unsigned n;
     job_t *j;
@@ -493,7 +508,8 @@ int cc_build_add_file(const char *track, const char *dst, unsigned px) {
     j->track = strdup(track);
     if (!j->track) return -1;
     j->key = 0;
-    for (n = 0; dst[n] && n < sizeof xf.dst - 5; ++n) xf.dst[n] = dst[n];   /* (a path that does not fit is cut: the callers' is short) */
+    for (n = 0; dst[n] && n < sizeof xf.dst - 5; ++n)
+        xf.dst[n] = dst[n]; /* (a path that does not fit is cut: the callers' is short) */
     xf.dst[n] = 0;
     xf.px = px;
     cb.total = 1;
@@ -521,7 +537,7 @@ int cc_build_start(void) {
         cc_build_stop(); /* nothing to build: free the job array */
         return 0;
     }
-    mkdir(CARD_DIR, 0755);   /* the folder, then the cache in it (EEXIST is fine) */
+    mkdir(CARD_DIR, 0755); /* the folder, then the cache in it (EEXIST is fine) */
     mkdir(ART_DIR, 0755);
     if (!card_space(ART_DIR) || pthread_create(&cb.thread, (void *)0, cc_worker, (void *)0)) {
         cc_build_stop(); /* no card, no space, or no thread: the caller shows what is cached already */
@@ -539,15 +555,15 @@ int cc_build_busy(void) { return cb.jobs != (job_t *)0; }
 int cc_build_near_step(void *albums, const unsigned *order, unsigned centre, unsigned *cursor, unsigned batch) {
     unsigned n = albums ? deque_size(albums) : 0, c = *cursor, left = batch;
     if (centre >= n) centre = n ? n - 1 : 0;
-    while ((c >> 1) < n && left) {      /* the cursor is 2 x distance + (0 after the centre, 1 before it) */
+    while ((c >> 1) < n && left) { /* the cursor is 2 x distance + (0 after the centre, 1 before it) */
         unsigned d = c >> 1, k = c & 1, i;
         void *r;
         ++c;
-        if (k ? !d || d > centre : centre + d >= n) continue;   /* out of range or d = 0 twice: free */
+        if (k ? !d || d > centre : centre + d >= n) continue; /* out of range or d = 0 twice: free */
         i = k ? centre - d : centre + d;
         r = cc_row(albums, order, i);
         --left;
-        if (cc_build_add(cc_str(r, REC_PATH), cc_album_key(r)) < 0) c = n << 1;   /* full: done */
+        if (cc_build_add(cc_str(r, REC_PATH), cc_album_key(r)) < 0) c = n << 1; /* full: done */
     }
     *cursor = c;
     return (c >> 1) >= n;

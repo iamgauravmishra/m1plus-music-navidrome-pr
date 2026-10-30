@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Search the extracted stock tree (read-only; tools/paths.py finds it, also from a worktree), or with
---tree the release tree built in work/mod-release. Wraps tools/dis.py, tools/awtk_ui.py and
+--tree the release tree built in work/mod-release. Wraps tools/disasm.py, tools/awtk_ui.py and
 tools/audit_images.py; the output is plain text.
 
   stock.py strings TEXT                strings of bin/demo containing TEXT: address and the functions that load them
@@ -26,13 +26,13 @@ RAW = 'rootfs/release/assets/{theme}/raw'
 def root(tree):
     if tree:
         r = os.path.join(paths.WORK, 'mod-release')
-        if not os.path.isdir(r): sys.exit(f'{r}: no built tree (venv/bin/python -I tools/build.py --tree-only)')
+        if not os.path.isdir(r): sys.exit(f'{r}: no built tree (uv run python -I tools/build.py --tree-only)')
         return r
     s = paths.find_stock()
-    if not s: sys.exit('no unpacked stock tree (venv/bin/python -I tools/build.py unpacks it)')
+    if not s: sys.exit('no unpacked stock tree (uv run python -I tools/build.py unpacks it)')
     return s
 
-def dis(*args): sys.exit(subprocess.run([paths.VENV_PY, '-I', os.path.join(TOOLS, 'dis.py'), *args]).returncode)
+def dis(*args): sys.exit(subprocess.run([sys.executable, '-I', os.path.join(TOOLS, 'disasm.py'), *args]).returncode)
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

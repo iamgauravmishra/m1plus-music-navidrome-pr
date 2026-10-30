@@ -1,8 +1,6 @@
 # The text-width model
 
-Split out of docs/ui.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
-
-## 2. The text-width model (`tools/awtk_text.py`)
+**Sources:** `tools/awtk_text.py`.
 
 `demo` links AWTK statically with its stb_truetype backend (`font_stb_create_ex` `0x67ee74`); there is
 no FreeType. The lcd is `lcd_mem` with no text functions, so `canvas_draw_text` (`0x645348`) draws

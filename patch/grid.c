@@ -67,10 +67,14 @@ static void grid_round(grid_t *g, unsigned *px) {
     for (k = 0; r && k < 4; ++k)
         for (y = 0; y < r; ++y)
             for (x = 0; x < r; ++x) {
-                unsigned *p = px + (k & 2 ? s - 1 - y : y) * s + (k & 1 ? s - 1 - x : x), a = 255u - g->corner[y * r + x];
+                unsigned *p = px + (k & 2 ? s - 1 - y : y) * s + (k & 1 ? s - 1 - x : x),
+                         a = 255u - g->corner[y * r + x];
                 if (a == 255) continue;
-                if (g->blend) *p = (*p & 0xffffff) | a << 24;   /* cut in the alpha: whatever lies behind shows */
-                else *p = 0xff000000u |GRID_DIV255((*p & 255) * a) | GRID_DIV255((*p >> 8 & 255) * a) << 8 | GRID_DIV255((*p >> 16 & 255) * a) << 16;
+                if (g->blend)
+                    *p = (*p & 0xffffff) | a << 24; /* cut in the alpha: whatever lies behind shows */
+                else
+                    *p = 0xff000000u | GRID_DIV255((*p & 255) * a) | GRID_DIV255((*p >> 8 & 255) * a) << 8 |
+                         GRID_DIV255((*p >> 16 & 255) * a) << 16;
             }
 }
 
@@ -100,8 +104,10 @@ static int grid_fit(void *canvas, unsigned *s, int maxw) {
         while (lo < hi) {
             unsigned mid = (lo + hi + 1) / 2, keep = s[mid];
             s[mid] = ELLIPSIS;
-            if (grid_width(canvas, s, mid + 1) <= maxw) lo = mid;
-            else hi = mid - 1;
+            if (grid_width(canvas, s, mid + 1) <= maxw)
+                lo = mid;
+            else
+                hi = mid - 1;
             s[mid] = keep;
         }
         s[lo] = ELLIPSIS;
@@ -137,7 +143,8 @@ grid_tile_t *grid_tile(grid_t *g, int a, int lo, int hi, int *fresh) {
             if (!victim || victim->album) victim = t;
         } else {
             if (t->stamp < any->stamp || !any->album) any = t;
-            if ((t->album - 1 < lo || t->album - 1 > hi) && (!victim || (victim->album && t->stamp < victim->stamp))) victim = t;
+            if ((t->album - 1 < lo || t->album - 1 > hi) && (!victim || (victim->album && t->stamp < victim->stamp)))
+                victim = t;
         }
     }
     t = victim ? victim : any;
@@ -174,12 +181,16 @@ void grid_art_url(grid_t *g, grid_tile_t *t, const char *file) {
 }
 
 void grid_mosaic(grid_t *g, grid_tile_t *t, unsigned *tmp) {
-    static const unsigned char QUAD[5][4] = {{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 1, 1, 0}, {0, 1, 2, 0}, {0, 1, 2, 3}};   /* the source in each quadrant (row-major) */
+    static const unsigned char QUAD[5][4] = {{0, 0, 0, 0},
+                                             {0, 0, 0, 0},
+                                             {0, 1, 1, 0},
+                                             {0, 1, 2, 0},
+                                             {0, 1, 2, 3}}; /* the source in each quadrant (row-major) */
     int half = g->side / 2, side = g->side, q, r, i = t->qi;
     char url[80];
     const char *file;
     unsigned *px;
-    if (t->nq < 2) {   /* no cover: the placeholder; one: the cover itself */
+    if (t->nq < 2) { /* no cover: the placeholder; one: the cover itself */
         t->ckey = t->nq ? t->qkey[0] : 0;
         grid_art(g, t);
         return;
@@ -193,13 +204,15 @@ void grid_mosaic(grid_t *g, grid_tile_t *t, unsigned *tmp) {
             return;
         }
         for (k = 0; k < side * side; ++k) px[k] = GRID_GREY;
-    } else px = (unsigned *)bitmap_lock_buffer_for_write(t->bmp);
+    } else
+        px = (unsigned *)bitmap_lock_buffer_for_write(t->bmp);
     file = cc_url(url, t->qkey[i]);
     if (!file || !cc_decode(g->win, file, 1, (unsigned)half, 1, tmp))
         for (r = 0; r < half * half; ++r) tmp[r] = GRID_GREY;
     for (q = 0; q < 4; ++q) {
         if (QUAD[t->nq][q] != i) continue;
-        for (r = 0; r < half; ++r) memcpy(px + ((q >> 1) * half + r) * side + (q & 1) * half, tmp + r * half, (unsigned)half * 4);
+        for (r = 0; r < half; ++r)
+            memcpy(px + ((q >> 1) * half + r) * side + (q & 1) * half, tmp + r * half, (unsigned)half * 4);
     }
     t->qi = ++i;
     if (i >= t->nq) {
@@ -240,14 +253,17 @@ void grid_text(void *canvas, grid_tile_t *t, int pass, int x, int y, int w, int 
     if (*len && (view_h <= 0 || (y >= 0 && y + h <= view_h))) canvas_draw_text_in_rect(canvas, s, (unsigned)*len, rect);
 }
 
-void grid_paint(void *canvas, grid_t *g, int first, int last, int origin_y, int view_h, grid_tile_t *(*tile_of)(void *, int), void *ctx) {
+void grid_paint(void *canvas, grid_t *g, int first, int last, int origin_y, int view_h,
+                grid_tile_t *(*tile_of)(void *, int), void *ctx) {
     int a, pass;
-    for (a = first; a < last; ++a) grid_blit(canvas, g, tile_of(ctx, a), grid_cell_x(a), grid_cell_y(a, origin_y), view_h);
-    for (pass = 0; pass < 2; ++pass) {   /* albums, then artists: one text style at a time */
+    for (a = first; a < last; ++a)
+        grid_blit(canvas, g, tile_of(ctx, a), grid_cell_x(a), grid_cell_y(a, origin_y), view_h);
+    for (pass = 0; pass < 2; ++pass) { /* albums, then artists: one text style at a time */
         widget_prepare_text_style(pass ? g->st_sub : g->st_title, canvas);
         for (a = first; a < last; ++a)
-            grid_text(canvas, tile_of(ctx, a), pass, grid_cell_x(a), grid_cell_y(a, origin_y) + GRID_COVER + GRID_TITLE_GAP + (pass ? GRID_TITLE_H : 0),
-                      GRID_COVER, pass ? GRID_SUB_H : GRID_TITLE_H, view_h);
+            grid_text(canvas, tile_of(ctx, a), pass, grid_cell_x(a),
+                      grid_cell_y(a, origin_y) + GRID_COVER + GRID_TITLE_GAP + (pass ? GRID_TITLE_H : 0), GRID_COVER,
+                      pass ? GRID_SUB_H : GRID_TITLE_H, view_h);
     }
 }
 
@@ -260,8 +276,8 @@ static void grid_fill(void *canvas, int y0, int y1, unsigned c, int view_h) {
     canvas_fill_rect(canvas, 0, y0, GRID_LIST_W, y1 - y0);
 }
 
-void grid_list_paint(void *canvas, grid_t *g, void *st_title, void *st_sub, int r0, int r1, int off, int view_h, int press, int shift,
-                     grid_tile_t *(*tile_of)(void *, int), void *ctx) {
+void grid_list_paint(void *canvas, grid_t *g, void *st_title, void *st_sub, int r0, int r1, int off, int view_h,
+                     int press, int shift, grid_tile_t *(*tile_of)(void *, int), void *ctx) {
     int r, pass;
     for (r = r0; r <= r1; ++r) {
         grid_tile_t *t = tile_of(ctx, r);
@@ -270,10 +286,11 @@ void grid_list_paint(void *canvas, grid_t *g, void *st_title, void *st_sub, int 
         grid_blit(canvas, g, t, LIST_ART_X + shift, y + LIST_ART_Y, view_h);
         grid_fill(canvas, y + LIST_ROW_H - 1, y + LIST_ROW_H, LIST_HAIR, view_h);
     }
-    for (pass = 0; pass < 2; ++pass) {   /* titles, then subtitles: one text style at a time */
+    for (pass = 0; pass < 2; ++pass) { /* titles, then subtitles: one text style at a time */
         widget_prepare_text_style(pass ? st_sub : st_title, canvas);
         for (r = r0; r <= r1; ++r)
-            grid_text(canvas, tile_of(ctx, r), pass, LIST_TEXT_X + shift, r * LIST_ROW_H - off + (pass ? LIST_SUB_Y : LIST_TITLE_Y), LIST_TEXT_W - shift,
+            grid_text(canvas, tile_of(ctx, r), pass, LIST_TEXT_X + shift,
+                      r * LIST_ROW_H - off + (pass ? LIST_SUB_Y : LIST_TITLE_Y), LIST_TEXT_W - shift,
                       pass ? LIST_SUB_H : LIST_TITLE_H, view_h);
     }
 }
@@ -308,7 +325,8 @@ int grid_mosaic_keys(void *songs, void *albums, unsigned *key) {
         void *r = deque_at(songs, (unsigned)k);
         int before = nk;
         grid_try_key(key, &nk, cc_album_key(r), tried, &ntried);
-        if (nk == before && albums) grid_try_key(key, &nk, grid_album_key(albums, cc_str(r, REC_ALBUM)), tried, &ntried);
+        if (nk == before && albums)
+            grid_try_key(key, &nk, grid_album_key(albums, cc_str(r, REC_ALBUM)), tried, &ntried);
     }
     return nk;
 }

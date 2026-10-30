@@ -1,7 +1,7 @@
 /* Stock M1 Plus V2.1 layout and ABI constants shared by patch/m1plus.c and test/patch.py.
  * The test harness parses the #defines in this file, so a change cannot leave the mocks behind.
- * Structure follows q2-pod's patch/offsets.inc (Copyright (c) 2026 Diamond Bond, MIT); the values
- * are the M1 Plus's own, read from demo with tools/dis.py. */
+ * Structure follows q2-pod's patch/offsets.inc; the values are the M1 Plus's own, read from demo
+ * with tools/disasm.py. */
 #define W_NAME 0x10       /* widget_t name; the Home dispatcher reads only this: lw $a0, 0x10($a0) @0x533ba4 */
 #define EVT_CLICK 0x10c   /* Home icons register their click with this type: widget_on @0x533f78 */
 #define RET_OK 0
@@ -41,7 +41,7 @@
 
 /* ---------------------------------------------------------------------------
  * Cover Flow (patch/coverflow.c). Event ids, record layout and widget fields
- * read from this demo with tools/dis.py; the geometry is this project's own
+ * read from this demo with tools/disasm.py; the geometry is this project's own
  * (320x480 portrait), the depth model follows q2-pod (docs/architecture.md).
  */
 #define EVT_DESTROY 0x0c        /* widget_destroy_sync: event_init(e, 0xc) @0x670600 */
@@ -178,7 +178,7 @@
 #define CF_COVER_Y 89      /* view_covers' y in the window (NAVBAR_H + 39) */
 
 /* ---------------------------------------------------------------------------
- * Shuffle (patch/shuffle.c, docs/architecture.md). Read from this demo with tools/dis.py.
+ * Shuffle (patch/shuffle.c, docs/architecture.md). Read from this demo with tools/disasm.py.
  */
 #define REC_SIZE 0x58      /* stSongInfo: memset(local, 0, 0x58) in loadSongList @0x4e2e4c and the row callback @0x4e908c */
 #define REC_CLASS 0x38     /* loadSongList stores its class argument here in every copy @0x4e3144 */
@@ -200,7 +200,7 @@
 
 /* ---------------------------------------------------------------------------
  * Library rows (patch/rows.c, patch/rows.json, docs/architecture.md). The row fit follows q2-pod's
- * compact_row_layout (patch/navigation.c, MIT); the ABI is this demo's (tools/dis.py).
+ * compact_row_layout (patch/navigation.c); the ABI is this demo's (tools/disasm.py).
  */
 #define W_X 0x00                /* widget_t x, y, w, h: widget_move_resize_ex stores them @0x66d268 */
 #define W_Y 0x04

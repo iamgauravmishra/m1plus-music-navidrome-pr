@@ -1,8 +1,6 @@
 # Boot logo, quotes, settings slides
 
-Split out of docs/ui.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
-
-## 5. Boot logo, quotes, settings slides (`tools/mod_boot.py`)
+**Sources:** `tools/mod_boot.py`.
 
 - **Logo.** `/etc/init.d/S11logo_display_shell` runs `display_logo` on `images/xx/logo180.jpg` when
   `/mnt/data/config.ini` has `ROTATEMODE=1`, else `logo.jpg`; these are the only splash images. Stock
@@ -29,7 +27,7 @@ Split out of docs/ui.md. A "section N" in the text is an old section number of `
   the close reversed). `fwupdate_page` and `fwdownload_page` stay stock (the way back to a known build).
   +115 bytes each.
 
-### Settings slide safety audit (static, on stock `demo`)
+## Settings slide safety audit (static, on stock `demo`)
 
 A close animation is dangerous where code pops windows in a loop expecting the stack to change
 synchronously. `navigator_back` (`0x4d20dc`) -> `window_manager_back` (`0x677d2c`) ->

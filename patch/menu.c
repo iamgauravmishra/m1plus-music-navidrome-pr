@@ -41,27 +41,29 @@
 #define CUSTOMIZE POD_CUSTOMIZE_ID
 
 static struct {
-    unsigned char order[N];   /* the shown items, in menu order */
+    unsigned char order[N]; /* the shown items, in menu order */
     unsigned n;
-    unsigned off;             /* bit id: the item is turned off (not listed on Extras); never a shown item or Customize */
+    unsigned off; /* bit id: the item is turned off (not listed on Extras); never a shown item or Customize */
 } mn __attribute__((section(".scratch")));
 
-static struct {   /* the Main Menu page while it is open */
+static struct { /* the Main Menu page while it is open */
     void *row[N], *sw[N], *up[N], *win, *sv;
-    unsigned char order[N];  /* every item: the shown ones in menu order, then the hidden ones */
-    unsigned down, pressed;   /* item id + 1 of the row a touch went down on / of the arrow showing its pressed look (0: none) */
-    int zone;                 /* that touch went down inside the row's arrow rectangle */
+    unsigned char order[N]; /* every item: the shown ones in menu order, then the hidden ones */
+    unsigned down,
+        pressed; /* item id + 1 of the row a touch went down on / of the arrow showing its pressed look (0: none) */
+    int zone; /* that touch went down inside the row's arrow rectangle */
 } cm __attribute__((section(".scratch")));
 
-static struct {   /* the Customize > Extras page while it is open (no row for Customize: row[CUSTOMIZE] is 0) */
-    void *row[N], *sw[N], *hdr[POD_EXTRAS_GROUPS], *win, *sv;   /* hdr: the group section headers (a missing one: 0) */
+static struct { /* the Customize > Extras page while it is open (no row for Customize: row[CUSTOMIZE] is 0) */
+    void *row[N], *sw[N], *hdr[POD_EXTRAS_GROUPS], *win, *sv; /* hdr: the group section headers (a missing one: 0) */
 } xc __attribute__((section(".scratch")));
 
-static const unsigned char EX_ORDER[N] = POD_EXTRAS_ORDER;   /* the Extras page's rows (item ids), top to bottom */
+static const unsigned char EX_ORDER[N] = POD_EXTRAS_ORDER; /* the Extras page's rows (item ids), top to bottom */
 
-static const unsigned char EX_GROUP[N] = POD_EXTRAS_GROUP;   /* the Extras group (section header) of each item id */
+static const unsigned char EX_GROUP[N] = POD_EXTRAS_GROUP; /* the Extras group (section header) of each item id */
 
-static void mn_defaults(void) {   /* tools/pod_pages.py DEFAULT_MENU: Cover Flow, Albums, Artists, Songs, Playlists ("12345") */
+static void
+mn_defaults(void) { /* tools/pod_pages.py DEFAULT_MENU: Cover Flow, Albums, Artists, Songs, Playlists ("12345") */
     static const unsigned char ids[POD_MENU_DEFAULT] = POD_MENU_DEFAULT_IDS;
     unsigned i;
     for (i = 0; i < POD_MENU_DEFAULT; i++) mn.order[i] = ids[i];
@@ -76,9 +78,7 @@ static unsigned mn_id(unsigned c) {
     return 255;
 }
 
-static char mn_char(unsigned id) {
-    return (char)(id < 9 ? '0' + id : 'a' + (id - 9));
-}
+static char mn_char(unsigned id) { return (char)(id < 9 ? '0' + id : 'a' + (id - 9)); }
 
 /* The saved list, or the defaults. */
 static void mn_load(void) {
@@ -91,11 +91,11 @@ static void mn_load(void) {
     if (fd < 0) return;
     n = read(fd, buf, sizeof buf);
     close(fd);
-    if (n <= 0 || n >= (int)sizeof buf) return;   /* empty, or too long to be a list */
+    if (n <= 0 || n >= (int)sizeof buf) return; /* empty, or too long to be a list */
     len = (unsigned)n - (buf[n - 1] == '\n');
     for (i = 0; i < len; i++) {
         unsigned id;
-        if (buf[i] == '-') {   /* the off part starts: once */
+        if (buf[i] == '-') { /* the off part starts: once */
             if (part) return;
             part = 1;
             continue;
@@ -103,9 +103,12 @@ static void mn_load(void) {
         id = mn_id((unsigned char)buf[i]);
         if (id >= N || (seen >> id & 1)) return;
         seen |= 1u << id;
-        if (!part) ord[k++] = (unsigned char)id;
-        else if (id == CUSTOMIZE) return;   /* Customize can never be turned off */
-        else off |= 1u << id;
+        if (!part)
+            ord[k++] = (unsigned char)id;
+        else if (id == CUSTOMIZE)
+            return; /* Customize can never be turned off */
+        else
+            off |= 1u << id;
     }
     for (i = 0; i < k; i++) mn.order[i] = ord[i];
     mn.n = k;
@@ -116,9 +119,10 @@ static int mn_save(void) {
     char buf[N + 4];
     unsigned i, k = mn.n;
     for (i = 0; i < mn.n; i++) buf[i] = mn_char(mn.order[i]);
-    if (mn.off) {   /* the off items in the Extras order (pod_pages.format_menu) */
+    if (mn.off) { /* the off items in the Extras order (pod_pages.format_menu) */
         buf[k++] = '-';
-        for (i = 0; i < N; i++) if (mn.off >> EX_ORDER[i] & 1) buf[k++] = mn_char(EX_ORDER[i]);
+        for (i = 0; i < N; i++)
+            if (mn.off >> EX_ORDER[i] & 1) buf[k++] = mn_char(EX_ORDER[i]);
     }
     buf[k++] = '\n';
     buf[k] = 0;
@@ -142,7 +146,7 @@ static void mn_put(void *w, int y, int on) {
     mn_show(w, on);
 }
 
-static void mn_place(void *w, unsigned pos, int on) {   /* ... at position pos of the 52 px rows */
+static void mn_place(void *w, unsigned pos, int on) { /* ... at position pos of the 52 px rows */
     mn_put(w, (int)pos * POD_ROW_H, on);
 }
 
@@ -179,7 +183,11 @@ static unsigned mn_extras(void *const *row, void *const *hdr, int cfg, void **se
             y += POD_ROW_H;
         }
     }
-    for (g = 0; g < POD_EXTRAS_GROUPS; g++) if (!has[g] && hdr[g]) { mn_header(hdr[g], 0, 0); seq[k++] = hdr[g]; }
+    for (g = 0; g < POD_EXTRAS_GROUPS; g++)
+        if (!has[g] && hdr[g]) {
+            mn_header(hdr[g], 0, 0);
+            seq[k++] = hdr[g];
+        }
     for (i = 0; i < N; i++) {
         unsigned id = EX_ORDER[i];
         if (!row[id] || (cfg ? !mn_shown(id) : mn_listed(id))) continue;
@@ -192,14 +200,13 @@ static unsigned mn_extras(void *const *row, void *const *hdr, int cfg, void **se
 
 static int mn_shown(unsigned id) {
     unsigned i;
-    for (i = 0; i < mn.n; i++) if (mn.order[i] == id) return 1;
+    for (i = 0; i < mn.n; i++)
+        if (mn.order[i] == id) return 1;
     return 0;
 }
 
 /* The Extras page lists an item the menu does not show and the list did not turn off; never Customize (its button is in the page's navbar, its row stays hidden). */
-static int mn_listed(unsigned id) {
-    return id != CUSTOMIZE && !mn_shown(id) &&!(mn.off >> id & 1);
-}
+static int mn_listed(unsigned id) { return id != CUSTOMIZE && !mn_shown(id) && !(mn.off >> id & 1); }
 
 /* The stock list_view gives its scroll_view a paint-children hook (list_view_on_add_child, sw 0xf4 @0x60cd10, stock
  * function 0x60c164) that returns at the first visible child whose top is below the canvas: it takes the children to be
@@ -224,39 +231,59 @@ static void mn_plain_paint(void *sv) {
  * range): a page just opened is at the top, and the menu back in front (from a page it opened) stays where it was. Returns 0 when
  * the asset is not ours (nothing was changed). */
 static int mn_arrange(void *win, int extras) {
-    void *sv = widget_lookup(win, "pod_scrollview", 1), *row[POD_MENU_ROWS], *hdr[POD_EXTRAS_GROUPS], *seq[POD_MENU_ROWS + POD_EXTRAS_GROUPS + 2];
-    void *pad = extras ? (void *)0 : widget_lookup(win, "pod_pad", 1);   /* the menu's trailing spacer row (the mini player bar's padding), if the asset has it */
-    void *shelf = extras ? (void *)0 : widget_lookup(win, "pod_shelf", 1);   /* the Recently Played shelf, if the asset has it */
-    void *daily = extras ? (void *)0 : widget_lookup(win, "pod_daily", 1);   /* the Daily Mix section (patch/dailymix.c), if the asset has it */
+    void *sv = widget_lookup(win, "pod_scrollview", 1), *row[POD_MENU_ROWS], *hdr[POD_EXTRAS_GROUPS],
+         *seq[POD_MENU_ROWS + POD_EXTRAS_GROUPS + 2];
+    void *pad = extras
+                    ? (void *)0
+                    : widget_lookup(
+                          win, "pod_pad",
+                          1); /* the menu's trailing spacer row (the mini player bar's padding), if the asset has it */
+    void *shelf =
+        extras ? (void *)0 : widget_lookup(win, "pod_shelf", 1); /* the Recently Played shelf, if the asset has it */
+    void *daily =
+        extras ? (void *)0
+               : widget_lookup(win, "pod_daily", 1); /* the Daily Mix section (patch/dailymix.c), if the asset has it */
     unsigned total = extras ? POD_EXTRAS_ROWS : POD_MENU_ROWS, i, pos = 0, k = 0;
     int vh, max, shelf_h, daily_h, rows_h;
     if (!sv) return 0;
     for (i = 0; i < total; i++) {
         row[i] = mn_find(win, "pod_row", i);
-        if (!row[i]) return 0;   /* not our asset: leave it as it is */
+        if (!row[i]) return 0; /* not our asset: leave it as it is */
     }
     mn_load();
-    shelf_h = shelf && widget_get_visible(shelf) ? widget_get_prop_int(shelf, "h", SH_HMAX) : 0;   /* its own height: one to three rows of covers (patch/recent.c sets it) */
-    daily_h = daily && widget_get_visible(daily) ? widget_get_prop_int(daily, "h", DM_SEC_H) : 0;   /* the card's section: a fixed DM_SEC_H */
-    if (extras) {   /* the rows the menu does not show and the list did not turn off, in the fixed Extras order, under the headers of their groups; the others hidden, last */
-        for (i = 0; i < POD_EXTRAS_GROUPS; i++) hdr[i] = mn_find(win, "pod_hdr", i);   /* (a missing header: that group has none) */
+    shelf_h = shelf && widget_get_visible(shelf)
+                  ? widget_get_prop_int(shelf, "h", SH_HMAX)
+                  : 0; /* its own height: one to three rows of covers (patch/recent.c sets it) */
+    daily_h = daily && widget_get_visible(daily) ? widget_get_prop_int(daily, "h", DM_SEC_H)
+                                                 : 0; /* the card's section: a fixed DM_SEC_H */
+    if (extras) { /* the rows the menu does not show and the list did not turn off, in the fixed Extras order, under the headers of their groups; the others hidden, last */
+        for (i = 0; i < POD_EXTRAS_GROUPS; i++)
+            hdr[i] = mn_find(win, "pod_hdr", i); /* (a missing header: that group has none) */
         k = mn_extras(row, hdr, 0, seq, &vh);
         for (i = 0; i < k; i++) widget_restack(seq[i], i);
         rows_h = vh;
     } else {
-        for (i = 0; i < mn.n; i++) { seq[k++] = row[mn.order[i]]; mn_place(row[mn.order[i]], pos++, 1); }
-        seq[k++] = row[N]; mn_place(row[N], pos++, 1);   /* Extras: always shown, always the last row */
+        for (i = 0; i < mn.n; i++) {
+            seq[k++] = row[mn.order[i]];
+            mn_place(row[mn.order[i]], pos++, 1);
+        }
+        seq[k++] = row[N];
+        mn_place(row[N], pos++, 1); /* Extras: always shown, always the last row */
         rows_h = (int)pos * POD_ROW_H;
         if (daily) {
             widget_move(daily, 0, rows_h);
-            seq[k++] = daily;   /* right after the shown rows (hidden, the layouter skips it) */
+            seq[k++] = daily; /* right after the shown rows (hidden, the layouter skips it) */
         }
         if (shelf) {
             widget_move(shelf, 0, rows_h + daily_h);
-            seq[k++] = shelf;   /* then the shelf (hidden, the layouter skips it) */
+            seq[k++] = shelf; /* then the shelf (hidden, the layouter skips it) */
         }
-        for (i = 0; i < N; i++) if (!mn_shown(i)) { seq[k++] = row[i]; mn_place(row[i], 0, 0); }
-        if (pad) seq[k++] = pad;   /* last: after the shown rows (the layouter skips the hidden ones in between) */
+        for (i = 0; i < N; i++)
+            if (!mn_shown(i)) {
+                seq[k++] = row[i];
+                mn_place(row[i], 0, 0);
+            }
+        if (pad) seq[k++] = pad; /* last: after the shown rows (the layouter skips the hidden ones in between) */
         for (i = 0; i < k; i++) widget_restack(seq[i], i);
     }
     mn_plain_paint(sv);
@@ -265,16 +292,14 @@ static int mn_arrange(void *win, int extras) {
     if (pad) widget_move(pad, 0, rows_h + daily_h + shelf_h);
     vh = rows_h + daily_h + shelf_h + (pad && widget_get_visible(pad) ? MB_PAD : 0);
     widget_set_prop_int(sv, "virtual_h", vh);
-    max = vh - widget_get_prop_int(sv, "h", 0);   /* a shorter list may not stay scrolled past its end */
+    max = vh - widget_get_prop_int(sv, "h", 0); /* a shorter list may not stay scrolled past its end */
     if (max < 0) max = 0;
     if (widget_get_prop_int(sv, "yoffset", 0) > max) widget_set_prop_int(sv, "yoffset", max);
     widget_invalidate_force(sv, (void *)0);
     return 1;
 }
 
-void menu_arrange(void *win, int extras) {
-    mn_arrange(win, extras);
-}
+void menu_arrange(void *win, int extras) { mn_arrange(win, extras); }
 
 /* A section of the Home list (the Recently Played shelf, patch/recent.c; the Daily Mix card, patch/dailymix.c) shows or hides: visible and sensitive together;
  * the list keeps its place. Nothing changes when the asset has no such section or is not ours. */
@@ -283,7 +308,8 @@ static void mn_section(void *win, const char *name, int on) {
     int was;
     if (!sec) return;
     was = widget_get_visible(sec);
-    if (!was && !on) return;   /* still hidden: nothing to do (a visible section is arranged again: its height may have changed) */
+    if (!was && !on)
+        return; /* still hidden: nothing to do (a visible section is arranged again: its height may have changed) */
     mn_show(sec, on);
     if (!mn_arrange(win, 0)) mn_show(sec, was);
 }
@@ -296,7 +322,8 @@ void menu_daily(void *win, int on) { mn_section(win, "pod_daily", on); }
 static void cm_rebuild(void) {
     unsigned i, k = mn.n;
     for (i = 0; i < mn.n; i++) cm.order[i] = mn.order[i];
-    for (i = 0; i < N; i++) if (!mn_shown(i)) cm.order[k++] = (unsigned char)i;
+    for (i = 0; i < N; i++)
+        if (!mn_shown(i)) cm.order[k++] = (unsigned char)i;
 }
 
 /* Arrange the rows from cm.order (the same pass at open and after every change): y, switch image, arrow. Then keep
@@ -309,13 +336,17 @@ static void cm_layout(unsigned focus) {
         int on = pos < mn.n;
         widget_move(cm.row[id], 0, (int)pos * POD_ROW_H);
         image_base_set_image(cm.sw[id], on ? "sset_on" : "sset_off");
-        widget_set_visible(cm.up[id], on && pos > 0, 0);   /* a picture only: never a touch target */
+        widget_set_visible(cm.up[id], on && pos > 0, 0); /* a picture only: never a touch target */
         widget_set_sensitive(cm.up[id], 0);
     }
-    for (pos = 0; pos < N; pos++) widget_restack(cm.row[cm.order[pos]], pos);   /* the children in page order: a relayout keeps it (see menu_arrange) */
+    for (pos = 0; pos < N; pos++)
+        widget_restack(cm.row[cm.order[pos]],
+                       pos); /* the children in page order: a relayout keeps it (see menu_arrange) */
     if (cm.sv && focus < N) {
-        int vh = widget_get_prop_int(cm.sv, "h", 0), off = widget_get_prop_int(cm.sv, "yoffset", 0), top = 0, max = (int)N * POD_ROW_H - vh;
-        for (pos = 0; pos < N; pos++) if (cm.order[pos] == focus) top = (int)pos * POD_ROW_H;
+        int vh = widget_get_prop_int(cm.sv, "h", 0), off = widget_get_prop_int(cm.sv, "yoffset", 0), top = 0,
+            max = (int)N * POD_ROW_H - vh;
+        for (pos = 0; pos < N; pos++)
+            if (cm.order[pos] == focus) top = (int)pos * POD_ROW_H;
         if (vh > 0) {
             if (top < off) off = top;
             if (top + POD_ROW_H > off + vh) off = top + POD_ROW_H - vh;
@@ -346,9 +377,7 @@ static void cm_commit(const unsigned char *old, unsigned old_n, unsigned old_off
  * and w in the row, the full 52 px height) the tap moves the item up, anywhere else it shows or hides the item. A
  * row without an arrow (hidden, or first) takes the whole width as a toggle. The pointer event carries screen
  * coordinates; widget_to_local turns them into the row's. */
-static int cm_has_arrow(unsigned id) {
-    return mn.n > 1 && mn.order[0] != id && mn_shown(id);
-}
+static int cm_has_arrow(unsigned id) { return mn.n > 1 && mn.order[0] != id && mn_shown(id); }
 
 static int cm_in_zone(unsigned id, void *e) {
     int pt[2], x, w;
@@ -361,7 +390,7 @@ static int cm_in_zone(unsigned id, void *e) {
     return pt[0] >= x && pt[0] < x + w;
 }
 
-static void cm_release(void) {   /* the arrow that shows its pressed look goes back to normal */
+static void cm_release(void) { /* the arrow that shows its pressed look goes back to normal */
     if (cm.pressed) widget_set_state(cm.up[cm.pressed - 1], "normal");
     cm.pressed = 0;
 }
@@ -371,10 +400,11 @@ static void cm_toggle(unsigned id) {
     unsigned char old[N];
     unsigned old_n = mn.n, old_off = mn.off;
     for (i = 0; i < mn.n; i++) old[i] = mn.order[i];
-    if (mn_shown(id)) {   /* hidden: it shows on Extras (its off flag was clear while it was shown) */
-        for (i = 0; i < old_n; i++) if (old[i] != id) mn.order[k++] = old[i];
+    if (mn_shown(id)) { /* hidden: it shows on Extras (its off flag was clear while it was shown) */
+        for (i = 0; i < old_n; i++)
+            if (old[i] != id) mn.order[k++] = old[i];
         mn.n = k;
-    } else if (mn.n < N) {   /* shown again at the end of the menu: no longer turned off */
+    } else if (mn.n < N) { /* shown again at the end of the menu: no longer turned off */
         mn.order[mn.n++] = (unsigned char)id;
         mn.off &= ~(1u << id);
     }
@@ -419,13 +449,16 @@ static int cm_on_row(void *ctx, void *e) {
     int zone = cm.down == id + 1 ? cm.zone : cm_in_zone(id, e);
     cm_release();
     cm.down = 0;
-    if (zone && cm_has_arrow(id)) cm_up(id);
-    else cm_toggle(id);
+    if (zone && cm_has_arrow(id))
+        cm_up(id);
+    else
+        cm_toggle(id);
     return RET_OK;
 }
 
 static int cm_on_destroy(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     memset(&cm, 0, sizeof cm);
     return RET_OK;
 }
@@ -437,7 +470,7 @@ void menu_custom_opened(void *win) {
         cm.row[i] = mn_find(win, "pod_row", i);
         cm.sw[i] = mn_find(win, "pod_switch", i);
         cm.up[i] = mn_find(win, "pod_up", i);
-        if (!cm.row[i] || !cm.sw[i] || !cm.up[i]) {   /* not our asset: leave it as it is */
+        if (!cm.row[i] || !cm.sw[i] || !cm.up[i]) { /* not our asset: leave it as it is */
             memset(&cm, 0, sizeof cm);
             return;
         }
@@ -467,9 +500,10 @@ static void xc_layout(void) {
     int vh, max;
     for (i = 0; i < N; i++) {
         unsigned id = EX_ORDER[i];
-        if (id != CUSTOMIZE && !mn_shown(id)) image_base_set_image(xc.sw[id], mn.off >> id & 1 ? "sset_off" : "sset_on");
+        if (id != CUSTOMIZE && !mn_shown(id))
+            image_base_set_image(xc.sw[id], mn.off >> id & 1 ? "sset_off" : "sset_on");
     }
-    k = mn_extras(xc.row, xc.hdr, 1, seq, &vh);   /* the rows under their group's header, the others hidden last */
+    k = mn_extras(xc.row, xc.hdr, 1, seq, &vh); /* the rows under their group's header, the others hidden last */
     for (i = 0; i < k; i++) widget_restack(seq[i], i);
     widget_set_prop_int(xc.sv, "virtual_h", vh);
     max = vh - widget_get_prop_int(xc.sv, "h", 0);
@@ -491,7 +525,8 @@ static int xc_on_row(void *ctx, void *e) {
 }
 
 static int xc_on_destroy(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     memset(&xc, 0, sizeof xc);
     return RET_OK;
 }
@@ -501,10 +536,10 @@ void menu_extras_opened(void *win) {
     unsigned i;
     memset(&xc, 0, sizeof xc);
     for (i = 0; i < N; i++) {
-        if (i == CUSTOMIZE) continue;   /* Customize has no row: it is never turned off */
+        if (i == CUSTOMIZE) continue; /* Customize has no row: it is never turned off */
         xc.row[i] = mn_find(win, "pod_row", i);
         xc.sw[i] = mn_find(win, "pod_switch", i);
-        if (!xc.row[i] || !xc.sw[i]) {   /* not our asset: leave it as it is */
+        if (!xc.row[i] || !xc.sw[i]) { /* not our asset: leave it as it is */
             memset(&xc, 0, sizeof xc);
             return;
         }
@@ -519,6 +554,7 @@ void menu_extras_opened(void *win) {
     mn_plain_paint(xc.sv);
     mn_load();
     xc_layout();
-    for (i = 0; i < N; i++) if (xc.row[i]) widget_on(xc.row[i], EVT_CLICK, xc_on_row, (void *)(long)i);
+    for (i = 0; i < N; i++)
+        if (xc.row[i]) widget_on(xc.row[i], EVT_CLICK, xc_on_row, (void *)(long)i);
     widget_on(win, EVT_DESTROY, xc_on_destroy, (void *)0);
 }

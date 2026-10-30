@@ -1,13 +1,16 @@
 # Screenshot
 
-Split out of docs/architecture.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
-
-## 8c. Screenshot (`patch/shot.c`, `patch/shot.h`, test `test/pod/shot.py`, `tools/pull_shots.py`)
+**Sources:** `patch/shot.c`, `patch/shot.h`, test `test/pod/shot.py`, `tools/pull_shots.py`.
 
 A developer's screen grab, the only row of Customize > Developer (`ACT_SHOT`, page `m1plus_developer`). No stock function is hooked, nothing
 runs on the boot path, in the main loop or at paint, and there is no thread: a tap starts a payload-owned countdown, and the only
 code that runs afterwards is two timer callbacks. The kill switch `/mnt/mmc/m1plus-off` is checked at the tap, at every tick and
 before the grab (the camera is hidden and nothing is read or written when it appears mid-way).
+
+Import with `uv run python -I tools/pull_shots.py [CARD_DIR] [--build latest|DIR]`.
+PNG names include the source content hash, so another card reusing `shot-0001.bmp` does not lose
+an image. JSON sidecars record the original path/hash and, when selected, the dev tag/package
+hash. `--build` stores captures in that artifact's `device/` directory; otherwise `out/shots/`.
 
 - **Confirm and cancel.** A tap on the idle row opens the stock confirm dialog (`pod_confirm` in `patch/m1plus.c`, shared with Rebuild
   Covers: `dialog/confirminfo_dialog`, kind 5 wrapped text, modal, `CONFIRM_YES` for Yes) asking "Take a screenshot in 5 s?"; only Yes

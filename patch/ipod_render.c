@@ -8,12 +8,13 @@
 #define COMMANDS 192
 #define TEXT_WORDS 2048
 #define IMAGES 8
-#define SLIDE_MS 280              /* the reference's push and pop: 280 ms ease in and out */
+#define SLIDE_MS 280 /* the reference's push and pop: 280 ms ease in and out */
 #define I(p, o) (*(int *)((char *)(p) + (o)))
 
 enum { DRAW_FILL, DRAW_TEXT, DRAW_IMAGE };
 struct command {
-    int kind, rect[4], src[4], edge;   /* edge: the image is the menu half's edge shadow (ip_render_edge): it belongs to the left half of a split */
+    int kind, rect[4], src[4],
+        edge; /* edge: the image is the menu half's edge shadow (ip_render_edge): it belongs to the left half of a split */
     unsigned color, text, n;
     void *style, *bitmap;
 };
@@ -61,17 +62,22 @@ static void *clone(void *source) {
     const unsigned char *src;
     unsigned char *dst;
     void *copy;
-    if (!w || !h || w > 320 || h > 264 || *(unsigned short *)((char *)source + BITMAP_FORMAT) != BITMAP_RGBA8888) return (void *)0;
+    if (!w || !h || w > 320 || h > 264 || *(unsigned short *)((char *)source + BITMAP_FORMAT) != BITMAP_RGBA8888)
+        return (void *)0;
     pitch = bitmap_get_line_length(source);
     if (pitch < w * 4) return (void *)0;
     copy = bitmap_create_ex(w, h, w * 4, BITMAP_RGBA8888);
     if (!copy) return (void *)0;
     src = bitmap_lock_buffer_for_read(source);
     dst = bitmap_lock_buffer_for_write(copy);
-    if (src && dst) for (y = 0; y < h; ++y) memcpy(dst + y * w * 4, src + y * pitch, w * 4);
+    if (src && dst)
+        for (y = 0; y < h; ++y) memcpy(dst + y * w * 4, src + y * pitch, w * 4);
     if (src) bitmap_unlock_buffer(source);
     if (dst) bitmap_unlock_buffer(copy);
-    if (!src || !dst) { bitmap_destroy(copy); return (void *)0; }
+    if (!src || !dst) {
+        bitmap_destroy(copy);
+        return (void *)0;
+    }
     return copy;
 }
 
@@ -79,7 +85,10 @@ int ip_render_transition(int direction, int width) {
     void *original[IMAGES];
     unsigned i, j;
     /* Fast input settles immediately, rather than stacking transitions or snapshots. */
-    if (render.active) { ip_render_cancel(); return 0; }
+    if (render.active) {
+        ip_render_cancel();
+        return 0;
+    }
     if (!render.last || !render.old || !render.last->valid) return 0;
     memcpy(render.old, render.last, sizeof(struct picture));
     /* width 0: the split. The menu half and the artwork pane of a split page part (opening a fullscreen page) or close over it; every command is kept. */
@@ -87,7 +96,10 @@ int ip_render_transition(int direction, int width) {
     if (render.split) width = IP_SPLIT_X;
     /* Half-width navigation does not move or clone the stationary artwork pane. */
     for (i = 0, j = 0; i < render.old->count; ++i) {
-        if (render.split) { j = render.old->count; break; }
+        if (render.split) {
+            j = render.old->count;
+            break;
+        }
         struct command *c = &render.old->commands[i];
         if (c->rect[0] >= width || c->rect[0] + c->rect[2] <= 0) continue;
         if (i != j) memcpy(&render.old->commands[j], c, sizeof *c);
@@ -97,10 +109,14 @@ int ip_render_transition(int direction, int width) {
     for (i = 0; i < render.old->count; ++i) {
         struct command *c = &render.old->commands[i];
         if (c->kind != DRAW_IMAGE) continue;
-        for (j = 0; j < render.nimages; ++j) if (original[j] == c->bitmap) break;
+        for (j = 0; j < render.nimages; ++j)
+            if (original[j] == c->bitmap) break;
         if (j == render.nimages) {
             void *copy;
-            if (j >= IMAGES || !(copy = clone(c->bitmap))) { ip_render_cancel(); return 0; }
+            if (j >= IMAGES || !(copy = clone(c->bitmap))) {
+                ip_render_cancel();
+                return 0;
+            }
             original[j] = c->bitmap;
             render.images[render.nimages++] = copy;
         }
@@ -119,7 +135,9 @@ int ip_render_active(void) { return render.active; }
 int ip_render_width(void) { return render.width; }
 int ip_render_split(void) { return render.active && render.split; }
 int ip_render_direction(void) { return render.direction; }
-void ip_render_edge(void *bitmap) { render.edge = bitmap; }   /* the menu edge's shadow image: recorded images that are it replay with the menu half */
+void ip_render_edge(void *bitmap) {
+    render.edge = bitmap;
+} /* the menu edge's shadow image: recorded images that are it replay with the menu half */
 
 int ip_render_tick(void) {
     if (!render.active) return 0;
@@ -152,7 +170,10 @@ void ip_render_end(void) {
 static struct command *append(int kind, const int *rect) {
     struct command *c;
     if (!render.recording || !render.last) return (struct command *)0;
-    if (render.last->count == COMMANDS) { render.overflow = 1; return (struct command *)0; }
+    if (render.last->count == COMMANDS) {
+        render.overflow = 1;
+        return (struct command *)0;
+    }
     c = &render.last->commands[render.last->count++];
     c->kind = kind, c->edge = 0;
     memcpy(c->rect, rect, 4 * sizeof(int));
@@ -175,8 +196,10 @@ void ip_render_fill(void *canvas, int x, int y, int w, int h, unsigned rgb) {
 void ip_render_text(void *canvas, const unsigned *text, unsigned n, const int *rect) {
     struct command *c = append(DRAW_TEXT, rect);
     if (c) {
-        if (n > TEXT_WORDS - render.last->used) { render.overflow = 1; --render.last->count; }
-        else {
+        if (n > TEXT_WORDS - render.last->used) {
+            render.overflow = 1;
+            --render.last->count;
+        } else {
             c->text = render.last->used, c->n = n, c->style = render.style;
             memcpy(render.last->text + c->text, text, n * sizeof(unsigned));
             render.last->used += n;
@@ -187,7 +210,11 @@ void ip_render_text(void *canvas, const unsigned *text, unsigned n, const int *r
 
 void ip_render_image(void *canvas, void *bitmap, const int *src, const int *dst) {
     struct command *c = append(DRAW_IMAGE, dst);
-    if (c) { c->bitmap = bitmap; c->edge = bitmap == render.edge; memcpy(c->src, src, 4 * sizeof(int)); }
+    if (c) {
+        c->bitmap = bitmap;
+        c->edge = bitmap == render.edge;
+        memcpy(c->src, src, 4 * sizeof(int));
+    }
     canvas_draw_image(canvas, bitmap, src, dst);
 }
 
@@ -203,6 +230,7 @@ void ip_render_out(void *canvas, int half) {
         } else if (c->kind == DRAW_TEXT) {
             widget_prepare_text_style(c->style, canvas);
             canvas_draw_text_in_rect(canvas, render.old->text + c->text, c->n, c->rect);
-        } else canvas_draw_image(canvas, c->bitmap, c->src, c->rect);
+        } else
+            canvas_draw_image(canvas, c->bitmap, c->src, c->rect);
     }
 }

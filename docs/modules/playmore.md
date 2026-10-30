@@ -6,7 +6,7 @@ y 130: `list_view` `playmore_listview` > `scroll_view` `playmore_scrollview` > `
 `img_1_5x`, `img_2x` and `label1_msg`), Add to playlist (2), Online search (3), Look up album (4), Look up artist (5), Delete song (6).
 M1+ Music makes it an iOS style bottom sheet with two pages.
 
-Preview, both pages over Now Playing with the dim (each page with its own glass; the zoomed top edges are checked with `tools/peek.py crop`): `venv/bin/python -I tools/preview_playmore.py work/mod-release out/preview/playmore.png` (not tracked).
+Preview, both pages over Now Playing with the dim (each page with its own glass; the zoomed top edges are checked with `tools/peek.py crop`): `uv run python -I tools/preview_playmore.py work/mod-release out/preview/playmore.png` (not tracked).
 
 ## What the user sees
 

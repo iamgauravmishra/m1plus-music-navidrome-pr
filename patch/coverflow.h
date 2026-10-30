@@ -1,6 +1,6 @@
 /* Cover Flow's depth renderer, shared by the Cover Flow page (patch/coverflow.c) and the iPod page's Cover Flow screen (patch/ipod_cf.c).
  *
- * Copyright (c) 2026 Xin. MIT licence (see LICENSE). The renderer is q2-pod's, after Rockbox PictureFlow (see coverflow.c, NOTICE).
+ * Copyright (c) 2026 Xin. MIT licence (see LICENSE). The renderer follows q2-pod's design, after Rockbox PictureFlow (see coverflow.c).
  */
 #pragma once
 

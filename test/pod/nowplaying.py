@@ -829,7 +829,7 @@ def run(ctx):
         (x0, x1), (y0, y1) = edges(cols), edges(rows)
         tot = sum(map(sum, c)); mx = sum((x + 0.5) * c[y][x] for y in range(H_) for x in range(W_)) / tot; my = sum((y + 0.5) * c[y][x] for y in range(H_) for x in range(W_)) / tot
         return ((x0 + x1) / 2, (y0 + y1) / 2), (mx, my)
-    (fb, fc), (ub, uc), (mb, mc) = optical('np_fav'), optical('np_unfav'), optical('np_more')
+    (fb, fc), (ub, _), (mb, mc) = optical('np_fav'), optical('np_unfav'), optical('np_more')
     d = lambda p: max(abs(p[0] - 22), abs(p[1] - 22))
     expect(d(fb) <= 0.75 and d(fc) <= 0.75 and d(((fb[0] + fc[0]) / 2, (fb[1] + fc[1]) / 2)) <= 0.25 and d(ub) <= 0.75 and abs(ub[0] - fb[0]) < 0.3 and abs(ub[1] - fb[1]) < 0.3
            and d(mb) <= 0.25 and d(mc) <= 0.25,

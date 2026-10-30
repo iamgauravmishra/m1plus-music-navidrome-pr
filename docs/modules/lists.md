@@ -1,8 +1,6 @@
 # Library lists (look)
 
-Split out of docs/ui.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
-
-### Library lists (`tools/mod_lists.py`)
+## Library lists (`tools/mod_lists.py`)
 
 The library pages' rows are built by code (`folder_create_tablerow` `0x5331fc`,
 `localclass_create_tablerow` `0x5368ac`, `music_create_tablerow` `0x528560`, the jump list's cloned

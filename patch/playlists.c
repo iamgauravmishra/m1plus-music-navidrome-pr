@@ -34,8 +34,10 @@
 #include "grid.h"
 #include "i18n.h"
 
-extern int pod_home_open(int id);   /* patch/m1plus.c: a stock Home destination through the dispatcher */
-extern int songs_open_playlist(int id, const char *name);   /* patch/songs.c: our Songs page on a playlist; -1 when it did not open */
+extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
+extern int
+songs_open_playlist(int id,
+                    const char *name); /* patch/songs.c: our Songs page on a playlist; -1 when it did not open */
 
 #define CELL_H GRID_CELL_H
 #define PITCH GRID_PITCH
@@ -57,35 +59,37 @@ extern int songs_open_playlist(int id, const char *name);   /* patch/songs.c: ou
 typedef grid_tile_t tile_t;
 
 typedef struct {
-    unsigned key[4];   /* the first distinct albums of the playlist that have a cache file */
+    unsigned key[4]; /* the first distinct albums of the playlist that have a cache file */
     int nk, songs;
     int scanned;
 } info_t;
 
 static struct {
-    void *win, *view, *sv, *status, *btn_more, *scrim, *card, *btn;   /* btn: the view toggle */
-    void *title, *back, *np, *btn_selall, *bar, *del;   /* the navbar's title, Back and Now Playing; the select mode's Select All text, bar and Delete pill (the last three optional: no select mode without them) */
-    void *mark[2];                /* the select marks (unselect, selected): bitmaps */
-    unsigned char *sel;           /* the select mode's bitset: (count + 7) / 8 bytes */
+    void *win, *view, *sv, *status, *btn_more, *scrim, *card, *btn; /* btn: the view toggle */
+    void *title, *back, *np, *btn_selall, *bar,
+        *del; /* the navbar's title, Back and Now Playing; the select mode's Select All text, bar and Delete pill (the last three optional: no select mode without them) */
+    void *mark[2]; /* the select marks (unselect, selected): bitmaps */
+    unsigned char *sel; /* the select mode's bitset: (count + 7) / 8 bytes */
     unsigned nsel;
-    int select;                   /* select mode (Delete Playlists in the menu) */
-    void *st_ltitle, *st_lsub;    /* the hidden labels whose styles are the list mode's two text styles */
-    int list;                     /* 1 list mode, 0 grid */
-    int press;                    /* list: the row under the finger, + 1 */
-    void *pls;                    /* our copy of the stock playlist rows */
+    int select; /* select mode (Delete Playlists in the menu) */
+    void *st_ltitle, *st_lsub; /* the hidden labels whose styles are the list mode's two text styles */
+    int list; /* 1 list mode, 0 grid */
+    int press; /* list: the row under the finger, + 1 */
+    void *pls; /* our copy of the stock playlist rows */
     unsigned count;
-    info_t *info;                 /* count entries */
-    void *albums;                 /* the library's albums (cc_albums), loaded at the first scan, for the album-name lookup */
+    info_t *info; /* count entries */
+    void *albums; /* the library's albums (cc_albums), loaded at the first scan, for the album-name lookup */
     int albums_tried;
-    unsigned *tmp;                /* one quadrant (side / 2 squared words) for grid_mosaic */
+    unsigned *tmp; /* one quadrant (side / 2 squared words) for grid_mosaic */
     int seen, dir, noscroll;
     int down, down_x, down_y;
-    int menu;                     /* the popup card is open */
+    int menu; /* the popup card is open */
     unsigned more_timer;
-    void *items[PL_MENU_ROWS], *labels[PL_MENU_ROWS];   /* the menu's row buttons and their labels (a label may be missing: no fit) */
-    void *fade;                   /* the navbar's fade (img_nb_fade, optional): shown only while the list is scrolled */
-    int bg;                       /* another window is in front: the loader does not run (pl_on_bg) */
-    grid_t g;                    /* LAST (test/pod/playlists.py reads the fields above by index) */
+    void *items[PL_MENU_ROWS],
+        *labels[PL_MENU_ROWS]; /* the menu's row buttons and their labels (a label may be missing: no fit) */
+    void *fade; /* the navbar's fade (img_nb_fade, optional): shown only while the list is scrolled */
+    int bg; /* another window is in front: the loader does not run (pl_on_bg) */
+    grid_t g; /* LAST (test/pod/playlists.py reads the fields above by index) */
 } pl __attribute__((section(".scratch")));
 
 static void pl_show(void *w, int on) {
@@ -95,8 +99,12 @@ static void pl_show(void *w, int on) {
 }
 
 static int pl_rows(void) { return ((int)pl.count + GRID_COLS - 1) / GRID_COLS; }
-static int pl_rows_h(void) { return pl.list ? (int)pl.count * LIST_ROW_H : pl_rows() ? GRID_ROW_GAP + pl_rows() * PITCH : 0; }   /* the cells' or rows' height */
-static int pl_pad(void) { return pl.select ? SG_BAR_H : 0; }   /* the select bar covers the window's last SG_BAR_H rows: the list scrolls clear of it */
+static int pl_rows_h(void) {
+    return pl.list ? (int)pl.count * LIST_ROW_H : pl_rows() ? GRID_ROW_GAP + pl_rows() * PITCH : 0;
+} /* the cells' or rows' height */
+static int pl_pad(void) {
+    return pl.select ? SG_BAR_H : 0;
+} /* the select bar covers the window's last SG_BAR_H rows: the list scrolls clear of it */
 static int pl_content(void) { return pl_rows_h() ? pl_rows_h() + pl_pad() : 0; }
 static int pl_max_scroll(void) {
     int m = pl_content() - GRID_VIEW_H;
@@ -127,7 +135,8 @@ static unsigned pl_fmt(char *out, unsigned size, const char *f, int n) {
         if (f[0] == '%' && f[1] == 'd') {
             while (d && o + 1 < size) out[o++] = digits[--d];
             f += 2;
-        } else out[o++] = *f++;
+        } else
+            out[o++] = *f++;
     }
     out[o] = 0;
     return o;
@@ -141,8 +150,10 @@ static int pl_row_of(int s) { return s > GRID_ROW_GAP + CELL_H ? (s - GRID_ROW_G
 /* The rows (grid rows, or list rows = playlists) that touch the view: [*r0, *r1], inside [0, n - 1] also while a drag pulls the list past an end (overscroll). */
 static void pl_span(int *r0, int *r1) {
     int n = pl.list ? (int)pl.count : pl_rows(), s = pl_off();
-    if (pl.list) *r0 = s / LIST_ROW_H, *r1 = (s + GRID_VIEW_H - 1) / LIST_ROW_H;
-    else *r0 = pl_row_of(s), *r1 = (s + GRID_VIEW_H - GRID_ROW_GAP + PITCH - 1) / PITCH - 1;
+    if (pl.list)
+        *r0 = s / LIST_ROW_H, *r1 = (s + GRID_VIEW_H - 1) / LIST_ROW_H;
+    else
+        *r0 = pl_row_of(s), *r1 = (s + GRID_VIEW_H - GRID_ROW_GAP + PITCH - 1) / PITCH - 1;
     if (*r0 < 0) *r0 = 0;
     if (*r1 > n - 1) *r1 = n - 1;
 }
@@ -150,8 +161,10 @@ static void pl_span(int *r0, int *r1) {
 static void pl_window(int *lo, int *hi) {
     int per = pl.list ? 1 : GRID_COLS, n = pl.list ? (int)pl.count : pl_rows(), r0, r1;
     pl_span(&r0, &r1);
-    if (pl.dir < 0) r0 -= PL_AHEAD;
-    else r1 += PL_AHEAD;
+    if (pl.dir < 0)
+        r0 -= PL_AHEAD;
+    else
+        r1 += PL_AHEAD;
     if (r0 < 0) r0 = 0;
     if (r1 > n - 1) r1 = n - 1;
     *lo = r0 * per;
@@ -181,7 +194,7 @@ static void pl_prep(tile_t *t, int a) {
     t->fit = 0, t->art = 0, t->qi = 0;
     t->nq = in->nk > 1 && !pl.tmp ? 1 : in->nk;
     memcpy(t->qkey, in->key, sizeof t->qkey);
-    if (in->scanned && !in->nk) t->art = 2;   /* no album with a cover: the placeholder */
+    if (in->scanned && !in->nk) t->art = 2; /* no album with a cover: the placeholder */
     pl_texts(t, a);
 }
 
@@ -231,14 +244,18 @@ static int pl_on_paint(void *ctx, void *e) {
     I(canvas, CANVAS_OY) += off;
     pl_span(&r0, &r1);
     if (r1 >= r0 && pl.list) {
-        grid_list_paint(canvas, &pl.g, pl.st_ltitle, pl.st_lsub, r0, r1, off, GRID_VIEW_H, pl.select ? 0 : pl.press, pl.select ? SG_SEL_COL : 0, pl_tile_of, (void *)0);
-        for (a = r0; pl.select && pl.mark[0] && a <= r1; ++a) pl_mark(canvas, a, LIST_ART_X + (SG_SEL_COL - 6 - SG_MARK) / 2, a * LIST_ROW_H - off + (LIST_ROW_H - SG_MARK) / 2);
+        grid_list_paint(canvas, &pl.g, pl.st_ltitle, pl.st_lsub, r0, r1, off, GRID_VIEW_H, pl.select ? 0 : pl.press,
+                        pl.select ? SG_SEL_COL : 0, pl_tile_of, (void *)0);
+        for (a = r0; pl.select && pl.mark[0] && a <= r1; ++a)
+            pl_mark(canvas, a, LIST_ART_X + (SG_SEL_COL - 6 - SG_MARK) / 2,
+                    a * LIST_ROW_H - off + (LIST_ROW_H - SG_MARK) / 2);
     } else if (r1 >= r0) {
         last = (r1 + 1) * GRID_COLS;
         if (last > (int)pl.count) last = (int)pl.count;
         grid_paint(canvas, &pl.g, r0 * GRID_COLS, last, GRID_ROW_GAP - off, GRID_VIEW_H, pl_tile_of, (void *)0);
         for (a = r0 * GRID_COLS; pl.select && pl.mark[0] && a < last; ++a)
-            pl_mark(canvas, a, grid_cell_x(a) + GRID_COVER - SG_MARK - 6, grid_cell_y(a, GRID_ROW_GAP - off) + GRID_COVER - SG_MARK - 6);
+            pl_mark(canvas, a, grid_cell_x(a) + GRID_COVER - SG_MARK - 6,
+                    grid_cell_y(a, GRID_ROW_GAP - off) + GRID_COVER - SG_MARK - 6);
     }
     I(canvas, CANVAS_OY) -= off;
     return RET_OK;
@@ -263,7 +280,8 @@ static void pl_scan(int i) {
     list = *(void **)PDEQ_SHOWLIST;
     n = list ? (int)deque_size(list) : 0;
     in->songs = n;
-    in->nk = grid_mosaic_keys(list, pl.albums, in->key);   /* patch/grid.c: shared with the Songs page's playlist header */
+    in->nk =
+        grid_mosaic_keys(list, pl.albums, in->key); /* patch/grid.c: shared with the Songs page's playlist header */
     in->scanned = 1;
 }
 
@@ -298,7 +316,8 @@ static int pl_moving(void) {
 }
 
 static void pl_kick(void) {
-    if (!pl.more_timer && pl.view && !pl.bg && (pl.noscroll || pl_next_load() >= 0)) pl.more_timer = timer_add(pl_on_load, (void *)0, PL_MORE_MS);
+    if (!pl.more_timer && pl.view && !pl.bg && (pl.noscroll || pl_next_load() >= 0))
+        pl.more_timer = timer_add(pl_on_load, (void *)0, PL_MORE_MS);
 }
 
 static void pl_dir(void) {
@@ -324,7 +343,8 @@ static int pl_on_load(const void *unused) {
         if (!pl.info[a].scanned) {
             pl_scan(a);
             pl_prep(t, a);
-        } else if (!t->art) grid_mosaic(&pl.g, t, pl.tmp);
+        } else if (!t->art)
+            grid_mosaic(&pl.g, t, pl.tmp);
         if (top < GRID_VIEW_H && top + pl_height() > 0) pl_redraw();
     }
     pl_kick();
@@ -332,7 +352,8 @@ static int pl_on_load(const void *unused) {
 }
 
 static int pl_on_scroll(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     if (!pl.view) return RET_OK;
     pl_fade();
     pl_dir();
@@ -345,7 +366,7 @@ static int pl_on_scroll(void *ctx, void *e) {
  */
 static void pl_size(void) {
     int h = pl_content();
-    if (!h) h = GRID_VIEW_H;   /* (the empty page hides the view) */
+    if (!h) h = GRID_VIEW_H; /* (the empty page hides the view) */
     widget_resize(pl.view, PL_W, h);
     widget_set_prop_int(pl.sv, "virtual_h", h);
 }
@@ -355,7 +376,7 @@ static void pl_select(int on);
 
 static void pl_load(void) {
     void *list;
-    pl_select(0);   /* a page read again is not in select mode (the marks were of the old list) */
+    pl_select(0); /* a page read again is not in select mode (the marks were of the old list) */
     if (pl.more_timer) timer_remove(pl.more_timer);
     pl.more_timer = 0;
     grid_drop(&pl.g);
@@ -371,7 +392,8 @@ static void pl_load(void) {
     if (pl.count > PL_MAX) pl.count = PL_MAX;
     pl.info = pl.count ? calloc(pl.count, sizeof(info_t)) : (info_t *)0;
     if (pl.count && !pl.info) pl.count = 0;
-    pl.sel = pl.count ? calloc((pl.count + 7) / 8, 1) : (unsigned char *)0;   /* none: no select mode (the menu's Delete opens the stock page) */
+    pl.sel = pl.count ? calloc((pl.count + 7) / 8, 1)
+                      : (unsigned char *)0; /* none: no select mode (the menu's Delete opens the stock page) */
     grid_placeholder(&pl.g);
     pl_show(pl.view, pl.count != 0);
     pl_show(pl.status, pl.count == 0);
@@ -390,7 +412,7 @@ static int pl_cell_at(int x, int y) {
     int a;
     if (y < 0 || y >= pl_rows_h()) return -1;
     if (!pl.list) return grid_cell_at(x, y, GRID_ROW_GAP, (int)pl.count);
-    a = y / LIST_ROW_H;   /* a list row: any x */
+    a = y / LIST_ROW_H; /* a list row: any x */
     return a < (int)pl.count ? a : -1;
 }
 
@@ -423,7 +445,7 @@ static void pl_open(int i) {
  * "N Selected", Select All at the right, a mark on every cell or row, a bar below with the Delete pill. Delete runs the stock handler's sequence (@0x53dbcc) on the
  * stock selection vector, which the page fills from its own marks at that moment.
  */
-static void pl_head(void) {   /* the navbar's title: "N Selected" in select mode, else Playlists */
+static void pl_head(void) { /* the navbar's title: "N Selected" in select mode, else Playlists */
     char buf[64];
     if (!pl.title) return;
     if (!pl.select) {
@@ -435,7 +457,9 @@ static void pl_head(void) {   /* the navbar's title: "N Selected" in select mode
 }
 
 /* The select mode is there when the asset has its widgets, the marks decoded and the selection bitset exists. */
-static int pl_select_ok(void) { return pl.btn_selall && pl.bar && pl.del && pl.mark[0] && pl.mark[1] && pl.sel && pl.count; }
+static int pl_select_ok(void) {
+    return pl.btn_selall && pl.bar && pl.del && pl.mark[0] && pl.mark[1] && pl.sel && pl.count;
+}
 
 static void pl_select(int on) {
     int i, max;
@@ -473,9 +497,10 @@ static void pl_toggle(int i) {
 }
 
 static int pl_on_selall(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     if (!pl.select || !pl.sel) return RET_OK;
-    if (pl.nsel < pl.count) {   /* all, unless all are: then none */
+    if (pl.nsel < pl.count) { /* all, unless all are: then none */
         unsigned i;
         memset(pl.sel, 0, (pl.count + 7) / 8);
         for (i = 0; i < pl.count; ++i) pl.sel[i >> 3] |= (unsigned char)(1 << (i & 7));
@@ -490,9 +515,12 @@ static int pl_on_selall(void *ctx, void *e) {
 }
 
 static int pl_on_back(void *ctx, void *e) {
-    (void)ctx; (void)e;
-    if (pl.select) pl_select(0);
-    else navigator_back();
+    (void)ctx;
+    (void)e;
+    if (pl.select)
+        pl_select(0);
+    else
+        navigator_back();
     return RET_OK;
 }
 
@@ -513,15 +541,19 @@ static int pl_on_up(void *ctx, void *e) {
     pl.down = 0;
     if (pl.list) pl_set_press(0);
     if (a < 0 || !e || !pl.view) return RET_OK;
-    if (pl_abs(I(e, PE_X) - pl.down_x) < PL_TAP_PX && pl_abs(I(e, PE_Y) - pl.down_y) < PL_TAP_PX && pl_item_of(e) == a) {
-        if (pl.select) pl_toggle(a);
-        else pl_open(a);
+    if (pl_abs(I(e, PE_X) - pl.down_x) < PL_TAP_PX && pl_abs(I(e, PE_Y) - pl.down_y) < PL_TAP_PX &&
+        pl_item_of(e) == a) {
+        if (pl.select)
+            pl_toggle(a);
+        else
+            pl_open(a);
     }
     return RET_OK;
 }
 
 static int pl_on_abort(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     pl.down = 0;
     if (pl.list) pl_set_press(0);
     return RET_OK;
@@ -584,8 +616,10 @@ static void pl_create(void) {
     if (navigator_to_with_context("dialog/kbaddplaylist_dialog", name)) return;
     loadLocalClassList(CLASS_PLAYLISTS);
     r = createPlayListItem(*(void **)PDEQ_PLAYLIST, name);
-    if (r == -1) pl_toast(TR("msg_playlistfull"));
-    else if (r == -2) pl_toast(TR("msg_playlistexist"));
+    if (r == -1)
+        pl_toast(TR("msg_playlistfull"));
+    else if (r == -2)
+        pl_toast(TR("msg_playlistexist"));
 }
 
 /* The stock confirm dialog of the stock delete handler (@0x53dc78: kind 1, the text at +8, msg_delplaylist): modal; 0xa (CONFIRM_YES) is Yes, anything else ends it (@0x53dcc0). */
@@ -622,7 +656,8 @@ static int pl_stock_selection(void) {
  * batch_delete_file(0xf00b, *pdeq_playlist, the selection, 0, 0), which runs deletePlaylist and deleteAllMusicByPlaylist for each selected row; the message
  * msg_delplaylistsuccess. The stock page rebuilds its list afterwards: this page reads it again (pl_load ends select mode). */
 static int pl_on_delete(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     if (!pl.select) return RET_OK;
     if (!pl.nsel) {
         pl_toast(TR("msg_delplaylistfailed"));
@@ -638,13 +673,15 @@ static int pl_on_delete(void *ctx, void *e) {
 }
 
 static int pl_on_more(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     if (pl.view) pl_menu(!pl.menu);
     return RET_OK;
 }
 
 static int pl_on_scrim(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     pl_menu(0);
     return RET_OK;
 }
@@ -656,14 +693,19 @@ static int pl_on_item(void *ctx, void *e) {
     (void)e;
     pl_menu(0);
     if (!pl.view) return RET_OK;
-    *(int *)NAVIGATION_STATUS = 0;   /* the stock pages' normal (not multi-select) mode: export all */
-    if (which == PL_NEW) pl_create();
-    else if (which == PL_IMPORT) stock_playlist_import((void *)0, (void *)0);
-    else if (which == PL_EXPORT) stock_playlist_export((void *)0, (void *)0);
-    else {   /* Delete Playlists: select mode on this page (nothing to select with no playlist); where it cannot be (the asset or the marks lack it) the stock Playlists page, whose multi-select deletes */
+    *(int *)NAVIGATION_STATUS = 0; /* the stock pages' normal (not multi-select) mode: export all */
+    if (which == PL_NEW)
+        pl_create();
+    else if (which == PL_IMPORT)
+        stock_playlist_import((void *)0, (void *)0);
+    else if (which == PL_EXPORT)
+        stock_playlist_export((void *)0, (void *)0);
+    else { /* Delete Playlists: select mode on this page (nothing to select with no playlist); where it cannot be (the asset or the marks lack it) the stock Playlists page, whose multi-select deletes */
         if (!pl.count) return RET_OK;
-        if (!pl_select_ok()) pod_home_open(HOME_PLAYLIST);
-        else pl_select(1);
+        if (!pl_select_ok())
+            pod_home_open(HOME_PLAYLIST);
+        else
+            pl_select(1);
         return RET_OK;
     }
     pl_load();
@@ -674,7 +716,8 @@ static int pl_on_item(void *ctx, void *e) {
  * The page
  */
 static int pl_on_fg(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     pl.bg = 0;
     if (pl.view && pl.g.tiles) pl_load();
     return RET_OK;
@@ -723,14 +766,15 @@ static int pl_first(void) {
 static void pl_set_mode(int list) {
     int first = pl_first(), max;
     void *wa = P(pl.sv, SC_WA);
-    if (wa && I(wa, SC_AN_STATE) == SC_AN_RUNNING && P(wa, SC_AN_WIDGET) == pl.sv) {   /* a coasting list stops (patch/scroll.c sc_down) */
+    if (wa && I(wa, SC_AN_STATE) == SC_AN_RUNNING &&
+        P(wa, SC_AN_WIDGET) == pl.sv) { /* a coasting list stops (patch/scroll.c sc_down) */
         widget_animator_destroy(wa);
         stock_scroll_done(pl.sv, (void *)0);
     }
     if (pl.more_timer) timer_remove(pl.more_timer);
     pl.more_timer = 0;
     pl.list = list, pl.press = 0, pl.down = 0, pl.dir = 1;
-    grid_drop(&pl.g);   /* the tiles were made for the other shape */
+    grid_drop(&pl.g); /* the tiles were made for the other shape */
     pl_shape(list);
     if (pl.g.tiles) grid_placeholder(&pl.g);
     pl_size();
@@ -745,7 +789,8 @@ static void pl_set_mode(int list) {
 }
 
 static int pl_on_toggle(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     if (!pl.view || !pl.g.tiles) return RET_OK;
     pl_set_mode(!pl.list);
     home_write_atomic(PLAYLISTS_FILE, PLAYLISTS_TMP, pl.list ? "0\n" : "1\n");
@@ -753,7 +798,8 @@ static int pl_on_toggle(void *ctx, void *e) {
 }
 
 static int pl_on_destroy(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     if (pl.more_timer) timer_remove(pl.more_timer);
     grid_free(&pl.g);
     if (pl.pls) deque_destroy(pl.pls);
@@ -779,7 +825,7 @@ static int pl_open_page(void) {
     widget_on(pl.win, EVT_DESTROY, pl_on_destroy, (void *)0);
     pl.back = pod_bind(pl.win, "btn_return", pl_on_back, (void *)0);
     pl.np = pod_bind(pl.win, "btn_backtoplayer", pod_on_player, (void *)0);
-    pl.btn_selall = pod_bind(pl.win, "btn_selall", pl_on_selall, (void *)0);   /* the select mode's widgets: optional */
+    pl.btn_selall = pod_bind(pl.win, "btn_selall", pl_on_selall, (void *)0); /* the select mode's widgets: optional */
     pl.del = pod_bind(pl.win, "pl_del", pl_on_delete, (void *)0);
     pl.bar = widget_lookup(pl.win, "pl_bar", 1);
     pl.title = widget_lookup(pl.win, "label_title", 1);
@@ -789,14 +835,15 @@ static int pl_open_page(void) {
     pl.view = widget_lookup(pl.win, "view_grid", 1);
     pl.sv = widget_lookup(pl.win, "playlists_scrollview", 1);
     pl.status = widget_lookup(pl.win, "label_status", 1);
-    pl.fade = widget_lookup(pl.win, "img_nb_fade", 1);   /* optional */
+    pl.fade = widget_lookup(pl.win, "img_nb_fade", 1); /* optional */
     pl.g.st_title = widget_lookup(pl.win, "label_grid_title", 1);
     pl.g.st_sub = widget_lookup(pl.win, "label_grid_sub", 1);
     pl.st_ltitle = widget_lookup(pl.win, "label_row_title", 1);
     pl.st_lsub = widget_lookup(pl.win, "label_row_sub", 1);
     pl.btn = pod_bind(pl.win, "btn_albumview", pl_on_toggle, (void *)0);
-    if (!pl.btn_more || !pl.btn || !pl.scrim || !pl.card || !pl.view || !pl.sv || !pl.status || !pl.g.st_title || !pl.g.st_sub || !pl.st_ltitle || !pl.st_lsub) {
-        navigator_back();   /* an asset that is not ours */
+    if (!pl.btn_more || !pl.btn || !pl.scrim || !pl.card || !pl.view || !pl.sv || !pl.status || !pl.g.st_title ||
+        !pl.g.st_sub || !pl.st_ltitle || !pl.st_lsub) {
+        navigator_back(); /* an asset that is not ours */
         return -2;
     }
     for (i = 0; i < PL_MENU_ROWS; ++i) {
@@ -808,8 +855,9 @@ static int pl_open_page(void) {
     }
     pl_menu(0);
     if (pl.del) pod_centre_pill(pl.del, PL_BAR_PILL_W);
-    pl.tmp = calloc((GRID_COVER / 2) * (GRID_COVER / 2), 4);   /* one quadrant of a mosaic; without it a mosaic falls back to its first cover */
-    {   /* the stock grid, its two text styles are this page's hidden labels */
+    pl.tmp = calloc((GRID_COVER / 2) * (GRID_COVER / 2),
+                    4); /* one quadrant of a mosaic; without it a mosaic falls back to its first cover */
+    { /* the stock grid, its two text styles are this page's hidden labels */
         void *st_title = pl.g.st_title, *st_sub = pl.g.st_sub;
         if (!grid_init(&pl.g, pl.win, GRID_TILES, GRID_COVER, GRID_R)) {
             grid_free(&pl.g);
@@ -822,7 +870,7 @@ static int pl_open_page(void) {
     }
     pl.mark[0] = pod_make_mark(pl.win, "unselect");
     pl.mark[1] = pod_make_mark(pl.win, "selected");
-    if (!pl.mark[0] || !pl.mark[1]) {   /* the pair is all or none (no marks: no select mode) */
+    if (!pl.mark[0] || !pl.mark[1]) { /* the pair is all or none (no marks: no select mode) */
         if (pl.mark[0]) bitmap_destroy(pl.mark[0]);
         if (pl.mark[1]) bitmap_destroy(pl.mark[1]);
         pl.mark[0] = pl.mark[1] = (void *)0;
@@ -830,7 +878,8 @@ static int pl_open_page(void) {
     pl.list = !pl_use_grid();
     pl_shape(pl.list);
     pl_glyph();
-    pl.noscroll = !widget_on(pl.sv, EVT_SCROLL, pl_on_scroll, (void *)0) || !widget_on(pl.sv, EVT_SCROLL_END, pl_on_scroll, (void *)0);
+    pl.noscroll = !widget_on(pl.sv, EVT_SCROLL, pl_on_scroll, (void *)0) ||
+                  !widget_on(pl.sv, EVT_SCROLL_END, pl_on_scroll, (void *)0);
     widget_on(pl.win, EVT_WINDOW_TO_FG, pl_on_fg, (void *)0);
     widget_on(pl.win, EVT_WINDOW_TO_BG, pl_on_bg, (void *)0);
     widget_on(pl.view, EVT_POINTER_DOWN, pl_on_down, (void *)0);

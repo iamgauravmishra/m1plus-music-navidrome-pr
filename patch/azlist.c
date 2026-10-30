@@ -39,10 +39,13 @@ void az_sections(az_t *az, const unsigned char *rank, unsigned stride) {
     if (!bits) return;
     for (r = 0; r < SG_RANKS; ++r) m[r] = 0;
     for (i = 0; i < n; ++i) {
-        for (b = 0, k = rank[i * stride], r = 0; r < SG_RANKS; ++r) {   /* m[r] still holds the previous song's value, m[r - 1] already this song's */
+        for (b = 0, k = rank[i * stride], r = 0; r < SG_RANKS;
+             ++r) { /* m[r] still holds the previous song's value, m[r - 1] already this song's */
             d = m[r] + (r == k);
-            if (r && m[r - 1] >= d) m[r] = m[r - 1], b |= 1u << r;      /* a tie takes the lower label: a section starts as late as it can */
-            else m[r] = d;
+            if (r && m[r - 1] >= d)
+                m[r] = m[r - 1], b |= 1u << r; /* a tie takes the lower label: a section starts as late as it can */
+            else
+                m[r] = d;
         }
         bits[i] = b;
     }
@@ -51,7 +54,8 @@ void az_sections(az_t *az, const unsigned char *rank, unsigned stride) {
         bits[i] = (unsigned)lab;
     }
     for (i = 0; i < n; ++i)
-        if ((int)bits[i] != prev) prev = (int)bits[i], az->sec_start[az->nsec] = i, az->sec_letter[az->nsec++] = az_rank_letter(prev);
+        if ((int)bits[i] != prev)
+            prev = (int)bits[i], az->sec_start[az->nsec] = i, az->sec_letter[az->nsec++] = az_rank_letter(prev);
     free(bits);
 }
 
@@ -68,7 +72,9 @@ int az_sec_of(const az_t *az, int i) {
     return s;
 }
 
-int az_row_y(const az_t *az, int i) { return az->top + (az->nsec ? (az_sec_of(az, i) + 1) * SG_HDR_H : 0) + i * az->row; }
+int az_row_y(const az_t *az, int i) {
+    return az->top + (az->nsec ? (az_sec_of(az, i) + 1) * SG_HDR_H : 0) + i * az->row;
+}
 int az_rows_end(const az_t *az) { return az->top + az->nsec * SG_HDR_H + az->count * az->row; }
 
 int az_max_scroll(const az_t *az) {
@@ -80,11 +86,13 @@ int az_row_from(const az_t *az, int y) {
     int s, i;
     if (!az->count) return 0;
     if (y < az->top) return 0;
-    if (!az->nsec) i = (y - az->top) / az->row;
+    if (!az->nsec)
+        i = (y - az->top) / az->row;
     else {
         s = az->nsec - 1;
         while (s > 0 && az_hdr_y(az, s) > y) --s;
-        i = y < az_hdr_y(az, s) + SG_HDR_H ? (int)az->sec_start[s] : (int)az->sec_start[s] + (y - az_hdr_y(az, s) - SG_HDR_H) / az->row;
+        i = y < az_hdr_y(az, s) + SG_HDR_H ? (int)az->sec_start[s]
+                                           : (int)az->sec_start[s] + (y - az_hdr_y(az, s) - SG_HDR_H) / az->row;
     }
     return i > az->count - 1 ? az->count - 1 : i;
 }
@@ -101,7 +109,8 @@ void az_span(const az_t *az, int *r0, int *r1) {
     int s = az_off(az), n = az->count;
     *r0 = az_row_from(az, s < 0 ? 0 : s);
     *r1 = az_row_from(az, s + GRID_VIEW_H - 1);
-    if (n && az_row_y(az, *r1) > s + GRID_VIEW_H - 1) --*r1;   /* the last pixel is in a header: the row after it is not in view */
+    if (n && az_row_y(az, *r1) > s + GRID_VIEW_H - 1)
+        --*r1; /* the last pixel is in a header: the row after it is not in view */
     if (n && az_row_y(az, *r0) + az->row <= s) ++*r0;
     if (*r1 > n - 1) *r1 = n - 1;
     if (*r0 < 0) *r0 = 0;
@@ -145,7 +154,7 @@ void az_paint_heads(az_t *az, void *canvas) {
     if (!az->nsec) return;
     widget_prepare_text_style(az->st_hdr, canvas);
     for (s = 0; s < az->nsec; ++s) az_letter_text(az, canvas, s, az_hdr_y(az, s) - off);
-    pin = az_pinned(az, &py);   /* over everything: the pinned band and its letter */
+    pin = az_pinned(az, &py); /* over everything: the pinned band and its letter */
     if (pin >= 0) {
         az_fill(canvas, 0, py, py + SG_HDR_H, 320, SG_HDR_BG);
         az_letter_text(az, canvas, pin, py);
@@ -175,7 +184,9 @@ int az_rail_plan(const az_t *az, int *sec) {
     }
 }
 
-int az_rail_span(const az_t *az, int letters) { return (letters < az->nsec ? 2 * letters - 1 : letters) * SG_RAIL_PITCH; }   /* the drawn height */
+int az_rail_span(const az_t *az, int letters) {
+    return (letters < az->nsec ? 2 * letters - 1 : letters) * SG_RAIL_PITCH;
+} /* the drawn height */
 
 static void az_show(void *w, int on) {
     if (!w) return;
@@ -197,7 +208,7 @@ void az_rail_fit(az_t *az, int rail_h) {
     az_redraw_rail(az);
 }
 
-static void az_bubble(az_t *az, int i) {   /* the bubble shows section i's letter, or hides */
+static void az_bubble(az_t *az, int i) { /* the bubble shows section i's letter, or hides */
     char s[2];
     if (i < 0) {
         widget_set_visible(az->bubble, 0, 0);
@@ -210,9 +221,10 @@ static void az_bubble(az_t *az, int i) {   /* the bubble shows section i's lette
 
 /* Section i's header at the window's top (clamped); a coasting list stops first. */
 static void az_jump(az_t *az, int i) {
-    int v = i ? az_hdr_y(az, i) : 0, max = az_max_scroll(az);   /* (the first section: the top, the large title and the pills with it) */
+    int v = i ? az_hdr_y(az, i) : 0,
+        max = az_max_scroll(az); /* (the first section: the top, the large title and the pills with it) */
     void *wa = P(az->sv, SC_WA);
-    if (wa && I(wa, SC_AN_STATE) == SC_AN_RUNNING && P(wa, SC_AN_WIDGET) == az->sv) {   /* patch/scroll.c sc_down */
+    if (wa && I(wa, SC_AN_STATE) == SC_AN_RUNNING && P(wa, SC_AN_WIDGET) == az->sv) { /* patch/scroll.c sc_down */
         widget_animator_destroy(wa);
         stock_scroll_done(az->sv, (void *)0);
     }
@@ -247,12 +259,17 @@ void az_rail_event(az_t *az, void *e) {
     }
     if (type == EVT_POINTER_DOWN) {
         if (!az->grab) widget_grab(az->win, az->rail);
-        az->grab = 1, az->rail_on = 0;   /* a new touch: its first letter always sets */
-    } else if (!az->grab) return;
+        az->grab = 1, az->rail_on = 0; /* a new touch: its first letter always sets */
+    } else if (!az->grab)
+        return;
     pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
     widget_to_local(az->rail, pt);
-    l = az_rail_plan(az, sec);   /* the drawn span, however many letters it shows, is split into the sections: every one is reachable */
-    i = pt[1] < SG_RAIL_PAD ? 0 : (pt[1] - SG_RAIL_PAD) * az->nsec / az_rail_span(az, l);   /* (the span starts SG_RAIL_PAD down the widget) */
+    l = az_rail_plan(
+        az,
+        sec); /* the drawn span, however many letters it shows, is split into the sections: every one is reachable */
+    i = pt[1] < SG_RAIL_PAD ? 0
+                            : (pt[1] - SG_RAIL_PAD) * az->nsec /
+                                  az_rail_span(az, l); /* (the span starts SG_RAIL_PAD down the widget) */
     if (i > az->nsec - 1) i = az->nsec - 1;
     az_rail_set(az, i);
 }
@@ -263,9 +280,10 @@ void az_rail_event(az_t *az, void *e) {
  * (INK2 - DOT) / 2 into its item, and the disc is centred on the same line. Horizontally canvas_draw_text_in_rect puts a text of measured width lw (the truncated
  * advances + 1 px per glyph) at rect.x + (rect.w - lw) / 2, integer: so the rect is SG_RAIL_TEXT_W wide, centred on the dots' x and moved by the letter's own
  * SG_RAIL_DX so the ink (not the advance) is centred on that x within half a pixel. */
-static const signed char az_rail_dx[27] = SG_RAIL_DX;   /* "#", A..Z */
+static const signed char az_rail_dx[27] = SG_RAIL_DX; /* "#", A..Z */
 #define SG_RAIL_DOT_Y ((SG_RAIL_INK2 - SG_RAIL_DOT) / 2)
-#define SG_RAIL_DISC_Y (-((SG_RAIL_DISC - SG_RAIL_INK2 + 1) / 2))   /* floor((INK2 - DISC) / 2), negative: the disc starts above the item */
+#define SG_RAIL_DISC_Y \
+    (-((SG_RAIL_DISC - SG_RAIL_INK2 + 1) / 2)) /* floor((INK2 - DISC) / 2), negative: the disc starts above the item */
 
 /* The rail (its own EVT_AFTER_PAINT, the rail's coordinates, the span from SG_RAIL_PAD): the plan's letters, a dot between two of them when the plan skips sections,
  * the touched letter (when it is a drawn one) on its disc with a black letter. */
@@ -276,11 +294,11 @@ void az_rail_paint(az_t *az, void *e) {
     if (!canvas || !az->nsec) return;
     l = az_rail_plan(az, sec);
     dots = l < az->nsec;
-    step = dots ? 2 : 1;   /* the items a letter takes with the dot after it */
+    step = dots ? 2 : 1; /* the items a letter takes with the dot after it */
     if (dots) {
         int x = SG_RAIL_CX - SG_RAIL_X - SG_RAIL_DOT / 2;
         canvas_set_fill_color(canvas, SG_RAIL_DOT_RGB);
-        for (j = 0; j + 1 < l; ++j) {   /* a dot of four pixels: the cross of two bars cuts its corners */
+        for (j = 0; j + 1 < l; ++j) { /* a dot of four pixels: the cross of two bars cuts its corners */
             int y = y0 + (step * j + 1) * SG_RAIL_PITCH + SG_RAIL_DOT_Y;
             canvas_fill_rect(canvas, x, y + 1, SG_RAIL_DOT, SG_RAIL_DOT - 2);
             canvas_fill_rect(canvas, x + 1, y, SG_RAIL_DOT - 2, SG_RAIL_DOT);
@@ -291,19 +309,21 @@ void az_rail_paint(az_t *az, void *e) {
             if (sec[j] == az->rail_i) {
                 int src[4], dst[4];
                 src[0] = src[1] = 0, src[2] = src[3] = SG_RAIL_DISC;
-                dst[0] = SG_RAIL_CX - SG_RAIL_X - SG_RAIL_DISC / 2, dst[1] = y0 + step * j * SG_RAIL_PITCH + SG_RAIL_DISC_Y, dst[2] = dst[3] = SG_RAIL_DISC;
+                dst[0] = SG_RAIL_CX - SG_RAIL_X - SG_RAIL_DISC / 2,
+                dst[1] = y0 + step * j * SG_RAIL_PITCH + SG_RAIL_DISC_Y, dst[2] = dst[3] = SG_RAIL_DISC;
                 canvas_draw_image(canvas, az->disc, src, dst);
             }
         }
     }
-    for (pass = 0; pass < 2; ++pass) {   /* the others, then the touched one (black) */
+    for (pass = 0; pass < 2; ++pass) { /* the others, then the touched one (black) */
         if (pass && !az->rail_on) break;
         widget_prepare_text_style(pass ? az->st_rail_on : az->st_rail, canvas);
         for (j = 0; j < l; ++j) {
             if ((sec[j] == az->rail_i && az->rail_on) != pass) continue;
             w[0] = az->sec_letter[sec[j]], w[1] = 0;
             k = w[0] >= 'A' && w[0] <= 'Z' ? (int)w[0] - 'A' + 1 : 0;
-            rect[0] = SG_RAIL_CX - SG_RAIL_X - SG_RAIL_TEXT_W / 2 + az_rail_dx[k], rect[1] = y0 + step * j * SG_RAIL_PITCH, rect[2] = SG_RAIL_TEXT_W, rect[3] = SG_RAIL_PITCH;
+            rect[0] = SG_RAIL_CX - SG_RAIL_X - SG_RAIL_TEXT_W / 2 + az_rail_dx[k],
+            rect[1] = y0 + step * j * SG_RAIL_PITCH, rect[2] = SG_RAIL_TEXT_W, rect[3] = SG_RAIL_PITCH;
             canvas_draw_text_in_rect(canvas, w, 1, rect);
         }
     }
@@ -362,18 +382,26 @@ void az_fit(void *w, const char *text) {
     while (lo < hi) {
         unsigned mid = (lo + hi + 1) / 2, k0 = s[mid], k1 = s[mid + 1];
         s[mid] = ELLIPSIS, s[mid + 1] = 0;
-        if (az_text_w(w, s) <= room) lo = mid;
-        else hi = mid - 1;
+        if (az_text_w(w, s) <= room)
+            lo = mid;
+        else
+            hi = mid - 1;
         s[mid] = k0, s[mid + 1] = k1;
     }
-    while (lo && s[lo - 1] == ' ') --lo;   /* no space before the ellipsis */
+    while (lo && s[lo - 1] == ' ') --lo; /* no space before the ellipsis */
     s[lo] = ELLIPSIS, s[lo + 1] = 0;
-    for (i = 0; s[i]; ++i) {   /* back to UTF-8 */
+    for (i = 0; s[i]; ++i) { /* back to UTF-8 */
         c = s[i];
-        if (c < 0x80) out[o++] = (char)c;
-        else if (c < 0x800) out[o++] = (char)(0xc0 | c >> 6), out[o++] = (char)(0x80 | (c & 63));
-        else if (c < 0x10000) out[o++] = (char)(0xe0 | c >> 12), out[o++] = (char)(0x80 | (c >> 6 & 63)), out[o++] = (char)(0x80 | (c & 63));
-        else out[o++] = (char)(0xf0 | c >> 18), out[o++] = (char)(0x80 | (c >> 12 & 63)), out[o++] = (char)(0x80 | (c >> 6 & 63)), out[o++] = (char)(0x80 | (c & 63));
+        if (c < 0x80)
+            out[o++] = (char)c;
+        else if (c < 0x800)
+            out[o++] = (char)(0xc0 | c >> 6), out[o++] = (char)(0x80 | (c & 63));
+        else if (c < 0x10000)
+            out[o++] = (char)(0xe0 | c >> 12), out[o++] = (char)(0x80 | (c >> 6 & 63)),
+            out[o++] = (char)(0x80 | (c & 63));
+        else
+            out[o++] = (char)(0xf0 | c >> 18), out[o++] = (char)(0x80 | (c >> 12 & 63)),
+            out[o++] = (char)(0x80 | (c >> 6 & 63)), out[o++] = (char)(0x80 | (c & 63));
     }
     out[o] = 0;
     widget_set_text_utf8(w, out);

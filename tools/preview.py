@@ -11,13 +11,13 @@ previews from one finished tree. Approximate, not AWTK; sample data.
   pull-down (the tree's dropdown_dialog.bin, real captions) and the toggle / slider art   controls()
   status bar / lock screen battery at 8x         preview_battery
 
-Usage: venv/bin/python -I tools/preview.py WORKDIR [OUT.png]     (default out/preview/release-preview.png, gitignored)
+Usage: uv run python -I tools/preview.py WORKDIR [OUT.png]     (default out/preview/release-preview.png, gitignored)
 """
-import os, subprocess, sys, tempfile
+import argparse, os, subprocess, sys, tempfile
 from PIL import Image, ImageDraw
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import build, preview_icons as PI
+import build, workflow, preview_icons as PI
 import pod_pages
 P = pod_pages
 
@@ -257,8 +257,18 @@ def shot_bars(work):
     return sheet.resize((sheet.width * 3, sheet.height * 3), Image.NEAREST)
 
 def main():
-    work = sys.argv[1]
-    out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(build.ROOT, 'out', 'preview', 'release-preview.png')
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument('work', nargs='?'); ap.add_argument('out', nargs='?')
+    ap.add_argument('--build', help='dev artifact directory or latest')
+    a = ap.parse_args()
+    if bool(a.work) == bool(a.build): ap.error('give a tree path or --build, not both')
+    if a.build:
+        directory = workflow.build_dir(a.build)
+        work = str(directory / 'tree'); record = workflow.validate_tree(work, current=False)
+        out = a.out or str(directory / 'previews/sheet.png')
+    else:
+        work = a.work; record = workflow.validate_tree(work, current=False)
+        out = a.out or os.path.join(build.ROOT, 'out/preview/release-preview.png')
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     raw = os.path.join(work, RAW)
     s = PI.Side(work, True); s.mark = lambda *a: None   # no C/K markers here
@@ -328,7 +338,7 @@ def main():
     wid = max(wid, bat.width + 2 * pad)
     hei = sum(max(i.height for _, i in r) + lab + pad for r in rows) + bat.height + 2 * pad + 40
     sh = Image.new('RGB', (wid, hei), (0x2A, 0x2A, 0x2A)); d = ImageDraw.Draw(sh)
-    d.text((pad, 6), f'{build.TAG} release (1:1 device pixels)',
+    d.text((pad, 6), f'{record["tag"]} {record["mode"]} (approximate; 1:1 device pixels)',
            fill=(255, 255, 255), font=PI.ANN)
     y = 30
     for r in rows:

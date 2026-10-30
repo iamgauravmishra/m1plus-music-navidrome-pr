@@ -35,23 +35,24 @@
 #include "common.h"
 #include "covercache.h"
 
-#define PM_ROWS 10    /* listitem0..6, then pod_more, pod_back, pod_tape */
+#define PM_ROWS 10 /* listitem0..6, then pod_more, pod_back, pod_tape */
 #define PM_MORE 7
 #define PM_BACK 8
 #define PM_TAPE 9
-#define GO_ALBUM 4    /* listitem4, Look up album */
+#define GO_ALBUM 4 /* listitem4, Look up album */
 
 /* what each page shows, top to bottom, as indices into pm.row[]; the sheet is as high as its page's rows (PM_PAGE_N, PM_PAGE2_N) */
 static const unsigned char pm_page[2][PM_PAGE_N] = {
-    {4, 5, 2, PM_TAPE, PM_MORE},      /* Look up album, Look up artist, Add to playlist, Cassette Mode, More */
-    {PM_BACK, 1, 0, 6},               /* the back header, Playback speed, A-B repeat, Delete */
+    {4, 5, 2, PM_TAPE, PM_MORE}, /* Look up album, Look up artist, Add to playlist, Cassette Mode, More */
+    {PM_BACK, 1, 0, 6}, /* the back header, Playback speed, A-B repeat, Delete */
 };
 static const unsigned char pm_rows[2] = {PM_PAGE_N, PM_PAGE2_N};
 
 static struct {
-    void *dlg, *lv, *sv, *bar, *glass; /* the dialog, its list_view, scroll_view and scroll bar, and the glass image under them */
+    void *dlg, *lv, *sv, *bar,
+        *glass; /* the dialog, its list_view, scroll_view and scroll bar, and the glass image under them */
     void *row[PM_ROWS];
-    int page;                         /* 0: the first page, 1: the More page */
+    int page; /* 0: the first page, 1: the More page */
 } pm __attribute__((section(".scratch")));
 
 static void pm_show(void *w, int on) {
@@ -68,8 +69,10 @@ static void pm_arrange(void) {
     memset(used, 0, sizeof used);
     widget_invalidate_force(pm.dlg, (void *)0);
     for (i = 0; i < PM_ROWS; i++) {
-        widget_resize(pm.row[i], PM_SV_W, PM_ROW_H); /* the asset has Go to artist and Delete 60 px high: the layouter keeps a row's own height */
-        widget_set_state(pm.row[i], "normal");       /* the row that was tapped is hidden by its own click */
+        widget_resize(
+            pm.row[i], PM_SV_W,
+            PM_ROW_H); /* the asset has Go to artist and Delete 60 px high: the layouter keeps a row's own height */
+        widget_set_state(pm.row[i], "normal"); /* the row that was tapped is hidden by its own click */
     }
     for (i = 0; i < n; i++) {
         void *r = pm.row[pm_page[pm.page][i]];
@@ -77,14 +80,18 @@ static void pm_arrange(void) {
         widget_move(r, 0, (int)i * PM_ROW_H);
         pm_show(r, 1);
     }
-    for (i = 0; i < PM_ROWS; i++) { /* parked under the shown rows: nothing it could shadow if a hit test did look at it */
+    for (i = 0; i < PM_ROWS;
+         i++) { /* parked under the shown rows: nothing it could shadow if a hit test did look at it */
         if (used[i]) continue;
         widget_move(pm.row[i], 0, h);
         pm_show(pm.row[i], 0);
     }
     for (i = 0; i < n; i++) widget_restack(pm.row[pm_page[pm.page][i]], k++);
-    for (i = 0; i < PM_ROWS; i++) if (!used[i]) widget_restack(pm.row[i], k++);
-    widget_resize(pm.glass, PM_DIALOG_W, h);   /* the glass of the page's own height: pm_sheet5 (page 1, 250 px) or pm_sheet (page 2, 200 px), never a crop */
+    for (i = 0; i < PM_ROWS; i++)
+        if (!used[i]) widget_restack(pm.row[i], k++);
+    widget_resize(
+        pm.glass, PM_DIALOG_W,
+        h); /* the glass of the page's own height: pm_sheet5 (page 1, 250 px) or pm_sheet (page 2, 200 px), never a crop */
     image_base_set_image(pm.glass, pm.page ? "pm_sheet" : "pm_sheet5");
     widget_resize(pm.dlg, PM_DIALOG_W, h);
     widget_move(pm.dlg, 0, PM_SCREEN_H - h);
@@ -174,19 +181,21 @@ static int pm_on_lookup_album(void *ctx, void *e) {
     *(unsigned char *)SONGER_FLAG = 1;
     if (cc_open_album((void *)0, 0, row) < 0) {
         *(unsigned char *)SONGER_FLAG = prev;
-        return RET_STOP;   /* the list changed between the two reads: the sheet is closed, nothing opened */
+        return RET_STOP; /* the list changed between the two reads: the sheet is closed, nothing opened */
     }
     top = window_manager_get_top_window(window_manager());
-    if (top && !strcmp(*(const char **)((char *)top + WIDGET_NAME), "albuminfo_page") && widget_on(top, EVT_DESTROY, pm_on_album_gone, top)) {
-        if (!pm_flag_owner) pm_flag_prev = prev;   /* an older owner still pending keeps the byte from before it */
+    if (top && !strcmp(*(const char **)((char *)top + WIDGET_NAME), "albuminfo_page") &&
+        widget_on(top, EVT_DESTROY, pm_on_album_gone, top)) {
+        if (!pm_flag_owner) pm_flag_prev = prev; /* an older owner still pending keeps the byte from before it */
         pm_flag_owner = top;
     } else
-        *(unsigned char *)SONGER_FLAG = prev;   /* cannot tell when it ends: do not leave the flag set */
+        *(unsigned char *)SONGER_FLAG = prev; /* cannot tell when it ends: do not leave the flag set */
     return RET_STOP;
 }
 
 static void pm_start(void *dlg) {
-    static const char *const names[PM_ROWS] = {"listitem0", "listitem1", "listitem2", "listitem3", "listitem4", "listitem5", "listitem6", "pod_more", "pod_back", "pod_tape"};
+    static const char *const names[PM_ROWS] = {"listitem0", "listitem1", "listitem2", "listitem3", "listitem4",
+                                               "listitem5", "listitem6", "pod_more",  "pod_back",  "pod_tape"};
     void *more_label, *back_label, *speed_label, *note_label, *tape_label;
     unsigned i;
     if (access(KILL_SD, F_OK) == 0) return;
@@ -201,7 +210,9 @@ static void pm_start(void *dlg) {
     speed_label = widget_lookup(dlg, "scrlabel1", 1);
     note_label = widget_lookup(dlg, "label1_msg", 1);
     tape_label = widget_lookup(dlg, "pod_tape_label", 1);
-    if (!pm.lv || !pm.sv || !pm.bar || !pm.glass || !more_label || !back_label || !speed_label || !note_label || !tape_label) goto fail;
+    if (!pm.lv || !pm.sv || !pm.bar || !pm.glass || !more_label || !back_label || !speed_label || !note_label ||
+        !tape_label)
+        goto fail;
     for (i = 0; i < PM_ROWS; i++) { /* exactly the asset: nine rows in the scroll_view */
         pm.row[i] = widget_lookup(dlg, names[i], 1);
         if (!pm.row[i] || *(void **)((char *)pm.row[i] + W_PARENT) != pm.sv) goto fail;
@@ -209,11 +220,13 @@ static void pm_start(void *dlg) {
     if (widget_count_children(pm.sv) != PM_ROWS) goto fail;
     if (widget_set_tr_text(more_label, "More") != RET_OK) goto fail;
     if (widget_set_tr_text(back_label, "More") != RET_OK) goto fail;
-    if (widget_set_tr_text(speed_label, "Speed") != RET_OK) goto fail;   /* the stock "Multiple Speed" is wider than the room before the badges */
+    if (widget_set_tr_text(speed_label, "Speed") != RET_OK)
+        goto fail; /* the stock "Multiple Speed" is wider than the room before the badges */
     if (widget_set_tr_text(note_label, "Files below 48 kHz only") != RET_OK) goto fail;
     if (widget_set_tr_text(tape_label, "Cassette Mode") != RET_OK) goto fail;
     if (!widget_on(dlg, EVT_DESTROY, pm_on_destroy, dlg)) goto fail;
-    if (!widget_on(pm.lv, EVT_WINDOW_TO_BG, pm_on_bg, dlg)) goto fail;   /* after the stock one on the dialog (top comment) */
+    if (!widget_on(pm.lv, EVT_WINDOW_TO_BG, pm_on_bg, dlg))
+        goto fail; /* after the stock one on the dialog (top comment) */
     if (!widget_on(pm.row[PM_MORE], EVT_CLICK, pm_on_more, dlg)) goto fail;
     if (!widget_on(pm.row[PM_BACK], EVT_CLICK, pm_on_back, dlg)) goto fail;
     if (!widget_on(pm.row[PM_TAPE], EVT_CLICK, pm_on_tape, dlg)) goto fail;
@@ -222,7 +235,9 @@ static void pm_start(void *dlg) {
     pm_arrange();
     return;
 fail:
-    memset(&pm, 0, sizeof pm); /* the stock rows are as the stock init left them; a handler that was bound finds no dialog of ours */
+    memset(
+        &pm, 0,
+        sizeof pm); /* the stock rows are as the stock init left them; a handler that was bound finds no dialog of ours */
 }
 
 /* The hook (tools/pod.py PLAYMORE_INIT): stock first, then ours. */

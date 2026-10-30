@@ -190,7 +190,6 @@ def row_machine(albums=1):
 
 
 def rows_tests(expect):
-    import json
     edits = MANIFEST.get('row_edits', [])
     J = json.load(open(os.path.join(ROOT, 'patch', 'rows.json')))
     target = PSYMS['compact_set_row_layout']
@@ -391,7 +390,7 @@ def rows_tests(expect):
            'a null layouter or row: straight to the stock layout (its own error)')
     lay = m.alloc(0x20); m.u.mem_write(lay, bytes(0x20)); m.u.mem_write(lay + 0x14, bytes([12, 0, 8]))
     r = m.new_widget('button', 0, 0, 0, 310, 60)
-    img = m.new_widget('image', r, 0, 0, 40, 60); lbl = m.new_widget('label', r, 0, 0, 200, 60)
+    img = m.new_widget('image', r, 0, 0, 40, 60); m.new_widget('label', r, 0, 0, 200, 60)
     m.resizes = []
     m.call(PSYMS['compact_row_layout'], a0=lay, a1=r, count=200000)
     expect(m.stock_layouts == 1 and not m.resizes and not m.focus,
@@ -406,7 +405,7 @@ def rows_tests(expect):
     m.call(PSYMS['compact_row_layout'], a0=lay, a1=big, count=400000)
     expect(m.stock_layouts == 1 and not m.resizes, f'more than {O["ROW_MAX_CHILDREN"]} children: the stock layout alone')
     tiny = m.new_widget('button', 0, 0, 0, 30, 60)
-    t1 = m.new_widget('image', tiny, 0, 0, 40, 60); t2 = m.new_widget('hscroll_label', tiny, 0, 0, 100, 60)
+    m.new_widget('image', tiny, 0, 0, 40, 60); t2 = m.new_widget('hscroll_label', tiny, 0, 0, 100, 60)
     m.call(PSYMS['compact_row_layout'], a0=lay, a1=tiny, count=200000)
     expect(m.geo(t2)[2] == 0, 'a row too narrow for its text: width 0, not negative')
 

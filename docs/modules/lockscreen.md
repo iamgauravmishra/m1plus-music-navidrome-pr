@@ -1,8 +1,6 @@
 # Lock screen
 
-Split out of docs/ui.md. A "section N" in the text is an old section number of `docs/architecture.md` (or of `docs/ui.md` in the asset notes); the "Old §" columns of those two index files map them to module files.
-
-### Lock screen (`tools/mod_lockscreen.py`)
+## Lock screen (`tools/mod_lockscreen.py`)
 
 `ui/screensaver_page.bin` (fullscreen 320x480), page theme `styles/screensaver_page.bin`, the three
 `screens_*` battery images, `screens_rightslide.png` (default + theme1), and four words of `demo`.

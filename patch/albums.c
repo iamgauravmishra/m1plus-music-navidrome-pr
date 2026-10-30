@@ -59,14 +59,16 @@
 #include "grid.h"
 
 extern int coverflow_open(void); /* patch/coverflow.c: the menu's Cover Flow row, opened over this page */
-extern int pod_home_open(int id);/* patch/m1plus.c: a stock Home destination through the dispatcher */
+extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
 
-#define CELL_H GRID_CELL_H              /* the cell geometry is the grid's (patch/grid.h), shared with the Recently Played shelf */
+#define CELL_H GRID_CELL_H /* the cell geometry is the grid's (patch/grid.h), shared with the Recently Played shelf */
 #define PITCH GRID_PITCH
-#define AL_W 320                        /* the content's width: the list_view's (its layouter gives a child a mobile scroll bar's list the full width; the scroll_view clips at 310, the covers end at 308) */
-#define AL_MORE_MS 16                   /* the loader's tick */
-#define AL_TAP_PX SC_DRAG_PX            /* a release closer than this to the press on both axes is a tap (from there the scroll_view drags) */
-#define AL_AHEAD (al.list ? 2 : 1)      /* rows loaded beyond the view in the scroll direction */
+#define AL_W \
+    320 /* the content's width: the list_view's (its layouter gives a child a mobile scroll bar's list the full width; the scroll_view clips at 310, the covers end at 308) */
+#define AL_MORE_MS 16 /* the loader's tick */
+#define AL_TAP_PX \
+    SC_DRAG_PX /* a release closer than this to the press on both axes is a tap (from there the scroll_view drags) */
+#define AL_AHEAD (al.list ? 2 : 1) /* rows loaded beyond the view in the scroll direction */
 /* the most cells a frame can touch: (view + cell) / pitch + 1 rows of GRID_COLS; the ring must hold them, the next
  * row in the scroll direction and leave two tiles of history */
 #if GRID_TILES < GRID_COLS * ((GRID_VIEW_H + CELL_H) / PITCH + 2 + 1) + 2
@@ -80,34 +82,36 @@ extern int pod_home_open(int id);/* patch/m1plus.c: a stock Home destination thr
 #define I(w, off) (*(int *)((char *)(w) + (off)))
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 
-typedef grid_tile_t tile_t;   /* the grid's tile (patch/grid.h) */
+typedef grid_tile_t tile_t; /* the grid's tile (patch/grid.h) */
 
 static struct {
     void *win, *view, *sv, *status, *btn;
-    void *st_title, *st_sub;      /* hidden labels whose styles are the list's two text styles */
-    void *st_gtitle, *st_gsub;    /* and the grid's two */
-    void *albums;                 /* our copy of the stock album rows */
-    unsigned *order;              /* display order as stock row numbers (cc_album_order, Settings > Cover Flow > Sort); NULL = stock order */
+    void *st_title, *st_sub; /* hidden labels whose styles are the list's two text styles */
+    void *st_gtitle, *st_gsub; /* and the grid's two */
+    void *albums; /* our copy of the stock album rows */
+    unsigned *
+        order; /* display order as stock row numbers (cc_album_order, Settings > Cover Flow > Sort); NULL = stock order */
     unsigned count;
-    int list;                     /* 1 list mode, 0 grid */
-    int press;                    /* list: the row under the finger, + 1 */
-    int seen;                     /* the scroll offset the loader last looked at (the direction is read from its change) */
-    int dir;                      /* the way the content last went: 1 down the list, -1 back up */
-    int noscroll;                 /* the scroll events could not be registered: the loader keeps polling for as long as the page is up */
-    int down, down_x, down_y;     /* the cell or row a press began on, + 1 (0 none), and where (screen coordinates) */
-    unsigned more_timer;          /* the loader's */
+    int list; /* 1 list mode, 0 grid */
+    int press; /* list: the row under the finger, + 1 */
+    int seen; /* the scroll offset the loader last looked at (the direction is read from its change) */
+    int dir; /* the way the content last went: 1 down the list, -1 back up */
+    int noscroll; /* the scroll events could not be registered: the loader keeps polling for as long as the page is up */
+    int down, down_x, down_y; /* the cell or row a press began on, + 1 (0 none), and where (screen coordinates) */
+    unsigned more_timer; /* the loader's */
     /* the background cache build (the shared worker, patch/covercache.c): build_timer is the one-shot start, then the poll;
      * own = this page holds the worker's job set; done = the worker's done counter at the last poll */
     unsigned build_timer;
     int own, done;
-    void *fade;                   /* the navbar's fade (img_nb_fade, optional): shown only while the list is scrolled */
+    void *fade; /* the navbar's fade (img_nb_fade, optional): shown only while the list is scrolled */
     /* the scan that queues the missing albums runs in AL_SCAN_BATCH steps on build_timer: scanning = a scan is under
      * way (own set held, worker not started); scan_cur / scan_centre = the cc_build_near_step cursor and the album it
      * is centred on; scanned = a finished scan found nothing missing (kept until the page closes: al is cleared on open) */
     int scanning, scanned;
     unsigned scan_cur, scan_centre;
     int fg;
-    grid_t g;                    /* the tile ring (GRID_TILES, heap), the placeholder, the mode's cover size (g.side): patch/grid.c; LAST (test/pod/albums.py reads the fields above by index) */
+    grid_t
+        g; /* the tile ring (GRID_TILES, heap), the placeholder, the mode's cover size (g.side): patch/grid.c; LAST (test/pod/albums.py reads the fields above by index) */
 } al __attribute__((section(".scratch")));
 
 /* Hidden and out of the hit test together (this AWTK's widget_find_target ignores visible). */
@@ -157,17 +161,17 @@ static void al_redraw(void) { widget_invalidate_force(al.sv, (void *)0); }
  */
 
 /* The first grid row that touches the view, or the row of scroll offset s. */
-static int al_row_of(int s) {
-    return s > GRID_ROW_GAP + CELL_H ? (s - GRID_ROW_GAP - CELL_H) / PITCH + 1 : 0;
-}
+static int al_row_of(int s) { return s > GRID_ROW_GAP + CELL_H ? (s - GRID_ROW_GAP - CELL_H) / PITCH + 1 : 0; }
 
 /* The rows (grid rows, or list rows = albums) that touch the view: [*r0, *r1], r1 < r0 for none. The offset is outside
  * [0, max] while a drag pulls the list past an end (the stock scroll_view's overscroll, the gap above the first row): the
  * rows are kept inside [0, n - 1], never a row before the first (album -1 read past the album list and crashed the app). */
 static void al_span(int *r0, int *r1) {
     int n = al.list ? (int)al.count : al_rows(), s = al_off();
-    if (al.list) *r0 = s / LIST_ROW_H, *r1 = (s + GRID_VIEW_H - 1) / LIST_ROW_H;
-    else *r0 = al_row_of(s), *r1 = (s + GRID_VIEW_H - GRID_ROW_GAP + PITCH - 1) / PITCH - 1;
+    if (al.list)
+        *r0 = s / LIST_ROW_H, *r1 = (s + GRID_VIEW_H - 1) / LIST_ROW_H;
+    else
+        *r0 = al_row_of(s), *r1 = (s + GRID_VIEW_H - GRID_ROW_GAP + PITCH - 1) / PITCH - 1;
     if (*r0 < 0) *r0 = 0;
     if (*r1 > n - 1) *r1 = n - 1;
 }
@@ -176,8 +180,10 @@ static void al_span(int *r0, int *r1) {
 static void al_window(int *lo, int *hi) {
     int per = al.list ? 1 : GRID_COLS, n = al.list ? (int)al.count : al_rows(), r0, r1;
     al_span(&r0, &r1);
-    if (al.dir < 0) r0 -= AL_AHEAD;
-    else r1 += AL_AHEAD;
+    if (al.dir < 0)
+        r0 -= AL_AHEAD;
+    else
+        r1 += AL_AHEAD;
     if (r0 < 0) r0 = 0;
     if (r1 > n - 1) r1 = n - 1;
     *lo = r0 * per;
@@ -227,7 +233,8 @@ static void al_paint_grid(void *canvas) {
 static void al_paint_list(void *canvas) {
     int r0, r1;
     al_span(&r0, &r1);
-    grid_list_paint(canvas, &al.g, al.st_title, al.st_sub, r0, r1, al_off(), GRID_VIEW_H, al.press, 0, al_tile_of, (void *)0);   /* patch/grid.c */
+    grid_list_paint(canvas, &al.g, al.st_title, al.st_sub, r0, r1, al_off(), GRID_VIEW_H, al.press, 0, al_tile_of,
+                    (void *)0); /* patch/grid.c */
 }
 
 /* The view's own EVT_AFTER_PAINT: the visible cells or rows and nothing else. It draws what is resident and the placeholder for the rest; it
@@ -239,8 +246,10 @@ static int al_on_paint(void *ctx, void *e) {
     (void)ctx;
     if (!canvas || !al.view || !al.g.tiles || !al.count) return RET_OK;
     I(canvas, CANVAS_OY) += off;
-    if (al.list) al_paint_list(canvas);
-    else al_paint_grid(canvas);
+    if (al.list)
+        al_paint_list(canvas);
+    else
+        al_paint_grid(canvas);
     I(canvas, CANVAS_OY) -= off;
     return RET_OK;
 }
@@ -260,8 +269,10 @@ static int al_next_load(void) {
         tile_t *t = al_find(a);
         int top, h, d;
         if (t && t->art) continue;
-        if (al.list) top = a * LIST_ROW_H - s, h = LIST_ROW_H;
-        else top = GRID_ROW_GAP + a / GRID_COLS * PITCH - s, h = CELL_H;
+        if (al.list)
+            top = a * LIST_ROW_H - s, h = LIST_ROW_H;
+        else
+            top = GRID_ROW_GAP + a / GRID_COLS * PITCH - s, h = CELL_H;
         d = al_abs(top + h / 2 - GRID_VIEW_H / 2);
         if (top >= GRID_VIEW_H || top + h <= 0) d += 100000; /* ahead of the view */
         if (d < bd) bd = d, best = a;
@@ -285,7 +296,8 @@ static int al_moving(void) {
 
 /* Arms the loader if there is something to load and it is not running. */
 static void al_kick(void) {
-    if (al.fg && !al.more_timer && al.view && (al.noscroll || al_next_load() >= 0)) al.more_timer = timer_add(al_on_load, (void *)0, AL_MORE_MS);
+    if (al.fg && !al.more_timer && al.view && (al.noscroll || al_next_load() >= 0))
+        al.more_timer = timer_add(al_on_load, (void *)0, AL_MORE_MS);
 }
 
 /* The way the content went since the loader last looked. */
@@ -301,7 +313,7 @@ static int al_on_load(const void *unused) {
     al.more_timer = 0;
     if (!al.view || !al.fg) return RET_OK;
     al_dir();
-    if (al_moving()) {   /* nothing is decoded while it moves: look again next tick (the polling ends with the page, or when nothing is left to load) */
+    if (al_moving()) { /* nothing is decoded while it moves: look again next tick (the polling ends with the page, or when nothing is left to load) */
         al_kick();
         return RET_OK;
     }
@@ -319,7 +331,8 @@ static int al_on_load(const void *unused) {
 /* The scroll_view's EVT_SCROLL (every change of its offset: the drag, the fling, a scroll_to) and its scroll end: the direction is read and the
  * loader armed. */
 static int al_on_scroll(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     if (!al.view) return RET_OK;
     al_fade();
     al_dir();
@@ -338,8 +351,8 @@ static int al_on_scroll(void *ctx, void *e) {
  */
 #define AL_BUILD_START_MS 50
 #define AL_BUILD_MS 500
-#define AL_SCAN_BATCH 64   /* albums stat'ed per scan step */
-#define AL_SCAN_MS 20      /* between steps: input is served in between */
+#define AL_SCAN_BATCH 64 /* albums stat'ed per scan step */
+#define AL_SCAN_MS 20 /* between steps: input is served in between */
 
 /* The tiles that were shown as the placeholder for want of a cache file, and whose file exists now, try again. */
 static void al_retry(void) {
@@ -395,7 +408,8 @@ static int al_on_build_start(const void *unused) {
         return RET_OK;
     }
     al.scanning = 0;
-    if (!cc_build_total()) al.scanned = 1; /* everything has its file or marker: no more scans until the page is opened again */
+    if (!cc_build_total())
+        al.scanned = 1; /* everything has its file or marker: no more scans until the page is opened again */
     if (!cc_build_start()) { /* nothing missing, no card, no space, no thread: the set is already freed */
         al.own = 0;
         return RET_OK;
@@ -408,11 +422,13 @@ static int al_on_build_start(const void *unused) {
 
 /* Starts the build a moment from now unless one is going or already due. */
 static void al_build_later(void) {
-    if (al.view && al.g.tiles && !al.own && !al.scanned && !al.build_timer) al.build_timer = timer_add(al_on_build_start, (void *)0, AL_BUILD_START_MS);
+    if (al.view && al.g.tiles && !al.own && !al.scanned && !al.build_timer)
+        al.build_timer = timer_add(al_on_build_start, (void *)0, AL_BUILD_START_MS);
 }
 
 static int al_on_fg(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     al.fg = 1;
     al_kick();
     al_build_later();
@@ -477,7 +493,8 @@ static int al_on_up(void *ctx, void *e) {
 
 /* The scroll_view took the gesture as a drag (it aborts its children's press), or the window went to the background. */
 static int al_on_abort(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     al.down = 0;
     if (al.list) al_set_press(0);
     return RET_OK;
@@ -497,16 +514,18 @@ static int al_on_bg(void *ctx, void *e) {
 /* The navbar's Cover Flow button: the same open as the menu's row (the playing album, else the last), over this
  * page, so Back returns here. */
 static int al_on_cover(void *ctx, void *e) {
-    (void)ctx; (void)e;
-    al_build_end();   /* one worker at a time: Cover Flow builds what is missing itself, with its Preparing screen */
+    (void)ctx;
+    (void)e;
+    al_build_end(); /* one worker at a time: Cover Flow builds what is missing itself, with its Preparing screen */
     coverflow_open();
     return RET_OK;
 }
 
 static int al_on_destroy(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     if (al.more_timer) timer_remove(al.more_timer);
-    al_build_end();   /* the timer removed, the worker cancelled and joined */
+    al_build_end(); /* the timer removed, the worker cancelled and joined */
     grid_free(&al.g);
     if (al.albums) deque_destroy(al.albums);
     free(al.order);
@@ -533,9 +552,7 @@ static int al_first(void) {
 
 /* The covers of a mode: the grid's GRID_COVER px with the shelf's GRID_R corners blended into black (the view is black, tiles stay opaque);
  * the list's LIST_ART px with LIST_R corners cut in the alpha (a pressed row's fill lies behind them). */
-static void al_shape(int list) {
-    grid_shape(&al.g, list ? LIST_ART : GRID_COVER, list ? LIST_R : GRID_R, list);
-}
+static void al_shape(int list) { grid_shape(&al.g, list ? LIST_ART : GRID_COVER, list ? LIST_R : GRID_R, list); }
 
 /* The content view as high as the mode's content, and the scroll_view told the same (the list_view layouter sums it again at the next layout). */
 static void al_size(void) {
@@ -548,14 +565,15 @@ static void al_size(void) {
 static void al_set_mode(int list) {
     int first = al_first(), max;
     void *wa = P(al.sv, SC_WA);
-    if (wa && I(wa, SC_AN_STATE) == SC_AN_RUNNING && P(wa, SC_AN_WIDGET) == al.sv) {   /* a coasting list stops (patch/scroll.c sc_down) */
+    if (wa && I(wa, SC_AN_STATE) == SC_AN_RUNNING &&
+        P(wa, SC_AN_WIDGET) == al.sv) { /* a coasting list stops (patch/scroll.c sc_down) */
         widget_animator_destroy(wa);
         stock_scroll_done(al.sv, (void *)0);
     }
     if (al.more_timer) timer_remove(al.more_timer);
     al.more_timer = 0;
     al.list = list, al.press = 0, al.down = 0, al.dir = 1;
-    grid_drop(&al.g);   /* the tiles were made for the other shape */
+    grid_drop(&al.g); /* the tiles were made for the other shape */
     al_shape(list);
     if (al.g.tiles) grid_placeholder(&al.g);
     al_size();
@@ -571,7 +589,8 @@ static void al_set_mode(int list) {
 
 /* The navbar toggle: the other mode, in place, and the choice saved. */
 static int al_on_toggle(void *ctx, void *e) {
-    (void)ctx; (void)e;
+    (void)ctx;
+    (void)e;
     if (!al.view) return RET_OK;
     al_set_mode(!al.list);
     home_write_atomic(ALBUMS_FILE, ALBUMS_TMP, al.list ? "0\n" : "1\n");
@@ -595,7 +614,7 @@ static int al_open(int list) {
     al.view = widget_lookup(al.win, "view_grid", 1);
     al.sv = widget_lookup(al.win, "albums_scrollview", 1);
     al.status = widget_lookup(al.win, "label_status", 1);
-    al.fade = widget_lookup(al.win, "img_nb_fade", 1);   /* optional */
+    al.fade = widget_lookup(al.win, "img_nb_fade", 1); /* optional */
     al.st_title = widget_lookup(al.win, "label_row_title", 1);
     al.st_sub = widget_lookup(al.win, "label_row_sub", 1);
     al.st_gtitle = widget_lookup(al.win, "label_grid_title", 1);
@@ -617,17 +636,20 @@ static int al_open(int list) {
         return 0;
     }
     al_shape(list);
-    al.g.st_title = al.st_gtitle, al.g.st_sub = al.st_gsub;   /* the grid's two text styles (the list mode's are drawn by this page) */
+    al.g.st_title = al.st_gtitle,
+    al.g.st_sub = al.st_gsub; /* the grid's two text styles (the list mode's are drawn by this page) */
     grid_placeholder(&al.g);
     al_size();
     al.dir = 1;
     al.fg = 1;
-    al.noscroll = !widget_on(al.sv, EVT_SCROLL, al_on_scroll, (void *)0) || !widget_on(al.sv, EVT_SCROLL_END, al_on_scroll, (void *)0);
+    al.noscroll = !widget_on(al.sv, EVT_SCROLL, al_on_scroll, (void *)0) ||
+                  !widget_on(al.sv, EVT_SCROLL_END, al_on_scroll, (void *)0);
     al_kick();
     al_build_later();
     if (widget_on(al.win, EVT_WINDOW_TO_FG, al_on_fg, (void *)0))
         widget_on(al.win, EVT_WINDOW_TO_BG, al_on_bg, (void *)0);
-    else widget_on(al.win, EVT_WINDOW_TO_BG, al_on_abort, (void *)0);
+    else
+        widget_on(al.win, EVT_WINDOW_TO_BG, al_on_abort, (void *)0);
     widget_on(al.view, EVT_POINTER_DOWN, al_on_down, (void *)0);
     widget_on(al.view, EVT_POINTER_UP, al_on_up, (void *)0);
     widget_on(al.view, EVT_POINTER_ABORT, al_on_abort, (void *)0);

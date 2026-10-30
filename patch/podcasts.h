@@ -2,8 +2,8 @@
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  * The resume ring (a fixed ring of places keyed by the FNV-1a hash of the path, most recent first, a place within 30 s of either end forgotten), the
- * jump to the place a little after an episode starts and the per-folder speed follow q2-pod's Resume and Podcasts sections (Copyright (c) 2026 Diamond
- * Bond, MIT, https://github.com/DiamondBond/q2-pod; see NOTICE). docs/modules/podcasts.md has the design, the file formats and the approximations.
+ * jump to the place a little after an episode starts and the per-folder speed follow q2-pod's Resume and Podcasts sections.
+ * docs/modules/podcasts.md has the design, the file formats and the approximations.
  *
  * ONE module makes the episode list of a show (pc_load_show): the files on the card, merged with the metadata file the subscribe phase will write
  * (.episodes: one line per episode), sorted newest first. The RSS client of the next phase feeds the same list by writing that file; nothing in the
@@ -14,28 +14,29 @@
 
 /* (the PC_* sizes are patch/offsets.inc's: include it first) */
 
-#define PC_ROOT_PATH "/mnt/mmc/Podcasts"   /* the folder, matched case-insensitively (pc_root gives the spelling the card has) */
+#define PC_ROOT_PATH \
+    "/mnt/mmc/Podcasts" /* the folder, matched case-insensitively (pc_root gives the spelling the card has) */
 
 typedef struct {
-    char file[PC_FILE];     /* the file name in the show folder; "" = no file (yet) */
-    char title[PC_TITLE];   /* the metadata title, else the file name without its extension */
-    unsigned guid;          /* FNV-1a of the metadata guid, 0 = none */
-    unsigned pub;           /* publication date, seconds since 1970 (UTC); the file's modification time without metadata */
-    unsigned dur;           /* duration in seconds; 0 = unknown */
-    unsigned length;        /* enclosure length in bytes (metadata), 0 = unknown */
-    unsigned hash;          /* ring key (pc_hash of the full path) of the local file; 0 when there is none */
-    unsigned state;         /* PC_LOCAL, PC_PART or PC_REMOTE */
+    char file[PC_FILE]; /* the file name in the show folder; "" = no file (yet) */
+    char title[PC_TITLE]; /* the metadata title, else the file name without its extension */
+    unsigned guid; /* FNV-1a of the metadata guid, 0 = none */
+    unsigned pub; /* publication date, seconds since 1970 (UTC); the file's modification time without metadata */
+    unsigned dur; /* duration in seconds; 0 = unknown */
+    unsigned length; /* enclosure length in bytes (metadata), 0 = unknown */
+    unsigned hash; /* ring key (pc_hash of the full path) of the local file; 0 when there is none */
+    unsigned state; /* PC_LOCAL, PC_PART or PC_REMOTE */
 } pc_ep_t;
 
 typedef struct {
-    char dir[PC_FILE];      /* the folder name, as the card spells it */
-    char title[PC_TITLE];   /* the show file's title, else the folder name */
-    char cover[PC_FILE];    /* cover.jpg / folder.jpg (or .jpeg / .png), "" = none */
-    char feed[PC_URL];      /* the show file's feed url ("" = none): kept for the subscribe phase */
-    char image[PC_URL];     /* the show file's image url */
-    unsigned count;         /* episodes with a file */
-    unsigned hash;          /* pc_hash of dir (lower-cased): the key of the show's speed */
-    unsigned fresh;         /* of those, episodes not played and with no place saved */
+    char dir[PC_FILE]; /* the folder name, as the card spells it */
+    char title[PC_TITLE]; /* the show file's title, else the folder name */
+    char cover[PC_FILE]; /* cover.jpg / folder.jpg (or .jpeg / .png), "" = none */
+    char feed[PC_URL]; /* the show file's feed url ("" = none): kept for the subscribe phase */
+    char image[PC_URL]; /* the show file's image url */
+    unsigned count; /* episodes with a file */
+    unsigned hash; /* pc_hash of dir (lower-cased): the key of the show's speed */
+    unsigned fresh; /* of those, episodes not played and with no place saved */
 } pc_show_t;
 
 /* The folder: out (PC_FILE + 20 bytes) is "/mnt/mmc/<Podcasts as the card spells it>"; 1 when it exists, else 0 (out then holds the default spelling). */
@@ -48,25 +49,29 @@ int pc_load_show(const pc_show_t *show, pc_ep_t *out, int max);
  * Both return the number of records (pc_parse_show: 1 when the header is right). */
 int pc_parse_eps(const char *buf, unsigned n, pc_ep_t *out, int max);
 int pc_parse_show(const char *buf, unsigned n, pc_show_t *show);
-void pc_when(unsigned pub, unsigned now, char *out, unsigned size);   /* an episode's date, Apple Podcasts style, in the language (docs/modules/podcasts.md "The date"); now: seconds since 1970 */
-unsigned pc_hash(const char *s);        /* FNV-1a over the ASCII-lower-cased bytes, never 0 */
-int pc_is_path(const char *path);       /* the path is a file in a show folder under the Podcasts folder (case-insensitive) */
-void pc_fmt(char *out, unsigned size, const char *fmt, unsigned n);   /* fmt with its one %d replaced by n */
+void pc_when(
+    unsigned pub, unsigned now, char *out,
+    unsigned
+        size); /* an episode's date, Apple Podcasts style, in the language (docs/modules/podcasts.md "The date"); now: seconds since 1970 */
+unsigned pc_hash(const char *s); /* FNV-1a over the ASCII-lower-cased bytes, never 0 */
+int pc_is_path(const char *path); /* the path is a file in a show folder under the Podcasts folder (case-insensitive) */
+void pc_fmt(char *out, unsigned size, const char *fmt, unsigned n); /* fmt with its one %d replaced by n */
 /* Whether a cover picture's header says it is small enough to decode (PC_COVER_MAX_PX); a missing or unknown file is refused. path is a plain path. */
 int pc_cover_ok(const char *path);
 
 /* The resume ring and the played marks. pc_state: PC_NEW (nothing saved), PC_PROGRESS (a place, *pos and *len set), PC_DONE (played). */
 enum { PC_NEW = 0, PC_PROGRESS = 1, PC_DONE = 2 };
 int pc_state(unsigned hash, unsigned *pos, unsigned *len);
-void pc_mark(unsigned hash, int played);   /* played: the episode is done (place cleared); else it is new again (forgotten) */
-void pc_flush(void);                       /* write the ring if it changed (the page's own actions) */
-unsigned pc_rev(void);                     /* grows with every change a list shows (a place, a mark) */
+void pc_mark(unsigned hash,
+             int played); /* played: the episode is done (place cleared); else it is new again (forgotten) */
+void pc_flush(void); /* write the ring if it changed (the page's own actions) */
+unsigned pc_rev(void); /* grows with every change a list shows (a place, a mark) */
 
 /* Per-show speed: playspeed_mode 0..3 (1x, 1.25x, 1.5x, 2x). pc_speed_set saves at once (0 when it could not be written). */
 int pc_speed_get(unsigned show);
 int pc_speed_set(unsigned show, int mode);
-void pc_speed_apply(unsigned show);        /* before an episode starts: the show's mode into playspeed_mode and the player */
-unsigned pc_show_of(const char *path);     /* pc_hash of the show folder name inside a podcast path, 0 for another path */
+void pc_speed_apply(unsigned show); /* before an episode starts: the show's mode into playspeed_mode and the player */
+unsigned pc_show_of(const char *path); /* pc_hash of the show folder name inside a podcast path, 0 for another path */
 
 /* The timer hook: the track the player is on (cc_playing(), NULL when none). Called by the places that already see it on a timer (recent_note, so the
  * Now Playing tick, the mini bar's and the Podcasts page's). Saves the place, marks played, jumps to a saved place after a start, and puts the speed back. */
