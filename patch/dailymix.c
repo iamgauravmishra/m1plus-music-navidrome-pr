@@ -32,6 +32,7 @@
 #include "i18n.h"
 #include "grid.h"
 #include "scroll.h"
+#include "podcasts.h"
 
 extern void pod_open_player(void *queue, int idx, int cls);   /* patch/albuminfo.c */
 extern void pod_toast(const char *text);                       /* patch/shuffle.c */
@@ -734,7 +735,7 @@ static int dm_ph_lib(job_t *j) {
         const char *path = cc_str(r, REC_PATH);
         cand_t *c;
         unsigned short *s;
-        if (I(r, REC_TYPE) != 8 || !*path) continue;
+        if (I(r, REC_TYPE) != 8 || !*path || pc_is_path(path)) continue;   /* (a podcast episode is no candidate for the mix) */
         c = &j->c[j->nc++];
         c->path = dm_path_hash(path);
         c->artist = dm_tag(cc_str(r, REC_ARTIST), path);
@@ -1532,6 +1533,7 @@ static void dm_kick(void) {
         waited = (unsigned)time_now_ms() - dm.t0;
         ms = waited >= DM_START_MS ? DM_TICK_MS : DM_START_MS - waited;   /* never inside the boot guard's window */
     } else return;
+    if (!pod_screen_lit() && ms < POD_DARK_MS) ms = POD_DARK_MS;
     dm.timer = timer_add(dm_tick, (void *)0, ms);
 }
 
@@ -1557,7 +1559,7 @@ static int dm_tick(const void *timer) {
     (void)timer;
     dm.timer = 0;   /* this one ends with the return */
     if (!dm.win || !dm.fg) return RET_OK;
-    dm_work();
+    if (pod_screen_lit()) dm_work();
     dm_kick();
     return RET_OK;
 }

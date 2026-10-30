@@ -6,6 +6,14 @@
 #include "stock.h"
 #include "common.h"
 #include "shot.h"
+#include "covercache.h"
+
+/* The library scan's folder walk (tools/pod.py SCAN_SITE, docs/modules/payload.md hook 6): stock skips a directory entry when strcmp(name, ".") is 0 (and then ".." and a list of
+ * system folders); the call is replaced by `jal pod_scan_dir`, whose delay slot still loads a1 = ".". A hidden folder (a name starting with '.') counts as a match, so
+ * /mnt/mmc/.m1plus/ (our cache, covers and downloads) never joins Songs and Albums; anything else is stock's strcmp. (q2-pod's ringnav_scan_dir.) */
+__attribute__((noinline)) int pod_scan_dir(const char *name, const char *dot) { return name[0] == '.' ? 0 : strcmp(name, dot); }
+
+int pod_screen_lit(void) { return *(volatile unsigned char *)BACKLIGHT_STATUS != 0; }
 
 /* Whether the card is mounted: its mount point is another file system than the one it is in (an unmounted /mnt/mmc is a plain directory on the internal flash). */
 int pod_card_mounted(void) {
@@ -172,4 +180,80 @@ __attribute__((noinline)) void pod_corners(void *canvas, const unsigned char *ta
                 canvas_fill_rect(canvas, k & 1 ? side - 1 - x : x, ly, 1, 1);
             }
         }
+}
+
+/* The pills: the glyph and the label centred as a pair SG_PILL_GAP apart (the album page's Play all, patch/albuminfo.c ah_centre_pill): AWTK puts the glyph in a
+ * square as high as the button at margin_left and the text at the square's end plus the spacer. Moved from patch/songs.c. */
+void pod_centre_pill(void *btn, int pw) {
+    static const char *const key[5] = {"normal:", "pressed:", "over:", "focused:", "disable:"};
+    static const char *const prop[5] = {"margin_left", "icon_at", "margin_right", "spacer", "text_align_h"};
+    const unsigned *text = widget_get_text(btn);
+    float w = text && *text ? widget_measure_text(btn, text) : 0.0f;
+    int tw = (int)(w + 0.999f), margin, i, j;
+    unsigned v[4], val[5];   /* value_t: type at 0, the uint32 at 8 */
+    char name[32];
+    if (!text || !*text) return;   /* (a text that cannot be measured is taken as 0 px wide: the glyph is still put at the left, not above the text as the automatic icon position would) */
+    if (tw > pw - (SG_PILL_H - SG_PILL_GLYPH) / 2 - SG_PILL_GLYPH - SG_PILL_GAP) {   /* too wide beside the glyph (ru "Перемешать"): the label steps down to
+                                                                                      * SG_PILL_PX_SMALL, as an iOS button shrinks its title, and is measured again */
+        for (i = 0; i < 5; ++i) {
+            unsigned k = 0, m = 0;
+            static const char fs[] = "font_size";
+            while (key[i][k]) name[k] = key[i][k], ++k;
+            while (fs[m]) name[k++] = fs[m++];
+            name[k] = 0;
+            memset(v, 0, sizeof v);
+            value_set_uint32(v, SG_PILL_PX_SMALL);
+            widget_set_style(btn, name, v);
+        }
+        w = widget_measure_text(btn, text);
+        tw = (int)(w + 0.999f);
+    }
+    margin = (pw - (SG_PILL_GLYPH + SG_PILL_GAP + tw)) / 2 - (SG_PILL_H - SG_PILL_GLYPH) / 2;
+    if (margin < 0) margin = 0;
+    val[0] = (unsigned)margin, val[1] = 1, val[2] = 0, val[3] = (unsigned)(SG_PILL_GAP - (SG_PILL_H - SG_PILL_GLYPH) / 2), val[4] = 2;   /* icon_at left, text_align_h left */
+    for (j = 0; j < 5; ++j) {
+        memset(v, 0, sizeof v);
+        value_set_uint32(v, val[j]);
+        for (i = 0; i < 5; ++i) {
+            unsigned k = 0, m = 0;
+            while (key[i][k]) name[k] = key[i][k], ++k;
+            while (prop[j][m]) name[k++] = prop[j][m++];
+            name[k] = 0;
+            widget_set_style(btn, name, v);
+        }
+    }
+}
+
+/* A select mark: the stock image (26 px) as a bitmap, cut to its circle. cc_decode flattens the image over black, so the square
+ * around the ring would be black on a cover (the Playlists grid): every pixel's alpha becomes its coverage by the ink's circle
+ * (the stock unselect / selected images: ink 2 .. 23, a circle of radius SG_MARK_INK centred in the square; 8 x 8 samples a pixel),
+ * so only the ring and what it holds are drawn. Over the Songs page's black it looks as before. */
+#define SG_MARK_INK 11
+void *pod_make_mark(void *win, const char *name) {
+    unsigned *px, x, y, i, j, n, c = 8 * SG_MARK, rr = 2 * 8 * SG_MARK_INK;
+    void *b = bitmap_create_ex(SG_MARK, SG_MARK, SG_MARK * 4, BITMAP_RGBA8888);
+    int ok;
+    if (!b) return b;
+    px = (unsigned *)bitmap_lock_buffer_for_write(b);
+    if (!px || bitmap_get_line_length(b) != SG_MARK * 4) {
+        if (px) bitmap_unlock_buffer(b);
+        bitmap_destroy(b);
+        return (void *)0;
+    }
+    ok = cc_decode(win, name, 1, SG_MARK, 1, px);
+    for (y = 0; ok && y < SG_MARK; ++y)
+        for (x = 0; x < SG_MARK; ++x) {
+            for (n = 0, i = 0; i < 8; ++i)
+                for (j = 0; j < 8; ++j) {   /* (coordinates doubled: the sample centres are odd, the circle's centre is c) */
+                    int dx = (int)(2 * (x * 8 + i) + 1) - (int)c, dy = (int)(2 * (y * 8 + j) + 1) - (int)c;
+                    n += (unsigned)(dx * dx + dy * dy) <= rr * rr;
+                }
+            px[y * SG_MARK + x] = (px[y * SG_MARK + x] & 0xffffff) | ((n * 255 + 32) / 64) << 24;
+        }
+    bitmap_unlock_buffer(b);
+    if (!ok) {
+        bitmap_destroy(b);
+        return (void *)0;
+    }
+    return b;
 }

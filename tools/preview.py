@@ -68,19 +68,79 @@ def controls(s, work):
     im.alpha_composite(s.img('light_dot'), (40 + 150 - 29, y - 11)); im.alpha_composite(s.img('balance_dot'), (250, y - 10))
     return im.crop((0, 0, 320, y + 62))
 
-def artists_page(s, album_artist=False, other=None):
-    """The Artists page from the tree's asset: the navbar with the title and toggle glyph the payload sets for
-    artist_type (the glyph is the other mode's), sample rows. other: 'Genres' or 'Composers', the same page on that class: its title, no toggle."""
-    im = PI.pod_page(s, 'm1plus_artists', 8, title=other or ('Album Artists' if album_artist else 'Artists'),
-                     icon='' if other else 'pod_nav_artist' if album_artist else 'pod_nav_albumartist').crop((0, 0, 320, 450))
-    d = ImageDraw.Draw(im)
-    names = (('Jazz', 'Rock', 'Unknown Genre') if other == 'Genres' else ('Bach', 'Mozart', 'Unknown Composer') if other else
-             ('Miles Davis', 'Nina Simone', 'Unknown Artist') if not album_artist else ('Various Artists', 'Miles Davis'))
+AR_SAMPLE = {   # the page's sample rows in display order: name -> (the section letters follow the payload's rule: a leading "The " dropped, a digit or symbol "#")
+    'artists': ['10cc', 'ABBA', 'Adele', 'Arctic Monkeys', 'The Beatles', 'Bill Withers', 'Björk', 'Bob Dylan', 'Carole King', 'Coldplay', 'Daft Punk', 'David Bowie', 'Eagles',
+                'Fleetwood Mac', 'Frank Sinatra', 'Kate Bush', 'Miles Davis', 'Nina Simone', 'Pink Floyd', 'Queen', 'Radiohead', 'The Rolling Stones', 'Steely Dan', 'Talking Heads',
+                'Unknown Artist'],
+    'album': ['Adele', 'Miles Davis', 'Nina Simone', 'Pink Floyd', 'Various Artists'],
+    'Genres': ['Alternative', 'Blues', 'Classical', 'Electronic', 'Jazz', 'Pop', 'Rock', 'Unknown Genre'],
+    'Composers': ['Bach', 'Beethoven', 'Chopin', 'Mozart', 'Unknown Composer'],
+}
+
+
+def artists_page(s, album_artist=False, other=None, scroll=0, touched=None, to=None):
+    """The Artists page as patch/artists.c paints it (docs/modules/artists.md, the Songs page's manner: tools/preview_songs.py's headers, pinned header, rail and bubble): the
+    large title (collapsing into the navbar's small one), the sections' letters, 52 px rows (the name 21 px white at x 24, the chevron, a hairline from the text), the rail.
+    The navbar is the asset's with the title and the toggle glyph the payload sets for artist_type (the glyph is the other mode's). other: 'Genres' or 'Composers', the same
+    page on that class: its title, no toggle, the stock order's sections."""
+    import preview_songs as PS
+    O_ = PS.O
+    names = AR_SAMPLE[other or ('album' if album_artist else 'artists')]
+    title = other or ('Album Artists' if album_artist else 'Artists')
+    top, row, hdr = O_['SG_TITLE_H'], 52, O_['SG_HDR_H']
+    def letter(n):
+        n = n[4:] if n[:4].lower() == 'the ' and n[4:] else n
+        return n[0].upper() if n[0].isascii() and n[0].isalpha() else '#'
+    rows, secs, y, last = [], [], top, None   # the Unknown row stays with the section before it (patch/artists.c ar_sections)
     for i, n in enumerate(names):
-        y = 50 + i * 52
-        d.rectangle((0, y + 51, 319, y + 51), fill=(0x22, 0x22, 0x22))
-        s.text(im, 24, y + 26, n, 21); im.alpha_composite(s.img('right_arrow'), (300 - 40 + 8, y + 16))
-    return im
+        c = last if n.startswith('Unknown') and last else letter(n)
+        if c != last: secs.append((c, y)); y += hdr; last = c
+        rows.append((n, y)); y += row
+    end = y + 12
+    tall = Image.new('RGBA', (320, end), (0, 0, 0, 255)); d = ImageDraw.Draw(tall)
+    s.text(tall, O_['SG_TITLE_X'], O_['SG_TITLE_H'] / 2, PS.fit(s, PS.tr(s, title), 32, 250), 32)
+    for c, hy in secs: PS.header(s, tall, c, hy)
+    chev = Image.new('RGBA', (10, 16), (0, 0, 0, 0))   # the payload's chevron (ar_make_chevron): a 2 px stroke, 4 x 4 samples a pixel, #8A8A8A
+    def seg2(px, py, ax, ay, bx, by):
+        dx, dy = bx - ax, by - ay; n = (px - ax) * dx + (py - ay) * dy; dd = dx * dx + dy * dy
+        if n <= 0: return (px - ax) ** 2 + (py - ay) ** 2
+        if n >= dd: return (px - bx) ** 2 + (py - by) ** 2
+        cr = (px - ax) * dy - (py - ay) * dx
+        return cr * cr // dd
+    for yy in range(16):
+        for xx in range(10):
+            hit = sum(1 for i in range(4) for j in range(4)
+                      if min(seg2(xx * 8 + 2 * j + 1, yy * 8 + 2 * i + 1, 14, 14, 68, 64), seg2(xx * 8 + 2 * j + 1, yy * 8 + 2 * i + 1, 68, 64, 14, 114)) <= 64)
+            chev.putpixel((xx, yy), (0x8A, 0x8A, 0x8A, hit * 255 // 16))
+    for n, ry in rows:
+        d.rectangle((24, ry + row - 1, O_['SG_TEXT_END'] - 1, ry + row - 1), fill=PS.HAIR)
+        s.text(tall, 24, ry + row / 2, s.clip(n, 21, 252 - 24), 21)
+        tall.alpha_composite(chev, (262, ry + (row - 16) // 2))
+    scroll = max(0, min(dict(secs)[to] if to else scroll, end - 400))   # to: the rail's jump, section `to`'s header at the window's top
+    im = PI.pod_page(s, 'm1plus_artists', 0, title=' ', icon='' if other else 'pod_nav_artist' if album_artist else 'pod_nav_albumartist')
+    im = im.crop((0, 0, 320, 50)); full = Image.new('RGBA', (320, 450), (0, 0, 0, 255)); full.paste(im, (0, 0))
+    full.alpha_composite(tall.crop((0, scroll, 320, min(end, scroll + 400))), (0, 50))
+    if scroll > O_['SG_COLLAPSE']:   # the large title has scrolled away: the navbar's small title, cut to its 156 px
+        s.text(full, 58, 25, PS.fit(s, PS.tr(s, title), PI.title_px(s.tree), O_['NAV_VIEW_X'] - 58), PI.title_px(s.tree))
+    hs = [(hy, c) for c, hy in secs]
+    cur = max((h for h in hs if h[0] <= scroll), default=None)   # the pinned header, pushed up by the next
+    if cur:
+        nxt = next((h for h in hs if h[0] > cur[0]), None)
+        push = min(0, nxt[0] - scroll - hdr) if nxt else 0
+        band = Image.new('RGBA', (320, hdr), (0, 0, 0, 255)); PS.header(s, band, cur[1], 0)
+        if push < 0: ImageDraw.Draw(band).rectangle((0, 0, 60, hdr - 1), fill=(0, 0, 0))
+        full.alpha_composite(band.crop((0, -push, 320, hdr)), (0, 50))
+    # the toolbar of the page over the list: the glass fade is hidden at rest (patch/artists.c ar_title_update)
+    PS.rail(s, full, [c for c, _ in secs], touched, 400)
+    if touched:
+        x, y0, r = (320 - PS.BUBBLE) // 2, 50 + (400 - PS.BUBBLE) // 2, 4
+        mask = Image.new('L', (PS.BUBBLE * r, PS.BUBBLE * r), 0); ImageDraw.Draw(mask).rounded_rectangle((0, 0, PS.BUBBLE * r - 1, PS.BUBBLE * r - 1), radius=14 * r, fill=255)
+        inner = Image.new('L', (PS.BUBBLE * r, PS.BUBBLE * r), 0); ImageDraw.Draw(inner).rounded_rectangle((r, r, PS.BUBBLE * r - 1 - r, PS.BUBBLE * r - 1 - r), radius=13 * r, fill=255)
+        full.paste(Image.new('RGBA', (PS.BUBBLE, PS.BUBBLE), (0x3A, 0x3A, 0x3A, 255)), (x, y0), mask.resize((PS.BUBBLE, PS.BUBBLE), Image.LANCZOS))
+        full.paste(Image.new('RGBA', (PS.BUBBLE, PS.BUBBLE), (0x26, 0x26, 0x26, 255)), (x, y0), inner.resize((PS.BUBBLE, PS.BUBBLE), Image.LANCZOS))
+        s.text(full, x + PS.BUBBLE / 2, y0 + PS.BUBBLE / 2, touched, 56, anchor='m')
+    return full
+
 
 def menu_page(s, data, home=False):
     """The menu as patch/menu.c arranges it for the saved list `data` (None: no file), 400 px under the navbar or the Home instance."""
@@ -238,7 +298,10 @@ def main():
     extras = extras_page(s, None)
     extras_cust = extras_page(s, custom)
     art0, art1 = artists_page(s).convert('RGB'), artists_page(s, True).convert('RGB')
+    art2 = artists_page(s, to='K', touched='K').convert('RGB')
     gen, comp = artists_page(s, other='Genres').convert('RGB'), artists_page(s, other='Composers').convert('RGB')
+    for name, panel_im in (('artists-top', art0), ('artists-jump-K', art2), ('artists-album', art1), ('artists-genres', gen)):   # the panels alone, for tools/peek.py crops
+        panel_im.save(os.path.join(os.path.dirname(os.path.abspath(out)), name + '.png'))
     pad, lab = 12, 20
     cols = [('Home page 1', home), ('Home page 3: the M1+ Music icon', home3), ('M1+ Music menu as Home (no top bar)', menu),
             ('Mini player bar: playing, long title', bar1), ('Mini player bar: paused, no cover', bar2), ('Mini player bar: backdrop blur off', bar3),
@@ -248,7 +311,7 @@ def main():
             ('Customize > Main Menu (default: Cover Flow ... Playlists shown, the rest hidden)', mm_def), ('Main Menu after customising (Shuffle, Genres hidden)', mm_cust),
             ('Customize > Extras (default: every hidden item listed, under the headers)', xc_def), ('Customize > Extras: Shuffle and Favorites turned off', xc_cust),
             ('The menu with that list', menu_cust), ('Extras (default menu: Play, Library, Collections, Tools under their headers)', extras),
-            ('Extras with Shuffle, Genres hidden, Shuffle and Favorites off', extras_cust), ('Artists: Artist mode (toggle shows Album Artist)', art0), ('Artists: Album Artist mode (toggle shows Artist)', art1), ('Genres (the Artists page on class 0xf006: no toggle)', gen), ('Composers (class 0xf005)', comp),
+            ('Extras with Shuffle, Genres hidden, Shuffle and Favorites off', extras_cust), ('Artists: Artist mode (toggle shows Album Artist)', art0), ('Artists: the rail jumps to K (bubble, pinned header, the small title)', art2), ('Artists: Album Artist mode (toggle shows Artist)', art1), ('Genres (the Artists page on class 0xf006: no toggle)', gen), ('Composers (class 0xf005)', comp),
             ('Album page', panel(album, 0, 4)), ('Album page, long title', panel(album, 1, 4)),
             ('Artist Cover Flow', panel(cf, 2, 3)),
             ('Albums: grid view (toggle shows the list)', PI.albums_grid(s).convert('RGB')),

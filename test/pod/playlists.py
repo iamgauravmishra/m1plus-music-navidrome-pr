@@ -38,7 +38,7 @@ def alb(i): return f'Artist {i}', f'Album {i}'
 def key_path(artist, album): return art_file(fnv(fnv(O['FNV_SEED'], artist), album) or 1)
 
 
-class LabelMachine(Machine):
+class LabelMachine(SelectMachine):
     """The menu labels' texts (label_text: handle -> text, widget_get_text's wide string) and their widths (measure: text -> px, None: the
     measure fails and returns 0), as widget_measure_text returns them (a float in $f0)."""
 
@@ -77,10 +77,12 @@ class PM:
         m.fs[CFSORT_FILE] = b'0\n'
         m.load_image = 0
         for w in ('btn_return', 'btn_backtoplayer', 'btn_more', 'btn_albumview', 'label_row_title', 'label_row_sub', 'pl_scrim', 'pl_card', 'view_grid', 'label_status', 'label_grid_title', 'label_grid_sub',
-                  'pl_item0', 'pl_item1', 'pl_item2', 'pl_item3', 'pl_label0', 'pl_label1', 'pl_label2', 'pl_label3'): Machine.widget(m, w)
+                  'pl_item0', 'pl_item1', 'pl_item2', 'pl_item3', 'pl_label0', 'pl_label1', 'pl_label2', 'pl_label3', 'label_title', 'btn_selall', 'pl_bar', 'pl_del'): Machine.widget(m, w)
+        m.label_text[m.widgets['pl_del']] = 'Delete'   # the text the asset gives the pill
         for i, text in enumerate(pod_pages.PLAYLIST_MENU): m.label_text[m.widgets[f'pl_label{i}']] = text
         m.canvas = m.alloc(0x80); m.oy_canvas = m.canvas
-        m.images = {'p_default': (24, 24, bytes((0x40, 0x40, 0x40, 255)) * (24 * 24))}
+        m.images = {'p_default': (24, 24, bytes((0x40, 0x40, 0x40, 255)) * (24 * 24)), 'unselect': (26, 26, struct.pack('<I', 0xff111111) * 676),
+                    'selected': (26, 26, struct.pack('<I', 0xff2222ee) * 676)}
         m.lib = [m.record(album=alb(i)[1], artist=alb(i)[0], path=f'/mnt/mmc/m/{i}/1.flac', rid=i + 1) for i in range(albums)]
         m.class_lists[O['CLASS_ALBUMS']] = m.lib
         for i in range(albums):
@@ -137,7 +139,7 @@ def settle(m, limit=200):
     most = 0
     for _ in range(limit):
         calls = tick(m)
-        most = max(most, sum(1 for c in calls if c[0] == 'widget_load_image' and c[1] != 'p_default'))
+        most = max(most, sum(1 for c in calls if c[0] == 'widget_load_image' and c[1] not in ('p_default', 'unselect', 'selected')))
         if not any(c[0] == 'timer_add' and c[1] == PSYMS['pl_on_load'] for c in calls):
             m.most_per_tick = most
             return paint(m)
@@ -242,6 +244,172 @@ def vis(m, name):
     return m.props.get((w, 'visible'), 1), m.props.get((w, 'sensitive'), 1)
 
 
+MARK, SEL_COL = O['SG_MARK'], O['SG_SEL_COL']
+SEL_VEC, PDEQ_PLAYLIST = pod.DATA['SEL_VEC'][0], pod.DATA['PDEQ_PLAYLIST'][0]
+
+
+def marks_of(blits):
+    """The select marks painted: (x, y, bitmap) of every 26 px blit."""
+    return sorted((b[2][0], b[2][1], b[0]) for b in blits if b[2][2] == MARK and b[2][3] == MARK)
+
+
+def select_tests(expect, lists):
+    """Delete Playlists is select mode on this page (the Songs page's manner): the navbar's x, "N Selected", Select All, a mark on every cell or row, a bar with the Delete
+    pill; Delete runs the stock handler's sequence (@0x53dbcc) on the stock selection vector: the message when nothing is marked, the stock confirm dialog (Yes 0xa),
+    batch_delete_file(0xf00b, *pdeq_playlist, the vector, 0, 0), the success message; the page reads again. Where the page cannot do it the stock page opens."""
+    names = ('btn_return', 'btn_more', 'btn_albumview', 'btn_backtoplayer')
+    # the asset: the select widgets start hidden and insensitive, the bar is the Songs page's (black, a hairline, the flat pill), the popup stays last
+    tree = awtk_ui.parse(open(UI, 'rb').read())
+    sa, bar, line, pill = (tree.find(n) for n in ('btn_selall', 'pl_bar', 'pl_bar_line', 'pl_del'))
+    expect(sa.type == 'button' and (sa.x, sa.y, sa.w, sa.h) == (O['SG_SELALL_X'], 0, 104, O['NAV_H']) and sa.get('visible') == 'false' and sa.get('sensitive') == 'false'
+           and sa in tree.find('navigationbar_view').children, 'Select All is the Songs page\'s text button in the navbar, hidden and insensitive')
+    expect(bar.type == 'view' and (bar.x, bar.y, bar.w, bar.h) == (0, 450 - O['SG_BAR_H'], 320, O['SG_BAR_H']) and bar.get('visible') == 'false' and bar.get('sensitive') == 'false'
+           and line in bar.children and line.get('sensitive') == 'false' and pill in bar.children
+           and (pill.x, pill.y, pill.w, pill.h) == (O['SG_PILL_X0'], (O['SG_BAR_H'] - O['SG_PILL_H']) // 2, O['PL_BAR_PILL_W'], O['SG_PILL_H']) and pill.get('style:normal:icon') == 'sg_trash'
+           and pill.get('style:normal:round_radius') == str(O['SG_PILL_R']), 'the bar is the Songs page\'s (64 px, a hairline) with one Delete pill across it, hidden and insensitive')
+    kids = tree.children
+    expect(kids.index(bar) > kids.index(tree.find('playlists_listview')) and kids.index(bar) < kids.index(tree.find('pl_scrim')), 'the bar lies over the list and under the popup')
+
+    # entering: from the menu's Delete Playlists row (the card closes); the navbar, the bar, the title, the marks
+    m = PM(lists, missing=(7,)); open_page(m)
+    expect(sum(1 for c in m.calls if c[0] == 'bitmap_create_ex' and c[1:3] == (MARK, MARK)) == 2 and ('widget_set_visible', m.widgets['pl_bar'], 1) not in m.calls,
+           'select mode is off at open (the asset starts its widgets hidden and insensitive); the two marks are decoded once')
+    settle(m)
+    m.click('btn_more'); m.calls = []
+    m.click('pl_item3')
+    calls = list(m.calls)
+    t, back = m.widgets['label_title'], m.widgets['btn_return']
+    expect(vis(m, 'pl_card') == (0, 0) and vis(m, 'btn_selall') == (1, 1) and vis(m, 'pl_bar') == (1, 1) and all(vis(m, n) == (0, 0) for n in ('btn_more', 'btn_albumview', 'btn_backtoplayer')),
+           'the menu closes; Select All and the bar show; "...", the toggle and Now Playing go (hidden and insensitive)')
+    expect(vis(m, 'btn_return') != (0, 0) and m.props.get((back, 'style:normal:icon')) == 'ah_nav_close' and m.props.get((back, 'style:pressed:icon')) == 'ah_nav_close_down',
+           'Back becomes the glass x')
+    expect(('widget_set_text_utf8', t, '0 Selected') in calls and ('widget_resize', t, O['SG_SELALL_X'] - O['NAV_TITLE_X'], 22) in calls, 'the title reads 0 Selected and runs to Select All')
+    expect('stock_resume' not in [c[0] for c in calls], 'the stock Playlists page is not opened')
+    expect(m.props.get((m.sv, 'virtual_h')) == RGAP + 3 * PITCH + O['SG_BAR_H'], 'the content is the bar\'s height longer, so the last row scrolls clear of it')
+    blits, texts, styles = paint(m)
+    mk = marks_of(blits)
+    want = [(MARGIN + (i % COLS) * CPITCH + COVER - MARK - 6, RGAP + (i // COLS) * PITCH + COVER - MARK - 6) for i in range(4)]
+    expect([(x, y) for x, y, _ in mk] == sorted(want) and len({b for _, _, b in mk}) == 1, f'a mark at the bottom right of each cover in view, all the unselected image ({mk})')
+    # a tap marks (and opens nothing); another unmarks; the count follows
+    centre = lambda i: (MARGIN + (i % COLS) * CPITCH + 10, RGAP + (i // COLS) * PITCH + 10)
+    calls = tap(m, *centre(1))
+    expect(('widget_set_text_utf8', t, '1 Selected') in calls and not [c for c in calls if c[0] in ('window_open', 'navigator_to_with_context')], 'a tap on a cell marks it (the title reads 1 Selected) and opens no playlist')
+    tap(m, *centre(3)); calls = tap(m, *centre(0)); calls = tap(m, *centre(0))
+    expect(('widget_set_text_utf8', t, '2 Selected') in calls, 'a second tap on a cell unmarks it')
+    mk = {(x, y): b for x, y, b in marks_of(paint(m)[0])}
+    on, off = mk[want[1]], mk[want[0]]
+    expect(on != off and mk[want[3]] == on and mk[want[2]] == off and pixel(m, on, 13, 13) == 0xff2222ee and pixel(m, off, 13, 13) == 0xff111111
+           and pixel(m, on, 0, 0) >> 24 == 0, 'the marked cells show the selected image, the others the unselected one (cut to its circle: no square over the cover)')
+    # a drag past the threshold marks nothing
+    calls = tap(m, *centre(2), dy=14)
+    expect(not [c for c in calls if c[0] == 'widget_set_text_utf8' and c[1] == t], 'a drag marks nothing')
+    # Select All: all, then none
+    m.click('btn_selall')
+    expect(('widget_set_text_utf8', t, f'{len(lists)} Selected') in m.calls, 'Select All marks every playlist')
+    m.click('btn_selall')
+    expect(('widget_set_text_utf8', t, '0 Selected') in m.calls, 'and a second tap marks none')
+    # Back (the x) leaves select mode first; the title and navbar are restored
+    tap(m, *centre(1)); m.calls = []
+    m.click('btn_return')
+    expect('navigator_back' not in m.names() and vis(m, 'btn_selall') == (0, 0) and vis(m, 'pl_bar') == (0, 0) and all(vis(m, n) == (1, 1) for n in names)
+           and ('widget_set_tr_text', t, 'Playlists') in m.calls and ('widget_resize', t, O['NAV_CF_X'] - O['NAV_TITLE_X'], 22) in m.calls
+           and m.props.get((back, 'style:normal:icon')) == 'ah_nav_back' and m.props.get((m.sv, 'virtual_h')) == RGAP + 3 * PITCH,
+           'Back leaves select mode (no navigation): the navbar, the title and the content are as before')
+    expect(not marks_of(paint(m)[0]), 'no marks outside select mode')
+    calls = tap(m, *centre(1))
+    expect(('window_open', 'm1plus_songs') in calls, 'and a tap opens the playlist again')
+    m.click('btn_return')
+    expect('navigator_back' in m.names(), 'Back with no select mode goes back')
+
+    # Delete: nothing marked is the message; No keeps the mode; Yes runs the stock calls in the stock order
+    m = PM(lists, missing=(7,)); open_page(m); settle(m); m.setword(SEL_VEC, m.alloc(8))
+    m.click('btn_more'); m.click('pl_item3'); m.calls = []
+    m.click('pl_del')
+    expect([c for c in m.calls if c[0] == 'toast'] == [('toast', 'msg_delplaylistfailed', 1, 2000)] and not [c for c in m.calls if c[0] in ('confirm', 'batch_delete_file')],
+           'Delete with nothing marked: the stock message (msg_delplaylistfailed), no dialog, no delete')
+    tap(m, *centre(1)); tap(m, *centre(3)); m.calls = []
+    m.click('pl_del')
+    expect([c for c in m.calls if c[0] == 'confirm'] == [('confirm', 'msg_delplaylist', 1)] and not [c for c in m.calls if c[0] in ('batch_delete_file', 'loadLocalClassList')]
+           and vis(m, 'pl_bar') == (1, 1), 'No: the stock confirm dialog (kind 1, msg_delplaylist), nothing is deleted or read, select mode stays')
+    m.confirm_yes = True; m.calls = []
+    m.click('pl_del')
+    order = [c for c in m.calls if c[0] in ('confirm', 'loadLocalClassList', 'select_recordinit', 'set_selectindex', 'batch_delete_file', 'toast')]
+    expect([c[0] for c in order] == ['confirm', 'loadLocalClassList', 'select_recordinit', 'set_selectindex', 'set_selectindex', 'batch_delete_file', 'toast', 'loadLocalClassList'], f'Yes: confirm, the stock list read, the stock vector filled, batch_delete_file, the message, the page reads again ({[c[0] for c in order]})')
+    bd = next(c for c in order if c[0] == 'batch_delete_file')
+    expect(bd[:2] == ('batch_delete_file', O['CLASS_PLAYLISTS']) and bd[3] == m.word(SEL_VEC) and bd[4:] == (0, 0, [1, 3]) and order[1] == ('loadLocalClassList', O['CLASS_PLAYLISTS'])
+           and order[2] == ('select_recordinit', len(lists)), f'batch_delete_file(0xf00b, the stock list, the stock vector, 0, 0) with rows 1 and 3 selected ({bd})')
+    expect(order[-2] == ('toast', 'msg_delplaylistsuccess', 1, 2000) and vis(m, 'pl_bar') == (0, 0) and vis(m, 'btn_selall') == (0, 0) and all(vis(m, n) == (1, 1) for n in names),
+           'then the success message, select mode is over and the page shows the playlists read again')
+    # the stock list changed under the page (a playlist added elsewhere): nothing is deleted, the page reads again
+    m = PM(lists, missing=(7,)); open_page(m); settle(m); m.setword(SEL_VEC, m.alloc(8)); m.confirm_yes = True
+    m.click('btn_more'); m.click('pl_item3'); tap(m, *centre(1))
+    PM.add(m, 9, 'Late', [1])
+    m.calls = []
+    m.click('pl_del')
+    expect('batch_delete_file' not in m.names() and 'select_recordinit' not in m.names() and ('loadLocalClassList', O['CLASS_PLAYLISTS']) in m.calls and vis(m, 'pl_bar') == (0, 0),
+           'a stock list that is not what the page shows (a playlist added meanwhile): nothing is deleted, the page reads again')
+    m = PM(lists, missing=(7,)); open_page(m); settle(m); m.setword(SEL_VEC, m.alloc(8)); m.confirm_yes = True
+    m.click('btn_more'); m.click('pl_item3'); tap(m, *centre(1))
+    m.playlists[1], m.playlists[2] = m.playlists[2], m.playlists[1]   # the same playlists in another order
+    m.calls = []
+    m.click('pl_del')
+    expect('batch_delete_file' not in m.names(), 'the same playlists in another order: nothing is deleted (the marks are of rows, not of ids)')
+    m = PM(lists, missing=(7,)); open_page(m); settle(m); m.confirm_yes = True   # no selection vector (never made): no delete
+    m.click('btn_more'); m.click('pl_item3'); tap(m, *centre(1)); m.calls = []
+    m.click('pl_del')
+    expect('batch_delete_file' not in m.names(), 'no stock selection vector: nothing is deleted')
+
+    # list mode: a mark column left of each row, the cover and the texts 30 px to the right, taps mark
+    m = PM(lists, missing=(7,)); m.fs[PL_FILE] = b'0\n'; open_page(m); settle(m)
+    m.click('btn_more'); m.click('pl_item3')
+    blits, texts, styles = settle(m)
+    mk = marks_of(blits)
+    expect([(x, y) for x, y, _ in mk] == [(O['LIST_ART_X'] + (SEL_COL - 6 - MARK) // 2, r * O['LIST_ROW_H'] + (O['LIST_ROW_H'] - MARK) // 2) for r in range(6)],
+           f'list mode: a mark in a column left of every row ({mk})')
+    covers = sorted(b[2][:4] for b in blits if b[2][2] == O['LIST_ART'])
+    expect(all(c[0] == O['LIST_ART_X'] + SEL_COL for c in covers) and len(covers) == 6, 'the covers move right by the mark column')
+    rows = [(t, r) for (t, r), s in zip(texts, styles) if s == 'label_row_title']
+    expect(rows and all(r[0] == O['LIST_TEXT_X'] + SEL_COL and r[2] == O['LIST_TEXT_W'] - SEL_COL for _, r in rows), f'the texts too, 30 px narrower ({rows[:1]})')
+    calls = tap(m, 150, 1 * O['LIST_ROW_H'] + 20)
+    expect(('widget_set_text_utf8', m.widgets['label_title'], '1 Selected') in calls and not [c for c in calls if c[0] == 'window_open'], 'a tap on a row marks it')
+    m.touch('down', 150, SCREEN_Y0 + 2 * O['LIST_ROW_H'] + 20, 5000, fn='pl_on_down'); paint(m)
+    expect(not [f for f in m.fills if f[0] == O['LIST_PRESS']], 'a pressed row is not filled in select mode')
+    m.touch('abort', 150, SCREEN_Y0 + 2 * O['LIST_ROW_H'] + 20, 5010, fn='pl_on_abort')
+    m.click('btn_return')
+    blits, texts, styles = settle(m)
+    rows = [(t, r) for (t, r), s in zip(texts, styles) if s == 'label_row_title']
+    expect(all(r[0] == O['LIST_TEXT_X'] and r[2] == O['LIST_TEXT_W'] for _, r in rows) and not marks_of(blits), 'leaving select mode puts the texts back at their width')
+
+    # fallbacks: the stock Playlists page where the page cannot do it, nothing when there is nothing to select
+    for what, tweak in (('the select widgets are not in the asset', lambda m: m.widgets.pop('pl_bar')), ('the Delete pill is not in the asset', lambda m: m.widgets.pop('pl_del')),
+                        ('Select All is not in the asset', lambda m: m.widgets.pop('btn_selall')), ('the marks do not decode', lambda m: m.images.pop('selected'))):
+        m = PM(lists); tweak(m); open_page(m); settle(m); m.click('btn_more'); m.calls = []
+        m.click('pl_item3')
+        expect(('stock_resume', '14') in m.calls, f'{what}: Delete Playlists opens the stock Playlists page (Home id 14), as before')
+    m = PM([]); open_page(m); m.click('btn_more'); m.calls = []
+    m.click('pl_item3')
+    expect(('widget_set_visible', m.widgets['pl_bar'], 1) not in m.calls and 'stock_resume' not in m.names() and vis(m, 'pl_card') == (0, 0), 'with no playlist there is nothing to select: the menu closes, nothing else')
+    # the page read again (back from another window) leaves select mode
+    m = PM(lists, missing=(7,)); open_page(m); settle(m)
+    m.click('btn_more'); m.click('pl_item3'); tap(m, *centre(1))
+    fn, c = m.bound[(m.window, O['EVT_WINDOW_TO_FG'])]
+    m.call(fn, a0=c, a1=0, count=60000000)
+    expect(vis(m, 'pl_bar') == (0, 0) and vis(m, 'btn_selall') == (0, 0) and all(vis(m, n) == (1, 1) for n in names), 'the page read again is out of select mode (the marks were of the old list)')
+    # closing frees the marks
+    m.call(PSYMS['pl_on_destroy'], count=400000)
+    expect(sum(1 for c in m.calls if c[0] == 'bitmap_destroy') >= 2, 'closing frees the marks')
+    # the stock hit test on the asset: the bar's pill and Select All are reached where they show, nothing under the bar's top
+    m = PM(lists, missing=(7,)); open_page(m); settle(m); m.click('btn_more'); m.click('pl_item3')
+    root = asset_tree(UI)
+    for n in ('btn_selall', 'pl_bar', 'pl_del'):
+        if m.props.get((m.widgets[n], 'sensitive')) == 1: node(root, n).flags |= F_SENSITIVE
+    for n in ('btn_more', 'btn_albumview', 'btn_backtoplayer'):
+        if m.props.get((m.widgets[n], 'sensitive')) == 0: node(root, n).flags &= ~F_SENSITIVE
+    node(root, 'view_grid').h = 3000
+    expect(stock_target(m, root, 160, 450 - 32)[-1] == 'pl_del' and stock_target(m, root, 280, 25)[-1] == 'btn_selall' and stock_target(m, root, 190, 25)[-1] != 'btn_albumview',
+           'in select mode the pill and Select All are hit where they show, and the hidden navbar buttons take no touch')
+
+
 def run(ctx):
     expect, page = ctx.expect, ctx.page
     row = next(i for i, r in enumerate(page.rows) if r.label == 'Playlists')
@@ -343,7 +511,7 @@ def run(ctx):
            'the grid shows; the status line, the scrim and the card are hidden and insensitive')
     h = m.word(m.widgets['view_grid'] + 0xc)
     expect(h == RGAP + 3 * PITCH and m.props.get((m.sv, 'virtual_h')) == h, f'6 playlists are 3 rows: the content is {h} px and the scroll_view is told')
-    expect(not [c for c in m.calls if c[0] == 'widget_load_image' and c[1] != 'p_default'], 'no cover is decoded in the open (only the placeholder disc)')
+    expect(not [c for c in m.calls if c[0] == 'widget_load_image' and c[1] not in ('p_default', 'unselect', 'selected')], 'no cover is decoded in the open (only the placeholder disc)')
 
     # 4. The loader: one playlist read or one cover source decoded a tick; the mosaics (cells 4 and 5 are in the third row: scrolled to)
     blits, texts, styles = settle(m)
@@ -493,11 +661,11 @@ def run(ctx):
         m.click(item)
         expect([c for c in m.calls if c[0] == handler] == [(handler, 0)] and m.word(NAV_STATUS) == 0
                and ('loadLocalClassList', O['CLASS_PLAYLISTS']) in m.calls, f'{item}: the stock {handler[15:]} handler runs with the list in normal mode, then the page reads again')
-    # Delete: the stock Playlists page (its multi-select button deletes), through the Home dispatcher
+    # Delete Playlists: select mode on this page (select_tests below); the stock Playlists page only where the page cannot do it
     m.calls = []
     m.click('pl_item3')
-    expect(('stock_resume', '14') in m.calls and vis(m, 'pl_card') == (0, 0) and not [c for c in m.calls if c[0] == 'loadLocalClassList'],
-           'Delete playlists opens the stock Playlists page (Home id 14); the page reads again when it comes back')
+    expect('stock_resume' not in m.names() and vis(m, 'pl_card') == (0, 0) and vis(m, 'pl_bar') == (1, 1), 'Delete Playlists starts select mode on this page (select_tests); the stock page stays closed')
+    select_tests(expect, lists)
 
     # 11b. The card fits the language: the glyph's 48 px + its widest label + 16 px, 180..292, its right edge at 314; rows and labels follow
     raw = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw')
@@ -597,12 +765,13 @@ def run(ctx):
            'the first playlist in view stays at the top; the content is 12 rows')
     blits, texts, styles = settle(m)
     expect(('bitmap_create_ex', LART, LART) in m.calls or any(m.bitmaps[b][1] == LART for b in m.bitmaps), 'the tiles were remade at 52 px')
-    expect(all(m.bitmaps[b][1] == LART for b in m.bitmaps) and len(m.bitmaps) <= TILES + 1, 'no 144 px tile survives the switch; the ring is bounded')
+    tiles_ = [b for b in m.bitmaps if m.bitmaps[b][1] != MARK]   # (the two select marks are 26 px and live as long as the page)
+    expect(all(m.bitmaps[b][1] == LART for b in tiles_) and len(tiles_) <= TILES + 1, 'no 144 px tile survives the switch; the ring is bounded')
     m.calls = []; m.click('btn_albumview', count=60000000)
     expect(glyph(m) == 'pod_nav_list' and m.fs.get(PL_FILE) == b'1\n' and m.word(m.sv + SC_YOFF) == first_grid // COLS * PITCH == 0 + 2 // COLS * PITCH,
            'back to the grid: "1" saved, the glyph back, the first playlist in view kept')
     settle(m)
-    expect(all(m.bitmaps[b][1] == COVER for b in m.bitmaps), 'and the tiles are 144 px again')
+    expect(all(m.bitmaps[b][1] in (COVER, MARK) for b in m.bitmaps), 'and the tiles are 144 px again')
     #     the choice survives a re-open, and is the Albums page's own file apart
     m.click('btn_albumview', count=60000000)
     fn, c = m.bound[(m.window, O['EVT_DESTROY'])]

@@ -115,7 +115,7 @@ called when that found no navbar or list). Kill switch (`home_off()`: `/mnt/mmc/
   `EVT_WINDOW_TO_BG`, `EVT_WINDOW_TO_FG` on the window, `EVT_AFTER_PAINT` and `EVT_CLICK` on the card, `EVT_CLICK` on the three buttons, and
   arms a **one-shot `MB_FIRST_MS` (120 ms)**. It shows, moves and decodes nothing: the menu's first paint at boot (inside the boot
   guard's 5 s window) is exactly today's.
-- **Timer**: `mb_first` arms the repeating `mb_tick` (`MB_TICK_MS` 500) and does the first work; both call `mb_work`. Only while the window is
+- **Timer**: `mb_first` arms the repeating `mb_tick` (500 ms lit, 1000 ms dark) and does the first work. Only while the window is
   in front: `EVT_WINDOW_TO_BG` removes the timer (Now Playing, any page, the pull-down or a dialog above), `EVT_WINDOW_TO_FG` arms the
   one-shot again (the state is current a moment after Back), `EVT_DESTROY` removes it and frees the cover bitmap. A window started over
   one that never said it was gone replaces its state.
@@ -152,3 +152,5 @@ The kill switch, a missing widget (any of the seven, the list or its scroll view
 the bar is never shown and the list is not moved (`mb_stop` clears the state; a handler that was registered finds no window of ours). No
 bitmap: the bar still shows (title, artist, buttons) without a cover, paint draws nothing. A cover that
 does not decode: the placeholder, else grey. Nothing is shown at boot unless a track is queued, and then only after the one-shot.
+
+The page timer runs every 500 ms lit and 1000 ms dark; it records album changes while dark, defers visual work, and refreshes the shelf on the first lit tick (up to one second after waking).

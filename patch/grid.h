@@ -75,6 +75,8 @@ void grid_set(grid_tile_t *t, const char *album, const char *artist, unsigned ck
 
 /* The cover from the cache file of t->ckey (t->art 1), else the placeholder (t->art 2); a bitmap that cannot be made also gives 2. */
 void grid_art(grid_t *g, grid_tile_t *t);
+/* The same from a picture file at url ("file://<path>", any size the stock loader takes; NULL: no picture, the placeholder): the Podcasts page's covers. The caller has checked the size (pc_cover_ok). */
+void grid_art_url(grid_t *g, grid_tile_t *t, const char *url);
 
 /* A mosaic cover (the Playlists page): the tile's nq distinct cover keys qkey[] (the caller sets them, qi 0), ONE source decoded per call into
  * tmp (side / 2 squared words, the caller's) and placed in its quadrants; the covers repeat to fill four quadrants (1: the one cover full size,
@@ -93,9 +95,16 @@ void grid_blit(void *canvas, grid_t *g, grid_tile_t *t, int x, int y, int view_h
 /* The tile's album (pass 0) or artist (pass 1) in rect (x, y, w, h), cut once; drawn only when wholly inside view_h (> 0). The canvas has the style. */
 void grid_text(void *canvas, grid_tile_t *t, int pass, int x, int y, int w, int h, int view_h);
 /* The list mode's rows [r0, r1] (row r is tile_of(ctx, r)) of a view scrolled `off` px: the pressed fill (row press - 1, 0 none), the cover, the hairline,
- * then the titles (style label st_title) and the subtitles (st_sub), each drawn only when wholly inside view_h. Shared by the Albums and Playlists lists. */
-void grid_list_paint(void *canvas, grid_t *g, void *st_title, void *st_sub, int r0, int r1, int off, int view_h, int press,
+ * then the titles (style label st_title) and the subtitles (st_sub), each drawn only when wholly inside view_h. Shared by the Albums and Playlists lists. shift: the
+ * cover, the texts (and their width) move right by it (the Playlists page's select mode makes room for the mark; 0 elsewhere); the pressed fill and the hairline stay. */
+void grid_list_paint(void *canvas, grid_t *g, void *st_title, void *st_sub, int r0, int r1, int off, int view_h, int press, int shift,
                      grid_tile_t *(*tile_of)(void *, int), void *ctx);
+
+/* A playlist's mosaic: the first (up to) four distinct albums of its songs that have a Cover Flow cache file, as cache keys in key[4], and how many (0..4). From the
+ * first PL_SCAN songs of the list `songs` (a stock song list); the key is the cc_album_key of the song (its artist and album as the playlist stored them), and when
+ * that has no file the album of that name in `albums` (the library's copy, cc_albums; NULL: no lookup), whose record carries the artist the cache key was made from.
+ * Shared by the Playlists page (one playlist a tick) and the Songs page's playlist header. */
+int grid_mosaic_keys(void *songs, void *albums, unsigned *key);
 
 /* Cells [first, last): the covers, then the albums, then the artists. tile_of(ctx, a) gives cell a's tile. */
 void grid_paint(void *canvas, grid_t *g, int first, int last, int origin_y, int view_h, grid_tile_t *(*tile_of)(void *, int), void *ctx);

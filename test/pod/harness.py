@@ -146,6 +146,7 @@ class Machine:
         self.u.mem_map(STACK & ~0xfffff, 0x200000)
         self.u.mem_map(SCRATCH, 0x100000)
         self.u.mem_map(HEAP, HEAP_SIZE)
+        self.u.mem_write(pod.DATA['BACKLIGHT_STATUS'][0], b'\x01')
         self.next = SCRATCH
         self.heap = HEAP
         self.calls = []
@@ -209,6 +210,7 @@ class Machine:
         self.blits, self.texts, self.measures, self.glyphs, self.draw_oy = [], [], [], [], []
         self.fills, self.text_styles, self.cur_style, self.fill_color = [], [], '', 0 # canvas_fill_rect (colour, x, y, w, h); the style widget of each text
         self.destroyed, self.loads = 0, []   # bitmaps destroyed / images loaded, over the machine's life
+        self.locked, self.load_into = 0, []  # the bitmap last locked for writing / (url, that bitmap) per image load: which bitmap a decode was for
         self.tm_buf = 0                     # the struct tm localtime answers with (patch/dailymix.c)
         self.block_hook = self.u.hook_add(UC_HOOK_BLOCK, self._block)   # icount: instructions of every block entered (a test that does not count can hook_del it: it is most of the time)
 
@@ -440,7 +442,7 @@ class Machine:
             self.calls.append(('image_base_set_image', a0, self.read_cstr(a1)))
         elif name == 'widget_load_image':
             url = self.read_cstr(a1)
-            self.loads.append(url)
+            self.loads.append(url); self.load_into.append((url, self.locked))
             self.calls.append(('widget_load_image', url))
             ret = self.load_image
             img = self.images.get(url)
@@ -459,6 +461,9 @@ class Machine:
             if ret: self.timers.append((a0, a2))
         elif name == 'timer_remove':
             self.calls.append(('timer_remove', a0)); ret = 0
+        elif name == 'timer_modify':   # the page timer's new interval (patch/ipod.c ip_retime): recorded and applied to the last timer_add of that callback's slot
+            self.calls.append(('timer_modify', a0, a1)); ret = 9 if self.timer_modify_fail else 0
+            if not ret and self.timers: self.timers[-1] = (self.timers[-1][0], a1)
         # ---- Cover Flow: bitmaps and the canvas
         elif name == 'bitmap_create_ex':
             if not self.bitmap_ok:
@@ -482,6 +487,7 @@ class Machine:
             ret = self.word(a0) * 4
         elif name in ('bitmap_lock_buffer_for_read', 'bitmap_lock_buffer_for_write'):
             ret = self.word(a0 + 0x14)
+            if name == 'bitmap_lock_buffer_for_write': self.locked = a0
             self.calls.append((name,))
         elif name == 'bitmap_unlock_buffer':
             self.calls.append(('bitmap_unlock_buffer',))
@@ -903,6 +909,7 @@ class Machine:
     font_mem = 0x7000f000
     glyphs = ()               # (char, size) of every font_get_glyph call
     widget_on_fail = frozenset()   # events whose widget_on registration is refused (returns 0)
+    timer_modify_fail = False
     live_scroll = frozenset() # scroll_view structs whose virtual_h / yoffset the widget_set_prop_int mock also stores (the stock setters' stores)
     oy_canvas = 0             # a canvas in emulated memory whose origin y (canvas_t @4) is logged in draw_oy at every canvas_draw_image
     draw_oy = ()
@@ -929,6 +936,8 @@ class Machine:
         return self.call(fn, a0=ctx, a1=0, count=8000000)
 
     def names(self): return [c[0] for c in self.calls]
+
+    def screen(self, lit): self.u.mem_write(pod.DATA['BACKLIGHT_STATUS'][0], bytes([int(lit)]))
 
     def click(self, name, count=2000000, x=None, evt='EVT_CLICK'):
         """Tap the widget `name`: its latest EVT_CLICK handler (the payload's widget_on call) runs with the context it was given.
@@ -982,6 +991,80 @@ STOCK_LIBC = {0x742160: 'memcpy', 0x742da0: 'memset'}
 STOCK_NOOPS = ('widget_set_focused', 'widget_set_focused_internal', 'widget_invalidate_force', 'widget_ref', 'widget_unref', 'printf',
                'fflush', 'widget_update_pointer_cursor', 'widget_is_keyboard', 'widget_is_focusable', 'widget_get_window',
                'darray_init', 'widget_off_by_func', 'darray_deinit')
+
+
+class SelectMachine(Machine):
+    """The machine plus the stock multi-select calls the Songs and Playlists pages make: the selection vector (select_recordinit, set_selectindex: `sel_vec`), the
+    stock batch delete (recorded with the selected rows), and the style setter of the pills (`styled`) with its value (value_set_uint32)."""
+    def __init__(self):
+        super().__init__()
+        self.styled, self.sel_vec = [], None
+        for n in ('select_recordinit', 'set_selectindex', 'batch_delete_file', 'widget_set_style', 'value_set_uint32'):
+            self.handlers[pod.FUNCTIONS[n][2]] = n
+
+    def _hook(self, u, address, size, _):
+        name = self.handlers.get(address, '')
+        a0, a1, a2, a3 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3))
+        sp = u.reg_read(UC_MIPS_REG_SP)
+        ret = 0
+        if name == 'select_recordinit':
+            self.sel_vec = [0] * a0 if a0 >= 0 else self.sel_vec
+            self.calls.append(('select_recordinit', a0))
+        elif name == 'set_selectindex':
+            assert self.sel_vec is not None and 0 <= a0 < len(self.sel_vec), f'set_selectindex({a0}) out of range'
+            self.sel_vec[a0] ^= 1; ret = 1
+            self.calls.append(('set_selectindex', a0))
+        elif name == 'batch_delete_file':
+            flag = self.word(sp + 16)
+            self.calls.append(('batch_delete_file', a0, a1, a2, a3, flag, [i for i, v in enumerate(self.sel_vec or []) if v]))
+            ret = 1
+        elif name == 'widget_set_style':
+            self.styled.append((a0, self.read_cstr(a1), self.word(a2 + 8)))
+        elif name == 'value_set_uint32':
+            self.setword(a0 + 8, a1); ret = a0
+        else:
+            return super()._hook(u, address, size, _)
+        u.reg_write(UC_MIPS_REG_V0, ret & 0xffffffff)
+        u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+
+
+class ListMachine(SelectMachine):
+    """The machine plus what the A-Z list pages (patch/azlist.c, the Songs and Artists pages) call that the shared mocks do not know: the widget text calls the title
+    fit and the pills make (widget_get_text, widget_measure_text: `measure` gives a text's width), the scroll animator's destroy and the stock scroll end handler (the
+    rail's jump stops a coasting list first)."""
+    def __init__(self):
+        super().__init__()
+        self.wtext, self.measure = {}, lambda t: 8 * len(t)
+        self.handlers[pod.SCROLL_DONE] = 'stock_scroll_done'   # the stock scroll end handler (patch/scroll.c's): mocked, it clears wa
+        for n in ('widget_get_text', 'widget_measure_text', 'widget_animator_destroy'):
+            self.handlers[pod.FUNCTIONS[n][2]] = n
+
+    def _hook(self, u, address, size, _):
+        name = self.handlers.get(address, '')
+        a0, a1 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1))
+        if name == 'widget_set_tr_text': self.wtext[a0] = self.tr(self.read_cstr(a1))
+        elif name == 'widget_set_text_utf8': self.wtext[a0] = self.read_cstr(a1)
+        if name == 'widget_get_text':
+            t = self.wtext.get(a0)
+            ret = 0
+            if t is not None:
+                t = t.encode('latin-1').decode('utf-8')
+                ret = self.alloc(4 * len(t) + 4); self.u.mem_write(ret, struct.pack(f'<{len(t) + 1}I', *map(ord, t), 0))
+        elif name == 'widget_measure_text':
+            n = 0
+            while self.word(a1 + 4 * n): n += 1
+            t = ''.join(chr(c) for c in struct.unpack(f'<{n}I', self.u.mem_read(a1, 4 * n))) if n else ''
+            w = float(self.measure(t)) if t else 0.0
+            u.reg_write(UC_MIPS_REG_F0, struct.unpack('<I', struct.pack('<f', w))[0]); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+            return
+        elif name == 'widget_animator_destroy':
+            self.calls.append(('widget_animator_destroy', a0)); self.setword(a0 + 0x28, 0); ret = 0
+        elif name == 'stock_scroll_done':
+            self.calls.append(('stock_scroll_done', a0)); self.setword(a0 + O['SC_WA'], 0); ret = 0
+        else:
+            return super()._hook(u, address, size, _)
+        u.reg_write(UC_MIPS_REG_V0, ret & 0xffffffff)
+        u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
 
 
 POINTER_ON = {'d': 0x67126c, 'm': 0x6715f4, 'u': 0x67187c}   # widget_on_pointer_down / _move / _up (the window manager's entry points)
@@ -1247,11 +1330,11 @@ COVER_WIDGETS = ['btn_return', 'btn_backtoplayer', 'btn_cancel', 'navigationbar_
 CFSORT_FILE, CFSORT_TMP = '/mnt/data/m1plus-cfsort', '/mnt/data/m1plus-cfsort.tmp'   # patch/home.h
 
 
-def cover_machine(albums=3, tracks=2, cached=True, sort='album'):
+def cover_machine(albums=3, tracks=2, cached=True, sort='album', cls=None):
     """A machine set up to open Cover Flow: the asset's widgets, an album list and, by default,
     a complete thumbnail cache (so no build runs). sort: the order setting; the machines default to the stock order
     ('album'), which the shelf tests index by album number; 'artist' is the setting's own default (the sort tests)."""
-    m = Machine()
+    m = (cls or Machine)()
     if sort == 'album': m.fs[CFSORT_FILE] = b'0\n'
     for n in COVER_WIDGETS: m.widget(n)
     m.showlist = [m.record(album=f'Album {i}', artist=f'Artist {i}',
@@ -1315,14 +1398,44 @@ def artist_rec(m, name, rid):
 COMPOSER_ALBUMS = {'Bach': ['Goldberg Variations', 'Cello Suites'], 'Mozart': ['Requiem'], 'Unknown Composer': []}
 
 
+AR_WIDGETS = ('artists_listview', 'view_grid', 'sg_rail', 'sg_bubble', 'sg_bubble_letter', 'ar_title', 'label_hdr', 'label_rail', 'label_rail_on', 'label_row_title',
+              'btn_artisttype', 'img_nb_fade')
+
+
+def artists_row_y(i, starts=(0, 1)):
+    """The y (from the list's top, the scroll offset not included) of the middle of display row i of the Artists page, the sections starting at the rows `starts`."""
+    return O['SG_TITLE_H'] + sum(1 for s in starts if s <= i) * O['SG_HDR_H'] + i * 52 + 26
+
+
+def artists_tap(m, i, starts=(0, 1), dx=0, dy=0, count=30000000):
+    """A tap on display row i of the Artists page (a press and a release at the row's middle; dx, dy: the finger moves between them)."""
+    y = 80 + artists_row_y(i, starts)
+    m.touch('down', 100, y, 1000, fn='ar_on_down', count=count)
+    calls = list(m.calls)
+    m.touch('up', 100 + dx, y + dy, 1080, fn='ar_on_up', count=count)
+    m.calls = calls + m.calls
+
+
 def artists_machine(artists=('Miles Davis', 'Nina Simone', 'Unknown Artist'), composers=(), genres=()):
     """A machine with the Artists page's widgets, the stock artist list (class 0xf004), each
     artist's albums (loadAlbumList) and the library album list (getAllAlbum). Miles Davis has
     three albums, one of them (Jazz Hits) filed under Various Artists in the library list; Nina
     Simone has one; Unknown Artist none. Every library album is cached under its library key."""
-    m = cover_machine(albums=0)
-    for n in ('pod_listview', 'pod_scrollview', 'btn_artisttype'): m.widget(n)
-    m.props[(m.widgets['pod_scrollview'], 'w')] = 310
+    m = cover_machine(albums=0, cls=ListMachine)
+    for n in AR_WIDGETS: m.widget(n)
+    # the page's widgets as widget structs (window > list_view > scroll_view > view_grid, and the rail), for demo's own widget_to_local (as songs_machine)
+    win, lv, sv, view, rail = m.alloc(0x80), m.widgets['artists_listview'], m.alloc(0x180), m.widgets['view_grid'], m.widgets['sg_rail']
+    m.u.mem_write(sv, bytes(0x180)); m.u.mem_write(lv, bytes(0x80)); m.u.mem_write(view, bytes(0x80)); m.u.mem_write(rail, bytes(0x80))
+    for w, y, h, parent in ((win, 30, 450, 0), (lv, 50, O['GRID_VIEW_H'], win), (sv, 0, O['GRID_VIEW_H'], lv), (view, 0, O['GRID_VIEW_H'], sv)):
+        for off, v in ((4, y), (8, 320), (0xc, h), (0x44, parent)): m.setword(w + off, v)
+    m.setword(sv + 8, 310)
+    for off, v in ((0, O['SG_RAIL_X']), (4, 50), (8, O['SG_RAIL_W']), (0xc, O['GRID_VIEW_H']), (0x44, win)): m.setword(rail + off, v)
+    m.widgets['artists_scrollview'] = sv
+    m.mem_geometry, m.live_scroll = True, frozenset({sv, rail})
+    m.sv, m.rail, m.view, m.lv = sv, rail, view, lv
+    m.canvas = m.alloc(0x80); m.oy_canvas = m.canvas
+    m.measure = lambda t: 0   # no title is cut (test/pod/artists.py measures in the real font)
+    for n, w in (('label_title', O['NAV_VIEW_X'] - O['NAV_TITLE_X']), ('ar_title', 250)): m.setword(m.widgets[n] + 8, w)
     m.album_artists = [artist_rec(m, a, i + 1) for i, a in enumerate(('Various Artists', 'Miles Davis'))]
     m.class_lists[O['CLASS_ARTISTS']] = [artist_rec(m, a, -1 if a == 'Unknown Artist' else i + 1)
                                          for i, a in enumerate(artists)]

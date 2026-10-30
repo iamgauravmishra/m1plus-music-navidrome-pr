@@ -43,6 +43,7 @@
 #include "covercache.h"
 #include "common.h"
 #include "grid.h"
+#include "podcasts.h"
 
 #if SH_TILES != GRID_COLS * SH_ROWS || SH_TILES != RC_MAX
 #error the shelf shows every album the file keeps: SH_TILES = GRID_COLS * SH_ROWS = RC_MAX
@@ -209,7 +210,9 @@ int recent_note(void *t) {
     const char *album;
     unsigned key, i, at;
     ent_t e;
+    pc_note(t);   /* Podcasts: the place, the played mark, the speed (patch/pcmodel.c); every page that sees the playing track on a timer calls this */
     if (!t) return 0;
+    if (pc_is_path(cc_str(t, REC_PATH))) return 0;   /* an episode is not an album of the shelf */
     album = cc_str(t, REC_ALBUM);
     if (!*album) return 0;   /* an untagged album is not recorded */
     key = rc_id(album);
@@ -335,11 +338,30 @@ static int rc_work(void) {
     return rc_next() >= 0;
 }
 
+static int rc_dark(const void *timer);
+
 static int rc_tick(const void *timer) {
     (void)timer;
     if (!rc.win || !rc.fg) { rc.timer = 0; return RET_OK; }
+    if (!pod_screen_lit()) {
+        rc.timer = timer_add(rc_dark, (void *)0, POD_DARK_MS);
+        return RET_OK;
+    }
     if (!rc_work()) { rc.timer = 0; return RET_OK; }   /* nothing left: the timer ends with the return */
     return RET_REPEAT;
+}
+
+static int rc_dark(const void *timer) {
+    (void)timer;
+    rc.timer = 0;
+    if (!rc.win || !rc.fg) return RET_OK;
+    if (!pod_screen_lit()) {
+        rc.timer = timer_add(rc_dark, (void *)0, POD_DARK_MS);
+    } else if (rc_next() >= 0) {
+        rc.timer = timer_add(rc_tick, (void *)0, RC_TICK_MS);
+        if (rc.timer && !rc_work()) rc_unarm();
+    }
+    return RET_OK;
 }
 
 static int rc_first(const void *timer) {
@@ -348,8 +370,11 @@ static int rc_first(const void *timer) {
     if (!rc.win || !rc.fg) return RET_OK;
     rc.warm = 1;
     if (rc_next() < 0) return RET_OK;
-    rc.timer = timer_add(rc_tick, (void *)0, RC_TICK_MS);
-    if (rc.timer && !rc_work()) rc_unarm();
+    if (!pod_screen_lit()) rc.timer = timer_add(rc_dark, (void *)0, POD_DARK_MS);
+    else {
+        rc.timer = timer_add(rc_tick, (void *)0, RC_TICK_MS);
+        if (rc.timer && !rc_work()) rc_unarm();
+    }
     return RET_OK;
 }
 

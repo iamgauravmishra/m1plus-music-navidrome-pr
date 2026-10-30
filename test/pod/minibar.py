@@ -532,9 +532,9 @@ def run(ctx):
     expect(last_row_bottom + O['MB_GAP'] == O['MB_Y'], 'scrolled to the end, the last row ends exactly MB_GAP above the pill')
     # the list runs to the window's bottom under the pill: a row is under it, and the pill (the later sibling) takes the touch there; the row above is reached
     p = target(m, 160, O['MB_Y'] + 14)
-    expect(p[-1] == 'pod_mb_card' and 'pod_row19' not in p, f'where Extras lies under the pill the pill takes the touch ({p})')
+    expect(p[-1] == 'pod_mb_card' and f'pod_row{len(pod_pages.ITEMS)}' not in p, f'where Extras lies under the pill the pill takes the touch ({p})')
     p = target(m, 160, O['MB_Y'] - 4)
-    expect('pod_row19' in p, f'the Extras row just above the pill is reached ({p})')
+    expect(f'pod_row{len(pod_pages.ITEMS)}' in p, f'the Extras row just above the pill is reached ({p})')
     # hidden bar: the full-height list takes everything
     m = BM(); m.start(); m.first()
     t = world(m)

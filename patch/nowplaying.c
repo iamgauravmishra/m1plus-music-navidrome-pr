@@ -39,6 +39,7 @@ static struct {
     void *pt;              /* label_playtime (stock's elapsed time), 0 if the page lacks it */
     unsigned pdone;        /* the hash of the text label_playtime held after our last look */
     unsigned timer;        /* the repeating np_tick timer */
+    unsigned interval;     /* interval last accepted by timer_modify */
     unsigned key;          /* what the colour was last made from: 0 nothing yet, NP_KEY_NEUTRAL, or a file's hash */
     unsigned sig;          /* np_cover_sig at the last full hash: while it is unchanged the file is not hashed again */
     unsigned color;        /* the window's bg_color as 0x00BBGGRR (what the corners are painted from) */
@@ -382,8 +383,9 @@ static void np_info(void) {
 }
 
 static void np_work(void) {
-    recent_note(cc_playing());   /* the Recently Played list (patch/recent.c): cheap while the album is the same. No stock query here: the page under
-                                  * Now Playing (a stock song list) draws and plays *pdeq_showlist; the menu's to-foreground resolves the cover key */
+    recent_note(cc_playing()); /* No stock list query: the page underneath owns pdeq_showlist;
+                               * the menu's foreground handler resolves the cover key. */
+    if (!pod_screen_lit()) return;
     np_cover();
     np_time();
     np_elapsed();
@@ -391,8 +393,11 @@ static void np_work(void) {
 }
 
 static int np_tick(const void *timer) {
+    unsigned want;
     (void)timer;
     if (!np.win) return RET_OK; /* not ours any more: a timer that returns RET_OK ends */
+    want = pod_screen_lit() ? NP_TICK_MS : POD_DARK_MS;
+    if (np.timer && np.interval != want && timer_modify(np.timer, want) == RET_OK) np.interval = want;
     /* another page on top: nothing of this one is seen, np_on_foreground catches up. A dialog (the pull-down) also clears np.fg
      * but leaves the page the top normal window and partly visible, so the work goes on under it. */
     if (!np_bar_sync() && np.barok && !np.fg) return RET_REPEAT;
@@ -446,6 +451,7 @@ static void np_start(void *win) {
     np.color = NP_NEUTRAL & 0xffffff; /* the asset's window colour */
     if (!widget_on(win, EVT_DESTROY, np_on_destroy, win)) { memset(&np, 0, sizeof np); return; }
     np.timer = timer_add(np_tick, (void *)0, NP_TICK_MS);
+    np.interval = NP_TICK_MS;
     if (!np.timer) { /* the page stays stock; the destroy handler finds no window of ours any more */
         memset(&np, 0, sizeof np);
         return;

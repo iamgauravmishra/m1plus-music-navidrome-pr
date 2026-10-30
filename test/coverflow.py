@@ -81,7 +81,7 @@ def render(lib, frac, texs, cfg=None, pw=W, ph=H):
 
 class CFG(ctypes.Structure):
     """patch/coverflow.c cfg_t."""
-    _fields_ = [(n, ctypes.c_int) for n in ('w', 'h', 'cx', 'top', 'art', 'eye', 'x1', 'xs', 'z1', 'zs', 'reflect', 'rot')]
+    _fields_ = [(n, ctypes.c_int) for n in ('w', 'h', 'cx', 'top', 'art', 'eye', 'x1', 'xs', 'z1', 'zs', 'reflect', 'rot', 'tail', 'bg')]
 
 
 def land_cfg(lib, rot=1):
@@ -305,6 +305,41 @@ def main():
                             wrong += 1
                 expect(wrong == 0, f'{"portrait" if cfg is lib.portrait else "landscape"} frac {frac}: '
                        f'{wrong} body pixels show a farther cover or a mixture where a nearer cover is not')
+
+        # 8d. cfg.bg: the frame over a colour. 0 is over black (the same bytes as the shelf itself); white turns the fade into transparency
+        #     towards white and ends on white where no cover is, never grey covers or black gaps.
+        def with_bg(base, bg):
+            c = CFG.from_address(base)
+            out = CFG(*[getattr(c, n) for n, _ in CFG._fields_])
+            out.bg = bg
+            return out
+        expect(CFG.from_address(lib.portrait).bg == 0 and CFG.from_address(lib.land).bg == 0, 'the stock shelves are over black (bg 0)')
+        black = render(lib, ONE // 5, texs)
+        expect(list(render(lib, ONE // 5, texs, with_bg(lib.portrait, 0))) == list(black), 'bg 0 renders the shelf as it was')
+        white = render(lib, ONE // 5, texs, with_bg(lib.portrait, 0xffffff))
+        expect(all(v >> 24 == 255 for v in white), 'over white the frame is opaque')
+        expect(all(white[x] == 0xffffffff for x in range(W)) and white[(H - 1) * W] == 0xffffffff and white[(H - 1) * W + W - 1] == 0xffffffff, 'no cover: the pixel is white (top row, bottom corners)')
+        rest_w, rest_b = render(lib, 0, texs, with_bg(lib.portrait, 0xffffff)), render(lib, 0, texs)
+        expect(all(rest_w[(TOP + ART // 2) * W + x] == rest_b[(TOP + ART // 2) * W + x] for x in range(CX - ART // 4, CX + ART // 4)), 'the centre cover at rest is unfaded over either')
+        chan = lambda v: (v & 255, v >> 8 & 255, v >> 16 & 255)
+        mid = (TOP + ART // 2) * W
+        lighter = bad = 0
+        for x in range(W):
+            b, w = chan(black[mid + x]), chan(white[mid + x])
+            if any(wc < bc for wc, bc in zip(w, b)): bad += 1
+            if any(wc > bc + 20 for wc, bc in zip(w, b)): lighter += 1
+        expect(bad == 0 and lighter > 100, f'the dimmed side covers blend towards white, not black: never darker than over black ({bad} darker), clearly lighter on {lighter} of {W} columns')
+        side = [None] * RING; side[REACH + 2] = texture((200, 60, 60))
+        ws = render(lib, 0, side, with_bg(lib.portrait, 0xffffff)); bs = render(lib, 0, side)
+        hit = [i for i in range(mid, mid + W) if bs[i] & 0xffffff]
+        wp, bp = chan(ws[hit[len(hit) // 2]]), chan(bs[hit[len(hit) // 2]])
+        expect(hit and wp[0] > 150 and wp[1] > bp[1] + 100 and wp[1] > 100 and wp[1] < 255, f'a cover two out over white is its colour thinned towards white ({wp}), over black dimmed ({bp})')
+        flatw = texture((255, 255, 255))
+        for i in range(TEXELS): flatw[i] = 0xffffffff
+        wf = render(lib, ONE // 3, [flatw] * RING, with_bg(lib.portrait, 0xffffff))
+        expect(all(min(chan(v)) >= 244 for v in wf), f'white covers over white: all within the 1-per-layer rounding of white, no channel overflows into a dark pixel or leaves a seam (darkest {min(min(chan(v)) for v in wf)})')
+        gap = render(lib, ONE // 7, texs, with_bg(lib.portrait, 0x336699))
+        expect(chan(gap[0]) == (0x99, 0x66, 0x33) and gap[0] >> 24 == 255, 'any colour: the corner is the bg (r | g << 8 | b << 16), opaque')
 
         # 9. The cache key: FNV-1a of artist then album, each with a separator, never 0.
         def fnv(h, s):

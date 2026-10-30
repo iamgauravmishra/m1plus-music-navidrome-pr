@@ -119,6 +119,15 @@ DP_ADD_GLYPH = 'plus'
 DP_ADDED_GLYPH = 'check'
 DAILY = ['dm_disc', 'dm_disc_down'] + DPAGE   # the Daily Mix card's play disc and the page's images (DPAGE) (patch/dailymix.c, tools/pod_ui.py): a 48 px glass disc with a 22 px white play glyph, one px right of centre (a triangle's weight sits left of its box)
 DM_DISC_PX, DM_PLAY_GLYPH = 48, 22     # patch/offsets.inc DM_DISC, tools/pod_dailymix.py DM_PLAY_GLYPH
+# The iPod page's click wheel (patch/ipod.c, docs/modules/ipod.md): one 220 px image, a light ring with a 90 px centre button and the four labels drawn in; the corners are transparent
+# (the window's colour shows). IP_WHEEL_D / IP_HUB_R in patch/offsets.inc are these numbers (test/pod/ipod.py checks them).
+IPOD = ['ipod_wheel']
+IPOD_WHEEL_D, IPOD_HUB_R = 220, 45
+DAILY = DAILY + IPOD
+# The Tape page (patch/tape.c, docs/modules/tape.md): the More dialog's row icon and the page's four pictures (tools/tape_art.py draws them; the page is landscape, the pictures are turned for the portrait panel).
+import tape_art
+TAPE = list(tape_art.NAMES)   # the page's pictures: tape_top and tape_screw shared, and tape_shell / tape_hubs / tape_marks for each theme (the row icon pod_ic_tape is a row image, installed with them)
+DAILY = DAILY + TAPE
 # M1+ Music menu and Shuffle page rows: label -> (added image, glyph). A bare white glyph (BARE_PX canvas) left of the title.
 # '@shanling' = the brand mark cut out of a stock image (shanling_mark below), not a glyph.
 POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'audio-lines'), 'Cover Flow': ('pod_ic_coverflow', 'gallery-horizontal'),   # audio-lines: the wave of the navbar's Now Playing button
@@ -143,14 +152,14 @@ POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'audio-lines'), 'Cover Flow': (
             'Most Played': ('pod_ic_most', 'flame'),
             'Composers': ('pod_ic_composers', 'feather'), 'Hi-Res': ('pod_ic_hires', '+badge-hr'),
             'Update Library': ('pod_ic_update', 'refresh-cw'), 'Tidal': ('pod_ic_tidal', 'T:brand-tidal'),
-            'CD Ripper': ('pod_ic_cdripper', 'disc'), 'Screenshot': ('pod_ic_screenshot', 'camera'),
+            'CD Ripper': ('pod_ic_cdripper', 'disc'), 'Pod': ('pod_ic_ipod', 'circle'), 'Podcasts': ('pod_ic_podcasts', 'podcast'), 'Screenshot': ('pod_ic_screenshot', 'camera'), 'Cassette Mode': ('pod_ic_tape', '+cassette-tape'), 'Cassette Theme': ('pod_ic_tape', '+cassette-tape'),
             # the Settings page (the menu's Settings row opens it)
             'System Settings': ('pod_ic_settings', 'settings'), 'Playback': ('pod_ic_playset', 'headphones')}
 # The "M1+ Music" icon patch/home.c adds to the stock Home grid (id 99): 66x66 like the stock Home icons
 # (white Lucide smartphone glyph on the #777777 disc, #555555 pressed), style home_m1plus_style in home_page.bin.
 POD_HOME = ('m1plus', 'm1plus_down')
 POD_HOME_GLYPH, POD_HOME_STYLE = 'smartphone', 'home_m1plus_style'
-POD_UI = ['m1plus_menu', 'm1plus_shuffle', 'm1plus_customize', 'm1plus_extras', 'm1plus_mainmenu', 'm1plus_cfset', 'm1plus_homeset', 'm1plus_extrascfg', 'm1plus_developer']
+POD_UI = ['m1plus_menu', 'm1plus_shuffle', 'm1plus_customize', 'm1plus_extras', 'm1plus_mainmenu', 'm1plus_cfset', 'm1plus_homeset', 'm1plus_extrascfg', 'm1plus_developer', 'm1plus_tapeset']
 # The navbar toggles (tools/pod_ui.py NAV_VIEW_ICON, patch/albums.c, patch/artists.c): the glyph of the view a tap switches to, a plain
 # 24 px white glyph like the navbar's others (pressed #777777), added to the images.
 NAV_VIEW = {'pod_nav_grid': 'layout-grid', 'pod_nav_list': 'list',
@@ -249,7 +258,7 @@ NP = {'np_play': ('pil:play', 44, 0, 'fg', 'np_play_down'), 'np_pause': ('pil:pa
       'mb_next': ('pil:mb_next', (34, 24), 0, 'white', 'mb_next_down'),
       'mb_glass': ('pil:glass', (304, 56), 0, 'fg', 'mb_glass_down'),
       'lk_card': ('pil:glass_card', (288, 334), 0, 'fg', None),
-      'pm_sheet': ('pil:glass_sheet', (320, 200), 0, 'fg', None),
+      'pm_sheet': ('pil:glass_sheet', (320, 200), 0, 'fg', None), 'pm_sheet5': ('pil:glass_sheet5', (320, 250), 0, 'fg', None),
       'pl_glass': ('pil:glass_menu', (72, 200), 0, 'fg', None),
       'np_grabber': ('pil:grabber', (120, 44), 0, 'ghost', 'np_grabber_down'),
       'np_row_playing': ('pil:wave', (40, 20), 0, 'fg', None),
@@ -655,7 +664,42 @@ def album_images():
     tick = glyph_fit(DP_ADDED_GLYPH, AH_SHUF_GLYPH, AH_SHUF_GLYPH, WHITE, 0)   # the mix's playlist exists
     f['dp_added'] = on_disc(tick, AH_DISC_PX, AH_SHUF_DISC)
     f['dp_added_down'] = on_disc(tick, AH_DISC_PX, AH_SHUF_DISC_DOWN)
+    f['ipod_wheel'] = ipod_wheel()
+    import tape_art
+    f.update(tape_art.images())
     return f
+
+def ipod_wheel():
+    """The click wheel: a ring (a light vertical gradient inside a darker 1 px rim) with a centre button, drawn at 4 x and reduced; the labels MENU, |<<, >>| and >|| on the ring."""
+    from PIL import Image, ImageDraw, ImageFont
+    k, d, hr = 4, IPOD_WHEEL_D, IPOD_HUB_R
+    r = d // 2
+    big = Image.new('RGBA', (d * k, d * k), (0, 0, 0, 0))
+    def grad(radius, top, bot, rim):
+        m = Image.new('L', big.size, 0); ImageDraw.Draw(m).ellipse((r * k - radius * k, r * k - radius * k, r * k + radius * k - 1, r * k + radius * k - 1), fill=255)
+        g = Image.new('RGBA', big.size, (0, 0, 0, 0)); gd = ImageDraw.Draw(g)
+        for y in range(r * k - radius * k, r * k + radius * k):
+            t = (y - (r * k - radius * k)) / (2 * radius * k)
+            gd.line((0, y, big.width, y), fill=tuple(int(a + (b - a) * t) for a, b in zip(top, bot)) + (255,))
+        rm = Image.new('RGBA', big.size, (0, 0, 0, 0)); ImageDraw.Draw(rm).ellipse((r * k - radius * k, r * k - radius * k, r * k + radius * k - 1, r * k + radius * k - 1), fill=rim + (255,))
+        inner = Image.new('L', big.size, 0); ImageDraw.Draw(inner).ellipse((r * k - radius * k + k, r * k - radius * k + k, r * k + radius * k - k - 1, r * k + radius * k - k - 1), fill=255)
+        big.alpha_composite(rm); big.paste(g, (0, 0), inner)
+    grad(r, (0xFA,) * 3, (0xDC,) * 3, (0xA8, 0xAB, 0xB0))
+    grad(hr, (0xEE,) * 3, (0xCF,) * 3, (0xB0,) * 3)
+    lab = (0x86,) * 3 + (255,); dr = ImageDraw.Draw(big); mid = (r + hr) * k // 2; g = 5 * k; cx = cy = r * k
+    for sx in (-1, 1):   # |<< and >>|: two triangles pointing along sx, then the bar
+        x = cx + sx * mid
+        for xc in (x - 3 * k, x + 3 * k):
+            dr.polygon([(xc - sx * 3 * k, cy - g), (xc - sx * 3 * k, cy + g), (xc + sx * 3 * k, cy)], fill=lab)
+        bx = x + sx * 8 * k
+        dr.rectangle((min(bx, bx + sx * 2 * k), cy - g, max(bx, bx + sx * 2 * k), cy + g), fill=lab)
+    by = cy + mid
+    dr.polygon([(cx - 8 * k, by - 5 * k), (cx - 8 * k, by + 5 * k), (cx - 1 * k, by)], fill=lab)
+    dr.rectangle((cx + 2 * k, by - 5 * k, cx + 4 * k, by + 5 * k), fill=lab); dr.rectangle((cx + 6 * k, by - 5 * k, cx + 8 * k, by + 5 * k), fill=lab)
+    out = big.resize((d, d), Image.LANCZOS)
+    f = ImageFont.truetype(TILE_FONT, 14); bb = f.getbbox('MENU')
+    ImageDraw.Draw(out).text((r - (bb[2] - bb[0]) / 2 - bb[0], r - mid // k - (bb[3] - bb[1]) / 2 - bb[1]), 'MENU', font=f, fill=lab)
+    return out
 
 def solid_pill(w, h, rgb):
     """A w x h pill (corner radius h / 2) of one opaque colour, anti-aliased (8 x supersampled)."""
@@ -912,6 +956,7 @@ def np_glyph(g, size, ink_px, rgb):
 # just inside the top edge. Straight-alpha RGBA, anti-aliased (8x supersampled, box filter). Pressed: a brighter fill and rim.
 GLASS = (304, 56, 28)                                         # w, h, radius
 GLASS_CARD = (288, 334, 18)                                   # the lock screen's now-playing card (mod_lockscreen.py; docs/modules/lockscreen.md)
+GLASS_SHEET5 = (320, 250, 18)                               # the same sheet with the Tape row (page 1, five rows): its own image, not a crop of a taller one (docs/modules/playmore.md)
 GLASS_SHEET = (320, 200, 18)                                  # Now Playing's More sheet (patch/playmore.c, docs/modules/playmore.md): top corners only
 GLASS_SHEET_FILL = ((0x2A, 0x2A, 0x2C), (0x1E, 0x1E, 0x20), 0.88)   # denser than the card (0.76): rows, labels and grey badges sit straight on it (docs/modules/playmore.md)
 GLASS_MENU = (72, 200, 14)    # the Playlists page's "..." menu card (patch/playlists.c, docs/modules/playlists.md): the sheet's glass, all four corners; drawn patch3_x
@@ -969,6 +1014,7 @@ def np_images():
             if g == 'pil:glass': out[name] = glass_image(*GLASS, pressed)
             elif g == 'pil:glass_card': out[name] = glass_image(*GLASS_CARD, fill=GLASS_CARD_FILL)
             elif g == 'pil:glass_sheet': out[name] = glass_image(*GLASS_SHEET, fill=GLASS_SHEET_FILL, top_only=True)
+            elif g == 'pil:glass_sheet5': out[name] = glass_image(*GLASS_SHEET5, fill=GLASS_SHEET_FILL, top_only=True)
             elif g == 'pil:glass_menu': out[name] = glass_image(*GLASS_MENU, fill=GLASS_SHEET_FILL)
             elif g.startswith('pil:'): out[name] = pil_glyph(g[4:], px, rgb, alpha)
             elif rest: out[name] = np_disc(px, rest[0], NP_DISC_ALPHA_DOWN if pressed else NP_DISC_ALPHA, g, ink, rgb)

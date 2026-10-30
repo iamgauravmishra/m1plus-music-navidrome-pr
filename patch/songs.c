@@ -50,7 +50,9 @@
 #include "covercache.h"
 #include "common.h"
 #include "grid.h"
+#include "azlist.h"
 #include "i18n.h"
+#include "podcasts.h"
 
 extern int pod_home_open(int id);   /* patch/m1plus.c: a stock Home destination through the dispatcher */
 extern void pod_toast(const char *text);   /* patch/shuffle.c: the stock message box */
@@ -85,8 +87,8 @@ static struct {
     void *win, *view, *sv, *status, *title, *back, *np;
     void *fade;                   /* the navbar's fade (img_nb_fade, optional): shown only while the list is scrolled */
     void *btn_search, *btn_sort, *btn_select, *btn_selall, *btn_play, *btn_shuffle, *btn_add, *btn_del;
-    void *st_title, *st_sub, *st_hdr, *st_rail, *st_rail_on;   /* hidden labels whose styles are the text styles */
-    void *rail, *bubble, *bubble_letter, *bar, *scrim, *card, *tick[SG_SORT_ROWS];
+    void *st_title, *st_sub;      /* hidden labels whose styles are the text styles (the rail's and the header's are az's) */
+    void *bar, *scrim, *card, *tick[SG_SORT_ROWS];
     void *list;                   /* the stock list the index is of (*pdeq_showlist when valid) */
     void *first;                  /* its first record: with the size, tells a list another query replaced */
     unsigned count;
@@ -95,12 +97,10 @@ static struct {
     unsigned nsel;
     int select;                   /* select mode */
     int sort;                     /* sort_flag as the page last read it */
-    int nsec;                     /* 0: a plain list; else the sections */
-    unsigned sec_start[SG_MAX_SEC];       /* the first song of each section */
-    unsigned char sec_letter[SG_MAX_SEC];
+    az_t al;                      /* the sections and the rail (patch/azlist.c); al.nsec is 0 for a plain list */
     void *albums;                 /* the library's albums (cc_albums), for the cover lookup */
     int albums_tried;
-    void *disc;                   /* the rail's disc (SG_RAIL_DISC px, alpha) and the select marks (SG_MARK px): bitmaps */
+    /* the select marks (SG_MARK px): bitmaps */
     void *mark[2];                /* unselect, selected */
     int press;                    /* the row under the finger, + 1 */
     int seen, dir, noscroll;
@@ -109,7 +109,6 @@ static struct {
     int title_fits;               /* the small title's text fits its room (the glass capsule starts 64 px after it): a language where it does not has none */
     int menu;                     /* the sort card is open */
     int picker;                   /* the stock playlist picker is open over this page */
-    int grab, rail_on, rail_i;    /* a finger holds the rail (the grab); it has set a letter (the disc and the bubble show); the letter's section */
     unsigned more_timer, stale_timer, build_timer;
     int own, done, build_at;      /* the cover build: this page holds the worker's set; its done counter at the last poll; the song it was made around */
     char title_save[0x200];       /* nagvation_title across the picker */
@@ -120,6 +119,10 @@ static struct {
     unsigned char ci[CLASSINFO_SIZE];   /* CLASS_ARTIST_SONGS: the browsing record of the artist (CLASSINFO, as the two stock queries left it), put back before every query and play */
     void *big;                    /* the large title (sg_title) */
     void *foot;                   /* the song count under the last row (sg_foot, a label in the content view) */
+    void *hname;                  /* a playlist's header: the name (sg_hname, an optional label of the content view; the count is the list's footer) */
+    unsigned *htmp;               /* one quadrant of the header's mosaic (PH_COVER / 2 squared words) for grid_mosaic */
+    int head;                     /* the page has a playlist's header (class 0xff13, its labels, its tile and quadrant buffer): the pills and the rows start lower, the large title is not shown */
+    grid_t hg;                    /* the header's one tile, PH_COVER px (patch/grid.c, as the Playlists page's mosaics) */
     grid_t g;                     /* the tile ring (LAST: test/pod/songs.py reads the fields above by index) */
 } sg __attribute__((section(".scratch")));
 
@@ -134,7 +137,6 @@ static void sg_show(void *w, int on) {
 static int sg_abs(int v) { return v < 0 ? -v : v; }
 static int sg_off(void) { return sg.sv ? I(sg.sv, SC_YOFF) : 0; }
 static void sg_redraw(void) { widget_invalidate_force(sg.sv, (void *)0); }
-static void sg_redraw_rail(void) { widget_invalidate_force(sg.rail, (void *)0); }
 
 /* The text of a record: its title, else its file name. */
 static const char *sg_name(void *rec) {
@@ -149,19 +151,11 @@ static const char *sg_name(void *rec) {
 /* The section rank of a record, in the order the stock Title sort puts them (toolsQueryDbTable's title comparator 0x5e0dac: digits and most symbols before the
  * letters): 0 "#" (the Initial '*', a title that starts with a digit, or '#', anything else), 1..26 'A'..'Z'. From the Initial the scan stored; 0 (never written: a
  * database older than the column) takes the title's first character. */
-#define SG_RANKS 27
-#if SG_MAX_SEC < SG_RANKS
-#error a section per rank does not fit
-#endif
 static unsigned char sg_rank(void *rec) {
     int c = B(rec, REC_INITIAL);
     if (!c) c = (unsigned char)*sg_name(rec);
-    if (c >= 'a' && c <= 'z') c -= 32;
-    return c >= 'A' && c <= 'Z' ? (unsigned char)(c - 'A' + 1) : 0;
+    return (unsigned char)az_rank_of(c);
 }
-
-/* The letter a section of rank r shows. */
-static unsigned char sg_rank_letter(int r) { return r > 0 ? (unsigned char)('A' + r - 1) : '#'; }
 
 /* The index is of the stock list `list` as long as that list is still in *pdeq_showlist, as big, and starts with the same record. */
 static int sg_valid(void) {
@@ -197,57 +191,16 @@ static int sg_query(void) {
     return loadLocalClassList(sg.cls);
 }
 
-/* Content geometry. The rows (and the headers, in Title order) start at SG_TOP; section s's header is at sg_hdr_y(s), its songs follow. */
-static int sg_hdr_y(int s) { return SG_TOP + s * SG_HDR_H + (int)sg.sec_start[s] * ROW; }
-
-/* The section holding song i (the last one that starts at or before it), -1 in a plain list. */
-static int sg_sec_of(int i) {
-    int s = sg.nsec - 1;
-    while (s > 0 && (int)sg.sec_start[s] > i) --s;
-    return s;
-}
-
-static int sg_row_y(int i) { return SG_TOP + (sg.nsec ? (sg_sec_of(i) + 1) * SG_HDR_H : 0) + i * ROW; }
+/* Content geometry (patch/azlist.c: the rows, and the headers in Title order, start at SG_TOP; section s's header is at az_hdr_y(s), its songs follow). The page
+ * keeps al.count and al.content (what the scroll offset is clamped to) in step with the list: sg_load and sg_size. */
+static int sg_row_y(int i) { return az_row_y(&sg.al, i); }
 static int sg_pad(void) { return sg.select ? SG_BAR_H : 0; }   /* the bar covers the window's last SG_BAR_H rows: the list scrolls clear of it */
-static int sg_rows_end(void) { return SG_TOP + sg.nsec * SG_HDR_H + (int)sg.count * ROW; }   /* the content y under the last row: the song count */
+static int sg_rows_end(void) { return az_rows_end(&sg.al); }   /* the content y under the last row: the song count */
 static int sg_content(void) { return sg_rows_end() + SG_FOOT_H + sg_pad(); }
-static int sg_max_scroll(void) {
-    int m = sg_content() - GRID_VIEW_H;
-    return m > 0 ? m : 0;
-}
-
-/* The first song whose row ends below content y (the one in y's row, or the first after a header or the title block). */
-static int sg_row_from(int y) {
-    int s, i;
-    if (!sg.count) return 0;
-    if (y < SG_TOP) return 0;
-    if (!sg.nsec) i = (y - SG_TOP) / ROW;
-    else {
-        s = sg.nsec - 1;
-        while (s > 0 && sg_hdr_y(s) > y) --s;
-        i = y < sg_hdr_y(s) + SG_HDR_H ? (int)sg.sec_start[s] : (int)sg.sec_start[s] + (y - sg_hdr_y(s) - SG_HDR_H) / ROW;
-    }
-    return i > (int)sg.count - 1 ? (int)sg.count - 1 : i;
-}
-
-/* The song under content point y: its row, or -1 for the title block, a header and the air below the last row. */
-static int sg_at(int y) {
-    int i;
-    if (y < SG_TOP || !sg.count) return -1;
-    i = sg_row_from(y);
-    return y >= sg_row_y(i) && y < sg_row_y(i) + ROW ? i : -1;
-}
-
-/* The songs [*r0, *r1] that touch the view (r1 < r0 for none), inside [0, count - 1] also while a drag pulls the list past an end. */
-static void sg_span(int *r0, int *r1) {
-    int s = sg_off(), n = (int)sg.count;
-    *r0 = sg_row_from(s < 0 ? 0 : s);
-    *r1 = sg_row_from(s + GRID_VIEW_H - 1);
-    if (n && sg_row_y(*r1) > s + GRID_VIEW_H - 1) --*r1;   /* the last pixel is in a header: the song after it is not in view */
-    if (n && sg_row_y(*r0) + ROW <= s) ++*r0;
-    if (*r1 > n - 1) *r1 = n - 1;
-    if (*r0 < 0) *r0 = 0;
-}
+static int sg_max_scroll(void) { return az_max_scroll(&sg.al); }
+static int sg_row_from(int y) { return az_row_from(&sg.al, y); }
+static int sg_at(int y) { return az_at(&sg.al, y); }   /* the song under content point y: its row, or -1 for the title block, a header and the air below the last row */
+static void sg_span(int *r0, int *r1) { az_span(&sg.al, r0, r1); }
 
 /* The songs the tiles are kept for: those in view and SG_AHEAD rows beyond them in the scroll direction. */
 static void sg_window(int *lo, int *hi) {
@@ -294,48 +247,17 @@ static void sg_retext(void) {
  * Paint: the rows, the headers and the pinned header, in one EVT_AFTER_PAINT of the content view. Coordinates are the window's (its top is 0): the scroll_view has
  * moved the canvas up by yoffset, which the paint adds back (CANVAS_OY) for its duration, as the Albums page does.
  */
-static void sg_fill(void *canvas, int x, int y0, int y1, int w, unsigned c) {
-    if (y0 < 0) y0 = 0;
-    if (y1 > GRID_VIEW_H) y1 = GRID_VIEW_H;
-    if (y1 <= y0) return;
-    canvas_set_fill_color(canvas, c);
-    canvas_fill_rect(canvas, x, y0, w, y1 - y0);
-}
-
-/* The pinned header's backing: the page's black over the rows scrolling under it (the headers in the flow have no band, as the Recently Played shelf's).
- * (The letter is drawn with the text passes.) */
-static void sg_band(void *canvas, int y) {
-    sg_fill(canvas, 0, y, y + SG_HDR_H, SG_W, SG_HDR_BG);
-}
-
-/* The header letter of section s with its top at window y (only when it lies wholly inside the window, as every text). */
-static void sg_letter_text(void *canvas, int s, int y) {
-    unsigned w[2];
-    int rect[4];
-    if (y < 0 || y + SG_HDR_H > GRID_VIEW_H) return;
-    w[0] = sg.sec_letter[s], w[1] = 0;
-    rect[0] = SG_HDR_X, rect[1] = y, rect[2] = 100, rect[3] = SG_HDR_H - 1;
-    canvas_draw_text_in_rect(canvas, w, 1, rect);
-}
-
-/* The pinned header: the section the window's top is in, at the top; the next header, as it arrives, pushes it up. Returns its section (-1 for none)
- * and the y of its band (<= 0). */
-static int sg_pinned(int *y) {
-    int s = sg_off(), k = sg.nsec - 1;
-    if (!sg.nsec) return -1;
-    while (k >= 0 && sg_hdr_y(k) > s) --k;
-    if (k < 0) return -1;
-    *y = k + 1 < sg.nsec && sg_hdr_y(k + 1) - s < SG_HDR_H ? sg_hdr_y(k + 1) - s - SG_HDR_H : 0;
-    return k;
-}
-
 static void sg_paint_rows(void *canvas) {
-    int r0, r1, r, off = sg_off(), pin, py, s, tx = sg_tx(), room = SG_TEXT_END - tx, pass;
+    int r0, r1, r, off = sg_off(), tx = sg_tx(), room = SG_TEXT_END - tx, pass;
+    if (sg.head) {   /* a playlist's mosaic (the cover, or the placeholder disc until it is made) */
+        grid_tile_t *h = grid_find(&sg.hg, 0);
+        if (h) grid_blit(canvas, &sg.hg, h, PH_COVER_X, PH_COVER_Y - off, GRID_VIEW_H);
+    }
     sg_span(&r0, &r1);
     for (r = r0; r <= r1; ++r) {
         tile_t *t = sg_tile(r);
         int y = sg_row_y(r) - off;
-        if (sg.press == r + 1 && !sg.select) sg_fill(canvas, 0, y, y + ROW - 1, SG_W, LIST_PRESS);
+        if (sg.press == r + 1 && !sg.select) az_fill(canvas, 0, y, y + ROW - 1, SG_W, LIST_PRESS);
         if (sg.select && sg.mark[0]) {
             void *m = sg.mark[sg_is_sel(r)];
             int src[4], dst[4], top = y + (ROW - SG_MARK) / 2;
@@ -346,21 +268,14 @@ static void sg_paint_rows(void *canvas) {
             }
         }
         grid_blit(canvas, &sg.g, t, sg_art_x(), y + LIST_ART_Y, GRID_VIEW_H);
-        sg_fill(canvas, tx, y + ROW - 1, y + ROW, room, LIST_HAIR);
+        az_fill(canvas, tx, y + ROW - 1, y + ROW, room, LIST_HAIR);
     }
     for (pass = 0; pass < 2; ++pass) {   /* titles, then artists: one text style at a time */
         widget_prepare_text_style(pass ? sg.st_sub : sg.st_title, canvas);
         for (r = r0; r <= r1; ++r)
             grid_text(canvas, sg_tile(r), pass, tx, sg_row_y(r) - off + (pass ? LIST_SUB_Y : LIST_TITLE_Y), room, pass ? LIST_SUB_H : LIST_TITLE_H, GRID_VIEW_H);
     }
-    if (!sg.nsec) return;
-    widget_prepare_text_style(sg.st_hdr, canvas);
-    for (s = 0; s < sg.nsec; ++s) sg_letter_text(canvas, s, sg_hdr_y(s) - off);
-    pin = sg_pinned(&py);   /* over everything: the pinned band and its letter */
-    if (pin >= 0) {
-        sg_band(canvas, py);
-        sg_letter_text(canvas, pin, py);
-    }
+    az_paint_heads(&sg.al, canvas);   /* the section letters, then over everything the pinned band and its letter */
 }
 
 static int sg_on_paint(void *ctx, void *e) {
@@ -406,8 +321,14 @@ static int sg_moving(void) {
     return wa && I(wa, SC_AN_STATE) == SC_AN_RUNNING && P(wa, SC_AN_WIDGET) == sg.sv;
 }
 
+/* The playlist header's mosaic still to be made (one source a tick) and in view. */
+static int sg_head_pending(void) {
+    grid_tile_t *t = sg.head && sg.hg.tiles ? grid_find(&sg.hg, 0) : (grid_tile_t *)0;
+    return t && !t->art && sg_off() < PH_COVER_Y + PH_COVER;
+}
+
 static void sg_kick(void) {
-    if (!sg.more_timer && sg.view && (sg.noscroll || sg_next_load() >= 0)) sg.more_timer = timer_add(sg_on_load, (void *)0, SG_MORE_MS);
+    if (!sg.more_timer && sg.view && (sg.noscroll || sg_next_load() >= 0 || sg_head_pending())) sg.more_timer = timer_add(sg_on_load, (void *)0, SG_MORE_MS);
 }
 
 static void sg_dir(void) {
@@ -452,6 +373,12 @@ static int sg_on_load(const void *unused) {
         sg_kick();
         return RET_OK;
     }
+    if (sg_head_pending()) {   /* the header's mosaic first: it is what the page opens on */
+        grid_mosaic(&sg.hg, grid_find(&sg.hg, 0), sg.htmp);
+        sg_redraw();
+        sg_kick();
+        return RET_OK;
+    }
     a = sg_next_load();
     if (a >= 0) {
         tile_t *t = sg_tile(a);
@@ -467,7 +394,7 @@ static int sg_on_load(const void *unused) {
  * The navbar's title: the large title is in the content; once it has scrolled away the navbar shows the small one
  */
 static void sg_title_update(void) {
-    int on = sg.noscroll || sg.select || (sg_off() > SG_COLLAPSE && sg.title_fits);
+    int on = sg.noscroll || sg.select || (sg_off() > (sg.head ? PH_COLLAPSE : SG_COLLAPSE) && sg.title_fits);
     if (on != sg.title_on) {
         sg.title_on = on;
         widget_set_visible(sg.title, on, 0);
@@ -577,6 +504,7 @@ static int sg_on_scroll(void *ctx, void *e) {
  */
 static void sg_size(void) {
     int h = sg.count ? sg_content() : GRID_VIEW_H;
+    sg.al.content = sg_content();
     widget_resize(sg.view, SG_W, h);
     widget_set_prop_int(sg.sv, "virtual_h", h);
 }
@@ -595,43 +523,6 @@ static void sg_fmt(char *out, unsigned size, const char *f, int n) {
     out[o] = 0;
 }
 
-static int sg_tw(void *w, const unsigned *t) { return (int)(widget_measure_text(w, t) + 0.999f); }
-
-/* The UTF-8 text on label w, cut with an ellipsis to the label's width, measured in its own style (grid_fit's rule: the longest prefix that fits with the
- * ellipsis after it, a binary search). At most SG_NAME_MAX wide chars are looked at. */
-static void sg_fit(void *w, const char *text) {
-    unsigned s[SG_NAME_MAX + 1], len = 0, lo, hi, i, o = 0, c;
-    char out[4 * SG_NAME_MAX + 1];
-    const unsigned *t;
-    int room;
-    if (!w) return;
-    room = I(w, W_W);
-    widget_set_text_utf8(w, text);
-    t = widget_get_text(w);
-    if (!t || sg_tw(w, t) <= room) return;
-    while (t[len] && len < SG_NAME_MAX) s[len] = t[len], ++len;
-    s[len] = 0;
-    lo = 0, hi = len - 1;
-    while (lo < hi) {
-        unsigned mid = (lo + hi + 1) / 2, k0 = s[mid], k1 = s[mid + 1];
-        s[mid] = ELLIPSIS, s[mid + 1] = 0;
-        if (sg_tw(w, s) <= room) lo = mid;
-        else hi = mid - 1;
-        s[mid] = k0, s[mid + 1] = k1;
-    }
-    while (lo && s[lo - 1] == ' ') --lo;   /* no space before the ellipsis */
-    s[lo] = ELLIPSIS, s[lo + 1] = 0;
-    for (i = 0; s[i]; ++i) {   /* back to UTF-8 */
-        c = s[i];
-        if (c < 0x80) out[o++] = (char)c;
-        else if (c < 0x800) out[o++] = (char)(0xc0 | c >> 6), out[o++] = (char)(0x80 | (c & 63));
-        else if (c < 0x10000) out[o++] = (char)(0xe0 | c >> 12), out[o++] = (char)(0x80 | (c >> 6 & 63)), out[o++] = (char)(0x80 | (c & 63));
-        else out[o++] = (char)(0xf0 | c >> 18), out[o++] = (char)(0x80 | (c >> 12 & 63)), out[o++] = (char)(0x80 | (c >> 6 & 63)), out[o++] = (char)(0x80 | (c & 63));
-    }
-    out[o] = 0;
-    widget_set_text_utf8(w, out);
-}
-
 static const char *sg_name_text(void) { return sg.key ? TR(sg.key) : sg.name; }   /* a list's title */
 
 /* The song count under the last row: "25 songs" (the key by n == 1, the number where the translation has its %d). */
@@ -642,90 +533,50 @@ static void sg_foot_text(void) {
     widget_move(sg.foot, SG_HDR_X, sg_rows_end() + SG_FOOT_GAP);
 }
 
+/* A playlist's header from the list just read: the tile's four album keys (the Playlists page's mosaic, patch/grid.c grid_mosaic_keys, from the first PL_SCAN songs and
+ * the library's albums for the lookup), the tile made again only when they changed (a return to the front keeps the mosaic: no flicker), and the count. */
+static void sg_head_prep(void) {
+    unsigned key[4];
+    int nk, fresh, i, same;
+    grid_tile_t *t;
+    if (!sg.head) return;
+    memset(key, 0, sizeof key);
+    nk = sg.count ? grid_mosaic_keys(sg.list, sg.albums, key) : 0;
+    t = grid_tile(&sg.hg, 0, 0, 0, &fresh);
+    for (i = 0, same = !fresh && t->nq == (nk > 1 && !sg.htmp ? 1 : nk) && t->art; i < 4; ++i) same = same && t->qkey[i] == key[i];
+    if (!same) {
+        grid_free_art(t);
+        t->art = 0, t->qi = 0;
+        t->nq = nk > 1 && !sg.htmp ? 1 : nk;
+        memcpy(t->qkey, key, sizeof key);
+        if (!nk) t->art = 2;   /* no album with a cover: the placeholder */
+    }
+}
+
 static void sg_head(void) {   /* the navbar's title: "N Selected" in select mode, else "Songs" (in a language where it does not fit: none), else the list's, cut to fit */
     char buf[64];
     if (!sg.select) {
         const unsigned *t;
         if (!sg_lib()) {
-            sg_fit(sg.title, sg_name_text());
+            az_fit(sg.title, sg_name_text());
             sg.title_fits = 1;
             return;
         }
         widget_set_tr_text(sg.title, "Songs");
         t = widget_get_text(sg.title);
-        sg.title_fits = !t || sg_tw(sg.title, t) <= I(sg.title, W_W);   /* (no text, or no way to measure it: shown) */
+        sg.title_fits = !t || az_text_w(sg.title, t) <= I(sg.title, W_W);   /* (no text, or no way to measure it: shown) */
         return;
     }
     sg_fmt(buf, sizeof buf, TR("%d Selected"), (int)sg.nsel);
     widget_set_text_utf8(sg.title, buf);
 }
 
-static int sg_rail_h(void) { return GRID_VIEW_H - sg_pad(); }
-
-/* The rail's plan (the stock page's index shows A F K P U Z with two dots between: an image, search_icon.png): the letters it draws, as section numbers in sec[],
- * and how many (the return). At most SG_RAIL_ITEMS items fit: the sections' own letters when there are that few, else every k-th section (k from 2 up, until the
- * letters with a dot between each pair fit) with the first and the last always there (a multiple of k within half a step of the last gives way to it). A rail with
- * fewer letters than sections (the return < sg.nsec) has a dot between two letters: item 2j is letter j, item 2j + 1 a dot. */
-static int sg_rail_plan(int *sec) {
-    int n = sg.nsec, k, m, i;
-    if (n <= SG_RAIL_ITEMS) {
-        for (i = 0; i < n; ++i) sec[i] = i;
-        return n;
-    }
-    for (k = 2;; ++k) {
-        for (m = 0, i = 0; i < n - 1; i += k) sec[m++] = i;
-        if (m > 1 && n - 1 - sec[m - 1] < (k + 1) / 2) --m;
-        sec[m++] = n - 1;
-        if (2 * m - 1 <= SG_RAIL_ITEMS) return m;
-    }
-}
-static int sg_rail_span(int letters) { return (letters < sg.nsec ? 2 * letters - 1 : letters) * SG_RAIL_PITCH; }   /* the drawn height */
-
-/* The rail widget is the drawn span plus SG_RAIL_PAD above and below, centred on the list the bar leaves (a touch further from the span reaches the rows, and the
- * wide column takes none of the rows' right edge or the pills outside it); inside it the span starts at SG_RAIL_PAD. There only when there are sections. */
-static void sg_rail_fit(void) {
-    int sec[SG_MAX_SEC], span;
-    if (sg.nsec > 0) {
-        span = sg_rail_span(sg_rail_plan(sec));
-        widget_move(sg.rail, SG_RAIL_X, SG_LIST_Y + (sg_rail_h() - span) / 2 - SG_RAIL_PAD);
-        widget_resize(sg.rail, SG_RAIL_W, span + 2 * SG_RAIL_PAD);
-    }
-    sg_show(sg.rail, sg.nsec > 0 && sg.count);
-    sg_redraw_rail();
-}
+/* The rail's widget: centred on the list the select bar leaves (docs/modules/songs.md). */
+static void sg_rail_fit(void) { az_rail_fit(&sg.al, GRID_VIEW_H - sg_pad()); }
 
 static void sg_ticks(void) {
     int i;
     for (i = 0; i < SG_SORT_ROWS; ++i) widget_set_visible(sg.tick[i], i == sg.sort, 0);
-}
-
-/* The sections of the stock Title order. It sorts by the whole title (toolsQueryDbTable's comparator) and the Initial is the scan's first surviving character, so the
- * two only roughly agree (a symbol that sorts after 'z', an accented letter, a dropped kana, a CJK title placed by its whole pinyin): the songs are not in runs of
- * equal letters (V2.1oGS made a section per run and fell back to a plain list over SG_MAX_SEC runs: on the device no headers, no rail). The list keeps the stock
- * order (the play queue), so the sections are the non-decreasing labelling of the songs that puts the most of them under their own letter: a stray stays in the
- * section around it and cannot open one early. One pass forward keeps m[r] = the most songs labelled correctly so far with a last label <= r and, per song, a
- * bit per rank that says the best for r came from a lower label; one pass back reads the labels off; a section starts where the label changes. 4 bytes per
- * song, for the duration of the call; no memory = a plain list. At most SG_RANKS sections. */
-static void sg_sections(void) {
-    unsigned *bits = calloc(sg.count, sizeof(unsigned)), i, b;
-    int m[SG_RANKS], r, d, k, lab = SG_RANKS - 1, prev = -1;
-    if (!bits) return;
-    for (r = 0; r < SG_RANKS; ++r) m[r] = 0;
-    for (i = 0; i < sg.count; ++i) {
-        for (b = 0, k = sg.idx[i].letter, r = 0; r < SG_RANKS; ++r) {   /* m[r] still holds the previous song's value, m[r - 1] already this song's */
-            d = m[r] + (r == k);
-            if (r && m[r - 1] >= d) m[r] = m[r - 1], b |= 1u << r;      /* a tie takes the lower label: a section starts as late as it can */
-            else m[r] = d;
-        }
-        bits[i] = b;
-    }
-    for (i = sg.count; i-- > 0;) {
-        while (lab && (bits[i] >> lab & 1)) --lab;
-        bits[i] = (unsigned)lab;
-    }
-    for (i = 0; i < sg.count; ++i)
-        if ((int)bits[i] != prev) prev = (int)bits[i], sg.sec_start[sg.nsec] = i, sg.sec_letter[sg.nsec++] = sg_rank_letter(prev);
-    free(bits);
 }
 
 /* The stock query again, and the page rebuilt from it: the index, the sections, the tiles. The library's albums are loaded first (once): both are stock queries
@@ -740,7 +591,7 @@ static void sg_load(int keep) {
     grid_drop(&sg.g);
     free(sg.idx);
     free(sg.sel);
-    sg.idx = (song_t *)0, sg.sel = (unsigned char *)0, sg.list = sg.first = (void *)0, sg.count = sg.nsel = 0, sg.nsec = 0, sg.press = sg.down = 0;
+    sg.idx = (song_t *)0, sg.sel = (unsigned char *)0, sg.list = sg.first = (void *)0, sg.count = sg.nsel = 0, sg.al.count = 0, sg.al.nsec = 0, sg.press = sg.down = 0;
     if (!sg.albums_tried) {
         sg.albums_tried = 1;
         sg.albums = cc_albums();
@@ -758,6 +609,7 @@ static void sg_load(int keep) {
             sg.idx = (song_t *)0, sg.sel = (unsigned char *)0, sg.count = 0;
         }
     }
+    sg.al.count = (int)sg.count;
     if (sg.count) {
         sg.list = list, sg.first = deque_at(list, 0);
         for (i = 0; i < sg.count; ++i) {
@@ -765,8 +617,9 @@ static void sg_load(int keep) {
             sg.idx[i].key = cc_album_key(rec);
             sg.idx[i].letter = sg_rank(rec);
         }
-        if (sg_lib() && sg.sort == 0) sg_sections();
+        if (sg_lib() && sg.sort == 0) az_sections(&sg.al, &sg.idx[0].letter, sizeof(song_t));
     }
+    sg_head_prep();
     grid_placeholder(&sg.g);
     sg_show(sg.view, sg.count != 0);
     sg_show(sg.status, sg.count == 0);
@@ -824,6 +677,16 @@ static void sg_play_at(int at, int how) {
     if (n) {   /* loadSongList finds a song by file name and CUE start: a duplicate name (01.flac) would always start at the first, so the row's own index wins */
         if ((unsigned)at < n && !strcmp(cc_str(deque_at(queue, (unsigned)at), REC_PATH), cc_str(pick, REC_PATH))) idx = (unsigned)at;
         else if (found >= 0 && (unsigned)found < n) idx = (unsigned)found;
+    }
+    if (how == SG_SHUFFLE && n) {   /* a shuffle leaves the podcast episodes out (patch/pcmodel.c; the queue itself when there are none) */
+        int at_i = (int)idx;
+        queue = pc_strip(queue, &at_i);
+        idx = (unsigned)at_i;
+        n = queue ? deque_size(queue) : 0;
+        if (!queue) {
+            pod_toast(TR("Update Local Music first"));
+            return;
+        }
     }
     first = n ? deque_at(queue, idx) : (void *)0;
     if (!first || access(cc_str(first, REC_PATH), F_OK)) {
@@ -1045,170 +908,21 @@ static int sg_on_abort(void *ctx, void *e) {
 }
 
 /* ---------------------------------------------------------------------------
- * The rail
+ * The rail (patch/azlist.c: grab, jump, bubble, the compact index and its alignment; docs/modules/songs.md)
  */
-static void sg_bubble(int i) {   /* the bubble shows section i's letter, or hides */
-    char s[2];
-    if (i < 0) {
-        widget_set_visible(sg.bubble, 0, 0);
-        return;
-    }
-    s[0] = (char)sg.sec_letter[i], s[1] = 0;
-    widget_set_text_utf8(sg.bubble_letter, s);
-    widget_set_visible(sg.bubble, 1, 0);
-}
 
-/* Section i's header at the window's top (clamped); a coasting list stops first. */
-static void sg_jump(int i) {
-    int v = i ? sg_hdr_y(i) : 0, max = sg_max_scroll();   /* (the first section: the top, the large title and the pills with it) */
-    void *wa = P(sg.sv, SC_WA);
-    if (wa && I(wa, SC_AN_STATE) == SC_AN_RUNNING && P(wa, SC_AN_WIDGET) == sg.sv) {   /* patch/scroll.c sc_down */
-        widget_animator_destroy(wa);
-        stock_scroll_done(sg.sv, (void *)0);
-    }
-    widget_set_prop_int(sg.sv, "yoffset", v > max ? max : v);
-}
-
-static void sg_rail_set(int i) {
-    if (i == sg.rail_i && sg.rail_on) return;
-    sg.rail_i = i;
-    sg.rail_on = 1;
-    sg_jump(i);
-    sg_bubble(i);
-    sg_redraw_rail();
-}
-
-static void sg_rail_end(void) {
-    if (!sg.grab) return;
-    sg.grab = sg.rail_on = 0;
-    widget_ungrab(sg.win, sg.rail);
-    sg_bubble(-1);
-    sg_redraw_rail();
-}
-
-/* DOWN grabs the touch (the moves and the release come here wherever they go), every position sets the letter under it (above the first and below the last: those). */
 static int sg_on_rail(void *ctx, void *e) {
-    int type, pt[2], i, l, sec[SG_MAX_SEC];
     (void)ctx;
-    if (!e || !sg.view || !sg.nsec) return RET_OK;
-    type = I(e, 0);
-    if (type == EVT_POINTER_UP || type == EVT_POINTER_ABORT) {
-        sg_rail_end();
-        return RET_OK;
-    }
-    if (type == EVT_POINTER_DOWN) {
-        if (!sg.grab) widget_grab(sg.win, sg.rail);
-        sg.grab = 1, sg.rail_on = 0;   /* a new touch: its first letter always sets */
-    } else if (!sg.grab) return RET_OK;
-    pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
-    widget_to_local(sg.rail, pt);
-    l = sg_rail_plan(sec);   /* the drawn span, however many letters it shows, is split into the sections: every one is reachable */
-    i = pt[1] < SG_RAIL_PAD ? 0 : (pt[1] - SG_RAIL_PAD) * sg.nsec / sg_rail_span(l);   /* (the span starts SG_RAIL_PAD down the widget) */
-    if (i > sg.nsec - 1) i = sg.nsec - 1;
-    sg_rail_set(i);
+    if (sg.view) az_rail_event(&sg.al, e);
     return RET_OK;
 }
 
-/* Alignment (tools/pod_ui.py rail_metrics derives the two numbers from the tree's own font and pod.py writes them to stock.h):
- * vertically the 12 px text box of a 13 px item sits at its top and the baseline int(ascender * scale) lower, so the cap ink centre is SG_RAIL_INK2 / 2 below the
- * item's top; a dot goes where the midpoint of two letters' ink centres is (one item below the upper letter's centre: the letters are two items apart), so its top is
- * (INK2 - DOT) / 2 into its item, and the disc is centred on the same line. Horizontally canvas_draw_text_in_rect puts a text of measured width lw (the truncated
- * advances + 1 px per glyph) at rect.x + (rect.w - lw) / 2, integer: so the rect is SG_RAIL_TEXT_W wide, centred on the dots' x and moved by the letter's own
- * SG_RAIL_DX so the ink (not the advance) is centred on that x within half a pixel. */
-static const signed char sg_rail_dx[27] = SG_RAIL_DX;   /* "#", A..Z */
-#define SG_RAIL_DOT_Y ((SG_RAIL_INK2 - SG_RAIL_DOT) / 2)
-#define SG_RAIL_DISC_Y (-((SG_RAIL_DISC - SG_RAIL_INK2 + 1) / 2))   /* floor((INK2 - DISC) / 2), negative: the disc starts above the item */
-
-/* The rail (its own EVT_AFTER_PAINT, the rail's coordinates, the span from SG_RAIL_PAD): the plan's letters, a dot between two of them when the plan skips sections,
- * the touched letter (when it is a drawn one) on its disc with a black letter. */
 static int sg_on_rail_paint(void *ctx, void *e) {
-    void *canvas = e ? *(void **)((char *)e + EVENT_PAINT_CANVAS) : (void *)0;
-    int j, k, l, y0 = SG_RAIL_PAD, step, dots, pass, rect[4], sec[SG_MAX_SEC];
-    unsigned w[2];
     (void)ctx;
-    if (!canvas || !sg.nsec || !sg.view) return RET_OK;
-    l = sg_rail_plan(sec);
-    dots = l < sg.nsec;
-    step = dots ? 2 : 1;   /* the items a letter takes with the dot after it */
-    if (dots) {
-        int x = SG_RAIL_CX - SG_RAIL_X - SG_RAIL_DOT / 2;
-        canvas_set_fill_color(canvas, SG_RAIL_DOT_RGB);
-        for (j = 0; j + 1 < l; ++j) {   /* a dot of four pixels: the cross of two bars cuts its corners */
-            int y = y0 + (step * j + 1) * SG_RAIL_PITCH + SG_RAIL_DOT_Y;
-            canvas_fill_rect(canvas, x, y + 1, SG_RAIL_DOT, SG_RAIL_DOT - 2);
-            canvas_fill_rect(canvas, x + 1, y, SG_RAIL_DOT - 2, SG_RAIL_DOT);
-        }
-    }
-    if (sg.rail_on && sg.disc) {
-        for (j = 0; j < l; ++j) {
-            if (sec[j] == sg.rail_i) {
-                int src[4], dst[4];
-                src[0] = src[1] = 0, src[2] = src[3] = SG_RAIL_DISC;
-                dst[0] = SG_RAIL_CX - SG_RAIL_X - SG_RAIL_DISC / 2, dst[1] = y0 + step * j * SG_RAIL_PITCH + SG_RAIL_DISC_Y, dst[2] = dst[3] = SG_RAIL_DISC;
-                canvas_draw_image(canvas, sg.disc, src, dst);
-            }
-        }
-    }
-    for (pass = 0; pass < 2; ++pass) {   /* the others, then the touched one (black) */
-        if (pass && !sg.rail_on) break;
-        widget_prepare_text_style(pass ? sg.st_rail_on : sg.st_rail, canvas);
-        for (j = 0; j < l; ++j) {
-            if ((sec[j] == sg.rail_i && sg.rail_on) != pass) continue;
-            w[0] = sg.sec_letter[sec[j]], w[1] = 0;
-            k = w[0] >= 'A' && w[0] <= 'Z' ? (int)w[0] - 'A' + 1 : 0;
-            rect[0] = SG_RAIL_CX - SG_RAIL_X - SG_RAIL_TEXT_W / 2 + sg_rail_dx[k], rect[1] = y0 + step * j * SG_RAIL_PITCH, rect[2] = SG_RAIL_TEXT_W, rect[3] = SG_RAIL_PITCH;
-            canvas_draw_text_in_rect(canvas, w, 1, rect);
-        }
-    }
+    if (sg.view) az_rail_paint(&sg.al, e);
     return RET_OK;
 }
 
-/* The disc: SG_RAIL_DISC px, the accent colour, four corners of radius SG_RAIL_DISC / 2 cut in the alpha (a disc). */
-static void sg_make_disc(void) {
-    unsigned char tab[(SG_RAIL_DISC / 2) * (SG_RAIL_DISC / 2)];
-    unsigned *px;
-    unsigned x, y, k, r = SG_RAIL_DISC / 2;
-    void *b = bitmap_create_ex(SG_RAIL_DISC, SG_RAIL_DISC, SG_RAIL_DISC * 4, BITMAP_RGBA8888);
-    if (!b) return;
-    px = (unsigned *)bitmap_lock_buffer_for_write(b);
-    if (!px || bitmap_get_line_length(b) != SG_RAIL_DISC * 4) {
-        if (px) bitmap_unlock_buffer(b);
-        bitmap_destroy(b);
-        return;
-    }
-    pod_corner_fill(tab, r);
-    for (y = 0; y < SG_RAIL_DISC * SG_RAIL_DISC; ++y) px[y] = SG_ACCENT;
-    for (k = 0; k < 4; ++k)
-        for (y = 0; y < r; ++y)
-            for (x = 0; x < r; ++x) {
-                unsigned *p = px + (k & 2 ? 2 * r - 1 - y : y) * 2 * r + (k & 1 ? 2 * r - 1 - x : x);
-                *p = (*p & 0xffffff) | (255u - tab[y * r + x]) << 24;
-            }
-    bitmap_unlock_buffer(b);
-    sg.disc = b;
-}
-
-/* A select mark: the stock image (26 px) as a bitmap. */
-static void *sg_make_mark(const char *name) {
-    unsigned *px;
-    void *b = bitmap_create_ex(SG_MARK, SG_MARK, SG_MARK * 4, BITMAP_RGBA8888);
-    int ok;
-    if (!b) return b;
-    px = (unsigned *)bitmap_lock_buffer_for_write(b);
-    if (!px || bitmap_get_line_length(b) != SG_MARK * 4) {
-        if (px) bitmap_unlock_buffer(b);
-        bitmap_destroy(b);
-        return (void *)0;
-    }
-    ok = cc_decode(sg.win, name, 1, SG_MARK, 1, px);
-    bitmap_unlock_buffer(b);
-    if (!ok) {
-        bitmap_destroy(b);
-        return (void *)0;
-    }
-    *(unsigned short *)((char *)b + BITMAP_FLAGS) |= 1;   /* opaque: over black */
-    return b;
-}
 
 /* ---------------------------------------------------------------------------
  * The sort card: the stock sort dialog's five labels under the Sort button; a row sets the stock order (@0x47d114: sort_flag and [SYSSET] SORTSELECT), the list is read again
@@ -1251,50 +965,6 @@ static int sg_on_search(void *ctx, void *e) {
 }
 
 /* ---------------------------------------------------------------------------
- * The pills: the glyph and the label centred as a pair SG_PILL_GAP apart (the album page's Play all, patch/albuminfo.c ah_centre_pill): AWTK puts the glyph in a
- * square as high as the button at margin_left and the text at the square's end plus the spacer.
- */
-static void sg_centre_pill(void *btn, int pw) {
-    static const char *const key[5] = {"normal:", "pressed:", "over:", "focused:", "disable:"};
-    static const char *const prop[5] = {"margin_left", "icon_at", "margin_right", "spacer", "text_align_h"};
-    const unsigned *text = widget_get_text(btn);
-    float w = text && *text ? widget_measure_text(btn, text) : 0.0f;
-    int tw = (int)(w + 0.999f), margin, i, j;
-    unsigned v[4], val[5];   /* value_t: type at 0, the uint32 at 8 */
-    char name[32];
-    if (!text || !*text) return;   /* (a text that cannot be measured is taken as 0 px wide: the glyph is still put at the left, not above the text as the automatic icon position would) */
-    if (tw > pw - (SG_PILL_H - SG_PILL_GLYPH) / 2 - SG_PILL_GLYPH - SG_PILL_GAP) {   /* too wide beside the glyph (ru "Перемешать"): the label steps down to
-                                                                                      * SG_PILL_PX_SMALL, as an iOS button shrinks its title, and is measured again */
-        for (i = 0; i < 5; ++i) {
-            unsigned k = 0, m = 0;
-            static const char fs[] = "font_size";
-            while (key[i][k]) name[k] = key[i][k], ++k;
-            while (fs[m]) name[k++] = fs[m++];
-            name[k] = 0;
-            memset(v, 0, sizeof v);
-            value_set_uint32(v, SG_PILL_PX_SMALL);
-            widget_set_style(btn, name, v);
-        }
-        w = widget_measure_text(btn, text);
-        tw = (int)(w + 0.999f);
-    }
-    margin =(pw - (SG_PILL_GLYPH + SG_PILL_GAP + tw)) / 2 - (SG_PILL_H - SG_PILL_GLYPH) / 2;
-    if (margin < 0) margin = 0;
-    val[0] = (unsigned)margin, val[1] = 1, val[2] = 0, val[3] = (unsigned)(SG_PILL_GAP - (SG_PILL_H - SG_PILL_GLYPH) / 2), val[4] = 2;   /* icon_at left, text_align_h left */
-    for (j = 0; j < 5; ++j) {
-        memset(v, 0, sizeof v);
-        value_set_uint32(v, val[j]);
-        for (i = 0; i < 5; ++i) {
-            unsigned k = 0, m = 0;
-            while (key[i][k]) name[k] = key[i][k], ++k;
-            while (prop[j][m]) name[k++] = prop[j][m++];
-            name[k] = 0;
-            widget_set_style(btn, name, v);
-        }
-    }
-}
-
-/* ---------------------------------------------------------------------------
  * The window
  */
 static int sg_on_fg(void *ctx, void *e) {
@@ -1312,7 +982,7 @@ static int sg_on_fg(void *ctx, void *e) {
 }
 
 static int sg_on_bg(void *ctx, void *e) {
-    sg_rail_end();
+    az_rail_end(&sg.al);
     return sg_on_abort(ctx, e);
 }
 
@@ -1323,8 +993,10 @@ static int sg_on_destroy(void *ctx, void *e) {
     if (sg.stale_timer) timer_remove(sg.stale_timer);
     sg_build_end();
     grid_free(&sg.g);
+    grid_free(&sg.hg);
+    free(sg.htmp);
     if (sg.albums) deque_destroy(sg.albums);
-    if (sg.disc) bitmap_destroy(sg.disc);
+    az_free(&sg.al);
     for (i = 0; i < 2; ++i)
         if (sg.mark[i]) bitmap_destroy(sg.mark[i]);
     free(sg.idx);
@@ -1369,18 +1041,20 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
     sg.status = widget_lookup(sg.win, "label_status", 1);
     sg.st_title = widget_lookup(sg.win, "label_row_title", 1);
     sg.st_sub = widget_lookup(sg.win, "label_row_sub", 1);
-    sg.st_hdr = widget_lookup(sg.win, "label_hdr", 1);
-    sg.st_rail = widget_lookup(sg.win, "label_rail", 1);
-    sg.st_rail_on = widget_lookup(sg.win, "label_rail_on", 1);
-    sg.rail = widget_lookup(sg.win, "sg_rail", 1);
-    sg.bubble = widget_lookup(sg.win, "sg_bubble", 1);
-    sg.bubble_letter = widget_lookup(sg.win, "sg_bubble_letter", 1);
+    sg.al.st_hdr = widget_lookup(sg.win, "label_hdr", 1);
+    sg.al.st_rail = widget_lookup(sg.win, "label_rail", 1);
+    sg.al.st_rail_on = widget_lookup(sg.win, "label_rail_on", 1);
+    sg.al.rail = widget_lookup(sg.win, "sg_rail", 1);
+    sg.al.bubble = widget_lookup(sg.win, "sg_bubble", 1);
+    sg.al.bubble_letter = widget_lookup(sg.win, "sg_bubble_letter", 1);
     sg.bar = widget_lookup(sg.win, "sg_bar", 1);
     sg.big = widget_lookup(sg.win, "sg_title", 1);   /* optional: the large title */
     sg.foot = widget_lookup(sg.win, "sg_foot", 1);
+    sg.hname = widget_lookup(sg.win, "sg_hname", 1);   /* optional: a playlist's header */
+    sg.al.win = sg.win, sg.al.sv = sg.sv, sg.al.top = SG_TOP, sg.al.row = ROW;
     if (!sg.foot || !sg.back || !sg.np || !sg.btn_search || !sg.btn_sort || !sg.btn_select || !sg.btn_selall || !sg.btn_play || !sg.btn_shuffle || !sg.btn_add || !sg.btn_del ||
-        !sg.scrim || !sg.card || !sg.title || !sg.view || !sg.sv || !sg.status || !sg.st_title || !sg.st_sub || !sg.st_hdr || !sg.st_rail || !sg.st_rail_on ||
-        !sg.rail || !sg.bubble || !sg.bubble_letter || !sg.bar) {
+        !sg.scrim || !sg.card || !sg.title || !sg.view || !sg.sv || !sg.status || !sg.st_title || !sg.st_sub || !sg.al.st_hdr || !sg.al.st_rail || !sg.al.st_rail_on ||
+        !sg.al.rail || !sg.al.bubble || !sg.al.bubble_letter || !sg.bar) {
         navigator_back();   /* an asset that is not ours */
         return -2;
     }
@@ -1401,15 +1075,30 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
             widget_set_prop_str(sg.btn_select, "style:pressed:icon", "pod_nav_selectl_down");
         } else widget_move(sg.btn_search, NAV_CF_X, 0);
         widget_resize(sg.title, sg_search_x() - NAV_TITLE_X, 22);
-        sg_fit(sg.big, sg_name_text());
+        az_fit(sg.big, sg_name_text());
     }
-    sg_centre_pill(sg.btn_play, SG_PILL_W);
-    sg_centre_pill(sg.btn_shuffle, SG_PILL_W);
-    sg_centre_pill(sg.btn_add, SG_BAR_PILL_W);
-    sg_centre_pill(sg.btn_del, SG_BAR_PILL_W);
-    sg_make_disc();
-    sg.mark[0] = sg_make_mark("unselect");
-    sg.mark[1] = sg_make_mark("selected");
+    /* A playlist's header (docs/modules/songs.md): the mosaic tile (the Playlists page's, patch/grid.c) and the name under it (the count is the footer under the last row,
+     * as Apple Music's), the pills and the rows lower, the large title gone. Without the label, the tile or the quadrant buffer the page keeps its plain look (the large title). */
+    if (sg.cls == CLASS_PLAYLIST_SONGS && sg.hname) {
+        sg.htmp = calloc((PH_COVER / 2) * (PH_COVER / 2), 4);
+        if (grid_init(&sg.hg, sg.win, 1, PH_COVER, PH_COVER_R)) {
+            grid_placeholder(&sg.hg);
+            sg.head = 1;
+            sg.al.top = PH_TOP;
+            widget_move(sg.btn_play, SG_PILL_X0, PH_PILL_Y);
+            widget_move(sg.btn_shuffle, SG_PILL_X1, PH_PILL_Y);
+            az_fit(sg.hname, sg_name_text());
+            sg_show(sg.big, 0);
+            widget_set_visible(sg.hname, 1, 0);   /* (an insensitive label: shown, never a touch target) */
+        } else grid_free(&sg.hg);
+    }
+    pod_centre_pill(sg.btn_play, SG_PILL_W);
+    pod_centre_pill(sg.btn_shuffle, SG_PILL_W);
+    pod_centre_pill(sg.btn_add, SG_BAR_PILL_W);
+    pod_centre_pill(sg.btn_del, SG_BAR_PILL_W);
+    az_make_disc(&sg.al);
+    sg.mark[0] = pod_make_mark(sg.win, "unselect");
+    sg.mark[1] = pod_make_mark(sg.win, "selected");
     if (!sg.mark[0] || !sg.mark[1]) sg.mark[0] = sg.mark[1] = (void *)0;   /* (one that did not decode is freed with the other at destroy: the pair is all or none) */
     sg.noscroll = !widget_on(sg.sv, EVT_SCROLL, sg_on_scroll, (void *)0) || !widget_on(sg.sv, EVT_SCROLL_END, sg_on_scroll, (void *)0);
     if (sg.noscroll) widget_set_visible(sg.title, 1, 0);   /* the large title's collapse needs the scroll events: without them the navbar keeps its title */
@@ -1420,15 +1109,15 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
     widget_on(sg.view, EVT_POINTER_UP, sg_on_up, (void *)0);
     widget_on(sg.view, EVT_POINTER_ABORT, sg_on_abort, (void *)0);
     widget_on(sg.view, EVT_AFTER_PAINT, sg_on_paint, (void *)0);
-    widget_on(sg.rail, EVT_POINTER_DOWN, sg_on_rail, (void *)0);
-    widget_on(sg.rail, EVT_POINTER_MOVE, sg_on_rail, (void *)0);
-    widget_on(sg.rail, EVT_POINTER_UP, sg_on_rail, (void *)0);
-    widget_on(sg.rail, EVT_POINTER_ABORT, sg_on_rail, (void *)0);
-    widget_on(sg.rail, EVT_AFTER_PAINT, sg_on_rail_paint, (void *)0);
+    widget_on(sg.al.rail, EVT_POINTER_DOWN, sg_on_rail, (void *)0);
+    widget_on(sg.al.rail, EVT_POINTER_MOVE, sg_on_rail, (void *)0);
+    widget_on(sg.al.rail, EVT_POINTER_UP, sg_on_rail, (void *)0);
+    widget_on(sg.al.rail, EVT_POINTER_ABORT, sg_on_rail, (void *)0);
+    widget_on(sg.al.rail, EVT_AFTER_PAINT, sg_on_rail_paint, (void *)0);
     if (!grid_init(&sg.g, sg.win, GRID_TILES, LIST_ART, 0)) {
         grid_free(&sg.g);
         sg_show(sg.view, 0);
-        sg_show(sg.rail, 0);
+        sg_show(sg.al.rail, 0);
         sg_show(sg.status, 1);
         widget_set_tr_text(sg.status, "Not enough memory");
         return 0;

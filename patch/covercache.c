@@ -260,6 +260,7 @@ static const char *so_name(const char *s) {
 
 /* The name order of both lists (albums by artist and title, the Artists page): ASCII case aside, "The " dropped. */
 int cc_name_cmp(const char *a, const char *b) { return cc_nocase(so_name(a), so_name(b)); }
+const char *cc_name_key(const char *s) { return so_name(s); }
 
 /* Heapsort of v[0..n) by cmp, which must be total (ties broken by the row numbers in v, so equal names keep the stock
  * order). No libc callback into the payload; no memory. */

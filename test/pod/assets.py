@@ -108,7 +108,7 @@ def run(ctx):
                    and all(hair[0].get(f'style:{st}:bg_color') == '#222222' for st in mod_icons.ROW_STATES)
                    and all(row.get(f'style:{st}:border_width') == '0' for st in mod_icons.ROW_STATES) and row.get('style') == 'list_item_style',
                    f'{key}:{row.name}: bare 24 px glyph at x 16, title at x 56, the #222222 hairline inset to x 56 (the theme\'s full-width one off), pressed band is the stock style\'s')
-    expect(used == set(mod_icons.pod_row_names()), 'every added row icon is used by a row')
+    expect(used | {'pod_ic_tape'} == set(mod_icons.pod_row_names()), 'every added row icon is used by a row (pod_ic_tape: the Tape row of Now Playing\'s More dialog, tests/pod/playmore.py)')
     # the Home grid icon (patch/home.c builds the widget): its two 66x66 images and the style that names them
     import awtk_style
     for n in mod_icons.POD_HOME:
@@ -261,7 +261,8 @@ def run(ctx):
     ttf = Ttf(os.path.join(raw, 'fonts/default.ttf'))
     w = awtk_width(ttf, nl.get('text'), 21)
     expect(w <= nl.w, f'the row text fits its {nl.w} px label ({w} px)')
-    expect(demo.count(b'V2.1\0') >= 1 and build.TAG.encode() + b'\0' not in demo, 'demo still carries the stock version literal V2.1 (FW. Version), not our tag')
+    stock_len = os.path.getsize(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', 'release/bin/demo'))   # the payload is appended after the stock file's length
+    expect(demo.count(b'V2.1\0') >= 1 and build.TAG.encode() + b'\0' not in demo[:stock_len], 'demo\'s own data still carries the stock version literal V2.1 (FW. Version), not our tag (only the appended payload has it: the iPod About row)')
 
     # 51. The on/off switch (sset_on / sset_off): no text, a pill track and a round knob, the stock 57x28 canvas.
     from PIL import Image

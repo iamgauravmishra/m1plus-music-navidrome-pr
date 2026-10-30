@@ -25,9 +25,7 @@
  */
 #include "offsets.inc"
 
-#define CF_ONE 65536
-#define CF_REACH 3 /* ring slots either side of the centre that can show (fading in) or preload */
-#define CF_RING (2 * CF_REACH + 1)
+#include "coverflow.h" /* CF_ONE, CF_REACH, CF_RING, cfg_t, coverflow_render */
 #define CF_WANTED (CF_RING + 1)  /* the covers the loader keeps decoded: the ring and the next one ahead */
 #define CF_SLOTS (CF_WANTED + 1) /* texture slots: those and one left behind, for a reversal */
 #define CF_TEXELS (ART_SIZE * ART_SIZE)
@@ -57,19 +55,11 @@ static const int cf_cos[17] = { 65536, 65396, 64975, 64277, 63303, 62058, 60547,
 static const int cf_sin[17] = { 0,     4286,  8554,  12785, 16962, 21066, 25080, 28986, 32768,
                                 36410, 39896, 43211, 46341, 49273, 51993, 54491, 56756 };
 
-/* A shelf's geometry: w x h logical columns and rows (the cover's x right, y down), the centre line
- * cx, the centre cover's top and size on screen (art; its texture is always ART_SIZE), the eye
- * distance, the first side cover's offset x1 and depth z1, the spacing xs and zs of the rest, the
- * reflection's length in px at the cover's own size. rot: the frame is the logical one turned a
- * quarter clockwise (logical (x, y) is physical (h - 1 - y, x)), see coverflow_render. */
-typedef struct {
-    int w, h, cx, top, art, eye, x1, xs, z1, zs, reflect, rot;
-} cfg_t;
-
+/* cfg_t (a shelf's geometry) is in coverflow.h. */
 const cfg_t cf_portrait = { CF_VIEW_W, CF_VIEW_H, CF_CX, CF_TOP, ART_SIZE, CF_EYE, CF_X1, CF_XS,
-                            CF_Z1, CF_ZS, CF_REFLECT, 0 };
+                            CF_Z1, CF_ZS, CF_REFLECT, 0, 0, 0 };
 const cfg_t cf_land = { CFL_W, CFL_H, CFL_CX, CFL_TOP, ART_SIZE, CF_EYE, CFL_X1, CFL_XS,
-                        CF_Z1, CF_ZS, CF_REFLECT, 1 };
+                        CF_Z1, CF_ZS, CF_REFLECT, 1, 0, 0 };
 
 /* A right-hand cover t (16.16, >= 0) from the visual position: centre xc and depth zc (1/16 px),
  * rotation c, s (16.16) and brightness (of 256). Left covers mirror it. */
@@ -93,6 +83,8 @@ static void pose(const cfg_t *g, int t, pose_t *p) {
         p->xc = 16 * g->x1 + (16 * g->xs * e >> 16);
         p->zc = 16 * g->z1 + (16 * g->zs * e >> 16);
         p->bright = e < CF_ONE ? CF_BRIGHT1 - ((CF_BRIGHT1 - CF_BRIGHT2) * e >> 16)
+                    : g->tail ? (e < 2 * CF_ONE ? CF_BRIGHT2 - ((CF_BRIGHT2 - g->tail) * (e - CF_ONE) >> 16)   /* the iPod page's longer shelf: g->tail at three out, gone by 3.5 */
+                                : e < 5 * CF_ONE / 2 ? g->tail * (5 * CF_ONE - 2 * e) >> 16 : 0)
                     : e < 2 * CF_ONE ? CF_BRIGHT2 * (2 * CF_ONE - e) >> 16
                                      : 0;
     }
@@ -174,7 +166,8 @@ static void column(shelf_t *f, int col, const unsigned *tex, int h, int bright) 
                     to = (y + 1) << 8 < bottom ? (y + 1) << 8 : bottom;
                 cov = (unsigned)(to - from);
             }
-            put(px, shade(tex[row * ART_SIZE], (unsigned)bright), cov);
+            if (g->bg) put(px, tex[row * ART_SIZE], cov * (unsigned)bright >> 8);   /* over a colour: the fade is transparency */
+            else put(px, shade(tex[row * ART_SIZE], (unsigned)bright), cov);
         }
     }
     /* The reflection starts where the body ends, sharing the row the body only partly covers. */
@@ -193,8 +186,10 @@ static void column(shelf_t *f, int col, const unsigned *tex, int h, int bright) 
             mirrored = dist * step >> 8 >> 16; /* texel rows up from the bottom edge */
             row = ART_SIZE - 1 - (mirrored >= ART_SIZE ? ART_SIZE - 1 : mirrored);
             cov = (unsigned)(((y + 1) << 8) - from) * (256u - (unsigned)(dist * fade >> 16)) >> 8;
-            put(px, shade(tex[row * ART_SIZE], dim), cov);
+            if (g->bg) put(px, tex[row * ART_SIZE], cov * dim >> 8);
+            else put(px, shade(tex[row * ART_SIZE], dim), cov);
         }
+        if (g->bg && bright < 256) return;   /* a faded cover is not opaque: it hides nothing behind it */
         /* The rows this body covers whole are opaque now: join them to the known span, or keep
          * the longer of the two. */
         s0 = (top + 255) >> 8, s1 = bottom >> 8;
@@ -256,11 +251,18 @@ void coverflow_render(const cfg_t *g, unsigned *d, int pitch, int frac,
             int j = slot(frac, k, i);
             draw_cover(&f, (j - CF_REACH) * CF_ONE - frac, ring[j]);
         }
-    for (y = 0; y < ph; ++y) { /* over black */
+    for (y = 0; y < ph; ++y) { /* over black, or over g->bg: what the covers do not cover of each pixel */
         unsigned *p = d + y * pitch;
         x = pw;
-        do *p++ |= 0xff000000u;
-        while (--x);
+        if (g->bg)
+            do {
+                unsigned a = *p >> 24, have = a + (a >> 7);
+                *p = ((*p & 0xffffffu) + shade(g->bg, 256 - have)) | 0xff000000u;
+                ++p;
+            } while (--x);
+        else
+            do *p++ |= 0xff000000u;
+            while (--x);
     }
 }
 

@@ -157,7 +157,10 @@ void grid_set(grid_tile_t *t, const char *album, const char *artist, unsigned ck
 
 void grid_art(grid_t *g, grid_tile_t *t) {
     char url[80];
-    const char *file = cc_url(url, t->ckey);
+    grid_art_url(g, t, cc_url(url, t->ckey));
+}
+
+void grid_art_url(grid_t *g, grid_tile_t *t, const char *file) {
     unsigned *px;
     void *b;
     t->art = 2;
@@ -257,20 +260,55 @@ static void grid_fill(void *canvas, int y0, int y1, unsigned c, int view_h) {
     canvas_fill_rect(canvas, 0, y0, GRID_LIST_W, y1 - y0);
 }
 
-void grid_list_paint(void *canvas, grid_t *g, void *st_title, void *st_sub, int r0, int r1, int off, int view_h, int press,
+void grid_list_paint(void *canvas, grid_t *g, void *st_title, void *st_sub, int r0, int r1, int off, int view_h, int press, int shift,
                      grid_tile_t *(*tile_of)(void *, int), void *ctx) {
     int r, pass;
     for (r = r0; r <= r1; ++r) {
         grid_tile_t *t = tile_of(ctx, r);
         int y = r * LIST_ROW_H - off;
         if (press == t->album) grid_fill(canvas, y, y + LIST_ROW_H - 1, LIST_PRESS, view_h);
-        grid_blit(canvas, g, t, LIST_ART_X, y + LIST_ART_Y, view_h);
+        grid_blit(canvas, g, t, LIST_ART_X + shift, y + LIST_ART_Y, view_h);
         grid_fill(canvas, y + LIST_ROW_H - 1, y + LIST_ROW_H, LIST_HAIR, view_h);
     }
     for (pass = 0; pass < 2; ++pass) {   /* titles, then subtitles: one text style at a time */
         widget_prepare_text_style(pass ? st_sub : st_title, canvas);
         for (r = r0; r <= r1; ++r)
-            grid_text(canvas, tile_of(ctx, r), pass, LIST_TEXT_X, r * LIST_ROW_H - off + (pass ? LIST_SUB_Y : LIST_TITLE_Y), LIST_TEXT_W,
+            grid_text(canvas, tile_of(ctx, r), pass, LIST_TEXT_X + shift, r * LIST_ROW_H - off + (pass ? LIST_SUB_Y : LIST_TITLE_Y), LIST_TEXT_W - shift,
                       pass ? LIST_SUB_H : LIST_TITLE_H, view_h);
     }
+}
+
+/* Adds key to the mosaic's albums when it has a cache file and is not there yet; `tried` keeps the keys looked at so none is looked at twice. */
+static void grid_try_key(unsigned *key, int *nk, unsigned k, unsigned *tried, int *ntried) {
+    char url[80];
+    int i;
+    if (!k) return;
+    for (i = 0; i < *ntried; ++i)
+        if (tried[i] == k) return;
+    if (*ntried < 16) tried[(*ntried)++] = k;
+    if (cc_url(url, k)) key[(*nk)++] = k;
+}
+
+/* The cache key of the library's album called `album`: its record is the one the cache file was made from (the library lists an album once, under the artist of one
+ * of its tracks), so a track of a compilation finds the file its own artist would not. 0: none. */
+static unsigned grid_album_key(void *albums, const char *album) {
+    unsigned n = albums ? deque_size(albums) : 0, j;
+    if (!*album) return 0;
+    for (j = 0; j < n; ++j) {
+        void *r = deque_at(albums, j);
+        if (!cc_nocase(cc_str(r, REC_ALBUM), album)) return cc_album_key(r);
+    }
+    return 0;
+}
+
+int grid_mosaic_keys(void *songs, void *albums, unsigned *key) {
+    unsigned tried[16];
+    int n = songs ? (int)deque_size(songs) : 0, k, ntried = 0, nk = 0;
+    for (k = 0; k < n && k < PL_SCAN && nk < 4; ++k) {
+        void *r = deque_at(songs, (unsigned)k);
+        int before = nk;
+        grid_try_key(key, &nk, cc_album_key(r), tried, &ntried);
+        if (nk == before && albums) grid_try_key(key, &nk, grid_album_key(albums, cc_str(r, REC_ALBUM)), tried, &ntried);
+    }
+    return nk;
 }

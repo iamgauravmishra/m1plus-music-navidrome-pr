@@ -42,6 +42,10 @@ layout model where one exists (`tools/awtk_text.py`, `tools/awtk_ui.py`).
 | [`modules/recent.md`](modules/recent.md) | (new) | The Recently Played shelf of the menu's Home instance (`tools/pod_ui.py` `shelf()`, `patch/recent.c`): header, covers, the list file, taps |
 | [`modules/playlists.md`](modules/playlists.md) | (new) | The Playlists page (`tools/pod_ui.py` `build_playlists_page()`, `patch/playlists.c`): the grid of mosaics, the popup menu, the navbar button |
 | [`modules/songs.md`](modules/songs.md) | (new) | The Songs page (`tools/pod_ui.py` `build_songs_page()`, `patch/songs.c`): the large title, the flat pills, sections and the pinned header, the rail and its bubble, the sort card, the select mode and its bar, the glass capsule of four buttons |
+| [`modules/ipod-coverflow.md`](modules/ipod-coverflow.md) | (new) | The iPod page's Cover Flow screen (`patch/ipod_cf.c`): the 320 x 240 white screen under the iPod title bar, the 320 x 156 depth-rendered frame, the captions |
+| [`modules/tape.md`](modules/tape.md) | (new) | The Tape page, a landscape cassette Now Playing page (`tools/tape_art.py` the art, `tools/pod_ui.py` `build_tape_page`, `patch/tape.c`, mock `tools/preview_tape.py`): the 480 x 320 picture turned onto the portrait panel, the label's text, the reels, touch |
+| [`modules/ipod.md`](modules/ipod.md) | (new) | The virtual iPod Classic page (`tools/pod_ui.py` `build_ipod_page`, `tools/mod_icons.py` `ipod_wheel`, `patch/ipod.c`, mock `tools/preview_ipod.py`): the fullscreen 320 x 480 window, the 240 px iPod screen (title bar, 27 px rows, classic blue selection, cover pane, Now Playing) and the 220 px click wheel |
+| [`modules/podcasts.md`](modules/podcasts.md) | (new) | The Podcasts page (`tools/pod_ui.py` `build_podcasts_page`, `patch/podcasts.c`): the Shows list and a Show's header and episode rows (unplayed dot, grey line, speed) |
 | [`modules/dailymix.md`](modules/dailymix.md) | (new) | The Daily Mix hero card above that shelf (`patch/dailymix.c`, `tools/pod_dailymix.py`, `tools/pod_mix.py`, `tools/preview_dailymix.py`): layout, art generator, texts, Settings rows, the once-a-day job |
 | [`modules/boot.md`](modules/boot.md) | 5, 8 | Boot logo, quotes, settings slides (`tools/mod_boot.py`), the settings-slide safety audit |
 | [`modules/icons.md`](modules/icons.md) | 6 | Lucide icons, icon audit (`tools/mod_icons.py`, `tools/audit_images.py`) |
@@ -55,6 +59,6 @@ layout model where one exists (`tools/awtk_text.py`, `tools/awtk_ui.py`).
 | [`modules/polish.md`](modules/polish.md) | 7 | About row, polish (`tools/mod_about.py`, `tools/mod_polish.py`) |
 | [`modules/menu.md`](modules/menu.md) | 8 | M1+ Music page layout (`tools/pod_ui.py`) |
 | [`modules/albums.md`](modules/albums.md) | 8 | The Albums page (`ui/m1plus_albums.bin`); code half in the same file |
-| [`modules/playmore.md`](modules/playmore.md) | new | Now Playing's More menu: a dimmed bottom sheet with two pages (`patch/playmore.c`, `tools/mod_lists.py`) |
+| [`modules/playmore.md`](modules/playmore.md) | new | Now Playing's More menu: a dimmed bottom sheet with two pages, the second with the Tape row (`patch/playmore.c`, `tools/mod_lists.py`) |
 | [`modules/i18n.md`](modules/i18n.md) | 8a | Localisation (the look half) |
 | [`modules/device-checks.md`](modules/device-checks.md) | 9 | Device checks for the looks |

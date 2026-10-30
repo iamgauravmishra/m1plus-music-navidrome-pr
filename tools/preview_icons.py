@@ -311,33 +311,50 @@ def mosaic(rgbs, size, r):
     for q, k in enumerate(quad): im.paste(sample_cover(rgbs[k], h), ((q & 1) * h, (q >> 1) * h))
     return rounded(im, r)
 
-def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1):
+def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1, select=None):
     """ui/m1plus_playlists.bin as patch/playlists.c paints it: the Albums grid's cells (a mosaic cover, the playlist's name in 18 px, "N tracks" in
-    15 px #AAAAAA) under a navbar with the "..." button; menu=True: the popup card open (row `pressed` held down) under the button."""
+    15 px #AAAAAA) under a navbar with the "..." button; menu=True: the popup card open (row `pressed` held down) under the button. select: the set of marked
+    playlists (indexes into PLAYLISTS) in select mode (the menu's Delete Playlists): the glass x, "N Selected", Select All, a mark on every cell or row (the list's rows
+    and texts 30 px to the right), the bar with the Delete pill."""
     import awtk_ui
     o = offsets(); W_, H_ = 320, 450
     root = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', 'm1plus_playlists.bin'), 'rb').read())
     im = Image.new('RGBA', (W_, H_), (0, 0, 0, 255))
-    s.text(im, 36, 25, s.shown(root.find('label_title')), title_px(s.tree))
-    im.alpha_composite(s.img('return'), (14, 14)); im.alpha_composite(s.img('back_to_player'), (278, 13))
-    more = root.find('btn_more'); ic = s.img(more.get('style:normal:icon'))
-    im.alpha_composite(ic, (more.x + (more.w - ic.width) // 2, (more.h - ic.height) // 2))
-    tog = root.find('btn_albumview'); ic = s.img('pod_nav_grid' if list_mode else tog.get('style:normal:icon'))   # the glyph of the view a tap switches to
-    im.alpha_composite(ic, (tog.x + (tog.w - ic.width) // 2, (tog.h - ic.height) // 2))
+    shift = o['SG_SEL_COL'] if select is not None else 0
+    if select is not None:   # select mode's navbar (the Songs page's): the glass x, "N Selected", Select All at the right
+        import preview_songs as PS
+        PS.glass(s, im, 'ah_nav_close', 7, 44)
+        s.text(im, o['NAV_TITLE_X'], 25, s.strings.get('%d Selected', '%d Selected').replace('%d', str(len(select))), title_px(s.tree))
+        sa = s.strings.get('Select All', 'Select All'); s.text(im, o['SG_SELALL_X'] + 104 - 8 - s.font.width(sa, 18), 25, sa, 18)
+    else:
+        s.text(im, 36, 25, s.shown(root.find('label_title')), title_px(s.tree))
+        im.alpha_composite(s.img('return'), (14, 14)); im.alpha_composite(s.img('back_to_player'), (278, 13))
+        more = root.find('btn_more'); ic = s.img(more.get('style:normal:icon'))
+        im.alpha_composite(ic, (more.x + (more.w - ic.width) // 2, (more.h - ic.height) // 2))
+        tog = root.find('btn_albumview'); ic = s.img('pod_nav_grid' if list_mode else tog.get('style:normal:icon'))   # the glyph of the view a tap switches to
+        im.alpha_composite(ic, (tog.x + (tog.w - ic.width) // 2, (tog.h - ic.height) // 2))
+    def mark(x, y, a):   # a select mark (the stock images, 26 px)
+        mk = s.img('selected' if a in select else 'unselect'); im.alpha_composite(mk, (x, y))
+    def bar():   # the bar: black, a #222222 hairline, the Delete pill across it
+        import preview_songs as PS
+        d_ = ImageDraw.Draw(im); d_.rectangle((0, H_ - o['SG_BAR_H'], W_ - 1, H_ - 1), fill=(0, 0, 0)); d_.rectangle((0, H_ - o['SG_BAR_H'], W_ - 1, H_ - o['SG_BAR_H']), fill=PS.HAIR)
+        PS.pill(s, im, o['SG_PILL_X0'], H_ - o['SG_BAR_H'] + (o['SG_BAR_H'] - o['SG_PILL_H']) // 2, PS.tr(s, 'Delete'), s.img('sg_trash'), w=o['PL_BAR_PILL_W'])
     if list_mode:   # 64 px rows as patch/grid.c grid_list_paint draws them: 52 px mosaic, name 21 px, count 18 px #AAAAAA, hairline, the pressed row
         d = ImageDraw.Draw(im); rh = o['LIST_ROW_H']
         def lcut(text, px):
-            while s.font.width(text, px) > o['LIST_TEXT_W'] and len(text) > 1: text = text[:-2] + '…' if text.endswith('…') else text[:-1] + '…'
+            while s.font.width(text, px) > o['LIST_TEXT_W'] - shift and len(text) > 1: text = text[:-2] + '…' if text.endswith('…') else text[:-1] + '…'
             return text
         for r, (name, tracks, albums) in enumerate(PLAYLISTS):
             y = 50 + r * rh
             if y + rh > H_: break
             if r == row_pressed: d.rectangle((0, y, W_ - 1, y + rh - 2), fill=(0x33, 0x33, 0x33))
             d.rectangle((0, y + rh - 1, W_ - 1, y + rh - 1), fill=(0x22, 0x22, 0x22))
-            im.alpha_composite(mosaic([ALBUMS[i][2] for i in albums if ALBUMS[i][2]], o['LIST_ART'], o['LIST_R']), (o['LIST_ART_X'], y + o['LIST_ART_Y']))
-            s.text(im, o['LIST_TEXT_X'], y + o['LIST_TITLE_Y'] + o['LIST_TITLE_H'] / 2, lcut(name, 21), 21)
+            im.alpha_composite(mosaic([ALBUMS[i][2] for i in albums if ALBUMS[i][2]], o['LIST_ART'], o['LIST_R']), (o['LIST_ART_X'] + shift, y + o['LIST_ART_Y']))
+            s.text(im, o['LIST_TEXT_X'] + shift, y + o['LIST_TITLE_Y'] + o['LIST_TITLE_H'] / 2, lcut(name, 21), 21)
             count = s.strings.get('%d track' if tracks == 1 else '%d tracks', '%d tracks').replace('%d', str(tracks))
-            s.text(im, o['LIST_TEXT_X'], y + o['LIST_SUB_Y'] + o['LIST_SUB_H'] / 2, lcut(count, 18), 18, (0xAA, 0xAA, 0xAA))
+            s.text(im, o['LIST_TEXT_X'] + shift, y + o['LIST_SUB_Y'] + o['LIST_SUB_H'] / 2, lcut(count, 18), 18, (0xAA, 0xAA, 0xAA))
+            if select is not None: mark(o['LIST_ART_X'] + (shift - 6 - o['SG_MARK']) // 2, y + (rh - o['SG_MARK']) // 2, r)
+        if select is not None: bar()
         return im
     cover, gap, m, tg, th, sh = o['GRID_COVER'], o['GRID_GAP'], o['GRID_MARGIN'], o['GRID_TITLE_GAP'], o['GRID_TITLE_H'], o['GRID_SUB_H']
     pitch = cover + tg + th + sh + o['GRID_ROW_GAP']
@@ -350,6 +367,7 @@ def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1):
         c = mosaic([ALBUMS[i][2] for i in albums if ALBUMS[i][2]], cover, o['GRID_R'])
         y1 = min(H_, top + cover)
         im.alpha_composite(c.crop((0, 0, cover, y1 - top)), (x, top))
+        if select is not None and top + cover - o['SG_MARK'] - 6 + o['SG_MARK'] <= H_: mark(x + cover - o['SG_MARK'] - 6, top + cover - o['SG_MARK'] - 6, a)
         ty = top + cover + tg
         if ty + th <= H_: s.text(im, x, ty + th / 2, cut(name, 18), 18)
         if ty + th + sh <= H_:
@@ -375,6 +393,7 @@ def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1):
             ic = next(c for c in row.children if c.type == 'image')
             im.alpha_composite(s.img(ic.get('image')), (cx + ic.x, y + ic.y))
             s.text(im, cx + lab.x, y + row.h / 2, s.clip(s.shown(lab), 18, cw - o['PL_TEXT_X'] - o['PL_TEXT_R']), 18)
+    if select is not None: bar()
     return im
 
 def card_rgba(c):

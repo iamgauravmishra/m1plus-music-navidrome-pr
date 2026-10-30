@@ -106,6 +106,7 @@ static struct {
      * is centred on; scanned = a finished scan found nothing missing (kept until the page closes: al is cleared on open) */
     int scanning, scanned;
     unsigned scan_cur, scan_centre;
+    int fg;
     grid_t g;                    /* the tile ring (GRID_TILES, heap), the placeholder, the mode's cover size (g.side): patch/grid.c; LAST (test/pod/albums.py reads the fields above by index) */
 } al __attribute__((section(".scratch")));
 
@@ -226,7 +227,7 @@ static void al_paint_grid(void *canvas) {
 static void al_paint_list(void *canvas) {
     int r0, r1;
     al_span(&r0, &r1);
-    grid_list_paint(canvas, &al.g, al.st_title, al.st_sub, r0, r1, al_off(), GRID_VIEW_H, al.press, al_tile_of, (void *)0);   /* patch/grid.c */
+    grid_list_paint(canvas, &al.g, al.st_title, al.st_sub, r0, r1, al_off(), GRID_VIEW_H, al.press, 0, al_tile_of, (void *)0);   /* patch/grid.c */
 }
 
 /* The view's own EVT_AFTER_PAINT: the visible cells or rows and nothing else. It draws what is resident and the placeholder for the rest; it
@@ -284,7 +285,7 @@ static int al_moving(void) {
 
 /* Arms the loader if there is something to load and it is not running. */
 static void al_kick(void) {
-    if (!al.more_timer && al.view && (al.noscroll || al_next_load() >= 0)) al.more_timer = timer_add(al_on_load, (void *)0, AL_MORE_MS);
+    if (al.fg && !al.more_timer && al.view && (al.noscroll || al_next_load() >= 0)) al.more_timer = timer_add(al_on_load, (void *)0, AL_MORE_MS);
 }
 
 /* The way the content went since the loader last looked. */
@@ -298,7 +299,7 @@ static int al_on_load(const void *unused) {
     int a;
     (void)unused;
     al.more_timer = 0;
-    if (!al.view) return RET_OK;
+    if (!al.view || !al.fg) return RET_OK;
     al_dir();
     if (al_moving()) {   /* nothing is decoded while it moves: look again next tick (the polling ends with the page, or when nothing is left to load) */
         al_kick();
@@ -412,6 +413,8 @@ static void al_build_later(void) {
 
 static int al_on_fg(void *ctx, void *e) {
     (void)ctx; (void)e;
+    al.fg = 1;
+    al_kick();
     al_build_later();
     return RET_OK;
 }
@@ -477,6 +480,14 @@ static int al_on_abort(void *ctx, void *e) {
     (void)ctx; (void)e;
     al.down = 0;
     if (al.list) al_set_press(0);
+    return RET_OK;
+}
+
+static int al_on_bg(void *ctx, void *e) {
+    al_on_abort(ctx, e);
+    al.fg = 0;
+    if (al.more_timer) timer_remove(al.more_timer);
+    al.more_timer = 0;
     return RET_OK;
 }
 
@@ -610,11 +621,13 @@ static int al_open(int list) {
     grid_placeholder(&al.g);
     al_size();
     al.dir = 1;
+    al.fg = 1;
     al.noscroll = !widget_on(al.sv, EVT_SCROLL, al_on_scroll, (void *)0) || !widget_on(al.sv, EVT_SCROLL_END, al_on_scroll, (void *)0);
     al_kick();
     al_build_later();
-    widget_on(al.win, EVT_WINDOW_TO_FG, al_on_fg, (void *)0);   /* back in front (from Cover Flow, an album): build what is still missing */
-    widget_on(al.win, EVT_WINDOW_TO_BG, al_on_abort, (void *)0);   /* a press is forgotten (a dialog's abort reaches the view too) */
+    if (widget_on(al.win, EVT_WINDOW_TO_FG, al_on_fg, (void *)0))
+        widget_on(al.win, EVT_WINDOW_TO_BG, al_on_bg, (void *)0);
+    else widget_on(al.win, EVT_WINDOW_TO_BG, al_on_abort, (void *)0);
     widget_on(al.view, EVT_POINTER_DOWN, al_on_down, (void *)0);
     widget_on(al.view, EVT_POINTER_UP, al_on_up, (void *)0);
     widget_on(al.view, EVT_POINTER_ABORT, al_on_abort, (void *)0);

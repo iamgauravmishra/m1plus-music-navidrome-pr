@@ -22,7 +22,7 @@ the stock Home after a failed start. One album page everywhere: the stock album 
 header with a centred 160 px rounded cover, year and track count, a round Shuffle and a Play all pill) opens from Albums, Cover Flow,
 the Albums grid, Artists, the All albums card and Now Playing's Look up album. Everything it adds follows Settings > Language (13 languages). `docs/ui.md` has the pictures and the rules.
 
-Status: the release is V2.1oV (its test build oUDM is on the card). Milestones, hardware results and lessons:
+Status: the release is V2.1pB (pA + the library scan skips dot-folders and Library lists leave out /mnt/mmc/Podcasts/, after q2-pod; test build pAQ flashed, good). Milestones, hardware results and lessons:
 `docs/history.md`; per-tag details are in git.
 
 ## Build, test, flash

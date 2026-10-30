@@ -1384,7 +1384,7 @@ def album_tests(expect, page, cover_asset):
     # the artist's Cover Flow starts on its first album; the main one keeps its last album
     m = artists_machine(); m.load_image = 0; m.stock_songlist = True
     m.call(PSYMS['artists_open'], count=5000000)
-    m.call(PSYMS['ar_on_artist'], a0=0, count=8000000)
+    artists_tap(m, 0)
     expect(shelf_value(m) == 0,
            "the artist's Cover Flow starts on its first (leftmost) album, not the stock slide_menu's item 1")
     expect(('widget_set_text_utf8', m.widgets['label_album'], 'Kind of Blue') in m.calls
@@ -1394,7 +1394,7 @@ def album_tests(expect, page, cover_asset):
            "a tap on that album opens the stock album page with the artist page's class")
     # one album: the captions are there as soon as the page opens
     m = artists_machine(); m.call(PSYMS['artists_open'], count=5000000)
-    m.call(PSYMS['ar_on_artist'], a0=1, count=8000000)
+    artists_tap(m, 1)
     expect(('widget_set_text_utf8', m.widgets['label_album'], 'Pastel Blues') in m.calls
            and ('widget_set_text_utf8', m.widgets['label_artist'], 'Nina Simone') in m.calls and shelf_value(m) == 0,
            'an artist with one album shows its captions on open')

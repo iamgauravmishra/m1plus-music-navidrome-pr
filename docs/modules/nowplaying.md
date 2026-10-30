@@ -12,7 +12,7 @@ cover's rounded corners and a remaining-time label from one hook and one page ti
 `start_player` when the context's class is not `0xff`, runs `playing_choiceshowpage` and `player_timer_start`, returns 0, or `0x10` for a null window).
 The hook calls it through `stock_playing_init_trampoline` and returns its result; with `RET_OK`, a window and no
 `/mnt/mmc/m1plus-off`, `np_start` runs: it finds `np_remaining` and `label_playlen` (a missing one turns the time off, not the tint),
-registers `EVT_DESTROY` on the window (`np_on_destroy`, context the window), adds a **repeating 500 ms timer** (`np_tick`, answering
+registers `EVT_DESTROY` on the window (`np_on_destroy`, context the window), adds a **repeating timer** (500 ms lit, 1000 ms dark; `np_tick`, answering
 `RET_REPEAT` 8 as the stock page timer `0x53cf48` does; a refused timer or `widget_on` leaves the page stock), registers
 `np_on_art_paint` on `img_playcover` (`EVT_AFTER_PAINT`) and runs one tick at once. State is one 176-byte `.scratch` struct
 (`np`): the window, the labels, the timer id, the cover key, the window colour, the seconds shown, which label is visible and the
@@ -221,3 +221,5 @@ bottom (V2.1nL: 22 / 13 / 17 / 11). `mod_nowplaying.py` places every box from th
   in the full-strength middle; the art page has none and keeps the full tint. The inactive lyric grey went from `#8C8C8C` to `#A0A0A0`.
   `test/pod/nowplaying.py` checks over every tone under the tint and the scrim: inactive lyrics and the info labels >= 3:1, the current lyric and the quality line >= 4.5:1 (the inactive lyric alone, without the scrim, is under 3:1 on the brightest tone). `image_wait` and the A-B markers are insensitive. Touch: `check_touch`
   models demo's hit test for every control (44 px, the slider 30), the art and the title rows reach the slide view.
+
+The page timer runs every 500 ms lit and 1000 ms dark. Screen-off ticks still record the playing album for Recently Played, but defer cover, time and label updates until the first lit tick (up to one second after waking). The stock `backlight_status` byte is pinned by the build.

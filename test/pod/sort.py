@@ -212,7 +212,7 @@ def run(ctx):
         m.fs.pop(CFSORT_FILE, None)       # the setting at its default, Artist: the artist's shelf must still keep its own order
         m.call(PSYMS['artists_open'], count=5000000)
         if tracks: m.play(tracks(m), pos)
-        m.call(PSYMS['ar_on_artist'], a0=artist_index, count=8000000)
+        artists_tap(m, artist_index)
         return m
     m = artist_page(0)
     shown, rows = shelf(m, 3)

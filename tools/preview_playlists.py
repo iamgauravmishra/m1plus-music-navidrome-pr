@@ -19,7 +19,9 @@ def main():
     a = ap.parse_args()
     s = PI.Side(a.workdir, True, a.lang)
     panels = [('Playlists: grid (the toggle shows the list)', PI.playlists_grid(s)), ('"..." menu open (Delete row pressed)', PI.playlists_grid(s, menu=True, pressed=3)),
-              ('List mode (the toggle shows the grid; row 2 pressed)', PI.playlists_grid(s, list_mode=True))]
+              ('List mode (the toggle shows the grid; row 2 pressed)', PI.playlists_grid(s, list_mode=True)),
+              ('Delete Playlists: select mode (grid), two marked', PI.playlists_grid(s, select={1, 3})),
+              ('Select mode in list mode (the rows 30 px to the right), one marked', PI.playlists_grid(s, list_mode=True, row_pressed=-1, select={2}))]
     pad, lab = 12, 20
     sheet = Image.new('RGB', (len(panels) * (320 + pad) + pad, 450 + lab + 2 * pad), (0x2A, 0x2A, 0x2A)); d = ImageDraw.Draw(sheet)
     for i, (title, im) in enumerate(panels):

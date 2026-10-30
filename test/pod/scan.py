@@ -1,0 +1,150 @@
+"""The library scan's folder walk (patch/common.c pod_scan_dir, tools/pod.py SCAN_SITE, docs/modules/payload.md hook 6): stock's folder lister (0x5ea364) skips a directory whose
+name is "." or ".." or a short list of system folders, and walks every other dot-folder. The build replaces its `jalr strcmp(name, ".")` (0x5ea6a8) by `jal pod_scan_dir`;
+the stock code from the name test (0x5ea69c) runs for real under Unicorn, stock and built, and must skip every hidden folder in the build only. Modelled on q2-pod's
+ringnav_scan_dir test (test/patch.py; Copyright (c) 2026 Diamond Bond, MIT)."""
+import os, struct
+import paths
+from unicorn.mips_const import UC_MIPS_REG_S0, UC_MIPS_REG_GP
+from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
+
+SITE, SKIP, KEEP = pod.SCAN_SITE, 0x5ea600, 0x5ea6b8   # the walk goes back to readdir (skip), or on to the next name test (keep)
+GOT_STRCMP = -0xa94
+HIDDEN = ('.', '..', '.m1plus', '.deezer', '.Trashes', '.hidden', '.a', '.LOST.DIR')
+SHOWN = ('Music', 'Deezer', 'Podcasts', 'a.b', 'x.', 'lost+found2', 'Albums .old')   # (lost+found and the like are stock's later tests, not this one's)
+
+
+class Walk(Machine):
+    """Stock's name test at 0x5ea69c, run for real; its callees (strcmp) are the base machine's mocks."""
+    def __init__(self, stock=False):
+        super().__init__()
+        self.handlers[self.word(pod.GP + GOT_STRCMP)] = 'strcmp'
+        self.handlers[SKIP], self.handlers[KEEP] = 'skip', 'keep'
+        self.end = None
+        if stock: self.setword(SITE, 0x0320f809)
+
+    def _hook(self, u, address, size, _):
+        name = self.handlers.get(address)
+        if name in ('skip', 'keep'):
+            self.end = name; u.emu_stop(); return
+        return super()._hook(u, address, size, _)
+
+    def test(self, name):
+        """'skip' when the walk goes back to readdir for this directory name, 'keep' when it goes on to the next test."""
+        self.end = None; self.calls = []; self.icount = 0; self.limit = 100000
+        self.u.reg_write(UC_MIPS_REG_SP, STACK); self.setword(STACK + 0x38, pod.GP)
+        self.u.reg_write(UC_MIPS_REG_GP, pod.GP); self.u.reg_write(UC_MIPS_REG_RA, RET)
+        self.u.reg_write(UC_MIPS_REG_S0, self.cstr(name))
+        self.u.emu_start(0x5ea69c, 0)
+        return self.end
+
+
+def run(ctx):
+    scan_tests(ctx)
+    query_tests(ctx)
+
+
+def scan_tests(ctx):
+    expect = ctx.expect
+    stock_demo = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
+    m = Walk()
+    built = m.data
+    w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
+    # the build: the one word is a jal into the payload; the pinned words around it are stock's
+    expect(pod.SCAN_SITE == 0x5ea6a8 and w(stock_demo, SITE) == 0x0320f809 and w(built, SITE) >> 26 == 3 and (w(built, SITE) & 0x3ffffff) << 2 == PSYMS['pod_scan_dir'],
+           'the build replaced stock\'s `jalr t9` at 0x5ea6a8 by `jal pod_scan_dir`')
+    expect(all(w(stock_demo, a) == old and (a == SITE or w(built, a) == old) for a, old, _ in pod.SCAN_PINS),
+           'every pinned word of the folder lister is stock\'s in the stock demo and unchanged in the build, but the site')
+    expect(w(built, 0x5ea6ac) == 0x24a53ed4 and w(built, 0x5ea6b0) == 0x1040ffd3, 'the delay slot still loads a1 = "." and the branch on the result still goes back to readdir')
+    expect(MANIFEST['hook_scan'] == {'addr': SITE, 'target': PSYMS['pod_scan_dir']}, 'the manifest records the hook')
+    # the stock code, stock and built
+    stock = Walk(stock=True)
+    for n in HIDDEN + SHOWN: expect(stock.test(n) == ('skip' if n == '.' else 'keep'), f'STOCK: {n!r} -> {stock.end} (this test skips "." only; ".." falls to the next test, which skips it)')
+    for n in HIDDEN: expect(m.test(n) == 'skip', f'BUILT: the hidden folder {n!r} is skipped')
+    for n in SHOWN: expect(m.test(n) == 'keep', f'BUILT: {n!r} is walked as before')
+    # the payload function alone: stock's strcmp for any other name, 0 for a name that starts with a dot
+    f = lambda name, dot='.': m.call(PSYMS['pod_scan_dir'], a0=m.cstr(name), a1=m.cstr(dot), count=2000)
+    expect(f('.m1plus') == 0 and f('..') == 0 and f('.') == 0 and f('.x', 'zzz') == 0, 'a name starting with a dot returns 0 (a match)')
+    expect(f('Music') != 0 and f('') != 0 and f('Music', 'Music') == 0 and f('.', '.') == 0, 'any other name returns strcmp(name, dot)')
+    m.call(PSYMS['pod_scan_dir'], a0=m.cstr('.m1plus'), a1=m.cstr('.'), count=2000)
+    expect(m.calls == [] and m.icount < 12, f'a hidden name costs a few instructions and calls nothing ({m.icount})')
+
+
+class QueryMachine(Machine):
+    """The payload's Library query hooks run against SQLite: the stock functions behind the trampolines are an in-memory database (modelled on q2-pod's LibraryQueryMachine)."""
+    TRAMPS = {'stock_dbquery_trampoline': 'db', 'stock_sorted_query_trampoline': 'sorted'}
+
+    def __init__(self, rows):
+        super().__init__()
+        import sqlite3
+        self.db = sqlite3.connect(':memory:')
+        self.db.execute('create table songtable(id,album,songer,albumsonger,composer,style,fileurl)')
+        self.db.executemany('insert into songtable values(?,?,?,?,?,?,?)', rows)
+        self.tramp = {PSYMS[n]: k for n, k in self.TRAMPS.items()}
+        for a in self.tramp: self.handlers[a] = 'tramp'
+        self.sql = self.results = self.via = None
+
+    def _hook(self, u, address, size, _):
+        if address in self.tramp:
+            a0, a1, a2, a3 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3))
+            assert self.read_cstr(a0) == '/mnt/data/database.db' and (a2, a3) == (123, 1), 'the callback and the sort flag pass through'
+            self.sql, self.via = self.read_cstr(a1), self.tramp[address]
+            self.results = self.db.execute(self.sql).fetchall()
+            u.reg_write(UC_MIPS_REG_V0, len(self.results)); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+            return
+        return super()._hook(u, address, size, _)
+
+    def query(self, sql, fn='pc_library_query'):
+        self.sql = None
+        n = self.call(PSYMS[fn], a0=self.cstr('/mnt/data/database.db'), a1=self.cstr(sql), a2=123, a3=1, count=20000)
+        return n, self.sql
+
+
+def query_tests(ctx):
+    expect = ctx.expect
+    stock_demo = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
+    built = Machine().data
+    w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
+    for at, pro, fn, name in ((pod.QUERY_DB, pod.QUERY_DB_PROLOGUE, 'pc_library_query', 'toolsQueryDbTable'), (pod.QUERY_SORT, pod.QUERY_SORT_PROLOGUE, 'pc_sorted_query', 'toolsQueryDbTableAndSort')):
+        expect(tuple(w(stock_demo, at + 4 * i) for i in range(3)) == pro, f'{name} is stock\'s PIC prologue in the stock demo')
+        j = w(built, at)
+        expect(j >> 26 == 2 and (j & 0x3ffffff) << 2 == PSYMS[fn] and w(built, at + 4) == 0, f'the build replaced {name}\'s prologue by `j {fn}; nop`')
+        expect(w(built, at + 12) == w(stock_demo, at + 12), f'{name}: the word the trampoline resumes at is stock\'s')
+    expect(all(w(stock_demo, a) == old and w(built, a) == old for a, old, _ in pod.QUERY_PINS), 'the pinned words of both query functions are stock\'s, in the stock demo and in the build')
+    expect(MANIFEST['hook_query'] == {'addr': pod.QUERY_DB, 'target': PSYMS['pc_library_query']} and MANIFEST['hook_sorted_query']['addr'] == pod.QUERY_SORT, 'the manifest records both hooks')
+    for n, at in (('stock_dbquery_trampoline', pod.QUERY_DB), ('stock_sorted_query_trampoline', pod.QUERY_SORT)):   # gp restored, then a jump past the displaced prologue
+        tw = [w(built, PSYMS[n] + 4 * i) for i in range(4)]
+        expect(tw[0] >> 16 == 0x3c1c and tw[2] >> 26 == 2 and (tw[2] & 0x3ffffff) << 2 == at + 12, f'{n} jumps to {at + 12:#x}')
+
+    rows = [(1, 'Shared', 'Shared', 'Shared', 'Shared', 'Rock', '/mnt/mmc/Podcasts/show/episode.mp3'),
+            (2, 'Shared', 'Shared', 'Shared', 'Shared', 'Rock', '/mnt/mmc/Music/track.flac'),
+            (3, '', '', '', '', '', '/mnt/mmc/PODCASTS/untagged.mp3'),
+            (4, 'Pod', 'Host', 'Host', 'Host', 'Talk', '/mnt/mmc/pOdCaStS/Show/ep.mp3'),
+            (5, 'Extra', 'Singer', 'Singer', 'Singer', 'Pop', '/mnt/mmc/Podcasts Extra/song.mp3'),
+            (6, 'Nested', 'Singer', 'Singer', 'Singer', 'Pop', '/mnt/mmc/Music/Podcasts/song.mp3'),
+            (7, 'Nopath', 'Nobody', 'Nobody', 'Nobody', 'Pop', None),
+            (8, '', '', '', '', '', '/mnt/mmc/Music/untagged.mp3')]
+    q = QueryMachine(rows)
+    for fn, via in (('pc_library_query', 'db'), ('pc_sorted_query', 'sorted')):
+        for sql, want in (('select id,album,songer,fileurl from songtable group by album COLLATE NOCASE', {2, 5, 6, 7, 8}),
+                          ('select id,songer from songtable group by songer COLLATE NOCASE', {2, 5, 7, 8}),
+                          ('select id,albumsonger from songtable group by albumsonger COLLATE NOCASE', {2, 5, 7, 8}),
+                          ('select id,composer from songtable group by composer COLLATE NOCASE', {2, 5, 7, 8}),
+                          ('select id,style from songtable group by style COLLATE NOCASE', {2, 5, 8}),
+                          ("select id,album,songer,fileurl from songtable where songer like 'Shared' group by album COLLATE NOCASE", {2}),
+                          ("select * from songtable where album like 'Shared'", {2}),
+                          ('select * from songtable ORDER BY id DESC limit 100;', {2, 5, 6, 7, 8}),
+                          ('select * from songtable', {2, 5, 6, 7, 8})):
+            n, got = q.query(sql, fn)
+            expect(got is not None and q.via == via and {r[0] for r in q.results} == want and n == len(q.results),
+                   f'{fn}: {sql[:60]!r} -> ids {sorted(r[0] for r in q.results)} (want {sorted(want)}); the shared album keeps the music row, untagged episodes add no Unknown row')
+    # stock's text for anything that is not a songtable select, or does not fit: unchanged
+    for sql in ('select * from playlist where id > 100 and cd_num=3', 'select * from myfav', 'delete from songtable', 'select * from songtable2', 'SELECT * FROM songtable',
+                '', 'select 1 where 0 /* from songtable */ ' + 'x' * 1100, 'select * from songtable where fileurl=\'' + 'y' * 1100 + '\''):
+        qq = QueryMachine([])
+        qq.db.execute('create table playlist(id,cd_num)'); qq.db.execute('create table myfav(id)'); qq.db.execute('create table songtable2(id)')
+        try: qq.query(sql)
+        except Exception: pass
+        expect(qq.sql == sql, f'{sql[:50]!r}: stock SQL, untouched')
+    n, got = q.query('select * from songtable where id=2')
+    expect(got == "select * from (select * from songtable where ifnull(fileurl,'') not like '/mnt/mmc/podcasts/%') where id=2", f'the rewritten text: {got}')
+    expect(q.icount < 1500 and q.calls == [], f'one rewrite costs {q.icount} instructions and calls nothing but the trampoline')

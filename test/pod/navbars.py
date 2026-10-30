@@ -10,7 +10,7 @@ import awtk_strings, awtk_ui, mod_icons, pod_i18n, pod_ui
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DIGESTS = os.path.join(os.path.dirname(HERE), 'navbars-stock.sha256')
-NEW_IMAGES = ('pod_nav_', 'nb_fade', 'ah_', 'pl_glass', 'pl_ic_', 'sg_', 'np_', 'dm_', 'dp_', 'pod_ic_')      # the images this work adds or changes (all ours; ah_*: the album page's buttons, tint and navbar; np_*: Now Playing's glyphs and discs; pl_*: the Playlists page's menu, docs/modules/playlists.md; sg_*: the Songs page's); dm_ / dp_: the Daily Mix card and page; pod_ic_*: the menu and settings row glyphs (tools/mod_icons.py POD_ROWS)
+NEW_IMAGES = ('pod_nav_', 'nb_fade', 'ah_', 'pl_glass', 'pl_ic_', 'sg_', 'np_', 'dm_', 'dp_', 'pod_ic_', 'ipod_', 'tape_')      # the images this work adds or changes (all ours; ah_*: the album page's buttons, tint and navbar; np_*: Now Playing's glyphs and discs; pl_*: the Playlists page's menu, docs/modules/playlists.md; sg_*: the Songs page's); dm_ / dp_: the Daily Mix card and page; pod_ic_*: the menu and settings row glyphs (tools/mod_icons.py POD_ROWS); ipod_*: the Pod page's click wheel; tape_*: the Tape page's pictures
 OUR_FILES = ('about_page.bin', 'albuminfo_page.bin')  # the About page (it carries the release tag) and the album page (its ui and theme: docs/modules/album-page.md)
 # the code-built stock navbars: (first, last + 1) of the builders' bytes in demo (the album pages' two, Folders, Artists/Genres/Composers, stock Playlists)
 BUILDERS = ((0x524e4c, 0x5251e0), (0x526a3c, 0x527010), (0x5312dc, 0x5316c0), (0x535188, 0x5357c0), (0x53d5f8, 0x53d900))
@@ -127,8 +127,6 @@ def run(ctx):
         hidden_fade = fade.get('visible') == 'false' and fade.get('sensitive') == 'false'
         if any(c.name.endswith('_scrollview') and c.name[:-len('scrollview')] in ('albums_', 'playlists_') for c in root.walk()):
             ink = min(O['GRID_ROW_GAP'], O['LIST_ART_Y'])               # the grid's first cover, the list mode's first cover
-        elif name == 'm1plus_artists':
-            ink = (pod_ui.ROW_H - 21) // 2                              # its runtime rows: 21 px text centred in a ROW_H row
         else:
             sv = next((c for c in root.walk() if c.type == 'scroll_view'), None)
             first = min(sv.children, key=lambda c: c.y) if sv and sv.children else None
@@ -155,5 +153,5 @@ def run(ctx):
         bad = [(x, y, tgt(x, y)) for x, y in ((8, 6), (29, 25), (49, 45)) if tgt(x, y) != 'btn_return']
         bad += [(x, y, tgt(x, y)) for x, y in ((play.x + 10, 6), (play.x + 30, 25), (311, 45)) if tgt(x, y) != 'btn_backtoplayer']
         expect(not bad, f'{pg}: the disc corners and centres of Back and Now Playing reach their buttons ({bad})')
-        expect(all(tgt(x, y) == 'row0' for x in (20, 160, 280 if pg == 'm1plus_songs.bin' else 300) for y in (50, 55, 62, 69)) and all(tgt(x, y) != pod_ui.NB_FADE_NAME for x in (0, 160, 319) for y in range(50, 70)),
+        expect(all(tgt(x, y) == 'row0' for x in (20, 160, 280 if pg in ('m1plus_songs.bin', 'm1plus_artists.bin') else 300) for y in (50, 55, 62, 69)) and all(tgt(x, y) != pod_ui.NB_FADE_NAME for x in (0, 160, 319) for y in range(50, 70)),
                f'{pg}: the first row takes touches through the whole fade, which never gets one')

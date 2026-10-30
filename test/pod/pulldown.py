@@ -23,7 +23,8 @@ STOCK = ('widget_move', 'widget_resize', 'widget_set_visible', 'widget_get_visib
          'widget_count_children', 'widget_get_child', 'widget_get_type')   # pinned for the payload, but here the real stock code runs
 LAYOUTER_VT, LV_HOOK, PAINT_HOOK, PAINT_DEFAULT = 0x9047a0, 0x60c0fc, 0x60c164, 0x674690
 CHECK_AND_LAYOUT = 0x677a80       # window_manager_check_and_layout: the main loop calls it before every paint (@0x6939f4), the snapshots too (@0x68f194)
-ROW_H, ITEMS, MENU_ROWS = 52, 19, 20
+ROW_H, ITEMS = 52, len(pod_pages.ITEMS)
+MENU_ROWS, EX = ITEMS + 1, ITEMS   # the menu's rows; the Extras row is the last, its index the item count
 LCD_W, LCD_H = 320, 480
 SAVED = '/mnt/data/m1plus-menu'
 
@@ -174,7 +175,7 @@ def run(ctx):
 
     # -- 1. a relayout ----------------------------------------------------------------------------------------------------
     for name, saved in (('Cover Flow first', b'1023456j\n'), ('a shuffled order', b'2403156j\n'), ('the default', b'0123456j\n'), ('no saved list', None)):
-        want = {None: [1, 2, 3, 4, 5, 19], b'0123456j\n': [0, 1, 2, 3, 4, 5, 6, 18, 19], b'1023456j\n': [1, 0, 2, 3, 4, 5, 6, 18, 19], b'2403156j\n': [2, 4, 0, 3, 1, 5, 6, 18, 19]}[saved]
+        want = {None: [1, 2, 3, 4, 5, EX], b'0123456j\n': [0, 1, 2, 3, 4, 5, 6, 18, EX], b'1023456j\n': [1, 0, 2, 3, 4, 5, 6, 18, EX], b'2403156j\n': [2, 4, 0, 3, 1, 5, 6, 18, EX]}[saved]
         for fixed in (False, True):
             tag = 'fixed' if fixed else 'V2.1mY'
             m = world(saved, fixed)
@@ -186,7 +187,7 @@ def run(ctx):
             if fixed or saved in (None, b'0123456j\n'):
                 expect(ok, f'{tag} {name}: the first relayout leaves the rows where they were ({m.order()})')
             else:
-                expect(not ok and m.order() == [0, 1, 2, 3, 4, 5, 6, 18, 19], f'{tag} {name}: the stock list_view lays the rows out in child (asset) order again ({m.order()})')
+                expect(not ok and m.order() == [0, 1, 2, 3, 4, 5, 6, 18, EX], f'{tag} {name}: the stock list_view lays the rows out in child (asset) order again ({m.order()})')
             m.relayout(); m.mark(); m.relayout()
             expect(m.order() == (want if fixed or saved in (None, b'0123456j\n') else m.order()) and m.vh() == len(want) * ROW_H and m.yoff() == 0, f'{tag} {name}: further relayouts change nothing more')
             if fixed:
@@ -198,15 +199,15 @@ def run(ctx):
     for fixed in (False, True):
         tag = 'fixed' if fixed else 'V2.1mY'
         m = world(b'1023456j\n', fixed, rows=ITEMS); m.arrange(extras=1); o = m.order()
-        want = [i for i in pod_pages.EXTRAS_ORDER if 7 <= i < 18]
+        want = [i for i in pod_pages.EXTRAS_ORDER if 7 <= i < 18 or i >= ITEMS - 2]   # (the Pod and Podcasts are the last two items)
         expect(o == want, f'{tag}: the Extras page shows the items the menu does not show in the fixed order ({o})')
         m.relayout()
-        expect(m.order() == (want if fixed else list(range(7, 18))),
+        expect(m.order() == (want if fixed else list(range(7, 18)) + [ITEMS - 2, ITEMS - 1]),
                f'{tag}: the Extras page after a relayout ' + ('is the same' if fixed else f'is back in id order ({m.order()})'))
         if fixed: expect(m.stack()[:len(want)] == want and m.vh() == len(want) * ROW_H, f'fixed: the Extras children are stacked in that order ({m.stack()})')
     # the Extras page with its section headers: the stock list_view layouter keeps a child's own height (a header is HDR_H high, not 52), so after any relayout the headers
     # and the rows are where the payload put them (pod_pages.extras_display / extras_layout) and virtual_h is the sum of the heights
-    for saved in (None, b'1023456j\n', b'\n', b'0123456abcdefghi\n', b'1-ab\n', b'012345678\n', b'012345678abcdefghij\n', b'2-hi\n'):
+    for saved in (None, b'1023456j\n', b'\n', b'0123456abcdefghi\n', b'1-ab\n', b'012345678\n', b'012345678abcdefghijk\n', b'2-hi\n'):
         m = world(saved, True, rows=ITEMS, hdrs=True)
         shown, hidden = pod_pages.extras_display(*pod_pages.parse_menu_full(saved))
         lay, height = pod_pages.extras_layout(shown, ROW_H)
@@ -221,19 +222,19 @@ def run(ctx):
     # a list the payload does not know is left alone
     for what, mut in (('another vtable', lambda m: m.setword(m.sv + 0x70, LV_VT)), ('another paint hook', lambda m: m.setword(m.sv + 0xf4, 0x123456))):
         m = world(None, True); mut(m); hook = m.word(m.sv + 0xf4); m.arrange()
-        expect(m.word(m.sv + 0xf4) == hook and m.order() == [1, 2, 3, 4, 5, 19], f'{what}: the paint hook word is not touched')
+        expect(m.word(m.sv + 0xf4) == hook and m.order() == [1, 2, 3, 4, 5, EX], f'{what}: the paint hook word is not touched')
 
     # -- 2. the lock screen: the first frame after the menu is back ------------------------------------------------------
     for fixed in (False, True):
         tag = 'fixed' if fixed else 'V2.1mY'
         m = world(b'1023456j\n', fixed); settle(m)
         want = m.order(); y0 = m.ys()
-        expect(want == [1, 0, 2, 3, 4, 5, 6, 18, 19] and not m.marked(), f'{tag} lock screen: the menu is settled in its saved order')
+        expect(want == [1, 0, 2, 3, 4, 5, 6, 18, EX] and not m.marked(), f'{tag} lock screen: the menu is settled in its saved order')
         # the screensaver (fullscreen) opens over the menu and closes; the window manager lays the menu out for the new size before it paints it
         m.mark(); m.relayout()
         first_frame = m.order()
         if fixed: expect(first_frame == want and m.ys() == y0, f'fixed lock screen: the first frame after the unlock is the saved order ({first_frame})')
-        else: expect(first_frame == [0, 1, 2, 3, 4, 5, 6, 18, 19], f'V2.1mY lock screen: the first frame is the asset order, the splash ({first_frame})')
+        else: expect(first_frame == [0, 1, 2, 3, 4, 5, 6, 18, EX], f'V2.1mY lock screen: the first frame is the asset order, the splash ({first_frame})')
         m.arrange(); m.relayout()      # EVT_WINDOW_TO_FOREGROUND: on_menu_fg
         expect(m.order() == want and m.ys() == y0 and m.vh() == 9 * ROW_H, f'{tag} lock screen: and the saved order after the foreground event')
 
@@ -298,7 +299,7 @@ def run(ctx):
         for s in steps: m.pointer(s[0], s[1], s[2], *s[3:])
         expect(m.yoff() > 100 and m.vh() == 9 * ROW_H, f'{tag}: a slow drag up scrolls the arranged page ({m.yoff()}), the virtual height stays {m.vh()}')
         m.relayout()
-        expect(m.order() == [1, 0, 2, 3, 4, 5, 6, 18, 19] if fixed else True, f'{tag}: and a relayout while scrolled does not move the rows')
+        expect(m.order() == [1, 0, 2, 3, 4, 5, 6, 18, EX] if fixed else True, f'{tag}: and a relayout while scrolled does not move the rows')
         y0 = m.yoff()
         m.arrange()
         expect(m.yoff() == y0, f'{tag}: arranging the page again keeps its scroll position ({y0} -> {m.yoff()})')
@@ -316,7 +317,7 @@ def run(ctx):
         m = world(b'3210456j\n', fixed, main=True)
         m.call(PSYMS['menu_custom_opened'], a0=m.root, count=4000000)
         if not fixed: m.setword(m.sv + 0xf4, PAINT_HOOK)
-        cm_order = [3, 2, 1, 0, 4, 5, 6, 18] + list(range(7, 18))   # Customize, id 18, is shown last in the saved list
+        cm_order = [3, 2, 1, 0, 4, 5, 6, 18] + list(range(7, 18)) + [19, 20]   # Customize, id 18, is shown last in the saved list
         ys = lambda: [i for _, i in sorted((m.s32(r + 4), i) for i, r in enumerate(m.rows))]
         expect(ys() == cm_order, f'{tag} Main Menu: opened in the saved order ({ys()})')
         m.relayout()
@@ -334,7 +335,7 @@ def run(ctx):
     # last child O['MB_PAD'] high is the bottom padding; menu_arrange moves it after the shown rows, keeps it the last child and adds its height
     pad_h = O['MB_PAD']
     show = lambda m, on: m.call(pod.FUNCTIONS['widget_set_visible'][2], a0=m.pad, a1=on, a2=0, count=400000)
-    for saved, want in ((None, [1, 2, 3, 4, 5, 19]), (b'0123456j\n', [0, 1, 2, 3, 4, 5, 6, 18, 19]), (b'j\n', [18, 19]), (b'6502j\n', [6, 5, 0, 2, 18, 19])):
+    for saved, want in ((None, [1, 2, 3, 4, 5, EX]), (b'0123456j\n', [0, 1, 2, 3, 4, 5, 6, 18, EX]), (b'j\n', [18, EX]), (b'6502j\n', [6, 5, 0, 2, 18, EX])):
         m = world(saved, True, pad=True); settle(m)
         n = len(want); tag = f'pad, saved {saved!r}'
         expect(m.order() == want and m.vh() == n * ROW_H and not m.shown(m.pad) and m.stack()[-1] == 'pad', f'{tag}: hidden, the spacer adds nothing (virtual_h {m.vh()}) and is the last child')
@@ -351,4 +352,4 @@ def run(ctx):
         expect(m.vh() == n * ROW_H and m.order() == want, f'{tag}: hidden again, virtual_h is the rows')
     # a menu asset without the spacer (or the Extras page) is unchanged
     m = world(None, True); settle(m)
-    expect(m.vh() == 6 * ROW_H and m.order() == [1, 2, 3, 4, 5, 19], 'no spacer in the tree: the arrangement is as before')
+    expect(m.vh() == 6 * ROW_H and m.order() == [1, 2, 3, 4, 5, EX], 'no spacer in the tree: the arrangement is as before')

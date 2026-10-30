@@ -97,6 +97,29 @@
 #define CF_BRIGHT2 128
 #define CF_REFLECT 26
 #define CF_REFLECT_TOP 64
+/* The iPod page's Cover Flow screen (patch/ipod_cf.c, docs/modules/ipod-coverflow.md): the same depth renderer, scaled by 112 / 168 (0.667) for the 320 x 240 screen under the title bar:
+ * a 320 x IPCF_FRAME_H frame on white (IPCF_BG; r | g << 8 | b << 16) drawn at y IPCF_FRAME_Y (= IP_BAR_H), the centre cover IPCF_ART px at IPCF_TOP, seen from IPCF_EYE, the first side cover IPCF_X1 out and IPCF_Z1 back, the rest IPCF_XS / IPCF_ZS
+ * apart; IPCF_REFLECT px of reflection; the cover three out keeps IPCF_TAIL of 256 (seven covers show). The two caption lines start at IPCF_CAP_Y, IPCF_CAP_H high each. The
+ * slide eases to the target album: each IPCF_FRAME_MS tick covers dt / (dt + IPCF_TAU_MS) of what is left, ends within IPCF_DONE (1/64 album), and never starts more than
+ * IPCF_NEAR albums away (a long jump lands near the target at once, so the covers that show are the ones being decoded). */
+#define IPCF_FRAME_Y 24
+#define IPCF_FRAME_H 168
+#define IPCF_BG 0xffffff
+#define IPCF_ART 112
+#define IPCF_TOP 20
+#define IPCF_EYE 208
+#define IPCF_X1 74
+#define IPCF_XS 32
+#define IPCF_Z1 64
+#define IPCF_ZS 15
+#define IPCF_REFLECT 34
+#define IPCF_TAIL 72
+#define IPCF_CAP_Y 192
+#define IPCF_CAP_H 22
+#define IPCF_FRAME_MS 33
+#define IPCF_TAU_MS 70
+#define IPCF_DONE 1024
+#define IPCF_NEAR 4
 #define DRAG_PX 108        /* finger travel per album */
 #define TAP_SLOP 12        /* px either way: a release within this of the down point (and no drag) is a tap */
 #define DRAG_START 5       /* px along the carousel, and no more across, start a drag (counted from there); tune on the device */
@@ -534,10 +557,11 @@
 /* Now Playing's More dialog (patch/playmore.c, docs/modules/playmore.md): ui/dialog/playmore_dialog.bin is a 320 px wide
  * sheet pinned at y 130 (the stock init, @0x479d10, and its to-background handler @0x4789f0) holding list_view playmore_listview >
  * scroll_view playmore_scrollview (310 px, the scroll bar scroll_bar_m beside it, 10 px) > list_item rows, PM_ROW_H (50, the
- * list_view's item_height) high each; the asset adds the hidden rows pod_more and pod_back. The payload shows PM_PAGE_N rows
- * at a time and puts the sheet on the bottom of the 480 px screen (the stock 130 + 350 ends there too). */
+ * list_view's item_height) high each; the asset adds the hidden rows pod_more, pod_back and pod_tape. The payload shows PM_PAGE_N rows (page 1) or PM_PAGE2_N
+ * (page 2) at a time and puts the sheet, as high as they are, on the bottom of the 480 px screen (the stock 130 + 350 ends there too). */
 #define PM_ROW_H 50
-#define PM_PAGE_N 4
+#define PM_PAGE_N 5               /* page 1's rows (Look up album, Look up artist, Add to playlist, Cassette Mode, More): the sheet is that high (PM_ROW_H x) */
+#define PM_PAGE2_N 4              /* page 2's rows (the back header, Speed, A-B repeat, Delete) */
 #define PM_SCREEN_H 480
 #define PM_DIALOG_W 320
 #define PM_SV_W 310
@@ -617,6 +641,7 @@
 #define SG_PILL_X1 149
 #define SG_BAR_PILL_W 145        /* the select bar's pills (Add to Playlist needs the room; the bar is below the rail, whose touch column ends at the bar's top) */
 #define SG_BAR_PILL_X1 165
+#define PL_BAR_PILL_W 300        /* the Playlists page's select bar has the one pill, Delete, across the bar (x SG_PILL_X0, a 10 px margin each side) */
 #define SG_PILL_R 20
 #define SG_PILL_GLYPH 16
 #define SG_PILL_GAP 8
@@ -648,6 +673,17 @@
 #define SG_BUILD_MOVE 32
 #define SG_MORE_MS 16
 #define SG_SORT_ROWS 5
+#define PH_COVER 160            /* a playlist's header on the Songs page (docs/modules/songs.md "A playlist's header"): the 2 x 2 mosaic of its albums, centred, the album page's cover (160 px, 10 px corners) */
+#define PH_COVER_X 80
+#define PH_COVER_Y 8
+#define PH_COVER_R 10
+#define PH_NAME_X 17            /* the name, 22 px white, centred in 286 px (the album page's title label) */
+#define PH_NAME_W 286
+#define PH_NAME_Y 182           /* 14 px under the cover */
+#define PH_NAME_H 22
+#define PH_PILL_Y 220           /* the Play / Shuffle pills, 16 px under the name's box (no count line: the count is the list's footer); the rows start SG_TOP - SG_PILL_Y - SG_PILL_H = 12 px under them */
+#define PH_TOP 272              /* PH_PILL_Y + SG_PILL_H + 12: where the rows start (SG_TOP is 104 under the large title) */
+#define PH_COLLAPSE 204         /* the navbar shows the small title once the name's box (its bottom, y 204) has scrolled away */
 #define SG_FOOT_H 52            /* the song count under the last row ("25 songs"): this much content, the text box SG_FOOT_GAP below the row, SG_FOOT_TEXT_H high, from x SG_HDR_X */
 #define SG_FOOT_GAP 14
 #define SG_FOOT_TEXT_H 20
@@ -798,3 +834,143 @@
 #define MIX_PLAYS_CAP 200
 #define MIX_ARTIST_CAP 4000
 #define MIX_ALBUMS 3
+
+/* The virtual iPod Classic page (patch/ipod.c, docs/modules/ipod.md; tools/pod_ui.py build_ipod_page and tools/mod_icons.py ipod_wheel build the asset from
+ * the same numbers). A fullscreen window (320 x 480, the status bar is not drawn): the iPod screen on top (IP_BAR_H title bar, IP_ROWS rows of IP_ROW_H), the click wheel
+ * below (a IP_WHEEL_D image at IP_WHEEL_X, IP_WHEEL_Y; the touch circle is IP_RING_R, the centre button IP_HUB_R). Colours are r | g << 8 | b << 16 words. */
+#define IP_W 320
+#define IP_H 480
+#define IP_SCREEN_H 240
+#define IP_BAR_H 24
+#define IP_ROW_H 27
+#define IP_ROWS 8                 /* (240 - 24) / 27 */
+#define IP_SPLIT_X 180            /* the main menu's list ends here; the cover pane is right of it (the iPod 6G split screen) */
+#define IP_WHEEL_X 50
+#define IP_WHEEL_Y 250
+#define IP_WHEEL_D 220
+#define IP_RING_R 110
+#define IP_HUB_R 45
+#define IP_DEAD_R 11              /* a move whose chord passes closer than this to the centre (10% of IP_RING_R) turns nothing: the angle jumps there */
+#define IP_STEP 240               /* one wheel step = 15 degrees (24 a turn), in sixteenths of a degree: THE tuning constant of the feel */
+#define IP_REVERSE 128            /* after the drag flips direction, this much reverse travel (8 degrees) is swallowed before stepping resumes */
+#define IP_LONG 16                /* a list of more rows than this accelerates; this many or fewer always move one row a step */
+#define IP_VMAX 6400              /* the instantaneous angular speed is clamped here before smoothing: 400 degrees a second, in sixteenths */
+#define IP_SMOOTH_NUM 3           /* angular speed smoothing: v += (min(instant, IP_VMAX) - v) * 3 / 20 (0.15) */
+#define IP_SMOOTH_DEN 20
+#define IP_FAST 2880              /* smoothed speed above which the tiers climb: 180 degrees a second, in sixteenths */
+#define IP_PAUSE_MS 250           /* a gap this long between two moves resets the speed and the tier */
+#define IP_TIER_MS 500            /* held above IP_FAST this long climbs one tier */
+#define IP_TAP_PX 12              /* a touch that travels less than this and turns no step is a tap */
+#define IP_ART 112                /* the Now Playing screen's picture */
+#define IP_TICK_MS 500
+#define IP_FIRST_MS 50
+#define IP_DEPTH 6
+#define IP_TEXT_X 10
+#define IP_SEL_TOP 0xf7b15fu      /* the classic blue selection: #5FB1F7 to #0C62D2, top to bottom (as r | g << 8 | b << 16) */
+#define IP_SEL_BOT 0xd2620cu
+#define IP_BAR_TOP 0xf7f5f4u      /* the title bar: #F4F5F7 to #B4B8C0 */
+#define IP_BAR_BOT 0xc0b8b4u
+#define IP_BODY 0xcec9c6u         /* the window's colour behind the wheel: #C6C9CE */
+#define IP_PANE 0xf5f3f2u         /* the cover pane: #F2F3F5 */
+#define IP_NP_ART_X 12
+#define IP_NP_ART_Y 36
+#define IP_NP_TEXT_X 136
+#define IP_NP_BAR_Y 188
+#define IP_NP_BAR_H 10
+/* The main menu's cover pane, q2-pod's Split Home pan (patch/ipod.c, docs/modules/ipod.md "The cover pane"): the pane is right of the 1 px hairline at IP_SPLIT_X, under the title bar.
+ * One cover, scaled once to IP_PANE_ART (the pane's height zoomed 110%, q2-pod DRIFT_ZOOM_PCT), is copied 1:1 into it: each axis a linear ping-pong across the zoom's margin
+ * (IP_PANE_R px), in whole pixels, so nothing is resampled while it moves. q2-pod's DRIFT_* values; ticks are IP_DRIFT_MS long. */
+#define IP_PANE_X 181             /* IP_SPLIT_X + 1 */
+#define IP_PANE_W 139             /* 320 - IP_PANE_X */
+#define IP_PANE_H 216             /* IP_SCREEN_H - IP_BAR_H */
+#define IP_PANE_ART 238           /* the cover's bitmap, square: IP_PANE_H * 110 / 100, rounded up */
+#define IP_PANE_R 22              /* IP_PANE_ART - IP_PANE_H: the pan's range on each axis */
+#define IP_PANE_TRIES 48          /* random albums looked at (one cache file test each) for the cover shown while nothing with a cached cover plays */
+#define IP_DRIFT_MS 100           /* the page timer's interval while the cover pans on the main menu (IP_TICK_MS otherwise) */
+#define IP_DRIFT_X_MS 20000       /* one sweep across the range, x and y (2 * X * Y fits 32 bits) */
+#define IP_DRIFT_Y_MS 26000
+#define IP_DRIFT_MAX_MS 250       /* a step is capped at this, so a stalled loop never jumps */
+#define IP_DRIFT_LOOK 5           /* while the pan ticks, the clock / battery / track look runs every this many ticks (0.5 s) */
+
+/* Podcasts (patch/pcmodel.c, patch/podcasts.c, docs/modules/podcasts.md). Files the user copies to /mnt/mmc/Podcasts/<Show>/; the episode model, the resume ring and the speeds
+ * are pcmodel.c, the page is podcasts.c. pc_ep_t / pc_show_t are the model's records (test/pod/podcasts.py reads them by these offsets; pcmodel.c asserts the sizes). */
+#define PC_FILE 128               /* a file or folder name, the NUL included (a longer name is skipped: it would not fit the path buffers) */
+#define PC_TITLE 96               /* a title, UTF-8 bytes with the NUL (cut before a continuation byte) */
+#define PC_URL 160                /* a feed or image url of the show file (kept for the subscribe phase; not used by P0) */
+#define PC_MAX_EPS 300            /* episodes of one show the model holds (newest kept) */
+#define PC_MAX_SHOWS 40           /* shows the page lists */
+#define PC_EP_SIZE 248            /* pc_ep_t: file[PC_FILE] title[PC_TITLE] guid pub dur length hash state */
+#define PC_EP_TITLE 128
+#define PC_EP_GUID 224
+#define PC_EP_PUB 228
+#define PC_EP_DUR 232
+#define PC_EP_LENGTH 236
+#define PC_EP_HASH 240
+#define PC_EP_STATE 244
+#define PC_LOCAL 0                /* pc_ep_t.state: the file is on the card */
+#define PC_PART 1                 /* a .part file only (a download under way or cut off) */
+#define PC_REMOTE 2               /* metadata only: not downloaded */
+#define PC_SHOW_SIZE 684          /* pc_show_t: dir[PC_FILE] title[PC_TITLE] cover[PC_FILE] feed[PC_URL] image[PC_URL] count hash fresh */
+#define PC_SH_TITLE 128
+#define PC_SH_COVER 224
+#define PC_SH_FEED 352
+#define PC_SH_IMAGE 512
+#define PC_SH_COUNT 672
+#define PC_SH_HASH 676
+#define PC_SH_NEW 680             /* episodes with no saved place and not played (the dot count), set by pc_load_show_counts */
+#define PC_RING_SLOTS 512         /* places kept (q2-pod's ring size); a slot is 16 bytes: hash, pos, len, flags */
+#define PC_SLOT_SIZE 16
+#define PC_RING_HEAD 8            /* "PCR1" and the slot count */
+#define PC_SPEED_SLOTS 64         /* per-show speed modes: 8 bytes each (show hash, mode), after "PCS1" and the count */
+#define PC_EDGE_S 30              /* within this many seconds of either end a place is forgotten (q2-pod RESUME_EDGE_S): near the start nothing is saved, near the end the episode is played */
+#define PC_SAVE_MS 30000          /* the ring is written at most this often while an episode plays (also at a track change, a pause and the page's own actions) */
+#define PC_SEEK_MAX 5             /* a saved place is jumped to only while the episode has played less than this (q2-pod RESUME_START_S) */
+#define PC_SEEK_WAIT_MS 15000     /* a seek that has not happened this long after the episode started is dropped */
+#define PC_COVER_MAX_PX 2100000   /* a cover picture is decoded only when width * height is at most this (the stock loader holds the whole bitmap) */
+#define PC_ROW_H 64               /* the page's rows (LIST_ROW_H) */
+#define PC_HDR_H 132              /* the Show level's header: the cover, the name, the count, the speed */
+#define PC_HDR_ART 96
+#define PC_TILES 44               /* text / cover tiles: every show (PC_MAX_SHOWS) and a few spare */
+#define PC_DOT 12                 /* the unplayed dot's bitmap, square */
+#define PC_SPEEDS 4               /* playspeed_mode 0..3: 1x, 1.25x, 1.5x, 2x (stock "Multiple Speed", images p_1_25 / p_1_5 / p_2) */
+
+/* The Tape page (patch/tape.c, docs/modules/tape.md; tools/tape_art.py draws the images from the same numbers, test/pod/tape.py checks them). The page is LANDSCAPE, 480 x 320: the
+ * framebuffer is the portrait 320 x 480 and holds the picture turned 90 degrees clockwise, so landscape (x, y) is the framebuffer's row x, column 319 - y. Everything below is in
+ * landscape pixels. Colours are r | g << 8 | b << 16 words (alpha ff added by the code). */
+#define TP_W 480                  /* landscape width = framebuffer rows */
+#define TP_H 320                  /* landscape height = framebuffer columns */
+#define TP_TOP_X 100              /* tape_top's rectangle (landscape): the holes with their rings, the clear window; turned it is 74 columns x 280 rows */
+#define TP_TOP_Y 110
+#define TP_TOP_W 280
+#define TP_TOP_H 74
+#define TP_REEL_X0 132            /* the reels' centres (landscape, on a pixel boundary): supply, take-up, and their y */
+#define TP_REEL_X1 348
+#define TP_REEL_Y 147
+#define TP_HOLE_R 28
+#define TP_HUB_R 14
+#define TP_HUB_PX 30              /* a hub sprite's cell in tape_hubs: 24 stacked, 5 degrees apart (the ring has 6 teeth, the drive 3 spokes: the picture repeats every 120 degrees) */
+#define TP_SPRITES 24
+#define TP_PACK_MIN 16            /* the tape pack's radius on an empty and on a full reel; r_supply^2 + r_takeup^2 is constant (the tape's area) */
+#define TP_PACK_MAX 66
+#define TP_CLEAR_X0 180           /* the clear window (x0, y0 inclusive, x1, y1 exclusive) and its corner radius */
+#define TP_CLEAR_Y0 112
+#define TP_CLEAR_X1 300
+#define TP_CLEAR_Y1 182
+#define TP_CLEAR_R 4
+#define TP_MARK_PX 26             /* a printed mark's cell in tape_marks (play, pause, repeat stacked) and where it is on the band: the cells' top left */
+#define TP_PLAY_X 410
+#define TP_PLAY_Y 115
+#define TP_REPEAT_X 410
+#define TP_REPEAT_Y 153
+#define TP_SPIN 76800             /* the reels' speed: angular speed x pack radius, in 1/16 degree x px a second (300 degrees a second at the empty pack's 16 px) */
+#define TP_PLAY_MS 70             /* the page timer's interval while playing (the reels turn) and paused */
+#define TP_IDLE_MS 500
+#define TP_FIRST_MS 50
+#define TP_TAP_PX 14              /* a touch that travels less than this (landscape pixels) is a tap */
+#define TP_CLOSE_X0 0             /* the close button, the top left screw as the user sees it (landscape): a 50 x 50 touch area around it, x1 / y1 exclusive */
+#define TP_CLOSE_Y0 0
+#define TP_CLOSE_X1 50
+#define TP_CLOSE_Y1 50
+#define TP_SCREW_X 11             /* its pressed sprite tape_screw (MARK_PX square): its top left on the screen */
+#define TP_SCREW_Y 12
+#define TP_LUT_N 18500            /* the distance table: sqrt(d2h) for d2h = (2 dx + 1)^2 + (2 dy + 1)^2 up to this, in 1/16 px */

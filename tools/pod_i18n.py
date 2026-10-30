@@ -24,6 +24,7 @@ ALL_TABLES = sorted(LOCALES + list(TWINS))
 
 # Stock keys used as they are: key -> the English text of en_US (the test compares it with the shipped table).
 STOCK = {
+    'cdrippersettings': 'Settings',   # the Pod's Settings row and level title (patch/ipod.c)
     'hr': 'Hi-Res',
     'sset_updatemusic': 'Update Library',
     'cdripper': 'CD Ripper',
@@ -43,6 +44,9 @@ STOCK = {
     'msg_delsongfailed': 'Failed To Delete Song',
     'msg_delsongsuccess': 'Song Deleted',
     'msg_addfailed': 'Adding Failed',
+    'msg_delplaylist': 'Delete Playlist?',     # the Playlists page's select mode: the stock delete handler's confirm dialog and message boxes (@0x53dbcc)
+    'msg_delplaylistfailed': 'Failed To Delete Playlist',
+    'msg_delplaylistsuccess': 'Playlist Deleted',
 }
 
 _L = LOCALES[1:]    # the order of the translations below (English is the key)
@@ -96,7 +100,7 @@ TEXT = dict([
     _t('Playback', '播放', '播放', '再生', '재생', 'Lecture', 'Wiedergabe',
        'Reproducción', 'Riproduzione', 'การเล่น', 'Odtwarzanie', 'Воспроизведение', 'Відтворення'),
     _t('System Settings', '系统设置', '系統設定', 'システム設定', '시스템 설정', 'Réglages système', 'Systemeinstellungen',
-       'Ajustes del sistema', 'Impostazioni di sistema', 'การตั้งค่าระบบ', 'Ustawienia systemowe', 'Системные настройки', 'Системні налаштування'),
+       'Ajustes del sistema', 'Impostazioni di sistema', 'การตั้งค่าระบบ', 'Ustawienia systemowe', 'Системные настройки', 'Налаштування системи'),
     _t('Shanling Home', '山灵主页', '山靈主頁', 'Shanling ホーム', 'Shanling 홈', 'Accueil Shanling', 'Shanling-Start',
        'Inicio Shanling', 'Home Shanling', 'หน้าหลัก Shanling', 'Ekran Shanling', 'Экран Shanling', 'Екран Shanling'),
     _t('Favorites', '我的最爱', '我的最愛', 'お気に入り', '즐겨찾기', 'Favoris', 'Favoriten',
@@ -175,6 +179,42 @@ TEXT = dict([
     # the Songs page's line for an empty list (Favourites, a playlist ...; the library's empty line is "Update Local Music first")
     _t('No songs', '没有歌曲', '沒有歌曲', '曲がありません', '노래 없음', 'Aucun titre', 'Keine Titel',
        'Sin canciones', 'Nessun brano', 'ไม่มีเพลง', 'Brak utworów', 'Нет песен', 'Немає пісень'),
+    # the iPod page's Now Playing screen (patch/ipod.c): the line for an empty player (the track's place in the queue is the neutral "3 / 12": the table format allows one %d a text)
+    _t('Not Playing', '未在播放', '未在播放', '再生していません', '재생 중이 아님', 'Aucune lecture', 'Keine Wiedergabe',
+       'Sin reproducción', 'Nessuna riproduzione', 'ไม่ได้เล่น', 'Nie odtwarza', 'Не воспроизводится', 'Не відтворюється'),
+    # the iPod page's Settings list (patch/ipod.c): the labels and the values that cycle (Shuffle: Off / Songs; Repeat: Off / One / All; its last row is the shared Customize key)
+    _t('Repeat', '重复', '重複', 'リピート', '반복', 'Répéter', 'Wiederholen',
+       'Repetir', 'Ripeti', 'เล่นซ้ำ', 'Powtarzaj', 'Повтор', 'Повтор'),
+    _t('Off', '关', '關', 'オフ', '끔', 'Désactivé', 'Aus',
+       'Desactivado', 'Disattivato', 'ปิด', 'Wył.', 'Выкл.', 'Вимк.'),
+    _t('One', '单曲', '單曲', '1曲', '한 곡', 'Un titre', 'Einzeln',
+       'Una', 'Uno', 'เพลงเดียว', 'Jeden', 'Один', 'Один'),
+    _t('All', '全部', '全部', 'すべて', '전체', 'Tous', 'Alle',
+       'Todo', 'Tutti', 'ทั้งหมด', 'Wszystkie', 'Все', 'Усі'),
+    _t('About', '关于', '關於', '情報', '정보', 'À propos', 'Info',
+       'Acerca de', 'Info', 'เกี่ยวกับ', 'Informacje', 'О плеере', 'Про плеєр'),
+    # Podcasts (patch/podcasts.c, docs/modules/podcasts.md): the Extras item and the page's title, the two empty lines, the counts, the grey line of an episode
+    _t('Podcasts', '播客', '播客', 'ポッドキャスト', '팟캐스트', 'Podcasts', 'Podcasts',
+       'Pódcast', 'Podcast', 'พอดแคสต์', 'Podcasty', 'Подкасты', 'Подкасти'),
+    _t('No podcasts. Copy a folder for each show into Podcasts on the card.',
+       '没有播客。请在存储卡的 Podcasts 文件夹中为每个节目放一个文件夹。', '沒有播客。請在記憶卡的 Podcasts 資料夾中為每個節目放一個資料夾。',
+       'ポッドキャストがありません。カードの Podcasts フォルダに番組ごとのフォルダをコピーしてください。', '팟캐스트가 없습니다. 카드의 Podcasts 폴더에 프로그램마다 폴더를 복사하세요.',
+       'Aucun podcast. Copiez un dossier par émission dans Podcasts sur la carte.', 'Keine Podcasts. Kopiere für jede Sendung einen Ordner in Podcasts auf der Karte.',
+       'Sin pódcast. Copia una carpeta por programa en Podcasts de la tarjeta.', 'Nessun podcast. Copia una cartella per ogni programma in Podcasts sulla scheda.',
+       'ไม่มีพอดแคสต์ คัดลอกโฟลเดอร์ของแต่ละรายการไปที่ Podcasts บนการ์ด', 'Brak podcastów. Skopiuj folder dla każdego programu do Podcasts na karcie.',
+       'Нет подкастов. Скопируйте по папке на каждое шоу в Podcasts на карте.', 'Немає подкастів. Скопіюйте по теці для кожного шоу в Podcasts на картці.'),
+    _t('No downloaded episodes', '没有已下载的节目', '沒有已下載的節目', 'ダウンロード済みのエピソードがありません', '다운로드한 에피소드가 없습니다', 'Aucun épisode téléchargé', 'Keine geladenen Folgen',
+       'Sin episodios descargados', 'Nessun episodio scaricato', 'ไม่มีตอนที่ดาวน์โหลด', 'Brak pobranych odcinków', 'Нет загруженных выпусков', 'Немає завантажених випусків'),
+    _t('%d episode', '%d 个节目', '%d 個節目', '%d エピソード', '에피소드 %d개', '%d épisode', '%d Folge',
+       '%d episodio', '%d episodio', '%d ตอน', 'Odcinki: %d', 'Выпусков: %d', 'Випусків: %d'),
+    _t('%d episodes', '%d 个节目', '%d 個節目', '%d エピソード', '에피소드 %d개', '%d épisodes', '%d Folgen',
+       '%d episodios', '%d episodi', '%d ตอน', 'Odcinki: %d', 'Выпусков: %d', 'Випусків: %d'),
+    _t('%d min left', '剩余 %d 分钟', '剩餘 %d 分鐘', '残り %d 分', '%d분 남음', '%d min restantes', 'Noch %d Min.',
+       'Quedan %d min', '%d min rimasti', 'เหลือ %d นาที', 'Zostało %d min', 'Осталось %d мин', 'Ще %d хв'),
+    _t('%d min', '%d 分钟', '%d 分鐘', '%d 分', '%d분', '%d min', '%d Min.',
+       '%d min', '%d min', '%d นาที', '%d min', '%d мин', '%d хв'),
+    _t('Played', '已播放', '已播放', '再生済み', '재생함', 'Lu', 'Gehört',
+       'Reproducido', 'Riprodotto', 'เล่นแล้ว', 'Odtworzono', 'Прослушано', 'Прослухано'),
     # Now Playing's info page labels (patch/nowplaying.c np_info): stock's "Genres" (the plural tab name) and "Era"
     # (a decade in several tables, "age" in Korean) become "Genre: ..." and "Year: ..."
     _t('Genre', '风格', '風格', 'ジャンル', '장르', 'Genre', 'Genre',
@@ -200,6 +240,18 @@ TEXT = dict([
        'Más', 'Altro', 'เพิ่มเติม', 'Więcej', 'Ещё', 'Ще'),
     _t('Speed', '倍速', '倍速', '再生速度', '재생 속도', 'Vitesse', 'Tempo',
        'Velocidad', 'Velocità', 'ความเร็ว', 'Prędkość', 'Скорость', 'Швидкість'),
+    # Now Playing's More sheet: the row that opens the landscape cassette page (patch/tape.c, docs/modules/tape.md); the page's own name is the same text
+    _t('Cassette Mode', '磁带模式', '錄音帶模式', 'カセットモード', '카세트 모드', 'Mode cassette', 'Kassettenmodus',
+       'Modo casete', 'Modalità cassetta', 'โหมดเทป', 'Tryb kasety', 'Режим кассеты', 'Режим касети'),
+    # Customize > Cassette Mode: the theme row and its three values
+    _t('Cassette Theme', '磁带主题', '錄音帶主題', 'カセットテーマ', '카세트 테마', 'Thème cassette', 'Kassettendesign',
+       'Tema del casete', 'Tema cassetta', 'ธีมเทป', 'Motyw kasety', 'Тема кассеты', 'Тема касети'),
+    _t('Normal', '标准', '標準', '標準', '기본', 'Normal', 'Normal',
+       'Normal', 'Normale', 'ปกติ', 'Normalny', 'Обычная', 'Звичайна'),
+    _t('Chrome', '铬色', '鉻色', 'クローム', '크롬', 'Chrome', 'Chrom',
+       'Cromo', 'Cromo', 'โครเมียม', 'Chrom', 'Хром', 'Хром'),
+    _t('Metal', '金属', '金屬', 'メタル', '메탈', 'Métal', 'Metall',
+       'Metal', 'Metallo', 'โลหะ', 'Metal', 'Металл', 'Метал'),
     # The Songs page (patch/songs.c): the Play pill (Shuffle is above), the select mode's navbar ("N Selected", the Select All text button) and its
     # Delete pill. The count goes where %d is (the payload puts the number there). Add to playlist is the stock key (STOCK).
     _t('Play', '播放', '播放', '再生', '재생', 'Lire', 'Abspielen',
@@ -254,6 +306,30 @@ TEXT = dict([
     _t('Tools', '工具', '工具', 'ツール', '도구', 'Outils', 'Werkzeuge',
        'Herramientas', 'Strumenti', 'เครื่องมือ', 'Narzędzia', 'Инструменты', 'Інструменти'),
 ])
+# The Podcasts page's dates (patch/pcmodel.c pc_when, docs/modules/podcasts.md "The date"): Apple Podcasts' "Just now", "4m ago", "4h ago", "4d ago", "Oct 23", "Oct 23, 2025". A month
+# text has its one %d (the day) where the language puts it; the year follows as ", %d". These keys do not start with %d, so DATE_KEYS lets the %d test of the tables know them.
+_MONTH_KEYS = ('Jan %d', 'Feb %d', 'Mar %d', 'Apr %d', 'May %d', 'Jun %d', 'Jul %d', 'Aug %d', 'Sep %d', 'Oct %d', 'Nov %d', 'Dec %d')
+_MONTHS = {   # locale -> the twelve month texts
+    'zh_CN': [f'{m}月%d日' for m in range(1, 13)], 'zh_HK': [f'{m}月%d日' for m in range(1, 13)], 'ja_JP': [f'{m}月%d日' for m in range(1, 13)],
+    'ko_KR': [f'{m}월 %d일' for m in range(1, 13)],
+    'fr_FR': [f'{x} %d' for x in ('janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.')],
+    'ge_DE': [f'%d. {x}' for x in ('Jan.', 'Feb.', 'März', 'Apr.', 'Mai', 'Juni', 'Juli', 'Aug.', 'Sept.', 'Okt.', 'Nov.', 'Dez.')],
+    'sp_ES': [f'%d {x}' for x in ('ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic')],
+    'it_IT': [f'%d {x}' for x in ('gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic')],
+    'th_TH': [f'%d {x}' for x in ('ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.')],
+    'po_PL': [f'%d {x}' for x in ('sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru')],
+    'ru_RU': [f'%d {x}' for x in ('янв.', 'февр.', 'мар.', 'апр.', 'мая', 'июн.', 'июл.', 'авг.', 'сент.', 'окт.', 'нояб.', 'дек.')],
+    'uk_UK': [f'%d {x}' for x in ('січ.', 'лют.', 'бер.', 'квіт.', 'трав.', 'черв.', 'лип.', 'серп.', 'вер.', 'жовт.', 'лист.', 'груд.')],
+}
+TEXT.update(_t(k, *[_MONTHS[loc][i] for loc in _L]) for i, k in enumerate(_MONTH_KEYS))
+TEXT.update([
+    _t(', %d', '，%d年', '，%d年', ', %d年', ', %d년', ', %d', ', %d', ', %d', ', %d', ', %d', ', %d', ', %d', ', %d'),
+    _t('Just now', '刚刚', '剛剛', 'たった今', '방금', 'À l’instant', 'Gerade eben', 'Ahora mismo', 'Adesso', 'เมื่อสักครู่', 'Przed chwilą', 'Только что', 'Щойно'),
+    _t('%dm ago', '%d分钟前', '%d分鐘前', '%d分前', '%d분 전', 'il y a %d min', 'vor %d Min.', 'hace %d min', '%d min fa', '%d นาทีที่แล้ว', '%d min temu', '%d мин назад', '%d хв тому'),
+    _t('%dh ago', '%d小时前', '%d小時前', '%d時間前', '%d시간 전', 'il y a %d h', 'vor %d Std.', 'hace %d h', '%d h fa', '%d ชั่วโมงที่แล้ว', '%d godz. temu', '%d ч назад', '%d год тому'),
+    _t('%dd ago', '%d天前', '%d天前', '%d日前', '%d일 전', 'il y a %d j', 'vor %d T.', 'hace %d d', '%d g fa', '%d วันที่แล้ว', '%d dn. temu', '%d дн. назад', '%d дн. тому'),
+])
+DATE_KEYS = _MONTH_KEYS + (', %d', '%dm ago', '%dh ago', '%dd ago')   # keys with a %d that do not start with it (the tables test, test/pod/i18n.py)
 DPAGE_KEYS = ('Updated today', 'Updated yesterday', 'Updated %s', 'Play', 'Songs you love and some to rediscover, made fresh every day.')   # the Daily Mix page's keys
 DAILY_KEYS =('Made for You', 'Daily Mix', 'Regenerate Daily Mix', '%s and more', '%s, %s')     # the card's keys (tools/pod_dailymix.py TEXT)
 
@@ -265,7 +341,7 @@ def english(key):
     return TEXT[key]['en_US'] if key in TEXT else STOCK[key]
 
 
-BRANDS = ('M1+ Music', 'Tidal')     # shown as they are, no key
+BRANDS = ('M1+ Music', 'Tidal', 'Pod')     # shown as they are, no key
 
 
 def key_for(english):

@@ -1488,7 +1488,32 @@ def background_build_tests(ctx):
            'cancelled while waiting for the parser: unlocked, nothing extracted, no marker written')
 
 
-SECTIONS = [layout_tests, taps_list_tests, toggle_tests, stock_widget_tests, background_build_tests]   # tools/check.py runs each as its own task
+def foreground_loader_tests(ctx):
+    expect = ctx.expect
+    m = albums_machine(); open_grid(m)
+    m.fire(O['EVT_WINDOW_TO_BG'], m.window)
+    expect(not any(c[0] in ('pthread_join', 'pthread_cancel') for c in m.calls), 'background does not join or cancel the cache worker')
+    calls = tick(m)
+    expect(not any(c[0] in ('widget_load_image', 'widget_invalidate_force', 'timer_add') for c in calls),
+           'a stray loader callback in the background does no work and does not rearm')
+    calls = fired(m, 'al_on_fg')
+    expect(armed(calls), 'foreground resumes the missing tile loader')
+    calls = tick(m)
+    expect(any(c[0] == 'widget_load_image' for c in calls), 'the resumed loader decodes a tile')
+    for ev in ('EVT_WINDOW_TO_FG', 'EVT_WINDOW_TO_BG'):
+        m = albums_machine(); m.widget_on_fail = frozenset({O[ev]}); open_grid(m)
+        calls = tick(m)
+        expect(any(c[0] == 'widget_load_image' for c in calls), f'{ev} registration failure does not strand the loader')
+        if ev == 'EVT_WINDOW_TO_FG':
+            expect(m.bound[(m.window, O['EVT_WINDOW_TO_BG'])][0] == PSYMS['al_on_abort'], 'fallback only clears presses')
+    m = albums_machine(); m.widget_on_fail = frozenset({O['EVT_WINDOW_TO_FG']}); open_grid(m)
+    expect(m.bound.get((m.window, O['EVT_WINDOW_TO_BG']), (0,))[0] == PSYMS['al_on_abort'], 'foreground registration failure still binds the press abort')
+    gesture(m, [('down', 40, 40, 1000)]); m.fire(O['EVT_WINDOW_TO_BG'], m.window)
+    calls = gesture(m, [('up', 40, 40, 1080)])
+    expect(not any(c[0] == 'navigator_to_with_context' for c in calls), 'fallback background abort clears the pending press')
+    expect(any(c[0] == 'widget_load_image' for c in tick(m)), 'fallback background leaves loader active')
+
+SECTIONS = [layout_tests, taps_list_tests, toggle_tests, stock_widget_tests, background_build_tests, foreground_loader_tests]   # tools/check.py runs each as its own task
 
 
 def run(ctx):

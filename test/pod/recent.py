@@ -8,6 +8,7 @@ switch and every failure falling back to the plain menu."""
 import os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 import pod_recent
+EX = len(pod_pages.ITEMS)   # the Extras row's index, the last of the menu's rows
 
 
 pulldown, minibar, nowplaying = sibling('pulldown'), sibling('minibar'), sibling('nowplaying')
@@ -582,13 +583,13 @@ def file_and_layout_tests(ctx):
     def layout_errors(m, shown, bar, shelf=True, na=3, extras=True):
         """What is wrong with the page ([]: nothing): the shown rows in order from y 0, virtual_h, the children stacked the shown rows,
         the shelf, the hidden rows, the spacer last, the shelf right below the last shown row, the spacer row after the shelf."""
-        want = shown + ([18] if extras else []) + [19]   # Customize (18) only when the saved list shows it; Extras (19) always, last
+        want = shown + ([18] if extras else []) + [EX]   # Customize (18) only when the saved list shows it; Extras always, last
         n, errs = len(want), []
         vh = n * ROW_H + (shh(na) if shelf else 0) + (MB_PAD if bar else 0)
         if not (m.order() == want and m.row_ys() == {i: p * ROW_H for p, i in enumerate(want)} and m.vh() == vh):
             errs.append(f'rows {m.order()}, virtual_h {m.vh()} (want {want} from y 0, {vh})')
         st = m.stack()
-        if not (st[:n] == want and st[n] == 'shelf' and st[-1] == 'pad' and sorted(st[n + 1:-1]) == [i for i in range(20) if i not in want]):
+        if not (st[:n] == want and st[n] == 'shelf' and st[-1] == 'pad' and sorted(st[n + 1:-1]) == [i for i in range(EX + 1) if i not in want]):
             errs.append(f'stacked {st}')
         if m.y_of(m.shelf) != n * ROW_H: errs.append(f'the shelf at y {m.y_of(m.shelf)}')
         if bar and shelf and not (m.y_of(m.pad) == n * ROW_H + shh(na) and m.is_visible(m.pad)): errs.append(f'the spacer at y {m.y_of(m.pad)}')
@@ -621,7 +622,7 @@ def file_and_layout_tests(ctx):
     painted = m.paint_list(d=0)
     expect('pod_shelf' in painted and all(f'pod_row{i}' in painted for i in (1, 2)), f'the shelf (its top is in view) and the first rows are painted ({painted})')
     painted = m.paint_list(d=300)
-    expect('pod_shelf' in painted and 'pod_row1' not in painted and 'pod_row19' in painted, f'scrolled 300 px the shelf and the last rows are painted, the first row is not ({painted})')
+    expect('pod_shelf' in painted and 'pod_row1' not in painted and f'pod_row{EX}' in painted, f'scrolled 300 px the shelf and the last rows are painted, the first row is not ({painted})')
     # scrolled to the end with the mini bar up: the artist line's box ends MB_GAP above the pill, as the last row did
     m = ST(ents(3), bar=True)
     list_y_of_shelf_end = m.y_of(m.shelf) + SH_H - m.yoff()
@@ -667,7 +668,7 @@ def file_and_layout_tests(ctx):
         p = m.target(x, sh_y + y)
         expect(p[-1] == 'pod_shelf', f'{what}: still the shelf (its handler decides there is no tile) ({p})')
     p = m.target(160, sh_y - 1)
-    expect(p[-1] == 'pod_row19', f'the pixel row above the shelf is the Extras row ({p})')
+    expect(p[-1] == f'pod_row{EX}', f'the pixel row above the shelf is the Extras row ({p})')
     p = m.target(160, sh_y - ROW_H - 1)
     expect(p[-1] == 'pod_row18', f'and the row above it (Customize) ({p})')
     p = m.target(160, 5)
@@ -689,7 +690,7 @@ def file_and_layout_tests(ctx):
     p = m.target(tile_x(1) + 48, sh_y + 20)
     expect(p[-1] == 'pod_shelf', f'scrolled 100 px: the shelf\'s top is at window y {sh_y} and its header is the shelf\'s ({p})')
     p = m.target(160, sh_y - 5)
-    expect(p[-1] == 'pod_row19', f'with the Extras row above it ({p})')
+    expect(p[-1] == f'pod_row{EX}', f'with the Extras row above it ({p})')
     # the mini bar's pill still takes its area (it is a later sibling of the list); the shelf partly under it (list at the top) does not reach it
     m = covered(ST(ents(3), bar=True, end=False))
     p = m.target(160, O['MB_Y'] + O['MB_H'] // 2)
@@ -856,7 +857,7 @@ def grid_and_tap_tests(ctx):
         expect(m.opened() == [], f'a tap on {what} opens nothing')
     expect(not [c for c in m.calls_all if c[0] == 'loadLocalClassList'], 'and does not even load the album list')
     m.setword(m.sv + 0x84, 300); m.tap(cx(0), sy(-20))
-    expect(m.opened() == [] and ('pod_row19', EVT_CLICK) in m.fired, f'a tap just above the shelf is the Extras row\'s ({m.fired})')
+    expect(m.opened() == [] and (f'pod_row{EX}', EVT_CLICK) in m.fired, f'a tap just above the shelf is the Extras row\'s ({m.fired})')
     m = covered(ST(ents(2))); library(m); m.tap(tile_x(1) + SH_COVER - 1, sy(SH_TOP + 48))
     expect(m.opened() != [], 'the last pixel column of a cover is the tile\'s')
     m.tap(tile_x(1) + SH_COVER, sy(SH_TOP + 48)); n_ = len(m.opened())
@@ -1142,7 +1143,60 @@ def refresh_and_fallback_tests(ctx):
     m.call(PSYMS['m1plus_home_init'], a0=HOME_WIN, a1=0x55, count=3000000); m.top_main = HOME_WIN; m.timers = []; m.call(PSYMS['hm_open'], count=6000000)
     expect(('widget_set_visible', m.widgets['pod_shelf'], 1) not in m.calls and (PSYMS['rc_first'], O['RC_FIRST_MS']) in m.timers, 'nothing recorded yet: the page is set up, the shelf stays hidden')
 
+    # Both Home timers share the real shelf and its pending history.
+    m = home_machine(False); m.call(PSYMS['m1plus_home_init'], a0=HOME_WIN, a1=0x55, count=3000000)
+    m.top_main = HOME_WIN; m.call(PSYMS['hm_open'], count=6000000); m.screen(False)
+    m.track(album='Dark A'); m.call(PSYMS['mb_first'], count=40000000)
+    m.track(album='Dark B', path='/mnt/mmc/b/1.flac'); m.call(PSYMS['mb_tick'], count=40000000)
+    m.call(PSYMS['rc_first'], count=40000000)
+    expect([e[0] for e in pod_recent.parse(m.fs[RECENT])] == [pod_recent.identity('Dark B'), pod_recent.identity('Dark A')], 'both Home timers retain dark album transitions')
+    expect(not m.props.get((m.widgets['pod_shelf'], 'visible')), 'the shelf remains unchanged while dark')
+    m.screen(True); m.call(PSYMS['mb_tick'], count=40000000)
+    expect(m.props.get((m.widgets['pod_shelf'], 'visible')) == 1, 'minibar wake actually shows the refreshed shelf')
+    e = m.alloc(0x40); m.u.mem_write(e, bytes(0x40)); m.setword(e + O['EVENT_PAINT_CANVAS'], 0x22220000)
+    m.texts.clear(); m.call(PSYMS['rc_on_paint'], a0=0, a1=e, count=40000000)
+    expect([s for s, _ in m.texts if s in ('Dark A', 'Dark B')] == ['Dark B', 'Dark A'], 'the shelf paints both dark transitions in order')
+    m.call(PSYMS['mb_tick'], count=40000000)
+    expect(not any(c[0] == 'widget_invalidate_force' and c[1] == m.widgets['pod_shelf'] for c in m.calls), 'a second lit tick does not refresh the shelf again')
+
     # ------------------------------------------------------------------ recording from the places that see the playing track
+    m = minibar.BM(); m.watch[PSYMS['recent_refresh']] = 'recent_refresh'; m.screen(False)
+    m.track(album='Dark A'); m.start(); m.first()
+    m.track(album='Dark B', path='/mnt/mmc/b/1.flac'); m.tick()
+    expect(('timer_modify', 0x777, 1000) in m.calls, 'dark minibar tick slows its timer')
+    m.tick(); expect(not any(c[0] == 'timer_modify' for c in m.calls), 'unchanged dark minibar interval is not modified again')
+    expect([e[0] for e in pod_recent.parse(m.fs.get(RECENT, b''))] == [pod_recent.identity('Dark B'), pod_recent.identity('Dark A')], 'minibar records both dark album transitions')
+    expect(not any(c[0].startswith('widget_') or c[0] == 'recent_refresh' for c in m.calls), 'dark minibar tick does no visual work')
+    m.screen(True); m.tick()
+    expect(('timer_modify', 0x777, 500) in m.calls, 'lit minibar tick restores its timer')
+    expect('recent_refresh' in m.names(), 'first lit minibar tick refreshes the shelf')
+    m.screen(False); m.timer_modify_fail = True; m.tick(); m.tick()
+    expect(('timer_modify', 0x777, 1000) in m.calls, 'failed minibar retime is retried')
+    m.timer_modify_fail = False; m.tick(); m.tick()
+    expect(not any(c[0] == 'timer_modify' for c in m.calls), 'successful minibar retry is remembered')
+    m.start(); m.first(); m.tick()
+    expect(('timer_modify', 0x777, 1000) in m.calls, 'a replacement minibar retimes its fresh timer')
+    m.call(PSYMS['mb_on_destroy'], a0=minibar.WIN); m.screen(False); m.tick()
+    expect(not m.calls, 'a stray dark minibar tick after destroy does nothing')
+
+    m = covered(ST(ents(3), start=False)); m.screen(False); m.start(); m.first()
+    expect(m.timers[-1:] == [(PSYMS['rc_dark'], 1000)] and 'widget_load_image' not in m.names(), 'dark shelf uses a one-second wake check and does not decode')
+    r = m.call(PSYMS['rc_dark'], count=40000000)
+    expect(r == 0 and m.timers[-1:] == [(PSYMS['rc_dark'], 1000)] and 'widget_load_image' not in m.names(), 'each dark shelf check rearms once at one second')
+    m.screen(True); m.call(PSYMS['rc_dark'], count=40000000)
+    expect('widget_load_image' in m.names(), 'the first lit shelf check resumes decoding')
+    ended = False
+    for _ in range(10):
+        if m.tick() != O['RET_REPEAT']:
+            ended = True; break
+    expect(ended and not any(c[0] == 'timer_add' for c in m.calls), 'the resumed shelf loader terminates when covers are complete')
+    m.fire(EVT_DESTROY); m.screen(False); m.call(PSYMS['rc_dark'], count=40000000)
+    expect(not m.calls, 'a stray dark shelf check after destroy does nothing')
+    m = covered(ST(ents(3), start=False)); m.start(); m.first(); m.screen(False)
+    r = m.tick()
+    expect(r == 0 and [c for c in m.calls if c[0] == 'timer_add'] == [('timer_add', PSYMS['rc_dark'], 1000)] and 'widget_load_image' not in m.names(),
+           'a lit repeating loader entering darkness retires and arms exactly one slow check')
+
     m = minibar.BM(); m.watch[PSYMS['recent_refresh']] = 'recent_refresh'
     m.status = 2; m.track(title='Blue in Green', artist='Miles Davis', album='Kind of Blue'); m.cover('Miles Davis', 'Kind of Blue')
     m.start(); m.first()
@@ -1170,6 +1224,7 @@ def refresh_and_fallback_tests(ctx):
     m.tick()
     expect(not [c for c in m.calls if c[0] in ('open', 'write', 'rename')], 'its next tick on the same album: no file call')
     t2 = m.record(album='Homogenic', artist='Björk', path='/mnt/mmc/b/1.flac', title='Hunter', name='1.flac'); m.play([t2], 0)
+    m.screen(False)
     m.tick()
     expect([e[0] for e in pod_recent.parse(m.fs[RECENT])] == [pod_recent.identity('Homogenic'), pod_recent.identity('Kind of Blue')], 'a track of another album: recorded on the tick, in front')
     t3 = m.record(album='', artist='Björk', path='/mnt/mmc/b/2.flac', title='Untagged', name='2.flac'); m.play([t3], 0); m.tick()

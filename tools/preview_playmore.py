@@ -16,13 +16,12 @@ import awtk_ui, awtk_strings
 import preview_nowplaying as NP
 
 ROW_H, SCREEN_H, SHEET_W, SV_W = 50, 480, 320, 310
-PAGE1 = ['listitem4', 'listitem5', 'listitem2', 'pod_more']                       # Look up album, Look up artist, Add to playlist, More
+PAGE1 = ['listitem4', 'listitem5', 'listitem2', 'pod_tape', 'pod_more']           # Look up album, Look up artist, Add to playlist, Cassette Mode, More
 PAGE2 = ['pod_back', 'listitem1', 'listitem0', 'listitem6']                       # the back header, Playback speed, A-B repeat, Delete
-SHEET_Y = SCREEN_H - len(PAGE1) * ROW_H                                           # the bottom sheet: 280
 DIM_ALPHA = 130                                                                   # the asset's highlight="default(alpha=130)"
 KEYS = {'scrlabel0': 'player_abrepeat', 'scrlabel1': 'Speed', 'scrlabel2': 'batch_addplaylist', 'scrlabel3': 'player_onlinesearch',
         'scrlabel4': 'player_albuminfo', 'scrlabel5': 'player_songerinfo', 'scrlabel6': 'player_delete', 'label1_msg': 'Files below 48 kHz only',
-        'pod_more_label': 'More', 'pod_back_label': 'More'}
+        'pod_more_label': 'More', 'pod_back_label': 'More', 'pod_tape_label': 'Cassette Mode'}
 SPEED_SEL = {'img_1x': 'p_1_sel'}                                                  # 1.0X is the selected speed in the mock-up
 
 
@@ -34,10 +33,10 @@ def sheet(p, im, tree, order, pressed=None):
     """Draw the sheet for `order` (row names, top to bottom) on im (the 320 x 480 screen): the whole page dimmed (the highlighter dims the
     full screen, the sheet's own area included, then the glass lies on that), the glass image (the dialog's bg_image) on the bottom, the rows
     transparent over it (the painter draws no row fill), the hairlines and the pressed band (`pressed`: a row name) as the rows' inline styles."""
-    h = len(order) * ROW_H
+    h = len(order) * ROW_H; sy = SCREEN_H - h
     im.alpha_composite(Image.new('RGBA', (SHEET_W, SCREEN_H), (0, 0, 0, DIM_ALPHA)), (0, 0))
-    glass = p.image(tree.get('style:normal:bg_image')); assert glass and glass.size == (SHEET_W, h), 'the dialog\'s bg_image is the sheet'
-    im.alpha_composite(glass, (0, SHEET_Y))
+    glass = p.image('pm_sheet5' if len(order) == len(PAGE1) else 'pm_sheet'); assert glass and glass.size == (SHEET_W, h), 'the page\'s own glass picture (pod_glass: pm_sheet5 for five rows, pm_sheet for four), not a crop'
+    im.alpha_composite(glass, (0, sy))
     hair = tint(tree.find('listitem1').get('style:normal:border_color'))
     for pos, name in enumerate(order):
         row = tree.find(name)
@@ -47,13 +46,13 @@ def sheet(p, im, tree, order, pressed=None):
                 if c.name.startswith('img_'):
                     c.y, c.h = 8, 20
                     if c.name in SPEED_SEL: c.set('image', SPEED_SEL[c.name])
-        if name in ('pod_more', 'pod_back'):
+        if name in ('pod_more', 'pod_back', 'pod_tape'):
             row.remove('visible'); row.remove('sensitive')       # the asset starts it hidden; the payload shows it
         if name == pressed:
-            im.alpha_composite(Image.new('RGBA', (SV_W, ROW_H), tint(tree.find(name).get('style:pressed:bg_color'))), (0, SHEET_Y + pos * ROW_H))
+            im.alpha_composite(Image.new('RGBA', (SV_W, ROW_H), tint(tree.find(name).get('style:pressed:bg_color'))), (0, sy + pos * ROW_H))
         if row.get('style:normal:border') == 'top' and pos:
-            im.alpha_composite(Image.new('RGBA', (SV_W, 1), hair), (0, SHEET_Y + pos * ROW_H))     # AWTK blends a 1 px line's alpha like a fill
-        p.walk(im, row, 0, SHEET_Y, (0, SHEET_Y, SV_W, SHEET_Y + h), 0, tree)
+            im.alpha_composite(Image.new('RGBA', (SV_W, 1), hair), (0, sy + pos * ROW_H))     # AWTK blends a 1 px line's alpha like a fill
+        p.walk(im, row, 0, sy, (0, sy, SV_W, sy + h), 0, tree)
 
 
 def panel(work, theme, lang, order, pressed=None):

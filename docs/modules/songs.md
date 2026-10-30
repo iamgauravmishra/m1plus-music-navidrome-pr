@@ -2,6 +2,8 @@
 
 Not in the old section numbering (a feature added after V2.1oD). Code: `patch/songs.c` (with `patch/grid.c`, `patch/covercache.c`, `patch/shuffle.c` and `patch/scroll.h` as the Albums page uses them), the page `tools/pod_ui.py` (`build_songs_page`, `navbar(songs=True)`), the rows `tools/pod_pages.py` (`SONGS`, `ACT_SONGS`, `ACT_LIST`, `SORT_MENU`), the images `tools/mod_icons.py` (`SONGS_IMAGES`, the Songs capsule pieces), the constants `patch/offsets.inc` (`SG_*`), the preview `tools/preview_songs.py`, the test `test/pod/songs.py`. **No hook.** The menu's Songs row (`ACT_SONGS`, formerly Home id 3, the stock `allmusic_page` with class `0xf001`) opens `ui/m1plus_songs.bin`; a window that will not open falls back to the stock Songs page through the Home dispatcher (`pod_home_open(3)`), which also stays reachable from Shanling Home. The kill switch (`/mnt/mmc/m1plus-off`) disables the entry to the menu; nothing of this page runs without it.
 
+**Shared code.** The sections' labelling, the geometry of a list with headers, the header letters and the pinned header, the rail (plan, fit, paint, grab and jump, the bubble, the disc) and the title fit moved to `patch/azlist.c` (`az_*`, `docs/modules/artists.md` "Shared furniture") when the Artists, Genres and Composers page took this page's structure; the pills' centring and the select marks (`pod_centre_pill`, `pod_make_mark`, `patch/common.c`) are shared with the Playlists page's select mode; this page's `sg_*` names are thin wrappers (`sg_on_rail`, `sg_on_rail_paint`, `sg_row_y` ...) over an `az_t` (`sg.al`), and behaviour, asset and tests are unchanged. Everything below that says "sg_rail_plan", "sg_sections", "sg_jump" etc. is `az_rail_plan`, `az_sections`, `az_jump` now.
+
 ## What the user sees
 
 - **Navbar: the glass navbar of our pages** (`docs/modules/navbar.md`): the glass Back disc, the small title from x 58, and the right-hand actions as **one glass capsule on the stock Songs page's order, Search 122, Sort 168, Select 214, Now Playing 260** (46 / 46 / 46 / 60 px, glass x 124 .. 311; the same pieces as the other capsules, `pod_nav_search` is a left cap, `pod_nav_songsort` and `pod_nav_select` middles, `ah_nav_play` the right cap; `test/pod/glassbtn.py` glues the four into one 187 px capsule byte for byte). Glass is on the toolbar only: every other button of the page (the pills, the select bar, Select All) is flat.
@@ -27,7 +29,7 @@ Entries (no hook, as Songs):
 |---|---|---|---|---|
 | menu / Extras row Favorites, Recently Added, Recently Played, Most Played, Hi-Res (`ACT_LIST`, arg = the Home tile) | `songs_open_list(home)` (table `SG_LISTS`) | `0xf00a`, `0xf009`, `0xf007`, `0xf008`, `0xf002` | the row's key (`Hi-Res` is the stock `hr`) | the tile's stock page (`pod_home_open`) |
 | Playlists grid / list, a tap (`patch/playlists.c` `pl_open`) | `songs_open_playlist(id, name)` | `0xff13`, the id in `classinfo[1]` | the playlist's name | the stock songs page, as before (title in `nagvation_title`, the id in `classinfo[1]`, `allmusic_page` with `0xff13`) |
-| Genres page, a tap (`patch/artists.c` `ar_on_artist`) | `songs_open_genre(name, unknown)` | `0xff09`, the name in `classinfo + 0x30d` and the Unknown byte `classinfo + 0xc` | the genre's name; no Search (below) | the stock row tap's own sequence (the record, `allmusic_page` with `0xff09`) |
+| Genres page, a tap (`patch/artists.c` `ar_open`) | `songs_open_genre(name, unknown)` | `0xff09`, the name in `classinfo + 0x30d` and the Unknown byte `classinfo + 0xc` | the genre's name; no Search (below) | the stock row tap's own sequence (the record, `allmusic_page` with `0xff09`) |
 | Cover Flow's artist page, the Songs button (`patch/coverflow.c` `on_songs`) | `songs_open_artist(artist_row)` | `0xff11`, the artist's whole browsing record (below) | the artist's name | the stock album page on the All songs row (the All albums card's call); no Home fallback |
 
 What a list is (the stock page's buttons for these classes are Back, Search, multi-select and Now Playing: its navbar builder 0x526a3c adds Sort only for `0xf001` and leaves
@@ -35,7 +37,7 @@ Search out only for a genre's songs, `0xff09`):
 
 - **Navbar**: no Sort. Search moves to Sort's slot (`widget_move` to `NAV_CF_X` 168; its image is the capsule's left cap, which does not depend on where the capsule starts), so the
   capsule is **Search 168 | Select 214 | Now Playing 260**, the Albums page's three-piece capsule. The small title runs from x 58 to 168 (110 px).
-- **Titles**: the large title (`sg_title`, 250 px) and the small one carry the list's title, **cut with an ellipsis** to their width (`sg_fit`: `grid_fit`'s binary search on the
+- **Titles**: the large title (`sg_title`, 250 px; a playlist has its header instead, below) and the small one carry the list's title, **cut with an ellipsis** to their width (`sg_fit`: `grid_fit`'s binary search on the
   wide text in the label's own style, no space before the `…`, at most `SG_NAME_MAX` 128 characters looked at; the playlist's name is copied into the page, at most 255 bytes, cut
   before a character). The Songs title keeps its own rule (never cut; no small title where it does not fit). A list's title is set as text, not as a key: a language changed while
   the page is open shows on the next open.
@@ -63,7 +65,7 @@ star, the picker, a stock page behind). `sg.pl_id` carries the Unknown byte. **N
 (the `list-checks` glyph on a left piece, set at run time on `btn_select`'s three icon states; the middle piece `pod_nav_select` has a square left end), Now Playing keeps the right cap `ah_nav_play`: the two glue into a
 95 px capsule, glass 216 .. 311, as the Artists page's switch and Now Playing do (`test/pod/glassbtn.py`, byte for byte); the small title runs from 58 to 214 (156 px). Sort is hidden as on any list. Play, Shuffle
 (this genre), Select, Delete (`batch_delete_file(0xff09, ...)` is the generic library delete, `addresses.md` "Deleting by class") and Add to Playlist (`PICKER_ADD | 0xff09`) follow `sg.cls` as the other lists. A window that
-will not open repeats the stock tap's own sequence (the record, then `navigator_to_with_context("allmusic_page", 0xff09)`), so the stock Songs page opens. A playlist's header with its mosaic is not done.
+will not open repeats the stock tap's own sequence (the record, then `navigator_to_with_context("allmusic_page", 0xff09)`), so the stock Songs page opens.
 **An artist's songs.** The state of this list is not an id but the whole 0x390 byte browsing record `CLASSINFO` (`0xa0c768`, `CLASSINFO_SIZE`). `songs_open_artist` builds it as the stock
 artist page and its All songs card do: `loadAlbumList(0xf004, artist)` (memsets the record, `classinfo[0]` = `0xff01`, the artist name at +0x10d, byte +0xa for the Unknown Artist; the albums
 go to `*pdeq_showlist`, always with the All songs row last, `REC_ID` -2; no such row: -1) then `loadAlbumdetailList(0xff01, that row)` (the argument is the record, not an index: byte +8 =
@@ -71,6 +73,22 @@ all songs, the album text at +0xd, `classinfo[0]` = `0xff11`, then `loadLocalCla
 when it opens and puts it back (`sg_classinfo`) before every `loadLocalClassList` (the read on each `sg_on_fg`) and every `loadSongList` (which runs the class query again from the record
 and copies it for the memory playback): any other page's query overwrites it. The title is the artist (cut like a playlist's); a row's grey line is its **album** (the artist is the title).
 Delete and Add use `0xff11` unchanged (`batch_delete_file` and `batch_add_file` take the generic songtable path for it).
+
+## A playlist's header (class `0xff13`, `songs_open_playlist`)
+
+A playlist's page opens on a header in the album page's and the Daily Mix page's manner instead of the large title (`docs/modules/album-page.md` "the album view", `docs/modules/dailymix.md` "The page"): the playlist's **2 x 2 mosaic** and its **name**, centred, then Play / Shuffle and the rows. The song count is only the footer under the last row (the header had it too until the device test: two counts on one page; Apple Music shows "Updated ..." there, which would need the time of the playlist's last change: not looked for; a song's row copies the library song, so its time added is probably the scan's). Every other list (the library, Favorites, a genre's songs ...) keeps the large title; the Daily Mix page has its own window. Numbers (`patch/offsets.inc` `PH_*`; content y, the window is 320 wide):
+
+| part | geometry |
+|---|---|
+| mosaic | `PH_COVER` 160 px square at x `PH_COVER_X` 80 (centred), y `PH_COVER_Y` 8; corners `PH_COVER_R` 10 px blended into black (the album page's cover: 160 px, 10 px corners) |
+| name | label `sg_hname`, x `PH_NAME_X` 17, 286 wide, y `PH_NAME_Y` 182 (14 px under the cover), 22 px high, **22 px white centred** (the album page's `srlabel_ahtitle_style` size), cut with an ellipsis to its width (`az_fit`) |
+| pills | the same two flat pills (`SG_PILL_X0` / `SG_PILL_X1`, 129 x 40), at y `PH_PILL_Y` 220, 16 px under the name (the payload `widget_move`s them) |
+| rows | from `PH_TOP` 272 = pills' bottom + 12, as the library's start `SG_TOP` 104 under its pills |
+| collapse | the navbar's small title appears once the offset passes `PH_COLLAPSE` 204 (the name's bottom: the name has scrolled away), instead of the large title's `SG_COLLAPSE` 46 (`sg_title_update`) |
+
+**The mosaic is the Playlists page's code, not a second one.** `grid_mosaic_keys` (`patch/grid.c`, moved out of `patch/playlists.c`, whose scan calls it too) picks the first four distinct albums of the playlist's first `PL_SCAN` (50) songs that have a Cover Flow cache file (a song's own `cc_album_key`, else the library's album of that name, `cc_albums`, which this page already holds for its covers), and `grid_mosaic` composes the tile (one source decoded per call, `grid_shape` 160 px / 10 px, A B / C D, three repeat the first, two A B / B A, one is the cover full size, none is the stock placeholder disc). The header has its own `grid_t` of one tile (`sg.hg`, `grid_init(.., 1, PH_COVER, PH_COVER_R)`) and one quadrant buffer (`sg.htmp`, 80 x 80 x 4 = 25.6 KB); the page's loader (`sg_on_load`, 16 ms) makes the mosaic **first**, one cover a tick, nothing while the list moves, and only while the header is in view (`sg_head_pending`). The keys come from the list the page has just read (`sg.list`: no extra query). `sg_head_prep` (every `sg_load`) makes the tile again only when the four keys changed: a return to the front keeps the bitmap (no flicker), a changed playlist remakes it and the count. No quadrant buffer: a mosaic is its first cover (as the Playlists page); no tile ring or no `sg_hname` / `sg_hmeta` in the asset: the plain look (the large title, `SG_TOP`). A tap on the header opens and plays nothing (the rows start at `PH_TOP`; `sg_at`). An empty playlist says "No songs" and shows no header (the view is hidden).
+
+Texts: no new key ("%d song(s)" and "Play" / "Shuffle" are the page's). The asset (`tools/pod_ui.py build_songs_page`) holds the two labels in the content view after the large title, hidden and insensitive; the payload shows them with `widget_set_visible` only (they stay insensitive). Not seen on the device: the look of the composition (the cover's 14 px gap to the name, the count's rhythm: chosen from the album page's, not measured with `tools/ah_ink.py` here), the time of the one-cover-a-tick mosaic over the first rows' covers.
 
 ## The stock page's index (the evidence for the compact rail)
 

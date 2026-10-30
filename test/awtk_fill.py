@@ -10,7 +10,9 @@ Answers three questions about this AWTK build with its real code, not with assum
      meet the body; the edge pixels lie between the two (anti-aliased);
   3. canvas_draw_image_ex with draw_type scale_auto scales by nearest neighbour (a 1 px black /
      white column pattern drawn 280 -> 216 has only black and white pixels), so a cover drawn at
-     another size than it was written at is resampled without filtering.
+     another size than it was written at is resampled without filtering;
+  and, for the iPod page's cover pane (docs/modules/ipod.md): canvas_draw_image of a source window into a destination of the same size copies
+  it pixel for pixel (no resampling), at any offset.
 
 libc and libm are mocked (malloc, memset, memcpy, sqrtf, sinf, operator new ...); system_info()
 gets a zeroed block; the lcd is lcd_mem_bgr565_create_single_fb (the device's pixel format).
@@ -202,6 +204,27 @@ def main():
     print(f'  canvas_draw_image_ex of mb_glass.png {gw}x{gh} over the wallpaper: every pixel the alpha blend within {worst:.1f} '
           f'({blended} translucent pixels blended), nothing outside: {"ok" if not bad and outside and blended > 5000 else "FAIL " + str(bad[:3])}')
     ok &= not bad and outside and blended > 5000
+    shots.append(px)
+    # 6. the iPod page's cover pane (patch/ipod.c, docs/modules/ipod.md "The cover pane"): canvas_draw_image of a SOURCE WINDOW of a bitmap into a destination of the
+    #    same size is a copy (every pixel the source's, no resampling), whatever the window's offset: the pan moves the window a whole pixel at a time and nothing shimmers
+    s.wall(); sz = 238
+    bmp = d.call('bitmap_create_ex', sz, sz, 0, 1)
+    buf = d.call('bitmap_lock_buffer_for_write', bmp)
+    pat = lambda x, y: ((x * 8) & 0xf8, (y * 4) & 0xfc, ((x + y) * 8) & 0xf8)      # (r, g, b), exact in bgr565
+    d.u.mem_write(buf, b''.join(bytes((b, g, r, 255)) for y in range(sz) for x in range(sz) for r, g, b in (pat(x, y),)))
+    d.call('bitmap_unlock_buffer', bmp)
+    ww, wh, dx, dy = 139, 180, 10, 10
+    ok6 = True
+    for sx, sy in ((43, 7), (44, 7), (60, 22)):
+        s.wall()
+        d.call('canvas_draw_image', s.canvas, bmp, d.rect(sx, sy, ww, wh), d.rect(dx, dy, ww, wh))
+        px = s.read()
+        same = all(px[dy + y][dx + x] == pat(sx + x, sy + y) for y in range(0, wh, 3) for x in range(ww))
+        out = px[dy - 1][dx + 5] == rgb565(bgr565(wallpaper(dx + 5, dy - 1))) and px[dy + 5][dx + ww] == rgb565(bgr565(wallpaper(dx + ww, dy + 5)))
+        ok6 &= same and out
+    print(f'  canvas_draw_image of a {ww}x{wh} source window at offsets (43, 7), (44, 7), (60, 22) into {ww}x{wh}: every pixel the source\'s, nothing outside: '
+          f'{"ok" if ok6 else "FAIL"}')
+    ok &= ok6
     shots.append(px)
     if len(sys.argv) > 2:
         from PIL import Image

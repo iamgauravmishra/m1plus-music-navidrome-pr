@@ -70,10 +70,23 @@ the recovery button combination for this model remains unverified.
 - **V2.1oP** (2026-10-29): Genres and Composers open on our Artists page (no artist-type switch), a genre's
   songs on our Songs page (class 0xff09, no Search: a Select | Now Playing capsule) and a composer's albums in Cover Flow
   (loadAlbumList(0xf005) -> 0xff02, the album page as 0xff14). Test build oNG (on oN) flashed, "looks good".
-- **V2.1oU** (2026-10-29, current release): an artist's Cover Flow page has a Songs | Now Playing capsule (the All albums
+- **V2.1oU** (2026-10-29): an artist's Cover Flow page has a Songs | Now Playing capsule (the All albums
   navbar disc is gone; the card stays) whose Songs opens all the artist's songs on our Songs page (class 0xff11: the 0x390 byte
   browsing record of loadAlbumList(0xf004) + loadAlbumdetailList(0xff01, the All songs row), put back before every query
   and play; the album as a row's grey line). Test build oTA flashed.
+- **V2.1oW** (2026-10-30): the **Pod** MVP, a virtual iPod Classic (an Extras item, Play group): a fullscreen page,
+  320 x 240 screen over a touch click wheel tuned to the Apple Music 404-page iPod (15 degree steps, tiers 1 .. 34, a hard stop at the ends),
+  the library lists, its own Now Playing, Shuffle Songs, a Settings list, Cover Flow on white under the title bar, and the main menu's cover
+  pane panning as q2-pod's Split Home. Test builds oPK .. oUIP flashed; the user accepted it as the MVP.
+- **V2.1oX** (2026-10-30): Artists, Genres and Composers in the Songs page's style (one painted list, letter sections, the
+  A-Z rail; patch/azlist.c shared with Songs), Delete Playlists as a select mode on our Playlists page (the stock delete, verified on the
+  device), and a playlist's header on the Songs page (mosaic and name; the count only under the last row). Test builds oWA, oWB flashed,
+  "looks good". Lesson: cc_decode flattens over black, so an image drawn over a cover needs its own alpha (the select mark's black square).
+- **V2.1pA** (2026-10-30, current release): **Cassette Mode**, a landscape fullscreen cassette Now Playing page (after Sony's NW-A100
+  cassette screen and FiiO's Tape mode) from a row on page 1 of the More sheet: the picture turned onto the portrait panel, rotated text
+  blended glyph by glyph, reels from pre-rendered hub frames, tape packs that show progress, taps only (play/pause, a screw closes),
+  Normal, Chrome and Metal themes in Customize > Cassette Mode. Test builds oXTP .. oXTS flashed, "good enough". Lesson: a page's touch
+  handler must not grab or eat move events, or the system pull-down from the top edge stops working (oXTP's swipes broke it).
 
 ## Hardware results (what broke on the device, and why)
 
@@ -162,6 +175,9 @@ First tests, 2026-10-19 to 10-25:
 
 ## Retired designs (what the docs no longer describe)
 
+- **The Pod's Ken Burns cover pane** (test build V2.1oSIP): a 168 px cover window panned and zoomed into the pane every 80 ms, with
+  crossfades; on the device the covers jiggled (a window resized and moved every frame is resampled differently each time). Replaced by
+  one cover scaled once and copied 1:1 at whole pixels (`docs/modules/ipod.md` "The cover pane").
 - **Entry icon.** Up to jA the M1+ Pod entry was the Tidal icon (id 1, taken over); kA made it an icon of its own (id 99).
 - **Stock Albums list with a run-time toggle (lC..lG).** See the lG result above; replaced by the page's own list mode (lK).
 - **Landscape Cover Flow navbar button (lE/lF).** Exit glyph in the frame, navbar hidden; now a Settings switch and the navbar stays.

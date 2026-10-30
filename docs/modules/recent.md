@@ -166,3 +166,5 @@ is gone from the library: a tap does nothing. Nothing runs in the main loop; not
 
 All of it (`test/pod/recent.py`): the stock calls (`loadLocalClassList`, `loadAlbumList`, `albumcoverinfo_init`, `navigator_to_with_context`) are the harness's mocks, as for the Albums grid; the layouter, scroll_view and pointer
 code are demo's own. Not seen on the device (`docs/modules/device-checks.md`): the look (the header's size and spacing in the real font, the covers' rounded corners on the real lcd), the cost of a decode tick (144 px, box filter), and the touch feel (no pressed look on a cell). The clipping at the list's edges follows from the stock code (`0x610ec4`), not from a device.
+
+The shelf's loader checks once per second for as long as covers remain pending while the screen is off, then resumes on its first lit check and stops when covers are loaded.

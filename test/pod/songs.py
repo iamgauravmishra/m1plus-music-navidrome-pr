@@ -17,7 +17,7 @@ UI = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_songs.bi
 ALL = O['CLASS_ALL_SONGS']
 TEXT_X, TEXT_END, SEL = O['LIST_TEXT_X'], O['SG_TEXT_END'], O['SG_SEL_COL']
 RAIL_X, RAIL_W = O['SG_RAIL_X'], O['SG_RAIL_W']
-WIDGETS = ('view_grid', 'sg_rail', 'sg_foot', 'btn_return', 'btn_backtoplayer', 'btn_search', 'btn_sort', 'btn_select', 'btn_selall', 'btn_play', 'btn_shuffle', 'sg_add', 'sg_del', 'sg_scrim', 'sg_card',
+WIDGETS = ('view_grid', 'sg_rail', 'sg_foot', 'sg_hname', 'btn_return', 'btn_backtoplayer', 'btn_search', 'btn_sort', 'btn_select', 'btn_selall', 'btn_play', 'btn_shuffle', 'sg_add', 'sg_del', 'sg_scrim', 'sg_card',
            'label_title', 'sg_title', 'label_status', 'label_row_title', 'label_row_sub', 'label_hdr', 'label_rail', 'label_rail_on', 'sg_bubble', 'sg_bubble_letter', 'sg_bar',
            'sg_item0', 'sg_item1', 'sg_item2', 'sg_item3', 'sg_item4', 'sg_tick0', 'sg_tick1', 'sg_tick2', 'sg_tick3', 'sg_tick4')
 
@@ -27,61 +27,8 @@ def key_path(artist, album): return art_file(album_key(artist, album))
 def near(a, b, tol=2): return all(abs(((a >> s) & 255) - ((b >> s) & 255)) <= tol for s in (0, 8, 16, 24))
 
 
-class SongsMachine(Machine):
-    """The machine plus what the Songs page calls that the shared mocks do not know: the stock selection vector and batch delete, the widget text calls of
-    the pills, the style setter and the animator destroy."""
-    def __init__(self):
-        super().__init__()
-        self.wtext, self.styled, self.sel_vec, self.measure = {}, [], None, lambda t: 8 * len(t)
-        self.sel_log = []
-        self.handlers[pod.SCROLL_DONE] = 'stock_scroll_done'   # the stock scroll end handler (patch/scroll.c's): mocked, it clears wa
-        for n in ('select_recordinit', 'set_selectindex', 'batch_delete_file', 'widget_get_text', 'widget_measure_text', 'widget_set_style', 'value_set_uint32',
-                  'widget_animator_destroy'):
-            self.handlers[pod.FUNCTIONS[n][2]] = n
-
-    def _hook(self, u, address, size, _):
-        name = self.handlers.get(address, '')
-        a0, a1, a2, a3 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3))
-        sp = u.reg_read(UC_MIPS_REG_SP)
-        ret = 0
-        if name == 'widget_set_tr_text': self.wtext[a0] = self.tr(self.read_cstr(a1))
-        elif name == 'widget_set_text_utf8': self.wtext[a0] = self.read_cstr(a1)
-        if name == 'select_recordinit':
-            self.sel_vec = [0] * a0 if a0 >= 0 else self.sel_vec
-            self.calls.append(('select_recordinit', a0))
-        elif name == 'set_selectindex':
-            assert self.sel_vec is not None and 0 <= a0 < len(self.sel_vec), f'set_selectindex({a0}) out of range'
-            self.sel_vec[a0] ^= 1; ret = 1
-            self.calls.append(('set_selectindex', a0))
-        elif name == 'batch_delete_file':
-            flag = self.word(sp + 16)
-            self.calls.append(('batch_delete_file', a0, a1, a2, a3, flag, [i for i, v in enumerate(self.sel_vec or []) if v]))
-            ret = 1
-        elif name == 'widget_get_text':
-            t = self.wtext.get(a0)
-            if t is not None:
-                t = t.encode('latin-1').decode('utf-8')
-                ret = self.alloc(4 * len(t) + 4); self.u.mem_write(ret, struct.pack(f'<{len(t) + 1}I', *map(ord, t), 0))
-        elif name == 'widget_measure_text':
-            n = 0
-            while self.word(a1 + 4 * n): n += 1
-            t = ''.join(chr(c) for c in struct.unpack(f'<{n}I', self.u.mem_read(a1, 4 * n))) if n else ''
-            w = float(self.measure(t)) if t else 0.0
-            u.reg_write(UC_MIPS_REG_F0, struct.unpack('<I', struct.pack('<f', w))[0]); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
-            return
-        elif name == 'widget_set_style':
-            self.styled.append((a0, self.read_cstr(a1), self.word(a2 + 8)))
-        elif name == 'value_set_uint32':
-            self.setword(a0 + 8, a1); ret = a0
-        elif name == 'widget_animator_destroy':
-            self.calls.append(('widget_animator_destroy', a0)); self.setword(a0 + 0x28, 0)
-        elif name == 'stock_scroll_done':
-            self.calls.append(('stock_scroll_done', a0)); self.setword(a0 + O['SC_WA'], 0)
-        else:
-            return super()._hook(u, address, size, _)
-        if name in ('widget_set_tr_text', 'widget_set_text_utf8'): return super()._hook(u, address, size, _)
-        u.reg_write(UC_MIPS_REG_V0, ret & 0xffffffff)
-        u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+class SongsMachine(ListMachine):
+    """The list machine: the text calls, the animator destroy, the stock selection vector and batch delete, the style setter of the pills."""
 
 
 def initial_of(title, kind=None):
@@ -226,7 +173,8 @@ def click(m, name):
 
 class Layout:
     """The model of the page's geometry from the letters of the songs (the payload's, written again)."""
-    def __init__(self, letters, sections=True):
+    def __init__(self, letters, sections=True, top=TOP):
+        self.top = top
         self.n = len(letters)
         self.secs = []
         if sections and letters:   # the non-decreasing labelling (rank "#" 0, A..Z 1..26) with the most songs under their own letter; a tie starts a section late
@@ -247,10 +195,10 @@ class Layout:
             self.right = best[-1][26]
             self.secs = [(i, '#' if l == 0 else chr(64 + l)) for i, l in enumerate(labels) if i == 0 or l != labels[i - 1]]
 
-    def hdr_y(self, s): return TOP + s * HDR + self.secs[s][0] * ROW
+    def hdr_y(self, s): return self.top + s * HDR + self.secs[s][0] * ROW
     def sec_of(self, i): return max(k for k, (st, _) in enumerate(self.secs) if st <= i)
-    def row_y(self, i): return TOP + ((self.sec_of(i) + 1) * HDR if self.secs else 0) + i * ROW
-    def content(self, pad=0): return TOP + len(self.secs) * HDR + self.n * ROW + FOOT + pad
+    def row_y(self, i): return self.top + ((self.sec_of(i) + 1) * HDR if self.secs else 0) + i * ROW
+    def content(self, pad=0): return self.top + len(self.secs) * HDR + self.n * ROW + FOOT + pad
 
 
 RAIL_P, RAIL_ITEMS, RAIL_DOT, RAIL_DISC = O['SG_RAIL_PITCH'], O['SG_RAIL_ITEMS'], O['SG_RAIL_DOT'], O['SG_RAIL_DISC']
@@ -348,9 +296,16 @@ def asset_tests(ctx):
     expect(lv.type == 'list_view' and sv.type == 'scroll_view' and sv in lv.children and bar in lv.children and (lv.x, lv.y, lv.w, lv.h) == (0, 50, 320, VIEW_H) and (sv.w, bar.x) == (310, 310)
            and sv.children == [grid] and grid.type == 'view', 'the body is the library lists\' structure: list_view > scroll_view > one content view, with the stock mobile scroll bar')
     kids = {c.name: c for c in grid.children}
-    expect(list(kids) == ['sg_title', 'btn_play', 'btn_shuffle', 'sg_foot'] and kids['sg_title'].get('style:normal:font_size') == '32' and kids['sg_title'].get('sensitive') == 'false'
+    hn = kids['sg_hname']
+    expect(list(kids) == ['sg_title', 'sg_hname', 'btn_play', 'btn_shuffle', 'sg_foot'] and kids['sg_title'].get('style:normal:font_size') == '32' and kids['sg_title'].get('sensitive') == 'false'
            and kids['sg_title'].get('style:normal:text_color') == '#FFFFFF' and (kids['sg_title'].x, kids['sg_title'].y, kids['sg_title'].h) == (12, 0, 52),
-           'the content view holds the large title (32 px white, x 12, insensitive), the two pills and the song count')
+           'the content view holds the large title (32 px white, x 12, insensitive), the playlist header\'s name, the two pills and the song count (no count in the header: the footer is the one)')
+    expect(hn.type == 'label' and hn.get('visible') == 'false' and hn.get('sensitive') == 'false' and hn.get('style:normal:text_align_h') == 'center'
+           and (hn.x, hn.y, hn.w, hn.h) == (O['PH_NAME_X'], O['PH_NAME_Y'], O['PH_NAME_W'], O['PH_NAME_H']) and hn.get('style:normal:font_size') == '22' and hn.get('style:normal:text_color') == '#FFFFFF',
+           'a playlist\'s header: the name (22 px white), centred in 286 px (the album page\'s title label), hidden and insensitive until the payload shows it')
+    expect(O['PH_TOP'] == O['PH_PILL_Y'] + O['SG_PILL_H'] + (O['SG_TOP'] - O['SG_PILL_Y'] - O['SG_PILL_H']) and O['PH_COVER_Y'] + O['PH_COVER'] < O['PH_NAME_Y']
+           and O['PH_PILL_Y'] == O['PH_NAME_Y'] + O['PH_NAME_H'] + 16 and O['PH_COLLAPSE'] == O['PH_NAME_Y'] + O['PH_NAME_H'] and O['PH_COVER_X'] * 2 + O['PH_COVER'] == 320,
+           'the header\'s numbers stack: the cover centred, the name, the pills 16 px under it, the rows start as far under the pills as the library\'s do')
     ft = kids['sg_foot']
     expect(ft.type == 'label' and ft.get('sensitive') == 'false' and (ft.x, ft.w, ft.h) == (O['SG_HDR_X'], 320 - 2 * O['SG_HDR_X'], O['SG_FOOT_TEXT_H'])
            and ft.get('style:normal:font_size') == str(O['SG_FOOT_PX']) and ft.get('style:normal:text_color') == '#9C9C9C' and ft.get('style:normal:text_align_h') == 'left',
@@ -877,6 +832,8 @@ def collapse_and_select_tests(ctx):
     expect(ttl and all(r[0] == 104 and r[2] == 192 for t, r in ttl), 'and the text from x 104 to 296 (192 px)')
     bits = [b[0] for b in marks]
     expect(len(set(bits)) == 1, 'all unselected: one mark image')
+    expect(pixel(m, bits[0], 0, 0) >> 24 == 0 and pixel(m, bits[0], 25, 25) >> 24 == 0 and pixel(m, bits[0], 13, 13) >> 24 == 255 and pixel(m, bits[0], 13, 2) >> 24 >= 128,
+           'the mark is cut to its circle (radius 11 in the 26 px square): the corners are transparent, the disc opaque, so no black square shows on a cover')
     off_mark = bits[0]
     tap(m, 150, lay.row_y(1) + 30); tap(m, 150, lay.row_y(3) + 30)
     expect(m.wtext[m.widgets['label_title']] == '2 Selected' and not any(c[0] == 'navigator_to_with_context' for c in m.calls), 'a tap marks a row (the count follows) and plays nothing')
@@ -1052,6 +1009,7 @@ def list_machine(titles, cls=None, **kw):
     m = songs_machine(titles, **kw)
     if cls is not None: m.class_lists[cls] = list(m.songs)
     m.setword(m.widgets['sg_title'] + 8, 250)
+    m.setword(m.widgets['sg_hname'] + 8, O['PH_NAME_W'])   # the playlist header's name label, as the asset sizes it
     return m
 
 
@@ -1148,22 +1106,23 @@ def lists_tests(ctx):
     name = 'A very long playlist name for the road'
     r = m.call(PSYMS['songs_open_playlist'], a0=7, a1=m.cstr(name), count=900000000)
     big = m.widgets['sg_title']
+    pl_lay = lambda n: Layout(['A'] * n, sections=False, top=O['PH_TOP'])   # a playlist's rows start under its header
     expect(r == 0 and [c[1] for c in m.calls if c[0] == 'loadLocalClassList'] == [O['CLASS_ALBUMS'], pls] and m.word(ci) == 7 and m.word(G_CLASS) == pls
-           and m.props[(m.sv, 'virtual_h')] == Layout(['A'] * 5, sections=False).content(), 'songs_open_playlist: class 0xff13 with the playlist in classinfo[1]: its five songs')
+           and m.props[(m.sv, 'virtual_h')] == pl_lay(5).content(), 'songs_open_playlist: class 0xff13 with the playlist in classinfo[1]: its five songs')
     expect(m.wtext[big] == fitted(name, 250) == fitted('A very long playlist name for…', 250) and m.wtext[m.widgets['label_title']] == fitted(name, 110),
            f'the name is the title, cut with an ellipsis (no space before it) to the large title\'s 250 px and the small one\'s 110 ({m.wtext[big]!r})')
     foot = m.widgets['sg_foot']
-    expect(m.wtext[foot] == '5 songs' and m.props.get((foot, 'y')) == TOP + 5 * ROW + O['SG_FOOT_GAP'], f'the playlist\'s count under its last row: "5 songs" ({m.wtext.get(foot)!r})')
+    expect(m.wtext[foot] == '5 songs' and m.props.get((foot, 'y')) == O['PH_TOP'] + 5 * ROW + O['SG_FOOT_GAP'], f'the playlist\'s count under its last row: "5 songs" ({m.wtext.get(foot)!r})')
     m.setword(ci, 3)
     m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
-    expect(m.word(ci) == 7 and m.props[(m.sv, 'virtual_h')] == Layout(['A'] * 5, sections=False).content(), 'read again with its own id put back in classinfo[1]')
+    expect(m.word(ci) == 7 and m.props[(m.sv, 'virtual_h')] == pl_lay(5).content(), 'read again with its own id put back in classinfo[1]')
     m.playlist_songs[7] = list(m.songs[:1]); m.setword(SHOWLIST, m.new_deque([]))   # one song left (deleted elsewhere); another query replaced the list
     m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
-    expect(m.wtext[foot] == '1 song' and m.props.get((foot, 'y')) == TOP + ROW + O['SG_FOOT_GAP'], f'read again, the count follows: "1 song" ({m.wtext.get(foot)!r})')
+    expect(m.wtext[foot] == '1 song' and m.props.get((foot, 'y')) == O['PH_TOP'] + ROW + O['SG_FOOT_GAP'], f'read again, the count follows: "1 song" ({m.wtext.get(foot)!r})')
     m.playlist_songs[7] = list(m.songs[:5])
     m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
     settle(m); m.setword(ci, 3)
-    calls = tap(m, 150, lay.row_y(1) + 30)
+    calls = tap(m, 150, pl_lay(5).row_y(1) + 30)
     expect(m.word(ci) == 7 and [c[3] for c in calls if c[0] == 'loadSongList'] == [pls] and m.played[1] == 1 and m.played[0] == m.songs[:5],
            'a row plays the playlist with class 0xff13 and its id in classinfo[1] (loadSongList keeps classinfo for the memory playback)')
     m.call(PSYMS['sg_on_destroy'], count=4000000)
@@ -1173,6 +1132,81 @@ def lists_tests(ctx):
         kept = nm.encode('utf-8')[:255].decode('utf-8', 'ignore')
         expect(m.wtext[m.widgets['sg_title']] == fitted(kept, 250), f'a {len(nm.encode())} byte name is cut on characters ({len(kept)} kept)')
         m.call(PSYMS['sg_on_destroy'], count=4000000)
+
+    # A playlist's header (docs/modules/songs.md "A playlist's header"): the Playlists page's 2 x 2 mosaic (patch/grid.c, one source a tick), the name and the count under
+    # it, the pills and the rows lower, the large title gone, the small title once the name has scrolled away; other lists keep the large title
+    PHT, PHC = O['PH_TOP'], O['PH_COVER']
+    def head_blits(blits): return [b for b in blits if b[2][2] == PHC]
+    def quad(m, bmp): return [pixel(m, bmp, x, y) for x, y in ((PHC // 4, PHC // 4), (3 * PHC // 4, PHC // 4), (PHC // 4, 3 * PHC // 4), (3 * PHC // 4, 3 * PHC // 4))]
+    m = list_machine(titles); m.playlist_songs = {7: list(m.songs[:5])}
+    m.call(PSYMS['songs_open_playlist'], a0=7, a1=m.cstr('Road Trip'), count=900000000)
+    calls = list(m.calls)
+    hn, big, lt = (m.widgets[n] for n in ('sg_hname', 'sg_title', 'label_title'))
+    expect(('widget_set_visible', hn, 1) in calls and not [c for c in calls if c[0] == 'widget_set_sensitive' and c[1] == hn]
+           and vis(m, 'sg_title') == (0, 0), 'a playlist shows its name label (insensitive: never a touch target) and hides the large title')
+    expect(('widget_move', m.widgets['btn_play'], O['SG_PILL_X0'], O['PH_PILL_Y']) in calls and ('widget_move', m.widgets['btn_shuffle'], O['SG_PILL_X1'], O['PH_PILL_Y']) in calls,
+           'the pills move under the header (the same x, y PH_PILL_Y)')
+    expect(m.wtext[hn] == 'Road Trip', f'the name ({m.wtext.get(hn)!r})')
+    blits, texts, styles, fills = settle(m)
+    hb = head_blits(blits)
+    expect(len(hb) == 1 and tuple(hb[0][2][:2]) == (O['PH_COVER_X'], O['PH_COVER_Y']) and m.most_per_tick == 1, f'the mosaic is drawn centred at (80, 8), 160 px, one cover decoded a tick ({[b[2] for b in hb]})')
+    expect(all(near(a, colour(k)) for k, a in enumerate(quad(m, hb[0][0]))) and pixel(m, hb[0][0], 0, 0) & 0xffffff == 0, 'the four distinct albums fill the quadrants A B / C D, the corner rounded into black')
+    rows0 = [r for t, r in texts if t == titles[0]]
+    expect(rows0 and rows0[0][1] >= O['PH_TOP'], 'the first row is under the header (its text from PH_TOP down)')
+    keep = hb[0][0]
+    m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
+    blits2, *_ = settle(m)
+    expect(head_blits(blits2)[0][0] == keep, 'a return to the front reads the list again and keeps the mosaic (the same albums: no new tile, no flicker)')
+    m.playlist_songs[7] = list(m.songs[2:4])
+    m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
+    blits3, *_ = settle(m)
+    expect(all(near(a, b2) for a, b2 in zip(quad(m, head_blits(blits3)[0][0]), [colour(2), colour(3), colour(3), colour(2)])),
+           'other songs: the mosaic is made again from them (two albums: A B / B A)')
+    scroll_to(m, O['PH_COLLAPSE'] - 10)
+    expect(m.props.get((lt, 'visible')) != 1, 'the navbar\'s small title stays away while the name is in view')
+    scroll_to(m, O['PH_COLLAPSE'] + 1)
+    expect(m.props.get((lt, 'visible')) == 1, 'and shows once the name has scrolled away (PH_COLLAPSE, not the large title\'s 46)')
+    scroll_to(m, 0)
+    expect(m.props.get((lt, 'visible')) == 0, 'back at the top it goes')
+    scroll_to(m, 100)
+    blits4, *_ = paint(m)
+    expect(head_blits(blits4)[0][1][1] == 100 - O['PH_COVER_Y'] and head_blits(blits4)[0][2][1] == 0, 'the mosaic scrolls with the content (cut at the window\'s top: its first 92 rows are gone)')
+    calls = tap(m, 150, 20)
+    expect(not [c for c in calls if c[0] in ('navigator_to_with_context', 'loadSongList')], 'a tap on the header opens and plays nothing')
+    m.call(PSYMS['sg_on_destroy'], count=4000000)
+    expect(sum(1 for c in m.calls if c[0] == 'bitmap_destroy') >= 3, 'closing frees the header\'s bitmaps with the others')
+    # one album: its cover full size; none with a cache file: the placeholder disc; no memory for a quadrant: the first cover
+    m = list_machine(titles); m.playlist_songs = {7: [m.songs[0], m.songs[5]]}
+    m.call(PSYMS['songs_open_playlist'], a0=7, a1=m.cstr('One'), count=900000000)
+    hb = head_blits(settle(m)[0])
+    expect(all(near(a, colour(0)) for a in quad(m, hb[0][0])), 'two songs of one album: that cover full size')
+    m.call(PSYMS['sg_on_destroy'], count=4000000)
+    m = list_machine(titles, cached=False); m.playlist_songs = {7: list(m.songs[:5])}
+    m.call(PSYMS['songs_open_playlist'], a0=7, a1=m.cstr('Bare'), count=900000000)
+    hb = head_blits(settle(m)[0])
+    expect(len(hb) == 1 and all(near(a, 0xff404040) for a in quad(m, hb[0][0])), 'no album with a cache file: the stock placeholder disc')
+    m.call(PSYMS['sg_on_destroy'], count=4000000)
+    m = list_machine(titles); m.playlist_songs = {7: list(m.songs[:5])}; m.calloc_fail_size = (PHC // 2) * (PHC // 2) * 4
+    m.call(PSYMS['songs_open_playlist'], a0=7, a1=m.cstr('Tight'), count=900000000)
+    hb = head_blits(settle(m)[0])
+    expect(all(near(a, colour(0)) for a in quad(m, hb[0][0])), 'no memory for the quadrant buffer: the first cover full size (as the Playlists page)')
+    m.call(PSYMS['sg_on_destroy'], count=4000000)
+    # an empty playlist: the page says so (no header to show over nothing)
+    m = list_machine(titles); m.playlist_songs = {7: []}
+    m.call(PSYMS['songs_open_playlist'], a0=7, a1=m.cstr('Empty'), count=900000000)
+    expect(vis(m, 'label_status') == (1, 1) and vis(m, 'view_grid') == (0, 0), 'an empty playlist: "No songs", the view hidden')
+    m.call(PSYMS['sg_on_destroy'], count=4000000)
+    # an asset without the two labels, or no tile ring: the plain look (the large title, the pills where they were)
+    m = list_machine(titles); m.playlist_songs = {7: list(m.songs[:5])}; del m.widgets['sg_hname']
+    m.call(PSYMS['songs_open_playlist'], a0=7, a1=m.cstr('Plain'), count=900000000)
+    expect(('widget_set_visible', m.widgets['sg_title'], 0) not in m.calls and not [c for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets['btn_play']]
+           and m.props[(m.sv, 'virtual_h')] == Layout(['A'] * 5, sections=False).content(), 'without the header labels the page keeps the large title and the rows from SG_TOP')
+    m.call(PSYMS['sg_on_destroy'], count=4000000)
+    # the other lists have no header
+    m = list_machine(titles, O['CLASS_FAV']); m.call(PSYMS['songs_open_list'], a0=O['HOME_FAV'], count=900000000)
+    expect(('widget_set_visible', m.widgets['sg_hname'], 1) not in m.calls and vis(m, 'sg_title') == (1, 1) and not [c for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets['btn_play']],
+           'Favorites (and every list but a playlist) keep the large title and the pills where they were')
+    m.call(PSYMS['sg_on_destroy'], count=4000000)
 
     # A genre's songs (class 0xff09, from the Genres page's tap): the genre's name and the Unknown byte in the browsing record for every read and play, its name the
     # title, and no Search (the stock navbar builder leaves it out for 0xff09): the capsule is Select (the left cap) | Now Playing

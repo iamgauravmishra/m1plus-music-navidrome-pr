@@ -5,10 +5,14 @@
 #pragma once
 
 #define ELLIPSIS 0x2026   /* U+2026 HORIZONTAL ELLIPSIS, the wide char texts are cut with */
+#define POD_DARK_MS 1000
+
+int pod_screen_lit(void);                 /* stock backlight state */
 
 int pod_on_back(void *ctx, void *e);     /* click handler: navigator_back() */
 int pod_on_player(void *ctx, void *e);   /* click handler: the stock "back to the player" button */
-int pod_card_mounted(void);              /* the SD card is mounted (statfs: /mnt/mmc is another file system than /mnt); never write under /mnt/mmc otherwise */
+int pod_scan_dir(const char *name, const char *dot);   /* the library scan's strcmp(name, ".") replacement: 0 for any name starting with '.' (docs/modules/payload.md hook 6) */
+int pod_card_mounted(void);             /* the SD card is mounted (statfs: /mnt/mmc is another file system than /mnt); never write under /mnt/mmc otherwise */
 int pod_is_type(void *w, const char *type);   /* w is a widget of exactly this type name */
 /* Bind fn to EVT_CLICK of the widget called name in win (ctx passed through); returns the widget, NULL if
  * the page has none (or fn is NULL). */
@@ -40,3 +44,9 @@ int pod_bar_tint(void *win, unsigned color);
 void pod_bar_black(void *win);
 int pod_is_top(void *win);
 void *pod_bind(void *win, const char *name, int (*fn)(void *, void *), const void *ctx);
+/* The flat pill's glyph and label (a button whose style has the glyph as its icon) centred as a pair SG_PILL_GAP apart in a pill pw px wide (the Songs page's pills, the
+ * album page's Play all; AWTK puts the glyph in a square as high as the button at margin_left and the text at the square's end plus the spacer); a label too wide beside
+ * the glyph steps down to SG_PILL_PX_SMALL. Needs the button's text (widget_get_text) to be set. */
+void pod_centre_pill(void *btn, int pw);
+/* A select mark: the stock image called name (the multi-select's unselect / selected, SG_MARK px) as an opaque bitmap, NULL when it cannot be made. win: any widget of the page. */
+void *pod_make_mark(void *win, const char *name);

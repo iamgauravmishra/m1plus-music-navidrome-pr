@@ -7,6 +7,7 @@ from awtk_text import Ttf, StbText
 
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
 SAME_AS_ENGLISH = {'Cover Flow', 'Playlists', 'Genres', 'Extras', 'Albums', 'Artists', '%s, %s'}   # translations that are the English word by design
+SAME_AS_ENGLISH |= {'Podcasts', '%d min', ', %d', 'Normal', 'Chrome', 'Metal'}    # Podcasts in French and German; the minute abbreviation in French, Spanish, Italian and Polish
 SAME_AS_ENGLISH |= {'Genre', 'Screenshot', 'Collections'}    # French and German write Genre the same; German and Italian say Screenshot; French writes Collections the same
 
 
@@ -64,7 +65,7 @@ def run(ctx):
         expect(all(dict(built[stub])[k] == dict(built[twin])[k] for k in pod_i18n.TEXT), f'{stub} holds {twin}\'s language')
     for k, by in pod_i18n.TEXT.items():
         counts = {loc: by[loc].count('%d') for loc in LOC}
-        expect(set(counts.values()) == ({1} if k.startswith('%d') else {0}) and all('%' not in by[l].replace('%d', '').replace('%s', '') for l in LOC)
+        expect(set(counts.values()) == ({1} if k.startswith('%d') or k in pod_i18n.DATE_KEYS else {0}) and all('%' not in by[l].replace('%d', '').replace('%s', '') for l in LOC)
                and all(by[l].count('%s') == k.count('%s') for l in LOC),
                f'{k!r}: %d only in the track counts, once each; %s only in the Daily Mix templates, as often as the key has it')
     expect(sorted(pod_i18n.TEXT) == pod_i18n.KEYS and all(set(by) == set(LOC) for by in pod_i18n.TEXT.values()), 'every key has all 13 languages')
@@ -133,20 +134,21 @@ def run(ctx):
         m = artists_machine(); m.set_language(loc)
         m.call(open_artists, count=5000000)
         title = m.widgets['label_title']
-        expect(tr_keys(m, title) == ['Artists'] and text_of(m, title) == [T('Artists')], f'{loc}: the Artists title is set by key and reads {T("Artists")!r}')
+        big = m.widgets['ar_title']   # both titles are the table's text (set as text through the title fit, as the Songs lists')
+        expect(text_of(m, title) == [T('Artists')] and text_of(m, big) == [T('Artists')], f'{loc}: the Artists titles read {T("Artists")!r}')
         m.call(PSYMS['ar_on_toggle'], count=5000000)
-        expect(tr_keys(m, title)[-1:] == ['Album Artists'] and text_of(m, title) == [T('Album Artists')], f'{loc}: the Album Artists title')
+        expect(text_of(m, title) == [T('Album Artists')] and text_of(m, big) == [T('Album Artists')], f'{loc}: the Album Artists titles')
         m = artists_machine(artists=()); m.set_language(loc)
         m.call(open_artists, count=2000000)
         st = m.widgets['label_status']
         expect(tr_keys(m, st) == ['Update Local Music first'] and text_of(m, st) == [T('Update Local Music first')], f'{loc}: the empty Artists message')
         # an artist without albums, and the All albums card
         m = artists_machine(); m.set_language(loc); m.call(open_artists, count=5000000)
-        m.call(PSYMS['ar_on_artist'], a0=2, count=8000000)
+        artists_tap(m, 2)
         st = m.widgets['label_status']
         expect(text_of(m, st) == [T('No albums')] and tr_keys(m, st) == ['No albums'], f'{loc}: an artist without albums')
         m = artists_machine(); m.set_language(loc); m.call(open_artists, count=5000000)
-        m.call(PSYMS['ar_on_artist'], a0=0, count=8000000)
+        artists_tap(m, 0)
         put_value(m, 3); m.call(PSYMS['on_changed'], count=2000000)
         expect(text_of(m, m.widgets['label_album']) == [T('All albums')], f'{loc}: the All albums card')
         # Cover Flow: empty library, too large, first-run status and progress

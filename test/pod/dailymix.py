@@ -453,6 +453,17 @@ def run(ctx):
     day = day_of(1800000000, tz)
     mdl, picks, seed, aseed = expect_mix(None, songs, plays, rec_, fav, day, 0)
     m = fresh(count=True)
+    m.screen(False); m.clock = START_MS + 1000; m.call(PSYMS['dm_tick'], count=2000000)
+    expect([c[2] for c in m.calls if c[0] == 'timer_add'] == [1000] and not any(c[0] == 'loadLocalClassList' for c in m.calls), 'dark Daily Mix defers pending work with one one-second check')
+    m.screen(True); m.call(PSYMS['dm_tick'], count=2000000)
+    expect([c[2] for c in m.calls if c[0] == 'timer_add'] == [O['DM_TICK_MS']], 'first lit Daily Mix check starts the pending job at its normal cadence')
+    m.call(PSYMS['dm_tick'], count=2000000)
+    expect(any(c[0] == 'loadLocalClassList' for c in m.calls), 'the resumed job loads its first list')
+    m.screen(False); m.call(PSYMS['dm_tick'], count=2000000)
+    expect([c[2] for c in m.calls if c[0] == 'timer_add'] == [1000] and not any(c[0] in ('loadLocalClassList', 'widget_load_image') for c in m.calls), 'an active job pauses with one one-second check')
+    m.fire(EVT_DESTROY); m.call(PSYMS['dm_tick'], count=2000000)
+    expect(not m.calls, 'a stray Daily Mix timer after destroy does nothing')
+    m = fresh(count=True)
     expect(not m.up(), 'no mix yet: the card is hidden')
     # nothing is made inside the boot guard's window: the first ticks only arm the timer
     m.clock = 3000; m.call(PSYMS['dm_tick'], a0=0, count=2000000)
@@ -487,6 +498,15 @@ def run(ctx):
     m.fire(EVT_FG)
     expect('timer_add' not in m.names(), 'the menu in front again on the same day: no job, no timer')
     main_m = m
+
+    # ---- podcast episodes (docs/modules/podcasts.md) are no candidates: a library with a dozen of them, each the most played song of the card, gives the same mix as the library without
+    eps_p = [dict(path=f'/mnt/mmc/Podcasts/Show {i % 3}/ep{i:02d}.mp3', artist='Narrator', album='A Show', title=f'Episode {i}', name=f'ep{i:02d}.mp3') for i in range(12)]
+    plays_p = dict(plays); plays_p.update({len(songs) + i: 300 for i in range(12)})
+    mp = fresh(songs_=songs + eps_p, plays_=plays_p)
+    put_tones(mp, songs, picks, mdl)
+    run_job(mp)
+    expect(mpaths(mp) == [mdl[i]['path'] for i in picks] and not any('/Podcasts/' in p for p in mpaths(mp)),
+           'the Daily Mix skips podcast episodes (a path under /mnt/mmc/Podcasts/): the mix is the one of the library without them')
 
     # ---- a previous mix: yesterday's is shown while the new one is made and replaced by the new file; an old "Daily Mix" stock playlist is not our business (no cleanup code)
     ymix0 = X.dump_mix(day - 1, 5, 6, 3, [(1, 2, 3), (4, 5, 6)], ['Old'], PATHS[:10])   # (yesterday was made three times)

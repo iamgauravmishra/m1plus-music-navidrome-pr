@@ -86,13 +86,13 @@ def run(ctx):
     #    repeat. Each row opens its stock destination through the dispatcher with its Home id, as Songs does.
     P = pod_pages
     labels = [r.label for r in page.rows]
-    expect(labels[-2:] == ['Customize', 'Extras'] and labels.index('Artists') < labels.index('Extras'),
-           'the menu ends with Customize, Extras; the library rows come first')
+    expect(labels[-4:] == ['Customize', 'Pod', 'Podcasts', 'Extras'] and labels.index('Artists') < labels.index('Extras'),
+           'the menu ends with Customize, Pod, Podcasts, Extras; the library rows come first')
     ex_i = labels.index('Extras')
     ex = P.EXTRAS_PAGE
     n_items = 9    # the menu items proper; the nine stock Home tiles follow them among the items
-    expect(len(P.ITEMS) == 19 and len(page.rows) == 20 and ex_i == 19 and P.ITEMS[P.CUSTOMIZE_ID].label == 'Customize' and not any(r.label == 'Screenshot' for r in P.ITEMS),
-           'nineteen items (nine menu items, nine stock tiles, Customize; no Screenshot), then Extras')
+    expect(len(P.ITEMS) == 21 and len(page.rows) == 22 and ex_i == 21 and P.ITEMS[P.CUSTOMIZE_ID].label == 'Customize' and not any(r.label == 'Screenshot' for r in P.ITEMS),
+           'twenty-one items (nine menu items, nine stock tiles, Customize, Pod, Podcasts; no Screenshot), then Extras')
     expect(page.rows[ex_i].action == P.ACT_PAGE and P.PAGES[page.rows[ex_i].arg] is ex, 'the Extras row opens the Extras page')
     want = [('Favorites', 10), ('Recently Added', 13), ('Recently Played', 12), ('Most Played', 11), ('Composers', 8),
             ('Hi-Res', 9), ('Update Library', 2), ('Tidal', 1), ('CD Ripper', 15)]
@@ -101,7 +101,7 @@ def run(ctx):
     expect([(r.label, r.arg) for r in stock] == want and all(r.action == (P.ACT_LIST if r.label in lists else P.ACT_ARTISTS if r.label == 'Composers' else P.ACT_HOME) for r in stock),
            'the items after the menu\'s own nine are the nine stock Home tiles by id (the five song lists on our Songs page, Composers on our Artists page)')
     expect([(r.label, r.action, r.arg) for r in ex.rows] == [(r.label, r.action, r.arg) for r in P.ITEMS]
-           and [(r.label, r.action, r.arg) for r in page.rows[:19]] ==[(r.label, r.action, r.arg) for r in P.ITEMS],
+           and [(r.label, r.action, r.arg) for r in page.rows[:21]] ==[(r.label, r.action, r.arg) for r in P.ITEMS],
            'Extras and the menu have a row for every item (same labels and actions), so an item opens the same way from either')
     homes = [r.arg for r in P.ITEMS if r.action in (P.ACT_HOME, P.ACT_LIST) or (r.action == P.ACT_ARTISTS and r.arg)] + [r.arg for r in P.CUSTOMIZE_PAGE.rows if r.action == P.ACT_HOME]
     expect(len(set(homes)) == len(homes) and len(homes) + 5 == 18,
@@ -110,7 +110,7 @@ def run(ctx):
     m.widgets = {n: 0x30000000 + i for i, n in enumerate(['btn_return', 'btn_backtoplayer', 'btn_customize'] + [f'pod_row{i}' for i in range(len(ex.rows))])}
     m.call(on_row, a0=rows0 + 12 * ex_i)
     expect(('window_open', ex.key) in m.calls and m.names().count('widget_on') == 4 + len(ex.rows),
-           'the Extras row opens m1plus_extras and binds the navbar (Back, Now Playing, Customize), its nineteen rows and the destroy handler that tells Shanling Home it is gone (home_extras_opened)')
+           'the Extras row opens m1plus_extras and binds the navbar (Back, Now Playing, Customize), its twenty rows and the destroy handler that tells Shanling Home it is gone (home_extras_opened)')
     # the navbar's Customize button opens the Customize page, as the Customize row of the menu does (open_page, so Shanling Home's exit knows the page)
     cust_w = m.widgets['btn_customize']
     expect((cust_w, O['EVT_CLICK']) in m.bound, 'the Extras page binds a click on btn_customize')
@@ -142,7 +142,7 @@ def run(ctx):
     asset = asset_tree(path)
     ex_rows = [c for c in node(asset, 'pod_scrollview').children if c.name.startswith('pod_row')]   # (and the four section headers, pod_hdr0..3)
     icons = [r for r in awtk_ui.parse(open(path, 'rb').read()).walk() if r.name == 'pod_icon']
-    expect(len(ex_rows) == 19 and len(icons) == 19, 'nineteen Extras rows, each with its icon disc')
+    expect(len(ex_rows) == 21 and len(icons) == 21, 'twenty-one Extras rows, each with its icon disc')
     header_asset_tests(ctx, awtk_ui.parse(open(path, 'rb').read()), 'Extras')
     m = Machine()
     for i, r in enumerate([c for c in ex_rows if 50 + c.y + c.h // 2 < CLIENT_H]):
@@ -216,15 +216,15 @@ def arranged(m, rows):
     return out
 
 
-MENU_ROWS = 20   # nineteen items (the last, Customize), Extras
+MENU_ROWS = 22   # twenty-one items (the last, Podcasts), Extras
 # The Extras page's fixed order, written out (pod_pages.EXTRAS_GROUPS, English labels): four titled groups, not alphabetical
-EXTRAS_PLAY = ['Now Playing', 'Shuffle']
-EXTRAS_LIB = ['Albums', 'Artists', 'Songs', 'Playlists', 'Cover Flow', 'Genres', 'Composers', 'Folders']
+EXTRAS_PLAY = ['Now Playing', 'Shuffle', 'Pod']
+EXTRAS_LIB = ['Albums', 'Artists', 'Songs', 'Playlists', 'Cover Flow', 'Genres', 'Composers', 'Folders', 'Podcasts']
 EXTRAS_COLL = ['Favorites', 'Recently Played', 'Recently Added', 'Most Played', 'Hi-Res']
 EXTRAS_TOOLS = ['Update Library', 'CD Ripper', 'Tidal']   # Customize is in no group: the Extras page's navbar button opens it
 EXTRAS_TITLES = ['Play', 'Library', 'Collections', 'Tools']
 # what the Extras page lists for the default menu (Cover Flow, Albums, Artists, Songs, Playlists): everything else but Customize (never listed)
-DEF_EXTRAS = ['Now Playing', 'Shuffle', 'Genres', 'Composers', 'Folders', 'Favorites', 'Recently Played', 'Recently Added', 'Most Played', 'Hi-Res',
+DEF_EXTRAS = ['Now Playing', 'Shuffle', 'Pod', 'Genres', 'Composers', 'Folders', 'Podcasts', 'Favorites', 'Recently Played', 'Recently Added', 'Most Played', 'Hi-Res',
               'Update Library', 'CD Ripper', 'Tidal']
 
 
@@ -235,7 +235,7 @@ def open_menu(data=None, rows=MENU_ROWS, present=()):
     return m
 
 
-def extras_open(data=None, rows=pod_pages.CUSTOMIZE_ID + 1):
+def extras_open(data=None, rows=len(pod_pages.ITEMS)):
     """The Extras page opened by the Extras menu row: (machine, labels of the listed rows top to bottom, {row: (y, shown)})."""
     m = page_machine(rows)
     if data is not None: m.fs[MENU_FILE] = data
@@ -261,7 +261,7 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
     NI = len(P.ITEMS)
     CU = P.CUSTOMIZE_ID
     items18 = items[:18]   # the items but Customize
-    expect(items[:9] == ['Now Playing', 'Cover Flow', 'Albums', 'Artists', 'Songs', 'Playlists', 'Shuffle', 'Genres', 'Folders'] and items[CU] == 'Customize' and CU == NI - 1
+    expect(items[:9] == ['Now Playing', 'Cover Flow', 'Albums', 'Artists', 'Songs', 'Playlists', 'Shuffle', 'Genres', 'Folders'] and items[CU] == 'Customize' and items[NI - 2] == 'Pod' and items[NI - 1] == 'Podcasts' and CU == NI - 3
            and P.DEFAULT_MENU == [1, 2, 3, 4, 5] and P.parse_menu(None) == P.DEFAULT_MENU and P.parse_menu(b'12345\n') == P.DEFAULT_MENU,
            'the asset order is the item order; the default menu is items 1..5 (Cover Flow ... Playlists), Now Playing, Shuffle and Customize hidden')
     m = open_menu()
@@ -269,7 +269,7 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
     a = arranged(m, MENU_ROWS)
     expect(all(a[i] == ((i - 1) * ROW_H, True) for i in range(1, 6)) and a[NI] == (5 * ROW_H, True),
            f'the shown rows are consecutive 52 px steps from y 0, Extras right after them ({a})')
-    expect(all(a[i] == (0, False) for i in [0] + list(range(6, CU + 1))), 'Now Playing, Shuffle, Genres, Folders, the nine Extras items and Customize are hidden (and insensitive) and parked at y 0')
+    expect(all(a[i] == (0, False) for i in [0] + list(range(6, NI))), 'Now Playing, Shuffle, Genres, Folders, the nine Extras items, Customize, the Pod and Podcasts are hidden (and insensitive) and parked at y 0')
     expect(('widget_set_prop_int', m.widgets['pod_scrollview'], 'virtual_h', 6 * ROW_H) in m.calls
            and not [c for c in m.calls if c[:3] == ('widget_set_prop_int', m.widgets['pod_scrollview'], 'yoffset')],
            'the list scrolls over exactly the shown rows (virtual_h 6 x 52), from the asset\'s top (the offset is not touched)')
@@ -283,7 +283,7 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
                        (b'a\n', ['Favorites']), (b'0ei\n', ['Now Playing', 'Composers', 'CD Ripper']), (b'0123456ad\n', items[:7] + ['Favorites', 'Most Played']),
                        (b'ihgfedcba876543210\n', items18[::-1]), (b'012345678abcdefghi', items18), (b'012345678abcdefgh', items18[:-1]),
                        (b'i0\n', ['CD Ripper', 'Now Playing']), (b'j\n', ['Customize']), (b'0j\n', ['Now Playing', 'Customize']), (b'j0', ['Customize', 'Now Playing']),
-                       (b'012345678abcdefghij\n', items), (b'jihgfedcba876543210', items[::-1]), (b'1j2\n', ['Cover Flow', 'Customize', 'Albums'])):
+                       (b'012345678abcdefghijkl\n', items), (b'lkjihgfedcba876543210', items[::-1]), (b'k\n', ['Pod']), (b'l\n', ['Podcasts']), (b'1j2\n', ['Cover Flow', 'Customize', 'Albums'])):
         for off in (b'', b'-', b'-0', b'-a\n', b'-bd'):   # the part after '-' (items turned off Extras) never changes the menu; an item both shown and off is invalid
             d = (data.rstrip(b'\n') + off).rstrip(b'\n') + b'\n' if off else data
             m = open_menu(d)
@@ -332,7 +332,7 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
            b'012345678abcdefghi0x\n', b'0123456789abcdefghx\n', b'x0\n', b'0x0\n', b'\nx', b'\n\n', b'0\r\n',
            b'0123456780123456', b'a' * 200, bytes(range(256)), b'01\x002\n', b'0123456789012345678901234567890123456789\n', b'0' * 1000000,
            # the item characters: unknown ones, duplicates, an uppercase letter, one too many, over the file cap
-           b'ihgfedcba876543210\n\n', b'k\n', b'aa\n', b'A\n', b'0a0\n', b'012345678abcdefghijk\n', b'012345678abcdefghij0\n', b'012345678abcdefghija\n',
+           b'ihgfedcba876543210\n\n', b'm\n', b'aa\n', b'A\n', b'0a0\n', b'012345678abcdefghijkm\n', b'012345678abcdefghijk0\n', b'012345678abcdefghija\n',
            b'012345678abcdefghij\n\n', b'0123456789abcdefgh\n', b'z', b'0123456789abcdefghijklmn', b'0123456789abcdefghijklm',
            # the turned-off part: '-' once, no id in both parts, and Customize (j) never in it
            b'1-2-3\n', b'1--2\n', b'--', b'--\n', b'-\n-', b'1-1\n', b'1-21\n', b'12-1', b'0-0', b'-j\n', b'1-j\n', b'12345-j\n', b'1-2j\n', b'j-j', b'-1-\n', b'1-2\n\n',
@@ -354,7 +354,7 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
         pool = b'0123456789\n -jxA' if rnd.random() < 0.3 else (P.ID_CHARS + '-').encode() if rnd.random() < 0.5 else b'012345678'
         data = bytes(rnd.choice(pool) for _ in range(n))
         if rnd.random() < 0.5:   # a valid-looking permutation with at most one '-', so the accepted case is exercised too
-            ids = list(P.ID_CHARS.encode()); rnd.shuffle(ids); ids = ids[:rnd.randrange(0, 20)]
+            ids = list(P.ID_CHARS.encode()); rnd.shuffle(ids); ids = ids[:rnd.randrange(0, 21)]
             ids.insert(rnd.randrange(0, len(ids) + 1), ord('-')) if rnd.random() < 0.8 else None
             data = bytes(ids) + rnd.choice((b'', b'\n'))
         ids, off = P.parse_menu_full(data)
@@ -368,22 +368,22 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
         if err: expect(False, f'Extras page, saved {data!r}: {err}'); break
     else: expect(True, 'the payload reads 400 random lists as the Python model does (the menu and the Extras page with its section headers, positions and stacking)')
     expect(P.parse_menu(b'0123456\n') == list(range(7)) == P.parse_menu(b'0123456') and P.parse_menu(b'0e8a\n') == [0, 13, 8, 9]
-           and P.parse_menu(b'012345678abcdefghi\n') == list(range(18)) and P.parse_menu(b'012345678abcdefghij\n') == list(range(19))
+           and P.parse_menu(b'012345678abcdefghi\n') == list(range(18)) and P.parse_menu(b'012345678abcdefghijk\n') == list(range(20)) and P.parse_menu(b'012345678abcdefghijkl\n') == list(range(21))
            and P.parse_menu(b'0j\n') == [0, 18] and P.parse_menu(b'x\n') == P.DEFAULT_MENU,
-           'the Python model: the item characters are ids 0..8, 9..17 (a..i) and 18 (j, Customize); x is unknown')
+           'the Python model: the item characters are ids 0..8, 9..17 (a..i) and 18 (j, Customize) and 19 (k, the Pod) and 20 (l, Podcasts); x is unknown')
     expect(P.OFF_CHAR == '-' and P.DEFAULT_OFF == [] and P.format_menu(P.DEFAULT_MENU) == '12345\n' and P.format_menu(P.DEFAULT_MENU, P.DEFAULT_OFF) == '12345\n'
            and P.parse_menu_full(b'12345\n') == (P.DEFAULT_MENU, []) and P.parse_menu_full(b'12345') == (P.DEFAULT_MENU, []) and P.parse_menu_full(None) == (P.DEFAULT_MENU, [])
            and P.parse_menu_full(b'\n') == ([], []) and P.parse_menu_full(b'-\n') == ([], []) and P.parse_menu_full(b'0ea\n') == ([0, 13, 9], [])
            and P.parse_menu_full(b'12345-ab\n') == (P.DEFAULT_MENU, [9, 10]) and P.parse_menu_full(b'0-1') == ([0], [1]) and P.parse_menu_full(b'-0\n') == ([], [0])
            and P.parse_menu_full(b'0-j\n') == (P.DEFAULT_MENU, []) and P.parse_menu_full(b'0-1-2\n') == (P.DEFAULT_MENU, []) and P.parse_menu_full(b'0-0\n') == (P.DEFAULT_MENU, [])
            and P.format_menu([1, 2, 3], [10, 9]) == '123-ab\n' and P.format_menu([1], [17, 0, 13]) == '1-0ei\n'
-           and P.format_menu([], []) == '\n' and P.format_menu(list(range(19))) == '012345678abcdefghij\n'
-           and len(P.format_menu(list(range(10)), list(range(10, 18)))) < P.MENU_FILE_MAX and len(P.format_menu([], list(range(18)))) < P.MENU_FILE_MAX,
+           and P.format_menu([], []) == '\n' and P.format_menu(list(range(21))) == '012345678abcdefghijkl\n'
+           and len(P.format_menu(list(range(10)), list(range(10, 18)) + [19, 20])) < P.MENU_FILE_MAX and len(P.format_menu([], list(range(18)) + [19, 20])) < P.MENU_FILE_MAX,
            'the Python model: "<shown>[-<off>]", the default 12345, the off part in the Extras order, Customize never off, the longest list fits the file cap')
     m = open_menu(b'0\n'); m.fs[MENU_FILE] = b'0\n'
     expect(m.fs[MENU_FILE] == b'0\n', 'a valid list is never rewritten by reading it')
-    m = open_menu(b'jihgfedcba876543210\n')
-    expect(m.icount < 200000, f'the longest valid list: arranging twenty rows stays cheap ({m.icount} instructions)')
+    m = open_menu(b'lkjihgfedcba876543210\n')
+    expect(m.icount < 200000, f'the longest valid list: arranging twenty-one rows stays cheap ({m.icount} instructions)')
     m = open_menu(b'876543210-abcdefghi\n')
     expect(m.icount < 200000, f'a long list with a long off part: arranging stays cheap ({m.icount} instructions)')
 
@@ -410,24 +410,24 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
     full = EXTRAS_PLAY + EXTRAS_LIB + EXTRAS_COLL + EXTRAS_TOOLS
     expect(P.EXTRAS_GROUPS == tuple(zip(EXTRAS_TITLES, map(tuple, (EXTRAS_PLAY, EXTRAS_LIB, EXTRAS_COLL, EXTRAS_TOOLS)))) and P.EXTRAS_TITLES == EXTRAS_TITLES
            and sorted(full + ['Customize']) == sorted(items) and [items[i] for i in P.EXTRAS_ORDER] == full + ['Customize'] and 0 < hdr_h < ROW_H
-           and [P.EXTRAS_GROUP_OF[i] for i in P.EXTRAS_ORDER] == [0] * 2 + [1] * 8 + [2] * 5 + [3] * 3 + [4] and P.EXTRAS_GROUP_OF[CU] == len(P.EXTRAS_GROUPS),
+           and [P.EXTRAS_GROUP_OF[i] for i in P.EXTRAS_ORDER] == [0] * 3 + [1] * 9 + [2] * 5 + [3] * 3 + [4] and P.EXTRAS_GROUP_OF[CU] == len(P.EXTRAS_GROUPS),
            f'the Extras order is Play, Library, Collections, Tools, each item once, in the written order, then Customize (in no group) ({[items[i] for i in P.EXTRAS_ORDER]})')
     left = lambda shown: [x for x in full if x not in shown]
     m, order, a = extras()
     want_ex = left([items[i] for i in P.DEFAULT_MENU])
     expect(order == want_ex == DEF_EXTRAS, f'default: Now Playing, Shuffle (Play), Genres, Composers, Folders (Library), the collections, the Tools; no Customize ({order})')
     expect(all(a[i] == (0, False) for i in P.DEFAULT_MENU) and ('widget_set_prop_int', m.widgets['pod_scrollview'], 'virtual_h', len(want_ex) * ROW_H + 4 * hdr_h) in m.calls,
-           'the items the menu shows are hidden here, the list is the thirteen others and four headers long')
+           'the items the menu shows are hidden here, the list is the fifteen others and four headers long')
     ys = [y for y, i in sorted((y, i) for i, (y, on) in a.items() if on)]
     err = extras_ok(m, None)
     expect(not err, f'default: the arrangement is the Python model\'s (pod_pages.extras_display / extras_layout) ({err})')
-    expect(extras_state(m, range(NI)) == [('hdr', 0, 0), ('row', 0, 40), ('row', 6, 92), ('hdr', 1, 144), ('row', 7, 184), ('row', 13, 236), ('row', 8, 288),
-                                           ('hdr', 2, 340), ('row', 9, 380), ('row', 11, 432), ('row', 10, 484), ('row', 12, 536), ('row', 14, 588),
-                                           ('hdr', 3, 640), ('row', 15, 680), ('row', 17, 732), ('row', 16, 784)] and hdr_h == 40,
+    expect(extras_state(m, range(NI)) == [('hdr', 0, 0), ('row', 0, 40), ('row', 6, 92), ('row', 19, 144), ('hdr', 1, 196), ('row', 7, 236), ('row', 13, 288), ('row', 8, 340), ('row', 20, 392),
+                                           ('hdr', 2, 444), ('row', 9, 484), ('row', 11, 536), ('row', 10, 588), ('row', 12, 640), ('row', 14, 692),
+                                           ('hdr', 3, 744), ('row', 15, 784), ('row', 17, 836), ('row', 16, 888)] and hdr_h == 40,
            'default: the headers and rows at their y (40 px headers, 52 px rows), written out')
-    expect(ys[0] == hdr_h and ys == sorted(ys) and ys[1] - ys[0] == ROW_H and ys[2] - ys[1] == hdr_h + ROW_H, 'the shown rows are in display order; a header (40 px) lies between the groups, none between rows')
+    expect(ys[0] == hdr_h and ys == sorted(ys) and ys[1] - ys[0] == ROW_H and ys[3] - ys[2] == hdr_h + ROW_H, 'the shown rows are in display order; a header (40 px) lies between the groups, none between rows')
     m, order, a = extras(b'\n')
-    expect(order == full, 'every item hidden: the eighteen but Customize are in Extras, in the fixed order')
+    expect(order == full, 'every item hidden: the twenty but Customize are in Extras, in the fixed order')
     m, order, a = extras(b'012345678\n')
     expect(order == left(items[:9]) and all(a[i] == (0, False) for i in range(9)), 'Genres and Folders in the menu too: Extras is the other nine')
     m, order, a = extras(b'0345\n')
@@ -442,15 +442,15 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
     ys = [y for y, i in sorted((y, i) for i, (y, on) in a.items() if on)]
     expect(all(b - a_ in (ROW_H, ROW_H + hdr_h) for a_, b in zip(ys, ys[1:])) and ys[0] == hdr_h,
            'the remaining Extras rows are 52 px apart, 92 where a header lies between two groups')
-    m, order, a = extras(b'012345678abcdefghi\n')
+    m, order, a = extras(b'012345678abcdefghikl\n')
     expect(order == [] and all(a[i] == (0, False) for i in range(NI)), 'every item but Customize shown in the menu: Extras is empty (Customize is never listed)')
-    m, order, a = extras(b'012345678abcdefghij\n')
+    m, order, a = extras(b'012345678abcdefghijkl\n')
     expect(order == [] and all(a[i] == (0, False) for i in range(NI)) and ('widget_set_prop_int', m.widgets['pod_scrollview'], 'virtual_h', 0) in m.calls,
            'every item shown in the menu: Extras is empty (its menu row stays)')
     m, order, a = extras(b'i0\n')
     expect(order == left(['CD Ripper', 'Now Playing']), f'a shown last tile and a shown first item both leave Extras ({order})')
     m, order, a = extras(b'j\n')
-    expect(order == full, f'Customize alone in the menu: Extras has the other eighteen ({order})')
+    expect(order == full, f'Customize alone in the menu: Extras has the other twenty ({order})')
     # Customize hidden from the menu (the default) is not on Extras either: its row stays hidden (the navbar button opens Customize)
     m, order, a = extras(b'123456\n')
     expect(order == [x for x in DEF_EXTRAS if x != 'Shuffle'] and a[CU] == (0, False),
@@ -463,7 +463,7 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
            f'Favorites and Recently Added turned off: not listed, hidden and insensitive; Customize (hidden from the menu) is not listed either ({order})')
     m, order, a = extras(b'12345j-ab\n')
     expect(order == [x for x in DEF_EXTRAS if x not in ('Customize', 'Favorites', 'Recently Added')] and extras_ok(m, b'12345j-ab') == '', f'the same with Customize shown ({order})')
-    m, order, a = extras(b'-' + P.ID_CHARS[:18].encode() + b'\n')
+    m, order, a = extras(b'-' + P.ID_CHARS.replace('j', '').encode() + b'\n')
     expect(order == [] and ('widget_set_prop_int', m.widgets['pod_scrollview'], 'virtual_h', 0) in m.calls and all(a[i] == (0, False) for i in range(NI)),
            'every item but Customize turned off (nothing shown): Extras is empty')
     m, order, a = extras(b'0-0\n')
@@ -576,8 +576,8 @@ def settings_tests(ctx, on_row, rows0):
         return m
 
     # 15. Customize: Main Menu, Extras, Home Screen and Cover Flow (sub-pages), Playback, System Settings, Developer; a menu item like the others
-    expect([r.label for r in S.rows] == ['Main Menu', 'Extras', 'Home Screen', 'Cover Flow', 'Playback', 'System Settings', 'Developer'],
-           'the Customize page lists Main Menu, Extras, Home Screen, Cover Flow, Playback, System Settings and Developer')
+    expect([r.label for r in S.rows] == ['Main Menu', 'Extras', 'Home Screen', 'Cover Flow', 'Cassette Mode', 'Playback', 'System Settings', 'Developer'],
+           'the Customize page lists Main Menu, Extras, Home Screen, Cover Flow, Cassette Mode, Playback, System Settings and Developer')
     pb = next(r for r in S.rows if r.label == 'Playback'); ss = next(r for r in S.rows if r.label == 'System Settings')
     expect((pb.action, pb.arg) == (P.ACT_HOME, P.HOME_PLAYSET) and (ss.action, ss.arg) == (P.ACT_HOME, P.HOME_SYSSET),
            'Playback opens the stock Play settings page, System Settings the stock one')
@@ -654,7 +654,7 @@ def extrascfg_tests(ctx, on_row, rows_s):
     m = open_page()
     labels, ys = listed(m)
     expect(('window_open', P.EXTRASCFG_PAGE.key) in m.calls and labels == CFG_DEF and hidden_ok(m) and extras_ok(m, None, cfg=True) == ''
-           and sorted(ys.values())[:3] == [hdr_h, hdr_h + ROW_H, 2 * hdr_h + 2 * ROW_H], f'default menu: the items it hides, in the Extras order, under their group headers ({labels}, {extras_ok(m, None, cfg=True)})')
+           and sorted(ys.values())[:3] == [hdr_h, hdr_h + ROW_H, hdr_h + 2 * ROW_H], f'default menu: the items it hides, in the Extras order, under their group headers ({labels}, {extras_ok(m, None, cfg=True)})')
     expect([k for k, key, y in extras_state(m, ids)].count('hdr') == 4 and extras_state(m, ids)[-4][:2] == ('hdr', 3) and len(extras_state(m, ids)) == len(CFG_DEF) + 4,
            'four headers shown: the Tools header too, for its three rows without Customize (which has no row here)')
     expect(all(v == ['sset_on'] for i, v in switches(m).items() if items[i] in labels) and 'Customize' not in labels,
@@ -663,27 +663,27 @@ def extrascfg_tests(ctx, on_row, rows_s):
            'a click handler per row and a destroy handler; the list scrolls over exactly the rows and headers shown')
     expect(len([c for c in m.calls if c[0] == 'widget_restack']) == len(ids) + len(HDRS), 'the rows and the headers are restacked in display order, the hidden ones last (extras_ok)')
     m = open_page(b'\n')
-    expect(listed(m)[0] == [x for x in full if x != 'Customize'] and len(listed(m)[0]) == 18 and extras_ok(m, b'\n', cfg=True) == '',
-           'nothing shown in the menu: all eighteen rows (Customize has none)')
-    m = open_page(b'012345678abcdefghij\n')
+    expect(listed(m)[0] == [x for x in full if x != 'Customize'] and len(listed(m)[0]) == 20 and extras_ok(m, b'\n', cfg=True) == '',
+           'nothing shown in the menu: all twenty rows (Customize has none)')
+    m = open_page(b'012345678abcdefghijkl\n')
     expect(listed(m)[0] == [] and hidden_ok(m) and ('widget_set_prop_int', m.widgets['pod_scrollview'], 'virtual_h', 0) in m.calls and extras_state(m, ids) == []
-           and extras_ok(m, b'012345678abcdefghij\n', cfg=True) == '', 'everything shown in the menu: no row and no header')
+           and extras_ok(m, b'012345678abcdefghijkl\n', cfg=True) == '', 'everything shown in the menu: no row and no header')
     import random
     rnd = random.Random(11)
     for _ in range(300):   # random saved lists (valid and not): the page is the Python model's, headers, y positions, stacking and virtual_h
-        k = rnd.randrange(0, 20)
+        k = rnd.randrange(0, 21)
         pool = list(P.ID_CHARS); rnd.shuffle(pool)
-        data = (''.join(pool[:k]) + ('-' + ''.join(rnd.sample(P.ID_CHARS[:18], rnd.randrange(0, 5))) if rnd.random() < 0.5 else '') + chr(10)).encode()
+        data = (''.join(pool[:k]) + ('-' + ''.join(rnd.sample(P.ID_CHARS.replace('j', ''), rnd.randrange(0, 5))) if rnd.random() < 0.5 else '') + chr(10)).encode()
         err = extras_ok(open_page(data), data, cfg=True)
         if err: expect(False, f'Customize > Extras, saved {data!r}: {err}'); break
     else: expect(True, 'the page is the Python model\'s for 300 random saved lists (headers shown iff their group has a row, y positions, stacking, virtual_h)')
-    m = open_page(b'012345678abcdefghj\n')   # everything shown in the menu but CD Ripper: its group's header shows with it, and no other
-    expect(extras_ok(m, b'012345678abcdefghj\n', cfg=True) == '' and listed(m)[0] == ['CD Ripper'] and [t[:2] for t in extras_state(m, ids)] == [('hdr', 3), ('row', 17)],
+    m = open_page(b'012345678abcdefghjkl\n')   # everything shown in the menu but CD Ripper: its group's header shows with it, and no other
+    expect(extras_ok(m, b'012345678abcdefghjkl\n', cfg=True) == '' and listed(m)[0] == ['CD Ripper'] and [t[:2] for t in extras_state(m, ids)] == [('hdr', 3), ('row', 17)],
            'only CD Ripper left: the Tools header and the row')
     m = open_page(b'1-0a\n')
     labels, _ = listed(m)
     sw = switches(m)
-    expect(labels[:3] == ['Now Playing', 'Shuffle', 'Albums'] and 'Cover Flow' not in labels and sw[0] == ['sset_off'] and sw[9] == ['sset_off'] and sw[10] == ['sset_on'],
+    expect(labels[:3] == ['Now Playing', 'Shuffle', 'Pod'] and 'Cover Flow' not in labels and sw[0] == ['sset_off'] and sw[9] == ['sset_off'] and sw[10] == ['sset_on'],
            f'a saved list with off items: their switches are off, the others on, the menu\'s items have no row ({labels[:3]})')
     expect(extras_ok(m, b'1-0a\n', cfg=True) == '', 'and the headers, positions and stacking are the model\'s (the turned-off ones still listed here)')
     for bad in (b'1-1\n', b'0-j\n', b'1-2-3\n', b'x\n'):
@@ -741,7 +741,7 @@ def extrascfg_tests(ctx, on_row, rows_s):
     tree = awtk_ui.parse(open(path, 'rb').read())
     rows = [w for w in tree.walk() if w.type == 'list_item']
     expect([r.name for r in rows] == [f'pod_row{i}' for i in ids] and [pod_i18n.shown_english(next(c for c in r.children if c.type == 'hscroll_label')) for r in rows] == [items[i] for i in ids],
-           'eighteen rows pod_row0..17 (no Customize) in the item order')
+           'twenty rows pod_row0..17, 19, 20 (no Customize) in the item order')
     expect(all(r.find(f'pod_switch{i}') is not None and r.find(f'pod_switch{i}').get('image') == 'sset_on' and r.find(f'pod_switch{i}').get('sensitive') == 'false'
                and (r.find(f'pod_switch{i}').w, r.find(f'pod_switch{i}').h) == (57, 28) and r.find('pod_icon') is not None and not [w for w in r.walk() if w.name.startswith('pod_up')]
                for i, r in zip(ids, rows)), 'each row: the stock 57x28 switch image (on), the icon disc, no up arrow')
@@ -971,9 +971,9 @@ def mainmenu_tests(ctx, on_row, rows_s, mm_i):
     expect(labels[:3] == ['Composers', 'Now Playing', 'CD Ripper'] and labels[3:] == [x for x in items if x not in labels[:3]]
            and on == [True] * 3 + [False] * (n - 3) and up == [False, True, True] + [False] * (n - 3),
            f'Extras items in a saved list come first in their place, the rest follow in default order ({labels[:5]})')
-    m = open_page(b'012345678abcdefghij\n'); m.log = list(m.calls)
+    m = open_page(b'012345678abcdefghijkl\n'); m.log = list(m.calls)
     labels, on, up = state(m)
-    expect(labels == items and all(on) and up == [False] + [True] * (n - 1), 'all nineteen shown: an arrow on every row but the first')
+    expect(labels == items and all(on) and up == [False] + [True] * (n - 1), 'all twenty-one shown: an arrow on every row but the first')
     m = open_page(b'0123456x\n'); m.log = list(m.calls)
     labels, on, up = state(m)
     expect(labels == dflt and on == [True] * DN + [False] * (n - DN), 'a saved list with the retired x (the Extras row): the defaults')
@@ -986,13 +986,13 @@ def mainmenu_tests(ctx, on_row, rows_s, mm_i):
     run(m, lambda: m.click('pod_row1'))   # Cover Flow off
     expect(m.fs.get(MENU_FILE) == b'2345\n' and ('rename', MENU_TMP, MENU_FILE) in m.calls and MENU_TMP not in m.fs, f'hide Cover Flow: saved atomically ({m.fs.get(MENU_FILE)!r})')
     labels, on, up = state(m)
-    expect(labels == items[2:6] + items[:2] + items[6:] and on == [True] * 4 + [False] * 15
-           and up == [False] + [True] * 3 + [False] * 15, f'it moves to the hidden group (default order after the shown ones), its switch off ({labels}, {on})')
+    expect(labels == items[2:6] + items[:2] + items[6:] and on == [True] * 4 + [False] * 17
+           and up == [False] + [True] * 3 + [False] * 17, f'it moves to the hidden group (default order after the shown ones), its switch off ({labels}, {on})')
     run(m, lambda: m.click('pod_row8'))   # Folders on
     expect(m.fs.get(MENU_FILE) == b'23458\n', f'show Folders: it joins the end ({m.fs.get(MENU_FILE)!r})')
     labels, on, up = state(m)
     expect(labels[:5] == ['Albums', 'Artists', 'Songs', 'Playlists', 'Folders'] and labels[5:8] == ['Now Playing', 'Cover Flow', 'Shuffle']
-           and on == [True] * 5 + [False] * 14, f'and is the last shown row ({labels})')
+           and on == [True] * 5 + [False] * 16, f'and is the last shown row ({labels})')
     run(m, lambda: m.click('pod_row0'))   # Now Playing, hidden by default, on: it joins the end
     expect(m.fs.get(MENU_FILE) == b'234580\n' and state(m)[0][5] == 'Now Playing' and state(m)[1][5] is True, 'show Now Playing (hidden by default): it joins the end')
     run(m, lambda: m.click('pod_row0'))   # hide it
@@ -1013,10 +1013,10 @@ def mainmenu_tests(ctx, on_row, rows_s, mm_i):
     expect(m.fs.get(MENU_FILE) == b'\n' and all(x is False for x in state(m)[1]) and not any(state(m)[2]),
            'every item can be hidden (Customize too; Extras stays on the menu): the list is empty, no arrow shows')
     for i in range(n): run(m, lambda i=i: m.click(f'pod_row{i}'))
-    expect(m.fs.get(MENU_FILE) == b'012345678abcdefghij\n' and all(state(m)[1]) and len(m.fs[MENU_FILE]) < P.MENU_FILE_MAX,
-           'and every item, all nineteen, can be shown again: the longest list fits the file cap')
+    expect(m.fs.get(MENU_FILE) == b'012345678abcdefghijkl\n' and all(state(m)[1]) and len(m.fs[MENU_FILE]) < P.MENU_FILE_MAX,
+           'and every item, all twenty-one, can be shown again: the longest list fits the file cap')
     run(m, lambda: arrow(m, 17))
-    expect(m.fs.get(MENU_FILE) == b'012345678abcdefgihj\n', 'arrows work down at the end of the long list (the page scrolls)')
+    expect(m.fs.get(MENU_FILE) == b'012345678abcdefgihjkl\n', 'arrows work down at the end of the long list (the page scrolls)')
     m = open_page(); m.fail.add(('write', MENU_TMP)); m.log = list(m.calls)
     run(m, lambda: m.click('pod_row1'))
     expect(MENU_FILE not in m.fs and state(m)[0] == dflt and state(m)[1][:DN] == [True] * DN and MENU_TMP not in m.fs,
@@ -1072,7 +1072,7 @@ def mainmenu_tests(ctx, on_row, rows_s, mm_i):
     expect(m.fs.get(MENU_FILE) == b'1245\n', 'the top row has no arrow: a tap on that spot is a toggle (it never moves a first item)')
     m = open_page(); m.log = list(m.calls); m.fail.add(('rename', MENU_FILE))
     run(m, lambda: arrow(m, 5))
-    expect(MENU_FILE not in m.fs and state(m)[0] == dflt and state(m)[2] == [False] + [True] * 4 + [False] * 14, 'a failed save of a move is undone too')
+    expect(MENU_FILE not in m.fs and state(m)[0] == dflt and state(m)[2] == [False] + [True] * 4 + [False] * 16, 'a failed save of a move is undone too')
     m = open_page()
     h = {x: m.widgets[x] for x in m.widgets if x.startswith('pod_up')}
     expect(all((h[f'pod_up{i}'], 0) in [c[1:3] for c in m.calls if c[0] == 'widget_set_visible'] and (h[f'pod_up{i}'], 0) in [c[1:3] for c in m.calls if c[0] == 'widget_set_sensitive']
@@ -1135,11 +1135,11 @@ def mainmenu_tests(ctx, on_row, rows_s, mm_i):
     rows = [w for w in tree.walk() if w.type == 'list_item']
     expect([pod_i18n.shown_english(next(c for c in r.children if c.type == 'hscroll_label')) for r in rows] == items
            and [r.name for r in rows] == [f'pod_row{i}' for i in range(n)],
-           'nineteen rows named pod_row0..18: the items in the default order (the menu\'s Extras row is not on this page)')
+           'twenty rows named pod_row0..19: the items in the default order (the menu\'s Extras row is not on this page)')
     lv = tree.find('pod_listview')
     expect(lv.type == 'list_view' and lv.children[0].type == 'scroll_view' and tree.find('scroll_bar_m') is not None and lv.y + lv.h == CLIENT_H
            and max(r.y + r.h for r in rows) == n * ROW_H > lv.h,
-           'stock list_view > scroll_view + scroll bar (nineteen 52 px rows scroll), ending at the window bottom')
+           'stock list_view > scroll_view + scroll bar (twenty 52 px rows scroll), ending at the window bottom')
     for i, r in enumerate(rows):
         swi, upb = r.find(f'pod_switch{i}'), r.find(f'pod_up{i}')
         lab = next(c for c in r.children if c.type == 'hscroll_label')

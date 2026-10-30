@@ -161,6 +161,21 @@ def run(ctx):
     expect(len(paint) == 1 and paint[0][1] == m.widgets['img_playcover'] and paint[0][3] == PSYMS['np_on_art_paint'], 'the cover widget paints its corners')
     # the timer's first run is part of the init: no cover (type 0) -> the neutral tone, once
     expect(m.styles == [(WIN, 'normal:bg_color', O['NP_NEUTRAL'])], f'no cover file: the neutral tone ({[hex(x[2]) for x in m.styles]})')
+    m.screen(False); m.calls = []; m.tick()
+    expect(not any(c[0] == 'get_playtimeandlength' for c in m.calls), 'screen-off tick skips visual time work')
+    expect(('timer_modify', 0x777, 1000) in m.calls, 'screen-off tick slows the page timer')
+    m.tick(); expect(not any(c[0] == 'timer_modify' for c in m.calls), 'unchanged dark interval is not modified again')
+    m.screen(True); m.calls = []; m.tick()
+    expect(('timer_modify', 0x777, 500) in m.calls, 'first lit tick restores the page timer')
+    expect(any(c[0] == 'get_playtimeandlength' for c in m.calls), 'first lit tick catches up')
+    m.screen(False); m.timer_modify_fail = True; m.tick(); m.tick()
+    expect(('timer_modify', 0x777, 1000) in m.calls, 'a failed retime is retried')
+    m.timer_modify_fail = False; m.tick(); m.tick()
+    expect(not any(c[0] == 'timer_modify' for c in m.calls), 'a successful retry is remembered')
+    m.screen(True)
+    m.init(win=WIN + 0x100); m.screen(False); m.tick()
+    expect(('timer_modify', 0x777, 1000) in m.calls, 'a replacement page retimes its own fresh timer')
+    m.init(win=WIN)
 
     # destroy: the timer goes, nothing runs afterwards
     m.calls = []

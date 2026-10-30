@@ -181,11 +181,12 @@ def home_tests(expect, page):
     homeset_i = next(i for i, r in enumerate(SETTINGS.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.HOMESET_PAGE_INDEX)
     settings_i = next(i for i, r in enumerate(page.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.CUSTOMIZE_PAGE_INDEX)
     entry = PSYMS['m1plus_home_click']
-    expect([r.label for r in SETTINGS.rows] == ['Main Menu', 'Extras', 'Home Screen', 'Cover Flow', 'Playback', 'System Settings', 'Developer'] and
-           [r.arg for r in SETTINGS.rows[4:6]] == [pod_pages.HOME_PLAYSET, pod_pages.HOME_SYSSET] and homeset_i == 2
+    expect([r.label for r in SETTINGS.rows] == ['Main Menu', 'Extras', 'Home Screen', 'Cover Flow', 'Cassette Mode', 'Playback', 'System Settings', 'Developer'] and
+           [r.arg for r in SETTINGS.rows[5:7]] == [pod_pages.HOME_PLAYSET, pod_pages.HOME_SYSSET] and homeset_i == 2
            and (SETTINGS.rows[3].action, SETTINGS.rows[3].arg) == (pod_pages.ACT_PAGE, pod_pages.CFSET_PAGE_INDEX)
+           and (SETTINGS.rows[4].action, SETTINGS.rows[4].arg) == (pod_pages.ACT_PAGE, pod_pages.CASSETTE_PAGE_INDEX)
            and (SETTINGS.rows[1].action, SETTINGS.rows[1].arg) == (pod_pages.ACT_PAGE, pod_pages.EXTRASCFG_PAGE_INDEX)
-           and (SETTINGS.rows[6].action, SETTINGS.rows[6].arg) == (pod_pages.ACT_PAGE, pod_pages.DEVELOPER_PAGE_INDEX)
+           and (SETTINGS.rows[7].action, SETTINGS.rows[7].arg) == (pod_pages.ACT_PAGE, pod_pages.DEVELOPER_PAGE_INDEX)
            and [(r.label, r.action) for r in pod_pages.DEVELOPER_PAGE.rows] == [('Screenshot', pod_pages.ACT_SHOT)]
            and not [r for r in SETTINGS.rows if r.action in (pod_pages.ACT_GRID, pod_pages.ACT_STARTUP)],
            'the Customize page: Main Menu, Extras, Home Screen and Cover Flow (sub-pages), Playback and System Settings (stock pages) and Developer last (its page holds Screenshot); no launcher rows left on it')
@@ -193,7 +194,7 @@ def home_tests(expect, page):
                                                            ('Regenerate Daily Mix', pod_pages.ACT_REGEN), ('Shanling Home', pod_pages.ACT_GRID)]
            and HOMESET.title == 'Home Screen' and (start_i, grid_i) == (0, 4),
            'the Home Screen page: titled Home Screen, rows Boot to M1+ Music (switch), Recent Albums (the Recently Played shelf, switch), Daily Mix (the card, switch), Regenerate Daily Mix (action) and Shanling Home')
-    expect(page.rows[0].label == 'Now Playing' and page.rows[-1].label == 'Extras' and page.rows[settings_i].label == 'Customize' and len(page.rows) == 20
+    expect(page.rows[0].label == 'Now Playing' and page.rows[-1].label == 'Extras' and page.rows[settings_i].label == 'Customize' and len(page.rows) == 22
            and not [r for r in page.rows if r.action in (pod_pages.ACT_GRID, pod_pages.ACT_STARTUP)],
            'the menu keeps the grouped rows, a Customize row and the Extras row last, which opens the Customize page (no launcher rows left on it)')
 

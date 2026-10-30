@@ -24,6 +24,7 @@
 #include "offsets.inc"
 #include "stock.h"
 #include "i18n.h"
+#include "podcasts.h"
 
 #define P(r, off) (*(char **)((char *)(r) + (off)))
 #define I(r, off) (*(int *)((char *)(r) + (off)))
@@ -244,7 +245,11 @@ int shuffle_play(int kind) {
         toast(TR("Too many songs to shuffle"));
         return -1;
     }
-    if (kind == SHUFFLE_SONGS) at = rand_below(n);
+    if (kind == SHUFFLE_SONGS) {
+        unsigned tries;
+        at = rand_below(n);
+        for (tries = 0; tries < 50 && pc_is_path(str(deque_at(list, at), REC_PATH)); ++tries) at = rand_below(n);   /* podcasts stay out of the shuffle (patch/pcmodel.c) */
+    }
     pick = deque_at(list, at);
     queue = _create_deque("stSongInfo");
     if (!queue) return -1;
@@ -258,7 +263,18 @@ int shuffle_play(int kind) {
          * the same song */
         if (at < n && !strcmp(str(deque_at(queue, at), REC_PATH), str(pick, REC_PATH))) idx = at;
         else if (found >= 0 && (unsigned)found < n) idx = (unsigned)found;
-    } else if (n && !group_order(queue, n, kind == SHUFFLE_FOLDERS)) {
+    }
+    if (n) {   /* the podcast files are taken out of the queue (a copy, made only when there are any), then the albums and folders are put in their play order */
+        int at_i = (int)idx;
+        queue = pc_strip(queue, &at_i);
+        idx = (unsigned)at_i;
+        n = queue ? deque_size(queue) : 0;
+        if (!queue) {
+            toast(TR("Update Local Music first"));
+            return -1;
+        }
+    }
+    if (kind != SHUFFLE_SONGS && n && !group_order(queue, n, kind == SHUFFLE_FOLDERS)) {
         deque_destroy(queue);
         toast(TR("Not enough memory"));
         return -1;

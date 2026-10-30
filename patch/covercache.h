@@ -34,6 +34,7 @@ int cc_find_album(const char *album);                  /* the library Albums row
  * sorted view is a permutation of its row numbers, and anything that goes back to stock (cc_open_album) takes the stock row. */
 int cc_nocase(const char *a, const char *b);           /* ASCII case-insensitive compare (SQLite NOCASE, as the stock list groups) */
 int cc_name_cmp(const char *a, const char *b);         /* cc_nocase with a leading "The " dropped from both (the Artist order's name key) */
+const char *cc_name_key(const char *s);                 /* s without a leading "The " (when something follows it): the text the Artist order compares, and the Artists page's section letter comes from */
 void cc_heapsort(unsigned *v, unsigned n, int (*cmp)(unsigned, unsigned)); /* in place, no memory; cmp must be total (break ties by the row number) */
 int cc_sort_artist(void);                           /* the setting: 1 Artist (default), 0 Album */
 int cc_sort_toggle(void);                              /* flip it, saved atomically; the new state, or -1 when it could not be saved */

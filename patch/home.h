@@ -26,6 +26,8 @@
 #define LANDSCAPE_TMP "/mnt/data/m1plus-landscape.tmp"
 #define CFSORT_FILE "/mnt/data/m1plus-cfsort" /* the album order of Cover Flow and Albums: "0" or "0\n" = by album title (stock), anything else or missing = Artist (the default) */
 #define CFSORT_TMP "/mnt/data/m1plus-cfsort.tmp"
+#define TAPETHEME_FILE "/mnt/data/m1plus-tapetheme" /* the Cassette Mode theme: "1" = Chrome, "2" = Metal (each with an optional newline), anything else or missing = Normal (the default) */
+#define TAPETHEME_TMP "/mnt/data/m1plus-tapetheme.tmp"
 #define MENU_FILE "/mnt/data/m1plus-menu"  /* the menu's visible items in order, one digit (item id) each (patch/menu.c); missing or invalid = the defaults */
 #define MENU_TMP "/mnt/data/m1plus-menu.tmp"
 #define RECENT_FILE "/mnt/data/m1plus-recent" /* the albums played last, most recent first (patch/recent.c); missing or malformed = none */

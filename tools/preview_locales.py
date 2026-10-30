@@ -19,7 +19,7 @@ def sheet(work, table):
     s = PI.Side(work, True, table); s.mark = lambda *a: None
     panels = [('M1+ Music menu (Home)', preview.menu_page(s, None, home=True)),
               ('Extras', preview.extras_page(s, None)),
-              ('Customize', PI.pod_page(s, 'm1plus_customize', 7).convert('RGB')),
+              ('Customize', PI.pod_page(s, 'm1plus_customize', 8).convert('RGB')),
               ('Customize > Home Screen', PI.pod_page(s, 'm1plus_homeset', 2, switches={'pod_switch0': True}).convert('RGB')),
               ('Customize > Cover Flow', PI.pod_page(s, 'm1plus_cfset', 2, switches={'pod_switch0': False}).convert('RGB')),
               ('Shuffle', PI.pod_page(s, 'm1plus_shuffle', 3).convert('RGB')),

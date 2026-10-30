@@ -53,9 +53,13 @@ ACT_SONGS = 18      # open the Songs page: the library as one list with a large 
 ACT_DAILY = 19   # switch row: the Daily Mix card on the Home menu (patch/dailymix.c)
 ACT_REGEN = 20   # action row (no chevron, like the Shuffle rows): make today's Daily Mix again with a new seed (patch/dailymix.c)
 ACT_LIST = 21    # open a stock song list on the Songs page (patch/songs.c songs_open_list; arg = its HOME_* tile, where a window that will not open falls back)
+ACT_IPOD = 22    # open the Pod, the virtual iPod Classic page: a fullscreen window with a touch click wheel (patch/ipod.c ipod_open)
+ACT_PODCASTS = 23   # open the Podcasts page: the shows in /mnt/mmc/Podcasts and their episodes (patch/podcasts.c podcasts_open)
+ACT_CTHEME = 24  # value row: the Cassette Mode page's theme, Normal, Chrome or Metal; a tap cycles it (patch/tape.c tape_theme_cycle)
 SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
-VALUE_ACTIONS = (ACT_SORT,)    # rows with a grey value at the right (the widget pod_value<row>)
+VALUE_ACTIONS = (ACT_SORT, ACT_CTHEME)    # rows with a grey value at the right (the widget pod_value<row>)
+VALUE_INIT = {ACT_SORT: 'Artist', ACT_CTHEME: 'Normal'}   # what the asset's value label says before the payload sets it
 
 # ACT_SHUFFLE arguments (mirror the enum in patch/shuffle.c)
 SHUFFLE_SONGS = 0    # every song, stock Shuffle play mode, from a random song
@@ -74,8 +78,8 @@ class Page:
         self.name = name        # root widget name property
         self.title = title      # navbar title text
         self.rows = list(rows)
-        self.kind = kind        # 'rows', 'cover' (Cover Flow's own layout), 'list' (an empty stock
-                                # list the payload fills, e.g. Artists) or 'grid' (the Albums grid)
+        self.kind = kind        # 'rows', 'cover' (Cover Flow's own layout), 'artists' (the A-Z list page the payload
+                                # fills: Artists, Genres, Composers) or 'grid' (the Albums grid)
 
 
 # The M1+ Music menu, the Classic iPod main menu adapted to the 320x480 touch screen (q2-pod
@@ -90,6 +94,7 @@ CUSTOMIZE_PAGE_INDEX = 4
 EXTRAS_PAGE_INDEX = 5
 MENUCFG_PAGE_INDEX = 7
 CFSET_PAGE_INDEX = 8
+CASSETTE_PAGE_INDEX = 18
 HOMESET_PAGE_INDEX = 9
 EXTRASCFG_PAGE_INDEX = 13
 DEVELOPER_PAGE_INDEX = 14
@@ -116,8 +121,12 @@ ITEMS = [   # item id = index; the default order, essentials first (iPod classic
     Row('Update Library', ACT_HOME, HOME_UPDATE),
     Row('Tidal', ACT_HOME, HOME_TIDAL),
     Row('CD Ripper', ACT_HOME, HOME_CDRIPPER),
-    # The Customize page (was the always-shown Settings row): an item like the others, hidden from the menu by default (a Tool on Extras), last.
+    # The Customize page (was the always-shown Settings row): an item like the others, hidden from the menu by default (a Tool on Extras).
     Row('Customize', ACT_PAGE, CUSTOMIZE_PAGE_INDEX),
+    # The Pod, the virtual iPod Classic (docs/modules/ipod.md): an item like the rest, hidden from the menu by default (on Extras, in Play).
+    Row('Pod', ACT_IPOD),
+    # Podcasts (docs/modules/podcasts.md): the shows on the card and their episodes; an item like the rest, hidden from the menu by default (on Extras, in Play).
+    Row('Podcasts', ACT_PODCASTS),
 ]
 CUSTOMIZE_ID = 18
 assert ITEMS[CUSTOMIZE_ID].label == 'Customize'
@@ -125,11 +134,11 @@ DEFAULT_MENU = [1, 2, 3, 4, 5]   # the items shown by default, in order (saved s
                                     # among them (the mini player bar of the Home instance opens it, docs/modules/minibar.md), nor are Shuffle and Customize; every other item is on the Extras page,
                                     # grouped (EXTRAS_GROUPS), and Customize > Main Menu can show any of them
 assert all(0 <= i < len(ITEMS) for i in DEFAULT_MENU) and len(set(DEFAULT_MENU)) == len(DEFAULT_MENU)
-ID_CHARS = '012345678abcdefghij'   # the saved list's character for each item id: '0'..'8' the first nine, 'a'..'i' the nine Extras tiles, 'j' Customize
+ID_CHARS = '012345678abcdefghijkl'   # the saved list's character for each item id: '0'..'8' the first nine, 'a'..'i' the nine Extras tiles, 'j' Customize, 'k' the Pod, 'l' Podcasts
 assert len(ID_CHARS) == len(ITEMS)
 OFF_CHAR = '-'           # the saved list's separator: the item characters after it are turned off (not listed on the Extras page); at most once
 DEFAULT_OFF = []         # no item is turned off by default
-MENU_FILE_MAX = 24       # patch/menu.c reads at most this many bytes of the saved list (19 item characters at most in both parts together, the '-' and a newline); longer is invalid
+MENU_FILE_MAX = 24       # patch/menu.c reads at most this many bytes of the saved list (21 item characters at most in both parts together, the '-' and a newline); longer is invalid
 MENU = Page('m1plus_menu', 'm1plus_menu_page', 'M1+ Music', rows=ITEMS + [
     Row('Extras', ACT_PAGE, EXTRAS_PAGE_INDEX),   # always shown, always last
 ])
@@ -167,8 +176,8 @@ def format_menu(ids, off=()):
 # Cover Flow's own page (patch/coverflow.c fills it at runtime: the slide_menu of covers, the
 # progress/cancel pair of the first-run cache build, and the album's track list).
 COVER = Page('m1plus_cover', 'm1plus_cover_page', 'Cover Flow', kind='cover')
-# Artists: the stock Artists query as stock-style rows; a tap opens Cover Flow on that artist's albums.
-ARTISTS = Page('m1plus_artists', 'm1plus_artists_page', 'Artists', kind='list')
+# Artists: the stock Artists query as an A-Z list in the Songs page's manner; a tap opens Cover Flow on that artist's albums.
+ARTISTS = Page('m1plus_artists', 'm1plus_artists_page', 'Artists', kind='artists')
 # Albums: the grid of covers or the list (patch/albums.c draws both in one custom view); the navbar button switches the mode.
 ALBUMS = Page('m1plus_albums', 'm1plus_albums_page', 'Albums', kind='grid')
 # Playlists: the stock playlists as a grid, each a mosaic of its albums' covers (patch/playlists.c); the "..." button opens the popup menu.
@@ -194,6 +203,7 @@ CUSTOMIZE_PAGE = Page('m1plus_customize', 'm1plus_customize_page', 'Customize', 
     Row('Extras', ACT_PAGE, EXTRASCFG_PAGE_INDEX),
     Row('Home Screen', ACT_PAGE, HOMESET_PAGE_INDEX),
     Row('Cover Flow', ACT_PAGE, CFSET_PAGE_INDEX),
+    Row('Cassette Mode', ACT_PAGE, CASSETTE_PAGE_INDEX),
     Row('Playback', ACT_HOME, HOME_PLAYSET),
     Row('System Settings', ACT_HOME, HOME_SYSSET),
     Row('Developer', ACT_PAGE, DEVELOPER_PAGE_INDEX),
@@ -225,8 +235,8 @@ MENUCFG_PAGE = Page('m1plus_mainmenu', 'm1plus_mainmenu_page', 'Main Menu', kind
 # group's section header, a non-interactive caption, shown while the group has a row on the page): what plays, the library's
 # views, the song collections, the tools. Customize is in none: it is the Extras page's navbar button.
 EXTRAS_GROUPS = (
-    ('Play', ('Now Playing', 'Shuffle')),
-    ('Library', ('Albums', 'Artists', 'Songs', 'Playlists', 'Cover Flow', 'Genres', 'Composers', 'Folders')),
+    ('Play', ('Now Playing', 'Shuffle', 'Pod')),
+    ('Library', ('Albums', 'Artists', 'Songs', 'Playlists', 'Cover Flow', 'Genres', 'Composers', 'Folders', 'Podcasts')),
     ('Collections', ('Favorites', 'Recently Played', 'Recently Added', 'Most Played', 'Hi-Res')),
     ('Tools', ('Update Library', 'CD Ripper', 'Tidal')),
 )
@@ -286,9 +296,25 @@ SORT_VALUES = ('Artist', 'Album')    # the value shown for the setting's two sta
 # The Daily Mix page (patch/dailymix.c dp_*): opened by a tap on the Home card; it has no navbar and no rows of its own (the payload paints the songs).
 DAILYMIX = Page('m1plus_dailymix', 'm1plus_dailymix_page', 'Daily Mix', kind='dailymix')
 
+# The Pod page (patch/ipod.c): a fullscreen window, no navbar and no rows; the payload paints the Pod screen and takes the wheel's touches.
+IPOD = Page('m1plus_ipod', 'm1plus_ipod_page', 'Pod', kind='ipod')
+
+# The Podcasts page (patch/podcasts.c): the Albums page's structure (a navbar over a stock list holding one view the payload paints); two levels, the shows and a show's episodes.
+PODCASTS = Page('m1plus_podcasts', 'm1plus_podcasts_page', 'Podcasts', kind='podcasts')
+
+# The Tape page (patch/tape.c): a fullscreen window drawn landscape; the payload paints the cassette and takes the touches (opened from Now Playing's More dialog, not from a menu row).
+TAPE = Page('m1plus_tape', 'm1plus_tape_page', 'Cassette Mode', kind='tape')
+
+# Customize > Cassette Mode: the cassette's look. Cassette Theme shows its value (Normal, Chrome or Metal) at the right and a tap cycles it; the choice is saved and the Tape page reads it when it opens.
+CASSETTE_PAGE = Page('m1plus_tapeset', 'm1plus_tapeset_page', 'Cassette Mode', rows=[
+    Row('Cassette Theme', ACT_CTHEME),
+])
+CTHEME_VALUES = ('Normal', 'Chrome', 'Metal')   # the value shown for the setting's three states, in the order of the saved index (tools/tape_art.py THEME_NAMES)
+
 # PAGES[0] is the entry page.
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, CUSTOMIZE_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, CFSET_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
-         EXTRASCFG_PAGE, DEVELOPER_PAGE]
+         EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, CASSETTE_PAGE]
+assert PAGES[CASSETTE_PAGE_INDEX] is CASSETTE_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[CUSTOMIZE_PAGE_INDEX] is CUSTOMIZE_PAGE
 assert PAGES[EXTRASCFG_PAGE_INDEX] is EXTRASCFG_PAGE and PAGES[DEVELOPER_PAGE_INDEX] is DEVELOPER_PAGE
 assert PAGES[EXTRAS_PAGE_INDEX] is EXTRAS_PAGE and PAGES[MENUCFG_PAGE_INDEX] is MENUCFG_PAGE

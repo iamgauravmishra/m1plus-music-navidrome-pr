@@ -44,7 +44,7 @@ def check_texts(font):
         for loc in pod_i18n.LOCALES:
             t = by[loc]
             check(t and t == t.strip() and all(ord(c) >= 0x20 for c in t), f'{key!r} {loc}: empty or untidy text {t!r}')
-            if key.startswith('%d'): check(t.count('%d') == 1 and '%' not in t.replace('%d', ''), f'{key!r} {loc}: need exactly one %d in {t!r}')
+            if key.startswith('%d') or key in pod_i18n.DATE_KEYS: check(t.count('%d') == 1 and '%' not in t.replace('%d', ''), f'{key!r} {loc}: need exactly one %d in {t!r}')
             elif '%s' in key: check(t.count('%s') == key.count('%s') and '%' not in t.replace('%s', ''), f'{key!r} {loc}: need exactly {key.count("%s")} x %s in {t!r}')   # the Daily Mix card's templates
             else: check('%' not in t, f'{key!r} {loc}: unexpected % in {t!r}')
             for c in t:

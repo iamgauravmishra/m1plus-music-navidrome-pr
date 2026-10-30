@@ -121,3 +121,18 @@ a faithful reproduction of a flat public-domain work, Wikimedia Commons PD-Art).
 Project scan, https://commons.wikimedia.org/wiki/File:Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg
 (1920 px thumbnail, SHA-256 dbca2f16b195f6e83feb98d44c0d98eb0b39f560314efbedfedab9e45caa8a2f);
 tools/wallpaper_prepare.py makes it. It replaces the default lock screen picture in the V2.1hB package.
+
+Podcasts (docs/modules/podcasts.md). The resume ring (a fixed ring of places keyed by the path hash, a place within 30 s of either end
+forgotten), the jump to a saved place a moment after an episode starts, and the speed kept per folder follow q2-pod's Resume and
+Podcasts and Audiobooks sections (docs/internals.md); the code is written for the M1 Plus. q2-pod: Copyright (c) 2026 Diamond Bond, MIT.
+assets/icons/lucide/svg/podcast.svg is a hand-written copy of the Lucide drawing (ISC).
+
+q2-pod's ID3_PATH (tools/build.py: player_get_id3info's jalr strcpy of the parsed path, which every fresh parse reaches, turned into a jal) and ringnav_id3_path (patch/navigation.c) are the model
+for the tag reader hook of Podcasts (docs/modules/podcasts.md "Tags", docs/modules/payload.md hook 5); the site and the function are written for the M1 Plus.
+
+q2-pod's SCAN_DIRS (tools/build.py: the library scan's `jalr strcmp(name, ".")`, turned into a jal) and ringnav_scan_dir (patch/navigation.c: a name starting with a dot counts as a match) are the model
+for the folder test of the library scan (docs/modules/payload.md hook 6, patch/common.c pod_scan_dir); the site and the function are written for the M1 Plus.
+
+q2-pod's toolsQueryDbTable / toolsQueryDbTableAndSort hooks (tools/build.py: dbquery, sorted_query), ringnav_library_query (patch/navigation.c: the songtable replaced by a filtered subquery before stock's grouping) and
+MUSIC_WHERE (a case-insensitive LIKE on the path) are the model for the Library query filter (docs/modules/payload.md hook 7, patch/pcmodel.c pc_library_query, test/pod/scan.py); the addresses, the predicate (Podcasts only) and the
+unscoped form are written for the M1 Plus.

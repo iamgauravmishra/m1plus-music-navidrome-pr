@@ -22,7 +22,8 @@
  *   touch     a tap on a cell or row opens the playlist in our Songs page (patch/songs.c, class 0xff13), or the stock songs page (allmusic_page) as the stock
  *             Playlists page does when ours does not open.
  *   menu      the "..." button opens a popup card of this page (hidden, insensitive widgets shown by the payload): New playlist, Import,
- *             Export (the stock code), Delete playlists (the stock Playlists page, whose multi-select mode deletes). No hook.
+ *             Export (the stock code), Delete playlists (select mode on this page: marks, a bar with the Delete pill, the stock delete handler's sequence on the stock
+ *             selection vector; the stock Playlists page only where the page cannot). No hook.
  */
 #include "offsets.inc"
 #include "stock.h"
@@ -63,6 +64,11 @@ typedef struct {
 
 static struct {
     void *win, *view, *sv, *status, *btn_more, *scrim, *card, *btn;   /* btn: the view toggle */
+    void *title, *back, *np, *btn_selall, *bar, *del;   /* the navbar's title, Back and Now Playing; the select mode's Select All text, bar and Delete pill (the last three optional: no select mode without them) */
+    void *mark[2];                /* the select marks (unselect, selected): bitmaps */
+    unsigned char *sel;           /* the select mode's bitset: (count + 7) / 8 bytes */
+    unsigned nsel;
+    int select;                   /* select mode (Delete Playlists in the menu) */
     void *st_ltitle, *st_lsub;    /* the hidden labels whose styles are the list mode's two text styles */
     int list;                     /* 1 list mode, 0 grid */
     int press;                    /* list: the row under the finger, + 1 */
@@ -89,7 +95,9 @@ static void pl_show(void *w, int on) {
 }
 
 static int pl_rows(void) { return ((int)pl.count + GRID_COLS - 1) / GRID_COLS; }
-static int pl_content(void) { return pl.list ? (int)pl.count * LIST_ROW_H : pl_rows() ? GRID_ROW_GAP + pl_rows() * PITCH : 0; }
+static int pl_rows_h(void) { return pl.list ? (int)pl.count * LIST_ROW_H : pl_rows() ? GRID_ROW_GAP + pl_rows() * PITCH : 0; }   /* the cells' or rows' height */
+static int pl_pad(void) { return pl.select ? SG_BAR_H : 0; }   /* the select bar covers the window's last SG_BAR_H rows: the list scrolls clear of it */
+static int pl_content(void) { return pl_rows_h() ? pl_rows_h() + pl_pad() : 0; }
 static int pl_max_scroll(void) {
     int m = pl_content() - GRID_VIEW_H;
     return m > 0 ? m : 0;
@@ -110,9 +118,8 @@ static void *pl_rec(int i) { return deque_at(pl.pls, (unsigned)i); }
 /* The playlist's id: REC_DISC, what the stock row handler hands to classinfo[1] (@0x53d5f4) */
 static int pl_id(int i) { return I(pl_rec(i), REC_DISC); }
 
-/* "8 tracks" in the player's language (the key by n == 1, the number put where the translation has its %d), as the album page's header */
-static unsigned pl_count(char *out, unsigned size, int n) {
-    const char *f = TR(n == 1 ? "%d track" : "%d tracks");
+/* A text with its %d: "8 tracks", "3 Selected" (the number put where the player's language has its %d), as the album page's header */
+static unsigned pl_fmt(char *out, unsigned size, const char *f, int n) {
     char digits[12];
     unsigned o = 0, d = 0, i;
     for (i = (unsigned)(n < 0 ? 0 : n); d == 0 || i; i /= 10) digits[d++] = (char)('0' + i % 10);
@@ -158,18 +165,33 @@ static int pl_height(void) { return pl.list ? LIST_ROW_H : CELL_H; }
 
 static tile_t *pl_find(int a) { return grid_find(&pl.g, a); }
 
-/* The tile's texts and mosaic keys from the playlist's scan (the count shows once the playlist has been read). */
-static void pl_prep(tile_t *t, int a) {
+/* The tile's texts: the name and the count (blank until the playlist has been read). */
+static void pl_texts(tile_t *t, int a) {
     info_t *in = &pl.info[a];
     char sub[48];
     sub[0] = 0;
-    if (in->scanned) pl_count(sub, sizeof sub, in->songs);
+    if (in->scanned) pl_fmt(sub, sizeof sub, TR(in->songs == 1 ? "%d track" : "%d tracks"), in->songs);
+    grid_set(t, cc_str(pl_rec(a), REC_TITLE), sub, 0);
+}
+
+/* The tile's texts and mosaic keys from the playlist's scan (the count shows once the playlist has been read). */
+static void pl_prep(tile_t *t, int a) {
+    info_t *in = &pl.info[a];
     grid_free_art(t);
     t->fit = 0, t->art = 0, t->qi = 0;
     t->nq = in->nk > 1 && !pl.tmp ? 1 : in->nk;
     memcpy(t->qkey, in->key, sizeof t->qkey);
     if (in->scanned && !in->nk) t->art = 2;   /* no album with a cover: the placeholder */
-    grid_set(t, cc_str(pl_rec(a), REC_TITLE), sub, 0);
+    pl_texts(t, a);
+}
+
+/* The texts are cut to a width that the select mode changes (the list's rows make room for the mark): every tile's are made again from the playlist. */
+static void pl_retext(void) {
+    int i;
+    for (i = 0; pl.g.tiles && pl.pls && i < pl.g.n; ++i) {
+        tile_t *t = &pl.g.tiles[i];
+        if (t->album && t->album - 1 < (int)pl.count) pl_texts(t, t->album - 1), t->fit = 0;
+    }
 }
 
 static tile_t *pl_tile(int a) {
@@ -189,18 +211,34 @@ static tile_t *pl_tile_of(void *ctx, int a) {
 /* ---------------------------------------------------------------------------
  * Paint (the cell paint is the grid's)
  */
+static int pl_is_sel(int i) { return pl.sel && (pl.sel[i >> 3] >> (i & 7) & 1); }
+
+/* The select mark of playlist a: the list's rows have a column left of the cover (the cover and the texts move right by SG_SEL_COL, as the Songs page's); a grid cell
+ * has it at the bottom right of its cover (SG_MARK px, 6 px in). Drawn only when wholly inside the window. */
+static void pl_mark(void *canvas, int a, int x, int y) {
+    int src[4], dst[4];
+    if (y < 0 || y + SG_MARK > GRID_VIEW_H) return;
+    src[0] = src[1] = 0, src[2] = src[3] = SG_MARK;
+    dst[0] = x, dst[1] = y, dst[2] = dst[3] = SG_MARK;
+    canvas_draw_image(canvas, pl.mark[pl_is_sel(a)], src, dst);
+}
+
 static int pl_on_paint(void *ctx, void *e) {
     void *canvas = e ? *(void **)((char *)e + EVENT_PAINT_CANVAS) : (void *)0;
-    int off = pl_off(), r0, r1, last;
+    int off = pl_off(), r0, r1, last, a;
     (void)ctx;
     if (!canvas || !pl.view || !pl.g.tiles || !pl.count) return RET_OK;
     I(canvas, CANVAS_OY) += off;
     pl_span(&r0, &r1);
-    if (r1 >= r0 && pl.list) grid_list_paint(canvas, &pl.g, pl.st_ltitle, pl.st_lsub, r0, r1, off, GRID_VIEW_H, pl.press, pl_tile_of, (void *)0);
-    else if (r1 >= r0) {
+    if (r1 >= r0 && pl.list) {
+        grid_list_paint(canvas, &pl.g, pl.st_ltitle, pl.st_lsub, r0, r1, off, GRID_VIEW_H, pl.select ? 0 : pl.press, pl.select ? SG_SEL_COL : 0, pl_tile_of, (void *)0);
+        for (a = r0; pl.select && pl.mark[0] && a <= r1; ++a) pl_mark(canvas, a, LIST_ART_X + (SG_SEL_COL - 6 - SG_MARK) / 2, a * LIST_ROW_H - off + (LIST_ROW_H - SG_MARK) / 2);
+    } else if (r1 >= r0) {
         last = (r1 + 1) * GRID_COLS;
         if (last > (int)pl.count) last = (int)pl.count;
         grid_paint(canvas, &pl.g, r0 * GRID_COLS, last, GRID_ROW_GAP - off, GRID_VIEW_H, pl_tile_of, (void *)0);
+        for (a = r0 * GRID_COLS; pl.select && pl.mark[0] && a < last; ++a)
+            pl_mark(canvas, a, grid_cell_x(a) + GRID_COVER - SG_MARK - 6, grid_cell_y(a, GRID_ROW_GAP - off) + GRID_COVER - SG_MARK - 6);
     }
     I(canvas, CANVAS_OY) -= off;
     return RET_OK;
@@ -210,35 +248,11 @@ static int pl_on_paint(void *ctx, void *e) {
  * Reading a playlist: its track count and the albums for its mosaic
  */
 
-/* The cache key of the library's album called `album`: its record is the one the cache file was made from (the library lists an album once,
- * under the artist of one of its tracks), so a track of a compilation finds the file its own artist would not. 0: none. */
-static unsigned pl_album_key(const char *album) {
-    unsigned n = pl.albums ? deque_size(pl.albums) : 0, j;
-    if (!*album) return 0;
-    for (j = 0; j < n; ++j) {
-        void *r = deque_at(pl.albums, j);
-        if (!cc_nocase(cc_str(r, REC_ALBUM), album)) return cc_album_key(r);
-    }
-    return 0;
-}
-
-/* Adds key to the playlist's albums when it has a cache file and is not there yet; `tried` keeps the keys looked at so none is looked at twice. */
-static void pl_try(info_t *in, unsigned key, unsigned *tried, int *ntried) {
-    char url[80];
-    int k;
-    if (!key) return;
-    for (k = 0; k < *ntried; ++k)
-        if (tried[k] == key) return;
-    if (*ntried < 16) tried[(*ntried)++] = key;
-    if (cc_url(url, key)) in->key[in->nk++] = key;
-}
-
 /* Reads playlist i's songs: how many, and from the first PL_SCAN the first four distinct albums that have a cover. The stock query leaves them
  * in *pdeq_showlist, which the next query replaces (the library lookup is therefore loaded first). */
 static void pl_scan(int i) {
     info_t *in = &pl.info[i];
-    unsigned tried[16];
-    int n, k, ntried = 0;
+    int n;
     void *list;
     if (!pl.albums_tried) {
         pl.albums_tried = 1;
@@ -248,13 +262,8 @@ static void pl_scan(int i) {
     loadLocalClassList(CLASS_PLAYLIST_SONGS);
     list = *(void **)PDEQ_SHOWLIST;
     n = list ? (int)deque_size(list) : 0;
-    in->songs = n, in->nk = 0;
-    for (k = 0; k < n && k < PL_SCAN && in->nk < 4; ++k) {
-        void *r = deque_at(list, (unsigned)k);
-        int before = in->nk;
-        pl_try(in, cc_album_key(r), tried, &ntried);
-        if (in->nk == before && pl.albums) pl_try(in, pl_album_key(cc_str(r, REC_ALBUM)), tried, &ntried);
-    }
+    in->songs = n;
+    in->nk = grid_mosaic_keys(list, pl.albums, in->key);   /* patch/grid.c: shared with the Songs page's playlist header */
     in->scanned = 1;
 }
 
@@ -342,14 +351,18 @@ static void pl_size(void) {
 }
 
 /* The stock query again and the page rebuilt from it: tiles and scans dropped (they were of the old list). */
+static void pl_select(int on);
+
 static void pl_load(void) {
     void *list;
+    pl_select(0);   /* a page read again is not in select mode (the marks were of the old list) */
     if (pl.more_timer) timer_remove(pl.more_timer);
     pl.more_timer = 0;
     grid_drop(&pl.g);
     if (pl.pls) deque_destroy(pl.pls);
     free(pl.info);
-    pl.pls = (void *)0, pl.info = (info_t *)0, pl.count = 0;
+    free(pl.sel);
+    pl.pls = (void *)0, pl.info = (info_t *)0, pl.sel = (unsigned char *)0, pl.count = pl.nsel = 0;
     if (loadLocalClassList(CLASS_PLAYLISTS) > 0) {
         list = *(void **)PDEQ_PLAYLIST;
         if (list && deque_size(list)) pl.pls = cc_copy_list(list);
@@ -358,6 +371,7 @@ static void pl_load(void) {
     if (pl.count > PL_MAX) pl.count = PL_MAX;
     pl.info = pl.count ? calloc(pl.count, sizeof(info_t)) : (info_t *)0;
     if (pl.count && !pl.info) pl.count = 0;
+    pl.sel = pl.count ? calloc((pl.count + 7) / 8, 1) : (unsigned char *)0;   /* none: no select mode (the menu's Delete opens the stock page) */
     grid_placeholder(&pl.g);
     pl_show(pl.view, pl.count != 0);
     pl_show(pl.status, pl.count == 0);
@@ -374,7 +388,7 @@ static void pl_load(void) {
  */
 static int pl_cell_at(int x, int y) {
     int a;
-    if (y < 0 || y >= pl_content()) return -1;
+    if (y < 0 || y >= pl_rows_h()) return -1;
     if (!pl.list) return grid_cell_at(x, y, GRID_ROW_GAP, (int)pl.count);
     a = y / LIST_ROW_H;   /* a list row: any x */
     return a < (int)pl.count ? a : -1;
@@ -404,6 +418,84 @@ static void pl_open(int i) {
     navigator_to_with_context("allmusic_page", (const void *)CLASS_PLAYLIST_SONGS);
 }
 
+/* ---------------------------------------------------------------------------
+ * Select mode (the menu's Delete Playlists), in the Songs page's manner (patch/songs.c, docs/modules/songs.md "Select"): the navbar's Back becomes the x, the title
+ * "N Selected", Select All at the right, a mark on every cell or row, a bar below with the Delete pill. Delete runs the stock handler's sequence (@0x53dbcc) on the
+ * stock selection vector, which the page fills from its own marks at that moment.
+ */
+static void pl_head(void) {   /* the navbar's title: "N Selected" in select mode, else Playlists */
+    char buf[64];
+    if (!pl.title) return;
+    if (!pl.select) {
+        widget_set_tr_text(pl.title, "Playlists");
+        return;
+    }
+    pl_fmt(buf, sizeof buf, TR("%d Selected"), (int)pl.nsel);
+    widget_set_text_utf8(pl.title, buf);
+}
+
+/* The select mode is there when the asset has its widgets, the marks decoded and the selection bitset exists. */
+static int pl_select_ok(void) { return pl.btn_selall && pl.bar && pl.del && pl.mark[0] && pl.mark[1] && pl.sel && pl.count; }
+
+static void pl_select(int on) {
+    int i, max;
+    void *nav[3];
+    if (on == pl.select) return;
+    pl.select = on;
+    pl.nsel = 0;
+    if (pl.sel) memset(pl.sel, 0, (pl.count + 7) / 8);
+    pl.press = pl.down = 0;
+    nav[0] = pl.btn_more, nav[1] = pl.btn, nav[2] = pl.np;
+    for (i = 0; i < 3; ++i) pl_show(nav[i], !on);
+    pl_show(pl.btn_selall, on);
+    pl_show(pl.bar, on);
+    if (pl.title) widget_resize(pl.title, (on ? SG_SELALL_X : NAV_CF_X) - NAV_TITLE_X, 22);
+    if (pl.back) {
+        widget_set_prop_str(pl.back, "style:normal:icon", on ? "ah_nav_close" : "ah_nav_back");
+        widget_set_prop_str(pl.back, "style:over:icon", on ? "ah_nav_close" : "ah_nav_back");
+        widget_set_prop_str(pl.back, "style:pressed:icon", on ? "ah_nav_close_down" : "ah_nav_back_down");
+    }
+    pl_head();
+    pl_retext();
+    pl_size();
+    max = pl_max_scroll();
+    if (pl_off() > max) widget_set_prop_int(pl.sv, "yoffset", max);
+    pl_fade();
+    pl_redraw();
+}
+
+static void pl_toggle(int i) {
+    if (i < 0 || i >= (int)pl.count || !pl.sel) return;
+    pl.sel[i >> 3] ^= (unsigned char)(1 << (i & 7));
+    pl.nsel += pl_is_sel(i) ? 1 : (unsigned)-1;
+    pl_head();
+    pl_redraw();
+}
+
+static int pl_on_selall(void *ctx, void *e) {
+    (void)ctx; (void)e;
+    if (!pl.select || !pl.sel) return RET_OK;
+    if (pl.nsel < pl.count) {   /* all, unless all are: then none */
+        unsigned i;
+        memset(pl.sel, 0, (pl.count + 7) / 8);
+        for (i = 0; i < pl.count; ++i) pl.sel[i >> 3] |= (unsigned char)(1 << (i & 7));
+        pl.nsel = pl.count;
+    } else {
+        memset(pl.sel, 0, (pl.count + 7) / 8);
+        pl.nsel = 0;
+    }
+    pl_head();
+    pl_redraw();
+    return RET_OK;
+}
+
+static int pl_on_back(void *ctx, void *e) {
+    (void)ctx; (void)e;
+    if (pl.select) pl_select(0);
+    else navigator_back();
+    return RET_OK;
+}
+
 static int pl_on_down(void *ctx, void *e) {
     int a;
     (void)ctx;
@@ -411,7 +503,7 @@ static int pl_on_down(void *ctx, void *e) {
     if (!e || !pl.view) return RET_OK;
     a = pl_item_of(e);
     pl.down = a + 1, pl.down_x = I(e, PE_X), pl.down_y = I(e, PE_Y);
-    if (pl.list) pl_set_press(a + 1);
+    if (pl.list && !pl.select) pl_set_press(a + 1);
     return RET_OK;
 }
 
@@ -421,7 +513,10 @@ static int pl_on_up(void *ctx, void *e) {
     pl.down = 0;
     if (pl.list) pl_set_press(0);
     if (a < 0 || !e || !pl.view) return RET_OK;
-    if (pl_abs(I(e, PE_X) - pl.down_x) < PL_TAP_PX && pl_abs(I(e, PE_Y) - pl.down_y) < PL_TAP_PX && pl_item_of(e) == a) pl_open(a);
+    if (pl_abs(I(e, PE_X) - pl.down_x) < PL_TAP_PX && pl_abs(I(e, PE_Y) - pl.down_y) < PL_TAP_PX && pl_item_of(e) == a) {
+        if (pl.select) pl_toggle(a);
+        else pl_open(a);
+    }
     return RET_OK;
 }
 
@@ -434,7 +529,7 @@ static int pl_on_abort(void *ctx, void *e) {
 
 /* ---------------------------------------------------------------------------
  * The "..." menu: a popup card over the page. New playlist, Import and Export run the stock code and the page reads the playlists again;
- * Delete opens the stock Playlists page, whose multi-select button deletes (its delete handler, @0x53dbcc, works on that page's selection).
+ * Delete is select mode (above).
  */
 /* The card as wide as the language needs: the widest label (widget_measure_text: the label's own font, its translated text), the glyph's
  * room before it (PL_TEXT_X) and PL_TEXT_R after it, PL_CARD_MIN..PL_CARD_MAX, the right edge kept at PL_CARD_RIGHT under the button; the rows and labels follow. The glass is drawn
@@ -493,6 +588,55 @@ static void pl_create(void) {
     else if (r == -2) pl_toast(TR("msg_playlistexist"));
 }
 
+/* The stock confirm dialog of the stock delete handler (@0x53dc78: kind 1, the text at +8, msg_delplaylist): modal; 0xa (CONFIRM_YES) is Yes, anything else ends it (@0x53dcc0). */
+static int pl_ask(const char *text) {
+    struct {
+        int kind, ms;
+        char text[MSGINFO_TEXT], text2[MSGINFO_TEXT];
+    } info;
+    unsigned i;
+    memset(&info, 0, sizeof info);
+    info.kind = 1;
+    for (i = 0; text[i] && i < sizeof info.text - 1; ++i) info.text[i] = text[i];
+    return navigator_to_with_context("dialog/confirminfo_dialog", &info) == CONFIRM_YES;
+}
+
+/* The page's marks into the stock selection: a vector of ints as long as *pdeq_playlist, 1 for each selected row. The stock list is read first (another page's
+ * query may have replaced it) and must be what the page shows (as many playlists, the same ids in the same order): else nothing is selected and the page reads again. */
+static int pl_stock_selection(void) {
+    void *list;
+    unsigned i, n;
+    if (loadLocalClassList(CLASS_PLAYLISTS) <= 0 || !*(void **)SEL_VEC) return 0;
+    list = *(void **)PDEQ_PLAYLIST;
+    n = list ? deque_size(list) : 0;
+    if (!n || !pl.pls || n != deque_size(pl.pls)) return 0;
+    for (i = 0; i < n; ++i)
+        if (I(deque_at(list, i), REC_DISC) != pl_id((int)i)) return 0;
+    select_recordinit((int)n);
+    for (i = 0; i < pl.count && i < n; ++i)
+        if (pl_is_sel((int)i)) set_selectindex((int)i);
+    return 1;
+}
+
+/* Delete: the stock handler's sequence (@0x53dbcc): nothing selected is the message msg_delplaylistfailed; the confirm dialog (msg_delplaylist; Yes 0xa); then
+ * batch_delete_file(0xf00b, *pdeq_playlist, the selection, 0, 0), which runs deletePlaylist and deleteAllMusicByPlaylist for each selected row; the message
+ * msg_delplaylistsuccess. The stock page rebuilds its list afterwards: this page reads it again (pl_load ends select mode). */
+static int pl_on_delete(void *ctx, void *e) {
+    (void)ctx; (void)e;
+    if (!pl.select) return RET_OK;
+    if (!pl.nsel) {
+        pl_toast(TR("msg_delplaylistfailed"));
+        return RET_OK;
+    }
+    if (!pl_ask(TR("msg_delplaylist"))) return RET_OK;
+    if (pl_stock_selection()) {
+        batch_delete_file(CLASS_PLAYLISTS, *(void **)PDEQ_PLAYLIST, *(void **)SEL_VEC, 0, 0);
+        pl_toast(TR("msg_delplaylistsuccess"));
+    }
+    pl_load();
+    return RET_OK;
+}
+
 static int pl_on_more(void *ctx, void *e) {
     (void)ctx; (void)e;
     if (pl.view) pl_menu(!pl.menu);
@@ -516,8 +660,10 @@ static int pl_on_item(void *ctx, void *e) {
     if (which == PL_NEW) pl_create();
     else if (which == PL_IMPORT) stock_playlist_import((void *)0, (void *)0);
     else if (which == PL_EXPORT) stock_playlist_export((void *)0, (void *)0);
-    else {
-        pod_home_open(HOME_PLAYLIST);
+    else {   /* Delete Playlists: select mode on this page (nothing to select with no playlist); where it cannot be (the asset or the marks lack it) the stock Playlists page, whose multi-select deletes */
+        if (!pl.count) return RET_OK;
+        if (!pl_select_ok()) pod_home_open(HOME_PLAYLIST);
+        else pl_select(1);
         return RET_OK;
     }
     pl_load();
@@ -613,7 +759,10 @@ static int pl_on_destroy(void *ctx, void *e) {
     if (pl.pls) deque_destroy(pl.pls);
     if (pl.albums) deque_destroy(pl.albums);
     free(pl.info);
+    free(pl.sel);
     free(pl.tmp);
+    if (pl.mark[0]) bitmap_destroy(pl.mark[0]);
+    if (pl.mark[1]) bitmap_destroy(pl.mark[1]);
     memset(&pl, 0, sizeof pl);
     return RET_OK;
 }
@@ -628,8 +777,12 @@ static int pl_open_page(void) {
     pl.win = window_open("m1plus_playlists");
     if (!pl.win) return -1;
     widget_on(pl.win, EVT_DESTROY, pl_on_destroy, (void *)0);
-    pod_bind(pl.win, "btn_return", pod_on_back, (void *)0);
-    pod_bind(pl.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    pl.back = pod_bind(pl.win, "btn_return", pl_on_back, (void *)0);
+    pl.np = pod_bind(pl.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    pl.btn_selall = pod_bind(pl.win, "btn_selall", pl_on_selall, (void *)0);   /* the select mode's widgets: optional */
+    pl.del = pod_bind(pl.win, "pl_del", pl_on_delete, (void *)0);
+    pl.bar = widget_lookup(pl.win, "pl_bar", 1);
+    pl.title = widget_lookup(pl.win, "label_title", 1);
     pl.btn_more = pod_bind(pl.win, "btn_more", pl_on_more, (void *)0);
     pl.scrim = pod_bind(pl.win, "pl_scrim", pl_on_scrim, (void *)0);
     pl.card = widget_lookup(pl.win, "pl_card", 1);
@@ -654,6 +807,7 @@ static int pl_open_page(void) {
         pl.labels[i] = widget_lookup(pl.items[i], LABELS[i], 0);
     }
     pl_menu(0);
+    if (pl.del) pod_centre_pill(pl.del, PL_BAR_PILL_W);
     pl.tmp = calloc((GRID_COVER / 2) * (GRID_COVER / 2), 4);   /* one quadrant of a mosaic; without it a mosaic falls back to its first cover */
     {   /* the stock grid, its two text styles are this page's hidden labels */
         void *st_title = pl.g.st_title, *st_sub = pl.g.st_sub;
@@ -665,6 +819,13 @@ static int pl_open_page(void) {
             return 0;
         }
         pl.g.st_title = st_title, pl.g.st_sub = st_sub;
+    }
+    pl.mark[0] = pod_make_mark(pl.win, "unselect");
+    pl.mark[1] = pod_make_mark(pl.win, "selected");
+    if (!pl.mark[0] || !pl.mark[1]) {   /* the pair is all or none (no marks: no select mode) */
+        if (pl.mark[0]) bitmap_destroy(pl.mark[0]);
+        if (pl.mark[1]) bitmap_destroy(pl.mark[1]);
+        pl.mark[0] = pl.mark[1] = (void *)0;
     }
     pl.list = !pl_use_grid();
     pl_shape(pl.list);

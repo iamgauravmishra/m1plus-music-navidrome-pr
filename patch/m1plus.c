@@ -24,12 +24,14 @@
 /* ACT_* mirror tools/pod_pages.py. */
 enum { ACT_HOME = 0, ACT_PAGE = 1, ACT_PLAYER = 2, ACT_COVER = 3, ACT_SHUFFLE = 4, ACT_ARTISTS = 8,
        ACT_GRID = 9, ACT_STARTUP = 10, ACT_ALBUMS = 11, ACT_LANDSCAPE = 12, ACT_SORT = 13, ACT_SHOT = 14, ACT_REBUILD = 15, ACT_SHELF = 16,
-       ACT_PLAYLISTS = 17, ACT_SONGS = 18, ACT_DAILY = 19, ACT_REGEN = 20, ACT_LIST = 21 };
+       ACT_PLAYLISTS = 17, ACT_SONGS = 18, ACT_DAILY = 19, ACT_REGEN = 20, ACT_LIST = 21, ACT_IPOD = 22, ACT_PODCASTS = 23, ACT_CTHEME = 24 };
 
 extern void shot_start(void);    /* patch/shot.c: the Screenshot row: confirm, 5 s countdown, capture; or cancel */
 extern int artists_open(int home);   /* patch/artists.c: the Artists list, its own page; arg HOME_GENRE / HOME_COMPOSER: Genres / Composers on it */
 extern int albums_open(void);    /* patch/albums.c: Albums, our page in the mode used last (grid or list) */
 extern int playlists_open(void); /* patch/playlists.c: Playlists, a grid of mosaics of each playlist's covers */
+extern int ipod_open(void);      /* patch/ipod.c: the virtual iPod Classic, a fullscreen page with a touch click wheel */
+extern int podcasts_open(void);  /* patch/podcasts.c: the shows on the card and their episodes */
 extern int songs_open(void);     /* patch/songs.c: Songs, the library as one list with sections and a jump rail */
 extern int songs_open_list(int home); /* patch/songs.c: another stock song list (Favourites ...) on the same page; arg = its Home tile */
 extern void menu_arrange(void *win, int extras);   /* patch/menu.c: the menu / Extras rows as the saved list says */
@@ -128,6 +130,8 @@ static int on_row(void *ctx, void *e) {
     else if (row->action == ACT_ALBUMS) albums_open();
     else if (row->action == ACT_PLAYLISTS) playlists_open();
     else if (row->action == ACT_SONGS) songs_open();
+    else if (row->action == ACT_IPOD) ipod_open();
+    else if (row->action == ACT_PODCASTS) podcasts_open();
     else if (row->action == ACT_LIST) songs_open_list(row->arg);
     else if (row->action == ACT_SHUFFLE) shuffle_play(row->arg); /* patch/shuffle.c; plays, no page */
     else if (row->action == ACT_GRID) home_to_grid();      /* patch/home.c: the stock grid */
@@ -207,6 +211,32 @@ static void bind_sort(void *win, unsigned i, const struct pod_row *row) {
     if (r) widget_on(r, EVT_CLICK, on_sort, (void *)0);
 }
 
+/* Customize > Cassette Mode > Cassette Theme: the row shows the theme (Normal, Chrome or Metal) in its grey value label and a tap goes on to the next (saved first: a failed save
+ * leaves the theme and the label as they were). The Tape page reads the saved theme when it opens (patch/tape.c). */
+static void *ctheme_label __attribute__((section(".scratch")));
+extern int tape_theme(void);          /* patch/tape.c: the saved theme, 0 Normal (the default), 1 Chrome, 2 Metal */
+extern int tape_theme_cycle(void);    /* the next one, saved atomically; the new theme or -1 */
+
+static void ctheme_show(void) {
+    static const char *const name[3] = {"Normal", "Chrome", "Metal"};
+    if (ctheme_label) widget_set_tr_text(ctheme_label, name[tape_theme()]);
+}
+
+static int on_ctheme(void *ctx, void *e) {
+    (void)ctx; (void)e;
+    if (tape_theme_cycle() >= 0) ctheme_show();
+    return RET_OK;
+}
+
+static void bind_ctheme(void *win, unsigned i, const struct pod_row *row) {
+    char name[24];
+    void *r = widget_lookup(win, row->name, 1);
+    snprintf(name, sizeof name, "pod_value%u", i);
+    ctheme_label = widget_lookup(win, name, 1);
+    ctheme_show();
+    if (r) widget_on(r, EVT_CLICK, on_ctheme, (void *)0);
+}
+
 /* Open POD_PAGES[index]; 0 once its window is up, -1 if AWTK could not open the asset. as_home: the entry
  * page as the Home instance (no navbar); 0 gives the normal instance with Back. */
 static int open_page(int index, int as_home) {
@@ -223,6 +253,7 @@ static int open_page(int index, int as_home) {
         const struct pod_row *row = &page->rows[i];
         if (row->action == ACT_STARTUP || row->action == ACT_LANDSCAPE || row->action == ACT_SHELF || row->action == ACT_DAILY) bind_switch(win, i, row);
         else if (row->action == ACT_SORT) bind_sort(win, (unsigned)i, row);
+        else if (row->action == ACT_CTHEME) bind_ctheme(win, (unsigned)i, row);
         else pod_bind(win, row->name, on_row, row);
         if (row->action == ACT_REGEN) regen_row = widget_lookup(win, row->name, 1), regen_show();
     }
@@ -244,6 +275,9 @@ static int open_page(int index, int as_home) {
 }
 
 int m1plus_open_entry(void) { return open_page(POD_ENTRY_PAGE, 1); }
+
+/* The Settings page, for the iPod page's Settings row (patch/ipod.c): the normal instance, with Back, over whatever is in front. */
+int pod_open_settings(void) { return open_page(POD_CUSTOMIZE_PAGE, 0); }
 
 /* Recovery: while the boot guard's bad note exists the grid has no M1+ Music icon (it is boot-created), so the
  * Tidal icon (id 1) opens the menu (normal instance, with Back) to reach Customize > Home Screen > Boot to M1+ Music (Customize is

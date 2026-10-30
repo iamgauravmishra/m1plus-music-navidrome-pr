@@ -280,7 +280,7 @@ def stock_list(rows, scroll, top=NAVBAR_H):
     for i, r in enumerate(rows):
         chevron = r.action not in pod_pages.NO_CHEVRON_ACTIONS + pod_pages.SWITCH_ACTIONS + pod_pages.VALUE_ACTIONS   # rows that play, act in place, switch or show a value: no chevron
         switch = (f'pod_switch{i}', False) if r.action in pod_pages.SWITCH_ACTIONS else None   # the payload sets the state at open
-        value = (f'pod_value{i}', pod_pages.SORT_VALUES[0]) if r.action in pod_pages.VALUE_ACTIONS else None   # ... and the value
+        value = (f'pod_value{i}', pod_pages.VALUE_INIT[r.action]) if r.action in pod_pages.VALUE_ACTIONS else None   # ... and the value
         sv.children.append(row_item(f'pod_row{i}', i * ROW_H, r.label, chevron, ROW_H, sv_w, switch, value))
     lv.children = [sv]
     if scroll:   # stock's scroll bar, only when there is something to scroll
@@ -288,18 +288,6 @@ def stock_list(rows, scroll, top=NAVBAR_H):
                                   [('name', 'scroll_bar_m'), ('max', '1000')]))
     return lv
 
-
-def build_list_page(page):
-    """A page whose rows the payload builds at runtime (patch/artists.c): the navbar with the
-    Artist / Album Artist toggle, an empty stock list (with its scroll bar: the rows usually
-    overflow), and a hidden message line for an empty library."""
-    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
-    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
-    root.children.append(navbar(page.title, toggle='artist'))
-    root.children.append(stock_list([], True))
-    root.children.append(nav_fade())
-    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, '#FFFFFF')))
-    return root
 
 
 # The Albums page (patch/albums.c): a stock list (list_view > scroll_view) under the navbar whose one child, view_grid, paints the covers and titles itself.
@@ -331,6 +319,40 @@ def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview
     # The two modes' text styles (patch/albums.c reads them with widget_prepare_text_style; never shown)
     for name, px, colour in (('label_row_title', LIST_TITLE_PX, '#FFFFFF'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA'),
                              ('label_grid_title', GRID_ALBUM_PX, '#FFFFFF'), ('label_grid_sub', GRID_ARTIST_PX, '#AAAAAA')):
+        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+        root.children.append(lab)
+    return root
+
+
+PC_DIM_RGB, PC_ACCENT_RGB = '#8E8E93', '#FF9F0A'   # a played episode's title; the show's speed in the header
+
+
+def build_podcasts_page(page):
+    """The Podcasts page (patch/podcasts.c, docs/modules/podcasts.md): the Albums list mode's structure (a stock list holding the one content view the payload paints) under the
+    plain navbar (Back, title, Now Playing). The payload paints two levels in view_grid, the shows and a show's episodes; label_status is its empty-state hint (two lines);
+    the four hidden labels are the text styles: the row title, the grey line, a played episode's title and the show's speed."""
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    root.children.append(navbar(page.title))
+    lv = stock_list([], True)
+    lv.set('name', 'podcasts_listview')
+    sv = lv.children[0]
+    sv.set('name', 'podcasts_scrollview')
+    grid = Widget('view', 0, 0, SCREEN_W, GRID_VIEW_H, [('name', 'view_grid')])   # the content: the payload sizes it to the level's rows
+    styled(grid, ('normal',), 'bg_color', '#000000')
+    styled(grid, ('normal',), 'text_color', '#FFFFFF')
+    styled(grid, ('normal',), 'font_size', str(GRID_TITLE_PX))
+    styled(grid, ('normal',), 'text_align_h', 'left')
+    styled(grid, ('normal',), 'text_align_v', 'middle')
+    sv.children.append(grid)
+    root.children.append(lv)
+    root.children.append(nav_fade(shown=False))   # patch/podcasts.c shows it while yoffset > 0
+    status = hidden(label('label_status', 20, 180, SCREEN_W - 40, 90, '', 18, '#FFFFFF'))
+    styled(status, ('normal',), 'text_align_v', 'middle')
+    root.children.append(status)
+    for name, px, colour in (('label_row_title', LIST_TITLE_PX, '#FFFFFF'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA'),
+                             ('label_row_dim', LIST_TITLE_PX, PC_DIM_RGB), ('label_row_acc', LIST_SUB_PX, PC_ACCENT_RGB)):
         lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
         styled(lab, ('normal',), 'text_align_v', 'middle')
         root.children.append(lab)
@@ -394,7 +416,9 @@ def playlist_menu():
 
 def build_playlists_page(page):
     root = build_grid_page(page, toggle='list', coverflow=False, more=True, names=('playlists_listview', 'playlists_scrollview'))
-    root.children.extend(playlist_menu())   # last: above the list and the navbar
+    root.children[0].children.append(selall_button())   # the navbar's select mode text (the menu's Delete Playlists starts select mode: patch/playlists.c)
+    root.children.append(select_bar('pl_bar', 'pl_bar_line', [('pl_del', OFFSETS['SG_PILL_X0'], 'Delete', 'sg_trash', OFFSETS['PL_BAR_PILL_W'])]))
+    root.children.extend(playlist_menu())   # last: above the list, the bar and the navbar
     return root
 
 
@@ -501,14 +525,9 @@ def sort_card():
     return scrim, card
 
 
-def build_songs_page(page):
-    o = OFFSETS
-    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
-    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
-    nb = navbar(page.title, songs=True)
-    nb.children[0].set('visible', 'false')   # the small title: the payload shows it once the large title has scrolled away
-    nb.children.append(hidden(Widget('button', SG_SELALL_X, 0, SG_SELALL_W, NAVBAR_H, [('name', 'btn_selall'), ('enable', 'true'), pod_i18n.text_prop('Select All')])))
-    sa = nb.children[-1]
+def selall_button():
+    """The select mode's Select All: a flat text button at the navbar's right (hidden and insensitive until select mode: the Songs and Playlists pages)."""
+    sa = hidden(Widget('button', SG_SELALL_X, 0, SG_SELALL_W, NAVBAR_H, [('name', 'btn_selall'), ('enable', 'true'), pod_i18n.text_prop('Select All')]))
     for st in STATES:   # select mode's text button: flat, right aligned
         styled(sa, (st,), 'bg_color', '#00000000')
         styled(sa, (st,), 'text_color', '#777777' if st == 'pressed' else '#FFFFFF')
@@ -517,6 +536,94 @@ def build_songs_page(page):
         styled(sa, (st,), 'border_color', '#00000000')
         styled(sa, (st,), 'text_align_h', 'right')
         styled(sa, (st,), 'margin_right', '8')
+    return sa
+
+
+def select_bar(name, line_name, pills):
+    """The select mode's bottom bar (hidden until select mode): black, a #222222 top hairline, flat pills [(name, x, text, glyph, width)]."""
+    o = OFFSETS
+    bar = hidden(Widget('view', 0, CLIENT_H - o['SG_BAR_H'], SCREEN_W, o['SG_BAR_H'], [('name', name)]))
+    for st in STATES: styled(bar, (st,), 'bg_color', '#000000')
+    line = Widget('view', 0, 0, SCREEN_W, 1, [('name', line_name), ('sensitive', 'false')])
+    for st in STATES: styled(line, (st,), 'bg_color', '#222222')
+    py = (o['SG_BAR_H'] - o['SG_PILL_H']) // 2
+    bar.children = [line] + [sg_pill(n, x, py, text, glyph, w=w) for n, x, text, glyph, w in pills]
+    return bar
+
+
+def azlist_labels():
+    """The hidden text styles of the A-Z furniture (patch/azlist.c, shared by the Songs and Artists pages): the header letter, the rail letter and the touched rail letter."""
+    out = []
+    for name, px, colour, align in (('label_hdr', SG_HDR_PX, '#FFFFFF', 'left'), ('label_rail', SG_RAIL_PX, '#EEEEEC', 'center'), ('label_rail_on', SG_RAIL_PX, '#000000', 'center')):
+        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, align))   # text styles only (widget_prepare_text_style); never shown
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+        if name == 'label_rail_on': styled(lab, ('normal', 'pressed', 'disable', 'focused'), 'bg_color', '#EEEEEC')   # the letter on the disc: black on the accent (the contrast scan reads the label's own background)
+        out.append(lab)
+    return out
+
+
+def azlist_rail():
+    """(rail, bubble): the rail (a transparent view of its own, outside the scroll_view, so a touch on it never starts a drag; the payload paints the letters) and the letter bubble."""
+    o = OFFSETS
+    rail = Widget('view', o['SG_RAIL_X'], NAVBAR_H, o['SG_RAIL_W'], GRID_VIEW_H, [('name', 'sg_rail')])
+    for st in STATES: styled(rail, (st,), 'bg_color', '#00000000')
+    bubble = hidden(Widget('view', (SCREEN_W - o['SG_BUBBLE']) // 2, NAVBAR_H + (GRID_VIEW_H - o['SG_BUBBLE']) // 2, o['SG_BUBBLE'], o['SG_BUBBLE'], [('name', 'sg_bubble')]))
+    for st in STATES:   # the look tools/mod_lists.py gives the stock view_letter: a dark rounded square with a white letter
+        styled(bubble, (st,), 'bg_color', '#262626')
+        styled(bubble, (st,), 'round_radius', '14')
+        styled(bubble, (st,), 'border_color', '#3A3A3A')
+        styled(bubble, (st,), 'border_width', '1')
+    letter = Widget('label', 0, 0, o['SG_BUBBLE'], o['SG_BUBBLE'], [('name', 'sg_bubble_letter'), ('text', ''), ('sensitive', 'false')])
+    for st in ('normal', 'disable', 'focused'):
+        styled(letter, (st,), 'text_color', '#FFFFFF')
+        styled(letter, (st,), 'font_size', str(SG_BUBBLE_PX))
+        styled(letter, (st,), 'text_align_h', 'center')
+        styled(letter, (st,), 'text_align_v', 'middle')
+    bubble.children.append(letter)
+    return [rail, bubble]
+
+
+def build_artists_page(page):
+    """The Artists / Genres / Composers page (patch/artists.c, docs/modules/artists.md): the Songs page's structure (a stock list holding one content view that paints the
+    rows, the section letters and the pinned header; the rail and the bubble beside it; the large title in the content view, the small one in the navbar once it has scrolled
+    away) under the navbar with the Artist / Album Artist switch. No pills, no select mode, no sort card."""
+    o = OFFSETS
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    nb = navbar(page.title, toggle='artist')
+    nb.children[0].set('visible', 'false')   # the small title: the payload shows it once the large title has scrolled away
+    root.children.append(nb)
+    lv = stock_list([], True)
+    lv.set('name', 'artists_listview')
+    sv = lv.children[0]
+    sv.set('name', 'artists_scrollview')
+    grid = Widget('view', 0, 0, SCREEN_W, GRID_VIEW_H, [('name', 'view_grid')])
+    styled(grid, ('normal',), 'bg_color', '#000000')
+    title = Widget('label', o['SG_TITLE_X'], 0, 250, o['SG_TITLE_H'], [('name', 'ar_title'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])
+    styled(title, ('normal',), 'text_color', '#FFFFFF')
+    styled(title, ('normal',), 'font_size', str(SG_TITLE_PX))
+    styled(title, ('normal',), 'text_align_h', 'left')
+    styled(title, ('normal',), 'text_align_v', 'middle')
+    grid.children = [title]
+    sv.children.append(grid)
+    root.children.append(lv)
+    root.children.append(nav_fade(shown=False))   # patch/artists.c shows it while yoffset > 0 (at rest it would darken the large title)
+    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, '#FFFFFF')))
+    lab = hidden(label('label_row_title', 0, 0, 10, 10, '', LIST_TITLE_PX, '#FFFFFF', 'left'))   # the row text style (the stock srlabel_leftwhite21_style's 21 px white)
+    styled(lab, ('normal',), 'text_align_v', 'middle')
+    root.children.append(lab)
+    root.children.extend(azlist_labels())
+    root.children.extend(azlist_rail())
+    return root
+
+
+def build_songs_page(page):
+    o = OFFSETS
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    nb = navbar(page.title, songs=True)
+    nb.children[0].set('visible', 'false')   # the small title: the payload shows it once the large title has scrolled away
+    nb.children.append(selall_button())
     root.children.append(nb)
     lv = stock_list([], True)
     lv.set('name', 'songs_listview')
@@ -532,43 +639,24 @@ def build_songs_page(page):
     foot = label('sg_foot', o['SG_HDR_X'], 0, SCREEN_W - 2 * o['SG_HDR_X'], o['SG_FOOT_TEXT_H'], '', o['SG_FOOT_PX'], SG_FOOT_RGB, 'left')   # the song count: the payload sets the text and puts it under the last row
     foot.set('sensitive', 'false')
     styled(foot, ('normal',), 'text_align_v', 'middle')
-    grid.children = [title, sg_pill('btn_play', o['SG_PILL_X0'], o['SG_PILL_Y'], 'Play', 'sg_play'),
+    # a playlist's header (patch/songs.c, class 0xff13): the name and the count, centred under the mosaic the payload paints; the payload moves the pills down and
+    # shows these two (hidden and insensitive here, like every decoration it shows later)
+    hname = hidden(label('sg_hname', o['PH_NAME_X'], o['PH_NAME_Y'], o['PH_NAME_W'], o['PH_NAME_H'], '', 22, '#FFFFFF', 'center'))
+    styled(hname, ('normal',), 'text_align_v', 'middle')
+    grid.children = [title, hname, sg_pill('btn_play', o['SG_PILL_X0'], o['SG_PILL_Y'], 'Play', 'sg_play'),
                      sg_pill('btn_shuffle', o['SG_PILL_X1'], o['SG_PILL_Y'], 'Shuffle', 'sg_shuffle'), foot]
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/songs.c shows it while yoffset > 0 (at rest it would darken the large title)
     root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, '#FFFFFF')))
-    for name, px, colour, align in (('label_row_title', LIST_TITLE_PX, '#FFFFFF', 'left'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA', 'left'),
-                                    ('label_hdr', SG_HDR_PX, '#FFFFFF', 'left'), ('label_rail', SG_RAIL_PX, '#EEEEEC', 'center'), ('label_rail_on', SG_RAIL_PX, '#000000', 'center')):
+    for name, px, colour, align in (('label_row_title', LIST_TITLE_PX, '#FFFFFF', 'left'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA', 'left')):
         lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, align))   # text styles only (widget_prepare_text_style); never shown
         styled(lab, ('normal',), 'text_align_v', 'middle')
-        if name == 'label_rail_on': styled(lab, ('normal', 'pressed', 'disable', 'focused'), 'bg_color', '#EEEEEC')   # the letter on the disc: black on the accent (the contrast scan reads the label's own background)
         root.children.append(lab)
-    rail = Widget('view', o['SG_RAIL_X'], NAVBAR_H, o['SG_RAIL_W'], GRID_VIEW_H, [('name', 'sg_rail')])   # transparent; the payload paints the letters
-    for st in STATES: styled(rail, (st,), 'bg_color', '#00000000')
-    root.children.append(rail)
-    bubble = hidden(Widget('view', (SCREEN_W - o['SG_BUBBLE']) // 2, NAVBAR_H + (GRID_VIEW_H - o['SG_BUBBLE']) // 2, o['SG_BUBBLE'], o['SG_BUBBLE'], [('name', 'sg_bubble')]))
-    for st in STATES:   # the look tools/mod_lists.py gives the stock view_letter: a dark rounded square with a white letter
-        styled(bubble, (st,), 'bg_color', '#262626')
-        styled(bubble, (st,), 'round_radius', '14')
-        styled(bubble, (st,), 'border_color', '#3A3A3A')
-        styled(bubble, (st,), 'border_width', '1')
-    letter = Widget('label', 0, 0, o['SG_BUBBLE'], o['SG_BUBBLE'], [('name', 'sg_bubble_letter'), ('text', ''), ('sensitive', 'false')])
-    for st in ('normal', 'disable', 'focused'):
-        styled(letter, (st,), 'text_color', '#FFFFFF')
-        styled(letter, (st,), 'font_size', str(SG_BUBBLE_PX))
-        styled(letter, (st,), 'text_align_h', 'center')
-        styled(letter, (st,), 'text_align_v', 'middle')
-    bubble.children.append(letter)
-    root.children.append(bubble)
-    bar = hidden(Widget('view', 0, CLIENT_H - o['SG_BAR_H'], SCREEN_W, o['SG_BAR_H'], [('name', 'sg_bar')]))
-    for st in STATES: styled(bar, (st,), 'bg_color', '#000000')
-    line = Widget('view', 0, 0, SCREEN_W, 1, [('name', 'sg_bar_line'), ('sensitive', 'false')])
-    for st in STATES: styled(line, (st,), 'bg_color', '#222222')
-    py = (o['SG_BAR_H'] - o['SG_PILL_H']) // 2
-    bar.children = [line, sg_pill('sg_add', o['SG_PILL_X0'], py, 'Add to Playlist', 'sg_listplus', w=o['SG_BAR_PILL_W']),
-                    sg_pill('sg_del', o['SG_BAR_PILL_X1'], py, 'Delete', 'sg_trash', w=o['SG_BAR_PILL_W'])]
-    root.children.append(bar)
+    root.children.extend(azlist_labels())
+    root.children.extend(azlist_rail())
+    root.children.append(select_bar('sg_bar', 'sg_bar_line', [('sg_add', o['SG_PILL_X0'], 'Add to Playlist', 'sg_listplus', o['SG_BAR_PILL_W']),
+                                                              ('sg_del', o['SG_BAR_PILL_X1'], 'Delete', 'sg_trash', o['SG_BAR_PILL_W'])]))
     root.children.extend(sort_card())   # last: above everything
     return root
 
@@ -618,6 +706,50 @@ def build_dailymix_page(page):
         styled(lab, ('normal',), 'text_align_v', 'middle')
         root.children.append(lab)
     root.children.append(hidden(Widget('label', 36, 14, 200, 22, [('name', 'label_title'), ('style', 'navbar_label_white'), pod_i18n.text_prop(page.title)])))
+    return root
+
+
+# The iPod page (patch/ipod.c, docs/modules/ipod.md; the numbers are patch/offsets.inc IP_*): a fullscreen window (the lock screen's `fullscreen = true`, so the stock status bar is not drawn and
+# the window is 320 x 480) in the wheel's body colour. ipod_screen (320 x 240) is painted by the payload in its own EVT_AFTER_PAINT and takes no touch (insensitive); ipod_wheel
+# (220 x 220, the touch target: the payload does the circle's hit test and grabs the touch) holds the wheel picture as an insensitive image child. Eight hidden, insensitive labels
+# only carry the text styles. label_title (hidden) is the page's title for the i18n and asset tests.
+IP_STYLES = (('label_ip_row', 17, '#000000', 'left'), ('label_ip_sel', 17, '#FFFFFF', 'left'), ('label_ip_title', 16, '#000000', 'left'),
+             ('label_ip_small', 14, '#666666', 'left'), ('label_ip_np1', 18, '#000000', 'left'), ('label_ip_np2', 16, '#666666', 'left'), ('label_ip_time', 14, '#666666', 'right'))
+
+
+def build_ipod_page(page):
+    o = OFFSETS
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name), ('fullscreen', 'true')])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#C6C9CE')
+    screen = Widget('view', 0, 0, o['IP_W'], o['IP_SCREEN_H'], [('name', 'ipod_screen'), ('sensitive', 'false')])
+    styled(screen, ('normal',), 'bg_color', '#FFFFFF')
+    wheel = Widget('view', o['IP_WHEEL_X'], o['IP_WHEEL_Y'], o['IP_WHEEL_D'], o['IP_WHEEL_D'], [('name', 'ipod_wheel')])
+    wheel.children = [Widget('image', 0, 0, o['IP_WHEEL_D'], o['IP_WHEEL_D'], [('name', 'ipod_wheel_img'), ('image', 'ipod_wheel'), ('draw_type', 'default'), ('sensitive', 'false')])]
+    root.children = [screen, wheel]
+    # the style labels sit in two hidden, insensitive views whose background is the colour the text is drawn on (the theme scan reads a label's contrast against it)
+    light = hidden(Widget('view', 0, 0, 10, 10, [('name', 'ip_styles_light')])); styled(light, ('normal',), 'bg_color', '#FFFFFF')
+    blue = hidden(Widget('view', 0, 0, 10, 10, [('name', 'ip_styles_blue')])); styled(blue, ('normal',), 'bg_color', '#0C62D2')
+    for name, px, colour, align in IP_STYLES:
+        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, align))
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+        (blue if name == 'label_ip_sel' else light).children.append(lab)
+    blue.children.append(hidden(Widget('label', 36, 14, 200, 22, [('name', 'label_title'), ('style', 'navbar_label_white'), pod_i18n.text_prop(page.title)])))
+    root.children += [light, blue]
+    return root
+
+
+# The Tape page (patch/tape.c, docs/modules/tape.md): a fullscreen window (320 x 480; the picture is landscape, turned into it by the payload) in the surface colour behind the cassette,
+# one view over the whole window (tape_view: the touch target, painted by the payload in its own EVT_AFTER_PAINT) and a hidden, insensitive label that only carries the font.
+# label_title (hidden) is the page's title for the i18n and asset tests.
+def build_tape_page(page):
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name), ('fullscreen', 'true')])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#111112')
+    view = Widget('view', 0, 0, 320, 480, [('name', 'tape_view')])
+    styled(view, ('normal',), 'bg_color', '#111112')
+    holder = hidden(Widget('view', 0, 0, 10, 10, [('name', 'tp_styles')])); styled(holder, ('normal',), 'bg_color', '#111112')
+    lab = hidden(label('label_tp_font', 0, 0, 10, 10, '', 16, '#FFFFFF', 'left')); styled(lab, ('normal',), 'text_align_v', 'middle')
+    holder.children = [lab, hidden(Widget('label', 36, 14, 200, 22, [('name', 'label_title'), ('style', 'navbar_label_white'), pod_i18n.text_prop(page.title)]))]
+    root.children = [view, holder]
     return root
 
 
@@ -681,9 +813,8 @@ def build_extrascfg_page(page):
     root.children.append(navbar(page.title))
     lv = stock_list([], True)
     sv = lv.children[0]
-    for i, r in enumerate(pod_pages.ITEMS):
-        if i == pod_pages.CUSTOMIZE_ID: continue
-        sv.children.append(row_item(f'pod_row{i}', i * ROW_H, r.label, False, ROW_H, sv.w, (f'pod_switch{i}', True)))
+    for k, (i, r) in enumerate((i, r) for i, r in enumerate(pod_pages.ITEMS) if i != pod_pages.CUSTOMIZE_ID):
+        sv.children.append(row_item(f'pod_row{i}', k * ROW_H, r.label, False, ROW_H, sv.w, (f'pod_switch{i}', True)))
     sv.children += extras_headers(sv.w)   # after the rows: the payload stacks them in place
     root.children.append(lv)
     root.children.append(nav_fade())
@@ -819,16 +950,22 @@ def build_page(page):
         return build_extrascfg_page(page)
     if page.kind == 'grid':
         return build_grid_page(page)
+    if page.kind == 'podcasts':
+        return build_podcasts_page(page)
     if page.kind == 'playlists':
         return build_playlists_page(page)
     if page.kind == 'songs':
         return build_songs_page(page)
     if page.kind == 'dailymix':
         return build_dailymix_page(page)
+    if page.kind == 'ipod':
+        return build_ipod_page(page)
+    if page.kind == 'tape':
+        return build_tape_page(page)
     if page.kind == 'cover':
         return build_cover_page(page)
-    if page.kind == 'list':
-        return build_list_page(page)
+    if page.kind == 'artists':
+        return build_artists_page(page)
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
     root.children.append(navbar(page.title, customize=page is pod_pages.EXTRAS_PAGE))

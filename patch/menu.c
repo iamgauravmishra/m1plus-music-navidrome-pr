@@ -4,11 +4,11 @@
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
  * The menu's asset (ui/m1plus_menu.bin) holds a stock list row for every item in the default order (the nine
- * menu items, the nine Extras tiles: Favorites ... CD Ripper, then Customize: POD_MENU_ITEMS in all), then the Extras row (the
+ * menu items, the nine Extras tiles: Favorites ... CD Ripper, then Customize and the Pod: POD_MENU_ITEMS in all), then the Extras row (the
  * last, always shown, never hidden or moved); ui/m1plus_extras.bin holds the same row for every item. The setting is one small file,
  * MENU_FILE: the shown items in menu order, one character each (the item id, its row index: '0'..'8', then 'a'..'i' for ids 9..17,
- * 'j' for Customize, id 18), then optionally '-' and the items turned off (the Extras page does not list them), then a newline
- * ("12345\n", Cover Flow ... Playlists, is the default; Now Playing, Shuffle and Customize are items that are hidden by default). It is read,
+ * 'j' for Customize, id 18, 'k' for the Pod, id 19), then optionally '-' and the items turned off (the Extras page does not list them), then a newline
+ * ("12345\n", Cover Flow ... Playlists, is the default; Now Playing, Shuffle, Customize and the Pod are items that are hidden by default). It is read,
  * strictly, every time the menu, the Extras page or a customise page opens (and when the menu comes back to the foreground):
  * known characters only, no id twice (in either part or across them), '-' at most once, Customize never after it (it stays
  * reachable), a file shorter than POD_MENU_FILE_MAX; anything else, or no file, is the default list with nothing off
@@ -69,10 +69,10 @@ static void mn_defaults(void) {   /* tools/pod_pages.py DEFAULT_MENU: Cover Flow
     mn.off = 0;
 }
 
-/* The item id of a saved character ('0'..'8' the menu items, 'a'..'i' the Extras tiles, ids 9..17, 'j' Customize), or 255. */
+/* The item id of a saved character ('0'..'8' the menu items, 'a'..'i' the Extras tiles, ids 9..17, 'j' Customize, 'k' the Pod, 'l' Podcasts), or 255. */
 static unsigned mn_id(unsigned c) {
     if (c - '0' < 9) return c - '0';
-    if (c - 'a' < 10) return 9 + c - 'a';
+    if (c - 'a' < 12) return 9 + c - 'a';
     return 255;
 }
 

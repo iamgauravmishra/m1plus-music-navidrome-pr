@@ -46,6 +46,7 @@ extern const char *np_cover_file(int *busy);         /* the /tmp file of the pla
 static struct {
     void *win, *bar, *card, *title, *artist, *play, *pause, *next, *sv, *pad;   /* the list's scroll view and its trailing spacer row */
     unsigned timer;      /* the one-shot or the repeating timer, 0 none */
+    unsigned interval;   /* repeating timer interval last accepted by timer_modify */
     int fg;              /* the window is in front */
     int shown;           /* the bar is up */
     int playing;         /* the glyph shown: 1 pause (playing), 0 play, -1 neither set yet */
@@ -57,6 +58,7 @@ static struct {
     unsigned *pl;        /* the backdrop blur's half-resolution plane, MB_HW x MB_HH words (heap, freed with the page) */
     int blur;            /* the blur is registered and still allowed (a structural mismatch clears it) */
     int fix;             /* a frame was partial: invalidate the whole pill at the next chance */
+    int recent_pending;  /* dark album changes need publishing when the screen is lit */
     unsigned char x0[MB_HH];   /* per half row: the first block inside the pill */
 } mb __attribute__((section(".scratch")));
 
@@ -316,8 +318,8 @@ static void mb_glyph(void) {
 static void mb_work(void) {
     void *t = cc_playing();
     unsigned key;
+    if ((t && recent_note(t)) || mb.recent_pending) { mb.recent_pending = 0; recent_refresh(); }
     if (!t) { mb_hide(); return; }
-    if (recent_note(t)) recent_refresh();   /* the Recently Played shelf (patch/recent.c): a new album under this menu shows at once */
     key = mb_track_key(t);
     if (!mb.shown || key != mb.key) {
         mb.key = key;
@@ -341,8 +343,15 @@ static void mb_work(void) {
  * The timer and the window's events
  */
 static int mb_tick(const void *timer) {
+    unsigned want;
     (void)timer;
     if (!mb.win || !mb.fg) { mb.timer = 0; return RET_OK; }
+    want = pod_screen_lit() ? MB_TICK_MS : POD_DARK_MS;
+    if (mb.timer && mb.interval != want && timer_modify(mb.timer, want) == RET_OK) mb.interval = want;
+    if (!pod_screen_lit()) {
+        if (recent_note(cc_playing())) mb.recent_pending = 1;
+        return RET_REPEAT;
+    }
     mb_work();
     return RET_REPEAT;
 }
@@ -352,7 +361,11 @@ static int mb_first(const void *timer) {
     mb.timer = 0;   /* this one ends with the return */
     if (!mb.win || !mb.fg) return RET_OK;
     mb.timer = timer_add(mb_tick, (void *)0, MB_TICK_MS);
-    if (mb.timer) mb_work();
+    mb.interval = MB_TICK_MS;
+    if (mb.timer) {
+        if (pod_screen_lit()) mb_work();
+        else if (recent_note(cc_playing())) mb.recent_pending = 1;
+    }
     return RET_OK;
 }
 

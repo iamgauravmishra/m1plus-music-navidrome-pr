@@ -60,6 +60,7 @@ The menu's Albums row (`ACT_ALBUMS`) opens our one Albums page in the mode used 
   only if the decoded cell is in view. A tile inside the window is never replaced; otherwise the least recently used goes, so the 2+ tiles of the ring outside the window are the
   history: after a reversal what was just left is still there (no cover is decoded twice in a back-and-forth over the same rows, tested). The decode costs 0.75 to 1.9 M payload
   instructions under Unicorn, a few ms on the device, one per tick instead of two inside a paint.
+  The window's background event stops the tile timer; foreground kicks it again for missing tiles. A late callback does nothing. If the foreground event cannot be registered, the loader retains its original behavior so it cannot be stranded. The separate cache worker retains its existing lifetime and is not joined on background.
 - **No decoding while the scroll_view moves.** A decode is a few ms on the UI thread, and the next pointer event waits behind it, so during quick repeated flicks (a new row entering almost every tick) frames dropped.
   `al_moving` reads the stock scroll_view's own state: **a finger dragging it** (`SC_PRESSED` and `SC_DRAGGED` bytes, set by the first MOVE past the 10 px drag threshold, cleared by the UP) or **its scroll animator running**
   (`SC_WA` non-null, `SC_AN_STATE` running and `SC_AN_WIDGET` this scroll_view: the fling, a 200 ms `scroll_to` animation; the same checks `patch/scroll.c` makes). The deferral is the state, not a speed: the stock fling is that

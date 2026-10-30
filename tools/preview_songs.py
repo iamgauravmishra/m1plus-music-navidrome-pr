@@ -55,9 +55,9 @@ def section(t):
     return c if c.isalpha() and c.isascii() else '#'
 
 
-def build_items(sections=True):
+def build_items(sections=True, top=TOP):
     """Flat list of ('h', letter, y) and ('r', song, y) with the content y of each, plus {letter: header y}. sections=False: a list (Favourites, a playlist ...), rows only."""
-    items, y, heads, last = [], TOP, {}, None
+    items, y, heads, last = [], top, {}, None
     for t in SONGS:
         c = section(t)
         if sections and c != last:
@@ -92,17 +92,21 @@ def fit(s, text, px, room):
     return text[:k].rstrip(' ') + '…'
 
 
-def content(s, covers_on=True, select=None, title=None):
+def content(s, covers_on=True, select=None, title=None, head=False):
     """The whole list as one tall image (window x, content y): title, pills, headers, rows. select: the set of marked titles in select mode (a mark column; the pills dim).
     title: a list's title (no sections), else the library's "Songs"."""
-    items, heads, end = build_items(title is None)
+    items, heads, end = build_items(title is None, O['PH_TOP'] if head else TOP)
     im = Image.new('RGBA', (W, end + O['SG_FOOT_H'] + 20), (0, 0, 0, 255)); d = ImageDraw.Draw(im)
-    s.text(im, O['SG_TITLE_X'], O['SG_TITLE_H'] / 2, fit(s, title, 32, 250) if title else tr(s, 'Songs'), 32)
+    if head:   # a playlist's header: the mosaic (the Playlists page's tile, PH_COVER px, 10 px corners), the name 22 px centred under it (patch/songs.c; the count is the footer only)
+        im.alpha_composite(PI.mosaic([PI.ALBUMS[i][2] for i in (0, 1, 2, 3)], O['PH_COVER'], O['PH_COVER_R']), (O['PH_COVER_X'], O['PH_COVER_Y']))
+        s.text(im, W / 2, O['PH_NAME_Y'] + O['PH_NAME_H'] / 2, fit(s, title, 22, O['PH_NAME_W']), 22, anchor='m')
+    else: s.text(im, O['SG_TITLE_X'], O['SG_TITLE_H'] / 2, fit(s, title, 32, 250) if title else tr(s, 'Songs'), 32)
     n = sum(1 for it in items if it[0] == 'r')   # the song count under the last row (patch/songs.c sg_foot_text: the key by n == 1, the number where %d is)
     foot = tuple(int(pod_ui.SG_FOOT_RGB[i:i + 2], 16) for i in (1, 3, 5))
-    s.text(im, O['SG_HDR_X'], end + O['SG_FOOT_GAP'] + O['SG_FOOT_TEXT_H'] / 2, tr(s, '%d song' if n == 1 else '%d songs').replace('%d', str(n)), O['SG_FOOT_PX'], foot)
+    count = tr(s, '%d song' if n == 1 else '%d songs').replace('%d', str(n))
+    s.text(im, O['SG_HDR_X'], end + O['SG_FOOT_GAP'] + O['SG_FOOT_TEXT_H'] / 2, count, O['SG_FOOT_PX'], foot)
     for i, (label, g) in enumerate((('Play', 'sg_play'), ('Shuffle', 'sg_shuffle'))):
-        pill(s, im, (O['SG_PILL_X0'], O['SG_PILL_X1'])[i], PILL_Y, tr(s, label), s.img(g), PILL_RGB if select is None else BAND)
+        pill(s, im, (O['SG_PILL_X0'], O['SG_PILL_X1'])[i], O['PH_PILL_Y'] if head else PILL_Y, tr(s, label), s.img(g), PILL_RGB if select is None else BAND)
     shift = SEL_COL if select is not None else 0
     tx = TEXT_X + shift
     on, off = s.img('selected'), s.img('unselect')
@@ -200,9 +204,9 @@ def sort_card(s, im, current=0):
         if i == current: tick(im, CARD_X + CARD_W - 16 - 18, y + (CARD_ROW - 18) // 2, 18, PI.WHITE)
 
 
-def page(s, covers=True, scroll=0, touched=None, select=None, menu=False, letters=None, title=None, genre=False):
-    items, heads, end = build_items(title is None)
-    tall, _ = content(s, covers, select, title)
+def page(s, covers=True, scroll=0, touched=None, select=None, menu=False, letters=None, title=None, genre=False, head=False):
+    items, heads, end = build_items(title is None, O['PH_TOP'] if head else TOP)
+    tall, _ = content(s, covers, select, title, head)
     im = Image.new('RGBA', (W, WIN), (0, 0, 0, 255))
     pad = BAR_H if select is not None else 0
     scroll = max(0, min(scroll, end + O['SG_FOOT_H'] + pad - (WIN - NAV)))       # the list ends with the song count at the window's foot (the bar's room added in select mode)
@@ -216,7 +220,7 @@ def page(s, covers=True, scroll=0, touched=None, select=None, menu=False, letter
         if push < 0:    # a header that is not wholly inside the window has no letter (patch/songs.c sg_letter_text)
             ImageDraw.Draw(band).rectangle((0, 0, 60, HDR_H - 1), fill=(0, 0, 0))
         im.alpha_composite(band.crop((0, -push, W, HDR_H)), (0, NAV))
-    navbar(s, im, scroll, select, title, genre)
+    navbar(s, im, scroll - (O['PH_COLLAPSE'] - O['SG_COLLAPSE'] if head else 0), select, title, genre)   # (a playlist's header collapses the title at PH_COLLAPSE)
     if title is None: rail(s, im, letters or [h[1] for h in items if h[0] == 'h'], touched, WIN - NAV - pad)   # (a list has no rail)
     if select is not None:    # the bar: Add to Playlist, Delete (the stock multi-select's add and delete), flat pills
         d = ImageDraw.Draw(im); d.rectangle((0, WIN - BAR_H, W - 1, WIN - 1), fill=(0, 0, 0)); d.rectangle((0, WIN - BAR_H, W - 1, WIN - BAR_H), fill=HAIR)
@@ -250,8 +254,9 @@ def main():
               ('Select button: marks, Add to Playlist / Delete', page(s, scroll=heads['C'] - 8, select={'Creep', '春よ、来い'})),
               ('End of the list: Y (a CJK title by pinyin), the song count', page(s, scroll=10 ** 6)),
               ('Favorites (a list: no Sort, no sections, no rail)', page(s, title=tr(s, 'Favorites'))),
-              ('A playlist, scrolled: its long name cut', page(s, scroll=200, title='Late Night Drive: Songs for the Long Way Home')),
-              ('A playlist\'s end: the song count', page(s, scroll=10 ** 6, title='Late Night Drive: Songs for the Long Way Home')),
+              ('A playlist: the header', page(s, title='Late Night Drive: Songs for the Long Way Home', head=True)),
+              ('A playlist, past the name', page(s, scroll=260, title='Late Night Drive: Songs for the Long Way Home', head=True)),
+              ('A playlist\'s end: the song count', page(s, scroll=10 ** 6, title='Late Night Drive: Songs for the Long Way Home', head=True)),
               ('A genre\'s songs, scrolled: no Search, Select | Now Playing', page(s, scroll=200, title='Alternative & Punk', genre=True))]
     pad, lab = 12, 20
     sheet = Image.new('RGB', (len(panels) * (320 + pad) + pad, 450 + lab + 2 * pad), (0x2A, 0x2A, 0x2A)); d = ImageDraw.Draw(sheet)
