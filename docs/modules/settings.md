@@ -6,7 +6,7 @@ Sources: `patch/m1plus.c`, `patch/home.c`, `patch/covercache.c`, `patch/tape.c` 
 Customize is item 18 (`j`), hidden from the main menu by default. The Extras navbar always
 provides access, and it cannot be turned off. Its rows open Main Menu, Extras, Home Screen,
 Cover Flow, Cassette Mode, Playback, System Settings and Developer. The two stock settings
-pages use Home dispatcher IDs 16 and 17; Developer contains Screenshot.
+pages use Home dispatcher IDs 16 and 17; Developer contains Screenshot and Network Probe ([probe](probe.md)).
 
 ## Persisted choices
 

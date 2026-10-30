@@ -72,7 +72,7 @@ def run(ctx):
         if nav is None: continue
         k = {c.name: c for c in nav.children}
         back, play, lbl = k['btn_return'], k['btn_backtoplayer'], k['label_title']
-        group = sorted([k[n] for n in ('btn_coverflow', 'btn_more', 'btn_albumview', 'btn_artisttype', 'btn_customize', 'btn_search', 'btn_sort', 'btn_select') if n in k], key=lambda c: c.x) + [play]
+        group = sorted([k[n] for n in ('btn_coverflow', 'btn_more', 'btn_albumview', 'btn_artisttype', 'btn_customize', 'btn_feeds', 'btn_search', 'btn_sort', 'btn_select') if n in k], key=lambda c: c.x) + [play]
         capsule = len(group) > 1
         ok = (back.x, back.y, back.w, back.h) == (7, 0, 44, 50) and back.get('style:normal:icon') == 'ah_nav_back' and back.get('style:pressed:icon') == 'ah_nav_back_down'
         if capsule:

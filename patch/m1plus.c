@@ -43,9 +43,12 @@ enum {
     ACT_LIST = 21,
     ACT_IPOD = 22,
     ACT_PODCASTS = 23,
-    ACT_CTHEME = 24
+    ACT_CTHEME = 24,
+    ACT_NETPROBE = 25
 };
 
+extern void
+probe_start(void); /* patch/probe.c: the Network Probe row: confirm, then one worker thread logs to the card */
 extern void shot_start(void); /* patch/shot.c: the Screenshot row: confirm, 5 s countdown, capture; or cancel */
 extern int artists_open(
     int home); /* patch/artists.c: the Artists list, its own page; arg HOME_GENRE / HOME_COMPOSER: Genres / Composers on it */
@@ -175,6 +178,8 @@ static int on_row(void *ctx, void *e) {
         home_to_grid(); /* patch/home.c: the stock grid */
     else if (row->action == ACT_SHOT)
         shot_start(); /* patch/shot.c; a timer, no page */
+    else if (row->action == ACT_NETPROBE)
+        probe_start(); /* patch/probe.c; a confirm dialog, then a thread, no page */
     else if (row->action == ACT_REBUILD)
         rebuild_ask(); /* a confirm dialog, then Cover Flow rebuilds */
     else if (row->action == ACT_REGEN)

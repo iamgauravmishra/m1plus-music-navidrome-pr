@@ -187,9 +187,9 @@ def home_tests(expect, page):
            and (SETTINGS.rows[4].action, SETTINGS.rows[4].arg) == (pod_pages.ACT_PAGE, pod_pages.CASSETTE_PAGE_INDEX)
            and (SETTINGS.rows[1].action, SETTINGS.rows[1].arg) == (pod_pages.ACT_PAGE, pod_pages.EXTRASCFG_PAGE_INDEX)
            and (SETTINGS.rows[7].action, SETTINGS.rows[7].arg) == (pod_pages.ACT_PAGE, pod_pages.DEVELOPER_PAGE_INDEX)
-           and [(r.label, r.action) for r in pod_pages.DEVELOPER_PAGE.rows] == [('Screenshot', pod_pages.ACT_SHOT)]
+           and [(r.label, r.action) for r in pod_pages.DEVELOPER_PAGE.rows] == [('Screenshot', pod_pages.ACT_SHOT), ('Network Probe', pod_pages.ACT_NETPROBE)]
            and not [r for r in SETTINGS.rows if r.action in (pod_pages.ACT_GRID, pod_pages.ACT_STARTUP)],
-           'the Customize page: Main Menu, Extras, Home Screen and Cover Flow (sub-pages), Playback and System Settings (stock pages) and Developer last (its page holds Screenshot); no launcher rows left on it')
+           'the Customize page: Main Menu, Extras, Home Screen and Cover Flow (sub-pages), Playback and System Settings (stock pages) and Developer last (its page holds Screenshot and Network Probe); no launcher rows left on it')
     expect([(r.label, r.action) for r in HOMESET.rows] == [('Boot to M1+ Music', pod_pages.ACT_STARTUP), ('Recent Albums', pod_pages.ACT_SHELF), ('Daily Mix', pod_pages.ACT_DAILY),
                                                            ('Regenerate Daily Mix', pod_pages.ACT_REGEN), ('Shanling Home', pod_pages.ACT_GRID)]
            and HOMESET.title == 'Home Screen' and (start_i, grid_i) == (0, 4),

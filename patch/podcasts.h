@@ -37,6 +37,7 @@ typedef struct {
     unsigned count; /* episodes with a file */
     unsigned hash; /* pc_hash of dir (lower-cased): the key of the show's speed */
     unsigned fresh; /* of those, episodes not played and with no place saved */
+    unsigned checked; /* the show file's checked=: seconds since 1970 of the last successful refresh, 0 = never */
 } pc_show_t;
 
 /* The folder: out (PC_FILE + 20 bytes) is "/mnt/mmc/<Podcasts as the card spells it>"; 1 when it exists, else 0 (out then holds the default spelling). */
@@ -55,9 +56,13 @@ void pc_when(
         size); /* an episode's date, Apple Podcasts style, in the language (docs/modules/podcasts.md "The date"); now: seconds since 1970 */
 unsigned pc_hash(const char *s); /* FNV-1a over the ASCII-lower-cased bytes, never 0 */
 int pc_is_path(const char *path); /* the path is a file in a show folder under the Podcasts folder (case-insensitive) */
-void pc_fmt(char *out, unsigned size, const char *fmt, unsigned n); /* fmt with its one %d replaced by n */
+void pc_fmt(char *out, unsigned size, const char *fmt, unsigned n);
+void pc_fmt2(char *out, unsigned size, const char *fmt, unsigned a, unsigned b);
+/* the same for a text with two %d: the first becomes a, the second b */ /* fmt with its one %d replaced by n */
 /* Whether a cover picture's header says it is small enough to decode (PC_COVER_MAX_PX); a missing or unknown file is refused. path is a plain path. */
 int pc_cover_ok(const char *path);
+/* A picture file's kind and size from its header: 1 JPEG (*sof its start-of-frame marker: 0xc0 / 0xc1 baseline, 0xc2 progressive), 2 PNG (*sof 0), 0 anything else (then *w = *h = 0). */
+int pc_pic_info(const char *path, unsigned *w, unsigned *h, unsigned *sof);
 
 /* The resume ring and the played marks. pc_state: PC_NEW (nothing saved), PC_PROGRESS (a place, *pos and *len set), PC_DONE (played). */
 enum { PC_NEW = 0, PC_PROGRESS = 1, PC_DONE = 2 };

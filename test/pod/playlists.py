@@ -213,7 +213,7 @@ def glass_checks(expect, tree, scrim, card, items):
     ui_root = os.path.join(WORK, 'rootfs', 'release/assets')
     for base, _, files in os.walk(ui_root):
         users += [os.path.relpath(os.path.join(base, f), ui_root) for f in files if f.endswith('.bin') and b'pl_glass' in open(os.path.join(base, f), 'rb').read()]
-    expect(users == ['default/raw/ui/m1plus_playlists.bin'], f'pl_glass is used by the Playlists page only ({users})')
+    expect(users == ['default/raw/ui/m1plus_playlists.bin', 'default/raw/ui/m1plus_podcasts.bin'], f'pl_glass is used by the Playlists page and the Podcasts refresh dialog only ({users})')
     # the stock code: an inline bg_image_draw_type name is normalised by image_draw_type_find (style_normalize_value @0x65a1f4: strstr "image_draw_type"),
     # "patch3_x" is 13 in its table (@0x9050d8), canvas_draw_image_ex's case 13 (jump table @0x75ce40) calls canvas_draw_image_patch3_x (@0x647a08),
     # which keeps min(dst.w, img.w) / 3 at each end (li $v0, 3; div @0x647b0c) and stretches the middle

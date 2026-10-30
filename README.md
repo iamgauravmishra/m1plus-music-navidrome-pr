@@ -25,7 +25,7 @@ Follow the [installation guide](docs/install.md) for preparation, updates and re
 <details>
 <summary>Release status</summary>
 
-Status: the release is V2.1pE (pD + playlist mosaics look a repeated album up once, cover-file checks one call lighter; pD: the album page's cover-tint poll works only in front with the screen lit and gives up after bounded tries). Milestones, hardware results and lessons:
+Status: the release is V2.1pF (pE + Podcasts feeds: subscribe from subscriptions.txt, refresh with a progress dialog and Cancel, episodes not on the card listed greyed, cover art downloaded and shrunk; test build pCFC flashed). Milestones, hardware results and lessons:
 `docs/history.md`; per-tag details are in git.
 
 </details>

@@ -38,13 +38,14 @@ for commands, [UI](ui.md) for layout/assets, and [history](history.md) for recor
 | [Mini player](modules/minibar.md) | Home overlay, controls, blur and timer |
 | [Recently Played](modules/recent.md) | History file, covers and shelf layout |
 | [Daily Mix](modules/dailymix.md) | Selection job, stored mix, card and page |
-| [Podcasts](modules/podcasts.md) | Local episodes, metadata, resume and speed |
+| [Podcasts](modules/podcasts.md) | Local episodes, feeds, covers, resume and speed |
 | [Virtual iPod](modules/ipod.md) | Touch wheel, navigation and playback |
 | [iPod Cover Flow](modules/ipod-coverflow.md) | Embedded carousel and album navigation |
 | [Cassette Mode](modules/tape.md) | Landscape rendering, themes and timer |
 | [Menu](modules/menu.md) | Home/normal instances, Extras and customization |
 | [Languages](modules/i18n.md) | Translation tables, keys and width checks |
 | [Screenshot](modules/screenshot.md) | Countdown, framebuffer capture and import |
+| [Network Probe](modules/probe.md) | Developer check of HTTPS, Wi-Fi, clock, RAM and screen-off |
 | [List gestures](modules/gestures.md) | Drag cancellation and stopping coasting lists |
 
 Older source comments cite numbered sections from the former architecture document:

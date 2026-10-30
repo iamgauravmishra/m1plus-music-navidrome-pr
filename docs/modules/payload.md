@@ -41,8 +41,11 @@ function past its 3-word prologue (`lui $gp,0xa03e; ori $gp,$gp,0x3ed0; j <fn+12
 - **libc** only through slots `demo` already imports: a stub `lui/ori $t8, slot; lw $t9,0($t8); jr
   $t9` tail-calls the resolved pointer (`pod.py LIBC`: atoi, access, open/read/write/close/fsync,
   memset/memcpy/strcmp/strcasecmp/strdup/snprintf, calloc/free, fopen/fclose/fread/fwrite/fseek/ftell,
-  rename/unlink/mkdir/statfs, pthread_create/join, mutex lock/unlock, the libcstl deque calls). No
-  new imports are added.
+  rename/unlink/mkdir/statfs, pthread_create/join, mutex lock/unlock, the libcstl deque calls; for the Podcasts refresh worker also libcurl's easy interface, pthread_detach and
+  demo's libjpeg 7 with `_setjmp`). No new imports are added. The worker (`patch/pcnet.c`, `pcfeed.c`, `pccover.c`; source order `pcmodel.c pcfeed.c pcpng.c pccover.c pcnet.c podcasts.c`; `pcpng.c` is a streaming PNG decoder of our own, with no import of its own) is started by a tap on
+  Refresh All / Import and ends by itself; it touches no widget and calls no stock function, so the safety list of `AGENTS.md` does not change. The one stock address it uses is libjpeg's
+  `error_exit` `0x5dbfe0`; `JPEG_PINS` in `tools/pod.py` pins it and every libjpeg structure offset and size `patch/pccover.c` writes against stock's own decoder and encoder
+  (`0x5dd5ec`, `0x5de554`).
 
 ## Hook sites
 

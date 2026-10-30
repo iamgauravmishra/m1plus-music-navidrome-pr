@@ -18,7 +18,10 @@
 
 _Static_assert(sizeof(pc_ep_t) == PC_EP_SIZE, "pc_ep_t");
 _Static_assert(sizeof(pc_show_t) == PC_SHOW_SIZE, "pc_show_t");
-_Static_assert(__builtin_offsetof(pc_ep_t, hash) == PC_EP_HASH && __builtin_offsetof(pc_show_t, hash) == PC_SH_HASH,
+_Static_assert(__builtin_offsetof(pc_ep_t, hash) == PC_EP_HASH && __builtin_offsetof(pc_show_t, hash) == PC_SH_HASH &&
+                   __builtin_offsetof(pc_show_t, checked) == PC_SH_CHECKED &&
+                   __builtin_offsetof(pc_show_t, feed) == PC_SH_FEED &&
+                   __builtin_offsetof(pc_show_t, image) == PC_SH_IMAGE,
                "offsets");
 
 #define PM_ROOT "/mnt/mmc"
@@ -110,6 +113,29 @@ void pc_fmt(char *out, unsigned size, const char *fmt, unsigned n) {
     for (; *fmt && o + 1 < size; ++fmt) {
         if (fmt[0] == '%' && fmt[1] == 'd') {
             for (i = k; i && o + 1 < size; --i) out[o++] = num[i - 1];
+            ++fmt;
+        } else
+            out[o++] = *fmt;
+    }
+    out[o] = 0;
+}
+
+void pc_fmt2(char *out, unsigned size, const char *fmt, unsigned a, unsigned b) {
+    char num[2][12];
+    unsigned len[2], k, i, o = 0, which = 0, v[2];
+    v[0] = a, v[1] = b;
+    for (which = 0; which < 2; ++which) {
+        unsigned n = v[which];
+        k = 0;
+        do num[which][k++] = (char)('0' + n % 10), n /= 10;
+        while (n && k < sizeof num[0]);
+        len[which] = k;
+    }
+    which = 0;
+    for (; *fmt && o + 1 < size; ++fmt) {
+        if (fmt[0] == '%' && fmt[1] == 'd') {
+            for (i = len[which]; i && o + 1 < size; --i) out[o++] = num[which][i - 1];
+            which = 1;
             ++fmt;
         } else
             out[o++] = *fmt;
@@ -317,6 +343,8 @@ int pc_parse_show(const char *buf, unsigned n, pc_show_t *show) {
             pm_cpy_n(show->feed, PC_URL, p + 5, (int)len - 5);
         else if (len >= 6 && pm_ieq_n(p, "image=", 6))
             pm_cpy_n(show->image, PC_URL, p + 6, (int)len - 6);
+        else if (len >= 8 && pm_ieq_n(p, "checked=", 8))
+            show->checked = pm_num(p + 8, len - 8);
     }
     return 1;
 }
@@ -585,20 +613,22 @@ static unsigned pm_be32(const unsigned char *b) {
     return (unsigned)b[0] << 24 | (unsigned)b[1] << 16 | (unsigned)b[2] << 8 | b[3];
 }
 
-int pc_cover_ok(const char *path) {
+int pc_pic_info(const char *path, unsigned *pw, unsigned *ph, unsigned *psof) {
     unsigned char b[32];
-    unsigned w = 0, h = 0;
+    unsigned w = 0, h = 0, sofm = 0;
+    int kind = 0, steps = 0;
     void *f = fopen(path, "rb");
-    int steps = 0;
+    *pw = *ph = *psof = 0;
     if (!f) return 0;
     if (fread(b, 1, 24, f) != 24) {
         fclose(f);
         return 0;
     }
     if (b[0] == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G') { /* PNG: IHDR's width and height at 16 and 20 */
-        w = pm_be32(b + 16), h = pm_be32(b + 20);
+        w = pm_be32(b + 16), h = pm_be32(b + 20), kind = 2;
     } else if (b[0] == 0xff && b[1] == 0xd8) { /* JPEG: the segments up to a start-of-frame */
         long at = 2;
+        kind = 1;
         while (steps++ < 64) {
             unsigned len, marker;
             if (fseek(f, at, 0) || fread(b, 1, 4, f) != 4) break;
@@ -617,13 +647,20 @@ int pc_cover_ok(const char *path) {
             if (marker >= 0xc0 && marker <= 0xcf && marker != 0xc4 && marker != 0xc8 && marker != 0xcc) {
                 unsigned char sof[5];
                 if (fseek(f, at + 5, 0) || fread(sof, 1, 4, f) != 4) break;
-                h = pm_be16(sof), w = pm_be16(sof + 2);
+                h = pm_be16(sof), w = pm_be16(sof + 2), sofm = marker;
                 break;
             }
             at += 2 + len;
         }
     }
     fclose(f);
+    *pw = w, *ph = h, *psof = sofm;
+    return kind;
+}
+
+int pc_cover_ok(const char *path) {
+    unsigned w, h, sof;
+    pc_pic_info(path, &w, &h, &sof);
     return w && h && w <= 8192 && h <= 8192 && w * h <= PC_COVER_MAX_PX;
 }
 

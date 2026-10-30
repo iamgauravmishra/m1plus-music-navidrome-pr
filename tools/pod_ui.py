@@ -80,19 +80,20 @@ SONGS_BUTTONS = (('btn_search', 'pod_nav_search', 122), ('btn_sort', 'pod_nav_so
 NAV_SEARCH_X = SONGS_BUTTONS[0][2]
 
 
+NAV_FEEDS_ICON = 'pod_nav_feeds'           # the Podcasts page's Feeds button: Lucide rss, the capsule's left cap on the 214 slot (tools/mod_icons.py)
 NAV_CUSTOMIZE_ICON = 'pod_nav_customize'   # the Extras page's Customize button: the capsule's left cap on the 214 slot (tools/mod_icons.py)
 
 
-def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, songs=False, customize=False):
+def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, songs=False, customize=False, feeds=False):
     nb = Widget('view', 0, 0, SCREEN_W, NAVBAR_H, [('name', 'navigationbar_view')])
     # a title runs under a toggle's button no further than the button's left edge
-    right = NAV_SEARCH_X if songs else NAV_CF_X if coverflow or more else NAV_VIEW_X if toggle or customize else NAV_TITLE_END
+    right = NAV_SEARCH_X if songs else NAV_CF_X if coverflow or more else NAV_VIEW_X if toggle or customize or feeds else NAV_TITLE_END
     lbl = Widget('label', NAV_TITLE_X, 14, right - NAV_TITLE_X, 22,
                  [('name', 'label_title'), ('style', 'navbar_label_white'), ('length', '31'), pod_i18n.text_prop(title)])
     ret = Widget('button', NAV_BACK_X, 0, NAV_BACK_W, NAVBAR_H, [
         ('name', 'btn_return'), ('enable', 'true'), ('style', 'img_btn_style'),
         ('style:over:icon', 'ah_nav_back'), ('style:normal:icon', 'ah_nav_back'), ('style:pressed:icon', 'ah_nav_back_down')])
-    img = 'ah_nav_play' if toggle or coverflow or more or songs or customize else 'ah_nav_np'   # a toggle / button makes Now Playing the capsule's right cap; else a disc
+    img = 'ah_nav_play' if toggle or coverflow or more or songs or customize or feeds else 'ah_nav_np'   # a toggle / button makes Now Playing the capsule's right cap; else a disc
     player = Widget('button', NAV_PLAY_X, 0, NAV_PLAY_W, NAVBAR_H, [
         ('name', 'btn_backtoplayer'), ('enable', 'true'), ('style', 'img_btn_style'),
         ('style:pressed:icon', img + '_down'), ('style:normal:icon', img), ('style:over:icon', img)])
@@ -106,6 +107,10 @@ def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, 
         nb.children.append(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
             ('name', 'btn_customize'), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', NAV_CUSTOMIZE_ICON + '_down'), ('style:normal:icon', NAV_CUSTOMIZE_ICON), ('style:over:icon', NAV_CUSTOMIZE_ICON)]))
+    if feeds:   # the Podcasts page's Feeds button (patch/podcasts.c shows it on the Shows level only, and makes Now Playing the right cap, where it is)
+        nb.children.append(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
+            ('name', 'btn_feeds'), ('enable', 'true'), ('style', 'img_btn_style'),
+            ('style:pressed:icon', NAV_FEEDS_ICON + '_down'), ('style:normal:icon', NAV_FEEDS_ICON), ('style:over:icon', NAV_FEEDS_ICON)]))
     if coverflow:
         nb.children.append(Widget('button', NAV_CF_X, 0, NAV_CF_W, NAVBAR_H, [
             ('name', 'btn_coverflow'), ('enable', 'true'), ('style', 'img_btn_style'),
@@ -325,7 +330,7 @@ def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview
     return root
 
 
-PC_DIM_RGB, PC_ACCENT_RGB = '#8E8E93', '#FF9F0A'   # a played episode's title; the show's speed in the header
+PC_DIM_RGB, PC_ACCENT_RGB, PC_ACTION_RGB = '#8E8E93', '#FF9F0A', '#0A84FF'   # a played episode's title; the show's speed in the header; an action row (Refresh All)
 
 
 def build_podcasts_page(page):
@@ -334,7 +339,7 @@ def build_podcasts_page(page):
     the four hidden labels are the text styles: the row title, the grey line, a played episode's title and the show's speed."""
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
-    root.children.append(navbar(page.title))
+    root.children.append(navbar(page.title, feeds=True))
     lv = stock_list([], True)
     lv.set('name', 'podcasts_listview')
     sv = lv.children[0]
@@ -352,11 +357,71 @@ def build_podcasts_page(page):
     styled(status, ('normal',), 'text_align_v', 'middle')
     root.children.append(status)
     for name, px, colour in (('label_row_title', LIST_TITLE_PX, '#FFFFFF'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA'),
-                             ('label_row_dim', LIST_TITLE_PX, PC_DIM_RGB), ('label_row_acc', LIST_SUB_PX, PC_ACCENT_RGB)):
+                             ('label_row_dim', LIST_TITLE_PX, PC_DIM_RGB), ('label_row_acc', LIST_SUB_PX, PC_ACCENT_RGB), ('label_row_act', LIST_TITLE_PX, PC_ACTION_RGB)):
         lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
         styled(lab, ('normal',), 'text_align_v', 'middle')
         root.children.append(lab)
+    root.children.extend(podcasts_dialog())   # last: above the list and the navbar
     return root
+
+
+# The refresh dialog of the Podcasts page (patch/podcasts.c pg_dlg_*): the Playlists menu's pieces. A full-client scrim (dimmed as that menu's, it takes every touch: the dialog is
+# modal) and a card in that menu's glass (pl_glass, patch3_x, PD_CARD_H = its 200 px), centred: the title, the current show's name (the payload sets it; ellipsis), the bar (a track and
+# a fill whose width the payload sets), the "2 of 5" line (or "Cancelling..."), and a Cancel row filling the card's last 50 px with the menu rows' hairline above it and the pressed 6 % white.
+# Everything starts hidden and insensitive; the texts inside are insensitive too (only the Cancel row takes touches).
+PD_CARD_W, PD_CARD_H, PD_BAR_W, PD_BAR_H = (OFFSETS[k] for k in ('PD_CARD_W', 'PD_CARD_H', 'PD_BAR_W', 'PD_BAR_H'))
+PD_MARGIN = (PD_CARD_W - PD_BAR_W) // 2
+PD_TITLE_Y, PD_TITLE_H, PD_TITLE_PX = 16, 28, 20
+PD_NAME_Y, PD_NAME_H, PD_NAME_PX = 54, 26, 17
+PD_BAR_Y = 94
+PD_COUNT_Y, PD_COUNT_H, PD_COUNT_PX = 106, 26, 15
+PD_CANCEL_PX = 18
+PD_TRACK_RGB, PD_FILL_RGB, PD_NAME_RGB, PD_COUNT_RGB, PD_CANCEL_RGB = '#FFFFFF33', '#EBEBEB', '#EBEBEB', '#AAAAAA', '#FFFFFF'   # neutral: no accent colour
+
+
+def podcasts_dialog():
+    """(scrim, card) of the refresh dialog."""
+    assert PD_CARD_H == OFFSETS['PL_MENU_ROWS'] * PL_ROW_H
+    scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', 'pod_pd_scrim'), ('enable', 'true')]))
+    for st in STATES:
+        styled(scrim, (st,), 'bg_color', PL_DIM)
+        styled(scrim, (st,), 'text_color', '#FFFFFF')
+        styled(scrim, (st,), 'border_width', '0')
+        styled(scrim, (st,), 'border_color', '#00000000')
+    card = hidden(Widget('view', (SCREEN_W - PD_CARD_W) // 2, (CLIENT_H - PD_CARD_H) // 2, PD_CARD_W, PD_CARD_H, [('name', 'pod_pd_card')]))
+    for st in STATES:
+        styled(card, (st,), 'bg_color', '#00000000')
+        styled(card, (st,), 'bg_image', PL_GLASS)
+        styled(card, (st,), 'bg_image_draw_type', 'patch3_x')
+        styled(card, (st,), 'border_width', '0')
+    def text(name, y, h, px, colour, text_prop):
+        lab = Widget('hscroll_label', PD_MARGIN, y, PD_BAR_W, h, [('name', name), text_prop, ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+        for st in ('normal', 'disable', 'focused'):
+            styled(lab, (st,), 'font_size', str(px))
+            styled(lab, (st,), 'text_color', colour)
+            styled(lab, (st,), 'text_align_h', 'center')
+            styled(lab, (st,), 'text_align_v', 'middle')
+        return lab
+    card.children.append(text('pod_pd_title', PD_TITLE_Y, PD_TITLE_H, PD_TITLE_PX, '#FFFFFF', pod_i18n.text_prop('Refreshing Podcasts')))
+    card.children.append(text('pod_pd_name', PD_NAME_Y, PD_NAME_H, PD_NAME_PX, PD_NAME_RGB, ('text', '')))
+    for name, w, rgb in (('pod_pd_track', PD_BAR_W, PD_TRACK_RGB), ('pod_pd_fill', 1, PD_FILL_RGB)):
+        bar = Widget('view', PD_MARGIN, PD_BAR_Y, w, PD_BAR_H, [('name', name), ('sensitive', 'false')])
+        for st in STATES:
+            styled(bar, (st,), 'bg_color', rgb)
+            styled(bar, (st,), 'border_width', '0')
+            styled(bar, (st,), 'round_radius', str(PD_BAR_H // 2))
+        card.children.append(bar)
+    card.children.append(text('pod_pd_count', PD_COUNT_Y, PD_COUNT_H, PD_COUNT_PX, PD_COUNT_RGB, ('text', '')))
+    cancel = Widget('button', 0, PD_CARD_H - PL_ROW_H, PD_CARD_W, PL_ROW_H, [('name', 'pod_pd_cancel'), ('enable', 'true'), pod_i18n.text_prop('Cancel')])
+    for st in STATES:
+        styled(cancel, (st,), 'bg_color', PL_PRESSED if st == 'pressed' else '#00000000')
+        styled(cancel, (st,), 'text_color', PD_CANCEL_RGB)
+        styled(cancel, (st,), 'font_size', str(PD_CANCEL_PX))
+        styled(cancel, (st,), 'border', 'top')
+        styled(cancel, (st,), 'border_width', '1')
+        styled(cancel, (st,), 'border_color', PL_HAIR)
+    card.children.append(cancel)
+    return scrim, card
 
 
 # The Playlists page (patch/playlists.c): the Albums grid's structure (a stock list holding the one content view that paints the cells) under a navbar
