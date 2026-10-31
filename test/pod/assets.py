@@ -15,7 +15,7 @@ def run(ctx):
 
     # 25. Contrast in the built assets: every button we style inline has a dark background and
     #     light text in every widget state (theme-styled navbar buttons excepted).
-    for asset_name in ('m1plus_menu.bin', 'm1plus_cover.bin', 'm1plus_artists.bin', 'm1plus_shuffle.bin', 'm1plus_customize.bin', 'm1plus_cfset.bin', 'm1plus_homeset.bin'):
+    for asset_name in ('m1plus_menu.bin', 'm1plus_cover.bin', 'm1plus_artists.bin', 'm1plus_shuffle.bin', 'm1plus_settings.bin', 'm1plus_library.bin', 'm1plus_homeset.bin'):
         tree = awtk_ui.parse(open(os.path.join(ui_dir, asset_name), 'rb').read())
         for w in tree.walk():
             if w.type == 'list_item':   # rows: stock's widget and theme styles, as sysset's rows
@@ -155,23 +155,29 @@ def run(ctx):
     # from the pinned stock shutdown screen (the committed disc is what the derivation makes), the rest are existing mappings
     glyphs = {n: g for n, g, _ in mod_icons.GLYPHS}
     expect(mod_icons.POD_ROWS['Now Playing'][1] == glyphs['back_to_player'] == 'audio-lines','the Now Playing row uses the wave glyph of the navbar\'s Now Playing button')
-    mark = Image.open(os.path.join(mod_icons.PNG, mod_icons.POD_ROWS['Shanling Home'][0] + '.png')).convert('RGBA')
-    expect(mod_icons.POD_ROWS['Shanling Home'][1] == mod_icons.SHANLING and mark.tobytes() == mod_icons.bare_icon(mod_icons.SHANLING, mod_icons.POD_ICON).tobytes(),
+    mark = Image.open(os.path.join(mod_icons.PNG, mod_icons.card_name(mod_icons.SHANLING) + '.png')).convert('RGBA')
+    expect(mod_icons.CARD_GLYPHS['Open Shanling Home'] == mod_icons.SHANLING and mark.tobytes() == mod_icons.bare_icon(mod_icons.SHANLING, mod_icons.POD_ICON).tobytes(),
            'the Shanling Home row has the brand mark derived from the stock shutdown screen (pinned), bare')
     ink = [p for p in mark.getdata() if p[3] > 200]; bb = mark.getchannel('A').getbbox()
     expect(len(ink) > 60 and mark.size == (24, 24) and bb[2] - bb[0] == 24 and all(p[:3] == (255, 255, 255) for p in ink),
            f'the mark is white ink 24 px wide, thickened to about 2 px strokes ({len(ink)} solid px, box {bb})')
-    expect({'Main Menu', 'Cover Flow', 'Landscape', 'Sort', 'Boot to M1+ Music', 'Playback', 'Customize', 'Developer'} <= set(mod_icons.POD_ROWS)
-           and not {'Play Settings', 'Start in: M1+ Music', 'Start in M1+ Music', 'Settings', 'Cover Flow landscape'} & set(mod_icons.POD_ROWS)
-           and not any(k.startswith('pod_nav_rotate') for k in mod_icons.NAV_VIEW), 'icons exist for the Customize rows and the Cover Flow page\'s, none for the old labels or the removed rotate button')
-    expect(mod_icons.POD_ROWS['Customize'][1] == 'sliders-horizontal' and mod_icons.POD_ROWS['Home Screen'][1] == 'house'
-           and mod_icons.POD_ROWS['Boot to M1+ Music'][1] == 'power' and mod_icons.POD_ROWS['Playback'][1] == 'headphones'
-           and mod_icons.POD_ROWS['Developer'][1] == 'code'
-           and {'m1plus_homeset', 'm1plus_extrascfg', 'm1plus_developer'} <= set(mod_icons.POD_UI),
-           'Customize sliders-horizontal, Home Screen house, Boot to power, Playback headphones, Developer code; the new pages get their icons')
-    expect(mod_icons.POD_ROWS['Landscape'][1] == 'rotate-cw-square' and mod_icons.POD_ROWS['Sort'][1] == 'arrow-down-wide-narrow'
-           and mod_icons.POD_ROWS['Cover Flow'][1] == '+coverflow' and mod_icons.NAV_VIEW['pod_nav_coverflow'] == '+coverflow' and 'm1plus_cfset' in mod_icons.POD_UI,
-           'Settings > Cover Flow: the custom Cover Flow glyph (also the menu\'s and the navbar button\'s), the rotate glyph for Landscape, arrow-down-wide-narrow for Sort')
+    expect(mod_icons.POD_ROWS['Settings'][1] == 'sliders-horizontal' and not {'Play Settings', 'Start in: M1+ Music', 'Start in M1+ Music', 'Cover Flow landscape', 'Customize'} & set(mod_icons.POD_ROWS)
+           and not any(k.startswith('pod_nav_rotate') for k in mod_icons.NAV_VIEW) and 'm1plus_settings' not in mod_icons.POD_UI,
+           'the menu item Settings has the sliders glyph; the Settings pages are cards with their own glyphs (CARD_GLYPHS), not POD_ROWS rows')
+    expect(mod_icons.POD_ROWS['Cover Flow'][1] == '+coverflow' and mod_icons.NAV_VIEW['pod_nav_coverflow'] == '+coverflow',
+           'the custom Cover Flow glyph on the menu row and the navbar button')
+    cg = mod_icons.CARD_GLYPHS
+    expect(cg['Home Screen'] == 'house' and cg['Boot to M1+ Music'] == 'power' and cg['Developer'] == 'code' and cg['All Playback Settings'] == 'headphones'
+           and cg['Landscape'] == 'rotate-cw-square' and cg['Album Order'] == 'arrow-down-wide-narrow' and cg['Wi-Fi'] == 'wifi' and cg['Bluetooth'] == 'bluetooth',
+           'card rows: Home Screen house, Boot to power, Playback headphones, Developer code, Landscape rotate, Album Order arrow-down-wide-narrow, Wi-Fi, Bluetooth')
+    import pod_pages
+    for page in pod_pages.PAGES:   # every Settings row but the pickers' has a glyph, drawn at 20 px in a 24 px image
+        if page.kind == 'cards':
+            for r in page.rows:
+                if pod_pages.row_kind(r) not in ('check', 'info'): expect(r.label in cg, f'{page.key}: {r.label} has a card glyph')
+    for n in mod_icons.CARD_IMAGES:
+        im = Image.open(os.path.join(mod_icons.PNG, n + '.png')).convert('RGBA')
+        expect(im.size == {'pod_chev': (9, 15), 'pod_check': (20, 20), **{p: (320, 52) for p in mod_icons.CARD_PIECE_IMAGES}}.get(n, (24, 24)) and im.getchannel('A').getbbox(), f'{n} is a drawn image of its size')
     lock_imgs = {n: open(os.path.join(img_dir, n + '.png'), 'rb').read() for n in ('screens_battery', 'screens_charge', 'screens_lowbattery')}
     expect(all(lock_imgs[n] == battery_art.png(battery_art.LOCK, s) for n, s in
                (('screens_battery', 'normal'), ('screens_charge', 'charge'), ('screens_lowbattery', 'low'))),
@@ -227,9 +233,8 @@ def run(ctx):
 
     # 41. The product name and the About row. "M1+ Music" is what the user sees: no old name ("M1 Pod", "M1+ Pod") is left
     #     in our ui files, the 16 string tables, demo's payload or the Home icon; the internal name is m1plus (m1pod is gone). About keeps
-    #     its seven stock rows in their order (FW. Version still the stock literal) and gets "M1+ Music:<TAG>" right below FW. Version.
-    import build, mod_about
-    from awtk_text import Ttf, awtk_width
+    #     its seven stock rows in their order (FW. Version still the stock literal) (the tag is on our About page).
+    import build
     raw = os.path.join(WORK, 'rootfs', 'release/assets/default/raw')
     old_names = (b'M1 Pod', b'M1+ Pod')
     has_old = lambda p: any(n in open(p, 'rb').read() for n in old_names)
@@ -245,22 +250,9 @@ def run(ctx):
            'the internal name is m1plus: m1plus_menu.bin, /mnt/data/m1plus-start, /mnt/mmc/m1plus-off')
     old_files = sorted(os.path.relpath(os.path.join(d, f), raw) for d, _, fs in os.walk(raw) for f in fs if 'm1pod' in f)
     expect(not old_files and b'm1pod' not in demo, f'the old internal name m1pod is gone: no asset is named so, demo has no such string ({old_files})')
-    about = awtk_ui.parse(open(os.path.join(ui_dir, 'systemset/about_page.bin'), 'rb').read())
-    view = about.find('about_scrollview')
-    names = [c.name for c in view.children]
-    expect(names == ['listitem0', 'listitem1', 'listitem7', 'listitem2', 'listitem3', 'listitem4', 'listitem6', 'listitem5'],
-           f'About: the stock rows in order with the new one right below FW. Version ({names})')
-    new, fw = view.find('listitem7'), view.find('listitem1')
-    nl, fl = new.children[0], fw.children[0]
     expect(re.fullmatch(r'V2\.1[a-z][A-Z]+', build.TAG) is not None, f'the tag comes from tools/build.py ({build.TAG})')
-    expect(nl.name == 'scrlabel7' and nl.get('text') == f'M1+ Music:{build.TAG}' == mod_about.row_text(build.TAG),
-           f'the About row reads M1+ Music:{build.TAG}')
-    expect(new.get('style') == fw.get('style') and (nl.type, nl.x, nl.y, nl.w, nl.h) == (fl.type, fl.x, fl.y, fl.w, fl.h)
-           and nl.get('style') == fl.get('style') == 'srlabel_leftwhite21_style' and fl.get('text') is None,
-           'the new row is the FW. Version row cloned (same styles and geometry); the stock label stays text-less (code sets it)')
-    ttf = Ttf(os.path.join(raw, 'fonts/default.ttf'))
-    w = awtk_width(ttf, nl.get('text'), 21)
-    expect(w <= nl.w, f'the row text fits its {nl.w} px label ({w} px)')
+    about = awtk_ui.parse(open(os.path.join(ui_dir, 'systemset/about_page.bin'), 'rb').read())
+    expect(about.find('listitem7') is None and len(about.find('about_scrollview').children) == 7, 'the stock About page keeps its seven rows (our own About page, m1plus_about, shows the tag and the values: tools/mod_about.py is gone)')
     stock_len = os.path.getsize(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', 'release/bin/demo'))   # the payload is appended after the stock file's length
     expect(demo.count(b'V2.1\0') >= 1 and build.TAG.encode() + b'\0' not in demo[:stock_len], 'demo\'s own data still carries the stock version literal V2.1 (FW. Version), not our tag (only the appended payload has it: the iPod About row)')
 

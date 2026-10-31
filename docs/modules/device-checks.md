@@ -56,5 +56,5 @@ in [history](../history.md); feature modules retain their detailed edge cases.
 - **EXTRA-04:** Cassette Mode orientation, text, theme, progress/reels, pause/resume, close
   and dark-screen timer behaviour. [Cassette checklist](tape.md#device-checklist-first-flash)
 
-For captures use Customize → Developer → Screenshot, then `tools/pull_shots.py --build latest`.
+For captures use Settings → Developer → Screenshot, then `tools/pull_shots.py --build latest`.
 See [installation/restore](../install.md) and [capture details](screenshot.md).

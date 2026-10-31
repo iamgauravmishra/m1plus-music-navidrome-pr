@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""out/preview/cassette-setting.png: Customize (with its new Cassette Mode row) and the Cassette Mode page with the Cassette Theme row in its three states (Normal, Chrome,
+"""out/preview/cassette-setting.png: Settings (with its new Cassette Mode row) and the Cassette Mode page with the Cassette Theme row in its three states (Normal, Chrome,
 Metal), drawn from a finished tree's own ui files, strings and font (docs/modules/settings.md). Approximate (PIL, not AWTK).
 
 Usage: uv run python -I tools/preview_cassette_setting.py WORKDIR [OUT.png]     (en_US; default out/preview/cassette-setting.png)
@@ -7,7 +7,7 @@ Usage: uv run python -I tools/preview_cassette_setting.py WORKDIR [OUT.png]     
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PIL import Image, ImageDraw
-import build, preview_icons as PI, pod_pages as P
+import build, preview_icons as PI, preview_settings as PS, pod_pages as P
 
 
 def main():
@@ -15,9 +15,9 @@ def main():
     work = sys.argv[1]
     out_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(build.ROOT, 'out', 'preview', 'cassette-setting.png')
     s = PI.Side(work, True, 'en_US'); s.mark = lambda *a: None
-    panels = [('Customize (8 rows, scrolls)', PI.pod_page(s, 'm1plus_customize', 8).convert('RGB'))]
+    panels = [('Settings > Now Playing', PS.draw_page(s, 'm1plus_npset').convert('RGB'))]
     for v in P.CTHEME_VALUES:
-        panels.append((f'Cassette Mode > Cassette Theme: {v}', PI.pod_page(s, 'm1plus_tapeset', 1, values={'pod_value0': v}).convert('RGB')))
+        panels.append((f'Now Playing > Theme: {v}', PS.draw_page(s, 'm1plus_tapetheme', state={'shown': {f'pod_check{P.CTHEME_VALUES.index(v)}'}}).convert('RGB')))
     pad = 12
     wid = sum(im.width for _, im in panels) + pad * (len(panels) + 1)
     hei = max(im.height for _, im in panels) + 44 + pad

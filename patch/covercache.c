@@ -236,7 +236,7 @@ int cc_find_album(const char *album) {
 }
 
 /* ---------------------------------------------------------------------------
- * The album order (Settings > Cover Flow > Sort), shared by Cover Flow and the Albums page.
+ * The album order (Settings > Library > Album Order), shared by Cover Flow and the Albums page.
  *
  * Album: the stock list as it is (getAllAlbum: group by album COLLATE NOCASE, so by album title). Artist (the
  * default, iPod style): by the album row's artist, then by album title, each compared ASCII case-insensitively
@@ -312,9 +312,9 @@ int cc_sort_artist(void) {
     return !(n >= 1 && b[0] == '0' && (n == 1 || (n == 2 && b[1] == '\n'))); /* only "0" / "0\n" is Album */
 }
 
-int cc_sort_toggle(void) {
-    int next = !cc_sort_artist();
-    return home_write_atomic(CFSORT_FILE, CFSORT_TMP, next ? "1\n" : "0\n") == 0 ? next : -1;
+int cc_sort_set(int artist) {
+    artist = artist != 0;
+    return home_write_atomic(CFSORT_FILE, CFSORT_TMP, artist ? "1\n" : "0\n") == 0 ? artist : -1;
 }
 
 unsigned *cc_album_order(void *albums) {

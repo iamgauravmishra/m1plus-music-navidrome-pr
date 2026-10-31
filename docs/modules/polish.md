@@ -1,14 +1,8 @@
-# About row and polish
+# Product name and polish
 
-## About (`tools/mod_about.py`)
+## About
 
-System Settings > About keeps its seven stock rows. FW. Version is the literal `V2.1` in demo's `.rodata`
-(0x74773c, set by `systemset_about_page_init` 0x4a170c's widget walk), which this tree never patches, so it
-already shows the stock firmware version; the package tag in `firmware_v20.info` is not shown. One more
-`list_item` (`listitem7` > `hscroll_label scrlabel7`, a clone of the FW. Version row, the stock walk ignores
-names it does not know) is inserted right below it with the fixed text `M1+ Music:<TAG>` (`TAG` from
-`tools/build.py`, passed to the step). The brand is not translated; the format is the stock `label:value`. No
-hook, nothing at run time. Product name: the user sees "M1+ Music"; internal names (`m1plus-*` files, `m1plus_*.bin`,
+The stock System Settings > About page is untouched (`tools/mod_about.py`, which added an `M1+ Music:<TAG>` row to it, is gone). Settings > System > About is our own cards page that shows everything the stock page does plus the build tag: [settings](settings.md) "About". FW. Version is still the literal `V2.1` in demo's `.rodata` (0x74773c), which this tree never patches; the package tag in `firmware_v20.info` is not shown. Product name: the user sees "M1+ Music"; internal names (`m1plus-*` files, `m1plus_*.bin`,
 widget and C identifiers) are `m1plus`.
 ## Polish (`tools/mod_polish.py`)
 

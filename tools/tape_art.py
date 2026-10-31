@@ -40,7 +40,7 @@ HUB_PX = 30                                          # the hub sprite's cell (2 
 REEL_CX, REEL_CY = (132, 348), 147                   # supply (left), take-up (right)
 TEETH, SPRITES = 6, 24                               # the ring has 6 teeth (60 degrees), the drive 3 spokes (120): the picture repeats every 120 degrees, 24 frames of 5
 
-THEMES = {   # the user's choice (Customize > Cassette Mode > Cassette Theme, saved as the index in THEME_NAMES); more themes can be added as data
+THEMES = {   # the user's choice (Settings > Now Playing > Theme, saved as the index in THEME_NAMES); more themes can be added as data
     'normal': dict(shell=(0x3A, 0x3D, 0x42), paper=((0xF3, 0xF1, 0xE8), (0xE6, 0xE3, 0xD7)), ink=(0x1B, 0x1F, 0x2A), sub=(0x4A, 0x52, 0x62),
                    band=(0x3C, 0x78, 0xBE), band_ink=(255, 255, 255), print=(0x3C, 0x78, 0xBE), hub=(0xE9, 0xE7, 0xDF),
                    model='TYPE I NORMAL', rule_a=0.20, tone_mix=0.30),

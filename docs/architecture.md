@@ -16,7 +16,7 @@ for commands, [UI](ui.md) for layout/assets, and [history](history.md) for recor
 | [Payload](modules/payload.md) | Segment layout, trampolines, stock calls and hooks |
 | [Addresses](modules/addresses.md) | Stock symbols, offsets and record layouts |
 | [Home and boot guard](modules/home-guard.md) | Startup marker, grid entry, window stack and fallback |
-| [Settings](modules/settings.md) | Customize pages and persisted choices |
+| [Settings](modules/settings.md) | Settings pages and persisted choices |
 | [Safety](modules/safety.md) | Allowed entry points and required invariants |
 | [Validation](modules/validation.md) | Test boundaries and what they prove |
 | [q2-pod comparison](modules/q2pod.md) | Corresponding mechanisms and platform differences |

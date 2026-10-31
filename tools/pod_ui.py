@@ -82,19 +82,19 @@ NAV_SEARCH_X = SONGS_BUTTONS[0][2]
 
 
 NAV_FEEDS_ICON = 'pod_nav_feeds'           # the Podcasts page's Feeds button: Lucide rss, the capsule's left cap on the 214 slot (tools/mod_icons.py)
-NAV_CUSTOMIZE_ICON = 'pod_nav_customize'   # the Extras page's Customize button: the capsule's left cap on the 214 slot (tools/mod_icons.py)
+NAV_SETTINGS_ICON = 'pod_nav_settings'   # the Extras page's Settings button: the capsule's left cap on the 214 slot (tools/mod_icons.py)
 
 
-def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, songs=False, customize=False, feeds=False, select=False, show_more=False):
+def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, songs=False, settings=False, feeds=False, select=False, show_more=False):
     nb = Widget('view', 0, 0, SCREEN_W, NAVBAR_H, [('name', 'navigationbar_view')])
     # a title runs under a toggle's button no further than the button's left edge
-    right = NAV_SEARCH_X if songs else NAV_CF_X if coverflow or more else NAV_VIEW_X if toggle or customize or feeds else NAV_TITLE_END
+    right = NAV_SEARCH_X if songs else NAV_CF_X if coverflow or more else NAV_VIEW_X if toggle or settings or feeds else NAV_TITLE_END
     lbl = Widget('label', NAV_TITLE_X, 14, right - NAV_TITLE_X, 22,
                  [('name', 'label_title'), ('style', 'navbar_label_white'), ('length', '31'), pod_i18n.text_prop(title)])
     ret = Widget('button', NAV_BACK_X, 0, NAV_BACK_W, NAVBAR_H, [
         ('name', 'btn_return'), ('enable', 'true'), ('style', 'img_btn_style'),
         ('style:over:icon', 'ah_nav_back'), ('style:normal:icon', 'ah_nav_back'), ('style:pressed:icon', 'ah_nav_back_down')])
-    img = 'ah_nav_play' if toggle or coverflow or more or songs or customize or feeds else 'ah_nav_np'   # a toggle / button makes Now Playing the capsule's right cap; else a disc
+    img = 'ah_nav_play' if toggle or coverflow or more or songs or settings or feeds else 'ah_nav_np'   # a toggle / button makes Now Playing the capsule's right cap; else a disc
     player = Widget('button', NAV_PLAY_X, 0, NAV_PLAY_W, NAVBAR_H, [
         ('name', 'btn_backtoplayer'), ('enable', 'true'), ('style', 'img_btn_style'),
         ('style:pressed:icon', img + '_down'), ('style:normal:icon', img), ('style:over:icon', img)])
@@ -104,10 +104,10 @@ def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, 
         nb.children.append(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
             ('name', TOGGLE_NAME[toggle]), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', icon + '_down'), ('style:normal:icon', icon), ('style:over:icon', icon)]))
-    if customize:   # the Extras page's Customize button (patch/m1plus.c opens the Customize page on its tap)
+    if settings:   # the Extras page's Settings button (patch/m1plus.c opens the Settings page on its tap)
         nb.children.append(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
-            ('name', 'btn_customize'), ('enable', 'true'), ('style', 'img_btn_style'),
-            ('style:pressed:icon', NAV_CUSTOMIZE_ICON + '_down'), ('style:normal:icon', NAV_CUSTOMIZE_ICON), ('style:over:icon', NAV_CUSTOMIZE_ICON)]))
+            ('name', 'btn_settings'), ('enable', 'true'), ('style', 'img_btn_style'),
+            ('style:pressed:icon', NAV_SETTINGS_ICON + '_down'), ('style:normal:icon', NAV_SETTINGS_ICON), ('style:over:icon', NAV_SETTINGS_ICON)]))
     if feeds:   # the Podcasts page's Feeds button (patch/podcasts.c shows it on the Shows level only, and makes Now Playing the right cap, where it is)
         nb.children.append(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
             ('name', 'btn_feeds'), ('enable', 'true'), ('style', 'img_btn_style'),
@@ -158,7 +158,7 @@ def switch_image(name, w, h, on):
         ('name', name), ('image', 'sset_on' if on else 'sset_off'), ('draw_type', 'default'), ('sensitive', 'false')])
 
 
-VALUE_W, VALUE_PX = 110, 19                      # a value row's grey value (Customize > Cover Flow > Sort): right aligned, 12 px margin
+VALUE_W, VALUE_PX = 110, 19                      # a value row's grey value (Settings > Library > Album Order): right aligned, 12 px margin
 
 
 def value_x(w): return w - SWITCH_MARGIN - VALUE_W
@@ -949,7 +949,7 @@ HDR_NAMES = tuple(f'pod_hdr{g}' for g in range(len(pod_pages.EXTRAS_GROUPS)))
 
 
 def extras_headers(w):
-    """The hidden, insensitive section headers of the Extras page and of Customize > Extras, for a list `w` wide."""
+    """The hidden, insensitive section headers of the Extras page and of Settings > Extras, for a list `w` wide."""
     out = []
     for g, title in enumerate(pod_pages.EXTRAS_TITLES):
         hdr = hidden(Widget('view', 0, 0, w, pod_pages.HDR_H, [('name', f'pod_hdr{g}')]))
@@ -967,7 +967,7 @@ def extras_headers(w):
 
 
 def build_extrascfg_page(page):
-    """Customize > Extras (patch/menu.c menu_extras_opened): a switch row (the whole row toggles) per item but Customize, in id order
+    """Settings > Extras (patch/menu.c menu_extras_opened): a switch row (the whole row toggles) per item but Settings, in id order
     like the Extras page's asset, all on. The payload shows only the items the menu does not show, stacked in EXTRAS_ORDER, and sets the
     switches from the saved list. No up arrows: the order is fixed."""
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
@@ -975,11 +975,119 @@ def build_extrascfg_page(page):
     root.children.append(navbar(page.title))
     lv = stock_list([], True)
     sv = lv.children[0]
-    for k, (i, r) in enumerate((i, r) for i, r in enumerate(pod_pages.ITEMS) if i != pod_pages.CUSTOMIZE_ID):
+    for k, (i, r) in enumerate((i, r) for i, r in enumerate(pod_pages.ITEMS) if i != pod_pages.SETTINGS_ID):
         sv.children.append(row_item(f'pod_row{i}', k * ROW_H, r.label, False, ROW_H, sv.w, (f'pod_switch{i}', True)))
     sv.children += extras_headers(sv.w)   # after the rows: the payload stacks them in place
     root.children.append(lv)
     root.children.append(nav_fade())
+    return root
+
+
+# The Settings pages (docs/modules/settings.md "Cards"): iOS-style grouped cards in the stock list (list_view > scroll_view 310 wide + scroll_bar_m, stock list_item rows). The stock list_view
+# layouter stacks every visible child of the scroll_view in child order and ignores its y, so the children ARE the column (tools/pod_settings.py layout): a spacer, then the rows, headers,
+# notes and gaps in display order, then a spacer. A card is drawn by its rows: each row's background is a picture piece (single / top / middle / bottom, pod_cd_*, the card's inset,
+# corners and fill baked in, a lit twin when pressed). A row is a stock list_item with a glyph image, the stock 21 px label, a hairline child from the label to the card's edge (not on a
+# card's last row) and the right accessory: the chevron image (pod_chev), a value label and chevron, the stock switch image or the picker's check (hidden until the payload shows it on
+# the chosen row). Headers and notes are insensitive views whose grey label starts where the row glyphs' ink does. The numbers are tools/pod_settings.py's.
+def cards_row(i, row, piece, last):
+    import pod_settings as ST
+    from mod_icons import CARD_GLYPHS, card_name, CARD_CHEVRON, CARD_CHECK
+    kind = pod_pages.row_kind(row)
+    has_icon = kind not in ('check', 'info')
+    item = Widget('list_item', 0, 0, ST.LIST_W, ST.ROW_H, [('name', f'pod_row{i}'), ('style', 'list_item_style')] + ([('sensitive', 'false')] if kind == 'info' else []))
+    normal, down = ST.piece_images(piece)
+    for st in ('normal', 'over', 'pressed', 'focused', 'disable'):
+        styled(item, (st,), 'bg_color', '#00000000')
+        styled(item, (st,), 'bg_image', down if st == 'pressed' else normal)
+        styled(item, (st,), 'bg_image_draw_type', 'default')
+        styled(item, (st,), 'border_width', '0')
+        styled(item, (st,), 'border_color', '#00000000')
+    x, w = ST.label_box(kind, has_icon)
+    if has_icon:
+        item.children.append(Widget('image', ST.ICON_X, ST.ICON_Y, ST.ICON_PX, ST.ICON_PX, [
+            ('name', 'pod_icon'), ('image', card_name(CARD_GLYPHS[row.label])), ('draw_type', 'icon'), ('sensitive', 'false')]))
+    item.children.append(Widget('hscroll_label', x, 0, w, ST.ROW_H, [
+        ('name', f'pod_label{i}'), ('style', 'srlabel_leftwhite21_style'), pod_i18n.text_prop(row.label), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('yoyo', 'true'), ('loop', 'true')]))
+    if kind in ('link', 'value'):
+        ax, ay, aw, ah = ST.accessory('chevron')
+        item.children.append(Widget('image', ax, ay, aw, ah, [('name', 'pod_chevron'), ('image', CARD_CHEVRON[0]), ('draw_type', 'icon'), ('sensitive', 'false')]))
+    if kind == 'value':
+        vx, vw = ST.value_box()
+        init = pod_pages.VALUE_INIT.get(row.action)
+        val = Widget('hscroll_label', vx, 0, vw, ST.ROW_H, [('name', f'pod_value{i}'), pod_i18n.text_prop(init) if init else ('text', ''), ('only_parent_focus', 'true'),
+                                                              ('ellipses', 'true'), ('sensitive', 'false')])
+        for st in ('normal', 'disable', 'focused'):
+            styled(val, (st,), 'font_size', str(ST.VALUE_PX))
+            styled(val, (st,), 'text_color', ST.GREY)
+            styled(val, (st,), 'text_align_h', 'right')
+            styled(val, (st,), 'text_align_v', 'middle')
+        item.children.append(val)
+    if kind == 'info':
+        vx, vw = ST.info_box()
+        val = Widget('hscroll_label', vx, 0, vw, ST.ROW_H, [('name', f'pod_value{i}'), ('text', ''), ('only_parent_focus', 'true'),
+                                                              ('ellipses', 'true'), ('sensitive', 'false')])
+        for st in ('normal', 'disable', 'focused'):
+            styled(val, (st,), 'font_size', str(ST.INFO_PX))
+            styled(val, (st,), 'text_color', ST.GREY)
+            styled(val, (st,), 'text_align_h', 'right')
+            styled(val, (st,), 'text_align_v', 'middle')
+        item.children.append(val)
+    if kind == 'switch':
+        ax, ay, aw, ah = ST.accessory('switch')
+        item.children.append(Widget('image', ax, ay, aw, ah, [('name', f'pod_switch{i}'), ('image', 'sset_off'), ('draw_type', 'default'), ('sensitive', 'false')]))
+    if kind == 'check':
+        ax, ay, aw, ah = ST.accessory('check')
+        item.children.append(hidden(Widget('image', ax, ay, aw, ah, [('name', f'pod_check{i}'), ('image', CARD_CHECK[0]), ('draw_type', 'icon')])))
+    if not last:
+        hair = Widget('view', x, ST.ROW_H - 1, ST.CM + ST.CARD_W - x, 1, [('name', 'pod_hair'), ('sensitive', 'false')])
+        for st in STATES: styled(hair, (st,), 'bg_color', ST.CARD_HAIR_RGB)
+        item.children.append(hair)
+    return item
+
+
+def cards_spacer(name, h):
+    import pod_settings as ST
+    """An insensitive black view h high: the layouter gives it the list's width and its place."""
+    v = Widget('view', 0, 0, ST.LIST_W, h, [('name', name), ('sensitive', 'false')])
+    for st in STATES: styled(v, (st,), 'bg_color', '#000000')
+    return v
+
+
+def cards_text(name, y, h, text, px, item_h):
+    """A header or a note: an insensitive view item_h high holding the grey label (text from HDR_X, which the layouter does not move: it is the child's)."""
+    import pod_settings as ST
+    v = cards_spacer(name, item_h)
+    lab = Widget('hscroll_label', ST.HDR_X, y, ST.HDR_W, h, [('name', name + '_t'), pod_i18n.text_prop(text), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+    for st in ('normal', 'disable', 'focused'):
+        styled(lab, (st,), 'font_size', str(px))
+        styled(lab, (st,), 'text_color', ST.GREY)
+        styled(lab, (st,), 'text_align_h', 'left')
+        styled(lab, (st,), 'text_align_v', 'middle')
+    v.children.append(lab)
+    return v
+
+
+def build_cards_page(page):
+    import pod_settings as ST
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    root.children.append(navbar(page.title))
+    lv = stock_list([], True)
+    sv = lv.children[0]
+    placed, end = ST.layout(page.layout)
+    pieces = ST.pieces(page.layout)
+    n_hdr = n_note = n_gap = i = 0
+    for it, y in placed:
+        if it == ST.TOP: sv.children.append(cards_spacer('pod_top', ST.CM))
+        elif it == ST.END: sv.children.append(cards_spacer('pod_end', ST.END_H))
+        elif it is pod_pages.GAP: sv.children.append(cards_spacer(f'pod_gap{n_gap}', ST.GAP_H)); n_gap += 1
+        elif isinstance(it, pod_pages.Hdr): sv.children.append(cards_text(f'pod_sec{n_hdr}', ST.HDR_LABEL_Y, ST.HDR_LABEL_H, it.text, ST.HDR_PX, ST.HDR_H)); n_hdr += 1
+        elif isinstance(it, pod_pages.Note): sv.children.append(cards_text(f'pod_note{n_note}', ST.NOTE_LABEL_Y, ST.NOTE_LABEL_H, it.text, ST.NOTE_PX, ST.NOTE_H)); n_note += 1
+        else:
+            sv.children.append(cards_row(i, it, pieces[i], pieces[i] in ('single', 'bot'))); i += 1
+        sv.children[-1].y = y   # (the layouter sets it again: the asset says the same)
+    root.children.append(lv)
+    root.children.append(nav_fade(shown=False))   # the first card is 10 px under the bar: the fade would dim its top at rest, so it stays hidden (the content clips at the bar)
     return root
 
 
@@ -1197,6 +1305,8 @@ def build_keyboard_page(page):
 
 
 def build_page(page):
+    if page.kind == 'cards':
+        return build_cards_page(page)
     if page.kind == 'keyboard':
         return build_keyboard_page(page)
     if page.kind == 'menucfg':
@@ -1223,7 +1333,7 @@ def build_page(page):
         return build_artists_page(page)
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
-    root.children.append(navbar(page.title, customize=page is pod_pages.EXTRAS_PAGE))
+    root.children.append(navbar(page.title, settings=page is pod_pages.EXTRAS_PAGE))
     lv = stock_list(page.rows, len(page.rows) * ROW_H > CLIENT_H - NAVBAR_H)
     root.children.append(lv)
     root.children.append(nav_fade())

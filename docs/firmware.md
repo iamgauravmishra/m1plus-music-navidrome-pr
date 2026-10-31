@@ -171,7 +171,7 @@ A plain fwtool rebuild of stock is 12 KB under the stock size, which fwtool enfo
   never mapped; `.pdr` is used by debuggers (gdb), and nothing on the rootfs is known to read it from
   disk. File size, section headers and every other byte are unchanged (cross-checked with
   pyelftools). `demo` is pinned by its stock SHA-256 (`29e23119...b3f1`). The About version string is
-  in `demo`'s `.rodata` (0x74773c) and stays `V2.1`; `tools/mod_about.py` adds the `M1+ Music:<tag>` row to `about_page.bin`.
+  in `demo`'s `.rodata` (0x74773c) and stays `V2.1`; the build tag is on our own About page (Settings > System > About).
 - **removed**, each pinned by SHA-256: `usr/bin/strace`, `strace-log-merge`, `sqlite3`, `hcidump`;
   `usr/lib/libdbus-1.so.3.19.8`; `usr/lib/lib{gio,glib,gmodule,gobject,gthread}-2.0.so.0.5400.3`
   (6,438,409 bytes). Evidence they are unused: no symlink resolves to any of them; a byte search of

@@ -131,38 +131,51 @@ DAILY = DAILY + IPOD
 import tape_art
 TAPE = list(tape_art.NAMES)   # the page's pictures: tape_top and tape_screw shared, and tape_shell / tape_hubs / tape_marks for each theme (the row icon pod_ic_tape is a row image, installed with them)
 DAILY = DAILY + TAPE
+# The Settings pages (tools/pod_settings.py, docs/modules/settings.md "Cards"): a 20 px glyph (CARD_GLYPH_PX, stroke 2) centred in a 24 px image on each row, by the row's label; the card's
+# chevron (Lucide chevron-right fitted to 9 x 15, #777777, stroke 2) and the picker's check (20 px, white).
+CARD_GLYPH_PX, CARD_CHEVRON, CARD_CHECK = 20, ('pod_chev', 9, 15, (0x77,) * 3, 2), ('pod_check', 20)
+CARD_GLYPHS = {'Wi-Fi': 'wifi', 'Bluetooth': 'bluetooth', 'Menu & Extras': 'list-checks', 'Home Screen': 'house', 'Library': 'disc-3', 'Now Playing': 'audio-lines',
+               'Play Mode': 'repeat', 'EQ': 'sliders-vertical', 'All Playback Settings': 'headphones', 'Display': 'sun', 'Language': 'languages',
+               'Keyboards': '+keyboard', 'About': 'info', 'All System Settings': 'settings', 'Developer': 'code', 'Main Menu': 'list-checks', 'Extras': 'ellipsis',
+               'Recent Albums': 'history', 'Daily Mix': 'shuffle', 'Regenerate Daily Mix': 'refresh-cw', 'Update Library': 'refresh-cw', 'Album Order': 'arrow-down-wide-narrow',
+               'Landscape': 'rotate-cw-square', 'Rebuild Covers': 'image-up', 'Theme': '+cassette-tape', 'Boot to M1+ Music': 'power', 'Open Shanling Home': '@shanling',
+               'Screenshot': 'camera', 'Network Probe': 'globe', 'Keyboard': '+keyboard', 'English': 'languages', 'Chinese (Pinyin)': 'languages'}
+
+
+def card_name(g):
+    """The image of a card row's glyph: pod_ci_<glyph>."""
+    return 'pod_ci_' + g.lstrip('+@').replace('-', '_')
+
+
+# A card is drawn by its rows (the stock list_view layouter stacks the scroll_view's children and ignores their y, so a card cannot be a view of its own: tools/pod_settings.py): the background of
+# each row is one of four pieces, ROW_W x ROW_H with the card (x CARD_X .. CARD_X + CARD_W, fill CARD_RGB, corners CARD_R where the piece has them) drawn in and transparent outside, and the pressed
+# twin (the lit grey). Names pod_cd_<piece>[_down]; the geometry is tools/pod_settings.py's (CARD_PIECE).
+CARD_PIECE = {'ROW_W': 320, 'ROW_H': 52, 'CARD_X': 10, 'CARD_W': 300, 'CARD_R': 12, 'FILL': (0x1C,) * 3, 'LIT': (0x2C, 0x2C, 0x2E)}
+CARD_PIECES = ('single', 'top', 'mid', 'bot')
+CARD_PIECE_IMAGES = [f'pod_cd_{p}{d}' for p in CARD_PIECES for d in ('', '_down')]
+CARD_IMAGES = sorted({card_name(g) for g in CARD_GLYPHS.values()}) + [CARD_CHEVRON[0], CARD_CHECK[0]] + CARD_PIECE_IMAGES
+DAILY = DAILY + CARD_IMAGES + ['pod_ic_tape']   # (pod_ic_tape: Now Playing's More sheet's Cassette Mode row, tools/mod_lists.py: no row page uses it any more)
 # M1+ Music menu and Shuffle page rows: label -> (added image, glyph). A bare white glyph (BARE_PX canvas) left of the title.
 # '@shanling' = the brand mark cut out of a stock image (shanling_mark below), not a glyph.
 POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'audio-lines'), 'Cover Flow': ('pod_ic_coverflow', '+coverflow'),   # audio-lines: the wave of the navbar's Now Playing button
             'Shuffle': ('pod_ic_shuffle', 'shuffle'), 'Songs': ('pod_ic_songs', 'music'),
             'Albums': ('pod_ic_albums', 'disc-3'), 'Artists': ('pod_ic_artists', 'mic-vocal'),
             'Genres': ('pod_ic_genres', 'guitar'), 'Folders': ('pod_ic_folders', 'folder'),
-            'Playlists': ('pod_ic_playlists', 'list-music'), 'Customize': ('pod_ic_customize', 'sliders-horizontal'), 'Extras': ('pod_ic_extras', 'ellipsis'),
-            'Developer': ('pod_ic_developer', 'code'),
+            'Playlists': ('pod_ic_playlists', 'list-music'), 'Settings': ('pod_ic_prefs', 'sliders-horizontal'), 'Extras': ('pod_ic_extras', 'ellipsis'),
             'Shuffle Songs': ('pod_ic_shufsongs', 'music'), 'Shuffle Albums': ('pod_ic_shufalbums', 'disc-3'),
             'Shuffle Folders': ('pod_ic_shuffolders', 'folder'),
-            # the Settings page's rows: the launcher's two, the customise page and the Cover Flow switch
-            'Shanling Home': ('pod_ic_shanling', '@shanling'), 'Boot to M1+ Music': ('pod_ic_startup', 'power'),
-            'Main Menu': ('pod_ic_mainmenu', 'list-checks'),
-            'Home Screen': ('pod_ic_homescreen', 'house'),   # the Customize > Home Screen row (Boot to has the power glyph)
-            # Settings > Cover Flow (the Settings page's Cover Flow row uses the menu's gallery disc)
-            'Landscape': ('pod_ic_landscape', 'rotate-cw-square'), 'Sort': ('pod_ic_sort', 'arrow-down-wide-narrow'),
-            'Rebuild Covers': ('pod_ic_rebuild', 'image-up'),
             # the Extras page (the stock Home tiles the menu does not repeat; glyphs as the Home grid's)
             'Favorites': ('pod_ic_fav', 'star'), 'Recently Added': ('pod_ic_recentadd', 'clock-plus'),
-            'Recently Played': ('pod_ic_recent', 'history'), 'Recent Albums': ('pod_ic_recent', 'history'),   # the shelf's switch (Customize > Home Screen): the same clock
-            'Daily Mix': ('pod_ic_shuffle', 'shuffle'), 'Regenerate Daily Mix': ('pod_ic_update', 'refresh-cw'),   # the card's switch and its action row (Customize > Home Screen): Shuffle's and Update Library's glyphs
-            'Most Played': ('pod_ic_most', 'flame'),
+            'Recently Played': ('pod_ic_recent', 'history'), 'Most Played': ('pod_ic_most', 'flame'),
             'Composers': ('pod_ic_composers', 'feather'), 'Hi-Res': ('pod_ic_hires', '+badge-hr'),
             'Update Library': ('pod_ic_update', 'refresh-cw'), 'Tidal': ('pod_ic_tidal', 'T:brand-tidal'),
-            'CD Ripper': ('pod_ic_cdripper', 'disc'), 'Pod': ('pod_ic_ipod', 'circle'), 'Podcasts': ('pod_ic_podcasts', 'podcast'), 'Screenshot': ('pod_ic_screenshot', 'camera'), 'Network Probe': ('pod_ic_netprobe', 'globe'), 'Keyboard': ('pod_ic_keyboard', '+keyboard'), 'Keyboards': ('pod_ic_keyboard', '+keyboard'), 'English': ('pod_ic_languages', 'languages'), 'Chinese (Pinyin)': ('pod_ic_languages', 'languages'),'Cassette Mode': ('pod_ic_tape', '+cassette-tape'), 'Cassette Theme': ('pod_ic_tape', '+cassette-tape'),
-            # the Settings page (the menu's Settings row opens it)
-            'System Settings': ('pod_ic_settings', 'settings'), 'Playback': ('pod_ic_playset', 'headphones')}
+            'CD Ripper': ('pod_ic_cdripper', 'disc'), 'Pod': ('pod_ic_ipod', 'circle'), 'Podcasts': ('pod_ic_podcasts', 'podcast'),
+            'Cassette Mode': ('pod_ic_tape', '+cassette-tape')}   # Now Playing's More sheet row (tools/mod_lists.py)
 # The "M1+ Music" icon patch/home.c adds to the stock Home grid (id 99): 66x66 like the stock Home icons
 # (white Lucide smartphone glyph on the #777777 disc, #555555 pressed), style home_m1plus_style in home_page.bin.
 POD_HOME = ('m1plus', 'm1plus_down')
 POD_HOME_GLYPH, POD_HOME_STYLE = 'smartphone', 'home_m1plus_style'
-POD_UI = ['m1plus_menu', 'm1plus_shuffle', 'm1plus_customize', 'm1plus_extras', 'm1plus_mainmenu', 'm1plus_cfset', 'm1plus_homeset', 'm1plus_extrascfg', 'm1plus_developer', 'm1plus_tapeset', 'm1plus_keyboards']
+POD_UI = ['m1plus_menu', 'm1plus_shuffle', 'm1plus_extras', 'm1plus_mainmenu', 'm1plus_extrascfg']   # the pages whose rows get the 24 px row glyphs of POD_ROWS (the Settings pages' cards have their own, CARD_GLYPHS)
 # The navbar toggles (tools/pod_ui.py NAV_VIEW_ICON, patch/albums.c, patch/artists.c): the glyph of the view a tap switches to, a plain
 # 24 px white glyph like the navbar's others (pressed #777777), added to the images.
 NAV_VIEW = {'pod_nav_grid': 'layout-grid', 'pod_nav_list': 'list',
@@ -172,12 +185,12 @@ NAV_VIEW = {'pod_nav_grid': 'layout-grid', 'pod_nav_list': 'list',
             'pod_nav_songs': 'list',   # Cover Flow's artist page: our Songs page on the artist's songs (the left cap, then Now Playing)
             'pod_nav_search': 'search', 'pod_nav_songsort': 'arrow-down-wide-narrow', 'pod_nav_select': 'list-checks',
             'pod_nav_selectl': 'list-checks',   # the Songs page's Search / Sort / Select (capsule: left, middle, middle, then Now Playing); selectl: Select as the left cap of a genre's songs (no Search: Select | Now Playing)
-            'pod_nav_customize': 'sliders-horizontal',   # the Extras page's Customize button: the left cap of [Customize | Now Playing]
+            'pod_nav_settings': 'sliders-horizontal',   # the Extras page's Settings button: the left cap of [Settings | Now Playing]
             'pod_nav_feeds': '+rss'}   # the Podcasts page's Feeds button (Lucide rss, as a custom svg: assets/icons/custom/rss.svg): the left cap of [Feeds | Now Playing]
 # the glass piece each Pod page button is (docs/modules/navbar.md): the Albums and Playlists pages' capsule is Cover Flow / "..." (left cap), the grid / list
 # toggle (middle), Now Playing (right cap); the Artists page's is the switch (left cap) and Now Playing; the Cover Flow artist page's is Songs (left cap) and Now Playing
 NAV_VIEW_POS = {'pod_nav_grid': 'middle', 'pod_nav_list': 'middle', 'pod_nav_artist': 'left', 'pod_nav_albumartist': 'left', 'pod_nav_coverflow': 'left',
-                'pod_nav_more': 'left', 'pod_nav_songs': 'left', 'pod_nav_search': 'left', 'pod_nav_songsort': 'middle', 'pod_nav_select': 'middle', 'pod_nav_selectl': 'left', 'pod_nav_customize': 'left', 'pod_nav_feeds': 'left'}
+                'pod_nav_more': 'left', 'pod_nav_songs': 'left', 'pod_nav_search': 'left', 'pod_nav_songsort': 'middle', 'pod_nav_select': 'middle', 'pod_nav_selectl': 'left', 'pod_nav_settings': 'left', 'pod_nav_feeds': 'left'}
 NAV_PX = 24
 # The Playlists page's "..." menu rows (tools/pod_ui.py playlist_menu, in row order): a bare white glyph left of the label, as on Now
 # Playing's More sheet's rows, drawn at PL_MENU_PX (20: the 24 px of the sheet's rows looked big beside the 18 px labels; the stroke stays 2 px).
@@ -287,7 +300,7 @@ def is_badge(g): return g.startswith('badge:')
 def used_glyphs():
     """(Lucide names, Tabler names) of every glyph the tables use; custom ones excluded."""
     gl = [e[2] for e in HOME + SETTINGS + LISTS] + list(PULLDOWN.values()) + list(STATUS.values()) + \
-        [g for g in WIFI_LEVELS if g] + [COVER_GLYPH, POD_HOME_GLYPH, SHOT_BAR[1]] + list(NAV_VIEW.values()) + [g for _, g in PL_MENU_ICONS] + [v[1] for v in POD_ROWS.values() if v[1] != SHANLING] + \
+        [g for g in WIFI_LEVELS if g] + [COVER_GLYPH, POD_HOME_GLYPH, SHOT_BAR[1]] + list(NAV_VIEW.values()) + [g for _, g in PL_MENU_ICONS] + [v[1] for v in POD_ROWS.values() if v[1] != SHANLING] + [g for g in CARD_GLYPHS.values() if g != SHANLING] + \
         [g for _, g, _ in GLYPHS] + [v[0] for v in SONGS_IMAGES.values()] + [v[0] for v in KEYBOARD_IMAGES.values()] + [KB_CLEAR[1], DP_ADD_GLYPH] + list(PC_GLYPHS) + [g for _, g in DISCS] + [v[0] for v in NP.values() if not v[0].startswith('pil:')] + ['lock:filled'] + R3_GLYPHS
     names = {gname(g) for g in gl if g and not is_custom(g) and not is_badge(g)}
     return sorted(n for n in names if not n.startswith('T:')), sorted(n[2:] for n in names if n.startswith('T:'))
@@ -463,6 +476,23 @@ def bare_icon(g, canvas):
     gi = badge(g[6:]) if is_badge(g) else shanling_mark() if g == SHANLING else glyph(g, BARE_PX, 'bare')
     c = Image.new('RGBA', (canvas, canvas), WHITE + (0,)); c.alpha_composite(gi, ((canvas - gi.width) // 2, (canvas - gi.height) // 2)); return c
 
+def card_piece(piece, lit=False, ss=8):
+    """One row's slice of a card: single (all four corners rounded), top (the upper two), mid (none) or bot (the lower two), anti-aliased, transparent outside the card."""
+    from PIL import Image, ImageDraw
+    c = CARD_PIECE; w, h, x0, cw, r = c['ROW_W'], c['ROW_H'], c['CARD_X'], c['CARD_W'], c['CARD_R']
+    big = Image.new('L', (w * ss, h * ss), 0); d = ImageDraw.Draw(big)
+    box = (x0 * ss, 0, (x0 + cw) * ss - 1, h * ss - 1)
+    rounded = {'single': (True, True, True, True), 'top': (True, True, False, False), 'mid': (False,) * 4, 'bot': (False, False, True, True)}[piece]
+    d.rounded_rectangle(box, r * ss, fill=255, corners=rounded)
+    im = Image.new('RGBA', (w, h), (c['LIT'] if lit else c['FILL']) + (0,)); im.putalpha(big.resize((w, h), Image.LANCZOS)); return im
+
+def card_icon(g):
+    """A Settings card row's glyph: the glyph at CARD_GLYPH_PX (stroke 2) centred in a POD_ICON canvas; a badge and the Shanling mark keep their size."""
+    from PIL import Image
+    if is_badge(g) or g == SHANLING: return bare_icon(g, POD_ICON)
+    gi = glyph(g, CARD_GLYPH_PX, 'bare'); c = Image.new('RGBA', (POD_ICON,) * 2, WHITE + (0,))
+    c.alpha_composite(gi, ((POD_ICON - gi.width) // 2, (POD_ICON - gi.height) // 2)); return c
+
 def disc(size, rgb, ss=4):
     from PIL import Image, ImageDraw
     big = Image.new('L', (size * ss, size * ss), 0)
@@ -605,6 +635,12 @@ def generate_all(sizes):
         t.alpha_composite(g, ((w - g.width) // 2, (w - g.height) // 2))
         f[n] = t if sizes[n + ':mode'] == 'RGBA' else t.convert('RGB')
     for n, g in POD_ROWS.values(): f[n] = bare_icon(g, POD_ICON)
+    for g in set(CARD_GLYPHS.values()): f[card_name(g)] = card_icon(g)
+    name, w, h, rgb, sw = CARD_CHEVRON
+    f[name] = glyph_fit('chevron-right', w, h, rgb, 0, sw)
+    f[CARD_CHECK[0]] = glyph_fit('check', CARD_CHECK[1], CARD_CHECK[1])
+    for p in CARD_PIECES:
+        f[f'pod_cd_{p}'] = card_piece(p); f[f'pod_cd_{p}_down'] = card_piece(p, True)
     for n, g in PL_MENU_ICONS: f[n] = glyph(g, PL_MENU_PX, 'bare')
     for n, g in NAV_VIEW.items():
         pos = NAV_VIEW_POS[n]

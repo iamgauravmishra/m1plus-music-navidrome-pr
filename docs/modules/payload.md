@@ -32,6 +32,7 @@ function past its 3-word prologue (`lui $gp,0xa03e; ori $gp,$gp,0x3ed0; j <fn+12
   `$gp` from `$t9`. `pod.py FUNCTIONS` lists every one with its address and checks each against
   `.dynsym` before writing; `DATA` pins the exported data (`pdeq_showlist` `0xa045d8`,
   `parse_cover_mutex` `0xa04588`, `g_class_type` `0x97cad4`, `classinfo` `0xa0c768`).
+  The Settings pages (`patch/m1plus.c`, `SETTINGS_PINS`) call `navigator_to` `0x4d1d80` for the stock pages, `get_equalizer_preset_name` `0x49daec`, and for the About page `getDiskMemoryInfo` `0x5b30e0`, `networkGetConnectStatus` `0x5d7cac` and `networkGetIPAddr` `0x5d753c`, from the UI thread on a tap or a page open, and read `wififlag`, `bluetoothflag`, `equalizer_flag`, `equalizer_mode`, `language`, `product_sncode` and `wifi_mac`; no hook ([addresses](addresses.md)).
 - **Stock list queries are page state.** `loadLocalClassList` / `loadAlbumList` replace `*pdeq_showlist` (and may
   set `nagvation_title`, `classinfo`), which every stock list page draws its rows from and plays from, and which
   their to-foreground does not read again while the class is unchanged. Run them only from the page in front

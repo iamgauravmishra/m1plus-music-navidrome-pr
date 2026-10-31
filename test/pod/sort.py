@@ -1,4 +1,4 @@
-"""Cover Flow opens on the playing album; the album order (Settings > Cover Flow > Sort): the Artist order, the stock
+"""Cover Flow opens on the playing album; the album order (Settings > Library > Album Order): the Artist order, the stock
 Album order, the setting file, the same order on the Albums page, and the stock row behind every album that is opened.
 (The Settings > Cover Flow page itself is tested in test/pod/menu.py, the localisation in test/pod/i18n.py.)"""
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)

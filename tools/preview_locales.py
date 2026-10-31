@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""out/preview/locale-<table>.png: the M1+ Music menu (as Home), Extras, Customize, Shuffle and Main Menu pages in other
+"""out/preview/locale-<table>.png: the M1+ Music menu (as Home), Extras, Settings, Shuffle and Main Menu pages in other
 languages, drawn from a finished tree's own ui files, strings tables and font (docs/ui.md "Localisation").
 Approximate (PIL, not AWTK): labels that do not fit are cut with an ellipsis, as an idle hscroll_label shows them.
 
@@ -9,7 +9,7 @@ strings table name such as ru_RU; output in out/preview/, gitignored)
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PIL import Image, ImageDraw
-import build, preview, preview_icons as PI
+import build, preview, preview_icons as PI, preview_settings as PS
 
 DEFAULT = ['zh_CN', 'ja_JP', 'ge_DE', 'ru_RU']
 
@@ -18,9 +18,9 @@ def sheet(work, table):
     s = PI.Side(work, True, table); s.mark = lambda *a: None
     panels = [('M1+ Music menu (Home)', preview.menu_page(s, None, home=True)),
               ('Extras', preview.extras_page(s, None)),
-              ('Customize', PI.pod_page(s, 'm1plus_customize', 8).convert('RGB')),
-              ('Customize > Home Screen', PI.pod_page(s, 'm1plus_homeset', 2, switches={'pod_switch0': True}).convert('RGB')),
-              ('Customize > Cover Flow', PI.pod_page(s, 'm1plus_cfset', 2, switches={'pod_switch0': False}).convert('RGB')),
+              ('Settings', PS.draw_page(s, 'm1plus_settings').convert('RGB')),
+              ('Settings > Home Screen', PS.draw_page(s, 'm1plus_homeset').convert('RGB')),
+              ('Settings > Library', PS.draw_page(s, 'm1plus_library').convert('RGB')),
               ('Shuffle', PI.pod_page(s, 'm1plus_shuffle', 3).convert('RGB')),
               ('Main Menu', preview.mainmenu_page(s, None))]
     pad = 12

@@ -18,7 +18,7 @@ the PNGs you meant to change.
 | Lucide (lucide-static 1.61.0, tarball SHA-256 `62773cd2...ba75f1`) | `assets/icons/lucide/svg/` | ISC, `assets/icons/lucide/LICENSE` |
 | Tabler (`@tabler/icons` 3.49.0), `T:` prefix, only where Lucide lacks one: `brand-tidal`, `circle-check` filled, `a-b`, `multiplier-1x` | `assets/icons/tabler/svg/` | MIT, `assets/icons/tabler/LICENSE` |
 | custom, drawn in Lucide's style (24 grid, 2 px stroke, round caps): `badge-hr`, `dac`, `gain-low`/`gain-high`, `volume-3waves`, `coverflow` (Lucide `gallery-horizontal` with side covers 10 units tall, 3 units out) | `assets/icons/custom/` | ours |
-| the Shanling mark (`pod_ic_shanling`): the swoosh cut from stock `shutdown.png` (SHA-256 pinned), isolated by whiteness, 24 px wide, dilated to about a 2 px stroke | stock art | |
+| the Shanling mark (`pod_ci_shanling`, the Settings > Developer > Open Shanling Home row): the swoosh cut from stock `shutdown.png` (SHA-256 pinned), isolated by whiteness, 24 px wide, dilated to about a 2 px stroke | stock art | |
 
 **Rule:** an icon gets a real Lucide glyph (Tabler where Lucide has none), or is drawn in Lucide's style, or keeps
 its stock image when that is decent. Lucide has no filled style: `name:filled` fills the outline (star, play,
@@ -42,8 +42,9 @@ pause, skip, lock); `ellipsis` is always filled.
 | settings | all 46 (40x40) | bare 24 px glyph; DAC, DSD output (2) and ReplayGain are text badges (Inter in a 24x16 rounded rectangle, 1.5 px line, `badge()`); labels stay at x 60 |
 | Home grid | 18 + 18 `_down` (66x66) | 38 px glyph on `#777777` (pressed `#555555`); HiFi (zh_CN) a store; Tidal Tabler `brand-tidal` |
 | M1+ Music Home icon | added `m1plus`, `m1plus_down` (66x66) | Lucide `smartphone` on the same disc; style `home_m1plus_style` (a copy of `home_tidal_style`) added to `styles/home_page.bin` in stock sort order; widget built at run time (`home-guard.md`) |
-| M1+ Music rows | 26 added `pod_ic_*` (24x24) | glyph x 16..40, title x 56, a 1 px `#222222` hairline from x 56 (child `pod_hair`, insensitive; the theme's bottom border off, `border_width` 0); image insensitive |
-| navbar extras | added `pod_nav_coverflow`, `pod_nav_customize`, `pod_nav_grid`, `pod_nav_list` (+ `_down`) | Cover Flow button (`coverflow`); Customize capsule cap (`sliders-horizontal`); Albums view toggle (`layout-grid` / `list`, showing the mode a tap switches to) |
+| M1+ Music rows | added `pod_ic_*` (24x24) | menu, Shuffle, Extras and Main Menu rows: glyph x 16..40, title x 56, a 1 px `#222222` hairline from x 56 (child `pod_hair`, insensitive; the theme's bottom border off, `border_width` 0); image insensitive |
+| Settings cards | added `pod_ci_*` (24x24, a 20 px glyph), `pod_chev`, `pod_check` | the Settings pages' rows (`CARD_GLYPHS`, `settings.md` "Cards"); the grey chevron and the picker's check |
+| navbar extras | added `pod_nav_coverflow`, `pod_nav_settings`, `pod_nav_grid`, `pod_nav_list` (+ `_down`) | Cover Flow button (`coverflow`); Settings capsule cap (`sliders-horizontal`); Albums view toggle (`layout-grid` / `list`, showing the mode a tap switches to) |
 | navbar and dialogs | 110 | add, cancel, delete, multi-select, sort, search, back, chevron, more, settings, `back_to_player` (`audio-lines`, 23x24); selection circles and squares, expanders, queue-dialog modes, dialog actions, Now Playing more-dialog and batch-add icons, Bluetooth/USB page transport |
 | Folders, Playlists, CD | 24 bare glyphs (40x40) | 16 audio formats share `file-music`; SD, USB; New / Import / Export; CD track dialog (`guitar`, microphone, calendar) |
 | list placeholders | 6 glyphs (40x40), 3 "no cover" tiles (60/90/100) | the tile colour with a muted glyph at 0.52 of the tile |
@@ -68,13 +69,12 @@ not touched.
 
 | page | rows |
 |---|---|
-| M1+ Music menu | Now Playing `audio-lines`, Cover Flow custom `coverflow`, Shuffle `shuffle`, Songs `music`, Albums `disc-3`, Artists `mic-vocal`, Genres `guitar`, Folders `folder`, Playlists `list-music`, Customize `sliders-horizontal`, Extras `ellipsis` |
-| Customize | Main Menu `list-checks`, Extras `ellipsis`, Cover Flow `coverflow` (Landscape `rotate-cw-square`, Sort `arrow-down-wide-narrow`), Home Screen `house` (Boot to M1+ Music `power`, Shanling Home the mark), Playback `headphones`, System Settings `settings`, Developer `code` |
+| M1+ Music menu | Now Playing `audio-lines`, Cover Flow custom `coverflow`, Shuffle `shuffle`, Songs `music`, Albums `disc-3`, Artists `mic-vocal`, Genres `guitar`, Folders `folder`, Playlists `list-music`, Settings `sliders-horizontal`, Extras `ellipsis` |
+| Settings (cards, 20 px) | `CARD_GLYPHS` in `tools/mod_icons.py`: Wi-Fi `wifi`, Bluetooth `bluetooth`, Menu & Extras `list-checks`, Home Screen `house`, Library `disc-3`, Now Playing `audio-lines`, Play Mode `repeat`, EQ `sliders-vertical`, Display `sun`, Language `languages`, Developer `code`; sub-pages: Album Order `arrow-down-wide-narrow`, Landscape `rotate-cw-square`, Rebuild Covers `image-up`, Boot to M1+ Music `power`, Open Shanling Home the mark |
 | Extras | the Home grid's glyphs: `star`, `clock-plus`, `history`, `flame`, `feather`, `badge-hr`, `refresh-cw`, `globe`, `disc` |
 | Shuffle | the song, album and folder glyphs |
 
-The rows live in `ui/m1plus_menu.bin`, `m1plus_shuffle.bin`, `m1plus_settings.bin`, `m1plus_extras.bin`, `m1plus_mainmenu.bin`
-and `m1plus_cfset.bin`.
+The rows live in `ui/m1plus_menu.bin`, `m1plus_shuffle.bin`, `m1plus_extras.bin` and `m1plus_mainmenu.bin`; the Settings cards pages are built by `tools/pod_ui.py` `build_cards_page`.
 
 ## Audit (`tools/audit_images.py`)
 

@@ -26,7 +26,7 @@ def writes_atomically(m, path, tmp, data):
     return flat == want and ('write', tmp, data) in m.calls and m.fs.get(path) == data
 
 
-SETTINGS, HOMESET = pod_pages.CUSTOMIZE_PAGE, pod_pages.HOMESET_PAGE
+SETTINGS, HOMESET = pod_pages.SETTINGS_PAGE, pod_pages.DEVELOPER_PAGE
 NAVBAR, LISTVIEW, SCROLLVIEW, SCROLLBAR = 'navigationbar_view', 'pod_listview', 'pod_scrollview', 'scroll_bar_m'
 ICON_STYLE = 'home_m1plus_style'
 ICON_NAME = str(pod_pages.HOME_ENTRY)
@@ -174,30 +174,24 @@ def home_tests(expect, page):
 
     # ===================== the launcher =====================
     on_row, rowsM = PSYMS['on_row'], PSYMS['pod_rows_0']
-    rowsS = PSYMS[f'pod_rows_{pod_pages.CUSTOMIZE_PAGE_INDEX}']
-    rowsH = PSYMS[f'pod_rows_{pod_pages.HOMESET_PAGE_INDEX}']
+    rowsS = PSYMS[f'pod_rows_{pod_pages.SETTINGS_PAGE_INDEX}']
+    rowsH = PSYMS[f'pod_rows_{pod_pages.DEVELOPER_PAGE_INDEX}']
     grid_i = next(i for i, r in enumerate(HOMESET.rows) if r.action == pod_pages.ACT_GRID)
     start_i = next(i for i, r in enumerate(HOMESET.rows) if r.action == pod_pages.ACT_STARTUP)
-    homeset_i = next(i for i, r in enumerate(SETTINGS.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.HOMESET_PAGE_INDEX)
-    settings_i = next(i for i, r in enumerate(page.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.CUSTOMIZE_PAGE_INDEX)
+    homeset_i = next(i for i, r in enumerate(SETTINGS.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.DEVELOPER_PAGE_INDEX)
+    settings_i = next(i for i, r in enumerate(page.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.SETTINGS_PAGE_INDEX)
     entry = PSYMS['m1plus_home_click']
-    expect([r.label for r in SETTINGS.rows] == ['Main Menu', 'Extras', 'Home Screen', 'Cover Flow', 'Cassette Mode', 'Keyboards', 'Playback', 'System Settings', 'Developer'] and
-           [r.arg for r in SETTINGS.rows[6:8]] == [pod_pages.HOME_PLAYSET, pod_pages.HOME_SYSSET]
-           and (SETTINGS.rows[5].action, SETTINGS.rows[5].arg) == (pod_pages.ACT_PAGE, pod_pages.KEYBOARDS_PAGE_INDEX) and homeset_i == 2
-           and (SETTINGS.rows[3].action, SETTINGS.rows[3].arg) == (pod_pages.ACT_PAGE, pod_pages.CFSET_PAGE_INDEX)
-           and (SETTINGS.rows[4].action, SETTINGS.rows[4].arg) == (pod_pages.ACT_PAGE, pod_pages.CASSETTE_PAGE_INDEX)
-           and (SETTINGS.rows[1].action, SETTINGS.rows[1].arg) == (pod_pages.ACT_PAGE, pod_pages.EXTRASCFG_PAGE_INDEX)
-           and (SETTINGS.rows[8].action, SETTINGS.rows[8].arg) == (pod_pages.ACT_PAGE, pod_pages.DEVELOPER_PAGE_INDEX)
-           and [(r.label, r.action) for r in pod_pages.DEVELOPER_PAGE.rows] == [('Screenshot', pod_pages.ACT_SHOT), ('Network Probe', pod_pages.ACT_NETPROBE), ('Keyboard', pod_pages.ACT_KEYBOARD)]
-           and not [r for r in SETTINGS.rows if r.action in (pod_pages.ACT_GRID, pod_pages.ACT_STARTUP)],
-           'the Customize page: Main Menu, Extras, Home Screen and Cover Flow, Cassette Mode and Keyboards (sub-pages), Playback and System Settings (stock pages) and Developer last (its page holds Screenshot, Network Probe and Keyboard); no launcher rows left on it')
-    expect([(r.label, r.action) for r in HOMESET.rows] == [('Boot to M1+ Music', pod_pages.ACT_STARTUP), ('Recent Albums', pod_pages.ACT_SHELF), ('Daily Mix', pod_pages.ACT_DAILY),
-                                                           ('Regenerate Daily Mix', pod_pages.ACT_REGEN), ('Shanling Home', pod_pages.ACT_GRID)]
-           and HOMESET.title == 'Home Screen' and (start_i, grid_i) == (0, 4),
-           'the Home Screen page: titled Home Screen, rows Boot to M1+ Music (switch), Recent Albums (the Recently Played shelf, switch), Daily Mix (the card, switch), Regenerate Daily Mix (action) and Shanling Home')
-    expect(page.rows[0].label == 'Now Playing' and page.rows[-1].label == 'Extras' and page.rows[settings_i].label == 'Customize' and len(page.rows) == 22
+    expect(homeset_i == len(SETTINGS.rows) - 1 and SETTINGS.rows[homeset_i].label == 'Developer'
+           and (SETTINGS.rows[homeset_i].action, SETTINGS.rows[homeset_i].arg) == (pod_pages.ACT_PAGE, pod_pages.DEVELOPER_PAGE_INDEX)
+           and [(r.label, r.action) for r in HOMESET.rows] == [('Boot to M1+ Music', pod_pages.ACT_STARTUP), ('Open Shanling Home', pod_pages.ACT_GRID), ('Screenshot', pod_pages.ACT_SHOT),
+                                                              ('Network Probe', pod_pages.ACT_NETPROBE), ('Keyboard', pod_pages.ACT_KEYBOARD)]
+           and HOMESET.title == 'Developer' and (start_i, grid_i) == (0, 1)
+           and not [r for r in SETTINGS.rows if r.action in (pod_pages.ACT_GRID, pod_pages.ACT_STARTUP)]
+           and [(r.label, r.action) for r in pod_pages.HOMESET_PAGE.rows] == [('Recent Albums', pod_pages.ACT_SHELF), ('Daily Mix', pod_pages.ACT_DAILY), ('Regenerate Daily Mix', pod_pages.ACT_REGEN)],
+           'Settings ends with Developer, whose page holds the launcher rows: Boot to M1+ Music (switch) and Open Shanling Home, then Screenshot, Network Probe and Keyboard; the Home Screen page has the shelf and mix switches and Regenerate Daily Mix')
+    expect(page.rows[0].label == 'Now Playing' and page.rows[-1].label == 'Extras' and page.rows[settings_i].label == 'Settings' and len(page.rows) == 22
            and not [r for r in page.rows if r.action in (pod_pages.ACT_GRID, pod_pages.ACT_STARTUP)],
-           'the menu keeps the grouped rows, a Customize row and the Extras row last, which opens the Customize page (no launcher rows left on it)')
+           'the menu keeps the grouped rows, a Settings row and the Extras row last, which opens the Settings page (no launcher rows left on it)')
 
     def own(m, c): return c[1] not in {h for n, h in m.widgets.items() if n.startswith('pod_row')}   # not one of the menu's rows (patch/menu.c arranges those)
     def hid(m): return [c for c in m.calls if c[0] in ('widget_set_visible', 'widget_set_sensitive') and c[2] == 0 and own(m, c)]
@@ -423,15 +417,15 @@ def home_tests(expect, page):
     expect(('window_open', SETTINGS.key) in m.calls and switch_shows(m, start_i) is None,
            "the menu's Settings row opens the Settings page (no switch on it any more)")
     expect(not hid(m) and not moved(m), 'the Settings page keeps its navbar and list')
-    expect([c[0] for c in m.calls].count('widget_on') == 2 + len(SETTINGS.rows), 'its Back, its bars icon and its seven rows are bound')
+    expect([c[0] for c in m.calls].count('widget_on') == 2 + len(SETTINGS.rows) + 2, 'its Back, its bars icon and its rows are bound, and the foreground and destroy events of the values')
     m.window = 0x20003000
     m.call(on_row, a0=rowsS + 12 * homeset_i)
     expect(('window_open', HOMESET.key) in m.calls and switch_shows(m, start_i) is True,
-           "the Home Screen row opens the Home Screen page; Boot to M1+ Music is on")
+           "the Developer row opens the Developer page; Boot to M1+ Music is on")
     expect(m.types.get(switch_image(m, start_i)) is None and not [c for c in m.calls if c[0] == 'widget_set_text_utf8'],
            'the switches are images (sset_on / sset_off): no text is set anywhere (the V2.1iM ghost text cannot come back)')
-    expect(not hid(m) and not moved(m), 'the Home Screen page keeps its navbar and list')
-    expect([c[0] for c in m.calls].count('widget_on') == 2 + len(HOMESET.rows),'its Back, its bars icon and its two rows are bound')
+    expect(not hid(m) and not moved(m), 'the Developer page keeps its navbar and list')
+    expect([c[0] for c in m.calls].count('widget_on') == 2 + len(HOMESET.rows) + 2,'its Back, its bars icon and its rows are bound (and the switch refresh events)')
     m.call(PSYMS['pod_on_back'])
     expect(m.names() == ['navigator_back'], 'Back goes back to the Settings page')
 
@@ -478,10 +472,10 @@ def home_tests(expect, page):
     # a Home Screen page without a menu below it (cannot happen from the UI): just the back
     m = armed(); m.top_main = HOME_WIN; m.call(open_cb); m.call(on_row, a0=rowsH + 12 * grid_i)
     expect(m.names() == ['widget_lookup', 'widget_set_visible', 'widget_set_sensitive', 'navigator_back'], 'no Settings window known: one navigator_back, no window_close')
-    # Customize opened from the Extras page (menu > Extras > Customize > Home Screen): that page is closed too, by handle
+    # Settings opened from the Extras page (menu > Extras > Settings > Home Screen): that page is closed too, by handle
     rowsE = PSYMS[f'pod_rows_{pod_pages.EXTRAS_PAGE_INDEX}']
     extras_i = next(i for i, r in enumerate(page.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.EXTRAS_PAGE_INDEX)
-    cust_e = next(i for i, r in enumerate(pod_pages.EXTRAS_PAGE.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.CUSTOMIZE_PAGE_INDEX)
+    cust_e = next(i for i, r in enumerate(pod_pages.EXTRAS_PAGE.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.SETTINGS_PAGE_INDEX)
     def via_extras():
         m = armed(); m.top_main = HOME_WIN; m.call(open_cb)
         m.window = 0x20002000; m.call(on_row, a0=rowsM + 12 * extras_i)
@@ -492,7 +486,7 @@ def home_tests(expect, page):
     m = via_extras(); m.call(on_row, a0=rowsH + 12 * grid_i)
     expect(m.names() == ['widget_lookup', 'widget_set_visible', 'widget_set_sensitive', 'window_close', 'window_close', 'window_close', 'navigator_back']
            and m.calls[3:6] == [('window_close', 0x20001000), ('window_close', 0x20002000), ('window_close', 0x20003000)],
-           f'menu > Extras > Customize > Home Screen: Shanling Home closes the menu, the Extras page and the Customize page, then the Home Screen page ({m.names()})')
+           f'menu > Extras > Settings > Home Screen: Shanling Home closes the menu, the Extras page and the Settings page, then the Home Screen page ({m.names()})')
     m = via_extras()
     destroy = m.destroy
     expect(len(destroy) == 1, 'the Extras page registers its destroy')

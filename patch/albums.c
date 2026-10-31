@@ -90,7 +90,7 @@ static struct {
     void *st_gtitle, *st_gsub; /* and the grid's two */
     void *albums; /* our copy of the stock album rows */
     unsigned *
-        order; /* display order as stock row numbers (cc_album_order, Settings > Cover Flow > Sort); NULL = stock order */
+        order; /* display order as stock row numbers (cc_album_order, Settings > Library > Album Order); NULL = stock order */
     unsigned count;
     int list; /* 1 list mode, 0 grid */
     int press; /* list: the row under the finger, + 1 */

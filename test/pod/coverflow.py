@@ -905,7 +905,7 @@ def landscape_tests(ctx, asset):
     expect(tree.find('btn_landscape') is None and not [w for w in tree.walk() if 'rotate' in str(w.props)],
            'the navbar has no landscape button (the Settings switch replaced it)')
     lbl = tree.find('label_title')
-    settings_lbl = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets/default/raw/ui/m1plus_customize.bin'), 'rb').read()).find('label_title')
+    settings_lbl = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets/default/raw/ui/m1plus_settings.bin'), 'rb').read()).find('label_title')
     expect((lbl.x, lbl.w) == (settings_lbl.x, settings_lbl.w) and lbl.x + lbl.w > O['NAV_VIEW_X'] and [c.name for c in tree.find('navigationbar_view').children] == ['label_title', 'btn_return', 'btn_backtoplayer', 'btn_songs'],
            'the title has the whole navbar between Back and Now Playing, as on the other pages without a toggle')
     imgs = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx')
@@ -923,7 +923,7 @@ def landscape_tests(ctx, asset):
 
 
 def rebuild_tests(ctx):
-    """Settings > Cover Flow > Rebuild Covers: coverflow_rebuild opens Cover Flow on the Preparing screen with the shared worker
+    """Settings > Library > Rebuild Covers: coverflow_rebuild opens Cover Flow on the Preparing screen with the shared worker
     in CC_REBUILD mode: every album is extracted again and its file replaced (a no-art marker too); Cancel keeps a complete cache."""
     expect = ctx.expect
     rebuild = PSYMS['coverflow_rebuild']

@@ -40,13 +40,13 @@
     "/mnt/data/m1plus-recent" /* the albums played last, most recent first (patch/recent.c); missing or malformed = none */
 #define RECENT_TMP "/mnt/data/m1plus-recent.tmp"
 #define SHELF_FILE \
-    "/mnt/data/m1plus-shelf" /* the Recently Played shelf: "0" = off, anything else or missing = on (Customize > Home Screen) */
+    "/mnt/data/m1plus-shelf" /* the Recently Played shelf: "0" = off, anything else or missing = on (Settings > Home Screen) */
 #define SHELF_TMP "/mnt/data/m1plus-shelf.tmp"
 #define DAILY_SET_FILE \
-    "/mnt/data/m1plus-daily" /* the Daily Mix card: "0" = off, anything else or missing = on (Customize > Home Screen) */
+    "/mnt/data/m1plus-daily" /* the Daily Mix card: "0" = off, anything else or missing = on (Settings > Home Screen) */
 #define DAILY_SET_TMP "/mnt/data/m1plus-daily.tmp"
 #define KBZH_FILE \
-    "/mnt/data/m1plus-kbzh" /* the on-screen keyboard's Chinese (Pinyin) layer: "1" = on, anything else or missing = off (Customize > Keyboards; patch/keyboard.c) */
+    "/mnt/data/m1plus-kbzh" /* the on-screen keyboard's Chinese (Pinyin) layer: "1" = on, anything else or missing = off (Settings > Keyboards; patch/keyboard.c) */
 #define KBZH_TMP "/mnt/data/m1plus-kbzh.tmp"
 #define MIX_DIR \
     CARD_DIR \
@@ -79,9 +79,9 @@ extern int home_write_atomic(const char *path, const char *tmp,
                              const char *data); /* temp, fsync, rename, directory fsync; 0 = done */
 extern void home_menu_opened(void *win, int settings, int entry);
 extern void
-home_extras_opened(void *win); /* the Extras page: Customize may be opened from it, Shanling Home closes it too */
+home_extras_opened(void *win); /* the Extras page: Settings may be opened from it, Shanling Home closes it too */
 extern int home_to_grid(void);
-extern int home_start(void); /* the "Boot to M1+ Music" setting as Customize > Home Screen shows it */
+extern int home_start(void); /* the "Boot to M1+ Music" setting as Settings > Developer shows it */
 extern int home_toggle(void); /* flip it; the new state, or -1 when it could not be saved */
 extern int home_restore(void);
 extern void home_restore_failed(int restored);
@@ -94,15 +94,15 @@ extern void recent_start(void *win);
 extern int recent_note(
     void *track); /* the track the player is on: record its album; 1 when the list changed (cheap when it did not) */
 extern void recent_refresh(void); /* the list changed under a live shelf (the mini bar's tick): show it */
-extern int recent_setting(void); /* the Customize > Home Screen switch: 1 on (the default) */
+extern int recent_setting(void); /* the Settings > Home Screen switch: 1 on (the default) */
 extern void menu_shelf(void *win,
                        int on); /* patch/menu.c: show or hide the shelf and move the rows (the list keeps its place) */
 extern void menu_daily(void *win,
                        int on); /* patch/menu.c: the same for the Daily Mix section, which sits above the shelf */
 
-/* patch/dailymix.c: the Daily Mix card of the Home instance of the menu (dailymix_start, called by home_menu_opened) and its Customize > Home Screen rows */
+/* patch/dailymix.c: the Daily Mix card of the Home instance of the menu (dailymix_start, called by home_menu_opened) and its Settings > Home Screen rows */
 extern void dailymix_start(void *win);
-extern int dailymix_setting(void); /* the Customize > Home Screen switch: 1 on (the default) */
+extern int dailymix_setting(void); /* the Settings > Home Screen switch: 1 on (the default) */
 extern int dailymix_toggle(void); /* flip it, saved atomically; the new state, or -1 when it could not be saved */
 extern void dailymix_regen(
     void); /* Regenerate Daily Mix: today's mix is made again with a new seed, when the Home menu is in front */
@@ -110,7 +110,7 @@ extern int dailymix_can_regen(
     void); /* Regenerate can make a mix: the switch is on and the last job did not find the library too small */
 extern int recent_toggle(void); /* flip it, saved atomically; the new state, or -1 when it could not be saved */
 extern int
-kb_zh_setting(void); /* patch/keyboard.c: Customize > Keyboards > Chinese (Pinyin): 1 on, 0 off (the default) */
+kb_zh_setting(void); /* patch/keyboard.c: Settings > Keyboards > Chinese (Pinyin): 1 on, 0 off (the default) */
 extern int kb_zh_toggle(void); /* flip it, saved atomically; the new state, or -1 when it could not be saved */
 
 /* patch/m1plus.c (stages with the home feature) */

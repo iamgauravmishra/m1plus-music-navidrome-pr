@@ -1013,7 +1013,7 @@ def asset_tests(ctx):
     expect(contrast(pod_ui.PC_ACTION_RGB, '#000000') > 4.5, 'the Feeds level\'s action rows read on black (4.5:1)')
     # the item
     item = next(i for i, r in enumerate(P.ITEMS) if r.label == 'Podcasts')
-    expect(item == 20 == len(P.ITEMS) - 1 and P.ITEMS[item].action == P.ACT_PODCASTS == 23 and P.ID_CHARS[item] == 'l' and item not in P.DEFAULT_MENU and P.PAGES[P.PAGES.index(P.PODCASTS) + 1:] == [P.TAPE, P.CASSETTE_PAGE, P.KEYBOARD, P.KEYBOARDS_PAGE]
+    expect(item == 20 == len(P.ITEMS) - 1 and P.ITEMS[item].action == P.ACT_PODCASTS == 23 and P.ID_CHARS[item] == 'l' and item not in P.DEFAULT_MENU and P.PAGES[P.PAGES.index(P.PODCASTS) + 1:] == [P.TAPE, P.NPSET_PAGE, P.KEYBOARD, P.KEYBOARDS_PAGE, P.MENUEXTRAS_PAGE, P.SORT_PAGE, P.THEME_PAGE, P.ABOUT_PAGE]
            and P.PODCASTS.kind == 'podcasts', 'Podcasts is the last item (id 20, saved as "l"), hidden from the menu by default; its page follows the Pod (the Tape pages come after it)')
     expect(P.EXTRAS_GROUPS[1][1][-1] == 'Podcasts' and P.EXTRAS_GROUP_OF[item] == 1 and P.EXTRAS_GROUPS[0][1] == ('Now Playing', 'Shuffle', 'Pod')
            and P.parse_menu_full(b'123456l\n') == ([1, 2, 3, 4, 5, 6, 20], []) and P.format_menu([1, 2, 20]) == '12l\n', 'Extras lists it in the Library group, last; the saved list carries it as l')

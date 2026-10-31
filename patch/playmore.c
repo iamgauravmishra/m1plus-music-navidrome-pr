@@ -123,7 +123,7 @@ static int pm_on_back(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* Cassette Mode (the row is pod_tape): the landscape cassette page (patch/tape.c) over Now Playing. The page opens first and the sheet closes once it is up (a window below the top one, as Customize >
+/* Cassette Mode (the row is pod_tape): the landscape cassette page (patch/tape.c) over Now Playing. The page opens first and the sheet closes once it is up (a window below the top one, as Settings >
  * Shanling Home closes the menu under the Settings page): a page that cannot open leaves the sheet as it was. */
 extern int tape_open(void);
 

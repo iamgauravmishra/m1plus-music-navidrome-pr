@@ -20,7 +20,7 @@ Preview, both pages over Now Playing with the dim (each page with its own glass;
   rows are visible and sensitive and sets the sheet to the page's height and its own glass picture (page 1 250 px `pm_sheet5`, page 2 200 px `pm_sheet`, below); there is no slide.
 - **Cassette Mode** (`pod_tape`, page 1, between Add to playlist and More: the cassette glyph `pod_ic_tape`, the label "Cassette Mode", translated in all 13 languages, no chevron). A tap opens the landscape
   cassette page over Now Playing (`patch/tape.c` `tape_open`, `docs/modules/tape.md`) **first** and closes the sheet once the page is up (`pm_on_tape`: `window_close` of a window under the
-  top one, as Customize > Home Screen > Shanling Home closes the menu under the Settings page); a page that cannot open leaves the sheet as it was. The row is hidden with the kill switch
+  top one, as Settings > Developer > Open Shanling Home closes the menu under the Settings page); a page that cannot open leaves the sheet as it was. The row is hidden with the kill switch
   (nothing is bound, `pod_tape` stays `visible=false` and `sensitive=false`).
 - **Look up album opens our album page** (`pm_on_lookup_album`, a click handler on `listitem4` bound after the stock init, so the emitter runs it first;
   RET_STOP (11, `emitter_dispatch` @0x6f450c) keeps the stock one, RET_OK lets it run). The stock handler (0x4795cc) opened `playerjumpinfo_page`. Ours reads

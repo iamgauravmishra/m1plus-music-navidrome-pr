@@ -16,7 +16,7 @@ stock row theme. The asset contains one row per `ITEMS` entry, then Extras. Neve
 row count: Pod and Podcasts are items too.
 
 Default shown IDs are `12345`: Cover Flow, Albums, Artists, Songs and Playlists. Extras is
-always visible and last. Customize (ID 18, `j`) is hidden by default and stays reachable from
+always visible and last. Settings (ID 18, `j`) is hidden by default and stays reachable from
 the Extras navbar. Pod is ID 19 (`k`), Podcasts ID 20 (`l`). Their actions/pages are defined
 once in `pod_pages.py`.
 
@@ -42,7 +42,7 @@ newline. Characters are `ID_CHARS` (`0`–`8`, then `a`–`l`); total file lengt
 and less than `MENU_FILE_MAX` (24 bytes).
 
 - Each ID may appear once across both parts; at most one `-` is allowed.
-- Customize cannot be off. Unknown characters, duplicates or oversized/missing data select
+- Settings cannot be off. Unknown characters, duplicates or oversized/missing data select
   the default menu with no off items.
 - An empty body represented by a newline, or `-`, is valid: only Extras is shown.
 - Showing an item clears its off flag; hiding it again returns it to Extras.
@@ -58,12 +58,12 @@ the main menu unless they are off; empty groups have no header. Each `pod_hdr0..
 insensitive view with 20 px white text, not a clickable row. Shown headers/rows are restacked
 in display order; hidden children follow. A missing header only removes that heading.
 
-The navbar's `btn_customize` replaces the menu's Customize row on this page. It opens the
-same Customize page, and failure to find it binds nothing. Existing names such as
+The navbar's `btn_settings` replaces the menu's Settings row on this page. It opens the
+same Settings page, and failure to find it binds nothing. Existing names such as
 `pod_rowN`, `pod_listview`, `pod_scrollview` and `scroll_bar_m` remain unchanged.
 
-Customize → Extras lists only items hidden from the main menu, with switches for whether
-they appear on Extras. Customize has no off switch. Rows stay in place while toggled; Extras
+Settings → Extras lists only items hidden from the main menu, with switches for whether
+they appear on Extras. Settings has no off switch. Rows stay in place while toggled; Extras
 rereads the file when foregrounded. Both pages use `extras_display`/`extras_layout` and the C
 equivalents; stock relayout is tested with headers and variable-height sections.
 

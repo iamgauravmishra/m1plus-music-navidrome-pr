@@ -583,7 +583,7 @@ def file_and_layout_tests(ctx):
     def layout_errors(m, shown, bar, shelf=True, na=3, extras=True):
         """What is wrong with the page ([]: nothing): the shown rows in order from y 0, virtual_h, the children stacked the shown rows,
         the shelf, the hidden rows, the spacer last, the shelf right below the last shown row, the spacer row after the shelf."""
-        want = shown + ([18] if extras else []) + [EX]   # Customize (18) only when the saved list shows it; Extras always, last
+        want = shown + ([18] if extras else []) + [EX]   # Settings (18) only when the saved list shows it; Extras always, last
         n, errs = len(want), []
         vh = n * ROW_H + (shh(na) if shelf else 0) + (MB_PAD if bar else 0)
         if not (m.order() == want and m.row_ys() == {i: p * ROW_H for p, i in enumerate(want)} and m.vh() == vh):
@@ -594,7 +594,7 @@ def file_and_layout_tests(ctx):
         if m.y_of(m.shelf) != n * ROW_H: errs.append(f'the shelf at y {m.y_of(m.shelf)}')
         if bar and shelf and not (m.y_of(m.pad) == n * ROW_H + shh(na) and m.is_visible(m.pad)): errs.append(f'the spacer at y {m.y_of(m.pad)}')
         return errs
-    # the saved lists: the default, none, a reordered one, the same without Customize (Extras follows the items, the shelf Extras);
+    # the saved lists: the default, none, a reordered one, the same without Settings (Extras follows the items, the shelf Extras);
     # the shelf's own heights for 1 to 6 albums are the grid's tests below
     for saved, shown, xs in ((b'123456j\n', [1, 2, 3, 4, 5, 6], True), (b'j\n', [], True), (b'6502j\n', [6, 5, 0, 2], True), (b'6502\n', [6, 5, 0, 2], False)):
         for bar in (False, True):
@@ -670,7 +670,7 @@ def file_and_layout_tests(ctx):
     p = m.target(160, sh_y - 1)
     expect(p[-1] == f'pod_row{EX}', f'the pixel row above the shelf is the Extras row ({p})')
     p = m.target(160, sh_y - ROW_H - 1)
-    expect(p[-1] == 'pod_row18', f'and the row above it (Customize) ({p})')
+    expect(p[-1] == 'pod_row18', f'and the row above it (Settings) ({p})')
     p = m.target(160, 5)
     expect(p[-1] == 'window', 'above the list (the 10 px of air) the window')
     sh_y = scroll_to(m, m.vh() - 430 + 200)       # scrolled to the end: the shelf's last pixel rows end the list
@@ -780,7 +780,7 @@ def grid_and_tap_tests(ctx):
     expect(len(m.bitmaps) == 6, 'at the end of the list the third row is made: all six covers (486 KB) are resident only then')
 
     # ------------------------------------------------------------------ the covers are made once the shelf is in view or about to be (it is at the bottom of a long list)
-    LONG = b'012345678abcdefghj\n'      # 18 shown items (Customize last) + Extras: the shelf is at y 988, far below a 430 px viewport
+    LONG = b'012345678abcdefghj\n'      # 18 shown items (Settings last) + Extras: the shelf is at y 988, far below a 430 px viewport
     EV_SCROLL = O['EVT_SCROLL']
     m = covered(ST(ents(3), saved=LONG, end=False))
     expect(m.y_of(m.shelf) == 19 * ROW_H and m.timers == [(PSYMS['rc_first'], O['RC_FIRST_MS'])], f'a long menu: the shelf is far below the viewport, the one-shot is armed as always ({m.y_of(m.shelf)}, {m.timers})')
@@ -995,7 +995,7 @@ def refresh_and_fallback_tests(ctx):
     # an album again: the shelf is back, one tick, and the rows go down
     m.fs[RECENT] = pod_recent.dump(ents(2)); m.timers = []; m.fire(EVT_FG); m.relayout()
     expect(m.shelf_up() and m.y_of(m.shelf) == 8 * ROW_H and m.timers == [(PSYMS['rc_tick'], O['RC_TICK_MS'])], 'an album again: the shelf and the rows below it are back, the covers are queued')
-    # the switch (Customize > Home Screen)
+    # the switch (Settings > Home Screen)
     m = covered(ST(ents(3))); m.decode_all()
     m.fs[SHELF_SET] = b'0\n'; m.calls = []; m.fire(EVT_FG); m.relayout()
     expect(not m.shelf_up() and m.row_ys()[1] == 0, 'the switch off: the shelf is hidden and insensitive, the rows go back up')
@@ -1019,13 +1019,12 @@ def refresh_and_fallback_tests(ctx):
     m.fire(EVT_BG); m.calls = []; m.call(PSYMS['recent_refresh'], count=8000000)
     expect(m.names() == [], 'a menu that is not in front is left alone by the refresh (it reads the file when it comes back)')
 
-    # ------------------------------------------------------------------ the Customize > Home Screen switch
+    # ------------------------------------------------------------------ the Settings > Home Screen switch
     homeset = pod_pages.HOMESET_PAGE
     shelf_i = next(i for i, r in enumerate(homeset.rows) if r.action == pod_pages.ACT_SHELF)
-    start_i = next(i for i, r in enumerate(homeset.rows) if r.action == pod_pages.ACT_STARTUP)
-    homeset_i = next(i for i, r in enumerate(pod_pages.CUSTOMIZE_PAGE.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.HOMESET_PAGE_INDEX)
-    expect([(r.label, r.action) for r in homeset.rows][1] == ('Recent Albums', pod_pages.ACT_SHELF) and pod_pages.ACT_SHELF in pod_pages.SWITCH_ACTIONS and pod_pages.ACT_SHELF == 16,
-           'the Home Screen page has a switch row "Recent Albums", the second one')
+    homeset_i = next(i for i, r in enumerate(pod_pages.SETTINGS_PAGE.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.HOMESET_PAGE_INDEX)
+    expect([(r.label, r.action) for r in homeset.rows][0] == ('Recent Albums', pod_pages.ACT_SHELF) and pod_pages.ACT_SHELF in pod_pages.SWITCH_ACTIONS and pod_pages.ACT_SHELF == 16,
+           'the Home Screen page has a switch row "Recent Albums", the first one')
     expect('Recent Albums' in pod_i18n.TEXT and all(pod_i18n.TEXT['Recent Albums'][l] for l in pod_i18n.LOCALES) and len(pod_i18n.TEXT['Recent Albums']) == 13,
            'with a text in all 13 languages (the shorter wording the Spanish and Ukrainian rows need)')
     hs = awtk_ui.parse(open(os.path.join(raw, 'ui', homeset.key + '.bin'), 'rb').read())
@@ -1033,10 +1032,10 @@ def refresh_and_fallback_tests(ctx):
     expect(row.find(f'pod_switch{shelf_i}') is not None and any(c.get('tr_text') == 'Recent Albums' for c in row.walk()), 'its asset row is a switch row with the label')
     def settings_machine(content=None, daily=None):
         sm = Machine()
-        for n in ['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(homeset.rows))] + [f'pod_switch{i}' for i in range(len(homeset.rows))]: sm.widget(n)
+        for n in ['btn_return', 'btn_backtoplayer', 'pod_note1'] + [f'pod_row{i}' for i in range(len(homeset.rows))] + [f'pod_switch{i}' for i in range(len(homeset.rows))]: sm.widget(n)
         if content is not None: sm.fs[SHELF_SET] = content
         if daily is not None: sm.fs['/mnt/data/m1plus-daily'] = daily   # (patch/home.h DAILY_SET_FILE)
-        sm.call(PSYMS['on_row'], a0=PSYMS[f'pod_rows_{pod_pages.CUSTOMIZE_PAGE_INDEX}'] + 12 * homeset_i, count=3000000)
+        sm.call(PSYMS['on_row'], a0=PSYMS[f'pod_rows_{pod_pages.SETTINGS_PAGE_INDEX}'] + 12 * homeset_i, count=3000000)
         return sm
     def image_of(sm, i):
         got = [c[2] for c in sm.calls if c[0] == 'image_base_set_image' and c[1] == sm.widgets[f'pod_switch{i}']]
@@ -1053,21 +1052,18 @@ def refresh_and_fallback_tests(ctx):
     for content, on in ((b'0\n', 0), (b'0', 0), (b'1\n', 1), (b'x', 1), (b'', 1)):
         sm = settings_machine(content)
         expect(image_of(sm, shelf_i) == ('sset_on' if on else 'sset_off'), f'file {content!r}: the page opens with the switch {"on" if on else "off"}')
-    sm = settings_machine(); sm.click(f'pod_row{shelf_i}')
-    sm.click(f'pod_row{start_i}')
-    expect(sm.fs.get(SHELF_SET) == b'0\n' and image_of(sm, shelf_i) is None, 'tapping Boot to M1+ Music leaves this switch alone')
-    # Regenerate Daily Mix (patch/m1plus.c regen_show): dimmed (40 % opacity) and insensitive while no mix can be made; the Daily Mix switch updates it in place
+    # Regenerate Daily Mix (patch/m1plus.c regen_show): hidden (card, note and row) and insensitive while no mix can be made; the Daily Mix switch updates it in place
     regen_i = next(i for i, r in enumerate(homeset.rows) if r.action == pod_pages.ACT_REGEN)
     daily_i = next(i for i, r in enumerate(homeset.rows) if r.action == pod_pages.ACT_DAILY)
-    regen_state = lambda sm: (sm.props.get((sm.widgets[f'pod_row{regen_i}'], 'opacity')), sm.props.get((sm.widgets[f'pod_row{regen_i}'], 'sensitive')))
+    regen_state = lambda sm: tuple(sm.props.get((sm.widgets[n], k)) for n, k in ((f'pod_row{regen_i}', 'visible'), (f'pod_row{regen_i}', 'sensitive'), ('pod_note1', 'visible'), ('pod_note1', 'sensitive')))
     sm = settings_machine()
-    expect(regen_state(sm) == (255, 1), 'the Daily Mix switch on: Regenerate Daily Mix opens at full opacity and tappable')
+    expect(regen_state(sm) == (1, 1, 1, 0), 'the Daily Mix switch on: Regenerate Daily Mix and its note are shown (the note never takes a touch) and the row tappable')
     sm.click(f'pod_row{daily_i}')
-    expect(regen_state(sm) == (102, 0), 'the switch tapped off: Regenerate is dimmed and insensitive at once')
+    expect(regen_state(sm) == (0, 0, 0, 0), 'the switch tapped off: the row and its note are hidden and the row insensitive at once')
     sm.click(f'pod_row{daily_i}')
-    expect(regen_state(sm) == (255, 1), '... and back when it is on again')
+    expect(regen_state(sm) == (1, 1, 1, 0), '... and back when it is on again')
     sm = settings_machine(daily=b'0\n')
-    expect(regen_state(sm) == (102, 0), 'the page opened with the switch off: Regenerate is dimmed')
+    expect(regen_state(sm) == (0, 0, 0, 0), 'the page opened with the switch off: Regenerate and its note are hidden')
 
     # ------------------------------------------------------------------ every failure falls back to the plain menu
     plain_ys = ST(None).row_ys()

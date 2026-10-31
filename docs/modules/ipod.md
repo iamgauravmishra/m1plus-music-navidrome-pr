@@ -140,7 +140,7 @@ The main menu's **Settings** row pushes `K_SETTINGS`, a static list of three row
 Shuffle and Repeat are **one stock setting** (the play mode 0 List play, 1 Repeat one, 2 Shuffle, 3 Repeat all; shuffle mode has no repeat of its own), so turning Repeat on turns Shuffle off and the
 reverse; Repeat reads `Off` in Shuffle mode. The iPod's Shuffle `Albums` value is not offered (stock has no such mode: Shuffle Albums is a queue order, `patch/shuffle.c`). No backlight or other settings:
 their setters are not pinned in this payload. Keys: `Shuffle`, `Songs`, `Off`, `Repeat`, `One`, `All` (our keys, 13 languages, `tools/pod_i18n.py`); the row title is stock `cdrippersettings`.
-About and Customize are absent. Appearance, Light and Dark have translations in all 13 languages.
+About and Settings are absent. Appearance, Light and Dark have translations in all 13 languages.
 
 ## Appearance (`patch/ipod_theme.c`)
 
@@ -164,7 +164,7 @@ The renderer records a bounded display model (192 commands and 2,048 owned text 
 
 ## Entry and exit
 
-- Entry: `ACT_IPOD` (22), the menu item id 19 (`pod_pages.ITEMS`, after Customize, saved as `k`, hidden by default: Customize > Main Menu shows it, the Extras page lists it (Play group)
+- Entry: `ACT_IPOD` (22), the menu item id 19 (`pod_pages.ITEMS`, after Settings, saved as `k`, hidden by default: Settings > Main Menu shows it, the Extras page lists it (Play group)
   with the default menu's items). The label is the name `Pod`, a plain text in every language (like `M1+ Music`); no translation key.
 - Exit: MENU on the main menu (`navigator_back`; the stock window under it and its status bar come back). There is no hardware back key in this payload (the stock key handler
   `on_wm_keyup_fun` handles the media keys; nothing here changes it).
@@ -245,7 +245,7 @@ Pinned in `tools/pod.py`: `prev_quick_click` `0x4cccb0` (the twin of `next_quick
 - No sound (above). No rotation action on Now Playing (above), no scrubber. No cover flip in Cover Flow (the centre opens the tracks as a list). No search, no Genres,
   Composers or Folders, no Shuffle Albums value. The cover pane does not follow the row and shows only covers already in the Cover Flow cache (from its 168 px file, upscaled to 264). Not built from the reference: the volume overlay and wheel volume (no safe stock volume read-back, "Now Playing: the iPod's cycle, why not"), the progress / scrubber cycle, held next / previous seeking (`seek_time` blocks the UI thread; `mclSetSeek` alone is unpinned and untested), and the Cover Flow to Now Playing cover flip (80 to 5 degrees: the Cover Flow renderer has no cheap rotation of a single cover).
 - No clock in the title bar (the iPod's has none); long translated labels are cut with an ellipsis to the 130 px root text box (Spanish, Russian and Ukrainian Shuffle Songs; the Settings rows French Shuffle and Appearance, German Repeat and Appearance, Polish Repeat, Spanish Shuffle and Repeat values, Russian Shuffle and Appearance, Ukrainian Shuffle: `test/pod/ipod.py` i18n_tests lists them).
-- Albums are in the stock query's order, not Settings > Cover Flow > Sort.
+- Albums are in the stock query's order, not Settings > Library > Album Order.
 - The play queue is the stock one: `start_player` copies the shown list; a Songs list of thousands of rows is copied once per play, as the Songs page does.
 
 ## Device checklist
@@ -267,6 +267,6 @@ Pinned in `tools/pod.py`: `prev_quick_click` `0x4cccb0` (the twin of `next_quick
   cached album, MENU back: it changes and stays), else the random rotation, new after MENU back to the main menu; the wheel and music stay responsive; with no cover cache (never opened Cover Flow / Albums)
   the placeholder, still; the pane stops moving on every other level (the timer slows to 500 ms) and in a message box.
 - Shuffle Songs: playback starts at a random song with shuffle on, the iPod's Now Playing shows it, Next picks another random song. Settings: Shuffle and Repeat values change on the centre press and agree with
-  Customize > Playback; MENU returns to the root.
+  Settings > Playback; MENU returns to the root.
 - Idle: nothing queued shows `Not Playing`; the placeholder in Now Playing; sleep / wake and the lock screen do not leave the page broken; a language change re-draws in the new language.
 - Music keeps playing (no glitch) while the wheel turns; the page leaves no timer (go to Home and back).

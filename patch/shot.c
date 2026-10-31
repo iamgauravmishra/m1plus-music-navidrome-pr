@@ -2,7 +2,7 @@
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
- * A tap on the Screenshot row (Customize > Developer) asks in the stock confirm dialog; Yes starts a payload-owned countdown (SHOT_SECONDS, one stock timer, so the user can
+ * A tap on the Screenshot row (Settings > Developer) asks in the stock confirm dialog; Yes starts a payload-owned countdown (SHOT_SECONDS, one stock timer, so the user can
  * leave the page and go where the picture should be), shows a camera in the status bar while it runs, and then
  * writes what is on the panel to /mnt/mmc/screenshots/shot-NNNN.bmp (24 bit, bottom-up). No stock function is
  * hooked and nothing runs unless that row was tapped: no thread, no paint hook, no main loop work; the timers exist only

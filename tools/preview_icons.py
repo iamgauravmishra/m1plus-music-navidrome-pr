@@ -182,7 +182,7 @@ def pod_page(s, key, tree_rows=8, home=False, first=0, title=None, icon=None, or
         title = title or s.shown(lt)
         s.text(im, 36, 25, s.clip(title, title_px(s.tree), lt.w), title_px(s.tree))
         im.alpha_composite(s.img('return'), (14, 14))
-        tog = next((w for w in root.walk() if w.name in ('btn_artisttype', 'btn_customize')), None)
+        tog = next((w for w in root.walk() if w.name in ('btn_artisttype', 'btn_settings')), None)
         if tog and icon != '':   # a capsule piece on the 214 slot: Now Playing is its right cap (ah_nav_play, the whole 60 x 50 button), else the stock glyph
             np_ = s.img('ah_nav_play'); im.alpha_composite(np_, (260 + (60 - np_.width) // 2, (50 - np_.height) // 2))
         else: im.alpha_composite(s.img('back_to_player'), (278, 13))
@@ -436,7 +436,7 @@ def main():
     before, after, out = sys.argv[1:4]
     sides = [('stock', Side(before, False)), ('release (Tabler Icons)', Side(after, True))]
     sections = [('Home page 1', lambda s: home(s, 0)), ('Home page 2', lambda s: home(s, 1)), ('Home page 3 (after: with the M1+ Music icon)', lambda s: home(s, 2)),
-                ('M1+ Music menu (opened from the grid icon)', lambda s: pod_page(s, 'm1plus_menu', 8)), ('M1+ Music > Customize page', lambda s: pod_page(s, 'm1plus_customize', 7)),
+                ('M1+ Music menu (opened from the grid icon)', lambda s: pod_page(s, 'm1plus_menu', 8)), ('M1+ Music > Extras page', lambda s: pod_page(s, 'm1plus_extras', 7)),
                 ('M1+ Music > Shuffle page', lambda s: pod_page(s, 'm1plus_shuffle', 3)),
                 ('Settings icons (46)', settings), ('Pull-down', pulldown), ('List placeholders', lists)]
     pad = 14

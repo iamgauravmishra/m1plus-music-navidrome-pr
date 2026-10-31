@@ -12,7 +12,7 @@ official V2.1 firmware.
 - **Now Playing:** cover-colour backgrounds, rounded artwork and remaining time.
 - **Extras:** album/folder shuffle, local podcasts, a virtual iPod and Cassette Mode.
 - **Appearance:** a translucent lock screen, minimal theme, Lucide icons and Inter + Source Han Sans fonts.
-- **Customize:** choose menu items, startup behaviour, Cover Flow orientation and album order.
+- **Settings:** choose menu items, startup behaviour, Cover Flow orientation and album order.
 - **Languages:** the added UI follows the player's language setting, with 13 translations.
 
 Stock settings and Tidal remain accessible. See the [user guide](docs/guide.md) for controls and options.
@@ -25,7 +25,7 @@ Follow the [installation guide](docs/install.md) for preparation, updates and re
 <details>
 <summary>Release status</summary>
 
-Status: the release is V2.1pM (pL + Playlists > New playlist on our own keyboard, a Done action key; test build zCQBIAAAB flashed). Milestones, hardware results and lessons:
+Status: the release is V2.1pN (pM + Settings: Customize redesigned as iOS-style grouped cards, stock pages linked with their values, our own About; test build zWZKWAAAC flashed). Milestones, hardware results and lessons:
 `docs/history.md`; per-tag details are in git.
 
 </details>

@@ -152,7 +152,7 @@ the rows are at 52 n, the shelf right below them at the height its albums need, 
 snapshot's relayout and the bar coming and going change nothing. `test/pod/pulldown.py` section 6 (the spacer alone) is unchanged.
 Scrolled to the end with the bar up, the shelf's last line ends exactly `MB_GAP` above the pill (`MB_PAD` 64 below the shelf, the pill at list y 374: tested).
 
-## The setting (Customize > Home Screen > Recent Albums)
+## The setting (Settings > Home Screen > Recent Albums)
 
 A switch row (`ACT_SHELF` 16, `pod_pages.HOMESET_PAGE` row 1, the stock on/off image `sset_on` / `sset_off`), **on by default**, saved like the other switches: `/mnt/data/m1plus-shelf`, `0\n` off,
 `1\n` on, no file or anything but `0` = on (`recent_setting`, `recent_toggle`: `home_write_atomic`, a failed save changes neither the file nor the image). The menu reads it at start and at every to-foreground,

@@ -3,7 +3,7 @@
 Code: `patch/keyboard.c`, `patch/keyboard.h` (API and geometry constants). Asset: `tools/pod_ui.py` `build_keyboard_page` (`ui/m1plus_keyboard.bin`), geometry in `tools/pod_keyboard.py`,
 glyphs in `tools/mod_icons.py` (`KEYBOARD_IMAGES`, `qk_*`). Tests: `test/pod/keyboard.py` (sections: base, name, gap, asset, setting, zh, strip, hit, lang_gap), `test/pod/pinyin.py` (the engine on its own).
 Preview: `tools/preview_keyboard.py`. No hook, no new import, no thread; one timer only while the delete key is held. Built for podcast search (iTunes search itself is not part of it); its first consumer is the Playlists page's New playlist (below); stock's T9 popup
-(`ui/user_keyboard.bin`, pages laid out 640 px wide in a 320 px popup) is not used. With Customize > Keyboards > Chinese (Pinyin) on, it also types Chinese (below).
+(`ui/user_keyboard.bin`, pages laid out 640 px wide in a 320 px popup) is not used. With Settings > Keyboards > Chinese (Pinyin) on, it also types Chinese (below).
 
 ## What it is
 
@@ -42,7 +42,7 @@ delete and Search. Geometry stays; the pad's own events resolve the rest:
   inside a key's rectangle is never resolved by the pad, and if the pad resolved a touch that the key also got (the two models disagree at an edge pixel) the key wins and the pad's resolution is dropped.
 * The log marks it: `hit=Q via=gap gap=1 off=15,0` (gap: the larger of the two axis distances, px; off: from the key's centre). A touch inside a key logs `hit=W off=0,0` as before.
 
-## Keyboards (Customize > Keyboards) and the language key
+## Keyboards (Settings > Keyboards) and the language key
 
 The setting is two switch rows, English (always on, not switchable) and Chinese (Pinyin) (default off, `/mnt/data/m1plus-kbzh`): [settings](settings.md) "Keyboards". `keyboard_open` reads it.
 
@@ -51,7 +51,7 @@ The setting is two switch rows, English (always on, not switchable) and Chinese 
   `中` while on English, `EN` while on Chinese (`LANG_TAGS`; characters, not translated). If `gpinyin.dat` is not there (`access`), or the engine will not open when the key is tapped, **the key goes away**
   (`kb.layers = 1`, space wide again), the failure is logged (`KB_LOG`: `zh dictionary missing`, `zh engine did not open`) and English stays. Nothing crashes.
 * The layer the last keyboard ended on is remembered **for the session** (`kb_memo`, a scratch word outside the page's state): the next keyboard starts on it (and opens the engine at once). Turning the
-  setting off in Customize forgets it.
+  setting off in Settings forgets it.
 
 ## Layers and the Chinese (Pinyin) layer
 
@@ -106,7 +106,7 @@ and `123 / ABC / #+=`, not translated). Callers need nothing for Chinese: the se
 
 ## The Developer row
 
-Customize > Developer > **Keyboard** (`ACT_KEYBOARD` 26, Lucide `keyboard`) calls `keyboard_test`: the keyboard with the hint "Type here" and `KB_LOG`; Search shows the typed text in a toast (Chinese text too:
+Settings > Developer > **Keyboard** (`ACT_KEYBOARD` 26, Lucide `keyboard`) calls `keyboard_test`: the keyboard with the hint "Type here" and `KB_LOG`; Search shows the typed text in a toast (Chinese text too:
 the message box and the font cover it, device check below). The Pinyin Probe row that answered whether the engine can be used is gone; its findings are in "Pinyin engine" below.
 Every touch on the pad is appended to `/mnt/mmc/m1plus-probe.log` (the Network Probe's log, no fsync):
 
@@ -131,7 +131,7 @@ press / lift / abort / background behaviour, delete from the gap above it, a tou
 engine** on the real dictionary, `pinyin.py`'s `Engine`): the language key present or absent and where space is, the dictionary missing, an engine that will not open (scripted), stock's dead object, an
 engine somebody else opened, open and close with the page, the layer kept for the session. **Chinese layer**: nihao (candidates, pinyin, geometry), delete, space, predictions and their chain, a long sentence
 in steps against fresh engine searches, jianpin, the separator, Search with pending / unreadable / mixed text, Back, clear, repeat, the limits, a glyph in the font for every candidate of common inputs.
-**Strip**: the highlight, tap, scroll, the ring of widgets, scrolling to the 100th candidate and tapping one far along, and demo's hit test on the strip. `Customize > Keyboards` is in `test/pod/menu.py`.
+**Strip**: the highlight, tap, scroll, the ring of widgets, scrolling to the 100th candidate and tapping one far along, and demo's hit test on the strip. `Settings > Keyboards` is in `test/pod/menu.py`.
 `uv run python -I tools/preview_keyboard.py work/mod-release out/preview/keyboard.png` draws the tree's real rectangles, colours and glyphs for all pages, the strip states (the candidate lists are the real
 engine's answers) and the Keyboards page.
 

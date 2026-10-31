@@ -6,8 +6,8 @@
 WORKDIR is a built tree (work/mod-release): the font, the status bar art, stock's keyboard icons and ui/m1plus_keyboard.bin come from it. The QWERTY panels draw the real
 asset: the field, the pad and every key's rectangle, colour, label and glyph are read from the tree (the lowercase page; the other pages use tools/pod_keyboard.py's layout,
 which test/pod/keyboard.py holds the payload to), the text and caret as patch/keyboard.c places them (the stb width, a text too wide shows its end after an ellipsis).
-Panels (the second block: Customize > Keyboards with Chinese (Pinyin) on): the language key on the English layer, the Chinese layer typing nihao (with a candidate held), after a commit with the predictions,
-a long sentence with its first word taken, the row scrolled, the 123 page with the key, Customize and its Keyboards page. The candidate lists are the real engine's answers (test/pod/pinyin.py).
+Panels (the second block: Settings > Keyboards with Chinese (Pinyin) on): the language key on the English layer, the Chinese layer typing nihao (with a candidate held), after a commit with the predictions,
+a long sentence with its first word taken, the row scrolled, the 123 page with the key, Settings and its Keyboards page. The candidate lists are the real engine's answers (test/pod/pinyin.py).
 Stock ui/user_keyboard.bin's letter page at the tree's own positions (its pages are laid out 640 px wide in a 320 px popup; drawn clipped, as an unscaled AWTK would
 show it), then the empty field (shift on), typing with a key held, the 123 page, the #+= page, a long text, and the results after Search with the keyboard gone.
 """
@@ -16,7 +16,7 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_ui
 import pod_keyboard as PK
-import preview_icons as PI
+import preview_icons as PI, preview_settings as PS
 
 W, H, SS, BAR = 320, 480, 4, 30
 GREY = (0x8E, 0x8E, 0x93); WHITE = (255, 255, 255)
@@ -206,11 +206,11 @@ def stock_t9(s, pg, text):
 
 
 def keyboards_page(s, zh):
-    """Customize > Keyboards: English (always on, the row dimmed to 60 % by the payload), Chinese (Pinyin) a switch."""
-    im = PI.pod_page(s, 'm1plus_keyboards', 2, switches={'pod_switch0': True, 'pod_switch1': zh}).convert('RGBA')
-    row = im.crop((0, 50, W, 50 + 52))
+    """Settings > Keyboards: English (always on, the row dimmed to 60 % by the payload), Chinese (Pinyin) a switch."""
+    im = PS.draw_page(s, 'm1plus_keyboards', state={'switches': {'pod_switch0': True, 'pod_switch1': zh}}).convert('RGBA')
+    row = im.crop((10, 60, 310, 60 + 52))
     dim = Image.blend(Image.new('RGBA', row.size, (0, 0, 0, 255)), row, 153 / 255)
-    im.paste(dim, (0, 50))
+    im.paste(dim, (10, 60))
     return im
 
 
@@ -238,9 +238,9 @@ def main():
               ('woxihuantingboke, the first word taken', screen(s, pg, '我', 'abc', lang=True, zh=True, strip=('xi huan ting bo ke', rest))),
               ('Row scrolled 80 px', screen(s, pg, '', 'abc', lang=True, zh=True, strip=('ni hao', nihao, None, 80))),
               ('Chinese layer, 123 page (the key stays)', screen(s, pg, '你好', '123', lang=True, zh=True)),
-              ('Customize (9 rows, scrolls)', PI.pod_page(s, 'm1plus_customize', 9).convert('RGBA')),
-              ('Customize > Keyboards, Chinese off', keyboards_page(s, False)),
-              ('Customize > Keyboards, Chinese on', keyboards_page(s, True))]
+              ('Settings', PS.draw_page(s, 'm1plus_settings').convert('RGBA')),
+              ('Settings > Keyboards, Chinese off', keyboards_page(s, False)),
+              ('Settings > Keyboards, Chinese on', keyboards_page(s, True))]
     pad, lab = 12, 20
     sheet = Image.new('RGB', (len(panels) * (W + pad) + pad, H + lab + 2 * pad), (0x2A, 0x2A, 0x2A)); d = ImageDraw.Draw(sheet)
     for i, (title, im) in enumerate(panels):

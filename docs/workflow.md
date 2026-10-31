@@ -119,7 +119,7 @@ Follow [Install](install.md) for card preparation, update confirmation and resto
 [device checks](modules/device-checks.md) and the feature's module doc to validate a build. Record the tag,
 pass/fail/untested status and captures. Emulation does not certify hardware timing or appearance.
 
-**Customize → Developer → Screenshot** asks first, then captures after five seconds.
+**Settings → Developer → Screenshot** asks first, then captures after five seconds.
 See [capture details](modules/screenshot.md). With the card mounted:
 
 ```sh

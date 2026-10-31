@@ -912,29 +912,33 @@ def theme_tests(ctx):
     for t in THEMES:
         f = tape_art.TEXT['model']; w = sum(font.step(font.glyph(c), f['px']) for c in tape_art.THEMES[t]['model']) + 1
         expect(f['x'] + w <= tape_art.ARROW_AT[0] - 2, f'{t}: the model name {tape_art.THEMES[t]["model"]!r} is {w} px, it ends before the arrow at x {tape_art.ARROW_AT[0]}')
-    # the theme is read once, at open: a change in Customize shows the next time
+    # the theme is read once, at open: a change in Settings shows the next time
     m = machine(font=font, status=3, theme=1); m.open(); m.timers = []
     m.fs[THEME_FILE] = b'2\n'; m.loads.clear(); settle(m)
     expect(not any('metal' in u for u in m.loads), 'a theme saved while the page is open is not loaded under it')
 
 
 def setting_tests(ctx):
-    """Customize > Cassette Mode > Cassette Theme (m1plus_tapeset): a value row, Normal by default, a tap cycles Normal, Chrome, Metal; saved atomically; read when the Tape page opens."""
+    """Settings > Now Playing > Theme (m1plus_npset) and its picker Cassette Theme (m1plus_tapetheme): the value row shows Normal, Chrome or Metal and opens the picker; a tap on a picker row saves
+    the theme atomically and moves the check; the Tape page reads the theme when it opens."""
     expect, P = ctx.expect, pod_pages
-    C = P.CASSETTE_PAGE
-    rows_s = PSYMS[f'pod_rows_{P.CUSTOMIZE_PAGE_INDEX}']
-    ct_i = next(i for i, r in enumerate(P.CUSTOMIZE_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.CASSETTE_PAGE_INDEX)
-    expect(P.CUSTOMIZE_PAGE.rows[ct_i].label == 'Cassette Mode' and C.title == 'Cassette Mode' and [(r.label, r.action) for r in C.rows] == [('Cassette Theme', P.ACT_CTHEME)]
-           and P.ACT_CTHEME in P.VALUE_ACTIONS and P.CTHEME_VALUES == ('Normal', 'Chrome', 'Metal') and C.key == 'm1plus_tapeset', 'Customize has the Cassette Mode row (after Cover Flow); its page has the Cassette Theme value row')
-    expect(P.CTHEME_VALUES == tuple(n.capitalize() for n in THEMES), 'the values are the themes in the saved order')
+    C, T = P.NPSET_PAGE, P.THEME_PAGE
+    rows_s = PSYMS[f'pod_rows_{P.SETTINGS_PAGE_INDEX}']
+    rows_n = PSYMS[f'pod_rows_{P.NPSET_PAGE_INDEX}']
+    np_i = next(i for i, r in enumerate(P.SETTINGS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.NPSET_PAGE_INDEX)
+    expect(P.SETTINGS_PAGE.rows[np_i].label == 'Now Playing' and C.title == 'Now Playing' and [(r.label, r.action, r.arg) for r in C.rows] == [('Theme', P.ACT_CTHEME, P.THEME_PAGE_INDEX)]
+           and P.ACT_CTHEME in P.VALUE_ACTIONS and P.CTHEME_VALUES == ('Normal', 'Chrome', 'Metal') and C.key == 'm1plus_npset' and any(isinstance(x, P.Hdr) and x.text == 'Cassette Mode' for x in C.layout),
+           'Settings has the Now Playing row; its page has a Cassette Mode header over the Theme value row')
+    expect([(r.label, r.action, r.arg) for r in T.rows] == [('Normal', P.ACT_THEMESET, 0), ('Chrome', P.ACT_THEMESET, 1), ('Metal', P.ACT_THEMESET, 2)] and T.title == 'Cassette Theme'
+           and T.key == 'm1plus_tapetheme' and P.CTHEME_VALUES == tuple(n.capitalize() for n in THEMES), 'the picker: Normal, Chrome and Metal in the saved order, titled Cassette Theme')
     val = 'pod_value0'
 
     def open_page(data=None, language=None):
         m = Machine()
-        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(P.CUSTOMIZE_PAGE.rows))] + ['pod_row0', val])}
+        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(P.SETTINGS_PAGE.rows))] + [val])}
         if data is not None: m.fs[THEME_FILE] = data
         if language: m.set_language(language)
-        m.call(PSYMS['on_row'], a0=rows_s + 12 * ct_i, count=3000000)
+        m.call(PSYMS['on_row'], a0=rows_s + 12 * np_i, count=3000000)
         return m
 
     def label(m):
@@ -942,39 +946,57 @@ def setting_tests(ctx):
         return keys[-1] if keys else None
 
     m = open_page()
-    expect(('window_open', C.key) in m.calls and ('widget_on', m.widgets['pod_row0'], O['EVT_CLICK']) in [c[:3] for c in m.calls], 'the Cassette Mode row opens the page and binds its row')
+    expect(('window_open', C.key) in m.calls and ('widget_on', m.widgets['pod_row0'], O['EVT_CLICK']) in [c[:3] for c in m.calls], 'the Now Playing row opens the page and binds its row')
     expect(label(m) == 'Normal' and THEME_FILE not in m.fs, 'with nothing saved the theme is Normal, and reading writes nothing')
     for data, want in ((b'1\n', 'Chrome'), (b'1', 'Chrome'), (b'2\n', 'Metal'), (b'2', 'Metal'), (b'0\n', 'Normal'), (b'0', 'Normal'),
                        (b'3\n', 'Normal'), (b'', 'Normal'), (b'x', 'Normal'), (b'11', 'Normal'), (b'1\n\n', 'Normal'), (b'12', 'Normal'), (b' 1\n', 'Normal'), (b'\x001', 'Normal'), (b'-1', 'Normal')):
         expect(label(open_page(data)) == want, f'saved {data!r}: {want}')
     m = open_page()
-    for want_file, want in ((b'1\n', 'Chrome'), (b'2\n', 'Metal'), (b'0\n', 'Normal'), (b'1\n', 'Chrome')):
-        m.click('pod_row0')
-        expect(m.fs.get(THEME_FILE) == want_file and THEME_FILE + '.tmp' not in m.fs and ('rename', THEME_FILE + '.tmp', THEME_FILE) in m.calls and ('fsync', '/mnt/data') in m.calls and label(m) == want,
-               f'a tap: {want}, written atomically ({m.fs.get(THEME_FILE)!r})')
-    m = open_page(b'1\n'); m.fail.add(('write', THEME_FILE + '.tmp')); m.click('pod_row0')
-    expect(m.fs.get(THEME_FILE) == b'1\n' and label(m) is None and THEME_FILE + '.tmp' not in m.fs,
-           'a failed write changes neither the file nor the label')
-    m = open_page(b'2\n'); m.fail.add(('rename', THEME_FILE)); m.click('pod_row0')
-    expect(m.fs.get(THEME_FILE) == b'2\n' and label(m) is None, 'a failed rename changes neither')
+    m.click('pod_row0')
+    expect(('window_open', T.key) in m.calls and THEME_FILE not in m.fs, 'a tap on Theme opens the picker and saves nothing')
+
+    def open_pick(data=None):
+        m = Machine()
+        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(3)] + [f'pod_check{i}' for i in range(3)])}
+        if data is not None: m.fs[THEME_FILE] = data
+        m.call(PSYMS['on_row'], a0=rows_n, count=3000000)
+        return m
+
+    def shown(m, i):
+        v = [c[2] for c in m.calls if c[0] == 'widget_set_visible' and c[1] == m.widgets[f'pod_check{i}']]
+        return v[-1] if v else None
+
+    m = open_pick()
+    expect(('window_open', T.key) in m.calls and [shown(m, i) for i in range(3)] == [1, 0, 0], 'the picker opens with the check on Normal')
+    expect([[shown(open_pick(d), i) for i in range(3)] for d in (b'1\n', b'2\n', b'9')] == [[0, 1, 0], [0, 0, 1], [1, 0, 0]], 'a saved Chrome or Metal has the check; an invalid file is Normal')
+    m = open_pick()
+    for want_file, k in ((b'1\n', 1), (b'2\n', 2), (b'0\n', 0), (b'1\n', 1)):
+        m.click(f'pod_row{k}')
+        expect(m.fs.get(THEME_FILE) == want_file and THEME_FILE + '.tmp' not in m.fs and ('rename', THEME_FILE + '.tmp', THEME_FILE) in m.calls and ('fsync', '/mnt/data') in m.calls
+               and [shown(m, i) for i in range(3)] == [int(i == k) for i in range(3)], f'a tap on {T.rows[k].label}: written atomically ({m.fs.get(THEME_FILE)!r}), the check follows')
+    m = open_pick(b'1\n'); m.fail.add(('write', THEME_FILE + '.tmp')); m.click('pod_row2')
+    expect(m.fs.get(THEME_FILE) == b'1\n' and THEME_FILE + '.tmp' not in m.fs and not any(c[0] == 'widget_set_visible' for c in m.calls),
+           'a failed write changes neither the file nor the check')
+    m = open_pick(b'2\n'); m.fail.add(('rename', THEME_FILE)); m.click('pod_row0')
+    expect(m.fs.get(THEME_FILE) == b'2\n' and not any(c[0] == 'widget_set_visible' for c in m.calls), 'a failed rename changes neither')
     # the setting is what the Tape page opens with
     for data, t in ((None, 'normal'), (b'1\n', 'chrome'), (b'2\n', 'metal'), (b'7\n', 'normal'), (b'', 'normal')):
         mt = machine(font=real_font(), status=3)
         if data is not None: mt.fs[THEME_FILE] = data
         mt.open()
         expect(f'tape_shell_{t}' in mt.loads and sum(u.startswith('tape_shell_') for u in mt.loads) == 1, f'the Tape page opens with the {t} theme for a saved {data!r}')
-    # localisation: the row, the page title and the three values in every language
+    # localisation: the value in every language is set by key
     for loc in pod_i18n.ALL_TABLES:
-        T = tr_of(loc)
         for data, key in ((None, 'Normal'), (b'1\n', 'Chrome'), (b'2\n', 'Metal')):
-            m = open_page(data, loc)
-            texts = [c[2] for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] == m.widgets[val]]
-            expect(label(m) == key and texts[-1:] == [T(key)], f'{loc}: {key} is set by key and reads {T(key)!r}')
-    # the asset: the value label reads Normal until the payload sets it
-    tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets/default/raw/ui/m1plus_tapeset.bin'), 'rb').read())
+            expect(label(open_page(data, loc)) == key, f'{loc}: {key} is set by key')
+    # the assets: the value label reads Normal until the payload sets it; the picker has the three rows with a hidden check each and the note
+    tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets/default/raw/ui/m1plus_npset.bin'), 'rb').read())
     row, lab = tree.find('pod_row0'), tree.find('pod_value0')
-    expect(row is not None and lab is not None and (lab.get('tr_text') or lab.get('text')) == 'Normal' and row.find('pod_icon') is not None and tree.find('label_title').get('tr_text') == 'Cassette Mode',
-           'the page asset: a title Cassette Mode, one row with the cassette glyph and its value label')
+    expect(row is not None and lab is not None and (lab.get('tr_text') or lab.get('text')) == 'Normal' and row.find('pod_icon') is not None and tree.find('label_title').get('tr_text') == 'Now Playing'
+           and tree.find('pod_sec0_t').get('tr_text') == 'Cassette Mode', 'the page asset: a title Now Playing, the Cassette Mode header, one row with the cassette glyph and its value label')
+    tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets/default/raw/ui/m1plus_tapetheme.bin'), 'rb').read())
+    expect(all(tree.find(f'pod_check{i}').get('visible') == 'false' and tree.find(f'pod_check{i}').get('sensitive') == 'false' and tree.find(f'pod_row{i}').find('pod_icon') is None for i in range(3))
+           and tree.find('pod_note0_t').get('tr_text') == 'Applies the next time Cassette Mode opens.', 'the picker asset: three rows without a glyph, a hidden insensitive check each, the note')
 
 
 def symmetry_tests(ctx):

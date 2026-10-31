@@ -137,16 +137,16 @@ def run(ctx):
            'the field indexes are those of linux/fb.h (fb_var_screeninfo 160 bytes, fb_fix_screeninfo 68; stock reads bpp @0x68, red @0x70, blue @0x88 of its copy)')
     expect(DEFS['SHOT_SECONDS'] == 5 and tick_ms == 1000 and settle_ms >= 50 and DEFS['SHOT_MAX_NUM'] == 9999, '5 s in 1 s ticks, a settle of at least three frames, numbers up to 9999')
 
-    # 2. The Developer row: the only row of Customize > Developer, bound to ACT_SHOT; a tap asks first.
+    # 2. The Developer row: the only row of Settings > Developer, bound to ACT_SHOT; a tap asks first.
     S = P.DEVELOPER_PAGE
-    item = 0
-    expect(S.key == 'm1plus_developer' and [r.label for r in S.rows] == ['Screenshot', 'Network Probe', 'Keyboard'] and S.rows[item].action == P.ACT_SHOT == 14 and P.PAGES[P.DEVELOPER_PAGE_INDEX] is S,
-           'Screenshot is the first row of the Developer page (Network Probe the second)')
+    item = 2
+    expect(S.key == 'm1plus_developer' and [r.label for r in S.rows] == ['Boot to M1+ Music', 'Open Shanling Home', 'Screenshot', 'Network Probe', 'Keyboard'] and S.rows[item].action == P.ACT_SHOT == 14 and P.PAGES[P.DEVELOPER_PAGE_INDEX] is S,
+           'Screenshot is the third row of the Developer page (under Startup; Network Probe next)')
     expect(not [r for page in P.PAGES if page is not S for r in page.rows if r.action == P.ACT_SHOT],
            'no other page has a Screenshot row (menu, Extras and Main Menu page have none)')
     rows_s = PSYMS[f'pod_rows_{P.DEVELOPER_PAGE_INDEX}']
     m = shot_machine()
-    expect((m.read_cstr(m.word(rows_s + 12 * item)), m.word(rows_s + 12 * item + 4)) == ('pod_row0', P.ACT_SHOT), 'the payload row table binds pod_row0 of the Developer page to ACT_SHOT')
+    expect((m.read_cstr(m.word(rows_s + 12 * item)), m.word(rows_s + 12 * item + 4)) == ('pod_row2', P.ACT_SHOT), 'the payload row table binds pod_row2 of the Developer page to ACT_SHOT')
     m.call(PSYMS['on_row'], a0=rows_s + 12 * item)
     expect([c[1:] for c in m.calls if c[0] == 'confirm'] == [(ASK, O['CONFIRM_KIND_WRAP'])] and ('timer_add', TICK, tick_ms) in m.calls
            and 'toast' not in m.names() and 'window_open' not in m.names() and 'stock_resume' not in m.names(),
@@ -155,8 +155,8 @@ def run(ctx):
     tree = awtk_ui.parse(open(os.path.join(ui, 'm1plus_developer.bin'), 'rb').read())
     row = tree.find(f'pod_row{item}')
     expect(row is not None and pod_i18n.shown_english(next(c for c in row.children if c.type == 'hscroll_label')) == 'Screenshot'
-           and next(c for c in row.children if c.name == 'pod_icon').get('image') == 'pod_ic_screenshot', 'the Developer row reads Screenshot, with the camera glyph')
-    for key in ('m1plus_extras', 'm1plus_menu', 'm1plus_mainmenu', 'm1plus_customize'):
+           and next(c for c in row.children if c.name == 'pod_icon').get('image') == 'pod_ci_camera', 'the Developer row reads Screenshot, with the camera glyph')
+    for key in ('m1plus_extras', 'm1plus_menu', 'm1plus_mainmenu', 'm1plus_settings'):
         t = awtk_ui.parse(open(os.path.join(ui, key + '.bin'), 'rb').read())
         expect(not [w for w in t.walk() if w.type == 'hscroll_label' and pod_i18n.shown_english(w) == 'Screenshot'],
                f'{key} has no Screenshot row')

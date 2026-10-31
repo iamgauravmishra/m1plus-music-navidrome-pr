@@ -6,7 +6,7 @@ release once the answers are in (the worker design, the CA bundle and the guards
 
 ## What it is
 
-**Customize > Developer > Network Probe** (`ACT_NETPROBE` 25, Lucide `globe`). A tap asks in the stock confirm dialog; Yes makes one `calloc`ed context, calls `curl_global_init(ALL)` and
+**Settings > Developer > Network Probe** (`ACT_NETPROBE` 25, Lucide `globe`). A tap asks in the stock confirm dialog; Yes makes one `calloc`ed context, calls `curl_global_init(ALL)` and
 `get_wifisignal()` (both on the UI thread), then starts **one detached pthread** (`probe_main`) and returns. The thread writes one line per fact to **`/mnt/mmc/m1plus-probe.log`** (appended, `fsync`ed
 per line, each line `[epoch +seconds]`) and frees its context when done. A tap while it runs only toasts "Network probe is running". The kill switch is checked at the tap; no card = "Storage unavailable".
 No hook, nothing at boot, in the main loop or at paint; the UI is never touched from the thread. **No new import**: only what demo already has (`curl_easy_*`, `curl_global_init`, `popen`, `pclose`,

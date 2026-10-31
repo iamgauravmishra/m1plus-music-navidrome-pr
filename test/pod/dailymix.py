@@ -278,10 +278,10 @@ def run(ctx):
     missing = {c: l for l in D.LOCALES for k in D.TEXT for c in D.TEXT[k][l] if c not in ' %s' and probe.box(c) is None}
     expect(not missing, f'every character of the texts has ink in the font ({missing})')
     homeset = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1plus_homeset.bin'), 'rb').read())
-    rows = homeset.find('pod_scrollview').children
+    rows = [w for w in homeset.find('pod_scrollview').children if w.type == 'list_item']
     lab_w = lambda r: next(w for w in r.children if w.type == 'hscroll_label').w
-    expect([r.name for r in rows] == [f'pod_row{i}' for i in range(5)] and lab_w(rows[2]) == lab_w(rows[1]), 'Customize > Home Screen has five rows; the Daily Mix switch row has the Recent Albums row\'s label box')
-    sw_room, act_room = lab_w(rows[2]), lab_w(rows[3])
+    expect([r.name for r in rows] == [f'pod_row{i}' for i in range(3)] and lab_w(rows[1]) == lab_w(rows[0]), 'Settings > Home Screen has three rows (Recent Albums, Daily Mix, Regenerate Daily Mix); the Daily Mix switch row has the Recent Albums row\'s label box')
+    sw_room, act_room = lab_w(rows[1]), lab_w(rows[2])
     over = []
     for l in D.LOCALES:
         if width(D.tr(l, 'Made for You'), D.DM_HEAD_PX) > D.DM_HEAD_W - 4: over.append((l, 'header'))
@@ -328,10 +328,10 @@ def run(ctx):
                f'{n}.png: the 48 px glass disc (pressed={pressed}) with the white play glyph in the middle, the committed file')
     expect(set(n for n in ('dm_disc', 'dm_disc_down') if os.path.exists(os.path.join(mod_icons.PNG, n + '.png'))) == {'dm_disc', 'dm_disc_down'}
            and {'dm_disc', 'dm_disc_down'} <= set(mod_icons.pod_names()), 'the disc images are committed and added by the build')
-    regen_row, daily_row = rows[3], rows[2]
-    expect(not [w for w in regen_row.children if w.type == 'image' and w.name != 'pod_icon'] and any(w.name == 'pod_switch2' for w in daily_row.children) and not any(w.name.startswith('pod_switch') for w in regen_row.children)
-           and [w for w in rows[4].children if w.type == 'image' and w.name != 'pod_icon'],
-           'Regenerate Daily Mix is an action row without a chevron or a switch; Daily Mix has the switch pod_switch2')
+    regen_row, daily_row = rows[2], rows[1]
+    expect(not [w for w in regen_row.children if w.type == 'image' and w.name != 'pod_icon'] and any(w.name == 'pod_switch1' for w in daily_row.children) and not any(w.name.startswith('pod_switch') for w in regen_row.children)
+           and homeset.find('pod_note1') is not None and homeset.find('pod_note1').get('sensitive') == 'false' and homeset.find('pod_row2').get('style:normal:bg_image') == 'pod_cd_single',
+           'Regenerate Daily Mix is an action row without a chevron or a switch, in a card of its own (a single piece) and note (pod_note1) the payload hides with it; Daily Mix has the switch pod_switch1')
     expect(pod_pages.ACT_DAILY in pod_pages.SWITCH_ACTIONS and pod_pages.ACT_REGEN in pod_pages.NO_CHEVRON_ACTIONS and pod_pages.ACT_REGEN not in pod_pages.SWITCH_ACTIONS,
            'the rows\' kinds in tools/pod_pages.py')
 
@@ -746,7 +746,7 @@ def run(ctx):
     mw.scroll_to(300); mw.relayout()
     hx, hy = mw.abs_pos(mw.daily)
     expect(mw.target(160, hy + 25)[-1] == 'pod_daily' and mw.target(20, hy - 20)[-1].startswith('pod_row') and mw.target(160, hy + 100)[-1] == 'pod_dm_card'
-           and mw.target(8, hy + 100)[-1] == 'pod_daily', 'the header and the 12 px margin are dead (the section takes them), the card is the card, the Customize row above is reachable')
+           and mw.target(8, hy + 100)[-1] == 'pod_daily', 'the header and the 12 px margin are dead (the section takes them), the card is the card, the Settings row above is reachable')
     mw.hide_all()
     expect(mw.target(160, hy + 100)[-1] != 'pod_dm_card' and mw.target(160, hy + 100)[-1] != 'pod_daily', 'hidden: no touch reaches the section or the card')
 
@@ -773,4 +773,4 @@ def run(ctx):
     sec_im = P.section_image(s, tones)
     expect(sec_im.size == (D.DM_W_VIEW, D.DM_SEC_H) and sec_im.getbbox() is not None, 'the section image')
     page = P.settings_page(s)
-    expect(page.size == (320, 50 + 5 * 52), 'Customize > Home Screen with the two new rows has five rows')
+    expect(page.size == (320, 450), 'Settings > Home Screen: the three rows in two cards, drawn from the built asset')

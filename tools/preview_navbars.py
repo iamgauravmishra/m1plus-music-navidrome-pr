@@ -179,13 +179,13 @@ def build_panels(work, new):
     sc = 150
     panels = [
         ('Menu (grid-icon instance)', page_panel(work, 'm1plus_menu.bin', SETTINGS)),
-        ('Customize', page_panel(work, 'm1plus_customize.bin', SETTINGS)),
+        ('Extras', page_panel(work, 'm1plus_extras.bin', SETTINGS)),
         ('Artists', page_panel(work, 'm1plus_artists.bin', ARTISTS)),
         ('Albums (grid page)', page_panel(work, 'm1plus_albums.bin', [])),
         ('Playlists', page_panel(work, 'm1plus_playlists.bin', ARTISTS)),
         ('Cover Flow bar', cf_bar(work)),
         ('Cover Flow, an artist', cf_artist_bar(work)),
-        ('Customize, scrolled', page_panel(work, 'm1plus_customize.bin', SETTINGS, scroll=sc)),
+        ('Extras, scrolled', page_panel(work, 'm1plus_extras.bin', SETTINGS, scroll=sc)),
         ('Home instance, scrolled', home_panel(work, ghost=False, scroll=sc)),
         ("Songs page (main's, unchanged)", allmusic_panel(work)),
     ]

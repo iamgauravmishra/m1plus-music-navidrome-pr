@@ -2,7 +2,7 @@
 
 **Sources:** `patch/shot.c`, `patch/shot.h`, test `test/pod/shot.py`, `tools/pull_shots.py`.
 
-A developer's screen grab, the only row of Customize > Developer (`ACT_SHOT`, page `m1plus_developer`). No stock function is hooked, nothing
+A developer's screen grab, the only row of Settings > Developer (`ACT_SHOT`, page `m1plus_developer`). No stock function is hooked, nothing
 runs on the boot path, in the main loop or at paint, and there is no thread: a tap starts a payload-owned countdown, and the only
 code that runs afterwards is two timer callbacks. The kill switch `/mnt/mmc/m1plus-off` is checked at the tap, at every tick and
 before the grab (the camera is hidden and nothing is read or written when it appears mid-way).

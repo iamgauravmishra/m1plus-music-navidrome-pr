@@ -718,7 +718,7 @@ static int tp_on_touch(void *ctx, void *e) {
 }
 
 /* ---------------------------------------------------------------------------
- * The saved theme (Customize > Cassette Mode > Cassette Theme): "1" Chrome, "2" Metal (an optional newline), anything else or no file Normal; reading never writes.
+ * The saved theme (Settings > Now Playing > Theme): "1" Chrome, "2" Metal (an optional newline), anything else or no file Normal; reading never writes.
  */
 int tape_theme(void) {
     char b[4];
@@ -729,11 +729,11 @@ int tape_theme(void) {
     return n >= 1 && (b[0] == '1' || b[0] == '2') && (n == 1 || (n == 2 && b[1] == '\n')) ? b[0] - '0' : 0;
 }
 
-/* The next theme (Normal, Chrome, Metal, Normal ...), saved atomically; the new theme, or -1 and the saved one unchanged when it could not be saved. */
-int tape_theme_cycle(void) {
-    int next = (tape_theme() + 1) % TP_THEMES;
+/* Choose the theme (0 Normal, 1 Chrome, 2 Metal), saved atomically; the theme, or -1 (an unknown theme, or one that could not be saved: the saved one is unchanged). */
+int tape_theme_set(int theme) {
     static const char *const text[TP_THEMES] = {"0\n", "1\n", "2\n"};
-    return home_write_atomic(TAPETHEME_FILE, TAPETHEME_TMP, text[next]) == 0 ? next : -1;
+    if (theme < 0 || theme >= TP_THEMES) return -1;
+    return home_write_atomic(TAPETHEME_FILE, TAPETHEME_TMP, text[theme]) == 0 ? theme : -1;
 }
 
 /* ---------------------------------------------------------------------------
@@ -754,7 +754,7 @@ int tape_open(void) {
     if (tp.view && tp.st_font) {
         unsigned *f, d2;
         char name[32];
-        tp.theme = tape_theme(); /* read once: a change in Customize shows the next time the page opens */
+        tp.theme = tape_theme(); /* read once: a change in Settings shows the next time the page opens */
         snprintf(name, sizeof name, "tape_shell_%s", theme_name[tp.theme]);
         tp.base = tp_load(name, TP_H, TP_W);
         snprintf(name, sizeof name, "tape_hubs_%s", theme_name[tp.theme]);
