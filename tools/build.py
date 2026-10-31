@@ -22,7 +22,7 @@ from pathlib import Path
 
 ZIP = paths.ZIP     # this checkout's firmware/, else the main checkout's (tools/paths.py)
 ZIP_SHA = 'db7bdbc42ffe6d5c1e3fdca9363edb78a01898b9a725c34793394cf6abfa33c0'
-TAG = 'V2.1pG'
+TAG = 'V2.1pH'
 RESTORE_TAG = 'V2.1R'
 # The asset steps after the payload, in order: name -> (module, extra args). Each
 # tools/<module>.py WORKDIR WORKDIR [args] edits the tree in place (venv python: Pillow, fontTools);
@@ -30,7 +30,8 @@ RESTORE_TAG = 'V2.1R'
 # The battery step runs first and the font right after it, before anything that measures text.
 STEPS = [('mod_theme', []), ('mod_lists', []), ('mod_nowplaying', []), ('mod_boot', []),
          ('mod_ipodrows', []), ('mod_pulldown', []), ('mod_lockscreen', []), ('mod_wallpaper', []),
-         ('mod_icons', []), ('mod_strings', []), ('mod_polish', []), ('mod_about', [TAG]), ('mod_cacerts', [])]
+         ('mod_icons', []), ('mod_strings', []), ('mod_polish', []), ('mod_overlays', []), ('mod_about', [TAG]),
+         ('mod_cacerts', [])]
 BASE = ('mod_battery', 'mod_font', 'mod_space')     # stock tree -> battery art, font, space (cached as one stage)
 
 def sha256(p):

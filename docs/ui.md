@@ -33,7 +33,7 @@ and measure the font from the tree being built.
 | Playback | [Now Playing](modules/nowplaying.md), [More sheet](modules/playmore.md), [mini player](modules/minibar.md) |
 | Home content | [Recently Played](modules/recent.md), [Daily Mix](modules/dailymix.md) |
 | Extras | [Playlists](modules/playlists.md), [Songs](modules/songs.md), [Podcasts](modules/podcasts.md), [Cassette Mode](modules/tape.md), [virtual iPod](modules/ipod.md), [iPod Cover Flow](modules/ipod-coverflow.md) |
-| System appearance | [Boot logo/slides](modules/boot.md), [icons](modules/icons.md), [battery](modules/battery.md), [pull-down](modules/pulldown.md), [lock screen](modules/lockscreen.md), [wallpaper](modules/wallpaper.md), [About/polish](modules/polish.md) |
+| System appearance | [Boot logo/slides](modules/boot.md), [icons](modules/icons.md), [battery](modules/battery.md), [pull-down](modules/pulldown.md), [lock screen](modules/lockscreen.md), [wallpaper](modules/wallpaper.md), [About/polish](modules/polish.md), [dialogs, power-off splash](modules/overlays.md) |
 | Languages | [Translation and sizing](modules/i18n.md) |
 
 Older source comments refer to former UI sections: 1 rules, 2 text width, 3 fonts, 4 theme/lists/
