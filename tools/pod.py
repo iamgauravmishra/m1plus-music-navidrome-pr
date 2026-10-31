@@ -42,7 +42,7 @@ OBJCOPY = os.path.join(LLVM, 'llvm-objcopy')
 LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
-SOURCES = ['m1plus.c', 'common.c', 'menu.c', 'covercache.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'albuminfo.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'rows.c', 'shot.c', 'home.c',
+SOURCES = ['m1plus.c', 'common.c', 'menu.c', 'covercache.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'albuminfo.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c',
            'scroll.c', 'playmore.c', 'playlists.c', 'azlist.c', 'songs.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnet.c', 'podcasts.c', 'tape.c', 'probe.c', 'keyboard.c']
 
 FLAGS = ['--target=mipsel-linux-gnu', '-march=mips32r2', '-mabi=32', '-mfp64',
@@ -353,6 +353,28 @@ SETTINGS_PINS = (   # (address, stock word, what it proves)
     # the Play Mode's value: the keys the stock More dialog sets for mclGetPlayMode's 0, 1, 2, 3 (0x47a454, 0x47a4d4, 0x47a4e8, 0x47a500)
     (0x47a454, 0x24a54ce8, 'more dialog: mode 0 "playmode_listplay"'), (0x47a4d4, 0x24a54cfc, 'more dialog: mode 1 "playmode_repeattrack"'),
     (0x47a4e8, 0x24a54d14, 'more dialog: mode 2 "playmode_shuffle"'), (0x47a500, 0x24a54d28, 'more dialog: mode 3 "playmode_repeatall"'),
+)
+# Regional CJK forms (patch/fontregion.c, docs/modules/fonts.md "Regional forms"): the font manager, the live "default" font
+# (one stb font object for every size: match compares the name only), its glyph cache, and the locale's change event
+FUNCTIONS.update({
+    'font_manager':            ('void *', 'void', 0x650ad0),
+    'font_manager_get_font':   ('void *', 'void *, const char *, int', 0x650dc4),   # lookup, else load and add
+    'font_manager_shrink_cache': ('int', 'void *, int', 0x6510b8),   # glyph_cache_shrink of every font; 0 keeps none
+    'locale_info_on':          ('int', 'void *, int, void *, void *', 0x658ba8),   # emitter_on(locale + 0x10, 0x122, cb, ctx)
+})
+FONT_PINS = (   # (address, stock word, what it proves): the stb font layout patch/offsets.inc FONT_* names
+    (0x67ef14, 0x240500d4, 'font_stb_create_ex: tk_calloc(1, 0xd4): the font object'),
+    (0x67ef48, 0xafc20020, 'font_stb_create_ex: sw match (0x67d2d4) @+0x20'), (0x67ef60, 0xafc20024, 'font_stb_create_ex: sw get_glyph (0x680228) @+0x24'),
+    (0x67f030, 0xafd7003c, 'font_stb_create_ex: sw s7 @+0x3c: stbtt_fontinfo data'), (0x67f038, 0xafd60040, 'font_stb_create_ex: sw s6 @+0x40: fontstart'),
+    (0x67f74c, 0x02a21021, 'stbtt_InitFont: addu v0, s5, v0: cmap + the record\'s subtable offset'),
+    (0x67f758, 0xafc20064, 'stbtt_InitFont: sw v0 @+0x64: index_map (the last record of platform 0 or 3/1, 3/10 wins)'),
+    (0x67c3c0, 0x8c870004, 'stbtt_FindGlyphIndex: lw a3, 4(a0): data, read on every lookup'),
+    (0x67c3c4, 0x8c88002c, 'stbtt_FindGlyphIndex: lw t0, 0x2c(a0): index_map (fontinfo +0x2c = font +0x64), read on every lookup'),
+    (0x680300, 0x02c02025, 'font_stb_get_glyph: move a0, s6: the fontinfo it looks glyphs up in'),
+    (0x658970, 0x26120003, 'locale_info_reload: addiu s2, s0, 3: the language at +3'), (0x658978, 0xafb00010, 'locale_info_reload: the country at +0, the second %s'),
+    (0x658a7c, 0x24050122, 'locale_info_change: EVT_LOCALE_CHANGED 0x122'), (0x658bc8, 0x24050122, 'locale_info_on: emitter_on with 0x122'),
+    (0x66d4bc, 0x2405014a, 'widget_set_theme: EVT_THEME_CHANGED 0x14a, dispatched on the window manager after font_manager_unload_all'),
+    (0x74a988, 0x61666564, 'the stock font name "default" (main: system_info_set_default_font)'), (0x74a98c, 0x00746c75, '"default" (cont.)'),
 )
 ID3_SITE = 0x4dff4c   # get_id3info's jalr strcpy of the parsed path, replaced by jal pc_id3_path (docs/modules/podcasts.md "Tags"); q2-pod's ID3_PATH is the same site in its demo
 PODCAST_PINS = (   # (address, stock word, what it proves)
@@ -1012,7 +1034,7 @@ def patch_demo(raw, payload, ps, demo_path):
     check(BASE <= target4 < BASE + len(payload), 'playing init entry symbol outside payload')
     hook(patched, PLAYING_INIT, PLAYING_INIT_PROLOGUE, target4, 'playing_page_init')
     patch_playmore(patched, ps, len(payload))
-    for a, old, what in PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + PINYIN_PINS + JPEG_PINS + TAPE_PINS + SCAN_PINS + QUERY_PINS:   # stock code the Playlists and Songs pages call: checked, not written
+    for a, old, what in PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + PINYIN_PINS + JPEG_PINS + TAPE_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS:   # stock code the Playlists and Songs pages call: checked, not written
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     target5 = ps['pc_id3_path']

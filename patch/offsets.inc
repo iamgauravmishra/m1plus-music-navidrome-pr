@@ -1137,3 +1137,20 @@
 #define TP_SCREW_X 11             /* its pressed sprite tape_screw (MARK_PX square): its top left on the screen */
 #define TP_SCREW_Y 12
 #define TP_LUT_N 18500            /* the distance table: sqrt(d2h) for d2h = (2 dx + 1)^2 + (2 dy + 1)^2 up to this, in 1/16 px */
+
+/* ---------------------------------------------------------------------------
+ * Regional CJK forms (patch/fontregion.c, docs/modules/fonts.md "Regional forms"). The AWTK stb font object
+ * (font_stb_create_ex 0x67ee74, tk_calloc(1, 0xd4) @0x67ef14): font_t then stbtt_fontinfo at +0x38.
+ * ------------------------------------------------------------------------- */
+#define FONT_MATCH 0x20           /* font_t match: 0x67d2d4 for an stb font (sw @0x67ef48), name only, size ignored */
+#define FONT_GET_GLYPH 0x24       /* font_t get_glyph: font_stb_get_glyph 0x680228 (sw @0x67ef60) */
+#define FONT_DATA 0x3c            /* stbtt_fontinfo data: the ttf buffer (sw s7 @0x67f030) */
+#define FONT_START 0x40           /* stbtt_fontinfo fontstart (sw s6 @0x67f038) */
+#define FONT_INDEX_MAP 0x64       /* stbtt_fontinfo index_map: cmap + the chosen subtable offset, from data (sw @0x67f758); */
+                                  /* stbtt_FindGlyphIndex reads data and it on every call (lw 4(a0), 0x2c(a0) @0x67c3c0) */
+#define STB_MATCH 0x67d2d4u
+#define STB_GET_GLYPH 0x680228u
+#define LOCALE_COUNTRY 0          /* locale_info_t: country[3] then language[3]: locale_info_reload builds "%s_%s" from +3, +0 (@0x658970) */
+#define LOCALE_LANGUAGE 3
+#define EVT_LOCALE_CHANGED 0x122  /* locale_info_change dispatches it when the language changes (@0x658a7c) */
+#define EVT_THEME_CHANGED 0x14a   /* widget_set_theme dispatches it on the window manager after the font reload (@0x66d4bc) */

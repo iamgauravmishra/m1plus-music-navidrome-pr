@@ -348,8 +348,16 @@ class Machine:
             if ret: self.bound[(a0, a1)] = (a2, a3)
         elif name == 'widget_set_text_utf8':
             self.calls.append(('widget_set_text_utf8', a0, self.read_cstr(a1))); ret = 0
-        elif name == 'locale_info':
-            ret = 0x23000000
+        elif name == 'locale_info':   # a test's locale_info_t (country[3], language[3]), else a handle locale_info_tr ignores
+            ret = getattr(self, 'locale', 0x23000000)
+        elif name == 'locale_info_on':
+            self.calls.append(('locale_info_on', a0, a1, a2, a3)); ret = 1
+        elif name == 'font_manager':   # none unless a test gives one (patch/fontregion.c then does nothing)
+            ret = getattr(self, 'fm', 0)
+        elif name == 'font_manager_get_font':
+            self.calls.append(('font_manager_get_font', a0, self.read_cstr(a1), a2)); ret = getattr(self, 'font', 0)
+        elif name == 'font_manager_shrink_cache':
+            self.calls.append(('font_manager_shrink_cache', a0, a1))
         elif name == 'locale_info_tr':   # the stock table lookup: the key itself when the table lacks it
             raw = self.strings.get(self.read_cstr(a1), self.read_cstr(a1)).encode('utf-8')
             ret = self.alloc(len(raw) + 1); self.u.mem_write(ret, raw + b'\0')
