@@ -170,8 +170,8 @@ def run(ctx):
            and {'m1plus_homeset', 'm1plus_extrascfg', 'm1plus_developer'} <= set(mod_icons.POD_UI),
            'Customize sliders-horizontal, Home Screen house, Boot to power, Playback headphones, Developer code; the new pages get their icons')
     expect(mod_icons.POD_ROWS['Landscape'][1] == 'rotate-cw-square' and mod_icons.POD_ROWS['Sort'][1] == 'arrow-down-wide-narrow'
-           and mod_icons.POD_ROWS['Cover Flow'][1] == 'gallery-horizontal' and 'm1plus_cfset' in mod_icons.POD_UI,
-           'Settings > Cover Flow: the gallery row (also the menu\'s), the rotate glyph for Landscape, arrow-down-wide-narrow for Sort')
+           and mod_icons.POD_ROWS['Cover Flow'][1] == '+coverflow' and mod_icons.NAV_VIEW['pod_nav_coverflow'] == '+coverflow' and 'm1plus_cfset' in mod_icons.POD_UI,
+           'Settings > Cover Flow: the custom Cover Flow glyph (also the menu\'s and the navbar button\'s), the rotate glyph for Landscape, arrow-down-wide-narrow for Sort')
     lock_imgs = {n: open(os.path.join(img_dir, n + '.png'), 'rb').read() for n in ('screens_battery', 'screens_charge', 'screens_lowbattery')}
     expect(all(lock_imgs[n] == battery_art.png(battery_art.LOCK, s) for n, s in
                (('screens_battery', 'normal'), ('screens_charge', 'charge'), ('screens_lowbattery', 'low'))),

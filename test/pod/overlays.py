@@ -18,9 +18,9 @@ def run(ctx):
         expect(shipped(n, 'theme1') == shipped(n), f'{n}: theme1 gets the same file')
     expect(sorted(os.listdir(mo.ASSET)) == sorted(n + '.png' for n in mo.NAMES), 'the committed art is exactly the three files')
 
-    # the art that was reverted stays the stock bytes: scan, charging, battery and USB images are not touched by the step
+    # the charging and battery art stays the stock bytes (the scan spinner, chargebg and the USB pages are tools/mod_icons.py's, docs/modules/icons.md)
     stock = mo.stock_dir()
-    for n in ['scan1', 'scan12', 'charging0', 'charging18', 'charge_big', 'chargebg', 'usb_dac', 'usb_storage', 'dac_charge']:
+    for n in ['charging0', 'charging18', 'charge_big', 'dac_charge']:
         expect(shipped(n) == open(os.path.join(stock, n + '.png'), 'rb').read(), f'{n} is stock')
 
     sizes = {'msginfo_bg': (260, 180), 'confirminfo_bg': (260, 180), 'shutdown': (320, 480)}

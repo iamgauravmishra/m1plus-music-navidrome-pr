@@ -32,7 +32,7 @@ Usage: mod_icons.py SRC_WORKDIR OUT_WORKDIR     (OUT == SRC edits in place; a bu
                                                 tarball (SHA-256 pinned; parsed as data, nothing is executed)
        mod_icons.py --check [WORKDIR]           verify the asset PNGs (+ a work tree) against the stock pins
 """
-import argparse, hashlib, io, os, re, shutil, stat, subprocess, sys, tarfile
+import argparse, hashlib, io, math, os, re, shutil, stat, subprocess, sys, tarfile
 import xml.etree.ElementTree as ET
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import paths
@@ -133,7 +133,7 @@ TAPE = list(tape_art.NAMES)   # the page's pictures: tape_top and tape_screw sha
 DAILY = DAILY + TAPE
 # M1+ Music menu and Shuffle page rows: label -> (added image, glyph). A bare white glyph (BARE_PX canvas) left of the title.
 # '@shanling' = the brand mark cut out of a stock image (shanling_mark below), not a glyph.
-POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'audio-lines'), 'Cover Flow': ('pod_ic_coverflow', 'gallery-horizontal'),   # audio-lines: the wave of the navbar's Now Playing button
+POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'audio-lines'), 'Cover Flow': ('pod_ic_coverflow', '+coverflow'),   # audio-lines: the wave of the navbar's Now Playing button
             'Shuffle': ('pod_ic_shuffle', 'shuffle'), 'Songs': ('pod_ic_songs', 'music'),
             'Albums': ('pod_ic_albums', 'disc-3'), 'Artists': ('pod_ic_artists', 'mic-vocal'),
             'Genres': ('pod_ic_genres', 'guitar'), 'Folders': ('pod_ic_folders', 'folder'),
@@ -167,7 +167,7 @@ POD_UI = ['m1plus_menu', 'm1plus_shuffle', 'm1plus_customize', 'm1plus_extras', 
 # 24 px white glyph like the navbar's others (pressed #777777), added to the images.
 NAV_VIEW = {'pod_nav_grid': 'layout-grid', 'pod_nav_list': 'list',
             'pod_nav_artist': 'mic-vocal', 'pod_nav_albumartist': 'user-star',   # the Artists page's Artist / Album Artist switch
-            'pod_nav_coverflow': 'gallery-horizontal',
+            'pod_nav_coverflow': '+coverflow',   # Lucide gallery-horizontal with shorter side covers
             'pod_nav_more': 'ellipsis',   # the Playlists page's "..." menu button
             'pod_nav_songs': 'list',   # Cover Flow's artist page: our Songs page on the artist's songs (the left cap, then Now Playing)
             'pod_nav_search': 'search', 'pod_nav_songsort': 'arrow-down-wide-narrow', 'pod_nav_select': 'list-checks',
@@ -288,7 +288,7 @@ def used_glyphs():
     """(Lucide names, Tabler names) of every glyph the tables use; custom ones excluded."""
     gl = [e[2] for e in HOME + SETTINGS + LISTS] + list(PULLDOWN.values()) + list(STATUS.values()) + \
         [g for g in WIFI_LEVELS if g] + [COVER_GLYPH, POD_HOME_GLYPH, SHOT_BAR[1]] + list(NAV_VIEW.values()) + [g for _, g in PL_MENU_ICONS] + [v[1] for v in POD_ROWS.values() if v[1] != SHANLING] + \
-        [g for _, g, _ in GLYPHS] + [v[0] for v in SONGS_IMAGES.values()] + [v[0] for v in KEYBOARD_IMAGES.values()] + [KB_CLEAR[1], DP_ADD_GLYPH] + list(PC_GLYPHS) + [g for _, g in DISCS] + [v[0] for v in NP.values() if not v[0].startswith('pil:')] + ['lock:filled']
+        [g for _, g, _ in GLYPHS] + [v[0] for v in SONGS_IMAGES.values()] + [v[0] for v in KEYBOARD_IMAGES.values()] + [KB_CLEAR[1], DP_ADD_GLYPH] + list(PC_GLYPHS) + [g for _, g in DISCS] + [v[0] for v in NP.values() if not v[0].startswith('pil:')] + ['lock:filled'] + R3_GLYPHS
     names = {gname(g) for g in gl if g and not is_custom(g) and not is_badge(g)}
     return sorted(n for n in names if not n.startswith('T:')), sorted(n[2:] for n in names if n.startswith('T:'))
 
@@ -440,9 +440,9 @@ def shanling_mark():
 # text in a thin rounded rectangle, the weight of the Lucide strokes at that size; BADGE_W x BADGE_H ink.
 BADGE_W, BADGE_H, BADGE_SW, BADGE_R, BADGE_PAD = BARE_PX, 16, 1.5, 3.5, 1.5
 
-def badge(text, ss=8):
+def badge(text, ss=8, size=(BADGE_W, BADGE_H)):
     from PIL import Image, ImageDraw, ImageFont
-    w, h = BADGE_W, BADGE_H
+    w, h = size
     big = Image.new('L', (w * ss, h * ss), 0); d = ImageDraw.Draw(big)
     d.rounded_rectangle((0, 0, w * ss - 1, h * ss - 1), radius=BADGE_R * ss, fill=255)
     i = BADGE_SW * ss
@@ -629,6 +629,7 @@ def generate_all(sizes):
     for n, level in WIFI_LOCK.items(): f[n] = wifi_lock(level)
     f.update(album_images())
     f.update(podcast_images())
+    f.update(r3_images())
     return f
 
 def ah_tint_alpha(y):
@@ -945,6 +946,8 @@ SKIP_H, SKIP_WR, SKIP_OV, SKIP_RK = 24, 1.46, 0.18, 0.6              # ink heigh
 # The mini player bar's glyphs (patch/offsets.inc MB_*, docs/modules/minibar.md): the same shapes, bare white, drawn for the bar: pause 22 px tall, next 30 x 17,
 # play 19 x 22 (a triangle as tall as the pause bars reads a little smaller, so the ink is as tall as the pause); pressed = 55 % white
 MB_PLAY_INK, MB_PAUSE_H, MB_SKIP_H, MB_SKIP_W = (19, 22), 22, 17, 30
+# The screensaver's play1 / pause1 (round 3 below): the same shapes on a 32 px disc, 12 x 14 play, 14 px pause; the triangle's corners a little rounder (0.16 of its height)
+SS_PLAY_INK, SS_PAUSE_H, SS_PLAY_R = (12, 14), 14, 0.16
 
 def _inset(poly, r):
     """A convex polygon moved inward by r (vertices intersect the offset edges)."""
@@ -991,13 +994,15 @@ def transport_mask(kind, size):
     """The 'L' mask of the transport glyph `kind` (play, pause, next, prev) on a size (px or (w, h)) canvas, ink centred."""
     from PIL import Image, ImageDraw
     cw, ch = size if isinstance(size, tuple) else (size, size)
-    bar = kind.startswith('mb_')      # the mini player bar's glyphs: the same shapes at the bar's sizes (MB_*)
-    kind = kind.removeprefix('mb_')
+    bar, ss = kind.startswith('mb_'), kind.startswith('ss_')      # the mini player bar's glyphs: the same shapes at the bar's sizes (MB_*); ss_: the screensaver's (SS_*)
+    kind = kind.removeprefix('mb_').removeprefix('ss_')
     play_ink, pause_h, skip_h, skip_wr = (MB_PLAY_INK, MB_PAUSE_H, MB_SKIP_H, MB_SKIP_W / MB_SKIP_H) if bar else (PLAY_INK, PAUSE_H, SKIP_H, SKIP_WR)
+    if ss: play_ink, pause_h = SS_PLAY_INK, SS_PAUSE_H
+    play_r = SS_PLAY_R if ss else PLAY_R
     play_shift = PLAY_SHIFT * play_ink[1] / PLAY_INK[1]
     s = TSS; big = Image.new('L', (cw * s, ch * s), 0); d = ImageDraw.Draw(big)
     if kind == 'play':
-        r = PLAY_R * play_ink[1]; w, h = _fit_tri(*play_ink, r)
+        r = play_r * play_ink[1]; w, h = _fit_tri(*play_ink, r)
         iw, ih = _tri_ink(w, h, r)
         ip = _inset(_tri(0, 0, w, h, True), r); minx, miny = min(p[0] for p in ip), min(p[1] for p in ip)
         ox, oy = (cw - iw) / 2 + play_shift - (minx - r), (ch - ih) / 2 - (miny - r)
@@ -1191,6 +1196,146 @@ def ring_tile(g, state, on_style='disc'):
     t.alpha_composite(gi, ((N - gi.width) // 2, (N - gi.height) // 2)); return t
 
 
+# ---------------------------------------------------------------- round 3: playback, badges, controls, hero art
+# Stock images that were still stock after round 2 (docs/modules/icons.md "Round 3"). Kept stock: every MQA image, eq_*, vol_dot,
+# vol_progressbak, volume_bg, charge_big, dac_charge.
+R3_DISC_A, R3_DISC_A_DOWN = 51, 102           # the translucent white disc behind the screensaver's transport shapes: 20 %, pressed 40 %
+PM_DISC_A, PM_DISC_A_DOWN, PM_GLYPH_A_DOWN = 51, 90, 205   # the volume / Bluetooth plus and minus discs: 20 %, pressed 35 %; the pressed glyph 80 % white
+# image -> (glyph, canvas px, disc px, glyph px = its canvas, stroke px); even canvas and stroke put the bar edges on pixel boundaries
+PM_BUTTONS = {'vol_add': ('plus', 44, 42, 32, 2), 'vol_dec': ('minus', 44, 42, 32, 2), 'bt_add': ('plus', 100, 90, 64, 4), 'bt_dec': ('minus', 100, 90, 64, 4)}
+PM_DOWN = {'vol_add': 'vol_adddown', 'vol_dec': 'vol_decdown', 'bt_add': 'bt_add_down', 'bt_dec': 'bt_dec_down'}
+PM_CHECK = ('T:circle-check:filled', 80, 52, 14, 77)    # led_select: glyph, canvas, glyph px, its offset, disc alpha (30 %)
+R3_BADGES = {'p_hr': ('HR', (28, 18)), '16bit': ('16bit', (40, 18)), '24bit': ('24bit', (40, 18))}   # white outline badges (badge()); replaygain is the settings' RG badge centred in 40 px
+R3_SUNS = {'light_lefticon': 'sun-dim', 'light_righticon': 'sun'}
+R3_PLAYING = ('audio-lines', 40, 24)            # icon_playing: a bare white glyph (canvas, ink px)
+R3_QUEUE = 'list-music'                         # p_playqueue (+ down, #777777): sized like SMALL_GLYPHS
+# hero art (the USB DAC / storage, Wi-Fi transfer and Bluetooth receiver pages): a dark grey gradient disc with a 1 px rim and soft rings.
+# image -> (disc px, glyph, glyph px); the stock images are 250 / 250 / 210 / 254 px
+HERO = {'usb_dac': (146, 'usb', 76), 'usb_storage': (146, 'hard-drive', 76), 'wifits_icon': (104, 'wifi', 58), 'btrecv_icon': (116, 'bluetooth', 64)}
+HERO_TOP, HERO_BOT, HERO_K = (0x30,) * 3, (0x1A,) * 3, 4
+HERO_GLYPH = (0xC0,) * 3                     # the glyph's grey: softer than white, so it sits in the disc
+HERO_RIM = (0.34, 0.14)                          # rim white alpha at the disc's top and bottom
+HERO_RINGS, HERO_LINE_A, HERO_GLOW_A, HERO_GLOW_BLUR = 3, (0.32, 0.23, 0.14), 0.06, 1.2   # ring lines' alpha (inner to outer), the glow step per band, the glow's blur (px)
+# chargebg: the stock empty battery frame (charge_big) with the white Lucide battery-charging bolt, 60 % of the first design's size, centred
+CHARGE_FRAME_SHA = '0911a86708c1ea3d157e5cd7c6551fd377374411a7f30d0acca63c57eb956154'   # stock charge_big.png, the frame (pinned: it is read, not replaced)
+BOLT_PTS, BOLT_SCALE = [(11, 7), (8, 12), (12, 12), (9, 17)], 8.6 * 0.6    # grid units; px per grid unit
+R3_GLYPHS = ['plus', 'minus', 'sun-dim', 'sun', 'list-music', 'audio-lines', 'usb', 'hard-drive', 'wifi', 'bluetooth', 'T:circle-check:filled']
+
+def alpha_scale(im, a):
+    im = im.copy(); im.putalpha(im.getchannel('A').point(lambda v: v * a // 255)); return im
+
+def translucent_disc(size, disc_px, alpha, ss=8):
+    """A size x size canvas with a centred flat white disc of disc_px at `alpha`."""
+    from PIL import Image, ImageDraw
+    big = Image.new('L', (size * ss, size * ss), 0); o = (size - disc_px) / 2 * ss
+    ImageDraw.Draw(big).ellipse((o, o, o + disc_px * ss - 1, o + disc_px * ss - 1), fill=alpha)
+    im = Image.new('RGBA', (size, size), WHITE + (0,)); im.putalpha(big.resize((size, size), Image.BOX)); return im
+
+def screensaver_transport(kind, pressed, size=36, disc_px=32):
+    from PIL import Image
+    c = translucent_disc(size, disc_px, R3_DISC_A_DOWN if pressed else R3_DISC_A)
+    g = Image.new('RGBA', (size, size), WHITE + (0,)); g.putalpha(transport_mask('ss_' + kind, size))
+    c.alpha_composite(g); return c
+
+def pm_button(g, size, disc_px, ink, sw, pressed):
+    c = translucent_disc(size, disc_px, PM_DISC_A_DOWN if pressed else PM_DISC_A)
+    gl = _rsvg(build_svg(g, 'outline', ink, sw * 24 / ink, False), ink)
+    if pressed: gl = alpha_scale(gl, PM_GLYPH_A_DOWN)
+    c.alpha_composite(gl, ((size - ink) // 2, (size - ink) // 2)); return c
+
+def led_select_image():
+    g, size, px, off, alpha = PM_CHECK
+    c = translucent_disc(size, size, alpha); c.alpha_composite(glyph_fit(g, px, px, WHITE, 0), (off, off)); return c
+
+def hero_disc(size, d):
+    """The dark grey disc of diameter d centred in size x size: a vertical gradient HERO_TOP to HERO_BOT, a 1 px rim whose white alpha fades from HERO_RIM[0] to [1]."""
+    from PIL import Image, ImageChops, ImageDraw
+    k = HERO_K; s = size * k; cx = s / 2; r = d * k / 2; y0, y1 = cx - r, cx + r
+    mask = Image.new('L', (s, s), 0); ImageDraw.Draw(mask).ellipse([cx - r, cx - r, cx + r, cx + r], fill=255)
+    inner = Image.new('L', (s, s), 0); ImageDraw.Draw(inner).ellipse([cx - r + k, cx - r + k, cx + r - k, cx + r - k], fill=255)
+    grad, ra = Image.new('RGBA', (s, s)), Image.new('L', (s, s))
+    for y in range(s):
+        t = min(max((y - y0) / (y1 - y0), 0), 1)
+        grad.paste(tuple(round(a + (b - a) * t) for a, b in zip(HERO_TOP, HERO_BOT)) + (255,), (0, y, s, y + 1))
+        ra.paste(round(255 * (HERO_RIM[0] + (HERO_RIM[1] - HERO_RIM[0]) * t)), (0, y, s, y + 1))
+    grad.putalpha(mask)
+    rim = Image.new('RGBA', (s, s), WHITE + (0,)); rim.putalpha(ImageChops.multiply(ImageChops.subtract(mask, inner), ra))
+    grad.alpha_composite(rim); return grad.resize((size, size), Image.LANCZOS)
+
+def hero_rings(size, d):
+    """Soft concentric rings round the disc: HERO_RINGS thin lines of fading alpha over a faint blurred glow."""
+    from PIL import Image, ImageDraw, ImageFilter
+    k, n = HERO_K, HERO_RINGS; s = size * k; cx = s / 2; r0 = d * k / 2; rmax = size * k / 2 - 2 * k
+    rad = lambda i: r0 + (rmax - r0) * i / n
+    glow = Image.new('RGBA', (s, s), (0, 0, 0, 0)); gd = ImageDraw.Draw(glow)
+    for i in range(n, 0, -1): gd.ellipse([cx - rad(i), cx - rad(i), cx + rad(i), cx + rad(i)], fill=(255, 255, 255, round(255 * HERO_GLOW_A * (n - i + 1))))
+    glow = glow.filter(ImageFilter.GaussianBlur(k * HERO_GLOW_BLUR)); glow.putalpha(glow.getchannel('A').point(lambda v: v * 6 // 10))
+    lines = Image.new('RGBA', (s, s), (0, 0, 0, 0)); ld = ImageDraw.Draw(lines)
+    for i in range(1, n + 1): ld.ellipse([cx - rad(i), cx - rad(i), cx + rad(i), cx + rad(i)], outline=(255, 255, 255, round(255 * HERO_LINE_A[i - 1])), width=k)
+    glow.alpha_composite(lines); return glow.resize((size, size), Image.LANCZOS)
+
+def hero_image(size, d, g, gpx):
+    c = hero_rings(size, d); c.alpha_composite(hero_disc(size, d))
+    gl = tint(render(g, gpx, 'outline', 2), HERO_GLYPH); ink = gl.getchannel('A').getbbox()
+    c.alpha_composite(gl, (round(size / 2 - (ink[0] + ink[2]) / 2), round(size / 2 - (ink[1] + ink[3]) / 2))); return c
+
+def charge_bolt_image():
+    """The stock empty battery frame (charge_big) with a white bolt, drawn at 8x as a 2-unit round stroke polyline."""
+    from PIL import Image, ImageDraw
+    path = os.path.join(find_stock_img(), 'charge_big.png')
+    assert sha256(open(path, 'rb').read()) == CHARGE_FRAME_SHA, 'charge_big.png is not the pinned stock file'
+    base = read_png(path).convert('RGBA'); w, h = base.size; s = 8
+    big = Image.new('RGBA', (w * s, h * s), (0, 0, 0, 0)); d = ImageDraw.Draw(big)
+    sc = BOLT_SCALE * s; mx = sum(p[0] for p in BOLT_PTS) / len(BOLT_PTS); my = (BOLT_PTS[0][1] + BOLT_PTS[-1][1]) / 2
+    pts = [(w * s / 2 + (x - mx) * sc, h * s / 2 + (y - my) * sc) for x, y in BOLT_PTS]
+    sw = 2 * sc * 0.55; d.line(pts, fill=WHITE + (255,), width=round(sw), joint='curve')
+    for x, y in pts: d.ellipse([x - sw / 2, y - sw / 2, x + sw / 2, y + sw / 2], fill=WHITE + (255,))
+    base.alpha_composite(big.resize((w, h), Image.LANCZOS)); return base
+
+# the Update Library spinner (scanmusic_dialog img_animation: scan1..scan12, 200x200, 100 ms a frame): a white arc with a fading
+# tail sweeping round a faint track; the song count (label_msg1) sits in the middle
+SCAN_FRAMES, SCAN_SIZE = 12, 200
+SCAN_R, SCAN_W, SCAN_TRACK_A, SCAN_TAIL, SCAN_TAIL_GAMMA = 84, 5, 30, 240, 1.6   # radius, stroke (px), track alpha, tail (degrees), alpha ramp
+
+def scan_frame(i):
+    """Frame i (0-based): the head at 12 o'clock + i/SCAN_FRAMES of a turn, the tail's alpha ramping up to it."""
+    from PIL import Image, ImageDraw
+    k = HERO_K; s = SCAN_SIZE * k; c = s / 2; r, w = SCAN_R * k, SCAN_W * k; box = [c - r, c - r, c + r, c + r]
+    im = Image.new('RGBA', (s, s), WHITE + (0,)); d = ImageDraw.Draw(im)
+    d.ellipse(box, outline=WHITE + (SCAN_TRACK_A,), width=w)
+    head, steps = -90 + 360 * i / SCAN_FRAMES, 60
+    for j in range(steps):
+        a0 = head - SCAN_TAIL + SCAN_TAIL * j / steps
+        d.arc(box, a0, a0 + SCAN_TAIL / steps + 1, fill=WHITE + (round(255 * (j / steps) ** SCAN_TAIL_GAMMA),), width=w)
+    hx, hy = c + (r - w / 2) * math.cos(math.radians(head)), c + (r - w / 2) * math.sin(math.radians(head))
+    d.ellipse([hx - w / 2, hy - w / 2, hx + w / 2, hy + w / 2], fill=WHITE + (255,))     # the round head
+    return im.resize((SCAN_SIZE, SCAN_SIZE), Image.LANCZOS)
+
+SCAN_NAMES = [f'scan{i}' for i in range(1, SCAN_FRAMES + 1)]
+
+def r3_images():
+    """The round 3 images (R3_NAMES)."""
+    f = {}
+    for n in ('play1', 'pause1'):
+        f[n] = screensaver_transport(n[:-1], False); f[n + '_down'] = screensaver_transport(n[:-1], True)
+    f['icon_playing'] = np_glyph(R3_PLAYING[0], R3_PLAYING[1], R3_PLAYING[2], WHITE)
+    f['p_playqueue'] = glyph_box(R3_QUEUE, (24, 22), NAV_K, WHITE)
+    f['p_playqueuedown'] = glyph_box(R3_QUEUE, (24, 22), NAV_K, (0x77,) * 3)
+    for n, (text, size) in R3_BADGES.items(): f[n] = badge(text, size=size)
+    f['replaygain'] = bare_icon('badge:RG', 40)
+    for n, (g, size, d, ink, sw) in PM_BUTTONS.items():
+        f[n] = pm_button(g, size, d, ink, sw, False); f[PM_DOWN[n]] = pm_button(g, size, d, ink, sw, True)
+    f['led_select'] = led_select_image()
+    for n, g in R3_SUNS.items(): f[n] = glyph_fit(g, 24, 24, WHITE, 0)
+    for n, (d, g, gpx) in HERO.items(): f[n] = hero_image(HERO_SIZE[n], d, g, gpx)
+    f['chargebg'] = charge_bolt_image()
+    for i, n in enumerate(SCAN_NAMES): f[n] = scan_frame(i)
+    return f
+
+HERO_SIZE = {'usb_dac': 250, 'usb_storage': 250, 'wifits_icon': 210, 'btrecv_icon': 254}
+R3_NAMES = sorted(['play1', 'play1_down', 'pause1', 'pause1_down', 'icon_playing', 'p_playqueue', 'p_playqueuedown', 'replaygain', 'led_select',
+                   'chargebg'] + list(R3_BADGES) + list(R3_SUNS) + list(PM_BUTTONS) + list(PM_DOWN.values()) + list(HERO) + SCAN_NAMES)
+
 # ---------------------------------------------------------------- stock pins
 # SHA-256 of each file this step replaces, in the stock V2.1 images/xx (the tree the other steps start from)
 _PIN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mod_icons_pins.txt')
@@ -1204,7 +1349,7 @@ def replaced_names():
          'bar_play', 'bar_pause', 'bar_bt', 'bar_btcon', 'bar_digital'] + [f'bar_vol{i}' for i in range(5)] +
         [f'bar_wifi{i}' for i in range(5)] + COVERS +
         [n for n, _, _ in GLYPHS] + [d for _, _, d in GLYPHS if d] + [n for n, _ in DISCS] + RECOLOUR +
-        list(SPEEDS) + list(PLAYALL) + list(WIFI_LOCK)))
+        list(SPEEDS) + list(PLAYALL) + list(WIFI_LOCK) + R3_NAMES))
 
 def pod_row_names(): return sorted({n for n, _ in POD_ROWS.values()})
 def nav_names(): return sorted(set(NAV_VIEW) | {n + '_down' for n in NAV_VIEW})
