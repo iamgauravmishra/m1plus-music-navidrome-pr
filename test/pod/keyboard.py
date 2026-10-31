@@ -1187,7 +1187,56 @@ def lang_gap_tests(ctx):
     expect(py_text(m) == 'q' and strip_on(m), 'on the Chinese layer a gap touch between Q and W composes a q')
 
 
-SECTIONS = [base_tests, gap_tests, asset_tests, setting_tests, zh_tests, strip_tests, hit_tests, lang_gap_tests]   # tools/check.py runs each as its own task
+def name_tests(ctx):
+    """The New playlist consumer (patch/playlists.c pl_create / pl_named): title, placeholder, the Done label (KB_DONE), the name through createPlayListItem after the page was told to close,
+    nothing for an empty name (the keyboard stays), Back, the two messages, the 63 byte limit under stock's 127."""
+    expect = ctx.expect
+    def create(**kw):
+        m = keyboard_machine()
+        m.setword(STACK + 16, 0); m.setword(STACK + 20, DEFS['KB_DONE'])
+        assert DEFS['KB_DONE'] == 2
+        r = m.call(PSYMS['keyboard_open'], a0=m.cstr('New playlist'), a1=m.cstr('Enter a playlist name'), a2=0, a3=PSYMS['pl_named'], count=40000000)
+        assert r == 0
+        for k, v in kw.items(): setattr(m, k, v)
+        return m
+    def made(m): return [c for c in m.calls if c[0] == 'createPlayListItem']
+    def toasts(m): return [c for c in m.calls if c[0] == 'toast']
+    m = create()
+    expect(said(m, 'label_title') == 'New playlist' and said(m, 'kb_hint') == 'Enter a playlist name' and said(m, 'kb_go') == 'Done' and field(m) == '',
+           f'New playlist: the keyboard has the stock title and hint and the action key reads Done ({said(m, "label_title")}, {said(m, "kb_hint")}, {said(m, "kb_go")})')
+    expect(not [c for c in m.calls if c[0] in ('navigator_to_with_context', 'createPlayListItem')], 'opening creates nothing and opens no stock dialog')
+    m0 = opened()
+    expect(said(m0, 'kb_go') is None and not [c for c in m0.calls if c[0] == 'widget_set_tr_text' and c[1] == m0.widgets['kb_go']], 'without KB_DONE the action key is the asset\'s Search')
+    m.calls = []
+    press(m, 'kb_go')
+    expect(shown(m, 'kb_go') == (1, 1) and not made(m) and ('navigator_back',) not in m.calls, 'Done with an empty field does nothing and the keyboard stays')
+    press(m, 'kb_space'); press(m, 'kb_go')
+    expect(not made(m) and ('navigator_back',) not in m.calls, 'a field of spaces is empty as well')
+    typ(m, 'Mix'); press(m, 'kb_space'); m.calls = []
+    press(m, 'kb_go')
+    order = [c[0] for c in m.calls if c[0] in ('navigator_back', 'loadLocalClassList', 'createPlayListItem')]
+    expect(order == ['navigator_back', 'loadLocalClassList', 'createPlayListItem'] and made(m) == [('createPlayListItem', 'Mix', 0)] and not toasts(m),
+           f'Done: the page is told to close, the stock list is read, createPlayListItem gets the trimmed name ({order}, {made(m)})')
+    for ret, key in ((-1, 'msg_playlistfull'), (-2, 'msg_playlistexist')):
+        m = create(create_ret=ret); typ(m, 'Mix'); m.calls = []
+        press(m, 'kb_go')
+        expect(toasts(m) == [('toast', key, 1, 2000)] and [c[0] for c in m.calls if c[0] in ('navigator_back', 'toast')] == ['navigator_back', 'toast'],
+               f'{key} is shown in the stock message box after the keyboard closed ({toasts(m)})')
+    m = create(); typ(m, 'Mix'); m.calls = []
+    run_evt(m, 'btn_return', O['EVT_CLICK'])
+    expect(not made(m) and ('navigator_back',) in m.calls and not toasts(m), 'Back creates nothing')
+    m = create(); typ(m, 'A' + 'a' * 69); m.calls = []
+    press(m, 'kb_go')
+    expect(len(made(m)) == 1 and made(m)[0][1] == 'A' + 'a' * 62, 'the keyboard\'s own 63 bytes are the name\'s limit (stock\'s edit took 127)')
+    m = create(); typ(m, 'Ab'); m.calls = []
+    press(m, 'kb_go')
+    expect(made(m)[0][1] == 'Ab', 'the name is what the field shows')
+    for loc in pod_i18n.LOCALES:   # the Done key's text fits its 74 px
+        t = pod_i18n.TEXT['Done'][loc]
+        expect(width(t, 15) <= PK.KB_MODE_W - 8, f'Done fits the action key in {loc} ({t}: {width(t, 15)} px)')
+
+
+SECTIONS = [base_tests, name_tests,gap_tests, asset_tests, setting_tests, zh_tests, strip_tests, hit_tests, lang_gap_tests]   # tools/check.py runs each as its own task
 
 
 def run(ctx):

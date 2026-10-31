@@ -182,7 +182,6 @@ class Machine:
         self.pl_rows = []           # the playlist table's song rows addPlayList was given: (row id, playlist id, path, title); checkPlayListExist / getPlayListMaxId read them
         self.pl_created = []        # (name, id) of the playlists createPlayListItem made (a result >= 0)
         self.clobber = False        # createPlayListItem leaves the browsing class, classinfo[0..1] and the navigation title changed (a test of "put back")
-        self.dialog_name = 'Mix'    # what the keyboard dialog writes into the name (None: cancelled)
         self.album_artists = []     # the artists list while artist_type == 1 (the stock page's album-artist switch)
         self.class_lists = {}       # ... per class, where a test sets one (0xf004: the artists)
         self.tracklist = []         # what loadSongList leaves there
@@ -661,11 +660,6 @@ class Machine:
             if ctx in ('search_page', 'playlist_page'):   # the Songs page's Search (no context) and the stock playlist picker (a value: the add context)
                 self.calls.append(('navigator_to_with_context', ctx, a1))
                 u.reg_write(UC_MIPS_REG_V0, 0); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
-                return
-            if ctx == 'dialog/kbaddplaylist_dialog':   # modal; the name goes into the caller's buffer, 0 = accepted
-                self.calls.append(('navigator_to_with_context', ctx, self.dialog_name))
-                if self.dialog_name is not None: self.u.mem_write(a1, self.dialog_name.encode() + b'\0')
-                u.reg_write(UC_MIPS_REG_V0, 0 if self.dialog_name is not None else 1); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
                 return
             self.calls.append(('navigator_to_with_context', ctx, self.word(a1 + 4),
                                self.word(a1 + 8), self.word(a1 + 12)))

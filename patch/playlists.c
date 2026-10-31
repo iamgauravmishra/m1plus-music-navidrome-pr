@@ -33,6 +33,7 @@
 #include "common.h"
 #include "grid.h"
 #include "i18n.h"
+#include "keyboard.h"
 
 extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
 extern int
@@ -607,19 +608,22 @@ static void pl_toast(const char *text) {
     navigator_to_with_context("dialog/msginfo_dialog", &info);
 }
 
-/* The stock create handler (@0x53e8e4) without the page rebuild: the keyboard dialog fills the name (0 = accepted), createPlayListItem adds the
- * playlist to the database (-1 full, -2 exists) from the stock list, which is read first. */
-static void pl_create(void) {
-    char name[256];
+/* Done on our keyboard (patch/keyboard.c; not modal: it calls this after the keyboard page was told to close, the name trimmed, 1 to 63 bytes): the
+ * stock create handler's tail (@0x53e8e4): the stock list is read first, createPlayListItem adds the playlist to the database (-1 full, -2 exists),
+ * the stock message box for those two, and this page, which is in front again (or about to be: the other order only reads twice), reads its list again. */
+static void pl_named(const char *name) {
     int r;
-    memset(name, 0, sizeof name);
-    if (navigator_to_with_context("dialog/kbaddplaylist_dialog", name)) return;
     loadLocalClassList(CLASS_PLAYLISTS);
     r = createPlayListItem(*(void **)PDEQ_PLAYLIST, name);
     if (r == -1)
         pl_toast(TR("msg_playlistfull"));
     else if (r == -2)
         pl_toast(TR("msg_playlistexist"));
+    if (pl.win && pl.view) pl_load();
+}
+
+static void pl_create(void) {
+    keyboard_open(TR("playlist_create"), TR("msg_newplaylists"), (const char *)0, pl_named, (kb_cancel_fn)0, KB_DONE);
 }
 
 /* The stock confirm dialog of the stock delete handler (@0x53dc78: kind 1, the text at +8, msg_delplaylist): modal; 0xa (CONFIRM_YES) is Yes, anything else ends it (@0x53dcc0). */
@@ -694,9 +698,10 @@ static int pl_on_item(void *ctx, void *e) {
     pl_menu(0);
     if (!pl.view) return RET_OK;
     *(int *)NAVIGATION_STATUS = 0; /* the stock pages' normal (not multi-select) mode: export all */
-    if (which == PL_NEW)
-        pl_create();
-    else if (which == PL_IMPORT)
+    if (which == PL_NEW) {
+        pl_create(); /* the keyboard is not modal: pl_named reads the list when the name is in */
+        return RET_OK;
+    } else if (which == PL_IMPORT)
         stock_playlist_import((void *)0, (void *)0);
     else if (which == PL_EXPORT)
         stock_playlist_export((void *)0, (void *)0);

@@ -33,6 +33,7 @@ STOCK = {
     'playlist_create': 'New playlist',    # the Playlists page's menu: the stock Playlists page's own row texts
     'playlist_import': 'Import playlist',
     'playlist_export': 'Export playlist',
+    'msg_newplaylists': 'Enter a playlist name',   # the New playlist keyboard's placeholder (the stock keyboard dialog's own hint, patch/playlists.c)
     'msg_playlistfull': 'Playlist Is Full',        # the message boxes of a New playlist that cannot be made (the stock create handler's)
     'msg_playlistexist': 'Playlist Already Exists',
     'msg_addplaylistsuccess': 'Added To Playlist',   # the Daily Mix page's Add disc and the stock playlist picker (@0x53d51c) after a successful add
@@ -362,6 +363,8 @@ TEXT = dict([
        'espacio', 'spazio', 'เว้นวรรค', 'spacja', 'пробел', 'пробіл'),
     _t('Search', '搜索', '搜尋', '検索', '검색', 'Chercher', 'Suchen',
        'Buscar', 'Cerca', 'ค้นหา', 'Szukaj', 'Поиск', 'Пошук'),
+    _t('Done', '完成', '完成', '完了', '완료', 'OK', 'Fertig',
+       'Hecho', 'Fine', 'เสร็จ', 'Gotowe', 'Готово', 'Готово'),
     _t('Type here', '在此输入', '在此輸入', 'ここに入力', '여기에 입력', 'Saisir ici', 'Hier tippen',
        'Escribe aquí', 'Digita qui', 'พิมพ์ที่นี่', 'Wpisz tutaj', 'Введите здесь', 'Введіть тут'),
     # Now Playing's More menu (patch/playmore.c): the row that opens the second page (and that page's back header), the short
