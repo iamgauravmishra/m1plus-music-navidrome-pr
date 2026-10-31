@@ -9,8 +9,8 @@
  *
  *   Shows      a row per folder of /mnt/mmc/Podcasts: the cover (cover.jpg / folder.jpg, a PC_ROW_H list row's LIST_ART px cover), the show's name, "N episodes".
  *   Show       a header (the PC_HDR_ART px cover, the name, the episode count and the show's speed: a tap on the speed cycles 1x 1.25x 1.5x 2x and is kept), then a row per
- *              downloaded episode, newest first: the unplayed dot, the title, a grey line "date - N min left" / "date - N min" / "date - Played". A tap on the dot toggles
- *              played; a tap on the row plays this episode and the ones after it in the list's order (from the first second, or from the saved place: pc_note jumps there).
+ *              downloaded episode, newest first: the title (bright when unplayed, grey when played or not on the card), a grey line "date - N min left" / "date - N min" / "date - Played".
+ *              A tap on the row plays this episode and the ones after it in the list's order (from the first second, or from the saved place: pc_note jumps there).
  *
  * Playing builds stSongInfo records of our own for the show's files (the library may not have scanned them) and starts them as the stock Folders page does: class 1, the
  * queue handed to playing_page (start_player copies it). Cover pictures are decoded one per 16 ms tick (pc_cover_ok first: a picture that is too large for the stock decoder is
@@ -37,23 +37,31 @@ extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one b
 #define PG_LOAD_MS 16
 #define PG_TICK_MS 1000
 #define PG_TAP_PX SC_DRAG_PX
-#define PG_DOT_X 12
-#define PG_TEXT_X 34
-#define PG_TEXT_W 274 /* to the 12 px right margin */
+#define PG_TEXT_X \
+    16 /* an episode's texts start here (no cover, no dot: unplayed is a bright title), as the Feeds level's rows without a cover */
+#define PG_TEXT_W 292 /* to the 12 px right margin */
 #define PG_BOTTOM 12
 #define PG_HDR_TEXT_X 124
 #define PG_HDR_TEXT_W 184
 #define PG_SPEED_Y 82 /* the speed text's top in the header; its touch area is PG_SPEED_H high from there */
 #define PG_SPEED_H 34
-#define PG_DOT_RGB \
-    0xff840au /* #0A84FF as the RGBA bitmap word's colour bytes (r, g, b order in a little-endian word: 0xBBGGRR) */
 #define PG_REC_SIZE 0x58
 #define PG_ACT_X 16 /* the action rows (Refresh All, Import) of the Feeds level: no cover, the text from here */
 #define PG_REMOTE_KEY 9 /* a tile's ckey for an episode that is not on the card (the others: pc_state + 1) */
 #define PG_ROW_REFRESH -1 /* pg.rows[] entries of the Feeds level that are no show */
 #define PG_ROW_IMPORT -2
+#define PG_ROW_DOWNLOADS -3 /* shown while a download is queued or running; a tap on it does nothing */
+#define PG_AWAKE_MS 1000 /* the downloads' timer */
 
-enum { L_SHOWS = 0, L_EPS = 1, L_FEEDS = 2 };
+enum { L_SHOWS = 0, L_EPS = 1, L_FEEDS = 2, L_DLS = 3 };
+
+#define PG_DL_MAX PC_MAX_SHOWS /* rows of the Downloads level (the tile ring holds that many) */
+#define PG_PICK_BYTES ((PC_MAX_EPS + 7) / 8) /* the select mode's bitsets */
+
+struct pg_dl { /* a row of the Downloads level */
+    char dir[PC_FILE], file[PC_FILE], title[PC_TITLE];
+    unsigned key;
+};
 
 static struct {
     void *win, *view, *sv, *status, *title, *fade;
@@ -66,8 +74,9 @@ static struct {
     char root[PC_FILE + 20];
     pc_show_t *shows;
     int nshows; /* every folder the model found (shows with files, subscriptions without) */
-    int rows[PC_MAX_SHOWS +
-             2]; /* the rows of the Shows / Feeds level: an index into shows, or PG_ROW_REFRESH / PG_ROW_IMPORT */
+    int rows
+        [PC_MAX_SHOWS +
+         3]; /* the rows of the Shows / Feeds level: an index into shows, or PG_ROW_REFRESH / PG_ROW_IMPORT / PG_ROW_DOWNLOADS */
     int nrows;
     int from_feeds; /* the Show level was opened from Feeds: Back goes there, and the episodes not on the card are listed (greyed) */
     unsigned gen; /* pn_gen() the Feeds rows were made at */
@@ -79,12 +88,23 @@ static struct {
         down_y; /* the row under the finger + 1; the row a press began on + 1 (0 none; a header hit is -1) and where */
     int fg, noscroll;
     unsigned rev; /* pc_rev() the rows were made at */
-    unsigned timer, load_timer, dlg_timer;
+    unsigned timer, load_timer, dlg_timer,
+        awake; /* awake: the downloads' timer (keeps the device awake, starts the queue again): scoped to the window, in front or not */
+    int rpend; /* a refresh waits for the downloads to pause: 1 + only_new */
+    int has_dl; /* the Feeds level has its Downloads row */
+    unsigned dgen; /* pn_dl_gen() the Show level's lines were made at */
+    void *back, *btn_select, *btn_selall, *bar, *del,
+        *mark
+            [2]; /* select mode: the navbar's Back (its x), Select, Select All, the bottom bar and its Delete pill, the unselect / selected marks */
+    int select; /* select mode (the Show and Downloads levels: marks, Select All, a Delete bar) */
+    unsigned npick, ncan; /* rows marked, rows that can be */
+    unsigned char pick[PG_PICK_BYTES], can[PG_PICK_BYTES]; /* the marks, and the rows that may be marked */
+    struct pg_dl *dls; /* the Downloads level's rows (pg.rows[a] is the show of row a, for its cover) */
+    int dl_off; /* the Feeds level's offset is feeds_off; this one is kept while the rows are made again */
     int dlg; /* the refresh dialog is up */
     unsigned dlg_name_hash; /* pc_hash of the feed whose name the dialog shows */
     unsigned dlg_px,
         dlg_done; /* what the dialog last drew: the fill's width, and the "n of m" it showed (so a tick without news changes nothing) */
-    void *dot; /* the unplayed dot's bitmap */
     grid_tile_t spd; /* the speed text of the Show header */
     grid_t g; /* the tiles: a show's cover and texts, an episode's texts (ckey = its state + 1) */
     grid_t hg; /* the Show header's cover (one tile) and its name and count */
@@ -99,13 +119,15 @@ static void pg_show(void *w, int on) {
 static int pg_abs(int v) { return v < 0 ? -v : v; }
 static int pg_off(void) { return pg.sv ? I(pg.sv, SC_YOFF) : 0; }
 static void pg_redraw(void) { widget_invalidate_force(pg.sv, (void *)0); }
+static void pg_awake_arm(void); /* the downloads' timer, armed when something is queued */
 
 static int pg_count(void) { return pg.level == L_EPS ? pg.neps : pg.nrows; }
 static int pg_top(void) { return pg.level == L_EPS ? PC_HDR_H : 0; }
 static int pg_content(void) {
-    return pg_count()          ? pg_top() + pg_count() * PC_ROW_H + (pg.level == L_EPS ? PG_BOTTOM : 0)
-           : pg.level == L_EPS ? PC_HDR_H
-                               : 0;
+    return (pg_count()          ? pg_top() + pg_count() * PC_ROW_H + (pg.level == L_EPS ? PG_BOTTOM : 0)
+            : pg.level == L_EPS ? PC_HDR_H
+                                : 0) +
+           (pg.select && pg_count() ? SG_BAR_H : 0); /* (the select mode's bar covers the last rows' place) */
 }
 
 static void pg_size(void) {
@@ -127,9 +149,13 @@ static void pg_span(int *r0, int *r1) {
 /* ---------------------------------------------------------------------------
  * Texts and tiles
  */
+static void pg_cat(char *out, unsigned size, const char *s);
+
+/* An episode's grey line: the date, then a tail: Played, N min left, or its length; one that is not on the card ends with its size ("· 48 MB", when the feed gave one), which a played
+ * episode's line (it ends with Played) never has: the two grey titles are told apart by it. */
 static void pg_sub_of(const pc_ep_t *e, unsigned *state, char *out, unsigned size) {
     static const char sep[] = " \xc2\xb7 "; /* " · " */
-    char date[48], tail[40];
+    char date[48], tail[72];
     unsigned pos, len, total, mins = 0, o = 0, k;
     int s = pc_state(e->hash, &pos, &len);
     total = len ? len : e->dur;
@@ -149,6 +175,12 @@ static void pg_sub_of(const pc_ep_t *e, unsigned *state, char *out, unsigned siz
     } else if (total) {
         mins = (total + 59) / 60;
         pc_fmt(tail, sizeof tail, TR("%d min"), mins);
+    }
+    if (e->state != PC_LOCAL && e->length) {
+        char sz[24];
+        pc_fmt(sz, sizeof sz, TR("%d MB"), (e->length + 1048575) >> 20);
+        if (tail[0]) pg_cat(tail, sizeof tail, sep);
+        pg_cat(tail, sizeof tail, sz);
     }
     for (k = 0; date[k] && o + 1 < size; ++k) out[o++] = date[k];
     if (date[0] && tail[0])
@@ -191,6 +223,58 @@ static void pg_cat(char *out, unsigned size, const char *s) {
     out[o] = 0;
 }
 
+/* The words of a download that failed: for an episode a 404 is "Not found" (a missing feed is another thing). */
+static const char *pg_dl_word(int code) {
+    switch (code) {
+    case PN_GONE:
+        return TR("Not found");
+    case PN_CARDFULL:
+        return TR("Card is full");
+    case PN_NOTAUDIO:
+        return TR("Not audio");
+    case PN_QFULL:
+        return TR("Queue is full");
+    default:
+        return pg_status_word(code);
+    }
+}
+
+/* "Downloading 42%" when the length is known, else "Downloading 12 MB". */
+static void pg_dl_progress(char *out, unsigned size, unsigned got, unsigned total) {
+    char num[24];
+    out[0] = 0;
+    pg_cat(out, size, TR("Downloading"));
+    if (total) {
+        unsigned pct = (got >> 10) * 100 / ((total >> 10) ? (total >> 10) : 1);
+        pc_fmt(num, sizeof num, " %d%", pct > 100 ? 100 : pct);
+    } else
+        pc_fmt(num, sizeof num, " %d MB", got >> 20);
+    pg_cat(out, size, num);
+}
+
+/* The state line of an episode that is not on the card, when it has one: Waiting, Downloading 42%, Failed: <why>, or Paused (a .part from before). 0 when it is a plain remote episode (its date line). */
+static int pg_dl_line(unsigned key, int part, char *out, unsigned size) {
+    int code = 0, st;
+    unsigned got = 0, total = 0;
+    out[0] = 0;
+    st = key ? pn_dl_state(key, &code, &got, &total) : PN_DL_NONE;
+    if (st == PN_DL_ACTIVE)
+        pg_dl_progress(out, size, got, total);
+    else if (st == PN_DL_WAIT)
+        pg_cat(out, size, TR("Waiting"));
+    else if (st == PN_DL_FAILED) {
+        pg_cat(out, size, TR("Failed"));
+        pg_cat(out, size, ": ");
+        pg_cat(out, size, pg_dl_word(code));
+    } else if (part)
+        pg_cat(out, size, TR("Paused"));
+    return out[0] != 0;
+}
+
+static int pg_dl_sub(const pc_ep_t *e, char *out, unsigned size) {
+    return pg_dl_line(e->file[0] ? pn_dl_key(pg.shows[pg.sel].dir, e->file) : 0, e->state == PC_PART, out, size);
+}
+
 /* The texts of row a of the Feeds level into out (title) and sub. */
 static void pg_feed_texts(int a, char *title, unsigned tsize, char *sub, unsigned ssize) {
     int row = pg.rows[a];
@@ -202,7 +286,9 @@ static void pg_feed_texts(int a, char *title, unsigned tsize, char *sub, unsigne
         for (i = 0; i < pg.nrows; ++i)
             if (pg.rows[i] >= 0 && pg.shows[pg.rows[i]].checked > last) last = pg.shows[pg.rows[i]].checked;
         pg_cat(title, tsize, TR("Refresh All"));
-        if (pn_busy()) {
+        if (pg.rpend)
+            pg_cat(sub, ssize, TR("Waiting")); /* the downloads are pausing: the refresh starts when they have */
+        else if (pn_busy()) {
             char num[28];
             pn_progress(&done, &total);
             pg_cat(sub, ssize, TR("Refreshing"));
@@ -214,6 +300,16 @@ static void pg_feed_texts(int a, char *title, unsigned tsize, char *sub, unsigne
             pc_when(last, now, sub, ssize);
         else
             pg_cat(sub, ssize, TR("Never refreshed"));
+    } else if (row == PG_ROW_DOWNLOADS) { /* "Downloads (3)" and the one being fetched: its percent, or Waiting */
+        char num[16];
+        unsigned got = 0, total = 0;
+        pg_cat(title, tsize, TR("Downloads"));
+        pc_fmt(num, sizeof num, " (%d)", (unsigned)pn_dl_count());
+        pg_cat(title, tsize, num);
+        if (pn_dl_current(&got, &total))
+            pg_dl_progress(sub, ssize, got, total);
+        else
+            pg_cat(sub, ssize, TR("Waiting"));
     } else if (row == PG_ROW_IMPORT) {
         pg_cat(title, tsize, TR("Import shows"));
         pg_cat(sub, ssize, "Podcasts/" PN_IMPORT_FILE);
@@ -263,9 +359,15 @@ static grid_tile_t *pg_tile(int a) {
             pg_feed_texts(a, title, sizeof title, sub, sizeof sub);
             grid_set(t, title, sub, 0);
             if (pg.rows[a] < 0) t->art = 2; /* an action row has no cover to load */
+        } else if (pg.level == L_DLS) { /* the episode and its state line, the show's cover */
+            pg_dl_line(pg.dls[a].key, 1, sub, sizeof sub);
+            grid_set(t, pg.dls[a].title, sub, 0);
         } else {
             unsigned state;
-            pg_sub_of(&pg.eps[a], &state, sub, sizeof sub);
+            if (pg.eps[a].state == PC_LOCAL || !pg_dl_sub(&pg.eps[a], sub, sizeof sub))
+                pg_sub_of(&pg.eps[a], &state, sub, sizeof sub);
+            else
+                state = PC_NEW;
             grid_set(t, pg.eps[a].title, sub, 0);
             t->ckey = pg.eps[a].state == PC_LOCAL ? state + 1 : PG_REMOTE_KEY;
         }
@@ -282,6 +384,19 @@ static void pg_feed_retext(void) {
         if (!t) continue;
         pg_feed_texts(a, title, sizeof title, sub, sizeof sub);
         grid_set(t, title, sub, 0);
+        t->fit = 0, t->tw = t->aw = 0;
+    }
+}
+
+/* The state lines of the Downloads rows made again (a step of progress): the covers stay. */
+static void pg_dls_retext(void) {
+    int a;
+    for (a = 0; a < pg.nrows; ++a) {
+        grid_tile_t *t = grid_find(&pg.g, a);
+        char sub[80];
+        if (!t) continue;
+        pg_dl_line(pg.dls[a].key, 1, sub, sizeof sub);
+        grid_set(t, pg.dls[a].title, sub, 0);
         t->fit = 0, t->tw = t->aw = 0;
     }
 }
@@ -308,16 +423,32 @@ static void pg_header_texts(void) {
 /* ---------------------------------------------------------------------------
  * Paint
  */
+static int pg_is_pick(int i) { return pg.pick[i >> 3] >> (i & 7) & 1; }
+static int pg_can_pick(int i) { return pg.can[i >> 3] >> (i & 7) & 1; }
+
+/* The select mark of a row that can be marked, wholly inside the window (as the Playlists page's). */
+static void pg_mark(void *canvas, int i, int x, int y) {
+    int src[4], dst[4];
+    if (!pg.mark[0] || !pg_can_pick(i) || y < 0 || y + SG_MARK > GRID_VIEW_H) return;
+    src[0] = src[1] = 0, src[2] = src[3] = SG_MARK;
+    dst[0] = x, dst[1] = y, dst[2] = dst[3] = SG_MARK;
+    canvas_draw_image(canvas, pg.mark[pg_is_pick(i)], src, dst);
+}
+
+/* The Shows and Downloads levels: the list rows of the stock Albums list mode. In select mode (Downloads) a mark column opens left of the covers. */
 static void pg_paint_shows(void *canvas) {
-    int r0, r1;
+    int r0, r1, r;
     pg_span(&r0, &r1);
     if (r1 < r0) return;
-    grid_list_paint(canvas, &pg.g, pg.st_title, pg.st_sub, r0, r1, pg_off(), GRID_VIEW_H, pg.press, 0, pg_tile_of,
-                    (void *)0);
+    grid_list_paint(canvas, &pg.g, pg.st_title, pg.st_sub, r0, r1, pg_off(), GRID_VIEW_H, pg.select ? 0 : pg.press,
+                    pg.select ? SG_SEL_COL : 0, pg_tile_of, (void *)0);
+    for (r = r0; pg.select && r <= r1; ++r)
+        pg_mark(canvas, r, LIST_ART_X + (SG_SEL_COL - 6 - SG_MARK) / 2,
+                r * PC_ROW_H - pg_off() + (PC_ROW_H - SG_MARK) / 2);
 }
 
 static void pg_paint_eps(void *canvas) {
-    int r0, r1, r, off = pg_off(), pass;
+    int r0, r1, r, off = pg_off(), pass, sx = pg.select ? SG_SEL_COL : 0;
     grid_tile_t *h = &pg.hg.tiles[0];
     if (off < PC_HDR_H) { /* the header: cover, name, count, speed */
         grid_blit(canvas, &pg.hg, h, 16, 16 - off, GRID_VIEW_H);
@@ -334,18 +465,11 @@ static void pg_paint_eps(void *canvas) {
     for (r = r0; r <= r1; ++r) {
         grid_tile_t *t = pg_tile(r);
         int y = PC_HDR_H + r * PC_ROW_H - off;
-        if (pg.press == r + 1) az_fill(canvas, 0, y, y + PC_ROW_H - 1, PG_W, LIST_PRESS);
-        az_fill(canvas, PG_TEXT_X, y + PC_ROW_H - 1, y + PC_ROW_H, PG_W - PG_TEXT_X, LIST_HAIR);
-        if (pg.dot && t->ckey != PC_DONE + 1 &&
-            t->ckey !=
-                PG_REMOTE_KEY) { /* the unplayed dot (a started episode too; none on one that is not on the card) */
-            int src[4], dst[4], top = y + (PC_ROW_H - PC_DOT) / 2;
-            if (top >= 0 && top + PC_DOT <= GRID_VIEW_H) {
-                src[0] = src[1] = 0, src[2] = src[3] = PC_DOT;
-                dst[0] = PG_DOT_X, dst[1] = top, dst[2] = dst[3] = PC_DOT;
-                canvas_draw_image(canvas, pg.dot, src, dst);
-            }
-        }
+        if (pg.press == r + 1 && !pg.select) az_fill(canvas, 0, y, y + PC_ROW_H - 1, PG_W, LIST_PRESS);
+        az_fill(canvas, PG_TEXT_X + sx, y + PC_ROW_H - 1, y + PC_ROW_H, PG_W - PG_TEXT_X - sx, LIST_HAIR);
+        if (pg.select) /* select mode: the mark column opens left of the texts (as the Playlists page's rows) */
+            pg_mark(canvas, r, PG_TEXT_X + (SG_SEL_COL - 6 - SG_MARK) / 2, y + (PC_ROW_H - SG_MARK) / 2);
+        (void)t;
     }
     for (pass = 0; pass < 3; ++pass) { /* titles, played titles, grey lines: one text style at a time */
         widget_prepare_text_style(pass == 0 ? pg.st_title : pass == 1 ? pg.st_dim : pg.st_sub, canvas);
@@ -355,9 +479,9 @@ static void pg_paint_eps(void *canvas) {
                 played = t->ckey == PC_DONE + 1 ||
                          t->ckey == PG_REMOTE_KEY; /* (a title not on the card is as grey as a played one) */
             if (pass == 2)
-                grid_text(canvas, t, 1, PG_TEXT_X, y + LIST_SUB_Y, PG_TEXT_W, LIST_SUB_H, GRID_VIEW_H);
+                grid_text(canvas, t, 1, PG_TEXT_X + sx, y + LIST_SUB_Y, PG_TEXT_W - sx, LIST_SUB_H, GRID_VIEW_H);
             else if ((pass == 1) == played)
-                grid_text(canvas, t, 0, PG_TEXT_X, y + LIST_TITLE_Y, PG_TEXT_W, LIST_TITLE_H, GRID_VIEW_H);
+                grid_text(canvas, t, 0, PG_TEXT_X + sx, y + LIST_TITLE_Y, PG_TEXT_W - sx, LIST_TITLE_H, GRID_VIEW_H);
         }
     }
 }
@@ -378,10 +502,14 @@ static void pg_paint_feeds(void *canvas) {
         widget_prepare_text_style(pass == 0 ? pg.st_title : pass == 1 ? pg.st_act : pg.st_sub, canvas);
         for (r = r0; r <= r1; ++r) {
             grid_tile_t *t = pg_tile(r);
-            int y = r * PC_ROW_H - off, show = pg.rows[r] >= 0, x = show ? LIST_TEXT_X : PG_ACT_X, w = PG_W - 12 - x;
+            int y = r * PC_ROW_H - off, show = pg.rows[r] >= 0, x = show ? LIST_TEXT_X : PG_ACT_X, w = PG_W - 12 - x,
+                plain =
+                    show ||
+                    pg.rows[r] ==
+                        PG_ROW_DOWNLOADS; /* (the Downloads row is a report, not an action: the plain title style) */
             if (pass == 2)
                 grid_text(canvas, t, 1, x, y + LIST_SUB_Y, w, LIST_SUB_H, GRID_VIEW_H);
-            else if ((pass == 0) == show)
+            else if ((pass == 0) == plain)
                 grid_text(canvas, t, 0, x, y + LIST_TITLE_Y, w, LIST_TITLE_H, GRID_VIEW_H);
         }
     }
@@ -393,7 +521,7 @@ static int pg_on_paint(void *ctx, void *e) {
     (void)ctx;
     if (!canvas || !pg.view || !pg.g.tiles) return RET_OK;
     I(canvas, CANVAS_OY) += off;
-    if (pg.level == L_SHOWS && pg.nrows)
+    if ((pg.level == L_SHOWS || pg.level == L_DLS) && pg.nrows)
         pg_paint_shows(canvas);
     else if (pg.level == L_FEEDS && pg.nrows)
         pg_paint_feeds(canvas);
@@ -401,32 +529,6 @@ static int pg_on_paint(void *ctx, void *e) {
         pg_paint_eps(canvas);
     I(canvas, CANVAS_OY) -= off;
     return RET_OK;
-}
-
-/* The unplayed dot: a disc of the accent colour, antialiased by 4 x 4 samples a pixel, in an RGBA bitmap. */
-static void pg_make_dot(void) {
-    unsigned *px;
-    int x, y, i, j, n;
-    void *b = bitmap_create_ex(PC_DOT, PC_DOT, PC_DOT * 4, BITMAP_RGBA8888);
-    if (!b) return;
-    px = (unsigned *)bitmap_lock_buffer_for_write(b);
-    if (!px || bitmap_get_line_length(b) != PC_DOT * 4) {
-        if (px) bitmap_unlock_buffer(b);
-        bitmap_destroy(b);
-        return;
-    }
-    for (y = 0; y < PC_DOT; ++y)
-        for (x = 0; x < PC_DOT; ++x) {
-            for (n = 0, i = 0; i < 4; ++i)
-                for (j = 0; j < 4; ++j) {
-                    int dx = x * 8 + 2 * j + 1 - PC_DOT * 4,
-                        dy = y * 8 + 2 * i + 1 - PC_DOT * 4; /* eighths of a pixel from the centre */
-                    if (dx * dx + dy * dy <= (PC_DOT * 4 - 4) * (PC_DOT * 4 - 4)) ++n; /* the disc is 11 px across */
-                }
-            px[y * PC_DOT + x] = (unsigned)(n * 255 / 16) << 24 | PG_DOT_RGB;
-        }
-    bitmap_unlock_buffer(b);
-    pg.dot = b;
 }
 
 /* ---------------------------------------------------------------------------
@@ -532,15 +634,48 @@ static void pg_drop_tiles(void) {
     pg.press = pg.down = 0;
 }
 
-/* The navbar's Feeds button is the capsule's left cap on the Shows level; elsewhere it is hidden (and out of the hit test) and Now Playing is the glass disc. */
+/* Whether row a can be marked in select mode. Show level: an episode with a file, or a .part that no download holds (a paused one: deleting it takes the paused download away); a remote
+ * row cannot. Downloads level: every row but the one running (it is paused with a tap first). */
+static int pg_pickable(int a) {
+    int code, st;
+    unsigned got, total;
+    if (pg.level == L_DLS) return a < pg.nrows && pn_dl_state(pg.dls[a].key, &code, &got, &total) != PN_DL_ACTIVE;
+    if (pg.level != L_EPS || a >= pg.neps) return 0;
+    if (pg.eps[a].state == PC_LOCAL) return 1;
+    if (pg.eps[a].state != PC_PART || !pg.eps[a].file[0]) return 0;
+    st = pn_dl_state(pn_dl_key(pg.shows[pg.sel].dir, pg.eps[a].file), &code, &got, &total);
+    return st == PN_DL_NONE || st == PN_DL_FAILED;
+}
+
+/* How many rows can be marked; with fill the bitset of them is made. */
+static unsigned pg_sel_scan(int fill) {
+    int i, n = pg_count();
+    unsigned c = 0;
+    if (fill) memset(pg.can, 0, sizeof pg.can);
+    for (i = 0; i < n && i < PC_MAX_EPS; ++i)
+        if (pg_pickable(i)) {
+            ++c;
+            if (fill) pg.can[i >> 3] |= (unsigned char)(1 << (i & 7));
+        }
+    return c;
+}
+
+static void pg_select(int on);
+
+/* The navbar's right end. Shows level: the Feeds button, the capsule's left cap. Show and Downloads levels: the Select button (the same cap) when a row can be marked. Elsewhere both are hidden (and out
+ * of the hit test) and Now Playing is the glass disc; with a cap beside it Now Playing is the capsule's right cap. */
 static void pg_nav(void) {
-    int shows = pg.level == L_SHOWS;
-    const char *img = shows ? "ah_nav_play" : "ah_nav_np";
+    int shows = pg.level == L_SHOWS,
+        sel =
+            !pg.select && (pg.level == L_EPS || pg.level == L_DLS) && pg.btn_select && pg.mark[0] && pg_sel_scan(0) > 0,
+        cap = shows || sel;
+    const char *img = cap ? "ah_nav_play" : "ah_nav_np";
     pg_show(pg.btn_feeds, shows);
+    pg_show(pg.btn_select, sel);
     if (pg.np) {
         widget_set_prop_str(pg.np, "style:normal:icon", img);
         widget_set_prop_str(pg.np, "style:over:icon", img);
-        widget_set_prop_str(pg.np, "style:pressed:icon", shows ? "ah_nav_play_down" : "ah_nav_np_down");
+        widget_set_prop_str(pg.np, "style:pressed:icon", cap ? "ah_nav_play_down" : "ah_nav_np_down");
     }
 }
 
@@ -556,6 +691,7 @@ static void pg_scan(void) {
 /* The Shows level: what is on the card (a subscription with nothing downloaded is in Feeds, not here). */
 static void pg_load_shows(void) {
     int i, feeds = 0;
+    if (pg.select) pg_select(0);
     pg_drop_tiles();
     pg.level = L_SHOWS;
     pg.from_feeds = 0;
@@ -586,6 +722,7 @@ static void pg_load_shows(void) {
 static void pg_load_feeds(void) {
     int i, feeds = 0, off = pg.level == L_FEEDS ? pg_off() : pg.feeds_off;
     char path[PC_FILE * 2 + 40];
+    if (pg.select) pg_select(0);
     pg_drop_tiles();
     pg.level = L_FEEDS;
     pg.from_feeds = 0;
@@ -593,6 +730,8 @@ static void pg_load_feeds(void) {
     pg.nrows = 0;
     for (i = 0; i < pg.nshows; ++i) feeds += pg.shows[i].feed[0] != 0;
     if (feeds) pg.rows[pg.nrows++] = PG_ROW_REFRESH;
+    pg.has_dl = pn_dl_count() > 0;
+    if (pg.has_dl) pg.rows[pg.nrows++] = PG_ROW_DOWNLOADS;
     for (i = 0; pg.root[i] && i + 1 < (int)sizeof path; ++i) path[i] = pg.root[i];
     path[i] = 0;
     if (i + (int)sizeof("/" PN_IMPORT_FILE) <= (int)sizeof path) {
@@ -604,7 +743,7 @@ static void pg_load_feeds(void) {
     free(pg.eps);
     pg.eps = (pc_ep_t *)0;
     pg.neps = 0;
-    pg.gen = pn_gen();
+    pg.gen = pn_gen(), pg.dgen = pn_dl_gen();
     pg_title("Feeds", (const char *)0);
     pg_nav();
     pg_show(pg.view, 1);
@@ -622,20 +761,114 @@ static void pg_load_feeds(void) {
     pg_kick();
 }
 
-/* The Show level of show `si` (an index into shows): the episodes on the card, newest first; opened from Feeds, the ones not on the card as well, greyed. */
-static void pg_open_show(int si, int remote) {
-    pc_ep_t *all = calloc(PC_MAX_EPS, sizeof *all);
-    int n, k, m = 0;
-    if (!all) {
+/* The index in shows of the show folder dir, -1 when there is none. */
+static int pg_show_of(const char *dir) {
+    int i;
+    for (i = 0; i < pg.nshows; ++i)
+        if (!strcmp(pg.shows[i].dir, dir)) return i;
+    return -1;
+}
+
+static void pg_dl_row(int n, int si, const char *dir, const char *file, const char *title, unsigned key) {
+    struct pg_dl *d = &pg.dls[n];
+    d->dir[0] = d->file[0] = d->title[0] = 0;
+    pg_cat(d->dir, sizeof d->dir, dir);
+    pg_cat(d->file, sizeof d->file, file);
+    pg_cat(d->title, sizeof d->title, title);
+    d->key = key;
+    pg.rows[n] = si;
+}
+
+/* The Downloads level's rows (at most PG_DL_MAX): what the worker holds, in the order it was asked (queued, running, waiting), then the failed ones, then the paused ones the card
+ * has and the worker does not (a .part of an episode its show's .episodes lists: after a reboot, the user's unfinished downloads). Titles come from the shows' .episodes; the scan reads
+ * the shows with a feed (and the ones the worker names), one pc_load_show each. */
+static void pg_dls_build(void) {
+    char dir[PC_FILE], file[PC_FILE];
+    int n = 0, i, si, code;
+    unsigned key;
+    pc_ep_t *all;
+    for (i = 0; n < PG_DL_MAX && (key = pn_dl_listed(i, dir, file, &code)); ++i) {
+        si = pg_show_of(dir);
+        if (si >= 0) pg_dl_row(n++, si, dir, file, file, key);
+    }
+    all = calloc(PC_MAX_EPS, sizeof *all);
+    for (si = 0; all && si < pg.nshows; ++si) {
+        int k, cnt, used = 0;
+        for (k = 0; k < n; ++k) used |= pg.rows[k] == si;
+        if (!used && !pg.shows[si].feed[0]) continue;
+        cnt = pc_load_show(&pg.shows[si], all, PC_MAX_EPS);
+        for (k = 0; k < cnt; ++k) {
+            int j, found = -1;
+            for (j = 0; j < n; ++j)
+                if (pg.rows[j] == si && !strcmp(pg.dls[j].file, all[k].file)) found = j;
+            if (found >= 0) {
+                pg.dls[found].title[0] = 0;
+                pg_cat(pg.dls[found].title, PC_TITLE, all[k].title);
+            } else if (all[k].state == PC_PART && all[k].file[0] && n < PG_DL_MAX) {
+                pg_dl_row(n++, si, pg.shows[si].dir, all[k].file, all[k].title,
+                          pn_dl_key(pg.shows[si].dir, all[k].file));
+            }
+        }
+    }
+    free(all);
+    pg.nrows = n;
+}
+
+/* The Downloads level, behind the Feeds level's Downloads row: a row per download (the show's cover, the episode, its state line). keep: the scroll position stays (the rows are made again). */
+static void pg_load_downloads(int keep) {
+    int off = keep ? pg_off() : 0;
+    if (!pg.dls) {
         pod_toast(TR("Not enough memory"));
         return;
     }
+    if (pg.select) pg_select(0);
+    if (pg.level == L_FEEDS) pg.feeds_off = pg_off();
+    pg_drop_tiles();
+    pg.level = L_DLS;
+    pg.from_feeds = 0;
+    pg_scan();
+    free(pg.eps);
+    pg.eps = (pc_ep_t *)0;
+    pg.neps = 0;
+    pg_dls_build();
+    pg.gen = pn_gen(), pg.dgen = pn_dl_gen();
+    pg_title("Downloads", (const char *)0);
+    pg_nav();
+    pg_show(pg.view, 1);
+    pg_show(pg.status, 0);
+    if (!pg.nrows) pg_empty("No downloads");
+    grid_shape(&pg.g, LIST_ART, LIST_R, 1);
+    grid_placeholder(&pg.g);
+    pg_size();
+    widget_set_prop_int(pg.sv, "yoffset", off);
+    pg_fade();
+    pg_redraw();
+    pg_kick();
+}
+
+/* The Show level of show `si` (an index into shows): the episodes on the card, newest first; opened from Feeds, the ones not on the card as well, greyed. */
+static pc_ep_t *pg_eps_of(int si, int remote, int *count) {
+    pc_ep_t *all = calloc(PC_MAX_EPS, sizeof *all);
+    int n, k, m = 0;
+    if (!all) return all;
     n = pc_load_show(&pg.shows[si], all, PC_MAX_EPS);
     for (k = 0; k < n; ++k)
         if (remote || all[k].state == PC_LOCAL) {
             if (m != k) memcpy(&all[m], &all[k], sizeof *all);
             ++m;
         }
+    *count = m;
+    return all;
+}
+
+static void pg_open_show(int si, int remote) {
+    int m = 0;
+    pc_ep_t *all = pg_eps_of(si, remote, &m);
+    if (!all) {
+        pod_toast(TR("Not enough memory"));
+        return;
+    }
+    pg.gen = pn_gen(), pg.dgen = pn_dl_gen();
     if (pg.level == L_FEEDS)
         pg.feeds_off = pg_off();
     else
@@ -660,6 +893,108 @@ static void pg_open_show(int si, int remote) {
     pg_kick();
 }
 
+/* The Show level's episodes read again (a download finished, failed or was started: the list changed): the scroll position and the header stay, the lines are made again. */
+static void pg_reload_eps(void) {
+    int m = 0;
+    pc_ep_t *all = pg_eps_of(pg.sel, pg.from_feeds, &m);
+    pg.gen = pn_gen(), pg.dgen = pn_dl_gen();
+    if (!all) return;
+    free(pg.eps);
+    pg.eps = all, pg.neps = m;
+    grid_drop(&pg.g);
+    pg.press = pg.down = 0;
+    if (!m)
+        pg_empty(pg.from_feeds ? "No episodes yet. Refresh the feed in Feeds." : "No downloaded episodes");
+    else {
+        pg_show(pg.view, 1);
+        pg_show(pg.status, 0);
+    }
+    pg_header_texts();
+    pg_size();
+    pg_nav();
+    pg_redraw();
+}
+
+/* ---------------------------------------------------------------------------
+ * Select mode (the Show and Downloads levels), in the Playlists page's manner (docs/modules/playlists.md "Select mode"): the navbar's Back becomes the x, the title "N Selected", Select All at the
+ * right, a mark on every row that can be marked, a bottom bar with one Delete pill and a confirm before anything is removed.
+ */
+static void pg_head(void) { /* the navbar's title: "N Selected" in select mode, else the level's */
+    char buf[64];
+    if (!pg.title) return;
+    if (!pg.select) {
+        if (pg.level == L_EPS)
+            pg_title((const char *)0, pg.shows[pg.sel].title);
+        else if (pg.level == L_DLS)
+            pg_title("Downloads", (const char *)0);
+        return;
+    }
+    pc_fmt(buf, sizeof buf, TR("%d Selected"), pg.npick);
+    widget_set_text_utf8(pg.title, buf);
+}
+
+static void pg_select(int on) {
+    int max;
+    if (on == pg.select) return;
+    if (on && !(pg.btn_selall && pg.bar && pg.del && pg.mark[0] && pg.mark[1])) return;
+    pg.select = on;
+    pg.npick = 0;
+    memset(pg.pick, 0, sizeof pg.pick);
+    pg.ncan = on ? pg_sel_scan(1) : 0;
+    pg.press = pg.down = 0;
+    pg_show(pg.btn_select, 0);
+    pg_show(pg.btn_feeds, 0);
+    pg_show(pg.np, !on);
+    pg_show(pg.btn_selall, on);
+    pg_show(pg.bar, on);
+    if (pg.title) widget_resize(pg.title, (on ? SG_SELALL_X : NAV_VIEW_X) - NAV_TITLE_X, 22);
+    if (pg.back) {
+        widget_set_prop_str(pg.back, "style:normal:icon", on ? "ah_nav_close" : "ah_nav_back");
+        widget_set_prop_str(pg.back, "style:over:icon", on ? "ah_nav_close" : "ah_nav_back");
+        widget_set_prop_str(pg.back, "style:pressed:icon", on ? "ah_nav_close_down" : "ah_nav_back_down");
+    }
+    pg_head();
+    if (!on) pg_nav();
+    grid_drop(&pg.g); /* the texts are made again at the other width */
+    pg_size();
+    max = pg_content() - GRID_VIEW_H;
+    if (max < 0) max = 0;
+    if (pg_off() > max) widget_set_prop_int(pg.sv, "yoffset", max);
+    pg_fade();
+    pg_redraw();
+}
+
+static int pg_on_select(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    if (pg.win && !pg.select && (pg.level == L_EPS || pg.level == L_DLS)) pg_select(1);
+    return RET_OK;
+}
+
+static void pg_toggle_pick(int i) {
+    if (i < 0 || i >= pg_count() || !pg_can_pick(i)) return;
+    pg.pick[i >> 3] ^= (unsigned char)(1 << (i & 7));
+    pg.npick += pg_is_pick(i) ? 1 : (unsigned)-1;
+    pg_head();
+    pg_redraw();
+}
+
+static int pg_on_selall(void *ctx, void *e) {
+    int i, all;
+    (void)ctx;
+    (void)e;
+    if (!pg.select) return RET_OK;
+    all = pg.npick < pg.ncan; /* all that can be, unless all are: then none */
+    memset(pg.pick, 0, sizeof pg.pick);
+    pg.npick = 0;
+    if (all)
+        for (i = 0; i < pg_count() && i < PC_MAX_EPS; ++i)
+            if (pg_can_pick(i)) pg.pick[i >> 3] |= (unsigned char)(1 << (i & 7)), ++pg.npick;
+    pg_head();
+    pg_redraw();
+    return RET_OK;
+}
+
 static int pg_on_cancel(void *ctx, void *e);
 
 static int pg_on_back(void *ctx, void *e) {
@@ -667,7 +1002,9 @@ static int pg_on_back(void *ctx, void *e) {
     (void)e;
     if (!pg.win) return RET_OK;
     if (pg.dlg) return pg_on_cancel((void *)0, (void *)0); /* Back while the refresh dialog is up is its Cancel */
-    if (pg.level == L_EPS && pg.from_feeds)
+    if (pg.select)
+        pg_select(0); /* the x leaves select mode first */
+    else if (pg.level == L_DLS || (pg.level == L_EPS && pg.from_feeds))
         pg_load_feeds();
     else if (pg.level != L_SHOWS)
         pg_load_shows();
@@ -740,6 +1077,8 @@ static void pg_dlg_finish(void) {
     const char *shown = msg;
     pg_dlg_show(0);
     pn_summary(&ok, &failed, &cancelled);
+    pn_dl_start(); /* the downloads that paused for the refresh go on */
+    pg_awake_arm();
     if (cancelled) {
         if (ok)
             pc_fmt(msg, sizeof msg, TR("Cancelled, %d updated"), ok);
@@ -809,6 +1148,14 @@ static void pg_toast_code(int code) {
 /* Refresh the feeds in rows [first, count) that are subscriptions (every one: Refresh All; the new ones after an import: those never refreshed). */
 static void pg_refresh(int only_new) {
     int idx[PC_MAX_SHOWS], n = 0, i, r;
+    if (pn_dl_running()) { /* downloads pause for a refresh (the queue stays, they go on when it ends): the refresh starts from the page's tick once the thread has stopped */
+        pn_dl_pause();
+        pg.rpend = only_new + 1;
+        pg_awake_arm();
+        pg_feed_retext();
+        pg_redraw();
+        return;
+    }
     for (i = 0; i < pg.nrows; ++i) {
         int s = pg.rows[i];
         if (s >= 0 && (!only_new || !pg.shows[s].checked)) idx[n++] = s;
@@ -845,6 +1192,8 @@ static void pg_feeds_tap(int a) {
         if (!pn_busy()) pg_refresh(0);
     } else if (row == PG_ROW_IMPORT) {
         if (!pn_busy()) pg_import();
+    } else if (row == PG_ROW_DOWNLOADS) {
+        pg_load_downloads(0); /* the Downloads level */
     } else
         pg_open_show(row, 1);
 }
@@ -871,11 +1220,11 @@ static void pg_record_free(unsigned *rec) {
     for (i = 0; i < sizeof field / sizeof *field; ++i) free(*(char **)((char *)rec + field[i]));
 }
 
-static int pg_path(const pc_ep_t *e, char *out, unsigned size) {
+static int pg_join(char *out, unsigned size, const char *dir, const char *file) {
     unsigned n = 0, k;
     const char *parts[3];
     int p;
-    parts[0] = pg.root, parts[1] = pg.shows[pg.sel].dir, parts[2] = e->file;
+    parts[0] = pg.root, parts[1] = dir, parts[2] = file;
     for (p = 0; p < 3; ++p) {
         if (p) out[n++] = '/';
         for (k = 0; parts[p][k]; ++k) {
@@ -885,6 +1234,10 @@ static int pg_path(const pc_ep_t *e, char *out, unsigned size) {
     }
     out[n] = 0;
     return 1;
+}
+
+static int pg_path(const pc_ep_t *e, char *out, unsigned size) {
+    return pg_join(out, size, pg.shows[pg.sel].dir, e->file);
 }
 
 /* Episode `at` and the ones after it: the queue (the list's order, from the first row, so Previous goes back up the list), Now Playing. */
@@ -963,19 +1316,84 @@ static int pg_on_down(void *ctx, void *e) {
     a = pg_item_of(e, &x);
     pg.down = a == -1 ? 0 : a == -2 ? -2 : a + 1;
     pg.down_x = I(e, PE_X), pg.down_y = I(e, PE_Y);
-    if (a >= 0 && !(pg.level == L_EPS && x < PG_TEXT_X))
-        pg_set_press(a + 1); /* (the dot column is its own button: no row fill) */
+    if (a >= 0 && !pg.select) pg_set_press(a + 1);
+    (void)x;
     return RET_OK;
 }
 
-static void pg_toggle(int a) {
-    unsigned pos, len;
-    int s = pc_state(pg.eps[a].hash, &pos, &len);
-    if (!pg.eps[a].hash) return;
-    pc_mark(pg.eps[a].hash, s != PC_DONE);
-    pg.rev = pc_rev();
+/* A tap on an episode that is not on the card: a queued or running download is cancelled (its .part stays, a later tap resumes it); anything else (not downloaded, Paused, Failed) is queued. */
+static void pg_dl_toggle(const char *dir, const char *file) {
+    unsigned key, got, total;
+    int code, st, r;
+    if (!file[0]) return;
+    key = pn_dl_key(dir, file);
+    st = pn_dl_state(key, &code, &got, &total);
+    if (st == PN_DL_WAIT || st == PN_DL_ACTIVE)
+        pn_dl_cancel(key);
+    else {
+        r = pn_dl_add(pg.root, dir, file);
+        if (r != PN_OK) pod_toast(pg_dl_word(r));
+        pg_awake_arm();
+    }
+}
+
+static void pg_dl_tap(int a) {
+    pg_dl_toggle(pg.shows[pg.sel].dir, pg.eps[a].file);
     grid_drop(&pg.g);
     pg_redraw();
+}
+
+/* A tap on a row of the Downloads level: what it does on the Show level (a running or waiting one is paused, a paused one resumes, a failed one is tried again). */
+static void pg_dls_tap(int a) {
+    pg_dl_toggle(pg.dls[a].dir, pg.dls[a].file);
+    pg_load_downloads(1);
+}
+
+extern int pod_confirm(const char *text); /* patch/m1plus.c: the stock confirm dialog, modal; nonzero for Yes */
+
+/* Whether the player has this file (the stock playing record's path, as the tag reader and the resume code compare). */
+static int pg_playing(const char *path) {
+    void *t = cc_playing();
+    const char *p = t ? *(const char **)((char *)t + REC_PATH) : (const char *)0;
+    return p && !strcasecmp(p, path);
+}
+
+/* The Delete pill of the select bar, after a confirm (No: the mode stays). Show level: each marked episode's file and .part are unlinked (a .part marked alone is a paused download taken away); the
+ * `.episodes` line stays, so the episode is a remote one again, greyed and downloadable; its resume place and played mark are forgotten (pc_mark: it starts fresh when downloaded again). The episode
+ * the player is on is never deleted (it is skipped, with a toast). Downloads level: a waiting one leaves the queue, a paused or failed one loses its .part and its failure. */
+static int pg_on_delete(void *ctx, void *e) {
+    int i, kept = 0;
+    (void)ctx;
+    (void)e;
+    if (!pg.select || !pg.npick) return RET_OK;
+    if (!pod_confirm(pg.level == L_DLS ? TR("Remove the selected downloads?") : TR("Delete the selected episodes?")))
+        return RET_OK;
+    for (i = 0; i < pg_count() && i < PC_MAX_EPS; ++i) {
+        char path[PC_FILE * 3 + 24];
+        const char *dir = pg.level == L_DLS ? pg.dls[i].dir : pg.shows[pg.sel].dir,
+                   *file = pg.level == L_DLS ? pg.dls[i].file : pg.eps[i].file;
+        unsigned key = pg.level == L_DLS ? pg.dls[i].key : pn_dl_key(dir, file),
+                 hash = pg.level == L_EPS && pg.eps[i].state == PC_LOCAL ? pg.eps[i].hash : 0;
+        if (!pg_is_pick(i) || !pg_can_pick(i) || !pg_join(path, sizeof path - 6, dir, file)) continue;
+        if (pg.level == L_EPS && pg_playing(path)) {
+            ++kept;
+            continue;
+        }
+        pn_dl_cancel(key); /* a waiting one leaves the queue */
+        if (pg.level == L_EPS) unlink(path);
+        pg_cat(path, sizeof path, ".part");
+        unlink(path);
+        pn_dl_clear(key);
+        if (hash) pc_mark(hash, 0);
+    }
+    pc_flush();
+    pg_select(0);
+    if (pg.level == L_DLS)
+        pg_load_downloads(1);
+    else
+        pg_reload_eps();
+    if (kept) pod_toast(TR("The playing episode was kept"));
+    return RET_OK;
 }
 
 static void pg_speed_cycle(void) {
@@ -996,17 +1414,19 @@ static int pg_on_up(void *ctx, void *e) {
     if (!a || !e || !pg.view) return RET_OK;
     if (pg_abs(I(e, PE_X) - pg.down_x) >= PG_TAP_PX || pg_abs(I(e, PE_Y) - pg.down_y) >= PG_TAP_PX) return RET_OK;
     same = pg_item_of(e, &x);
-    if (a == -2) {
+    if (pg.select) {
+        if (a > 0 && same == a - 1) pg_toggle_pick(same); /* a tap marks and unmarks; a drag marks nothing */
+    } else if (a == -2) {
         if (same == -2) pg_speed_cycle();
     } else if (same == a - 1) {
-        if (pg.level == L_SHOWS)
+        if (pg.level == L_DLS)
+            pg_dls_tap(same);
+        else if (pg.level == L_SHOWS)
             pg_open_show(pg.rows[same], 0);
         else if (pg.level == L_FEEDS)
             pg_feeds_tap(same);
         else if (pg.eps[same].state != PC_LOCAL)
-            return RET_OK; /* not on the card: nothing to play or mark until it is downloaded */
-        else if (x < PG_TEXT_X)
-            pg_toggle(same);
+            pg_dl_tap(same); /* not on the card: nothing to play or mark; a tap downloads it, or cancels the download */
         else
             pg_play(same);
     }
@@ -1035,13 +1455,69 @@ static int pg_tick(const void *timer) {
         pg_dlg_arm(); /* the screen is back on: the dialog's own timer stopped while it was dark */
     if (pod_screen_lit() && pg.level == L_FEEDS && pn_gen() != pg.gen)
         pg_load_feeds(); /* the worker moved on: a show finished, or it ended (the files are read again; the rows are rebuilt) */
+    if (pod_screen_lit() && pg.level == L_FEEDS &&
+        pg.dgen != pn_dl_gen()) { /* a download moved on: the Downloads row's line */
+        pg.dgen = pn_dl_gen();
+        pg_feed_retext();
+        pg_redraw();
+    }
+    if (pod_screen_lit() && pg.level == L_EPS) {
+        if (pn_gen() != pg.gen && !pg.select)
+            pg_reload_eps(); /* (not while rows are marked: the marks are of these rows) a download started, finished or failed: the episodes are read again (a finished one is a file now) */
+        else if (pn_dl_gen() != pg.dgen) { /* a step of progress: the state lines are made again */
+            pg.dgen = pn_dl_gen();
+            grid_drop(&pg.g);
+            pg_redraw();
+        }
+    }
+    if (pod_screen_lit() &&
+        pg.level ==
+            L_DLS) { /* the Downloads level: the rows again when the worker's state moved, the lines for a step of progress */
+        if (pn_gen() != pg.gen && !pg.select)
+            pg_load_downloads(1);
+        else if (pn_dl_gen() != pg.dgen) {
+            pg.dgen = pn_dl_gen();
+            pg_dls_retext();
+            pg_redraw();
+        }
+    }
     if (pod_screen_lit() && pg.level == L_EPS &&
         pc_rev() != pg.rev) { /* a place or a mark changed: the grey lines are made again */
         pg.rev = pc_rev();
         grid_drop(&pg.g);
         pg_redraw();
     }
+    if (pg.rpend && pg.level == L_FEEDS && pod_screen_lit() && !pn_dl_running() && !pn_busy()) {
+        int only_new = pg.rpend - 1; /* the downloads have paused: the refresh the user asked for starts */
+        pg.rpend = 0;
+        pg_refresh(only_new);
+    }
     return RET_REPEAT;
+}
+
+/* The downloads' timer (1 s), page-scoped like the others but kept in the background too: while a download runs it calls stock's reset_poweroptions_timer(1, 1, 0), which sets the standby and
+ * auto power-off countdowns again and leaves the screen's alone (stock standby would stop the Wi-Fi and the CPU, docs/modules/probe.md). It runs on the UI thread, never from the worker. It also starts the
+ * queue again when no thread runs (after a refresh, or a tap that raced the worker's end) and drops a refresh nobody can see start. No widget is touched. It ends when nothing is queued. */
+static int pg_awake_tick(const void *timer) {
+    (void)timer;
+    if (!pg.win) {
+        pg.awake = 0;
+        return RET_OK;
+    }
+    if (pn_dl_running()) reset_poweroptions_timer(1, 1, 0);
+    if (pg.rpend && !pn_dl_running() && !pn_busy() && (pg.level != L_FEEDS || !pg.fg || !pod_screen_lit()))
+        pg.rpend = 0; /* the page is not there to open the refresh's dialog: the downloads go on */
+    if (!pg.rpend && pn_dl_waiting() && !pn_dl_running()) pn_dl_start();
+    if (!pn_dl_count() && !pg.rpend) {
+        pg.awake = 0;
+        return RET_OK;
+    }
+    return RET_REPEAT;
+}
+
+static void pg_awake_arm(void) {
+    if (pg.win && !pg.awake && (pn_dl_count() > 0 || pg.rpend))
+        pg.awake = timer_add(pg_awake_tick, (void *)0, PG_AWAKE_MS);
 }
 
 static void pg_arm(void) {
@@ -1059,6 +1535,7 @@ static int pg_on_fg(void *ctx, void *e) {
         pg_dlg_arm();
     }
     if (pg.level == L_FEEDS) pg_load_feeds(); /* a refresh may have ended while another page was in front */
+    if (pg.level == L_DLS && !pg.select) pg_load_downloads(1); /* so may a download */
     if (pg.level == L_EPS) { /* the grey lines are made again: a place may have changed, and "4h ago" is a time later */
         pg.rev = pc_rev();
         grid_drop(&pg.g);
@@ -1088,13 +1565,18 @@ static int pg_on_destroy(void *ctx, void *e) {
     if (pg.timer) timer_remove(pg.timer);
     if (pg.load_timer) timer_remove(pg.load_timer);
     if (pg.dlg_timer) timer_remove(pg.dlg_timer);
+    if (pg.awake)
+        timer_remove(
+            pg.awake); /* the downloads go on while the device is awake; nothing keeps it awake without this window */
     if (pg.dlg) pn_cancel(); /* the page is closed (the hardware Back key) with the dialog up: that is Cancel too */
     pc_flush();
     grid_free(&pg.g);
     grid_free(&pg.hg);
-    if (pg.dot) bitmap_destroy(pg.dot);
+    if (pg.mark[0]) bitmap_destroy(pg.mark[0]);
+    if (pg.mark[1]) bitmap_destroy(pg.mark[1]);
     free(pg.shows);
     free(pg.eps);
+    free(pg.dls);
     memset(&pg, 0, sizeof pg);
     return RET_OK;
 }
@@ -1106,7 +1588,7 @@ int podcasts_open(void) {
     pg.win = window_open("m1plus_podcasts");
     if (!pg.win) return -1;
     widget_on(pg.win, EVT_DESTROY, pg_on_destroy, (void *)0);
-    pod_bind(pg.win, "btn_return", pg_on_back, (void *)0);
+    pg.back = pod_bind(pg.win, "btn_return", pg_on_back, (void *)0);
     pod_bind(pg.win, "btn_backtoplayer", pod_on_player, (void *)0);
     pg.view = widget_lookup(pg.win, "view_grid", 1);
     pg.sv = widget_lookup(pg.win, "podcasts_scrollview", 1);
@@ -1127,6 +1609,12 @@ int podcasts_open(void) {
     pg.dlg_fill = widget_lookup(pg.win, "pod_pd_fill", 1);
     pg.dlg_cancel = pod_bind(pg.win, "pod_pd_cancel", pg_on_cancel, (void *)0);
     pg.btn_feeds = widget_lookup(pg.win, "btn_feeds", 1);
+    pg.btn_select =
+        pod_bind(pg.win, "btn_select", pg_on_select,
+                 (void *)0); /* select mode's widgets: optional (without them the Select button never shows) */
+    pg.btn_selall = pod_bind(pg.win, "btn_selall", pg_on_selall, (void *)0);
+    pg.del = pod_bind(pg.win, "pg_del", pg_on_delete, (void *)0);
+    pg.bar = widget_lookup(pg.win, "pg_bar", 1);
     if (!pg.view || !pg.sv || !pg.status || !pg.title || !pg.st_title || !pg.st_sub || !pg.st_dim || !pg.st_acc ||
         !pg.st_act || !pg.btn_feeds || !pg.dlg_scrim || !pg.dlg_card || !pg.dlg_name || !pg.dlg_count || !pg.dlg_fill ||
         !pg.dlg_cancel) {
@@ -1141,8 +1629,12 @@ int podcasts_open(void) {
         return 0;
     }
     pg.g.st_title = pg.st_title, pg.g.st_sub = pg.st_sub;
+    pg.dls = calloc(PG_DL_MAX, sizeof *pg.dls);
+    if (pg.del) pod_centre_pill(pg.del, PL_BAR_PILL_W);
     pc_root(pg.root);
-    pg_make_dot();
+    pg.mark[0] = pod_make_mark(pg.win, "unselect");
+    pg.mark[1] = pod_make_mark(pg.win, "selected");
+    if (!pg.mark[1] && pg.mark[0]) bitmap_destroy(pg.mark[0]), pg.mark[0] = (void *)0;
     pg.fg = 1;
     pg.noscroll = !widget_on(pg.sv, EVT_SCROLL, pg_on_scroll, (void *)0) ||
                   !widget_on(pg.sv, EVT_SCROLL_END, pg_on_scroll, (void *)0);
@@ -1153,6 +1645,7 @@ int podcasts_open(void) {
     widget_on(pg.view, EVT_POINTER_ABORT, pg_on_abort, (void *)0);
     widget_on(pg.view, EVT_AFTER_PAINT, pg_on_paint, (void *)0);
     pg_arm();
+    pg_awake_arm(); /* a download queued by an earlier window of the page is still going */
     pg_load_shows();
     return 0;
 }

@@ -38,6 +38,8 @@ pf_image(const pf_parser_t *p); /* the channel's picture url: itunes:image href,
  * An item whose guid an old line has keeps that line's file name; the others get "YYYY-MM-DD Title.ext". *fresh: kept items no old line had. dir: the show folder's path (the files are looked at with access). */
 unsigned pf_render_episodes(const pf_parser_t *p, const char *dir, const char *old, unsigned oldn, char *out,
                             unsigned cap, unsigned *fresh);
+/* The line of .episodes (eps, n bytes) whose file name is `file`: its enclosure url (u=) into url (usize bytes) and its length (l=, 0 when none or not a number) into *length. 0 when there is no such line, no url, or the url does not fit. */
+int pf_find_episode(const char *eps, unsigned n, const char *file, char *url, unsigned usize, unsigned *length);
 /* The .show text. title / feed / image: plain text (control bytes become spaces), checked: seconds since 1970 (0 = never). Returns its length. */
 unsigned pf_render_show(const char *title, const char *feed, const char *image, unsigned checked, char *out,
                         unsigned cap);

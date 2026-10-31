@@ -87,12 +87,17 @@ the recovery button combination for this model remains unverified.
   blended glyph by glyph, reels from pre-rendered hub frames, tape packs that show progress, taps only (play/pause, a screw closes),
   Normal, Chrome and Metal themes in Customize > Cassette Mode. Test builds oXTP .. oXTS flashed, "good enough". Lesson: a page's touch
   handler must not grab or eat move events, or the system pull-down from the top edge stops working (oXTP's swipes broke it).
-- **V2.1pF** (2026-10-30, current release): **Podcasts feeds** on the device: shows imported from `Podcasts/subscriptions.txt`,
+- **V2.1pF** (2026-10-30): **Podcasts feeds** on the device: shows imported from `Podcasts/subscriptions.txt`,
   Refresh All on one worker thread over the app's own libcurl with Mozilla's CA bundle in the firmware, a progress dialog with
   Cancel, episodes not on the card listed greyed on a show opened from Feeds, and cover art downloaded and shrunk once to a 192 px
   JPEG (demo's libjpeg; PNG through a streaming decoder of our own). Test builds pAFA, pCFA .. pCFC flashed: the 4 MB All-In feed,
   a 3000 px JPEG and a 2000 px RGBA PNG cover all worked. Lesson: podcast art is often too large for the stock loader (36 MB for
   3000 px), so shrink once on download instead of decoding at full size on every page open.
+- **V2.1pI** (2026-10-31, current release): **Podcasts episode downloads** (policy after q2-podcasts): one at a time into a `.part`
+  beside the episode, 512 KB chunks each opened, written, synced and closed, Range resume, retries, a 32 MB card margin; a Downloads
+  page; select-and-delete of episodes; no unplayed-dot column. Test build zQKWXAAAC flashed: an episode downloaded and played.
+  Finding: stock's `reset_poweroptions_timer(1, 1, 0)` (0x4d7874; its arguments gate standby, auto power-off and the screen light)
+  called from a page timer while a download runs keeps the device out of standby with the screen still turning off.
 
 ## Hardware results (what broke on the device, and why)
 

@@ -241,14 +241,14 @@ def run(ctx):
     tt = ep_titles(m)
     expect(tt == [('Sub One', 'label_row_title'), ('Remote A', 'label_row_dim'), ('Remote B', 'label_row_dim')], f'the episodes not on the card are in the grey (played) style: {tt}')
     bl, *_ = PCP.paint(m)
-    expect(not [b for b in bl if tuple(b[2][2:]) == (O['PC_DOT'], O['PC_DOT'])], 'and they have no unplayed dot')
+    expect(not [b for b in bl if tuple(b[2][2:]) != (O['PC_HDR_ART'], O['PC_HDR_ART'])], 'and they have no unplayed dot or any other mark: only the header cover is drawn')
     m.calls = []
     PCP.tap(m, 150, HDR + 10)
-    expect('navigator_to_with_context' not in m.names() and toasts(m) == [], f'a tap on an episode that is not on the card does nothing (the download is the next step): {toasts(m)}')
+    expect('navigator_to_with_context' not in m.names() and toasts(m) == [], f'a tap on an episode that is not on the card queues its download, silently: {toasts(m)}')
     ring = m.ring()
     m.calls = []
     PCP.tap(m, 20, HDR + 10)
-    expect(m.ring() == ring and toasts(m) == [], 'nor does a tap where the unplayed dot would be (it marks nothing)')
+    expect(m.ring() == ring and toasts(m) == [], 'a tap at the left edge is a tap on the row too (no dot column: it cancels the queued download, marks nothing)')
     PCP.click(m, 'btn_return')
     expect(PCP.title_text(m) == 'Feeds' and m.props[(m.sv, 'virtual_h')] == 4 * ROW and flags(m, 'btn_feeds') == (0, 0), 'Back from a Show opened from Feeds returns to Feeds')
     PCP.click(m, 'btn_return')

@@ -30,14 +30,35 @@ enum {
     PN_STORAGE, /* no card, or a file could not be written */
     PN_MEM, /* no memory, or no thread */
     PN_BUSY, /* a refresh is already running */
-    PN_CANCELLED /* the transfer was aborted by the page's Cancel (never shown: the show keeps its earlier status) */
+    PN_CANCELLED, /* the transfer was aborted by the page's Cancel (never shown: the show keeps its earlier status) */
+    PN_CARDFULL, /* a download: the card would keep less than PN_DL_MARGIN_KB free */
+    PN_NOTAUDIO, /* a download: the answer is a web page (Content-Type text/...), not an episode */
+    PN_QFULL, /* the download queue is full (PN_QMAX) */
+    PN_PAUSED /* a download stopped for a refresh and kept in the queue (never shown) */
 };
+
+/* Episode downloads (docs/modules/podcasts.md "Downloads"). The policy follows q2-podcasts (MIT): one at a time, chunks written with open / write / fsync / close, Range resume, a stall limit,
+ * retries after 10, 20 and 40 s, a free-space margin. The queue is in memory only. */
+/* PN_QMAX: downloads queued or running. PN_DL_BUF: bytes gathered before a chunk is written (open, write, fsync, close), so the card is rarely held busy. PN_DL_MARGIN_KB: the card always keeps this much
+ * free (32 MB), checked before the download and before every chunk. PN_DL_PATH_MAX: the longest path of a download, the .part file included. PN_DL_STALL: seconds without a byte (libcurl's low-speed
+ * time-out at 1 byte a second). PN_DL_RETRIES: network failures retried, after 10, 20 and 40 s (the count starts again after an attempt that got bytes). PN_DL_MAX_BYTES: a larger download is
+ * refused (the file offsets are 32 bit). PN_FAILS: download failures remembered for the rows. */
+#define PN_QMAX 32
+#define PN_DL_BUF 524288u
+#define PN_DL_MARGIN_KB 32768u
+#define PN_DL_PATH_MAX 240
+#define PN_DL_STALL 60
+#define PN_DL_RETRIES 3
+#define PN_DL_MAX_BYTES 2147483647u
+#define PN_FAILS 16
+
+enum { PN_DL_NONE = 0, PN_DL_WAIT = 1, PN_DL_ACTIVE = 2, PN_DL_FAILED = 3 };
 
 /* The conditions to start (UI thread): the card is there, the Wi-Fi is connected (stock get_wifisignal), the clock is set, the CA bundle exists. 0 or PN_*. */
 int pn_guard(void);
 /* Refresh the shows shows[idx[0..n)] that have a feed url: the guards, then one worker thread. root is the Podcasts folder as the card spells it. 0 when the thread runs, else PN_* (nothing started). */
 int pn_refresh(const char *root, const pc_show_t *shows, const int *idx, int n);
-int pn_busy(void); /* a worker is running */
+int pn_busy(void); /* a refresh worker is running (a download worker is pn_dl_running) */
 void pn_cancel(
     void); /* UI thread: ask the worker to stop: the transfer in progress is aborted (libcurl's transfer-info callback), no further show is started */
 int pn_cancelling(void); /* a worker is running and was asked to stop */
@@ -55,3 +76,29 @@ int pn_status(
 /* Subscribe to the urls in <root>/subscriptions.txt that no show has yet: a folder and a .show file each (the title is the host until the first refresh names it). Returns how many were
  * added (the shows in the file already there do not count), -1 when there is no such file. shows[0..nshows): the folders now there. */
 int pn_import(const char *root, const pc_show_t *shows, int nshows);
+
+/* ---- Downloads. All of these run on the UI thread; the worker thread (one at a time, never beside a refresh) only reads and writes the status record. */
+/* The key of an episode in the queue and the failure table: pc_hash of "<show folder>/<file name>". */
+unsigned pn_dl_key(const char *dir, const char *file);
+/* Queue the download of file in the show folder dir (the names as the model has them; root is the Podcasts folder). The guards run first (card, Wi-Fi, clock, CA bundle: PN_*), a path over PN_DL_PATH_MAX is PN_STORAGE, a full queue PN_QFULL;
+ * a queued or running one is left as it is (a cancel not yet taken is undone). Starts the worker when none runs. 0 when queued. */
+int pn_dl_add(const char *root, const char *dir, const char *file);
+/* Take the episode out of the queue; one that is running is aborted at once (the .part stays: a later add resumes it). */
+void pn_dl_cancel(unsigned key);
+/* Start the worker for the queued downloads when none runs (the page's timer calls this after a refresh and after a pause). The guards run first; when they fail every queued download fails with their code (shown on its row). 0 or PN_*. */
+int pn_dl_start(void);
+/* Ask a running download worker to stop and keep the queue (for a refresh); pn_dl_running() turns 0 when it has. */
+void pn_dl_pause(void);
+int pn_dl_running(void); /* the download worker thread is running */
+int pn_dl_count(void); /* downloads queued or running */
+int pn_dl_waiting(void); /* downloads queued and not running */
+unsigned pn_dl_gen(
+    void); /* moves with every step of progress (another percent, or another MB when the length is unknown) and every state change */
+/* The state of an episode: PN_DL_NONE, PN_DL_WAIT (queued, or waiting to retry), PN_DL_ACTIVE (*got of *total bytes; total 0 = unknown), PN_DL_FAILED (*code PN_*). */
+int pn_dl_state(unsigned key, int *code, unsigned *got, unsigned *total);
+/* The download being fetched now: its key (0 when none) and its progress. */
+unsigned pn_dl_current(unsigned *got, unsigned *total);
+/* Forget the failure of an episode (its row is a plain remote one again, or Paused with a .part). */
+void pn_dl_clear(unsigned key);
+/* The n-th download the Downloads page lists, from 0: the queue in the order it was asked (dir, file, *code 0), then the failed ones (*code the PN_* reason). Returns its key, 0 past the last. dir and file take PC_FILE bytes. */
+unsigned pn_dl_listed(int n, char *dir, char *file, int *code);
