@@ -427,9 +427,13 @@ KEYBOARDS_PAGE = Page('m1plus_keyboards', 'm1plus_keyboards_page', 'Keyboards', 
     Row('Chinese (Pinyin)', ACT_KB_ZH),
 ])
 
+# The Search results page (patch/search.c, docs/modules/search.md): the plain navbar (Back, the query as the title, an edit-search button, Now Playing) over a stock list holding one content view the payload paints
+# (Artists, Albums and Songs sections); opened by search_open after our keyboard, from the Songs page's Search and the album page's search disc, no menu row.
+SEARCH = Page('m1plus_search', 'm1plus_search_page', 'Search', kind='search')
+
 # PAGES[0] is the entry page.
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
-         EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, MENUEXTRAS_PAGE, SORT_PAGE, THEME_PAGE, ABOUT_PAGE]
+         EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, MENUEXTRAS_PAGE, SORT_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE

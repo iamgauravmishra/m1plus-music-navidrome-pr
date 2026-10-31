@@ -19,6 +19,7 @@ import awtk_ui
 from awtk_ui import Widget
 import pod_i18n, pod_pages
 import pod_keyboard as PK
+import pod_search as PS
 
 UI = 'release/assets/default/raw/ui'   # relative to a rootfs dir
 SCREEN_W, SCREEN_H = 320, 480
@@ -781,6 +782,57 @@ def build_artists_page(page):
     return root
 
 
+def build_search_page(page):
+    """The Search page (patch/search.c, docs/modules/search.md; the numbers are tools/pod_search.py's, parsed from patch/search.h): the Apple Music search screen. A rounded field with the
+    keyboard's own field widgets (kb_field with the magnifier, hint, text, caret and clear button), the round X button (btn_return), a row of chips (se_chips: the payload paints the texts and
+    moves the selected chip's pill se_chip_hl), the line under it, a stock list holding one content view that paints the rows, and the keyboard's pad, strip and pop-up at the bottom. Hidden
+    labels carry the text styles; label_title (hidden) is the page's title, which the asset tests read from every page."""
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    lv = stock_list([], True, top=PS.SE_LIST_Y)
+    lv.set('name', 'se_listview')
+    sv = lv.children[0]
+    sv.set('name', 'se_scrollview')
+    grid = Widget('view', 0, 0, SCREEN_W, PS.SE_LIST_H, [('name', 'view_grid')])
+    styled(grid, ('normal',), 'bg_color', '#000000')
+    sv.children.append(grid)
+    root.children.append(lv)
+    root.children.append(Widget('view', 0, PS.SE_SEP_Y, SCREEN_W, 1, [('name', 'se_sep'), ('sensitive', 'false')]))
+    styled(root.children[-1], STATES, 'bg_color', PS.SEP_RGB)
+    chips = Widget('view', 0, PS.SE_CHIPS_Y, SCREEN_W, PS.SE_CHIPS_H, [('name', 'se_chips'), ('enable', 'true')])
+    for st in STATES:
+        styled(chips, (st,), 'bg_color', '#000000')
+        styled(chips, (st,), 'border_width', '0')
+    chips.children = [kb_view('se_chip_hl', PS.SE_CHIP_X, PS.SE_CHIP_Y, 80, PS.SE_CHIP_H, PS.CHIP_ON_RGB, PS.SE_CHIP_R)]
+    root.children.append(chips)
+    field = kb_view('kb_field', PS.SE_FIELD_X, PS.SE_FIELD_Y, PS.SE_FIELD_W, PS.SE_FIELD_H, PS.FIELD_RGB, PS.SE_FIELD_R)
+    field.set('sensitive', 'true')   # the clear button inside it needs it, and a tap on the field brings the keyboard back
+    mag = Widget('image', PS.SE_MAG_X, (PS.SE_FIELD_H - PK.FIELD_MAG) // 2, PK.FIELD_MAG, PK.FIELD_MAG, [('name', 'kb_mag'), ('image', 'qk_mag'), ('draw_type', 'center'), ('sensitive', 'false')])
+    hint = label('kb_hint', PS.SE_TEXT_X, 0, PS.SE_TEXT_W, PS.SE_FIELD_H, '', PS.FIELD_PX, PS.FIELD_HINT, 'left')
+    text = label('kb_text', PS.SE_TEXT_X, 0, PS.SE_TEXT_W, PS.SE_FIELD_H, '', PS.FIELD_PX, PS.FIELD_INK, 'left')
+    for lab in (hint, text):
+        lab.set('sensitive', 'false')
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+    caret = kb_view('kb_caret', PS.SE_TEXT_X, PS.SE_CARET_Y, PK.CARET_W, PK.CARET_H, PK.KB_INK)
+    clear = hidden(Widget('button', PS.SE_FIELD_W - PS.SE_CLEAR_W, 0, PS.SE_CLEAR_W, PS.SE_FIELD_H, [('name', 'kb_clear'), ('enable', 'true'), ('style', 'img_btn_style'),
+                   ('style:pressed:icon', 'qk_clear'), ('style:normal:icon', 'qk_clear'), ('style:over:icon', 'qk_clear')]))
+    field.children = [mag, hint, text, caret, clear]
+    root.children.append(field)
+    root.children.append(Widget('button', PS.SE_CLOSE_X, PS.SE_CLOSE_Y, PS.SE_CLOSE_W, PS.SE_CLOSE_H, [
+        ('name', 'btn_return'), ('enable', 'true'), ('style', 'img_btn_style'),
+        ('style:over:icon', 'se_close'), ('style:normal:icon', 'se_close'), ('style:pressed:icon', 'se_close_down')]))
+    root.children.append(hidden(label('label_status', 10, 150, SCREEN_W - 20, 30, '', 20, '#FFFFFF')))
+    root.children.append(hidden(label('label_title', 0, 0, 200, 22, '', 16, '#FFFFFF', 'left')))
+    root.children[-1].set(*pod_i18n.text_prop(page.title))
+    for name, px, colour in (('label_row_title', LIST_TITLE_PX, PS.TITLE_RGB), ('label_row_sub', LIST_SUB_PX, PS.SUB_RGB), ('label_chip', PS.SE_CHIP_PX, PS.CHIP_INK), ('label_chip_on', PS.SE_CHIP_PX, PS.CHIP_ON_INK)):
+        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'center' if name.startswith('label_chip') else 'left'))   # text styles only (widget_prepare_text_style); never shown
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+        if name == 'label_chip_on': styled(lab, ('normal', 'pressed', 'disable', 'focused'), 'bg_color', PS.CHIP_ON_RGB)   # the dark text is on the selected pill (the contrast scan reads the label's own background)
+        root.children.append(lab)
+    root.children += keyboard_pad_widgets()
+    return root
+
+
 def build_songs_page(page):
     o = OFFSETS
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
@@ -1240,23 +1292,9 @@ def kb_view(name, x, y, w, h, fill, radius=0):
     return v
 
 
-def build_keyboard_page(page):
-    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
-    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
-    root.children.append(navbar(page.title))
-    field = kb_view('kb_field', PK.FIELD_X, PK.FIELD_Y, PK.FIELD_W, PK.FIELD_H, PK.KB_BG, PK.FIELD_R)
-    field.set('sensitive', 'true')   # the clear button inside it needs it: stock's hit test does not look into an insensitive parent
-    mag = Widget('image', PK.FIELD_MAG_X, (PK.FIELD_H - PK.FIELD_MAG) // 2, PK.FIELD_MAG, PK.FIELD_MAG, [('name', 'kb_mag'), ('image', 'qk_mag'), ('draw_type', 'center'), ('sensitive', 'false')])
-    hint = label('kb_hint', PK.FIELD_TEXT_X, 0, PK.FIELD_TEXT_W, PK.FIELD_H, '', PK.FIELD_PX, PK.KB_GREY, 'left')
-    text = label('kb_text', PK.FIELD_TEXT_X, 0, PK.FIELD_TEXT_W, PK.FIELD_H, '', PK.FIELD_PX, PK.KB_INK, 'left')
-    for lab in (hint, text):
-        lab.set('sensitive', 'false')
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-    caret = kb_view('kb_caret', PK.FIELD_TEXT_X, PK.CARET_Y, PK.CARET_W, PK.CARET_H, PK.KB_INK)
-    clear = hidden(Widget('button', PK.FIELD_CLEAR_X, 0, PK.FIELD_CLEAR_W, PK.FIELD_H, [('name', 'kb_clear'), ('enable', 'true'), ('style', 'img_btn_style'),
-                   ('style:pressed:icon', 'qk_clear'), ('style:normal:icon', 'qk_clear'), ('style:over:icon', 'qk_clear')]))
-    field.children = [mag, hint, text, caret, clear]
-    root.children.append(field)
+def keyboard_pad_widgets():
+    """The pad, the candidate strip and the key pop-up (patch/keyboard.c), in paint order: [pad, strip, stem, pop]. The keyboard page and the Search page (which embeds the keyboard,
+    keyboard_attach) both end with these, so the payload finds the same widgets by the same names in either."""
     pad = Widget('view', 0, CLIENT_H - PK.KB_H, SCREEN_W, PK.KB_H, [('name', 'kb_pad'), ('enable', 'true')])
     for st in STATES:
         styled(pad, (st,), 'bg_color', PK.KB_BG)
@@ -1278,7 +1316,6 @@ def build_keyboard_page(page):
     pad.children.append(kb_button('kb_go', x, y, w, PK.KB_FN, PK.KB_FN_DOWN, px=15, text=pod_i18n.text_prop('Search')))
     lx, ly, lw = PK.layout('abc', lang=True)['fn']['lang']   # the language key: hidden until the payload finds a second keyboard enabled, then space gives it the room
     pad.children.append(hidden(kb_button('kb_lang', lx, ly, lw, PK.KB_FN, PK.KB_FN_DOWN, px=18, text=('text', PK.LANG_TAGS[0]))))
-    root.children.append(pad)
     # The candidate strip (Chinese layer), a window child before the pop-up so that the balloons of the top row paint over it. It must be sensitive for its candidates view inside it to take
     # touches (stock's hit test does not look into an insensitive parent); hidden() takes it out of the hit test while it is not shown, the payload shows both together.
     strip = hidden(kb_view('kb_strip', 0, PK.STRIP_Y, SCREEN_W, PK.STRIP_H, PK.STRIP_BG))
@@ -1296,14 +1333,33 @@ def build_keyboard_page(page):
     cands.children = [chl] + items
     strip.set('sensitive', 'false')
     strip.children = [py, sep, cands]
-    root.children.append(strip)
     stem = hidden(kb_view('kb_stem', 0, 0, PK.KB_KW, PK.KB_STEM_UP + PK.KB_KH, PK.KB_POP, PK.KB_RADIUS))
     pop = hidden(kb_view('kb_pop', 0, 0, PK.KB_POP_W, PK.KB_POP_H, PK.KB_POP, PK.KB_POP_R))
     glyph = label('kb_pop_l', 0, 0, PK.KB_POP_W, PK.KB_POP_H, '', PK.KB_POP_PX, PK.KB_INK, 'center')
     glyph.set('sensitive', 'false')
     styled(glyph, ('normal',), 'text_align_v', 'middle')
     pop.children.append(glyph)
-    root.children += [stem, pop]
+    return [pad, strip, stem, pop]
+
+
+def build_keyboard_page(page):
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    root.children.append(navbar(page.title))
+    field = kb_view('kb_field', PK.FIELD_X, PK.FIELD_Y, PK.FIELD_W, PK.FIELD_H, PK.KB_BG, PK.FIELD_R)
+    field.set('sensitive', 'true')   # the clear button inside it needs it: stock's hit test does not look into an insensitive parent
+    mag = Widget('image', PK.FIELD_MAG_X, (PK.FIELD_H - PK.FIELD_MAG) // 2, PK.FIELD_MAG, PK.FIELD_MAG, [('name', 'kb_mag'), ('image', 'qk_mag'), ('draw_type', 'center'), ('sensitive', 'false')])
+    hint = label('kb_hint', PK.FIELD_TEXT_X, 0, PK.FIELD_TEXT_W, PK.FIELD_H, '', PK.FIELD_PX, PK.KB_GREY, 'left')
+    text = label('kb_text', PK.FIELD_TEXT_X, 0, PK.FIELD_TEXT_W, PK.FIELD_H, '', PK.FIELD_PX, PK.KB_INK, 'left')
+    for lab in (hint, text):
+        lab.set('sensitive', 'false')
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+    caret = kb_view('kb_caret', PK.FIELD_TEXT_X, PK.CARET_Y, PK.CARET_W, PK.CARET_H, PK.KB_INK)
+    clear = hidden(Widget('button', PK.FIELD_CLEAR_X, 0, PK.FIELD_CLEAR_W, PK.FIELD_H, [('name', 'kb_clear'), ('enable', 'true'), ('style', 'img_btn_style'),
+                   ('style:pressed:icon', 'qk_clear'), ('style:normal:icon', 'qk_clear'), ('style:over:icon', 'qk_clear')]))
+    field.children = [mag, hint, text, caret, clear]
+    root.children.append(field)
+    root.children += keyboard_pad_widgets()
     return root
 
 
@@ -1324,6 +1380,8 @@ def build_page(page):
         return build_playlists_page(page)
     if page.kind == 'songs':
         return build_songs_page(page)
+    if page.kind == 'search':
+        return build_search_page(page)
     if page.kind == 'dailymix':
         return build_dailymix_page(page)
     if page.kind == 'ipod':

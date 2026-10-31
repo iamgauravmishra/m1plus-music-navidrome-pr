@@ -54,3 +54,9 @@ void *pod_bind(void *win, const char *name, int (*fn)(void *, void *), const voi
 void pod_centre_pill(void *btn, int pw);
 /* A select mark: the stock image called name (the multi-select's unselect / selected, SG_MARK px) as an opaque bitmap, NULL when it cannot be made. win: any widget of the page. */
 void *pod_make_mark(void *win, const char *name);
+
+/* The grey chevron the list rows of the Artists and Search pages end with: a POD_CHEV_W x POD_CHEV_H RGBA bitmap (a two segment stroke, antialiased by 4 x 4 samples, POD_CHEV_RGB), NULL when it cannot be made. */
+#define POD_CHEV_W 10
+#define POD_CHEV_H 16
+#define POD_CHEV_RGB 0x8a8a8a
+void *pod_make_chevron(void);

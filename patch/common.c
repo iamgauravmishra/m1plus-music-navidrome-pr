@@ -276,3 +276,45 @@ void *pod_make_mark(void *win, const char *name) {
     }
     return b;
 }
+
+/* The chevron: a stroke of two segments (the stock right_arrow is 13 x 22 and our image loader only makes squares), antialiased by 4 x 4 samples per pixel, in the
+ * alpha of a grey bitmap (the rail's disc is made the same way). Coordinates are eighths of a pixel. */
+static int pod_seg2(int px, int py, int ax, int ay, int bx,
+                    int by) { /* the squared distance of (px, py) to the segment a-b */
+    int dx = bx - ax, dy = by - ay, n = (px - ax) * dx + (py - ay) * dy, d = dx * dx + dy * dy, cx, cy, cr;
+    if (n <= 0)
+        cx = px - ax, cy = py - ay;
+    else if (n >= d)
+        cx = px - bx, cy = py - by;
+    else {
+        cr = (px - ax) * dy - (py - ay) * dx; /* the cross product: distance = |cr| / sqrt(d) */
+        return cr * cr / d;
+    }
+    return cx * cx + cy * cy;
+}
+
+void *pod_make_chevron(void) {
+    unsigned *px;
+    int x, y, i, j, n, d;
+    void *b = bitmap_create_ex(POD_CHEV_W, POD_CHEV_H, POD_CHEV_W * 4, BITMAP_RGBA8888);
+    if (!b) return (void *)0;
+    px = (unsigned *)bitmap_lock_buffer_for_write(b);
+    if (!px || bitmap_get_line_length(b) != POD_CHEV_W * 4) {
+        if (px) bitmap_unlock_buffer(b);
+        bitmap_destroy(b);
+        return (void *)0;
+    }
+    for (y = 0; y < POD_CHEV_H; ++y)
+        for (x = 0; x < POD_CHEV_W; ++x) {
+            for (n = 0, i = 0; i < 4; ++i)
+                for (j = 0; j < 4; ++j) {
+                    int sx = x * 8 + 2 * j + 1, sy = y * 8 + 2 * i + 1;
+                    d = pod_seg2(sx, sy, 14, 14, 68, 64);
+                    if (pod_seg2(sx, sy, 68, 64, 14, 114) < d) d = pod_seg2(sx, sy, 68, 64, 14, 114);
+                    if (d <= 64) ++n; /* half the stroke's width: 1 px */
+                }
+            px[y * POD_CHEV_W + x] = (unsigned)(n * 255 / 16) << 24 | POD_CHEV_RGB;
+        }
+    bitmap_unlock_buffer(b);
+    return b;
+}

@@ -2,7 +2,7 @@
 
 Code: `patch/keyboard.c`, `patch/keyboard.h` (API and geometry constants). Asset: `tools/pod_ui.py` `build_keyboard_page` (`ui/m1plus_keyboard.bin`), geometry in `tools/pod_keyboard.py`,
 glyphs in `tools/mod_icons.py` (`KEYBOARD_IMAGES`, `qk_*`). Tests: `test/pod/keyboard.py` (sections: base, name, gap, asset, setting, zh, strip, hit, lang_gap), `test/pod/pinyin.py` (the engine on its own).
-Preview: `tools/preview_keyboard.py`. No hook, no new import, no thread; one timer only while the delete key is held. Built for podcast search (iTunes search itself is not part of it); its first consumer is the Playlists page's New playlist (below); stock's T9 popup
+Preview: `tools/preview_keyboard.py`. No hook, no new import, no thread; one timer only while the delete key is held. Built for podcast search (iTunes search itself is not part of it); its consumers are the Playlists page's New playlist and library Search (below, and embedded in the Search page); stock's T9 popup
 (`ui/user_keyboard.bin`, pages laid out 640 px wide in a 320 px popup) is not used. With Settings > Keyboards > Chinese (Pinyin) on, it also types Chinese (below).
 
 ## What it is
@@ -102,7 +102,28 @@ use only what they are given. One keyboard at a time: `keyboard_open` returns -1
 Flags: `KB_DONE` (2) makes the action key read **Done** (`widget_set_tr_text(kb.go, "Done")` at open; the asset's label stays Search for everyone else, same width, same colours); `KB_LOG` (1) appends the touch log (below). An empty or all-space field on the action key does nothing and the page stays (nothing is closed or called), so a naming caller never gets an empty name. Strings are keys of `tools/pod_i18n.py` (`Keyboard`, `Keyboards`, `English`, `Chinese (Pinyin)`, `space`, `Search`, `Done`, `Type here`, 13 languages; key labels are characters
 and `123 / ABC / #+=`, not translated). Callers need nothing for Chinese: the setting and the language key are the keyboard's.
 
-**Consumers.** The Developer row (below) and Playlists > ... > **New playlist** (`patch/playlists.c` `pl_create`: title the stock `playlist_create`, hint the stock `msg_newplaylists`, `KB_DONE`, no cancel callback; `pl_named` is the done callback and makes the playlist, shows the stock "full" / "exists" boxes from inside the callback and reads the page again: docs/modules/playlists.md "Create"). The text limit there is the keyboard's 63 bytes (stock's edit allowed 127). Test: `name_tests`.
+**Consumers.** Library Search embeds the pad in its own page (`keyboard_attach`, below; `docs/modules/search.md`), the Developer row (below) and Playlists > ... > **New playlist** (`patch/playlists.c` `pl_create`: title the stock `playlist_create`, hint the stock `msg_newplaylists`, `KB_DONE`, no cancel callback; `pl_named` is the done callback and makes the playlist, shows the stock "full" / "exists" boxes from inside the callback and reads the page again: docs/modules/playlists.md "Create"). The text limit there is the keyboard's 63 bytes (stock's edit allowed 127). Test: `name_tests`.
+
+## Embedded in another page (`keyboard_attach`)
+
+The Search page (`docs/modules/search.md`) has the pad on its own window so that nothing opens or closes while the user types. The code is shared, not copied: `keyboard_open`'s body is split into
+`kb_init` (the widgets by name through `kb_find`, the bindings, the layers, the first page, `kb_refresh`) and what a page of its own adds (the window, the title, `KB_DONE`, Back, the destroy
+handler). The asset side is `keyboard_pad_widgets()` in `tools/pod_ui.py`: the pad, the candidate strip and the pop-up, which the keyboard page and the Search page both end with (byte for byte equal,
+tested in `test/pod/search.py` `asset_tests`).
+
+```c
+int  keyboard_attach(void *win, const char *placeholder, int text_x, int text_w, int caret_y, kb_change_fn on_change, kb_go_fn on_go);
+void keyboard_detach(void);      /* the page's destroy event: the timer, the engine, the state */
+void keyboard_show(int on);      /* the pad and the strip shown / hidden (hidden: invisible and insensitive, the caret goes, a held key and the pop-up are let go) */
+int  keyboard_shown(void);
+const char *keyboard_text(void); /* the committed text */
+```
+
+The page's window holds `kb_pad`, `kb_strip`, `kb_stem`, `kb_pop` and a field (`kb_field`, `kb_mag`, `kb_hint`, `kb_text`, `kb_caret`, `kb_clear`) by those names; `text_x`, `text_w` and `caret_y` are the
+field's inner geometry in that page (the keyboard page uses `KB_TEXT_X`, `KB_TEXT_W`, `KB_CARET_Y`: `kb.tx`, `kb.tw`, `kb.cy`). `on_change(text)` is called at the end of `kb_refresh`, so on every change of the
+committed text and also when a layer or page switch refreshes the field (the caller ignores a repeat); a Chinese candidate still being composed is not in it. The action key (`kb_go`, reading
+`Search` as in the asset) commits what is pending and calls `on_go`; no page is closed and there is no cancel. The pad starts shown. One keyboard at a time: `keyboard_open` and `keyboard_attach` refuse while
+either exists; `keyboard_detach` frees it (the next `keyboard_open` works). Tests: `test/pod/search.py` `embed_tests` and `live_tests`; the existing keyboard sections run unchanged.
 
 ## The Developer row
 

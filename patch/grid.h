@@ -29,7 +29,7 @@
 #define GRID_FIT_ARTIST 2
 #define GRID_PLACEHOLDER "p_default" /* the stock 254 px disc, as Cover Flow's */
 #define GRID_GREY 0xff2b2b2bu
-#define GRID_MAX_ROUND 16 /* the largest corner radius */
+#define GRID_MAX_ROUND 22 /* the largest corner radius (the Search page's round artist thumbnails: half of 44) */
 
 typedef struct {
     int album; /* the user's album number + 1; 0 = free */

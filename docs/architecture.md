@@ -28,7 +28,8 @@ for commands, [UI](ui.md) for layout/assets, and [history](history.md) for recor
 | [Cover Flow](modules/coverflow.md) | Renderer, cache, gestures and landscape mode |
 | [Albums](modules/albums.md) | Shared grid/list page and cover loading |
 | [Artists](modules/artists.md) | Artists, Album Artists, Genres and Composers |
-| [Songs](modules/songs.md) | A–Z sections, rail, search, sort and selection |
+| [Songs](modules/songs.md) | A–Z sections, rail, sort and selection |
+| [Search](modules/search.md) | Library search: the Apple Music screen, chips, live results, embedded keyboard, folded multi-word matching |
 | [Playlists](modules/playlists.md) | Cover mosaics, list mode and stock playlist operations |
 | [Album page](modules/album-page.md) | Shared stock album view, tint and playback actions |
 | [Rows](modules/rows.md) | Stock row edits, layout and text sizing |
