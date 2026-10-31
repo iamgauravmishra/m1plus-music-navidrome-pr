@@ -76,6 +76,8 @@ int pn_status(
 /* Subscribe to the urls in <root>/subscriptions.txt that no show has yet: a folder and a .show file each (the title is the host until the first refresh names it). Returns how many were
  * added (the shows in the file already there do not count), -1 when there is no such file. shows[0..nshows): the folders now there. */
 int pn_import(const char *root, const pc_show_t *shows, int nshows);
+/* Unsubscribe: the show's .show rewritten without its feed address (nothing else changes; the .episodes stay). 1 when written. */
+int pn_unsubscribe(const char *root, const pc_show_t *show);
 
 /* ---- Downloads. All of these run on the UI thread; the worker thread (one at a time, never beside a refresh) only reads and writes the status record. */
 /* The key of an episode in the queue and the failure table: pc_hash of "<show folder>/<file name>". */

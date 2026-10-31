@@ -26,6 +26,7 @@ typedef struct {
     unsigned length; /* enclosure length in bytes (metadata), 0 = unknown */
     unsigned hash; /* ring key (pc_hash of the full path) of the local file; 0 when there is none */
     unsigned state; /* PC_LOCAL, PC_PART or PC_REMOTE */
+    char desc[PC_DESC]; /* the entry's x=: the description as plain text, at most PC_DESC_CUT bytes; "" = none */
 } pc_ep_t;
 
 typedef struct {
@@ -38,6 +39,9 @@ typedef struct {
     unsigned hash; /* pc_hash of dir (lower-cased): the key of the show's speed */
     unsigned fresh; /* of those, episodes not played and with no place saved */
     unsigned checked; /* the show file's checked=: seconds since 1970 of the last successful refresh, 0 = never */
+    char author[PC_AUTHOR]; /* the show file's author= (the channel's itunes:author), "" = none */
+    char category[PC_CAT]; /* the show file's category= (the first itunes:category), "" = none */
+    char desc[PC_DESC]; /* the show file's desc= (the channel's itunes:summary, else description, as plain text) */
 } pc_show_t;
 
 /* The folder: out (PC_FILE + 20 bytes) is "/mnt/mmc/<Podcasts as the card spells it>"; 1 when it exists, else 0 (out then holds the default spelling). */

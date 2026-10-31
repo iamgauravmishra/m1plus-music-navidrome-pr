@@ -3,8 +3,8 @@
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
  * See patch/pcfeed.h. The parser is a byte at a time state machine over libcurl's chunks (any split): text, a tag, a comment, CDATA, and a skipped declaration. Only the elements the
- * model needs are collected (the channel's title and picture; an item's title, guid, pubDate, itunes:duration and enclosure); descriptions and everything else are discarded as they
- * pass, so a 4 MB feed costs the 20 KB parser and nothing more. Atom feeds are not read (a podcast feed is RSS; "Not a feed" otherwise).
+ * model needs are collected (the channel's title, picture, author, first category and summary; an item's title, guid, pubDate, itunes:duration, enclosure and description); a description
+ * streams through a tag-stripping sink that keeps at most PC_DESC_CUT bytes, and everything else is discarded as it passes, so a 4 MB feed costs the 25 KB parser and nothing more. Atom feeds are not read (a podcast feed is RSS; "Not a feed" otherwise).
  */
 #include "offsets.inc"
 #include "stock.h"
@@ -17,17 +17,48 @@
 #define PF_EPS_MAX 65536 /* the .episodes text the model reads at most (PM_META_MAX) */
 
 enum { M_TEXT, M_TAG, M_COMMENT, M_CDATA, M_SKIP };
-enum { W_NONE, W_ITITLE, W_CTITLE, W_GUID, W_PUB, W_DUR, W_IMGURL };
-enum { E_NONE, E_RSS, E_ITEM, E_IMAGE, E_TITLE, E_GUID, E_PUB, E_DUR, E_URL, E_ENCL, E_ITUNES_IMAGE };
+/* W_ISUM..: the description kinds (item: itunes:summary, description, content:encoded = ranks 1..3; channel: itunes:summary, description = ranks 1..2); they stream through the description sink */
+enum { W_NONE, W_ITITLE, W_CTITLE, W_GUID, W_PUB, W_DUR, W_IMGURL, W_AUTHOR, W_ISUM, W_IDESC, W_IENC, W_CSUM, W_CDESC };
+enum {
+    E_NONE,
+    E_RSS,
+    E_ITEM,
+    E_IMAGE,
+    E_TITLE,
+    E_GUID,
+    E_PUB,
+    E_DUR,
+    E_URL,
+    E_ENCL,
+    E_ITUNES_IMAGE,
+    E_ISUM,
+    E_DESC,
+    E_ENC,
+    E_AUTHOR,
+    E_CAT
+};
+enum {
+    DM_TEXT,
+    DM_LT,
+    DM_TAG,
+    DM_COMMENT
+}; /* the description sink's modes: text, after a '<', in a tag, in a comment */
 
 struct pf_parser {
-    int mode, want, in_item, in_image, saw_feed, img_itunes, nitems, seen;
-    unsigned tl, tn, en;
+    int mode, want, in_item, in_image, saw_feed, img_itunes, nitems, seen, drank, srank;
+    unsigned tl, tn, en, dn, dtn, dnl, den;
     char quote, trunc, d1, d2, tover, inent;
+    char dm, dq, dcut, dcont, dspace, dnend, dent_on, dc1, dc2, dhead[3];
     char ent[12];
+    char dname[12];
+    char dent[12];
+    char dbuf[PC_DESC]; /* the description being collected (the sink's output) */
     char txt[PF_TEXT];
     char tag[PF_TAG];
     char title[PC_TITLE];
+    char author[PC_AUTHOR];
+    char category[PC_CAT];
+    char summary[PC_DESC];
     char image[PC_URL];
     pf_item_t cur;
     pf_item_t items[PF_KEEP];
@@ -285,13 +316,170 @@ int pf_items(const pf_parser_t *p) { return p->nitems; }
 int pf_seen(const pf_parser_t *p) { return p->seen; }
 const char *pf_title(const pf_parser_t *p) { return p->title; }
 const char *pf_image(const pf_parser_t *p) { return p->image; }
+const char *pf_author(const pf_parser_t *p) { return p->author; }
+const char *pf_category(const pf_parser_t *p) { return p->category; }
+const char *pf_summary(const pf_parser_t *p) { return p->summary; }
+
+/* ---------------------------------------------------------------------------
+ * The description sink: the text of an itunes:summary / description / content:encoded as plain text, a byte at a time in bounded memory (the element of a real feed is up to 100 KB of HTML).
+ * The bytes come entity- and CDATA-decoded by the parser, so they hold real tags and double-encoded entities. Tags are skipped (a boundary tag counts as a space; a comment is skipped whole; a '<'
+ * that does not start one stays text), the common entities are decoded once more, white space runs (and U+00A0) become one space, the ends are trimmed, and the text is cut at PC_DESC_CUT bytes before
+ * a split UTF-8 character. After the cut the sink ignores everything, so the rest of a long element costs a compare per byte.
+ */
+static void pf_dout(pf_parser_t *p, unsigned char c) { /* an output byte */
+    if (p->dcut) return;
+    if (c == 0xa0 && p->dn && (unsigned char)p->dbuf[p->dn - 1] == 0xc2) { /* U+00A0 (also from an entity): a space */
+        --p->dn;
+        if (p->dn && p->dbuf[p->dn - 1] == ' ') --p->dn; /* the space put before it, the pending one replaces it */
+        p->dspace = p->dn != 0;
+        return;
+    }
+    if (c <= 32) {
+        p->dspace = p->dn != 0;
+        return;
+    }
+    if (p->dn + (p->dspace ? 2 : 1) > PC_DESC_CUT) {
+        p->dcut = 1, p->dcont = (c & 0xc0) == 0x80;
+        return;
+    }
+    if (p->dspace) p->dbuf[p->dn++] = ' ', p->dspace = 0;
+    p->dbuf[p->dn++] = (char)c;
+}
+
+static void pf_dcp(pf_parser_t *p, unsigned cp) {
+    char b[4];
+    unsigned n = 0, k;
+    if (pf_put_cp(b, &n, 4, cp))
+        for (k = 0; k < n; ++k) pf_dout(p, (unsigned char)b[k]);
+}
+
+static int pf_alnum(int c) { return (unsigned)(c - '0') < 10u || (unsigned)(pf_lc(c) - 'a') < 26u; }
+
+static void pf_dlit(pf_parser_t *p) { /* a '&' that is not an entity: as written */
+    unsigned k;
+    pf_dout(p, '&');
+    for (k = 0; k < p->den; ++k) pf_dout(p, (unsigned char)p->dent[k]);
+    p->dent_on = 0;
+}
+
+static int pf_dboundary(
+    const pf_parser_t *p) { /* a tag that separates words: p, br, li, ul, ol, div, tr, td, h1..h6, hr, blockquote */
+    static const char *const tab[] = {"p",  "br", "li", "ul", "ol", "div", "tr", "td",
+                                      "h1", "h2", "h3", "h4", "h5", "h6",  "hr", "blockquote"};
+    unsigned i;
+    for (i = 0; i < sizeof tab / sizeof *tab; ++i)
+        if (pf_is(p->dname, p->dnl, tab[i])) return 1;
+    return 0;
+}
+
+static void pf_dbyte(pf_parser_t *p, unsigned char c) {
+    if (p->dcut) return;
+    if (p->dent_on) {
+        if (c == ';') {
+            unsigned cp = p->den == 4 && pf_is(p->dent, 4, "nbsp") ? 0xa0 : pf_ent_cp(p->dent, p->den);
+            if (cp) {
+                char b[4];
+                unsigned n = 0;
+                if (pf_put_cp(b, &n, 4, cp)) {
+                    p->dent_on = 0;
+                    pf_dcp(p, cp);
+                    return;
+                }
+            }
+            pf_dlit(p);
+            pf_dout(p, ';');
+            return;
+        }
+        if (p->den < 10 && (pf_alnum(c) || c == '#')) {
+            p->dent[p->den++] = (char)c;
+            return;
+        }
+        pf_dlit(p); /* not an entity after all: what was read, then this byte as any other */
+    }
+    switch (p->dm) {
+    case DM_LT:
+        if ((unsigned)(pf_lc(c) - 'a') < 26u || c == '/' || c == '!' || c == '?') {
+            p->dm = DM_TAG, p->dtn = 0, p->dnl = 0, p->dnend = 0, p->dq = 0;
+            pf_dbyte(p, c);
+            return;
+        }
+        p->dm = DM_TEXT;
+        pf_dout(p, '<');
+        pf_dbyte(p, c);
+        return;
+    case DM_TAG:
+        if (!p->dnend) {
+            if (pf_alnum(c)) {
+                if (p->dnl < sizeof p->dname - 1) p->dname[p->dnl++] = (char)pf_lc(c);
+            } else if (!(c == '/' && p->dtn == 0))
+                p->dnend = 1;
+        }
+        if (p->dtn < 3) p->dhead[p->dtn] = (char)c;
+        ++p->dtn;
+        if (p->dq) {
+            if (c == (unsigned char)p->dq) p->dq = 0;
+        } else if (c == '"' || c == '\'')
+            p->dq = (char)c;
+        else if (c == '>') {
+            if (pf_dboundary(p)) pf_dout(p, ' ');
+            p->dm = DM_TEXT;
+        } else if (p->dtn == 3 && p->dhead[0] == '!' && p->dhead[1] == '-' && p->dhead[2] == '-')
+            p->dm = DM_COMMENT, p->dc1 = p->dc2 = 0;
+        return;
+    case DM_COMMENT:
+        if (c == '>' && p->dc1 == '-' && p->dc2 == '-') p->dm = DM_TEXT;
+        p->dc1 = p->dc2, p->dc2 = (char)c;
+        return;
+    default:
+        if (c == '<')
+            p->dm = DM_LT;
+        else if (c == '&')
+            p->dent_on = 1, p->den = 0;
+        else
+            pf_dout(p, c);
+        return;
+    }
+}
+
+static void pf_start_desc(pf_parser_t *p, int want) {
+    p->dm = DM_TEXT, p->dn = 0, p->dspace = p->dcut = p->dcont = p->dent_on = 0;
+    p->dq = 0, p->den = 0;
+    p->dbuf[0] = 0;
+    p->want = want, p->tn = 0, p->tover = 0, p->inent = 0, p->en = 0;
+}
+
+/* The end of the element: what is left of an open entity or '<' is text, a split last character goes, the text is trimmed; dbuf holds it (NUL ended). */
+static void pf_dfinish(pf_parser_t *p) {
+    unsigned n;
+    if (!p->dcut) {
+        if (p->dent_on) pf_dlit(p);
+        if (p->dm == DM_LT) pf_dout(p, '<');
+    }
+    n = p->dn;
+    if (p->dcut && p->dcont) {
+        while (n && ((unsigned char)p->dbuf[n - 1] & 0xc0) == 0x80) --n;
+        if (n) --n;
+    }
+    while (n && p->dbuf[n - 1] == ' ') --n;
+    p->dbuf[n] = 0;
+    p->dn = n;
+}
 
 static void pf_txt_cp(pf_parser_t *p, unsigned cp) {
-    if (!pf_put_cp(p->txt, &p->tn, PF_TEXT - 1, cp)) p->tover = 1;
+    if (p->want >=
+        W_ISUM) { /* a character the parser decoded: its bytes go through the sink as any others (a '<' is a tag, an '&' an entity) */
+        char b[4];
+        unsigned n = 0, k;
+        if (pf_put_cp(b, &n, 4, cp))
+            for (k = 0; k < n; ++k) pf_dbyte(p, (unsigned char)b[k]);
+    } else if (!pf_put_cp(p->txt, &p->tn, PF_TEXT - 1, cp))
+        p->tover = 1;
 }
 
 static void pf_txt(pf_parser_t *p, unsigned char c) {
-    if (p->tn < PF_TEXT - 1)
+    if (p->want >= W_ISUM)
+        pf_dbyte(p, c);
+    else if (p->tn < PF_TEXT - 1)
         p->txt[p->tn++] = (char)c;
     else
         p->tover = 1;
@@ -347,7 +535,19 @@ static void pf_finish_text(pf_parser_t *p) {
     p->want = 0;
     pf_flush_ent(p);
     p->txt[p->tn] = 0;
-    if (w == W_ITITLE)
+    if (w >= W_ISUM) {
+        int item = w < W_CSUM, rank = w - (item ? W_ISUM : W_CSUM) + 1;
+        pf_dfinish(p);
+        if (p->dbuf[0]) { /* present: the first of the preference order wins */
+            memcpy(item ? p->cur.desc : p->summary, p->dbuf, p->dn + 1);
+            if (item)
+                p->drank = rank;
+            else
+                p->srank = rank;
+        }
+    } else if (w == W_AUTHOR) {
+        if (!p->author[0]) pf_norm(p->author, PC_AUTHOR, p->txt, p->tn);
+    } else if (w == W_ITITLE)
         pf_norm(p->cur.title, PC_TITLE, p->txt, p->tn);
     else if (w == W_CTITLE)
         pf_norm(p->title, PC_TITLE, p->txt, p->tn);
@@ -374,6 +574,11 @@ static int pf_code(const char *nm, unsigned len) {
         {"enclosure", E_ENCL},
         {"itunes:duration", E_DUR},
         {"itunes:image", E_ITUNES_IMAGE},
+        {"itunes:summary", E_ISUM},
+        {"description", E_DESC},
+        {"content:encoded", E_ENC},
+        {"itunes:author", E_AUTHOR},
+        {"itunes:category", E_CAT},
         {"image", E_IMAGE},
         {"url", E_URL},
         {"rss", E_RSS},
@@ -411,7 +616,19 @@ static void pf_open(pf_parser_t *p, int code, int selfclose) {
         p->saw_feed = 1;
     else if (code == E_ITEM) {
         p->in_item = 1;
+        p->drank = 0;
         memset(&p->cur, 0, sizeof p->cur);
+    } else if (code == E_ISUM || code == E_DESC || code == E_ENC) {
+        int rank = code == E_ISUM ? 1 : code == E_DESC ? 2 : 3;
+        if (p->in_item) {
+            if (!p->drank || rank < p->drank) pf_start_desc(p, W_ISUM + rank - 1);
+        } else if (!p->in_image && code != E_ENC && (!p->srank || rank < p->srank))
+            pf_start_desc(p, W_CSUM + rank - 1);
+    } else if (code == E_AUTHOR) {
+        if (!p->in_item && !p->in_image && !p->author[0]) pf_start_text(p, W_AUTHOR);
+    } else if (code == E_CAT) {
+        if (!p->in_item && !p->category[0] && pf_attr(p->tag, n, "text", buf, sizeof buf))
+            pf_norm(p->category, PC_CAT, buf, pf_len(buf));
     } else if (code == E_IMAGE) {
         if (!p->in_item) p->in_image = 1;
     } else if (code == E_TITLE) {
@@ -454,7 +671,9 @@ static void pf_open(pf_parser_t *p, int code, int selfclose) {
 
 static void pf_close(pf_parser_t *p, int code) {
     int w = p->want;
-    if (w && ((code == E_TITLE && (w == W_ITITLE || w == W_CTITLE)) || (code == E_GUID && w == W_GUID) ||
+    if (w && ((code == E_ISUM && (w == W_ISUM || w == W_CSUM)) || (code == E_DESC && (w == W_IDESC || w == W_CDESC)) ||
+              (code == E_ENC && w == W_IENC) || (code == E_AUTHOR && w == W_AUTHOR) ||
+              (code == E_TITLE && (w == W_ITITLE || w == W_CTITLE)) || (code == E_GUID && w == W_GUID) ||
               (code == E_PUB && w == W_PUB) || (code == E_DUR && w == W_DUR) || (code == E_URL && w == W_IMGURL)))
         pf_finish_text(p);
     if (code == E_ITEM && p->in_item) {
@@ -527,7 +746,13 @@ void pf_push(pf_parser_t *p, const char *d, unsigned n) {
         case M_CDATA:
             if (c == '>' && p->d1 == ']' && p->d2 == ']') {
                 p->mode = M_TEXT;
-                if (p->want && !p->tover && p->tn >= 2) p->tn -= 2; /* the "]]" that was kept as text */
+                if (p->want && p->want < W_ISUM && !p->tover && p->tn >= 2)
+                    p->tn -= 2; /* the "]]" that was kept as text */
+            } else if (p->want >= W_ISUM) {
+                if (p->d1)
+                    pf_dbyte(
+                        p, (unsigned char)
+                               p->d1); /* the description sink gets each byte two late, so the "]]" never reaches it */
             } else if (p->want)
                 pf_txt(p, c);
             p->d1 = p->d2, p->d2 = (char)c;
@@ -665,8 +890,8 @@ static void pf_app_plain(char *out, unsigned *o, unsigned cap, const char *s) {
     pf_app(out, o, cap, tmp);
 }
 
-unsigned pf_render_show(const char *title, const char *feed, const char *image, unsigned checked, char *out,
-                        unsigned cap) {
+unsigned pf_render_show(const char *title, const char *feed, const char *image, unsigned checked, const char *author,
+                        const char *category, const char *desc, char *out, unsigned cap) {
     unsigned o = 0;
     pf_app(out, &o, cap, "M1PLUS-SHOW 1\ntitle=");
     pf_app_plain(out, &o, cap, title);
@@ -677,6 +902,21 @@ unsigned pf_render_show(const char *title, const char *feed, const char *image, 
     pf_app(out, &o, cap, "\nchecked=");
     pf_app_u(out, &o, cap, checked);
     pf_app(out, &o, cap, "\n");
+    if (author[0]) { /* the descriptive keys only when there is something to say */
+        pf_app(out, &o, cap, "author=");
+        pf_app_plain(out, &o, cap, author);
+        pf_app(out, &o, cap, "\n");
+    }
+    if (category[0]) {
+        pf_app(out, &o, cap, "category=");
+        pf_app_plain(out, &o, cap, category);
+        pf_app(out, &o, cap, "\n");
+    }
+    if (desc[0]) {
+        pf_app(out, &o, cap, "desc=");
+        pf_app_plain(out, &o, cap, desc);
+        pf_app(out, &o, cap, "\n");
+    }
     out[o] = 0;
     return o;
 }
@@ -751,23 +991,26 @@ int pf_find_episode(const char *eps, unsigned n, const char *file, char *url, un
 unsigned pf_render_episodes(const pf_parser_t *p, const char *dir, const char *old, unsigned oldn, char *out,
                             unsigned cap, unsigned *fresh) {
     unsigned o = 0, k, n = 0, lo;
-    char names[PF_KEEP][PC_FILE], ln[1280];
+    char names[PF_KEEP][PC_FILE], ln[1536];
     const char *stop = old ? old + oldn : (const char *)0, *q, *next;
     if (cap > PF_EPS_MAX) cap = PF_EPS_MAX;
     *fresh = 0;
     pf_app(out, &o, cap, "M1PLUS-EPISODES 1\n");
     for (k = 0; k < (unsigned)p->nitems; ++k) {
         const pf_item_t *it = &p->items[k];
-        char f[PC_FILE];
+        char f[PC_FILE], od[PC_DESC];
         const char *fv = (const char *)0;
         unsigned fn = 0, gl = pf_len(it->guid), j, tries;
-        f[0] = 0;
-        if (old) { /* an old line with this guid keeps its file name */
+        f[0] = od[0] = 0;
+        if (old) { /* an old line with this guid keeps its file name (and its description when the feed has none now) */
             for (q = old; q < stop; q = next) {
                 unsigned len = pf_line(q, stop, &next), vn;
                 const char *v;
                 if (len && pf_field(q, len, 'g', &v, &vn) && vn == gl && pf_same(v, vn, it->guid)) {
+                    const char *xv;
+                    unsigned xn;
                     if (pf_field(q, len, 'f', &fv, &fn) && fn && fn < PC_FILE) memcpy(f, fv, fn), f[fn] = 0;
+                    if (pf_field(q, len, 'x', &xv, &xn)) pf_norm(od, PC_DESC, xv, xn);
                     break;
                 }
             }
@@ -805,6 +1048,10 @@ unsigned pf_render_episodes(const pf_parser_t *p, const char *dir, const char *o
         pf_app_plain(ln, &lo, sizeof ln, it->title);
         pf_app(ln, &lo, sizeof ln, "\tu=");
         pf_app_plain(ln, &lo, sizeof ln, it->url);
+        if (it->desc[0] || od[0]) {
+            pf_app(ln, &lo, sizeof ln, "\tx=");
+            pf_app_plain(ln, &lo, sizeof ln, it->desc[0] ? it->desc : od);
+        }
         pf_app(ln, &lo, sizeof ln, "\n");
         if (o + lo < cap) memcpy(out + o, ln, lo), o += lo;
     }

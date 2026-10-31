@@ -926,7 +926,12 @@
 #define PC_URL 320                /* a feed or image url of the show file (the feed url the refresh fetches: a longer one is refused at import) */
 #define PC_MAX_EPS 300            /* episodes of one show the model holds (newest kept) */
 #define PC_MAX_SHOWS 40           /* shows the page lists */
-#define PC_EP_SIZE 248            /* pc_ep_t: file[PC_FILE] title[PC_TITLE] guid pub dur length hash state */
+#define PC_DESC 208               /* a description: at most PC_DESC_CUT bytes of UTF-8 (cut before a continuation byte) and the NUL, with room */
+#define PC_DESC_CUT 200           /* the bytes of a description the feed reader keeps (HTML stripped, entities decoded, white space collapsed) */
+#define PC_AUTHOR 64              /* a show's author (itunes:author), UTF-8 bytes with the NUL */
+#define PC_CAT 48                 /* a show's first iTunes category, UTF-8 bytes with the NUL */
+#define PC_EP_SIZE 456            /* pc_ep_t: file[PC_FILE] title[PC_TITLE] guid pub dur length hash state desc[PC_DESC] */
+#define PC_EP_DESC 248
 #define PC_EP_TITLE 128
 #define PC_EP_GUID 224
 #define PC_EP_PUB 228
@@ -937,7 +942,10 @@
 #define PC_LOCAL 0                /* pc_ep_t.state: the file is on the card */
 #define PC_PART 1                 /* a .part file only (a download under way or cut off) */
 #define PC_REMOTE 2               /* metadata only: not downloaded */
-#define PC_SHOW_SIZE 1008         /* pc_show_t: dir[PC_FILE] title[PC_TITLE] cover[PC_FILE] feed[PC_URL] image[PC_URL] count hash fresh checked */
+#define PC_SHOW_SIZE 1328         /* pc_show_t: dir[PC_FILE] title[PC_TITLE] cover[PC_FILE] feed[PC_URL] image[PC_URL] count hash fresh checked author[PC_AUTHOR] category[PC_CAT] desc[PC_DESC] */
+#define PC_SH_AUTHOR 1008
+#define PC_SH_CAT 1072
+#define PC_SH_DESC 1120
 #define PC_SH_TITLE 128
 #define PC_SH_COVER 224
 #define PC_SH_FEED 352
@@ -956,10 +964,92 @@
 #define PC_SEEK_WAIT_MS 15000     /* a seek that has not happened this long after the episode started is dropped */
 #define PC_COVER_MAX_PX 2100000   /* a cover picture is decoded only when width * height is at most this (the stock loader holds the whole bitmap) */
 #define PC_ROW_H 64               /* the page's rows (LIST_ROW_H) */
-#define PC_HDR_H 132              /* the Show level's header: the cover, the name, the count, the speed */
-#define PC_HDR_ART 96
 #define PC_TILES 44               /* text / cover tiles: every show (PC_MAX_SHOWS) and a few spare */
 #define PC_SPEEDS 4               /* playspeed_mode 0..3: 1x, 1.25x, 1.5x, 2x (stock "Multiple Speed", images p_1_25 / p_1_5 / p_2) */
+/* The Podcasts Show page (patch/podcasts.c, docs/modules/podcasts.md "The Show page"; tools/preview_podcasts_revamp.py reads these). Content y is from the list's top (window row
+ * PG_LIST_Y = the navbar's bottom), x is the window's. HEADER, in the album page's and the playlist header's manner: the PS_ART px cover at x PS_ART_X with PS_ART_R px corners (flush with
+ * the list's top: the album page's 50), the show's name PS_NAME_GAP under it (PS_NAME_PX white, centred in PS_NAME_X / PS_NAME_W, PS_NAME_PITCH a line, at most PS_NAME_LINES), the
+ * Latest Episode pill PS_LATEST_GAP under that (PS_LATEST_H high, white, centred: its ends the white disc, PS_LATEST_PADL / glyph / PS_LATEST_GAPG / text / PS_LATEST_PADR), the
+ * show's description (PS_DESC_GAP under the pill, PS_DESC_LINES lines of PS_DESC_PITCH, PS_DESC_X / PS_DESC_W), the "Category · Author" line (PS_META_GAP under it) and the Episodes header
+ * (PS_HEAD_GAP under the last block, PS_HEAD_H high). The navbar's small title shows once the offset passes the name's bottom less PS_COLLAPSE_BACK. CELLS are PS_CELL_H high, in the
+ * order of the offsets below (from the cell's top); the state pill is PS_PILL_H high from x PS_CELL_X (pad PS_PILL_PADL, the PA_G_PX glyph, PS_PILL_GAP, the text, PS_PILL_PADR); the
+ * "..." is PS_DOTS_HIT px square around (PS_DOTS_CX, the pill's middle). BADGES on the date line: the check (a PA_G_PX cell, PS_BADGE_CHECK_W wide slot) when played, the PA_BADGE_PX disc
+ * (PS_BADGE_DISC_W slot) when the file is on the card. PA_* is the atlas pc_atlas (tools/mod_icons.py PA_*): PA_RING_N 12-step progress rings, PA_G_* the 16 px glyph strip. */
+#define PG_LIST_Y 50
+#define PS_ART 160
+#define PS_ART_X 80
+#define PS_ART_R 10
+#define PS_NAME_GAP 14
+#define PS_NAME_PX 22
+#define PS_NAME_PITCH 26
+#define PS_NAME_X 17
+#define PS_NAME_W 286
+#define PS_NAME_LINES 2
+#define PS_LATEST_GAP 12
+#define PS_LATEST_H 40
+#define PS_LATEST_PADL 18
+#define PS_LATEST_GLYPH 14
+#define PS_LATEST_GAPG 8
+#define PS_LATEST_PADR 20
+#define PS_LATEST_MAX 296
+#define PS_DESC_GAP 14
+#define PS_DESC_PITCH 21
+#define PS_DESC_LINES 2
+#define PS_DESC_X 16
+#define PS_DESC_W 288
+#define PS_META_GAP 6
+#define PS_META_PITCH 22
+#define PS_HEAD_GAP 14
+#define PS_HEAD_H 34
+#define PS_COLLAPSE_BACK 12
+#define PS_CELL_H 173
+#define PS_CELL_X 16
+#define PS_CELL_W 288
+#define PS_DATE_Y 9
+#define PS_DATE_H 22
+#define PS_TITLE_Y 32
+#define PS_TITLE_PITCH 24
+#define PS_CDESC_Y 83
+#define PS_CDESC_PITCH 20
+#define PS_PILL_Y 131
+#define PS_PILL_H 30
+#define PS_PILL_PADL 10
+#define PS_PILL_GAP 6
+#define PS_PILL_PADR 12
+#define PS_DOTS_CX 292
+#define PS_DOTS_HIT 44
+#define PS_BADGE_CHECK_W 20
+#define PS_BADGE_DISC_W 18
+#define PS_SHEET_ICON_X 16
+#define PS_SHEET_TEXT_X 56
+#define PS_SHEET_VALUE_R 304
+#define PS_SHEET_VALUE_W 130
+#define PS_SHEET_GAP 12
+#define PA_SIZE 160
+#define PA_RING_PX 16
+#define PA_RING_N 12
+#define PA_RING_COLS 6
+#define PA_G_Y 32
+#define PA_G_PX 16
+#define PA_ARROW 0
+#define PA_PLAY 1
+#define PA_PAUSE 2
+#define PA_RETRY 3
+#define PA_CHECK 4
+#define PA_PLAYK 5
+#define PA_DOTS_Y 48
+#define PA_DOTS_PX 20
+#define PA_BADGE_X 24
+#define PA_BADGE_PX 12
+#define PA_PILL_Y 68
+#define PA_PILLF_X 0
+#define PA_PILLO_X 32
+#define PA_PILLW_X 64
+#define PA_PILLR_X 108
+#define PA_PILL_PX 30
+#define PA_PILLW_PX 40
+#define PA_FILL_A 56
+#define PA_RING_A 110
 
 /* The Tape page (patch/tape.c, docs/modules/tape.md; tools/tape_art.py draws the images from the same numbers, test/pod/tape.py checks them). The page is LANDSCAPE, 480 x 320: the
  * framebuffer is the portrait 320 x 480 and holds the picture turned 90 degrees clockwise, so landscape (x, y) is the framebuffer's row x, column 319 - y. Everything below is in

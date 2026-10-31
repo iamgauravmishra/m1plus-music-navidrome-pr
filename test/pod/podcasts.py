@@ -11,7 +11,7 @@ RING, SPEED = STATE + '/resume', STATE + '/speed'
 PLAYSPEED_MODE = pod.DATA['PLAYSPEED_MODE'][0]
 EPS_HEAD = 'M1PLUS-EPISODES 1\n'
 SCREEN_Y0 = 80   # the list's top on the screen: the 30 px system bar and the 50 px navbar
-VIEW_H, ROW, HDR = O['GRID_VIEW_H'], O['PC_ROW_H'], O['PC_HDR_H']
+VIEW_H, ROW, CELL = O['GRID_VIEW_H'], O['PC_ROW_H'], O['PS_CELL_H']
 SC_YOFF = O['SC_YOFF']
 
 
@@ -120,18 +120,19 @@ class PM(ListMachine):
         raw = bytes(self.u.mem_read(a, O['PC_EP_SIZE']))
         cs = lambda b: b.split(b'\0', 1)[0].decode('utf-8', 'replace')
         g, p, d, l, h, s = struct.unpack_from('<6I', raw, O['PC_EP_GUID'])
-        return dict(file=cs(raw[:O['PC_FILE']]), title=cs(raw[O['PC_FILE']:O['PC_EP_GUID'] - 0]), guid=g, pub=p, dur=d, length=l, hash=h, state=s)
+        return dict(file=cs(raw[:O['PC_FILE']]), title=cs(raw[O['PC_FILE']:O['PC_EP_GUID'] - 0]), guid=g, pub=p, dur=d, length=l, hash=h, state=s, desc=cs(raw[O['PC_EP_DESC']:O['PC_EP_SIZE']]))
 
     def show(self, a):
         raw = bytes(self.u.mem_read(a, O['PC_SHOW_SIZE']))
         cs = lambda b: b.split(b'\0', 1)[0].decode('utf-8', 'replace')
         n, h, fresh, checked = struct.unpack_from('<4I', raw, O['PC_SH_COUNT'])
-        return dict(dir=cs(raw[:128]), title=cs(raw[128:224]), cover=cs(raw[224:352]), feed=cs(raw[O['PC_SH_FEED']:O['PC_SH_IMAGE']]), image=cs(raw[O['PC_SH_IMAGE']:O['PC_SH_COUNT']]), count=n, hash=h, fresh=fresh, checked=checked)
+        return dict(dir=cs(raw[:128]), title=cs(raw[128:224]), cover=cs(raw[224:352]), feed=cs(raw[O['PC_SH_FEED']:O['PC_SH_IMAGE']]), image=cs(raw[O['PC_SH_IMAGE']:O['PC_SH_COUNT']]), count=n, hash=h, fresh=fresh, checked=checked,
+                    author=cs(raw[O['PC_SH_AUTHOR']:O['PC_SH_CAT']]), category=cs(raw[O['PC_SH_CAT']:O['PC_SH_DESC']]), desc=cs(raw[O['PC_SH_DESC']:O['PC_SHOW_SIZE']]))
 
     # ---- the payload's entry points
     def parse_eps(self, text, mx=300):
         raw = text if isinstance(text, bytes) else text.encode('utf-8')
-        buf, out = self.alloc(len(raw) + 1), self.alloc(mx * O['PC_EP_SIZE'])
+        buf, out = self.alloc(len(raw) + 1), self.ep_buffer(mx)
         self.u.mem_write(buf, raw + b'\0'); self.u.mem_write(out, bytes(mx * O['PC_EP_SIZE']))
         n = self.call(PSYMS['pc_parse_eps'], a0=buf, a1=len(raw), a2=out, a3=mx, count=20000000)
         return [self.ep(out + i * O['PC_EP_SIZE']) for i in range(n)]
@@ -141,8 +142,14 @@ class PM(ListMachine):
         n = self.call(PSYMS['pc_scan_shows'], a0=out, a1=mx, count=200000000)
         return [self.show(out + i * O['PC_SHOW_SIZE']) for i in range(n)], out
 
+    def ep_buffer(self, mx):
+        """One zeroed-by-the-caller output array of mx episodes per machine and size: the records are big (456 bytes) and a test reads them hundreds of times."""
+        bufs = self.__dict__.setdefault('_ep_buffers', {})
+        if mx not in bufs: bufs[mx] = self.alloc(mx * O['PC_EP_SIZE'])
+        return bufs[mx]
+
     def episodes(self, show_addr, mx=300):
-        out = self.alloc(mx * O['PC_EP_SIZE']); self.u.mem_write(out, bytes(mx * O['PC_EP_SIZE']))
+        out = self.ep_buffer(mx); self.u.mem_write(out, bytes(mx * O['PC_EP_SIZE']))
         n = self.call(PSYMS['pc_load_show'], a0=show_addr, a1=out, a2=mx, count=400000000)
         return [self.ep(out + i * O['PC_EP_SIZE']) for i in range(n)]
 
@@ -598,8 +605,10 @@ def cover_tests(ctx):
 
 
 # ---- the page
-PG_WIDGETS = ['podcasts_listview', 'view_grid', 'label_status', 'label_title', 'img_nb_fade', 'label_row_title', 'label_row_sub', 'label_row_dim', 'label_row_acc', 'label_row_act',
-              'btn_return', 'btn_backtoplayer', 'btn_feeds', 'btn_select', 'btn_selall', 'pg_bar', 'pg_del', 'pod_pd_scrim', 'pod_pd_card', 'pod_pd_title', 'pod_pd_name', 'pod_pd_track', 'pod_pd_fill', 'pod_pd_count', 'pod_pd_cancel']
+SHEET_ROWS = [r[0] for r in pod_ui.PS_SHEET_ROWS]
+PG_WIDGETS = (['podcasts_listview', 'view_grid', 'label_status', 'label_title', 'img_nb_fade', 'label_row_title', 'label_row_sub', 'label_row_act', 'img_ah_tint',
+               'btn_return', 'btn_backtoplayer', 'btn_feeds', 'btn_select', 'btn_more', 'btn_selall', 'pg_bar', 'pg_del', 'pod_pd_scrim', 'pod_pd_card', 'pod_pd_title', 'pod_pd_name', 'pod_pd_track', 'pod_pd_fill', 'pod_pd_count', 'pod_pd_cancel',
+               'pg_sh_scrim', 'pg_sh_card', 'pg_sh_speed_vl', 'pg_sh_refresh_vl'] + [n for n, *_ in pod_ui.PS_STYLES] + [f'pg_sh_{r}{s}' for r in SHEET_ROWS for s in ('', '_tx', '_hr')])
 T0 = 1700000000   # 2023-11-14 22:13:20 UTC
 DAY = 86400
 
@@ -613,6 +622,13 @@ def page_card(m):
     m.images[f'file://{ROOT}/Alpha Show/cover.jpg'] = (600, 600, bytes((200, 40, 40, 255)) * 600 * 600)
     m.images['p_default'] = (16, 16, bytes((90, 90, 90, 255)) * 256)
     m.load_image = 0
+
+
+def atlas_image():
+    """The Show page's atlas (assets/icons/png/pc_atlas.png) as the image manager would give it: (w, h, RGBA bytes)."""
+    from PIL import Image
+    im = Image.open(os.path.join(mod_icons.PNG, 'pc_atlas.png')).convert('RGBA')
+    return im.width, im.height, im.tobytes()
 
 
 def page_machine(card=page_card, cls=None):
@@ -630,6 +646,7 @@ def page_machine(card=page_card, cls=None):
     m.canvas = m.alloc(0x80); m.oy_canvas = m.canvas
     m.setword(m.widgets['label_title'] + 8, 156)
     m.clock = 5000
+    m.images['pc_atlas'] = atlas_image()
     return m
 
 
@@ -670,11 +687,66 @@ def click(m, name):
 
 
 def title_text(m):
-    t = [c for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] == m.widgets['label_title']]
-    return t[-1][2] if t else None
+    """The text the navbar's title label holds now (set by widget_set_text_utf8; the hint's text comes with widget_set_tr_text)."""
+    t = m.wtext.get(m.widgets['label_title'])
+    return t.encode('latin-1').decode('utf-8') if t is not None else None
 
 
-def row_y(i, level): return i * ROW if level == 0 else HDR + i * ROW
+def hdr(m):
+    """Where the Show level's cells start (content y): the Episodes header's top and its height, read from a frame scrolled 100 px (a text is drawn only wholly in view: at the top a tall header hides it)."""
+    _, texts, styles, _ = paint(m, 100)
+    return next(r[1] for (t, r), s in zip(texts, styles) if s == 'label_ps_head') + 100 + O['PS_HEAD_H']
+
+
+def cell_y(m, i): return hdr(m) + i * CELL
+
+
+def body(m, i, **kw):
+    """A tap on the date line of cell i: its body."""
+    tap(m, 150, cell_y(m, i) + 12, **kw)
+
+
+def act(m, i, **kw):
+    """A tap on cell i's state pill: what the cell does (play it, download it, pause, resume, retry)."""
+    tap(m, 30, cell_y(m, i) + O['PS_PILL_Y'] + O['PS_PILL_H'] // 2, **kw)
+
+
+def dots(m, i, **kw):
+    tap(m, O['PS_DOTS_CX'], cell_y(m, i) + O['PS_PILL_Y'] + O['PS_PILL_H'] // 2, **kw)
+
+
+def latest(m, **kw):
+    """A tap on the Latest Episode pill."""
+    _, texts, styles, _ = paint(m, 0)
+    r = next(r for (t, r), s in zip(texts, styles) if s in ('label_ps_latest', 'label_ps_latestw'))
+    tap(m, r[0] + 20, r[1] + r[3] // 2, **kw)
+
+
+def all_cells(m):
+    """cells() of every cell of the open show: frames scrolled 120 px apart from the first cell (a cell's texts are drawn only while wholly in view)."""
+    h = hdr(m)
+    n = (m.props.get((m.sv, 'virtual_h')) - h - 20) // CELL
+    out = {}
+    for k in range(n * CELL // 120 + 2):
+        for i, c in cells(m, h + 120 * k).items():
+            if i not in out and 0 <= i < n and c['title'] and c['pill']: out[i] = c
+    return out
+
+
+def cells(m, off=0):
+    """{index: {date, title: [lines], desc: [lines], pill, played}} of the cells in a frame (the texts by style and place)."""
+    h = hdr(m)
+    _, texts, styles, _ = paint(m, off)
+    out = {}
+    for (t, r), s in zip(texts, styles):
+        if not s.startswith('label_ps_') or s in ('label_ps_name', 'label_ps_sec', 'label_ps_meta', 'label_ps_head', 'label_ps_latest', 'label_ps_latestw'): continue
+        i = (r[1] + off - h) // CELL
+        c = out.setdefault(i, dict(date='', title=[], desc=[], pill='', played=False))
+        if s == 'label_ps_date': c['date'] = t
+        elif s in ('label_ps_ctitle', 'label_ps_cdim'): c['title'].append(t); c['played'] = s == 'label_ps_cdim'
+        elif s == 'label_ps_cdesc': c['desc'].append(t)
+        elif s == 'label_ps_pill': c['pill'] = t
+    return out
 
 
 def ring_of(m, h):
@@ -742,7 +814,7 @@ def open_tests(ctx):
     m5.call(PSYMS['podcasts_open'], count=40000000)
     expect(('widget_set_tr_text', m5.widgets['label_status'], 'Not enough memory') in m5.calls, 'no memory for the shows: "Not enough memory"')
     # an asset that is not ours
-    for gone in ('view_grid', 'label_row_acc', 'podcasts_scrollview', 'label_title'):
+    for gone in ('view_grid', 'label_ps_name', 'podcasts_scrollview', 'label_title'):
         m6 = page_machine(); m6.widgets.pop(gone)
         r = m6.call(PSYMS['podcasts_open'], count=40000000)
         expect(r == 0xffffffff and 'navigator_back' in m6.names() and not any(c[0] == 'timer_add' for c in m6.calls), f'without {gone} the page leaves again and arms nothing')
@@ -758,49 +830,34 @@ def paint_calls(m): return m.calls
 
 
 def level_tests(ctx):
-    """A tap on a show opens its episodes in place: the header, the rows, the dots and the grey lines, Back."""
+    """A tap on a show opens its page in place: the header and the cells, the states, Back goes up a level."""
     expect = ctx.expect
     m = opened()
     for _ in range(4): m.call(PSYMS['pg_on_load'], a0=0, count=40000000)
     m.setword(m.sv + SC_YOFF, 30); m.props[(m.sv, 'yoffset')] = 30
     tap(m, 150, ROW + 10, off=30)
-    expect(title_text(m) == 'bravo' and m.props.get((m.sv, 'virtual_h')) == HDR + 3 * ROW + 12 and m.props.get((m.sv, 'yoffset')) == 0,
-           f'a tap on bravo: the navbar title is the show, the content a header, three rows and the air under them ({m.props.get((m.sv, "virtual_h"))}), at the top')
-    texts = drawn(m)
-    head = [t for t in drawn(m, style='label_row_title') if t[1][1] < HDR]
-    expect(head == [('bravo', (124, 22, 184, 24))], f'the header: the name at (124, 22) ({head})')
-    expect([t for t in drawn(m, style='label_row_sub') if t[1][1] < HDR] == [('3 episodes', (124, 50, 184, 20))], 'and the count under it')
-    expect(drawn(m, style='label_row_acc') == [('1x', (124, O['PC_HDR_H'] - 132 + 82 + 7, 184, 20))], f'and the show\'s speed in the accent colour ({drawn(m, style="label_row_acc")})')
+    shown = title_text(m)
+    h = hdr(m)
+    expect(shown == 'bravo' and m.props.get((m.sv, 'virtual_h')) == h + 3 * CELL + 20 and m.props.get((m.sv, 'yoffset')) == 0,
+           f'a tap on bravo: the navbar title is the show, the content a header ({h} px), three cells and the air under them ({m.props.get((m.sv, "virtual_h"))}), at the top')
     d = lambda t: when_model(t, 1800000000)   # (the machine's clock: 2027-01-15)
-    rows = [t for t in drawn(m, style='label_row_title') if t[1][1] >= HDR]
-    subs = [t for t in drawn(m, style='label_row_sub') if t[1][1] >= HDR]
-    expect([t for t, _ in rows] == ['Bravo 3', 'Bravo 2', 'Bravo 1'] and [r for _, r in rows] == [(16, HDR + i * ROW + O['LIST_TITLE_Y'], 292, O['LIST_TITLE_H']) for i in range(3)],
-           f'the episodes newest first, the titles from the metadata, at x 16, 292 px wide ({rows})')
-    expect([t for t, _ in subs] == [f'{d(T0 + 3 * DAY)} · 60 min'.encode().decode('latin-1'), f'{d(T0 + 2 * DAY)} · 20 min'.encode().decode('latin-1'), f'{d(T0 + DAY)} · 10 min'.encode().decode('latin-1')]
-           or [t for t, _ in subs] == [f'{d(T0 + 3 * DAY)} · 60 min', f'{d(T0 + 2 * DAY)} · 20 min', f'{d(T0 + DAY)} · 10 min'],
-           f'the grey line: the date, a middle dot and the duration ({[t for t, _ in subs]})')
-    bl, _, _, fills = paint(m)
-    expect(not [b for b in bl if tuple(b[2][2:]) != (O['PC_HDR_ART'], O['PC_HDR_ART'])], 'no unplayed dot, no mark: only the header\'s cover is drawn (unplayed is a bright title)')
-    hair = [f for f in fills if f[0] == O['LIST_HAIR']]
-    expect([(f[1], f[2]) for f in hair] == [(16, HDR + i * ROW + ROW - 1) for i in range(3)], 'a hairline under each row from the text\'s x')
-    # state: a place, played
+    c = all_cells(m)
+    expect([c[i]['title'] for i in range(3)] == [['Bravo 3'], ['Bravo 2'], ['Bravo 1']] and not any(c[i]['played'] for i in range(3)),
+           f'the episodes newest first, the titles from the metadata, bright ({[c[i]["title"] for i in range(3)]})')
+    expect([c[i]['date'] for i in range(3)] == [d(T0 + 3 * DAY), d(T0 + 2 * DAY), d(T0 + DAY)], f'the date lines ({[c[i]["date"] for i in range(3)]})')
+    expect([c[i]['pill'] for i in range(3)] == ['60m', '20m', '10m'], f'the state pills say the length ({[c[i]["pill"] for i in range(3)]})')
+    # state: played; a place
     h2, h3 = pc_hash(f'{ROOT}/bravo/b2.mp3'), pc_hash(f'{ROOT}/bravo/b3.mp3')
     m.call(PSYMS['pc_mark'], a0=h2, a1=1, count=30000000)
-    m.fs[RING] = m.fs[RING]   # (marks are written at once)
     m.call(PSYMS['pg_tick'], a0=0, count=40000000)
-    expect(drawn(m, style='label_row_dim') == [('Bravo 2', (16, HDR + ROW + O['LIST_TITLE_Y'], 292, O['LIST_TITLE_H']))], 'a played episode\'s title is in the grey style')
-    subs = [t for t, _ in drawn(m, style='label_row_sub') if True]
-    expect(subs[2] == f'{d(T0 + 2 * DAY)} · Played', f'and its line says Played ({subs})')
-    bl, _, _, _ = paint(m)
-    expect([t for t, r in drawn(m, style='label_row_title') if r[1] >= HDR] == ['Bravo 3', 'Bravo 1'] and [t for t, _ in drawn(m, style='label_row_dim')] == ['Bravo 2'],
-           'unplayed titles are bright (the title style), the played one is grey: the brightness is what tells them apart')
+    c = all_cells(m)
+    expect([c[i]['played'] for i in range(3)] == [False, True, False], 'a played episode\'s title is in the grey style (and the others bright: the brightness tells them apart)')
     m.call(PSYMS['pc_mark'], a0=h2, a1=0, count=30000000)
     m.pt = (360, 3600, 1); m.status = 2
     m.play([m.record(path=f'{ROOT}/bravo/b3.mp3')], 0); m.clock += 40000
     m.call(PSYMS['pg_tick'], a0=0, count=40000000)
-    subs = [t for t, _ in drawn(m, style='label_row_sub') if True]
-    expect(subs[1] == f'{d(T0 + 3 * DAY)} · 54 min left' and m.state(h3) == (1, 360, 3600), f'an episode in progress (the page\'s timer noted its place): "N min left" ({subs})')
-    expect(len(drawn(m, style='label_row_dim')) == 0, 'it is not grey: a started episode is not played')
+    c = all_cells(m)
+    expect(c[0]['pill'] == '54m left' and m.state(h3) == (1, 360, 3600) and not c[0]['played'], f'an episode in progress (the page\'s timer noted its place): "54m left" ({c[0]["pill"]})')
     # Back goes up a level
     m.calls = []
     click(m, 'btn_return')
@@ -816,11 +873,10 @@ def level_tests(ctx):
     tap(m, 150, 10)
     for _ in range(4): m.call(PSYMS['pg_on_load'], a0=0, count=40000000)
     bl, _, _, _ = paint(m)
-    big = [b for b in bl if tuple(b[2][2:]) == (O['PC_HDR_ART'], O['PC_HDR_ART'])]
-    expect([tuple(b[2]) for b in big] == [(16, 16, O['PC_HDR_ART'], O['PC_HDR_ART'])] and f'file://{ROOT}/Alpha Show/cover.jpg' in m.loads, 'the Show header: the 96 px cover (decoded from the picture) at (16, 16)')
-    expect([t for t, _ in drawn(m, style='label_row_sub') if True][0] == '2 episodes', 'Alpha Show: two episodes')
-    texts = drawn(m, style='label_row_title')
-    expect([t for t, _ in texts] == ['Alpha Show', 'ep2', 'ep1'], f'the files\' names are the titles when there is no metadata ({[t for t, _ in texts]})')
+    big = [b for b in bl if tuple(b[2][2:]) == (O['PS_ART'], O['PS_ART'])]
+    expect([tuple(b[2]) for b in big] == [(O['PS_ART_X'], 0, O['PS_ART'], O['PS_ART'])] and f'file://{ROOT}/Alpha Show/cover.jpg' in m.loads, 'the Show header: the 160 px cover (decoded from the picture) at x 80, flush with the list\'s top')
+    c = all_cells(m)
+    expect([c[i]['title'] for i in range(2)] == [['ep2'], ['ep1']], f'the files\' names are the titles when there is no metadata ({[c[i]["title"] for i in range(2)]})')
     # a show with nothing downloaded
     m = opened(lambda mm: (page_card(mm), mm.put(f'{ROOT}/MetaOnly/.episodes', (EPS_HEAD + 'g=m1\tp=9\tf=m1.mp3\tt=Not yet\tu=https://e.example/m1\n').encode())))
     expect([t for t, _ in drawn(m, style='label_row_title')] == ['Alpha Show', 'bravo'] and m.props.get((m.sv, 'virtual_h')) == 2 * ROW,
@@ -830,7 +886,7 @@ def level_tests(ctx):
 
 
 def touch_tests(ctx):
-    """Taps: a show opens, an episode plays (with the ones after it), the dot toggles played, the speed cycles; stray touches do nothing."""
+    """Taps: a show opens, a cell plays (with the ones after it); stray touches do nothing."""
     expect = ctx.expect
     m = opened()
     h2 = pc_hash(f'{ROOT}/bravo/b2.mp3')
@@ -850,55 +906,38 @@ def touch_tests(ctx):
     expect(mm.props.get((mm.sv, 'virtual_h')) == 2 * ROW, 'a press on one row released on another opens nothing')
     # play
     tap(m, 150, ROW + 10)   # bravo
-    rows_y = lambda i: HDR + i * ROW + 20
     m.calls = []
-    tap(m, 150, rows_y(1))   # Bravo 2: the second row
+    act(m, 1)   # Bravo 2: the second cell's pill
     nav = [c for c in m.calls if c[0] == 'navigator_to_with_context']
     expect(len(nav) == 1 and nav[0][1] == 'playing_page' and nav[0][2:] == (1, 1, O['PLAY_MODE']), f'a tap on an episode opens Now Playing with the queue: index 1, class 1 (folder play), mode 2 ({nav})')
     q, idx = m.played
     field = lambda r, off: m.read_cstr(m.word(r + off))
     expect([field(r, O['REC_PATH']) for r in q] == [f'{ROOT}/bravo/b3.mp3', f'{ROOT}/bravo/b2.mp3', f'{ROOT}/bravo/b1.mp3'] and idx == 1,
-           'the queue is the show\'s episodes in the list\'s order, from the first row; the tapped one starts (the ones after it play next)')
+           'the queue is the show\'s episodes in the list\'s order, from the first cell; the tapped one starts (the ones after it play next)')
     r = q[1]
     expect((field(r, O['REC_NAME']), field(r, O['REC_TITLE']), field(r, O['REC_ALBUM']), field(r, O['REC_ARTIST'])) == ('b2.mp3', 'Bravo 2', 'bravo', 'bravo')
            and m.word(r + O['REC_TYPE']) == 8 and m.word(r + O['REC_CLASS']) == 1, 'a record: the file name, the title, the show as album and artist, a song (type 8), class 1')
     expect(m.word(pod.DATA['G_CLASS_TYPE'][0]) == 1, 'the browsing class is 1 (folder play)')
-    m.mode = O['MODE_SHUFFLE']; m.calls = []; tap(m, 150, rows_y(0))
-    expect(m.mode == O['MODE_ORDER'] and ('mclSetPlayMode', O['MODE_ORDER']) in m.calls, 'the list plays in order: a shuffle mode is turned off')
+    m.mode = O['MODE_SHUFFLE']; m.calls = []; body(m, 0)
+    expect(m.mode == O['MODE_ORDER'] and ('mclSetPlayMode', O['MODE_ORDER']) in m.calls, 'a tap on a cell\'s body plays it too, in order: a shuffle mode is turned off')
     expect(('deque_destroy',) in m.calls and not [c for c in m.calls if c[0] == 'loadSongList'], 'the queue is the page\'s own: no stock list query is made, the page frees its copy')
     # a played episode starts again; a missing file does not start
     m.call(PSYMS['pc_mark'], a0=h2, a1=1, count=30000000)
     m.call(PSYMS['pg_tick'], a0=0, count=40000000)
-    m.calls = []; tap(m, 150, rows_y(1)); played = any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in m.calls)
+    m.calls = []; act(m, 1); played = any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in m.calls)
     expect(m.state(h2)[0] == 0 and played, 'a played episode is new again when it is started (it plays from the beginning)')
     del m.fs[f'{ROOT}/bravo/b1.mp3']
-    m.calls = []; tap(m, 150, rows_y(2))
+    m.calls = []; act(m, 2)
     expect(not [c for c in m.calls if c[0] == 'navigator_to_with_context' and c[1] == 'playing_page'] and any(c[0] == 'toast' and c[1] == 'Storage unavailable' for c in m.calls),
            'an episode whose file has gone: "Storage unavailable", nothing starts')
     m.fs[f'{ROOT}/bravo/b1.mp3'] = b''
-    # there is no dot column: the left edge of a row is the row
-    m.calls = []; tap(m, 20, rows_y(0))
+    # a tap on the left edge of a cell is the cell (no dot column)
+    m.calls = []; tap(m, 4, cell_y(m, 0) + 12)
     h3 = pc_hash(f'{ROOT}/bravo/b3.mp3')
-    expect([c for c in m.calls if c[0] == 'navigator_to_with_context' and c[1] == 'playing_page'] and m.state(h3)[0] != 2, 'a tap at the left edge of a row plays the row and marks nothing (the dot and its column are gone)')
+    expect([c for c in m.calls if c[0] == 'navigator_to_with_context' and c[1] == 'playing_page'] and m.state(h3)[0] != 2, 'a tap at the left edge of a cell plays it and marks nothing')
     m.call(PSYMS['pc_mark'], a0=h3, a1=0, count=3000000)
-    # the speed
-    SH = pc_hash('bravo')
-    got = []
-    for _ in range(5):
-        m.calls = []; tap(m, 200, 82 + 15)
-        got.append((m.call(PSYMS['pc_speed_get'], a0=SH, count=2000000), drawn(m, style='label_row_acc')[0][0]))
-    expect(got == [(1, '1.25x'), (2, '1.5x'), (3, '2x'), (0, '1x'), (1, '1.25x')], f'a tap on the speed cycles 1x, 1.25x, 1.5x, 2x and is kept ({got})')
-    expect(m.fs[SPEED][:4] == b'PCS1' and (SH, 1) == struct.unpack_from('<2I', m.fs[SPEED], 8), 'in the speed file')
-    expect(m.word(PLAYSPEED_MODE) == 1 and m.speeds[-1] == 1, 'and the stock mode and the player follow (the next episode starts at it)')
-    m.calls = []; tap(m, 100, 97)
-    expect(m.call(PSYMS['pc_speed_get'], a0=SH, count=2000000) == 1, 'a tap left of the speed does nothing')
     m.calls = []; tap(m, 200, 30)
-    expect(m.call(PSYMS['pc_speed_get'], a0=SH, count=2000000) == 1 and not [c for c in m.calls if c[0] == 'navigator_to_with_context'], 'nor does a tap on the header\'s name')
-    m.card_mounted = False
-    m.calls = []; tap(m, 200, 97)
-    expect(any(c[0] == 'toast' and c[1] == 'Storage unavailable' for c in m.calls) and m.call(PSYMS['pc_speed_get'], a0=SH, count=2000000) == 1, 'a speed that cannot be saved (no card): said, and the old one stays')
-
-
+    expect(not [c for c in m.calls if c[0] == 'navigator_to_with_context'], 'a tap on the header\'s cover or name does nothing')
 def lifecycle_tests(ctx):
     """The page timer, the window's events, the places noted from the page, the destroy."""
     expect = ctx.expect
@@ -937,7 +976,7 @@ def lifecycle_tests(ctx):
     m = page_machine(); m.mtime[f'{ROOT}/Alpha Show/ep1.mp3'] = 1800000000 - 3600; m.mtime[f'{ROOT}/Alpha Show/ep2.mp3'] = 1800000000 - 30
     m.call(PSYMS['podcasts_open'], count=40000000)
     tap(m, 150, 10)
-    lines = lambda: [t for t, _ in drawn(m, style='label_row_sub')][1:]
+    lines = lambda: [all_cells(m)[i]['date'] for i in range(2)]
     expect(lines() == ['Just now', '1h ago'], f'the lines read as of the clock when the page opens ({lines()})')
     m.wall += 7200; fn, ctx_ = m.bound[(m.window, O['EVT_WINDOW_TO_BG'])]; m.call(fn, a0=ctx_, a1=0, count=4000000)
     fn, ctx_ = m.bound[(m.window, O['EVT_WINDOW_TO_FG'])]; m.call(fn, a0=ctx_, a1=0, count=4000000)
@@ -958,12 +997,12 @@ def asset_tests(ctx):
     expect(lv is not None and lv.y == pod_ui.NAVBAR_H and lv.y + lv.h == 450 and [c.type for c in lv.children] == ['scroll_view', 'scroll_bar_m'], 'list_view (50-450) > scroll_view + scroll_bar_m, as stock')
     sv = lv.children[0]
     expect(sv.name == 'podcasts_scrollview' and [c.name for c in sv.children] == ['view_grid'] and sv.w == 310, 'the scroll_view holds the one content view')
-    for name in ('label_status', 'img_nb_fade', 'label_row_title', 'label_row_sub', 'label_row_dim', 'label_row_acc', 'label_row_act'):
+    for name in ('label_status', 'img_nb_fade', 'label_row_title', 'label_row_sub', 'label_row_act', 'img_ah_tint', *[n for n, *_ in pod_ui.PS_STYLES]):
         w = tree.find(name)
         expect(w is not None and w.get('visible') == 'false' and w.get('sensitive') == 'false', f'{name} starts hidden and insensitive')
     nav = tree.find('navigationbar_view')
-    expect([c.name for c in nav.children] == ['label_title', 'btn_return', 'btn_backtoplayer', 'btn_feeds', 'btn_select', 'btn_selall'] and tree.find('label_title').get('tr_text') == 'Podcasts',
-           'the navbar: title, Back, Now Playing, the Feeds button (the capsule\'s left cap), the hidden Select button on the same slot and Select All')
+    expect([c.name for c in nav.children] == ['label_title', 'btn_return', 'btn_backtoplayer', 'btn_feeds', 'btn_select', 'btn_more', 'btn_selall'] and tree.find('label_title').get('tr_text') == 'Podcasts',
+           'the navbar: title, Back, Now Playing, the Feeds button (the capsule\'s left cap), the hidden Select button (Downloads) and "..." (the Show level) on the same slot and Select All')
     fb, npb = tree.find('btn_feeds'), tree.find('btn_backtoplayer')
     expect(fb.x == pod_ui.NAV_VIEW_X and fb.get('style:normal:icon') == 'pod_nav_feeds' and fb.get('style:pressed:icon') == 'pod_nav_feeds_down' and npb.get('style:normal:icon') == 'ah_nav_play'
            and tree.find('label_title').x + tree.find('label_title').w <= fb.x, 'Feeds is the left cap of the capsule that ends in Now Playing; the title stops at its left edge')
@@ -971,7 +1010,7 @@ def asset_tests(ctx):
            'the Feeds glyph (Lucide rss) is in the tree, normal and pressed')
     expect(tree.find('label_status').h >= 60, 'the hint has room for two lines')
     # the colours of the text styles on the black page
-    expect(pod_ui.PC_DIM_RGB == '#8E8E93' and contrast(pod_ui.PC_DIM_RGB, '#000000') > 4.5 and contrast(pod_ui.PC_ACCENT_RGB, '#000000') > 4.5, 'the played title and the speed read on black (4.5:1)')
+    expect(contrast(pod_ui.PC_ACTION_RGB, '#000000') > 4.5, 'the Feeds level\'s action rows read on black (4.5:1)')
     # the item
     item = next(i for i, r in enumerate(P.ITEMS) if r.label == 'Podcasts')
     expect(item == 20 == len(P.ITEMS) - 1 and P.ITEMS[item].action == P.ACT_PODCASTS == 23 and P.ID_CHARS[item] == 'l' and item not in P.DEFAULT_MENU and P.PAGES[P.PAGES.index(P.PODCASTS) + 1:] == [P.TAPE, P.CASSETTE_PAGE, P.KEYBOARD, P.KEYBOARDS_PAGE]
@@ -1078,21 +1117,21 @@ def when_tests(ctx):
 
 
 def width_tests(ctx):
-    """The grey line in every language, measured in the real font (the label_row_sub 18 px style, 292 px of room): the longest lines must fit; a longer one would end in an ellipsis (patch/grid.c grid_text)."""
+    """The date line of a cell in every language, measured in the real font (the label_ps_date 15 px style): the room is the cell's text width less the two badges (a check and the disc), so the longest date fits."""
     expect = ctx.expect
     from awtk_text import Ttf, StbText
     font = Ttf(os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw', 'fonts', 'default.ttf'))
-    st = StbText(font, O['LIST_SUB_PX'] if 'LIST_SUB_PX' in O else 18)
+    st = StbText(font, dict((n, px) for n, px, *_ in pod_ui.PS_STYLES)['label_ps_date'])
+    room = O['PS_CELL_W'] - O['PS_BADGE_CHECK_W'] - O['PS_BADGE_DISC_W']
     worst = []
     for loc in pod_i18n.LOCALES:
         t = pod_i18n.table_for(loc)
         tr = lambda key, n=None, t=t: (pod_i18n.TEXT[key][t].replace('%d', str(n)) if n is not None else pod_i18n.TEXT[key][t])
         dates = [when_model(NOW - d, NOW, 0, tr) for d in (10, 600, 7200, 3 * DAY, 20 * DAY, 200 * DAY)] + [when_model(NOW - (d + 45) * DAY, NOW, 0, tr) for d in range(0, 365, 30)]
-        tails = [tr('Played'), tr('%d min left', 135), tr('%d min', 135), tr('%d min', 135) + ' \u00b7 ' + tr('%d MB', 999)]   # (the last: an episode that is not on the card, with its size)
-        w = max(st.layout(d + ' · ' + x)[1] for d in dates for x in tails)
+        w = max(st.layout(d)[1] for d in dates)
         worst.append((loc, round(w)))
-    print('  widest grey line a language needs (px, room 292):', worst)
-    expect(all(w <= 292 for _, w in worst), f'the longest grey line (a date with a year, a middle dot, "135 min left") fits 292 px in every language ({[x for x in worst if x[1] > 292]})')
+    print(f'  widest date a language needs (px, room {room}):', worst)
+    expect(all(w <= room for _, w in worst), f'the longest date line (a date with a year) fits {room} px in every language, with the two badges ({[x for x in worst if x[1] > room]})')
 
 
 GET_ID3INFO, ID3_SITE_VA = 0x4dfd58, 0x4dff4c
@@ -1211,7 +1250,7 @@ def tag_tests(ctx):
     expect(ret == i and m.read_cstr(i + 0x504) == 'WSJ Show' and m.read_cstr(i + 0x684) == '', 'a playing record with another path is ignored')
     # the page's own record carries what the hook wants
     mm = opened(); tap(mm, 150, 10); mm.calls = []
-    tap(mm, 150, HDR + 20)
+    act(mm, 0)
     q, idx = mm.played
     expect(mm.read_cstr(mm.word(q[0] + O['REC_ARTIST'])) == 'Alpha Show' and mm.read_cstr(mm.word(q[0] + O['REC_TITLE'])) == 'ep2', 'a record queued by the page carries the episode title and the show as artist')
 

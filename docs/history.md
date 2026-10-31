@@ -98,13 +98,20 @@ the recovery button combination for this model remains unverified.
   page; select-and-delete of episodes; no unplayed-dot column. Test build zQKWXAAAC flashed: an episode downloaded and played.
   Finding: stock's `reset_poweroptions_timer(1, 1, 0)` (0x4d7874; its arguments gate standby, auto power-off and the screen light)
   called from a page timer while a download runs keeps the device out of standby with the screen still turning off.
-- **V2.1pJ** (2026-10-31, current release): **our own on-screen keyboard** (`docs/modules/keyboard.md`): iPhone OS 1 style QWERTY
+- **V2.1pJ** (2026-10-31): **our own on-screen keyboard** (`docs/modules/keyboard.md`): iPhone OS 1 style QWERTY
   (29 x 36 keys, 3 px gaps, 180 px), a key pop-up, 123 and #+= pages, a search field, gaps resolved to the nearest key, and
   **Chinese (Pinyin)** input behind Customize > Keyboards (a 中/EN key, a candidate strip, predictions). Test builds zPPCPAAAC,
   zPGFYAAAB (probe) and zPGFYAAAC flashed: all worked. Findings: stock's T9 popup is laid out 640 px wide in a 320 px window, and
   stock's Chinese input never had a dictionary (its init asks for an absent `/usr/dict_pinyin.dat`) while the shipped, unreferenced
   `data/gpinyin.dat` opens with `im_open_decoder` in 76 ms (~1 MB, searches 0.1-2.5 ms). Tap log of 155 taps: no systematic offset
   (mean -2, +3 px), all 9 misses in the 1-4 px gaps between keys, hence the nearest-key rule.
+- **V2.1pK** (2026-10-31, current release): the **Podcasts Show page in Apple Podcasts style** (round 1 of the revamp, designed
+  from preview sheets the user picked): the page tinted from the cover (the album page's algorithm), the album page's 160 px header,
+  episode cells with a date line (played check, downloaded disc), 2-line title and description from the feed, and a state pill
+  (outlined download, filled play); bottom sheets in the style of Now Playing's More sheet replace dropdown menus (Playback Speed,
+  Refresh Feed, Select Episodes, Mark All as Played, Unsubscribe; per episode Download / Remove Download, Mark as Played /
+  Unplayed). Test build zWWLSAAAB flashed, accepted. Lesson: the user rejected a top-right dropdown menu as crowded but accepted
+  the same actions in a bottom sheet behind the same "…" button.
 
 ## Hardware results (what broke on the device, and why)
 

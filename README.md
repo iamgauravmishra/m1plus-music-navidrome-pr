@@ -25,7 +25,7 @@ Follow the [installation guide](docs/install.md) for preparation, updates and re
 <details>
 <summary>Release status</summary>
 
-Status: the release is V2.1pJ (pI + our own on-screen QWERTY keyboard with Chinese (Pinyin) input on stock's engine, Customize > Keyboards; test builds zPPCPAAAC, zPGFYAAAB, zPGFYAAAC flashed). Milestones, hardware results and lessons:
+Status: the release is V2.1pK (pJ + the Podcasts Show page in Apple Podcasts style: cover-tinted page, 160 px header, episode cells with state pills and badges, bottom sheets with Mark as Played, Unsubscribe and per-show refresh; test build zWWLSAAAB flashed). Milestones, hardware results and lessons:
 `docs/history.md`; per-tag details are in git.
 
 </details>

@@ -22,7 +22,7 @@ PCN, PF = sibling('pcnet'), sibling('pcfeeds')
 PCP = PCN.PCP
 PN, RP, CA = PCN.PN, PCN.ROOT_DIR, PCN.CA
 PN.update(CARDFULL=13, NOTAUDIO=14, QFULL=15, PAUSED=16)
-ROW, HDR = PCP.ROW, PCP.HDR
+ROW = PCP.ROW
 NOW = PF.NOW
 SHOW = f'{RP}/Show'
 O_APPEND_FLAGS = 1 | 0x100 | 0x8      # O_WRONLY | O_CREAT | O_APPEND
@@ -579,16 +579,18 @@ def open_sub_one(m):
     PCP.click(m, 'btn_feeds')
     PCP.tap(m, 150, 2 * ROW + 10)
 
-
 def lines(m):
-    """[(row, text)] of the Show level's grey lines in a frame (the header's own lines excluded)."""
-    _, texts, styles, _ = PCP.paint(m)
-    return sorted(((y - HDR) // ROW, t) for (t, (x, y, w, h)), s in zip(texts, styles) if s == 'label_row_sub' and y >= HDR)
+    """[(cell, label)] of the Show page's state pills in the frames that show its cells."""
+    return sorted((i, c['pill']) for i, c in PCP.all_cells(m).items())
+
+
+def dates(m):
+    return sorted((i, c['date']) for i, c in PCP.all_cells(m).items())
 
 
 def titles(m):
-    _, texts, styles, _ = PCP.paint(m)
-    return sorted(((y - HDR) // ROW, t, s) for (t, (x, y, w, h)), s in zip(texts, styles) if s in ('label_row_title', 'label_row_dim') and y >= HDR)
+    """[(cell, title, style)]: a played episode's title is in the grey style."""
+    return sorted((i, ' '.join(c['title']), 'label_ps_cdim' if c['played'] else 'label_ps_ctitle') for i, c in PCP.all_cells(m).items())
 
 
 def tick(m, name='pg_tick'):
@@ -605,45 +607,45 @@ def page_tests(ctx):
     m = page()
     open_sub_one(m)
     before = [t for _, t in lines(m)]
-    expect(before[0].startswith('1h ago') and 'min' in before[0], f'a plain remote episode keeps its date and length line ({before})')
+    expect(dates(m)[0][1] == '1h ago' and before == [f'{(len(DATA) + 1048575) >> 20} MB', 'Download', 'Download'], f'a plain remote episode: its date line and a download pill with the feed\'s size, "Download" without one ({dates(m)[0]}, {before})')
     m.calls = []; m.thread = None
-    PCP.tap(m, 150, HDR + 10)
+    PCP.act(m, 0)
     expect(m.thread and m.thread[0] == PSYMS['pn_dmain'] and toasts(m) == [] and ('timer_add', PSYMS['pg_awake_tick'], 1000) in m.calls and fn(m, 'pn_dl_count') == 1,
            'a tap on an episode that is not on the card queues it: the worker starts and the page arms its 1 s downloads timer')
-    expect(dict(lines(m))[0] == 'Waiting' and dict(lines(m))[1] == before[1], 'its line says Waiting; the others are unchanged')
-    expect(titles(m)[0][2] == 'label_row_dim', 'the title keeps the grey style (no accent colour)')
+    expect(dict(lines(m))[0] == 'Waiting' and dict(lines(m))[1] == before[1], 'its pill says Waiting (the ring at 0); the others are unchanged')
+    expect(titles(m)[0][2] == 'label_ps_ctitle', 'the title stays bright: an episode not on the card is unplayed')
     bl, *_ = PCP.paint(m)
-    expect(not [b for b in bl if tuple(b[2][2:]) != (O['PC_HDR_ART'], O['PC_HDR_ART'])], 'and no mark of any kind (no dot column: only the header cover is drawn)')
+    expect(not [b for b in bl if tuple(b[2][2:]) == (O['PA_BADGE_PX'], O['PA_BADGE_PX'])], 'and it has no on-the-card badge')
     m.calls = []
-    PCP.tap(m, 150, HDR + 10)
+    PCP.act(m, 0)
     expect(fn(m, 'pn_dl_count') == 0 and dict(lines(m))[0] == before[0] and 'pthread_create' not in [c[0] for c in m.calls],
-           'a tap on a queued row takes it out of the queue; the line is the date line again (there is no .part)')
-    PCP.tap(m, 150, HDR + 10)
+           'a tap on a queued cell\'s pill takes it out of the queue; the pill is the size again (there is no .part)')
+    PCP.act(m, 0)
     th = m.thread
     # running: the status record says it
     key_a = key_of('Sub One', 'a.mp3')
     poke_slot(m, 0, 'Sub One', 'a.mp3', 2)
     m.setword(pn_at(DKEY), key_a); m.setword(pn_at(DGOT), len(DATA) * 42 // 100); m.setword(pn_at(DTOTAL), len(DATA)); m.setword(pn_at(DGEN), 5); m.setword(pn_at(KIND), 2); m.setword(pn_at(0), 1)
     tick(m)
-    expect(dict(lines(m))[0] == 'Downloading 42%', f'a running download: "Downloading 42%" ({dict(lines(m))[0]})')
+    expect(dict(lines(m))[0] == '42%', f'a running download: the ring and "42%" ({dict(lines(m))[0]})')
     m.setword(pn_at(DTOTAL), 0); m.setword(pn_at(DGOT), 12 * 1048576 + 5); m.setword(pn_at(DGEN), 6)
     tick(m)
-    expect(dict(lines(m))[0] == 'Downloading 12 MB', 'the length unknown: "Downloading 12 MB"')
+    expect(dict(lines(m))[0] == '12 MB', 'the length unknown: "12 MB"')
     m.setword(pn_at(DTOTAL), 1000); m.setword(pn_at(DGOT), 5000); m.setword(pn_at(DGEN), 7)
     tick(m)
-    expect(dict(lines(m))[0] == 'Downloading 12 MB' or dict(lines(m))[0] == 'Downloading 4 MB' or dict(lines(m))[0].startswith('Downloading'), 'a length that is smaller than the bytes got was wrong: read as unknown')
+    expect(dict(lines(m))[0].endswith('MB'), 'a length that is smaller than the bytes got was wrong: read as unknown (MB)')
     m.setword(pn_at(DGOT), 100); m.setword(pn_at(DTOTAL), len(DATA)); m.setword(pn_at(DGEN), 8)
     tick(m)
-    expect(dict(lines(m))[0] == 'Downloading 0%', 'under one percent: 0%')
+    expect(dict(lines(m))[0] == '0%', 'under one percent: 0%')
     m.setword(pn_at(DGOT), len(DATA)); m.setword(pn_at(DGEN), 9)
     tick(m)
-    expect(dict(lines(m))[0] == 'Downloading 100%', '100%')
+    expect(dict(lines(m))[0] == '100%', '100%')
     m.screen(False); m.setword(pn_at(DGOT), len(DATA) // 2); m.setword(pn_at(DGEN), 11); m.calls = []
     m.call(PSYMS['pg_tick'], a0=0, count=40000000)
-    expect(not [c for c in m.calls if c[0] in ('widget_invalidate_force', 'widget_set_text_utf8', 'grid_drop')] and dict(lines(m))[0] == 'Downloading 100%',
-           'screen off: a step of progress does no visual work (the lines are made again by the first lit tick)')
+    expect(not [c for c in m.calls if c[0] in ('widget_invalidate_force', 'widget_set_text_utf8', 'grid_drop')],
+           'screen off: a step of progress does no visual work (the first lit tick paints it)')
     tick(m)
-    expect(dict(lines(m))[0] == 'Downloading 49%', 'the screen is back: the line is right again')
+    expect(dict(lines(m))[0] == '49%', 'the screen is back: the pill is right again')
     m.setword(pn_at(DWAIT), 1); m.setword(pn_at(DGEN), 10)
     tick(m)
     expect(dict(lines(m))[0] == 'Waiting', 'waiting for a retry: Waiting')
@@ -655,40 +657,40 @@ def page_tests(ctx):
     for gen, (code, word) in enumerate(words.items(), 20):
         poke_fail(m, 0, 'Sub One', 'a.mp3', code); m.setword(pn_at(0 + 12), gen)
         tick(m)
-        expect(dict(lines(m))[0] == f'Failed: {word}', f'failure {code}: "Failed: {word}" ({dict(lines(m))[0]})')
+        expect(dict(lines(m))[0] == 'Retry', f'failure {code} ({word}): the pill reads Retry ({dict(lines(m))[0]}); the reason is on the Downloads level')
     # Paused: a .part with no state of the queue
     poke_fail(m, 0, 'Sub One', 'a.mp3', 0); m.setword(pn_at(12), 60)
     m.put(f'{RP}/Sub One/b.mp3.part', b'x' * 100)
     tick(m)
     expect(dict(lines(m))[1] == 'Paused', 'an incomplete .part and nothing queued (after a reboot): Paused')
-    PCP.tap(m, 150, HDR + ROW + 10)
+    PCP.act(m, 1)
     expect(fn(m, 'pn_dl_count') >= 1 and state(m, 'b.mp3', 'Sub One')[0] == DL_STATE['WAIT'] and dict(lines(m))[1] == 'Waiting', 'a tap on a Paused row queues it again (it resumes from the .part)')
     # a tap with no Wi-Fi: the toast, nothing queued
     m = page(); open_sub_one(m); m.wifi = -1; m.calls = []; m.thread = None
-    PCP.tap(m, 150, HDR + 10)
+    PCP.act(m, 0)
     expect(toasts(m) == ['No Wi-Fi'] and m.thread is None and fn(m, 'pn_dl_count') == 0, 'a tap with no Wi-Fi: the toast says so, nothing is queued')
     m.wifi = 4; m.wall = 1700000000; m.calls = []
-    PCP.tap(m, 150, HDR + 10)
+    PCP.act(m, 0)
     expect(toasts(m) == ['Set the date first'], 'a clock that was never set: "Set the date first"')
     # the whole thing through the real worker: the tap, the thread, the page's tick, the local row
     m = page(); open_sub_one(m); m.thread = None
-    PCP.tap(m, 150, HDR + 10)
+    PCP.act(m, 0)
     th = m.thread
     work(m, th)
     tick(m)
-    expect(f'{RP}/Sub One/a.mp3' in m.fs and dict(lines(m))[0].startswith('1h ago'), f'the download ends: the page reads the episodes again, the row is a local episode (its date line {dict(lines(m))[0]})')
+    expect(f'{RP}/Sub One/a.mp3' in m.fs and dates(m)[0][1] == '1h ago' and dict(lines(m))[0] == '10m', f'the download ends: the page reads the episodes again, the cell is a local episode (its pill {dict(lines(m))[0]})')
     t = titles(m)
-    expect(t[0][2] == 'label_row_title' and t[1][2] == 'label_row_dim', 'the finished one has the normal title style, the others stay grey')
+    expect(t[0][2] == 'label_ps_ctitle' and t[1][2] == 'label_ps_ctitle', 'the titles are all unplayed (bright)')
     bl, *_ = PCP.paint(m)
-    expect(not [b for b in bl if tuple(b[2][2:]) != (O['PC_HDR_ART'], O['PC_HDR_ART'])], 'and no dot: unplayed is the bright title')
+    expect(len([b for b in bl if tuple(b[2][2:]) == (O['PA_BADGE_PX'], O['PA_BADGE_PX'])]) == 1, 'and the finished one has the on-the-card badge')
     m.calls = []
-    PCP.tap(m, 150, HDR + 10)
+    PCP.act(m, 0)
     q, idx = m.played
     paths = [m.read_cstr(m.word(rec + O['REC_PATH'])) for rec in q]
     expect(paths == [f'{RP}/Sub One/a.mp3'] and idx == 0, f'a tap on it plays it like any local episode, the queue of the files only ({paths})')
     # a second, in the same list: the Feeds row
     m = page(); open_sub_one(m)
-    PCP.tap(m, 150, HDR + 10); PCP.tap(m, 150, HDR + ROW + 10)
+    PCP.act(m, 0); PCP.act(m, 1)
     PCP.click(m, 'btn_return')
     _, texts, styles, _ = PCP.paint(m)
     got = sorted(((y // ROW, t, s) for (t, (x, y, w, h)), s in zip(texts, styles)))
@@ -708,7 +710,7 @@ def refresh_page_tests(ctx):
     """Refresh All while downloads run: they pause, the refresh starts when the thread has stopped, the downloads go on afterwards."""
     expect = ctx.expect
     m = page(lambda mm: mm.put(f'{RP}/Sub One/a.mp3.part', DATA[:1000])); open_sub_one(m)   # (it had begun: the refresh keeps the line of an episode with a .part)
-    PCP.tap(m, 150, HDR + 10)
+    PCP.act(m, 0)
     th = m.thread
     PCP.click(m, 'btn_return')
     m.calls = []; m.thread = None
@@ -735,7 +737,7 @@ def refresh_page_tests(ctx):
     work(m, m.thread)
     expect(m.fs.get(f'{RP}/Sub One/a.mp3') == DATA, 'and the episode is finished, resumed from its .part')
     # the page is not in front or dark when the downloads have paused: the refresh is dropped, the downloads go on
-    m = page(); open_sub_one(m); PCP.tap(m, 150, HDR + 10); th = m.thread
+    m = page(); open_sub_one(m); PCP.act(m, 0); th = m.thread
     PCP.click(m, 'btn_return')
     PCP.tap(m, 150, 10)
     work(m, th)
@@ -753,7 +755,7 @@ def awake_tests(ctx):
     m.calls = []
     r = m.call(PSYMS['pg_awake_tick'], a0=0, count=40000000)
     expect(r == 0 and not [c for c in m.calls if c[0] == 'reset_poweroptions_timer'], 'the timer with nothing queued: no call, and it ends')
-    PCP.tap(m, 150, HDR + 10)
+    PCP.act(m, 0)
     th = m.thread
     m.calls = []
     r = m.call(PSYMS['pg_awake_tick'], a0=0, count=40000000)
@@ -766,21 +768,21 @@ def awake_tests(ctx):
     expect(r == 0 and not [c for c in m.calls if c[0] == 'reset_poweroptions_timer'], 'the download is done: no call, the timer ends')
     # a queue that waits (no thread running): no call
     m = page(); open_sub_one(m)
-    PCP.tap(m, 150, HDR + 10)
+    PCP.act(m, 0)
     m.setword(pn_at(0), 0); m.setword(pn_at(KIND), 0)
     m.thread = None; m.calls = []
     m.call(PSYMS['pg_awake_tick'], a0=0, count=40000000)
     expect(not [c for c in m.calls if c[0] == 'reset_poweroptions_timer'] and m.thread and m.thread[0] == PSYMS['pn_dmain'], 'a queue with no thread: the timer starts the worker (a tap that raced its end); it keeps nothing awake before it runs')
     # the refresh's thread does not keep the device awake
     m = page(); open_sub_one(m)
-    PCP.tap(m, 150, HDR + 10); PCP.click(m, 'btn_return')
+    PCP.act(m, 0); PCP.click(m, 'btn_return')
     m.setword(pn_at(KIND), 1)   # the thread now a refresh's
     m.calls = []
     m.call(PSYMS['pg_awake_tick'], a0=0, count=40000000)
     expect(not [c for c in m.calls if c[0] == 'reset_poweroptions_timer'], 'only a download thread keeps the device awake (the refresh dialog is its own thing)')
     # screen off: the same call, no widget work; in the background too
     m = page(); open_sub_one(m)
-    PCP.tap(m, 150, HDR + 10)
+    PCP.act(m, 0)
     m.screen(False); m.calls = []
     m.call(PSYMS['pg_awake_tick'], a0=0, count=40000000)
     expect([c[0] for c in m.calls if c[0] == 'reset_poweroptions_timer'] == ['reset_poweroptions_timer'] and not [c for c in m.calls if c[0].startswith(('widget', 'canvas', 'grid', 'label', 'toast'))],
@@ -795,7 +797,7 @@ def awake_tests(ctx):
     m2 = page(); open_sub_one(m2)
     m2.calls = []; fn_, ctx_ = m2.bound[(m2.window, O['EVT_DESTROY'])]; m2.call(fn_, a0=ctx_, a1=0, count=4000000)
     n0 = len([c for c in m2.calls if c[0] == 'timer_remove'])
-    m2 = page(); open_sub_one(m2); PCP.tap(m2, 150, HDR + 10)
+    m2 = page(); open_sub_one(m2); PCP.act(m2, 0)
     m2.calls = []; fn_, ctx_ = m2.bound[(m2.window, O['EVT_DESTROY'])]; m2.call(fn_, a0=ctx_, a1=0, count=4000000)
     n1 = len([c for c in m2.calls if c[0] == 'timer_remove'])
     expect(n1 == n0 + 1 and fn(m2, 'pn_dl_count') == 1 and fn(m2, 'pn_dl_running') == 1, 'destroying the window removes the downloads timer and nothing else is done: the queue and the thread are left alone (the device may sleep; the next start resumes from the .part)')
