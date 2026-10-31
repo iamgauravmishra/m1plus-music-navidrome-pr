@@ -589,8 +589,8 @@
  * right edge stays at PL_CARD_RIGHT under the button; its width is the language's widest label plus PL_TEXT_X + PL_TEXT_R, at least PL_CARD_MIN,
  * at most PL_CARD_MAX (the asset's: the widest of the 13 languages fits, test/pod/playlists.py). */
 #define PL_MENU_ROWS 4
-#define PL_CARD_RIGHT 314
-#define PL_CARD_Y 44
+#define PL_CARD_RIGHT 311      /* flush with the navbar glass's right end */
+#define PL_CARD_Y 52           /* 6 px under the glass (y 4 .. 46) */
 #define PL_CARD_R 14
 #define PL_ROW_H 50
 #define PL_ICON_X 16

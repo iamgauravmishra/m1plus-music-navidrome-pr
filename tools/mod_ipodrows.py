@@ -149,10 +149,68 @@ def edit_specfolder(root):
         title.x, title.w = 36, 180
 
 
+NAV_BACK = (7, 0, 44, 50)   # the Pod navbar's Back (tools/pod_ui.py NAV_BACK_X, NAV_BACK_W): the glass disc ah_nav_back at x 8 .. 50, y 4 .. 46
+USB_SET_ICON = 'ah_nav_set'  # tools/mod_icons.py AH_NAV_PIECES: a glass disc with the Lucide settings glyph, Now Playing's disc columns
+
+
+def edit_usbmode(root):
+    """The USB mode page (USB DAC / USB storage; no navbar): Back (9, 5, 50, 60, stock return chevron) and the DAC settings button
+    (274, 0, 46, 53, the dac_set image on a black fill) were on two different rows. Both become the glass discs of our navbar, on its row:
+    Back on the Pod navbar's Back, settings on Now Playing's slot (glyph 290, glass 269 .. 311). Stock code only shows / hides them
+    (on_usbmodeset_onclick, usbmode_showface: widget_set_visible / widget_set_enable); the charge glyph (236, 10, 20, 30) is centred on
+    the discs' row (y 25) already."""
+    back, dset = one(root, 'btn_return', 'button'), one(root, 'btn_dacset', 'button')
+    assert (back.x, back.y, back.w, back.h) == (9, 5, 50, 60) and back.get('style') == 'img_btn_style', 'unexpected usbmode_page Back'
+    assert (dset.x, dset.y, dset.w, dset.h) == (274, 0, 46, 53) and dset.get('style:normal:bg_image') == 'dac_set', 'unexpected usbmode_page DAC settings'
+    back.x, back.y, back.w, back.h = NAV_BACK
+    for st in ('over', 'normal'): back.set(f'style:{st}:icon', 'ah_nav_back')
+    back.set('style:pressed:icon', 'ah_nav_back_down')
+    dset.x, dset.y, dset.w, dset.h = NAV_NP
+    dset.props = [(k, v) for k, v in dset.props if not k.startswith('style:')]   # the black fill and the bg_image: the disc is the icon now
+    dset.set('style', 'img_btn_style')
+    for st in ('over', 'normal'): dset.set(f'style:{st}:icon', USB_SET_ICON)
+    dset.set('style:pressed:icon', USB_SET_ICON + '_down')
+
+
 NAVBAR_UI_EDITS = {   # edited in both themes (each has its own file)
     'playset/equalizer_page.bin': edit_equalizer,
     'systemset/specfolder_page.bin': edit_specfolder,
 }
+
+
+# The Settings-type pages (systemset/*, playset/*, audiosetting_page and the keyboard / edit dialogs: every ui file with the stock navbar
+# Back) take the glass navbar of our pages: Back the glass disc ah_nav_back and Now Playing the disc ah_nav_np. Back keeps its button
+# (0, 0, 80, 50, the whole touch) and navbar_btnreturn_style (icon_at left: the icon centred in a button-high square at x + h / 2 +
+# x_offset); x_offset +4 (stock -6) puts the 42 px disc at x 8 .. 50, as the album page's theme does for the code-built Back. Now
+# Playing (260, 0, 60, 50, img_btn_style) shows the disc centred: glass 269 .. 311, glyph 290. The title (x 36, under the disc now)
+# starts at NAV_TITLE_X, its right end kept but before the bar's next widget (a switch, select-all). The Bluetooth receiver page
+# is left as it is (no Bluetooth work).
+NAV_TITLE_X, BACK_X_OFFSET = 58, 4   # tools/pod_ui.py NAV_TITLE_X
+GLASS_NAV_SKIP = ('bluetoothrecv_page.bin',)
+STATES = ('normal', 'pressed', 'over', 'focused', 'disable')
+
+
+def glass_navbar(root):
+    """Restyle the stock navbar's Back / Now Playing in root (see above); returns how many bars it changed."""
+    n = 0
+    for bar in root.walk():
+        backs = [c for c in bar.children if c.name == 'btn_return' and (c.x, c.y, c.w, c.h) == (0, 0, 80, 50)
+                 and c.get('style') == 'navbar_btnreturn_style' and c.get('style:normal:icon') == 'return']
+        if not backs: continue
+        back, = backs
+        for st in ('over', 'normal'): back.set(f'style:{st}:icon', 'ah_nav_back')
+        back.set('style:pressed:icon', 'ah_nav_back_down')
+        for st in STATES: back.set(f'style:{st}:x_offset', str(BACK_X_OFFSET))
+        for np_ in bar.children:
+            if np_.name == 'btn_backtoplayer' and (np_.x, np_.y, np_.w, np_.h) == NAV_NP and np_.get('style') == 'img_btn_style':
+                for st in ('over', 'normal'): np_.set(f'style:{st}:icon', 'ah_nav_np')
+                np_.set('style:pressed:icon', 'ah_nav_np_down')
+        for t in bar.children:
+            if t.name == 'label_title' and t.x == 36:
+                right = min([t.x + t.w] + [c.x for c in bar.children if c.y < 50 and c.x > t.x and c not in (t, back)] + [NAV_NP[0]])
+                t.x, t.w = NAV_TITLE_X, right - NAV_TITLE_X
+        n += 1
+    return n
 
 
 def build_navbar_ui(work):
@@ -164,6 +222,19 @@ def build_navbar_ui(work):
             names = lambda d: [(w.type, w.name) for w in awtk_ui.parse(d).walk()]
             assert names(old) == names(new), f'{rel}: a widget was added, removed or renamed'
             report.append(f'{theme}/ui/{rel}: {len(old)} -> {len(new)} bytes')
+    bars = 0
+    for theme in mod_lists.THEMES:
+        ui = os.path.join(work, mod_lists.RAW.format(theme=theme), 'ui')
+        for d, _, files in sorted(os.walk(ui)):
+            for f in sorted(files):
+                if not f.endswith('.bin') or f in GLASS_NAV_SKIP: continue
+                path = os.path.join(d, f)
+                if b'return' not in open(path, 'rb').read(): continue
+                counted = []
+                old, new, root = edit_ui(path, lambda r: counted.append(glass_navbar(r)))
+                bars += counted[0]
+    assert bars >= 50, f'glass navbar: only {bars} stock navbars found'
+    report.append(f'glass navbar: {bars} stock navbars (Back, Now Playing, title)')
     return report
 
 
@@ -174,6 +245,7 @@ UI_EDITS = {
     'playerjumpinfo_page.bin': edit_jumplist,
     'album_page.bin': lambda r: item_height(r, 'album_listview'),
     'playlist_page.bin': lambda r: item_height(r, 'playlist_listview'),
+    'usbmode_page.bin': edit_usbmode,
 }
 
 
@@ -241,8 +313,8 @@ def pill_layout(text_w, w=180, h=44, margin_left=None):
     return icon_x, rx, (rx, rw)                               # the text is left aligned: its pen starts at the rect
 # The navbar buttons' styles the stock builders (0x526a3c, 0x524e4c) name, and the glass disc (rest, pressed, icon_at, x_offset) each shows on this page
 # (a page theme only: the artist's albums page shares the builders but not this theme). Every image is centred in the button main's pins make it
-# (tools/mod_icons.py AH_NAV_PIECES; icon_at 5), so the glyph centres are the Pod navbar's: search 191 (a disc), multi-select 237 and Now Playing 290
-# (60 px at 262), one capsule 216 .. 311 (multi-select's image 4 px wider than its button, to meet Now Playing's), the select mode's add / delete / cancel in the stock 60 px buttons at 116 / 191 / 268 (146, 221, 290) and the all /
+# (tools/mod_icons.py AH_NAV_PIECES; icon_at 5), so the glyph centres are the Pod navbar's: search 198 (a disc), multi-select 244 and Now Playing 290
+# (60 px at 262), one capsule 223 .. 311 (multi-select's image 4 px wider than its button, to meet Now Playing's), the select mode's add / delete / cancel in the stock 60 px buttons at 116 / 191 / 268 (146, 221, 290) and the all /
 # unselect toggle in its 50 px one (29). Back keeps its stock rule, icon_at left in a button-high square: x_offset +4 (stock -6) puts the 42 px
 # disc at x 8 .. 50 whether the builder made Back at (0, 50 high) or (3, 44 high): square centre x + h / 2 is 25 in both.
 NAV_STYLES = {'navbar_btnreturn_style': ('ah_nav_back', 'ah_nav_back_down', 1, 4),

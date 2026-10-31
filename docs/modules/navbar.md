@@ -7,7 +7,7 @@ Goal: moving between pages never makes the Back arrow, the title or the right-ha
 |---|---|
 | Back | button (0, 0, 80, 50), `navbar_btnreturn_style`: chevron glyph columns 14..22 |
 | Title | label (36, 14, w, 22), 20 px white, left aligned (`navbar_label_white`) |
-| Right slots | 46 wide, `img_btn_style` (icon centred): x 122 / 168 / 214 (`NAV_CF_X`, `NAV_VIEW_X`, `NAV_VIEW_W` in `patch/offsets.inc`), glyph centres 145 / 191 / 237 |
+| Right slots | 46 wide, `img_btn_style` (icon centred): x 122 / 168 / 214 (`NAV_CF_X`, `NAV_VIEW_X`, `NAV_VIEW_W` in `patch/offsets.inc`), glyph centres 152 / 198 / 244 (7 px right of each slot's centre: 46 apart up to Now Playing's 290) |
 | Now Playing | (260, 0, 60, 50), `img_btn_style`: glyph columns 280..299 (centre 290) |
 | Bottom line | `navigationbar_line_style`, y 49, where a page has it |
 
@@ -35,7 +35,7 @@ unreliable there: `cdripper_page_init+...`, `home_page_init+...`, `playing_page_
 | Page (how reached) | Source | Before | Fix |
 |---|---|---|---|
 | M1+ Music pages: Menu, Albums, Playlists, Artists, Cover Flow's artist/albums page, Extras, Settings, Main Menu, Shuffle, Cover Flow settings | assets `m1plus_*.bin` (`pod_ui.navbar()`) | the reference | none |
-| Settings pages `systemset/*` (33), `playset/*` (all but Equalizer), `audiosetting_page`: Back 80, title (36, 14) 20 px, Now Playing (260, 0, 60, 50) | assets | on the reference | none |
+| Settings pages `systemset/*` (33), `playset/*` (all but Equalizer), `audiosetting_page`, the keyboard / edit dialogs: Back 80, title (36, 14) 20 px, Now Playing (260, 0, 60, 50) | assets | stock glyphs: a plain chevron and Now Playing glyph, the title at 36 | the glass navbar (`mod_ipodrows.glass_navbar`, every ui file with the stock Back, both themes; not the Bluetooth receiver): Back keeps its 80 px button and gets `ah_nav_back` with `x_offset` +4 (the disc at 8 .. 50), Now Playing the disc `ah_nav_np` (glyph 290), the title from 58, its right end kept or before the bar's next widget (a switch: 135 / 145 px on Atmosphere LED / Equalizer) |
 | Settings > Equalizer (`playset/equalizer_page`), both themes | asset | Now Playing (270, 0, 50, 50): glyph 295 | Now Playing (260, 0, 60, 50): `mod_ipodrows.edit_equalizer` |
 | Update music > folder picker (`systemset/specfolder_page`), both themes | asset | Now Playing (279, 0, 41, 50): glyph 299; select-all (229, 0, 38, 50), `icon_at` 5: glyph 246; theme1 title x 90 | Now Playing (260, 0, 60, 50); select-all (214, 0, 46, 50), the multi-select slot; theme1 title (36, 14, 180, 22): `mod_ipodrows.edit_specfolder` |
 | Settings > Screen saver, Atmosphere LED: an on/off image `image_switch` (193, 11, 57, 28) in the bar | asset | a control, not a button | left alone: it has no Pod counterpart, and a switch at the 214 slot would overlap Now Playing |
@@ -50,7 +50,7 @@ unreliable there: `cdripper_page_init+...`, `home_page_init+...`, `playing_page_
 
 Not in scope and left alone: Now Playing's own full-screen header (`playing_page`), Now Playing's More sheet and the dialogs, the stock Home
 (`home_page`: no navbar), Tidal, HiFi (`hifi/*`), Airplay, DLNA/online search, CD ripper (`cdripper_page`, `searchcdripper_page`, `rippingset_page`,
-the builder 0x52c5e8), USB mode.
+the builder 0x52c5e8), USB mode (its Back and DAC settings are the glass discs on the navbar's row: `mod_ipodrows.edit_usbmode`).
 
 ## Left alone, and why
 
@@ -88,19 +88,19 @@ actions as **one glass capsule on main's slots**, a soft fade under the bar. Not
 |---|---|
 | Albums | Cover Flow 168 (left cap), grid / list toggle 214 (middle), Now Playing 260 (right cap `ah_nav_play`) |
 | Playlists | "..." 168 (left cap), toggle 214 (middle), Now Playing 260 |
-| Songs | Search 122 (left cap), Sort 168 and Select 214 (middles), Now Playing 260: a capsule of four, glass 124 .. 311 (`docs/modules/songs.md`); the title (small, shown when the large one has scrolled away) ends at 122. The other lists on that page (Favourites ..., a playlist) have no Sort: Search 168 (left cap), Select 214, Now Playing 260, the title ends at 168 |
-| Songs, a genre's songs (class `0xff09`) | no Search, no Sort: Select 214 (left cap `pod_nav_selectl`, set at run time), Now Playing 260 (right cap): a capsule of two, glass 216 .. 311 (the stock builder leaves Search out for this class); the title ends at 214 |
+| Songs | Search 122 (left cap), Sort 168 and Select 214 (middles), Now Playing 260: a capsule of four, glass 131 .. 311 (`docs/modules/songs.md`); the title (small, shown when the large one has scrolled away) ends at 122. The other lists on that page (Favourites ..., a playlist) have no Sort: Search 168 (left cap), Select 214, Now Playing 260, the title ends at 168 |
+| Songs, a genre's songs (class `0xff09`) | no Search, no Sort: Select 214 (left cap `pod_nav_selectl`, set at run time), Now Playing 260 (right cap): a capsule of two, glass 223 .. 311 (the stock builder leaves Search out for this class); the title ends at 214 |
 | Artists | Artist / Album Artist switch 214 (left cap), Now Playing 260 |
-| Extras (`m1plus_extras`) | Settings 214 (left cap `pod_nav_settings`, Lucide `sliders-horizontal`; opens the Settings page), Now Playing 260 (right cap): glass 216 .. 311; the title ends at 214. Settings > Extras and the other pages have no button |
+| Extras (`m1plus_extras`) | Settings 214 (left cap `pod_nav_settings`, Lucide `sliders-horizontal`; opens the Settings page), Now Playing 260 (right cap): glass 223 .. 311; the title ends at 214. Settings > Extras and the other pages have no button |
 | Genres, Composers (the Artists page on another class) | the switch is hidden (`visible=false` and `sensitive=false`) and Now Playing, which the asset builds as the capsule's right cap, is set at run time to the glass disc `ah_nav_np` (`_down` pressed), as on every page with no toggle; the title ends at 214 |
-| Cover Flow | main page and a composer's page: Now Playing disc `ah_nav_np` at 260 (glass 269 .. 311). An artist page with songs: the capsule Songs (`btn_songs`, Lucide `list`, left cap, x 214) \| Now Playing (`ah_nav_play` set at run time), glass 216 .. 311, the Artists page's shape |
+| Cover Flow | main page and a composer's page: Now Playing disc `ah_nav_np` at 260 (glass 269 .. 311). An artist page with songs: the capsule Songs (`btn_songs`, Lucide `list`, left cap, x 214) \| Now Playing (`ah_nav_play` set at run time), glass 223 .. 311, the Artists page's shape |
 | menu, Settings, sub-pages | Now Playing disc |
-| album page (stock builders, page theme) | multi-select 214 (left cap, a 50 px image over its 46 px button) and Now Playing 262 (right cap): glass 216 .. 311; search 168 a disc (`album-page.md`) |
+| album page (stock builders, page theme) | multi-select 214 (left cap, a 50 px image over its 46 px button) and Now Playing 262 (right cap): glass 223 .. 311; search 168 a disc (`album-page.md`) |
 
-**Capsule on the real slots.** Every image is cut to the button it sits in (46 / 46 / 60 px, 42 high), centred by `img_btn_style`: slices of ONE 141 px capsule (glass x 170 .. 311,
-radius 21), so adjacent pieces abut exactly (tested: the three glue into the capsule byte for byte) and the glass ends 21 px right of Now Playing's glyph column 290. The Songs page's capsule starts at the 122 slot (187 px, glass 124 .. 311, Search | Sort | Select | Now Playing): the same left cap, middles and right cap (a pane's straight parts and ends do not depend on its width), tested to glue byte for byte (`test/pod/glassbtn.py`). Select mode swaps Back's glyph for `ah_nav_close` (a 42 px disc with an x) and hides the capsule.
+**Capsule on the real slots.** Every image is cut to the button it sits in (46 / 46 / 60 px, 42 high), centred by `img_btn_style`: slices of ONE capsule (glass x 177 .. 311 for three pieces,
+radius 21), so adjacent pieces abut exactly (tested: the three glue into the capsule byte for byte) and the glass ends 21 px right of Now Playing's glyph column 290. The Songs page's capsule starts at the 122 slot (180 px, glass 131 .. 311, Search | Sort | Select | Now Playing): the same left cap, middles and right cap (a pane's straight parts and ends do not depend on its width), tested to glue byte for byte (`test/pod/glassbtn.py`). Select mode swaps Back's glyph for `ah_nav_close` (a 42 px disc with an x) and hides the capsule.
 **Pressed.** A lone disc is the lighter glass. A capsule piece keeps the rest glass (the capsule stays one pane, no lit block with square ends) with a **round highlight** on its glyph: a white disc of 36 px at 14 % (`NAV_PRESS_D`, `NAV_PRESS_ALPHA`), concentric with the cap ends (every glyph is 21 px from a cap's edge), 3 px of glass above and below, inside its own button (`test/pod/glassbtn.py`).
-Glyph columns 191 / 237 / 290 as main's. A left cap's first 2 px are transparent (170 = 191 - 21); the Artists capsule starts at 216.
+**Even spacing.** Main's slots are 46 apart but Now Playing's 60 px button puts its glyph 53 right of the last slot's (stock's 290), so every slot's glass and glyph is drawn `NAV_SHIFT` (7 px) right of its button: its image is 60 wide, centred on the 46 px button (AWTK centres an icon at its own size), the content in its right 46 columns. Glyph columns 152 / 198 / 244 / 290, 46 apart; the buttons (the touch) stay on main's slots. A left cap's glass starts 21 px left of its glyph (177 = 198 - 21); the Artists capsule starts at 223. The album page's stock-built search and multi-select take the same shift (198, 244).
 
 **The fade.** Nothing is darkened at rest (scroll offset 0; test `navbars.py`, alpha <= 8 over each page's first content): `nb_fade.png` 320 x 20, black, alpha 255 (1 - t)^3.6 (<= 8 from row 12: a text page's first row has its ink from row 15, a switch from row 12). The cover pages (Albums grid / list, Playlists: covers from row 10 / 4) build the fade **hidden** and `al_fade` / `pl_fade` (`patch/albums.c`, `patch/playlists.c`, from the scroll view's EVT_SCROLL they already hold and after a mode switch) show it only while `yoffset > 0`; visible only, it stays insensitive; no `img_nb_fade` = nothing happens (hidden). Preview: `tools/preview_fade.py`. An insensitive, unclickable `img_nb_fade` at (0, 50) right
 after the list on every Pod page with a list under the bar (not Cover Flow). No blur, no paint code. **Home instance** (device bug V2.1oAB: a dark band across the covers):

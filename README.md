@@ -25,7 +25,7 @@ Follow the [installation guide](docs/install.md) for preparation, updates and re
 <details>
 <summary>Release status</summary>
 
-Status: the release is V2.1pQ (pP + CJK closer to PingFang: Source Han Sans Medium, SHS punctuation, Japanese and Traditional Chinese forms by UI language; not flashed). Milestones, hardware results and lessons:
+Status: the release is V2.1pR (pQ + navbar polish: evenly spaced glass capsule, menus under the glass, glass Back / Now Playing on the Settings-type pages and the USB mode page; test build zRGURAAAF flashed). Milestones, hardware results and lessons:
 `docs/history.md`; per-tag details are in git.
 
 </details>

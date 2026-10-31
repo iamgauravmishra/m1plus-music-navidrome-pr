@@ -205,8 +205,8 @@ def glass_checks(expect, tree, scrim, card, items):
            f'pl_glass: four transparent corners (r {r} inside the outer thirds of {third} px), the middle third the same in every column (a stretch is exact)')
     expect(all(card.get(f'style:{st}:bg_image') == 'pl_glass' and card.get(f'style:{st}:bg_image_draw_type') == 'patch3_x' and card.get(f'style:{st}:bg_color') == '#00000000'
                and card.get(f'style:{st}:round_radius') is None for st in pod_ui.STATES)
-           and (card.x + card.w, card.y, card.w) == (pod_ui.PL_CARD_RIGHT, pod_ui.PL_CARD_Y, pod_ui.PL_CARD_MAX) == (314, 44, 292),
-           'the card is the glass image drawn patch3_x over no fill, at its widest in the asset (292 px), its right edge at 314 under the button')
+           and (card.x + card.w, card.y, card.w) == (pod_ui.PL_CARD_RIGHT, pod_ui.PL_CARD_Y, pod_ui.PL_CARD_MAX) == (311, 52, 292),
+           'the card is the glass image drawn patch3_x over no fill, at its widest in the asset (292 px), its right edge at 311 (the navbar glass\'s), 6 px under the glass')
     expect(all(scrim.get(f'style:{st}:bg_color') == '#%08X' % DIM for st in pod_ui.STATES) and DIM == int(pod_ui.PL_DIM[-2:], 16),
            f'the scrim dims the page by {DIM}/255, as Now Playing\'s More sheet\'s highlighter')
     users = []
@@ -674,7 +674,7 @@ def run(ctx):
     expect('stock_resume' not in m.names() and vis(m, 'pl_card') == (0, 0) and vis(m, 'pl_bar') == (1, 1), 'Delete Playlists starts select mode on this page (select_tests); the stock page stays closed')
     select_tests(expect, lists)
 
-    # 11b. The card fits the language: the glyph's 48 px + its widest label + 16 px, 180..292, its right edge at 314; rows and labels follow
+    # 11b. The card fits the language: the glyph's 48 px + its widest label + 16 px, 180..292, its right edge at 311; rows and labels follow
     raw = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw')
     font = Ttf(os.path.join(raw, 'fonts', 'default.ttf'))
     keys = ('playlist_create', 'playlist_import', 'playlist_export', 'Delete Playlists')
@@ -694,11 +694,11 @@ def run(ctx):
         w = want or max(widths) + 64
         m = menu_for(texts, lambda t: StbText(font, pod_ui.PL_LABEL_PX).layout(t)[1])
         pos, sizes = fit(m)
-        expect(pos == (314 - w, 44) and sizes.get('pl_card') == (w, 200) and all(sizes.get(f'pl_item{i}') == (w, 50) and sizes.get(f'pl_label{i}') == (w - 64, 50) for i in range(4))
+        expect(pos == (311 - w, 52) and sizes.get('pl_card') == (w, 200) and all(sizes.get(f'pl_item{i}') == (w, 50) and sizes.get(f'pl_label{i}') == (w - 64, 50) for i in range(4))
                and 180 <= w <= 292 and max(widths) <= w - 64 and vis(m, 'pl_card') == (1, 1),
-               f'{loc}: the card {w} px wide (glyph room 48 + labels up to {max(widths)} px + 16, at least 180), x {314 - w}..314; rows {w}, labels {w - 64} ({pos}, {sizes.get("pl_card")})')
+               f'{loc}: the card {w} px wide (glyph room 48 + labels up to {max(widths)} px + 16, at least 180), x {311 - w}..311; rows {w}, labels {w - 64} ({pos}, {sizes.get("pl_card")})')
     m = menu_for(pod_pages.PLAYLIST_MENU, lambda t: 300)
-    expect(fit(m)[0] == (22, 44) and fit(m)[1].get('pl_card') == (292, 200), f'a label wider than the room keeps the widest card (292 px, its ellipsis): {fit(m)}')
+    expect(fit(m)[0] == (19, 52) and fit(m)[1].get('pl_card') == (292, 200), f'a label wider than the room keeps the widest card (292 px, its ellipsis): {fit(m)}')
     m = menu_for(pod_pages.PLAYLIST_MENU, None)
     expect(fit(m) == (None, {}) and vis(m, 'pl_card') == (1, 1), 'a label that cannot be measured leaves the asset\'s card (292 px), and the menu opens')
     m = PM(lists); m.widgets.pop('pl_label2'); open_page(m); m.measure = lambda t: 50; m.calls = []
@@ -707,7 +707,7 @@ def run(ctx):
     m = menu_for(pod_pages.PLAYLIST_MENU, lambda t: 100)
     m.click('btn_more'); m.measure = lambda t: 200; m.calls = []
     m.click('btn_more')
-    expect(fit(m)[1].get('pl_card') == (264, 200) and fit(m)[0] == (50, 44), f'every open measures again (a language changed meanwhile): {fit(m)}')
+    expect(fit(m)[1].get('pl_card') == (264, 200) and fit(m)[0] == (47, 52), f'every open measures again (a language changed meanwhile): {fit(m)}')
 
     # 12. Closing frees everything
     m = PM(lists, missing=(7,)); open_page(m); settle(m)

@@ -25,12 +25,13 @@ def run(ctx):
     expect(H_ == 42 and sorted(gen) == sorted(N) and len(N) == 2 * (len(mod_icons.AH_NAV_PIECES) + 1) + 1 and all(shipped(n) == png_of(gen[n]) for n in N),
            f'the {len(N)} ah_nav_* PNGs are the generator\'s output byte for byte')
     # independent of mod_icons.glass_piece: (width, glass columns, glyph centre) of every image, and its capsule (image columns) when it is a slice: the Pod
-    # pages' right cap of the 141 px capsule; the album page's multi-select (a 50 px image centred on its 46 px button at 214: x 212 .. 262) and Now Playing
-    # (60 at 262), the two caps of one 95 px capsule 216 .. 311
-    want = {'ah_nav_back': (42, 0, 42, 21), 'ah_nav_close': (42, 0, 42, 21), 'ah_nav_np': (60, 9, 51, 30), 'ah_nav_search': (46, 2, 44, 23),
-            'ah_nav_multi': (50, 4, 50, 25, (4, 99)), 'ah_nav_npa': (60, 0, 49, 28, (-46, 49)),
+    # pages' right cap of the 141 px capsule, its glass from 7 (the slots' 7 px shift); the album page's search (a 60 px image centred on its 46 px button at
+    # 168: x 161 .. 221, the disc 177 .. 219, glyph 198), multi-select (a 50 px image centred on its 46 px button at 214: x 212 .. 262, glyph 244) and Now
+    # Playing (60 at 262), the two caps of one 88 px capsule 223 .. 311
+    want = {'ah_nav_back': (42, 0, 42, 21), 'ah_nav_close': (42, 0, 42, 21), 'ah_nav_np': (60, 9, 51, 30), 'ah_nav_set': (60, 9, 51, 30), 'ah_nav_search': (60, 16, 58, 37),
+            'ah_nav_multi': (50, 11, 50, 32, (11, 99)), 'ah_nav_npa': (60, 0, 49, 28, (-39, 49)),
             'ah_nav_add': (60, 9, 51, 30), 'ah_nav_del': (60, 9, 51, 30), 'ah_nav_cancel': (60, 1, 43, 22), 'ah_nav_unsel': (50, 8, 50, 29), 'ah_nav_sel': (50, 8, 50, 29),
-            'ah_nav_play': (60, 0, 51, 30, (-90, 51))}
+            'ah_nav_play': (60, 7, 51, 30, (-90, 51))}
     PD = 36   # a pressed slice: the rest glass and a white disc of PD px, 14 % opaque, on the glyph's centre (3 px of glass above and below)
     def highlight(out, cx):
         d = mod_icons.disc(PD, (255, 255, 255)); d.putalpha(d.getchannel('A').point(lambda v: round(v * 0.14)))
@@ -43,9 +44,9 @@ def run(ctx):
             out.alpha_composite(G(c1 - c0, H_, 21, False).crop((x0 - c0, 0, x1 - c0, H_)), (x0, 0))
             return highlight(out, cx) if pressed else out
         out.alpha_composite(G(x1 - x0, H_, 21, pressed), (x0, 0)); return out
-    expect((mod_icons.NAV_PRESS_D, mod_icons.NAV_PRESS_ALPHA) == (PD, 0.14) and mod_icons.AH_CAPSULE == (216, 311) and 212 + 4 == 216 and 212 + 50 == 262 == 311 - 49
-           and 216 + 21 == 237 and 290 + 21 == 311 and 237 - 212 == 25 and 290 - 262 == 28,
-           'the album capsule: multi-select\'s 50 px image on its button 214 + 46 / 2 - 25 = 212 meets Now Playing\'s at 262; glass 216 .. 311, 21 px past each glyph (237, 290)')
+    expect((mod_icons.NAV_PRESS_D, mod_icons.NAV_PRESS_ALPHA) == (PD, 0.14) and mod_icons.AH_CAPSULE == (223, 311) and 212 + 11 == 223 and 212 + 50 == 262 == 311 - 49
+           and 223 + 21 == 244 and 290 + 21 == 311 and 244 - 212 == 32 and 290 - 262 == 28,
+           'the album capsule: multi-select\'s 50 px image on its button 214 + 46 / 2 - 25 = 212 meets Now Playing\'s at 262; glass 223 .. 311, 21 px past each glyph (244, 290)')
     bad = []
     for n in N:
         base = n[:-5] if n.endswith('_down') else n
@@ -58,37 +59,40 @@ def run(ctx):
     expect(not bad, f'every ah_nav_* image is its glass (a disc, or a cap of a capsule, pressed with the round highlight) at its columns with a glyph of at most {GL} px centred on its column, otherwise the glass byte for byte ({bad})')
     # the Pod pages' capsule pieces (pod_nav_*) glue into ONE capsule: Cover Flow / "..." (46 at x 168), toggle (46 at 214), Now Playing (60 at 260): glass 170 .. 311
     plain = lambda pos, pressed=False: mod_icons.capsule_piece(pos, None, pressed)
-    glued = Image.new('RGBA', (152, H_), (0, 0, 0, 0))
-    for p, x in (('left', 0), ('middle', 46), ('right', 92)): glued.paste(plain(p), (x, 0))
-    full = Image.new('RGBA', (152, H_), (0, 0, 0, 0)); full.alpha_composite(G(141, H_, 21), (2, 0))
-    expect(list(full.getdata()) == list(glued.getdata()), f'Cover Flow | toggle | Now Playing: the three pieces of main\'s 46 / 46 / 60 px slots glue into the 141 x {H_} capsule (x 170 .. 311) exactly, no seam')
-    # the Songs page's capsule starts at the 122 slot: Search (left), Sort and Select (middle), Now Playing (right), one 187 px capsule, glass 124 .. 311 (the same pieces)
-    glued = Image.new('RGBA', (198, H_), (0, 0, 0, 0))
-    for p, x in (('left', 0), ('middle', 46), ('middle', 92), ('right', 138)): glued.paste(plain(p), (x, 0))
-    full = Image.new('RGBA', (198, H_), (0, 0, 0, 0)); full.alpha_composite(G(187, H_, 21), (2, 0))
-    expect(list(full.getdata()) == list(glued.getdata()), f'Search | Sort | Select | Now Playing: the four pieces of the slots 122 / 168 / 214 / 260 glue into the 187 x {H_} capsule (x 124 .. 311) exactly, no seam')
-    # a genre's songs have no Search (the stock navbar leaves it out for class 0xff09): Select as the left cap (pod_nav_selectl, runtime icon of btn_select at 214) and Now Playing, a 95 px capsule, glass 216 .. 311
-    glued = Image.new('RGBA', (106, H_), (0, 0, 0, 0))
-    for p, x in (('left', 0), ('right', 46)): glued.paste(plain(p), (x, 0))
-    full = Image.new('RGBA', (106, H_), (0, 0, 0, 0)); full.alpha_composite(G(95, H_, 21), (2, 0))
-    expect(list(full.getdata()) == list(glued.getdata()), f'Select (left cap) | Now Playing: the two pieces of the slots 214 / 260 glue into the 95 x {H_} capsule (x 216 .. 311) exactly, no seam')
+    # every piece drawn where AWTK puts it (its image centred on its button: a slot's 60 px image at slot - 7, Now Playing's at 260), window columns from x0
+    def glued_at(pieces, x0):
+        out = Image.new('RGBA', (320 - x0, H_), (0, 0, 0, 0))
+        for p, x in pieces:
+            im, bw = plain(p), (60 if p == 'right' else 46)
+            out.alpha_composite(im, (x + (bw - im.width) // 2 - x0, 0))
+        return out
+    def capsule_at(c0, x0):
+        full = Image.new('RGBA', (320 - x0, H_), (0, 0, 0, 0)); full.alpha_composite(G(311 - c0, H_, 21), (c0 - x0, 0)); return full
+    expect(list(capsule_at(177, 161).getdata()) == list(glued_at((('left', 168), ('middle', 214), ('right', 260)), 161).getdata()),
+           f'Cover Flow | toggle | Now Playing: the three pieces on main\'s 46 / 46 / 60 px slots glue into the 134 x {H_} capsule (x 177 .. 311) exactly, no seam')
+    # the Songs page's capsule starts at the 122 slot: Search (left), Sort and Select (middle), Now Playing (right), one 180 px capsule, glass 131 .. 311 (the same pieces)
+    expect(list(capsule_at(131, 115).getdata()) == list(glued_at((('left', 122), ('middle', 168), ('middle', 214), ('right', 260)), 115).getdata()),
+           f'Search | Sort | Select | Now Playing: the four pieces of the slots 122 / 168 / 214 / 260 glue into the 180 x {H_} capsule (x 131 .. 311) exactly, no seam')
+    # a genre's songs have no Search (the stock navbar leaves it out for class 0xff09): Select as the left cap (pod_nav_selectl, runtime icon of btn_select at 214) and Now Playing, an 88 px capsule, glass 223 .. 311
+    expect(list(capsule_at(223, 207).getdata()) == list(glued_at((('left', 214), ('right', 260)), 207).getdata()),
+           f'Select (left cap) | Now Playing: the two pieces of the slots 214 / 260 glue into the 88 x {H_} capsule (x 223 .. 311) exactly, no seam')
     expect(mod_icons.NAV_VIEW_POS['pod_nav_selectl'] == 'left' and mod_icons.NAV_VIEW['pod_nav_selectl'] == mod_icons.NAV_VIEW['pod_nav_select'],
            'pod_nav_selectl is the left-cap piece of the same list-checks glyph as pod_nav_select')
     # the Extras page's Settings button: the same left cap (so Settings | Now Playing glues as the two-piece capsule above), with the Lucide sliders-horizontal glyph the Settings row's icon uses
     expect(mod_icons.NAV_VIEW_POS['pod_nav_settings'] == 'left' and mod_icons.NAV_VIEW['pod_nav_settings'] == 'sliders-horizontal'
-           and mod_icons.POD_ROWS['Settings'][1] == 'sliders-horizontal' and mod_icons.capsule_piece('left', 'sliders-horizontal', False).size == (46, H_)
+           and mod_icons.POD_ROWS['Settings'][1] == 'sliders-horizontal' and mod_icons.capsule_piece('left', 'sliders-horizontal', False).size == (60, H_)
            and list(mod_icons.capsule_piece('left', 'sliders-horizontal', True).getdata()) != list(mod_icons.capsule_piece('left', 'sliders-horizontal', False).getdata()),
            'pod_nav_settings is the left-cap piece of sliders-horizontal, the Settings row\'s glyph; its _down differs (the round highlight)')
     # Cover Flow's artist page: Songs (left cap at 214) | Now Playing (ah_nav_play, set at run time): the same two pieces as the Artists page's switch, one 95 px capsule
     expect(mod_icons.NAV_VIEW_POS['pod_nav_songs'] == 'left' and 'pod_nav_allalbums' not in mod_icons.NAV_VIEW and 'pod_nav_allalbums' not in mod_icons.NAV_VIEW_POS
            and mod_icons.NAV_VIEW_POS['pod_nav_artist'] == 'left' and O['NAV_VIEW_X'] + O['NAV_VIEW_W'] == 260,
-           'Cover Flow\'s artist page: Songs is a left cap at 214 and Now Playing (ah_nav_play) the right cap at 260 (glued exactly as Select | Now Playing above, glass 216 .. 311); no All albums disc')
-    # the album page's two caps, drawn where AWTK centres them (multi-select's 50 px image at 214 + 23 - 25 = 212, Now Playing's at 262), glue into one 95 px capsule
+           'Cover Flow\'s artist page: Songs is a left cap at 214 and Now Playing (ah_nav_play) the right cap at 260 (glued exactly as Select | Now Playing above, glass 223 .. 311); no All albums disc')
+    # the album page's two caps, drawn where AWTK centres them (multi-select's 50 px image at 214 + 23 - 25 = 212, Now Playing's at 262), glue into one 88 px capsule
     def gl(n, pressed=False):
         w, x0, x1, cx, _g, cap = mod_icons.AH_NAV_PIECES[n]; return mod_icons.glass_piece(w, x0, x1, None, cx, pressed, cap)
     glued = Image.new('RGBA', (110, H_), (0, 0, 0, 0)); glued.paste(gl('ah_nav_multi'), (0, 0)); glued.paste(gl('ah_nav_npa'), (50, 0))
-    full = Image.new('RGBA', (110, H_), (0, 0, 0, 0)); full.alpha_composite(G(95, H_, 21), (4, 0))
-    expect(list(full.getdata()) == list(glued.getdata()), f'the album page: multi-select (x 212 .. 262) | Now Playing (262 .. 322) glue into the 95 x {H_} capsule (x 216 .. 311) exactly, no seam')
+    full = Image.new('RGBA', (110, H_), (0, 0, 0, 0)); full.alpha_composite(G(88, H_, 21), (11, 0))
+    expect(list(full.getdata()) == list(glued.getdata()), f'the album page: multi-select (x 212 .. 262) | Now Playing (262 .. 322) glue into the 88 x {H_} capsule (x 223 .. 311) exactly, no seam')
     # a pressed slice is the rest slice but for a round highlight on its glyph, inside its button and its glass: the capsule keeps one pane, no lit block
     slices = [(f'pod {p}', plain(p), plain(p, True), mod_icons.CAPSULE_PIECES[p][3], mod_icons.CAPSULE_PIECES[p][1:3], mod_icons.NAV_SLOT_W if p != 'right' else 60)
               for p in ('left', 'middle', 'right')]
@@ -99,18 +103,20 @@ def run(ctx):
         lo = (rest.width - bw) // 2   # the button's first image column
         inside = all((x + 0.5 - cx) ** 2 + (y + 0.5 - H_ / 2) ** 2 <= (PD / 2 + 1) ** 2 for x, y in diff)   # its anti-aliased edge
         lit = sum(down.getpixel((cx, 6))[:3]) > sum(rest.getpixel((cx, 6))[:3]) and down.getpixel((cx, 2)) == rest.getpixel((cx, 2))
-        if not (diff and inside and lit and x0 <= cx - PD // 2 and cx + PD // 2 <= x1 and lo <= cx - PD // 2 and cx + PD // 2 <= lo + bw): bad.append(n)
-    expect(not bad, f'a pressed capsule piece differs from its rest piece only in a {PD} px disc on its glyph (lighter; the rim untouched), inside its glass and its button ({bad})')
-    expect(122 + 46 + 46 + 46 == 260 and 124 + 187 == 311 and O['NAV_SEARCH_X'] == 122, 'the Songs capsule: slots 122 + 46 + 46 + 46 = Now Playing at 260 (main\'s), glass 124 .. 311')
-    expect(mod_icons.NAV_SLOT_W + mod_icons.NAV_SLOT_W + mod_icons.NAV_PLAY_W == 152 and 170 + 141 == 311 == 290 + 21,
-           'the capsule ends 21 px (the cap radius) right of Now Playing\'s glyph column 290; its slots are 168 + 46 + 46 = 260, Now Playing at 260 (main\'s)')
+        if not (diff and inside and lit and x0 <= cx - PD // 2 and cx + PD // 2 <= x1 and lo <= cx < lo + bw): bad.append(n)
+    expect(not bad, f'a pressed capsule piece differs from its rest piece only in a {PD} px disc on its glyph (lighter; the rim untouched), inside its glass, the glyph inside its button ({bad})')
+    expect(122 + 46 + 46 + 46 == 260 and 131 + 180 == 311 and O['NAV_SEARCH_X'] == 122, 'the Songs capsule: slots 122 + 46 + 46 + 46 = Now Playing at 260 (main\'s), glass 131 .. 311')
+    expect(mod_icons.NAV_SLOT_W + mod_icons.NAV_SLOT_W + mod_icons.NAV_PLAY_W == 152 and 177 + 134 == 311 == 290 + 21 and mod_icons.NAV_SHIFT == 7
+           and [s + 23 + 7 for s in (122, 168, 214)] + [290] == [152, 198, 244, 290],
+           'the capsule ends 21 px (the cap radius) right of Now Playing\'s glyph column 290; its slots are 168 + 46 + 46 = 260, Now Playing at 260 (main\'s); '
+           'each slot\'s glyph 7 px right of its centre, so the glyphs are 46 apart up to Now Playing\'s (152 / 198 / 244 / 290)')
     for n, pos in mod_icons.NAV_VIEW_POS.items():
         for sfx, pressed in (('', False), ('_down', True)):
             im, r = asset_image(n + sfx), plain(pos, pressed)
             glyph = [(x, y) for y in range(im.height) for x in range(im.width) if im.getpixel((x, y)) != r.getpixel((x, y))]
-            cx = 23
+            cx = 37
             expect(im.size == r.size and glyph and abs((min(p[0] for p in glyph) + max(p[0] for p in glyph)) / 2 - cx) <= 1.5 and max(p[1] for p in glyph) - min(p[1] for p in glyph) + 1 <= GL,
-                   f'{n}{sfx}: the {pos} piece with its glyph on the slot\'s centre column ({cx})')
+                   f'{n}{sfx}: the {pos} piece with its glyph on the slot\'s centre column + 7 ({cx} in its 60 px image)')
     # contrast of the white glyphs over the glass over pure white / black
     rep = []
     for pressed in (False, True):

@@ -362,11 +362,11 @@ def asset_tests(ctx):
            'the select bar: 64 px, black with a #222222 hairline, the two flat pills Add to playlist and Delete')
     card, scrim = f('sg_card'), f('sg_scrim')
     items = [f(f'sg_item{i}') for i in range(5)]
-    expect((card.x, card.y, card.w) == (46, 44, 268) and card.get('style:normal:bg_color') == '#2C2C2E' and card.get('style:normal:round_radius') == '14' and (scrim.x, scrim.y, scrim.w, scrim.h) == (0, 0, 320, 450)
+    expect((card.x, card.y, card.w) == (43, 52, 268) and card.get('style:normal:bg_color') == '#2C2C2E' and card.get('style:normal:round_radius') == '14' and (scrim.x, scrim.y, scrim.w, scrim.h) == (0, 0, 320, 450)
            and scrim.type == 'button' and [(i.y, i.h) for i in items] == [(k * O['PL_ROW_H'], O['PL_ROW_H']) for k in range(5)] and card.h == 5 * O['PL_ROW_H']
            and card.x + card.w == O['PL_CARD_RIGHT'] and all(i.get('style:pressed:bg_color') == '#3A3A3C' and i.get('style:normal:bg_color') == '#00000000' for i in items)
            and tree.children.index(scrim) > tree.children.index(barw) and tree.children.index(card) == tree.children.index(scrim) + 1 == len(tree.children) - 1,
-           'the sort card: flat (x 46, y 44, 268 wide, #2C2C2E, radius 14, #3A3A3C pressed) on the Playlists menu\'s rhythm (PL_ROW_H rows, no padding, right edge PL_CARD_RIGHT), last in the window under a transparent scrim')
+           'the sort card: flat (x 43, y 52, 268 wide, #2C2C2E, radius 14, #3A3A3C pressed) on the Playlists menu\'s rhythm (PL_ROW_H rows, no padding, right edge PL_CARD_RIGHT), last in the window under a transparent scrim')
     labs = [next(c for c in i.children if c.type == 'hscroll_label') for i in items]
     expect([l.get('tr_text') for l in labs] == list(pod_pages.SORT_MENU) and all(c.get('sensitive') == 'false' for l in labs for c in [l]), 'the card rows carry the five stock keys')
     expect(all(any(c.type == 'image' and c.get('image') == 'sg_tick' for c in i.children) for i in items), 'each row has a tick image (shown on the current order)')
