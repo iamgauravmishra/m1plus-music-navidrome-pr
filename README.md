@@ -25,7 +25,7 @@ Follow the [installation guide](docs/install.md) for preparation, updates and re
 <details>
 <summary>Release status</summary>
 
-Status: the release is V2.1pO (pN + the Podcasts Shows page in Apple Podcasts style: one cover grid of every show, a refresh line, Continue Listening, no Feeds level; 16 redirects and over-cap feeds kept; test build zEFQKAAAE flashed). Milestones, hardware results and lessons:
+Status: the release is V2.1pP (pO + a new Pod row glyph: Lucide smartphone body with a screen bar and click wheel; not flashed). Milestones, hardware results and lessons:
 `docs/history.md`; per-tag details are in git.
 
 </details>
