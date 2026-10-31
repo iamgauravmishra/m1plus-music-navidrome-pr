@@ -58,9 +58,8 @@ extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination th
 #define AR_TEXT_END \
     252 /* the names are cut here: the chevron stands between this and the rail's touch column (x 284) */
 #define AR_CHEV_X 262
-#define AR_CHEV_W 10 /* the chevron's bitmap, drawn by ar_make_chevron */
-#define AR_CHEV_H 16
-#define AR_CHEV_RGB 0x8a8a8a
+#define AR_CHEV_W POD_CHEV_W /* the chevron's bitmap, made by pod_make_chevron (patch/common.c) */
+#define AR_CHEV_H POD_CHEV_H
 #define AR_W 320 /* the content's width: the list_view's (the scroll_view clips at 310) */
 #define MAX_ARTISTS 20000 /* one byte of rank and four of order each, no widget: bounded by the stock list's own size */
 #define AR_TILES (GRID_VIEW_H / AR_ROW + 6) /* the text ring: the rows in view, two beyond and the history */
@@ -265,48 +264,6 @@ static int ar_on_paint(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* The chevron: a stroke of two segments (the stock right_arrow is 13 x 22 and our image loader only makes squares), antialiased by 4 x 4 samples per pixel, in the
- * alpha of a grey bitmap (the rail's disc is made the same way). Coordinates are eighths of a pixel. */
-static int ar_seg2(int px, int py, int ax, int ay, int bx,
-                   int by) { /* the squared distance of (px, py) to the segment a-b */
-    int dx = bx - ax, dy = by - ay, n = (px - ax) * dx + (py - ay) * dy, d = dx * dx + dy * dy, cx, cy, cr;
-    if (n <= 0)
-        cx = px - ax, cy = py - ay;
-    else if (n >= d)
-        cx = px - bx, cy = py - by;
-    else {
-        cr = (px - ax) * dy - (py - ay) * dx; /* the cross product: distance = |cr| / sqrt(d) */
-        return cr * cr / d;
-    }
-    return cx * cx + cy * cy;
-}
-
-static void ar_make_chevron(void) {
-    unsigned *px;
-    int x, y, i, j, n, d;
-    void *b = bitmap_create_ex(AR_CHEV_W, AR_CHEV_H, AR_CHEV_W * 4, BITMAP_RGBA8888);
-    if (!b) return;
-    px = (unsigned *)bitmap_lock_buffer_for_write(b);
-    if (!px || bitmap_get_line_length(b) != AR_CHEV_W * 4) {
-        if (px) bitmap_unlock_buffer(b);
-        bitmap_destroy(b);
-        return;
-    }
-    for (y = 0; y < AR_CHEV_H; ++y)
-        for (x = 0; x < AR_CHEV_W; ++x) {
-            for (n = 0, i = 0; i < 4; ++i)
-                for (j = 0; j < 4; ++j) {
-                    int sx = x * 8 + 2 * j + 1, sy = y * 8 + 2 * i + 1;
-                    d = ar_seg2(sx, sy, 14, 14, 68, 64);
-                    if (ar_seg2(sx, sy, 68, 64, 14, 114) < d) d = ar_seg2(sx, sy, 68, 64, 14, 114);
-                    if (d <= 64) ++n; /* half the stroke's width: 1 px */
-                }
-            px[y * AR_CHEV_W + x] = (unsigned)(n * 255 / 16) << 24 | AR_CHEV_RGB;
-        }
-    bitmap_unlock_buffer(b);
-    ar.chev = b;
-}
-
 /* ---------------------------------------------------------------------------
  * Touch on the rows (patch/songs.c: DOWN remembers, ABORT forgets, UP within the drag threshold on the same row acts)
  */
@@ -490,7 +447,7 @@ int artists_open(int home) {
         return h ? pod_home_open(h) : -1;
     }
     az_make_disc(&ar.al);
-    ar_make_chevron();
+    ar.chev = pod_make_chevron();
     ar.noscroll = !widget_on(ar.sv, EVT_SCROLL, ar_on_scroll, (void *)0) ||
                   !widget_on(ar.sv, EVT_SCROLL_END, ar_on_scroll, (void *)0);
     if (ar.noscroll && ar.title)

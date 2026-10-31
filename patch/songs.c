@@ -55,6 +55,7 @@
 #include "podcasts.h"
 
 extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
+extern int search_open(void); /* patch/search.c: our keyboard, then the results page; -1 when it did not open */
 extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
 extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one become List play */
 extern void pod_set_mode(int mode); /* patch/shuffle.c: the stock play mode */
@@ -1047,11 +1048,13 @@ static int sg_on_item(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* Search: the stock page (@0x52704c: navigator_to("search_page"), nothing set first). The list it leaves in *pdeq_showlist makes this page read it again when it is back. */
+/* Search: our keyboard, then our results page (patch/search.c, docs/modules/search.md). Its queries leave their list in *pdeq_showlist, which makes this page read it again when it is
+ * back. Where ours will not open (a results page is already under this one, or no keyboard asset) the stock page (@0x52704c: navigator_to("search_page"), nothing set first). */
 static int sg_on_search(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    if (sg.view && !sg.select && !sg.menu) navigator_to_with_context("search_page", (const void *)0);
+    if (sg.view && !sg.select && !sg.menu && search_open() < 0)
+        navigator_to_with_context("search_page", (const void *)0);
     return RET_OK;
 }
 
@@ -1072,6 +1075,7 @@ static int sg_on_fg(void *ctx, void *e) {
         sg_load(
             1); /* a list is read every time: playing changes Recently Played and Most Played, Now Playing's star the Favourites */
     sg_build_later();
+    sg_kick(); /* the loader stops on a list another page replaced (Search's queries), and the list can be valid again by now: covers still to load start it here */
     return RET_OK;
 }
 

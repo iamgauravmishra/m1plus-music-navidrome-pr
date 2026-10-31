@@ -684,11 +684,16 @@ KEYBOARD_IMAGES = {'qk_shift': ('+arrow-big-up', (255, 255, 255), 18, 18), 'qk_s
                    'qk_delete': ('+delete', (255, 255, 255), 24, 20), 'qk_mag': ('search', (0x8E, 0x8E, 0x93), 16, 16)}
 KB_CLEAR = ('qk_clear', 'x', (0x1C, 0x1C, 0x1E), 9, 16, (0x63, 0x63, 0x66))   # name, glyph, its colour, its ink px, the disc's diameter, the disc
 ALBUM += sorted(KEYBOARD_IMAGES) + [KB_CLEAR[0]]
+# the Search page's X (patch/search.h SE_CLOSE_*): a flat disc as high as the field, in the field's grey (pressed lighter), a white 13 px x; not the 42 px glass
+SE_CLOSE = ('se_close', 'x', WHITE, 13, 36, (0x1C, 0x1C, 0x1E), (0x3A, 0x3A, 0x3C))   # name, glyph, its colour, its ink px, the disc's diameter, the disc, pressed
+ALBUM += [SE_CLOSE[0], SE_CLOSE[0] + '_down']
 
 def keyboard_images():
     f = {n: glyph_fit(g, cw, ch, rgb, 1 if n != 'qk_mag' else 0) for n, (g, rgb, cw, ch) in KEYBOARD_IMAGES.items()}
     n, g, rgb, ink, d, fill = KB_CLEAR
     f[n] = on_disc(glyph_fit(g, ink, ink, rgb, 0, 1.5), d, fill)
+    n, g, rgb, ink, d, fill, down = SE_CLOSE
+    f[n], f[n + '_down'] = (on_disc(glyph_fit(g, ink, ink, rgb, 0), d, c) for c in (fill, down))
     return f
 
 def songs_images():

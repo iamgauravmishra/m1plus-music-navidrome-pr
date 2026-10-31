@@ -20,6 +20,16 @@ typedef void (*kb_done_fn)(const char *text);
 typedef void (*kb_cancel_fn)(void);
 #define KB_LOG 1
 #define KB_DONE 2 /* the action key reads "Done" (a name, not a search) */
+typedef void (*kb_change_fn)(const char *text);
+typedef void (*kb_go_fn)(void);
+/* The same pad embedded in another page (patch/search.c): the page's window holds the widgets kb_pad, kb_strip, kb_stem, kb_pop and a field (kb_text, kb_hint, kb_caret, kb_clear) of the
+ * names of the keyboard page's; on_change gets the field's text whenever it may have changed, on_go the action key. -1 when a keyboard exists already or the widgets are not there. */
+int keyboard_attach(void *win, const char *placeholder, int text_x, int text_w, int caret_y, kb_change_fn on_change,
+                    kb_go_fn on_go);
+void keyboard_detach(void); /* the page's destroy event */
+void keyboard_show(int on); /* show or hide the embedded pad (hidden: no touch, no caret) */
+int keyboard_shown(void);
+const char *keyboard_text(void); /* the field's committed text (UTF-8) */
 int keyboard_open(const char *title, const char *placeholder, const char *initial, kb_done_fn on_done,
                   kb_cancel_fn on_cancel, unsigned flags);
 /* The Developer row Keyboard: keyboard_open with a placeholder, KB_LOG, and Search showing the text in a toast. */

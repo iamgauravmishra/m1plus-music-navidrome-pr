@@ -88,6 +88,10 @@ static struct {
     unsigned timer, len, flags, log_t;
     kb_done_fn done;
     kb_cancel_fn cancel;
+    kb_change_fn on_change; /* embedded: called with the field's text whenever it may have changed */
+    kb_go_fn on_go; /* embedded: the action key */
+    int embedded, hidden, tx, tw,
+        cy; /* embedded in another page (keyboard_attach); the pad is hidden; the field's text x, text room and caret y */
     short kx[KB_KEYS], ky[KB_KEYS], kw[KB_KEYS];
     char lab[KB_KEYS][4];
     char buf[KB_MAX + 1];
@@ -230,13 +234,14 @@ static void kb_refresh(void) { /* the text and the caret */
     char shown[KB_MAX + 8];
     int w = 0;
     if (kb.len)
-        w = kb_fit(kb.text, kb.buf, kb.len, KB_TEXT_W, shown);
+        w = kb_fit(kb.text, kb.buf, kb.len, kb.tw, shown);
     else
         shown[0] = 0;
     widget_set_text_utf8(kb.text, shown);
     widget_set_visible(kb.hint, kb.len == 0, 0);
     kb_show(kb.clear, kb.len != 0);
-    widget_move(kb.caret, KB_TEXT_X + (kb.len ? w + 1 : 0), KB_CARET_Y);
+    widget_move(kb.caret, kb.tx + (kb.len ? w + 1 : 0), kb.cy);
+    if (kb.embedded && kb.on_change) kb.on_change(kb.buf);
 }
 
 static void kb_page(int page);
@@ -794,6 +799,14 @@ static void kb_finish(int ok) {
     char text[KB_MAX + 1];
     unsigned a = 0, b, i;
     if (kb.finished) return;
+    if (kb.embedded) { /* the action key of an embedded pad: what is pending is committed, the page decides what follows (hides the pad) */
+        if (kb_layer_of(kb.layer)->flush) kb_layer_of(kb.layer)->flush();
+        kb_unpop();
+        kb_stop();
+        kb_put("go");
+        if (kb.on_go) kb.on_go();
+        return;
+    }
     if (ok && kb_layer_of(kb.layer)->flush)
         kb_layer_of(kb.layer)->flush(); /* the pinyin still pending is committed as its first candidate */
     b = kb.len;
@@ -1058,17 +1071,12 @@ static int kb_bind(void *w, int id) {
            widget_on(w, EVT_POINTER_ABORT, kb_on_touch, (void *)(long)id);
 }
 
-int keyboard_open(const char *title, const char *placeholder, const char *initial, kb_done_fn on_done,
-                  kb_cancel_fn on_cancel, unsigned flags) {
+/* The lookups and bindings both ways of having the pad share (a page of its own, or embedded in another): the widgets by name, the pad's, the field's and the strip's events, the
+ * keyboards and the first page. 0 when every widget is there; -1 (the state cleared) for an asset that is not ours. */
+static int kb_init(const char *placeholder, const char *initial, int embedded) {
     char name[12];
     int i, ok;
-    if (kb.win) return -1;
-    memset(&kb, 0, sizeof kb);
-    memset(&zh, 0, sizeof zh);
-    kb.win = window_open("m1plus_keyboard");
-    if (!kb.win) return -1;
-    kb.done = on_done, kb.cancel = on_cancel, kb.flags = flags;
-    kb.title = kb_find("label_title");
+    kb.title = embedded ? (void *)0 : kb_find("label_title");
     kb.pad = kb_find("kb_pad");
     kb.text = kb_find("kb_text");
     kb.hint = kb_find("kb_hint");
@@ -1090,9 +1098,9 @@ int keyboard_open(const char *title, const char *placeholder, const char *initia
     kb.sep = kb_find("kb_sep");
     kb.cands = kb_find("kb_cands");
     kb.chl = kb_find("kb_chl");
-    ok = kb.title && kb.pad && kb.text && kb.hint && kb.caret && kb.clear && kb.stem && kb.pop && kb.pop_l &&
-         kb.shift && kb.shifton && kb.sym && kb.del && kb.mode && kb.space && kb.go && kb.lang && kb.strip && kb.py &&
-         kb.sep && kb.cands && kb.chl;
+    ok = (embedded || kb.title) && kb.pad && kb.text && kb.hint && kb.caret && kb.clear && kb.stem && kb.pop &&
+         kb.pop_l && kb.shift && kb.shifton && kb.sym && kb.del && kb.mode && kb.space && kb.go && kb.lang &&
+         kb.strip && kb.py && kb.sep && kb.cands && kb.chl;
     for (i = 0; i < KB_KEYS; ++i) {
         snprintf(name, sizeof name, "kb_k%d", i);
         kb.key[i] = kb_find(name);
@@ -1105,12 +1113,8 @@ int keyboard_open(const char *title, const char *placeholder, const char *initia
     }
     if (!ok) { /* an asset that is not ours */
         memset(&kb, 0, sizeof kb);
-        navigator_back();
         return -1;
     }
-    widget_on(kb.win, EVT_DESTROY, kb_on_destroy, kb.win);
-    pod_bind(kb.win, "btn_return", kb_on_back, (void *)0);
-    pod_bind(kb.win, "btn_backtoplayer", pod_on_player, (void *)0);
     widget_on(kb.win, EVT_WINDOW_TO_BG, kb_on_bg, (void *)0);
     for (i = 0; i < KB_KEYS; ++i) kb_bind(kb.key[i], i);
     kb_bind(kb.shift, K_SHIFT);
@@ -1130,8 +1134,6 @@ int keyboard_open(const char *title, const char *placeholder, const char *initia
     widget_on(kb.cands, EVT_POINTER_UP, zh_on_strip, (void *)0);
     widget_on(kb.cands, EVT_POINTER_ABORT, zh_on_strip, (void *)0);
     zh.hot = -1;
-    if (title && title[0]) widget_set_text_utf8(kb.title, title);
-    if (flags & KB_DONE) widget_set_tr_text(kb.go, "Done");
     widget_set_text_utf8(kb.hint, placeholder ? placeholder : "");
     if (initial) { /* cut on a character boundary */
         unsigned n = kb_slen(initial), c = 0, l;
@@ -1161,6 +1163,70 @@ int keyboard_open(const char *title, const char *placeholder, const char *initia
     kb_put("open");
     return 0;
 }
+
+int keyboard_open(const char *title, const char *placeholder, const char *initial, kb_done_fn on_done,
+                  kb_cancel_fn on_cancel, unsigned flags) {
+    if (kb.win) return -1;
+    memset(&kb, 0, sizeof kb);
+    memset(&zh, 0, sizeof zh);
+    kb.win = window_open("m1plus_keyboard");
+    if (!kb.win) return -1;
+    kb.done = on_done, kb.cancel = on_cancel, kb.flags = flags;
+    kb.tx = KB_TEXT_X, kb.tw = KB_TEXT_W, kb.cy = KB_CARET_Y;
+    if (kb_init(placeholder, initial, 0) != 0) {
+        navigator_back();
+        return -1;
+    }
+    widget_on(kb.win, EVT_DESTROY, kb_on_destroy, kb.win);
+    pod_bind(kb.win, "btn_return", kb_on_back, (void *)0);
+    pod_bind(kb.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    if (title && title[0]) widget_set_text_utf8(kb.title, title);
+    if (flags & KB_DONE) widget_set_tr_text(kb.go, "Done");
+    return 0;
+}
+
+/* The pad, the candidate strip and the field of ANOTHER page's window (the same widget names; ui/m1plus_search.bin has them, built from the same pieces as the keyboard page: tools/pod_ui.py
+ * keyboard_pad_widgets). The text goes to on_change whenever it may have changed (the page ignores a repeat), the action key to on_go (the page hides the pad); the page's own Back closes the
+ * window and ends this with keyboard_detach from its destroy handler. The pad starts shown. text_x, text_w, caret_y: the field's inner geometry in that page. */
+int keyboard_attach(void *win, const char *placeholder, int text_x, int text_w, int caret_y, kb_change_fn on_change,
+                    kb_go_fn on_go) {
+    if (kb.win || !win) return -1;
+    memset(&kb, 0, sizeof kb);
+    memset(&zh, 0, sizeof zh);
+    kb.win = win, kb.embedded = 1;
+    kb.tx = text_x, kb.tw = text_w, kb.cy = caret_y;
+    if (kb_init(placeholder, (const char *)0, 1) != 0) return -1;
+    kb.on_change = on_change, kb.on_go = on_go;
+    return 0;
+}
+
+/* The page's window is going: the timer, the engine's megabyte and the state go with it. */
+void keyboard_detach(void) {
+    if (!kb.win || !kb.embedded) return;
+    kb_stop();
+    zh_leave();
+    memset(&zh, 0, sizeof zh);
+    memset(&kb, 0, sizeof kb);
+}
+
+/* Show or hide an embedded pad: hidden it takes no touch (hidden and insensitive), the caret goes, a key held or a pop-up in the air is let go; shown again the candidate strip comes back
+ * only if candidates are there. */
+void keyboard_show(int on) {
+    if (!kb.win || !kb.embedded || kb.hidden == !on) return;
+    kb.hidden = !on;
+    if (!on) {
+        kb_gap_end(0);
+        kb_unpop();
+        kb_stop();
+    }
+    kb_show(kb.pad, on);
+    kb_show(kb.strip, on && zh.src != S_NONE);
+    widget_set_visible(kb.caret, on, 0);
+}
+
+int keyboard_shown(void) { return kb.win && kb.embedded && !kb.hidden; }
+
+const char *keyboard_text(void) { return kb.win ? kb.buf : ""; }
 
 static void kb_test_done(const char *text) { pod_toast(text); }
 

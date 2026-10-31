@@ -99,6 +99,10 @@ One more site is a data word, not a code hook (section 8d): `g_scroll_view_vtabl
 no hook: taps use its content view's `EVT_POINTER_*` handlers and loading uses a page timer;
 see [Albums](albums.md)).
 
+Library Search (`patch/search.c`, [search](search.md)) adds no hook, no import and no thread, and one page-scoped timer (`se_tick`, 40 ms: the 200 ms debounce of live search and the cover loader; it ends when idle and
+with the page): the Songs page's own Search button calls it (the album page is untouched: stock's disc there still opens the stock search page), and the keyboard's pad is embedded in the Search page's own window (`keyboard_attach`, [keyboard](keyboard.md)), so no page is opened or closed when the user types.
+It reads the library with the stock queries the Songs, Artists, Albums and Playlists pages run, once, only from its page in front.
+
 ## What the entry does (`patch/m1plus.c`)
 
 `m1plus_home_click(icon, e)`: read the icon's name (`icon + 0x10`, stock stores the Home id as a
