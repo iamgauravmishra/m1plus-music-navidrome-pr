@@ -317,7 +317,7 @@ def run(ctx):
         m = world(b'3210456j\n', fixed, main=True)
         m.call(PSYMS['menu_custom_opened'], a0=m.root, count=4000000)
         if not fixed: m.setword(m.sv + 0xf4, PAINT_HOOK)
-        cm_order = [3, 2, 1, 0, 4, 5, 6, 18] + list(range(7, 18)) + [19, 20]   # Customize, id 18, is shown last in the saved list
+        cm_order = [3, 2, 1, 0, 4, 5, 6, 18] + list(range(7, 18)) + [19, 20]   # Settings, id 18, is shown last in the saved list
         ys = lambda: [i for _, i in sorted((m.s32(r + 4), i) for i, r in enumerate(m.rows))]
         expect(ys() == cm_order, f'{tag} Main Menu: opened in the saved order ({ys()})')
         m.relayout()

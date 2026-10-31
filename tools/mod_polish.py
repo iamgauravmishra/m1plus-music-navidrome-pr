@@ -21,7 +21,7 @@ import awtk_style
 from modlib import clone_workdir, edit_ui
 
 UI = 'rootfs/release/assets/default/raw/ui'
-PAGES = ('m1plus_menu', 'm1plus_shuffle', 'm1plus_customize', 'm1plus_extras', 'm1plus_artists', 'm1plus_cover', 'm1plus_cfset', 'm1plus_homeset', 'm1plus_extrascfg', 'm1plus_developer')
+PAGES = ('m1plus_menu', 'm1plus_shuffle', 'm1plus_settings', 'm1plus_extras', 'm1plus_artists', 'm1plus_cover', 'm1plus_cfset', 'm1plus_homeset', 'm1plus_extrascfg', 'm1plus_developer')
 TITLE_W = 200                     # the stock navbar title width
 IMG_MTIME = 1750924035            # as the other added ui files (mod_icons.py)
 

@@ -1,17 +1,24 @@
-# Customize and launcher
+# Settings and launcher
 
-Sources: `patch/m1plus.c`, `patch/home.c`, `patch/covercache.c`, `patch/tape.c` and
-`tools/pod_pages.py`. User instructions are in the [guide](../guide.md#customize).
+Sources: `patch/m1plus.c`, `patch/home.c`, `patch/covercache.c`, `patch/tape.c`, `tools/pod_settings.py`, `tools/pod_ui.py` and
+`tools/pod_pages.py`. User instructions are in the [guide](../guide.md#settings).
 
-Customize is item 18 (`j`), hidden from the main menu by default. The Extras navbar always
-provides access, and it cannot be turned off. Its rows open Main Menu, Extras, Home Screen,
-Cover Flow, Cassette Mode, Keyboards, Playback, System Settings and Developer. The two stock settings
-pages use Home dispatcher IDs 16 and 17; Developer contains Screenshot, Network Probe ([probe](probe.md)) and Keyboard ([keyboard](keyboard.md)).
+Settings is item 18 (`j`), hidden from the main menu by default. The Extras navbar always provides access, and it cannot be turned off. It is iOS-style grouped cards (below): **Wi-Fi**, **Bluetooth**; **Menu & Extras**, **Home Screen**, **Library**, **Now Playing**; under **Playback** Play Mode, EQ and **All Playback Settings** (stock playset page, Home dispatcher id 16; Gapless is on it); under **System** Display, Language, Keyboards, **About** (our own page) and **All System Settings** (stock sysset page, id 17); then **Developer** (Startup: Boot to M1+ Music, Open Shanling Home; Tools: Screenshot, Network Probe ([probe](probe.md)), Keyboard ([keyboard](keyboard.md))). Keyboards sits under System: the design had no place for it, and dropping the pinyin switch would have lost a feature.
+
+## Cards
+
+The design is `tools/preview_settings.py` (it draws the built tree's own assets; `out/preview/settings-mock-3.png`). The numbers are `tools/pod_settings.py` (shared by `tools/pod_ui.py build_cards_page`, the preview and `test/pod/settings.py`); a page is a `Page(layout=[Row, Hdr, Note, GAP ...])` in `tools/pod_pages.py` and its kind is `cards`.
+
+- The list is the stock `list_view` > `scroll_view` (310 wide) + `scroll_bar_m`, the rows stock `list_item`s (`list_item_style`, the stock 21 px `hscroll_label`).
+- **The layouter stacks the children.** The stock `list_view` layouter (`children_layouter_list_view`, `0x60b12c..`; see [recent](recent.md) "The shelf after the rows") ignores a child's `y`: it puts every **visible** child of the scroll_view at the running y in **child order**, sets x (0) and the width, and sums the heights into `virtual_h`. V2.1zWZKWAAAB had the cards as views of their own placed by `y`, so the layouter stacked them as a block above the rows. So the page is now only a column of full-width items in display order, nothing relying on the asset's y/x/w: a 10 px spacer (`pod_top`), the rows, headers (`pod_sec<n>`, 40), notes (`pod_note<n>`, 34), gaps (`pod_gap<n>`, 20), all insensitive views except the rows, and a 10 px spacer (`pod_end`). The asset's y is the stacked y anyway.
+- **A card is drawn by its rows.** Each row's background (`bg_image`, draw type `default`, `bg_color` transparent) is a picture piece, `pod_cd_single`, `_top`, `_mid` or `_bot` (320 x 52, `mod_icons.card_piece`): the card (x 10 .. 310, `#1C1C1C`, radius 12 only on the corners the piece has) is baked in and the rest is transparent; `pod_cd_<piece>_down` is the same shape in the pressed grey `#2C2C2E` (the highlight is clipped to the card's shape, corners included). The pieces are 320 wide because the layouter gives a child the list's width. A row of a hidden neighbour stays right because a row's piece depends only on the rows around it in the layout, and the one that hides (Regenerate Daily Mix) is a card of its own, a single piece. The row's children are row relative (the glyph image at x 22, the label at 58 or 24, a hairline `#333333` from the label to x 310, on every row but a card's last, the chevron / value / switch / check with their ink 14 px from x 310). Headers and notes are views whose grey label starts at x 24, the left of the row glyphs' ink.
+- The right side by ink: **link** = the chevron `pod_chev` (Lucide chevron-right fitted to 9 x 15, `#777777`, 2 px stroke) 14 px from the card edge; **value** = grey `#AAAAAA` 18 px text 8 px left of the chevron (`pod_value<i>`; the payload sizes it to its text and gives the row's label the rest: `value_fit`); **switch** = the stock `sset_on` / `sset_off` image; **picker row** = no glyph and a check (`pod_check<i>`, shown on the chosen row); **action** = nothing (Update Library, Regenerate Daily Mix, Rebuild Covers, Open Shanling Home, Screenshot, Network Probe). `pod_pages.row_kind` says which.
+- Headers are `#AAAAAA` 18 px and notes 15 px. The Now Playing button is the round `ah_nav_np`. The navbar fade (`img_nb_fade`) stays hidden: the first card is 10 px under the bar and the fade would dim it at rest.
+- Hidden is `visible=false` and `sensitive=false` (the layouter then skips the item); headers, notes, spacers, glyphs and accessories are never sensitive. `test/pod/settings.py` runs demo's own layouter (`window_manager_check_and_layout`) on every cards page as built, starting each child at a wrong x and y, and asserts every child's final x, y and height, `virtual_h`, and that with Daily Mix off the Regenerate row and its note are skipped and nothing else moves; it also hit-tests every visible row, header, note and gap.
 
 ## Persisted choices
 
-Switches and value rows save before updating their image/label. A failed atomic save leaves
-the file and displayed state unchanged. Reading settings never writes them.
+Switches and pickers save before updating their image/check. A failed atomic save leaves the file and displayed state unchanged. Reading settings never writes them.
 
 | Setting | File under `/mnt/data/` | Values/default |
 |---|---|---|
@@ -19,25 +26,54 @@ the file and displayed state unchanged. Reading settings never writes them.
 | Recent Albums | `m1plus-shelf` | `0` off; missing/other on |
 | Daily Mix | `m1plus-daily` | `0` off; missing/other on |
 | Landscape | `m1plus-landscape` | `1` landscape; default portrait |
-| Album sort | `m1plus-cfsort` | `0` or `0\n` Album; missing/other Artist |
+| Album Order | `m1plus-cfsort` | `0` or `0\n` Album; missing/other Artist |
 | Cassette Theme | `m1plus-tapetheme` | `1` Chrome, `2` Metal, optional newline; missing/other Normal |
 | Chinese (Pinyin) keyboard | `m1plus-kbzh` | `1` on (first byte); missing/other off |
 
-Home Screen also has Regenerate Daily Mix and Shanling Home. Regenerate is an action without
-a chevron: it requests a new seed, and the Home page rebuilds when next foregrounded. Shelf
-and mix visibility are reread when returning to Home. The separate Recent Albums translation
-fits switch rows where Recently Played would overflow.
+**Home Screen** has the Recent Albums and Daily Mix switches (one card, the note "Shown on Home below the menu") and, in a card of its own with its note, Regenerate Daily Mix: an action that requests a new seed, the Home page rebuilds when next foregrounded. That row and its note are hidden (`regen_show`: the row, `pod_note1`; the layouter skips them) while no mix can be made (Daily Mix off, or a library under `MIX_MIN_LIB`). Shelf and mix visibility are reread when returning to Home. The separate Recent Albums translation fits switch rows where Recently Played would overflow.
 
-Cassette Theme cycles Normal → Chrome → Metal. `tape_theme` reads it when the Tape page opens;
-a change affects the next open. Value labels use translation keys, not fixed English text.
+**Library**: Update Library (the stock updatemusic page, Home id 2, as the Update Library item), **Album Order** (a value row, Artist or Album; opens the picker `m1plus_albumorder`: two check rows, `ACT_SORTSET`, `cc_sort_set`), and under the Cover Flow header Landscape and Rebuild Covers. **Now Playing**: under the Cassette Mode header **Theme** (value Normal / Chrome / Metal, opens the picker `m1plus_tapetheme`: three check rows, `ACT_THEMESET`, `tape_theme_set`, the note "Applies the next time Cassette Mode opens."). `tape_theme` reads it when the Tape page opens; a change affects the next open. Value labels use translation keys, not fixed English text. The old tap-to-cycle value rows are gone.
+
+## Stock pages and state
+
+Every stock row is `ACT_STOCK` (`pod_pages.STOCK_PAGES`, `POD_STOCK` in `pages.h`): a plain `navigator_to(name)` with no context, which is exactly what stock's own lists do (`tools/pod.py SETTINGS_PINS` pins each call site's string load and the shared `jalr navigator_to`; the pages' inits read only globals, and Back is `navigator_back`, so it returns to our page). Verified in the disassembly of V2.1:
+
+| Row | Page | Stock caller |
+|---|---|---|
+| Wi-Fi | `systemset/wifi_page` | the Wi-Fi hub's row thunk `0x4b1448` (the hub `systemset/wifiset_page` is the stock Settings' row 1; its Wi-Fi row goes straight to the list, so does ours) |
+| Bluetooth | `systemset/bluetooth_page` | the hub's row thunk `0x4b1410` |
+| Display | `systemset/display_page` | Settings row 3, string at `0x4ada74` (shared call `0x4ad830`) |
+| Language | `systemset/language_page` | Settings row 0, `0x4ada20` |
+| Play Mode | `playset/playmode_page` | Play Settings row, `0x4a04a4` (shared call `0x4a0068`) |
+| EQ | `playset/equalizer_page` | Play Settings row, `0x4a0218` (there is no EQ tile in the pull-down) |
+
+The stock Settings' init sets `syssetinto_flag` (read only by the pull-down's tile handlers), so a sub-page opened from our page needs nothing set first. Values come from the words the stock UI reads (`DATA` in `tools/pod.py`): Wi-Fi `wififlag` (1 on; `wifi_switch` clears it and saves `[SYSSET] WIFI`), Bluetooth `bluetoothflag`, the play mode `mclGetPlayMode` 0..3 shown with the stock keys `playmode_listplay`, `playmode_repeattrack`, `playmode_shuffle`, `playmode_repeatall` (the keys the stock More dialog sets, `0x47a454..0x47a500`), EQ `equalizer_flag` (Off) or the preset's name from stock's `get_equalizer_preset_name` (`0x49daec`, a tr key `eq_*`), Language `language` (the language menu's index) shown with the stock `lan_*` names. These are stock tr keys, so they follow Language. Nothing here toggles Wi-Fi or Bluetooth (`wifi_switch` sleeps on the UI thread): they are links. The values are read when the page opens and each time it is back in front (`EVT_WINDOW_TO_FG`, `page_refresh`).
+
+## About
+
+Settings > System > About (`m1plus_about`, `ABOUT_PAGE`) is our own cards page: the stock About page's seven values in sections, plus the build tag, so the stock page is no longer linked (it stays under All System Settings, unchanged; `tools/mod_about.py`, which added a tag row to it, is gone). Rows are `ACT_INFO` (`row_kind` info): a label and a grey 16 px value at the right, no chevron, no glyph, insensitive (not bound, `sensitive=false` in the asset), the value taking the room its text needs (`value_fit`, at most 190 px) and the label the rest. Read-only, on the UI thread when the page opens and each time it is back in front, no hook, no query, no write. Sections: the card with **M1+ Music** (the build tag, `M1PLUS_TAG`) and **Firmware**; **Device**: Model, Serial Number, Wi-Fi MAC, IP Address; **Storage**: Capacity, Available. Library counts are not shown: they would need a database query. An empty value reads "-".
+
+The sources are what the stock page's widget walk reads (the callback of `systemset_about_page_init`, `0x4a1240..0x4a170c` (the symbol table calls it `on_sn_qrcode_onclick`; the init is `0x4a170c`..; it matches the rows by widget name and sets each label `"<key>:<value>"` with `getFormatString`):
+
+| Row (stock key) | Stock source | Pinned (`SETTINGS_PINS`, `DATA`) |
+|---|---|---|
+| Model (`about_model`, scrlabel0) | the literal `"Shanling M1 Plus"` at `0x747718` | `addiu v0` at `0x4a145c`, the word at `0x747718` |
+| Firmware (`about_version`, scrlabel1) | the literal `"V2.1"` at `0x74773c` (never patched: the row follows stock) | `0x4a14cc`, `0x74773c` |
+| Capacity (`about_cardcap`, scrlabel2) | float at `0xa03e74`, set by `getDiskMemoryInfo("/mnt/mmc", &cap, &free)` (`0x5b30e0`: `statfs`, in G) at init, only while `access("/tmp/mmc_add")` succeeds (else 0); stock prints `%.2fG` | `lwc1` at `0x4a1514`, the call at `0x4a1778` and its arguments `0x4a176c..0x4a177c`, `access` string `0x4a1754` |
+| Wi-Fi MAC (`about_wifimac`, scrlabel3) | the string `wifi_mac` (`0xa061a8`, 32 bytes); empty when not set (stock shows only the label) | symbol `wifi_mac` |
+| Available (`about_cardremain`, scrlabel4) | float at `0xa03e70`, the same call | `lwc1` at `0x4a1634` |
+| Serial Number (`about_sn`, scrlabel5) | the string `product_sncode` (`0xa0553c`, 16 bytes) | symbol `product_sncode` |
+| IP Address (`about_ipaddr`, scrlabel6) | `networkGetIPAddr(0, buf)` (`0x5d753c`) while `networkGetConnectStatus()` (`0x5d7cac`) is above 0, else empty | the two `jalr`s at `0x4a16dc`, `0x4a16f4` |
+
+Capacity and Available are shown as `N.NN GB` made with integers (the payload prints no floats); our page calls `getDiskMemoryInfo` itself on each refresh (a `statfs`, as stock does at the page's init). The build tag, the labels and the section headers are the only things not from stock; the labels are our translation keys (13 languages).
 
 ## Keyboards
 
-Customize > Keyboards (`m1plus_keyboards`, iOS style) lists the keyboards the on-screen keyboard ([keyboard](keyboard.md)) offers as two switch rows: **English**, always on (its switch shows on, the
+Settings > Keyboards (`m1plus_keyboards`) lists the keyboards the on-screen keyboard ([keyboard](keyboard.md)) offers as two switch rows: **English**, always on (its switch shows on, the
 row is dimmed to 60 % and takes no tap: `bind_switch` sets its opacity and sensitivity, nothing is bound), and **Chinese (Pinyin)**, a normal switch row (`ACT_KB_ZH`, `kb_zh_toggle`, saved atomically in
 `m1plus-kbzh`, off by default; the keyboard reads it each time it opens, `kb_zh_setting`). With it on the keyboard has a language key and a pinyin layer; turning it off also forgets the layer the last keyboard
-ended on. A failed save changes neither the file nor the switch. The three strings are in all 13 languages (`Keyboards`, `English`, `Chinese (Pinyin)`); the rows' icons are the keyboard and the Lucide
-`languages` glyph (`assets/icons/png/pod_ic_languages.png`). More keyboards would be more rows and a bit each in the layer table of `patch/keyboard.c`.
+ended on. A failed save changes neither the file nor the switch. The three strings are in all 13 languages (`Keyboards`, `English`, `Chinese (Pinyin)`); the rows' glyphs are the Lucide `languages`
+(`pod_ci_languages`). More keyboards would be more rows and a bit each in the layer table of `patch/keyboard.c`.
 
 ## Rebuild Covers
 
@@ -70,10 +106,10 @@ At open, `find_playing` checks `cc_playing`: `mclGetPlayPos` `0x5d4290` and `PLA
 then title ignoring ASCII case for compilations. Selection priority is playing album, saved
 `LAST_ALBUM`, then first album. This is a one-time lookup, not polling.
 
-## Shanling Home and startup
+## Open Shanling Home and startup
 
-Shanling Home sets the session's `grid` flag, shows the stock grid and closes the recorded menu,
-Extras and Customize windows by handle before navigating back from Home Screen. It does not
+Open Shanling Home (Developer > Startup) sets the session's `grid` flag, shows the stock grid and closes the recorded menu,
+Extras and Settings windows by handle before navigating back from the Developer page. It does not
 issue repeated `navigator_back` calls against a closing window. Destroy handlers forget the
 recorded handles.
 

@@ -209,7 +209,7 @@ def base_tests(ctx):
     def neutral(c): return len(c) < 7 or max(int(c[i:i + 2], 16) for i in (1, 3, 5)) - min(int(c[i:i + 2], 16) for i in (1, 3, 5)) <= 6   # the design's greys lean 2 to 5 levels to blue (#6E6E73, #8E8E93, #E5E5EA)
     colours = [(w.name, k, v) for w in t.walk() if w.name.startswith('kb_') for k, v in w.props if k.endswith(('bg_color', 'text_color', 'border_color')) and v.startswith('#')]
     expect(colours and all(neutral(v) for _, _, v in colours), f'no accent colour anywhere: white and grey only ({[c for c in colours if not neutral(c[2])]})')
-    for n in ('qk_shift', 'qk_shifton', 'qk_delete', 'qk_mag', 'qk_clear', 'pod_ic_keyboard'):
+    for n in ('qk_shift', 'qk_shifton', 'qk_delete', 'qk_mag', 'qk_clear', 'pod_ci_keyboard'):
         im = asset_image(n)
         px = [im.getpixel((x, y)) for x in range(im.width) for y in range(im.height) if im.getpixel((x, y))[3] > 40]
         expect(px and all(neutral('#%02x%02x%02x' % p[:3]) for p in px), f'{n}.png is grey and white only')
@@ -684,11 +684,10 @@ def asset_tests(ctx):
     expect(all(len(v) < 7 or max(int(v[i:i + 2], 16) for i in (1, 3, 5)) - min(int(v[i:i + 2], 16) for i in (1, 3, 5)) <= 6 for _, _, v in colours), 'still no accent colour anywhere')
     expect(all(c in PK.LABELS for c in PK.LANG_TAGS) and PK.LANG_TAGS == ('中', 'EN') and FONT.glyph('中') != 0, 'the language key\'s labels are characters the font has (中 for the Chinese layer, EN to go back)')
 
-    # the Keyboards page of Customize is built by the generic row page; its strings fit
-    kt = awtk_ui.parse(open(os.path.join(RAW, 'ui', 'm1plus_keyboards.bin'), 'rb').read())
+    # the Keyboards page of Settings is a cards page; its strings fit
     built = {loc: dict(awtk_strings.load(os.path.join(RAW, 'strings', loc + '.bin'))) for loc in pod_i18n.LOCALES}
-    sw = kt.find('pod_switch0')
-    room = (sw.x if sw is not None else 280) - 56 - 4
+    import pod_settings as ST
+    room = ST.label_box('switch', True)[1] - 4
     worst = max((width(built[loc][k], 20), loc, k) for loc in pod_i18n.LOCALES for k in ('English', 'Chinese (Pinyin)'))
     expect(worst[0] <= room, f'the rows\' labels fit the room before the switch in every language (widest {worst}, room {room})')
 
@@ -701,7 +700,7 @@ DICT_DATA = open(PY.DICT, 'rb').read()
 
 
 def zh_machine(setting=True, dictionary=True):
-    """The keyboard's machine over the real engine; setting: Customize > Keyboards > Chinese (Pinyin) is on; dictionary: gpinyin.dat is there."""
+    """The keyboard's machine over the real engine; setting: Settings > Keyboards > Chinese (Pinyin) is on; dictionary: gpinyin.dat is there."""
     m = keyboard_machine(ZhMachine({PY.SYS_PATH: DICT_DATA} if dictionary else {}))
     if setting: m.fs[KBZH] = b'1\n'
     if dictionary: m.present.add(PY.SYS_PATH)
@@ -790,7 +789,7 @@ def setting_tests(ctx):
     assert kopen(m) == 0
     expect(shown(m, 'kb_lang') == (0, 0) and keys(m)[0] == 'Q' and m.word(ENG) == 0 and geo(m, 'kb_space')[0] == 79, 'with the setting turned off meanwhile: English, no key, the dictionary untouched')
 
-    # 5. Turning the setting off in Customize forgets the layer
+    # 5. Turning the setting off in Settings forgets the layer
     m = zh_opened()
     press(m, 'kb_lang')
     m.call(*m.bound[(m.window, DESTROY)][:1], a0=m.bound[(m.window, DESTROY)][1], count=4000000)

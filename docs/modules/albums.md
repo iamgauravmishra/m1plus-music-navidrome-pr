@@ -143,7 +143,7 @@ The menu's Albums row (`ACT_ALBUMS`) opens our one Albums page in the mode used 
 
 (the two Albums panels of `out/preview/release-preview.png`, grid and list mode with row 2 pressed: `PI.albums_grid` / `PI.albums_list` in `tools/preview_icons.py`, sample covers.)
 The Albums row opens this page in the mode used last (first use: the grid, `ALBUMS_DEFAULT_GRID`); the stock Albums list is not part of it
-(it stays under Customize > Home Screen > Shanling Home, unmodified).
+(it stays under Settings > Developer > Open Shanling Home, unmodified).
 The grid mode is the standard navbar over a stock list (320x400, scrolled by the stock scroll_view like the library lists) holding one `view_grid`: two 144 px covers a row, 8 px between them and 12 px
 margins (Apple Music style), the album in 18 px white and under it the artist in 15 px `#AAAAAA`, one line each (cut with an ellipsis at the
 cover's width, left-aligned; a 22 px and a 20 px line, 4 px under the cover), so a tile is 190 px tall; 10 px between rows, the first row 10 px from the navbar and the last 10 px from the bottom

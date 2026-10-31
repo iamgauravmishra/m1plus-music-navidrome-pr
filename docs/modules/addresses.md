@@ -16,8 +16,8 @@ resumes and call boundaries.
 | `get_id3info` tag-copy call | `0x4dff4c` |
 | Empty `scroll_view` event slot | `0x97a330` |
 
-Only `demo`'s unloaded `.pdr` is zeroed. Stock About stays `V2.1`; `tools/mod_about.py` adds
-the separate `M1+ Music:<tag>` row without a hook.
+Only `demo`'s unloaded `.pdr` is zeroed. Stock About stays `V2.1`; our own About page (docs/modules/settings.md) shows
+the build tag beside it, without a hook.
 
 Pinned stock functions, beyond those in the sections below: `widget_lookup` `0x666a74`, `widget_on`
 `0x666d20`, `widget_set_text_utf8` `0x66f720`, `navigator_back` `0x4d20dc`, `on_backtoplayer_onclick`
@@ -203,3 +203,14 @@ AOSP's PinyinIME (`ime_pinyin::*`, `0x5bf9b0`..`0x5ceb40`) over one global. All 
 | `inputmethod_module` (stock's wrapper), its global object | `0xa0c2bc` (`0xa10000 - 0x7d44`) | constructor `0x5bf2d0` sets byte `+4`; `dequeinit` `0x5bf230`; `init` `0x5bf460` (path argument ignored: opens `/usr/dict_pinyin.dat` `0x755fd0` and `/usr/dict/dict_pinyin_user.dat` `0x755fb0`, then `im_set_max_lens(9, 12)`); `search` `0x5bf32c` (`+0x10` = the count `0x5bf104` keeps); `get_candidate` `0x5bf768` (malloc'd UTF-8, `utf16_to_utf8` `0x5bf568`; `0x8aed58` when empty); `choose` `0x5bf908` |
 | who initialises it | `keyboard_init` `0x5b25d4` <- `user_keyboard_init` `0x547b9c` (`0x547cd0`) <- the page-init dispatcher (`on_wm_timer_rgbled_state`, `0x4d06cc`) for the window `user_keyboard` `0x744968` | opened by `dialog_kbaddnet_dialog_init` `0x477a7c` (Wi-Fi), the playlist-name and keyword search dialogs; not at boot |
 | the dictionary asset | `/release/assets/default/raw/data/gpinyin.dat` (1,068,442 bytes) | referenced by no code; stock's init asks for `/usr/dict_pinyin.dat`, absent from the rootfs |
+
+## Settings (patch/m1plus.c, `SETTINGS_PINS` in tools/pod.py; docs/modules/settings.md "Stock pages and state")
+
+| What | Address | Evidence |
+|---|---|---|
+| the stock pages the rows open | strings `0x748f1c` `systemset/wifi_page`, `0x748f00` `bluetooth_page`, `0x748ab4` `display_page`, `0x748a34` `language_page`, `0x7475a0` `playset/playmode_page`, `0x7474d4` `equalizer_page` | each a plain `navigator_to` (`0x4d1d80`) from the Wi-Fi hub's row thunks `0x4b1448` / `0x4b1410`, the Settings list's row handler (shared call `0x4ad830`, rows 3 / 0) and the Play Settings list's (shared call `0x4a0068`); the pins check the string loads and the calls |
+| About page values | model literal `0x747718`, firmware literal `0x74773c`, `product_sncode` `0xa0553c`, `wifi_mac` `0xa061a8`, card floats `0xa03e74` (capacity) / `0xa03e70` (free), `getDiskMemoryInfo(path, &cap, &free)` `0x5b30e0`, `networkGetConnectStatus()` `0x5d7cac`, `networkGetIPAddr(0, buf)` `0x5d753c` | the stock About page's widget walk (callback `0x4a1240..0x4a170c`, init `0x4a170c`): rows scrlabel0..6 = model, firmware, capacity, Wi-Fi MAC, free space, serial number, IP; docs/modules/settings.md "About" |
+| `get_equalizer_preset_name(i, buf)` | `0x49daec` | prologue `(0x3c1c0056, 0x279c63e4, 0x0399e021)`; `sltiu v1, a0, 12`; copies the tr key of `equalizer preset i` (table `0x97c7a0`: 1..3 `eq_custom1..3`, `eq_pop`, `eq_rock`, `eq_dance`, `eq_blues`, `eq_metal`, `eq_vocal`, `eq_classical`, `eq_jazz`) |
+| the EQ switch handler | `0x49d750` | flips `equalizer_flag` and saves `[PLAYSET] EQFLAG` |
+| `wififlag` / `bluetoothflag` / `equalizer_flag` / `equalizer_mode` / `language` (data, dynsym) | `0x97caf8` / `0xa05ac0` / `0xa05ac2` / `0x97cb00` / `0xa05ab8` | `wifi_switch` `0x507a8c` clears `wififlag` and saves `[SYSSET] WIFI`; the language index is `switch_language`'s (0 zh_CN .. 12 uk_UK), its names the `lan_*` keys |
+| the play mode's keys | `0x47a454`, `0x47a4d4`, `0x47a4e8`, `0x47a500` | the stock More dialog sets `playmode_listplay`, `playmode_repeattrack`, `playmode_shuffle`, `playmode_repeatall` for `mclGetPlayMode` 0..3 |

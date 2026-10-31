@@ -500,10 +500,10 @@ def run(ctx):
             if (h, 'visible') in m.props: nd.flags = nd.flags & ~F_VISIBLE | (F_VISIBLE if m.props[(h, 'visible')] else 0)
             if (h, 'sensitive') in m.props: nd.flags = nd.flags & ~F_SENSITIVE | (F_SENSITIVE if m.props[(h, 'sensitive')] else 0)
         nb = node(t, 'navigationbar_view'); nb.flags &= ~(F_VISIBLE | F_SENSITIVE)
-        # the arranged rows (patch/menu.c): a menu long enough to scroll (Cover Flow ... Shuffle, Customize, then Extras: eight rows; the default menu is shorter),
+        # the arranged rows (patch/menu.c): a menu long enough to scroll (Cover Flow ... Shuffle, Settings, then Extras: eight rows; the default menu is shorter),
         # 52 px apart from y 0 (the Home list's first row is HOME_PAD down); the others are hidden and parked; the spacer row follows the shown rows (visible while the bar shows)
         sv = node(t, 'pod_scrollview')
-        shown = [1, 2, 3, 4, 5, 6, pod_pages.CUSTOMIZE_ID, len(pod_pages.ITEMS)]
+        shown = [1, 2, 3, 4, 5, 6, pod_pages.SETTINGS_ID, len(pod_pages.ITEMS)]
         for i, r in enumerate(c for c in sv.children if c.name.startswith('pod_row')):
             r.y = shown.index(i) * 52 if i in shown else 0
             if i not in shown: r.flags &= ~(F_VISIBLE | F_SENSITIVE)
@@ -525,7 +525,7 @@ def run(ctx):
     # the last menu row above the card
     rows_end = O['HOME_PAD'] + 7 * 52   # the 7th row's bottom
     p = target(m, 160, O['HOME_PAD'] + 6 * 52 + 26)
-    expect('pod_row18' in p, f'the 7th row (Customize) (y {O["HOME_PAD"] + 6 * 52}..{rows_end}) above the card is hit ({p})')
+    expect('pod_row18' in p, f'the 7th row (Settings) (y {O["HOME_PAD"] + 6 * 52}..{rows_end}) above the card is hit ({p})')
     p = target(m, 160, O['MB_Y'] - 2)
     expect('pod_minibar' not in p and p[-1] != 'pod_mb_card', f'the strip above the card is not the card ({p})')
     last_row_bottom = O['HOME_PAD'] + HOME_LIST_H - O['MB_PAD']   # the list scrolled to the end of its padded content

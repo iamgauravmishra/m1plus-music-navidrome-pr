@@ -7,10 +7,10 @@ For installation, updates and restore, see [Install](install.md).
 M1+ Music opens at startup and from its icon on Shanling Home. The default menu shows Cover Flow,
 Albums, Artists, Songs, Playlists and Extras. Daily Mix and Recently Played appear below it;
 the mini player appears while a track is queued.
-
-Open **Extras → Customize** using the navbar button. **Main Menu** shows, hides and reorders
-items; **Extras** turns off items you do not want listed there. Customize remains reachable.
-**Home Screen → Shanling Home** returns to the stock grid; **Boot to M1+ Music** changes startup.
+Open **Extras → Settings** using the navbar button. **Settings → Menu & Extras** holds **Main Menu**
+(show, hide and reorder items) and **Extras** (turn off items you do not want listed there). Settings
+remains reachable. **Developer → Open Shanling Home** returns to the stock grid; **Boot to M1+ Music**
+(Developer → Startup) changes startup.
 
 ## Browse and play
 
@@ -30,14 +30,20 @@ a tap opens or plays a row.
 
 Copy music to the card, then use **Extras → Update Library** to scan it.
 
-## Customize
+## Settings
 
-- **Home Screen:** startup, Recent Albums, Daily Mix and Regenerate Daily Mix.
-- **Cover Flow:** landscape presentation, artist/album order and Rebuild Covers.
-- **Cassette Mode:** cycle Normal, Chrome and Metal themes.
+Settings is iOS-style grouped cards; a grey value at the right shows the current state.
+
+- **Wi-Fi, Bluetooth:** open the stock pages (the value shows On or Off).
+- **Menu & Extras, Home Screen, Library, Now Playing, Keyboards:** the pages below.
+- **Playback:** **Play Mode** and **EQ** open the stock pages (the value shows the mode and the preset); **All Playback Settings** opens the stock list (Gapless is there).
+- **System:** **Display** and **Language** (the value is the current language) open the stock pages, **Keyboards** is below, **About** is our own page (the build and firmware versions; Device: model, serial number, Wi-Fi MAC and IP address; Storage: card capacity and free space), **All System Settings** opens the stock list.
+- **Menu & Extras:** Main Menu and Extras, as above.
+- **Home Screen:** the Recent Albums and Daily Mix switches; Regenerate Daily Mix appears while Daily Mix is on.
+- **Library:** Update Library; **Album Order** (Artist or Album, a picker with a check mark, for Albums and Cover Flow); under Cover Flow, landscape presentation and Rebuild Covers.
+- **Now Playing:** under Cassette Mode, **Theme** (Normal, Chrome or Metal; a picker, applied the next time Cassette Mode opens).
 - **Keyboards:** English is always on; switch on Chinese (Pinyin) to get a language key and pinyin input on the on-screen keyboard (candidates above the keys, swipe them sideways, space takes the first).
-- **Playback / System Settings:** open the stock settings pages.
-- **Developer → Screenshot:** confirm a capture, then leave the page within five seconds.
+- **Developer:** Startup (**Boot to M1+ Music**, **Open Shanling Home**) and Tools (**Screenshot**: confirm a capture, then leave the page within five seconds; **Network Probe**; **Keyboard**).
 
 Rebuild Covers asks before regenerating the cache. Screenshots can be cancelled during their
 countdown; see [capture details](modules/screenshot.md).
@@ -45,7 +51,7 @@ countdown; see [capture details](modules/screenshot.md).
 ## Extras
 
 **Cassette Mode** is a landscape Now Playing screen. Tap the cassette to pause/resume and the
-top-left screw to close. Change its theme under Customize.
+top-left screw to close. Change its theme under Settings.
 
 **Pod** opens a virtual iPod with a touch click wheel. See its [controls and limits](modules/ipod.md).
 
@@ -53,6 +59,6 @@ top-left screw to close. Change its theme under Customize.
 episode to play; tap the unplayed dot to change its played state. The show header cycles playback
 speed. Feed subscription and downloading are not implemented; see [formats and limits](modules/podcasts.md).
 
-For a missing feature, show its row through **Customize → Main Menu**, or find it under Extras.
+For a missing feature, show its row through **Settings → Main Menu**, or find it under Extras.
 The [UI reference](ui.md) includes a preview; [module docs](architecture.md) describe implementation
 and hardware-validation limits.

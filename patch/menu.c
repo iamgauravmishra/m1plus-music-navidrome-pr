@@ -1,16 +1,16 @@
 /* M1+ Music's customisable main menu: which items show, in which order, which of the others the Extras page lists, and the
- * Main Menu and Customize > Extras pages that edit it.
+ * Main Menu and Settings > Extras pages that edit it.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
  * The menu's asset (ui/m1plus_menu.bin) holds a stock list row for every item in the default order (the nine
- * menu items, the nine Extras tiles: Favorites ... CD Ripper, then Customize and the Pod: POD_MENU_ITEMS in all), then the Extras row (the
+ * menu items, the nine Extras tiles: Favorites ... CD Ripper, then Settings and the Pod: POD_MENU_ITEMS in all), then the Extras row (the
  * last, always shown, never hidden or moved); ui/m1plus_extras.bin holds the same row for every item. The setting is one small file,
  * MENU_FILE: the shown items in menu order, one character each (the item id, its row index: '0'..'8', then 'a'..'i' for ids 9..17,
- * 'j' for Customize, id 18, 'k' for the Pod, id 19), then optionally '-' and the items turned off (the Extras page does not list them), then a newline
- * ("12345\n", Cover Flow ... Playlists, is the default; Now Playing, Shuffle, Customize and the Pod are items that are hidden by default). It is read,
+ * 'j' for Settings, id 18, 'k' for the Pod, id 19), then optionally '-' and the items turned off (the Extras page does not list them), then a newline
+ * ("12345\n", Cover Flow ... Playlists, is the default; Now Playing, Shuffle, Settings and the Pod are items that are hidden by default). It is read,
  * strictly, every time the menu, the Extras page or a customise page opens (and when the menu comes back to the foreground):
- * known characters only, no id twice (in either part or across them), '-' at most once, Customize never after it (it stays
+ * known characters only, no id twice (in either part or across them), '-' at most once, Settings never after it (it stays
  * reachable), a file shorter than POD_MENU_FILE_MAX; anything else, or no file, is the default list with nothing off
  * (tools/pod_pages.py parse_menu_full is the model, test/pod/menu.py fuzzes the two against each other). Nothing here can fail the
  * page open: a row or the list missing from the tree leaves the asset as it is.
@@ -27,8 +27,8 @@
  * arrow on every shown item but the first, both pictures (insensitive); the row takes every tap and decides by
  * where it is: on the arrow's rectangle it moves the item one place up, elsewhere it shows or hides the item
  * (shown ones join the end of the menu, and an item shown has its off flag cleared). The shown items come first in menu order, the
- * hidden ones after them in the default order. The Customize > Extras page (ui/m1plus_extrascfg.bin): a switch row (the whole row
- * toggles) per item but Customize, only the rows the menu does not show, in the Extras order; on = listed on Extras, off = turned
+ * hidden ones after them in the default order. The Settings > Extras page (ui/m1plus_extrascfg.bin): a switch row (the whole row
+ * toggles) per item but Settings, only the rows the menu does not show, in the Extras order; on = listed on Extras, off = turned
  * off. Each change is saved at once (a failed save is undone) and the rows move in place; the menu and the Extras page arrange
  * again when they are back in front.
  */
@@ -38,12 +38,12 @@
 #include "grid.h"
 
 #define N POD_MENU_ITEMS
-#define CUSTOMIZE POD_CUSTOMIZE_ID
+#define CUSTOMIZE POD_SETTINGS_ID
 
 static struct {
     unsigned char order[N]; /* the shown items, in menu order */
     unsigned n;
-    unsigned off; /* bit id: the item is turned off (not listed on Extras); never a shown item or Customize */
+    unsigned off; /* bit id: the item is turned off (not listed on Extras); never a shown item or Settings */
 } mn __attribute__((section(".scratch")));
 
 static struct { /* the Main Menu page while it is open */
@@ -54,7 +54,7 @@ static struct { /* the Main Menu page while it is open */
     int zone; /* that touch went down inside the row's arrow rectangle */
 } cm __attribute__((section(".scratch")));
 
-static struct { /* the Customize > Extras page while it is open (no row for Customize: row[CUSTOMIZE] is 0) */
+static struct { /* the Settings > Extras page while it is open (no row for Settings: row[CUSTOMIZE] is 0) */
     void *row[N], *sw[N], *hdr[POD_EXTRAS_GROUPS], *win, *sv; /* hdr: the group section headers (a missing one: 0) */
 } xc __attribute__((section(".scratch")));
 
@@ -71,7 +71,7 @@ mn_defaults(void) { /* tools/pod_pages.py DEFAULT_MENU: Cover Flow, Albums, Arti
     mn.off = 0;
 }
 
-/* The item id of a saved character ('0'..'8' the menu items, 'a'..'i' the Extras tiles, ids 9..17, 'j' Customize, 'k' the Pod, 'l' Podcasts), or 255. */
+/* The item id of a saved character ('0'..'8' the menu items, 'a'..'i' the Extras tiles, ids 9..17, 'j' Settings, 'k' the Pod, 'l' Podcasts), or 255. */
 static unsigned mn_id(unsigned c) {
     if (c - '0' < 9) return c - '0';
     if (c - 'a' < 12) return 9 + c - 'a';
@@ -106,7 +106,7 @@ static void mn_load(void) {
         if (!part)
             ord[k++] = (unsigned char)id;
         else if (id == CUSTOMIZE)
-            return; /* Customize can never be turned off */
+            return; /* Settings can never be turned off */
         else
             off |= 1u << id;
     }
@@ -160,9 +160,9 @@ static void mn_header(void *w, int y, int on) {
 static int mn_shown(unsigned id);
 static int mn_listed(unsigned id);
 
-/* Stack the Extras page (cfg 0) or Customize > Extras (cfg 1): per group, in the fixed order, its header (if the asset has it) above the group's first listed row, then
+/* Stack the Extras page (cfg 0) or Settings > Extras (cfg 1): per group, in the fixed order, its header (if the asset has it) above the group's first listed row, then
  * its rows; the groups with no listed row have their headers hidden, and the unlisted rows are hidden, last. A row is listed when the menu does not show the item and,
- * on the Extras page, the list did not turn it off (the Customize > Extras page lists the turned-off ones too, and has no row for Customize: row[CUSTOMIZE] is 0).
+ * on the Extras page, the list did not turn it off (the Settings > Extras page lists the turned-off ones too, and has no row for Settings: row[CUSTOMIZE] is 0).
  * tools/pod_pages.py extras_display / extras_layout are the model. seq gets the children in stacking order; returns their count, and the list's height in *vh. */
 static unsigned mn_extras(void *const *row, void *const *hdr, int cfg, void **seq, int *vh) {
     unsigned g, i, k = 0;
@@ -205,7 +205,7 @@ static int mn_shown(unsigned id) {
     return 0;
 }
 
-/* The Extras page lists an item the menu does not show and the list did not turn off; never Customize (its button is in the page's navbar, its row stays hidden). */
+/* The Extras page lists an item the menu does not show and the list did not turn off; never Settings (its button is in the page's navbar, its row stays hidden). */
 static int mn_listed(unsigned id) { return id != CUSTOMIZE && !mn_shown(id) && !(mn.off >> id & 1); }
 
 /* The stock list_view gives its scroll_view a paint-children hook (list_view_on_add_child, sw 0xf4 @0x60cd10, stock
@@ -490,7 +490,7 @@ void menu_custom_opened(void *win) {
     widget_on(win, EVT_DESTROY, cm_on_destroy, (void *)0);
 }
 
-/* ---- the Customize > Extras page */
+/* ---- the Settings > Extras page */
 
 /* Lay the rows out: the items the menu does not show, in the Extras order, the others hidden (last); each switch is on when the
  * Extras page lists the item. The list is scrolled to the top when the page opens, and clamped later. */
@@ -531,12 +531,12 @@ static int xc_on_destroy(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* The Customize > Extras page is up (patch/m1plus.c open_page): lay it out from the saved list and bind its rows. */
+/* The Settings > Extras page is up (patch/m1plus.c open_page): lay it out from the saved list and bind its rows. */
 void menu_extras_opened(void *win) {
     unsigned i;
     memset(&xc, 0, sizeof xc);
     for (i = 0; i < N; i++) {
-        if (i == CUSTOMIZE) continue; /* Customize has no row: it is never turned off */
+        if (i == CUSTOMIZE) continue; /* Settings has no row: it is never turned off */
         xc.row[i] = mn_find(win, "pod_row", i);
         xc.sw[i] = mn_find(win, "pod_switch", i);
         if (!xc.row[i] || !xc.sw[i]) { /* not our asset: leave it as it is */

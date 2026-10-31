@@ -72,8 +72,8 @@ class TapMachine(StockEventMachine):
         self.window = win
 
     def on_open(self):
-        on_row = PSYMS['on_row']; rows_s = PSYMS[f'pod_rows_{pod_pages.CUSTOMIZE_PAGE_INDEX}']
-        mm_i = next(i for i, r in enumerate(pod_pages.CUSTOMIZE_PAGE.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.MENUCFG_PAGE_INDEX)
+        on_row = PSYMS['on_row']; rows_s = PSYMS[f'pod_rows_{pod_pages.MENUEXTRAS_PAGE_INDEX}']
+        mm_i = next(i for i, r in enumerate(pod_pages.MENUEXTRAS_PAGE.rows) if r.action == pod_pages.ACT_PAGE and r.arg == pod_pages.MENUCFG_PAGE_INDEX)
         self.call(on_row, a0=rows_s + 12 * mm_i, count=3000000)
         self.sync()
 

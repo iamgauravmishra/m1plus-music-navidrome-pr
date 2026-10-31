@@ -74,11 +74,11 @@ def run(ctx):
     expect(list(full.getdata()) == list(glued.getdata()), f'Select (left cap) | Now Playing: the two pieces of the slots 214 / 260 glue into the 95 x {H_} capsule (x 216 .. 311) exactly, no seam')
     expect(mod_icons.NAV_VIEW_POS['pod_nav_selectl'] == 'left' and mod_icons.NAV_VIEW['pod_nav_selectl'] == mod_icons.NAV_VIEW['pod_nav_select'],
            'pod_nav_selectl is the left-cap piece of the same list-checks glyph as pod_nav_select')
-    # the Extras page's Customize button: the same left cap (so Customize | Now Playing glues as the two-piece capsule above), with the Lucide sliders-horizontal glyph the Customize row's icon uses
-    expect(mod_icons.NAV_VIEW_POS['pod_nav_customize'] == 'left' and mod_icons.NAV_VIEW['pod_nav_customize'] == 'sliders-horizontal'
-           and mod_icons.POD_ROWS['Customize'][1] == 'sliders-horizontal' and mod_icons.capsule_piece('left', 'sliders-horizontal', False).size == (46, H_)
+    # the Extras page's Settings button: the same left cap (so Settings | Now Playing glues as the two-piece capsule above), with the Lucide sliders-horizontal glyph the Settings row's icon uses
+    expect(mod_icons.NAV_VIEW_POS['pod_nav_settings'] == 'left' and mod_icons.NAV_VIEW['pod_nav_settings'] == 'sliders-horizontal'
+           and mod_icons.POD_ROWS['Settings'][1] == 'sliders-horizontal' and mod_icons.capsule_piece('left', 'sliders-horizontal', False).size == (46, H_)
            and list(mod_icons.capsule_piece('left', 'sliders-horizontal', True).getdata()) != list(mod_icons.capsule_piece('left', 'sliders-horizontal', False).getdata()),
-           'pod_nav_customize is the left-cap piece of sliders-horizontal, the Customize row\'s glyph; its _down differs (the round highlight)')
+           'pod_nav_settings is the left-cap piece of sliders-horizontal, the Settings row\'s glyph; its _down differs (the round highlight)')
     # Cover Flow's artist page: Songs (left cap at 214) | Now Playing (ah_nav_play, set at run time): the same two pieces as the Artists page's switch, one 95 px capsule
     expect(mod_icons.NAV_VIEW_POS['pod_nav_songs'] == 'left' and 'pod_nav_allalbums' not in mod_icons.NAV_VIEW and 'pod_nav_allalbums' not in mod_icons.NAV_VIEW_POS
            and mod_icons.NAV_VIEW_POS['pod_nav_artist'] == 'left' and O['NAV_VIEW_X'] + O['NAV_VIEW_W'] == 260,

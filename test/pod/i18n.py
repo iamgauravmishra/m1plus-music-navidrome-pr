@@ -2,7 +2,7 @@
 the stock translation, every language's payload output, widths per language, glyphs in the shipped font."""
 import os, re, stat
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
-import awtk_strings, awtk_style, mod_icons, pod_i18n, pod_keyboard
+import build, awtk_strings, awtk_style, pod_i18n, pod_keyboard
 from awtk_text import Ttf, StbText
 
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
@@ -10,6 +10,7 @@ SAME_AS_ENGLISH = {'Cover Flow', 'Playlists', 'Genres', 'Extras', 'Albums', 'Art
 SAME_AS_ENGLISH |= {'Podcasts', '%d min', ', %d', 'Normal', 'Chrome', 'Metal'}    # Podcasts in French and German; the minute abbreviation in French, Spanish, Italian and Polish
 SAME_AS_ENGLISH |= {'Feeds', 'Downloads', '%d MB'}    # German writes Feeds and Downloads as English does
 SAME_AS_ENGLISH |= {'Genre', 'Screenshot', 'Collections'}    # French and German write Genre the same; German and Italian say Screenshot; French writes Collections the same
+SAME_AS_ENGLISH |= {'Wi-Fi', 'Wi-Fi MAC', 'Bluetooth', 'EQ', 'System', 'Display', 'Firmware', 'Model', 'Device'}    # brand and technical words (Wi-Fi, Bluetooth, EQ); System in German and Polish, Display in Italian
 
 
 
@@ -92,7 +93,7 @@ def run(ctx):
     expect(tree is not None and used, 'the pages use keys')
     cover = awtk_ui.parse(open(os.path.join(WORK, RAW, 'ui', 'm1plus_cover.bin'), 'rb').read())
     expect(cover.find('btn_cancel').get('tr_text') == 'Cancel', 'the Cancel button is translated')
-    expect(pod_i18n.key_for('Customize') == 'Customize' and pod_i18n.key_for('Hi-Res') == 'hr' and pod_i18n.key_for('M1+ Music') is None
+    expect(pod_i18n.key_for('Settings') == 'Settings' and pod_i18n.key_for('Hi-Res') == 'hr' and pod_i18n.key_for('M1+ Music') is None
            and pod_i18n.key_for('Tidal') is None and pod_i18n.key_for('Albums') == 'Albums', 'stock keys where the English is the same, brand names plain')
 
     # 4. The payload's source: nothing user-visible bypasses the translation.
@@ -114,8 +115,8 @@ def run(ctx):
     orphans = set(pod_i18n.TEXT) | set(pod_i18n.STOCK)
     orphans -= used | {k for k in orphans if any(f'"{k}"' in src for src in sources.values())}
     expect(not orphans, f'every key is used by an asset or the payload: {sorted(orphans)}')
-    expect({'Landscape', 'Sort', 'Artist', 'album', 'Cover Flow'} <= used | keys_in_c and 'Cover Flow landscape' not in pod_i18n.TEXT,
-           'the Settings > Cover Flow page uses its keys (rows in the asset, the value by key in the payload); the old landscape row key is gone')
+    expect({'Landscape', 'Album Order', 'Artist', 'album', 'Cover Flow'} <= used | keys_in_c and 'Cover Flow landscape' not in pod_i18n.TEXT,
+           'Settings > Library uses its keys (rows in the asset, the value by key in the payload); the old landscape row key is gone')
     expect(all(k in sources['home.c'] for k in ('"M1+ Music"',)), 'the Home icon keeps the brand name as plain text')
     expect(len(re.findall(r'locale_info_tr|widget_set_tr_text', ' '.join(pod.FUNCTIONS))) == 2 and pod.FUNCTIONS['locale_info_tr'][2] == 0x658db4
            and pod.FUNCTIONS['widget_set_tr_text'][2] == 0x66f994 and pod.FUNCTIONS['locale_info'][2] == 0x6588b0, 'the three stock translation functions are pinned')
@@ -216,7 +217,7 @@ def run(ctx):
     for page in pod_pages.PAGES:
         tree = awtk_ui.parse(open(os.path.join(WORK, RAW, 'ui', page.key + '.bin'), 'rb').read())
         lt = tree.find('label_title')
-        keys = [(r.label, [c for c in tree.find(f'pod_row{i}').children if c.type == 'hscroll_label'][0].w) for i, r in enumerate(page.rows)]
+        keys = [(r.label, [c for c in tree.find(f'pod_row{i}').children if c.type == 'hscroll_label'][0].w) for i, r in enumerate(page.rows) if pod_pages.row_kind(r) not in ('value', 'info')]   # a value row's label shares its room with the value: checked below
         for loc in LOC:
             if pod_i18n.key_for(page.title) and page.kind != 'songs':   # the Songs page's small title is hidden by the payload where it does not fit (test/pod/songs.py)
                 w = width(tr_text(loc, pod_i18n.key_for(page.title)), title_px)
@@ -224,8 +225,8 @@ def run(ctx):
             for english, room in keys:
                 k = pod_i18n.key_for(english)
                 if k and width(tr_text(loc, k), row_px) > room: over.append((page.key, english, loc, width(tr_text(loc, k), row_px), room))
-    expect(not over, f'every menu, Extras, Shuffle, Settings and Main Menu row and every page title fits its label in all 13 languages ({over[:4]})')
-    hdr_over = []   # the section headers of the Extras and Customize > Extras pages: 16 px grey captions in labels of 274 px
+    expect(not over, f'every menu, Extras, Shuffle, Settings and Main Menu row and every page title fits its label in all 13 languages ({over[:40]})')
+    hdr_over = []   # the section headers of the Extras and Settings > Extras pages: 16 px grey captions in labels of 274 px
     for page in (pod_pages.EXTRAS_PAGE, pod_pages.EXTRASCFG_PAGE):
         tree = awtk_ui.parse(open(os.path.join(WORK, RAW, 'ui', page.key + '.bin'), 'rb').read())
         for g, title in enumerate(pod_pages.EXTRAS_TITLES):
@@ -279,11 +280,36 @@ def run(ctx):
         lines = {loc: wrapped(tr_text(loc, key), wrap_px, 260) for loc in LOC}
         expect(wrap_px == 20 and max(lines.values()) <= 3, f'the {what} confirm wraps to at most 3 lines of 260 px at {wrap_px} px in all languages ({lines})')
         expect(all(len(pod_i18n.TEXT[key][loc].encode()) < 0x1ff for loc in LOC), 'and fits the dialog context\'s 0x200 byte text')
-    for loc in LOC:      # the label and the value of the Sort row do not meet: the room left of the value, and the longest value
-        longest = max(width(tr_text(loc, pod_i18n.key_for(v)), pod_ui.VALUE_PX) for v in pod_pages.SORT_VALUES)
-        label = width(tr_text(loc, pod_i18n.key_for('Sort')), row_px)
-        if mod_icons.POD_TEXT_X + label + 8 > pod_ui.value_x(320) + pod_ui.VALUE_W - longest: over.append((loc, 'Sort', 'label meets value', label, longest))
-    expect(not over, f'messages, the cover page, the album buttons and count line, and the Sort value fit in all languages ({over[:4]})')
+    # the Settings cards (tools/pod_settings.py): a value and the row's label share the room between the glyph column and the chevron (the payload gives the value the room its text needs, at most VALUE_MAX);
+    # every value text of every language fits with its label, and the headers and notes fit their 272 px labels
+    import pod_settings as ST
+    stock_values = {'wifi': ('On', 'Off'), 'bluetooth': ('On', 'Off'), 'playmode': ('playmode_listplay', 'playmode_repeattrack', 'playmode_shuffle', 'playmode_repeatall'),
+                    'eq': ('Off', 'eq_custom1', 'eq_custom2', 'eq_custom3', 'eq_pop', 'eq_rock', 'eq_dance', 'eq_blues', 'eq_metal', 'eq_vocal', 'eq_classical', 'eq_jazz'),
+                    'language': ('lan_simplified', 'lan_traditional', 'lan_english', 'lan_japanese', 'lan_korean', 'lan_french', 'lan_german', 'lan_spanish', 'lan_italian', 'lan_thai',
+                                 'lan_polish', 'lan_russian', 'lan_ukrainian')}
+    cards_over, room = [], ST.chevron_left() - ST.VALUE_GAP - ST.TEXT_X
+    for page in [p for p in pod_pages.PAGES if p.kind == 'cards']:
+        tree = awtk_ui.parse(open(os.path.join(WORK, RAW, 'ui', page.key + '.bin'), 'rb').read())
+        for loc in LOC:
+            for i, r in enumerate(page.rows):
+                if pod_pages.row_kind(r) == 'info':   # an About row: the label and a realistic value (the longest each can be) share the room from the label to the right ink edge
+                    sample = {pod_pages.INFO_TAG: build.TAG, pod_pages.INFO_FW: 'V2.1', pod_pages.INFO_MODEL: 'Shanling M1 Plus', pod_pages.INFO_SN: '888888888888', pod_pages.INFO_MAC: '88:88:88:88:88:88',
+                              pod_pages.INFO_IP: '192.168.188.188', pod_pages.INFO_CAP: '188.88 GB', pod_pages.INFO_FREE: '188.88 GB'}.get(r.arg)
+                    lk = pod_i18n.key_for(r.label)
+                    need = width(tr_text(loc, lk) if lk else r.label, row_px) + ST.VALUE_LABEL_GAP + min(width(sample, ST.INFO_PX) + 6, ST.INFO_MAX)
+                    if need > ST.RIGHT - ST.CM - ST.PAD: cards_over.append((page.key, r.label, sample, loc, need, ST.RIGHT - ST.CM - ST.PAD))
+                    continue
+                if pod_pages.row_kind(r) != 'value': continue
+                vkeys = stock_values[pod_pages.STOCK_PAGES[r.arg][1]] if r.action == pod_pages.ACT_STOCK else ('Artist', 'album') if r.action == pod_pages.ACT_SORT else ('Normal', 'Chrome', 'Metal')
+                for vk in vkeys:
+                    need = width(tr_text(loc, pod_i18n.key_for(r.label)), row_px) + ST.VALUE_LABEL_GAP + min(width(tr_text(loc, vk), ST.VALUE_PX) + 6, ST.VALUE_MAX)
+                    if need > room: cards_over.append((page.key, r.label, vk, loc, need, room))
+            for node in tree.walk():
+                if node.name.startswith(('pod_sec', 'pod_note')) and node.name.endswith('_t'):
+                    px = int(node.get('style:normal:font_size'))
+                    if width(tr_text(loc, pod_i18n.key_for(pod_i18n.shown_english(node))), px) > node.w - 4: cards_over.append((page.key, node.name, loc, px))
+    expect(not cards_over, f'the Settings value rows (label and value), headers and notes fit in all 13 languages ({cards_over[:40]})')
+    expect(not over, f'messages, the cover page, the album buttons and count line fit in all languages ({over[:4]})')
 
     # 8. Glyphs: every character of every text we add, and of the stock texts we reuse, has ink in the shipped font.
     probe = StbText(font, 20)

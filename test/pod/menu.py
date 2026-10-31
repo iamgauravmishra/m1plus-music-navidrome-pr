@@ -86,13 +86,13 @@ def run(ctx):
     #    repeat. Each row opens its stock destination through the dispatcher with its Home id, as Songs does.
     P = pod_pages
     labels = [r.label for r in page.rows]
-    expect(labels[-4:] == ['Customize', 'Pod', 'Podcasts', 'Extras'] and labels.index('Artists') < labels.index('Extras'),
-           'the menu ends with Customize, Pod, Podcasts, Extras; the library rows come first')
+    expect(labels[-4:] == ['Settings', 'Pod', 'Podcasts', 'Extras'] and labels.index('Artists') < labels.index('Extras'),
+           'the menu ends with Settings, Pod, Podcasts, Extras; the library rows come first')
     ex_i = labels.index('Extras')
     ex = P.EXTRAS_PAGE
     n_items = 9    # the menu items proper; the nine stock Home tiles follow them among the items
-    expect(len(P.ITEMS) == 21 and len(page.rows) == 22 and ex_i == 21 and P.ITEMS[P.CUSTOMIZE_ID].label == 'Customize' and not any(r.label == 'Screenshot' for r in P.ITEMS),
-           'twenty-one items (nine menu items, nine stock tiles, Customize, Pod, Podcasts; no Screenshot), then Extras')
+    expect(len(P.ITEMS) == 21 and len(page.rows) == 22 and ex_i == 21 and P.ITEMS[P.SETTINGS_ID].label == 'Settings' and not any(r.label == 'Screenshot' for r in P.ITEMS),
+           'twenty-one items (nine menu items, nine stock tiles, Settings, Pod, Podcasts; no Screenshot), then Extras')
     expect(page.rows[ex_i].action == P.ACT_PAGE and P.PAGES[page.rows[ex_i].arg] is ex, 'the Extras row opens the Extras page')
     want = [('Favorites', 10), ('Recently Added', 13), ('Recently Played', 12), ('Most Played', 11), ('Composers', 8),
             ('Hi-Res', 9), ('Update Library', 2), ('Tidal', 1), ('CD Ripper', 15)]
@@ -103,25 +103,25 @@ def run(ctx):
     expect([(r.label, r.action, r.arg) for r in ex.rows] == [(r.label, r.action, r.arg) for r in P.ITEMS]
            and [(r.label, r.action, r.arg) for r in page.rows[:21]] ==[(r.label, r.action, r.arg) for r in P.ITEMS],
            'Extras and the menu have a row for every item (same labels and actions), so an item opens the same way from either')
-    homes = [r.arg for r in P.ITEMS if r.action in (P.ACT_HOME, P.ACT_LIST) or (r.action == P.ACT_ARTISTS and r.arg)] + [r.arg for r in P.CUSTOMIZE_PAGE.rows if r.action == P.ACT_HOME]
+    homes = [r.arg for r in P.ITEMS if r.action in (P.ACT_HOME, P.ACT_LIST) or (r.action == P.ACT_ARTISTS and r.arg)] + [r.arg for r in P.SETTINGS_PAGE.rows if r.action == P.ACT_HOME]
     expect(len(set(homes)) == len(homes) and len(homes) + 5 == 18,
            'no tile is twice (Albums, id 5, Artists, id 6, Songs, id 3, and Playlists, id 14, are the payload pages; HiFi, id 0, is left out)')
     m = Machine()
-    m.widgets = {n: 0x30000000 + i for i, n in enumerate(['btn_return', 'btn_backtoplayer', 'btn_customize'] + [f'pod_row{i}' for i in range(len(ex.rows))])}
+    m.widgets = {n: 0x30000000 + i for i, n in enumerate(['btn_return', 'btn_backtoplayer', 'btn_settings'] + [f'pod_row{i}' for i in range(len(ex.rows))])}
     m.call(on_row, a0=rows0 + 12 * ex_i)
     expect(('window_open', ex.key) in m.calls and m.names().count('widget_on') == 4 + len(ex.rows),
-           'the Extras row opens m1plus_extras and binds the navbar (Back, Now Playing, Customize), its twenty rows and the destroy handler that tells Shanling Home it is gone (home_extras_opened)')
-    # the navbar's Customize button opens the Customize page, as the Customize row of the menu does (open_page, so Shanling Home's exit knows the page)
-    cust_w = m.widgets['btn_customize']
-    expect((cust_w, O['EVT_CLICK']) in m.bound, 'the Extras page binds a click on btn_customize')
+           'the Extras row opens m1plus_extras and binds the navbar (Back, Now Playing, Settings), its twenty rows and the destroy handler that tells Shanling Home it is gone (home_extras_opened)')
+    # the navbar's Settings button opens the Settings page, as the Settings row of the menu does (open_page, so Shanling Home's exit knows the page)
+    cust_w = m.widgets['btn_settings']
+    expect((cust_w, O['EVT_CLICK']) in m.bound, 'the Extras page binds a click on btn_settings')
     m.calls = []
     fn, fctx = m.bound[(cust_w, O['EVT_CLICK'])]
     m.call(fn, a0=fctx, a1=0, count=5000000)
-    expect(('window_open', P.CUSTOMIZE_PAGE.key) in m.calls and m.names().count('window_open') == 1 and m.names().count('widget_on') >= 2 + len(P.CUSTOMIZE_PAGE.rows),
-           'a tap on the Customize button opens m1plus_customize and binds its navbar and rows')
+    expect(('window_open', P.SETTINGS_PAGE.key) in m.calls and m.names().count('window_open') == 1 and m.names().count('widget_on') >= 2 + len(P.SETTINGS_PAGE.rows),
+           'a tap on the Settings button opens m1plus_settings and binds its navbar and rows')
     m2 = Machine(); m2.widgets = {n: 0x30000000 + i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(ex.rows))])}
     m2.call(on_row, a0=rows0 + 12 * ex_i)
-    expect(('window_open', ex.key) in m2.calls and 'btn_customize' not in m2.widgets and m2.names().count('widget_on') == 3 + len(ex.rows),
+    expect(('window_open', ex.key) in m2.calls and 'btn_settings' not in m2.widgets and m2.names().count('widget_on') == 3 + len(ex.rows),
            'an Extras asset without the button (not ours) opens as before, nothing else bound (stock-safe)')
     rows_ex = PSYMS[f'pod_rows_{P.EXTRAS_PAGE_INDEX}']
     for i, (name, hid) in enumerate(want):
@@ -184,14 +184,14 @@ def extras_state(m, row_ids):
 
 
 def extras_ok(m, data, cfg=False):
-    """The Extras page (cfg False) or Customize > Extras (cfg True) the payload arranged for the saved list `data` against the Python model (pod_pages.extras_display /
+    """The Extras page (cfg False) or Settings > Extras (cfg True) the payload arranged for the saved list `data` against the Python model (pod_pages.extras_display /
     extras_layout): the shown children and their y, the hidden ones (headers and rows) hidden, insensitive and parked at y 0, every header insensitive, the children
     stacked shown first then the hidden headers then the hidden rows, and virtual_h. Returns '' or what differs."""
     P = pod_pages
     ids, off = P.parse_menu_full(data)
     shown, hidden = P.extras_display(ids, off, cfg)
     lay, height = P.extras_layout(shown, pod_ui.ROW_H)
-    row_ids = [i for i in range(len(P.ITEMS)) if not (cfg and i == P.CUSTOMIZE_ID)]
+    row_ids = [i for i in range(len(P.ITEMS)) if not (cfg and i == P.SETTINGS_ID)]
     name = lambda kind, key: f'pod_hdr{key}' if kind == 'hdr' else f'pod_row{key}'
     got = extras_state(m, row_ids)
     if got != lay: return f'children {got} != {lay}'
@@ -221,9 +221,9 @@ MENU_ROWS = 22   # twenty-one items (the last, Podcasts), Extras
 EXTRAS_PLAY = ['Now Playing', 'Shuffle', 'Pod']
 EXTRAS_LIB = ['Albums', 'Artists', 'Songs', 'Playlists', 'Cover Flow', 'Genres', 'Composers', 'Folders', 'Podcasts']
 EXTRAS_COLL = ['Favorites', 'Recently Played', 'Recently Added', 'Most Played', 'Hi-Res']
-EXTRAS_TOOLS = ['Update Library', 'CD Ripper', 'Tidal']   # Customize is in no group: the Extras page's navbar button opens it
+EXTRAS_TOOLS = ['Update Library', 'CD Ripper', 'Tidal']   # Settings is in no group: the Extras page's navbar button opens it
 EXTRAS_TITLES = ['Play', 'Library', 'Collections', 'Tools']
-# what the Extras page lists for the default menu (Cover Flow, Albums, Artists, Songs, Playlists): everything else but Customize (never listed)
+# what the Extras page lists for the default menu (Cover Flow, Albums, Artists, Songs, Playlists): everything else but Settings (never listed)
 DEF_EXTRAS = ['Now Playing', 'Shuffle', 'Pod', 'Genres', 'Composers', 'Folders', 'Podcasts', 'Favorites', 'Recently Played', 'Recently Added', 'Most Played', 'Hi-Res',
               'Update Library', 'CD Ripper', 'Tidal']
 
@@ -258,19 +258,19 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
     ROW_H = pod_ui.ROW_H
 
     # 9. The default menu: Cover Flow, Albums, Artists, Songs, Playlists (saved string "12345"), then Extras; Now Playing (the mini player bar opens it), Shuffle,
-    #    Customize and all the others are hidden by default and on the Extras page; Extras is always last.
+    #    Settings and all the others are hidden by default and on the Extras page; Extras is always last.
     NI = len(P.ITEMS)
-    CU = P.CUSTOMIZE_ID
-    items18 = items[:18]   # the items but Customize
-    expect(items[:9] == ['Now Playing', 'Cover Flow', 'Albums', 'Artists', 'Songs', 'Playlists', 'Shuffle', 'Genres', 'Folders'] and items[CU] == 'Customize' and items[NI - 2] == 'Pod' and items[NI - 1] == 'Podcasts' and CU == NI - 3
+    CU = P.SETTINGS_ID
+    items18 = items[:18]   # the items but Settings
+    expect(items[:9] == ['Now Playing', 'Cover Flow', 'Albums', 'Artists', 'Songs', 'Playlists', 'Shuffle', 'Genres', 'Folders'] and items[CU] == 'Settings' and items[NI - 2] == 'Pod' and items[NI - 1] == 'Podcasts' and CU == NI - 3
            and P.DEFAULT_MENU == [1, 2, 3, 4, 5] and P.parse_menu(None) == P.DEFAULT_MENU and P.parse_menu(b'12345\n') == P.DEFAULT_MENU,
-           'the asset order is the item order; the default menu is items 1..5 (Cover Flow ... Playlists), Now Playing, Shuffle and Customize hidden')
+           'the asset order is the item order; the default menu is items 1..5 (Cover Flow ... Playlists), Now Playing, Shuffle and Settings hidden')
     m = open_menu()
     expect(shown_order(m) == default, f'no saved list: the default menu, unchanged by the Extras items ({shown_order(m)})')
     a = arranged(m, MENU_ROWS)
     expect(all(a[i] == ((i - 1) * ROW_H, True) for i in range(1, 6)) and a[NI] == (5 * ROW_H, True),
            f'the shown rows are consecutive 52 px steps from y 0, Extras right after them ({a})')
-    expect(all(a[i] == (0, False) for i in [0] + list(range(6, NI))), 'Now Playing, Shuffle, Genres, Folders, the nine Extras items, Customize, the Pod and Podcasts are hidden (and insensitive) and parked at y 0')
+    expect(all(a[i] == (0, False) for i in [0] + list(range(6, NI))), 'Now Playing, Shuffle, Genres, Folders, the nine Extras items, Settings, the Pod and Podcasts are hidden (and insensitive) and parked at y 0')
     expect(('widget_set_prop_int', m.widgets['pod_scrollview'], 'virtual_h', 6 * ROW_H) in m.calls
            and not [c for c in m.calls if c[:3] == ('widget_set_prop_int', m.widgets['pod_scrollview'], 'yoffset')],
            'the list scrolls over exactly the shown rows (virtual_h 6 x 52), from the asset\'s top (the offset is not touched)')
@@ -283,8 +283,8 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
                        (b'876543210\n', items[8::-1]), (b'\n', []),
                        (b'a\n', ['Favorites']), (b'0ei\n', ['Now Playing', 'Composers', 'CD Ripper']), (b'0123456ad\n', items[:7] + ['Favorites', 'Most Played']),
                        (b'ihgfedcba876543210\n', items18[::-1]), (b'012345678abcdefghi', items18), (b'012345678abcdefgh', items18[:-1]),
-                       (b'i0\n', ['CD Ripper', 'Now Playing']), (b'j\n', ['Customize']), (b'0j\n', ['Now Playing', 'Customize']), (b'j0', ['Customize', 'Now Playing']),
-                       (b'012345678abcdefghijkl\n', items), (b'lkjihgfedcba876543210', items[::-1]), (b'k\n', ['Pod']), (b'l\n', ['Podcasts']), (b'1j2\n', ['Cover Flow', 'Customize', 'Albums'])):
+                       (b'i0\n', ['CD Ripper', 'Now Playing']), (b'j\n', ['Settings']), (b'0j\n', ['Now Playing', 'Settings']), (b'j0', ['Settings', 'Now Playing']),
+                       (b'012345678abcdefghijkl\n', items), (b'lkjihgfedcba876543210', items[::-1]), (b'k\n', ['Pod']), (b'l\n', ['Podcasts']), (b'1j2\n', ['Cover Flow', 'Settings', 'Albums'])):
         for off in (b'', b'-', b'-0', b'-a\n', b'-bd'):   # the part after '-' (items turned off Extras) never changes the menu; an item both shown and off is invalid
             d = (data.rstrip(b'\n') + off).rstrip(b'\n') + b'\n' if off else data
             m = open_menu(d)
@@ -335,7 +335,7 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
            # the item characters: unknown ones, duplicates, an uppercase letter, one too many, over the file cap
            b'ihgfedcba876543210\n\n', b'm\n', b'aa\n', b'A\n', b'0a0\n', b'012345678abcdefghijkm\n', b'012345678abcdefghijk0\n', b'012345678abcdefghija\n',
            b'012345678abcdefghij\n\n', b'0123456789abcdefgh\n', b'z', b'0123456789abcdefghijklmn', b'0123456789abcdefghijklm',
-           # the turned-off part: '-' once, no id in both parts, and Customize (j) never in it
+           # the turned-off part: '-' once, no id in both parts, and Settings (j) never in it
            b'1-2-3\n', b'1--2\n', b'--', b'--\n', b'-\n-', b'1-1\n', b'1-21\n', b'12-1', b'0-0', b'-j\n', b'1-j\n', b'12345-j\n', b'1-2j\n', b'j-j', b'-1-\n', b'1-2\n\n',
            b'1-2 \n', b'1-x\n', b'1-9\n', b'-0123456789', b'012345678-abcdefghij\n', b'012345678-abcdefgh0\n', b'0123456-abcdefghij1\n', b'012345678-abcdefghi-\n',
            b'0123456789-abcdefghij', b'012345678abcdefghi-j\n', b'012345678abcdefghij-\n\n']
@@ -363,7 +363,7 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
         want = [P.MENU.rows[i].label for i in ids] + ['Extras']
         if shown_order(m) != want: expect(False, f'parser model differs for {data!r}: {shown_order(m)} vs {want}'); break
         mx, ex, _ = extras_open(data)
-        want = [P.ITEMS[i].label for i in P.EXTRAS_ORDER if i != P.CUSTOMIZE_ID and i not in ids and i not in off]
+        want = [P.ITEMS[i].label for i in P.EXTRAS_ORDER if i != P.SETTINGS_ID and i not in ids and i not in off]
         if ex != want: expect(False, f'parser model differs for the Extras page, {data!r}: {ex} vs {want}'); break
         err = extras_ok(mx, data)   # headers, y positions, stacking and virtual_h against pod_pages.extras_display / extras_layout
         if err: expect(False, f'Extras page, saved {data!r}: {err}'); break
@@ -371,7 +371,7 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
     expect(P.parse_menu(b'0123456\n') == list(range(7)) == P.parse_menu(b'0123456') and P.parse_menu(b'0e8a\n') == [0, 13, 8, 9]
            and P.parse_menu(b'012345678abcdefghi\n') == list(range(18)) and P.parse_menu(b'012345678abcdefghijk\n') == list(range(20)) and P.parse_menu(b'012345678abcdefghijkl\n') == list(range(21))
            and P.parse_menu(b'0j\n') == [0, 18] and P.parse_menu(b'x\n') == P.DEFAULT_MENU,
-           'the Python model: the item characters are ids 0..8, 9..17 (a..i) and 18 (j, Customize) and 19 (k, the Pod) and 20 (l, Podcasts); x is unknown')
+           'the Python model: the item characters are ids 0..8, 9..17 (a..i) and 18 (j, Settings) and 19 (k, the Pod) and 20 (l, Podcasts); x is unknown')
     expect(P.OFF_CHAR == '-' and P.DEFAULT_OFF == [] and P.format_menu(P.DEFAULT_MENU) == '12345\n' and P.format_menu(P.DEFAULT_MENU, P.DEFAULT_OFF) == '12345\n'
            and P.parse_menu_full(b'12345\n') == (P.DEFAULT_MENU, []) and P.parse_menu_full(b'12345') == (P.DEFAULT_MENU, []) and P.parse_menu_full(None) == (P.DEFAULT_MENU, [])
            and P.parse_menu_full(b'\n') == ([], []) and P.parse_menu_full(b'-\n') == ([], []) and P.parse_menu_full(b'0ea\n') == ([0, 13, 9], [])
@@ -380,7 +380,7 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
            and P.format_menu([1, 2, 3], [10, 9]) == '123-ab\n' and P.format_menu([1], [17, 0, 13]) == '1-0ei\n'
            and P.format_menu([], []) == '\n' and P.format_menu(list(range(21))) == '012345678abcdefghijkl\n'
            and len(P.format_menu(list(range(10)), list(range(10, 18)) + [19, 20])) < P.MENU_FILE_MAX and len(P.format_menu([], list(range(18)) + [19, 20])) < P.MENU_FILE_MAX,
-           'the Python model: "<shown>[-<off>]", the default 12345, the off part in the Extras order, Customize never off, the longest list fits the file cap')
+           'the Python model: "<shown>[-<off>]", the default 12345, the off part in the Extras order, Settings never off, the longest list fits the file cap')
     m = open_menu(b'0\n'); m.fs[MENU_FILE] = b'0\n'
     expect(m.fs[MENU_FILE] == b'0\n', 'a valid list is never rewritten by reading it')
     m = open_menu(b'lkjihgfedcba876543210\n', count=True)
@@ -406,17 +406,17 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
     def extras(data=None):
         return extras_open(data, NI)
     # The fixed order, the same in every language (the English labels): four titled groups in a deliberate order, each with a section header
-    # (pod_hdr<group>, HDR_H high, a plain view that is never a touch target) above its first shown row; Customize, when the menu does not show it, is a Tool.
+    # (pod_hdr<group>, HDR_H high, a plain view that is never a touch target) above its first shown row; Settings, when the menu does not show it, is a Tool.
     hdr_h = P.HDR_H
     full = EXTRAS_PLAY + EXTRAS_LIB + EXTRAS_COLL + EXTRAS_TOOLS
     expect(P.EXTRAS_GROUPS == tuple(zip(EXTRAS_TITLES, map(tuple, (EXTRAS_PLAY, EXTRAS_LIB, EXTRAS_COLL, EXTRAS_TOOLS)))) and P.EXTRAS_TITLES == EXTRAS_TITLES
-           and sorted(full + ['Customize']) == sorted(items) and [items[i] for i in P.EXTRAS_ORDER] == full + ['Customize'] and 0 < hdr_h < ROW_H
+           and sorted(full + ['Settings']) == sorted(items) and [items[i] for i in P.EXTRAS_ORDER] == full + ['Settings'] and 0 < hdr_h < ROW_H
            and [P.EXTRAS_GROUP_OF[i] for i in P.EXTRAS_ORDER] == [0] * 3 + [1] * 9 + [2] * 5 + [3] * 3 + [4] and P.EXTRAS_GROUP_OF[CU] == len(P.EXTRAS_GROUPS),
-           f'the Extras order is Play, Library, Collections, Tools, each item once, in the written order, then Customize (in no group) ({[items[i] for i in P.EXTRAS_ORDER]})')
+           f'the Extras order is Play, Library, Collections, Tools, each item once, in the written order, then Settings (in no group) ({[items[i] for i in P.EXTRAS_ORDER]})')
     left = lambda shown: [x for x in full if x not in shown]
     m, order, a = extras()
     want_ex = left([items[i] for i in P.DEFAULT_MENU])
-    expect(order == want_ex == DEF_EXTRAS, f'default: Now Playing, Shuffle (Play), Genres, Composers, Folders (Library), the collections, the Tools; no Customize ({order})')
+    expect(order == want_ex == DEF_EXTRAS, f'default: Now Playing, Shuffle (Play), Genres, Composers, Folders (Library), the collections, the Tools; no Settings ({order})')
     expect(all(a[i] == (0, False) for i in P.DEFAULT_MENU) and ('widget_set_prop_int', m.widgets['pod_scrollview'], 'virtual_h', len(want_ex) * ROW_H + 4 * hdr_h) in m.calls,
            'the items the menu shows are hidden here, the list is the fifteen others and four headers long')
     ys = [y for y, i in sorted((y, i) for i, (y, on) in a.items() if on)]
@@ -428,7 +428,7 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
            'default: the headers and rows at their y (40 px headers, 52 px rows), written out')
     expect(ys[0] == hdr_h and ys == sorted(ys) and ys[1] - ys[0] == ROW_H and ys[3] - ys[2] == hdr_h + ROW_H, 'the shown rows are in display order; a header (40 px) lies between the groups, none between rows')
     m, order, a = extras(b'\n')
-    expect(order == full, 'every item hidden: the twenty but Customize are in Extras, in the fixed order')
+    expect(order == full, 'every item hidden: the twenty but Settings are in Extras, in the fixed order')
     m, order, a = extras(b'012345678\n')
     expect(order == left(items[:9]) and all(a[i] == (0, False) for i in range(9)), 'Genres and Folders in the menu too: Extras is the other nine')
     m, order, a = extras(b'0345\n')
@@ -444,36 +444,36 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
     expect(all(b - a_ in (ROW_H, ROW_H + hdr_h) for a_, b in zip(ys, ys[1:])) and ys[0] == hdr_h,
            'the remaining Extras rows are 52 px apart, 92 where a header lies between two groups')
     m, order, a = extras(b'012345678abcdefghikl\n')
-    expect(order == [] and all(a[i] == (0, False) for i in range(NI)), 'every item but Customize shown in the menu: Extras is empty (Customize is never listed)')
+    expect(order == [] and all(a[i] == (0, False) for i in range(NI)), 'every item but Settings shown in the menu: Extras is empty (Settings is never listed)')
     m, order, a = extras(b'012345678abcdefghijkl\n')
     expect(order == [] and all(a[i] == (0, False) for i in range(NI)) and ('widget_set_prop_int', m.widgets['pod_scrollview'], 'virtual_h', 0) in m.calls,
            'every item shown in the menu: Extras is empty (its menu row stays)')
     m, order, a = extras(b'i0\n')
     expect(order == left(['CD Ripper', 'Now Playing']), f'a shown last tile and a shown first item both leave Extras ({order})')
     m, order, a = extras(b'j\n')
-    expect(order == full, f'Customize alone in the menu: Extras has the other twenty ({order})')
-    # Customize hidden from the menu (the default) is not on Extras either: its row stays hidden (the navbar button opens Customize)
+    expect(order == full, f'Settings alone in the menu: Extras has the other twenty ({order})')
+    # Settings hidden from the menu (the default) is not on Extras either: its row stays hidden (the navbar button opens Settings)
     m, order, a = extras(b'123456\n')
     expect(order == [x for x in DEF_EXTRAS if x != 'Shuffle'] and a[CU] == (0, False),
-           f'Customize hidden from the menu is not on the Extras page: its row is hidden and insensitive ({order})')
+           f'Settings hidden from the menu is not on the Extras page: its row is hidden and insensitive ({order})')
     mm = open_menu(b'123456\n')
     expect(shown_order(mm) == default[:5] + ['Shuffle', 'Extras'], 'and the menu then ends with the Shuffle, Extras rows')
-    # the items turned off ('-' part) are not on the Extras page; the others in the fixed order; Customize hidden is always there
+    # the items turned off ('-' part) are not on the Extras page; the others in the fixed order; Settings hidden is always there
     m, order, a = extras(b'123456-ab\n')
     expect(order == [x for x in DEF_EXTRAS if x not in ('Shuffle', 'Favorites', 'Recently Added')] and a[9] == (0, False) and a[10] == (0, False),
-           f'Favorites and Recently Added turned off: not listed, hidden and insensitive; Customize (hidden from the menu) is not listed either ({order})')
+           f'Favorites and Recently Added turned off: not listed, hidden and insensitive; Settings (hidden from the menu) is not listed either ({order})')
     m, order, a = extras(b'12345j-ab\n')
-    expect(order == [x for x in DEF_EXTRAS if x not in ('Customize', 'Favorites', 'Recently Added')] and extras_ok(m, b'12345j-ab') == '', f'the same with Customize shown ({order})')
+    expect(order == [x for x in DEF_EXTRAS if x not in ('Settings', 'Favorites', 'Recently Added')] and extras_ok(m, b'12345j-ab') == '', f'the same with Settings shown ({order})')
     m, order, a = extras(b'-' + P.ID_CHARS.replace('j', '').encode() + b'\n')
     expect(order == [] and ('widget_set_prop_int', m.widgets['pod_scrollview'], 'virtual_h', 0) in m.calls and all(a[i] == (0, False) for i in range(NI)),
-           'every item but Customize turned off (nothing shown): Extras is empty')
+           'every item but Settings turned off (nothing shown): Extras is empty')
     m, order, a = extras(b'0-0\n')
     expect(order == DEF_EXTRAS, 'an item both shown and off is invalid: the default menu, nothing off')
     m, order, a = extras(b'0-j\n')
-    expect(order == DEF_EXTRAS, 'Customize in the off part is invalid: the default menu, nothing off')
+    expect(order == DEF_EXTRAS, 'Settings in the off part is invalid: the default menu, nothing off')
     # an item shown in the menu keeps no off flag: only items the menu does not show can be off, so the off part never hides a shown row
     m, order, a = extras(b'12-ab\n')
-    expect('Favorites' not in order and 'Now Playing' in order and 'Customize' not in order, f'a file with an off part: the shown items are not on Extras either way ({order})')
+    expect('Favorites' not in order and 'Now Playing' in order and 'Settings' not in order, f'a file with an off part: the shown items are not on Extras either way ({order})')
     # the children are stacked in that order (a stock relayout lays visible rows out in child order), the hidden ones last
     for data in (None, b'\n', b'0123456ad\n', b'3\n', b'3-0a\n'):
         m, order, a = extras(data)
@@ -485,7 +485,7 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
         mm = open_menu(data); ids = P.parse_menu(data)
         _, ex_order, _ = extras(data)
         in_menu = set(shown_order(mm)) - {'Extras'}
-        expect(in_menu | set(ex_order) >= set(items) - {'Customize'} and not in_menu & set(ex_order), f'saved {data!r}: every item is in exactly one of the menu and Extras')
+        expect(in_menu | set(ex_order) >= set(items) - {'Settings'} and not in_menu & set(ex_order), f'saved {data!r}: every item is in exactly one of the menu and Extras')
     # a tap on a hidden item's row in Extras does what the menu row would
     rows_x = PSYMS[f'pod_rows_{P.EXTRAS_PAGE_INDEX}']
     for i, r in enumerate(P.ITEMS):
@@ -562,11 +562,12 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
 
 def settings_tests(ctx, on_row, rows0):
     expect, P = ctx.expect, pod_pages
-    S = P.CUSTOMIZE_PAGE
-    rows_s = PSYMS[f'pod_rows_{P.CUSTOMIZE_PAGE_INDEX}']
-    mm_i = next(i for i, r in enumerate(S.rows) if r.action == P.ACT_PAGE and r.arg == P.MENUCFG_PAGE_INDEX)
-    cf_i = next(i for i, r in enumerate(S.rows) if r.action == P.ACT_PAGE and r.arg == P.CFSET_PAGE_INDEX)
-    settings_i = next(i for i, r in enumerate(P.MENU.rows) if r.action == P.ACT_PAGE and r.arg == P.CUSTOMIZE_PAGE_INDEX)
+    S = P.SETTINGS_PAGE
+    rows_s = PSYMS[f'pod_rows_{P.SETTINGS_PAGE_INDEX}']
+    rows_me = PSYMS[f'pod_rows_{P.MENUEXTRAS_PAGE_INDEX}']
+    mm_i = next(i for i, r in enumerate(P.MENUEXTRAS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.MENUCFG_PAGE_INDEX)
+    cf_i = next(i for i, r in enumerate(S.rows) if r.action == P.ACT_PAGE and r.arg == P.LIBRARY_PAGE_INDEX)
+    settings_i = next(i for i, r in enumerate(P.MENU.rows) if r.action == P.ACT_PAGE and r.arg == P.SETTINGS_PAGE_INDEX)
 
     def open_settings():
         m = Machine()
@@ -575,55 +576,56 @@ def settings_tests(ctx, on_row, rows0):
         m.call(on_row, a0=rows0 + 12 * settings_i, count=3000000)
         return m
 
-    # 15. Customize: Main Menu, Extras, Home Screen and Cover Flow (sub-pages), Playback, System Settings, Developer; a menu item like the others
-    expect([r.label for r in S.rows] == ['Main Menu', 'Extras', 'Home Screen', 'Cover Flow', 'Cassette Mode', 'Keyboards', 'Playback', 'System Settings', 'Developer'],
-           'the Customize page lists Main Menu, Extras, Home Screen, Cover Flow, Cassette Mode, Keyboards, Playback, System Settings and Developer')
-    pb = next(r for r in S.rows if r.label == 'Playback'); ss = next(r for r in S.rows if r.label == 'System Settings')
+    # 15. Settings (cards): the stock Wi-Fi and Bluetooth pages, our pages, Playback (Play Mode, EQ, the stock list), System (Display, Language, Keyboards, About, the stock list), Developer
+    expect([r.label for r in S.rows] == ['Wi-Fi', 'Bluetooth', 'Menu & Extras', 'Home Screen', 'Library', 'Now Playing', 'Play Mode', 'EQ', 'All Playback Settings',
+                                         'Display', 'Language', 'Keyboards', 'About', 'All System Settings', 'Developer'],
+           'the Settings page lists Wi-Fi, Bluetooth, Menu & Extras, Home Screen, Library, Now Playing, Play Mode, EQ, All Playback Settings, Display, Language, Keyboards, About, All System Settings, Developer')
+    pb = next(r for r in S.rows if r.label == 'All Playback Settings'); ss = next(r for r in S.rows if r.label == 'All System Settings')
     expect((pb.action, pb.arg) == (P.ACT_HOME, P.HOME_PLAYSET) and (ss.action, ss.arg) == (P.ACT_HOME, P.HOME_SYSSET),
-           'Playback opens the stock Play settings page, System Settings the stock one')
-    ex_r, cu_r = len(P.ITEMS), P.CUSTOMIZE_ID
-    expect(P.MENU.rows[cu_r].label == 'Customize' and (P.MENU.rows[cu_r].action, P.MENU.rows[cu_r].arg) == (P.ACT_PAGE, P.CUSTOMIZE_PAGE_INDEX)
-           and P.MENU.rows[ex_r].label == 'Extras' and P.MENU.rows[-1] is P.MENU.rows[ex_r], 'the menu\'s Customize row opens the Customize page; Extras is the last row')
+           'All Playback Settings opens the stock Play settings list, All System Settings the stock one')
+    expect([r.label for r in P.MENUEXTRAS_PAGE.rows] == ['Main Menu', 'Extras'] and P.MENUEXTRAS_PAGE.title == 'Menu & Extras', 'Menu & Extras holds Main Menu and Extras')
+    ex_r, cu_r = len(P.ITEMS), P.SETTINGS_ID
+    expect(P.MENU.rows[cu_r].label == 'Settings' and (P.MENU.rows[cu_r].action, P.MENU.rows[cu_r].arg) == (P.ACT_PAGE, P.SETTINGS_PAGE_INDEX)
+           and P.MENU.rows[ex_r].label == 'Extras' and P.MENU.rows[-1] is P.MENU.rows[ex_r], 'the menu\'s Settings row opens the Settings page; Extras is the last row')
     for data in (None, b'\n', b'0123456\n', b'87\n', b'zz', b'ihgfedcba876543210\n', b'012345678abcdefghi\n', b'a\n', b'0123456abcdefghi8\n', b'j\n', b'012345678abcdefghij\n', b'1-a\n'):
         m = open_menu(data)
         a = arranged(m, MENU_ROWS)
         ids, off = P.parse_menu_full(data)
         expect(a[ex_r][1] and a[ex_r][0] == len(ids) * pod_ui.ROW_H, f'saved {data!r}: the Extras row is shown, right after the shown items')
-        expect(a[cu_r][1] == (cu_r in ids), f'saved {data!r}: Customize is a normal item: shown only when the list shows it')
+        expect(a[cu_r][1] == (cu_r in ids), f'saved {data!r}: Settings is a normal item: shown only when the list shows it')
         expect(('widget_on', m.widgets[f'pod_row{cu_r}'], O['EVT_CLICK']) in [c[:3] for c in m.calls]
-               and ('widget_on', m.widgets[f'pod_row{ex_r}'], O['EVT_CLICK']) in [c[:3] for c in m.calls], f'saved {data!r}: the Customize and Extras rows are bound')
+               and ('widget_on', m.widgets[f'pod_row{ex_r}'], O['EVT_CLICK']) in [c[:3] for c in m.calls], f'saved {data!r}: the Settings and Extras rows are bound')
     m = open_settings()
-    expect(('window_open', S.key) in m.calls and m.names().count('widget_on') == 2 + len(S.rows), 'the menu row opens the Customize page and binds its rows')
-    expect(not any(c[0] == 'widget_set_tr_text' for c in m.calls), 'the Customize page shows no sort value (it is on the Cover Flow page)')
+    expect(('window_open', S.key) in m.calls and m.names().count('widget_on') == 2 + len(S.rows) + 2, 'the menu row opens the Settings page and binds its rows, and its foreground and destroy events (the values refresh)')
 
-    # 16. Customize > Cover Flow: the row opens the sub-page (landscape switch, sort value); the generic page open binds its rows
+    # 16. Settings > Library: the row opens the sub-page (Update Library, Album Order, the landscape switch, Rebuild Covers); the generic page open binds its rows
     m = Machine()
     m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(S.rows))])}
     m.call(on_row, a0=rows_s + 12 * cf_i, count=3000000)
-    expect(('window_open', P.CFSET_PAGE.key) in m.calls, 'the Cover Flow row on the Customize page opens m1plus_cfset')
-    cfset_tests(ctx, on_row)
+    expect(('window_open', P.LIBRARY_PAGE.key) in m.calls, 'the Library row on the Settings page opens m1plus_library')
+    library_tests(ctx, on_row)
     keyboards_tests(ctx, on_row, rows_s)
 
-    # 17. The Main Menu row opens the customise page (the generic page open: navbar bound, no row table)
+    # 17. The Main Menu row (on Menu & Extras) opens the customise page (the generic page open: navbar bound, no row table)
     m = Machine()
     m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'])}
-    m.call(on_row, a0=rows_s + 12 * mm_i, count=3000000)
+    m.call(on_row, a0=rows_me + 12 * mm_i, count=3000000)
     expect(('window_open', P.MENUCFG_PAGE.key) in m.calls and P.MENUCFG_PAGE.rows == [], 'the Main Menu row opens the Main Menu page')
-    mainmenu_tests(ctx, on_row, rows_s, mm_i)
-    extrascfg_tests(ctx, on_row, rows_s)
+    mainmenu_tests(ctx, on_row, rows_me, mm_i)
+    extrascfg_tests(ctx, on_row, rows_me)
 
 
 def extrascfg_tests(ctx, on_row, rows_s):
-    """Customize > Extras (m1plus_extrascfg): a switch row per item but Customize, only the items the menu does not show, on = listed on Extras."""
+    """Settings > Extras (m1plus_extrascfg): a switch row per item but Settings, only the items the menu does not show, on = listed on Extras."""
     expect, P = ctx.expect, pod_pages
-    n, CU, ROW_H = len(P.ITEMS), P.CUSTOMIZE_ID, pod_ui.ROW_H
+    n, CU, ROW_H = len(P.ITEMS), P.SETTINGS_ID, pod_ui.ROW_H
     items = [r.label for r in P.ITEMS]
     ids = [i for i in range(n) if i != CU]
-    ex_i = next(i for i, r in enumerate(P.CUSTOMIZE_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.EXTRASCFG_PAGE_INDEX)
+    ex_i = next(i for i, r in enumerate(P.MENUEXTRAS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.EXTRASCFG_PAGE_INDEX)
     hdr_h, full = P.HDR_H, EXTRAS_PLAY + EXTRAS_LIB + EXTRAS_COLL + EXTRAS_TOOLS
-    CFG_DEF = [x for x in DEF_EXTRAS if x != 'Customize']   # the default menu's hidden items, but Customize (no row on this page), in the Extras order
-    expect(P.CUSTOMIZE_PAGE.rows[ex_i].label == 'Extras' and P.PAGES[P.EXTRASCFG_PAGE_INDEX] is P.EXTRASCFG_PAGE and P.EXTRASCFG_PAGE.kind == 'extrascfg',
-           'the Customize page has an Extras row that opens the Customize > Extras page')
+    CFG_DEF = [x for x in DEF_EXTRAS if x != 'Settings']   # the default menu's hidden items, but Settings (no row on this page), in the Extras order
+    expect(P.MENUEXTRAS_PAGE.rows[ex_i].label == 'Extras' and P.PAGES[P.EXTRASCFG_PAGE_INDEX] is P.EXTRASCFG_PAGE and P.EXTRASCFG_PAGE.kind == 'extrascfg',
+           'Menu & Extras has an Extras row that opens the Settings > Extras page')
 
     def open_page(data=None):
         m = Machine()
@@ -657,15 +659,15 @@ def extrascfg_tests(ctx, on_row, rows_s):
     expect(('window_open', P.EXTRASCFG_PAGE.key) in m.calls and labels == CFG_DEF and hidden_ok(m) and extras_ok(m, None, cfg=True) == ''
            and sorted(ys.values())[:3] == [hdr_h, hdr_h + ROW_H, hdr_h + 2 * ROW_H], f'default menu: the items it hides, in the Extras order, under their group headers ({labels}, {extras_ok(m, None, cfg=True)})')
     expect([k for k, key, y in extras_state(m, ids)].count('hdr') == 4 and extras_state(m, ids)[-4][:2] == ('hdr', 3) and len(extras_state(m, ids)) == len(CFG_DEF) + 4,
-           'four headers shown: the Tools header too, for its three rows without Customize (which has no row here)')
-    expect(all(v == ['sset_on'] for i, v in switches(m).items() if items[i] in labels) and 'Customize' not in labels,
-           'every switch is on (listed on Extras); Customize has no row')
+           'four headers shown: the Tools header too, for its three rows without Settings (which has no row here)')
+    expect(all(v == ['sset_on'] for i, v in switches(m).items() if items[i] in labels) and 'Settings' not in labels,
+           'every switch is on (listed on Extras); Settings has no row')
     expect(m.names().count('widget_on') == 2 + len(ids) + 1 and ('widget_set_prop_int', m.widgets['pod_scrollview'], 'virtual_h', len(labels) * ROW_H + 4 * hdr_h) in m.calls,
            'a click handler per row and a destroy handler; the list scrolls over exactly the rows and headers shown')
     expect(len([c for c in m.calls if c[0] == 'widget_restack']) == len(ids) + len(HDRS), 'the rows and the headers are restacked in display order, the hidden ones last (extras_ok)')
     m = open_page(b'\n')
-    expect(listed(m)[0] == [x for x in full if x != 'Customize'] and len(listed(m)[0]) == 20 and extras_ok(m, b'\n', cfg=True) == '',
-           'nothing shown in the menu: all twenty rows (Customize has none)')
+    expect(listed(m)[0] == [x for x in full if x != 'Settings'] and len(listed(m)[0]) == 20 and extras_ok(m, b'\n', cfg=True) == '',
+           'nothing shown in the menu: all twenty rows (Settings has none)')
     m = open_page(b'012345678abcdefghijkl\n')
     expect(listed(m)[0] == [] and hidden_ok(m) and ('widget_set_prop_int', m.widgets['pod_scrollview'], 'virtual_h', 0) in m.calls and extras_state(m, ids) == []
            and extras_ok(m, b'012345678abcdefghijkl\n', cfg=True) == '', 'everything shown in the menu: no row and no header')
@@ -676,7 +678,7 @@ def extrascfg_tests(ctx, on_row, rows_s):
         pool = list(P.ID_CHARS); rnd.shuffle(pool)
         data = (''.join(pool[:k]) + ('-' + ''.join(rnd.sample(P.ID_CHARS.replace('j', ''), rnd.randrange(0, 5))) if rnd.random() < 0.5 else '') + chr(10)).encode()
         err = extras_ok(open_page(data), data, cfg=True)
-        if err: expect(False, f'Customize > Extras, saved {data!r}: {err}'); break
+        if err: expect(False, f'Settings > Extras, saved {data!r}: {err}'); break
     else: expect(True, 'the page is the Python model\'s for 300 random saved lists (headers shown iff their group has a row, y positions, stacking, virtual_h)')
     m = open_page(b'012345678abcdefghjkl\n')   # everything shown in the menu but CD Ripper: its group's header shows with it, and no other
     expect(extras_ok(m, b'012345678abcdefghjkl\n', cfg=True) == '' and listed(m)[0] == ['CD Ripper'] and [t[:2] for t in extras_state(m, ids)] == [('hdr', 3), ('row', 17)],
@@ -691,7 +693,7 @@ def extrascfg_tests(ctx, on_row, rows_s):
         m = open_page(bad)
         expect(listed(m)[0] == CFG_DEF and all(v == ['sset_on'] for i, v in switches(m).items() if items[i] in listed(m)[0]), f'saved {bad!r}: invalid, the default (nothing off)')
 
-    # a tap on a row turns the item off Extras (saved at once, atomically) and on again; Customize hidden from the menu is not on this page
+    # a tap on a row turns the item off Extras (saved at once, atomically) and on again; Settings hidden from the menu is not on this page
     m = open_page()
     m.click('pod_row9')
     expect(m.fs.get(MENU_FILE) == b'12345-a\n' and ('rename', MENU_TMP, MENU_FILE) in m.calls and ('fsync', '/mnt/data') in m.calls and MENU_TMP not in m.fs
@@ -711,12 +713,12 @@ def extrascfg_tests(ctx, on_row, rows_s):
     # the Extras page and the menu follow the file
     _, order, _ = extras_open(m.fs[MENU_FILE])
     expect('Recently Added' not in order and 'CD Ripper' not in order and 'Favorites' in order, f'Extras then omits the two ({order})')
-    expect(shown_order(open_menu(m.fs[MENU_FILE])) == ['Albums', 'Artists', 'Now Playing', 'Cover Flow', 'Customize', 'Extras'], 'and the menu is unchanged')
-    # Customize hidden from the menu: on the Extras page, never off
+    expect(shown_order(open_menu(m.fs[MENU_FILE])) == ['Albums', 'Artists', 'Now Playing', 'Cover Flow', 'Settings', 'Extras'], 'and the menu is unchanged')
+    # Settings hidden from the menu: on the Extras page, never off
     m = open_page(b'123456\n')
-    expect(listed(m)[0] == [x for x in CFG_DEF if x != 'Shuffle'] and 'pod_row%d' % CU not in m.widgets, 'Customize hidden from the menu has no row here')
+    expect(listed(m)[0] == [x for x in CFG_DEF if x != 'Shuffle'] and 'pod_row%d' % CU not in m.widgets, 'Settings hidden from the menu has no row here')
     _, order, _ = extras_open(b'123456-0\n')
-    expect('Customize' not in order and 'Now Playing' not in order, f'it is not on the Extras page either ({order})')
+    expect('Settings' not in order and 'Now Playing' not in order, f'it is not on the Extras page either ({order})')
     # a failed save is undone: the file, the switch and the next tap
     m = open_page(); m.fail.add(('write', MENU_TMP))
     m.click('pod_row9')
@@ -737,12 +739,12 @@ def extrascfg_tests(ctx, on_row, rows_s):
         expect(('window_open', P.EXTRASCFG_PAGE.key) in m.calls and not any(c[0] in ('widget_move', 'widget_set_visible', 'widget_restack') for c in m.calls)
                and m.names().count('widget_on') == 2, f'no {gone}: the page opens as the asset has it, nothing moved or bound')
 
-    # the asset: a stock list of switch rows, one per item but Customize, all on, no arrows
+    # the asset: a stock list of switch rows, one per item but Settings, all on, no arrows
     path = os.path.join(WORK, UI, P.EXTRASCFG_PAGE.key + '.bin')
     tree = awtk_ui.parse(open(path, 'rb').read())
     rows = [w for w in tree.walk() if w.type == 'list_item']
     expect([r.name for r in rows] == [f'pod_row{i}' for i in ids] and [pod_i18n.shown_english(next(c for c in r.children if c.type == 'hscroll_label')) for r in rows] == [items[i] for i in ids],
-           'twenty rows pod_row0..17, 19, 20 (no Customize) in the item order')
+           'twenty rows pod_row0..17, 19, 20 (no Settings) in the item order')
     expect(all(r.find(f'pod_switch{i}') is not None and r.find(f'pod_switch{i}').get('image') == 'sset_on' and r.find(f'pod_switch{i}').get('sensitive') == 'false'
                and (r.find(f'pod_switch{i}').w, r.find(f'pod_switch{i}').h) == (57, 28) and r.find('pod_icon') is not None and not [w for w in r.walk() if w.name.startswith('pod_up')]
                for i, r in zip(ids, rows)), 'each row: the stock 57x28 switch image (on), the icon disc, no up arrow')
@@ -756,7 +758,7 @@ def extrascfg_tests(ctx, on_row, rows_s):
         for x in (100, 290):
             got = stock_target(m, asset_tree(path), x, y)
             expect(f'pod_row{ids[i]}' in got and not any(g.startswith('pod_switch') for g in got), f'row {ids[i]}: a touch at x {x} (on the switch too) goes to the row ({got})')
-    header_asset_tests(ctx, tree, 'Customize > Extras')
+    header_asset_tests(ctx, tree, 'Settings > Extras')
     # an asset without the headers (not ours, or an older one): the rows are arranged as before, one after the other, nothing else touched
     m = Machine()
     names = ['btn_return', 'btn_backtoplayer', 'pod_scrollview'] + [f'pod_{k}{i}' for k in ('row', 'switch') for i in ids]
@@ -788,14 +790,14 @@ def header_asset_tests(ctx, tree, what):
 
 
 def keyboards_tests(ctx, on_row, rows_s):
-    """Customize > Keyboards (m1plus_keyboards): English always on and not switchable, Chinese (Pinyin) a switch saved in /mnt/data/m1plus-kbzh, off by default."""
+    """Settings > Keyboards (m1plus_keyboards): English always on and not switchable, Chinese (Pinyin) a switch saved in /mnt/data/m1plus-kbzh, off by default."""
     expect, P = ctx.expect, pod_pages
     K = P.KEYBOARDS_PAGE
     FILE = '/mnt/data/m1plus-kbzh'
-    kb_i = next(i for i, r in enumerate(P.CUSTOMIZE_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.KEYBOARDS_PAGE_INDEX)
+    kb_i = next(i for i, r in enumerate(P.SETTINGS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.KEYBOARDS_PAGE_INDEX)
     expect([(r.label, r.action) for r in K.rows] == [('English', P.ACT_KB_EN), ('Chinese (Pinyin)', P.ACT_KB_ZH)] and K.title == 'Keyboards' and K.key == 'm1plus_keyboards'
-           and P.ACT_KB_EN in P.SWITCH_ACTIONS and P.ACT_KB_ZH in P.SWITCH_ACTIONS and P.PAGES[P.KEYBOARDS_PAGE_INDEX] is K and P.CUSTOMIZE_PAGE.rows[kb_i].label == 'Keyboards',
-           'Customize has a Keyboards row (after Cassette Mode); its page has two switch rows: English and Chinese (Pinyin)')
+           and P.ACT_KB_EN in P.SWITCH_ACTIONS and P.ACT_KB_ZH in P.SWITCH_ACTIONS and P.PAGES[P.KEYBOARDS_PAGE_INDEX] is K and P.SETTINGS_PAGE.rows[kb_i].label == 'Keyboards',
+           'Settings has a Keyboards row (after Cassette Mode); its page has two switch rows: English and Chinese (Pinyin)')
     tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets/default/raw/ui/m1plus_keyboards.bin'), 'rb').read())
     expect(all(tree.find(f'pod_row{i}') is not None and tree.find(f'pod_switch{i}') is not None for i in range(2)) and not [w for w in tree.walk() if w.name.startswith('pod_value')],
            'the asset has the two rows, each with a switch image, no value label')
@@ -803,7 +805,7 @@ def keyboards_tests(ctx, on_row, rows_s):
     def open_kb(saved=None):
         m = Machine()
         m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(
-            ['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(P.CUSTOMIZE_PAGE.rows))] + ['pod_switch0', 'pod_switch1'])}
+            ['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(P.SETTINGS_PAGE.rows))] + ['pod_switch0', 'pod_switch1'])}
         if saved is not None: m.fs[FILE] = saved
         m.call(on_row, a0=rows_s + 12 * kb_i, count=3000000)
         return m
@@ -834,23 +836,25 @@ def keyboards_tests(ctx, on_row, rows_s):
         expect(all(pod_i18n.TEXT[k][pod_i18n.table_for(loc)] for k in ('Keyboards', 'English', 'Chinese (Pinyin)')), f'the three strings have a text in {loc}')
 
 
-def cfset_tests(ctx, on_row):
-    """Customize > Cover Flow (m1plus_cfset): the Landscape switch and the Sort value row."""
+def library_tests(ctx, on_row):
+    """Settings > Library (m1plus_library): Update Library, Album Order (a value row opening the picker page), the Landscape switch and Rebuild Covers; the picker Album Order."""
     expect, P = ctx.expect, pod_pages
-    C = P.CFSET_PAGE
-    rows_s = PSYMS[f'pod_rows_{P.CUSTOMIZE_PAGE_INDEX}']
-    cf_i = next(i for i, r in enumerate(P.CUSTOMIZE_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.CFSET_PAGE_INDEX)
+    C = P.LIBRARY_PAGE
+    rows_s = PSYMS[f'pod_rows_{P.SETTINGS_PAGE_INDEX}']
+    rows_c = PSYMS[f'pod_rows_{P.LIBRARY_PAGE_INDEX}']
+    cf_i = next(i for i, r in enumerate(P.SETTINGS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.LIBRARY_PAGE_INDEX)
     LAND, SORT = '/mnt/data/m1plus-landscape', CFSORT_FILE
     land_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_LANDSCAPE)
     sort_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_SORT)
     sw, val = f'pod_switch{land_i}', f'pod_value{sort_i}'
-    expect([(r.label, r.action) for r in C.rows] == [('Landscape', P.ACT_LANDSCAPE), ('Sort', P.ACT_SORT), ('Rebuild Covers', P.ACT_REBUILD)] and C.title == 'Cover Flow',
-           'the Cover Flow page: titled Cover Flow, rows Landscape (switch), Sort (value) and Rebuild Covers')
+    expect([(r.label, r.action) for r in C.rows] == [('Update Library', P.ACT_HOME), ('Album Order', P.ACT_SORT), ('Landscape', P.ACT_LANDSCAPE), ('Rebuild Covers', P.ACT_REBUILD)]
+           and C.title == 'Library' and C.rows[0].arg == P.HOME_UPDATE and C.rows[sort_i].arg == P.SORT_PAGE_INDEX and P.row_kind(C.rows[0]) == 'action' and P.row_kind(C.rows[sort_i]) == 'value',
+           'the Library page: Update Library (the stock page, no chevron), Album Order (a value, a chevron, its picker), Landscape (switch) and Rebuild Covers')
 
-    def open_cf(land=None, sort=None, language=None):
+    def open_lib(land=None, sort=None, language=None):
         m = Machine()
         m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(
-            ['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(P.CUSTOMIZE_PAGE.rows))] + [sw, val])}
+            ['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(P.SETTINGS_PAGE.rows))] + [sw, val])}
         if land is not None: m.fs[LAND] = land
         if sort is not None: m.fs[SORT] = sort
         if language: m.set_language(language)
@@ -860,65 +864,89 @@ def cfset_tests(ctx, on_row):
     def label(m):
         """The last key the sort value was set to, and the text it shows."""
         keys = [c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets[val]]
-        texts = [c[2] for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] == m.widgets[val]]
-        return (keys[-1] if keys else None), (texts[-1] if texts else None)
+        return keys[-1] if keys else None
 
-    m = open_cf()
-    # (the Customize page's own row tables bind the cfset page's rows by name: row0 the switch, row1 the sort tap)
-    expect(('window_open', C.key) in m.calls and ('widget_on', m.widgets['pod_row0'], O['EVT_CLICK']) in [c[:3] for c in m.calls]
-           and ('widget_on', m.widgets['pod_row1'], O['EVT_CLICK']) in [c[:3] for c in m.calls], 'the Cover Flow row opens the page and binds both rows')
-    # Landscape: the switch writes the setting Cover Flow reads, atomically, the image follows (as the Customize page's switch did)
+    m = open_lib()
+    expect(('window_open', C.key) in m.calls and all(('widget_on', m.widgets[f'pod_row{i}'], O['EVT_CLICK']) in [c[:3] for c in m.calls] for i in range(len(C.rows))),
+           'the Library row opens the page and binds every row')
+    # Landscape: the switch writes the setting Cover Flow reads, atomically, the image follows
     expect(('image_base_set_image', m.widgets[sw], 'sset_off') in m.calls, 'Landscape is off with nothing saved')
-    m = open_cf(b'1\n')
+    m = open_lib(b'1\n')
     expect(('image_base_set_image', m.widgets[sw], 'sset_on') in m.calls, 'saved landscape: the switch opens on')
     for data in (b'x', b'', b'0\n'):
-        m = open_cf(data)
+        m = open_lib(data)
         expect(('image_base_set_image', m.widgets[sw], 'sset_off') in m.calls, f'saved {data!r}: the switch opens off')
-    m = open_cf()
+    m = open_lib()
     m.click(f'pod_row{land_i}')
     expect(m.fs.get(LAND) == b'1\n' and LAND + '.tmp' not in m.fs and ('rename', LAND + '.tmp', LAND) in m.calls and ('fsync', '/mnt/data') in m.calls
            and ('image_base_set_image', m.widgets[sw], 'sset_on') in m.calls, 'a tap turns it on: written atomically, the switch on')
     m.click(f'pod_row{land_i}')
     expect(m.fs.get(LAND) == b'0\n' and ('image_base_set_image', m.widgets[sw], 'sset_off') in m.calls, 'and off again')
     expect(SORT not in m.fs, 'the landscape switch does not touch the sort file')
-    m = open_cf(b'1\n'); m.fail.add(('write', LAND + '.tmp'))
+    m = open_lib(b'1\n'); m.fail.add(('write', LAND + '.tmp'))
     m.click(f'pod_row{land_i}')
     expect(m.fs.get(LAND) == b'1\n' and not any(c[0] == 'image_base_set_image' for c in m.calls) and LAND + '.tmp' not in m.fs,
            'a failed write changes neither the file nor the switch')
 
-    # Sort: Artist by default, the value in the row's grey label (set by key, so the language follows), a tap flips it
-    expect(label(open_cf()) == ('Artist', 'Artist'), 'with nothing saved the order is Artist')
-    expect(label(open_cf(sort=b'0\n')) == ('album', 'album'), 'saved "0": Album (the stock key album)')
+    # Album Order: Artist by default, the value in the row's grey label (set by key, so the language follows)
+    expect(label(open_lib()) == 'Artist', 'with nothing saved the order is Artist')
+    expect(label(open_lib(sort=b'0\n')) == 'album', 'saved "0": Album (the stock key album)')
     for data in (b'1\n', b'1', b'', b'x', b'00', b'0x', b'0\n\n', b'2\n', b' 0\n', b'\x000'):
-        expect(label(open_cf(sort=data))[0] == 'Artist', f'saved {data!r}: invalid or Artist, the label reads Artist')
-    expect(label(open_cf(sort=b'0'))[0] == 'album', 'saved "0" without a newline is Album too')
-    m = open_cf()
+        expect(label(open_lib(sort=data)) == 'Artist', f'saved {data!r}: invalid or Artist, the label reads Artist')
+    expect(label(open_lib(sort=b'0')) == 'album', 'saved "0" without a newline is Album too')
+    m = open_lib()
     m.click(f'pod_row{sort_i}')
+    expect(('window_open', P.SORT_PAGE.key) in m.calls, 'a tap on Album Order opens the picker page (m1plus_albumorder), it does not change the order')
+    expect(SORT not in m.fs, 'opening the picker saves nothing')
+    # the picker: a check on the chosen row, a tap on the other saves it atomically and the checks follow
+    S = P.SORT_PAGE
+    expect([(r.label, r.action, r.arg) for r in S.rows] == [('Artist', P.ACT_SORTSET, 1), ('Album', P.ACT_SORTSET, 0)] and S.title == 'Album Order' and all(P.row_kind(r) == 'check' for r in S.rows),
+           'the picker: Artist and Album, check rows')
+
+    def open_pick(sort=None, language=None):
+        m = Machine()
+        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(
+            ['btn_return', 'btn_backtoplayer', 'pod_row0', 'pod_row1', 'pod_check0', 'pod_check1'])}
+        if sort is not None: m.fs[SORT] = sort
+        if language: m.set_language(language)
+        m.call(on_row, a0=rows_c + 12 * sort_i, count=3000000)
+        return m
+
+    def shown(m, i):
+        v = [c[2] for c in m.calls if c[0] == 'widget_set_visible' and c[1] == m.widgets[f'pod_check{i}']]
+        return v[-1] if v else None
+
+    m = open_pick()
+    expect(('window_open', S.key) in m.calls and shown(m, 0) == 1 and shown(m, 1) == 0, 'the picker opens with the check on Artist (nothing saved)')
+    m = open_pick(b'0\n')
+    expect(shown(m, 0) == 0 and shown(m, 1) == 1, 'saved Album: the check is on Album')
+    m = open_pick()
+    m.click('pod_row1')
     expect(m.fs.get(SORT) == b'0\n' and SORT + '.tmp' not in m.fs and ('rename', SORT + '.tmp', SORT) in m.calls and ('fsync', '/mnt/data') in m.calls
-           and label(m) == ('album', 'album'), 'a tap on Sort: Album, written atomically, the value follows')
-    m.click(f'pod_row{sort_i}')
-    expect(m.fs.get(SORT) == b'1\n' and label(m) == ('Artist', 'Artist'), 'and back to Artist')
-    expect(LAND not in m.fs, 'the sort tap does not touch the landscape file')
-    m = open_cf(sort=b'0\n'); m.fail.add(('write', SORT + '.tmp'))
-    m.click(f'pod_row{sort_i}')
-    expect(m.fs.get(SORT) == b'0\n' and label(m) == (None, None) and SORT + '.tmp' not in m.fs, 'a failed write changes neither the file nor the value')
-    m = open_cf(); m.fail.add(('rename', SORT))
-    m.click(f'pod_row{sort_i}')
-    expect(SORT not in m.fs and label(m) == (None, None), 'a failed rename changes neither')
+           and shown(m, 0) == 0 and shown(m, 1) == 1, 'a tap on Album: written atomically, the check follows')
+    m.click('pod_row0')
+    expect(m.fs.get(SORT) == b'1\n' and shown(m, 0) == 1 and shown(m, 1) == 0, 'and back to Artist')
+    expect(LAND not in m.fs, 'the picker does not touch the landscape file')
+    m = open_pick(b'0\n'); m.fail.add(('write', SORT + '.tmp'))
+    m.click('pod_row0')
+    expect(m.fs.get(SORT) == b'0\n' and shown(m, 0) is None and shown(m, 1) is None and SORT + '.tmp' not in m.fs, 'a failed write changes neither the file nor the check (no check is touched)')
+    m = open_pick(); m.fail.add(('rename', SORT))
+    m.click('pod_row1')
+    expect(SORT not in m.fs and shown(m, 0) is None and shown(m, 1) is None, 'a failed rename changes neither')
     # localisation: the value is the translation in every language
     for loc in pod_i18n.ALL_TABLES:
         T = tr_of(loc)
-        m = open_cf(language=loc)
-        expect(label(m) == ('Artist', T('Artist')), f'{loc}: Artist reads {T("Artist")!r}')
-        m.click(f'pod_row{sort_i}')
-        expect(label(m)[0] == 'album', f'{loc}: Album is the stock key album')
+        m = open_lib(language=loc)
+        expect(label(m) == 'Artist' and T('Artist'), f'{loc}: Artist is set by key')
+        m = open_lib(sort=b'0\n', language=loc)
+        expect(label(m) == 'album', f'{loc}: Album is the stock key album')
     # Rebuild Covers: the row asks first (the stock confirm dialog, a wrapped message), and only Yes opens the rebuild
     rb_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_REBUILD)
     KEY = 'Rebuild all covers? This may take a few minutes.'
 
     def rebuild_machine(language=None, yes=False):
         m = cover_machine(albums=3)
-        for n in ['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(P.CUSTOMIZE_PAGE.rows))] + [sw, val]:
+        for n in ['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(P.SETTINGS_PAGE.rows))] + [sw, val]:
             if n not in m.widgets: m.widget(n)
         if language: m.set_language(language)
         m.confirm_yes = yes
@@ -940,19 +968,18 @@ def cfset_tests(ctx, on_row):
         T = tr_of(loc)
         m = rebuild_machine(language=loc)
         expect([c[1] for c in m.calls if c[0] == 'confirm'] == [T(KEY)], f'{loc}: the confirm message reads {T(KEY)!r}')
-    # the built asset: a value label that takes no touch, no chevron, the row takes the tap
+    # the built asset: a value label that takes no touch, a chevron, the row takes the tap
     path = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui', C.key + '.bin')
     tree = awtk_ui.parse(open(path, 'rb').read())
     row, value = tree.find(f'pod_row{sort_i}'), tree.find(val)
     expect(value is not None and value.get('sensitive') == 'false' and value.get('tr_text') == 'Artist'
-           and not [c for c in row.children if c.type == 'image' and c.get('image') == 'right_arrow'],
-           'the Sort row: an insensitive value label (tr_text Artist) and no chevron')
+           and [c for c in row.children if c.name == 'pod_chevron'], 'the Album Order row: an insensitive value label (tr_text Artist) and the chevron')
     expect(tree.find(f'pod_switch{land_i}') is not None and tree.find(f'pod_switch{land_i}').get('sensitive') == 'false'
            and not [c for c in tree.find(f'pod_row{land_i}').children if c.name == val], 'the Landscape row: its switch image, no value')
     node_tree = asset_tree(path)
     mm = Machine()
-    for r in (land_i, sort_i):
-        y = 50 + r * pod_ui.ROW_H + pod_ui.ROW_H // 2
+    for r in range(len(C.rows)):
+        y = 50 + tree.find(f'pod_row{r}').y + pod_ui.ROW_H // 2
         for x in (100, 290):
             got = stock_target(mm, node_tree, x, y)
             expect(f'pod_row{r}' in got and not any(n.startswith('pod_value') or n.startswith('pod_switch') for n in got), f'a tap at x {x} on row {r} reaches the row ({got})')
@@ -961,7 +988,7 @@ def cfset_tests(ctx, on_row):
 def mainmenu_tests(ctx, on_row, rows_s, mm_i):
     expect, P = ctx.expect, pod_pages
     n = len(P.ITEMS)
-    CU = P.CUSTOMIZE_ID
+    CU = P.SETTINGS_ID
     ROW_H = pod_ui.ROW_H
     items = [r.label for r in P.ITEMS]
     ZX, ZW = 191, 50   # the arrow's rectangle in the row (the asset's pod_up button, checked in 22); the tap of an arrow is a click on its row in this zone
@@ -1001,7 +1028,7 @@ def mainmenu_tests(ctx, on_row, rows_s, mm_i):
     DN = len(D)   # 5 shown by default
     expect(labels == dflt and labels[0] == 'Cover Flow' and labels[4] == 'Playlists' and labels[5] == 'Now Playing' and on == [True] * DN + [False] * (n - DN)
            and up == [False] + [True] * (DN - 1) + [False] * (n - DN),
-           f'default: the five items on top, Now Playing, Shuffle, Genres, Folders, the nine Extras items and Customize off below, an arrow on each shown item but the first ({labels}, {on}, {up})')
+           f'default: the five items on top, Now Playing, Shuffle, Genres, Folders, the nine Extras items and Settings off below, an arrow on each shown item but the first ({labels}, {on}, {up})')
     expect(all(('widget_on', m.widgets['pod_row3'], O[e]) in [c[:3] for c in m.calls] for e in ('EVT_CLICK', 'EVT_POINTER_DOWN', 'EVT_POINTER_UP', 'EVT_POINTER_ABORT'))
            and not any(c[0] == 'widget_on' and c[1] == m.widgets['pod_up3'] for c in m.calls)
            and m.names().count('widget_on') == 2 + 4 * n + 1, 'each row is bound (click, pointer down, up, abort), no arrow is (and the window destroy); the page has no Extras row')
@@ -1059,7 +1086,7 @@ def mainmenu_tests(ctx, on_row, rows_s, mm_i):
            'and hidden again, it goes back to the hidden group')
     for i in range(n): run(m, lambda i=i: m.click(f'pod_row{i}') if P.ID_CHARS[i].encode() in m.fs[MENU_FILE].rstrip(b'\n') else None)
     expect(m.fs.get(MENU_FILE) == b'\n' and all(x is False for x in state(m)[1]) and not any(state(m)[2]),
-           'every item can be hidden (Customize too; Extras stays on the menu): the list is empty, no arrow shows')
+           'every item can be hidden (Settings too; Extras stays on the menu): the list is empty, no arrow shows')
     for i in range(n): run(m, lambda i=i: m.click(f'pod_row{i}'))
     expect(m.fs.get(MENU_FILE) == b'012345678abcdefghijkl\n' and all(state(m)[1]) and len(m.fs[MENU_FILE]) < P.MENU_FILE_MAX,
            'and every item, all twenty-one, can be shown again: the longest list fits the file cap')
@@ -1070,17 +1097,17 @@ def mainmenu_tests(ctx, on_row, rows_s, mm_i):
     expect(MENU_FILE not in m.fs and state(m)[0] == dflt and state(m)[1][:DN] == [True] * DN and MENU_TMP not in m.fs,
            'a failed save is undone: the file, the order and the switches are as they were')
 
-    # 19b. Customize is an item like the others: hidden it leaves the list (and shows on the Extras page), shown it joins the end, it moves up
+    # 19b. Settings is an item like the others: hidden it leaves the list (and shows on the Extras page), shown it joins the end, it moves up
     m = open_page(); m.log = list(m.calls)
     run(m, lambda: m.click(f'pod_row{CU}'))
-    expect(m.fs.get(MENU_FILE) == b'12345j\n' and state(m)[0][:6] == dflt[:5] + ['Customize'] and state(m)[1][:7] == [True] * 6 + [False] and state(m)[2][5] is True,
-           f'showing Customize (hidden by default): it joins the end of the menu list, with an arrow ({m.fs.get(MENU_FILE)!r})')
+    expect(m.fs.get(MENU_FILE) == b'12345j\n' and state(m)[0][:6] == dflt[:5] + ['Settings'] and state(m)[1][:7] == [True] * 6 + [False] and state(m)[2][5] is True,
+           f'showing Settings (hidden by default): it joins the end of the menu list, with an arrow ({m.fs.get(MENU_FILE)!r})')
     run(m, lambda: m.click(f'pod_row{CU}'))
-    expect(m.fs.get(MENU_FILE) == b'12345\n' and state(m)[0][:5] == dflt[:5] and state(m)[1][:6] == [True] * 5 + [False] and 'Customize' in state(m)[0][5:],
+    expect(m.fs.get(MENU_FILE) == b'12345\n' and state(m)[0][:5] == dflt[:5] and state(m)[1][:6] == [True] * 5 + [False] and 'Settings' in state(m)[0][5:],
            'and hiding it again: it leaves the menu list (and is on the Extras page)')
     run(m, lambda: m.click(f'pod_row{CU}'))
     run(m, lambda: arrow(m, CU))
-    expect(m.fs.get(MENU_FILE) == b'1234j5\n' and state(m)[0][4] == 'Customize', 'its arrow moves it up one place')
+    expect(m.fs.get(MENU_FILE) == b'1234j5\n' and state(m)[0][4] == 'Settings', 'its arrow moves it up one place')
 
     # 19c. The off flags: showing an item clears its flag; hiding keeps the others; a hidden item the list turned off stays off (and a shown one is never off)
     m = open_page(b'12345-ab\n'); m.log = list(m.calls)

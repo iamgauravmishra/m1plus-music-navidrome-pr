@@ -57,13 +57,25 @@ ACT_IPOD = 22    # open the Pod, the virtual iPod Classic page: a fullscreen win
 ACT_PODCASTS = 23   # open the Podcasts page: the shows in /mnt/mmc/Podcasts and their episodes (patch/podcasts.c podcasts_open)
 ACT_NETPROBE = 25 # the Network Probe row (Developer): a thread checks HTTPS, Wi-Fi, the clock, RAM and the screen-off soak, and logs to /mnt/mmc/m1plus-probe.log (patch/probe.c)
 ACT_KEYBOARD = 26 # the Keyboard row (Developer): opens the on-screen QWERTY keyboard (patch/keyboard.c) with a test callback: Search toasts the text, every tap is logged to /mnt/mmc/m1plus-probe.log
-ACT_KB_EN = 27  # switch row (Customize > Keyboards): English, always on and not switchable (the row's switch is shown on and the row is dimmed)
-ACT_KB_ZH = 28  # switch row (Customize > Keyboards): Chinese (Pinyin), off by default; on gives the on-screen keyboard a language key and the pinyin layer (patch/keyboard.c kb_zh_toggle)
-ACT_CTHEME = 24  # value row: the Cassette Mode page's theme, Normal, Chrome or Metal; a tap cycles it (patch/tape.c tape_theme_cycle)
+ACT_KB_EN = 27  # switch row (Settings > Keyboards): English, always on and not switchable (the row's switch is shown on and the row is dimmed)
+ACT_KB_ZH = 28  # switch row (Settings > Keyboards): Chinese (Pinyin), off by default; on gives the on-screen keyboard a language key and the pinyin layer (patch/keyboard.c kb_zh_toggle)
+ACT_CTHEME = 24  # value row: the Cassette Mode theme, Normal, Chrome or Metal; opens its picker page (arg = the page index); the payload shows the saved theme (patch/tape.c tape_theme)
+ACT_STOCK = 29   # open a stock page by name (arg = index in STOCK_PAGES; patch/m1plus.c navigator_to, no context); some show a value of the stock state at the right
+ACT_SORTSET = 30   # picker row (Album Order): choose the album order (arg 1 Artist, 0 Album); a check shows on the chosen row (patch/covercache.c cc_sort_set)
+ACT_THEMESET = 31  # picker row (Cassette Theme): choose the theme (arg 0 Normal, 1 Chrome, 2 Metal); a check shows on the chosen row (patch/tape.c tape_theme_set)
+ACT_INFO = 33     # an information row of the About page: a label and a grey value at the right, no chevron, not tappable (arg = INFO_*: where patch/m1plus.c reads the value; INFO_STATIC: the Row's own text)
 SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
-VALUE_ACTIONS = (ACT_SORT, ACT_CTHEME)    # rows with a grey value at the right (the widget pod_value<row>)
+VALUE_ACTIONS = (ACT_SORT, ACT_CTHEME)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
+CHECK_ACTIONS = (ACT_SORTSET, ACT_THEMESET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
+ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_NETPROBE, ACT_REBUILD, ACT_GRID)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
 VALUE_INIT = {ACT_SORT: 'Artist', ACT_CTHEME: 'Normal'}   # what the asset's value label says before the payload sets it
+# The stock pages ACT_STOCK opens: (the name navigator_to takes = ui/<name>.bin, the value the row shows at the right: the payload reads the stock state, patch/m1plus.c VK_*, or None).
+# Each is a plain navigator_to(name) with no context in stock (docs/modules/settings.md "Stock pages"): the Settings and Play Settings lists' rows, the Wi-Fi hub's two; Back returns to our page.
+STOCK_WIFI, STOCK_BLUETOOTH, STOCK_PLAYMODE, STOCK_EQ, STOCK_DISPLAY, STOCK_LANGUAGE = range(6)
+STOCK_PAGES = (('systemset/wifi_page', 'wifi'), ('systemset/bluetooth_page', 'bluetooth'), ('playset/playmode_page', 'playmode'), ('playset/equalizer_page', 'eq'),
+               ('systemset/display_page', None), ('systemset/language_page', 'language'))
+STOCK_VALUES = ('wifi', 'bluetooth', 'playmode', 'eq', 'language')   # the VK_* of patch/m1plus.c, in this order
 
 # ACT_SHUFFLE arguments (mirror the enum in patch/shuffle.c)
 SHUFFLE_SONGS = 0    # every song, stock Shuffle play mode, from a random song
@@ -76,33 +88,62 @@ class Row:
         self.label, self.action, self.arg = label, action, arg
 
 
+def row_kind(row):
+    """How a settings row is drawn: 'switch', 'value' (a grey value and the chevron), 'check', 'info' (a grey value, no chevron, no touch), 'action' (no accessory) or 'link' (the chevron)."""
+    if row.action in SWITCH_ACTIONS: return 'switch'
+    if row.action in VALUE_ACTIONS or (row.action == ACT_STOCK and STOCK_PAGES[row.arg][1]): return 'value'
+    if row.action in CHECK_ACTIONS: return 'check'
+    if row.action == ACT_INFO: return 'info'
+    if row.action in ACTION_ACTIONS or (row.action == ACT_HOME and row.arg == HOME_UPDATE): return 'action'
+    return 'link'
+
+
+class Hdr:
+    """A section header of a cards page (grey text above a card)."""
+    def __init__(self, text): self.text = text
+
+
+class Note:
+    """A grey note under a card."""
+    def __init__(self, text): self.text = text
+
+
+GAP = 'gap'   # in a cards page's layout: the space between two cards that have no header or note between them
+
+
 class Page:
-    def __init__(self, key, name, title, rows=(), kind='rows'):
+    def __init__(self, key, name, title, rows=(), kind='rows', layout=None):
         self.key = key          # asset basename under ui/ (ui/<key>.bin) and window resource name
         self.name = name        # root widget name property
         self.title = title      # navbar title text
+        self.layout = list(layout) if layout is not None else None   # a cards page: the Rows, Hdrs, Notes and GAPs in order (tools/pod_settings.py places them)
+        if layout is not None: kind, rows = 'cards', [x for x in layout if isinstance(x, Row)]
         self.rows = list(rows)
-        self.kind = kind        # 'rows', 'cover' (Cover Flow's own layout), 'artists' (the A-Z list page the payload
+        self.kind = kind        # 'rows', 'cards' (a Settings page: layout), 'cover' (Cover Flow's own layout), 'artists' (the A-Z list page the payload
                                 # fills: Artists, Genres, Composers) or 'grid' (the Albums grid)
 
 
 # The M1+ Music menu, the Classic iPod main menu adapted to the 320x480 touch screen (q2-pod
-# docs/ipod.md geometry). Nineteen customisable items (the nine menu items, the nine Extras tiles and Customize), then Extras,
+# docs/ipod.md geometry). Nineteen customisable items (the nine menu items, the nine Extras tiles and Settings), then Extras,
 # which is always shown, always last and not customisable. The asset holds every row in the default order (an item's id is its row
 # index); patch/menu.c hides the items the user hid (the Extras page lists them unless the user turned them off there) and orders the
 # rest, as the saved list in /mnt/data/m1plus-menu says. Shuffle opens the Shuffle page, Artists the payload's
-# Artists list, Customize the Customize page (Main Menu, Extras, Home Screen, Cover Flow, Playback, System Settings,
-# Developer). Customize is hidden from the menu by default like Shuffle; it then shows on the Extras page (Tools), where it can never be turned off.
+# Artists list, Settings the Settings page (cards: Wi-Fi, Bluetooth, the M1+ Music pages, Playback, System,
+# Developer). Settings is hidden from the menu by default like Shuffle; it then shows on the Extras page (Tools), where it can never be turned off.
 SHUFFLE_PAGE_INDEX = 3   # its index in PAGES
-CUSTOMIZE_PAGE_INDEX = 4
+SETTINGS_PAGE_INDEX = 4
 EXTRAS_PAGE_INDEX = 5
 MENUCFG_PAGE_INDEX = 7
-CFSET_PAGE_INDEX = 8
-CASSETTE_PAGE_INDEX = 18
+LIBRARY_PAGE_INDEX = 8
+NPSET_PAGE_INDEX = 18
 KEYBOARDS_PAGE_INDEX = 20
 HOMESET_PAGE_INDEX = 9
 EXTRASCFG_PAGE_INDEX = 13
 DEVELOPER_PAGE_INDEX = 14
+MENUEXTRAS_PAGE_INDEX = 21
+SORT_PAGE_INDEX = 22
+THEME_PAGE_INDEX = 23
+ABOUT_PAGE_INDEX = 24
 ITEMS = [   # item id = index; the default order, essentials first (iPod classic style)
     Row('Now Playing', ACT_PLAYER),
     Row('Cover Flow', ACT_COVER),
@@ -114,8 +155,8 @@ ITEMS = [   # item id = index; the default order, essentials first (iPod classic
     Row('Genres', ACT_ARTISTS, HOME_GENRE),
     Row('Folders', ACT_HOME, HOME_FOLDER),
     # The stock Home tiles the menu does not repeat (Songs, Albums, Artists, Genres, Folders and Playlists are items above,
-    # Play/System Settings are on Customize; the HiFi Store, id 0, exists on the grid only in Simplified Chinese and is left
-    # out). They are items too, hidden by default: Customize > Main Menu can show any of them in the menu. The five song lists (Favorites, Recently Added,
+    # Play/System Settings are on Settings; the HiFi Store, id 0, exists on the grid only in Simplified Chinese and is left
+    # out). They are items too, hidden by default: Settings > Main Menu can show any of them in the menu. The five song lists (Favorites, Recently Added,
     # Recently Played, Most Played, Hi-Res) open on our Songs page (ACT_LIST, docs/modules/songs.md "The other lists"), the rest their stock page.
     Row('Favorites', ACT_LIST, HOME_FAV),
     Row('Recently Added', ACT_LIST, HOME_RECENTADD),
@@ -126,20 +167,20 @@ ITEMS = [   # item id = index; the default order, essentials first (iPod classic
     Row('Update Library', ACT_HOME, HOME_UPDATE),
     Row('Tidal', ACT_HOME, HOME_TIDAL),
     Row('CD Ripper', ACT_HOME, HOME_CDRIPPER),
-    # The Customize page (was the always-shown Settings row): an item like the others, hidden from the menu by default (a Tool on Extras).
-    Row('Customize', ACT_PAGE, CUSTOMIZE_PAGE_INDEX),
+    # The Settings page (was the always-shown Settings row): an item like the others, hidden from the menu by default (a Tool on Extras).
+    Row('Settings', ACT_PAGE, SETTINGS_PAGE_INDEX),
     # The Pod, the virtual iPod Classic (docs/modules/ipod.md): an item like the rest, hidden from the menu by default (on Extras, in Play).
     Row('Pod', ACT_IPOD),
     # Podcasts (docs/modules/podcasts.md): the shows on the card and their episodes; an item like the rest, hidden from the menu by default (on Extras, in Play).
     Row('Podcasts', ACT_PODCASTS),
 ]
-CUSTOMIZE_ID = 18
-assert ITEMS[CUSTOMIZE_ID].label == 'Customize'
+SETTINGS_ID = 18
+assert ITEMS[SETTINGS_ID].label == 'Settings'
 DEFAULT_MENU = [1, 2, 3, 4, 5]   # the items shown by default, in order (saved string "12345"): Cover Flow, Albums, Artists, Songs, Playlists, then Extras. A minimal menu: Now Playing is not
-                                    # among them (the mini player bar of the Home instance opens it, docs/modules/minibar.md), nor are Shuffle and Customize; every other item is on the Extras page,
-                                    # grouped (EXTRAS_GROUPS), and Customize > Main Menu can show any of them
+                                    # among them (the mini player bar of the Home instance opens it, docs/modules/minibar.md), nor are Shuffle and Settings; every other item is on the Extras page,
+                                    # grouped (EXTRAS_GROUPS), and Settings > Main Menu can show any of them
 assert all(0 <= i < len(ITEMS) for i in DEFAULT_MENU) and len(set(DEFAULT_MENU)) == len(DEFAULT_MENU)
-ID_CHARS = '012345678abcdefghijkl'   # the saved list's character for each item id: '0'..'8' the first nine, 'a'..'i' the nine Extras tiles, 'j' Customize, 'k' the Pod, 'l' Podcasts
+ID_CHARS = '012345678abcdefghijkl'   # the saved list's character for each item id: '0'..'8' the first nine, 'a'..'i' the nine Extras tiles, 'j' Settings, 'k' the Pod, 'l' Podcasts
 assert len(ID_CHARS) == len(ITEMS)
 OFF_CHAR = '-'           # the saved list's separator: the item characters after it are turned off (not listed on the Extras page); at most once
 DEFAULT_OFF = []         # no item is turned off by default
@@ -154,7 +195,7 @@ def parse_menu_full(data):
     defaults. A line of item characters (ID_CHARS), then optionally OFF_CHAR and more item characters (the items the
     Extras page leaves out), then an optional newline, shorter than the file cap. Invalid, giving the default
     ([DEFAULT_MENU], []): an unknown character, an id twice (in either part or across them), a second OFF_CHAR, or
-    Customize (CUSTOMIZE_ID) after it (it can never be turned off: it must stay reachable)."""
+    Settings (SETTINGS_ID) after it (it can never be turned off: it must stay reachable)."""
     if isinstance(data, str): data = data.encode('latin-1')
     default = (list(DEFAULT_MENU), list(DEFAULT_OFF))
     if data is None or not 0 < len(data) < MENU_FILE_MAX: return default
@@ -162,7 +203,7 @@ def parse_menu_full(data):
     shown, sep, off = body.partition(OFF_CHAR)
     if OFF_CHAR in off or any(c not in ID_CHARS for c in shown + off): return default
     ids, offs = [ID_CHARS.index(c) for c in shown], [ID_CHARS.index(c) for c in off]
-    if len(set(ids + offs)) != len(ids) + len(offs) or CUSTOMIZE_ID in offs: return default
+    if len(set(ids + offs)) != len(ids) + len(offs) or SETTINGS_ID in offs: return default
     return ids, offs
 
 
@@ -201,36 +242,76 @@ SHUFFLE_PAGE = Page('m1plus_shuffle', 'm1plus_shuffle_page', 'Shuffle', rows=[
     Row('Shuffle Folders', ACT_SHUFFLE, SHUFFLE_FOLDERS),
 ])
 
-# Customize (M1+ Music's own settings; System Settings is the stock one): the menu's two pages (Main Menu, Extras), the Home
-# Screen and Cover Flow sub-pages (below), the stock Playback and System Settings pages, and Developer (Screenshot).
-CUSTOMIZE_PAGE = Page('m1plus_customize', 'm1plus_customize_page', 'Customize', rows=[
-    Row('Main Menu', ACT_PAGE, MENUCFG_PAGE_INDEX),
-    Row('Extras', ACT_PAGE, EXTRASCFG_PAGE_INDEX),
+# Settings (iOS style grouped cards, tools/pod_settings.py places them; the design is tools/preview_settings.py's): the stock Wi-Fi and Bluetooth pages, the M1+ Music pages
+# (Menu & Extras, Home Screen, Library, Now Playing, Keyboards), Playback (Play Mode, EQ, the stock Play Settings list) and System (Display, Language, About, the stock
+# System Settings list), then Developer. Every "stock page" row is a plain navigator_to of the page stock's own list calls (STOCK_PAGES).
+SETTINGS_PAGE = Page('m1plus_settings', 'm1plus_settings_page', 'Settings', layout=[
+    Row('Wi-Fi', ACT_STOCK, STOCK_WIFI),
+    Row('Bluetooth', ACT_STOCK, STOCK_BLUETOOTH),
+    GAP,
+    Row('Menu & Extras', ACT_PAGE, MENUEXTRAS_PAGE_INDEX),
     Row('Home Screen', ACT_PAGE, HOMESET_PAGE_INDEX),
-    Row('Cover Flow', ACT_PAGE, CFSET_PAGE_INDEX),
-    Row('Cassette Mode', ACT_PAGE, CASSETTE_PAGE_INDEX),
+    Row('Library', ACT_PAGE, LIBRARY_PAGE_INDEX),
+    Row('Now Playing', ACT_PAGE, NPSET_PAGE_INDEX),
+    Hdr('Playback'),
+    Row('Play Mode', ACT_STOCK, STOCK_PLAYMODE),
+    Row('EQ', ACT_STOCK, STOCK_EQ),
+    Row('All Playback Settings', ACT_HOME, HOME_PLAYSET),
+    Hdr('System'),
+    Row('Display', ACT_STOCK, STOCK_DISPLAY),
+    Row('Language', ACT_STOCK, STOCK_LANGUAGE),
     Row('Keyboards', ACT_PAGE, KEYBOARDS_PAGE_INDEX),
-    Row('Playback', ACT_HOME, HOME_PLAYSET),
-    Row('System Settings', ACT_HOME, HOME_SYSSET),
+    Row('About', ACT_PAGE, ABOUT_PAGE_INDEX),
+    Row('All System Settings', ACT_HOME, HOME_SYSSET),
+    GAP,
     Row('Developer', ACT_PAGE, DEVELOPER_PAGE_INDEX),
 ])
 
-# Customize > Developer: the developer's tools. Screenshot: a confirm dialog, then a 5 s countdown (cancellable), then the screen
-# is written to the card (patch/shot.c). Network Probe: a confirm dialog, then one worker thread logs what the network stack can do to the card (patch/probe.c).
-DEVELOPER_PAGE = Page('m1plus_developer', 'm1plus_developer_page', 'Developer', rows=[
+# Settings > System > About (our own page: the stock About page's seven values in sections, read the way stock reads them; docs/modules/settings.md "About"). INFO_* say where patch/m1plus.c reads
+# a row's value: the build tag, the stock firmware version literal, the model literal, the serial number, the Wi-Fi MAC, the IP address (while connected), the card's capacity and free space.
+INFO_TAG, INFO_FW, INFO_MODEL, INFO_SN, INFO_MAC, INFO_IP, INFO_CAP, INFO_FREE = range(8)
+ABOUT_PAGE = Page('m1plus_about', 'm1plus_about_page', 'About', layout=[
+    Row('M1+ Music', ACT_INFO, INFO_TAG),
+    Row('Firmware', ACT_INFO, INFO_FW),
+    Hdr('Device'),
+    Row('Model', ACT_INFO, INFO_MODEL),
+    Row('Serial Number', ACT_INFO, INFO_SN),
+    Row('Wi-Fi MAC', ACT_INFO, INFO_MAC),
+    Row('IP Address', ACT_INFO, INFO_IP),
+    Hdr('Storage'),
+    Row('Capacity', ACT_INFO, INFO_CAP),
+    Row('Available', ACT_INFO, INFO_FREE),
+])
+
+# Settings > Menu & Extras: the two pages that arrange the menu (patch/menu.c).
+MENUEXTRAS_PAGE = Page('m1plus_menuextras', 'm1plus_menuextras_page', 'Menu & Extras', layout=[
+    Row('Main Menu', ACT_PAGE, MENUCFG_PAGE_INDEX),
+    Note('Show, hide and reorder the menu'),
+    Row('Extras', ACT_PAGE, EXTRASCFG_PAGE_INDEX),
+    Note('Items the menu does not show'),
+])
+
+# Settings > Developer: Startup (the Boot to M1+ Music switch, patch/home.c, and the way out to the stock grid) and the developer's tools. Screenshot: a confirm dialog, then a 5 s
+# countdown (cancellable), then the screen is written to the card (patch/shot.c). Network Probe: a confirm dialog, then one worker thread logs what the network stack can do to the card (patch/probe.c).
+DEVELOPER_PAGE = Page('m1plus_developer', 'm1plus_developer_page', 'Developer', layout=[
+    Hdr('Startup'),
+    Row('Boot to M1+ Music', ACT_STARTUP),
+    Row('Open Shanling Home', ACT_GRID),
+    Note('Off: the device starts on Shanling Home'),
+    Hdr('Tools'),
     Row('Screenshot', ACT_SHOT),
     Row('Network Probe', ACT_NETPROBE),
     Row('Keyboard', ACT_KEYBOARD),
 ])
 
-# Customize > Home Screen: the Boot to M1+ Music switch (patch/home.c), the Recent Albums and Daily Mix switches (the shelf and the card of the Home menu), Regenerate
-# Daily Mix and Shanling Home, the way out to the grid.
-HOMESET_PAGE = Page('m1plus_homeset', 'm1plus_homeset_page', 'Home Screen', rows=[
-    Row('Boot to M1+ Music', ACT_STARTUP),
+# Settings > Home Screen: the Recent Albums and Daily Mix switches (the shelf and the card of the Home menu), and Regenerate Daily Mix in a card of its own, which
+# (with its note) is hidden while Daily Mix is off (patch/m1plus.c regen_show: pod_card1, pod_note1 and the row).
+HOMESET_PAGE = Page('m1plus_homeset', 'm1plus_homeset_page', 'Home Screen', layout=[
     Row('Recent Albums', ACT_SHELF),
     Row('Daily Mix', ACT_DAILY),
+    Note('Shown on Home below the menu'),
     Row('Regenerate Daily Mix', ACT_REGEN),
-    Row('Shanling Home', ACT_GRID),
+    Note('A new mix the next time Home opens'),
 ])
 
 # Main Menu: the customise page (patch/menu.c builds its behaviour at run time): one row per item with a
@@ -241,7 +322,7 @@ MENUCFG_PAGE = Page('m1plus_mainmenu', 'm1plus_mainmenu_page', 'Main Menu', kind
 # order, same index as the menu's; patch/menu.c hides the ones the menu shows or that are off and stacks the rest in EXTRAS_ORDER,
 # the same for every language). The items are in four titled groups, in a deliberate order (not alphabetical; the title is the
 # group's section header, a non-interactive caption, shown while the group has a row on the page): what plays, the library's
-# views, the song collections, the tools. Customize is in none: it is the Extras page's navbar button.
+# views, the song collections, the tools. Settings is in none: it is the Extras page's navbar button.
 EXTRAS_GROUPS = (
     ('Play', ('Now Playing', 'Shuffle', 'Pod')),
     ('Library', ('Albums', 'Artists', 'Songs', 'Playlists', 'Cover Flow', 'Genres', 'Composers', 'Folders', 'Podcasts')),
@@ -249,10 +330,10 @@ EXTRAS_GROUPS = (
     ('Tools', ('Update Library', 'CD Ripper', 'Tidal')),
 )
 _LABELS = [r.label for r in ITEMS]
-# Customize is in no group and is never listed: the Extras page's navbar has a Customize button instead (the asset keeps its row for the
-# index, hidden by the payload), and Customize > Extras has no row for it. Its id ends EXTRAS_ORDER, and its group is the sentinel len(EXTRAS_GROUPS).
-EXTRAS_ORDER = [_LABELS.index(label) for _, group in EXTRAS_GROUPS for label in group] + [CUSTOMIZE_ID]   # item ids, the flattened groups, then Customize
-EXTRAS_GROUP_OF = [next((g for g, (_, labels) in enumerate(EXTRAS_GROUPS) if label in labels), len(EXTRAS_GROUPS)) for label in _LABELS]   # item id -> its group (Customize: none)
+# Settings is in no group and is never listed: the Extras page's navbar has a Settings button instead (the asset keeps its row for the
+# index, hidden by the payload), and Settings > Extras has no row for it. Its id ends EXTRAS_ORDER, and its group is the sentinel len(EXTRAS_GROUPS).
+EXTRAS_ORDER = [_LABELS.index(label) for _, group in EXTRAS_GROUPS for label in group] + [SETTINGS_ID]   # item ids, the flattened groups, then Settings
+EXTRAS_GROUP_OF = [next((g for g, (_, labels) in enumerate(EXTRAS_GROUPS) if label in labels), len(EXTRAS_GROUPS)) for label in _LABELS]   # item id -> its group (Settings: none)
 EXTRAS_TITLES = [title for title, _ in EXTRAS_GROUPS]
 assert sorted(EXTRAS_ORDER) == list(range(len(ITEMS))) and len(set(EXTRAS_TITLES)) == len(EXTRAS_GROUPS)
 HDR_H = 40         # the section header's strip: shorter than a row (patch/menu.c puts it above the group's first row)
@@ -261,16 +342,16 @@ HDR_H = 40         # the section header's strip: shorter than a row (patch/menu.
 def extras_display(ids, off=(), cfg=False):
     """The Extras page's children as patch/menu.c stacks them for the saved list (shown item ids `ids`, turned-off ids `off`):
     [('hdr', group)] and [('row', item id)] in display order, then the hidden ones last (the hidden headers in group order, then the hidden rows in
-    EXTRAS_ORDER). A row is shown when the menu does not show the item and (Extras) the list did not turn it off, or (cfg: Customize > Extras, which
-    has no row for Customize) whatever the list says about it off; Customize is never listed (on Extras its row is hidden: the navbar has its button); a header is shown only while its group has a shown row, right above it.
+    EXTRAS_ORDER). A row is shown when the menu does not show the item and (Extras) the list did not turn it off, or (cfg: Settings > Extras, which
+    has no row for Settings) whatever the list says about it off; Settings is never listed (on Extras its row is hidden: the navbar has its button); a header is shown only while its group has a shown row, right above it.
     Returns (shown, hidden)."""
-    listed = (lambda i: i != CUSTOMIZE_ID and i not in ids) if cfg else (lambda i: i != CUSTOMIZE_ID and i not in ids and i not in off)
+    listed = (lambda i: i != SETTINGS_ID and i not in ids) if cfg else (lambda i: i != SETTINGS_ID and i not in ids and i not in off)
     shown, hidden = [], []
     for g in range(len(EXTRAS_GROUPS)):
         rows = [i for i in EXTRAS_ORDER if EXTRAS_GROUP_OF[i] == g and listed(i)]
         if rows: shown += [('hdr', g)] + [('row', i) for i in rows]
         else: hidden.append(('hdr', g))
-    hidden += [('row', i) for i in EXTRAS_ORDER if not listed(i) and not (cfg and i == CUSTOMIZE_ID)]
+    hidden += [('row', i) for i in EXTRAS_ORDER if not listed(i) and not (cfg and i == SETTINGS_ID)]
     return shown, hidden
 
 
@@ -285,19 +366,28 @@ def extras_layout(shown, row_h):
 
 EXTRAS_PAGE = Page('m1plus_extras', 'm1plus_extras_page', 'Extras', rows=[Row(r.label, r.action, r.arg) for r in ITEMS])
 
-# Customize > Extras: which of the items the menu does not show the Extras page lists (patch/menu.c builds its behaviour at run time).
-# A switch row (the whole row toggles) per item but Customize, in id order like the Extras page's asset; the payload shows only the
+# Settings > Extras: which of the items the menu does not show the Extras page lists (patch/menu.c builds its behaviour at run time).
+# A switch row (the whole row toggles) per item but Settings, in id order like the Extras page's asset; the payload shows only the
 # items the menu does not show, stacked in EXTRAS_ORDER. Off = left out of Extras (the saved list's part after OFF_CHAR); showing
 # an item in the menu (Main Menu) turns it on again, so an item hidden from the menu later is back on Extras.
 EXTRASCFG_PAGE = Page('m1plus_extrascfg', 'm1plus_extrascfg_page', 'Extras', kind='extrascfg')
 
-# Settings > Cover Flow: the landscape switch, the album order and Rebuild Covers. Sort shows its value (Artist or Album) at
-# the right and a tap flips it; the same order is used by the Cover Flow page and the Albums page. Rebuild Covers asks
-# (the stock confirm dialog) and then opens Cover Flow on its Preparing screen with every cover extracted again.
-CFSET_PAGE = Page('m1plus_cfset', 'm1plus_cfset_page', 'Cover Flow', rows=[
+# Settings > Library: Update Library (the stock page, as the Update Library item), Album Order (its value at the right opens a picker; the same order is used by the Albums page and
+# Cover Flow), and Cover Flow's Landscape switch and Rebuild Covers (the stock confirm dialog, then Cover Flow opens on its Preparing screen with every cover extracted again).
+LIBRARY_PAGE = Page('m1plus_library', 'm1plus_library_page', 'Library', layout=[
+    Row('Update Library', ACT_HOME, HOME_UPDATE),
+    Note('Scan the card for new music'),
+    Row('Album Order', ACT_SORT, SORT_PAGE_INDEX),
+    Note('Albums and Cover Flow'),
+    Hdr('Cover Flow'),
     Row('Landscape', ACT_LANDSCAPE),
-    Row('Sort', ACT_SORT),
     Row('Rebuild Covers', ACT_REBUILD),
+])
+# Settings > Library > Album Order: the picker (a check on the chosen row).
+SORT_PAGE = Page('m1plus_albumorder', 'm1plus_albumorder_page', 'Album Order', layout=[
+    Row('Artist', ACT_SORTSET, 1),
+    Row('Album', ACT_SORTSET, 0),
+    Note('Albums and Cover Flow'),
 ])
 SORT_VALUES = ('Artist', 'Album')    # the value shown for the setting's two states (the default, Artist, first)
 
@@ -313,28 +403,38 @@ PODCASTS = Page('m1plus_podcasts', 'm1plus_podcasts_page', 'Podcasts', kind='pod
 # The Tape page (patch/tape.c): a fullscreen window drawn landscape; the payload paints the cassette and takes the touches (opened from Now Playing's More dialog, not from a menu row).
 TAPE = Page('m1plus_tape', 'm1plus_tape_page', 'Cassette Mode', kind='tape')
 
-# Customize > Cassette Mode: the cassette's look. Cassette Theme shows its value (Normal, Chrome or Metal) at the right and a tap cycles it; the choice is saved and the Tape page reads it when it opens.
-CASSETTE_PAGE = Page('m1plus_tapeset', 'm1plus_tapeset_page', 'Cassette Mode', rows=[
-    Row('Cassette Theme', ACT_CTHEME),
+# Settings > Now Playing: the cassette's look. Theme shows its value (Normal, Chrome or Metal) at the right and opens a picker; the choice is saved and the Tape page reads it when it opens.
+NPSET_PAGE = Page('m1plus_npset', 'm1plus_npset_page', 'Now Playing', layout=[
+    Hdr('Cassette Mode'),
+    Row('Theme', ACT_CTHEME, THEME_PAGE_INDEX),
+])
+# Settings > Now Playing > Theme: the picker (a check on the chosen row).
+THEME_PAGE = Page('m1plus_tapetheme', 'm1plus_tapetheme_page', 'Cassette Theme', layout=[
+    Row('Normal', ACT_THEMESET, 0),
+    Row('Chrome', ACT_THEMESET, 1),
+    Row('Metal', ACT_THEMESET, 2),
+    Note('Applies the next time Cassette Mode opens.'),
 ])
 CTHEME_VALUES = ('Normal', 'Chrome', 'Metal')   # the value shown for the setting's three states, in the order of the saved index (tools/tape_art.py THEME_NAMES)
 
 # The keyboard page (patch/keyboard.c, docs/modules/keyboard.md): the navbar, a search field and our own QWERTY pad; opened by keyboard_open (the Developer row, later podcast search), no menu row.
 KEYBOARD = Page('m1plus_keyboard', 'm1plus_keyboard_page', 'Keyboard', kind='keyboard')
 
-# Customize > Keyboards (iOS style): the keyboards the on-screen keyboard offers. English is always on (its switch is shown on and cannot be turned off); Chinese (Pinyin) is off by default.
+# Settings > Keyboards (iOS style): the keyboards the on-screen keyboard offers. English is always on (its switch is shown on and cannot be turned off); Chinese (Pinyin) is off by default.
 # With it on, the keyboard page has a language key and a pinyin layer with a candidate strip (docs/modules/keyboard.md). The choice is saved in /mnt/data/m1plus-kbzh (patch/keyboard.c).
-KEYBOARDS_PAGE = Page('m1plus_keyboards', 'm1plus_keyboards_page', 'Keyboards', rows=[
+KEYBOARDS_PAGE = Page('m1plus_keyboards', 'm1plus_keyboards_page', 'Keyboards', layout=[
     Row('English', ACT_KB_EN),
     Row('Chinese (Pinyin)', ACT_KB_ZH),
 ])
 
 # PAGES[0] is the entry page.
-PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, CUSTOMIZE_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, CFSET_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
-         EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, CASSETTE_PAGE, KEYBOARD, KEYBOARDS_PAGE]
+PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
+         EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, MENUEXTRAS_PAGE, SORT_PAGE, THEME_PAGE, ABOUT_PAGE]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
-assert PAGES[CASSETTE_PAGE_INDEX] is CASSETTE_PAGE
-assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[CUSTOMIZE_PAGE_INDEX] is CUSTOMIZE_PAGE
+assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
+assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE
 assert PAGES[EXTRASCFG_PAGE_INDEX] is EXTRASCFG_PAGE and PAGES[DEVELOPER_PAGE_INDEX] is DEVELOPER_PAGE
 assert PAGES[EXTRAS_PAGE_INDEX] is EXTRAS_PAGE and PAGES[MENUCFG_PAGE_INDEX] is MENUCFG_PAGE
-assert PAGES[CFSET_PAGE_INDEX] is CFSET_PAGE and PAGES[HOMESET_PAGE_INDEX] is HOMESET_PAGE
+assert PAGES[LIBRARY_PAGE_INDEX] is LIBRARY_PAGE and PAGES[HOMESET_PAGE_INDEX] is HOMESET_PAGE
+assert PAGES[ABOUT_PAGE_INDEX] is ABOUT_PAGE
+assert PAGES[MENUEXTRAS_PAGE_INDEX] is MENUEXTRAS_PAGE and PAGES[SORT_PAGE_INDEX] is SORT_PAGE and PAGES[THEME_PAGE_INDEX] is THEME_PAGE

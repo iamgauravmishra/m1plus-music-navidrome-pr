@@ -72,8 +72,8 @@ def main():
         ('Albums grid, scrolled 40', 'm1plus_albums.bin', grid_content, 40, False),
         ('Albums list, rest', 'm1plus_albums.bin', list_content, 0, False),
         ('Albums list, scrolled 40', 'm1plus_albums.bin', list_content, 40, False),
-        ('Customize, rest', 'm1plus_customize.bin', pn.row_widgets(pn.SETTINGS, 0, 0, pitch=52), 0, True),
-        ('Customize, scrolled 150', 'm1plus_customize.bin', pn.row_widgets(pn.SETTINGS, 0, 150, pitch=52), 150, True),
+        ('Extras, rest', 'm1plus_extras.bin', pn.row_widgets(pn.SETTINGS, 0, 0, pitch=52), 0, True),
+        ('Extras, scrolled 150', 'm1plus_extras.bin', pn.row_widgets(pn.SETTINGS, 0, 150, pitch=52), 150, True),
         ('Artists, rest', 'm1plus_artists.bin', pn.row_widgets(pn.ARTISTS, 0, 0, pitch=52), 0, True),
     ]
     pad, top = 10, 20

@@ -10,9 +10,9 @@ import awtk_strings, awtk_ui, mod_icons, mod_overlays, pod_i18n, pod_ui
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DIGESTS = os.path.join(os.path.dirname(HERE), 'navbars-stock.sha256')
-NEW_IMAGES = ('pod_nav_', 'nb_fade', 'ah_', 'pl_glass', 'pl_ic_', 'sg_', 'np_', 'dm_', 'dp_', 'pod_ic_', 'ipod_', 'tape_', 'qk_')      # the images this work adds or changes (all ours; ah_*: the album page's buttons, tint and navbar; np_*: Now Playing's glyphs and discs; pl_*: the Playlists page's menu, docs/modules/playlists.md; sg_*: the Songs page's); dm_ / dp_: the Daily Mix card and page; pod_ic_*: the menu and settings row glyphs (tools/mod_icons.py POD_ROWS); ipod_*: the Pod page's click wheel; tape_*: the Tape page's pictures
+NEW_IMAGES = ('pod_nav_', 'nb_fade', 'ah_', 'pl_glass', 'pl_ic_', 'sg_', 'np_', 'dm_', 'dp_', 'pod_ic_', 'ipod_', 'tape_', 'qk_', 'pod_ci_', 'pod_cd_', 'pod_chev', 'pod_check')      # the images this work adds or changes (all ours; ah_*: the album page's buttons, tint and navbar; np_*: Now Playing's glyphs and discs; pl_*: the Playlists page's menu, docs/modules/playlists.md; sg_*: the Songs page's); dm_ / dp_: the Daily Mix card and page; pod_ic_*: the menu and settings row glyphs (tools/mod_icons.py POD_ROWS); ipod_*: the Pod page's click wheel; tape_*: the Tape page's pictures
 OVERLAY_UI = ('confirminfo_dialog.bin', 'rippercompleted_dialog.bin', 'cardupdate_dialog.bin', 'formatcard_dialog.bin', 'dialog_autoshutdown.bin')   # the ui files tools/mod_overlays.py restyles (docs/modules/overlays.md; their window themes in styles/ stay stock)
-OUR_FILES = ('about_page.bin', 'albuminfo_page.bin')  # the About page (it carries the release tag) and the album page (its ui and theme: docs/modules/album-page.md)
+OUR_FILES = ('about_page.bin', 'albuminfo_page.bin')  # the About page (the digest was taken when it carried the release tag; it is stock again, our own About page is m1plus_about) and the album page (its ui and theme: docs/modules/album-page.md)
 # the code-built stock navbars: (first, last + 1) of the builders' bytes in demo (the album pages' two, Folders, Artists/Genres/Composers, stock Playlists)
 BUILDERS = ((0x524e4c, 0x5251e0), (0x526a3c, 0x527010), (0x5312dc, 0x5316c0), (0x535188, 0x5357c0), (0x53d5f8, 0x53d900))
 
@@ -73,7 +73,7 @@ def run(ctx):
         if nav is None: continue
         k = {c.name: c for c in nav.children}
         back, play, lbl = k['btn_return'], k['btn_backtoplayer'], k['label_title']
-        group = sorted([k[n] for n in ('btn_coverflow', 'btn_more', 'btn_albumview', 'btn_artisttype', 'btn_customize', 'btn_feeds', 'btn_search', 'btn_sort', 'btn_select') if n in k and not (n == 'btn_coverflow' and name == 'm1plus_songs') and k[n].get('visible') != 'false'], key=lambda c: c.x) + [play]   # (a hidden button shares a slot with one that shows)
+        group = sorted([k[n] for n in ('btn_coverflow', 'btn_more', 'btn_albumview', 'btn_artisttype', 'btn_settings', 'btn_feeds', 'btn_search', 'btn_sort', 'btn_select') if n in k and not (n == 'btn_coverflow' and name == 'm1plus_songs') and k[n].get('visible') != 'false'], key=lambda c: c.x) + [play]   # (a hidden button shares a slot with one that shows)
         capsule = len(group) > 1
         ok = (back.x, back.y, back.w, back.h) == (7, 0, 44, 50) and back.get('style:normal:icon') == 'ah_nav_back' and back.get('style:pressed:icon') == 'ah_nav_back_down'
         if capsule:
@@ -101,14 +101,14 @@ def run(ctx):
         expect(len(fades) == (1 if listed else 0) and all((f.x, f.y, f.w, f.h) == (0, 50, 320, mod_icons.NB_FADE[2]) and f.get('sensitive') == 'false' and f.get('clickable') == 'false' and f.get('image') == 'nb_fade' for f in fades),
                f'{name}: {"one insensitive fade at (0, 50)" if listed else "no fade (no list under the bar)"}')
 
-    # only the Extras page has the Customize button: the left cap of [Customize | Now Playing] on the 214 slot, the title ending at 214
-    with_btn = sorted(name for name, root in pods.items() if any(c.name == 'btn_customize' for c in root.walk()))
+    # only the Extras page has the Settings button: the left cap of [Settings | Now Playing] on the 214 slot, the title ending at 214
+    with_btn = sorted(name for name, root in pods.items() if any(c.name == 'btn_settings' for c in root.walk()))
     nav = next(c for c in pods['m1plus_extras'].children if c.name == 'navigationbar_view')
-    cb = next(c for c in nav.children if c.name == 'btn_customize')
+    cb = next(c for c in nav.children if c.name == 'btn_settings')
     lb = next(c for c in nav.children if c.name == 'label_title')
     expect(with_btn == ['m1plus_extras'] and (cb.x, cb.y, cb.w, cb.h) == (214, 0, 46, 50) and cb.get('style') == 'img_btn_style' and cb.get('enable') == 'true'
-           and cb.get('style:normal:icon') == cb.get('style:over:icon') == 'pod_nav_customize' and cb.get('style:pressed:icon') == 'pod_nav_customize_down'
-           and lb.x + lb.w == 214, 'only the Extras page has btn_customize: a 46 px button on the 214 slot with the pod_nav_customize pieces, the title ends at 214')
+           and cb.get('style:normal:icon') == cb.get('style:over:icon') == 'pod_nav_settings' and cb.get('style:pressed:icon') == 'pod_nav_settings_down'
+           and lb.x + lb.w == 214, 'only the Extras page has btn_settings: a 46 px button on the 214 slot with the pod_nav_settings pieces, the title ends at 214')
     # ------------------------------------------------------------------ images
     for n, pos in mod_icons.NAV_VIEW_POS.items():
         for suffix, pressed in (('', False), ('_down', True)):
@@ -146,7 +146,7 @@ def run(ctx):
     # ------------------------------------------------------------------ hit tests on the built pages (demo's own widget_find_target)
     m = A.AlbumMachine()
     mark = m.next   # every hit test lays the whole page out again in scratch memory: each starts from here (nothing of a layout outlives its test)
-    for pg in ('m1plus_customize.bin', 'm1plus_artists.bin', 'm1plus_albums.bin', 'm1plus_playlists.bin', 'm1plus_songs.bin'):
+    for pg in ('m1plus_settings.bin', 'm1plus_artists.bin', 'm1plus_albums.bin', 'm1plus_playlists.bin', 'm1plus_songs.bin'):
         a = asset_tree(os.path.join(stock_ui, pg))
         lst = next(c for c in a.children if c.y == 50 and c.h >= 300)
         sv = next((c for c in lst.children if c.name.endswith('scrollview')), lst)

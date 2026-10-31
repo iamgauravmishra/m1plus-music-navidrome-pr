@@ -320,6 +320,40 @@ FUNCTIONS.update({
     # Podcast downloads (patch/podcasts.c pg_awake_tick): stock's reset_poweroptions_timer(standby, auto_off, screen): a non-zero argument sets that countdown again (standby via setstandby_time, auto power-off via setsavepower_time, the screen's light via setlight_time); the page passes (1, 1, 0)
     'reset_poweroptions_timer': ('void', 'int, int, int', 0x4d7874),
 })
+# Settings (patch/m1plus.c, docs/modules/settings.md "Stock pages", "Stock state"): navigator_to opens the stock pages; the EQ preset's name is stock's table lookup (a tr key).
+FUNCTIONS.update({
+    'navigator_to':            ('int', 'const char *', 0x4d1d80),
+    'get_equalizer_preset_name': ('int', 'int, char *', 0x49daec),
+    # About (docs/modules/settings.md "About"): the card's capacity and free space (statfs, in G as floats), the connection state and the IP address, as the stock About page reads them
+    'getDiskMemoryInfo':       ('int', 'const char *, float *, float *', 0x5b30e0),
+    'networkGetConnectStatus': ('int', 'void', 0x5d7cac),
+    'networkGetIPAddr':        ('int', 'int, char *', 0x5d753c),
+})
+SETTINGS_PINS = (   # (address, stock word, what it proves)
+    # the stock pages: each is a plain navigator_to of the name (the string load is the word before the call's delay slot or the shared call), nothing else set first
+    (0x4b1460, 0x0320f809, 'the Wi-Fi hub row (0x4b1448): jalr navigator_to'), (0x4b1464, 0x24848f1c, 'its delay slot: a0 = "systemset/wifi_page"'),
+    (0x4b1428, 0x0320f809, 'the Bluetooth hub row (0x4b1410): jalr navigator_to'), (0x4b142c, 0x24848f00, 'its delay slot: a0 = "systemset/bluetooth_page"'),
+    (0x4ad830, 0x0320f809, 'the Settings rows\' shared call: jalr navigator_to'), (0x4ada74, 0x24848ab4, 'Settings row 3: a0 = "systemset/display_page"'),
+    (0x4ada20, 0x24848a34, 'Settings row 0: a0 = "systemset/language_page"'),
+    (0x4a0068, 0x0320f809, 'the Play Settings rows\' shared call: jalr navigator_to'), (0x4a04a4, 0x248475a0, 'Play Settings row: a0 = "playset/playmode_page"'),
+    (0x4a0218, 0x248474d4, 'Play Settings row: a0 = "playset/equalizer_page"'),
+    # About: the stock page's values (the widget walk's callback inside what the symbol table calls on_sn_qrcode_onclick, @0x4a1240..0x4a170c; the init 0x4a170c-): the model and firmware version literals, the card
+    # numbers (access /tmp/mmc_add, then getDiskMemoryInfo("/mnt/mmc", &cap 0xa03e74, &rem 0xa03e70)), the serial number and the Wi-Fi MAC strings, the IP address
+    (0x4a145c, 0x24427718, 'about row 0: v0 = "Shanling M1 Plus" (the model literal)'), (0x4a14cc, 0x2442773c, 'about row 1: v0 = "V2.1" (the firmware version literal)'),
+    (0x747718, 0x6e616853, 'the model literal reads "Shan.." (Shanling M1 Plus)'), (0x74773c, 0x312e3256, 'the version literal reads "V2.1"'),
+    (0x4a1514, 0xc4403e74, 'about row 2: lwc1 f0, 0x3e74(v0): the card capacity'), (0x4a1634, 0xc4403e70, 'about row 4: lwc1 f0, 0x3e70(v0): the card free space'),
+    (0x4a1754, 0x248477a4, 'about init: a0 = "/tmp/mmc_add" (access: the card is in)'), (0x4a177c, 0x24844bd0, 'about init: a0 = "/mnt/mmc" (getDiskMemoryInfo)'),
+    (0x4a1778, 0x0320f809, 'about init: jalr getDiskMemoryInfo'), (0x4a1774, 0x26253e74, 'about init: a1 = &capacity (s1 + 0x3e74)'), (0x4a176c, 0x26463e70, 'about init: a2 = &free space (s2 + 0x3e70)'),
+    (0x4a16dc, 0x0320f809, 'about row 6: jalr networkGetConnectStatus'), (0x4a16f4, 0x0320f809, 'about row 6: jalr networkGetIPAddr(0, buf), only while it says connected'),
+    # EQ: the on/off byte and the preset's name (the toggle handler 0x49d750 and the name lookup)
+    (0x49d774, 0x24c670d8, 'eq switch: a2 = "EQFLAG"'), (0x49d77c, 0x24a54264, 'eq switch: a1 = "PLAYSET"'), (0x49d788, 0x90620000, 'eq switch: lbu v0, (v1): equalizer_flag'),
+    (0x49d78c, 0x38440001, 'eq switch: xori a0, v0, 1: the flag flipped, saved by write_int_config, stored back'),
+    (0x49daec, 0x3c1c0056, 'get_equalizer_preset_name prologue'), (0x49daf0, 0x279c63e4, 'get_equalizer_preset_name prologue'), (0x49daf4, 0x0399e021, 'get_equalizer_preset_name prologue'),
+    (0x49daf8, 0x2c83000c, 'get_equalizer_preset_name: sltiu v1, a0, 12: a preset 0..11, else it returns 0'),
+    # the Play Mode's value: the keys the stock More dialog sets for mclGetPlayMode's 0, 1, 2, 3 (0x47a454, 0x47a4d4, 0x47a4e8, 0x47a500)
+    (0x47a454, 0x24a54ce8, 'more dialog: mode 0 "playmode_listplay"'), (0x47a4d4, 0x24a54cfc, 'more dialog: mode 1 "playmode_repeattrack"'),
+    (0x47a4e8, 0x24a54d14, 'more dialog: mode 2 "playmode_shuffle"'), (0x47a500, 0x24a54d28, 'more dialog: mode 3 "playmode_repeatall"'),
+)
 ID3_SITE = 0x4dff4c   # get_id3info's jalr strcpy of the parsed path, replaced by jal pc_id3_path (docs/modules/podcasts.md "Tags"); q2-pod's ID3_PATH is the same site in its demo
 PODCAST_PINS = (   # (address, stock word, what it proves)
     (0x4e0544, 0x3c1c0052, 'seek_time prologue'), (0x4e0548, 0x279c398c, 'seek_time prologue'), (0x4e054c, 0x0399e021, 'seek_time prologue'),
@@ -495,6 +529,19 @@ DATA = {
     'PLAYSONG_ID3INFO':   (0xa0d88c, 'playsong_id3info'),
     'SONG_NAME':          (0xa0513c, 'song_name'),
     'SONG_ARTIST':        (0xa0503c, 'song_artist'),
+    # Settings (patch/m1plus.c, docs/modules/settings.md "Stock state"): the state the top page shows at the right of Wi-Fi, Bluetooth, EQ and Language (one byte each, one int each; the stock
+    # status bar and pull-down read the same words): wififlag (1 on; wifi_switch clears it and saves [SYSSET] WIFI), bluetoothflag, equalizer_flag (the byte on_eqswitch_onclick flips and saves as [PLAYSET] EQFLAG),
+    # equalizer_mode (the preset, 1..11) and language (the language menu's index, 0 zh_CN .. 12 uk_UK, as switch_language numbers them)
+    'WIFI_FLAG':          (0x97caf8, 'wififlag'),
+    'BT_FLAG':            (0xa05ac0, 'bluetoothflag'),
+    'EQ_FLAG':            (0xa05ac2, 'equalizer_flag'),
+    'EQ_MODE':            (0x97cb00, 'equalizer_mode'),
+    'LANGUAGE':           (0xa05ab8, 'language'),
+    # About: the serial number (a string of 16 bytes) and the Wi-Fi MAC (32), and the stock literals the model and firmware rows show
+    'PRODUCT_SN':         (0xa0553c, 'product_sncode'),
+    'WIFI_MAC':           (0xa061a8, 'wifi_mac'),
+    'ABOUT_MODEL':        (0x747718, None),
+    'ABOUT_FW':           (0x74773c, None),
 }
 LIBC = {
     'atoi': ('int', 'const char *'), 'access': ('int', 'const char *, int'),
@@ -711,7 +758,7 @@ def gen_stock_h(out, demo_path):
     h.append('#define POD_MENU_DEFAULT_IDS {' + ', '.join(str(i) for i in pod_pages.DEFAULT_MENU) + '}')   # ... these item ids, in order
     h.append(f'#define POD_MENU_FILE_MAX {pod_pages.MENU_FILE_MAX}')
     h.append(f'#define POD_MENU_ROWS {len(pod_pages.MENU.rows)}')
-    h.append(f'#define POD_CUSTOMIZE_ID {pod_pages.CUSTOMIZE_ID}')
+    h.append(f'#define POD_SETTINGS_ID {pod_pages.SETTINGS_ID}')
     h.append(f'#define POD_EXTRAS_ROWS {len(pod_pages.EXTRAS_PAGE.rows)}')
     h.append('#define POD_EXTRAS_ORDER {' + ', '.join(str(i) for i in pod_pages.EXTRAS_ORDER) + '}')   # the Extras page's rows (item ids) top to bottom
     h.append(f'#define POD_EXTRAS_GROUPS {len(pod_pages.EXTRAS_GROUPS)}')   # the Extras page's titled groups (section headers pod_hdr0 ..) ...
@@ -733,6 +780,18 @@ def gen_stock_h(out, demo_path):
             for ri, r in enumerate(page.rows):
                 h.append(f'    {{"pod_row{ri}", {r.action}, {r.arg}}},')
             h.append('};')
+    h.append('static const struct pod_stock POD_STOCK[] = {')   # ACT_STOCK's pages: the name and the value the row shows (VK_*: 0 none, else 1 + the index in STOCK_VALUES)
+    for name, value in pod_pages.STOCK_PAGES:
+        h.append(f'    {{"{name}", {pod_pages.STOCK_VALUES.index(value) + 1 if value else 0}}},')
+    h.append('};')
+    import pod_settings as ST   # the value labels' fit (patch/m1plus.c value_fit): the right edge of a value's box and the room a value may take, the label's left edge and the gap between them
+    h.append(f'#define POD_VALUE_RIGHT {ST.value_box()[0] + ST.VALUE_W}')
+    h.append(f'#define POD_VALUE_MAX {ST.VALUE_MAX}')
+    h.append(f'#define POD_VALUE_GAP {ST.VALUE_LABEL_GAP}')
+    h.append(f'#define POD_LABEL_X {ST.TEXT_X}')
+    h.append(f'#define POD_INFO_RIGHT {ST.RIGHT}')   # the About rows' value: its right edge, the most it takes, and the label's left edge
+    h.append(f'#define POD_INFO_MAX {ST.INFO_MAX}')
+    h.append(f'#define POD_INFO_LABEL_X {ST.CM + ST.PAD}')
     h.append('static const struct pod_page POD_PAGES[] = {')
     for pi, page in enumerate(pages):
         rows = f'pod_rows_{pi}' if page.rows else '0'
@@ -742,7 +801,7 @@ def gen_stock_h(out, demo_path):
     h.append(f'#define POD_ENTRY_ID {pod_pages.HOME_ENTRY}')
     h.append('#define POD_ENTRY_PAGE 0')
     h.append('#define POD_MENU_PAGE 0')
-    h.append(f'#define POD_CUSTOMIZE_PAGE {pod_pages.CUSTOMIZE_PAGE_INDEX}')
+    h.append(f'#define POD_SETTINGS_PAGE {pod_pages.SETTINGS_PAGE_INDEX}')
     h.append(f'#define POD_EXTRAS_PAGE {pod_pages.EXTRAS_PAGE_INDEX}')
     h.append(f'#define POD_MENUCFG_PAGE {pod_pages.MENUCFG_PAGE_INDEX}')
     h.append(f'#define POD_EXTRASCFG_PAGE {pod_pages.EXTRASCFG_PAGE_INDEX}')
@@ -953,7 +1012,7 @@ def patch_demo(raw, payload, ps, demo_path):
     check(BASE <= target4 < BASE + len(payload), 'playing init entry symbol outside payload')
     hook(patched, PLAYING_INIT, PLAYING_INIT_PROLOGUE, target4, 'playing_page_init')
     patch_playmore(patched, ps, len(payload))
-    for a, old, what in PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + PINYIN_PINS + JPEG_PINS + TAPE_PINS + SCAN_PINS + QUERY_PINS:   # stock code the Playlists and Songs pages call: checked, not written
+    for a, old, what in PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + PINYIN_PINS + JPEG_PINS + TAPE_PINS + SCAN_PINS + QUERY_PINS:   # stock code the Playlists and Songs pages call: checked, not written
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     target5 = ps['pc_id3_path']

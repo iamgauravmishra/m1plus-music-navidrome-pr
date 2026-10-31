@@ -22,7 +22,7 @@ from pathlib import Path
 
 ZIP = paths.ZIP     # this checkout's firmware/, else the main checkout's (tools/paths.py)
 ZIP_SHA = 'db7bdbc42ffe6d5c1e3fdca9363edb78a01898b9a725c34793394cf6abfa33c0'
-TAG = 'V2.1pM'
+TAG = 'V2.1pN'
 RESTORE_TAG = 'V2.1R'
 # The asset steps after the payload, in order: name -> (module, extra args). Each
 # tools/<module>.py WORKDIR WORKDIR [args] edits the tree in place (venv python: Pillow, fontTools);
@@ -30,7 +30,7 @@ RESTORE_TAG = 'V2.1R'
 # The battery step runs first and the font right after it, before anything that measures text.
 STEPS = [('mod_theme', []), ('mod_lists', []), ('mod_nowplaying', []), ('mod_boot', []),
          ('mod_ipodrows', []), ('mod_pulldown', []), ('mod_lockscreen', []), ('mod_wallpaper', []),
-         ('mod_icons', []), ('mod_strings', []), ('mod_polish', []), ('mod_overlays', []), ('mod_about', [TAG]),
+         ('mod_icons', []), ('mod_strings', []), ('mod_polish', []), ('mod_overlays', []),
          ('mod_cacerts', [])]
 BASE = ('mod_battery', 'mod_font', 'mod_space')     # stock tree -> battery art, font, space (cached as one stage)
 
@@ -64,7 +64,6 @@ def make_tree(stock, mod, cache, tag=TAG):
     changed, removed, _ = bc.delta_since(before, mod)
     prev = bc.H('pod', key, bc.delta_sha(mod, changed, removed))
     for module, args in STEPS:
-        if module == 'mod_about': args = [tag]
         t = time.time(); prev = bc.step_key(prev, module, args)
         if bc.have_step(prev): bc.apply_delta(prev, mod); stage_report(module, t, True); continue
         before = bc.snap(mod)

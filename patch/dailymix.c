@@ -6,7 +6,7 @@
  * window's and the card's own widgets, their events and one page timer, as the Recently Played shelf (patch/recent.c) and the mini bar do.
  *
  * The card. dailymix_start looks the section up (pod_daily: the header "Made for You", the card pod_dm_card, the glass play disc pod_dm_play, two hidden
- * labels that carry the text styles), reads the Customize > Home Screen switch (DAILY_SET_FILE) and the mix file (MIX_FILE, strictly validated: any
+ * labels that carry the text styles), reads the Settings > Home Screen switch (DAILY_SET_FILE) and the mix file (MIX_FILE, strictly validated: any
  * deviation is "no mix") and shows the section (menu_daily in patch/menu.c: visible and sensitive together, the list keeps its place) when there is a
  * mix and the switch is on. DM_FIRST_MS later its one-shot reads the art file (MIX_ART_FILE, validated: size, magic, size fields, the art seed of the
  * mix file, the checksum) into a 296 x 220 bitmap; the card's after-paint draws the bitmap and the text (title in two lines, the top artists in up to

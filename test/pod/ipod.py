@@ -278,7 +278,7 @@ def menu_tests(ctx):
     expect, P = ctx.expect, pod_pages
     item = next(i for i, r in enumerate(P.ITEMS) if r.label == 'Pod')
     expect(item == 19 == len(P.ITEMS) - 2 and P.ITEMS[item].action == P.ACT_IPOD == 22 and P.ID_CHARS[item] == 'k' and item not in P.DEFAULT_MENU,
-           'Pod is menu item 19 (saved as "k"), after Customize and before Podcasts, hidden by default like Now Playing: Customize > Main Menu shows it, the Extras page lists it')
+           'Pod is menu item 19 (saved as "k"), after Settings and before Podcasts, hidden by default like Now Playing: Settings > Main Menu shows it, the Extras page lists it')
     expect(P.EXTRAS_ORDER.index(item) == P.EXTRAS_GROUPS[0][1].index('Pod') and P.parse_menu_full(b'123456k\n') == ([1, 2, 3, 4, 5, 6, 19], []) and P.format_menu([1, 2, 19]) == '12k\n',
            'Extras lists it in the Play group, after Now Playing and Shuffle; the saved list carries it as k')
     expect(pod_i18n.key_for('Pod') is None and 'Pod' in pod_i18n.BRANDS, 'the label is the brand name "iPod", a plain text in every language (as M1+ Music and Tidal)')

@@ -697,6 +697,23 @@ class Machine:
         elif name == 'widget_destroy':
             self.calls.append(('widget_destroy', a0))
         # ---- Shuffle: the stock play mode, the seed
+        # ---- Settings: stock pages by name, the EQ preset name, the text measure (a base machine has no text: 0 wide)
+        elif name == 'navigator_to':
+            self.calls.append(('navigator_to', self.read_cstr(a0))); ret = 0
+        elif name == 'getDiskMemoryInfo':   # (path, &capacity, &free) in G as floats, the card's numbers a test sets in self.disk
+            cap, rem = getattr(self, 'disk', (0.0, 0.0)); self.calls.append(('getDiskMemoryInfo', self.read_cstr(a0)))
+            self.u.mem_write(a1, struct.pack('<f', cap)); self.u.mem_write(a2, struct.pack('<f', rem)); ret = 0
+        elif name == 'networkGetConnectStatus':
+            ret = getattr(self, 'net', 0)
+        elif name == 'networkGetIPAddr':
+            self.calls.append(('networkGetIPAddr', a0)); self.u.mem_write(a1, getattr(self, 'ip', b'') + b'\0'); ret = 0
+        elif name == 'get_equalizer_preset_name':
+            ret = 0 if a0 >= 12 else 1
+            if ret: self.u.mem_write(a1, ('eq_' + str(a0)).encode() + b'\0')
+        elif name == 'widget_get_text':
+            ret = 0
+        elif name == 'widget_measure_text':
+            u.reg_write(UC_MIPS_REG_F0, 0); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
         elif name == 'mclGetPlayMode':
             ret = self.mode
         elif name == 'mclGetPlayPos':

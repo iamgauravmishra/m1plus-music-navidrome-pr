@@ -305,7 +305,7 @@ static struct {
     void *artist_row;
     unsigned *keys;
     int owns; /* this page holds the shared worker's job set (cc_build_*) */
-    int rebuild; /* Settings > Cover Flow > Rebuild Covers: every album is extracted again (CC_REBUILD) */
+    int rebuild; /* Settings > Library > Rebuild Covers: every album is extracted again (CC_REBUILD) */
     unsigned timer;
     unsigned saved_album; /* the centre album's key, kept across opens and reboots */
     int screen, album;
@@ -956,7 +956,7 @@ static int on_pointer(void *ctx, void *e) {
 }
 
 /* ---------------------------------------------------------------------------
- * Landscape. The Settings > Cover Flow > Landscape switch chooses the page's presentation, kept in
+ * Landscape. The Settings > Library > Landscape switch chooses the page's presentation, kept in
  * LANDSCAPE_FILE (like the Albums view's), and the page opens in it. The navbar stays as it is in both (Back, the
  * title, Now Playing); in landscape the covers view and the touch layer are the body under it, CFL_Y down and
  * CFL_W high, the caption labels are hidden (the frame carries the captions), and the frame bitmap is the
@@ -1135,7 +1135,7 @@ static int on_cancel(void *ctx, void *e) {
 }
 
 /* The albums, exactly as the stock Albums page lists them, copied (cc_albums) so later stock queries (the
- * album page's) cannot pull them away. They are shown in the Settings > Cover Flow > Sort order (patch/covercache.c;
+ * album page's) cannot pull them away. They are shown in the Settings > Library > Album Order order (patch/covercache.c;
  * the copy itself keeps the stock order, cf.order maps the shelf to it); a library over MAX_ALBUMS is not shown. */
 static int load_albums(void) {
     cf.albums = cc_albums();
@@ -1360,7 +1360,7 @@ int coverflow_open(void) {
     return open_covers(load_albums(), "Update Local Music first");
 }
 
-/* Settings > Cover Flow > Rebuild Covers, after its confirm: the library's Cover Flow opened with the Preparing screen
+/* Settings > Library > Rebuild Covers, after its confirm: the library's Cover Flow opened with the Preparing screen
  * on EVERY album (cc_build CC_REBUILD: each cache file is extracted again and replaced, the no-art markers too). Cancel
  * or Back leaves a complete cache (the old files stay until replaced); when it is done the covers show as usual. */
 int coverflow_rebuild(void) {

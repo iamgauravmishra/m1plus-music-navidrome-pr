@@ -33,13 +33,12 @@ static struct {
     int start; /* the setting: 1 = start in M1+ Music */
     int grid; /* the user chose the stock grid for this session */
     int pending; /* an open timer is scheduled */
-    void *entry; /* the entry menu window (the Customize page opens over it) */
+    void *entry; /* the entry menu window (the Settings page opens over it) */
     int tries;
     int as_home; /* the menu being opened is the Home instance: its Back is hidden */
     void *home; /* the stock Home window */
-    void *menu; /* the Customize page window (it opens over the entry menu, or over the Extras page) */
-    void
-        *extras; /* the Extras page window while it is open (Customize can be opened from it); cleared by its destroy */
+    void *menu; /* the Settings page window (it opens over the entry menu, or over the Extras page) */
+    void *extras; /* the Extras page window while it is open (Settings can be opened from it); cleared by its destroy */
 } hs __attribute__((section(".scratch")));
 
 static int hm_exists(const char *p) { return access(p, F_OK) == 0; }
@@ -298,9 +297,9 @@ static int hm_fill_window(void *win) {
     return 1;
 }
 
-/* Called by m1plus.c for the entry page (entry = 1) and for the Customize page (settings = 1): remember the
+/* Called by m1plus.c for the entry page (entry = 1) and for the Settings page (settings = 1): remember the
  * windows; the entry page as the Home instance loses its navbar (the Now Playing row replaces the bars icon;
- * the Customize > Home Screen > Shanling Home row is the way out). */
+ * the Settings > Developer > Open Shanling Home row is the way out). */
 void home_menu_opened(void *win, int settings, int entry) {
     if (entry) {
         hs.entry = win;
@@ -317,15 +316,15 @@ void home_menu_opened(void *win, int settings, int entry) {
     if (settings) hs.menu = win;
 }
 
-/* The destroy of the Extras page: forget its handle (it may be closed long before Customize is opened from the menu). */
+/* The destroy of the Extras page: forget its handle (it may be closed long before Settings is opened from the menu). */
 static int hm_extras_gone(void *ctx, void *e) {
     (void)e;
     if (hs.extras == ctx) hs.extras = (void *)0;
     return RET_OK;
 }
 
-/* Called by m1plus.c for the Extras page: Customize can be opened from it (when the menu does not list Customize),
- * so the stack under the Home Screen page can be menu > Extras > Customize. A failed handler registration forgets
+/* Called by m1plus.c for the Extras page: Settings can be opened from it (when the menu does not list Settings),
+ * so the stack under the Developer page can be menu > Extras > Settings. A failed handler registration forgets
  * the window again, so a handle that nothing clears is never kept. */
 void home_extras_opened(void *win) {
     hs.extras = win;
@@ -348,9 +347,9 @@ void home_restore_failed(int restored) {
     hs.grid = 1;
 }
 
-/* "Shanling Home" (on the Customize > Home Screen page): show the stock grid, keep it for this session, and
- * close the pages above Home: the menu, the Extras page (when Customize was opened from it) and the Customize page under the Home Screen page first (by handle: a
- * second back right after the first would find the closing page), then the Home Screen page itself. */
+/* "Open Shanling Home" (on the Settings > Developer page): show the stock grid, keep it for this session, and
+ * close the pages above Home: the menu, the Extras page (when Settings was opened from it) and the Settings page under the Developer page first (by handle: a
+ * second back right after the first would find the closing page), then the Developer page itself. */
 int home_to_grid(void) {
     hs.grid = 1;
     hm_grid(1);

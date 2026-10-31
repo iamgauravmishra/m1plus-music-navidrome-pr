@@ -35,7 +35,7 @@ int cc_open_album(
 int cc_find_album(
     const char *
         album); /* the library Albums row with that album name (NOCASE), -1: none; cc_open_album(NULL, 0, row) opens it */
-/* The album order shared by Cover Flow and Albums (Settings > Cover Flow > Sort). The stock list is never reordered: the
+/* The album order shared by Cover Flow and Albums (Settings > Library > Album Order). The stock list is never reordered: the
  * sorted view is a permutation of its row numbers, and anything that goes back to stock (cc_open_album) takes the stock row. */
 int cc_nocase(const char *a,
               const char *b); /* ASCII case-insensitive compare (SQLite NOCASE, as the stock list groups) */
@@ -48,13 +48,14 @@ void cc_heapsort(unsigned *v, unsigned n,
                  int (*cmp)(unsigned,
                             unsigned)); /* in place, no memory; cmp must be total (break ties by the row number) */
 int cc_sort_artist(void); /* the setting: 1 Artist (default), 0 Album */
-int cc_sort_toggle(void); /* flip it, saved atomically; the new state, or -1 when it could not be saved */
+int cc_sort_set(
+    int artist); /* set it (1 Artist, 0 Album), saved atomically; the state, or -1 when it could not be saved (and the setting is unchanged) */
 unsigned *cc_album_order(
     void *albums); /* heap array of the rows in display order; NULL = stock order (Album mode, or no memory) */
 void *cc_row(void *albums, const unsigned *order, unsigned i); /* display row i of the list */
 void *cc_playing(void); /* the stSongInfo of the track the player is on, NULL if nothing is queued */
 
-/* The cache builder, shared by Cover Flow (its Preparing screen, and Settings > Cover Flow > Rebuild Covers) and the
+/* The cache builder, shared by Cover Flow (its Preparing screen, and Settings > Library > Rebuild Covers) and the
  * Albums page (in the background). ONE worker thread app-wide: a job set is held from cc_build_open until
  * cc_build_stop, and cc_build_open refuses while one is held. The owner polls the counters from a page-scoped timer
  * (UI thread) and must call cc_build_stop (cancel, join, free) when it is done with the set and when its page is destroyed.

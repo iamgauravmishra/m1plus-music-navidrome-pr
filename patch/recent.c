@@ -23,7 +23,7 @@
  *
  * The shelf. recent_start looks the widgets up, registers EVT_DESTROY / EVT_WINDOW_TO_BG / EVT_WINDOW_TO_FG on the window and the
  * shelf's EVT_AFTER_PAINT, pointer events and the list's EVT_SCROLL, arms a one-shot RC_FIRST_MS later and, when the list holds an
- * album and the Customize > Home Screen switch (SHELF_FILE) is on, sizes the shelf (ceil(albums / 2) rows of covers) and shows it (menu_shelf in patch/menu.c: visible and sensitive together, virtual_h grows). Any widget missing, any registration
+ * album and the Settings > Home Screen switch (SHELF_FILE) is on, sizes the shelf (ceil(albums / 2) rows of covers) and shows it (menu_shelf in patch/menu.c: visible and sensitive together, virtual_h grows). Any widget missing, any registration
  * or the timer failing: nothing is shown or moved, the menu is as it was. The menu's first paint decodes nothing.
  *   cells    the Albums grid's (patch/grid.c, the GRID_* geometry): cell i shows entry i, GRID_COVER px covers with GRID_R px rounded corners in
  *            the bitmap's own alpha (the Albums page's are square), the album and artist cut with an ellipsis once, a shared placeholder disc.
@@ -69,7 +69,7 @@ static struct {
     unsigned timer; /* the one-shot or the decode tick, 0 none */
     int fg; /* the window is in front */
     int warm; /* the one-shot after start has run */
-    int on; /* Customize > Home Screen > Recent Albums */
+    int on; /* Settings > Home Screen > Recent Albums */
     int shown; /* the shelf is up */
     int noscroll; /* the scroll event could not be registered: the covers are made as soon as the shelf is shown */
     unsigned t0; /* time_now_ms at start: the album list is not loaded for covers before RC_RESOLVE_MS after it */
@@ -258,7 +258,7 @@ int recent_note(void *t) {
 }
 
 /* ---------------------------------------------------------------------------
- * The setting (Customize > Home Screen > Recent Albums): the file holds "0" for off, anything else or no file is on.
+ * The setting (Settings > Home Screen > Recent Albums): the file holds "0" for off, anything else or no file is on.
  */
 int recent_setting(void) {
     char c = 0;

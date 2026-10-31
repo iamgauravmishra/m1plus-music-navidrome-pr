@@ -76,7 +76,7 @@ def lg16(n):
 
 
 def seed_for(day, regen):
-    """The mix's seed: the day number, and how often the mix of that day was made again (Customize > Home Screen > Regenerate Daily Mix)."""
+    """The mix's seed: the day number, and how often the mix of that day was made again (Settings > Home Screen > Regenerate Daily Mix)."""
     return (((day * 2654435761) & M) ^ ((regen * 0x85EBCA6B) & M)) or 1
 
 

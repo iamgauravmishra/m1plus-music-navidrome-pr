@@ -223,7 +223,7 @@ level's Downloads row, `pg_awake_tick`), `patch/curlopts.h`. Tests: `test/pod/pc
 
 ## Next: covers, search (design only)
 
-Step 0, the device probe (HTTPS and the CA bundle, Wi-Fi, clock, RAM, screen-off soak), is built: `docs/modules/probe.md` (Customize > Developer > Network Probe). Its findings replace the open checks below.
+Step 0, the device probe (HTTPS and the CA bundle, Wi-Fi, clock, RAM, screen-off soak), is built: `docs/modules/probe.md` (Settings > Developer > Network Probe). Its findings replace the open checks below.
 
 * **Subscriptions**: a feed url per show in `.show` (`feed=`): created by `subscriptions.txt` (built). Unsubscribe is built (the Show page's sheet). Next: a Subscribe action with the url typed.
 * **Open device checks for it**: does Update Local Music scan the folder / skip dot folders; is the clock set after boot without Wi-Fi; `get_wifisignal` return values; libcurl's CA path and available TLS version; free RAM during a 4 MB feed parse.

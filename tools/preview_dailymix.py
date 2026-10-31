@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Previews of the Daily Mix hero card (docs/modules/dailymix.md): the card at 1x and 2x, in the Home layout (rows, the new section, the Recently
-Played shelf, the mini bar), six palettes, every language, and Customize > Home Screen with the proposed rows. Approximate, not AWTK; sample data.
+Played shelf, the mini bar), six palettes, every language, and Settings > Home Screen with the proposed rows. Approximate, not AWTK; sample data.
 
   uv run python -I tools/preview_dailymix.py WORKDIR [OUTDIR]       (WORKDIR: the built release tree, work/mod-release; default OUTDIR out/dailymix)
 """
@@ -8,7 +8,7 @@ import os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from PIL import Image, ImageDraw
-import preview, preview_icons as PI, pod_dailymix as D, mod_icons as M, awtk_ui
+import preview, preview_icons as PI, preview_settings as PS, pod_dailymix as D, mod_icons as M, awtk_ui
 from awtk_text import Ttf, awtk_width
 
 RAW = awtk_ui.RAW
@@ -68,15 +68,9 @@ def section_image(s, tones, seed=SEED, loc='en_US', names=ARTISTS):
     return im
 
 
-def settings_page(s, loc='en_US', daily=True):
-    """Customize > Home Screen as the build has it: Boot to M1+ Music, Recent Albums, Daily Mix (a switch, shuffle glyph), Regenerate Daily Mix (an action
-    row without a chevron, the Update Library refresh glyph) and Shanling Home. daily=False leaves the two Daily Mix rows out (the page before them)."""
-    root = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', 'm1plus_homeset.bin'), 'rb').read())
-    sv = root.find('pod_scrollview')
-    start, recent, sw_row, act_row, shan = sv.children
-    sv.children = [start, recent, sw_row, act_row, shan] if daily else [start, recent, shan]
-    for i, r in enumerate(sv.children): r.y = i * 52
-    return PI.pod_page(s, 'm1plus_homeset', len(sv.children), switches={'pod_switch0': True, 'pod_switch1': True, 'pod_switch2': True}, root=root).convert('RGB')
+def settings_page(s, loc='en_US'):
+    """Settings > Home Screen as the build has it (tools/preview_settings.py draws the built asset): Recent Albums and Daily Mix switches in one card, Regenerate Daily Mix (an action row) in another."""
+    return PS.draw_page(s, 'm1plus_homeset').convert('RGB')
 
 
 def labelled(items, cols, gap=12, lab=18, bg=(0x2A, 0x2A, 0x2A)):
@@ -127,8 +121,8 @@ def main():
     # (c) palettes
     save('palettes.png', labelled([(n, card_image(s, t)) for n, t in PALETTES], 3))
     save('card-pressed.png', labelled([('normal', card), ('disc pressed', card_image(s, tones, pressed=True))], 2))
-    # (d) Customize > Home Screen
-    save('settings-home-screen.png', labelled([('without Daily Mix', settings_page(s, daily=False)), ('with Daily Mix', settings_page(s))], 2))
+    # (d) Settings > Home Screen
+    save('settings-home-screen.png', labelled([('with Daily Mix', settings_page(s))], 1))
     # (e) every language, and the longest strings
     sides = {loc: side(work, loc) for loc in D.LOCALES}
     save('card-languages.png', labelled([(loc, section_image(sides[loc], tones, loc=loc)) for loc in D.LOCALES], 3))

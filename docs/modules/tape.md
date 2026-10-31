@@ -12,7 +12,7 @@ The release status records flashed builds; use the final checklist for validatio
 
 ## Themes and assets
 
-Customize → Cassette Mode → Cassette Theme cycles Normal, Chrome and Metal. The order is
+Settings → Now Playing → Theme cycles Normal, Chrome and Metal. The order is
 `tape_art.THEME_NAMES`; `/mnt/data/m1plus-tapetheme` stores `0\n`, `1\n` or `2\n` atomically.
 `tape_theme` accepts `1`/`2` with an optional newline and defaults to Normal for all other data.
 A failed save changes neither file nor label. The Tape page reads the setting once at open.
@@ -129,7 +129,7 @@ Following the other page timers (`pod_screen_lit()` in `patch/common.c`, the sto
 
 ## Themes
 
-The look is a **theme the user chooses**: **Customize > Cassette Mode > Cassette Theme: Normal (default), Chrome, Metal**, as FiiO's "Tape mode theme" (above). The same
+The look is a **theme the user chooses**: **Settings > Now Playing > Theme: Normal (default), Chrome, Metal**, as FiiO's "Tape mode theme" (above). The same
 cassette is shown for every track; a theme is a complete look (shell colour, label paper and print, band, hub ring), not a tape grade tied to the
 music. More themes can be added later as data (`THEMES` in the mock).
 
@@ -187,7 +187,7 @@ Open Now Playing on a playing track, More (page 1), tap **Cassette Mode**: the s
 - Tap the middle: pause / play, with the pause bars shown at once? Tap the top left screw: does it darken and turn while held, and close the page on release? Is a swipe from the top edge still opening
   the control centre (pull-down) with the page open, playing and paused? Does a long drag do nothing? Is 14 px too easy / too hard for a tap, is the 50 px screw area right?
 - Material: is the knurl crisp (4 px cells, no moire), the foil arrow and hairlines metallic, the smoked window, the pale hubs with their 3-spoke drive, and the reels still smooth at 24 frames? Does the pack's sheen look right?
-- Customize > Cassette Mode > Cassette Theme: tap cycles Normal, Chrome, Metal; reopen the page: the new look (shell, hubs, ink, fine print)? It survives a reboot?
+- Settings > Now Playing > Theme: tap cycles Normal, Chrome, Metal; reopen the page: the new look (shell, hubs, ink, fine print)? It survives a reboot?
 - Battery number, `+` while charging, volume (change it with the keys: the line follows within half a second while paused), the format (file extension), the clock?
 - Does the screen still sleep after the usual idle time with the page open (playing and paused)? Does it wake and keep going, the reels on the right turn and the text current at once (no jump)? Battery: leave it playing with the screen off for an hour (screen-off ticks are 1 s and draw nothing) and compare the drain with Now Playing; is the lit 70 ms tick warm?
 - Back to Now Playing, More again, Tape again: opens every time, no leaked state. Does the page keep playing through a track change and a phone-style lock / unlock?

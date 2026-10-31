@@ -76,7 +76,7 @@ the builder 0x52c5e8), USB mode.
 
 ## Glass navbars on our pages (and the album page's glass)
 
-Scope: **only the M1+ Music pages** (menu, Settings and sub-pages, Main Menu, Home Screen, Cover Flow settings, Shuffle, Extras, Albums, Artists, Playlists, Cover Flow's
+Scope: **only the M1+ Music pages** (menu, Settings and its card pages (the fade stays hidden there), Main Menu, Shuffle, Extras, Albums, Artists, Playlists, Cover Flow's
 bar) and, through its page theme, the album page (`album-page.md`). Stock pages keep main's title bars on main's slots: the shared `return` / `back_to_player` images, the
 navbar styles and every stock ui / style / image file and builder are byte-identical to main's build (`test/pod/navbars.py`, digests in `test/navbars-stock.sha256`).
 
@@ -91,7 +91,7 @@ actions as **one glass capsule on main's slots**, a soft fade under the bar. Not
 | Songs | Search 122 (left cap), Sort 168 and Select 214 (middles), Now Playing 260: a capsule of four, glass 124 .. 311 (`docs/modules/songs.md`); the title (small, shown when the large one has scrolled away) ends at 122. The other lists on that page (Favourites ..., a playlist) have no Sort: Search 168 (left cap), Select 214, Now Playing 260, the title ends at 168 |
 | Songs, a genre's songs (class `0xff09`) | no Search, no Sort: Select 214 (left cap `pod_nav_selectl`, set at run time), Now Playing 260 (right cap): a capsule of two, glass 216 .. 311 (the stock builder leaves Search out for this class); the title ends at 214 |
 | Artists | Artist / Album Artist switch 214 (left cap), Now Playing 260 |
-| Extras (`m1plus_extras`) | Customize 214 (left cap `pod_nav_customize`, Lucide `sliders-horizontal`; opens the Customize page), Now Playing 260 (right cap): glass 216 .. 311; the title ends at 214. Customize > Extras and the other pages have no button |
+| Extras (`m1plus_extras`) | Settings 214 (left cap `pod_nav_settings`, Lucide `sliders-horizontal`; opens the Settings page), Now Playing 260 (right cap): glass 216 .. 311; the title ends at 214. Settings > Extras and the other pages have no button |
 | Genres, Composers (the Artists page on another class) | the switch is hidden (`visible=false` and `sensitive=false`) and Now Playing, which the asset builds as the capsule's right cap, is set at run time to the glass disc `ah_nav_np` (`_down` pressed), as on every page with no toggle; the title ends at 214 |
 | Cover Flow | main page and a composer's page: Now Playing disc `ah_nav_np` at 260 (glass 269 .. 311). An artist page with songs: the capsule Songs (`btn_songs`, Lucide `list`, left cap, x 214) \| Now Playing (`ah_nav_play` set at run time), glass 216 .. 311, the Artists page's shape |
 | menu, Settings, sub-pages | Now Playing disc |

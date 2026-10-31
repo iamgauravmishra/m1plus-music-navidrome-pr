@@ -71,21 +71,21 @@ def run(ctx):
 
     # 1. The row and what it needs
     S = P.DEVELOPER_PAGE
-    expect([r.label for r in S.rows] == ['Screenshot', 'Network Probe', 'Keyboard'] and S.rows[1].action == P.ACT_NETPROBE == 25, 'Customize > Developer has Network Probe as its second row, ACT_NETPROBE 25')
+    expect([r.label for r in S.rows] == ['Boot to M1+ Music', 'Open Shanling Home', 'Screenshot', 'Network Probe', 'Keyboard'] and S.rows[3].action == P.ACT_NETPROBE == 25, 'Settings > Developer has Network Probe as its fourth row, ACT_NETPROBE 25')
     expect(not [r for page in P.PAGES if page is not S for r in page.rows if r.action == P.ACT_NETPROBE], 'no other page has the row')
     rows_s = PSYMS[f'pod_rows_{P.DEVELOPER_PAGE_INDEX}']
     m = probe_machine()
-    expect((m.read_cstr(m.word(rows_s + 12)), m.word(rows_s + 16)) == ('pod_row1', P.ACT_NETPROBE), 'the payload row table binds pod_row1 of the Developer page to ACT_NETPROBE')
+    expect((m.read_cstr(m.word(rows_s + 36)), m.word(rows_s + 40)) == ('pod_row3', P.ACT_NETPROBE), 'the payload row table binds pod_row3 of the Developer page to ACT_NETPROBE')
     needed = ('curl_global_init', 'curl_easy_init', 'curl_easy_setopt', 'curl_easy_perform', 'curl_easy_getinfo', 'curl_easy_cleanup', 'curl_easy_strerror', 'pthread_create',
               'pthread_detach', 'sleep', 'popen', 'pclose', 'fgets', 'fopen', 'fclose', 'fseek', 'ftell', 'open', 'read', 'write', 'fsync', 'close', 'time', 'localtime')
     expect(all(n in pod.LIBC for n in needed) and len(pod.got_slots(DEMO, list(needed))) == len(needed), 'every call the probe makes is an import of demo, reached through its own GOT slot (no new import)')
     expect(pod.FUNCTIONS['get_wifisignal'][2] == 0x506cc8, 'get_wifisignal is the stock function at 0x506cc8')
     ui = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui')
     tree = awtk_ui.parse(open(os.path.join(ui, 'm1plus_developer.bin'), 'rb').read())
-    row = tree.find('pod_row1')
+    row = tree.find('pod_row3')
     expect(row is not None and pod_i18n.shown_english(next(c for c in row.children if c.type == 'hscroll_label')) == 'Network Probe'
-           and next(c for c in row.children if c.name == 'pod_icon').get('image') == 'pod_ic_netprobe', 'the asset row reads Network Probe with its glyph')
-    expect(os.path.isfile(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx/pod_ic_netprobe.png')), 'the glyph is in the tree')
+           and next(c for c in row.children if c.name == 'pod_icon').get('image') == 'pod_ci_globe', 'the asset row reads Network Probe with its glyph')
+    expect(os.path.isfile(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx/pod_ci_globe.png')), 'the glyph is in the tree')
 
     # 2. The tap
     m = probe_machine()

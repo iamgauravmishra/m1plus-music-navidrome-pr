@@ -3,7 +3,7 @@
 previews from one finished tree. Approximate, not AWTK; sample data.
 
   Home pages 1 and 3 (Tabler icons, the M1+ Music icon) + status bar     preview_icons.home
-  M1+ Music menu as Home (no top bar), Customize page, Shuffle page       preview_icons.pod_page (the tree's own ui files)
+  M1+ Music menu as Home (no top bar), Settings page, Shuffle page       preview_icons.pod_page (the tree's own ui files)
   album page (header, Play, Shuffle)             preview_album
   artist Cover Flow, and the landscape Cover Flow (480 x 320, as the user sees it)   preview_cover
   Albums: the grid and the list mode of ui/m1plus_albums.bin, with the mode toggle    preview_icons.albums_grid / albums_list
@@ -17,7 +17,7 @@ import argparse, os, subprocess, sys, tempfile
 from PIL import Image, ImageDraw
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import build, workflow, preview_icons as PI
+import build, workflow, preview_icons as PI, preview_settings as PS
 import pod_pages
 P = pod_pages
 
@@ -229,7 +229,7 @@ def extras_names(shown):
     return [f'pod_hdr{key}' if kind == 'hdr' else f'pod_row{key}' for kind, key in shown]
 
 def extrascfg_page(s, data):
-    """Customize > Extras: the items the menu does not show, in the Extras order, a switch on when Extras lists the item."""
+    """Settings > Extras: the items the menu does not show, in the Extras order, a switch on when Extras lists the item."""
     ids, off = P.parse_menu_full(data)
     shown = P.extras_display(ids, off, cfg=True)[0]
     return PI.pod_page(s, 'm1plus_extrascfg', 9, order=extras_names(shown),
@@ -294,13 +294,13 @@ def main():
     sh1 = minibar_page(s, *bar_args, shelf=(SHELF_ALBUMS[:1],), scroll=None)
     for name, panel_im in (('shelf-home-top', sh6top), ('shelf-6-albums-end', sh6), ('shelf-5-albums-end', sh5), ('shelf-3-albums-end', sh3), ('shelf-1-album-end', sh1)):   # the panels alone, for tools/peek.py crops
         panel_im.save(os.path.join(os.path.dirname(os.path.abspath(out)), name + '.png'))
-    sett = PI.pod_page(s, 'm1plus_customize', 7).convert('RGB')
-    homeset = PI.pod_page(s, 'm1plus_homeset', 3, switches={'pod_switch0': True, 'pod_switch1': True}).convert('RGB')
-    cfset = PI.pod_page(s, 'm1plus_cfset', 2, switches={'pod_switch0': False}, values={'pod_value1': 'Artist'}).convert('RGB')
+    sett = PS.draw_page(s, 'm1plus_settings').convert('RGB')
+    homeset = PS.draw_page(s, 'm1plus_homeset').convert('RGB')
+    cfset = PS.draw_page(s, 'm1plus_library').convert('RGB')
     shuf = PI.pod_page(s, 'm1plus_shuffle', 3).convert('RGB')
     ctl = controls(s, work).convert('RGB')
     bars, bars_same = PI.bars_compare(s); bars = bars.convert('RGB')
-    custom = b'2301458j-6a\n'   # Albums, Artists, Now Playing, Cover Flow, Songs, Playlists, Folders, Customize: Shuffle and Genres are hidden; Shuffle and Favorites are turned off Extras
+    custom = b'2301458j-6a\n'   # Albums, Artists, Now Playing, Cover Flow, Songs, Playlists, Folders, Settings: Shuffle and Genres are hidden; Shuffle and Favorites are turned off Extras
     mm_def, mm_cust = mainmenu_page(s, None), mainmenu_page(s, custom)
     xc_def, xc_cust = extrascfg_page(s, None), extrascfg_page(s, custom)
     menu_cust = menu_page(s, custom)
@@ -316,9 +316,9 @@ def main():
             ('Mini player bar: playing, long title', bar1), ('Mini player bar: paused, no cover', bar2), ('Mini player bar: backdrop blur off', bar3),
             ('Home menu with the Recently Played shelf below the rows (list at the top)', sh6top), ('Scrolled to the end: the shelf above the bar, 6 albums (one with no cache file)', sh6), ('Scrolled to the end: 5 albums', sh5), ('Scrolled to the end: 3 albums', sh3),
             ('Scrolled to the end: 1 album', sh1),
-            ('Customize page', sett), ('Customize > Cover Flow (Sort: Artist)', cfset), ('Customize > Home Screen', homeset),('Shuffle page', shuf),
-            ('Customize > Main Menu (default: Cover Flow ... Playlists shown, the rest hidden)', mm_def), ('Main Menu after customising (Shuffle, Genres hidden)', mm_cust),
-            ('Customize > Extras (default: every hidden item listed, under the headers)', xc_def), ('Customize > Extras: Shuffle and Favorites turned off', xc_cust),
+            ('Settings page', sett), ('Settings > Library (Album Order: Artist)', cfset), ('Settings > Home Screen', homeset),('Shuffle page', shuf),
+            ('Settings > Main Menu (default: Cover Flow ... Playlists shown, the rest hidden)', mm_def), ('Main Menu after customising (Shuffle, Genres hidden)', mm_cust),
+            ('Settings > Extras (default: every hidden item listed, under the headers)', xc_def), ('Settings > Extras: Shuffle and Favorites turned off', xc_cust),
             ('The menu with that list', menu_cust), ('Extras (default menu: Play, Library, Collections, Tools under their headers)', extras),
             ('Extras with Shuffle, Genres hidden, Shuffle and Favorites off', extras_cust), ('Artists: Artist mode (toggle shows Album Artist)', art0), ('Artists: the rail jumps to K (bubble, pinned header, the small title)', art2), ('Artists: Album Artist mode (toggle shows Artist)', art1), ('Genres (the Artists page on class 0xf006: no toggle)', gen), ('Composers (class 0xf005)', comp),
             ('Album page', panel(album, 0, 4)), ('Album page, long title', panel(album, 1, 4)),
@@ -331,7 +331,7 @@ def main():
             ('Pull-down, toggles and sliders', ctl),
             ('Status bar: real (top), pull-down default, theme1; below, their differences x16 (' + ('identical' if bars_same else 'DIFFER') + ')', bars),
             ('Lock screen over The Starry Night (playing, idle + charging)', lock),
-            ('Cover Flow landscape (Customize > Cover Flow > Landscape; player held turned counter-clockwise)', land)]
+            ('Cover Flow landscape (Settings > Library > Landscape; player held turned counter-clockwise)', land)]
     # rows of panels, packed left to right
     rows = [cols[i:i + 3] for i in range(0, len(cols), 3)]
     wid = max(sum(i.width for _, i in r) + pad * (len(r) + 1) for r in rows)

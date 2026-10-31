@@ -66,7 +66,7 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
   does (`slide_menu_set_value` `0x61399c`, tail call `0x613a1c`). So every offset change and album change calls
   `widget_invalidate_force` on the touch layer, which is always the frame's rectangle (`redraw()`). Tests model this (`dirty_rects` / `abs_rect` in `test/pod/harness.py`).
 - **Landscape.** The page, main or per artist, opens in a landscape presentation in
-  the 320 x 400 body under the navbar when **Settings > Cover Flow > Landscape** is on (the switch row of `m1plus_cfset`; nothing changes the presentation while the page is open); no global
+  the 320 x 400 body under the navbar when **Settings > Library > Landscape** is on (the switch row of `m1plus_library`; nothing changes the presentation while the page is open); no global
   LCD orientation changes. The navbar is untouched in both (Back, the title, Now Playing). The content is turned 90 degrees **clockwise** on the screen (its top edge at the screen's right: the
   player is held turned counter-clockwise, the status bar and navbar then a strip on the left; the direction is the
   map in `turned()` / `where()` / `coverflow_render`), the carousel runs along the 400 px side. `cfg_t` (`cf_portrait`,
@@ -139,7 +139,7 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
   when re-armed) the worker is cancelled and joined and the cached covers show. No build below 16 MB free, without a
   card or if `pthread_create` fails. A 250 ms timer polls the counters; Cancel, Back and closing stop it (`pthread_join`);
   `EVT_DESTROY` removes the timer, joins, frees everything. Nothing is written outside the card.
-- **Rebuild Covers** (`coverflow_rebuild`, Settings > Cover Flow > Rebuild Covers after its confirm dialog, `docs/modules/settings.md`): the
+- **Rebuild Covers** (`coverflow_rebuild`, Settings > Library > Rebuild Covers after its confirm dialog, `docs/modules/settings.md`): the
   library's Cover Flow opened with `cf.rebuild`, so `start_build` opens the set in `CC_REBUILD` mode and queues EVERY album with a
   track path. The Preparing screen, counters, Cancel and Back are the same. The worker extracts each album again to `.tmp` and
   `rename`s it over the cache file, so an old picture is replaced atomically and a "no art" marker is replaced by the picture an

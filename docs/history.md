@@ -247,6 +247,9 @@ Painting and text
 - **A button's icon is drawn at its own size on the rect's centre, unclipped** (`canvas_draw_icon_in_rect` `0x648f90`): an image wider than
   its button reaches past it (oO: multi-select's 50 px glass over its 46 px button bridges the stock builders' 2 px gap; seen seamless on the
   device). Keep what a press changes inside the button: only its rect is repainted.
+- **A list's scroll view has no free positions.** The stock `list_view` layouter stacks every visible child in child order and
+  ignores its y (V2.1zWZKWAAAB: Settings card backgrounds as views behind the rows stacked as a block above them). Draw a
+  card by its rows (per-row background pieces) and test a list page on demo's own layouter, not the asset's y.
 - **A custom-painted view beats a widget per item.** One view that draws only what is visible with a small ring of decoded tiles costs
   per frame and in memory independently of the library; the stock `slide_menu` laid out all its children (up to 4000) on every drag step.
 - **Rendering is not emulated.** The canvas a hook gets while a dialog animates cannot be reproduced; prefer removing a stock

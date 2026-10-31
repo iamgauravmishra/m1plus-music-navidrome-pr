@@ -3,7 +3,7 @@
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
- * Customize > Developer > Network Probe: a tap asks (the stock confirm dialog), Yes starts ONE detached pthread that runs the checks and
+ * Settings > Developer > Network Probe: a tap asks (the stock confirm dialog), Yes starts ONE detached pthread that runs the checks and
  * writes one line per fact to /mnt/mmc/m1plus-probe.log. The thread uses only what demo already imports (libcurl's easy interface,
  * popen, fgets, sleep, pthread_create / pthread_detach); no stock function is hooked, nothing runs at boot, in the main loop or at paint,
  * and the UI is never touched from the thread (the toast and the dialog are the tap's). The kill switch is checked at the tap.
