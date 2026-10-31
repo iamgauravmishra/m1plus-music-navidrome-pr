@@ -908,6 +908,12 @@ class Machine:
             ret = self.tm_buf
         elif name == 'stock_init_resume':
             self.calls.append(('stock_init_resume', a0, a1)); ret = self.init_ret
+        # ---- the keyboard's Chinese layer (patch/keyboard.c): stock's ime_pinyin open and close, scripted for the ways opening fails (the real engine runs, see test/pod/pinyin.py Engine)
+        elif name == 'im_open_decoder':
+            self.calls.append(('im_open_decoder', self.read_cstr(a0), self.read_cstr(a1)))
+            ret = int(self.py_open_ok); eng = self.alloc(0x30d8); self.u.mem_write(eng, bytes([ret])); self.setword(pod.DATA['PY_ENGINE'][0], eng)   # a failed open leaves an object that is not initialised, as stock's
+        elif name == 'im_close_decoder':
+            self.calls.append(('im_close_decoder',)); self.setword(pod.DATA['PY_ENGINE'][0], 0)
         # ---- the network probe (patch/probe.c): libcurl's easy interface, the shell and a worker thread
         elif name == 'get_wifisignal':
             ret = self.wifi; self.calls.append(('get_wifisignal',))
@@ -1032,6 +1038,7 @@ class Machine:
     play_pos = -1            # mclGetPlayPos: the playing track's index in the play queue (*PLAY_QUEUE), -1 for none
     seed = 12345             # toolsRandnum
     wifi = 4                 # stock get_wifisignal: -1 not connected, else the level 2..5
+    py_open_ok = True        # im_open_decoder's result (the engine object it leaves is initialised only on success)
     wall = 1800000000        # time(): the wall clock, seconds (2027-01-15 08:00 UTC); tz: seconds localtime adds
     tz = 0
     clock = 1                # time_now_ms
@@ -1172,6 +1179,7 @@ class ListMachine(SelectMachine):
     def __init__(self):
         super().__init__()
         self.wtext, self.measure = {}, lambda t: 8 * len(t)
+        self.measure_w = None   # or a function (widget, text) -> width: the font differs per widget (the keyboard's field, pinyin label and candidates)
         self.handlers[pod.SCROLL_DONE] = 'stock_scroll_done'   # the stock scroll end handler (patch/scroll.c's): mocked, it clears wa
         for n in ('widget_get_text', 'widget_measure_text', 'widget_animator_destroy'):
             self.handlers[pod.FUNCTIONS[n][2]] = n
@@ -1191,7 +1199,7 @@ class ListMachine(SelectMachine):
             n = 0
             while self.word(a1 + 4 * n): n += 1
             t = ''.join(chr(c) for c in struct.unpack(f'<{n}I', self.u.mem_read(a1, 4 * n))) if n else ''
-            w = float(self.measure(t)) if t else 0.0
+            w = float(self.measure_w(a0, t) if self.measure_w else self.measure(t)) if t else 0.0
             u.reg_write(UC_MIPS_REG_F0, struct.unpack('<I', struct.pack('<f', w))[0]); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
             return
         elif name == 'widget_animator_destroy':

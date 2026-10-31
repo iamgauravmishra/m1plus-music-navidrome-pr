@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_ui
 from awtk_ui import Widget
 import pod_i18n, pod_pages
+import pod_keyboard as PK
 
 UI = 'release/assets/default/raw/ui'   # relative to a rootfs dir
 SCREEN_W, SCREEN_H = 320, 480
@@ -1019,7 +1020,100 @@ def daily():
     return sec
 
 
+# The keyboard page (patch/keyboard.c, docs/modules/keyboard.md; geometry: tools/pod_keyboard.py): the plain navbar, the search field (magnifier, grey hint, text, caret, clear button),
+# the 180 px pad of buttons at the bottom of the window (26 char keys laid out as the lowercase page, the function keys; the payload moves, relabels and hides them per page), and
+# last the key pop-up (a stem and a balloon with the letter): insensitive, shown by the payload while a key is down. White and grey only.
+def kb_button(name, x, y, w, fill, down, ink=PK.KB_INK, px=20, text=None, icon=None):
+    b = Widget('button', x, y, w, PK.KB_KH, [('name', name), ('enable', 'true')] + ([text] if text else []))
+    for st in STATES:
+        styled(b, (st,), 'bg_color', down if st == 'pressed' else fill)
+        styled(b, (st,), 'text_color', ink)
+        styled(b, (st,), 'font_size', str(px))
+        styled(b, (st,), 'border_width', '0')
+        styled(b, (st,), 'round_radius', str(PK.KB_RADIUS))
+        if icon: styled(b, (st,), 'icon', icon)
+    return b
+
+
+def kb_view(name, x, y, w, h, fill, radius=0):
+    v = Widget('view', x, y, w, h, [('name', name), ('sensitive', 'false')])
+    for st in STATES:
+        styled(v, (st,), 'bg_color', fill)
+        styled(v, (st,), 'border_width', '0')
+        if radius: styled(v, (st,), 'round_radius', str(radius))
+    return v
+
+
+def build_keyboard_page(page):
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    root.children.append(navbar(page.title))
+    field = kb_view('kb_field', PK.FIELD_X, PK.FIELD_Y, PK.FIELD_W, PK.FIELD_H, PK.KB_BG, PK.FIELD_R)
+    field.set('sensitive', 'true')   # the clear button inside it needs it: stock's hit test does not look into an insensitive parent
+    mag = Widget('image', PK.FIELD_MAG_X, (PK.FIELD_H - PK.FIELD_MAG) // 2, PK.FIELD_MAG, PK.FIELD_MAG, [('name', 'kb_mag'), ('image', 'qk_mag'), ('draw_type', 'center'), ('sensitive', 'false')])
+    hint = label('kb_hint', PK.FIELD_TEXT_X, 0, PK.FIELD_TEXT_W, PK.FIELD_H, '', PK.FIELD_PX, PK.KB_GREY, 'left')
+    text = label('kb_text', PK.FIELD_TEXT_X, 0, PK.FIELD_TEXT_W, PK.FIELD_H, '', PK.FIELD_PX, PK.KB_INK, 'left')
+    for lab in (hint, text):
+        lab.set('sensitive', 'false')
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+    caret = kb_view('kb_caret', PK.FIELD_TEXT_X, PK.CARET_Y, PK.CARET_W, PK.CARET_H, PK.KB_INK)
+    clear = hidden(Widget('button', PK.FIELD_CLEAR_X, 0, PK.FIELD_CLEAR_W, PK.FIELD_H, [('name', 'kb_clear'), ('enable', 'true'), ('style', 'img_btn_style'),
+                   ('style:pressed:icon', 'qk_clear'), ('style:normal:icon', 'qk_clear'), ('style:over:icon', 'qk_clear')]))
+    field.children = [mag, hint, text, caret, clear]
+    root.children.append(field)
+    pad = Widget('view', 0, CLIENT_H - PK.KB_H, SCREEN_W, PK.KB_H, [('name', 'kb_pad'), ('enable', 'true')])
+    for st in STATES:
+        styled(pad, (st,), 'bg_color', PK.KB_BG)
+        styled(pad, (st,), 'border_width', '0')
+    lay = PK.layout('abc')
+    for i, (c, x, y, w) in enumerate(lay['keys']):
+        pad.children.append(kb_button(f'kb_k{i}', x, y, w, PK.KB_KEY, PK.KB_KEY_DOWN, text=('text', c)))
+    fx, fy, fw = lay['fn']['shift']
+    pad.children.append(kb_button('kb_shift', fx, fy, fw, PK.KB_FN, PK.KB_FN_DOWN, icon='qk_shift'))
+    pad.children.append(hidden(kb_button('kb_shifton', fx, fy, fw, PK.KB_ON, PK.KB_ON_DOWN, icon='qk_shifton')))
+    pad.children.append(hidden(kb_button('kb_sym', fx, fy, fw, PK.KB_FN, PK.KB_FN_DOWN, px=15, text=('text', '#+='))))
+    x, y, w = lay['fn']['del']
+    pad.children.append(kb_button('kb_del', x, y, w, PK.KB_FN, PK.KB_FN_DOWN, icon='qk_delete'))
+    x, y, w = lay['fn']['mode']
+    pad.children.append(kb_button('kb_mode', x, y, w, PK.KB_FN, PK.KB_FN_DOWN, px=15, text=('text', '123')))
+    x, y, w = lay['fn']['space']
+    pad.children.append(kb_button('kb_space', x, y, w, PK.KB_KEY, PK.KB_KEY_DOWN, px=15, text=pod_i18n.text_prop('space')))
+    x, y, w = lay['fn']['go']
+    pad.children.append(kb_button('kb_go', x, y, w, PK.KB_FN, PK.KB_FN_DOWN, px=15, text=pod_i18n.text_prop('Search')))
+    lx, ly, lw = PK.layout('abc', lang=True)['fn']['lang']   # the language key: hidden until the payload finds a second keyboard enabled, then space gives it the room
+    pad.children.append(hidden(kb_button('kb_lang', lx, ly, lw, PK.KB_FN, PK.KB_FN_DOWN, px=18, text=('text', PK.LANG_TAGS[0]))))
+    root.children.append(pad)
+    # The candidate strip (Chinese layer), a window child before the pop-up so that the balloons of the top row paint over it. It must be sensitive for its candidates view inside it to take
+    # touches (stock's hit test does not look into an insensitive parent); hidden() takes it out of the hit test while it is not shown, the payload shows both together.
+    strip = hidden(kb_view('kb_strip', 0, PK.STRIP_Y, SCREEN_W, PK.STRIP_H, PK.STRIP_BG))
+    py = label('kb_py', PK.PY_X, 0, PK.PY_MAX, PK.STRIP_H, '', PK.PY_PX, PK.STRIP_PY_INK, 'left')
+    sep = hidden(kb_view('kb_sep', 0, PK.SEP_Y, 1, PK.SEP_H, PK.STRIP_SEP))
+    cands = Widget('view', 0, 0, SCREEN_W, PK.STRIP_H, [('name', 'kb_cands'), ('enable', 'true')])
+    for st in STATES:
+        styled(cands, (st,), 'bg_color', PK.STRIP_BG)
+        styled(cands, (st,), 'border_width', '0')
+    chl = hidden(kb_view('kb_chl', 0, PK.CHL_Y, PK.CAND_MIN, PK.CHL_H, PK.KB_KEY, PK.KB_RADIUS))
+    items = [hidden(label(f'kb_c{i}', 0, 0, PK.CAND_MIN, PK.STRIP_H, '', PK.CAND_PX, PK.KB_INK, 'left')) for i in range(PK.POOL)]
+    for lab in [py] + items:
+        lab.set('sensitive', 'false')
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+    cands.children = [chl] + items
+    strip.set('sensitive', 'false')
+    strip.children = [py, sep, cands]
+    root.children.append(strip)
+    stem = hidden(kb_view('kb_stem', 0, 0, PK.KB_KW, PK.KB_STEM_UP + PK.KB_KH, PK.KB_POP, PK.KB_RADIUS))
+    pop = hidden(kb_view('kb_pop', 0, 0, PK.KB_POP_W, PK.KB_POP_H, PK.KB_POP, PK.KB_POP_R))
+    glyph = label('kb_pop_l', 0, 0, PK.KB_POP_W, PK.KB_POP_H, '', PK.KB_POP_PX, PK.KB_INK, 'center')
+    glyph.set('sensitive', 'false')
+    styled(glyph, ('normal',), 'text_align_v', 'middle')
+    pop.children.append(glyph)
+    root.children += [stem, pop]
+    return root
+
+
 def build_page(page):
+    if page.kind == 'keyboard':
+        return build_keyboard_page(page)
     if page.kind == 'menucfg':
         return build_menucfg_page(page)
     if page.kind == 'extrascfg':

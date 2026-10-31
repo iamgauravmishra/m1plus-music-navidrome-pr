@@ -155,14 +155,14 @@ POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'audio-lines'), 'Cover Flow': (
             'Most Played': ('pod_ic_most', 'flame'),
             'Composers': ('pod_ic_composers', 'feather'), 'Hi-Res': ('pod_ic_hires', '+badge-hr'),
             'Update Library': ('pod_ic_update', 'refresh-cw'), 'Tidal': ('pod_ic_tidal', 'T:brand-tidal'),
-            'CD Ripper': ('pod_ic_cdripper', 'disc'), 'Pod': ('pod_ic_ipod', 'circle'), 'Podcasts': ('pod_ic_podcasts', 'podcast'), 'Screenshot': ('pod_ic_screenshot', 'camera'), 'Network Probe': ('pod_ic_netprobe', 'globe'), 'Cassette Mode': ('pod_ic_tape', '+cassette-tape'), 'Cassette Theme': ('pod_ic_tape', '+cassette-tape'),
+            'CD Ripper': ('pod_ic_cdripper', 'disc'), 'Pod': ('pod_ic_ipod', 'circle'), 'Podcasts': ('pod_ic_podcasts', 'podcast'), 'Screenshot': ('pod_ic_screenshot', 'camera'), 'Network Probe': ('pod_ic_netprobe', 'globe'), 'Keyboard': ('pod_ic_keyboard', '+keyboard'), 'Keyboards': ('pod_ic_keyboard', '+keyboard'), 'English': ('pod_ic_languages', 'languages'), 'Chinese (Pinyin)': ('pod_ic_languages', 'languages'),'Cassette Mode': ('pod_ic_tape', '+cassette-tape'), 'Cassette Theme': ('pod_ic_tape', '+cassette-tape'),
             # the Settings page (the menu's Settings row opens it)
             'System Settings': ('pod_ic_settings', 'settings'), 'Playback': ('pod_ic_playset', 'headphones')}
 # The "M1+ Music" icon patch/home.c adds to the stock Home grid (id 99): 66x66 like the stock Home icons
 # (white Lucide smartphone glyph on the #777777 disc, #555555 pressed), style home_m1plus_style in home_page.bin.
 POD_HOME = ('m1plus', 'm1plus_down')
 POD_HOME_GLYPH, POD_HOME_STYLE = 'smartphone', 'home_m1plus_style'
-POD_UI = ['m1plus_menu', 'm1plus_shuffle', 'm1plus_customize', 'm1plus_extras', 'm1plus_mainmenu', 'm1plus_cfset', 'm1plus_homeset', 'm1plus_extrascfg', 'm1plus_developer', 'm1plus_tapeset']
+POD_UI = ['m1plus_menu', 'm1plus_shuffle', 'm1plus_customize', 'm1plus_extras', 'm1plus_mainmenu', 'm1plus_cfset', 'm1plus_homeset', 'm1plus_extrascfg', 'm1plus_developer', 'm1plus_tapeset', 'm1plus_keyboards']
 # The navbar toggles (tools/pod_ui.py NAV_VIEW_ICON, patch/albums.c, patch/artists.c): the glyph of the view a tap switches to, a plain
 # 24 px white glyph like the navbar's others (pressed #777777), added to the images.
 NAV_VIEW = {'pod_nav_grid': 'layout-grid', 'pod_nav_list': 'list',
@@ -288,7 +288,7 @@ def used_glyphs():
     """(Lucide names, Tabler names) of every glyph the tables use; custom ones excluded."""
     gl = [e[2] for e in HOME + SETTINGS + LISTS] + list(PULLDOWN.values()) + list(STATUS.values()) + \
         [g for g in WIFI_LEVELS if g] + [COVER_GLYPH, POD_HOME_GLYPH, SHOT_BAR[1]] + list(NAV_VIEW.values()) + [g for _, g in PL_MENU_ICONS] + [v[1] for v in POD_ROWS.values() if v[1] != SHANLING] + \
-        [g for _, g, _ in GLYPHS] + [v[0] for v in SONGS_IMAGES.values()] + [DP_ADD_GLYPH] + [g for _, g in DISCS] + [v[0] for v in NP.values() if not v[0].startswith('pil:')] + ['lock:filled']
+        [g for _, g, _ in GLYPHS] + [v[0] for v in SONGS_IMAGES.values()] + [v[0] for v in KEYBOARD_IMAGES.values()] + [KB_CLEAR[1], DP_ADD_GLYPH] + [g for _, g in DISCS] + [v[0] for v in NP.values() if not v[0].startswith('pil:')] + ['lock:filled']
     names = {gname(g) for g in gl if g and not is_custom(g) and not is_badge(g)}
     return sorted(n for n in names if not n.startswith('T:')), sorted(n[2:] for n in names if n.startswith('T:'))
 
@@ -641,6 +641,19 @@ SONGS_IMAGES = {'sg_play': ('play:filled', WHITE, 14, 16), 'sg_shuffle': ('shuff
                 'sg_trash': ('trash', (0xFF, 0x6B, 0x6B), 16, 16), 'sg_tick': ('+check', WHITE, 18, 18)}
 ALBUM += sorted(SONGS_IMAGES)
 
+# The keyboard page's glyphs (patch/keyboard.c, docs/modules/keyboard.md): shift (outline, white) and shift on (filled, dark on the light key), delete, the field's magnifier (grey) and its clear
+# disc (a dark x on a grey disc), exact canvases; the custom SVGs are Lucide's arrow-big-up and delete. White and grey only.
+KEYBOARD_IMAGES = {'qk_shift': ('+arrow-big-up', (255, 255, 255), 18, 18), 'qk_shifton': ('+arrow-big-up:filled', (0x1C, 0x1C, 0x1E), 18, 18),
+                   'qk_delete': ('+delete', (255, 255, 255), 24, 20), 'qk_mag': ('search', (0x8E, 0x8E, 0x93), 16, 16)}
+KB_CLEAR = ('qk_clear', 'x', (0x1C, 0x1C, 0x1E), 9, 16, (0x63, 0x63, 0x66))   # name, glyph, its colour, its ink px, the disc's diameter, the disc
+ALBUM += sorted(KEYBOARD_IMAGES) + [KB_CLEAR[0]]
+
+def keyboard_images():
+    f = {n: glyph_fit(g, cw, ch, rgb, 1 if n != 'qk_mag' else 0) for n, (g, rgb, cw, ch) in KEYBOARD_IMAGES.items()}
+    n, g, rgb, ink, d, fill = KB_CLEAR
+    f[n] = on_disc(glyph_fit(g, ink, ink, rgb, 0, 1.5), d, fill)
+    return f
+
 def songs_images():
     from PIL import Image
     f = {}
@@ -666,6 +679,7 @@ def album_images():
     f['ah_play'] = p                 # no padding: the style's icon_at left centres it in a pill-high square (mod_ipodrows.pill_layout)
     f.update(ah_nav_images())
     f.update(songs_images())
+    f.update(keyboard_images())
     f[NB_FADE[0]] = nb_fade_image()
     g = glyph_fit('play:filled', DM_PLAY_GLYPH, DM_PLAY_GLYPH, WHITE, 0)
     for n, pressed in (('dm_disc', False), ('dm_disc_down', True)):

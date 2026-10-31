@@ -5,8 +5,8 @@ Sources: `patch/m1plus.c`, `patch/home.c`, `patch/covercache.c`, `patch/tape.c` 
 
 Customize is item 18 (`j`), hidden from the main menu by default. The Extras navbar always
 provides access, and it cannot be turned off. Its rows open Main Menu, Extras, Home Screen,
-Cover Flow, Cassette Mode, Playback, System Settings and Developer. The two stock settings
-pages use Home dispatcher IDs 16 and 17; Developer contains Screenshot and Network Probe ([probe](probe.md)).
+Cover Flow, Cassette Mode, Keyboards, Playback, System Settings and Developer. The two stock settings
+pages use Home dispatcher IDs 16 and 17; Developer contains Screenshot, Network Probe ([probe](probe.md)) and Keyboard ([keyboard](keyboard.md)).
 
 ## Persisted choices
 
@@ -21,6 +21,7 @@ the file and displayed state unchanged. Reading settings never writes them.
 | Landscape | `m1plus-landscape` | `1` landscape; default portrait |
 | Album sort | `m1plus-cfsort` | `0` or `0\n` Album; missing/other Artist |
 | Cassette Theme | `m1plus-tapetheme` | `1` Chrome, `2` Metal, optional newline; missing/other Normal |
+| Chinese (Pinyin) keyboard | `m1plus-kbzh` | `1` on (first byte); missing/other off |
 
 Home Screen also has Regenerate Daily Mix and Shanling Home. Regenerate is an action without
 a chevron: it requests a new seed, and the Home page rebuilds when next foregrounded. Shelf
@@ -29,6 +30,14 @@ fits switch rows where Recently Played would overflow.
 
 Cassette Theme cycles Normal → Chrome → Metal. `tape_theme` reads it when the Tape page opens;
 a change affects the next open. Value labels use translation keys, not fixed English text.
+
+## Keyboards
+
+Customize > Keyboards (`m1plus_keyboards`, iOS style) lists the keyboards the on-screen keyboard ([keyboard](keyboard.md)) offers as two switch rows: **English**, always on (its switch shows on, the
+row is dimmed to 60 % and takes no tap: `bind_switch` sets its opacity and sensitivity, nothing is bound), and **Chinese (Pinyin)**, a normal switch row (`ACT_KB_ZH`, `kb_zh_toggle`, saved atomically in
+`m1plus-kbzh`, off by default; the keyboard reads it each time it opens, `kb_zh_setting`). With it on the keyboard has a language key and a pinyin layer; turning it off also forgets the layer the last keyboard
+ended on. A failed save changes neither the file nor the switch. The three strings are in all 13 languages (`Keyboards`, `English`, `Chinese (Pinyin)`); the rows' icons are the keyboard and the Lucide
+`languages` glyph (`assets/icons/png/pod_ic_languages.png`). More keyboards would be more rows and a bit each in the layer table of `patch/keyboard.c`.
 
 ## Rebuild Covers
 

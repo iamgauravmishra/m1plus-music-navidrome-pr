@@ -576,8 +576,8 @@ def settings_tests(ctx, on_row, rows0):
         return m
 
     # 15. Customize: Main Menu, Extras, Home Screen and Cover Flow (sub-pages), Playback, System Settings, Developer; a menu item like the others
-    expect([r.label for r in S.rows] == ['Main Menu', 'Extras', 'Home Screen', 'Cover Flow', 'Cassette Mode', 'Playback', 'System Settings', 'Developer'],
-           'the Customize page lists Main Menu, Extras, Home Screen, Cover Flow, Cassette Mode, Playback, System Settings and Developer')
+    expect([r.label for r in S.rows] == ['Main Menu', 'Extras', 'Home Screen', 'Cover Flow', 'Cassette Mode', 'Keyboards', 'Playback', 'System Settings', 'Developer'],
+           'the Customize page lists Main Menu, Extras, Home Screen, Cover Flow, Cassette Mode, Keyboards, Playback, System Settings and Developer')
     pb = next(r for r in S.rows if r.label == 'Playback'); ss = next(r for r in S.rows if r.label == 'System Settings')
     expect((pb.action, pb.arg) == (P.ACT_HOME, P.HOME_PLAYSET) and (ss.action, ss.arg) == (P.ACT_HOME, P.HOME_SYSSET),
            'Playback opens the stock Play settings page, System Settings the stock one')
@@ -602,6 +602,7 @@ def settings_tests(ctx, on_row, rows0):
     m.call(on_row, a0=rows_s + 12 * cf_i, count=3000000)
     expect(('window_open', P.CFSET_PAGE.key) in m.calls, 'the Cover Flow row on the Customize page opens m1plus_cfset')
     cfset_tests(ctx, on_row)
+    keyboards_tests(ctx, on_row, rows_s)
 
     # 17. The Main Menu row opens the customise page (the generic page open: navbar bound, no row table)
     m = Machine()
@@ -784,6 +785,53 @@ def header_asset_tests(ctx, tree, what):
            f'{what}: the caption is in the style of the Home menu\'s "Made for You" heading (x 10, 20 px, white), inside the strip, insensitive')
     expect(not [w for h in hdrs for w in h.walk() if w.type in ('list_item', 'image', 'button')], f'{what}: no list_item, chevron, icon or button in a header (no press visual)')
     expect(sv.children[-4:] == hdrs and len([c for c in sv.children if c.name.startswith('pod_row')]) == len(sv.children) - 4, f'{what}: the headers follow the rows')
+
+
+def keyboards_tests(ctx, on_row, rows_s):
+    """Customize > Keyboards (m1plus_keyboards): English always on and not switchable, Chinese (Pinyin) a switch saved in /mnt/data/m1plus-kbzh, off by default."""
+    expect, P = ctx.expect, pod_pages
+    K = P.KEYBOARDS_PAGE
+    FILE = '/mnt/data/m1plus-kbzh'
+    kb_i = next(i for i, r in enumerate(P.CUSTOMIZE_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.KEYBOARDS_PAGE_INDEX)
+    expect([(r.label, r.action) for r in K.rows] == [('English', P.ACT_KB_EN), ('Chinese (Pinyin)', P.ACT_KB_ZH)] and K.title == 'Keyboards' and K.key == 'm1plus_keyboards'
+           and P.ACT_KB_EN in P.SWITCH_ACTIONS and P.ACT_KB_ZH in P.SWITCH_ACTIONS and P.PAGES[P.KEYBOARDS_PAGE_INDEX] is K and P.CUSTOMIZE_PAGE.rows[kb_i].label == 'Keyboards',
+           'Customize has a Keyboards row (after Cassette Mode); its page has two switch rows: English and Chinese (Pinyin)')
+    tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets/default/raw/ui/m1plus_keyboards.bin'), 'rb').read())
+    expect(all(tree.find(f'pod_row{i}') is not None and tree.find(f'pod_switch{i}') is not None for i in range(2)) and not [w for w in tree.walk() if w.name.startswith('pod_value')],
+           'the asset has the two rows, each with a switch image, no value label')
+
+    def open_kb(saved=None):
+        m = Machine()
+        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(
+            ['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(P.CUSTOMIZE_PAGE.rows))] + ['pod_switch0', 'pod_switch1'])}
+        if saved is not None: m.fs[FILE] = saved
+        m.call(on_row, a0=rows_s + 12 * kb_i, count=3000000)
+        return m
+
+    def images(m, i): return [c[2] for c in m.calls if c[0] == 'image_base_set_image' and c[1] == m.widgets[f'pod_switch{i}']]
+
+    m = open_kb()
+    expect(('window_open', K.key) in m.calls and images(m, 0) == ['sset_on'] and images(m, 1) == ['sset_off'], 'the row opens the page: English shows on, Chinese (Pinyin) off with nothing saved')
+    expect(('widget_set_opacity', m.widgets['pod_row0'], 153) in m.calls and ('widget_set_sensitive', m.widgets['pod_row0'], 0) in m.calls
+           and (m.widgets['pod_row0'], O['EVT_CLICK']) not in m.bound and (m.widgets['pod_row1'], O['EVT_CLICK']) in m.bound,
+           'English is dimmed and takes no tap (nothing is bound on it); the Chinese row is bound')
+    expect(FILE not in m.fs, 'English has nothing to save: no file')
+    for data, on in ((b'1\n', 1), (b'1', 1), (b'0\n', 0), (b'', 0), (b'x', 0), (b'11', 1), (b'\n1', 0)):
+        got = images(open_kb(data), 1)
+        expect(got == [('sset_on' if on else 'sset_off')], f'saved {data!r}: the Chinese switch opens {"on" if on else "off"} (the file\'s first byte "1" is on, anything else off)')
+    m = open_kb()
+    m.click('pod_row1')
+    expect(m.fs.get(FILE) == b'1\n' and FILE + '.tmp' not in m.fs and ('rename', FILE + '.tmp', FILE) in m.calls and ('fsync', '/mnt/data') in m.calls and images(m, 1)[-1] == 'sset_on',
+           'a tap turns Chinese (Pinyin) on: written atomically, the switch on')
+    expect(m.call(PSYMS['kb_zh_setting']) == 1, 'kb_zh_setting reads it')
+    m.click('pod_row1')
+    expect(m.fs.get(FILE) == b'0\n' and images(m, 1)[-1] == 'sset_off' and m.call(PSYMS['kb_zh_setting']) == 0, 'and off again')
+    m = open_kb(b'1\n'); m.fail.add(('write', FILE + '.tmp'))
+    m.click('pod_row1')
+    expect(m.fs.get(FILE) == b'1\n' and FILE + '.tmp' not in m.fs and images(m, 1) == [] and m.call(PSYMS['kb_zh_setting']) == 1, 'a failed write changes neither the file nor the switch')
+    expect(m.call(PSYMS['kb_zh_setting']) == 1 and Machine().call(PSYMS['kb_zh_setting']) == 0, 'no file: off')
+    for loc in pod_i18n.LOCALES:
+        expect(all(pod_i18n.TEXT[k][pod_i18n.table_for(loc)] for k in ('Keyboards', 'English', 'Chinese (Pinyin)')), f'the three strings have a text in {loc}')
 
 
 def cfset_tests(ctx, on_row):
