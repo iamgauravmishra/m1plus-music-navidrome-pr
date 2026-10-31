@@ -42,11 +42,13 @@ typedef struct {
     char author[PC_AUTHOR]; /* the show file's author= (the channel's itunes:author), "" = none */
     char category[PC_CAT]; /* the show file's category= (the first itunes:category), "" = none */
     char desc[PC_DESC]; /* the show file's desc= (the channel's itunes:summary, else description, as plain text) */
+    unsigned
+        newest; /* the newest episode's date, remote or local: the largest p= of the .episodes entries, else (no .episodes) the newest audio file's date; 0 = none: the Shows page's order */
 } pc_show_t;
 
 /* The folder: out (PC_FILE + 20 bytes) is "/mnt/mmc/<Podcasts as the card spells it>"; 1 when it exists, else 0 (out then holds the default spelling). */
 int pc_root(char *out);
-/* The shows: the folders in it (those with an episode file or a metadata file), sorted by title; at most max. Returns the count. */
+/* The shows: the folders in it (those with an episode file or a metadata file), the most recently updated first (newest episode, remote or local; ties by title, a leading "The " aside); at most max. Returns the count. */
 int pc_scan_shows(pc_show_t *out, int max);
 /* The episodes of a show, newest first (publication date, then file name, descending), PC_LOCAL / PC_PART / PC_REMOTE together; at most max. Returns the count. */
 int pc_load_show(const pc_show_t *show, pc_ep_t *out, int max);
@@ -75,6 +77,14 @@ void pc_mark(unsigned hash,
              int played); /* played: the episode is done (place cleared); else it is new again (forgotten) */
 void pc_flush(void); /* write the ring if it changed (the page's own actions) */
 unsigned pc_rev(void); /* grows with every change a list shows (a place, a mark) */
+typedef struct { /* an episode partly played, for Continue Listening */
+    int show; /* the index in the shows array given to pc_continue */
+    unsigned hash, pos,
+        len; /* the ring key, the place and the length the ring saw (an episode in progress always has both: a place is only kept for a length that is known) */
+    char file[PC_FILE], title[PC_TITLE];
+} pc_cont_t;
+/* The episodes partly played, the most recently played first (the ring's order), at most max, found among the shows' files (docs/modules/podcasts.md "The Shows page"). Returns the count. */
+int pc_continue(const pc_show_t *shows, int nshows, pc_cont_t *out, int max);
 
 /* Per-show speed: playspeed_mode 0..3 (1x, 1.25x, 1.5x, 2x). pc_speed_set saves at once (0 when it could not be written). */
 int pc_speed_get(unsigned show);

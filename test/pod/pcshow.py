@@ -116,7 +116,7 @@ def machine(card=deep_card, **kw):
     m = PCP.page_machine(lambda mm: card(mm, **kw) if kw else card(mm), SM)
     m.px = {m.widgets[n]: px for n, px, *_ in pod_ui.PS_STYLES}
     m.px.update({m.widgets['pg_sh_speed_vl']: pod_ui.PS_SHEET_PX, m.widgets['pg_sh_refresh_vl']: pod_ui.PS_SHEET_PX})
-    m.px.update({m.widgets[n]: px for n, px in (('label_row_title', 21), ('label_row_sub', 18), ('label_row_act', 21))})
+    m.px.update({m.widgets[n]: px for n, px in (('label_row_title', 21), ('label_row_sub', 18))})
     for r, _, label, *_ in pod_ui.PS_SHEET_ROWS:
         m.px[m.widgets[f'pg_sh_{r}_tx']] = pod_ui.PS_SHEET_PX
         m.wtext[m.widgets[f'pg_sh_{r}_tx']] = label   # (the label's text, as the asset's tr_text gives it)
@@ -125,14 +125,12 @@ def machine(card=deep_card, **kw):
     return m
 
 
-def open_show(m, title=SHOW_TITLE[:6], feeds=False):
-    """A tap on the show's row of the Shows level (its name is cut with an ellipsis there: matched by its start), or of the Feeds level."""
-    if feeds: PCP.click(m, 'btn_feeds')
-    names = [t for _, t, _ in SEL.lines(m)]
-    PCP.tap(m, 150, next(i for i, n in enumerate(names) if n.startswith(title)) * ROW + 10)
+def open_show(m, title=SHOW_TITLE[:6]):
+    """A tap on the show's cover on the Shows level (its name is cut with an ellipsis under it: matched by its start)."""
+    PCP.tap_show(m, title)
 
 
-def shown(feeds=False, **kw):
+def shown(**kw):
     """The page with the Deep show open, with its downloading / failed states set and a place on episode 2, as the card_machine of this file describes."""
     m = machine(**kw)
     # a place on episode 2: the page's timer notes what the player has played
@@ -146,7 +144,7 @@ def shown(feeds=False, **kw):
     m.setword(DL.pn_at(DL.DKEY), DL.key_of(DEEP, 'e5.mp3')); m.setword(DL.pn_at(DL.DGOT), 420000); m.setword(DL.pn_at(DL.DTOTAL), 1000000)
     m.setword(DL.pn_at(DL.KIND), 2); m.setword(DL.pn_at(0), 1); m.setword(DL.pn_at(DL.DSEQ), 10)
     DL.poke_fail(m, 0, DEEP, 'e7.mp3', PN['NET'])
-    open_show(m, feeds=feeds)
+    open_show(m)
     return m
 
 
@@ -194,7 +192,7 @@ def asset_tests(ctx):
     rh = O['PM_ROW_H']
     expect((card.x, card.y, card.w, card.h) == (0, 450 - 5 * rh, 320, 5 * rh) and card.get('style:normal:bg_image') == 'pc_sheet5' and card.get('visible') == 'false',
            'the card is the five-row sheet at the bottom of the window (the payload sets its size and picture)')
-    expect([c.name for c in card.children] == [f'pg_sh_{r}' for r in PCP.SHEET_ROWS] and len(PCP.SHEET_ROWS) == O['PM_PAGE_N'] + 4, 'nine rows: the show sheet\'s five and the episode sheet\'s four')
+    expect([c.name for c in card.children] == [f'pg_sh_{r}' for r in PCP.SHEET_ROWS] and len(PCP.SHEET_ROWS) == O['PM_PAGE_N'] + 5, 'ten rows: the show sheet\'s five, the episode sheet\'s four and the Shows level\'s Import from Card')
     for r, icon, label, value, red in pod_ui.PS_SHEET_ROWS:
         row = tree.find(f'pg_sh_{r}')
         ic, tx, hr = tree.find(f'pg_sh_{r}_ic'), tree.find(f'pg_sh_{r}_tx'), tree.find(f'pg_sh_{r}_hr')
@@ -472,7 +470,7 @@ def latest_tests(ctx):
     PCP.latest(m)
     expect(len([c for c in m.calls if c[0] == 'navigator_to_with_context']) == 1, 'and a tap plays it')
     # a started newest episode: still the white play pill; a show with no episode has no pill
-    m = shown(entries=[], feeds=True)
+    m = shown(entries=[])
     st = m.widgets['label_status']
     moved = [c for c in m.calls if c[0] == 'widget_move' and c[1] == st]
     expect(not texts_of(m, 'label_ps_latest') and not texts_of(m, 'label_ps_latestw'), 'a show with no episode has no pill')
@@ -486,7 +484,7 @@ def nav_tests(ctx):
     expect = ctx.expect
     m = shown()
     h = hdr_model(m)
-    expect(flags(m, 'btn_more') == (1, 1) and flags(m, 'btn_select') == (0, 0) and flags(m, 'btn_feeds') == (0, 0), 'the Show page: the "..." shows; Select and Feeds are hidden and insensitive')
+    expect(flags(m, 'btn_more') == (1, 1) and flags(m, 'btn_select') == (0, 0), 'the Show page: the "..." shows; Select is hidden and insensitive')
     expect(m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_play' and m.props[(m.widgets['btn_backtoplayer'], 'style:pressed:icon')] == 'ah_nav_play_down',
            'Now Playing is the capsule\'s right cap, so "..." | Now Playing is one capsule')
     t = m.widgets['label_title']
@@ -516,17 +514,16 @@ def nav_tests(ctx):
     expect(m.props.get((t, 'visible')) == 1 and flags(m, 'btn_more') == (0, 0), 'select mode shows its title and hides the "..."')
     PCP.click(m, 'btn_return')
     expect(m.props.get((t, 'visible')) == 0 and flags(m, 'btn_more') == (1, 1), 'leaving select mode: the "..." is back, the title hidden at the top')
-    # other levels: the title is always there, the "..." is not
+    # the Shows level: the large title is the page's, the navbar's is hidden at rest and there is no "..." without Import
     PCP.click(m, 'btn_return')
-    expect(m.props.get((t, 'visible')) == 1 and flags(m, 'btn_more') == (0, 0) and flags(m, 'btn_feeds') == (1, 1), 'the Shows level: the title is visible, Feeds shows, the "..." does not')
-    PCP.click(m, 'btn_feeds')
-    expect(m.props.get((t, 'visible')) == 1 and flags(m, 'btn_more') == (0, 0), 'Feeds: the same')
+    expect(m.props.get((t, 'visible')) == 0 and flags(m, 'btn_more') == (0, 0) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_np',
+           'the Shows level: the large title shows, the navbar\'s is hidden, the "..." is not there (nothing in its sheet) and Now Playing is the disc')
     # the Downloads level keeps its Select button (it stays as it is)
     m = shown()
-    PCP.click(m, 'btn_return'); PCP.click(m, 'btn_feeds')
+    PCP.click(m, 'btn_return')
     DL.poke_slot(m, 0, DEEP, 'e3.mp3', 1, seq=2)
     m.setword(DL.pn_at(12), 5); DL.tick(m)
-    PCP.tap(m, 150, ROW + 10)
+    PCP.tap_downloads(m)
     expect(PCP.title_text(m) == 'Downloads' and flags(m, 'btn_select') == (1, 1) and flags(m, 'btn_more') == (0, 0), 'the Downloads level keeps its Select button and has no "..."')
 
 
@@ -685,15 +682,15 @@ def sheet_tests(ctx):
     rows, h, glass, _ = show_sheet(m)
     expect(rows == ['speed', 'select'] and h == 100 and glass == GLASS[2], f'every episode played: Mark All as Played is gone ({rows})')
     # a subscribed show with nothing on the card: no Select Episodes
-    m = machine(entries=[entry(i) for i in range(3)], files=()); open_show(m, feeds=True)
+    m = machine(entries=[entry(i) for i in range(3)], files=()); open_show(m)
     rows, h, glass, _ = show_sheet(m)
     expect(rows == ['speed', 'refresh', 'markall', 'unsub'] and h == 200 and glass == GLASS[4], f'nothing on the card: no Select Episodes ({rows}, {h}, {glass})')
     # a show with no episode and no mark: its own sheet (speed, refresh, unsubscribe)
-    m = machine(entries=[]); open_show(m, feeds=True)
+    m = machine(entries=[]); open_show(m)
     rows, h, glass, _ = show_sheet(m)
     expect(rows == ['speed', 'refresh', 'unsub'] and h == 150, f'a subscription with no episode yet: speed, refresh, unsubscribe ({rows})')
     # never refreshed
-    m = machine(checked=0, files=()); open_show(m, feeds=True); show_sheet(m)
+    m = machine(checked=0, files=()); open_show(m); show_sheet(m)
     expect(text_of(m, 'pg_sh_refresh_vl') == 'Never refreshed', 'never refreshed: the value says so')
     # no sheet in select mode, none over the refresh dialog
     m = shown()
@@ -829,23 +826,24 @@ def unsub_tests(ctx):
     shows, _ = m.shows()
     expect([s['feed'] for s in shows if s['dir'] == DEEP] == [''], 'the show is no subscription: pc_scan_shows reads no feed address')
     PCP.click(m, 'btn_return')
-    expect(PCP.title_text(m) == 'Podcasts', 'Back goes to the Shows level (it was a subscription in Feeds no more)')
-    PCP.click(m, 'btn_feeds')
-    expect(not [n for _, n, _ in SEL.lines(m) if n and n.startswith('All-In')], 'and Feeds does not list it')
+    expect(PCP.title_text(m) == 'Podcasts', 'Back goes to the Shows level')
+    _, _, off = PCP.show_at(m, 'All-In')
+    expect([t[-8:] for t, _ in PCP.drawn(m, off, style='label_ps_gsub')][:1] == ['episodes'] and not [t for t, _ in PCP.drawn(m, 0, style='label_ps_line')],
+           'the show is still on the Shows level, now a local one (its caption counts its episodes) and with no refresh line: no show has a feed')
     # no file left: its own files and the folder go, the page leaves for the level below
-    m = machine(files=()); open_show(m, feeds=True)
+    m = machine(files=()); open_show(m)
     m.put(f'{RP}/{DEEP}/e1.mp3.part', b'x')
     m.confirm_yes = True
     PCP.click(m, 'btn_more'); m.calls = []
     PCP.click(m, 'pg_sh_unsub')
     gone = [p for p in m.fs if p.startswith(f'{RP}/{DEEP}/')]
     expect(not gone and f'{RP}/{DEEP}' not in m.dirs and ('rmdir', f'{RP}/{DEEP}') in m.calls, f'nothing is left: .show, .episodes, cover.jpg and the .part files are deleted and the empty folder is removed ({gone})')
-    expect(PCP.title_text(m) == 'Feeds', 'the page goes back to the level below (opened from Feeds: Feeds)')
+    expect(PCP.title_text(m) == 'Podcasts' and not [t for t, _ in PCP.drawn(m, 0, style='label_ps_gtitle') if t.startswith('All-In')], 'the page goes back to the Shows level, which no longer lists the show')
     m2 = machine(files=(0,)); open_show(m2)
     m2.track(f'{RP}/{DEEP}/e0.mp3'); m2.confirm_yes = True
     PCP.click(m2, 'btn_more'); PCP.click(m2, 'pg_sh_unsub')
     expect(f'{RP}/{DEEP}/e0.mp3' in m2.fs and f'{RP}/{DEEP}/.episodes' in m2.fs and PCP.title_text(m2).startswith('All-In'), 'the playing episode is never deleted: its file stays, so the folder and its .episodes do too')
-    m4 = machine(files=()); open_show(m4, feeds=True)
+    m4 = machine(files=()); open_show(m4)
     m4.put(f'{RP}/{DEEP}/notes.txt', b'mine'); m4.confirm_yes = True
     PCP.click(m4, 'btn_more'); PCP.click(m4, 'pg_sh_unsub')
     expect(f'{RP}/{DEEP}/notes.txt' in m4.fs and f'{RP}/{DEEP}/.show' not in m4.fs and f'{RP}/{DEEP}' in m4.dirs, 'a file of the user\'s in the folder stays; the folder is not removed (rmdir refuses)')

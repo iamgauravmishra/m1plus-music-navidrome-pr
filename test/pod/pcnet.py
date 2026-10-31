@@ -243,9 +243,9 @@ def run(ctx):
     expect((m.word(d), m.word(t)) == (1, 1), 'progress 1 of 1')
     expect([u for u, _ in sites if u == F_WSJ] == [F_WSJ] and not [u for u, _ in sites if 'feeds.example' in u and u != F_WSJ], 'only the show with a feed was fetched (B has an empty feed, C none)')
     o = sites[0][1]   # the feed's request is the first
-    expect(o[10065] == CA and o[52] == 1 and o[68] == 8 and o[181] == 3 and o[182] == 3 and o[45] == 1 and o[99] == 1 and o[78] == 20 and o[19] == 1000 and o[20] == 30 and o[13] == 120
+    expect(o[10065] == CA and o[52] == 1 and o[68] == 16 and o[181] == 3 and o[182] == 3 and o[45] == 1 and o[99] == 1 and o[78] == 20 and o[19] == 1000 and o[20] == 30 and o[13] == 120
            and o[10102] == '' and o[10018].startswith('M1PlusMusic/') and 64 not in o and 81 not in o and 10007 not in o,
-           'the request: CAINFO the firmware\'s bundle, redirects (8) limited to http(s), fail on HTTP error, no signals, time-outs, every encoding, a User-Agent, no Range; no SSL_VERIFY option is ever set')
+           'the request: CAINFO the firmware\'s bundle, redirects (16) limited to http(s), fail on HTTP error, no signals, time-outs, every encoding, a User-Agent, no Range; no SSL_VERIFY option is ever set')
     expect(len([c for c in m.calls if c[0] == 'curl_easy_init']) == 0 and len(m.curl) == 0, 'every easy handle is cleaned up')
     m.calls = []
     r, th = start(m, [])
@@ -348,7 +348,15 @@ def run(ctx):
     one_failure('NOTFEED', {'body': b'<html><body>Sign in</body></html>'}, 'an HTML page with 200')
     one_failure('NOTFEED', {'body': b'{"error": "no"}'}, 'JSON')
     one_failure('NOTFEED', {'body': b''}, 'an empty answer')
-    one_failure('NOTFEED', {'body': b'<rss><channel><title>X</title>' + b'<!-- ' + b'x' * (9 << 20) + b' -->', 'chunk': 65536}, 'a feed over 8 MiB (the write callback stops the transfer)')
+    one_failure('NOTFEED', {'body': b'<rss><channel><title>X</title>' + b'<!-- ' + b'x' * (9 << 20) + b' -->', 'chunk': 65536}, 'a feed over 8 MiB with no item before the cap (the write callback stops the transfer)')
+    # a feed over 8 MiB whose newest items come first (TED Talks Daily, 8.5 MB): parsed up to the cap, the items kept, a success
+    big = WSJ.replace(b'</channel>', b'<item><title>Cut by the cap</title><enclosure url="https://x/cut.mp3" type="audio/mpeg" length="9"/><!-- ' + b'x' * (9 << 20) + b' --></item></channel>')
+    m = machine(site=lambda url, o: {'body': big, 'chunk': 65536})
+    sub(m, 'S', F_WSJ, checked=5)
+    r, th = start(m, ['S']); work(m, th)
+    got = m.fs.get(f'{ROOT_DIR}/S/.episodes', b'').decode()
+    expect(status(m, F_WSJ)[0] == PN['OK'] and got.count('\n') == 4 and 'Cut by the cap' not in got,
+           'a feed over 8 MiB with its items first: PN_OK, the items parsed before the cap kept, the item cut by the cap left out')
     # writes that fail
     for what in ('.episodes', '.show'):
         m = machine(site=lambda url, o: {'body': WSJ})
@@ -474,7 +482,7 @@ def run(ctx):
     img_reqs = [(u, o) for u, o in reqs if u != F_WSJ]
     expect(len(img_reqs) == 1 and img_reqs[0][0].startswith(IMG), 'the picture url the feed named is requested once')
     o = img_reqs[0][1]
-    expect(o[10065] == CA and o[52] == 1 and o[68] == 8 and o[181] == 3 and o[182] == 3 and o[45] == 1 and o[99] == 1 and o[78] == 20 and o[19] == 1000 and o[20] == 30 and o[13] == 120 and 64 not in o and 81 not in o,
+    expect(o[10065] == CA and o[52] == 1 and o[68] == 16 and o[181] == 3 and o[182] == 3 and o[45] == 1 and o[99] == 1 and o[78] == 20 and o[19] == 1000 and o[20] == 30 and o[13] == 120 and 64 not in o and 81 not in o,
            'the same request options as the feed: CA bundle, redirects limited to http(s), fail on HTTP error, time-outs; no SSL_VERIFY option')
     s = show_of(m, 'WSJ Minute Briefing')
     expect(s['cover'] == 'cover.jpg' and m.call(PSYMS['pc_cover_ok'], a0=m.cstr(f'{FOLDER}/cover.jpg'), count=2000000) == 1, 'the model finds the cover and the page would decode it (header check)')

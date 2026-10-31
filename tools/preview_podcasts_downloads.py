@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Approximate PIL mock-up of the Podcasts page's Feeds, Show and Downloads levels (patch/podcasts.c, docs/modules/podcasts.md "Downloads", "The ... menu"): open, the Downloads level, a Show level without the dot column (an unplayed, a played and two episodes that are not on the card), the Show level's "..." menu, and select mode (the rows
+"""Approximate PIL mock-up (from before round 2 of the revamp: its Feeds panel is the Shows page's predecessor, which tools/preview_podcasts_revamp.py now draws) of the Podcasts page's Feeds, Show and Downloads levels (patch/podcasts.c, docs/modules/podcasts.md "Downloads", "The ... menu"): open, the Downloads level, a Show level without the dot column (an unplayed, a played and two episodes that are not on the card), the Show level's "..." menu, and select mode (the rows
 slid right by the mark column; on the Downloads level too). Not pixel-exact AWTK.
 
   preview_podcasts_downloads.py WORKDIR OUT.png [--lang CODE]

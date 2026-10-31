@@ -1,4 +1,4 @@
-"""The Podcasts page's Downloads level and select mode (patch/podcasts.c, docs/modules/podcasts.md "Downloads"): the level behind the Feeds level's Downloads row (rows from the queue, the failed
+"""The Podcasts page's Downloads level and select mode (patch/podcasts.c, docs/modules/podcasts.md "Downloads"): the level behind the Shows level's Downloads row (rows from the queue, the failed
 ones and the .part files the card has, their state lines, taps, the live update, the empty state, the screen-off rule), and the select mode of the Show and Downloads levels in the Playlists page's
 manner (the navbar's x, "N Selected", Select All, marks, a Delete bar, a confirm; only episodes on the card are marked; the file and its .part unlinked, the `.episodes` line kept, the playing episode
 kept, a show with no file leaving the Shows level). The compiled payload runs under Unicorn; the card is a dict of paths."""
@@ -46,14 +46,16 @@ def toasts(m): return [c[1] for c in m.calls if c[0] == 'toast']
 def confirms(m): return [c[1] for c in m.calls if c[0] == 'confirm']
 def unlinks(m): return [c[1].replace(RP + '/', '') for c in m.calls if c[0] == 'unlink']
 def tick(m): return DL.tick(m)
-def to_feeds(m): PCP.click(m, 'btn_feeds')
+def to_downloads(m):
+    tick(m)   # (the page reads the queue again from its timer: the row appears)
+    PCP.tap_downloads(m)
 def title(m): return PCP.title_text(m)
 
 
 def lines(m, top=0):
     """[(row, title, grey line)] of a frame: the titles and the grey lines by row (top: where the first row starts)."""
     _, texts, styles, _ = PCP.paint(m)
-    t = {(y - top) // ROW: v for (v, (x, y, w, h)), s in zip(texts, styles) if s in ('label_row_title', 'label_row_act') and y >= top and (y - top) % ROW == O['LIST_TITLE_Y']}
+    t = {(y - top) // ROW: v for (v, (x, y, w, h)), s in zip(texts, styles) if s == 'label_row_title' and y >= top and (y - top) % ROW == O['LIST_TITLE_Y']}
     g = {(y - top) // ROW: v for (v, (x, y, w, h)), s in zip(texts, styles) if s == 'label_row_sub' and y >= top and (y - top) % ROW == O['LIST_SUB_Y']}
     return [(r, t.get(r), g.get(r)) for r in sorted(t)]
 
@@ -76,11 +78,11 @@ def downloads_tests(ctx):
     running(m)
     poke_slot(m, 1, SUB, 'c.mp3', 1, seq=2)
     poke_fail(m, 0, SUB, 'f.mp3', PN['NET'])
-    to_feeds(m)
-    expect(any(t == 'Downloads (2)' for _, t, _ in lines(m)), f'Feeds: Downloads (2) ({lines(m)})')
+    tick(m)
+    expect('Downloads (2)' in [t for t, _ in PCP.drawn(m, 0, style='label_row_title')], f'the Shows level: a Downloads (2) row once the page\'s timer has read the queue ({PCP.drawn(m, 0)})')
     m.calls = []
-    PCP.tap(m, 150, ROW + 10)
-    expect(title(m) == 'Downloads' and flags(m, 'btn_feeds') == (0, 0), 'a tap on the Downloads row opens the level: the title Downloads, the Feeds button gone')
+    to_downloads(m)
+    expect(title(m) == 'Downloads' and flags(m, 'btn_more') == (0, 0), 'a tap on the Downloads row opens the level: the title Downloads, no "..."')
     got = lines(m)
     expect(got == [(0, 'Ep E', 'Downloading 42%'), (1, 'Ep C', 'Waiting'), (2, 'Ep F', "Failed: Can't connect"), (3, 'Ep D', 'Paused')],
            f'a row per download: the running and waiting ones in queue order, then the failed one, then the paused .part the card has and the worker does not: {got}')
@@ -104,9 +106,9 @@ def downloads_tests(ctx):
     PCP.tap(m, 150, names.index('Ep D') * ROW + 10)   # the paused one resumes
     expect(DL.state(m, 'd.mp3', SUB)[0] == 1, 'a tap on a paused one resumes it (queued)')
     PCP.click(m, 'btn_return')
-    expect(title(m) == 'Feeds', 'Back returns to Feeds')
+    expect(title(m) == 'Podcasts' and m.props[(m.widgets['label_title'], 'visible')] == 0, 'Back returns to the Shows level')
     # a finished download leaves the list; the live update; the empty state
-    PCP.tap(m, 150, ROW + 10)
+    to_downloads(m)
     for i in range(32): poke_slot(m, i, SUB, 'x.mp3', 0)
     m.setword(pn_at(DL.DKEY), 0); m.setword(pn_at(0), 0); m.setword(pn_at(DL.KIND), 0)
     m.u.mem_write(pn_at(DL.FAILS), bytes(DL.FAIL_SIZE * 16))
@@ -122,12 +124,12 @@ def downloads_tests(ctx):
     m = page()
     for i in range(32): poke_slot(m, i, SUB, f'q{i}.mp3', 1, seq=i + 1)
     for i in range(16): poke_fail(m, i, SUB, f'z{i}.mp3', PN['HTTP'])
-    to_feeds(m); PCP.tap(m, 150, ROW + 10)
+    to_downloads(m)
     expect(m.props.get((m.sv, 'virtual_h')) == 40 * ROW, 'at most 40 rows (the tile ring): 32 queued, 16 failed, the rest left out')
     # progress changes a line, not the rows
     m = page()
     running(m, got=100000)
-    to_feeds(m); PCP.tap(m, 150, ROW + 10)
+    to_downloads(m)
     expect(lines(m)[0][2] == 'Downloading 9%', f'{lines(m)}')
     m.setword(pn_at(DL.DGOT), 500000); m.setword(pn_at(DL.DGEN), 9)
     m.calls = []
@@ -156,28 +158,28 @@ def all_marks(m):
 def select_tests(ctx):
     expect = ctx.expect
     m = page()
-    expect(flags(m, 'btn_select') == (0, 0) and flags(m, 'btn_feeds') == (1, 1), 'the Shows level: Feeds, no Select')
-    PCP.tap(m, 150, 10)   # Alpha Show (two files)
-    expect(title(m) == 'Alpha Show' and flags(m, 'btn_select') == (0, 0) and flags(m, 'btn_feeds') == (0, 0) and flags(m, 'btn_more') == (1, 1) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_play',
+    expect(flags(m, 'btn_select') == (0, 0) and flags(m, 'btn_more') == (0, 0), 'the Shows level: no Select, no "..." (nothing to import)')
+    PCP.tap_show(m, 'Alpha Show')   # (two files)
+    expect(title(m) == 'Alpha Show' and flags(m, 'btn_select') == (0, 0) and flags(m, 'btn_more') == (1, 1) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_play',
            'a show\'s page: the "..." (the capsule\'s left cap) and Now Playing as its right cap; the Select button is not there (Select Episodes is in the sheet)')
-    m = page(); to_feeds(m)
+    m = page()
     m.put(f'{RP}/Sub Two/.episodes', (PCP.EPS_HEAD + 'g=t1\tp=5\tf=t.mp3\tt=T\tu=https://e.example/t.mp3\n').encode())
-    PCP.tap(m, 150, 3 * ROW + 10)   # Sub Two: one episode, not on the card
+    PCP.tap_show(m, 'Sub Two')   # one episode, not on the card
     PCP.click(m, 'btn_more')
     expect(title(m) == 'Sub Two' and flags(m, 'pg_sh_select') == (0, 0) and flags(m, 'pg_sh_speed')[0] == 1,
            'a show with only remote episodes: the sheet has no Select Episodes row (nothing can be marked)')
-    # Sub One from Feeds: a, b local, c, e, f remote, d paused
-    m = page(); to_feeds(m)
-    PCP.tap(m, 150, 2 * ROW + 10)
+    # Sub One: a, b local, c, e, f remote, d paused
+    m = page()
+    PCP.tap_show(m, SUB)
     PCP.click(m, 'btn_more')
-    expect(title(m) == SUB and flags(m, 'pg_sh_select') == (1, 1), 'Sub One from Feeds: the sheet has Select Episodes')
+    expect(title(m) == SUB and flags(m, 'pg_sh_select') == (1, 1), 'Sub One: the sheet has Select Episodes')
     PCP.click(m, 'pg_sh_scrim')
     h0 = m.props.get((m.sv, 'virtual_h'))
     m.calls = []
     start_select(m)
     t, back = m.widgets['label_title'], m.widgets['btn_return']
     expect(('widget_set_text_utf8', t, '0 Selected') in m.calls and ('widget_resize', t, O['SG_SELALL_X'] - O['NAV_TITLE_X'], 22) in m.calls and flags(m, 'pg_sh_card') == (0, 0), 'Select Episodes: the sheet closes, the title reads 0 Selected and runs to Select All')
-    expect(flags(m, 'btn_selall') == (1, 1) and flags(m, 'pg_bar') == (1, 1) and flags(m, 'btn_select') == (0, 0) and flags(m, 'btn_more') == (0, 0) and flags(m, 'btn_backtoplayer') == (0, 0) and flags(m, 'btn_feeds') == (0, 0),
+    expect(flags(m, 'btn_selall') == (1, 1) and flags(m, 'pg_bar') == (1, 1) and flags(m, 'btn_select') == (0, 0) and flags(m, 'btn_more') == (0, 0) and flags(m, 'btn_backtoplayer') == (0, 0),
            'Select All and the bar show; the "..." and Now Playing go (hidden and insensitive)')
     expect(m.props.get((t, 'visible')) == 1, 'the title shows (in select mode it is "N Selected", not the collapsing show title)')
     expect(m.props.get((back, 'style:normal:icon')) == 'ah_nav_close' and m.props.get((back, 'style:pressed:icon')) == 'ah_nav_close_down', 'Back becomes the glass x')
@@ -241,26 +243,29 @@ def select_tests(ctx):
     expect(m.state(h)[0] == 0, 'the played mark of a deleted episode is forgotten')
     c = PCP.all_cells(m)
     expect([c[i]['title'] for i in range(2)] == [['Ep A'], ['Ep B']] and [c[i]['pill'] for i in range(2)][0].endswith('m') and c[1]['pill'] == '1 MB', f'the page now: Ep A on the card, Ep B a download cell again ({c[0]["pill"]}, {c[1]["pill"]})')
-    # a show left with no file drops off the Shows level, and stays in Feeds
+    # a show left with no file stays on the Shows level (it is a subscription with its metadata; every show is listed)
     m = page()
-    PCP.tap(m, 150, 10)   # Alpha Show
+    PCP.tap_show(m, 'Alpha Show')
     start_select(m); PCP.click(m, 'btn_selall'); m.calls = []; m.confirm_yes = True
     PCP.click(m, 'pg_del')
     expect(sorted(unlinks(m)) == sorted(['Alpha Show/ep1.mp3', 'Alpha Show/ep1.mp3.part', 'Alpha Show/ep2.mp3', 'Alpha Show/ep2.mp3.part']) and title(m) == 'Alpha Show',
            f'Alpha Show: both files deleted; the page is empty ({unlinks(m)})')
-    expect(('widget_set_tr_text', m.widgets['label_status'], 'No downloaded episodes') in m.calls, 'and says so under its header')
+    expect(('widget_set_tr_text', m.widgets['label_status'], 'No episodes yet. Choose Refresh Feed in the menu at the top right.') in m.calls, 'and says so under its header (a subscription: use Refresh Feed in the menu)')
     PCP.click(m, 'btn_return')
-    names = [t_ for _, t_, _ in lines(m)]
-    expect('Alpha Show' not in names, f'Back: the Shows level no longer lists it ({names})')
-    to_feeds(m)
-    expect('Alpha Show' in [t_ for _, t_, _ in lines(m)], 'it is still in Feeds')
+    expect(PCP.show_at(m, 'Alpha')[2] >= 0 and title(m) == 'Podcasts', 'Back: the Shows level still lists it (a subscription is a show without a file; every show is listed)')
+    m = page()
+    PCP.tap_show(m, SUB)
+    start_select(m); PCP.click(m, 'btn_selall'); m.confirm_yes = True
+    PCP.click(m, 'pg_del')
+    PCP.click(m, 'btn_return')
+    expect(PCP.show_at(m, SUB)[2] >= 0 and title(m) == 'Podcasts', 'the same for Sub One, whose files are all deleted')
 
     # the Downloads level: a running row cannot be marked; Delete removes .part, failure and queue entry
     m = page()
     running(m)
     poke_slot(m, 1, SUB, 'c.mp3', 1, seq=2)
     poke_fail(m, 0, SUB, 'f.mp3', PN['CARDFULL'])
-    to_feeds(m); PCP.tap(m, 150, ROW + 10)
+    to_downloads(m)
     m.confirm_yes = True
     expect(flags(m, 'btn_select') == (1, 1), 'the Downloads level has Select')
     PCP.click(m, 'btn_select')
@@ -278,7 +283,7 @@ def select_tests(ctx):
     expect([t_ for _, t_, _ in lines(m)] == ['Ep E'] and flags(m, 'pg_bar') == (0, 0), 'the page shows what is left; the mode ended')
     expect(f'{RP}/{SUB}/a.mp3' in m.fs and b'f=c.mp3' in m.fs[f'{RP}/{SUB}/.episodes'], 'the episodes stay remote (their lines are kept)')
     # a download finishing while rows are marked does not reload the list under the marks; and a dark tick does no visual work
-    m = page(); to_feeds(m); PCP.tap(m, 150, 2 * ROW + 10); start_select(m); PCP.body(m, 0)
+    m = page(); PCP.tap_show(m, SUB); start_select(m); PCP.body(m, 0)
     m.setword(pn_at(12), 700); tick(m)
     expect(len(all_marks(m)) == 3 and len({b for _, b in all_marks(m).values()}) == 2, 'the generation moves while rows are marked: the cells and the marks stay as they are')
     m.screen(False); m.calls = []; m.setword(pn_at(12), 800)

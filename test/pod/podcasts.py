@@ -2,10 +2,11 @@
 will write, newest first), the resume ring, the jump to a saved place, the played marks, the speed per show, Shuffle's queue without podcasts, the page (two levels,
 covers, rows, taps, play) and the menu item. The compiled payload runs under Unicorn with the stock calls mocked; the card is a dict of paths."""
 import datetime, os, random, struct
-import mod_icons, paths
+import mod_icons, paths, pod_show
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 ROOT = '/mnt/mmc/Podcasts'
+EMPTY_HINT = 'No podcasts. Copy a folder for each show into Podcasts on the card, or put subscriptions.txt there and choose Import from Card in the menu at the top right.'
 STATE = '/mnt/mmc/.m1plus/podcasts'
 RING, SPEED = STATE + '/resume', STATE + '/speed'
 PLAYSPEED_MODE = pod.DATA['PLAYSPEED_MODE'][0]
@@ -127,7 +128,7 @@ class PM(ListMachine):
         cs = lambda b: b.split(b'\0', 1)[0].decode('utf-8', 'replace')
         n, h, fresh, checked = struct.unpack_from('<4I', raw, O['PC_SH_COUNT'])
         return dict(dir=cs(raw[:128]), title=cs(raw[128:224]), cover=cs(raw[224:352]), feed=cs(raw[O['PC_SH_FEED']:O['PC_SH_IMAGE']]), image=cs(raw[O['PC_SH_IMAGE']:O['PC_SH_COUNT']]), count=n, hash=h, fresh=fresh, checked=checked,
-                    author=cs(raw[O['PC_SH_AUTHOR']:O['PC_SH_CAT']]), category=cs(raw[O['PC_SH_CAT']:O['PC_SH_DESC']]), desc=cs(raw[O['PC_SH_DESC']:O['PC_SHOW_SIZE']]))
+                    author=cs(raw[O['PC_SH_AUTHOR']:O['PC_SH_CAT']]), category=cs(raw[O['PC_SH_CAT']:O['PC_SH_DESC']]), desc=cs(raw[O['PC_SH_DESC']:O['PC_SH_NEWEST']]), newest=struct.unpack_from('<I', raw, O['PC_SH_NEWEST'])[0])
 
     # ---- the payload's entry points
     def parse_eps(self, text, mx=300):
@@ -257,8 +258,10 @@ def scan_tests(ctx):
     expect = ctx.expect
     m = card_machine()
     shows, arr = m.shows()
-    expect([s['title'] for s in shows] == ['Alpha Show', 'bravo', 'The Daily News', 'MetaOnly'],
-           f'the shows are the folders with an episode file or a metadata file, sorted by title (a leading "The " aside, case aside); Empty, the dot folder and the loose file are not shows: {[s["title"] for s in shows]}')
+    expect([s['title'] for s in shows] == ['bravo', 'Alpha Show', 'MetaOnly', 'The Daily News'],
+           f'the shows are the folders with an episode file or a metadata file, the most recently updated first (the newest episode: bravo 6000, Alpha Show 2000, MetaOnly 9, The Daily 7); Empty, the dot folder and the loose file are not shows: {[s["title"] for s in shows]}')
+    expect([s['newest'] for s in shows] == [6000, 2000, 9, 7],
+           f'newest: the largest p= of the entries (bravo; a remote episode counts), else the newest file\'s date (Alpha Show, The Daily), a metadata-only show its entry\'s ({[s["newest"] for s in shows]})')
     by = {s['dir']: s for s in shows}
     expect(by['Alpha Show']['count'] == 3 and by['bravo']['count'] == 4 and by['The Daily']['count'] == 1 and by['MetaOnly']['count'] == 0,
            f'the count is the files on the card: .part files, other files and metadata entries without a file are not counted ({[(s["dir"], s["count"]) for s in shows]})')
@@ -268,7 +271,8 @@ def scan_tests(ctx):
     expect(all(s['fresh'] == s['count'] for s in shows), 'every episode is new (no place saved, not played)')
     expect(len(m.shows(2)[0]) == 2, 'at most max shows')
     # without metadata: the file names and dates
-    e = m.episodes(arr)
+    alpha = arr + O['PC_SHOW_SIZE'] * [s['dir'] for s in shows].index('Alpha Show')
+    e = m.episodes(alpha)
     expect([x['file'] for x in e] == ['ep2.mp3', 'Ep10.M4A', 'ep1.mp3'] and [x['title'] for x in e] == ['ep2', 'Ep10', 'ep1'] and [x['pub'] for x in e] == [2000, 2000, 1000],
            f'no metadata: the episodes are the audio files (mp3 m4a ...; not notes.txt, the picture or a dot file), the title the name without its extension, the date the file\'s, newest first, ties by name descending: {[x["file"] for x in e]}')
     expect(all(x['state'] == O['PC_LOCAL'] and x['dur'] == 0 and x['guid'] == 0 and x['hash'] == pc_hash(f'{ROOT}/Alpha Show/{x["file"]}') for x in e),
@@ -293,7 +297,7 @@ def scan_tests(ctx):
     m2 = card_machine()
     m2.put(f'{ROOT}/x/' + 'n' * 130 + '.mp3'); m2.put(f'{ROOT}/' + 'L' * 130 + '/a.mp3')
     shows2, arr2 = m2.shows()
-    expect([s['title'] for s in shows2] == ['Alpha Show', 'bravo', 'The Daily News', 'MetaOnly'],
+    expect([s['title'] for s in shows2] == ['bravo', 'Alpha Show', 'MetaOnly', 'The Daily News'],
            'a folder name or a file name that does not fit the buffers (127 bytes) is skipped: a folder with nothing else is no show')
     m3 = PM()
     for i in range(350): m3.put(f'{ROOT}/Big/{i:03}.mp3', b'', 1000 + i)
@@ -321,7 +325,7 @@ def scan_tests(ctx):
     m.call(PSYMS['pc_mark'], a0=pc_hash(f'{ROOT}/Alpha Show/ep1.mp3'), a1=1, count=20000000)
     m.call(PSYMS['pc_mark'], a0=pc_hash(f'{ROOT}/Alpha Show/ep2.mp3'), a1=1, count=20000000)
     shows, _ = m.shows()
-    expect([s['fresh'] for s in shows] == [1, 4, 1, 0], f'the new count drops for played episodes ({[s["fresh"] for s in shows]})')
+    expect({s['dir']: s['fresh'] for s in shows} == {'Alpha Show': 1, 'bravo': 4, 'The Daily': 1, 'MetaOnly': 0}, f'the new count drops for played episodes ({[(s["dir"], s["fresh"]) for s in shows]})')
 
 
 # ---------------------------------------------------------------------------
@@ -606,8 +610,8 @@ def cover_tests(ctx):
 
 # ---- the page
 SHEET_ROWS = [r[0] for r in pod_ui.PS_SHEET_ROWS]
-PG_WIDGETS = (['podcasts_listview', 'view_grid', 'label_status', 'label_title', 'img_nb_fade', 'label_row_title', 'label_row_sub', 'label_row_act', 'img_ah_tint',
-               'btn_return', 'btn_backtoplayer', 'btn_feeds', 'btn_select', 'btn_more', 'btn_selall', 'pg_bar', 'pg_del', 'pod_pd_scrim', 'pod_pd_card', 'pod_pd_title', 'pod_pd_name', 'pod_pd_track', 'pod_pd_fill', 'pod_pd_count', 'pod_pd_cancel',
+PG_WIDGETS = (['podcasts_listview', 'view_grid', 'label_status', 'label_title', 'img_nb_fade', 'label_row_title', 'label_row_sub', 'pg_big', 'img_ah_tint',
+               'btn_return', 'btn_backtoplayer', 'btn_select', 'btn_more', 'btn_selall', 'pg_bar', 'pg_del', 'pod_pd_scrim', 'pod_pd_card', 'pod_pd_title', 'pod_pd_name', 'pod_pd_track', 'pod_pd_fill', 'pod_pd_count', 'pod_pd_cancel',
                'pg_sh_scrim', 'pg_sh_card', 'pg_sh_speed_vl', 'pg_sh_refresh_vl'] + [n for n, *_ in pod_ui.PS_STYLES] + [f'pg_sh_{r}{s}' for r in SHEET_ROWS for s in ('', '_tx', '_hr')])
 T0 = 1700000000   # 2023-11-14 22:13:20 UTC
 DAY = 86400
@@ -679,6 +683,38 @@ def tap(m, x, y, off=0, dt=80, move=0):
     sy = SCREEN_Y0 + y - off
     m.touch('down', x, sy, 1000, fn='pg_on_down')
     m.touch('up', x, sy + move, 1000 + dt, fn='pg_on_up', count=80000000)
+
+
+def show_at(m, title):
+    """(x, y, off) of a point on the cover of the show whose title starts with `title` on the Shows level: its caption is looked for in frames scrolled 100 px apart (a text is drawn only wholly in view);
+    y is the content y, off the offset of the frame that showed it (tap it with that offset)."""
+    for off in range(0, 6000, 100):
+        for (t, r), s in zip(*paint(m, off)[1:3]):
+            if s == 'label_ps_gtitle' and t.startswith(title):
+                return r[0] + 10, r[1] + off - O['GRID_TITLE_GAP'] - O['GRID_COVER'] // 2, off
+    raise AssertionError(f'no show {title!r} on the Shows level')
+
+
+def tap_downloads(m, **kw):
+    """A tap on the Shows level's Downloads row (found by its title in the frame)."""
+    for (t, r), s in zip(*paint(m, 0)[1:3]):
+        if s == 'label_row_title' and t.startswith('Downloads'):
+            return tap(m, 150, r[1] + r[3] // 2, **kw)
+    raise AssertionError('no Downloads row on the Shows level')
+
+
+def tap_line(m, **kw):
+    """A tap on the refresh line (its grey text's middle)."""
+    for (t, r), s in zip(*paint(m, 0)[1:3]):
+        if s == 'label_ps_meta' and (t.startswith('Updated') or t.startswith('Never') or t.startswith('Refreshing') or t == 'Waiting' or t.endswith('ago · ')):
+            return tap(m, r[0] + 20, r[1] + r[3] // 2, **kw)
+    raise AssertionError('no refresh line on the Shows level')
+
+
+def tap_show(m, title, **kw):
+    """A tap on a show's cover on the Shows level: its Show page opens."""
+    x, y, off = show_at(m, title)
+    tap(m, x, y, off=off, **kw)
 
 
 def click(m, name):
@@ -761,8 +797,11 @@ def open_tests(ctx):
     calls = list(m.calls)
     expect(('window_open', 'm1plus_podcasts') in calls and not [c for c in calls if c[0] in ('list_item_create', 'hscroll_label_create', 'image_create', 'image_base_set_image')],
            'the window opens; no widget is made per show or episode (the content view paints the rows)')
-    expect(m.props.get((m.sv, 'virtual_h')) == 2 * ROW and ('widget_resize', m.view, 320, 2 * ROW) in calls and m.props.get((m.sv, 'yoffset')) == 0, 'the content is two 64 px rows (Alpha Show, bravo), at the top')
-    expect(title_text(m) == 'Podcasts' and m.props.get((m.widgets['label_status'], 'visible'), 1) == 0, 'the navbar title is Podcasts; the empty-state line is hidden')
+    H2 = pod_show.shows_layout(2, False, 0, False)
+    expect(m.props.get((m.sv, 'virtual_h')) == H2['h'] == 270 and ('widget_resize', m.view, 320, H2['h']) in calls and m.props.get((m.sv, 'yoffset')) == 0,
+           f'the content is the large title, the grid of two shows (bravo, Alpha Show) and the air under it ({H2["h"]} px), at the top')
+    expect(title_text(m) == 'Podcasts' and m.props.get((m.widgets['label_status'], 'visible'), 1) == 0 and m.props.get((m.widgets['label_title'], 'visible')) == 0
+           and m.props.get((m.widgets['pg_big'], 'visible'), 1) == 1, 'the large title shows, the navbar\'s small one is hidden at rest; the empty-state line is hidden')
     for ev in ('EVT_AFTER_PAINT', 'EVT_POINTER_DOWN', 'EVT_POINTER_UP', 'EVT_POINTER_ABORT'):
         expect((m.view, O[ev]) in m.bound, f'the content view handles {ev}')
     expect((m.sv, O['EVT_SCROLL']) in m.bound and (m.sv, O['EVT_SCROLL_END']) in m.bound and (m.window, O['EVT_WINDOW_TO_BG']) in m.bound and (m.window, O['EVT_WINDOW_TO_FG']) in m.bound
@@ -773,14 +812,14 @@ def open_tests(ctx):
     expect(('window_open', 'm1plus_podcasts') in m.calls and m.call(PSYMS['podcasts_open'], count=4000000) == 0xffffffff, 'a second open while the page is up is refused')
     # the rows
     bl, texts, styles, fills = paint(m)
-    want = [('Alpha Show', (O['LIST_TEXT_X'], O['LIST_TITLE_Y'], O['LIST_TEXT_W'], O['LIST_TITLE_H']), 'label_row_title'), ('2 episodes', (O['LIST_TEXT_X'], O['LIST_SUB_Y'], O['LIST_TEXT_W'], O['LIST_SUB_H']), 'label_row_sub'),
-            ('bravo', (O['LIST_TEXT_X'], ROW + O['LIST_TITLE_Y'], O['LIST_TEXT_W'], O['LIST_TITLE_H']), 'label_row_title'), ('3 episodes', (O['LIST_TEXT_X'], ROW + O['LIST_SUB_Y'], O['LIST_TEXT_W'], O['LIST_SUB_H']), 'label_row_sub')]
-    got = sorted(zip(texts, styles), key=lambda t: (t[0][1][1], t[0][1][0]))
-    expect([(t, r, s) for (t, r), s in got] == want, f'a show: its name (21 px) and "N episodes" (18 px grey) in the Albums list\'s places: {[(t, r, s) for (t, r), s in got]}')
-    covers = [b for b in bl if tuple(b[2][2:]) == (O['LIST_ART'], O['LIST_ART'])]
-    expect([tuple(b[2]) for b in covers] == [(O['LIST_ART_X'], O['LIST_ART_Y'] + i * ROW, O['LIST_ART'], O['LIST_ART']) for i in range(2)], 'a 52 px cover (the placeholder at first) at the list\'s place in each row')
-    hair = [f for f in fills if f[0] == O['LIST_HAIR']]
-    expect(len(hair) == 2, 'a hairline under each row')
+    cells = [pod_show.grid_cell(i, H2['y_grid']) for i in range(2)]
+    want = [(t, (cx, ty, O['GRID_COVER'], O['GRID_TITLE_H']), 'label_ps_gtitle') for t, (cx, cy, ty, sy) in zip(('bravo', 'Alpha Show'), cells)] + \
+           [(t, (cx, sy, O['GRID_COVER'], O['GRID_SUB_H']), 'label_ps_gsub') for t, (cx, cy, ty, sy) in zip(('3 episodes', '2 episodes'), cells)]
+    expect(sorted((t, r, s) for (t, r), s in zip(texts, styles)) == sorted(want),
+           f'a show: its name (18 px) and "N episodes" (15 px grey, no feed: its files) in the Albums grid\'s places, the most recently updated first: {[(t, r, s) for (t, r), s in zip(texts, styles)]}')
+    covers = [b for b in bl if tuple(b[2][2:]) == (O['GRID_COVER'], O['GRID_COVER'])]
+    expect([tuple(b[2]) for b in covers] == [(cx, cy, O['GRID_COVER'], O['GRID_COVER']) for cx, cy, ty, sy in cells], 'a 144 px cover (the placeholder at first) at the grid\'s place in each cell')
+    expect(not [f for f in fills if f[0] == O['LIST_HAIR']] and not [b for b in bl if tuple(b[2][2:]) == (O['LIST_ART'], O['LIST_ART'])], 'no list row: no hairline, no 52 px cover')
     # the covers: one a tick, the nearest to the top first; a cover only when its header is small
     placeholder = covers[0][0]
     n = 0
@@ -790,11 +829,11 @@ def open_tests(ctx):
     loads = [u for u in m.loads if u.startswith('file://')]
     expect(loads == [f'file://{ROOT}/Alpha Show/cover.jpg'], f'the cover file is decoded (bravo has none; nothing else is loaded) ({loads})')
     bl, _, _, _ = paint(m)
-    covers = [b for b in bl if tuple(b[2][2:]) == (O['LIST_ART'], O['LIST_ART'])]
-    expect(covers[0][0] != placeholder and covers[1][0] == placeholder, 'Alpha Show shows its picture now, bravo the placeholder disc')
-    data, w, h = m.bitmaps[covers[0][0]]
-    px = struct.unpack('<I', m.u.mem_read(data + (26 * w + 26) * 4, 4))[0]
-    expect((w, h) == (O['LIST_ART'], O['LIST_ART']) and px & 0xffffff == 0x2828c8, f'the cover is the 600 px picture reduced to 52 ({px:08x})')
+    covers = [b for b in bl if tuple(b[2][2:]) == (O['GRID_COVER'], O['GRID_COVER'])]
+    expect(covers[1][0] != placeholder and covers[0][0] == placeholder, 'Alpha Show shows its picture now, bravo the placeholder disc')
+    data, w, h = m.bitmaps[covers[1][0]]
+    px = struct.unpack('<I', m.u.mem_read(data + (72 * w + 72) * 4, 4))[0]
+    expect((w, h) == (O['GRID_COVER'], O['GRID_COVER']) and px & 0xffffff == 0x2828c8, f'the cover is the 600 px picture reduced to 144 ({px:08x})')
     expect(not [c for c in m.calls if c[0] == 'widget_load_image'] and not any(c[0] == 'widget_load_image' for c in paint_calls(m)), 'painting decodes nothing')
     # a picture that is too large is never decoded
     m2 = page_machine(lambda mm: (page_card(mm), mm.put(f'{ROOT}/Alpha Show/cover.jpg', jpeg(3000, 3000))))
@@ -805,8 +844,8 @@ def open_tests(ctx):
     m3 = page_machine(lambda mm: mm.folder('/mnt/mmc/Music'))
     m3.call(PSYMS['podcasts_open'], count=40000000)
     st = m3.widgets['label_status']
-    expect(('widget_set_tr_text', st, 'No podcasts. Copy a folder for each show into Podcasts on the card, or subscribe in Feeds, at the top right.') in m3.calls and m3.props.get((st, 'visible')) == 1 and m3.props.get((m3.view, 'visible')) == 0
-           and ('label_set_line_wrap', st, 1) in m3.calls, 'no Podcasts folder: the hint (two lines) shows, the list is hidden')
+    expect(('widget_set_tr_text', st, EMPTY_HINT) in m3.calls and m3.props.get((st, 'visible')) == 1 and m3.props.get((m3.view, 'visible')) == 0
+           and ('label_set_line_wrap', st, 1) in m3.calls and m3.props.get((m3.widgets['label_title'], 'visible')) == 1, 'no Podcasts folder: the hint shows, the list (and the large title) is hidden, the navbar has the title')
     m4 = page_machine(lambda mm: mm.folder(ROOT))
     m4.call(PSYMS['podcasts_open'], count=40000000)
     expect(m4.props.get((m4.widgets['label_status'], 'visible')) == 1, 'an empty Podcasts folder: the same hint')
@@ -823,7 +862,7 @@ def open_tests(ctx):
     # a lot of shows
     m8 = page_machine(lambda mm: [mm.put(f'{ROOT}/S{i:02}/a.mp3') for i in range(45)])
     m8.call(PSYMS['podcasts_open'], count=200000000)
-    expect(m8.props.get((m8.sv, 'virtual_h')) == 40 * ROW, 'at most 40 shows are listed')
+    expect(m8.props.get((m8.sv, 'virtual_h')) == pod_show.shows_layout(40, False, 0, False)['h'], 'at most 40 shows are listed')
 
 
 def paint_calls(m): return m.calls
@@ -834,8 +873,8 @@ def level_tests(ctx):
     expect = ctx.expect
     m = opened()
     for _ in range(4): m.call(PSYMS['pg_on_load'], a0=0, count=40000000)
-    m.setword(m.sv + SC_YOFF, 30); m.props[(m.sv, 'yoffset')] = 30
-    tap(m, 150, ROW + 10, off=30)
+    x, y, _ = show_at(m, 'bravo')
+    tap(m, x, y, off=30)   # (the list scrolled 30 px: Back finds it there)
     shown = title_text(m)
     h = hdr(m)
     expect(shown == 'bravo' and m.props.get((m.sv, 'virtual_h')) == h + 3 * CELL + 20 and m.props.get((m.sv, 'yoffset')) == 0,
@@ -861,8 +900,8 @@ def level_tests(ctx):
     # Back goes up a level
     m.calls = []
     click(m, 'btn_return')
-    expect('navigator_back' not in m.names() and title_text(m) == 'Podcasts' and m.props.get((m.sv, 'virtual_h')) == 2 * ROW and m.props.get((m.sv, 'yoffset')) == 30,
-           'Back from the episodes: the shows again, the list where it was (30), the page stays')
+    expect('navigator_back' not in m.names() and title_text(m) == 'Podcasts' and m.props.get((m.sv, 'virtual_h')) == pod_show.shows_layout(2, False, 1, False)['h'] and m.props.get((m.sv, 'yoffset')) == 30,
+           'Back from the episodes: the shows again (with Continue Listening now: bravo\'s episode is partly played), the list where it was (30), the page stays')
     m.calls = []
     click(m, 'btn_return')
     expect('navigator_back' in m.names(), 'Back from the shows leaves the page')
@@ -870,7 +909,7 @@ def level_tests(ctx):
     m = opened()
     for _ in range(4): m.call(PSYMS['pg_on_load'], a0=0, count=40000000)
     m.loads.clear()
-    tap(m, 150, 10)
+    tap_show(m, 'Alpha Show')
     for _ in range(4): m.call(PSYMS['pg_on_load'], a0=0, count=40000000)
     bl, _, _, _ = paint(m)
     big = [b for b in bl if tuple(b[2][2:]) == (O['PS_ART'], O['PS_ART'])]
@@ -879,8 +918,11 @@ def level_tests(ctx):
     expect([c[i]['title'] for i in range(2)] == [['ep2'], ['ep1']], f'the files\' names are the titles when there is no metadata ({[c[i]["title"] for i in range(2)]})')
     # a show with nothing downloaded
     m = opened(lambda mm: (page_card(mm), mm.put(f'{ROOT}/MetaOnly/.episodes', (EPS_HEAD + 'g=m1\tp=9\tf=m1.mp3\tt=Not yet\tu=https://e.example/m1\n').encode())))
-    expect([t for t, _ in drawn(m, style='label_row_title')] == ['Alpha Show', 'bravo'] and m.props.get((m.sv, 'virtual_h')) == 2 * ROW,
-           'a show with metadata and no file is not on the Shows level (the offline library: Feeds lists it)')
+    x, y, off = show_at(m, 'MetaOnly')
+    expect([t for t, _ in drawn(m, off, style='label_ps_gsub')][-1:] == ['0 episodes'] and m.props.get((m.sv, 'virtual_h')) == pod_show.shows_layout(3, False, 0, False)['h'],
+           'a show with metadata and no file is on the Shows level too (no Feeds level: every show is here)')
+    tap(m, x, y, off=off)
+    expect(title_text(m) == 'MetaOnly' and all_cells(m)[0]['pill'] == 'Download', 'and it opens: its episode that is not on the card is a download cell')
     click(m, 'btn_return')
     expect(m.props.get((m.widgets['label_status'], 'visible')) == 0 and m.props.get((m.view, 'visible')) == 1, 'Back brings the shows back')
 
@@ -890,22 +932,21 @@ def touch_tests(ctx):
     expect = ctx.expect
     m = opened()
     h2 = pc_hash(f'{ROOT}/bravo/b2.mp3')
-    # the press fill
-    m.touch('down', 100, SCREEN_Y0 + ROW + 5, 1000, fn='pg_on_down')
+    H2 = pod_show.shows_layout(2, False, 0, False)
+    gx, gy = pod_show.grid_cell(0, H2['y_grid'])[:2]
+    opens = lambda mm: mm.props.get((mm.sv, 'virtual_h')) != H2['h']   # (a Show page has another height)
+    for what, x, y, dy in (('a drag past the threshold', gx + 10, gy + 10, 14), ('the air below the last row', gx + 10, H2['h'] - 5, 0), ('the gap between two covers', gx + O['GRID_COVER'] + 3, gy + 10, 0),
+                           ('the large title', 30, 20, 0), ('the margin left of the first cover', 4, gy + 10, 0)):
+        mm = opened(); tap(mm, x, y, move=dy)
+        expect(not opens(mm), f'a touch on {what} opens nothing')
+    mm = opened(); mm.touch('down', gx + 10, SCREEN_Y0 + gy + 10, 1000, fn='pg_on_down'); mm.touch('up', gx + O['GRID_COVER'] + O['GRID_GAP'] + 10, SCREEN_Y0 + gy + 10, 1080, fn='pg_on_up', count=40000000)
+    expect(not opens(mm), 'a press on one cover released on another opens nothing')
+    m.touch('down', gx + 10, SCREEN_Y0 + gy + 10, 1000, fn='pg_on_down')
     _, _, _, fills = paint(m)
-    expect((O['LIST_PRESS'], 0, ROW, 320, ROW - 1) in fills, 'the row under the finger is filled')
-    m.touch('abort', 100, SCREEN_Y0 + ROW + 5, 1010, fn='pg_on_abort')
-    _, _, _, fills = paint(m)
-    expect(not [f for f in fills if f[0] == O['LIST_PRESS']], 'an aborted press (the scroll_view took the drag) leaves no fill')
-    m.touch('up', 100, SCREEN_Y0 + ROW + 5, 1020, fn='pg_on_up', count=40000000)
-    expect(title_text(m) == 'Podcasts' or m.props.get((m.sv, 'virtual_h')) == 2 * ROW, 'and opens nothing')
-    for what, y, dy in (('a drag past the threshold', 10, 14), ('the air below the last row', 2 * ROW + 20, 0)):
-        mm = opened(); tap(mm, 150, y, move=dy)
-        expect(mm.props.get((mm.sv, 'virtual_h')) == 2 * ROW, f'a touch on {what} opens nothing')
-    mm = opened(); mm.touch('down', 100, SCREEN_Y0 + 5, 1000, fn='pg_on_down'); mm.touch('up', 100, SCREEN_Y0 + ROW + 5, 1080, fn='pg_on_up', count=40000000)
-    expect(mm.props.get((mm.sv, 'virtual_h')) == 2 * ROW, 'a press on one row released on another opens nothing')
+    expect(not [f for f in fills if f[0] == O['LIST_PRESS']], 'a show has no pressed fill (only the Downloads row presses)')
+    m.touch('abort', gx + 10, SCREEN_Y0 + gy + 10, 1010, fn='pg_on_abort')
     # play
-    tap(m, 150, ROW + 10)   # bravo
+    tap_show(m, 'bravo')
     m.calls = []
     act(m, 1)   # Bravo 2: the second cell's pill
     nav = [c for c in m.calls if c[0] == 'navigator_to_with_context']
@@ -975,7 +1016,7 @@ def lifecycle_tests(ctx):
     # the date lines are made again when the page comes back to the front (no timer for it)
     m = page_machine(); m.mtime[f'{ROOT}/Alpha Show/ep1.mp3'] = 1800000000 - 3600; m.mtime[f'{ROOT}/Alpha Show/ep2.mp3'] = 1800000000 - 30
     m.call(PSYMS['podcasts_open'], count=40000000)
-    tap(m, 150, 10)
+    tap_show(m, 'Alpha Show')
     lines = lambda: [all_cells(m)[i]['date'] for i in range(2)]
     expect(lines() == ['Just now', '1h ago'], f'the lines read as of the clock when the page opens ({lines()})')
     m.wall += 7200; fn, ctx_ = m.bound[(m.window, O['EVT_WINDOW_TO_BG'])]; m.call(fn, a0=ctx_, a1=0, count=4000000)
@@ -984,8 +1025,8 @@ def lifecycle_tests(ctx):
     # a stray event after the shows changed on the card
     m = opened()
     m.put(f'{ROOT}/Zeta/z1.mp3', b'', T0)
-    tap(m, 150, 10); click(m, 'btn_return')
-    expect(m.props.get((m.sv, 'virtual_h')) == 3 * ROW, 'Back to the shows reads the card again (a show that came meanwhile is there)')
+    tap_show(m, 'bravo'); click(m, 'btn_return')
+    expect(m.props.get((m.sv, 'virtual_h')) == pod_show.shows_layout(3, False, 0, False)['h'], 'Back to the shows reads the card again (a show that came meanwhile is there)')
 
 
 def asset_tests(ctx):
@@ -997,20 +1038,21 @@ def asset_tests(ctx):
     expect(lv is not None and lv.y == pod_ui.NAVBAR_H and lv.y + lv.h == 450 and [c.type for c in lv.children] == ['scroll_view', 'scroll_bar_m'], 'list_view (50-450) > scroll_view + scroll_bar_m, as stock')
     sv = lv.children[0]
     expect(sv.name == 'podcasts_scrollview' and [c.name for c in sv.children] == ['view_grid'] and sv.w == 310, 'the scroll_view holds the one content view')
-    for name in ('label_status', 'img_nb_fade', 'label_row_title', 'label_row_sub', 'label_row_act', 'img_ah_tint', *[n for n, *_ in pod_ui.PS_STYLES]):
+    big = tree.find('pg_big')
+    expect(sv.children[0].name == 'view_grid' and [c.name for c in sv.children[0].children] == ['pg_big'] and big.get('tr_text') == 'Podcasts' and big.get('sensitive') == 'false' and big.x == O['PP_TITLE_X'] and big.y == 0 and big.h == O['PP_TITLE_H']
+           and big.get('style:normal:font_size') == str(O['PP_TITLE_PX']), 'the content view holds the large title (a label, as the Songs page\'s: it scrolls and is clipped with the content), insensitive')
+    for name in ('label_status', 'img_nb_fade', 'label_row_title', 'label_row_sub', 'img_ah_tint', *[n for n, *_ in pod_ui.PS_STYLES]):
         w = tree.find(name)
         expect(w is not None and w.get('visible') == 'false' and w.get('sensitive') == 'false', f'{name} starts hidden and insensitive')
     nav = tree.find('navigationbar_view')
-    expect([c.name for c in nav.children] == ['label_title', 'btn_return', 'btn_backtoplayer', 'btn_feeds', 'btn_select', 'btn_more', 'btn_selall'] and tree.find('label_title').get('tr_text') == 'Podcasts',
-           'the navbar: title, Back, Now Playing, the Feeds button (the capsule\'s left cap), the hidden Select button (Downloads) and "..." (the Show level) on the same slot and Select All')
-    fb, npb = tree.find('btn_feeds'), tree.find('btn_backtoplayer')
-    expect(fb.x == pod_ui.NAV_VIEW_X and fb.get('style:normal:icon') == 'pod_nav_feeds' and fb.get('style:pressed:icon') == 'pod_nav_feeds_down' and npb.get('style:normal:icon') == 'ah_nav_play'
-           and tree.find('label_title').x + tree.find('label_title').w <= fb.x, 'Feeds is the left cap of the capsule that ends in Now Playing; the title stops at its left edge')
-    expect(os.path.isfile(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx/pod_nav_feeds.png')) and os.path.isfile(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx/pod_nav_feeds_down.png')),
-           'the Feeds glyph (Lucide rss) is in the tree, normal and pressed')
-    expect(tree.find('label_status').h >= 60, 'the hint has room for two lines')
-    # the colours of the text styles on the black page
-    expect(contrast(pod_ui.PC_ACTION_RGB, '#000000') > 4.5, 'the Feeds level\'s action rows read on black (4.5:1)')
+    expect([c.name for c in nav.children] == ['label_title', 'btn_return', 'btn_backtoplayer', 'btn_select', 'btn_more', 'btn_selall'] and tree.find('label_title').get('tr_text') == 'Podcasts',
+           'the navbar: title, Back, Now Playing, the hidden Select button (Downloads) and "..." (the Show level, and the Shows level when Import is possible) on the same slot, and Select All: no Feeds button')
+    mb, npb = tree.find('btn_more'), tree.find('btn_backtoplayer')
+    expect(mb.x == pod_ui.NAV_VIEW_X and mb.get('style:normal:icon') == 'pod_nav_more' and npb.get('style:normal:icon') == 'ah_nav_np' and tree.find('label_title').x + tree.find('label_title').w <= mb.x,
+           'the "..." is the left cap of the capsule that ends in Now Playing; the title stops at its left edge')
+    img_dir = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx')
+    expect(not os.path.exists(os.path.join(img_dir, 'pod_nav_feeds.png')) and not os.path.exists(os.path.join(img_dir, 'pod_nav_feeds_down.png')) and 'pod_nav_feeds' not in mod_icons.NAV_VIEW, 'the Feeds glyph is gone from the tree')
+    expect(tree.find('label_status').h >= 60, 'the hint has room for three lines')
     # the item
     item = next(i for i, r in enumerate(P.ITEMS) if r.label == 'Podcasts')
     expect(item == 20 == len(P.ITEMS) - 1 and P.ITEMS[item].action == P.ACT_PODCASTS == 23 and P.ID_CHARS[item] == 'l' and item not in P.DEFAULT_MENU and P.PAGES[P.PAGES.index(P.PODCASTS) + 1:] == [P.TAPE, P.NPSET_PAGE, P.KEYBOARD, P.KEYBOARDS_PAGE, P.MENUEXTRAS_PAGE, P.SORT_PAGE, P.THEME_PAGE, P.ABOUT_PAGE]
@@ -1249,7 +1291,7 @@ def tag_tests(ctx):
     ret = m.call(PSYMS['pc_id3_path'], a0=i, a1=m.cstr(p), count=200000)
     expect(ret == i and m.read_cstr(i + 0x504) == 'WSJ Show' and m.read_cstr(i + 0x684) == '', 'a playing record with another path is ignored')
     # the page's own record carries what the hook wants
-    mm = opened(); tap(mm, 150, 10); mm.calls = []
+    mm = opened(); tap_show(mm, 'Alpha Show'); mm.calls = []
     act(mm, 0)
     q, idx = mm.played
     expect(mm.read_cstr(mm.word(q[0] + O['REC_ARTIST'])) == 'Alpha Show' and mm.read_cstr(mm.word(q[0] + O['REC_TITLE'])) == 'ep2', 'a record queued by the page carries the episode title and the show as artist')

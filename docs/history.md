@@ -105,13 +105,20 @@ the recovery button combination for this model remains unverified.
   stock's Chinese input never had a dictionary (its init asks for an absent `/usr/dict_pinyin.dat`) while the shipped, unreferenced
   `data/gpinyin.dat` opens with `im_open_decoder` in 76 ms (~1 MB, searches 0.1-2.5 ms). Tap log of 155 taps: no systematic offset
   (mean -2, +3 px), all 9 misses in the 1-4 px gaps between keys, hence the nearest-key rule.
-- **V2.1pK** (2026-10-31, current release): the **Podcasts Show page in Apple Podcasts style** (round 1 of the revamp, designed
+- **V2.1pK** (2026-10-31): the **Podcasts Show page in Apple Podcasts style** (round 1 of the revamp, designed
   from preview sheets the user picked): the page tinted from the cover (the album page's algorithm), the album page's 160 px header,
   episode cells with a date line (played check, downloaded disc), 2-line title and description from the feed, and a state pill
   (outlined download, filled play); bottom sheets in the style of Now Playing's More sheet replace dropdown menus (Playback Speed,
   Refresh Feed, Select Episodes, Mark All as Played, Unsubscribe; per episode Download / Remove Download, Mark as Played /
   Unplayed). Test build zWWLSAAAB flashed, accepted. Lesson: the user rejected a top-right dropdown menu as crowded but accepted
   the same actions in a bottom sheet behind the same "…" button.
+- **V2.1pO** (2026-10-31, current release): the **Podcasts Shows page in Apple Podcasts style** (round 2): one cover grid of every
+  show (subscribed or local; captions instead of badges), the large title with a refresh line, a static Continue Listening row with
+  play discs, the Downloads row, Import in a bottom sheet; the Feeds level is gone. Also 16 redirects (tracking chains reach 8 hops)
+  and feeds over the 8 MiB cap kept up to the cap (TED Talks Daily is 8.5 MB), both found by an iTunes-search probe; Now Playing's
+  speed row shows the gauge. Test build zEFQKAAAE flashed. Lesson: an icon change must commit the regenerated PNG under
+  `assets/icons/png` (the build copies only those); zEFQKAAAC shipped the generator change without the PNGs, and the preview
+  (drawn from the generator) and the tests (checking draw calls, not pixels) both missed it.
 
 ## Hardware results (what broke on the device, and why)
 
