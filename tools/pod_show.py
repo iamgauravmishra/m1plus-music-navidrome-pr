@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""The Podcasts Show page's layout model (patch/podcasts.c, docs/modules/podcasts.md "The Show page"): the PS_* numbers of patch/offsets.inc, the line breaking of tools/pod_wrap.py
-and the glyph advances of the font (tools/awtk_text.py: the glyph's width and 1 px each). test/pod/pcshow.py checks the payload against it and tools/preview_podcasts_revamp.py draws
+"""The Podcasts Show page's and Shows page's layout model (patch/podcasts.c, docs/modules/podcasts.md "The Show page", "The Shows page"): the PS_* and PP_* numbers of patch/offsets.inc, the line breaking of tools/pod_wrap.py
+and the glyph advances of the font (tools/awtk_text.py: the glyph's width and 1 px each). test/pod/pcshow.py and test/pod/pcshows.py check the payload against it and tools/preview_podcasts_revamp.py draws
 from it, so the preview, the tests and the device share one set of numbers.
 """
 import os, sys
@@ -90,3 +90,56 @@ def content_height(h_hdr, n, select=False):
 
 def font_path(work):
     return os.path.join(work, 'rootfs', 'release', 'assets', 'default', 'raw', 'fonts', 'default.ttf')
+
+
+# ---------------------------------------------------------------------------
+# The Shows page (round 2; patch/podcasts.c pg_home_layout, pg_paint_home): the blocks' tops and the cells' boxes, content y from the list's top.
+
+def shows_layout(n_shows, has_line, n_cont, has_dl):
+    """The Shows level's layout: where each block starts (0 when it is not there), the grid's top and the content's height."""
+    o = O
+    L = dict(y_line=o['PP_LINE_Y'] if has_line else 0, y_shelf=0, y_dl=0, y_shows=0)
+    y = o['PP_LINE_Y'] + (o['PP_LINE_PITCH'] if has_line else o['PP_NOLINE_PITCH'])
+    if n_cont:
+        L['y_shelf'] = y
+        y += o['PP_HEAD_PITCH'] + o['PP_SHELF_PITCH_Y']
+    if has_dl:
+        L['y_dl'] = y
+        y += o['PC_ROW_H']
+    if n_cont or has_dl:
+        y += o['PP_SEC_GAP']
+        L['y_shows'] = y
+        y += o['PP_HEAD_PITCH']
+    L['y_grid'] = y
+    L['h'] = y + (n_shows + o['GRID_COLS'] - 1) // o['GRID_COLS'] * grid_pitch() + o['PP_BOTTOM']
+    return L
+
+
+def grid_pitch():
+    """Row to row of the Albums grid: the cover, the gap, the title, the grey line and the row gap."""
+    o = O
+    return o['GRID_COVER'] + o['GRID_TITLE_GAP'] + o['GRID_TITLE_H'] + o['GRID_SUB_H'] + o['GRID_ROW_GAP']
+
+
+def grid_cell(i, y_grid):
+    """Show i's cell: (x of the cover, y of the cover, y of the title box, y of the grey line's box)."""
+    o = O
+    x = o['GRID_MARGIN'] + i % o['GRID_COLS'] * (o['GRID_COVER'] + o['GRID_GAP'])
+    y = y_grid + i // o['GRID_COLS'] * grid_pitch()
+    ty = y + o['GRID_COVER'] + o['GRID_TITLE_GAP']
+    return x, y, ty, ty + o['GRID_TITLE_H']
+
+
+def shelf_play(i, y_shelf):
+    """Continue Listening item i's play disc (x, y of its top left): PA_PLAYB_PX px, PP_SHELF_PLAY_INSET from the cover's right and bottom edges."""
+    o = O
+    x, y = shelf_item(i, y_shelf)[:2]
+    d = o['PP_SHELF_ART'] - o['PP_SHELF_PLAY_INSET'] - o['PA_PLAYB_PX']
+    return x + d, y + d
+
+
+def shelf_item(i, y_shelf):
+    """Continue Listening item i: (x, y of the cover, y of the title box, y of the "left" box); the cover is PP_SHELF_ART px."""
+    o = O
+    x, y = o['PP_SHELF_X'] + i * o['PP_SHELF_PITCH'], y_shelf + o['PP_HEAD_PITCH']
+    return x, y, y + o['PP_SHELF_TITLE_Y'], y + o['PP_SHELF_LEFT_Y']

@@ -192,14 +192,21 @@ static int pn_save(const char *path, const char *tmp, const char *data, unsigned
 struct fx {
     pf_parser_t *p;
     unsigned long long total;
+    int capped; /* the cap was reached: the transfer was stopped there */
     char err[160];
 };
 
+/* A feed over PN_FEED_CAP is parsed up to the cap and the transfer stopped there (a write error); feeds list the newest items first, so what was parsed is
+ * kept when it holds a feed and an item (pn_fetch). The item cut by the cap is not kept: the parser keeps an item at its end tag only. */
 static unsigned pn_write(char *d, unsigned size, unsigned nmemb, void *user) {
     struct fx *f = user;
     unsigned len = size * nmemb;
+    if (f->total + len > PN_FEED_CAP) {
+        pf_push(f->p, d, (unsigned)(PN_FEED_CAP - f->total));
+        f->total = PN_FEED_CAP, f->capped = 1;
+        return 0;
+    }
     f->total += len;
-    if (f->total > PN_FEED_CAP) return 0; /* a write error: the transfer stops */
     pf_push(f->p, d, len);
     return len;
 }
@@ -258,7 +265,7 @@ static void *pn_easy(const char *url, unsigned (*write_cb)(char *, unsigned, uns
     curl_easy_setopt(h, CURLOPT_XFERINFODATA, xdata); /* 0: a refresh's request; the attempt of a download otherwise */
     curl_easy_setopt(h, CURLOPT_NOSIGNAL, 1); /* a thread: no SIGALRM resolver time-outs */
     curl_easy_setopt(h, CURLOPT_FOLLOWLOCATION, 1);
-    curl_easy_setopt(h, CURLOPT_MAXREDIRS, 8);
+    curl_easy_setopt(h, CURLOPT_MAXREDIRS, 16); /* tracking chains reach 8 hops (podtrac, Art19 through 4 counters) */
     curl_easy_setopt(h, CURLOPT_PROTOCOLS, CURLPROTO_HTTP_HTTPS); /* a redirect to file:// or ftp:// is refused */
     curl_easy_setopt(h, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP_HTTPS);
     curl_easy_setopt(h, CURLOPT_FAILONERROR, 1);
@@ -289,7 +296,7 @@ static int pn_fetch(const char *url, pf_parser_t *p) {
     if (rc == 0) return pf_is_feed(p) ? PN_OK : PN_NOTFEED;
     if (rc == CURLE_HTTP_RETURNED_ERROR) return http == 404 || http == 410 ? PN_GONE : PN_HTTP;
     if (rc == CURLE_ABORTED_BY_CALLBACK) return PN_CANCELLED;
-    if (rc == CURLE_WRITE_ERROR) return PN_NOTFEED;
+    if (rc == CURLE_WRITE_ERROR) return f.capped && pf_is_feed(p) && pf_items(p) > 0 ? PN_OK : PN_NOTFEED;
     if (rc == CURLE_SSL_CACERT || rc == CURLE_SSL_CONNECT_ERROR || rc == CURLE_PEER_FAILED_VERIFICATION ||
         rc == CURLE_SSL_CERTPROBLEM || rc == CURLE_SSL_CIPHER || rc == CURLE_SSL_ISSUER_ERROR)
         return PN_CERT;

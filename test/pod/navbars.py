@@ -73,7 +73,7 @@ def run(ctx):
         if nav is None: continue
         k = {c.name: c for c in nav.children}
         back, play, lbl = k['btn_return'], k['btn_backtoplayer'], k['label_title']
-        group = sorted([k[n] for n in ('btn_coverflow', 'btn_more', 'btn_albumview', 'btn_artisttype', 'btn_settings', 'btn_feeds', 'btn_search', 'btn_sort', 'btn_select') if n in k and not (n == 'btn_coverflow' and name == 'm1plus_songs') and k[n].get('visible') != 'false'], key=lambda c: c.x) + [play]   # (a hidden button shares a slot with one that shows)
+        group = sorted([k[n] for n in ('btn_coverflow', 'btn_more', 'btn_albumview', 'btn_artisttype', 'btn_settings', 'btn_search', 'btn_sort', 'btn_select') if n in k and not (n == 'btn_coverflow' and name == 'm1plus_songs') and k[n].get('visible') != 'false'], key=lambda c: c.x) + [play]   # (a hidden button shares a slot with one that shows)
         capsule = len(group) > 1
         ok = (back.x, back.y, back.w, back.h) == (7, 0, 44, 50) and back.get('style:normal:icon') == 'ah_nav_back' and back.get('style:pressed:icon') == 'ah_nav_back_down'
         if capsule:
@@ -90,7 +90,7 @@ def run(ctx):
         if name == 'm1plus_podcasts':
             s = k['btn_select']
             expect((s.x, s.w, s.y, s.h) == (O['NAV_VIEW_X'], slot_w, 0, 50) and s.get('visible') == 'false' and s.get('style:normal:icon') == 'pod_nav_selectl' and mod_icons.NAV_VIEW_POS['pod_nav_selectl'] == 'left',
-                   f'{name}: the hidden Select button is the left cap on the 214 slot, where Feeds is (the code shows one of them, with Now Playing as the right cap)')
+                   f'{name}: the hidden Select button is the left cap on the 214 slot, where the "..." is (the code shows one of them, with Now Playing as the right cap)')
         if 'btn_songs' in k:
             s = k['btn_songs']
             expect((s.x, s.w, s.y, s.h) == (O['NAV_VIEW_X'], slot_w, 0, 50) and s.x + s.w == play.x and s.get('visible') == 'false' and s.get('style:normal:icon') == 'pod_nav_songs'

@@ -81,20 +81,19 @@ SONGS_BUTTONS = (('btn_search', 'pod_nav_search', 122), ('btn_sort', 'pod_nav_so
 NAV_SEARCH_X = SONGS_BUTTONS[0][2]
 
 
-NAV_FEEDS_ICON = 'pod_nav_feeds'           # the Podcasts page's Feeds button: Lucide rss, the capsule's left cap on the 214 slot (tools/mod_icons.py)
 NAV_SETTINGS_ICON = 'pod_nav_settings'   # the Extras page's Settings button: the capsule's left cap on the 214 slot (tools/mod_icons.py)
 
 
-def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, songs=False, settings=False, feeds=False, select=False, show_more=False):
+def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, songs=False, settings=False, select=False, show_more=False):
     nb = Widget('view', 0, 0, SCREEN_W, NAVBAR_H, [('name', 'navigationbar_view')])
     # a title runs under a toggle's button no further than the button's left edge
-    right = NAV_SEARCH_X if songs else NAV_CF_X if coverflow or more else NAV_VIEW_X if toggle or settings or feeds else NAV_TITLE_END
+    right = NAV_SEARCH_X if songs else NAV_CF_X if coverflow or more else NAV_VIEW_X if toggle or settings or select or show_more else NAV_TITLE_END
     lbl = Widget('label', NAV_TITLE_X, 14, right - NAV_TITLE_X, 22,
                  [('name', 'label_title'), ('style', 'navbar_label_white'), ('length', '31'), pod_i18n.text_prop(title)])
     ret = Widget('button', NAV_BACK_X, 0, NAV_BACK_W, NAVBAR_H, [
         ('name', 'btn_return'), ('enable', 'true'), ('style', 'img_btn_style'),
         ('style:over:icon', 'ah_nav_back'), ('style:normal:icon', 'ah_nav_back'), ('style:pressed:icon', 'ah_nav_back_down')])
-    img = 'ah_nav_play' if toggle or coverflow or more or songs or settings or feeds else 'ah_nav_np'   # a toggle / button makes Now Playing the capsule's right cap; else a disc
+    img = 'ah_nav_play' if toggle or coverflow or more or songs or settings else 'ah_nav_np'   # a toggle / button makes Now Playing the capsule's right cap; else a disc
     player = Widget('button', NAV_PLAY_X, 0, NAV_PLAY_W, NAVBAR_H, [
         ('name', 'btn_backtoplayer'), ('enable', 'true'), ('style', 'img_btn_style'),
         ('style:pressed:icon', img + '_down'), ('style:normal:icon', img), ('style:over:icon', img)])
@@ -108,15 +107,11 @@ def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, 
         nb.children.append(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
             ('name', 'btn_settings'), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', NAV_SETTINGS_ICON + '_down'), ('style:normal:icon', NAV_SETTINGS_ICON), ('style:over:icon', NAV_SETTINGS_ICON)]))
-    if feeds:   # the Podcasts page's Feeds button (patch/podcasts.c shows it on the Shows level only, and makes Now Playing the right cap, where it is)
-        nb.children.append(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
-            ('name', 'btn_feeds'), ('enable', 'true'), ('style', 'img_btn_style'),
-            ('style:pressed:icon', NAV_FEEDS_ICON + '_down'), ('style:normal:icon', NAV_FEEDS_ICON), ('style:over:icon', NAV_FEEDS_ICON)]))
-    if select:   # the Podcasts page's Select button (patch/podcasts.c shows it, as the capsule's left cap, on the Show and Downloads levels when a row can be deleted)
+    if select:   # the Podcasts page's Select button (patch/podcasts.c shows it, as the capsule's left cap, on the Downloads level when a row can be deleted)
         nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
             ('name', 'btn_select'), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', 'pod_nav_selectl_down'), ('style:normal:icon', 'pod_nav_selectl'), ('style:over:icon', 'pod_nav_selectl')])))
-    if show_more:   # the Podcasts Show page's "..." (opens its bottom sheet): the capsule's left cap on the 214 slot, shown on that level only (patch/podcasts.c)
+    if show_more:   # the Podcasts page's "..." (opens a bottom sheet): the capsule's left cap on the 214 slot, shown on the Show level and on the Shows level when Import is possible (patch/podcasts.c)
         nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
             ('name', 'btn_more'), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', 'pod_nav_more_down'), ('style:normal:icon', 'pod_nav_more'), ('style:over:icon', 'pod_nav_more')])))
@@ -343,12 +338,14 @@ def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview
     return root
 
 
-PC_ACTION_RGB = '#0A84FF'   # an action row's title (Refresh All, on the Feeds level)
 # The Show page's text styles (patch/podcasts.c; hidden labels the payload reads with widget_prepare_text_style and measures with widget_measure_text): name, px, colour, alignment.
 # Colours as the approved design: the description #B8B8B8, the grey lines #AAAAAA, a played title #A6A6A6; the Latest Episode pill's label is dark on its white pill.
 PS_STYLES = (('label_ps_name', 22, '#FFFFFF', 'center'), ('label_ps_sec', 16, '#B8B8B8', 'left'), ('label_ps_meta', 15, '#AAAAAA', 'left'), ('label_ps_head', 22, '#FFFFFF', 'left'),
              ('label_ps_date', 15, '#AAAAAA', 'left'), ('label_ps_ctitle', 20, '#FFFFFF', 'left'), ('label_ps_cdim', 20, '#A6A6A6', 'left'), ('label_ps_cdesc', 16, '#AAAAAA', 'left'),
-             ('label_ps_pill', 16, '#FFFFFF', 'left'), ('label_ps_latest', 18, '#000000', 'left'), ('label_ps_latestw', 18, '#FFFFFF', 'left'))
+             ('label_ps_pill', 16, '#FFFFFF', 'left'), ('label_ps_latest', 18, '#000000', 'left'), ('label_ps_latestw', 18, '#FFFFFF', 'left'),
+             # the Shows page (round 2): the section headers (Continue Listening, Shows), the refresh line's white "Refresh", a Continue Listening item's title and its grey "35m left", the grid's title and grey line under each cover (the Albums grid's 18 / 15 px)
+             ('label_ps_sech', 20, '#FFFFFF', 'left'), ('label_ps_line', 15, '#FFFFFF', 'left'), ('label_ps_stitle', 14, '#FFFFFF', 'left'), ('label_ps_sleft', 13, '#AAAAAA', 'left'),
+             ('label_ps_gtitle', 18, '#FFFFFF', 'left'), ('label_ps_gsub', 15, '#AAAAAA', 'left'))
 PS_TINT_NAME = 'img_ah_tint'   # the album page's tint gradient (ah_tint), a window sized insensitive image under everything; shown on the Show level once the cover's tone is set
 
 
@@ -360,7 +357,7 @@ def build_podcasts_page(page):
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
     root.children.append(hidden(Widget('image', 0, 0, SCREEN_W, CLIENT_H, [('name', PS_TINT_NAME), ('image', 'ah_tint'), ('draw_type', 'default'), ('clickable', 'false')])))   # first: under everything
-    root.children.append(navbar(page.title, feeds=True, select=True, show_more=True))
+    root.children.append(navbar(page.title, select=True, show_more=True))
     root.children[1].children.append(selall_button())   # the select mode's navbar text (the Playlists page's)
     lv = stock_list([], True)
     lv.set('name', 'podcasts_listview')
@@ -369,6 +366,12 @@ def build_podcasts_page(page):
     for w in (lv, sv):
         for st in ('normal', 'disable', 'focused'): w.set(f'style:{st}:bg_color', '#00000000')
     grid = Widget('view', 0, 0, SCREEN_W, GRID_VIEW_H, [('name', 'view_grid')])   # the content: the payload sizes it to the level's rows
+    big = Widget('label', OFFSETS['PP_TITLE_X'], 0, 250, OFFSETS['PP_TITLE_H'], [('name', 'pg_big'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])   # the Shows level's large title (the Songs page's): a child of the content, so it scrolls and is clipped with it
+    styled(big, ('normal',), 'text_color', '#FFFFFF')
+    styled(big, ('normal',), 'font_size', str(OFFSETS['PP_TITLE_PX']))
+    styled(big, ('normal',), 'text_align_h', 'left')
+    styled(big, ('normal',), 'text_align_v', 'middle')
+    grid.children = [big]
     styled(grid, ('normal',), 'bg_color', '#00000000')
     styled(grid, ('normal',), 'text_color', '#FFFFFF')
     styled(grid, ('normal',), 'font_size', str(GRID_TITLE_PX))
@@ -380,8 +383,7 @@ def build_podcasts_page(page):
     status = hidden(label('label_status', 20, 180, SCREEN_W - 40, 90, '', 18, '#FFFFFF'))
     styled(status, ('normal',), 'text_align_v', 'middle')
     root.children.append(status)
-    for name, px, colour in (('label_row_title', LIST_TITLE_PX, '#FFFFFF'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA'),
-                             ('label_row_act', LIST_TITLE_PX, PC_ACTION_RGB)):
+    for name, px, colour in (('label_row_title', LIST_TITLE_PX, '#FFFFFF'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA')):
         lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
         styled(lab, ('normal',), 'text_align_v', 'middle')
         root.children.append(lab)
@@ -400,11 +402,12 @@ def build_podcasts_page(page):
 # 320 px glass from the bottom of the window (pc_sheet5 .. pc_sheet1, a picture for each number of rows: tools/mod_icons.py PC_SHEETS; the payload sets the image
 # and the card's height and place for the rows it shows), PM_ROW_H rows, each a button (transparent, 6 % white pressed) with its 20 px glyph at x PS_SHEET_ICON_X, the label from
 # PS_SHEET_TEXT_X and, for the two rows that have one, the grey value right aligned to PS_SHEET_VALUE_R; a 1 px hairline child on the top of every row but the first (the payload shows it).
-# One widget set serves both sheets: the nine rows are fixed (glyph and label each), the payload shows and places the ones the sheet needs. Everything starts hidden and insensitive.
+# One widget set serves both sheets: the ten rows are fixed (glyph and label each), the payload shows and places the ones the sheet needs. Everything starts hidden and insensitive.
 PS_SHEET_ROWS = (('speed', 'pc_ic_speed', 'Playback Speed', True, False), ('refresh', 'pc_ic_refresh', 'Refresh Feed', True, False), ('select', 'pc_ic_select', 'Select Episodes', False, False),
                  ('markall', 'pc_ic_check', 'Mark All as Played', False, False), ('unsub', 'pc_ic_unsub', 'Unsubscribe', False, True),
                  ('dl', 'pc_ic_down', 'Download', False, False), ('rm', 'pc_ic_trash', 'Remove Download', False, False),
-                 ('mark', 'pc_ic_check', 'Mark as Played', False, False), ('unmark', 'pc_ic_undo', 'Mark as Unplayed', False, False))   # id, glyph, label, has a value, red
+                 ('mark', 'pc_ic_check', 'Mark as Played', False, False), ('unmark', 'pc_ic_undo', 'Mark as Unplayed', False, False),
+                 ('import', 'pc_ic_import', 'Import from Card', False, False))   # id, glyph, label, has a value, red; the last is the Shows level's sheet (an 'Add Show' row is not built until search exists)
 PS_SHEET_ICON_X, PS_SHEET_TEXT_X, PS_SHEET_VALUE_R, PS_SHEET_VALUE_W, PS_SHEET_GAP = (OFFSETS[k] for k in ('PS_SHEET_ICON_X', 'PS_SHEET_TEXT_X', 'PS_SHEET_VALUE_R', 'PS_SHEET_VALUE_W', 'PS_SHEET_GAP'))   # patch/offsets.inc
 PS_SHEET_RED = '#FF6B6B'
 PS_SHEET_PX = 18   # the labels (Now Playing's More sheet: 18 px)

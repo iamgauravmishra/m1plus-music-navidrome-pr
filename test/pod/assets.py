@@ -131,10 +131,10 @@ def run(ctx):
     expect(dict((n, g) for n, _, g in mod_icons.HOME)['tidal'] == 'T:brand-tidal' and mod_icons.POD_ROWS['Tidal'][1] == 'T:brand-tidal',
            'the Home grid and the Extras row both use Tabler\'s brand-tidal (Lucide has no Tidal)')
     lucide, tabler_used = mod_icons.used_glyphs()
-    expect(tabler_used == ['a-b', 'brand-tidal', 'circle-check', 'multiplier-1x'] and
+    expect(tabler_used == ['a-b', 'brand-tidal', 'circle-check'] and
            all(os.path.isfile(os.path.join(mod_icons.LUCIDE_SVG, n + '.svg')) for n in lucide) and
            not any(os.path.isfile(os.path.join(mod_icons.CUSTOM, n + '.svg')) for n in lucide),
-           f'the set is Lucide ({len(lucide)} committed SVGs) with four Tabler glyphs; no custom SVG shadows a Lucide name')
+           f'the set is Lucide ({len(lucide)} committed SVGs) with three Tabler glyphs; no custom SVG shadows a Lucide name')
     expect(os.path.isfile(os.path.join(mod_icons.LUCIDE, 'LICENSE')) and mod_icons.HOME_GLYPH == 38 and mod_icons.DISC_SW == 1.75
            and (mod_icons.BARE_PX, mod_icons.BARE_SW) == (24, 2.0) and mod_icons.POD_ICON == 24 and mod_icons.POD_TEXT_X == 56 == mod_icons.HAIR_X,
            'Home discs: Lucide at stroke 1.75, glyph canvas 38 px on the 66 px discs; list icons bare: 24 px canvas, stroke 2.0 px, title and hairline from x 56')

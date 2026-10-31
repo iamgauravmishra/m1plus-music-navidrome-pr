@@ -16,7 +16,7 @@ the PNGs you meant to change.
 | set | where | licence |
 |---|---|---|
 | Lucide (lucide-static 1.61.0, tarball SHA-256 `62773cd2...ba75f1`) | `assets/icons/lucide/svg/` | ISC, `assets/icons/lucide/LICENSE` |
-| Tabler (`@tabler/icons` 3.49.0), `T:` prefix, only where Lucide lacks one: `brand-tidal`, `circle-check` filled, `a-b`, `multiplier-1x` | `assets/icons/tabler/svg/` | MIT, `assets/icons/tabler/LICENSE` |
+| Tabler (`@tabler/icons` 3.49.0), `T:` prefix, only where Lucide lacks one: `brand-tidal`, `circle-check` filled, `a-b` | `assets/icons/tabler/svg/` | MIT, `assets/icons/tabler/LICENSE` |
 | custom, drawn in Lucide's style (24 grid, 2 px stroke, round caps): `badge-hr`, `dac`, `gain-low`/`gain-high`, `volume-3waves`, `coverflow` (Lucide `gallery-horizontal` with side covers 10 units tall, 3 units out) | `assets/icons/custom/` | ours |
 | the Shanling mark (`pod_ci_shanling`, the Settings > Developer > Open Shanling Home row): the swoosh cut from stock `shutdown.png` (SHA-256 pinned), isolated by whiteness, 24 px wide, dilated to about a 2 px stroke | stock art | |
 

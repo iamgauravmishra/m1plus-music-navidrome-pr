@@ -17,7 +17,7 @@ def sibling(name):
     return mod
 
 
-PF = sibling('pcfeeds')
+PF = sibling('pcshows')
 PCP, PCN = PF.PCP, PF.PCN
 F, RP, PN, flags, toasts, hash_of = PF.F, PF.RP, PF.PN, PF.flags, PF.toasts, PF.hash_of
 RET_REPEAT = 8
@@ -49,14 +49,13 @@ def fill_w(m):
 
 
 def started(m, sites=None):
-    """Feeds level, Refresh All tapped: the worker is waiting in m.thread."""
-    PCP.click(m, 'btn_feeds')
+    """The Shows level, the refresh line tapped (Refresh All): the worker is waiting in m.thread."""
     WSJ = open(os.path.join(FEEDS, 'wsj-3items.xml'), 'rb').read()
     HEAD = open(os.path.join(FEEDS, 'headlines-3items.xml'), 'rb').read()
     m.curl_site = sites or (lambda url, o: {'body': WSJ if url == F['alpha'] else HEAD if url == F['one'] else b'<html></html>'})
     m.thread = None
     m.calls = []
-    PCP.tap(m, 150, 10)
+    PCP.tap_line(m)
     return m
 
 
@@ -100,16 +99,14 @@ def run(ctx):
         m.calls = []
         r = dlg_tick(m)
         expect(r == 0 and flags(m, 'pod_pd_card') == (0, 0) and flags(m, 'pod_pd_scrim') == (0, 0) and toasts(m) == [line], f'{label}: closes (hidden and insensitive), one line: "{line}" ({toasts(m)})')
-    r = PF.rows(m)
-    expect(r[1]['sub'][0].startswith('Can') or 'Can\'t connect' in r[1]['sub'][0], 'the Feeds rows keep their per-feed errors (the dialog only summarises)')
+    expect("Can't connect" in [t for t, _ in PCP.drawn(m, 0, style='label_ps_gsub')], 'the shows\' captions keep their per-feed errors (the dialog only summarises)')
 
     # 3. Import opens it too
     sub_txt = f'{RP}/subscriptions.txt'
     m = PF.opened(lambda mm: mm.put(sub_txt, f'{F["three"]}\n'.encode()))
-    PCP.click(m, 'btn_feeds')
     m.curl_site = lambda url, o: {'body': WSJ}
     m.thread = None
-    PCP.tap(m, 150, 10 + PF.ROW)   # the Import row
+    PCP.click(m, 'btn_more'); PCP.click(m, 'pg_sh_import')   # Import from Card
     expect(m.thread is not None and flags(m, 'pod_pd_card') == (1, 1) and text_of(m, 'pod_pd_count') == '1 of 2', 'Import: the new show and Sub One (never refreshed) are refreshed and the dialog is up ("1 of 2")')
     work(m)
     dlg_tick(m)
@@ -119,10 +116,10 @@ def run(ctx):
     m = PF.opened()
     started(m)
     m.calls = []
-    PCP.tap(m, 150, 10)
+    PCP.tap_line(m)
     PF.pn_set(m, busy=1)
-    PCP.tap(m, 150, 10)
-    expect('pthread_create' not in m.names() and toasts(m) == [], 'a tap on Refresh All while the worker runs starts nothing (the scrim keeps the real touch away as well)')
+    PCP.tap_line(m)
+    expect('pthread_create' not in m.names() and toasts(m) == [], 'a tap on the refresh line while the worker runs starts nothing (the scrim keeps the real touch away as well)')
 
     # 5. Cancel
     m = PF.opened()
@@ -143,13 +140,13 @@ def run(ctx):
     before = dict(m.fs)
     cancel_at = []
     def sites(url, o):
-        if url == F['alpha']: return {'body': WSJ, 'chunk': 4000, 'xfer': lambda u, sent, total: m.setword(CANCEL, 1) if sent >= 8000 else None}
+        if url == F['one']: return {'body': WSJ, 'chunk': 4000, 'xfer': lambda u, sent, total: m.setword(CANCEL, 1) if sent >= 8000 else None}   # (Sub One has the newest episode: the grid's, and so the refresh's, first)
         cancel_at.append(url)
         return {'body': HEAD}
     started(m, sites)
     work(m)
     calls = list(m.calls)
-    expect(cancel_at == [] and m.fs == before and PCN.status(m, F['alpha']) is None and 'curl_perform' in [c[0] for c in calls],
+    expect(cancel_at == [] and m.fs == before and PCN.status(m, F['one']) is None and 'curl_perform' in [c[0] for c in calls],
            'Cancel in the middle of the first feed: libcurl\'s callback aborted the transfer (42), nothing was written, the show keeps its status, no other show was fetched')
     expect([c for c in calls if c[0] == 'curl_perform'][0][2] == 42, 'the transfer ended with CURLE_ABORTED_BY_CALLBACK')
     m.calls = []
@@ -160,16 +157,16 @@ def run(ctx):
     urls = []
     def sites2(url, o):
         urls.append(url)
-        if url == F['alpha']: return {'body': WSJ}
-        if url == F['one']: return {'body': HEAD}
+        if url == F['one']: return {'body': WSJ}
+        if url == F['alpha']: return {'body': HEAD}
         return {'body': b'x' * 30000, 'chunk': 5000, 'xfer': lambda u, sent, total: m.setword(CANCEL, 1) if sent >= 10000 else None}
     started(m, sites2)
     work(m)
-    expect(len(urls) == 3 and urls[:2] == [F['alpha'], F['one']] and PCN.status(m, F['alpha']) == (PN['OK'], 3) and PCN.status(m, F['one']) == (PN['OK'], 3) and PCN.status(m, F['two']) is None,
-           f'Cancel in the picture\'s transfer of the second show: its feed is complete and OK, the third was not started ({urls})')
+    expect(len(urls) == 2 and urls[0] == F['one'] and PCN.status(m, F['one']) == (PN['OK'], 3) and PCN.status(m, F['alpha']) is None and PCN.status(m, F['two']) is None,
+           f'Cancel in the picture\'s transfer of the first show (Sub One has no cover picture; Alpha Show has): its feed is complete and OK, the others were not started ({urls})')
     m.calls = []
     dlg_tick(m)
-    expect(toasts(m) == ['Cancelled, 2 updated'] and not [p for p in m.fs if '.cover' in p or '/Sub One/cover' in p], 'closed with "Cancelled, 2 updated", no cover file')
+    expect(toasts(m) == ['Cancelled, 1 updated'] and not [p for p in m.fs if '.cover' in p or '/Sub One/cover' in p], 'closed with "Cancelled, 1 updated", no cover file')
 
     # 6. Back is Cancel, and so is leaving the page
     m = PF.opened()

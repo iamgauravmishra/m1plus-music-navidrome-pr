@@ -3,6 +3,7 @@
 end at once (404, a web page, a full card, the 32 MB margin), Cancel and the pause for a refresh, the refresh and the downloads never running together, the keep-awake call (only from the page's
 timer, only while a download runs), the rows' state lines and their widths in the 13 languages, and malformed answers. The compiled payload runs under Unicorn; the card is a dict of paths."""
 import importlib.util, os, sys
+import pod_show
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -18,7 +19,7 @@ def sibling(name):
     return mod
 
 
-PCN, PF = sibling('pcnet'), sibling('pcfeeds')
+PCN, PF = sibling('pcnet'), sibling('pcshows')
 PCP = PCN.PCP
 PN, RP, CA = PCN.PN, PCN.ROOT_DIR, PCN.CA
 PN.update(CARDFULL=13, NOTAUDIO=14, QFULL=15, PAUSED=16)
@@ -222,7 +223,7 @@ def transfer_tests(ctx):
     calls = work(m, th)
     o = log[0][2]
     expect(log[0][0] == URL_A and log[0][1] == 0, 'the url is the one stored in .episodes, with its query, as the feed gave it')
-    expect(o[10065] == CA and o[52] == 1 and o[68] == 8 and o[181] == 3 and o[182] == 3 and o[45] == 1 and o[99] == 1 and o[78] == 20 and 64 not in o and 81 not in o and 10007 not in o,
+    expect(o[10065] == CA and o[52] == 1 and o[68] == 16 and o[181] == 3 and o[182] == 3 and o[45] == 1 and o[99] == 1 and o[78] == 20 and 64 not in o and 81 not in o and 10007 not in o,
            'the request: the firmware CA bundle, redirects (8) limited to http(s), fail on HTTP errors, no signals, verification never switched off, no Range for a fresh file')
     expect(o[19] == 1 and o[20] == 60 and o[13] == 0 and o[10102] == 'identity', 'a stall is 1 byte a second for 60 s; no limit on the whole transfer; no content encoding')
     expect(m.fs.get(f'{SHOW}/a.mp3') == DATA and part_of(m) is None and left_over(m) == ['a.mp3'], 'the finished file is the whole body, renamed into the show folder, no .part left')
@@ -576,8 +577,7 @@ def page(extra=None):
 
 
 def open_sub_one(m):
-    PCP.click(m, 'btn_feeds')
-    PCP.tap(m, 150, 2 * ROW + 10)
+    PCP.tap_show(m, 'Sub One')
 
 def lines(m):
     """[(cell, label)] of the Show page's state pills in the frames that show its cells."""
@@ -688,22 +688,22 @@ def page_tests(ctx):
     q, idx = m.played
     paths = [m.read_cstr(m.word(rec + O['REC_PATH'])) for rec in q]
     expect(paths == [f'{RP}/Sub One/a.mp3'] and idx == 0, f'a tap on it plays it like any local episode, the queue of the files only ({paths})')
-    # a second, in the same list: the Feeds row
+    # a second, on the Shows level: the Downloads row
     m = page(); open_sub_one(m)
     PCP.act(m, 0); PCP.act(m, 1)
     PCP.click(m, 'btn_return')
     _, texts, styles, _ = PCP.paint(m)
-    got = sorted(((y // ROW, t, s) for (t, (x, y, w, h)), s in zip(texts, styles)))
-    expect(('Refresh All' in [g[1] for g in got]) and (1, 'Downloads (2)', 'label_row_title') in got and (1, 'Waiting', 'label_row_sub') in got, f'Feeds: a Downloads (2) row after Refresh All, in the plain title style, with its line ({got[:6]})')
-    expect(m.props.get((m.sv, 'virtual_h')) == 5 * ROW, 'it is one more row')
+    got = sorted(((t, s) for (t, (x, y, w, h)), s in zip(texts, styles)))
+    expect(('Downloads (2)', 'label_row_title') in got and ('Waiting', 'label_row_sub') in got, f'the Shows level: a Downloads (2) row, in the plain title style, with its line ({got[:6]})')
+    expect(m.props.get((m.sv, 'virtual_h')) == pod_show.shows_layout(4, True, 0, True)['h'], 'it is one more block (the row, and the "Shows" header over the grid)')
     poke_slot(m, 0, 'Sub One', 'a.mp3', 2); m.setword(pn_at(DKEY), key_a); m.setword(pn_at(DGOT), len(DATA) // 4); m.setword(pn_at(DTOTAL), len(DATA)); m.setword(pn_at(DGEN), 77)
     tick(m)
     _, texts, styles, _ = PCP.paint(m)
-    got = sorted(((y // ROW, t) for (t, (x, y, w, h)), s in zip(texts, styles)))
-    expect((1, 'Downloading 24%') in got, f'the row shows the one running ({[g for g in got if g[0] == 1]})')
+    got = sorted((t for (t, (x, y, w, h)), s in zip(texts, styles)))
+    expect('Downloading 24%' in got, f'the row shows the one running ({got})')
     poke_slot(m, 0, 'Sub One', 'a.mp3', 0); poke_slot(m, 1, 'Sub One', 'b.mp3', 0); m.setword(pn_at(DKEY), 0); m.setword(pn_at(12), 90)
     tick(m)
-    expect(m.props.get((m.sv, 'virtual_h')) == 4 * ROW, 'when nothing is queued the row is gone again')
+    expect(m.props.get((m.sv, 'virtual_h')) == pod_show.shows_layout(4, True, 0, False)['h'], 'when nothing is queued the row is gone again')
 
 
 def refresh_page_tests(ctx):
@@ -714,12 +714,12 @@ def refresh_page_tests(ctx):
     th = m.thread
     PCP.click(m, 'btn_return')
     m.calls = []; m.thread = None
-    PCP.tap(m, 150, 10)   # Refresh All
+    PCP.tap_line(m)   # Refresh All
     expect(m.word(pn_at(DPAUSE)) == 1 and m.thread is None and 'pthread_create' not in [c[0] for c in m.calls] and fn(m, 'pn_busy') == 0 and m.props.get((m.widgets['pod_pd_scrim'], 'visible'), 0) == 0,
            'Refresh All while a download runs: the downloads are asked to pause, no refresh thread yet, no dialog yet')
     _, texts, styles, _ = PCP.paint(m)
     got = {t for (t, r) in texts}
-    expect('Waiting' in got, 'the Refresh All row says Waiting')
+    expect('Waiting' in got, 'the refresh line says Waiting')
     tick(m)
     expect(m.thread is None, 'while the download thread has not stopped the page does not start the refresh')
     work(m, th)
@@ -739,7 +739,7 @@ def refresh_page_tests(ctx):
     # the page is not in front or dark when the downloads have paused: the refresh is dropped, the downloads go on
     m = page(); open_sub_one(m); PCP.act(m, 0); th = m.thread
     PCP.click(m, 'btn_return')
-    PCP.tap(m, 150, 10)
+    PCP.tap_line(m)
     work(m, th)
     m.screen(False); m.thread = None
     m.call(PSYMS['pg_awake_tick'], a0=0, count=40000000)

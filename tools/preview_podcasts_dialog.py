@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Approximate PIL mock-up of the Podcasts refresh dialog (patch/podcasts.c pg_dlg_*, docs/modules/podcasts.md "Feeds"): the Feeds level behind the scrim and the glass card, at three
+"""Approximate PIL mock-up of the Podcasts refresh dialog (patch/podcasts.c pg_dlg_*, docs/modules/podcasts.md "Feeds"): the page behind the scrim (drawn as the Feeds level of before round 2 of the revamp: the Shows page is tools/preview_podcasts_revamp.py's) and the glass card, at three
 moments (a show under way, Cancel pressed and the worker not yet stopped, the longest title language). Not pixel-exact AWTK.
 
   preview_podcasts_dialog.py WORKDIR OUT.png [--lang CODE]

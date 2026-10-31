@@ -942,7 +942,8 @@
 #define PC_LOCAL 0                /* pc_ep_t.state: the file is on the card */
 #define PC_PART 1                 /* a .part file only (a download under way or cut off) */
 #define PC_REMOTE 2               /* metadata only: not downloaded */
-#define PC_SHOW_SIZE 1328         /* pc_show_t: dir[PC_FILE] title[PC_TITLE] cover[PC_FILE] feed[PC_URL] image[PC_URL] count hash fresh checked author[PC_AUTHOR] category[PC_CAT] desc[PC_DESC] */
+#define PC_SHOW_SIZE 1332         /* pc_show_t: dir[PC_FILE] title[PC_TITLE] cover[PC_FILE] feed[PC_URL] image[PC_URL] count hash fresh checked author[PC_AUTHOR] category[PC_CAT] desc[PC_DESC] newest */
+#define PC_SH_NEWEST 1328         /* the newest episode's date (seconds since 1970; an entry's p=, remote or local; the files' dates when there is no .episodes), 0 = none: the Shows page's order */
 #define PC_SH_AUTHOR 1008
 #define PC_SH_CAT 1072
 #define PC_SH_DESC 1120
@@ -1050,6 +1051,51 @@
 #define PA_PILLW_PX 40
 #define PA_FILL_A 56
 #define PA_RING_A 110
+#define PA_CHEV 6
+#define PA_TILE_X 0
+#define PA_TILE_Y 112
+#define PA_TILE_PX 44
+#define PA_PLAYB_X 48
+#define PA_PLAYB_Y 112
+#define PA_PLAYB_PX 28
+/* The Podcasts Shows page (Apple Podcasts style; patch/podcasts.c, docs/modules/podcasts.md "The Shows page"; tools/pod_show.py shows_layout is the model the tests and tools/preview_podcasts_revamp.py use). Content y from the list's top
+ * (window row PG_LIST_Y), x the window's. In order: the large title (a label, PP_TITLE_H high at x PP_TITLE_X, PP_TITLE_PX px; the navbar's small title shows from SG_COLLAPSE on), the refresh line (PP_LINE_H high at PP_LINE_Y, 15 px: "Updated
+ * 1h ago · Refresh", only when a show has a feed; PP_LINE_PITCH to the next block, PP_NOLINE_PITCH when there is no line; its touch is PP_LINE_HIT high around the text's middle), Continue Listening (PP_HEAD_H header at x PP_HEAD_X, 20 px, then PP_HEAD_PITCH to the
+ * covers: at most PP_SHELF_MAX PP_SHELF_ART px covers at x PP_SHELF_X + i * PP_SHELF_PITCH, the title (14 px, one line, PP_SHELF_W wide) PP_SHELF_TITLE_Y under the cover's top and the "35m left" (13 px) at PP_SHELF_LEFT_Y; PP_SHELF_PITCH_Y the block's height; each cover has the atlas' PA_PLAYB_PX play disc PP_SHELF_PLAY_INSET from its right and bottom edges),
+ * the Downloads row (PC_ROW_H high: the PA_TILE_PX tile (the atlas') at x PP_DL_TILE_X, PP_DL_TILE_Y down, the texts from PP_DL_TEXT_X, PP_DL_TEXT_W wide at LIST_TITLE_Y / LIST_SUB_Y, the chevron's middle at PP_DL_CHEV_CX, hairline from the text),
+ * PP_SEC_GAP of air and the "Shows" header (at x PP_SHOWS_X, only when something is above it), then the Albums grid (GRID_*: GRID_COVER covers, the title and the grey line under each) from the grid's top; PP_BOTTOM under the last row. */
+#define PP_TITLE_X 16
+#define PP_TITLE_H 52
+#define PP_TITLE_PX 32
+#define PP_LINE_Y 52
+#define PP_LINE_H 20
+#define PP_LINE_PITCH 34
+#define PP_NOLINE_PITCH 8
+#define PP_LINE_HIT 44
+#define PP_LINE_X 16
+#define PP_HEAD_H 28
+#define PP_HEAD_PITCH 34
+#define PP_HEAD_X 14
+#define PP_SHOWS_X 16
+#define PP_SHELF_MAX 3
+#define PP_SHELF_ART 92
+#define PP_SHELF_R 8
+#define PP_SHELF_X 14
+#define PP_SHELF_PITCH 100
+#define PP_SHELF_W 92
+#define PP_SHELF_TITLE_Y 96
+#define PP_SHELF_TITLE_H 18
+#define PP_SHELF_LEFT_Y 114
+#define PP_SHELF_LEFT_H 16
+#define PP_SHELF_PITCH_Y 142
+#define PP_SHELF_PLAY_INSET 6
+#define PP_DL_TILE_X 16
+#define PP_DL_TILE_Y 10
+#define PP_DL_TEXT_X 72
+#define PP_DL_TEXT_W 214
+#define PP_DL_CHEV_CX 298
+#define PP_SEC_GAP 12
+#define PP_BOTTOM 10
 
 /* The Tape page (patch/tape.c, docs/modules/tape.md; tools/tape_art.py draws the images from the same numbers, test/pod/tape.py checks them). The page is LANDSCAPE, 480 x 320: the
  * framebuffer is the portrait 320 x 480 and holds the picture turned 90 degrees clockwise, so landscape (x, y) is the framebuffer's row x, column 319 - y. Everything below is in

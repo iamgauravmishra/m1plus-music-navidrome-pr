@@ -148,8 +148,8 @@ def synth_cover(s, kind, n=400):
 
 
 class Show:
-    def __init__(self, key, title, cover, author, genre, sub, eps, local=False, new=0):
-        self.key, self.title, self.cover, self.author, self.genre, self.sub, self.eps, self.local, self.new = key, title, cover, author, genre, sub, eps, local, new
+    def __init__(self, key, title, cover, author, genre, sub, eps, local=False):
+        self.key, self.title, self.cover, self.author, self.genre, self.sub, self.eps, self.local = key, title, cover, author, genre, sub, eps, local
         self.tone = NP.tone(*PAT.average(cover.resize((160, 160), Image.LANCZOS))) if cover is not None else None
 
 
@@ -190,13 +190,13 @@ def make_shows(s, logo):
                 ep('5d ago', 'A conversation about the long term', 'An interview with a guest who has spent twenty years on the subject.', 'partial', '35m left')]
     mk = lambda *a, **k: Show(*a, **k)
     return [
-        mk('allin', 'All-In with Chamath, Jason, Sacks & Friedberg', allin, 'All-In Podcast', 'Technology', '3 new', allin_eps, new=3),
+        mk('allin', 'All-In with Chamath, Jason, Sacks & Friedberg', allin, 'All-In Podcast', 'Technology', '3 new', allin_eps),
         mk('brief', 'The Brief', synth_cover(s, 'brief'), 'Newsroom Media', 'News', 'Updated today', generic('the headlines', 'Markets open lower, a deal in Brussels and the weather that will not quit')),
         mk('headlines', 'The Headlines', synth_cover(s, 'headlines'), 'Headlines Network', 'News', 'No Wi-Fi', generic('the front pages', 'Elections, earnings and everything else you missed overnight')),
         mk('minute', 'WSJ Minute Briefing', synth_cover(s, 'minute'), 'The Wall Street Journal', 'Business', 'Updated today', generic('business', 'Stocks rally, oil slips and the Fed speaks')),
-        mk('night', '夜听故事会', synth_cover(s, 'night'), '夜听团队', '社会文化', '1 new', night_eps, new=1),
+        mk('night', '夜听故事会', synth_cover(s, 'night'), '夜听团队', '社会文化', '1 new', night_eps),
         mk('deep', 'Deep Dive with a Very Long Podcast Title', synth_cover(s, 'deep'), 'Deep Media', 'Society & Culture', 'Updated 2d ago', generic('culture', 'Why we collect things')),
-        mk('tech', 'Tech Daily', synth_cover(s, 'tech'), 'Tech Daily', 'Technology', '2 new', generic('technology', 'A new chip, a new phone and a new argument'), new=2),
+        mk('tech', 'Tech Daily', synth_cover(s, 'tech'), 'Tech Daily', 'Technology', '2 new', generic('technology', 'A new chip, a new phone and a new argument')),
         mk('local', 'Lecture Series (from the card)', None, '', '', '12 episodes', allin_eps[:2], local=True),
     ]
 
@@ -276,7 +276,7 @@ def bottom_sheet(s, fr, rows):
 
 SHOW_ROWS = [('pc_ic_speed', 'Playback Speed', '1.25×', WHITE), ('pc_ic_refresh', 'Refresh Feed', 'Updated 1h ago', WHITE), ('pc_ic_select', 'Select Episodes', '', WHITE),
              ('pc_ic_check', 'Mark All as Played', '', WHITE), ('pc_ic_unsub', 'Unsubscribe', '', REDISH)]
-SHOWS_ROWS = [('file-input', 'Import from Card', '', WHITE), ('plus', 'Add Show', '', WHITE)]
+SHOWS_ROWS = [('pc_ic_import', 'Import from Card', '', WHITE)]      # Add Show stays out until search exists
 
 
 def cell_rows(e):
@@ -433,43 +433,43 @@ def combos(s, sh):
 
 
 def build_shows(s, shows, shelf_n, downloads, refreshing):
-    """The Shows page's content (window x, content y from the navbar's bottom; black): the large title, the refresh line, Continue Listening (a static row of at most 3,
-    only when something is partly played), Downloads (2) (only while pending), the cover grid (the Albums grid's geometry, a count badge, a title and a grey line)."""
-    im = Image.new('RGBA', (W, 3000), (0, 0, 0, 255)); info = {}
-    s.text(im, 16, 26, 'Podcasts', 32, WHITE); y = 52
-    if refreshing: s.text(im, 16, y + 10, 'Refreshing 2/5…', 15, GREY)
-    else:
-        t1 = 'Updated 1h ago · '; s.text(im, 16, y + 10, t1, 15, GREY); s.text(im, 16 + s.font.width(t1, 15), y + 10, 'Refresh', 15, WHITE)
-    y += 26 + 8
+    """The Shows page's content (window x, content y from the navbar's bottom; black), laid out by tools/pod_show.py shows_layout and drawn with the PP_* numbers of patch/offsets.inc as
+    patch/podcasts.c pg_paint_home does: the large title, the refresh line (when a show has a feed), Continue Listening (a static row of at most PP_SHELF_MAX covers, only when something is partly
+    played), Downloads (n) (only while pending: the atlas' tile and chevron), the "Shows" header (only when one of those shows) and the Albums grid (no badge on the covers)."""
+    o = O
     shelf = [(shows[0], 'The Real Reason Markets Moved', '35m left'), (shows[4], '第126期｜深夜食堂', '12m left'), (shows[1], 'Markets open lower', '48m left')][:shelf_n]
+    has_line = any(sh.key != 'local' for sh in shows)
+    L = pod_show.shows_layout(len(shows), has_line, len(shelf), downloads)
+    im = Image.new('RGBA', (W, L['h']), (0, 0, 0, 255)); info = dict(layout=L)
+    s.text(im, o['PP_TITLE_X'], o['PP_TITLE_H'] / 2, 'Podcasts', o['PP_TITLE_PX'], WHITE)
+    if has_line:
+        cy = o['PP_LINE_Y'] + o['PP_LINE_H'] / 2
+        if refreshing: s.text(im, o['PP_LINE_X'], cy, 'Refreshing 2/5…', 15, GREY)
+        else:
+            t1 = 'Updated 1h ago · '; s.text(im, o['PP_LINE_X'], cy, t1, 15, GREY); s.text(im, o['PP_LINE_X'] + FONT.width(t1, 15), cy, 'Refresh', 15, WHITE)
     if shelf:
-        s.text(im, 14, y + 14, 'Continue Listening', 20, WHITE); y += 34
+        s.text(im, o['PP_HEAD_X'], L['y_shelf'] + o['PP_HEAD_H'] / 2, 'Continue Listening', 20, WHITE)
         for i, (sh, t, left) in enumerate(shelf):
-            x = 14 + i * 100
-            _paste(im, cover_img(sh, 92, 8), x, y)
-            s.text(im, x, y + 92 + 4 + 9, PS.fit(s, t, 14, 92), 14, WHITE); s.text(im, x, y + 92 + 4 + 18 + 8, left, 13, GREY)
-        y += 92 + 4 + 18 + 18 + 10
+            x, y, ty, ly = pod_show.shelf_item(i, L['y_shelf'])
+            _paste(im, cover_img(sh, o['PP_SHELF_ART'], o['PP_SHELF_R']), x, y)
+            _paste(im, sprite(o['PA_PLAYB_X'], o['PA_PLAYB_Y'], o['PA_PLAYB_PX'], o['PA_PLAYB_PX']), *pod_show.shelf_play(i, L['y_shelf']))
+            s.text(im, x, ty + o['PP_SHELF_TITLE_H'] / 2, PS.fit(s, t, 14, o['PP_SHELF_W']), 14, WHITE)
+            s.text(im, x, ly + o['PP_SHELF_LEFT_H'] / 2, left, 13, GREY)
     if downloads:
-        rrect(im, 16, y + 10, 44, 44, 8, (0x1E, 0x1E, 0x1E, 255)); put_icon(im, 'download', 38, y + 32, 22)
-        s.text(im, 72, y + O['LIST_TITLE_Y'] + O['LIST_TITLE_H'] / 2, 'Downloads (2)', 21, WHITE)
-        s.text(im, 72, y + O['LIST_SUB_Y'] + O['LIST_SUB_H'] / 2, 'Downloading 42%', 18, GREY)
-        put_icon(im, 'chevron-right', 298, y + 32, 18, GREY); hline(im, 72, W, y + 63, FOLD + (255,)); y += 64
-    if shelf or downloads:
-        y += 12; s.text(im, 16, y + 14, 'Shows', 20, WHITE); y += 34
-    cov, gap, m = O['GRID_COVER'], O['GRID_GAP'], O['GRID_MARGIN']
-    pitch = cov + O['GRID_TITLE_GAP'] + O['GRID_TITLE_H'] + O['GRID_SUB_H'] + O['GRID_ROW_GAP']
+        y = L['y_dl']
+        _paste(im, sprite(o['PA_TILE_X'], o['PA_TILE_Y'], o['PA_TILE_PX'], o['PA_TILE_PX']), o['PP_DL_TILE_X'], y + o['PP_DL_TILE_Y'])
+        s.text(im, o['PP_DL_TEXT_X'], y + o['LIST_TITLE_Y'] + o['LIST_TITLE_H'] / 2, 'Downloads (2)', 21, WHITE)
+        s.text(im, o['PP_DL_TEXT_X'], y + o['LIST_SUB_Y'] + o['LIST_SUB_H'] / 2, 'Downloading 42%', 18, GREY)
+        _paste(im, glyph16(o['PA_CHEV']), o['PP_DL_CHEV_CX'] - o['PA_G_PX'] // 2, y + o['PC_ROW_H'] // 2 - o['PA_G_PX'] // 2)
+        hline(im, o['PP_DL_TEXT_X'], W, y + o['PC_ROW_H'] - 1, FOLD + (255,))
+    if L['y_shows']: s.text(im, o['PP_SHOWS_X'], L['y_shows'] + o['PP_HEAD_H'] / 2, 'Shows', 20, WHITE)
     for a, sh in enumerate(shows):
-        x, top = m + (a % 2) * (cov + gap), y + (a // 2) * pitch
-        _paste(im, cover_img(sh, cov, O['GRID_R']), x, top)
-        if sh.new:
-            t = str(sh.new); bw = max(24, s.font.width(t, 15) + 14)
-            rrect(im, x + cov - bw - 6, top + 6, bw, 24, 12, (255, 255, 255, 255)); s.text(im, x + cov - bw / 2 - 6, top + 18, t, 15, (0, 0, 0), 'm')
-        ty = top + cov + O['GRID_TITLE_GAP']
-        s.text(im, x, ty + O['GRID_TITLE_H'] / 2, PS.fit(s, sh.title, 18, cov), 18, WHITE)
-        s.text(im, x, ty + O['GRID_TITLE_H'] + O['GRID_SUB_H'] / 2, PS.fit(s, sh.sub, 15, cov), 15, GREY)
-    y += ((len(shows) + 1) // 2) * pitch
-    info['end'] = y + 10
-    return im.crop((0, 0, W, y + 10)), info
+        x, y, ty, sy = pod_show.grid_cell(a, L['y_grid'])
+        _paste(im, cover_img(sh, o['GRID_COVER'], o['GRID_R']), x, y)
+        s.text(im, x, ty + o['GRID_TITLE_H'] / 2, PS.fit(s, sh.title, 18, o['GRID_COVER']), 18, WHITE)
+        s.text(im, x, sy + o['GRID_SUB_H'] / 2, PS.fit(s, sh.sub, 15, o['GRID_COVER']), 15, GREY)
+    info['end'] = L['h']
+    return im, info
 
 
 def shows_frame(s, shows, shelf_n=3, downloads=True, scroll=0, refreshing=False, sheet=None, end=False):
@@ -524,7 +524,7 @@ def main():
 
     sf = lambda **k: shows_frame(s, shows, **k)[0]
     assemble([('Shows: top with Continue Listening x3,\nDownloads (2)', sf()), ('top with Continue Listening x2, no Downloads row', sf(shelf_n=2, downloads=False)),
-              ('scrolled: the title collapsed into the navbar', sf(scroll=330)), ('the "..." sheet: Import from Card, Add Show', sf(sheet=SHOWS_ROWS)),
+              ('scrolled: the title collapsed into the navbar', sf(scroll=330)), ('the "..." sheet: Import from Card (Add Show is hidden)', sf(sheet=SHOWS_ROWS)),
               ('while refreshing: "Refreshing 2/5"', sf(refreshing=True)), ('end of the grid', sf(end=True))], 3, out('shows'))
 
     strip = pill_strip(s, allin.tone); col = combos(s, allin)

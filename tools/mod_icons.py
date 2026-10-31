@@ -185,12 +185,11 @@ NAV_VIEW = {'pod_nav_grid': 'layout-grid', 'pod_nav_list': 'list',
             'pod_nav_songs': 'list',   # Cover Flow's artist page: our Songs page on the artist's songs (the left cap, then Now Playing)
             'pod_nav_search': 'search', 'pod_nav_songsort': 'arrow-down-wide-narrow', 'pod_nav_select': 'list-checks',
             'pod_nav_selectl': 'list-checks',   # the Songs page's Search / Sort / Select (capsule: left, middle, middle, then Now Playing); selectl: Select as the left cap of a genre's songs (no Search: Select | Now Playing)
-            'pod_nav_settings': 'sliders-horizontal',   # the Extras page's Settings button: the left cap of [Settings | Now Playing]
-            'pod_nav_feeds': '+rss'}   # the Podcasts page's Feeds button (Lucide rss, as a custom svg: assets/icons/custom/rss.svg): the left cap of [Feeds | Now Playing]
+            'pod_nav_settings': 'sliders-horizontal'}   # the Extras page's Settings button: the left cap of [Settings | Now Playing]
 # the glass piece each Pod page button is (docs/modules/navbar.md): the Albums and Playlists pages' capsule is Cover Flow / "..." (left cap), the grid / list
 # toggle (middle), Now Playing (right cap); the Artists page's is the switch (left cap) and Now Playing; the Cover Flow artist page's is Songs (left cap) and Now Playing
 NAV_VIEW_POS = {'pod_nav_grid': 'middle', 'pod_nav_list': 'middle', 'pod_nav_artist': 'left', 'pod_nav_albumartist': 'left', 'pod_nav_coverflow': 'left',
-                'pod_nav_more': 'left', 'pod_nav_songs': 'left', 'pod_nav_search': 'left', 'pod_nav_songsort': 'middle', 'pod_nav_select': 'middle', 'pod_nav_selectl': 'left', 'pod_nav_settings': 'left', 'pod_nav_feeds': 'left'}
+                'pod_nav_more': 'left', 'pod_nav_songs': 'left', 'pod_nav_search': 'left', 'pod_nav_songsort': 'middle', 'pod_nav_select': 'middle', 'pod_nav_selectl': 'left', 'pod_nav_settings': 'left'}
 NAV_PX = 24
 # The Playlists page's "..." menu rows (tools/pod_ui.py playlist_menu, in row order): a bare white glyph left of the label, as on Now
 # Playing's More sheet's rows, drawn at PL_MENU_PX (20: the 24 px of the sheet's rows looked big beside the 18 px labels; the stroke stays 2 px).
@@ -236,8 +235,8 @@ GLYPHS = [
     # actions in dialogs and pages
     ('rename', 'pencil', None), ('bt_del', 'trash', None), ('bt_scan', 'refresh-cw', None), ('datetime', 'calendar', None),
     ('wifi_add', 'circle-plus', None), ('kb_visible', 'eye', None), ('kb_invisible', 'eye-off', None),
-    ('p_abrepeat', 'T:a-b', None), ('p_add', 'list-plus', None), ('p_delete', 'trash', None),    # a-b, multiplier-1x: no Lucide glyph
-    ('p_multiple', 'T:multiplier-1x', None), ('p_onlinesearch', 'globe', None),
+    ('p_abrepeat', 'T:a-b', None), ('p_add', 'list-plus', None), ('p_delete', 'trash', None),    # a-b: no Lucide glyph (Playback speed: the Podcasts sheet's gauge)
+    ('p_multiple', 'gauge', None), ('p_onlinesearch', 'globe', None),
     ('player_albuminfo', 'disc-3', None), ('player_songerinfo', 'mic-vocal', None),
     ('batchadd_fav', 'star', None), ('batchadd_playlist', 'list-plus', None),
 ]
@@ -711,12 +710,15 @@ PA_DOTS_Y, PA_DOTS_PX, PA_BADGE_X, PA_BADGE_PX = 48, 20, 24, 12   # the "..." gl
 PA_PILL_Y, PA_PILLF_X, PA_PILLO_X, PA_PILLW_X, PA_PILLR_X, PA_PILL_PX, PA_PILLW_PX = 68, 0, 32, 64, 108, 30, 40   # the discs: filled (30), outlined (30), white (40) and outlined (40): the Latest Episode pill's ends
 PA_FILL_A, PA_RING_A, PA_TRACK_A = 56, 110, 80           # alpha of the filled pill, of the outlined pill's ring (2 px), of the progress ring's track
 PA_GREY, PA_BADGE_GREY, PA_DARK, PA_RED = (0xAA,) * 3, (0xD0,) * 3, (0x14,) * 3, (0xFF, 0x6B, 0x6B)
+PA_CHEV = 6                                              # glyph 6 of the strip: the chevron-right (grey) of the Shows page's Downloads row
+PA_TILE_X, PA_TILE_Y, PA_TILE_PX, PA_TILE_R, PA_TILE_RGB, PA_TILE_GLYPH = 0, 112, 44, 8, (0x1E,) * 3, 22   # the Downloads row's tile: a 44 px rounded square, the Lucide download glyph (22 px, white) on it
+PA_PLAYB_X, PA_PLAYB_Y, PA_PLAYB_PX, PA_PLAYB_RIM_A, PA_PLAYB_GLYPH = 48, 112, 28, 90, 12   # Continue Listening's play disc: 28 px, a white 26 px disc inside a 1 px black rim (35 %, so it reads on a white cover too), the dark play triangle (12 px) nudged 1 px right to look centred
 PC_ATLAS = 'pc_atlas'
-PC_SHEET_ICONS = (('pc_ic_speed', 'gauge', WHITE), ('pc_ic_refresh', 'refresh-cw', WHITE), ('pc_ic_select', 'list-checks', WHITE), ('pc_ic_check', '+check', WHITE),
+PC_SHEET_ICONS = (('pc_ic_import', 'file-input', WHITE), ('pc_ic_speed', 'gauge', WHITE), ('pc_ic_refresh', 'refresh-cw', WHITE), ('pc_ic_select', 'list-checks', WHITE), ('pc_ic_check', '+check', WHITE),
                   ('pc_ic_unsub', 'x', PA_RED), ('pc_ic_down', 'arrow-down', WHITE), ('pc_ic_trash', 'trash', WHITE), ('pc_ic_undo', 'rotate-ccw', WHITE))
 PC_SHEET_PX = 20
 PC_SHEETS = (('pc_sheet1', 50), ('pc_sheet2', 100), ('pc_sheet3', 150), ('pc_sheet4', 200), ('pc_sheet5', 250))   # the sheets' glass for 1..5 rows (Now Playing's pm_sheet / pm_sheet5 for 4 and 5, but a name of ours: the Show page's rows need no other page's image)
-PC_GLYPHS = ('arrow-down',)                                  # the Lucide glyph the set adds to the sources (the download symbol of the pill, the badge and the sheet)
+PC_GLYPHS = ('arrow-down', 'download', 'chevron-right', 'file-input')                                 # the Lucide glyph the set adds to the sources (the download symbol of the pill, the badge and the sheet)
 PODCASTS = [PC_ATLAS] + [n for n, _, _ in PC_SHEET_ICONS] + [n for n, _ in PC_SHEETS]
 ALBUM += PODCASTS
 
@@ -761,6 +763,26 @@ def _pc_badge():
     out = disc_.copy(); out.putalpha(ImageChops.subtract(disc_.getchannel('A'), cut))
     return out
 
+def _pc_tile():
+    """The Downloads row's 44 px tile: an opaque #1E1E1E rounded square (8 px corners, anti-aliased) with the Lucide download glyph centred on it."""
+    from PIL import Image, ImageDraw
+    px, s = PA_TILE_PX, 8
+    m = Image.new('L', (px * s, px * s), 0)
+    ImageDraw.Draw(m).rounded_rectangle((0, 0, px * s - 1, px * s - 1), radius=PA_TILE_R * s, fill=255)
+    out = Image.new('RGBA', (px, px), PA_TILE_RGB + (0,)); out.putalpha(m.resize((px, px), Image.LANCZOS))
+    g = glyph('download', PA_TILE_GLYPH, 'small')
+    out.alpha_composite(g, ((px - g.width) // 2, (px - g.height) // 2))
+    return out
+
+def _pc_playb():
+    """Continue Listening's 28 px play disc: a white disc inside a faint black rim, a dark play triangle on it."""
+    px = PA_PLAYB_PX
+    out = _pc_disc(px, (0, 0, 0), PA_PLAYB_RIM_A)
+    out.alpha_composite(_pc_disc(px - 2, WHITE, 255), (1, 1))
+    g = tint(glyph('play', PA_PLAYB_GLYPH, 'solid'), PA_DARK)
+    out.alpha_composite(g, ((px - g.width) // 2 + 1, (px - g.height) // 2))
+    return out
+
 def pc_atlas():
     """The atlas image (PA_SIZE square)."""
     from PIL import Image, ImageOps
@@ -772,8 +794,11 @@ def pc_atlas():
     cell(3, ImageOps.mirror(glyph('rotate-ccw', PA_G_PX, 'small')))
     cell(4, tint(glyph('+check', 14, 'small'), PA_GREY))
     cell(5, tint(glyph('play', 14, 'solid'), PA_DARK))
+    cell(PA_CHEV, tint(glyph('chevron-right', PA_G_PX, 'small'), PA_GREY))
     d = glyph('ellipsis', PA_DOTS_PX, 'solid'); a.alpha_composite(tint(d, PA_GREY), (0, PA_DOTS_Y))
     a.alpha_composite(_pc_badge(), (PA_BADGE_X, PA_DOTS_Y))
+    a.alpha_composite(_pc_tile(), (PA_TILE_X, PA_TILE_Y))
+    a.alpha_composite(_pc_playb(), (PA_PLAYB_X, PA_PLAYB_Y))
     a.alpha_composite(_pc_disc(PA_PILL_PX, WHITE, PA_FILL_A), (PA_PILLF_X, PA_PILL_Y))
     a.alpha_composite(_pc_disc(PA_PILL_PX, WHITE, PA_RING_A, 2), (PA_PILLO_X, PA_PILL_Y))
     a.alpha_composite(_pc_disc(PA_PILLW_PX, WHITE, 255), (PA_PILLW_X, PA_PILL_Y))

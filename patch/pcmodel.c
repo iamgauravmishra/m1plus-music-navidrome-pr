@@ -18,15 +18,13 @@
 
 _Static_assert(sizeof(pc_ep_t) == PC_EP_SIZE, "pc_ep_t");
 _Static_assert(sizeof(pc_show_t) == PC_SHOW_SIZE, "pc_show_t");
-_Static_assert(__builtin_offsetof(pc_ep_t, hash) == PC_EP_HASH && __builtin_offsetof(pc_show_t, hash) == PC_SH_HASH &&
-                   __builtin_offsetof(pc_show_t, checked) == PC_SH_CHECKED &&
-                   __builtin_offsetof(pc_show_t, feed) == PC_SH_FEED &&
-                   __builtin_offsetof(pc_show_t, image) == PC_SH_IMAGE &&
-                   __builtin_offsetof(pc_ep_t, desc) == PC_EP_DESC &&
-                   __builtin_offsetof(pc_show_t, author) == PC_SH_AUTHOR &&
-                   __builtin_offsetof(pc_show_t, category) == PC_SH_CAT &&
-                   __builtin_offsetof(pc_show_t, desc) == PC_SH_DESC,
-               "offsets");
+_Static_assert(
+    __builtin_offsetof(pc_ep_t, hash) == PC_EP_HASH && __builtin_offsetof(pc_show_t, hash) == PC_SH_HASH &&
+        __builtin_offsetof(pc_show_t, checked) == PC_SH_CHECKED && __builtin_offsetof(pc_show_t, feed) == PC_SH_FEED &&
+        __builtin_offsetof(pc_show_t, image) == PC_SH_IMAGE && __builtin_offsetof(pc_ep_t, desc) == PC_EP_DESC &&
+        __builtin_offsetof(pc_show_t, author) == PC_SH_AUTHOR && __builtin_offsetof(pc_show_t, category) == PC_SH_CAT &&
+        __builtin_offsetof(pc_show_t, desc) == PC_SH_DESC && __builtin_offsetof(pc_show_t, newest) == PC_SH_NEWEST,
+    "offsets");
 
 #define PM_ROOT "/mnt/mmc"
 #define PM_STATE_DIR CARD_DIR "/podcasts"
@@ -378,23 +376,67 @@ static int pm_cover_rank(const char *name) {
 
 static pc_show_t *pm_sort_shows __attribute__((section(".scratch")));
 
+/* The Shows page's order: the most recently updated first (newest episode, remote or local), ties by title. */
 static int pm_show_cmp(unsigned a, unsigned b) {
-    int d = cc_name_cmp(pm_sort_shows[a].title, pm_sort_shows[b].title);
+    const pc_show_t *x = &pm_sort_shows[a], *y = &pm_sort_shows[b];
+    int d;
+    if (x->newest != y->newest) return x->newest > y->newest ? -1 : 1;
+    d = cc_name_cmp(x->title, y->title);
     return d ? d : a < b ? -1 : a > b;
 }
 
-/* One show folder's summary into *s: its audio files (and how many are new), the best cover, the show file. 1 when it is a show (it has an audio file or a metadata file). */
+/* The largest p= (publication date) of the entries of a .episodes buffer: only a line that is an entry counts (as pc_parse_eps reads it: one of g, f, t, u has a value), at most
+ * PC_MAX_EPS entries (the newest come first in the file the refresh writes). 0 when there is none. */
+static unsigned pm_newest_pub(const char *buf, unsigned n) {
+    const char *p, *stop = buf + n, *next;
+    unsigned best = 0;
+    int entries = 0;
+    if (!pm_header(buf, n, "M1PLUS-EPISODES 1", &p)) return 0;
+    for (; p < stop && entries < PC_MAX_EPS; p = next) {
+        unsigned len = pm_line(p, stop, &next), at = 0, pub = 0;
+        int any = 0;
+        if (!len || p[0] == '#' || len > PM_LINE_MAX) continue;
+        while (at < len) {
+            const char *f = p + at;
+            unsigned flen = 0;
+            while (at + flen < len && f[flen] != '\t') ++flen;
+            if (flen >= 2 && f[1] == '=') {
+                unsigned vlen = flen - 2;
+                if (f[0] == 'p')
+                    pub = pm_num(f + 2, vlen);
+                else if (f[0] == 'f')
+                    any |= vlen && vlen < PC_FILE;
+                else if (f[0] == 'g' || f[0] == 't' || f[0] == 'u')
+                    any |= vlen != 0;
+            }
+            at += flen + 1;
+        }
+        if (any) {
+            ++entries;
+            if (pub > best) best = pub;
+        }
+    }
+    return best;
+}
+
+/* One show folder's summary into *s: its audio files (and how many are new), the best cover, the show file, the newest episode's date. 1 when it is a show (it has an audio file or a metadata file). */
 static int pm_summary(const char *root, pc_show_t *s) {
     char path[PM_PATH];
     void *d;
     char *ent;
-    int best = 99, meta = 0;
+    int best = 99, meta = 0, has_eps = 0;
     char *buf;
-    unsigned n;
-    s->count = s->fresh = 0;
+    unsigned n, file_newest = 0;
+    s->count = s->fresh = s->newest = 0;
     s->cover[0] = 0;
     s->hash = pc_hash(s->dir);
     pm_cpy(s->title, PC_TITLE, s->dir);
+    if (pm_join(path, sizeof path, root, s->dir, ".episodes") && (buf = pm_slurp(path, PM_META_MAX, &n)) != (char *)0) {
+        s->newest = pm_newest_pub(
+            buf, n); /* the entries' dates: a downloaded file's own date is the download's, not the episode's */
+        has_eps = s->newest != 0; /* (entries with no date: the files' dates, as the merge takes them) */
+        free(buf);
+    }
     if (!pm_join(path, sizeof path, root, s->dir, (const char *)0) || !(d = opendir(path))) return 0;
     while ((ent = readdir(d)) != (char *)0) {
         const char *name = pm_name(ent);
@@ -413,9 +455,15 @@ static int pm_summary(const char *root, pc_show_t *s) {
         if (pm_join(full, sizeof full, root, s->dir, name)) {
             unsigned pos, len;
             if (pc_state(pc_hash(full), &pos, &len) == PC_NEW) ++s->fresh;
+            if (!has_eps) { /* no metadata: the episodes are the files, dated by them (one stat each) */
+                unsigned st[40];
+                memset(st, 0, sizeof st);
+                if (__xstat(3, full, st) == 0 && st[0x40 / 4] > file_newest) file_newest = st[0x40 / 4];
+            }
         }
     }
     closedir(d);
+    if (!has_eps) s->newest = file_newest;
     if (pm_join(path, sizeof path, root, s->dir, ".show") && (buf = pm_slurp(path, 4096, &n)) != (char *)0) {
         pc_parse_show(buf, n, s);
         free(buf);
@@ -826,6 +874,47 @@ void pc_restart(unsigned hash) {
     pm_ring_load();
     at = pm.s ? pm_find_slot(hash) : -1;
     if (at >= 0 && (pm.s[at].flags & 1)) pc_mark(hash, 0);
+}
+
+/* The episodes partly played, the most recently played first (the ring is kept in that order: every place noted moves its slot to the front): the Shows page's Continue Listening. The first PM_CONT_SCAN
+ * places that are in progress (a place, not played) are looked for among the shows' files, one pc_load_show per show with a file, stopping when every candidate is found; one that is on no show
+ * (its file is gone) is skipped. At most max items go to out. */
+#define PM_CONT_SCAN 12
+int pc_continue(const pc_show_t *shows, int nshows, pc_cont_t *out, int max) {
+    pc_cont_t cand[PM_CONT_SCAN];
+    char got[PM_CONT_SCAN];
+    unsigned i, nc = 0, left;
+    int s, k, n = 0;
+    pc_ep_t *all;
+    pm_ring_load();
+    for (i = 0; pm.s && i < pm.n && nc < PM_CONT_SCAN; ++i) {
+        const slot_t *t = &pm.s[i];
+        if ((t->flags & 1) || !t->pos) continue;
+        memset(&cand[nc], 0, sizeof cand[nc]);
+        cand[nc].hash = t->hash, cand[nc].pos = t->pos, cand[nc].len = t->len;
+        got[nc++] = 0;
+    }
+    if (!nc || max <= 0 || !(all = calloc(PC_MAX_EPS, sizeof *all))) return 0;
+    left = nc;
+    for (s = 0; s < nshows && left; ++s) {
+        int cnt;
+        if (!shows[s].count) continue;
+        cnt = pc_load_show(&shows[s], all, PC_MAX_EPS);
+        for (k = 0; k < cnt && left; ++k) {
+            if (all[k].state != PC_LOCAL || !all[k].hash) continue;
+            for (i = 0; i < nc; ++i)
+                if (!got[i] && cand[i].hash == all[k].hash) {
+                    got[i] = 1, --left;
+                    cand[i].show = s;
+                    pm_cpy(cand[i].file, PC_FILE, all[k].file);
+                    pm_cpy(cand[i].title, PC_TITLE, all[k].title);
+                }
+        }
+    }
+    free(all);
+    for (i = 0; i < nc && n < max; ++i)
+        if (got[i]) memcpy(&out[n++], &cand[i], sizeof *out);
+    return n;
 }
 
 /* ---------------------------------------------------------------------------
