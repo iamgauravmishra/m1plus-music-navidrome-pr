@@ -3,7 +3,7 @@
 Two stock-looking screens restyled with assets only (no code, no new or renamed widget): the message and confirm dialogs and the power-off splash. The step runs after `mod_polish`
 in `tools/build.py`. It copies PNGs committed in `assets/overlays/` (`mod_overlays.py --generate` redraws them: Pillow, `rsvg-convert` for the splash), refuses any file that is not
 the pinned stock one (`tools/mod_overlays_pins.txt`, SHA-256, `--pins`), keeps the file mode and the stock pixel sizes. Preview: `uv run python -I tools/preview_overlays.py work/mod-release out/preview/overlays.png`
-(not tracked). The Update Library spinner, the charging screen and the USB DAC / storage page stay stock on purpose (another branch works on them).
+(not tracked). The Update Library spinner, the charging bolt (`chargebg`) and the USB / Wi-Fi / Bluetooth mode pages are drawn by `tools/mod_icons.py` (`docs/modules/icons.md`), not here.
 
 - **Message and confirm dialogs** (`msginfo_bg`, `confirminfo_bg`, 260 x 180, default and theme1: the same stock bytes). A glass card, `mod_icons.glass_image(260, 180, 12, fill=DIALOG_FILL)`
   (the More sheet's pane, alpha 0.94: the text sits on it with the page dimmed behind by the dialogs' own `highlight` alpha 100); the confirm card also has the
@@ -17,7 +17,7 @@ the pinned stock one (`tools/mod_overlays_pins.txt`, SHA-256, `--pins`), keeps t
 
 ## Tests (`test/pod/overlays.py`)
 
-Pins cover the three names; built files are the committed assets; theme1 gets the same two dialog images; the scan, charging, battery and USB images and `poweroff_page.bin` are stock bytes; sizes;
+Pins cover the three names; built files are the committed assets; theme1 gets the same two dialog images; the charging and battery images (`charging0`, `charging18`, `charge_big`, `dac_charge`) and `poweroff_page.bin` are stock bytes; sizes;
 glass and divider; the ui edits (transparent buttons, Cancel's border, geometry unchanged). `test/pod/navbars.py` exempts the replaced files (`mod_overlays.NAMES`, `OVERLAY_UI`).
 
 ## Device check
