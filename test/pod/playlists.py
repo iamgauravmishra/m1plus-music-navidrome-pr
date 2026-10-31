@@ -644,23 +644,24 @@ def run(ctx):
     expect(vis(m, 'pl_card') == (0, 0) and vis(m, 'pl_scrim') == (0, 0), 'and a second tap closes them (hidden and insensitive)')
     m.click('btn_more'); m.click('pl_scrim')
     expect(vis(m, 'pl_card') == (0, 0) and vis(m, 'pl_scrim') == (0, 0), 'a tap on the scrim closes the menu')
-    # New playlist: the stock keyboard dialog, createPlayListItem on the freshly read stock list, then the page reads again
+    # New playlist: our keyboard opens (stock's T9 dialog is gone); its Done calls pl_named: createPlayListItem on the freshly read stock list, then the page reads again.
+    # (The keyboard's own behaviour, with this callback as its on_done, is test/pod/keyboard.py name_tests; this machine has no keyboard asset, so the open itself fails here.)
     m.click('btn_more'); m.calls = []
     m.click('pl_item0')
-    names_ = m.names()
-    expect(vis(m, 'pl_card') == (0, 0) and ('navigator_to_with_context', 'dialog/kbaddplaylist_dialog', 'Mix') in m.calls
-           and ('createPlayListItem', 'Mix', len(lists)) in m.calls and 'stock_resume' not in names_,
-           'New playlist: the menu closes, the stock keyboard dialog, createPlayListItem(stock list, name)')
-    order = [c for c in m.calls if c[0] in ('navigator_to_with_context', 'loadLocalClassList', 'createPlayListItem')]
-    expect([c[0] for c in order] == ['navigator_to_with_context', 'loadLocalClassList', 'createPlayListItem', 'loadLocalClassList'] and order[1][1] == order[3][1] == O['CLASS_PLAYLISTS'],
-           f'... the stock list is read before the playlist is made and the page reads again after ({[c[0] for c in order]})')
+    expect(vis(m, 'pl_card') == (0, 0) and ('window_open', 'm1plus_keyboard') in m.calls and not [c for c in m.calls if c[0] == 'navigator_to_with_context' and c[1] == 'dialog/kbaddplaylist_dialog']
+           and not [c for c in m.calls if c[0] in ('createPlayListItem', 'loadLocalClassList')],
+           'New playlist: the menu closes and our keyboard page is opened; nothing is created and the list is not read until Done (the keyboard is not modal)')
+    m.calls = []
+    m.call(PSYMS['pl_named'], a0=m.cstr('Mix'), count=40000000)
+    order = [c for c in m.calls if c[0] in ('loadLocalClassList', 'createPlayListItem')]
+    expect([c[0] for c in order] == ['loadLocalClassList', 'createPlayListItem', 'loadLocalClassList'] and order[0][1] == order[2][1] == O['CLASS_PLAYLISTS']
+           and ('createPlayListItem', 'Mix', len(lists)) in m.calls and 'stock_resume' not in m.names(),
+           f'Done: the stock list is read, createPlayListItem(stock list, name) makes the playlist, the page reads again ({[c[0] for c in order]})')
     for ret, key in ((-1, 'msg_playlistfull'), (-2, 'msg_playlistexist')):
         m.create_ret = ret; m.calls = []
-        m.click('pl_item0')
+        m.call(PSYMS['pl_named'], a0=m.cstr('Mix'), count=40000000)
         expect([c for c in m.calls if c[0] == 'toast'] == [('toast', key, 1, 2000)], f'a playlist that cannot be made says {key} in the stock message box ({[c for c in m.calls if c[0] == "toast"]})')
-    m.create_ret = 5; m.dialog_name = None; m.calls = []
-    m.click('pl_item0')
-    expect(not [c for c in m.calls if c[0] == 'createPlayListItem'], 'a cancelled keyboard dialog creates nothing')
+    m.create_ret = 5
     # Import / Export: the stock click handlers, in the normal (not multi-select) mode, then the page reads again
     for item, handler in (('pl_item1', 'stock_playlist_import'), ('pl_item2', 'stock_playlist_export')):
         m.setword(NAV_STATUS, 1); m.calls = []

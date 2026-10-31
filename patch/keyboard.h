@@ -11,13 +11,15 @@
  *   initial      the field's text to start with (UTF-8, at most KB_MAX bytes, cut on a character boundary); NULL for none
  *   on_done      Search with a non-empty text: called with the text (spaces at both ends removed) right after the page was told to close
  *   on_cancel    Back (the navbar's or the hardware key) without Search; NULL for none
- *   flags        KB_LOG: every touch on the pad and every key is appended to the Network Probe's log (/mnt/mmc/m1plus-probe.log)
+ *   flags        KB_DONE: the action key (on_done) reads "Done" instead of "Search"
+ *                KB_LOG: every touch on the pad and every key is appended to the Network Probe's log (/mnt/mmc/m1plus-probe.log)
  * Returns 0 once the page is up, -1 when it could not open (another keyboard is still there: one at a time, also from inside a callback, since the page is
  * destroyed only after the callback ran; or the asset is not ours). The callbacks run on the UI thread, from the event that closed the page (on_cancel for the hardware
  * Back key from the page's destroy event); the page is gone or closing, so a callback must not use it. */
 typedef void (*kb_done_fn)(const char *text);
 typedef void (*kb_cancel_fn)(void);
 #define KB_LOG 1
+#define KB_DONE 2 /* the action key reads "Done" (a name, not a search) */
 int keyboard_open(const char *title, const char *placeholder, const char *initial, kb_done_fn on_done,
                   kb_cancel_fn on_cancel, unsigned flags);
 /* The Developer row Keyboard: keyboard_open with a placeholder, KB_LOG, and Search showing the text in a toast. */

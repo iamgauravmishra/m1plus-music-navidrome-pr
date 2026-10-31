@@ -25,7 +25,7 @@ Follow the [installation guide](docs/install.md) for preparation, updates and re
 <details>
 <summary>Release status</summary>
 
-Status: the release is V2.1pL (pK + icon polish: neutral screensaver transport, playing marker, queue, HR/bit-depth/RG badges, volume steps, LED check, backlight suns, grey-glyph USB/Wi-Fi/Bluetooth mode screens, white charging bolt, a white-arc Update Library spinner and a custom Cover Flow glyph; test build zMVYOAAAC flashed). Milestones, hardware results and lessons:
+Status: the release is V2.1pM (pL + Playlists > New playlist on our own keyboard, a Done action key; test build zCQBIAAAB flashed). Milestones, hardware results and lessons:
 `docs/history.md`; per-tag details are in git.
 
 </details>

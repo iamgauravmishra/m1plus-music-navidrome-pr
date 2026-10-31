@@ -1131,6 +1131,7 @@ int keyboard_open(const char *title, const char *placeholder, const char *initia
     widget_on(kb.cands, EVT_POINTER_ABORT, zh_on_strip, (void *)0);
     zh.hot = -1;
     if (title && title[0]) widget_set_text_utf8(kb.title, title);
+    if (flags & KB_DONE) widget_set_tr_text(kb.go, "Done");
     widget_set_text_utf8(kb.hint, placeholder ? placeholder : "");
     if (initial) { /* cut on a character boundary */
         unsigned n = kb_slen(initial), c = 0, l;

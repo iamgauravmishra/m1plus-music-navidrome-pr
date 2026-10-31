@@ -1,8 +1,8 @@
 # Keyboard
 
 Code: `patch/keyboard.c`, `patch/keyboard.h` (API and geometry constants). Asset: `tools/pod_ui.py` `build_keyboard_page` (`ui/m1plus_keyboard.bin`), geometry in `tools/pod_keyboard.py`,
-glyphs in `tools/mod_icons.py` (`KEYBOARD_IMAGES`, `qk_*`). Tests: `test/pod/keyboard.py` (sections: base, gap, asset, setting, zh, strip, hit, lang_gap), `test/pod/pinyin.py` (the engine on its own).
-Preview: `tools/preview_keyboard.py`. No hook, no new import, no thread; one timer only while the delete key is held. Built for podcast search (iTunes search itself is not part of it); stock's T9 popup
+glyphs in `tools/mod_icons.py` (`KEYBOARD_IMAGES`, `qk_*`). Tests: `test/pod/keyboard.py` (sections: base, name, gap, asset, setting, zh, strip, hit, lang_gap), `test/pod/pinyin.py` (the engine on its own).
+Preview: `tools/preview_keyboard.py`. No hook, no new import, no thread; one timer only while the delete key is held. Built for podcast search (iTunes search itself is not part of it); its first consumer is the Playlists page's New playlist (below); stock's T9 popup
 (`ui/user_keyboard.bin`, pages laid out 640 px wide in a 320 px popup) is not used. With Customize > Keyboards > Chinese (Pinyin) on, it also types Chinese (below).
 
 ## What it is
@@ -99,8 +99,10 @@ int keyboard_open(const char *title, const char *placeholder, const char *initia
 `title` / `placeholder` are UTF-8 and already translated (`TR()`), NULL keeps the page's title / no hint. Search with a non-empty text (spaces at both ends trimmed; an empty text does nothing)
 calls `navigator_back()` and then `on_done(text)`; Back (navbar or hardware key) calls `on_cancel()` (hardware Back: from the destroy event). Callbacks run on the UI thread with the page closing:
 use only what they are given. One keyboard at a time: `keyboard_open` returns -1 while the previous page is not destroyed yet (also from inside a callback), or when the asset is not ours.
-`KB_LOG` appends the touch log (below). Strings are keys of `tools/pod_i18n.py` (`Keyboard`, `Keyboards`, `English`, `Chinese (Pinyin)`, `space`, `Search`, `Type here`, 13 languages; key labels are characters
+Flags: `KB_DONE` (2) makes the action key read **Done** (`widget_set_tr_text(kb.go, "Done")` at open; the asset's label stays Search for everyone else, same width, same colours); `KB_LOG` (1) appends the touch log (below). An empty or all-space field on the action key does nothing and the page stays (nothing is closed or called), so a naming caller never gets an empty name. Strings are keys of `tools/pod_i18n.py` (`Keyboard`, `Keyboards`, `English`, `Chinese (Pinyin)`, `space`, `Search`, `Done`, `Type here`, 13 languages; key labels are characters
 and `123 / ABC / #+=`, not translated). Callers need nothing for Chinese: the setting and the language key are the keyboard's.
+
+**Consumers.** The Developer row (below) and Playlists > ... > **New playlist** (`patch/playlists.c` `pl_create`: title the stock `playlist_create`, hint the stock `msg_newplaylists`, `KB_DONE`, no cancel callback; `pl_named` is the done callback and makes the playlist, shows the stock "full" / "exists" boxes from inside the callback and reads the page again: docs/modules/playlists.md "Create"). The text limit there is the keyboard's 63 bytes (stock's edit allowed 127). Test: `name_tests`.
 
 ## The Developer row
 
@@ -145,9 +147,9 @@ equal the emulation's, the UTF-8 log is right. Still open:
    out of the view at the left edge, the divider)?
 4. Does `EVT_POINTER_MOVE` reach `kb_cands` for a finger that stays on it (as the rails do), is a 6 px threshold right, does the row feel right without coasting?
 5. Does the 中 / EN key read well at 18 px, is the pinyin separator key (`'` in shift's place) discoverable, are capitals missed on the Chinese layer? Is space at 120 px enough?
-6. Candidate quality for the user's own text; whether stock's own T9 popups (Wi-Fi password, new playlist) still work after the engine was opened and closed by this page (their init opens the global anew);
+6. Candidate quality for the user's own text; whether stock's own T9 popups (Wi-Fi password) still work after the engine was opened and closed by this page (their init opens the global anew);
    stack use of the engine on the UI thread while typing.
-7. Order of `navigator_back` and the callback when a caller opens a page from `on_done`; whether the hardware Back key's destroy-time `on_cancel` is safe for a caller that opens a window.
+7. Order of `navigator_back` and the callback when a caller opens a page from `on_done` (New playlist shows a stock message box from there and the Playlists page reads its list there: check the box shows over the Playlists page, the new playlist is listed, and the page is not blank or double-loaded); whether the hardware Back key's destroy-time `on_cancel` is safe for a caller that opens a window.
 8. Not done: caps lock, blinking caret, a Search key dim when empty, accents, fullwidth punctuation on the Chinese layer, Korean and Japanese layers, a number-row variant (rejected), coasting on the strip.
 
 ## Pinyin engine
