@@ -1,9 +1,9 @@
 Font sources that are not part of the repo (too large to commit), used by `tools/mod_font.py`
 (the release build, `docs/ui.md`):
 
-- `09_SourceHanSansSC.zip`: Source Han Sans 2.005R, Simplified Chinese OTFs (95 MB, SIL OFL 1.1),
-  https://github.com/adobe-fonts/source-han-sans/releases/download/2.005R/09_SourceHanSansSC.zip
-  SHA-256 `ef7364f7ac2564be1ae9c1d74276de2653fe38b73449070398c4fc0b7e032ff1`.
+- `01_SourceHanSans.ttc.zip`: Source Han Sans 2.005R, every weight and region in one TTC (96 MB, SIL OFL 1.1),
+  https://github.com/adobe-fonts/source-han-sans/releases/download/2.005R/01_SourceHanSans.ttc.zip
+  SHA-256 `a024cf1759494847cd47aae4379bcb3dc530017c709f3f503ee0ed918dd92952`.
   `python3 -I tools/mod_font.py --fetch` downloads and checks it.
 
 The Inter subset is committed (`assets/fonts/Inter-m1plus.ttf`, made by `tools/font_inter.py`).

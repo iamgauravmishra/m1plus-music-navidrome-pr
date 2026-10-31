@@ -75,6 +75,8 @@ extern int stock_home_init_trampoline(void *win, void *ctx);
 /* patch/home.c */
 extern void home_boot(void *win);
 extern int home_off(void);
+/* patch/fontregion.c: the CJK forms of the UI language (default.ttf's regional cmaps), from the boot guard */
+extern void fr_boot(void);
 extern int home_write_atomic(const char *path, const char *tmp,
                              const char *data); /* temp, fsync, rename, directory fsync; 0 = done */
 extern void home_menu_opened(void *win, int settings, int entry);

@@ -73,6 +73,7 @@ def switch_shows(m, i):
 def home_tests(expect, page):
     ALLOWED = {'stock_init_resume', 'access', 'open', 'write', 'fsync', 'close', 'rename', 'unlink', 'read', 'timer_add', 'widget_on'}
     ALLOWED |= {'widget_lookup', 'widget_set_visible', 'widget_set_sensitive'}   # the grid is hidden (after the marker)
+    ALLOWED |= {'locale_info_on'}   # patch/fontregion.c fr_boot: the language and theme change handlers (test/pod/fontregion.py)
     clear_cb, open_cb, fg_cb = PSYMS['hm_clear'], PSYMS.get('hm_open'), PSYMS.get('hm_fg')
 
     # -- the hook itself: two words over home_page_init's PIC prologue, the third and the rest untouched
@@ -94,8 +95,10 @@ def home_tests(expect, page):
     expect(not any(n.startswith('window') or n.startswith('widget_set') or n.startswith('navigator') or n == 'on_backtoplayer_onclick'
                    for n in m.names()), 'no window is opened, shown, hidden or navigated at boot by the guard')   # (this Machine has no widgets)
     expect(m.timers == [(clear_cb, CLEAR_MS), (open_cb, OPEN_FIRST_MS)], f'also the first open timer ({m.timers})')
-    wo = [c for c in m.calls if c[0] == 'widget_on']
+    wo = [c for c in m.calls if c[0] == 'widget_on' and c[1] != m.wm]   # (fr_boot's theme handler is on the window manager)
     expect(wo == [('widget_on', HOME_WIN, 0x12d, fg_cb, HOME_WIN)], f'one Home-foreground handler on the Home window ({wo})')
+    expect([c[1:3] for c in m.calls if c[0] == 'widget_on' and c[1] == m.wm] == [(m.wm, 0x14a)] and len([c for c in m.calls if c[0] == 'locale_info_on']) == 1,
+           'the ready path runs fr_boot: one theme handler on the window manager, one locale handler')
     # a stock init that fails leaves everything stock
     m = Machine(); boot(m, ret=0x10)
     expect(not m.fs and not m.timers and m.names() == ['stock_init_resume'], 'a stock init failure: no marker, no timer, no access')
@@ -115,7 +118,7 @@ def home_tests(expect, page):
     m.call(PSYMS['m1plus_home_init'], a0=HOME_WIN + 0x100, a1=0)
     expect(RUN not in m.fs and not [c for c in m.calls if c[0] == 'open'], 'a re-created Home does not arm again')
     expect([c for c in m.calls if c[0] == 'widget_on'] == [('widget_on', HOME_WIN + 0x100, 0x12d, fg_cb, HOME_WIN + 0x100)],
-           'but the new Home window gets the foreground handler')
+           'but the new Home window gets the foreground handler (and fr_boot registers its change handlers only once)')
     m = Machine(); m.present.add(KILL_SD); boot(m); m.call(clear_cb)
     expect('unlink' not in m.names(), 'the clear timer does nothing when the guard is off')
 

@@ -28,7 +28,7 @@ def resolve(rel):
     return os.path.join(ROOT, rel)
 
 ZIP = resolve('firmware/M1 Plus Firmware V2.1.zip')
-SHS_ZIP = resolve('fonts/09_SourceHanSansSC.zip')
+SHS_ZIP = resolve('fonts/01_SourceHanSans.ttc.zip')
 WORK = os.path.abspath(os.environ.get('M1_WORK') or os.path.join(ROOT, 'work'))
 OUT = os.path.abspath(os.environ.get('M1_OUT') or os.path.join(ROOT, 'out'))
 

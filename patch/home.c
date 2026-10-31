@@ -378,6 +378,7 @@ void home_boot(void *win) {
         hs.home = win;
         hm_add_icon(win); /* after the marker, in the guard's path; a failure adds nothing */
         widget_on(win, EVT_WINDOW_TO_FG, hm_fg, win);
+        fr_boot(); /* the UI language's CJK forms, before the first frame; a mismatch leaves the font as it is */
         if (hs.start) {
             hm_grid(0); /* no grid flash behind the menu */
             hm_schedule(OPEN_FIRST_MS);

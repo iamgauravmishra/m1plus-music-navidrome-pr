@@ -182,6 +182,18 @@ Screen state: exported byte `backlight_status` at `0x97cae4` is pinned in `tools
 | `playsong_id3info` (data, dynsym) | `0xa0d88c` | 0xa9c bytes: path (cache key) `+0`, CUE start `+0x400`, album `+0x404` (0x100), artist `+0x504` (0x100), composer `+0x604` (0x80), title `+0x684` (0x200) |
 | `song_name` / `song_artist` (data, dynsym) | `0xa0513c` (0x200) / `0xa0503c` (0x100) | built by `get_id3info` after the site from the struct: title (else the file name `rec+8`), artist (else `"Unknown"` @`0x7466e8`); read by the Now Playing page (`0x5397a0`), the lock screen (`0x53f77c`), the Home guide page |
 
+## Fonts and locale (patch/fontregion.c, `FONT_PINS` in tools/pod.py; docs/modules/fonts.md "Regional forms")
+
+| What | Address | Evidence |
+|---|---|---|
+| `font_stb_create_ex` | `0x67ee74` | `tk_calloc(1, 0xd4)` @`0x67ef14`: font_t (name[32], match `+0x20` = `0x67d2d4` (name only), get_glyph `+0x24` = `0x680228`, get_vmetrics `+0x28`, shrink_cache `+0x2c`, destroy `+0x30`, desc `+0x34`), then `stbtt_fontinfo` at `+0x38` (data `+0x3c` @`0x67f030`, fontstart `+0x40` @`0x67f038`, index_map `+0x64` @`0x67f758`: cmap + the last record of platform 0 or 3/1, 3/10), glyph cache `+0xb4`, vmetrics `+0xc4..0xcc`, mono `+0xd0` |
+| `stbtt_FindGlyphIndex` | `0x67c3b4` | `lw a3,4(a0)` / `lw t0,0x2c(a0)` @`0x67c3c0`: data and index_map read on every lookup (a0 = font + 0x38, from `font_stb_get_glyph` `move a0,s6` @`0x680300`, after its glyph cache misses) |
+| `font_manager()` / `font_manager_get_font(fm, name, size)` | `0x650ad0` / `0x650dc4` | global `0xa0be30`; lookup by name (`font_manager_lookup` `0x650cc0`), else load and add; one stb object serves every size; `"default"` @`0x74a988` |
+| `font_manager_shrink_cache(fm, keep)` | `0x6510b8` | every font's `glyph_cache_shrink` (`0x6a43b4`); keep 0 frees every glyph; stock calls it with 10 from the main loop (`0x5f27ec`) |
+| `font_manager_unload_all` | `0x650f74` | frees the font objects: the window manager's locale handler (`0x6772dc`) and `widget_set_theme` (@`0x66d550`) call it, so a language or theme change recreates the font |
+| `locale_info()` / `locale_info_on(locale, type, cb, ctx)` | `0x6588b0` / `0x658ba8` | locale_info_t: country[3] `+0`, language[3] `+3` (`locale_info_reload` `"%s_%s"` from `+3`, `+0` @`0x658970`), emitter `+0x10`; `locale_info_on` = `emitter_on(+0x10, 0x122, cb, ctx)`; `locale_info_change` dispatches `EVT_LOCALE_CHANGED` 0x122 (@`0x658a7c`) only when it changes; emitter handlers run newest first |
+| `EVT_THEME_CHANGED` | 0x14a | `widget_set_theme` `0x66d444` (@`0x66d4bc`), dispatched on the window manager after the font unload and theme load (`0x66d618`) |
+
 ## Pinyin engine (patch/keyboard.c Chinese layer, `PINYIN_PINS` in tools/pod.py; docs/modules/keyboard.md "Pinyin engine")
 
 AOSP's PinyinIME (`ime_pinyin::*`, `0x5bf9b0`..`0x5ceb40`) over one global. All the C entry points are `.dynsym` names with PIC prologues `(0x3c1c0044, 0x279c.... , 0x0399e021)` (pinned).

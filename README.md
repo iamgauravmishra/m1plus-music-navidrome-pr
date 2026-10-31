@@ -25,7 +25,7 @@ Follow the [installation guide](docs/install.md) for preparation, updates and re
 <details>
 <summary>Release status</summary>
 
-Status: the release is V2.1pP (pO + a new Pod row glyph: Lucide smartphone body with a screen bar and click wheel; not flashed). Milestones, hardware results and lessons:
+Status: the release is V2.1pQ (pP + CJK closer to PingFang: Source Han Sans Medium, SHS punctuation, Japanese and Traditional Chinese forms by UI language; not flashed). Milestones, hardware results and lessons:
 `docs/history.md`; per-tag details are in git.
 
 </details>

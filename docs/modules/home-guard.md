@@ -34,7 +34,9 @@ main -> application_init -> navigator_to("home_page") -> navigator_to_with_conte
       Home "to foreground" handler (`EVT_WINDOW_TO_FOREGROUND` `0x12d`) on the Home window, and, when the
       setting is M1+ Music, hide the grid content (`app_gesture`: icon pages + bottom strip, `visible=false`
       and `sensitive=false`; after the marker is durable) and schedule the first pod-menu open (10 ms,
-      `OPEN_FIRST_MS`).
+      `OPEN_FIRST_MS`). Before the open, `fr_boot` (`patch/fontregion.c`, docs/modules/fonts.md "Regional forms")
+      points the font at the UI language's CJK cmap and, once a session, registers the language and theme change
+      handlers; any mismatch leaves the font as it is.
 
 ### The grid icon (`hm_add_icon`, `hm_icon_cell`)
 
