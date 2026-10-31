@@ -249,37 +249,31 @@ def run(ctx):
     m.pt = (10, 100, 1)
     expect(m.props.get((m.widgets['label_playlen'], 'sensitive')) is None, 'sensitivity is the asset\'s (both labels insensitive), only visibility is toggled')
 
-    # the elapsed label (label_playtime): stock's "mm:ss" / "hh:mm:ss" without the leading zero, rewritten only when stock wrote it again
-    def elapsed(text, **kw):
-        m = NowMachine(); m.page(); m.src(0); m.pt = (30, 200, 1)
-        h = m.widget('label_playtime'); m.texts[h] = text
-        for k, v in kw.items(): setattr(m, k, v)
+    # the elapsed time: np_elapsed shows "m:ss" from the same query and label_playtime (stock's "01:27", rewritten on stock's tick) hides,
+    # so stock's text is never painted; stock's label is never written
+    def elapsed(pt=(30, 200, 1), both=True):
+        m = NowMachine(); m.page(); m.src(0); m.pt = pt
+        if both: m.widget('np_elapsed')
+        h = m.widget('label_playtime'); m.texts[h] = '00:30'
         m.init(); return m, h
-    pset = lambda m, h: [c[2] for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] == h]
-    cases = {'00:00': '0:00', '00:20': '0:20', '09:59': '9:59', '10:00': '10:00', '59:59': '59:59', '01:02:03': '1:02:03', '10:00:00': '10:00:00',
-             '00:00:20': '0:20', '00:61': '1:01', '125:00': '2:05:00', '0:20': '0:20', '1:02:03': '1:02:03'}
-    got = {}
-    for before in cases:
-        m, h = elapsed(before); got[before] = m.texts[h]
-    expect(got == cases, f'the elapsed text loses its leading zero ({[(k, got[k], v) for k, v in cases.items() if got[k] != v]})')
-    m, h = elapsed('00:20')
-    expect(pset(m, h) == ['0:20'], 'one rewrite of the elapsed label')
-    m.calls = []; m.tick(); m.tick(); expect(not pset(m, h), 'ticks after that leave it alone (no rewrite loop)')
-    m.texts[h] = '00:21'; m.calls = []; m.tick()
-    expect(pset(m, h) == ['0:21'], 'stock writing it again is answered once')
-    m.calls = []; m.tick(); expect(not pset(m, h), 'and not again')
-    m.texts[h] = '00:21'; m.calls = []; m.tick()
-    expect(pset(m, h) == ['0:21'], 'the same stock text written again is answered again, once per write')
-    for odd in ('', '-', 'x0:20', '00:2x', '1:2:3:4', ':20', '00:', '0000:20', '00:20 ', '1' * 30, '00::20'):
-        m, h = elapsed(odd)
-        expect(m.texts[h] == odd and not pset(m, h), f'unexpected text {odd!r} stays as stock wrote it')
-    m, h = elapsed('00:20', get_ret=0x10); expect(m.texts[h] == '00:20' and not pset(m, h), 'a failed read: untouched')
-    m = NowMachine(); m.page(); m.src(0); m.init(); m.tick()
-    expect(not any(c[0] == 'widget_get_text_utf8' for c in m.calls), 'a page without label_playtime: no elapsed handling')
-    m, h = elapsed('00:20', **{}); m.call(PSYMS['np_on_destroy'], a0=WIN, a1=0); m.texts[h] = '00:30'; m.calls = []; m.tick()
-    expect(m.texts[h] == '00:30', 'after the page is gone a stray tick leaves the elapsed label alone')
-    m = NowMachine(); m.page(); m.src(0); h = m.widget('label_playtime'); m.texts[h] = '00:20'; m.present.add(KILL); m.init()
-    expect(m.texts[h] == '00:20', 'the kill switch: stock text')
+    eset = lambda m: [c[2] for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] == m.widgets.get('np_elapsed')]
+    m, h = elapsed()
+    expect(eset(m) == ['0:30'] and m.visible('np_elapsed') == 1 and m.visible('label_playtime') == 0, f'np_elapsed shows 0:30 and stock\'s elapsed hides ({eset(m)})')
+    expect(not any(c[0] == 'widget_set_text_utf8' and c[1] == h for c in m.calls) and m.texts[h] == '00:30', 'stock\'s label is not written')
+    m.calls = []; m.tick(); expect(not eset(m), 'an unchanged second is not set again')
+    for pos, want in ((87, '1:27'), (600, '10:00'), (3723, '1:02:03')):
+        m.pt = (pos, 7200, 1); m.calls = []; m.tick(); expect(eset(m) == [want], f'{pos} s reads {want} ({eset(m)})')
+    m.pt = (9000, 7200, 1); m.calls = []; m.tick(); expect(eset(m) == ['2:00:00'], 'a position past the length reads the length')
+    m.pt = (10, 100, -1); m.tick(); expect(m.visible('np_elapsed') == 0 and m.visible('label_playtime') == 1, 'a failed query: stock\'s elapsed')
+    m.pt = (10, 100, 1); m.tick(); expect(m.visible('np_elapsed') == 1 and m.visible('label_playtime') == 0, 'and ours comes back')
+    m, h = elapsed(both=False)
+    expect(m.props.get((h, 'visible')) is None and m.visible('np_remaining') == 1, 'a page without np_elapsed: stock\'s elapsed untouched, the remaining time still ours')
+    m = NowMachine(); m.page(); m.src(0); m.pt = (30, 200, 1); m.widget('np_elapsed'); m.init()
+    expect(not eset(m) and m.visible('np_elapsed') is None, 'a page without label_playtime: np_elapsed stays hidden')
+    m, h = elapsed(); m.call(PSYMS['np_on_destroy'], a0=WIN, a1=0); m.pt = (40, 200, 1); m.calls = []; m.tick()
+    expect(not eset(m), 'after the page is gone a stray tick writes nothing')
+    m = NowMachine(); m.page(); m.src(0); m.pt = (30, 200, 1); m.widget('np_elapsed'); h = m.widget('label_playtime'); m.present.add(KILL); m.init()
+    expect(not eset(m) and m.props.get((h, 'visible')) is None, 'the kill switch: stock\'s elapsed')
 
     # ------------------------------------------------------------------ the info page's lines (np_info)
     from awtk_text import Ttf, StbText
@@ -725,12 +719,12 @@ def run(ctx):
     expect(_w20('Hello, World') < mn.TEXT_W and _w20('A' * 40) > mn.TEXT_W and _S(_t, 20).layout('Hg')[1] > 0, 'the 20 px title measures with the pinned font: a short title fits the 176 px column, a long one is cut (ellipsis)')
     expect(rect('btn_fav') == (204, 306, 44, 44) and rect('btn_more') == (248, 306, 44, 44), 'star and More: 44x44 targets, 4 px apart, right edge on the 28 px margin')
     expect(rect('slider_play') == (28, 348, 264, 30) and f('slider_play').get('bar_size') == '6' and f('slider_play').get('style:normal:icon') == '', 'progress: the stock 30 px target, a 6 px bar, no thumb')
-    expect(rect('label_playtime')[:2] == (28, mn.TIMES_Y) and rect('np_remaining') == rect('label_playlen') and rect('label_playlen')[0] + rect('label_playlen')[2] == 292,
+    expect(rect('label_playtime')[:2] == (28, mn.TIMES_Y) and rect('np_remaining') == rect('label_playlen') and rect('np_elapsed') == rect('label_playtime') and rect('label_playlen')[0] + rect('label_playlen')[2] == 292,
            'times under the bar on the margins; the remaining time sits on the total')
-    expect(all(f(n).get(f'style:{s}:font_size') == '14' for n in ('label_playtime', 'label_playlen', 'np_remaining') for s in ('normal', 'disable', 'focused')), 'times are 14 px in every state')
+    expect(all(f(n).get(f'style:{s}:font_size') == '14' for n in ('label_playtime', 'label_playlen', 'np_remaining', 'np_elapsed') for s in ('normal', 'disable', 'focused')), 'times are 14 px in every state')
     expect(f('view_buttons').y == 392 and f('view_buttons').y + f('view_buttons').h == 450, 'the transport row is 392..450')
-    expect(f('np_remaining').get('visible') == 'false' and all(f(n).get('sensitive') == 'false' for n in ('np_remaining', 'label_playlen', 'label_playtime', 'img_np_tint')),
-           'np_remaining starts hidden; the labels and the gradient are insensitive')
+    expect(all(f(n).get('visible') == 'false' for n in ('np_remaining', 'np_elapsed')) and all(f(n).get('sensitive') == 'false' for n in ('np_remaining', 'np_elapsed', 'label_playlen', 'label_playtime', 'img_np_tint')),
+           'np_remaining and np_elapsed start hidden; the labels and the gradient are insensitive')
     for n in ('label_index', 'img_hr'):
         expect(rect(n)[2:] == (0, 0) and f(n).get('visible') == 'false' and f(n).get('sensitive') == 'false', f'{n} is kept, hidden and insensitive at 0x0')
     expect(f('label_album') in f('view_info').children and 'label_album' not in [c.name for c in f('view').children], 'the album line is on the info page, not under the art')

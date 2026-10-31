@@ -13,9 +13,9 @@
  *     into a dark, a little desaturated tone that is set as the window's bg_color (widget_set_style); a static
  *     gradient image over it (ui/playing_page.bin, np_tint.png) fades it to black towards the bottom. No cover, or a
  *     source that is not a JPEG file: the neutral dark tone.
- *   - the remaining time: label_playlen carries the total (stock rewrites it on every tick); np_remaining, a label
- *     of the asset, shows "-mm:ss" from get_playtimeandlength while that call gives a length, and label_playlen
- *     shows again whenever it does not.
+ *   - the times: label_playtime and label_playlen carry stock's elapsed and total (stock rewrites both on every tick);
+ *     np_elapsed and np_remaining, labels of the asset, show "m:ss" and "-m:ss" from get_playtimeandlength while that
+ *     call gives a length, and stock's two show again whenever it does not.
  *   - the info page's lines (np_info): rewritten as "Label: value" with spaced units, only when stock wrote them anew.
  * EXPERIMENTAL, the status bar: while the page is in front its bg_color is the page's colour on the first row (np_bar_color),
  * set from np_set_color; EVT_WINDOW_TO_BACKGROUND, the destroy, a replaced page and the tick's top-window check put the stock
@@ -35,15 +35,15 @@
 
 static struct {
     void *win, *rem, *tot; /* the window, np_remaining (ours), label_playlen (stock) */
-    void *pt; /* label_playtime (stock's elapsed time), 0 if the page lacks it */
-    unsigned pdone; /* the hash of the text label_playtime held after our last look */
+    void *el, *pt; /* np_elapsed (ours), label_playtime (stock's elapsed time); both 0 if the page lacks either */
     unsigned timer; /* the repeating np_tick timer */
     unsigned interval; /* interval last accepted by timer_modify */
     unsigned key; /* what the colour was last made from: 0 nothing yet, NP_KEY_NEUTRAL, or a file's hash */
     unsigned sig; /* np_cover_sig at the last full hash: while it is unchanged the file is not hashed again */
     unsigned color; /* the window's bg_color as 0x00BBGGRR (what the corners are painted from) */
     int shown; /* the seconds np_remaining shows, -1 none */
-    int own; /* 1: np_remaining is the visible label, 0: label_playlen is */
+    int eshown; /* the seconds np_elapsed shows, -1 none */
+    int own; /* 1: our times are the visible labels, 0: stock's are */
     int fg; /* 1 from the page's start and EVT_WINDOW_TO_FOREGROUND, 0 after EVT_WINDOW_TO_BACKGROUND */
     int barok; /* 1: both window events are registered, so the status bar may be tinted (else it never is) */
     int bar; /* 1: the status bar's bg_color is ours (np_bar_color) and must go back to black */
@@ -74,28 +74,6 @@ __attribute__((noinline)) void np_format_clock(char *out, unsigned size, int sec
 /* "-m:ss", or "-h:mm:ss" from an hour on: the seconds left. A position past the end shows -0:00. */
 __attribute__((noinline)) void np_format_remaining(char *out, unsigned size, int pos, int len) {
     np_format_clock(out, size, len - pos, 1);
-}
-
-/* Stock's elapsed text ("mm:ss" or "hh:mm:ss", digits and colons only, at most 3 digits a group) as seconds; -1 when it is
- * anything else (the label is then left as stock wrote it). */
-__attribute__((noinline)) int np_parse_clock(const char *s) {
-    int groups = 0, val[3] = {0, 0, 0}, digits = 0;
-    if (!*s) return -1;
-    for (;; ++s) {
-        if (*s >= '0' && *s <= '9') {
-            if (++digits > 3) return -1;
-            val[groups] = val[groups] * 10 + (*s - '0');
-        } else if (*s == ':' || !*s) {
-            if (!digits) return -1;
-            ++groups, digits = 0;
-            if (!*s) break;
-            if (groups == 3) return -1;
-        } else
-            return -1;
-    }
-    if (groups == 2) return val[0] * 60 + val[1];
-    if (groups == 3) return val[0] * 3600 + val[1] * 60 + val[2];
-    return -1;
 }
 
 /* The gradient's alpha on window row y (np_tint.png: black, NP_ALPHA_TOP at the first row to NP_ALPHA_BOTTOM at the last). */
@@ -243,12 +221,18 @@ static void np_cover(void) {
     }
 }
 
-/* np_remaining is the visible label while the player gives a length, label_playlen (stock's total) otherwise. */
+/* np_elapsed and np_remaining are the visible labels while the player gives a length, label_playtime and label_playlen
+ * (stock's) otherwise. Stock rewrites its two on its own tick ("01:27"), so ours are separate labels and not rewrites of
+ * stock's text, which a paint between the two timers would show. */
 static void np_label(int own) {
     if (own == np.own) return;
     np.own = own;
-    widget_set_visible(np.rem, own, 0); /* both are insensitive in the asset, so hidden is also untouchable */
+    widget_set_visible(np.rem, own, 0); /* all four are insensitive in the asset, so hidden is also untouchable */
     widget_set_visible(np.tot, !own, 0);
+    if (np.el) {
+        widget_set_visible(np.el, own, 0);
+        widget_set_visible(np.pt, !own, 0);
+    }
 }
 
 static void np_time(void) {
@@ -266,31 +250,12 @@ static void np_time(void) {
         widget_set_text_utf8(np.rem, text);
         np.shown = len - pos;
     }
+    if (np.el && np.eshown != pos) {
+        np_format_clock(text, sizeof text, pos, 0);
+        widget_set_text_utf8(np.el, text);
+        np.eshown = pos;
+    }
     np_label(1);
-}
-
-/* The elapsed label (label_playtime, stock rewrites it on its own tick): reformatted without the leading zero, only when its
- * text is not the one we left (np.pdone: the hash of what it held after our last look), so there is no rewrite loop. A text
- * that is not a clock, or that was cut short, is left as stock wrote it. */
-unsigned np_hash(const char *s);
-static void np_elapsed(void) {
-    char s[24], out[24];
-    int secs;
-    unsigned n, h;
-    if (!np.pt || widget_get_text_utf8(np.pt, s, sizeof s) != RET_OK) return;
-    for (n = 0; n < sizeof s && s[n]; ++n) {
-    }
-    if (!n || n >= sizeof s - 1) return;
-    h = np_hash(s);
-    if (h == np.pdone) return;
-    np.pdone = h; /* whatever happens below, this text is not looked at again */
-    secs = np_parse_clock(s);
-    if (secs < 0) return;
-    np_format_clock(out, sizeof out, secs, 0);
-    for (n = 0; out[n] == s[n] && s[n]; ++n) {
-    }
-    if (out[n] == s[n]) return; /* already as wanted */
-    if (widget_set_text_utf8(np.pt, out) == RET_OK) np.pdone = np_hash(out);
 }
 
 /* The info page's lines. Stock writes them when the track changes (show_player_face 0x53bab4 -> the fill 0x539c40, only
@@ -410,7 +375,6 @@ static void np_work(void) {
     if (!pod_screen_lit()) return;
     np_cover();
     np_time();
-    np_elapsed();
     np_info();
 }
 
@@ -467,8 +431,10 @@ static void np_start(void *win) {
     np.win = win;
     np.rem = widget_lookup(win, "np_remaining", 1);
     np.tot = widget_lookup(win, "label_playlen", 1);
+    np.el = widget_lookup(win, "np_elapsed", 1);
     np.pt = widget_lookup(win, "label_playtime", 1);
-    np.shown = -1;
+    if (!np.el || !np.pt) np.el = np.pt = (void *)0; /* only the pair is swapped */
+    np.shown = np.eshown = -1;
     for (n = 0; n < NP_INFO_N; ++n) np.info[n] = widget_lookup(win, np_info_names[n], 1);
     np.color = NP_NEUTRAL & 0xffffff; /* the asset's window colour */
     if (!widget_on(win, EVT_DESTROY, np_on_destroy, win)) {

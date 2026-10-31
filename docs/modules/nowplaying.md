@@ -9,10 +9,10 @@ cover's rounded corners and a remaining-time label from one hook and one page ti
 `{queue, index, class, mode}`; it registers the page's `EVT_*` handlers with `widget_on`, starts the queue with
 `start_player` when the context's class is not `0xff`, runs `playing_choiceshowpage` and `player_timer_start`, returns 0, or `0x10` for a null window).
 The hook calls it through `stock_playing_init_trampoline` and returns its result; with `RET_OK`, a window and no
-`/mnt/mmc/m1plus-off`, `np_start` runs: it finds `np_remaining` and `label_playlen` (a missing one turns the time off, not the tint),
+`/mnt/mmc/m1plus-off`, `np_start` runs: it finds `np_remaining` and `label_playlen` (a missing one turns the times off, not the tint), `np_elapsed` and `label_playtime`,
 registers `EVT_DESTROY` on the window (`np_on_destroy`, context the window), adds a **repeating timer** (500 ms lit, 1000 ms dark; `np_tick`, answering
 `RET_REPEAT` 8 as the stock page timer `0x53cf48` does; a refused timer or `widget_on` leaves the page stock), registers
-`np_on_art_paint` on `img_playcover` (`EVT_AFTER_PAINT`) and runs one tick at once. State is one 176-byte `.scratch` struct
+`np_on_art_paint` on `img_playcover` (`EVT_AFTER_PAINT`) and runs one tick at once. State is one 256-byte `.scratch` struct
 (`np`): the window, the labels, the timer id, the cover key, the window colour, the seconds shown, which label is visible and the
 12x12 corner table. A page built over a live one removes the old timer first; a destroy whose context is not the current window
 (an earlier page's) does nothing; the current one removes the timer and zeroes the state, after which a stray tick returns `RET_OK`
@@ -87,18 +87,15 @@ a pixel, computed once at the page's start; the Python model `corner_alpha` equa
 `canvas_fill_rect(x, y, 1, 1)` that the stock canvas blends, so the corner is anti-aliased over the art. About 160 fills, and only
 when the cover widget repaints (page open, track change; not for the slider, the times or a scrolling title). Without the hook the corners are square.
 
-**The remaining time** (`np_time`): `get_playtimeandlength(&pos, &len)` (`0x4e015c`, the call the stock tick makes at `0x53a8fc`: seconds;
+**The times** (`np_time`): `get_playtimeandlength(&pos, &len)` (`0x4e015c`, the call the stock tick makes at `0x53a8fc`: seconds;
 returns 1, or -1 for an index outside the queue). With 1 and `len > 0`, `np_format_remaining` writes `-m:ss` (`-h:mm:ss` from 3600 s;
-no leading zero, as Apple Music; `np_format_clock`; a position past the length clamps to `-0:00`) into `np_remaining` only when the seconds
-changed and shows it while hiding `label_playlen` (`widget_set_visible`; both labels are insensitive in the asset, so hide = invisible +
-insensitive); otherwise `label_playlen` is shown again and `np_remaining` hidden. demo keeps rewriting `label_playlen` on its own tick, which is why
-the swap is two labels and not one rewritten text (two timers 500 ms apart in phase would flash the total).
-
-**The elapsed time** (`np_elapsed`, same tick): `label_playtime` is stock's, rewritten by the stock page timer as `mm:ss` / `hh:mm:ss`. Looked up at the start
-(`np.pt`); each tick its text is read (`widget_get_text_utf8`, 24 bytes; a text that may be cut is left alone) and its hash compared with `np.pdone`, the hash
-of what the label held after our last look. Only a different text is parsed (`np_parse_clock`: two or three groups of one to three digits, nothing else; otherwise
-stock's text stays) and rewritten with `np_format_clock` (`0:20`, `10:00`, `1:02:03`; a leading `00:` hour group goes), the hash stored first so nothing is
-retried. Both stock's page timer and ours are 500 ms timers of the same loop, so stock's text is normally never painted between its write and our rewrite.
+no leading zero, as Apple Music; `np_format_clock`; a position past the length clamps to `-0:00`) into `np_remaining`, and `np_format_clock`
+writes `m:ss` (`0:20`, `10:00`, `1:02:03`) into `np_elapsed`, each only when its seconds changed; both show while `label_playlen` and
+`label_playtime` hide (`widget_set_visible`; all four labels are insensitive in the asset, so hide = invisible + insensitive); otherwise
+stock's two show again and ours hide. `np_elapsed` is swapped only when the page has both it and `label_playtime`. demo keeps rewriting
+its two labels on its own tick (the elapsed one as `mm:ss`), which is why the swap is four labels and not rewritten texts: an earlier build
+rewrote `label_playtime` after stock (its text hashed so as not to loop), and on the device the label flickered between `01:27` and `1:27`,
+because stock's text was painted between stock's write and our 500 ms tick.
 
 **The info page** (`np_info`, same tick). Stock fills it when the track changes (`show_player_face` `0x53bab4`, which the page timer
 calls every tick but which fills only while its changed flags `0xa05a62/3` are set; the fill is `0x539c40`): `label_info`
@@ -199,14 +196,14 @@ bottom (V2.1nL: 22 / 13 / 17 / 11). `mod_nowplaying.py` places every box from th
   a missing value is stock's own "Unknown" in the app's language.
 - **Not on the art page.** The album line (`label_album` is on the info page with genre, year, size, location), the quality
   line (`label_info`, the info page's first line), the "3/12" index (`label_index`, hidden at 0x0 like `img_hr`, which demo toggles
-  for Hi-Res tracks), the Hi-Res tag. Every widget the app looks up keeps its name; the new ones are `img_np_tint` and
-  `np_remaining`. Lyrics (page 2) and info (page 3) start under the grabber (y 44) and end above the dots (y 288); the slide
+  for Hi-Res tracks), the Hi-Res tag. Every widget the app looks up keeps its name; the new ones are `img_np_tint`,
+  `np_remaining` and `np_elapsed`. Lyrics (page 2) and info (page 3) start under the grabber (y 44) and end above the dots (y 288); the slide
   pages are 352 px high so page 1 holds the title and artist.
-- **Remaining time.** demo rewrites `label_playlen` with the track's length on every 500 ms tick. `np_remaining` (an insensitive
-  label on the same rectangle, hidden in the asset) shows `-m:ss` (`-h:mm:ss` from an hour on; no leading zero, the elapsed label is
-  reformatted the same way: `0:20`, `1:02:03`) from `get_playtimeandlength` (the call the stock tick makes) while the player reports a length; the payload swaps
-  the two labels' visibility, and `label_playlen` shows again whenever the player does not. A position past the end reads
-  `-0:00`. Both labels are insensitive in the asset, so a hidden one never takes a touch.
+- **Times.** demo rewrites `label_playtime` (`mm:ss`) and `label_playlen` (the length) on every 500 ms tick. `np_elapsed` and
+  `np_remaining` (insensitive labels on the same rectangles, hidden in the asset) show `m:ss` and `-m:ss` (`h:mm:ss` from an hour on; no
+  leading zero) from `get_playtimeandlength` (the call the stock tick makes) while the player reports a length; the payload swaps the
+  labels' visibility, and stock's two show again whenever the player does not. A position past the end reads `-0:00`. All four labels
+  are insensitive in the asset, so a hidden one never takes a touch.
 - **A-B repeat markers.** demo moves `img_repeata` / `img_repeatb` to `x = 12 + pos * 296 / len`, `y = 364` (the bar's centre
   357 + 7) in `getx_by_playtime` (`0x53b824`, `0x53b8f0`; only from this page's timer): five pinned `addiu` immediates make it
   `x = 28 + pos * 264 / len`, `y = 370` (centre 363 + 7). `mod_nowplaying.marker_edits` lists them with their stock words;
