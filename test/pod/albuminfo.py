@@ -491,6 +491,45 @@ def tint_tests(expect):
             ok &= all(geo(s_ui, n) == a and geo(b_ui, n) == b for n, (a, b) in want.items())
     expect(ok,
            'Settings > Equalizer and the folder picker (both themes): Now Playing (img_btn_style) at (260, 0, 60, 50); the picker\'s select-all on the 214 slot, 46 wide')
+    # every stock navbar of a ui file (Settings-type pages, both themes) is the glass one: Back's disc 8 .. 50 (centre 0 + 50 / 2 + 4 = 29, the
+    # Pod navbar's), Now Playing's disc on 290, the title from 58 ending where it did or before the bar's next widget; the Bluetooth receiver stays stock
+    import glob as _glob
+    bad, bars = [], 0
+    for theme in mod_lists.THEMES:
+        for p in sorted(_glob.glob(_os.path.join(stock_ui, theme, 'raw/ui', '**', '*.bin'), recursive=True)):
+            rel = _os.path.relpath(p, _os.path.join(stock_ui, theme, 'raw/ui'))
+            s_ui = awtk_ui.parse(open(p, 'rb').read())
+            b_ui = awtk_ui.parse(open(_os.path.join(WORK, 'rootfs', 'release/assets', theme, 'raw/ui', rel), 'rb').read())
+            for sb, bb in zip(s_ui.walk(), b_ui.walk()):
+                back = next((c for c in sb.children if c.name == 'btn_return' and (c.x, c.y, c.w, c.h) == (0, 0, 80, 50) and c.get('style:normal:icon') == 'return'), None)
+                if back is None: continue
+                bback = next(c for c in bb.children if c.name == 'btn_return')
+                if rel == 'bluetoothrecv_page.bin':
+                    if bback.get('style:normal:icon') != 'return': bad.append((theme, rel, 'changed'))
+                    continue
+                bars += 1
+                ok = ((bback.x, bback.y, bback.w, bback.h) == (0, 0, 80, 50) and bback.get('style') == 'navbar_btnreturn_style'
+                      and [bback.get(f'style:{s}:icon') for s in ('normal', 'pressed')] == ['ah_nav_back', 'ah_nav_back_down'] and bback.get('style:normal:x_offset') == '4')
+                for sc, bc in zip(sb.children, bb.children):
+                    if bc.name == 'btn_backtoplayer' and (bc.x, bc.w) == (260, 60) and bc.get('style') == 'img_btn_style': ok &= bc.get('style:normal:icon') == 'ah_nav_np' and (bc.x, bc.w) == (260, 60)
+                    if sc.name == 'label_title' and sc.x == 36:
+                        nxt = min([c.x for c in bb.children if c.y < 50 and c.x > 36 and c.name not in ('btn_return', 'label_title')] + [260])
+                        ok &= bc.x == 58 and bc.x + bc.w == min(sc.x + sc.w, nxt)
+                if not ok: bad.append((theme, rel))
+    expect(bars >= 50 and not bad, f'the Settings-type pages\' {bars} stock navbars: glass Back (x_offset 4, the disc at 8 .. 50) and Now Playing disc, the title from 58; Bluetooth receiver untouched ({bad})')
+    rel = 'usbmode_page.bin'   # the USB mode page (default theme only): Back and DAC settings on the navbar's row, as glass discs
+    s_ui = awtk_ui.parse(open(_os.path.join(stock_ui, 'default', 'raw/ui', rel), 'rb').read())
+    b_ui = awtk_ui.parse(open(_os.path.join(WORK, 'rootfs', 'release/assets', 'default', 'raw/ui', rel), 'rb').read())
+    back, dset = b_ui.find('btn_return'), b_ui.find('btn_dacset')
+    icons = lambda w: [w.get(f'style:{s}:icon') for s in ('normal', 'over', 'pressed')]
+    expect(not _os.path.exists(_os.path.join(stock_ui, 'theme1', 'raw/ui', rel))
+           and (geo(s_ui, 'btn_return'), geo(s_ui, 'btn_dacset')) == ((9, 5, 50, 60), (274, 0, 46, 53))
+           and (geo(b_ui, 'btn_return'), geo(b_ui, 'btn_dacset')) == ((7, 0, 44, 50), (260, 0, 60, 50))
+           and icons(back) == ['ah_nav_back', 'ah_nav_back', 'ah_nav_back_down'] and icons(dset) == ['ah_nav_set', 'ah_nav_set', 'ah_nav_set_down']
+           and back.get('style') == dset.get('style') == 'img_btn_style' and not [k for k, _ in dset.props if k.startswith('style:') and 'icon' not in k]
+           and geo(b_ui, 'img_daccharge') == (236, 10, 20, 30) and 10 + 30 // 2 == 4 + mod_icons.GLASS_H // 2
+           and [(w.type, w.name) for w in s_ui.walk()] == [(w.type, w.name) for w in b_ui.walk()],
+           'the USB mode page: Back the glass disc on the Pod navbar\'s Back (x 8 .. 50), DAC settings a glass disc on Now Playing\'s slot (glyph 290), no black fill; the charge glyph on their row (y 25); no widget added or renamed')
     tint_png = Image.open(_os.path.join(raw, 'images', 'xx', 'ah_tint.png')).convert('RGBA')
     expect(tint_png.size == (320, O['AH_WIN_H']) and all(tint_png.getpixel((x, y)) == (0, 0, 0, mod_icons.ah_tint_alpha(y)) for y in range(O['AH_WIN_H']) for x in (0, 319))
            and tint_png.getpixel((5, 0))[3] == O['AH_TINT_A_TOP'] and tint_png.getpixel((5, O['AH_TINT_ROWS'] - 1))[3] == O['AH_TINT_A_BOT'] == 200 and tint_png.getpixel((5, 449))[3] == 200
@@ -841,7 +880,7 @@ NAV_CLASSES = {'Albums list / grid / Cover Flow 0xf003 -> 0xff10': 0xff10, 'arti
                'raw 0xf003': 0xf003, 'raw 0xff01': 0xff01, 'sibling branch 0xff09': 0xff09}   # (0xf001, the Songs class' branch with search and sort, is never albuminfo's)
 # the window x each style's glyph must land on: the Pod navbar's right-hand glyph columns (191 / 237 / 290), the select mode's buttons centred in their stock
 # 60 px slots (add 116, delete 191; cancel's glass ends where Now Playing's does), the unselect toggle's disc where Back's is (8 .. 50: centre 29)
-NAV_GLYPH_X = {'search_style': 191, 'navbar_btnmulselect_style': 237, 'navbar_btnbackplayer_style': 290, 'navbar_btnadd_style': 146,
+NAV_GLYPH_X = {'search_style': 198, 'navbar_btnmulselect_style': 244, 'navbar_btnbackplayer_style': 290, 'navbar_btnadd_style': 146,
                'navbar_btndel_style': 221, 'navbar_btncancel_style': 290, 'navbar_btnunselect_style': 29, 'navbar_btnselected_style': 29, 'navbar_btnreturn_style': 29}
 
 
@@ -886,7 +925,7 @@ def nav_tests(expect):
             if icon_at == 1:   # Back: icon_at left, the icon centred in a h x h square (x_offset +4: the Pod navbar's disc columns)
                 gx = x + h // 2 + off
             else:   # canvas_draw_icon_in_rect: the image at its own size on the rect's centre
-                left = x + w // 2 - iw // 2 if (w - iw) % 2 == 0 and iw - w in (0, 4) else None
+                left = x + w // 2 - iw // 2 if (w - iw) % 2 == 0 and iw - w in (0, 4, 2 * mod_icons.NAV_SHIFT) else None
                 gx = None if left is None else left + cx
                 if left is not None: glass[style] = (left + x0, left + x1)
             if gx != NAV_GLYPH_X[style] or h < mod_icons.GLASS_H or y + h > band_h or (iw is not None and icon_at != 1 and x + w // 2 - iw // 2 + x1 > 320):

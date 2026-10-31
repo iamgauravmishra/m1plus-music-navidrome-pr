@@ -42,12 +42,12 @@ unselect (0, 50), add / delete / cancel (116 / 191 / 268, 60 wide); `0x524e4c` (
 handler `0x5267f0`; also `album_page_init`, an artist's albums) makes the same without search, 50 px high (Back at x 0), and none of multi-select / Now Playing when
 `songerinfoflag` (`0xa04737`) is set. The page theme (`mod_ipodrows.NAV_STYLES`, both themes; a page theme only, so the artist's albums page keeps its look) overrides the
 nine navbar button styles: each state shows ONE glass piece (`mod_icons.AH_NAV_PIECES`, 42 high), centred in the real button, so the glyph centres are the Pod navbar's
-191 / 237 / 290, select mode's add / delete 146 / 221 and cancel 290, the unselect toggle 29; Back keeps its stock rule (`icon_at` left in a button-high square) with
+198 / 244 / 290 (each slot's glyph 7 px right of its centre, `navbar.md` "Even spacing"), select mode's add / delete 146 / 221 and cancel 290, the unselect toggle 29; Back keeps its stock rule (`icon_at` left in a button-high square) with
 `x_offset` +4, so the 42 px disc is at x 8 .. 50 from either builder. The search style's opaque black fill is gone on this page. `test/pod/albuminfo.py` `nav_tests` runs
 both builders in the emulator for every select state, `songerinfoflag` and class and checks every button against these numbers; the hit-test tests use the built asset and
 the emulated buttons.
-**The capsule.** Multi-select and Now Playing are ONE glass capsule, x 216 .. 311 (`mod_icons.AH_CAPSULE`, the Artists page's columns), as the right-hand actions on our
-own pages (`navbar.md`); search, which only the toggle builder makes (after a select cycle), is a lone disc beside it (170 .. 212, the usual 4 px gap); the select mode's
+**The capsule.** Multi-select and Now Playing are ONE glass capsule, x 223 .. 311 (`mod_icons.AH_CAPSULE`, the Artists page's columns), as the right-hand actions on our
+own pages (`navbar.md`); search, which only the toggle builder makes (after a select cycle), is a lone disc beside it (177 .. 219, the usual 4 px gap); the select mode's
 buttons are discs (the stock buttons are 75 px apart). It is images only, no builder changes: both builders make multi-select and Now Playing together or neither, so they
 are always the left and right cap, whichever builder ran. The builders leave 2 px between them (multi-select 214 .. 260, Now Playing 262 .. 322): multi-select's image is
 50 px, 4 wider than its button, and AWTK draws an icon at its own size on the rect's centre (`canvas_draw_icon_in_rect` `0x648f90` takes only the centre, then

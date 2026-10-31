@@ -903,13 +903,13 @@ def solid_pill(w, h, rgb):
     im = Image.new('RGBA', (w, h), rgb + (255,)); im.putalpha(m.resize((w, h), Image.BOX)); return im
 
 # Glass navbar buttons (docs/modules/navbar.md): every glass piece is one image, cut to the REAL button it sits in (main's slots: the Pod pages' right-hand
-# buttons 46 wide at x 122 / 168 / 214, Now Playing 60 wide at 260, glyph centres 145 / 191 / 237 / 290), drawn by the button's `icon` centred in it. A
+# buttons 46 wide at x 122 / 168 / 214, Now Playing 60 wide at 260, glyph centres 152 / 198 / 244 / 290 with NAV_SHIFT below), drawn by the button's `icon` centred in it. A
 # lone button is a disc (glass_image of the mini bar's pane, the white glyph on it); the Pod pages' buttons that abut (Cover Flow / "..." | toggle | Now
 # Playing) are slices of ONE capsule (r = 21) from 21 px left of the first glyph to 21 px right of Now Playing's, so the join is seamless (the slices are
 # cut from one pane, the straight parts of a pane being identical). Pressed: a disc is the lighter glass; a capsule slice keeps the rest glass (the
 # capsule stays one pane) with a round highlight on its glyph (NAV_PRESS_D, concentric with the cap ends: every glyph is 21 px from a cap's edge).
 GLASS_H, GLASS_GLYPH = 42, 20                # the glass is 42 px high (y 4 .. 46 in a 50 px bar), the glyph's ink box 20 px (the navbar's NAV_K size)
-NAV_SLOT_W, NAV_PLAY_W, NAV_CAPSULE_W = 46, 60, 141   # patch/offsets.inc NAV_VIEW_W; Now Playing's button; the Albums capsule 170 .. 311 (the Artists one starts at 216)
+NAV_SLOT_W, NAV_PLAY_W, NAV_CAPSULE_W = 46, 60, 141   # patch/offsets.inc NAV_VIEW_W; Now Playing's button; the pane of the capsule's pieces (any width: the Albums capsule is 177 .. 311, the Artists one 223 .. 311)
 NAV_PRESS_D, NAV_PRESS_ALPHA = 36, 0.14      # a pressed slice's highlight: a white disc 36 px across (3 px of glass above and below it), 14 % opaque
 
 def glass_piece(w, x0, x1, glyph, glyph_cx, pressed=False, cap=None, h=GLASS_H):
@@ -928,9 +928,16 @@ def glass_piece(w, x0, x1, glyph, glyph_cx, pressed=False, cap=None, h=GLASS_H):
         out.alpha_composite(g, (glyph_cx - g.width // 2, (h - g.height) // 2))
     return out
 
+# The slots are 46 apart but Now Playing's glyph is 53 right of the last slot's (its 60 px button keeps stock's glyph at 290), so every slot's glass and
+# glyph is drawn NAV_SHIFT right of its button: the glyphs 152 / 198 / 244 / 290, 46 apart. The button (the touch) stays on main's slot; its image is
+# NAV_SHIFT_W wide, centred on it (AWTK draws an icon centred at its own size), 2 x NAV_SHIFT wider, the content in its right NAV_SLOT_W columns.
+NAV_SHIFT = 7
+NAV_SHIFT_W = NAV_SLOT_W + 2 * NAV_SHIFT
 # the capsule's pieces in the Pod pages' 46 px slots and Now Playing's 60 px button: position -> (w, glass columns, glyph centre, capsule columns)
-CAPSULE_PIECES = {'left': (NAV_SLOT_W, 2, 46, 23, (2, 2 + NAV_CAPSULE_W)), 'middle': (NAV_SLOT_W, 0, 46, 23, (-44, NAV_CAPSULE_W - 44)),
-                  'right': (NAV_PLAY_W, 0, 51, 30, (-90, 51)), 'only': (NAV_SLOT_W, 2, 44, 23, None)}
+S2 = 2 * NAV_SHIFT
+CAPSULE_PIECES = {'left': (NAV_SHIFT_W, S2 + 2, S2 + 46, S2 + 23, (S2 + 2, S2 + 2 + NAV_CAPSULE_W)),
+                  'middle': (NAV_SHIFT_W, S2, S2 + 46, S2 + 23, (S2 - 44, S2 + NAV_CAPSULE_W - 44)),
+                  'right': (NAV_PLAY_W, NAV_SHIFT, 51, 30, (-90, 51)), 'only': (NAV_SHIFT_W, S2 + 2, S2 + 44, S2 + 23, None)}
 
 def capsule_piece(position, glyph, pressed=False):
     w, x0, x1, cx, cap = CAPSULE_PIECES[position]
@@ -938,17 +945,19 @@ def capsule_piece(position, glyph, pressed=False):
 
 # image -> (width, glass columns, glyph centre, glyph, capsule columns or None): the lone discs and the album page's capsule. Back (the Pod pages' 44 px
 # button centres it: x 8 .. 50; the album page draws it in the stock Back button's icon square), Now Playing's disc (Pod pages, button x 260: glass
-# 269 .. 311), the album page's pieces in the stock builders' buttons (the glyph centres on the Pod's: search 191 in its 46 px slot at 168, a disc;
-# multi-select 237 at 214 and Now Playing 290 in its 60 px button at 262, the capsule AH_CAPSULE; the select mode's add / delete 146 / 221 centred in
+# 269 .. 311), the album page's pieces in the stock builders' buttons (the glyph centres on the Pod's: search 198 in its 46 px slot at 168, a disc;
+# multi-select 244 at 214 and Now Playing 290 in its 60 px button at 262, the capsule AH_CAPSULE; the select mode's add / delete 146 / 221 centred in
 # their 60 px buttons at 116 / 191, cancel 290 in the one at 268, the all / unselect toggle 29 in its 50 px one at 0). Both builders make multi-select
 # and Now Playing together (or neither), so they are always the capsule's two caps; search (the toggle builder's only) stays a disc beside it. The
 # builders leave 2 px between them (260 .. 262): multi-select's image is 4 px wider than its button, and AWTK draws an icon centred at its own size
 # (canvas_draw_icon_in_rect 0x648f90: the rect's centre only), so it reaches from 212 to 262 and its glass meets Now Playing's.
-AH_CAPSULE = (216, 311)      # window columns: 21 px left of multi-select's glyph to 21 px right of Now Playing's (the Artists capsule's)
-AH_MULTI_W = NAV_SLOT_W + 4  # multi-select's image: 2 px over its button on each side
+AH_CAPSULE = (216 + NAV_SHIFT, 311)      # window columns: 21 px left of multi-select's glyph to 21 px right of Now Playing's (the Artists capsule's)
+AH_MULTI_W = NAV_SLOT_W + 4  # multi-select's image: 2 px over its button on each side (x 212 .. 262), the glass from AH_CAPSULE[0], the glyph NAV_SHIFT right
+AH_MULTI_X0 = AH_CAPSULE[0] - (214 - 2)
 AH_NAV_PIECES = {'ah_nav_back': (42, 0, 42, 21, 'chevron-left', None), 'ah_nav_close': (42, 0, 42, 21, 'x', None), 'ah_nav_np': (NAV_PLAY_W, 9, 51, 30, 'audio-lines', None),
-                 'ah_nav_search': (46, 2, 44, 23, 'search', None),
-                 'ah_nav_multi': (AH_MULTI_W, 4, AH_MULTI_W, 25, 'list-checks', (4, 4 + AH_CAPSULE[1] - AH_CAPSULE[0])),
+                 'ah_nav_set': (NAV_PLAY_W, 9, 51, 30, 'settings', None),   # the USB mode page's DAC settings (tools/mod_ipodrows.py edit_usbmode), on Now Playing's disc
+                 'ah_nav_search': (NAV_SHIFT_W, S2 + 2, S2 + 44, S2 + 23, 'search', None),
+                 'ah_nav_multi': (AH_MULTI_W, AH_MULTI_X0, AH_MULTI_W, 25 + NAV_SHIFT, 'list-checks', (AH_MULTI_X0, AH_MULTI_X0 + AH_CAPSULE[1] - AH_CAPSULE[0])),
                  'ah_nav_npa': (NAV_PLAY_W, 0, AH_CAPSULE[1] - 262, 28, 'audio-lines', (AH_CAPSULE[0] - 262, AH_CAPSULE[1] - 262)),
                  'ah_nav_add': (NAV_PLAY_W, 9, 51, 30, 'plus', None), 'ah_nav_del': (NAV_PLAY_W, 9, 51, 30, 'trash', None), 'ah_nav_cancel': (NAV_PLAY_W, 1, 43, 22, 'x', None),
                  'ah_nav_unsel': (50, 8, 50, 29, 'circle', None)}

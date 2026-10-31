@@ -123,7 +123,7 @@ def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, 
         nb.children.append(Widget('button', NAV_CF_X, 0, NAV_CF_W, NAVBAR_H, [
             ('name', 'btn_more'), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', 'pod_nav_more_down'), ('style:normal:icon', 'pod_nav_more'), ('style:over:icon', 'pod_nav_more')]))
-    if songs:   # Search, Sort, Select: three pieces of the capsule that ends in Now Playing (x 124 .. 311, glass; docs/modules/navbar.md)
+    if songs:   # Search, Sort, Select: three pieces of the capsule that ends in Now Playing (x 131 .. 311, glass; docs/modules/navbar.md)
         for name, icon, x in SONGS_BUTTONS:
             nb.children.append(Widget('button', x, 0, NAV_VIEW_W, NAVBAR_H, [
                 ('name', name), ('enable', 'true'), ('style', 'img_btn_style'),
