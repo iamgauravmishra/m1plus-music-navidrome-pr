@@ -24,7 +24,7 @@ label_index ("%d/%d"), label_info, label_album/genre/year/size/location ("%s:%s"
 slider_play, img_repeata/b (moved by code to x = 12 + pos*296/len, y = 364; five pinned immediates make it x =
 28 + pos*264/len, y = 370: the bar's centre + 7), img_hr, img_mqa, btn_fav/more/playmode/prev/play/next/queue/
 return, image_wait, slide_view, slide_indicator, view_lrc, scroll_lrc, label_lyricmsg, view_local/view_dlna,
-app_gesture. Every one keeps its name; the new widgets are img_np_tint and np_remaining.
+app_gesture. Every one keeps its name; the new widgets are img_np_tint, np_remaining and np_elapsed.
 
 Files (every image is new and referenced only from these two files):
   ui/playing_page.bin      geometry and inline styles
@@ -292,8 +292,10 @@ def apply_ui(root):
     move(pl, W - M - TIMES_W, TIMES_Y, TIMES_W, TIMES_H); text_style(pl, TIMES_PX, GREY, 'right')
     rem = awtk_ui.Widget('label', pl.x, pl.y, pl.w, pl.h, [('name', 'np_remaining'), ('visible', 'false')])
     text_style(rem, TIMES_PX, GREY, 'right')
-    svv.children.append(rem)
-    for w in (pt, pl, rem): w.set('sensitive', 'false')       # decoration; patch/nowplaying.c swaps label_playlen and np_remaining
+    el = awtk_ui.Widget('label', pt.x, pt.y, pt.w, pt.h, [('name', 'np_elapsed'), ('visible', 'false')])
+    text_style(el, TIMES_PX, GREY, 'left')
+    svv.children += [rem, el]
+    for w in (pt, pl, rem, el): w.set('sensitive', 'false')   # decoration; patch/nowplaying.c swaps the stock times and ours
     dots = find(root, 'slide_indicator'); move(dots, *DOTS)
     dots.set('size', str(DOTS[3])); dots.set('spacing', '10')
     dots.set('style:normal:selected_fg_color', DOT_ON); dots.set('style:normal:fg_color', DOT_OFF)
@@ -312,7 +314,7 @@ def apply_ui(root):
     for n in ('img_repeata', 'img_repeatb'): w = find(root, n); move(w, SLIDER[0], SLIDER[1] + SLIDER[3] // 2 + 7, w.w, w.h)
 
     after = [w.name for w in root.walk() if w.name]
-    assert sorted(set(names)) == sorted(set(after) - {'img_np_tint', 'np_remaining', 'img_np_scrim_lyrics', 'img_np_scrim_info', 'img_np_shadow'}), 'a widget name was lost'
+    assert sorted(set(names)) == sorted(set(after) - {'img_np_tint', 'np_remaining', 'np_elapsed', 'img_np_scrim_lyrics', 'img_np_scrim_info', 'img_np_shadow'}), 'a widget name was lost'
     assert album in info.children
     return root
 
@@ -380,7 +382,7 @@ def check_touch(root):
         t = hit(root, (0, 0, W, H), x, y)
         assert inside(t, sv), f'touch at ({x},{y}) on the cover page lands on {t.name or t.type}, not the slide_view'
     # the decoration never takes a touch
-    for n in ('img_np_tint', 'img_np_scrim_lyrics', 'img_np_scrim_info', 'img_np_shadow', 'np_remaining', 'label_playtime', 'label_playlen', 'img_repeata', 'img_repeatb', 'image_wait'):
+    for n in ('img_np_tint', 'img_np_scrim_lyrics', 'img_np_scrim_info', 'img_np_shadow', 'np_remaining', 'np_elapsed', 'label_playtime', 'label_playlen', 'img_repeata', 'img_repeatb', 'image_wait'):
         assert find(root, n).get('sensitive') == 'false', f'{n} must be insensitive'
     return [(n, rects[n]) for n in PROBES]
 

@@ -25,7 +25,7 @@ Follow the [installation guide](docs/install.md) for preparation, updates and re
 <details>
 <summary>Release status</summary>
 
-Status: the release is V2.1pF (pE + Podcasts feeds: subscribe from subscriptions.txt, refresh with a progress dialog and Cancel, episodes not on the card listed greyed, cover art downloaded and shrunk; test build pCFC flashed). Milestones, hardware results and lessons:
+Status: the release is V2.1pG (pF + the Now Playing elapsed time on its own label, no more 01:27 / 1:27 flicker; not yet flashed). Milestones, hardware results and lessons:
 `docs/history.md`; per-tag details are in git.
 
 </details>

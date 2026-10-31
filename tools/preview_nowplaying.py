@@ -23,7 +23,7 @@ from mod_nowplaying import tone, tint_alpha, corner_alpha, ART_R, BG
 HSCROLL_MARGIN = 2
 W, BAR, H = 320, 30, 450
 SAMPLE = {'scrlabel_title': 'Money', 'scrlabel_artist': 'Pink Floyd', 'label_album': 'Album: The Dark Side of the Moon',
-          'label_index': '5/10', 'label_playtime': '1:23', 'label_playlen': '6:22', 'np_remaining': '-4:59',
+          'label_index': '5/10', 'np_elapsed': '1:23', 'np_remaining': '-4:59',
           # the info page's lines as patch/nowplaying.c np_info leaves them (stock writes "Album:...", "Genres:...", "Era:...",
           # "File Size:48.92MB", "FLAC|44.1kHz|16bit|1021kbps")
           'label_info': 'FLAC | 44.1 kHz | 16-bit | 1021 kbps', 'label_genre': 'Genre: Progressive Rock', 'label_year': 'Year: 1973',
@@ -147,8 +147,8 @@ class Painter:
         im.alpha_composite(win, (0, BAR))
         return im
     def walk(self, im, wd, ox, oy, clip, page, root):
-        if wd.name == 'np_remaining': pass           # the hook shows it and hides label_playlen
-        elif wd.name == 'label_playlen' or wd.get('visible') == 'false' or wd.get('disg:hide') == 'true': return
+        if wd.name in ('np_remaining', 'np_elapsed'): pass       # the hook shows them and hides the stock times
+        elif wd.name in ('label_playlen', 'label_playtime') or wd.get('visible') == 'false' or wd.get('disg:hide') == 'true': return
         if wd.name in ('image_wait', 'img_repeata', 'img_repeatb'): return       # app-driven, normally hidden
         w, h = wd.w, wd.h
         x, y = wd.x, wd.y
