@@ -9,6 +9,9 @@ Sources: `patch/ipod.c`, `tools/pod_ui.py` (`build_ipod_page`, `ui/m1plus_ipod.b
 preview: `tools/preview_ipod.py` (light/dark menus, library rows, Now Playing, a transition
 contact sheet and GIF, the cross-fading cover pane and the reference palette).
 
+The Pod row's glyph (`pod_ic_ipod`) is `assets/icons/custom/ipod.svg`: Lucide's `smartphone` body
+with a screen bar and a click wheel, the pick from `tools/preview_pod_icon.py` (candidate B).
+
 The page adds no stock hook or boot work. It owns its `EVT_AFTER_PAINT`, pointer grab,
 foreground/background/destroy events and one page timer, using stock calls already shared
 with Albums, Songs, the mini player and Cover Flow.
