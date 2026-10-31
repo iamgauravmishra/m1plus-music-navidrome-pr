@@ -2,7 +2,7 @@
 the stock translation, every language's payload output, widths per language, glyphs in the shipped font."""
 import os, re, stat
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
-import awtk_strings, awtk_style, mod_icons, pod_i18n
+import awtk_strings, awtk_style, mod_icons, pod_i18n, pod_keyboard
 from awtk_text import Ttf, StbText
 
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
@@ -81,7 +81,7 @@ def run(ctx):
             if k is not None:
                 used.add(k)
                 if k not in pod_i18n.TEXT and k not in pod_i18n.STOCK: bad.append((w.name, k))
-            if t not in (None, '') and t not in pod_i18n.BRANDS: bad.append((w.name, t))
+            if t not in (None, '') and t not in pod_i18n.BRANDS and t not in pod_keyboard.LABELS: bad.append((w.name, t))
             expect(not (t and k), f'{page.key}:{w.name} does not carry both text and tr_text')
         expect(not bad, f'{page.key}: every text is a tr_text key of ours or the stock tables, or a brand name ({bad})')
         title = tree.find('label_title')
@@ -103,7 +103,7 @@ def run(ctx):
         for a in call_args(src, 'widget_set_text_utf8'):
             for inner in call_args(a, 'TR'): a = a.replace(inner, '')       # a translated key inside is fine
             for lit in literal.findall(a):
-                if lit not in ('', 'M1+ Music'): plain.append((f, lit))
+                if lit not in ('', 'M1+ Music') and lit not in pod_keyboard.LABELS: plain.append((f, lit))
         for a in call_args(src, 'toast') + call_args(src, 'pod_toast'):
             if literal.search(a) and not a.startswith('TR('): plain.append((f, a))
         for name in ('TR', 'widget_set_tr_text'):

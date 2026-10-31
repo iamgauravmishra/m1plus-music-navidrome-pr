@@ -181,3 +181,25 @@ Screen state: exported byte `backlight_status` at `0x97cae4` is pinned in `tools
 | the tag reader's hook site | `0x4dff4c` | `jalr strcpy(info, path)` (words @`0x4dff40..0x4dff50` pinned): replaced by `jal pc_id3_path`; docs/modules/payload.md hook 5 |
 | `playsong_id3info` (data, dynsym) | `0xa0d88c` | 0xa9c bytes: path (cache key) `+0`, CUE start `+0x400`, album `+0x404` (0x100), artist `+0x504` (0x100), composer `+0x604` (0x80), title `+0x684` (0x200) |
 | `song_name` / `song_artist` (data, dynsym) | `0xa0513c` (0x200) / `0xa0503c` (0x100) | built by `get_id3info` after the site from the struct: title (else the file name `rec+8`), artist (else `"Unknown"` @`0x7466e8`); read by the Now Playing page (`0x5397a0`), the lock screen (`0x53f77c`), the Home guide page |
+
+## Pinyin engine (patch/keyboard.c Chinese layer, `PINYIN_PINS` in tools/pod.py; docs/modules/keyboard.md "Pinyin engine")
+
+AOSP's PinyinIME (`ime_pinyin::*`, `0x5bf9b0`..`0x5ceb40`) over one global. All the C entry points are `.dynsym` names with PIC prologues `(0x3c1c0044, 0x279c.... , 0x0399e021)` (pinned).
+
+| What | Address | Evidence |
+|---|---|---|
+| the engine global `MatrixSearch*` (data) | `0xa0a360` (GOT word `0xa00410`) | NULL until `im_open_decoder`; byte `+0` is `inited_` (tested `lbu` by `search` `0x5c5740`, `get_candidate` `0x5c5128`, `get_candidate_num` `0x5c3094`; set by `sb v0,(s0)` @`0x5c2ed0` / `0x5c2ff8`); sizeof `0x30d8` |
+| `im_open_decoder(sys, user)` | `0x5c7350` | destroys the object at the global (`0x5c7384`), `new` (`0x30d8` bytes), `MatrixSearch::init(sys, user)` `0x5c2ddc` (NULL path: fails); returns its result |
+| `im_open_decoder_fd` | `0x5c743c` | `init_fd(fd, start, len, user)` `0x5c2ef0`; no caller in demo; not used |
+| `im_close_decoder` | `0x5c7534` | `close()`, destroy, `*global = 0` @`0x5c7594` |
+| `im_set_max_lens(sps, hzs)` / `im_flush_cache` | `0x5c75a8` / `0x5c75dc` | thin wrappers; stock's wrapper uses 9 / 12 |
+| `im_search(buf, len)` | `0x5c760c` | `MatrixSearch::search(buf, len)` `0x5c5710` (len clamped to 39), then the candidate count |
+| `im_delsearch(pos, is_pos_in_splid, clear_fixed)` / `im_reset_search` | `0x5c7678` / `0x5c76e8` | `delsearch` `0x5c5880`, `reset_search` `0x5c3018` |
+| `im_get_sps_str(&len)` | `0x5c7720` | the pinyin string the engine read |
+| `im_get_candidate(i, buf, max_len)` | `0x5c7754` | `get_candidate` `0x5c5104`; UTF-16 into `buf`, returns `buf` or NULL |
+| `im_get_spl_start_pos(const char16 **)`, `im_choose(i)`, `im_cancel_last_choice`, `im_get_fixed_len` | `0x5c778c`, `0x5c77c0`, `0x5c77f4`, `0x5c7824` | `get_spl_start` `0x5c37b8` (returns the syllable count `+0x2dc`, `*out = this + 0x2e0`: the start offsets, one more than the count), `choose` `0x5c6244`, `cancel_last_choice` `0x5c5ba8`, `get_fixedlen` `0x5c32bc`; pinned: prologues of `im_get_spl_start_pos`, `im_get_fixed_len` |
+| hanzi to pinyin (research only, not called by the payload) | `DictList::get_splids_for_hanzi(this, hanzi, half_splid, splids, max)` `0x5bffd4`, `SpellingTrie::get_spelling_str(this, splid)` `0x5c922c`, `DictList::get_lemma_id(this, str, len)` `0x5c01a4` | the `DictTrie` is `*(MatrixSearch + 0xc)` (vtable `0x978e7c`), the `DictList` `*(DictTrie + 4)`, the `SpellingTrie` `*(DictTrie + 8)` (also the global `0xa0a370`); `get_splids_for_hanzi` dereferences the result of its binary search (`mybsearch` `0x5c69f8`) and **crashes for a character that is not in the dictionary**: test `get_lemma_id(&ch, 1) != 0` first; `get_spelling_str` gives the spelling in upper case with a capital-and-lower head for initials (`ZhOU`) |
+| `MatrixSearch::get_predicts(this, history, out[][8], n)` | `0x5c6834` | 1..7 character history (`utf16_strlen` `0x5cec6c`, then `inner_predict` `0x5c65d4`); no C wrapper |
+| `inputmethod_module` (stock's wrapper), its global object | `0xa0c2bc` (`0xa10000 - 0x7d44`) | constructor `0x5bf2d0` sets byte `+4`; `dequeinit` `0x5bf230`; `init` `0x5bf460` (path argument ignored: opens `/usr/dict_pinyin.dat` `0x755fd0` and `/usr/dict/dict_pinyin_user.dat` `0x755fb0`, then `im_set_max_lens(9, 12)`); `search` `0x5bf32c` (`+0x10` = the count `0x5bf104` keeps); `get_candidate` `0x5bf768` (malloc'd UTF-8, `utf16_to_utf8` `0x5bf568`; `0x8aed58` when empty); `choose` `0x5bf908` |
+| who initialises it | `keyboard_init` `0x5b25d4` <- `user_keyboard_init` `0x547b9c` (`0x547cd0`) <- the page-init dispatcher (`on_wm_timer_rgbled_state`, `0x4d06cc`) for the window `user_keyboard` `0x744968` | opened by `dialog_kbaddnet_dialog_init` `0x477a7c` (Wi-Fi), the playlist-name and keyword search dialogs; not at boot |
+| the dictionary asset | `/release/assets/default/raw/data/gpinyin.dat` (1,068,442 bytes) | referenced by no code; stock's init asks for `/usr/dict_pinyin.dat`, absent from the rootfs |

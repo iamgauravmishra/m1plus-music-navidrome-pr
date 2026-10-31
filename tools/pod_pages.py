@@ -56,8 +56,11 @@ ACT_LIST = 21    # open a stock song list on the Songs page (patch/songs.c songs
 ACT_IPOD = 22    # open the Pod, the virtual iPod Classic page: a fullscreen window with a touch click wheel (patch/ipod.c ipod_open)
 ACT_PODCASTS = 23   # open the Podcasts page: the shows in /mnt/mmc/Podcasts and their episodes (patch/podcasts.c podcasts_open)
 ACT_NETPROBE = 25 # the Network Probe row (Developer): a thread checks HTTPS, Wi-Fi, the clock, RAM and the screen-off soak, and logs to /mnt/mmc/m1plus-probe.log (patch/probe.c)
+ACT_KEYBOARD = 26 # the Keyboard row (Developer): opens the on-screen QWERTY keyboard (patch/keyboard.c) with a test callback: Search toasts the text, every tap is logged to /mnt/mmc/m1plus-probe.log
+ACT_KB_EN = 27  # switch row (Customize > Keyboards): English, always on and not switchable (the row's switch is shown on and the row is dimmed)
+ACT_KB_ZH = 28  # switch row (Customize > Keyboards): Chinese (Pinyin), off by default; on gives the on-screen keyboard a language key and the pinyin layer (patch/keyboard.c kb_zh_toggle)
 ACT_CTHEME = 24  # value row: the Cassette Mode page's theme, Normal, Chrome or Metal; a tap cycles it (patch/tape.c tape_theme_cycle)
-SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY)
+SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
 VALUE_ACTIONS = (ACT_SORT, ACT_CTHEME)    # rows with a grey value at the right (the widget pod_value<row>)
 VALUE_INIT = {ACT_SORT: 'Artist', ACT_CTHEME: 'Normal'}   # what the asset's value label says before the payload sets it
@@ -96,6 +99,7 @@ EXTRAS_PAGE_INDEX = 5
 MENUCFG_PAGE_INDEX = 7
 CFSET_PAGE_INDEX = 8
 CASSETTE_PAGE_INDEX = 18
+KEYBOARDS_PAGE_INDEX = 20
 HOMESET_PAGE_INDEX = 9
 EXTRASCFG_PAGE_INDEX = 13
 DEVELOPER_PAGE_INDEX = 14
@@ -205,6 +209,7 @@ CUSTOMIZE_PAGE = Page('m1plus_customize', 'm1plus_customize_page', 'Customize', 
     Row('Home Screen', ACT_PAGE, HOMESET_PAGE_INDEX),
     Row('Cover Flow', ACT_PAGE, CFSET_PAGE_INDEX),
     Row('Cassette Mode', ACT_PAGE, CASSETTE_PAGE_INDEX),
+    Row('Keyboards', ACT_PAGE, KEYBOARDS_PAGE_INDEX),
     Row('Playback', ACT_HOME, HOME_PLAYSET),
     Row('System Settings', ACT_HOME, HOME_SYSSET),
     Row('Developer', ACT_PAGE, DEVELOPER_PAGE_INDEX),
@@ -215,6 +220,7 @@ CUSTOMIZE_PAGE = Page('m1plus_customize', 'm1plus_customize_page', 'Customize', 
 DEVELOPER_PAGE = Page('m1plus_developer', 'm1plus_developer_page', 'Developer', rows=[
     Row('Screenshot', ACT_SHOT),
     Row('Network Probe', ACT_NETPROBE),
+    Row('Keyboard', ACT_KEYBOARD),
 ])
 
 # Customize > Home Screen: the Boot to M1+ Music switch (patch/home.c), the Recent Albums and Daily Mix switches (the shelf and the card of the Home menu), Regenerate
@@ -313,9 +319,20 @@ CASSETTE_PAGE = Page('m1plus_tapeset', 'm1plus_tapeset_page', 'Cassette Mode', r
 ])
 CTHEME_VALUES = ('Normal', 'Chrome', 'Metal')   # the value shown for the setting's three states, in the order of the saved index (tools/tape_art.py THEME_NAMES)
 
+# The keyboard page (patch/keyboard.c, docs/modules/keyboard.md): the navbar, a search field and our own QWERTY pad; opened by keyboard_open (the Developer row, later podcast search), no menu row.
+KEYBOARD = Page('m1plus_keyboard', 'm1plus_keyboard_page', 'Keyboard', kind='keyboard')
+
+# Customize > Keyboards (iOS style): the keyboards the on-screen keyboard offers. English is always on (its switch is shown on and cannot be turned off); Chinese (Pinyin) is off by default.
+# With it on, the keyboard page has a language key and a pinyin layer with a candidate strip (docs/modules/keyboard.md). The choice is saved in /mnt/data/m1plus-kbzh (patch/keyboard.c).
+KEYBOARDS_PAGE = Page('m1plus_keyboards', 'm1plus_keyboards_page', 'Keyboards', rows=[
+    Row('English', ACT_KB_EN),
+    Row('Chinese (Pinyin)', ACT_KB_ZH),
+])
+
 # PAGES[0] is the entry page.
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, CUSTOMIZE_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, CFSET_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
-         EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, CASSETTE_PAGE]
+         EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, CASSETTE_PAGE, KEYBOARD, KEYBOARDS_PAGE]
+assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[CASSETTE_PAGE_INDEX] is CASSETTE_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[CUSTOMIZE_PAGE_INDEX] is CUSTOMIZE_PAGE
 assert PAGES[EXTRASCFG_PAGE_INDEX] is EXTRASCFG_PAGE and PAGES[DEVELOPER_PAGE_INDEX] is DEVELOPER_PAGE

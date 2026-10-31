@@ -71,7 +71,7 @@ def run(ctx):
 
     # 1. The row and what it needs
     S = P.DEVELOPER_PAGE
-    expect([r.label for r in S.rows] == ['Screenshot', 'Network Probe'] and S.rows[1].action == P.ACT_NETPROBE == 25, 'Customize > Developer has Network Probe as its second row, ACT_NETPROBE 25')
+    expect([r.label for r in S.rows] == ['Screenshot', 'Network Probe', 'Keyboard'] and S.rows[1].action == P.ACT_NETPROBE == 25, 'Customize > Developer has Network Probe as its second row, ACT_NETPROBE 25')
     expect(not [r for page in P.PAGES if page is not S for r in page.rows if r.action == P.ACT_NETPROBE], 'no other page has the row')
     rows_s = PSYMS[f'pod_rows_{P.DEVELOPER_PAGE_INDEX}']
     m = probe_machine()

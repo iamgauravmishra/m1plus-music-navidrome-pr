@@ -35,6 +35,7 @@ Copy music to the card, then use **Extras → Update Library** to scan it.
 - **Home Screen:** startup, Recent Albums, Daily Mix and Regenerate Daily Mix.
 - **Cover Flow:** landscape presentation, artist/album order and Rebuild Covers.
 - **Cassette Mode:** cycle Normal, Chrome and Metal themes.
+- **Keyboards:** English is always on; switch on Chinese (Pinyin) to get a language key and pinyin input on the on-screen keyboard (candidates above the keys, swipe them sideways, space takes the first).
 - **Playback / System Settings:** open the stock settings pages.
 - **Developer → Screenshot:** confirm a capture, then leave the page within five seconds.
 

@@ -336,6 +336,22 @@ TEXT = dict([
        'Prueba de red en curso', 'Test di rete in corso', 'กำลังทดสอบเครือข่าย', 'Test sieci trwa', 'Проверка сети идёт', 'Перевірка мережі триває'),
     _t('Network probe failed', '网络探测失败', '網絡探測失敗', 'ネットワーク診断に失敗', '네트워크 점검 실패', 'Échec du test réseau', 'Netzwerktest fehlgeschlagen',
        'Error en la prueba de red', 'Test di rete non riuscito', 'ทดสอบเครือข่ายไม่สำเร็จ', 'Test sieci nieudany', 'Проверка сети не удалась', 'Перевірка мережі не вдалася'),
+    # Customize > Keyboards (iOS style: English always on, Chinese (Pinyin) a switch; patch/keyboard.c)
+    _t('Keyboards', '键盘', '鍵盤', 'キーボード', '키보드', 'Claviers', 'Tastaturen',
+       'Teclados', 'Tastiere', 'แป้นพิมพ์', 'Klawiatury', 'Клавиатуры', 'Клавіатури'),
+    _t('English', '英语', '英語', '英語', '영어', 'Anglais', 'Englisch',
+       'Inglés', 'Inglese', 'อังกฤษ', 'Angielski', 'Английский', 'Англійська'),
+    _t('Chinese (Pinyin)', '中文拼音', '中文拼音', '中国語（ピンイン）', '중국어(병음)', 'Chinois (pinyin)', 'Chinesisch (Pinyin)',
+       'Chino (pinyin)', 'Cinese (pinyin)', 'จีน (พินอิน)', 'Chiński (pinyin)', 'Китайский (пиньинь)', 'Китайська (піньїнь)'),
+    # The on-screen keyboard (patch/keyboard.c; the Developer row, the page's title and the keys' labels)
+    _t('Keyboard', '键盘', '鍵盤', 'キーボード', '키보드', 'Clavier', 'Tastatur',
+       'Teclado', 'Tastiera', 'แป้นพิมพ์', 'Klawiatura', 'Клавиатура', 'Клавіатура'),
+    _t('space', '空格', '空格', 'スペース', '스페이스', 'espace', 'Leertaste',
+       'espacio', 'spazio', 'เว้นวรรค', 'spacja', 'пробел', 'пробіл'),
+    _t('Search', '搜索', '搜尋', '検索', '검색', 'Chercher', 'Suchen',
+       'Buscar', 'Cerca', 'ค้นหา', 'Szukaj', 'Поиск', 'Пошук'),
+    _t('Type here', '在此输入', '在此輸入', 'ここに入力', '여기에 입력', 'Saisir ici', 'Hier tippen',
+       'Escribe aquí', 'Digita qui', 'พิมพ์ที่นี่', 'Wpisz tutaj', 'Введите здесь', 'Введіть тут'),
     # Now Playing's More menu (patch/playmore.c): the row that opens the second page (and that page's back header), the short
     # Playback speed label (stock: "Multiple Speed", wider than the room before the four speed badges) and the 14 px note under it
     _t('More', '更多', '更多', 'その他', '더 보기', 'Plus', 'Mehr',

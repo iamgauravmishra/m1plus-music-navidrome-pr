@@ -45,6 +45,9 @@
 #define DAILY_SET_FILE \
     "/mnt/data/m1plus-daily" /* the Daily Mix card: "0" = off, anything else or missing = on (Customize > Home Screen) */
 #define DAILY_SET_TMP "/mnt/data/m1plus-daily.tmp"
+#define KBZH_FILE \
+    "/mnt/data/m1plus-kbzh" /* the on-screen keyboard's Chinese (Pinyin) layer: "1" = on, anything else or missing = off (Customize > Keyboards; patch/keyboard.c) */
+#define KBZH_TMP "/mnt/data/m1plus-kbzh.tmp"
 #define MIX_DIR \
     CARD_DIR \
     "/daily-mix" /* the Daily Mix's own folder inside the card folder (CARD_DIR, patch/covercache.h); made by the writer */
@@ -106,6 +109,9 @@ extern void dailymix_regen(
 extern int dailymix_can_regen(
     void); /* Regenerate can make a mix: the switch is on and the last job did not find the library too small */
 extern int recent_toggle(void); /* flip it, saved atomically; the new state, or -1 when it could not be saved */
+extern int
+kb_zh_setting(void); /* patch/keyboard.c: Customize > Keyboards > Chinese (Pinyin): 1 on, 0 off (the default) */
+extern int kb_zh_toggle(void); /* flip it, saved atomically; the new state, or -1 when it could not be saved */
 
 /* patch/m1plus.c (stages with the home feature) */
 extern int m1plus_open_entry(void);

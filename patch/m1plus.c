@@ -44,11 +44,16 @@ enum {
     ACT_IPOD = 22,
     ACT_PODCASTS = 23,
     ACT_CTHEME = 24,
-    ACT_NETPROBE = 25
+    ACT_NETPROBE = 25,
+    ACT_KEYBOARD = 26,
+    ACT_KB_EN = 27,
+    ACT_KB_ZH = 28
 };
 
 extern void
 probe_start(void); /* patch/probe.c: the Network Probe row: confirm, then one worker thread logs to the card */
+extern void keyboard_test(
+    void); /* patch/keyboard.c: the Keyboard row: the on-screen keyboard page, Search toasts the text, the touches are logged */
 extern void shot_start(void); /* patch/shot.c: the Screenshot row: confirm, 5 s countdown, capture; or cancel */
 extern int artists_open(
     int home); /* patch/artists.c: the Artists list, its own page; arg HOME_GENRE / HOME_COMPOSER: Genres / Composers on it */
@@ -180,6 +185,8 @@ static int on_row(void *ctx, void *e) {
         shot_start(); /* patch/shot.c; a timer, no page */
     else if (row->action == ACT_NETPROBE)
         probe_start(); /* patch/probe.c; a confirm dialog, then a thread, no page */
+    else if (row->action == ACT_KEYBOARD)
+        keyboard_test(); /* patch/keyboard.c; its own page */
     else if (row->action == ACT_REBUILD)
         rebuild_ask(); /* a confirm dialog, then Cover Flow rebuilds */
     else if (row->action == ACT_REGEN)
@@ -187,13 +194,13 @@ static int on_row(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* The switch rows (Customize > Home Screen: Boot to M1+ Music, Recent Albums and Daily Mix; Customize > Cover Flow: Landscape): a tap flips the
+/* The switch rows (Customize > Home Screen: Boot to M1+ Music, Recent Albums and Daily Mix; Customize > Cover Flow: Landscape; Customize > Keyboards: English, Chinese (Pinyin)): a tap flips the
  * setting and the row's switch image follows it. The context is the slot below, one per action, filled when the page opens. */
 struct swctx {
     int action;
     void *img;
 };
-static struct swctx sw_slot[4] __attribute__((section(".scratch")));
+static struct swctx sw_slot[6] __attribute__((section(".scratch")));
 
 static void switch_show(void *img, int on) {
     if (img) image_base_set_image(img, on ? "sset_on" : "sset_off");
@@ -204,6 +211,7 @@ static void switch_show(void *img, int on) {
 #define REGEN_DIM \
     102 /* 40 % opacity: the stock paint draws the row, its icon and label through the canvas global alpha */
 static void *regen_row __attribute__((section(".scratch")));
+#define KB_EN_DIM 153 /* 60 %: Customize > Keyboards > English, always on and not switchable */
 
 static void regen_show(void) {
     int on = dailymix_can_regen();
@@ -216,6 +224,8 @@ static int switch_state(int action) {
     return action == ACT_STARTUP ? home_start()
            : action == ACT_SHELF ? recent_setting()
            : action == ACT_DAILY ? dailymix_setting()
+           : action == ACT_KB_EN ? 1 /* English: always on */
+           : action == ACT_KB_ZH ? kb_zh_setting()
                                  : coverflow_landscape();
 }
 
@@ -227,6 +237,7 @@ static int on_switch(void *ctx, void *e) {
     on = s->action == ACT_STARTUP ? home_toggle()
          : s->action == ACT_SHELF ? recent_toggle()
          : s->action == ACT_DAILY ? dailymix_toggle()
+         : s->action == ACT_KB_ZH ? kb_zh_toggle()
                                   : coverflow_landscape_toggle(); /* -1: not saved, unchanged */
     if (on >= 0) switch_show(s->img, on);
     if (s->action == ACT_DAILY) regen_show();
@@ -236,11 +247,20 @@ static int on_switch(void *ctx, void *e) {
 static void bind_switch(void *win, unsigned i, const struct pod_row *row) {
     char name[24];
     void *r = widget_lookup(win, row->name, 1);
-    int k = row->action == ACT_LANDSCAPE ? 1 : row->action == ACT_SHELF ? 2 : row->action == ACT_DAILY ? 3 : 0;
+    int k = row->action == ACT_LANDSCAPE ? 1
+            : row->action == ACT_SHELF   ? 2
+            : row->action == ACT_DAILY   ? 3
+            : row->action == ACT_KB_EN   ? 4
+            : row->action == ACT_KB_ZH   ? 5
+                                         : 0;
     snprintf(name, sizeof name, "pod_switch%u", i);
     sw_slot[k].action = row->action;
     sw_slot[k].img = widget_lookup(win, name, 1);
     switch_show(sw_slot[k].img, switch_state(row->action));
+    if (row->action == ACT_KB_EN) { /* English cannot be turned off: on, dimmed, and the row takes no tap */
+        if (r) widget_set_opacity(r, KB_EN_DIM), widget_set_sensitive(r, 0);
+        return;
+    }
     if (r) widget_on(r, EVT_CLICK, on_switch, &sw_slot[k]);
 }
 
@@ -311,7 +331,7 @@ static int open_page(int index, int as_home) {
     for (i = 0; i < page->count; i++) {
         const struct pod_row *row = &page->rows[i];
         if (row->action == ACT_STARTUP || row->action == ACT_LANDSCAPE || row->action == ACT_SHELF ||
-            row->action == ACT_DAILY)
+            row->action == ACT_DAILY || row->action == ACT_KB_EN || row->action == ACT_KB_ZH)
             bind_switch(win, i, row);
         else if (row->action == ACT_SORT)
             bind_sort(win, (unsigned)i, row);

@@ -93,11 +93,18 @@ the recovery button combination for this model remains unverified.
   JPEG (demo's libjpeg; PNG through a streaming decoder of our own). Test builds pAFA, pCFA .. pCFC flashed: the 4 MB All-In feed,
   a 3000 px JPEG and a 2000 px RGBA PNG cover all worked. Lesson: podcast art is often too large for the stock loader (36 MB for
   3000 px), so shrink once on download instead of decoding at full size on every page open.
-- **V2.1pI** (2026-10-31, current release): **Podcasts episode downloads** (policy after q2-podcasts): one at a time into a `.part`
+- **V2.1pI** (2026-10-31): **Podcasts episode downloads** (policy after q2-podcasts): one at a time into a `.part`
   beside the episode, 512 KB chunks each opened, written, synced and closed, Range resume, retries, a 32 MB card margin; a Downloads
   page; select-and-delete of episodes; no unplayed-dot column. Test build zQKWXAAAC flashed: an episode downloaded and played.
   Finding: stock's `reset_poweroptions_timer(1, 1, 0)` (0x4d7874; its arguments gate standby, auto power-off and the screen light)
   called from a page timer while a download runs keeps the device out of standby with the screen still turning off.
+- **V2.1pJ** (2026-10-31, current release): **our own on-screen keyboard** (`docs/modules/keyboard.md`): iPhone OS 1 style QWERTY
+  (29 x 36 keys, 3 px gaps, 180 px), a key pop-up, 123 and #+= pages, a search field, gaps resolved to the nearest key, and
+  **Chinese (Pinyin)** input behind Customize > Keyboards (a 中/EN key, a candidate strip, predictions). Test builds zPPCPAAAC,
+  zPGFYAAAB (probe) and zPGFYAAAC flashed: all worked. Findings: stock's T9 popup is laid out 640 px wide in a 320 px window, and
+  stock's Chinese input never had a dictionary (its init asks for an absent `/usr/dict_pinyin.dat`) while the shipped, unreferenced
+  `data/gpinyin.dat` opens with `im_open_decoder` in 76 ms (~1 MB, searches 0.1-2.5 ms). Tap log of 155 taps: no systematic offset
+  (mean -2, +3 px), all 9 misses in the 1-4 px gaps between keys, hence the nearest-key rule.
 
 ## Hardware results (what broke on the device, and why)
 
