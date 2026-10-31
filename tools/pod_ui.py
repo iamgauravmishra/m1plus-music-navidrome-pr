@@ -124,6 +124,10 @@ def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, 
             nb.children.append(Widget('button', x, 0, NAV_VIEW_W, NAVBAR_H, [
                 ('name', name), ('enable', 'true'), ('style', 'img_btn_style'),
                 ('style:pressed:icon', icon + '_down'), ('style:normal:icon', icon), ('style:over:icon', icon)]))
+    if songs:   # the artist's songs list (patch/songs.c shows it there only): the Cover Flow button, the capsule's left cap on Search's list slot (the Albums page's, NAV_CF_X); the toggle back to the covers
+        nb.children.append(hidden(Widget('button', NAV_CF_X, 0, NAV_CF_W, NAVBAR_H, [
+            ('name', 'btn_coverflow'), ('enable', 'true'), ('style', 'img_btn_style'),
+            ('style:pressed:icon', NAV_CF_ICON + '_down'), ('style:normal:icon', NAV_CF_ICON), ('style:over:icon', NAV_CF_ICON)])))
     if artist_songs:   # Cover Flow's artist page (patch/coverflow.c shows it, makes Now Playing the right cap, and shortens the title, only there)
         nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [   # the capsule's left cap: opens our Songs page on the artist's songs
             ('name', 'btn_songs'), ('enable', 'true'), ('style', 'img_btn_style'),

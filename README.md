@@ -25,7 +25,7 @@ Follow the [installation guide](docs/install.md) for preparation, updates and re
 <details>
 <summary>Release status</summary>
 
-Status: the release is V2.1pG (pF + the Now Playing elapsed time on its own label, no more 01:27 / 1:27 flicker; not yet flashed). Milestones, hardware results and lessons:
+Status: the release is V2.1pH (pG + glass message and confirm dialogs, the M1+ power-off splash, Look up artist opens our artist page, the artist page toggles covers and songs, Delete closes the More sheet first; test build zZPAJAAAB flashed). Milestones, hardware results and lessons:
 `docs/history.md`; per-tag details are in git.
 
 </details>

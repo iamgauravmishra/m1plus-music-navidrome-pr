@@ -40,6 +40,10 @@
 #define PM_BACK 8
 #define PM_TAPE 9
 #define GO_ALBUM 4 /* listitem4, Look up album */
+#define PM_DELETE 6 /* listitem6, Delete song */
+#define GO_ARTIST 5 /* listitem5, Look up artist */
+extern int coverflow_artist(void *artists, unsigned index,
+                            unsigned scope); /* patch/coverflow.c: 0 once the page is up */
 
 /* what each page shows, top to bottom, as indices into pm.row[]; the sheet is as high as its page's rows (PM_PAGE_N, PM_PAGE2_N) */
 static const unsigned char pm_page[2][PM_PAGE_N] = {
@@ -193,6 +197,71 @@ static int pm_on_lookup_album(void *ctx, void *e) {
     return RET_STOP;
 }
 
+/* Look up artist (listitem5): our Cover Flow artist page (coverflow_artist, the page the Artists list opens) instead of the stock album_page.
+ * Same mechanism as Look up album: bound after the stock init, so it runs first; RET_STOP keeps the stock handler (0x4793ac) from running, RET_OK
+ * lets it run. The artist is the playing track's REC_ARTIST, looked up in the Artists list the stock page would show (loadLocalClassList(0xf004):
+ * getAllArtist, or the album-artist list when Settings' artist type says so; a row's name is REC_TITLE, compared ASCII case-insensitively as the list
+ * groups; the Unknown Artist row, id -1, never matches). The page opens FIRST (as Cassette Mode does) and the sheet closes once it is up, so any
+ * failure (nothing playing, no artist tag, not in the list, Cover Flow already open, the page will not open) leaves everything as it was for the
+ * stock handler. Like the stock one it sets songerinfoflag (a track tap or Play all on an album page above then unwinds to the Now Playing that is
+ * in the stack) and closes an albuminfo_page in the stack; the flag is released by the destroy of the Cover Flow page (pm_on_album_gone). */
+static int pm_on_lookup_artist(void *ctx, void *e) {
+    void *track, *list, *one, *top, *below;
+    const char *name;
+    unsigned i, n;
+    int found = -1, ret;
+    unsigned char prev;
+    (void)e;
+    if (!pm.dlg || ctx != pm.dlg) return RET_OK;
+    track = cc_playing();
+    if (!track) return RET_OK;
+    name = cc_str(track, REC_ARTIST);
+    if (!*name) return RET_OK;
+    if (loadLocalClassList(CLASS_ARTISTS) <= 0) return RET_OK;
+    list = *(void **)PDEQ_SHOWLIST;
+    n = list ? deque_size(list) : 0;
+    for (i = 0; i < n && found < 0; i++) {
+        void *r = deque_at(list, i);
+        if (*(int *)((char *)r + REC_ID) != -1 && !cc_nocase(cc_str(r, REC_TITLE), name)) found = (int)i;
+    }
+    if (found < 0) return RET_OK;
+    one = _create_deque(
+        "stSongInfo"); /* the page takes its own copy of the row; this list only carries it there (and keeps the stock list's reload from pulling it away) */
+    if (!one) return RET_OK;
+    deque_init(one);
+    _deque_push_back(one, deque_at(list, (unsigned)found));
+    prev = *(unsigned char *)SONGER_FLAG;
+    *(unsigned char *)SONGER_FLAG = 1;
+    below = window_manager_get_top_window(window_manager());
+    ret = coverflow_artist(one, 0, CLASS_ARTISTS);
+    deque_destroy(one);
+    if (ret != 0) {
+        *(unsigned char *)SONGER_FLAG = prev;
+        return RET_OK;
+    }
+    top = window_manager_get_top_window(window_manager());
+    if (top && top != below && widget_on(top, EVT_DESTROY, pm_on_album_gone, top)) {
+        if (!pm_flag_owner) pm_flag_prev = prev;
+        pm_flag_owner = top;
+    } else
+        *(unsigned char *)SONGER_FLAG = prev;
+    window_close(ctx);
+    if (navigator_window_is_exist("albuminfo_page")) navigator_close("albuminfo_page");
+    return RET_STOP;
+}
+
+/* Delete (listitem6): the sheet closes BEFORE the stock handler (0x4791f4) opens its confirm. That handler is modal (navigator_to_with_context
+ * returns the answer, 0xa yes / 0x14 no; it never touches its ctx, the dialog), so it runs on unchanged after the sheet is gone: only on Yes does it
+ * delete_playqueue_file(0) and show the result. The glass confirm card is translucent, so an open sheet behind it showed through. Stock's own Add to
+ * playlist (0x4798f0) closes the sheet the same way (window_close, then goes on with the same handler), so continuing after window_close is the stock
+ * pattern. Speed, A-B and Look up open no dialog; Look up album / artist and Cassette Mode close the sheet themselves. A No leaves Now Playing, no sheet. */
+static int pm_on_delete(void *ctx, void *e) {
+    (void)e;
+    if (!pm.dlg || ctx != pm.dlg) return RET_OK;
+    window_close(ctx);
+    return RET_OK;
+}
+
 static void pm_start(void *dlg) {
     static const char *const names[PM_ROWS] = {"listitem0", "listitem1", "listitem2", "listitem3", "listitem4",
                                                "listitem5", "listitem6", "pod_more",  "pod_back",  "pod_tape"};
@@ -231,6 +300,8 @@ static void pm_start(void *dlg) {
     if (!widget_on(pm.row[PM_BACK], EVT_CLICK, pm_on_back, dlg)) goto fail;
     if (!widget_on(pm.row[PM_TAPE], EVT_CLICK, pm_on_tape, dlg)) goto fail;
     if (!widget_on(pm.row[GO_ALBUM], EVT_CLICK, pm_on_lookup_album, dlg)) goto fail;
+    if (!widget_on(pm.row[GO_ARTIST], EVT_CLICK, pm_on_lookup_artist, dlg)) goto fail;
+    if (!widget_on(pm.row[PM_DELETE], EVT_CLICK, pm_on_delete, dlg)) goto fail;
     pm.page = 0;
     pm_arrange();
     return;

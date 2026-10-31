@@ -16,7 +16,7 @@ UI = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_songs.bi
 ALL = O['CLASS_ALL_SONGS']
 TEXT_X, TEXT_END, SEL = O['LIST_TEXT_X'], O['SG_TEXT_END'], O['SG_SEL_COL']
 RAIL_X, RAIL_W = O['SG_RAIL_X'], O['SG_RAIL_W']
-WIDGETS = ('view_grid', 'sg_rail', 'sg_foot', 'sg_hname', 'btn_return', 'btn_backtoplayer', 'btn_search', 'btn_sort', 'btn_select', 'btn_selall', 'btn_play', 'btn_shuffle', 'sg_add', 'sg_del', 'sg_scrim', 'sg_card',
+WIDGETS = ('btn_coverflow', 'view_grid', 'sg_rail', 'sg_foot', 'sg_hname', 'btn_return', 'btn_backtoplayer', 'btn_search', 'btn_sort', 'btn_select', 'btn_selall', 'btn_play', 'btn_shuffle', 'sg_add', 'sg_del', 'sg_scrim', 'sg_card',
            'label_title', 'sg_title', 'label_status', 'label_row_title', 'label_row_sub', 'label_hdr', 'label_rail', 'label_rail_on', 'sg_bubble', 'sg_bubble_letter', 'sg_bar',
            'sg_item0', 'sg_item1', 'sg_item2', 'sg_item3', 'sg_item4', 'sg_tick0', 'sg_tick1', 'sg_tick2', 'sg_tick3', 'sg_tick4')
 
@@ -27,7 +27,25 @@ def near(a, b, tol=2): return all(abs(((a >> s) & 255) - ((b >> s) & 255)) <= to
 
 
 class SongsMachine(ListMachine):
-    """The list machine: the text calls, the animator destroy, the stock selection vector and batch delete, the style setter of the pills."""
+    """The list machine: the text calls, the animator destroy, the stock selection vector and batch delete, the style setter of the pills.
+    cf_page / stack: the artist's covers window patch/coverflow.c would report (coverflow_artist_page) and the window stack navigator_back pops
+    (window_manager_get_top_window answers the last of it); None: no covers page, the mocks stay the base machine's."""
+    cf_page = None
+    stack = None
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.handlers[PSYMS['coverflow_artist_page']] = 'coverflow_artist_page'   # patch/coverflow.c, trapped
+
+    def _hook(self, u, address, size, _):
+        name = self.handlers.get(address)
+        ret = None
+        if name == 'coverflow_artist_page': ret = self.cf_page or 0
+        elif name == 'window_manager_get_top_window' and self.stack is not None: ret = self.stack[-1] if self.stack else 0
+        elif name == 'navigator_back' and self.stack is not None:
+            self.calls.append(('navigator_back',)); self.stack.pop(); ret = 0
+        if ret is None: return super()._hook(u, address, size, _)
+        u.reg_write(UC_MIPS_REG_V0, ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
 
 
 def initial_of(title, kind=None):
@@ -285,6 +303,9 @@ def asset_tests(ctx):
            and O['NAV_SEARCH_X'] == pod_ui.NAV_SEARCH_X == 122, 'the navbar: Search 122, Sort 168, Select 214 (46 wide, the stock Songs page\'s order), Now Playing 260')
     expect([f(n).get('style:normal:icon') for n in ('btn_search', 'btn_sort', 'btn_select', 'btn_backtoplayer')] == ['pod_nav_search', 'pod_nav_songsort', 'pod_nav_select', 'ah_nav_play']
            and all(f(n).get('style') == 'img_btn_style' for n in ('btn_search', 'btn_sort', 'btn_select')), 'they are the glass capsule\'s pieces; Now Playing is its right cap')
+    cfb = f('btn_coverflow')
+    expect((cfb.x, cfb.w, cfb.h) == (O['NAV_CF_X'], 46, 50) and cfb.get('style:normal:icon') == 'pod_nav_coverflow' and cfb.get('visible') == 'false' and cfb.get('sensitive') == 'false',
+           'the artist\'s songs Cover Flow button: the Albums page\'s left-cap glyph at 168, built hidden and insensitive (patch/songs.c shows it for an artist\'s songs only)')
     lt = f('label_title')
     expect((lt.x, lt.w) == (58, 64) and lt.get('visible') == 'false' and lt.x + lt.w == 122 and O['NAV_TITLE_X'] == 58, 'the small title starts at x 58, ends at the capsule (122) and starts hidden')
     sa = f('btn_selall')
@@ -1303,8 +1324,12 @@ def lists_tests(ctx):
     expect(m.u.mem_read(ci0 + O['CLASSINFO_ALL_SONGS'], 1)[0] == 1 and m.word(ci0) == art_cls and m.read_cstr(ci0 + O['CLASSINFO_ARTIST']) == 'Miles Davis',
            'the record holds the all-songs flag, class 0xff11 and the artist, as the stock queries leave it')
     big, lt = m.widgets['sg_title'], m.widgets['label_title']
-    expect(m.wtext[big] == 'Miles Davis' and m.wtext[lt] == 'Miles Davis' and vis(m, 'btn_sort') == (0, 0) and ('widget_move', m.widgets['btn_search'], O['NAV_CF_X'], 0) in m.calls,
-           'the artist is the title; no Sort, Search in its slot')
+    expect(m.wtext[big] == 'Miles Davis' and m.wtext[lt] == 'Miles Davis' and vis(m, 'btn_sort') == (0, 0) and ('widget_move', m.widgets['btn_search'], O['NAV_CF_X'], 0) not in m.calls,
+           'the artist is the title; no Sort')
+    cfb = m.widgets['btn_coverflow']
+    expect(vis(m, 'btn_search') == (0, 0) and vis(m, 'btn_coverflow') == (1, 1) and m.props[(lt, 'w')] == O['NAV_CF_X'] - 58,
+           'an artist\'s songs: no Search (hidden and insensitive), the Cover Flow button is the capsule\'s left cap at 168 and the title ends there')
+    expect((cfb, O['EVT_CLICK']) in m.bound, 'the Cover Flow button is bound')
     blits, texts, styles, fills = settle(m)
     shown = [t for t, rc in texts]
     expect(vis(m, 'sg_rail')[0] == 0 and m.props[(m.sv, 'virtual_h')] == Layout(['A'] * 5, sections=False).content() and shown[:5] == titles[:5] and 'Album 0' in shown
@@ -1320,6 +1345,28 @@ def lists_tests(ctx):
     calls = tap(m, 150, lay.row_y(1) + 30)
     expect([c[3] for c in calls if c[0] == 'loadSongList'] == [art_cls] and bytes(m.u.mem_read(ci0, nci)) == snap and m.played[1] == 1 and m.played[0] == m.songs[:5]
            and m.word(G_CLASS) == art_cls, 'a row plays the artist\'s songs with class 0xff11, the record put back before loadSongList')
+    # the toggle with Cover Flow's artist page: the Cover Flow button closes this page only (the covers page is under it); Back leaves the artist (both pages)
+    COVERS_WIN, SONGS_WIN = 0x111, 0x222
+    def backs(m): return sum(1 for c in m.calls if c[0] == 'navigator_back')
+    m.cf_page = COVERS_WIN; m.stack = [COVERS_WIN, SONGS_WIN]; m.calls = []
+    click(m, 'btn_coverflow')
+    expect(backs(m) == 1 and m.stack == [COVERS_WIN], f'Cover Flow button: one navigator_back, the covers page is what is left ({backs(m)}, {m.stack})')
+    m.stack = [COVERS_WIN, SONGS_WIN]; m.calls = []
+    click(m, 'btn_return')
+    expect(backs(m) == 2 and m.stack == [], f'Back from the artist\'s songs leaves the artist: this page and the covers page close ({backs(m)}, {m.stack})')
+    m.stack = [0x999, COVERS_WIN, SONGS_WIN]; m.calls = []
+    click(m, 'btn_return')
+    expect(backs(m) == 2 and m.stack == [0x999], 'Back with Now Playing or the Artists list under the covers page ends there (two pages closed)')
+    m.stack = [0x999, SONGS_WIN]; m.calls = []
+    click(m, 'btn_return')
+    expect(backs(m) == 1 and m.stack == [0x999], 'Back with another window under this page (no covers page) closes only this page')
+    m.cf_page = None; m.stack = None; m.calls = []
+    click(m, 'btn_select')
+    expect(vis(m, 'btn_coverflow') == (0, 0) and vis(m, 'btn_search') == (0, 0), 'select mode hides the Cover Flow button')
+    click(m, 'btn_coverflow')
+    expect(backs(m) == 0, 'a stray click on the hidden Cover Flow button in select mode does nothing')
+    click(m, 'btn_return')
+    expect(vis(m, 'btn_coverflow') == (1, 1) and vis(m, 'btn_search') == (0, 0) and backs(m) == 0, 'leaving select mode shows the Cover Flow button again, still no Search')
     click(m, 'btn_select'); tap(m, 150, lay.row_y(0) + 30); tap(m, 150, lay.row_y(3) + 30)
     m.confirm_answer = O['CONFIRM_DELETE_LIBRARY']
     m.u.mem_write(ci0, b'\xaa' * nci)

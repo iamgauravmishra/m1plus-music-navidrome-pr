@@ -47,6 +47,8 @@ class PM(pulldown.SM):
         self.tr_fail, self.bind_fail = set(), None
         self.tape_ret = 0               # what tape_open returns (patch/tape.c, trapped here: test/pod/tape.py runs it)
         self.handlers[PSYMS['tape_open']] = 'tape_open'
+        self.cf_ret = 0                 # what coverflow_artist returns (patch/coverflow.c, trapped here: test/pod/coverflow.py and artists.py run it)
+        self.handlers[PSYMS['coverflow_artist']] = 'coverflow_artist'
         self.init_ret = 0
         self.navs = []                 # the navigator's stack: (name, window)
         self.no_window = False         # the navigator opens no window (the top window is not the album page)
@@ -102,6 +104,11 @@ class PM(pulldown.SM):
             return self._stack_hook(u, name, a0)
         if name == 'navigator_to_with_context' and self.read_cstr(a0) == 'albuminfo_page' and not self.no_window:
             self.page('albuminfo_page')   # the navigator opens the page: a window on top (before the harness records the open)
+        if name == 'coverflow_artist':
+            rows = [self.read_cstr(self.word(r + O['REC_TITLE'])) for r in self.deques.get(a0, [])]
+            self.calls.append(('coverflow_artist', tuple(rows), a1, a2))
+            if self.cf_ret == 0 and not self.no_window: self.page('m1plus_cover')
+            u.reg_write(UC_MIPS_REG_V0, self.cf_ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
         if name == 'tape_open':
             self.calls.append(('tape_open',)); u.reg_write(UC_MIPS_REG_V0, self.tape_ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
         if name == 'widget_set_tr_text' and self.read_cstr(a1) in self.tr_fail:
@@ -148,7 +155,7 @@ class PM(pulldown.SM):
 
     def stock_kept(self):
         """Every handler the stock init registered is still registered, first and in order, and still the latest for its widget and event."""
-        return self.stock_reg == self.reg[:len(self.stock_reg)] and all(self.bound[k] == v for k, v in self.stock_bound.items() if k != (self.rows[GO_ALBUM], O['EVT_CLICK']))   # (Look up album is ours, bound after the stock one)
+        return self.stock_reg == self.reg[:len(self.stock_reg)] and all(self.bound[k] == v for k, v in self.stock_bound.items() if k not in ((self.rows[GO_ALBUM], O['EVT_CLICK']), (self.rows[GO_ARTIST], O['EVT_CLICK']), (self.rows[DELETE], O['EVT_CLICK'])))   # (Look up album, artist and Delete are ours, bound after the stock ones)
     def handlers_of(self, w, e): return [(fn, ctx) for ww, ee, fn, ctx in self.reg if (ww, ee) == (w, e)]
     def added(self): return [(self.name(w), e) for w, e, fn, ctx in self.reg[len(self.stock_reg):]]
 
@@ -409,8 +416,8 @@ def run(ctx):
     expect(m.stock_kept(),
            'every stock handler is still bound to the same function and context after the hook, and still first in the order')
     expect(sorted(m.added()) == sorted([('pod_more', O['EVT_CLICK']), ('pod_back', O['EVT_CLICK']), ('pod_tape', O['EVT_CLICK']), ('playmore_dialog', O['EVT_DESTROY']), ('playmore_listview', O['EVT_WINDOW_TO_BG']),
-                                        ('listitem4', O['EVT_CLICK'])]),
-           f'the hook adds the More click, the back click, the Tape click, the Look up album click, the destroy and the to-background handlers and nothing else ({m.added()})')
+                                        ('listitem4', O['EVT_CLICK']), ('listitem5', O['EVT_CLICK']), ('listitem6', O['EVT_CLICK'])]),
+           f'the hook adds the More click, the back click, the Tape click, the Look up album, artist and Delete clicks, the destroy and the to-background handlers and nothing else ({m.added()})')
     expect(not any(c[0] in ('widget_off_by_func',) for c in m.calls), 'no stock handler is taken off')
 
     # -- 2. hit tests on page 1: a touch reaches the row that is drawn there, a hidden row never takes it -----------------------
@@ -461,7 +468,7 @@ def run(ctx):
     expect(all(not m.hit(160, y)[-1].endswith('!') for y in range(SHEET2_Y + 2, SCREEN_H, 7)), 'page 2: no touch lands on a hidden widget')
     expect(not any(n in ROWS for n in m.hit(160, SHEET2_Y - 1)), f'page 2: one pixel above the sheet there is no row ({m.hit(160, SHEET2_Y - 1)})')
     expect(m.stock_kept(), 'page 2: the stock handlers are still bound')
-    expect(m.bound[(m.rows[DELETE], O['EVT_CLICK'])][0] == STOCK_CLICK['listitem6'], 'page 2: Delete is bound to the stock delete handler (it asks for confirmation)')
+    expect(m.handlers_of(m.rows[DELETE], O['EVT_CLICK'])[0][0] == STOCK_CLICK['listitem6'], 'page 2: Delete keeps the stock delete handler (it asks for confirmation), ours after it')
     m.click_back()
     expect(m.shown() == PAGE1 and m.size(m.dialog) == (320, 250) and m.top() == SHEET_Y and m.vh() == 250 and m.size(m.glass) == (320, 250) and all(m.dead(i) for i in HIDDEN1),
            f'the back header returns to page 1: five rows, the sheet taller again, with its own glass ({m.shown()}, {m.size(m.dialog)}, y {m.top()})')
@@ -644,6 +651,77 @@ def run(ctx):
     expect(ret == RET_STOP and flag(m) == 0, f'the destroy watch refused: the page is open and the flag is not left set ({ret}, {flag(m)})')
     m = PM(); m.present.add(KILL); m.open()
     expect(m.handlers_of(m.rows[GO_ALBUM], CLICK) == [(STOCK_CLICK['listitem4'], m.dialog)], 'kill switch: Look up album is the stock handler alone')
+
+    # -- 7c. Look up artist opens our Cover Flow artist page (patch/playmore.c pm_on_lookup_artist) ------------------------------------
+    CLS_ART = O['CLASS_ARTISTS']
+    def alib(m, playing='Miles Davis', artists=('Other', 'MILES DAVIS', 'Zed'), flag=0, pos=0):
+        """An open sheet, the library's artists (and the Unknown Artist row, id -1, last), the player on a track by `playing`."""
+        m.open()
+        rows = [m.record(title=a, rid=i + 1) for i, a in enumerate(artists)] + [m.record(title='Unknown Artist', rid=-1)]
+        m.class_lists[CLS_ART] = rows
+        if playing is not None: m.play([m.record(artist=playing)], pos)
+        m.u.mem_write(FLAG, bytes([flag]))
+        m.page('playing_page')
+        return rows
+    def artist_tap(m):
+        fn, c = m.bound[(m.rows[GO_ARTIST], CLICK)]
+        ret = m.call(fn, a0=c, a1=0, count=4000000); m.sync()
+        return ret
+    def cf_calls(m): return [c[1:] for c in m.calls if c[0] == 'coverflow_artist']
+    m = PM(); alib(m)
+    expect(m.handlers_of(m.rows[GO_ARTIST], CLICK) == [(STOCK_CLICK['listitem5'], m.dialog), (PSYMS['pm_on_lookup_artist'], m.dialog)],
+           'Look up artist: the stock handler first, ours bound after it (so it runs before it)')
+    ret = artist_tap(m)
+    expect(ret == RET_STOP and cf_calls(m) == [(('MILES DAVIS',), 0, CLS_ART)],
+           f'Look up artist: our Cover Flow artist page opens on the playing artist\'s row, matched without case, scope CLASS_ARTISTS, the stock handler stopped ({ret}, {cf_calls(m)})')
+    names = [c[0] for c in m.calls]
+    expect(('loadLocalClassList', CLS_ART) in m.calls, 'Look up artist: the list is the stock Artists list (getAllArtist / album artist as the setting says)')
+    expect(('window_close', m.dialog) in m.calls and names.index('window_close') > names.index('coverflow_artist'), 'Look up artist: the page opens first, the sheet closes after')
+    expect('deque_destroy' in names and 'navigator_to_with_context' not in names, 'Look up artist: the one-row carrier list is freed, no stock page is opened')
+    expect(flag(m) == 1 and [n for n, _ in m.navs] == ['playing_page', 'm1plus_cover'], f'Look up artist: songerinfoflag set, the artist page on top of Now Playing ({flag(m)}, {[n for n, _ in m.navs]})')
+    page = m.navs[-1][1]
+    expect(m.bound.get((page, DESTROY), (0,))[0] == PSYMS['pm_on_album_gone'], 'Look up artist: the page\'s destroy is watched')
+    m.call(m.bound[(page, DESTROY)][0], a0=page, a1=0, count=200000)
+    expect(flag(m) == 0, 'the artist page\'s destroy clears songerinfoflag')
+    m = PM(); alib(m); old = m.page('albuminfo_page'); artist_tap(m)
+    expect(('navigator_close', 'albuminfo_page') in m.calls and 'albuminfo_page' not in [n for n, _ in m.navs], 'an albuminfo_page already open is closed')
+    m = PM(); alib(m, flag=1); artist_tap(m); page = m.navs[-1][1]
+    m.call(m.bound[(page, DESTROY)][0], a0=page, a1=0, count=200000)
+    expect(flag(m) == 1, 'a flag set before the tap is left set when the page ends')
+    def stock_runs_a(m, what):
+        before = list(m.navs)
+        ret = artist_tap(m)
+        gone = [c for c in m.calls if c[0] in ('window_close', 'navigator_close', 'navigator_to_with_context')]
+        expect(ret == 0 and not gone and flag(m) == 0 and m.navs == before, f'{what}: the stock handler runs (RET_OK), nothing closed or opened, the flag unchanged ({ret}, {gone}, {flag(m)})')
+    m = PM(); alib(m, playing=None); stock_runs_a(m, 'artist: nothing playing')
+    m = PM(); alib(m, playing=''); stock_runs_a(m, 'artist: a track with no artist')
+    m = PM(); alib(m, playing='Nobody'); stock_runs_a(m, 'artist: an artist the list lacks (e.g. album artist mode)')
+    m = PM(); alib(m, playing='Unknown Artist'); stock_runs_a(m, 'artist: the Unknown Artist row is never matched')
+    m = PM(); alib(m, artists=()); stock_runs_a(m, 'artist: an empty library')
+    m = PM(); alib(m, pos=5); stock_runs_a(m, 'artist: a play position outside the queue')
+    m = PM(); alib(m); m.cf_ret = -1; stock_runs_a(m, 'artist: Cover Flow refuses (open already / page will not open)')
+    m = PM(); alib(m); m.no_window = True; ret = artist_tap(m)
+    expect(flag(m) == 0 and ret == RET_STOP, f'artist: no window to watch after the open: the flag is not left set ({flag(m)}, {ret})')
+    m = PM(); alib(m); m.widget_on_fail = frozenset({DESTROY}); ret = artist_tap(m)
+    expect(ret == RET_STOP and flag(m) == 0, f'artist: the destroy watch refused: the page is open and the flag is not left set ({ret}, {flag(m)})')
+    m = PM(); m.present.add(KILL); m.open()
+    expect(m.handlers_of(m.rows[GO_ARTIST], CLICK) == [(STOCK_CLICK['listitem5'], m.dialog)], 'kill switch: Look up artist is the stock handler alone')
+
+    # -- 7d. Delete closes the sheet before the stock handler's modal confirm (patch/playmore.c pm_on_delete) -----------------------------
+    m = PM(); alib(m)
+    expect(m.handlers_of(m.rows[DELETE], CLICK) == [(STOCK_CLICK['listitem6'], m.dialog), (PSYMS['pm_on_delete'], m.dialog)],
+           'Delete: the stock handler first in the list, ours bound after it (so ours runs before it, the emitter runs the newest first)')
+    fn, c = m.bound[(m.rows[DELETE], CLICK)]
+    ret = m.call(fn, a0=c, a1=0, count=200000); m.sync()
+    expect(ret == 0 and m.calls.count(('window_close', m.dialog)) == 1 and 'navigator_to_with_context' not in [x[0] for x in m.calls],
+           f'Delete: ours closes the sheet and returns RET_OK, so the stock handler (the modal confirm, delete only on Yes) still runs and nothing else opens ({ret})')
+    m.calls.clear(); m.call(fn, a0=0x1234, a1=0, count=200000)
+    expect(('window_close', m.dialog) not in m.calls, 'Delete: a click handler left behind for another dialog does nothing')
+    m = PM(); m.present.add(KILL); m.open()
+    expect(m.handlers_of(m.rows[DELETE], CLICK) == [(STOCK_CLICK['listitem6'], m.dialog)], 'kill switch: Delete is the stock handler alone')
+    # the other rows: Add to playlist closes the sheet itself in stock (window_close at 0x47994c, then playlist_page); Speed / A-B open no dialog; none of them gets a handler of ours
+    m = PM(); alib(m)
+    expect(all(m.handlers_of(m.rows[i], CLICK) == [(STOCK_CLICK[ROWS[i]], m.dialog)] for i in (ADD, AB)), 'Add to playlist and A-B repeat keep the stock handler alone (stock closes the sheet for Add to playlist itself)')
 
     # -- 8. the texts in every language, and the room they have ------------------------------------------------------------------------
     stock_raw = os.path.join(paths.find_stock(paths.ZIP), RAW)

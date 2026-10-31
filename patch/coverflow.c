@@ -1275,6 +1275,9 @@ static int start_build(void) {
 }
 
 /* Back: preparing -> cancel and covers, covers -> leave the page. */
+/* The artist's covers window (patch/songs.c: Back from the artist's songs list leaves the artist too), NULL when this is not an artist page. */
+void *coverflow_artist_page(void) { return cf.win && cf.scoped ? cf.win : (void *)0; }
+
 static int on_back(void *ctx, void *e) {
     (void)ctx;
     (void)e;

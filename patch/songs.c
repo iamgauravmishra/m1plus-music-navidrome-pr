@@ -86,6 +86,7 @@ typedef struct {
 static struct {
     void *win, *view, *sv, *status, *title, *back, *np;
     void *fade; /* the navbar's fade (img_nb_fade, optional): shown only while the list is scrolled */
+    void *btn_cf; /* the artist's songs list only: the Cover Flow button (back to the covers) */
     void *btn_search, *btn_sort, *btn_select, *btn_selall, *btn_play, *btn_shuffle, *btn_add, *btn_del;
     void *st_title, *st_sub; /* hidden labels whose styles are the text styles (the rail's and the header's are az's) */
     void *bar, *scrim, *card, *tick[SG_SORT_ROWS];
@@ -172,6 +173,9 @@ static int sg_lib(void) {
 static int sg_genre(void) {
     return sg.cls == CLASS_GENRE_SONGS;
 } /* a genre's songs: the stock navbar has no Search there */
+static int sg_artist(void) {
+    return sg.cls == CLASS_ARTIST_SONGS;
+} /* an artist's songs: Cover Flow's artist page is its other view (a toggle, not a stack) */
 static int sg_search_x(void) {
     return sg_lib() ? NAV_SEARCH_X : sg_genre() ? NAV_VIEW_X : NAV_CF_X;
 } /* the capsule's first piece: a list's Search takes Sort's slot; a genre's has none (Select, the left cap, is first) */
@@ -779,8 +783,11 @@ static void sg_select(int on) {
     sg.press = sg.down = 0;
     nav[0] = sg.btn_search, nav[1] = sg.btn_sort, nav[2] = sg.btn_select, nav[3] = sg.np;
     for (i = 0; i < 4; ++i)
-        sg_show(nav[i], !on && (i != 1 || sg_lib()) &&
-                            (i != 0 || !sg_genre())); /* (a list has no Sort, a genre's songs no Search) */
+        sg_show(nav[i],
+                !on && (i != 1 || sg_lib()) &&
+                    (i != 0 || (!sg_genre() &&
+                                !sg_artist()))); /* (a list has no Sort, a genre's songs and an artist's no Search) */
+    if (sg.btn_cf) sg_show(sg.btn_cf, !on && sg_artist());
     sg_show(sg.btn_selall, on);
     sg_show(sg.bar, on);
     widget_set_sensitive(sg.btn_play, !on); /* the pills stay in the content, dim and dead (their disabled style) */
@@ -905,13 +912,29 @@ static int sg_on_add(void *ctx, void *e) {
     return RET_OK;
 }
 
+/* An artist's songs and Cover Flow's artist page are two views of the artist (a toggle: the Cover Flow button here, the list button there), so Back from this one
+ * leaves the artist, not just the list: this page closes and, when the artist's covers page is what is under it, that closes too (two navigator_backs, no loop;
+ * these pages have no close animation, so each takes effect at once). The Cover Flow button closes only this page. */
+extern void *coverflow_artist_page(void); /* patch/coverflow.c: the artist's covers window, NULL when there is none */
+
 static int sg_on_back(void *ctx, void *e) {
+    void *cfw;
     (void)ctx;
     (void)e;
-    if (sg.select)
+    if (sg.select) {
         sg_select(0);
-    else
-        navigator_back();
+        return RET_OK;
+    }
+    cfw = sg_artist() ? coverflow_artist_page() : (void *)0;
+    navigator_back();
+    if (cfw && window_manager_get_top_window(window_manager()) == cfw) navigator_back();
+    return RET_OK;
+}
+
+static int sg_on_cf(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    if (sg.view && sg_artist() && !sg.select && !sg.menu) navigator_back();
     return RET_OK;
 }
 
@@ -1099,6 +1122,7 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
     sg.np = pod_bind(sg.win, "btn_backtoplayer", pod_on_player, (void *)0);
     sg.btn_search = pod_bind(sg.win, "btn_search", sg_on_search, (void *)0);
     sg.btn_sort = pod_bind(sg.win, "btn_sort", sg_on_sort, (void *)0);
+    sg.btn_cf = pod_bind(sg.win, "btn_coverflow", sg_on_cf, (void *)0); /* optional */
     sg.btn_select = pod_bind(sg.win, "btn_select", sg_on_select, (void *)0);
     sg.btn_selall = pod_bind(sg.win, "btn_selall", sg_on_selall, (void *)0);
     sg.btn_play = pod_bind(sg.win, "btn_play", sg_on_play, (void *)0);
@@ -1147,6 +1171,11 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
             widget_set_prop_str(sg.btn_select, "style:normal:icon", "pod_nav_selectl");
             widget_set_prop_str(sg.btn_select, "style:over:icon", "pod_nav_selectl");
             widget_set_prop_str(sg.btn_select, "style:pressed:icon", "pod_nav_selectl_down");
+        } else if (
+            sg_artist() &&
+            sg.btn_cf) { /* an artist's songs: the Cover Flow button is the capsule's left cap (Albums' place), no Search */
+            sg_show(sg.btn_search, 0);
+            sg_show(sg.btn_cf, 1);
         } else
             widget_move(sg.btn_search, NAV_CF_X, 0);
         widget_resize(sg.title, sg_search_x() - NAV_TITLE_X, 22);

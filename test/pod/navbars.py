@@ -6,11 +6,12 @@ digests in test/navbars-stock.sha256. What this work adds or changes is named in
 page's release tag)."""
 import glob, hashlib, os, sys
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
-import awtk_strings, awtk_ui, mod_icons, pod_i18n, pod_ui
+import awtk_strings, awtk_ui, mod_icons, mod_overlays, pod_i18n, pod_ui
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DIGESTS = os.path.join(os.path.dirname(HERE), 'navbars-stock.sha256')
 NEW_IMAGES = ('pod_nav_', 'nb_fade', 'ah_', 'pl_glass', 'pl_ic_', 'sg_', 'np_', 'dm_', 'dp_', 'pod_ic_', 'ipod_', 'tape_')      # the images this work adds or changes (all ours; ah_*: the album page's buttons, tint and navbar; np_*: Now Playing's glyphs and discs; pl_*: the Playlists page's menu, docs/modules/playlists.md; sg_*: the Songs page's); dm_ / dp_: the Daily Mix card and page; pod_ic_*: the menu and settings row glyphs (tools/mod_icons.py POD_ROWS); ipod_*: the Pod page's click wheel; tape_*: the Tape page's pictures
+OVERLAY_UI = ('confirminfo_dialog.bin', 'rippercompleted_dialog.bin', 'cardupdate_dialog.bin', 'formatcard_dialog.bin', 'dialog_autoshutdown.bin')   # the ui files tools/mod_overlays.py restyles (docs/modules/overlays.md; their window themes in styles/ stay stock)
 OUR_FILES = ('about_page.bin', 'albuminfo_page.bin')  # the About page (it carries the release tag) and the album page (its ui and theme: docs/modules/album-page.md)
 # the code-built stock navbars: (first, last + 1) of the builders' bytes in demo (the album pages' two, Folders, Artists/Genres/Composers, stock Playlists)
 BUILDERS = ((0x524e4c, 0x5251e0), (0x526a3c, 0x527010), (0x5312dc, 0x5316c0), (0x535188, 0x5357c0), (0x53d5f8, 0x53d900))
@@ -25,7 +26,7 @@ def stock_digests(assets):
         for f in sorted(glob.glob(os.path.join(assets, area, '**', '*'), recursive=True)):
             if not os.path.isfile(f): continue
             rel = os.path.relpath(f, assets); name = os.path.basename(f)
-            if (area.endswith('/ui') and name.startswith('m1plus_')) or name in OUR_FILES or (area.endswith('/images') and name.startswith(NEW_IMAGES)): continue
+            if (area.endswith('/ui') and name.startswith('m1plus_')) or name in OUR_FILES or (area.endswith('/ui') and name in OVERLAY_UI) or (name.endswith('.png') and name[:-4] in mod_overlays.NAMES) or (area.endswith('/images') and name.startswith(NEW_IMAGES)): continue
             data = open(f, 'rb').read()
             if area.endswith('/strings'):   # the string tables without OUR keys (tools/pod_i18n.py TEXT, which every feature adds to): the stock keys and their texts only
                 data = awtk_strings.serialize([kv for kv in awtk_strings.parse(data) if kv[0] not in pod_i18n.TEXT])
@@ -72,7 +73,7 @@ def run(ctx):
         if nav is None: continue
         k = {c.name: c for c in nav.children}
         back, play, lbl = k['btn_return'], k['btn_backtoplayer'], k['label_title']
-        group = sorted([k[n] for n in ('btn_coverflow', 'btn_more', 'btn_albumview', 'btn_artisttype', 'btn_customize', 'btn_feeds', 'btn_search', 'btn_sort', 'btn_select') if n in k], key=lambda c: c.x) + [play]
+        group = sorted([k[n] for n in ('btn_coverflow', 'btn_more', 'btn_albumview', 'btn_artisttype', 'btn_customize', 'btn_feeds', 'btn_search', 'btn_sort', 'btn_select') if n in k and not (n == 'btn_coverflow' and name == 'm1plus_songs')], key=lambda c: c.x) + [play]
         capsule = len(group) > 1
         ok = (back.x, back.y, back.w, back.h) == (7, 0, 44, 50) and back.get('style:normal:icon') == 'ah_nav_back' and back.get('style:pressed:icon') == 'ah_nav_back_down'
         if capsule:
