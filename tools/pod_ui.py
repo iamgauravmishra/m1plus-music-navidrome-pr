@@ -85,7 +85,7 @@ NAV_FEEDS_ICON = 'pod_nav_feeds'           # the Podcasts page's Feeds button: L
 NAV_CUSTOMIZE_ICON = 'pod_nav_customize'   # the Extras page's Customize button: the capsule's left cap on the 214 slot (tools/mod_icons.py)
 
 
-def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, songs=False, customize=False, feeds=False, select=False):
+def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, songs=False, customize=False, feeds=False, select=False, show_more=False):
     nb = Widget('view', 0, 0, SCREEN_W, NAVBAR_H, [('name', 'navigationbar_view')])
     # a title runs under a toggle's button no further than the button's left edge
     right = NAV_SEARCH_X if songs else NAV_CF_X if coverflow or more else NAV_VIEW_X if toggle or customize or feeds else NAV_TITLE_END
@@ -116,6 +116,10 @@ def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, 
         nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
             ('name', 'btn_select'), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', 'pod_nav_selectl_down'), ('style:normal:icon', 'pod_nav_selectl'), ('style:over:icon', 'pod_nav_selectl')])))
+    if show_more:   # the Podcasts Show page's "..." (opens its bottom sheet): the capsule's left cap on the 214 slot, shown on that level only (patch/podcasts.c)
+        nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
+            ('name', 'btn_more'), ('enable', 'true'), ('style', 'img_btn_style'),
+            ('style:pressed:icon', 'pod_nav_more_down'), ('style:normal:icon', 'pod_nav_more'), ('style:over:icon', 'pod_nav_more')])))
     if coverflow:
         nb.children.append(Widget('button', NAV_CF_X, 0, NAV_CF_W, NAVBAR_H, [
             ('name', 'btn_coverflow'), ('enable', 'true'), ('style', 'img_btn_style'),
@@ -339,41 +343,122 @@ def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview
     return root
 
 
-PC_DIM_RGB, PC_ACCENT_RGB, PC_ACTION_RGB = '#8E8E93', '#FF9F0A', '#0A84FF'   # a played episode's title; the show's speed in the header; an action row (Refresh All)
+PC_ACTION_RGB = '#0A84FF'   # an action row's title (Refresh All, on the Feeds level)
+# The Show page's text styles (patch/podcasts.c; hidden labels the payload reads with widget_prepare_text_style and measures with widget_measure_text): name, px, colour, alignment.
+# Colours as the approved design: the description #B8B8B8, the grey lines #AAAAAA, a played title #A6A6A6; the Latest Episode pill's label is dark on its white pill.
+PS_STYLES = (('label_ps_name', 22, '#FFFFFF', 'center'), ('label_ps_sec', 16, '#B8B8B8', 'left'), ('label_ps_meta', 15, '#AAAAAA', 'left'), ('label_ps_head', 22, '#FFFFFF', 'left'),
+             ('label_ps_date', 15, '#AAAAAA', 'left'), ('label_ps_ctitle', 20, '#FFFFFF', 'left'), ('label_ps_cdim', 20, '#A6A6A6', 'left'), ('label_ps_cdesc', 16, '#AAAAAA', 'left'),
+             ('label_ps_pill', 16, '#FFFFFF', 'left'), ('label_ps_latest', 18, '#000000', 'left'), ('label_ps_latestw', 18, '#FFFFFF', 'left'))
+PS_TINT_NAME = 'img_ah_tint'   # the album page's tint gradient (ah_tint), a window sized insensitive image under everything; shown on the Show level once the cover's tone is set
 
 
 def build_podcasts_page(page):
     """The Podcasts page (patch/podcasts.c, docs/modules/podcasts.md): the Albums list mode's structure (a stock list holding the one content view the payload paints) under the
-    plain navbar (Back, title, Now Playing). The payload paints two levels in view_grid, the shows and a show's episodes; label_status is its empty-state hint (two lines);
-    the four hidden labels are the text styles: the row title, the grey line, a played episode's title and the show's speed."""
+    plain navbar (Back, title, Now Playing). The payload paints the levels in view_grid; label_status is its empty-state hint (two lines); the hidden labels are the text styles.
+    The Show level is tinted from the cover as the album page is (docs/modules/album-page.md "Cover tint"): the window's colour is set by the payload and img_ah_tint, the gradient
+    over it, is shown; so the list, its scroll view and the content view are transparent (on every level: over the black window they look as before)."""
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
-    root.children.append(navbar(page.title, feeds=True, select=True))
-    root.children[0].children.append(selall_button())   # the select mode's navbar text (the Playlists page's)
+    root.children.append(hidden(Widget('image', 0, 0, SCREEN_W, CLIENT_H, [('name', PS_TINT_NAME), ('image', 'ah_tint'), ('draw_type', 'default'), ('clickable', 'false')])))   # first: under everything
+    root.children.append(navbar(page.title, feeds=True, select=True, show_more=True))
+    root.children[1].children.append(selall_button())   # the select mode's navbar text (the Playlists page's)
     lv = stock_list([], True)
     lv.set('name', 'podcasts_listview')
     sv = lv.children[0]
     sv.set('name', 'podcasts_scrollview')
+    for w in (lv, sv):
+        for st in ('normal', 'disable', 'focused'): w.set(f'style:{st}:bg_color', '#00000000')
     grid = Widget('view', 0, 0, SCREEN_W, GRID_VIEW_H, [('name', 'view_grid')])   # the content: the payload sizes it to the level's rows
-    styled(grid, ('normal',), 'bg_color', '#000000')
+    styled(grid, ('normal',), 'bg_color', '#00000000')
     styled(grid, ('normal',), 'text_color', '#FFFFFF')
     styled(grid, ('normal',), 'font_size', str(GRID_TITLE_PX))
     styled(grid, ('normal',), 'text_align_h', 'left')
     styled(grid, ('normal',), 'text_align_v', 'middle')
     sv.children.append(grid)
     root.children.append(lv)
-    root.children.append(nav_fade(shown=False))   # patch/podcasts.c shows it while yoffset > 0
+    root.children.append(nav_fade(shown=False))   # patch/podcasts.c shows it while yoffset > 0 (not on the Show level, which paints a fade in the page's colour)
     status = hidden(label('label_status', 20, 180, SCREEN_W - 40, 90, '', 18, '#FFFFFF'))
     styled(status, ('normal',), 'text_align_v', 'middle')
     root.children.append(status)
     for name, px, colour in (('label_row_title', LIST_TITLE_PX, '#FFFFFF'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA'),
-                             ('label_row_dim', LIST_TITLE_PX, PC_DIM_RGB), ('label_row_acc', LIST_SUB_PX, PC_ACCENT_RGB), ('label_row_act', LIST_TITLE_PX, PC_ACTION_RGB)):
+                             ('label_row_act', LIST_TITLE_PX, PC_ACTION_RGB)):
         lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
         styled(lab, ('normal',), 'text_align_v', 'middle')
         root.children.append(lab)
+    for name, px, colour, align in PS_STYLES:
+        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, align))
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+        if name == 'label_ps_latest': styled(lab, ('normal', 'pressed', 'disable', 'focused'), 'bg_color', '#FFFFFF')   # the dark label of the white pill: the contrast scan reads the label's own background
+        root.children.append(lab)
     root.children.append(select_bar('pg_bar', 'pg_bar_line', [('pg_del', OFFSETS['SG_PILL_X0'], 'Delete', 'sg_trash', OFFSETS['PL_BAR_PILL_W'])]))   # the select mode's bar: one Delete pill across it, as the Playlists page's
-    root.children.extend(podcasts_dialog())   # last: above the list and the navbar
+    root.children.extend(podcasts_sheet())   # the two bottom sheets' one widget set: above the list, the bar and the navbar
+    root.children.extend(podcasts_dialog())   # last: above everything
     return root
+
+
+# The Show page's bottom sheets (the show's "..." and an episode's), in the style of Now Playing's More sheet (docs/modules/playmore.md): the page dimmed (the Playlists menu's scrim), the
+# 320 px glass from the bottom of the window (pc_sheet5 .. pc_sheet1, a picture for each number of rows: tools/mod_icons.py PC_SHEETS; the payload sets the image
+# and the card's height and place for the rows it shows), PM_ROW_H rows, each a button (transparent, 6 % white pressed) with its 20 px glyph at x PS_SHEET_ICON_X, the label from
+# PS_SHEET_TEXT_X and, for the two rows that have one, the grey value right aligned to PS_SHEET_VALUE_R; a 1 px hairline child on the top of every row but the first (the payload shows it).
+# One widget set serves both sheets: the nine rows are fixed (glyph and label each), the payload shows and places the ones the sheet needs. Everything starts hidden and insensitive.
+PS_SHEET_ROWS = (('speed', 'pc_ic_speed', 'Playback Speed', True, False), ('refresh', 'pc_ic_refresh', 'Refresh Feed', True, False), ('select', 'pc_ic_select', 'Select Episodes', False, False),
+                 ('markall', 'pc_ic_check', 'Mark All as Played', False, False), ('unsub', 'pc_ic_unsub', 'Unsubscribe', False, True),
+                 ('dl', 'pc_ic_down', 'Download', False, False), ('rm', 'pc_ic_trash', 'Remove Download', False, False),
+                 ('mark', 'pc_ic_check', 'Mark as Played', False, False), ('unmark', 'pc_ic_undo', 'Mark as Unplayed', False, False))   # id, glyph, label, has a value, red
+PS_SHEET_ICON_X, PS_SHEET_TEXT_X, PS_SHEET_VALUE_R, PS_SHEET_VALUE_W, PS_SHEET_GAP = (OFFSETS[k] for k in ('PS_SHEET_ICON_X', 'PS_SHEET_TEXT_X', 'PS_SHEET_VALUE_R', 'PS_SHEET_VALUE_W', 'PS_SHEET_GAP'))   # patch/offsets.inc
+PS_SHEET_RED = '#FF6B6B'
+PS_SHEET_PX = 18   # the labels (Now Playing's More sheet: 18 px)
+
+
+def podcasts_sheet():
+    """(scrim, card) of the Show page's sheets: the card at its tallest (five rows, pc_sheet5), at the bottom of the window."""
+    from mod_icons import PC_SHEET_PX
+    o = OFFSETS
+    rh, rows = o['PM_ROW_H'], len(PS_SHEET_ROWS)
+    scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', 'pg_sh_scrim'), ('enable', 'true')]))
+    for st in STATES:
+        styled(scrim, (st,), 'bg_color', PL_DIM)
+        styled(scrim, (st,), 'text_color', '#FFFFFF')
+        styled(scrim, (st,), 'border_width', '0')
+        styled(scrim, (st,), 'border_color', '#00000000')
+    card = hidden(Widget('view', 0, CLIENT_H - 5 * rh, SCREEN_W, 5 * rh, [('name', 'pg_sh_card')]))
+    for st in STATES:
+        styled(card, (st,), 'bg_color', '#00000000')
+        styled(card, (st,), 'bg_image', 'pc_sheet5')
+        styled(card, (st,), 'bg_image_draw_type', 'default')
+        styled(card, (st,), 'border_width', '0')
+    for i, (rid, icon, text, value, red) in enumerate(PS_SHEET_ROWS):
+        item = hidden(Widget('button', 0, i * rh, SCREEN_W, rh, [('name', f'pg_sh_{rid}'), ('enable', 'true')]))
+        for st in STATES:
+            styled(item, (st,), 'bg_color', PL_PRESSED if st == 'pressed' else '#00000000')
+            styled(item, (st,), 'text_color', '#FFFFFF')
+            styled(item, (st,), 'border_width', '0')
+            styled(item, (st,), 'border_color', '#00000000')
+        item.children.append(Widget('image', PS_SHEET_ICON_X, (rh - PC_SHEET_PX) // 2, PC_SHEET_PX, PC_SHEET_PX, [
+            ('name', f'pg_sh_{rid}_ic'), ('draw_type', 'default'), ('image', icon), ('sensitive', 'false')]))
+        lab = Widget('hscroll_label', PS_SHEET_TEXT_X, 0, PS_SHEET_VALUE_R - PS_SHEET_TEXT_X, rh, [
+            ('name', f'pg_sh_{rid}_tx'), pod_i18n.text_prop(text), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+        for st in ('normal', 'disable', 'focused'):
+            styled(lab, (st,), 'font_size', str(PS_SHEET_PX))
+            styled(lab, (st,), 'text_color', PS_SHEET_RED if red else '#FFFFFF')
+            styled(lab, (st,), 'text_align_h', 'left')
+            styled(lab, (st,), 'text_align_v', 'middle')
+        item.children.append(lab)
+        if value:
+            val = Widget('hscroll_label', PS_SHEET_VALUE_R - PS_SHEET_VALUE_W, 0, PS_SHEET_VALUE_W, rh, [
+                ('name', f'pg_sh_{rid}_vl'), ('text', ''), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+            for st in ('normal', 'disable', 'focused'):
+                styled(val, (st,), 'font_size', str(PS_SHEET_PX))
+                styled(val, (st,), 'text_color', '#AAAAAA')
+                styled(val, (st,), 'text_align_h', 'right')
+                styled(val, (st,), 'text_align_v', 'middle')
+            item.children.append(val)
+        hair = Widget('view', 0, 0, SCREEN_W, 1, [('name', f'pg_sh_{rid}_hr'), ('sensitive', 'false')])
+        for st in STATES: styled(hair, (st,), 'bg_color', PL_HAIR)
+        item.children.append(hair)
+        card.children.append(item)
+    assert len(card.children) == rows
+    return scrim, card
 
 
 # The refresh dialog of the Podcasts page (patch/podcasts.c pg_dlg_*): the Playlists menu's pieces. A full-client scrim (dimmed as that menu's, it takes every touch: the dialog is

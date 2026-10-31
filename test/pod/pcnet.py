@@ -277,6 +277,10 @@ def run(ctx):
     s = show_of(m, 'WSJ Minute Briefing')
     expect(s and s['title'] == 'WSJ Minute Briefing' and s['feed'] == F_WSJ and s['image'].startswith('https://image.simplecastcdn.com/images/2c92a2cd') and s['checked'] == 1800000000,
            'the .show file: the feed\'s title, the feed url, the picture url, checked = now; the model reads it')
+    expect(s['author'] == 'The Wall Street Journal' and s['category'] == 'News' and s['desc'].startswith('The top business headlines from The Wall Street Journal, three times daily. Whether it’s the latest')
+           and 150 < len(s['desc'].encode()) <= 200 and b'\t' not in m.fs[f'{ROOT_DIR}/WSJ Minute Briefing/.show'],
+           'the .show file also has the channel\'s author, its first category (not the sub-category) and its summary (cut at 200 bytes) as plain text, the model reads them')
+    shown_before = m.fs[f'{ROOT_DIR}/WSJ Minute Briefing/.show']
     text = m.fs[f'{ROOT_DIR}/WSJ Minute Briefing/.episodes'].decode()
     lines = [dict(f.split('=', 1) for f in ln.split('\t')) for ln in text.split('\n')[1:] if ln]
     expect(text.startswith('M1PLUS-EPISODES 1\n') and [l['t'] for l in lines] == ['Intensifying Tech Selloff Drags Down Nasdaq', 'Amazon, Intel Earnings Add Fuel to Tech Selloff', 'Alphabet Stock Suffers Worst Day on Record']
@@ -301,6 +305,16 @@ def run(ctx):
     expect(m.fs[f'{ROOT_DIR}/WSJ Minute Briefing/.episodes'] == before[f'{ROOT_DIR}/WSJ Minute Briefing/.episodes'] and status(m, F_WSJ) == (PN['OK'], 0),
            'the same feed again: the same .episodes, no new episode')
     expect(s['title'] == 'WSJ Minute Briefing' and s['checked'] == 1800003600 and f'{ROOT_DIR}/WSJ Renamed Upstream/.show' not in m.fs, 'the title and the folder are not changed after the first refresh; checked moved')
+    # a feed that now gives no author, category, summary or episode description keeps what the files had
+    bare = re.sub(rb'<itunes:author>.*?</itunes:author>|<itunes:category[^>]*/>|<itunes:category[^>]*>|</itunes:category>|<itunes:summary>.*?</itunes:summary>|<description>.*?</description>|<content:encoded>.*?</content:encoded>', b'', WSJ, flags=re.S)
+    expect(b'itunes:author' not in bare and b'itunes:summary' not in bare and b'<description' not in bare, 'the stripped feed has none of them')
+    m.wall += 3600
+    m.curl_site = lambda url, o: {'body': bare}
+    eps_before = m.fs[f'{ROOT_DIR}/WSJ Minute Briefing/.episodes']
+    r, th = start(m, ['WSJ Minute Briefing']); work(m, th)
+    s2 = show_of(m, 'WSJ Minute Briefing')
+    expect((s2['author'], s2['category'], s2['desc']) == (s['author'], s['category'], s['desc']) and s2['checked'] == s['checked'] + 3600 and m.fs[f'{ROOT_DIR}/WSJ Minute Briefing/.episodes'] == eps_before and shown_before != m.fs[f'{ROOT_DIR}/WSJ Minute Briefing/.show'],
+           'a refresh whose feed gives an empty author, category and summary keeps the old values in .show (only checked moves) and the old episode descriptions in .episodes')
     # a downloaded file stays the episode's; an entry outside the window with its file is carried
     dl = f'{ROOT_DIR}/WSJ Minute Briefing/' + lines[2]['f']
     m.put(dl, b'audio')

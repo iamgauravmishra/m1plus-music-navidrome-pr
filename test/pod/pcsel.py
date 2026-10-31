@@ -20,7 +20,7 @@ def sibling(name):
 
 DL = sibling('pcdl')
 PF, PCN, PCP = DL.PF, DL.PCN, DL.PCP
-RP, ROW, HDR, NOW, PN = DL.RP, DL.ROW, DL.HDR, DL.NOW, DL.PN
+RP, ROW, NOW, PN = DL.RP, DL.ROW, DL.NOW, DL.PN
 pn_at, poke_slot, poke_fail, key_of = DL.pn_at, DL.poke_slot, DL.poke_fail, DL.key_of
 SG_MARK, SG_BAR_H = O['SG_MARK'], O['SG_BAR_H']
 SUB = 'Sub One'
@@ -53,7 +53,7 @@ def title(m): return PCP.title_text(m)
 def lines(m, top=0):
     """[(row, title, grey line)] of a frame: the titles and the grey lines by row (top: where the first row starts)."""
     _, texts, styles, _ = PCP.paint(m)
-    t = {(y - top) // ROW: v for (v, (x, y, w, h)), s in zip(texts, styles) if s in ('label_row_title', 'label_row_dim', 'label_row_act') and y >= top and (y - top) % ROW == O['LIST_TITLE_Y']}
+    t = {(y - top) // ROW: v for (v, (x, y, w, h)), s in zip(texts, styles) if s in ('label_row_title', 'label_row_act') and y >= top and (y - top) % ROW == O['LIST_TITLE_Y']}
     g = {(y - top) // ROW: v for (v, (x, y, w, h)), s in zip(texts, styles) if s == 'label_row_sub' and y >= top and (y - top) % ROW == O['LIST_SUB_Y']}
     return [(r, t.get(r), g.get(r)) for r in sorted(t)]
 
@@ -135,51 +135,74 @@ def downloads_tests(ctx):
     expect(lines(m)[0][2] == 'Downloading 50%' and not [c for c in m.calls if c[0] in ('opendir', '__xstat')], 'a step of progress: the line is made again, the card is not read')
 
 
+def start_select(m):
+    """Select mode of the Show page: the show's "..." and its sheet's Select Episodes."""
+    PCP.click(m, 'btn_more')
+    PCP.click(m, 'pg_sh_select')
+
+
+def all_marks(m):
+    """{cell: image} of the select marks of the open show's cells, from frames scrolled 120 px apart (a mark is drawn only wholly in view)."""
+    h = PCP.hdr(m)
+    n = (m.props.get((m.sv, 'virtual_h')) - h - 20 - SG_BAR_H) // PCP.CELL
+    out = {}
+    for k in range(n * PCP.CELL // 120 + 2):
+        for x, y, b in marks(m, h + 120 * k):
+            i = (y + h + 120 * k - h) // PCP.CELL
+            if 0 <= i < n: out.setdefault(i, (x, b))
+    return out
+
+
 def select_tests(ctx):
     expect = ctx.expect
     m = page()
     expect(flags(m, 'btn_select') == (0, 0) and flags(m, 'btn_feeds') == (1, 1), 'the Shows level: Feeds, no Select')
     PCP.tap(m, 150, 10)   # Alpha Show (two files)
-    expect(title(m) == 'Alpha Show' and flags(m, 'btn_select') == (1, 1) and flags(m, 'btn_feeds') == (0, 0) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_play',
-           'a show with episodes on the card: the Select button (the capsule\'s left cap) and Now Playing as its right cap')
+    expect(title(m) == 'Alpha Show' and flags(m, 'btn_select') == (0, 0) and flags(m, 'btn_feeds') == (0, 0) and flags(m, 'btn_more') == (1, 1) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_play',
+           'a show\'s page: the "..." (the capsule\'s left cap) and Now Playing as its right cap; the Select button is not there (Select Episodes is in the sheet)')
     m = page(); to_feeds(m)
     m.put(f'{RP}/Sub Two/.episodes', (PCP.EPS_HEAD + 'g=t1\tp=5\tf=t.mp3\tt=T\tu=https://e.example/t.mp3\n').encode())
     PCP.tap(m, 150, 3 * ROW + 10)   # Sub Two: one episode, not on the card
-    expect(title(m) == 'Sub Two' and flags(m, 'btn_select') == (0, 0) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_np',
-           'a show with only remote episodes: no Select button, Now Playing is the glass disc')
+    PCP.click(m, 'btn_more')
+    expect(title(m) == 'Sub Two' and flags(m, 'pg_sh_select') == (0, 0) and flags(m, 'pg_sh_speed')[0] == 1,
+           'a show with only remote episodes: the sheet has no Select Episodes row (nothing can be marked)')
     # Sub One from Feeds: a, b local, c, e, f remote, d paused
     m = page(); to_feeds(m)
     PCP.tap(m, 150, 2 * ROW + 10)
-    expect(title(m) == SUB and flags(m, 'btn_select') == (1, 1), 'Sub One from Feeds: Select')
+    PCP.click(m, 'btn_more')
+    expect(title(m) == SUB and flags(m, 'pg_sh_select') == (1, 1), 'Sub One from Feeds: the sheet has Select Episodes')
+    PCP.click(m, 'pg_sh_scrim')
     h0 = m.props.get((m.sv, 'virtual_h'))
     m.calls = []
-    PCP.click(m, 'btn_select')
+    start_select(m)
     t, back = m.widgets['label_title'], m.widgets['btn_return']
-    expect(('widget_set_text_utf8', t, '0 Selected') in m.calls and ('widget_resize', t, O['SG_SELALL_X'] - O['NAV_TITLE_X'], 22) in m.calls, 'Select: the title reads 0 Selected and runs to Select All')
-    expect(flags(m, 'btn_selall') == (1, 1) and flags(m, 'pg_bar') == (1, 1) and flags(m, 'btn_select') == (0, 0) and flags(m, 'btn_backtoplayer') == (0, 0) and flags(m, 'btn_feeds') == (0, 0),
-           'Select All and the bar show; Select and Now Playing go (hidden and insensitive)')
+    expect(('widget_set_text_utf8', t, '0 Selected') in m.calls and ('widget_resize', t, O['SG_SELALL_X'] - O['NAV_TITLE_X'], 22) in m.calls and flags(m, 'pg_sh_card') == (0, 0), 'Select Episodes: the sheet closes, the title reads 0 Selected and runs to Select All')
+    expect(flags(m, 'btn_selall') == (1, 1) and flags(m, 'pg_bar') == (1, 1) and flags(m, 'btn_select') == (0, 0) and flags(m, 'btn_more') == (0, 0) and flags(m, 'btn_backtoplayer') == (0, 0) and flags(m, 'btn_feeds') == (0, 0),
+           'Select All and the bar show; the "..." and Now Playing go (hidden and insensitive)')
+    expect(m.props.get((t, 'visible')) == 1, 'the title shows (in select mode it is "N Selected", not the collapsing show title)')
     expect(m.props.get((back, 'style:normal:icon')) == 'ah_nav_close' and m.props.get((back, 'style:pressed:icon')) == 'ah_nav_close_down', 'Back becomes the glass x')
     expect(m.props.get((m.sv, 'virtual_h')) == h0 + SG_BAR_H, 'the content is the bar\'s height longer')
-    mk = marks(m)
-    expect(len(mk) == 3 and len({b for _, _, b in mk}) == 1, f'a mark on each row that can be marked (two files and the .part), all unselected ({len(mk)})')
-    expect(all(x == 16 + (O['SG_SEL_COL'] - 6 - SG_MARK) // 2 for x, _, _ in mk), 'in the mark column that opens left of the texts')
-    ls = lines(m, HDR)
-    expect([t_ for _, t_, _ in ls][:4] == ['Ep A', 'Ep B', 'Ep C', 'Ep D'], f'the four rows in view: {ls}')
-    _, texts, styles, _ = PCP.paint(m)
-    xs = [r[0] for (v, r), s in zip(texts, styles) if s in ('label_row_title', 'label_row_dim') and r[1] >= HDR]
-    expect(xs and all(x == 16 + O['SG_SEL_COL'] for x in xs), f'the texts moved right by the mark column ({xs})')
-    # taps: a remote row marks nothing, a local one marks
+    mk = all_marks(m)
+    expect(sorted(mk) == [0, 1, 3] and len({b for _, b in mk.values()}) == 1, f'a mark on each cell that can be marked (the two files and the .part), all unselected ({sorted(mk)})')
+    expect(all(x == O['PS_CELL_X'] + (O['SG_SEL_COL'] - 6 - SG_MARK) // 2 for x, _ in mk.values()), 'in the mark column that opens left of the texts')
+    c = PCP.all_cells(m)
+    expect([c[i]['title'] for i in range(4)] == [['Ep A'], ['Ep B'], ['Ep C'], ['Ep D']], f'the cells: {[c[i]["title"] for i in range(4)]}')
+    _, texts, styles, _ = PCP.paint(m, PCP.hdr(m))
+    xs = [r[0] for (v, r), s in zip(texts, styles) if s in ('label_ps_ctitle', 'label_ps_cdim')]
+    expect(xs and all(x == O['PS_CELL_X'] + O['SG_SEL_COL'] for x in xs), f'the texts moved right by the mark column ({xs})')
+    expect(not [b for b in PCP.paint(m, PCP.hdr(m))[0] if tuple(b[2][2:]) == (O['PA_DOTS_PX'], O['PA_DOTS_PX'])], 'and the "..." of the cells is gone')
+    # taps: a remote cell marks nothing, a local one marks
     m.calls = []
-    PCP.tap(m, 150, HDR + 2 * ROW + 10)   # Ep C: remote
-    expect(not [c for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] == t] and DL.fn(m, 'pn_dl_count') == 0 and 'pthread_create' not in [c[0] for c in m.calls],
-           'a tap on a remote row marks nothing and downloads nothing')
+    PCP.body(m, 2)   # Ep C: remote
+    expect(not [c_ for c_ in m.calls if c_[0] == 'widget_set_text_utf8' and c_[1] == t] and DL.fn(m, 'pn_dl_count') == 0 and 'pthread_create' not in [c_[0] for c_ in m.calls],
+           'a tap on a remote cell marks nothing and downloads nothing')
     m.calls = []
-    PCP.tap(m, 150, HDR + 10)
-    expect(('widget_set_text_utf8', t, '1 Selected') in m.calls and 'navigator_to_with_context' not in [c[0] for c in m.calls], 'a tap on a file marks it (1 Selected) and plays nothing')
-    expect(len({b for _, _, b in marks(m)}) == 2, 'the marked row has the selected image')
+    PCP.body(m, 0)
+    expect(('widget_set_text_utf8', t, '1 Selected') in m.calls and 'navigator_to_with_context' not in [c_[0] for c_ in m.calls], 'a tap on a file marks it (1 Selected) and plays nothing')
+    expect(len({b for _, b in all_marks(m).values()}) == 2, 'the marked cell has the selected image')
     m.calls = []
-    PCP.tap(m, 20, HDR + 10)   # where the dot would be
-    expect(m.ring() is None and ('widget_set_text_utf8', t, '0 Selected') in m.calls, 'a tap where the dot would be unmarks (it does not toggle played)')
+    PCP.act(m, 0)   # the pill: in select mode the whole cell is its body
+    expect(m.ring() is None and ('widget_set_text_utf8', t, '0 Selected') in m.calls, 'a tap on the pill unmarks (in select mode it does not play, and nothing is toggled played)')
     m.calls = []
     PCP.click(m, 'btn_selall')
     expect(('widget_set_text_utf8', t, '3 Selected') in m.calls, 'Select All marks the three that can be marked')
@@ -187,17 +210,17 @@ def select_tests(ctx):
     PCP.click(m, 'btn_selall')
     expect(('widget_set_text_utf8', t, '0 Selected') in m.calls, 'Select All again: none')
     m.calls = []
-    PCP.tap(m, 150, HDR + 10, move=40)
-    expect(not [c for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] == t], 'a drag marks nothing')
+    PCP.body(m, 0, move=40)
+    expect(not [c_ for c_ in m.calls if c_[0] == 'widget_set_text_utf8' and c_[1] == t], 'a drag marks nothing')
     m.calls = []
     PCP.click(m, 'btn_return')
-    expect(flags(m, 'pg_bar') == (0, 0) and flags(m, 'btn_selall') == (0, 0) and flags(m, 'btn_select') == (1, 1) and m.props.get((back, 'style:normal:icon')) == 'ah_nav_back' and title(m) == SUB
-           and 'navigator_back' not in [c[0] for c in m.calls] and m.props.get((m.sv, 'virtual_h')) == h0,
-           'Back (the x) leaves select mode first: the bar goes, Select is back, the title and the content are as before')
-    PCP.click(m, 'btn_select'); m.calls = []
+    expect(flags(m, 'pg_bar') == (0, 0) and flags(m, 'btn_selall') == (0, 0) and flags(m, 'btn_more') == (1, 1) and m.props.get((back, 'style:normal:icon')) == 'ah_nav_back' and title(m) == SUB
+           and 'navigator_back' not in [c_[0] for c_ in m.calls] and m.props.get((m.sv, 'virtual_h')) == h0 and m.props.get((t, 'visible')) == 0,
+           'Back (the x) leaves select mode first: the bar goes, the "..." is back, the title (hidden again at the top) and the content are as before')
+    start_select(m); m.calls = []
     PCP.click(m, 'pg_del')
     expect(not confirms(m), 'Delete with nothing marked does nothing')
-    PCP.tap(m, 150, HDR + 10); m.calls = []; m.confirm_yes = False
+    PCP.body(m, 0); m.calls = []; m.confirm_yes = False
     PCP.click(m, 'pg_del')
     expect(confirms(m) == ['Delete the selected episodes?'] and not unlinks(m) and flags(m, 'pg_bar') == (1, 1), 'Delete asks; No: nothing is deleted and the mode stays')
     # Yes, with the playing episode among them
@@ -214,19 +237,18 @@ def select_tests(ctx):
     expect(f'{RP}/{SUB}/a.mp3' in m.fs and f'{RP}/{SUB}/b.mp3' not in m.fs and f'{RP}/{SUB}/d.mp3.part' not in m.fs, 'the card: a.mp3 stays; b.mp3 and the paused d.mp3.part are gone')
     eps = m.fs[f'{RP}/{SUB}/.episodes']
     expect(b'f=b.mp3' in eps and b'f=d.mp3' in eps, 'the .episodes lines are kept (the episodes are remote again)')
-    expect(flags(m, 'pg_bar') == (0, 0) and title(m) == SUB and flags(m, 'btn_select') == (1, 1), 'the mode ended; the page is read again')
+    expect(flags(m, 'pg_bar') == (0, 0) and title(m) == SUB and flags(m, 'btn_more') == (1, 1), 'the mode ended; the page is read again')
     expect(m.state(h)[0] == 0, 'the played mark of a deleted episode is forgotten')
-    got = lines(m, HDR)
-    _, _, styles, _ = PCP.paint(m)
-    expect([t_ for _, t_, _ in got][:2] == ['Ep A', 'Ep B'] and styles.count('label_row_title') >= 1 + 1, f'the page now: {got}')
+    c = PCP.all_cells(m)
+    expect([c[i]['title'] for i in range(2)] == [['Ep A'], ['Ep B']] and [c[i]['pill'] for i in range(2)][0].endswith('m') and c[1]['pill'] == '1 MB', f'the page now: Ep A on the card, Ep B a download cell again ({c[0]["pill"]}, {c[1]["pill"]})')
     # a show left with no file drops off the Shows level, and stays in Feeds
     m = page()
     PCP.tap(m, 150, 10)   # Alpha Show
-    PCP.click(m, 'btn_select'); PCP.click(m, 'btn_selall'); m.calls = []; m.confirm_yes = True
+    start_select(m); PCP.click(m, 'btn_selall'); m.calls = []; m.confirm_yes = True
     PCP.click(m, 'pg_del')
-    expect(sorted(unlinks(m)) == sorted(['Alpha Show/ep1.mp3', 'Alpha Show/ep1.mp3.part', 'Alpha Show/ep2.mp3', 'Alpha Show/ep2.mp3.part']) and title(m) == 'Alpha Show' and flags(m, 'btn_select') == (0, 0),
-           f'Alpha Show: both files deleted; the page is empty, Select goes ({unlinks(m)})')
-    expect(('widget_set_tr_text', m.widgets['label_status'], 'No downloaded episodes') in m.calls, 'and says so')
+    expect(sorted(unlinks(m)) == sorted(['Alpha Show/ep1.mp3', 'Alpha Show/ep1.mp3.part', 'Alpha Show/ep2.mp3', 'Alpha Show/ep2.mp3.part']) and title(m) == 'Alpha Show',
+           f'Alpha Show: both files deleted; the page is empty ({unlinks(m)})')
+    expect(('widget_set_tr_text', m.widgets['label_status'], 'No downloaded episodes') in m.calls, 'and says so under its header')
     PCP.click(m, 'btn_return')
     names = [t_ for _, t_, _ in lines(m)]
     expect('Alpha Show' not in names, f'Back: the Shows level no longer lists it ({names})')
@@ -256,9 +278,9 @@ def select_tests(ctx):
     expect([t_ for _, t_, _ in lines(m)] == ['Ep E'] and flags(m, 'pg_bar') == (0, 0), 'the page shows what is left; the mode ended')
     expect(f'{RP}/{SUB}/a.mp3' in m.fs and b'f=c.mp3' in m.fs[f'{RP}/{SUB}/.episodes'], 'the episodes stay remote (their lines are kept)')
     # a download finishing while rows are marked does not reload the list under the marks; and a dark tick does no visual work
-    m = page(); to_feeds(m); PCP.tap(m, 150, 2 * ROW + 10); PCP.click(m, 'btn_select'); PCP.tap(m, 150, HDR + 10)
+    m = page(); to_feeds(m); PCP.tap(m, 150, 2 * ROW + 10); start_select(m); PCP.body(m, 0)
     m.setword(pn_at(12), 700); tick(m)
-    expect(len(marks(m)) == 3 and len({b for _, _, b in marks(m)}) == 2, 'the generation moves while rows are marked: the rows and the marks stay as they are')
+    expect(len(all_marks(m)) == 3 and len({b for _, b in all_marks(m).values()}) == 2, 'the generation moves while rows are marked: the cells and the marks stay as they are')
     m.screen(False); m.calls = []; m.setword(pn_at(12), 800)
     m.call(PSYMS['pg_tick'], a0=0, count=40000000)
     expect(not [c for c in m.calls if c[0] in ('widget_invalidate_force', 'widget_set_text_utf8', 'widget_set_visible')], 'screen off: a tick does no visual work in select mode')

@@ -288,7 +288,7 @@ def used_glyphs():
     """(Lucide names, Tabler names) of every glyph the tables use; custom ones excluded."""
     gl = [e[2] for e in HOME + SETTINGS + LISTS] + list(PULLDOWN.values()) + list(STATUS.values()) + \
         [g for g in WIFI_LEVELS if g] + [COVER_GLYPH, POD_HOME_GLYPH, SHOT_BAR[1]] + list(NAV_VIEW.values()) + [g for _, g in PL_MENU_ICONS] + [v[1] for v in POD_ROWS.values() if v[1] != SHANLING] + \
-        [g for _, g, _ in GLYPHS] + [v[0] for v in SONGS_IMAGES.values()] + [v[0] for v in KEYBOARD_IMAGES.values()] + [KB_CLEAR[1], DP_ADD_GLYPH] + [g for _, g in DISCS] + [v[0] for v in NP.values() if not v[0].startswith('pil:')] + ['lock:filled']
+        [g for _, g, _ in GLYPHS] + [v[0] for v in SONGS_IMAGES.values()] + [v[0] for v in KEYBOARD_IMAGES.values()] + [KB_CLEAR[1], DP_ADD_GLYPH] + list(PC_GLYPHS) + [g for _, g in DISCS] + [v[0] for v in NP.values() if not v[0].startswith('pil:')] + ['lock:filled']
     names = {gname(g) for g in gl if g and not is_custom(g) and not is_badge(g)}
     return sorted(n for n in names if not n.startswith('T:')), sorted(n[2:] for n in names if n.startswith('T:'))
 
@@ -628,6 +628,7 @@ def generate_all(sizes):
     for n, pressed in PLAYALL.items(): f[n] = play_all_pill(pressed)
     for n, level in WIFI_LOCK.items(): f[n] = wifi_lock(level)
     f.update(album_images())
+    f.update(podcast_images())
     return f
 
 def ah_tint_alpha(y):
@@ -660,6 +661,93 @@ def songs_images():
     for n, (g, rgb, ink, canvas) in SONGS_IMAGES.items():
         c = Image.new('RGBA', (canvas, canvas), (0, 0, 0, 0)); gi = glyph_fit(g, ink, ink, rgb, 0)
         c.alpha_composite(gi, ((canvas - gi.width) // 2, (canvas - gi.height) // 2)); f[n] = c
+    return f
+
+# The Podcasts Show page (patch/podcasts.c, docs/modules/podcasts.md "The Show page"). ONE atlas, pc_atlas (PA_SIZE square, straight-alpha RGBA), holds what the page paints
+# in its content view (no widget per cell): the progress ring's 12 steps, the state glyphs, the "on the card" badge, the "..." glyph and the discs the pills' ends are cut from. The
+# cells are patch/offsets.inc PA_* (test/pod/pcshow.py checks they are these numbers); the payload decodes the atlas once with its alpha (podcasts.c pg_atlas). The bottom sheets' glyphs
+# are images of their own (they sit in widgets) and the sheets' glass for one to five rows (the More sheet's glass, a picture per height).
+PA_SIZE = 160
+PA_RING_N, PA_RING_PX, PA_RING_COLS = 12, 16, 6          # ring k (the arc k / 12 of the circle, 0..11) at column k % 6, row k / 6 of 16 px cells from the atlas' top left
+PA_G_Y, PA_G_PX = 32, 16                                 # the 16 px glyph strip: arrow-down, play, pause, retry, check (grey), play (dark) at x 16 * index
+PA_DOTS_Y, PA_DOTS_PX, PA_BADGE_X, PA_BADGE_PX = 48, 20, 24, 12   # the "..." glyph (20 px, grey) at x 0; the 12 px badge at x 24
+PA_PILL_Y, PA_PILLF_X, PA_PILLO_X, PA_PILLW_X, PA_PILLR_X, PA_PILL_PX, PA_PILLW_PX = 68, 0, 32, 64, 108, 30, 40   # the discs: filled (30), outlined (30), white (40) and outlined (40): the Latest Episode pill's ends
+PA_FILL_A, PA_RING_A, PA_TRACK_A = 56, 110, 80           # alpha of the filled pill, of the outlined pill's ring (2 px), of the progress ring's track
+PA_GREY, PA_BADGE_GREY, PA_DARK, PA_RED = (0xAA,) * 3, (0xD0,) * 3, (0x14,) * 3, (0xFF, 0x6B, 0x6B)
+PC_ATLAS = 'pc_atlas'
+PC_SHEET_ICONS = (('pc_ic_speed', 'gauge', WHITE), ('pc_ic_refresh', 'refresh-cw', WHITE), ('pc_ic_select', 'list-checks', WHITE), ('pc_ic_check', '+check', WHITE),
+                  ('pc_ic_unsub', 'x', PA_RED), ('pc_ic_down', 'arrow-down', WHITE), ('pc_ic_trash', 'trash', WHITE), ('pc_ic_undo', 'rotate-ccw', WHITE))
+PC_SHEET_PX = 20
+PC_SHEETS = (('pc_sheet1', 50), ('pc_sheet2', 100), ('pc_sheet3', 150), ('pc_sheet4', 200), ('pc_sheet5', 250))   # the sheets' glass for 1..5 rows (Now Playing's pm_sheet / pm_sheet5 for 4 and 5, but a name of ours: the Show page's rows need no other page's image)
+PC_GLYPHS = ('arrow-down',)                                  # the Lucide glyph the set adds to the sources (the download symbol of the pill, the badge and the sheet)
+PODCASTS = [PC_ATLAS] + [n for n, _, _ in PC_SHEET_ICONS] + [n for n, _ in PC_SHEETS]
+ALBUM += PODCASTS
+
+def _pc_ring(k):
+    """The progress ring's step k: a faint 2 px track and the arc from 12 o'clock for k / PA_RING_N of the circle, white, 16 px."""
+    from PIL import Image, ImageChops, ImageDraw
+    px, s, w = PA_RING_PX, 8, 2
+    n = px * s
+    def arc(frac):
+        m = Image.new('L', (n, n), 0)
+        d = ImageDraw.Draw(m)
+        if frac > 0: d.arc((0, 0, n - 1, n - 1), -90, -90 + 360 * frac, fill=255, width=w * s)
+        return m.resize((px, px), Image.LANCZOS)
+    track = Image.new('L', (n, n), 0)
+    ImageDraw.Draw(track).ellipse((0, 0, n - 1, n - 1), outline=255, width=w * s)
+    track = track.resize((px, px), Image.LANCZOS).point(lambda v: v * PA_TRACK_A // 255)
+    out = Image.new('RGBA', (px, px), WHITE + (0,))
+    out.putalpha(ImageChops.lighter(track, arc(k / PA_RING_N)))
+    return out
+
+def _pc_disc(size, rgb, alpha, ring=0):
+    """A disc (or a ring `ring` px wide) of one colour at one alpha, anti-aliased: the ends of a pill."""
+    from PIL import Image, ImageChops, ImageDraw
+    s = 8
+    m = Image.new('L', (size * s, size * s), 0)
+    ImageDraw.Draw(m).ellipse((0, 0, size * s - 1, size * s - 1), fill=255)
+    if ring:
+        inner = Image.new('L', (size * s, size * s), 0)
+        ImageDraw.Draw(inner).ellipse((ring * s, ring * s, (size - ring) * s - 1, (size - ring) * s - 1), fill=255)
+        m = ImageChops.subtract(m, inner)
+    out = Image.new('RGBA', (size, size), rgb + (0,))
+    out.putalpha(m.resize((size, size), Image.LANCZOS).point(lambda v: v * alpha // 255))
+    return out
+
+def _pc_badge():
+    """The 12 px "on the card" badge: a light grey disc with the Lucide arrow-down cut out of it (transparent: the page shows through)."""
+    from PIL import Image, ImageChops
+    px = PA_BADGE_PX
+    disc_ = _pc_disc(px, PA_BADGE_GREY, 255)
+    g = glyph('arrow-down', 8, 'small')            # 8 px, 1.5 px stroke
+    cut = Image.new('L', (px, px), 0); cut.paste(g.getchannel('A'), ((px - g.width) // 2, (px - g.height) // 2))
+    out = disc_.copy(); out.putalpha(ImageChops.subtract(disc_.getchannel('A'), cut))
+    return out
+
+def pc_atlas():
+    """The atlas image (PA_SIZE square)."""
+    from PIL import Image, ImageOps
+    a = Image.new('RGBA', (PA_SIZE, PA_SIZE), (0, 0, 0, 0))
+    for k in range(PA_RING_N): a.alpha_composite(_pc_ring(k), (k % PA_RING_COLS * PA_RING_PX, k // PA_RING_COLS * PA_RING_PX))
+    def cell(i, im): a.alpha_composite(im, (i * PA_G_PX + (PA_G_PX - im.width) // 2, PA_G_Y + (PA_G_PX - im.height) // 2))
+    cell(0, glyph('arrow-down', PA_G_PX, 'small'))
+    cell(1, glyph('play', 14, 'solid')); cell(2, glyph('pause', 14, 'solid'))
+    cell(3, ImageOps.mirror(glyph('rotate-ccw', PA_G_PX, 'small')))
+    cell(4, tint(glyph('+check', 14, 'small'), PA_GREY))
+    cell(5, tint(glyph('play', 14, 'solid'), PA_DARK))
+    d = glyph('ellipsis', PA_DOTS_PX, 'solid'); a.alpha_composite(tint(d, PA_GREY), (0, PA_DOTS_Y))
+    a.alpha_composite(_pc_badge(), (PA_BADGE_X, PA_DOTS_Y))
+    a.alpha_composite(_pc_disc(PA_PILL_PX, WHITE, PA_FILL_A), (PA_PILLF_X, PA_PILL_Y))
+    a.alpha_composite(_pc_disc(PA_PILL_PX, WHITE, PA_RING_A, 2), (PA_PILLO_X, PA_PILL_Y))
+    a.alpha_composite(_pc_disc(PA_PILLW_PX, WHITE, 255), (PA_PILLW_X, PA_PILL_Y))
+    a.alpha_composite(_pc_disc(PA_PILLW_PX, WHITE, PA_RING_A, 2), (PA_PILLR_X, PA_PILL_Y))
+    return a
+
+def podcast_images():
+    f = {PC_ATLAS: pc_atlas()}
+    for n, g, rgb in PC_SHEET_ICONS: f[n] = tint(glyph(g, PC_SHEET_PX, 'small'), rgb) if rgb != WHITE else glyph(g, PC_SHEET_PX, 'small')
+    for n, h in PC_SHEETS: f[n] = glass_image(320, h, 18, fill=GLASS_SHEET_FILL, top_only=True)
+    assert sorted(f) == sorted(PODCASTS)
     return f
 
 def album_images():

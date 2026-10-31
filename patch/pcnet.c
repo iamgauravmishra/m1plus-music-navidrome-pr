@@ -430,7 +430,9 @@ static void pn_refresh_one(const struct pn_job *j, const char *dir) {
                 pn_join(tmp, sizeof tmp, path, ".show.tmp", (const char *)0);
                 memcpy(shown, first && pf_title(p)[0] ? pf_title(p) : s.title, PC_TITLE);
                 n = pf_render_show(shown, s.feed, pf_image(p)[0] ? pf_image(p) : s.image, (unsigned)time((long *)0),
-                                   eps, PN_EPS_MAX);
+                                   pf_author(p)[0] ? pf_author(p) : s.author,
+                                   pf_category(p)[0] ? pf_category(p) : s.category,
+                                   pf_summary(p)[0] ? pf_summary(p) : s.desc, eps, PN_EPS_MAX);
                 if (!pn_save(file, tmp, eps, n))
                     code = PN_STORAGE;
                 else {
@@ -1021,11 +1023,23 @@ int pn_import(const char *root, const pc_show_t *shows, int nshows) {
             !pn_join(tmp, sizeof tmp, show, ".show.tmp", (const char *)0))
             continue;
         if (!access(file, F_OK)) continue; /* a folder of this name is already a subscription */
-        n = pf_render_show(host, line, "", 0, text, sizeof text);
+        n = pf_render_show(host, line, "", 0, "", "", "", text, sizeof text);
         if (!pn_save(file, tmp, text, n)) continue;
         seen[nseen++] = hash;
         ++added, ++subs;
     }
     free(buf);
     return added;
+}
+
+/* Unsubscribe (the Show page's sheet, docs/modules/podcasts.md "The Show page"): the show's .show again without its feed address, the rest as it was (title, picture, author, category,
+ * description, last refresh), written atomically; the .episodes stay (the caller removes what else goes). UI thread; no worker runs a refresh of this show (the page is not refreshing).
+ * 1 when written, 0 when the file could not be. */
+int pn_unsubscribe(const char *root, const pc_show_t *s) {
+    char file[PN_PATH], tmp[PN_PATH], text[PC_URL + PC_URL + 2 * PC_DESC + 320];
+    unsigned n;
+    if (!pn_join(file, sizeof file, root, s->dir, ".show") || !pn_join(tmp, sizeof tmp, root, s->dir, ".show.tmp"))
+        return 0;
+    n = pf_render_show(s->title, "", s->image, s->checked, s->author, s->category, s->desc, text, sizeof text);
+    return pn_save(file, tmp, text, n);
 }

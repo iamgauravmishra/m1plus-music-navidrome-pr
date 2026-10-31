@@ -43,7 +43,7 @@ LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
 SOURCES = ['m1plus.c', 'common.c', 'menu.c', 'covercache.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'albuminfo.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'rows.c', 'shot.c', 'home.c',
-           'scroll.c', 'playmore.c', 'playlists.c', 'azlist.c', 'songs.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcpng.c', 'pccover.c', 'pcnet.c', 'podcasts.c', 'tape.c', 'probe.c', 'keyboard.c']
+           'scroll.c', 'playmore.c', 'playlists.c', 'azlist.c', 'songs.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnet.c', 'podcasts.c', 'tape.c', 'probe.c', 'keyboard.c']
 
 FLAGS = ['--target=mipsel-linux-gnu', '-march=mips32r2', '-mabi=32', '-mfp64',
          '-mno-abicalls', '-fno-pic', '-G0', '-ffreestanding', '-fno-builtin',
@@ -542,6 +542,7 @@ LIBC = {
     'jpeg_set_defaults': ('void', 'void *'), 'jpeg_set_quality': ('void', 'void *, int, int'), 'jpeg_start_compress': ('void', 'void *, int'),
     'jpeg_write_scanlines': ('unsigned', 'void *, unsigned char **, unsigned'), 'jpeg_finish_compress': ('void', 'void *'), 'jpeg_destroy_compress': ('void', 'void *'),
     '_setjmp': ('int', 'void *'),
+    'rmdir': ('int', 'const char *'),   # Podcasts unsubscribe (patch/podcasts.c): the show folder left empty
 }
 
 

@@ -21,7 +21,11 @@ _Static_assert(sizeof(pc_show_t) == PC_SHOW_SIZE, "pc_show_t");
 _Static_assert(__builtin_offsetof(pc_ep_t, hash) == PC_EP_HASH && __builtin_offsetof(pc_show_t, hash) == PC_SH_HASH &&
                    __builtin_offsetof(pc_show_t, checked) == PC_SH_CHECKED &&
                    __builtin_offsetof(pc_show_t, feed) == PC_SH_FEED &&
-                   __builtin_offsetof(pc_show_t, image) == PC_SH_IMAGE,
+                   __builtin_offsetof(pc_show_t, image) == PC_SH_IMAGE &&
+                   __builtin_offsetof(pc_ep_t, desc) == PC_EP_DESC &&
+                   __builtin_offsetof(pc_show_t, author) == PC_SH_AUTHOR &&
+                   __builtin_offsetof(pc_show_t, category) == PC_SH_CAT &&
+                   __builtin_offsetof(pc_show_t, desc) == PC_SH_DESC,
                "offsets");
 
 #define PM_ROOT "/mnt/mmc"
@@ -321,6 +325,9 @@ int pc_parse_eps(const char *buf, unsigned n, pc_ep_t *out, int max) {
                 case 'u':
                     any |= vlen != 0;
                     break;
+                case 'x':
+                    pm_cpy_n(e->desc, PC_DESC, v, (int)vlen);
+                    break;
                 default:
                     break;
                 }
@@ -345,6 +352,12 @@ int pc_parse_show(const char *buf, unsigned n, pc_show_t *show) {
             pm_cpy_n(show->image, PC_URL, p + 6, (int)len - 6);
         else if (len >= 8 && pm_ieq_n(p, "checked=", 8))
             show->checked = pm_num(p + 8, len - 8);
+        else if (len >= 7 && pm_ieq_n(p, "author=", 7))
+            pm_cpy_n(show->author, PC_AUTHOR, p + 7, (int)len - 7);
+        else if (len >= 9 && pm_ieq_n(p, "category=", 9))
+            pm_cpy_n(show->category, PC_CAT, p + 9, (int)len - 9);
+        else if (len >= 5 && pm_ieq_n(p, "desc=", 5))
+            pm_cpy_n(show->desc, PC_DESC, p + 5, (int)len - 5);
     }
     return 1;
 }

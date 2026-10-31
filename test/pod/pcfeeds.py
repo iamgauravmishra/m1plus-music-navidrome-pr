@@ -20,13 +20,16 @@ def sibling(name):
 
 PCP, PCN = sibling('podcasts'), sibling('pcnet')
 PN, CA = PCN.PN, PCN.CA
-RP, ROW, HDR = PCP.ROOT, PCP.ROW, PCP.HDR
+RP, ROW = PCP.ROOT, PCP.ROW
 NOW = 1800000000
 F = {k: f'https://f.example/{k}' for k in ('alpha', 'one', 'two', 'three')}
 OK_NEW = 3     # a status: fresh items
 
 
 def hash_of(s): return PCP.pc_hash(s)
+
+
+def fn(m, name, **kw): return m.call(PSYMS[name], count=2000000, **kw)
 
 
 def card(m):
@@ -84,12 +87,6 @@ def flags(m, name):
 
 
 def toasts(m): return [c[1] for c in m.calls if c[0] == 'toast']
-
-
-def ep_titles(m):
-    """[(title, style)] of the Show level's frame in row order: the header's name first, then the episodes (the page paints the titles and the grey titles in two passes)."""
-    _, texts, styles, _ = PCP.paint(m)
-    return [(t, s) for (t, r), s in sorted(zip(texts, styles), key=lambda e: e[0][1][1]) if s in ('label_row_title', 'label_row_dim')]
 
 
 def run(ctx):
@@ -233,39 +230,44 @@ def run(ctx):
     PCP.tap(m, 150, ROW + 10)
     expect(toasts(m) == ['Nothing new to import'] and m.thread is None, 'importing again: "Nothing new to import"')
 
-    # 7. A feed opens the Show level, with the episodes that are not on the card greyed and silent
+    # 7. A feed opens the Show page, with the episodes that are not on the card too (download pills)
     m = opened()
     PCP.click(m, 'btn_feeds')
     PCP.tap(m, 150, 2 * ROW + 10)
-    expect(PCP.title_text(m) == 'Sub One' and flags(m, 'btn_feeds') == (0, 0), 'a tap on a subscription opens its Show level')
-    tt = ep_titles(m)
-    expect(tt == [('Sub One', 'label_row_title'), ('Remote A', 'label_row_dim'), ('Remote B', 'label_row_dim')], f'the episodes not on the card are in the grey (played) style: {tt}')
+    expect(PCP.title_text(m) == 'Sub One' and flags(m, 'btn_feeds') == (0, 0), 'a tap on a subscription opens its Show page')
+    c = PCP.all_cells(m)
+    expect([(c[i]['title'], c[i]['played'], c[i]['pill']) for i in range(2)] == [(['Remote A'], False, '1 MB'), (['Remote B'], False, 'Download')],
+           f'the episodes not on the card are download cells ("1 MB", the feed\'s size rounded up; "Download" when it gave none): {c}')
     bl, *_ = PCP.paint(m)
-    expect(not [b for b in bl if tuple(b[2][2:]) != (O['PC_HDR_ART'], O['PC_HDR_ART'])], 'and they have no unplayed dot or any other mark: only the header cover is drawn')
+    expect(not [b for b in bl if tuple(b[2][2:]) in ((O['PA_BADGE_PX'], O['PA_BADGE_PX']),)], 'and they have no "on the card" badge')
     m.calls = []
-    PCP.tap(m, 150, HDR + 10)
-    expect('navigator_to_with_context' not in m.names() and toasts(m) == [], f'a tap on an episode that is not on the card queues its download, silently: {toasts(m)}')
+    PCP.body(m, 0)
+    expect('navigator_to_with_context' not in m.names() and toasts(m) == [] and fn(m, 'pn_dl_count') == 0, 'a tap on the body of an episode that is not on the card does nothing (only the pill and the "..." download)')
+    m.calls = []
+    PCP.act(m, 0)
+    expect('navigator_to_with_context' not in m.names() and toasts(m) == [] and fn(m, 'pn_dl_count') == 1, f'a tap on its pill queues the download, silently: {toasts(m)}')
     ring = m.ring()
     m.calls = []
-    PCP.tap(m, 20, HDR + 10)
-    expect(m.ring() == ring and toasts(m) == [], 'a tap at the left edge is a tap on the row too (no dot column: it cancels the queued download, marks nothing)')
+    PCP.act(m, 0)
+    expect(m.ring() == ring and toasts(m) == [] and fn(m, 'pn_dl_count') == 0, 'a second tap cancels it, marks nothing')
     PCP.click(m, 'btn_return')
     expect(PCP.title_text(m) == 'Feeds' and m.props[(m.sv, 'virtual_h')] == 4 * ROW and flags(m, 'btn_feeds') == (0, 0), 'Back from a Show opened from Feeds returns to Feeds')
     PCP.click(m, 'btn_return')
     expect(PCP.title_text(m) == 'Podcasts', 'and Back again to the Shows level')
 
-    # 8. The same show from the Shows level lists only what is on the card; a mixed show plays only its files
+    # 8. The same show from the Shows level lists the same episodes (the page lists every episode the show knows); a mixed show plays only its files
     m = opened(lambda mm: (mm.put(f'{RP}/Alpha Show/.episodes', (PCP.EPS_HEAD + f'g=r1\tp={NOW}\tf=new.mp3\tt=Not yet\tu=https://e/n.mp3\ng=e1\tp={T0_(1)}\tf=ep1.mp3\tt=One\ng=e2\tp={T0_(2)}\tf=ep2.mp3\tt=Two\n').encode())))
     PCP.tap(m, 150, 10)   # Alpha Show on the Shows level
-    tt = [t for t, _ in ep_titles(m)]
-    expect(tt[1:] == ['Two', 'One'], f'from the Shows level only the files are listed ({tt})')
+    c = PCP.all_cells(m)
+    expect([c[i]['title'] for i in range(3)] == [['Not yet'], ['Two'], ['One']], f'from the Shows level too the episode that is not on the card is listed, newest first ({[c[i]["title"] for i in range(3)]})')
     PCP.click(m, 'btn_return')
+    expect(PCP.title_text(m) == 'Podcasts', 'Back from it (opened from the Shows level) goes to the Shows level')
     PCP.click(m, 'btn_feeds')
     PCP.tap(m, 150, 1 * ROW + 10)
-    tt = ep_titles(m)
-    expect(tt[1:] == [('Not yet', 'label_row_dim'), ('Two', 'label_row_title'), ('One', 'label_row_title')], f'from Feeds the episode that is not on the card is listed too, newest first, grey ({tt})')
+    c = PCP.all_cells(m)
+    expect([c[i]['title'] for i in range(3)] == [['Not yet'], ['Two'], ['One']], 'from Feeds: the same cells')
     m.calls = []
-    PCP.tap(m, 150, HDR + 1 * ROW + 10)   # "Two": the first file
+    PCP.act(m, 1)   # "Two": the first file
     ctxs = [c for c in m.calls if c[0] == 'navigator_to_with_context']
     q, idx = m.played
     paths = [m.read_cstr(m.word(rec + O['REC_PATH'])) for rec in q]
