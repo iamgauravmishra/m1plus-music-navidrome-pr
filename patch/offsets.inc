@@ -959,7 +959,6 @@
 #define PC_HDR_H 132              /* the Show level's header: the cover, the name, the count, the speed */
 #define PC_HDR_ART 96
 #define PC_TILES 44               /* text / cover tiles: every show (PC_MAX_SHOWS) and a few spare */
-#define PC_DOT 12                 /* the unplayed dot's bitmap, square */
 #define PC_SPEEDS 4               /* playspeed_mode 0..3: 1x, 1.25x, 1.5x, 2x (stock "Multiple Speed", images p_1_25 / p_1_5 / p_2) */
 
 /* The Tape page (patch/tape.c, docs/modules/tape.md; tools/tape_art.py draws the images from the same numbers, test/pod/tape.py checks them). The page is LANDSCAPE, 480 x 320: the

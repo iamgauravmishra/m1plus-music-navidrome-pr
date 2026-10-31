@@ -911,6 +911,12 @@ class Machine:
         # ---- the network probe (patch/probe.c): libcurl's easy interface, the shell and a worker thread
         elif name == 'get_wifisignal':
             ret = self.wifi; self.calls.append(('get_wifisignal',))
+        elif name == 'reset_poweroptions_timer':   # stock: standby / auto power-off / screen countdowns set again for a non-zero argument (patch/podcasts.c keeps the device awake with (1, 1, 0))
+            self.calls.append(('reset_poweroptions_timer', a0, a1, a2))
+        elif name == 'lseek':   # a descriptor's position (the downloads ask the size of a .part file with SEEK_END)
+            p, _, pos = self.fds[a0]; size = len(self.fs.get(p, b''))
+            ret = {0: a1, 1: pos + a1, 2: size + a1}[a2]; self.fds[a0][2] = ret
+            self.calls.append(('lseek', p, a1, a2))
         elif name == 'curl_global_init':
             self.calls.append(('curl_global_init', a0))
         elif name == 'curl_easy_init':
@@ -921,7 +927,7 @@ class Machine:
             ret = self.curl_perform(a0)
         elif name == 'curl_easy_getinfo':
             v = self.curl_last[a0].get(a1, 0)
-            if a1 in (0x100001, 0x100020): self.setword(a2, self.cstr(v) if v else 0)
+            if a1 in (0x100001, 0x100012, 0x100020): self.setword(a2, self.cstr(v) if v else 0)   # strings: the effective url, Content-Type, the primary IP
             elif a1 >> 20 == 6: self.u.mem_write(a2, struct.pack('<Q', v))
             else: self.setword(a2, v)
         elif name == 'curl_easy_cleanup':
@@ -932,6 +938,7 @@ class Machine:
             self.calls.append(('pthread_detach', a0))
         elif name == 'sleep':
             self.calls.append(('sleep', a0)); self.wall += a0
+            if getattr(self, 'on_sleep', None): self.on_sleep(len([c for c in self.calls if c[0] == 'sleep']))   # a test's way to act while the worker waits (the number of sleeps so far)
         elif name == 'popen':
             cmd = self.read_cstr(a0); self.calls.append(('popen', cmd, self.read_cstr(a1)))
             ret = self.alloc(4); self.pipes[ret] = list(self.shell(cmd))
@@ -987,15 +994,17 @@ class Machine:
             if r.get('xfer'): r['xfer'](o[10002], sent, total)
             if not o.get(20219): return 0
             return self.nested(o[20219], o.get(10057, 0), 0, total & 0xffffffff, total >> 32, sent & 0xffffffff, sent >> 32, 0, 0, 0, 0)
+        last = {0x200002: r['code'], 0x200014: r['redirects'], 0x20000d: r['verify'], 0x100001: r['eff'], 0x100012: r.get('ctype'), 0x100020: r['ip'], 0x600008: 0,
+                0x600032: r['total'], 0x600033: r['dns'], 0x600034: r['conn'], 0x600038: r['tls'], 0x600036: r['first']}
+        self.curl_last[h] = last   # (libcurl has the headers' facts ready before the first byte reaches the write callback: a download asks for the code and the Content-Type there)
         if r['rc'] == 0 and xfer(0): rc = 42   # CURLE_ABORTED_BY_CALLBACK
-        for i in range(0, len(body) if rc == 0 else 0, r['chunk']):
+        for i in range(0, len(body) if rc == 0 or r.get('partial') else 0, r['chunk']):   # 'partial': the body arrives, then the transfer fails with rc
             part = body[i:i + r['chunk']]; self.u.mem_write(buf, part); sent += len(part)
             if self.nested(o[20011], buf, 1, len(part), o[10001]) != len(part): rc = 23; break   # CURLE_WRITE_ERROR: the callback cut the transfer off
             if xfer(sent): rc = 42; break
         self.calls.append(('curl_perform', o[10002], rc))
         if r['err']: self.u.mem_write(o[10010], r['err'].encode() + b'\0')
-        self.curl_last[h] = {0x200002: r['code'], 0x200014: r['redirects'], 0x20000d: r['verify'], 0x100001: r['eff'], 0x100020: r['ip'], 0x600008: sent,
-                             0x600032: r['total'], 0x600033: r['dns'], 0x600034: r['conn'], 0x600038: r['tls'], 0x600036: r['first']}
+        last[0x600008] = sent
         return rc
 
     def set_language(self, table):

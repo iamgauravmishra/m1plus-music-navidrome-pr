@@ -599,7 +599,7 @@ def cover_tests(ctx):
 
 # ---- the page
 PG_WIDGETS = ['podcasts_listview', 'view_grid', 'label_status', 'label_title', 'img_nb_fade', 'label_row_title', 'label_row_sub', 'label_row_dim', 'label_row_acc', 'label_row_act',
-              'btn_return', 'btn_backtoplayer', 'btn_feeds', 'pod_pd_scrim', 'pod_pd_card', 'pod_pd_title', 'pod_pd_name', 'pod_pd_track', 'pod_pd_fill', 'pod_pd_count', 'pod_pd_cancel']
+              'btn_return', 'btn_backtoplayer', 'btn_feeds', 'btn_select', 'btn_selall', 'pg_bar', 'pg_del', 'pod_pd_scrim', 'pod_pd_card', 'pod_pd_title', 'pod_pd_name', 'pod_pd_track', 'pod_pd_fill', 'pod_pd_count', 'pod_pd_cancel']
 T0 = 1700000000   # 2023-11-14 22:13:20 UTC
 DAY = 86400
 
@@ -697,7 +697,7 @@ def open_tests(ctx):
            and (m.window, O['EVT_DESTROY']) in m.bound, 'the scroll events, the window\'s background, foreground and destroy are bound')
     expect([(c[1], c[2]) for c in calls if c[0] == 'timer_add'] == [(PSYMS['pg_tick'], 1000), (PSYMS['pg_on_load'], 16)],
            f'a 1 s page timer is armed (the place is noted from it), then the cover loader\'s 16 ms one ({[c for c in calls if c[0] == "timer_add"]})')
-    expect([c for c in calls if c[0] == 'bitmap_create_ex'][:1] == [('bitmap_create_ex', O['PC_DOT'], O['PC_DOT'])], 'the unplayed dot is made at open (12 x 12)')
+    expect([c for c in calls if c[0] == 'bitmap_create_ex'][:2] == [('bitmap_create_ex', O['SG_MARK'], O['SG_MARK'])] * 2, 'only the two select marks are made at open (26 px): there is no unplayed dot bitmap any more')
     expect(('window_open', 'm1plus_podcasts') in m.calls and m.call(PSYMS['podcasts_open'], count=4000000) == 0xffffffff, 'a second open while the page is up is refused')
     # the rows
     bl, texts, styles, fills = paint(m)
@@ -774,29 +774,26 @@ def level_tests(ctx):
     d = lambda t: when_model(t, 1800000000)   # (the machine's clock: 2027-01-15)
     rows = [t for t in drawn(m, style='label_row_title') if t[1][1] >= HDR]
     subs = [t for t in drawn(m, style='label_row_sub') if t[1][1] >= HDR]
-    expect([t for t, _ in rows] == ['Bravo 3', 'Bravo 2', 'Bravo 1'] and [r for _, r in rows] == [(34, HDR + i * ROW + O['LIST_TITLE_Y'], 274, O['LIST_TITLE_H']) for i in range(3)],
-           f'the episodes newest first, the titles from the metadata, at x 34 ({rows})')
+    expect([t for t, _ in rows] == ['Bravo 3', 'Bravo 2', 'Bravo 1'] and [r for _, r in rows] == [(16, HDR + i * ROW + O['LIST_TITLE_Y'], 292, O['LIST_TITLE_H']) for i in range(3)],
+           f'the episodes newest first, the titles from the metadata, at x 16, 292 px wide ({rows})')
     expect([t for t, _ in subs] == [f'{d(T0 + 3 * DAY)} · 60 min'.encode().decode('latin-1'), f'{d(T0 + 2 * DAY)} · 20 min'.encode().decode('latin-1'), f'{d(T0 + DAY)} · 10 min'.encode().decode('latin-1')]
            or [t for t, _ in subs] == [f'{d(T0 + 3 * DAY)} · 60 min', f'{d(T0 + 2 * DAY)} · 20 min', f'{d(T0 + DAY)} · 10 min'],
            f'the grey line: the date, a middle dot and the duration ({[t for t, _ in subs]})')
     bl, _, _, fills = paint(m)
-    dots = [b for b in bl if tuple(b[2][2:]) == (O['PC_DOT'], O['PC_DOT'])]
-    expect([tuple(b[2]) for b in dots] == [(12, HDR + i * ROW + (ROW - O['PC_DOT']) // 2, O['PC_DOT'], O['PC_DOT']) for i in range(3)], 'every episode has the unplayed dot')
-    data, w, h = m.bitmaps[dots[0][0]]
-    px = lambda x, y: struct.unpack('<I', m.u.mem_read(data + (y * w + x) * 4, 4))[0]
-    expect(px(6, 6) == 0xffff840a and px(0, 0) >> 24 == 0 and px(11, 11) >> 24 == 0 and 0 < px(1, 3) >> 24 < 255, f'the dot is a disc of #0A84FF with a soft edge ({px(6, 6):08x}, {px(1, 3):08x})')
+    expect(not [b for b in bl if tuple(b[2][2:]) != (O['PC_HDR_ART'], O['PC_HDR_ART'])], 'no unplayed dot, no mark: only the header\'s cover is drawn (unplayed is a bright title)')
     hair = [f for f in fills if f[0] == O['LIST_HAIR']]
-    expect([(f[1], f[2]) for f in hair] == [(34, HDR + i * ROW + ROW - 1) for i in range(3)], 'a hairline under each row from the text\'s x')
+    expect([(f[1], f[2]) for f in hair] == [(16, HDR + i * ROW + ROW - 1) for i in range(3)], 'a hairline under each row from the text\'s x')
     # state: a place, played
     h2, h3 = pc_hash(f'{ROOT}/bravo/b2.mp3'), pc_hash(f'{ROOT}/bravo/b3.mp3')
     m.call(PSYMS['pc_mark'], a0=h2, a1=1, count=30000000)
     m.fs[RING] = m.fs[RING]   # (marks are written at once)
     m.call(PSYMS['pg_tick'], a0=0, count=40000000)
-    expect(drawn(m, style='label_row_dim') == [('Bravo 2', (34, HDR + ROW + O['LIST_TITLE_Y'], 274, O['LIST_TITLE_H']))], 'a played episode\'s title is in the grey style')
+    expect(drawn(m, style='label_row_dim') == [('Bravo 2', (16, HDR + ROW + O['LIST_TITLE_Y'], 292, O['LIST_TITLE_H']))], 'a played episode\'s title is in the grey style')
     subs = [t for t, _ in drawn(m, style='label_row_sub') if True]
     expect(subs[2] == f'{d(T0 + 2 * DAY)} · Played', f'and its line says Played ({subs})')
     bl, _, _, _ = paint(m)
-    expect(len([b for b in bl if tuple(b[2][2:]) == (O['PC_DOT'], O['PC_DOT'])]) == 2, 'a played episode has no dot')
+    expect([t for t, r in drawn(m, style='label_row_title') if r[1] >= HDR] == ['Bravo 3', 'Bravo 1'] and [t for t, _ in drawn(m, style='label_row_dim')] == ['Bravo 2'],
+           'unplayed titles are bright (the title style), the played one is grey: the brightness is what tells them apart')
     m.call(PSYMS['pc_mark'], a0=h2, a1=0, count=30000000)
     m.pt = (360, 3600, 1); m.status = 2
     m.play([m.record(path=f'{ROOT}/bravo/b3.mp3')], 0); m.clock += 40000
@@ -879,12 +876,10 @@ def touch_tests(ctx):
     expect(not [c for c in m.calls if c[0] == 'navigator_to_with_context' and c[1] == 'playing_page'] and any(c[0] == 'toast' and c[1] == 'Storage unavailable' for c in m.calls),
            'an episode whose file has gone: "Storage unavailable", nothing starts')
     m.fs[f'{ROOT}/bravo/b1.mp3'] = b''
-    # the dot
+    # there is no dot column: the left edge of a row is the row
     m.calls = []; tap(m, 20, rows_y(0))
     h3 = pc_hash(f'{ROOT}/bravo/b3.mp3')
-    expect(m.state(h3)[0] == 2 and not [c for c in m.calls if c[0] == 'navigator_to_with_context'] and m.ring()[1][0][0] == h3, 'a tap on the dot marks the episode played (written at once), and plays nothing')
-    m.calls = []; tap(m, 20, rows_y(0))
-    expect(m.state(h3)[0] == 0, 'and again: new')
+    expect([c for c in m.calls if c[0] == 'navigator_to_with_context' and c[1] == 'playing_page'] and m.state(h3)[0] != 2, 'a tap at the left edge of a row plays the row and marks nothing (the dot and its column are gone)')
     m.call(PSYMS['pc_mark'], a0=h3, a1=0, count=3000000)
     # the speed
     SH = pc_hash('bravo')
@@ -967,8 +962,8 @@ def asset_tests(ctx):
         w = tree.find(name)
         expect(w is not None and w.get('visible') == 'false' and w.get('sensitive') == 'false', f'{name} starts hidden and insensitive')
     nav = tree.find('navigationbar_view')
-    expect([c.name for c in nav.children] == ['label_title', 'btn_return', 'btn_backtoplayer', 'btn_feeds'] and tree.find('label_title').get('tr_text') == 'Podcasts',
-           'the navbar: title, Back, Now Playing and the Feeds button (the capsule\'s left cap)')
+    expect([c.name for c in nav.children] == ['label_title', 'btn_return', 'btn_backtoplayer', 'btn_feeds', 'btn_select', 'btn_selall'] and tree.find('label_title').get('tr_text') == 'Podcasts',
+           'the navbar: title, Back, Now Playing, the Feeds button (the capsule\'s left cap), the hidden Select button on the same slot and Select All')
     fb, npb = tree.find('btn_feeds'), tree.find('btn_backtoplayer')
     expect(fb.x == pod_ui.NAV_VIEW_X and fb.get('style:normal:icon') == 'pod_nav_feeds' and fb.get('style:pressed:icon') == 'pod_nav_feeds_down' and npb.get('style:normal:icon') == 'ah_nav_play'
            and tree.find('label_title').x + tree.find('label_title').w <= fb.x, 'Feeds is the left cap of the capsule that ends in Now Playing; the title stops at its left edge')
@@ -1083,7 +1078,7 @@ def when_tests(ctx):
 
 
 def width_tests(ctx):
-    """The grey line in every language, measured in the real font (the label_row_sub 18 px style, 274 px of room): the longest lines must fit; a longer one would end in an ellipsis (patch/grid.c grid_text)."""
+    """The grey line in every language, measured in the real font (the label_row_sub 18 px style, 292 px of room): the longest lines must fit; a longer one would end in an ellipsis (patch/grid.c grid_text)."""
     expect = ctx.expect
     from awtk_text import Ttf, StbText
     font = Ttf(os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw', 'fonts', 'default.ttf'))
@@ -1093,11 +1088,11 @@ def width_tests(ctx):
         t = pod_i18n.table_for(loc)
         tr = lambda key, n=None, t=t: (pod_i18n.TEXT[key][t].replace('%d', str(n)) if n is not None else pod_i18n.TEXT[key][t])
         dates = [when_model(NOW - d, NOW, 0, tr) for d in (10, 600, 7200, 3 * DAY, 20 * DAY, 200 * DAY)] + [when_model(NOW - (d + 45) * DAY, NOW, 0, tr) for d in range(0, 365, 30)]
-        tails = [tr('Played'), tr('%d min left', 135), tr('%d min', 135)]
+        tails = [tr('Played'), tr('%d min left', 135), tr('%d min', 135), tr('%d min', 135) + ' \u00b7 ' + tr('%d MB', 999)]   # (the last: an episode that is not on the card, with its size)
         w = max(st.layout(d + ' · ' + x)[1] for d in dates for x in tails)
         worst.append((loc, round(w)))
-    print('  widest grey line a language needs (px, room 274):', worst)
-    expect(all(w <= 274 for _, w in worst), f'the longest grey line (a date with a year, a middle dot, "135 min left") fits 274 px in every language ({[x for x in worst if x[1] > 274]})')
+    print('  widest grey line a language needs (px, room 292):', worst)
+    expect(all(w <= 292 for _, w in worst), f'the longest grey line (a date with a year, a middle dot, "135 min left") fits 292 px in every language ({[x for x in worst if x[1] > 292]})')
 
 
 GET_ID3INFO, ID3_SITE_VA = 0x4dfd58, 0x4dff4c

@@ -25,7 +25,7 @@ Follow the [installation guide](docs/install.md) for preparation, updates and re
 <details>
 <summary>Release status</summary>
 
-Status: the release is V2.1pH (pG + glass message and confirm dialogs, the M1+ power-off splash, Look up artist opens our artist page, the artist page toggles covers and songs, Delete closes the More sheet first; test build zZPAJAAAB flashed). Milestones, hardware results and lessons:
+Status: the release is V2.1pI (pH + Podcasts episode downloads with resume and keep-awake, a Downloads page, select-and-delete episodes, no unplayed-dot column; test build zQKWXAAAC flashed). Milestones, hardware results and lessons:
 `docs/history.md`; per-tag details are in git.
 
 </details>

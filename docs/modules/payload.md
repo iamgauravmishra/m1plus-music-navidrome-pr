@@ -43,7 +43,11 @@ function past its 3-word prologue (`lui $gp,0xa03e; ori $gp,$gp,0x3ed0; j <fn+12
   memset/memcpy/strcmp/strcasecmp/strdup/snprintf, calloc/free, fopen/fclose/fread/fwrite/fseek/ftell,
   rename/unlink/mkdir/statfs, pthread_create/join, mutex lock/unlock, the libcstl deque calls; for the Podcasts refresh worker also libcurl's easy interface, pthread_detach and
   demo's libjpeg 7 with `_setjmp`). No new imports are added. The worker (`patch/pcnet.c`, `pcfeed.c`, `pccover.c`; source order `pcmodel.c pcfeed.c pcpng.c pccover.c pcnet.c podcasts.c`; `pcpng.c` is a streaming PNG decoder of our own, with no import of its own) is started by a tap on
-  Refresh All / Import and ends by itself; it touches no widget and calls no stock function, so the safety list of `AGENTS.md` does not change. The one stock address it uses is libjpeg's
+  Refresh All / Import and ends by itself; it touches no widget and calls no stock function, so the safety list of `AGENTS.md` does not change. **Downloads** (`pn_dl_*`, `pn_dmain` in `patch/pcnet.c`) use the same thread design: ONE detached
+  pthread at a time (`pn.kind` says whether it is a refresh or a download thread; a refresh and downloads never run together), draining a memory-only queue of 32 slots in the status record, and the same libcurl options
+  (`pn_easy`); the one extra libc import-slot is `lseek` (the size of a `.part` file; `LIBC` in `tools/pod.py`: no new import, demo already has it), `sleep` is the probe's. The one stock function they add is `reset_poweroptions_timer` `0x4d7874`, pinned in
+  `PODCAST_PINS` and called **only from `patch/podcasts.c` `pg_awake_tick`, a page-scoped 1 s timer on the UI thread**, `(1, 1, 0)`, while a download thread runs; the worker never calls a stock function. That timer is the only timer added (no hook, no global timer): it exists while the
+  Podcasts window does, in front or behind, and ends when nothing is queued. The one stock address the refresh worker uses is libjpeg's
   `error_exit` `0x5dbfe0`; `JPEG_PINS` in `tools/pod.py` pins it and every libjpeg structure offset and size `patch/pccover.c` writes against stock's own decoder and encoder
   (`0x5dd5ec`, `0x5de554`).
 

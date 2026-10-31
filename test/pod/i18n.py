@@ -8,7 +8,7 @@ from awtk_text import Ttf, StbText
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
 SAME_AS_ENGLISH = {'Cover Flow', 'Playlists', 'Genres', 'Extras', 'Albums', 'Artists', '%s, %s'}   # translations that are the English word by design
 SAME_AS_ENGLISH |= {'Podcasts', '%d min', ', %d', 'Normal', 'Chrome', 'Metal'}    # Podcasts in French and German; the minute abbreviation in French, Spanish, Italian and Polish
-SAME_AS_ENGLISH |= {'Feeds'}    # German writes Feeds as English does
+SAME_AS_ENGLISH |= {'Feeds', 'Downloads', '%d MB'}    # German writes Feeds and Downloads as English does
 SAME_AS_ENGLISH |= {'Genre', 'Screenshot', 'Collections'}    # French and German write Genre the same; German and Italian say Screenshot; French writes Collections the same
 
 

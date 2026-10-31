@@ -84,7 +84,7 @@ NAV_FEEDS_ICON = 'pod_nav_feeds'           # the Podcasts page's Feeds button: L
 NAV_CUSTOMIZE_ICON = 'pod_nav_customize'   # the Extras page's Customize button: the capsule's left cap on the 214 slot (tools/mod_icons.py)
 
 
-def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, songs=False, customize=False, feeds=False):
+def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, songs=False, customize=False, feeds=False, select=False):
     nb = Widget('view', 0, 0, SCREEN_W, NAVBAR_H, [('name', 'navigationbar_view')])
     # a title runs under a toggle's button no further than the button's left edge
     right = NAV_SEARCH_X if songs else NAV_CF_X if coverflow or more else NAV_VIEW_X if toggle or customize or feeds else NAV_TITLE_END
@@ -111,6 +111,10 @@ def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, 
         nb.children.append(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
             ('name', 'btn_feeds'), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', NAV_FEEDS_ICON + '_down'), ('style:normal:icon', NAV_FEEDS_ICON), ('style:over:icon', NAV_FEEDS_ICON)]))
+    if select:   # the Podcasts page's Select button (patch/podcasts.c shows it, as the capsule's left cap, on the Show and Downloads levels when a row can be deleted)
+        nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
+            ('name', 'btn_select'), ('enable', 'true'), ('style', 'img_btn_style'),
+            ('style:pressed:icon', 'pod_nav_selectl_down'), ('style:normal:icon', 'pod_nav_selectl'), ('style:over:icon', 'pod_nav_selectl')])))
     if coverflow:
         nb.children.append(Widget('button', NAV_CF_X, 0, NAV_CF_W, NAVBAR_H, [
             ('name', 'btn_coverflow'), ('enable', 'true'), ('style', 'img_btn_style'),
@@ -343,7 +347,8 @@ def build_podcasts_page(page):
     the four hidden labels are the text styles: the row title, the grey line, a played episode's title and the show's speed."""
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
-    root.children.append(navbar(page.title, feeds=True))
+    root.children.append(navbar(page.title, feeds=True, select=True))
+    root.children[0].children.append(selall_button())   # the select mode's navbar text (the Playlists page's)
     lv = stock_list([], True)
     lv.set('name', 'podcasts_listview')
     sv = lv.children[0]
@@ -365,6 +370,7 @@ def build_podcasts_page(page):
         lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
         styled(lab, ('normal',), 'text_align_v', 'middle')
         root.children.append(lab)
+    root.children.append(select_bar('pg_bar', 'pg_bar_line', [('pg_del', OFFSETS['SG_PILL_X0'], 'Delete', 'sg_trash', OFFSETS['PL_BAR_PILL_W'])]))   # the select mode's bar: one Delete pill across it, as the Playlists page's
     root.children.extend(podcasts_dialog())   # last: above the list and the navbar
     return root
 

@@ -728,6 +728,26 @@ static int pf_file_here(const char *dir, const char *f, unsigned fn) {
     return access(path, F_OK) == 0;
 }
 
+int pf_find_episode(const char *eps, unsigned n, const char *file, char *url, unsigned usize, unsigned *length) {
+    const char *stop = eps + n, *q, *next;
+    for (q = eps; q < stop; q = next) {
+        unsigned len = pf_line(q, stop, &next), fn, un, ln, i, num = 0;
+        const char *f, *u, *l;
+        if (!len || q[0] == '#' || !pf_field(q, len, 'f', &f, &fn) || !pf_same(f, fn, file)) continue;
+        if (!pf_field(q, len, 'u', &u, &un) || !un || un >= usize) return 0;
+        memcpy(url, u, un);
+        url[un] = 0;
+        if (pf_field(q, len, 'l', &l, &ln))
+            for (i = 0; i < ln && l[i] >= '0' && l[i] <= '9' && num <= 0x19999999u; ++i)
+                num = num * 10 + (unsigned)(l[i] - '0');
+        else
+            i = ln = 0;
+        *length = i == ln && num <= 0x7fffffffu ? num : 0; /* not a number, or too large to be a file here: unknown */
+        return 1;
+    }
+    return 0;
+}
+
 unsigned pf_render_episodes(const pf_parser_t *p, const char *dir, const char *old, unsigned oldn, char *out,
                             unsigned cap, unsigned *fresh) {
     unsigned o = 0, k, n = 0, lo;
