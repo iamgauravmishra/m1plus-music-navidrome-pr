@@ -121,8 +121,7 @@ def run(ctx):
     # 13. Close: the timer is dropped, the worker joined, the frame and list freed.
     m.call(PSYMS['on_destroy'], count=2000000)
     expect('deque_destroy' in m.names(), 'the album copy is freed')
-    expect(('fwrite', m.showlist and 0 or 0) or True, 'last album written')
-    expect('fwrite' in m.names(), 'the last album is saved on close')
+    expect(('rename', '/mnt/mmc/.m1plus/coverflow-position.tmp', '/mnt/mmc/.m1plus/coverflow-position') in m.calls, 'the last album is saved on close')
 
     # 14. First run: no cache files -> jobs, a thread, the progress label and Cancel.
     m = cover_machine(albums=3, cached=False)
@@ -649,7 +648,7 @@ def shelf_tests(ctx):
 
 # Landscape (docs/ui.md "Cover Flow landscape"): the same page turned a quarter, drawn into the body under the navbar.
 LW, LH, LCX, LY = O['CFL_W'], O['CFL_H'], O['CFL_CX'], O['CFL_Y']
-LFILE, LTMP = '/mnt/data/m1plus-landscape', '/mnt/data/m1plus-landscape.tmp'
+LFILE, LTMP = '/mnt/data/m1plus/coverflow-landscape', '/mnt/data/m1plus/coverflow-landscape.tmp'
 LAND_RECT = (0, LY, LH, LW)                      # the landscape frame in the window: the body under the navbar
 PORTRAIT_RECT = (0, CF_FRAME_Y, O['CF_VIEW_W'], O['CF_VIEW_H'])
 NAV_NAMES = ('navigationbar_view', 'btn_return', 'btn_backtoplayer', 'label_title')
@@ -766,7 +765,7 @@ def landscape_tests(ctx, asset):
             expect('slide_menu' not in m.widgets, 'no stock widget of the size of the portrait frame is involved')
 
     # 28. Persistence: the saved choice opens the page that way, with no write; anything else is portrait.
-    for data, want in ((b'1\n', True), (b'0\n', False), (b'x', False), (b'', False)):
+    for data, want in ((b'1\n', True), (b'0\n', False), (b'x', False), (b'', False), (b'1x', False), (b'11', False)):
         m = land_machine(saved=data)
         expect(bitmaps_made(m) == ([(LH, LW)] if want else [(O['CF_VIEW_W'], O['CF_VIEW_H'])]),
                f'saved {data!r}: opens {"landscape" if want else "portrait"} ({bitmaps_made(m)})')

@@ -945,14 +945,7 @@ static int pl_on_bg(void *ctx, void *e) {
 /* ---------------------------------------------------------------------------
  * The view toggle (the Albums page's, docs/modules/albums.md): the grid or the list, switched in place and saved
  */
-static int pl_use_grid(void) {
-    char c = 0;
-    int fd = open(PLAYLISTS_FILE, O_RDONLY, 0), n;
-    if (fd < 0) return 1;
-    n = read(fd, &c, 1);
-    close(fd);
-    return !(n == 1 && c == '0');
-}
+static int pl_use_grid(void) { return set_read(PLAYLISTS_FILE, '1') != '0'; }
 
 /* The toggle shows the glyph of the mode a tap switches to. */
 static void pl_glyph(void) {

@@ -10,7 +10,7 @@ from harness import *   # noqa: F401,F403  (test/patch.py initialises the harnes
 VT = {'list_view': LV_VT, 'scroll_view': SV_VT, 'list_item': LI_VT, 'button': BTN_VT, 'image': IMG_VT, 'window': LV_VT}
 CLICK = O['EVT_CLICK']
 WIN_Y = 30                       # the window sits under the 30 px system bar: screen y = window y + 30
-MENU_FILE = '/mnt/data/m1plus-menu'
+MENU_FILE = '/mnt/data/m1plus/home-menu'
 F_VIS, F_SENS = 4, 8
 
 

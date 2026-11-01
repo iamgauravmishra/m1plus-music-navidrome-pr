@@ -42,7 +42,7 @@ The last `SE_REC_MAX` (5) queries the user **committed to**, newest first: a tap
 The text is trimmed (spaces, tabs); an empty one is ignored. An entry that folds the same (`se_fold`: case, diacritics, kana, width) moves to the top, replaced by the new spelling; the sixth drops the oldest. The file is written
 **only when the list changed** (the same query again at the top writes nothing).
 
-* **Storage:** `/mnt/data/m1plus-search-recent` (`SEARCH_RECENT_FILE`, patch/home.h; `.tmp` beside it, `home_write_atomic`): UTF-8, one query per line, newest first, each a `\n` end, at most 63 bytes a line. It is read once when the page opens
+* **Storage:** `/mnt/data/m1plus/search-history` (`SEARCH_RECENT_FILE`, patch/home.h; `.tmp` beside it, `home_write_atomic`): UTF-8, one query per line, newest first, each a `\n` end, at most 63 bytes a line. It is read once when the page opens
   (`se_rec_load`); a file that is oversized, has more than 5 lines, an empty line, a line of 64 bytes or more, a control character or a repeat (by the same fold) is **no history at all** and is left as it is until the next save. A failed write keeps the old file.
 * **Shown** when the field has no terms and nothing is listed (`se.rm`, set by `se_layout`): the list view is the same content view, now painting `se_paint_recent`: a header `Recently Searched` (grey, 18 px, in a `SE_REC_HEAD_H` 40 px band,
   x 16), then rows `SE_REC_ROW_H` 50 px high: the query (white, 21 px, the results' title style, cut with an ellipsis at `SE_REC_TEXT_END` 262), an x (`pod_make_cross`, a 12 px grey stroke drawn like the chevron, no image file, centre x 292) and the

@@ -1027,12 +1027,12 @@ def pinyin_tests(ctx):
         expect(costs[1] < costs[0] * 3.5 and costs[1] / count < 9000, f'{count} Chinese songs: the first scan with initials costs {costs[1] / 1e6:.1f} M instructions ({costs[1] / count:.0f} a song; {costs[0] / 1e6:.1f} M without)')
 
 
-REC_FILE, REC_TMP = '/mnt/data/m1plus-search-recent', '/mnt/data/m1plus-search-recent.tmp'
+REC_FILE, REC_TMP = '/mnt/data/m1plus/search-history', '/mnt/data/m1plus/search-history.tmp'
 REC_HEAD, REC_ROW, REC_MAX = D['SE_REC_HEAD_H'], D['SE_REC_ROW_H'], D['SE_REC_MAX']
 
 
 def recent_tests(ctx):
-    """Recent searches: the last five queries the user committed to (a result tapped, the action key), newest first, in /mnt/data/m1plus-search-recent; shown in the empty state under a
+    """Recent searches: the last five queries the user committed to (a result tapped, the action key), newest first, in /mnt/data/m1plus/search-history; shown in the empty state under a
     header; a row searches, its x removes it; bad files read as no history."""
     expect = ctx.expect
     kb = sibling('keyboard')

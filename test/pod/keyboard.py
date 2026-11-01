@@ -649,7 +649,7 @@ def asset_tests(ctx):
 # ====================================================================================================================================
 # The setting, the language key, the layers
 # ====================================================================================================================================
-KBZH = '/mnt/data/m1plus-kbzh'
+KBZH = '/mnt/data/m1plus/keyboard-pinyin'
 DICT_DATA = open(PY.DICT, 'rb').read()
 
 
@@ -680,7 +680,7 @@ def setting_tests(ctx):
            'no setting: no language key, space and every key where they were (79, 163 wide), the dictionary never looked at, the engine never opened')
     m = zh_opened(setting=False)
     expect(shown(m, 'kb_lang') == (0, 0) and not layout_ok(m, 'ABC') and m.word(ENG) == 0 and geo(m, 'kb_space')[0] == 79, 'the dictionary there but the setting off: the same')
-    for data in (b'0\n', b'', b'x', b'\n1'):
+    for data in (b'0\n', b'', b'x', b'\n1', b'1x', b'11'):
         m = keyboard_machine(); m.fs[KBZH] = data; m.present.add(PY.SYS_PATH)
         kopen(m)
         expect(shown(m, 'kb_lang') == (0, 0), f'the file {data!r}: off')

@@ -49,20 +49,39 @@ static unsigned hm_len(const char *s) {
     return n;
 }
 
-/* fsync of the data directory: 0 only when the directory entry changes are durable. */
-static int hm_sync_dir(void) {
-    int fd = open(DATA_DIR, O_RDONLY, 0), ok;
+/* fsync of a directory: 0 only when its entry changes are durable. */
+static int hm_sync_dir(const char *dir) {
+    int fd = open(dir, O_RDONLY, 0), ok;
     if (fd < 0) return -1;
     ok = fsync(fd) == 0;
     return (close(fd) == 0 && ok) ? 0 : -1;
 }
 
+/* The settings folder (SET_DIR), made durable in DATA_DIR; 0 when it exists. */
+static int hm_make_set_dir(void) {
+    if (hm_exists(SET_DIR)) return 0;
+    if (mkdir(SET_DIR, 0755) != 0) return -1;
+    return hm_sync_dir(DATA_DIR);
+}
+
+/* 1 when path is a file in SET_DIR. */
+static int hm_in_set(const char *path) {
+    static const char pre[] = SET_DIR "/";
+    unsigned i;
+    for (i = 0; pre[i]; i++)
+        if (path[i] != pre[i]) return 0;
+    return 1;
+}
+
 /* Temp file, fsync, rename onto the target, fsync of the directory. 0 on success. A failure of the last
- * step returns -1 although the rename happened: the caller must not rely on the file (see hm_arm). */
+ * step returns -1 although the rename happened: the caller must not rely on the file (see hm_arm). A
+ * file in SET_DIR makes a missing folder first. */
 int home_write_atomic(const char *path, const char *tmp, const char *data) {
     unsigned n = hm_len(data);
+    int in_set = hm_in_set(path);
     int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     int ok;
+    if (fd < 0 && in_set && hm_make_set_dir() == 0) fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0) return -1;
     ok = write(fd, data, n) == (int)n && fsync(fd) == 0;
     ok = (close(fd) == 0) && ok;
@@ -70,7 +89,18 @@ int home_write_atomic(const char *path, const char *tmp, const char *data) {
         unlink(tmp);
         return -1;
     }
-    return hm_sync_dir();
+    return hm_sync_dir(in_set ? SET_DIR : DATA_DIR);
+}
+
+/* The one reader of a one-character setting file: the character for exactly "x" or "x\n", else def. */
+int set_read(const char *path, int def) {
+    char b[4];
+    int fd = open(path, O_RDONLY, 0), n;
+    if (fd < 0) return def;
+    n = read(fd, b, 3);
+    close(fd);
+    if (n == 1 || (n == 2 && b[1] == '\n')) return (unsigned char)b[0];
+    return def;
 }
 
 /* Opt-in log on the SD card: only when /mnt/mmc/m1plus-log exists. Best effort. */
@@ -88,7 +118,7 @@ int home_off(void) { return hm_exists(KILL_SD) || hm_exists(KILL_DATA); }
 
 static void hm_clear_marker(void) {
     unlink(MARKER);
-    hm_sync_dir();
+    hm_sync_dir(DATA_DIR);
 }
 
 /* A marker at boot: the last attempt never proved itself. Record it (the bad note is sticky: no

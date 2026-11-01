@@ -14,17 +14,7 @@ static int dark __attribute__((section(".scratch")));
 static const struct ip_theme_palette palettes[2] = {{SCREEN_COLORS, 0xcec9c6u, SCREEN_REST},
                                                     {SCREEN_COLORS, 0x111111u, SCREEN_REST}};
 
-void ip_theme_load(void) {
-    char data[3];
-    int fd, n;
-    dark = 0;
-    fd = open(IP_THEME_FILE, 0, 0);
-    if (fd < 0) return;
-    n = read(fd, data, sizeof data);
-    close(fd);
-    /* Refuse malformed or extended files; missing and invalid settings are Light. */
-    if ((n == 1 || (n == 2 && data[1] == '\n')) && data[0] == '1') dark = 1;
-}
+void ip_theme_load(void) { dark = set_read(IP_THEME_FILE, 0) == '1'; /* missing and invalid settings are Light */ }
 
 int ip_theme_dark(void) { return dark; }
 

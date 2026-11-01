@@ -61,7 +61,7 @@ def run(ctx):
     expect(w(built, 0x5450fc) == 0 and w(built, 0x5450f0) == 0x8fbc0010 and w(built, 0x545104) == 0x8fbc0010, 'the delay slot is still a nop and $gp is still reloaded from the stack after the call')
     expect(MANIFEST['hook_battery'] == {'addr': site, 'target': PSYMS['bp_capacity']}, 'the manifest records the hook')
     expect(pod.DATA['POWER_CAPACITY'][0] == 0xa059ec and pod.FUNCTIONS['get_battery_capacity'][2] == 0x4e6dd8, 'power_capacity and get_battery_capacity are the pinned addresses')
-    expect(DEFS['BP_W_W'] == 8 and DEFS['BP_W_H'] == 0xc and DEFS['BP_W_PARENT'] == 0x44 and DEFS['BP_FILE'] == '/mnt/data/m1plus-battpct'
+    expect(DEFS['BP_W_W'] == 8 and DEFS['BP_W_H'] == 0xc and DEFS['BP_W_PARENT'] == 0x44 and DEFS['BP_FILE'] == '/mnt/data/m1plus/battery-percentage'
            and DEFS['BP_GAUGE'] == '/sys/class/power_supply/battery/capacity', 'the widget_t offsets and the two files')
 
     # 2. Off (the default): stock's value, no label touched, no gauge read.
@@ -149,11 +149,11 @@ def run(ctx):
 
     # 5. The Settings switch
     expect(m.call(PSYMS['battpct_setting'], count=2000000) == 0, 'battpct_setting reads the file: 0 now')
-    for saved, on in ((None, 0), (b'1\n', 1), (b'1', 1), (b'0\n', 0), (b'', 0), (b'x', 0), (b'\n1', 0)):
+    for saved, on in ((None, 0), (b'1\n', 1), (b'1', 1), (b'0\n', 0), (b'', 0), (b'x', 0), (b'1x', 0), (b'11', 0), (b'\n1', 0)):
         m = machine(setting=saved)
         expect(m.call(PSYMS['battpct_setting'], count=2000000) == on, f'saved {saved!r}: the setting reads {on}')
     m = machine(setting=None, gauge=b'87\n')
-    expect(m.call(PSYMS['battpct_toggle'], count=4000000) == 1 and m.fs[FILE] == b'1\n' and FILE + '.tmp' not in m.fs and ('rename', FILE + '.tmp', FILE) in m.calls and ('fsync', '/mnt/data') in m.calls,
+    expect(m.call(PSYMS['battpct_toggle'], count=4000000) == 1 and m.fs[FILE] == b'1\n' and FILE + '.tmp' not in m.fs and ('rename', FILE + '.tmp', FILE) in m.calls and ('fsync', '/mnt/data/m1plus') in m.calls,
            'the first toggle writes "1" atomically (a temp file, fsync, rename) and turns it on')
     expect(tick(m) == 87 and [t for _, t in texts(m)] == ['87%', '87%'], 'the next tick shows the percentage at once (the cache follows the switch)')
     expect(m.call(PSYMS['battpct_toggle'], count=4000000) == 0 and m.fs[FILE] == b'0\n', 'and off again')

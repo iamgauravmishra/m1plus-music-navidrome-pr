@@ -13,8 +13,8 @@ EX = len(pod_pages.ITEMS)   # the Extras row's index, the last of the menu's row
 
 pulldown, minibar, nowplaying = sibling('pulldown'), sibling('minibar'), sibling('nowplaying')
 
-RECENT, RECENT_TMP = '/mnt/data/m1plus-recent', '/mnt/data/m1plus-recent.tmp'
-SHELF_SET, SHELF_TMP = '/mnt/data/m1plus-shelf', '/mnt/data/m1plus-shelf.tmp'
+RECENT, RECENT_TMP = '/mnt/data/m1plus/recently-played', '/mnt/data/m1plus/recently-played.tmp'
+SHELF_SET, SHELF_TMP = '/mnt/data/m1plus/home-recent-albums', '/mnt/data/m1plus/home-recent-albums.tmp'
 KILL_SD, KILL_DATA = '/mnt/mmc/m1plus-off', '/mnt/data/m1plus-off'
 WIN = 0x24000000
 EVT_DESTROY, EVT_AFTER_PAINT, EVT_CLICK = O['EVT_DESTROY'], O['EVT_AFTER_PAINT'], O['EVT_CLICK']
@@ -1001,7 +1001,7 @@ def refresh_and_fallback_tests(ctx):
     expect(not m.shelf_up() and m.row_ys()[1] == 0, 'the switch off: the shelf is hidden and insensitive, the rows go back up')
     m.fs[SHELF_SET] = b'1\n'; m.calls = []; m.fire(EVT_FG); m.relayout()
     expect(m.shelf_up() and m.y_of(m.shelf) == 8 * ROW_H and 'widget_load_image' not in m.names(), 'on again: the shelf is back with its covers (kept in RAM, nothing decoded)')
-    for content, up in ((b'0', False), (b'0\n', False), (b'1\n', True), (b'x', True), (b'', True), (b'00', False), (b'\n', True)):
+    for content, up in ((b'0', False), (b'0\n', False), (b'1\n', True), (b'x', True), (b'', True), (b'00', True), (b'0x', True), (b'\n', True)):
         m = ST(ents(3), setting=content)
         expect(m.shelf_up() == up, f'switch file {content!r}: the shelf is {"up" if up else "hidden"} at start')
     m = ST(ents(3), setting=b'0\n')
@@ -1034,7 +1034,7 @@ def refresh_and_fallback_tests(ctx):
         sm = Machine()
         for n in ['btn_return', 'btn_backtoplayer'] + [f'pod_note{i}' for i in range(5)] + [f'pod_row{i}' for i in range(len(homeset.rows))] + [f'pod_switch{i}' for i in range(len(homeset.rows))]: sm.widget(n)
         if content is not None: sm.fs[SHELF_SET] = content
-        if daily is not None: sm.fs['/mnt/data/m1plus-daily'] = daily   # (patch/home.h DAILY_SET_FILE)
+        if daily is not None: sm.fs['/mnt/data/m1plus/home-daily-mix'] = daily   # (patch/home.h DAILY_SET_FILE)
         sm.call(PSYMS['on_row'], a0=PSYMS[f'pod_rows_{pod_pages.SETTINGS_PAGE_INDEX}'] + 12 * homeset_i, count=3000000)
         return sm
     def image_of(sm, i):
@@ -1049,7 +1049,7 @@ def refresh_and_fallback_tests(ctx):
     expect(sm.fs.get(SHELF_SET) == b'1\n' and image_of(sm, shelf_i) == 'sset_on', 'and on again')
     sm.fail.add(('write', SHELF_TMP)); sm.click(f'pod_row{shelf_i}')
     expect(sm.fs.get(SHELF_SET) == b'1\n' and image_of(sm, shelf_i) is None and SHELF_TMP not in sm.fs, 'a failed save changes neither the file nor the image')
-    for content, on in ((b'0\n', 0), (b'0', 0), (b'1\n', 1), (b'x', 1), (b'', 1)):
+    for content, on in ((b'0\n', 0), (b'0', 0), (b'1\n', 1), (b'x', 1), (b'', 1), (b'0x', 1)):
         sm = settings_machine(content)
         expect(image_of(sm, shelf_i) == ('sset_on' if on else 'sset_off'), f'file {content!r}: the page opens with the switch {"on" if on else "off"}')
     # Regenerate Daily Mix (patch/m1plus.c regen_show): hidden (card, note and row) and insensitive while no mix can be made; the Daily Mix switch updates it in place

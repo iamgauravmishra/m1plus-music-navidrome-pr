@@ -47,7 +47,7 @@ widget: nothing). **No new hook, nothing at boot:** `homecover_start` looks up t
 ## Rebuild Covers
 
 Settings > Library > Rebuild Covers ([settings](settings.md)) no longer opens Cover Flow. Its Yes writes the request file
-`/mnt/data/m1plus-covers-rebuild` (`REBUILD_FILE`) and shows a toast. When `hc_on_start` begins a scan it checks the file (`access`):
+`/mnt/data/m1plus/covers-rebuild` (`REBUILD_FILE`) and shows a toast. When `hc_on_start` begins a scan it checks the file (`access`):
 
 - present: the set is opened in `CC_REBUILD` mode, so `cc_build_near_step` queues EVERY album with a track path (existing pictures and
   markers too; the shelf's albums first, as always), and the line reads `Rebuilding covers n/m` (key `Rebuilding covers`, 13 languages);

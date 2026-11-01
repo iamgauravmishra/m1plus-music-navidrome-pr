@@ -3,8 +3,8 @@ Album order, the setting file, the same order on the Albums page, and the stock 
 (The Settings > Cover Flow page itself is tested in test/pod/menu.py, the localisation in test/pod/i18n.py.)"""
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
-ALBUMS_FILE = '/mnt/data/m1plus-albums'
-LAST = '/mnt/mmc/.m1plus/covers/album'
+ALBUMS_FILE = '/mnt/data/m1plus/albums-view'
+LAST = '/mnt/mmc/.m1plus/coverflow-position'
 SEED = O['FNV_SEED']
 
 
@@ -168,7 +168,7 @@ def run(ctx):
     # not found, nothing playing, errors: today's behaviour, the saved last album
     key = fnv(fnv(SEED, 'Nirvana'), 'Nevermind') or 1
     def saved(m):
-        m.files[LAST] = 4; m.saved_album = key
+        m.fs[LAST] = b'%08x\n' % key
     for what, setup in (('an album the library does not have', lambda m: m.play([rec(m, 'Not In The Library', 'Nobody')], 0)),
                         ('a track with no album tag', lambda m: m.play([rec(m, '', 'Nobody')], 0)),
                         ('nothing playing (position -1)', lambda m: m.play([rec(m, 'Kind of Blue', 'Miles Davis')], -1)),
@@ -185,8 +185,31 @@ def run(ctx):
     expect(opened(m, None, 0) == want(5), 'the playing album wins over the saved one')
     m = lib_machine(); m.play([rec(m, 'Kind of Blue', 'Miles Davis')], 0)
     m.call(cover_open, count=30000000); m.call(PSYMS['on_destroy'], count=2000000)
-    expect(any(c[0] == 'fopen' and c[1] == LAST and c[2] == 'wb' for c in m.calls) and
-           ('fwrite', fnv(fnv(SEED, 'Miles Davis'), 'Kind of Blue') or 1) in m.calls, 'leaving writes the centred album as the last one, as before')
+    mkey = fnv(fnv(SEED, 'Miles Davis'), 'Kind of Blue') or 1
+    tmp = LAST + '.tmp'
+    seq = [c[:2] for c in m.calls if len(c) > 1 and c[1] in (tmp, LAST) and c[0] in ('open', 'write', 'fsync', 'close', 'rename')]
+    expect(seq == [('open', tmp), ('write', tmp), ('fsync', tmp), ('close', tmp), ('rename', tmp)], f'the last album is written atomically: temp, write, fsync, close, rename ({seq})')
+    expect(('rename', tmp, LAST) in m.calls and tmp not in m.fs and m.fs.get(LAST) == b'%08x\n' % mkey,
+           'the file holds the key as 8 lowercase hex digits and a newline, and no temp file is left')
+    expect(not any(c[0] in ('fopen', 'fwrite') and 'covers/album' in str(c) for c in m.calls), 'the old file in the cover cache folder is not used')
+    # a failed write leaves no temp file and no position
+    for fail in (('write', tmp), ('fsync', tmp), ('rename', LAST)):
+        m = lib_machine(); m.play([rec(m, 'Kind of Blue', 'Miles Davis')], 0)
+        m.call(cover_open, count=30000000); m.fail.add(fail); m.call(PSYMS['on_destroy'], count=2000000)
+        expect(tmp not in m.fs and LAST not in m.fs, f'a failed {fail[0]} leaves no temp file and no position file')
+    # no card: nothing is written under the mount point, nothing is read
+    m = lib_machine(); m.play([rec(m, 'Kind of Blue', 'Miles Davis')], 0); m.card_mounted = False
+    m.call(cover_open, count=30000000); m.call(PSYMS['on_destroy'], count=2000000)
+    expect(not any(c[0] in ('open', 'write', 'rename') and str(c[1]).startswith('/mnt/mmc/.m1plus/coverflow-position') for c in m.calls),
+           'with no card the position is neither read nor written')
+    # a malformed file is no saved album; an upper-case or newline-less key is still 8 hex digits
+    for what, data in (('empty', b''), ('short', b'1234abc\n'), ('long', b'1234abcde\n'), ('junk', b'1234abcg\n'), ('zero', b'00000000\n'),
+                       ('the old binary form', b'\x01\x02\x03\x04'), ('two lines', b'1234abcd\n\n'), ('a space', b' 234abcd\n')):
+        m = lib_machine(); m.fs[LAST] = data
+        expect(opened(m, None, 0)[0] == 0, f'a {what} position file: no saved album, the first opens')
+    for what, data in (('without the newline', b'%08x' % mkey), ('upper case', b'%08X\n' % mkey)):
+        m = lib_machine(); m.fs[LAST] = data
+        expect(opened(m, None, 0) == want(5), f'a key {what} is read')
     # looked up once, at open: nothing in the page reads the player afterwards
     m = lib_machine(); m.play([rec(m, 'Kind of Blue', 'Miles Davis')], 0); m.call(cover_open, count=30000000)
     m.play([rec(m, 'Nevermind', 'Nirvana')], 0)

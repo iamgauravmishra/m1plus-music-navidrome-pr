@@ -413,14 +413,7 @@ static int so_cmp(unsigned a, unsigned b) {
     return d ? d : a < b ? -1 : a > b;
 }
 
-int cc_sort_artist(void) {
-    char b[4];
-    int fd = open(CFSORT_FILE, 0, 0), n;
-    if (fd < 0) return 1;
-    n = read(fd, b, sizeof b);
-    close(fd);
-    return !(n >= 1 && b[0] == '0' && (n == 1 || (n == 2 && b[1] == '\n'))); /* only "0" / "0\n" is Album */
-}
+int cc_sort_artist(void) { return set_read(CFSORT_FILE, '1') != '0'; /* only "0" / "0\n" is Album */ }
 
 int cc_sort_set(int artist) {
     artist = artist != 0;

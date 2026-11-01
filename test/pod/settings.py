@@ -54,8 +54,8 @@ def layout_tests(ctx):
     """Every cards page under demo's own layouter, plus the asset against the model."""
     expect, P = ctx.expect, pod_pages
     pages = [p for p in P.PAGES if p.kind == 'cards']
-    expect([p.key for p in pages] == ['m1plus_settings', 'm1plus_library', 'm1plus_homeset', 'm1plus_developer', 'm1plus_npset', 'm1plus_keyboards', 'm1plus_albumorder', 'm1plus_tapetheme', 'm1plus_about', 'm1plus_vinylrec', 'm1plus_vinyltheme', 'm1plus_cache'],
-           'the cards pages: Settings, Library, Home Screen, Developer, Now Playing, Keyboards, the four pickers, About and Cover Cache')
+    expect([p.key for p in pages] == ['m1plus_settings', 'm1plus_library', 'm1plus_homeset', 'm1plus_developer', 'm1plus_npset', 'm1plus_keyboards', 'm1plus_albumorder', 'm1plus_tapetheme', 'm1plus_about', 'm1plus_vinylrec', 'm1plus_vinyltheme', 'm1plus_cache', 'm1plus_files'],
+           'the cards pages: Settings, Library, Home Screen, Developer, Now Playing, Keyboards, the four pickers, About, Cover Cache and Settings Files')
     expect(mod_icons.CARD_PIECE == {'ROW_W': ST.ROW_W, 'ROW_H': ST.ROW_H, 'CARD_X': ST.CM, 'CARD_W': ST.CARD_W, 'CARD_R': ST.CARD_R, 'FILL': (0x1C,) * 3, 'LIT': (0x2C, 0x2C, 0x2E)}
            and ST.CARD_RGB == '#1C1C1C' and ST.PRESSED_RGB == '#2C2C2E', 'the pieces\' geometry in tools/mod_icons.py is the layout model\'s')
     for page in pages:
@@ -170,7 +170,7 @@ def settings_page_machine(page, daily=None):
     P = pod_pages
     m = Machine()
     m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_note{i}' for i in range(5)] + [f'pod_row{i}' for i in range(len(page.rows))] + [f'pod_switch{i}' for i in range(len(page.rows))])}
-    if daily is not None: m.fs['/mnt/data/m1plus-daily'] = daily
+    if daily is not None: m.fs['/mnt/data/m1plus/home-daily-mix'] = daily
     m.call(PSYMS['on_row'], a0=PSYMS['pod_rows_%d' % P.SETTINGS_PAGE_INDEX] + 12 * next(i for i, r in enumerate(P.SETTINGS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.PAGES.index(page)), count=3000000)
     return m
 

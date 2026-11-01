@@ -123,7 +123,7 @@ The menu's Albums row (`ACT_ALBUMS`) opens our one Albums page in the mode used 
   (`pod_nav_grid` in list mode, `pod_nav_list` in grid mode; the same `widget_set_prop_str` pattern as the Artists toggle), invalidate the view, and
   save the mode (`home_write_atomic`). Nothing is opened, so nothing can be left behind. If the page's asset lacks the two style labels the
   page leaves again (`navigator_back`) as it does without `view_grid`.
-- **Persistence.** `/mnt/data/m1plus-albums`: `1` the grid, `0` the list, missing or anything else
+- **Persistence.** `/mnt/data/m1plus/albums-view`: `1` the grid, `0` the list, missing or anything else
   `ALBUMS_DEFAULT_GRID`; written as the Start-in setting is (`home_write_atomic`: temp file, `fsync`, `rename`, directory
   `fsync`) at every toggle. The menu's Albums row (`albums_open`) opens the page in that mode. If the window cannot open at all it opens the
   **stock Albums list** through the Home dispatcher (id 5, `pod_home_open`); the stock list stays reachable from Shanling Home, unmodified.

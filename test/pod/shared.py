@@ -149,7 +149,7 @@ def cover_flow_tests(expect):
     for last in (0, 2):
         m = cover_machine(albums=3)
         key = fnv(fnv(O['FNV_SEED'], f'Artist {last}'), f'Album {last}') or 1
-        m.files['/mnt/mmc/.m1plus/covers/album'] = 4; m.saved_album = key
+        m.fs['/mnt/mmc/.m1plus/coverflow-position'] = b'%08x\n' % key
         m.call(PSYMS['coverflow_open'], count=5000000)
         expect(shelf_value(m) == last
                and ('widget_set_text_utf8', m.widgets['label_album'], f'Album {last}') in m.calls,

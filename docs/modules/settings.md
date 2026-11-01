@@ -18,27 +18,33 @@ The design is `tools/preview_settings.py` (it draws the built tree's own assets;
 
 ## Persisted choices
 
-Switches and pickers save before updating their image/check. A failed atomic save leaves the file and displayed state unchanged. Reading settings never writes them.
+Switches and pickers save before updating their image/check. A failed atomic save leaves the file and displayed state unchanged. Reading settings never writes them. One reader serves every one-character file below: `set_read(path, default)` (patch/home.c, declared in home.h) returns the character of a file that is exactly `x` or `x\n`, and the default for a missing file, an empty one or anything longer (trailing junk is the default, never a first-byte match). Each setting compares that character; the values below are those characters. The multi-value files (`home-menu`, `search-history`, `recently-played`) and the boot guard's `m1plus-start` have their own parsers.
 
-| Setting | File under `/mnt/data/` | Values/default |
+Feature settings live in their own folder, `/mnt/data/m1plus/` (`SET_DIR`, patch/home.h). `home_write_atomic` makes the folder when a write finds it missing and fsyncs the folder after the rename. The boot guard's files stay directly in `/mnt/data/`: `m1plus-start` (Boot to M1+ Music: `0` stock Home; missing/other enables M1+ Music), the marker `m1plus-run`, the bad note `m1plus-bad` and the kill switch `m1plus-off` ([home guard](home-guard.md)). The guard's crash path therefore never depends on the folder.
+
+| Setting | File under `/mnt/data/m1plus/` | Values/default |
 |---|---|---|
-| Boot to M1+ Music | `m1plus-start` | `0` stock Home; missing/other enables M1+ Music |
-| Recent Albums | `m1plus-shelf` | `0` off; missing/other on |
-| Daily Mix | `m1plus-daily` | `0` off; missing/other on |
-| Landscape | `m1plus-landscape` | `1` landscape; default portrait |
-| Album Order | `m1plus-cfsort` | `0` or `0\n` Album; missing/other Artist |
-| Cassette Theme | `m1plus-tapetheme` | `1` Chrome, `2` Metal, optional newline; missing/other Normal |
-| Vinyl Record | `m1plus-vinylrec` | `1` Cover, optional newline; missing/other Black |
-| Vinyl Base | `m1plus-vinyltheme` | `1` Snow, optional newline; missing/other Graphite |
-| Chinese (Pinyin) keyboard | `m1plus-kbzh` | `1` on (first byte); missing/other off |
-| Podcast Search | `m1plus-pcsearch` | `1` on (first byte); missing/other off (the default) |
-| Battery Percentage | `m1plus-battpct` | `1` on (first byte); missing/other off (the default) |
+| Recent Albums | `home-recent-albums` | `0` off; missing/other on |
+| Daily Mix | `home-daily-mix` | `0` off; missing/other on |
+| Albums / Playlists view | `albums-view`, `playlists-view` | `0` list; missing/other grid |
+| Cover Flow Landscape | `coverflow-landscape` | `1` landscape; missing/other portrait |
+| Album Order | `album-order` | `0` Album; missing/other Artist |
+| Cassette Theme | `cassette-theme` | `1` Chrome, `2` Metal; missing/other Normal |
+| Vinyl Record | `vinyl-record` | `1` Cover; missing/other Black |
+| Vinyl Base | `vinyl-base` | `1` Snow; missing/other Graphite |
+| Pod Appearance | `pod-appearance` | `1` Dark; missing/other Light |
+| Chinese (Pinyin) keyboard | `keyboard-pinyin` | `1` on; missing/other off |
+| Podcast Search | `podcast-online-search` | `1` on; missing/other off (the default) |
+| Battery Percentage | `battery-percentage` | `1` on; missing/other off (the default) |
+| Main Menu / Extras | `home-menu` | item ids in order, optional `-` then the hidden ids ([menu](menu.md)); invalid = defaults |
+| Recent searches | `search-history` | up to 5 UTF-8 lines, newest first ([search](search.md)); malformed = none |
+| Recently Played albums | `recently-played` | `M1R2` then up to 6 tab-separated rows ([recent](recent.md)); malformed = none |
 
 **Home Screen** (also the menu's arrangement: Main Menu and Extras, two link rows with notes) has the Recent Albums and Daily Mix switches (one card, the note "Shown on Home below the menu"). Last on the page, after Battery Percentage and its note (below), is Regenerate Daily Mix in a card of its own with its note: an action that requests a new seed (a toast "New mix when Home opens" confirms an accepted tap), the Home page rebuilds when next foregrounded. That row and its note are hidden (`regen_show`: the last row, `pod_note4`; the layouter skips them and the page ends after Battery Percentage) while no mix can be made (Daily Mix off, or a library under `MIX_MIN_LIB`). Shelf and mix visibility are reread when returning to Home. The separate Recent Albums translation fits switch rows where Recently Played would overflow. Under a **Status Bar** header, **Battery Percentage** (a switch row, Lucide `battery-charging`, `ACT_BATTPCT` 36, `battpct_setting` / `battpct_toggle` in `patch/battery.c`, saved atomically in `m1plus-battpct`, **off by default**; a failed save changes neither the file nor the switch) with the note "The exact charge beside the battery icon". The status bar reads it through the payload's cached flag, which the switch updates at once; what it does is [battery](battery.md) "The percentage". Texts in the 13 languages (`Status Bar`, `Battery Percentage`, the note; no `%` in a text, `mod_strings` refuses one). Tests: `test/pod/battery.py`.
 
 **Library**: Update Library (the stock updatemusic page, Home id 2, as the Update Library item), **Album Order** (a value row, Artist or Album; opens the picker `m1plus_albumorder`: two check rows, `ACT_SORTSET`, `cc_sort_set`), **Rebuild Covers** (between them, one card: Update Library, Rebuild Covers, Album Order; the Update Library note was dropped) and under the Cover Flow header Landscape. **Now Playing**: under the Cassette Mode header **Theme** (value Normal / Chrome / Metal, opens the picker `m1plus_tapetheme`: three check rows, `ACT_THEMESET`, `tape_theme_set`, the note "Applies the next time Cassette Mode opens."). `tape_theme` reads it when the Tape page opens; a change affects the next open. Value labels use translation keys, not fixed English text. The old tap-to-cycle value rows are gone.
 
-**Library > Podcasts**: under a header of its own at the end of the Library page, **Podcast Search** (a switch row, Lucide `search`, `ACT_PCSEARCH` 34, `pcsearch_setting` / `pcsearch_toggle` in `patch/podcasts.c`, file `/mnt/data/m1plus-pcsearch`: `1` is on, a missing file or anything else is off, so it is **off by default**) and the note "Search words are sent to Apple." (the iTunes directory is queried with what is typed). The tap saves first (`home_write_atomic`: temp file, fsync, rename) and only then changes the switch: a failed save changes neither the file nor the switch. The Podcasts page reads the setting when it opens and each time it is back in front (`EVT_WINDOW_TO_FG`), so the Search button follows it: [Podcasts](podcasts.md) "Search". The row and its note have a text in the 13 languages (`Podcast Search`, `Search words are sent to Apple.`; French says `Recherche` under its `Podcasts` header, the full words did not fit the label). Tests: `test/pod/menu.py` `pcsearch_row_tests`.
+**Library > Podcasts**: under a header of its own at the end of the Library page, **Podcast Search** (a switch row, Lucide `search`, `ACT_PCSEARCH` 34, `pcsearch_setting` / `pcsearch_toggle` in `patch/podcasts.c`, file `/mnt/data/m1plus/podcast-online-search`: `1` is on, a missing file or anything else is off, so it is **off by default**) and the note "Search words are sent to Apple." (the iTunes directory is queried with what is typed). The tap saves first (`home_write_atomic`: temp file, fsync, rename) and only then changes the switch: a failed save changes neither the file nor the switch. The Podcasts page reads the setting when it opens and each time it is back in front (`EVT_WINDOW_TO_FG`), so the Search button follows it: [Podcasts](podcasts.md) "Search". The row and its note have a text in the 13 languages (`Podcast Search`, `Search words are sent to Apple.`; French says `Recherche` under its `Podcasts` header, the full words did not fit the label). Tests: `test/pod/menu.py` `pcsearch_row_tests`.
 
 ## Stock pages and state
 
@@ -91,7 +97,7 @@ must not be used for this message. Evidence: `dialog_confirminfo_dialog_init` `0
 branch `0x472e1c`; stock equalizer reset `on_eqreset_onclick` `0x49dd6c` uses the same dialog.
 
 Only `CONFIRM_YES` (`0xa`, `btn_enter`) acts; No or a failed dialog does nothing. Yes stays on Settings: it writes the request
-file `/mnt/data/m1plus-covers-rebuild` (`REBUILD_FILE`, `"1\n"`, `home_write_atomic`, so it survives a reboot) and shows the toast
+file `/mnt/data/m1plus/covers-rebuild` (`REBUILD_FILE`, `"1\n"`, `home_write_atomic`, so it survives a reboot) and shows the toast
 "Covers will rebuild on Home" (`pod_toast`; a failed write shows "Storage unavailable"). Home's cover build does the rest
 ([homecover.md](homecover.md)): every cover is extracted again in the background, including no-art markers, and the file is
 removed when it completes. The translated message and toast are checked in all 16 tables. The kind-5 appearance still needs
@@ -99,7 +105,7 @@ device confirmation.
 
 ## Cover Cache
 
-Settings > Developer > Tools > **Cover Cache** (a link row, glyph `hard-drive`) opens `m1plus_cache`, a cards page of the About kind (`ACT_INFO` rows: a label and a grey right-aligned value, no chevron, no touch; `INFO_CC_*` kinds, values from `homecover_stat`). Card 1: **Albums** (library albums), **Covers** (`r<key>-168.jpg` with size > 0), **No art** (empty `r` markers), **Missing** (albums with neither, by the `CC_MISSING` rule: a track path and no file), **Old files** (every other file but `album`: unprefixed, `f`-prefixed, `.tmp`), **Size** (all files but `album`, MB with one decimal under 10 MB). Card 2: **Status**: Idle, Preparing n/m or Rebuilding n/m (Home's own set; in practice Home is in the background while Settings is open, so these show only if it ever holds the worker here), Building [n/m] (another page's set), Rebuild requested (the request file exists, nothing builds), Clearing. Card 3: **Clear Cover Cache**.
+Settings > Developer > Tools > **Cover Cache** (a link row, glyph `hard-drive`) opens `m1plus_cache`, a cards page of the About kind (`ACT_INFO` rows: a label and a grey right-aligned value, no chevron, no touch; `INFO_CC_*` kinds, values from `homecover_stat`). Card 1: **Albums** (library albums), **Covers** (`r<key>-168.jpg` with size > 0), **No art** (empty `r` markers), **Missing** (albums with neither, by the `CC_MISSING` rule: a track path and no file), **Old files** (every other file: unprefixed, `f`-prefixed, `.tmp`, the old Cover Flow position `album`), **Size** (all files, MB with one decimal under 10 MB). Card 2: **Status**: Idle, Preparing n/m or Rebuilding n/m (Home's own set; in practice Home is in the background while Settings is open, so these show only if it ever holds the worker here), Building [n/m] (another page's set), Rebuild requested (the request file exists, nothing builds), Clearing. Card 3: **Clear Cover Cache**.
 
 Counting never blocks and only runs while the page is open (`homecover_cache_open`, `patch/homecover.c`): the folder is read `CP_N` 64 entries per 20 ms tick (`cc_file_size` per file), then `cc_albums` is loaded once and checked 64 albums per tick; until a count is known its value is an ellipsis. A 500 ms poll refreshes the page when the Status text changed. Background and destroy remove both timers and free the directory handle and album copy; the foreground and a finished clear count again from nothing. No folder: zeros (every album missing), Status Idle. Tests: `test/pod/homecover.py` `cache_tests`.
 
@@ -108,6 +114,10 @@ Counting never blocks and only runs while the page is open (`homecover_cache_ope
 ### Clear Cover Cache (card 3)
 
 `ACT_CLEARCACHE`, glyph `trash`. `clear_ask` first refuses with the toast "Covers are being made, try later" when the shared cover worker is held (`cc_build_busy`; nothing is stopped, since a set may belong to Albums or Cover Flow). Otherwise it asks in the same stock confirm dialog (kind 5) "Delete all cached covers? They will be made again on Home."; No does nothing. Yes calls `homecover_clear` (`patch/homecover.c`): it removes a pending Rebuild Covers request and deletes every regular file in `/mnt/mmc/.m1plus/covers` except `album` (Cover Flow's position): the `r<key>-168.jpg` pictures, their empty no-art markers, `.tmp` leftovers and the stale old-format files. Deletion is 32 unlinks per 20 ms tick of a self-ending timer (the directory handle is kept between ticks), so nothing blocks; the timer needs no page, so leaving Settings mid-way lets it finish, and a build starting meanwhile stops it quietly (a partial clear is fine). The toast "Cover cache cleared" shows at the end. Home's build then finds every album missing at its next foreground. Tests: `test/pod/homecover.py` `clear_tests`.
+
+## Settings Files
+
+Settings > Developer > Tools > **Settings Files** (a link row, glyph Lucide `file-cog`) opens `m1plus_files`, a cards page of the Cover Cache kind (`ACT_INFO` rows, `INFO_SF + k`, values from `setfiles_stat`, `patch/setfiles.c`). It shows the payload's own files as raw values: the labels are the file names themselves (identifiers, untranslated; only the title is translated). Card 1: the guard files in `/mnt/data` (`m1plus-start` the character, `m1plus-run`, `m1plus-bad`, `m1plus-off` present or missing). Card 2: `m1plus/` (the settings folder: present or missing), then one row per file in it: a single-character setting shows its character (`other` for anything longer, `empty`), `home-menu` its first 12 characters (an ellipsis after), `search-history` and `recently-played` their number of lines, `covers-rebuild` present or missing; a file that is not there reads `missing`. Everything is read once by `setfiles_open` as the page opens (open, read, close, access); a refresh on coming back to the page shows those values again and reads nothing, no timer. No hook or pin. Tests: `files_tests` in `test/pod/homecover.py`.
 
 ## Album ordering and initial selection
 
@@ -125,7 +135,7 @@ title order. Cache keys remain artist + album title.
 At open, `find_playing` checks `cc_playing`: `mclGetPlayPos` `0x5d4290` and `PLAY_QUEUE`
 `0xa0394c`, bounded by `deque_size`. It matches the album by `cc_album_key` (FNV of artist/title),
 then title ignoring ASCII case for compilations. Selection priority is playing album, saved
-`LAST_ALBUM`, then first album. This is a one-time lookup, not polling.
+`coverflow-position`, then first album. This is a one-time lookup, not polling.
 
 ## Open Shanling Home and startup
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The Recently Played list file of the menu's shelf (patch/recent.c, docs/modules/recent.md): the model the tests compare the payload with.
 
-/mnt/data/m1plus-recent:
+/mnt/data/m1plus/recently-played:
 
     M1R2\\n
     <id: 8 hex>\\t<cover key: 8 hex>\\t<0|1>\\t<album>\\t<artist>\\t<path of a track of the album>\\n        (one line per album, the most recent first)

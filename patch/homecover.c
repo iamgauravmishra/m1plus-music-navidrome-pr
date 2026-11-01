@@ -220,7 +220,7 @@ void homecover_start(void *win) {
 }
 
 /* ---------------------------------------------------------------------------
- * Settings > Developer > Clear Cover Cache (after its confirm): every file in ART_DIR but "album" (Cover Flow's position) is removed:
+ * Settings > Developer > Clear Cover Cache (after its confirm): every file in ART_DIR is removed (Cover Flow's position is outside it):
  * the r<key>-168.jpg pictures, their empty no-art markers, .tmp leftovers and the stale old-format files. HC_CLEAR_N unlinks a tick on a
  * one-shot that re-arms itself (the directory handle is kept between ticks), so a big cache never blocks input; the timer needs no page, it
  * ends with the last file. A pending Rebuild Covers request goes too (every cover is missing now, the next Home build makes them all).
@@ -256,7 +256,7 @@ static int cl_tick(const void *unused) {
     while (n < HC_CLEAR_N && (ent = readdir(cl.dir)) != (char *)0) {
         char path[300]; /* (d_name is at most 255 bytes) */
         const char *name = ent + 11; /* struct dirent: d_type at 10, d_name at 11 */
-        if (ent[10] != 8 || !strcmp(name, "album")) continue;
+        if (ent[10] != 8) continue;
         snprintf(path, sizeof path, ART_DIR "/%s", name);
         unlink(path);
         ++n;
@@ -309,7 +309,7 @@ static struct {
     char last[64]; /* the Status text the page shows now */
 } cp __attribute__((section(".scratch")));
 
-/* r<8 hex>-168.jpg exactly: the current cache name; anything else in the folder but "album" is an old or temporary file. */
+/* r<8 hex>-168.jpg exactly: the current cache name; anything else in the folder is an old or temporary file. */
 static int cp_is_pic(const char *name) {
     int i;
     if (name[0] != 'r') return 0;
@@ -348,7 +348,7 @@ static int cp_tick(const void *unused) {
             const char *name = ent + 11; /* struct dirent: d_type at 10, d_name at 11 */
             char path[300];
             long size;
-            if (ent[10] != 8 || !strcmp(name, "album")) continue;
+            if (ent[10] != 8) continue;
             ++n;
             snprintf(path, sizeof path, ART_DIR "/%s", name);
             size = cc_file_size(path);

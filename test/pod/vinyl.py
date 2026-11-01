@@ -26,8 +26,8 @@ EVT_BG, EVT_FG, EVT_DESTROY, EVT_PAINT = O['EVT_WINDOW_TO_BG'], O['EVT_WINDOW_TO
 WIN = 0x24200000
 SYSBAR = pod.DATA['SYSTEM_BAR'][0]
 KILL = '/mnt/mmc/m1plus-off'
-REC_FILE = '/mnt/data/m1plus-vinylrec'
-THEME_FILE = '/mnt/data/m1plus-vinyltheme'
+REC_FILE = '/mnt/data/m1plus/vinyl-record'
+THEME_FILE = '/mnt/data/m1plus/vinyl-base'
 COMPOSE_MAX = 6000000   # instructions: the Cover record composed once into the base, the same on a track change (3.1 M measured, to be re-measured); not a tick's cost
 COVER_MAX = 18000000   # instructions: a track change with Cover (the tint, the ring composed, the box composed again; the black case loads vinyl_base). 14 M measured (tint to tint 12.4 M, to black 14.0 M), 5.5 M of it any track change
 W, H = 320, 480
@@ -662,7 +662,7 @@ def setting_tests(ctx):
     m = open_pick()
     for k in (1, 0, 1, 1, 0):
         m.click(f'pod_row{k}')
-        expect(m.fs.get(REC_FILE) == b'%d\n' % k and REC_FILE + '.tmp' not in m.fs and ('rename', REC_FILE + '.tmp', REC_FILE) in m.calls and ('fsync', '/mnt/data') in m.calls
+        expect(m.fs.get(REC_FILE) == b'%d\n' % k and REC_FILE + '.tmp' not in m.fs and ('rename', REC_FILE + '.tmp', REC_FILE) in m.calls and ('fsync', '/mnt/data/m1plus') in m.calls
                and [shown(m, i) for i in range(2)] == [int(i == k) for i in range(2)], f'a tap on {T.rows[k].label}: written atomically ({m.fs.get(REC_FILE)!r}), the check follows')
     m = open_pick(b'1\n'); m.fail.add(('write', REC_FILE + '.tmp')); m.click('pod_row0')
     expect(m.fs.get(REC_FILE) == b'1\n' and REC_FILE + '.tmp' not in m.fs and not any(c[0] == 'widget_set_visible' for c in m.calls), 'a failed write changes neither the file nor the check')
@@ -764,7 +764,7 @@ def theme_setting_tests(ctx):
     m = open_pick()
     for k in (1, 0, 1):
         m.click(f'pod_row{k}')
-        expect(m.fs.get(THEME_FILE) == b'%d\n' % k and THEME_FILE + '.tmp' not in m.fs and ('rename', THEME_FILE + '.tmp', THEME_FILE) in m.calls and ('fsync', '/mnt/data') in m.calls
+        expect(m.fs.get(THEME_FILE) == b'%d\n' % k and THEME_FILE + '.tmp' not in m.fs and ('rename', THEME_FILE + '.tmp', THEME_FILE) in m.calls and ('fsync', '/mnt/data/m1plus') in m.calls
                and [shown(m, i) for i in range(2)] == [int(i == k) for i in range(2)], f'a tap on {T.rows[k].label}: written atomically ({m.fs.get(THEME_FILE)!r}), the check follows')
     m = open_pick(b'1\n'); m.fail.add(('write', THEME_FILE + '.tmp')); m.click('pod_row0')
     expect(m.fs.get(THEME_FILE) == b'1\n' and not any(c[0] == 'widget_set_visible' for c in m.calls), 'a failed write changes neither the file nor the check')

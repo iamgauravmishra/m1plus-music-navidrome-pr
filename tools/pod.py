@@ -41,7 +41,7 @@ OBJCOPY = os.path.join(LLVM, 'llvm-objcopy')
 LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
-SOURCES = ['m1plus.c', 'common.c', 'menu.c', 'covercache.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c',
+SOURCES = ['m1plus.c', 'common.c', 'menu.c', 'covercache.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c',
            'scroll.c', 'playmore.c', 'playlists.c', 'azlist.c', 'songops.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'pcnet.c', 'podcasts.c', 'tape.c', 'vinyl.c', 'onlineart.c', 'keyboard.c', 'search.c', 'battery.c', 'lyrics.c', 'picker.c', 'folders.c']
 
 FLAGS = ['--target=mipsel-linux-gnu', '-march=mips32r2', '-mabi=32', '-mfp64',
@@ -994,6 +994,7 @@ def gen_stock_h(out, demo_path):
     h.append(f'#define POD_EXTRASCFG_PAGE {pod_pages.EXTRASCFG_PAGE_INDEX}')
     h.append(f'#define POD_DEVELOPER_PAGE {pod_pages.DEVELOPER_PAGE_INDEX}')
     h.append(f'#define POD_CACHE_PAGE {pod_pages.CACHE_PAGE_INDEX}')
+    h.append(f'#define POD_FILES_PAGE {pod_pages.FILES_PAGE_INDEX}')
     (out / 'pages.h').write_text('\n'.join(h) + '\n')
     return slots
 

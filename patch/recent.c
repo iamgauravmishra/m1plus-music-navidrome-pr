@@ -260,14 +260,7 @@ int recent_note(void *t) {
 /* ---------------------------------------------------------------------------
  * The setting (Settings > Home Screen > Recent Albums): the file holds "0" for off, anything else or no file is on.
  */
-int recent_setting(void) {
-    char c = 0;
-    int fd = open(SHELF_FILE, O_RDONLY, 0), n;
-    if (fd < 0) return 1;
-    n = read(fd, &c, 1);
-    close(fd);
-    return !(n == 1 && c == '0');
-}
+int recent_setting(void) { return set_read(SHELF_FILE, '1') != '0'; }
 
 int recent_toggle(void) {
     int next = !recent_setting();

@@ -62,7 +62,7 @@ Installed sizes (Graphite's names; Snow's `_white` are 90 KB base, 9 KB lid, 3 K
 
 Settings > Now Playing > Vinyl Mode > **Record** (a value row opening the picker `m1plus_vinylrec`, a check on the chosen row, "Applies the next time Vinyl Mode opens."):
 **Black** (default, the installed look) or **Cover** (the record tinted from the playing track's cover; black for a grey cover or none). Saved as `0` or `1` (optional
-newline; anything else or no file is Black) in `/mnt/data/m1plus-vinylrec` by `vinyl_record_set` (atomic, as the Cassette Theme); the page reads it once when it opens
+newline; anything else or no file is Black) in `/mnt/data/m1plus/vinyl-record` by `vinyl_record_set` (atomic, as the Cassette Theme); the page reads it once when it opens
 (`vinyl_record`). `vinyl_art.RECORD_NAMES` is the order. Red, Smoke and Clear were mocked and device-tried, then dropped: no code, strings or tables of them remain. Nothing
 changed for Black: `vinyl_base` is pixel for pixel what V2.1qD installed, `vinyl_rec` is not even loaded, and the page costs what it did.
 
@@ -95,7 +95,7 @@ changed for Black: `vinyl_base` is pixel for pixel what V2.1qD installed, `vinyl
 
 Settings > Now Playing > Vinyl Mode > **Base**: **Graphite** (default, the installed look) or **Snow** (a
 matte off-white plinth, silver arm, grey keys, dark text). A value row opening the picker `m1plus_vinyltheme` (a check on the chosen row, "Applies the next time Vinyl Mode opens.");
-saved as `0` or `1` (optional newline; only `1` is Snow, anything else or no file is Graphite) in `/mnt/data/m1plus-vinyltheme` (`vinyl_theme`, `vinyl_theme_set`), read once when the page opens.
+saved as `0` or `1` (optional newline; only `1` is Snow, anything else or no file is Graphite) in `/mnt/data/m1plus/vinyl-base` (`vinyl_theme`, `vinyl_theme_set`), read once when the page opens.
 The designs are `vinyl_art.THEMES` (selected by `use(theme)`; the mocks are `tools/preview_vinyl_themes.py`).
 
 - **Pictures.** A theme changes six: `vinyl_base`, `vinyl_lid` (the rim colour), `vinyl_arm`, `vinyl_armsh` (Snow's shadow is lighter), `vinyl_cap`, `vinyl_keys`. Graphite's keep their

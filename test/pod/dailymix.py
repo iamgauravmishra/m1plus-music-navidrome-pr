@@ -35,7 +35,7 @@ recent, pulldown = sibling('recent'), sibling('pulldown')
 CARD_DIR = '/mnt/mmc/.m1plus'
 MIX_DIR = CARD_DIR + '/daily-mix'
 MIX, MIX_TMP, ART, ART_TMP = MIX_DIR + '/tracks', MIX_DIR + '/tracks.tmp', MIX_DIR + '/art', MIX_DIR + '/art.tmp'
-SET, SET_TMP = '/mnt/data/m1plus-daily', '/mnt/data/m1plus-daily.tmp'
+SET, SET_TMP = '/mnt/data/m1plus/home-daily-mix', '/mnt/data/m1plus/home-daily-mix.tmp'
 KILL_SD = '/mnt/mmc/m1plus-off'
 EVT_DOWN, EVT_UP, EVT_ABORT = O['EVT_POINTER_DOWN'], O['EVT_POINTER_UP'], O['EVT_POINTER_ABORT']
 EVT_BG, EVT_FG, EVT_DESTROY, EVT_AFTER_PAINT, EVT_CLICK = O['EVT_WINDOW_TO_BG'], O['EVT_WINDOW_TO_FG'], O['EVT_DESTROY'], O['EVT_AFTER_PAINT'], O['EVT_CLICK']
@@ -338,7 +338,7 @@ def run(ctx):
     # ===== 5. the switch file
     m = Machine(); m.dirs.add('/mnt/data')
     expect(m.call(PSYMS['dailymix_setting'], count=100000) == 1, 'no file: the card is on')
-    for content, want in ((b'1\n', 1), (b'0\n', 0), (b'0', 0), (b'', 1), (b'x', 1), (b'10', 1)):
+    for content, want in ((b'1\n', 1), (b'0\n', 0), (b'0', 0), (b'', 1), (b'x', 1), (b'10', 1), (b'0x', 1), (b'00', 1)):
         m.fs[SET] = content
         expect(m.call(PSYMS['dailymix_setting'], count=100000) == want, f'switch file {content!r}: {"on" if want else "off"}')
     m.fs[SET] = b'1\n'

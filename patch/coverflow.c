@@ -272,7 +272,8 @@ void coverflow_render(const cfg_t *g, unsigned *d, int pitch, int frac, const un
  */
 #define I(r, off) (*(int *)((char *)(r) + (off)))
 
-#define LAST_ALBUM ART_DIR "/album" /* the centre album's key, so a reboot opens on it */
+#define POSITION_FILE \
+    CARD_DIR "/coverflow-position" /* the centre album's key (8 hex digits), so a reboot opens on it */
 #define ART_NEAR 3 /* flat fallback: real art only this many covers either side */
 #define PLACEHOLDER "p_default" /* the stock 254 px disc, Now Playing's missing-art image */
 #define POLL_MS 250
@@ -960,14 +961,7 @@ static int on_pointer(void *ctx, void *e) {
  * CFL_W high, the caption labels are hidden (the frame carries the captions), and the frame bitmap is the
  * body-sized one. Without a depth frame the covers are flat and portrait, whatever the setting says.
  */
-static int use_land(void) {
-    char c = 0;
-    int fd = open(LANDSCAPE_FILE, 0, 0), n;
-    if (fd < 0) return 0;
-    n = read(fd, &c, 1);
-    close(fd);
-    return n == 1 && c == '1';
-}
+static int use_land(void) { return set_read(LANDSCAPE_FILE, 0) == '1'; }
 
 /* The setting for the Landscape switch (patch/m1plus.c). */
 int coverflow_landscape(void) { return use_land(); }
@@ -1095,14 +1089,47 @@ static int on_songs(void *ctx, void *e) {
  * Opening: the album list, then art for the albums with no cache file (q2-pod's first-run build;
  * later opens resume where a cancel left off).
  */
-static void blob(const char *path, unsigned *value, int write) {
-    void *f = fopen(path, write ? "wb" : "rb");
-    if (!f) return;
-    if (write)
-        fwrite(value, sizeof *value, 1, f);
-    else if (fread(value, sizeof *value, 1, f) != 1)
-        *value = 0;
-    fclose(f);
+/* The centre album's key as 8 lowercase hex digits and a newline, in a file of the card's own (the keys belong to the card's
+ * library, so the file stays on it): temp file, fsync, rename. Only with the card mounted. */
+static void position_save(unsigned key) {
+    char text[16], tmp[sizeof POSITION_FILE + 4];
+    int fd, ok;
+    if (!pod_card_mounted()) return; /* never write to the internal flash under the mount point */
+    mkdir(CARD_DIR, 0755); /* EEXIST is fine; a failure shows in the open below */
+    snprintf(text, sizeof text, "%08x\n", key);
+    snprintf(tmp, sizeof tmp, "%s.tmp", POSITION_FILE);
+    fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) return;
+    ok = write(fd, text, 9) == 9 && fsync(fd) == 0;
+    ok = (close(fd) == 0) && ok;
+    if (!ok || rename(tmp, POSITION_FILE) != 0) unlink(tmp);
+}
+
+/* The saved key: exactly 8 hex digits and an optional newline; anything else, a missing file or the card not mounted is 0. */
+static unsigned position_load(void) {
+    char text[16];
+    unsigned key = 0;
+    int fd, n, i;
+    if (!pod_card_mounted()) return 0;
+    fd = open(POSITION_FILE, O_RDONLY, 0);
+    if (fd < 0) return 0;
+    n = read(fd, text, sizeof text);
+    close(fd);
+    if (n == 9 && text[8] == '\n') n = 8;
+    if (n != 8) return 0;
+    for (i = 0; i < 8; ++i) {
+        int c = text[i];
+        if (c >= '0' && c <= '9')
+            c -= '0';
+        else if (c >= 'a' && c <= 'f')
+            c -= 'a' - 10;
+        else if (c >= 'A' && c <= 'F')
+            c -= 'A' - 10;
+        else
+            return 0;
+        key = key << 4 | (unsigned)c;
+    }
+    return key;
 }
 
 static int on_poll(const void *unused) {
@@ -1145,7 +1172,7 @@ static int load_albums(void) {
 }
 
 /* The album the shelf opens on: the playing track's album when something is queued, else the one last centred
- * (LAST_ALBUM). Looked up once, at open (no polling). The track's album is its album key (cc_album_key, the FNV
+ * (POSITION_FILE). Looked up once, at open (no polling). The track's album is its album key (cc_album_key, the FNV
  * of artist then album the cache files carry), else the album of that name: the library groups albums by name and
  * lists one artist for each, which a compilation's tracks do not all share. -1: no match (nothing playing, an
  * online or untagged track, an artist who does not have that album). */
@@ -1297,7 +1324,7 @@ static int on_destroy(void *ctx, void *e) {
     cf.dragging = 0;
     build_end();
     fx_close();
-    if (cf.saved_album && !cf.scoped) blob(LAST_ALBUM, &cf.saved_album, 1);
+    if (cf.saved_album && !cf.scoped) position_save(cf.saved_album);
     if (cf.albums) deque_destroy(cf.albums);
     if (cf.artist_row) deque_destroy(cf.artist_row);
     free(cf.keys);
@@ -1345,7 +1372,7 @@ static int open_covers(int n, const char *empty) {
         cf.screen = CF_COVERS;
         return 0;
     }
-    if (!cf.scoped) blob(LAST_ALBUM, &cf.saved_album, 0); /* the last album outlives a reboot */
+    if (!cf.scoped) cf.saved_album = position_load(); /* the last album outlives a reboot */
     pick_start();
     if (!start_build()) to_covers();
     return 0;

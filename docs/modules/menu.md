@@ -13,7 +13,7 @@ layout/hit-testing. User instructions are in the [guide](../guide.md#home-and-me
 
 Both use stock `list_view > scroll_view` with `scroll_bar_m`, 52 px `list_item` rows and the
 stock row theme. The asset contains one row per `ITEMS` entry, then Extras. Never hard-code the
-row count: Pod, Podcasts and Search are items too.
+row count: Pod, Podcasts and Search are items too. Item ids are frozen (`ITEM_IDS`, asserted at build): `home-menu` stores them, so a new item is appended, never inserted, removed or reordered.
 
 Default shown IDs are `12345`: Cover Flow, Albums, Artists, Songs and Playlists. Extras is
 always visible and last. Settings (ID 18, `j`) is hidden by default and stays reachable from
@@ -37,7 +37,7 @@ scroll above the floating pill. Details: [mini player](minibar.md), [Daily Mix](
 
 ## Saved menu
 
-`/mnt/data/m1plus-menu` contains `<shown IDs in order>[-<off IDs>]` with an optional final
+`/mnt/data/m1plus/home-menu` contains `<shown IDs in order>[-<off IDs>]` with an optional final
 newline. Characters are `ID_CHARS` (`0`–`8`, then `a`–`m`); total file length must be nonzero
 and less than `MENU_FILE_MAX` (25 bytes).
 

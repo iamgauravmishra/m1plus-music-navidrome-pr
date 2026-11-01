@@ -43,7 +43,7 @@ delete and Search. Geometry stays; the pad's own events resolve the rest:
 
 ## Keyboards (Settings > Keyboards) and the language key
 
-The setting is two switch rows, English (always on, not switchable) and Chinese (Pinyin) (default off, `/mnt/data/m1plus-kbzh`): [settings](settings.md) "Keyboards". `keyboard_open` reads it.
+The setting is two switch rows, English (always on, not switchable) and Chinese (Pinyin) (default off, `/mnt/data/m1plus/keyboard-pinyin`): [settings](settings.md) "Keyboards". `keyboard_open` reads it.
 
 * **Off**: the keyboard is exactly the one above: no language key, space 163 px wide, the dictionary and the engine never touched.
 * **On**: row four is `123 / ABC` (74), the **language key** `kb_lang` (40 wide, function colour, x 79), space (now x 122, 120 wide), Search. The key is on every page and shows the layer a tap goes to:

@@ -6,8 +6,8 @@ from harness import *   # noqa: F401,F403  (test/patch.py initialises the harnes
 import pod_recent
 import pod_i18n
 
-CFSORT_FILE = '/mnt/data/m1plus-cfsort'
-RECENT = '/mnt/data/m1plus-recent'
+CFSORT_FILE = '/mnt/data/m1plus/album-order'
+RECENT = '/mnt/data/m1plus/recently-played'
 HC_X, HC_Y, HC_W, HC_H, HOME_PAD, WIN_H = (O[k] for k in ('HC_X', 'HC_Y', 'HC_W', 'HC_H', 'HOME_PAD', 'WIN_H'))
 START_MS, POLL_MS = O['RC_RESOLVE_MS'], 500
 
@@ -15,7 +15,7 @@ START_MS, POLL_MS = O['RC_RESOLVE_MS'], 500
 def key_of(i): return album_key(f'Artist {i}', f'Album {i}')
 
 
-REQ = '/mnt/data/m1plus-covers-rebuild'
+REQ = '/mnt/data/m1plus/covers-rebuild'
 
 
 def home_machine(n=8, missing=(), empty=(), rebuild=False):
@@ -265,12 +265,11 @@ def rebuild_tests(ctx):
 
 
 def clear_tests(ctx):
-    """Settings > Developer > Clear Cover Cache (clear_ask / homecover_clear): the confirm, then every file in the cache folder but 'album' is removed in bounded steps."""
+    """Settings > Developer > Clear Cover Cache (clear_ask / homecover_clear): the confirm, then every file in the cache folder is removed in bounded steps."""
     expect = ctx.expect
     ART = '/mnt/mmc/.m1plus/covers'
     CONFIRM = 'Delete all cached covers? They will be made again on Home.'
     BUSY, DONE = 'Covers are being made, try later', 'Cover cache cleared'
-    KEEP = {ART + '/album'}
 
     def machine(n=100, yes=True, loc=None):
         m = Machine()
@@ -296,7 +295,7 @@ def clear_tests(ctx):
         seen.append(len(unlinks(m)))
         if not [c for c in m.calls if c[0] == 'timer_add' and c[1] == PSYMS['cl_tick']]: break
     gone = [p for p in paths if p not in m.present]
-    expect(set(gone) == set(paths) - KEEP and ART + '/album' in m.present and ART + '/album' in m.files, 'every file but album is deleted (pictures, markers, .tmp, unprefixed and f files)')
+    expect(set(gone) == set(paths), 'every file is deleted (pictures, markers, .tmp, unprefixed and f files, the old Cover Flow position file album)')
     expect(ticks >= 4 and all(n <= 32 for n in seen), f'bounded: {ticks} ticks of at most 32 unlinks ({seen})')
     expect(toasts(m) == [DONE] and not [c for c in m.calls if c[0] == 'unlink' and c[1] in ('.', '..')], 'the toast reads Cover cache cleared at the end')
     expect(m.open_dirs == {} , 'the directory handle is closed')
@@ -350,13 +349,12 @@ def cache_tests(ctx):
 
     def machine(pictures=3, markers=2, old=3, albums=8, folder=True, big=0):
         """A Home machine (n albums, none with a cache file of the album's own name) plus a mixed cache folder: `pictures` r<key> files (400000 bytes; the keys of albums 0..),
-        `markers` empty r files (the last is no album's), `old` stale files (unprefixed, f-prefixed, .tmp: 100000 bytes), `big` tiny pictures, and the 'album' file (3 MB: never counted)."""
+        `markers` empty r files (the last is no album's), `old` stale files (unprefixed, f-prefixed, .tmp: 100000 bytes), `big` tiny pictures."""
         m = home_machine(albums, missing=set(range(albums)))
         names = [(f'r{key_of(i):08x}-168.jpg', 400000) for i in range(pictures)]
         names += [(f'r{key_of(pictures + i):08x}-168.jpg', 0) for i in range(markers - 1)] + [('r000000aa-168.jpg', 0)]
         names += [(f'{0x1234:08x}-168.jpg', 100000), (f'f{0x1234:08x}-168.jpg', 100000), (f'r{key_of(0):08x}-168.jpg.tmp', 100000)][:old]
         names += [(f'r{0x7000 + i:08x}-168.jpg', 10) for i in range(big)]
-        names.append(('album', 3000000))
         for nm, size in names if folder else ():
             m.present.add(f'{ART}/{nm}'); m.files[f'{ART}/{nm}'] = size
         if folder: m.listing[ART] = [('.', 4), ('..', 4)] + [(nm, 8) for nm, _ in names]
@@ -384,7 +382,7 @@ def cache_tests(ctx):
     expect([c for c in new if c[0] == 'timer_add' and c[1] in (TICK, POLL)] == [('timer_add', TICK, 20), ('timer_add', POLL, 500)], 'the count tick and the 500 ms poll are armed')
     expect(values(m)[:6] == [ELL] * 6 and values(m)[6] == 'Idle' and not [c for c in new if c[0] == 'fopen'], 'before counting every count is an ellipsis and Status is Idle')
 
-    # 2. Counted: pictures, markers (the 'album' file and the dot entries excluded), old files, albums, missing albums, size.
+    # 2. Counted: pictures, markers (the dot entries excluded), old files, albums, missing albums, size.
     count_all(m)
     tenths = ((3 * 400000 + 3 * 100000) // 1024 * 10 + 512) // 1024
     expect(values(m) == ['8', '3', '2', '4', '3', f'{tenths // 10}.{tenths % 10} MB', 'Idle'],
@@ -593,7 +591,39 @@ def covlist_tests(ctx):
     m.call(PSYMS['cv_on_destroy'], a0=0, a1=0, count=3000000)
 
 
-SECTIONS = [tests, rebuild_tests, clear_tests, cache_tests, covlist_tests]
+def files_tests(ctx):
+    """Settings > Developer > Tools > Settings Files (patch/setfiles.c): opens from Developer, every row's label, the values of a seeded file system, and no file read after the page opened."""
+    expect, P = ctx.expect, pod_pages
+    FP = P.FILES_PAGE
+    d_i = next(i for i, r in enumerate(P.DEVELOPER_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.FILES_PAGE_INDEX)
+    expect(P.DEVELOPER_PAGE.rows[d_i].label == 'Settings Files' and FP.title == 'Settings Files', 'Developer > Tools has a Settings Files link row that opens the page of that title')
+    labels = [r.label for r in FP.rows]
+    expect(labels == list(P.GUARD_FILES) + [P.FOLDER_LABEL] + list(P.SETTING_FILES) and all(r.action == P.ACT_INFO for r in FP.rows),
+           'the rows: the four guard files, the folder, the 17 setting files; all information rows')
+    expect(sorted(r.arg for r in FP.rows) == list(range(P.INFO_SF, P.INFO_SF + len(FP.rows))), 'their kinds are unique and consecutive')
+    D = '/mnt/data/'
+    S = D + 'm1plus/'
+    m = Machine()
+    for n in ['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(FP.rows))] + [f'pod_value{i}' for i in range(len(FP.rows))] + [f'pod_label{i}' for i in range(len(FP.rows))]:
+        m.widget(n)
+    m.fs[D + 'm1plus-start'], m.fs[D + 'm1plus-bad'] = b'1\n', b''
+    m.present.add(S.rstrip('/'))
+    m.fs.update({S + 'albums-view': b'1', S + 'playlists-view': b'0\n', S + 'home-menu': b'6502\n', S + 'cassette-theme': b'12', S + 'search-history': b'a\nb\nc\n',
+                 S + 'recently-played': b'x\ty\nz\n', S + 'covers-rebuild': b'1\n', S + 'battery-percentage': b'1'})
+    m.call(PSYMS['on_row'], a0=PSYMS[f'pod_rows_{P.DEVELOPER_PAGE_INDEX}'] + 12 * d_i, count=6000000)
+    expect(('window_open', FP.key) in m.calls, 'the link row opens m1plus_files')
+    want = {'m1plus-start': '1', 'm1plus-run': 'missing', 'm1plus-bad': 'present', 'm1plus-off': 'missing', P.FOLDER_LABEL: 'present', 'albums-view': '1', 'playlists-view': '0',
+            'album-order': 'missing', 'cassette-theme': 'other', 'home-menu': '6502', 'battery-percentage': '1', 'search-history': '3', 'recently-played': '2', 'covers-rebuild': 'present',
+            'keyboard-pinyin': 'missing'}
+    got = {r.label: next((c[2] for c in reversed(m.calls) if c[0] == 'widget_set_text_utf8' and c[1] == m.widgets[f'pod_value{i}']), None) for i, r in enumerate(FP.rows)}
+    expect(all(got[k] == v for k, v in want.items()), f'the seeded values: {[(k, got[k], v) for k, v in want.items() if got[k] != v]}')
+    del m.fs[S + 'albums-view']
+    m.call(PSYMS['on_page_fg'], a0=P.FILES_PAGE_INDEX, a1=0, count=3000000)
+    expect(not [c for c in m.calls if c[0] in ('open', 'read', 'access', 'timer_add')] and any(c[0] == 'widget_set_text_utf8' for c in m.calls),
+           'a refresh of the page (foreground) shows the values it read at open and reads no file, adds no timer')
+
+
+SECTIONS = [tests, rebuild_tests, clear_tests, cache_tests, covlist_tests, files_tests]
 
 
 def run(ctx):

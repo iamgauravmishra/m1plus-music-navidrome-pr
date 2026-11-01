@@ -155,7 +155,7 @@ def run(ctx):
 
 # ---------------------------------------------------------------------------
 # The customisable menu (patch/menu.c): the saved list, the arrangement of the stock list's rows, the Main Menu page.
-MENU_FILE, MENU_TMP = '/mnt/data/m1plus-menu', '/mnt/data/m1plus-menu.tmp'
+MENU_FILE, MENU_TMP = '/mnt/data/m1plus/home-menu', '/mnt/data/m1plus/home-menu.tmp'
 UI = os.path.join('rootfs', 'release/assets/default/raw/ui')
 
 
@@ -697,7 +697,7 @@ def extrascfg_tests(ctx, on_row, rows_s):
     # a tap on a row turns the item off Extras (saved at once, atomically) and on again; Settings hidden from the menu is not on this page
     m = open_page()
     m.click('pod_row9')
-    expect(m.fs.get(MENU_FILE) == b'12345-a\n' and ('rename', MENU_TMP, MENU_FILE) in m.calls and ('fsync', '/mnt/data') in m.calls and MENU_TMP not in m.fs
+    expect(m.fs.get(MENU_FILE) == b'12345-a\n' and ('rename', MENU_TMP, MENU_FILE) in m.calls and ('fsync', '/mnt/data/m1plus') in m.calls and MENU_TMP not in m.fs
            and switches(m)[9] == ['sset_off'], f'Favorites off: saved atomically with the off part, the switch follows ({m.fs.get(MENU_FILE)!r})')
     expect(not any(c[0] == 'widget_move' for c in m.calls) and listed(m)[0] == CFG_DEF, 'the row stays where it is (the page does not re-arrange)')
     m.click('pod_row0')
@@ -791,10 +791,10 @@ def header_asset_tests(ctx, tree, what):
 
 
 def keyboards_tests(ctx, on_row, rows_s):
-    """Settings > Keyboards (m1plus_keyboards): English always on and not switchable, Chinese (Pinyin) a switch saved in /mnt/data/m1plus-kbzh, off by default."""
+    """Settings > Keyboards (m1plus_keyboards): English always on and not switchable, Chinese (Pinyin) a switch saved in /mnt/data/m1plus/keyboard-pinyin, off by default."""
     expect, P = ctx.expect, pod_pages
     K = P.KEYBOARDS_PAGE
-    FILE = '/mnt/data/m1plus-kbzh'
+    FILE = '/mnt/data/m1plus/keyboard-pinyin'
     kb_i = next(i for i, r in enumerate(P.SETTINGS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.KEYBOARDS_PAGE_INDEX)
     expect([(r.label, r.action) for r in K.rows] == [('English', P.ACT_KB_EN), ('Chinese (Pinyin)', P.ACT_KB_ZH)] and K.title == 'Keyboards' and K.key == 'm1plus_keyboards'
            and P.ACT_KB_EN in P.SWITCH_ACTIONS and P.ACT_KB_ZH in P.SWITCH_ACTIONS and P.PAGES[P.KEYBOARDS_PAGE_INDEX] is K and P.SETTINGS_PAGE.rows[kb_i].label == 'Keyboards',
@@ -819,12 +819,12 @@ def keyboards_tests(ctx, on_row, rows_s):
            and (m.widgets['pod_row0'], O['EVT_CLICK']) not in m.bound and (m.widgets['pod_row1'], O['EVT_CLICK']) in m.bound,
            'English is dimmed and takes no tap (nothing is bound on it); the Chinese row is bound')
     expect(FILE not in m.fs, 'English has nothing to save: no file')
-    for data, on in ((b'1\n', 1), (b'1', 1), (b'0\n', 0), (b'', 0), (b'x', 0), (b'11', 1), (b'\n1', 0)):
+    for data, on in ((b'1\n', 1), (b'1', 1), (b'0\n', 0), (b'', 0), (b'x', 0), (b'11', 0), (b'1x', 0), (b'\n1', 0)):
         got = images(open_kb(data), 1)
-        expect(got == [('sset_on' if on else 'sset_off')], f'saved {data!r}: the Chinese switch opens {"on" if on else "off"} (the file\'s first byte "1" is on, anything else off)')
+        expect(got == [('sset_on' if on else 'sset_off')], f'saved {data!r}: the Chinese switch opens {"on" if on else "off"} (exactly "1" or "1\\n" is on, anything else off)')
     m = open_kb()
     m.click('pod_row1')
-    expect(m.fs.get(FILE) == b'1\n' and FILE + '.tmp' not in m.fs and ('rename', FILE + '.tmp', FILE) in m.calls and ('fsync', '/mnt/data') in m.calls and images(m, 1)[-1] == 'sset_on',
+    expect(m.fs.get(FILE) == b'1\n' and FILE + '.tmp' not in m.fs and ('rename', FILE + '.tmp', FILE) in m.calls and ('fsync', '/mnt/data/m1plus') in m.calls and images(m, 1)[-1] == 'sset_on',
            'a tap turns Chinese (Pinyin) on: written atomically, the switch on')
     expect(m.call(PSYMS['kb_zh_setting']) == 1, 'kb_zh_setting reads it')
     m.click('pod_row1')
@@ -838,11 +838,11 @@ def keyboards_tests(ctx, on_row, rows_s):
 
 
 def pcsearch_row_tests(ctx, on_row, rows_s):
-    """Settings > Library > Podcasts > Podcast Search (docs/modules/settings.md): a switch row, off by default, saved as "1" in /mnt/data/m1plus-pcsearch (the first byte), written atomically; a failed
+    """Settings > Library > Podcasts > Podcast Search (docs/modules/settings.md): a switch row, off by default, saved as "1" in /mnt/data/m1plus/podcast-online-search (the first byte), written atomically; a failed
     save changes neither the file nor the switch; the Podcasts page reads it with pcsearch_setting."""
     expect, P = ctx.expect, pod_pages
     C = P.LIBRARY_PAGE
-    FILE = '/mnt/data/m1plus-pcsearch'
+    FILE = '/mnt/data/m1plus/podcast-online-search'
     cf_i = next(i for i, r in enumerate(P.SETTINGS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.LIBRARY_PAGE_INDEX)
     ps_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_PCSEARCH)
     layout = [type(x).__name__ + (':' + x.label if isinstance(x, P.Row) else ':' + x.text if hasattr(x, 'text') else '') for x in C.layout]
@@ -860,11 +860,11 @@ def pcsearch_row_tests(ctx, on_row, rows_s):
 
     m = open_lib()
     expect(images(m) == ['sset_off'] and FILE not in m.fs and m.call(PSYMS['pcsearch_setting'], count=2000000) == 0, 'opened with nothing saved: the switch is off, nothing is written, the setting reads 0 (the default)')
-    for data, on in ((b'1\n', 1), (b'1', 1), (b'0\n', 0), (b'', 0), (b'x', 0), (b'\n1', 0)):
+    for data, on in ((b'1\n', 1), (b'1', 1), (b'0\n', 0), (b'', 0), (b'x', 0), (b'1x', 0), (b'11', 0), (b'\n1', 0)):
         expect(images(open_lib(data)) == [('sset_on' if on else 'sset_off')], f'saved {data!r}: the switch opens {"on" if on else "off"}')
     m = open_lib()
     m.click(f'pod_row{ps_i}')
-    expect(m.fs.get(FILE) == b'1\n' and FILE + '.tmp' not in m.fs and ('rename', FILE + '.tmp', FILE) in m.calls and ('fsync', '/mnt/data') in m.calls and images(m)[-1] == 'sset_on'
+    expect(m.fs.get(FILE) == b'1\n' and FILE + '.tmp' not in m.fs and ('rename', FILE + '.tmp', FILE) in m.calls and ('fsync', '/mnt/data/m1plus') in m.calls and images(m)[-1] == 'sset_on'
            and m.call(PSYMS['pcsearch_setting'], count=2000000) == 1, 'a tap turns it on: written atomically (a temp file, fsync, rename), the switch on')
     m.click(f'pod_row{ps_i}')
     expect(m.fs.get(FILE) == b'0\n' and images(m)[-1] == 'sset_off' and m.call(PSYMS['pcsearch_setting'], count=2000000) == 0, 'and off again')
@@ -882,7 +882,7 @@ def library_tests(ctx, on_row):
     rows_s = PSYMS[f'pod_rows_{P.SETTINGS_PAGE_INDEX}']
     rows_c = PSYMS[f'pod_rows_{P.LIBRARY_PAGE_INDEX}']
     cf_i = next(i for i, r in enumerate(P.SETTINGS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.LIBRARY_PAGE_INDEX)
-    LAND, SORT = '/mnt/data/m1plus-landscape', CFSORT_FILE
+    LAND, SORT = '/mnt/data/m1plus/coverflow-landscape', CFSORT_FILE
     land_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_LANDSCAPE)
     sort_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_SORT)
     sw, val = f'pod_switch{land_i}', f'pod_value{sort_i}'
@@ -917,7 +917,7 @@ def library_tests(ctx, on_row):
         expect(('image_base_set_image', m.widgets[sw], 'sset_off') in m.calls, f'saved {data!r}: the switch opens off')
     m = open_lib()
     m.click(f'pod_row{land_i}')
-    expect(m.fs.get(LAND) == b'1\n' and LAND + '.tmp' not in m.fs and ('rename', LAND + '.tmp', LAND) in m.calls and ('fsync', '/mnt/data') in m.calls
+    expect(m.fs.get(LAND) == b'1\n' and LAND + '.tmp' not in m.fs and ('rename', LAND + '.tmp', LAND) in m.calls and ('fsync', '/mnt/data/m1plus') in m.calls
            and ('image_base_set_image', m.widgets[sw], 'sset_on') in m.calls, 'a tap turns it on: written atomically, the switch on')
     m.click(f'pod_row{land_i}')
     expect(m.fs.get(LAND) == b'0\n' and ('image_base_set_image', m.widgets[sw], 'sset_off') in m.calls, 'and off again')
@@ -961,7 +961,7 @@ def library_tests(ctx, on_row):
     expect(shown(m, 0) == 0 and shown(m, 1) == 1, 'saved Album: the check is on Album')
     m = open_pick()
     m.click('pod_row1')
-    expect(m.fs.get(SORT) == b'0\n' and SORT + '.tmp' not in m.fs and ('rename', SORT + '.tmp', SORT) in m.calls and ('fsync', '/mnt/data') in m.calls
+    expect(m.fs.get(SORT) == b'0\n' and SORT + '.tmp' not in m.fs and ('rename', SORT + '.tmp', SORT) in m.calls and ('fsync', '/mnt/data/m1plus') in m.calls
            and shown(m, 0) == 0 and shown(m, 1) == 1, 'a tap on Album: written atomically, the check follows')
     m.click('pod_row0')
     expect(m.fs.get(SORT) == b'1\n' and shown(m, 0) == 1 and shown(m, 1) == 0, 'and back to Artist')
@@ -998,7 +998,7 @@ def library_tests(ctx, on_row):
     expect(confirms == [('confirm', KEY, O['CONFIRM_KIND_WRAP'])], f'a tap on Rebuild Covers asks first, in the stock confirm dialog, kind 5 (wrapped) ({confirms})')
     expect(('navigator_to_with_context', 'dialog/confirminfo_dialog') == m.calls[[c[0] for c in m.calls].index('navigator_to_with_context')][:2]
            if 'navigator_to_with_context' in m.names() else False, 'through navigator_to_with_context(dialog/confirminfo_dialog)')
-    REQ = '/mnt/data/m1plus-covers-rebuild'
+    REQ = '/mnt/data/m1plus/covers-rebuild'
     expect(not any(n in m.names() for n in ('window_open', 'pthread_create', 'mkdir', 'rename', 'unlink', 'fopen', 'toast')) and build_state(m)['jobs'] == 0 and REQ not in m.fs,
            'No (or the dialog closed): nothing happens at all, no page, no thread, no file, no toast')
     m = rebuild_machine(yes=True)

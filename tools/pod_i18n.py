@@ -263,6 +263,7 @@ TEXT = dict([
     _t('Cover cache cleared', '封面缓存已清除', '封面快取已清除', 'キャッシュを消去しました', '커버 캐시를 지웠습니다', 'Cache des pochettes vidé', 'Cover-Cache geleert',
        'Caché de carátulas borrada', 'Cache copertine svuotata', 'ล้างแคชปกแล้ว', 'Pamięć okładek wyczyszczona', 'Кэш обложек очищен', 'Кеш обкладинок очищено'),
     # Settings > Developer > Cover Cache (patch/homecover.c): the row and page title, the seven labels, the Status values (a count "n/m" follows Preparing, Rebuilding and Building)
+    _t('Settings Files', '设置文件', '設定檔案', '設定ファイル', '설정 파일', 'Fichiers de réglages', 'Einstellungsdateien', 'Archivos de ajustes', 'File delle impostazioni', 'ไฟล์การตั้งค่า', 'Pliki ustawień', 'Файлы настроек', 'Файли налаштувань'),
     _t('Cover Cache', '封面缓存', '封面快取', 'カバーキャッシュ', '커버 캐시', 'Cache des pochettes', 'Cover-Cache', 'Caché de carátulas', 'Cache copertine', 'แคชปก', 'Pamięć okładek', 'Кэш обложек', 'Кеш обкладинок'),
     _t('Covers', '封面', '封面', 'カバー', '커버', 'Pochettes', 'Cover', 'Carátulas', 'Copertine', 'ปก', 'Okładki', 'Обложки', 'Обкладинки'),
     _t('No art', '无封面', '無封面', 'カバーなし', '커버 없음', 'Sans pochette', 'Ohne Cover', 'Sin carátula', 'Senza copertina', 'ไม่มีปก', 'Brak okładki', 'Без обложки', 'Без обкладинки'),
@@ -743,7 +744,8 @@ def english(key):
     return TEXT[key]['en_US'] if key in TEXT else STOCK[key]
 
 
-BRANDS = ('M1+ Music', 'Tidal', 'Pod')     # shown as they are, no key
+import pod_pages
+BRANDS = ('M1+ Music', 'Tidal', 'Pod') + pod_pages.GUARD_FILES + (pod_pages.FOLDER_LABEL,) + pod_pages.SETTING_FILES   # shown as they are, no key (the Settings Files labels are file names)
 
 
 def key_for(english):

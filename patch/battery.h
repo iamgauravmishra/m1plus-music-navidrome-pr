@@ -6,8 +6,8 @@
 #pragma once
 
 #define BP_FILE \
-    "/mnt/data/m1plus-battpct" /* "1" = on, anything else or missing = off (Settings > Home Screen > Status Bar) */
-#define BP_TMP "/mnt/data/m1plus-battpct.tmp"
+    "/mnt/data/m1plus/battery-percentage" /* "1" = on, anything else or missing = off (Settings > Home Screen > Status Bar) */
+#define BP_TMP "/mnt/data/m1plus/battery-percentage.tmp"
 #define BP_GAUGE \
     "/sys/class/power_supply/battery/capacity" /* the AXP2101 fuel gauge: an integer 0..100 and a newline */
 #define BP_LABEL "pod_pct" /* the hidden label tools/pod_ui.py adds to the system bar's right group */

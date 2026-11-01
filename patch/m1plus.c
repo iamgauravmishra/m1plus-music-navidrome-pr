@@ -105,7 +105,8 @@ enum {
     INFO_IP,
     INFO_CAP,
     INFO_FREE,
-    INFO_CC /* the Cover Cache page's seven values start here: homecover_stat(kind - INFO_CC) */
+    INFO_CC, /* the Cover Cache page's seven values start here: homecover_stat(kind - INFO_CC) */
+    INFO_SF = INFO_CC + 7 /* the Settings Files page's 22 values: setfiles_stat(kind - INFO_SF) */
 };
 
 enum { VK_NONE = 0, VK_WIFI, VK_BLUETOOTH, VK_PLAYMODE, VK_EQ, VK_SORT, VK_THEME, VK_RECORD, VK_VTHEME };
@@ -407,7 +408,9 @@ static void info_text(void *label, int kind) {
     const char *s = buf;
     float cap, rem;
     buf[0] = 0;
-    if (kind >= INFO_CC)
+    if (kind >= INFO_SF)
+        setfiles_stat(kind - INFO_SF, buf, sizeof buf);
+    else if (kind >= INFO_CC)
         homecover_stat(kind - INFO_CC, buf, sizeof buf);
     else if (kind == INFO_TAG)
         s = M1PLUS_TAG;
@@ -542,6 +545,7 @@ static int open_page(int index, int as_home) {
     page = &POD_PAGES[index];
     win = window_open(page->asset);
     if (!win) return -1;
+    if (index == POD_FILES_PAGE) setfiles_open(); /* the files, read once as the page opens */
     pod_bind(win, "btn_return", pod_on_back, (void *)0);
     pod_bind(win, "btn_backtoplayer", pod_on_player, (void *)0);
     for (i = 0; i < page->count; i++) {

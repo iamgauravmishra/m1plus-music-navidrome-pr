@@ -63,11 +63,11 @@ ACT_STOCK = 29   # open a stock page by name (arg = index in STOCK_PAGES; patch/
 ACT_SORTSET = 30   # picker row (Album Order): choose the album order (arg 1 Artist, 0 Album); a check shows on the chosen row (patch/covercache.c cc_sort_set)
 ACT_THEMESET = 31  # picker row (Cassette Theme): choose the theme (arg 0 Normal, 1 Chrome, 2 Metal); a check shows on the chosen row (patch/tape.c tape_theme_set)
 ACT_INFO = 33     # an information row of the About page: a label and a grey value at the right, no chevron, not tappable (arg = INFO_*: where patch/m1plus.c reads the value; INFO_STATIC: the Row's own text)
-ACT_PCSEARCH = 34  # switch row (Settings > Library > Podcasts): Podcast Search, off by default; on shows a Search button on the Podcasts page (patch/podcasts.c pcsearch_toggle, /mnt/data/m1plus-pcsearch)
+ACT_PCSEARCH = 34  # switch row (Settings > Library > Podcasts): Podcast Search, off by default; on shows a Search button on the Podcasts page (patch/podcasts.c pcsearch_toggle, /mnt/data/m1plus/podcast-online-search)
 ACT_FOLDERS = 37  # open the Folders page: the card's folders and audio files in our list (patch/folders.c; arg = HOME_FOLDER, where a window that will not open falls back to the stock folder_page)
 ACT_CLEARCACHE = 42  # action row (Settings > Developer > Tools): a confirm dialog, then every cached cover but Cover Flow's position is deleted in steps (patch/homecover.c homecover_clear)
 ACT_CCLIST = 43    # value row (Settings > Developer > Cover Cache: No art, Missing): a count, and when it is not zero a chevron and a tap that opens the plain list of those albums (arg = the INFO_CC_* of its count; patch/covlist.c)
-ACT_BATTPCT = 36  # switch row (Settings > Home Screen > Status Bar): Battery Percentage, off by default; on shows the gauge's exact charge beside the battery outline (patch/battery.c battpct_toggle, /mnt/data/m1plus-battpct)
+ACT_BATTPCT = 36  # switch row (Settings > Home Screen > Status Bar): Battery Percentage, off by default; on shows the gauge's exact charge beside the battery outline (patch/battery.c battpct_toggle, /mnt/data/m1plus/battery-percentage)
 ACT_VREC = 38     # value row (Settings > Now Playing > Vinyl Mode): the record colour, Black or Cover (tinted from the cover); opens its picker page (arg = the page index; patch/vinyl.c vinyl_record)
 ACT_RECSET = 39   # picker row (Record): choose the colour (arg = its index in vinyl_art.RECORD_NAMES); a check shows on the chosen row (patch/vinyl.c vinyl_record_set)
 ACT_VTHEME = 40   # value row (Settings > Now Playing > Vinyl Mode): the plinth theme, Graphite or White; opens its picker page (arg = the page index; patch/vinyl.c vinyl_theme)
@@ -137,7 +137,7 @@ class Page:
 # docs/ipod.md geometry). Nineteen customisable items (the nine menu items, the nine Extras tiles and Settings), then Extras,
 # which is always shown, always last and not customisable. The asset holds every row in the default order (an item's id is its row
 # index); patch/menu.c hides the items the user hid (the Extras page lists them unless the user turned them off there) and orders the
-# rest, as the saved list in /mnt/data/m1plus-menu says. Shuffle opens the Shuffle page, Artists the payload's
+# rest, as the saved list in /mnt/data/m1plus/home-menu says. Shuffle opens the Shuffle page, Artists the payload's
 # Artists list, Settings the Settings page (cards: Wi-Fi, Bluetooth, the M1+ Music pages, Playback, System,
 # Developer). Settings is hidden from the menu by default like Shuffle; it then shows on the Extras page (Tools), where it can never be turned off.
 SHUFFLE_PAGE_INDEX = 3   # its index in PAGES
@@ -190,6 +190,13 @@ ITEMS = [   # item id = index; the default order, essentials first (iPod classic
 ]
 SETTINGS_ID = 18
 assert ITEMS[SETTINGS_ID].label == 'Settings'
+# The saved menu (/mnt/data/m1plus/home-menu, patch/menu.c) stores these ids, so they are frozen: a new item is
+# appended here and to ITEMS; never insert, remove or reorder (that silently remaps a saved menu). Display order
+# comes from DEFAULT_MENU and EXTRAS_GROUPS, not from the id.
+ITEM_IDS = ('Now Playing', 'Cover Flow', 'Albums', 'Artists', 'Songs', 'Playlists', 'Shuffle', 'Genres', 'Folders',
+            'Favorites', 'Recently Added', 'Recently Played', 'Most Played', 'Composers', 'Hi-Res', 'Update Library',
+            'Tidal', 'CD Ripper', 'Settings', 'Pod', 'Podcasts', 'Search')
+assert tuple(r.label for r in ITEMS[:len(ITEM_IDS)]) == ITEM_IDS, 'menu item ids are frozen: append new items, never insert or reorder'
 DEFAULT_MENU = [1, 2, 3, 4, 5]   # the items shown by default, in order (saved string "12345"): Cover Flow, Albums, Artists, Songs, Playlists, then Extras. A minimal menu: Now Playing is not
                                     # among them (the mini player bar of the Home instance opens it, docs/modules/minibar.md), nor are Shuffle and Settings; every other item is on the Extras page,
                                     # grouped (EXTRAS_GROUPS), and Settings > Main Menu can show any of them
@@ -315,6 +322,17 @@ CACHE_PAGE = Page('m1plus_cache', 'm1plus_cache_page', 'Cover Cache', layout=[
 # The plain list behind the Cover Cache page's No art / Missing rows (patch/covlist.c, docs/modules/settings.md "Cover Cache"): the Albums page's asset without its toggle and Cover Flow button, the title set by the payload.
 COVLIST = Page('m1plus_covlist', 'm1plus_covlist_page', 'Missing Covers', kind='covlist')
 
+# Settings > Developer > Tools > Settings Files (patch/setfiles.c, docs/modules/settings.md "Settings Files"): the payload's own files as read when the page opens. The labels are the file names (identifiers, not translated).
+SETTING_FILES = ('albums-view', 'playlists-view', 'album-order', 'coverflow-landscape', 'cassette-theme', 'vinyl-record', 'vinyl-base', 'pod-appearance', 'home-recent-albums',
+                 'home-daily-mix', 'home-menu', 'keyboard-pinyin', 'podcast-online-search', 'battery-percentage', 'search-history', 'recently-played', 'covers-rebuild')
+GUARD_FILES = ('m1plus-start', 'm1plus-run', 'm1plus-bad', 'm1plus-off')
+FOLDER_LABEL = 'm1plus/'
+INFO_SF = INFO_CC_STATUS + 1   # patch/m1plus.c INFO_SF = INFO_CC + 7; row k reads setfiles_stat(k): 4 guard files, the folder, the settings
+FILES_PAGE_INDEX = 35   # after COVLIST (34)
+FILES_PAGE = Page('m1plus_files', 'm1plus_files_page', 'Settings Files', layout=(
+    [Row(f, ACT_INFO, INFO_SF + k) for k, f in enumerate(GUARD_FILES)] + [GAP, Row(FOLDER_LABEL, ACT_INFO, INFO_SF + 4)]
+    + [Row(f, ACT_INFO, INFO_SF + 5 + k) for k, f in enumerate(SETTING_FILES)]))
+
 # Settings > Developer: Startup (the Boot to M1+ Music switch, patch/home.c, and the way out to the stock grid) and the developer's tools. Screenshot: a confirm dialog, then a 5 s
 # countdown (cancellable), then the screen is written to the card (patch/shot.c). System Update opens the stock firmware update page.
 DEVELOPER_PAGE = Page('m1plus_developer', 'm1plus_developer_page', 'Developer', layout=[
@@ -325,6 +343,7 @@ DEVELOPER_PAGE = Page('m1plus_developer', 'm1plus_developer_page', 'Developer', 
     Hdr('Tools'),
     Row('Screenshot', ACT_SHOT),
     Row('Cover Cache', ACT_PAGE, CACHE_PAGE_INDEX),
+    Row('Settings Files', ACT_PAGE, FILES_PAGE_INDEX),
     Row('System Update', ACT_STOCK, STOCK_FWUPDATE),
 ])
 
@@ -487,7 +506,7 @@ CTHEME_VALUES = ('Normal', 'Chrome', 'Metal')   # the value shown for the settin
 KEYBOARD = Page('m1plus_keyboard', 'm1plus_keyboard_page', 'Keyboard', kind='keyboard')
 
 # Settings > Keyboards (iOS style): the keyboards the on-screen keyboard offers. English is always on (its switch is shown on and cannot be turned off); Chinese (Pinyin) is off by default.
-# With it on, the keyboard page has a language key and a pinyin layer with a candidate strip (docs/modules/keyboard.md). The choice is saved in /mnt/data/m1plus-kbzh (patch/keyboard.c).
+# With it on, the keyboard page has a language key and a pinyin layer with a candidate strip (docs/modules/keyboard.md). The choice is saved in /mnt/data/m1plus/keyboard-pinyin (patch/keyboard.c).
 KEYBOARDS_PAGE = Page('m1plus_keyboards', 'm1plus_keyboards_page', 'Keyboards', layout=[
     Row('English', ACT_KB_EN),
     Row('Chinese (Pinyin)', ACT_KB_ZH),
@@ -506,7 +525,7 @@ QUEUE_PAGE = Page('m1plus_queue', 'm1plus_queue_page', 'Queue', kind='queue')
 # PAGES[0] is the entry page.
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
          EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, SORT_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL, FOLDERS, QUEUE_PAGE,
-         RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST]
+         RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST, FILES_PAGE]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE
@@ -514,5 +533,5 @@ assert PAGES[EXTRASCFG_PAGE_INDEX] is EXTRASCFG_PAGE and PAGES[DEVELOPER_PAGE_IN
 assert PAGES[EXTRAS_PAGE_INDEX] is EXTRAS_PAGE and PAGES[MENUCFG_PAGE_INDEX] is MENUCFG_PAGE
 assert PAGES[LIBRARY_PAGE_INDEX] is LIBRARY_PAGE and PAGES[HOMESET_PAGE_INDEX] is HOMESET_PAGE
 assert PAGES[ABOUT_PAGE_INDEX] is ABOUT_PAGE and PAGES[RECORD_PAGE_INDEX] is RECORD_PAGE
-assert PAGES[VINYL_WHITE_INDEX] is VINYL_WHITE and PAGES[VTHEME_PAGE_INDEX] is VTHEME_PAGE and PAGES[CACHE_PAGE_INDEX] is CACHE_PAGE
+assert PAGES[VINYL_WHITE_INDEX] is VINYL_WHITE and PAGES[VTHEME_PAGE_INDEX] is VTHEME_PAGE and PAGES[CACHE_PAGE_INDEX] is CACHE_PAGE and PAGES[FILES_PAGE_INDEX] is FILES_PAGE
 assert PAGES[SORT_PAGE_INDEX] is SORT_PAGE and PAGES[THEME_PAGE_INDEX] is THEME_PAGE

@@ -42,7 +42,7 @@ the artist (q2-pod's `ARTIST_ALBUMS`, `cf.scoped`). Everything below holds for a
 - **Songs button.** `btn_songs` (the left cap of the Songs | Now Playing capsule at 214) opens our Songs page on the artist's songs (`songs_open_artist`: `loadAlbumList(0xf004)` + `loadAlbumdetailList(0xff01, the All songs row)`, class `0xff11`; docs/modules/coverflow.md, songs.md).
 - **Ends.** The shelf does not wrap (ring slots past either end stay empty, drag clamped, fling and
   side taps stop at an end); the main page still wraps.
-- Title is the artist; the scope never reads or writes `/mnt/mmc/.m1plus/covers/album`; "No albums" when
+- Title is the artist; the scope never reads or writes `/mnt/mmc/.m1plus/coverflow-position`; "No albums" when
   empty; Back goes covers -> Artists -> menu. The stock list always ends with "Unknown
   Artist" (id -1), which opens to "No albums" without untagged songs. A refused second open while Cover
   Flow is open.

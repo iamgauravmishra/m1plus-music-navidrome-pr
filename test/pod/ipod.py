@@ -1436,7 +1436,7 @@ def settings_tests(ctx):
 
 def appearance_tests(ctx):
     expect = ctx.expect
-    path = '/mnt/data/m1plus-pod-theme'
+    path = '/mnt/data/m1plus/pod-appearance'
     m = machine(); m.open(); m.timers = []
     expect(m.call(PSYMS['ip_theme_dark']) == 0, 'missing Appearance setting defaults to Light')
     for data in (b'', b'2', b'1junk', b'11', b'1\nextra'):

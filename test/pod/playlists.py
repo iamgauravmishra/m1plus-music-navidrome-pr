@@ -19,7 +19,7 @@ HALF = COVER // 2
 REC_DISC = O['REC_DISC']
 UI = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_playlists.bin') if WORK else None
 NAV_STATUS, CLASSINFO = pod.DATA['NAVIGATION_STATUS'][0], pod.DATA['CLASSINFO'][0]
-PL_FILE = '/mnt/data/m1plus-playlists'
+PL_FILE = '/mnt/data/m1plus/playlists-view'
 GREY_DISC = 0xff404040     # the stock placeholder disc of these tests (p_default, flat)
 
 
@@ -861,12 +861,16 @@ def run(ctx):
     fn, c = m.bound[(m.window, O['EVT_DESTROY'])]
     m.call(fn, a0=c, a1=0, count=20000000)
     open_page(m)
-    expect(glyph(m) == 'pod_nav_grid' and PL_FILE != '/mnt/data/m1plus-albums', 'the list mode is remembered when the page is opened again, in its own file')
-    m.fs['/mnt/data/m1plus-albums'] = b'1\n'; m.fs[PL_FILE] = b'junk'
+    expect(glyph(m) == 'pod_nav_grid' and PL_FILE != '/mnt/data/m1plus/albums-view', 'the list mode is remembered when the page is opened again, in its own file')
+    m.fs['/mnt/data/m1plus/albums-view'] = b'1\n'; m.fs[PL_FILE] = b'junk'
     fn, c = m.bound[(m.window, O['EVT_DESTROY'])]
     m.call(fn, a0=c, a1=0, count=20000000)
     open_page(m)
     expect(glyph(m) == 'pod_nav_list', 'garbage in the file is the grid')
+    m.fs[PL_FILE] = b'0x'
+    m.call(fn, a0=c, a1=0, count=20000000)
+    open_page(m)
+    expect(glyph(m) == 'pod_nav_list', 'trailing junk after "0" is the grid too')
     #     the loader rules hold in the list: one step a tick, nothing while the list is dragged
     m = PM(many); m.fs[PL_FILE] = b'0\n'; open_page(m)
     m.u.mem_write(m.sv + O['SC_PRESSED'], bytes([1, 1]))

@@ -13,7 +13,7 @@ The release status records flashed builds; use the final checklist for validatio
 ## Themes and assets
 
 Settings → Now Playing → Theme cycles Normal, Chrome and Metal. The order is
-`tape_art.THEME_NAMES`; `/mnt/data/m1plus-tapetheme` stores `0\n`, `1\n` or `2\n` atomically.
+`tape_art.THEME_NAMES`; `/mnt/data/m1plus/cassette-theme` stores `0\n`, `1\n` or `2\n` atomically.
 `tape_theme` accepts `1`/`2` with an optional newline and defaults to Normal for all other data.
 A failed save changes neither file nor label. The Tape page reads the setting once at open.
 

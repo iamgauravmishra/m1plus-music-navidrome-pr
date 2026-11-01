@@ -102,7 +102,7 @@ runs the compiled code against it.
 
 ## Recording and the shelf
 
-`mb_work` also calls `recent_note(track)` (`patch/recent.c`, `docs/modules/recent.md`) before the labels: it records the playing album in `/mnt/data/m1plus-recent` when the album changed (a key compare in RAM first, nothing else on a tick that changed nothing) and, when it did, `recent_refresh()` shows
+`mb_work` also calls `recent_note(track)` (`patch/recent.c`, `docs/modules/recent.md`) before the labels: it records the playing album in `/mnt/data/m1plus/recently-played` when the album changed (a key compare in RAM first, nothing else on a tick that changed nothing) and, when it did, `recent_refresh()` shows
 the new album on the Recently Played shelf at the foot of the list. The shelf follows the last shown row and the spacer `pod_pad` follows the shelf (the list's last child); both add to `virtual_h` (`mb_pad` adds and removes `MB_PAD` itself, `menu_arrange` / `menu_shelf` add the shelf's own
 height: 234, 434 or 634), the default menu with both is 416 + 634 + 64 = 1114 px in the 430 px list (six albums); scrolled to the end the shelf's last line ends `MB_GAP` above the pill, as the last row did.
 

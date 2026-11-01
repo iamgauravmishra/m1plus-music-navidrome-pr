@@ -26,7 +26,7 @@ CHECK_AND_LAYOUT = 0x677a80       # window_manager_check_and_layout: the main lo
 ROW_H, ITEMS = 52, len(pod_pages.ITEMS)
 MENU_ROWS, EX = ITEMS + 1, ITEMS   # the menu's rows; the Extras row is the last, its index the item count
 LCD_W, LCD_H = 320, 480
-SAVED = '/mnt/data/m1plus-menu'
+SAVED = '/mnt/data/m1plus/home-menu'
 
 
 class SM(StockEventMachine):

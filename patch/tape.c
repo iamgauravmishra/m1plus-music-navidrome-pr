@@ -721,12 +721,8 @@ static int tp_on_touch(void *ctx, void *e) {
  * The saved theme (Settings > Now Playing > Theme): "1" Chrome, "2" Metal (an optional newline), anything else or no file Normal; reading never writes.
  */
 int tape_theme(void) {
-    char b[4];
-    int fd = open(TAPETHEME_FILE, 0, 0), n;
-    if (fd < 0) return 0;
-    n = read(fd, b, sizeof b);
-    close(fd);
-    return n >= 1 && (b[0] == '1' || b[0] == '2') && (n == 1 || (n == 2 && b[1] == '\n')) ? b[0] - '0' : 0;
+    int c = set_read(TAPETHEME_FILE, 0);
+    return c == '1' || c == '2' ? c - '0' : 0;
 }
 
 /* Choose the theme (0 Normal, 1 Chrome, 2 Metal), saved atomically; the theme, or -1 (an unknown theme, or one that could not be saved: the saved one is unchanged). */

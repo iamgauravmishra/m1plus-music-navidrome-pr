@@ -39,7 +39,7 @@ def artists_tests(ctx):
     expect(('widget_set_text_utf8', m.widgets['label_title'], 'Miles Davis') in m.calls, 'the title is the artist')
     expect(('widget_set_text_utf8', m.widgets['label_album'], 'Kind of Blue') in m.calls, 'the first album is centred')
     expect('pthread_create' not in m.names(), "the library's cached covers are used: nothing to build")
-    expect(not any(c[0] == 'fopen' and c[1].endswith('.m1plus/covers/album') for c in m.calls),
+    expect(not any(c[0] in ('open', 'read') and c[1].endswith('coverflow-position') for c in m.calls),
            "the main Cover Flow's last album is not read")
     jazz = art_file(fnv(fnv(O["FNV_SEED"], "Various Artists"), "Jazz Hits"))
     loads = [c[1] for c in open_calls if c[0] == 'widget_load_image']   # decoded when the shelf is built (the centre) ...
@@ -67,7 +67,7 @@ def artists_tests(ctx):
     # 32b. Landscape on an artist's Cover Flow (the choice is shared with the main one): the body-sized frame, the card's
     #      caption All albums over the artist, and the shelf still has its ends.
     lw, lh = O['CFL_W'], O['CFL_H']
-    ml = artists_machine(); ml.fs['/mnt/data/m1plus-landscape'] = b'1\n'; ml.canvas_mem = ml.alloc(0x80)
+    ml = artists_machine(); ml.fs['/mnt/data/m1plus/coverflow-landscape'] = b'1\n'; ml.canvas_mem = ml.alloc(0x80)
     ml.call(open_, count=5000000); ml.call(PSYMS['ar_open'], a0=0, count=8000000)
     expect([(c[1], c[2]) for c in ml.calls if c[0] == 'bitmap_create_ex'] == [(lh, lw)], 'the artist\'s Cover Flow opens in landscape when that is saved')
     def paint_land(m):
@@ -136,11 +136,11 @@ def artists_tests(ctx):
 
     # 36. Closing: the scoped page writes no last album, and the main Cover Flow still reads its own.
     m.call(PSYMS['on_destroy'], count=2000000)
-    expect('fwrite' not in m.names(), "scoped browsing leaves the main Cover Flow's last album alone")
+    expect(not any(c[0] in ('open', 'write', 'rename') and 'coverflow-position' in str(c) for c in m.calls), "scoped browsing leaves the main Cover Flow's last album alone")
     expect(sum(1 for c in m.calls if c[0] == 'deque_destroy') >= 2, "the artist's albums and row are freed")
-    m.files['/mnt/mmc/.m1plus/covers/album'] = 4; m.saved_album = 0x1234abcd
+    m.fs['/mnt/mmc/.m1plus/coverflow-position'] = b'1234abcd\n'
     m.call(PSYMS['coverflow_open'], count=8000000)
-    expect(any(c[0] == 'fopen' and c[1] == '/mnt/mmc/.m1plus/covers/album' and c[2] == 'rb' for c in m.calls),
+    expect(('open', '/mnt/mmc/.m1plus/coverflow-position', 0) in m.calls,
            'the main Cover Flow still reads its last album')
 
     # 37. One album: no card. No albums: the message. Cover Flow already open: refused.

@@ -20,7 +20,7 @@ the outline; `tools/preview_battery.py` draws empty/half/full/charging/low from 
 
 ## The percentage (`patch/battery.c`, `patch/battery.h`, `test/pod/battery.py`; hook 8 in [payload](payload.md))
 
-**Setting:** Settings > Home Screen > Status Bar > **Battery Percentage**, a switch, **off by default**, `/mnt/data/m1plus-battpct` (`1` on, a missing file or anything else off; [settings](settings.md)).
+**Setting:** Settings > Home Screen > Status Bar > **Battery Percentage**, a switch, **off by default**, `/mnt/data/m1plus/battery-percentage` (`1` on, a missing file or anything else off; [settings](settings.md)).
 On, the status bar shows the AXP2101 fuel gauge's charge as a number just left of the battery outline, and the fill, the charging picture's fill and the pull-down's fill use the same value.
 
 **How.** Stock's `show_sysbar_face` (`0x544b48`, the status bar's 1 s timer and `system_bar_init`) calls `get_battery_capacity` (`0x4e6dd8`), drops the return value and draws from the

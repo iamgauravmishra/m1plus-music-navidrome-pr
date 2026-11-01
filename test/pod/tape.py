@@ -23,7 +23,7 @@ EVT_BG, EVT_FG, EVT_DESTROY, EVT_PAINT = O['EVT_WINDOW_TO_BG'], O['EVT_WINDOW_TO
 WIN = 0x24200000
 SYSBAR = pod.DATA['SYSTEM_BAR'][0]
 KILL = '/mnt/mmc/m1plus-off'
-THEME_FILE = '/mnt/data/m1plus-tapetheme'
+THEME_FILE = '/mnt/data/m1plus/cassette-theme'
 THEMES = tape_art.THEME_NAMES
 W, H = O['TP_W'], O['TP_H']                       # landscape 480 x 320
 FIELDS = ('title', 'artist', 'album', 'times', 'big', 'model', 'status')
@@ -972,7 +972,7 @@ def setting_tests(ctx):
     m = open_pick()
     for want_file, k in ((b'1\n', 1), (b'2\n', 2), (b'0\n', 0), (b'1\n', 1)):
         m.click(f'pod_row{k}')
-        expect(m.fs.get(THEME_FILE) == want_file and THEME_FILE + '.tmp' not in m.fs and ('rename', THEME_FILE + '.tmp', THEME_FILE) in m.calls and ('fsync', '/mnt/data') in m.calls
+        expect(m.fs.get(THEME_FILE) == want_file and THEME_FILE + '.tmp' not in m.fs and ('rename', THEME_FILE + '.tmp', THEME_FILE) in m.calls and ('fsync', '/mnt/data/m1plus') in m.calls
                and [shown(m, i) for i in range(3)] == [int(i == k) for i in range(3)], f'a tap on {T.rows[k].label}: written atomically ({m.fs.get(THEME_FILE)!r}), the check follows')
     m = open_pick(b'1\n'); m.fail.add(('write', THEME_FILE + '.tmp')); m.click('pod_row2')
     expect(m.fs.get(THEME_FILE) == b'1\n' and THEME_FILE + '.tmp' not in m.fs and not any(c[0] == 'widget_set_visible' for c in m.calls),

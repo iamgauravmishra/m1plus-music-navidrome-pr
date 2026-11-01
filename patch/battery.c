@@ -27,14 +27,7 @@ static struct {
     int shown; /* a label may be showing: the hide path has work to do */
 } bp __attribute__((section(".scratch")));
 
-static int bp_read_setting(void) {
-    char c = 0;
-    int fd = open(BP_FILE, O_RDONLY, 0), n;
-    if (fd < 0) return 0;
-    n = read(fd, &c, 1);
-    close(fd);
-    return n == 1 && c == '1';
-}
+static int bp_read_setting(void) { return set_read(BP_FILE, 0) == '1'; }
 
 /* Settings > Home Screen > Battery Percentage: 1 on, 0 off (the default). */
 int battpct_setting(void) { return bp_read_setting(); }

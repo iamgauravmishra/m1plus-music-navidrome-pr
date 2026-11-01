@@ -153,7 +153,7 @@ About and Settings are absent. Appearance, Light and Dark have translations in a
 
 ## Appearance (`patch/ipod_theme.c`)
 
-Light is the default. Dark is the black iPod Classic: **the screen stays white** (the reference and the real one do the same); only the case behind the wheel (`#111111`) and the wheel image turn dark (ring `#252526` to `#1D1D1E`, white glyphs; the silver wheel is `#F6F6F6` to `#EEEEEE` with `#9FA9B3` glyphs, MENU in 16 px); it is confined to Pod. The existing insensitive wheel image switches between `ipod_wheel` and `ipod_wheel_dark`, with no widget replacement. `/mnt/data/m1plus-pod-theme` stores `0` or `1` through `home_write_atomic` and a sibling `.tmp`; missing or malformed content selects Light. A failed save leaves the live appearance unchanged. The palette updates the ten existing hidden text labels, and changing appearance invalidates pre-rendered cover projections and Cover Flow frames.
+Light is the default. Dark is the black iPod Classic: **the screen stays white** (the reference and the real one do the same); only the case behind the wheel (`#111111`) and the wheel image turn dark (ring `#252526` to `#1D1D1E`, white glyphs; the silver wheel is `#F6F6F6` to `#EEEEEE` with `#9FA9B3` glyphs, MENU in 16 px); it is confined to Pod. The existing insensitive wheel image switches between `ipod_wheel` and `ipod_wheel_dark`, with no widget replacement. `/mnt/data/m1plus/pod-appearance` stores `0` or `1` through `home_write_atomic` and a sibling `.tmp`; missing or malformed content selects Light. A failed save leaves the live appearance unchanged. The palette updates the ten existing hidden text labels, and changing appearance invalidates pre-rendered cover projections and Cover Flow frames.
 
 ## The placeholder cover
 

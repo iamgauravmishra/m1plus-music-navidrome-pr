@@ -187,11 +187,11 @@ def home_tests(expect, page):
     expect(homeset_i == len(SETTINGS.rows) - 1 and SETTINGS.rows[homeset_i].label == 'Developer'
            and (SETTINGS.rows[homeset_i].action, SETTINGS.rows[homeset_i].arg) == (pod_pages.ACT_PAGE, pod_pages.DEVELOPER_PAGE_INDEX)
            and [(r.label, r.action) for r in HOMESET.rows] == [('Boot to M1+ Music', pod_pages.ACT_STARTUP), ('Open Shanling Home', pod_pages.ACT_GRID), ('Screenshot', pod_pages.ACT_SHOT),
-                                                              ('Cover Cache', pod_pages.ACT_PAGE), ('System Update', pod_pages.ACT_STOCK)]
+                                                              ('Cover Cache', pod_pages.ACT_PAGE), ('Settings Files', pod_pages.ACT_PAGE), ('System Update', pod_pages.ACT_STOCK)]
            and HOMESET.title == 'Developer' and (start_i, grid_i) == (0, 1)
            and not [r for r in SETTINGS.rows if r.action in (pod_pages.ACT_GRID, pod_pages.ACT_STARTUP)]
            and [(r.label, r.action) for r in pod_pages.HOMESET_PAGE.rows] == [('Recent Albums', pod_pages.ACT_SHELF), ('Daily Mix', pod_pages.ACT_DAILY), ('Main Menu', pod_pages.ACT_PAGE), ('Extras', pod_pages.ACT_PAGE), ('Battery Percentage', pod_pages.ACT_BATTPCT), ('Regenerate Daily Mix', pod_pages.ACT_REGEN)],
-           'Settings ends with Developer, whose page holds the launcher rows: Boot to M1+ Music (switch) and Open Shanling Home, then Screenshot, Cover Cache and System Update; the Home Screen page has the shelf and mix switches, Main Menu, Extras, Battery Percentage and last Regenerate Daily Mix')
+           'Settings ends with Developer, whose page holds the launcher rows: Boot to M1+ Music (switch) and Open Shanling Home, then Screenshot, Cover Cache, Settings Files and System Update; the Home Screen page has the shelf and mix switches, Main Menu, Extras, Battery Percentage and last Regenerate Daily Mix')
     expect(page.rows[0].label == 'Now Playing' and page.rows[-1].label == 'Extras' and page.rows[settings_i].label == 'Settings' and len(page.rows) == 23
            and not [r for r in page.rows if r.action in (pod_pages.ACT_GRID, pod_pages.ACT_STARTUP)],
            'the menu keeps the grouped rows, a Settings row and the Extras row last, which opens the Settings page (no launcher rows left on it)')

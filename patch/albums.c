@@ -145,12 +145,8 @@ static void al_fade(void) {
 
 /* The persisted mode: "1" the grid, "0" the list, anything else ALBUMS_DEFAULT_GRID. */
 static int al_use_grid(void) {
-    char c = 0;
-    int fd = open(ALBUMS_FILE, O_RDONLY, 0), n;
-    if (fd < 0) return ALBUMS_DEFAULT_GRID;
-    n = read(fd, &c, 1);
-    close(fd);
-    return n == 1 && c == '1' ? 1 : n == 1 && c == '0' ? 0 : ALBUMS_DEFAULT_GRID;
+    int c = set_read(ALBUMS_FILE, 0);
+    return c == '1' ? 1 : c == '0' ? 0 : ALBUMS_DEFAULT_GRID;
 }
 
 /* The window repaints (the scroll_view's rectangle: the content view itself is as high as the library). */

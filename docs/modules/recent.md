@@ -35,7 +35,7 @@ ellipsis). The 20 / 8 px air is the result of measuring `tools/preview.py`'s ren
 With the shelf (six albums) and the mini player bar up a menu of 8 rows (416 px; the default menu has 6, so everything below is 104 px higher) is 416 + 634 + 64 (`MB_PAD`) = 1114 px in a 430 px list; at the top the shelf's first row is already within a row of the
 viewport (416 < 430), at the end the last row fills the bottom of the list above the pill. One album: 416 + 234 + 64 = 714 px.
 
-## The list file (`/mnt/data/m1plus-recent`, `tools/pod_recent.py` is the model)
+## The list file (`/mnt/data/m1plus/recently-played`, `tools/pod_recent.py` is the model)
 
 ```
 M1R2\n
@@ -155,7 +155,7 @@ Scrolled to the end with the bar up, the shelf's last line ends exactly `MB_GAP`
 
 ## The setting (Settings > Home Screen > Recent Albums)
 
-A switch row (`ACT_SHELF` 16, `pod_pages.HOMESET_PAGE` row 1, the stock on/off image `sset_on` / `sset_off`), **on by default**, saved like the other switches: `/mnt/data/m1plus-shelf`, `0\n` off,
+A switch row (`ACT_SHELF` 16, `pod_pages.HOMESET_PAGE` row 1, the stock on/off image `sset_on` / `sset_off`), **on by default**, saved like the other switches: `/mnt/data/m1plus/home-recent-albums`, `0\n` off,
 `1\n` on, no file or anything but `0` = on (`recent_setting`, `recent_toggle`: `home_write_atomic`, a failed save changes neither the file nor the image). The menu reads it at start and at every to-foreground,
 so the shelf follows the switch when Settings is closed. The label is its own key **"Recent Albums"** (13 languages, `tools/pod_i18n.py`) instead of the menu item's "Recently Played": that text is too wide for the
 switch row in Spanish (202 px of 195) and Ukrainian (197 of 195); the row uses the item's clock glyph (`pod_ic_recent`).

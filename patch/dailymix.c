@@ -280,14 +280,7 @@ static int dm_small __attribute__((section(
 /* ---------------------------------------------------------------------------
  * The setting: the file holds "0" for off, anything else or no file is on.
  */
-int dailymix_setting(void) {
-    char c = 0;
-    int fd = open(DAILY_SET_FILE, O_RDONLY, 0), n;
-    if (fd < 0) return 1;
-    n = read(fd, &c, 1);
-    close(fd);
-    return !(n == 1 && c == '0');
-}
+int dailymix_setting(void) { return set_read(DAILY_SET_FILE, '1') != '0'; }
 
 int dailymix_toggle(void) {
     int next = !dailymix_setting();

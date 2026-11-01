@@ -89,7 +89,7 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
   pointer back (`widget_to_local` on the touch layer, x = y_local, y = 319 - x_local), so drags and flings along the long
   side move the shelf as in portrait, a tap on the centre cover (`|x - 200| < 84`) opens the album by
   `open_album` (stock sequence, cover thread released), a side tap brings that cover in. Persistence:
-  `/mnt/data/m1plus-landscape` (`1` landscape, anything else or missing portrait; written atomically by the switch
+  `/mnt/data/m1plus/coverflow-landscape` (`1` landscape, anything else or missing portrait; written atomically by the switch
   (`coverflow_landscape_toggle`), read when the covers screen is first built (`use_land`); shared by the main and artist pages). Without a depth frame (flat fallback) there is
   no landscape, whatever the setting says. A commit redraws the frame (the captions are in it).
 - **Captions.** `label_album` / `label_artist` are `hscroll_label`s configured as Now Playing's info
@@ -108,7 +108,7 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
 - **Start index.** The stock `slide_menu` starts on item 1, not 0; the page always sets the start
   album (`cfpos.value`, or `slide_menu_set_value` in the flat fallback), so an artist's page opens on its first album, a
   one-album shelf has its captions on open, and the main page keeps its last-album memory
-  (`/mnt/mmc/.m1plus/covers/album`, including album 0).
+  (`/mnt/mmc/.m1plus/coverflow-position`, including album 0): the centre album key as 8 lowercase hex digits and a newline, written on close by a temp file, fsync and rename (`position_save`, card mounted only; it belongs to the card's library and survives a cover cache wipe). `position_load` takes exactly 8 hex digits and an optional newline; a missing, short, junk or all-zero file is no saved album. The old `covers/album` file is not read.
 - **The album.** Tapping the centre cover opens our album page (`docs/modules/album-page.md`), else the plain stock `albuminfo_page`, as a stock
   Albums row does (`cc_open_album`, `patch/covercache.c`, the same call the Albums grid makes): `loadAlbumList(0xf003, 0)` puts the stock album list back into `*pdeq_showlist` (the
   page's own copy was made from the same query, so the row is the same), `albumcoverinfo_init` rebuilds

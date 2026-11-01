@@ -886,14 +886,7 @@ static int vn_recolour(const unsigned char (*st)[3]) {
 }
 
 /* The saved plinth theme: '1' Snow (an optional newline), anything else or no file Graphite; reading never writes. */
-int vinyl_theme(void) {
-    char b[4];
-    int fd = open(VINYLTHEME_FILE, 0, 0), n;
-    if (fd < 0) return 0;
-    n = read(fd, b, sizeof b);
-    close(fd);
-    return n >= 1 && b[0] == '1' && (n == 1 || (n == 2 && b[1] == '\n')) ? 1 : 0;
-}
+int vinyl_theme(void) { return set_read(VINYLTHEME_FILE, 0) == '1'; }
 
 /* Choose the theme (0 Graphite, 1 Snow), saved atomically; the theme, or -1 (unknown, or not saved: the saved one is unchanged). */
 int vinyl_theme_set(int theme) {
@@ -903,14 +896,7 @@ int vinyl_theme_set(int theme) {
 }
 
 /* The saved colour: '1' Cover (an optional newline), anything else or no file Black; reading never writes. */
-int vinyl_record(void) {
-    char b[4];
-    int fd = open(VINYLREC_FILE, 0, 0), n;
-    if (fd < 0) return 0;
-    n = read(fd, b, sizeof b);
-    close(fd);
-    return n >= 1 && b[0] == '1' && (n == 1 || (n == 2 && b[1] == '\n')) ? 1 : 0;
-}
+int vinyl_record(void) { return set_read(VINYLREC_FILE, 0) == '1'; }
 
 /* Choose the colour (0 Black, 1 Cover), saved atomically; the colour, or -1 (unknown, or not saved: the saved one is unchanged). */
 int vinyl_record_set(int rec) {

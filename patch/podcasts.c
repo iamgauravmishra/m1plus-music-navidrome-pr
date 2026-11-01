@@ -287,14 +287,7 @@ static struct {
 } pg __attribute__((section(".scratch")));
 
 /* Settings > Library > Podcasts > Podcast Search: "1" = on, anything else or no file = off. Read when the Podcasts page opens and each time it is back in front. */
-int pcsearch_setting(void) {
-    char c = 0;
-    int fd = open(PCSEARCH_FILE, O_RDONLY, 0), n;
-    if (fd < 0) return 0;
-    n = read(fd, &c, 1);
-    close(fd);
-    return n == 1 && c == '1';
-}
+int pcsearch_setting(void) { return set_read(PCSEARCH_FILE, 0) == '1'; }
 
 int pcsearch_toggle(void) {
     int next = !pcsearch_setting();

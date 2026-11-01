@@ -169,7 +169,7 @@ class Machine:
         self.py_log = []            # the engine's calls over the machine's life (call() clears calls): im_open_decoder, im_close_decoder, py_lemma_id (char), py_splids (char)
         self.strings = {}           # the language's table for the mocked locale_info_tr: key -> text (none: English, the key itself)
         self.bound = {}             # (widget, event) -> (handler, ctx): the latest widget_on, whatever call it was in
-        self.present = set()        # paths access() finds
+        self.present = {'/mnt/data/m1plus'}   # paths access() finds (the settings folder exists)
         self.files = {}             # path -> size, for fopen/ftell
         self.window = 0x20001000    # window_open's result (0 = failure)
         self.windows = {}           # ... for the windows named here (a page that opens another: one of them can fail)
@@ -224,7 +224,7 @@ class Machine:
         self.handlers[pod.PLAYLIST_EXPORT] = 'stock_playlist_export'
         # the Home guard's world (patch/home.c): flash/SD files, file descriptors, the window stack
         self.fs, self.fds, self.next_fd, self.fail = {}, {}, 3, set()
-        self.dirs = {'/mnt/data'}
+        self.dirs = {'/mnt/data', '/mnt/data/m1plus'}
         self.timers = []            # (callback, ms) of every timer_add
         self.timer_fail = False
         self.create_fail = set()    # widget constructors (view_create, ..) that return 0
@@ -882,7 +882,7 @@ class Machine:
                 chunk = data[:a1 * a2]; self.u.mem_write(a0, chunk) if chunk else None
                 ret = len(chunk) // a1 if a1 else 0
             else:
-                self.u.mem_write(a0, struct.pack('<I', self.saved_album) if self.files.get(self.fh[1]) else b'\0' * 4)
+                self.u.mem_write(a0, b'\0' * 4)
                 ret = 1 if self.files.get(self.fh[1]) else 0
             self.calls.append(('fread', ret))
         elif name == 'fwrite':
@@ -1108,7 +1108,6 @@ class Machine:
     def rect(self, w, x, y, cw, ch):
         for k, v in (('x', x), ('y', y), ('w', cw), ('h', ch)): self.props[(w, k)] = v
 
-    saved_album = 0
     fb = None                 # Screenshot: the frame buffer /dev/fb0 answers with (see the ioctl / mmap mocks)
     card_mounted = True       # statfs tells the card's mount point from its parent
     blits = ()              # the Albums grid's canvas_draw_image calls (bitmap, src rect, dst rect), texts, text measures
@@ -1561,7 +1560,7 @@ COVER_WIDGETS = ['btn_return', 'btn_backtoplayer', 'btn_cancel', 'navigationbar_
                  'label_album', 'label_artist', 'label_status', 'label_title', 'btn_songs']
 
 
-CFSORT_FILE, CFSORT_TMP = '/mnt/data/m1plus-cfsort', '/mnt/data/m1plus-cfsort.tmp'   # patch/home.h
+CFSORT_FILE, CFSORT_TMP = '/mnt/data/m1plus/album-order', '/mnt/data/m1plus/album-order.tmp'   # patch/home.h
 
 
 def cover_machine(albums=3, tracks=2, cached=True, sort='album', cls=None):

@@ -23,7 +23,7 @@ PCS, SE = sibling('pcshows'), sibling('pcsearch')
 PCP, PCN = PCS.PCP, PCS.PCN
 import pod_i18n, pod_show   # noqa: E402
 
-RP, SETTING, SDIR = PCP.ROOT, '/mnt/data/m1plus-pcsearch', SE.SDIR
+RP, SETTING, SDIR = PCP.ROOT, '/mnt/data/m1plus/podcast-online-search', SE.SDIR
 SEARCH, LOOKUP = SE.SEARCH, SE.LOOKUP
 F_WSJ = SE.F_WSJ
 NOW = PCS.NOW

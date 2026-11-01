@@ -7,7 +7,7 @@ from unicorn import mips_const
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 SCREEN_Y0 = 30 + 50     # the grid view on the screen: under the 30 px status bar and the 50 px navbar
-ALBUMS_FILE, ALBUMS_TMP = '/mnt/data/m1plus-albums', '/mnt/data/m1plus-albums.tmp'
+ALBUMS_FILE, ALBUMS_TMP = '/mnt/data/m1plus/albums-view', '/mnt/data/m1plus/albums-view.tmp'
 COVER, GAP, MARGIN, COLS = O['GRID_COVER'], O['GRID_GAP'], O['GRID_MARGIN'], O['GRID_COLS']
 TGAP, THEIGHT, VIEW_H, TILES = O['GRID_TITLE_GAP'], O['GRID_TITLE_H'], O['GRID_VIEW_H'], O['GRID_TILES']
 RGAP, SUBH = O['GRID_ROW_GAP'], O['GRID_SUB_H']
@@ -398,7 +398,8 @@ def layout_tests(ctx):
     m.call(on_row, a0=rows0 + 12 * row, count=20000000)
     expect(('window_open', 'm1plus_albums') in m.calls and 'stock_resume' not in m.names() and page_mode(m) == (0 if O['ALBUMS_DEFAULT_GRID'] else 1),
            'with no setting the Albums row opens our page in the default mode')
-    for data, want_list in ((b'1\n', 0), (b'0\n', 1), (b'x', 1 - O['ALBUMS_DEFAULT_GRID']), (b'', 1 - O['ALBUMS_DEFAULT_GRID'])):
+    for data, want_list in ((b'1\n', 0), (b'0\n', 1), (b'x', 1 - O['ALBUMS_DEFAULT_GRID']), (b'', 1 - O['ALBUMS_DEFAULT_GRID']),
+                           (b'0x', 1 - O['ALBUMS_DEFAULT_GRID']), (b'1x', 1 - O['ALBUMS_DEFAULT_GRID'])):
         m = albums_machine(3); m.fs[ALBUMS_FILE] = data
         calls = open_grid(m)
         expect(('window_open', 'm1plus_albums') in calls and 'stock_resume' not in m.names() and page_mode(m) == want_list,
@@ -1023,7 +1024,7 @@ def toggle_tests(ctx):
     calls = m.calls
     expect(not [c for c in calls if c[0] in opened_ev], f'toggling opens and closes nothing ({[c[0] for c in calls if c[0] in opened_ev]})')
     expect(m.fs.get(ALBUMS_FILE) == b'0\n' and ALBUMS_TMP not in m.fs, f'it saves "0" atomically ({m.fs.get(ALBUMS_FILE)!r})')
-    expect(('fsync', ALBUMS_TMP) in calls and ('fsync', '/mnt/data') in calls and ('rename', ALBUMS_TMP, ALBUMS_FILE) in calls,
+    expect(('fsync', ALBUMS_TMP) in calls and ('fsync', '/mnt/data/m1plus') in calls and ('rename', ALBUMS_TMP, ALBUMS_FILE) in calls,
            'temp file, fsync, rename, directory fsync (as the Start-in setting)')
     expect(glyph(m) == 'pod_nav_grid' and m.props.get((m.widgets['btn_albumview'], 'style:pressed:icon')) == 'pod_nav_grid_down'
            and m.props.get((m.widgets['btn_albumview'], 'style:over:icon')) == 'pod_nav_grid', 'the button now shows the grid glyph')

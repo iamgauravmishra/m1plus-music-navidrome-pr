@@ -737,14 +737,7 @@ static const struct kb_layer KB_LAYERS[2] = {
 static const struct kb_layer *kb_layer_of(int layer) { return &KB_LAYERS[layer]; }
 
 /* Settings > Keyboards > Chinese (Pinyin): "1" = on, anything else or no file = off. */
-int kb_zh_setting(void) {
-    char c = 0;
-    int fd = open(KBZH_FILE, O_RDONLY, 0), n;
-    if (fd < 0) return 0;
-    n = read(fd, &c, 1);
-    close(fd);
-    return n == 1 && c == '1';
-}
+int kb_zh_setting(void) { return set_read(KBZH_FILE, 0) == '1'; }
 
 int kb_zh_toggle(void) {
     int next = !kb_zh_setting();

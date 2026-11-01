@@ -19,50 +19,50 @@
 #define START_FILE "/mnt/data/m1plus-start" /* "1" = start in M1+ Music (default when missing), "0" = Shanling */
 #define START_TMP "/mnt/data/m1plus-start.tmp"
 #define ALBUMS_FILE \
-    "/mnt/data/m1plus-albums" /* "1" = the Albums grid (default when missing, ALBUMS_DEFAULT_GRID), "0" = the list mode of the same page */
-#define ALBUMS_TMP "/mnt/data/m1plus-albums.tmp"
+    "/mnt/data/m1plus/albums-view" /* "1" = the Albums grid (default when missing, ALBUMS_DEFAULT_GRID), "0" = the list mode of the same page */
+#define ALBUMS_TMP "/mnt/data/m1plus/albums-view.tmp"
 #define PLAYLISTS_FILE \
-    "/mnt/data/m1plus-playlists" /* the Playlists page's mode, as ALBUMS_FILE: "1" the grid (default), "0" the list */
-#define PLAYLISTS_TMP "/mnt/data/m1plus-playlists.tmp"
+    "/mnt/data/m1plus/playlists-view" /* the Playlists page's mode, as ALBUMS_FILE: "1" the grid (default), "0" the list */
+#define PLAYLISTS_TMP "/mnt/data/m1plus/playlists-view.tmp"
 #define LANDSCAPE_FILE \
-    "/mnt/data/m1plus-landscape" /* "1" = Cover Flow opens in landscape, anything else portrait (the default) */
-#define LANDSCAPE_TMP "/mnt/data/m1plus-landscape.tmp"
+    "/mnt/data/m1plus/coverflow-landscape" /* "1" = Cover Flow opens in landscape, anything else portrait (the default) */
+#define LANDSCAPE_TMP "/mnt/data/m1plus/coverflow-landscape.tmp"
 #define CFSORT_FILE \
-    "/mnt/data/m1plus-cfsort" /* the album order of Cover Flow and Albums: "0" or "0\n" = by album title (stock), anything else or missing = Artist (the default) */
-#define CFSORT_TMP "/mnt/data/m1plus-cfsort.tmp"
+    "/mnt/data/m1plus/album-order" /* the album order of Cover Flow and Albums: "0" or "0\n" = by album title (stock), anything else or missing = Artist (the default) */
+#define CFSORT_TMP "/mnt/data/m1plus/album-order.tmp"
 #define TAPETHEME_FILE \
-    "/mnt/data/m1plus-tapetheme" /* the Cassette Mode theme: "1" = Chrome, "2" = Metal (each with an optional newline), anything else or missing = Normal (the default) */
-#define TAPETHEME_TMP "/mnt/data/m1plus-tapetheme.tmp"
+    "/mnt/data/m1plus/cassette-theme" /* the Cassette Mode theme: "1" = Chrome, "2" = Metal (each with an optional newline), anything else or missing = Normal (the default) */
+#define TAPETHEME_TMP "/mnt/data/m1plus/cassette-theme.tmp"
 #define VINYLREC_FILE \
-    "/mnt/data/m1plus-vinylrec" /* Vinyl Mode's record colour: "1" Cover (with an optional newline), anything else or missing = Black (the default) */
-#define VINYLREC_TMP "/mnt/data/m1plus-vinylrec.tmp"
+    "/mnt/data/m1plus/vinyl-record" /* Vinyl Mode's record colour: "1" Cover (with an optional newline), anything else or missing = Black (the default) */
+#define VINYLREC_TMP "/mnt/data/m1plus/vinyl-record.tmp"
 #define VINYLTHEME_FILE \
-    "/mnt/data/m1plus-vinyltheme" /* Vinyl Mode's plinth theme: "1" Snow (with an optional newline), anything else or missing = Graphite (the default) */
-#define VINYLTHEME_TMP "/mnt/data/m1plus-vinyltheme.tmp"
+    "/mnt/data/m1plus/vinyl-base" /* Vinyl Mode's plinth theme: "1" Snow (with an optional newline), anything else or missing = Graphite (the default) */
+#define VINYLTHEME_TMP "/mnt/data/m1plus/vinyl-base.tmp"
 #define MENU_FILE \
-    "/mnt/data/m1plus-menu" /* the menu's visible items in order, one digit (item id) each (patch/menu.c); missing or invalid = the defaults */
-#define MENU_TMP "/mnt/data/m1plus-menu.tmp"
+    "/mnt/data/m1plus/home-menu" /* the menu's visible items in order, one digit (item id) each (patch/menu.c); missing or invalid = the defaults */
+#define MENU_TMP "/mnt/data/m1plus/home-menu.tmp"
 #define RECENT_FILE \
-    "/mnt/data/m1plus-recent" /* the albums played last, most recent first (patch/recent.c); missing or malformed = none */
-#define RECENT_TMP "/mnt/data/m1plus-recent.tmp"
+    "/mnt/data/m1plus/recently-played" /* the albums played last, most recent first (patch/recent.c); missing or malformed = none */
+#define RECENT_TMP "/mnt/data/m1plus/recently-played.tmp"
 #define SEARCH_RECENT_FILE \
-    "/mnt/data/m1plus-search-recent" /* the last searches, newest first, one UTF-8 line each (patch/search.c); missing or malformed = none */
-#define SEARCH_RECENT_TMP "/mnt/data/m1plus-search-recent.tmp"
+    "/mnt/data/m1plus/search-history" /* the last searches, newest first, one UTF-8 line each (patch/search.c); missing or malformed = none */
+#define SEARCH_RECENT_TMP "/mnt/data/m1plus/search-history.tmp"
 #define SHELF_FILE \
-    "/mnt/data/m1plus-shelf" /* the Recently Played shelf: "0" = off, anything else or missing = on (Settings > Home Screen) */
-#define SHELF_TMP "/mnt/data/m1plus-shelf.tmp"
+    "/mnt/data/m1plus/home-recent-albums" /* the Recently Played shelf: "0" = off, anything else or missing = on (Settings > Home Screen) */
+#define SHELF_TMP "/mnt/data/m1plus/home-recent-albums.tmp"
 #define DAILY_SET_FILE \
-    "/mnt/data/m1plus-daily" /* the Daily Mix card: "0" = off, anything else or missing = on (Settings > Home Screen) */
-#define DAILY_SET_TMP "/mnt/data/m1plus-daily.tmp"
+    "/mnt/data/m1plus/home-daily-mix" /* the Daily Mix card: "0" = off, anything else or missing = on (Settings > Home Screen) */
+#define DAILY_SET_TMP "/mnt/data/m1plus/home-daily-mix.tmp"
 #define REBUILD_FILE \
-    "/mnt/data/m1plus-covers-rebuild" /* exists while a Settings > Library > Rebuild Covers is requested; Home's cover build (patch/homecover.c) does it and removes it when done */
-#define REBUILD_TMP "/mnt/data/m1plus-covers-rebuild.tmp"
+    "/mnt/data/m1plus/covers-rebuild" /* exists while a Settings > Library > Rebuild Covers is requested; Home's cover build (patch/homecover.c) does it and removes it when done */
+#define REBUILD_TMP "/mnt/data/m1plus/covers-rebuild.tmp"
 #define KBZH_FILE \
-    "/mnt/data/m1plus-kbzh" /* the on-screen keyboard's Chinese (Pinyin) layer: "1" = on, anything else or missing = off (Settings > Keyboards; patch/keyboard.c) */
-#define KBZH_TMP "/mnt/data/m1plus-kbzh.tmp"
+    "/mnt/data/m1plus/keyboard-pinyin" /* the on-screen keyboard's Chinese (Pinyin) layer: "1" = on, anything else or missing = off (Settings > Keyboards; patch/keyboard.c) */
+#define KBZH_TMP "/mnt/data/m1plus/keyboard-pinyin.tmp"
 #define PCSEARCH_FILE \
-    "/mnt/data/m1plus-pcsearch" /* Podcast Search: "1" = on, anything else or missing = off (Settings > Library > Podcasts; patch/podcasts.c) */
-#define PCSEARCH_TMP "/mnt/data/m1plus-pcsearch.tmp"
+    "/mnt/data/m1plus/podcast-online-search" /* Podcast Search: "1" = on, anything else or missing = off (Settings > Library > Podcasts; patch/podcasts.c) */
+#define PCSEARCH_TMP "/mnt/data/m1plus/podcast-online-search.tmp"
 #define MIX_DIR \
     CARD_DIR \
     "/daily-mix" /* the Daily Mix's own folder inside the card folder (CARD_DIR, patch/covercache.h); made by the writer */
@@ -73,6 +73,8 @@
 #define MIX_ART_FILE MIX_DIR "/art" /* its card art, 296 x 220 RGB565 with a checksummed header */
 #define MIX_ART_TMP MIX_DIR "/art.tmp"
 #define DATA_DIR "/mnt/data"
+#define SET_DIR \
+    "/mnt/data/m1plus" /* the feature settings above; the guard files (KILL_DATA to START_TMP) stay in DATA_DIR */
 #define LOG_ENABLE "/mnt/mmc/m1plus-log" /* opt-in: an empty file on the card turns the log on */
 #define LOG_FILE "/mnt/mmc/m1plus.log"
 
@@ -94,6 +96,7 @@ extern int home_off(void);
 extern void fr_boot(void);
 extern int home_write_atomic(const char *path, const char *tmp,
                              const char *data); /* temp, fsync, rename, directory fsync; 0 = done */
+extern int set_read(const char *path, int def); /* a one-character setting file: "x" or "x\n" gives x, else def */
 extern void home_menu_opened(void *win, int settings, int entry);
 extern void
 home_extras_opened(void *win); /* the Extras page: Settings may be opened from it, Shanling Home closes it too */
@@ -137,6 +140,8 @@ extern int covlist_open(
 extern void homecover_stat(
     int idx, char *buf,
     unsigned n); /* a value of that page: 0 Albums, 1 Covers, 2 No art, 3 Missing, 4 Old files, 5 Size, 6 Status */
+extern void setfiles_open(void); /* the Settings Files page is opening: read the files once (patch/setfiles.c) */
+extern void setfiles_stat(int idx, char *buf, unsigned n); /* a row's text as read: 0..21 the files */
 extern int homecover_clear(
     void); /* Settings > Developer > Clear Cover Cache, after its confirm: 1 under way, 0 the cover worker is busy */
 extern void pod_toast(const char *text); /* patch/shuffle.c */
