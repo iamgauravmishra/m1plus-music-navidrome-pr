@@ -250,9 +250,15 @@ class Machine:
     def alloc(self, n):
         a = self.next; self.next = (self.next + n + 7) & ~7; return a
 
+    reuse_heap = False        # a test that makes many short-lived blocks (the local search's scan) sets it: free() then gives a block back to a later malloc / calloc of the same size
+
     def malloc(self, n):
+        rn = (n + 15) & ~15
+        if self.reuse_heap and self.__dict__.setdefault('_free', {}).get(rn):
+            return self._free[rn].pop()
         a = self.heap; self.heap = (self.heap + n + 15) & ~15
         assert self.heap < HEAP + HEAP_SIZE, 'emulated heap exhausted'
+        if self.reuse_heap: self.__dict__.setdefault('_blocks', {})[a] = rn
         return a
 
     def cstr(self, s):
@@ -800,6 +806,7 @@ class Machine:
             self.calls.append(('calloc', n, ret))
         elif name == 'free':
             self.calls.append(('free', a0))
+            if self.reuse_heap and a0 in self.__dict__.get('_blocks', {}): self.__dict__.setdefault('_free', {}).setdefault(self._blocks[a0], []).append(a0)
         elif name == 'fopen':
             path, mode = self.read_cstr(a0), self.read_cstr(a1)
             self.calls.append(('fopen', path, mode))

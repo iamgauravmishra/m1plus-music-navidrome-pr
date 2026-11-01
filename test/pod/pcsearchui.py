@@ -33,9 +33,9 @@ WSJ = PCN.feed_bytes('wsj-3items.xml')
 PQ = {k: v for k, v in O.items() if k.startswith('PQ_')}
 
 
-def card_for(on=True, imp=False):
+def card_for(on=True, imp=False, subs=True):
     def card(m):
-        PCS.card(m)
+        (PCS.card if subs else PCP.page_card)(m)   # (subs: the card has subscriptions, so the "..." always has the Subscriptions row)
         if on: m.fs[SETTING] = b'1\n'
         if imp: m.put(f'{RP}/subscriptions.txt', b'https://x.example/rss\n')
     return card
@@ -59,8 +59,8 @@ def site_for(**extra):
     return site
 
 
-def opened(on=True, imp=False, site=None):
-    m = PCS.opened(cardf=card_for(on, imp))
+def opened(on=True, imp=False, site=None, subs=True):
+    m = PCS.opened(cardf=card_for(on, imp, subs))
     m.windows['m1plus_keyboard'] = 0   # (keyboard_open finds no window: the test calls the callbacks the keyboard would)
     m.setword(m.widgets['ps_text'] + 8, O['PQ_TEXT_W']); m.setword(m.widgets['ps_hint'] + 8, O['PQ_TEXT_W'])   # (the labels' widths: the text is cut to them)
     m.curl_site = site or site_for()
@@ -81,6 +81,7 @@ def undo(s):
 
 
 def text(m, n): return undo(m.wtext.get(m.widgets[n], ''))
+def at_search(m): return flags(m, 'ps_field')[0] == 1 and flags(m, 'pg_big')[0] == 0 and flags(m, 'label_title')[0] == 0   # (the search level has no title: neither the navbar's nor a large one)
 
 
 def tick(m): return PCS.tick(m)
@@ -94,8 +95,8 @@ def work(m):
 
 
 def enter(m):
-    """A tap on the Search button: the level opens and (nothing typed) the keyboard is asked for."""
-    PCP.click(m, 'btn_search')
+    """A tap on the globe: the level opens on Apple Podcasts and (nothing typed) the keyboard is asked for."""
+    PCP.click(m, 'btn_globe')
     return [c for c in m.calls if c[0] == 'window_open']
 
 
@@ -144,57 +145,69 @@ def setting_tests(ctx):
     expect(m.call(PSYMS['pcsearch_toggle'], count=4000000) == 0xffffffff and m.fs[SETTING] == b'1\n' and SETTING + '.tmp' not in m.fs, 'a failed save: -1 and the file is as it was')
     # the page: opened with the setting off, then switched on in Settings while the page is behind another
     m = opened(on=False)
-    expect(flags(m, 'btn_search') == (0, 0), 'off: no Search button')
+    expect(flags(m, 'btn_globe') == (0, 0), 'off: no globe, no search entry at all')
     m.fs[SETTING] = b'1\n'
     PCS.refg(m)
-    expect(flags(m, 'btn_search') == (1, 1), 'switched on in Settings while the page was behind: the button is there when the page is back in front')
+    expect(flags(m, 'btn_globe') == (1, 1), 'switched on in Settings while the page was behind: the globe is there when the page is back in front')
     m.fs[SETTING] = b'0\n'
     PCS.refg(m)
-    expect(flags(m, 'btn_search') == (0, 0), 'and gone again when switched off')
+    expect(flags(m, 'btn_globe') == (0, 0), 'and gone again when switched off')
     m = opened(on=True)
-    expect(flags(m, 'btn_search') == (1, 1), 'on at open: the button')
+    expect(flags(m, 'btn_globe') == (1, 1), 'on at open: the globe')
 
 
 def entry_tests(ctx):
-    """The navbar of the Shows level: nothing when off; Search | Now Playing when the "..." has nothing; Search | ... | Now Playing when it has Import from Card; the Show level is unchanged."""
+    """The navbar of the Shows level in the four states (the magnifier always, the globe only with Podcast Search on, the \"...\" only when Import is possible, then Now Playing): the pieces' slots 46 apart right-aligned to
+    Now Playing, the glass pieces (the magnifier the left cap, the globe and the \"...\" middle pieces), the small title's room; the Show level is unchanged."""
     expect = ctx.expect
     NP = lambda m, st='normal': m.props[(m.widgets['btn_backtoplayer'], f'style:{st}:icon')]
-    m = opened(on=False)
-    expect(flags(m, 'btn_search') == (0, 0) and flags(m, 'btn_more') == (0, 0) and NP(m) == 'ah_nav_np', 'off, nothing to import: the round Now Playing, no Search, no "..." (as today)')
-    m = opened(on=False, imp=True)
-    expect(flags(m, 'btn_search') == (0, 0) and flags(m, 'btn_more') == (1, 1) and icon(m, 'btn_more') == 'pod_nav_more' and NP(m) == 'ah_nav_play' and not moves(m, 'btn_search'), 'off, Import possible: "... | Now Playing" exactly as before')
-    m = opened(on=True)
-    expect(flags(m, 'btn_search') == (1, 1) and flags(m, 'btn_more') == (0, 0) and NP(m) == 'ah_nav_play' and NP(m, 'pressed') == 'ah_nav_play_down' and moves(m, 'btn_search')[-1] == (O['NAV_VIEW_X'], 0),
-           'on, the "..." has nothing: Search | Now Playing, Search on the 214 slot, Now Playing its right cap')
-    expect(icon(m, 'btn_search') is None or icon(m, 'btn_search') == 'pod_nav_search', 'the Search piece is the Songs page\'s left cap')
+    X, W = O['NAV_VIEW_X'], O['NAV_VIEW_W']
+    shapes = ((False, False, 'Now Playing disc', []),
+              (True, False, 'globe | Now Playing', [('btn_globe', X)]),
+              (False, True, '... | Now Playing', [('btn_more', X)]),
+              (True, True, 'globe | ... | Now Playing', [('btn_globe', X - W), ('btn_more', X)]))
+    for on, imp, name, slots in shapes:
+        m = opened(on=on, imp=imp, subs=True)   # (a subscription changes nothing here: the Subscriptions page is a Library row, the "..." is Import's alone)
+        shown = {n for n in ('btn_globe', 'btn_more') if flags(m, n) == (1, 1)}
+        np_icon = ('ah_nav_play', 'ah_nav_play_down') if slots else ('ah_nav_np', 'ah_nav_np_down')
+        expect(shown == {n for n, _ in slots} and (NP(m), NP(m, 'pressed')) == np_icon, f'{name}: exactly those pieces show, Now Playing is the right cap of a capsule or the plain disc')
+        for n, x in slots:
+            if n != 'btn_more': expect(moves(m, n)[-1] == (x, 0), f'{name}: {n} is on slot {x} ({moves(m, n)[-1:]})')
+        expect(icon(m, 'btn_more') == ('pod_nav_moremid' if on and imp else 'pod_nav_more'), f'{name}: the \"...\" is the middle piece beside the globe, else the left cap')
+        w = [c for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets['label_title']]
+        expect(not w and flags(m, 'label_title')[0] == 0 and PCP.title_text(m) == 'Podcasts', f'{name}: the navbar title is hidden and never resized for the pieces ({w[-1][2:] if w else None}); the large heading is the title')
+        xs = [x for _, x in slots]
+        expect(all(b - a == W for a, b in zip(xs, xs[1:])) and (not xs or xs[-1] == X), f'{name}: the glyphs are 46 apart (the glass capsule rules)')
+    m = opened(on=False, imp=False, subs=True)
+    expect(flags(m, 'btn_more') == (0, 0) and flags(m, 'btn_globe') == (0, 0) and NP(m) == 'ah_nav_np', 'a subscription and nothing to import: no "..." (it would have no row), Now Playing is the plain disc')
+    m = opened(on=True, imp=True, subs=False)
+    expect({n for n in ('btn_globe', 'btn_more') if flags(m, n) == (1, 1)} == {'btn_globe', 'btn_more'}, 'the capsule is at most globe | ... | NP, with the "..." only when there is something to import')
     m = opened(on=True, imp=True)
-    expect(flags(m, 'btn_search') == (1, 1) and flags(m, 'btn_more') == (1, 1) and moves(m, 'btn_search')[-1] == (O['NAV_CF_X'], 0) and icon(m, 'btn_more') == 'pod_nav_moremid'
-           and icon(m, 'btn_more', 'pressed') == 'pod_nav_moremid_down' and icon(m, 'btn_more', 'over') == 'pod_nav_moremid' and NP(m) == 'ah_nav_play',
-           'on and Import possible: Search (168) | "..." (214, the middle piece) | Now Playing')
-    w = [c for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets['label_title']]
-    expect(w and w[-1][2] == O['NAV_CF_X'] - 58, f'the small title is cut to the room left of Search ({w[-1][2:] if w else None})')
-    # a show opened: the usual "... | Now Playing" (the middle piece is only for the Shows level), Search gone
+    expect(icon(m, 'btn_more', 'pressed') == 'pod_nav_moremid_down' and icon(m, 'btn_more', 'over') == 'pod_nav_moremid', 'the \"...\" has its middle piece for every state')
+    # a show opened: the usual \"... | Now Playing\" (the middle piece is only for the Shows level), the globe gone
     PCP.tap_show(m, 'Alpha')
-    expect(flags(m, 'btn_search') == (0, 0) and flags(m, 'btn_more') == (1, 1) and icon(m, 'btn_more') == 'pod_nav_more', 'on a Show page: "... | Now Playing", no Search')
+    expect(flags(m, 'btn_globe') == (0, 0) and flags(m, 'btn_more') == (1, 1) and icon(m, 'btn_more') == 'pod_nav_more', 'on a Show page: \"... | Now Playing\", no globe')
     PCP.click(m, 'btn_return')
-    expect(flags(m, 'btn_search') == (1, 1) and icon(m, 'btn_more') == 'pod_nav_moremid', 'back on the Shows level: Search | ... | Now Playing again')
+    expect(flags(m, 'btn_globe') == (1, 1) and icon(m, 'btn_more') == 'pod_nav_moremid', 'back on the Shows level: the globe and the middle "..." again')
     # the assets
     from mod_icons import NAV_VIEW, NAV_VIEW_POS
-    expect(NAV_VIEW['pod_nav_moremid'] == 'ellipsis' and NAV_VIEW_POS['pod_nav_moremid'] == 'middle' and NAV_VIEW_POS['pod_nav_search'] == 'left', 'the "..." has a middle piece, Search the left cap')
-    pics = {n: asset_image(n) for n in ('pod_nav_moremid', 'pod_nav_moremid_down', 'pod_nav_search', 'pod_ci_search')}
-    mid = pics['pod_nav_moremid']
-    expect(mid.getbbox() is not None and mid.getpixel((mid.width // 2 + 7, 23))[3] > 0 and pics['pod_nav_moremid_down'].tobytes() != mid.tobytes()
-           and pics['pod_ci_search'].getbbox() is not None, 'the new pictures are in the build and have pixels (glass and glyph)')
+    expect(NAV_VIEW['pod_nav_moremid'] == 'ellipsis' and NAV_VIEW_POS['pod_nav_moremid'] == 'middle'
+           and NAV_VIEW['pod_nav_globe'] == 'globe' and NAV_VIEW_POS['pod_nav_globe'] == 'left', 'the "..." is a middle piece beside the globe, the globe the left cap (Lucide globe)')
+    pics = {n: asset_image(n) for n in ('pod_nav_moremid', 'pod_nav_moremid_down', 'pod_nav_globe', 'pod_nav_globe_down', 'pod_ci_search')}
     import mod_icons
-    for n in ('pod_nav_moremid', 'pod_nav_moremid_down', 'pod_ci_search'):
+    for n in ('pod_nav_moremid', 'pod_nav_moremid_down', 'pod_nav_globe', 'pod_nav_globe_down', 'pod_ci_search'):
         path = os.path.join(mod_icons.PNG, n + '.png')
         expect(os.path.isfile(path) and open(path, 'rb').read() == open(asset_path(n), 'rb').read(), f'{n}.png is committed and is the file the build ships')
-    # the ellipsis dots really are in the middle piece (three dark-to-white glyph pixels around the glyph centre), the same glyph as the left cap's
-    left = asset_image('pod_nav_more')
-    cy = 21
-    dots = [x for x in range(mid.width) if mid.getpixel((x, cy))[:3] == (255, 255, 255) and mid.getpixel((x, cy))[3] > 200]
-    dots_left = [x for x in range(left.width) if left.getpixel((x, cy))[:3] == (255, 255, 255) and left.getpixel((x, cy))[3] > 200]
-    expect(len(dots) >= 3 and len(dots) == len(dots_left) and mid.width == left.width, f'the middle piece draws the ellipsis glyph ({len(dots)} white pixels on its row, the left piece {len(dots_left)})')
+    globe, mid = pics['pod_nav_globe'], pics['pod_nav_moremid']
+    white = lambda im: {(x, y) for y in range(im.height) for x in range(im.width) if im.getpixel((x, y))[:3] == (255, 255, 255) and im.getpixel((x, y))[3] > 200}
+    gw = white(globe)
+    # the globe: a ring (its centre column and its row are glyph pixels at the glyph's top and bottom) with a meridian and an equator
+    cx = globe.width // 2 + 7
+    gy = sorted(y for x, y in gw if x == cx)
+    expect(len(gw) > 60 and gy and gy[-1] - gy[0] >= 15 and any(abs(x - (min(p[0] for p in gw) + max(p[0] for p in gw)) // 2) <= 1 for x, y in gw) and pics['pod_nav_globe_down'].tobytes() != globe.tobytes() and globe.width == mid.width,
+           f'the globe piece draws a 24 px globe glyph ({len(gw)} white pixels, {gy[-1] - gy[0] if gy else None} px tall) and has a pressed picture')
+    dots = [x for x in range(mid.width) if mid.getpixel((x, 21))[:3] == (255, 255, 255) and mid.getpixel((x, 21))[3] > 200]
+    expect(len(dots) >= 3, 'the middle piece still draws the ellipsis glyph')
 
 
 def search_tests(ctx):
@@ -203,13 +216,13 @@ def search_tests(ctx):
     site = site_for()
     m = opened(site=site)
     calls = enter(m)
-    expect(('window_open', 'm1plus_keyboard') in calls and text(m, 'label_title') == 'Search' and flags(m, 'ps_field')[0] == 1 and flags(m, 'pg_big')[0] == 0 and flags(m, 'btn_search') == (0, 0)
-           and m.props.get((m.widgets['label_title'], 'visible')) == 1, 'a tap on Search: the level opens with its title, the field (insensitive widgets), the keyboard is asked for at once; the Shows level\'s large title and buttons go')
-    expect(('widget_set_tr_text', m.widgets['ps_hint'], 'Search') in m.calls or text(m, 'ps_hint') == 'Search', 'the field\'s hint reads Search')
+    expect(('window_open', 'm1plus_keyboard') in calls and at_search(m) and flags(m, 'ps_field')[0] == 1 and flags(m, 'pg_big')[0] == 0 and flags(m, 'btn_globe') == (0, 0)
+           and m.props.get((m.widgets['label_title'], 'visible')) == 0, 'a tap on Search: the level opens with no title (neither the navbar\'s nor a large one: the field keeps the keyboard page\'s place), the field (insensitive widgets), the keyboard is asked for at once; the Shows level\'s large title and buttons go')
+    expect(('widget_set_tr_text', m.widgets['ps_hint'], 'Search Apple Podcasts') in m.calls or text(m, 'ps_hint') == 'Search Apple Podcasts', 'the field\'s hint reads Search Apple Podcasts')
     expect(m.props.get((m.sv, 'virtual_h')) == pod_show.search_layout(0)['h'] and flags(m, 'label_status')[0] == 0, 'no results yet: the content is the field\'s height, no status line')
     # the keyboard's Back with nothing typed: the Shows level
     m.call(PSYMS['pg_srch_cancel'], count=4000000)
-    expect(text(m, 'label_title') == 'Podcasts' and flags(m, 'ps_field')[0] == 0 and flags(m, 'btn_search') == (1, 1), 'the keyboard\'s Back with nothing typed: back on the Shows level')
+    expect(PCP.title_text(m) == 'Podcasts' and flags(m, 'ps_field')[0] == 0 and flags(m, 'btn_globe') == (1, 1), 'the keyboard\'s Back with nothing typed: back on the Shows level')
     enter(m)
     # a tap on the field opens the keyboard again
     m.calls = []
@@ -252,7 +265,7 @@ def search_tests(ctx):
            f'a result with no feed: its grey line reads Not available and the row is dimmed; the other is not ({rows})')
     m.calls = []; m.thread = None
     PCP.tap(m, 150, L['rows'][1] + 30)
-    expect(m.thread is None and text(m, 'label_title') == 'Search', 'a tap on the dimmed row does nothing')
+    expect(m.thread is None and at_search(m), 'a tap on the dimmed row does nothing')
     # no results
     m = opened(site=site_for(**{SEARCH + 'zzz': {'body': b'{"resultCount":0,"results":[]}'}}))
     stage(m, 'zzz')
@@ -280,7 +293,7 @@ def search_tests(ctx):
     enter(m); submit(m, 'all in')
     th = m.thread
     PCP.click(m, 'btn_return')
-    expect(text(m, 'label_title') == 'Podcasts' and flags(m, 'ps_field')[0] == 0 and m.word(SE_CANCEL()) == 1, 'Back from the level while the worker runs: the Shows level, the worker is asked to stop')
+    expect(PCP.title_text(m) == 'Podcasts' and flags(m, 'ps_field')[0] == 0 and m.word(SE_CANCEL()) == 1, 'Back from the level while the worker runs: the Shows level, the worker is asked to stop')
     m.thread = th; work(m)
     expect(m.call(PSYMS['pn_search_state'], count=2000) == 3 and m.call(PSYMS['pn_search_code'], count=2000) == 12, 'the worker ends cancelled')
     # leaving after the answer came, mid-thumbnails: the thumbs stop at the cancel
@@ -298,7 +311,7 @@ def search_tests(ctx):
     # coming back to the level after a visit: the answer and the thumbnails that came are still there
     m = opened()
     stage(m, 'all in')
-    PCP.click(m, 'btn_return'); PCP.click(m, 'btn_search')
+    PCP.click(m, 'btn_return'); PCP.click(m, 'btn_globe')
     expect(len(level_rows(m)) >= 5 and text(m, 'ps_text') == 'all in' and not [c for c in m.calls if c == ('window_open', 'm1plus_keyboard')], 'Search again: the term and the rows of the last answer, no keyboard')
     # the window destroyed (the hardware Back key): the thumbnails and the held preview go, a running worker is told to stop
     expect(any(p.startswith(SDIR + '/t') for p in m.fs), 'the thumbnails are in the cache directory')
@@ -343,7 +356,7 @@ def input_tests(ctx):
     # a link whose show has no feed address
     m = opened(site=site_for(**{LOOKUP + '77': {'body': b'{"resultCount":1,"results":[{"collectionName":"No Feed"}]}'}}))
     enter(m); submit(m, 'https://podcasts.apple.com/us/podcast/x/id77'); work(m); tick(m)
-    expect(toasts(m) == ["Can't subscribe: Not available"] and text(m, 'label_title') == 'Search' and flags(m, 'label_status')[0] == 0, f'a link with no feed: "Can\'t subscribe: Not available", the level stays ({toasts(m)})')
+    expect(toasts(m) == ["Can't subscribe: Not available"] and at_search(m) and flags(m, 'label_status')[0] == 0, f'a link with no feed: "Can\'t subscribe: Not available", the level stays ({toasts(m)})')
     # a feed address that fails
     for label, reply, word in (('a 404', {'rc': 22, 'code': 404}, 'Feed not found'), ('a 403', {'rc': 22, 'code': 403}, 'Server error'), ('an HTML page', {'body': b'<html>x</html>'}, 'Not a podcast feed'),
                                ('no connection', {'rc': 6}, "Can't connect")):
@@ -351,7 +364,7 @@ def input_tests(ctx):
         enter(m); submit(m, 'https://bad.example/rss'); work(m); tick(m)
         got = toasts(m)
         shows, _ = m.shows()
-        expect(got == [f"Can't subscribe: {word}"] and text(m, 'label_title') == 'Search' and len(shows) == 4 and not [d for d in m.dirs if d.startswith(RP + '/') and d.count('/') == 4 and 'bad' in d],
+        expect(got == [f"Can't subscribe: {word}"] and at_search(m) and len(shows) == 4 and not [d for d in m.dirs if d.startswith(RP + '/') and d.count('/') == 4 and 'bad' in d],
                f'{label}: "Can\'t subscribe: {word}", no folder was made ({got})')
     # a long feed address (the keyboard's KB_LONG takes up to 255 bytes): the preview fetches it whole; the field shows its start cut with an ellipsis
     site = site_for()
@@ -377,7 +390,7 @@ def preview_tests(ctx):
     expect(site.log[-2] == first or first in site.log, 'the result\'s feed is fetched')
     tick(m)
     shows_before, _ = m.shows()
-    expect(text(m, 'label_title') == 'WSJ Minute Briefing' and m.props.get((m.sv, 'yoffset'), 0) == 0 and flags(m, 'btn_more') == (0, 0) and flags(m, 'btn_search') == (0, 0)
+    expect(text(m, 'label_title') == 'WSJ Minute Briefing' and m.props.get((m.sv, 'yoffset'), 0) == 0 and flags(m, 'btn_more') == (0, 0) and flags(m, 'btn_globe') == (0, 0)
            and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_np' and not [d for d in m.dirs if d.startswith(RP + '/.pv')], 'the preview is the Show page: the show\'s title, no "..." (no sheets), no folder')
     h = PCP.hdr(m)
     _, texts, styles, fills = PCP.paint(m, 0)
@@ -401,12 +414,15 @@ def preview_tests(ctx):
     expect(m.props.get((m.sv, 'virtual_h')) == h + 3 * ch + 20, 'the content is the header, three short cells and the air under them')
     # a tap on a cell, its right edge (the "..." place) and the pill's place do nothing
     m.thread = None; m.calls = []
-    for y in (h + 12, h + O['PS_PILL_Y'] - 20):
-        PCP.tap(m, 150, y); PCP.tap(m, O['PS_DOTS_CX'], y)
-    expect(m.thread is None and not [c for c in m.calls if c[0] in ('pthread_create', 'navigator_to_with_context')] and ('widget_set_visible', m.widgets['pg_sh_card'], 1) not in m.calls, 'a tap on an episode, its pill place or its "..." place does nothing')
+    PCP.tap(m, 150, h + 12)
+    expect(m.thread is None and not [c for c in m.calls if c[0] in ('pthread_create', 'navigator_to_with_context')] and ('widget_set_visible', m.widgets['pg_sh_card'], 1) not in m.calls
+           and [t for (t, r), s in zip(*PCP.paint(m, 0)[1:3]) if s == 'label_ps_head'], 'a tap on an episode opens its episode page (no pill, no "...": nothing to start, no sheet; pcdetail.py has the page)')
+    PCP.tap(m, O['PS_DOTS_CX'], 300); PCP.tap(m, 30, 340)
+    expect(m.thread is None and not [c for c in m.calls if c[0] in ('pthread_create', 'navigator_to_with_context')] and ('widget_set_visible', m.widgets['pg_sh_card'], 1) not in m.calls, 'on the preview\'s page the pill and "..." places are nothing: no download, no sheet')
+    PCP.click(m, 'btn_return')   # Back: the list
     # Back: the results are as they were
     PCP.click(m, 'btn_return')
-    expect(text(m, 'label_title') == 'Search' and len(level_rows(m)) >= 5 and text(m, 'ps_text') == 'all in' and m.call(PSYMS['pn_preview_parser'], count=2000) == 0, 'Back: the search level with its rows, the held feed let go')
+    expect(at_search(m) and len(level_rows(m)) >= 5 and text(m, 'ps_text') == 'all in' and m.call(PSYMS['pn_preview_parser'], count=2000) == 0, 'Back: the search level with its rows, the held feed let go')
     # Subscribe
     PCP.tap(m, 150, L['rows'][0] + 30); work(m); tick(m)
     hdr = PCP.paint(m, 0)
@@ -423,9 +439,9 @@ def preview_tests(ctx):
     pills = [t for t, s in zip((t for t, r in t3), s3) if s == 'label_ps_pill']
     expect(pills and all(p.endswith('MB') or p == 'Download' for p in pills) and m.props.get((m.sv, 'virtual_h')) == hh + 3 * O['PS_CELL_H'] + 20, f'the real cells: the download pills ({pills}) and the full cell height')
     PCP.click(m, 'btn_return')
-    expect(text(m, 'label_title') == 'Search' and len(level_rows(m)) >= 5, 'its Back returns to the search results')
+    expect(at_search(m) and len(level_rows(m)) >= 5, 'its Back returns to the search results')
     PCP.click(m, 'btn_return')
-    expect(text(m, 'label_title') == 'Podcasts', 'and the next Back to the Shows level')
+    expect(PCP.title_text(m) == 'Podcasts', 'and the next Back to the Shows level')
     # already subscribed
     # a feed the card has already (a typed address, and a result): the real Show page of that show at once, nothing fetched, Back returns to the results
     site3 = site_for()
@@ -437,7 +453,7 @@ def preview_tests(ctx):
     lat = [t for (t, r), s in zip(*PCP.paint(m3, 0)[1:3]) if s in ('label_ps_latest', 'label_ps_latestw')]
     expect(not lat or lat[0].startswith('Latest Episode') and 'Subscribe' not in lat[0], f'its header pill is the normal Latest Episode pill, never Subscribe or Subscribed ({lat})')
     PCP.click(m3, 'btn_return')
-    expect(text(m3, 'label_title') == 'Search', 'Back returns to the search level')
+    expect(at_search(m3), 'Back returns to the search level')
     sub_feed = PCS.F['alpha']
     ans = json.dumps({'resultCount': 1, 'results': [{'collectionName': 'Alpha Result', 'artistName': 'A', 'feedUrl': sub_feed, 'artworkUrl100': ''}]}).encode()
     m6 = opened(site=site_for(**{SEARCH + 'alpha': {'body': ans}}))
@@ -450,7 +466,7 @@ def preview_tests(ctx):
     pl = [t for (t, r), s in zip(*PCP.paint(m6, d - 60)[1:3]) if s in ('label_ps_pill',)]
     expect(flags(m6, 'btn_more') == (1, 1), f'with the "..." (and the cells\' pills {pl})')
     PCP.click(m6, 'btn_return')
-    expect(text(m6, 'label_title') == 'Search' and len(level_rows(m6)) == 1, 'Back: the results')
+    expect(at_search(m6) and len(level_rows(m6)) == 1, 'Back: the results')
     # an Apple link that turns out to be a show already: after the lookup, the real page too
     site7 = site_for(**{sub_feed: {'body': WSJ}, LOOKUP + '77': {'body': json.dumps({'resultCount': 1, 'results': [{'collectionName': 'Alpha', 'feedUrl': sub_feed}]}).encode()}})
     m7 = opened(site=site7)
@@ -460,7 +476,7 @@ def preview_tests(ctx):
     m4 = opened(site=site_for(**{first: {'rc': 22, 'code': 403}}))
     stage(m4, 'all in')
     PCP.tap(m4, 150, L['rows'][0] + 30); work(m4); tick(m4)
-    expect(toasts(m4) == ["Can't subscribe: Server error"] and text(m4, 'label_title') == 'Search' and len(level_rows(m4)) >= 5 and not [p for p in m4.fs if p.startswith(f'{RP}/') and 'Briefing' in p],
+    expect(toasts(m4) == ["Can't subscribe: Server error"] and at_search(m4) and len(level_rows(m4)) >= 5 and not [p for p in m4.fs if p.startswith(f'{RP}/') and 'Briefing' in p],
            f'a 403 on the first fetch: "Can\'t subscribe: Server error", the results stay, no folder ({toasts(m4)})')
     # a failed write at Subscribe makes nothing
     m5 = opened(site=site_for(**{first: {'body': WSJ}}))
@@ -533,7 +549,7 @@ def off_tests(ctx):
     enter(m); submit(m, F_WSJ); work(m)
     m.screen(False); m.calls = []
     m.call(PSYMS['pg_tick'], a0=0, count=40000000)
-    expect(text(m, 'label_title') == 'Search', 'a preview that came in the dark is not opened in the dark')
+    expect(at_search(m), 'a preview that came in the dark is not opened in the dark')
     tick(m)
     expect(text(m, 'label_title') == 'WSJ Minute Briefing', 'and is at the first lit tick')
 
@@ -551,6 +567,10 @@ def width_tests(ctx):
             w, tx = pod_show.subscribe_pill(font, tr(key))
             worst.append((w, loc, key))
             expect(w <= O['PS_LATEST_MAX'], f'{loc}: the {key} pill ({w} px) fits PS_LATEST_MAX')
+        w = font.width(tr('Apple Podcasts'), 20)
+        expect(w <= 200, f'{loc}: the keyboard page\'s title "Apple Podcasts" ({w} px of the 200 px title, 20 px) fits')
+        w = font.width(tr('Search Apple Podcasts'), 18)
+        expect(w + 4 <= O['PQ_TEXT_W'], f'{loc}: the field\'s hint "{tr("Search Apple Podcasts")}" ({w} px + the label\'s 2 px margins) fits the {O["PQ_TEXT_W"]} px text room')
         for key in ('Searching…', 'No results', 'Loading…', 'Not available'):
             w = font.width(tr(key), 18)
             expect(w <= 280, f'{loc}: "{tr(key)}" fits the status line ({w} px of 280)')

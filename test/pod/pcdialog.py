@@ -99,7 +99,7 @@ def run(ctx):
         m.calls = []
         r = dlg_tick(m)
         expect(r == 0 and flags(m, 'pod_pd_card') == (0, 0) and flags(m, 'pod_pd_scrim') == (0, 0) and toasts(m) == [line], f'{label}: closes (hidden and insensitive), one line: "{line}" ({toasts(m)})')
-    expect("Can't connect" in [t for t, _ in PCP.drawn(m, 0, style='label_ps_gsub')], 'the shows\' captions keep their per-feed errors (the dialog only summarises)')
+    expect("Can't connect" in [t for t, _ in PCP.drawn(m, 120, style='label_ps_gsub')], 'the shows\' captions keep their per-feed errors (the dialog only summarises)')
 
     # 3. Import opens it too
     sub_txt = f'{RP}/subscriptions.txt'

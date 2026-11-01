@@ -35,7 +35,7 @@ class PM(ListMachine):
     mtime, stdio over those bytes, the player (status, position, seek, speed), and a deque that copies the records it is given as the stock one does."""
     def __init__(self):
         super().__init__()
-        self.mtime, self.dh, self.fp = {}, {}, {}
+        self.mtime, self.dh, self.fp, self.sizes = {}, {}, {}, {}   # sizes: a file's st_size when it is not its bytes' length (a gigabyte episode)
         self.status = 2          # mclGetPlayStatus: 2 playing, 3 paused
         self.pt = (0, 0, 1)      # get_playtimeandlength: position, length, result
         self.seeks, self.speeds = [], []
@@ -70,7 +70,7 @@ class PM(ListMachine):
             path = self.read_cstr(a1)
             if ('__xstat', path) in self.fail or not (path in self.fs or path in self.dirs or path in self.files): ret = 0xffffffff
             else:
-                self.u.mem_write(a2, bytes(144)); self.setword(a2 + 0x40, self.mtime.get(path, 0)); self.setword(a2 + 0x30, len(self.fs.get(path, b''))); ret = 0
+                self.u.mem_write(a2, bytes(144)); self.setword(a2 + 0x40, self.mtime.get(path, 0)); self.setword(a2 + 0x30, self.sizes.get(path, len(self.fs.get(path, b'')))); ret = 0
             self.calls.append(('__xstat', a0, path))
         elif name == 'memmove':
             self.u.mem_write(a0, bytes(self.u.mem_read(a1, a2))); ret = a0
@@ -611,7 +611,7 @@ def cover_tests(ctx):
 # ---- the page
 SHEET_ROWS = [r[0] for r in pod_ui.PS_SHEET_ROWS]
 PG_WIDGETS = (['podcasts_listview', 'view_grid', 'label_status', 'label_title', 'img_nb_fade', 'label_row_title', 'label_row_sub', 'pg_big', 'img_ah_tint',
-               'btn_return', 'btn_backtoplayer', 'btn_select', 'btn_more', 'btn_search', 'ps_field', 'ps_hint', 'ps_text', 'ps_clear', 'ps_mag', 'btn_selall', 'pg_bar', 'pg_del', 'pod_pd_scrim', 'pod_pd_card', 'pod_pd_title', 'pod_pd_name', 'pod_pd_track', 'pod_pd_fill', 'pod_pd_count', 'pod_pd_cancel',
+               'btn_return', 'btn_backtoplayer', 'btn_more', 'btn_globe', 'ps_field', 'ps_hint', 'ps_text', 'ps_clear', 'ps_mag', 'btn_selall', 'pg_bar', 'pg_del', 'pg_unsubp', 'pod_pd_scrim', 'pod_pd_card', 'pod_pd_title', 'pod_pd_name', 'pod_pd_track', 'pod_pd_fill', 'pod_pd_count', 'pod_pd_cancel',
                'pg_sh_scrim', 'pg_sh_card', 'pg_sh_speed_vl', 'pg_sh_refresh_vl'] + [n for n, *_ in pod_ui.PS_STYLES] + [f'pg_sh_{r}{s}' for r in SHEET_ROWS for s in ('', '_tx', '_hr')])
 T0 = 1700000000   # 2023-11-14 22:13:20 UTC
 DAY = 86400
@@ -628,10 +628,10 @@ def page_card(m):
     m.load_image = 0
 
 
-def atlas_image():
-    """The Show page's atlas (assets/icons/png/pc_atlas.png) as the image manager would give it: (w, h, RGBA bytes)."""
+def atlas_image(name='pc_atlas'):
+    """The Show page's atlas (assets/icons/png/pc_atlas.png), or another of its images, as the image manager would give it: (w, h, RGBA bytes)."""
     from PIL import Image
-    im = Image.open(os.path.join(mod_icons.PNG, 'pc_atlas.png')).convert('RGBA')
+    im = Image.open(os.path.join(mod_icons.PNG, name + '.png')).convert('RGBA')
     return im.width, im.height, im.tobytes()
 
 
@@ -651,6 +651,7 @@ def page_machine(card=page_card, cls=None):
     m.setword(m.widgets['label_title'] + 8, 156)
     m.clock = 5000
     m.images['pc_atlas'] = atlas_image()
+    m.images['pod_ic_subtile'] = atlas_image('pod_ic_subtile')
     return m
 
 
@@ -669,6 +670,11 @@ def paint(m, off=0):
     fn, ctx = m.bound[(m.view, O['EVT_AFTER_PAINT'])]
     m.call(fn, a0=ctx, a1=ev, count=400000000)
     return list(m.blits), list(m.texts), list(m.text_styles), list(m.fills)
+
+
+def paint_bottom(m):
+    """A frame scrolled to the bottom of the Shows level, where the Library rows are (the page's 400 px view)."""
+    return paint(m, max(0, m.props.get((m.sv, 'virtual_h'), 0) - 400))
 
 
 def drawn(m, off=0, style=None):
@@ -695,12 +701,19 @@ def show_at(m, title):
     raise AssertionError(f'no show {title!r} on the Shows level')
 
 
+def lib_row_at(m, name):
+    """(content y of the middle, offset) of the Shows level's Library row called name: the rows close the page, so the frames are scrolled 100 px apart until its title is drawn (a text is drawn only wholly in view)."""
+    for off in range(0, 6000, 100):
+        for (t, r), s in zip(*paint(m, off)[1:3]):
+            if s == 'label_row_title' and t.startswith(name):
+                return r[1] + r[3] // 2 + off, off
+    raise AssertionError(f'no {name} row on the Shows level')
+
+
 def tap_downloads(m, **kw):
-    """A tap on the Shows level's Downloads row (found by its title in the frame)."""
-    for (t, r), s in zip(*paint(m, 0)[1:3]):
-        if s == 'label_row_title' and t.startswith('Downloads'):
-            return tap(m, 150, r[1] + r[3] // 2, **kw)
-    raise AssertionError('no Downloads row on the Shows level')
+    """A tap on the Shows level's Downloads row (found by its title, scrolled into view)."""
+    y, off = lib_row_at(m, 'Downloads')
+    return tap(m, 150, y, off=off, **kw)
 
 
 def tap_line(m, **kw):
@@ -723,8 +736,9 @@ def click(m, name):
 
 
 def title_text(m):
-    """The text the navbar's title label holds now (set by widget_set_text_utf8; the hint's text comes with widget_set_tr_text)."""
-    t = m.wtext.get(m.widgets['label_title'])
+    """The page's title now: the navbar's title label while it shows (a Show page scrolled, select mode's "N Selected"), else the large heading (the Shows, Downloads and Subscriptions levels; the navbar has no title there), else the label's text (set by widget_set_text_utf8)."""
+    big, nav = m.widgets['pg_big'], m.widgets['label_title']
+    t = m.wtext.get(big) if m.props.get((big, 'visible'), 1) and not m.props.get((nav, 'visible'), 0) else m.wtext.get(nav)
     return t.encode('latin-1').decode('utf-8') if t is not None else None
 
 
@@ -797,9 +811,9 @@ def open_tests(ctx):
     calls = list(m.calls)
     expect(('window_open', 'm1plus_podcasts') in calls and not [c for c in calls if c[0] in ('list_item_create', 'hscroll_label_create', 'image_create', 'image_base_set_image')],
            'the window opens; no widget is made per show or episode (the content view paints the rows)')
-    H2 = pod_show.shows_layout(2, False, 0, False)
-    expect(m.props.get((m.sv, 'virtual_h')) == H2['h'] == 270 and ('widget_resize', m.view, 320, H2['h']) in calls and m.props.get((m.sv, 'yoffset')) == 0,
-           f'the content is the large title, the grid of two shows (bravo, Alpha Show) and the air under it ({H2["h"]} px), at the top')
+    H2 = pod_show.shows_layout(2, False, 0)
+    expect(m.props.get((m.sv, 'virtual_h')) == H2['h'] == 392 and ('widget_resize', m.view, 320, H2['h']) in calls and m.props.get((m.sv, 'yoffset')) == 0,
+           f'the content is the large title, the Shows header, the grid of two shows (bravo, Alpha Show), then the Downloads Library row (no feed: no Subscriptions row) and the air under it ({H2["h"]} px), at the top')
     expect(title_text(m) == 'Podcasts' and m.props.get((m.widgets['label_status'], 'visible'), 1) == 0 and m.props.get((m.widgets['label_title'], 'visible')) == 0
            and m.props.get((m.widgets['pg_big'], 'visible'), 1) == 1, 'the large title shows, the navbar\'s small one is hidden at rest; the empty-state line is hidden')
     for ev in ('EVT_AFTER_PAINT', 'EVT_POINTER_DOWN', 'EVT_POINTER_UP', 'EVT_POINTER_ABORT'):
@@ -814,12 +828,14 @@ def open_tests(ctx):
     bl, texts, styles, fills = paint(m)
     cells = [pod_show.grid_cell(i, H2['y_grid']) for i in range(2)]
     want = [(t, (cx, ty, O['GRID_COVER'], O['GRID_TITLE_H']), 'label_ps_gtitle') for t, (cx, cy, ty, sy) in zip(('bravo', 'Alpha Show'), cells)] + \
-           [(t, (cx, sy, O['GRID_COVER'], O['GRID_SUB_H']), 'label_ps_gsub') for t, (cx, cy, ty, sy) in zip(('3 episodes', '2 episodes'), cells)]
+           [(t, (cx, sy, O['GRID_COVER'], O['GRID_SUB_H']), 'label_ps_gsub') for t, (cx, cy, ty, sy) in zip(('Local · 3 episodes', 'Local · 2 episodes'), cells)] + \
+           [('Downloads', (O['PP_DL_TEXT_X'], H2['y_dl'] + O['LIST_TITLE_Y'], O['PP_DL_TEXT_W'], O['LIST_TITLE_H']), 'label_row_title'), ('5 episodes', (O['PP_DL_TEXT_X'], H2['y_dl'] + O['LIST_SUB_Y'], O['PP_DL_TEXT_W'], O['LIST_SUB_H']), 'label_row_sub'),
+            ('Shows', (O['PP_SHOWS_X'], H2['y_shows'], 320 - 2 * O['PP_SHOWS_X'], O['PP_HEAD_H']), 'label_ps_sech')]
     expect(sorted((t, r, s) for (t, r), s in zip(texts, styles)) == sorted(want),
-           f'a show: its name (18 px) and "N episodes" (15 px grey, no feed: its files) in the Albums grid\'s places, the most recently updated first: {[(t, r, s) for (t, r), s in zip(texts, styles)]}')
+           f'a show: its name (18 px) and "N episodes" (15 px grey; no feed: the marker) in the Albums grid\'s places, the most recently updated first: {[(t, r, s) for (t, r), s in zip(texts, styles)]}')
     covers = [b for b in bl if tuple(b[2][2:]) == (O['GRID_COVER'], O['GRID_COVER'])]
     expect([tuple(b[2]) for b in covers] == [(cx, cy, O['GRID_COVER'], O['GRID_COVER']) for cx, cy, ty, sy in cells], 'a 144 px cover (the placeholder at first) at the grid\'s place in each cell')
-    expect(not [f for f in fills if f[0] == O['LIST_HAIR']] and not [b for b in bl if tuple(b[2][2:]) == (O['LIST_ART'], O['LIST_ART'])], 'no list row: no hairline, no 52 px cover')
+    expect(not [f for f in fills if f[0] == O['LIST_HAIR'] and f[1] != O['PP_DL_TEXT_X']] and not [b for b in bl if tuple(b[2][2:]) == (O['LIST_ART'], O['LIST_ART'])], 'no list row: no full-width hairline, no 52 px cover (the Library row has its own hairline from its text)')
     # the covers: one a tick, the nearest to the top first; a cover only when its header is small
     placeholder = covers[0][0]
     n = 0
@@ -845,7 +861,7 @@ def open_tests(ctx):
     m3.call(PSYMS['podcasts_open'], count=40000000)
     st = m3.widgets['label_status']
     expect(('widget_set_tr_text', st, EMPTY_HINT) in m3.calls and m3.props.get((st, 'visible')) == 1 and m3.props.get((m3.view, 'visible')) == 0
-           and ('label_set_line_wrap', st, 1) in m3.calls and m3.props.get((m3.widgets['label_title'], 'visible')) == 1, 'no Podcasts folder: the hint shows, the list (and the large title) is hidden, the navbar has the title')
+           and ('label_set_line_wrap', st, 1) in m3.calls and m3.props.get((m3.widgets['label_title'], 'visible')) == 0, 'no Podcasts folder: the hint shows, the list (and the large title) is hidden, the navbar has no title')
     m4 = page_machine(lambda mm: mm.folder(ROOT))
     m4.call(PSYMS['podcasts_open'], count=40000000)
     expect(m4.props.get((m4.widgets['label_status'], 'visible')) == 1, 'an empty Podcasts folder: the same hint')
@@ -862,7 +878,7 @@ def open_tests(ctx):
     # a lot of shows
     m8 = page_machine(lambda mm: [mm.put(f'{ROOT}/S{i:02}/a.mp3') for i in range(45)])
     m8.call(PSYMS['podcasts_open'], count=200000000)
-    expect(m8.props.get((m8.sv, 'virtual_h')) == pod_show.shows_layout(40, False, 0, False)['h'], 'at most 40 shows are listed')
+    expect(m8.props.get((m8.sv, 'virtual_h')) == pod_show.shows_layout(40, False, 0)['h'], 'at most 40 shows are listed')
 
 
 def paint_calls(m): return m.calls
@@ -900,7 +916,7 @@ def level_tests(ctx):
     # Back goes up a level
     m.calls = []
     click(m, 'btn_return')
-    expect('navigator_back' not in m.names() and title_text(m) == 'Podcasts' and m.props.get((m.sv, 'virtual_h')) == pod_show.shows_layout(2, False, 1, False)['h'] and m.props.get((m.sv, 'yoffset')) == 30,
+    expect('navigator_back' not in m.names() and title_text(m) == 'Podcasts' and m.props.get((m.sv, 'virtual_h')) == pod_show.shows_layout(2, False, 1)['h'] and m.props.get((m.sv, 'yoffset')) == 30,
            'Back from the episodes: the shows again (with Continue Listening now: bravo\'s episode is partly played), the list where it was (30), the page stays')
     m.calls = []
     click(m, 'btn_return')
@@ -919,7 +935,7 @@ def level_tests(ctx):
     # a show with nothing downloaded
     m = opened(lambda mm: (page_card(mm), mm.put(f'{ROOT}/MetaOnly/.episodes', (EPS_HEAD + 'g=m1\tp=9\tf=m1.mp3\tt=Not yet\tu=https://e.example/m1\n').encode())))
     x, y, off = show_at(m, 'MetaOnly')
-    expect([t for t, _ in drawn(m, off, style='label_ps_gsub')][-1:] == ['0 episodes'] and m.props.get((m.sv, 'virtual_h')) == pod_show.shows_layout(3, False, 0, False)['h'],
+    expect([t for t, _ in drawn(m, off, style='label_ps_gsub')][-1:] == ['Local · 0 episodes'] and m.props.get((m.sv, 'virtual_h')) == pod_show.shows_layout(3, False, 0)['h'],
            'a show with metadata and no file is on the Shows level too (no Feeds level: every show is here)')
     tap(m, x, y, off=off)
     expect(title_text(m) == 'MetaOnly' and all_cells(m)[0]['pill'] == 'Download', 'and it opens: its episode that is not on the card is a download cell')
@@ -932,7 +948,7 @@ def touch_tests(ctx):
     expect = ctx.expect
     m = opened()
     h2 = pc_hash(f'{ROOT}/bravo/b2.mp3')
-    H2 = pod_show.shows_layout(2, False, 0, False)
+    H2 = pod_show.shows_layout(2, False, 0)
     gx, gy = pod_show.grid_cell(0, H2['y_grid'])[:2]
     opens = lambda mm: mm.props.get((mm.sv, 'virtual_h')) != H2['h']   # (a Show page has another height)
     for what, x, y, dy in (('a drag past the threshold', gx + 10, gy + 10, 14), ('the air below the last row', gx + 10, H2['h'] - 5, 0), ('the gap between two covers', gx + O['GRID_COVER'] + 3, gy + 10, 0),
@@ -959,8 +975,8 @@ def touch_tests(ctx):
     expect((field(r, O['REC_NAME']), field(r, O['REC_TITLE']), field(r, O['REC_ALBUM']), field(r, O['REC_ARTIST'])) == ('b2.mp3', 'Bravo 2', 'bravo', 'bravo')
            and m.word(r + O['REC_TYPE']) == 8 and m.word(r + O['REC_CLASS']) == 1, 'a record: the file name, the title, the show as album and artist, a song (type 8), class 1')
     expect(m.word(pod.DATA['G_CLASS_TYPE'][0]) == 1, 'the browsing class is 1 (folder play)')
-    m.mode = O['MODE_SHUFFLE']; m.calls = []; body(m, 0)
-    expect(m.mode == O['MODE_ORDER'] and ('mclSetPlayMode', O['MODE_ORDER']) in m.calls, 'a tap on a cell\'s body plays it too, in order: a shuffle mode is turned off')
+    m.mode = O['MODE_SHUFFLE']; m.calls = []; act(m, 0)
+    expect(m.mode == O['MODE_ORDER'] and ('mclSetPlayMode', O['MODE_ORDER']) in m.calls, 'a tap on a cell\'s pill plays it in order: a shuffle mode is turned off')
     expect(('deque_destroy',) in m.calls and not [c for c in m.calls if c[0] == 'loadSongList'], 'the queue is the page\'s own: no stock list query is made, the page frees its copy')
     # a played episode starts again; a missing file does not start
     m.call(PSYMS['pc_mark'], a0=h2, a1=1, count=30000000)
@@ -975,7 +991,8 @@ def touch_tests(ctx):
     # a tap on the left edge of a cell is the cell (no dot column)
     m.calls = []; tap(m, 4, cell_y(m, 0) + 12)
     h3 = pc_hash(f'{ROOT}/bravo/b3.mp3')
-    expect([c for c in m.calls if c[0] == 'navigator_to_with_context' and c[1] == 'playing_page'] and m.state(h3)[0] != 2, 'a tap at the left edge of a cell plays it and marks nothing')
+    expect(not [c for c in m.calls if c[0] == 'navigator_to_with_context'] and m.state(h3)[0] != 2 and [t for (t, r), s in zip(*paint(m, 0)[1:3]) if s == 'label_ps_head'], 'a tap at the left edge of a cell opens its episode page and marks nothing (the body no longer plays: the pill does)')
+    click(m, 'btn_return')
     m.call(PSYMS['pc_mark'], a0=h3, a1=0, count=3000000)
     m.calls = []; tap(m, 200, 30)
     expect(not [c for c in m.calls if c[0] == 'navigator_to_with_context'], 'a tap on the header\'s cover or name does nothing')
@@ -1026,7 +1043,7 @@ def lifecycle_tests(ctx):
     m = opened()
     m.put(f'{ROOT}/Zeta/z1.mp3', b'', T0)
     tap_show(m, 'bravo'); click(m, 'btn_return')
-    expect(m.props.get((m.sv, 'virtual_h')) == pod_show.shows_layout(3, False, 0, False)['h'], 'Back to the shows reads the card again (a show that came meanwhile is there)')
+    expect(m.props.get((m.sv, 'virtual_h')) == pod_show.shows_layout(3, False, 0)['h'], 'Back to the shows reads the card again (a show that came meanwhile is there)')
 
 
 def asset_tests(ctx):
@@ -1045,8 +1062,8 @@ def asset_tests(ctx):
         w = tree.find(name)
         expect(w is not None and w.get('visible') == 'false' and w.get('sensitive') == 'false', f'{name} starts hidden and insensitive')
     nav = tree.find('navigationbar_view')
-    expect([c.name for c in nav.children] == ['label_title', 'btn_return', 'btn_backtoplayer', 'btn_select', 'btn_more', 'btn_search', 'btn_selall'] and tree.find('label_title').get('tr_text') == 'Podcasts',
-           'the navbar: title, Back, Now Playing, the hidden Select button (Downloads), "..." (the Show level, and the Shows level when Import is possible) on the same slot, the hidden Search button (Podcast Search) and Select All: no Feeds button')
+    expect([c.name for c in nav.children] == ['label_title', 'btn_return', 'btn_backtoplayer', 'btn_more', 'btn_globe', 'btn_selall'] and tree.find('label_title').get('tr_text') == 'Podcasts',
+           'the navbar: title, Back, Now Playing, "..." (the Show level, and the Shows level when Import is possible) on the same slot, the hidden Globe button (Apple Podcasts search, while Podcast Search is on) and Select All: no Feeds button')
     mb, npb = tree.find('btn_more'), tree.find('btn_backtoplayer')
     expect(mb.x == pod_ui.NAV_VIEW_X and mb.get('style:normal:icon') == 'pod_nav_more' and npb.get('style:normal:icon') == 'ah_nav_np' and tree.find('label_title').x + tree.find('label_title').w <= mb.x,
            'the "..." is the left cap of the capsule that ends in Now Playing; the title stops at its left edge')

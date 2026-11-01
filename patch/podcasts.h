@@ -52,6 +52,11 @@ int pc_root(char *out);
 int pc_scan_shows(pc_show_t *out, int max);
 /* The episodes of a show, newest first (publication date, then file name, descending), PC_LOCAL / PC_PART / PC_REMOTE together; at most max. Returns the count. */
 int pc_load_show(const pc_show_t *show, pc_ep_t *out, int max);
+/* One file of a show folder: its modification time and its size in KB; 1 when it exists. */
+int pc_stat(const char *root, const char *dir, const char *file, unsigned *mtime, unsigned *kb);
+/* The audio files and .part files of a show folder, one callback each (name, size in KB, 1 for a .part); the count. No .episodes is read (the Shows page's totals). */
+int pc_walk(const char *root, const char *dir, void (*cb)(void *ctx, const char *name, unsigned kb, int part),
+            void *ctx);
 /* The text formats (docs/modules/podcasts.md "Files"): the .episodes buffer into out (a header line, then one line per episode, tab separated key=value fields); the .show buffer into show.
  * Both return the number of records (pc_parse_show: 1 when the header is right). */
 int pc_parse_eps(const char *buf, unsigned n, pc_ep_t *out, int max);
@@ -61,6 +66,9 @@ void pc_when(
     unsigned
         size); /* an episode's date, Apple Podcasts style, in the language (docs/modules/podcasts.md "The date"); now: seconds since 1970 */
 unsigned pc_hash(const char *s); /* FNV-1a over the ASCII-lower-cased bytes, never 0 */
+unsigned pc_guid_hash(
+    const char *s,
+    unsigned n); /* the hash an .episodes line's g= gets (pc_ep_t.guid): FNV-1a over the n bytes as they are, never 0 */
 int pc_is_path(const char *path); /* the path is a file in a show folder under the Podcasts folder (case-insensitive) */
 void pc_fmt(char *out, unsigned size, const char *fmt, unsigned n);
 void pc_fmt2(char *out, unsigned size, const char *fmt, unsigned a, unsigned b);

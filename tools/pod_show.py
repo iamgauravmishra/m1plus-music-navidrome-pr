@@ -95,24 +95,43 @@ def font_path(work):
 # ---------------------------------------------------------------------------
 # The Shows page (round 2; patch/podcasts.c pg_home_layout, pg_paint_home): the blocks' tops and the cells' boxes, content y from the list's top.
 
-def shows_layout(n_shows, has_line, n_cont, has_dl):
-    """The Shows level's layout: where each block starts (0 when it is not there), the grid's top and the content's height."""
+def shows_layout(n_shows, has_line, n_cont):
+    """The Shows level's layout: where each block starts (0 when it is not there), the grid's top and the content's height. The Library rows close the page, PP_LIB_GAP under the grid: Downloads always, Subscriptions while a show has a feed
+    (has_line: the refresh line shows under the same condition)."""
     o = O
-    L = dict(y_line=o['PP_LINE_Y'] if has_line else 0, y_shelf=0, y_dl=0, y_shows=0)
+    L = dict(y_line=o['PP_LINE_Y'] if has_line else 0, y_shelf=0, y_sub=0)
     y = o['PP_LINE_Y'] + (o['PP_LINE_PITCH'] if has_line else o['PP_NOLINE_PITCH'])
     if n_cont:
         L['y_shelf'] = y
-        y += o['PP_HEAD_PITCH'] + o['PP_SHELF_PITCH_Y']
-    if has_dl:
-        L['y_dl'] = y
-        y += o['PC_ROW_H']
-    if n_cont or has_dl:
-        y += o['PP_SEC_GAP']
-        L['y_shows'] = y
-        y += o['PP_HEAD_PITCH']
+        y += o['PP_HEAD_PITCH'] + o['PP_SHELF_PITCH_Y'] + o['PP_SEC_GAP']
+    L['y_shows'] = y
+    y += o['PP_HEAD_PITCH']
     L['y_grid'] = y
-    L['h'] = y + (n_shows + o['GRID_COLS'] - 1) // o['GRID_COLS'] * grid_pitch() + o['PP_BOTTOM']
+    y += (n_shows + o['GRID_COLS'] - 1) // o['GRID_COLS'] * grid_pitch()
+    L['y_dl'] = y + (o['PP_LIB_GAP'] if n_shows else 0)
+    y = L['y_dl'] + o['PC_ROW_H']
+    if has_line:
+        L['y_sub'] = y
+        y += o['PC_ROW_H']
+    L['h'] = y + o['PP_BOTTOM']
     return L
+
+
+def downloads_layout(n_ip, n_dl, select=False):
+    """The Downloads page's layout (patch/podcasts.c pg_dy, pg_dhead, pg_dh): the storage line, the In Progress header and rows, PP_SEC_GAP, the Downloaded header and rows, content y from the list's top; the headers' tops
+    (None for a section with no row), each row's top (In Progress then Downloaded) and the content's height (the select bar's room too)."""
+    o = O
+    y, rows, y_ip, y_dh = o['PDL_LINE_PITCH'], [], None, None
+    if n_ip:
+        y_ip = y
+        y += o['PP_HEAD_PITCH']
+        rows += [y + i * o['PC_ROW_H'] for i in range(n_ip)]
+        y += n_ip * o['PC_ROW_H'] + o['PP_SEC_GAP']
+    if n_dl:
+        y_dh = y
+        y += o['PP_HEAD_PITCH']
+        rows += [y + i * o['PC_ROW_H'] for i in range(n_dl)]
+    return dict(y_line=o['PDL_LINE_Y'], y_ip=y_ip, y_dh=y_dh, rows=rows, h=(rows[-1] + o['PC_ROW_H'] + o['PP_BOTTOM'] if rows else o['PDL_LINE_PITCH']) + (o['SG_BAR_H'] if select and rows else 0))
 
 
 def grid_pitch():
@@ -148,8 +167,9 @@ def shelf_item(i, y_shelf):
 def search_layout(n):
     """The search level of the Podcasts page (docs/modules/podcasts.md "Search") with n result rows: the field's rectangle, where the rows start, each row's top, the content's height."""
     o = O
-    return dict(field=(o['PQ_FIELD_X'], o['PQ_FIELD_Y'], o['PQ_FIELD_W'], o['PQ_FIELD_H']), top=o['PQ_TOP'], rows=[o['PQ_TOP'] + i * o['PC_ROW_H'] for i in range(n)],
-                h=o['PQ_TOP'] + n * o['PC_ROW_H'] + (o['PQ_BOTTOM'] if n else 0), hint_y=o['PQ_TOP'] + o['PQ_HINT_Y'])
+    top = o['PQ_TOP']
+    return dict(field=(o['PQ_FIELD_X'], o['PQ_FIELD_Y'], o['PQ_FIELD_W'], o['PQ_FIELD_H']), top=top,
+                rows=[top + i * o['PC_ROW_H'] for i in range(n)], h=top + n * o['PC_ROW_H'] + (o['PQ_BOTTOM'] if n else 0), hint_y=top + o['PQ_HINT_Y'])
 
 
 def subscribe_pill(font, text):
@@ -158,3 +178,56 @@ def subscribe_pill(font, text):
     tw = font.width(text, PX['label_ps_latest'])
     w = max(o['PS_LATEST_PADL'] + tw + o['PS_LATEST_PADR'], o['PQ_SUB_MIN'])
     return w, (w - tw) // 2
+
+
+# ---------------------------------------------------------------------------
+# The episode page (patch/pcdetail.c, docs/modules/podcasts.md "The episode page"): the PD_* numbers of patch/pcdetail.h and the layout of pd_make in Python.
+
+def _pd_numbers():
+    import re
+    text = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'patch', 'pcdetail.h')).read()
+    return {k: int(v) for k, v in re.findall(r'#define (PD_\w+) (\d+)', text)}
+
+
+PD = _pd_numbers()
+
+
+def detail_date(when, length, mb='%d MB'):
+    """The date line (pd_date): "Oct 28 · 48 MB", English words; the size is left out when it is unknown, the date when there is none."""
+    size = mb % ((length + 1048575) >> 20) if length else ''
+    return ' · '.join(x for x in (when, size) if x)
+
+
+def detail_layout(font, title, show, desc, hint='No description', has_pill=True):
+    """The episode page's layout (pd_make): the date line's top, the title's lines, the show row's top and the show's name cut to its room, the pill row's top and each description line as (text, y); h is the
+    content's height. desc: paragraphs separated by newlines ('' shows the hint, in the grey line's style)."""
+    p = PD
+    L = {}
+    y = p['PD_TOP']
+    L['y_date'] = y
+    y += p['PD_DATE_H'] + p['PD_GAP_DATE']
+    L['y_title'] = y
+    L['title'] = lines(font, title, 'label_ps_head', p['PD_W'], p['PD_TITLE_LINES'])
+    y += len(L['title']) * p['PD_TITLE_PITCH'] + p['PD_GAP_TITLE']
+    L['y_show'] = y
+    got = lines(font, show, 'label_ps_meta', p['PD_SHOW_TEXT_W'], 1)
+    L['show'] = got[0] if got else ''
+    y += p['PD_SHOW_H'] + p['PD_GAP_SHOW']
+    L['y_pill'] = 0
+    if has_pill:
+        L['y_pill'] = y
+        y += p['PD_PILL_ROW'] + p['PD_GAP_PILL']
+    L['y_desc'] = y
+    style = 'label_ps_sec' if desc else 'label_ps_meta'
+    L['hint'] = not desc
+    out, para, n = [], False, 0
+    for par in (desc or hint).split('\n'):
+        if not par or n >= p['PD_LINES']: continue
+        ls = lines(font, par, style, p['PD_W'], p['PD_LINES'] - n)
+        if para: y += p['PD_PGAP']
+        for t in ls:
+            out.append((t, y)); y += p['PD_PITCH']
+        n += len(ls); para = True
+    L['desc'] = out
+    L['h'] = y + p['PD_BOTTOM']
+    return L

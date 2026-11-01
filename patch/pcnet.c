@@ -16,14 +16,19 @@
 #include "podcasts.h"
 #include "pcfeed.h"
 #include "pcjson.h"
+#include "pcopml.h"
 #include "pcnet.h"
 #include "pccover.h"
+#include "pcnotes.h"
 #include "curlopts.h"
 
 #define PN_PATH 400
 #define PN_SHOW_MAX 4096 /* bytes of a show file read */
 #define PN_URLS_MAX 16384 /* bytes of subscriptions.txt read */
 #define PN_EPS_MAX 65536 /* bytes of .episodes read and written (the model reads at most this much) */
+#define PN_CARD "/mnt/mmc" /* the card: its root is searched for *.opml */
+#define PN_DNAME 11 /* struct dirent (32-bit, MIPS o32): d_name at 11 (pcmodel.c PM_DNAME) */
+#define PN_OPML_MAX 8 /* OPML files read by one import */
 
 struct pn_job {
     char root[PC_FILE + 20];
@@ -403,6 +408,14 @@ static void pn_cover(const char *dir, const char *url) {
     if (ok) pn_bump();
 }
 
+/* The show's .notes (the kept items' long descriptions, docs/modules/podcasts.md "The notes file"), written before .episodes so that a new .episodes has its notes; a failure is not the refresh's (the page falls back to x=). */
+static void pn_notes(const char *dir, const pf_parser_t *p) {
+    char file[PN_PATH], tmp[PN_PATH];
+    if (pn_join(file, sizeof file, dir, ".notes", (const char *)0) &&
+        pn_join(tmp, sizeof tmp, dir, ".notes.tmp", (const char *)0))
+        pno_save(file, tmp, (const struct pf_parser *)p);
+}
+
 /* ---------------------------------------------------------------------------
  * One show
  */
@@ -448,6 +461,7 @@ static void pn_refresh_one(const struct pn_job *j, const char *dir) {
             old = pn_slurp(file, PN_EPS_MAX, &oldn);
             n = pf_render_episodes(p, path, old, oldn, eps, PN_EPS_MAX, &fresh);
             first = s.checked == 0;
+            pn_notes(path, p);
             pn_join(tmp, sizeof tmp, path, ".episodes.tmp", (const char *)0);
             if (!pn_save(file, tmp, eps, n))
                 code = PN_STORAGE;
@@ -596,7 +610,7 @@ static int pn_next_slot(void) {
 }
 
 /* KB free for a non-root user on the file system of path (MIPS o32 statfs: f_bsize is word 1, f_bavail word 7); 0 when statfs fails. */
-static int pn_free_kb(const char *path, unsigned *kb) {
+int pn_free_kb(const char *path, unsigned *kb) {
     unsigned fs[32];
     unsigned long long b;
     memset(fs, 0, sizeof fs);
@@ -1342,6 +1356,7 @@ int pn_subscribe(const char *root, const pc_show_t *shows, int nshows, char *dir
         !pn_join(tmp, sizeof tmp, path, ".episodes.tmp", (const char *)0))
         goto done;
     n = pf_render_episodes(p, path, (const char *)0, 0, eps, PN_EPS_MAX, &fresh);
+    pn_notes(path, p);
     if (!pn_save(file, tmp, eps, n)) goto done;
     pn_join(file, sizeof file, path, ".show", (const char *)0);
     pn_join(tmp, sizeof tmp, path, ".show.tmp", (const char *)0);
@@ -1355,7 +1370,8 @@ done:
     free(eps);
     if (!ok) {
         if (made) { /* nothing is left behind */
-            const char *own[] = {".episodes", ".episodes.tmp", ".show", ".show.tmp", "cover.jpg"};
+            const char *own[] = {".episodes", ".episodes.tmp", ".show",    ".show.tmp",
+                                 ".notes",    ".notes.tmp",    "cover.jpg"};
             unsigned i;
             for (i = 0; i < sizeof own / sizeof *own; ++i)
                 if (pn_join(file, sizeof file, path, own[i], (const char *)0)) unlink(file);
@@ -1398,21 +1414,50 @@ static void pn_folder(const char *url, char *out, unsigned size, char *host, uns
     out[o] = 0;
 }
 
-int pn_import(const char *root, const pc_show_t *shows, int nshows) {
-    char path[PN_PATH], *buf, *p, *stop;
-    unsigned n;
-    int added = 0, i, subs = nshows;
+/* The addresses an import has taken so far (this call), and the room: one source after another shares them. */
+struct pn_imp {
+    const char *root;
+    const pc_show_t *shows;
+    int nshows, subs, added, nseen;
     unsigned seen[PC_MAX_SHOWS];
-    int nseen = 0;
-    if (!pn_join(path, sizeof path, root, PN_IMPORT_FILE, (const char *)0)) return -1;
-    buf = pn_slurp(path, PN_URLS_MAX, &n);
-    if (!buf) return -1;
-    stop = buf + n;
-    for (p = buf; p < stop && subs < PC_MAX_SHOWS;) {
+};
+
+enum { PN_SUB_SKIP = 0, PN_SUB_ADDED = 1, PN_SUB_FULL = 2 };
+
+/* One feed address (checked: http(s), shorter than PC_URL, no byte under 33; line is NUL terminated) as a subscription: the folder <host>-<hash8> with a .show (title: the name when there is one, else the host;
+ * checked=0). A feed already subscribed or taken in this import is SKIP, as is a folder of that name that is already a subscription and a write that fails; with 40 shows PN_SUB_FULL. */
+static int pn_sub_one(struct pn_imp *im, char *line, const char *name) {
+    char dir[PC_FILE], host[PC_FILE], show[PN_PATH], file[PN_PATH], tmp[PN_PATH], text[PC_URL + PC_TITLE + 160];
+    unsigned hash, n;
+    int i, dup = 0;
+    for (i = 0; i < im->nshows; ++i)
+        if (pn_eq(im->shows[i].feed, line)) dup = 1;
+    hash = pc_hash(line);
+    for (i = 0; i < im->nseen; ++i)
+        if (im->seen[i] == hash) dup = 1;
+    if (dup) return PN_SUB_SKIP;
+    if (im->subs >= PC_MAX_SHOWS) return PN_SUB_FULL;
+    pn_folder(line, dir, sizeof dir, host, sizeof host);
+    if (!pn_join(show, sizeof show, im->root, dir, (const char *)0)) return PN_SUB_SKIP;
+    mkdir(show, 0755);
+    if (!pn_join(file, sizeof file, show, ".show", (const char *)0) ||
+        !pn_join(tmp, sizeof tmp, show, ".show.tmp", (const char *)0))
+        return PN_SUB_SKIP;
+    if (!access(file, F_OK)) return PN_SUB_SKIP; /* a folder of this name is already a subscription */
+    n = pf_render_show(name && name[0] ? name : host, line, "", 0, "", "", "", text, sizeof text);
+    if (!pn_save(file, tmp, text, n)) return PN_SUB_SKIP;
+    im->seen[im->nseen++] = hash;
+    ++im->added, ++im->subs;
+    return PN_SUB_ADDED;
+}
+
+/* The lines of subscriptions.txt: one http(s) address each, # comments; over-long, spaced and duplicate lines are skipped. */
+static void pn_import_lines(struct pn_imp *im, char *buf, unsigned n) {
+    char *p, *stop = buf + n;
+    for (p = buf; p < stop;) {
         char *line = p, *e;
-        unsigned len, hash;
-        int dup = 0, ok = 1;
-        char dir[PC_FILE], host[PC_FILE], show[PN_PATH], file[PN_PATH], tmp[PN_PATH], text[PC_URL + 160];
+        unsigned len;
+        int i, ok = 1;
         while (p < stop && *p != '\n') ++p;
         e = p;
         if (p < stop) ++p;
@@ -1426,26 +1471,103 @@ int pn_import(const char *root, const pc_show_t *shows, int nshows) {
             if ((unsigned char)line[i] <= 32) ok = 0;
         if (!ok) continue;
         line[len] = 0;
-        for (i = 0; i < nshows; ++i)
-            if (pn_eq(shows[i].feed, line)) dup = 1;
-        hash = pc_hash(line);
-        for (i = 0; i < nseen; ++i)
-            if (seen[i] == hash) dup = 1;
-        if (dup) continue;
-        pn_folder(line, dir, sizeof dir, host, sizeof host);
-        if (!pn_join(show, sizeof show, root, dir, (const char *)0)) continue;
-        mkdir(show, 0755);
-        if (!pn_join(file, sizeof file, show, ".show", (const char *)0) ||
-            !pn_join(tmp, sizeof tmp, show, ".show.tmp", (const char *)0))
-            continue;
-        if (!access(file, F_OK)) continue; /* a folder of this name is already a subscription */
-        n = pf_render_show(host, line, "", 0, "", "", "", text, sizeof text);
-        if (!pn_save(file, tmp, text, n)) continue;
-        seen[nseen++] = hash;
-        ++added, ++subs;
+        if (pn_sub_one(im, line, (const char *)0) == PN_SUB_FULL) break;
     }
+}
+
+/* The OPML files an import reads, into paths (PN_PATH each, at most max): Podcasts/subscriptions.opml, then every *.opml in the card's root, a dot file excepted (macOS leaves ._name.opml beside
+ * each file it copies). Returns how many. */
+static int pn_opml_files(const char *root, char (*paths)[PN_PATH], int max) {
+    void *d;
+    char *ent;
+    int n = 0;
+    if (pn_join(paths[n], PN_PATH, root, PN_OPML_FILE, (const char *)0) && !access(paths[n], F_OK)) ++n;
+    d = opendir(PN_CARD);
+    while (d && n < max && (ent = readdir(d)) != (char *)0) {
+        const char *name = ent + PN_DNAME;
+        unsigned len = pn_len(name);
+        if (len > 5 && name[0] != '.' && !strcasecmp(name + len - 5, ".opml") &&
+            pn_join(paths[n], PN_PATH, PN_CARD, name, (const char *)0))
+            ++n;
+    }
+    if (d) closedir(d);
+    return n;
+}
+
+int pn_import_found(const char *root) {
+    char txt[PN_PATH], paths[PN_OPML_MAX][PN_PATH];
+    return (pn_join(txt, sizeof txt, root, PN_IMPORT_FILE, (const char *)0) && !access(txt, F_OK)) +
+           pn_opml_files(root, paths, PN_OPML_MAX);
+}
+
+/* One OPML file: its outlines with a feed address as subscriptions. Renamed to <name>.imported when it held at least one and every one of them was seen (a cap that stopped it leaves the file
+ * for a later import). Returns whether the file could be read. */
+static int pn_import_opml(struct pn_imp *im, const char *path) {
+    char *buf, to[PN_PATH];
+    unsigned n;
+    int items = 0, complete = 1;
+    po_t p;
+    po_item_t *it;
+    buf = pn_slurp(path, PO_FILE_MAX, &n);
+    if (!buf) return 0;
+    it = calloc(1, sizeof *it);
+    if (it) {
+        po_open(&p, buf, n);
+        while (po_next(&p, it)) {
+            ++items;
+            if (pn_sub_one(im, it->url, it->title) == PN_SUB_FULL) {
+                complete = 0;
+                break;
+            }
+        }
+        free(it);
+    } else
+        complete = 0;
     free(buf);
-    return added;
+    if (items && complete && pn_join(to, sizeof to, path, (const char *)0, (const char *)0) &&
+        pn_cat(to, sizeof to, ".imported"))
+        rename(path, to);
+    return 1;
+}
+
+int pn_import(const char *root, const pc_show_t *shows, int nshows) {
+    char path[PN_PATH], paths[PN_OPML_MAX][PN_PATH], *buf;
+    unsigned n;
+    int found = 0, i, nfiles;
+    struct pn_imp *im = calloc(1, sizeof *im);
+    if (!im) return -1;
+    im->root = root, im->shows = shows, im->nshows = im->subs = nshows;
+    if (pn_join(path, sizeof path, root, PN_IMPORT_FILE, (const char *)0) &&
+        (buf = pn_slurp(path, PN_URLS_MAX, &n)) != (char *)0) {
+        found = 1;
+        pn_import_lines(im, buf, n);
+        free(buf);
+    }
+    nfiles = pn_opml_files(root, paths, PN_OPML_MAX);
+    for (i = 0; i < nfiles; ++i) found |= pn_import_opml(im, paths[i]);
+    i = found ? im->added : -1;
+    free(im);
+    return i;
+}
+
+/* Export (the Subscriptions page's sheet): OPML 2.0 of every show with a feed, by title, into Podcasts/subscriptions-export.opml, atomically. *count is the number of shows written. 1 when written
+ * (an export of no show is written too), 0 when it was not (no memory, a card that cannot be written). */
+int pn_export(const char *root, const pc_show_t *shows, int nshows, int *count) {
+    char file[PN_PATH], tmp[PN_PATH], *text;
+    int order[PC_MAX_SHOWS], n = po_order(shows, nshows > PC_MAX_SHOWS ? PC_MAX_SHOWS : nshows, order), ok = 0;
+    unsigned len;
+    *count = 0;
+    text = calloc(PO_EXPORT_MAX, 1);
+    if (!text) return 0;
+    len = po_render(shows, order, n, text, PO_EXPORT_MAX);
+    if (len && pn_join(file, sizeof file, root, PN_EXPORT_FILE, (const char *)0) &&
+        pn_join(tmp, sizeof tmp, root, "." PN_EXPORT_FILE ".tmp", (const char *)0) && pod_card_mounted() &&
+        pn_save(file, tmp, text, len)) {
+        ok = 1;
+        *count = n;
+    }
+    free(text);
+    return ok;
 }
 
 /* Unsubscribe (the Show page's sheet, docs/modules/podcasts.md "The Show page"): the show's .show again without its feed address, the rest as it was (title, picture, author, category,
@@ -1458,4 +1580,33 @@ int pn_unsubscribe(const char *root, const pc_show_t *s) {
         return 0;
     n = pf_render_show(s->title, "", s->image, s->checked, s->author, s->category, s->desc, text, sizeof text);
     return pn_save(file, tmp, text, n);
+}
+
+/* Unsubscribe from a show without its page (the Subscriptions page's Unsubscribe, once for each marked show; the Show page's sheet does the same for the show open): pn_unsubscribe, then the .part files and the queued
+ * downloads of the show go; with no episode file left on the card the show's own files (.show, .episodes, cover.jpg) and its folder (rmdir: one with anything else in it is left) go too. No audio file is ever
+ * deleted, so the playing episode stays. 0: the .show could not be written (nothing else was touched); 1: the show stays on the card (episode files are left); 2: it is gone. */
+int pn_unsubscribe_show(const char *root, const pc_show_t *s) {
+    static const char *const own[] = {".show", ".episodes", "cover.jpg"};
+    char path[PN_PATH];
+    pc_ep_t *all;
+    int m, i, left = 0;
+    if (!pn_unsubscribe(root, s)) return 0;
+    all = calloc(PC_MAX_EPS, sizeof *all);
+    if (!all) return 1; /* (what is left is not known: everything stays) */
+    m = pc_load_show(s, all, PC_MAX_EPS);
+    for (i = 0; i < m; ++i) {
+        unsigned key;
+        if (!all[i].file[0]) continue;
+        key = pn_dl_key(s->dir, all[i].file);
+        pn_dl_cancel(key);
+        if (pn_join(path, sizeof path, root, s->dir, all[i].file) && pn_cat(path, sizeof path, ".part")) unlink(path);
+        pn_dl_clear(key);
+        left += all[i].state == PC_LOCAL;
+    }
+    free(all);
+    if (left) return 1;
+    for (i = 0; i < (int)(sizeof own / sizeof *own); ++i)
+        if (pn_join(path, sizeof path, root, s->dir, own[i])) unlink(path);
+    if (pn_join(path, sizeof path, root, s->dir, (const char *)0)) rmdir(path);
+    return 2;
 }

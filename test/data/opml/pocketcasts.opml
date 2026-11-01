@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+    <head>
+        <title>Pocket Casts Feeds</title>
+    </head>
+    <body>
+        <outline text="feeds">
+            <outline type="rss" text="Accidental Tech Podcast" xmlUrl="https://atp.fm/rss" title="Accidental Tech Podcast"/>
+            <outline type="rss" text="Search Engine" xmlUrl="https://feeds.megaphone.fm/search-engine" title="Search Engine"/>
+            <outline type="rss" text="Conan O&apos;Brien Needs a Friend" xmlUrl="https://feeds.simplecast.com/dHoohVNH" title="Conan O&apos;Brien Needs a Friend"/>
+            <outline type="rss" text="Lex Fridman Podcast" xmlUrl="https://lexfridman.com/feed/podcast/" title="Lex Fridman Podcast"/>
+            <outline type="rss" text="Darknet Diaries" xmlUrl="https://feeds.megaphone.fm/darknetdiaries" title="Darknet Diaries"/>
+            <outline type="rss" text="Rework" xmlUrl="https://feeds.simplecast.com/wgl4xEgL" title="Rework"/>
+            <outline type="rss" text="Podcast &quot;Quoted&quot; Name" xmlUrl="http://example.com/feed.rss?a=1&amp;b=2" title="Podcast &quot;Quoted&quot; Name"/>
+        </outline>
+    </body>
+</opml>

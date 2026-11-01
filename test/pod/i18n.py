@@ -6,11 +6,11 @@ import build, awtk_strings, awtk_style, pod_i18n, pod_keyboard
 from awtk_text import Ttf, StbText
 
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
-SAME_AS_ENGLISH = {'Cover Flow', 'Playlists', 'Playlist', 'Genres', 'Extras', 'Albums', 'Artists', '%s, %s'}   # translations that are the English word by design
-SAME_AS_ENGLISH |= {'Podcasts', '%d min', ', %d', 'Normal', 'Chrome', 'Metal'}    # Podcasts in French and German; the minute abbreviation in French, Spanish, Italian and Polish
-SAME_AS_ENGLISH |= {'Downloads', '%d MB'}    # German writes Downloads as English does
+SAME_AS_ENGLISH = {'Cover Flow', 'Playlists', 'Playlist', 'Genres', 'Extras', 'Albums', 'Artists', 'Local', '%s, %s'}   # translations that are the English word by design
+SAME_AS_ENGLISH |= {'Podcasts', ', %d', 'Normal', 'Chrome', 'Metal'}    # Podcasts in French and German
+SAME_AS_ENGLISH |= {'Downloads', '%d MB', '%d.%d GB', '%d GB'}    # German writes Downloads as English does
 SAME_AS_ENGLISH |= {'Genre', 'Screenshot', 'Collections'}    # French and German write Genre the same; German and Italian say Screenshot; French writes Collections the same
-SAME_AS_ENGLISH |= {'Wi-Fi', 'Wi-Fi MAC', 'Bluetooth', 'EQ', 'System', 'Display', 'Firmware', 'Model', 'Device'}    # brand and technical words (Wi-Fi, Bluetooth, EQ); System in German and Polish, Display in Italian
+SAME_AS_ENGLISH |= {'Apple Podcasts', 'Wi-Fi', 'Wi-Fi MAC', 'Bluetooth', 'EQ', 'System', 'Display', 'Firmware', 'Model', 'Device'}    # brand and technical words (Wi-Fi, Bluetooth, EQ); System in German and Polish, Display in Italian
 
 
 

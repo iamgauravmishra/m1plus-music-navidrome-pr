@@ -1061,11 +1061,11 @@
 #define PA_PLAYB_Y 112
 #define PA_PLAYB_PX 28
 /* The Podcasts Shows page (Apple Podcasts style; patch/podcasts.c, docs/modules/podcasts.md "The Shows page"; tools/pod_show.py shows_layout is the model the tests and tools/preview_podcasts_revamp.py use). Content y from the list's top
- * (window row PG_LIST_Y), x the window's. In order: the large title (a label, PP_TITLE_H high at x PP_TITLE_X, PP_TITLE_PX px; the navbar's small title shows from SG_COLLAPSE on), the refresh line (PP_LINE_H high at PP_LINE_Y, 15 px: "Updated
+ * (window row PG_LIST_Y), x the window's. In order: the large title (a label, PP_TITLE_H high at x PP_TITLE_X, PP_TITLE_PX px, shared by the Downloads and Subscriptions pages; it scrolls away with the content and the navbar shows no title), the refresh line (PP_LINE_H high at PP_LINE_Y, 15 px: "Updated
  * 1h ago · Refresh", only when a show has a feed; PP_LINE_PITCH to the next block, PP_NOLINE_PITCH when there is no line; its touch is PP_LINE_HIT high around the text's middle), Continue Listening (PP_HEAD_H header at x PP_HEAD_X, 20 px, then PP_HEAD_PITCH to the
  * covers: at most PP_SHELF_MAX PP_SHELF_ART px covers at x PP_SHELF_X + i * PP_SHELF_PITCH, the title (14 px, one line, PP_SHELF_W wide) PP_SHELF_TITLE_Y under the cover's top and the "35m left" (13 px) at PP_SHELF_LEFT_Y; PP_SHELF_PITCH_Y the block's height; each cover has the atlas' PA_PLAYB_PX play disc PP_SHELF_PLAY_INSET from its right and bottom edges),
- * the Downloads row (PC_ROW_H high: the PA_TILE_PX tile (the atlas') at x PP_DL_TILE_X, PP_DL_TILE_Y down, the texts from PP_DL_TEXT_X, PP_DL_TEXT_W wide at LIST_TITLE_Y / LIST_SUB_Y, the chevron's middle at PP_DL_CHEV_CX, hairline from the text),
- * PP_SEC_GAP of air and the "Shows" header (at x PP_SHOWS_X, only when something is above it), then the Albums grid (GRID_*: GRID_COVER covers, the title and the grey line under each) from the grid's top; PP_BOTTOM under the last row. */
+ * the Library rows, last, PP_LIB_GAP under the grid (the Downloads row: PC_ROW_H high: the PA_TILE_PX tile (the atlas') at x PP_DL_TILE_X, PP_DL_TILE_Y down, the texts from PP_DL_TEXT_X, PP_DL_TEXT_W wide at LIST_TITLE_Y / LIST_SUB_Y, the chevron's middle at PP_DL_CHEV_CX, hairline from the text),
+ * after the shelf PP_SEC_GAP of air and the "Shows" header (at x PP_SHOWS_X), then the Albums grid (GRID_*: GRID_COVER covers, the title and the grey line under each) from the grid's top; PP_BOTTOM under the last row. */
 #define PP_TITLE_X 16
 #define PP_TITLE_H 52
 #define PP_TITLE_PX 32
@@ -1097,7 +1097,13 @@
 #define PP_DL_TEXT_W 214
 #define PP_DL_CHEV_CX 298
 #define PP_SEC_GAP 12
+#define PP_LIB_GAP 24 /* the air between the grid's last row and the Library rows (Downloads, Subscriptions) that close the Shows page */
 #define PP_BOTTOM 10
+/* The Downloads page (patch/podcasts.c, docs/modules/podcasts.md "The Downloads page"; tools/pod_show.py downloads_layout is the model): content y from the list's top. The storage line (15 px grey, PP_LINE_H high) at PDL_LINE_Y, x PP_LINE_X;
+ * the first section's header PDL_LINE_PITCH down; a section is its header (PP_HEAD_PITCH) and its PC_ROW_H rows; PP_SEC_GAP between sections; PP_BOTTOM under the last row. The Library rows of the Shows page are the Downloads row's geometry
+ * twice (PP_DL_*): Downloads, then Subscriptions (its tile is the image pod_ic_subtile, PA_TILE_PX square). */
+#define PDL_LINE_Y 52
+#define PDL_LINE_PITCH 80
 
 /* The Podcasts search level (patch/podcasts.c, docs/modules/podcasts.md "Search"; tools/pod_show.py search_layout is the model the tests and the preview use). Content y from the list top (window row PG_LIST_Y). The field is widgets of the content view
 * (ps_field, the keyboard page's field look: PQ_FIELD_W x PQ_FIELD_H, #1C1C1E, PQ_FIELD_R corners, the 16 px magnifier PQ_MAG_X in, the text from PQ_TEXT_X for PQ_TEXT_W px); the result rows are the Downloads rows' (PC_ROW_H, a LIST_ART px

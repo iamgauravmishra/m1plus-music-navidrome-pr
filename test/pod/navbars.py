@@ -82,9 +82,7 @@ def run(ctx):
         expect(ok, f'{name}: Back is the glass disc at x 8, y 4 (a 44 x 50 button at x 7), {"the capsule " + str([(c.name, c.x) for c in group]) + " abuts on main\'s slots and its glass ends at x 311, Now Playing its right cap" if capsule else "Now Playing the disc at x 269 .. 311"}, the title from x 58 ends before the first button')
         expect('btn_allalbums' not in k, f'{name}: no All albums button')
         if name == 'm1plus_podcasts':
-            s = k['btn_select']
-            expect((s.x, s.w, s.y, s.h) == (O['NAV_VIEW_X'], slot_w, 0, 50) and s.get('visible') == 'false' and s.get('style:normal:icon') == 'pod_nav_selectl' and mod_icons.NAV_VIEW_POS['pod_nav_selectl'] == 'left',
-                   f'{name}: the hidden Select button is the left cap on the 214 slot, where the "..." is (the code shows one of them, with Now Playing as the right cap)')
+            expect('btn_select' not in k and 'btn_more' in k, f'{name}: no Select button of its own any more (Select is a sheet row on the Downloads page)')
         if 'btn_songs' in k:
             s = k['btn_songs']
             expect((s.x, s.w, s.y, s.h) == (O['NAV_VIEW_X'], slot_w, 0, 50) and s.x + s.w == play.x and s.get('visible') == 'false' and s.get('style:normal:icon') == 'pod_nav_songs'

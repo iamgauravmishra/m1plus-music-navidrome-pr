@@ -295,9 +295,9 @@ def run(ctx):
     eps, _ = m.shows()
     expect(eps[0]['count'] == 0, 'a subscription with nothing downloaded has no episode files (count 0)')
     wr = [c for c in calls3 if c[0] == 'rename']
-    expect([c[2].rsplit('/', 1)[1] for c in wr] == ['.episodes', '.show', 'WSJ Minute Briefing'], 'both files are written to a temp file and renamed into place, the folder renamed last')
+    expect([c[2].rsplit('/', 1)[1] for c in wr] == ['.notes', '.episodes', '.show', 'WSJ Minute Briefing'], 'both files are written to a temp file and renamed into place, the folder renamed last')
     fsyncs = [c for c in calls3 if c[0] == 'fsync']
-    expect(len(fsyncs) == 2, 'each file is fsynced before its rename')
+    expect(len(fsyncs) == 3, 'each file (.notes, .episodes, .show) is fsynced before its rename')
 
     # 4. A second refresh: nothing new, nothing renamed, the title kept, the time moved
     before = dict(m.fs)
@@ -478,7 +478,7 @@ def run(ctx):
     big = picture(3000, 3000)
     m, reqs, files = cover_run(big)
     cv = decoded(m)
-    expect(cv.format == 'JPEG' and cv.size == (192, 192) and files == ['.episodes', '.show', 'cover.jpg'], f'a 3000 x 3000 cover becomes a 192 x 192 JPEG named cover.jpg, in the renamed folder; no temp file left: {files} {cv.size}')
+    expect(cv.format == 'JPEG' and cv.size == (192, 192) and files == ['.episodes', '.notes', '.show', 'cover.jpg'], f'a 3000 x 3000 cover becomes a 192 x 192 JPEG named cover.jpg, in the renamed folder; no temp file left: {files} {cv.size}')
     expect(cv.getpixel((10, 96))[0] > 180 and cv.getpixel((10, 96))[2] < 80 and cv.getpixel((180, 96))[2] > 180 and cv.getpixel((180, 96))[0] < 80, 'the picture is kept (red left, blue right)')
     expect(('scale', 8, (375, 375)) in m.jlog and ('encoded', (192, 192), 85) in m.jlog and m.jlog.count('std_error') == 1 and m.jlog[-2:] == ['destroy_decompress', 'destroy_compress'],
            'libjpeg decodes at 1/8 (375 x 375 of 3000), the encoder writes 192 x 192 at quality 85, both destroyed')
@@ -507,19 +507,19 @@ def run(ctx):
     m, reqs, files = cover_run(picture(1400, 1400, progressive=True))
     expect(decoded(m).size == (192, 192) and ('scale', 4, (350, 350)) in m.jlog, 'a progressive JPEG within the size cap is shrunk too (1400 x 1400, 1/4)')
     m, reqs, files = cover_run(picture(3000, 3000, progressive=True))
-    expect(files == ['.episodes', '.show'] and not [e for e in m.jlog if e == 'create_decompress'] and status(m, F_WSJ) == (PN['OK'], 3),
+    expect(files == ['.episodes', '.notes', '.show'] and not [e for e in m.jlog if e == 'create_decompress'] and status(m, F_WSJ) == (PN['OK'], 3),
            'a progressive JPEG above 2.1 million pixels is refused before libjpeg sees it (it would hold all its coefficients): no cover, the status untouched')
     m, reqs, files = cover_run(picture(4100, 4100, optimize=True))
-    expect(files == ['.episodes', '.show'] and 'create_decompress' not in m.jlog, 'a baseline JPEG above 16 million pixels is refused')
+    expect(files == ['.episodes', '.notes', '.show'] and 'create_decompress' not in m.jlog, 'a baseline JPEG above 16 million pixels is refused')
 
     # a cover the user put there wins; every spelling the page knows
     for name in ('cover.jpg', 'cover.png', 'cover.jpeg', 'folder.jpg', 'folder.png', 'folder.jpeg'):
         m, reqs, files = cover_run(big, folder_files=[(name, b'mine')])
-        expect(not [u for u, _ in reqs if u != F_WSJ] and m.fs.get(f'{FOLDER}/{name}') == b'mine' and sorted(files) == sorted(['.episodes', '.show', name]), f'a {name} in the folder: no download, the file untouched')
+        expect(not [u for u, _ in reqs if u != F_WSJ] and m.fs.get(f'{FOLDER}/{name}') == b'mine' and sorted(files) == sorted(['.episodes', '.notes', '.show', name]), f'a {name} in the folder: no download, the file untouched')
 
     # failures: nothing left, the feed's status untouched
     def no_cover(m, files, label):
-        expect(files == ['.episodes', '.show'] and status(m, F_WSJ) == (PN['OK'], 3) and m.call(PSYMS['pn_busy'], count=2000) == 0 and len(m.curl) == 0, f'{label}: no cover and no leftover file, the feed\'s status OK with three new')
+        expect(files == ['.episodes', '.notes', '.show'] and status(m, F_WSJ) == (PN['OK'], 3) and m.call(PSYMS['pn_busy'], count=2000) == 0 and len(m.curl) == 0, f'{label}: no cover and no leftover file, the feed\'s status OK with three new')
     m, reqs, files = cover_run(b'', image_status={'rc': 22, 'code': 404}); no_cover(m, files, 'HTTP 404 for the picture')
     m, reqs, files = cover_run(b'', image_status={'rc': 60, 'code': 0}); no_cover(m, files, 'a certificate error on the picture')
     m, reqs, files = cover_run(b'', image_status={'rc': 28, 'code': 0, 'body': big[:50000]}); no_cover(m, files, 'a time-out half way through the picture')
@@ -553,13 +553,13 @@ def run(ctx):
 
     # PNG: kept as it is when the page can decode it, else refused
     m, reqs, files = cover_run(picture(600, 600, fmt='PNG'))
-    expect(files == ['.episodes', '.show', 'cover.jpg'] and decoded(m).size == (192, 192) and 'create_decompress' not in m.jlog and show_of(m, 'WSJ Minute Briefing')['cover'] == 'cover.jpg',
+    expect(files == ['.episodes', '.notes', '.show', 'cover.jpg'] and decoded(m).size == (192, 192) and 'create_decompress' not in m.jlog and show_of(m, 'WSJ Minute Briefing')['cover'] == 'cover.jpg',
            'a PNG becomes the same 192 x 192 cover.jpg (the streaming decoder of pcpng.c; the details are in pcpng.py)')
     m, reqs, files = cover_run(picture(100, 100, fmt='PNG')[:60]); no_cover(m, files, 'a truncated PNG')
     PT = sibling('pcpng')   # (Pillow cannot write an interlaced PNG: the header's flag is set by hand)
     inter = PT.png(200, 200, 2, 8, bytes(601) * 200, interlace=1)
     m, reqs, files = cover_run(inter)
-    expect(files == ['.episodes', '.show', 'cover.png'] and m.fs[f'{FOLDER}/cover.png'] == inter, 'an interlaced PNG small enough for the page is kept as cover.png (it cannot be shrunk in one pass)')
+    expect(files == ['.episodes', '.notes', '.show', 'cover.png'] and m.fs[f'{FOLDER}/cover.png'] == inter, 'an interlaced PNG small enough for the page is kept as cover.png (it cannot be shrunk in one pass)')
     m, reqs, files = cover_run(PT.png(3000, 3000, 2, 8, bytes(9001) * 3000, interlace=1)); no_cover(m, files, 'a large interlaced PNG')
 
     # no picture url, or one that is not http(s): nothing is requested

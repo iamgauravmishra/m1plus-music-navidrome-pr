@@ -126,10 +126,17 @@ the recovery button combination for this model remains unverified.
   an already subscribed show opens its real page. Test builds zVKGGAAAB, zVKGGAAAC flashed, accepted. Finding: a probe of 15
   queries in four storefronts found US, TW and HK right for Chinese shows and CN the worst (wrong top results), 0.6 % of results
   without a feed URL, and every enclosure honouring Range.
-- **V2.1qD** (2026-11-01, current release): **Vinyl Mode**, a fullscreen portrait turntable Now Playing page from the More sheet
+- **V2.1qD** (2026-11-01): **Vinyl Mode**, a fullscreen portrait turntable Now Playing page from the More sheet
   (`docs/modules/vinyl.md`): the cover as a turning label (33 1/3 rpm, spin-up and a 2 s spin-down), a tonearm following the track and
   parking on pause once the record has stopped, eased swings, round prev / play / next keys, film grain on the plinth only. Designed from
   mock rounds (`tools/preview_vinyl.py`); test builds zDEZGAAAD to zDEZGAAAM flashed, accepted.
+- **V2.1qE** (2026-11-01, current release): **Podcasts round 4**: an episode page in Apple Podcasts' layout (a tap on a cell body;
+  date and size, title, a show row, the state pill; long descriptions kept per show in `.notes`), OPML import and export and a
+  Subscriptions page, a Downloads page with In Progress and Downloaded sections, storage and Delete Played, Downloads and
+  Subscriptions rows at the bottom of the Shows page, large headings instead of navbar titles, 'Local' on shows with no feed, and
+  the internet search retitled Apple Podcasts. Test builds zNTNUAAAB, zBDYKAAAB to zBDYKAAAG flashed, accepted. Lesson: three
+  parallel branches on one file (`patch/podcasts.c`) cost more in merging than they saved; a test built on another module's
+  constant (`PM_PAGE_N + 7`) broke when that module grew.
 
 ## Hardware results (what broke on the device, and why)
 - **Vinyl Mode pause (zDEZGAAAI).** Tapping pause stalled the page, then the arm stuttered until parked. Stock's `play_pause_music`
