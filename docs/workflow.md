@@ -60,6 +60,10 @@ totals separately. Missing inputs/results fail; subprocess groups have
 wall-time limits. Logs and failed trees are retained. `make clean` removes `work/check` only,
 keeping dev artifacts, counters and caches. Locks prevent overlapping writes.
 
+The runner reports build durations, test progress about every ten seconds as tasks finish,
+and the three slowest tasks. Dev `results.json` also records `timings.setup`, `timings.tests`
+and `timings.package` in wall seconds; setup includes input checks, tree construction and validation.
+
 ## CI
 
 Start `.github/workflows/ci.yml` manually through Actions > ci > Run workflow or

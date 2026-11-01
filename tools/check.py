@@ -84,10 +84,13 @@ def run_test(name, cmd, logdir, timeout):
 
 
 def run_build(flags, logfile, env=None):
+    start = time.monotonic()
     cmd = [sys.executable, '-I', os.path.join(TOOLS, 'build.py'), *map(str, flags)]
     rc, log = workflow.run_logged(cmd, logfile, env=env)
     if rc: raise SystemExit(f'build {workflow.exit_description(rc)}; log: {logfile}\n{log[-2500:]}')
-    print(f'build ready; log: {logfile}', flush=True)
+    elapsed = time.monotonic() - start
+    print(f'build ready ({elapsed:.1f}s); log: {logfile}', flush=True)
+    return elapsed
 
 
 def expected_results(names, tests):
@@ -193,6 +196,8 @@ def main():
             tree = base / 'tree' if a.dev else base / 'release/work/mod-release'
             workflow.validate_tree(tree)
         times = workflow.read(TIMES)
+        test_start = progress = time.monotonic()
+        timings = {'setup': test_start - start}
         with cf.ThreadPoolExecutor(max_workers=a.jobs) as ex:
             pending = {ex.submit(run_test, n, test_cmd(n, stock, tree), logs, a.timeout): n
                        for n in sorted(names, key=lambda n: times.get(n, 0), reverse=True)}
@@ -200,11 +205,20 @@ def main():
                 r = f.result(); tests.append(r)
                 if a.verbose or not test_ok(r):   # passes only with --verbose; the summary line counts them
                     print(f'{r["test"]}: {"PASS" if test_ok(r) else "FAIL " + workflow.exit_description(r["rc"])} ({r["secs"]:.1f}s)', flush=True)
+                now = time.monotonic()
+                if not a.verbose and now - progress >= 10:
+                    print(f'tests: {len(tests)}/{len(names)} completed ({now - test_start:.1f}s)', flush=True)
+                    progress = now
+        timings['tests'] = time.monotonic() - test_start
+        if tests:
+            slowest = sorted(tests, key=lambda t: t['secs'], reverse=True)[:3]
+            print(f'tests ready ({timings["tests"]:.1f}s); slowest: ' +
+                  ', '.join(f'{t["test"].removeprefix("patch:")} {t["secs"]:.1f}s' for t in slowest), flush=True)
         workflow.write(TIMES, {n: s for n, s in {**times, **{t['test']: t['secs'] for t in tests}}.items() if n in ALL_TESTS})   # names no longer run are dropped
         tests_passed = len(tests) == len(names) and all(test_ok(t) for t in tests)
         if workflow.input_key() != key: tests_passed = False
         if tests_passed and (a.dev or 'release' in sel):
-            run_build([*flags, '--pack-only'], logs / 'package.log', env)
+            timings['package'] = run_build([*flags, '--pack-only'], logs / 'package.log', env)
             package = base / 'update.bin' if a.dev else base / 'release/out' / f'M1Plus-{build.TAG}-release-update.bin'
             if not a.dev: builds['release'] = {'sha': workflow.sha(package), 'package': str(package)}
         elif 'release' in sel: builds['release'] = {'error': 'tests failed; package not produced'}
@@ -217,7 +231,8 @@ def main():
             m = workflow.read(tree / 'build.json')
             passed = tests_passed and bool(m.get('package_sha256')) and workflow.input_key() == key
             workflow.write(base / 'results.json', {'passed': passed, 'scope': 'full', 'inputs': key, 'tree': m['tree'],
-                                                  'package_sha256': m.get('package_sha256'), 'expected': names, 'tests': tests})
+                                                  'package_sha256': m.get('package_sha256'), 'expected': names, 'tests': tests,
+                                                  'timings': timings})
             if passed:
                 workflow.tested_package(base)
                 workflow.write(Path(ROOT) / 'out/dev/latest.json', {'build': str(base)})

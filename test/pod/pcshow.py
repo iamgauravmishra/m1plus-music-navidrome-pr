@@ -49,6 +49,7 @@ class SM(PCN.NM):
 
     def _hook(self, u, address, size, _):
         name = self.handlers.get(address, '')
+        if name not in ('widget_measure_text', 'rmdir'): return super()._hook(u, address, size, _)
         a0, a1 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1))
         if name == 'widget_measure_text':
             n = 0

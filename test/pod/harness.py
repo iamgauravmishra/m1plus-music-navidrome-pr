@@ -10,7 +10,7 @@ import importlib.util, json, os, re, struct, sys
 from unicorn import Uc, UC_ARCH_MIPS, UC_MODE_MIPS32, UC_MODE_LITTLE_ENDIAN, UC_HOOK_CODE, UC_HOOK_BLOCK
 from unicorn.mips_const import (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3,
                                 UC_MIPS_REG_V0, UC_MIPS_REG_SP, UC_MIPS_REG_RA, UC_MIPS_REG_T9, UC_MIPS_REG_PC, UC_MIPS_REG_GP, UC_MIPS_REG_F0,
-                                UC_MIPS_REG_CP0_STATUS as _STATUS, UC_MIPS_REG_0, UC_MIPS_REG_31)
+                                UC_MIPS_REG_CP0_STATUS as _STATUS, UC_MIPS_REG_0 as UC_MIPS_REG_0)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TOOLS = os.path.join(ROOT, 'tools')
@@ -230,6 +230,7 @@ class Machine:
         self.create_fail = set()    # widget constructors (view_create, ..) that return 0
         self.wm, self.top_main, self.home_opened, self.init_ret = 0x22000000, 0, 1, 0
         self._icount, self.limit, self.counting = 0, 0, False
+        self._nested_contexts = []  # reusable CPU snapshots; active nested calls each hold their own
         self.bitmaps, self.free_blocks = {}, {}   # bitmap_create_ex's results; destroyed data blocks to reuse
         self.blits, self.texts, self.measures, self.glyphs, self.draw_oy = [], [], [], [], []
         self.fills, self.text_styles, self.cur_style, self.fill_color = [], [], '', 0 # canvas_fill_rect (colour, x, y, w, h); the style widget of each text
@@ -1055,15 +1056,20 @@ class Machine:
         """Payload code run from inside a mock (a libcurl callback): the registers are saved, the frame is below the caller's, and the
         caller continues afterwards. Returns $v0."""
         u = self.u
-        saved = [u.reg_read(r) for r in range(UC_MIPS_REG_0, UC_MIPS_REG_31 + 1)] + [u.reg_read(UC_MIPS_REG_PC)]
-        sp = (u.reg_read(UC_MIPS_REG_SP) - 0x400) & ~7
-        for r, v in zip((UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3), args): u.reg_write(r, v & 0xffffffff)
-        for i, v in enumerate(args[4:]): self.setword(sp + 16 + 4 * i, v)
-        u.reg_write(UC_MIPS_REG_SP, sp); u.reg_write(UC_MIPS_REG_RA, RET); u.reg_write(UC_MIPS_REG_T9, fn)
-        u.emu_start(fn, RET)
-        ret = u.reg_read(UC_MIPS_REG_V0)
-        for r, v in zip(list(range(UC_MIPS_REG_0, UC_MIPS_REG_31 + 1)) + [UC_MIPS_REG_PC], saved): u.reg_write(r, v)
-        return ret
+        # qsort/bsearch call this millions of times. A native CPU snapshot avoids 66 individual
+        # register transfers per comparison and also preserves HI/LO and floating-point state.
+        if self._nested_contexts:
+            saved = self._nested_contexts.pop(); u.context_update(saved)
+        else: saved = u.context_save()
+        try:
+            sp = (u.reg_read(UC_MIPS_REG_SP) - 0x400) & ~7
+            for r, v in zip((UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3), args): u.reg_write(r, v & 0xffffffff)
+            for i, v in enumerate(args[4:]): self.setword(sp + 16 + 4 * i, v)
+            u.reg_write(UC_MIPS_REG_SP, sp); u.reg_write(UC_MIPS_REG_RA, RET); u.reg_write(UC_MIPS_REG_T9, fn)
+            u.emu_start(fn, RET)
+            return u.reg_read(UC_MIPS_REG_V0)
+        finally:
+            u.context_restore(saved); self._nested_contexts.append(saved)
 
     def curl_perform(self, h):
         """curl_easy_perform against the scripted server self.curl_site(url, options) -> a dict: rc, code, body, chunk (bytes per write
@@ -1226,14 +1232,17 @@ STOCK_NOOPS = ('widget_set_focused', 'widget_set_focused_internal', 'widget_inva
 class SelectMachine(Machine):
     """The machine plus the stock multi-select calls the Songs and Playlists pages make: the selection vector (select_recordinit, set_selectindex: `sel_vec`), the
     stock batch delete (recorded with the selected rows), and the style setter of the pills (`styled`) with its value (value_set_uint32)."""
+    SELECT_CALLS = ('select_recordinit', 'set_selectindex', 'batch_delete_file', 'batch_add_file', 'widget_set_style', 'value_set_uint32')
+
     def __init__(self):
         super().__init__()
         self.styled, self.sel_vec = [], None
-        for n in ('select_recordinit', 'set_selectindex', 'batch_delete_file', 'batch_add_file', 'widget_set_style', 'value_set_uint32'):
+        for n in self.SELECT_CALLS:
             self.handlers[pod.FUNCTIONS[n][2]] = n
 
     def _hook(self, u, address, size, _):
         name = self.handlers.get(address, '')
+        if name not in self.SELECT_CALLS: return super()._hook(u, address, size, _)
         a0, a1, a2, a3 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3))
         sp = u.reg_read(UC_MIPS_REG_SP)
         ret = 0
@@ -1275,6 +1284,9 @@ class ListMachine(SelectMachine):
 
     def _hook(self, u, address, size, _):
         name = self.handlers.get(address, '')
+        if name not in ('widget_set_tr_text', 'widget_set_text_utf8', 'widget_get_text', 'widget_measure_text',
+                        'widget_animator_destroy', 'stock_scroll_done'):
+            return super()._hook(u, address, size, _)
         a0, a1 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1))
         if name == 'widget_set_tr_text': self.wtext[a0] = self.tr(self.read_cstr(a1))
         elif name == 'widget_set_text_utf8': self.wtext[a0] = self.read_cstr(a1)

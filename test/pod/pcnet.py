@@ -31,6 +31,8 @@ class NM(PCP.PM):
     """The card machine plus what the worker calls: directories that exist for access, renamed whole."""
     def _hook(self, u, address, size, _):
         name = self.handlers.get(address, '')
+        if name not in ('access', 'rmdir', 'rename', 'fopen') and name not in JPEG_MOCKS:
+            return super()._hook(u, address, size, _)
         a0, a1, a2 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2))
         ret = None
         if name == 'access' and self.read_cstr(a0) in self.dirs:
