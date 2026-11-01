@@ -211,7 +211,7 @@ static int on_row(void *ctx, void *e) {
     else if (row->action == ACT_REBUILD)
         rebuild_ask(); /* a confirm dialog, then Cover Flow rebuilds */
     else if (row->action == ACT_REGEN)
-        dailymix_regen(); /* patch/dailymix.c: no page, no message; the card is made again when the Home menu is back in front */
+        dailymix_regen(); /* patch/dailymix.c: no page, a toast when asked; the card is made again when the Home menu is back in front */
     else if (row->action == ACT_STOCK)
         navigator_to(
             POD_STOCK[row->arg].name); /* a plain navigator_to, as the stock lists call it: Back returns here */
@@ -237,7 +237,7 @@ static void switch_show(void *img, int on) {
 
 /* Settings > Home Screen > Regenerate Daily Mix: its row and its note are hidden (not visible, not sensitive: the list_view layouter skips them and the rows below close up, though
  * there are none) while no mix can be made (the Daily Mix switch off, or a library under MIX_MIN_LIB songs); the Daily Mix switch updates them in place. The row is a card of its own
- * (a single piece), so nothing else changes with it. They are the page's third row and second note (pod_note1). */
+ * (a single piece) at the end of the page, so nothing else changes with it. They are the page's last row and fifth note (pod_note4; tools/pod_pages.py HOMESET_PAGE, pinned by test). */
 static void *regen_row __attribute__((section(".scratch"))), *regen_note __attribute__((section(".scratch")));
 #define KB_EN_DIM 153 /* 60 %: Settings > Keyboards > English, always on and not switchable */
 
@@ -472,7 +472,7 @@ static int open_page(int index, int as_home) {
         }
         if (row->action == ACT_REGEN) {
             regen_row = widget_lookup(win, row->name, 1);
-            regen_note = widget_lookup(win, "pod_note1", 1);
+            regen_note = widget_lookup(win, "pod_note4", 1);
             regen_show();
         }
     }

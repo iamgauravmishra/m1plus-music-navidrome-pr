@@ -171,6 +171,8 @@ TEXT = dict([
        'Se muestra bajo el menú de inicio', 'Mostrato sotto il menu in Home', 'แสดงใต้เมนูในหน้าหลัก', 'Widoczne pod menu na ekranie głównym', 'Под меню на главном экране', 'Під меню на головному екрані'),
     _t('A new mix the next time Home opens', '下次打开主屏幕时生成新的精选', '下次開啟主畫面時產生新的精選', '次にホームを開くと新しいミックス', '다음에 홈을 열면 새 믹스', "Un nouveau mix à la prochaine ouverture", 'Beim nächsten Öffnen ein neuer Mix',
        'Una mezcla nueva al abrir Inicio', 'Un nuovo mix alla prossima apertura', 'มิกซ์ใหม่เมื่อเปิดหน้าหลักครั้งถัดไป', 'Nowy miks przy następnym otwarciu', 'Новый микс при следующем открытии', 'Новий мікс при наступному відкритті'),
+    _t('New mix when Home opens', '主屏幕打开时生成新精选', '主畫面開啟時產生新精選', 'ホームを開くと新しいミックス', '홈을 열면 새 믹스', "Nouveau mix à l'ouverture", 'Neuer Mix beim Öffnen',
+       'Nueva mezcla al abrir Inicio', "Nuovo mix all'apertura", 'มิกซ์ใหม่เมื่อเปิดหน้าหลัก', 'Nowy miks po otwarciu', 'Новый микс при открытии', 'Новий мікс при відкритті'),
     _t('Scan the card for new music', '扫描存储卡中的新音乐', '掃描記憶卡中的新音樂', 'カードの新しい音楽をスキャン', '카드에서 새 음악 검색', 'Chercher de nouveaux titres sur la carte', 'Karte nach neuer Musik durchsuchen',
        'Buscar música nueva en la tarjeta', 'Cerca nuova musica sulla scheda', 'สแกนการ์ดหาเพลงใหม่', 'Szukaj nowej muzyki na karcie', 'Поиск новой музыки на карте', 'Пошук нової музики на картці'),
     _t('Albums and Cover Flow', '专辑和封面流', '專輯與封面流', 'アルバムとカバーフロー', '앨범 및 커버 플로우', 'Albums et Cover Flow', 'Alben und Cover Flow',

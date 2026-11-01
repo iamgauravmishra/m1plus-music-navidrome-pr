@@ -147,26 +147,29 @@ def layout_tests(ctx):
                     expect(not any(c.startswith('pod_row') for c in got_path) and got_path[-1] in ('pod_scrollview', 'pod_listview', page.name), f'{page.key}: a tap at x {x} on {n} reaches nothing actionable ({got_path})')
     # the Home Screen page with Daily Mix off: the regen row and its note are hidden (the payload's visible + sensitive), the layouter skips them and nothing else moves
     page = P.HOMESET_PAGE
-    full, hid = SL(page), SL(page, hide=('pod_row2', 'pod_note1'))
+    regen_i = next(i for i, r in enumerate(page.rows) if r.action == P.ACT_REGEN)
+    regen_row, regen_note = f'pod_row{regen_i}', f'pod_note{sum(isinstance(it, P.Note) for it in page.layout) - 1}'
+    expect(regen_i == len(page.rows) - 1 and isinstance(page.layout[-1], P.Note) and page.layout[-1].text == 'A new mix the next time Home opens' and page.layout[-2].label == 'Regenerate Daily Mix'
+           and page.layout[-4].label == 'Battery Percentage' and regen_note == 'pod_note4', 'Regenerate Daily Mix and its note end the Home Screen page, after Battery Percentage and its note (pod_note4, the name the payload hides)')
+    full, hid = SL(page),SL(page, hide=(regen_row, regen_note))
     placed, end = ST.layout(page.layout)
-    expect(ST.pieces(page.layout)[2] == 'single', 'Regenerate Daily Mix is a card of its own: a single piece, correct whatever its neighbours do')
-    keep = [n for n in full.kid if n not in ('pod_row2', 'pod_note1')]
+    expect(ST.pieces(page.layout)[regen_i] == 'single', 'Regenerate Daily Mix is a card of its own: a single piece, correct whatever its neighbours do')
+    keep = [n for n in full.kid if n not in (regen_row, regen_note, 'pod_end')]
     gone = ST.ROW_H + ST.NOTE_H
-    before = [n for n in keep if full.box(n)[1] < full.box('pod_row2')[1]]
-    after = [n for n in keep if n not in before]
-    expect(all(hid.box(n) == full.box(n) for n in before) and all(hid.box(n)[1] == full.box(n)[1] - gone and hid.box(n)[:1] == full.box(n)[:1] for n in after) and after
-           and full.vh() == end and hid.vh() == end - gone, 'Daily Mix off: the layouter skips the regen row and its note, the items above stay where they were, those below close up by exactly their heights and virtual_h shrinks by the same')
-    # and the page opens that way by itself: the payload hides them when no mix can be made
+    expect(keep and all(hid.box(n) == full.box(n) for n in keep) and hid.box('pod_end')[1] == full.box('pod_end')[1] - gone and full.vh() == end and hid.vh() == end - gone,
+           'Daily Mix off: the layouter skips the regen row and its note, everything above stays where it was and virtual_h shrinks by their heights (no gap at the end)')
+    # and the page opens that way by itself: the payload hides them when no mix can be made, and nothing else
     sm = settings_page_machine(P.HOMESET_PAGE, daily=b'0\n')
-    expect([c[2] for c in sm.calls if c[0] == 'widget_set_visible' and c[1] == sm.widgets['pod_row2']][-1:] == [0]
-           and [c[2] for c in sm.calls if c[0] == 'widget_set_visible' and c[1] == sm.widgets['pod_note1']][-1:] == [0]
-           and [c[2] for c in sm.calls if c[0] == 'widget_set_sensitive' and c[1] == sm.widgets['pod_row2']][-1:] == [0], 'with Daily Mix off the page opens with the row and its note hidden and insensitive')
+    vis = lambda n, f: [c[2] for c in sm.calls if c[0] == f and c[1] == sm.widgets[n]][-1:]
+    expect(vis(regen_row, 'widget_set_visible') == [0] and vis(regen_note, 'widget_set_visible') == [0] and vis(regen_row, 'widget_set_sensitive') == [0]
+           and not [c for c in sm.calls if c[0] in ('widget_set_visible', 'widget_set_sensitive') and c[1] not in (sm.widgets[regen_row], sm.widgets[regen_note])],
+           'with Daily Mix off the page opens with the row and its note hidden and insensitive, and no other widget touched')
 
 
 def settings_page_machine(page, daily=None):
     P = pod_pages
     m = Machine()
-    m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer', 'pod_note1'] + [f'pod_row{i}' for i in range(len(page.rows))] + [f'pod_switch{i}' for i in range(len(page.rows))])}
+    m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_note{i}' for i in range(5)] + [f'pod_row{i}' for i in range(len(page.rows))] + [f'pod_switch{i}' for i in range(len(page.rows))])}
     if daily is not None: m.fs['/mnt/data/m1plus-daily'] = daily
     m.call(PSYMS['on_row'], a0=PSYMS['pod_rows_%d' % P.SETTINGS_PAGE_INDEX] + 12 * next(i for i, r in enumerate(P.SETTINGS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.PAGES.index(page)), count=3000000)
     return m

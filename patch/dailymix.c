@@ -301,6 +301,7 @@ int dailymix_can_regen(void) { return dailymix_setting() && !dm_small; }
 void dailymix_regen(void) {
     if (!dailymix_can_regen()) return;
     if (dm_regen_req < 255) ++dm_regen_req;
+    pod_toast(TR("New mix when Home opens")); /* a short form of the page's note */
 }
 
 /* ---------------------------------------------------------------------------
@@ -647,6 +648,16 @@ static void dm_job_end(int failed) {
     if (!j) return;
     dm.job = (job_t *)0;
     if (failed) dm.fail_day = j->day;
+    dm_job_free(j);
+}
+
+/* A covered or closed Home drops its lists, but still owes an interrupted manual mix.
+ * Today's committed mix cannot trigger the automatic retry. Keep any newer ask too. */
+static void dm_job_cancel(void) {
+    job_t *j = dm.job;
+    if (!j) return;
+    if (j->manual && !dm_regen_req) dm_regen_req = 1;
+    dm.job = (job_t *)0;
     dm_job_free(j);
 }
 
@@ -1721,11 +1732,7 @@ static int dm_tick(const void *timer) {
 
 static void dm_stop(void) {
     dm_unarm();
-    if (dm.job) {
-        job_t *j = dm.job;
-        dm.job = (job_t *)0;
-        dm_job_free(j);
-    }
+    dm_job_cancel();
     if (dm.bmp) bitmap_destroy(dm.bmp);
     free(dm.paths);
     memset(&dm, 0, sizeof dm);
@@ -1745,10 +1752,8 @@ static int dm_on_background(void *ctx, void *e) {
     dm.down = 0;
     dm_unarm();
     if (dm.job) {
-        job_t *j = dm.job;
-        int art = j->art_only;
-        dm.job = (job_t *)0;
-        dm_job_free(j);
+        int art = dm.job->art_only;
+        dm_job_cancel();
         if (art) dm.load = 2;
     }
     return RET_OK;

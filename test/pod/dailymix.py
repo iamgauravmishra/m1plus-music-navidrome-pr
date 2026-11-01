@@ -280,8 +280,8 @@ def run(ctx):
     homeset = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1plus_homeset.bin'), 'rb').read())
     rows = [w for w in homeset.find('pod_scrollview').children if w.type == 'list_item']
     lab_w = lambda r: next(w for w in r.children if w.type == 'hscroll_label').w
-    expect([r.name for r in rows][:3] == [f'pod_row{i}' for i in range(3)] and lab_w(rows[1]) == lab_w(rows[0]), 'Settings > Home Screen starts with three rows (Recent Albums, Daily Mix, Regenerate Daily Mix); the Daily Mix switch row has the Recent Albums row\'s label box')
-    sw_room, act_room = lab_w(rows[1]), lab_w(rows[2])
+    expect([r.name for r in rows] == [f'pod_row{i}' for i in range(6)] and lab_w(rows[1]) == lab_w(rows[0]), 'Settings > Home Screen has six rows (Regenerate Daily Mix the last); the Daily Mix switch row has the Recent Albums row\'s label box')
+    sw_room, act_room = lab_w(rows[1]), lab_w(rows[5])
     over = []
     for l in D.LOCALES:
         if width(D.tr(l, 'Made for You'), D.DM_HEAD_PX) > D.DM_HEAD_W - 4: over.append((l, 'header'))
@@ -328,10 +328,10 @@ def run(ctx):
                f'{n}.png: the 48 px glass disc (pressed={pressed}) with the white play glyph in the middle, the committed file')
     expect(set(n for n in ('dm_disc', 'dm_disc_down') if os.path.exists(os.path.join(mod_icons.PNG, n + '.png'))) == {'dm_disc', 'dm_disc_down'}
            and {'dm_disc', 'dm_disc_down'} <= set(mod_icons.pod_names()), 'the disc images are committed and added by the build')
-    regen_row, daily_row = rows[2], rows[1]
+    regen_row, daily_row = rows[5], rows[1]
     expect(not [w for w in regen_row.children if w.type == 'image' and w.name != 'pod_icon'] and any(w.name == 'pod_switch1' for w in daily_row.children) and not any(w.name.startswith('pod_switch') for w in regen_row.children)
-           and homeset.find('pod_note1') is not None and homeset.find('pod_note1').get('sensitive') == 'false' and homeset.find('pod_row2').get('style:normal:bg_image') == 'pod_cd_single',
-           'Regenerate Daily Mix is an action row without a chevron or a switch, in a card of its own (a single piece) and note (pod_note1) the payload hides with it; Daily Mix has the switch pod_switch1')
+           and homeset.find('pod_note4') is not None and homeset.find('pod_note4').get('sensitive') == 'false' and homeset.find('pod_row5').get('style:normal:bg_image') == 'pod_cd_single',
+           'Regenerate Daily Mix is an action row without a chevron or a switch, in a card of its own (a single piece) and note (pod_note4) at the end of the page, the payload hides with it; Daily Mix has the switch pod_switch1')
     expect(pod_pages.ACT_DAILY in pod_pages.SWITCH_ACTIONS and pod_pages.ACT_REGEN in pod_pages.NO_CHEVRON_ACTIONS and pod_pages.ACT_REGEN not in pod_pages.SWITCH_ACTIONS,
            'the rows\' kinds in tools/pod_pages.py')
 
@@ -521,7 +521,9 @@ def run(ctx):
 
     # ---- Regenerate (on the machine of the first mix): a new seed, the next regeneration count, a new playlist; two asks are one; with the card off it waits
     m = main_m
-    m.call(PSYMS['dailymix_regen'], count=100000); m.call(PSYMS['dailymix_regen'], count=100000)
+    m.call(PSYMS['dailymix_regen'], count=100000)
+    expect([c[1] for c in m.calls if c[0] == 'toast'] == ['New mix when Home opens'], 'an accepted ask shows the toast')
+    m.call(PSYMS['dailymix_regen'], count=100000)
     m.fire(EVT_FG)
     expect('timer_add' in m.names(), 'Regenerate Daily Mix: the next time the Home menu is in front a timer starts the job')
     m.clock += 1000
@@ -533,7 +535,9 @@ def run(ctx):
     m.call(PSYMS['dm_tick'], a0=0, count=2000000)
     expect('timer_add' not in m.names(), 'and nothing more is asked of the next tick')
     m = fresh(setting=b'0\n'); m.call(PSYMS['dm_tick'], a0=0, count=2000000)   # (the one-shot of the start, which arms nothing with the card off)
-    m.call(PSYMS['dailymix_regen'], count=100000); m.fire(EVT_FG); m.clock += 20000; m.fire(EVT_FG)
+    m.call(PSYMS['dailymix_regen'], count=100000)
+    expect(not [c for c in m.calls if c[0] == 'toast'], 'a refused ask (card off) shows no toast')
+    m.fire(EVT_FG); m.clock += 20000; m.fire(EVT_FG)
     expect('timer_add' not in m.names() and MIX not in m.fs, 'with the card off nothing is made, not even for Regenerate')
     m.fs[SET] = b'1\n'; m.fire(EVT_FG)
     expect('timer_add' in m.names(), 'switched on again, the pending Regenerate runs')
@@ -639,6 +643,30 @@ def run(ctx):
     m.fire(EVT_FG); m.clock += 100
     cs = m.ticks(limit=600)
     expect(X.parse_mix(m.fs[MIX])[0] == day and mpaths(m) == [mdl[i]['path'] for i in picks], 'and back in front the job starts again from the top and finishes')
+
+    # A manual job must keep its request when Home is covered or destroyed before commit.
+    # Unlike an automatic job, today's existing mix will not make dm_need retry it.
+    today_mix = main_m.fs[MIX]
+    for event in (EVT_BG, EVT_DESTROY):
+        m = fresh(mixfile=today_mix)
+        m.clock = START_MS + 1000
+        m.ticks(limit=600)  # finish loading the existing art before the request
+        m.fire(EVT_BG)
+        m.call(PSYMS['dailymix_regen'], count=100000)
+        m.fire(EVT_FG)
+        for _ in range(5): m.call(PSYMS['dm_tick'], count=60000000)
+        expect(m.fs[MIX] == today_mix and 'timer_add' in m.names(), 'manual regeneration is in progress with today\'s old mix still on disk')
+        m.fire(event)
+        expect(m.fs[MIX] == today_mix and not written(m, [m.calls]), 'interrupting manual regeneration keeps the committed mix untouched')
+        if event == EVT_DESTROY: m.start_dm(); m.clock += START_MS + 1000
+        else: m.fire(EVT_FG)
+        m.ticks(limit=600)
+        parsed = X.parse_mix(m.fs[MIX])
+        old = X.parse_mix(today_mix)
+        expect(parsed and parsed[3] == old[3] + 1 and parsed[1] == X.seed_for(day, old[3] + 1),
+               f'manual regeneration resumes after event {event}, using the next seed exactly once')
+        m.fire(EVT_FG)
+        expect('timer_add' not in m.names(), 'a completed manual regeneration does not leave another request pending')
 
     # ---- the menu and the card go away: window destroyed, timer removed, bitmap freed
     m = fresh(mixfile=good); m.fs[ART] = art_ok; m.clock = 1

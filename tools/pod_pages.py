@@ -298,15 +298,13 @@ DEVELOPER_PAGE = Page('m1plus_developer', 'm1plus_developer_page', 'Developer', 
     Row('System Update', ACT_STOCK, STOCK_FWUPDATE),
 ])
 
-# Settings > Home Screen: the Recent Albums and Daily Mix switches (the shelf and the card of the Home menu), and Regenerate Daily Mix in a card of its own, which
-# (with its note) is hidden while Daily Mix is off (patch/m1plus.c regen_show: pod_card1, pod_note1 and the row). Then the two pages that arrange the menu (patch/menu.c), and under a
-# Status Bar header the Battery Percentage switch (patch/battery.c).
+# Settings > Home Screen: the Recent Albums and Daily Mix switches (the shelf and the card of the Home menu), . Then the two pages that arrange the menu (patch/menu.c), under a
+# Status Bar header the Battery Percentage switch (patch/battery.c), and last Regenerate Daily Mix in a card of its own, which (with its note, pod_note4)
+# is hidden while Daily Mix is off (patch/m1plus.c regen_show: the row and the note).
 HOMESET_PAGE = Page('m1plus_homeset', 'm1plus_homeset_page', 'Home Screen', layout=[
     Row('Recent Albums', ACT_SHELF),
     Row('Daily Mix', ACT_DAILY),
     Note('Shown on Home below the menu'),
-    Row('Regenerate Daily Mix', ACT_REGEN),
-    Note('A new mix the next time Home opens'),
     Row('Main Menu', ACT_PAGE, MENUCFG_PAGE_INDEX),
     Note('Show, hide and reorder the menu'),
     Row('Extras', ACT_PAGE, EXTRASCFG_PAGE_INDEX),
@@ -314,6 +312,8 @@ HOMESET_PAGE = Page('m1plus_homeset', 'm1plus_homeset_page', 'Home Screen', layo
     Hdr('Status Bar'),
     Row('Battery Percentage', ACT_BATTPCT),
     Note('The exact charge beside the battery icon'),
+    Row('Regenerate Daily Mix', ACT_REGEN),
+    Note('A new mix the next time Home opens'),
 ])
 
 # Main Menu: the customise page (patch/menu.c builds its behaviour at run time): one row per item with a

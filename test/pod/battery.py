@@ -168,8 +168,8 @@ def run(ctx):
     layout = [type(x).__name__ + (':' + x.label if isinstance(x, P.Row) else ':' + x.text if hasattr(x, 'text') else '') for x in H.layout]
     bp_i = next(i for i, r in enumerate(H.rows) if r.action == P.ACT_BATTPCT)
     expect(H.rows[bp_i].label == 'Battery Percentage' and P.ACT_BATTPCT == 36 and P.ACT_BATTPCT in P.SWITCH_ACTIONS and P.row_kind(H.rows[bp_i]) == 'switch'
-           and layout[-3:] == ['Hdr:Status Bar', 'Row:Battery Percentage', 'Note:The exact charge beside the battery icon'],
-           f'the Home Screen page ends with a Status Bar header, the Battery Percentage switch row and its note ({layout[-3:]})')
+           and layout[-5:-2] == ['Hdr:Status Bar', 'Row:Battery Percentage', 'Note:The exact charge beside the battery icon'] and layout[-2:] == ['Row:Regenerate Daily Mix', 'Note:A new mix the next time Home opens'],
+           f'the Home Screen page has a Status Bar header, the Battery Percentage switch row and its note before Regenerate Daily Mix ({layout[-5:]})')
     S = P.SETTINGS_PAGE
     hs_i = next(i for i, r in enumerate(S.rows) if r.action == P.ACT_PAGE and r.arg == P.HOMESET_PAGE_INDEX)
     rows_s = PSYMS[f'pod_rows_{P.SETTINGS_PAGE_INDEX}']; on_row = PSYMS['on_row']

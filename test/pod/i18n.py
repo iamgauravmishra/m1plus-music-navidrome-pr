@@ -231,7 +231,7 @@ def run(ctx):
     over = []
     for loc in LOC:
         for key in ('Update Local Music first', 'Not enough memory', 'Storage unavailable', 'Too many songs to shuffle',
-                    'Screenshot saved', 'Screenshot failed', 'No music in this folder'):
+                    'Screenshot saved', 'Screenshot failed', 'No music in this folder', 'New mix when Home opens'):
             if width(tr_text(loc, key), msg_px) > 260: over.append((loc, key))          # the message box's line is 260 px (@0x4788a0)
         for key in ('Update Local Music first', 'Library too large', 'No albums', 'Not enough memory'):
             if width(tr_text(loc, key), 20) > cover.find('label_status').w: over.append((loc, key, 'status'))
