@@ -122,7 +122,6 @@ def run(ctx):
            and pod.FUNCTIONS['widget_set_tr_text'][2] == 0x66f994 and pod.FUNCTIONS['locale_info'][2] == 0x6588b0, 'the three stock translation functions are pinned')
 
     # 5. The payload in every language (the stock lookup mocked with the built table): each text it sets is the table's.
-    albuminfo = sibling('albuminfo')
     shuffle = sibling('shuffle')
     play = PSYMS['shuffle_play']
     cover_open = PSYMS['coverflow_open']
@@ -184,27 +183,10 @@ def run(ctx):
         m.showlist = [one] * (A['SHUFFLE_MAX'] + 1)
         m.call(play, a0=1, count=50000000)
         expect(toast_of(m) == [T('Too many songs to shuffle')], f'{loc}: Shuffle Albums with too many songs')
-        # the album page: both buttons and the count line
-        am = albuminfo.AlbumMachine(); am.set_language(loc)
-        item = am.header(tracks=6, year=1959)
-        kids = am.kids(item)
-        expect(am.texts.get(kids[3]) == T('Play all') and not am.texts.get(kids[5]), f'{loc}: the pill reads {T("Play all")!r}; Shuffle is a glyph with no text')
-        for n in (1, 2, 5, 11, 21, 100):
-            am = albuminfo.AlbumMachine(); am.set_language(loc)
-            item = am.header(tracks=n, year=1959 if n % 2 else 0)
-            want = T('%d track' if n == 1 else '%d tracks').replace('%d', str(n))
-            if n % 2: want = '1959 \xc2\xb7 ' + want
-            expect(am.texts.get(am.kids(item)[4]) == want, f'{loc}: {n} tracks reads {want!r} (got {am.texts.get(am.kids(item)[4])!r})')
-        am = albuminfo.AlbumMachine(); am.set_language(loc)
-        item = am.header(tracks=3, year=1959); am.present.clear()
-        am.call(PSYMS['ah_on_shuffle'], count=5000000)
-        expect(toast_of(am) == [T('Storage unavailable')], f'{loc}: Shuffle on the album page with the card out')
 
     # 6. English stays English: no table, or a table without the key, shows the key (= the English text).
     m = artists_machine(); m.call(open_artists, count=5000000)
     expect(text_of(m, m.widgets['label_title']) == ['Artists'], 'no translation loaded: English')
-    am = albuminfo.AlbumMachine(); item = am.header(tracks=1, year=1959)
-    expect(am.texts.get(am.kids(item)[4]) == '1959 \xc2\xb7 1 track' and am.texts.get(am.kids(item)[3]) == 'Play all', 'the album header in English')
 
     # 7. Widths in the shipped font, per language: rows, titles, messages, buttons.
     font = Ttf(os.path.join(WORK, RAW, 'fonts', 'default.ttf'))

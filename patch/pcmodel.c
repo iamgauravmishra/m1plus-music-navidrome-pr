@@ -1107,7 +1107,7 @@ void *pc_strip(void *queue, int *idx) {
 }
 
 /* ---------------------------------------------------------------------------
- * The Library query filter (docs/modules/payload.md hook 7). Every Library list (Songs, Albums, Artists, Genres, Composers, Hi-Res, Recently Added, the search, an album's and an
+ * The Library query filter (docs/modules/payload.md hook 6). Every Library list (Songs, Albums, Artists, Genres, Composers, Hi-Res, Recently Added, the search, an album's and an
  * artist's songs, Cover Flow's source, Memory Playback's queue) is a `select ... from songtable ...` that stock formats with sprintf and runs through toolsQueryDbTable (0x5ee77c) or
  * toolsQueryDbTableAndSort (0x5ee9ac, the Songs title sorts). Both prologues are hooked (q2-pod's dbquery / sorted_query, ringnav_library_query); the table is replaced by a
  * filtered subquery BEFORE stock's grouping, so an album shared by music and an episode keeps the music row (its artwork) and untagged episodes add no Unknown rows. The filter is

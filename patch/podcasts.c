@@ -1234,7 +1234,7 @@ static void pg_art(grid_t *g, grid_tile_t *t, const pc_show_t *s) {
 }
 
 /* ---------------------------------------------------------------------------
- * The Show page's tint: the album page's (docs/modules/album-page.md "Cover tint", "Status bar"; patch/albuminfo.c) on this window, with the same functions and assets: the window's bg_color is the
+ * The Show page's tint: the album page's (docs/modules/album-page.md "Cover tint", "Status bar"; patch/albumpage.c) on this window, with the same functions and assets: the window's bg_color is the
  * tone (pod_tone) of the cover's average colour under the black gradient image ah_tint (the window's first child, img_ah_tint, shown only now), so the list over it is transparent; the status bar takes
  * the window's row 0 (pod_bar_tint, pod_bar_black: the one owner of the bar) while the page is in front and tinted; the tone cache (pod_tone_get / pod_tone_put, shared with the album page and Now
  * Playing) remembers it per show. A show without a cover picture stays black. The state is the page's: it is cleared when another level shows, when the page is behind another and when it is destroyed.

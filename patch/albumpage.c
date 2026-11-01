@@ -31,8 +31,6 @@
 #include "i18n.h"
 #include "songops.h"
 
-extern void pod_open_player(void *queue, int idx, int cls); /* patch/albuminfo.c: the stock row handler's tail */
-
 #define ROW LIST_ROW_H
 
 #define I(w, off) (*(int *)((char *)(w) + (off)))

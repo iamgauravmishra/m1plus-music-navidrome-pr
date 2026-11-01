@@ -8,7 +8,7 @@
 #include "shot.h"
 #include "covercache.h"
 
-/* The library scan's folder walk (tools/pod.py SCAN_SITE, docs/modules/payload.md hook 6): stock skips a directory entry when strcmp(name, ".") is 0 (and then ".." and a list of
+/* The library scan's folder walk (tools/pod.py SCAN_SITE, docs/modules/payload.md hook 5): stock skips a directory entry when strcmp(name, ".") is 0 (and then ".." and a list of
  * system folders); the call is replaced by `jal pod_scan_dir`, whose delay slot still loads a1 = ".". A hidden folder (a name starting with '.') counts as a match, so
  * /mnt/mmc/.m1plus/ (our cache, covers and downloads) never joins Songs and Albums; anything else is stock's strcmp. (q2-pod's ringnav_scan_dir.) */
 __attribute__((noinline)) int pod_scan_dir(const char *name, const char *dot) {
@@ -67,10 +67,10 @@ void *pod_bind(void *win, const char *name, int (*fn)(void *, void *), const voi
     return w;
 }
 
-/* The cover tint (Now Playing's, patch/nowplaying.c, and the album page's, patch/albuminfo.c). Value: NP_V_MIN + v *
+/* The cover tint (Now Playing's, patch/nowplaying.c, and the album page's, patch/albumpage.c). Value: NP_V_MIN + v *
  * (NP_V_MAX - NP_V_MIN) / 255 for the brightest channel v; every channel keeps NP_SAT_NUM / NP_SAT_DEN of its distance
  * from v (a grey stays grey). A black cover is the neutral tone. With NP_V_MAX 192 white text keeps 4.5:1 under the
- * gradients of both pages (test/pod/nowplaying.py, test/pod/albuminfo.py). */
+ * gradients of both pages (test/pod/nowplaying.py, test/pod/albumpage.py). */
 __attribute__((noinline)) unsigned pod_tone(unsigned r, unsigned g, unsigned b) {
     unsigned v = r > g ? r : g, c[3], i, vt;
     if (b > v) v = b;
@@ -211,7 +211,7 @@ __attribute__((noinline)) void pod_corners(void *canvas, const unsigned char *ta
         }
 }
 
-/* The pills: the glyph and the label centred as a pair SG_PILL_GAP apart (the album page's Play all, patch/albuminfo.c ah_centre_pill): AWTK puts the glyph in a
+/* The pills: the glyph and the label centred as a pair SG_PILL_GAP apart (the album page's Play all, patch/albumpage.c): AWTK puts the glyph in a
  * square as high as the button at margin_left and the text at the square's end plus the spacer. Moved from patch/songs.c. */
 void pod_centre_pill(void *btn, int pw) {
     static const char *const key[5] = {"normal:", "pressed:", "over:", "focused:", "disable:"};

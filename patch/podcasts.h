@@ -98,7 +98,7 @@ void pc_note(void *track);
 /* The hook in stock's tag reader (get_id3info 0x4dfd58, the strcpy of the parsed path at 0x4dff4c; docs/modules/podcasts.md "Tags"): stock's strcpy(info, path), then for a podcast path the episode and the show
  * in the struct's title / artist / album. Returns info, as strcpy does. */
 char *pc_id3_path(char *info, const char *path);
-/* The Library query filter (the two hooks on toolsQueryDbTable 0x5ee77c and toolsQueryDbTableAndSort 0x5ee9ac; docs/modules/payload.md hook 7): stock's query with songtable replaced by a subquery without
+/* The Library query filter (the two hooks on toolsQueryDbTable 0x5ee77c and toolsQueryDbTableAndSort 0x5ee9ac; docs/modules/payload.md hook 6): stock's query with songtable replaced by a subquery without
  * the /mnt/mmc/Podcasts/ paths. Same arguments and result as the stock functions. */
 int pc_library_query(const char *db, const char *sql, void *row, int sort);
 int pc_sorted_query(const char *db, const char *sql, void *row, int sort);

@@ -9,7 +9,7 @@ Writes OUTDIR/podcasts-final-show.png, -shows.png, -states.png and OUTDIR/podcas
 
 WORKDIR is a built tree (work/mod-release): the font (measured with the stb model of tools/stb_raster.py: advance + 1 px a glyph), the glass navbar pieces and
 the menu glass come from it and from tools/mod_icons.py (Lucide). The page tint is the album page's: tone() of the cover's average colour (mod_nowplaying.tone)
-under the black gradient of mod_icons.ah_tint_alpha, the status bar darkened as preview_album_tint.bar_color does. Sizes follow the other previews (rows of
+under the black gradient of mod_icons.ah_tint_alpha, the status bar darkened as bar_color does (patch/common.c pod_bar_color). Sizes follow the other previews (rows of
 patch/offsets.inc, 16 px margins, the Albums grid's 144 px cells). Covers: All-In's real logo and synthetic stand-ins. Not pixel-exact AWTK.
 """
 import argparse, os, re, sys
@@ -17,7 +17,6 @@ from PIL import Image, ImageChops, ImageDraw, ImageOps
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import preview_icons as PI
 import preview_songs as PS
-import preview_album_tint as PAT
 import mod_icons as M
 import mod_nowplaying as NP
 import pod_show
@@ -25,6 +24,18 @@ from stb_raster import _paste
 
 W, WIN, NAV, STAT = 320, 450, 50, 30
 O = PI.offsets()
+
+
+def average(im):
+    return im.resize((1, 1), Image.BOX).getpixel((0, 0))
+
+
+def bar_color(tone):
+    """patch/common.c pod_bar_color of the page's window row 0 (the tone under the overlay's first alpha): darkened until the
+    status bar's white glyphs keep 4.5:1. Returns (the bar's colour, the page's row 0 colour)."""
+    row0 = tuple(v * (255 - M.ah_tint_alpha(0)) // 255 for v in tone); r, g, b = row0
+    while 2126 * r * r + 7152 * g * g + 722 * b * b > O['NP_BAR_LUM_MAX']: r, g, b = r * 15 >> 4, g * 15 >> 4, b * 15 >> 4
+    return (r, g, b), row0
 WHITE, GREY, SEC, DIMT, REDISH = (255,) * 3, (0xAA,) * 3, (0xB8,) * 3, (0xA6,) * 3, (0xFF, 0x6B, 0x6B)
 FOLD = (0x22, 0x22, 0x22)
 CJK = '⺀-鿿＀-￯“”'      # characters that may break anywhere: CJK, fullwidth forms, curly quotes
@@ -150,7 +161,7 @@ def synth_cover(s, kind, n=400):
 class Show:
     def __init__(self, key, title, cover, author, genre, sub, eps, local=False):
         self.key, self.title, self.cover, self.author, self.genre, self.sub, self.eps, self.local = key, title, cover, author, genre, sub, eps, local
-        self.tone = NP.tone(*PAT.average(cover.resize((160, 160), Image.LANCZOS))) if cover is not None else None
+        self.tone = NP.tone(*average(cover.resize((160, 160), Image.LANCZOS))) if cover is not None else None
 
 
 def ep(date, title, desc, state, label, played=False, pct=0):
@@ -243,7 +254,7 @@ def window(s, tone, content, scroll, title=None, band=False, top=0, caps='more')
 
 
 def frame(s, win, tone):
-    bar = PAT.bar_color(tone)[0] if tone is not None else (0, 0, 0)
+    bar = bar_color(tone)[0] if tone is not None else (0, 0, 0)
     im = Image.new('RGBA', (W, STAT + WIN), bar + (255,))
     PI.status_bar(s, im, 0, bg=bar)
     im.alpha_composite(win, (0, STAT))

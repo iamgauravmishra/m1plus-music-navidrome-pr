@@ -1,6 +1,6 @@
 # Payload safety
 
-- **Keep the approved entry points.** Home icon tap, guarded Home initialization, album header,
+- **Keep the approved entry points.** Home icon tap, guarded Home initialization,
   Now Playing initialization, More-dialog initialization, the podcast tag-copy call site and
   the previously empty `scroll_view` event slot. See [payload](payload.md) and `AGENTS.md` for
   their scope. Do not add global paint or main-loop work.

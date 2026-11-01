@@ -16,8 +16,7 @@ design (its tools/build.py), reduced to the one hook this project needs:
   * stock functions are reached through absolute-address macros, libc only through demo's own GOT
     slots -- both pinned.
 
-A second hook, home_page_init, runs the boot guard (patch/home.c); a third, albuminfo_listitem0_layout,
-restyles the album page's header (patch/albuminfo.c), a fourth, playing_page_init, tints Now Playing
+A second hook, home_page_init, runs the boot guard (patch/home.c); a third, playing_page_init, tints Now Playing
 and shows the remaining time (patch/nowplaying.c). The library rows are pinned
 call-site and immediate edits (patch/rows.json). Every patched word and the input demo are pinned
 by value/SHA before anything is written.
@@ -42,7 +41,7 @@ OBJCOPY = os.path.join(LLVM, 'llvm-objcopy')
 LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
-SOURCES = ['m1plus.c', 'common.c', 'menu.c', 'covercache.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'albuminfo.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c',
+SOURCES = ['m1plus.c', 'common.c', 'menu.c', 'covercache.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c',
            'scroll.c', 'playmore.c', 'playlists.c', 'azlist.c', 'songops.c', 'songs.c', 'albumpage.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnet.c', 'podcasts.c', 'tape.c', 'probe.c', 'keyboard.c', 'search.c']
 
 FLAGS = ['--target=mipsel-linux-gnu', '-march=mips32r2', '-mabi=32', '-mfp64',
@@ -68,13 +67,7 @@ HOME_CLICK_PROLOGUE = (0x3c1c004d, 0x279c0350, 0x0399e021)  # lui/addiu $gp; add
 HOME_INIT = 0x534cd4
 HOME_INIT_PROLOGUE = (0x3c1c004d, 0x279cf1fc, 0x0399e021)
 
-# The third hook (patch/albuminfo.c): albuminfo_listitem0_layout, which builds the album page's
-# header item. It is called only from the album page's list builder (albuminfo_page_init and its
-# to-foreground rebuild), never at boot; m1plus_albuminfo_header runs the stock function first.
-ALBUMINFO_HEADER = 0x526264
-ALBUMINFO_HEADER_PROLOGUE = (0x3c1c004e, 0x279cdc6c, 0x0399e021)
-
-# The fourth hook (patch/nowplaying.c): playing_page_init, the Now Playing page's init (called by the navigator's
+# The third hook (patch/nowplaying.c): playing_page_init, the Now Playing page's init (called by the navigator's
 # page-init dispatcher only when the page is built, never at boot). m1plus_playing_init runs the stock function
 # first, then starts the page-scoped tint and remaining-time timer.
 PLAYING_INIT = 0x53d1e4
@@ -97,9 +90,7 @@ FUNCTIONS = {
     'widget_set_sensitive':    ('int', 'void *, int', 0x666b9c),
     'widget_set_opacity':      ('int', 'void *, int', 0x669140),   # (the Regenerate Daily Mix row, dimmed: opacity byte +0x34, widget_paint's global alpha)
     'widget_use_style':        ('int', 'void *, const char *', 0x66aa64),
-    'hscroll_label_create':    ('void *', 'void *, int, int, int, int', 0x60a700),
     'hscroll_label_set_only_parent_focus': ('int', 'void *, int', 0x6092e8),
-    'hscroll_label_set_ellipses': ('int', 'void *, int', 0x609380),
     'widget_grab':             ('int', 'void *, void *', 0x668958),
     'widget_ungrab':           ('int', 'void *, void *', 0x6689f4),
     'widget_count_children':   ('unsigned', 'void *', 0x669f00),
@@ -182,9 +173,8 @@ FUNCTIONS = {
     'slide_indicator_set_max': ('int', 'void *, unsigned', 0x616b70),
     'widget_destroy':          ('int', 'void *', 0x66e544),
     'window_close':            ('int', 'void *', 0x675b70),   # "Shanling Home" closes the menu under the Settings page
-    # The album view (patch/albuminfo.c, patch/coverflow.c): the header's new widgets, the stock Play all
-    # sequence, and the cover-task list the stock album page builds before albuminfo_page opens
-    'button_create':           ('void *', 'void *, int, int, int, int', 0x622adc),
+    # The album view (patch/covercache.c, patch/songops.c): the stock play sequence, and the cover-task list the stock
+    # album page builds before albuminfo_page opens
     'start_player':            ('int', 'void *, int, int, int', 0x4e4648),
     'albumcoverinfo_init':     ('void', 'void *', 0x4dcf9c),
     'batchadd_albumcover_task': ('void', 'int, int', 0x4dccac),   # local_albumsmallcover_task: ends with albumcover_taskstate = 1
@@ -195,7 +185,7 @@ FUNCTIONS = {
 FUNCTIONS.update({
     'widget_set_style':        ('int', 'void *, const char *, const void *', 0x66c448),
     'value_set_uint32':        ('void *', 'void *, unsigned', 0x711858),
-    # The album page's Play all pill (patch/albuminfo.c ah_centre_pill): the translated text (a wchar_t string) and its width
+    # The album page's Play all pill (patch/albumpage.c): the translated text (a wchar_t string) and its width
     # in the widget's own style, as widget_measure_text @0x66c7e0 gets it (widget_get_canvas, widget_prepare_text_style,
     # canvas_measure_text @0x644544; 0 when there is no canvas or no text)
     'widget_get_text':         ('const unsigned *', 'void *', 0x667ea4),
@@ -226,18 +216,13 @@ FUNCTIONS.update({
     # icon's visibility does not
     'widget_set_need_relayout_children': ('int', 'void *', 0x66c338),
 })
-# The album page's Play all and Shuffle open Now Playing the way a track row does (the row handler @0x52569c, loop
-# @0x525904..0x5259d8; patch/albuminfo.c ah_open_player): the window stack calls, and widget_off_by_func to take the stock
-# Play all handler (@0x525d48, which stays on the page) off the button
+# Now Playing opens the way a track row does (the row handler @0x52569c, loop @0x525904..0x5259d8; patch/songops.c
+# pod_open_player): the window stack calls
 FUNCTIONS.update({
     'navigator_window_is_exist':  ('int', 'const char *', 0x4d2040),
     'navigator_close':         ('int', 'const char *', 0x4d2118),   # closes the named page (Now Playing's Look up album / artist, patch/playmore.c)
     'window_manager_get_top_window': ('void *', 'void *', 0x6775c4),
-    'widget_off_by_func':      ('int', 'void *, int, void *, void *', 0x666ec0),
-    # the album page's tint (patch/albuminfo.c): the page window the header's item is in
-    'widget_get_window':       ('void *', 'void *', 0x66a9a8),
 })
-# (rows_track_number also uses label_create, widget_use_style, widget_set_sensitive and widget_set_text_utf8, above)
 # The mini player bar (patch/minibar.c, docs/modules/minibar.md): the calls the stock transport buttons make, and the play state
 # they read. The lock screen's btn_play / btn_next handlers (strcmp-bound to 0x53f964 / 0x53f900 by name @0x53f3d4 / @0x53f410) are
 # `playpause_quick_click()` / `next_quick_click(e, 0)` followed by the page's own refresh (0x53f520); Now Playing's next button
@@ -461,12 +446,12 @@ TAPE_PINS = (   # (address, stock word, what it proves): the Tape page invalidat
     (0x668e14, 0x24060010, 'widget_invalidate: the rectangle is 16 bytes (rect_init, copied with memcpy 0x10): four 32 bit words x, y, w, h'),
     (0x667d84, 0x3c1c003a, 'widget_get_text_utf8 prologue'), (0x667d88, 0x279cc14c, 'widget_get_text_utf8 prologue'), (0x667d8c, 0x0399e021, 'widget_get_text_utf8 prologue'),
 )
-# The library scan's folder walk (patch/common.c pod_scan_dir, docs/modules/payload.md hook 6): toolsLoadAllFile (0x5efd98) lists each folder with the function at 0x5ea364 (readdir
+# The library scan's folder walk (patch/common.c pod_scan_dir, docs/modules/payload.md hook 5): toolsLoadAllFile (0x5efd98) lists each folder with the function at 0x5ea364 (readdir
 # loop, 0x5ea600); for a directory entry (d_type 4, name in s0) it skips "." with `strcmp(name, ".")` (0x5ea6a8), ".." and a list of system folders (lost+found, System Volume
 # Information, RECYCLER, $RECYCLE.BIN, .LOST.DIR, .fseventsd, .Spotlight-V100, .Trashes); a zero result goes back to readdir (0x5ea600). Every other dot-folder is walked. The
 # strcmp call is replaced by `jal pod_scan_dir` (q2-pod's SCAN_DIRS): the delay slot still loads a1 = ".", a0 = the name. Not on the boot path (tools/reach.py): the scan runs from
 # the Update Local Music item and the other scan callers only.
-# The Library query filter (patch/pcmodel.c pc_library_query / pc_sorted_query, docs/modules/payload.md hook 7): the two functions every songtable select goes through, hooked at their PIC prologues
+# The Library query filter (patch/pcmodel.c pc_library_query / pc_sorted_query, docs/modules/payload.md hook 6): the two functions every songtable select goes through, hooked at their PIC prologues
 # (q2-pod's toolsQueryDbTable / toolsQueryDbTableAndSort hooks). Both take (db, sql, row callback, sort) in a0..a3 and use no stack arguments.
 QUERY_DB, QUERY_DB_PROLOGUE = 0x5ee77c, (0x3c1c0041, 0x279c5754, 0x0399e021)
 QUERY_SORT, QUERY_SORT_PROLOGUE = 0x5ee9ac, (0x3c1c0041, 0x279c5524, 0x0399e021)
@@ -773,7 +758,6 @@ def gen_stock_h(out, demo_path):
     h.append(f'#define stock_playlist_import ((int (*)(void *, void *))0x{PLAYLIST_IMPORT:x}u)')   # the stock Playlists page's Import / Export rows
     h.append(f'#define stock_playlist_export ((int (*)(void *, void *))0x{PLAYLIST_EXPORT:x}u)')
     h.append('extern int stock_home_click_trampoline(void *, void *);')
-    h.append('extern void stock_albuminfo_header_trampoline(void *);')
     h.append('extern int stock_playing_init_trampoline(void *, void *);')
     h.append('extern int stock_playmore_init_trampoline(void *, void *);')
     h.append('extern int stock_dbquery_trampoline(const char *, const char *, void *, int);')
@@ -848,9 +832,6 @@ def gen_asm(out, slots):
     # the same for home_page_init
     asm += ['.globl stock_home_init_trampoline', 'stock_home_init_trampoline:',
             f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{HOME_INIT + 12:x}', 'nop']
-    # and for the album page's header builder
-    asm += ['.globl stock_albuminfo_header_trampoline', 'stock_albuminfo_header_trampoline:',
-            f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{ALBUMINFO_HEADER + 12:x}', 'nop']
     # and for the Now Playing page's init
     asm += ['.globl stock_playing_init_trampoline', 'stock_playing_init_trampoline:',
             f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{PLAYING_INIT + 12:x}', 'nop']
@@ -895,8 +876,7 @@ def compile_payload(out, demo_path, tag=TAG):
     run(CLANG, *FLAGS, '-c', out / 'pod_asm.S', '-o', out / 'pod_asm.o')
     # compact_set_row_layout is reached only from the patched stock call sites, so keep it
     keep = ['--undefined=compact_set_row_layout', '--undefined=m1plus_home_init',
-            '--undefined=stock_home_init_trampoline', '--undefined=m1plus_albuminfo_header',
-            '--undefined=stock_albuminfo_header_trampoline', '--undefined=m1plus_playing_init',
+            '--undefined=stock_home_init_trampoline', '--undefined=m1plus_playing_init',
             '--undefined=stock_playing_init_trampoline', '--undefined=m1plus_scroll_event',
             '--undefined=m1plus_playmore_init', '--undefined=stock_playmore_init_trampoline', '--undefined=pc_id3_path', '--undefined=pc_library_query', '--undefined=pc_sorted_query', '--undefined=stock_dbquery_trampoline', '--undefined=stock_sorted_query_trampoline',
             '--undefined=pod_scan_dir', '--undefined=pf_items', '--undefined=pf_seen']   # (the last two: accessors of the parser the tests read; nothing in the payload calls them)
@@ -985,12 +965,6 @@ def patch_rows(image, ps):
         a, old = int(a, 16), int(old, 16)
         check(old == JALR_T9, f'{a:#x}: not jalr $t9'); at(a, old)
         edits.append((a, old, jal(icon, a), 'icon'))
-    number = ps.get('rows_track_number')
-    check(number is not None, 'payload has no rows_track_number')
-    for a, old, *_ in J['text_calls']['sites']:
-        a, old = int(a, 16), int(old, 16)
-        check(old == JALR_T9, f'{a:#x}: not jalr $t9'); at(a, old)
-        edits.append((a, old, jal(number, a), 'text'))
     for g in J['pinned']:
         for a, old, *_ in g['sites']:
             at(int(a, 16), int(old, 16))
@@ -1035,9 +1009,6 @@ def patch_demo(raw, payload, ps, demo_path):
     check(BASE <= target2 < BASE + len(payload), 'home init entry symbol outside payload')
     hook(patched, HOME_CLICK, HOME_CLICK_PROLOGUE, target, 'home click')
     hook(patched, HOME_INIT, HOME_INIT_PROLOGUE, target2, 'home_page_init')
-    target3 = ps['m1plus_albuminfo_header']
-    check(BASE <= target3 < BASE + len(payload), 'album header entry symbol outside payload')
-    hook(patched, ALBUMINFO_HEADER, ALBUMINFO_HEADER_PROLOGUE, target3, 'albuminfo_listitem0_layout')
     target4 = ps['m1plus_playing_init']
     check(BASE <= target4 < BASE + len(payload), 'playing init entry symbol outside payload')
     hook(patched, PLAYING_INIT, PLAYING_INIT_PROLOGUE, target4, 'playing_page_init')
@@ -1057,7 +1028,7 @@ def patch_demo(raw, payload, ps, demo_path):
     check(dynsym(demo_path).get('playsong_id3info') == 0xa0d88c, 'playsong_id3info moved')
     edits = patch_rows(patched, ps)
     # no row edit may touch a PIC prologue (the hooks are the only ones) or a hook site
-    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, ALBUMINFO_HEADER, PLAYING_INIT, PLAYMORE_INIT, QUERY_DB, QUERY_SORT)) and not ID3_SITE <= int(a, 16) < ID3_SITE + 4 and not SCAN_SITE <= int(a, 16) < SCAN_SITE + 4
+    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, PLAYING_INIT, PLAYMORE_INIT, QUERY_DB, QUERY_SORT)) and not ID3_SITE <= int(a, 16) < ID3_SITE + 4 and not SCAN_SITE <= int(a, 16) < SCAN_SITE + 4
               for a, *_ in edits), 'row edit on a hook')
     check(all(not (SCROLL_SLOT <= int(a, 16) < SCROLL_SLOT + 4 or a in {hex(p[0]) for p in SCROLL_PINS}) for a, *_ in edits),
           'row edit on a list gesture word')
@@ -1089,7 +1060,6 @@ def main():
         'payload_sha256': sha(payload), 'scratch_bytes': scratch, 'entry_symbol': ps['m1plus_home_click'],
         'segment_file_off': seg_off, 'hook': {'addr': HOME_CLICK, 'target': ps['m1plus_home_click']},
         'hook_init': {'addr': HOME_INIT, 'target': ps['m1plus_home_init']},
-        'hook_albuminfo': {'addr': ALBUMINFO_HEADER, 'target': ps['m1plus_albuminfo_header']},
         'hook_playing': {'addr': PLAYING_INIT, 'target': ps['m1plus_playing_init']},
         'hook_playmore': {'addr': PLAYMORE_INIT, 'target': ps['m1plus_playmore_init']},
         'hook_id3': {'addr': ID3_SITE, 'target': ps['pc_id3_path']},
@@ -1103,7 +1073,7 @@ def main():
     (build / 'manifest.json').write_text(json.dumps(manifest, indent=1) + '\n')
     print(f'payload {len(payload)} bytes ({scratch} .scratch) @ {BASE:#x} (entry {ps["m1plus_home_click"]:#x}), '
           f'hook @ {HOME_CLICK:#x}, boot guard hook @ {HOME_INIT:#x} (home_page_init), '
-          f'album header hook @ {ALBUMINFO_HEADER:#x}, Now Playing init hook @ {PLAYING_INIT:#x}, '
+          f'Now Playing init hook @ {PLAYING_INIT:#x}, '
           f'scroll_view before-children slot @ {SCROLL_SLOT:#x} -> {ps["m1plus_scroll_event"]:#x}')
     kinds = {k: sum(e[3] == k for e in edits) for k in ('immediate', 'call', 'nop')}
     print(f'  rows: {len(edits)} pinned edits ({kinds["immediate"]} immediates, {kinds["call"]} row-layout '

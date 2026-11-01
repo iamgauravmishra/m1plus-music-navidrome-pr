@@ -2,9 +2,9 @@
 """out/preview/stock-pages.png: PIL mock-up of the stock pages the release restyles (docs/ui.md),
 drawn from one finished tree. Approximate, not AWTK; sample data.
 
-  Albums (stock list) -> the album page            the stock Albums rows, then albuminfo_page
-  Cover Flow on an artist -> the same album page   the All albums card opens the same stock page
-  a playlist's songs                               the Songs page (allmusic_page) with the q2-pod rows
+  Albums (stock list)                              the stock Albums rows (their album page is our own, docs/modules/album-page.md)
+  Cover Flow on an artist                          the All albums card opens our Songs page on the artist's songs
+  a playlist's songs                              the Songs page (allmusic_page) with the q2-pod rows
   the queue (Now Playing list)                     playerjumpinfo_page: the playing row has the wave marker at the right end
 
 Usage: uv run python -I tools/preview_stock.py WORKDIR OUT.png
@@ -13,12 +13,13 @@ import argparse, os, sys
 from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import preview_font   # noqa: F401  (redirects the painters' text to stb_raster, the tree's font)
-import preview_album as PA
 import preview_cover as PC
 import preview_lists as PL
 from preview_lockscreen import Painter
 
 W, H, BAR = PL.W, PL.H, PL.BAR
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ART_SIZE = 160   # the sample covers' size
 ALBUMS = [('Kind of Blue', 'Miles Davis', 'sky'), ('Bitches Brew', 'Miles Davis', 'design'), ('Blue Train', 'John Coltrane', 'disc'),
           ('Time Out', 'The Dave Brubeck Quartet', 'sky'), ('Mingus Ah Um', 'Charles Mingus', 'design'),
           ('Head Hunters', 'Herbie Hancock', 'disc'), ('Take Five', 'Paul Desmond', 'sky')]
@@ -31,6 +32,23 @@ QUEUE = [('So What', 'Miles Davis'), ('Freddie Freeloader', 'Miles Davis'), ('Bl
          ('Freddie Freeloader (Alt.)', 'Miles Davis')]
 
 
+def art(kind):
+    """A sample cover: the wallpaper's centre, a two-tone design, or the placeholder disc."""
+    if kind == 'sky':
+        im = Image.open(os.path.join(ROOT, 'assets', 'starry-night-320x480.png')).convert('RGB').crop((0, 90, 320, 410))
+        return im.resize((ART_SIZE, ART_SIZE), Image.LANCZOS)
+    im = Image.new('RGB', (ART_SIZE, ART_SIZE)); d = ImageDraw.Draw(im)
+    if kind == 'disc':
+        d.rectangle([0, 0, ART_SIZE, ART_SIZE], fill=(34, 34, 34))
+        c = ART_SIZE / 2
+        d.ellipse([c - 70, c - 70, c + 70, c + 70], fill=(46, 46, 46)); d.ellipse([c - 60, c - 60, c + 60, c + 60], fill=(70, 70, 70))
+        d.ellipse([c - 20, c - 20, c + 20, c + 20], fill=(34, 34, 34))
+    else:
+        for y in range(ART_SIZE): d.line([(0, y), (ART_SIZE, y)], fill=(200 - y // 2, 90 + y // 4, 60 + y // 2))
+        d.ellipse([34, 30, 134, 130], outline=(255, 240, 210), width=5); d.rectangle([20, 140, 148, 148], fill=(30, 20, 40))
+    return im
+
+
 def albums_list(p, s):
     """The stock Albums page: 64 px list_items, a 52 px cover at (4,4), title and artist from x 60."""
     pg = PL.Page(p, s); pg.navbar('Albums')
@@ -38,7 +56,7 @@ def albums_list(p, s):
         y = BAR + 50 + i * 64
         pg.rect(0, y, 310, 60, s.color('list_item', 'list_item_style', 'bg_color', 'pressed' if i == 0 else 'normal'))
         pg.rect(0, y + 60, 310, 1, '#222222')
-        pg.im.paste(PA.art(kind).resize((52, 52), Image.LANCZOS).convert('RGBA'), (4, y + 4))
+        pg.im.paste(art(kind).resize((52, 52), Image.LANCZOS).convert('RGBA'), (4, y + 4))
         pg.label(album, 60, y + 7, 238, 24, 'hscroll_label', 'srlabel_item_white_style')
         pg.label(artist, 60, y + 33, 238, 20, 'hscroll_label', 'srlabel_item_gray18_style')
         pg.icon(s.str('button', 'btn_rightarrow_style', 'icon'), 285, y, 13, 60)
@@ -89,21 +107,18 @@ def main():
              ((120, 200, 120), 0), ((200, 120, 200), 0), ((210, 140, 60), 0)]
     scoped = [None] * 3 + shelf[3:]
     panels = [('1. Albums (stock list): tap Kind of Blue', albums_list(p, st('album_page'))),
-              ('2. the album page', PA.page(a.work, 'Albums', 'Kind of Blue', 'Miles Davis', '1959 · 8 tracks', PA.art('sky'), 8)),
-              ('3. Cover Flow on Miles Davis: tap the card', PC.page(a.work, 'All albums', 'Miles Davis', 'Miles Davis', scoped)),
-              ('4. the same album page (All albums)', PA.page(a.work, 'Albums', 'All albums', 'Miles Davis', '24 tracks', PA.art('disc'), 8)),
-              ('5. a playlist (Songs page, q2-pod rows)', playlist_detail(p, st('allmusic_page'))),
-              ('6. the queue (Now Playing list)', queue(p, st('playerjumpinfo_page')))]
+              ('2. Cover Flow on Miles Davis: tap the card', PC.page(a.work, 'All albums', 'Miles Davis', 'Miles Davis', scoped)),
+              ('3. a playlist (Songs page, q2-pod rows)', playlist_detail(p, st('allmusic_page'))),
+              ('4. the queue (Now Playing list)', queue(p, st('playerjumpinfo_page')))]
     pad, top = 12, 20
-    cols = 3
+    cols = 2
     out = Image.new('RGB', (cols * (W + pad) + pad, 2 * (H + top + pad) + pad + 16), (40, 40, 40))
     d = ImageDraw.Draw(out)
     for i, (cap, im) in enumerate(panels):
         x, y = pad + (i % cols) * (W + pad), pad + (i // cols) * (H + top + pad)
         assert im.size == (W, H), (cap, im.size)
         out.paste(im.convert('RGB'), (x, y + top)); d.text((x, y + 4), cap, fill=(230, 230, 230))
-    d.text((pad, out.height - 16), 'approximate PIL mock-ups (not AWTK); the album page is one stock page for the Albums list, '
-           'Cover Flow, Artists and the All albums card; sample data', fill=(160, 160, 160))
+    d.text((pad, out.height - 16), 'approximate PIL mock-ups (not AWTK); sample data', fill=(160, 160, 160))
     out.quantize(colors=192).save(a.out, optimize=True); print('wrote', a.out, out.size)
 
 

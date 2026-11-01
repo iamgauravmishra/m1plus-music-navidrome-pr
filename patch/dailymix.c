@@ -33,11 +33,11 @@
 #include "grid.h"
 #include "scroll.h"
 #include "podcasts.h"
+#include "songops.h"
 
-extern void pod_open_player(void *queue, int idx, int cls); /* patch/albuminfo.c */
 extern void pod_toast(const char *text); /* patch/shuffle.c */
 extern unsigned pod_rand(unsigned n); /* patch/shuffle.c */
-extern void pod_set_mode(int mode); /* patch/shuffle.c: the stock play mode (patch/albuminfo.c uses it for Shuffle) */
+extern void pod_set_mode(int mode); /* patch/shuffle.c: the stock play mode (patch/songops.c uses it for Shuffle) */
 extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one become List play (Play) */
 
 #define P(r, off) (*(char **)((char *)(r) + (off)))
@@ -1972,7 +1972,7 @@ static void dp_layout(void *canvas) {
     dp.laid = 1;
 }
 
-/* The pill's glyph, the gap and the text centred as a pair for the language (the album page's centring, patch/albuminfo.c ah_centre_pill). The text is measured with the
+/* The pill's glyph, the gap and the text centred as a pair for the language (the album page's centring, patch/albumpage.c). The text is measured with the
  * hidden label's own style; one that cannot be measured is taken as 40 px. */
 static void dp_pill(void) {
     unsigned wide[DM_TEXT];

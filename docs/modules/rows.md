@@ -74,19 +74,6 @@ The same function serves a third call site, the Artists / Genres / Composers reb
 without the marker the name is 265 px from x 12. Not touched: Folders (its icons tell folders from files), Search (types), the Playlists
 page (a playlist is not a track). No site is reachable from `main` / `platform_init` (`tools/reach.py`).
 
-**The track number** (`rows_track_number`, `rows.json` `text_calls`). The album detail rows are built by `albumdeinfo_listitem_layout`
-(`0x526394`: the tick `img_choice`, then `0x524b50`, called once per row at `0x5264a0` while the page builds, which creates the
-`listsscrlabel_N` hscroll_label, styles it white or gold, and formats `"%d %s"` (position + 1, the title; `0x524ce0`) into a stack buffer
-that `widget_set_text_utf8(label, buffer)` (`0x524cf4`) sets). That `jalr` becomes `jal rows_track_number` (the format load `0x524cdc`,
-`move $a1` `0x524ce8`, the GOT load `0x524cf0` and the delay slot `0x524cf8` pinned; stock label builder otherwise untouched, the page's one
-hook stays `albuminfo_listitem0_layout`). It splits the leading 1-3 digits and one space off, creates once per row a plain `label`
-(`label_create`, `ROW_NUM_W` 24 px wide, 35 for three digits; `srlabel_tracknum_style`, insensitive) restacked just before the title, sets the number
-on it and the rest on the stock title label. The row fit does the rest (the number is a visible child, so the title is narrowed by its width + 8).
-A row that already has the label (a rebuilt or recycled row) reuses it and sets its column width. Anything else (no number, no space, more than
-three digits, kill switch, `label_create` failing) sets the whole text on the title as stock. The style is in the `albuminfo_page` page theme
-(`tools/mod_ipodrows.py`: `label`, `#AAAAAA`, 21 px, right aligned). The multi-select pass (`visiable_list_selectbox` `0x4cc9b0`) matches
-children by the name `img_choice` only, so the extra child is invisible to it. Not reachable from `main` / `platform_init`.
-
 **Safety.** `tools/reach.py` builds an over-approximate graph of stock demo (12,162 functions; an edge
 for every call, GOT load or address taken) and walks it from `main` and `platform_init` except through
 the navigator's open-by-name dispatcher (`sub_4d00c0`): none of the 25 functions holding an edit is
@@ -102,7 +89,7 @@ the 46 immediates and 3 nops are static, so the way back from them is a stock re
 
 `tools/mod_ipodrows.py` edits the five row `ui/*.bin` (`localclass_page`, `allmusic_page`,
 `playerjumpinfo_page`, `album_page`, `playlist_page`: `row_height` / `default_item_height` 60 -> 64 and the jump list's template row) and the page
-themes (`allmusic_page`, `playerjumpinfo_page`, `albuminfo_page`, `playlist_page`, `search_page`, new
+themes (`allmusic_page`, `playerjumpinfo_page`, `playlist_page`, `search_page`, new
 `album_page`, both themes, 21 px titles, `srlabel_item_gray18_style` second line). Rows are 64 px with a
 60 px body above `list_item_style`'s separator, 52 px art at (4,4), titles to a 12 px right margin. Track rows of the Songs
 family and the queue show no per-row disc (below), so every title starts at x 12. The playing row has a small marker at the

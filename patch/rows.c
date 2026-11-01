@@ -26,8 +26,7 @@
  *     children afterwards would make every layout pass change sizes and relayout the window again);
  *   - on x=0 rows (Albums, Search albums) moves the ROW_ART cover to ROW_ART_INSET;
  *   - inside the second line's own view (Songs: view_artist) stretches its label to the view's end.
- * rows_track_icon (below) hides the repeated format disc of the track rows (docs/architecture.md section 6);
- * rows_track_number (below) shows the album detail track number in a grey label of its own.
+ * rows_track_icon (below) hides the repeated format disc of the track rows (docs/architecture.md section 6).
  * Anything unexpected (no row, no text, too many children) is left to the stock layout alone, which
  * always runs.
  */
@@ -172,59 +171,6 @@ int compact_set_row_layout(void *row, const char *params) {
 static int is_place_icon(const char *name) {
     return strcmp(name, "icon_folder") == 0 || strcmp(name, "icon_playlist") == 0 || strcmp(name, "icon_tf") == 0 ||
            strcmp(name, "icon_otg") == 0;
-}
-
-/* Replaces the text setter call (label, the text "N title") in the album detail track row's label builder
- * (0x524b50, called once per row by albumdeinfo_listitem_layout 0x526394; patch/rows.json text_calls).
- * Stock formats "%d %s" (track position + 1, then the title) into one hscroll_label. Apple Music style, the
- * number is secondary: the title label gets the text after the number, and the row gets one small
- * right-aligned label (ROW_NUM_STYLE: #AAAAAA, ROW_NUM_W wide, insensitive) for the number, restacked just
- * before the title, so the flow is [check box] number title: the row fit narrows the title by the
- * number's width + spacing, the ellipsis and the playing row's gold title stay the title's. A row that
- * already has the number label (a rebuilt or recycled row) reuses it. Anything unexpected (no leading
- * number and a space, the kill switch, no label) sets the whole text as stock does. */
-__attribute__((used, retain)) void rows_track_number(void *title, const char *text) {
-    const char *p = text;
-    char digits[8];
-    void *row, *num = (void *)0;
-    unsigned n, i, at = 0, len;
-    int width;
-    if (!title || !text || access(KILL_SD, F_OK) == 0) {
-        widget_set_text_utf8(title, text);
-        return;
-    }
-    while (*p >= '0' && *p <= '9') p++;
-    len = (unsigned)(p - text);
-    row = P(title, W_PARENT);
-    if (!len || len > 3 || *p != ' ' || !row) {
-        widget_set_text_utf8(title, text);
-        return;
-    }
-    n = widget_count_children(row);
-    for (i = 0; i < n && i < ROW_MAX_CHILDREN; i++) {
-        void *c = widget_get_child(row, i);
-        if (c == title)
-            at = i;
-        else if (pod_is_type(c, "label"))
-            num = c;
-    }
-    width = len > 2 ? ROW_NUM_W3 : ROW_NUM_W;
-    if (!num) {
-        num = label_create(row, 0, 0, width, I(title, W_H));
-        if (!num) {
-            widget_set_text_utf8(title, text);
-            return;
-        }
-        widget_use_style(num, ROW_NUM_STYLE);
-        widget_set_sensitive(num, 0);
-        widget_restack(num, at); /* last child now: before the title */
-    } else {
-        widget_resize(num, width, I(num, W_H)); /* a recycled row: this number's column (no-op when unchanged) */
-    }
-    memcpy(digits, text, len);
-    digits[len] = 0;
-    widget_set_text_utf8(num, digits);
-    widget_set_text_utf8(title, p + 1);
 }
 
 __attribute__((used, retain)) void rows_track_icon(void *img, const char *name) {

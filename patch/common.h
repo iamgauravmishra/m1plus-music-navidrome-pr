@@ -14,7 +14,7 @@ int pod_on_player(void *ctx, void *e); /* click handler: the stock "back to the 
 int pod_scan_dir(
     const char *name,
     const char *
-        dot); /* the library scan's strcmp(name, ".") replacement: 0 for any name starting with '.' (docs/modules/payload.md hook 6) */
+        dot); /* the library scan's strcmp(name, ".") replacement: 0 for any name starting with '.' (docs/modules/payload.md hook 5) */
 int pod_card_mounted(
     void); /* the SD card is mounted (statfs: /mnt/mmc is another file system than /mnt); never write under /mnt/mmc otherwise */
 int pod_is_type(void *w, const char *type); /* w is a widget of exactly this type name */

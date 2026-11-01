@@ -31,7 +31,7 @@ for commands, [UI](ui.md) for layout/assets, and [history](history.md) for recor
 | [Songs](modules/songs.md) | A–Z sections, rail, sort and selection |
 | [Search](modules/search.md) | Library search: the Apple Music screen, chips, live results, embedded keyboard, folded multi-word matching |
 | [Playlists](modules/playlists.md) | Cover mosaics, list mode and stock playlist operations |
-| [Album page](modules/album-page.md) | Shared stock album view, tint and playback actions |
+| [Album page](modules/album-page.md) | Our own album page (tint, status bar, tone cache, playback actions); the stock page stays plain stock as its fallback |
 | [Rows](modules/rows.md) | Stock row edits, layout and text sizing |
 | [Shuffle](modules/shuffle.md) | Song, album and folder queues |
 | [Now Playing](modules/nowplaying.md) | Cover tint, remaining time and rounded artwork |

@@ -17,6 +17,7 @@ template, which its table clones without any row constructor:
                              view_info w 238, scrlabel_name (0,7,238,24), view_artist at y 33 h 20,
                              scrlabel_artist w 213 (the jump list's rebind sizes view_info 238x60)
   ui/album_page.bin          album_listview default_item_height 60 -> 64
+  ui/albuminfo_page.bin      (the plain stock album page, the fallback of ours) navigationbar_view y 0 -> 3, as allmusic_page
   ui/playlist_page.bin       playlist_listview default_item_height 60 -> 64 (its rows are created
                              0 high, so this is their pitch)
   ui/playset/equalizer_page.bin, ui/systemset/specfolder_page.bin (both themes)
@@ -25,7 +26,7 @@ template, which its table clones without any row constructor:
 
 and page themes (both asset themes, derived from the tree's styles as tools/mod_lists.py does; run
 after it): srlabel_item_white_style and srlabel_item_gold20_style at 21 px on the pages whose title
-boxes are 24 px now (Songs and the other song lists, the jump list, Albums, the album page, Playlists,
+boxes are 24 px now (Songs and the other song lists, the jump list, Albums, Playlists,
 Search). Folders and Artists have them from the lists step. The grey line stays stock's
 srlabel_item_gray18_style (#AAAAAA, 18 px). styles/default.bin is not touched (shared with every
 page), nor the stock layout strings in demo.
@@ -39,15 +40,14 @@ import mod_lists
 from modlib import clone_workdir, edit_ui
 
 PITCH, BODY = 64, 60
-TINT_NAME, TINT_H = 'img_ah_tint', 450      # the album page's tint gradient (the window is 450 px high): patch/offsets.inc AH_WIN_H
-NAV_H = 44             # the shared navbar builder's button height: patch/offsets.inc AH_NAV_H
-NAV_BAND = (0, 0, 320, 50)   # the album page's floating controls band (patch/offsets.inc AH_NAV_BAND_H): the full width, the stock builders' buttons sit in it at main's slots
+NAV_H = 44             # the shared navbar builder's button height (patch/rows.json NAV_H)
 STOCK_PITCH, STOCK_BODY = 60, 56
 TEXT_W = 238           # x 60 .. 298 in a 310 px row (12 px margins, a 40 px icon + 8)
 TITLE = (0, 7, TEXT_W, 24)
 SUB_Y, SUB_H = 33, 20
 ARTIST_W = TEXT_W - 25  # after the 20 px MQA badge + 5
-TITLE_PAGES = ('allmusic_page', 'playerjumpinfo_page', 'album_page', 'albuminfo_page', 'playlist_page', 'search_page')
+TITLE_PAGES = ('allmusic_page', 'playerjumpinfo_page', 'album_page', 'playlist_page', 'search_page')
+TITLE_PX, ARTIST_PX, META_PX = 22, 18, 15   # the album page's header lines (patch/offsets.inc AH_TITLE_H.. = AB_META in tools/pod_ui.py): what tools/ah_ink.py measures
 
 
 def one(root, name, kind):
@@ -79,15 +79,19 @@ def template_row(root):
     return row, btn
 
 
+def center_navbar(root, page):
+    """The shared navbar builder makes NAV_H high buttons at y 0 (patch/rows.json NAV_H); these pages keep their 50 px bar,
+    so the bar's view starts (50 - NAV_H) / 2 down: glyphs and title centre at y 25 as on the Pod pages, the bottom line stays at 50."""
+    nav = one(root, 'navigationbar_view', 'view')
+    assert (nav.x, nav.y, nav.w, nav.h) == (0, 0, 320, 50), f'unexpected {page} navbar'
+    nav.y = (50 - NAV_H) // 2
+    nav.h = 50 - nav.y
+
+
 def edit_allmusic(root):
     row_height(root, 'music_table_client')
     template_row(root)
-    # the shared navbar builder makes NAV_H high buttons at y 0 (patch/rows.json AH_NAV_H); this page keeps its 50 px bar,
-    # so the bar's view starts (50 - NAV_H) / 2 down: glyphs and title centre at y 25 as on the Pod pages, the bottom line stays at 50
-    nav = one(root, 'navigationbar_view', 'view')
-    assert (nav.x, nav.y, nav.w, nav.h) == (0, 0, 320, 50), 'unexpected allmusic_page navbar'
-    nav.y = (50 - NAV_H) // 2
-    nav.h = 50 - nav.y
+    center_navbar(root, 'allmusic_page')
 
 
 def edit_jumplist(root):
@@ -104,24 +108,9 @@ def edit_jumplist(root):
 
 
 def edit_albuminfo(root):
-    """The album page's tint (patch/albuminfo.c): ah_tint, a window sized black gradient, is the window's first child (under the
-    list and the controls); the list_view and its scroll_view are transparent, so the window's colour (black, or the cover's tone
-    once the payload sets it) shows through the header. The stock rows keep their own black. Nothing is renamed or removed.
-    The floating controls (patch/offsets.inc AH_NAV_*): the navbar view is a band over the page's top (NAV_BAND, the
-    buttons' glass discs drawn by the page theme, the buttons placed by the builders' main-pinned slots, patch/rows.json), LAST in the window so it
-    paints and hit-tests over the list, which now starts at the window's top and scrolls under it."""
-    assert root.type == 'window' and [c.name for c in root.children] == ['navigationbar_view', 'albuminfo_listview'], 'unexpected albuminfo_page'
-    lv, sv = one(root, 'albuminfo_listview', 'list_view'), one(root, 'albuminfo_scrollview', 'scroll_view')
-    for w in (lv, sv):
-        for st in ('normal', 'disable', 'focused'): w.set(f'style:{st}:bg_color', '#00000000')
-    tint = awtk_ui.Widget('image', 0, 0, 320, TINT_H, [('name', TINT_NAME), ('image', 'ah_tint'), ('draw_type', 'default'),
-                                                       ('clickable', 'false'), ('sensitive', 'false')])
-    nav, bar = one(root, 'navigationbar_view', 'view'), one(root, 'scroll_bar_m', 'scroll_bar_m')
-    assert (nav.h, lv.y, lv.h, sv.h, bar.h) == (50, 50, 400, 400, 400), 'unexpected albuminfo_page geometry'
-    nav.x, nav.y, nav.w, nav.h = NAV_BAND
-    lv.y = 0
-    lv.h = sv.h = bar.h = TINT_H
-    root.children = [tint, lv, nav]
+    """The plain stock album page (the fallback of our own, patch/albumpage.c): only its navbar sits as allmusic_page's does, the shared
+    builder's NAV_H high buttons centred in the 50 px bar (see edit_allmusic). Nothing else is touched."""
+    center_navbar(root, 'albuminfo_page')
 
 
 NAV_NP = (260, 0, 60, 50)   # the Pod navbar's btn_backtoplayer (tools/pod_ui.py navbar())
@@ -256,158 +245,10 @@ def build_ui(work):
         assert not os.path.exists(os.path.join(work, mod_lists.RAW.format(theme='theme1'), 'ui', rel)), f'theme1 has its own {rel}'
         old, new, root = edit_ui(path, fn)
         names = lambda d: [(w.type, w.name) for w in awtk_ui.parse(d).walk()]
-        want = names(old) + ([('image', TINT_NAME)] if rel == 'albuminfo_page.bin' else [])
-        assert sorted(names(new), key=str) == sorted(want, key=str), f'{rel}: a widget was added, removed or renamed'
+        assert sorted(names(new), key=str) == sorted(names(old), key=str), f'{rel}: a widget was added, removed or renamed'
         report.append(f'ui/{rel}: {len(old)} -> {len(new)} bytes')
     return report
 
-
-# The album view (patch/albuminfo.c): the styles its hook applies to the stock header. They are new
-# names in the page theme only, so a header the hook leaves alone keeps stock's btn_imgplayall_style and
-# text styles. Title, artist and the year line are centred (an hscroll_label shows its text centred when
-# it fits and scrolls it, with ellipses, when it does not, as the Cover Flow captions do).
-ALBUM_VIEW = 'albuminfo_page'
-PLAY_STYLE, SHUF_STYLE = 'btn_ahplay_style', 'btn_ahshuf_style'
-TITLE_STYLE, ARTIST_STYLE, META_STYLE = 'srlabel_ahtitle_style', 'srlabel_ahartist_style', 'srlabel_ahmeta_style'
-HEAD_STYLE, HEAD_SRC = 'list_item_ahhead_style', 'list_item_notpress_style'
-ROW_STYLE, ROW_PRESSED, ROW_HAIR = 'list_item_style', '#FFFFFF33', '#FFFFFF22'   # the track rows on this page: transparent, pressed 20 % white, hairline 13 % white
-TITLE_PX, ARTIST_PX, META_PX = 22, 18, 15
-TITLE_COLOR, ARTIST_COLOR, META_COLOR = '#FFFFFF', '#AAAAAA', '#9C9C9C'   # the design's #8C8C8C is 3.8:1 on the page's #333333 pressed row: mod_theme --scan wants 4.5
-PLAY_INK, PLAY_PX = '#141414', 18          # the pill's fill is its bg_image (PLAY_BG_IMAGE): white, #BEBEBE pressed
-PLAY_BG_IMAGE, PLAY_BG_IMAGE_DOWN, IMAGE_CENTER = 'ah_pill', 'ah_pill_down', 2   # bg_image_draw_type: DEFAULT 0, ICON 1, CENTER 2 (centred at its own size)
-TRACK_PX = 19                                                # the track rows' title and number on this page (the other pages keep 21)
-PLAY_ICON, SHUF_ICON, SHUF_ICON_DOWN = 'ah_play', 'ah_shuffle', 'ah_shuffle_down'   # tools/mod_icons.py ALBUM
-CENTER, RIGHT = 1, 3                                         # text_align_h: left 2, centre 1, right 3
-NUM_STYLE, NUM_COLOR = 'srlabel_tracknum_style', '#AAAAAA'   # patch/offsets.inc ROW_NUM_STYLE; the secondary grey (as the artist line)
-# The pill's icon and text are laid out by widget_draw_icon_text (@0x67235c) and widget_calc_icon_text_rect (@0x666f04):
-# icon_at 0 = auto, which is TOP when icon height + font size < the height left by the margins (16 + 18 < 44: the
-# glyph above the text); 1 left, 2 right, 3 top, 4 bottom, 5 centre. With "left" the icon is centred in a square
-# as high as the (margined) rect and the text goes in what is right of that square plus the spacer. DEVICE FINDING
-# (V2.1nF screenshot): the text is drawn LEFT aligned at the start of that rect, not centred in it (text_align_h is read
-# with the default 2 = left at @0x672588; V2.1nC assumed centred, so its negative spacer pulled the text onto the glyph).
-# The glyph is centred in the 44 px square, so it ends 14 px before the square's end: spacer = gap - 14 puts the text
-# `gap` px after the glyph's image. margin_left is set per page build by the hook (patch/albuminfo.c ah_centre_pill, from the
-# measured text); the style carries the margin for an English text, which is also the fallback.
-PLAY_ICON_AT, PLAY_ALIGN = 1, 2                              # icon_at left; text_align_h left (left 2, centre 1, right 3)
-PLAY_GLYPH_W, PLAY_GLYPH_VIS = 16, 15                        # ah_play.png: the image, its opaque columns
-PLAY_GAP, PLAY_MARGIN_L, PLAY_MARGIN_R = 8, 37, 0           # patch/offsets.inc AH_PILL_GAP, AH_PILL_MARGIN
-PLAY_SPACER = PLAY_GAP - (44 - PLAY_GLYPH_W) // 2            # -6
-
-
-def pill_margin(text_w, w=180, h=44):
-    """margin_left that centres glyph + gap + text in the pill (the hook's formula), or None when it does not fit."""
-    m = (w - (PLAY_GLYPH_W + PLAY_GAP + text_w)) // 2 - (h - PLAY_GLYPH_W) // 2
-    return m if text_w > 0 and m >= 0 else None
-
-
-def pill_layout(text_w, w=180, h=44, margin_left=None):
-    """Where AWTK draws the pill's glyph and text (x of the glyph's image, x of the text's pen, the text rect
-    (x, w)), from the style numbers above and the measured text width; margin_left as the hook sets it (the style's
-    when the text cannot be measured)."""
-    m = pill_margin(text_w, w, h)
-    ir_x = PLAY_MARGIN_L if margin_left is None and m is None else (m if margin_left is None else margin_left)
-    ir_w = w - ir_x - PLAY_MARGIN_R
-    sq = h                                                    # the icon square: ir.h x ir.h at ir.x
-    icon_x = ir_x + sq // 2 - PLAY_GLYPH_W // 2               # canvas_draw_icon_in_rect: centred on the square
-    rx, rw = ir_x + sq + PLAY_SPACER, ir_w - sq - PLAY_SPACER
-    return icon_x, rx, (rx, rw)                               # the text is left aligned: its pen starts at the rect
-# The navbar buttons' styles the stock builders (0x526a3c, 0x524e4c) name, and the glass disc (rest, pressed, icon_at, x_offset) each shows on this page
-# (a page theme only: the artist's albums page shares the builders but not this theme). Every image is centred in the button main's pins make it
-# (tools/mod_icons.py AH_NAV_PIECES; icon_at 5), so the glyph centres are the Pod navbar's: search 198 (a disc), multi-select 244 and Now Playing 290
-# (60 px at 262), one capsule 223 .. 311 (multi-select's image 4 px wider than its button, to meet Now Playing's), the select mode's add / delete / cancel in the stock 60 px buttons at 116 / 191 / 268 (146, 221, 290) and the all /
-# unselect toggle in its 50 px one (29). Back keeps its stock rule, icon_at left in a button-high square: x_offset +4 (stock -6) puts the 42 px
-# disc at x 8 .. 50 whether the builder made Back at (0, 50 high) or (3, 44 high): square centre x + h / 2 is 25 in both.
-NAV_STYLES = {'navbar_btnreturn_style': ('ah_nav_back', 'ah_nav_back_down', 1, 4),
-              'search_style': ('ah_nav_search', 'ah_nav_search_down', 5, 0),
-              'navbar_btnmulselect_style': ('ah_nav_multi', 'ah_nav_multi_down', 5, 0),
-              'navbar_btnbackplayer_style': ('ah_nav_npa', 'ah_nav_npa_down', 5, 0),
-              'navbar_btnunselect_style': ('ah_nav_unsel', 'ah_nav_unsel_down', 5, 0),
-              'navbar_btnselected_style': ('ah_nav_sel', None, 5, 0),
-              'navbar_btnadd_style': ('ah_nav_add', 'ah_nav_add_down', 5, 0),
-              'navbar_btndel_style': ('ah_nav_del', 'ah_nav_del_down', 5, 0),
-              'navbar_btncancel_style': ('ah_nav_cancel', 'ah_nav_cancel_down', 5, 0)}
-NAVBAR_TITLES = ('navbar_label_white', 'navbar_leftlabel_white', 'navbar_centerlabel_white', 'navbar_rightlabel_white')
-
-
-def album_view_styles(page, base):
-    """The header's styles: srlabel_ahtitle / ahartist / ahmeta (the stock white and grey lines, centred, 22 px
-    white, 18 px #AAAAAA, 13 px #9C9C9C); btn_ahplay_style, the Play all pill (white fill, round_radius 22, 20 px
-    dark text, the play glyph image, #BEBEBE pressed); btn_ahshuf_style, the round Shuffle (its disc and glyph
-    are images, pressed one lighter; no fill, no text). The navbar title labels' text is transparent on this
-    page (the design shows Back and Now Playing only; the label stays, so nothing that looks it up changes)."""
-    for state in ('normal', 'pressed', 'over', 'focused', 'disable'):
-        s = awtk_style.Item('button', PLAY_STYLE, state)
-        s.set_color('bg_color', '#00000000')   # the fill is the image: the button is AH_BTN_H high for the touch, the pill AH_PILL_H
-        s.set('bg_image', PLAY_BG_IMAGE_DOWN if state == 'pressed' else PLAY_BG_IMAGE, awtk_style.T_STRING)
-        s.set('bg_image_draw_type', IMAGE_CENTER, awtk_style.T_UINT32)
-        s.set_color('text_color', PLAY_INK)
-        s.set('font_size', PLAY_PX, awtk_style.T_UINT32)
-        s.set('icon', PLAY_ICON, awtk_style.T_STRING)
-        s.set('icon_at', PLAY_ICON_AT, awtk_style.T_INT32)
-        s.set('margin_left', PLAY_MARGIN_L, awtk_style.T_INT32)
-        s.set('margin_right', PLAY_MARGIN_R, awtk_style.T_INT32)
-        s.set('spacer', PLAY_SPACER, awtk_style.T_INT32)
-        s.set('text_align_h', PLAY_ALIGN, awtk_style.T_INT32)
-        page.put(s)
-        s = awtk_style.Item('button', SHUF_STYLE, state)
-        s.set_color('bg_color', '#00000000')
-        s.set('icon', SHUF_ICON_DOWN if state == 'pressed' else SHUF_ICON, awtk_style.T_STRING)
-        page.put(s)
-    # the floating controls: the navbar buttons' own styles, overridden on this page only. Every state the glass piece (an icon: the piece
-    # is one image, tools/mod_icons.py ah_nav_images), no fill, centred in the button; pressed = the lighter disc, or a cap's round highlight.
-    for style, (rest, down, icon_at, x_offset) in NAV_STYLES.items():
-        for state in ('normal', 'pressed', 'over', 'focused', 'disable'):
-            s = awtk_style.Item('button', style, state)
-            s.set_color('bg_color', '#00000000'); s.set_color('border_color', '#00000000'); s.set_color('text_color', '#FFFFFF')
-            s.set('icon', down if state == 'pressed' and down else rest, awtk_style.T_STRING)
-            s.set('icon_at', icon_at, awtk_style.T_INT32)
-            if x_offset: s.set('x_offset', x_offset, awtk_style.T_INT32)
-            page.put(s)
-    # the track rows (the stock list_item_style, resolved in this page's theme first): transparent, so the deep tint under the
-    # list shows; the pressed band and the 1 px hairline are translucent white, which over a black page is exactly today's
-    # #333333 and #222222 (51 and 34 levels of 255)
-    for s in base.states('list_item', ROW_STYLE):
-        n = mod_lists.copy(s)
-        n.set_color('bg_color', ROW_PRESSED if s.state == 'pressed' else '#00000000')
-        n.set_color('border_color', ROW_HAIR)
-        n.set('border_width', 1, awtk_style.T_UINT32)   # theme1's stock rows have a 4 px black gap there; here a hairline in both themes
-        page.put(n)
-    for s in base.states('list_item', HEAD_SRC):   # the header item: the stock notpress look, transparent (the window's colour and the tint show)
-        n = mod_lists.copy(s, HEAD_STYLE)
-        n.set_color('bg_color', '#00000000'); n.set_color('border_color', '#00000000')
-        page.put(n)
-    for name, src_name, px, color in ((TITLE_STYLE, 'srlabel_item_white_style', TITLE_PX, TITLE_COLOR),
-                                      (ARTIST_STYLE, 'srlabel_item_gray18_style', ARTIST_PX, ARTIST_COLOR),
-                                      (META_STYLE, 'srlabel_item_gray18_style', META_PX, META_COLOR)):
-        src = base.states('hscroll_label', src_name)
-        assert src, f'default.bin has no {src_name}'
-        for s in src:
-            n = mod_lists.copy(s, name)
-            n.set('font_size', px, awtk_style.T_UINT32)
-            n.set_color('text_color', color)
-            n.set('text_align_h', CENTER, awtk_style.T_INT32)
-            page.put(n)
-    # the track rows' title (white, and the playing row's gold) and number, TRACK_PX like the number: the rows keep their 64 px
-    for name in ('srlabel_item_white_style', 'srlabel_item_gold20_style'):
-        for s in base.states('hscroll_label', name):
-            n = mod_lists.copy(s); n.set('font_size', TRACK_PX, awtk_style.T_UINT32); page.put(n)
-    # the track rows' number (patch/rows.c rows_track_number): a plain label, so type 'label'; the grey line's colour, the
-    # title's size, right aligned in its fixed column (ROW_NUM_W). #AAAAAA is 5.44:1 on the #333333 pressed row.
-    src = base.states('hscroll_label', 'srlabel_item_gray18_style')
-    assert src, 'default.bin has no srlabel_item_gray18_style'
-    for s in src:
-        n = awtk_style.Item('label', NUM_STYLE, s.state, list(s.props))
-        n.set('font_size', TRACK_PX, awtk_style.T_UINT32)
-        n.set_color('text_color', NUM_COLOR)
-        n.set('text_align_h', RIGHT, awtk_style.T_INT32)
-        page.put(n)
-    hidden = 0
-    for name in NAVBAR_TITLES:
-        for s in base.states('label', name):
-            n = mod_lists.copy(s)
-            n.set_color('text_color', '#00000000')
-            page.put(n); hidden += 1
-    assert hidden == 12, f'unexpected navbar title styles ({hidden})'
 
 
 def style_rels():
@@ -438,7 +279,6 @@ def build_page_themes(work):
         mod_lists.r_title(th, base, None)
         gray = base.find('hscroll_label', 'srlabel_item_gray18_style', 'normal')
         assert gray and gray.get('font_size') == 18, 'the grey line is not 18 px'
-        if page == ALBUM_VIEW: album_view_styles(th, base)
         new = awtk_style.serialize(th.th)
         assert awtk_style.serialize(awtk_style.parse(new)) == new
         path = os.path.join(work, 'rootfs', rel)

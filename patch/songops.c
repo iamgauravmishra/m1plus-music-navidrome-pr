@@ -78,6 +78,37 @@ int so_add(int cls, unsigned count, const unsigned char *sel, unsigned nsel, int
     return 1;
 }
 
+/* Open Now Playing on the queue exactly as a track row's tap does (the stock album row handler @0x52569c, its tail
+ * @0x5258c8..0x525970): when songerinfoflag is set and a playing_page is in the stack, the windows above it are popped
+ * with navigator_back and the old playing_page is closed (the stock loop, which also stops at home_page); then
+ * navigator_to_with_context("playing_page", {queue, index, class, 2}), whose init starts the player. Stock's loop
+ * trusts every navigator_back to change the top window at once (true for these pages: none has a close animation);
+ * a bound of POP_MAX turns that trust into a limit, after which the page is opened over what is left. */
+void pod_open_player(void *queue, int idx,
+                     int cls) { /* (the album page's so_open_fn; also the Daily Mix card's play disc) */
+    struct {
+        void *dq;
+        int idx, cls, mode;
+    } context;
+    if (*(unsigned char *)SONGER_FLAG && navigator_window_is_exist("playing_page")) {
+        void *wm = window_manager();
+        int i;
+        for (i = 0; i < POP_MAX; ++i) {
+            void *top = window_manager_get_top_window(wm);
+            const char *name = top ? *(const char **)((char *)top + WIDGET_NAME) : (const char *)0;
+            if (!name) break;
+            if (!strcmp(name, "playing_page")) {
+                window_close(top);
+                break;
+            }
+            if (!strcmp(name, "home_page")) break;
+            navigator_back();
+        }
+    }
+    context.dq = queue, context.idx = idx, context.cls = cls, context.mode = PLAY_MODE;
+    navigator_to_with_context("playing_page", &context); /* playing_page_init -> start_player copies the queue */
+}
+
 /* Song `at` (-1: a random one) of the list and the list as the queue, in Now Playing: the stock Songs row's handler (@0x5275a4: loadSongList of the shown list, then
  * Now Playing at the row), as Shuffle Songs does it (patch/shuffle.c). The caller has put the browsing record back (loadSongList runs the class query again and keeps
  * classinfo for the memory playback). */

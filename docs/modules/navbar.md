@@ -40,7 +40,7 @@ unreliable there: `cdripper_page_init+...`, `home_page_init+...`, `playing_page_
 | Update music > folder picker (`systemset/specfolder_page`), both themes | asset | Now Playing (279, 0, 41, 50): glyph 299; select-all (229, 0, 38, 50), `icon_at` 5: glyph 246; theme1 title x 90 | Now Playing (260, 0, 60, 50); select-all (214, 0, 46, 50), the multi-select slot; theme1 title (36, 14, 180, 22): `mod_ipodrows.edit_specfolder` |
 | Settings > Screen saver, Atmosphere LED: an on/off image `image_switch` (193, 11, 57, 28) in the bar | asset | a control, not a button | left alone: it has no Pod counterpart, and a switch at the 214 slot would overlap Now Playing |
 | Equalizer's `img_switch` (203, 11, 57, 28) | asset | as above | left alone, same reason |
-| Songs, Hi-Res, Favourites, Recently played / added, Most played, a playlist's songs (`allmusic_page`) and an album's page (`albuminfo_page`) | code, builder 0x526a3c (shared) | 50 px buttons, 22 px title, slots at 120 / 170 / 220 / 270 | done before this document: 44 px buttons, slots 122 / 168 / 214, Now Playing 262 x 60, Back x 3, title 20 px, `allmusic_page`'s bar view at y 3 (`docs/modules/album-page.md`). The multi-select button stays at 214: the device shots put its glyph on the Pod toggle's columns |
+| Songs, Hi-Res, Favourites, Recently played / added, Most played, a playlist's songs (`allmusic_page`) and an album's page (`albuminfo_page`) | code, builder 0x526a3c (shared) | 50 px buttons, 22 px title, slots at 120 / 170 / 220 / 270 | done before this document: 44 px buttons, slots 122 / 168 / 214, Now Playing 262 x 60, Back x 3, title 20 px, the bar view of `allmusic_page` and `albuminfo_page` at y 3 (`mod_ipodrows.center_navbar`). The multi-select button stays at 214: the device shots put its glyph on the Pod toggle's columns |
 | Folders (`folder_page`) | code, builder 0x5312dc | multi-select (224, 60 wide): glyph 252; search (178, 60): 208; Now Playing (270, 60): 298; title 22 px | multi-select 214 x 46, search 168 x 46, Now Playing 262 x 60 (`patch/rows.json`), title 20 px (`navtitle`) |
 | Artists / Genres / Composers, stock page (`localclass_page`; Genres and Composers from Extras) | code, builder 0x535188 | artist switch / search (183, 60): 213; multi-select (224): 252; Now Playing (270): 298; title 22 px | the left button 168 x 46 (glyph 191), multi-select 214 x 46, Now Playing 262 x 60, title 20 px |
 | Playlists, stock page (`playlist_page`, "Delete Playlists") | code, builder 0x53d5f8 | multi-select (224, 60): 252; Now Playing (270): 298; title 22 px | multi-select 214 x 46, Now Playing 262 x 60, title 20 px |
@@ -67,17 +67,16 @@ the builder 0x52c5e8), USB mode (its Back and DAC settings are the glass discs o
 ## Mechanisms
 
 - Immediates: `patch/rows.json` `immediates` (`addiu rt, $zero, imm` before `button_create(parent, x, y, w, h-on-stack)`: a1 x, a3 w), applied
-  by `tools/pod.py patch_rows`, all checked against stock. 20 words for the pages above; the albuminfo builder's are in `album-page.md`.
+  by `tools/pod.py patch_rows`, all checked against stock. 20 words for the pages above; the shared builder `0x526a3c`'s (the stock album page, `allmusic_page`, Songs) are the `NAV_H` group of `rows.json`.
 - Titles: `tools/mod_lists.py` `PAGES`, recipe `navtitle` on `folder_page`, `localclass_page`, `allmusic_page`, `playerjumpinfo_page`,
   `playlist_page`.
 - Assets: `tools/mod_ipodrows.py` `NAVBAR_UI_EDITS` (both themes; stock rectangles asserted).
-- Tests: `test/pod/albuminfo.py` (`tint_tests`: every navbar immediate against stock and built, the glyph-centre arithmetic, the page
-  themes' title size, the asset rectangles against stock and built) and `test/pod/rows.py` (every `rows.json` word).
+- Tests: `test/pod/rows.py` (every `rows.json` word) and `test/pod/navbars.py` (the stock pages' builders byte-identical to main's).
 
-## Glass navbars on our pages (and the album page's glass)
+## Glass navbars on our pages
 
 Scope: **only the M1+ Music pages** (menu, Settings and its card pages (the fade stays hidden there), Main Menu, Shuffle, Extras, Albums, Artists, Playlists, Cover Flow's
-bar) and, through its page theme, the album page (`album-page.md`). Stock pages keep main's title bars on main's slots: the shared `return` / `back_to_player` images, the
+bar) and the album page's own controls (`album-page.md`). Stock pages keep main's title bars on main's slots: the shared `return` / `back_to_player` images, the
 navbar styles and every stock ui / style / image file and builder are byte-identical to main's build (`test/pod/navbars.py`, digests in `test/navbars-stock.sha256`).
 
 Look: an **opaque bar**, a **glass Back disc** (`ah_nav_back`, 42 px, x 8 .. 50, y 4 .. 46: an `img_btn_style` 44 x 50 button at x 7), the **title from x 58**, the right-hand
@@ -95,7 +94,7 @@ actions as **one glass capsule on main's slots**, a soft fade under the bar. Not
 | Genres, Composers (the Artists page on another class) | the switch is hidden (`visible=false` and `sensitive=false`) and Now Playing, which the asset builds as the capsule's right cap, is set at run time to the glass disc `ah_nav_np` (`_down` pressed), as on every page with no toggle; the title ends at 214 |
 | Cover Flow | main page and a composer's page: Now Playing disc `ah_nav_np` at 260 (glass 269 .. 311). An artist page with songs: the capsule Songs (`btn_songs`, Lucide `list`, left cap, x 214) \| Now Playing (`ah_nav_play` set at run time), glass 223 .. 311, the Artists page's shape |
 | menu, Settings, sub-pages | Now Playing disc |
-| album page (stock builders, page theme) | multi-select 214 (left cap, a 50 px image over its 46 px button) and Now Playing 262 (right cap): glass 223 .. 311; search 168 a disc (`album-page.md`) |
+| album page (ours) | glass controls as window children: Back disc, Select (left cap `pod_nav_selectl`) \| Now Playing (right cap `ah_nav_play`); select mode swaps in all / none, Add, Delete, Cancel (`album-page.md`) |
 
 **Capsule on the real slots.** Every image is cut to the button it sits in (46 / 46 / 60 px, 42 high), centred by `img_btn_style`: slices of ONE capsule (glass x 177 .. 311 for three pieces,
 radius 21), so adjacent pieces abut exactly (tested: the three glue into the capsule byte for byte) and the glass ends 21 px right of Now Playing's glyph column 290. The Songs page's capsule starts at the 122 slot (180 px, glass 131 .. 311, Search | Sort | Select | Now Playing): the same left cap, middles and right cap (a pane's straight parts and ends do not depend on its width), tested to glue byte for byte (`test/pod/glassbtn.py`). Select mode swaps Back's glyph for `ah_nav_close` (a 42 px disc with an x) and hides the capsule.
