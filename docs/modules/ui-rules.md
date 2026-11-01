@@ -1,7 +1,7 @@
 # Rules every UI step follows
 
-- **Names stay.** Never rename or delete a widget the app looks up by name (`widget_lookup(win, name,
-  TRUE)`, recursive, so reparenting is safe); restyle, move or hide it.
+- **Preserve names.** Restyle, move or hide named widgets; never rename/delete them.
+  `widget_lookup(win, name, TRUE)` is recursive, so reparenting is safe.
 - **Hit testing ignores `visible`.** Hide = `visible=false` + `sensitive=false`; decorative overlays
   are `sensitive=false`. This AWTK's `widget_find_target_default` (`0x6747d4`) takes the first child
   (from the top) with enable and sensitive set (`flags & 9 == 9`) that contains the point;
@@ -21,6 +21,6 @@
   items). Page-local styles change one page only.
 - **Text width = truncated glyph advance + 1 px per glyph** (below); use `StbText`
   (`tools/awtk_text.py`) and measure the font of the tree being built.
-- **No close animation on windows a "play from here" loop can pop** (library pages, album detail, the
-  jump list, Now Playing, M1+ Music pages), see the slides audit in section 8.
+- **No close animation on windows a "play from here" loop can pop:** library pages, album detail,
+  jump list, Now Playing and M1+ Music pages. See [slides audit](boot.md#settings-slide-safety-audit-static-on-stock-demo).
 - The rebuilt rootfs must not exceed stock (fwtool enforces it); one change per package where possible.

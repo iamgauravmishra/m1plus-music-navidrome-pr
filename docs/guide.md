@@ -32,20 +32,27 @@ Copy music to the card, then use **Extras → Update Library** to scan it.
 
 ## Settings
 
-Settings is iOS-style grouped cards; a grey value at the right shows the current state.
+Grey values show the current setting.
 
-- **Wi-Fi, Bluetooth:** open the stock pages (the value shows On or Off).
-- **Home Screen, Library, Now Playing, Keyboards:** the pages below.
-- **Playback:** **Play Mode** and **EQ** open the stock pages (the value shows the mode and the preset); **All Playback Settings** opens the stock list (Gapless is there).
-- **System:** **Display** opens the stock page (Language is on the stock System Settings list), **Keyboards** is below, **About** is our own page (the build and firmware versions; Device: model, serial number, Wi-Fi MAC and IP address; Storage: card capacity and free space), **All System Settings** opens the stock list.
-- **Home Screen:** the Recent Albums and Daily Mix switches; then Main Menu and Extras, as above; under Status Bar the Battery Percentage switch (off by default), which shows the battery's exact charge, such as 87%, beside the battery icon (the charge is the fuel gauge's reading, not the voltage steps stock shows); and last Regenerate Daily Mix, which appears while Daily Mix is on and answers a tap with "New mix when Home opens".
-- **Library:** Update Library; **Album Order** (Artist or Album, a picker with a check mark, for Albums and Cover Flow); **Rebuild Covers** (next to Update Library); under Cover Flow, landscape presentation.
-- **Now Playing:** under Cassette Mode, **Theme** (Normal, Chrome or Metal; a picker, applied the next time Cassette Mode opens).
-- **Keyboards:** English is always on; switch on Chinese (Pinyin) to get a language key and pinyin input on the on-screen keyboard (candidates above the keys, swipe them sideways, space takes the first).
-- **Developer:** Startup (**Boot to M1+ Music**, **Open Shanling Home**) and Tools (**Screenshot**: confirm a capture, then leave the page within five seconds; **Cover Cache** shows how many covers are cached, missing or stale and what is being built, and **Clear Cover Cache** on it deletes the cached covers after a confirm (Home makes them again); **System Update** opens the stock firmware update page).
+| Page | Options |
+|---|---|
+| Wi-Fi / Bluetooth | Stock connection pages; values show On/Off |
+| Home Screen | Recent Albums, Daily Mix, Main Menu and Extras; Battery Percentage (off by default, reads the fuel gauge); Regenerate Daily Mix (while enabled, takes effect next Home visit) |
+| Library | Update Library, Album Order (Artist/Album, for Albums and Cover Flow), Rebuild Covers and landscape Cover Flow |
+| Now Playing | Cassette Theme: Normal, Chrome or Metal; applies next time Cassette Mode opens |
+| Playback | Stock Play Mode and EQ pages; All Playback Settings includes Gapless |
+| System | Stock Display and All System Settings (including Language); Keyboards; About shows build/firmware, model, serial, Wi-Fi MAC/IP and card capacity/free space |
+| Keyboards | English always enabled; Chinese (Pinyin) adds a language key and candidates above the keys. Swipe candidates sideways; space selects the first |
+| Developer → Startup | Boot to M1+ Music; Open Shanling Home |
+| Developer → Tools | Screenshot, Cover Cache and stock System Update |
 
-Rebuild Covers asks first; Yes shows a toast and the Home screen regenerates every cover in the background ("Rebuilding covers n/m" at its top; it restarts at the next visit if you leave Home meanwhile). Screenshots can be cancelled during their
-countdown; see [capture details](modules/screenshot.md).
+**Rebuild Covers** asks for confirmation, then Home rebuilds in the background with
+"Rebuilding covers n/m" progress. Leaving Home restarts it on the next visit. **Cover Cache**
+shows cached/missing/stale counts and current work; **Clear Cover Cache** asks before deleting,
+then Home regenerates covers.
+
+**Screenshot** asks first: leave the page within five seconds to capture another screen.
+Cancel during the countdown if needed; see [capture details](modules/screenshot.md).
 
 ## Extras
 
@@ -68,6 +75,6 @@ speed. Feeds, downloads and the search for new shows (Settings > Library > Podca
 
 **Search** (hidden from the menu by default) opens the library search, the same page as the Songs page's Search button; show it in the menu through **Settings → Home Screen → Main Menu**.
 
-For a missing feature, show its row through **Settings → Main Menu**, or find it under Extras.
+For a missing feature, enable it through **Settings → Home Screen → Main Menu**, or find it under Extras.
 The [UI reference](ui.md) includes a preview; [module docs](architecture.md) describe implementation
 and hardware-validation limits.

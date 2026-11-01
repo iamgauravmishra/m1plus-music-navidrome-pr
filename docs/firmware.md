@@ -22,8 +22,8 @@ db7bdbc42ffe6d5c1e3fdca9363edb78a01898b9a725c34793394cf6abfa33c0  M1 Plus Firmwa
 | rootfs | squashfs 4.0, LZO, 128 KiB blocks, 55,738,368 bytes | same format |
 | Signing | none, MD5 only | none |
 
-`update.bin` is not encrypted or signed. The device-side updater (`update_firmware` in `demo`,
-disassembled with `tools/disasm.py`) does exactly this:
+The unsigned, unencrypted package is handled by `demo`'s `update_firmware`
+(disassembled with `tools/disasm.py`):
 
 1. `tar xvf /mnt/mmc/update.bin -C <tmp>` ; `sync`
 2. read 4 lines of `firmware_v20.info`
@@ -37,9 +37,9 @@ The separate `kernel2` recovery system performs the flash. **The recovery kernel
 are absent from `update.bin` and remain unchanged.** The M1 Plus recovery button combination is
 unverified; the Q2's documented sequence must not be assumed to work on this model.
 
-**The flash layout, read on the device** (`/proc/mtd`, 2026-10-29, through a one-off diagnostic that a saved
-screenshot wrote to the card: `statfs` of the file systems and `/proc/mtd`, `/proc/cmdline`, `/proc/mounts`; not
-kept in the tree). The NAND is 128 MiB with 128 KiB erase blocks:
+**Device flash layout** (`/proc/mtd`, 2026-10-29): 128 MiB NAND, 128 KiB erase blocks.
+A one-off screenshot diagnostic saved `statfs`, `/proc/mtd`, `/proc/cmdline` and `/proc/mounts`
+to the card; the diagnostic is not retained.
 
 | mtd | name | size | what it is |
 |---|---|---|---|
@@ -52,12 +52,11 @@ kept in the tree). The NAND is 128 MiB with 128 KiB erase blocks:
 | 6 | ota | 128 KiB | the OTA flag (`ota:kernel2`) |
 | 7 | userdata | 24.75 MiB | the UBI volume `userdata`, UBIFS at `/mnt/data` (`/dev/ubi1_0`, mounted `sync`): 17.7 MiB, 16 MiB free with a library database |
 
-So the recovery system (mtd3, mtd4) is wholly separate from what `update.bin` writes (mtd1, mtd2). The partition table
-the kernel's device tree carries (8 MiB kernel, 247 MiB "rootfs" on NAND; a NOR table beside it) is not the one in
-use. The kernel command line (`console=ttyS3,115200n8 quiet mem=128M@0x0 init=/linuxrc flashtype=nand root=/dev/mtdblock_bbt_ro2
-rootfstype=squashfs ro`) shows 128 MiB of RAM and a serial console on UART3, a possible way in if a boot ever loops
-(the board's pads are not located). The rootfs partition leaves about 19 MiB above the stock image size, the limit
-`fwtool` enforces (the safety rules keep that limit).
+Recovery (mtd3/4) is separate from updated partitions (mtd1/2). The device-tree NAND table
+(8 MiB kernel, 247 MiB rootfs, alongside a NOR table) is unused. The command line is
+`console=ttyS3,115200n8 quiet mem=128M@0x0 init=/linuxrc flashtype=nand root=/dev/mtdblock_bbt_ro2 rootfstype=squashfs ro`:
+128 MiB RAM and a UART3 console (board pads unlocated; possible boot-loop access).
+Although the partition has ~19 MiB spare above stock, `fwtool` still enforces the stock image-size limit.
 
 ## 2. Safety assessment
 
@@ -90,8 +89,7 @@ string stays "V2.1". Consequences:
 
 ## 3b. The lock screen page (ui/screensaver_page.bin): what the app does with it
 
-What `demo` does with this page (`screensaver_page_init` and the static handlers after
-`poweroff_page_init`, read with `disasm.py`):
+Stock behaviour (`screensaver_page_init` and handlers after `poweroff_page_init`, via `disasm.py`):
 
 - at init a `widget_foreach` visitor matches names: `img_screensaver` gets the wallpaper
   (`screensaver_default` or `file://` + the custom picture), `view_timeinfo` is shown or hidden by the
@@ -108,15 +106,14 @@ What `demo` does with this page (`screensaver_page_init` and the static handlers
 - `dclock_time` and `dclock_date` are never looked up and their format is never changed (the strings
   are not in `demo` at all).
 
-`disasm.py xref` now resumes after undecodable words in `.text` and sees call arguments set in branch
-delay slots; before that it reported 0 references for most strings.
+`disasm.py xref` handles undecodable `.text` words and branch-delay arguments; older results
+reporting zero string references were incomplete.
 
 12/24 h: `demo` calls `digit_clock_set_format` in two places only: the date-time settings row
 (`Y-MM-DD`) and `change_time24h_12h`, which sets the status bar's `bar_dclock` to `hh:mm` (24 h) or
 `HH:TT` (12 h).
-The stock lock screen clock therefore always shows 24 h, whatever the setting, and the mod keeps that
-by default. The digit_clock formatter is statically linked into `demo` (`wstr_format_date_time`,
-modified by Shanling) and supports:
+The lock screen stays 24 h by default, independently of that setting. The statically linked,
+Shanling-modified `wstr_format_date_time` supports:
 
 | token | output | token | output |
 |---|---|---|---|
@@ -125,8 +122,8 @@ modified by Shanling) and supports:
 | `D` / `DD` | 1-31 / 01-31 | `m` / `mm`, `s` / `ss` | minute, second |
 | `w` / `W` | weekday 0-6 / name (EN or CN) | `T` / `TT` | minute / minute + ` AM` or ` PM` |
 
-so `HH:TT` renders `05:30 PM` on the M1 Plus (q2-pod saw `05:PM` on the Q2's lock screen: a different
-AWTK build, so these tokens are not portable between models). A `HH:TT` lock clock would be a fixed 12 h one: it does not follow the setting.
+`HH:TT` renders `05:30 PM` on M1 Plus, but `05:PM` on Q2's different AWTK build: tokens are
+not portable. A lock clock using this format would stay 12 h regardless of the setting.
 
 Sizing follows AWTK's stb font backend: `font_size` equals hhea ascender minus descender (299 units in
 `default.ttf`), digits are tabular (142 units), so `hh:mm` is 2.14 x font_size wide; the tool reads the

@@ -18,9 +18,8 @@
 | [Device checks](modules/device-checks.md) | Hardware validation checklist |
 | [History](history.md) | Recorded milestones, device findings and lessons |
 
-Module documents under `modules/` hold implementation details, pins and test evidence. Read the
-relevant module before changing a feature. Read [payload](modules/payload.md) and
-[addresses](modules/addresses.md) before searching the stock binary.
+Read the relevant `modules/` doc for implementation, pins and tests before changing a feature.
+Before searching stock binaries, read [payload](modules/payload.md) and [addresses](modules/addresses.md).
 
 ## Source layout
 
@@ -31,6 +30,5 @@ relevant module before changing a feature. Read [payload](modules/payload.md) an
 | `test/` | MIPS/host tests and package goldens |
 | `assets/` | Fonts, icon sources, boot logo and wallpaper |
 
-Module notes retain technical evidence and historical experiments. Current pin/source lists
-are defined in `tools/pod.py`; current artifact sizes are in build manifests. A device result
-applies to its recorded build, not automatically to later releases.
+Module notes preserve evidence and experiments. Use `tools/pod.py` for current pins/sources
+and build manifests for sizes. Device results apply only to their recorded build.

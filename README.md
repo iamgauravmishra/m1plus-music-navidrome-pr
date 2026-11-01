@@ -1,6 +1,6 @@
-# m1plus-mod
+# M1+ Music
 
-**M1+ Music** brings a modern music-player interface to the **Shanling M1 Plus**, built on
+M1+ Music brings a modern music-player interface to the **Shanling M1 Plus**, built on
 official V2.1 firmware.
 
 [Install](docs/install.md) · [User guide](docs/guide.md) · [UI preview](docs/ui.md) · [Development](docs/workflow.md)

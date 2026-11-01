@@ -12,9 +12,9 @@ uv run python -I tools/mod_font.py --fetch
 make doctor
 ```
 
-uv owns each checkout's `.venv` and locked dependencies. Change `pyproject.toml` and regenerate
-`uv.lock` when updating dependencies. Builds require Python 3.15 and Homebrew LLVM/LLD; Apple
-clang lacks MIPS support. `LLVM_BIN` and `LLD_BIN` override toolchain locations.
+Each checkout needs its own uv-managed `.venv` and Python 3.15. Update `pyproject.toml` and
+`uv.lock` together. Use Homebrew LLVM/LLD (Apple clang lacks MIPS support); override locations
+with `LLVM_BIN` / `LLD_BIN`.
 
 Each worktree runs `make setup`. Firmware, fonts and a matching stock tree may be read from
 the main checkout; outputs, caches and counters stay local. `tools/paths.py` resolves data only;
@@ -62,14 +62,14 @@ keeping dev artifacts, counters and caches. Locks prevent overlapping writes.
 
 ## CI
 
-`.github/workflows/ci.yml` runs only when started (Actions > ci > Run workflow, or
-`gh workflow run ci --repo imfing/m1plus-music`): macOS runners cost 10x. One `macos-latest` job
-mirrors local use: Homebrew `llvm lld squashfs librsvg`, the stock firmware zip, `make setup`,
-Source Han Sans, `make doctor`, `make format-check`, `make dev` (lint, all tests and a verified dev package;
-the dev counter is seeded from the run number, so each run gets a new `V2.1z...` tag). The run's
-artifact is that `update.bin` (14 days). It checks no golden and publishes nothing; releases stay
-local (`make check`, `make publish`). Linux cannot reproduce the goldens: Pillow's Linux wheel has zlib, not zlib-ng, so the
-built PNGs differ in bytes, and so does the merged CJK font. Tests compare generated PNGs by pixels.
+Start `.github/workflows/ci.yml` manually through Actions > ci > Run workflow or
+`gh workflow run ci --repo imfing/m1plus-music` (macOS runners cost 10x). Its `macos-latest`
+job installs Homebrew `llvm lld squashfs librsvg`, firmware and Source Han Sans, then runs
+`make setup`, `make doctor`, `make format-check` and `make dev` (lint, all tests and a verified
+package). The run number seeds a fresh `V2.1z...` tag; `update.bin` is retained for 14 days.
+CI neither checks goldens nor publishes. Releases stay local (`make check`, `make publish`):
+Linux Pillow uses zlib rather than zlib-ng, changing PNG and merged CJK-font bytes.
+PNG tests compare pixels.
 
 The firmware zip is the asset of a private prerelease (tag `m1plus-firmware-v2.1`) in this
 repository, downloaded with `GITHUB_TOKEN`. The repository must never be made public while that
@@ -83,38 +83,31 @@ Previews: `tools/preview*.py` write to `out/preview/` (gitignored). Generate the
 
 ## Context budget
 
-An audit of one week (2026-10-25 to 11-01) found almost every token was a cache read: each turn
-sends the whole context again, so cost is turns times context size. Turns above 400k context were
-a fifth of the turns and 45% of the reads, and subagents were 72% of all reads (300 to 500 turn
-feature agents reaching 900k). Hence:
+The 2026-10-25–11-01 audit found cache reads dominated cost: turns above 400k context accounted
+for 45% of reads; subagents accounted for 72%. Keep sessions small:
 
-- One stage per subagent (probe, implement, test). It ends with a short handoff (branch, commit,
-  doc updated) and the next stage starts fresh from that, not from the transcript.
-- One topic per session. Past ~250k context, or when the topic changes, write the conclusion to
-  the module doc, then compact or start a new session. Close sessions that are not in use.
-- Large files (`test/pod/harness.py`, `tools/pod_ui.py`, `docs/modules/podcasts.md`,
-  `patch/coverflow.c`, `docs/architecture.md`, `docs/ui.md`): `grep -n` first, then Read the range.
-  Do not re-read a file you have not changed. `docs/history.md` is for people, not agents.
-- Images stay in context for every later turn: crop or zoom with `tools/peek.py` and read the
-  result once; do not re-read an unchanged preview.
-- Mechanical edits across files: one `tools/sub.py FILE... --pairs PAIRS.json --stat` call, not a
-  `sed -i` per change. Tests: `make test TEST=...` while iterating, the full suite once at the end.
+- Give subagents one stage (probe, implement or test), ending with branch, commit and doc
+  handoff; start the next stage fresh.
+- One topic per session. Past ~250k context or at a topic change, document conclusions and
+  compact/start fresh. Close unused sessions.
+- Search large files first, then read relevant ranges. Do not reread unchanged files;
+  `docs/history.md` is for people, not agent context.
+- Crop/zoom images with `tools/peek.py`, then read once.
+- Batch mechanical edits with `tools/sub.py FILE... --pairs PAIRS.json --stat`.
+  Run selected tests while iterating and the full suite at completion.
 
 ## C formatting
 
-`make format` runs clang-format on tracked payload `.c` and `.h` files; `make format-check`
-checks without edits. `.clang-format` keeps four-space indentation, attached braces and a
-120-column limit. Includes stay in their original order; comments are not reflowed.
-Homebrew LLVM supplies the formatter. `LLVM_BIN` or `CLANG_FORMAT` can select another binary.
-Keep formatting separate from functional changes and verify the package hashes afterward.
+Run `make format`, then `make format-check` for tracked payload C/headers. `.clang-format`
+defines four spaces, attached braces and 120 columns; include order and comment wrapping stay
+unchanged. Select Homebrew clang-format with `LLVM_BIN` or `CLANG_FORMAT`. Keep formatting
+separate from functional changes and verify package hashes afterward.
 
 ## Python lint
 
-`make lint` runs Ruff (pinned in the `dev` group of `pyproject.toml`) with the pyflakes rules and
-syntax errors only: unused imports and variables, undefined names, redefinitions. `make test`,
-`make dev` and `make check` run it first. Ruff does not format the Python; the compact style stays.
-`test/pod/*.py` and `tools/preview_tape.py` star-import their helpers, so the star-import rules are
-off there, and `test/pod/harness.py` may import names only to re-export them to the tests.
+`make lint` runs pinned Ruff bug/syntax checks (pyflakes), without formatting. Test, dev and
+check targets run it first. Star-import exceptions cover `test/pod/*.py` and
+`tools/preview_tape.py`; the harness may import names for re-export.
 
 ## Integration and restore
 

@@ -4,18 +4,16 @@ The interface uses a minimal, iPod-inspired style for the 320 × 480 touchscreen
 preserve widget names, pin the stock bytes they replace and run in `tools/build.py` order.
 Runtime behaviour is documented in [architecture](architecture.md).
 
-Generate the release preview with `tools/preview.py WORKDIR [OUT.png]` (default
-`out/preview/release-preview.png`, gitignored; `docs/workflow.md`). The sheet shows:
-Home pages 1 and 3 (the M1+ Music icon), the M1+ Music menu as Home (no top bar), the Settings, Main Menu, Shuffle and
-Extras pages, the Artists toggle, the album page, an artist's Cover Flow (and the landscape one), the Albums grid and
-list, the pull-down with the toggle and slider art (`controls()`), the lock screen (playing; idle on the charger) and
-the battery at 8x. The feature previews (`preview_icons.py`, `preview_stock.py`,
-`preview_battery.py`, `preview_nowplaying.py` ...) write wherever you point them; use `out/preview/`. All are
-approximate PIL mock-ups drawn from the built tree (not AWTK), text rasterised from the tree's own `default.ttf`
-the stb_truetype way (`tools/preview_font.py`, `tools/stb_raster.py`), sample data.
+`make preview` renders the selected dev artifact without changing it. For a release sheet, use
+`tools/preview.py WORKDIR [OUT.png]` (default `out/preview/release-preview.png`). It covers Home,
+menus/settings, library views, portrait/landscape Cover Flow, pull-down controls, lock-screen
+states and an enlarged battery. Feature tools (`preview_icons.py`, `preview_stock.py`,
+`preview_battery.py`, `preview_nowplaying.py`, etc.) accept output paths; use gitignored
+`out/preview/`.
 
-`make preview` renders the selected dev artifact without changing it; see [workflow](workflow.md).
-Device captures and checks are documented [here](modules/device-checks.md).
+Previews are approximate PIL mock-ups with sample data, not AWTK captures. Text uses the built
+tree's `default.ttf` via stb_truetype (`tools/preview_font.py`, `tools/stb_raster.py`). See
+[workflow](workflow.md) and [device checks](modules/device-checks.md) for validation.
 
 ## Before changing the UI
 

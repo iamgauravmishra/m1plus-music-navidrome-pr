@@ -16,13 +16,13 @@ the card inserted until the update finishes.
 4. Open **System settings → System Update → TF card update** and confirm.
 5. Wait for the player to restart. Check the **M1+ Music** tag in About, below stock V2.1.
 
-The update does not replace music on the card. The player keeps `update.bin`; overwrite it with
-the next package. Start with the stock restore package when first validating the package path.
+Music stays on the card. Overwrite the retained `update.bin` for the next update.
+First-time package-path validation should use the stock restore package.
 
 ## Update
 
-Repeat the installation steps with the new verified package. Developers should use `make dev`
-for a fresh tag; release tags are assigned during integration. Menu confirmation stays manual.
+Repeat with a new verified package. Developers use `make dev` for a fresh tag; integration
+assigns release tags. Confirm the update manually on the player.
 
 ## Disable M1+ Music
 
