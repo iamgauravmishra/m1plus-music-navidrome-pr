@@ -27,6 +27,7 @@ def machine(setting=b'1\n', gauge=b'87\n', labels=True, cap=STOCK_CAP, w=32):
     if labels:
         for name in (LABEL, LABEL_DD):
             h = m.widget(name); m.setword(h + DEFS['BP_W_W'], w); m.setword(h + DEFS['BP_W_H'], 30); m.setword(h + DEFS['BP_W_PARENT'], 0x31000000)
+    for k in ('POWER_EXT', 'POWER_USBSTATE', 'POWER_FLAG', 'USBDAC_CHARGEFLAG'): m.setword(pod.DATA[k][0], 0)   # on battery (the demo's data starts with its own values)
     bar = m.alloc(0x80); m.setword(pod.DATA['SYSTEM_BAR'][0], bar)
     return m
 
@@ -74,12 +75,13 @@ def run(ctx):
     expect(m.names() == ['get_battery_capacity', 'access'] and m.icount < 400, f'off, steady state: stock\'s function and the kill switch test only ({m.names()}, {m.icount} instructions)')
 
     # 3. On with a valid gauge: the real percentage, in power_capacity and the return value; the label shows "N%".
-    for text, pct in ((b'87\n', 87), (b'87', 87), (b'0\n', 0), (b'5\n', 5), (b'10\n', 10), (b'99\n', 99), (b'100\n', 100), (b'007\n', 7)):
+    for text, pct in ((b'87\n', 87), (b'87', 87), (b'0\n', 0), (b'5\n', 5), (b'6\n', 6), (b'10\n', 10), (b'99\n', 99), (b'100\n', 100), (b'007\n', 7)):
         m = machine(gauge=text)
         v = tick(m)
         want = f'{pct}%'
-        expect(v == pct and power(m) == pct and [t for _, t in texts(m)] == [want, want] and all(a for _, a in vis(m)) and len(vis(m)) == 2,
-               f'on, gauge {text!r}: {pct} returned and stored, "{want}" shown in the bar\'s label and the pull-down\'s ({texts(m)})')
+        stored = 0 if pct <= DEFS['BP_LOW'] else pct   # on battery, at most BP_LOW: 0, stock's red bar_lowpower
+        expect(v == stored and power(m) == stored and [t for _, t in texts(m)] == [want, want] and all(a for _, a in vis(m)) and len(vis(m)) == 2,
+               f'on, gauge {text!r}: {stored} returned and stored, "{want}" shown in the bar\'s label and the pull-down\'s ({texts(m)})')
     m = machine(gauge=b'87\n'); tick(m)
     expect(('open', GAUGE, 0) in m.calls and ('access', KILL) in m.calls and m.calls.index(('access', KILL)) > m.calls.index(('get_battery_capacity',)),
            'stock\'s function runs first, then the kill switch is tested, then the gauge read')
@@ -100,6 +102,19 @@ def run(ctx):
     # charging: stock's animation (a +10 counter in power_capacity) is replaced by the gauge's value on every tick, the picture logic is not touched
     m = machine(gauge=b'63\n', cap=70); tick(m)
     expect(power(m) == 63, 'charging (stock leaves its animation value): the real percentage is stored')
+    # low battery: 5% or less on battery, or stock's own bucket 0, is stored as 0 (red); a charging picture keeps the real value
+    ext, usb, flag, dac = (pod.DATA[k][0] for k in ('POWER_EXT', 'POWER_USBSTATE', 'POWER_FLAG', 'USBDAC_CHARGEFLAG'))
+    for text, cap, want in ((b'6\n', 40, 6), (b'5\n', 40, 0), (b'1\n', 40, 0), (b'30\n', 0, 0), (b'30\n', 40, 30)):
+        m = machine(gauge=text, cap=cap); v = tick(m)
+        expect(v == want and power(m) == want, f'on battery, gauge {text!r}, stock bucket {cap}: {want} stored ({power(m)})')
+    for text, cap, want in ((b'3\n', 40, 3), (b'1\n', 0, 1), (b'30\n', 0, 30)):
+        m = machine(gauge=text, cap=cap); m.setword(ext, 1)   # external power, USB state not 2: stock draws the charging picture
+        v = tick(m)
+        expect(v == want and power(m) == want, f'charging (stock draws bar_charge), gauge {text!r}, stock bucket {cap}: the real value {want} stored ({power(m)})')
+    m = machine(gauge=b'3\n'); m.setword(ext, 1); m.setword(usb, 2); m.u.mem_write(flag, b'\x01')
+    expect(tick(m) == 0 and power(m) == 0, 'external power but stock\'s test falls through to the low / normal picture: 3% is stored as 0')
+    m = machine(gauge=b'3\n'); m.setword(ext, 1); m.setword(usb, 2); m.u.mem_write(flag, b'\x01'); m.setword(dac, 1)
+    expect(tick(m) == 3 and power(m) == 3, 'external power with the DAC charge flag set: the charging picture, the real value')
 
     # 4. On, but no valid gauge: stock's value; the label hidden (and not shown before: nothing to hide)
     for text in (None, b'', b'\n', b'abc', b'101\n', b'-5\n', b'+5\n', b'12x\n', b'1234\n', b' 50\n', b'5 0\n', b'50\n50\n', b'1.5\n', b'0x10\n'):

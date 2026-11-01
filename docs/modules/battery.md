@@ -50,7 +50,11 @@ no timer, no thread; a missing label or window just skips that label. Boot path:
 turned the setting on.
 
 **Other readers of `power_capacity`.** `poweroff_page_init` (the low-battery screen at 0), `check_updatefw_exist` / `check_otginfo` (only whether capacity or charge status is non-zero), `on_poweroff_keyup_fun`.
-With the setting on they see the percentage: the red `bar_lowpower` picture and the power-off low-battery screen appear only at a gauge reading of 0 (stock showed them below 3.535 V, the lowest bucket),
-and the update checks test only for a non-zero capacity or charge status.
+With the setting on they see the stored value, which is **0 at a gauge reading of 5% or less on battery** (`BP_LOW`), and also whenever stock's own bucket is 0 (so never later than stock), else the percentage.
+Stock chooses `bar_lowpower` only for `power_capacity <= 0` (`bgtz` at `0x545158`, twin `0x475c94`), re-sets the picture every tick, and only on the path that is not the charging / full picture (`POWER_EXT` `0xa059f8` != 1,
+or `POWER_USBSTATE` `0xa059f4` == 2 with `POWER_FLAG` `0xa05aa8` == 1 and `usbdac_chargeflag` == 0; pinned in `BATTERY_PINS`); the hook mirrors that test and stores 0 only when stock would reach the `bgtz`, so a charging
+battery keeps the real value (3% charging: `bar_charge`, fill 3). The label always shows the real number. Analysis of every reader of 0: none shuts down or auto-opens a page. `poweroff_page_init` (opened by the power key)
+picks the `screens_lowbattery` title and a 0 bar; `check_updatefw_exist` refuses an on-device update (-0xf) and `check_otginfo` refuses OTG when the external-power word and the capacity are both 0; `on_poweroff_keyup_fun`
+only formats the value into a progress bar. These are stock's low-battery behaviours, now from 5% instead of below 3.535 V when not charging, and accepted. The 0 fill is empty (5% of 16 px is under 1 px).
 
 **Accuracy is a device question.** `capacity` is the AXP2101's own estimate (read 100 on a charged device); how well it tracks a discharge, and whether it drifts without a learning cycle, needs a discharge test on the device.

@@ -8,6 +8,7 @@
  * bp_capacity runs stock's function first, and then, only while Settings > Home Screen > Battery Percentage is on and the kill switch /mnt/mmc/m1plus-off is absent and
  * /sys/class/power_supply/battery/capacity reads a plain integer 0..100, stores that percentage in power_capacity (so the fill, the charging picture's fill and the
  * pull-down's bar use the real level, charging included) and shows "N%" in the label pod_pct that sits left of the outline (its twin pod_pct_dd in the pull-down's bar).
+ * At BP_LOW (5) percent or less on battery (and when stock's own bucket is 0) the stored value is 0, which is how stock's own test shows the red bar_lowpower (battery.md "Other readers").
  * In every other case the stock value stays and the labels are hidden (visible and sensitive off). The icon pictures stay stock's (charging, low).
  *
  * The right icon group lays its visible children out right-aligned, so the label (the group's last child but the Screenshot camera, hidden in the asset) makes the icons
@@ -99,7 +100,12 @@ int bp_capacity(void) {
         if (bp.state == 2) pct = bp_gauge();
     }
     if (pct < 0 && !bp.shown) return cap; /* off and nothing to hide: stock, no lookups */
-    if (pct >= 0) *(int *)POWER_CAPACITY = cap = pct;
+    if (pct >= 0) {
+        /* stock picks bar_lowpower only for power_capacity <= 0, and only when it reaches that test (not on the charging / full pictures: show_sysbar_face 0x54510c..0x54514c) */
+        int low_test = *(int *)POWER_EXT != 1 ||
+                       (*(int *)POWER_USBSTATE == 2 && *(char *)POWER_FLAG == 1 && *(int *)USBDAC_CHARGEFLAG == 0);
+        *(int *)POWER_CAPACITY = cap = low_test && (pct <= BP_LOW || cap <= 0) ? 0 : pct;
+    }
     bar = *(void **)SYSTEM_BAR;
     bp_label(bar ? widget_lookup(bar, BP_LABEL, 1) : (void *)0, pct);
     wm = window_manager();

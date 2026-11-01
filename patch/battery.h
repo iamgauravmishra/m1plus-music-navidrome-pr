@@ -13,6 +13,9 @@
 #define BP_LABEL "pod_pct" /* the hidden label tools/pod_ui.py adds to the system bar's right group */
 #define BP_LABEL_DD "pod_pct_dd" /* its twin in the pull-down's own bar (view_sysbar of dropdown_dialog.bin) */
 
+#define BP_LOW \
+    5 /* a gauge reading of at most this, on battery, is stored as 0: stock's red bar_lowpower (and its other low-battery readers) */
+
 /* widget_t fields the label's fit reads and writes (pinned by BATTERY_PINS in tools/pod.py against widget_resize and widget_set_visible) */
 #define BP_W_W 8 /* widget->w */
 #define BP_W_H 0xc /* widget->h */
