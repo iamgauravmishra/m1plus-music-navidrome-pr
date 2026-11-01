@@ -29,7 +29,7 @@ Window 320 x 450 (the numbers are `patch/search.h`; `pod_search.py` mirrors them
   from x 68, a chevron (the Artists page's, `pod_make_chevron`) at x 288 on artists, albums and playlists and none on songs, and a hairline from x 68 to 310 under every row. The grey line is
   `Artist`, `Album · <artist>`, `Song · <artist>` or `Playlist` (translated; the album word is the stock key `album`).
 * **Thumbnails** use the covers we already have and are loaded lazily: an album's and a song's is the Cover Flow cache file of its artist + album (`cc_album_key`, `cc_url`; a song whose own file is
-  missing takes the library album of that name's), an artist's the cover of the first album of theirs that has one, a playlist's and anything without a file the stock placeholder disc (`p_default`),
+  missing takes the library album of that name's, `cc_cover_key`), an artist's the cover of the first album of theirs that has one, a playlist's and anything without a file the stock placeholder disc (`p_default`),
   all through the Albums grid's ring (`patch/grid.c`; `grid_art` decodes one cover; `GRID_MAX_ROUND` is 22 for the round ones). Text and thumbnail of a row are made when it is first painted (16 tiles
   of each shape: the rows in view, two beyond and the history); **one cover is decoded per tick of the page's timer**, never while a query is waiting, so typing is not blocked by decoding. The timer ends when nothing is left, so **a paint that finds a tile without its thumbnail starts it again** (`se_cover_next` in `se_on_paint`): a chip change or a scroll makes
   new tiles after the timer ended. The source is the cache's only size (168 px JPEG, the Songs page's rows read the same file), box-reduced to 44 px per decode; there is no smaller tier.

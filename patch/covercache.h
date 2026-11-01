@@ -26,6 +26,10 @@ unsigned cc_key_of(const char *artist, const char *album); /* the same key from 
 char *cc_path(char *out, unsigned size, unsigned key, const char *suffix);
 long cc_file_size(const char *path);
 const char *cc_url(char *out, unsigned key); /* "file://<cache file>" (out holds 80), NULL: no art cached */
+unsigned cc_cover_key(
+    void *albums, unsigned key,
+    const char *
+        album); /* key when its cache file has a picture, else the first library album (albums: cc_albums) named album (NOCASE, not the Unknown row) whose file has one, else key */
 int cc_decode(void *w, const char *url, int unload, unsigned size, int box, unsigned *out);
 void *cc_copy_list(void *list); /* a stock list copied into a deque of our own */
 void *cc_albums(void); /* the stock Albums list (getAllAlbum), copied; NULL if empty */

@@ -137,6 +137,20 @@ const char *cc_url(char *out, unsigned key) {
     return cc_file_size(out + 7) > 0 ? out : (const char *)0; /* a missing file does not open: -1 */
 }
 
+/* A song's or an album's cover: the cache is keyed by the library's album record, which lists an album once under the artist of
+ * one of its tracks, so a track of a compilation (its own artist) finds no file under its own key, and the album of that name has it. */
+unsigned cc_cover_key(void *albums, unsigned key, const char *album) {
+    char url[80];
+    unsigned n = albums ? deque_size(albums) : 0, i;
+    if (cc_url(url, key)) return key;
+    for (i = 0; album && *album && i < n; ++i) {
+        void *r = deque_at(albums, i);
+        if (I(r, REC_ID) != -1 && !cc_nocase(cc_str(r, REC_ALBUM), album) && cc_url(url, cc_album_key(r)))
+            return cc_album_key(r);
+    }
+    return key;
+}
+
 /* A decoded image reduced to size x size over black. Only the four 32-bit formats; the stock loader
  * decodes JPEG and PNG to RGBA8888 with straight alpha. The image manager's copy is only read, and a
  * cover's load is dropped again at once (unload), as the stock cover rows do; w is any widget (the

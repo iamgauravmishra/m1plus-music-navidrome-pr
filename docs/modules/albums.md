@@ -129,7 +129,8 @@ The menu's Albums row (`ACT_ALBUMS`) opens our one Albums page in the mode used 
   **stock Albums list** through the Home dispatcher (id 5, `pod_home_open`); the stock list stays reachable from Shanling Home, unmodified.
 - **Shared helpers** (`patch/covercache.c`, used by `coverflow.c` and `albums.c`, the next page that shows covers, the landscape
   Cover Flow, can use them as they are): `cc_fnv`, `cc_album_key`, `cc_path`, `cc_file_size`, `cc_url` (the cache file's `file://` url
-  if it holds a picture), `cc_decode(widget, url, unload, size, box, out)` (stock loader, centred square, nearest or box to `size`),
+  if it holds a picture), `cc_cover_key(albums, key, album)` (a song's or an album's cover: `key` when its file holds a picture, else the first library album of that name,
+  NOCASE and not the Unknown row, whose file does, else `key`; the one compilation lookup of Songs, Search, the playlist mosaic and the Daily Mix page), `cc_decode(widget, url, unload, size, box, out)` (stock loader, centred square, nearest or box to `size`),
   `cc_sample` / `cc_box` (the pure pixel functions, also built for the host), `cc_copy_list`, `cc_albums` (the stock Albums list copied),
   `cc_open_album(artist_row, row)` (the stock open sequence, library or one artist's). The cache *builder* (the one worker thread, `cc_build_*`) is there too: Cover Flow's Preparing screen, Rebuild Covers and the Albums page's background build use it.
 - **Risks.** `widget_prepare_text_style` on a hidden, insensitive label takes the font, size and colour from that label's style (assumed: it reads

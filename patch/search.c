@@ -711,19 +711,6 @@ static void se_apply(void) {
     se_redraw();
 }
 
-static unsigned se_cover_of(
-    void *rec,
-    const char *album) { /* a song's or an album's cover: its own cache file, else the library album of that name's */
-    char url[80];
-    unsigned key = cc_album_key(rec), i, n = se.n[SE_ALBUM];
-    if (cc_url(url, key)) return key;
-    for (i = 0; album && *album && i < n; ++i) {
-        void *a = deque_at(se.lists[SE_ALBUM], i);
-        if (!cc_nocase(cc_str(a, REC_ALBUM), album) && cc_url(url, cc_album_key(a))) return cc_album_key(a);
-    }
-    return key;
-}
-
 static unsigned
 se_artist_cover(const char *name) { /* an artist's picture: the cover of the first album of theirs that has one */
     char url[80];
@@ -750,7 +737,7 @@ static void se_prep(grid_tile_t *t, int r) {
     case SE_ALBUM:
         if (*cc_str(rec, REC_ALBUM)) title = cc_str(rec, REC_ALBUM);
         snprintf(sub, sizeof sub, *a ? "%s \xc2\xb7 %s" : "%s", TR("album"), a);
-        key = se_cover_of(rec, title);
+        key = cc_cover_key(se.lists[SE_ALBUM], cc_album_key(rec), title);
         break;
     case SE_PLAYLIST:
         snprintf(sub, sizeof sub, "%s", TR("Playlist"));
@@ -758,7 +745,7 @@ static void se_prep(grid_tile_t *t, int r) {
     default:
         if (!*title) title = cc_str(rec, REC_NAME);
         snprintf(sub, sizeof sub, *a ? "%s \xc2\xb7 %s" : "%s", TR("Song"), a);
-        key = se_cover_of(rec, cc_str(rec, REC_ALBUM));
+        key = cc_cover_key(se.lists[SE_ALBUM], cc_album_key(rec), cc_str(rec, REC_ALBUM));
         break;
     }
     grid_set(t, title, sub, key);

@@ -2408,22 +2408,15 @@ static int dp_on_destroy(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* The cover cache key of each song's album: the stock album row of that title (case folded, as the album list groups; the row's artist may be the album artist, which
- * the song's own artist is not), else the key of the song's own artist and album. One copy of the stock album list, dropped at once. */
+/* The cover cache key of each song's album (cc_cover_key: its own, else the library album of that title's; 0 without an album tag). One copy of the stock album list,
+ * dropped at once. */
 static void dp_keys(void) {
     void *albums = cc_albums();
-    unsigned n = albums ? deque_size(albums) : 0, i, k;
+    unsigned i;
     for (i = 0; i < dp.n; ++i) {
         void *rec = dp.rows[i].raw;
         const char *album = cc_str(rec, REC_ALBUM);
-        dp.key[i] = *album ? cc_album_key(rec) : 0;
-        for (k = 0; *album && k < n; ++k) {
-            void *r = deque_at(albums, k);
-            if (I(r, REC_ID) != -1 && !cc_nocase(cc_str(r, REC_ALBUM), album)) {
-                dp.key[i] = cc_album_key(r);
-                break;
-            }
-        }
+        dp.key[i] = *album ? cc_cover_key(albums, cc_album_key(rec), album) : 0;
     }
     if (albums) deque_destroy(albums);
 }
