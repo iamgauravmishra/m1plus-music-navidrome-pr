@@ -52,6 +52,8 @@ typedef struct {
 int pc_root(char *out);
 /* The shows: the folders in it (those with an episode file or a metadata file), the most recently updated first (newest episode, remote or local; ties by title, a leading "The " aside); at most max. Returns the count. */
 int pc_scan_shows(pc_show_t *out, int max);
+/* Whether any show folder holds an episode file (the Pod's No Podcasts): stops at the first one, no metadata read. */
+int pc_any_episode(void);
 /* The episodes of a show, newest first (publication date, then file name, descending), PC_LOCAL / PC_PART / PC_REMOTE together; at most max. Returns the count. */
 int pc_load_show(const pc_show_t *show, pc_ep_t *out, int max);
 /* One file of a show folder: its modification time and its size in KB; 1 when it exists. */

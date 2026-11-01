@@ -70,14 +70,14 @@ enum {
     K_PC_EPS
 };
 enum { S_SHUFFLE, S_REPEAT, S_APPEARANCE, S_COUNT };
-enum { M_COVER, M_ALBUMS, M_ARTISTS, M_SONGS, M_PLAYLISTS, M_PODCASTS, M_SHUFFLE, M_COUNT };
-enum { ROOT_MUSIC, ROOT_COVER, ROOT_SHUFFLE, ROOT_NOW, ROOT_SETTINGS, ROOT_COUNT };
+enum { M_COVER, M_ALBUMS, M_ARTISTS, M_SONGS, M_PLAYLISTS, M_SHUFFLE, M_COUNT };
+enum { ROOT_MUSIC, ROOT_COVER, ROOT_PODCASTS, ROOT_SHUFFLE, ROOT_NOW, ROOT_SETTINGS, ROOT_COUNT };
 enum { R_NONE, R_CENTRE, R_RING };
 
-static const char *const MAIN_KEYS[ROOT_COUNT] = {"Music", "Cover Flow", "Shuffle Songs", "Now Playing",
-                                                  "cdrippersettings"};
-static const char *const MUSIC_KEYS[M_COUNT] = {"Cover Flow", "Albums",   "Artists",      "Songs",
-                                                "Playlists",  "Podcasts", "Shuffle Songs"};
+static const char *const MAIN_KEYS[ROOT_COUNT] = {"Music",         "Cover Flow",  "Podcasts",
+                                                  "Shuffle Songs", "Now Playing", "cdrippersettings"};
+static const char *const MUSIC_KEYS[M_COUNT] = {"Cover Flow", "Albums",    "Artists",
+                                                "Songs",      "Playlists", "Shuffle Songs"};
 static const char *const SET_KEYS[S_COUNT] = {"Shuffle", "Repeat", "Appearance"};
 static const char *const MODE_ICONS[4] = {"ipod_mode_shuffle", "ipod_mode_repeat", "ipod_mode_repeat1",
                                           "ipod_playing"}; /* the play mode marks, then the playing track's speaker */
@@ -173,6 +173,10 @@ static struct {
             upgrade; /* demo was seen making a cover since the track changed; the next fade is the same album sharpened (same phase) */
         int px; /* the shown slot's pan place the frame was built at, in 1/256 px (0 .. IP_PANE_R * 256) */
     } pane;
+    /* the pane while the main menu's Podcasts row is the selection: the picture ipod_podcasts (IP_PANE_W x IP_PANE_H, loaded on the first look, kept while the page
+     * lives), and No Podcasts under it when no show folder has an episode file (pc_any: -1 not looked yet this visit of the main menu, else pc_any_episode) */
+    unsigned pc_img[32]; /* bitmap_t is 0x48 bytes */
+    int pc_img_ok, pc_any;
     unsigned sig[5]; /* the last painted values of the timer's look: battery, play state, track, position, queue */
 } ip __attribute__((section(".scratch")));
 
@@ -221,7 +225,9 @@ static void ip_header(void *canvas, int w) {
     ip_fill(canvas, 0, IP_BAR_H - 1, w, 1, p->header_rule);
 }
 
+static void ip_pc_pane_look(void);
 static void ip_redraw(void) {
+    ip_pc_pane_look();
     if (ip.screen) widget_invalidate_force(ip.screen, (void *)0);
 }
 
@@ -250,6 +256,16 @@ static int ip_tall(int kind) {
 static int ip_split(int kind) { return kind == K_MAIN || kind == K_MUSIC || kind == K_SETTINGS; }
 static int ip_is_tracks(int kind) { return kind == K_SONGS || kind == K_TRACKS || kind == K_PL_TRACKS; }
 static struct lvl *ip_top(void) { return &ip.st[ip.depth]; }
+
+/* The main menu's Podcasts row is the selection: the pane shows the podcasts picture, not the covers (the reference's). */
+static int ip_pc_pane(void) { return ip_top()->kind == K_MAIN && ip_root_id(ip_top()->sel) == ROOT_PODCASTS; }
+
+/* What that pane needs, looked once before it is painted (never in paint): the picture, and whether any show has an episode file (once a visit of the main menu). */
+static void ip_pc_pane_look(void) {
+    if (!ip.win || !ip_pc_pane()) return;
+    if (!ip.pc_img_ok) ip.pc_img_ok = !widget_load_image(ip.win, "ipod_podcasts", ip.pc_img);
+    if (ip.pc_any < 0) ip.pc_any = pc_any_episode();
+}
 
 /* The wide string cut with an ellipsis to maxw px (the canvas has the text's style): grid.c's search. Its length. At most 63 characters are read. */
 unsigned ip_fit(void *canvas, unsigned *s, int maxw) {
@@ -759,6 +775,7 @@ static void ip_pane_reset(
     void) { /* a split page comes back as the main menu: new random covers, and the playing album's cover looked up again (it may be cached since) */
     ip.pane.picked = ip.pane.pk_art = 0;
     ip.pane.pk = 0;
+    ip.pc_any = -1; /* episodes may have come or gone */
 }
 
 /* Up to IP_PANE_KEYS distinct random albums with a cached cover, in random order (IP_PANE_TRIES draws from one album query). Their number. */
@@ -1022,7 +1039,8 @@ static int ip_pane_advance(void) {
 /* The tick's pane work: the state machine above, then the frame when something moved. 1: the pane's rectangle needs painting. */
 static int ip_pane_step(void) {
     int changed, pos;
-    if (!ip_split(ip_top()->kind) || !pod_is_top(ip.win)) return 0;
+    if (!ip_split(ip_top()->kind) || !pod_is_top(ip.win) || ip_pc_pane())
+        return 0; /* (the Podcasts picture is still: the covers wait, and pan on from where they were) */
     changed = ip_pane_advance();
     if (!ip.pane.have[ip.pane.cur]) return changed;
     pos = ip_pane_pos(ip.pane.cur);
@@ -1051,6 +1069,7 @@ static unsigned ip_want_ms(void) {
     if (ip.fg && pod_is_top(ip.win) && ip_rows_more()) return IPCF_FRAME_MS;
     if (ip.fg && pod_is_top(ip.win) && ip.row_worker) return IP_DRIFT_MS;
     if (ip.fg && ip_top()->kind == K_CF && ipcf_busy()) return IPCF_FRAME_MS;
+    if (ip_pc_pane()) return IP_TICK_MS; /* the Podcasts picture: nothing moves */
     if (ip_split(ip_top()->kind) && ip.fg && ip.pane.fading && pod_is_top(ip.win)) return IP_FADE_TICK_MS;
     return ip_split(ip_top()->kind) && ip.fg &&
                    (!ip.pane.have[ip.pane.cur] || ip.pane.key[ip.pane.cur] || ip.pane.rot_n) && pod_is_top(ip.win)
@@ -1232,7 +1251,21 @@ static void ip_paint_pane(void *canvas) {
     int src[4], dst[4];
     ip_fill(canvas, IP_SPLIT_X, 0, IP_W - IP_SPLIT_X, IP_SCREEN_H, ip_theme_colors()->pane);
     dst[0] = IP_PANE_X, dst[1] = 0, dst[2] = IP_PANE_W, dst[3] = IP_PANE_H;
-    if (ip.pane.mix_ok &&
+    if (ip_pc_pane()) { /* the Podcasts row: its picture, still, and No Podcasts centred under the glyph when there is no episode */
+        src[0] = src[1] = 0, src[2] = IP_PANE_W, src[3] = IP_PANE_H;
+        if (ip.pc_img_ok) canvas_draw_image(canvas, ip.pc_img, src, dst);
+        if (!ip.pc_any) {
+            unsigned wide[64], n = ip_len(TR("No Podcasts"));
+            int w, rect[4];
+            widget_prepare_text_style(ip.st_sel, canvas);
+            tk_utf8_to_utf16_ex(TR("No Podcasts"), n, wide, 64);
+            n = ip_fit(canvas, wide, IP_PANE_W - 2 * IP_TEXT_X);
+            w = n ? (int)(canvas_measure_text(canvas, wide, n) + 0.999f) : 0;
+            rect[0] = IP_PANE_X + (IP_PANE_W - w) / 2, rect[1] = IP_PC_TEXT_Y, rect[2] = w + 2, rect[3] = IP_ROW_H;
+            if (n) canvas_draw_text_in_rect(canvas, wide, n, rect);
+        }
+    } else if (
+        ip.pane.mix_ok &&
         ip.pane.mix) { /* the frame built on the timer at the sub-pixel place (the cross-fade included): a 1:1 copy */
         src[0] = src[1] = 0, src[2] = IP_PANE_W, src[3] = IP_PANE_H;
         canvas_draw_image(canvas, ip.pane.mix, src, dst);
@@ -1826,7 +1859,9 @@ static void ip_select(void) {
                 ip_push(K_CF);
             else
                 coverflow_open();
-        } else if (row == ROOT_SHUFFLE)
+        } else if (row == ROOT_PODCASTS)
+            ip_push(K_PODCASTS);
+        else if (row == ROOT_SHUFFLE)
             ip_shuffle_all();
         else if (row == ROOT_NOW)
             ip_push(K_NOW);
@@ -1853,9 +1888,6 @@ static void ip_select(void) {
             break;
         case M_PLAYLISTS:
             ip_push(K_PLAYLISTS);
-            break;
-        case M_PODCASTS:
-            ip_push(K_PODCASTS);
             break;
         case M_SHUFFLE:
             ip_shuffle_all();
@@ -2185,6 +2217,7 @@ int ipod_open(void) {
     ip.depth = 0;
     ip.now_shown = ip_now_shown();
     ip.pane.trk = ~0u;
+    ip.pc_any = -1;
     ip_theme_load();
     ip_theme_apply(ip.win, widget_lookup(ip.win, "ipod_wheel_img", 1));
     ip_render_open();

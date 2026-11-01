@@ -426,6 +426,8 @@ TEXT = dict([
     _t('Save Episode', '保存单集', '儲存單集', 'エピソードを保存', '에피소드 저장', 'Enregistrer l’épisode', 'Episode sichern', 'Guardar episodio', 'Salva episodio', 'บันทึกตอน', 'Zapisz odcinek', 'Сохранить выпуск', 'Зберегти епізод'),
     _t('Unsave Episode', '取消保存单集', '取消儲存單集', 'エピソードの保存を解除', '에피소드 저장 해제', 'Retirer des enregistrés', 'Nicht mehr sichern', 'Quitar de guardados', 'Rimuovi dai salvati', 'เลิกบันทึกตอน', 'Usuń z zapisanych', 'Убрать из сохранённых', 'Прибрати зі збережених'),
     _t('No saved episodes', '没有已保存的单集', '沒有已儲存的單集', '保存したエピソードはありません', '저장된 에피소드가 없습니다', 'Aucun épisode enregistré', 'Keine gesicherten Episoden', 'Sin episodios guardados', 'Nessun episodio salvato', 'ไม่มีตอนที่บันทึกไว้', 'Brak zapisanych odcinków', 'Нет сохранённых выпусков', 'Немає збережених епізодів'),
+    # The Pod's Podcasts pane on the main menu while no show has an episode (patch/ipod.c, docs/modules/ipod.md)
+    _t('No Podcasts', '没有播客', '沒有播客', 'ポッドキャストなし', '팟캐스트 없음', 'Aucun podcast', 'Keine Podcasts', 'Sin pódcast', 'Nessun podcast', 'ไม่มีพอดแคสต์', 'Brak podcastów', 'Нет подкастов', 'Немає подкастів'),
     _t('No downloaded episodes', '没有已下载的节目', '沒有已下載的節目', 'ダウンロード済みのエピソードがありません', '다운로드한 에피소드가 없습니다', 'Aucun épisode téléchargé', 'Keine geladenen Folgen',
        'Sin episodios descargados', 'Nessun episodio scaricato', 'ไม่มีตอนที่ดาวน์โหลด', 'Brak pobranych odcinków', 'Нет загруженных выпусков', 'Немає завантажених випусків'),
     _t('%d episode', '%d 个节目', '%d 個節目', '%d エピソード', '에피소드 %d개', '%d épisode', '%d Folge',

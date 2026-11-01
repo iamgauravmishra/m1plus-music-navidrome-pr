@@ -476,6 +476,27 @@ static int pm_summary(const char *root, pc_show_t *s) {
     return s->count > 0 || meta;
 }
 
+int pc_any_episode(void) {
+    char root[PC_FILE + 20];
+    void *d, *sd;
+    char *ent, *sent;
+    int found = 0;
+    if (!pc_root(root) || !(d = opendir(root))) return 0;
+    while (!found && (ent = readdir(d)) != (char *)0) {
+        const char *name = pm_name(ent);
+        char path[PM_PATH];
+        if (!*name || name[0] == '.' || pm_len(name) >= PC_FILE) continue;
+        if (!pm_join(path, sizeof path, root, name, (const char *)0) || !(sd = opendir(path))) continue;
+        while (!found && (sent = readdir(sd)) != (char *)0) {
+            const char *f = pm_name(sent);
+            found = f[0] != '.' && pm_len(f) < PC_FILE && pm_audio(f);
+        }
+        closedir(sd);
+    }
+    closedir(d);
+    return found;
+}
+
 int pc_scan_shows(pc_show_t *out, int max) {
     char root[PC_FILE + 20];
     void *d;

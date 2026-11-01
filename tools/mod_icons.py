@@ -118,8 +118,9 @@ DAILY = ['dm_disc', 'dm_disc_down'] + DPAGE   # the Daily Mix card's play disc a
 DM_DISC_PX, DM_PLAY_GLYPH = 48, 22     # patch/offsets.inc DM_DISC, tools/pod_dailymix.py DM_PLAY_GLYPH
 # The iPod page's click wheel (patch/ipod.c, docs/modules/ipod.md): light/dark 220 px images, a ring with a 90 px centre button and the four labels drawn in; the corners are transparent
 # (the window's colour shows). IP_WHEEL_D / IP_HUB_R in patch/offsets.inc are these numbers (test/pod/ipod.py checks them).
-IPOD = ['ipod_wheel', 'ipod_wheel_dark', 'ipod_mode_shuffle', 'ipod_mode_repeat', 'ipod_mode_repeat1', 'ipod_playing', 'ipod_placeholder']
+IPOD = ['ipod_wheel', 'ipod_wheel_dark', 'ipod_mode_shuffle', 'ipod_mode_repeat', 'ipod_mode_repeat1', 'ipod_playing', 'ipod_placeholder', 'ipod_podcasts']
 IPOD_WHEEL_D, IPOD_HUB_R = 220, 45
+IPOD_PC_PANE, IPOD_PC_GLYPH_Y = (160, 240), 104   # patch/offsets.inc IP_PANE_W x IP_PANE_H, IP_PC_GLYPH_Y: the main menu's Podcasts pane (patch/ipod.c ip_paint_pane)
 IPOD_PLACEHOLDER = os.path.join(ROOT, 'assets', 'icons', 'ipod-placeholder-256.png')   # the user-supplied iTunes Cover Flow placeholder (1200 px), scaled once to 256 px with a good filter; the Pod's one cover for anything without art
 IPOD_MODE_SRC = 32    # the Now Playing mode marks are drawn at 2 x (IP_MODE_PX = 16) and reduced by the payload (patch/offsets.inc)
 IP_PLAY_SRC = 14
@@ -887,10 +888,46 @@ def album_images():
     from PIL import Image
     f['ipod_playing'] = glyph_fit('volume-2', 2 * IP_PLAY_SRC, 2 * IP_PLAY_SRC, WHITE, 2, 4.0)   # patch/ipod.c: the playing track's speaker, a heavy white glyph at 28 px, 14 px after the box filter
     f['ipod_placeholder'] = Image.open(IPOD_PLACEHOLDER).convert('RGB')   # the Pod's cover for anything without art (docs/modules/ipod.md)
+    f['ipod_podcasts'] = ipod_podcasts_pane()
     import tape_art
     f.update(tape_art.images())
     f.update(vinyl_art.images())
     return f
+
+def ipod_podcasts_pane():
+    """The main menu's Podcasts pane (the iPod 6G's): a vertical blue-grey gradient in ipod-player's info pane colours (A7C1D6 to 3E4D5C), and the classic white podcast glyph (a head in three broadcast arcs open at the
+    bottom, a tapered body through their gap) with a soft glow, drawn at 4 x and reduced. Opaque. The payload writes No Podcasts under it."""
+    from PIL import Image, ImageDraw, ImageFilter
+    k, (w, h), cx, cy = 4, IPOD_PC_PANE, IPOD_PC_PANE[0] / 2, IPOD_PC_GLYPH_Y
+    bg = Image.new('RGB', (w, h))
+    px = bg.load()
+    top, bot = (0xA7, 0xC1, 0xD6), (0x3E, 0x4D, 0x5C)   # ipod-player's infoPaneTop / infoPaneBottom
+    for y in range(h):
+        for x in range(w):
+            t = y / (h - 1)
+            px[x, y] = tuple(round(a + (b - a) * t) for a, b in zip(top, bot))
+    m = Image.new('L', (w * k, h * k), 0)
+    d = ImageDraw.Draw(m)
+    def s(v): return v * k
+    sw = 4.5
+    for r, gap in ((54, 52), (40, 50), (26, 44)):   # ring radius, half the bottom gap in degrees
+        a0, a1 = 90 + gap, 90 - gap + 360
+        d.arc((s(cx - r - sw / 2), s(cy - r - sw / 2), s(cx + r + sw / 2), s(cy + r + sw / 2)), a0, a1, fill=255, width=round(s(sw)))
+        for a in (a0, a1):   # round caps
+            ex, ey = cx + r * math.cos(math.radians(a)), cy + r * math.sin(math.radians(a))
+            d.ellipse((s(ex - sw / 2), s(ey - sw / 2), s(ex + sw / 2), s(ey + sw / 2)), fill=255)
+    hr, hy = 11.5, cy - 10
+    d.ellipse((s(cx - hr), s(hy - hr), s(cx + hr), s(hy + hr)), fill=255)
+    bt, bb, wt, wb = cy + 6, 160, 13.5, 8.5   # the body: top and bottom, half widths, round ends
+    d.polygon([(s(cx - wt), s(bt + wt)), (s(cx + wt), s(bt + wt)), (s(cx + wb), s(bb - wb)), (s(cx - wb), s(bb - wb))], fill=255)
+    d.ellipse((s(cx - wt), s(bt), s(cx + wt), s(bt + 2 * wt)), fill=255)
+    d.ellipse((s(cx - wb), s(bb - 2 * wb), s(cx + wb), s(bb)), fill=255)
+    mask = m.resize((w, h), Image.BOX)
+    glow = mask.filter(ImageFilter.GaussianBlur(4)).point(lambda v: v * 3 // 5)
+    out = bg.convert('RGBA')
+    out.alpha_composite(Image.merge('RGBA', (*Image.new('RGB', (w, h), (255, 255, 255)).split(), glow)))
+    out.alpha_composite(Image.merge('RGBA', (*Image.new('RGB', (w, h), (255, 255, 255)).split(), mask)))
+    return out.convert('RGB')
 
 def ipod_wheel(dark=False):
     """The click wheel: a light or charcoal ring (a vertical gradient inside a 1 px rim) with a centre button, drawn at 4 x and reduced; the labels MENU, |<<, >>| and >|| on the ring."""

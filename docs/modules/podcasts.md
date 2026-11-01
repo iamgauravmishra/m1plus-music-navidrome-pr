@@ -234,7 +234,7 @@ Step 0, the device probe (HTTPS and the CA bundle, Wi-Fi, clock, RAM, screen-off
 
 * **Subscriptions**: a feed url per show in `.show` (`feed=`): created by `subscriptions.txt` (built). Unsubscribe is built (the Show page's sheet). Next: a Subscribe action with the url typed.
 * **Open device checks for it**: does Update Local Music scan the folder / skip dot folders; is the clock set after boot without Wi-Fi; `get_wifisignal` return values; libcurl's CA path and available TLS version; free RAM during a 4 MB feed parse.
-* The Pod has a Music > Podcasts row (docs/modules/ipod.md "Podcasts").
+* The Pod has a Podcasts row on its main menu, with its own pane picture (docs/modules/ipod.md "Podcasts").
 
 ## The Show page (Apple Podcasts style; round 1 of the revamp)
 

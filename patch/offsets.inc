@@ -1000,6 +1000,8 @@
 #define IP_PANE_W 160
 #define IP_SHADOW_W 10            /* the white menu casts a soft shadow on the pane's left edge (a real iPod's, iPlayr's radius 8, offset 4): IP_SHADOW_W columns, black, 52 % at the edge falling to 0 (the table in ip_shadow_alpha) */
 #define IP_PANE_H 240
+#define IP_PC_GLYPH_Y 104         /* the main menu's Podcasts pane (ipod_podcasts, IP_PANE_W x IP_PANE_H): the glyph's centre (tools/mod_icons.py), and the top of the 30 px row No Podcasts is centred in */
+#define IP_PC_TEXT_Y 160
 #define IP_PANE_ART 264
 #define IP_PANE_R 24
 #define IP_PANE_TRIES 48          /* random albums looked at (one cache file test each) for the cover shown while nothing with a cached cover plays */
