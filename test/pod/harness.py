@@ -654,6 +654,23 @@ class Machine:
             items = self.artist_query()
             self.setword(pod.DATA['PDEQ_SHOWLIST'][0], self.new_deque(items))
             ret = len(items)
+        elif name == 'toolsQueryDbTable':
+            # `select * from songtable where fileurl in ('a','b')` (the Daily Mix's own query, payload dm_rows): clears *tools_pdeq_directory, then the song row callback fills it
+            # with the library's rows (class_lists[0xf001], else the shown list) that match, in reverse library order (the database's order is not the mix's)
+            sql = self.read_cstr(a1)
+            self.calls.append(('toolsQueryDbTable', self.read_cstr(a0), sql, a2, a3))
+            m_ = re.fullmatch(r"select \* from songtable where fileurl in \((.*)\)", sql)
+            if not m_:
+                ret = -1
+            else:
+                wanted = {p.replace("''", "'") for p in re.findall(r"'((?:[^']|'')*)'", m_.group(1))}
+                rows = [r for r in reversed(self.class_lists.get(0xf001, self.showlist)) if self.read_cstr(self.word(r + O['REC_PATH'])) in wanted]
+                tmp = pod.DATA['PDEQ_TOOLS_TMP'][0]
+                if not self.word(tmp): self.setword(tmp, self.new_deque())
+                self.deques[self.word(tmp)] = rows
+                ret = len(rows)
+        elif name == 'deque_clear':
+            self.deques[a0] = []; self.calls.append(('deque_clear', a0))
         elif name == 'loadSongList':
             self.calls.append(('loadSongList', self.read_cstr(a1), a2, a3))
             if self.stock_songlist:   # as stock does (@0x4e2ce0): the shown list's songs, class set,

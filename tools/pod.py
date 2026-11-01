@@ -137,6 +137,7 @@ FUNCTIONS = {
     'loadAlbumList':           ('int', 'int, void *', 0x4ee8d8),   # Artists: an artist's albums (album_page_init)
     'loadAlbumdetailList':     ('int', 'int, void *', 0x4eea98),   # an album row (a RECORD pointer, not an index) to its songs: loadLocalClassList(0xff11) for the All songs row
     'loadSongList':            ('int', 'void *, const char *, int, int', 0x4e2ce0),
+    'toolsQueryDbTable':       ('int', 'const char *, const char *, void *, int', 0x5ee77c),   # (db, sql, row callback, sort); hooked (pc_library_query), so a call goes through the Library filter
     'navigator_to_with_context': ('int', 'const char *, const void *', 0x4d1d48),
     'toolsGetAlbumCover':      ('int', 'const char *, const char *, int, int', 0x5eaee0),
     'toolsGetExternCover':     ('int', 'const char *, const char *, int, int', 0x5eafec),
@@ -497,6 +498,12 @@ QUERY_SORT, QUERY_SORT_PROLOGUE = 0x5ee9ac, (0x3c1c0041, 0x279c5524, 0x0399e021)
 QUERY_PINS = (   # (address, stock word, what it proves): the first word after the prologue the trampolines resume at (the frame), and the sqlite3_exec calls that run the SQL
     (0x5ee788, 0x27bdff28, 'toolsQueryDbTable: addiu sp, sp, -0xd8 (the trampoline resumes here)'), (0x5ee7fc, 0x0320f809, 'toolsQueryDbTable: jalr sqlite3_exec(db, sql=a1, cb=a2)'),
     (0x5ee9b8, 0x27bdfe80, 'toolsQueryDbTableAndSort: addiu sp, sp, -0x180 (the trampoline resumes here)'), (0x5eea2c, 0x0320f809, 'toolsQueryDbTableAndSort: jalr sqlite3_exec(db, sql=a1, cb=a2)'),
+    # The Daily Mix's own song query (patch/dailymix.c dm_rows, docs/modules/dailymix.md): stock's getAllMusic query (sort_first_alphabet 0x4ea0ac) with another SQL: the database path
+    # string (0x745a34) and the song row callback (0x4e9058: a row of 18 columns, pushed into *tools_pdeq_directory) as it loads them, the call, and the callback's own prologue
+    (0x4ea11c, 0x24c69058, 'sort_first_alphabet: a2 = the song row callback 0x4e9058'), (0x4ea120, 0x0320f809, 'sort_first_alphabet: jalr toolsQueryDbTable(db, sql, cb, 1)'),
+    (0x4ea124, 0x24845a34, 'sort_first_alphabet: a0 = the database path string 0x745a34'),
+    (0x4e9058, 0x3c1c0052, 'song row callback prologue'), (0x4e905c, 0x279cae78, 'song row callback prologue'), (0x4e9060, 0x0399e021, 'song row callback prologue'),
+    (0x4e9068, 0x14a200d5, 'song row callback: bne a1, 0x12 (the column count): a row of any other width is skipped'),
 )
 SCAN_SITE = 0x5ea6a8
 SCAN_PINS = (   # (address, stock word, what it proves)
@@ -570,6 +577,7 @@ PICKER_PINS = (
 DATA = {
     'BACKLIGHT_STATUS':   (0x97cae4, 'backlight_status'), # byte: 0 off, 1 lit (awake_screen)
     'PDEQ_SHOWLIST':      (0xa045d8, 'pdeq_showlist'),   # deque_t * of the loaded list
+    'PDEQ_TOOLS_TMP':     (0xa03964, 'tools_pdeq_directory'),   # deque_t * the stock song row callback fills (toolsQueryDbTable clears it first; loadLocalClassList assigns it to the show list, then clears it)
     'PARSE_COVER_MUTEX':  (0xa04588, 'parse_cover_mutex'),  # the lock every stock art caller holds
     # g_class_type: albuminfo_page_init stores classinfo[0] (0xff10) there @0x5268ec, and the row
     # handler passes it to loadSongList and playing_page @0x5275a4.
@@ -661,7 +669,7 @@ LIBC = {
     'pthread_mutex_lock': ('int', 'void *'), 'pthread_mutex_unlock': ('int', 'void *'),
     '_create_deque': ('void *', 'const char *'), 'deque_init': ('void', 'void *'),
     'deque_assign': ('void', 'void *, const void *'), 'deque_size': ('unsigned', 'const void *'),
-    'deque_at': ('void *', 'const void *, unsigned'), 'deque_destroy': ('void', 'void *'),
+    'deque_at': ('void *', 'const void *, unsigned'), 'deque_destroy': ('void', 'void *'), 'deque_clear': ('void', 'void *'),
     # Artists and the artist-scoped Cover Flow (patch/artists.c, patch/coverflow.c)
     'strcasecmp': ('int', 'const char *, const char *'), '_deque_push_back': ('void', 'void *, const void *'),
     # Screenshot (patch/shot.c): the frame buffer, as stock's lcd_linux_fb_create calls them (ioctl 0x4600 / 0x4602, mmap)
@@ -873,6 +881,8 @@ def gen_stock_h(out, demo_path):
         if sym is not None:
             check(syms.get(sym) == addr, f'{sym}: address {syms.get(sym)} != pinned {addr:#x}')
         h.append(f'#define {name} 0x{addr:x}u')
+    h.append('#define STOCK_DB_PATH ((const char *)0x745a34u)')   # "/mnt/data/database.db" (QUERY_PINS)
+    h.append('#define STOCK_SONG_ROW ((void *)0x4e9058u)')       # the song row callback getAllMusic passes to toolsQueryDbTable (QUERY_PINS)
     h.append(f'#define STOCK_HOME_CLICK 0x{HOME_CLICK:x}u')   # the icon click handler stock registers per icon
     h.append(f'#define POD_ENTRY_NAME "{pod_pages.HOME_ENTRY}"')   # the added icon's widget name (a decimal id, as stock's)
     h.append(f'#define stock_np_mode_button ((int (*)(void *))0x{NP_MODE_BUTTON:x}u)')   # Now Playing's mode button picture (patch/nowplaying.c)

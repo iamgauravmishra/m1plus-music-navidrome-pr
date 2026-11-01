@@ -710,14 +710,18 @@ def run(ctx):
     expect(t.played and qpaths(t) == mpaths_t and t.played[1] == 0, f'the disc plays the mix from its first song: the queue is its 12 songs in the mix\'s order, index 0 ({t.played and t.played[1]})')
     nav = [c for c in t.calls if c[0] == 'navigator_to_with_context']
     expect(nav and nav[-1][1] == 'playing_page' and ('loadSongList', songs_t[order_t[0]]['name'], 0, 0xf001) in t.calls and t.word(pod.DATA['G_CLASS_TYPE'][0]) == 0xf001
-           and 0xff13 not in [c[1] for c in t.calls if c[0] == 'loadLocalClassList'], f'it starts as the Shuffle page does: the library (0xf001), loadSongList with the first song and the class 0xf001, then Now Playing ({nav})')
+           and not [c for c in t.calls if c[0] == 'loadLocalClassList'], f'it starts as the Shuffle page does: loadSongList with the first song and the class 0xf001, then Now Playing, with no library read (loadLocalClassList / getAllMusic) ({nav})')
+    dq_ = [c for c in t.calls if c[0] == 'toolsQueryDbTable']
+    expect(len(dq_) == 1 and dq_[0][2] == "select * from songtable where fileurl in (" + ",".join("'" + p + "'" for p in mpaths_t) + ")" and dq_[0][4] == 0,
+           f'the mix\'s rows come from one stock query of just its paths ({dq_})')
     t = touch_world(); t.present.discard(mpaths_t[0]); t.click('pod_dm_play')
     expect(t.played and qpaths(t) == mpaths_t[1:] and t.played[1] == 0, 'the first song is not on the card: it is left out, the queue starts at the next')
     t = touch_world(); [t.present.discard(p) for p in mpaths_t]; t.click('pod_dm_play')
     expect(t.played is None and [c for c in t.calls if c[0] == 'toast'] and not [c for c in t.calls if c[0] == 'navigator_to_with_context' and c[1] == 'playing_page'], 'no song of the mix is on the card: the usual message, nothing starts')
-    gone = list(mpaths_t); gone[2] = '/mnt/mmc/Music/not-in-the-library.flac'
+    gone = list(mpaths_t); gone[2] = "/mnt/mmc/Music/not-in-the-library's.flac"
     t = touch_world(mixfile=X.dump_mix(day, 0x1234abcd, 0x0badf00d, 0, tones, nm[:3], gone)); t.present.add(gone[2]); t.click('pod_dm_play')
     expect(t.played and qpaths(t) == [p for p in gone if p != gone[2]], 'a song that is not in the library is left out')
+    expect("'/mnt/mmc/Music/not-in-the-library''s.flac'" in [c for c in t.calls if c[0] == 'toolsQueryDbTable'][0][2], 'a quote in a path is doubled in the SQL')
 
     # ===== 11. the section in the list
     sy = lambda mm_: mm_.y_of(mm_.daily)

@@ -390,7 +390,10 @@ def run(ctx):
     expect([t[2] for t in timers] == [O['DP_MORE_MS']] and timers[0][1] == PSYMS['dp_on_load'], f'one page timer: the cover loader, {O["DP_MORE_MS"]} ms ({timers})')
     expect(m.bound[(m.page['btn_return'], EVT_CLICK)][0] == PSYMS['pod_on_back'], 'the back disc is the stock back handler')
     ld = [c[1] for c in calls if c[0] == 'loadLocalClassList']
-    expect(ld.count(0xf001) == 1 and ld.count(0xf00b) == 1 and not {dm_t.CLS_FAV, 0xff13} & set(ld), f'the page reads the library once (and the album list for the cover keys), the playlist list once (is the mix saved?), no favourites, no playlist\'s songs ({[hex(x) for x in ld]})')
+    dq = [c for c in calls if c[0] == 'toolsQueryDbTable']
+    expect(0xf001 not in ld and ld.count(0xf00b) == 1 and not {dm_t.CLS_FAV, 0xff13} & set(ld), f'the page does not read the library (loadLocalClassList 0xf001), only the album list for the cover keys and the playlist list once (is the mix saved?), no favourites, no playlist\'s songs ({[hex(x) for x in ld]})')
+    expect(len(dq) == 1 and dq[0][1] == '/mnt/data/database.db' and dq[0][2].startswith("select * from songtable where fileurl in ('") and dq[0][3] == 0x4e9058 and dq[0][4] == 0
+           and all("'" + p + "'" in dq[0][2] for p in [s['path'] for s in m.songs[:12]]), f'the mix\'s 12 rows come from one stock query of just their paths ({dq})')
     expect(not written(m, [calls]), 'opening the page writes, renames and deletes nothing')
     expect(not [c for c in calls if c[0] == 'widget_load_image' and 'star' in c[1]], 'no star image is loaded')
 
@@ -560,6 +563,7 @@ def run(ctx):
     m.pscroll(SCR)
     x, y = m.row_xy(2)
     m.pscroll(SCR)
+    shown0 = m.word(pod.DATA['PDEQ_SHOWLIST'][0])
     calls = m.ptap(x, y)
     expect(m.fired[:2] == [('view_dm', EVT_DOWN), ('view_dm', EVT_UP)] or ('view_dm', EVT_UP) in m.fired, 'the content view gets the pointer down and up through demo\'s own dispatch')
     expect(m.played and played_paths(m) == playlist and m.played[1] == 2, f'a tap on song 2 plays the mix from it: the queue is the playlist\'s 12 songs in order, index 2 ({m.played and m.played[1]})')
@@ -567,7 +571,9 @@ def run(ctx):
     expect(nav and nav[-1][1] == 'playing_page' and ('loadSongList', m.songs[2]['name'], 0, 0xf001) in calls and m.word(pod.DATA['G_CLASS_TYPE'][0]) == 0xf001
            and not [c for c in calls if c[0] == 'mclSetPlayMode'], 'it starts as the Shuffle page does (the library 0xf001, loadSongList with that song and the class 0xf001, then Now Playing) and leaves the play mode alone')
     ld = [c[1] for c in calls if c[0] == 'loadLocalClassList']
-    expect(ld == [0xf001] and 'allmusic_page' not in [c[1] for c in nav], 'the library is read again just before the queue is made, nothing else')
+    dq = [c for c in calls if c[0] == 'toolsQueryDbTable']
+    expect(not ld and len(dq) == 1 and 'allmusic_page' not in [c[1] for c in nav], f'the queue is made from one query of the mix\'s rows: no library read (loadLocalClassList / getAllMusic) ({ld}, {len(dq)})')
+    expect(m.word(pod.DATA['PDEQ_SHOWLIST'][0]) == shown0 and m.deques[m.word(pod.DATA['PDEQ_TOOLS_TMP'][0])] == [], 'the shown list pointer is put back and the query\'s deque is cleared')
     expect(not written(m, [calls]), 'playing writes nothing')
     # the same file name on every row (a duplicate name resolves to the first copy in stock): the drawn row wins
     songs_dup = [dict(s, name='01.flac') for s in uniq]

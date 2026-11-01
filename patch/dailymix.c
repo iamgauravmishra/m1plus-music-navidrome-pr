@@ -1512,6 +1512,41 @@ static unsigned dm_mix_find(void *dq, const char *const *paths, unsigned np, uns
     return found;
 }
 
+/* The mix's rows alone, not the library: stock's own song query (getAllMusic's `select * from songtable`, same database, same row callback) with `where fileurl in (...)`,
+ * the paths with their quotes doubled, in a heap string (25 paths of 255 bytes are over the Library filter's 1 KB buffer: pq_filter then leaves the statement as it is, which
+ * is as correct). The callback leaves the rows in *tools_pdeq_directory (toolsQueryDbTable clears it first); *pdeq_showlist is not touched. The deque is the rows in the
+ * database's order, NULL when the query failed or found none; the caller reads it, then dm_rows_done() clears it (stock clears it after every list it loads). */
+static void *dm_rows(const char *const *paths, unsigned np) {
+    static const char head[] = "select * from songtable where fileurl in (";
+    unsigned i, n = sizeof head + 1;
+    const char *p;
+    char *sql, *o;
+    void *dq = (void *)0;
+    for (i = 0; i < np; ++i) {
+        for (p = paths[i]; *p; ++p) n += 2;
+        n += 3;
+    }
+    sql = calloc(n, 1);
+    if (!sql) return (void *)0;
+    memcpy(sql, head, sizeof head - 1);
+    o = sql + sizeof head - 1;
+    for (i = 0; i < np; ++i) {
+        if (i) *o++ = ',';
+        *o++ = '\'';
+        for (p = paths[i]; *p; ++p) {
+            if (*p == '\'') *o++ = '\'';
+            *o++ = *p;
+        }
+        *o++ = '\'';
+    }
+    *o++ = ')';
+    if (toolsQueryDbTable(STOCK_DB_PATH, sql, STOCK_SONG_ROW, 0) >= 0) dq = *(void **)PDEQ_TOOLS_TMP;
+    free(sql);
+    return dq && deque_size(dq) ? dq : (void *)0;
+}
+
+static void dm_rows_done(void) { deque_clear(*(void **)PDEQ_TOOLS_TMP); }
+
 static int dp_open(void); /* the page (below): 0 once it is up or already open */
 
 /* The card's tap: the page. (A tap that cannot open it does nothing; with no song of the mix left on the card, the usual message.) */
@@ -1526,9 +1561,9 @@ static void dm_open(void) {
  * out; none left, or the wanted one gone: the usual message and nothing starts. */
 static void dm_play_at(const char *const *paths, unsigned np, const char *want, int shuffle) {
     const char *sel[MIX_SONGS];
-    unsigned at[MIX_SONGS], qat[MIX_SONGS], m = 0, k = 0, i, start = 0, count = 0;
-    void *lib, *queue, *mixq, *pick;
-    lib = np ? dm_list(CLASS_ALL_SONGS) : (void *)0;
+    unsigned at[MIX_SONGS], m = 0, k = 0, i, n, start;
+    void *lib, *queue = (void *)0, *small = (void *)0, *saved, *pick;
+    lib = np ? dm_rows(paths, np) : (void *)0;
     if (lib) dm_mix_find(lib, paths, np, at);
     for (i = 0; lib && i < np; ++i)
         if (at[i] != ~0u && !access(paths[i], F_OK)) sel[m] = paths[i], at[m++] = at[i];
@@ -1538,35 +1573,37 @@ static void dm_play_at(const char *const *paths, unsigned np, const char *want, 
     else if (shuffle && m)
         k = pod_rand(m);
     if (k >= m) {
+        dm_rows_done();
         pod_toast(TR("Storage unavailable"));
         return;
     }
-    pick = deque_at(lib, at[k]);
-    queue = _create_deque("stSongInfo");
-    if (!queue) return;
-    deque_init(queue);
-    *(int *)G_CLASS_TYPE = CLASS_ALL_SONGS;
-    loadSongList(queue, cc_str(pick, REC_NAME), I(pick, REC_CUE_START), CLASS_ALL_SONGS);
-    mixq = _create_deque("stSongInfo");
-    if (mixq) {
-        deque_init(mixq);
-        dm_mix_find(queue, sel, m, qat);
-        for (i = 0; i < m; ++i) {
-            if (qat[i] == ~0u) continue;
-            if (i == k) start = count;
-            _deque_push_back(mixq, deque_at(queue, qat[i]));
-            ++count;
+    small = _create_deque("stSongInfo");
+    if (small) queue = _create_deque("stSongInfo");
+    if (queue) {
+        deque_init(small);
+        deque_init(queue);
+        for (i = 0; i < m; ++i) _deque_push_back(small, deque_at(lib, at[i])); /* the mix's rows in the mix's order */
+        pick = deque_at(small, k);
+        saved = *(void **)PDEQ_SHOWLIST;
+        *(void **)PDEQ_SHOWLIST = small; /* loadSongList copies the shown list */
+        *(int *)G_CLASS_TYPE = CLASS_ALL_SONGS;
+        loadSongList(queue, cc_str(pick, REC_NAME), I(pick, REC_CUE_START), CLASS_ALL_SONGS);
+        *(void **)PDEQ_SHOWLIST = saved;
+        n = deque_size(queue);
+        for (start = 0; start < n && strcmp(cc_str(deque_at(queue, start), REC_PATH), sel[k]);
+             ++start) { /* by path: a file name shared by several songs is not enough */
         }
-        if (count) {
+        if (start < n) {
             if (shuffle)
                 pod_set_mode(MODE_SHUFFLE);
             else if (!want)
                 pod_set_in_order(); /* Play plays the mix in order, even after a Shuffle; a row tap keeps the mode */
-            pod_open_player(mixq, (int)start, CLASS_ALL_SONGS);
+            pod_open_player(queue, (int)start, CLASS_ALL_SONGS);
         }
-        deque_destroy(mixq);
     }
-    deque_destroy(queue);
+    if (queue) deque_destroy(queue);
+    if (small) deque_destroy(small);
+    dm_rows_done();
 }
 
 /* From the first song (the card's disc). */
@@ -2425,12 +2462,14 @@ static void dp_keys(void) {
 static void dp_songs(void) {
     const char *paths[MIX_SONGS];
     unsigned at[MIX_SONGS], np = dm_paths(paths), i;
-    void *lib = dm_list(CLASS_ALL_SONGS);
+    void *lib = np ? dm_rows(paths, np) : (void *)0;
     dp.rows = np ? calloc(np, sizeof(pick_t)) : (pick_t *)0;
-    if (!lib || !dp.rows) return;
-    dm_mix_find(lib, paths, np, at);
-    for (i = 0; i < np; ++i)
-        if (at[i] != ~0u && !access(paths[i], F_OK)) dm_rec_copy(&dp.rows[dp.n++], deque_at(lib, at[i]));
+    if (lib && dp.rows) {
+        dm_mix_find(lib, paths, np, at);
+        for (i = 0; i < np; ++i)
+            if (at[i] != ~0u && !access(paths[i], F_OK)) dm_rec_copy(&dp.rows[dp.n++], deque_at(lib, at[i]));
+    }
+    if (lib) dm_rows_done();
 }
 
 /* The page. 0 once it is up (or already open); -1 when nothing could be made (no song of the mix left in the library and on the card: the usual message; no window, an asset
