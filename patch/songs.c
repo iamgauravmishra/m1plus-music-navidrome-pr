@@ -249,8 +249,20 @@ static int sg_is_sel(int i) { return sg.sel && (sg.sel[i >> 3] >> (i & 7) & 1); 
 /* The tile of song a, made from the stock record (the caller has checked sg_valid). */
 static void sg_prep(tile_t *t, int a) {
     void *rec = deque_at(sg.list, (unsigned)a);
-    grid_set(t, sg_name(rec), cc_str(rec, sg.cls == CLASS_ARTIST_SONGS ? REC_ALBUM : REC_ARTIST),
-             sg.idx[a].key); /* an artist's list: the artist is the title, the album the grey line */
+    const char *sub =
+        cc_str(rec, sg.cls == CLASS_ARTIST_SONGS
+                        ? REC_ALBUM
+                        : REC_ARTIST); /* an artist's list: the artist is the title, the album the grey line */
+    char buf[300];
+    if (sg.cls ==
+        CLASS_OFTEN) { /* Most Played: "12 plays · Artist" (the count first, a long artist is the part that is cut); REC_TRACK = plays - 1 */
+        int plays = I(rec, REC_TRACK) + 1;
+        char count[48];
+        pod_fmt(count, sizeof count, TR(plays == 1 ? "%d play" : "%d plays"), plays);
+        snprintf(buf, sizeof buf, "%s%s%s", count, sub[0] ? " \xc2\xb7 " : "", sub);
+        sub = buf;
+    }
+    grid_set(t, sg_name(rec), sub, sg.idx[a].key);
 }
 
 static tile_t *sg_tile(int a) {

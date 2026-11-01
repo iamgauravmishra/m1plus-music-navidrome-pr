@@ -53,6 +53,8 @@ Search out only for a genre's songs, `0xff09`):
   the page is open shows on the next open.
 - **Order**: the query's own (Recently Played newest first, Most Played by plays, a playlist in insertion order, ...). `sort_flag` is the library's: a list has **no sections, no
   rail**, whatever the flag.
+- **Most Played's play count**: the grey line of a row is `N plays · Artist` (`sg_prep`; `N` = `REC_TRACK` + 1, `1 play` singular), the count first so a long artist is what is cut. Texts
+  `%d play` / `%d plays` (`tools/pod_i18n.py`, 13 languages; pl, ru, uk a label form). No other list (or the artist's songs) changes its grey line.
 - **Play, Play pill, Shuffle**: `loadSongList(queue, name, cue, class)`, `g_class_type` = class, Now Playing's context class = class (the stock row handler passes
   `g_class_type`). For a playlist the page puts its id into `classinfo[1]` before every query and before `loadSongList` (which copies classinfo for the memory playback,
   0x4e2d80): another page's query (the Playlists grid's scan, which stops while it is behind, `pl_on_bg`) may have left another id. **Shuffle** on a list is that list in the

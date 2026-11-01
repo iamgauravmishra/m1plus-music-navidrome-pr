@@ -313,6 +313,11 @@ TEXT = dict([
        '%d canción', '%d brano', '%d เพลง', 'Utwory: %d', 'Песен: %d', 'Пісень: %d'),
     _t('%d songs', '%d 首歌曲', '%d 首歌曲', '%d 曲', '%d곡', '%d titres', '%d Titel',
        '%d canciones', '%d brani', '%d เพลง', 'Utwory: %d', 'Песен: %d', 'Пісень: %d'),
+    # the grey line of a Most Played row, "12 plays · Artist" (patch/songs.c sg_prep; pl, ru, uk the label form)
+    _t('%d play', '播放 %d 次', '播放 %d 次', '%d 回再生', '%d회 재생', '%d lecture', '%d Wiedergabe',
+       '%d reproducción', '%d riproduzione', 'เล่น %d ครั้ง', 'Odtworzenia: %d', 'Прослушано: %d', 'Прослухано: %d'),
+    _t('%d plays', '播放 %d 次', '播放 %d 次', '%d 回再生', '%d회 재생', '%d lectures', '%d Wiedergaben',
+       '%d reproducciones', '%d riproduzioni', 'เล่น %d ครั้ง', 'Odtworzenia: %d', 'Прослушано: %d', 'Прослухано: %d'),
     # the Songs page's line for an empty list (Favourites, a playlist ...; the library's empty line is "Update Local Music first")
     _t('No songs', '没有歌曲', '沒有歌曲', '曲がありません', '노래 없음', 'Aucun titre', 'Keine Titel',
        'Sin canciones', 'Nessun brano', 'ไม่มีเพลง', 'Brak utworów', 'Нет песен', 'Немає пісень'),

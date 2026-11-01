@@ -1070,6 +1070,7 @@ def lists_tests(ctx):
         row = next(i for i, r in enumerate(page.rows) if r.label == label)
         expect(page.rows[row].action == P.ACT_LIST and page.rows[row].arg == O[home], f'the menu\'s {label} row opens the list (ACT_LIST) with its Home tile')
         m = list_machine(titles, cls); m.strings = {'hr': 'Hi-Res'}
+        m.setword(m.songs[0] + O['REC_TRACK'], 11)   # REC_TRACK = plays - 1 on the Most Played records (the others' track numbers are never shown)
         m.call(on_row, a0=rows0 + 12 * row, count=900000000)
         calls = m.calls
         queries = [c[1] for c in calls if c[0] == 'loadLocalClassList']
@@ -1084,6 +1085,10 @@ def lists_tests(ctx):
         shown = [t for t, r in texts if t in titles]
         expect(vis(m, 'sg_rail')[0] == 0 and len(shown) >= 4 and shown == titles[:len(shown)] and not any(len(t) == 1 for t, r in texts)
                and m.props[(m.sv, 'virtual_h')] == lay.content(), f'{label}: a plain list in the query\'s order, no sections, no rail')
+        subs = [t for t, r in texts if 'Artist' in t]
+        plays = ['12 plays', '1 play', '1 play', '1 play']
+        want = [f'{p} \xb7 Artist {i}' for i, p in enumerate(plays)] if cls == O['CLASS_OFTEN'] else [f'Artist {i}' for i in range(4)]
+        expect(subs[:4] == want, f'{label}: the grey line is the artist, on Most Played "N plays \xb7 artist" (REC_TRACK + 1; "1 play" singular) ({subs[:4]!r})')
         calls = tap(m, 150, lay.row_y(2) + 30)
         nav = [c for c in calls if c[0] == 'navigator_to_with_context' and c[1] == 'playing_page']
         expect(nav and nav[0][3] == cls and m.played[1] == 2 and m.played[0] == m.songs and [c[3] for c in calls if c[0] == 'loadSongList'] == [cls] and m.word(G_CLASS) == cls,
