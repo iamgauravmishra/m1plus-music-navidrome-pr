@@ -71,7 +71,7 @@ The sources are what the stock page's widget walk reads (the callback of `system
 | Row (stock key) | Stock source | Pinned (`SETTINGS_PINS`, `DATA`) |
 |---|---|---|
 | Model (`about_model`, scrlabel0) | the literal `"Shanling M1 Plus"` at `0x747718` | `addiu v0` at `0x4a145c`, the word at `0x747718` |
-| Firmware (`about_version`, scrlabel1) | the literal `"V2.1"` at `0x74773c` (never patched: the row follows stock) | `0x4a14cc`, `0x74773c` |
+| Firmware (`about_version`, scrlabel1) | the literal `"V2.1"` at `0x74773c` (never patched: the row follows stock; only the updater's compare is repointed, `modules/version.md`) | `0x4a14cc`, `0x74773c` |
 | Capacity (`about_cardcap`, scrlabel2) | float at `0xa03e74`, set by `getDiskMemoryInfo("/mnt/mmc", &cap, &free)` (`0x5b30e0`: `statfs`, in G) at init, only while `access("/tmp/mmc_add")` succeeds (else 0); stock prints `%.2fG` | `lwc1` at `0x4a1514`, the call at `0x4a1778` and its arguments `0x4a176c..0x4a177c`, `access` string `0x4a1754` |
 | Wi-Fi MAC (`about_wifimac`, scrlabel3) | the string `wifi_mac` (`0xa061a8`, 32 bytes); empty when not set (stock shows only the label) | symbol `wifi_mac` |
 | Available (`about_cardremain`, scrlabel4) | float at `0xa03e70`, the same call | `lwc1` at `0x4a1634` |

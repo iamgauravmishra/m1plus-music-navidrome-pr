@@ -29,7 +29,8 @@ The unsigned, unencrypted package is handled by `demo`'s `update_firmware`
 2. read 4 lines of `firmware_v20.info`
 3. line 1 must `strcmp` equal `"Shanling M1 Plus"`
 4. line 2 must contain the letter `V` (`strchr`) and must NOT equal the built-in `"V2.1"`
-   (identical version is refused with error -14; there is no "newer than" check)
+   (identical version is refused with error -14; there is no "newer than" check). The mod points this
+   compare at another string, so official V2.1 installs too (`docs/modules/version.md`)
 5. MD5 of `recovery-update/xImage` and `rootfs.squashfs` must match lines 3 and 4
 6. `flash_erase /dev/mtd6` ; write marker `ota:kernel2` to mtd6 with `nandwrite` ; reboot
 
@@ -81,10 +82,10 @@ the progress bar out as a horizontal fill inside it (`docs/ui.md`), with **no bi
 
 The `demo` code is untouched by the asset steps (the space step only zeroes its unloaded `.pdr`; the
 payload appends a segment and patches pinned words, `docs/architecture.md`), so the installed version
-string stays "V2.1". Consequences:
-- every package needs its own version tag so the updater accepts it (`docs/workflow.md`);
-- official stock V2.1 would be refused by the TF-card menu afterwards (identical version), so a
-  `V2.1R` restore package with the untouched stock images is built by `build.py --restore`;
+string stays "V2.1" (the online check and About read it), but `update_firmware`'s own compare is
+repointed (`docs/modules/version.md`). Consequences:
+- the TF-card updater accepts any package tag, including Shanling's official V2.1: that is the
+  user's way back to stock; `V2.1R` (`build.py --restore`, stock images, own tag) stays a developer tool;
 - any future official release (V2.2 ...) installs normally.
 
 ## 3b. The lock screen page (ui/screensaver_page.bin): what the app does with it

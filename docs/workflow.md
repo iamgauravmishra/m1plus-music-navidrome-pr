@@ -136,6 +136,8 @@ uv run python -I tools/fwtool.py verify out/M1Plus-<tag>-release-update.bin
 uv run python -I tools/flash_sd.py out/M1Plus-<tag>-release-update.bin
 ```
 
+The `V2.1R` restore package (stock images, own tag) is a developer tool: users restore with Shanling's official V2.1 (`docs/modules/version.md`).
+
 Release/restore copies require golden bytes; dev copies require a full receipt. There is no
 `--force` bypass. `build.py --dev` alone creates no test receipt; use `make dev` for installation.
 `--pack-only` rejects stale trees. Payload edits retain the font/base cache; `--no-cache`

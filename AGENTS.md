@@ -63,7 +63,7 @@ gets the Source Han Sans zip.
 ## Version tags
 
 A release has a semantic `VERSION` (`major.minor.patch`, `tools/build.py`) and its package tag is `TAG = V2.1-<VERSION>`
-(what the updater compares: it refuses a package whose version equals the installed one). The About row shows
+(what the updater reads; it refuses only a package equal to `V2.1`, a compare patched to another string, so the official V2.1 package, `V2.1R`, releases and dev builds all install: `docs/modules/version.md`). The About row shows
 the plain `VERSION` for a release (`build.about`) and the dev tag for a dev build; the GitHub release and its git
 tag are named `VERSION` (no `v`). Dev tags are `V2.1z` + capital letters.
 

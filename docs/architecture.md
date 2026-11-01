@@ -17,6 +17,7 @@ for commands, [UI](ui.md) for layout/assets, and [history](history.md) for recor
 | [Addresses](modules/addresses.md) | Stock symbols, offsets and record layouts |
 | [Home and boot guard](modules/home-guard.md) | Startup marker, grid entry, window stack and fallback |
 | [Settings](modules/settings.md) | Settings pages and persisted choices |
+| [Updater version compare](modules/version.md) | Why the official V2.1 package installs over the mod |
 | [Safety](modules/safety.md) | Allowed entry points and required invariants |
 | [Validation](modules/validation.md) | Test boundaries and what they prove |
 | [q2-pod comparison](modules/q2pod.md) | Corresponding mechanisms and platform differences |

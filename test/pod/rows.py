@@ -232,6 +232,7 @@ def rows_tests(expect):
     allowed |= {pod.fileoff(built, pod.ID3_SITE)}                                                            # the tag reader's call (Podcasts)
     allowed |= {pod.fileoff(built, pod.QUERY_DB), pod.fileoff(built, pod.QUERY_DB) + 4, pod.fileoff(built, pod.QUERY_SORT), pod.fileoff(built, pod.QUERY_SORT) + 4}   # the Library query hooks (patch/pcmodel.c)
     allowed.add(pod.fileoff(built, pod.SCAN_SITE))                                                       # the library scan's folder test (patch/common.c pod_scan_dir)
+    allowed.add(pod.fileoff(built, pod.UPDATE_SITE))                                                     # update_firmware's version compare operand (docs/modules/version.md)
     allowed.add(pod.fileoff(built, pod.BATTERY_SITE))                                                    # show_sysbar_face's get_battery_capacity call (patch/battery.c)
     allowed.add(pod.fileoff(built, pod.SCROLL_SLOT))                                                   # the scroll_view vtable slot (patch/scroll.c)
     import mod_nowplaying   # the A-B marker immediates (five pinned words, disjoint from the row edits)
