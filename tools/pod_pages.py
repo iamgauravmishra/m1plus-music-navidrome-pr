@@ -410,6 +410,10 @@ PODCASTS = Page('m1plus_podcasts', 'm1plus_podcasts_page', 'Podcasts', kind='pod
 # The Tape page (patch/tape.c): a fullscreen window drawn landscape; the payload paints the cassette and takes the touches (opened from Now Playing's More dialog, not from a menu row).
 TAPE = Page('m1plus_tape', 'm1plus_tape_page', 'Cassette Mode', kind='tape')
 
+# The Vinyl page (patch/vinyl.c): a fullscreen turntable Now Playing page (portrait); the payload paints the record and takes the touches, the text is the page's labels
+# (opened from Now Playing's More dialog, not from a menu row).
+VINYL = Page('m1plus_vinyl', 'm1plus_vinyl_page', 'Vinyl Mode', kind='vinyl')
+
 # Settings > Now Playing: the cassette's look. Theme shows its value (Normal, Chrome or Metal) at the right and opens a picker; the choice is saved and the Tape page reads it when it opens.
 NPSET_PAGE = Page('m1plus_npset', 'm1plus_npset_page', 'Now Playing', layout=[
     Hdr('Cassette Mode'),
@@ -440,7 +444,7 @@ SEARCH = Page('m1plus_search', 'm1plus_search_page', 'Search', kind='search')
 
 # PAGES[0] is the entry page.
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
-         EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, SORT_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE]
+         EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, SORT_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE

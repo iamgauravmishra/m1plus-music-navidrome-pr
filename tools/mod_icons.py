@@ -128,6 +128,10 @@ DAILY = DAILY + IPOD
 import tape_art
 TAPE = list(tape_art.NAMES)   # the page's pictures: tape_top and tape_screw shared, and tape_shell / tape_hubs / tape_marks for each theme (the row icon pod_ic_tape is a row image, installed with them)
 DAILY = DAILY + TAPE
+# The Vinyl page (patch/vinyl.c, docs/modules/vinyl.md): its seven pictures (tools/vinyl_art.py draws them; portrait, as the panel). The More sheet's row icon is pod_ic_vinyl.
+import vinyl_art
+VINYL = list(vinyl_art.NAMES)
+DAILY = DAILY + VINYL
 # The Settings pages (tools/pod_settings.py, docs/modules/settings.md "Cards"): a 20 px glyph (CARD_GLYPH_PX, stroke 2) centred in a 24 px image on each row, by the row's label; the card's
 # chevron (Lucide chevron-right fitted to 9 x 15, #777777, stroke 2) and the picker's check (20 px, white).
 CARD_GLYPH_PX, CARD_CHEVRON, CARD_CHECK = 20, ('pod_chev', 9, 15, (0x77,) * 3, 2), ('pod_check', 20)
@@ -151,7 +155,7 @@ CARD_PIECE = {'ROW_W': 320, 'ROW_H': 52, 'CARD_X': 10, 'CARD_W': 300, 'CARD_R': 
 CARD_PIECES = ('single', 'top', 'mid', 'bot')
 CARD_PIECE_IMAGES = [f'pod_cd_{p}{d}' for p in CARD_PIECES for d in ('', '_down')]
 CARD_IMAGES = sorted({card_name(g) for g in CARD_GLYPHS.values()}) + [CARD_CHEVRON[0], CARD_CHECK[0]] + CARD_PIECE_IMAGES
-DAILY = DAILY + CARD_IMAGES + ['pod_ic_tape']   # (pod_ic_tape: Now Playing's More sheet's Cassette Mode row, tools/mod_lists.py: no row page uses it any more)
+DAILY = DAILY + CARD_IMAGES + ['pod_ic_tape', 'pod_ic_vinyl']   # (pod_ic_tape, pod_ic_vinyl: Now Playing's More sheet's Cassette Mode and Vinyl Mode rows, tools/mod_lists.py: no row page uses them)
 # M1+ Music menu and Shuffle page rows: label -> (added image, glyph). A bare white glyph (BARE_PX canvas) left of the title.
 # '@shanling' = the brand mark cut out of a stock image (shanling_mark below), not a glyph.
 POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'audio-lines'), 'Cover Flow': ('pod_ic_coverflow', '+coverflow'),   # audio-lines: the wave of the navbar's Now Playing button
@@ -167,7 +171,7 @@ POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'audio-lines'), 'Cover Flow': (
             'Composers': ('pod_ic_composers', 'feather'), 'Hi-Res': ('pod_ic_hires', '+badge-hr'),
             'Update Library': ('pod_ic_update', 'refresh-cw'), 'Tidal': ('pod_ic_tidal', 'T:brand-tidal'),
             'CD Ripper': ('pod_ic_cdripper', 'disc'), 'Pod': ('pod_ic_ipod', '+ipod'), 'Podcasts': ('pod_ic_podcasts', 'podcast'), 'Search': ('pod_ic_search', 'search'),
-            'Cassette Mode': ('pod_ic_tape', '+cassette-tape')}   # Now Playing's More sheet row (tools/mod_lists.py)
+            'Cassette Mode': ('pod_ic_tape', '+cassette-tape'), 'Vinyl Mode': ('pod_ic_vinyl', '+turntable')}   # Now Playing's More sheet rows (tools/mod_lists.py)
 # The "M1+ Music" icon patch/home.c adds to the stock Home grid (id 99): 66x66 like the stock Home icons
 # (white Lucide smartphone glyph on the #777777 disc, #555555 pressed), style home_m1plus_style in home_page.bin.
 POD_HOME = ('m1plus', 'm1plus_down')
@@ -272,7 +276,7 @@ NP = {'np_play': ('pil:play', 44, 0, 'fg', 'np_play_down'), 'np_pause': ('pil:pa
       'mb_next': ('pil:mb_next', (34, 24), 0, 'white', 'mb_next_down'),
       'mb_glass': ('pil:glass', (304, 56), 0, 'fg', 'mb_glass_down'),
       'lk_card': ('pil:glass_card', (288, 334), 0, 'fg', None),
-      'pm_sheet': ('pil:glass_sheet', (320, 200), 0, 'fg', None), 'pm_sheet5': ('pil:glass_sheet5', (320, 250), 0, 'fg', None),
+      'pm_sheet': ('pil:glass_sheet', (320, 200), 0, 'fg', None), 'pm_sheet6': ('pil:glass_sheet6', (320, 300), 0, 'fg', None),
       'pl_glass': ('pil:glass_menu', (72, 200), 0, 'fg', None),
       'sg_glass': ('pil:glass_sort', (72, 250), 0, 'fg', None),
       'np_grabber': ('pil:grabber', (120, 44), 0, 'ghost', 'np_grabber_down'),
@@ -735,7 +739,7 @@ PC_ATLAS = 'pc_atlas'
 PC_SHEET_ICONS = (('pc_ic_import', 'file-input', WHITE), ('pc_ic_speed', 'gauge', WHITE), ('pc_ic_refresh', 'refresh-cw', WHITE), ('pc_ic_select', 'list-checks', WHITE), ('pc_ic_check', '+check', WHITE),
                   ('pc_ic_unsub', 'x', PA_RED), ('pc_ic_down', 'arrow-down', WHITE), ('pc_ic_trash', 'trash', WHITE), ('pc_ic_undo', 'rotate-ccw', WHITE))
 PC_SHEET_PX = 20
-PC_SHEETS = (('pc_sheet1', 50), ('pc_sheet2', 100), ('pc_sheet3', 150), ('pc_sheet4', 200), ('pc_sheet5', 250))   # the sheets' glass for 1..5 rows (Now Playing's pm_sheet / pm_sheet5 for 4 and 5, but a name of ours: the Show page's rows need no other page's image)
+PC_SHEETS = (('pc_sheet1', 50), ('pc_sheet2', 100), ('pc_sheet3', 150), ('pc_sheet4', 200), ('pc_sheet5', 250))   # the sheets' glass for 1..5 rows (Now Playing's pm_sheet is the 4 row one, but a name of ours: the Show page's rows need no other page's image)
 PC_GLYPHS = ('arrow-down', 'download', 'chevron-right', 'file-input')                                 # the Lucide glyph the set adds to the sources (the download symbol of the pill, the badge and the sheet)
 PODCASTS = [PC_ATLAS] + [n for n, _, _ in PC_SHEET_ICONS] + [n for n, _ in PC_SHEETS]
 ALBUM += PODCASTS
@@ -874,6 +878,7 @@ def album_images():
     f['ipod_placeholder'] = Image.open(IPOD_PLACEHOLDER).convert('RGB')   # the Pod's cover for anything without art (docs/modules/ipod.md)
     import tape_art
     f.update(tape_art.images())
+    f.update(vinyl_art.images())
     return f
 
 def ipod_wheel(dark=False):
@@ -1169,7 +1174,7 @@ def np_glyph(g, size, ink_px, rgb):
 # just inside the top edge. Straight-alpha RGBA, anti-aliased (8x supersampled, box filter). Pressed: a brighter fill and rim.
 GLASS = (304, 56, 28)                                         # w, h, radius
 GLASS_CARD = (288, 334, 18)                                   # the lock screen's now-playing card (mod_lockscreen.py; docs/modules/lockscreen.md)
-GLASS_SHEET5 = (320, 250, 18)                               # the same sheet with the Tape row (page 1, five rows): its own image, not a crop of a taller one (docs/modules/playmore.md)
+GLASS_SHEET6 = (320, 300, 18)                               # the same sheet with the Cassette and Vinyl rows (page 1, six rows): its own image, not a crop of a taller one (docs/modules/playmore.md)
 GLASS_SHEET = (320, 200, 18)                                  # Now Playing's More sheet (patch/playmore.c, docs/modules/playmore.md): top corners only
 GLASS_SHEET_FILL = ((0x2A, 0x2A, 0x2C), (0x1E, 0x1E, 0x20), 0.88)   # denser than the card (0.76): rows, labels and grey badges sit straight on it (docs/modules/playmore.md)
 GLASS_SORT = (72, 250, 14)    # the Songs page's sort card (docs/modules/songs.md): the same pane, five rows high (the gradient is vertical, so each height has its own picture)
@@ -1228,7 +1233,7 @@ def np_images():
             if g == 'pil:glass': out[name] = glass_image(*GLASS, pressed)
             elif g == 'pil:glass_card': out[name] = glass_image(*GLASS_CARD, fill=GLASS_CARD_FILL)
             elif g == 'pil:glass_sheet': out[name] = glass_image(*GLASS_SHEET, fill=GLASS_SHEET_FILL, top_only=True)
-            elif g == 'pil:glass_sheet5': out[name] = glass_image(*GLASS_SHEET5, fill=GLASS_SHEET_FILL, top_only=True)
+            elif g == 'pil:glass_sheet6': out[name] = glass_image(*GLASS_SHEET6, fill=GLASS_SHEET_FILL, top_only=True)
             elif g == 'pil:glass_menu': out[name] = glass_image(*GLASS_MENU, fill=GLASS_SHEET_FILL)
             elif g == 'pil:glass_sort': out[name] = glass_image(*GLASS_SORT, fill=GLASS_SHEET_FILL)
             elif g.startswith('pil:'): out[name] = pil_glyph(g[4:], px, rgb, alpha)

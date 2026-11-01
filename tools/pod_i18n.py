@@ -447,6 +447,9 @@ TEXT = dict([
     # Now Playing's More sheet: the row that opens the landscape cassette page (patch/tape.c, docs/modules/tape.md); the page's own name is the same text
     _t('Cassette Mode', '磁带模式', '錄音帶模式', 'カセットモード', '카세트 모드', 'Mode cassette', 'Kassettenmodus',
        'Modo casete', 'Modalità cassetta', 'โหมดเทป', 'Tryb kasety', 'Режим кассеты', 'Режим касети'),
+    # Now Playing's More sheet: the row that opens the turntable page (patch/vinyl.c, docs/modules/vinyl.md); the page's own name is the same text
+    _t('Vinyl Mode', '黑胶模式', '黑膠模式', 'レコードモード', '바이닐 모드', 'Mode vinyle', 'Vinylmodus',
+       'Modo vinilo', 'Modalità vinile', 'โหมดแผ่นเสียง', 'Tryb winylu', 'Режим винила', 'Режим вінілу'),
     # Settings > Now Playing > Theme: the picker's title and its three values
     _t('Cassette Theme', '磁带主题', '錄音帶主題', 'カセットテーマ', '카세트 테마', 'Thème cassette', 'Kassettendesign',
        'Tema del casete', 'Tema cassetta', 'ธีมเทป', 'Motyw kasety', 'Тема кассеты', 'Тема касети'),

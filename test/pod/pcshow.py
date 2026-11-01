@@ -192,7 +192,7 @@ def asset_tests(ctx):
     rh = O['PM_ROW_H']
     expect((card.x, card.y, card.w, card.h) == (0, 450 - 5 * rh, 320, 5 * rh) and card.get('style:normal:bg_image') == 'pc_sheet5' and card.get('visible') == 'false',
            'the card is the five-row sheet at the bottom of the window (the payload sets its size and picture)')
-    expect([c.name for c in card.children] == [f'pg_sh_{r}' for r in PCP.SHEET_ROWS] and len(PCP.SHEET_ROWS) == O['PM_PAGE_N'] + 5, 'ten rows: the show sheet\'s five, the episode sheet\'s four and the Shows level\'s Import from Card')
+    expect([c.name for c in card.children] == [f'pg_sh_{r}' for r in PCP.SHEET_ROWS] and len(PCP.SHEET_ROWS) == 10, 'ten rows: the show sheet\'s five, the episode sheet\'s four and the Shows level\'s Import from Card')
     for r, icon, label, value, red in pod_ui.PS_SHEET_ROWS:
         row = tree.find(f'pg_sh_{r}')
         ic, tx, hr = tree.find(f'pg_sh_{r}_ic'), tree.find(f'pg_sh_{r}_tx'), tree.find(f'pg_sh_{r}_hr')

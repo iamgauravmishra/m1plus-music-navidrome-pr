@@ -35,7 +35,7 @@ for commands, [UI](ui.md) for layout/assets, and [history](history.md) for recor
 | [Rows](modules/rows.md) | Stock row edits, layout and text sizing |
 | [Shuffle](modules/shuffle.md) | Song, album and folder queues |
 | [Now Playing](modules/nowplaying.md) | Cover tint, remaining time and rounded artwork |
-| [More sheet](modules/playmore.md) | Playback options and Cassette Mode entry |
+| [More sheet](modules/playmore.md) | Playback options, Cassette Mode and Vinyl Mode entries |
 | [Mini player](modules/minibar.md) | Home overlay, controls, blur and timer |
 | [Recently Played](modules/recent.md) | History file, covers and shelf layout |
 | [Daily Mix](modules/dailymix.md) | Selection job, stored mix, card and page |
@@ -43,6 +43,7 @@ for commands, [UI](ui.md) for layout/assets, and [history](history.md) for recor
 | [Virtual iPod](modules/ipod.md) | Touch wheel, navigation and playback |
 | [iPod Cover Flow](modules/ipod-coverflow.md) | Embedded carousel and album navigation |
 | [Cassette Mode](modules/tape.md) | Landscape rendering, themes and timer |
+| [Vinyl Mode](modules/vinyl.md) | Portrait turntable page: turning cover label, tonearm, keys |
 | [Menu](modules/menu.md) | Home/normal instances, Extras and customization |
 | [Languages](modules/i18n.md) | Translation tables, keys and width checks |
 | [Screenshot](modules/screenshot.md) | Countdown, framebuffer capture and import |

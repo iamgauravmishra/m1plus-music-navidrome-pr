@@ -55,6 +55,8 @@ in [history](../history.md); feature modules retain their detailed edge cases.
   [iPod checklist](ipod.md#device-checklist)
 - **EXTRA-04:** Cassette Mode orientation, text, theme, progress/reels, pause/resume, close
   and dark-screen timer behaviour. [Cassette checklist](tape.md#device-checklist-first-flash)
+- **EXTRA-05:** Vinyl Mode cover label, turning and stopping, arm on the groove and parked, keys,
+  record tap, close and dark-screen timer behaviour. [Vinyl checklist](vinyl.md#device-checklist-first-flash)
 
 For captures use Settings → Developer → Screenshot, then `tools/pull_shots.py --build latest`.
 See [installation/restore](../install.md) and [capture details](screenshot.md).

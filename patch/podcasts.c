@@ -2773,8 +2773,7 @@ static void pg_sheet_value(int i, int v, const char *text, const char *alt) {
 
 /* Show the rows (ids, in order) and the card that holds them: PM_ROW_H each from the card's top, the first without its hairline, the glass picture of that height. */
 static void pg_sheet_rows(const int *rows, int n) {
-    static const char *const glass[PM_PAGE_N + 1] = {"",          "pc_sheet1", "pc_sheet2",
-                                                     "pc_sheet3", "pc_sheet4", "pc_sheet5"};
+    static const char *const glass[] = {"", "pc_sheet1", "pc_sheet2", "pc_sheet3", "pc_sheet4", "pc_sheet5"};
     int i, k, h = n * PM_ROW_H;
     for (i = 0; i < PG_SHEET_ROWS; ++i) {
         int at = -1;

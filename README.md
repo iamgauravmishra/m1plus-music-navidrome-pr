@@ -10,7 +10,7 @@ official V2.1 firmware.
 - **Browse:** Cover Flow, album grids/lists, Artists, an A–Z Songs list and Playlists.
 - **Home:** Daily Mix, Recently Played and a floating mini player.
 - **Now Playing:** cover-colour backgrounds, rounded artwork and remaining time.
-- **Extras:** album/folder shuffle, local podcasts, a virtual iPod and Cassette Mode.
+- **Extras:** album/folder shuffle, local podcasts, a virtual iPod, Cassette Mode and Vinyl Mode.
 - **Appearance:** a translucent lock screen, minimal theme, Lucide icons and Inter + Source Han Sans fonts.
 - **Settings:** choose menu items, startup behaviour, Cover Flow orientation and album order.
 - **Languages:** the added UI follows the player's language setting, with 13 translations.
