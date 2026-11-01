@@ -80,7 +80,8 @@ def set_fb(m, w, h, fmt, pad=0, pages=1, page=0, seed=1, **over):
 def shot_machine(**kw):
     m = Machine()
     m.ind = m.widget('pod_shot')            # the camera in the system bar's right group
-    m.confirm_yes = True                    # Yes in the stock confirm dialog (the No tests clear it)
+    m.confirm_yes = True                    # Yes in the Cancel dialog (the No tests clear it)
+    m.confirm_answers = {'Take a screenshot in:': DEFS['SHOT_QUIT_SHORT']}   # the Take dialog: its left button, 5 s (tests set another code)
     m.rows = set_fb(m, kw.pop('w', 320), kw.pop('h', 480), kw.pop('fmt', 'rgb565'), **kw)
     return m
 
@@ -112,6 +113,11 @@ class Run:
         return self.step('grab', 'shot_grab')
 
 
+def lang(m, loc):
+    """The machine speaks loc; its Take dialog's text is translated, so the answer (the 5 s button) is keyed by that text."""
+    m.set_language(loc); m.confirm_answers = {tr_of(loc)('Take a screenshot in:'): DEFS['SHOT_QUIT_SHORT']}
+
+
 def files(m): return {p: d for p, d in m.fs.items() if p.startswith(DIR)}
 
 
@@ -120,8 +126,9 @@ def run(ctx):
     P = pod_pages
     tick_ms, settle_ms = DEFS['SHOT_TICK_MS'], DEFS['SHOT_SETTLE_MS']
     TICK, GRAB = PSYMS['shot_tick'], PSYMS['shot_grab']
-    ASK, CANCEL = 'Take a screenshot in 5 s?', 'Cancel the screenshot?'
-    def asked(r): return [c[2] for c in r.log if c[1] == 'confirm']
+    ASK1, ASK, CANCEL = 'Take a screenshot?', 'Take a screenshot in:', 'Cancel the screenshot?'
+    def adds(r): return sum(1 for c in r.log if c[1] == 'timer_add' and c[2] in (TICK, GRAB))
+    def asked(r): return [c[2] for c in r.log if c[1] == 'confirm' and c[2] != ASK1]   # the delay and Cancel dialogs (step 1 has its own tests)
 
     # 1. What is pinned. The format is learned the way stock learns it: lcd_linux_fb_create opens /dev/fb0 and issues
     #    ioctl 0x4602 and 0x4600 (`addiu $a1, $zero, 0x4602` @0x63953c, 0x4600 @0x639558), then mmaps the node.
@@ -148,7 +155,7 @@ def run(ctx):
     m = shot_machine()
     expect((m.read_cstr(m.word(rows_s + 12 * item)), m.word(rows_s + 12 * item + 4)) == ('pod_row2', P.ACT_SHOT), 'the payload row table binds pod_row2 of the Developer page to ACT_SHOT')
     m.call(PSYMS['on_row'], a0=rows_s + 12 * item)
-    expect([c[1:] for c in m.calls if c[0] == 'confirm'] == [(ASK, O['CONFIRM_KIND_WRAP'])] and ('timer_add', TICK, tick_ms) in m.calls
+    expect([c[1:] for c in m.calls if c[0] == 'confirm'] == [(ASK1, O['CONFIRM_KIND_WRAP']), (ASK, O['CONFIRM_KIND_WRAP'])] and ('timer_add', TICK, tick_ms) in m.calls
            and 'toast' not in m.names() and 'window_open' not in m.names() and 'stock_resume' not in m.names(),
            'tapping the row asks in the stock confirm dialog (kind 5, wrapped); Yes starts the countdown: a 1 s timer, no toast, no page opens')
     ui = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui')
@@ -307,7 +314,7 @@ def run(ctx):
     r.step('tap3', 'shot_start'); expect(set(m.names()) <= {'access'}, 'nor while the grab is pending (no dialog either)')
     m.confirm_yes = True
     r.step('grab', 'shot_grab')
-    expect(r.toasts() == ['Screenshot saved'] and len(files(m)) == 1 and sum(c[1] == 'timer_add' for c in r.log) == 2, 'one countdown, one grab, one file')
+    expect(r.toasts() == ['Screenshot saved'] and len(files(m)) == 1 and adds(r) == 2, 'one countdown, one grab, one file')
     r = Run(m); r.full()
     expect(len(files(m)) == 2 and r.toasts() == ['Screenshot saved'], 'a tap after the capture starts the next one (shot-0002)')
     m = shot_machine(w=8, h=4); m.timer_fail = True
@@ -341,23 +348,23 @@ def run(ctx):
     # 10. Every text goes through the stock translation: the row, the countdown and both outcomes, in all 16 tables.
     for loc in pod_i18n.ALL_TABLES:
         T = tr_of(loc)
-        m = shot_machine(w=8, h=4); m.set_language(loc); r = Run(m); r.full()
+        m = shot_machine(w=8, h=4); lang(m, loc); r = Run(m); r.full()
         expect(r.toasts() == [T('Screenshot saved')], f'{loc}: the success toast reads {T("Screenshot saved")!r}')
-        m = shot_machine(w=8, h=4); m.set_language(loc); m.fb = None; r = Run(m); r.full()
+        m = shot_machine(w=8, h=4); lang(m, loc); m.fb = None; r = Run(m); r.full()
         expect(r.toasts()[-1] == T('Screenshot failed'), f'{loc}: the failure toast')
-        m = shot_machine(w=8, h=4); m.set_language(loc); m.free_mb = 1; r = Run(m); r.full()
+        m = shot_machine(w=8, h=4); lang(m, loc); m.free_mb = 1; r = Run(m); r.full()
         expect(r.toasts()[-1] == T('Storage unavailable'), f'{loc}: the storage toast')
 
-        m = shot_machine(w=8, h=4); m.set_language(loc); r = Run(m); r.step('tap', 'shot_start'); r.step('tap2', 'shot_start')
-        expect([c[2] for c in r.log if c[1] == 'confirm'] == [T(ASK), T(CANCEL)], f'{loc}: the two dialogs read {T(ASK)!r} / {T(CANCEL)!r}')
+        m = shot_machine(w=8, h=4); lang(m, loc); r = Run(m); r.step('tap', 'shot_start'); r.step('tap2', 'shot_start')
+        expect([c[2] for c in r.log if c[1] == 'confirm'] == [T(ASK1), T(ASK), T(CANCEL)], f'{loc}: the three dialogs read {T(ASK1)!r} / {T(ASK)!r} / {T(CANCEL)!r}')
 
     # 11. Confirm and cancel. The tap asks first; only Yes starts. While counting, a tap asks to cancel; Yes removes the tick timer.
-    m = shot_machine(w=8, h=4); m.confirm_yes = False; r = Run(m); r.step('tap', 'shot_start')
-    expect(asked(r) == [ASK] and not r.has('timer_add') and not r.has('widget_set_visible') and not r.toasts() and not r.has('timer_remove'), 'No: nothing starts, no timer, no camera, no toast')
-    m.confirm_yes = True; r.step('tap', 'shot_start')
+    m = shot_machine(w=8, h=4); m.confirm_answers[ASK] = 0; r = Run(m); r.step('tap', 'shot_start')
+    expect(asked(r) == [ASK] and not r.has('timer_add', TICK, tick_ms) and not r.has('widget_set_visible') and not r.toasts() and not r.has('timer_remove'), 'No: nothing starts, no timer, no camera, no toast')
+    m.confirm_answers[ASK] = 4; r.step('tap', 'shot_start')
     expect(asked(r) == [ASK, ASK] and r.has('tap', 'timer_add', TICK, tick_ms) and m.props[(m.ind, 'visible')] == 1, 'and the next tap can still start (nothing was left pending)')
-    m = shot_machine(w=8, h=4); m.confirm_answer = 0x14; r = Run(m); r.step('tap', 'shot_start')
-    expect(not r.has('timer_add') and not r.toasts(), 'any answer but Yes (the dialog failing to open or closing) does nothing')
+    m = shot_machine(w=8, h=4); m.confirm_answers[ASK] = 0x14; r = Run(m); r.step('tap', 'shot_start')
+    expect(not r.has('timer_add', TICK, tick_ms) and not r.toasts(), 'any answer but the two buttons (the back key, the dialog failing to open) does nothing')
     m = shot_machine(w=8, h=4); r = Run(m); r.step('tap', 'shot_start'); r.step('tick', 'shot_tick'); r.step('tick', 'shot_tick')
     m.confirm_yes = False; r.step('tap2', 'shot_start')
     expect(asked(r) == [ASK, CANCEL] and not r.has('timer_remove') and m.props[(m.ind, 'visible')] == 1, 'No to Cancel: the countdown goes on, camera still shown')
@@ -370,7 +377,7 @@ def run(ctx):
     n = len(r.log); r.step('tap3', 'shot_start')
     expect(asked(r)[-1] == ASK and r.has('tap3', 'timer_add', TICK, tick_ms) and m.props[(m.ind, 'visible')] == 1 and not files(m), 'back to idle: a tap asks to take again and can start; no file was written')
     m = shot_machine(w=8, h=4); r = Run(m); r.step('tap', 'shot_start'); r.step('tick', 'shot_tick'); r.step('tap2', 'shot_start'); r.step('tap3', 'shot_start')
-    expect(asked(r) == [ASK, CANCEL, ASK] and sum(c[1] == 'timer_add' for c in r.log) == 2, 'a second countdown after a cancel is a normal one')
+    expect(asked(r) == [ASK, CANCEL, ASK] and adds(r) == 2, 'a second countdown after a cancel is a normal one')
     for _ in range(5): r.step('tick', 'shot_tick')
     r.step('grab', 'shot_grab')
     expect(len(files(m)) == 1 and r.toasts() == ['Screenshot saved'], 'and takes its picture')
@@ -382,3 +389,61 @@ def run(ctx):
     # kill switch at the tap (each tick and the grab are in section 9)
     m = shot_machine(w=8, h=4); m.present.add(KILL); r = Run(m); r.step('tap', 'shot_start')
     expect(not asked(r), 'kill switch present: the tap shows no dialog')
+
+    # 12. The choice is on the confirm dialog: its left button (btn_cancel, quits with 4) is 5 s, its right (btn_enter, 0xa) is 10 s.
+    #     Stock: btn_cancel's click handler 0x473230 is `addiu $a1, $zero, 4` into dialog_quit, btn_enter returns CONFIRM_YES.
+    expect(DEFS['SHOT_QUIT_SHORT'] == 4 and DEFS['SHOT_QUIT_LONG'] == O['CONFIRM_YES'] == 0xa and DEFS['SHOT_SECONDS_LONG'] == 10
+           and word(0x473230 + 20) == 0x24050004 and (DEFS['SHOT_DIALOG'], DEFS['SHOT_BTN_SHORT'], DEFS['SHOT_BTN_LONG']) == ('confirminfo_dialog', 'btn_cancel', 'btn_enter'),
+           'btn_cancel quits with 4 (stock @0x473230), btn_enter with 0xa; the dialog and button names are stock\'s')
+    expect(bytes(m.u.mem_read(0x744044, 11)) == b'btn_cancel\0' and bytes(m.u.mem_read(0x744030, 10)) == b'btn_enter\0', 'the names are the strings stock binds (0x744044, 0x744030)')
+    m = shot_machine(w=8, h=4); m.confirm_answers[ASK] = DEFS['SHOT_QUIT_LONG']; r = Run(m); r.step('tap', 'shot_start')
+    expect(asked(r) == [ASK] and r.has('tap', 'timer_add', TICK, tick_ms), 'the right button (10 s) starts the countdown')
+    rets = [r.step('tick', 'shot_tick') for _ in range(10)]
+    expect(rets[:9] == [RET_REPEAT] * 9 and rets[9] == 0 and adds(r) == 2 and m.props[(m.ind, 'visible')] == 0, 'nine ticks repeat, the tenth ends the timer, hides the camera and arms the grab')
+    r.step('grab', 'shot_grab'); expect(len(files(m)) == 1 and r.toasts() == ['Screenshot saved'], 'and takes its picture')
+    m = shot_machine(w=8, h=4); m.confirm_answers[ASK] = DEFS['SHOT_QUIT_LONG']; r = Run(m); r.step('tap', 'shot_start')
+    for _ in range(5): r.step('tick', 'shot_tick')
+    expect(m.props[(m.ind, 'visible')] == 1 and adds(r) == 1, 'after 5 ticks the 10 s countdown still runs (camera shown, no grab)')
+    r.step('tap2', 'shot_start'); expect(asked(r) == [ASK, CANCEL], 'a tap then asks to cancel (Yes / No as before)')
+    m = shot_machine(w=8, h=4); r = Run(m); r.step('tap', 'shot_start')
+    for _ in range(5): r.step('tick', 'shot_tick')
+    expect(adds(r) == 2, 'the left button (4): 5 ticks and the grab is armed')
+    for answer in (0, 0x10, 0x14, 1, 7):
+        m = shot_machine(w=8, h=4); m.confirm_answers[ASK] = answer; r = Run(m); r.step('tap', 'shot_start')
+        expect(not r.has('timer_add', TICK, tick_ms) and not r.toasts() and m.props.get((m.ind, 'visible'), 0) == 0, f'result {answer:#x} (back key, closed, failed): no countdown')
+    # the relabel timer: started just before the dialog opens, it relabels the buttons once the dialog is found and then ends
+    RELABEL = PSYMS['shot_relabel']
+    m = shot_machine(w=8, h=4); r = Run(m); r.step('tap', 'shot_start')
+    expect(r.index('tap', 'timer_add', RELABEL, DEFS['SHOT_RELABEL_MS']) is not None and r.index('tap', 'timer_add', RELABEL, DEFS['SHOT_RELABEL_MS']) < r.index('tap', 'confirm', ASK, O['CONFIRM_KIND_WRAP']),
+           'the relabel timer is added before the dialog opens')
+    m = shot_machine(w=8, h=4); b_short, b_long = m.widget('confirminfo_dialog') and m.widget('btn_cancel'), m.widget('btn_enter')
+    v = m.call(RELABEL)
+    texts = [(c[1], c[2]) for c in m.calls if c[0] == 'widget_set_text_utf8']
+    expect(v == 0 and texts == [(b_short, '5 s'), (b_long, '10 s')], 'with the dialog up the timer sets "5 s" on btn_cancel and "10 s" on btn_enter and ends')
+    for loc in pod_i18n.ALL_TABLES:
+        m = shot_machine(w=8, h=4); lang(m, loc); m.widget('confirminfo_dialog'); b1, b2 = m.widget('btn_cancel'), m.widget('btn_enter'); m.call(RELABEL)
+        T = tr_of(loc)
+        expect([(c[1], c[2]) for c in m.calls if c[0] == 'widget_set_text_utf8'] == [(b1, T('5 s')), (b2, T('10 s'))], f'{loc}: the buttons read {T("5 s")!r} / {T("10 s")!r}')
+    m = shot_machine(w=8, h=4); r = Run(m); r.step('tap', 'shot_start')
+    vs = [m.call(RELABEL) for _ in range(DEFS['SHOT_RELABEL_TRIES'])]
+    expect(vs[:-1] == [RET_REPEAT] * (DEFS['SHOT_RELABEL_TRIES'] - 1) and vs[-1] == 0 and not any(c[0] == 'widget_set_text_utf8' for c in m.calls),
+           'no dialog: the timer repeats SHOT_RELABEL_TRIES times, then ends, touching nothing')
+    m = shot_machine(w=8, h=4); m.timer_fail = True; r = Run(m); r.step('tap', 'shot_start')
+    expect(asked(r) == [ASK] and r.has('timer_add', RELABEL, DEFS['SHOT_RELABEL_MS']) and r.toasts() == ['Screenshot failed'],
+           'a refused relabel timer is ignored (the buttons stay Yes / No); the refused tick timer is the usual failure')
+
+    # 13. Two steps (the back key does not close confirminfo_dialog on the device): a plain Yes / No first, then the delay dialog.
+    def raw_asked(r): return [c[2] for c in r.log if c[1] == 'confirm']
+    for answer in (0, 4, 0x14):   # No, the other button's code, anything else: nothing starts and the delay is not asked
+        m = shot_machine(w=8, h=4); m.confirm_answers[ASK1] = answer; r = Run(m); r.step('tap', 'shot_start')
+        expect(raw_asked(r) == [ASK1] and not r.has('timer_add') and not r.toasts() and not r.has('widget_set_visible'), f'step 1 answered {answer:#x}: nothing starts, no delay dialog, no relabel timer')
+    m = shot_machine(w=8, h=4); r = Run(m); r.step('tap', 'shot_start')
+    i1, it, i2 = r.index('tap', 'confirm', ASK1, O['CONFIRM_KIND_WRAP']), r.index('tap', 'timer_add', RELABEL, DEFS['SHOT_RELABEL_MS']), r.index('tap', 'confirm', ASK, O['CONFIRM_KIND_WRAP'])
+    expect(raw_asked(r) == [ASK1, ASK] and None not in (i1, it, i2) and i1 < it < i2 and adds(r) == 1,
+           'Yes at step 1: the delay dialog follows, its relabel timer added after step 1 and before it opens; its short button starts a countdown')
+    m = shot_machine(w=8, h=4); m.confirm_answers[ASK1] = 0; r = Run(m); r.step('tap', 'shot_start'); m.confirm_answers[ASK1] = 0xa; r.step('tap', 'shot_start')
+    expect(raw_asked(r) == [ASK1, ASK1, ASK] and r.has('timer_add', TICK, tick_ms), 'after a No the next tap asks from step 1 again')
+    m = shot_machine(w=8, h=4); m.confirm_answers[ASK] = 0; r = Run(m); r.step('tap', 'shot_start')
+    expect(raw_asked(r) == [ASK1, ASK] and not r.has('timer_add', TICK, tick_ms) and not r.toasts(), 'step 2 answered with any other code: no shot')
+    m = shot_machine(w=8, h=4); m.present.add(KILL); r = Run(m); r.step('tap', 'shot_start')
+    expect(not raw_asked(r), 'kill switch present: neither dialog opens')

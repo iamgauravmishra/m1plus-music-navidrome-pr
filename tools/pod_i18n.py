@@ -478,12 +478,18 @@ TEXT = dict([
        'Género', 'Genere', 'ประเภท', 'Gatunek', 'Жанр', 'Жанр'),
     _t('Year', '年份', '年份', '年', '연도', 'Année', 'Jahr',
        'Año', 'Anno', 'ปี', 'Rok', 'Год', 'Рік'),
-    # Screenshot (the Extras row; the toasts of patch/shot.c: the countdown is the fixed 5 s of SHOT_SECONDS)
+    # Screenshot (the Extras row; the toasts of patch/shot.c: the countdown is 5 s or 10 s, chosen on the confirm dialog's buttons)
     _t('Screenshot', '截图', '截圖', 'スクリーンショット', '스크린샷', "Capture d'écran", 'Screenshot',
        'Captura de pantalla', 'Screenshot', 'ภาพหน้าจอ', 'Zrzut ekranu', 'Скриншот', 'Знімок екрана'),
-    _t('Take a screenshot in 5 s?', '5 秒后截图？', '5 秒後截圖？', '5秒後にスクリーンショットを撮りますか？', '5초 후 스크린샷을 찍을까요?',
-       'Prendre une capture dans 5 s ?', 'Screenshot in 5 s aufnehmen?', '¿Hacer una captura en 5 s?', 'Fare uno screenshot tra 5 s?',
-       'ถ่ายภาพหน้าจอใน 5 วินาทีไหม', 'Zrobić zrzut ekranu za 5 s?', 'Сделать скриншот через 5 с?', 'Зробити знімок через 5 с?'),
+    _t('Take a screenshot?', '截图？', '截圖？', 'スクリーンショットを撮りますか？', '스크린샷을 찍을까요?',
+       'Prendre une capture ?', 'Screenshot aufnehmen?', '¿Hacer una captura?', 'Fare uno screenshot?',
+       'ถ่ายภาพหน้าจอไหม', 'Zrobić zrzut ekranu?', 'Сделать скриншот?', 'Зробити знімок?'),
+    _t('Take a screenshot in:', '截图延时：', '截圖延遲：', 'スクリーンショットまで：', '스크린샷까지:',
+       'Capture dans :', 'Screenshot in:', 'Captura en:', 'Screenshot tra:',
+       'ถ่ายภาพหน้าจอใน:', 'Zrzut ekranu za:', 'Скриншот через:', 'Знімок через:'),
+    # the two buttons of that dialog (patch/shot.c relabels the stock Yes / No)
+    _t('5 s', '5 秒', '5 秒', '5秒', '5초', '5 s', '5 s', '5 s', '5 s', '5 วินาที', '5 s', '5 с', '5 с'),
+    _t('10 s', '10 秒', '10 秒', '10秒', '10초', '10 s', '10 s', '10 s', '10 s', '10 วินาที', '10 s', '10 с', '10 с'),
     _t('Cancel the screenshot?', '取消截图？', '取消截圖？', 'スクリーンショットを取り消しますか？', '스크린샷을 취소할까요?',
        'Annuler la capture ?', 'Screenshot abbrechen?', '¿Cancelar la captura?', 'Annullare lo screenshot?',
        'ยกเลิกการถ่ายภาพหน้าจอไหม', 'Anulować zrzut ekranu?', 'Отменить скриншот?', 'Скасувати знімок?'),

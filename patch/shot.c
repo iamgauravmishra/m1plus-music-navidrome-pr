@@ -2,7 +2,7 @@
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
- * A tap on the Screenshot row (Settings > Developer) asks in the stock confirm dialog; Yes starts a payload-owned countdown (SHOT_SECONDS, one stock timer, so the user can
+ * A tap on the Screenshot row (Settings > Developer) asks in the stock confirm dialog; Yes starts a payload-owned countdown (5 s or 10 s, chosen in the dialog, one stock timer, so the user can
  * leave the page and go where the picture should be), shows a camera in the status bar while it runs, and then
  * writes what is on the panel to /mnt/mmc/screenshots/shot-NNNN.bmp (24 bit, bottom-up). No stock function is
  * hooked and nothing runs unless that row was tapped: no thread, no paint hook, no main loop work; the timers exist only
@@ -36,6 +36,8 @@
 extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
 extern int
 pod_confirm(const char *text); /* patch/m1plus.c: the stock confirm dialog, wrapped text, modal; nonzero for Yes */
+extern int
+pod_confirm_code(const char *text); /* the same dialog's raw result (CONFIRM_YES 0xa, btn_cancel 4, else 0 ..) */
 
 enum {
     SH_IDLE,
@@ -49,6 +51,7 @@ enum { R_OK, R_STORAGE, R_FAIL }; /* a saved file; no card / no room; the frame 
 static struct {
     int phase;
     int left; /* countdown ticks to go */
+    int tries; /* looks for the dialog by the relabel timer */
     unsigned timer; /* the tick timer while it runs, else 0 */
 } sh __attribute__((section(".scratch")));
 
@@ -226,11 +229,25 @@ static int shot_tick(const void *timer) {
     return RET_OK; /* this timer ends */
 }
 
-/* The Screenshot row was tapped (patch/m1plus.c on_row). Idle: the stock confirm dialog asks, Yes starts the countdown.
+/* The first main loop turn inside the confirm dialog (started just before it opens; the dialog is modal): the stock dialog's two
+ * buttons become the choice, "5 s" on the left (btn_cancel) and "10 s" on the right (btn_enter). The dialog is found by its name
+ * (a stock window is not named like ours, nothing else is touched); until it is up the timer repeats, SHOT_RELABEL_TRIES times at most,
+ * and then ends: a dialog that never opened leaves nothing behind. */
+static int shot_relabel(const void *timer) {
+    void *wm = window_manager(), *dlg = wm ? widget_lookup(wm, SHOT_DIALOG, 1) : (void *)0, *b;
+    (void)timer;
+    if (!dlg) return ++sh.tries < SHOT_RELABEL_TRIES ? RET_REPEAT : RET_OK;
+    if ((b = widget_lookup(dlg, SHOT_BTN_SHORT, 1)) != (void *)0) widget_set_text_utf8(b, TR("5 s"));
+    if ((b = widget_lookup(dlg, SHOT_BTN_LONG, 1)) != (void *)0) widget_set_text_utf8(b, TR("10 s"));
+    return RET_OK;
+}
+
+/* The Screenshot row was tapped (patch/m1plus.c on_row). Idle: the stock confirm dialog asks with "5 s" and "10 s" as its buttons, either starts the countdown.
  * Counting: the dialog asks to cancel, Yes removes the tick timer. The dialog is modal and the main loop runs under it, so
  * the phase is looked at again after it returns. One capture at a time; in the settle phase the capture is committed and the
  * tap does nothing. */
 void shot_start(void) {
+    int secs, code;
     if (home_off()) return;
     if (sh.phase == SH_COUNT) {
         sh.phase = SH_ASK_CANCEL;
@@ -244,7 +261,16 @@ void shot_start(void) {
     }
     if (sh.phase != SH_IDLE) return;
     sh.phase = SH_ASK;
-    if (!pod_confirm(TR("Take a screenshot in 5 s?")) || home_off()) {
+    if (!pod_confirm(TR("Take a screenshot?")) ||
+        home_off()) { /* step 1: plain Yes / No (the back key does not close it) */
+        sh.phase = SH_IDLE;
+        return;
+    }
+    sh.tries = 0; /* step 2: the delay, the same dialog with its buttons relabelled */
+    timer_add(shot_relabel, (void *)0, SHOT_RELABEL_MS); /* a refused timer only leaves the buttons Yes / No */
+    code = pod_confirm_code(TR("Take a screenshot in:"));
+    secs = code == SHOT_QUIT_LONG ? SHOT_SECONDS_LONG : code == SHOT_QUIT_SHORT ? SHOT_SECONDS : 0;
+    if (!secs || home_off()) {
         sh.phase = SH_IDLE;
         return;
     }
@@ -255,6 +281,6 @@ void shot_start(void) {
         return;
     }
     sh.phase = SH_COUNT;
-    sh.left = SHOT_SECONDS;
+    sh.left = secs;
     indicator(1);
 }

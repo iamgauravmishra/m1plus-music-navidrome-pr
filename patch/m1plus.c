@@ -153,7 +153,7 @@ static int on_menu_fg(void *ctx, void *e) {
  * reset and the Bluetooth reconnect use) with a wrapped message; the call is modal and returns CONFIRM_YES for Yes.
  * No (or the dialog failing to open) does nothing at all; Yes opens Cover Flow on its Preparing screen with every
  * cover extracted again (coverflow_rebuild). */
-int pod_confirm(const char *s) { /* also patch/shot.c: Take / Cancel the screenshot */
+int pod_confirm_code(const char *s) { /* the dialog's raw result; also patch/shot.c: Take / Cancel the screenshot */
     struct {
         int kind, ms;
         char text[MSGINFO_TEXT], text2[MSGINFO_TEXT];
@@ -162,8 +162,10 @@ int pod_confirm(const char *s) { /* also patch/shot.c: Take / Cancel the screens
     memset(&info, 0, sizeof info);
     info.kind = CONFIRM_KIND_WRAP;
     for (i = 0; s[i] && i < sizeof info.text - 1; ++i) info.text[i] = s[i];
-    return navigator_to_with_context("dialog/confirminfo_dialog", &info) == CONFIRM_YES;
+    return navigator_to_with_context("dialog/confirminfo_dialog", &info);
 }
+
+int pod_confirm(const char *s) { return pod_confirm_code(s) == CONFIRM_YES; }
 
 static void rebuild_ask(void) {
     if (pod_confirm(TR("Rebuild all covers? This may take a few minutes."))) coverflow_rebuild();

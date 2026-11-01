@@ -10,7 +10,18 @@
 #define SHOT_CARD "/mnt/mmc" /* the card's mount point: a mounted card is another file system than its parent */
 #define SHOT_PARENT "/mnt"
 #define SHOT_FB "/dev/fb0" /* the node stock opens in lcd_linux_fb_create @0x6393dc */
-#define SHOT_SECONDS 5 /* the countdown, one stock timer tick (1000 ms) each */
+#define SHOT_SECONDS 5 /* the short countdown, one stock timer tick (1000 ms) each */
+#define SHOT_SECONDS_LONG 10 /* the long one */
+/* The choice is the confirm dialog itself: its two buttons are relabelled "5 s" and "10 s" by a timer started just before it opens
+ * (the dialog is modal and the main loop runs under it). btn_cancel's click quits the dialog with 4 (handler @0x473230, `addiu $a1, $zero, 4`
+ * then dialog_quit), btn_enter's with CONFIRM_YES (0xa); any other result (back key, a dialog that failed to open) is a cancel. */
+#define SHOT_QUIT_SHORT 4
+#define SHOT_QUIT_LONG 0xa
+#define SHOT_DIALOG "confirminfo_dialog"
+#define SHOT_BTN_SHORT "btn_cancel"
+#define SHOT_BTN_LONG "btn_enter"
+#define SHOT_RELABEL_MS 10
+#define SHOT_RELABEL_TRIES 20 /* the dialog is looked for this many times, then the buttons keep stock's Yes / No */
 #define SHOT_TICK_MS 1000
 #define SHOT_SETTLE_MS \
     120 /* after the indicator is hidden: a few frames for the main loop to repaint before the grab */

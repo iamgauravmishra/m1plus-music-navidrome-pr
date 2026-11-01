@@ -730,7 +730,8 @@ class Machine:
                 self.calls.append(('toast', self.read_cstr(a1 + 8), self.word(a1), self.word(a1 + 4)))
             elif ctx == 'dialog/confirminfo_dialog':   # modal: the button pressed is the result (0xa Yes, else No; confirm_answer: any other value)
                 self.calls.append(('confirm', self.read_cstr(a1 + 8), self.word(a1)))
-                ret = self.confirm_answer if self.confirm_answer is not None else O['CONFIRM_YES'] if self.confirm_yes else 0
+                text = self.read_cstr(a1 + 8)
+                ret = self.confirm_answers[text] if text in self.confirm_answers else self.confirm_answer if self.confirm_answer is not None else O['CONFIRM_YES'] if self.confirm_yes else 0
         elif name == 'createPlayListItem':   # (the stock list, the name): the new id, -1 full, -2 exists
             self.calls.append(('createPlayListItem', self.read_cstr(a1), len(self.deques.get(a0, [])))); ret = -2 if self.read_cstr(a1) in self.pl_names else self.create_ret
             if ret >= 0: self.pl_created.append((self.read_cstr(a1), ret))
@@ -1141,6 +1142,7 @@ class Machine:
     live_scroll = frozenset() # scroll_view structs whose virtual_h / yoffset the widget_set_prop_int mock also stores (the stock setters' stores)
     oy_canvas = 0             # a canvas in emulated memory whose origin y (canvas_t @4) is logged in draw_oy at every canvas_draw_image
     draw_oy = ()
+    confirm_answers = {}      # the answer by dialog text (a test sets a copy: m.confirm_answers = {text: code}); before confirm_answer
     confirm_answer = None     # what the stock confirm dialog returns when a test wants a value other than Yes / No (the Songs delete's 0x14)
     mem_geometry = False      # widget_move / widget_resize also write the widget_t (stock widget_to_local reads it)
     COUNT = False             # count from the start (count()); otherwise call() has no step limit
