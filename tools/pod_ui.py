@@ -1166,21 +1166,25 @@ VN_LABELS = (('vn_title', 'title', 0), ('vn_title2', 'title', 1), ('vn_artist', 
 
 def build_vinyl_page(page):
     import vinyl_art
+    th = getattr(page, 'theme', 'graphite'); bg = '#%02X%02X%02X' % tuple(vinyl_art.window_bg(th))
     root = Widget('window', 0, 0, 0, 0, [('name', page.name), ('fullscreen', 'true')])
-    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#464648')
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', bg)
     view = Widget('view', 0, 0, 320, 480, [('name', 'vinyl_view')])
-    styled(view, ('normal',), 'bg_color', '#464648')
+    styled(view, ('normal',), 'bg_color', bg)
     root.children = [view]
     for name, field, dx in VN_LABELS:
         t = vinyl_art.TEXT[field]; x, y, w, h = vinyl_art.label_box(field)
         lab = Widget('hscroll_label', x + dx, y, w, h, [('name', name), ('text', ''), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
         for st in ('normal', 'disable', 'focused'):
             styled(lab, (st,), 'font_size', str(t['px']))
-            styled(lab, (st,), 'text_color', '#%02X%02X%02X' % t['rgb'])
+            styled(lab, (st,), 'text_color', '#%02X%02X%02X' % vinyl_art.text_rgb(field, th))
             styled(lab, (st,), 'text_align_h', 'left')
             styled(lab, (st,), 'text_align_v', 'middle')
         root.children.append(lab)
-    root.children.append(hidden(Widget('label', 36, 14, 200, 22, [('name', 'label_title'), ('style', 'navbar_label_white'), pod_i18n.text_prop(page.title)])))
+    title = hidden(Widget('label', 36, 14, 200, 22, [('name', 'label_title'), ('style', 'navbar_label_white'), pod_i18n.text_prop(page.title)]))
+    if th == 'white':   # never seen; the build's contrast scan still reads it against the light plinth
+        for st in ('normal', 'disable', 'focused'): styled(title, (st,), 'text_color', '#1C1C1E')
+    root.children.append(title)
     return root
 
 

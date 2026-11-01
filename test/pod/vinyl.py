@@ -3,7 +3,7 @@
 What is proved, on the real compiled payload under Unicorn (the stock calls it makes mocked, the bitmaps real memory):
   * the numbers of offsets.inc and the payload's tables against tools/vinyl_art.py (the record, the label, the pivot, the arm picture's pivot, the arm's
     turns on the groove and parked, the layers' rectangles, the key band), the built asset (a fullscreen window, one 320 x 480 view, the text labels) and that
-    the pictures are the generator's output byte for byte;
+    the pictures decode to the generator's pixels exactly (tools/png_pack.py packs them smaller, a palette with tRNS where the colours fit);
   * the picture: the frame is, pixel for pixel, a python model of the composition (the base, the label turned bilinear, the lid, the arm's shadow and the
     premultiplied arm turned bilinear, the cap, the key cells) at every state tested, and close to the approved design (tools/vinyl_art.py design);
   * the record turning at 33 1/3 rpm while playing (with its speed-up and slow-down), still when paused; the arm on the groove, following the position,
@@ -13,7 +13,8 @@ What is proved, on the real compiled payload under Unicorn (the stock calls it m
     the record plays / pauses; no swipe, no grab, no move handler;
   * the page's life: one timer retimed with timer_modify, removed on to-background and destroy, the idle power rules, the kill switch.
 The emulated frames are written to out/preview/vinyl-emu-*.png (with the text as the labels draw it), next to the design's (vinyl-emu-*-design.png)."""
-import os, struct
+import math, os, re, struct
+from pathlib import Path
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 import mod_icons, vinyl_art
 from PIL import Image, ImageChops
@@ -25,6 +26,10 @@ EVT_BG, EVT_FG, EVT_DESTROY, EVT_PAINT = O['EVT_WINDOW_TO_BG'], O['EVT_WINDOW_TO
 WIN = 0x24200000
 SYSBAR = pod.DATA['SYSTEM_BAR'][0]
 KILL = '/mnt/mmc/m1plus-off'
+REC_FILE = '/mnt/data/m1plus-vinylrec'
+THEME_FILE = '/mnt/data/m1plus-vinyltheme'
+COMPOSE_MAX = 6000000   # instructions: the Cover record composed once into the base, the same on a track change (3.1 M measured, to be re-measured); not a tick's cost
+COVER_MAX = 18000000   # instructions: a track change with Cover (the tint, the ring composed, the box composed again; the black case loads vinyl_base). 14 M measured (tint to tint 12.4 M, to black 14.0 M), 5.5 M of it any track change
 W, H = 320, 480
 OUT = os.path.join(ROOT, 'out', 'preview')
 LABELS = ('vn_title', 'vn_title2', 'vn_artist', 'vn_times', 'vn_status')
@@ -136,9 +141,11 @@ class VM(Machine):
         return list(self.calls)
 
 
-def machine(playing=True, status=2, cover=False, **kw):
+def machine(playing=True, status=2, cover=False, rec=0, theme=0, **kw):
     m = VM()
     m.status = status
+    if theme: m.fs[THEME_FILE] = b'%d\n' % theme
+    if rec: m.fs[REC_FILE] = b'%d\n' % rec
     if playing: m.playing(**kw)
     if cover:   # the album's cached cover (/mnt/mmc/.m1plus/covers/<key>-168.jpg), as the album page made it
         path = art_file(album_key(kw.get('artist', 'M83'), kw.get('album', 'Hurry Up')))
@@ -216,10 +223,13 @@ def words(im, pm=False):
 
 
 _L = {}
-def layers():
-    if not _L:
-        _L.update({n: words(asset_image(n), n == 'vinyl_arm') for n in A.NAMES})
-    return _L
+def layers(theme='graphite'):
+    """The words of every layer under a plinth theme (plain layer names)."""
+    if theme not in _L:
+        d = {n: words(asset_image(A.tname(n, theme)), n == 'vinyl_arm') for n in A.THEMED}
+        d['vinyl_label'] = words(asset_image('vinyl_label'))
+        _L[theme] = d
+    return _L[theme]
 
 
 def sprite(img, vx, vy, c, s):
@@ -248,9 +258,26 @@ def arm_box(a):
     return (max(min(xs) - 2, 0), max(min(ys) - 2, 0), min(max(xs) + 3 + O['VN_SH_DX'], W), min(max(ys) + 3 + O['VN_SH_DY'], O['VN_BAND_Y0']))
 
 
-def model(ang, arm, label_src=None, playkey=0, pressed=K_NONE):
+def rec_base(stops, theme='graphite'):
+    """The page's base for the Cover record: vinyl_base with the record composed from vinyl_rec's map by the ramp of `stops` (patch/vinyl.c vn_recolour, integer for integer): inside the rim the
+    table's colour, on the rim the base's plus the colour's difference from the black record's rim by the disc's coverage."""
+    base = list(layers(theme)['vinyl_base']); tab = A.ramp_table([(t, c) for t, c in stops]); x0, y0, x1, y1 = A.REC_BOX; R = O['VN_REC_R']; K = O['VN_REC_K']
+    for i, (m, _, _, _) in enumerate(asset_image('vinyl_rec').convert('RGBA').getdata()):
+        if not m: continue
+        x, y = x0 + i % (x1 - x0), y0 + i // (x1 - x0); vx, vy = 2 * (x - O['VN_REC_X']) + 1, 2 * (y - O['VN_REC_Y']) + 1; d2 = vx * vx + vy * vy
+        w = tab[m][0] | tab[m][1] << 8 | tab[m][2] << 16 | 0xff000000
+        if d2 > (2 * R - 2) ** 2:
+            c = 8 * R + 4 - math.isqrt(16 * d2); cov = 0 if c <= 0 else 255 if c >= 8 else c * 32; b = base[y * W + x]; out = 0xff000000
+            for sh in (0, 8, 16):
+                out |= max(0, min(255, (b >> sh & 255) + (((w >> sh & 255) * cov + 127) // 255) - ((K * cov + 127) // 255))) << sh
+            w = out
+        base[y * W + x] = w
+    return base
+
+
+def model(ang, arm, label_src=None, playkey=0, pressed=K_NONE, rec_base_=None, theme='graphite'):
     """The whole frame (a list of words) as the payload composes it: the label turned by ang (label_src: the cover's words, None for vinyl_label), the arm at arm."""
-    L = layers(); base, lid, cap, armw, sh = L['vinyl_base'], L['vinyl_lid'], L['vinyl_cap'], L['vinyl_arm'], L['vinyl_armsh']
+    L = layers(theme); base, lid, cap, armw, sh = rec_base_ or L['vinyl_base'], L['vinyl_lid'], L['vinyl_cap'], L['vinyl_arm'], L['vinyl_armsh']
     src = label_src or L['vinyl_label']
     lc, ls, ac, as_ = icos(ang), isin(ang), icos(arm), isin(arm)
     out = list(base); box = arm_box(arm)
@@ -340,13 +367,17 @@ def side():
     return PI.Side(WORK, True)
 
 
-def dump(m, name, f, ang):
+def dump(m, name, f, ang, theme='graphite'):
     """out/preview/vinyl-emu-<name>.png: the frame with the labels' text drawn as the AWTK labels draw it, and the design at the same state next to it."""
     os.makedirs(OUT, exist_ok=True)
     s = side(); im = m.frame().convert('RGBA')
-    A.text(s, im, dict(f, title=m.text_of('vn_title'), artist=m.text_of('vn_artist')), m.text_of('vn_status'), m.text_of('vn_times'))
-    im.convert('RGB').save(os.path.join(OUT, f'vinyl-emu-{name}.png'))
-    d = A.design(s, dict(f, angle=-ang / 16))
+    A.use(theme)
+    try:
+        A.text(s, im, dict(f, title=m.text_of('vn_title'), artist=m.text_of('vn_artist')), m.text_of('vn_status'), m.text_of('vn_times'))
+        im.convert('RGB').save(os.path.join(OUT, f'vinyl-emu-{name}.png'))
+        d = A.design(s, dict(f, angle=-ang / 16))
+    finally:
+        A.use('graphite')
     d.convert('RGB').save(os.path.join(OUT, f'vinyl-emu-{name}-design.png'))
     diff = ImageChops.difference(im.convert('RGB'), d.convert('RGB'))
     return sum(sum(px) for px in diff.getdata()) / (W * H * 3)
@@ -357,6 +388,7 @@ def number_tests(ctx):
     expect = ctx.expect
     expect((O['VN_W'], O['VN_H']) == (A.W, A.H) == (320, 480), 'the page is portrait 320 x 480')
     expect((O['VN_REC_X'], O['VN_REC_Y'], O['VN_REC_R'], O['VN_LAB_R'], O['VN_LAB_PX'], O['VN_LAB_IN']) == (*A.REC_C, A.REC_R, A.LAB_R, A.LAB_PX, A.LAB_IN), 'the record and its label')
+    expect((O['VN_RB_X0'], O['VN_RB_Y0'], O['VN_RB_X0'] + O['VN_RB_W'], O['VN_RB_Y0'] + O['VN_RB_H']) == A.REC_BOX and O['VN_RECS'] == len(A.RECORD_NAMES) and O['VN_REC_COVER'] == A.RECORD_NAMES.index('cover'), 'vinyl_rec\'s box, and the record colours')
     expect((O['VN_PIV_X'], O['VN_PIV_Y']) == A.PIVOT and (O['VN_ARM_W'], O['VN_ARM_H'], O['VN_ARM_PX'], O['VN_ARM_PY']) == A.arm_geometry(), f'the pivot and the arm picture with its pivot {A.arm_geometry()}')
     expect((O['VN_SH_DX'], O['VN_SH_DY']) == A.ARM_SHADOW[:2], 'the arm\'s shadow offset')
     expect(O['VN_PARK'] == A.park16() and payload_groove() == A.groove_table16() and O['VN_GROOVE_N'] == A.GROOVE_N, f'the arm\'s turns: parked {A.park16()}, on the groove {A.groove_table16()[::8]}')
@@ -405,24 +437,41 @@ def asset_tests(ctx):
     root = asset_tree(os.path.join(WORK, UI)); root.h = 480
     for x, y in ((160, 240), (5, 5), (246, 449), (30, 392), (315, 475)):
         expect(stock_target(Machine(), root, x, y)[-1] == 'vinyl_view', f'a touch at ({x}, {y}) reaches vinyl_view (the labels are insensitive)')
-    sizes = {'vinyl_base': (320, 480), 'vinyl_lid': (160, 160), 'vinyl_arm': A.arm_geometry()[:2], 'vinyl_armsh': A.arm_geometry()[:2], 'vinyl_cap': (32, 32), 'vinyl_keys': A.KEY_SHEET, 'vinyl_label': (152, 152)}
+    geo = A.arm_geometry()[:2]
+    base_sizes = {'vinyl_base': (320, 480), 'vinyl_lid': (160, 160), 'vinyl_arm': geo, 'vinyl_armsh': geo, 'vinyl_cap': (32, 32), 'vinyl_keys': A.KEY_SHEET}
+    sizes = {A.tname(n, th): z for th in A.THEME_NAMES for n, z in base_sizes.items()}
+    sizes.update({'vinyl_label': (152, 152), 'vinyl_rec': (A.REC_BOX[2] - A.REC_BOX[0], A.REC_BOX[3] - A.REC_BOX[1])})
     gen = A.images()
     for n, size in sizes.items():
         im = asset_image(n); built = open(asset_path(n), 'rb').read()
-        expect(im.size == size == gen[n].size and built == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read() == png_of(gen[n]), f'{n}: {size}, the generator\'s PNG byte for byte')
-    expect(set(sizes) == set(A.NAMES), 'the seven pictures')
+        expect(im.size == size == gen[n].size and built == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read() and im.convert('RGBA').tobytes() == gen[n].tobytes()
+               and len(built) <= len(png_of(gen[n])), f'{n}: {size}, the generator\'s RGBA pixels exactly, in no more bytes than the plain PNG')
+    expect(set(sizes) == set(A.NAMES) and len(sizes) == 6 * len(A.THEME_NAMES) + 2, 'the pictures: six a plinth theme and two shared')
     total = sum(os.path.getsize(asset_path(n)) for n in sizes) + os.path.getsize(asset_path('pod_ic_vinyl'))
     print('  vinyl pictures: %d bytes (%s)' % (total, {n: os.path.getsize(asset_path(n)) for n in sizes}))
-    expect(total < 260000, f'the pictures add {total} bytes to the rootfs')
+    expect(total < 560000, f'the pictures add {total} bytes to the rootfs')
+    for n in ('vinyl_base', 'vinyl_lid', 'vinyl_arm', 'vinyl_armsh', 'vinyl_cap', 'vinyl_keys'):
+        expect(open(asset_path(n), 'rb').read() == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read(), f'{n} (Graphite) keeps its name')
+    for th in A.THEME_NAMES:
+        b = asset_image(A.tname('vinyl_base', th))
+        expect(all(b.getpixel(p)[3] == 255 for p in ((0, 0), (319, 479), (96, 196))) and asset_image(A.tname('vinyl_keys', th)).getpixel((0, 0))[3] == 255, f'{th}: the base and the key cells are opaque')
     base = asset_image('vinyl_base')
     expect(all(base.getpixel(p)[3] == 255 for p in ((0, 0), (319, 479), (96, 196))) and asset_image('vinyl_keys').getpixel((0, 0))[3] == 255 and asset_image('vinyl_label').getpixel((0, 0))[3] == 255,
            'the base, the key cells and the fallback label are opaque')
     rgb = set(base.convert('RGB').getdata())
-    expect(all(max(c) - min(c) <= 12 for c in rgb), 'neutral greys only: no colour in the base (the plinth, record, keys, chevron)')
+    expect(all(max(c) - min(c) <= 12 for c in rgb) and all(max(c) - min(c) <= 12 for c in asset_image('vinyl_base_white').convert('RGB').getdata()), 'neutral greys only: no colour in the Graphite and White bases')
     lid = asset_image('vinyl_lid')
     expect(lid.getpixel((80, 80))[3] > 200 and lid.getpixel((5, 5))[3] == 0 and lid.getpixel((80, 40))[3] < 60, 'the lid: the spindle opaque, the corners clear, the label under it mostly shows')
     sh = asset_image('vinyl_armsh')
     expect(set(px[:3] for px in sh.getdata()) == {(0, 0, 0)} and max(px[3] for px in sh.getdata()) <= A.ARM_SHADOW[3], 'the shadow: black, its alpha at most 150')
+    rec = asset_image('vinyl_rec'); bx, by_, bx1, by1 = A.REC_BOX; rw = bx1 - bx
+    expect(A.REC_BOX == (0, 34, 258, 358) and rec.size == (258, 324), 'vinyl_rec covers the record\'s box (0, 34) .. (258, 358)')
+    rd = list(rec.getdata())
+    expect(all((px[0] > 0) == A.rec_in_map(bx + i % rw, by_ + i // rw) and px[1:] == (0, 0, 255) for i, px in enumerate(rd)), 'the record map (the red channel) holds exactly the ring outside the label that the rim covers; 0 elsewhere; G, B 0, opaque')
+    st = A.tint_stops((200, 100, 60)); tab = A.ramp_table(st)
+    expect(all(tab[t] == st[k][1] for k, t in enumerate(A.RECORD_STOPS_T)) and all(tab[t][0] <= tab[t + 1][0] for t in range(255)), 'the ramp table hits its five stops exactly and rises')
+    base0 = layers()['vinyl_base']; inner = [base0[y * W + x] & 255 for y in range(34, 358) for x in range(0, 258) if 156 * 4 < (2 * (x - 96) + 1) ** 2 + (2 * (y - 196) + 1) ** 2 < 160 * 4 and x > 3]
+    expect(abs(sum(inner) / len(inner) - O['VN_REC_K']) < 3 and O['VN_REC_K'] == A.REC_EDGE_K, f'the black record\'s rim grey is VN_REC_K = {O["VN_REC_K"]} ({sum(inner) / len(inner):.1f} measured)')
 
 
 def draw_tests(ctx):
@@ -456,6 +505,273 @@ def draw_tests(ctx):
     m3 = opened(playing=False, status=3)
     expect(m3.text_of('vn_title') == 'Not Playing' and m3.text_of('vn_artist') == '' and m3.text_of('vn_times') == '0:00  -0:00', 'nothing playing: Not Playing, 0:00 -0:00')
     expect(ndiff(m3.frame_words(), model(0, O['VN_PARK'], None))[0] == 0, 'and the arm is parked, the plain label')
+
+
+def record_tests(ctx):
+    """Record colours (docs/modules/vinyl.md "Record colours"): the saved colour read; Black is the installed base, untouched and as cheap as ever."""
+    expect = ctx.expect
+    base_m = opened(cover=True)
+    expect('vinyl_rec' not in base_m.loads, 'Black (nothing saved): vinyl_rec is not even loaded')
+    for data, want in ((None, 0), (b'0\n', 0), (b'1', 1), (b'1\n', 1), (b'2\n', 0), (b'3', 0), (b'9', 0), (b'12', 0), (b'1x', 0), (b'1\n\n', 0), (b'', 0), (b'\n', 0), (b'x', 0)):
+        m = Machine()
+        if data is not None: m.fs[REC_FILE] = data
+        expect(m.call(PSYMS['vinyl_record']) == want, f'the saved record {data!r}: {want}')
+    km = machine(rec=1); km.present.add(KILL)
+    expect(km.open() == 0xffffffff and 'vinyl_rec' not in km.loads, 'the kill switch refuses the page whatever the colour')
+
+
+def cover_record_tests(ctx):
+    """The Cover colour: the record tinted from the playing track's cover (vn_tint, the python mirror A.cover_tint_px), a grey cover or none black, recomputed on a track change (and the ring composed again),
+    left alone for a track of the same cover."""
+    expect = ctx.expect
+    g = A.groove_table16()
+
+    def add_cover(m, artist, album, img):
+        path = art_file(album_key(artist, album)); m.files[path] = 9000
+        m.images['file://' + path] = (168, 168, img.convert('RGBA').tobytes())
+
+    def words_of(m):
+        w = m.cover_words(); return [(v & 255, v >> 8 & 255, v >> 16 & 255) for v in w]
+
+    grey = Image.new('RGB', (168, 168), (120, 120, 124))
+    m = machine(rec=1); add_cover(m, 'M83', 'Hurry Up', A.cover('sunset', 168)); add_cover(m, 'Grey', 'Mono', grey); add_cover(m, 'Blue', 'Sky', A.cover('blue', 168))
+    assert m.open() == 0; m.timers = []; m.calls_all = []; m.first(); m.calls_all += m.calls
+    tint = A.cover_tint_px(words_of(m)); stops = A.tint_stops(tint)
+    expect(tint is not None and 'vinyl_rec' in m.loads, 'a colourful cover: tinted #%02X%02X%02X' % tint)
+    sp = Spin(g); sp.step(0, True, 200, 243, force=True)
+    n, first = ndiff(m.frame_words(), model(0, groove_at(200, 243, g), m.cover_words(), playkey=1, rec_base_=rec_base(stops)))
+    expect(n == 0, f'Cover: the first frame is the model with the ring tinted from the cover ({n} differ {first})')
+    f = dict(cover=A.cover('sunset', 168), title='Midnight City', artist='M83', pos=200, len=243, playing=True, fmt='FLAC', batt=60, charging=False, vol=42, clock='21:07')
+    ref = A.tint_style(A.cover_tint(A.cover('sunset', 168).resize((152, 152), Image.BOX)))
+    md = dump(m, 'rec-cover', dict(f, rec=ref), 0)
+    expect(md < 5.0, f'Cover: close to the mock\'s tint (float): mean difference {md:.2f}; the integer tint is #%02X%02X%02X' % tint)
+    # a track change to a grey cover: black again, exactly the installed base
+    costs = {}
+    m.playing(title='Mono', artist='Grey', album='Mono'); m.count(); m.tick(50); sp.step(50, True, 200, 243); costs['to black'] = m.icount
+    cov = m.cover_words()
+    expect(A.cover_tint_px(words_of(m)) is None and ndiff(m.frame_words(), model(sp.ang, sp.arm, cov, playkey=1))[0] == 0, 'a grey cover: the record is black again, the frame the plain model (the base restored)')
+    m.playing(title='Sky', artist='Blue', album='Sky'); m.count(); m.tick(50); sp.step(50, True, 200, 243); costs['to tint'] = m.icount
+    t2 = A.cover_tint_px(words_of(m)); s2 = A.tint_stops(t2)
+    expect(t2 is not None and t2 != tint and ndiff(m.frame_words(), model(sp.ang, sp.arm, m.cover_words(), playkey=1, rec_base_=rec_base(s2)))[0] == 0, 'the next cover: the ring tinted #%02X%02X%02X, the frame the model' % t2)
+    m.playing(title='Sky 2', artist='Blue', album='Sky'); m.count(); m.tick(50); sp.step(50, True, 200, 243); costs['same tint'] = m.icount
+    m.tick(50); sp.step(50, True, 200, 243); m.count(); m.tick(50); sp.step(50, True, 200, 243); costs['plain tick'] = m.icount
+    expect(ndiff(m.frame_words(), model(sp.ang, sp.arm, m.cover_words(), playkey=1, rec_base_=rec_base(s2)))[0] == 0, 'a track of the same cover: the same tint, the frame still the model')
+    mb = machine(); add_cover(mb, 'M83', 'Hurry Up', A.cover('sunset', 168)); add_cover(mb, 'Blue', 'Sky', A.cover('blue', 168))
+    assert mb.open() == 0; mb.timers = []; mb.calls_all = []; mb.first(); mb.playing(title='Sky', artist='Blue', album='Sky'); mb.count(); mb.tick(50); costs['Black record, track change'] = mb.icount
+    print('  cover record, a tick that changes track: %s' % costs)
+    expect(costs['to tint'] < COVER_MAX and costs['to black'] < COVER_MAX and costs['same tint'] < costs['Black record, track change'] + 500000,
+           f'a track change with Cover costs {costs["to tint"]} (tinted) / {costs["to black"]} (black) instructions once (budget {COVER_MAX}), a track of the same tint nothing extra ({costs["same tint"]} against {costs["Black record, track change"]})')
+    # no cover at all: black
+    m = machine(rec=1); assert m.open() == 0; m.timers = []; m.calls_all = []; m.first()
+    expect(ndiff(m.frame_words(), model(0, groove_at(200, 243, g), None, playkey=1))[0] == 0, 'no cover: the label is vinyl_label and the record black')
+    for what, img in (('another size', (10, 10, bytes(400))), ('absent', None)):
+        m = machine(cover=True, rec=1)
+        if img: m.images['vinyl_rec'] = img
+        else: del m.images['vinyl_rec']
+        assert m.open() == 0; m.timers = []; m.calls_all = []; m.first()
+        expect(ndiff(m.frame_words(), model(0, groove_at(200, 243, g), m.cover_words(), playkey=1))[0] == 0, f'vinyl_rec {what}: the page stays Black, untouched')
+    # the first look with Cover costs the ring once; Black's costs nothing extra
+    ml = machine(cover=True, rec=1); ml.open(); ml.timers = []; ml.count(); ml.first(); cost_cover = ml.icount
+    mk = machine(cover=True); mk.open(); mk.timers = []; mk.count(); mk.first(); cost_black = mk.icount
+    print('  Cover record: first look %d instructions (Black %d, so %d more)' % (cost_cover, cost_black, cost_cover - cost_black))
+    expect(cost_cover - cost_black < COMPOSE_MAX, f'the first look with Cover costs {cost_cover - cost_black} instructions more than Black\'s (budget {COMPOSE_MAX})')
+    mt = opened(cover=True, rec=1); mt.count(); mt.tick(50); mt.tick(50); cost_tick = mt.icount
+    mb = opened(cover=True); mb.count(); mb.tick(50); mb.tick(50)
+    expect(cost_tick == mb.icount, f'a playing tick with Cover costs what Black\'s does ({cost_tick} against {mb.icount})')
+
+
+def cover_change_tests(ctx):
+    """Cover, a track change from one tint to another: the frame (the record's rim included) is the python model of a fresh compose of the new tint on the pristine base, whatever the record held
+    before (a bug of V2.1zTUKNAAAD: the rim was blended onto the previous tint's rim). Every plinth theme; A to B, A to B to A, A to grey to B."""
+    expect = ctx.expect
+    g = A.groove_table16()
+    x0, y0, x1, y1 = A.REC_BOX
+    rim = sum(1 for i, (mv, _, _, _) in enumerate(asset_image('vinyl_rec').convert('RGBA').getdata())
+              if mv and (2 * (x0 + i % (x1 - x0) - O['VN_REC_X']) + 1) ** 2 + (2 * (y0 + i // (x1 - x0) - O['VN_REC_Y']) + 1) ** 2 > (2 * O['VN_REC_R'] - 2) ** 2)
+    cap = int(re.search(r'#define VN_RIM_MAX (\d+)', (Path(__file__).resolve().parents[2] / 'patch' / 'vinyl.c').read_text()).group(1))
+    expect(rim <= cap, f'the rim pixels the payload keeps ({rim}) fit its buffer (VN_RIM_MAX {cap})')
+    solid = lambda c: Image.new('RGB', (168, 168), c)
+    covers = {'sunset': A.cover('sunset', 168), 'blue': A.cover('blue', 168), 'grey': solid((120, 120, 124)), 'green': solid((40, 170, 60)), 'red': solid((200, 40, 50))}
+    for theme, tname in enumerate(('graphite', 'white')):
+        m = machine(rec=1, theme=theme)
+        for k, img in covers.items():
+            path = art_file(album_key(k, k)); m.files[path] = 9000
+            m.images['file://' + path] = (168, 168, img.convert('RGBA').tobytes())
+        m.playing(title='sunset', artist='sunset', album='sunset')
+        assert m.open() == 0; m.timers = []; m.calls_all = []; m.first()
+        sp = Spin(g); sp.step(0, True, 200, 243, force=True)
+        for step, k in enumerate(('blue', 'sunset', 'green', 'red', 'grey', 'blue', 'red', 'sunset')):
+            m.playing(title=k, artist=k, album=k); m.count(); m.tick(50); sp.step(50, True, 200, 243)
+            if step == 1: expect(m.icount < COVER_MAX, f'a track change from one tint to another costs {m.icount} instructions (budget {COVER_MAX})'); print('  cover record, tint to tint: %d instructions' % m.icount)
+            tint = A.cover_tint_px(words_of_cover(m))
+            rb = rec_base(A.tint_stops(tint), tname) if tint else None
+            n, first = ndiff(m.frame_words(), model(sp.ang, sp.arm, m.cover_words(), playkey=1, rec_base_=rb, theme=tname))
+            expect(n == 0, f'{tname} Cover, change {step} to {k} (tint {tint}): the frame is a fresh compose on the pristine base ({n} differ {first})')
+
+
+def words_of_cover(m):
+    return [(v & 255, v >> 8 & 255, v >> 16 & 255) for v in m.cover_words()]
+
+
+def setting_tests(ctx):
+    """Settings > Now Playing > Record (m1plus_npset) and its picker Record (m1plus_vinylrec): the value row shows the colour and opens the picker; a tap on a picker row saves it atomically and moves the
+    check; the saved file is what the page opens with (the same pattern as the Cassette Theme, test/pod/tape.py)."""
+    expect, P = ctx.expect, pod_pages
+    C, T = P.NPSET_PAGE, P.RECORD_PAGE
+    names = P.RECORD_VALUES
+    rows_s = PSYMS[f'pod_rows_{P.SETTINGS_PAGE_INDEX}']
+    rows_n = PSYMS[f'pod_rows_{P.NPSET_PAGE_INDEX}']
+    np_i = next(i for i, r in enumerate(P.SETTINGS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.NPSET_PAGE_INDEX)
+    expect(names == tuple(n.capitalize() for n in A.RECORD_NAMES[:len(names)]) and len(names) == O['VN_RECS'] and P.ACT_VREC in P.VALUE_ACTIONS and P.ACT_RECSET in P.CHECK_ACTIONS and C.rows[1].action == P.ACT_VREC
+           and [(r.label, r.action, r.arg) for r in T.rows] == [(n, P.ACT_RECSET, i) for i, n in enumerate(names)] and T.title == 'Record' and T.key == 'm1plus_vinylrec' and P.VALUE_INIT[P.ACT_VREC] == 'Black',
+           'the Record row (value row) and its picker: Black and Cover in the saved order (vinyl_art.RECORD_NAMES), titled Record')
+    val = 'pod_value1'
+
+    def open_page(data=None, language=None):
+        m = Machine()
+        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(P.SETTINGS_PAGE.rows))] + ['pod_value0', val])}
+        if data is not None: m.fs[REC_FILE] = data
+        if language: m.set_language(language)
+        m.call(PSYMS['on_row'], a0=rows_s + 12 * np_i, count=3000000)
+        return m
+
+    def label(m):
+        keys = [c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets[val]]
+        return keys[-1] if keys else None
+
+    m = open_page()
+    expect(label(m) == 'Black' and REC_FILE not in m.fs, 'with nothing saved the record is Black, and reading writes nothing')
+    for data, want in ((b'1\n', 'Cover'), (b'1', 'Cover'), (b'0\n', 'Black'), (b'2\n', 'Black'), (b'9\n', 'Black'), (b'', 'Black'), (b'x', 'Black'), (b'11', 'Black'), (b'1\n\n', 'Black'), (b' 1\n', 'Black')):
+        expect(label(open_page(data)) == want, f'saved {data!r}: {want}')
+    m = open_page(); m.click('pod_row1')
+    expect(('window_open', T.key) in m.calls and REC_FILE not in m.fs, 'a tap on Record opens the picker and saves nothing')
+
+    def open_pick(data=None):
+        m = Machine()
+        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(2)] + [f'pod_check{i}' for i in range(2)])}
+        if data is not None: m.fs[REC_FILE] = data
+        m.call(PSYMS['on_row'], a0=rows_n + 12 * 1, count=3000000)
+        return m
+
+    def shown(m, i):
+        v = [c[2] for c in m.calls if c[0] == 'widget_set_visible' and c[1] == m.widgets[f'pod_check{i}']]
+        return v[-1] if v else None
+
+    m = open_pick()
+    expect(('window_open', T.key) in m.calls and [shown(m, i) for i in range(2)] == [1, 0], 'the picker opens with the check on Black')
+    expect([[shown(open_pick(d), i) for i in range(2)] for d in (b'1\n', b'4\n', b'9')] == [[0, 1], [1, 0], [1, 0]], 'a saved Cover has the check; an invalid file is Black')
+    m = open_pick()
+    for k in (1, 0, 1, 1, 0):
+        m.click(f'pod_row{k}')
+        expect(m.fs.get(REC_FILE) == b'%d\n' % k and REC_FILE + '.tmp' not in m.fs and ('rename', REC_FILE + '.tmp', REC_FILE) in m.calls and ('fsync', '/mnt/data') in m.calls
+               and [shown(m, i) for i in range(2)] == [int(i == k) for i in range(2)], f'a tap on {T.rows[k].label}: written atomically ({m.fs.get(REC_FILE)!r}), the check follows')
+    m = open_pick(b'1\n'); m.fail.add(('write', REC_FILE + '.tmp')); m.click('pod_row0')
+    expect(m.fs.get(REC_FILE) == b'1\n' and REC_FILE + '.tmp' not in m.fs and not any(c[0] == 'widget_set_visible' for c in m.calls), 'a failed write changes neither the file nor the check')
+    m = open_pick(b'1\n'); m.fail.add(('rename', REC_FILE)); m.click('pod_row0')
+    expect(m.fs.get(REC_FILE) == b'1\n' and not any(c[0] == 'widget_set_visible' for c in m.calls), 'a failed rename changes neither')
+    for loc in pod_i18n.ALL_TABLES:
+        for data, key in ((None, 'Black'), (b'1\n', 'Cover')):
+            expect(label(open_page(data, loc)) == key, f'{loc}: the value is set by key ({key})')
+    tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets/default/raw/ui/m1plus_npset.bin'), 'rb').read())
+    row, lab = tree.find('pod_row1'), tree.find('pod_value1')
+    expect(row is not None and lab is not None and (lab.get('tr_text') or lab.get('text')) == 'Black' and row.find('pod_icon') is not None and tree.find('pod_sec1_t').get('tr_text') == 'Vinyl Mode',
+           'the page asset: a Vinyl Mode header, the Record row with the turntable glyph and its value label')
+
+
+def theme_tests(ctx):
+    """Plinth themes (docs/modules/vinyl.md "Themes"): the saved theme read; each theme's page asset, text colours and pictures; the frame the model's under every theme, with and without the Cover record."""
+    expect = ctx.expect
+    g = A.groove_table16()
+    for data, want in ((None, 0), (b'0\n', 0), (b'1', 1), (b'1\n', 1), (b'2', 0), (b'2\n', 0), (b'3\n', 0), (b'9', 0), (b'12', 0), (b'1x', 0), (b'1\n\n', 0), (b'', 0), (b'x', 0)):
+        m = Machine()
+        if data is not None: m.fs[THEME_FILE] = data
+        expect(m.call(PSYMS['vinyl_theme']) == want, f'the saved theme {data!r}: {want}')
+    expect(O['VN_THEMES'] == len(A.THEME_NAMES) == 2 and A.THEME_NAMES == ('graphite', 'white'), 'two themes, Graphite first (the default)')
+    for k, th in enumerate(A.THEME_NAMES):
+        page = (pod_pages.VINYL, pod_pages.VINYL_WHITE)[k]
+        key = page.key
+        tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets/default/raw/ui/%s.bin' % key), 'rb').read())
+        by = {w.name: w for w in tree.walk() if w.name}
+        cols = [by[n].get('style:normal:text_color') for n in ('vn_title', 'vn_title2', 'vn_artist', 'vn_times', 'vn_status')]
+        want = ['#%02X%02X%02X' % A.text_rgb(f, th) for f in ('title', 'title', 'artist', 'times', 'status')]
+        expect(cols == want and tree.get('fullscreen') == 'true', f'{th}: the page asset {key} has the theme\'s text colours {want}')
+        m = machine(cover=True, theme=k); assert m.open() == 0; opened_calls = list(m.calls); m.timers = []; m.calls_all = []; m.first(); m.calls_all += m.calls
+        expect(('window_open', key) in opened_calls, f'{th}: the page opens its asset {key}')
+        loaded = [u for u in m.loads if u.startswith('vinyl_') and u != 'vinyl_label']
+        expect(sorted(loaded) == sorted(A.tname(n, th) for n in A.THEMED) and not any(u.endswith(x) for u in loaded for x in {'_white'} - ({'_' + th} if th != 'graphite' else set())), f'{th}: it loads its own six pictures and no other theme\'s ({sorted(loaded)})')
+        n, first = ndiff(m.frame_words(), model(0, groove_at(200, 243, g), m.cover_words(), playkey=1, theme=th))
+        expect(n == 0, f'{th}: the frame is the model pixel for pixel ({n} differ {first})')
+        f = dict(cover=A.cover('sunset', 168), title='Midnight City', artist='M83', pos=200, len=243, playing=True, fmt='FLAC', batt=60, charging=False, vol=42, clock='21:07')
+        md = dump(m, 'theme-' + th, f, 0, th)
+        expect(md < 6.0, f'{th}: close to the design ({md:.2f} of 255 a channel)')
+        sp = Spin(g); sp.step(0, True, 200, 243, force=True)
+        for _ in range(6): m.tick(50); sp.step(50, True, 200, 243)
+        expect(ndiff(m.frame_words(), model(sp.ang, sp.arm, m.cover_words(), playkey=1, theme=th))[0] == 0, f'{th}: six ticks on, the turned frame is the model')
+        mc = machine(cover=True, rec=1, theme=k); assert mc.open() == 0; mc.timers = []; mc.calls_all = []; mc.first(); mc.calls_all += mc.calls
+        words_ = mc.cover_words(); tint = A.cover_tint_px([(v & 255, v >> 8 & 255, v >> 16 & 255) for v in words_])
+        n, first = ndiff(mc.frame_words(), model(0, groove_at(200, 243, g), words_, playkey=1, rec_base_=rec_base(A.tint_stops(tint), th), theme=th))
+        expect(n == 0, f'{th} with the Cover record: the frame is the model, the rim blended into this plinth ({n} differ {first})')
+        md = dump(mc, 'theme-%s-cover' % th, dict(f, rec=A.tint_style(A.cover_tint(A.cover('sunset', 168).resize((152, 152), Image.BOX)))), 0, th)
+        expect(md < 6.0, f'{th} with the Cover record: close to the design ({md:.2f})')
+        # the cost is the theme's own picture sizes, nothing in the tick
+        mt = opened(cover=True, theme=k); mt.count(); mt.tick(50); mt.tick(50)
+        mg = opened(cover=True); mg.count(); mg.tick(50); mg.tick(50)
+        expect(mt.icount == mg.icount, f'{th}: a playing tick costs what Graphite\'s does ({mt.icount})')
+
+
+def theme_setting_tests(ctx):
+    """Settings > Now Playing > Vinyl Mode > Base (m1plus_npset, the picker m1plus_vinyltheme): the same pattern as the Record row."""
+    expect, P = ctx.expect, pod_pages
+    C, T = P.NPSET_PAGE, P.VTHEME_PAGE
+    names = P.VTHEME_VALUES
+    rows_s = PSYMS[f'pod_rows_{P.SETTINGS_PAGE_INDEX}']
+    rows_n = PSYMS[f'pod_rows_{P.NPSET_PAGE_INDEX}']
+    np_i = next(i for i, r in enumerate(P.SETTINGS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.NPSET_PAGE_INDEX)
+    expect(names == ('Graphite', 'Snow') and len(names) == len(A.THEME_NAMES) and C.rows[2].action == P.ACT_VTHEME and C.rows[2].label == 'Base' and P.ACT_VTHEME in P.VALUE_ACTIONS and P.ACT_VTHSET in P.CHECK_ACTIONS
+           and [(r.label, r.action, r.arg) for r in T.rows] == [(n, P.ACT_VTHSET, i) for i, n in enumerate(names)] and T.title == 'Base' and T.key == 'm1plus_vinyltheme' and P.VALUE_INIT[P.ACT_VTHEME] == 'Graphite',
+           'the Base row (value row) and its picker: Graphite, Snow (the theme white) in the saved order (vinyl_art.THEME_NAMES)')
+    val = 'pod_value2'
+
+    def open_page(data=None, language=None):
+        m = Machine()
+        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(P.SETTINGS_PAGE.rows))] + ['pod_value0', 'pod_value1', val])}
+        if data is not None: m.fs[THEME_FILE] = data
+        if language: m.set_language(language)
+        m.call(PSYMS['on_row'], a0=rows_s + 12 * np_i, count=3000000)
+        return m
+
+    def label(m):
+        keys = [c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets[val]]
+        return keys[-1] if keys else None
+
+    expect(label(open_page()) == 'Graphite' and THEME_FILE not in open_page().fs, 'with nothing saved the base is Graphite, and reading writes nothing')
+    for data, want in ((b'1\n', 'Snow'), (b'1', 'Snow'), (b'2\n', 'Graphite'), (b'2', 'Graphite'), (b'0\n', 'Graphite'), (b'3\n', 'Graphite'), (b'', 'Graphite'), (b'x', 'Graphite'), (b'11', 'Graphite'), (b' 1\n', 'Graphite')):
+        expect(label(open_page(data)) == want, f'saved {data!r}: {want}')
+    m = open_page(); m.click('pod_row2')
+    expect(('window_open', T.key) in m.calls and THEME_FILE not in m.fs, 'a tap on Base opens the picker and saves nothing')
+
+    def open_pick(data=None):
+        m = Machine()
+        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(2)] + [f'pod_check{i}' for i in range(2)])}
+        if data is not None: m.fs[THEME_FILE] = data
+        m.call(PSYMS['on_row'], a0=rows_n + 12 * 2, count=3000000)
+        return m
+
+    def shown(m, i):
+        v = [c[2] for c in m.calls if c[0] == 'widget_set_visible' and c[1] == m.widgets[f'pod_check{i}']]
+        return v[-1] if v else None
+
+    expect([[shown(open_pick(d), i) for i in range(2)] for d in (None, b'1\n', b'2\n', b'9')] == [[1, 0], [0, 1], [1, 0], [1, 0]], 'the picker opens with the check on the saved theme; an invalid file is Graphite')
+    m = open_pick()
+    for k in (1, 0, 1):
+        m.click(f'pod_row{k}')
+        expect(m.fs.get(THEME_FILE) == b'%d\n' % k and THEME_FILE + '.tmp' not in m.fs and ('rename', THEME_FILE + '.tmp', THEME_FILE) in m.calls and ('fsync', '/mnt/data') in m.calls
+               and [shown(m, i) for i in range(2)] == [int(i == k) for i in range(2)], f'a tap on {T.rows[k].label}: written atomically ({m.fs.get(THEME_FILE)!r}), the check follows')
+    m = open_pick(b'1\n'); m.fail.add(('write', THEME_FILE + '.tmp')); m.click('pod_row0')
+    expect(m.fs.get(THEME_FILE) == b'1\n' and not any(c[0] == 'widget_set_visible' for c in m.calls), 'a failed write changes neither the file nor the check')
+    for loc in pod_i18n.ALL_TABLES:
+        for data, key in ((None, 'Graphite'), (b'1\n', 'Snow')):
+            expect(label(open_page(data, loc)) == key, f'{loc}: the value is set by key ({key})')
 
 
 def motion_tests(ctx):
@@ -603,7 +919,7 @@ def life_tests(ctx):
         expect(m.open() == 0xffffffff and 'navigator_back' in m.names() and 'timer_add' not in m.names(), f'no {missing}: the window goes again, no timer')
     m = machine(); m.load_image = 1
     expect(m.open() == 0xffffffff and 'navigator_back' in m.names() and len(m.bitmaps) == 0, 'a picture that will not load: the window goes again, nothing allocated')
-    for n in A.NAMES:
+    for n in [A.tname(x) for x in A.THEMED] + ['vinyl_label']:   # (vinyl_rec: read only for a coloured record; another theme's pictures only under that theme)
         m = machine(); m.images[n] = (10, 10, bytes(400))
         expect(m.open() == 0xffffffff and len(m.bitmaps) == 0, f'{n} of another size is refused, every bitmap freed')
     m = machine(); m.bitmap_ok = False
@@ -656,4 +972,4 @@ def run(ctx):
     for fn in SECTIONS: fn(ctx)
 
 
-SECTIONS = [number_tests, asset_tests, draw_tests, motion_tests, text_tests, touch_tests, life_tests]
+SECTIONS = [number_tests, asset_tests, draw_tests, record_tests, cover_record_tests, cover_change_tests, setting_tests, theme_tests, theme_setting_tests, motion_tests, text_tests, touch_tests, life_tests]

@@ -130,7 +130,7 @@ import tape_art
 TAPE = list(tape_art.NAMES)   # the page's pictures: tape_top and tape_screw shared, and tape_shell / tape_hubs / tape_marks for each theme (the row icon pod_ic_tape is a row image, installed with them)
 DAILY = DAILY + TAPE
 # The Vinyl page (patch/vinyl.c, docs/modules/vinyl.md): its seven pictures (tools/vinyl_art.py draws them; portrait, as the panel). The More sheet's row icon is pod_ic_vinyl.
-import vinyl_art
+import vinyl_art, png_pack
 VINYL = list(vinyl_art.NAMES)
 DAILY = DAILY + VINYL
 # The Settings pages (tools/pod_settings.py, docs/modules/settings.md "Cards"): a 20 px glyph (CARD_GLYPH_PX, stroke 2) centred in a 24 px image on each row, by the row's label; the card's
@@ -140,7 +140,7 @@ CARD_GLYPHS = {'Wi-Fi': 'wifi', 'Bluetooth': 'bluetooth', 'Home Screen': 'house'
                'Play Mode': 'repeat', 'EQ': 'sliders-vertical', 'All Playback Settings': 'headphones', 'Display': 'sun',
                'Keyboards': '+keyboard', 'About': 'info', 'All System Settings': 'settings', 'Developer': 'code', 'Main Menu': 'list-checks', 'Extras': 'ellipsis',
                'Recent Albums': 'history', 'Daily Mix': 'shuffle', 'Regenerate Daily Mix': 'refresh-cw', 'Update Library': 'refresh-cw', 'Album Order': 'arrow-down-wide-narrow',
-               'Landscape': 'rotate-cw-square', 'Rebuild Covers': 'image-up', 'Theme': '+cassette-tape', 'Boot to M1+ Music': 'power', 'Open Shanling Home': '@shanling',
+               'Landscape': 'rotate-cw-square', 'Rebuild Covers': 'image-up', 'Theme': '+cassette-tape', 'Record': '+turntable', 'Base': 'palette', 'Boot to M1+ Music': 'power', 'Open Shanling Home': '@shanling',
                'Screenshot': 'camera', 'System Update': 'download', 'Podcast Search': 'search', 'English': 'languages', 'Chinese (Pinyin)': 'languages', 'Battery Percentage': 'battery-charging'}
 
 
@@ -1531,7 +1531,8 @@ def cmd_generate():
     for n, im in sorted(files.items()):
         want = sizes.get(n)
         assert n in pod_names() + np_names() or im.size == want, (n, im.size, want)
-        im.save(os.path.join(PNG, n + '.png'), optimize=True)
+        if n in VINYL: open(os.path.join(PNG, n + '.png'), 'wb').write(png_pack.pack(im))   # (the Vinyl pictures only: smallest lossless, tools/png_pack.py)
+        else: im.save(os.path.join(PNG, n + '.png'), optimize=True)
     print(f'{len(files)} PNGs, {sum(os.path.getsize(os.path.join(PNG, f)) for f in os.listdir(PNG))} bytes -> {PNG}')
 
 def cmd_fetch(tgz):

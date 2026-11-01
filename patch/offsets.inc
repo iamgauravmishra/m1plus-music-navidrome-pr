@@ -1305,6 +1305,14 @@
 #define VN_LID_X 16               /* vinyl_lid (VN_LID_PX square): the step, gloss, white rim and spindle over the turning label */
 #define VN_LID_Y 116
 #define VN_LID_PX 160
+#define VN_RB_X0 0                /* vinyl_rec (RGB the bare plinth, A the record map) at (X0, Y0), W x H: the record's box */
+#define VN_RB_Y0 34
+#define VN_RB_W 258
+#define VN_RB_H 324
+#define VN_RECS 2                 /* the record colours: Black, Cover (tinted from the playing track's cover) */
+#define VN_REC_COVER 1
+#define VN_THEMES 2               /* the plinth themes: Graphite, Snow (tools/vinyl_art.py THEME_NAMES) */
+#define VN_REC_K 15               /* the black record's grey at its rim (tools/vinyl_art.py REC_EDGE_K) */
 #define VN_CAP_X 262              /* vinyl_cap (VN_CAP_PX square): the gimbal cap over the pivot */
 #define VN_CAP_Y 56
 #define VN_CAP_PX 32

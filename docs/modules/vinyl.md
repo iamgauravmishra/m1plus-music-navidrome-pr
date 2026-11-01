@@ -29,8 +29,11 @@ Sources: `patch/vinyl.c`, `tools/vinyl_art.py` (the design's drawing code and th
 | `vinyl_cap` | 32 x 32 RGBA at (262, 56) | the gimbal cap over the pivot (round: it does not turn) |
 | `vinyl_keys` | 286 x 58, opaque | the key band (rows 420 .. 478) cut in cells: the play key at rest and pressed with the play or pause glyph (x 0, 46, 92, 138), previous pressed (184), next pressed (237) |
 | `vinyl_label` | 152 x 152, opaque | the label of a track without a cover: light grey paper |
+| `vinyl_rec` | 258 x 324 RGBA at (0, 34) | the record map t of the Cover record in the red channel, 0 where the base stays (see "Record colours") |
 
-About 180 KB of PNGs in all (the base, with its grain, is 135 KB); the test prints the sizes and the build output the rootfs headroom.
+Installed sizes (Graphite's names; Snow's `_white` are 90 KB base, 9 KB lid, 3 KB arm, 2 KB shadow, 2 KB cap, 10 KB keys): base 124 KB (its grain), lid 10 KB, arm 3 KB, armsh 2 KB, cap 2 KB, keys 13 KB, `vinyl_label` 2.6 KB, `vinyl_rec` 28 KB; 301 KB for the 14 pictures of both themes. The test prints the sizes and the build output the rootfs headroom.
+
+**Encoding.** `tools/png_pack.py` writes the Vinyl PNGs (`mod_icons.py --generate` and `vinyl_art.py` use it for these names only): pure Python, each picture the smallest of RGBA or, when it has at most 256 colours (`vinyl_label`, `vinyl_rec`, both shadows), an 8 bit palette picture **with a tRNS chunk** (stb_image gives a palette picture four channels only when tRNS is there, which the payload's `vn_load` / `vn_recolour` need; stock ships such pictures, `scover_wait*`), over every filter plan and two zlib strategies. The pictures of few colours want no row filter (deflate repeats whole pixels). Every picture decodes to the same RGBA pixels as the plain `optimize=True` PNG it replaced (the packer asserts it, the test compares the pixels). Not done: Zopfli-class deflate (pinned `pyoxipng`) would save a few percent more; grey, RGB or LA pictures (the loader would give 1, 3 or 2 channels, the payload reads 4); cropping margins (the arm is 3 KB, the lid 10 KB: little to gain); sharing a layer between the themes (no layer is identical).
 
 - **Composition** (`vn_compose`, per pixel of a rectangle above the key band): the base; inside radius 77 of the record's centre (96, 196) the label,
   **inverse-mapped** through the label's turn (fixed point: sines from a 91 entry table, 1/16384, angles in 1/16 degree), bilinear over the 152 px picture;
@@ -54,6 +57,54 @@ About 180 KB of PNGs in all (the base, with its grain, is 135 KB); the test prin
   status line from the status bar's volume (read only, as the Tape page does), the file extension and the clock (`HH:MM`). No status bar: `VOL 0`. No battery: the status bar only has it in 20 % steps, which reads as false precision.
   At 10 px the widest line fits the 200 px label (test), so nothing is dropped. The status colour is #BCBCC2 (the mock's #ACACB2 is 4.2:1 on the plinth; the
   build's contrast scan wants 4.5:1).
+
+## Record colours
+
+Settings > Now Playing > Vinyl Mode > **Record** (a value row opening the picker `m1plus_vinylrec`, a check on the chosen row, "Applies the next time Vinyl Mode opens."):
+**Black** (default, the installed look) or **Cover** (the record tinted from the playing track's cover; black for a grey cover or none). Saved as `0` or `1` (optional
+newline; anything else or no file is Black) in `/mnt/data/m1plus-vinylrec` by `vinyl_record_set` (atomic, as the Cassette Theme); the page reads it once when it opens
+(`vinyl_record`). `vinyl_art.RECORD_NAMES` is the order. Red, Smoke and Clear were mocked and device-tried, then dropped: no code, strings or tables of them remain. Nothing
+changed for Black: `vinyl_base` is pixel for pixel what V2.1qD installed, `vinyl_rec` is not even loaded, and the page costs what it did.
+
+- **The picture.** `vinyl_rec` (258 x 324 at (0, 34), RGBA, 39 KB) holds one 8 bit map t in its red channel: the record outside the label, its grooves, track gaps, a slightly
+  darker rim (no bead: a bright bead read as a white outline on the device) and a weak static sheen baked into a luma (`SHEEN_COVER` 0.30, `GLOW_COVER` 0.06: the highlight
+  goes only a little lighter than the tint); 0 where the base stays. It carries no plinth (the first design did, 47 KB, and would have needed one a theme): the record is opaque,
+  and the rim's anti-aliasing uses the base itself.
+- **The colour.** Five stops (r, g, b) at t = 0, 118, 190, 235, 255 (`tint_stops`: the tint x 225/256, 77/256 of that in the troughs, lifted by 26, 51 and 72 of 256 towards white at
+  t = 190, 235, 255) made into a 256 entry table (`vn_ramp`, `ramp_table`: piecewise linear, rounded half up; 1 KB of `.scratch`). Inside the rim a pixel is the table's colour. A
+  pixel the disc covers only in part (coverage from an integer square root, 1/8 pixel) is the base's plus the colour's difference from the black record's rim grey
+  (`VN_REC_K` 15) by the coverage: the base already holds the plinth and the record's shadow there, so the edge blends into whatever the theme is. The base's rim pixels
+  (about 1020) are kept at the first recolour (`vr.rim`, scan order, 6 KB of `.scratch`, `vn.rim_saved`) and every later recolour blends from those, never from the rim a previous tint left
+  in `vn.base` (a track change from one tint to another used to carry the old rim over; the test `cover_change_tests` compares every change with a fresh compose, per theme).
+- **Where it runs.** `vn_recolour` composes the record into `vn.base`, which is the page's own copy (`vn_load` makes one; the image manager's bitmap is never written), at the
+  first look and whenever the cover changes (`vn_retint`), then `vn_compose` redraws the record's box of the frame. Every later look reads that base exactly as before: a
+  playing tick costs what Black's does. `vinyl_rec` is decoded, read and freed at once (no bitmap kept; 334 KB transient). A `vinyl_rec` that will not load or has another size
+  leaves the page Black.
+- **Cover.** `vn_tint` runs when the label's cover changes (a new track, and when demo's /tmp cover arrives): a 16 x 16 grid of cell means of the decoded 152 px label cover; the
+  chroma-weighted mean of the cells whose chroma (max - min) is at least the grid's mean; saturation clamped to 170 .. 235, value to 125 .. 190, the hue kept; a mean chroma
+  under 24 is grey: black. The same tint as the record already has changes nothing (a new track of the same album); a grey or missing cover puts the installed black
+  record back from a fresh decode of `vinyl_base` (the box's rows; a 614 KB transient). `vinyl_art.cover_tint_px` and `tint_stops` are the python mirror (the mock's float
+  `cover_tint` is within a few levels).
+- **Cost** (emulation, `test/pod/vinyl.py` `record_tests`, `cover_record_tests`, budgets enforced): a playing tick with Cover 2.21 M instructions, exactly Black's. The first
+  look with Cover about 1.9 M more than Black's once (budget 6 M). A track change with a new tint about 12.4 M once, from black or from another tint (a Black record's is 5.5 M: the cover decode, the new text and
+  label), to a grey cover about 14 M (the black restore decodes `vinyl_base`), to a track of the same tint 5.9 M, as Black's (budget 18 M). The frames are the python model
+  (`rec_base`) pixel for pixel and within a few levels of the mock.
+- **Memory.** Nothing kept beyond the 1 KB table, the 6 KB of saved rim and the 15 byte stops; transient 334 KB (`vinyl_rec`), 614 KB for the restore to black.
+
+## Themes (the plinth)
+
+Settings > Now Playing > Vinyl Mode > **Base**: **Graphite** (default, the installed look) or **Snow** (a
+matte off-white plinth, silver arm, grey keys, dark text). A value row opening the picker `m1plus_vinyltheme` (a check on the chosen row, "Applies the next time Vinyl Mode opens.");
+saved as `0` or `1` (optional newline; only `1` is Snow, anything else or no file is Graphite) in `/mnt/data/m1plus-vinyltheme` (`vinyl_theme`, `vinyl_theme_set`), read once when the page opens.
+The designs are `vinyl_art.THEMES` (selected by `use(theme)`; the mocks are `tools/preview_vinyl_themes.py`).
+
+- **Pictures.** A theme changes six: `vinyl_base`, `vinyl_lid` (the rim colour), `vinyl_arm`, `vinyl_armsh` (Snow's shadow is lighter), `vinyl_cap`, `vinyl_keys`. Graphite's keep their
+  names and are pixel for pixel what V2.1qD installed; Snow's end in `_white` (`vinyl_art.tname`, `vn_names`). `vinyl_label` and `vinyl_rec` are shared: the Cover record carries
+  no plinth (its rim blends into the base already loaded), so it is the same under every theme.
+- **Text.** The labels' colours are in the page asset, so each theme has its own: `m1plus_vinyl` (Graphite), `m1plus_vinyl_white` (the same tree, `vinyl_art.text_rgb`;
+  `vn_pages` opens the saved one). No stock call is needed to recolour a label. The chevron is in the base.
+- **Size.** Snow adds 116 KB of PNG (Walnut, 197 KB, was dropped for the rootfs headroom); see the table above.
+- **Cost.** None at run time: the page loads its theme's six pictures instead of Graphite's; a playing tick is identical (test).
 
 ## Touch
 
@@ -105,7 +156,7 @@ carry on from where they were.
 
 ## Not implemented
 
-Seek by dragging the arm, a scratch / cue gesture, coloured or picture-disc records, a speed (45 rpm) choice, a lock-screen skin, hardware Back handling.
+Seek by dragging the arm, a scratch / cue gesture, picture-disc records, a speed (45 rpm) choice, a lock-screen skin, hardware Back handling.
 
 ## Device checklist (first flash)
 
@@ -120,4 +171,8 @@ clean rounded top. Tap Vinyl Mode: the sheet closes and the turntable appears, t
   drag does nothing; the chevron closes; a pull-down from the top edge still opens the control centre.
 - A track with no cover: the grey label; an album with a cover cached: its cover at once; a track whose cover demo extracts: the label changes within a few
   seconds.
+- Record colour Cover (Settings > Now Playing > Vinyl Mode > Record, then open Vinyl Mode): with a colourful cover the record takes its colour (mock: `out/preview/vinyl-emu-rec-cover.png`),
+  with no white line at the edge and only a faint highlight; the fine groove rings show. A new track of another cover changes it (watch for a hitch of a few tens of ms on the
+  change: 15 M instructions); a grey or missing cover leaves it black, and back to black is exactly the installed look. Turning, the arm and the tick are as smooth as with Black.
+  Kill switch and `m1plus-off` still refuse the page.
 - The screen still sleeps with the page open, wakes and catches up; back to Now Playing, Vinyl again: opens every time. Kill switch: no Vinyl Mode row.

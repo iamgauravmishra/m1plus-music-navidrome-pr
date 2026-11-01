@@ -537,6 +537,21 @@ TEXT = dict([
        'Cromo', 'Cromo', 'โครเมียม', 'Chrom', 'Хром', 'Хром'),
     _t('Metal', '金属', '金屬', 'メタル', '메탈', 'Métal', 'Metall',
        'Metal', 'Metallo', 'โลหะ', 'Metal', 'Металл', 'Метал'),
+    # Settings > Now Playing > Record: Vinyl Mode's record colour, the picker's title and its values
+    _t('Record', '唱片', '唱片', 'レコード', '레코드', 'Disque', 'Schallplatte',
+       'Disco', 'Disco', 'แผ่นเสียง', 'Płyta', 'Пластинка', 'Платівка'),
+    _t('Black', '黑色', '黑色', 'ブラック', '블랙', 'Noir', 'Schwarz',
+       'Negro', 'Nero', 'ดำ', 'Czarny', 'Чёрный', 'Чорний'),
+    _t('Cover', '封面', '封面', 'ジャケット', '커버', 'Pochette', 'Cover',
+       'Portada', 'Copertina', 'ปก', 'Okładka', 'Обложка', 'Обкладинка'),
+    _t('Base', '底座', '底座', 'ベース', '베이스', 'Socle', 'Sockel',
+       'Soporte', 'Supporto', 'ฐาน', 'Podstawa', 'Основание', 'Основа'),
+    _t('Graphite', '石墨', '石墨', 'グラファイト', '그래파이트', 'Graphite', 'Graphit',
+       'Grafito', 'Grafite', 'กราไฟต์', 'Grafit', 'Графит', 'Графіт'),
+    _t('Snow', '雪白', '雪白', 'スノー', '스노우', 'Neige', 'Schnee',
+       'Nieve', 'Neve', 'หิมะ', 'Śnieg', 'Снег', 'Сніг'),
+    _t('Applies the next time Vinyl Mode opens.', '下次打开黑胶模式时生效。', '下次開啟黑膠模式時生效。', '次回レコードモード起動時に反映', '다음에 바이닐 모드를 열 때 적용됩니다.', "S'applique à la prochaine ouverture.", 'Gilt beim nächsten Öffnen.',
+       'Se aplica la próxima vez que se abre.', 'Si applica alla prossima apertura.', 'มีผลเมื่อเปิดครั้งถัดไป', 'Zastosowane przy następnym otwarciu.', 'Применится при следующем открытии.', 'Застосується при наступному відкритті.'),
     # The Songs page (patch/songs.c): the Play pill (Shuffle is above), the select mode's navbar ("N Selected", the Select All text button) and its
     # Delete pill. The count goes where %d is (the payload puts the number there). Add to playlist is the stock key (STOCK).
     _t('Play', '播放', '播放', '再生', '재생', 'Lire', 'Abspielen',

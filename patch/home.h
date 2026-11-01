@@ -33,6 +33,12 @@
 #define TAPETHEME_FILE \
     "/mnt/data/m1plus-tapetheme" /* the Cassette Mode theme: "1" = Chrome, "2" = Metal (each with an optional newline), anything else or missing = Normal (the default) */
 #define TAPETHEME_TMP "/mnt/data/m1plus-tapetheme.tmp"
+#define VINYLREC_FILE \
+    "/mnt/data/m1plus-vinylrec" /* Vinyl Mode's record colour: "1" Cover (with an optional newline), anything else or missing = Black (the default) */
+#define VINYLREC_TMP "/mnt/data/m1plus-vinylrec.tmp"
+#define VINYLTHEME_FILE \
+    "/mnt/data/m1plus-vinyltheme" /* Vinyl Mode's plinth theme: "1" Snow (with an optional newline), anything else or missing = Graphite (the default) */
+#define VINYLTHEME_TMP "/mnt/data/m1plus-vinyltheme.tmp"
 #define MENU_FILE \
     "/mnt/data/m1plus-menu" /* the menu's visible items in order, one digit (item id) each (patch/menu.c); missing or invalid = the defaults */
 #define MENU_TMP "/mnt/data/m1plus-menu.tmp"

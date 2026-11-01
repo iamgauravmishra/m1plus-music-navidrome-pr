@@ -66,14 +66,18 @@ ACT_INFO = 33     # an information row of the About page: a label and a grey val
 ACT_PCSEARCH = 34  # switch row (Settings > Library > Podcasts): Podcast Search, off by default; on shows a Search button on the Podcasts page (patch/podcasts.c pcsearch_toggle, /mnt/data/m1plus-pcsearch)
 ACT_FOLDERS = 37  # open the Folders page: the card's folders and audio files in our list (patch/folders.c; arg = HOME_FOLDER, where a window that will not open falls back to the stock folder_page)
 ACT_BATTPCT = 36  # switch row (Settings > Home Screen > Status Bar): Battery Percentage, off by default; on shows the gauge's exact charge beside the battery outline (patch/battery.c battpct_toggle, /mnt/data/m1plus-battpct)
+ACT_VREC = 38     # value row (Settings > Now Playing > Vinyl Mode): the record colour, Black or Cover (tinted from the cover); opens its picker page (arg = the page index; patch/vinyl.c vinyl_record)
+ACT_RECSET = 39   # picker row (Record): choose the colour (arg = its index in vinyl_art.RECORD_NAMES); a check shows on the chosen row (patch/vinyl.c vinyl_record_set)
+ACT_VTHEME = 40   # value row (Settings > Now Playing > Vinyl Mode): the plinth theme, Graphite or White; opens its picker page (arg = the page index; patch/vinyl.c vinyl_theme)
+ACT_VTHSET = 41   # picker row (Base): choose the theme (arg = its index in vinyl_art.THEME_NAMES); a check shows on the chosen row (patch/vinyl.c vinyl_theme_set)
 _ACTS = [v for k, v in globals().items() if k.startswith('ACT_')]
 assert len(set(_ACTS)) == len(_ACTS), 'two ACT_* share an id (patch/m1plus.c mirrors them)'
 SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
-VALUE_ACTIONS = (ACT_SORT, ACT_CTHEME)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
-CHECK_ACTIONS = (ACT_SORTSET, ACT_THEMESET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
+VALUE_ACTIONS = (ACT_SORT, ACT_CTHEME, ACT_VREC, ACT_VTHEME)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
+CHECK_ACTIONS = (ACT_SORTSET, ACT_THEMESET, ACT_RECSET, ACT_VTHSET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
 ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_GRID)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
-VALUE_INIT = {ACT_SORT: 'Artist', ACT_CTHEME: 'Normal'}   # what the asset's value label says before the payload sets it
+VALUE_INIT = {ACT_SORT: 'Artist', ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite'}   # what the asset's value label says before the payload sets it
 # The stock pages ACT_STOCK opens: (the name navigator_to takes = ui/<name>.bin, the value the row shows at the right: the payload reads the stock state, patch/m1plus.c VK_*, or None).
 # Each is a plain navigator_to(name) with no context in stock (docs/modules/settings.md "Stock pages"): the Settings and Play Settings lists' rows, the Wi-Fi hub's two; Back returns to our page.
 STOCK_WIFI, STOCK_BLUETOOTH, STOCK_PLAYMODE, STOCK_EQ, STOCK_DISPLAY, STOCK_FWUPDATE = range(6)
@@ -147,6 +151,9 @@ DEVELOPER_PAGE_INDEX = 14
 SORT_PAGE_INDEX = 21
 THEME_PAGE_INDEX = 22
 ABOUT_PAGE_INDEX = 23
+RECORD_PAGE_INDEX = 29
+VINYL_WHITE_INDEX = 30
+VTHEME_PAGE_INDEX = 31
 ITEMS = [   # item id = index; the default order, essentials first (iPod classic style)
     Row('Now Playing', ACT_PLAYER),
     Row('Cover Flow', ACT_COVER),
@@ -414,11 +421,18 @@ TAPE = Page('m1plus_tape', 'm1plus_tape_page', 'Cassette Mode', kind='tape')
 # The Vinyl page (patch/vinyl.c): a fullscreen turntable Now Playing page (portrait); the payload paints the record and takes the touches, the text is the page's labels
 # (opened from Now Playing's More dialog, not from a menu row).
 VINYL = Page('m1plus_vinyl', 'm1plus_vinyl_page', 'Vinyl Mode', kind='vinyl')
+VINYL.theme = 'graphite'
+# The same page under the White plinth theme (tools/vinyl_art.py THEMES): the text labels' colours differ, so it has its own asset (patch/vinyl.c opens the saved one).
+VINYL_WHITE = Page('m1plus_vinyl_white', 'm1plus_vinyl_white_page', 'Vinyl Mode', kind='vinyl')
+VINYL_WHITE.theme = 'white'
 
 # Settings > Now Playing: the cassette's look. Theme shows its value (Normal, Chrome or Metal) at the right and opens a picker; the choice is saved and the Tape page reads it when it opens.
 NPSET_PAGE = Page('m1plus_npset', 'm1plus_npset_page', 'Now Playing', layout=[
     Hdr('Cassette Mode'),
     Row('Theme', ACT_CTHEME, THEME_PAGE_INDEX),
+    Hdr('Vinyl Mode'),
+    Row('Record', ACT_VREC, RECORD_PAGE_INDEX),
+    Row('Base', ACT_VTHEME, VTHEME_PAGE_INDEX),
 ])
 # Settings > Now Playing > Theme: the picker (a check on the chosen row).
 THEME_PAGE = Page('m1plus_tapetheme', 'm1plus_tapetheme_page', 'Cassette Theme', layout=[
@@ -427,6 +441,20 @@ THEME_PAGE = Page('m1plus_tapetheme', 'm1plus_tapetheme_page', 'Cassette Theme',
     Row('Metal', ACT_THEMESET, 2),
     Note('Applies the next time Cassette Mode opens.'),
 ])
+# Settings > Now Playing > Record: the picker for Vinyl Mode's record colour (a check on the chosen row); the saved index is vinyl_art.RECORD_NAMES'.
+RECORD_PAGE = Page('m1plus_vinylrec', 'm1plus_vinylrec_page', 'Record', layout=[
+    Row('Black', ACT_RECSET, 0),
+    Row('Cover', ACT_RECSET, 1),
+    Note('Applies the next time Vinyl Mode opens.'),
+])
+# Settings > Now Playing > Base: the picker for Vinyl Mode's plinth theme (a check on the chosen row); the saved index is vinyl_art.THEME_NAMES'.
+VTHEME_PAGE = Page('m1plus_vinyltheme', 'm1plus_vinyltheme_page', 'Base', layout=[
+    Row('Graphite', ACT_VTHSET, 0),
+    Row('Snow', ACT_VTHSET, 1),
+    Note('Applies the next time Vinyl Mode opens.'),
+])
+VTHEME_VALUES = ('Graphite', 'Snow')   # the value the Base row shows, in the order of the saved index
+RECORD_VALUES = ('Black', 'Cover')   # the value the Record row shows, in the order of the saved index (tools/vinyl_art.py RECORD_NAMES)
 CTHEME_VALUES = ('Normal', 'Chrome', 'Metal')   # the value shown for the setting's three states, in the order of the saved index (tools/tape_art.py THEME_NAMES)
 
 # The keyboard page (patch/keyboard.c, docs/modules/keyboard.md): the navbar, a search field and our own QWERTY pad; opened by keyboard_open (the Developer row, later podcast search), no menu row.
@@ -451,12 +479,14 @@ QUEUE_PAGE = Page('m1plus_queue', 'm1plus_queue_page', 'Queue', kind='queue')
 
 # PAGES[0] is the entry page.
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
-         EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, SORT_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL, FOLDERS, QUEUE_PAGE]
+         EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, SORT_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL, FOLDERS, QUEUE_PAGE,
+         RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE
 assert PAGES[EXTRASCFG_PAGE_INDEX] is EXTRASCFG_PAGE and PAGES[DEVELOPER_PAGE_INDEX] is DEVELOPER_PAGE
 assert PAGES[EXTRAS_PAGE_INDEX] is EXTRAS_PAGE and PAGES[MENUCFG_PAGE_INDEX] is MENUCFG_PAGE
 assert PAGES[LIBRARY_PAGE_INDEX] is LIBRARY_PAGE and PAGES[HOMESET_PAGE_INDEX] is HOMESET_PAGE
-assert PAGES[ABOUT_PAGE_INDEX] is ABOUT_PAGE
+assert PAGES[ABOUT_PAGE_INDEX] is ABOUT_PAGE and PAGES[RECORD_PAGE_INDEX] is RECORD_PAGE
+assert PAGES[VINYL_WHITE_INDEX] is VINYL_WHITE and PAGES[VTHEME_PAGE_INDEX] is VTHEME_PAGE
 assert PAGES[SORT_PAGE_INDEX] is SORT_PAGE and PAGES[THEME_PAGE_INDEX] is THEME_PAGE

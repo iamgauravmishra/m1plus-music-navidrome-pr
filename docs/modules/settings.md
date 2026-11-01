@@ -28,6 +28,8 @@ Switches and pickers save before updating their image/check. A failed atomic sav
 | Landscape | `m1plus-landscape` | `1` landscape; default portrait |
 | Album Order | `m1plus-cfsort` | `0` or `0\n` Album; missing/other Artist |
 | Cassette Theme | `m1plus-tapetheme` | `1` Chrome, `2` Metal, optional newline; missing/other Normal |
+| Vinyl Record | `m1plus-vinylrec` | `1` Cover, optional newline; missing/other Black |
+| Vinyl Base | `m1plus-vinyltheme` | `1` Snow, optional newline; missing/other Graphite |
 | Chinese (Pinyin) keyboard | `m1plus-kbzh` | `1` on (first byte); missing/other off |
 | Podcast Search | `m1plus-pcsearch` | `1` on (first byte); missing/other off (the default) |
 | Battery Percentage | `m1plus-battpct` | `1` on (first byte); missing/other off (the default) |

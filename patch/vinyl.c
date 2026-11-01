@@ -53,6 +53,11 @@ static struct {
     int playing, pos, len;
     char fmt[8];
     int vol, hh, mm;
+    int theme; /* the plinth theme of this open (vinyl_theme): which pictures and which page asset */
+    int rec; /* the record's colour of this open (vinyl_record), 0 Black */
+    int retint, tinted; /* Cover: the cover may have changed; the base holds a tinted record */
+    int rim_saved; /* vr.rim holds the installed base's rim pixels */
+    unsigned char tst[5][3]; /* the tint's ramp stops it holds */
     int has_cover, settle; /* the label is the cover (else vinyl_label); /tmp looks left */
     unsigned fkey, cover_t; /* the /tmp file's hash when decoded; the next look at it */
     int spin; /* the label's speed, 0 .. 256 of 33 1/3 rpm */
@@ -192,6 +197,13 @@ static void *vn_load(const char *name, unsigned w, unsigned h, int pm) {
     return bmp;
 }
 
+/* The pictures a plinth theme changes, in the order base, lid, arm, armsh, cap, keys (tools/vinyl_art.py tname: Graphite's keep their names), and the page asset of each theme. */
+static const char *const vn_names[VN_THEMES][6] = {
+    {"vinyl_base", "vinyl_lid", "vinyl_arm", "vinyl_armsh", "vinyl_cap", "vinyl_keys"},
+    {"vinyl_base_white", "vinyl_lid_white", "vinyl_arm_white", "vinyl_armsh_white", "vinyl_cap_white",
+     "vinyl_keys_white"}};
+static const char *const vn_pages[VN_THEMES] = {"m1plus_vinyl", "m1plus_vinyl_white"};
+
 static void vn_free(void) {
     void **b[9] = {&vn.frame, &vn.base, &vn.keys, &vn.arm, &vn.sh, &vn.lid, &vn.cap, &vn.fall, &vn.cover};
     int i;
@@ -254,6 +266,7 @@ static void vn_unlock(void) {
  * The layers are locked (vn_lock). */
 static void vn_row(int y, int x0, int x1);
 static int vn_isqrt(int n);
+static int vn_retint(void);
 void vn_cols(int c, int s, int ox, int oy, int y, int *x0, int *x1);
 
 static void vn_compose(int x0, int y0, int x1, int y1) {
@@ -515,6 +528,7 @@ static void vn_cover(void *t, int first) {
         bitmap_unlock_buffer(vn.cover);
     }
     vn.has_cover = ok;
+    vn.retint = vn.rec == VN_REC_COVER;
     vn.cover_t = time_now_ms() + VN_COVER_MS;
 }
 
@@ -580,7 +594,7 @@ static void vn_update(int force) {
     unsigned key = t ? vn_track_key(t) : 0, now = time_now_ms(), dt = now - vn.t_last, step;
     long secs = time((long *)0);
     const int *tm = secs > 1577836800L ? localtime(&secs) : (const int *)0;
-    int hh = tm ? tm[2] : 0, mm = tm ? tm[1] : 0, status = force;
+    int hh = tm ? tm[2] : 0, mm = tm ? tm[1] : 0, status = force, tinted = 0;
     char line[96];
     if (force) vn.key = ~0u;
     if (!vn.t_last || dt > VN_DT_MAX)
@@ -604,6 +618,7 @@ static void vn_update(int force) {
         vn_cover(t, 1);
     } else if (vn.settle > 0 && (int)(now - vn.cover_t) >= 0 && vn_settle(t))
         label = 1;
+    if (vn.retint) vn.retint = 0, tinted = vn_retint(); /* Cover: before the layers are locked */
     if (pos != vn.pos || len != vn.len) {
         vn.pos = pos, vn.len = len;
         snprintf(line, sizeof line, "%d:%02d  -%d:%02d", pos / 60, pos % 60, (len - pos) / 60, (len - pos) % 60);
@@ -638,6 +653,7 @@ static void vn_update(int force) {
         vn.lc = vn_cos(vn.ang), vn.ls = vn_sin(vn.ang);
         vn_compose(0, 0, VN_W, VN_BAND_Y0);
     } else {
+        if (tinted) vn_compose(0, VN_REC_Y - VN_REC_R, VN_REC_X + VN_REC_R + 1, VN_REC_Y + VN_REC_R + 1);
         d = vn_arm_next(to, (int)dt);
         if (d != vn.arm_at) vn_arm_draw(d);
         if (label) vn_label_draw();
@@ -788,13 +804,212 @@ static int vn_on_touch(void *ctx, void *e) {
 }
 
 /* ---------------------------------------------------------------------------
+ * The record's colour (Settings > Now Playing > Record: 0 Black, 1 Cover; docs/modules/vinyl.md "Record colours"). Black is the installed base as it is. Cover is composed into the page's own
+ * copy of the base (vn.base is a copy vn_load made: never the image manager's bitmap) when the page opens and on each track change, so every look reads that base exactly as it reads the black
+ * one and costs the same. vinyl_rec holds the record map t in its red channel (0 where the base stays); the colour is five stops (r, g, b) at t = 0, 118, 190, 235, 255 made into a 256 entry
+ * table by vn_ramp. Inside the rim a pixel is the table's colour (opaque); a pixel of the rim (the disc's coverage under 1) is the installed base's (kept at the first recolour: vr.rim) plus the colour's difference from the black record's
+ * rim (VN_REC_K) by the coverage: the base already holds the plinth and the record's shadow there (whatever the theme), so the picture carries none of it. tools/vinyl_art.py ramp_table,
+ * rec_in_map and test/pod/vinyl.py rec_base are the same arithmetic.
+ */
+#define VN_RIM_MAX 1536 /* the map's rim pixels (1020 measured; test/pod/vinyl.py checks the margin) */
+
+static struct {
+    unsigned w[256]; /* the colour of map value t, opaque */
+    unsigned rim
+        [VN_RIM_MAX]; /* the installed base's rim pixels (the map's, in scan order), kept at the first recolour: a rim pixel always blends from these */
+} vr __attribute__((section(".scratch")));
+
+static void vn_ramp(const unsigned char (*st)[3]) {
+    static const unsigned char tt[5] = {0, 118, 190, 235, 255};
+    int t, k = 0;
+    for (t = 0; t < 256; ++t) {
+        int t0, t1, d, i;
+        unsigned c[3];
+        while (k < 3 && t > tt[k + 1]) ++k;
+        t0 = tt[k], t1 = tt[k + 1], d = t1 - t0;
+        for (i = 0; i < 3; ++i) c[i] = (unsigned)(st[k][i] * (t1 - t) + st[k + 1][i] * (t - t0) + d / 2) / (unsigned)d;
+        vr.w[t] = c[0] | c[1] << 8 | c[2] << 16 | 0xff000000u;
+    }
+}
+
+/* The colour st on the page's base inside the record's box, 1 when composed (0: vinyl_rec would not load or is another size: the base is left as it is). */
+static int vn_recolour(const unsigned char (*st)[3]) {
+    static const unsigned char at[4][4] = BITMAP_RGBA_AT;
+    unsigned bitmap[32], format, *base, stride = 0;
+    const unsigned char *data;
+    int ok = 0, x, y, ri = 0;
+    memset(bitmap, 0, sizeof bitmap);
+    if (widget_load_image(vn.win, "vinyl_rec", bitmap)) return 0;
+    format = (unsigned)(*(unsigned short *)((char *)bitmap + BITMAP_FORMAT)) - 1u;
+    data = format < 4 && bitmap[0] == VN_RB_W && bitmap[1] == VN_RB_H ? bitmap_lock_buffer_for_read(bitmap)
+                                                                      : (const unsigned char *)0;
+    base = data ? (unsigned *)bitmap_lock_buffer_for_write(vn.base) : (unsigned *)0;
+    if (base) {
+        stride = bitmap_get_line_length(bitmap);
+        vn_ramp(st);
+        for (y = 0; y < VN_RB_H; ++y) {
+            const unsigned char *s = data + y * stride + at[format][0];
+            unsigned *o = base + (y + VN_RB_Y0) * VN_W + VN_RB_X0;
+            int vy = 2 * (y + VN_RB_Y0 - VN_REC_Y) + 1;
+            for (x = 0; x < VN_RB_W; ++x, s += 4) {
+                unsigned m = *s, w;
+                int vx, d2;
+                if (!m) continue;
+                vx = 2 * (x + VN_RB_X0 - VN_REC_X) + 1, d2 = vx * vx + vy * vy, w = vr.w[m];
+                if (d2 > (2 * VN_REC_R - 2) *
+                             (2 * VN_REC_R - 2)) { /* the rim: the disc's coverage of this pixel, in 1/8 pixel */
+                    int c = 8 * VN_REC_R + 4 - vn_isqrt(16 * d2), i;
+                    unsigned cov = c <= 0 ? 0 : c >= 8 ? 255 : (unsigned)c * 32, b = o[x], out = 0xff000000u;
+                    if (ri <
+                        VN_RIM_MAX) { /* the first recolour: the base is still the installed one; later ones blend from what it saved */
+                        if (!vn.rim_saved) vr.rim[ri] = b;
+                        b = vr.rim[ri];
+                    }
+                    ++ri;
+                    for (i = 0; i < 24; i += 8) {
+                        int v = (int)(b >> i & 255) + (int)((((w >> i & 255) * cov + 127) / 255)) -
+                                (int)((VN_REC_K * cov + 127) / 255);
+                        out |= (unsigned)(v < 0 ? 0 : v > 255 ? 255 : v) << i;
+                    }
+                    w = out;
+                }
+                o[x] = w;
+            }
+        }
+        bitmap_unlock_buffer(vn.base);
+        vn.rim_saved = 1;
+        ok = 1;
+    }
+    if (data) bitmap_unlock_buffer(bitmap);
+    widget_unload_image(vn.win, bitmap);
+    return ok;
+}
+
+/* The saved plinth theme: '1' Snow (an optional newline), anything else or no file Graphite; reading never writes. */
+int vinyl_theme(void) {
+    char b[4];
+    int fd = open(VINYLTHEME_FILE, 0, 0), n;
+    if (fd < 0) return 0;
+    n = read(fd, b, sizeof b);
+    close(fd);
+    return n >= 1 && b[0] == '1' && (n == 1 || (n == 2 && b[1] == '\n')) ? 1 : 0;
+}
+
+/* Choose the theme (0 Graphite, 1 Snow), saved atomically; the theme, or -1 (unknown, or not saved: the saved one is unchanged). */
+int vinyl_theme_set(int theme) {
+    static const char *const text[VN_THEMES] = {"0\n", "1\n"};
+    if (theme < 0 || theme >= VN_THEMES) return -1;
+    return home_write_atomic(VINYLTHEME_FILE, VINYLTHEME_TMP, text[theme]) == 0 ? theme : -1;
+}
+
+/* The saved colour: '1' Cover (an optional newline), anything else or no file Black; reading never writes. */
+int vinyl_record(void) {
+    char b[4];
+    int fd = open(VINYLREC_FILE, 0, 0), n;
+    if (fd < 0) return 0;
+    n = read(fd, b, sizeof b);
+    close(fd);
+    return n >= 1 && b[0] == '1' && (n == 1 || (n == 2 && b[1] == '\n')) ? 1 : 0;
+}
+
+/* Choose the colour (0 Black, 1 Cover), saved atomically; the colour, or -1 (unknown, or not saved: the saved one is unchanged). */
+int vinyl_record_set(int rec) {
+    static const char *const text[VN_RECS] = {"0\n", "1\n"};
+    if (rec < 0 || rec >= VN_RECS) return -1;
+    return home_write_atomic(VINYLREC_FILE, VINYLREC_TMP, text[rec]) == 0 ? rec : -1;
+}
+
+/* The Cover colour: the record tinted from the decoded cover (vn.cover, VN_LAB_PX square). The mean colour of each cell of a 16 x 16 grid; the chroma-weighted mean of the cells whose chroma
+ * (max - min) is at least the grid's mean; its saturation clamped to 170 .. 235 and its value to 125 .. 190 (the hue kept); then the ramp (tools/vinyl_art.py cover_tint_px and tint_stops are the
+ * same integers). 0 for a (nearly) grey cover (the mean chroma under 24) or no cover: the record is black. */
+static int vn_tint(unsigned char (*st)[3]) {
+    const unsigned *px = vn.has_cover ? (const unsigned *)bitmap_lock_buffer_for_read(vn.cover) : (const unsigned *)0;
+    unsigned char cell[3][256];
+    unsigned sum[3] = {0, 0, 0}, sw = 0, mean = 0, hi, lo, sat, val, k, span, c[3];
+    int i, j, x, y, a;
+    if (!px) return 0;
+    for (j = 0; j < 16; ++j)
+        for (i = 0; i < 16; ++i) {
+            unsigned s[3] = {0, 0, 0}, cnt = 0;
+            for (y = j * VN_LAB_PX / 16; y < (j + 1) * VN_LAB_PX / 16; ++y)
+                for (x = i * VN_LAB_PX / 16; x < (i + 1) * VN_LAB_PX / 16; ++x, ++cnt) {
+                    unsigned p = px[y * VN_LAB_PX + x];
+                    s[0] += p & 255, s[1] += p >> 8 & 255, s[2] += p >> 16 & 255;
+                }
+            for (a = 0; a < 3; ++a) cell[a][j * 16 + i] = (unsigned char)(s[a] / cnt);
+        }
+    bitmap_unlock_buffer(vn.cover);
+    for (i = 0; i < 256; ++i) {
+        hi = lo = cell[0][i];
+        for (a = 1; a < 3; ++a) hi = cell[a][i] > hi ? cell[a][i] : hi, lo = cell[a][i] < lo ? cell[a][i] : lo;
+        mean += hi - lo;
+    }
+    mean /= 256;
+    if (mean < 24) return 0;
+    for (i = 0; i < 256; ++i) {
+        hi = lo = cell[0][i];
+        for (a = 1; a < 3; ++a) hi = cell[a][i] > hi ? cell[a][i] : hi, lo = cell[a][i] < lo ? cell[a][i] : lo;
+        if (hi - lo >= mean) {
+            for (a = 0; a < 3; ++a) sum[a] += cell[a][i] * (hi - lo);
+            sw += hi - lo;
+        }
+    }
+    for (a = 0; a < 3; ++a) c[a] = sum[a] / sw;
+    hi = c[0] > c[1] ? c[0] : c[1], hi = c[2] > hi ? c[2] : hi;
+    lo = c[0] < c[1] ? c[0] : c[1], lo = c[2] < lo ? c[2] : lo;
+    sat = (hi - lo) * 255 / (hi ? hi : 1), sat = sat < 170 ? 170 : sat > 235 ? 235 : sat;
+    val = hi < 125 ? 125 : hi > 190 ? 190 : hi;
+    k = val * sat / 255, span = hi - lo ? hi - lo : 1;
+    for (a = 0; a < 3; ++a) {
+        unsigned t =
+            (val - k + (c[a] - lo) * k / span) * 225 >> 8; /* the tint, a little deeper than the label's colour */
+        st[0][a] = (unsigned char)(t * 77 >> 8);
+        st[1][a] = (unsigned char)t;
+        st[2][a] = (unsigned char)(t + ((255 - t) * 26 >> 8));
+        st[3][a] = (unsigned char)(t + ((255 - t) * 51 >> 8));
+        st[4][a] = (unsigned char)(t + ((255 - t) * 72 >> 8));
+    }
+    return 1;
+}
+
+/* The page's record after a new cover (Cover colour): tinted from it, or black (a grey cover, none) again. 1 when the base changed, so the record's box is composed again. */
+static int vn_retint(void) {
+    unsigned char st[5][3];
+    int i;
+    if (vn_tint(st)) {
+        for (i = 0; vn.tinted && i < 15 && st[i / 3][i % 3] == vn.tst[i / 3][i % 3]; ++i) {
+        }
+        if (i == 15) return 0; /* the same tint: the base is already it */
+        if (!vn_recolour(st)) return 0;
+        memcpy(vn.tst, st, sizeof st), vn.tinted = 1;
+        return 1;
+    }
+    if (vn.tinted) { /* back to black: the installed base's box again */
+        void *b = vn_load(vn_names[vn.theme][0], VN_W, VN_H, 0);
+        unsigned *src = b ? (unsigned *)bitmap_lock_buffer_for_read(b) : (unsigned *)0,
+                 *dst = src ? (unsigned *)bitmap_lock_buffer_for_write(vn.base) : (unsigned *)0;
+        int y;
+        if (dst)
+            for (y = VN_RB_Y0; y < VN_RB_Y0 + VN_RB_H; ++y)
+                memcpy(dst + y * VN_W + VN_RB_X0, src + y * VN_W + VN_RB_X0, VN_RB_W * 4);
+        if (dst) bitmap_unlock_buffer(vn.base);
+        if (src) bitmap_unlock_buffer(b);
+        if (b) bitmap_destroy(b);
+        vn.tinted = 0;
+        return dst != (unsigned *)0;
+    }
+    return 0;
+}
+
+/* ---------------------------------------------------------------------------
  * Open: the More dialog's Vinyl Mode row. 0 once the page is up (or already open); -1 when it could not open (nothing is left of it).
  */
 int vinyl_open(void) {
     if (vn.win) return 0;
     if (access(KILL_SD, F_OK) == 0) return -1;
     memset(&vn, 0, sizeof vn);
-    vn.win = window_open("m1plus_vinyl");
+    vn.theme = vinyl_theme(); /* read once: a change in Settings shows the next time the page opens */
+    vn.win = window_open(vn_pages[vn.theme]);
     if (!vn.win) {
         memset(&vn, 0, sizeof vn);
         return -1;
@@ -808,15 +1023,17 @@ int vinyl_open(void) {
     vn.status = widget_lookup(vn.win, "vn_status", 1);
     if (vn.view && vn.title && vn.title2 && vn.artist && vn.times && vn.status) {
         unsigned *f;
-        vn.base = vn_load("vinyl_base", VN_W, VN_H, 0);
-        vn.keys = vn_load("vinyl_keys", VN_KEYS_W, VN_BAND_Y1 - VN_BAND_Y0, 0);
-        vn.arm = vn_load("vinyl_arm", VN_ARM_W, VN_ARM_H, 1);
-        vn.sh = vn_load("vinyl_armsh", VN_ARM_W, VN_ARM_H, 0);
-        vn.lid = vn_load("vinyl_lid", VN_LID_PX, VN_LID_PX, 0);
-        vn.cap = vn_load("vinyl_cap", VN_CAP_PX, VN_CAP_PX, 0);
+        vn.base = vn_load(vn_names[vn.theme][0], VN_W, VN_H, 0);
+        vn.keys = vn_load(vn_names[vn.theme][5], VN_KEYS_W, VN_BAND_Y1 - VN_BAND_Y0, 0);
+        vn.arm = vn_load(vn_names[vn.theme][2], VN_ARM_W, VN_ARM_H, 1);
+        vn.sh = vn_load(vn_names[vn.theme][3], VN_ARM_W, VN_ARM_H, 0);
+        vn.lid = vn_load(vn_names[vn.theme][1], VN_LID_PX, VN_LID_PX, 0);
+        vn.cap = vn_load(vn_names[vn.theme][4], VN_CAP_PX, VN_CAP_PX, 0);
         vn.fall = vn_load("vinyl_label", VN_LAB_PX, VN_LAB_PX, 0);
         vn.cover = bitmap_create_ex(VN_LAB_PX, VN_LAB_PX, VN_LAB_PX * 4, BITMAP_RGBA8888);
         vn.frame = bitmap_create_ex(VN_W, VN_H, VN_W * 4, BITMAP_RGBA8888);
+        vn.rec =
+            vinyl_record(); /* read once (a change in Settings shows the next time the page opens); Cover is composed into vn.base at the first look, once the cover is decoded (vn_retint) */
         f = vn.frame && vn.base && vn.keys && vn.arm && vn.sh && vn.lid && vn.cap && vn.fall && vn.cover
                 ? (unsigned *)bitmap_lock_buffer_for_write(vn.frame)
                 : (unsigned *)0;

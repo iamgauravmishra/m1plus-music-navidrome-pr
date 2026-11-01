@@ -143,12 +143,20 @@ the recovery button combination for this model remains unverified.
   an episode's More sheet with only Go to Podcasts and More. Test builds zCQUGAAAD to zCQUGAAAF flashed, accepted.
   Device finding: AWTK destroys a closed window later, so closing a page and reopening it in one call finds it still there
   (zCQUGAAAE's Go to Episode did nothing); the emulated tests could not see it because their window mock never closes either.
-- **V2.1qO** (2026-11-01, current release): **Cover resampling**: the cover cache extracts art itself (libjpeg DCT scaling, then
+- **V2.1qO** (2026-11-01): **Cover resampling**: the cover cache extracts art itself (libjpeg DCT scaling, then
   an exact area average, quality 90, stock's fit) instead of stock's corner-mapped bilinear, which aliased 600 to 1500 px art
   down to 168 px; `cc_box` weights edge pixels by coverage. Cache files `r<key>-168.jpg`, rebuilt once. Test build zIPUGAAAC
   flashed, accepted. `tools/preview_cover_resample.py` compares both pipelines on the laptop.
+- **V2.1qP** (2026-11-01, current release): **Vinyl Mode colours**: Settings > Now Playing > Vinyl Mode > Record (Black, or Cover: the
+  record tinted from the playing cover, composed once a track into the page's base, the playing tick unchanged) and Base (Graphite, or
+  Snow, a light plinth). Red, smoke, clear and a Walnut plinth were mocked and dropped (rootfs headroom); the vinyl PNGs are re-encoded
+  losslessly (`tools/png_pack.py`, four palette + tRNS). Test builds zTUKNAAAB to zTUKNAAAG flashed, accepted.
 
 ## Hardware results (what broke on the device, and why)
+- **Vinyl Cover record rim (zTUKNAAAD).** On a track change the previous tint's disc edge stayed. The anti-aliased rim blended onto
+  the current base pixel, which already held the last tint; the emulation model mirrored the same arithmetic, so the tests agreed with
+  the bug. Fixed by saving the pristine rim pixels (about 1,020, 6 KB) at the first recolour; a test now compares every change with a
+  fresh compose on the installed base.
 - **Vinyl Mode pause (zDEZGAAAI).** Tapping pause stalled the page, then the arm stuttered until parked. Stock's `play_pause_music`
   (0x4e43b4) mutes and sleeps 150 ms (`usleep` 0x4e4460) on the UI thread before `mclSetPause`, and each arm-swing tick composed two whole
   diagonal boxes (25 to 36 M instructions, over a 50 ms tick). Fixed by per-row spans, layer passes and stepped samplers (about 4 M a

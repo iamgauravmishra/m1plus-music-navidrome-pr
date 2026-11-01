@@ -926,9 +926,9 @@ def setting_tests(ctx):
     rows_s = PSYMS[f'pod_rows_{P.SETTINGS_PAGE_INDEX}']
     rows_n = PSYMS[f'pod_rows_{P.NPSET_PAGE_INDEX}']
     np_i = next(i for i, r in enumerate(P.SETTINGS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.NPSET_PAGE_INDEX)
-    expect(P.SETTINGS_PAGE.rows[np_i].label == 'Now Playing' and C.title == 'Now Playing' and [(r.label, r.action, r.arg) for r in C.rows] == [('Theme', P.ACT_CTHEME, P.THEME_PAGE_INDEX)]
-           and P.ACT_CTHEME in P.VALUE_ACTIONS and P.CTHEME_VALUES == ('Normal', 'Chrome', 'Metal') and C.key == 'm1plus_npset' and any(isinstance(x, P.Hdr) and x.text == 'Cassette Mode' for x in C.layout),
-           'Settings has the Now Playing row; its page has a Cassette Mode header over the Theme value row')
+    expect(P.SETTINGS_PAGE.rows[np_i].label == 'Now Playing' and C.title == 'Now Playing' and [(r.label, r.action, r.arg) for r in C.rows] == [('Theme', P.ACT_CTHEME, P.THEME_PAGE_INDEX), ('Record', P.ACT_VREC, P.RECORD_PAGE_INDEX), ('Base', P.ACT_VTHEME, P.VTHEME_PAGE_INDEX)]
+           and P.ACT_CTHEME in P.VALUE_ACTIONS and P.CTHEME_VALUES == ('Normal', 'Chrome', 'Metal') and C.key == 'm1plus_npset' and any(isinstance(x, P.Hdr) and x.text == 'Cassette Mode' for x in C.layout) and any(isinstance(x, P.Hdr) and x.text == 'Vinyl Mode' for x in C.layout),
+           'Settings has the Now Playing row; its page has a Cassette Mode header over the Theme value row, then a Vinyl Mode header over the Record row')
     expect([(r.label, r.action, r.arg) for r in T.rows] == [('Normal', P.ACT_THEMESET, 0), ('Chrome', P.ACT_THEMESET, 1), ('Metal', P.ACT_THEMESET, 2)] and T.title == 'Cassette Theme'
            and T.key == 'm1plus_tapetheme' and P.CTHEME_VALUES == tuple(n.capitalize() for n in THEMES), 'the picker: Normal, Chrome and Metal in the saved order, titled Cassette Theme')
     val = 'pod_value0'
