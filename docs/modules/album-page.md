@@ -65,7 +65,7 @@ Shuffle (this page backgrounds, Now Playing takes the bar in any order of the tw
 **Tone cache (the tint at once).** `pod_tone_get` / `pod_tone_put` (`patch/common.c`): 64 entries of `{album key, tone word, use stamp}` (12 bytes, 768 bytes of
 `.scratch`, no malloc), least recently used out, RAM only (nothing is written to the card), shared with Now Playing. The key is `cc_album_key`'s
 (`cc_key_of(artist, album)`, FNV-1a of artist then album, the Cover Flow cache file's name). The page looks the key up first (a hit tints at once, no decode); a miss decodes
-`/mnt/mmc/.m1plus/covers/<key>-168.jpg` (168 px, a few ms), sets the tint and inserts; the file there but **empty** (Cover Flow's "no art" marker) leaves the page black. Both pages take `pod_tone` of the `cc_box` average
+`/mnt/mmc/.m1plus/covers/f<key>-168.jpg` (168 px, a few ms; the page's tracks come in track order from the query filter, so a cover job's `deque_at(list, 0)` is the album's first track), sets the tint and inserts; the file there but **empty** (Cover Flow's "no art" marker) leaves the page black. Both pages take `pod_tone` of the `cc_box` average
 of the centred square, and the cache then serves every later page. Measured (synthetic 900 px covers and the boot logo, JPEG q85 full size
 against the same square at 160, 168 and 264 px, JPEG q80): the averages differ by at most 1 of 255 in a channel, a tone difference of at most 1 level. `test/pod/albumpage.py` and
 `test/pod/shared.py` `tone_cache_tests` (LRU and bounds), `test/pod/nowplaying.py`.

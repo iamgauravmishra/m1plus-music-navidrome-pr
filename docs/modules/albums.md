@@ -42,7 +42,7 @@ The menu's Albums row (`ACT_ALBUMS`) opens our one Albums page in the mode used 
   (y 0, height = content) intersects the canvas.
 - **Tiles and memory.** `GRID_TILES` 12 entries (a frame touches at most 6 grid cells or 8 list rows; the build checks that the ring holds the view,
   the rows ahead and two tiles of history). A tile is a 144x144 RGBA8888 `bitmap_create_ex` (81 KB, flagged opaque: the corners are blended into black, not cut in the alpha; the list mode's 52 px tiles are not opaque, see the shared grid above) holding the album's cover (the finished tile is cached, not the JPEG):
-  the Cover Flow cache file (`<key>-168.jpg`, key of the album record, so the same files) decoded by the stock
+  the Cover Flow cache file (`f<key>-168.jpg`, key of the album record, so the same files; the record is the album's first track, payload.md hook 6) decoded by the stock
   loader and reduced with an **area average** (`cc_box`: each output pixel is the mean of the source pixels its box
   covers, the centred square, alpha over black; nearest sampling shimmers at 168 -> 144). The album and the artist are converted to
   wide chars (`tk_utf8_to_utf16_ex`, at most 47) and, when `canvas_measure_text` says one is wider than the cell, cut

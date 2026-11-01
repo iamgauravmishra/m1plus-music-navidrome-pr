@@ -1,14 +1,14 @@
 /* Cover cache and album helpers shared by the pages that show album art (patch/coverflow.c, patch/albums.c).
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
- * The cache design (one JPEG per album, /mnt/mmc/.m1plus/covers/<key>-168.jpg, an empty file marking "no
+ * The cache design (one JPEG per album, /mnt/mmc/.m1plus/covers/f<key>-168.jpg, an empty file marking "no
  * art") follows q2-pod's; see docs/modules/coverflow.md.
  */
 #pragma once
 
 #define CARD_DIR \
     "/mnt/mmc/.m1plus" /* the one hidden folder the payload keeps on the card: covers/ (the cache) and daily-mix/ (the Daily Mix: tracks, art); made by the writers, only while the card is mounted */
-#define ART_DIR CARD_DIR "/covers" /* the cache: <key>-168.jpg per album, an empty file for "no art" */
+#define ART_DIR CARD_DIR "/covers" /* the cache: f<key>-168.jpg per album, an empty file for "no art" */
 
 /* Pure pixel helpers, also built for the host (test/coverflow.py). */
 unsigned cc_fnv(unsigned h, const char *s);

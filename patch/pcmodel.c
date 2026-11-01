@@ -1153,16 +1153,34 @@ void *pc_strip(void *queue, int *idx) {
  * on for every such query (q2-pod scopes it with a flag because its Cover Flow and Folders also read songtable; here nothing needs the episodes: our Podcasts pages and Folder play
  * list directories, the other tables (myfav, the recents, the playlists) are not songtable, and the scan's duplicate check is its own sqlite3_exec). The path test is SQLite's LIKE (case
  * insensitive for ASCII), bounded by the slash: '/mnt/mmc/Podcasts Extra/' and '/mnt/mmc/Music/Podcasts/' stay. Anything that is not a plain songtable select, or does not fit, goes to stock
- * untouched; no file I/O, no allocation, a 1 KB buffer on the caller's stack.
+ * untouched; no file I/O, no allocation, a 1 KB buffer on the caller's stack. The subquery is also ordered so an album is its first track (below).
  */
 #define PQ_BUF 1024
 static const char pq_head[] =
-    " from (select * from songtable where ifnull(fileurl,'') not like '" PM_ROOT "/podcasts/%')";
+    " from (select * from songtable where ifnull(fileurl,'') not like '" PM_ROOT "/podcasts/%'";
+/* An album is its first track: lowest track number, an untagged one (NULL or <= 0) after the tagged, then the lowest path. */
+static const char pq_first[] = " order by (ifnull(track,0)<=0), ifnull(track,0), fileurl)";
+/* The same order reversed, for `group by album`: SQLite 3.19.3 (the device's) gives a GROUP BY's bare columns (id, songer, fileurl) the LAST row of the group in the
+ * order its input arrives (verified with the 3.19.3 amalgamation; SQLite 3.54's sorter takes the first, so this is implementation behaviour, pinned by the device's SQLite). */
+static const char pq_last[] = " order by (ifnull(track,0)<=0) desc, ifnull(track,0) desc, fileurl desc)";
 
-/* sql with " from songtable" replaced by the filtered subquery, in out; 0 when sql is not such a select or does not fit */
+/* The end of the first pat in sql when the next character is not an s (albumsonger is not album); 0 when there is none */
+static const char *pq_find(const char *sql, const char *pat) {
+    unsigned i, n;
+    for (n = 0; sql[n]; ++n) {
+        for (i = 0; pat[i] && sql[n + i] == pat[i]; ++i) {
+        }
+        if (!pat[i] && sql[n + i] != 's') return sql + n + i;
+    }
+    return 0;
+}
+
+/* sql with " from songtable" replaced by the filtered subquery, in out; 0 when sql is not such a select or does not fit. An album list (`group by album`) gets the subquery
+ * ordered so the row SQLite keeps per album is its first track; an album's own tracks (`where album ...`) come in track order, so the first is the album's first track. */
 static char *pq_filter(char *out, const char *sql) {
     static const char tbl[] = " from songtable", sel[] = "select ";
-    unsigned i, n, m = sizeof pq_head - 1, len;
+    unsigned i, n, m = sizeof pq_head - 1, t, len;
+    const char *tail, *rest;
     if (!sql) return 0;
     for (i = 0; i < sizeof sel - 1; ++i)
         if (sql[i] != sel[i]) return 0;
@@ -1173,10 +1191,15 @@ static char *pq_filter(char *out, const char *sql) {
     }
     if (!sql[n]) return 0;
     len = pm_len(sql);
-    if (len - (sizeof tbl - 1) + m + 1 > PQ_BUF) return 0;
+    if (len - (sizeof tbl - 1) + m + sizeof pq_last > PQ_BUF)
+        return 0; /* fits with the longest tail (its size counts the NUL) */
+    rest = sql + n + sizeof tbl - 1;
+    tail = pq_find(rest, "group by album") ? pq_last : pq_find(rest, " where album") ? pq_first : ")";
+    t = pm_len(tail);
     memcpy(out, sql, n);
     memcpy(out + n, pq_head, m);
-    memcpy(out + n + m, sql + n + sizeof tbl - 1, len - n - (sizeof tbl - 1) + 1);
+    memcpy(out + n + m, tail, t);
+    memcpy(out + n + m + t, sql + n + sizeof tbl - 1, len - n - (sizeof tbl - 1) + 1);
     return out;
 }
 

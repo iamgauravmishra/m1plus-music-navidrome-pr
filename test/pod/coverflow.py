@@ -940,7 +940,7 @@ def rebuild_tests(ctx):
     s = build_state(m)
     expect(v == 0 and count_of(m, 'pthread_create') == 1 and s['running'] == 1 and s['mode'] == 1 and s['total'] == 3,
            f'a complete cache is rebuilt: one worker, CC_REBUILD, three jobs ({s})')
-    expect(build_jobs(m) == [(f'/mnt/mmc/m/{i}/1.flac', int(os.path.basename(p)[:8], 16)) for i, p in enumerate(cache_paths(m, 3))],
+    expect(build_jobs(m) == [(f'/mnt/mmc/m/{i}/1.flac', int(os.path.basename(p)[1:9], 16)) for i, p in enumerate(cache_paths(m, 3))],
            'one job per album, in the shelf order')
     expect(('widget_set_visible', m.widgets['btn_cancel'], 1) in m.calls and ('widget_set_tr_text', m.widgets['label_status'], 'Preparing covers...') in m.calls
            and 'view' not in [c[0] for c in m.calls], 'the Preparing screen with Cancel is shown, not the covers')

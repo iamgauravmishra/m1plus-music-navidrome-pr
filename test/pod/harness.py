@@ -122,8 +122,8 @@ CF_FRAME_Y, CF_ALBUM_Y, CF_ALBUM_H, CF_ARTIST_Y, CF_ARTIST_H = pod_ui.cover_layo
 
 
 def art_file(key):
-    """The thumbnail cache file of an album key: <key>-168.jpg (the size is in the name)."""
-    return f'/mnt/mmc/.m1plus/covers/{key:08x}-{O["ART_SIZE"]}.jpg'
+    """The thumbnail cache file of an album key: f<key>-168.jpg (the size is in the name)."""
+    return f'/mnt/mmc/.m1plus/covers/f{key:08x}-{O["ART_SIZE"]}.jpg'
 REC_SIZE = 0x58
 
 

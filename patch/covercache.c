@@ -2,7 +2,7 @@
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE). The cache design follows q2-pod's Cover Flow.
  *
- * One JPEG per album, /mnt/mmc/.m1plus/covers/<key>-168.jpg, written by the one worker thread below (started by
+ * One JPEG per album, /mnt/mmc/.m1plus/covers/f<key>-168.jpg, written by the one worker thread below (started by
  * Cover Flow's Preparing screen, its Rebuild Covers, or the Albums page in the background); key = FNV-1a of the artist then the album, so the same album has the same file
  * wherever it is listed. Readers decode through the stock image loader (JPEG and PNG to RGBA8888) and
  * reduce the centred square to the size they draw: nearest for Cover Flow's depth textures, an area
@@ -114,10 +114,11 @@ unsigned cc_key_of(const char *artist, const char *album) {
 
 unsigned cc_album_key(void *r) { return cc_key_of(cc_str(r, REC_ARTIST), cc_str(r, REC_ALBUM)); }
 
-/* ART_DIR/<key>-168.jpg<suffix>: the cache files carry their size, so the 140 px files of the earlier
- * builds are never scaled up. out holds at least 64 bytes. */
+/* ART_DIR/f<key>-168.jpg<suffix>: the cache files carry their size, so the 140 px files of the earlier
+ * builds are never scaled up, and the leading f marks the covers made from an album's first track (the files without it are of whichever
+ * track the library query gave, never read again). out holds at least 64 bytes. */
 char *cc_path(char *out, unsigned size, unsigned key, const char *suffix) {
-    snprintf(out, size, ART_DIR "/%08x-" CF_STR(ART_SIZE) ".jpg%s", key, suffix);
+    snprintf(out, size, ART_DIR "/f%08x-" CF_STR(ART_SIZE) ".jpg%s", key, suffix);
     return out;
 }
 
