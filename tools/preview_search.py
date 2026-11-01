@@ -120,12 +120,36 @@ def draw_rows(s, im, rows, bottom):
 
 
 O_TITLE_Y, O_SUB_Y = 7, 33   # offsets.inc LIST_TITLE_Y, LIST_SUB_Y
+O_TITLE_H, O_SUB_H = 24, 20  # LIST_TITLE_H, LIST_SUB_H
+RECENT = ('taylor swift', 'blue in green', 'miles davis', '周杰伦', 'a rather long search that does not fit its room')
 
 
-def screen(s, t, kb, text, rows, chip, keyboard=True, hint='Search', page='abc', held=None, sx=0):
+def draw_recent(s, im, recents, bottom):
+    """The empty state with a history: the header, then a row each (the query, an x), a hairline under every row (patch/search.c se_paint_recent)."""
+    top = BAR + D['SE_LIST_Y']
+    room = D['SE_REC_TEXT_END'] - D['SE_REC_TEXT_X']
+    def paint(d, k):
+        for i in range(len(recents)):
+            y = top + D['SE_REC_HEAD_H'] + i * D['SE_REC_ROW_H']
+            if y + D['SE_REC_ROW_H'] > BAR + bottom: break
+            cx, cy, r = D['SE_REC_X_C'], y + D['SE_REC_ROW_H'] / 2, 4.5
+            for a, b in (((-r, -r), (r, r)), ((r, -r), (-r, r))):
+                d.line(k(cx + a[0], cy + a[1], cx + b[0], cy + b[1]), fill=rgb(PS.CHEV_RGB) + (255,), width=int(1.75 * SS))
+            d.line(k(D['SE_REC_TEXT_X'], y + D['SE_REC_ROW_H'] - 1, D['SE_SEP_END'], y + D['SE_REC_ROW_H'] - 1), fill=(0x22, 0x22, 0x22, 255), width=SS)
+    im.alpha_composite(PKV.layer(paint))
+    s.text(im, D['SE_REC_TEXT_X'], top + D['SE_REC_HEAD_H'] - O_SUB_H - 6 + O_SUB_H / 2, s.clip(s.strings.get('Recently Searched', 'Recently Searched'), 18, room), 18, rgb(PS.SUB_RGB))
+    for i, q in enumerate(recents):
+        y = top + D['SE_REC_HEAD_H'] + i * D['SE_REC_ROW_H']
+        if y + D['SE_REC_ROW_H'] > BAR + bottom: break
+        s.text(im, D['SE_REC_TEXT_X'], y + (D['SE_REC_ROW_H'] - O_TITLE_H) / 2 + O_TITLE_H / 2, s.clip(q, 21, room), 21)
+
+
+def screen(s, t, kb, text, rows, chip, keyboard=True, hint='Search', page='abc', held=None, sx=0, recents=()):
     im = Image.new('RGBA', (W, H), (0, 0, 0, 255))
     PI.status_bar(s, im)
-    draw_rows(s, im, rows, D['SE_LIST_Y'] + D['SE_LIST_H'] if not keyboard else 450 - PK.KB_H)
+    bottom = D['SE_LIST_Y'] + D['SE_LIST_H'] if not keyboard else 450 - PK.KB_H
+    draw_rows(s, im, rows, bottom)
+    if recents: draw_recent(s, im, recents, bottom)
     draw_top(s, t, im, text, hint, keyboard, chip, sx)
     if keyboard: PKV.keyboard(kb, im, page, held)
     return im
@@ -140,6 +164,7 @@ def main():
     panels = [('top', 'Top Results, keyboard up (typing "taylor")', screen(s, t, kb, 'taylor', TOP, 0, True, page='abc', held='r')),
               ('albums', 'Albums chip, keyboard hidden', screen(s, t, kb, 'blue', ALBUMS, 2, False)),
               ('empty', 'Empty state: the page as it opens', screen(s, t, kb, '', [], 0, True, page='ABC')),
+              ('recent', 'Empty state with recent searches (keyboard hidden)', screen(s, t, kb, '', [], 0, False, recents=RECENT)),
               ('songs', 'Songs chip (the chip row scrolled)', screen(s, t, kb, 'blue', SONGS, 3, False, sx=120))]
     base, ext = os.path.splitext(a.out)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)

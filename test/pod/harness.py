@@ -161,6 +161,7 @@ class Machine:
         self.next = SCRATCH
         self.heap = HEAP
         self.calls = []
+        self.py_log = []            # the engine's calls over the machine's life (call() clears calls): im_open_decoder, im_close_decoder, py_lemma_id (char), py_splids (char)
         self.strings = {}           # the language's table for the mocked locale_info_tr: key -> text (none: English, the key itself)
         self.bound = {}             # (widget, event) -> (handler, ctx): the latest widget_on, whatever call it was in
         self.present = set()        # paths access() finds
@@ -933,10 +934,20 @@ class Machine:
             self.calls.append(('stock_init_resume', a0, a1)); ret = self.init_ret
         # ---- the keyboard's Chinese layer (patch/keyboard.c): stock's ime_pinyin open and close, scripted for the ways opening fails (the real engine runs, see test/pod/pinyin.py Engine)
         elif name == 'im_open_decoder':
-            self.calls.append(('im_open_decoder', self.read_cstr(a0), self.read_cstr(a1)))
-            ret = int(self.py_open_ok); eng = self.alloc(0x30d8); self.u.mem_write(eng, bytes([ret])); self.setword(pod.DATA['PY_ENGINE'][0], eng)   # a failed open leaves an object that is not initialised, as stock's
+            self.calls.append(('im_open_decoder', self.read_cstr(a0), self.read_cstr(a1))); self.py_log.append(('im_open_decoder',))
+            ret = int(self.py_open_ok); eng = self.alloc(0x30d8); self.u.mem_write(eng, bytes([ret])); self.setword(pod.DATA['PY_ENGINE'][0], eng)
+            trie = self.alloc(16); self.setword(eng + 0xc, trie); self.setword(trie + 4, self.PY_DL); self.setword(trie + 8, self.PY_SPT)   # MatrixSearch +0xc the DictTrie, its +4 the DictList, +8 the SpellingTrie   # a failed open leaves an object that is not initialised, as stock's
+        elif name == 'py_lemma_id':   # DictList::get_lemma_id(this, char16 *, len): 0 for a character the dictionary does not have
+            ch = chr(struct.unpack('<H', bytes(self.u.mem_read(a1, 2)))[0]); self.py_log.append(('py_lemma_id', ch)); ret = int(ch in self.py_dict)
+        elif name == 'py_splids':   # get_splids_for_hanzi(this, hanzi, half, out, max): the character's readings as ids into py_spellings; a character that is not in the dictionary crashes
+            ch = chr(a1 & 0xffff); assert ch in self.py_dict, f'get_splids_for_hanzi called for {ch!r}, not in the dictionary'
+            ids = [self.py_ids.setdefault(s, len(self.py_ids) + 1) for s in self.py_dict[ch]][:stack(0)]; self.py_log.append(('py_splids', ch))
+            self.u.mem_write(a3, struct.pack('<%dH' % len(ids), *ids)); ret = len(ids)
+        elif name == 'py_spelling':   # SpellingTrie::get_spelling_str(this, id): upper case with a capital-and-lower head (ZhOU)
+            s = next(k for k, v in self.py_ids.items() if v == (a1 & 0xffff)); t = s[0].upper() + (s[1] if s[:2] in ('zh', 'ch', 'sh') else '') + s[2 if s[:2] in ('zh', 'ch', 'sh') else 1:].upper()
+            ret = self.cstr(t)
         elif name == 'im_close_decoder':
-            self.calls.append(('im_close_decoder',)); self.setword(pod.DATA['PY_ENGINE'][0], 0)
+            self.calls.append(('im_close_decoder',)); self.py_log.append(('im_close_decoder',)); self.setword(pod.DATA['PY_ENGINE'][0], 0)
         # ---- libcurl's easy interface, the Wi-Fi level and worker threads (patch/pcnet.c)
         elif name == 'get_wifisignal':
             ret = self.wifi; self.calls.append(('get_wifisignal',))
@@ -1042,6 +1053,9 @@ class Machine:
     seed = 12345             # toolsRandnum
     wifi = 4                 # stock get_wifisignal: -1 not connected, else the level 2..5
     py_open_ok = True        # im_open_decoder's result (the engine object it leaves is initialised only on success)
+    PY_DL, PY_SPT = 0x7d100001, 0x7d100002   # the scripted DictList and SpellingTrie (patch/search.c's initials): py_dict maps a character to its readings
+    py_dict = {}
+    py_ids = {}
     wall = 1800000000        # time(): the wall clock, seconds (2027-01-15 08:00 UTC); tz: seconds localtime adds
     tz = 0
     clock = 1                # time_now_ms

@@ -55,6 +55,7 @@ ACT_REGEN = 20   # action row (no chevron, like the Shuffle rows): make today's 
 ACT_LIST = 21    # open a stock song list on the Songs page (patch/songs.c songs_open_list; arg = its HOME_* tile, where a window that will not open falls back)
 ACT_IPOD = 22    # open the Pod, the virtual iPod Classic page: a fullscreen window with a touch click wheel (patch/ipod.c ipod_open)
 ACT_PODCASTS = 23   # open the Podcasts page: the shows in /mnt/mmc/Podcasts and their episodes (patch/podcasts.c podcasts_open)
+ACT_SEARCH = 35   # open the library search page (patch/search.c search_open; the stock search_page where ours will not open), the Search item of the menu and Extras
 ACT_KB_EN = 27  # switch row (Settings > Keyboards): English, always on and not switchable (the row's switch is shown on and the row is dimmed)
 ACT_KB_ZH = 28  # switch row (Settings > Keyboards): Chinese (Pinyin), off by default; on gives the on-screen keyboard a language key and the pinyin layer (patch/keyboard.c kb_zh_toggle)
 ACT_CTHEME = 24  # value row: the Cassette Mode theme, Normal, Chrome or Metal; opens its picker page (arg = the page index); the payload shows the saved theme (patch/tape.c tape_theme)
@@ -171,6 +172,8 @@ ITEMS = [   # item id = index; the default order, essentials first (iPod classic
     Row('Pod', ACT_IPOD),
     # Podcasts (docs/modules/podcasts.md): the shows on the card and their episodes; an item like the rest, hidden from the menu by default (on Extras, in Play).
     Row('Podcasts', ACT_PODCASTS),
+    # Search (docs/modules/search.md): the library search page; an item like the rest, hidden from the menu by default (on Extras, in Library).
+    Row('Search', ACT_SEARCH),
 ]
 SETTINGS_ID = 18
 assert ITEMS[SETTINGS_ID].label == 'Settings'
@@ -178,11 +181,11 @@ DEFAULT_MENU = [1, 2, 3, 4, 5]   # the items shown by default, in order (saved s
                                     # among them (the mini player bar of the Home instance opens it, docs/modules/minibar.md), nor are Shuffle and Settings; every other item is on the Extras page,
                                     # grouped (EXTRAS_GROUPS), and Settings > Main Menu can show any of them
 assert all(0 <= i < len(ITEMS) for i in DEFAULT_MENU) and len(set(DEFAULT_MENU)) == len(DEFAULT_MENU)
-ID_CHARS = '012345678abcdefghijkl'   # the saved list's character for each item id: '0'..'8' the first nine, 'a'..'i' the nine Extras tiles, 'j' Settings, 'k' the Pod, 'l' Podcasts
+ID_CHARS = '012345678abcdefghijklm'   # the saved list's character for each item id: '0'..'8' the first nine, 'a'..'i' the nine Extras tiles, 'j' Settings, 'k' the Pod, 'l' Podcasts, 'm' Search
 assert len(ID_CHARS) == len(ITEMS)
 OFF_CHAR = '-'           # the saved list's separator: the item characters after it are turned off (not listed on the Extras page); at most once
 DEFAULT_OFF = []         # no item is turned off by default
-MENU_FILE_MAX = 24       # patch/menu.c reads at most this many bytes of the saved list (21 item characters at most in both parts together, the '-' and a newline); longer is invalid
+MENU_FILE_MAX = 25       # patch/menu.c reads at most this many bytes of the saved list (22 item characters at most in both parts together, the '-' and a newline); longer is invalid
 MENU = Page('m1plus_menu', 'm1plus_menu_page', 'M1+ Music', rows=ITEMS + [
     Row('Extras', ACT_PAGE, EXTRAS_PAGE_INDEX),   # always shown, always last
 ])
@@ -316,7 +319,7 @@ MENUCFG_PAGE = Page('m1plus_mainmenu', 'm1plus_mainmenu_page', 'Main Menu', kind
 # views, the song collections, the tools. Settings is in none: it is the Extras page's navbar button.
 EXTRAS_GROUPS = (
     ('Play', ('Now Playing', 'Shuffle', 'Pod')),
-    ('Library', ('Albums', 'Artists', 'Songs', 'Playlists', 'Cover Flow', 'Genres', 'Composers', 'Folders', 'Podcasts')),
+    ('Library', ('Albums', 'Artists', 'Songs', 'Playlists', 'Cover Flow', 'Genres', 'Composers', 'Folders', 'Podcasts', 'Search')),
     ('Collections', ('Favorites', 'Recently Played', 'Recently Added', 'Most Played', 'Hi-Res')),
     ('Tools', ('Update Library', 'CD Ripper', 'Tidal')),
 )

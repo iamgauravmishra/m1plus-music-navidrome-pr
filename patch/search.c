@@ -15,7 +15,7 @@
  *   matching  the query is folded (case, Latin diacritics, hiragana / katakana, half / full width) and split at spaces into at most SE_TERMS terms; a record matches when every term is a substring of
  *             its folded key (song: title, artist, album; album: album, artist; artist and playlist: the name), in any order. The matches of each type are kept in library order with their quality
  *             (0 the name is the whole query, 1 it starts with the first term, 2 otherwise). A query that extends the previous one (its folding starts with it) can only match what matched
- *             before, so only those are tested; anything else scans the library. se_key builds one key per record: a pinyin initials key would be a second array se_test is run on.
+ *             before, so only those are tested; anything else scans the library. se_key builds one key per record; a record with Chinese characters has a second, the initials of the characters' readings (the engine's dictionary, held open for the page's life), tested the same way.
  *   rows      Top Results: the best quality first, in each quality artists, albums, playlists, songs, SE_CAP_TOP rows; a type chip: that type's matches, best quality first, up to its cap.
  *   touch     a tap on a row: an artist opens Cover Flow (coverflow_artist), an album our album page (cc_open_album), a playlist our Songs page, a song plays the library in its order from it.
  *             Dragging the list hides the keyboard, a tap on the field shows it, the keyboard's action key hides it, Back (the X or the hardware key) leaves.
@@ -29,6 +29,7 @@
 #include "azlist.h"
 #include "keyboard.h"
 #include "search.h"
+#include "home.h"
 #include "i18n.h"
 
 extern int coverflow_artist(void *artists, unsigned index, unsigned scope); /* patch/coverflow.c */
@@ -42,6 +43,11 @@ extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message b
 #define SE_KEY 160 /* code points of a record's key (a longer one is cut) */
 #define SE_TILES 16 /* thumbnails kept per kind of shape: the rows in view, two beyond and the history */
 #define SE_DRAG 6 /* px a finger moves on the chips before it is a scroll */
+#define SE_HZ0 0x4e00u /* the characters whose reading is kept: U+4E00 .. U+9FFF */
+#define SE_HZN 0x5200u
+#define SE_PAL 254 /* distinct sets of initials (one per reading set: 26 single letters first) */
+#define SE_MASK \
+    0x80000000u /* a key entry with this bit is a set of initials (bit 0 'a' .. bit 25 'z'), not a code point */
 
 enum { SE_ARTIST, SE_ALBUM, SE_SONG, SE_PLAYLIST, SE_KINDS };
 enum { CH_TOP, CH_ARTISTS, CH_ALBUMS, CH_SONGS, CH_PLAYLISTS };
@@ -81,6 +87,15 @@ static struct {
     unsigned timer;
     void *chev;
     grid_t ga, gb; /* the thumbnails: artists (round), the others (corners) */
+    int py, seen,
+        npal; /* the engine is held; a hanzi-range character went into the key being built; palette entries in use */
+    unsigned pal[SE_PAL];
+    unsigned char *hz; /* SE_HZN bytes, per character: 0 not asked, 1 no reading, else the palette index + 2 */
+    char rec[SE_REC_MAX][SE_QMAX]; /* the recent searches, newest first */
+    int nrec, rm, dx; /* how many; the list shows them (empty state); the x zone of the press */
+    int hitx; /* set by se_item_of: the touch is in the x zone */
+    void *cross;
+    grid_tile_t rt[SE_REC_MAX + 1]; /* the texts of the rows, then the header */
 } se __attribute__((section(".scratch")));
 
 static void se_show(void *w, int on) {
@@ -292,11 +307,57 @@ static unsigned se_cp(unsigned c, unsigned *o) {
     return 1;
 }
 
-/* The folded s, appended to out[n ..] after a ' ' when n > 0 (a term never has a space, so a match cannot straddle two fields); at most max code points and a 0 in out[max]. The new n. */
-static unsigned se_cat(const char *s, unsigned *out, unsigned n, unsigned max) {
+/* The initials of a character's readings as a set (bit 0 'a' .. bit 25 'z'), as a hz[] byte: 0 when the engine is not there (asked again), 1 for a character without a reading. The engine is the
+ * keyboard's Chinese layer's (docs/modules/keyboard.md "Hanzi to pinyin"): MatrixSearch +0xc is the DictTrie, its +4 the DictList, its +8 the SpellingTrie. get_splids_for_hanzi crashes for a character
+ * that is not in the dictionary, so get_lemma_id (0: not) is asked first. Every reading counts (行: h and x); a spelling's first letter is its initial (Zh, Ch, Sh are z, c, s). */
+static unsigned char se_read_hanzi(unsigned c) {
+    void *eng = *(void *volatile *)PY_ENGINE, *trie, *dl, *spt;
+    unsigned short ch = (unsigned short)c, ids[8];
+    unsigned m = 0, first = 0, n, i;
+    if (!eng || !*(volatile unsigned char *)eng || !(trie = ((void **)eng)[3]) || !(dl = ((void **)trie)[1]) ||
+        !(spt = ((void **)trie)[2]))
+        return 0;
+    if (!py_lemma_id(dl, &ch, 1)) return 1;
+    n = py_splids(dl, ch, 0, ids, 8);
+    for (i = 0; i < n && i < 8; ++i) {
+        const char *s = py_spelling(spt, ids[i]);
+        unsigned l = s ? (unsigned char)s[0] | 0x20u : 0;
+        if (l < 'a' || l > 'z') continue;
+        m |= 1u << (l - 'a');
+        if (!first) first = 1u << (l - 'a');
+    }
+    if (!m) return 1;
+    for (i = 0; i < (unsigned)se.npal; ++i)
+        if (se.pal[i] == m) return (unsigned char)(i + 2);
+    if (se.npal < SE_PAL) return se.pal[se.npal] = m, (unsigned char)(se.npal++ + 2);
+    for (i = 0; se.pal[i] != first;
+         ++i) { /* the palette is full: the first reading's letter (the 26 single letters are the first entries) */
+    }
+    return (unsigned char)(i + 2);
+}
+
+/* The set of initials of character c, 0 when it has none or the engine is not held. */
+static unsigned se_hanzi(unsigned c) {
+    unsigned char *e;
+    if (!se.py || c < SE_HZ0 || c >= SE_HZ0 + SE_HZN) return 0;
+    e = &se.hz[c - SE_HZ0];
+    if (!*e) *e = se_read_hanzi(c);
+    return *e > 1 ? se.pal[*e - 2] : 0;
+}
+
+/* The folded s, appended to out[n ..] after a ' ' when n > 0 (a term never has a space, so a match cannot straddle two fields); at most max code points and a 0 in out[max]. The new n.
+ * se.seen is set when a character of the hanzi range went in. With py a character that has readings is its set of initials (SE_MASK | bits). */
+static unsigned se_cat(const char *s, unsigned *out, unsigned n, unsigned max, int py) {
     unsigned c, o[2], k, i, w;
     if (n && n < max) out[n++] = ' ';
     while (n + 2 <= max && (c = se_next(&s))) {
+        if (c - SE_HZ0 < SE_HZN) {
+            se.seen = 1;
+            if (py && (w = se_hanzi(c))) {
+                out[n++] = SE_MASK | w;
+                continue;
+            }
+        }
         k = se_cp(c, o);
         for (i = 0; i < k; ++i) {
             if (o[i] == 0x3099 || o[i] == 0x309a) {
@@ -312,7 +373,7 @@ static unsigned se_cat(const char *s, unsigned *out, unsigned n, unsigned max) {
 
 /* The folded text alone (a query). External so that the compiler keeps its general form: test/pod/search.py calls it with texts and room of its own. */
 __attribute__((noinline)) unsigned se_fold(const char *s, unsigned *out, unsigned max) {
-    return se_cat(s, out, 0, max);
+    return se_cat(s, out, 0, max, 0);
 }
 
 /* ---------------------------------------------------------------------------
@@ -321,7 +382,9 @@ __attribute__((noinline)) unsigned se_fold(const char *s, unsigned *out, unsigne
 static int se_find(const unsigned *key, unsigned n, const unsigned *t, unsigned tn) {
     unsigned i, j;
     for (i = 0; i + tn <= n; ++i) {
-        for (j = 0; j < tn && key[i + j] == t[j]; ++j) {
+        for (j = 0; j < tn; ++j) {
+            unsigned k = key[i + j], d = t[j] - 'a'; /* a set of initials holds the letter when its bit is set */
+            if (k != t[j] && !(k >= SE_MASK && d < 26 && (k >> d & 1))) break;
         }
         if (j == tn) return (int)i;
     }
@@ -361,7 +424,7 @@ static int se_exact(const unsigned *key, unsigned pn) {
 }
 
 /* Does the key (n code points, its first field pn long) hold every term? -1 no; else the quality: 0 the first field is the whole query, 1 the key starts with the first term (a title that
- * begins with what was typed), 2 otherwise. A second key of a record (a pinyin initials index) would be one more call of this with its own array, the best quality of the two kept. */
+ * begins with what was typed), 2 otherwise. A record's initials key (SE_MASK entries) is one more call of this on its own array (se_search), the better quality of the two kept. */
 static int se_test(const unsigned *key, unsigned n, unsigned pn) {
     int t, pos, prefix = 0;
     if (!se.nterms) return -1;
@@ -374,18 +437,19 @@ static int se_test(const unsigned *key, unsigned n, unsigned pn) {
     return se_exact(key, pn) ? 0 : 1;
 }
 
-/* The key of a record of a kind: its fields in order, folded; *pn the length of the first one (the name). The title of a song falls back to its file name. */
-static unsigned se_key(void *rec, int kind, unsigned *key, unsigned *pn) {
+/* The key of a record of a kind: its fields in order, folded (with py: the characters with readings as their initials); *pn the length of the first one (the name). The title of a song falls
+ * back to its file name. */
+static unsigned se_key(void *rec, int kind, unsigned *key, unsigned *pn, int py) {
     unsigned n;
-    if (kind == SE_ARTIST || kind == SE_PLAYLIST) return *pn = se_cat(cc_str(rec, REC_TITLE), key, 0, SE_KEY);
+    if (kind == SE_ARTIST || kind == SE_PLAYLIST) return *pn = se_cat(cc_str(rec, REC_TITLE), key, 0, SE_KEY, py);
     if (kind == SE_ALBUM) {
         const char *al = cc_str(rec, REC_ALBUM);
-        n = *pn = se_cat(*al ? al : cc_str(rec, REC_TITLE), key, 0, SE_KEY);
-        return se_cat(cc_str(rec, REC_ARTIST), key, n, SE_KEY);
+        n = *pn = se_cat(*al ? al : cc_str(rec, REC_TITLE), key, 0, SE_KEY, py);
+        return se_cat(cc_str(rec, REC_ARTIST), key, n, SE_KEY, py);
     }
-    n = *pn = se_cat(*cc_str(rec, REC_TITLE) ? cc_str(rec, REC_TITLE) : cc_str(rec, REC_NAME), key, 0, SE_KEY);
-    n = se_cat(cc_str(rec, REC_ARTIST), key, n, SE_KEY);
-    return se_cat(cc_str(rec, REC_ALBUM), key, n, SE_KEY);
+    n = *pn = se_cat(*cc_str(rec, REC_TITLE) ? cc_str(rec, REC_TITLE) : cc_str(rec, REC_NAME), key, 0, SE_KEY, py);
+    n = se_cat(cc_str(rec, REC_ARTIST), key, n, SE_KEY, py);
+    return se_cat(cc_str(rec, REC_ALBUM), key, n, SE_KEY, py);
 }
 
 /* ---------------------------------------------------------------------------
@@ -416,6 +480,13 @@ static void se_load(void) {
     void *list;
     int k;
     se_free_data();
+    if (!se.py &&
+        pinyin_hold() == 0) { /* the engine's dictionary for the initials; without it the search just has none */
+        if (!(se.hz = calloc(SE_HZN, 1))) pinyin_release();
+        se.py = se.hz != (unsigned char *)0;
+        for (k = 0; k < 26; ++k) se.pal[k] = 1u << k;
+        se.npal = 26;
+    }
     if (loadLocalClassList(CLASS_ARTISTS) > 0 && (list = *(void **)PDEQ_SHOWLIST) != (void *)0 && deque_size(list))
         se.lists[SE_ARTIST] = cc_copy_list(list);
     se.lists[SE_ALBUM] = cc_albums();
@@ -442,7 +513,7 @@ static void se_load(void) {
  * is written at or before where it was read). Otherwise the whole list is. */
 static void se_search(void) {
     int k, ext = se.have_prev && se.pn > 0 && se.nq >= se.pn;
-    unsigned i, key[SE_KEY + 2], pn, kn;
+    unsigned i, key[SE_KEY + 2], key2[SE_KEY + 2], pn, kn;
     for (i = 0; ext && i < (unsigned)se.pn; ++i)
         if (se.q[i] != se.pq[i]) ext = 0;
     for (k = 0; k < SE_KINDS; ++k) {
@@ -459,8 +530,18 @@ static void se_search(void) {
             int tier;
             if ((k == SE_ARTIST || k == SE_ALBUM) && *(int *)((char *)rec + REC_ID) == -1)
                 continue; /* "Unknown Artist" / "Unknown Album" */
-            kn = se_key(rec, k, key, &pn);
+            se.seen = 0;
+            kn = se_key(rec, k, key, &pn, 0);
             tier = se_test(key, kn, pn);
+            if (se.py && se.seen &&
+                (tier < 0 ||
+                 tier ==
+                     2)) { /* a record with Chinese characters: its initials can only improve a match that is not a prefix (an initials match is never exact) */
+                int t2;
+                kn = se_key(rec, k, key2, &pn, 1);
+                t2 = se_test(key2, kn, pn);
+                if (t2 >= 0 && (tier < 0 || t2 < tier)) tier = t2;
+            }
             if (tier >= 0) se.cand[k][w] = idx, se.sc[k][w++] = (unsigned char)tier;
         }
         se.nc[k] = w;
@@ -504,15 +585,115 @@ static void se_build(void) {
     se_grids_reset();
 }
 
-/* The content: the rows, then the air under them, or the keyboard's height while it is up (the list scrolls clear of it); the list or "No Results" shows. */
+/* ---------------------------------------------------------------------------
+ * Recent searches: the last SE_REC_MAX queries the user committed to (a result tapped, the action key), newest first, in SEARCH_RECENT_FILE (one UTF-8 line each).
+ * The empty state lists them under a header; a tap on one searches it, a tap on its x removes it.
+ */
+static unsigned se_rec_fold(const char *t, unsigned *f) { return se_fold(t, f, SE_QMAX); }
+
+/* The index of the entry that folds as t, or -1. */
+static int se_rec_find(const char *t) {
+    unsigned f[SE_QMAX + 2], g[SE_QMAX + 2], n = se_rec_fold(t, f), i, j;
+    for (i = 0; i < (unsigned)se.nrec; ++i) {
+        if (se_rec_fold(se.rec[i], g) != n) continue;
+        for (j = 0; j < n && f[j] == g[j]; ++j) {
+        }
+        if (j == n) return (int)i;
+    }
+    return -1;
+}
+
+static void se_rec_prep(void) { /* the rows' texts (cut to their width when first painted) and the header's */
+    int i;
+    memset(se.rt, 0, sizeof se.rt);
+    for (i = 0; i < se.nrec; ++i) grid_set(&se.rt[i], se.rec[i], "", 0);
+    grid_set(&se.rt[SE_REC_MAX], "", TR("Recently Searched"), 0);
+}
+
+static void se_rec_save(void) {
+    char buf[SE_REC_MAX * SE_QMAX + 1];
+    unsigned k = 0, n;
+    int i;
+    for (i = 0; i < se.nrec; ++i) {
+        for (n = 0; se.rec[i][n]; ++n) {
+        }
+        memcpy(buf + k, se.rec[i], n);
+        k += n;
+        buf[k++] = '\n';
+    }
+    buf[k] = 0;
+    home_write_atomic(SEARCH_RECENT_FILE, SEARCH_RECENT_TMP, buf);
+}
+
+/* The file into se.rec; anything malformed (too long, a line too long, empty or control characters, a repeat, too many lines) is no history at all. */
+static void se_rec_load(void) {
+    char buf[SE_REC_MAX * SE_QMAX + 2];
+    int fd, n, p = 0;
+    se.nrec = 0;
+    fd = open(SEARCH_RECENT_FILE, 0, 0);
+    if (fd >= 0) {
+        n = read(fd, buf, sizeof buf);
+        close(fd);
+        while (n > 0 && n < (int)sizeof buf && p < n) {
+            int e = p, i;
+            while (e < n && buf[e] != '\n') ++e;
+            if (e == p || e - p >= SE_QMAX || se.nrec == SE_REC_MAX) goto bad;
+            for (i = p; i < e; ++i)
+                if ((unsigned char)buf[i] < 0x20) goto bad;
+            memcpy(se.rec[se.nrec], buf + p, (unsigned)(e - p));
+            se.rec[se.nrec][e - p] = 0;
+            if (se_rec_find(se.rec[se.nrec]) >= 0) goto bad;
+            se.nrec++;
+            p = e + 1;
+        }
+        if (n >= (int)sizeof buf) goto bad;
+    }
+    se_rec_prep();
+    return;
+bad:
+    se.nrec = 0;
+    se_rec_prep();
+}
+
+/* A query the user committed to: trimmed, at the top (an entry that folds the same moves there), the file written only when the list changed. */
+static void se_rec_add(const char *text) {
+    char t[SE_QMAX];
+    unsigned n = 0;
+    int i, at;
+    while (*text == ' ' || *text == '\t') ++text;
+    while (text[n]) ++n;
+    while (n && (text[n - 1] == ' ' || text[n - 1] == '\t')) --n;
+    if (!n || n >= SE_QMAX) return;
+    memcpy(t, text, n);
+    t[n] = 0;
+    at = se_rec_find(t);
+    if (at == 0 && !strcmp(se.rec[0], t)) return;
+    if (at < 0) at = se.nrec < SE_REC_MAX ? se.nrec++ : SE_REC_MAX - 1;
+    for (i = at; i > 0; --i) memcpy(se.rec[i], se.rec[i - 1], SE_QMAX);
+    memcpy(se.rec[0], t, n + 1);
+    se_rec_save();
+    se_rec_prep();
+}
+
+static void se_rec_remove(int at) {
+    int i;
+    for (i = at; i + 1 < se.nrec; ++i) memcpy(se.rec[i], se.rec[i + 1], SE_QMAX);
+    se.nrec--;
+    se_rec_save();
+    se_rec_prep();
+}
+
+/* The content: the rows, then the air under them, or the keyboard's height while it is up (the list scrolls clear of it); the list or "No Results" shows.
+ * With no query and a history the content is the recent searches instead (se.rm). */
 static void se_layout(void) {
     int pad = keyboard_shown() ? KB_H : SE_BOTTOM, h, off = se_off();
-    se.content = se.nrows * SE_ROW_H + pad;
+    se.rm = se.nterms == 0 && se.nrows == 0 && se.nrec != 0;
+    se.content = se.rm ? SE_REC_HEAD_H + se.nrec * SE_REC_ROW_H + pad : se.nrows * SE_ROW_H + pad;
     h = se.content < SE_LIST_H ? SE_LIST_H : se.content;
     widget_resize(se.view, 320, h);
     widget_set_prop_int(se.sv, "virtual_h", h);
     if (off > h - SE_LIST_H) widget_set_prop_int(se.sv, "yoffset", h - SE_LIST_H);
-    se_show(se.list, se.nrows != 0);
+    se_show(se.list, se.nrows != 0 || se.rm);
     se_show(se.status, se.nrows == 0 && se.nterms != 0);
     if (se.nrows == 0 && se.nterms != 0) widget_set_tr_text(se.status, "No Results");
 }
@@ -632,11 +813,46 @@ static void se_paint_rows(void *canvas) {
     }
 }
 
+/* The recent searches: the header, then a row each (the query, an x on the right), a hairline under every row. */
+static void se_paint_recent(void *canvas) {
+    int i, off = se_off(), pass;
+    for (i = 0; i < se.nrec; ++i) {
+        int y = SE_REC_HEAD_H + i * SE_REC_ROW_H - off;
+        if (se.press == i + 1) az_fill(canvas, 0, y, y + SE_REC_ROW_H - 1, 320, LIST_PRESS);
+        az_fill(canvas, SE_REC_TEXT_X, y + SE_REC_ROW_H - 1, y + SE_REC_ROW_H, SE_SEP_END - SE_REC_TEXT_X, LIST_HAIR);
+        if (se.cross) {
+            int src[4], dst[4], top = y + (SE_REC_ROW_H - POD_CROSS) / 2;
+            if (top >= 0 && top + POD_CROSS <= SE_LIST_H) {
+                src[0] = src[1] = 0, src[2] = src[3] = POD_CROSS;
+                dst[0] = SE_REC_X_C - POD_CROSS / 2, dst[1] = top, dst[2] = dst[3] = POD_CROSS;
+                canvas_draw_image(canvas, se.cross, src, dst);
+            }
+        }
+    }
+    for (pass = 0; pass < 2; ++pass) { /* the queries in the title style, then the header in the grey one */
+        widget_prepare_text_style(pass ? se.st_sub : se.st_title, canvas);
+        if (pass)
+            grid_text(canvas, &se.rt[SE_REC_MAX], 1, SE_REC_TEXT_X, SE_REC_HEAD_H - LIST_SUB_H - 6 - off,
+                      SE_REC_TEXT_END - SE_REC_TEXT_X, LIST_SUB_H, SE_LIST_H);
+        else
+            for (i = 0; i < se.nrec; ++i)
+                grid_text(canvas, &se.rt[i], 0, SE_REC_TEXT_X,
+                          SE_REC_HEAD_H + i * SE_REC_ROW_H + (SE_REC_ROW_H - LIST_TITLE_H) / 2 - off,
+                          SE_REC_TEXT_END - SE_REC_TEXT_X, LIST_TITLE_H, SE_LIST_H);
+    }
+}
+
 static int se_on_paint(void *ctx, void *e) {
     void *canvas = e ? *(void **)((char *)e + EVENT_PAINT_CANVAS) : (void *)0;
     int off = se_off();
     grid_t *g;
     (void)ctx;
+    if (canvas && se.view && se.rm) {
+        I(canvas, CANVAS_OY) += off;
+        se_paint_recent(canvas);
+        I(canvas, CANVAS_OY) -= off;
+        return RET_OK;
+    }
     if (!canvas || !se.view || !se.rows || !se.nrows) return RET_OK;
     if (!se_valid()) { /* another query replaced the stock song list: nothing of it is read; the timer reads it again */
         if (!se.wait) se.wait = 1;
@@ -752,12 +968,19 @@ static int se_on_chips(void *ctx, void *e) {
 /* ---------------------------------------------------------------------------
  * Touch: a press remembers its row, a drag takes it back (and puts the keyboard away), a lift within the threshold on the same row acts
  */
-static int se_at(int y) { return y >= 0 && y / SE_ROW_H < se.nrows ? y / SE_ROW_H : -1; }
+static int se_at(int y) {
+    if (se.rm) {
+        y -= SE_REC_HEAD_H;
+        return y >= 0 && y / SE_REC_ROW_H < se.nrec ? y / SE_REC_ROW_H : -1;
+    }
+    return y >= 0 && y / SE_ROW_H < se.nrows ? y / SE_ROW_H : -1;
+}
 
 static int se_item_of(void *e) {
     int pt[2];
     pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
     widget_to_local(se.view, pt);
+    se.hitx = pt[0] >= SE_REC_X && pt[0] < SE_REC_X + SE_REC_X_W;
     return se_at(pt[1]);
 }
 
@@ -802,9 +1025,27 @@ static void se_play(int at) {
 }
 
 /* A tap on a result row (a symbol of its own: the tests call it with a row). */
+/* A tap on a recent search (a symbol of its own: the tests call it): its x removes it; the row searches it now, as if it had been typed. */
+static __attribute__((noinline)) void se_rec_tap(int i, int on_x) {
+    char q[SE_QMAX];
+    if (i < 0 || i >= se.nrec) return;
+    if (on_x) {
+        se_rec_remove(i);
+        se.press = 0;
+        se_layout();
+        se_redraw();
+        return;
+    }
+    memcpy(q, se.rec[i], SE_QMAX);
+    keyboard_set_text(q);
+    se.wait = 0;
+    se_apply();
+}
+
 static __attribute__((noinline)) void se_open_row(int i) {
     void *rec;
     if (i < 0 || i >= se.nrows) return;
+    se_rec_add(se.query);
     switch (se.rows[i].kind) {
     case SE_ARTIST:
         coverflow_artist(se.lists[SE_ARTIST], se.rows[i].idx, CLASS_ARTISTS);
@@ -838,6 +1079,7 @@ static int se_on_down(void *ctx, void *e) {
     se.pressing = 1;
     if (!e || !se.view) return RET_OK;
     a = se_item_of(e);
+    se.dx = se.hitx;
     se.down = a + 1, se.down_x = I(e, PE_X), se.down_y = I(e, PE_Y);
     se_set_press(a + 1);
     return RET_OK;
@@ -850,8 +1092,12 @@ static int se_on_up(void *ctx, void *e) {
     se_set_press(0);
     if (a < 0 || !e || !se.view) return RET_OK;
     if (se_abs(I(e, PE_X) - se.down_x) < SC_DRAG_PX && se_abs(I(e, PE_Y) - se.down_y) < SC_DRAG_PX &&
-        se_item_of(e) == a)
-        se_open_row(a);
+        se_item_of(e) == a && se.hitx == se.dx) {
+        if (se.rm)
+            se_rec_tap(a, se.dx);
+        else
+            se_open_row(a);
+    }
     return RET_OK;
 }
 
@@ -903,7 +1149,10 @@ se_on_text(const char *text) { /* the field's text may have changed: apply it SE
     se_kick();
 }
 
-static void se_on_go(void) { se_kb_hide(); } /* the keyboard's action key */
+static void se_on_go(void) { /* the keyboard's action key: a query is kept as a recent search */
+    se_rec_add(keyboard_text());
+    se_kb_hide();
+}
 
 /* The first row in view (or two beyond) whose tile has no thumbnail yet: its grid and tile; 0 when there is none. */
 static grid_tile_t *se_cover_next(grid_t **gp) {
@@ -962,11 +1211,14 @@ static int se_on_destroy(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     keyboard_detach();
+    if (se.py) pinyin_release(); /* the engine's megabyte goes back with the page */
+    free(se.hz);
     if (se.timer) timer_remove(se.timer);
     se_free_data();
     grid_free(&se.ga);
     grid_free(&se.gb);
     if (se.chev) bitmap_destroy(se.chev);
+    if (se.cross) bitmap_destroy(se.cross);
     free(se.rows);
     memset(&se, 0, sizeof se);
     return RET_OK;
@@ -997,6 +1249,7 @@ int search_open(void) {
     se.st_chip_on = widget_lookup(se.win, "label_chip_on", 1);
     se.rows = calloc(SE_MAX_ROWS, sizeof *se.rows);
     se.chev = pod_make_chevron();
+    se.cross = pod_make_cross();
     if (!se.rows || !se.list || !se.sv || !se.view || !se.status || !se.chips || !se.chl || !se.field || !se.st_title ||
         !se.st_sub || !se.st_chip || !se.st_chip_on || !grid_init(&se.ga, se.win, SE_TILES, SE_ART, SE_ART / 2) ||
         !grid_init(&se.gb, se.win, SE_TILES, SE_ART, SE_ART_R)) {
@@ -1027,6 +1280,7 @@ int search_open(void) {
     se_chip_fx();
     se_show(se.list, 0);
     se_show(se.status, 0);
+    se_rec_load();
     se_layout();
     se.wait = 1; /* the library is read once the page has been shown */
     se_kick();

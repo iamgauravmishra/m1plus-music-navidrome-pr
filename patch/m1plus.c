@@ -42,6 +42,7 @@ enum {
     ACT_IPOD = 22,
     ACT_PODCASTS = 23,
     ACT_CTHEME = 24,
+    ACT_SEARCH = 35,
     ACT_KB_EN = 27,
     ACT_KB_ZH = 28,
     ACT_STOCK = 29,
@@ -58,6 +59,7 @@ extern int albums_open(void); /* patch/albums.c: Albums, our page in the mode us
 extern int playlists_open(void); /* patch/playlists.c: Playlists, a grid of mosaics of each playlist's covers */
 extern int ipod_open(void); /* patch/ipod.c: the virtual iPod Classic, a fullscreen page with a touch click wheel */
 extern int podcasts_open(void); /* patch/podcasts.c: the shows on the card and their episodes */
+extern int search_open(void); /* patch/search.c: our keyboard, then the results page; -1 when it did not open */
 extern int songs_open(void); /* patch/songs.c: Songs, the library as one list with sections and a jump rail */
 extern int songs_open_list(
     int home); /* patch/songs.c: another stock song list (Favourites ...) on the same page; arg = its Home tile */
@@ -186,7 +188,13 @@ static int on_row(void *ctx, void *e) {
         ipod_open();
     else if (row->action == ACT_PODCASTS)
         podcasts_open();
-    else if (row->action == ACT_LIST)
+    else if (row->action == ACT_SEARCH) {
+        if (search_open() < 0)
+            navigator_to_with_context(
+                "search_page",
+                (const void
+                     *)0); /* the stock page where ours will not open, as the Songs page's Search (patch/songs.c) */
+    } else if (row->action == ACT_LIST)
         songs_open_list(row->arg);
     else if (row->action == ACT_SHUFFLE)
         shuffle_play(row->arg); /* patch/shuffle.c; plays, no page */
