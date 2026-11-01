@@ -362,11 +362,27 @@ def asset_tests(ctx):
            'the select bar: 64 px, black with a #222222 hairline, the two flat pills Add to playlist and Delete')
     card, scrim = f('sg_card'), f('sg_scrim')
     items = [f(f'sg_item{i}') for i in range(5)]
-    expect((card.x, card.y, card.w) == (43, 52, 268) and card.get('style:normal:bg_color') == '#2C2C2E' and card.get('style:normal:round_radius') == '14' and (scrim.x, scrim.y, scrim.w, scrim.h) == (0, 0, 320, 450)
+    expect((card.x, card.y, card.w) == (43, 52, 268) and all(card.get(f'style:{st}:bg_image') == 'sg_glass' and card.get(f'style:{st}:bg_image_draw_type') == 'patch3_x'
+                                                             and card.get(f'style:{st}:bg_color') == '#00000000' and card.get(f'style:{st}:round_radius') is None for st in pod_ui.STATES)
+           and (scrim.x, scrim.y, scrim.w, scrim.h) == (0, 0, 320, 450) and all(scrim.get(f'style:{st}:bg_color') == '#00000082' for st in pod_ui.STATES)
            and scrim.type == 'button' and [(i.y, i.h) for i in items] == [(k * O['PL_ROW_H'], O['PL_ROW_H']) for k in range(5)] and card.h == 5 * O['PL_ROW_H']
-           and card.x + card.w == O['PL_CARD_RIGHT'] and all(i.get('style:pressed:bg_color') == '#3A3A3C' and i.get('style:normal:bg_color') == '#00000000' for i in items)
+           and card.x + card.w == O['PL_CARD_RIGHT']
+           and all(i.get(f'style:{st}:bg_color') == ('#FFFFFF10' if st == 'pressed' else '#00000000') and i.get(f'style:{st}:border_width') == ('1' if k else '0')
+                   and i.get(f'style:{st}:border_color') == ('#FFFFFF22' if k else '#00000000') for k, i in enumerate(items) for st in pod_ui.STATES)
            and tree.children.index(scrim) > tree.children.index(barw) and tree.children.index(card) == tree.children.index(scrim) + 1 == len(tree.children) - 1,
-           'the sort card: flat (x 43, y 52, 268 wide, #2C2C2E, radius 14, #3A3A3C pressed) on the Playlists menu\'s rhythm (PL_ROW_H rows, no padding, right edge PL_CARD_RIGHT), last in the window under a transparent scrim')
+           'the sort card: the Playlists menu\'s glass (x 43, y 52, 268 wide, sg_glass drawn patch3_x over no fill, rows transparent, 6 % white pressed, 13 % white hairline above every row but the first, right edge PL_CARD_RIGHT), last in the window under the 130/255 dim scrim')
+    import io, mod_icons
+    from PIL import Image
+    gw, gh, gr = mod_icons.GLASS_SORT
+    raw_ = open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx/sg_glass.png'), 'rb').read()
+    gen = mod_icons.glass_image(gw, gh, gr, fill=mod_icons.GLASS_SHEET_FILL)
+    buf = io.BytesIO(); gen.save(buf, 'PNG', optimize=True)
+    g = Image.open(io.BytesIO(raw_)).convert('RGBA')
+    third = gw // 3
+    expect(raw_ == open(os.path.join(mod_icons.PNG, 'sg_glass.png'), 'rb').read() == buf.getvalue() and (gw, gh, gr) == (72, card.h, O['PL_CARD_R'])
+           and all(g.getpixel(p)[3] == 0 for p in ((0, 0), (gw - 1, 0), (0, gh - 1), (gw - 1, gh - 1))) and g.getpixel((gw // 2, gh // 2))[3] >= 0.85 * 255
+           and all(len({g.getpixel((x, y)) for x in range(third, gw - third)}) == 1 for y in range(gh)),
+           f'sg_glass.png is the generator output byte for byte ({gw}x{gh}, the card\'s height, r {gr}, the sheet\'s fill), four transparent corners, the middle third the same in every column (patch3_x stretches it exactly)')
     labs = [next(c for c in i.children if c.type == 'hscroll_label') for i in items]
     expect([l.get('tr_text') for l in labs] == list(pod_pages.SORT_MENU) and all(c.get('sensitive') == 'false' for l in labs for c in [l]), 'the card rows carry the five stock keys')
     expect(all(any(c.type == 'image' and c.get('image') == 'sg_tick' for c in i.children) for i in items), 'each row has a tick image (shown on the current order)')

@@ -31,7 +31,8 @@ BAND, HAIR = (0x14, 0x14, 0x14), (0x22, 0x22, 0x22)
 RAIL_X, RAIL_W, RAIL_CX, RAIL_PITCH, RAIL_ITEMS, RAIL_DOT, DISC, BUBBLE = (O[k] for k in ('SG_RAIL_X', 'SG_RAIL_W', 'SG_RAIL_CX', 'SG_RAIL_PITCH', 'SG_RAIL_ITEMS', 'SG_RAIL_DOT', 'SG_RAIL_DISC', 'SG_BUBBLE'))
 DOT_RGB = tuple((O['SG_RAIL_DOT_RGB'] >> s) & 255 for s in (16, 8, 0))
 ALL_LETTERS = ['#'] + [chr(65 + i) for i in range(26)]     # a library with a song under every letter: 27 sections, the collapsed index
-CARD_X, CARD_Y, CARD_W, CARD_ROW, CARD_R, CARD_PAD = 46, 44, 268, 50, 14, 0      # the sort card (tools/pod_ui.py SG_CARD_*: the Playlists menu's rhythm, flat)
+CARD_W, CARD_ROW, CARD_PAD = 268, 50, 0
+CARD_X, CARD_Y = O['PL_CARD_RIGHT'] - CARD_W, O['PL_CARD_Y']      # the sort card (tools/pod_ui.py SG_CARD_*: the Playlists menu's rhythm and glass)
 
 # title, artist, cover colour (index into PI.ALBUMS), the Initial a CJK title files under (the stock scan: its pinyin initial)
 SONGS = [("(Sittin' On) The Dock of the Bay", 'Otis Redding', 9), ('1979', 'The Smashing Pumpkins', 11), ('99 Luftballons', 'Nena', 5),
@@ -195,11 +196,16 @@ def navbar(s, im, scroll, select, title=None, genre=False):
 
 
 def sort_card(s, im, current=0):
-    """The sort card under the Sort button: the Playlists card (#2C2C2E, 48 px rows, flat), the stock labels, the current order ticked."""
-    h = 2 * CARD_PAD + len(pod_pages.SORT_MENU) * CARD_ROW
-    round_rect(im, CARD_X, CARD_Y, CARD_W, h, CARD_R, (0x2C, 0x2C, 0x2E))
+    """The sort card under the Sort button: the scrim's dim, the Playlists card's glass (sg_glass stretched as patch3_x does), the stock labels, hairlines, the current order ticked."""
+    im.alpha_composite(Image.new('RGBA', im.size, (0, 0, 0, 0x82)))
+    g = s.img('sg_glass'); t = g.width // 3
+    glass = Image.new('RGBA', (CARD_W, g.height))
+    glass.paste(g.crop((0, 0, t, g.height)), (0, 0)); glass.paste(g.crop((g.width - t, 0, g.width, g.height)), (CARD_W - t, 0))
+    glass.paste(g.crop((t, 0, g.width - t, g.height)).resize((CARD_W - 2 * t, g.height)), (t, 0))
+    im.alpha_composite(glass, (CARD_X, CARD_Y))
     for i, key in enumerate(pod_pages.SORT_MENU):
         y = CARD_Y + CARD_PAD + i * CARD_ROW
+        if i: im.alpha_composite(Image.new('RGBA', (CARD_W, 1), (255, 255, 255, 0x22)), (CARD_X, y))
         s.text(im, CARD_X + 16, y + CARD_ROW / 2, s.strings.get(key, key), 18)
         if i == current: tick(im, CARD_X + CARD_W - 16 - 18, y + (CARD_ROW - 18) // 2, 18, PI.WHITE)
 
