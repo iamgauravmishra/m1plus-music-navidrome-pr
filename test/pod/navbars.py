@@ -50,7 +50,6 @@ def run(ctx):
     # ------------------------------------------------------------------ stock pages are main's
     want = dict(l.split()[::-1] for l in open(DIGESTS) if l.strip() and not l.startswith('#'))
     got = stock_digests(assets)
-    print('DBG', [os.path.relpath(f, assets) for f in glob.glob(os.path.join(assets, 'default/raw/images', '**', '*'), recursive=True) if 'pod_ic_dev' in f or 'pod_ic_home' in f or 'pod_ic_start' in f or 'pod_ic_play' in f])
     got['demo-builders'] = builder_digest(open(DEMO, 'rb').read())
     expect(got == want, f'every stock ui / style / image / string / font file (the whole theme1 tree too) and the stock pages\' navbar builders in demo are byte-identical to main\'s build: {[k for k in got if got[k] != want.get(k)]} differ ({ {k: got[k] for k in got if got[k] != want.get(k)} }: the new digests, for test/navbars-stock.sha256 when the change is intended)')
 
