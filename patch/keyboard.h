@@ -20,6 +20,7 @@ typedef void (*kb_done_fn)(const char *text);
 typedef void (*kb_cancel_fn)(void);
 #define KB_LOG 1
 #define KB_DONE 2 /* the action key reads "Done" (a name, not a search) */
+#define KB_LONG 4 /* the text may be KB_MAX_LONG bytes, not KB_MAX (the podcast search field takes a feed address) */
 typedef void (*kb_change_fn)(const char *text);
 typedef void (*kb_go_fn)(void);
 /* The same pad embedded in another page (patch/search.c): the page's window holds the widgets kb_pad, kb_strip, kb_stem, kb_pop and a field (kb_text, kb_hint, kb_caret, kb_clear) of the
@@ -50,6 +51,7 @@ void keyboard_test(void);
 #define KB_LANG_W 40 /* the language key of row four (more than one keyboard on); space gives it room */
 #define KB_KEYS 26 /* char key widgets */
 #define KB_MAX 63 /* bytes of text */
+#define KB_MAX_LONG 255 /* ... with KB_LONG (a feed address) */
 #define KB_POP_W 46 /* the key pop-up: the balloon */
 #define KB_POP_H 50
 #define KB_POP_GAP 10 /* above the key */

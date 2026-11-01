@@ -143,3 +143,18 @@ def shelf_item(i, y_shelf):
     o = O
     x, y = o['PP_SHELF_X'] + i * o['PP_SHELF_PITCH'], y_shelf + o['PP_HEAD_PITCH']
     return x, y, y + o['PP_SHELF_TITLE_Y'], y + o['PP_SHELF_LEFT_Y']
+
+
+def search_layout(n):
+    """The search level of the Podcasts page (docs/modules/podcasts.md "Search") with n result rows: the field's rectangle, where the rows start, each row's top, the content's height."""
+    o = O
+    return dict(field=(o['PQ_FIELD_X'], o['PQ_FIELD_Y'], o['PQ_FIELD_W'], o['PQ_FIELD_H']), top=o['PQ_TOP'], rows=[o['PQ_TOP'] + i * o['PC_ROW_H'] for i in range(n)],
+                h=o['PQ_TOP'] + n * o['PC_ROW_H'] + (o['PQ_BOTTOM'] if n else 0), hint_y=o['PQ_TOP'] + o['PQ_HINT_Y'])
+
+
+def subscribe_pill(font, text):
+    """The preview's Subscribe / Subscribed pill: (width, x of the text inside it): the label's width plus the Latest Episode pill's paddings, at least PQ_SUB_MIN, the text centred."""
+    o = O
+    tw = font.width(text, PX['label_ps_latest'])
+    w = max(o['PS_LATEST_PADL'] + tw + o['PS_LATEST_PADR'], o['PQ_SUB_MIN'])
+    return w, (w - tw) // 2

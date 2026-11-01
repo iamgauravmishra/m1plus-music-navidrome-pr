@@ -94,7 +94,8 @@ static struct {
         cy; /* embedded in another page (keyboard_attach); the pad is hidden; the field's text x, text room and caret y */
     short kx[KB_KEYS], ky[KB_KEYS], kw[KB_KEYS];
     char lab[KB_KEYS][4];
-    char buf[KB_MAX + 1];
+    char buf[KB_MAX_LONG + 1];
+    unsigned max; /* the limit of this keyboard's text: KB_MAX, or KB_MAX_LONG with KB_LONG */
 } kb __attribute__((section(".scratch")));
 
 /* The Chinese layer's state: the pinyin typed, the engine's answer, the candidates read (UTF-8 in a pool, their x offsets in the strip), the strip's scroll and press. */
@@ -231,7 +232,7 @@ static int kb_fit(void *w, const char *src, unsigned n, int maxw, char *out) {
 }
 
 static void kb_refresh(void) { /* the text and the caret */
-    char shown[KB_MAX + 8];
+    char shown[KB_MAX_LONG + 8];
     int w = 0;
     if (kb.len)
         w = kb_fit(kb.text, kb.buf, kb.len, kb.tw, shown);
@@ -259,7 +260,7 @@ static void kb_changed(void) {
 
 static void kb_insert(const char *s) {
     unsigned n = kb_slen(s), i;
-    if (kb.len + n > KB_MAX) return;
+    if (kb.len + n > kb.max) return;
     for (i = 0; i < n; ++i) kb.buf[kb.len + i] = s[i];
     kb.len += n;
     kb.buf[kb.len] = 0;
@@ -267,7 +268,7 @@ static void kb_insert(const char *s) {
 
 static void kb_insert_fit(const char *s) { /* as many whole characters of s as there is room for */
     unsigned n = kb_slen(s), c = 0, l, i;
-    while (c < n && c + (l = kb_clen(s + c)) <= n && kb.len + c + l <= KB_MAX) c += l;
+    while (c < n && c + (l = kb_clen(s + c)) <= n && kb.len + c + l <= kb.max) c += l;
     for (i = 0; i < c; ++i) kb.buf[kb.len + i] = s[i];
     kb.len += c;
     kb.buf[kb.len] = 0;
@@ -796,7 +797,7 @@ static void kb_stop(void) {
 static void kb_finish(int ok) {
     kb_done_fn done = kb.done;
     kb_cancel_fn cancel = kb.cancel;
-    char text[KB_MAX + 1];
+    char text[KB_MAX_LONG + 1];
     unsigned a = 0, b, i;
     if (kb.finished) return;
     if (kb.embedded) { /* the action key of an embedded pad: what is pending is committed, the page decides what follows (hides the pad) */
@@ -1137,7 +1138,7 @@ static int kb_init(const char *placeholder, const char *initial, int embedded) {
     widget_set_text_utf8(kb.hint, placeholder ? placeholder : "");
     if (initial) { /* cut on a character boundary */
         unsigned n = kb_slen(initial), c = 0, l;
-        while (c < n && c + (l = kb_clen(initial + c)) <= KB_MAX && c + l <= n) c += l;
+        while (c < n && c + (l = kb_clen(initial + c)) <= kb.max && c + l <= n) c += l;
         for (i = 0; (unsigned)i < c; ++i) kb.buf[i] = initial[i];
         kb.len = c;
         kb.buf[c] = 0;
@@ -1172,6 +1173,7 @@ int keyboard_open(const char *title, const char *placeholder, const char *initia
     kb.win = window_open("m1plus_keyboard");
     if (!kb.win) return -1;
     kb.done = on_done, kb.cancel = on_cancel, kb.flags = flags;
+    kb.max = flags & KB_LONG ? KB_MAX_LONG : KB_MAX; /* before kb_init, which cuts the initial text to it */
     kb.tx = KB_TEXT_X, kb.tw = KB_TEXT_W, kb.cy = KB_CARET_Y;
     if (kb_init(placeholder, initial, 0) != 0) {
         navigator_back();
@@ -1193,7 +1195,7 @@ int keyboard_attach(void *win, const char *placeholder, int text_x, int text_w, 
     if (kb.win || !win) return -1;
     memset(&kb, 0, sizeof kb);
     memset(&zh, 0, sizeof zh);
-    kb.win = win, kb.embedded = 1;
+    kb.win = win, kb.embedded = 1, kb.max = KB_MAX;
     kb.tx = text_x, kb.tw = text_w, kb.cy = caret_y;
     if (kb_init(placeholder, (const char *)0, 1) != 0) return -1;
     kb.on_change = on_change, kb.on_go = on_go;

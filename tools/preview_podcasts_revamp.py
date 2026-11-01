@@ -5,7 +5,7 @@ static Continue Listening row, Downloads row, "..." sheet). Every frame is a 320
 
   preview_podcasts_revamp.py WORKDIR OUTDIR [--logo /tmp/m1plus-allin-check/logo.png] [--lang CODE]
 
-Writes OUTDIR/podcasts-final-show.png, -shows.png, -states.png.
+Writes OUTDIR/podcasts-final-show.png, -shows.png, -states.png and OUTDIR/podcasts-search.png (round 3: the Search capsule, the keyboard page, the results, the preview with Subscribe, the Settings row).
 
 WORKDIR is a built tree (work/mod-release): the font (measured with the stb model of tools/stb_raster.py: advance + 1 px a glyph), the glass navbar pieces and
 the menu glass come from it and from tools/mod_icons.py (Lucide). The page tint is the album page's: tone() of the cover's average colour (mod_nowplaying.tone)
@@ -216,7 +216,16 @@ def bg_rgb(tone, y):
     return tuple(v * (255 - a) // 255 for v in tone)
 
 
-def window(s, tone, content, scroll, title=None, band=False, top=0):
+def capsule(s, win, kind='more'):
+    """The navbar's right end: '...' | Now Playing ('more'), Search | Now Playing ('search'), Search | ... | Now Playing ('search_more': the Songs page's three pieces, the \"...\" the middle one),
+    or the round Now Playing alone ('none')."""
+    if kind == 'more': PS.glass(s, win, 'pod_nav_more', O['NAV_VIEW_X'])
+    elif kind == 'search': PS.glass(s, win, 'pod_nav_search', O['NAV_VIEW_X'])
+    elif kind == 'search_more': PS.glass(s, win, 'pod_nav_search', O['NAV_CF_X']); PS.glass(s, win, 'pod_nav_moremid', O['NAV_VIEW_X'])
+    PS.glass(s, win, 'ah_nav_np' if kind == 'none' else 'ah_nav_play', 260, 60)
+
+
+def window(s, tone, content, scroll, title=None, band=False, top=0, caps='more'):
     """The 320 x 450 window: the page colour per row, the content (scrolled), then the navbar: the glass Back and Now Playing pieces over the content, and when `band`
     an opaque bar in the page colour with a soft fade below it (the nb_fade of the navbars on our text pages) and the small title."""
     win = Image.new('RGBA', (W, WIN)); d = ImageDraw.Draw(win)
@@ -229,8 +238,7 @@ def window(s, tone, content, scroll, title=None, band=False, top=0):
             _paste(win, Image.new('RGBA', (W, 1), bg_rgb(tone, y) + (a,)), 0, y)
         s.text(win, O['NAV_TITLE_X'], 25, PS.fit(s, title, PI.title_px(s.tree), O['NAV_VIEW_X'] - O['NAV_TITLE_X'] - 4), PI.title_px(s.tree))
     PS.glass(s, win, 'ah_nav_back', 7, 44)
-    PS.glass(s, win, 'pod_nav_more', O['NAV_VIEW_X'])      # the capsule "... | Now Playing" (the Playlists page's left cap and the right cap)
-    PS.glass(s, win, 'ah_nav_play', 260, 60)
+    capsule(s, win, caps)      # the capsule "... | Now Playing" (the Playlists page's left cap and the right cap)
     return win
 
 
@@ -343,7 +351,7 @@ def dl_badge():
     return sprite(O['PA_BADGE_X'], O['PA_DOTS_Y'], O['PA_BADGE_PX'], O['PA_BADGE_PX'])
 
 
-def draw_cells(s, im, y, eps, info):
+def draw_cells(s, im, y, eps, info, preview=False):
     """The episode cells from window row y, each PS_CELL_H high (patch/podcasts.c pg_paint_eps): the date line (a check when played, the disc when on the card), the title (two lines at most), the
     description (two), the state pill and the "...", a hairline under it."""
     o = O
@@ -355,17 +363,30 @@ def draw_cells(s, im, y, eps, info):
         tl, dl = pod_show.cell(FONT, e['title'], e['desc'])
         for k, l in enumerate(tl): s.text(im, o['PS_CELL_X'], y0 + o['PS_TITLE_Y'] + k * o['PS_TITLE_PITCH'] + o['PS_TITLE_PITCH'] // 2, l, 20, DIMT if e['played'] else WHITE)
         for k, l in enumerate(dl): s.text(im, o['PS_CELL_X'], y0 + o['PS_CDESC_Y'] + k * o['PS_CDESC_PITCH'] + o['PS_CDESC_PITCH'] // 2, l, 16, GREY)
-        state_pill(s, im, o['PS_CELL_X'], y0 + o['PS_PILL_Y'], e['state'], e['label'], e.get('pct', 0))
         dy = y0 + o['PS_PILL_Y'] + o['PS_PILL_H'] // 2
-        _paste(im, sprite(0, o['PA_DOTS_Y'], o['PA_DOTS_PX'], o['PA_DOTS_PX']), o['PS_DOTS_CX'] - o['PA_DOTS_PX'] // 2, dy - o['PA_DOTS_PX'] // 2)
+        if not preview:     # (the preview's episodes carry no pill and no "...")
+            state_pill(s, im, o['PS_CELL_X'], y0 + o['PS_PILL_Y'], e['state'], e['label'], e.get('pct', 0))
+            _paste(im, sprite(0, o['PA_DOTS_Y'], o['PA_DOTS_PX'], o['PA_DOTS_PX']), o['PS_DOTS_CX'] - o['PA_DOTS_PX'] // 2, dy - o['PA_DOTS_PX'] // 2)
         info['dots'].append((o['PS_DOTS_CX'], dy))
-        y += o['PS_CELL_H']
+        y += o['PS_PCELL_H'] if preview else o['PS_CELL_H']     # (the preview's cells end under the description: PS_PCELL_H)
         hline(im, o['PS_CELL_X'], W, y - 1)
         info['cells'].append((y0, y))
     return y
 
 
-def build_show(s, sh):
+def subscribe_pill(s, im, y, label='Subscribe', white=True):
+    """The preview's pill (patch/podcasts.c pg_sub_pill, pg_latest_paint): Subscribe white with a dark label; no glyph, the label centred, at least PQ_SUB_MIN wide."""
+    o = O
+    w, tx = pod_show.subscribe_pill(FONT, label); h = o['PS_LATEST_H']; x = (W - w) // 2
+    ax = o['PA_PILLW_X'] if white else o['PA_PILLR_X']
+    _paste(im, sprite(ax, o['PA_PILL_Y'], 20, 40), x, y); _paste(im, sprite(ax + 20, o['PA_PILL_Y'], 20, 40), x + w - 20, y)
+    if white: _paste(im, Image.new('RGBA', (w - 40, h), WHITE + (255,)), x + 20, y)
+    else:
+        for yy in (y, y + h - 2): _paste(im, Image.new('RGBA', (w - 40, 2), (255, 255, 255, o['PA_RING_A'])), x + 20, yy)
+    s.text(im, x + tx, y + h / 2, label, 18, (0, 0, 0) if white else WHITE)
+
+
+def build_show(s, sh, preview=False):
     """The Show page's content (transparent; window x, window rows: the list starts at row 50, as PG_LIST_Y). The header's blocks and their wrapped lines are tools/pod_show.py's, the same model the
     tests check the payload against: the 160 px cover (10 px corners) flush with the list, the name 14 px under it (22 px white, centred, two lines at most), the Latest Episode pill, the show's
     description (two grey lines, no MORE), the "Category · Author" line, the Episodes header, the cells."""
@@ -375,20 +396,21 @@ def build_show(s, sh):
     im.alpha_composite(cover_img(sh, o['PS_ART'], o['PS_ART_R']), (o['PS_ART_X'], top))
     for k, l in enumerate(h['name']): s.text(im, 160, top + h['y_name'] + k * o['PS_NAME_PITCH'] + o['PS_NAME_PITCH'] // 2, l, o['PS_NAME_PX'], WHITE, 'm')
     local = sh.eps[0]['state'] in ('card', 'partial')
-    latest_pill(s, im, top + h['y_latest'], LT(sh, 'Latest Episode') if local else 'Latest Episode · ' + sh.eps[0]['label'], local)
+    if preview: subscribe_pill(s, im, top + h['y_latest'], 'Subscribe', True)
+    else: latest_pill(s, im, top + h['y_latest'], LT(sh, 'Latest Episode') if local else 'Latest Episode · ' + sh.eps[0]['label'], local)
     for k, l in enumerate(h['desc']): s.text(im, o['PS_DESC_X'], top + h['y_desc'] + k * o['PS_DESC_PITCH'] + o['PS_DESC_PITCH'] // 2, l, 16, SEC)
     for l in h['meta']: s.text(im, o['PS_DESC_X'], top + h['y_meta'] + o['PS_META_PITCH'] // 2, l, 15, GREY)
     s.text(im, o['PS_DESC_X'], top + h['y_head'] + (o['PS_HEAD_H'] - 6) // 2, LT(sh, 'Episodes'), 22, WHITE)
     info['collapse'] = top + h['collapse']; info['episodes_y'] = top + h['y_head']; info['header'] = h
-    y = draw_cells(s, im, top + h['h'], sh.eps, info)
+    y = draw_cells(s, im, top + h['h'], sh.eps, info, preview)
     info['end'] = y + 20   # the air under the last cell (PG_BOTTOM)
     return im.crop((0, 0, W, y + 20)), info
 
 
-def show_frame(s, sh, scroll=0, sheet=None):
-    content, info = build_show(s, sh)
+def show_frame(s, sh, scroll=0, sheet=None, preview=False):
+    content, info = build_show(s, sh, preview)
     scroll = min(scroll, max(0, info['end'] - WIN))
-    win = window(s, sh.tone, content, scroll, sh.title, scroll >= info['collapse'] - O['PG_LIST_Y'])
+    win = window(s, sh.tone, content, scroll, sh.title, scroll >= info['collapse'] - O['PG_LIST_Y'], caps='none' if preview else 'more')
     fr = frame(s, win, sh.tone)
     if sheet: bottom_sheet(s, fr, sheet)
     return fr, info
@@ -472,7 +494,7 @@ def build_shows(s, shows, shelf_n, downloads, refreshing):
     return im, info
 
 
-def shows_frame(s, shows, shelf_n=3, downloads=True, scroll=0, refreshing=False, sheet=None, end=False):
+def shows_frame(s, shows, shelf_n=3, downloads=True, scroll=0, refreshing=False, sheet=None, end=False, caps='more'):
     content, info = build_shows(s, shows, shelf_n, downloads, refreshing)
     if end: scroll = max(0, info['end'] - (WIN - NAV))
     win = Image.new('RGBA', (W, WIN), (0, 0, 0, 255))
@@ -481,12 +503,90 @@ def shows_frame(s, shows, shelf_n=3, downloads=True, scroll=0, refreshing=False,
         for y in range(20): _paste(win, Image.new('RGBA', (W, 1), (0, 0, 0, M.nb_fade_alpha(y, 20))), 0, NAV + y)
     ImageDraw.Draw(win).rectangle((0, 0, W - 1, NAV - 1), fill=(0, 0, 0, 255))
     if scroll > O['SG_COLLAPSE']: s.text(win, O['NAV_TITLE_X'], 25, 'Podcasts', PI.title_px(s.tree))
-    PS.glass(s, win, 'ah_nav_back', 7, 44); PS.glass(s, win, 'pod_nav_more', O['NAV_VIEW_X']); PS.glass(s, win, 'ah_nav_play', 260, 60)
+    PS.glass(s, win, 'ah_nav_back', 7, 44); capsule(s, win, caps)
     fr = frame(s, win, None)
     if sheet: bottom_sheet(s, fr, sheet)
     return fr, info
 
 
+def search_page(s, shows, results, text='all in', hint=None, status=None):
+    """The search level as patch/podcasts.c paints it (docs/modules/podcasts.md "Search"): the field at PQ_FIELD_* under the navbar (the keyboard page's field look: #1C1C1E, the magnifier, the white text or the grey hint),
+    the result rows from PQ_TOP (the Downloads rows' geometry: a LIST_ART px cover, the name 21 px, the author 18 px grey, a hairline), a result with no feed dimmed (PQ_DIM) with "Not available", or the status line
+    (Searching..., No results, a failure) 90 px high with its text centred. results: (name, author, show for the cover, has a feed)."""
+    o = O
+    win = Image.new('RGBA', (W, WIN), (0, 0, 0, 255))
+    fx, fy = o['PQ_FIELD_X'], NAV + o['PQ_FIELD_Y']
+    rrect(win, fx, fy, o['PQ_FIELD_W'], o['PQ_FIELD_H'], o['PQ_FIELD_R'], (0x1C, 0x1C, 0x1E, 255))
+    _paste(win, s.img('qk_mag'), fx + o['PQ_MAG_X'], fy + (o['PQ_FIELD_H'] - o['PQ_MAG']) // 2)
+    shown = PS.fit(s, text, 18, o['PQ_TEXT_W']) if text else hint
+    s.text(win, fx + o['PQ_TEXT_X'], fy + o['PQ_FIELD_H'] / 2, shown, 18, WHITE if text else (0x8E, 0x8E, 0x93))
+    if text: _paste(win, s.img('qk_clear'), fx + o['PQ_CLEAR_X'] + (o['PQ_CLEAR_W'] - o['PQ_CLEAR']) // 2, fy + (o['PQ_FIELD_H'] - o['PQ_CLEAR']) // 2)     # the keyboard page's clear disc, shown with a text
+    for i, (name, author, sh, feed) in enumerate(results):
+        y = NAV + o['PQ_TOP'] + i * o['PC_ROW_H']
+        if y + o['PC_ROW_H'] > WIN: break
+        _paste(win, cover_img(sh, o['LIST_ART'], o['LIST_R']), o['LIST_ART_X'], y + o['LIST_ART_Y'])
+        s.text(win, o['LIST_TEXT_X'], y + o['LIST_TITLE_Y'] + o['LIST_TITLE_H'] / 2, PS.fit(s, name, 21, o['LIST_TEXT_W']), 21, WHITE)
+        s.text(win, o['LIST_TEXT_X'], y + o['LIST_SUB_Y'] + o['LIST_SUB_H'] / 2, PS.fit(s, author if feed else 'Not available', 18, o['LIST_TEXT_W']), 18, GREY)
+        hline(win, 0, W, y + o['PC_ROW_H'] - 1)
+        if not feed: _paste(win, Image.new('RGBA', (W, o['PC_ROW_H'] - 1), (0, 0, 0, o['PQ_DIM'] >> 24)), 0, y)
+    if status: s.text(win, W // 2, NAV + o['PQ_TOP'] + o['PQ_HINT_Y'] + 45, status, 18, WHITE, 'm')
+    ImageDraw.Draw(win).rectangle((0, 0, W - 1, NAV - 1), fill=(0, 0, 0, 255))
+    s.text(win, O['NAV_TITLE_X'], 25, 'Search', PI.title_px(s.tree))
+    PS.glass(s, win, 'ah_nav_back', 7, 44); PS.glass(s, win, 'ah_nav_np', 260, 60)
+    return frame(s, win, None)
+
+
+def field_panel(s, shows):
+    """The search field with and without the clear button, one above the other (the magnifier is at the same pixels in both), the field of the keyboard page under them, and the clear button zoomed 12 x (its x
+    centred in the disc, measured by test/pod/pcsearchui.py field_tests)."""
+    o = O
+    fx, fy = o['PQ_FIELD_X'], NAV + o['PQ_FIELD_Y']
+    a, b = search_page(s, shows, [], '', hint='Search'), search_page(s, shows, [], 'all in')
+    out = Image.new('RGBA', (W, STAT + WIN), (0, 0, 0, 255)); d = ImageDraw.Draw(out)
+    box = (0, STAT + NAV, W, STAT + NAV + o['PQ_FIELD_Y'] * 2 + o['PQ_FIELD_H'])
+    d.text((10, 8), 'empty: no clear button', fill=(0xAA,) * 3, font=PI.ANN); out.paste(a.crop(box), (0, 24))
+    d.text((10, 90), 'with a text: the clear button', fill=(0xAA,) * 3, font=PI.ANN); out.paste(b.crop(box), (0, 106))
+    mag = (fx + o['PQ_MAG_X'] - 2, STAT + fy + 8, fx + o['PQ_MAG_X'] + o['PQ_MAG'] + 2, STAT + fy + o['PQ_FIELD_H'] - 8)
+    d.text((10, 172), 'the magnifier, both states, 6 x:', fill=(0xAA,) * 3, font=PI.ANN)
+    for i, src in enumerate((a, b)): out.paste(src.crop(mag).resize(((mag[2] - mag[0]) * 6, (mag[3] - mag[1]) * 6), Image.NEAREST), (10 + i * 160, 190))
+    cl = (fx + o['PQ_CLEAR_X'] + 10 - 4, STAT + fy + 10 - 4, fx + o['PQ_CLEAR_X'] + 10 + 20, STAT + fy + 10 + 20)
+    d.text((10, 330), 'the clear button, 5 x:', fill=(0xAA,) * 3, font=PI.ANN); out.paste(b.crop(cl).resize(((cl[2] - cl[0]) * 5, (cl[3] - cl[1]) * 5), Image.NEAREST), (10, 346))
+    return out
+
+
+def search_sheet(s, shows, workdir, path):
+    """podcasts-search.png: the Shows page's Search capsule (both shapes), the keyboard page the field opens, the results (one with no feed), the preview with Subscribe (and Subscribed), the Settings row."""
+    import json
+    import preview_keyboard as PK2
+    import preview_settings as PSET
+    fx = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'test', 'data', 'search', 'all_in_us.json'), encoding='utf-8'))['results']
+    res = [(r['collectionName'], r['artistName'], shows[i % len(shows)], bool(r.get('feedUrl'))) for i, r in enumerate(fx)]
+    res[2] = (res[2][0], res[2][1], res[2][2], False)
+    mini = shows[3]
+    prev = Show(mini.key, mini.title, mini.cover, mini.author, mini.genre, mini.sub,
+                [ep(e['date'], e['title'], e['desc'], 'remote', '48 MB') for e in mini.eps], False)
+    pg = PK2.Page(s)
+    lib = PSET.draw_page(s, 'm1plus_library', full=True, state={'switches': {'pod_switch3': False}}).convert('RGBA')
+    lib = lib.crop((0, lib.height - (STAT + WIN), W, lib.height)) if lib.height > STAT + WIN else lib
+    libf = Image.new('RGBA', (W, STAT + WIN), (0, 0, 0, 255)); PI.status_bar(s, libf, 0, bg=(0, 0, 0)); libf.alpha_composite(lib, (0, STAT + WIN - lib.height))
+    on = PSET.draw_page(s, 'm1plus_library', full=True, state={'switches': {'pod_switch4': True}}).convert('RGBA')
+    on = on.crop((0, on.height - (STAT + WIN), W, on.height)) if on.height > STAT + WIN else on
+    onf = Image.new('RGBA', (W, STAT + WIN), (0, 0, 0, 255)); PI.status_bar(s, onf, 0, bg=(0, 0, 0)); onf.alpha_composite(on, (0, STAT + WIN - on.height))
+    frames = [('Shows page, Podcast Search on, Import possible:\nSearch | ... | Now Playing', shows_frame(s, shows, shelf_n=0, downloads=False, caps='search_more')[0]),
+              ('... nothing to import: Search | Now Playing', shows_frame(s, shows, shelf_n=0, downloads=False, caps='search')[0]),
+              ('Podcast Search off: the capsule as before\n(here without Import: the round Now Playing)', shows_frame(s, shows, shelf_n=0, downloads=False, caps='none')[0]),
+              ('Search: the field opens our keyboard page', PK2.screen(s, pg, 'all in', 'abc', held='n', hint='Search')),
+              ('Results: the show, its author in grey,\none with no feed: Not available, dimmed', search_page(s, shows, res[:6])),
+              ('Searching...', search_page(s, shows, [], 'all in', status='Searching…')),
+              ('A failure, in the existing words', search_page(s, shows, [], 'all in', status="Can't connect")),
+              ('A show in the store: the preview.\nSubscribe is the Latest Episode pill', show_frame(s, prev, 0, preview=True)[0]),
+              ('The preview scrolled: normal cells without\nthe pill row (shorter), no "..."', show_frame(s, prev, 330, preview=True)[0]),
+              ('After Subscribe: the real Show page in place\n(pills, "...", sheets; Back = the results)', show_frame(s, prev, 0)[0]),
+              ('A result that is a show already: its real page\n(cells with pills, "..."), no Subscribed', show_frame(s, mini, 0)[0]),
+              ('The search field, with and without the clear\nbutton, the magnifier unmoved; clear button zoomed', field_panel(s, shows)),
+              ('Settings > Library > Podcasts: Podcast Search off', libf),
+              ('... on', onf)]
+    assemble(frames, 4, path)
 def assemble(frames, cols, path, lab=34, pad=12):
     rows = (len(frames) + cols - 1) // cols
     sheet = Image.new('RGB', (cols * (W + pad) + pad, rows * (STAT + WIN + lab + pad) + pad), (0x2A, 0x2A, 0x2A)); d = ImageDraw.Draw(sheet)
@@ -532,6 +632,7 @@ def main():
     sheet.paste(strip, (0, 0)); ImageDraw.Draw(sheet).text((12, strip.height + 8), 'Badge combinations in the cells (date line: check = played, grey disc = on the card)', fill=(0xAA,) * 3, font=PI.ANN)
     sheet.paste(col, (12, strip.height + 30)); sheet.save(out('states'), optimize=True)
     print('wrote', out('states'), sheet.size)
+    search_sheet(s, shows, a.workdir, os.path.join(a.outdir, 'podcasts-search.png'))
 
 
 if __name__ == '__main__': main()

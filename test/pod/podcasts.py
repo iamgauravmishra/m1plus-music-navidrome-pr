@@ -611,7 +611,7 @@ def cover_tests(ctx):
 # ---- the page
 SHEET_ROWS = [r[0] for r in pod_ui.PS_SHEET_ROWS]
 PG_WIDGETS = (['podcasts_listview', 'view_grid', 'label_status', 'label_title', 'img_nb_fade', 'label_row_title', 'label_row_sub', 'pg_big', 'img_ah_tint',
-               'btn_return', 'btn_backtoplayer', 'btn_select', 'btn_more', 'btn_selall', 'pg_bar', 'pg_del', 'pod_pd_scrim', 'pod_pd_card', 'pod_pd_title', 'pod_pd_name', 'pod_pd_track', 'pod_pd_fill', 'pod_pd_count', 'pod_pd_cancel',
+               'btn_return', 'btn_backtoplayer', 'btn_select', 'btn_more', 'btn_search', 'ps_field', 'ps_hint', 'ps_text', 'ps_clear', 'ps_mag', 'btn_selall', 'pg_bar', 'pg_del', 'pod_pd_scrim', 'pod_pd_card', 'pod_pd_title', 'pod_pd_name', 'pod_pd_track', 'pod_pd_fill', 'pod_pd_count', 'pod_pd_cancel',
                'pg_sh_scrim', 'pg_sh_card', 'pg_sh_speed_vl', 'pg_sh_refresh_vl'] + [n for n, *_ in pod_ui.PS_STYLES] + [f'pg_sh_{r}{s}' for r in SHEET_ROWS for s in ('', '_tx', '_hr')])
 T0 = 1700000000   # 2023-11-14 22:13:20 UTC
 DAY = 86400
@@ -849,7 +849,7 @@ def open_tests(ctx):
     m4 = page_machine(lambda mm: mm.folder(ROOT))
     m4.call(PSYMS['podcasts_open'], count=40000000)
     expect(m4.props.get((m4.widgets['label_status'], 'visible')) == 1, 'an empty Podcasts folder: the same hint')
-    m5 = page_machine(); m5.calloc_fail_size = O['PC_MAX_SHOWS'] * O['PC_SHOW_SIZE']
+    m5 = page_machine(); m5.calloc_fail_size = (O['PC_MAX_SHOWS'] + 1) * O['PC_SHOW_SIZE']
     m5.call(PSYMS['podcasts_open'], count=40000000)
     expect(('widget_set_tr_text', m5.widgets['label_status'], 'Not enough memory') in m5.calls, 'no memory for the shows: "Not enough memory"')
     # an asset that is not ours
@@ -1039,14 +1039,14 @@ def asset_tests(ctx):
     sv = lv.children[0]
     expect(sv.name == 'podcasts_scrollview' and [c.name for c in sv.children] == ['view_grid'] and sv.w == 310, 'the scroll_view holds the one content view')
     big = tree.find('pg_big')
-    expect(sv.children[0].name == 'view_grid' and [c.name for c in sv.children[0].children] == ['pg_big'] and big.get('tr_text') == 'Podcasts' and big.get('sensitive') == 'false' and big.x == O['PP_TITLE_X'] and big.y == 0 and big.h == O['PP_TITLE_H']
+    expect(sv.children[0].name == 'view_grid' and [c.name for c in sv.children[0].children] == ['pg_big', 'ps_field'] and big.get('tr_text') == 'Podcasts' and big.get('sensitive') == 'false' and big.x == O['PP_TITLE_X'] and big.y == 0 and big.h == O['PP_TITLE_H']
            and big.get('style:normal:font_size') == str(O['PP_TITLE_PX']), 'the content view holds the large title (a label, as the Songs page\'s: it scrolls and is clipped with the content), insensitive')
     for name in ('label_status', 'img_nb_fade', 'label_row_title', 'label_row_sub', 'img_ah_tint', *[n for n, *_ in pod_ui.PS_STYLES]):
         w = tree.find(name)
         expect(w is not None and w.get('visible') == 'false' and w.get('sensitive') == 'false', f'{name} starts hidden and insensitive')
     nav = tree.find('navigationbar_view')
-    expect([c.name for c in nav.children] == ['label_title', 'btn_return', 'btn_backtoplayer', 'btn_select', 'btn_more', 'btn_selall'] and tree.find('label_title').get('tr_text') == 'Podcasts',
-           'the navbar: title, Back, Now Playing, the hidden Select button (Downloads) and "..." (the Show level, and the Shows level when Import is possible) on the same slot, and Select All: no Feeds button')
+    expect([c.name for c in nav.children] == ['label_title', 'btn_return', 'btn_backtoplayer', 'btn_select', 'btn_more', 'btn_search', 'btn_selall'] and tree.find('label_title').get('tr_text') == 'Podcasts',
+           'the navbar: title, Back, Now Playing, the hidden Select button (Downloads), "..." (the Show level, and the Shows level when Import is possible) on the same slot, the hidden Search button (Podcast Search) and Select All: no Feeds button')
     mb, npb = tree.find('btn_more'), tree.find('btn_backtoplayer')
     expect(mb.x == pod_ui.NAV_VIEW_X and mb.get('style:normal:icon') == 'pod_nav_more' and npb.get('style:normal:icon') == 'ah_nav_np' and tree.find('label_title').x + tree.find('label_title').w <= mb.x,
            'the "..." is the left cap of the capsule that ends in Now Playing; the title stops at its left edge')

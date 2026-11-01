@@ -35,6 +35,10 @@ class NM(PCP.PM):
         ret = None
         if name == 'access' and self.read_cstr(a0) in self.dirs:
             ret = 0
+        elif name == 'rmdir':
+            p = self.read_cstr(a0); self.calls.append(('rmdir', p))
+            ret = -1 if [q for q in list(self.fs) + list(self.dirs) if q != p and q.startswith(p + '/')] or p not in self.dirs else 0
+            if ret == 0: self.dirs.discard(p)
         elif name == 'rename' and self.read_cstr(a0) in self.dirs:
             src, dst = self.read_cstr(a0), self.read_cstr(a1)
             self.calls.append(('rename', src, dst))
@@ -45,7 +49,7 @@ class NM(PCP.PM):
                 for p in list(self.fs):
                     if p.startswith(src + '/'): self.fs[dst + p[len(src):]] = self.fs.pop(p)
                 ret = 0
-        elif name == 'fopen' and 'w' in self.read_cstr(a1) and self.read_cstr(a0).startswith(ROOT_DIR):   # stdio write: a file on the card dict
+        elif name == 'fopen' and 'w' in self.read_cstr(a1) and self.read_cstr(a0).startswith((ROOT_DIR, '/mnt/mmc/.m1plus')):   # stdio write: a file on the card dict
             path = self.read_cstr(a0); self.calls.append(('fopen', path, self.read_cstr(a1)))
             if ('fopen', path) in self.fail: ret = 0
             else: self.fs[path] = b''; ret = self.alloc(4); self.fp[ret] = [path, 0]

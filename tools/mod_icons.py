@@ -139,7 +139,7 @@ CARD_GLYPHS = {'Wi-Fi': 'wifi', 'Bluetooth': 'bluetooth', 'Menu & Extras': 'list
                'Keyboards': '+keyboard', 'About': 'info', 'All System Settings': 'settings', 'Developer': 'code', 'Main Menu': 'list-checks', 'Extras': 'ellipsis',
                'Recent Albums': 'history', 'Daily Mix': 'shuffle', 'Regenerate Daily Mix': 'refresh-cw', 'Update Library': 'refresh-cw', 'Album Order': 'arrow-down-wide-narrow',
                'Landscape': 'rotate-cw-square', 'Rebuild Covers': 'image-up', 'Theme': '+cassette-tape', 'Boot to M1+ Music': 'power', 'Open Shanling Home': '@shanling',
-               'Screenshot': 'camera', 'Network Probe': 'globe', 'Keyboard': '+keyboard', 'English': 'languages', 'Chinese (Pinyin)': 'languages'}
+               'Screenshot': 'camera', 'Network Probe': 'globe', 'Keyboard': '+keyboard', 'Podcast Search': 'search', 'English': 'languages', 'Chinese (Pinyin)': 'languages'}
 
 
 def card_name(g):
@@ -182,6 +182,7 @@ NAV_VIEW = {'pod_nav_grid': 'layout-grid', 'pod_nav_list': 'list',
             'pod_nav_artist': 'mic-vocal', 'pod_nav_albumartist': 'user-star',   # the Artists page's Artist / Album Artist switch
             'pod_nav_coverflow': '+coverflow',   # Lucide gallery-horizontal with shorter side covers
             'pod_nav_more': 'ellipsis',   # the Playlists page's "..." menu button
+            'pod_nav_moremid': 'ellipsis',   # the Podcasts page's "..." as the middle piece of [Search | ... | Now Playing]
             'pod_nav_songs': 'list',   # Cover Flow's artist page: our Songs page on the artist's songs (the left cap, then Now Playing)
             'pod_nav_search': 'search', 'pod_nav_songsort': 'arrow-down-wide-narrow', 'pod_nav_select': 'list-checks',
             'pod_nav_selectl': 'list-checks',   # the Songs page's Search / Sort / Select (capsule: left, middle, middle, then Now Playing); selectl: Select as the left cap of a genre's songs (no Search: Select | Now Playing)
@@ -189,7 +190,7 @@ NAV_VIEW = {'pod_nav_grid': 'layout-grid', 'pod_nav_list': 'list',
 # the glass piece each Pod page button is (docs/modules/navbar.md): the Albums and Playlists pages' capsule is Cover Flow / "..." (left cap), the grid / list
 # toggle (middle), Now Playing (right cap); the Artists page's is the switch (left cap) and Now Playing; the Cover Flow artist page's is Songs (left cap) and Now Playing
 NAV_VIEW_POS = {'pod_nav_grid': 'middle', 'pod_nav_list': 'middle', 'pod_nav_artist': 'left', 'pod_nav_albumartist': 'left', 'pod_nav_coverflow': 'left',
-                'pod_nav_more': 'left', 'pod_nav_songs': 'left', 'pod_nav_search': 'left', 'pod_nav_songsort': 'middle', 'pod_nav_select': 'middle', 'pod_nav_selectl': 'left', 'pod_nav_settings': 'left'}
+                'pod_nav_more': 'left', 'pod_nav_moremid': 'middle', 'pod_nav_songs': 'left', 'pod_nav_search': 'left', 'pod_nav_songsort': 'middle', 'pod_nav_select': 'middle', 'pod_nav_selectl': 'left', 'pod_nav_settings': 'left'}
 NAV_PX = 24
 # The Playlists page's "..." menu rows (tools/pod_ui.py playlist_menu, in row order): a bare white glyph left of the label, as on Now
 # Playing's More sheet's rows, drawn at PL_MENU_PX (20: the 24 px of the sheet's rows looked big beside the 18 px labels; the stroke stays 2 px).
@@ -691,10 +692,24 @@ ALBUM += [SE_CLOSE[0], SE_CLOSE[0] + '_down']
 def keyboard_images():
     f = {n: glyph_fit(g, cw, ch, rgb, 1 if n != 'qk_mag' else 0) for n, (g, rgb, cw, ch) in KEYBOARD_IMAGES.items()}
     n, g, rgb, ink, d, fill = KB_CLEAR
-    f[n] = on_disc(glyph_fit(g, ink, ink, rgb, 0, 1.5), d, fill)
+    f[n] = clear_disc(ink, d, fill, rgb)
     n, g, rgb, ink, d, fill, down = SE_CLOSE
     f[n], f[n + '_down'] = (on_disc(glyph_fit(g, ink, ink, rgb, 0), d, c) for c in (fill, down))
     return f
+
+def clear_disc(ink, d, fill, rgb, stroke=2.0, ss=16):
+    """The field's clear button: a d px disc with an x of ink px (round ends, stroke px) drawn at ss x about the disc's own centre and reduced with a box filter, so the cross is centred in x and
+    y to a fraction of a pixel (glyph_fit's crop of an odd canvas put its ink 0.85 px left of the centre; test/pod/keyboard.py measures it)."""
+    from PIL import Image, ImageDraw
+    big = Image.new('L', (d * ss, d * ss), 0)
+    dr = ImageDraw.Draw(big)
+    c, h, r = (d * ss - 1) / 2, (ink - stroke) / 2 * ss, stroke * ss / 2
+    for sx in (-1, 1):
+        dr.line((c - h, c - sx * h, c + h, c + sx * h), fill=255, width=int(round(stroke * ss)))
+    for sx in (-1, 1):
+        for sy in (-1, 1): dr.ellipse((c + sx * h - r, c + sy * h - r, c + sx * h + r, c + sy * h + r), fill=255)
+    cross = Image.new('RGBA', (d, d), rgb + (0,)); cross.putalpha(big.resize((d, d), Image.BOX))
+    im = disc(d, fill); im.alpha_composite(cross); return im
 
 def songs_images():
     from PIL import Image

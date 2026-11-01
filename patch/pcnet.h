@@ -34,7 +34,8 @@ enum {
     PN_CARDFULL, /* a download: the card would keep less than PN_DL_MARGIN_KB free */
     PN_NOTAUDIO, /* a download: the answer is a web page (Content-Type text/...), not an episode */
     PN_QFULL, /* the download queue is full (PN_QMAX) */
-    PN_PAUSED /* a download stopped for a refresh and kept in the queue (never shown) */
+    PN_PAUSED, /* a download stopped for a refresh and kept in the queue (never shown) */
+    PN_NOFEED /* search: an Apple Podcasts address whose show has no feed address */
 };
 
 /* Episode downloads (docs/modules/podcasts.md "Downloads"). The policy follows q2-podcasts (MIT): one at a time, chunks written with open / write / fsync / close, Range resume, a stall limit,
@@ -58,7 +59,8 @@ enum { PN_DL_NONE = 0, PN_DL_WAIT = 1, PN_DL_ACTIVE = 2, PN_DL_FAILED = 3 };
 int pn_guard(void);
 /* Refresh the shows shows[idx[0..n)] that have a feed url: the guards, then one worker thread. root is the Podcasts folder as the card spells it. 0 when the thread runs, else PN_* (nothing started). */
 int pn_refresh(const char *root, const pc_show_t *shows, const int *idx, int n);
-int pn_busy(void); /* a refresh worker is running (a download worker is pn_dl_running) */
+int pn_busy(
+    void); /* a refresh worker is running (a download worker is pn_dl_running, a search or preview worker pn_job_busy) */
 void pn_cancel(
     void); /* UI thread: ask the worker to stop: the transfer in progress is aborted (libcurl's transfer-info callback), no further show is started */
 int pn_cancelling(void); /* a worker is running and was asked to stop */
@@ -104,3 +106,44 @@ unsigned pn_dl_current(unsigned *got, unsigned *total);
 void pn_dl_clear(unsigned key);
 /* The n-th download the Downloads page lists, from 0: the queue in the order it was asked (dir, file, *code 0), then the failed ones (*code the PN_* reason). Returns its key, 0 past the last. dir and file take PC_FILE bytes. */
 unsigned pn_dl_listed(int n, char *dir, char *file, int *code);
+
+/* ---- Search (docs/modules/podcasts.md "Search"). One worker at a time, never beside a refresh or a download (the page pauses the downloads first, as for a refresh). All of these run on the UI thread; the worker only
+ * writes the record they read. The country of the store is a constant: a region switch comes later. */
+#define PN_COUNTRY "US"
+#define PN_SEARCH_URL \
+    "https://itunes.apple.com/search?media=podcast&entity=podcast&limit=25&country=" PN_COUNTRY "&term="
+#define PN_LOOKUP_URL "https://itunes.apple.com/lookup?id="
+#define PN_JSON_CAP 98304u /* a search or lookup answer over 96 KB is cut there (25 results are about 44 KB) */
+#define PN_THUMB_CAP 262144u /* a result's artwork (about 5 KB) over this is refused */
+#define PN_SEARCH_DIR \
+    "/mnt/mmc/.m1plus/podcasts/search" /* the thumbnails t<n>.jpg|png and the preview's cover preview.jpg: scratch, made again by every search */
+#define PN_PREVIEW_COVER PN_SEARCH_DIR "/preview.jpg"
+
+enum { PN_S_IDLE = 0, PN_S_QUERY = 1, PN_S_THUMBS = 2, PN_S_DONE = 3 };
+
+/* What a text typed in the search field is: 0 a search term, 1 a feed address (http:// or https://, not an Apple Podcasts show link), 2 an Apple Podcasts show link (podcasts.apple.com ... /id<digits>; the digits into id, size bytes: ids pass 32 bits). */
+int pn_classify(const char *text, char *id, unsigned size);
+/* Start the search for the UTF-8 term: the guards, the old thumbnails removed, one worker (the query, then the artwork of each result one by one). 0 when it runs; PN_BUSY when a worker runs (the page waits and asks again). */
+int pn_search(const char *term);
+int pn_job_busy(void); /* a search or preview worker is running */
+int pn_search_state(
+    void); /* PN_S_*: the query runs / its answer is in and the artwork follows / the worker has ended */
+int pn_search_code(
+    void); /* the query's result once the answer is in (PN_OK, or PN_NET, PN_HTTP, ... and PN_CANCELLED) */
+unsigned pn_search_gen(void); /* moves whenever the answer or a thumbnail arrives, and when the worker ends */
+int pn_search_count(void); /* results (valid once the state is past PN_S_QUERY with PN_OK) */
+const pj_result_t *pn_search_result(int i);
+int pn_search_thumb(int i, char *path,
+                    unsigned size); /* 1 and the path of result i's picture file when it has arrived */
+void pn_search_clean(void); /* remove the thumbnails and forget the results */
+/* Preview a show: the feed at url (an address), or the feed the store's lookup gives for the Apple id digits (id not empty), fetched and parsed as a refresh does, held in memory (not a show folder), with its picture shrunk to PN_PREVIEW_COVER. 0 when it runs. */
+int pn_preview(const char *url, const char *id);
+int pn_preview_state(void); /* 0 none, 1 running, 2 done */
+int pn_preview_code(void); /* PN_OK, or why not (PN_NOFEED: the lookup found no feed address) */
+void *pn_preview_parser(void); /* the held pf_parser_t, NULL when none */
+const char *pn_preview_feed(void); /* the feed address of the held preview */
+int pn_preview_cover(void); /* the preview's picture file is there */
+void pn_preview_drop(void); /* free the held preview and its picture */
+/* Subscribe to the held preview exactly as an import and its first refresh would: a folder named from the feed's title, .episodes, .show (feed, title, image, author, category, description), cover.jpg. root: the Podcasts folder; shows[0..nshows): the folders now there.
+ * Returns PN_OK (*dir the folder's name, the preview dropped), PN_STORAGE when nothing could be written (nothing is left behind), PN_NOTFEED when no preview is held. UI thread, no network. */
+int pn_subscribe(const char *root, const pc_show_t *shows, int nshows, char *dir, unsigned dsize);

@@ -64,7 +64,8 @@ ACT_STOCK = 29   # open a stock page by name (arg = index in STOCK_PAGES; patch/
 ACT_SORTSET = 30   # picker row (Album Order): choose the album order (arg 1 Artist, 0 Album); a check shows on the chosen row (patch/covercache.c cc_sort_set)
 ACT_THEMESET = 31  # picker row (Cassette Theme): choose the theme (arg 0 Normal, 1 Chrome, 2 Metal); a check shows on the chosen row (patch/tape.c tape_theme_set)
 ACT_INFO = 33     # an information row of the About page: a label and a grey value at the right, no chevron, not tappable (arg = INFO_*: where patch/m1plus.c reads the value; INFO_STATIC: the Row's own text)
-SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH)
+ACT_PCSEARCH = 34  # switch row (Settings > Library > Podcasts): Podcast Search, off by default; on shows a Search button on the Podcasts page (patch/podcasts.c pcsearch_toggle, /mnt/data/m1plus-pcsearch)
+SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
 VALUE_ACTIONS = (ACT_SORT, ACT_CTHEME)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
 CHECK_ACTIONS = (ACT_SORTSET, ACT_THEMESET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
@@ -382,6 +383,9 @@ LIBRARY_PAGE = Page('m1plus_library', 'm1plus_library_page', 'Library', layout=[
     Hdr('Cover Flow'),
     Row('Landscape', ACT_LANDSCAPE),
     Row('Rebuild Covers', ACT_REBUILD),
+    Hdr('Podcasts'),
+    Row('Podcast Search', ACT_PCSEARCH),
+    Note('Search words are sent to Apple.'),
 ])
 # Settings > Library > Album Order: the picker (a check on the chosen row).
 SORT_PAGE = Page('m1plus_albumorder', 'm1plus_albumorder_page', 'Album Order', layout=[

@@ -605,6 +605,7 @@ def settings_tests(ctx, on_row, rows0):
     expect(('window_open', P.LIBRARY_PAGE.key) in m.calls, 'the Library row on the Settings page opens m1plus_library')
     library_tests(ctx, on_row)
     keyboards_tests(ctx, on_row, rows_s)
+    pcsearch_row_tests(ctx, on_row, rows_s)
 
     # 17. The Main Menu row (on Menu & Extras) opens the customise page (the generic page open: navbar bound, no row table)
     m = Machine()
@@ -836,6 +837,44 @@ def keyboards_tests(ctx, on_row, rows_s):
         expect(all(pod_i18n.TEXT[k][pod_i18n.table_for(loc)] for k in ('Keyboards', 'English', 'Chinese (Pinyin)')), f'the three strings have a text in {loc}')
 
 
+def pcsearch_row_tests(ctx, on_row, rows_s):
+    """Settings > Library > Podcasts > Podcast Search (docs/modules/settings.md): a switch row, off by default, saved as "1" in /mnt/data/m1plus-pcsearch (the first byte), written atomically; a failed
+    save changes neither the file nor the switch; the Podcasts page reads it with pcsearch_setting."""
+    expect, P = ctx.expect, pod_pages
+    C = P.LIBRARY_PAGE
+    FILE = '/mnt/data/m1plus-pcsearch'
+    cf_i = next(i for i, r in enumerate(P.SETTINGS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.LIBRARY_PAGE_INDEX)
+    ps_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_PCSEARCH)
+    layout = [type(x).__name__ + (':' + x.label if isinstance(x, P.Row) else ':' + x.text if hasattr(x, 'text') else '') for x in C.layout]
+    expect(C.rows[ps_i].label == 'Podcast Search' and P.ACT_PCSEARCH in P.SWITCH_ACTIONS and P.row_kind(C.rows[ps_i]) == 'switch'
+           and layout[-3:] == ['Hdr:Podcasts', 'Row:Podcast Search', 'Note:Search words are sent to Apple.'], f'the Library page ends with a Podcasts header, the Podcast Search switch row and its note ({layout[-3:]})')
+
+    def open_lib(saved=None):
+        m = Machine()
+        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(P.SETTINGS_PAGE.rows))] + [f'pod_switch{ps_i}'])}
+        if saved is not None: m.fs[FILE] = saved
+        m.call(on_row, a0=rows_s + 12 * cf_i, count=3000000)
+        return m
+
+    def images(m): return [c[2] for c in m.calls if c[0] == 'image_base_set_image' and c[1] == m.widgets[f'pod_switch{ps_i}']]
+
+    m = open_lib()
+    expect(images(m) == ['sset_off'] and FILE not in m.fs and m.call(PSYMS['pcsearch_setting'], count=2000000) == 0, 'opened with nothing saved: the switch is off, nothing is written, the setting reads 0 (the default)')
+    for data, on in ((b'1\n', 1), (b'1', 1), (b'0\n', 0), (b'', 0), (b'x', 0), (b'\n1', 0)):
+        expect(images(open_lib(data)) == [('sset_on' if on else 'sset_off')], f'saved {data!r}: the switch opens {"on" if on else "off"}')
+    m = open_lib()
+    m.click(f'pod_row{ps_i}')
+    expect(m.fs.get(FILE) == b'1\n' and FILE + '.tmp' not in m.fs and ('rename', FILE + '.tmp', FILE) in m.calls and ('fsync', '/mnt/data') in m.calls and images(m)[-1] == 'sset_on'
+           and m.call(PSYMS['pcsearch_setting'], count=2000000) == 1, 'a tap turns it on: written atomically (a temp file, fsync, rename), the switch on')
+    m.click(f'pod_row{ps_i}')
+    expect(m.fs.get(FILE) == b'0\n' and images(m)[-1] == 'sset_off' and m.call(PSYMS['pcsearch_setting'], count=2000000) == 0, 'and off again')
+    m = open_lib(b'1\n'); m.fail.add(('write', FILE + '.tmp'))
+    m.click(f'pod_row{ps_i}')
+    expect(m.fs.get(FILE) == b'1\n' and FILE + '.tmp' not in m.fs and images(m) == [] and m.call(PSYMS['pcsearch_setting'], count=2000000) == 1, 'a failed save changes neither the file nor the switch')
+    for loc in pod_i18n.LOCALES:
+        expect(all(pod_i18n.TEXT[k][pod_i18n.table_for(loc)] for k in ('Podcast Search', 'Podcasts', 'Search words are sent to Apple.')), f'the row, its header and its note have a text in {loc}')
+
+
 def library_tests(ctx, on_row):
     """Settings > Library (m1plus_library): Update Library, Album Order (a value row opening the picker page), the Landscape switch and Rebuild Covers; the picker Album Order."""
     expect, P = ctx.expect, pod_pages
@@ -847,9 +886,9 @@ def library_tests(ctx, on_row):
     land_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_LANDSCAPE)
     sort_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_SORT)
     sw, val = f'pod_switch{land_i}', f'pod_value{sort_i}'
-    expect([(r.label, r.action) for r in C.rows] == [('Update Library', P.ACT_HOME), ('Album Order', P.ACT_SORT), ('Landscape', P.ACT_LANDSCAPE), ('Rebuild Covers', P.ACT_REBUILD)]
+    expect([(r.label, r.action) for r in C.rows] == [('Update Library', P.ACT_HOME), ('Album Order', P.ACT_SORT), ('Landscape', P.ACT_LANDSCAPE), ('Rebuild Covers', P.ACT_REBUILD), ('Podcast Search', P.ACT_PCSEARCH)]
            and C.title == 'Library' and C.rows[0].arg == P.HOME_UPDATE and C.rows[sort_i].arg == P.SORT_PAGE_INDEX and P.row_kind(C.rows[0]) == 'action' and P.row_kind(C.rows[sort_i]) == 'value',
-           'the Library page: Update Library (the stock page, no chevron), Album Order (a value, a chevron, its picker), Landscape (switch) and Rebuild Covers')
+           'the Library page: Update Library (the stock page, no chevron), Album Order (a value, a chevron, its picker), Landscape (switch), Rebuild Covers and Podcast Search (switch)')
 
     def open_lib(land=None, sort=None, language=None):
         m = Machine()
