@@ -610,7 +610,7 @@ def build_playlists_page(page):
 # The Songs page (patch/songs.c, docs/modules/songs.md): the Albums structure (a stock list holding the one content view that paints the rows, headers and
 # pinned header itself) under the glass navbar (Back, the small title, Search / Sort / Select / Now Playing), with the page's own widgets: in the content view the
 # large title and the Play / Shuffle pills (real flat buttons: they scroll with the list); over the list the rail (a view of its own, outside the scroll_view, so a
-# touch on it never starts a drag) and the letter bubble (insensitive); the sort card (a scrim and the Playlists card's look) and, hidden until select mode, the
+# touch on it never starts a drag) and the letter bubble (insensitive); the sort card (a scrim and the Playlists card's glass) and, hidden until select mode, the
 # bar with the Add to playlist and Delete pills and the navbar's Select All text. Everything that is shown later starts hidden AND insensitive.
 SG_TITLE_PX, SG_HDR_PX, SG_RAIL_PX, SG_BUBBLE_PX, SG_PILL_PX = 32, 20, 12, 56, 18
 SG_PILL_RGB, SG_PILL_DOWN_RGB, SG_PILL_OFF_RGB = '#1E1E1E', '#333333', '#141414'   # flat: no glass
@@ -657,6 +657,7 @@ SG_CARD_W, SG_LABEL_X = 268, 16
 SG_CARD_X = PL_CARD_RIGHT - SG_CARD_W
 SG_CARD_H = SG_CARD_ROWS * PL_ROW_H
 SG_TICK_W = 18
+SG_GLASS = 'sg_glass'    # the card's glass: the Playlists card's pane, 250 px high (tools/mod_icons.py GLASS_SORT)
 SG_SELALL_X, SG_SELALL_W = 208, 104     # the select mode's "Select All" text, right aligned to a 8 px margin
 
 
@@ -676,26 +677,28 @@ def sg_pill(name, x, y, text, icon, ink='#FFFFFF', w=None):
 
 
 def sort_card():
-    """(scrim, card): the sort order card under the Sort button, flat #2C2C2E with #3A3A3C pressed rows on the Playlists menu's rhythm (PL_ROW_H rows, no padding):
+    """(scrim, card): the sort order card under the Sort button, in the Playlists menu's glass (sg_glass, patch3_x, scrim, pressed fill and hairlines of playlist_menu; PL_ROW_H rows, no padding):
     the five stock labels and, at the right of each, the tick image that is shown on the current order."""
     scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', 'sg_scrim'), ('enable', 'true')]))
     for st in STATES:
-        styled(scrim, (st,), 'bg_color', '#00000000')
+        styled(scrim, (st,), 'bg_color', PL_DIM)
         styled(scrim, (st,), 'text_color', '#FFFFFF')
         styled(scrim, (st,), 'border_width', '0')
         styled(scrim, (st,), 'border_color', '#00000000')
     card = hidden(Widget('view', SG_CARD_X, PL_CARD_Y, SG_CARD_W, SG_CARD_H, [('name', 'sg_card')]))
     for st in STATES:
-        styled(card, (st,), 'bg_color', '#2C2C2E')
+        styled(card, (st,), 'bg_color', '#00000000')
+        styled(card, (st,), 'bg_image', SG_GLASS)
+        styled(card, (st,), 'bg_image_draw_type', 'patch3_x')
         styled(card, (st,), 'border_width', '0')
-        styled(card, (st,), 'round_radius', str(PL_CARD_R))
     for i, key in enumerate(pod_pages.SORT_MENU):
         item = Widget('button', 0, i * PL_ROW_H, SG_CARD_W, PL_ROW_H, [('name', f'sg_item{i}'), ('enable', 'true')])
         for st in STATES:
-            styled(item, (st,), 'bg_color', '#3A3A3C' if st == 'pressed' else '#00000000')
+            styled(item, (st,), 'bg_color', PL_PRESSED if st == 'pressed' else '#00000000')
             styled(item, (st,), 'text_color', '#FFFFFF')
-            styled(item, (st,), 'border_width', '0')
-            styled(item, (st,), 'border_color', '#00000000')
+            styled(item, (st,), 'border', 'top' if i else 'none')
+            styled(item, (st,), 'border_width', '1' if i else '0')
+            styled(item, (st,), 'border_color', PL_HAIR if i else '#00000000')
         lab = Widget('hscroll_label', SG_LABEL_X, 0, SG_CARD_W - 2 * SG_LABEL_X - SG_TICK_W - 8, PL_ROW_H, [
             ('name', f'sg_label{i}'), pod_i18n.text_prop(pod_i18n.english(key)), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
         for st in ('normal', 'disable', 'focused'):

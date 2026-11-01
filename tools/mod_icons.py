@@ -274,6 +274,7 @@ NP = {'np_play': ('pil:play', 44, 0, 'fg', 'np_play_down'), 'np_pause': ('pil:pa
       'lk_card': ('pil:glass_card', (288, 334), 0, 'fg', None),
       'pm_sheet': ('pil:glass_sheet', (320, 200), 0, 'fg', None), 'pm_sheet5': ('pil:glass_sheet5', (320, 250), 0, 'fg', None),
       'pl_glass': ('pil:glass_menu', (72, 200), 0, 'fg', None),
+      'sg_glass': ('pil:glass_sort', (72, 250), 0, 'fg', None),
       'np_grabber': ('pil:grabber', (120, 44), 0, 'ghost', 'np_grabber_down'),
       'np_row_playing': ('pil:wave', (40, 20), 0, 'fg', None),
       'np_random': ('shuffle', 30, 18, 'mid', None), 'np_cycle': ('repeat', 30, 18, 'mid', None),
@@ -1171,6 +1172,7 @@ GLASS_CARD = (288, 334, 18)                                   # the lock screen'
 GLASS_SHEET5 = (320, 250, 18)                               # the same sheet with the Tape row (page 1, five rows): its own image, not a crop of a taller one (docs/modules/playmore.md)
 GLASS_SHEET = (320, 200, 18)                                  # Now Playing's More sheet (patch/playmore.c, docs/modules/playmore.md): top corners only
 GLASS_SHEET_FILL = ((0x2A, 0x2A, 0x2C), (0x1E, 0x1E, 0x20), 0.88)   # denser than the card (0.76): rows, labels and grey badges sit straight on it (docs/modules/playmore.md)
+GLASS_SORT = (72, 250, 14)    # the Songs page's sort card (docs/modules/songs.md): the same pane, five rows high (the gradient is vertical, so each height has its own picture)
 GLASS_MENU = (72, 200, 14)    # the Playlists page's "..." menu card (patch/playlists.c, docs/modules/playlists.md): the sheet's glass, all four corners; drawn patch3_x
                               # (the middle 24 px stretched to the card's width), as tall as the card (tools/pod_ui.py PL_CARD_H)
 GLASS_FILL = {False: ((0x2D, 0x2D, 0x2F), (0x23, 0x23, 0x25), 0.82), True: ((0x3A, 0x3A, 0x3C), (0x30, 0x30, 0x32), 0.86)}   # top rgb, bottom rgb, alpha
@@ -1228,6 +1230,7 @@ def np_images():
             elif g == 'pil:glass_sheet': out[name] = glass_image(*GLASS_SHEET, fill=GLASS_SHEET_FILL, top_only=True)
             elif g == 'pil:glass_sheet5': out[name] = glass_image(*GLASS_SHEET5, fill=GLASS_SHEET_FILL, top_only=True)
             elif g == 'pil:glass_menu': out[name] = glass_image(*GLASS_MENU, fill=GLASS_SHEET_FILL)
+            elif g == 'pil:glass_sort': out[name] = glass_image(*GLASS_SORT, fill=GLASS_SHEET_FILL)
             elif g.startswith('pil:'): out[name] = pil_glyph(g[4:], px, rgb, alpha)
             elif rest: out[name] = np_disc(px, rest[0], NP_DISC_ALPHA_DOWN if pressed else NP_DISC_ALPHA, g, ink, rgb)
             else: out[name] = glyph_fit(g, px, px, rgb, (px - ink) // 2, 1.5 if ink < 22 else None)   # the small mode / queue glyphs keep a 1.5 px stroke
