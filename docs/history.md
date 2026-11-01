@@ -119,15 +119,23 @@ the recovery button combination for this model remains unverified.
   speed row shows the gauge. Test build zEFQKAAAE flashed. Lesson: an icon change must commit the regenerated PNG under
   `assets/icons/png` (the build copies only those); zEFQKAAAC shipped the generator change without the PNGs, and the preview
   (drawn from the generator) and the tests (checking draw calls, not pixels) both missed it.
-- **V2.1pT** (2026-11-01, current release): **Podcast Search** behind Settings > Library > Podcasts > Podcast Search (off by default;
+- **V2.1pT** (2026-11-01): **Podcast Search** behind Settings > Library > Podcasts > Podcast Search (off by default;
   "Search words are sent to Apple"): a Search capsule on the Shows page, Apple's iTunes directory (US) through the payload's own
   bounded JSON extractor (`patch/pcjson.c`, fuzzed), thumbnails on the worker, a feed address or an Apple Podcasts link typed in
   directly (lookup by id, ids past 32 bits), a preview of the feed held in memory and Subscribe writing exactly what Import writes;
   an already subscribed show opens its real page. Test builds zVKGGAAAB, zVKGGAAAC flashed, accepted. Finding: a probe of 15
   queries in four storefronts found US, TW and HK right for Chinese shows and CN the worst (wrong top results), 0.6 % of results
   without a feed URL, and every enclosure honouring Range.
+- **V2.1qD** (2026-11-01, current release): **Vinyl Mode**, a fullscreen portrait turntable Now Playing page from the More sheet
+  (`docs/modules/vinyl.md`): the cover as a turning label (33 1/3 rpm, spin-up and a 2 s spin-down), a tonearm following the track and
+  parking on pause once the record has stopped, eased swings, round prev / play / next keys, film grain on the plinth only. Designed from
+  mock rounds (`tools/preview_vinyl.py`); test builds zDEZGAAAD to zDEZGAAAM flashed, accepted.
 
 ## Hardware results (what broke on the device, and why)
+- **Vinyl Mode pause (zDEZGAAAI).** Tapping pause stalled the page, then the arm stuttered until parked. Stock's `play_pause_music`
+  (0x4e43b4) mutes and sleeps 150 ms (`usleep` 0x4e4460) on the UI thread before `mclSetPause`, and each arm-swing tick composed two whole
+  diagonal boxes (25 to 36 M instructions, over a 50 ms tick). Fixed by per-row spans, layer passes and stepped samplers (about 4 M a
+  swing tick, 2.1 M playing; budgets in `test/pod/vinyl.py`), a 100 ms cap on a late tick, and the arm waiting for the record to stop.
 
 First tests, 2026-10-19 to 10-25:
 

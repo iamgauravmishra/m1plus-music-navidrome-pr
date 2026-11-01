@@ -3,11 +3,11 @@
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
- * The sheet is as high as its page's rows (page 1: PM_PAGE_N = 5 x 50 = 250 px, page 2: PM_PAGE2_N = 4 x 50 = 200 px) and sits on the bottom of the screen; the page
+ * The sheet is as high as its page's rows (page 1: PM_PAGE_N = 6 x 50 = 300 px, page 2: PM_PAGE2_N = 4 x 50 = 200 px) and sits on the bottom of the screen; the page
  * above it is dimmed by the asset's own dialog highlight (highlight="default(alpha=..)", the AWTK dialog highlighter the window
  * manager sets up when the dialog opens). The glass is the dialog's first child, an insensitive image (pod_glass) that gets the page's own picture and height
- * (pm_sheet5 250 px, pm_sheet 200 px): never a crop of a taller one. Page 1 (when it opens): Look up album (listitem4), Look up artist (5), Add to playlist
- * (2), Cassette Mode (pod_tape, the asset's: it opens the landscape cassette page, patch/tape.c) and "More" (pod_more, a row the asset adds, hidden until now; a chevron
+ * (pm_sheet6 300 px, pm_sheet 200 px): never a crop of a taller one. Page 1 (when it opens): Look up album (listitem4), Look up artist (5), Add to playlist
+ * (2), Cassette Mode (pod_tape, the asset's: it opens the landscape cassette page, patch/tape.c), Vinyl Mode (pod_vinyl: the turntable page, patch/vinyl.c) and "More" (pod_more, a row the asset adds, hidden until now; a chevron
  * at its right). A tap on More switches to page 2: a header row "< More" (pod_back, also the asset's; a tap returns to page 1), Playback speed (1), A-B repeat (0) and
  * Delete (6, its label red in the asset). Online search (3) is never shown. A switch only hides one row set and shows the other and sets the sheet to the page's height;
  * there is no slide. A tap above the sheet closes it: that is the stock handler's (pointer y < dialog y), which works unchanged with the new y.
@@ -17,7 +17,7 @@
  * speed / A-B widgets, which keep their stock handlers: we move rows, we do not replace behaviour; it also pins the sheet at
  * y 130) and then, unless the kill switch /mnt/mmc/m1plus-off exists and every widget of the asset is there, arranges page 1
  * and anchors the sheet. Everything fallible (the widget lookups, the handlers, the labels' texts) is done before the first
- * row moves, so any failure leaves the stock seven rows (pod_more, pod_back and pod_tape stay hidden and insensitive in the asset).
+ * row moves, so any failure leaves the stock seven rows (pod_more, pod_back, pod_tape and pod_vinyl stay hidden and insensitive in the asset).
  *
  * The stock to-background handler (0x4789f0, bound by the stock init to the dialog's EVT_WINDOW_TO_BG) moves the dialog back to
  * y 130 when another dialog (the Delete confirm) opens over it. Ours puts the sheet back on the bottom, so it has to run after the
@@ -35,10 +35,11 @@
 #include "common.h"
 #include "covercache.h"
 
-#define PM_ROWS 10 /* listitem0..6, then pod_more, pod_back, pod_tape */
+#define PM_ROWS 11 /* listitem0..6, then pod_more, pod_back, pod_tape, pod_vinyl */
 #define PM_MORE 7
 #define PM_BACK 8
 #define PM_TAPE 9
+#define PM_VINYL 10
 #define GO_ALBUM 4 /* listitem4, Look up album */
 #define PM_DELETE 6 /* listitem6, Delete song */
 #define GO_ARTIST 5 /* listitem5, Look up artist */
@@ -47,7 +48,8 @@ extern int coverflow_artist(void *artists, unsigned index,
 
 /* what each page shows, top to bottom, as indices into pm.row[]; the sheet is as high as its page's rows (PM_PAGE_N, PM_PAGE2_N) */
 static const unsigned char pm_page[2][PM_PAGE_N] = {
-    {4, 5, 2, PM_TAPE, PM_MORE}, /* Look up album, Look up artist, Add to playlist, Cassette Mode, More */
+    {4, 5, 2, PM_TAPE, PM_VINYL,
+     PM_MORE}, /* Look up album, Look up artist, Add to playlist, Cassette Mode, Vinyl Mode, More */
     {PM_BACK, 1, 0, 6}, /* the back header, Playback speed, A-B repeat, Delete */
 };
 static const unsigned char pm_rows[2] = {PM_PAGE_N, PM_PAGE2_N};
@@ -95,8 +97,8 @@ static void pm_arrange(void) {
         if (!used[i]) widget_restack(pm.row[i], k++);
     widget_resize(
         pm.glass, PM_DIALOG_W,
-        h); /* the glass of the page's own height: pm_sheet5 (page 1, 250 px) or pm_sheet (page 2, 200 px), never a crop */
-    image_base_set_image(pm.glass, pm.page ? "pm_sheet" : "pm_sheet5");
+        h); /* the glass of the page's own height: pm_sheet6 (page 1, 300 px) or pm_sheet (page 2, 200 px), never a crop */
+    image_base_set_image(pm.glass, pm.page ? "pm_sheet" : "pm_sheet6");
     widget_resize(pm.dlg, PM_DIALOG_W, h);
     widget_move(pm.dlg, 0, PM_SCREEN_H - h);
     widget_resize(pm.lv, PM_DIALOG_W, h);
@@ -131,6 +133,16 @@ static int pm_on_tape(void *ctx, void *e) {
     (void)e;
     if (!pm.dlg || ctx != pm.dlg) return RET_OK;
     if (tape_open() == 0) window_close(ctx);
+    return RET_OK;
+}
+
+/* Vinyl Mode (the row is pod_vinyl): the turntable page (patch/vinyl.c), opened the same way: the page first, the sheet closed once it is up. */
+extern int vinyl_open(void);
+
+static int pm_on_vinyl(void *ctx, void *e) {
+    (void)e;
+    if (!pm.dlg || ctx != pm.dlg) return RET_OK;
+    if (vinyl_open() == 0) window_close(ctx);
     return RET_OK;
 }
 
@@ -273,9 +285,10 @@ static int pm_on_delete(void *ctx, void *e) {
 }
 
 static void pm_start(void *dlg) {
-    static const char *const names[PM_ROWS] = {"listitem0", "listitem1", "listitem2", "listitem3", "listitem4",
-                                               "listitem5", "listitem6", "pod_more",  "pod_back",  "pod_tape"};
-    void *more_label, *back_label, *speed_label, *note_label, *tape_label;
+    static const char *const names[PM_ROWS] = {"listitem0", "listitem1", "listitem2", "listitem3",
+                                               "listitem4", "listitem5", "listitem6", "pod_more",
+                                               "pod_back",  "pod_tape",  "pod_vinyl"};
+    void *more_label, *back_label, *speed_label, *note_label, *tape_label, *vinyl_label;
     unsigned i;
     if (access(KILL_SD, F_OK) == 0) return;
     if (pm.dlg) memset(&pm, 0, sizeof pm); /* an earlier dialog that never said it was gone */
@@ -289,10 +302,11 @@ static void pm_start(void *dlg) {
     speed_label = widget_lookup(dlg, "scrlabel1", 1);
     note_label = widget_lookup(dlg, "label1_msg", 1);
     tape_label = widget_lookup(dlg, "pod_tape_label", 1);
+    vinyl_label = widget_lookup(dlg, "pod_vinyl_label", 1);
     if (!pm.lv || !pm.sv || !pm.bar || !pm.glass || !more_label || !back_label || !speed_label || !note_label ||
-        !tape_label)
+        !tape_label || !vinyl_label)
         goto fail;
-    for (i = 0; i < PM_ROWS; i++) { /* exactly the asset: nine rows in the scroll_view */
+    for (i = 0; i < PM_ROWS; i++) { /* exactly the asset: eleven rows in the scroll_view */
         pm.row[i] = widget_lookup(dlg, names[i], 1);
         if (!pm.row[i] || *(void **)((char *)pm.row[i] + W_PARENT) != pm.sv) goto fail;
     }
@@ -303,12 +317,14 @@ static void pm_start(void *dlg) {
         goto fail; /* the stock "Multiple Speed" is wider than the room before the badges */
     if (widget_set_tr_text(note_label, "Files below 48 kHz only") != RET_OK) goto fail;
     if (widget_set_tr_text(tape_label, "Cassette Mode") != RET_OK) goto fail;
+    if (widget_set_tr_text(vinyl_label, "Vinyl Mode") != RET_OK) goto fail;
     if (!widget_on(dlg, EVT_DESTROY, pm_on_destroy, dlg)) goto fail;
     if (!widget_on(pm.lv, EVT_WINDOW_TO_BG, pm_on_bg, dlg))
         goto fail; /* after the stock one on the dialog (top comment) */
     if (!widget_on(pm.row[PM_MORE], EVT_CLICK, pm_on_more, dlg)) goto fail;
     if (!widget_on(pm.row[PM_BACK], EVT_CLICK, pm_on_back, dlg)) goto fail;
     if (!widget_on(pm.row[PM_TAPE], EVT_CLICK, pm_on_tape, dlg)) goto fail;
+    if (!widget_on(pm.row[PM_VINYL], EVT_CLICK, pm_on_vinyl, dlg)) goto fail;
     if (!widget_on(pm.row[GO_ALBUM], EVT_CLICK, pm_on_lookup_album, dlg)) goto fail;
     if (!widget_on(pm.row[GO_ARTIST], EVT_CLICK, pm_on_lookup_artist, dlg)) goto fail;
     if (!widget_on(pm.row[PM_DELETE], EVT_CLICK, pm_on_delete, dlg)) goto fail;

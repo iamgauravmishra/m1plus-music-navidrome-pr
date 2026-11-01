@@ -561,10 +561,10 @@
 /* Now Playing's More dialog (patch/playmore.c, docs/modules/playmore.md): ui/dialog/playmore_dialog.bin is a 320 px wide
  * sheet pinned at y 130 (the stock init, @0x479d10, and its to-background handler @0x4789f0) holding list_view playmore_listview >
  * scroll_view playmore_scrollview (310 px, the scroll bar scroll_bar_m beside it, 10 px) > list_item rows, PM_ROW_H (50, the
- * list_view's item_height) high each; the asset adds the hidden rows pod_more, pod_back and pod_tape. The payload shows PM_PAGE_N rows (page 1) or PM_PAGE2_N
+ * list_view's item_height) high each; the asset adds the hidden rows pod_more, pod_back, pod_tape and pod_vinyl. The payload shows PM_PAGE_N rows (page 1) or PM_PAGE2_N
  * (page 2) at a time and puts the sheet, as high as they are, on the bottom of the 480 px screen (the stock 130 + 350 ends there too). */
 #define PM_ROW_H 50
-#define PM_PAGE_N 5               /* page 1's rows (Look up album, Look up artist, Add to playlist, Cassette Mode, More): the sheet is that high (PM_ROW_H x) */
+#define PM_PAGE_N 6               /* page 1's rows (Look up album, Look up artist, Add to playlist, Cassette Mode, Vinyl Mode, More): the sheet is that high (PM_ROW_H x) */
 #define PM_PAGE2_N 4              /* page 2's rows (the back header, Speed, A-B repeat, Delete) */
 #define PM_SCREEN_H 480
 #define PM_DIALOG_W 320
@@ -1177,3 +1177,54 @@
 #define LOCALE_LANGUAGE 3
 #define EVT_LOCALE_CHANGED 0x122  /* locale_info_change dispatches it when the language changes (@0x658a7c) */
 #define EVT_THEME_CHANGED 0x14a   /* widget_set_theme dispatches it on the window manager after the font reload (@0x66d4bc) */
+
+/* The Vinyl page (patch/vinyl.c, docs/modules/vinyl.md; tools/vinyl_art.py draws the pictures from the same numbers, test/pod/vinyl.py checks them). PORTRAIT, fullscreen 320 x 480:
+ * frame (x, y) is the screen's. Angles are in 1/16 degree, positive clockwise on the screen; sines and cosines are 1/16384. */
+#define VN_W 320
+#define VN_H 480
+#define VN_REC_X 96               /* the record's centre (a pixel corner) and radius */
+#define VN_REC_Y 196
+#define VN_REC_R 162
+#define VN_LAB_R 76               /* the label (the cover, VN_LAB_PX square, its centre VN_LAB_R, VN_LAB_R) and the radius it is drawn in (the white rim covers its edge) */
+#define VN_LAB_PX 152
+#define VN_LAB_IN 77
+#define VN_PIV_X 276              /* the tonearm's pivot (a pixel corner) */
+#define VN_PIV_Y 70
+#define VN_ARM_W 353              /* vinyl_arm and vinyl_armsh: the arm pointing +x, the pivot at (VN_ARM_PX, VN_ARM_PY) of the picture (a pixel corner) */
+#define VN_ARM_H 59
+#define VN_ARM_PX 73
+#define VN_ARM_PY 22
+#define VN_SH_DX 5                /* the arm's shadow lies this far right and down */
+#define VN_SH_DY 7
+#define VN_PARK 1391              /* the arm's turn parked straight down beside the record (paused, stopped); on the record it is vn_groove (VN_GROOVE_N + 1 points) */
+#define VN_GROOVE_N 32
+#define VN_LID_X 16               /* vinyl_lid (VN_LID_PX square): the step, gloss, white rim and spindle over the turning label */
+#define VN_LID_Y 116
+#define VN_LID_PX 160
+#define VN_CAP_X 262              /* vinyl_cap (VN_CAP_PX square): the gimbal cap over the pivot */
+#define VN_CAP_Y 56
+#define VN_CAP_PX 32
+#define VN_BAND_Y0 420            /* the key band (rows y0 .. y1 exclusive) and each key's columns: previous, play / pause, next; the band below VN_BAND_Y0 is never composed */
+#define VN_BAND_Y1 478
+#define VN_PREV_X0 170
+#define VN_PLAY_X0 223
+#define VN_NEXT_X0 269
+#define VN_NEXT_X1 318
+#define VN_KEYS_W 286             /* vinyl_keys: the play key's four looks at x 0, 46, 92, 138 (play, pause, + pressed), previous pressed at VN_CELL_PREV, next pressed at VN_CELL_NEXT */
+#define VN_CELL_PREV 184
+#define VN_CELL_NEXT 237
+#define VN_CLOSE_X1 52            /* the close chevron's touch area (0, 0) .. (x1, y1) exclusive */
+#define VN_CLOSE_Y1 44
+#define VN_TAP_PX 14              /* a touch that travels less than this is a tap (the record) */
+#define VN_SPEED 3200             /* 33 1/3 rpm: 200 degrees a second */
+#define VN_SPINUP_MS 700          /* the label reaches its speed in this, and stops in VN_SPINDOWN_MS */
+#define VN_SPINDOWN_MS 2000
+#define VN_DT_MAX 100             /* a late tick moves things as this would: stock's pause blocks the loop 150 ms (play_pause_music usleep 0x4e4460), so motion resumes, not leaps */
+#define VN_ARM_STEP 4             /* the arm is redrawn when its turn changes by this (1/4 degree); a change over VN_ARM_SNAP swings there, eased over VN_SWING_MS + 1 ms a 1/16 degree */
+#define VN_ARM_SNAP 16
+#define VN_SWING_MS 300
+#define VN_PLAY_MS 50             /* the page timer while the label turns or the arm swings, and at rest */
+#define VN_IDLE_MS 500
+#define VN_FIRST_MS 50
+#define VN_COVER_MS 500           /* after a track change the /tmp cover is looked at again every VN_COVER_MS, VN_SETTLE times */
+#define VN_SETTLE 8

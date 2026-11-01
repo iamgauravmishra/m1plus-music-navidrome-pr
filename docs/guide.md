@@ -25,7 +25,7 @@ remains reachable. **Developer → Open Shanling Home** returns to the stock gri
 | Shuffle | Shuffle songs, albums or folders from Extras |
 
 The mini player's cover opens Now Playing; its buttons pause/resume or skip. Now Playing's
-More sheet provides playback options, Look up album and Cassette Mode. A drag on a list scrolls;
+More sheet provides playback options, Look up album, Cassette Mode and Vinyl Mode. A drag on a list scrolls;
 a tap opens or plays a row.
 
 Copy music to the card, then use **Extras → Update Library** to scan it.
@@ -51,6 +51,10 @@ countdown; see [capture details](modules/screenshot.md).
 
 **Cassette Mode** is a landscape Now Playing screen. Tap the cassette to pause/resume and the
 top-left screw to close. Change its theme under Settings.
+
+**Vinyl Mode** is a turntable Now Playing screen: the cover turns as the record's label while
+playing. Tap the record or the large key to pause/resume, the side keys to skip, the top-left
+chevron to close.
 
 **Pod** opens a virtual iPod with a touch click wheel. See its [controls and limits](modules/ipod.md).
 

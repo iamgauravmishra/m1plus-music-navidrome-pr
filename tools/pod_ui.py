@@ -1081,6 +1081,32 @@ def build_tape_page(page):
     return root
 
 
+# The Vinyl page (patch/vinyl.c, docs/modules/vinyl.md): a fullscreen window (320 x 480, portrait), one view over the whole window (vinyl_view: the touch target, painted by the
+# payload in its own EVT_AFTER_PAINT) and the text over it as insensitive hscroll_labels that never scroll (cut with an ellipsis; tools/vinyl_art.py TEXT): the title and its twin one
+# pixel right (the weight of the mock's title), the artist, the times, the status line. label_title (hidden) is the page's name for the i18n and asset tests.
+VN_LABELS = (('vn_title', 'title', 0), ('vn_title2', 'title', 1), ('vn_artist', 'artist', 0), ('vn_times', 'times', 0), ('vn_status', 'status', 0))
+
+
+def build_vinyl_page(page):
+    import vinyl_art
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name), ('fullscreen', 'true')])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#464648')
+    view = Widget('view', 0, 0, 320, 480, [('name', 'vinyl_view')])
+    styled(view, ('normal',), 'bg_color', '#464648')
+    root.children = [view]
+    for name, field, dx in VN_LABELS:
+        t = vinyl_art.TEXT[field]; x, y, w, h = vinyl_art.label_box(field)
+        lab = Widget('hscroll_label', x + dx, y, w, h, [('name', name), ('text', ''), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+        for st in ('normal', 'disable', 'focused'):
+            styled(lab, (st,), 'font_size', str(t['px']))
+            styled(lab, (st,), 'text_color', '#%02X%02X%02X' % t['rgb'])
+            styled(lab, (st,), 'text_align_h', 'left')
+            styled(lab, (st,), 'text_align_v', 'middle')
+        root.children.append(lab)
+    root.children.append(hidden(Widget('label', 36, 14, 200, 22, [('name', 'label_title'), ('style', 'navbar_label_white'), pod_i18n.text_prop(page.title)])))
+    return root
+
+
 def build_menucfg_page(page):
     """The Main Menu page (patch/menu.c): a row per menu item in the default order, each with an up arrow (a stock
     button with the stock chevron-up art, expansion_2, insensitive: a picture, the row decides by the tap position)
@@ -1501,6 +1527,8 @@ def build_page(page):
         return build_ipod_page(page)
     if page.kind == 'tape':
         return build_tape_page(page)
+    if page.kind == 'vinyl':
+        return build_vinyl_page(page)
     if page.kind == 'cover':
         return build_cover_page(page)
     if page.kind == 'artists':
