@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The default lock screen wallpaper: The Starry Night in place of the stock picture (V2.1hB).
+"""The default lock screen wallpaper: a drawn bokeh field in place of the stock picture.
 
 When no custom wallpaper is set, demo's get_screensaver_image (@0x4d7524) keeps the resource name
 "screensaver_default" as the SCREENSAVERPATH, and screensaver_page_init gives img_screensaver that
@@ -10,8 +10,8 @@ untouched by this step. The resource is
 
 (the `xx` set is the only one that has it: `theme1` has no `screensaver_default`, so it falls back to
 this file; screensaver_default1.png, 640 x 480, is not referenced by demo or any ui file and stays).
-It is replaced byte for byte by assets/starry-night-320x480.png (tools/wallpaper_prepare.py: crop,
-tone, 256-colour palette PNG, ~134 KB), the same name, size and mode. The stock file is pinned by
+It is replaced byte for byte by assets/bokeh-320x480.png (tools/wallpaper_prepare.py: a drawn bokeh
+field, 256-colour palette PNG compressed by primage, ~9 KB), the same name and size. The stock file is pinned by
 SHA-256, so a different firmware refuses to build rather than overwrite something else.
 
 Usage: mod_wallpaper.py SRC_WORKDIR OUT_WORKDIR     (OUT == SRC edits in place)
@@ -23,8 +23,8 @@ from modlib import clone_workdir
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 IMAGE = 'rootfs/release/assets/default/raw/images/xx/screensaver_default.png'
 STOCK_SHA = '92e7162b035fd5c6797d782db482e871ed696baa44e1a40160d0244e4970828c'
-ASSET = os.path.join(ROOT, 'assets', 'starry-night-320x480.png')
-ASSET_SHA = 'c824ad7a9f3b65c9dcccb4622f56cc88a366d1d764c8f8d061527916460f9f6a'
+ASSET = os.path.join(ROOT, 'assets', 'bokeh-320x480.png')
+ASSET_SHA = '8bf483509e85afd980c6476b3fb74e6ed7903b187a81138fa1b553c94845989d'
 SIZE = (320, 480)
 
 

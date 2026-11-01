@@ -35,7 +35,7 @@ QUEUE = [('So What', 'Miles Davis'), ('Freddie Freeloader', 'Miles Davis'), ('Bl
 def art(kind):
     """A sample cover: the wallpaper's centre, a two-tone design, or the placeholder disc."""
     if kind == 'sky':
-        im = Image.open(os.path.join(ROOT, 'assets', 'starry-night-320x480.png')).convert('RGB').crop((0, 90, 320, 410))
+        im = Image.open(os.path.join(ROOT, 'assets', 'bokeh-320x480.png')).convert('RGB').crop((0, 90, 320, 410))
         return im.resize((ART_SIZE, ART_SIZE), Image.LANCZOS)
     im = Image.new('RGB', (ART_SIZE, ART_SIZE)); d = ImageDraw.Draw(im)
     if kind == 'disc':

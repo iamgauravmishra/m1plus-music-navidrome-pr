@@ -1,7 +1,7 @@
 # SHA-256 over the sorted (path, file sha256) list of each area of release/assets in main's build V2.1oC (b7719e8), without our string keys (the tables are hashed without tools/pod_i18n.py TEXT: every feature adds to them; the line was f8ccc34d... as file bytes), our pages (ui/m1plus_*), the plain stock album page's ui file (its navbar's y), the About page and our images (test/pod/navbars.py NEW_IMAGES); 'demo-builders': the bytes of the stock pages' navbar builders in demo (test/pod/navbars.py BUILDERS)
 d121556a6e91d96df7fe3102e426c6055efbb8cb87c717a755a0336b820db5e8 default/raw/ui
 4d94838f437cc6edcc0033d09093ff5bf5aa587a11a093161fb5ca4346081c43 default/raw/styles
-218e76cb484fc50e1a53da02535c0e94d7cd4be6fef5f8de3369492a8d01d2bd default/raw/images
+5a0a68b25d4fcfcddf5c298718e061bbe0db3823f363f3f0ba0e1b7aef4576f6 default/raw/images
 f2e8044af8946fb8d14d7b15e0623f26b1091256935e1320c7c4c2f45a7daa0d default/raw/strings
 137d3453a706b99e28ffa487e34cccbfe1fea5da1f4b3b3319380a88939a24b0 default/raw/fonts
 9016275dd9b2f31173b366e6eed4a81025e3b8cd86a09a350cbe10e9e5ae0ab5 theme1

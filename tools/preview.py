@@ -6,7 +6,7 @@ previews from one finished tree. Approximate, not AWTK; sample data.
   M1+ Music menu as Home (no top bar), Settings page, Shuffle page       preview_icons.pod_page (the tree's own ui files)
   artist Cover Flow, and the landscape Cover Flow (480 x 320, as the user sees it)   preview_cover
   Albums: the grid and the list mode of ui/m1plus_albums.bin, with the mode toggle    preview_icons.albums_grid / albums_list
-  lock screen over The Starry Night, unified battery (playing, idle + charging)   preview_lockscreen
+  lock screen over the default wallpaper, unified battery (playing, idle + charging)   preview_lockscreen
   pull-down (the tree's dropdown_dialog.bin, real captions) and the toggle / slider art   controls()
   status bar / lock screen battery at 8x         preview_battery
 
@@ -334,7 +334,7 @@ def main():
             ('Playlists: list mode (toggle shows the grid; row 2 pressed)', PI.playlists_grid(s, list_mode=True).convert('RGB')),
             ('Pull-down, toggles and sliders', ctl),
             ('Status bar: real (top), pull-down default, theme1; below, their differences x16 (' + ('identical' if bars_same else 'DIFFER') + ')', bars),
-            ('Lock screen over The Starry Night (playing, idle + charging)', lock),
+            ('Lock screen over the default wallpaper (playing, idle + charging)', lock),
             ('Cover Flow landscape (Settings > Library > Landscape; player held turned counter-clockwise)', land)]
     # rows of panels, packed left to right
     rows = [cols[i:i + 3] for i in range(0, len(cols), 3)]

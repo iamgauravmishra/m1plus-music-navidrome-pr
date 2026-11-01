@@ -32,15 +32,15 @@ def run(ctx):
                    f'{asset_name}:{w.name or w.type} ends inside the 450 px window ({w.y}+{w.h})')
 
     # 39. The default lock screen wallpaper: screensaver_default.png (the resource name demo keeps as
-    #     SCREENSAVERPATH when no custom picture is set) is The Starry Night, a 320x480 PNG well
-    #     under 150 KB; the other files are left alone and no theme shadows it.
+    #     SCREENSAVERPATH when no custom picture is set) is the drawn bokeh field, a 320x480 PNG
+    #     under 16 KB; the other files are left alone and no theme shadows it.
     assets = os.path.join(WORK, 'rootfs', 'release', 'assets')
     img = os.path.join(assets, 'default', 'raw', 'images', 'xx', 'screensaver_default.png')
     data = open(img, 'rb').read()
-    expect(data[:8] == b'\x89PNG\r\n\x1a\n' and struct.unpack('>II', data[16:24]) == (320, 480) and len(data) <= 150000,
-           f'screensaver_default.png is a 320x480 PNG of {len(data)} bytes (<= 150,000)')
+    expect(data[:8] == b'\x89PNG\r\n\x1a\n' and struct.unpack('>II', data[16:24]) == (320, 480) and len(data) <= 16000,
+           f'screensaver_default.png is a 320x480 PNG of {len(data)} bytes (<= 16,000)')
     import mod_wallpaper
-    expect(hashlib.sha256(data).hexdigest() == mod_wallpaper.ASSET_SHA, 'it is assets/starry-night-320x480.png')
+    expect(hashlib.sha256(data).hexdigest() == mod_wallpaper.ASSET_SHA, 'it is assets/bokeh-320x480.png')
     expect(not any(f.startswith('screensaver_default.') for t in os.listdir(assets) if t != 'default'
                    for _, _, fs in os.walk(os.path.join(assets, t)) for f in fs),
            'no other theme carries a screensaver_default that would shadow it')

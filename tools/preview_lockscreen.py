@@ -11,7 +11,7 @@ App-driven content is sample data: the cover is a synthetic picture, title/artis
 `idle` draws the nothing-queued state (the app hides view_bottomview). The wallpaper is app-driven too;
 by default a plain gradient stands in for it; --wallpaper busy draws a synthetic busy picture (to show
 a translucent card, docs/ui.md); --wallpaper stock uses the tree's screensaver_default (the stock picture, handy locally and not
-for committing, or The Starry Night, public domain). A bg_color with alpha (#RRGGBBAA) is blended, as demo's canvas fill does.
+for committing, or the mod's drawn bokeh field). A bg_color with alpha (#RRGGBBAA) is blended, as demo's canvas fill does.
 """
 import argparse, datetime, os, sys
 from PIL import Image, ImageDraw, ImageFont

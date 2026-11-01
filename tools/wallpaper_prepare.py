@@ -1,71 +1,69 @@
 #!/usr/bin/env python3
-"""Prepare the default lock screen wallpaper: Vincent van Gogh, The Starry Night (1889), public domain.
+"""Draw the default lock screen wallpaper: a soft bokeh field (assets/bokeh-320x480.png).
 
-  wallpaper_prepare.py --fetch DIR          download the pinned scan into DIR (a new, empty directory)
-  wallpaper_prepare.py SCAN.jpg OUT.png     portrait crop, tone, palette PNG (assets/starry-night-320x480.png)
+  wallpaper_prepare.py OUT.png
 
-Source: the Google Art Project scan on Wikimedia Commons,
-  https://commons.wikimedia.org/wiki/File:Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg
-fetched as its 1920 px thumbnail (Commons only serves a fixed list of thumbnail widths). The
-painting is in the public domain (the artist died in 1890; a faithful photograph of a flat
-public-domain work adds no new copyright, Commons PD-Art). The download is untrusted data: it is
-checked against SHA_256 before anything opens it, and only Pillow decodes it. Run with `python -I`
-and keep DIR out of the repo.
-
-The picture, 1920 x 1520, is cropped to the 2:3 portrait of the 320 x 480 screen: the full height
-and the 1013 px starting at x = 250, which holds the cypress (x 285-870) and the large swirl
-(x 690-1230), resampled with Lanczos. The tone is 20 % darker (brightness 0.8) so the translucent
-player card and the white clock (docs/ui.md) read well on its brightest parts, the moon
-and stars. The result is an 8-bit palette PNG (256 colours, median cut), about 134 KB: AWTK's loader
-(stb_image) expands it like any other PNG, and the rootfs headroom is untouched.
+Drawn, not sourced: a vertical gradient from teal (top) through light blue and periwinkle to deep blue
+(GRADIENT stops), then soft discs of cyan, blue and lavender light (DISCS: centre and radius as
+fractions of the screen, colour, opacity), each a filled circle whose edge is blurred by 15 % of its
+radius, larger and fainter at the upper right, small and brighter lower down. The 320 x 480 RGB picture
+is reduced to an 8-bit palette (256 colours, median cut, no dithering) and then compressed losslessly
+by primage (github.com/imfing/primage: OxiPNG, level 6), which keeps the palette. The result is about
+7 KB (the stock picture is 398 KB). AWTK's loader (stb_image) expands it like any other PNG. The build
+only copies the committed file, pinned by SHA-256 in mod_wallpaper.py; primage is needed only here.
 """
-import argparse, hashlib, os, sys, urllib.request
-from PIL import Image, ImageEnhance
+import argparse, os, shutil, subprocess, sys, tempfile
+from PIL import Image, ImageDraw, ImageFilter
 
-URL = ('https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/'
-       'Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg/1920px-Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg')
-SHA_256 = 'dbca2f16b195f6e83feb98d44c0d98eb0b39f560314efbedfedab9e45caa8a2f'
-SIZE = (1920, 1520)
-CROP_X = 250
-BRIGHTNESS = 0.8
+W, H = 320, 480
 COLOURS = 256
-OUT_SIZE = (320, 480)
+# (y as a fraction of the height, colour): indigo at the top, through aqua, to deep sea green
+GRADIENT = [(0.0, (62, 78, 150)), (0.22, (92, 118, 186)), (0.48, (112, 166, 196)), (0.75, (78, 146, 160)),
+            (1.0, (30, 78, 104))]
+# ((cx, cy, r) as fractions of the width, height and width, colour, opacity): large faint discs behind
+# the clock, small bright ones along the card's sides and in the strip under it
+DISCS = [((0.18, 0.08, 0.26), (170, 160, 235), 0.22), ((0.62, 0.15, 0.16), (150, 190, 240), 0.20),
+         ((0.92, 0.04, 0.09), (200, 200, 250), 0.40), ((0.03, 0.40, 0.07), (150, 230, 210), 0.45),
+         ((0.97, 0.52, 0.10), (170, 160, 235), 0.35), ((0.05, 0.78, 0.12), (120, 210, 200), 0.30),
+         ((0.60, 0.95, 0.07), (160, 235, 215), 0.50), ((0.88, 0.90, 0.13), (130, 180, 230), 0.30),
+         ((0.32, 0.97, 0.05), (200, 240, 230), 0.45)]
 
 
-def sha256(path):
-    with open(path, 'rb') as f: return hashlib.sha256(f.read()).hexdigest()
+def lerp(a, b, t): return tuple(round(x + (y - x) * t) for x, y in zip(a, b))
 
 
-def fetch(directory):
-    os.makedirs(directory, exist_ok=True)
-    if os.listdir(directory): sys.exit(f'{directory} is not empty: use a new, empty directory for the download')
-    path = os.path.join(directory, 'starry-night-1920.jpg')
-    req = urllib.request.Request(URL, headers={'User-Agent': 'm1plus-mod/1.0 (wallpaper fetch)'})
-    with urllib.request.urlopen(req, timeout=120) as r, open(path, 'wb') as f: f.write(r.read())
-    if sha256(path) != SHA_256:
-        os.remove(path); sys.exit('download SHA-256 mismatch: not the pinned scan')
-    print('->', path, SHA_256)
+def draw():
+    im = Image.new('RGB', (W, H))
+    d = ImageDraw.Draw(im)
+    for y in range(H):
+        t = y / (H - 1)
+        for (t0, c0), (t1, c1) in zip(GRADIENT, GRADIENT[1:]):
+            if t0 <= t <= t1:
+                d.line([(0, y), (W, y)], fill=lerp(c0, c1, (t - t0) / (t1 - t0)))
+                break
+    for (cx, cy, r), col, a in DISCS:
+        rr = r * W
+        mask = Image.new('L', (W, H), 0)
+        ImageDraw.Draw(mask).ellipse([cx * W - rr, cy * H - rr, cx * W + rr, cy * H + rr], fill=round(255 * a))
+        im = Image.composite(Image.new('RGB', (W, H), col), im, mask.filter(ImageFilter.GaussianBlur(rr * 0.15)))
+    return im
 
 
-def prepare(src, out):
-    if sha256(src) != SHA_256: sys.exit(f'{src}: SHA-256 is not the pinned scan ({SHA_256})')
-    im = Image.open(src)
-    if im.size != SIZE: sys.exit(f'unexpected size {im.size}')
-    h = im.height; w = h * OUT_SIZE[0] // OUT_SIZE[1]
-    im = im.convert('RGB').crop((CROP_X, 0, CROP_X + w, h)).resize(OUT_SIZE, Image.LANCZOS)
-    im = ImageEnhance.Brightness(im).enhance(BRIGHTNESS)
-    q = im.quantize(colors=COLOURS, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
-    q.save(out, 'PNG', optimize=True)
-    print(f'-> {out} ({os.path.getsize(out)} bytes, {OUT_SIZE[0]}x{OUT_SIZE[1]}, {COLOURS} colours)')
+def prepare(out):
+    primage = shutil.which('primage')
+    if not primage: sys.exit('primage not found (brew install --cask primage)')
+    q = draw().quantize(colors=COLOURS, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    with tempfile.TemporaryDirectory() as t:
+        tmp = os.path.join(t, 'wallpaper.png')
+        q.save(tmp, 'PNG', optimize=True)
+        subprocess.run([primage, '--format', 'png', '--png-level', '6', '--overwrite', '-o', out, tmp], check=True)
+    print(f'-> {out} ({os.path.getsize(out)} bytes, {W}x{H}, {COLOURS} colours)')
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--fetch', metavar='DIR'); ap.add_argument('args', nargs='*')
-    a = ap.parse_args()
-    if a.fetch: fetch(a.fetch)
-    elif len(a.args) == 2: prepare(*a.args)
-    else: ap.error('give --fetch DIR, or SCAN.jpg OUT.png')
+    ap.add_argument('out')
+    prepare(ap.parse_args().out)
 
 
 if __name__ == '__main__': main()
