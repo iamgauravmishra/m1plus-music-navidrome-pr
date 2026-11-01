@@ -15,6 +15,11 @@ Preview, both pages over Now Playing with the dim (each page with its own glass;
   dimmed (the AWTK dialog highlighter, below). A tap above the sheet closes it (stock behaviour, see "Positioning"); a tap on the sheet does not.
 - **Page 1** (when it opens, every time): Look up album (`listitem4`), Look up artist (5), Add to playlist (2), **Cassette Mode** (`pod_tape`, below), **Vinyl Mode** (`pod_vinyl`, below) and **More** (`pod_more`: the Extras
   ellipsis glyph, the label, the stock grey chevron-right `right_arrow` at its right).
+- **Page 1 of a podcast episode** (the playing record's path passes `pc_is_path`, tested at open; `pm.ep`): row set 2, only **Go to Podcasts** (`pod_goep`, the `pod_ic_podcasts` Lucide `podcast` glyph, no chevron, no hairline as the first row,
+  label translated in 13 languages) and **More**. Look up album, Look up artist, Add to playlist, Cassette Mode and Vinyl Mode are `visible=false` + `sensitive=false`, parked under the sheet and stacked last like every hidden row
+  (`pm_arrange` takes the shown rows from `pm_page[set]`, set = `pm_set()`: 0 music page 1, 1 More page, 2 episode page 1). The sheet is **2 rows, 100 px** (y 380) with the Podcasts page's own `pc_sheet2` glass (320 x 100, same pane,
+  no new image): height, glass, dialog / list_view / scroll_view / bar sizes and virtual_h all follow the row count as for the other pages. More opens the usual page 2; its back header returns to the episode's page 1. A tap on Go to Podcasts calls
+  `podcasts_go()` (patch/podcasts.c, docs/modules/podcasts.md "Go to Podcasts") and closes the sheet once the page is up (a page that will not open leaves the sheet). Songs: the sheet is unchanged. Test: `test/pod/playmore.py` section 7c.
 - **Page 2** (a tap on More): a header row **< More** (`pod_back`: the stock chevron-left `return`, the label "More"; a tap returns to page 1), then
   Playback speed (1), A-B repeat (0) and **Delete song** (6, its label red `#FF5A4F`). The stock rows keep their own handlers (speed badges,
   A-B switch, delete, add to playlist): the payload moves rows, it replaces no behaviour but two (Look up album and Look up artist, next items) and adds two (Cassette Mode, Vinyl Mode). Switching only swaps which

@@ -151,11 +151,11 @@ def layout_tests(ctx):
     L = lay(m)
     expect(m.props.get((m.sv, 'virtual_h')) == L['h'] and ('widget_resize', m.view, 320, L['h']) in m.calls and L['y_shelf'] == 0, f'four shows, a feed, nothing partly played: no Continue Listening, the content is {L["h"]} px')
     gridend = L['y_grid'] + 2 * pod_show.grid_pitch()
-    expect(L['y_shows'] == o['PP_LINE_Y'] + o['PP_LINE_PITCH'] and L['y_grid'] == L['y_shows'] + o['PP_HEAD_PITCH'] and L['y_dl'] == gridend + o['PP_LIB_GAP'] and L['y_sub'] == L['y_dl'] + o['PC_ROW_H'] and L['h'] == L['y_sub'] + o['PC_ROW_H'] + o['PP_BOTTOM'],
-           'the Shows header PP_LINE_PITCH under the line, the grid, then PP_LIB_GAP (24) of air and the Library rows (Downloads, Subscriptions) as the last section')
+    expect(L['y_shows'] == o['PP_LINE_Y'] + o['PP_LINE_PITCH'] and L['y_grid'] == L['y_shows'] + o['PP_HEAD_PITCH'] and L['y_dl'] == gridend + o['PP_LIB_GAP'] and L['y_sub'] == L['y_dl'] + o['PC_ROW_H'] and L['y_sav'] == L['y_sub'] + o['PC_ROW_H'] and L['h'] == L['y_sav'] + o['PC_ROW_H'] + o['PP_BOTTOM'],
+           'the Shows header PP_LINE_PITCH under the line, the grid, then PP_LIB_GAP (24) of air and the Library rows (Downloads, Subscriptions, Saved) as the last section')
     L0 = lay(m, line=False)
-    expect(L0['y_shows'] == o['PP_LINE_Y'] + o['PP_NOLINE_PITCH'] and L0['y_sub'] == 0 and L0['y_dl'] == L0['y_grid'] + 2 * pod_show.grid_pitch() + o['PP_LIB_GAP'] and L0['h'] == L0['y_dl'] + o['PC_ROW_H'] + o['PP_BOTTOM'],
-           'with no feed there is no refresh line and no Subscriptions row: the Shows header PP_NOLINE_PITCH under the title, the Downloads row alone at the end')
+    expect(L0['y_shows'] == o['PP_LINE_Y'] + o['PP_NOLINE_PITCH'] and L0['y_sub'] == 0 and L0['y_dl'] == L0['y_grid'] + 2 * pod_show.grid_pitch() + o['PP_LIB_GAP'] and L0['y_sav'] == L0['y_dl'] + o['PC_ROW_H'] and L0['h'] == L0['y_sav'] + o['PC_ROW_H'] + o['PP_BOTTOM'],
+           'with no feed there is no refresh line and no Subscriptions row: the Shows header PP_NOLINE_PITCH under the title, the Downloads row and Saved at the end')
     Le = lay(m, n=0)
     expect(Le['y_dl'] == Le['y_grid'] and Le['y_sub'] == Le['y_dl'] + o['PC_ROW_H'], 'no show: no gap, the rows follow the top block')
     # the refresh line: "Updated 1h ago · " in the grey 15 px style, the white word right after it
@@ -169,14 +169,15 @@ def layout_tests(ctx):
     bl, texts, styles, fills = PCP.paint(m, LO)
     tiles = sorted(tuple(b[2]) + (tuple(b[1][:2]),) for b in bl if tuple(b[1]) in ((o['PA_TILE_X'], o['PA_TILE_Y'], o['PA_TILE_PX'], o['PA_TILE_PX']), (0, 0, o['PA_TILE_PX'], o['PA_TILE_PX'])))
     chev = sorted(tuple(b[2]) for b in bl if b[1] == (o['PA_CHEV'] * o['PA_G_PX'], o['PA_G_Y'], o['PA_G_PX'], o['PA_G_PX']))
-    expect(tiles == [(o['PP_DL_TILE_X'], L['y_dl'] - LO + o['PP_DL_TILE_Y'], 44, 44, (o['PA_TILE_X'], o['PA_TILE_Y'])), (o['PP_DL_TILE_X'], L['y_sub'] - LO + o['PP_DL_TILE_Y'], 44, 44, (0, 0))]
-           and chev == [(o['PP_DL_CHEV_CX'] - 8, L['y_dl'] - LO + o['PC_ROW_H'] // 2 - 8, 16, 16), (o['PP_DL_CHEV_CX'] - 8, L['y_sub'] - LO + o['PC_ROW_H'] // 2 - 8, 16, 16)],
-           f'two Library rows: the atlas\' download tile and the podcast tile (its own image) at x 16, a chevron each ({tiles}, {chev})')
+    expect(tiles == [(o['PP_DL_TILE_X'], L['y_dl'] - LO + o['PP_DL_TILE_Y'], 44, 44, (o['PA_TILE_X'], o['PA_TILE_Y'])), (o['PP_DL_TILE_X'], L['y_sub'] - LO + o['PP_DL_TILE_Y'], 44, 44, (0, 0)), (o['PP_DL_TILE_X'], L['y_sav'] - LO + o['PP_DL_TILE_Y'], 44, 44, (0, 0))]
+           and chev == [(o['PP_DL_CHEV_CX'] - 8, L[k] - LO + o['PC_ROW_H'] // 2 - 8, 16, 16) for k in ('y_dl', 'y_sub', 'y_sav')],
+           f'three Library rows: the atlas\' download tile and the podcast and bookmark tiles (images of their own) at x 16, a chevron each ({tiles}, {chev})')
     rows = [(t, s, r) for (t, r), s in zip(texts, styles) if s in ('label_row_title', 'label_row_sub')]
     want = [('Downloads', 'label_row_title', (o['PP_DL_TEXT_X'], L['y_dl'] - LO + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H'])), ('5 episodes', 'label_row_sub', (o['PP_DL_TEXT_X'], L['y_dl'] - LO + o['LIST_SUB_Y'], o['PP_DL_TEXT_W'], o['LIST_SUB_H'])),
-            ('Subscriptions', 'label_row_title', (o['PP_DL_TEXT_X'], L['y_sub'] - LO + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H'])), ('3 shows', 'label_row_sub', (o['PP_DL_TEXT_X'], L['y_sub'] - LO + o['LIST_SUB_Y'], o['PP_DL_TEXT_W'], o['LIST_SUB_H']))]
+            ('Subscriptions', 'label_row_title', (o['PP_DL_TEXT_X'], L['y_sub'] - LO + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H'])), ('3 shows', 'label_row_sub', (o['PP_DL_TEXT_X'], L['y_sub'] - LO + o['LIST_SUB_Y'], o['PP_DL_TEXT_W'], o['LIST_SUB_H'])),
+            ('Saved', 'label_row_title', (o['PP_DL_TEXT_X'], L['y_sav'] - LO + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H'])), ('No saved episodes', 'label_row_sub', (o['PP_DL_TEXT_X'], L['y_sav'] - LO + o['LIST_SUB_Y'], o['PP_DL_TEXT_W'], o['LIST_SUB_H']))]
     expect(sorted(rows) == sorted(want), f'their titles (21 px) and grey lines (18 px) from x 72 ({rows})')
-    expect(all((o['LIST_HAIR'], o['PP_DL_TEXT_X'], L[k] - LO + o['PC_ROW_H'] - 1, 320 - o['PP_DL_TEXT_X'], 1) in fills for k in ('y_dl', 'y_sub')), 'a hairline under each from its text')
+    expect(all((o['LIST_HAIR'], o['PP_DL_TEXT_X'], L[k] - LO + o['PC_ROW_H'] - 1, 320 - o['PP_DL_TEXT_X'], 1) in fills for k in ('y_dl', 'y_sub', 'y_sav')), 'a hairline under each from its text')
     # the grid: cover, title and grey line of each cell where the model puts them
     got = grid(m)
     expect([t for t, _ in got] == ORDER, f'the grid lists every show, most recently updated first ({got})')
@@ -488,11 +489,11 @@ def library_tests(ctx):
     A1, A2 = EP('Alpha Show', 'ep1.mp3'), EP('Alpha Show', 'ep2.mp3')
     m = opened()
     L = lay(m)
-    expect([a for a, _ in lib(m)] == ['Downloads', 'Subscriptions'] and not [c for c in m.calls if c[0] == 'widget_set_text_utf8' and 'Downloads (' in str(c)], 'a card with subscriptions: both rows are there (nothing queued does not hide Downloads)')
+    expect([a for a, _ in lib(m)] == ['Downloads', 'Subscriptions', 'Saved'] and not [c for c in m.calls if c[0] == 'widget_set_text_utf8' and 'Downloads (' in str(c)], 'a card with subscriptions: both rows are there (nothing queued does not hide Downloads)')
     m2 = opened(cardf=lambda x: PCP.page_card(x))
-    expect([a for a, _ in lib(m2)] == ['Downloads'] and lay(m2, 2, False)['y_sub'] == 0, 'no show has a feed: the Downloads row alone (the Subscriptions row needs a subscription)')
+    expect([a for a, _ in lib(m2)] == ['Downloads', 'Saved'] and lay(m2, 2, False)['y_sub'] == 0, 'no show has a feed: the Downloads row and Saved (the Subscriptions row needs a subscription)')
     # idle: the count at once, the size when the totals scan has finished
-    expect(lib(m) == [('Downloads', '5 episodes'), ('Subscriptions', '3 shows')], f'idle: "5 episodes" at once, "3 shows" ({lib(m)})')
+    expect(lib(m) == [('Downloads', '5 episodes'), ('Subscriptions', '3 shows'), ('Saved', 'No saved episodes')], f'idle: "5 episodes" at once, "3 shows", nothing saved ({lib(m)})')
     m = opened(lambda mm: mm.sizes.update({A1: 100 << 20, A2: 50 << 20}))
     settle(m)
     expect(lib(m)[0] == ('Downloads', '5 episodes · 150 MB'), f'the totals scan has run: "5 episodes · 150 MB" ({lib(m)})')
@@ -500,9 +501,9 @@ def library_tests(ctx):
     settle(m)
     expect(lib(m)[0] == ('Downloads', '5 episodes · 1.4 GB'), f'from a gigabyte on one decimal: "5 episodes · 1.4 GB" ({lib(m)})')
     one = opened(lambda mm: mm.put(f'{RP}/Only/o.mp3', b'x', 5), lambda x: None)
-    expect(lib(one) == [('Downloads', '1 episode')], f'one file: "1 episode" ({lib(one)})')
+    expect(lib(one) == [('Downloads', '1 episode'), ('Saved', 'No saved episodes')], f'one file: "1 episode" ({lib(one)})')
     nothing = opened(lambda mm: mm.put(f'{RP}/Fresh/.show', f'M1PLUS-SHOW 1\ntitle=Fresh\nfeed={F["three"]}\nimage=\nchecked=0\n'.encode()), lambda x: None)
-    expect(lib(nothing) == [('Downloads', 'No downloads'), ('Subscriptions', '1 show')], f'a subscription with nothing downloaded: "No downloads", "1 show" ({lib(nothing)})')
+    expect(lib(nothing) == [('Downloads', 'No downloads'), ('Subscriptions', '1 show'), ('Saved', 'No saved episodes')], f'a subscription with nothing downloaded: "No downloads", "1 show" ({lib(nothing)})')
     # the totals scan: one show a tick, nothing once it is done, never in the dark, the old figure stays until the new one is complete
     m = opened(lambda mm: mm.sizes.update({A1: 100 << 20}))
     walks = []
@@ -555,7 +556,7 @@ def library_tests(ctx):
     expect(PCP.title_text(m) == 'Subscriptions', 'a tap on the Subscriptions row opens the Subscriptions page')
     PCP.click(m, 'btn_return')
     expect(PCP.title_text(m) == 'Podcasts' and m.props.get((m.sv, 'yoffset')) == LO, 'Back returns to the Shows level where it was')
-    PCP.tap(m, 150, L['y_dl'] - 2, off=LO); PCP.tap(m, 150, L['y_sub'] + o['PC_ROW_H'] + 2, off=LO)
+    PCP.tap(m, 150, L['y_dl'] - 2, off=LO); PCP.tap(m, 150, L['y_sav'] + o['PC_ROW_H'] + 2, off=LO)
     expect(PCP.title_text(m) == 'Podcasts', 'a touch just above the rows or just under them opens nothing')
     m = opened()
     for key, label in (('y_dl', 'Downloads'), ('y_sub', 'Subscriptions')):
@@ -575,7 +576,7 @@ def library_tests(ctx):
     m = opened()
     DL.poke_slot(m, 0, 'Sub One', 'a.mp3', 1, seq=1); m.setword(DL.pn_at(12), 5); tick(m)
     DL.poke_slot(m, 0, 'Sub One', 'a.mp3', 0); m.setword(DL.pn_at(12), 6); tick(m)
-    expect(m.props.get((m.sv, 'virtual_h')) == L['h'] and [a for a, _ in lib(m)] == ['Downloads', 'Subscriptions'], 'a download that comes and goes: the Library rows stay, the content is the same height')
+    expect(m.props.get((m.sv, 'virtual_h')) == L['h'] and [a for a, _ in lib(m)] == ['Downloads', 'Subscriptions', 'Saved'], 'a download that comes and goes: the Library rows stay, the content is the same height')
 
 
 def grid_tests(ctx):

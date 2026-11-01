@@ -174,6 +174,8 @@ def query_tests(ctx):
         expect(j >> 26 == 2 and (j & 0x3ffffff) << 2 == PSYMS[fn] and w(built, at + 4) == 0, f'the build replaced {name}\'s prologue by `j {fn}; nop`')
         expect(w(built, at + 12) == w(stock_demo, at + 12), f'{name}: the word the trampoline resumes at is stock\'s')
     expect(all(w(stock_demo, a) == old and w(built, a) == old for a, old, _ in pod.QUERY_PINS), 'the pinned words of both query functions are stock\'s, in the stock demo and in the build')
+    cstr_at = lambda b, a: b[pod.fileoff(b, a):].split(b'\0')[0]
+    expect(cstr_at(stock_demo, 0x74ba58) == b'myfav' and cstr_at(stock_demo, 0x74ba6c) == b'select * from %s', 'stock: getAllFav formats "select * from %s" with "myfav" (the filter matches the text exactly)')
     expect(MANIFEST['hook_query'] == {'addr': pod.QUERY_DB, 'target': PSYMS['pc_library_query']} and MANIFEST['hook_sorted_query']['addr'] == pod.QUERY_SORT, 'the manifest records both hooks')
     for n, at in (('stock_dbquery_trampoline', pod.QUERY_DB), ('stock_sorted_query_trampoline', pod.QUERY_SORT)):   # gp restored, then a jump past the displaced prologue
         tw = [w(built, PSYMS[n] + 4 * i) for i in range(4)]
@@ -202,7 +204,7 @@ def query_tests(ctx):
             expect(got is not None and q.via == via and {r[0] for r in q.results} == want and n == len(q.results),
                    f'{fn}: {sql[:60]!r} -> ids {sorted(r[0] for r in q.results)} (want {sorted(want)}); the shared album keeps the music row, untagged episodes add no Unknown row')
     # stock's text for anything that is not a songtable select, or does not fit: unchanged
-    for sql in ('select * from playlist where id > 100 and cd_num=3', 'select * from myfav', 'delete from songtable', 'select * from songtable2', 'SELECT * FROM songtable',
+    for sql in ('select * from playlist where id > 100 and cd_num=3', 'select * from myfav where id=1', 'select * from myfav ', 'select * from myfav;', 'select * from myfav2', 'delete from songtable', 'select * from songtable2', 'SELECT * FROM songtable',
                 '', 'select 1 where 0 /* from songtable */ ' + 'x' * 1100, 'select * from songtable where fileurl=\'' + 'y' * 1100 + '\''):
         qq = QueryMachine([])
         qq.db.execute('create table playlist(id,cd_num)'); qq.db.execute('create table myfav(id)'); qq.db.execute('create table songtable2(id)')
@@ -210,6 +212,18 @@ def query_tests(ctx):
         except Exception: pass
         expect(qq.sql == sql, f'{sql[:50]!r}: stock SQL, untouched')
     first_track_tests(expect)
+    # Favourites (getAllFav: exactly "select * from myfav") is music only; with pc_saved_scope set (the Saved page) it is the episodes only, the last saved first
+    fav = [(1, '/mnt/mmc/Music/a.flac'), (2, '/mnt/mmc/Podcasts/Show/ep1.mp3'), (3, '/mnt/mmc/Music/Podcasts/b.flac'), (4, '/mnt/mmc/pOdCaStS/Show/ep2.mp3'), (5, None), (6, '/mnt/mmc/Podcasts Extra/c.mp3'), (7, '/mnt/mmc/Podcasts/Other/ep3.mp3')]
+    qf = QueryMachine([])
+    qf.db.execute('create table myfav(id,fileurl)'); qf.db.executemany('insert into myfav values(?,?)', fav)
+    for fn in ('pc_library_query', 'pc_sorted_query'):
+        n, got = qf.query('select * from myfav', fn)
+        expect(got is not None and [r[0] for r in qf.results] == [1, 3, 5, 6], f'{fn}: Favourites lists the music rows, in the table order ({[r[0] for r in qf.results]}): {got}')
+        qf.u.mem_write(PSYMS['pc_saved_scope'], b'\1')
+        n, got = qf.query('select * from myfav', fn)
+        expect(got is not None and [r[0] for r in qf.results] == [7, 4, 2], f'{fn}: with the Saved scope the episodes, the last saved first ({[r[0] for r in qf.results]}): {got}')
+        qf.u.mem_write(PSYMS['pc_saved_scope'], b'\0')
+    expect(qf.icount < 1500 and qf.calls == [], f'the myfav rewrite costs {qf.icount} instructions')
     n, got = q.query('select * from songtable where id=2')
     expect(got == "select * from (select * from songtable where ifnull(fileurl,'') not like '/mnt/mmc/podcasts/%') where id=2", f'the rewritten text: {got}')
     expect(q.icount < 2500 and q.calls == [], f'one rewrite costs {q.icount} instructions and calls nothing but the trampoline')

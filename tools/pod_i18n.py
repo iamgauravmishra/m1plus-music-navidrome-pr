@@ -419,6 +419,11 @@ TEXT = dict([
     _t('The playing episode was kept', '正在播放的节目已保留', '正在播放的節目已保留', '再生中の項目は残しました', '재생 중인 에피소드는 유지되었습니다', 'L’épisode en lecture a été conservé', 'Die laufende Folge wurde behalten',
        'Se conservó el episodio en reproducción', 'Episodio in corso mantenuto', 'เก็บตอนที่กำลังเล่นไว้', 'Odtwarzany odcinek został zachowany', 'Воспроизводимый выпуск сохранён', 'Епізод, що відтворюється, збережено'),
     _t('Downloads', '下载', '下載', 'ダウンロード', '다운로드', 'Téléchargements', 'Downloads', 'Descargas', 'Download', 'ดาวน์โหลด', 'Pobrane', 'Загрузки', 'Завантаження'),
+    # Saved (patch/podcasts.c, docs/modules/podcasts.md "Saved"): the Shows page's row and page, and the episode sheet's row
+    _t('Saved', '已保存', '已儲存', '保存済み', '저장됨', 'Enregistrés', 'Gesichert', 'Guardados', 'Salvati', 'บันทึกแล้ว', 'Zapisane', 'Сохранённые', 'Збережені'),
+    _t('Save Episode', '保存单集', '儲存單集', 'エピソードを保存', '에피소드 저장', 'Enregistrer l’épisode', 'Episode sichern', 'Guardar episodio', 'Salva episodio', 'บันทึกตอน', 'Zapisz odcinek', 'Сохранить выпуск', 'Зберегти епізод'),
+    _t('Unsave Episode', '取消保存单集', '取消儲存單集', 'エピソードの保存を解除', '에피소드 저장 해제', 'Retirer des enregistrés', 'Nicht mehr sichern', 'Quitar de guardados', 'Rimuovi dai salvati', 'เลิกบันทึกตอน', 'Usuń z zapisanych', 'Убрать из сохранённых', 'Прибрати зі збережених'),
+    _t('No saved episodes', '没有已保存的单集', '沒有已儲存的單集', '保存したエピソードはありません', '저장된 에피소드가 없습니다', 'Aucun épisode enregistré', 'Keine gesicherten Episoden', 'Sin episodios guardados', 'Nessun episodio salvato', 'ไม่มีตอนที่บันทึกไว้', 'Brak zapisanych odcinków', 'Нет сохранённых выпусков', 'Немає збережених епізодів'),
     _t('No downloaded episodes', '没有已下载的节目', '沒有已下載的節目', 'ダウンロード済みのエピソードがありません', '다운로드한 에피소드가 없습니다', 'Aucun épisode téléchargé', 'Keine geladenen Folgen',
        'Sin episodios descargados', 'Nessun episodio scaricato', 'ไม่มีตอนที่ดาวน์โหลด', 'Brak pobranych odcinków', 'Нет загруженных выпусков', 'Немає завантажених випусків'),
     _t('%d episode', '%d 个节目', '%d 個節目', '%d エピソード', '에피소드 %d개', '%d épisode', '%d Folge',
@@ -516,6 +521,9 @@ TEXT = dict([
     # Now Playing's More sheet: the row that opens the turntable page (patch/vinyl.c, docs/modules/vinyl.md); the page's own name is the same text
     _t('Vinyl Mode', '黑胶模式', '黑膠模式', 'レコードモード', '바이닐 모드', 'Mode vinyle', 'Vinylmodus',
        'Modo vinilo', 'Modalità vinile', 'โหมดแผ่นเสียง', 'Tryb winylu', 'Режим винила', 'Режим вінілу'),
+    # Now Playing's More sheet while an episode plays: the row that opens the Podcasts page (patch/podcasts.c podcasts_go)
+    _t('Go to Podcasts', '前往播客', '前往 Podcast', 'ポッドキャストへ移動', '팟캐스트로 이동', 'Aller aux podcasts', 'Zu Podcasts',
+       'Ir a pódcasts', 'Vai ai podcast', 'ไปที่พอดแคสต์', 'Przejdź do podcastów', 'К подкастам', 'До подкастів'),
     # Settings > Now Playing > Theme: the picker's title and its three values
     _t('Cassette Theme', '磁带主题', '錄音帶主題', 'カセットテーマ', '카세트 테마', 'Thème cassette', 'Kassettendesign',
        'Tema del casete', 'Tema cassetta', 'ธีมเทป', 'Motyw kasety', 'Тема кассеты', 'Тема касети'),

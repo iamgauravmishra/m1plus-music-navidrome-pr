@@ -34,12 +34,14 @@
 #include "home.h"
 #include "common.h"
 #include "covercache.h"
+#include "podcasts.h"
 
-#define PM_ROWS 11 /* listitem0..6, then pod_more, pod_back, pod_tape, pod_vinyl */
+#define PM_ROWS 12 /* listitem0..6, then pod_more, pod_back, pod_tape, pod_vinyl, pod_goep */
 #define PM_MORE 7
 #define PM_BACK 8
 #define PM_TAPE 9
 #define PM_VINYL 10
+#define PM_GOEP 11 /* Go to Podcasts: page 1 of a podcast episode */
 #define GO_ALBUM 4 /* listitem4, Look up album */
 #define PM_DELETE 6 /* listitem6, Delete song */
 #define GO_ARTIST 5 /* listitem5, Look up artist */
@@ -47,18 +49,24 @@ extern int coverflow_artist(void *artists, unsigned index,
                             unsigned scope); /* patch/coverflow.c: 0 once the page is up */
 
 /* what each page shows, top to bottom, as indices into pm.row[]; the sheet is as high as its page's rows (PM_PAGE_N, PM_PAGE2_N) */
-static const unsigned char pm_page[2][PM_PAGE_N] = {
+static const unsigned char pm_page[3][PM_PAGE_N] = {
     {4, 5, 2, PM_TAPE, PM_VINYL,
      PM_MORE}, /* Look up album, Look up artist, Add to playlist, Cassette Mode, Vinyl Mode, More */
     {PM_BACK, 1, 0, 6}, /* the back header, Playback speed, A-B repeat, Delete */
+    {PM_GOEP,
+     PM_MORE}, /* page 1 of a podcast episode: Go to Podcasts, More (the rows that mean nothing for an episode are hidden) */
 };
-static const unsigned char pm_rows[2] = {PM_PAGE_N, PM_PAGE2_N};
+static const unsigned char pm_rows[3] = {PM_PAGE_N, PM_PAGE2_N, PM_PAGE_EP_N};
+static const char *const pm_glass[3] = {
+    "pm_sheet6", "pm_sheet",
+    "pc_sheet2"}; /* each set's own picture (pc_sheet2: the Podcasts page's 100 px glass, the same pane) */
 
 static struct {
     void *dlg, *lv, *sv, *bar,
         *glass; /* the dialog, its list_view, scroll_view and scroll bar, and the glass image under them */
     void *row[PM_ROWS];
     int page; /* 0: the first page, 1: the More page */
+    int ep; /* the playing track is a podcast episode: the first page is the episode's (set 2) */
 } pm __attribute__((section(".scratch")));
 
 static void pm_show(void *w, int on) {
@@ -66,11 +74,15 @@ static void pm_show(void *w, int on) {
     widget_set_sensitive(w, on);
 }
 
+/* The row set shown: 0 the first page, 1 the More page, 2 the first page of an episode. */
+static int pm_set(void) { return pm.page ? 1 : pm.ep ? 2 : 0; }
+
 /* The rows as pm.page says: the shown ones at y = position x PM_ROW_H, the others hidden and parked under the sheet; the
  * children stacked in that order; the sheet PM_PAGE_N rows high on the bottom of the screen. */
 static void pm_arrange(void) {
     unsigned char used[PM_ROWS];
-    unsigned i, k = 0, n = pm_rows[pm.page];
+    int set = pm_set();
+    unsigned i, k = 0, n = pm_rows[set];
     int h = (int)n * PM_ROW_H;
     memset(used, 0, sizeof used);
     widget_invalidate_force(pm.dlg, (void *)0);
@@ -81,8 +93,8 @@ static void pm_arrange(void) {
         widget_set_state(pm.row[i], "normal"); /* the row that was tapped is hidden by its own click */
     }
     for (i = 0; i < n; i++) {
-        void *r = pm.row[pm_page[pm.page][i]];
-        used[pm_page[pm.page][i]] = 1;
+        void *r = pm.row[pm_page[set][i]];
+        used[pm_page[set][i]] = 1;
         widget_move(r, 0, (int)i * PM_ROW_H);
         pm_show(r, 1);
     }
@@ -92,13 +104,13 @@ static void pm_arrange(void) {
         widget_move(pm.row[i], 0, h);
         pm_show(pm.row[i], 0);
     }
-    for (i = 0; i < n; i++) widget_restack(pm.row[pm_page[pm.page][i]], k++);
+    for (i = 0; i < n; i++) widget_restack(pm.row[pm_page[set][i]], k++);
     for (i = 0; i < PM_ROWS; i++)
         if (!used[i]) widget_restack(pm.row[i], k++);
     widget_resize(
         pm.glass, PM_DIALOG_W,
         h); /* the glass of the page's own height: pm_sheet6 (page 1, 300 px) or pm_sheet (page 2, 200 px), never a crop */
-    image_base_set_image(pm.glass, pm.page ? "pm_sheet" : "pm_sheet6");
+    image_base_set_image(pm.glass, pm_glass[set]);
     widget_resize(pm.dlg, PM_DIALOG_W, h);
     widget_move(pm.dlg, 0, PM_SCREEN_H - h);
     widget_resize(pm.lv, PM_DIALOG_W, h);
@@ -146,12 +158,22 @@ static int pm_on_vinyl(void *ctx, void *e) {
     return RET_OK;
 }
 
+/* Go to Podcasts (the row is pod_goep): the Podcasts page (patch/podcasts.c podcasts_go: uncovered when it is below, else opened), the same order: the page first, the sheet closed once it is up. */
+extern int podcasts_go(void);
+
+static int pm_on_goep(void *ctx, void *e) {
+    (void)e;
+    if (!pm.dlg || ctx != pm.dlg) return RET_OK;
+    if (podcasts_go() == 0) window_close(ctx);
+    return RET_OK;
+}
+
 /* Another dialog opened over the sheet: the stock handler (on the dialog, so it ran before this one on the list_view) has just
  * moved it to y 130. */
 static int pm_on_bg(void *ctx, void *e) {
     (void)e;
     if (!pm.dlg || ctx != pm.dlg) return RET_OK;
-    widget_move(ctx, 0, PM_SCREEN_H - (int)pm_rows[pm.page] * PM_ROW_H);
+    widget_move(ctx, 0, PM_SCREEN_H - (int)pm_rows[pm_set()] * PM_ROW_H);
     return RET_OK;
 }
 
@@ -287,8 +309,8 @@ static int pm_on_delete(void *ctx, void *e) {
 static void pm_start(void *dlg) {
     static const char *const names[PM_ROWS] = {"listitem0", "listitem1", "listitem2", "listitem3",
                                                "listitem4", "listitem5", "listitem6", "pod_more",
-                                               "pod_back",  "pod_tape",  "pod_vinyl"};
-    void *more_label, *back_label, *speed_label, *note_label, *tape_label, *vinyl_label;
+                                               "pod_back",  "pod_tape",  "pod_vinyl", "pod_goep"};
+    void *more_label, *back_label, *speed_label, *note_label, *tape_label, *vinyl_label, *goep_label, *track;
     unsigned i;
     if (access(KILL_SD, F_OK) == 0) return;
     if (pm.dlg) memset(&pm, 0, sizeof pm); /* an earlier dialog that never said it was gone */
@@ -303,8 +325,9 @@ static void pm_start(void *dlg) {
     note_label = widget_lookup(dlg, "label1_msg", 1);
     tape_label = widget_lookup(dlg, "pod_tape_label", 1);
     vinyl_label = widget_lookup(dlg, "pod_vinyl_label", 1);
+    goep_label = widget_lookup(dlg, "pod_goep_label", 1);
     if (!pm.lv || !pm.sv || !pm.bar || !pm.glass || !more_label || !back_label || !speed_label || !note_label ||
-        !tape_label || !vinyl_label)
+        !tape_label || !vinyl_label || !goep_label)
         goto fail;
     for (i = 0; i < PM_ROWS; i++) { /* exactly the asset: eleven rows in the scroll_view */
         pm.row[i] = widget_lookup(dlg, names[i], 1);
@@ -318,6 +341,7 @@ static void pm_start(void *dlg) {
     if (widget_set_tr_text(note_label, "Files below 48 kHz only") != RET_OK) goto fail;
     if (widget_set_tr_text(tape_label, "Cassette Mode") != RET_OK) goto fail;
     if (widget_set_tr_text(vinyl_label, "Vinyl Mode") != RET_OK) goto fail;
+    if (widget_set_tr_text(goep_label, "Go to Podcasts") != RET_OK) goto fail;
     if (!widget_on(dlg, EVT_DESTROY, pm_on_destroy, dlg)) goto fail;
     if (!widget_on(pm.lv, EVT_WINDOW_TO_BG, pm_on_bg, dlg))
         goto fail; /* after the stock one on the dialog (top comment) */
@@ -325,10 +349,13 @@ static void pm_start(void *dlg) {
     if (!widget_on(pm.row[PM_BACK], EVT_CLICK, pm_on_back, dlg)) goto fail;
     if (!widget_on(pm.row[PM_TAPE], EVT_CLICK, pm_on_tape, dlg)) goto fail;
     if (!widget_on(pm.row[PM_VINYL], EVT_CLICK, pm_on_vinyl, dlg)) goto fail;
+    if (!widget_on(pm.row[PM_GOEP], EVT_CLICK, pm_on_goep, dlg)) goto fail;
     if (!widget_on(pm.row[GO_ALBUM], EVT_CLICK, pm_on_lookup_album, dlg)) goto fail;
     if (!widget_on(pm.row[GO_ARTIST], EVT_CLICK, pm_on_lookup_artist, dlg)) goto fail;
     if (!widget_on(pm.row[PM_DELETE], EVT_CLICK, pm_on_delete, dlg)) goto fail;
     pm.page = 0;
+    track = cc_playing();
+    pm.ep = track && pc_is_path(cc_str(track, REC_PATH));
     pm_arrange();
     return;
 fail:

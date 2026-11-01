@@ -66,6 +66,8 @@ class NowMachine(Machine):
             if ret == 0: (self.bar_styles if a0 == self.bar else self.styles).append((a0, self.read_cstr(a1), v))
         elif name == 'widget_on' and a1 in self.on_fail:
             self.calls.append(('widget_on', a0, a1, a2, a3)); ret = 0
+        elif name == 'mclGetPlayStatus':   # the player is stopped: the episode timer (pc_note) saves nothing
+            ret = 0
         elif name == 'value_set_uint32':
             self.setword(a0, 7); self.setword(a0 + 8, a1); ret = a0
         elif name == 'get_playtimeandlength':
@@ -877,4 +879,37 @@ def run(ctx):
     expect(icons <= set(mod_icons.np_names()) and {'np_fav', 'np_unfav', 'np_play', 'np_pause', 'np_random', 'np_cycle', 'np_cycle1', 'np_order'} <= icons,
            f'the page theme\'s np_ button icons exist as images ({sorted(icons)})')
     expect(f('btn_fav').get('style') == 'btn_imgunfav_style' and f('btn_fav').get('style:pressed:icon') == 'np_unfav_down', 'btn_fav keeps its stock style (the app swaps it) with the pressed glyph')
+    by = {}
+    for s in th.items:
+        if s.widget == 'button' and s.style in ('btn_imgfav_style', 'btn_imgunfav_style', 'btn_imgsave_style', 'btn_imgunsave_style'): by.setdefault(s.style, {})[s.state] = s.get('icon')
+    want = {'btn_imgfav_style': 'np_fav', 'btn_imgunfav_style': 'np_unfav', 'btn_imgsave_style': 'np_save', 'btn_imgunsave_style': 'np_unsave'}
+    expect(all(len(by.get(n, {})) == 5 and all(i == want[n] for st, i in by[n].items()) for n in want),
+           f'the favourite button\'s four styles (star filled / outline, bookmark filled / outline) have their glyph in every state ({by})')
+    sv, uv = asset_image('np_save'), asset_image('np_unsave')
+    bb = lambda im: im.getchannel('A').point(lambda v: 255 if v > 200 else 0).getbbox()
+    expect(sv.size == uv.size == asset_image('np_fav').size == (44, 44) and bb(sv) is not None and bb(uv) is not None and sv.getpixel((22, 22))[:3] == mod_icons.NP_FG
+           and uv.getpixel((22, 22))[3] < 80 and asset_image('np_unsave_down').size == (44, 44),
+           'the bookmark images are 44 px: the disc and a filled (np_save) or outline (np_unsave) glyph in the star\'s off-white')
+    # an episode's favourite button is a bookmark: the tick (and a click, which runs after stock's handler) maps the style stock sets, music maps it back
+    ep, music = '/mnt/mmc/Podcasts/Show/e1.mp3', '/mnt/mmc/Music/a.flac'
+    def fav_machine(path, style):
+        mm = NowMachine(); mm.page(); mm.src(0); fav = mm.widget('btn_fav')
+        mm.setword(fav + O['WIDGET_STYLE'], mm.cstr(style)); mm.props[(fav, 'style')] = style
+        mm.play([mm.record(path=path)], 0); mm.init()
+        return mm, fav
+    for path, style, want_style in ((ep, 'btn_imgunfav_style', 'btn_imgunsave_style'), (ep, 'btn_imgfav_style', 'btn_imgsave_style'), (music, 'btn_imgunsave_style', 'btn_imgunfav_style'),
+                                    (music, 'btn_imgsave_style', 'btn_imgfav_style'), (music, 'btn_imgfav_style', None), (ep, 'btn_imgsave_style', None), (ep, 'btn_imgplay_style', None)):
+        mm, fav = fav_machine(path, style)
+        uses = [c for c in mm.calls if c[0] == 'widget_use_style' and c[1] == fav]
+        pressed = mm.props.get((fav, 'style:pressed:icon'))
+        expect(uses == ([('widget_use_style', fav, want_style)] if want_style else []) and pressed == (('np_unsave_down' if 'save' in want_style else 'np_unfav_down') if want_style else None),
+               f'{path.split("/")[3]} track, button on {style}: {uses}, pressed glyph {pressed}')
+    mm, fav = fav_machine(ep, 'btn_imgunfav_style')
+    clicks = [c for c in mm.calls if c[0] == 'widget_on' and c[1] == fav]
+    expect(len(clicks) == 1 and clicks[0][2] == O['EVT_CLICK'] and clicks[0][3] == PSYMS['np_on_fav'], 'a click on the button is handled after stock\'s (registered once the stock init has run)')
+    mm.setword(fav + O['WIDGET_STYLE'], mm.cstr('btn_imgfav_style')); mm.calls = []
+    mm.call(PSYMS['np_on_fav'], a0=0, a1=0)
+    expect([c for c in mm.calls if c[0] == 'widget_use_style'] == [('widget_use_style', fav, 'btn_imgsave_style')] and mm.props[(fav, 'style:pressed:icon')] == 'np_unsave_down', 'the click handler maps the style stock has just set, with no wait for a tick')
+    mm.play([], -1); mm.setword(fav + O['WIDGET_STYLE'], mm.cstr('btn_imgsave_style')); mm.calls = []; mm.tick()
+    expect([c for c in mm.calls if c[0] == 'widget_use_style'] == [('widget_use_style', fav, 'btn_imgfav_style')], 'nothing playing counts as music: the bookmark goes back to the star')
     expect(f('btn_playmode').get('style') == 'btn_imgrandom_style', 'btn_playmode keeps its stock style (the app swaps it)')

@@ -111,8 +111,8 @@ def deep_card(m, feed=True, entries=None, files=(0, 1, 2), desc=SHOW_DESC, autho
     m.wall = NOW
 
 
-def machine(card=deep_card, **kw):
-    """The page open on the Shows level, the font model set for the style labels."""
+def machine(card=deep_card, up=True, **kw):
+    """The page open on the Shows level (up=False: not opened yet), the font model set for the style labels."""
     m = PCP.page_machine(lambda mm: card(mm, **kw) if kw else card(mm), SM)
     m.px = {m.widgets[n]: px for n, px, *_ in pod_ui.PS_STYLES}
     m.px.update({m.widgets['pg_sh_speed_vl']: pod_ui.PS_SHEET_PX, m.widgets['pg_sh_refresh_vl']: pod_ui.PS_SHEET_PX})
@@ -121,7 +121,7 @@ def machine(card=deep_card, **kw):
         m.px[m.widgets[f'pg_sh_{r}_tx']] = pod_ui.PS_SHEET_PX
         m.wtext[m.widgets[f'pg_sh_{r}_tx']] = label   # (the label's text, as the asset's tr_text gives it)
     m.curl_site = DL.server(DL.DATA)
-    assert m.call(PSYMS['podcasts_open'], count=40000000) == 0
+    if up: assert m.call(PSYMS['podcasts_open'], count=40000000) == 0
     return m
 
 
@@ -192,7 +192,7 @@ def asset_tests(ctx):
     rh = O['PM_ROW_H']
     expect((card.x, card.y, card.w, card.h) == (0, 450 - 5 * rh, 320, 5 * rh) and card.get('style:normal:bg_image') == 'pc_sheet5' and card.get('visible') == 'false',
            'the card is the five-row sheet at the bottom of the window (the payload sets its size and picture)')
-    expect([c.name for c in card.children] == [f'pg_sh_{r}' for r in PCP.SHEET_ROWS] and len(PCP.SHEET_ROWS) == 12, 'twelve rows: the show sheet\'s five, the episode sheet\'s four, the Shows level\'s Import from Card and Subscriptions, the Subscriptions level\'s Export OPML (Select is the show sheet\'s, relabelled)')
+    expect([c.name for c in card.children] == [f'pg_sh_{r}' for r in PCP.SHEET_ROWS] and len(PCP.SHEET_ROWS) == 13, 'thirteen rows: the show sheet\'s five, the episode sheet\'s five (Save Episode), the Shows level\'s Import from Card and Subscriptions, the Subscriptions level\'s Export OPML (Select is the show sheet\'s, relabelled)')
     for r, icon, label, value, red in pod_ui.PS_SHEET_ROWS:
         row = tree.find(f'pg_sh_{r}')
         ic, tx, hr = tree.find(f'pg_sh_{r}_ic'), tree.find(f'pg_sh_{r}_tx'), tree.find(f'pg_sh_{r}_hr')
@@ -725,9 +725,20 @@ def sheet_tests(ctx):
     PCP.click(m, 'pg_sh_scrim'); PCP.dots(m, 4)
     expect(sheet_state(m)[0] == ['dl', 'mark'] and text_of(m, 'pg_sh_dl_tx') == 'Download', 'without a size: just Download')
     PCP.click(m, 'pg_sh_scrim'); PCP.dots(m, 0)
-    expect(sheet_state(m)[0] == ['rm', 'mark'], 'on the card: Remove Download and Mark as Played')
+    expect(sheet_state(m)[0] == ['rm', 'save', 'mark'] and text_of(m, 'pg_sh_save_tx') == 'Save Episode', 'on the card: Remove Download, Save Episode and Mark as Played')
     PCP.click(m, 'pg_sh_scrim'); PCP.dots(m, 1)
-    expect(sheet_state(m)[0] == ['rm', 'unmark'], 'played: Remove Download and Mark as Unplayed')
+    expect(sheet_state(m)[0] == ['rm', 'save', 'unmark'], 'played: Remove Download, Save Episode and Mark as Unplayed')
+    PCP.click(m, 'pg_sh_scrim'); m.calls = []
+    PCP.dots(m, 0); PCP.click(m, 'pg_sh_save')
+    path = f'{RP}/{DEEP}/e0.mp3'
+    expect(flags(m, 'pg_sh_card') == (0, 0) and [r[:2] for r in m.fav_rows] == [('e0.mp3', path)] and [c[1:] for c in m.calls if c[0] == 'addMyFav'] == [('e0.mp3', path)] and [c[1] for c in m.calls if c[0] == 'toast'] == ['Saved'],
+           f'Save Episode: stock\'s addMyFav on the record the episode plays as (its name and path), the sheet closes, a toast ({m.fav_rows})')
+    PCP.dots(m, 0)
+    expect(sheet_state(m)[0] == ['rm', 'save', 'mark'] and text_of(m, 'pg_sh_save_tx') == 'Unsave Episode', 'a saved episode: the row says Unsave Episode')
+    PCP.click(m, 'pg_sh_save'); m.calls = []
+    expect(m.fav_rows == [] and not [c for c in m.calls if c[0] == 'addMyFav'], 'Unsave Episode: stock\'s deleteMusicFromFav takes it out')
+    PCP.dots(m, 0)
+    expect(text_of(m, 'pg_sh_save_tx') == 'Save Episode', 'and the row offers Save again')
     PCP.click(m, 'pg_sh_scrim'); PCP.dots(m, 6)
     expect(sheet_state(m)[0] == ['rm', 'mark'], 'a paused .part: Remove Download (it takes the .part away)')
     PCP.click(m, 'pg_sh_scrim')

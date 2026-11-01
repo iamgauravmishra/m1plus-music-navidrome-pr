@@ -287,6 +287,7 @@ NP = {'np_play': ('pil:play', 44, 0, 'fg', 'np_play_down'), 'np_pause': ('pil:pa
       'np_random': ('shuffle', 30, 18, 'mid', None), 'np_cycle': ('repeat', 30, 18, 'mid', None),
       'np_cycle1': ('repeat-1', 30, 18, 'mid', None), 'np_order': ('repeat-off', 30, 18, 'off', None),
       'np_fav': ('star:filled', 44, 18, 'fg', None, 32), 'np_unfav': ('star', 44, 18, 'fg', 'np_unfav_down', 32),
+      'np_save': ('bookmark:filled', 44, 18, 'fg', None, 32), 'np_unsave': ('bookmark', 44, 18, 'fg', 'np_unsave_down', 32),   # an episode's favourite button (docs/modules/podcasts.md "Saved")
       'np_more': ('ellipsis', 44, 18, 'fg', 'np_more_down', 32), 'np_playqueue': ('list-music', 30, 18, 'mid', 'np_playqueue_down')}
 NP_FG, NP_DIM = (0xEE, 0xEE, 0xEC), (0x8C,) * 3        # q2-pod's off-white and its muted pressed grey
 NP_MID, NP_OFF = (0xC8,) * 3, (0x6E,) * 3               # the mode and queue glyphs (brighter than the secondary grey #AAAAAA); repeat-off, dimmer
@@ -741,16 +742,17 @@ PA_FILL_A, PA_RING_A, PA_TRACK_A = 56, 110, 80           # alpha of the filled p
 PA_GREY, PA_BADGE_GREY, PA_DARK, PA_RED = (0xAA,) * 3, (0xD0,) * 3, (0x14,) * 3, (0xFF, 0x6B, 0x6B)
 PA_CHEV = 6                                              # glyph 6 of the strip: the chevron-right (grey) of the Shows page's Downloads row
 PA_TILE_X, PA_TILE_Y, PA_TILE_PX, PA_TILE_R, PA_TILE_RGB, PA_TILE_GLYPH = 0, 112, 44, 8, (0x1E,) * 3, 22   # the Library rows' tile: a 44 px rounded square, the Lucide download glyph (22 px, white) on it
+PC_SAVE_TILE = 'pod_ic_savetile'                         # the Saved row's tile: the same square with the Lucide bookmark glyph
 PC_LIB_TILE = 'pod_ic_subtile'                           # the Subscriptions row's tile: the same square (an image of its own, so the atlas stays as it is: test/pod/navbars.py ignores pod_ic_) with the Lucide podcast glyph
 PA_PLAYB_X, PA_PLAYB_Y, PA_PLAYB_PX, PA_PLAYB_RIM_A, PA_PLAYB_GLYPH = 48, 112, 28, 90, 12   # Continue Listening's play disc: 28 px, a white 26 px disc inside a 1 px black rim (35 %, so it reads on a white cover too), the dark play triangle (12 px) nudged 1 px right to look centred
 PC_ATLAS = 'pc_atlas'
 PC_SHEET_ICONS = (('pc_ic_import', 'file-input', WHITE), ('pc_ic_speed', 'gauge', WHITE), ('pc_ic_refresh', 'refresh-cw', WHITE), ('pc_ic_select', 'list-checks', WHITE), ('pc_ic_check', '+check', WHITE),
                   ('pc_ic_unsub', 'x', PA_RED), ('pc_ic_down', 'arrow-down', WHITE), ('pc_ic_trash', 'trash', WHITE), ('pc_ic_undo', 'rotate-ccw', WHITE),
-                  ('pod_ic_export', 'file-output', WHITE))   # (pod_ic_ names: the images the stock pages' digest test ignores, test/pod/navbars.py NEW_IMAGES; a new pc_ image would change test/navbars-stock.sha256 in every branch)
+                  ('pod_ic_export', 'file-output', WHITE), ('pod_ic_save', 'bookmark', WHITE))   # (pod_ic_ names: the images the stock pages' digest test ignores, test/pod/navbars.py NEW_IMAGES; a new pc_ image would change test/navbars-stock.sha256 in every branch)
 PC_SHEET_PX = 20
 PC_SHEETS = (('pc_sheet1', 50), ('pc_sheet2', 100), ('pc_sheet3', 150), ('pc_sheet4', 200), ('pc_sheet5', 250))   # the sheets' glass for 1..5 rows (Now Playing's pm_sheet / pm_sheet5 for 4 and 5, but a name of ours: the Show page's rows need no other page's image)
 PC_GLYPHS = ('arrow-down', 'download', 'chevron-right', 'file-input', 'podcast', 'file-output')                                 # the Lucide glyph the set adds to the sources (the download symbol of the pill, the badge and the sheet)
-PODCASTS = [PC_ATLAS, PC_LIB_TILE] + [n for n, _, _ in PC_SHEET_ICONS] + [n for n, _ in PC_SHEETS]
+PODCASTS = [PC_ATLAS, PC_LIB_TILE, PC_SAVE_TILE] + [n for n, _, _ in PC_SHEET_ICONS] + [n for n, _ in PC_SHEETS]
 ALBUM += PODCASTS
 
 def _pc_ring(k):
@@ -837,7 +839,7 @@ def pc_atlas():
     return a
 
 def podcast_images():
-    f = {PC_ATLAS: pc_atlas(), PC_LIB_TILE: _pc_tile('podcast')}
+    f = {PC_ATLAS: pc_atlas(), PC_LIB_TILE: _pc_tile('podcast'), PC_SAVE_TILE: _pc_tile('bookmark')}
     for n, g, rgb in PC_SHEET_ICONS: f[n] = tint(glyph(g, PC_SHEET_PX, 'small'), rgb) if rgb != WHITE else glyph(g, PC_SHEET_PX, 'small')
     for n, h in PC_SHEETS: f[n] = glass_image(320, h, 18, fill=GLASS_SHEET_FILL, top_only=True)
     assert sorted(f) == sorted(PODCASTS)

@@ -130,13 +130,19 @@ the recovery button combination for this model remains unverified.
   (`docs/modules/vinyl.md`): the cover as a turning label (33 1/3 rpm, spin-up and a 2 s spin-down), a tonearm following the track and
   parking on pause once the record has stopped, eased swings, round prev / play / next keys, film grain on the plinth only. Designed from
   mock rounds (`tools/preview_vinyl.py`); test builds zDEZGAAAD to zDEZGAAAM flashed, accepted.
-- **V2.1qE** (2026-11-01, current release): **Podcasts round 4**: an episode page in Apple Podcasts' layout (a tap on a cell body;
+- **V2.1qE** (2026-11-01): **Podcasts round 4**: an episode page in Apple Podcasts' layout (a tap on a cell body;
   date and size, title, a show row, the state pill; long descriptions kept per show in `.notes`), OPML import and export and a
   Subscriptions page, a Downloads page with In Progress and Downloaded sections, storage and Delete Played, Downloads and
   Subscriptions rows at the bottom of the Shows page, large headings instead of navbar titles, 'Local' on shows with no feed, and
   the internet search retitled Apple Podcasts. Test builds zNTNUAAAB, zBDYKAAAB to zBDYKAAAG flashed, accepted. Lesson: three
   parallel branches on one file (`patch/podcasts.c`) cost more in merging than they saved; a test built on another module's
   constant (`PM_PAGE_N + 7`) broke when that module grew.
+- **V2.1qK** (2026-11-01, current release): **Podcasts round 5**: Music > Podcasts in the Pod (shows with files, local episodes,
+  an unplayed dot), Saved episodes (the `myfav` rows under `Podcasts/`, so stock's star keeps working: a bookmark on Now Playing
+  while an episode plays, a Saved row and page, Save / Unsave in the episode sheet; music Favourites no longer lists episodes), and
+  an episode's More sheet with only Go to Podcasts and More. Test builds zCQUGAAAD to zCQUGAAAF flashed, accepted.
+  Device finding: AWTK destroys a closed window later, so closing a page and reopening it in one call finds it still there
+  (zCQUGAAAE's Go to Episode did nothing); the emulated tests could not see it because their window mock never closes either.
 
 ## Hardware results (what broke on the device, and why)
 - **Vinyl Mode pause (zDEZGAAAI).** Tapping pause stalled the page, then the arm stuttered until parked. Stock's `play_pause_music`

@@ -110,6 +110,8 @@ char *pc_id3_path(char *info, const char *path);
  * the /mnt/mmc/Podcasts/ paths. Same arguments and result as the stock functions. */
 int pc_library_query(const char *db, const char *sql, void *row, int sort);
 int pc_sorted_query(const char *db, const char *sql, void *row, int sort);
+/* Set around a loadLocalClassList(0xf00a) (the Favourites query) to read the Saved episodes (myfav rows under the Podcasts folder) instead of the music Favourites; 0 otherwise. */
+extern unsigned char pc_saved_scope;
 /* An episode is about to start: forget a played mark so it plays from the beginning (a place is kept: pc_note jumps to it). */
 void pc_restart(unsigned hash);
 /* A queue (stSongInfo deque) with the podcast files taken out, for Shuffle: the queue itself when it has none; else a new queue (copies), *idx now the song that followed or was

@@ -652,6 +652,7 @@ def page_machine(card=page_card, cls=None):
     m.clock = 5000
     m.images['pc_atlas'] = atlas_image()
     m.images['pod_ic_subtile'] = atlas_image('pod_ic_subtile')
+    m.images['pod_ic_savetile'] = atlas_image('pod_ic_savetile')
     return m
 
 
@@ -812,8 +813,8 @@ def open_tests(ctx):
     expect(('window_open', 'm1plus_podcasts') in calls and not [c for c in calls if c[0] in ('list_item_create', 'hscroll_label_create', 'image_create', 'image_base_set_image')],
            'the window opens; no widget is made per show or episode (the content view paints the rows)')
     H2 = pod_show.shows_layout(2, False, 0)
-    expect(m.props.get((m.sv, 'virtual_h')) == H2['h'] == 392 and ('widget_resize', m.view, 320, H2['h']) in calls and m.props.get((m.sv, 'yoffset')) == 0,
-           f'the content is the large title, the Shows header, the grid of two shows (bravo, Alpha Show), then the Downloads Library row (no feed: no Subscriptions row) and the air under it ({H2["h"]} px), at the top')
+    expect(m.props.get((m.sv, 'virtual_h')) == H2['h'] == 456 and ('widget_resize', m.view, 320, H2['h']) in calls and m.props.get((m.sv, 'yoffset')) == 0,
+           f'the content is the large title, the Shows header, the grid of two shows (bravo, Alpha Show), then the Downloads and Saved Library rows (no feed: no Subscriptions row) and the air under them ({H2["h"]} px), at the top')
     expect(title_text(m) == 'Podcasts' and m.props.get((m.widgets['label_status'], 'visible'), 1) == 0 and m.props.get((m.widgets['label_title'], 'visible')) == 0
            and m.props.get((m.widgets['pg_big'], 'visible'), 1) == 1, 'the large title shows, the navbar\'s small one is hidden at rest; the empty-state line is hidden')
     for ev in ('EVT_AFTER_PAINT', 'EVT_POINTER_DOWN', 'EVT_POINTER_UP', 'EVT_POINTER_ABORT'):

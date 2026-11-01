@@ -271,7 +271,7 @@ def edit_playmore(root, pal):
     has none, A-B repeat is no longer first, the back header has none); Playback speed's row with room for its label. Stock
     widgets keep their names, order and rectangles, but the speed row's (PM_SPEED)."""
     sv, add, first, ab = root.find('playmore_scrollview'), root.find('listitem2'), root.find('listitem4'), root.find('listitem0')
-    assert sv and add and first and ab and add in sv.children and root.find('pod_more') is None and root.find('pod_back') is None and root.find('pod_tape') is None and root.find('pod_vinyl') is None, 'unexpected playmore_dialog'
+    assert sv and add and first and ab and add in sv.children and root.find('pod_more') is None and root.find('pod_back') is None and root.find('pod_tape') is None and root.find('pod_vinyl') is None and root.find('pod_goep') is None, 'unexpected playmore_dialog'
     assert root.type == 'dialog' and root.get('highlight') is None
     root.set('highlight', PM_HIGHLIGHT)
     for name, (stock, ours) in PM_SPEED.items():
@@ -299,7 +299,11 @@ def edit_playmore(root, pal):
     row('pod_vinyl', [   # page 1, under Cassette Mode: the Vinyl Mode page (patch/vinyl.c); a top hairline like the rows above it
         awtk_ui.Widget('image', 14, 13, 24, 24, [('name', 'pod_vinyl_icon'), ('draw_type', 'default'), ('image', 'pod_ic_vinyl'), ('sensitive', 'false')]),
         awtk_ui.Widget('hscroll_label', 48, 15, 200, 20, [('name', 'pod_vinyl_label'), ('style', 'srlabel_item_white_style')])])
+    goep = row('pod_goep', [   # page 1 of a podcast episode, the first row: the Podcasts page (patch/podcasts.c podcasts_go); no hairline, as the first row
+        awtk_ui.Widget('image', 14, 13, 24, 24, [('name', 'pod_goep_icon'), ('draw_type', 'default'), ('image', 'pod_ic_podcasts'), ('sensitive', 'false')]),
+        awtk_ui.Widget('hscroll_label', 48, 15, 200, 20, [('name', 'pod_goep_label'), ('style', 'srlabel_item_white_style')])])
     assert first.get('style:normal:border') == 'top' and ab.get('style:normal:border') == 'none'
+    goep.set('style:normal:border', 'none')
     first.set('style:normal:border', 'none')
     back.set('style:normal:border', 'none')
     ab.set('style:normal:border', 'top')
@@ -374,7 +378,7 @@ def build_ui(work):
             old, new, _ = edit_ui(path, lambda root, rel=rel: ui_edit(rel, root, pal))
             shape = lambda d: [(w.type, w.name, w.x, w.y, w.w, w.h) for w in awtk_ui.parse(d).walk()]
             if rel in ADD_EDITS:
-                ours = lambda s: s[1] in ('pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', PM_GLASS) or s[1].startswith(('pod_more_', 'pod_back_', 'pod_tape_', 'pod_vinyl_'))
+                ours = lambda s: s[1] in ('pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_goep', PM_GLASS) or s[1].startswith(('pod_more_', 'pod_back_', 'pod_tape_', 'pod_vinyl_', 'pod_goep_'))
                 other = lambda s: s[:2] if s[1] in PM_SPEED else s   # the speed row's rectangles are ours (PM_SPEED)
                 assert [other(s) for s in shape(new) if not ours(s)] == [other(s) for s in shape(old)], f'{rel}: a stock widget was removed, renamed or moved'
             elif rel in GEOMETRY_EDITS:

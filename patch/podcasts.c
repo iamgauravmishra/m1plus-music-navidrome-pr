@@ -57,7 +57,7 @@ extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one b
 #define PG_TEXT_MAX 232 /* wide chars of a cell's description (at most PC_DESC_CUT bytes) and room for the ellipsis */
 #define PG_TITLE_MAX 100 /* wide chars of a title (95 bytes at most) */
 #define PG_PILL_MAX 48 /* wide chars of a pill's label */
-#define PG_SHEET_ROWS 12 /* the sheets' fixed rows (tools/pod_ui.py PS_SHEET_ROWS) */
+#define PG_SHEET_ROWS 13 /* the sheets' fixed rows (tools/pod_ui.py PS_SHEET_ROWS) */
 #define PG_AWAKE_MS 1000 /* the downloads' timer */
 
 enum {
@@ -130,7 +130,8 @@ enum {
     PH_FIELD = 8,
     PH_CLEAR = 9,
     PH_SUBROW = 11,
-    PH_SHOW = 12
+    PH_SHOW = 12,
+    PH_SAVROW = 13
 }; /* what a touch hit: on the Show level the first four (the episode page's show row: PH_SHOW); on the Shows level the refresh line, the Downloads and Subscriptions rows, a Continue Listening item, a show's cover and captions */
 enum {
     SR_SPEED = 0,
@@ -144,7 +145,8 @@ enum {
     SR_UNMARK,
     SR_IMPORT,
     SR_DELPLAYED,
-    SR_EXPORT
+    SR_EXPORT,
+    SR_SAVE
 }; /* the sheets' rows, tools/pod_ui.py PS_SHEET_ROWS */
 enum { SH_NONE = 0, SH_SHOW = 1, SH_CELL = 2, SH_HOME = 3, SH_SUBS = 4, SH_DLS = 5 };
 enum {
@@ -205,6 +207,10 @@ static struct {
         awake; /* awake: the downloads' timer (keeps the device awake, starts the queue again): scoped to the window, in front or not */
     int rpend; /* a refresh waits for the downloads to pause: 1 + only_new */
     int rone; /* ... and it is of the show open only (the Show level's Refresh Feed): 1, else 0 (Refresh All / Import) */
+    int saved, want_off,
+        sv_n; /* the Downloads-style level (L_DLS) lists the Saved episodes (docs/modules/podcasts.md "Saved"); the offset the list is to come back to once its rows are in; the Saved episodes counted by pg_saved_load */
+    unsigned *sv_h,
+        *sv_d; /* their ring keys (pc_hash of the path), the last saved first, and the hashes of their show folders */
     int subs, from_subs,
         subs_off; /* the Downloads-style level (L_DLS) lists the Subscriptions instead of the downloads; the Show level was opened from it (Back returns there, to this offset) */
     void *
@@ -241,6 +247,7 @@ static struct {
     void *atlas; /* pc_atlas decoded with its alpha (PA_SIZE square), once the Show level first paints */
     void *
         subtile; /* pod_ic_subtile (the Subscriptions row's tile), decoded the same way once the Shows level first paints */
+    void *savetile; /* pod_ic_savetile (the Saved row's tile) */
     pg_cell_t *cells; /* PG_CELLS layouts of the Show level's cells */
     pg_hdr_t *hdr; /* the Show header's layout */
     pd_t *
@@ -262,7 +269,7 @@ static struct {
     int ncont;
     int has_import; /* Podcasts/subscriptions.txt exists: the Shows level's "..." has Import from Card */
     int has_line; /* some show has a feed: the refresh line shows */
-    int y_shelf, y_dl, y_sub, y_shows, y_grid,
+    int y_shelf, y_dl, y_sub, y_sav, y_shows, y_grid,
         home_h; /* the Shows level's blocks' tops (content y): the shelf's header (0: none), the Downloads row, the Subscriptions row (0: none), the "Shows" header, the grid; the content's height */
     unsigned gsig,
         ssig; /* what the grid's and the shelf's tiles were made for (a hash of the shows' folders, covers and the items' hashes): the tiles stay when a reload finds the same */
@@ -313,7 +320,7 @@ static int pg_count(void) {
  * rows). The Subscriptions page is plain rows from 0. pg_dy is the top of display row a. */
 static int pg_dy(int a) {
     int y = PDL_LINE_PITCH;
-    if (pg.subs) return PP_TITLE_H + a * PC_ROW_H;
+    if (pg.subs || pg.saved) return PP_TITLE_H + a * PC_ROW_H;
     if (pg.nip) {
         y += PP_HEAD_PITCH;
         if (a < pg.nip) return y + a * PC_ROW_H;
@@ -326,8 +333,8 @@ static int pg_dhead(int sec) {
     return sec && pg.nip ? PDL_LINE_PITCH + PP_HEAD_PITCH + pg.nip * PC_ROW_H + PP_SEC_GAP : PDL_LINE_PITCH;
 }
 static int pg_dh(void) {
-    return pg.subs ? PP_TITLE_H + pg.nrows * PC_ROW_H
-                   : (pg.nrows ? pg_dy(pg.nrows - 1) + PC_ROW_H + PP_BOTTOM : PDL_LINE_PITCH);
+    return pg.subs || pg.saved ? PP_TITLE_H + pg.nrows * PC_ROW_H
+                               : (pg.nrows ? pg_dy(pg.nrows - 1) + PC_ROW_H + PP_BOTTOM : PDL_LINE_PITCH);
 }
 /* The display row under content y, -1 for none (a header, the line, the gap). */
 static int pg_dhit(int y) {
@@ -965,6 +972,11 @@ static void *pg_subtile(void) {
     if (!pg.subtile) pg.subtile = pg_rgba("pod_ic_subtile", PA_TILE_PX, PA_TILE_PX);
     return pg.subtile;
 }
+/* The Saved row's tile (pod_ic_savetile), the same. */
+static void *pg_savetile(void) {
+    if (!pg.savetile) pg.savetile = pg_rgba("pod_ic_savetile", PA_TILE_PX, PA_TILE_PX);
+    return pg.savetile;
+}
 
 /* A w x h piece of the atlas from (sx, sy) at (x, y) of the view, cut by hand to the rows inside it (grid_blit's rule). */
 static void pg_blit_from(void *canvas, void *bmp, int sx, int sy, int w, int h, int x, int y) {
@@ -1242,7 +1254,7 @@ static void pg_line_make(pg_line_t *l) {
  * the Downloads row (while something is queued), a header "Shows" (only when one of those shows) and the grid. */
 static void pg_home_layout(void) {
     int y = PP_LINE_Y + (pg.has_line ? PP_LINE_PITCH : PP_NOLINE_PITCH);
-    pg.y_shelf = pg.y_sub = 0;
+    pg.y_shelf = pg.y_sub = pg.y_sav = 0;
     if (pg.ncont) {
         pg.y_shelf = y;
         y += PP_HEAD_PITCH + PP_SHELF_PITCH_Y + PP_SEC_GAP;
@@ -1260,6 +1272,8 @@ static void pg_home_layout(void) {
         pg.y_sub = y;
         y += PC_ROW_H;
     }
+    pg.y_sav = y; /* Saved closes the Library rows */
+    y += PC_ROW_H;
     pg.home_h = y + PP_BOTTOM;
 }
 
@@ -1333,6 +1347,18 @@ static void pg_lib_subs_sub(char *out, unsigned size) {
     pc_fmt(out, size, TR(n == 1 ? "%d show" : "%d shows"), n);
 }
 
+/* The Saved row's grey line: how many episodes (pg_saved_load's count, read when the Shows level was made). */
+static void pg_lib_saved_sub(char *out, unsigned size) {
+    out[0] = 0;
+    if (!pg.sv_n)
+        pg_cat(out, size, TR("No saved episodes"));
+    else
+        pc_fmt(out, size, TR(pg.sv_n == 1 ? "%d episode" : "%d episodes"), (unsigned)pg.sv_n);
+}
+
+/* The top of Library row i (Downloads, Subscriptions, Saved), 0 when the row is not there. */
+static int pg_ylib(int i) { return i == 0 ? pg.y_dl : i == 1 ? pg.y_sub : pg.y_sav; }
+
 static void pg_paint_home(void *canvas) {
     int off = pg_off(), i, a, c0, c1, y;
     pg_line_t ln;
@@ -1349,13 +1375,14 @@ static void pg_paint_home(void *canvas) {
                       PP_SHELF_X + i * PP_SHELF_PITCH + PP_SHELF_ART - PP_SHELF_PLAY_INSET - PA_PLAYB_PX,
                       pg.y_shelf + PP_HEAD_PITCH + PP_SHELF_ART - PP_SHELF_PLAY_INSET - PA_PLAYB_PX - off);
         }
-    for (i = 0; i < 2;
-         ++i) { /* the Library rows (Downloads, then Subscriptions): a tile, a chevron, a hairline from the text */
-        if (i && !pg.y_sub) break;
-        y = (i ? pg.y_sub : pg.y_dl) - off;
+    for (i = 0; i < 3;
+         ++i) { /* the Library rows (Downloads, Subscriptions, Saved): a tile, a chevron, a hairline from the text */
+        if (!pg_ylib(i)) continue;
+        y = pg_ylib(i) - off;
         if (pg.press == i + 1 && !pg.select) az_fill(canvas, 0, y, y + PC_ROW_H - 1, PG_W, LIST_PRESS);
         if (i)
-            pg_blit_from(canvas, pg_subtile(), 0, 0, PA_TILE_PX, PA_TILE_PX, PP_DL_TILE_X, y + PP_DL_TILE_Y);
+            pg_blit_from(canvas, i == 2 ? pg_savetile() : pg_subtile(), 0, 0, PA_TILE_PX, PA_TILE_PX, PP_DL_TILE_X,
+                         y + PP_DL_TILE_Y);
         else
             pg_sprite(canvas, PA_TILE_X, PA_TILE_Y, PA_TILE_PX, PA_TILE_PX, PP_DL_TILE_X, y + PP_DL_TILE_Y);
         pg_glyph(canvas, PA_CHEV, PP_DL_CHEV_CX - PA_G_PX / 2, y + PC_ROW_H / 2 - PA_G_PX / 2);
@@ -1393,17 +1420,19 @@ static void pg_paint_home(void *canvas) {
         }
     }
     /* the Library rows' texts: the title and the grey line of each */
-    for (i = 0; i < 2; ++i) {
+    for (i = 0; i < 3; ++i) {
         char sub[96];
         unsigned w[PG_TITLE_MAX];
         int n;
-        if (i && !pg.y_sub) break;
-        y = (i ? pg.y_sub : pg.y_dl) - off;
-        if (i)
+        if (!pg_ylib(i)) continue;
+        y = pg_ylib(i) - off;
+        if (i == 2)
+            pg_lib_saved_sub(sub, sizeof sub);
+        else if (i)
             pg_lib_subs_sub(sub, sizeof sub);
         else
             pg_lib_dl_sub(sub, sizeof sub);
-        n = pg_wide(w, PG_TITLE_MAX, TR(i ? "Subscriptions" : "Downloads"));
+        n = pg_wide(w, PG_TITLE_MAX, TR(i == 2 ? "Saved" : i ? "Subscriptions" : "Downloads"));
         pg_paint_text_at(canvas, pg.st_title, w, n, PP_DL_TEXT_X, y + LIST_TITLE_Y, PP_DL_TEXT_W, LIST_TITLE_H);
         n = pg_wide(w, PG_TITLE_MAX, sub);
         pg_paint_text_at(canvas, pg.st_sub, w, n, PP_DL_TEXT_X, y + LIST_SUB_Y, PP_DL_TEXT_W, LIST_SUB_H);
@@ -1456,7 +1485,7 @@ static int pg_played_row(int a) {
 static void pg_paint_dls(void *canvas) {
     int r0, r1, r, pass, off = pg_off(), shift = pg.select ? SG_SEL_COL : 0;
     pg_atlas(); /* (the played check) */
-    if (!pg.subs) {
+    if (!pg.subs && !pg.saved) {
         char line[120];
         unsigned w[120];
         int n;
@@ -1850,7 +1879,7 @@ static void pg_leave_show(void) {
 static void pg_nav(void) {
     int more = !pg.select && pg.btn_more &&
                ((pg.level == L_EPS && !pg.preview && !pg.det) || (pg.level == L_SHOWS && pg.has_import) ||
-                (pg.level == L_DLS && pg.nrows)),
+                (pg.level == L_DLS && pg.nrows && !pg.saved)),
         globe = !pg.select && pg.btn_globe && pg.level == L_SHOWS &&
                 pg.searchon, /* (the Apple Podcasts search, only while Podcast Search is on) */
         cap = more || globe,
@@ -1970,6 +1999,43 @@ static void pg_tscan_step(void) {
     }
 }
 
+/* The Saved episodes (docs/modules/podcasts.md "Saved"): the myfav rows under the Podcasts folder, which stock's star adds and removes (the query filter, payload.md hook 6, keeps them out of the music Favourites
+ * and lists only them while pc_saved_scope is set). Read with stock's own Favourites query, last saved first; the ones whose file is on the card are kept, at most PG_DLD_MAX: pg.sv_h their ring keys (pc_hash of the
+ * path, what pc_ep_t.hash is), pg.sv_d the hashes of their show folders, pg.sv_n the count. The stock list the query leaves in *pdeq_showlist is not used after. */
+static void pg_saved_load(void) {
+    void *list;
+    unsigned i, n, root = 0;
+    while (pg.root[root]) ++root;
+    pg.sv_n = 0;
+    if (!pg.sv_h || !pg.sv_d) return;
+    pc_saved_scope = 1;
+    list = loadLocalClassList(CLASS_FAV) > 0 ? *(void **)PDEQ_SHOWLIST : (void *)0;
+    pc_saved_scope = 0;
+    n = list ? deque_size(list) : 0;
+    for (i = 0; i < n && pg.sv_n < PG_DLD_MAX; ++i) {
+        const char *p = cc_str(deque_at(list, i), REC_PATH);
+        char dir[PC_FILE];
+        unsigned k;
+        if (!pc_is_path(p) || access(p, F_OK)) continue;
+        for (k = 0; k <= root && p[k]; ++k) {
+        }
+        if (k != root + 1 || !p[root + 1]) continue;
+        for (k = 0; p[root + 1 + k] && p[root + 1 + k] != '/' && k < (unsigned)PC_FILE - 1; ++k)
+            dir[k] = p[root + 1 + k];
+        dir[k] = 0;
+        pg.sv_h[pg.sv_n] = pc_hash(p), pg.sv_d[pg.sv_n] = pc_hash(dir);
+        ++pg.sv_n;
+    }
+}
+
+/* The rank of a saved episode (0 the last saved), -1 when the file is not saved. */
+static int pg_saved_rank(unsigned hash) {
+    int i;
+    for (i = 0; i < pg.sv_n; ++i)
+        if (pg.sv_h[i] == hash) return i;
+    return -1;
+}
+
 static void pg_load_shows(int keep) {
     int i, off = keep && pg.level == L_SHOWS ? pg_off() : pg.show_off, was = pg.level;
     if (pg.select) pg_select(0);
@@ -1980,9 +2046,10 @@ static void pg_load_shows(int keep) {
     } else
         pg_drop_tiles();
     pg.level = L_SHOWS;
-    pg.preview = pg.from_search = pg.subs = pg.from_subs = pg.from_dls = 0;
+    pg.preview = pg.from_search = pg.subs = pg.from_subs = pg.from_dls = pg.saved = 0;
     pg_leave_show();
     pg_scan();
+    pg_saved_load(); /* (the Saved row's count) */
     pg.has_line = pg.has_import = 0;
     for (i = 0; i < pg.nshows; ++i) pg.has_line |= pg.shows[i].feed[0] != 0;
     if (!pg.tot_ok || was != L_SHOWS || pn_gen() != pg.tot_gen) pg_tscan_start();
@@ -2117,12 +2184,18 @@ static void pg_dscan_show(int si, const char *only) {
         unsigned mt, kb;
         if (!e->file[0]) continue;
         if (e->state == PC_LOCAL) {
-            if ((only && strcmp(only, e->file)) || !pc_stat(pg.root, pg.shows[si].dir, e->file, &mt, &kb)) continue;
-            pg_dld_insert(si, e, mt ? mt : e->pub, kb);
+            int rank = pg.saved ? pg_saved_rank(e->hash) : 0;
+            if (rank < 0 || (only && strcmp(only, e->file)) || !pc_stat(pg.root, pg.shows[si].dir, e->file, &mt, &kb))
+                continue;
+            pg_dld_insert(si, e,
+                          pg.saved ? ~0u - (unsigned)rank
+                          : mt     ? mt
+                                   : e->pub,
+                          kb); /* (Saved: the order is the rank) */
             if (only) break;
             continue;
         }
-        if (only) continue;
+        if (only || pg.saved) continue;
         for (j = 0; j < pg.nip; ++j)
             if (pg.dls[j].si == si && !strcmp(pg.dls[j].file, e->file)) break;
         if (j < pg.nip) {
@@ -2192,6 +2265,16 @@ static void pg_dscan_start(void) {
     unsigned kb = 0;
     pg.nd = pg.nip = pg.nrows = 0;
     pg.dtot_n = pg.dtot_kb = 0;
+    if (pg.saved) { /* the shows that hold a saved episode, in the page's order: nothing is in progress here */
+        for (i = 0; i < pg.nshows && n < PC_MAX_SHOWS; ++i)
+            for (k = 0; k < pg.sv_n; ++k)
+                if (pg.sv_d[k] == pg.shows[i].hash) {
+                    pg.dsl[n++] = (unsigned char)i;
+                    break;
+                }
+        pg.dsn = n, pg.dscan = 0, pg.dscan_on = n > 0, pg.dfree_ok = 0;
+        return;
+    }
     pg_ip_sync();
     for (i = 0; i < pg.nip; ++i) {
         for (k = 0; k < n && pg.dsl[k] != pg.dls[i].si; ++k) {
@@ -2229,7 +2312,7 @@ static void pg_dls_apply(void) {
     int max;
     pg_ord_build();
     if (!pg.nrows && (pg.subs || !pg.dscan_on)) {
-        pg_empty(pg.subs ? "No subscriptions" : "No downloads");
+        pg_empty(pg.subs ? "No subscriptions" : pg.saved ? "No saved episodes" : "No downloads");
     } else {
         pg_show(pg.view, 1);
         pg_show(pg.status, 0);
@@ -2237,7 +2320,11 @@ static void pg_dls_apply(void) {
     pg_size();
     max = pg_content() - GRID_VIEW_H;
     if (max < 0) max = 0;
-    if (pg_off() > max) widget_set_prop_int(pg.sv, "yoffset", max);
+    if (pg.want_off && (pg.want_off <= max || !pg.dscan_on)) { /* the offset a Back asked for, once the rows reach it */
+        widget_set_prop_int(pg.sv, "yoffset", pg.want_off > max ? max : pg.want_off);
+        pg.want_off = 0;
+    } else if (pg_off() > max)
+        widget_set_prop_int(pg.sv, "yoffset", max);
     pg_nav();
     pg_redraw();
     pg_kick();
@@ -2248,7 +2335,7 @@ static void pg_dls_apply(void) {
 static void pg_dls_sync(void) {
     int k;
     unsigned kb = 0, mt, fkb;
-    if (pg.subs) return;
+    if (pg.subs || pg.saved) return; /* (the Saved page is made again by pg_load_downloads) */
     if (pg.dscan_on) {
         if (pn_gen() != pg.gen) pg_dscan_start();
     } else {
@@ -2268,7 +2355,7 @@ static void pg_dls_sync(void) {
 /* The Downloads level, behind the Shows level's Downloads row: the storage line, In Progress and Downloaded. The same level is the Subscriptions page (pg.subs: behind the Shows level's Subscriptions row, same taps and
  * select mode, other rows). keep (the Subscriptions page only): the scroll position stays when the rows are made again; the Downloads page reads the worker and the card through pg_dls_sync instead. */
 static void pg_load_downloads(int keep) {
-    int off = keep && pg.subs ? pg_off() : 0;
+    int off = keep && (pg.subs || pg.saved) ? pg_off() : 0;
     if (!pg.dls || !pg.ord) {
         pod_toast(TR("Not enough memory"));
         return;
@@ -2283,19 +2370,30 @@ static void pg_load_downloads(int keep) {
     pg.eps = (pc_ep_t *)0;
     pg.neps = 0;
     pg.nip = pg.nd = pg.nrows = pg.dscan_on = 0;
+    pg.want_off = 0;
     if (pg.subs)
         pg_subs_build();
-    else
+    else {
+        if (pg.saved) pg_saved_load();
         pg_dscan_start();
+    }
     pg.gen = pn_gen(), pg.dgen = pn_dl_gen();
     pg.rev = pc_rev();
-    pg_title(pg.subs ? "Subscriptions" : "Downloads", (const char *)0);
+    pg_title(pg.subs ? "Subscriptions" : pg.saved ? "Saved" : "Downloads", (const char *)0);
     grid_shape(&pg.g, LIST_ART, LIST_R, 1);
     grid_placeholder(&pg.g);
     pg_dls_apply();
     widget_set_prop_int(pg.sv, "yoffset", off);
+    if (pg.saved) pg.want_off = off; /* (the rows come a show a tick: the offset is put back as they reach it) */
     pg_fade();
     pg_kick();
+}
+
+/* The Saved page: the Downloads level with the saved episodes as its Downloaded rows, the last saved first (from the Shows level, or back from an episode page opened from it). */
+static void pg_load_saved(void) {
+    pg.saved = 1;
+    pg.subs = 0;
+    pg_load_downloads(0);
 }
 
 /* The Subscriptions page: the Downloads level with the subscriptions as its rows (from the Shows level, or back from a Show page opened from it). */
@@ -2868,7 +2966,7 @@ static void pg_head(void) { /* the navbar's title: "N Selected" in select mode, 
         if (pg.level == L_EPS)
             pg_title((const char *)0, pg.shows[pg.sel].title);
         else if (pg.level == L_DLS)
-            pg_title(pg.subs ? "Subscriptions" : "Downloads", (const char *)0);
+            pg_title(pg.subs ? "Subscriptions" : pg.saved ? "Saved" : "Downloads", (const char *)0);
         return;
     }
     pc_fmt(buf, sizeof buf, TR("%d Selected"), pg.npick);
@@ -3148,8 +3246,7 @@ static void pg_import(void) {
  * Playing
  */
 /* An stSongInfo of our own for episode e of the show open (strings duplicated; the deque copies them again and the caller frees these). */
-static void pg_record(unsigned *rec, const pc_ep_t *e, const char *path) {
-    const pc_show_t *s = &pg.shows[pg.sel];
+static void pg_record(unsigned *rec, const pc_show_t *s, const pc_ep_t *e, const char *path) {
     memset(rec, 0, PG_REC_SIZE);
     *(char **)((char *)rec + REC_NAME) = strdup(e->file);
     *(char **)((char *)rec + REC_PATH) = strdup(path);
@@ -3166,11 +3263,11 @@ static void pg_record_free(unsigned *rec) {
     for (i = 0; i < sizeof field / sizeof *field; ++i) free(*(char **)((char *)rec + field[i]));
 }
 
-static int pg_join(char *out, unsigned size, const char *dir, const char *file) {
+static int pg_join_in(const char *root, char *out, unsigned size, const char *dir, const char *file) {
     unsigned n = 0, k;
     const char *parts[3];
     int p;
-    parts[0] = pg.root, parts[1] = dir, parts[2] = file;
+    parts[0] = root, parts[1] = dir, parts[2] = file;
     for (p = 0; p < 3; ++p) {
         if (p) out[n++] = '/';
         for (k = 0; parts[p][k]; ++k) {
@@ -3182,36 +3279,33 @@ static int pg_join(char *out, unsigned size, const char *dir, const char *file) 
     return 1;
 }
 
-static int pg_path(const pc_ep_t *e, char *out, unsigned size) {
-    return pg_join(out, size, pg.shows[pg.sel].dir, e->file);
+static int pg_join(char *out, unsigned size, const char *dir, const char *file) {
+    return pg_join_in(pg.root, out, size, dir, file);
 }
 
-/* Episode `at` and the ones after it: the queue (the list's order, from the first row, so Previous goes back up the list), Now Playing. */
-static void pg_play(int at) {
+/* A queue of the local episodes of show s (the list's order, from the first row, so Previous goes back up the list) with episode `at` of eps as the one to start: the queue (*idx its place in it), the resume
+ * and the speed set as an episode start does, List play; NULL (a toast said why) when that episode is not on the card. root is the Podcasts folder (pc_root). Used by the Podcasts page (pg_play) and the Pod. */
+void *pg_episode_queue(const char *root, const pc_show_t *s, const pc_ep_t *eps, int neps, int at, int *idx) {
     void *queue;
     int i, ok = 0;
     char path[PC_FILE * 2 + 40];
-    struct {
-        void *dq;
-        int idx, cls, mode;
-    } context;
-    if (at < 0 || at >= pg.neps || pg.eps[at].state != PC_LOCAL || !pg_path(&pg.eps[at], path, sizeof path) ||
-        access(path, F_OK)) {
+    if (at < 0 || at >= neps || eps[at].state != PC_LOCAL ||
+        !pg_join_in(root, path, sizeof path, s->dir, eps[at].file) || access(path, F_OK)) {
         pod_toast(TR("Storage unavailable"));
-        return;
+        return (void *)0;
     }
     queue = _create_deque("stSongInfo");
-    if (!queue) return;
+    if (!queue) return queue;
     deque_init(queue);
-    for (i = 0; i < pg.neps; ++i) {
+    for (i = 0; i < neps; ++i) {
         unsigned rec[PG_REC_SIZE / 4];
         char p[PC_FILE * 2 + 40];
-        if (pg.eps[i].state != PC_LOCAL || !pg_path(&pg.eps[i], p, sizeof p)) {
+        if (eps[i].state != PC_LOCAL || !pg_join_in(root, p, sizeof p, s->dir, eps[i].file)) {
             if (i < at)
                 --at; /* not on the card (the Show page lists those, greyed), or a name that does not fit (the model refused such names; this is the belt): not in the queue */
             continue;
         }
-        pg_record(rec, &pg.eps[i], p);
+        pg_record(rec, s, &eps[i], p);
         _deque_push_back(queue, rec);
         pg_record_free(rec);
         ++ok;
@@ -3219,13 +3313,27 @@ static void pg_play(int at) {
     if (!ok) {
         deque_destroy(queue);
         pod_toast(TR("Storage unavailable"));
-        return;
+        return (void *)0;
     }
-    pc_restart(pg.eps[at < pg.neps ? at : 0].hash);
-    pc_speed_apply(pg.shows[pg.sel].hash);
+    pc_restart(eps[at < neps ? at : 0].hash);
+    pc_speed_apply(s->hash);
     pod_set_in_order();
+    *idx = at;
+    return queue;
+}
+
+/* Episode `at` and the ones after it: the queue, Now Playing. */
+static void pg_play(int at) {
+    void *queue;
+    int idx;
+    struct {
+        void *dq;
+        int idx, cls, mode;
+    } context;
+    queue = pg_episode_queue(pg.root, &pg.shows[pg.sel], pg.eps, pg.neps, at, &idx);
+    if (!queue) return;
     *(int *)G_CLASS_TYPE = 1;
-    context.dq = queue, context.idx = at, context.cls = 1, context.mode = PLAY_MODE;
+    context.dq = queue, context.idx = idx, context.cls = 1, context.mode = PLAY_MODE;
     navigator_to_with_context("playing_page", &context); /* start_player copies the queue */
     deque_destroy(queue);
 }
@@ -3289,6 +3397,7 @@ static int pg_hit(void *e, int *part) {
         }
         if (pt[1] >= pg.y_dl && pt[1] < pg.y_dl + PC_ROW_H) return *part = PH_DLROW, 0;
         if (pg.y_sub && pt[1] >= pg.y_sub && pt[1] < pg.y_sub + PC_ROW_H) return *part = PH_SUBROW, 1;
+        if (pg.y_sav && pt[1] >= pg.y_sav && pt[1] < pg.y_sav + PC_ROW_H) return *part = PH_SAVROW, 2;
         a = grid_cell_at(pt[0], pt[1], pg.y_grid, pg.nshows);
         if (a >= 0) *part = PH_CELL;
         return a;
@@ -3356,7 +3465,7 @@ static int pg_on_down(void *ctx, void *e) {
     pg.down_part = part;
     pg.down_x = I(e, PE_X), pg.down_y = I(e, PE_Y);
     if (a >= 0 && !pg.select &&
-        (pg.level == L_SHOWS  ? part == PH_DLROW || part == PH_SUBROW
+        (pg.level == L_SHOWS  ? part == PH_DLROW || part == PH_SUBROW || part == PH_SAVROW
          : pg.level == L_SRCH ? part == PH_BODY
                               : pg.level != L_EPS || part == PH_BODY))
         pg_set_press(
@@ -3426,9 +3535,16 @@ static void pg_dls_back(void) {
     pg.subs = 0;
     grid_shape(&pg.g, LIST_ART, LIST_R, 1);
     grid_placeholder(&pg.g);
-    pg_title("Downloads", (const char *)0);
+    pg_title(pg.saved ? "Saved" : "Downloads", (const char *)0);
     pg_show(pg.view, 1);
     pg_show(pg.status, 0);
+    if (pg.saved) { /* the episode may have been unsaved (or saved) since: the page is made again, at the offset it was left */
+        pg_load_downloads(0);
+        pg.want_off = off;
+        pg_dls_apply();
+        pg_fade();
+        return;
+    }
     pg_dls_sync();
     max = pg_content() - GRID_VIEW_H;
     if (max < 0) max = 0;
@@ -3519,7 +3635,7 @@ static void pg_delete_played(void) {
     int k, n = 0, kept = 0;
     unsigned freed = 0;
     char msg[96], sz[24];
-    if (pg.level != L_DLS || pg.subs || pg.dscan_on || pg.select) return;
+    if (pg.level != L_DLS || pg.subs || pg.saved || pg.dscan_on || pg.select) return;
     if (!pod_confirm(TR("Delete all played episodes?"))) return;
     for (k = pg.nd - 1; k >= 0; --k) {
         const struct pg_dl *d = &pg.dls[pg.dord[k]];
@@ -3559,8 +3675,8 @@ static const char *const pg_speed_name[PC_SPEEDS] = {"1\xc3\x97", "1.25\xc3\x97"
  * which each sheet shows the ones that apply, placed from the card's top, the card as high as its rows over the window's bottom edge. The show's "..." opens the show's: Playback Speed (a tap cycles
  * and the sheet stays), Refresh Feed, Select Episodes, Mark All as Played, Unsubscribe. A cell's "..." opens that episode's: Download or Remove Download, Mark as Played or Unplayed.
  */
-static const char *const pg_row_id[PG_SHEET_ROWS] = {"speed", "refresh", "select", "markall", "unsub",     "dl",
-                                                     "rm",    "mark",    "unmark", "import",  "delplayed", "export"};
+static const char *const pg_row_id[PG_SHEET_ROWS] = {"speed", "refresh", "select", "markall",   "unsub",  "dl",  "rm",
+                                                     "mark",  "unmark",  "import", "delplayed", "export", "save"};
 
 static void pg_sheet_close(void) {
     if (!pg.sheet) return;
@@ -3618,15 +3734,47 @@ static int pg_any_unplayed(void) {
     return 0;
 }
 
+/* Save / Unsave Episode (docs/modules/podcasts.md "Saved"): the star button's own calls on stock's favourites table (manage_myfav 0x4ef884: checkFavExist, then deleteMusicFromFav or addMyFav, on the record) with
+ * the record the episode plays as (pg_record: the same name and path, so the star in Now Playing sees it as saved). Only an episode on the card can be saved. pg_save_state: 1 saved, 0 not, -1 cannot. */
+static int pg_save_rec(int ep, unsigned *rec) {
+    char path[PC_FILE * 2 + 40];
+    if (ep < 0 || ep >= pg.neps || pg.eps[ep].state != PC_LOCAL ||
+        !pg_join(path, sizeof path, pg.shows[pg.sel].dir, pg.eps[ep].file))
+        return 0;
+    pg_record(rec, &pg.shows[pg.sel], &pg.eps[ep], path);
+    return 1;
+}
+
+static int pg_save_state(int ep) {
+    unsigned rec[PG_REC_SIZE / 4];
+    int on;
+    if (!pg_save_rec(ep, rec)) return -1;
+    on = checkFavExist(rec) != 0;
+    pg_record_free(rec);
+    return on;
+}
+
+static void pg_save_toggle(int ep) {
+    unsigned rec[PG_REC_SIZE / 4];
+    if (!pg_save_rec(ep, rec)) return;
+    if (checkFavExist(rec)) {
+        deleteMusicFromFav(rec);
+    } else {
+        addMyFav(rec);
+        pod_toast(TR("Saved"));
+    }
+    pg_record_free(rec);
+}
+
 /* The sheet of the show (SH_SHOW) or of episode ep (SH_CELL). */
 static void pg_sheet_open(int kind, int ep) {
-    int rows[PG_SHEET_ROWS], n = 0;
+    int rows[PG_SHEET_ROWS], n = 0, k;
     unsigned pos, len;
     char text[96];
     if (!pg.sh_card || pg.sheet ||
         (kind == SH_HOME   ? pg.level != L_SHOWS
          : kind == SH_SUBS ? pg.level != L_DLS || !pg.subs
-         : kind == SH_DLS  ? pg.level != L_DLS || pg.subs
+         : kind == SH_DLS  ? pg.level != L_DLS || pg.subs || pg.saved
                            : pg.level != L_EPS) ||
         pg.dlg || pg.select || pg.preview)
         return;
@@ -3692,6 +3840,10 @@ static void pg_sheet_open(int kind, int ep) {
             widget_set_text_utf8(pg.sh_tx[SR_DL], text);
         } else
             rows[n++] = SR_RM;
+        if (!pg.preview && (k = pg_save_state(ep)) >= 0) {
+            rows[n++] = SR_SAVE;
+            widget_set_text_utf8(pg.sh_tx[SR_SAVE], TR(k ? "Unsave Episode" : "Save Episode"));
+        }
         if (pg_ep_hash(e)) rows[n++] = pg_ep_state(e, &pos, &len) == PC_DONE ? SR_UNMARK : SR_MARK;
     }
     pg_sheet_rows(rows, n);
@@ -3871,6 +4023,9 @@ static int pg_on_sheet_row(void *ctx, void *e) {
     case SR_RM:
         pg_remove(ep);
         break;
+    case SR_SAVE:
+        pg_save_toggle(ep);
+        break;
     default: /* Mark as Played / Unplayed */
         hash = ep >= 0 && ep < pg.neps ? pg_ep_hash(&pg.eps[ep]) : 0;
         if (hash) {
@@ -3897,7 +4052,7 @@ static int pg_on_more(void *ctx, void *e) {
         pg_sheet_open(SH_SHOW, 0);
     else if (pg.win && pg.level == L_SHOWS)
         pg_sheet_open(SH_HOME, 0);
-    else if (pg.win && pg.level == L_DLS && !pg.select)
+    else if (pg.win && pg.level == L_DLS && !pg.select && !pg.saved)
         pg_sheet_open(pg.subs ? SH_SUBS : SH_DLS, 0);
     return RET_OK;
 }
@@ -3938,6 +4093,8 @@ static void pg_home_tap(int part, int a) {
         pg_load_downloads(0);
     else if (part == PH_SUBROW)
         pg_load_subs(0);
+    else if (part == PH_SAVROW)
+        pg_load_saved();
     else if (part == PH_SHELF)
         pg_cont_play(a);
     else if (part == PH_CELL)
@@ -4110,7 +4267,7 @@ static int pg_on_fg(void *ctx, void *e) {
             pg.gen = pn_gen() - 1;
     }
     if (pg.level == L_DLS && !pg.select) { /* so may a download */
-        if (pg.subs)
+        if (pg.subs || pg.saved)
             pg_load_downloads(1);
         else
             pg_dls_sync();
@@ -4162,6 +4319,9 @@ static int pg_on_destroy(void *ctx, void *e) {
     grid_free(&pg.sg);
     if (pg.atlas) bitmap_destroy(pg.atlas);
     if (pg.subtile) bitmap_destroy(pg.subtile);
+    if (pg.savetile) bitmap_destroy(pg.savetile);
+    free(pg.sv_h);
+    free(pg.sv_d);
     free(pg.cells);
     free(pg.hdr);
     free(pg.pd);
@@ -4263,6 +4423,8 @@ int podcasts_open(void) {
     pg.dls = calloc(PG_DLS_MAX, sizeof *pg.dls);
     pg.ord = calloc(PG_DLS_MAX + PG_DLD_MAX, sizeof *pg.ord);
     pg.dord = pg.ord ? pg.ord + PG_DLS_MAX : (unsigned short *)0;
+    pg.sv_h = calloc(PG_DLD_MAX, sizeof *pg.sv_h);
+    pg.sv_d = calloc(PG_DLD_MAX, sizeof *pg.sv_d);
     if (pg.del) pod_centre_pill(pg.del, PL_BAR_PILL_W);
     if (pg.unsubp) pod_centre_pill(pg.unsubp, PL_BAR_PILL_W);
     pc_root(pg.root);
@@ -4283,4 +4445,15 @@ int podcasts_open(void) {
     pg_awake_arm(); /* a download queued by an earlier window of the page is still going */
     pg_load_shows(0);
     return 0;
+}
+
+/* Go to Podcasts (Now Playing's More sheet, patch/playmore.c): a Podcasts page already in the stack (the episode was started from it) is shown as it was by closing the Now Playing over it (AWTK destroys
+ * a closed window later, so closing that page and opening a new one in the same call finds the old one still there: V2.1zCQUGAAAE did nothing); else the page opens at the Shows level. 0 once it is up or
+ * uncovered, -1 if it could not open. */
+int podcasts_go(void) {
+    if (pg.win) {
+        if (navigator_window_is_exist("playing_page")) navigator_close("playing_page");
+        return 0;
+    }
+    return podcasts_open();
 }

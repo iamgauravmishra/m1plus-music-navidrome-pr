@@ -1164,6 +1164,14 @@ static const char pq_first[] = " order by (ifnull(track,0)<=0), ifnull(track,0),
  * order its input arrives (verified with the 3.19.3 amalgamation; SQLite 3.54's sorter takes the first, so this is implementation behaviour, pinned by the device's SQLite). */
 static const char pq_last[] = " order by (ifnull(track,0)<=0) desc, ifnull(track,0) desc, fileurl desc)";
 
+/* The Favourites list (getAllFav, 0x4ec45c: exactly "select * from myfav") is music only; the Saved page (patch/podcasts.c) asks for the same statement with pc_saved_scope set around its
+ * loadLocalClassList(0xf00a) and gets the episodes only, the last saved first. Stock's own star adds and removes the episodes (myfav), so Saved is a view of that table. */
+unsigned char pc_saved_scope __attribute__((section(".scratch")));
+static const char pq_fav_sql[] = "select * from myfav";
+static const char pq_fav_music[] = "select * from myfav where ifnull(fileurl,'') not like '" PM_ROOT "/podcasts/%'";
+static const char pq_fav_saved[] =
+    "select * from myfav where ifnull(fileurl,'') like '" PM_ROOT "/podcasts/%' order by id desc";
+
 /* The end of the first pat in sql when the next character is not an s (albumsonger is not album); 0 when there is none */
 static const char *pq_find(const char *sql, const char *pat) {
     unsigned i, n;
@@ -1176,12 +1184,22 @@ static const char *pq_find(const char *sql, const char *pat) {
 }
 
 /* sql with " from songtable" replaced by the filtered subquery, in out; 0 when sql is not such a select or does not fit. An album list (`group by album`) gets the subquery
- * ordered so the row SQLite keeps per album is its first track; an album's own tracks (`where album ...`) come in track order, so the first is the album's first track. */
+ * ordered so the row SQLite keeps per album is its first track; an album's own tracks (`where album ...`) come in track order, so the first is the album's first track. The Favourites statement is
+ * replaced whole (above). */
 static char *pq_filter(char *out, const char *sql) {
     static const char tbl[] = " from songtable", sel[] = "select ";
     unsigned i, n, m = sizeof pq_head - 1, t, len;
     const char *tail, *rest;
     if (!sql) return 0;
+    for (i = 0; i < sizeof pq_fav_sql && sql[i] == pq_fav_sql[i]; ++i) {
+    }
+    if (i == sizeof pq_fav_sql) {
+        if (pc_saved_scope)
+            memcpy(out, pq_fav_saved, sizeof pq_fav_saved);
+        else
+            memcpy(out, pq_fav_music, sizeof pq_fav_music);
+        return out;
+    }
     for (i = 0; i < sizeof sel - 1; ++i)
         if (sql[i] != sel[i]) return 0;
     for (n = 0; sql[n]; ++n) {

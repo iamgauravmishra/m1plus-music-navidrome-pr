@@ -427,6 +427,9 @@ def check_touch(root):
 
 ICONS = {'btn_imgrandom_style': 'np_random', 'btn_imgcycle_style': 'np_cycle', 'btn_imgcycle1_style': 'np_cycle1',
          'btn_imgorder_style': 'np_order', 'btn_imgfav_style': 'np_fav', 'btn_imgunfav_style': 'np_unfav'}
+# The page theme's styles btn_imgsave_style / btn_imgunsave_style are the fav / unfav ones with the bookmark icons (patch/nowplaying.c np_fav_sync swaps them in while an episode plays, and the widget's
+# own pressed icon, stock's inline style:pressed:icon which the page sets above, to np_unsave_down).
+SAVE = {'btn_imgfav_style': ('btn_imgsave_style', 'np_save'), 'btn_imgunfav_style': ('btn_imgunsave_style', 'np_unsave')}
 # play/pause: the app swaps btn_play between these default.bin styles; page-local copies win (the window
 # theme is searched first) and leave default.bin, and every other page's play button, untouched.
 PLAY = {'btn_imgplay_style': ('np_play', 'np_play_down'), 'btn_imgpause_style': ('np_pause', 'np_pause_down')}
@@ -435,6 +438,11 @@ def apply_style(th):
     for name, icon in ICONS.items():
         ss = th.find('button', name); assert len(ss) == 5, name
         for s in ss: s.set('icon', icon)
+    for name, (new, icon) in SAVE.items():
+        assert not th.find(style=new), f'{new} already in the page theme'
+        for t in th.find('button', name):
+            s = awtk_style.Item('button', new, t.state, list(t.props))
+            s.set('icon', icon); th.items.append(s)
     template = th.find('button', 'btn_imgrandom_style')
     for name, (icon, down) in PLAY.items():
         assert not th.find(style=name), f'{name} already in the page theme'

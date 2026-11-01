@@ -180,6 +180,7 @@ class Machine:
         self.genre_songs = {}       # (genre name, Unknown Genre byte) -> its song rows (loadLocalClassList(0xff09) with classinfo[0], classinfo + 0x30d, classinfo + 0xc as the stock row tap leaves them)
         self.create_ret = 5         # createPlayListItem's result (-1 full, -2 exists)
         self.pl_names = set()       # playlist names createPlayListItem answers -2 for (a test sets them)
+        self.fav_rows = []          # myfav as stock has it, in insertion order: (name, path, title); checkFavExist / addMyFav / deleteMusicFromFav and loadLocalClassList(0xf00a) read them
         self.pl_rows = []           # the playlist table's song rows addPlayList was given: (row id, playlist id, path, title); checkPlayListExist / getPlayListMaxId read them
         self.pl_created = []        # (name, id) of the playlists createPlayListItem made (a result >= 0)
         self.clobber = False        # createPlayListItem leaves the browsing class, classinfo[0..1] and the navigation title changed (a test of "put back")
@@ -377,6 +378,10 @@ class Machine:
             self.calls.append(('widget_set_tr_text', a0, key)); self.calls.append(('widget_set_text_utf8', a0, self.tr(key))); ret = 0
         elif name == 'navigator_back':
             self.calls.append(('navigator_back',)); ret = 0
+        elif name == 'navigator_close':   # (the page stays: a window's destroy event is the test's to deliver)
+            self.calls.append(('navigator_close', self.read_cstr(a0))); ret = 0
+        elif name == 'navigator_window_is_exist':   # the window names a test puts in self.windows (none by default)
+            ret = int(self.read_cstr(a0) in getattr(self, 'windows', ()))
         elif name == 'on_backtoplayer_onclick':
             self.calls.append(('on_backtoplayer_onclick',)); ret = 0
         elif name == 'stock_resume':
@@ -621,6 +626,13 @@ class Machine:
                 self.setword(pod.DATA['PDEQ_SHOWLIST'][0], self.new_deque(items))
                 u.reg_write(UC_MIPS_REG_V0, len(items)); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
                 return
+            if a0 == O['CLASS_FAV'] and self.fav_rows:   # getAllFav: the query filter's two answers (payload.md hook 6): music only, or with pc_saved_scope the episodes, the last saved first
+                scope = self.u.mem_read(PSYMS['pc_saved_scope'], 1)[0]; self.calls.append(('fav_query', scope))
+                rows = [r for r in self.fav_rows if r[1].lower().startswith('/mnt/mmc/podcasts/') == bool(scope)]
+                items = [self.record(path=p, name=n, title=t) for n, p, t in (rows[::-1] if scope else rows)]
+                self.setword(pod.DATA['PDEQ_SHOWLIST'][0], self.new_deque(items))
+                u.reg_write(UC_MIPS_REG_V0, len(items)); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+                return
             items = self.class_lists.get(a0, self.showlist)
             if a0 == O['CLASS_ARTISTS'] and self.album_artists:   # GetAllAlbumArtist when artist_type == 1
                 items = self.album_artists if self.word(pod.DATA['ARTIST_TYPE'][0]) == 1 else items
@@ -721,6 +733,12 @@ class Machine:
         elif name == 'checkPlayListExist':   # (song record, playlist id): 1 = that path is already in that playlist
             path = self.read_cstr(self.word(a0 + O['REC_PATH'])); self.calls.append(('checkPlayListExist', path, a1))
             ret = int(any(r[1] == a1 and r[2] == path for r in self.pl_rows))
+        elif name in ('checkFavExist', 'addMyFav', 'deleteMusicFromFav'):   # (song record): keyed by file name and path, as the stock SQL (the cue times are 0)
+            key = (self.read_cstr(self.word(a0 + O['REC_NAME'])), self.read_cstr(self.word(a0 + O['REC_PATH'])))
+            self.calls.append((name,) + key)
+            if name == 'checkFavExist': ret = int(any(r[:2] == key for r in self.fav_rows))
+            elif name == 'addMyFav': self.fav_rows.append(key + (self.read_cstr(self.word(a0 + O['REC_TITLE'])),)); ret = 1
+            else: self.fav_rows = [r for r in self.fav_rows if r[:2] != key]; ret = 1
         elif name == 'getPlayListMaxId':
             self.calls.append(('getPlayListMaxId',)); ret = max([r[0] for r in self.pl_rows], default=0)
         elif name == 'addPlayList':   # (song record): the row's id is REC_ID, its playlist REC_DISC

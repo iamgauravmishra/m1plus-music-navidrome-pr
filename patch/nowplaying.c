@@ -45,8 +45,10 @@ static int np_on_queue(void *ctx, void *e) {
     (void)e;
     return queue_open() == 0 ? RET_STOP : RET_OK;
 }
+#include "podcasts.h"
 
 static struct {
+    void *fav; /* btn_fav (stock's star button): wears the bookmark styles while an episode plays */
     void *win, *rem, *tot; /* the window, np_remaining (ours), label_playlen (stock) */
     void *el, *pt; /* np_elapsed (ours), label_playtime (stock's elapsed time); both 0 if the page lacks either */
     unsigned timer; /* the repeating np_tick timer */
@@ -382,6 +384,41 @@ static void np_info(void) {
     }
 }
 
+/* The favourite button of an episode is a bookmark (docs/modules/podcasts.md "Saved"): stock's star toggles myfav and sets btn_imgfav_style / btn_imgunfav_style (its click handler at once, show_player_face on a
+ * track change); while the playing path is an episode the button's style is mapped to btn_imgsave_style / btn_imgunsave_style (the same icons, a bookmark, in the page theme), and back for music. Stock sets its style
+ * only when the name differs from the one it wants, so the swap lasts until stock's next fill; our click handler (run after stock's) and the tick put it back. */
+static void np_fav_sync(void) {
+    const char *cur, *want = (const char *)0;
+    void *rec;
+    int ep;
+    if (!np.fav) return;
+    cur = *(const char *const *)((char *)np.fav + WIDGET_STYLE);
+    if (!cur) return;
+    rec = cc_playing();
+    ep = rec && pc_is_path(cc_str(rec, REC_PATH));
+    if (ep) {
+        if (!strcmp(cur, "btn_imgfav_style"))
+            want = "btn_imgsave_style";
+        else if (!strcmp(cur, "btn_imgunfav_style"))
+            want = "btn_imgunsave_style";
+    } else if (!strcmp(cur, "btn_imgsave_style"))
+        want = "btn_imgfav_style";
+    else if (!strcmp(cur, "btn_imgunsave_style"))
+        want = "btn_imgunfav_style";
+    if (want) {
+        widget_use_style(np.fav, want);
+        /* stock's inline pressed icon (the page sets np_unfav_down on the widget) is a star: the bookmark presses to its own outline */
+        widget_set_prop_str(np.fav, "style:pressed:icon", ep ? "np_unsave_down" : "np_unfav_down");
+    }
+}
+
+static int np_on_fav(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    np_fav_sync();
+    return RET_OK;
+}
+
 static void np_work(void) {
     recent_note(cc_playing()); /* No stock list query: the page underneath owns pdeq_showlist;
                                * the menu's foreground handler resolves the cover key. */
@@ -390,6 +427,7 @@ static void np_work(void) {
     np_time();
     np_info();
     ly_tick(); /* the lyrics page (patch/lyrics.c) */
+    np_fav_sync();
 }
 
 static int np_tick(const void *timer) {
@@ -450,6 +488,8 @@ static void np_start(void *win) {
     np.tot = widget_lookup(win, "label_playlen", 1);
     np.el = widget_lookup(win, "np_elapsed", 1);
     np.pt = widget_lookup(win, "label_playtime", 1);
+    np.fav = widget_lookup(win, "btn_fav", 1);
+    if (np.fav) widget_on(np.fav, EVT_CLICK, np_on_fav, (void *)0);
     if (!np.el || !np.pt) np.el = np.pt = (void *)0; /* only the pair is swapped */
     np.shown = np.eshown = -1;
     for (n = 0; n < NP_INFO_N; ++n) np.info[n] = widget_lookup(win, np_info_names[n], 1);

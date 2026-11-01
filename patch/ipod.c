@@ -42,6 +42,9 @@ extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message b
 extern int pod_open_settings(void); /* patch/m1plus.c: the Settings page */
 extern unsigned pod_rand(unsigned n); /* patch/shuffle.c: the shuffle generator (seeded once) */
 extern void pod_set_mode(int mode); /* patch/shuffle.c: the stock play mode, set as the Play settings page does */
+extern void *pg_episode_queue(
+    const char *root, const pc_show_t *s, const pc_ep_t *eps, int neps, int at,
+    int *idx); /* patch/podcasts.c: the queue of a show's local episodes, set up as an episode start does */
 extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one become List play */
 /* patch/ipod_cf.c: the Cover Flow screen (level K_CF: the albums list drawn as covers; docs/modules/ipod-coverflow.md) */
 extern int ipcf_open(void *win), ipcf_up(void), ipcf_busy(void), ipcf_tick(void *list, unsigned count);
@@ -62,21 +65,24 @@ enum {
     K_PL_TRACKS,
     K_NOW,
     K_SETTINGS,
-    K_CF
+    K_CF,
+    K_PODCASTS,
+    K_PC_EPS
 };
 enum { S_SHUFFLE, S_REPEAT, S_APPEARANCE, S_COUNT };
-enum { M_COVER, M_ALBUMS, M_ARTISTS, M_SONGS, M_PLAYLISTS, M_SHUFFLE, M_COUNT };
+enum { M_COVER, M_ALBUMS, M_ARTISTS, M_SONGS, M_PLAYLISTS, M_PODCASTS, M_SHUFFLE, M_COUNT };
 enum { ROOT_MUSIC, ROOT_COVER, ROOT_SHUFFLE, ROOT_NOW, ROOT_SETTINGS, ROOT_COUNT };
 enum { R_NONE, R_CENTRE, R_RING };
 
 static const char *const MAIN_KEYS[ROOT_COUNT] = {"Music", "Cover Flow", "Shuffle Songs", "Now Playing",
                                                   "cdrippersettings"};
-static const char *const MUSIC_KEYS[M_COUNT] = {"Cover Flow", "Albums",    "Artists",
-                                                "Songs",      "Playlists", "Shuffle Songs"};
+static const char *const MUSIC_KEYS[M_COUNT] = {"Cover Flow", "Albums",   "Artists",      "Songs",
+                                                "Playlists",  "Podcasts", "Shuffle Songs"};
 static const char *const SET_KEYS[S_COUNT] = {"Shuffle", "Repeat", "Appearance"};
 static const char *const MODE_ICONS[4] = {"ipod_mode_shuffle", "ipod_mode_repeat", "ipod_mode_repeat1",
                                           "ipod_playing"}; /* the play mode marks, then the playing track's speaker */
 static void *ip_mode_bitmap(int i);
+static void ip_pc_play(int at);
 #define IP_NP_GONE 3 /* looks without a current track before Now Playing says Not Playing */
 
 struct lvl {
@@ -98,6 +104,10 @@ static struct {
     void *st_row, *st_sel, *st_title, *st_small, *st_subsel, *st_np1, *st_np2, *st_time, *st_val,
         *st_np3; /* hidden labels: the text styles */
     struct lvl st[IP_DEPTH];
+    pc_show_t *
+        pc_shows; /* the Podcasts level's shows (those with an episode file; compacted) and the open show's local episodes: malloc'd while their levels are in the stack */
+    pc_ep_t *pc_eps;
+    int pc_n, pc_neps;
     int depth; /* index of the level in front */
     void *list; /* the stock list the front level's rows are read from (valid while it is still the current one) */
     void *first;
@@ -231,6 +241,9 @@ static int ip_now_shown(void) {
 static int ip_root_id(int row) { return row >= ROOT_NOW && !ip_now_shown() ? row + 1 : row; }
 
 static int ip_is_list(int kind) { return kind != K_MAIN && kind != K_MUSIC && kind != K_NOW && kind != K_SETTINGS; }
+static int ip_is_pc(int kind) {
+    return kind == K_PODCASTS || kind == K_PC_EPS;
+} /* lists of our own (pcmodel), not stock deques */
 static int ip_tall(int kind) {
     return kind == K_ALBUMS || kind == K_ARTIST_ALBUMS || kind == K_PLAYLISTS;
 } /* cover rows; song lists are plain text rows */
@@ -320,7 +333,63 @@ static void ip_wheel_reset(void) { ip.acc = ip.dir = ip.rev = ip.speed = ip.fast
 /* ---------------------------------------------------------------------------
  * The stock lists
  */
-static void *ip_stock_list(int kind) { return *(void **)(kind == K_PLAYLISTS ? PDEQ_PLAYLIST : PDEQ_SHOWLIST); }
+static void *ip_stock_list(int kind) {
+    if (ip_is_pc(kind)) return kind == K_PODCASTS ? (void *)ip.pc_shows : (void *)ip.pc_eps;
+    return *(void **)(kind == K_PLAYLISTS ? PDEQ_PLAYLIST : PDEQ_SHOWLIST);
+}
+
+static void ip_pc_free(void) {
+    free(ip.pc_shows);
+    free(ip.pc_eps);
+    ip.pc_shows = (pc_show_t *)0, ip.pc_eps = (pc_ep_t *)0;
+    ip.pc_n = ip.pc_neps = 0;
+}
+
+/* The model of the front Podcasts level, read again: the shows with an episode file in the Podcasts page's order, or the open show's local episodes (newest first). Levels behind keep what they need (the
+ * shows stay while an episode list is open); what no level in the stack shows is freed. 1 when the level's list exists. */
+static int ip_pc_run(int d) {
+    int k, m = 0;
+    int kind = ip.st[d].kind;
+    if (kind != K_PC_EPS) {
+        free(ip.pc_eps);
+        ip.pc_eps = (pc_ep_t *)0, ip.pc_neps = 0;
+    }
+    if (kind == K_PODCASTS) {
+        pc_show_t *all = calloc(PC_MAX_SHOWS, sizeof *all);
+        int n;
+        free(ip.pc_shows);
+        ip.pc_shows = all, ip.pc_n = 0;
+        if (!all) return 0;
+        n = pc_scan_shows(all, PC_MAX_SHOWS);
+        for (k = 0; k < n; ++k)
+            if (all[k].count) memcpy(&all[m++], &all[k], sizeof *all);
+        ip.pc_n = m;
+        return 1;
+    }
+    {
+        pc_ep_t *all;
+        int n;
+        free(ip.pc_eps);
+        ip.pc_eps = (pc_ep_t *)0, ip.pc_neps = 0;
+        if (d < 1 || ip.st[d - 1].kind != K_PODCASTS || !ip.pc_shows || ip.st[d - 1].sel >= ip.pc_n) return 0;
+        all = calloc(PC_MAX_EPS, sizeof *all);
+        if (!all) return 0;
+        n = pc_load_show(&ip.pc_shows[ip.st[d - 1].sel], all, PC_MAX_EPS);
+        for (k = 0; k < n; ++k)
+            if (all[k].state == PC_LOCAL) memcpy(&all[m++], &all[k], sizeof *all);
+        ip.pc_eps = all, ip.pc_neps = m;
+        return 1;
+    }
+}
+
+/* Nothing of the model is kept once no level in the stack is a Podcasts one (called before every level's list is read). */
+static void ip_pc_trim(void) {
+    int k, keep = 0;
+    for (k = 1; k <= ip.depth; ++k) keep |= ip.st[k].kind == K_PODCASTS;
+    if (!keep) ip_pc_free();
+}
+
+static int ip_pc_count(int kind) { return kind == K_PODCASTS ? ip.pc_n : ip.pc_neps; }
 
 /* The stock record behind display row i of a list. An artist's albums are shown with the stock "All songs" record FIRST (the stock list has it last): row 0 is that record, rows 1 ..
  * the albums in the stock order. Everything that reads a row of such a list (its text, its cover, a tap, the query of its songs) goes through here. */
@@ -340,6 +409,7 @@ static int ip_valid(void) {
     void *cur;
     if (!ip_is_list(ip_top()->kind)) return 1;
     cur = ip_stock_list(ip_top()->kind);
+    if (ip_is_pc(ip_top()->kind)) return cur && ip.list == cur && ip.count == (unsigned)ip_pc_count(ip_top()->kind);
     return ip.list && cur == ip.list && deque_size(cur) == ip.count && (!ip.count || deque_at(cur, 0) == ip.first);
 }
 
@@ -347,6 +417,7 @@ static int ip_valid(void) {
 static int ip_run(int d) {
     struct lvl *l = &ip.st[d];
     void *par;
+    if (ip_is_pc(l->kind)) return ip_pc_run(d);
     switch (l->kind) {
     case K_ALBUMS:
     case K_CF:
@@ -408,9 +479,11 @@ static void ip_load(void) {
     void *list;
     ip.list = ip.first = (void *)0;
     ip.count = 0;
+    ip_pc_trim();
     if (!ip_is_list(l->kind)) return;
     if (ip_run(ip.depth) && (list = ip_stock_list(l->kind)) != (void *)0) {
-        ip.list = list, ip.count = deque_size(list), ip.first = ip.count ? deque_at(list, 0) : (void *)0;
+        ip.list = list, ip.count = ip_is_pc(l->kind) ? (unsigned)ip_pc_count(l->kind) : deque_size(list);
+        ip.first = ip.count && !ip_is_pc(l->kind) ? deque_at(list, 0) : (void *)0;
         ip.cls = ip_is_tracks(l->kind) ? (l->kind == K_SONGS       ? CLASS_ALL_SONGS
                                           : l->kind == K_PL_TRACKS ? CLASS_PLAYLIST_SONGS
                                                                    : *(int *)CLASSINFO)
@@ -435,6 +508,8 @@ static const char *ip_row_text(int kind, int i) {
     if (kind == K_MAIN) return TR(MAIN_KEYS[ip_root_id(i)]);
     if (kind == K_MUSIC) return TR(MUSIC_KEYS[i]);
     if (kind == K_SETTINGS) return TR(SET_KEYS[i]);
+    if (kind == K_PODCASTS) return ip.pc_shows[i].title[0] ? ip.pc_shows[i].title : ip.pc_shows[i].dir;
+    if (kind == K_PC_EPS) return ip.pc_eps[i].title[0] ? ip.pc_eps[i].title : ip.pc_eps[i].file;
     rec = ip_rec(kind, ip.list, i);
     if (kind == K_ALBUMS || kind == K_ARTIST_ALBUMS) {
         if (I(rec, REC_ID) == ID_ALL_SONGS)
@@ -1105,6 +1180,8 @@ static const char *ip_title(int kind) {
         return TR("Songs");
     case K_PLAYLISTS:
         return TR("Playlists");
+    case K_PODCASTS:
+        return TR("Podcasts");
     case K_NOW:
         return TR("Now Playing");
     case K_CF:
@@ -1214,7 +1291,7 @@ static void ip_paint_list(void *canvas, int kind) {
     for (pass = 0; pass < 2; ++pass) { /* the unselected rows, then the selected one: one text style at a time */
         widget_prepare_text_style(pass ? ip.st_sel : ip.st_row, canvas);
         for (i = 0; i < visible && l->top + i < n; ++i) {
-            int idx = l->top + i, sel = idx == l->sel, vw = 0, chev = !ip_is_tracks(kind);
+            int idx = l->top + i, sel = idx == l->sel, vw = 0, chev = !ip_is_tracks(kind) && kind != K_PC_EPS;
             const char *val = kind == K_SETTINGS ? ip_set_value(idx) : (const char *)0;
             if (sel != pass) continue;
             y = IP_BAR_H + i * h;
@@ -1224,8 +1301,26 @@ static void ip_paint_list(void *canvas, int kind) {
                 vw = ip_text_right(canvas, val, right - IP_TEXT_X, y, h), chev = 0;
                 widget_prepare_text_style(pass ? ip.st_sel : ip.st_row, canvas);
             }
-            ip_text(canvas, ip_row_text(kind, idx), tall ? IP_ROW_ART + 8 : IP_TEXT_X, y + (tall ? 4 : 0),
-                    vw ? right - IP_TEXT_X - IP_TEXT_X - vw - 12 : right - IP_TEXT_X - 22 - (tall ? IP_ROW_ART + 8 : 0),
+            if (kind ==
+                K_PC_EPS) { /* the iPod's blue dot of an episode not played at all (no place saved either); text indented for it on every row */
+                static const unsigned char dot[8] = {4, 6, 8, 8, 8, 8, 6, 4};
+                int k;
+                unsigned pos, len;
+                if (pc_state(ip.pc_eps[idx].hash, &pos, &len) == PC_NEW)
+                    for (k = 0; k < 8; ++k)
+                        ip_fill(canvas, 6 + (8 - dot[k]) / 2, y + (h - 8) / 2 + k, dot[k], 1,
+                                sel ? 0xffffffu : 0xe17d2au);
+            }
+            ip_text(canvas, ip_row_text(kind, idx),
+                    tall               ? IP_ROW_ART + 8
+                    : kind == K_PC_EPS ? IP_TEXT_X + 16
+                                       : IP_TEXT_X,
+                    y + (tall ? 4 : 0),
+                    vw ? right - IP_TEXT_X - IP_TEXT_X - vw - 12
+                       : right - IP_TEXT_X - 22 -
+                             (tall               ? IP_ROW_ART + 8
+                              : kind == K_PC_EPS ? 16
+                                                 : 0),
                     IP_ROW_H);
             if (tall) {
                 struct row_art *a = &ip.rows[i];
@@ -1267,6 +1362,7 @@ static void ip_paint_list(void *canvas, int kind) {
                 TR(kind == K_ALBUMS || kind == K_ARTIST_ALBUMS ? "No albums"
                    : kind == K_ARTISTS                         ? "No artists"
                    : kind == K_PLAYLISTS                       ? "No playlists"
+                   : ip_is_pc(kind)                            ? "No downloaded episodes"
                                                                : "No songs"),
                 IP_TEXT_X, IP_BAR_H, IP_W - 2 * IP_TEXT_X, IP_ROW_H);
     }
@@ -1758,6 +1854,9 @@ static void ip_select(void) {
         case M_PLAYLISTS:
             ip_push(K_PLAYLISTS);
             break;
+        case M_PODCASTS:
+            ip_push(K_PODCASTS);
+            break;
         case M_SHUFFLE:
             ip_shuffle_all();
             break; /* Shuffle Songs: stock Shuffle over the library, the iPod's own Now Playing */
@@ -1765,7 +1864,11 @@ static void ip_select(void) {
         return;
     }
     if (!ip_ensure() || !ip.count) return;
-    if (ip_is_tracks(kind))
+    if (kind == K_PODCASTS)
+        ip_push_titled(K_PC_EPS, ip.pc_shows[l->sel].title[0] ? ip.pc_shows[l->sel].title : ip.pc_shows[l->sel].dir);
+    else if (kind == K_PC_EPS)
+        ip_pc_play(l->sel);
+    else if (ip_is_tracks(kind))
         ip_play(l->sel, 0);
     else if (kind == K_ALBUMS || kind == K_CF ||
              kind == K_ARTIST_ALBUMS) { /* Cover Flow's centre button: the album's tracks */
@@ -1777,6 +1880,24 @@ static void ip_select(void) {
         ip_open_artist(l->sel);
     else if (kind == K_PLAYLISTS)
         ip_push_titled(K_PL_TRACKS, cc_str(deque_at(ip.list, (unsigned)l->sel), REC_TITLE));
+}
+
+/* A tap on an episode: the show's local episodes are the queue, as the Podcasts page plays one (pg_episode_queue: resume, speed, List play), then the page's own Now Playing. */
+static void ip_pc_play(int at) {
+    char root[PC_FILE + 20];
+    int idx = 0, d = ip.depth;
+    void *queue;
+    if (d < 1 || ip.st[d - 1].kind != K_PODCASTS || !ip.pc_shows || ip.st[d - 1].sel >= ip.pc_n || at < 0 ||
+        at >= ip.pc_neps)
+        return;
+    pc_root(root);
+    queue = pg_episode_queue(root, &ip.pc_shows[ip.st[d - 1].sel], ip.pc_eps, ip.pc_neps, at, &idx);
+    if (!queue) return;
+    *(int *)G_CLASS_TYPE = 1;
+    start_player(queue, idx, 1, PLAY_MODE);
+    *(unsigned char *)FORCE_REFRESH = 1;
+    deque_destroy(queue);
+    ip_push(K_NOW);
 }
 
 /* previous / next: the stock functions the Now Playing buttons and the hardware keys call (a click within a second of the last is ignored by stock). */
@@ -2027,6 +2148,7 @@ static int ip_on_destroy(void *ctx, void *e) {
     for (int m = 0; m < 4; ++m)
         if (ip.mode_bmp[m]) bitmap_destroy(ip.mode_bmp[m]);
     ipcf_close();
+    ip_pc_free();
     memset(&ip, 0, sizeof ip);
     return RET_OK;
 }

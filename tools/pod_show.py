@@ -97,7 +97,7 @@ def font_path(work):
 
 def shows_layout(n_shows, has_line, n_cont):
     """The Shows level's layout: where each block starts (0 when it is not there), the grid's top and the content's height. The Library rows close the page, PP_LIB_GAP under the grid: Downloads always, Subscriptions while a show has a feed
-    (has_line: the refresh line shows under the same condition)."""
+    (has_line: the refresh line shows under the same condition), then Saved always."""
     o = O
     L = dict(y_line=o['PP_LINE_Y'] if has_line else 0, y_shelf=0, y_sub=0)
     y = o['PP_LINE_Y'] + (o['PP_LINE_PITCH'] if has_line else o['PP_NOLINE_PITCH'])
@@ -113,6 +113,8 @@ def shows_layout(n_shows, has_line, n_cont):
     if has_line:
         L['y_sub'] = y
         y += o['PC_ROW_H']
+    L['y_sav'] = y
+    y += o['PC_ROW_H']
     L['h'] = y + o['PP_BOTTOM']
     return L
 

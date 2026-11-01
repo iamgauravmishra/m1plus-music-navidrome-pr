@@ -676,7 +676,21 @@ def screen_off_tests(ctx):
     expect(not [c for c in m.calls if c[0] == 'timer_add'] and not timers, 'the page adds no timer of its own')
 
 
-SECTIONS = [parser_tests, notes_file_tests, page_tests, pill_tests, show_row_tests, tint_page_tests, local_tests, preview_tests, width_tests, screen_off_tests]
+def goto_tests(ctx):
+    """Go to Podcasts (Now Playing's More sheet, patch/podcasts.c podcasts_go): no Podcasts page in the stack: it opens at the Shows level; one below Now Playing: Now Playing is closed over it and no
+    second page opens (V2.1zCQUGAAAE closed the old page and refused while AWTK had not destroyed it yet: the row did nothing)."""
+    expect = ctx.expect
+    def go(m): return m.call(PSYMS['podcasts_go'], count=80000000)
+    m = PCS.machine(up=False)
+    expect(go(m) == 0 and ('window_open', 'm1plus_podcasts') in m.calls and PCP.title_text(m) == 'Podcasts', 'Go to Podcasts: the page opens at the Shows level')
+    m = PCS.machine(); m.windows = {'playing_page'}; m.calls = []
+    expect(go(m) == 0 and ('navigator_close', 'playing_page') in m.calls and ('window_open', 'm1plus_podcasts') not in m.calls and ('navigator_close', 'm1plus_podcasts') not in m.calls,
+           f'a Podcasts page below Now Playing: Now Playing is closed, the page is kept as it was ({m.calls})')
+    m = PCS.machine(); m.calls = []
+    expect(go(m) == 0 and not [c for c in m.calls if c[0] in ('navigator_close', 'window_open')], 'a Podcasts page in front already: nothing is closed or opened')
+
+
+SECTIONS = [parser_tests, notes_file_tests, page_tests, pill_tests, show_row_tests, tint_page_tests, local_tests, preview_tests, width_tests, screen_off_tests, goto_tests]
 
 
 def run(ctx):

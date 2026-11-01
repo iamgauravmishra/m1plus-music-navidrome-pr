@@ -269,6 +269,7 @@
 /* Now Playing opens like a track tap (pod_open_player, patch/songops.c): the widget name field the stock pop loop compares
  * (@0x525920 lw a0, 0x10(top)), and at most POP_MAX pages popped. */
 #define WIDGET_NAME 0x10
+#define WIDGET_STYLE 0x1c /* the style name the widget uses (a char *; show_player_face 0x53bbf0.. compares it with btn_imgfav_style / btn_imgunfav_style before widget_use_style) */
 #define POP_MAX 16
 /* The cover tint (the album page, the Podcasts Show level; tools/mod_icons.py ah_tint): the window colour is the cover's tone (pod_tone,
  * the constants of Now Playing's) under a black gradient image, ah_tint.png (a window sized child of the page window, first,
@@ -653,10 +654,11 @@
 /* Now Playing's More dialog (patch/playmore.c, docs/modules/playmore.md): ui/dialog/playmore_dialog.bin is a 320 px wide
  * sheet pinned at y 130 (the stock init, @0x479d10, and its to-background handler @0x4789f0) holding list_view playmore_listview >
  * scroll_view playmore_scrollview (310 px, the scroll bar scroll_bar_m beside it, 10 px) > list_item rows, PM_ROW_H (50, the
- * list_view's item_height) high each; the asset adds the hidden rows pod_more, pod_back, pod_tape and pod_vinyl. The payload shows PM_PAGE_N rows (page 1) or PM_PAGE2_N
+ * list_view's item_height) high each; the asset adds the hidden rows pod_more, pod_back, pod_tape, pod_vinyl and pod_goep. The payload shows PM_PAGE_N rows (page 1) or PM_PAGE2_N
  * (page 2) at a time and puts the sheet, as high as they are, on the bottom of the 480 px screen (the stock 130 + 350 ends there too). */
 #define PM_ROW_H 50
-#define PM_PAGE_N 6               /* page 1's rows (Look up album, Look up artist, Add to playlist, Cassette Mode, Vinyl Mode, More): the sheet is that high (PM_ROW_H x) */
+#define PM_PAGE_N 6               /* page 1's rows (Look up album, Look up artist, Add to playlist, Cassette Mode, Vinyl Mode, More; the asset's pod_goep, Go to Podcasts, is the episode's first row): the sheet is that high (PM_ROW_H x) */
+#define PM_PAGE_EP_N 2            /* page 1 of a podcast episode (Go to Podcasts, More) */
 #define PM_PAGE2_N 4              /* page 2's rows (the back header, Speed, A-B repeat, Delete) */
 #define PM_SCREEN_H 480
 #define PM_DIALOG_W 320

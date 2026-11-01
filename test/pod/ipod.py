@@ -23,7 +23,7 @@ STEP_DEG = O['IP_STEP'] / 16
 ROWS, ROWH, BARH = O['IP_ROWS'], O['IP_ROW_H'], O['IP_BAR_H']
 STYLES = ('label_ip_row', 'label_ip_sel', 'label_ip_title', 'label_ip_small', 'label_ip_subsel', 'label_ip_np1', 'label_ip_np2', 'label_ip_time', 'label_ip_val', 'label_ip_np3')
 MAIN_KEYS = ['Music', 'Cover Flow', 'Shuffle Songs', 'Now Playing', 'cdrippersettings']
-MUSIC_KEYS = ['Cover Flow', 'Albums', 'Artists', 'Songs', 'Playlists', 'Shuffle Songs']
+MUSIC_KEYS = ['Cover Flow', 'Albums', 'Artists', 'Songs', 'Playlists', 'Podcasts', 'Shuffle Songs']
 TRAPS = ('coverflow_open',)
 SET_KEYS = ['Shuffle', 'Repeat', 'Appearance']
 PANE = (O['IP_PANE_X'], 0, O['IP_PANE_W'], O['IP_SCREEN_H'])
@@ -192,6 +192,10 @@ def opened(m, **kw):
 
 def texts_of(frame): return [t for t, _ in frame[0]]
 def rows_of(texts): return [t for t, r in sorted(texts, key=lambda tr: tr[1][1]) if BARH <= r[1] < 240 and ((r[0] == 62 and (r[1] - BARH) % O["IP_TALL_H"] == 4) or (r[0] in (8, 10) and (r[1] - BARH) % ROWH in (0, 4)))]
+
+
+def pc_rows(texts):   # the episode rows: their text is indented for the dot
+    return [t for t, r in sorted(texts, key=lambda tr: tr[1][1]) if BARH <= r[1] < 240 and r[0] == 8 + 16 and (r[1] - BARH) % ROWH == 0]
 
 
 def music(m):
@@ -732,7 +736,7 @@ def music_menu_tests(ctx):
     expect([t for t, r in sorted(texts, key=lambda tr: tr[1][1]) if r[0] == 8 and BARH <= r[1] < 240] ==
            [m.tr(k) for k in MAIN_KEYS], 'root shortcuts use the narrower margin')
     m.tap(CX, CY)
-    expect(rows_of(m.paint()[0]) == [m.tr(k) for k in ('Cover Flow', 'Albums', 'Artists', 'Songs', 'Playlists', 'Shuffle Songs')], 'Music contains the library entries')
+    expect(rows_of(m.paint()[0]) == [m.tr(k) for k in ('Cover Flow', 'Albums', 'Artists', 'Songs', 'Playlists', 'Podcasts', 'Shuffle Songs')], 'Music contains the library entries')
 
 
 def root_shortcut_tests(ctx):
@@ -1348,7 +1352,7 @@ def shuffle_tests(ctx):
         for i in range(10): m.present.add(f'/mnt/mmc/m/{i}.flac')
         m.open(); m.timers = []
         music(m)
-        m.turn(0, STEP_DEG * 5 + 5); m.tap(CX, CY)
+        m.turn(0, STEP_DEG * 6 + 5); m.tap(CX, CY)
         return m
     firsts = []
     for seed in (11, 12, 13, 14):
@@ -1371,13 +1375,13 @@ def shuffle_tests(ctx):
     # an empty library: the message, nothing played, the mode untouched
     m = machine(); m.open(); m.timers = []; m.mode = 1
     music(m)
-    m.turn(0, STEP_DEG * 5 + 5); m.tap(CX, CY)
+    m.turn(0, STEP_DEG * 6 + 5); m.tap(CX, CY)
     expect(any(c[0] == 'toast' for c in m.calls) and 'start_player' not in m.names() and m.mode == 1 and 'mclSetPlayMode' not in m.names(), 'no songs: the stock message box, nothing started, the mode kept')
     # the first file is gone: nothing started, the mode kept
     m = machine(songs=songs); m.open(); m.timers = []; m.mode = 3
     music(m)
     m.present.discard('/mnt/mmc/m/1.flac')
-    m.turn(0, STEP_DEG * 5 + 5); m.tap(CX, CY)
+    m.turn(0, STEP_DEG * 6 + 5); m.tap(CX, CY)
     expect(m.mode == 3 and ('start_player' not in m.names() or m.played[0][m.played[1]] is not None), 'a missing file starts nothing and keeps the mode')
 
 
@@ -1746,7 +1750,110 @@ def now_steady_tests(ctx):
     expect(len([c for c in m.calls if c[0] == 'bitmap_create_ex']) == before, 'painting allocates nothing')
 
 
-SECTIONS = [angle_tests, asset_tests, menu_tests, open_tests, paint_tests, wheel_tests, feel_tests, tap_tests, nav_tests, stale_tests, playing_indicator_tests, music_menu_tests, root_shortcut_tests, menu_padding_tests, rich_rows_tests, row_art_tests, playlist_art_tests, now_material_tests, classic_material_tests, split_menu_tests, pane_tests, shuffle_tests, settings_tests, i18n_tests, appearance_tests, transition_tests, fresh_art_tests, pane_sharp_tests, reference_nav_tests, shadow_slide_tests, now_steady_tests]
+class PCIM(IM):
+    """The Pod machine over a card: opendir / readdir / __xstat / stdio over the dict self.fs, as test/pod/podcasts.py's PM does, and a deque that copies the records it is given."""
+    def __init__(self):
+        super().__init__()
+        self.fs, self.mtime, self.dirs_, self.dh, self.fp = {}, {}, {'/mnt', '/mnt/mmc'}, {}, {}
+        self.dent = self.alloc(300)
+
+    def put(self, path, data=b'', mtime=0):
+        self.fs[path] = data
+        if mtime: self.mtime[path] = mtime
+        d = path.rsplit('/', 1)[0]
+        while d and d not in self.dirs_: self.dirs_.add(d); d = d.rsplit('/', 1)[0]
+        self.present.add(path)
+
+    def kids(self, path):
+        return sorted({p.rsplit('/', 1)[1] for p in list(self.fs) + list(self.dirs_) if p != path and p.rsplit('/', 1)[0] == path})
+
+    def _hook(self, u, address, size, _):
+        name = self.handlers.get(address, '')
+        a0, a1, a2, a3 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3))
+        ret = None
+        if name == 'opendir':
+            path = self.read_cstr(a0)
+            if path in self.dirs_: ret = self.alloc(8); self.dh[ret] = [self.kids(path), 0]
+            else: ret = 0
+        elif name == 'readdir':
+            d = self.dh[a0]
+            if d[1] < len(d[0]):
+                nm = d[0][d[1]].encode('latin-1'); d[1] += 1
+                self.u.mem_write(self.dent, bytes(300)); self.u.mem_write(self.dent + 11, nm + b'\0'); ret = self.dent
+            else: ret = 0
+        elif name == 'closedir':
+            self.dh.pop(a0, None); ret = 0
+        elif name == '__xstat':
+            path = self.read_cstr(a1)
+            if not (path in self.fs or path in self.dirs_): ret = 0xffffffff
+            else:
+                self.u.mem_write(a2, bytes(144)); self.setword(a2 + 0x40, self.mtime.get(path, 0)); self.setword(a2 + 0x30, len(self.fs.get(path, b''))); ret = 0
+        elif name == 'memmove':
+            self.u.mem_write(a0, bytes(self.u.mem_read(a1, a2))); ret = a0
+        elif name == 'fopen' and self.read_cstr(a0) in self.fs and 'w' not in self.read_cstr(a1):
+            h = self.alloc(4); self.fp[h] = [self.read_cstr(a0), 0]; ret = h
+        elif name == 'fread' and a3 in self.fp:
+            path, pos = self.fp[a3]; data = self.fs[path][pos:pos + a1 * a2]
+            if data: self.u.mem_write(a0, data)
+            self.fp[a3][1] += len(data); ret = len(data) // a1
+        elif name == 'fseek' and a0 in self.fp:
+            path, pos = self.fp[a0]; self.fp[a0][1] = {0: a1, 1: pos + a1, 2: len(self.fs[path]) + a1}[a2]; ret = 0
+        elif name == 'fclose' and a0 in self.fp:
+            self.fp.pop(a0); ret = 0
+        elif name == '_deque_push_back':
+            rec = self.alloc(REC_SIZE); self.u.mem_write(rec, bytes(self.u.mem_read(a1, REC_SIZE)))
+            self.deques.setdefault(a0, []).append(rec); ret = 0
+        if ret is not None:
+            u.reg_write(UC_MIPS_REG_V0, ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+            return
+        return super()._hook(u, address, size, _)
+
+
+def podcasts_tests(ctx):
+    """Music > Podcasts: the shows with a file (the Podcasts page's order), a show's local episodes (newest first), the dot of an unplayed one, a tap plays the show's episodes as a queue."""
+    expect = ctx.expect
+    root = '/mnt/mmc/Podcasts'
+    def card():
+        m = PCIM()
+        m.class_lists[O['CLASS_ALL_SONGS']] = []
+        m.put(f'{root}/Alpha/a1.mp3', b'x', mtime=1000); m.put(f'{root}/Alpha/a2.mp3', b'x', mtime=2000)
+        m.put(f'{root}/Beta/b1.mp3', b'x', mtime=5000)
+        m.put(f'{root}/Meta/.show', b'M1PLUS-SHOW 1\ntitle=Meta Only\n')   # a show with no file: not listed
+        m.open(); m.timers = []
+        return m
+    def go(m, row):
+        music(m)
+        m.turn(0, STEP_DEG * row + 5); m.tap(CX, CY)
+    m = card()
+    go(m, 5)
+    texts = m.paint()[0]
+    expect(rows_of(texts) == ['Beta', 'Alpha'] and 'Podcasts' in texts_of((texts,)), f'Podcasts: the shows with an episode file, newest first, the title bar ({rows_of(texts)})')
+    m.tap(CX, CY)
+    texts = m.paint()
+    expect(pc_rows(texts[0]) == ['b1'] and 'Beta' in texts_of(texts), f'a show: its episodes, the show as the title ({rows_of(texts[0])})')
+    # the episodes of Alpha, newest first, with the dot on both (nothing played)
+    x, y = m.polar(0, 85); m.tap(x, y)
+    m.turn(0, STEP_DEG + 5); m.tap(CX, CY)
+    texts = m.paint()
+    expect(pc_rows(texts[0]) == ['a2', 'a1'], f'Alpha: newest first ({rows_of(texts[0])})')
+    dots = [f for f in texts[1] if 6 <= f[1] <= 9 and f[3] <= 8 and f[4] == 1 and f[2] >= BARH and f[2] < BARH + 2 * ROWH]
+    expect(len(dots) == 16, f'both unplayed episodes have the dot, 8 rows each ({len(dots)} fills)')
+    m.turn(0, STEP_DEG + 5)
+    m.calls = []
+    m.tap(CX, CY)
+    sp = [c for c in m.calls if c[0] == 'start_player']
+    expect(len(sp) == 1 and sp[0][2:] == (1, O['PLAY_MODE']) and m.played and len(m.played[0]) == 2 and m.played[1] == 1, f'a tap starts the show\'s episodes as a class 1 queue at that row ({sp}, {m.played and m.played[1]})')
+    expect(m.word(G_CLASS) == 1 and 'Now Playing' in texts_of(m.paint()), 'the class is the folder class and the Pod\'s own Now Playing is in front')
+    # a card with no podcasts: an empty Podcasts level
+    m = PCIM(); m.class_lists[O['CLASS_ALL_SONGS']] = []; m.open(); m.timers = []
+    go(m, 5)
+    texts = m.paint()[0]
+    expect(rows_of(texts) == [m.tr('No downloaded episodes')], f'no Podcasts folder: only the empty line ({rows_of(texts)})')
+    m.tap(CX, CY)
+    expect(m.paint()[0] == texts, 'a press on the empty list does nothing')
+
+
+SECTIONS = [angle_tests, asset_tests, menu_tests, open_tests, paint_tests, wheel_tests, feel_tests, tap_tests, nav_tests, stale_tests, playing_indicator_tests, music_menu_tests, root_shortcut_tests, menu_padding_tests, rich_rows_tests, row_art_tests, playlist_art_tests, now_material_tests, classic_material_tests, split_menu_tests, pane_tests, shuffle_tests, settings_tests, i18n_tests, appearance_tests, transition_tests, fresh_art_tests, pane_sharp_tests, reference_nav_tests, shadow_slide_tests, now_steady_tests, podcasts_tests]
 
 
 def run(ctx):
