@@ -9,8 +9,10 @@ in [history](../history.md); feature modules retain their detailed edge cases.
 | ID | Check |
 |---|---|
 | SYS-01 | Boot, sleep/wake and reboot; switch startup, return to Shanling Home and reopen M1+ Music; verify the kill switch |
+| SYS-02 | Boot guard: install the guard alone, wait 10 s past Home and power-cycle; power off within 5 s of Home once to prove the failure branch; then Home on top. Card log `m1plus: armed` -> `m1plus: boot ok, marker cleared` |
 | UI-01 | Upright boot logo; readable fonts at 16/18/20/21 px; stable digits/clocks; CJK, Cyrillic, Vietnamese, Thai and curly quotes |
 | UI-02 | Status bar in 12/24 h mode with wireless icons; captions fit; settings slides, pull-down and stock theme behave correctly |
+| UI-03 | Pull-down over the main menu: pull down over the first row slowly and fast, default and custom order; rows stay behind the dialog and after it closes. Lock/unlock with a custom order shows no default-order frame. Main Menu arrows and switches work; the menu scrolls |
 | INPUT-01 | Tap, slow drag, flick, drag out-and-back, abort and catch a coasting list; scrolling must not open/play a row |
 | CAP-01 | Confirm/cancel a screenshot, leave the page, check indicator and captured colours; test missing/full card |
 

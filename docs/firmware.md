@@ -68,8 +68,8 @@ Although the partition has ~19 MiB spare above stock, `fwtool` still enforces th
 - Keep the rebuilt `rootfs.squashfs` no larger than stock (fwtool enforces this).
 - Charge the battery first and do not pull the card during the update.
 - Repacking changes compressed bytes; packing checks stock metadata, allowed file changes and
-  size. Restore packages reuse stock squashfs unchanged. Device findings, including the flashed
-  space step, are recorded in [history](history.md).
+  size. Restore packages reuse stock squashfs unchanged. The space step was flashed (see
+  below).
 
 ## 3. The battery widgets (what the release mod relies on)
 
@@ -187,7 +187,7 @@ The checkappprocess.sh watchdog (`usr/bin/checkappprocess.sh`, started by `demo`
 `pgrep /release/bin/demo` every 2 s and reboots if it is gone; the release leaves it as it is.
 
 The space step was flashed on hardware on 2026-10-19 (V2.1cS, stock UI) and has been part of every package
-since (`docs/history.md`). `fwtool diff` against stock lists exactly `demo` (content), the removed files and
+since. `fwtool diff` against stock lists exactly `demo` (content), the removed files and
 the mod's own files.
 
 ## 5. Rebuilding

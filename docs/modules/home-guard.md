@@ -149,7 +149,7 @@ the stock list code assumes it owns that layout:
   is the navbar. What reaches the page in that sequence is the relayout and the paint hook, both handled above; the tests run it with the
   window manager's own calls on the real stock code (DOWN, MOVEs, abort, snapshot layout, foreground arrange) and the first frame
   after a lock screen. What the emulation cannot show is the canvas the device gives the hook while the dialog animates (rendering is not
-  emulated), which is why the paint hook is removed instead of relied on; see `docs/history.md` (hardware results, mY) for the device checks.
+  emulated), which is why the paint hook is removed instead of relied on; see UI-03 in `docs/modules/device-checks.md` for the device checks.
 
 The setting is an own file, not `config.ini [M1PLUS]`: `write_int_config` rewrites the shared config
 the stock app parses at start-up, and a bad write there is a boot risk.
