@@ -54,6 +54,9 @@
 #define DAILY_SET_FILE \
     "/mnt/data/m1plus-daily" /* the Daily Mix card: "0" = off, anything else or missing = on (Settings > Home Screen) */
 #define DAILY_SET_TMP "/mnt/data/m1plus-daily.tmp"
+#define REBUILD_FILE \
+    "/mnt/data/m1plus-covers-rebuild" /* exists while a Settings > Library > Rebuild Covers is requested; Home's cover build (patch/homecover.c) does it and removes it when done */
+#define REBUILD_TMP "/mnt/data/m1plus-covers-rebuild.tmp"
 #define KBZH_FILE \
     "/mnt/data/m1plus-kbzh" /* the on-screen keyboard's Chinese (Pinyin) layer: "1" = on, anything else or missing = off (Settings > Keyboards; patch/keyboard.c) */
 #define KBZH_TMP "/mnt/data/m1plus-kbzh.tmp"
@@ -107,6 +110,9 @@ extern void minibar_start(void *win);
 extern void recent_start(void *win);
 extern int recent_note(
     void *track); /* the track the player is on: record its album; 1 when the list changed (cheap when it did not) */
+extern int recent_rekey(void *albums,
+                        unsigned *rows); /* the cover keys checked against a loaded album list (patch/homecover.c's
+                                                         scan); rows (SH_TILES) gets the shelf's albums' indices, the count returned */
 extern void recent_refresh(void); /* the list changed under a live shelf (the mini bar's tick): show it */
 extern int recent_setting(void); /* the Settings > Home Screen switch: 1 on (the default) */
 extern void menu_shelf(void *win,
@@ -116,6 +122,26 @@ extern void menu_daily(void *win,
 
 /* patch/dailymix.c: the Daily Mix card of the Home instance of the menu (dailymix_start, called by home_menu_opened) and its Settings > Home Screen rows */
 extern void dailymix_start(void *win);
+
+/* patch/homecover.c: the background cover build and its progress line on the Home instance of the menu (called by home_menu_opened) */
+extern void homecover_start(void *win);
+extern void
+homecover_cache_open(void *win,
+                     int page); /* the Cover Cache page is up: count the cache folder in steps (patch/homecover.c) */
+extern int homecover_tappable(
+    int idx); /* the Cover Cache page's No art (2) / Missing (3) row opens a list: counted and not zero */
+extern int homecover_list_open(int idx); /* that list (patch/covlist.c); -1 when the row is not tappable */
+extern int covlist_open(
+    int kind, const unsigned short *idx,
+    unsigned n); /* patch/covlist.c: kind 0 No Art, 1 Missing Covers; idx = display positions of the album list */
+extern void homecover_stat(
+    int idx, char *buf,
+    unsigned n); /* a value of that page: 0 Albums, 1 Covers, 2 No art, 3 Missing, 4 Old files, 5 Size, 6 Status */
+extern int homecover_clear(
+    void); /* Settings > Developer > Clear Cover Cache, after its confirm: 1 under way, 0 the cover worker is busy */
+extern void pod_toast(const char *text); /* patch/shuffle.c */
+extern void menu_arrange(void *win,
+                         int extras); /* patch/menu.c: the rows as the saved list says (the scroll offset is clamped) */
 extern int dailymix_setting(void); /* the Settings > Home Screen switch: 1 on (the default) */
 extern int dailymix_toggle(void); /* flip it, saved atomically; the new state, or -1 when it could not be saved */
 extern void dailymix_regen(

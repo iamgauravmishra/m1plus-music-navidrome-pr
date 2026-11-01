@@ -27,6 +27,7 @@ STATE = {
     'm1plus_about': {'values': {'pod_value0': 'V2.1pM', 'pod_value1': 'V2.1', 'pod_value2': 'Shanling M1 Plus', 'pod_value3': 'M1P2305A01234', 'pod_value4': '98:b3:ec:4a:7c:1e',
                                 'pod_value5': '192.168.1.42', 'pod_value6': '119.25 GB', 'pod_value7': '87.41 GB'}},
     'm1plus_keyboards': {'switches': {'pod_switch0': True, 'pod_switch1': False}},
+    'm1plus_cache': {'values': {'pod_value0': '840', 'pod_value1': '812', 'pod_value2': '9', 'pod_value3': '19', 'pod_value4': '3', 'pod_value5': '14.2 MB', 'pod_value6': 'Idle'}},
 }
 
 
@@ -75,7 +76,7 @@ def draw_row(s, im, d, row, y, values, switches, shown):
     if val:   # the payload's value_fit: the text sets its room, the label gets the rest
         text = values.get(val.name) or s.shown(val)
         info = row.get('sensitive') == 'false'   # an About row: 16 px, no chevron, the value ends at the right ink edge
-        px, mx = (ST.INFO_PX, ST.INFO_MAX) if info else (ST.VALUE_PX, ST.VALUE_MAX)
+        px, mx = (int(style(val, 'font_size', ST.INFO_PX)), ST.INFO_MAX) if info else (ST.VALUE_PX, ST.VALUE_MAX)   # (an info row's own size: About's 16, the Cover Cache page's 18)
         vw = min(s.font.width(text, px) + 6, mx) if text else 8
         right = val.x + (ST.INFO_W if info else ST.VALUE_W)
         s.text(im, right - 2, y + row.h / 2, text, px, rgb(ST.GREY), 'r')
@@ -89,6 +90,26 @@ def draw_row(s, im, d, row, y, values, switches, shown):
         elif c.name == 'pod_hair':
             d.rectangle((c.x, y + c.y, c.x + c.w - 1, y + c.y), fill=rgb(style(c, 'bg_color')))
     s.text(im, label.x, y + row.h / 2, s.clip(s.shown(label), 21, lab_w), 21)
+
+
+def draw_covlist(s, title, albums):
+    """The plain list of patch/covlist.c (the Albums list mode's rows without the cover: title 21 px white and artist 18 px grey from x 16, a hairline under each, rows 64 px) under the plain navbar."""
+    root = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', 'm1plus_covlist.bin'), 'rb').read())
+    im = Image.new('RGBA', (W, SCREEN), (0, 0, 0, 255)); d = ImageDraw.Draw(im)
+    if albums:
+        for i, (al, ar) in enumerate(albums):
+            y = NAV + i * 64
+            s.text(im, 16, y + 7 + 12, s.clip(al, 21, 288), 21)
+            s.text(im, 16, y + 33 + 10, s.clip(ar, 18, 288), 18, rgb('#AAAAAA'))
+            d.rectangle((0, y + 63, W - 1, y + 63), fill=(0x22, 0x22, 0x22))
+    else:
+        s.text(im, W // 2, 225, s.shown(type('L', (), {'get': lambda self, k: {'tr_text': 'No albums'}.get(k)})()), 20, (255, 255, 255), 'm')
+    d.rectangle((0, 0, W - 1, NAV - 1), fill=(0, 0, 0))
+    lt = next(w for w in root.walk() if w.name == 'label_title'); tpx = PI.title_px(s.tree)
+    s.text(im, lt.x, NAV / 2, title, tpx)
+    for name, bx, bw in (('ah_nav_back', 7, 44), ('ah_nav_np', 260, 60)):
+        g = s.img(name); im.alpha_composite(g, (bx + (bw - g.width) // 2, (NAV - g.height) // 2))
+    return im
 
 
 def sheet(panels, path):
@@ -115,6 +136,10 @@ def main():
            ('Settings > Now Playing', draw_page(s, 'm1plus_npset')),
            ('Settings > Now Playing > Theme', draw_page(s, 'm1plus_tapetheme')),
            ('Settings > Developer', draw_page(s, 'm1plus_developer')),
+           ('Settings > Developer > Cover Cache', draw_page(s, 'm1plus_cache')),
+           ('Cover Cache > Missing', draw_covlist(s, 'Missing Covers', [('Kind of Blue', 'Miles Davis'), ('Music Has the Right to Children', 'Boards of Canada'), ('Homogenic', 'Björk'), ('Selected Ambient Works 85-92', 'Aphex Twin'), ('Dummy', 'Portishead'), ('Blue in Green (Remastered, Mono Version)', 'Miles Davis'), ('Mezzanine', 'Massive Attack')])),
+           ('Cover Cache > No art', draw_covlist(s, 'No Art', [('Pastel Blues', 'Nina Simone'), ('Kid A', 'Radiohead')])),
+           ('Cover Cache > empty', draw_covlist(s, 'No Art', [])),
            ('Settings > Keyboards', draw_page(s, 'm1plus_keyboards')),
            ('Settings > About (first screen)', draw_page(s, 'm1plus_about')),
            ], out)

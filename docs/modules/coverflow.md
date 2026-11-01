@@ -139,16 +139,13 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
   when re-armed) the worker is cancelled and joined and the cached covers show. No build below 16 MB free, without a
   card or if `pthread_create` fails. A 250 ms timer polls the counters; Cancel, Back and closing stop it (`pthread_join`);
   `EVT_DESTROY` removes the timer, joins, frees everything. Nothing is written outside the card.
-- **Rebuild Covers** (`coverflow_rebuild`, Settings > Library > Rebuild Covers after its confirm dialog, `docs/modules/settings.md`): the
-  library's Cover Flow opened with `cf.rebuild`, so `start_build` opens the set in `CC_REBUILD` mode and queues EVERY album with a
-  track path. The Preparing screen, counters, Cancel and Back are the same. The worker extracts each album again to `.tmp` and
-  `rename`s it over the cache file, so an old picture is replaced atomically and a "no art" marker is replaced by the picture an
-  album gained; an album that now yields no art keeps what it has (the old picture, or its marker: nothing is written or removed).
-  Cancel, Back or closing mid-way leaves a complete cache (files already replaced are new, the rest are the old ones). When it is
-  done the covers show as usual. Refused like any build: no card, under 16 MB free, no thread, another page holding the worker
-  (the covers then show with what is cached). An empty library shows "Update Local Music first".
+- **Rebuild Covers is not Cover Flow's** (it used to open this page): Settings > Library > Rebuild Covers writes a request file and
+  Home's cover build does it (`docs/modules/homecover.md`, `docs/modules/settings.md`) with `CC_REBUILD`. The worker's `CC_REBUILD` mode
+  is unchanged: it extracts each album again to `.tmp` and `rename`s it over the cache file, so an old picture is replaced atomically and
+  a "no art" marker is replaced by the picture an album gained; an album that now yields no art keeps what it has (the old picture, or
+  its marker: nothing is written or removed). Cover Flow's open builds only the missing covers (`CC_MISSING`). Settings > Developer > Clear Cover Cache deletes the cache files (`docs/modules/settings.md`); Cover Flow's `album` file is kept.
 - **One worker at a time**, app-wide: the Albums page builds missing covers in the background (`docs/modules/albums.md`) with the
-  same set; its Cover Flow button stops its own build before opening this page, and a page that finds the set taken starts nothing.
+  same set, and so does the Home page (`docs/modules/homecover.md`: a progress line at its top, stopped when Home leaves the front); its Cover Flow button stops its own build before opening this page, and a page that finds the set taken starts nothing.
 - **Not ported from q2-pod:** Sort and Refresh cards, the rated scope, A-Z jump, the album split by
   album-artist/folder, the audiobook filter, the ffmpeg WebP fallback, wheel/ringnav. To clear the
   cache delete `/mnt/mmc/.m1plus/covers` from a computer.

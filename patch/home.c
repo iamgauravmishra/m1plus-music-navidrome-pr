@@ -308,6 +308,7 @@ void home_menu_opened(void *win, int settings, int entry) {
                 minibar_start(win);
                 recent_start(win);
                 dailymix_start(win);
+                homecover_start(win);
             }
             hm_grid(0);
             hs.as_home = 0;

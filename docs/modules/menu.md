@@ -32,8 +32,8 @@ again without losing scroll position. A hidden section contributes no height.
 
 The mini player is the window's last child: hidden/insensitive `pod_minibar`, at (8, 384),
 304 × 56. A queued track shows it and the 64 px `pod_pad` spacer, letting the final list item
-scroll above the floating pill. Details: [mini player](minibar.md), [Daily Mix](dailymix.md)
-and [Recently Played](recent.md).
+scroll above the floating pill. Details: [mini player](minibar.md), [Daily Mix](dailymix.md),
+[Recently Played](recent.md) and the [cover build line](homecover.md).
 
 ## Saved menu
 

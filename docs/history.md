@@ -156,6 +156,11 @@ the recovery button combination for this model remains unverified.
   deterministic cold builds. Features of V2.1qP plus **Find Cover & Lyrics** (Now Playing > More > Cover & Lyrics: iTunes and
   Deezer covers with a confirmation, LRCLIB lyric candidates, Covers / Lyrics tabs; fails fast with Try Again). Test builds
   zMIRFAAAB, D, E and F flashed, accepted. LRCLIB under load answers uncached queries with 503 (2026-11-01; cached ones 200).
+  Also in 1.0.0: **Home cover build** ("Preparing covers n/m" at the top of Home, Recently Played's albums first, stale
+  Recently Played cover keys re-keyed), **Rebuild Covers** through Home (Settings > Library, no Cover Flow detour) and
+  Settings > Developer > **Cover Cache** (counts, status, No art / Missing lists, Clear Cover Cache). Test builds zONMIAAAB to
+  I flashed, accepted. Lesson: a Recently Played cover key resolved under an earlier album-row rule (before V2.1qH) names a
+  file no build makes; the tile kept the placeholder while a tap (by title) showed the cover.
 
 ## Hardware results (what broke on the device, and why)
 - **Vinyl Cover record rim (zTUKNAAAD).** On a track change the previous tint's disc edge stayed. The anti-aliased rim blended onto

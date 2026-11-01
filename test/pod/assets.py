@@ -174,7 +174,7 @@ def run(ctx):
     for page in pod_pages.PAGES:   # every Settings row but the pickers' has a glyph, drawn at 20 px in a 24 px image
         if page.kind == 'cards':
             for r in page.rows:
-                if pod_pages.row_kind(r) not in ('check', 'info'): expect(r.label in cg, f'{page.key}: {r.label} has a card glyph')
+                if pod_pages.row_kind(r) not in ('check', 'info') and r.action != pod_pages.ACT_CCLIST: expect(r.label in cg, f'{page.key}: {r.label} has a card glyph')
     for n in mod_icons.CARD_IMAGES:
         im = Image.open(os.path.join(mod_icons.PNG, n + '.png')).convert('RGBA')
         expect(im.size == {'pod_chev': (9, 15), 'pod_check': (20, 20), **{p: (320, 52) for p in mod_icons.CARD_PIECE_IMAGES}}.get(n, (24, 24)) and im.getchannel('A').getbbox(), f'{n} is a drawn image of its size')

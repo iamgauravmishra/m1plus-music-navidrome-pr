@@ -1399,7 +1399,7 @@ def cards_row(i, row, piece, last):
     import pod_settings as ST
     from mod_icons import CARD_GLYPHS, card_name, CARD_CHEVRON, CARD_CHECK
     kind = pod_pages.row_kind(row)
-    has_icon = kind not in ('check', 'info')
+    has_icon = kind not in ('check', 'info') and row.action != pod_pages.ACT_CCLIST   # (the Cover Cache counts have no glyph)
     item = Widget('list_item', 0, 0, ST.LIST_W, ST.ROW_H, [('name', f'pod_row{i}'), ('style', 'list_item_style')] + ([('sensitive', 'false')] if kind == 'info' else []))
     normal, down = ST.piece_images(piece)
     for st in ('normal', 'over', 'pressed', 'focused', 'disable'):
@@ -1433,7 +1433,7 @@ def cards_row(i, row, piece, last):
         val = Widget('hscroll_label', vx, 0, vw, ST.ROW_H, [('name', f'pod_value{i}'), ('text', ''), ('only_parent_focus', 'true'),
                                                               ('ellipses', 'true'), ('sensitive', 'false')])
         for st in ('normal', 'disable', 'focused'):
-            styled(val, (st,), 'font_size', str(ST.INFO_PX))
+            styled(val, (st,), 'font_size', str(ST.VALUE_PX if row.arg >= pod_pages.INFO_CC_ALBUMS else ST.INFO_PX))   # (the Cover Cache page's values are the standard 18 px value size, About's the stock About's 16)
             styled(val, (st,), 'text_color', ST.GREY)
             styled(val, (st,), 'text_align_h', 'right')
             styled(val, (st,), 'text_align_v', 'middle')
@@ -1584,6 +1584,18 @@ def shelf():
         styled(lab, ('normal',), 'text_align_v', 'middle')
         sh.children.append(lab)
     return sh
+
+
+# The cover build's progress line of the Home instance (patch/homecover.c, docs/modules/homecover.md; HC_* of patch/offsets.inc): a plain 15 px #AAAAAA label above the list, hidden and
+# insensitive until the payload shows it (and moves the list down by HC_H); the payload sets its text ("Preparing covers 120/840").
+COVER_PROG = 'pod_cover_prog'
+HC_PX = OFFSETS['HC_PX']
+
+
+def cover_progress():
+    lab = hidden(label(COVER_PROG, OFFSETS['HC_X'], OFFSETS['HC_Y'], OFFSETS['HC_W'], OFFSETS['HC_H'], '', HC_PX, SH_SUB_RGB, 'left'))
+    styled(lab, ('normal',), 'text_align_v', 'middle')
+    return lab
 
 
 # The Daily Mix section of the menu's Home instance (patch/dailymix.c, docs/modules/dailymix.md; the DM_* numbers are tools/pod_dailymix.py's, patch/offsets.inc has the
@@ -1764,6 +1776,8 @@ def build_page(page):
         return build_menucfg_page(page)
     if page.kind == 'extrascfg':
         return build_extrascfg_page(page)
+    if page.kind == 'covlist':
+        return build_grid_page(page, toggle=None, coverflow=False, names=('covlist_listview', 'covlist_scrollview'))
     if page.kind == 'grid':
         return build_grid_page(page)
     if page.kind == 'podcasts':
@@ -1806,6 +1820,7 @@ def build_page(page):
         sv.children.append(daily())   # after the rows, before the shelf: the Daily Mix card (the payload moves it below the last shown row and shows it when there is a mix)
         sv.children.append(shelf())   # then the shelf (the payload moves it below the last shown row and shows it when there are albums to show)
         sv.children.append(hidden(Widget('view', 0, len(page.rows) * ROW_H, sv.w, MB_PAD, [('name', 'pod_pad')])))   # last child; the payload shows it with the bar
+        root.children.append(cover_progress())   # (hidden; the bar stays the last child: it paints over everything)
         root.children.append(minibar())
     return root
 

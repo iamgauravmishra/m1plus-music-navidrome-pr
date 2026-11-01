@@ -38,6 +38,12 @@
 #define SCREEN_W 320
 #define WIN_H 450
 #define HOME_PAD 10        /* the Home instance of the pod menu keeps this much air above its first row and below its last (patch/home.c hm_fill_window) */
+/* the cover build's progress line of the Home instance (patch/homecover.c, tools/pod_ui.py cover_progress): a label HC_W x HC_H at (HC_X, HC_Y) above the list while covers are built; the list then starts HC_H lower */
+#define HC_X 10
+#define HC_Y 8
+#define HC_W 300
+#define HC_H 20
+#define HC_PX 15
 
 /* ---------------------------------------------------------------------------
  * Cover Flow (patch/coverflow.c). Event ids, record layout and widget fields

@@ -886,9 +886,9 @@ def library_tests(ctx, on_row):
     land_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_LANDSCAPE)
     sort_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_SORT)
     sw, val = f'pod_switch{land_i}', f'pod_value{sort_i}'
-    expect([(r.label, r.action) for r in C.rows] == [('Update Library', P.ACT_HOME), ('Album Order', P.ACT_SORT), ('Landscape', P.ACT_LANDSCAPE), ('Rebuild Covers', P.ACT_REBUILD), ('Podcast Search', P.ACT_PCSEARCH)]
+    expect([(r.label, r.action) for r in C.rows] == [('Update Library', P.ACT_HOME), ('Rebuild Covers', P.ACT_REBUILD), ('Album Order', P.ACT_SORT), ('Landscape', P.ACT_LANDSCAPE), ('Podcast Search', P.ACT_PCSEARCH)]
            and C.title == 'Library' and C.rows[0].arg == P.HOME_UPDATE and C.rows[sort_i].arg == P.SORT_PAGE_INDEX and P.row_kind(C.rows[0]) == 'action' and P.row_kind(C.rows[sort_i]) == 'value',
-           'the Library page: Update Library (the stock page, no chevron), Album Order (a value, a chevron, its picker), Landscape (switch), Rebuild Covers and Podcast Search (switch)')
+           'the Library page: one card of Update Library (the stock page, no chevron), Rebuild Covers and Album Order (a value, a chevron, its picker), then Landscape (switch) under Cover Flow, and Podcast Search (switch)')
 
     def open_lib(land=None, sort=None, language=None):
         m = Machine()
@@ -998,15 +998,44 @@ def library_tests(ctx, on_row):
     expect(confirms == [('confirm', KEY, O['CONFIRM_KIND_WRAP'])], f'a tap on Rebuild Covers asks first, in the stock confirm dialog, kind 5 (wrapped) ({confirms})')
     expect(('navigator_to_with_context', 'dialog/confirminfo_dialog') == m.calls[[c[0] for c in m.calls].index('navigator_to_with_context')][:2]
            if 'navigator_to_with_context' in m.names() else False, 'through navigator_to_with_context(dialog/confirminfo_dialog)')
-    expect(not any(n in m.names() for n in ('window_open', 'pthread_create', 'mkdir', 'rename', 'unlink', 'fopen')) and build_state(m)['jobs'] == 0,
-           'No (or the dialog closed): nothing happens at all, no page, no thread, no file touched')
+    REQ = '/mnt/data/m1plus-covers-rebuild'
+    expect(not any(n in m.names() for n in ('window_open', 'pthread_create', 'mkdir', 'rename', 'unlink', 'fopen', 'toast')) and build_state(m)['jobs'] == 0 and REQ not in m.fs,
+           'No (or the dialog closed): nothing happens at all, no page, no thread, no file, no toast')
     m = rebuild_machine(yes=True)
-    expect(('window_open', 'm1plus_cover') in m.calls and count_of(m, 'pthread_create') == 1 and build_state(m)['mode'] == 1 and build_state(m)['total'] == 3
-           and ('widget_set_visible', m.widgets['btn_cancel'], 1) in m.calls, 'Yes opens Cover Flow on the Preparing screen with every cover queued (CC_REBUILD)')
+    expect(m.fs.get(REQ) == b'1\n' and [c[1] for c in m.calls if c[0] == 'toast'] == ['Covers will rebuild on Home'],
+           'Yes writes the request file and shows the toast')
+    expect(not any(n in m.names() for n in ('window_open', 'pthread_create')) and 'coverflow_rebuild' not in str(m.calls) and build_state(m)['jobs'] == 0,
+           'and stays on Settings: no Cover Flow, no worker')
+    for loc in pod_i18n.ALL_TABLES:
+        m = rebuild_machine(language=loc, yes=True)
+        expect([c[1] for c in m.calls if c[0] == 'toast'] == [tr_of(loc)('Covers will rebuild on Home')], f'{loc}: the toast is translated')
     for loc in pod_i18n.ALL_TABLES:
         T = tr_of(loc)
         m = rebuild_machine(language=loc)
         expect([c[1] for c in m.calls if c[0] == 'confirm'] == [T(KEY)], f'{loc}: the confirm message reads {T(KEY)!r}')
+    # Developer > Cover Cache: the No art / Missing rows are value rows whose chevron and tap exist only for a counted, non-zero count
+    D, CP = P.DEVELOPER_PAGE, P.CACHE_PAGE
+    cc_i = next(i for i, r in enumerate(D.rows) if r.action == P.ACT_PAGE and r.arg == P.CACHE_PAGE_INDEX)
+    na_i, ms_i = (next(i for i, r in enumerate(CP.rows) if r.action == P.ACT_CCLIST and r.arg == a) for a in (P.INFO_CC_NOART, P.INFO_CC_MISSING))
+    m = cover_machine(albums=4, cached=False)
+    for n in ['btn_return', 'btn_backtoplayer', 'pod_chevron'] + [f'pod_row{i}' for i in range(len(CP.rows))] + [f'pod_value{i}' for i in range(len(CP.rows))]:
+        if n not in m.widgets: m.widget(n)
+    m.call(on_row, a0=PSYMS[f'pod_rows_{P.DEVELOPER_PAGE_INDEX}'] + 12 * cc_i, count=6000000)
+    first = list(m.calls)
+    expect(('widget_set_visible', m.widgets['pod_chevron'], 0) in first and ('widget_set_sensitive', m.widgets[f'pod_row{ms_i}'], 0) in first
+           and ('widget_set_text_utf8', m.widgets[f'pod_value{ms_i}'], '\xe2\x80\xa6') in first, 'while counting: no chevron, the row takes no touch, the value is an ellipsis')
+    seen = []
+    for _ in range(30):
+        seen += fired(m, 'cp_tick', 40000000)
+        if not [c for c in m.calls if c[0] == 'timer_add' and c[1] == PSYMS['cp_tick']]: break
+    row_calls = lambda i: [c for c in seen if c[0] == 'widget_set_sensitive' and c[1] == m.widgets[f'pod_row{i}']]
+    expect(row_calls(ms_i)[-1:] == [('widget_set_sensitive', m.widgets[f'pod_row{ms_i}'], 1)] and row_calls(na_i)[-1:] == [('widget_set_sensitive', m.widgets[f'pod_row{na_i}'], 0)],
+           'counted: Missing (4) takes touches, No art (0) still does not')
+    expect(('widget_set_text_utf8', m.widgets[f'pod_value{ms_i}'], '4') in seen and ('widget_set_text_utf8', m.widgets[f'pod_value{na_i}'], '0') in seen, 'and the values are the counts')
+    cache_tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui', CP.key + '.bin'), 'rb').read())
+    sizes = {int(cache_tree.find(f'pod_value{i}').get('style:normal:font_size')) for i in range(len(CP.rows)) if cache_tree.find(f'pod_value{i}') is not None}
+    expect(sizes == {18}, f'the Cover Cache values are the standard 18 px value size, as Library\'s Album Order value ({sizes})')
+    expect(not [c for c in cache_tree.find(f'pod_row{na_i}').children if c.name.startswith('pod_icon')] and [c for c in cache_tree.find(f'pod_row{na_i}').children if c.name == 'pod_chevron'], 'No art: no glyph, a chevron the payload shows when there is a list')
     # the built asset: a value label that takes no touch, a chevron, the row takes the tap
     path = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui', C.key + '.bin')
     tree = awtk_ui.parse(open(path, 'rb').read())

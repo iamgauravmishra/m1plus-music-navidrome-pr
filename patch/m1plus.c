@@ -55,7 +55,9 @@ enum {
     ACT_VREC = 38,
     ACT_RECSET = 39,
     ACT_VTHEME = 40,
-    ACT_VTHSET = 41
+    ACT_VTHSET = 41,
+    ACT_CLEARCACHE = 42,
+    ACT_CCLIST = 43
 };
 
 extern void shot_start(void); /* patch/shot.c: the Screenshot row: confirm, 5 s countdown, capture; or cancel */
@@ -94,7 +96,17 @@ struct pod_stock {
 
 /* The values a Settings row shows at the right (tools/pod_pages.py STOCK_VALUES in this order, then the two of ours). */
 /* ACT_INFO's arg: where an About row's value comes from (tools/pod_pages.py INFO_*). */
-enum { INFO_TAG = 0, INFO_FW, INFO_MODEL, INFO_SN, INFO_MAC, INFO_IP, INFO_CAP, INFO_FREE };
+enum {
+    INFO_TAG = 0,
+    INFO_FW,
+    INFO_MODEL,
+    INFO_SN,
+    INFO_MAC,
+    INFO_IP,
+    INFO_CAP,
+    INFO_FREE,
+    INFO_CC /* the Cover Cache page's seven values start here: homecover_stat(kind - INFO_CC) */
+};
 
 enum { VK_NONE = 0, VK_WIFI, VK_BLUETOOTH, VK_PLAYMODE, VK_EQ, VK_SORT, VK_THEME, VK_RECORD, VK_VTHEME };
 
@@ -151,8 +163,8 @@ static int on_menu_fg(void *ctx, void *e) {
 
 /* Settings > Library > Rebuild Covers: the stock yes/no dialog (dialog/confirminfo_dialog, the one the equaliser
  * reset and the Bluetooth reconnect use) with a wrapped message; the call is modal and returns CONFIRM_YES for Yes.
- * No (or the dialog failing to open) does nothing at all; Yes opens Cover Flow on its Preparing screen with every
- * cover extracted again (coverflow_rebuild). */
+ * No (or the dialog failing to open) does nothing at all; Yes stays on Settings, writes the request file (REBUILD_FILE) that
+ * Home's cover build (patch/homecover.c) acts on, and shows a toast. */
 int pod_confirm_code(const char *s) { /* the dialog's raw result; also patch/shot.c: Take / Cancel the screenshot */
     struct {
         int kind, ms;
@@ -168,7 +180,21 @@ int pod_confirm_code(const char *s) { /* the dialog's raw result; also patch/sho
 int pod_confirm(const char *s) { return pod_confirm_code(s) == CONFIRM_YES; }
 
 static void rebuild_ask(void) {
-    if (pod_confirm(TR("Rebuild all covers? This may take a few minutes."))) coverflow_rebuild();
+    if (!pod_confirm(TR("Rebuild all covers? This may take a few minutes."))) return;
+    if (home_write_atomic(REBUILD_FILE, REBUILD_TMP, "1\n") == 0)
+        pod_toast(TR("Covers will rebuild on Home"));
+    else
+        pod_toast(TR("Storage unavailable"));
+}
+
+/* Settings > Developer > Clear Cover Cache: the same confirm dialog; refused (a toast) while the cover worker is busy. */
+__attribute__((noinline)) static void clear_ask(void) {
+    if (cc_build_busy()) {
+        pod_toast(TR("Covers are being made, try later"));
+        return;
+    }
+    if (pod_confirm(TR("Delete all cached covers? They will be made again on Home.")) && !homecover_clear())
+        pod_toast(TR("Covers are being made, try later"));
 }
 
 static void pick_choose(const struct pod_row *row);
@@ -220,7 +246,13 @@ static int on_row(void *ctx, void *e) {
     else if (row->action == ACT_SHOT)
         shot_start(); /* patch/shot.c; a timer, no page */
     else if (row->action == ACT_REBUILD)
-        rebuild_ask(); /* a confirm dialog, then Cover Flow rebuilds */
+        rebuild_ask(); /* a confirm dialog, then a request for Home's cover build */
+    else if (row->action == ACT_CCLIST)
+        homecover_list_open(
+            row->arg -
+            INFO_CC); /* the albums with no art / no cache file, a plain list (nothing when the count is 0 or still being made) */
+    else if (row->action == ACT_CLEARCACHE)
+        clear_ask(); /* a confirm dialog, then the cache files are removed in steps */
     else if (row->action == ACT_REGEN)
         dailymix_regen(); /* patch/dailymix.c: no page, a toast when asked; the card is made again when the Home menu is back in front */
     else if (row->action == ACT_STOCK)
@@ -371,11 +403,13 @@ static void disk_gb(float *cap, float *rem) {
 }
 
 static void info_text(void *label, int kind) {
-    char buf[40];
+    char buf[64];
     const char *s = buf;
     float cap, rem;
     buf[0] = 0;
-    if (kind == INFO_TAG)
+    if (kind >= INFO_CC)
+        homecover_stat(kind - INFO_CC, buf, sizeof buf);
+    else if (kind == INFO_TAG)
         s = M1PLUS_TAG;
     else if (kind == INFO_FW)
         s = (const char *)ABOUT_FW;
@@ -426,6 +460,23 @@ static void page_refresh(void *win, const struct pod_page *page) {
             row->action == ACT_PCSEARCH || row->action == ACT_BATTPCT) {
             snprintf(name, sizeof name, "pod_switch%d", i);
             switch_show(widget_lookup(win, name, 1), switch_state(row->action));
+        } else if (
+            row->action ==
+            ACT_CCLIST) { /* Cover Cache's No art / Missing: a value; the chevron and the tap only while there is a list to open */
+            int on = homecover_tappable(row->arg - INFO_CC);
+            void *item = widget_lookup(win, row->name, 1),
+                 *chev = item ? widget_lookup(item, "pod_chevron", 1) : (void *)0;
+            snprintf(name, sizeof name, "pod_value%d", i);
+            w = widget_lookup(win, name, 1);
+            if (chev) widget_set_visible(chev, on, 0);
+            if (item) widget_set_sensitive(item, on);
+            if (w) {
+                info_text(w, row->arg);
+                if (on)
+                    value_fit(win, (unsigned)i, w, POD_VALUE_RIGHT, POD_VALUE_MAX, POD_INFO_LABEL_X);
+                else
+                    value_fit(win, (unsigned)i, w, POD_INFO_RIGHT, POD_INFO_MAX, POD_INFO_LABEL_X);
+            }
         } else if (row->action == ACT_INFO) {
             snprintf(name, sizeof name, "pod_value%d", i);
             w = widget_lookup(win, name, 1);
@@ -441,6 +492,11 @@ static void page_refresh(void *win, const struct pod_page *page) {
             if (w) widget_set_visible(w, pick_chosen(row), 0);
         }
     }
+}
+
+/* A page whose values changed on their own (the Cover Cache page's counts and status): read them again. */
+void pod_page_refresh(int index) {
+    if (index >= 0 && index < POD_PAGE_COUNT && pod_fg[index]) page_refresh(pod_fg[index], &POD_PAGES[index]);
 }
 
 /* A picker row (Album Order, Cassette Theme, Record): choose it (saved first: a failed save leaves the old choice and its check), then the checks follow. */
@@ -496,7 +552,7 @@ static int open_page(int index, int as_home) {
             bind_switch(win, i, row), refresh = 1;
         else {
             if (row->action != ACT_INFO) pod_bind(win, row->name, on_row, row); /* an information row takes no tap */
-            if (row->action == ACT_INFO || row_value(row) || is_pick(row)) refresh = 1;
+            if (row->action == ACT_INFO || row->action == ACT_CCLIST || row_value(row) || is_pick(row)) refresh = 1;
         }
         if (row->action == ACT_REGEN) {
             regen_row = widget_lookup(win, row->name, 1);
@@ -510,6 +566,8 @@ static int open_page(int index, int as_home) {
         widget_on(win, EVT_WINDOW_TO_FG, on_page_fg, (void *)(long)index);
         widget_on(win, EVT_DESTROY, on_page_gone, (void *)(long)index);
     }
+    if (index == POD_CACHE_PAGE)
+        homecover_cache_open(win, index); /* counts the cache folder in steps while the page is open */
     if (index == POD_MENU_PAGE) {
         menu_arrange(win, 0);
         widget_on(win, EVT_WINDOW_TO_FG, on_menu_fg, win); /* back in front after the Main Menu page: arrange again */

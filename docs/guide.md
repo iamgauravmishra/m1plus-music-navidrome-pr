@@ -39,12 +39,12 @@ Settings is iOS-style grouped cards; a grey value at the right shows the current
 - **Playback:** **Play Mode** and **EQ** open the stock pages (the value shows the mode and the preset); **All Playback Settings** opens the stock list (Gapless is there).
 - **System:** **Display** opens the stock page (Language is on the stock System Settings list), **Keyboards** is below, **About** is our own page (the build and firmware versions; Device: model, serial number, Wi-Fi MAC and IP address; Storage: card capacity and free space), **All System Settings** opens the stock list.
 - **Home Screen:** the Recent Albums and Daily Mix switches; then Main Menu and Extras, as above; under Status Bar the Battery Percentage switch (off by default), which shows the battery's exact charge, such as 87%, beside the battery icon (the charge is the fuel gauge's reading, not the voltage steps stock shows); and last Regenerate Daily Mix, which appears while Daily Mix is on and answers a tap with "New mix when Home opens".
-- **Library:** Update Library; **Album Order** (Artist or Album, a picker with a check mark, for Albums and Cover Flow); under Cover Flow, landscape presentation and Rebuild Covers.
+- **Library:** Update Library; **Album Order** (Artist or Album, a picker with a check mark, for Albums and Cover Flow); **Rebuild Covers** (next to Update Library); under Cover Flow, landscape presentation.
 - **Now Playing:** under Cassette Mode, **Theme** (Normal, Chrome or Metal; a picker, applied the next time Cassette Mode opens).
 - **Keyboards:** English is always on; switch on Chinese (Pinyin) to get a language key and pinyin input on the on-screen keyboard (candidates above the keys, swipe them sideways, space takes the first).
-- **Developer:** Startup (**Boot to M1+ Music**, **Open Shanling Home**) and Tools (**Screenshot**: confirm a capture, then leave the page within five seconds; **System Update** opens the stock firmware update page).
+- **Developer:** Startup (**Boot to M1+ Music**, **Open Shanling Home**) and Tools (**Screenshot**: confirm a capture, then leave the page within five seconds; **Cover Cache** shows how many covers are cached, missing or stale and what is being built, and **Clear Cover Cache** on it deletes the cached covers after a confirm (Home makes them again); **System Update** opens the stock firmware update page).
 
-Rebuild Covers asks before regenerating the cache. Screenshots can be cancelled during their
+Rebuild Covers asks first; Yes shows a toast and the Home screen regenerates every cover in the background ("Rebuilding covers n/m" at its top; it restarts at the next visit if you leave Home meanwhile). Screenshots can be cancelled during their
 countdown; see [capture details](modules/screenshot.md).
 
 ## Extras

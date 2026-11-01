@@ -44,6 +44,7 @@ for commands, [UI](ui.md) for layout/assets, and [history](history.md) for recor
 | [Mini player](modules/minibar.md) | Home overlay, controls, blur and timer |
 | [Recently Played](modules/recent.md) | History file, covers and shelf layout |
 | [Daily Mix](modules/dailymix.md) | Selection job, stored mix, card and page |
+| [Home cover build](modules/homecover.md) | Background cover cache build and its progress line |
 | [Podcasts](modules/podcasts.md) | Local episodes, feeds, covers, resume and speed |
 | [Virtual iPod](modules/ipod.md) | Touch wheel, navigation and playback |
 | [iPod Cover Flow](modules/ipod-coverflow.md) | Embedded carousel and album navigation |

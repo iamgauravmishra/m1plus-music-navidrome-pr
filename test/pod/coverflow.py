@@ -215,7 +215,7 @@ def run(ctx):
     m = cover_machine(); m.window = 0
     expect(m.call(cover_open, count=200000) == 0xffffffff, 'window_open failure returns -1')
 
-    rebuild_tests(ctx)
+    missing_only_tests(ctx)
 
     # 20. The depth renderer on the real MIPS code: paint the covers and compare the frame with
     #     the host build of the same renderer (test/coverflow.py), pixel for pixel.
@@ -922,107 +922,10 @@ def landscape_tests(ctx, asset):
         expect(got[-1] == 'touch_layer', f'a touch at ({x},{y}) in the landscape body reaches the touch layer ({got})')
 
 
-def rebuild_tests(ctx):
-    """Settings > Library > Rebuild Covers: coverflow_rebuild opens Cover Flow on the Preparing screen with the shared worker
-    in CC_REBUILD mode: every album is extracted again and its file replaced (a no-art marker too); Cancel keeps a complete cache."""
+def missing_only_tests(ctx):
+    """Cover Flow's open builds the missing covers only (Rebuild Covers is Home's: test/pod/homecover.py)."""
     expect = ctx.expect
-    rebuild = PSYMS['coverflow_rebuild']
-    OLD = 111           # the size of an existing picture before the rebuild
-
-    def machine(albums=3, **kw):
-        m = cover_machine(albums=albums, **kw)
-        for p in cache_paths(m, albums): m.files[p] = OLD
-        return m
-
-    # 1. A complete cache still builds: every album is a job, the Preparing screen is up, mode CC_REBUILD.
-    m = machine()
-    v = m.call(rebuild, count=5000000)
-    s = build_state(m)
-    expect(v == 0 and count_of(m, 'pthread_create') == 1 and s['running'] == 1 and s['mode'] == 1 and s['total'] == 3,
-           f'a complete cache is rebuilt: one worker, CC_REBUILD, three jobs ({s})')
-    expect(build_jobs(m) == [(f'/mnt/mmc/m/{i}/1.flac', int(os.path.basename(p)[1:9], 16)) for i, p in enumerate(cache_paths(m, 3))],
-           'one job per album, in the shelf order')
-    expect(('widget_set_visible', m.widgets['btn_cancel'], 1) in m.calls and ('widget_set_tr_text', m.widgets['label_status'], 'Preparing covers...') in m.calls
-           and 'view' not in [c[0] for c in m.calls], 'the Preparing screen with Cancel is shown, not the covers')
-    expect(('mkdir', '/mnt/mmc/.m1plus/covers') in m.calls, 'the cache directory is made')
-    on_poll = fired(m, 'on_poll', 2000000)
-    expect(('widget_set_text_utf8', m.widgets['label_status'], 'Preparing covers... 0/3') in on_poll, 'the progress counts every album')
-    # the worker: every file is replaced (temp, rename), none removed first
-    dst = cache_paths(m, 3)
-    m.album_cover = 1
-    m.call(PSYMS['cc_worker'], count=5000000)
-    renames = [c for c in m.calls if c[0] == 'rename']
-    expect([c[2] for c in renames] == dst and all(c[1] == c[2] + '.tmp' for c in renames), 'each cover is extracted to a temp file and renamed over the old one')
-    expect(all(m.files.get(p) == 4096 for p in dst) and not [c for c in m.calls if c[0] == 'unlink' and c[1] in dst],
-           'the old files are replaced, never removed before')
-    expect(not [c for c in m.calls if c[0] == 'fopen' and c[2] == 'w'], 'no markers written for albums that have art')
-    # completion: joined, freed, then the covers
-    n = fired(m, 'on_poll', 5000000)
-    expect([c for c in n if c[0] == 'pthread_join'] and build_state(m)['jobs'] == 0 and 'view' in [c[0] for c in n],
-           'when the worker is done the set is freed and the covers show as usual')
-
-    # 2. Markers are replaced: an album that gained art has it now. An album that still has none keeps its marker (no write).
-    m = machine(); dst = cache_paths(m, 3)
-    m.files[dst[1]] = 0
-    m.call(rebuild, count=5000000)
-    m.album_cover = 1
-    m.call(PSYMS['cc_worker'], count=5000000)
-    expect(m.files[dst[1]] == 4096 and m.files[dst[0]] == 4096, 'the no-art marker is overwritten by the new picture')
-    m = machine(); dst = cache_paths(m, 3)
-    m.files[dst[1]] = 0
-    m.call(rebuild, count=5000000)
-    m.album_cover = m.extern_cover = 0
-    m.call(PSYMS['cc_worker'], count=5000000)
-    expect(m.files[dst[1]] == 0 and dst[1] in m.present and all(m.files[dst[i]] == OLD for i in (0, 2)),
-           'with no art found a marker stays a marker and a picture stays (old files stay until a new one replaces them)')
-    expect(not [c for c in m.calls if c[0] == 'fopen' and c[2] == 'w'] and not [c for c in m.calls if c[0] == 'unlink' and c[1] in dst]
-           and not [p for p in m.files if p.endswith('.tmp')], 'and nothing is written or removed but the temp files')
-    # an extraction that cannot be published keeps the old file too (audit rule)
-    m = machine(1); dst = cache_paths(m, 1)
-    m.call(rebuild, count=5000000)
-    m.album_cover = 1; m.fail.add(('rename', dst[0]))
-    m.call(PSYMS['cc_worker'], count=5000000)
-    expect(m.files[dst[0]] == OLD and dst[0] in m.present and not [p for p in m.files if p.endswith('.tmp')], 'a failed rename keeps the old file and leaves no temp file')
-
-    # 3. Cancel (and Back) in the middle: the worker is joined, the cache stays complete, the covers show.
-    m = machine(); dst = cache_paths(m, 3)
-    m.call(rebuild, count=5000000)
-    m.setword(PSYMS['cb'] + 4 * 5, 1)         # album 0 is done: replaced
-    m.files[dst[0]] = 4096
-    n = fired(m, 'on_cancel', 5000000)
-    expect([c for c in n if c[0] == 'pthread_join'] and build_state(m)['jobs'] == 0 and 'view' in [c[0] for c in n], 'Cancel joins the worker, frees the set and shows the covers')
-    expect(all(p in m.present and m.files[p] > 0 for p in dst) and m.files[dst[1]] == OLD and m.files[dst[0]] == 4096
-           and not [c for c in n if c[0] == 'unlink'], 'the cache is complete: the replaced file is new, the others are the old ones')
-    m = machine()
-    m.call(rebuild, count=5000000)
-    n = fired(m, 'on_back', 5000000)
-    expect([c for c in n if c[0] == 'pthread_join'] and build_state(m)['jobs'] == 0 and 'navigator_back' not in [c[0] for c in n], 'Back during the rebuild is Cancel')
-    m = machine()
-    m.call(rebuild, count=5000000)
-    n = fired(m, 'on_destroy', 5000000)
-    expect([c for c in n if c[0] == 'pthread_join'] and build_state(m)['jobs'] == 0 and build_state(m)['running'] == 0, 'closing the page mid-rebuild joins the worker and frees the set')
-
-    # 4. No free space: nothing is touched, the covers show with what is cached; so for no thread, an empty library, a refused timer.
-    m = machine(); m.free_mb = 2
-    m.call(rebuild, count=5000000)
-    expect(count_of(m, 'pthread_create') == 0 and build_state(m)['jobs'] == 0 and 'view' in [c[0] for c in m.calls]
-           and all(m.files[p] == OLD for p in cache_paths(m, 3)), 'no free space: no rebuild, the covers show, every file is untouched')
-    m = machine(); m.thread_ok = False
-    m.call(rebuild, count=5000000)
-    expect(build_state(m)['jobs'] == 0 and 'view' in [c[0] for c in m.calls], 'a refused thread: the covers show')
-    m = machine(); m.timer_fail = True
-    m.call(rebuild, count=5000000)
-    expect(count_of(m, 'pthread_join') == 1 and build_state(m)['jobs'] == 0 and 'view' in [c[0] for c in m.calls], 'a refused progress timer: the worker is joined, the covers show')
-    m = machine(0)
-    v = m.call(rebuild, count=2000000)
-    expect(v == 0 and count_of(m, 'pthread_create') == 0 and any(c[0] == 'widget_set_text_utf8' and 'Update Local Music' in str(c[2]) for c in m.calls),
-           'an empty library: the usual message, no thread')
-    m = machine(); m.call(PSYMS['coverflow_open'], count=5000000)
-    n = fired(m, 'on_destroy', 5000000)
-    m.call(rebuild, count=5000000)
-    expect(count_of(m, 'pthread_create') == 1 and build_state(m)['mode'] == 1, 'after a normal open is closed, a rebuild starts fresh')
-
-    # 5. The normal open is still the missing-only build.
+    # The normal open is the missing-only build.
     m = cover_machine(albums=3, cached=False)
     m.call(PSYMS['coverflow_open'], count=5000000)
     expect(build_state(m)['mode'] == 0 and build_state(m)['total'] == 3, 'coverflow_open builds the missing covers only (CC_MISSING)')
@@ -1030,8 +933,3 @@ def rebuild_tests(ctx):
     cached = cache_paths(m, 3)[1]; m.present.add(cached); m.files[cached] = 0     # a marker counts as cached
     m.call(PSYMS['coverflow_open'], count=5000000)
     expect(build_state(m)['total'] == 2 and [t for t, _ in build_jobs(m)] == ['/mnt/mmc/m/0/1.flac', '/mnt/mmc/m/2/1.flac'], 'a marker or a picture is not rebuilt by the normal open')
-    # a second page cannot take the worker
-    m = cover_machine(albums=3, cached=False)
-    m.call(PSYMS['coverflow_open'], count=5000000)
-    m.call(PSYMS['coverflow_rebuild'], count=5000000)
-    expect(count_of(m, 'pthread_create') == 0 and build_state(m)['total'] == 3 and build_state(m)['mode'] == 0, 'a page already open: the rebuild is refused and the running build is left alone')

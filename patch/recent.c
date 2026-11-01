@@ -538,6 +538,34 @@ static void rc_resolve(unsigned i) {
     if (row) rc_save();
 }
 
+/* The cover keys checked against an album list someone else loaded (patch/homecover.c's scan, from the menu's to-foreground): every entry
+ * gets its row's key and artist, resolved or not. A key resolved under an earlier row rule (the album's first track since V2.1qH) or the
+ * playing track's key names a file the builder never makes, so the tile kept the placeholder while a tap (by title) opened the album.
+ * rows gets the shelf's albums as indices into albums, most recent first (the build queues them first); returns their count. */
+int recent_rekey(void *albums, unsigned *rows) {
+    unsigned i, changed = 0;
+    int n = 0;
+    if (!albums) return 0;
+    if (!rc.loaded) rc_load();
+    for (i = 0; i < rc.n; ++i) {
+        ent_t *e = &rc.ent[i];
+        int at = rc_find(albums, e, 0);
+        void *row = at >= 0 ? deque_at(albums, (unsigned)at) : (void *)0;
+        if (!row) continue;
+        if (rows && i < SH_TILES) rows[n++] = (unsigned)at;
+        if (e->res && e->ckey == cc_album_key(row)) continue;
+        e->ckey = cc_album_key(row);
+        e->res = 1;
+        rc_copy(e->artist, sizeof e->artist, cc_str(row, REC_ARTIST));
+        changed = 1;
+    }
+    if (changed) {
+        rc_save();
+        recent_refresh();
+    }
+    return n;
+}
+
 static int rc_on_down(void *ctx, void *e) {
     (void)ctx;
     rc.down = 0;

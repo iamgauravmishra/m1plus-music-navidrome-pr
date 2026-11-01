@@ -1291,6 +1291,21 @@ def refresh_and_fallback_tests(ctx):
     expect([e[2] for e in got] == [1, 1, 1], 'one more album per to-foreground: all three resolved after three')
     m.clock += 10; m.calls = []; m.fire(EVT_FG)
     expect('loadLocalClassList' not in m.names(), 'a fully resolved list never loads the album list again')
+    # recent_rekey (the Home cover build's album list, patch/homecover.c): a key resolved under an earlier row rule (res 1, another artist) names a file
+    # the build never makes; the list's row gives every entry its key again, the file is written once, the tile tries the row's file
+    stale = [(e[0], album_key('Old Row', ALBUMS[i][1]), 1) + e[3:] for i, e in enumerate(ents(3))]
+    m = row_machine(); m.fs[RECENT] = pod_recent.dump(stale); m.start(); m.first(); m.decode_all()
+    expect(not [u_ for u_ in m.loads if u_.startswith('file://')], 'a stale resolved key finds no cache file: the placeholder')
+    rows = m.new_deque(m.showlist); m.calls = []
+    m.call(PSYMS['recent_rekey'], a0=rows, a1=0, count=40000000)
+    got = pod_recent.parse(m.fs[RECENT])
+    expect([e[1] for e in got] == [album_key('Various Artists', ALBUMS[i][1]) for i in range(3)] and all(e[2] == 1 and e[4] == 'Various Artists' for e in got)
+           and m.names().count('rename') == 1, f'recent_rekey: every entry takes its row\'s key and artist, one write ({[hex(e[1]) for e in got]})')
+    m.loads = []; m.decode_all()
+    expect(all('file://' + art_file(album_key('Various Artists', ALBUMS[i][1])) in m.loads for i in range(3)), f'the tiles are made again from the rows\' cache files ({m.loads})')
+    m.calls = []; m.call(PSYMS['recent_rekey'], a0=rows, a1=0, count=40000000)
+    expect('rename' not in m.names(), 'keys that already match: nothing written')
+    m.call(PSYMS['recent_rekey'], a0=0, a1=0, count=400000)
     # an album the library does not list: asked once, not again
     m = row_machine(); library(m, rows=[('Other', 'Y', '/o/1.flac')]); m.start(); m.clock = 1000 + O['RC_RESOLVE_MS']
     ls = []

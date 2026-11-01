@@ -304,7 +304,6 @@ static struct {
     void *artist_row;
     unsigned *keys;
     int owns; /* this page holds the shared worker's job set (cc_build_*) */
-    int rebuild; /* Settings > Library > Rebuild Covers: every album is extracted again (CC_REBUILD) */
     unsigned timer;
     unsigned saved_album; /* the centre album's key, kept across opens and reboots */
     int screen, album;
@@ -1247,12 +1246,12 @@ static int load_artist(void) {
     return (int)n;
 }
 
-/* Jobs for the albums with no cache file yet (every album in a rebuild, which extracts them all again). 1 when a
+/* Jobs for the albums with no cache file yet. 1 when a
  * build is running and the preparing screen is up, 0 when there is nothing to build (or no card, no space, no thread,
  * or the shared worker is busy with another page's set). */
 static int start_build(void) {
     unsigned n = album_count(), i;
-    if (!cc_build_open(n, cf.rebuild ? CC_REBUILD : CC_MISSING)) return 0;
+    if (!cc_build_open(n, CC_MISSING)) return 0;
     cf.owns = 1;
     for (i = 0; i < n; ++i) {
         unsigned key = key_at(i);
@@ -1357,17 +1356,6 @@ static int open_covers(int n, const char *empty) {
 int coverflow_open(void) {
     if (cf.win) return -1;
     memset(&cf, 0, sizeof cf);
-    if (open_page()) return -1;
-    return open_covers(load_albums(), "Update Local Music first");
-}
-
-/* Settings > Library > Rebuild Covers, after its confirm: the library's Cover Flow opened with the Preparing screen
- * on EVERY album (cc_build CC_REBUILD: each cache file is extracted again and replaced, the no-art markers too). Cancel
- * or Back leaves a complete cache (the old files stay until replaced); when it is done the covers show as usual. */
-int coverflow_rebuild(void) {
-    if (cf.win) return -1;
-    memset(&cf, 0, sizeof cf);
-    cf.rebuild = 1;
     if (open_page()) return -1;
     return open_covers(load_albums(), "Update Local Music first");
 }
