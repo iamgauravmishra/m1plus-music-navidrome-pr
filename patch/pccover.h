@@ -10,6 +10,15 @@
 #define PV_BASELINE_MAX_PX \
     16000000u /* a baseline JPEG above this many pixels is refused (libjpeg's time and the 6 MiB download cap make it rare); a progressive one is held to PC_COVER_MAX_PX: libjpeg keeps all its coefficients */
 
+#define CV_QUALITY 90 /* JPEG quality of an album cover (stock's encoder 0x5de554: jpeg_set_quality(90), pinned) */
+#define PV_COVER_PROGRESSIVE_PX \
+    4194304u /* a progressive album cover above this many pixels is left to stock (libjpeg keeps all its coefficients: about 3 bytes a pixel) */
+
+/* An album cover, the cache's extraction (patch/covercache.c): the JPEG or PNG at src into dst fitted inside size x size as stock's resize does (the same output size, cc_stock_fit), JPEG quality
+ * CV_QUALITY, by the exact area average. Returns 1; -1 when stock keeps the picture as it is (smaller than size) or it is an interlaced PNG; 0 on any other failure (not a picture this
+ * takes, too large, an error): nothing is left at dst, and the caller falls back to stock's own extraction. Worker thread only. */
+int pv_cover(const char *src, const char *dst, unsigned size);
+
 /* The JPEG at src into dst: fitted inside PV_SIZE x PV_SIZE, aspect kept, never upscaled, written as a baseline JPEG. libjpeg's own 1/2, 1/4 or 1/8 scaling does the first reduction while it
  * decodes, one row at a time, and an area average the rest, so a 3000 x 3000 picture needs a few hundred kB, not the 27 MB its bitmap would. Returns 1; on any failure (not a baseline or
  * progressive JPEG, too large, a decode error, a write error) 0, and dst is not left behind. For the refresh worker thread: demo's libjpeg and libc only, no stock function, no widget. */

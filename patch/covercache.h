@@ -1,14 +1,14 @@
 /* Cover cache and album helpers shared by the pages that show album art (patch/coverflow.c, patch/albums.c).
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
- * The cache design (one JPEG per album, /mnt/mmc/.m1plus/covers/f<key>-168.jpg, an empty file marking "no
+ * The cache design (one JPEG per album, /mnt/mmc/.m1plus/covers/r<key>-168.jpg, an empty file marking "no
  * art") follows q2-pod's; see docs/modules/coverflow.md.
  */
 #pragma once
 
 #define CARD_DIR \
     "/mnt/mmc/.m1plus" /* the one hidden folder the payload keeps on the card: covers/ (the cache) and daily-mix/ (the Daily Mix: tracks, art); made by the writers, only while the card is mounted */
-#define ART_DIR CARD_DIR "/covers" /* the cache: f<key>-168.jpg per album, an empty file for "no art" */
+#define ART_DIR CARD_DIR "/covers" /* the cache: r<key>-168.jpg per album, an empty file for "no art" */
 
 /* Pure pixel helpers, also built for the host (test/coverflow.py). */
 unsigned cc_fnv(unsigned h, const char *s);
@@ -18,6 +18,30 @@ void cc_sample(const unsigned char *data, unsigned w, unsigned h, unsigned strid
                unsigned size, unsigned *out);
 void cc_box(const unsigned char *data, unsigned w, unsigned h, unsigned stride, const unsigned char *at, unsigned size,
             unsigned *out);
+
+/* An exact area average, one source row at a time (cc_box and the cover extraction, patch/pccover.c, share it). A target pixel is the mean of the source
+ * area it covers, a source pixel counting for the fraction of it inside: integer weights (the source and target sizes scaled by each other, so a target
+ * cell is `ow` wide in units where a source pixel is `tw`), exact sums, one rounding at the end. Any ratio, up and down. */
+#define AR_MAX 512 /* the widest target row */
+#define AR_LIMIT (1u << 24) /* ow * oh: 255 * that still fits 32 bits */
+typedef struct {
+    unsigned ow, oh, tw, th, total, j, ty, rend;
+    unsigned acc[AR_MAX * 3], h[AR_MAX * 3];
+    unsigned char out[AR_MAX * 3];
+} ar_t;
+typedef void (*ar_emit_t)(void *user, const unsigned char *rgb); /* one finished target row: tw x (r, g, b) */
+/* 1, or 0 when a size is zero or over the limits (ow, oh <= 8192, ow * oh <= AR_LIMIT, tw <= AR_MAX). */
+int ar_init(ar_t *a, unsigned ow, unsigned oh, unsigned tw, unsigned th);
+/* The next source row: ow pixels of `step` bytes with r, g, b at the offsets ro, go, bo; ao < step is an alpha byte composed over black, ao >= step none.
+ * Every target row the row completes goes to emit (none, one, or several when the target is taller than the source). */
+void ar_push(ar_t *a, const unsigned char *px, unsigned step, unsigned ro, unsigned go, unsigned bo, unsigned ao,
+             ar_emit_t emit, void *user);
+/* The size stock's cover resize (0x5e00bc) gives a decoded w x h picture fitted inside t x t, never upscaled: 1 and the size, or 0 when stock keeps the picture as it is (it
+ * is smaller than t in both ways). Stock's float arithmetic, quirks included: a picture exactly t wide (or tall) and shorter is stretched to t x t. */
+int cc_stock_fit(unsigned w, unsigned h, unsigned t, unsigned *tw, unsigned *th);
+/* The size of the picture stock hands to that resize for a JPEG of w0 x h0 with ncomp components: whole when both sides are at most 1024 and it has three components,
+ * else decoded at libjpeg's 1/d with d from the longer side (1 under 1024, 2 up to 2048, 4 up to 4096, else 8), each side rounded up. */
+void cc_stock_dims(unsigned w0, unsigned h0, unsigned ncomp, unsigned *w, unsigned *h);
 
 #ifndef CF_HOST
 const char *cc_str(void *rec, int field); /* a record's string field, "" if none */

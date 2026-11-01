@@ -122,8 +122,8 @@ CF_FRAME_Y, CF_ALBUM_Y, CF_ALBUM_H, CF_ARTIST_Y, CF_ARTIST_H = pod_ui.cover_layo
 
 
 def art_file(key):
-    """The thumbnail cache file of an album key: f<key>-168.jpg (the size is in the name)."""
-    return f'/mnt/mmc/.m1plus/covers/f{key:08x}-{O["ART_SIZE"]}.jpg'
+    """The thumbnail cache file of an album key: r<key>-168.jpg (the size is in the name, the letter the sampling: patch/covercache.c cc_path)."""
+    return f'/mnt/mmc/.m1plus/covers/r{key:08x}-{O["ART_SIZE"]}.jpg'
 REC_SIZE = 0x58
 
 
@@ -195,6 +195,8 @@ class Machine:
         self.curl, self.curl_site, self.curl_last = {}, None, {}   # libcurl (patch/pcnet.c): handle -> options set; the scripted server; handle -> what the last request returned
         self.confirm_yes = False    # the answer of the stock confirm dialog (dialog/confirminfo_dialog)
         self.album_cover = 0        # toolsGetAlbumCover's result
+        self.listing, self.open_dirs = {}, {}   # opendir / readdir (patch/covercache.c art_folder): directory path -> [(name, d_type)], open handle -> entries left
+        self.taglib_kind, self.taglib_data = None, None   # taglib_album_picture's result (2 JPEG, 1 PNG, 0 none; None: 2 when album_cover is set) and the picture it saves to /tmp/.tmp_picture (None: no file)
         self.extern_cover = 0
         self.load_image = 1         # widget_load_image: 0 = success
         self.images = {}            # url -> (w, h, RGBA bytes) widget_load_image decodes when it succeeds
@@ -796,6 +798,20 @@ class Machine:
                 self.files[self.read_cstr(a1)] = 4096; self.present.add(self.read_cstr(a1))
                 if getattr(self, 'art_px', None): self.contents = getattr(self, 'contents', {}); self.contents[self.read_cstr(a1)] = jpeg_header(self.art_px)   # the stock encoder's output: fitted inside the request, never upscaled
             ret = self.album_cover
+        elif name == 'taglib_album_picture':   # libtag_c: the embedded picture of a track, saved to /tmp/.tmp_picture; 2 JPEG, 1 PNG, 0 none (patch/covercache.c art_embedded)
+            self.calls.append(('taglib_album_picture', self.read_cstr(a0), self.read_cstr(a1), a2, a3))
+            ret = self.taglib_kind if self.taglib_kind is not None else 2 if self.album_cover else 0
+            if ret and self.taglib_data is not None: self.fs['/tmp/.tmp_picture'] = self.taglib_data
+        elif name == 'opendir':
+            p = self.read_cstr(a0); self.calls.append(('opendir', p)); ret = 0
+            if p in self.listing: ret = self.alloc(4); self.open_dirs[ret] = list(self.listing[p])
+        elif name == 'readdir':   # struct dirent (32-bit): d_type at 10, d_name at 11
+            ret = 0
+            if self.open_dirs.get(a0):
+                nm, typ = self.open_dirs[a0].pop(0); ret = self.alloc(280)
+                self.u.mem_write(ret + 10, bytes([typ]) + nm.encode('latin-1') + b'\0')
+        elif name == 'closedir':
+            self.open_dirs.pop(a0, None); ret = 0
         elif name == 'toolsGetExternCover':
             self.calls.append(('toolsGetExternCover', self.read_cstr(a0), self.read_cstr(a1)))
             if self.extern_cover: self.files[self.read_cstr(a1)] = 4096

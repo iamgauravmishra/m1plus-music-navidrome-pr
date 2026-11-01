@@ -116,7 +116,7 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
   opens the stock page (this fallback runs only when ours does not open). The queries repeat on every tap (the page may have been left through Now Playing, and
   anything may have reused the list or the browsing record). Back from the album page returns to the
   covers. The artist page's All albums card is not an album: it opens our Songs page on all the artist's songs (`songs_open_artist`, as the Songs button does; a composer's card, or a Songs page that will not open, falls back to the stock page on the All songs row).
-- **Cache.** (The cache has one size, 168; the Pod's cover pane needs 264 and gets it without a second tier of files: from demo's own full-resolution file for the playing track and, for its random rotation, from one transient extraction into `/tmp/m1plus-pane.jpg` by this builder's worker (`cc_build_add_file`: no cache file, no marker), docs/modules/ipod.md "The cover pane".) The page keeps its own `/mnt/mmc/.m1plus/covers/f<key>-168.jpg` thumbnails, made from the album's first track (the album row is its first track by the query filter, payload.md hook 6; the leading `f` retired the files made from any track) (the size is in the
+- **Cache.** (The cache has one size, 168; the Pod's cover pane needs 264 and gets it without a second tier of files: from demo's own full-resolution file for the playing track and, for its random rotation, from one transient extraction into `/tmp/m1plus-pane.jpg` by this builder's worker (`cc_build_add_file`: no cache file, no marker), docs/modules/ipod.md "The cover pane".) The page keeps its own `/mnt/mmc/.m1plus/covers/r<key>-168.jpg` thumbnails, made from the album's first track (the album row is its first track by the query filter, payload.md hook 6; the leading `f` retired the files made from any track) (the size is in the
   name; key = FNV-1a of artist then album, never 0; the key, path, decode and reduce helpers are in
   `patch/covercache.c`, which the Albums grid reads the same files through). The stock cache `/mnt/mmc/.downpic` is keyed by an
   MD5 the payload cannot reproduce and holds 90 px images, so Cover Flow only reads through the stock
@@ -152,3 +152,25 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
 - **Not ported from q2-pod:** Sort and Refresh cards, the rated scope, A-Z jump, the album split by
   album-artist/folder, the audiobook filter, the ffmpeg WebP fallback, wheel/ringnav. To clear the
   cache delete `/mnt/mmc/.m1plus/covers` from a computer.
+
+## Cover resampling
+
+Two sampling steps make the 168 px cache file and the tiles drawn from it; both are exact area averages now.
+
+- **Extraction** (`art_make` in `patch/covercache.c`, worker thread, under `parse_cover_mutex`). Stock's `toolsGetAlbumCover` calls libtag_c's `taglib_album_picture(track, dst, 0x100000, 0x600000)`
+  (returns 2 a JPEG, 1 a PNG, 0 none; saves the raw picture to `/tmp/.tmp_picture`, `dst` is unused), then the loader and resize `0x5e03cc` / `0x5dfe98` -> `0x5e00bc`: a JPEG of at most 1024 x 1024
+  in colour is decoded whole, otherwise at libjpeg DCT scale 1/2 (longer side to 2048), 1/4 (to 4096) or 1/8; a PNG over 1024 on a side is refused; the picture is fitted by single precision division
+  (long side to the request, the other truncated; a side exactly the request gives a stretch to request x request; a picture smaller than the request is copied as it is), resized by the four-tap
+  bilinear `0x5dc020` (corner pixels mapped exactly, so a 6 : 1 reduction skips pixels and aliases) and written by `0x5de554` at quality 90. `toolsGetExternCover` picks a folder image
+  (regular files `.jpg/.jpeg/.png`; names `folder.*`, `cover.*`, `<track>.*` pulled to the front; JPEG file at most 6 MiB, PNG 1 MiB) and uses the same loaders. Ours: `art_embedded` calls
+  `taglib_album_picture` the same way, reads `/tmp/.tmp_picture` with `pv_cover` (`patch/pccover.c`, shared with the podcast shrink: libjpeg DCT scale to the smallest picture that still has both
+  target sides, one row at a time, `ar_push` area average, libjpeg encoder at quality 90; PNG through `patch/pcpng.c`); `art_folder` reproduces stock's file choice. The output size is stock's
+  (`cc_stock_fit`, pinned by `COVER_PINS`). **Everything else is stock's own call**: a picture smaller than the request, an interlaced PNG, a progressive JPEG over 4.2 Mpx, CMYK, any decode or
+  write error, an unreadable candidate. Memory: libjpeg's buffers, one source row and 14 kB of sums (a 3000 px picture needs no full bitmap); time: the Huffman decode of the picture
+  plus about 10 ns a source pixel at the scaled size (a 1500 px cover: 188 x 188 pixels averaged, a few ms, against stock's full decode).
+- **Cache name**: `r<key>-168.jpg` (`cc_path`): the old `<key>-168.jpg` files (bilinear) are never read again, so every cover is rebuilt once (Cover Flow's Preparing screen, or the Albums page in the
+  background). Change the letter when the way a cover is made changes again.
+- **`cc_box`** (grid tiles, mini player, album page, and so on) is `ar_push` over the centred square: edge pixels weigh their covered fraction (integer weights, one rounding, no per-pixel
+  division), where it counted every touched pixel in full (168 -> 144 blurred a 2 x 2 neighbourhood). `cc_sample` (Cover Flow's nearest) is unchanged.
+- **Comparison**: `uv run python -I tools/preview_cover_resample.py [--card | --image F | --m4a F]` writes `out/peek/cover-resample.png`: stock today (bilinear + old `cc_box`) against ours, with a 3x zoom.
+  Tests: `test/coverflow.py` (area average against an exact model, stock fit), `test/pod/coverart.py` (the worker end to end under Unicorn: sizes, scales, folder choice, every fallback).

@@ -137,12 +137,16 @@ the recovery button combination for this model remains unverified.
   the internet search retitled Apple Podcasts. Test builds zNTNUAAAB, zBDYKAAAB to zBDYKAAAG flashed, accepted. Lesson: three
   parallel branches on one file (`patch/podcasts.c`) cost more in merging than they saved; a test built on another module's
   constant (`PM_PAGE_N + 7`) broke when that module grew.
-- **V2.1qK** (2026-11-01, current release): **Podcasts round 5**: Music > Podcasts in the Pod (shows with files, local episodes,
+- **V2.1qK** (2026-11-01): **Podcasts round 5**: Music > Podcasts in the Pod (shows with files, local episodes,
   an unplayed dot), Saved episodes (the `myfav` rows under `Podcasts/`, so stock's star keeps working: a bookmark on Now Playing
   while an episode plays, a Saved row and page, Save / Unsave in the episode sheet; music Favourites no longer lists episodes), and
   an episode's More sheet with only Go to Podcasts and More. Test builds zCQUGAAAD to zCQUGAAAF flashed, accepted.
   Device finding: AWTK destroys a closed window later, so closing a page and reopening it in one call finds it still there
   (zCQUGAAAE's Go to Episode did nothing); the emulated tests could not see it because their window mock never closes either.
+- **V2.1qO** (2026-11-01, current release): **Cover resampling**: the cover cache extracts art itself (libjpeg DCT scaling, then
+  an exact area average, quality 90, stock's fit) instead of stock's corner-mapped bilinear, which aliased 600 to 1500 px art
+  down to 168 px; `cc_box` weights edge pixels by coverage. Cache files `r<key>-168.jpg`, rebuilt once. Test build zIPUGAAAC
+  flashed, accepted. `tools/preview_cover_resample.py` compares both pipelines on the laptop.
 
 ## Hardware results (what broke on the device, and why)
 - **Vinyl Mode pause (zDEZGAAAI).** Tapping pause stalled the page, then the arm stuttered until parked. Stock's `play_pause_music`

@@ -11,7 +11,7 @@ a device. Modelled on q2-pod's test/coverflow.py.
 --captures writes the raw CF_VIEW_W x CF_VIEW_H frames at rest and part-way through a turn;
 --preview composes the 320x480 page around one of them (approximate: PIL, not AWTK).
 """
-import argparse, collections, ctypes, os, re, subprocess, sys, tempfile
+import argparse, collections, ctypes, os, re, struct, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
@@ -36,6 +36,9 @@ ONE, REACH, RING = 65536, 3, 7
 TEXELS = ART * ART
 
 
+AR_EMIT = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.POINTER(ctypes.c_ubyte))   # ar_emit_t
+
+
 def build(tmp):
     so = os.path.join(tmp, 'coverflow.so')
     subprocess.run(['cc', '-O2', '-std=c99', '-Wall', '-DCF_HOST',
@@ -48,6 +51,14 @@ def build(tmp):
     lib.land = ctypes.addressof(ctypes.c_int.in_dll(lib, 'cf_land'))
     lib.cc_fnv.restype = ctypes.c_uint
     lib.cc_fnv.argtypes = [ctypes.c_uint, ctypes.c_char_p]
+    lib.ar_init.restype = ctypes.c_int
+    lib.ar_init.argtypes = [ctypes.c_void_p] + [ctypes.c_uint] * 4
+    lib.ar_push.restype = None
+    lib.ar_push.argtypes = [ctypes.c_void_p, ctypes.c_char_p] + [ctypes.c_uint] * 5 + [AR_EMIT, ctypes.c_void_p]
+    lib.cc_stock_fit.restype = ctypes.c_int
+    lib.cc_stock_fit.argtypes = [ctypes.c_uint] * 3 + [ctypes.POINTER(ctypes.c_uint)] * 2
+    lib.cc_stock_dims.restype = None
+    lib.cc_stock_dims.argtypes = [ctypes.c_uint] * 3 + [ctypes.POINTER(ctypes.c_uint)] * 2
     for f in (lib.cc_sample, lib.cc_box):
         f.restype = None
         f.argtypes = [ctypes.c_char_p, ctypes.c_uint, ctypes.c_uint, ctypes.c_uint,
@@ -384,9 +395,12 @@ def main():
         for y in range(ART):
             for x in range(ART):
                 chequer += bytes((255, 255, 255, 255) if (x + y) % 2 else (0, 0, 0, 255))
+        half_box = (ctypes.c_uint * (ART // 2) ** 2)()
+        lib.cc_box(bytes(chequer), ART, ART, ART * 4, rgba, ART // 2, half_box)
+        expect(all(v & 0xffffff == 0x808080 for v in half_box), 'cc_box at 2:1 averages a chequer to mid grey (127.5 rounds up)')
         lib.cc_box(bytes(chequer), ART, ART, ART * 4, rgba, tile, box)
         greys = [box[i] & 255 for i in range(tile * tile)]
-        expect(all(100 <= v <= 155 for v in greys), f'cc_box averages a chequer to grey ({min(greys)}..{max(greys)})')
+        expect(min(greys) < 100 and max(greys) > 155, f'cc_box at 7:6 leaves the chequer contrast a box that size has ({min(greys)}..{max(greys)}), not blurred over two pixels')
         nearest = (ctypes.c_uint * (tile * tile))()
         lib.cc_sample(bytes(chequer), ART, ART, ART * 4, rgba, tile, nearest)
         expect({v & 255 for v in nearest} <= {0, 255}, 'cc_sample keeps the chequer hard')
@@ -430,13 +444,17 @@ def main():
                 for x in range(size):
                     if kind == 'sample':
                         r, g, b = over(ox + x * side // size, oy + y * side // size)
-                    else:
-                        x0, x1 = x * side // size, min(side, ((x + 1) * side + size - 1) // size)
-                        y0, y1 = y * side // size, min(side, ((y + 1) * side + size - 1) // size)
-                        x1, y1 = max(x1, x0 + 1), max(y1, y0 + 1)
-                        px_ = [over(ox + i, oy + j) for j in range(y0, y1) for i in range(x0, x1)]
-                        n = len(px_)
-                        r, g, b = (sum(p[k] for p in px_) // n for k in range(3))
+                    else:   # the exact area average: a pixel counts for the part of it inside the target cell, one rounding at the end
+                        def cover(k):
+                            a_, e_ = k * side, (k + 1) * side
+                            return [(i, min(e_, (i + 1) * size) - max(a_, i * size)) for i in range(a_ // size, -(-e_ // size))]
+                        acc = [0, 0, 0]
+                        for j, wy in cover(y):
+                            for i, wx in cover(x):
+                                p_ = over(ox + i, oy + j)
+                                for k in range(3): acc[k] += wx * wy * p_[k]
+                        tot = side * side
+                        r, g, b = ((v + tot // 2) // tot for v in acc)
                     out_.append(0xff000000 | r | g << 8 | b << 16)
             return out_
 
@@ -453,7 +471,92 @@ def main():
                 if list(got) != model(kind, src_px, w_, h_, stride_, order, size_):
                     exact = False
                     print(f'  mismatch: {kind} {w_}x{h_} -> {size_} (stride {stride_}, order {order})')
-        expect(exact, 'cc_sample and cc_box equal the per-pixel division model for 1:1, integral, fractional and enlarging ratios')
+        expect(exact, 'cc_sample and cc_box match the models (cc_sample the per-pixel division, cc_box the exact area average with edge pixels weighted by their covered fraction) for 1:1, integral, fractional and enlarging ratios')
+
+        # 13. The exact area average row by row (ar_init / ar_push: the core of cc_box and of the cover extraction): every ratio, up and down, a pixel
+        #     weighted by the part of it inside the target cell, against an exact rational model; the totals' limits; and the alpha composing.
+        def area_model(img, ow, oh, tw, th):
+            def cover(k, n, m):   # the source pixels target cell k of n-wide cells touches, with their share, pixels m wide
+                return [(i, min((k + 1) * n, (i + 1) * m) - max(k * n, i * m)) for i in range(k * n // m, -(-(k + 1) * n // m))]
+            out_ = []
+            for y in range(th):
+                row_ = []
+                for x in range(tw):
+                    acc = [0, 0, 0]
+                    for j, wy in cover(y, oh, th):
+                        for i, wx in cover(x, ow, tw):
+                            for k in range(3): acc[k] += wx * wy * img[j][i][k]
+                    tot = ow * oh
+                    row_.append(tuple((v + tot // 2) // tot for v in acc))
+                out_.append(row_)
+            return out_
+
+        def area_run(img, ow, oh, tw, th, step=3, order=(0, 1, 2, 3)):
+            buf = ctypes.create_string_buffer(20000)
+            if not lib.ar_init(buf, ow, oh, tw, th): return None
+            rows_ = []
+            def emit(_, p): rows_.append([tuple(p[3 * x + k] for k in range(3)) for x in range(tw)])
+            cb = AR_EMIT(emit)
+            for j in range(oh):
+                if step == 3: px_ = bytes(v for p in img[j] for v in p)
+                else: px_ = b''.join(bytes(p[order.index(q)] for q in range(4)) for p in img[j])   # byte q holds the component whose position (order[c]) is q
+                lib.ar_push(buf, px_, step, *(order[:3] if step == 4 else (0, 1, 2)), order[3] if step == 4 else 3, cb, None)
+            return rows_
+
+        area_ok = True
+        for (ow_, oh_, tw_, th_) in ((24, 24, 24, 24), (24, 20, 8, 6), (37, 29, 23, 11), (10, 10, 30, 25), (168, 168, 144, 144), (101, 50, 50, 50),
+                                     (5, 5, 1, 1), (64, 48, 168, 3), (200, 3, 7, 3), (168, 168, 168, 168), (9, 9, 4, 8)):
+            img_ = [[tuple(rnd.randrange(256) for _ in range(3)) for _ in range(ow_)] for _ in range(oh_)]
+            if area_run(img_, ow_, oh_, tw_, th_) != area_model(img_, ow_, oh_, tw_, th_):
+                area_ok = False; print(f'  mismatch: ar {ow_}x{oh_} -> {tw_}x{th_}')
+        expect(area_ok, 'ar_push is the exact area average (edge pixels by their covered fraction, one rounding) for 1:1, integral, fractional, anisotropic and enlarging ratios')
+        flat3 = [[(7, 130, 251)] * 33 for _ in range(33)]
+        expect(all(p == (7, 130, 251) for r in area_run(flat3, 33, 33, 20, 17) for p in r), 'a flat picture stays exactly flat, whatever the ratio')
+        top = [[(255, 255, 255)] * 24 for _ in range(12)] + [[(0, 0, 0)] * 24 for _ in range(12)]
+        got = area_run(top, 24, 24, 24, 16)   # 24 -> 16 rows: target row 8 covers source rows 12 .. 13.5: all black, row 7 covers 10.5 .. 12: all white; no row leaks across the edge
+        expect(got[7][0] == (255, 255, 255) and got[8][0] == (0, 0, 0), 'a hard edge on a pixel boundary does not bleed into the next target row (weights are exact)')
+        buf_ = ctypes.create_string_buffer(20000)
+        expect(not lib.ar_init(buf_, 0, 5, 5, 5) and not lib.ar_init(buf_, 5, 5, 0, 5) and not lib.ar_init(buf_, 5, 5, 513, 5) and not lib.ar_init(buf_, 4097, 4097, 5, 5) and
+               lib.ar_init(buf_, 4096, 4096, 512, 5), 'sizes of zero, a target over 512 wide and a source over 2^24 pixels are refused (the sums fit 32 bits)')
+        for order_ in ((0, 1, 2, 3), (2, 1, 0, 3), (1, 2, 3, 0)):   # RGBA rows with alpha over black, any byte order
+            img_ = [[(rnd.randrange(256), rnd.randrange(256), rnd.randrange(256), rnd.choice((255, 255, 128, 0, rnd.randrange(256)))) for _ in range(6)] for _ in range(6)]
+            composed = [[tuple(p[k] * p[3] // 255 for k in range(3)) for p in r] for r in img_]
+            expect(area_run(img_, 6, 6, 4, 3, 4, order_) == area_model(composed, 6, 6, 4, 3), f'the area average composes alpha over black first, byte order {order_}')
+
+        # 14. Stock's resize geometry (cc_stock_fit: the FPU sequences of 0x5e00bc) and the picture it is given (cc_stock_dims): the cases read from the disassembly, then single precision.
+        f32 = lambda v: struct.unpack('<f', struct.pack('<f', v))[0]
+
+        def fit(w_, h_, t_):
+            tw_, th_ = ctypes.c_uint(), ctypes.c_uint()
+            r_ = lib.cc_stock_fit(w_, h_, t_, ctypes.byref(tw_), ctypes.byref(th_))
+            return (tw_.value, th_.value) if r_ else None
+
+        def fit_model(w_, h_, t_):
+            if w_ >= h_:
+                if t_ < w_: return t_, max(1, int(f32(h_ / f32(f32(w_) / f32(t_)))))
+                return (t_, t_) if w_ == t_ else None
+            if t_ < h_: return max(1, int(f32(w_ / f32(f32(h_) / f32(t_))))), t_
+            return (t_, t_) if h_ == t_ else None
+
+        expect([fit(*c) for c in ((600, 400, 168), (400, 600, 168), (1000, 1000, 168), (750, 500, 168), (168, 168, 168), (100, 100, 168), (167, 150, 168), (168, 100, 168), (100, 168, 168),
+                                  (3000, 3, 168), (1200, 1000, 264))] ==
+               [(168, 112), (112, 168), (168, 168), (168, 112), (168, 168), None, None, (168, 168), (168, 168), (168, 1), (264, 220)],
+               'stock fit: the long side to the request, the other by single precision division; smaller kept; exactly the request stretches to a square (stock\'s quirk)')
+        bad = [(w_, h_, t_) for w_ in list(range(1, 60)) + list(range(160, 175)) + [255, 264, 600, 1023, 1024, 1025, 2000] for h_ in list(range(1, 60, 7)) + list(range(160, 175)) + [333, 700, 1024]
+               for t_ in (168, 264) if fit(w_, h_, t_) != fit_model(w_, h_, t_)]
+        expect(not bad, f'stock fit equals the single precision model ({bad[:3]})')
+        # a 3 : 2 picture whose exact quotient is an integer would truncate one short if the division went through the double reciprocal; 600 x 400 -> 112 and 1800 x 1200 are the cases
+        expect(fit(1800, 1200, 168) == (168, 112) and fit(168, 168, 168) == (168, 168), 'integral quotients keep their value')
+
+        def dims(w0_, h0_, n_):
+            w_, h_ = ctypes.c_uint(), ctypes.c_uint()
+            lib.cc_stock_dims(w0_, h0_, n_, ctypes.byref(w_), ctypes.byref(h_))
+            return w_.value, h_.value
+
+        expect([dims(*c) for c in ((1024, 1024, 3), (1024, 1024, 1), (1500, 1500, 3), (1025, 100, 3), (2048, 2048, 3), (3000, 2000, 3), (4096, 100, 3), (4097, 4097, 3), (8000, 6001, 3), (500, 500, 1),
+                                   (1023, 1023, 1), (300, 200, 3))] ==
+               [(1024, 1024), (512, 512), (750, 750), (513, 50), (1024, 1024), (750, 500), (1024, 25), (513, 513), (1000, 751), (500, 500), (1023, 1023), (300, 200)],
+               'stock decodes up to 1024 x 1024 in colour whole, else at 1/2 (to 2048), 1/4 (to 4096), 1/8, sides rounded up; a gray JPEG always takes the scaled path')
 
         if a.captures:
             os.makedirs(a.captures, exist_ok=True)

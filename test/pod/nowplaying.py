@@ -667,7 +667,7 @@ def run(ctx):
     half = bytes([255, 0, 0, 255]) * 8 + bytes([0, 0, 255, 255]) * 8
     m = NowMachine(); m.page(); m.jpeg(P2, pix=half, size=(4, 4)); m.src(2)
     m.init()
-    avg = (127, 0, 127)       # (255*8 // 16, 0, 255*8 // 16): the box average of the 4x4 cover
+    avg = (128, 0, 128)       # (255*8 / 16 = 127.5, 0, 127.5): the exact area average of the 4x4 cover, rounded to nearest
     expect(m.styles == [(WIN, 'normal:bg_color', 0xff000000 | mn.tone(*avg)[0] | mn.tone(*avg)[1] << 8 | mn.tone(*avg)[2] << 16)],
            f'a red/blue cover tints with the tone of its average colour ({[hex(s[2]) for s in m.styles]})')
     expect(m.loads == ['file://' + P2], 'the cover is decoded once, from the file of source type 2')
