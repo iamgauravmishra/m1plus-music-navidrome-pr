@@ -18,6 +18,8 @@ int pod_scan_dir(
 int pod_card_mounted(
     void); /* the SD card is mounted (statfs: /mnt/mmc is another file system than /mnt); never write under /mnt/mmc otherwise */
 int pod_is_type(void *w, const char *type); /* w is a widget of exactly this type name */
+/* The translated text f ("%d tracks") with n where it has its %d, into out (size bytes). */
+void pod_fmt(char *out, unsigned size, const char *f, int n);
 /* Bind fn to EVT_CLICK of the widget called name in win (ctx passed through); returns the widget, NULL if
  * the page has none (or fn is NULL). */
 

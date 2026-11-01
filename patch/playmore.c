@@ -169,6 +169,17 @@ static int pm_on_album_gone(void *ctx, void *e) {
     return RET_OK;
 }
 
+/* An album page in the stack, ours (patch/albumpage.c) or the stock albuminfo_page it falls back to. */
+static void pm_close_albums(void) {
+    if (navigator_window_is_exist("albuminfo_page")) navigator_close("albuminfo_page");
+    if (navigator_window_is_exist(AB_WINDOW)) navigator_close(AB_WINDOW);
+}
+
+static int pm_is_album(void *win) {
+    const char *name = *(const char **)((char *)win + WIDGET_NAME);
+    return !strcmp(name, "albuminfo_page") || !strcmp(name, AB_WINDOW);
+}
+
 static int pm_on_lookup_album(void *ctx, void *e) {
     void *track, *top;
     int row;
@@ -180,7 +191,7 @@ static int pm_on_lookup_album(void *ctx, void *e) {
     row = cc_find_album(cc_str(track, REC_ALBUM));
     if (row < 0) return RET_OK;
     window_close(ctx);
-    if (navigator_window_is_exist("albuminfo_page")) navigator_close("albuminfo_page");
+    pm_close_albums();
     prev = *(unsigned char *)SONGER_FLAG;
     *(unsigned char *)SONGER_FLAG = 1;
     if (cc_open_album((void *)0, 0, row) < 0) {
@@ -188,8 +199,7 @@ static int pm_on_lookup_album(void *ctx, void *e) {
         return RET_STOP; /* the list changed between the two reads: the sheet is closed, nothing opened */
     }
     top = window_manager_get_top_window(window_manager());
-    if (top && !strcmp(*(const char **)((char *)top + WIDGET_NAME), "albuminfo_page") &&
-        widget_on(top, EVT_DESTROY, pm_on_album_gone, top)) {
+    if (top && pm_is_album(top) && widget_on(top, EVT_DESTROY, pm_on_album_gone, top)) {
         if (!pm_flag_owner) pm_flag_prev = prev; /* an older owner still pending keeps the byte from before it */
         pm_flag_owner = top;
     } else
@@ -246,7 +256,7 @@ static int pm_on_lookup_artist(void *ctx, void *e) {
     } else
         *(unsigned char *)SONGER_FLAG = prev;
     window_close(ctx);
-    if (navigator_window_is_exist("albuminfo_page")) navigator_close("albuminfo_page");
+    pm_close_albums();
     return RET_STOP;
 }
 

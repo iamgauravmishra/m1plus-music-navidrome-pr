@@ -43,7 +43,7 @@ LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
 SOURCES = ['m1plus.c', 'common.c', 'menu.c', 'covercache.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'albuminfo.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c',
-           'scroll.c', 'playmore.c', 'playlists.c', 'azlist.c', 'songs.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnet.c', 'podcasts.c', 'tape.c', 'probe.c', 'keyboard.c', 'search.c']
+           'scroll.c', 'playmore.c', 'playlists.c', 'azlist.c', 'songops.c', 'songs.c', 'albumpage.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnet.c', 'podcasts.c', 'tape.c', 'probe.c', 'keyboard.c', 'search.c']
 
 FLAGS = ['--target=mipsel-linux-gnu', '-march=mips32r2', '-mabi=32', '-mfp64',
          '-mno-abicalls', '-fno-pic', '-G0', '-ffreestanding', '-fno-builtin',
@@ -271,6 +271,8 @@ FUNCTIONS.update({
     'select_recordinit':       ('void', 'int', 0x4da3b0),
     'set_selectindex':         ('int', 'int', 0x4da434),
     'batch_delete_file':       ('int', 'int, void *, void *, int, int', 0x4e1408),
+    # The album page's playing row (patch/albumpage.c): the stock row builder 0x524b50 asks is_playing(g_class_type, the record's CUE start, its file name, its url) for the gold title
+    'is_playing':              ('int', 'int, int, const char *, const char *', 0x4d9d64),
 })
 SONGS_PINS = (   # (address, stock word, what it proves): prologues are `lui $gp, hi; addiu $gp, $gp, lo; addu $gp, $gp, $t9`
     (0x4da3b0, 0x3c1c0053, 'select_recordinit prologue'), (0x4da3b4, 0x279c9b20, 'select_recordinit prologue'), (0x4da3b8, 0x0399e021, 'select_recordinit prologue'),
@@ -286,6 +288,12 @@ SONGS_PINS = (   # (address, stock word, what it proves): prologues are `lui $gp
     (0x47d1a8, 0x24c64f90, 'sortselect row handler 0x47d114: a2 = "SORTSELECT"'), (0x47d1ac, 0x24a54540, 'sortselect row handler: a1 = "SYSSET"'),
     (0x47d1b0, 0x8c640000, 'sortselect row handler: a0 = sortMenu[i] (0x97c770: 0 1 2 3 4)'), (0x47d1b4, 0x0320f809, 'sortselect row handler: jalr write_int_config'),
     (0x47d1b8, 0xae640000, 'sortselect row handler: sw a0, (s3) in the delay slot: sort_flag (0xa059d4) = the choice'),
+    (0x4d9d64, 0x3c1c0053, 'is_playing prologue'), (0x4d9d68, 0x279ca16c, 'is_playing prologue'), (0x4d9d6c, 0x0399e021, 'is_playing prologue'),
+    (0x524c40, 0x8c460008, 'album row builder 0x524b50: a2 = record + 8 (the file name), the 3rd argument of is_playing'), (0x524c44, 0x8c47000c, 'album row builder: a3 = record + 0xc (the url)'),
+    (0x524c48, 0x8c450048, 'album row builder: a1 = record + 0x48 (the CUE start)'), (0x524c4c, 0x8f82ac00, 'album row builder: v0 = &g_class_type (GOT 0x97cad4)'),
+    (0x524c54, 0x0320f809, 'album row builder: jalr is_playing'), (0x524c58, 0x8c440000, 'album row builder: a0 = g_class_type (the delay slot)'),
+    (0x524c94, 0x8e220048, 'album row builder: a track whose CUE start (+0x48) ...'), (0x524c98, 0x1c400004, '... is > 0 shows its file name (bgtz)'),
+    (0x524ca0, 0x8e22004c, 'album row builder: or whose CUE end (+0x4c)'), (0x524ca4, 0x1840001f, '... is > 0 (blez to the title path 0x524d24: record + 0x10, else the file name)'),
 )
 # The iPod page (patch/ipod.c, docs/modules/ipod.md): the previous-track twin of next_quick_click (same prologue, same 1 s guard on e->time, `prev_music` 0x4e428c in place of
 # `next_music` 0x4e4338; the Now Playing button @0x53c1d8 and the hardware key @0x4cdb64 call it with (event, 0)), and the album track query loadAlbumdetailList(class, ROW RECORD)

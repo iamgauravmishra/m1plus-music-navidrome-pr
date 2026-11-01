@@ -51,6 +51,8 @@ void az_span(const az_t *az, int *r0, int *r1); /* the rows [*r0, *r1] that touc
 
 /* Paint, in the content view's EVT_AFTER_PAINT with the canvas origin moved by the offset: a fill clipped to the window; the section letters and the pinned header. */
 void az_fill(void *canvas, int x, int y0, int y1, int w, unsigned c);
+void az_fill_h(void *canvas, int x, int y0, int y1, int w, unsigned c,
+               int view_h); /* the same in a window view_h rows high (the album page's list is the whole 450 px) */
 void az_paint_heads(az_t *az, void *canvas);
 
 /* The rail. */

@@ -313,6 +313,34 @@
 #define CLASSINFO_ARTIST 0x10d
 #define CLASSINFO_ARTIST_14 0x20d
 #define CLASS_14 0xff14
+/* Our album page (patch/albumpage.c, docs/modules/album-page.md; ui/m1plus_album.bin, tools/pod_ui.py build_album_page, which reads this file and must equal it): the stock page's
+ * header numbers (AH_*: the cover at (AH_ART_X, AH_ART_Y) with AH_CORNER px corners, the lines at AH_TITLE_Y / AH_ARTIST_Y / AH_META_Y, the Shuffle disc and the Play all pill at
+ * AH_BTN_Y, the rows from AH_HDR_H) in a list that is the whole window (AH_WIN_H, the glass controls float over it). A row is LIST_ROW_H high: the track's number (right aligned in
+ * ROW_NUM_W, ROW_NUM_W3 from 100) from x AB_NUM_X, the title AB_NUM_GAP after it to AB_TEXT_END, both in a AB_TEXT_H high line AB_TEXT_Y down the row; the press fill and the 1 px
+ * hairline are translucent white over the tint (AB_PRESS, AB_HAIR) across AB_ROW_W (the list less its scroll bar). The select mode's glass buttons (the all / none toggle at
+ * AB_SELALL_X, AB_SELALL_W wide; Add, Delete, Cancel AB_BTN_W wide) take the places the stock builder gave them. The Play all pill's text label is AB_TEXT_SLACK wider than its text.
+ * AB_COVER_MS: the poll of the cache worker that makes a missing cover. AB_ASSET: the window resource. */
+#define AB_ASSET "m1plus_album"
+#define AB_WINDOW "m1plus_album_page" /* the root widget's name (tools/pod_pages.py ALBUM_PAGE): what navigator_close and the window manager know it by */
+#define AB_VIEW_W 320
+#define AB_ROW_W 310
+#define AB_NUM_X 12
+#define AB_NUM_GAP 8
+#define AB_TEXT_END 298
+#define AB_TEXT_Y 19
+#define AB_TEXT_H 22
+#define AB_PRESS 0x33ffffffu
+#define AB_HAIR 0x22ffffffu
+#define AB_SELALL_X 0
+#define AB_SELALL_W 50
+#define AB_ADD_X 116
+#define AB_DEL_X 191
+#define AB_CANCEL_X 268
+#define AB_BTN_W 60
+#define AB_TEXT_SLACK 4
+#define AB_PLAY_TEXT_W 50      /* the English "Play all" at 18 px: where the payload cannot measure the translated text, the pill's pair is centred for this width */
+#define AB_COVER_MS 200
+#define REC_CUE_END 0x4c       /* the CUE track's end (loadSongList's twin of REC_CUE_START); the stock row shows a CUE track by its file name when either is set (@0x524c98) */
 
 /* ---------------------------------------------------------------------------
  * The Albums grid (patch/albums.c, docs/ui.md). GRID_COLS columns of GRID_COVER px square covers with GRID_GAP px

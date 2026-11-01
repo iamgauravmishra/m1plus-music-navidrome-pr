@@ -46,6 +46,21 @@ int pod_is_type(void *w, const char *type) {
     return t && strcmp(t, type) == 0;
 }
 
+/* A translated "%d songs" with the number put where the translation has its %d. The table's text is never a printf format. */
+void pod_fmt(char *out, unsigned size, const char *f, int n) {
+    char digits[12];
+    unsigned o = 0, d = 0, i;
+    for (i = (unsigned)(n < 0 ? 0 : n); d == 0 || i; i /= 10) digits[d++] = (char)('0' + i % 10);
+    while (*f && o + 1 < size) {
+        if (f[0] == '%' && f[1] == 'd') {
+            while (d && o + 1 < size) out[o++] = digits[--d];
+            f += 2;
+        } else
+            out[o++] = *f++;
+    }
+    out[o] = 0;
+}
+
 void *pod_bind(void *win, const char *name, int (*fn)(void *, void *), const void *ctx) {
     void *w = widget_lookup(win, name, 1);
     if (w && fn) widget_on(w, EVT_CLICK, fn, (void *)ctx);

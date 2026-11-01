@@ -1,5 +1,32 @@
 # The album page
 
+**Sources:** `patch/albumpage.c` (our page), `patch/songops.c` (play / Delete / Add shared with the Songs page), `patch/covercache.c` `cc_open_album`, `tools/pod_ui.py` `build_album_page`,
+tests `test/pod/albumpage.py`. The stock page's restyle below (`patch/albuminfo.c`, `test/pod/albuminfo.py`) stays as the **fallback**.
+
+## Our page (ui/m1plus_album.bin, window m1plus_album_page)
+
+Every entry (Albums grid, Cover Flow and its All albums card, Recently Played, Now Playing's Look up album) goes through `cc_open_album`, which now calls `album_open(class, album row)` first:
+it runs `loadAlbumdetailList(class, row)` (class 0xff10 library album, 0xff11 artist's, 0xff14 composer's; the browsing record is snapshotted and put back before every query and play, as the
+Songs page's artist list does) and opens our window. It returns -1 (kill switch, the All albums card, a page already open) or -2 (window or asset missing) and `cc_open_album` then loads the
+album list again where needed and opens the stock `albuminfo_page` exactly as before (the albuminfo.c header hook is kept for that). The stock Shanling Albums list still opens the stock page.
+
+The design is the restyled stock page's, reproduced: a stock list that is the whole 450 px window (`view_grid` content view as on the Songs page) over a window colour and the `img_ah_tint`
+gradient; header numbers `AH_*` (cover 160 px, 10 px corners cut in the alpha, at y 50; title 22 / artist 18 / "year · N tracks" 15 px lines; Shuffle disc and Play all pill at y 292); rows
+64 px with a 19 px number column (22 px, 32 from 100) and 19 px title (gold when `is_playing`, a CUE track shows its file name), press fill 20 % white, hairline 13 % white, select marks.
+Play all / Shuffle / track tap are `so_play` with `pod_open_player` (the stock row handler's tail and the songerinfoflag pop loop). Cover: the Cover Flow cache file, else one cache-worker
+job polled every `AB_COVER_MS`, else the placeholder; tint from the tone cache or the file's average; status bar `pod_bar_tint` with the one-owner hand-over.
+
+**The only change from the stock restyle is the controls**: they are our glass buttons, direct children of the window (last, so over the list): Back (`ah_nav_back`), capsule Select
+(`pod_nav_selectl`, left cap) | Now Playing (`ah_nav_play`); select mode swaps in the all / none toggle, Add, Delete, Cancel at the stock builder's places. No Search button (the stock
+one existed only after a select cycle). They are not inside a bar view because this AWTK's hit test would give a view's whole band to it.
+
+Pinned stock: `is_playing` 0x4d9d64 and the album row builder's calls 0x524c40..0x524ca4 (`SONGS_PINS`). No new hook.
+Not verified on the device. Ambiguities matched to the reference: the pill's text is painted by the page (not a button text), centred as a pair with the glyph from the measured text.
+
+---
+
+# The stock album page (fallback)
+
 **Sources:** `patch/albuminfo.c`, test `test/pod/albuminfo.py`.
 
 There is one album view: the stock `albuminfo_page` (an album's tracks), restyled. It opens from the
