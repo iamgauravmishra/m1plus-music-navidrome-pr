@@ -28,7 +28,7 @@ RET_REPEAT = 8
 # struct se (patch/search.c), field by field: the offsets are worked out from the declaration, and checked against the payload's own state in `state()`
 _FIELDS = [('win', 4), ('view', 4), ('sv', 4), ('list', 4), ('status', 4), ('chips', 4), ('chl', 4), ('field', 4), ('st_title', 4), ('st_sub', 4), ('st_chip', 4), ('st_chip_on', 4),
            ('query', 64), ('typed', 64), ('q', 264), ('pq', 264), ('toff', 32), ('tlen', 32), ('nterms', 4), ('nq', 4), ('pn', 4), ('have_prev', 4), ('loaded', 4),
-           ('lists', 16), ('n', 16), ('cand', 16), ('sc', 16), ('nc', 16), ('rows', 4), ('nrows', 4), ('chip', 4), ('content', 4), ('chip_x', 24), ('chip_sx', 4), ('chip_down', 4),
+           ('lists', 16), ('n', 16), ('cand', 16), ('sc', 16), ('nc', 16), ('rows', 4), ('nrows', 4), ('chip', 4), ('content', 4), ('lo', 4), ('hi', 4), ('chip_x', 24), ('chip_sx', 4), ('chip_down', 4),
            ('chip_dx', 4), ('chip_sx0', 4), ('chip_drag', 4), ('chip_text', 480), ('chip_len', 20), ('press', 4), ('down', 4), ('down_x', 4), ('down_y', 4), ('pressing', 4),
            ('wait', 4), ('timer', 4), ('chev', 4)]
 OFF, _o = {}, 0
@@ -475,6 +475,53 @@ def chips_tests(ctx):
     for loc in pod_i18n.LOCALES:   # the chips' texts: every chip is at least its own text wide in every language (the row scrolls)
         ws = [width(pod_i18n.TEXT[k][loc], D['SE_CHIP_PX']) for k in PS.CHIPS]
         expect(all(w < 200 for w in ws), f'{loc}: the chips\' texts are short enough for a chip ({max(ws)})')
+
+
+def scope_tests(ctx):
+    """search_open_in: a page scoped to one type shows that chip only, cannot change it and matches that type only; search_open is the unscoped page."""
+    expect = ctx.expect
+    lib = dict(songs=[('Love', 'A', 'B')], artists=['Love'], albums=[('Love', 'A')], playlists=['Love'])
+    m = page_machine(**lib)
+    expect(m.call(PSYMS['search_open_in'], a0=CH_ALBUMS, count=40000000) == 0 and ('window_open', 'm1plus_search') in m.calls, 'search_open_in(SEARCH_ALBUMS) opens the page')
+    expect(D['SE_CHIPS'] == 5 and state(m, 'chip') == CH_ALBUMS and (state(m, 'lo'), state(m, 'hi')) == (CH_ALBUMS, CH_ALBUMS + 1), 'it opens with Albums selected, the row holding that chip alone')
+    widths = [width(PS.CHIPS[i], D['SE_CHIP_PX']) for i in range(5)]
+    lay = PS.chip_layout(widths)
+    xs = [state(m, 'chip_x', i) for i in range(6)]
+    expect(xs[CH_ALBUMS] == D['SE_CHIP_X'] and xs[CH_ALBUMS + 1] - D['SE_CHIP_GAP'] - xs[CH_ALBUMS] == lay[CH_ALBUMS][1], f'the one chip is at the row\'s first place, its own width ({xs})')
+    hl = m.widgets['se_chip_hl']
+    expect(tuple(m.props[(hl, k)] for k in 'xywh') == (D['SE_CHIP_X'], D['SE_CHIP_Y'], lay[CH_ALBUMS][1], D['SE_CHIP_H']), 'the pill is under it')
+    typed(m, 'love')
+    expect(titles(m) == ['Love'] and all(k == ALBUM for k, _ in rows(m)), f'only album rows appear ({rows(m)})')
+    expect(state(m, 'nc', ARTIST) == 0 and state(m, 'nc', SONG) == 0 and state(m, 'nc', PLAYLIST) == 0 and state(m, 'nc', ALBUM) == 1, 'only the scope\'s type is matched')
+    def touch(kind, x, t):
+        e = m.alloc(0x30); m.u.mem_write(e, bytes(0x30))
+        m.setword(e, {'down': 0xff, 'up': 0x103}[kind]); m.setword(e + 8, t); m.setword(e + 0x18, x); m.setword(e + 0x1c, 30 + D['SE_CHIPS_Y'] + 10)
+        fn, ctx_ = m.bound[(m.widgets['se_chips'], O['EVT_POINTER_DOWN'] if kind == 'down' else O['EVT_POINTER_UP'])]
+        m.call(fn, a0=ctx_, a1=e, count=40000000)
+    for k in (CH_TOP, CH_ARTISTS, CH_SONGS, CH_PLAYLISTS):   # where the full row has that chip, and on the chip itself
+        x = lay[k][0] + lay[k][1] // 2
+        touch('down', x, 1000); touch('up', x, 1080)
+        expect(state(m, 'chip') == CH_ALBUMS and all(kd == ALBUM for kd, _ in rows(m)), f'a tap where chip {k} would be changes nothing')
+    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    m.texts.clear(); m.text_styles.clear()
+    m.call(m.bound[(m.widgets['se_chips'], O['EVT_AFTER_PAINT'])][0], a0=0, a1=ev, count=2000000)
+    expect([t[0] for t in m.texts] == ['Albums'] and m.text_styles == ['label_chip_on'], f'only the selected chip is painted ({[t[0] for t in m.texts]})')
+    typed(m, 'lov'); typed(m, 'love')   # a shorter and a longer query: still only albums
+    expect(all(k == ALBUM for k, _ in rows(m)) and rows(m), 'a changed query keeps the scope')
+    for scope, kind in ((CH_ARTISTS, ARTIST), (CH_SONGS, SONG), (CH_PLAYLISTS, PLAYLIST)):
+        mm = page_machine(**lib)
+        expect(mm.call(PSYMS['search_open_in'], a0=scope, count=40000000) == 0, f'scope {scope} opens')
+        typed(mm, 'love')
+        expect(state(mm, 'chip') == scope and len(rows(mm)) == 1 and rows(mm)[0][0] == kind, f'scope {scope}: only that type\'s row ({rows(mm)})')
+    for bad in (-1, 5, 99):
+        mm = page_machine(**lib)
+        expect(mm.call(PSYMS['search_open_in'], a0=bad & 0xffffffff, count=40000000) == 0xffffffff and ('window_open', 'm1plus_search') not in mm.calls, f'scope {bad} is refused: the caller opens the stock page')
+    mm = page_machine(**lib)
+    expect(mm.call(PSYMS['search_open_in'], a0=0, count=40000000) == 0 and state(mm, 'chip') == CH_TOP and (state(mm, 'lo'), state(mm, 'hi')) == (0, 5), 'SEARCH_ALL is the full page, Top Results selected')
+    typed(mm, 'love')
+    expect(sorted(k for k, _ in rows(mm)) == [ARTIST, ALBUM, SONG, PLAYLIST], 'and finds every type')
+    mm = page_machine(**lib)
+    expect(mm.call(PSYMS['search_open_in'], a0=CH_SONGS, count=40000000) == 0 and mm.call(PSYMS['search_open_in'], a0=CH_ALBUMS, count=40000000) == 0xffffffff, 'a second page refuses, scoped or not')
 
 
 def chip_cover_tests(ctx):
@@ -1083,7 +1130,7 @@ def keyboard_text(m):
     return m.read_cstr(m.call(PSYMS['keyboard_text'], count=400000))
 
 
-SECTIONS = [recent_tests, fold_tests, query_tests, pinyin_tests, rank_tests, incremental_tests, page_tests, chips_tests, chip_cover_tests, live_tests, tap_tests, perf_tests, entry_tests, return_tests, embed_tests, asset_tests]   # tools/check.py runs each as its own task
+SECTIONS = [recent_tests, fold_tests, query_tests, pinyin_tests, rank_tests, incremental_tests, page_tests, chips_tests, scope_tests, chip_cover_tests, live_tests, tap_tests, perf_tests, entry_tests, return_tests, embed_tests, asset_tests]   # tools/check.py runs each as its own task
 
 
 def run(ctx):

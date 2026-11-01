@@ -79,6 +79,7 @@ static struct {
     unsigned nc[SE_KINDS];
     se_row_t *rows;
     int nrows, chip, content;
+    int lo, hi; /* the chips of the page: all of them, or only the scope's (lo = scope, hi = lo + 1) */
     int chip_x[SE_CHIPS + 1], chip_sx, chip_down, chip_dx, chip_sx0, chip_drag;
     unsigned chip_text[SE_CHIPS][24];
     int chip_len[SE_CHIPS];
@@ -519,7 +520,8 @@ static void se_search(void) {
     for (k = 0; k < SE_KINDS; ++k) {
         unsigned m, w = 0;
         void *list = se.lists[k];
-        if (!list || !se.cand[k] || !se.nterms) {
+        if (!list || !se.cand[k] || !se.nterms ||
+            (se.hi - se.lo == 1 && k != se_chip_kind[se.lo])) { /* a scoped page matches its own type only */
             se.nc[k] = 0;
             continue;
         }
@@ -877,7 +879,7 @@ static void se_chip_fx(void) {
     widget_invalidate_force(se.chips, (void *)0);
 }
 
-static int se_chips_end(void) { return se.chip_x[SE_CHIPS] - SE_CHIP_GAP + SE_CHIP_X; }
+static int se_chips_end(void) { return se.chip_x[se.hi] - SE_CHIP_GAP + SE_CHIP_X; }
 
 static int se_on_chips_paint(void *ctx, void *e) {
     void *canvas = e ? *(void **)((char *)e + EVENT_PAINT_CANVAS) : (void *)0;
@@ -886,7 +888,7 @@ static int se_on_chips_paint(void *ctx, void *e) {
     if (!canvas || !se.chips) return RET_OK;
     for (pass = 0; pass < 2; ++pass) {
         widget_prepare_text_style(pass ? se.st_chip_on : se.st_chip, canvas);
-        for (i = 0; i < SE_CHIPS; ++i) {
+        for (i = se.lo; i < se.hi; ++i) {
             int rect[4];
             if ((i == se.chip) != pass) continue;
             rect[0] = se.chip_x[i] - se.chip_sx, rect[1] = SE_CHIP_Y, rect[2] = se_chip_w(i), rect[3] = SE_CHIP_H;
@@ -900,7 +902,7 @@ static int se_on_chips_paint(void *ctx, void *e) {
 /* The chips' places from the texts' widths in the chip font (the page's language). */
 static void se_chips_setup(void) {
     int i, x = SE_CHIP_X;
-    for (i = 0; i < SE_CHIPS; ++i) {
+    for (i = se.lo; i < se.hi; ++i) {
         const char *s = TR(se_chip_key[i]);
         unsigned n = 0;
         float f;
@@ -913,7 +915,7 @@ static void se_chips_setup(void) {
         se.chip_x[i] = x;
         x += (f > 0.0f ? (int)(f + 0.999f) : se.chip_len[i] * 9) + 2 * SE_CHIP_PAD + SE_CHIP_GAP;
     }
-    se.chip_x[SE_CHIPS] = x;
+    se.chip_x[se.hi] = x;
 }
 
 /* Select a chip: scrolled into view, the rows of that type built from the matches already known. */
@@ -935,7 +937,7 @@ static int
 se_chip_at(int x) { /* the chip under x (the row's coordinates), the nearest one for a gap, -1 past the ends */
     int i;
     x += se.chip_sx;
-    for (i = 0; i < SE_CHIPS; ++i)
+    for (i = se.lo; i < se.hi; ++i)
         if (x < se.chip_x[i + 1]) return x >= se.chip_x[i] - SE_CHIP_GAP / 2 ? i : -1;
     return -1;
 }
@@ -1224,11 +1226,13 @@ static int se_on_destroy(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* The Songs page's Search and the album page's search button: the Search page over the page in front, the keyboard up and the results empty. 0 once it is up; -1: not opened (a Search page
- * exists already, or the window or its widgets are not there): the caller opens the stock search page. */
-int search_open(void) {
-    if (se.win) return -1;
+/* The Songs page's Search and the Menu's Search item: the Search page over the page in front, the keyboard up and the results empty. 0 once it is up; -1: not opened (a Search page
+ * exists already, or the window or its widgets are not there): the caller opens the stock search page. scope is SEARCH_ALL or one type: that page shows its one chip (selected, the others
+ * not drawn or tappable) and matches only that type. */
+int search_open_in(int scope) {
+    if (se.win || scope < SEARCH_ALL || scope >= SE_CHIPS) return -1;
     memset(&se, 0, sizeof se);
+    se.lo = scope == SEARCH_ALL ? 0 : scope, se.hi = scope == SEARCH_ALL ? SE_CHIPS : scope + 1;
     se.win = window_open("m1plus_search");
     if (!se.win) {
         memset(&se, 0, sizeof se);
@@ -1276,7 +1280,7 @@ int search_open(void) {
     widget_on(se.chips, EVT_POINTER_ABORT, se_on_chips, (void *)0);
     widget_on(se.field, EVT_POINTER_UP, se_on_field, (void *)0);
     se_chips_setup();
-    se.chip = CH_TOP;
+    se.chip = se.lo;
     se_chip_fx();
     se_show(se.list, 0);
     se_show(se.status, 0);
@@ -1286,3 +1290,6 @@ int search_open(void) {
     se_kick();
     return 0;
 }
+
+/* The unscoped page: every chip, Top Results selected. */
+int search_open(void) { return search_open_in(SEARCH_ALL); }

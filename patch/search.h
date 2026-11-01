@@ -9,6 +9,15 @@
  * (a Search page exists already, no memory, or the asset is not ours): the caller opens the stock search page. */
 int search_open(void);
 
+/* The same page scoped to one type: SEARCH_ARTISTS .. SEARCH_PLAYLISTS (the chip order; SEARCH_ALL is search_open). Its chip row shows that one chip, selected, and only that type is searched.
+ * 0 once the page is up; -1 as search_open, or for a scope that is not one of these. */
+#define SEARCH_ALL 0
+#define SEARCH_ARTISTS 1
+#define SEARCH_ALBUMS 2
+#define SEARCH_SONGS 3
+#define SEARCH_PLAYLISTS 4
+int search_open_in(int scope);
+
 /* Window coordinates (the window is 320 x 450 under the status bar). */
 #define SE_FIELD_X 12 /* the rounded search field: a capsule */
 #define SE_FIELD_Y 8

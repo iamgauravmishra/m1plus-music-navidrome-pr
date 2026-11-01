@@ -105,14 +105,13 @@ prefix of initials is quality 1: a Latin title that is the query ranks above 周
   `se_read_hanzi`: `get_lemma_id` first (0 means not in the dictionary: no reading, never `get_splids_for_hanzi`, which crashes), then `get_splids_for_hanzi`, then the first letter of each
   `get_spelling_str` (Zh, Ch, Sh are z, c, s). The three members are pinned prologues in `tools/pod.py` (`PINYIN_PINS`, `py_lemma_id` / `py_splids` / `py_spelling` in stock.h); no new hook.
 * **Polyphones: every reading counts.** 行 (hang heng xing) is h and x, so `yh` and `yx` both find 银行 and `xz` and `hz` find 行走. More matches than the right reading alone (`yz` is not one),
-  never fewer; the engine gives no frequency to pick one by. A term is initials only: `zhou` does not find 周 (the initial of 周 is `z`); a Latin term and an initials term can be mixed (`jay zjl`:
-  `jay` in the album, `zjl` in the artist) and any term of 1 letter matches any character with that initial.
+  never fewer; the engine gives no frequency to pick one by. A term is initials only: `zhou` does not find 周 (the initial of 周 is `z`); a mixed Latin and initials query (`jay zjl`) does not match on the device (accepted; the scripted test's mix passes, the real dictionary's does not), and any term of 1 letter matches any character with that initial.
 * **Memory:** one 20,992 byte table (a byte per character: not asked, no reading, or an index) allocated with the library and freed with the page, and a palette of at most 254 distinct sets
   (1 KB; the 26 single letters first, a full palette falls back to the first reading's letter). Keys stay on the stack (2 x 162 words). Each distinct character asks the engine once.
 * **Cost** (emulation, payload instructions of the first scan): 20,000 songs with Chinese titles and artists 44.1 M without initials, 79.2 M with (5,000: 11.4 M, 20.1 M; the engine's own
   calls are stock code and not counted); a Latin library adds nothing. Without the dictionary file, with an engine that fails to open or with no dictionary objects the search runs as before and
   nothing calls the engine (`pinyin_tests`: `test/pod/search.py`, the engine scripted in `harness.py` by `py_dict`; the real engine's functions are tested in `test/pod/pinyin.py`).
-* Not verified on the device: the payload against the real dictionary (only the same calls on the engine in `test/pod/pinyin.py`, and the scripted engine here), and the first tick's extra 76 ms.
+* On the device (build zEQLAAAAB): `zjl` finds 周杰伦 against the real dictionary; a mixed `jay zjl` does not match (accepted). Not verified: the first tick's extra 76 ms.
 
 ## Rows by chip
 
@@ -142,6 +141,8 @@ refuses while one exists. The asset side is `keyboard_pad_widgets()` in `tools/p
 
 ## Entry points
 
+* **`search_open_in(scope)`** (patch/search.h; `search_open()` is `search_open_in(SEARCH_ALL)`): `SEARCH_ALL`, `SEARCH_ARTISTS`, `SEARCH_ALBUMS`, `SEARCH_SONGS`, `SEARCH_PLAYLISTS` (0..4, the chip order); any other value returns -1. A scoped page opens with that chip selected and is the same page otherwise: the chip row draws and hit-tests only that chip (`se.lo` .. `se.hi`, the chips' places start at `SE_CHIP_X`, so a tap where another chip would be does nothing), `se_search` matches only that type (the other types' counts stay 0), recent searches are shared. Same -1 fallback as `search_open`; no caller uses a scope yet (`scope_tests`).
+
 * **Songs page**: `sg_on_search` calls `search_open()` instead of `navigator_to("search_page")`; the button does nothing in select mode or with the sort card open, as before. The other lists on
   that page (Favourites, a playlist, an artist's songs ...) search the whole library as the stock search did. When ours will not open the stock page does (`search_open() < 0`).
 * **Menu and Extras**: the **Search** item (ID 21, `m`, `ACT_SEARCH`; hidden from the menu by default, listed on Extras, movable to the Main Menu in Settings > Home Screen > Main Menu) calls `search_open()` from `on_row`, and the stock `search_page` when that returns < 0, as the Songs page does. The menu or Extras page stays under the Search page untouched, so Back returns to it at the same scroll place.
@@ -156,15 +157,14 @@ deleted letter one scan.
 
 ## Not verified on a device
 
-1. Everything about the embedded keyboard on the real page: the pad's touches with the list and chips behind and above, the hide/show by drag (the abort that the scroll_view's takeover sends to the
-   content view), the tap on the field (a pointer-up on a view), the pop-up over the list.
-2. The time of the first query on a 20,000 song library on the device (the emulation says about 76 M instructions), and the first tick's stock queries.
-3. The thumbnails: the lazy loader's feel while scrolling, the round artist picture (a corner table of radius 22, blended in the alpha), the placeholder, the artist's cover being the first album's.
-4. The chip row's drag and tap, the pill following it, the texts in the 13 languages (widths checked against the font, not seen).
+Tried on the device with zEQLAAAAB and working: the embedded keyboard on the page, scrolling results with thumbnails, the chips, the menu item, pinyin initials, recent searches with the x.
 
-5. The recent searches on the device: the x's touch (44 px) beside the list's drag, the row tap's keyboard text with a Chinese candidate pending, the 21 px text cut for CJK queries (the test's measure is the harness's 8 / 16 px per character).
+1. The time of the first query on a 20,000 song library (the emulation says about 76 M instructions), with the first tick's stock queries and pinyin engine.
+2. The texts in the 13 languages (widths checked against the font, not seen).
+3. The CJK text cut in recent rows (the test's measure is the harness's 8 / 16 px per character).
+4. The scoped mode (`search_open_in`, below): emulation only, and nothing opens it yet.
 
 ## Deferred
 
-Highlighting the matched text, a "show all" row past the caps, scoped search from a type, a Clear button for the recent searches, the Folders and stock Artists / Albums
+Highlighting the matched text, a "show all" row past the caps, a Clear button for the recent searches, the Folders and stock Artists / Albums
 pages' own search buttons (stock pages; the Albums grid and Artists pages have none), album and song covers beyond the cache (no extraction here), playlist mosaics.
