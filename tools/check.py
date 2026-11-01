@@ -142,6 +142,7 @@ def main():
     ap.add_argument('--dev', action='store_true', help='build, fully test and package one development artifact')
     ap.add_argument('--clean', action='store_true', help='remove retained integration/test scratch files')
     ap.add_argument('--no-cache', action='store_true')
+    ap.add_argument('--verbose', action='store_true', help='print every passing test, not only failures')
     ap.add_argument('--jobs', type=int, default=min(8, os.cpu_count() or 4))
     ap.add_argument('--timeout', type=int, default=300, help='seconds per test (default 300)')
     a = ap.parse_args()
@@ -197,7 +198,8 @@ def main():
                        for n in sorted(names, key=lambda n: times.get(n, 0), reverse=True)}
             for f in cf.as_completed(pending):
                 r = f.result(); tests.append(r)
-                print(f'{r["test"]}: {"PASS" if test_ok(r) else "FAIL " + workflow.exit_description(r["rc"])} ({r["secs"]:.1f}s)', flush=True)
+                if a.verbose or not test_ok(r):   # passes only with --verbose; the summary line counts them
+                    print(f'{r["test"]}: {"PASS" if test_ok(r) else "FAIL " + workflow.exit_description(r["rc"])} ({r["secs"]:.1f}s)', flush=True)
         workflow.write(TIMES, {n: s for n, s in {**times, **{t['test']: t['secs'] for t in tests}}.items() if n in ALL_TESTS})   # names no longer run are dropped
         tests_passed = len(tests) == len(names) and all(test_ok(t) for t in tests)
         if workflow.input_key() != key: tests_passed = False

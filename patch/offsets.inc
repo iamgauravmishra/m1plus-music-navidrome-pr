@@ -1004,6 +1004,7 @@
 #define PS_HEAD_H 34
 #define PS_COLLAPSE_BACK 12
 #define PS_CELL_H 173
+#define PS_PCELL_H 137            /* the preview's cell (docs/modules/podcasts.md "Search"): the date line, the title and the description of a normal cell without the pill row: PS_CDESC_Y + 2 * PS_CDESC_PITCH + 14 under it */
 #define PS_CELL_X 16
 #define PS_CELL_W 288
 #define PS_DATE_Y 9
@@ -1096,6 +1097,27 @@
 #define PP_DL_CHEV_CX 298
 #define PP_SEC_GAP 12
 #define PP_BOTTOM 10
+
+/* The Podcasts search level (patch/podcasts.c, docs/modules/podcasts.md "Search"; tools/pod_show.py search_layout is the model the tests and the preview use). Content y from the list top (window row PG_LIST_Y). The field is widgets of the content view
+* (ps_field, the keyboard page's field look: PQ_FIELD_W x PQ_FIELD_H, #1C1C1E, PQ_FIELD_R corners, the 16 px magnifier PQ_MAG_X in, the text from PQ_TEXT_X for PQ_TEXT_W px); the result rows are the Downloads rows' (PC_ROW_H, a LIST_ART px
+* cover, the name, the author in grey) from PQ_TOP; a result with no feed is dimmed (PQ_DIM, an ARGB black over the row). The Subscribe pill of the preview is at least PQ_SUB_MIN wide. */
+#define PQ_FIELD_X 10 /* the keyboard page's field (tools/pod_keyboard.py FIELD_*): x, w, the magnifier and the text are the same numbers, y is the same on screen (PG_LIST_Y + PQ_FIELD_Y = 58), so the glyph does not move when the keyboard page opens */
+#define PQ_FIELD_Y 8
+#define PQ_FIELD_W 300
+#define PQ_FIELD_H 36
+#define PQ_FIELD_R 10
+#define PQ_MAG_X 8
+#define PQ_MAG 16
+#define PQ_TEXT_X 30
+#define PQ_TEXT_W 228
+#define PQ_CLEAR_X 264 /* the clear button's 36 px touch area in the field (the 16 px disc centred in it); shown with a text */
+#define PQ_CLEAR_W 36
+#define PQ_CLEAR 16
+#define PQ_TOP 52
+#define PQ_BOTTOM 16
+#define PQ_HINT_Y 8 /* the status label ("Searching...", "No results", a failure; PG_LIST_Y + PQ_TOP + this is its top, 90 px high, the text centred) */
+#define PQ_DIM 0x99000000u
+#define PQ_SUB_MIN 150
 
 /* The Tape page (patch/tape.c, docs/modules/tape.md; tools/tape_art.py draws the images from the same numbers, test/pod/tape.py checks them). The page is LANDSCAPE, 480 x 320: the
  * framebuffer is the portrait 320 x 480 and holds the picture turned 90 degrees clockwise, so landscape (x, y) is the framebuffer's row x, column 319 - y. Everything below is in

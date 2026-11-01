@@ -15,6 +15,7 @@
 #include "common.h"
 #include "podcasts.h"
 #include "pcfeed.h"
+#include "pcjson.h"
 #include "pcnet.h"
 #include "pccover.h"
 #include "curlopts.h"
@@ -59,9 +60,19 @@ static struct {
         int code;
         char dir[PC_FILE], file[PC_FILE]; /* the names, for the Downloads page's rows */
     } fails[PN_FAILS];
+    /* Search and preview (docs/modules/podcasts.md "Search"; new fields go below). sstate: PN_S_*; scode: the query's result; sgen: moves with the answer, each thumbnail and the end; sn: results (written before sstate leaves PN_S_QUERY);
+     * sthumb[i]: 0 not yet, 1 the file is there (sext[i]: 1 jpg, 2 png), 2 none; pstate: 0 none, 1 running, 2 done; pcode: the preview's result; prev: the held feed (the page frees it); purl: the feed's address; pid: the Apple id to look up (0: purl is the feed). */
+    volatile int sstate, scode, sn, pstate, pcode;
+    volatile unsigned sgen;
+    char pid[16];
+    char surl[PN_PATH];
+    char purl[PC_URL];
+    pj_result_t sres[PJ_MAX];
+    volatile unsigned char sthumb[PJ_MAX], sext[PJ_MAX];
+    pf_parser_t *volatile prev;
 } pn __attribute__((section(".scratch")));
 
-enum { PN_KIND_REFRESH = 1, PN_KIND_DL = 2 };
+enum { PN_KIND_REFRESH = 1, PN_KIND_DL = 2, PN_KIND_SEARCH = 3, PN_KIND_PREVIEW = 4 };
 enum { PN_Q_FREE = 0, PN_Q_WAIT = 1, PN_Q_ACTIVE = 2 };
 
 static int pn_eq(const char *a, const char *b) {
@@ -114,7 +125,10 @@ static void pn_set(unsigned feed, int code, unsigned fresh) {
     pn_bump();
 }
 
-int pn_busy(void) { return pn.busy && pn.kind != PN_KIND_DL; }
+int pn_busy(void) {
+    return pn.busy && pn.kind != PN_KIND_DL && pn.kind != PN_KIND_SEARCH && pn.kind != PN_KIND_PREVIEW;
+}
+int pn_job_busy(void) { return pn.busy && (pn.kind == PN_KIND_SEARCH || pn.kind == PN_KIND_PREVIEW); }
 void pn_cancel(void) { pn.cancel = 1; }
 int pn_cancelling(void) { return pn_busy() && pn.cancel; }
 unsigned pn_part(void) { return pn.part; }
@@ -280,6 +294,17 @@ static void *pn_easy(const char *url, unsigned (*write_cb)(char *, unsigned, uns
     return h;
 }
 
+/* The PN_* code of a finished libcurl request that did not succeed (rc != 0), from curl's result and the HTTP code. */
+static int pn_rc(int rc, long http) {
+    if (rc == CURLE_HTTP_RETURNED_ERROR) return http == 404 || http == 410 ? PN_GONE : PN_HTTP;
+    if (rc == CURLE_ABORTED_BY_CALLBACK) return PN_CANCELLED;
+    if (rc == CURLE_SSL_CACERT || rc == CURLE_SSL_CONNECT_ERROR || rc == CURLE_PEER_FAILED_VERIFICATION ||
+        rc == CURLE_SSL_CERTPROBLEM || rc == CURLE_SSL_CIPHER || rc == CURLE_SSL_ISSUER_ERROR)
+        return PN_CERT;
+    if (rc == CURLE_SSL_CACERT_BADFILE) return PN_NOCERT;
+    return PN_NET;
+}
+
 /* The feed at url through the parser. Returns a PN_* code (PN_OK: the answer was a feed). */
 static int pn_fetch(const char *url, pf_parser_t *p) {
     struct fx f;
@@ -294,14 +319,8 @@ static int pn_fetch(const char *url, pf_parser_t *p) {
     curl_easy_getinfo(h, CURLINFO_RESPONSE_CODE, &http);
     curl_easy_cleanup(h);
     if (rc == 0) return pf_is_feed(p) ? PN_OK : PN_NOTFEED;
-    if (rc == CURLE_HTTP_RETURNED_ERROR) return http == 404 || http == 410 ? PN_GONE : PN_HTTP;
-    if (rc == CURLE_ABORTED_BY_CALLBACK) return PN_CANCELLED;
     if (rc == CURLE_WRITE_ERROR) return f.capped && pf_is_feed(p) && pf_items(p) > 0 ? PN_OK : PN_NOTFEED;
-    if (rc == CURLE_SSL_CACERT || rc == CURLE_SSL_CONNECT_ERROR || rc == CURLE_PEER_FAILED_VERIFICATION ||
-        rc == CURLE_SSL_CERTPROBLEM || rc == CURLE_SSL_CIPHER || rc == CURLE_SSL_ISSUER_ERROR)
-        return PN_CERT;
-    if (rc == CURLE_SSL_CACERT_BADFILE) return PN_NOCERT;
-    return PN_NET;
+    return pn_rc(rc, http);
 }
 
 /* ---------------------------------------------------------------------------
@@ -309,13 +328,13 @@ static int pn_fetch(const char *url, pf_parser_t *p) {
  */
 struct cx {
     int fd;
-    unsigned total;
+    unsigned total, cap;
 };
 
 static unsigned pn_cwrite(char *d, unsigned size, unsigned nmemb, void *user) {
     struct cx *c = user;
     unsigned len = size * nmemb, at = 0;
-    if (len > PN_COVER_CAP || c->total > PN_COVER_CAP - len) return 0; /* a write error: the transfer stops */
+    if (len > c->cap || c->total > c->cap - len) return 0; /* a write error: the transfer stops */
     c->total += len;
     while (at < len) {
         int w = write(c->fd, d + at, len - at);
@@ -325,14 +344,14 @@ static unsigned pn_cwrite(char *d, unsigned size, unsigned nmemb, void *user) {
     return len;
 }
 
-/* The picture at url into the file path (a plain file, not yet a cover). 1 when the whole answer was written; else 0 and no file. */
-static int pn_fetch_file(const char *url, const char *path) {
+/* The picture at url into the file path (a plain file, not yet a cover), at most cap bytes. 1 when the whole answer was written; else 0 and no file. */
+static int pn_fetch_file(const char *url, const char *path, unsigned cap) {
     struct cx c;
     char err[160];
     void *h;
     int rc, ok;
     c.fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    c.total = 0;
+    c.total = 0, c.cap = cap;
     if (c.fd < 0) return 0;
     h = pn_easy(url, pn_cwrite, &c, err, (void *)0);
     rc = h ? curl_easy_perform(h) : -1;
@@ -366,7 +385,7 @@ static void pn_cover(const char *dir, const char *url) {
     if (!pn_join(src, sizeof src, dir, ".cover.src", (const char *)0) ||
         !pn_join(tmp, sizeof tmp, dir, ".cover.tmp", (const char *)0))
         return;
-    if (!pn_fetch_file(url, src)) return;
+    if (!pn_fetch_file(url, src, PN_COVER_CAP)) return;
     kind = pc_pic_info(src, &w, &h, &sof);
     if (kind == 1) {
         ok = pn_join(dst, sizeof dst, dir, "cover.jpg", (const char *)0) && pv_shrink(src, tmp) && !rename(tmp, dst);
@@ -526,6 +545,7 @@ int pn_refresh(const char *root, const pc_show_t *shows, const int *idx, int n) 
  * again); 60 s without a byte is a stall; a network failure is retried after 10, 20 and 40 s, while a 404, a web page instead of audio and a full card fail at once; the card keeps
  * 32 MB free (checked before the download and before every chunk); the finished file is renamed into the show folder. The code is our own, over demo's libcurl.
  */
+static void pn_folder(const char *url, char *out, unsigned size, char *host, unsigned hsize);
 static unsigned pn_len(const char *s) {
     unsigned n = 0;
     while (s[n]) ++n;
@@ -961,6 +981,395 @@ unsigned pn_dl_listed(int n, char *dir, char *file, int *code) {
             return pn.fails[i].key;
         }
     return 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * Search (docs/modules/podcasts.md "Search")
+ *
+ * One worker job under the same rule as a refresh and the downloads: one thread at a time. The query (the store's JSON, at most PN_JSON_CAP bytes, taken apart by pj_results into pn.sres), then the
+ * artwork of each result one by one into PN_SEARCH_DIR; or a preview: the lookup of an Apple Podcasts id when there is one, the feed through the push parser (held in pn.prev for the page), its
+ * picture shrunk to PN_PREVIEW_COVER. The thread touches no widget; the page reads the record on its own timer.
+ */
+static int pn_ci(unsigned c) { return c >= 'A' && c <= 'Z' ? (int)(c + 32) : (int)c; }
+
+/* s starts with the lower-case prefix, in any case. */
+static int pn_starts_ci(const char *s, const char *prefix) {
+    while (*prefix && pn_ci((unsigned char)*s) == *prefix) ++s, ++prefix;
+    return !*prefix;
+}
+
+int pn_classify(const char *text, char *id, unsigned size) {
+    const char *h, *p;
+    id[0] = 0;
+    if (!pn_starts_ci(text, "http://") && !pn_starts_ci(text, "https://")) return 0;
+    h = text;
+    while (*h && *h != '/') ++h;
+    while (*h == '/') ++h;
+    for (p = h; *p && *p != '/' && *p != ':' && *p != '?' && *p != '#'; ++p)
+        if (pn_starts_ci(p, "podcasts.apple.com") &&
+            (p[18] == 0 || p[18] == '/' || p[18] == ':' || p[18] == '?' || p[18] == '#')) {
+            const char *q;
+            for (q = p + 18; *q; ++q)
+                if (q[0] == '/' && pn_ci((unsigned char)q[1]) == 'i' && pn_ci((unsigned char)q[2]) == 'd' &&
+                    q[3] >= '0' && q[3] <= '9') {
+                    unsigned n = 0, nz = 0;
+                    for (q += 3; *q >= '0' && *q <= '9'; ++q) {
+                        if (n + 1 >= size) return id[0] = 0, 1; /* (more digits than any id the store has) */
+                        id[n++] = *q;
+                        nz |= *q != '0';
+                    }
+                    id[n] = 0;
+                    if (!nz) return id[0] = 0, 1;
+                    return 2;
+                }
+            return 1;
+        }
+    return 1;
+}
+
+/* The URL-encoded UTF-8 text s appended to out: the unreserved characters (letters, digits, - _ . ~) as they are, every other byte as %XX. 0 when it does not fit. */
+static int pn_urlenc(char *out, unsigned size, const char *s) {
+    static const char hex[] = "0123456789ABCDEF";
+    unsigned o = pn_len(out);
+    for (; *s; ++s) {
+        unsigned char c = (unsigned char)*s;
+        int plain = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '-' ||
+                    c == '_' || c == '.' || c == '~';
+        if (o + (plain ? 1 : 3) + 1 > size) return 0;
+        if (plain)
+            out[o++] = (char)c;
+        else
+            out[o++] = '%', out[o++] = hex[c >> 4], out[o++] = hex[c & 15];
+    }
+    out[o] = 0;
+    return 1;
+}
+
+/* The state directory and the files in it. */
+static void pn_search_dir(void) {
+    mkdir("/mnt/mmc/.m1plus", 0755);
+    mkdir("/mnt/mmc/.m1plus/podcasts", 0755);
+    mkdir(PN_SEARCH_DIR, 0755);
+}
+
+static int pn_thumb_path(int i, const char *ext, char *out, unsigned size) {
+    char name[24];
+    pc_fmt(name, sizeof name, "/t%d.", (unsigned)i);
+    out[0] = 0;
+    return pn_cat(out, size, PN_SEARCH_DIR) && pn_cat(out, size, name) && pn_cat(out, size, ext);
+}
+
+void pn_search_clean(void) {
+    char path[PN_PATH];
+    int i;
+    for (i = 0; i < PJ_MAX; ++i) {
+        if (pn_thumb_path(i, "jpg", path, sizeof path)) unlink(path);
+        if (pn_thumb_path(i, "png", path, sizeof path)) unlink(path);
+        if (pn_thumb_path(i, "src", path, sizeof path)) unlink(path);
+        pn.sthumb[i] = pn.sext[i] = 0;
+    }
+    pn.sn = 0;
+}
+
+int pn_search_state(void) { return pn.sstate; }
+int pn_search_code(void) { return pn.scode; }
+unsigned pn_search_gen(void) { return pn.sgen; }
+int pn_search_count(void) { return pn.sn; }
+const pj_result_t *pn_search_result(int i) { return i >= 0 && i < pn.sn ? &pn.sres[i] : (const pj_result_t *)0; }
+
+int pn_search_thumb(int i, char *path, unsigned size) {
+    if (i < 0 || i >= PJ_MAX || pn.sthumb[i] != 1) return 0;
+    return pn_thumb_path(i, pn.sext[i] == 2 ? "png" : "jpg", path, size);
+}
+
+struct jx { /* the answer of the store: the bytes so far, up to PN_JSON_CAP */
+    char *buf;
+    unsigned n;
+    int capped;
+    char err[160];
+};
+
+static unsigned pn_jwrite(char *d, unsigned size, unsigned nmemb, void *user) {
+    struct jx *f = user;
+    unsigned len = size * nmemb;
+    if (len > PN_JSON_CAP - f->n) {
+        memcpy(f->buf + f->n, d, PN_JSON_CAP - f->n);
+        f->n = PN_JSON_CAP, f->capped = 1;
+        return 0; /* a write error ends the transfer; what came is parsed */
+    }
+    memcpy(f->buf + f->n, d, len);
+    f->n += len;
+    return len;
+}
+
+/* The answer at url into buf (PN_JSON_CAP + 1 bytes), *got bytes of it. PN_OK also for one cut at the cap. A 404 is no news of a feed here: PN_HTTP. */
+static int pn_fetch_json(const char *url, char *buf, unsigned *got) {
+    struct jx f;
+    void *h;
+    long http = 0;
+    int rc, code;
+    memset(&f, 0, sizeof f);
+    f.buf = buf;
+    h = pn_easy(url, pn_jwrite, &f, f.err, (void *)0);
+    if (!h) return PN_MEM;
+    rc = curl_easy_perform(h);
+    curl_easy_getinfo(h, CURLINFO_RESPONSE_CODE, &http);
+    curl_easy_cleanup(h);
+    *got = f.n;
+    if (rc == 0 || (rc == CURLE_WRITE_ERROR && f.capped)) return PN_OK;
+    code = pn_rc(rc, http);
+    return code == PN_GONE ? PN_HTTP : code;
+}
+
+/* A job's thread, started on the UI thread. */
+static int pn_spawn(void *(*fn)(void *), int kind) {
+    unsigned long th = 0;
+    curl_global_init(CURL_GLOBAL_ALL);
+    pn.busy = 1, pn.kind = kind, pn.cancel = pn.stopped = 0, pn.part = 0, pn.base = 0, pn.span = 1000, pn.cur = 0;
+    pn_bump();
+    if (pthread_create(&th, (const void *)0, fn, (void *)0)) {
+        pn.kind = 0;
+        pn.busy = 0;
+        pn_bump();
+        return PN_MEM;
+    }
+    pthread_detach(th);
+    return PN_OK;
+}
+
+/* Result i's picture into PN_SEARCH_DIR/t<i>.jpg|png, when the answer is a picture the page can decode; else none (the placeholder stays). */
+static void pn_thumb(int i) {
+    char src[PN_PATH], dst[PN_PATH];
+    unsigned w, h, sof;
+    int kind;
+    const char *url = pn.sres[i].art;
+    if ((pn_starts(url, "http://") || pn_starts(url, "https://")) && pn_thumb_path(i, "src", src, sizeof src) &&
+        pn_fetch_file(url, src, PN_THUMB_CAP)) {
+        kind = pc_pic_info(src, &w, &h, &sof);
+        if (kind && pc_cover_ok(src) && pn_thumb_path(i, kind == 2 ? "png" : "jpg", dst, sizeof dst) &&
+            !rename(src, dst)) {
+            pn.sext[i] = (unsigned char)kind;
+            __sync_synchronize();
+            pn.sthumb[i] = 1;
+        } else
+            unlink(src);
+    }
+    if (pn.sthumb[i] != 1) pn.sthumb[i] = 2;
+    __sync_synchronize();
+    ++pn.sgen;
+}
+
+static void *pn_smain(void *arg) {
+    char *buf = calloc(PN_JSON_CAP + 1, 1);
+    unsigned got = 0;
+    int code = PN_MEM, n = 0, i;
+    (void)arg;
+    if (buf) {
+        code = pn_fetch_json(pn.surl, buf, &got);
+        if (code == PN_OK) {
+            n = pj_results(buf, got, pn.sres, PJ_MAX);
+            if (n < 0) code = PN_HTTP, n = 0; /* not an answer of the store */
+        }
+    }
+    free(buf);
+    pn.sn = code == PN_OK ? n : 0;
+    pn.scode = code;
+    __sync_synchronize();
+    pn.sstate = code == PN_OK ? PN_S_THUMBS : PN_S_DONE;
+    ++pn.sgen;
+    pn_bump();
+    for (i = 0; code == PN_OK && i < pn.sn && !pn.cancel; ++i) pn_thumb(i);
+    __sync_synchronize();
+    pn.sstate = PN_S_DONE;
+    ++pn.sgen;
+    pn.stopped = pn.cancel;
+    pn.kind = 0;
+    pn.busy = 0;
+    pn_bump();
+    return (void *)0;
+}
+
+int pn_search(const char *term) {
+    int g;
+    if (pn.busy) return PN_BUSY;
+    g = pn_guard();
+    if (g) return g;
+    pn_search_dir();
+    pn_search_clean();
+    pn.surl[0] = 0;
+    if (!pn_cat(pn.surl, sizeof pn.surl, PN_SEARCH_URL) || !pn_urlenc(pn.surl, sizeof pn.surl, term)) return PN_MEM;
+    pn.scode = PN_OK;
+    pn.sstate = PN_S_QUERY;
+    ++pn.sgen;
+    g = pn_spawn(pn_smain, PN_KIND_SEARCH);
+    if (g) pn.sstate = PN_S_IDLE;
+    return g;
+}
+
+/* ---- Preview */
+void pn_preview_drop(void) {
+    pf_parser_t *p = pn.prev;
+    pn.prev = (pf_parser_t *)0;
+    if (p) pf_free(p);
+    unlink(PN_PREVIEW_COVER);
+    pn.pstate = 0;
+}
+
+int pn_preview_state(void) { return pn.pstate; }
+int pn_preview_code(void) { return pn.pcode; }
+void *pn_preview_parser(void) { return pn.prev; }
+const char *pn_preview_feed(void) { return pn.purl; }
+int pn_preview_cover(void) { return !access(PN_PREVIEW_COVER, F_OK); }
+
+/* The preview's picture: downloaded, shrunk (the Show page's own path: pv_shrink, pv_shrink_png) to PN_PREVIEW_COVER. Whatever fails leaves no file; the preview has the placeholder. */
+static void pn_preview_picture(const char *url) {
+    static const char src[] = PN_SEARCH_DIR "/preview.src", tmp[] = PN_SEARCH_DIR "/preview.tmp";
+    unsigned w, h, sof;
+    int kind, ok = 0;
+    if (!pn_starts(url, "http://") && !pn_starts(url, "https://")) return;
+    if (!pn_fetch_file(url, src, PN_COVER_CAP)) return;
+    kind = pc_pic_info(src, &w, &h, &sof);
+    if (kind == 1)
+        ok = pv_shrink(src, tmp) && !rename(tmp, PN_PREVIEW_COVER);
+    else if (kind == 2)
+        ok = pv_shrink_png(src, tmp) > 0 && !rename(tmp, PN_PREVIEW_COVER);
+    (void)ok;
+    unlink(tmp);
+    unlink(src);
+}
+
+static void *pn_pmain(void *arg) {
+    pf_parser_t *p = (pf_parser_t *)0;
+    char feed[PC_URL];
+    int code = PN_OK;
+    (void)arg;
+    feed[0] = 0;
+    if (pn.pid[0]) { /* an Apple Podcasts link: the store's lookup names the feed */
+        char *buf = calloc(PN_JSON_CAP + 1, 1);
+        char url[PN_PATH];
+        pj_result_t *r = calloc(1, sizeof *r);
+        unsigned got = 0;
+        url[0] = 0;
+        pn_cat(url, sizeof url, PN_LOOKUP_URL);
+        pn_cat(url, sizeof url, pn.pid);
+        if (!buf || !r)
+            code = PN_MEM;
+        else if ((code = pn_fetch_json(url, buf, &got)) == PN_OK) {
+            if (pj_results(buf, got, r, 1) < 1 || !r->feed[0])
+                code = PN_NOFEED;
+            else
+                memcpy(feed, r->feed, sizeof feed);
+        }
+        free(buf);
+        free(r);
+    } else
+        memcpy(feed, pn.purl, sizeof feed);
+    if (code == PN_OK) {
+        p = pf_new();
+        code = p ? pn_fetch(feed, p) : PN_MEM;
+    }
+    if (code == PN_OK && pn.cancel) code = PN_CANCELLED;
+    if (code == PN_OK) {
+        memcpy(pn.purl, feed, sizeof pn.purl);
+        unlink(PN_PREVIEW_COVER);
+        pn_preview_picture(pf_image(p));
+        if (pn.cancel) code = PN_CANCELLED;
+    }
+    if (code == PN_OK)
+        pn.prev = p;
+    else if (p)
+        pf_free(p);
+    pn.pcode = code;
+    __sync_synchronize();
+    pn.pstate = 2;
+    pn.stopped = pn.cancel;
+    pn.kind = 0;
+    pn.busy = 0;
+    pn_bump();
+    return (void *)0;
+}
+
+int pn_preview(const char *url, const char *id) {
+    int g;
+    if (pn.busy) return PN_BUSY;
+    g = pn_guard();
+    if (g) return g;
+    pn_search_dir();
+    pn_preview_drop();
+    pn.purl[0] = 0;
+    pn.pid[0] = 0;
+    if (id[0]) {
+        if (pn_len(id) >= sizeof pn.pid) return PN_NOTFEED;
+        pn_cat(pn.pid, sizeof pn.pid, id);
+    } else if (pn_len(url) >= sizeof pn.purl || !pn_cat(pn.purl, sizeof pn.purl, url))
+        return PN_NOTFEED;
+    pn.pcode = PN_OK;
+    pn.pstate = 1;
+    g = pn_spawn(pn_pmain, PN_KIND_PREVIEW);
+    if (g) pn.pstate = 0;
+    return g;
+}
+
+/* ---- Subscribe */
+int pn_subscribe(const char *root, const pc_show_t *shows, int nshows, char *dir, unsigned dsize) {
+    pf_parser_t *p = pn.prev;
+    char folder[PC_FILE], host[PC_FILE], path[PN_PATH], file[PN_PATH], tmp[PN_PATH], cover[PN_PATH];
+    char *eps;
+    unsigned n, fresh = 0;
+    int made = 0, ok = 0;
+    if (!p || !pn.purl[0]) return PN_NOTFEED;
+    if (nshows >= PC_MAX_SHOWS || !pod_card_mounted()) return PN_STORAGE;
+    eps = calloc(PN_EPS_MAX + 1, 1);
+    if (!eps) return PN_MEM;
+    (void)shows;
+    pn_folder(pn.purl, folder, sizeof folder, host,
+              sizeof host); /* the import's name: the host and the address' hash (only for a feed with no title) */
+    if (pf_title(p)[0]) {
+        char name[PC_FILE];
+        pf_folder_name(name, sizeof name, pf_title(p));
+        if (name[0]) {
+            memcpy(folder, name, pn_len(name) + 1);
+            if (pn_join(path, sizeof path, root, folder, (const char *)0) &&
+                !access(path, F_OK)) /* a folder of that name is someone else's: the import's name */
+                pn_folder(pn.purl, folder, sizeof folder, host, sizeof host);
+        }
+    }
+    mkdir(root, 0755);
+    if (!pn_join(path, sizeof path, root, folder, (const char *)0) || !access(path, F_OK)) goto done;
+    if (mkdir(path, 0755)) goto done;
+    made = 1;
+    if (!pn_join(file, sizeof file, path, ".episodes", (const char *)0) ||
+        !pn_join(tmp, sizeof tmp, path, ".episodes.tmp", (const char *)0))
+        goto done;
+    n = pf_render_episodes(p, path, (const char *)0, 0, eps, PN_EPS_MAX, &fresh);
+    if (!pn_save(file, tmp, eps, n)) goto done;
+    pn_join(file, sizeof file, path, ".show", (const char *)0);
+    pn_join(tmp, sizeof tmp, path, ".show.tmp", (const char *)0);
+    n = pf_render_show(pf_title(p)[0] ? pf_title(p) : host, pn.purl, pf_image(p), (unsigned)time((long *)0),
+                       pf_author(p), pf_category(p), pf_summary(p), eps, PN_EPS_MAX);
+    if (!pn_save(file, tmp, eps, n)) goto done;
+    if (pn_join(cover, sizeof cover, path, "cover.jpg", (const char *)0))
+        rename(PN_PREVIEW_COVER, cover); /* (no picture: the next refresh fetches it) */
+    ok = 1;
+done:
+    free(eps);
+    if (!ok) {
+        if (made) { /* nothing is left behind */
+            const char *own[] = {".episodes", ".episodes.tmp", ".show", ".show.tmp", "cover.jpg"};
+            unsigned i;
+            for (i = 0; i < sizeof own / sizeof *own; ++i)
+                if (pn_join(file, sizeof file, path, own[i], (const char *)0)) unlink(file);
+            rmdir(path);
+        }
+        return PN_STORAGE;
+    }
+    if (dir) {
+        dir[0] = 0;
+        pn_cat(dir, dsize, folder);
+    }
+    pn_preview_drop();
+    pn_bump();
+    return PN_OK;
 }
 
 /* ---------------------------------------------------------------------------

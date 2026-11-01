@@ -55,8 +55,9 @@ uv run python -I tools/check.py --test albums/toggle_tests
 uv run python -I tools/check.py --tests-only --jobs 4 --timeout 300
 ```
 
-`JOBS=4` also works with Makefile test/build targets. The runner reports completed tasks, native
-crashes and assertion totals separately. Missing inputs/results fail; subprocess groups have
+`JOBS=4` also works with Makefile test/build targets. The runner prints failures and one summary
+line (`--verbose` prints every pass too); it reports completed tasks, native crashes and assertion
+totals separately. Missing inputs/results fail; subprocess groups have
 wall-time limits. Logs and failed trees are retained. `make clean` removes `work/check` only,
 keeping dev artifacts, counters and caches. Locks prevent overlapping writes.
 
@@ -65,6 +66,25 @@ layout/text model and the built font. Keep feature details and device checks in 
 
 Previews: `tools/preview*.py` write to `out/preview/` (gitignored). Generate the release sheet with
 `uv run python -I tools/preview.py WORKDIR`. Release packages and generated previews stay out of Git.
+
+## Context budget
+
+An audit of one week (2026-10-25 to 11-01) found almost every token was a cache read: each turn
+sends the whole context again, so cost is turns times context size. Turns above 400k context were
+a fifth of the turns and 45% of the reads, and subagents were 72% of all reads (300 to 500 turn
+feature agents reaching 900k). Hence:
+
+- One stage per subagent (probe, implement, test). It ends with a short handoff (branch, commit,
+  doc updated) and the next stage starts fresh from that, not from the transcript.
+- One topic per session. Past ~250k context, or when the topic changes, write the conclusion to
+  the module doc, then compact or start a new session. Close sessions that are not in use.
+- Large files (`test/pod/harness.py`, `tools/pod_ui.py`, `docs/modules/podcasts.md`,
+  `patch/coverflow.c`, `docs/architecture.md`, `docs/ui.md`): `grep -n` first, then Read the range.
+  Do not re-read a file you have not changed. `docs/history.md` is for people, not agents.
+- Images stay in context for every later turn: crop or zoom with `tools/peek.py` and read the
+  result once; do not re-read an unchanged preview.
+- Mechanical edits across files: one `tools/sub.py FILE... --pairs PAIRS.json --stat` call, not a
+  `sed -i` per change. Tests: `make test TEST=...` while iterating, the full suite once at the end.
 
 ## C formatting
 
@@ -84,7 +104,7 @@ off there, and `test/pod/harness.py` may import names only to re-export them to 
 
 ## Integration and restore
 
-Feature branches leave release `TAG`, goldens, the README status line and history unchanged.
+Feature branches leave release `TAG`, goldens and history unchanged. The README names no release.
 At integration, bump `TAG` in `tools/build.py`, then run:
 
 ```sh

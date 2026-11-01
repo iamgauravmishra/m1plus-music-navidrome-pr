@@ -31,6 +31,7 @@ void pf_free(pf_parser_t *p);
 void pf_push(pf_parser_t *p, const char *data, unsigned n); /* the next bytes of the feed, any split */
 int pf_is_feed(const pf_parser_t *p); /* an <rss> or <channel> element was seen */
 int pf_items(const pf_parser_t *p); /* items kept (at most PF_KEEP), newest first */
+const pf_item_t *pf_item(const pf_parser_t *p, int i); /* kept item i, 0 <= i < pf_items (newest first), else NULL */
 int pf_seen(const pf_parser_t *p); /* items with an enclosure seen in the whole feed */
 const char *pf_title(const pf_parser_t *p); /* the channel's title ("" = none) */
 const char *

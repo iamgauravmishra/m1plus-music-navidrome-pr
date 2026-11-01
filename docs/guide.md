@@ -57,7 +57,7 @@ top-left screw to close. Change its theme under Settings.
 
 **Podcasts** reads local episodes from `Podcasts/<Show>/` on the card. Tap a show, then an
 episode to play; tap the unplayed dot to change its played state. The show header cycles playback
-speed. Feed subscription and downloading are not implemented; see [formats and limits](modules/podcasts.md).
+speed. Feeds, downloads and the search for new shows (Settings > Library > Podcast Search, off by default: a Search button on the Podcasts page, then Subscribe on a show's preview) are described in [formats and limits](modules/podcasts.md).
 
 For a missing feature, show its row through **Settings → Main Menu**, or find it under Extras.
 The [UI reference](ui.md) includes a preview; [module docs](architecture.md) describe implementation

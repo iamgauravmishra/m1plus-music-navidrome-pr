@@ -22,14 +22,6 @@ Stock settings and Tidal remain accessible. See the [user guide](docs/guide.md) 
 Install a verified `update.bin` from the TF card using the player's System Update menu.
 Follow the [installation guide](docs/install.md) for preparation, updates and restoring stock.
 
-<details>
-<summary>Release status</summary>
-
-Status: the release is V2.1pS (pR + library Search: an Apple Music style search page from the Songs page, live accent-, case- and kana-folded multi-word results with Top Results / Artists / Albums / Songs / Playlists chips, our keyboard embedded; test build zNOZHAAAN flashed). Milestones, hardware results and lessons:
-`docs/history.md`; per-tag details are in git.
-
-</details>
-
 ## Documentation
 
 Start with the [development workflow](docs/workflow.md); the [documentation index](docs/README.md) lists the rest.

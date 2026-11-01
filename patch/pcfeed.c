@@ -313,6 +313,9 @@ pf_parser_t *pf_new(void) { return calloc(1, sizeof(pf_parser_t)); }
 void pf_free(pf_parser_t *p) { free(p); }
 int pf_is_feed(const pf_parser_t *p) { return p->saw_feed; }
 int pf_items(const pf_parser_t *p) { return p->nitems; }
+const pf_item_t *pf_item(const pf_parser_t *p, int i) {
+    return i >= 0 && i < p->nitems ? &p->items[i] : (const pf_item_t *)0;
+}
 int pf_seen(const pf_parser_t *p) { return p->seen; }
 const char *pf_title(const pf_parser_t *p) { return p->title; }
 const char *pf_image(const pf_parser_t *p) { return p->image; }

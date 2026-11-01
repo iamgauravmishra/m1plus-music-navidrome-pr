@@ -298,6 +298,20 @@ def base_tests(ctx):
     full = [c for c in press(m, 'kb_go') if c[0] == 'atoi']
     expect(PK.KB_MAX == 63 and full and full[0][1] == 'A' + 'a' * 62, f'70 letters typed: 63 bytes of text and not a byte more reach on_done ({len(full[0][1]) if full else None})')
 
+    # KB_LONG (the podcast search field takes a feed address): up to 255 bytes, a long initial text kept whole, the field still shows the end of what does not fit
+    m = opened(flags=4)
+    typ(m, 'A')
+    for _ in range(299): typ(m, 'a')
+    full = [c for c in press(m, 'kb_go') if c[0] == 'atoi']
+    expect(full and full[0][1] == 'A' + 'a' * 254 and len(full[0][1]) == 255, f'with KB_LONG 300 letters typed: 255 bytes reach on_done ({len(full[0][1]) if full else None})')
+    m = opened(flags=4, initial='h' * 300)
+    expect(field(m).startswith('…') and field(m).endswith('h'), 'a long initial text is cut at 255 bytes and the field shows the end of it')
+    full = [c for c in press(m, 'kb_go') if c[0] == 'atoi']
+    expect(full and len(full[0][1]) == 255, 'and returns all 255 bytes')
+    m = opened(initial='h' * 300)
+    full = [c for c in press(m, 'kb_go') if c[0] == 'atoi']
+    expect(full and len(full[0][1]) == 63, 'without the flag the limit is still 63 bytes')
+
     # 5. Delete: on touch down, repeating while held
     m = opened(initial='abcdefgh')
     x, y = centre(m, 'kb_del')

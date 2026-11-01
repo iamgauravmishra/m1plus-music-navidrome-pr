@@ -35,6 +35,11 @@ gets the Source Han Sans zip.
 ## Working rules
 
 - Run builds and tests in the **foreground** (a build is seconds); never background and sleep-poll.
+- **Context budget:** read the lines you need (`grep -n`, Read with offset/limit), not whole large
+  files or `docs/history.md`; read an image once, cropped with `tools/peek.py`; batch mechanical edits
+  with `tools/sub.py --pairs`. One topic per session: past ~250k context or on a topic change, write
+  the result to its doc, then compact or start fresh. Subagents do one stage (probe, implement or
+  test) and hand back branch, commit and doc. `docs/workflow.md`.
 - C formatting: `make format`, then `make format-check`; `.clang-format` is the style definition.
 - Python lint: `make lint` (Ruff, bug rules only; `make test` runs it). Do not run `ruff format`.
 - `python -I` on anything that touches extracted firmware or downloads; never execute code from
@@ -64,12 +69,12 @@ equals the installed one, so each flashed package needs a new tag.
 Keep `.dev-number.json` (gitignored); do not reset it or reuse a dev output directory. It never
 changes `TAG`. Dev artifacts and test receipts stay together under `out/dev/<tag>`.
 
-**Feature branches do not bump `TAG`, update `test/golden.sha256`, edit `docs/history.md` or the README
-status line** (every branch doing so conflicts on merge). Their done-criterion is `check.py --tests-only`
+**Feature branches do not bump `TAG`, update `test/golden.sha256` or edit `docs/history.md`** (every
+branch doing so conflicts on merge). Their done-criterion is `check.py --tests-only`
 (all tests pass) and the feature's docs in `docs/modules/`. Only the **integration step** (merge into the
 release branch) bumps `TAG` in `tools/build.py` (the one source; `check.py` and `preview.py` read it),
-runs `check.py` then `check.py --update`, commits the golden and sets the README status line (one line
-naming the current release). `docs/history.md` is not a per-tag log (git is): add a milestone line only for a
+runs `check.py` then `check.py --update` and commits the golden. The README names no release (the
+release is `TAG`, its changes the squash commit). `docs/history.md` is not a per-tag log (git is): add a milestone line only for a
 notable or accepted release, and any new device finding or lesson. A golden or history conflict is resolved by taking the integration side and rerunning, not by hand.
 
 ## Safety rules (do not relax)

@@ -85,7 +85,7 @@ NAV_SEARCH_X = SONGS_BUTTONS[0][2]
 NAV_SETTINGS_ICON = 'pod_nav_settings'   # the Extras page's Settings button: the capsule's left cap on the 214 slot (tools/mod_icons.py)
 
 
-def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, songs=False, settings=False, select=False, show_more=False):
+def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, songs=False, settings=False, select=False, show_more=False, show_search=False):
     nb = Widget('view', 0, 0, SCREEN_W, NAVBAR_H, [('name', 'navigationbar_view')])
     # a title runs under a toggle's button no further than the button's left edge
     right = NAV_SEARCH_X if songs else NAV_CF_X if coverflow or more else NAV_VIEW_X if toggle or settings or select or show_more else NAV_TITLE_END
@@ -116,6 +116,10 @@ def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, 
         nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
             ('name', 'btn_more'), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', 'pod_nav_more_down'), ('style:normal:icon', 'pod_nav_more'), ('style:over:icon', 'pod_nav_more')])))
+    if show_search:   # the Podcasts page's Search (Podcast Search on in Settings): the capsule's left cap on the 168 slot with the "..." as its middle piece, or on the 214 slot beside Now Playing alone (patch/podcasts.c pg_nav moves it)
+        nb.children.append(hidden(Widget('button', NAV_CF_X, 0, NAV_CF_W, NAVBAR_H, [
+            ('name', 'btn_search'), ('enable', 'true'), ('style', 'img_btn_style'),
+            ('style:pressed:icon', 'pod_nav_search_down'), ('style:normal:icon', 'pod_nav_search'), ('style:over:icon', 'pod_nav_search')])))
     if coverflow:
         nb.children.append(Widget('button', NAV_CF_X, 0, NAV_CF_W, NAVBAR_H, [
             ('name', 'btn_coverflow'), ('enable', 'true'), ('style', 'img_btn_style'),
@@ -350,6 +354,22 @@ PS_STYLES = (('label_ps_name', 22, '#FFFFFF', 'center'), ('label_ps_sec', 16, '#
 PS_TINT_NAME = 'img_ah_tint'   # the album page's tint gradient (ah_tint), a window sized insensitive image under everything; shown on the Show level once the cover's tone is set
 
 
+def search_field():
+    """The search level's field (patch/podcasts.c, docs/modules/podcasts.md "Search"): the keyboard page's field look as widgets of the content view (so it scrolls with the rows): a rounded #1C1C1E view, the
+    magnifier, the grey hint and the white text (the payload sets the texts). Hidden and insensitive; a touch on it goes to the content view, which opens the keyboard."""
+    o = OFFSETS
+    f = kb_view('ps_field', o['PQ_FIELD_X'], o['PQ_FIELD_Y'], o['PQ_FIELD_W'], o['PQ_FIELD_H'], PK.KB_BG, o['PQ_FIELD_R'])
+    mag = Widget('image', o['PQ_MAG_X'], (o['PQ_FIELD_H'] - o['PQ_MAG']) // 2, o['PQ_MAG'], o['PQ_MAG'], [('name', 'ps_mag'), ('image', 'qk_mag'), ('draw_type', 'center'), ('sensitive', 'false')])
+    hint = label('ps_hint', o['PQ_TEXT_X'], 0, o['PQ_TEXT_W'], o['PQ_FIELD_H'], '', PK.FIELD_PX, PK.KB_GREY, 'left')
+    text = label('ps_text', o['PQ_TEXT_X'], 0, o['PQ_TEXT_W'], o['PQ_FIELD_H'], '', PK.FIELD_PX, PK.KB_INK, 'left')
+    for lab in (hint, text):
+        lab.set('sensitive', 'false')
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+    clear = hidden(Widget('image', o['PQ_CLEAR_X'] + (o['PQ_CLEAR_W'] - o['PQ_CLEAR']) // 2, (o['PQ_FIELD_H'] - o['PQ_CLEAR']) // 2, o['PQ_CLEAR'], o['PQ_CLEAR'], [('name', 'ps_clear'), ('image', 'qk_clear'), ('draw_type', 'center')]))   # the keyboard page's clear disc (its touch is the payload's: PH_CLEAR)
+    f.children = [mag, hint, text, clear]
+    return hidden(f)
+
+
 def build_podcasts_page(page):
     """The Podcasts page (patch/podcasts.c, docs/modules/podcasts.md): the Albums list mode's structure (a stock list holding the one content view the payload paints) under the
     plain navbar (Back, title, Now Playing). The payload paints the levels in view_grid; label_status is its empty-state hint (two lines); the hidden labels are the text styles.
@@ -358,7 +378,7 @@ def build_podcasts_page(page):
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
     root.children.append(hidden(Widget('image', 0, 0, SCREEN_W, CLIENT_H, [('name', PS_TINT_NAME), ('image', 'ah_tint'), ('draw_type', 'default'), ('clickable', 'false')])))   # first: under everything
-    root.children.append(navbar(page.title, select=True, show_more=True))
+    root.children.append(navbar(page.title, select=True, show_more=True, show_search=True))
     root.children[1].children.append(selall_button())   # the select mode's navbar text (the Playlists page's)
     lv = stock_list([], True)
     lv.set('name', 'podcasts_listview')
@@ -372,7 +392,7 @@ def build_podcasts_page(page):
     styled(big, ('normal',), 'font_size', str(OFFSETS['PP_TITLE_PX']))
     styled(big, ('normal',), 'text_align_h', 'left')
     styled(big, ('normal',), 'text_align_v', 'middle')
-    grid.children = [big]
+    grid.children = [big, search_field()]
     styled(grid, ('normal',), 'bg_color', '#00000000')
     styled(grid, ('normal',), 'text_color', '#FFFFFF')
     styled(grid, ('normal',), 'font_size', str(GRID_TITLE_PX))

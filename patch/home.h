@@ -48,6 +48,9 @@
 #define KBZH_FILE \
     "/mnt/data/m1plus-kbzh" /* the on-screen keyboard's Chinese (Pinyin) layer: "1" = on, anything else or missing = off (Settings > Keyboards; patch/keyboard.c) */
 #define KBZH_TMP "/mnt/data/m1plus-kbzh.tmp"
+#define PCSEARCH_FILE \
+    "/mnt/data/m1plus-pcsearch" /* Podcast Search: "1" = on, anything else or missing = off (Settings > Library > Podcasts; patch/podcasts.c) */
+#define PCSEARCH_TMP "/mnt/data/m1plus-pcsearch.tmp"
 #define MIX_DIR \
     CARD_DIR \
     "/daily-mix" /* the Daily Mix's own folder inside the card folder (CARD_DIR, patch/covercache.h); made by the writer */
@@ -114,6 +117,9 @@ extern int recent_toggle(void); /* flip it, saved atomically; the new state, or 
 extern int
 kb_zh_setting(void); /* patch/keyboard.c: Settings > Keyboards > Chinese (Pinyin): 1 on, 0 off (the default) */
 extern int kb_zh_toggle(void); /* flip it, saved atomically; the new state, or -1 when it could not be saved */
+extern int pcsearch_setting(
+    void); /* patch/podcasts.c: Settings > Library > Podcasts > Podcast Search: 1 on, 0 off (the default) */
+extern int pcsearch_toggle(void); /* flip it, saved atomically; the new state, or -1 when it could not be saved */
 
 /* patch/m1plus.c (stages with the home feature) */
 extern int m1plus_open_entry(void);
