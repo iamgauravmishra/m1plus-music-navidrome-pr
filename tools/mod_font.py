@@ -44,6 +44,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FONT = 'rootfs/release/assets/default/raw/fonts/default.ttf'
 FONT_SHA = '9a16af0aead992a2ad64f86d0de8d38bea60d6f605d42ffd0501684666161872'      # stock V2.1 (= mod_boot.FONT_SHA)
 
+LYRIC_FONT = 'rootfs/release/assets/default/raw/fonts/lyrics.ttf'   # the lyrics' bold face (a second file; AWTK name "lyrics")
+LYRIC_ASSET = 'assets/fonts/Inter-Bold-m1plus.ttf'
+LYRIC_SHA = '25127500c201a6b5c0495549bd0ec65070495fa73363c7daac2ed4566f65d67c'   # tools/font_inter.py --weight Bold output
+LYRIC_TRACKING = 16               # tighter than the UI face's 8: bold display text at 30 px, Apple's tight set; 'Be what you want to be' fits one 264 px row
 INTER_ASSET = 'assets/fonts/Inter-m1plus.ttf'
 INTER_SHA = 'a9909568a98305254788e3927126a6d4bf1b0d62079344aa5496f1c07ebb7bec'   # tools/font_inter.py output
 INTER_WEIGHT, INTER_EM = 'Medium', 252
@@ -153,6 +157,20 @@ def track(inter, k):
         if g.numberOfContours > 0:
             g.coordinates.translate((-(k // 2), 0)); g.recalcBounds(glyf); lsb = g.xMin
         hmtx[n] = (adv - k, lsb)
+    out = io.BytesIO(); f.save(out)
+    return out.getvalue()
+
+def lyric_face(inter, stock, k=0):
+    """The lyrics' second font file: the Inter subset of a heavy weight (tools/font_inter.py --weight), tracked k units,
+    as a stand-alone 256 unit font with default.ttf's vertical metrics (hhea, OS/2), so a font size means the same
+    pixels and rows sit on the same baseline as the default font's. Its outlines stay on the 252 grid as in merge()."""
+    from fontTools.ttLib import TTFont
+    f = TTFont(io.BytesIO(track(inter, k)), recalcTimestamp=False)
+    s = TTFont(io.BytesIO(stock), recalcTimestamp=False)
+    f['head'].unitsPerEm = s['head'].unitsPerEm
+    for t, names in (('hhea', ('ascent', 'descent', 'lineGap')),
+                     ('OS/2', ('sTypoAscender', 'sTypoDescender', 'sTypoLineGap', 'usWinAscent', 'usWinDescent'))):
+        for n in names: setattr(f[t], n, getattr(s[t], n))
     out = io.BytesIO(); f.save(out)
     return out.getvalue()
 
@@ -312,6 +330,10 @@ def verify(stock, new, rep):
         check(not bad, f'regional cmap {r}: {len(bad)} wrong mappings, e.g. ' + ' '.join(f'U+{c:04X}' for c in bad[:10]))
     return dict(stock_cps=len(sm), new_cps=len(nm), replaced=len(replaced & set(sm)), added=len(added), unchanged=len(same))
 
+def added_rels(stock_rootfs=None):
+    """The file this step adds (fwtool --allow-added)."""
+    return [LYRIC_FONT.removeprefix('rootfs/')]
+
 def apply(work, shs_zip=paths.SHS_ZIP):
     p = os.path.join(work, FONT)
     stock = open(p, 'rb').read()
@@ -323,6 +345,13 @@ def apply(work, shs_zip=paths.SHS_ZIP):
     new, rep = merge(stock, ib, shs_faces(shs_zip))
     r = verify(stock, new, rep)
     write_keep_mode(p, new)
+    lb = open(os.path.join(ROOT, LYRIC_ASSET), 'rb').read()
+    check(LYRIC_SHA is None or sha256(lb) == LYRIC_SHA, f'{LYRIC_ASSET}: SHA-256 mismatch (regenerate with tools/font_inter.py --weight Bold)')
+    lyric = lyric_face(lb, stock, LYRIC_TRACKING)
+    lp = os.path.join(work, LYRIC_FONT)
+    with open(lp, 'wb') as fh: fh.write(lyric)
+    os.chmod(lp, os.stat(p).st_mode & 0o7777)           # the permission bits of default.ttf
+    print(f'font: {LYRIC_FONT} {len(lyric)} bytes (Inter Bold, tracking -{LYRIC_TRACKING}), sha256 {sha256(lyric)}')
     print(f'font: {FONT} {len(stock)} -> {len(new)} bytes, sha256 {sha256(new)}; {r["stock_cps"]} stock code points all '
           f'kept with ink, {r["replaced"]} replaced, {r["added"]} added, {r["unchanged"]} unchanged; vertical metrics stock')
     return rep, r

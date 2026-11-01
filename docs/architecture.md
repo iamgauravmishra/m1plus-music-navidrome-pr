@@ -35,6 +35,7 @@ for commands, [UI](ui.md) for layout/assets, and [history](history.md) for recor
 | [Rows](modules/rows.md) | Stock row edits, layout and text sizing |
 | [Shuffle](modules/shuffle.md) | Song, album and folder queues |
 | [Now Playing](modules/nowplaying.md) | Cover tint, remaining time and rounded artwork |
+| [Lyrics page](modules/lyrics.md) | Our own lyrics lines over the stock rows: anchor, opacity falloff, eased scroll |
 | [More sheet](modules/playmore.md) | Playback options, Cassette Mode and Vinyl Mode entries |
 | [Mini player](modules/minibar.md) | Home overlay, controls, blur and timer |
 | [Recently Played](modules/recent.md) | History file, covers and shelf layout |

@@ -1,6 +1,6 @@
 # Font
 
-**Sources:** `tools/mod_font.py`, `tools/font_inter.py`.
+**Sources:** `tools/mod_font.py`, `tools/font_inter.py`, `assets/fonts/`.
 
 One file, `release/assets/default/raw/fonts/default.ttf` ("微软雅黑+Arial", 256 units/em, 9.4 MB),
 rewritten by code point; unitsPerEm, hhea ascender/descender/lineGap and OS/2 stay, so every layout
@@ -72,6 +72,24 @@ sized from them still adds up. The step runs first so every later step measures 
   language picks the forms, not the text: a Japanese title in a Chinese UI is drawn with SC forms (a per-text choice
   would need code at paint). `tools/preview_cjk.py STOCK_WORKDIR` draws the four maps side by side
   (`out/peek/cjk_regions.png`).
+- **Lyrics face (a second font file).** `release/assets/default/raw/fonts/lyrics.ttf`, 153,156 bytes, AWTK font name `lyrics`:
+  the Inter 4.1 **Bold** subset (`assets/fonts/Inter-Bold-m1plus.ttf`, 153,160 bytes, made by `tools/font_inter.py --weight Bold`
+  from the same pinned Inter zip, same code points and tabular digits as the Medium subset; the SHA-256 of the member and of the
+  subset are pinned in `font_inter.py` and `mod_font.LYRIC_SHA`; OFL as above) **tracked 16 units** (`LYRIC_TRACKING`; the UI
+  face's 8 is looser than Apple's set bold text: at 30 px 16 keeps `Be what you want to be` in one 264 px row, 12 would not).
+  `mod_font.lyric_face` turns it into a stand-alone font with default.ttf's unitsPerEm (256) and hhea / OS/2 vertical metrics (the
+  outlines stay on the 252 grid as in the merge), so a font size is the same number of pixels (AWTK: size = ascender - descender
+  units) and the baseline the same as the default font's; the Python text model (`StbText`) measures it like any other file. Only
+  the two lyric label styles of the Now Playing page name it (`font_name` `lyrics`, `docs/modules/lyrics.md`); nothing else loads it.
+  **How AWTK resolves it** (read in the stock binary): `font_manager_get_font` `0x650dc4` fixes the name, looks it up by (name,
+  size) in the font cache, else `font_manager_load` `0x650d00` asks `assets_manager_ref` for it, which reads
+  `assets/<theme>/raw/fonts/<name>.ttf` (`assets_manager_load_file` `0x63e1f4`, `assets_manager_build_asset_filename`; the same
+  way `default` is read); a name that cannot be loaded is retried with the default font name (`0x650ebc`), so a missing file shows
+  the default font, not nothing. **There is no per-glyph fallback**: `font_get_glyph` `0x6508b0` is a call through the one font's
+  vtable, and `canvas_draw_text` takes every glyph of a draw from the canvas font. The lyrics payload therefore chooses the style
+  per line: a line whose code points are all in lyrics.ttf (34 ranges, checked against its cmap by the test) takes the bold style,
+  any other line (CJK, kana, Hangul, symbols) the default font's. Cost: the rootfs went from 983,040 to 872,448 bytes under the stock size
+  (110,592 more for the file; `fwtool` enforces the size, and `mod_font.added_rels` lets the repack add the file).
 - **Pull-down volume.** The pull-down's status bar is laid out like the real one (`tools/statusbar.py`, section 4), where
   `100` at 16 px fits the stock 30 px label; the font step does nothing for it.
 - Not fixed on purpose: Latin UIs draw CJK ellipsis/dashes with Inter's, the colon is not raised between digits

@@ -23,7 +23,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ZIP_URL = 'https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip'
 ZIP_SHA = '9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e'
 MEMBERS = {'Regular': '40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82',
-           'Medium': '97ad806f526e41546d46365bb3a393145f75b7b1568913db74549ad8b8dba872'}
+           'Medium': '97ad806f526e41546d46365bb3a393145f75b7b1568913db74549ad8b8dba872',
+           'SemiBold': '78a843fade9d4612a5567302fb595b56976eb5fcebf4fea5a5912d638bafcde3',
+           'Bold': '288316099b1e0a47a4716d159098005eef7c0066921f34e3200393dbdb01947f'}
 LICENSE_SHA = '262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a'   # LICENSE.txt in the zip
 TNUM = {c: n + '.tf' for c, n in zip(range(0x30, 0x3A), ('zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'))}
 

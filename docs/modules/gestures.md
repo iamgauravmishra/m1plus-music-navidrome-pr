@@ -6,7 +6,7 @@ A swipe on a list must never play the song under the finger, and a touch on a li
 and press nothing. This is a patch in AWTK's input path, so it is a data word, not a code hook: nothing of the stock text is
 overwritten, and it runs only for touches that land inside a `scroll_view` (every stock list is `list_view > scroll_view >
 list_item` rows; Songs, Recently Added / Played, Favorites, Most Played, playlist songs, the queue, Folders, Artists, our menu
-and settings lists, the lyrics, and the Albums grid / list, whose one custom content view sits in a stock `list_view > scroll_view`, `docs/modules/albums.md`; Cover Flow has its own touch layer and no `scroll_view`).
+and settings lists, the stock lyrics list (hidden on Now Playing since our own lyrics page, `docs/modules/lyrics.md`: our own `np_lyrics` scroll_view takes its place, with no slidable axis: this hook does nothing for it, its drag / tap / snap-back are listeners of `patch/lyrics.c`, and a sideways swipe there still turns the slide page), and the Albums grid / list, whose one custom content view sits in a stock `list_view > scroll_view`, `docs/modules/albums.md`; Cover Flow has its own touch layer and no `scroll_view`).
 
 **The stock paths** (all read from `demo` and run unchanged in `test/pod/scroll.py`):
 
@@ -68,8 +68,7 @@ late-drag UP or a DOWN on a coasting list needs it (never on a MOVE or an ordina
 session; creating the file mid-session takes effect at the next start. Hot path: a MOVE costs 15 instructions including
 call and return, an idle DOWN or UP 36 / 19, no call and no syscall (`test/pod/scroll.py`).
 
-**Known limits.** Any scroll animation counts as a coast: a touch within the 200 ms of a programmatic scroll (the lyrics view moving
-to the next line, a list scrolled to the playing song) stops it and is not a tap; tap again. A swipe starting on a button inside
+**Known limits.** Any scroll animation counts as a coast: a touch within the 200 ms of a programmatic scroll (a list scrolled to the playing song) stops it and is not a tap; tap again. The lyrics page keeps the rule by its own code (`docs/modules/lyrics.md`): a touch within 200 ms of a lyric move that started presses nothing (the move goes on); its vertical drag, 3 s snap-back and tap-to-seek are listeners on `np_lyrics`, which answer RET_OK, grab nothing and leave a sideways drag to the slide view. A swipe starting on a button inside
 a row (the Main Menu's up arrow) is aborted like any swipe; a plain tap on that button still clicks the button, and in the
 emulation the row also gets its click, as in stock (the button returns `RET_OK`). The abort threshold is the stock 10 px; a
 first-MOVE scroll update (the other half of the "not following" feeling) is a separate change.
