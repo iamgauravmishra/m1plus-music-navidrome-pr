@@ -7,7 +7,7 @@ For installation, updates and restore, see [Install](install.md).
 M1+ Music opens at startup and from its icon on Shanling Home. The default menu shows Cover Flow,
 Albums, Artists, Songs, Playlists and Extras. Daily Mix and Recently Played appear below it;
 the mini player appears while a track is queued.
-Open **Extras → Settings** using the navbar button. **Settings → Menu & Extras** holds **Main Menu**
+Open **Extras → Settings** using the navbar button. **Settings → Home Screen** holds **Main Menu**
 (show, hide and reorder items) and **Extras** (turn off items you do not want listed there). Settings
 remains reachable. **Developer → Open Shanling Home** returns to the stock grid; **Boot to M1+ Music**
 (Developer → Startup) changes startup.
@@ -35,15 +35,14 @@ Copy music to the card, then use **Extras → Update Library** to scan it.
 Settings is iOS-style grouped cards; a grey value at the right shows the current state.
 
 - **Wi-Fi, Bluetooth:** open the stock pages (the value shows On or Off).
-- **Menu & Extras, Home Screen, Library, Now Playing, Keyboards:** the pages below.
+- **Home Screen, Library, Now Playing, Keyboards:** the pages below.
 - **Playback:** **Play Mode** and **EQ** open the stock pages (the value shows the mode and the preset); **All Playback Settings** opens the stock list (Gapless is there).
-- **System:** **Display** and **Language** (the value is the current language) open the stock pages, **Keyboards** is below, **About** is our own page (the build and firmware versions; Device: model, serial number, Wi-Fi MAC and IP address; Storage: card capacity and free space), **All System Settings** opens the stock list.
-- **Menu & Extras:** Main Menu and Extras, as above.
-- **Home Screen:** the Recent Albums and Daily Mix switches; Regenerate Daily Mix appears while Daily Mix is on.
+- **System:** **Display** opens the stock page (Language is on the stock System Settings list), **Keyboards** is below, **About** is our own page (the build and firmware versions; Device: model, serial number, Wi-Fi MAC and IP address; Storage: card capacity and free space), **All System Settings** opens the stock list.
+- **Home Screen:** the Recent Albums and Daily Mix switches; Regenerate Daily Mix appears while Daily Mix is on; then Main Menu and Extras, as above.
 - **Library:** Update Library; **Album Order** (Artist or Album, a picker with a check mark, for Albums and Cover Flow); under Cover Flow, landscape presentation and Rebuild Covers.
 - **Now Playing:** under Cassette Mode, **Theme** (Normal, Chrome or Metal; a picker, applied the next time Cassette Mode opens).
 - **Keyboards:** English is always on; switch on Chinese (Pinyin) to get a language key and pinyin input on the on-screen keyboard (candidates above the keys, swipe them sideways, space takes the first).
-- **Developer:** Startup (**Boot to M1+ Music**, **Open Shanling Home**) and Tools (**Screenshot**: confirm a capture, then leave the page within five seconds; **Network Probe**; **Keyboard**).
+- **Developer:** Startup (**Boot to M1+ Music**, **Open Shanling Home**) and Tools (**Screenshot**: confirm a capture, then leave the page within five seconds; **System Update** opens the stock firmware update page).
 
 Rebuild Covers asks before regenerating the cache. Screenshots can be cancelled during their
 countdown; see [capture details](modules/screenshot.md).

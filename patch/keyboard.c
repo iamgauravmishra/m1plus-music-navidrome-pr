@@ -12,7 +12,6 @@
  * 123 on the third row go between the two symbol pages. Delete works on touch down and repeats while held. Search (empty text: nothing) closes the page and calls
  * on_done with the text; Back closes it and calls on_cancel. A text too wide for the field shows its end after an ellipsis; the caret follows the measured width.
  * A touch on the pad that lands on no key (a gap, a margin) goes to the nearest key, as on an iPhone: the pad's own touch events resolve it and press that key.
- * With KB_LOG every touch on the pad and every key is appended to the Network Probe's log (the Developer row's way to judge the accuracy of 29 px keys).
  *
  * Keyboards (Settings > Keyboards): English is always there. With Chinese (Pinyin) on, a language key sits in row four and the Chinese layer composes pinyin with stock's Google
  * Pinyin engine (the shipped gpinyin.dat, opened when the layer is first used and closed with the page): the letters build the pinyin in a candidate strip above the pad, the
@@ -25,7 +24,6 @@
 #include "home.h"
 #include "i18n.h"
 #include "keyboard.h"
-#include "probe.h"
 
 extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
 
@@ -84,8 +82,8 @@ static struct {
     void *key[KB_KEYS];
     void *shift, *shifton, *sym, *del, *mode, *space, *go, *lang;
     void *strip, *py, *sep, *cands, *chl, *item[KB_POOL];
-    int page, geo, popped, held, hold, finished, log_n, log_x, log_y, gap, layers, layer, nkeys;
-    unsigned timer, len, flags, log_t;
+    int page, geo, popped, held, hold, finished, seen_n, seen_x, seen_y, gap, layers, layer, nkeys;
+    unsigned timer, len, flags, seen_t;
     kb_done_fn done;
     kb_cancel_fn cancel;
     kb_change_fn on_change; /* embedded: called with the field's text whenever it may have changed */
@@ -180,20 +178,6 @@ static unsigned u8_to_u16(const char *s, unsigned n, unsigned short *out, unsign
     }
     out[k] = 0;
     return k;
-}
-
-/* ---- the log (KB_LOG) ---- */
-static void kb_put(const char *s) {
-    char line[160];
-    int fd, n;
-    if (!(kb.flags & KB_LOG)) return;
-    n = snprintf(line, sizeof line, "[%u] kb %s\n", (unsigned)time((long *)0), s);
-    if (n <= 0) return;
-    if ((unsigned)n >= sizeof line) n = sizeof line - 1;
-    fd = open(PROBE_LOG, O_WRONLY | O_CREAT | O_APPEND, 0644);
-    if (fd < 0) return;
-    write(fd, line, (unsigned)n);
-    close(fd);
 }
 
 /* ---- the field ---- */
@@ -524,7 +508,6 @@ static int zh_enter(void) {
         return 0;
     }
     if (access(PINYIN_DICT, 0) != 0) {
-        kb_put("zh dictionary missing");
         return -1;
     }
     if (eng)
@@ -533,12 +516,10 @@ static int zh_enter(void) {
     eng = PY_ENGINE_PTR;
     if (!eng || !*(volatile unsigned char *)eng) {
         im_close_decoder();
-        kb_put("zh engine did not open");
         return -1;
     }
     zh.own = 1;
     zh.ready = 1;
-    kb_put("zh engine open");
     return 0;
 }
 
@@ -766,7 +747,6 @@ static void kb_lang_tap(void) { /* the language key: the other layer; the Chines
         return;
     }
     kb_layer_set(to);
-    kb_put(to == L_ZH ? "layer zh" : "layer en");
 }
 
 /* ---- delete's repeat ---- */
@@ -804,7 +784,6 @@ static void kb_finish(int ok) {
         if (kb_layer_of(kb.layer)->flush) kb_layer_of(kb.layer)->flush();
         kb_unpop();
         kb_stop();
-        kb_put("go");
         if (kb.on_go) kb.on_go();
         return;
     }
@@ -820,7 +799,6 @@ static void kb_finish(int ok) {
     kb_unpop();
     kb_stop();
     if (ok) {
-        kb_put("search");
         navigator_back();
         if (done) done(text); /* the page is closing: kb may already be reset, only locals from here */
     } else {
@@ -837,12 +815,9 @@ static int kb_on_back(void *ctx, void *e) {
 }
 
 static void kb_click(int id) {
-    char line[48];
     const struct kb_layer *l = kb_layer_of(kb.layer);
     if (!kb.win || kb.finished) return;
     if (id < KB_KEYS) {
-        snprintf(line, sizeof line, "key %s", kb.lab[id]);
-        kb_put(line);
         if (l->compose && kb.page == P_LOWER && l->compose(kb.lab[id][0])) return;
         zh_hide();
         kb_insert(kb.lab[id]);
@@ -934,17 +909,6 @@ static int kb_on_touch(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* Where a touch landed on the pad and which key took it (or which one it nearly was), from the pad's own rectangles. */
-static const char *kb_name(int id) {
-    return id == K_SHIFT || id == K_SHIFTON ? "shift"
-           : id == K_SYM                    ? "sym"
-           : id == K_DEL                    ? "del"
-           : id == K_MODE                   ? "mode"
-           : id == K_LANG                   ? "lang"
-           : id == K_SPACE                  ? "space"
-                                            : "go";
-}
-
 /* The rectangles of the keys that are there now (pad coordinates), in the order a tie is settled: char keys, the left key, delete, 123 / ABC, the language key, space, Search. */
 static int kb_rects(int *id, int *x, int *y, int *w) {
     int n = 0, i, sx = kb.layers > 1 ? KB_LANG_X + KB_LANG_W + KB_GAP : KB_LANG_X;
@@ -974,18 +938,15 @@ static void *kb_widget(int id) {
 /* A touch went down on the pad (or on one of its keys): log it, and when it fell on no key (from_pad, the pad's own event) resolve it to the nearest key: that key is pressed now and
  * clicked when the finger lifts. The same touch arrives once from the key and once from the pad whichever way AWTK passes it on: only the first is looked at. */
 static void kb_down(void *e, int from_pad) {
-    int id[KB_NRECT], x[KB_NRECT], y[KB_NRECT], w[KB_NRECT], pt[2], i, n, best = -1, bd = 0x7fffffff, sx, sy, bx = 0,
-                                                                          by = 0, gap = 0;
+    int id[KB_NRECT], x[KB_NRECT], y[KB_NRECT], w[KB_NRECT], pt[2], i, n, best = -1, bd = 0x7fffffff, sx, sy;
     unsigned t;
-    const char *name = "";
-    char line[128];
     if (!e) return;
     sx = *(int *)((char *)e + PE_X);
     sy = *(int *)((char *)e + PE_Y);
     t = *(unsigned *)((char *)e + 8);
-    if (kb.log_n && kb.log_t == t && kb.log_x == sx && kb.log_y == sy) return;
-    kb.log_n = 1, kb.log_t = t, kb.log_x = sx, kb.log_y = sy;
-    if (!from_pad && !(kb.flags & KB_LOG)) return; /* a key's own touch needs nothing worked out unless it is logged */
+    if (kb.seen_n && kb.seen_t == t && kb.seen_x == sx && kb.seen_y == sy) return;
+    kb.seen_n = 1, kb.seen_t = t, kb.seen_x = sx, kb.seen_y = sy;
+    if (!from_pad) return; /* a key's own touch needs nothing worked out */
     pt[0] = sx;
     pt[1] = sy;
     widget_to_local(kb.pad, pt);
@@ -994,20 +955,10 @@ static void kb_down(void *e, int from_pad) {
         int dx = pt[0] < x[i] ? x[i] - pt[0] : pt[0] >= x[i] + w[i] ? pt[0] - (x[i] + w[i] - 1) : 0;
         int dy = pt[1] < y[i] ? y[i] - pt[1] : pt[1] >= y[i] + KB_KH ? pt[1] - (y[i] + KB_KH - 1) : 0;
         int d = dx * dx + dy * dy;
-        if (d < bd) {
-            bd = d, best = i, gap = dx > dy ? dx : dy;
-            bx = pt[0] - (x[i] + w[i] / 2), by = pt[1] - (y[i] + KB_KH / 2);
-        }
+        if (d < bd) bd = d, best = i;
     }
     if (best < 0) return;
-    name = id[best] < KB_KEYS ? kb.lab[id[best]] : kb_name(id[best]);
-    if (bd == 0)
-        snprintf(line, sizeof line, "down x=%d y=%d pad=%d,%d hit=%s off=%d,%d", sx, sy, pt[0], pt[1], name, bx, by);
-    else
-        snprintf(line, sizeof line, "down x=%d y=%d pad=%d,%d hit=%s via=gap gap=%d off=%d,%d", sx, sy, pt[0], pt[1],
-                 name, gap, bx, by);
-    kb_put(line);
-    if (from_pad && bd > 0 && !kb.gap) {
+    if (bd > 0 && !kb.gap) {
         kb.gap = id[best] + 1;
         if (kb_widget(id[best])) widget_set_state(kb_widget(id[best]), "pressed");
         kb_press(id[best]);
@@ -1154,14 +1105,12 @@ static int kb_init(const char *placeholder, const char *initial, int embedded) {
                 kb.layers = 1, kb_memo = L_EN;
         } else if (access(PINYIN_DICT, 0) != 0) {
             kb.layers = 1;
-            kb_put("zh dictionary missing");
         }
     }
     kb_bottom();
     kb_lang_label();
     kb_page(kb_letters());
     kb_refresh();
-    kb_put("open");
     return 0;
 }
 
@@ -1229,10 +1178,3 @@ void keyboard_show(int on) {
 int keyboard_shown(void) { return kb.win && kb.embedded && !kb.hidden; }
 
 const char *keyboard_text(void) { return kb.win ? kb.buf : ""; }
-
-static void kb_test_done(const char *text) { pod_toast(text); }
-
-void keyboard_test(void) {
-    if (home_off()) return;
-    keyboard_open((const char *)0, TR("Type here"), "", kb_test_done, (kb_cancel_fn)0, KB_LOG);
-}

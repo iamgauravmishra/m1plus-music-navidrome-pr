@@ -46,7 +46,6 @@ for commands, [UI](ui.md) for layout/assets, and [history](history.md) for recor
 | [Menu](modules/menu.md) | Home/normal instances, Extras and customization |
 | [Languages](modules/i18n.md) | Translation tables, keys and width checks |
 | [Screenshot](modules/screenshot.md) | Countdown, framebuffer capture and import |
-| [Network Probe](modules/probe.md) | Developer check of HTTPS, Wi-Fi, clock, RAM and screen-off |
 | [Keyboard](modules/keyboard.md) | Own QWERTY keyboard page, API, tap log; gap rule; Chinese (Pinyin) layer and candidate strip |
 | [List gestures](modules/gestures.md) | Drag cancellation and stopping coasting lists |
 

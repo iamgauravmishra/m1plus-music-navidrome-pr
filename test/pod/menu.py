@@ -564,8 +564,8 @@ def settings_tests(ctx, on_row, rows0):
     expect, P = ctx.expect, pod_pages
     S = P.SETTINGS_PAGE
     rows_s = PSYMS[f'pod_rows_{P.SETTINGS_PAGE_INDEX}']
-    rows_me = PSYMS[f'pod_rows_{P.MENUEXTRAS_PAGE_INDEX}']
-    mm_i = next(i for i, r in enumerate(P.MENUEXTRAS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.MENUCFG_PAGE_INDEX)
+    rows_me = PSYMS[f'pod_rows_{P.HOMESET_PAGE_INDEX}']
+    mm_i = next(i for i, r in enumerate(P.HOMESET_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.MENUCFG_PAGE_INDEX)
     cf_i = next(i for i, r in enumerate(S.rows) if r.action == P.ACT_PAGE and r.arg == P.LIBRARY_PAGE_INDEX)
     settings_i = next(i for i, r in enumerate(P.MENU.rows) if r.action == P.ACT_PAGE and r.arg == P.SETTINGS_PAGE_INDEX)
 
@@ -576,14 +576,14 @@ def settings_tests(ctx, on_row, rows0):
         m.call(on_row, a0=rows0 + 12 * settings_i, count=3000000)
         return m
 
-    # 15. Settings (cards): the stock Wi-Fi and Bluetooth pages, our pages, Playback (Play Mode, EQ, the stock list), System (Display, Language, Keyboards, About, the stock list), Developer
-    expect([r.label for r in S.rows] == ['Wi-Fi', 'Bluetooth', 'Menu & Extras', 'Home Screen', 'Library', 'Now Playing', 'Play Mode', 'EQ', 'All Playback Settings',
-                                         'Display', 'Language', 'Keyboards', 'About', 'All System Settings', 'Developer'],
-           'the Settings page lists Wi-Fi, Bluetooth, Menu & Extras, Home Screen, Library, Now Playing, Play Mode, EQ, All Playback Settings, Display, Language, Keyboards, About, All System Settings, Developer')
+    # 15. Settings (cards): the stock Wi-Fi and Bluetooth pages, our pages, Playback (Play Mode, EQ, the stock list), System (Display, Keyboards, About, the stock list), Developer
+    expect([r.label for r in S.rows] == ['Wi-Fi', 'Bluetooth', 'Home Screen', 'Library', 'Now Playing', 'Play Mode', 'EQ', 'All Playback Settings',
+                                         'Display', 'Keyboards', 'About', 'All System Settings', 'Developer'],
+           'the Settings page lists Wi-Fi, Bluetooth, Home Screen, Library, Now Playing, Play Mode, EQ, All Playback Settings, Display, Keyboards, About, All System Settings, Developer')
     pb = next(r for r in S.rows if r.label == 'All Playback Settings'); ss = next(r for r in S.rows if r.label == 'All System Settings')
     expect((pb.action, pb.arg) == (P.ACT_HOME, P.HOME_PLAYSET) and (ss.action, ss.arg) == (P.ACT_HOME, P.HOME_SYSSET),
            'All Playback Settings opens the stock Play settings list, All System Settings the stock one')
-    expect([r.label for r in P.MENUEXTRAS_PAGE.rows] == ['Main Menu', 'Extras'] and P.MENUEXTRAS_PAGE.title == 'Menu & Extras', 'Menu & Extras holds Main Menu and Extras')
+    expect([r.label for r in P.HOMESET_PAGE.rows][-2:] == ['Main Menu', 'Extras'] and P.HOMESET_PAGE.title == 'Home Screen', 'Home Screen ends with Main Menu and Extras')
     ex_r, cu_r = len(P.ITEMS), P.SETTINGS_ID
     expect(P.MENU.rows[cu_r].label == 'Settings' and (P.MENU.rows[cu_r].action, P.MENU.rows[cu_r].arg) == (P.ACT_PAGE, P.SETTINGS_PAGE_INDEX)
            and P.MENU.rows[ex_r].label == 'Extras' and P.MENU.rows[-1] is P.MENU.rows[ex_r], 'the menu\'s Settings row opens the Settings page; Extras is the last row')
@@ -622,11 +622,11 @@ def extrascfg_tests(ctx, on_row, rows_s):
     n, CU, ROW_H = len(P.ITEMS), P.SETTINGS_ID, pod_ui.ROW_H
     items = [r.label for r in P.ITEMS]
     ids = [i for i in range(n) if i != CU]
-    ex_i = next(i for i, r in enumerate(P.MENUEXTRAS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.EXTRASCFG_PAGE_INDEX)
+    ex_i = next(i for i, r in enumerate(P.HOMESET_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.EXTRASCFG_PAGE_INDEX)
     hdr_h, full = P.HDR_H, EXTRAS_PLAY + EXTRAS_LIB + EXTRAS_COLL + EXTRAS_TOOLS
     CFG_DEF = [x for x in DEF_EXTRAS if x != 'Settings']   # the default menu's hidden items, but Settings (no row on this page), in the Extras order
-    expect(P.MENUEXTRAS_PAGE.rows[ex_i].label == 'Extras' and P.PAGES[P.EXTRASCFG_PAGE_INDEX] is P.EXTRASCFG_PAGE and P.EXTRASCFG_PAGE.kind == 'extrascfg',
-           'Menu & Extras has an Extras row that opens the Settings > Extras page')
+    expect(P.HOMESET_PAGE.rows[ex_i].label == 'Extras' and P.PAGES[P.EXTRASCFG_PAGE_INDEX] is P.EXTRASCFG_PAGE and P.EXTRASCFG_PAGE.kind == 'extrascfg',
+           'Home Screen has an Extras row that opens the Settings > Extras page')
 
     def open_page(data=None):
         m = Machine()

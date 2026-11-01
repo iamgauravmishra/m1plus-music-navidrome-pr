@@ -55,8 +55,6 @@ ACT_REGEN = 20   # action row (no chevron, like the Shuffle rows): make today's 
 ACT_LIST = 21    # open a stock song list on the Songs page (patch/songs.c songs_open_list; arg = its HOME_* tile, where a window that will not open falls back)
 ACT_IPOD = 22    # open the Pod, the virtual iPod Classic page: a fullscreen window with a touch click wheel (patch/ipod.c ipod_open)
 ACT_PODCASTS = 23   # open the Podcasts page: the shows in /mnt/mmc/Podcasts and their episodes (patch/podcasts.c podcasts_open)
-ACT_NETPROBE = 25 # the Network Probe row (Developer): a thread checks HTTPS, Wi-Fi, the clock, RAM and the screen-off soak, and logs to /mnt/mmc/m1plus-probe.log (patch/probe.c)
-ACT_KEYBOARD = 26 # the Keyboard row (Developer): opens the on-screen QWERTY keyboard (patch/keyboard.c) with a test callback: Search toasts the text, every tap is logged to /mnt/mmc/m1plus-probe.log
 ACT_KB_EN = 27  # switch row (Settings > Keyboards): English, always on and not switchable (the row's switch is shown on and the row is dimmed)
 ACT_KB_ZH = 28  # switch row (Settings > Keyboards): Chinese (Pinyin), off by default; on gives the on-screen keyboard a language key and the pinyin layer (patch/keyboard.c kb_zh_toggle)
 ACT_CTHEME = 24  # value row: the Cassette Mode theme, Normal, Chrome or Metal; opens its picker page (arg = the page index); the payload shows the saved theme (patch/tape.c tape_theme)
@@ -69,14 +67,14 @@ SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, A
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
 VALUE_ACTIONS = (ACT_SORT, ACT_CTHEME)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
 CHECK_ACTIONS = (ACT_SORTSET, ACT_THEMESET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
-ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_NETPROBE, ACT_REBUILD, ACT_GRID)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
+ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_GRID)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
 VALUE_INIT = {ACT_SORT: 'Artist', ACT_CTHEME: 'Normal'}   # what the asset's value label says before the payload sets it
 # The stock pages ACT_STOCK opens: (the name navigator_to takes = ui/<name>.bin, the value the row shows at the right: the payload reads the stock state, patch/m1plus.c VK_*, or None).
 # Each is a plain navigator_to(name) with no context in stock (docs/modules/settings.md "Stock pages"): the Settings and Play Settings lists' rows, the Wi-Fi hub's two; Back returns to our page.
-STOCK_WIFI, STOCK_BLUETOOTH, STOCK_PLAYMODE, STOCK_EQ, STOCK_DISPLAY, STOCK_LANGUAGE = range(6)
+STOCK_WIFI, STOCK_BLUETOOTH, STOCK_PLAYMODE, STOCK_EQ, STOCK_DISPLAY, STOCK_FWUPDATE = range(6)
 STOCK_PAGES = (('systemset/wifi_page', 'wifi'), ('systemset/bluetooth_page', 'bluetooth'), ('playset/playmode_page', 'playmode'), ('playset/equalizer_page', 'eq'),
-               ('systemset/display_page', None), ('systemset/language_page', 'language'))
-STOCK_VALUES = ('wifi', 'bluetooth', 'playmode', 'eq', 'language')   # the VK_* of patch/m1plus.c, in this order
+               ('systemset/display_page', None), ('systemset/fwupdate_page', None))
+STOCK_VALUES = ('wifi', 'bluetooth', 'playmode', 'eq')   # the VK_* of patch/m1plus.c, in this order
 
 # ACT_SHUFFLE arguments (mirror the enum in patch/shuffle.c)
 SHUFFLE_SONGS = 0    # every song, stock Shuffle play mode, from a random song
@@ -141,10 +139,9 @@ KEYBOARDS_PAGE_INDEX = 20
 HOMESET_PAGE_INDEX = 9
 EXTRASCFG_PAGE_INDEX = 13
 DEVELOPER_PAGE_INDEX = 14
-MENUEXTRAS_PAGE_INDEX = 21
-SORT_PAGE_INDEX = 22
-THEME_PAGE_INDEX = 23
-ABOUT_PAGE_INDEX = 24
+SORT_PAGE_INDEX = 21
+THEME_PAGE_INDEX = 22
+ABOUT_PAGE_INDEX = 23
 ITEMS = [   # item id = index; the default order, essentials first (iPod classic style)
     Row('Now Playing', ACT_PLAYER),
     Row('Cover Flow', ACT_COVER),
@@ -244,13 +241,12 @@ SHUFFLE_PAGE = Page('m1plus_shuffle', 'm1plus_shuffle_page', 'Shuffle', rows=[
 ])
 
 # Settings (iOS style grouped cards, tools/pod_settings.py places them; the design is tools/preview_settings.py's): the stock Wi-Fi and Bluetooth pages, the M1+ Music pages
-# (Menu & Extras, Home Screen, Library, Now Playing, Keyboards), Playback (Play Mode, EQ, the stock Play Settings list) and System (Display, Language, About, the stock
+# (Home Screen, Library, Now Playing, Keyboards), Playback (Play Mode, EQ, the stock Play Settings list) and System (Display, Keyboards, About, the stock
 # System Settings list), then Developer. Every "stock page" row is a plain navigator_to of the page stock's own list calls (STOCK_PAGES).
 SETTINGS_PAGE = Page('m1plus_settings', 'm1plus_settings_page', 'Settings', layout=[
     Row('Wi-Fi', ACT_STOCK, STOCK_WIFI),
     Row('Bluetooth', ACT_STOCK, STOCK_BLUETOOTH),
     GAP,
-    Row('Menu & Extras', ACT_PAGE, MENUEXTRAS_PAGE_INDEX),
     Row('Home Screen', ACT_PAGE, HOMESET_PAGE_INDEX),
     Row('Library', ACT_PAGE, LIBRARY_PAGE_INDEX),
     Row('Now Playing', ACT_PAGE, NPSET_PAGE_INDEX),
@@ -260,7 +256,6 @@ SETTINGS_PAGE = Page('m1plus_settings', 'm1plus_settings_page', 'Settings', layo
     Row('All Playback Settings', ACT_HOME, HOME_PLAYSET),
     Hdr('System'),
     Row('Display', ACT_STOCK, STOCK_DISPLAY),
-    Row('Language', ACT_STOCK, STOCK_LANGUAGE),
     Row('Keyboards', ACT_PAGE, KEYBOARDS_PAGE_INDEX),
     Row('About', ACT_PAGE, ABOUT_PAGE_INDEX),
     Row('All System Settings', ACT_HOME, HOME_SYSSET),
@@ -284,16 +279,8 @@ ABOUT_PAGE = Page('m1plus_about', 'm1plus_about_page', 'About', layout=[
     Row('Available', ACT_INFO, INFO_FREE),
 ])
 
-# Settings > Menu & Extras: the two pages that arrange the menu (patch/menu.c).
-MENUEXTRAS_PAGE = Page('m1plus_menuextras', 'm1plus_menuextras_page', 'Menu & Extras', layout=[
-    Row('Main Menu', ACT_PAGE, MENUCFG_PAGE_INDEX),
-    Note('Show, hide and reorder the menu'),
-    Row('Extras', ACT_PAGE, EXTRASCFG_PAGE_INDEX),
-    Note('Items the menu does not show'),
-])
-
 # Settings > Developer: Startup (the Boot to M1+ Music switch, patch/home.c, and the way out to the stock grid) and the developer's tools. Screenshot: a confirm dialog, then a 5 s
-# countdown (cancellable), then the screen is written to the card (patch/shot.c). Network Probe: a confirm dialog, then one worker thread logs what the network stack can do to the card (patch/probe.c).
+# countdown (cancellable), then the screen is written to the card (patch/shot.c). System Update opens the stock firmware update page.
 DEVELOPER_PAGE = Page('m1plus_developer', 'm1plus_developer_page', 'Developer', layout=[
     Hdr('Startup'),
     Row('Boot to M1+ Music', ACT_STARTUP),
@@ -301,18 +288,21 @@ DEVELOPER_PAGE = Page('m1plus_developer', 'm1plus_developer_page', 'Developer', 
     Note('Off: the device starts on Shanling Home'),
     Hdr('Tools'),
     Row('Screenshot', ACT_SHOT),
-    Row('Network Probe', ACT_NETPROBE),
-    Row('Keyboard', ACT_KEYBOARD),
+    Row('System Update', ACT_STOCK, STOCK_FWUPDATE),
 ])
 
 # Settings > Home Screen: the Recent Albums and Daily Mix switches (the shelf and the card of the Home menu), and Regenerate Daily Mix in a card of its own, which
-# (with its note) is hidden while Daily Mix is off (patch/m1plus.c regen_show: pod_card1, pod_note1 and the row).
+# (with its note) is hidden while Daily Mix is off (patch/m1plus.c regen_show: pod_card1, pod_note1 and the row). Then the two pages that arrange the menu (patch/menu.c).
 HOMESET_PAGE = Page('m1plus_homeset', 'm1plus_homeset_page', 'Home Screen', layout=[
     Row('Recent Albums', ACT_SHELF),
     Row('Daily Mix', ACT_DAILY),
     Note('Shown on Home below the menu'),
     Row('Regenerate Daily Mix', ACT_REGEN),
     Note('A new mix the next time Home opens'),
+    Row('Main Menu', ACT_PAGE, MENUCFG_PAGE_INDEX),
+    Note('Show, hide and reorder the menu'),
+    Row('Extras', ACT_PAGE, EXTRASCFG_PAGE_INDEX),
+    Note('Items the menu does not show'),
 ])
 
 # Main Menu: the customise page (patch/menu.c builds its behaviour at run time): one row per item with a
@@ -440,7 +430,7 @@ SEARCH = Page('m1plus_search', 'm1plus_search_page', 'Search', kind='search')
 
 # PAGES[0] is the entry page.
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
-         EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, MENUEXTRAS_PAGE, SORT_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE]
+         EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, SORT_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE
@@ -448,4 +438,4 @@ assert PAGES[EXTRASCFG_PAGE_INDEX] is EXTRASCFG_PAGE and PAGES[DEVELOPER_PAGE_IN
 assert PAGES[EXTRAS_PAGE_INDEX] is EXTRAS_PAGE and PAGES[MENUCFG_PAGE_INDEX] is MENUCFG_PAGE
 assert PAGES[LIBRARY_PAGE_INDEX] is LIBRARY_PAGE and PAGES[HOMESET_PAGE_INDEX] is HOMESET_PAGE
 assert PAGES[ABOUT_PAGE_INDEX] is ABOUT_PAGE
-assert PAGES[MENUEXTRAS_PAGE_INDEX] is MENUEXTRAS_PAGE and PAGES[SORT_PAGE_INDEX] is SORT_PAGE and PAGES[THEME_PAGE_INDEX] is THEME_PAGE
+assert PAGES[SORT_PAGE_INDEX] is SORT_PAGE and PAGES[THEME_PAGE_INDEX] is THEME_PAGE

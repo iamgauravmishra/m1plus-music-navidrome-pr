@@ -38,9 +38,8 @@ delete and Search. Geometry stays; the pad's own events resolve the rest:
   tests sweep a grid over the pad on every page (and with the language key) against it.
 * The resolved key is **pressed at once**: char keys show the pop-up of that key, any key looks pressed (`widget_set_state "pressed"`, "normal" when released), delete deletes and starts its repeat.
   The key is **clicked when the finger lifts** (`kb_gap_end(1)`); abort, the page going to the background or destroy lets go without typing.
-* The same touch reaches the key and the pad whichever way AWTK passes events on (unverified which): only the first sighting counts (the dedupe on time and position that the log already used), a touch
+* The same touch reaches the key and the pad whichever way AWTK passes events on (unverified which): only the first sighting counts (the dedupe on time and position), a touch
   inside a key's rectangle is never resolved by the pad, and if the pad resolved a touch that the key also got (the two models disagree at an edge pixel) the key wins and the pad's resolution is dropped.
-* The log marks it: `hit=Q via=gap gap=1 off=15,0` (gap: the larger of the two axis distances, px; off: from the key's centre). A touch inside a key logs `hit=W off=0,0` as before.
 
 ## Keyboards (Settings > Keyboards) and the language key
 
@@ -49,7 +48,7 @@ The setting is two switch rows, English (always on, not switchable) and Chinese 
 * **Off**: the keyboard is exactly the one above: no language key, space 163 px wide, the dictionary and the engine never touched.
 * **On**: row four is `123 / ABC` (74), the **language key** `kb_lang` (40 wide, function colour, x 79), space (now x 122, 120 wide), Search. The key is on every page and shows the layer a tap goes to:
   `中` while on English, `EN` while on Chinese (`LANG_TAGS`; characters, not translated). If `gpinyin.dat` is not there (`access`), or the engine will not open when the key is tapped, **the key goes away**
-  (`kb.layers = 1`, space wide again), the failure is logged (`KB_LOG`: `zh dictionary missing`, `zh engine did not open`) and English stays. Nothing crashes.
+  (`kb.layers = 1`, space wide again), English stays. Nothing crashes.
 * The layer the last keyboard ended on is remembered **for the session** (`kb_memo`, a scratch word outside the page's state): the next keyboard starts on it (and opens the engine at once). Turning the
   setting off in Settings forgets it.
 
@@ -102,7 +101,7 @@ use only what they are given. One keyboard at a time: `keyboard_open` returns -1
 Flags: `KB_LONG` (4) lifts the text limit from `KB_MAX` 63 to `KB_MAX_LONG` 255 bytes (the podcast search field takes a feed address; `kb.max` is set at open, the buffer and the field's shown text are sized for 255, a longer initial text is cut at 255 on a character boundary; tested in `test/pod/keyboard.py` `base_tests`); `KB_DONE` (2) makes the action key read **Done** (`widget_set_tr_text(kb.go, "Done")` at open; the asset's label stays Search for everyone else, same width, same colours); `KB_LOG` (1) appends the touch log (below). An empty or all-space field on the action key does nothing and the page stays (nothing is closed or called), so a naming caller never gets an empty name. Strings are keys of `tools/pod_i18n.py` (`Keyboard`, `Keyboards`, `English`, `Chinese (Pinyin)`, `space`, `Search`, `Done`, `Type here`, 13 languages; key labels are characters
 and `123 / ABC / #+=`, not translated). Callers need nothing for Chinese: the setting and the language key are the keyboard's.
 
-**Consumers.** Library Search embeds the pad in its own page (`keyboard_attach`, below; `docs/modules/search.md`), the Developer row (below) and Playlists > ... > **New playlist** (`patch/playlists.c` `pl_create`: title the stock `playlist_create`, hint the stock `msg_newplaylists`, `KB_DONE`, no cancel callback; `pl_named` is the done callback and makes the playlist, shows the stock "full" / "exists" boxes from inside the callback and reads the page again: docs/modules/playlists.md "Create"). The text limit there is the keyboard's 63 bytes (stock's edit allowed 127). Test: `name_tests`.
+**Consumers.** Library Search embeds the pad in its own page (`keyboard_attach`, below; `docs/modules/search.md`) and Playlists > ... > **New playlist** (`patch/playlists.c` `pl_create`: title the stock `playlist_create`, hint the stock `msg_newplaylists`, `KB_DONE`, no cancel callback; `pl_named` is the done callback and makes the playlist, shows the stock "full" / "exists" boxes from inside the callback and reads the page again: docs/modules/playlists.md "Create"). The text limit there is the keyboard's 63 bytes (stock's edit allowed 127). Test: `name_tests`.
 
 ## Embedded in another page (`keyboard_attach`)
 
@@ -124,30 +123,13 @@ field's inner geometry in that page (the keyboard page uses `KB_TEXT_X`, `KB_TEX
 committed text and also when a layer or page switch refreshes the field (the caller ignores a repeat); a Chinese candidate still being composed is not in it. The action key (`kb_go`, reading
 `Search` as in the asset) commits what is pending and calls `on_go`; no page is closed and there is no cancel. The pad starts shown. One keyboard at a time: `keyboard_open` and `keyboard_attach` refuse while
 either exists; `keyboard_detach` frees it (the next `keyboard_open` works). Tests: `test/pod/search.py` `embed_tests` and `live_tests`; the existing keyboard sections run unchanged.
-**Consumers.** Podcasts > Search (a tap on the search field opens it with `KB_LONG`, the placeholder and title `Search`; `pg_srch_done` / `pg_srch_cancel` in `patch/podcasts.c` only record what happened and the page handles it when it is in front again: docs/modules/podcasts.md "Search"), the Developer row (below) and Playlists > ... > **New playlist** (`patch/playlists.c` `pl_create`: title the stock `playlist_create`, hint the stock `msg_newplaylists`, `KB_DONE`, no cancel callback; `pl_named` is the done callback and makes the playlist, shows the stock "full" / "exists" boxes from inside the callback and reads the page again: docs/modules/playlists.md "Create"). The text limit there is the keyboard's 63 bytes (stock's edit allowed 127). Test: `name_tests`.
-
-## The Developer row
-
-Settings > Developer > **Keyboard** (`ACT_KEYBOARD` 26, Lucide `keyboard`) calls `keyboard_test`: the keyboard with the hint "Type here" and `KB_LOG`; Search shows the typed text in a toast (Chinese text too:
-the message box and the font cover it, device check below). The Pinyin Probe row that answered whether the engine can be used is gone; its findings are in "Pinyin engine" below.
-Every touch on the pad is appended to `/mnt/mmc/m1plus-probe.log` (the Network Probe's log, no fsync):
-
-```
-[epoch] kb open
-[epoch] kb down x=48 y=324 pad=48,24 hit=W off=0,0                       screen x, y; position in the pad; the key under it by our rectangles; offset from its centre
-[epoch] kb down x=31 y=324 pad=31,24 hit=Q via=gap gap=1 off=15,0        between keys: resolved to the nearest, the gap in px
-[epoch] kb key W                                                         the key AWTK clicked (the key that typed)
-[epoch] kb layer zh                                                      the language key (zh engine open / zh dictionary missing / zh engine did not open)
-[epoch] kb search
-```
-
-A `hit=` that differs from the following `kb key` line means AWTK's hit test and ours disagree. Both the key and the pad bind the touch; a repeated event is logged once.
+**Consumers.** Podcasts > Search (a tap on the search field opens it with `KB_LONG`, the placeholder and title `Search`; `pg_srch_done` / `pg_srch_cancel` in `patch/podcasts.c` only record what happened and the page handles it when it is in front again: docs/modules/podcasts.md "Search") and Playlists > ... > **New playlist** (`patch/playlists.c` `pl_create`: title the stock `playlist_create`, hint the stock `msg_newplaylists`, `KB_DONE`, no cancel callback; `pl_named` is the done callback and makes the playlist, shows the stock "full" / "exists" boxes from inside the callback and reads the page again: docs/modules/playlists.md "Create"). The text limit there is the keyboard's 63 bytes (stock's edit allowed 127). Test: `name_tests`.
 
 ## Tests, preview
 
 `make test TEST=keyboard`: asset geometry, colours (no accent), `keyboard.h` against `pod_keyboard.py`; every page's widget moves in the payload against `pod_keyboard.layout`; typing, shift, 123 / #+=,
 space rules, the 63 byte limit; delete, repeat, abort, background; clear; the caret by `StbText` width at every length, a long text; the pop-up (positions, edge clamping, never sensitive); Search, Back,
-destroy, one-at-a-time, missing widget; the log lines; stock's `widget_find_target` on the real tree (a touch anywhere on a key and at its corners lands on it, gaps on the pad, the pop-up and hidden
+destroy, one-at-a-time, missing widget; stock's `widget_find_target` on the real tree (a touch anywhere on a key and at its corners lands on it, gaps on the pad, the pop-up and hidden
 widgets take nothing); strings per language. **Gap rule**: a grid of about 800 touches over the pad on each of the four pages (and the Chinese layer with the language key) against `nearest_key`, the
 press / lift / abort / background behaviour, delete from the gap above it, a touch the key and the pad both hear types once. **Setting and layers** (`ZhMachine`: the keyboard machine over **demo's real
 engine** on the real dictionary, `pinyin.py`'s `Engine`): the language key present or absent and where space is, the dictionary missing, an engine that will not open (scripted), stock's dead object, an

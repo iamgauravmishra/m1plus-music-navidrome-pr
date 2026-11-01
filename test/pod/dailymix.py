@@ -280,7 +280,7 @@ def run(ctx):
     homeset = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1plus_homeset.bin'), 'rb').read())
     rows = [w for w in homeset.find('pod_scrollview').children if w.type == 'list_item']
     lab_w = lambda r: next(w for w in r.children if w.type == 'hscroll_label').w
-    expect([r.name for r in rows] == [f'pod_row{i}' for i in range(3)] and lab_w(rows[1]) == lab_w(rows[0]), 'Settings > Home Screen has three rows (Recent Albums, Daily Mix, Regenerate Daily Mix); the Daily Mix switch row has the Recent Albums row\'s label box')
+    expect([r.name for r in rows][:3] == [f'pod_row{i}' for i in range(3)] and lab_w(rows[1]) == lab_w(rows[0]), 'Settings > Home Screen starts with three rows (Recent Albums, Daily Mix, Regenerate Daily Mix); the Daily Mix switch row has the Recent Albums row\'s label box')
     sw_room, act_room = lab_w(rows[1]), lab_w(rows[2])
     over = []
     for l in D.LOCALES:
