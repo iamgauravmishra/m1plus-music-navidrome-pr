@@ -17,11 +17,12 @@ import preview_nowplaying as NP
 
 ROW_H, SCREEN_H, SHEET_W, SV_W = 50, 480, 320, 310
 PAGE1 = ['listitem4', 'listitem5', 'listitem2', 'pod_tape', 'pod_vinyl', 'pod_more']   # Look up album, Look up artist, Add to playlist, Cassette Mode, Vinyl Mode, More
-PAGE2 = ['pod_back', 'listitem1', 'listitem0', 'listitem6']                       # the back header, Playback speed, A-B repeat, Delete
+PAGE2 = ['pod_back', 'listitem1', 'listitem0', 'pod_art', 'listitem6']             # the back header, Playback speed, A-B repeat, Find Cover & Lyrics, Delete
+ART_DIM = 100                                                                     # the Find Cover & Lyrics row's opacity (of 255) with the Wi-Fi off (patch/playmore.c PM_ART_DIM)
 DIM_ALPHA = 130                                                                   # the asset's highlight="default(alpha=130)"
 KEYS = {'scrlabel0': 'player_abrepeat', 'scrlabel1': 'Speed', 'scrlabel2': 'batch_addplaylist', 'scrlabel3': 'player_onlinesearch',
         'scrlabel4': 'player_albuminfo', 'scrlabel5': 'player_songerinfo', 'scrlabel6': 'player_delete', 'label1_msg': 'Files below 48 kHz only',
-        'pod_more_label': 'More', 'pod_back_label': 'More', 'pod_tape_label': 'Cassette Mode', 'pod_vinyl_label': 'Vinyl Mode'}
+        'pod_more_label': 'More', 'pod_back_label': 'More', 'pod_tape_label': 'Cassette Mode', 'pod_vinyl_label': 'Vinyl Mode', 'pod_art_label': 'Cover & Lyrics'}
 SPEED_SEL = {'img_1x': 'p_1_sel'}                                                  # 1.0X is the selected speed in the mock-up
 
 
@@ -29,13 +30,13 @@ def tint(argb):
     """'#RRGGBBAA' (AWTK order) -> an RGBA tuple."""
     return tuple(int(argb[i:i + 2], 16) for i in (1, 3, 5, 7))
 
-def sheet(p, im, tree, order, pressed=None):
+def sheet(p, im, tree, order, pressed=None, offline=False):
     """Draw the sheet for `order` (row names, top to bottom) on im (the 320 x 480 screen): the whole page dimmed (the highlighter dims the
     full screen, the sheet's own area included, then the glass lies on that), the glass image (the dialog's bg_image) on the bottom, the rows
     transparent over it (the painter draws no row fill), the hairlines and the pressed band (`pressed`: a row name) as the rows' inline styles."""
     h = len(order) * ROW_H; sy = SCREEN_H - h
     im.alpha_composite(Image.new('RGBA', (SHEET_W, SCREEN_H), (0, 0, 0, DIM_ALPHA)), (0, 0))
-    glass = p.image('pm_sheet6' if len(order) == len(PAGE1) else 'pm_sheet'); assert glass and glass.size == (SHEET_W, h), 'the page\'s own glass picture (pod_glass: pm_sheet6 for six rows, pm_sheet for four), not a crop'
+    glass = p.image('pm_sheet6' if len(order) == len(PAGE1) else 'pm_sheet'); assert glass and glass.size == (SHEET_W, h), 'the page\'s own glass picture (pod_glass: pm_sheet6 for six rows, pm_sheet for five), not a crop'
     im.alpha_composite(glass, (0, sy))
     hair = tint(tree.find('listitem1').get('style:normal:border_color'))
     for pos, name in enumerate(order):
@@ -46,16 +47,20 @@ def sheet(p, im, tree, order, pressed=None):
                 if c.name.startswith('img_'):
                     c.y, c.h = 8, 20
                     if c.name in SPEED_SEL: c.set('image', SPEED_SEL[c.name])
-        if name in ('pod_more', 'pod_back', 'pod_tape', 'pod_vinyl'):
+        if name in ('pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_art'):
             row.remove('visible'); row.remove('sensitive')       # the asset starts it hidden; the payload shows it
         if name == pressed:
             im.alpha_composite(Image.new('RGBA', (SV_W, ROW_H), tint(tree.find(name).get('style:pressed:bg_color'))), (0, sy + pos * ROW_H))
         if row.get('style:normal:border') == 'top' and pos:
             im.alpha_composite(Image.new('RGBA', (SV_W, 1), hair), (0, sy + pos * ROW_H))     # AWTK blends a 1 px line's alpha like a fill
+        box = (0, sy + pos * ROW_H, SV_W, sy + (pos + 1) * ROW_H)
+        before = im.crop(box)
         p.walk(im, row, 0, sy, (0, sy, SV_W, sy + h), 0, tree)
+        if name == 'pod_art' and offline:
+            im.paste(Image.blend(before, im.crop(box), ART_DIM / 255), box)   # the row's opacity (the painter has none): the row over what was under it
 
 
-def panel(work, theme, lang, order, pressed=None):
+def panel(work, theme, lang, order, pressed=None, offline=False):
     raw = os.path.join(work, 'rootfs/release/assets', 'default', 'raw')
     rawt = os.path.join(work, 'rootfs/release/assets', theme, 'raw')
     strings = dict(awtk_strings.load(os.path.join(raw, 'strings', lang + '.bin')))
@@ -64,7 +69,7 @@ def panel(work, theme, lang, order, pressed=None):
     im = p.render(page, 0)
     tree = awtk_ui.parse(open(os.path.join(rawt, 'ui/dialog/playmore_dialog.bin'), 'rb').read())
     p.sample = {name: strings.get(key, key) for name, key in KEYS.items()}
-    sheet(p, im, tree, order, pressed)
+    sheet(p, im, tree, order, pressed, offline)
     return im
 
 
@@ -73,7 +78,7 @@ def main():
     ap.add_argument('work'); ap.add_argument('out'); ap.add_argument('--theme', default='default'); ap.add_argument('--lang', default='en_US')
     a = ap.parse_args()
     shots = [('page 1 (when it opens)', panel(a.work, a.theme, a.lang, PAGE1)), ('page 2 (More tapped)', panel(a.work, a.theme, a.lang, PAGE2)),
-             ('page 2, Delete pressed', panel(a.work, a.theme, a.lang, PAGE2, 'listitem6'))]
+             ('page 2, Wi-Fi off (row dimmed)', panel(a.work, a.theme, a.lang, PAGE2, None, True)), ('page 2, Delete pressed', panel(a.work, a.theme, a.lang, PAGE2, 'listitem6'))]
     pad, top = 10, 18
     out = Image.new('RGB', (len(shots) * (NP.W + pad) + pad, NP.BAR + NP.H + top + 18), (40, 40, 40)); d = ImageDraw.Draw(out)
     for i, (label, im) in enumerate(shots):

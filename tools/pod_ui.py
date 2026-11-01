@@ -1188,6 +1188,139 @@ def build_vinyl_page(page):
     return root
 
 
+# Find Cover & Lyrics (patch/onlineart.c, docs/modules/onlineart.md): the stock navbar, the Search page's chip row (Covers, Lyrics) and line, then the Search page's list (list_view > scroll_view holding
+# ONE content view, oa_view, that the payload paints: the cover thumbnails of the Covers tab, the candidate rows of the Lyrics tab, a lyrics text's lines in a detail). Two details are the same window with other
+# widgets shown (hidden = visible=false and sensitive=false): the cover's confirmation (oa_dc: the larger cover painted on oa_dc_art, its texts and the pill oa_save) and the lyrics' (the header oa_dh_*, the
+# list showing the text, the pill oa_lsave). Every y of the labels is a window y (the navbar is 50 px).
+# The empty / failed state's block over the list (patch/onlineart.c OA_ES_*, the same numbers; the payload stacks and centres what a state has on window y OA_ES_CENTRE): a 40 px glyph (the image of the state, pod_es_*),
+# the title (oa_status: white, 18 px), the explanation (oa_es_text, two lines, grey, 14 px, wrapped by the label) and the Try Again pill (oa_es_retry).
+OA_ES_CENTRE, OA_ES_ICON, OA_ES_TITLE_H, OA_ES_TEXT_H, OA_ES_TEXT_W, OA_ES_PILL_W, OA_ES_PILL_H = 260, 40, 26, 40, 260, 168, 36
+OA_ES_ICON_GAP, OA_ES_TITLE_GAP, OA_ES_PILL_GAP = 14, 4, 18
+OA_ES_TEXT_PX = 14
+# The states (patch/onlineart.c oa_es_fail / oa_es_state; test/pod/onlineartpage.py proves the payload shows exactly these; tools/preview_onlineart.py draws them): name -> (glyph image, title, explanation, Try Again pill).
+# "Searching…" has only the title. The failure titles are the Podcasts' words.
+OA_ES_STATES = {
+    'lyrics busy': ('pod_es_timer', 'Lyrics Service Busy', 'LRCLIB is under heavy load. Try again in a moment.', True),
+    'covers busy': ('pod_es_timer', 'Cover Service Busy', 'iTunes and Deezer are busy. Try again in a moment.', True),
+    'no lyrics': ('pod_es_music', 'No Lyrics Found', 'LRCLIB has no lyrics for this song.', False),
+    'no covers': ('pod_es_image', 'No Covers Found', 'Nothing on iTunes or Deezer for this album.', False),
+    'no connection': ('pod_es_plug', "Can't connect", 'Check your Wi-Fi connection.', True),
+    'certificate': ('pod_es_lock', 'Certificate problem', "The server's certificate was not accepted.", True),
+    'no certificates': ('pod_es_lock', 'Certificates missing', 'This device has no certificate bundle.', False),
+    'server error': ('pod_es_info', 'Server error', 'The server could not answer. Try again later.', True),
+    'no Wi-Fi': ('pod_es_wifi', 'No Wi-Fi', 'Turn on Wi-Fi to search online.', True),
+    'no date': ('pod_es_calendar', 'Set the date first', 'Secure connections need the right date.', True),
+    'no card': ('pod_es_card', 'Storage unavailable', 'The SD card could not be used.', True),
+    'no memory': ('pod_es_drive', 'Not enough memory', 'There is not enough memory to search.', True),
+}
+
+
+def oa_es_layout(glyph, text, pill):
+    """The block's y's (window coordinates) as patch/onlineart.c oa_es_apply stacks them: (icon, title, text, pill), None for a part the state does not have; the whole centred on OA_ES_CENTRE."""
+    h = (OA_ES_ICON + OA_ES_ICON_GAP if glyph else 0) + OA_ES_TITLE_H + (OA_ES_TITLE_GAP + OA_ES_TEXT_H if text else 0) + (OA_ES_PILL_GAP + OA_ES_PILL_H if pill else 0)
+    y = OA_ES_CENTRE - h // 2
+    ys = [None, None, None, None]
+    if glyph: ys[0], y = y, y + OA_ES_ICON + OA_ES_ICON_GAP
+    ys[1], y = y, y + OA_ES_TITLE_H
+    if text: y += OA_ES_TITLE_GAP; ys[2], y = y, y + OA_ES_TEXT_H
+    if pill: ys[3] = y + OA_ES_PILL_GAP
+    return tuple(ys)
+
+
+OA_STATUS =(16, 214, 288, OA_ES_TITLE_H, 18, '#FFFFFF')    # x, y, w, h, px, colour: the title of the state block
+OA_HEAD_TITLE = (16, 52, 288, 20, 17, '#FFFFFF')   # the lyrics detail's header, in the chip row's place
+OA_HEAD_SUB = (16, 72, 288, 15, 13, '#8E8E93')
+OA_LPILL = (16, 400, 288, 40)    # the lyrics detail's pill (window y); the text lines stop above it (OA_LY_H of patch/onlineart.c)
+OA_DC = (0, NAVBAR_H, SCREEN_W, CLIENT_H - NAVBAR_H)   # the cover detail's container (window y)
+OA_DC_ART = (40, 8, 240, 240)    # the larger cover (container y)
+OA_DC_LABELS = (   # name, y (container), h, px, colour: the album, the artist, the source, the failure line
+    ('oa_dc_name', 256, 26, 20, '#FFFFFF'),
+    ('oa_dc_artist', 282, 22, 16, '#AAAAAA'),
+    ('oa_dc_source', 304, 20, 13, '#8E8E93'),
+    ('oa_hint', 326, 20, 14, '#8E8E93'))
+OA_PILL = (16, 352, 288, 40)     # the cover detail's pill (container y)
+OA_BADGE_PX = 12
+OA_LINE_PX = 17                  # a lyrics text line
+
+
+def _oa_label(name, x, y, w, h, px, colour, align='center', text=None, valign='middle'):
+    lab = Widget('label', x, y, w, h, [('name', name), ('sensitive', 'false'), pod_i18n.text_prop(text) if text else ('text', '')])
+    for st in ('normal', 'disable', 'focused'):
+        styled(lab, (st,), 'text_color', colour)
+        styled(lab, (st,), 'font_size', str(px))
+        styled(lab, (st,), 'text_align_h', align)
+        styled(lab, (st,), 'text_align_v', valign)
+    return lab
+
+
+def _oa_pill(name, x, y, w, h):
+    pill = hidden(Widget('button', x, y, w, h, [('name', name), ('enable', 'true'), ('text', '')]))
+    for st in STATES:
+        styled(pill, (st,), 'bg_color', SG_PILL_DOWN_RGB if st == 'pressed' else SG_PILL_OFF_RGB if st == 'disable' else SG_PILL_RGB)
+        styled(pill, (st,), 'text_color', '#FFFFFF')
+        styled(pill, (st,), 'font_size', '18')
+        styled(pill, (st,), 'border_width', '0')
+        styled(pill, (st,), 'border_color', '#00000000')
+        styled(pill, (st,), 'round_radius', str(OFFSETS['SG_PILL_R']))
+    return pill
+
+
+def build_onlineart_page(page):
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    root.children.append(navbar(page.title))
+    # the Search page's chip row, line and list (the same numbers: tools/pod_search.py)
+    chips = Widget('view', 0, PS.SE_CHIPS_Y, SCREEN_W, PS.SE_CHIPS_H, [('name', 'oa_chips'), ('enable', 'true')])
+    for st in STATES:
+        styled(chips, (st,), 'bg_color', '#000000')
+        styled(chips, (st,), 'border_width', '0')
+    chips.children = [kb_view('oa_chip_hl', PS.SE_CHIP_X, PS.SE_CHIP_Y, 80, PS.SE_CHIP_H, PS.CHIP_ON_RGB, PS.SE_CHIP_R)]
+    root.children.append(chips)
+    sep = Widget('view', 0, PS.SE_SEP_Y, SCREEN_W, 1, [('name', 'oa_sep'), ('sensitive', 'false')])
+    styled(sep, STATES, 'bg_color', PS.SEP_RGB)
+    root.children.append(sep)
+    lv = stock_list([], True, top=PS.SE_LIST_Y)
+    lv.set('name', 'oa_listview')
+    sv = lv.children[0]
+    sv.set('name', 'oa_scrollview')
+    view = Widget('view', 0, 0, SCREEN_W, PS.SE_LIST_H, [('name', 'oa_view')])
+    styled(view, ('normal',), 'bg_color', '#000000')
+    sv.children.append(view)
+    root.children.append(lv)
+    x, y, w, h, px, colour = OA_STATUS
+    root.children.append(hidden(_oa_label('oa_status', x, y, w, h, px, colour)))
+    root.children.append(hidden(Widget('image', (SCREEN_W - OA_ES_ICON) // 2, OA_ES_CENTRE - 100, OA_ES_ICON, OA_ES_ICON, [('name', 'oa_es_icon'), ('image', 'pod_es_info'), ('draw_type', 'center'), ('sensitive', 'false')])))
+    root.children.append(hidden(_oa_label('oa_es_text', (SCREEN_W - OA_ES_TEXT_W) // 2, OA_ES_CENTRE - 20, OA_ES_TEXT_W, OA_ES_TEXT_H, OA_ES_TEXT_PX, '#8E8E93', valign='top')))
+    root.children.append(_oa_pill('oa_es_retry', (SCREEN_W - OA_ES_PILL_W) // 2, OA_ES_CENTRE + 30, OA_ES_PILL_W, OA_ES_PILL_H))
+    x, y, w, h, px, colour = OA_HEAD_TITLE
+    root.children.append(hidden(_oa_label('oa_dh_title', x, y, w, h, px, colour)))
+    x, y, w, h, px, colour = OA_HEAD_SUB
+    root.children.append(hidden(_oa_label('oa_dh_sub', x, y, w, h, px, colour)))
+    root.children.append(_oa_pill('oa_lsave', *OA_LPILL))
+    # the cover detail
+    dc = hidden(Widget('view', *OA_DC, [('name', 'oa_dc')]))
+    styled(dc, ('normal',), 'bg_color', '#000000')
+    dc.children.append(Widget('view', *OA_DC_ART, [('name', 'oa_dc_art'), ('sensitive', 'false')]))
+    styled(dc.children[-1], ('normal',), 'bg_color', '#000000')
+    for name, y, h, px, colour in OA_DC_LABELS:
+        dc.children.append(hidden(_oa_label(name, 16, y, SCREEN_W - 32, h, px, colour)) if name == 'oa_hint' else _oa_label(name, 16, y, SCREEN_W - 32, h, px, colour))
+    dc.children.append(_oa_pill('oa_save', 16, OA_PILL[1], OA_PILL[2], OA_PILL[3]))
+    root.children.append(dc)
+    # text styles only (widget_prepare_text_style), never shown; the title of the navbar is its own label_title
+    for name, px, colour, align in (('label_row_title', LIST_TITLE_PX, PS.TITLE_RGB, 'left'), ('label_row_sub', LIST_SUB_PX, PS.SUB_RGB, 'left'), ('label_chip', PS.SE_CHIP_PX, PS.CHIP_INK, 'center'),
+                                    ('label_chip_on', PS.SE_CHIP_PX, PS.CHIP_ON_INK, 'center'), ('label_badge', OA_BADGE_PX, PS.SUB_RGB, 'center'), ('label_badge_on', OA_BADGE_PX, PS.CHIP_ON_INK, 'center'),
+                                    ('label_line', OA_LINE_PX, '#FFFFFF', 'left')):
+        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, align))
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+        if name == 'label_chip_on': styled(lab, ('normal', 'pressed', 'disable', 'focused'), 'bg_color', PS.CHIP_ON_RGB)
+        if name == 'label_badge': styled(lab, ('normal', 'pressed', 'disable', 'focused'), 'bg_color', PS.SEP_RGB)
+        if name == 'label_badge_on': styled(lab, ('normal', 'pressed', 'disable', 'focused'), 'bg_color', PS.CHIP_ON_RGB)
+        root.children.append(lab)
+    return root
+
+
+
+
 def build_menucfg_page(page):
     """The Main Menu page (patch/menu.c): a row per menu item in the default order, each with an up arrow (a stock
     button with the stock chevron-up art, expansion_2, insensitive: a picture, the row decides by the tap position)
@@ -1653,6 +1786,8 @@ def build_page(page):
         return build_tape_page(page)
     if page.kind == 'vinyl':
         return build_vinyl_page(page)
+    if page.kind == 'onlineart':
+        return build_onlineart_page(page)
     if page.kind == 'cover':
         return build_cover_page(page)
     if page.kind == 'artists':

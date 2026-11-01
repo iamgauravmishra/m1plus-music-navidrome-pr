@@ -59,6 +59,9 @@ void pd_date(char *out, unsigned size, const char *when, unsigned length);
  * style). has_pill: the pill row is there (the page puts the pill and the "..." at y_pill). */
 void pd_make(pd_t *d, void *st_title, void *st_meta, void *st_desc, const char *title, const char *show,
              const char *date, const char *desc, const char *hint, int has_pill);
+/* s (n chars) in at most maxl lines of room px in the style label st, the lines as (start, length) into s (an ellipsis closes the last line when text is left); d only holds the advances' cache
+ * (Find Cover & Lyrics wraps a lyrics text line by line with it). */
+int pd_lines(pd_t *d, void *st, unsigned *s, int n, int room, int maxl, pw_line_t *out);
 /* The texts of the page at scroll offset off, each wholly inside the 400 px view or not at all (AWTK does not clip): datex is where the date starts (after the badges). */
 void pd_paint(void *canvas, const pd_t *d, int off, void *st_date, void *st_title, void *st_meta, void *st_desc,
               int datex);

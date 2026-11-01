@@ -55,6 +55,9 @@ in [history](../history.md); feature modules retain their detailed edge cases.
   [iPod checklist](ipod.md#device-checklist)
 - **EXTRA-04:** Cassette Mode orientation, text, theme, progress/reels, pause/resume, close
   and dark-screen timer behaviour. [Cassette checklist](tape.md#device-checklist-first-flash)
+- **EXTRA-06:** Find Cover & Lyrics (More sheet, More page): row dimmed with Wi-Fi off, covers from iTunes and Deezer,
+  a tapped cover on Albums, Cover Flow, the album page, mini player and Vinyl, the folder picture, LRCLIB lyrics saved as
+  `.lrc`. [Checklist](onlineart.md#device-checks-not-run)
 - **EXTRA-05:** Vinyl Mode cover label, turning and stopping, arm on the groove and parked, keys,
   record tap, close and dark-screen timer behaviour. [Vinyl checklist](vinyl.md#device-checklist-first-flash)
 

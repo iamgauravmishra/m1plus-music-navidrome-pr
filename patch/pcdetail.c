@@ -49,7 +49,7 @@ static void pd_adv(pd_t *d, void *st, const unsigned *s, int n, unsigned short *
 }
 
 /* s (n chars) in at most maxl lines of room px, the lines' starts relative to s (an ellipsis closes the last line when text is left). */
-static int pd_lines(pd_t *d, void *st, unsigned *s, int n, int room, int maxl, pw_line_t *out) {
+int pd_lines(pd_t *d, void *st, unsigned *s, int n, int room, int maxl, pw_line_t *out) {
     unsigned e[2];
     unsigned short *adv = d->adv;
     e[0] = ELLIPSIS, e[1] = 0;

@@ -153,7 +153,9 @@ the recovery button combination for this model remains unverified.
   losslessly (`tools/png_pack.py`, four palette + tRNS). Test builds zTUKNAAAB to zTUKNAAAG flashed, accepted.
 - **1.0.0** (2026-11-01, current release; package tag `V2.1-1.0.0`): semantic versions as in q2-pod, a manual macOS CI
   (`make dev` on the runner, the package as the run's artifact), `make publish` (draft GitHub release named `VERSION`),
-  deterministic cold builds. Same features as V2.1qP.
+  deterministic cold builds. Features of V2.1qP plus **Find Cover & Lyrics** (Now Playing > More > Cover & Lyrics: iTunes and
+  Deezer covers with a confirmation, LRCLIB lyric candidates, Covers / Lyrics tabs; fails fast with Try Again). Test builds
+  zMIRFAAAB, D, E and F flashed, accepted. LRCLIB under load answers uncached queries with 503 (2026-11-01; cached ones 200).
 
 ## Hardware results (what broke on the device, and why)
 - **Vinyl Cover record rim (zTUKNAAAD).** On a track change the previous tint's disc edge stayed. The anti-aliased rim blended onto

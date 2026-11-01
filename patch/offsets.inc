@@ -655,12 +655,12 @@
 /* Now Playing's More dialog (patch/playmore.c, docs/modules/playmore.md): ui/dialog/playmore_dialog.bin is a 320 px wide
  * sheet pinned at y 130 (the stock init, @0x479d10, and its to-background handler @0x4789f0) holding list_view playmore_listview >
  * scroll_view playmore_scrollview (310 px, the scroll bar scroll_bar_m beside it, 10 px) > list_item rows, PM_ROW_H (50, the
- * list_view's item_height) high each; the asset adds the hidden rows pod_more, pod_back, pod_tape, pod_vinyl and pod_goep. The payload shows PM_PAGE_N rows (page 1) or PM_PAGE2_N
+ * list_view's item_height) high each; the asset adds the hidden rows pod_more, pod_back, pod_tape, pod_vinyl, pod_goep and pod_art. The payload shows PM_PAGE_N rows (page 1) or PM_PAGE2_N
  * (page 2) at a time and puts the sheet, as high as they are, on the bottom of the 480 px screen (the stock 130 + 350 ends there too). */
 #define PM_ROW_H 50
 #define PM_PAGE_N 6               /* page 1's rows (Look up album, Look up artist, Add to playlist, Cassette Mode, Vinyl Mode, More; the asset's pod_goep, Go to Podcasts, is the episode's first row): the sheet is that high (PM_ROW_H x) */
 #define PM_PAGE_EP_N 2            /* page 1 of a podcast episode (Go to Podcasts, More) */
-#define PM_PAGE2_N 4              /* page 2's rows (the back header, Speed, A-B repeat, Delete) */
+#define PM_PAGE2_N 5              /* page 2's rows (the back header, Speed, A-B repeat, Find Cover & Lyrics, Delete) */
 #define PM_SCREEN_H 480
 #define PM_DIALOG_W 320
 #define PM_SV_W 310

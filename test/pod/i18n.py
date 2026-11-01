@@ -104,7 +104,7 @@ def run(ctx):
         for a in call_args(src, 'widget_set_text_utf8'):
             for inner in call_args(a, 'TR'): a = a.replace(inner, '')       # a translated key inside is fine
             for lit in literal.findall(a):
-                if lit not in ('', 'M1+ Music') and lit not in pod_keyboard.LABELS: plain.append((f, lit))
+                if lit not in ('', 'M1+ Music', 'iTunes', 'Deezer') and lit not in pod_keyboard.LABELS: plain.append((f, lit))
         for a in call_args(src, 'toast') + call_args(src, 'pod_toast'):
             if literal.search(a) and not a.startswith('TR('): plain.append((f, a))
         for name in ('TR', 'widget_set_tr_text'):

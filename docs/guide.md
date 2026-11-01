@@ -25,7 +25,7 @@ remains reachable. **Developer → Open Shanling Home** returns to the stock gri
 | Shuffle | Shuffle songs, albums or folders from Extras |
 
 The mini player's cover opens Now Playing; its buttons pause/resume or skip. Now Playing's
-More sheet provides playback options, Look up album, Cassette Mode and Vinyl Mode. A drag on a list scrolls;
+More sheet provides playback options, Look up album, Cassette Mode, Vinyl Mode and (on its More page, with Wi-Fi on) Find Cover & Lyrics. A drag on a list scrolls;
 a tap opens or plays a row.
 
 Copy music to the card, then use **Extras → Update Library** to scan it.
@@ -55,6 +55,10 @@ top-left screw to close. Change its theme under Settings.
 **Vinyl Mode** is a turntable Now Playing screen: the cover turns as the record's label while
 playing. Tap the record or the large key to pause/resume, the side keys to skip, the top-left
 chevron to close.
+
+**Cover & Lyrics** (Now Playing > ... > More > Cover & Lyrics, needs Wi-Fi) looks up the playing album's covers
+(iTunes, then Deezer) and its lyrics (LRCLIB). Tap a cover to use it for the album everywhere; Save Lyrics writes
+`<song>.lrc` next to the song (Replace Lyrics when one is there). See [details](modules/onlineart.md).
 
 **Pod** opens a virtual iPod with a touch click wheel. See its [controls and limits](modules/ipod.md).
 

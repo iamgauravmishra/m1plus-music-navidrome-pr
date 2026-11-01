@@ -1,0 +1,10 @@
+{
+ "resultCount": 5,
+ "results": [
+  {"wrapperType": "collection", "collectionType": "Album", "artistId": 487143, "collectionId": 1065973699, "amgArtistId": 3420, "artistName": "Radiohead", "collectionName": "OK Computer", "collectionCensoredName": "OK Computer", "artistViewUrl": "https://music.apple.com/us/artist/radiohead/657515?uo=4", "collectionViewUrl": "https://music.apple.com/us/album/ok-computer/1065973699?uo=4", "artworkUrl60": "https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b6/5a/d9/b65ad9ad-1d62-6bb1-ce0a-6c1e6e6f2d3c/634904078164.png/60x60bb.jpg", "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b6/5a/d9/b65ad9ad-1d62-6bb1-ce0a-6c1e6e6f2d3c/634904078164.png/100x100bb.jpg", "collectionPrice": 9.99, "collectionExplicitness": "notExplicit", "trackCount": 12, "copyright": "℗ 1997 XL Recordings Ltd", "country": "USA", "currency": "USD", "releaseDate": "1997-05-21T07:00:00Z", "primaryGenreName": "Alternative"},
+  {"wrapperType": "collection", "collectionType": "Album", "artistId": 487143, "collectionId": 1109714933, "artistName": "Radiohead", "collectionName": "OK Computer OKNOTOK 1997 2017", "artworkUrl60": "https://is1-ssl.mzstatic.com/image/thumb/Music117/v4/aa/bb/cc/aabbccdd/60x60bb.jpg", "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music117/v4/aa/bb/cc/aabbccdd/100x100bb.jpg", "trackCount": 23},
+  {"wrapperType": "collection", "collectionType": "Album", "collectionId": 1500000001, "artistName": "周杰倫", "collectionName": "葉惠美", "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music/v4/11/22/33/11223344/100x100bb.jpg", "trackCount": 11},
+  {"wrapperType": "collection", "collectionType": "Album", "collectionId": 1500000002, "artistName": "Sigur Rós & Friends \"Live\"", "collectionName": "Ágætis byrjun", "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music/v4/44/55/66/44556677/100x100bb.jpg"},
+  {"wrapperType": "collection", "collectionType": "Album", "collectionId": 1500000003, "artistName": "No Picture", "collectionName": "Album Without Art"}
+ ]
+}

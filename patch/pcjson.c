@@ -14,6 +14,7 @@ typedef struct
     char *out;
     unsigned cap, n;
     int cut;
+    int nl; /* 1: \n stays a line feed and \r is dropped (lyrics); 0: both are a space */
 } pj_out_t;
 
 static void pj_ws(pj_t *p) {
@@ -87,7 +88,11 @@ static int pj_str(pj_t *p, pj_out_t *o) {
                     continue;
                 } else
                     pj_put(o, hi < 0x20 ? ' ' : (unsigned)hi);
-            } else if (c == 'n' || c == 'r' || c == 't' || c == 'b' || c == 'f')
+            } else if (o->nl && c == 'n')
+                pj_put(o, '\n');
+            else if (o->nl && c == 'r')
+                continue;
+            else if (c == 'n' || c == 'r' || c == 't' || c == 'b' || c == 'f')
                 pj_put(o, ' ');
             else if (c >= 0x80)
                 --p->s; /* a backslash before a multi-byte character: the character is read as itself */
@@ -123,7 +128,8 @@ static int pj_skip(pj_t *p) {
         if (p->s >= p->e) return 0;
         c = *p->s;
         if (c == '"') {
-            pj_out_t none = {(char *)0, 0, 0, 0};
+            pj_out_t none;
+            none.out = (char *)0, none.cap = none.n = 0, none.cut = none.nl = 0;
             if (!pj_str(p, &none)) return 0;
         } else if (c == '{' || c == '[') {
             if (++depth > PJ_DEPTH) return 0;
@@ -169,15 +175,31 @@ static int pj_is(const char *a, const char *b) {
     return *a == *b;
 }
 
-/* The object whose '{' is at p->s into r. 1 when its '}' was reached, 0 when the text ended (or it was not an object): then r is not an answer. */
-static int pj_obj(pj_t *p, pj_result_t *r) {
-    r->id = 0;
-    r->name[0] = r->author[0] = r->feed[0] = r->art[0] = 0;
+/* A string value at p->s (the opening quote) into dst of size cap (at most; the NUL after it). 0 when the text ended first. *cut: something was left out. */
+static int pj_val(pj_t *p, char *dst, unsigned cap, int *cut) {
+    pj_out_t vo;
+    vo.out = dst, vo.cap = cap, vo.n = vo.cut = vo.nl = 0;
+    if (!pj_str(p, &vo)) return 0;
+    dst[vo.n] = 0;
+    if (cut) *cut = vo.cut;
+    return 1;
+}
+
+/* The key string at p->s and the ':' after it; 1 with p on the value, 0 when the object is not well formed or the text ends. */
+static int pj_key(pj_t *p, char *key, unsigned size) {
+    if (!pj_val(p, key, size, (int *)0)) return 0;
+    pj_ws(p);
+    if (p->s >= p->e || *p->s != ':') return 0;
+    ++p->s;
+    pj_ws(p);
+    return p->s < p->e;
+}
+
+/* The "name" of the object at p->s ('{') into dst (Deezer's artist); every other member skipped. p ends after the '}'. 0 when the text ended. */
+static int pj_nested_name(pj_t *p, char *dst, unsigned cap) {
     ++p->s;
     for (;;) {
-        char key[24];
-        pj_out_t ko, vo;
-        int which;
+        char key[8];
         unsigned c;
         pj_ws(p);
         if (p->s >= p->e) return 0;
@@ -190,37 +212,65 @@ static int pj_obj(pj_t *p, pj_result_t *r) {
             ++p->s;
             continue;
         }
-        if (c != '"') return 0;
-        ko.out = key, ko.cap = sizeof key, ko.n = ko.cut = 0;
-        if (!pj_str(p, &ko)) return 0;
-        key[ko.n] = 0;
-        pj_ws(p);
-        if (p->s >= p->e || *p->s != ':') return 0;
-        ++p->s;
+        if (c != '"' || !pj_key(p, key, sizeof key)) return 0;
+        if (*p->s == '"' && pj_is("name", key)) {
+            if (!pj_val(p, dst, cap, (int *)0)) return 0;
+        } else if (!pj_skip(p))
+            return 0;
+    }
+}
+
+/* The object whose '{' is at p->s into r. dz 0: the store's (collectionId, collectionName, artistName, feedUrl, artworkUrl100); 1: Deezer's album (id, title, artist.name, cover_medium as art).
+ * 1 when its '}' was reached, 0 when the text ended (or it was not an object): then r is not an answer. */
+static int pj_obj(pj_t *p, pj_result_t *r, int dz) {
+    r->id = 0;
+    r->name[0] = r->author[0] = r->feed[0] = r->art[0] = 0;
+    ++p->s;
+    for (;;) {
+        char key[24];
+        int which, cut = 0;
+        unsigned c;
         pj_ws(p);
         if (p->s >= p->e) return 0;
-        which = pj_is("collectionId", key)     ? 1
-                : pj_is("collectionName", key) ? 2
-                : pj_is("artistName", key)     ? 3
-                : pj_is("feedUrl", key)        ? 4
-                : pj_is("artworkUrl100", key)  ? 5
-                                               : 0;
+        c = *p->s;
+        if (c == '}') {
+            ++p->s;
+            return 1;
+        }
+        if (c == ',') {
+            ++p->s;
+            continue;
+        }
+        if (c != '"' || !pj_key(p, key, sizeof key)) return 0;
+        if (dz)
+            which = pj_is("id", key)             ? 1
+                    : pj_is("title", key)        ? 2
+                    : pj_is("artist", key)       ? 3
+                    : pj_is("cover_medium", key) ? 5
+                                                 : 0;
+        else
+            which = pj_is("collectionId", key)     ? 1
+                    : pj_is("collectionName", key) ? 2
+                    : pj_is("artistName", key)     ? 3
+                    : pj_is("feedUrl", key)        ? 4
+                    : pj_is("artworkUrl100", key)  ? 5
+                                                   : 0;
         if (which == 1 && *p->s >= '0' && *p->s <= '9')
             r->id = pj_num(p);
-        else if (which >= 2 && *p->s == '"') {
+        else if (dz && which == 3 && *p->s == '{') {
+            if (!pj_nested_name(p, r->author, PJ_AUTHOR)) return 0;
+        } else if (which >= 2 && *p->s == '"' && !(dz && which == 3)) {
             char *dst = which == 2 ? r->name : which == 3 ? r->author : which == 4 ? r->feed : r->art;
-            vo.out = dst, vo.cap = which == 2 ? PJ_NAME : which == 3 ? PJ_AUTHOR : which == 4 ? PC_URL : PJ_ART;
-            vo.n = vo.cut = 0;
-            if (!pj_str(p, &vo)) return 0;
-            dst[vo.n] = 0;
-            if (vo.cut && which >= 4) dst[0] = 0; /* a cut address is no address */
+            if (!pj_val(p, dst, which == 2 ? PJ_NAME : which == 3 ? PJ_AUTHOR : which == 4 ? PC_URL : PJ_ART, &cut))
+                return 0;
+            if (cut && which >= 4) dst[0] = 0; /* a cut address is no address */
         } else if (!pj_skip(p))
             return 0;
     }
 }
 
 /* The elements of the array whose '[' has been passed: the objects (the others are skipped) into out, up to max. Returns how many were kept. */
-static int pj_array(pj_t *p, pj_result_t *out, int max) {
+static int pj_array(pj_t *p, pj_result_t *out, int max, int dz) {
     int n = 0;
     for (;;) {
         unsigned c;
@@ -237,14 +287,15 @@ static int pj_array(pj_t *p, pj_result_t *out, int max) {
         }
         if (n >= max) return n;
         if (c == '{') {
-            if (!pj_obj(p, &out[n])) return n; /* cut short: not kept */
+            if (!pj_obj(p, &out[n], dz)) return n; /* cut short: not kept */
             if (out[n].name[0] || out[n].feed[0]) ++n;
         } else if (!pj_skip(p))
             return n;
     }
 }
 
-int pj_results(const char *json, unsigned n, pj_result_t *out, int max) {
+/* The members of the top-level object, up to the array called want: its objects. -1 when there is none. */
+static int pj_top(const char *json, unsigned n, pj_result_t *out, int max, const char *want, int dz) {
     pj_t p;
     p.s = (const unsigned char *)json, p.e = p.s + n;
     pj_ws(&p);
@@ -252,7 +303,6 @@ int pj_results(const char *json, unsigned n, pj_result_t *out, int max) {
     ++p.s;
     for (;;) {
         char key[16];
-        pj_out_t ko;
         unsigned c;
         pj_ws(&p);
         if (p.s >= p.e) return -1;
@@ -262,18 +312,100 @@ int pj_results(const char *json, unsigned n, pj_result_t *out, int max) {
             ++p.s;
             continue;
         }
-        if (c != '"') return -1;
-        ko.out = key, ko.cap = sizeof key, ko.n = ko.cut = 0;
-        if (!pj_str(&p, &ko)) return -1;
-        key[ko.n] = 0;
-        pj_ws(&p);
-        if (p.s >= p.e || *p.s != ':') return -1;
-        ++p.s;
-        pj_ws(&p);
-        if (p.s < p.e && *p.s == '[' && pj_is("results", key)) {
+        if (c != '"' || !pj_key(&p, key, sizeof key)) return -1;
+        if (*p.s == '[' && pj_is(want, key)) {
             ++p.s;
-            return pj_array(&p, out, max);
+            return pj_array(&p, out, max, dz);
         }
         if (!pj_skip(&p)) return -1;
     }
+}
+
+int pj_results(const char *json, unsigned n, pj_result_t *out, int max) {
+    return pj_top(json, n, out, max, "results", 0);
+}
+
+int pj_deezer(const char *json, unsigned n, pj_result_t *out, int max) { return pj_top(json, n, out, max, "data", 1); }
+
+/* One LRCLIB record at p->s ('{') into r (trackName, artistName, albumName, duration in whole seconds) and the texts s (syncedLyrics) and pl (plainLyrics), each at most cap, a null or a missing one is "";
+ * a cut text ends at its last whole line. 1 when the '}' was reached. */
+static int pj_lrc_obj(pj_t *p, pj_lrc_t *r, char *s, char *pl, unsigned cap) {
+    s[0] = pl[0] = 0;
+    r->title[0] = r->artist[0] = r->album[0] = 0;
+    r->secs = 0, r->synced = 0;
+    ++p->s;
+    for (;;) {
+        char key[16];
+        unsigned c;
+        pj_ws(p);
+        if (p->s >= p->e) return 0;
+        c = *p->s;
+        if (c == '}') {
+            ++p->s;
+            return 1;
+        }
+        if (c == ',') {
+            ++p->s;
+            continue;
+        }
+        if (c != '"' || !pj_key(p, key, sizeof key)) return 0;
+        if (*p->s == '"' && (pj_is("syncedLyrics", key) || pj_is("plainLyrics", key))) {
+            char *dst = pj_is("syncedLyrics", key) ? s : pl;
+            pj_out_t vo;
+            vo.out = dst, vo.cap = cap, vo.n = vo.cut = 0, vo.nl = 1;
+            if (!pj_str(p, &vo)) return 0;
+            if (vo.cut)
+                while (vo.n && dst[vo.n - 1] != '\n') --vo.n;
+            dst[vo.n] = 0;
+        } else if (*p->s == '"' && (pj_is("trackName", key) || pj_is("artistName", key) || pj_is("albumName", key))) {
+            char *dst = pj_is("trackName", key) ? r->title : pj_is("artistName", key) ? r->artist : r->album;
+            if (!pj_val(p, dst, dst == r->artist ? PJ_AUTHOR : PJ_NAME, (int *)0)) return 0;
+        } else if (*p->s >= '0' && *p->s <= '9' && pj_is("duration", key))
+            r->secs = pj_num(p);
+        else if (!pj_skip(p))
+            return 0;
+    }
+}
+
+/* Whether the text has anything but white space. */
+static int pj_text(const char *t) {
+    for (; *t; ++t)
+        if (*t != ' ' && *t != '\n') return 1;
+    return 0;
+}
+
+int pj_lrc_each(const char *json, unsigned n, unsigned cap, char *a, char *b,
+                int (*fn)(void *, const pj_lrc_t *, const char *), void *ctx) {
+    pj_t p;
+    pj_lrc_t r;
+    int count = 0, array;
+    p.s = (const unsigned char *)json, p.e = p.s + n;
+    pj_ws(&p);
+    if (p.s >= p.e || (*p.s != '{' && *p.s != '[')) return -1;
+    array = *p.s == '[';
+    if (array) ++p.s;
+    for (;;) {
+        unsigned c;
+        pj_ws(&p);
+        if (p.s >= p.e) break;
+        c = *p.s;
+        if (c == ',') {
+            ++p.s;
+            continue;
+        }
+        if (c == ']') break;
+        if (c == '{') {
+            if (!pj_lrc_obj(&p, &r, a, b, cap)) break; /* cut short: not kept */
+            r.synced = pj_text(a);
+            if (r.synced || pj_text(b)) {
+                ++count;
+                if (!fn(ctx, &r, r.synced ? a : b)) break;
+            }
+            if (!array) break;
+        } else if (!pj_skip(&p))
+            break;
+        else if (!array)
+            return -1;
+    }
+    return count;
 }

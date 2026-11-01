@@ -21,6 +21,7 @@
 #include "pccover.h"
 #include "pcnotes.h"
 #include "curlopts.h"
+#include "covercache.h"
 
 #define PN_PATH 400
 #define PN_SHOW_MAX 4096 /* bytes of a show file read */
@@ -75,9 +76,28 @@ static struct {
     pj_result_t sres[PJ_MAX];
     volatile unsigned char sthumb[PJ_MAX], sext[PJ_MAX];
     pf_parser_t *volatile prev;
+    /* Find Cover & Lyrics (docs/modules/onlineart.md; new fields go below). astate: PN_A_*; acode: the cover lookup's result; an: covers (written before astate leaves PN_A_COVERS); agen: moves with every step; athumb / aext as sthumb /
+     * sext; ares: iTunes' results first, then Deezer's (art: the picture the thumbnail is made from); asrc: PN_SRC_* of each; lstate: 0 not yet, 1 answered; lcode, ln (candidates, written before lstate is 1), lcand / lslot (the display order: slot of display index i; the text of slot s is PN_ART_DIR/l<s>.txt);
+     * pkstate: 0 none, 1 running, 2 done, pkcode; pkmode: 0 fetch the larger picture only, 1 save it; fidx / fext: the cover whose larger picture is held as full.jpg|png (fidx + 1, 0 none; fext 1 jpg, 2 png);
+     * the query and the pick's targets are copied here by the UI thread before the worker starts. */
+    volatile int astate, acode, an, lstate, lcode, ln, pkstate, pkcode, pkidx, pkmode, fidx, fext;
+    volatile unsigned agen;
+    volatile unsigned char athumb[PN_ART_MAX], aext[PN_ART_MAX], asrc[PN_ART_MAX], lslot[PN_LYR_MAX];
+    pj_result_t ares[PN_ART_MAX];
+    pn_lyr_t lcand[PN_LYR_MAX];
+    char aq[3][PN_ART_Q], pkdir[PN_PATH];
+    unsigned adur, pkkey[2];
+    int amask; /* the parts the worker looks up: PN_PART_COVERS | PN_PART_LYRICS */
 } pn __attribute__((section(".scratch")));
 
-enum { PN_KIND_REFRESH = 1, PN_KIND_DL = 2, PN_KIND_SEARCH = 3, PN_KIND_PREVIEW = 4 };
+enum {
+    PN_KIND_REFRESH = 1,
+    PN_KIND_DL = 2,
+    PN_KIND_SEARCH = 3,
+    PN_KIND_PREVIEW = 4,
+    PN_KIND_ART = 5,
+    PN_KIND_PICK = 6
+};
 enum { PN_Q_FREE = 0, PN_Q_WAIT = 1, PN_Q_ACTIVE = 2 };
 
 static int pn_eq(const char *a, const char *b) {
@@ -130,10 +150,11 @@ static void pn_set(unsigned feed, int code, unsigned fresh) {
     pn_bump();
 }
 
-int pn_busy(void) {
-    return pn.busy && pn.kind != PN_KIND_DL && pn.kind != PN_KIND_SEARCH && pn.kind != PN_KIND_PREVIEW;
+int pn_busy(void) { return pn.busy && (pn.kind == PN_KIND_REFRESH || !pn.kind); }
+int pn_job_busy(void) {
+    return pn.busy && (pn.kind == PN_KIND_SEARCH || pn.kind == PN_KIND_PREVIEW || pn.kind == PN_KIND_ART ||
+                       pn.kind == PN_KIND_PICK);
 }
-int pn_job_busy(void) { return pn.busy && (pn.kind == PN_KIND_SEARCH || pn.kind == PN_KIND_PREVIEW); }
 void pn_cancel(void) { pn.cancel = 1; }
 int pn_cancelling(void) { return pn_busy() && pn.cancel; }
 unsigned pn_part(void) { return pn.part; }
@@ -292,7 +313,9 @@ static void *pn_easy(const char *url, unsigned (*write_cb)(char *, unsigned, uns
     curl_easy_setopt(h, CURLOPT_LOW_SPEED_LIMIT, 1000);
     curl_easy_setopt(h, CURLOPT_LOW_SPEED_TIME, 30);
     curl_easy_setopt(h, CURLOPT_TIMEOUT, 120);
-    curl_easy_setopt(h, CURLOPT_USERAGENT, "M1PlusMusic/1.0");
+    curl_easy_setopt(
+        h, CURLOPT_USERAGENT,
+        "M1PlusMusic/1.0 (https://github.com/imfing/m1plus-mod)"); /* LRCLIB asks for the app's name and its address */
     curl_easy_setopt(h, CURLOPT_ACCEPT_ENCODING,
                      ""); /* every encoding libcurl has (gzip: a 3 MB feed is 400 kB on the wire) */
     curl_easy_setopt(h, CURLOPT_CAINFO, PN_CA);
@@ -1168,12 +1191,12 @@ static unsigned pn_jwrite(char *d, unsigned size, unsigned nmemb, void *user) {
     return len;
 }
 
-/* The answer at url into buf (PN_JSON_CAP + 1 bytes), *got bytes of it. PN_OK also for one cut at the cap. A 404 is no news of a feed here: PN_HTTP. */
-static int pn_fetch_json(const char *url, char *buf, unsigned *got) {
+/* The answer at url into buf (PN_JSON_CAP + 1 bytes), *got bytes of it. PN_OK also for one cut at the cap. A 404 or 410 is PN_GONE here (LRCLIB's "no such record"). */
+static int pn_fetch_json_once(const char *url, char *buf, unsigned *got, long *http_out) {
     struct jx f;
     void *h;
     long http = 0;
-    int rc, code;
+    int rc;
     memset(&f, 0, sizeof f);
     f.buf = buf;
     h = pn_easy(url, pn_jwrite, &f, f.err, (void *)0);
@@ -1182,8 +1205,26 @@ static int pn_fetch_json(const char *url, char *buf, unsigned *got) {
     curl_easy_getinfo(h, CURLINFO_RESPONSE_CODE, &http);
     curl_easy_cleanup(h);
     *got = f.n;
+    if (http_out) *http_out = http;
     if (rc == 0 || (rc == CURLE_WRITE_ERROR && f.capped)) return PN_OK;
-    code = pn_rc(rc, http);
+    return pn_rc(rc, http);
+}
+
+static int pn_fetch_json_raw(const char *url, char *buf, unsigned *got) {
+    return pn_fetch_json_once(url, buf, got, (long *)0);
+}
+
+/* The answer at url of a lookup service, one request, never repeated (a failure shows at once and the page's Try Again asks again). A busy answer (HTTP 503 or 429: LRCLIB under load answers uncached queries so) is
+ * PN_OVERLOAD. The other codes as pn_fetch_json_raw (a 404 is PN_GONE). */
+static int pn_fetch_json_api(const char *url, char *buf, unsigned *got) {
+    long http = 0;
+    int code = pn_fetch_json_once(url, buf, got, &http);
+    return code == PN_HTTP && (http == 503 || http == 429) ? PN_OVERLOAD : code;
+}
+
+/* The same, but a 404 is no news of a feed here: PN_HTTP. */
+static int pn_fetch_json(const char *url, char *buf, unsigned *got) {
+    int code = pn_fetch_json_raw(url, buf, got);
     return code == PN_GONE ? PN_HTTP : code;
 }
 
@@ -1270,6 +1311,485 @@ int pn_search(const char *term) {
     g = pn_spawn(pn_smain, PN_KIND_SEARCH);
     if (g) pn.sstate = PN_S_IDLE;
     return g;
+}
+
+/* ---- Find Cover & Lyrics (patch/onlineart.c is the page; docs/modules/onlineart.md) */
+#define PN_ART_URL 1280 /* a request's address: three fields of 95 bytes, each at most three times as long encoded */
+
+static void pn_art_dir(void) {
+    mkdir("/mnt/mmc/.m1plus", 0755);
+    mkdir(PN_ART_DIR, 0755);
+}
+
+static int pn_art_path(int i, const char *ext, char *out, unsigned size) {
+    char name[24];
+    pc_fmt(name, sizeof name, "/a%d.", (unsigned)i);
+    out[0] = 0;
+    return pn_cat(out, size, PN_ART_DIR) && pn_cat(out, size, name) && pn_cat(out, size, ext);
+}
+
+/* s into d (PN_ART_Q bytes): cut before a character that does not fit whole. */
+static void pn_art_field(char *d, const char *s) {
+    unsigned n = 0;
+    while (s[n] && n + 1 < PN_ART_Q) ++n;
+    if (s[n])
+        while (n && ((unsigned char)s[n] & 0xc0) == 0x80) --n;
+    memcpy(d, s, n);
+    d[n] = 0;
+}
+
+static int pn_lyr_path(int slot, char *out, unsigned size) {
+    char name[24];
+    pc_fmt(name, sizeof name, "/l%d.txt", (unsigned)slot);
+    out[0] = 0;
+    return pn_cat(out, size, PN_ART_DIR) && pn_cat(out, size, name);
+}
+
+void pn_art_full_drop(void) {
+    unlink(PN_ART_DIR "/full.jpg");
+    unlink(PN_ART_DIR "/full.png");
+    unlink(PN_ART_DIR "/pick.src");
+    pn.fidx = pn.fext = 0;
+}
+
+/* The files and results of the parts in mask (PN_PART_*). */
+static void pn_art_clean_parts(int mask) {
+    char path[PN_PATH];
+    int i;
+    if (mask & PN_PART_COVERS) {
+        for (i = 0; i < PN_ART_MAX; ++i) {
+            if (pn_art_path(i, "jpg", path, sizeof path)) unlink(path);
+            if (pn_art_path(i, "png", path, sizeof path)) unlink(path);
+            if (pn_art_path(i, "src", path, sizeof path)) unlink(path);
+            pn.athumb[i] = pn.aext[i] = 0;
+        }
+        pn_art_full_drop();
+        pn.an = 0;
+    }
+    if (mask & PN_PART_LYRICS) {
+        for (i = 0; i < PN_LYR_MAX; ++i)
+            if (pn_lyr_path(i, path, sizeof path)) unlink(path);
+        unlink(PN_ART_DIR "/lyrics.tmp");
+        pn.ln = 0;
+        pn.lstate = 0;
+    }
+}
+
+void pn_art_clean(void) { pn_art_clean_parts(PN_PART_COVERS | PN_PART_LYRICS); }
+
+int pn_art_state(void) { return pn.astate; }
+int pn_art_code(void) { return pn.acode; }
+int pn_art_count(void) { return pn.an; }
+unsigned pn_art_gen(void) { return pn.agen; }
+int pn_lyr_state(void) { return pn.lstate; }
+int pn_lyr_code(void) { return pn.lcode; }
+int pn_lyr_count(void) { return pn.ln; }
+const char *pn_art_name(int i) { return i >= 0 && i < pn.an ? pn.ares[i].name : ""; }
+const char *pn_art_artist(int i) { return i >= 0 && i < pn.an ? pn.ares[i].author : ""; }
+int pn_art_source(int i) { return i >= 0 && i < PN_ART_MAX ? pn.asrc[i] : 0; }
+int pn_pick_state(void) { return pn.pkstate; }
+int pn_pick_code(void) { return pn.pkcode; }
+
+int pn_art_thumb_state(int i) { return i >= 0 && i < PN_ART_MAX ? pn.athumb[i] : 0; }
+
+int pn_art_thumb(int i, char *path, unsigned size) {
+    if (i < 0 || i >= PN_ART_MAX || pn.athumb[i] != 1) return 0;
+    return pn_art_path(i, pn.aext[i] == 2 ? "png" : "jpg", path, size);
+}
+
+const pn_lyr_t *pn_lyr_get(int i) { return i >= 0 && i < pn.ln ? &pn.lcand[pn.lslot[i]] : (const pn_lyr_t *)0; }
+
+char *pn_lyr_text(int i, unsigned *n) {
+    char path[PN_PATH];
+    if (i < 0 || i >= pn.ln || !pn_lyr_path(pn.lslot[i], path, sizeof path)) return (char *)0;
+    return pn_slurp(path, PN_LRC_CAP, n);
+}
+
+int pn_art_full_path(int i, char *path, unsigned size) {
+    if (i < 0 || i >= pn.an || pn.fidx != i + 1 || !pn.fext) return 0;
+    path[0] = 0;
+    return pn_cat(path, size, PN_ART_DIR) && pn_cat(path, size, pn.fext == 2 ? "/full.png" : "/full.jpg");
+}
+
+int pn_art_full(const char *thumb, char *out, unsigned size) {
+    static const char *const from[2] = {"100x100bb", "250x250-"}, *const to[2] = {"600x600bb", "500x500-"};
+    unsigned n = pn_len(thumb), i;
+    int k;
+    if (n + 1 > size) return 0;
+    memcpy(out, thumb, n + 1);
+    for (k = 0; k < 2; ++k)
+        for (i = 0; i < n; ++i)
+            if (pn_starts(thumb + i, from[k])) {
+                memcpy(out + i, to[k], pn_len(to[k])); /* the same length: the address is changed in place */
+                return 1;
+            }
+    return 1;
+}
+
+/* The covers' query into url (after its base): "artist album", else "artist title". */
+static int pn_art_term(char *url, unsigned size) {
+    char term[PN_ART_Q * 2 + 2];
+    term[0] = 0;
+    pn_cat(term, sizeof term, pn.aq[0]);
+    if (term[0]) pn_cat(term, sizeof term, " ");
+    pn_cat(term, sizeof term, pn.aq[1][0] ? pn.aq[1] : pn.aq[2]);
+    return pn_urlenc(url, size, term);
+}
+
+/* Both stores' answers into pn.ares: the first PN_ART_ITUNES_MAX albums of the iTunes Search API that have a picture, then Deezer's up to PN_ART_MAX in all. The code is PN_OK when an answer came (even with
+ * no result); else the first failure. */
+static int pn_art_covers(char *buf) {
+    char *url = calloc(PN_ART_URL, 1);
+    pj_result_t *tmp = calloc(PJ_MAX, sizeof *tmp);
+    int n = 0, k, bad = 0, ok = 0;
+    if (!url || !tmp) {
+        free(url);
+        free(tmp);
+        pn.an = 0;
+        return PN_MEM;
+    }
+    for (k = 0; k < 2 && !pn.cancel; ++k) {
+        unsigned got = 0;
+        int c, m, i;
+        url[0] = 0;
+        if (!pn_cat(url, PN_ART_URL, k ? PN_ART_DEEZER : PN_ART_ITUNES) || !pn_art_term(url, PN_ART_URL)) {
+            if (!bad) bad = PN_MEM;
+            continue;
+        }
+        c = pn_fetch_json_api(url, buf, &got);
+        if (c == PN_GONE) c = PN_HTTP;
+        if (c == PN_OK) {
+            m = k ? pj_deezer(buf, got, tmp, PJ_MAX) : pj_results(buf, got, tmp, PJ_MAX);
+            if (m < 0)
+                c = PN_HTTP; /* not an answer of that service */
+            else {
+                ok = 1;
+                for (i = 0; i < m && n < (k ? PN_ART_MAX : PN_ART_ITUNES_MAX); ++i)
+                    if (pn_starts(tmp[i].art, "https://") || pn_starts(tmp[i].art, "http://")) {
+                        memcpy(&pn.ares[n], &tmp[i], sizeof pn.ares[n]);
+                        pn.asrc[n] = (unsigned char)k;
+                        ++n;
+                    }
+            }
+        }
+        if (c != PN_OK && !bad) bad = c;
+    }
+    free(url);
+    free(tmp);
+    pn.an = n;
+    if (pn.cancel) return PN_CANCELLED;
+    return ok || n ? PN_OK : bad ? bad : PN_OK;
+}
+
+/* Cover i's thumbnail into PN_ART_DIR/a<i>.jpg|png, when the answer is a picture the page can decode; else none (the placeholder stays). */
+static void pn_art_thumb_get(int i) {
+    char src[PN_PATH], dst[PN_PATH];
+    unsigned w, h, sof;
+    int kind;
+    const char *url = pn.ares[i].art;
+    if ((pn_starts(url, "http://") || pn_starts(url, "https://")) && pn_art_path(i, "src", src, sizeof src) &&
+        pn_fetch_file(url, src, PN_THUMB_CAP)) {
+        kind = pc_pic_info(src, &w, &h, &sof);
+        if (kind && pc_cover_ok(src) && pn_art_path(i, kind == 2 ? "png" : "jpg", dst, sizeof dst) &&
+            !rename(src, dst)) {
+            pn.aext[i] = (unsigned char)kind;
+            __sync_synchronize();
+            pn.athumb[i] = 1;
+        } else
+            unlink(src);
+    }
+    if (pn.athumb[i] != 1) pn.athumb[i] = 2;
+    __sync_synchronize();
+    ++pn.agen;
+}
+
+/* Lyrics candidates: every LRCLIB record that has lyrics, its text in PN_ART_DIR/l<slot>.txt (slots in arrival order, written atomically) and its fields in pn.lcand[slot]. A record equal to one held (the same
+ * fields and kind: api/search repeats what api/get gave) is skipped. *ctx counts the texts that could not be written. */
+_Static_assert(sizeof(((pn_lyr_t *)0)->title) == PJ_NAME && sizeof(((pn_lyr_t *)0)->artist) == PJ_AUTHOR &&
+                   sizeof(((pn_lyr_t *)0)->album) == PJ_NAME,
+               "pn_lyr_t holds a pj_lrc_t's strings");
+
+static int pn_lyr_add(void *ctx, const pj_lrc_t *r, const char *text) {
+    char path[PN_PATH];
+    unsigned n = pn_len(text);
+    int i, slot = pn.ln;
+    if (slot >= PN_LYR_MAX) return 0;
+    for (i = 0; i < slot; ++i) {
+        const pn_lyr_t *c = &pn.lcand[i];
+        if (c->secs == r->secs && c->synced == r->synced && pn_eq(c->title, r->title) && pn_eq(c->artist, r->artist) &&
+            pn_eq(c->album, r->album))
+            return 1;
+    }
+    pn_art_dir();
+    if (!pn_lyr_path(slot, path, sizeof path) || !pn_save(path, PN_ART_DIR "/lyrics.tmp", text, n)) {
+        ++*(int *)ctx;
+        return 1;
+    }
+    memcpy(pn.lcand[slot].title, r->title, sizeof r->title);
+    memcpy(pn.lcand[slot].artist, r->artist, sizeof r->artist);
+    memcpy(pn.lcand[slot].album, r->album, sizeof r->album);
+    pn.lcand[slot].secs = r->secs, pn.lcand[slot].synced = r->synced;
+    ++pn.ln;
+    return 1;
+}
+
+/* How far a candidate's length is from the track's (unknown lengths last once the track's is known; all equal when it is not). */
+static unsigned pn_lyr_dist(const pn_lyr_t *c) {
+    if (!pn.adur) return 0;
+    if (!c->secs) return 0x7fffffffu;
+    return c->secs > pn.adur ? c->secs - pn.adur : pn.adur - c->secs;
+}
+
+/* The display order: the first nex candidates (api/get's exact match) stay first, the rest by the closeness of their length to the track's, a synced one before a plain one among equals, otherwise in arrival order. */
+static void pn_lyr_order(int nex) {
+    int i, j, n = pn.ln;
+    unsigned char ord[PN_LYR_MAX];
+    for (i = 0; i < n; ++i) ord[i] = (unsigned char)i;
+    for (i = nex + 1; i < n; ++i) {
+        unsigned char s = ord[i];
+        unsigned ds = pn_lyr_dist(&pn.lcand[s]);
+        for (j = i; j > nex; --j) {
+            unsigned dp = pn_lyr_dist(&pn.lcand[ord[j - 1]]);
+            if (!(ds < dp || (ds == dp && pn.lcand[s].synced && !pn.lcand[ord[j - 1]].synced))) break;
+            ord[j] = ord[j - 1];
+        }
+        ord[j] = s;
+    }
+    for (i = 0; i < n; ++i) pn.lslot[i] = ord[i];
+}
+
+/* LRCLIB's records for the track: api/get (the artist, title, album and length: the exact match) and api/search (the title and artist) as candidates. Sets lcode and the candidates. buf: the answer's buffer. */
+static void pn_lyrics(char *buf) {
+    char *url = calloc(PN_ART_URL, 1), *a = calloc(2 * (PN_LRC_CAP + 1), 1);
+    unsigned got = 0;
+    int code = PN_MEM, code2 = PN_OK, nex = 0, fail = 0;
+    pn.ln = 0;
+    if (!url || !a) goto out;
+    url[0] = 0;
+    if (pn_cat(url, PN_ART_URL, PN_ART_LRCLIB "get?track_name=") && pn_urlenc(url, PN_ART_URL, pn.aq[2]) &&
+        pn_cat(url, PN_ART_URL, "&artist_name=") && pn_urlenc(url, PN_ART_URL, pn.aq[0]) &&
+        (!pn.aq[1][0] || (pn_cat(url, PN_ART_URL, "&album_name=") && pn_urlenc(url, PN_ART_URL, pn.aq[1])))) {
+        if (pn.adur) {
+            char num[24];
+            pc_fmt(num, sizeof num, "&duration=%d", pn.adur);
+            pn_cat(url, PN_ART_URL, num);
+        }
+        code = pn_fetch_json_api(url, buf, &got);
+        if (code == PN_OK) pj_lrc_each(buf, got, PN_LRC_CAP, a, a + PN_LRC_CAP + 1, pn_lyr_add, &fail);
+    }
+    nex = pn.ln;
+    if (!pn.cancel &&
+        (code == PN_OK || code == PN_GONE || code == PN_HTTP)) { /* (a busy get is PN_OVERLOAD at once: no search) */
+        url[0] = 0;
+        if (pn_cat(url, PN_ART_URL, PN_ART_LRCLIB "search?track_name=") && pn_urlenc(url, PN_ART_URL, pn.aq[2]) &&
+            pn_cat(url, PN_ART_URL, "&artist_name=") && pn_urlenc(url, PN_ART_URL, pn.aq[0])) {
+            code2 = pn_fetch_json_api(url, buf, &got);
+            if (code2 == PN_OK) pj_lrc_each(buf, got, PN_LRC_CAP, a, a + PN_LRC_CAP + 1, pn_lyr_add, &fail);
+        } else
+            code2 = PN_MEM;
+        if (!pn.ln) code = code2;
+    }
+    if (pn.cancel)
+        code = PN_CANCELLED;
+    else if (pn.ln)
+        code = PN_OK;
+    else if (fail)
+        code = PN_STORAGE;
+    else if (code == PN_OK || code == PN_GONE)
+        code = PN_NOLYRICS; /* answered, and no record has any */
+    if (code == PN_OK) pn_lyr_order(nex);
+out:
+    free(url);
+    free(a);
+    if (code != PN_OK) pn.ln = 0;
+    pn.lcode = code;
+    __sync_synchronize();
+    pn.lstate = 1;
+    ++pn.agen;
+}
+
+static void *pn_amain(void *arg) {
+    char *buf = calloc(PN_JSON_CAP + 1, 1);
+    int code = PN_MEM, i;
+    (void)arg;
+    if (pn.amask & PN_PART_COVERS) {
+        if (buf) code = pn_art_covers(buf);
+        pn.acode = code;
+        __sync_synchronize();
+        pn.astate = code == PN_OK && pn.an > 0 ? PN_A_THUMBS : PN_A_DONE;
+        ++pn.agen;
+        pn_bump();
+        for (i = 0; code == PN_OK && i < pn.an && !pn.cancel; ++i) pn_art_thumb_get(i);
+        __sync_synchronize();
+        pn.astate = PN_A_DONE;
+        ++pn.agen;
+    }
+    if (pn.amask & PN_PART_LYRICS) {
+        if (buf && !pn.cancel)
+            pn_lyrics(buf);
+        else {
+            pn.ln = 0, pn.lcode = pn.cancel ? PN_CANCELLED : PN_MEM;
+            __sync_synchronize();
+            pn.lstate = 1;
+            ++pn.agen;
+        }
+    }
+    free(buf);
+    pn.stopped = pn.cancel;
+    pn.kind = 0;
+    pn.busy = 0;
+    pn_bump();
+    return (void *)0;
+}
+
+/* The worker for the parts in mask, with the query already in pn.aq / pn.adur. */
+static int pn_art_run(int mask) {
+    int g = pn_guard();
+    if (g) return g;
+    pn_art_dir();
+    pn_art_clean_parts(mask);
+    pn.amask = mask;
+    if (mask & PN_PART_COVERS) pn.acode = PN_OK, pn.astate = PN_A_COVERS;
+    if (mask & PN_PART_LYRICS) pn.lcode = PN_OK;
+    pn.pkstate = 0;
+    ++pn.agen;
+    g = pn_spawn(pn_amain, PN_KIND_ART);
+    if (g && (mask & PN_PART_COVERS)) pn.astate = PN_A_IDLE;
+    return g;
+}
+
+int pn_art(const char *artist, const char *album, const char *title, unsigned seconds) {
+    if (pn.busy) return PN_BUSY;
+    pn_art_field(pn.aq[0], artist ? artist : "");
+    pn_art_field(pn.aq[1], album ? album : "");
+    pn_art_field(pn.aq[2], title ? title : "");
+    pn.adur = seconds;
+    return pn_art_run(PN_PART_COVERS | PN_PART_LYRICS);
+}
+
+int pn_art_again(int part) {
+    if (pn.busy) return PN_BUSY;
+    if (part != PN_PART_COVERS && part != PN_PART_LYRICS) return PN_MEM;
+    return pn_art_run(part);
+}
+
+/* The name the folder's picture gets: the first of folder.jpg, folder.jpeg, cover.jpg and cover.jpeg that is there (stock's Now Playing takes the first image it finds in that order, so the new one replaces it), else cover.jpg. */
+static int pn_art_side(const char *dir, char *out, unsigned size) {
+    static const char *const names[4] = {"folder.jpg", "folder.jpeg", "cover.jpg", "cover.jpeg"};
+    int k;
+    for (k = 0; k < 4; ++k)
+        if (pn_join(out, size, dir, names[k], (const char *)0) && !access(out, F_OK)) return 1;
+    return pn_join(out, size, dir, "cover.jpg", (const char *)0);
+}
+
+/* The larger picture of cover pkidx. Fetch (pkmode 0): downloaded to full.jpg|png when it is a picture the page can decode (pn.fidx / pn.fext say which cover). Save (pkmode 1): that picture (or one downloaded now),
+ * shrunk into each key's cover cache file (and a .pick marker beside it), the original JPEG into the track's folder. */
+static void *pn_kmain(void *arg) {
+    char url[PN_PATH], src[PN_PATH], dst[64], tmp[64], mark[72], side[PN_PATH];
+    unsigned w, h, sof, wrote = 0, k;
+    int kind = 0, code = PN_NET, held = 0;
+    (void)arg;
+    src[0] = 0;
+    mkdir(CARD_DIR, 0755);
+    mkdir(ART_DIR, 0755);
+    pn_art_dir();
+    if (pn.pkmode && pn.fidx == pn.pkidx + 1 && pn.fext && pn_art_full_path(pn.pkidx, src, sizeof src))
+        held = 1, kind = pn.fext;
+    else {
+        pn_art_full_drop();
+        pn_cat(src, sizeof src, PN_ART_DIR "/pick.src");
+        if (pn_art_full(pn.ares[pn.pkidx].art, url, sizeof url) && pn_fetch_file(url, src, PN_PICK_CAP)) {
+            kind = pc_pic_info(src, &w, &h, &sof);
+            code = PN_NOTFEED;
+        }
+    }
+    if (!pn.pkmode) {
+        if (kind && !held) {
+            if (pc_cover_ok(src) && !pn.cancel &&
+                !rename(src, kind == 2 ? PN_ART_DIR "/full.png" : PN_ART_DIR "/full.jpg")) {
+                pn.fext = kind;
+                pn.fidx = pn.pkidx + 1;
+                code = PN_OK;
+            } else
+                code = PN_NOTFEED;
+        }
+        if (pn.cancel) code = PN_CANCELLED;
+    } else if (kind) {
+        code = PN_NOTFEED;
+        for (k = 0; k < 2; ++k) {
+            unsigned key = pn.pkkey[k];
+            int ok;
+            if (!key || pn.cancel) continue;
+            cc_path(dst, sizeof dst, key, "");
+            cc_path(tmp, sizeof tmp, key, ".tmp");
+            cc_path(mark, sizeof mark, key, ".pick");
+            ok = kind == 1 ? pv_shrink(src, tmp) : pv_shrink_png(src, tmp) > 0;
+            if (ok && !rename(tmp, dst)) {
+                int fd = open(mark, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                if (fd >= 0) close(fd);
+                ++wrote;
+            } else {
+                unlink(tmp);
+                code = PN_STORAGE;
+            }
+        }
+        if (wrote && kind == 1 && pn.pkdir[0] && !pn.cancel && pn_art_side(pn.pkdir, side, sizeof side)) {
+            unsigned n = 0;
+            char *data = pn_slurp(src, PN_PICK_CAP, &n);
+            char stmp[PN_PATH];
+            stmp[0] = 0;
+            if (data && pn_join(stmp, sizeof stmp, pn.pkdir, ".cover.tmp", (const char *)0))
+                pn_save(side, stmp, data, n);
+            free(data); /* (a folder that cannot be written keeps the cache's cover: the sidecar is the extra) */
+        }
+        if (wrote) code = PN_OK;
+        if (pn.cancel) code = PN_CANCELLED;
+    }
+    if (!held) unlink(src);
+    pn.pkcode = code;
+    __sync_synchronize();
+    pn.pkstate = 2;
+    ++pn.agen;
+    pn.stopped = pn.cancel;
+    pn.kind = 0;
+    pn.busy = 0;
+    pn_bump();
+    return (void *)0;
+}
+
+static int pn_pick_spawn(int i, int mode, const char *dir, unsigned key0, unsigned key1) {
+    int g;
+    if (i < 0 || i >= pn.an || pn.athumb[i] != 1) return PN_NOFEED;
+    if (pn.busy) return PN_BUSY;
+    g = pn_guard();
+    if (g) return g;
+    pn.pkdir[0] = 0;
+    if (dir && !pn_cat(pn.pkdir, sizeof pn.pkdir, dir)) pn.pkdir[0] = 0;
+    pn.pkkey[0] = key0, pn.pkkey[1] = key1, pn.pkidx = i, pn.pkmode = mode;
+    pn.pkstate = 1, pn.pkcode = PN_OK;
+    ++pn.agen;
+    g = pn_spawn(pn_kmain, PN_KIND_PICK);
+    if (g) pn.pkstate = 0;
+    return g;
+}
+
+int pn_art_fetch(int i) { return pn_pick_spawn(i, 0, (const char *)0, 0, 0); }
+
+int pn_art_pick(int i, const char *dir, unsigned key0, unsigned key1) {
+    if (!key0 && !key1) return PN_NOFEED;
+    return pn_pick_spawn(i, 1, dir, key0, key1);
+}
+
+int pn_lyr_save(int i, const char *path) {
+    unsigned n = 0;
+    char tmp[PN_PATH];
+    char *data = pn_lyr_text(i, &n);
+    int ok;
+    tmp[0] = 0;
+    ok = data && pn_cat(tmp, sizeof tmp, path) && pn_cat(tmp, sizeof tmp, ".tmp") && pod_card_mounted() &&
+         pn_save(path, tmp, data, n);
+    free(data);
+    return ok;
 }
 
 /* ---- Preview */

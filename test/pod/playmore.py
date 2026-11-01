@@ -17,20 +17,20 @@ RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
 KILL = '/mnt/mmc/m1plus-off'
 DIALOG_Y, ROW_H, SCREEN_H, SHEET_H = 130, O['PM_ROW_H'], O['PM_SCREEN_H'], O['PM_PAGE_N'] * O['PM_ROW_H']
 SHEET_Y = SCREEN_H - SHEET_H                     # 180: page 1's sheet sits on the bottom of the screen
-SHEET2_H = O['PM_PAGE2_N'] * ROW_H               # page 2 has four rows: its sheet is 200 px; page 1 has six (the Cassette Mode and Vinyl Mode rows): 300 px
+SHEET2_H = O['PM_PAGE2_N'] * ROW_H               # page 2 has five rows (the back header, Speed, A-B repeat, Find Cover & Lyrics, Delete): its sheet is 250 px; page 1 has six (the Cassette Mode and Vinyl Mode rows): 300 px
 SHEET2_Y = SCREEN_H - SHEET2_H                   # 280 (page 1's SHEET_Y is 180)
 BINDER, SPEED_INIT = 0x478b44, 0x478fd0          # the stock widget_foreach visitor (binds a row or badge by name) and the speed badge images
 STOCK_BG, STOCK_UP = 0x4789f0, 0x478abc          # the stock to-background handler (moves the dialog to y 130) and tap-above-closes handler
 STOCK_CLICK = {'listitem0': 0x478f58, 'listitem2': 0x4798f0, 'listitem3': 0x4796cc, 'listitem4': 0x4795cc, 'listitem5': 0x4793ac,
                'listitem6': 0x4791f4, 'img_1x': 0x479bf4, 'img_1_25x': 0x479b20, 'img_1_5x': 0x479a4c, 'img_2x': 0x479978}
 STOCK_NAMES = ['listitem0', 'listitem1', 'listitem2', 'listitem3', 'listitem4', 'listitem5', 'listitem6']
-GO_ALBUM, GO_ARTIST, ADD, MORE, BACK, SPEED, AB, DELETE, SEARCH, TAPE, VINYL, GOEP = 4, 5, 2, 7, 8, 1, 0, 6, 3, 9, 10, 11   # row indices (listitemN, 7 = pod_more, 8 = pod_back, 9 = pod_tape, 10 = pod_vinyl, 11 = pod_goep)
-ROWS = STOCK_NAMES + ['pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_goep']
-PAGE1, PAGE2 = [GO_ALBUM, GO_ARTIST, ADD, TAPE, VINYL, MORE], [BACK, SPEED, AB, DELETE]
+GO_ALBUM, GO_ARTIST, ADD, MORE, BACK, SPEED, AB, DELETE, SEARCH, TAPE, VINYL, GOEP, ART = 4, 5, 2, 7, 8, 1, 0, 6, 3, 9, 10, 11, 12   # row indices (listitemN, 7 = pod_more, 8 = pod_back, 9 = pod_tape, 10 = pod_vinyl, 11 = pod_goep, 12 = pod_art)
+ROWS = STOCK_NAMES + ['pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_goep', 'pod_art']
+PAGE1, PAGE2 = [GO_ALBUM, GO_ARTIST, ADD, TAPE, VINYL, MORE], [BACK, SPEED, AB, ART, DELETE]
 PAGE_EP = [GOEP, MORE]   # page 1 of a podcast episode
-HIDDEN1, HIDDEN2, HIDDEN_EP = sorted(set(range(12)) - set(PAGE1)), sorted(set(range(12)) - set(PAGE2)), sorted(set(range(12)) - set(PAGE_EP))
+HIDDEN1, HIDDEN2, HIDDEN_EP = sorted(set(range(13)) - set(PAGE1)), sorted(set(range(13)) - set(PAGE2)), sorted(set(range(13)) - set(PAGE_EP))
 VT = {'dialog': LI_VT, 'list_view': LV_VT, 'scroll_view': SV_VT, 'list_item': LI_VT, 'image': IMG_VT}
-PM_TEXTS = {'More': None, 'Speed': None, 'Files below 48 kHz only': None, 'Cassette Mode': None, 'Vinyl Mode': None, 'Go to Podcasts': None}   # the keys the payload sets (the label each is for is in the checks)
+PM_TEXTS = {'More': None, 'Speed': None, 'Files below 48 kHz only': None, 'Cassette Mode': None, 'Vinyl Mode': None, 'Go to Podcasts': None, 'Cover & Lyrics': None}   # the keys the payload sets (the label each is for is in the checks)
 
 
 
@@ -52,6 +52,8 @@ class PM(pulldown.SM):
         self.handlers[PSYMS['vinyl_open']] = 'vinyl_open'
         self.ep_ret = 0                 # what podcasts_go returns (patch/podcasts.c, trapped here: test/pod/pcsaved.py / pcdetail run it)
         self.handlers[PSYMS['podcasts_go']] = 'podcasts_go'
+        self.art_ret = 0                # what onlineart_open returns (patch/onlineart.c, trapped here: test/pod/onlineartpage.py runs it)
+        self.handlers[PSYMS['onlineart_open']] = 'onlineart_open'
         self.cf_ret = 0                 # what coverflow_artist returns (patch/coverflow.c, trapped here: test/pod/coverflow.py and artists.py run it)
         self.handlers[PSYMS['coverflow_artist']] = 'coverflow_artist'
         self.init_ret = 0
@@ -120,11 +122,13 @@ class PM(pulldown.SM):
             self.calls.append(('podcasts_go',)); u.reg_write(UC_MIPS_REG_V0, self.ep_ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
         if name == 'vinyl_open':
             self.calls.append(('vinyl_open',)); u.reg_write(UC_MIPS_REG_V0, self.vinyl_ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
+        if name == 'onlineart_open':
+            self.calls.append(('onlineart_open',)); u.reg_write(UC_MIPS_REG_V0, self.art_ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
         if name == 'widget_set_tr_text' and self.read_cstr(a1) in self.tr_fail:
             self.calls.append(('widget_set_tr_text', a0, self.read_cstr(a1))); u.reg_write(UC_MIPS_REG_V0, 1); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
         if name == 'widget_on':
             self.reg.append((a0, a1, a2, a3))
-            fails = {'pod_more': (self.nodes['pod_more'], O['EVT_CLICK']), 'pod_back': (self.nodes['pod_back'], O['EVT_CLICK']), 'pod_tape': (self.nodes['pod_tape'], O['EVT_CLICK']), 'pod_vinyl': (self.nodes['pod_vinyl'], O['EVT_CLICK']), 'pod_goep': (self.nodes['pod_goep'], O['EVT_CLICK']),
+            fails = {'pod_more': (self.nodes['pod_more'], O['EVT_CLICK']), 'pod_back': (self.nodes['pod_back'], O['EVT_CLICK']), 'pod_tape': (self.nodes['pod_tape'], O['EVT_CLICK']), 'pod_vinyl': (self.nodes['pod_vinyl'], O['EVT_CLICK']), 'pod_goep': (self.nodes['pod_goep'], O['EVT_CLICK']),  'pod_art': (self.nodes['pod_art'], O['EVT_CLICK']),
                      'bg': (self.lv, O['EVT_WINDOW_TO_BG']), 'destroy': (self.dialog, O['EVT_DESTROY'])}
             if self.bind_fail and (a0, a1) == fails[self.bind_fail] and a2 != STOCK_BG:
                 self.reg.pop(); self.calls.append(('widget_on', a0, a1, a2, 0)); u.reg_write(UC_MIPS_REG_V0, 0); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
@@ -273,15 +277,15 @@ def glass_checks(expect, theme, built_ui, stock_t, lum):
            f'{theme}: the dialog itself is transparent (no fill, no image, no top line, no radius): the glass is its first child')
     glass = built_ui.find('pod_glass')
     expect(glass is not None and glass.type == 'image' and built_ui.children[0] is glass and glass.get('sensitive') == 'false' and glass.get('image') == 'pm_sheet'
-           and (glass.x, glass.y, glass.w, glass.h) == (0, 0, 320, 200) and glass.get('draw_type') == 'default',
-           f'{theme}: pod_glass is the dialog\'s first child (under the list), an insensitive image of pm_sheet 320 x 200 (the kill switch\'s look is the old one)')
+           and (glass.x, glass.y, glass.w, glass.h) == (0, 0, 320, 250) and glass.get('draw_type') == 'default',
+           f'{theme}: pod_glass is the dialog\'s first child (under the list), an insensitive image of pm_sheet 320 x 250 (page 2\'s glass; the kill switch\'s look)')
     lv, sv = built_ui.find('playmore_listview'), built_ui.find('playmore_scrollview')
     expect(all(x.get(f'style:{s}:bg_color') == '#00000000' for x in (lv, sv) for s in ('normal', 'disable', 'focused')), f'{theme}: the list_view and its scroll_view are transparent')
     states = ('normal', 'pressed', 'over', 'disable', 'focused')
     rows = [c for c in sv.children]
     expect(all(c.type == 'list_item' and all(c.get(f'style:{s}:bg_color') == ('#FFFFFF10' if s == 'pressed' else '#00000000') and c.get(f'style:{s}:border_color') == '#FFFFFF22' for s in states)
-               for c in rows) and len(rows) == 12,
-           f'{theme}: all twelve rows: transparent in every state but pressed (#FFFFFF10, 6 % white), the hairline #FFFFFF22 (13 % white)')
+               for c in rows) and len(rows) == 13,
+           f'{theme}: all thirteen rows: transparent in every state but pressed (#FFFFFF10, 6 % white), the hairline #FFFFFF22 (13 % white)')
     expect(not any('pm_sheet' in str(c.props) for c in stock_t.walk()) and 'pm_sheet' not in str([p for w_ in built_ui.walk() if w_.name not in ('pod_glass',) for p in w_.props]),
            f'{theme}: only pod_glass refers to pm_sheet; the rows and every other widget carry inline styles of this dialog, no shared style name')
     # the other pages' row styles are untouched: no ui asset but this one, and no style file, mentions the image or a transparent list_item_style
@@ -311,9 +315,9 @@ def glass_checks(expect, theme, built_ui, stock_t, lum):
         if pressed: c = [press / 255 * 255 + (1 - press / 255) * v for v in c]
         return tuple(round(v) for v in c)
     pos = {n: (i * ROW_H) for i, n in enumerate(page1_rows)}
-    pos.update({n: (i * ROW_H) for i, n in enumerate(['pod_back', 'listitem1', 'listitem0', 'listitem6'])})
+    pos.update({n: (i * ROW_H) for i, n in enumerate(['pod_back', 'listitem1', 'listitem0', 'pod_art', 'listitem6'])})
     texts = {'listitem4': 'scrlabel4', 'listitem5': 'scrlabel5', 'listitem2': 'scrlabel2', 'pod_more': 'pod_more_label', 'pod_back': 'pod_back_label',
-             'listitem1': 'scrlabel1', 'listitem0': 'scrlabel0', 'listitem6': 'scrlabel6', 'pod_tape': 'pod_tape_label', 'pod_vinyl': 'pod_vinyl_label'}
+             'listitem1': 'scrlabel1', 'listitem0': 'scrlabel0', 'listitem6': 'scrlabel6', 'pod_tape': 'pod_tape_label', 'pod_vinyl': 'pod_vinyl_label', 'pod_art': 'pod_art_label'}
     def worst(row, wname, color, level, pressed, img=None):
         wd = built_ui.find(wname); y0 = pos[row]; best = 99
         for y in range(wd.y, wd.y + wd.h):
@@ -401,7 +405,7 @@ def run(ctx):
     expect(keys.get('scrlabel4') == 'player_albuminfo' and keys.get('scrlabel5') == 'player_songerinfo' and keys.get('scrlabel6') == 'player_delete'
            and keys.get('scrlabel1') == 'player_multiple' and keys.get('scrlabel0') == 'player_abrepeat' and keys.get('label1_msg') == 'player_msgmul',
            'the stock binder gives the rows their stock texts')
-    expect(m.shown() == [0, 1, 2, 3, 4, 5, 6] and m.stacked()[:7] == list(range(7)) and all(m.dead(i) for i in (MORE, BACK, TAPE, VINYL, GOEP)) and not m.shown_row(MORE) and not m.shown_row(BACK) and not m.shown_row(TAPE) and not m.shown_row(VINYL),
+    expect(m.shown() == [0, 1, 2, 3, 4, 5, 6] and m.stacked()[:7] == list(range(7)) and all(m.dead(i) for i in (MORE, BACK, TAPE, VINYL, GOEP, ART)) and not m.shown_row(MORE) and not m.shown_row(BACK) and not m.shown_row(TAPE) and not m.shown_row(VINYL),
            'before the hook: the stock seven rows in asset order, pod_more, pod_back, pod_tape and pod_vinyl hidden and insensitive')
     m.relayout_all()
     expect(m.shown() == list(range(7)) and m.hs() == [50, 50, 50, 50, 50, 60, 60] and m.ys() == [0, 50, 100, 150, 200, 250, 310] and m.vh() == 370,
@@ -427,9 +431,9 @@ def run(ctx):
     expect(all(n in names for n in ('listitem0', 'listitem6', 'pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_more_label', 'pod_back_label', 'pod_tape_label', 'pod_vinyl_label', 'scrlabel1', 'label1_msg')), 'the rows and labels are found by their names')
     expect(m.stock_kept(),
            'every stock handler is still bound to the same function and context after the hook, and still first in the order')
-    expect(sorted(m.added()) == sorted([('pod_more', O['EVT_CLICK']), ('pod_back', O['EVT_CLICK']), ('pod_tape', O['EVT_CLICK']), ('pod_vinyl', O['EVT_CLICK']), ('pod_goep', O['EVT_CLICK']), ('playmore_dialog', O['EVT_DESTROY']), ('playmore_listview', O['EVT_WINDOW_TO_BG']),
+    expect(sorted(m.added()) == sorted([('pod_more', O['EVT_CLICK']), ('pod_back', O['EVT_CLICK']), ('pod_tape', O['EVT_CLICK']), ('pod_vinyl', O['EVT_CLICK']), ('pod_goep', O['EVT_CLICK']),  ('pod_art', O['EVT_CLICK']), ('playmore_dialog', O['EVT_DESTROY']), ('playmore_listview', O['EVT_WINDOW_TO_BG']),
                                         ('listitem4', O['EVT_CLICK']), ('listitem5', O['EVT_CLICK']), ('listitem6', O['EVT_CLICK'])]),
-           f'the hook adds the More click, the back click, the Tape click, the Look up album, artist and Delete clicks, the destroy and the to-background handlers and nothing else ({m.added()})')
+           f'the hook adds the More, back, Tape, Vinyl and Find Cover & Lyrics clicks, the Look up album, artist and Delete clicks, the destroy and the to-background handlers and nothing else ({m.added()})')
     expect(not any(c[0] in ('widget_off_by_func',) for c in m.calls), 'no stock handler is taken off')
 
     # -- 2. hit tests on page 1: a touch reaches the row that is drawn there, a hidden row never takes it -----------------------
@@ -454,20 +458,20 @@ def run(ctx):
     # -- 3. page 2 and back ---------------------------------------------------------------------------------------------------------
     m = PM(); m.open(); m.relayout_all()
     m.click_more()
-    expect(m.shown() == PAGE2, f'page 2: the back header, Playback speed, A-B repeat, Delete ({m.shown()})')
-    expect(m.ys() == [0, 50, 100, 150] and set(m.hs()) == {ROW_H}, f'page 2: the rows at 0, 50, 100, 150, {ROW_H} high ({m.ys()} {m.hs()})')
-    expect(all(m.live(i) for i in PAGE2) and all(m.dead(i) for i in HIDDEN2), 'page 2: four rows live, the other six (Online search and Cassette Mode included) neither visible nor sensitive')
-    expect(m.stacked()[:4] == PAGE2 and sorted(m.stacked()[4:]) == HIDDEN2, f'page 2: stacked in that order, the hidden rows last ({m.stacked()})')
-    expect(m.size(m.dialog) == (320, 200) and m.size(m.lv) == (320, 200) and m.size(m.sv) == (310, 200) and m.size(m.bar) == (10, 200) and m.vh() == 200 and m.size(m.glass) == (320, 200),
-           f'page 2: the sheet is 4 rows tall again, 200 px, as before the Cassette Mode row ({m.size(m.dialog)})')
-    expect(('image_base_set_image', m.nodes['pod_glass'], 'pm_sheet') == [c for c in m.calls if c[0] == 'image_base_set_image'][-1], 'page 2: the glass is its own picture, pm_sheet (200 px)')
-    expect(m.top() == SHEET2_Y == 280 and m.top() + m.size(m.dialog)[1] == SCREEN_H, 'page 2: the sheet is on the bottom of the screen (its top edge is 50 px lower)')
-    expect(all(m.s32(m.rows[i] + 4) >= 200 for i in HIDDEN2), 'page 2: the hidden rows are parked below the sheet')
+    expect(m.shown() == PAGE2, f'page 2: the back header, Playback speed, A-B repeat, Find Cover & Lyrics, Delete ({m.shown()})')
+    expect(m.ys() == [0, 50, 100, 150, 200] and set(m.hs()) == {ROW_H}, f'page 2: the rows at 0, 50, 100, 150, 200, {ROW_H} high ({m.ys()} {m.hs()})')
+    expect(all(m.live(i) for i in PAGE2) and all(m.dead(i) for i in HIDDEN2), 'page 2: five rows live, the other seven (Online search, Cassette and Vinyl Mode included) neither visible nor sensitive')
+    expect(m.stacked()[:5] == PAGE2 and sorted(m.stacked()[5:]) == HIDDEN2, f'page 2: stacked in that order, the hidden rows last ({m.stacked()})')
+    expect(m.size(m.dialog) == (320, 250) and m.size(m.lv) == (320, 250) and m.size(m.sv) == (310, 250) and m.size(m.bar) == (10, 250) and m.vh() == 250 and m.size(m.glass) == (320, 250),
+           f'page 2: the sheet is 5 rows tall, 250 px ({m.size(m.dialog)})')
+    expect(('image_base_set_image', m.nodes['pod_glass'], 'pm_sheet') == [c for c in m.calls if c[0] == 'image_base_set_image'][-1], 'page 2: the glass is its own picture, pm_sheet (250 px)')
+    expect(m.top() == SHEET2_Y == 230 and m.top() + m.size(m.dialog)[1] == SCREEN_H, 'page 2: the sheet is on the bottom of the screen (its top edge is 50 px lower than page 1\'s)')
+    expect(all(m.s32(m.rows[i] + 4) >= 250 for i in HIDDEN2), 'page 2: the hidden rows are parked below the sheet')
     m.relayout_all()
-    expect(m.shown() == PAGE2 and m.ys() == [0, 50, 100, 150] and set(m.hs()) == {ROW_H} and m.vh() == 200 and m.yoff() == 0 and m.stacked()[:4] == PAGE2,
+    expect(m.shown() == PAGE2 and m.ys() == [0, 50, 100, 150, 200] and set(m.hs()) == {ROW_H} and m.vh() == 250 and m.yoff() == 0 and m.stacked()[:5] == PAGE2,
            f'page 2: a relayout keeps the order, the rows {ROW_H} high and the height ({m.shown()}, {m.hs()})')
     m.relayout_all(); m.mark(); m.relayout_all()
-    expect(m.shown() == PAGE2 and m.stacked()[:4] == PAGE2, 'page 2: further relayouts change nothing')
+    expect(m.shown() == PAGE2 and m.stacked()[:5] == PAGE2, 'page 2: further relayouts change nothing')
     for pos, i in enumerate(PAGE2):
         path = m.tap_row(i)
         expect(path[3] == ROWS[i], f'page 2: a tap on row {pos} lands on {ROWS[i]} ({path})')
@@ -490,7 +494,7 @@ def run(ctx):
     for _ in range(3): m.click_more(); m.click_back()
     expect(m.shown() == PAGE1 and m.vh() == 300 and m.top() == SHEET_Y, 'switching pages repeatedly ends where it began')
     m.click_more(); m.mark(); m.relayout(); m.sync()
-    expect(m.shown() == PAGE2 and m.stacked()[:4] == PAGE2, 'a relayout while on page 2 (the Delete confirm opening over the dialog) keeps the rows, stacked in y order for the list_view paint hook')
+    expect(m.shown() == PAGE2 and m.stacked()[:5] == PAGE2, 'a relayout while on page 2 (the Delete confirm opening over the dialog) keeps the rows, stacked in y order for the list_view paint hook')
 
     # -- 4. tap above the sheet closes it (the stock handler, on the new y); a tap on the sheet does not -----------------------------
     def up(m, y):
@@ -545,7 +549,7 @@ def run(ctx):
     # -- 7. kill switch and failures: the stock menu ------------------------------------------------------------------------------
     def untouched(m, what, inert=True):
         moves = [c for c in m.calls if c[0] in ('widget_move', 'widget_resize', 'widget_restack', 'widget_set_visible', 'widget_set_sensitive', 'image_base_set_image')]
-        expect(m.shown() == list(range(7)) and m.stacked()[:7] == list(range(7)) and all(m.dead(i) for i in (MORE, BACK, TAPE, VINYL, GOEP)) and m.size(m.dialog) == (320, 350) and m.top() == DIALOG_Y and not moves,
+        expect(m.shown() == list(range(7)) and m.stacked()[:7] == list(range(7)) and all(m.dead(i) for i in (MORE, BACK, TAPE, VINYL, GOEP, ART)) and m.size(m.dialog) == (320, 350) and m.top() == DIALOG_Y and not moves,
                f'{what}: the stock menu, nothing moved ({m.shown()}, {m.size(m.dialog)}, y {m.top()}, {moves[:2]})')
         expect(m.stock_kept(), f'{what}: the stock handlers are bound')
         if inert:   # whatever handler the failed start left behind does nothing
@@ -558,18 +562,18 @@ def run(ctx):
     untouched(m, 'stock init failed'); expect(ret == 0x10 and m.names() == ['stock_playmore_resume'], 'a failed stock init: its result, nothing else')
     m = PM(); m.call(PSYMS['m1plus_playmore_init'], a0=0, a1=0, count=200000)
     expect(m.names() == ['stock_playmore_resume'], 'no dialog: nothing but the stock init')
-    for missing in ('pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_goep', 'pod_more_label', 'pod_back_label', 'pod_tape_label', 'pod_vinyl_label', 'pod_goep_label', 'scrlabel1', 'label1_msg', 'playmore_listview', 'playmore_scrollview', 'scroll_bar_m', 'listitem3'):
+    for missing in ('pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_goep', 'pod_art', 'pod_more_label', 'pod_back_label', 'pod_tape_label', 'pod_vinyl_label', 'pod_goep_label', 'pod_art_label', 'scrlabel1', 'label1_msg', 'playmore_listview', 'playmore_scrollview', 'scroll_bar_m', 'listitem3'):
         m = PM(); del m.widgets[missing]; m.open(); untouched(m, f'no {missing}')
     m = PM(); m.setword(m.rows[SEARCH] + 0x44, m.lv); m.open(); untouched(m, 'a row outside the scroll_view')
     m = PM(); m.kids(m.sv, m.rows[:7]); m.open(); untouched(m, 'seven rows in the scroll_view (an asset without pod_more)')
     m = PM(); m.kids(m.sv, m.rows[:8]); m.open(); untouched(m, 'eight rows in the scroll_view (an asset without pod_back)')
     m = PM(); m.kids(m.sv, m.rows[:9]); m.open(); untouched(m, 'nine rows in the scroll_view (an asset without pod_tape)')
     m = PM(); m.kids(m.sv, m.rows[:10]); m.open(); untouched(m, 'ten rows in the scroll_view (an asset without pod_vinyl)')
-    m = PM(); m.kids(m.sv, m.rows[:11]); m.open(); untouched(m, 'eleven rows in the scroll_view (an asset without pod_goep)')
+    m = PM(); m.kids(m.sv, m.rows[:12]); m.open(); untouched(m, 'twelve rows in the scroll_view (an asset without pod_art)')
     m = PM(); m.kids(m.sv, m.rows + [m.alloc(0x80)]); m.open(); untouched(m, 'thirteen children in the scroll_view')
     for key in PM_TEXTS:
         m = PM(); m.tr_fail = {key}; m.open(); untouched(m, f'the text {key!r} cannot be set')
-    for which in ('pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_goep', 'bg', 'destroy'):
+    for which in ('pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_goep', 'pod_art', 'bg', 'destroy'):
         m = PM(); m.bind_fail = which; m.open(); untouched(m, f'the {which} handler cannot be bound')
     m = PM(); m.bind_fail = 'pod_back'; m.open()
     fn, c = m.bound[(m.dialog, O['EVT_DESTROY'])]      # the destroy handler a failed start left behind does nothing
@@ -604,6 +608,34 @@ def run(ctx):
     expect('vinyl_open' not in [c[0] for c in m.calls], 'a Vinyl click handler left behind for another dialog does nothing')
     m = PM(); m.present.add(KILL); m.open()
     expect(m.handlers_of(m.rows[VINYL], O['EVT_CLICK']) == [] and m.dead(VINYL), 'kill switch: no Vinyl Mode handler, the row stays hidden and insensitive')
+    # Find Cover & Lyrics (pm_on_art, page 2, between A-B repeat and Delete): the page first, the sheet closed once it is up; dimmed and insensitive while the Wi-Fi is off
+    m = PM(); m.open()
+    expect(m.handlers_of(m.rows[ART], O['EVT_CLICK']) == [(PSYMS['pm_on_art'], m.dialog)] and m.dead(ART), 'the Find Cover & Lyrics row has our click handler alone; on page 1 it is hidden and insensitive')
+    m.click_more()
+    expect(m.live(ART) and 'pod_art' in m.tap_row(ART), f'page 2: with the Wi-Fi on the row is live and a touch on it reaches it ({m.tap_row(ART)})')
+    expect(m.props.get((m.rows[ART], 'opacity')) == 255, 'at full opacity')
+    m.calls = []; m.click_row(ART)
+    names = [c[0] for c in m.calls]
+    expect(names == ['get_wifisignal', 'onlineart_open', 'window_close'] and ('window_close', m.dialog) in m.calls, f'a tap opens the page, then closes the sheet ({names})')
+    m = PM(); m.open(); m.click_more(); m.art_ret = -1; m.calls = []; m.click_row(ART)
+    expect([c[0] for c in m.calls] == ['get_wifisignal', 'onlineart_open'] and m.shown() == PAGE2 and m.top() == SHEET2_Y and m.size(m.dialog) == (320, 250),
+           'a page that will not open leaves the sheet as it was, on page 2, nothing closed')
+    m = PM(); m.wifi = -1; m.open(); m.calls = []; m.click_more()
+    dim = [c for c in m.calls if c[0] == 'widget_set_opacity' and c[1] == m.rows[ART]]
+    expect(dim == [('widget_set_opacity', m.rows[ART], 100)] and m.shown() == PAGE2 and not m.live(ART) and (m.flags(m.rows[ART]) & F_VISIBLE),
+           f'Wi-Fi off: page 2 shows the row dimmed (opacity 100 of 255) and insensitive ({dim})')
+    expect('pod_art' not in m.tap_row(ART), f'a touch on the dimmed row does not reach it ({m.tap_row(ART)})')
+    m.calls = []; m.call(PSYMS['pm_on_art'], a0=m.dialog, a1=0, count=100000)
+    expect('onlineart_open' not in [c[0] for c in m.calls] and ('window_close', m.dialog) not in m.calls, 'a click handler that still runs with the Wi-Fi off (a connection lost since the sheet opened) opens nothing')
+    m.wifi = 4; m.click_back(); m.click_more()
+    expect(m.live(ART), 'the Wi-Fi back: page 2 looked at again, the row is live')
+    m = PM(); m.open(); m.click_more(); m.wifi = -1; m.click_back(); m.click_more()
+    expect(not m.live(ART) and m.flags(m.rows[ART]) & F_VISIBLE, 'the Wi-Fi is looked at each time page 2 shows (lost while on page 1: dimmed on the next visit)')
+    m = PM(); m.open(); m.calls = []
+    stale = m.alloc(0x80); m.call(PSYMS['pm_on_art'], a0=stale, a1=0, count=100000)
+    expect('onlineart_open' not in [c[0] for c in m.calls], 'a Find Cover & Lyrics click handler left behind for another dialog does nothing')
+    m = PM(); m.present.add(KILL); m.open()
+    expect(m.handlers_of(m.rows[ART], O['EVT_CLICK']) == [] and m.dead(ART), 'kill switch: no Find Cover & Lyrics handler, the row stays hidden and insensitive')
 
     # -- 7c. an episode is playing: page 1 is Go to Podcasts and More (patch/playmore.c pm_set, pm_on_goep) ------------------------------
     EP = '/mnt/mmc/Podcasts/Show One/ep1.mp3'
@@ -626,8 +658,8 @@ def run(ctx):
     m.window_event(O['EVT_WINDOW_TO_BG'])
     expect(m.top() == SCREEN_H - 100, f'episode: another dialog over the sheet leaves it on the bottom ({m.top()})')
     m.click_more()
-    expect(m.shown() == PAGE2 and m.size(m.dialog) == (320, 200) and m.top() == SHEET2_Y and [c for c in m.calls if c[0] == 'image_base_set_image'][-1] == ('image_base_set_image', m.glass, 'pm_sheet'),
-           'episode: More opens the same second page as for a song (200 px, its own glass)')
+    expect(m.shown() == PAGE2 and m.size(m.dialog) == (320, SHEET2_H) and m.top() == SHEET2_Y and [c for c in m.calls if c[0] == 'image_base_set_image'][-1] == ('image_base_set_image', m.glass, 'pm_sheet'),
+           'episode: More opens the same second page as for a song (250 px, its own glass)')
     m.click_back()
     expect(m.shown() == PAGE_EP and m.size(m.dialog) == (320, 100) and m.size(m.glass) == (320, 100) and all(m.dead(i) for i in HIDDEN_EP), 'episode: the back header returns to the episode\'s page 1')
     m = ep_sheet()
@@ -806,10 +838,10 @@ def run(ctx):
     row_px = th.find('hscroll_label', 'srlabel_item_white_style', 'normal')[0].get('font_size')
     tree = awtk_ui.parse(open(os.path.join(WORK, RAW, 'ui/dialog/playmore_dialog.bin'), 'rb').read())
     more_l, back_l, more_c, back_c = (tree.find(n) for n in ('pod_more_label', 'pod_back_label', 'pod_more_chev', 'pod_back_chev'))
-    tape_l, vinyl_l, goep_l = tree.find('pod_tape_label'), tree.find('pod_vinyl_label'), tree.find('pod_goep_label')
+    tape_l, vinyl_l, goep_l, art_l = tree.find('pod_tape_label'), tree.find('pod_vinyl_label'), tree.find('pod_goep_label'), tree.find('pod_art_label')
     speed_l, note_l, badges = tree.find('scrlabel1'), tree.find('label1_msg'), [tree.find(n) for n in ('img_1x', 'img_1_25x', 'img_1_5x', 'img_2x')]
     note_px = int(note_l.get('style:normal:font_size'))
-    over = {'more': [], 'speed': [], 'note': [], 'tape': [], 'vinyl': [], 'goep': []}
+    over = {'more': [], 'speed': [], 'note': [], 'tape': [], 'vinyl': [], 'goep': [], 'art': []}
     for loc in pod_i18n.ALL_TABLES:
         for key in PM_TEXTS:
             expect(built[loc][key] == pod_i18n.TEXT[key][pod_i18n.table_for(loc)], f'{loc}: {key!r} is in the table as {pod_i18n.TEXT[key][pod_i18n.table_for(loc)]!r}')
@@ -826,13 +858,16 @@ def run(ctx):
             if w > vinyl_l.w: over['vinyl'].append((loc, w))
             w = StbText(font, row_px).layout(built[loc]['Go to Podcasts'])[1]
             if w > goep_l.w: over['goep'].append((loc, w))
+            w = StbText(font, row_px).layout(built[loc]['Cover & Lyrics'])[1]
+            if w > art_l.w: over['art'].append((loc, w))
         m = PM(); m.set_language(loc); m.open()
-        for key, label in (('More', 'pod_more_label'), ('More', 'pod_back_label'), ('Speed', 'scrlabel1'), ('Files below 48 kHz only', 'label1_msg'), ('Cassette Mode', 'pod_tape_label'), ('Vinyl Mode', 'pod_vinyl_label'), ('Go to Podcasts', 'pod_goep_label')):
+        for key, label in (('More', 'pod_more_label'), ('More', 'pod_back_label'), ('Speed', 'scrlabel1'), ('Files below 48 kHz only', 'label1_msg'), ('Cassette Mode', 'pod_tape_label'), ('Vinyl Mode', 'pod_vinyl_label'), ('Go to Podcasts', 'pod_goep_label'), ('Cover & Lyrics', 'pod_art_label')):
             want = pod_i18n.TEXT[key][pod_i18n.table_for(loc)].encode('utf-8').decode('latin-1')
             expect(('widget_set_tr_text', m.nodes[label], key) in m.calls and ('widget_set_text_utf8', m.nodes[label], want) in m.calls, f'{loc}: {label} reads {want!r}')
     expect(not over['tape'] and tape_l.w == 200 and tape_l.x == more_l.x, f'"Cassette Mode" fits its {tape_l.w} px label (no chevron) in all 13 languages at {row_px} px ({over["tape"]})')
     expect(not over['vinyl'] and vinyl_l.w == 200 and vinyl_l.x == more_l.x, f'"Vinyl Mode" fits its {vinyl_l.w} px label (no chevron) in all 13 languages at {row_px} px ({over["vinyl"]})')
     expect(not over['goep'] and goep_l.w == 200 and goep_l.x == more_l.x, f'"Go to Podcasts" fits its {goep_l.w} px label in all 13 languages at {row_px} px ({over["goep"]})')
+    expect(not over['art'] and art_l.w == 200 and art_l.x == more_l.x, f'"Cover & Lyrics" fits its {art_l.w} px label (no chevron) in all 13 languages at {row_px} px ({over["art"]})')
     expect(not over['more'] and row_px == 20, f'"More" fits between the label x {more_l.x} and the chevron at x {more_c.x} in all 13 languages at {row_px} px ({over["more"]})')
     wide = lambda key, px: max((StbText(font, px).layout(built[l][key])[1], l) for l in pod_i18n.LOCALES)
     expect(not over['speed'] and wide('Speed', row_px)[0] > 40, f'"Speed" fits the {speed_l.w} px label in all 13 languages at {row_px} px (widest {wide("Speed", row_px)}; over: {over["speed"]})')
@@ -848,18 +883,18 @@ def run(ctx):
     for theme in ('default', 'theme1'):
         built_ui = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets', theme, 'raw/ui/dialog/playmore_dialog.bin'), 'rb').read())
         stock_t = stock_ui if theme == 'default' else awtk_ui.parse(open(os.path.join(stock_raw, '..', '..', theme, 'raw/ui/dialog/playmore_dialog.bin'), 'rb').read())
-        geo = lambda t: [(w.type, w.name, w.x, w.y, w.w, w.h) for w in t.walk() if not w.name.startswith(('pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_goep', 'pod_glass')) and w.name not in speed_names]
+        geo = lambda t: [(w.type, w.name, w.x, w.y, w.w, w.h) for w in t.walk() if not w.name.startswith(('pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_goep', 'pod_art', 'pod_glass')) and w.name not in speed_names]
         expect(geo(built_ui) == geo(stock_t), f'{theme}: every stock widget but the speed row\'s keeps its type, name and rectangle (the M1+ Music ones are added)')
         expect([(w.type, w.name) for w in built_ui.walk() if w.name in speed_names] == [(w.type, w.name) for w in stock_t.walk() if w.name in speed_names],
                f'{theme}: the speed row\'s widgets keep their type and name')
         expect([(built_ui.find(n).x, built_ui.find(n).y, built_ui.find(n).w, built_ui.find(n).h) for n in speed_names] ==
                [(48, 8, 96, 20), (48, 31, 262, 14), (148, 0, 36, 50), (188, 0, 36, 50), (228, 0, 36, 50), (268, 0, 36, 50)], f'{theme}: the speed row\'s rectangles')
         sv = built_ui.find('playmore_scrollview')
-        expect([c.name for c in sv.children] == STOCK_NAMES + ['pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_goep'], f'{theme}: pod_more, pod_back, pod_tape, pod_vinyl and pod_goep are the eighth to twelfth children of the scroll_view, after the seven stock rows')
+        expect([c.name for c in sv.children] == STOCK_NAMES + ['pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_goep', 'pod_art'], f'{theme}: pod_more, pod_back, pod_tape, pod_vinyl, pod_goep and pod_art are the eighth to thirteenth children of the scroll_view, after the seven stock rows')
         hl = built_ui.get('highlight')
         expect(hl is not None and hl.startswith('default(alpha=') and hl.endswith(')') and 40 <= int(hl[len('default(alpha='):-1]) <= 200, f'{theme}: the dialog dims the page under it with the "default" highlighter ({hl!r})')
         imgs = {f[:-4] for f in os.listdir(os.path.join(WORK, 'rootfs/release/assets/default/raw/images/xx'))}
-        for name, kids in (('pod_more', ['pod_more_icon', 'pod_more_label', 'pod_more_chev']), ('pod_back', ['pod_back_chev', 'pod_back_label']), ('pod_tape', ['pod_tape_icon', 'pod_tape_label']), ('pod_vinyl', ['pod_vinyl_icon', 'pod_vinyl_label']), ('pod_goep', ['pod_goep_icon', 'pod_goep_label'])):
+        for name, kids in (('pod_more', ['pod_more_icon', 'pod_more_label', 'pod_more_chev']), ('pod_back', ['pod_back_chev', 'pod_back_label']), ('pod_tape', ['pod_tape_icon', 'pod_tape_label']), ('pod_vinyl', ['pod_vinyl_icon', 'pod_vinyl_label']), ('pod_goep', ['pod_goep_icon', 'pod_goep_label']), ('pod_art', ['pod_art_icon', 'pod_art_label'])):
             row = built_ui.find(name)
             expect(row.type == 'list_item' and row.get('visible') == 'false' and row.get('sensitive') == 'false', f'{theme}: {name} starts hidden and insensitive')
             expect([c.name for c in row.children] == kids and all(c.get('sensitive') == 'false' for c in row.children if c.type == 'image'), f'{theme}: {name}\'s children are {kids}, the pictures insensitive')

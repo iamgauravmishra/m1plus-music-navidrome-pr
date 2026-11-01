@@ -36,12 +36,15 @@
 #include "covercache.h"
 #include "podcasts.h"
 
-#define PM_ROWS 12 /* listitem0..6, then pod_more, pod_back, pod_tape, pod_vinyl, pod_goep */
+#define PM_ROWS 13 /* listitem0..6, then pod_more, pod_back, pod_tape, pod_vinyl, pod_goep, pod_art */
 #define PM_MORE 7
 #define PM_BACK 8
 #define PM_TAPE 9
 #define PM_VINYL 10
 #define PM_GOEP 11 /* Go to Podcasts: page 1 of a podcast episode */
+#define PM_ART 12
+#define PM_ART_DIM \
+    100 /* the Find Cover & Lyrics row's opacity (of 255) while the Wi-Fi is off: dimmed, and it takes no tap */
 #define GO_ALBUM 4 /* listitem4, Look up album */
 #define PM_DELETE 6 /* listitem6, Delete song */
 #define GO_ARTIST 5 /* listitem5, Look up artist */
@@ -52,7 +55,7 @@ extern int coverflow_artist(void *artists, unsigned index,
 static const unsigned char pm_page[3][PM_PAGE_N] = {
     {4, 5, 2, PM_TAPE, PM_VINYL,
      PM_MORE}, /* Look up album, Look up artist, Add to playlist, Cassette Mode, Vinyl Mode, More */
-    {PM_BACK, 1, 0, 6}, /* the back header, Playback speed, A-B repeat, Delete */
+    {PM_BACK, 1, 0, PM_ART, 6}, /* the back header, Playback speed, A-B repeat, Find Cover & Lyrics, Delete */
     {PM_GOEP,
      PM_MORE}, /* page 1 of a podcast episode: Go to Podcasts, More (the rows that mean nothing for an episode are hidden) */
 };
@@ -105,6 +108,13 @@ static void pm_arrange(void) {
         pm_show(pm.row[i], 0);
     }
     for (i = 0; i < n; i++) widget_restack(pm.row[pm_page[set][i]], k++);
+    if (pm.page ==
+        1) { /* Find Cover & Lyrics needs the Wi-Fi: looked at each time page 2 shows (stock's get_wifisignal, as the Podcasts guard) */
+        int online = get_wifisignal() > 0;
+        widget_set_opacity(pm.row[PM_ART], online ? 255 : PM_ART_DIM);
+        widget_set_sensitive(pm.row[PM_ART], online);
+    } else
+        widget_set_opacity(pm.row[PM_ART], 255);
     for (i = 0; i < PM_ROWS; i++)
         if (!used[i]) widget_restack(pm.row[i], k++);
     widget_resize(
@@ -165,6 +175,17 @@ static int pm_on_goep(void *ctx, void *e) {
     (void)e;
     if (!pm.dlg || ctx != pm.dlg) return RET_OK;
     if (podcasts_go() == 0) window_close(ctx);
+    return RET_OK;
+}
+
+/* Find Cover & Lyrics (the row is pod_art, page 2): our page (patch/onlineart.c) over Now Playing, opened the same way: the page first, the sheet closed once it is up. Not with the Wi-Fi off (the row is dimmed
+ * and insensitive then; this is the second look). */
+extern int onlineart_open(void);
+
+static int pm_on_art(void *ctx, void *e) {
+    (void)e;
+    if (!pm.dlg || ctx != pm.dlg || get_wifisignal() <= 0) return RET_OK;
+    if (onlineart_open() == 0) window_close(ctx);
     return RET_OK;
 }
 
@@ -307,10 +328,11 @@ static int pm_on_delete(void *ctx, void *e) {
 }
 
 static void pm_start(void *dlg) {
-    static const char *const names[PM_ROWS] = {"listitem0", "listitem1", "listitem2", "listitem3",
-                                               "listitem4", "listitem5", "listitem6", "pod_more",
-                                               "pod_back",  "pod_tape",  "pod_vinyl", "pod_goep"};
-    void *more_label, *back_label, *speed_label, *note_label, *tape_label, *vinyl_label, *goep_label, *track;
+    static const char *const names[PM_ROWS] = {"listitem0", "listitem1", "listitem2", "listitem3", "listitem4",
+                                               "listitem5", "listitem6", "pod_more",  "pod_back",  "pod_tape",
+                                               "pod_vinyl", "pod_goep",  "pod_art"};
+    void *more_label, *back_label, *speed_label, *note_label, *tape_label, *vinyl_label, *goep_label, *art_label,
+        *track;
     unsigned i;
     if (access(KILL_SD, F_OK) == 0) return;
     if (pm.dlg) memset(&pm, 0, sizeof pm); /* an earlier dialog that never said it was gone */
@@ -326,10 +348,11 @@ static void pm_start(void *dlg) {
     tape_label = widget_lookup(dlg, "pod_tape_label", 1);
     vinyl_label = widget_lookup(dlg, "pod_vinyl_label", 1);
     goep_label = widget_lookup(dlg, "pod_goep_label", 1);
+    art_label = widget_lookup(dlg, "pod_art_label", 1);
     if (!pm.lv || !pm.sv || !pm.bar || !pm.glass || !more_label || !back_label || !speed_label || !note_label ||
-        !tape_label || !vinyl_label || !goep_label)
+        !tape_label || !vinyl_label || !goep_label || !art_label)
         goto fail;
-    for (i = 0; i < PM_ROWS; i++) { /* exactly the asset: eleven rows in the scroll_view */
+    for (i = 0; i < PM_ROWS; i++) { /* exactly the asset: thirteen rows in the scroll_view */
         pm.row[i] = widget_lookup(dlg, names[i], 1);
         if (!pm.row[i] || *(void **)((char *)pm.row[i] + W_PARENT) != pm.sv) goto fail;
     }
@@ -342,6 +365,7 @@ static void pm_start(void *dlg) {
     if (widget_set_tr_text(tape_label, "Cassette Mode") != RET_OK) goto fail;
     if (widget_set_tr_text(vinyl_label, "Vinyl Mode") != RET_OK) goto fail;
     if (widget_set_tr_text(goep_label, "Go to Podcasts") != RET_OK) goto fail;
+    if (widget_set_tr_text(art_label, "Cover & Lyrics") != RET_OK) goto fail;
     if (!widget_on(dlg, EVT_DESTROY, pm_on_destroy, dlg)) goto fail;
     if (!widget_on(pm.lv, EVT_WINDOW_TO_BG, pm_on_bg, dlg))
         goto fail; /* after the stock one on the dialog (top comment) */
@@ -350,6 +374,7 @@ static void pm_start(void *dlg) {
     if (!widget_on(pm.row[PM_TAPE], EVT_CLICK, pm_on_tape, dlg)) goto fail;
     if (!widget_on(pm.row[PM_VINYL], EVT_CLICK, pm_on_vinyl, dlg)) goto fail;
     if (!widget_on(pm.row[PM_GOEP], EVT_CLICK, pm_on_goep, dlg)) goto fail;
+    if (!widget_on(pm.row[PM_ART], EVT_CLICK, pm_on_art, dlg)) goto fail;
     if (!widget_on(pm.row[GO_ALBUM], EVT_CLICK, pm_on_lookup_album, dlg)) goto fail;
     if (!widget_on(pm.row[GO_ARTIST], EVT_CLICK, pm_on_lookup_artist, dlg)) goto fail;
     if (!widget_on(pm.row[PM_DELETE], EVT_CLICK, pm_on_delete, dlg)) goto fail;

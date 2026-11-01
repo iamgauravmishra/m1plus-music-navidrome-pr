@@ -82,7 +82,7 @@ PM_SPEED = {'scrlabel1': ((48, 8, 60, 20), (48, 8, 96, 20)),          # Playback
             'img_1_25x': ((172, 0, 36, 50), (188, 0, 36, 50)),        # note under them may use the whole row
             'img_1_5x': ((222, 0, 36, 50), (228, 0, 36, 50)),
             'img_2x': ((272, 0, 36, 50), (268, 0, 36, 50))}
-PM_SHEET = 'pm_sheet'                               # the glass image of page 2 (320 x 200, top corners r 18; tools/mod_icons.py GLASS_SHEET); page 1's is pm_sheet6 (320 x 300, GLASS_SHEET6): the payload sets the one the page needs on the dialog's first child, the insensitive image pod_glass
+PM_SHEET = 'pm_sheet'                               # the glass image of page 2 (320 x 250, five rows, top corners r 18; tools/mod_icons.py GLASS_SHEET); page 1's is pm_sheet6 (320 x 300, GLASS_SHEET6): the payload sets the one the page needs on the dialog's first child, the insensitive image pod_glass
 PM_GLASS = 'pod_glass'
 PM_PRESSED, PM_HAIR = '#FFFFFF10', '#FFFFFF22'      # the rows over it: transparent, pressed 6 % white (a 20 % band, as the album page's, takes the red under 3:1), hairline 13 % white
 PM_RED = '#FF5A4F'                                 # the Delete label: >= 4.5:1 on the glass at rest (test/pod/playmore.py; a label in a pressed row stays in its normal state)
@@ -271,7 +271,7 @@ def edit_playmore(root, pal):
     has none, A-B repeat is no longer first, the back header has none); Playback speed's row with room for its label. Stock
     widgets keep their names, order and rectangles, but the speed row's (PM_SPEED)."""
     sv, add, first, ab = root.find('playmore_scrollview'), root.find('listitem2'), root.find('listitem4'), root.find('listitem0')
-    assert sv and add and first and ab and add in sv.children and root.find('pod_more') is None and root.find('pod_back') is None and root.find('pod_tape') is None and root.find('pod_vinyl') is None and root.find('pod_goep') is None, 'unexpected playmore_dialog'
+    assert sv and add and first and ab and add in sv.children and root.find('pod_more') is None and root.find('pod_back') is None and root.find('pod_tape') is None and root.find('pod_vinyl') is None and root.find('pod_goep') is None and root.find('pod_art') is None, 'unexpected playmore_dialog'
     assert root.type == 'dialog' and root.get('highlight') is None
     root.set('highlight', PM_HIGHLIGHT)
     for name, (stock, ours) in PM_SPEED.items():
@@ -302,6 +302,9 @@ def edit_playmore(root, pal):
     goep = row('pod_goep', [   # page 1 of a podcast episode, the first row: the Podcasts page (patch/podcasts.c podcasts_go); no hairline, as the first row
         awtk_ui.Widget('image', 14, 13, 24, 24, [('name', 'pod_goep_icon'), ('draw_type', 'default'), ('image', 'pod_ic_podcasts'), ('sensitive', 'false')]),
         awtk_ui.Widget('hscroll_label', 48, 15, 200, 20, [('name', 'pod_goep_label'), ('style', 'srlabel_item_white_style')])])
+    row('pod_art', [   # page 2, between A-B repeat and Delete: Find Cover & Lyrics (patch/onlineart.c); a top hairline like the rows around it; the payload dims it and takes its touches away while the Wi-Fi is off
+        awtk_ui.Widget('image', 14, 13, 24, 24, [('name', 'pod_art_icon'), ('draw_type', 'default'), ('image', 'pod_ic_art'), ('sensitive', 'false')]),
+        awtk_ui.Widget('hscroll_label', 48, 15, 200, 20, [('name', 'pod_art_label'), ('style', 'srlabel_item_white_style')])])
     assert first.get('style:normal:border') == 'top' and ab.get('style:normal:border') == 'none'
     goep.set('style:normal:border', 'none')
     first.set('style:normal:border', 'none')
@@ -315,9 +318,9 @@ def edit_playmore(root, pal):
         root.set(f'style:{st}:bg_color', '#00000000')
         root.set(f'style:{st}:border', 'none')
         lv.set(f'style:{st}:bg_color', '#00000000'); sv.set(f'style:{st}:bg_color', '#00000000')
-    # the glass is the dialog's FIRST child, an insensitive image (drawn under the list): the dialog's own bg_image cannot change with the page (200 px on page 2, 300 on page 1),
+    # the glass is the dialog's FIRST child, an insensitive image (drawn under the list): the dialog's own bg_image cannot change with the page (250 px on page 2, 300 on page 1),
     # so the payload sets the image and the size of this one, pm_sheet (page 2's, the kill switch's look) or pm_sheet6
-    root.children.insert(0, awtk_ui.Widget('image', 0, 0, 320, 200, [('name', PM_GLASS), ('draw_type', 'default'), ('image', PM_SHEET), ('sensitive', 'false')]))
+    root.children.insert(0, awtk_ui.Widget('image', 0, 0, 320, 250, [('name', PM_GLASS), ('draw_type', 'default'), ('image', PM_SHEET), ('sensitive', 'false')]))
     for r in sv.children:
         assert r.type == 'list_item' and r.get('style:normal:bg_color') == '#000000' and r.get('style:pressed:border_color') == '#666666', f'{r.name}: unexpected row style'
         for st in ('normal', 'pressed', 'over', 'disable', 'focused'):
@@ -378,7 +381,7 @@ def build_ui(work):
             old, new, _ = edit_ui(path, lambda root, rel=rel: ui_edit(rel, root, pal))
             shape = lambda d: [(w.type, w.name, w.x, w.y, w.w, w.h) for w in awtk_ui.parse(d).walk()]
             if rel in ADD_EDITS:
-                ours = lambda s: s[1] in ('pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_goep', PM_GLASS) or s[1].startswith(('pod_more_', 'pod_back_', 'pod_tape_', 'pod_vinyl_', 'pod_goep_'))
+                ours = lambda s: s[1] in ('pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_goep', 'pod_art', PM_GLASS) or s[1].startswith(('pod_more_', 'pod_back_', 'pod_tape_', 'pod_vinyl_', 'pod_goep_', 'pod_art_'))
                 other = lambda s: s[:2] if s[1] in PM_SPEED else s   # the speed row's rectangles are ours (PM_SPEED)
                 assert [other(s) for s in shape(new) if not ours(s)] == [other(s) for s in shape(old)], f'{rel}: a stock widget was removed, renamed or moved'
             elif rel in GEOMETRY_EDITS:

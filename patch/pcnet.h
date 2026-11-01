@@ -39,7 +39,9 @@ enum {
     PN_NOTAUDIO, /* a download: the answer is a web page (Content-Type text/...), not an episode */
     PN_QFULL, /* the download queue is full (PN_QMAX) */
     PN_PAUSED, /* a download stopped for a refresh and kept in the queue (never shown) */
-    PN_NOFEED /* search: an Apple Podcasts address whose show has no feed address */
+    PN_NOFEED, /* search: an Apple Podcasts address whose show has no feed address */
+    PN_NOLYRICS, /* lyrics: no LRCLIB record has any */
+    PN_OVERLOAD /* find cover & lyrics: the service answered 503 or 429 (busy) on every try */
 };
 
 /* Episode downloads (docs/modules/podcasts.md "Downloads"). The policy follows q2-podcasts (MIT): one at a time, chunks written with open / write / fsync / close, Range resume, a stall limit,
@@ -160,3 +162,78 @@ void pn_preview_drop(void); /* free the held preview and its picture */
 /* Subscribe to the held preview exactly as an import and its first refresh would: a folder named from the feed's title, .episodes, .show (feed, title, image, author, category, description), cover.jpg. root: the Podcasts folder; shows[0..nshows): the folders now there.
  * Returns PN_OK (*dir the folder's name, the preview dropped), PN_STORAGE when nothing could be written (nothing is left behind), PN_NOTFEED when no preview is held. UI thread, no network. */
 int pn_subscribe(const char *root, const pc_show_t *shows, int nshows, char *dir, unsigned dsize);
+
+/* ---- Find Cover & Lyrics (docs/modules/onlineart.md): album covers from the iTunes Search API then Deezer, lyrics from LRCLIB. One worker at a time, never beside a refresh or a download (the page pauses the downloads first);
+ * the same guards, libcurl options and thread rules as the search. All of these run on the UI thread; the worker only writes the record they read. */
+#define PN_ART_MAX 12 /* covers offered: iTunes' first (at most PN_ART_ITUNES_MAX), Deezer's after them */
+#define PN_ART_ITUNES_MAX 6
+#define PN_ART_Q \
+    96 /* a query field (artist, album, title), UTF-8 bytes with the NUL; longer is cut on a character boundary */
+#define PN_LYR_MAX 20 /* lyrics candidates kept: the exact match, then LRCLIB's search results */
+#define PN_LRC_CAP 49152u /* lyrics kept: a text that goes on ends at its last whole line */
+#define PN_PICK_CAP 3145728u /* a cover picture larger than this is refused while it downloads */
+#define PN_ART_DIR \
+    "/mnt/mmc/.m1plus/art" /* scratch: the thumbnails a<n>.jpg|png, the larger picture full.jpg|png / pick.src and the lyrics l<n>.txt (until the page saves one) */
+#define PN_ART_ITUNES "https://itunes.apple.com/search?media=music&entity=album&limit=8&term="
+#define PN_ART_DEEZER "https://api.deezer.com/search/album?limit=8&q="
+#define PN_ART_LRCLIB "https://lrclib.net/api/"
+
+enum { PN_A_IDLE = 0, PN_A_COVERS = 1, PN_A_THUMBS = 2, PN_A_DONE = 3 };
+enum { PN_SRC_ITUNES = 0, PN_SRC_DEEZER = 1 };
+
+/* A lyrics candidate (LRCLIB record with lyrics): the texts are UTF-8, cut on a character boundary. */
+typedef struct {
+    char title[80], artist[56], album[80];
+    unsigned secs; /* the record's length in seconds, 0 = unknown */
+    int synced; /* it has syncedLyrics (else plain) */
+} pn_lyr_t;
+
+/* Start the lookup for artist, album and title (UTF-8; album may be empty: the title is then searched with the artist; seconds: the track's length, 0 = unknown) : the guards, the old files removed, one worker (iTunes,
+ * Deezer, the thumbnails one by one, then the lyrics). 0 when it runs; PN_BUSY when a worker runs (the page waits and asks again); PN_MEM when a query does not fit. */
+int pn_art(const char *artist, const char *album, const char *title, unsigned seconds);
+/* A lookup fails fast: every request is made once. A busy answer (HTTP 503 or 429) is PN_OVERLOAD at once; a busy LRCLIB get skips the search, a busy iTunes still lets Deezer run. The page's Try Again asks again. */
+enum { PN_PART_COVERS = 1, PN_PART_LYRICS = 2 };
+/* Look up one part again with the query of the last pn_art (the other part's results stay as they are): PN_PART_COVERS or PN_PART_LYRICS. Same returns as pn_art. */
+int pn_art_again(int part);
+int pn_art_state(
+    void); /* PN_A_*: the cover queries run / the answers are in and the thumbnails follow / the covers are done (the lyrics may still be coming: pn_lyr_state) */
+int pn_art_code(
+    void); /* the cover lookup's result once the answer is in: PN_OK (with pn_art_count() 0: no results), or why not */
+int pn_art_count(void); /* covers (valid once the state is past PN_A_COVERS with PN_OK) */
+unsigned pn_art_gen(void); /* moves whenever an answer, a thumbnail or the lyrics arrive, and when the worker ends */
+int pn_art_thumb(int i, char *path,
+                 unsigned size); /* 1 and the path of cover i's thumbnail picture when it has arrived */
+int pn_art_thumb_state(int i); /* 0 not yet, 1 the picture is there, 2 it could not be had (the placeholder stays) */
+/* Cover i's album, artist (UTF-8, "" when the service gave none) and source (PN_SRC_*); valid for 0 <= i < pn_art_count(). */
+const char *pn_art_name(int i);
+const char *pn_art_artist(int i);
+int pn_art_source(int i);
+/* The address of the larger picture for a thumbnail's url: the store's 100x100bb becomes 600x600bb, Deezer's 250x250 becomes 500x500; any other address is returned as it is. 1 when it fits out. */
+int pn_art_full(const char *thumb, char *out, unsigned size);
+/* Download cover i's larger picture for the confirmation page (the job slot; checked as a picture the loader takes: JPEG or PNG within pc_cover_ok). 0 when the worker runs; PN_BUSY, or a guard's code.
+ * The result is pn_pick_state / pn_pick_code; the file is pn_art_full_path. */
+int pn_art_fetch(int i);
+int pn_art_full_path(
+    int i, char *path,
+    unsigned
+        size); /* 1 and the path of the downloaded larger picture of cover i, when pn_art_fetch has completed for it */
+void pn_art_full_drop(void); /* remove the downloaded larger picture (no worker must run) */
+/* Lyrics: pn_lyr_state 0: the lookup has not answered, 1: it has (pn_lyr_code, pn_lyr_count). The candidates are in display order: LRCLIB's exact match (api/get) first, then api/search's records by how close their
+ * length is to the track's (a synced one first among equals). */
+int pn_lyr_state(void);
+int pn_lyr_code(void); /* PN_OK (candidates), PN_NOLYRICS (no record has any), or the failure's PN_* */
+int pn_lyr_count(void);
+const pn_lyr_t *pn_lyr_get(int i); /* candidate i, NULL when out of range */
+/* The lyrics text of candidate i: malloc'd (the caller frees), NUL-terminated, at most PN_LRC_CAP bytes; NULL when there is none or no memory. *n: its length. */
+char *pn_lyr_text(int i, unsigned *n);
+/* Write candidate i's lyrics to path (UI thread, atomically: path.tmp then rename; the card only). 1 when written. */
+int pn_lyr_save(int i, const char *path);
+/* Make the cover the user picked: shrink picture i's larger version into the cache file of each non-zero key (the cover cache, ART_DIR/<key>-168.jpg, and a .pick marker beside it that Rebuild Covers
+ * honours) and, when dir is not empty, put the original JPEG into that folder as the folder picture stock's Now Playing reads. The larger picture is the one pn_art_fetch downloaded for i, else it is
+ * downloaded now. 0 when the worker runs; PN_BUSY, or a guard's code. */
+int pn_art_pick(int i, const char *dir, unsigned key0, unsigned key1);
+int pn_pick_state(void); /* 0 none, 1 running, 2 done */
+int pn_pick_code(
+    void); /* PN_OK: the cover is in the cache (or, after pn_art_fetch, the picture is there); else why not */
+void pn_art_clean(
+    void); /* remove the thumbnails, the larger picture and the held lyrics, forget the results (no worker must run) */

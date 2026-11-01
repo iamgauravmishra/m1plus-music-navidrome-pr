@@ -651,7 +651,7 @@ static void build_file(const job_t *j) {
 }
 
 static void build_art(const job_t *j) {
-    char dst[64], tmp[64];
+    char dst[64], tmp[64], pick[72];
     int ok;
     void *f;
     if (!j->key) {
@@ -661,6 +661,9 @@ static void build_art(const job_t *j) {
     if (access(j->track, F_OK)) return; /* storage gone: no marker, the next open retries */
     cc_path(dst, sizeof dst, j->key, "");
     cc_path(tmp, sizeof tmp, j->key, ".tmp");
+    cc_path(pick, sizeof pick, j->key, ".pick");
+    if (!access(pick, F_OK) && !access(dst, F_OK))
+        return; /* a cover picked in Find Cover & Lyrics (docs/modules/onlineart.md): Rebuild Covers keeps it */
     pthread_mutex_lock((void *)PARSE_COVER_MUTEX);
     if (cb.cancelled) { /* cancelled while waiting for the parser: no extraction, no marker */
         pthread_mutex_unlock((void *)PARSE_COVER_MUTEX);
