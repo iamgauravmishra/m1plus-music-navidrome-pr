@@ -2161,13 +2161,7 @@ static int dp_next_load(void) {
 
 static int dp_on_load(const void *unused);
 
-static int dp_moving(void) {
-    void *wa;
-    if (!dp.sv) return 0;
-    if (*(unsigned char *)((char *)dp.sv + SC_PRESSED) && *(unsigned char *)((char *)dp.sv + SC_DRAGGED)) return 1;
-    wa = P(dp.sv, SC_WA);
-    return wa && I(wa, SC_AN_STATE) == SC_AN_RUNNING && P(wa, SC_AN_WIDGET) == dp.sv;
-}
+static int dp_moving(void) { return grid_moving(dp.sv); }
 
 static void dp_kick(void) {
     if (!dp.more_timer && dp.view && (dp.noscroll || dp_next_load() >= 0))

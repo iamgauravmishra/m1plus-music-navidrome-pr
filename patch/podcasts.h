@@ -44,6 +44,8 @@ typedef struct {
     char desc[PC_DESC]; /* the show file's desc= (the channel's itunes:summary, else description, as plain text) */
     unsigned
         newest; /* the newest episode's date, remote or local: the largest p= of the .episodes entries, else (no .episodes) the newest audio file's date; 0 = none: the Shows page's order */
+    unsigned
+        modified; /* the show file's modified=: the server's Last-Modified (seconds since 1970) of the feed we hold, 0 = none */
 } pc_show_t;
 
 /* The folder: out (PC_FILE + 20 bytes) is "/mnt/mmc/<Podcasts as the card spells it>"; 1 when it exists, else 0 (out then holds the default spelling). */

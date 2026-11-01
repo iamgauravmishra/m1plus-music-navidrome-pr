@@ -128,7 +128,8 @@ class PM(ListMachine):
         cs = lambda b: b.split(b'\0', 1)[0].decode('utf-8', 'replace')
         n, h, fresh, checked = struct.unpack_from('<4I', raw, O['PC_SH_COUNT'])
         return dict(dir=cs(raw[:128]), title=cs(raw[128:224]), cover=cs(raw[224:352]), feed=cs(raw[O['PC_SH_FEED']:O['PC_SH_IMAGE']]), image=cs(raw[O['PC_SH_IMAGE']:O['PC_SH_COUNT']]), count=n, hash=h, fresh=fresh, checked=checked,
-                    author=cs(raw[O['PC_SH_AUTHOR']:O['PC_SH_CAT']]), category=cs(raw[O['PC_SH_CAT']:O['PC_SH_DESC']]), desc=cs(raw[O['PC_SH_DESC']:O['PC_SH_NEWEST']]), newest=struct.unpack_from('<I', raw, O['PC_SH_NEWEST'])[0])
+                    author=cs(raw[O['PC_SH_AUTHOR']:O['PC_SH_CAT']]), category=cs(raw[O['PC_SH_CAT']:O['PC_SH_DESC']]), desc=cs(raw[O['PC_SH_DESC']:O['PC_SH_NEWEST']]), newest=struct.unpack_from('<I', raw, O['PC_SH_NEWEST'])[0],
+                    modified=struct.unpack_from('<I', raw, O['PC_SH_MODIFIED'])[0])
 
     # ---- the payload's entry points
     def parse_eps(self, text, mx=300):

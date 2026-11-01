@@ -724,6 +724,42 @@ def perf_tests(ctx):
         expect(load < 3_000_000, f'{count} songs: the first tick does not search ({load / 1e6:.2f} M besides the stock queries)')
 
 
+def loader_tests(ctx):
+    """The cover lookups belong to the loader: a paint that brings in tiles opens no cache file, nothing is read or decoded while the list is dragged or flung, and once it stops the covers load (a song's or album's own, the artist's first album with one, the placeholder for none)."""
+    expect = ctx.expect
+    songs = [('Taylor Song', 'Taylor Swift', 'Folklore'), ('Taylor Lone', 'Nobody', 'Nowhere')]
+    albums = [('Encore', 'Taylor Swift'), ('Folklore', 'Taylor Swift')]
+    cover = 'file://' + art_file(album_key('Taylor Swift', 'Folklore'))
+    cache_reads = lambda calls: [c for c in calls if c[0] in ('fopen', 'access', 'stat', 'widget_load_image')]
+    m = opened(songs, ['Taylor Swift'], albums, playlists=['Taylor Mix'], covers=[('Taylor Swift', 'Folklore')])
+    settle(m)
+    m.setword(m.sv + 0xa0, 0x101)   # pressed and dragged (SC_PRESSED, SC_DRAGGED bytes)
+    m.call(PSYMS['se_on_text'], a0=m.cstr('taylor'), count=2000000)
+    ticks(m, 30)                    # the query is applied; the covers wait for the finger
+    texts, _, _, blits = paint(m)
+    expect(len(rows(m)) >= 5 and len(blits) >= 5 and texts, 'the paint brought in the rows')
+    expect(not cache_reads(m.calls), f'a paint that brings in fresh tiles opens no cache file and decodes nothing ({cache_reads(m.calls)})')
+    loads = []
+    for _ in range(10):
+        m.call(PSYMS['se_tick'], count=900000000)
+        loads += cache_reads(m.calls)
+    expect(not loads and state(m, 'timer') != 0, f'while a finger drags the list the loader reads and decodes nothing and keeps looking ({loads})')
+    m.setword(m.sv + 0xa0, 0)
+    an = m.alloc(0x80); m.u.mem_write(an, bytes(0x80)); m.setword(an + 4, m.sv); m.setword(an + 0x28, O['SC_AN_RUNNING']); m.setword(m.sv + O['SC_WA'], an)
+    for _ in range(10):
+        m.call(PSYMS['se_tick'], count=900000000)
+        loads += cache_reads(m.calls)
+    expect(not loads, f'nor while the scroll animator (a fling) runs ({loads})')
+    m.setword(m.sv + O['SC_WA'], 0)
+    for _ in range(40):
+        if m.call(PSYMS['se_tick'], count=900000000) != RET_REPEAT: break
+        loads += [c[1] for c in m.calls if c[0] == 'widget_load_image']
+    expect(state(m, 'timer') == 0, 'once the list stops the loader finishes (a row with no cover file ends as the placeholder and is not picked again)')
+    expect(loads.count(cover) >= 3, f'the album, the song of that album and the artist (their first album with a cover, Encore has none) load Folklore\'s cover ({loads})')
+    texts, _, _, blits = paint(m)
+    expect(not cache_reads(m.calls), 'a later paint reads nothing')
+
+
 def entry_tests(ctx):
     """The Songs page's Search and the album page's search button."""
     expect = ctx.expect
@@ -1130,7 +1166,7 @@ def keyboard_text(m):
     return m.read_cstr(m.call(PSYMS['keyboard_text'], count=400000))
 
 
-SECTIONS = [recent_tests, fold_tests, query_tests, pinyin_tests, rank_tests, incremental_tests, page_tests, chips_tests, scope_tests, chip_cover_tests, live_tests, tap_tests, perf_tests, entry_tests, return_tests, embed_tests, asset_tests]   # tools/check.py runs each as its own task
+SECTIONS = [recent_tests, fold_tests, query_tests, pinyin_tests, rank_tests, incremental_tests, page_tests, chips_tests, scope_tests, chip_cover_tests, live_tests, tap_tests, perf_tests, loader_tests, entry_tests, return_tests, embed_tests, asset_tests]   # tools/check.py runs each as its own task
 
 
 def run(ctx):

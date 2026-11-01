@@ -77,8 +77,16 @@ typedef grid_tile_t tile_t;
 typedef struct {
     unsigned key; /* cc_album_key of the song: its cover's cache file */
     unsigned char letter; /* the section letter: 'A'..'Z' or '#' */
-    unsigned char pad[3];
+    unsigned char sig
+        [3]; /* 24 bits of a hash of what the row shows (both lines, the cover key, the section): a list read again with every sig the same keeps its tiles */
 } song_t;
+
+static void sg_set_sig(song_t *s, unsigned h) {
+    s->sig[0] = (unsigned char)h, s->sig[1] = (unsigned char)(h >> 8), s->sig[2] = (unsigned char)(h >> 16);
+}
+static int sg_same_sig(const song_t *a, const song_t *b) {
+    return a->sig[0] == b->sig[0] && a->sig[1] == b->sig[1] && a->sig[2] == b->sig[2];
+}
 
 static struct {
     void *win, *view, *sv, *status, *title, *back, *np;
@@ -334,13 +342,7 @@ static int sg_next_load(void) {
 
 static int sg_on_load(const void *unused);
 
-static int sg_moving(void) {
-    void *wa;
-    if (!sg.sv) return 0;
-    if (B(sg.sv, SC_PRESSED) && B(sg.sv, SC_DRAGGED)) return 1;
-    wa = P(sg.sv, SC_WA);
-    return wa && I(wa, SC_AN_STATE) == SC_AN_RUNNING && P(wa, SC_AN_WIDGET) == sg.sv;
-}
+static int sg_moving(void) { return grid_moving(sg.sv); }
 
 /* The playlist header's mosaic still to be made (one source a tick) and in view. */
 static int sg_head_pending(void) {
@@ -537,7 +539,7 @@ static void sg_head_prep(void) {
     grid_tile_t *t;
     if (!sg.head) return;
     memset(key, 0, sizeof key);
-    nk = sg.count ? grid_mosaic_keys(sg.list, sg.albums, key) : 0;
+    nk = sg.count ? grid_mosaic_keys(sg.list, sg.albums, key, (int *)0) : 0;
     t = grid_tile(&sg.hg, 0, 0, 0, &fresh);
     for (i = 0, same = !fresh && t->nq == (nk > 1 && !sg.htmp ? 1 : nk) && t->art; i < 4; ++i)
         same = same && t->qkey[i] == key[i];
@@ -580,15 +582,33 @@ static void sg_ticks(void) {
 
 /* The stock query again, and the page rebuilt from it: the index, the sections, the tiles. The library's albums are loaded first (once): both are stock queries
  * that replace *pdeq_showlist. */
+static unsigned sg_sig(void *rec, unsigned key, unsigned rank) {
+    const char *s[2];
+    unsigned h = 2166136261u ^ key, k;
+    s[0] = sg_name(rec), s[1] = cc_str(rec, sg.cls == CLASS_ARTIST_SONGS ? REC_ALBUM : REC_ARTIST);
+    h = (h ^ rank) * 16777619u;
+    for (k = 0; k < 2; ++k) {
+        const unsigned char *p = (const unsigned char *)s[k];
+        for (; *p; ++p) h = (h ^ *p) * 16777619u;
+        h = (h ^ 0x100) * 16777619u; /* (the line's end: "ab","c" is not "a","bc") */
+    }
+    return h;
+}
+
 static void sg_load(int keep) {
     unsigned i;
-    int at = keep ? sg_off() : 0;
+    int at = keep ? sg_off() : 0, same = 0;
     void *list = (void *)0;
+    song_t *old = sg.idx;
+    unsigned old_n = sg.count;
+    if (sg_lib())
+        free(old),
+            old =
+                (song_t
+                     *)0; /* (the library is big: its old index is not held beside the new one, and it is read again only when it changed) */
     if (sg.more_timer) timer_remove(sg.more_timer);
     sg.more_timer = 0;
     sg_build_end();
-    grid_drop(&sg.g);
-    free(sg.idx);
     free(sg.sel);
     sg.idx = (song_t *)0, sg.sel = (unsigned char *)0, sg.list = sg.first = (void *)0, sg.count = sg.nsel = 0,
     sg.al.count = 0, sg.al.nsec = 0, sg.press = sg.down = 0;
@@ -616,11 +636,25 @@ static void sg_load(int keep) {
             void *rec = deque_at(list, i);
             sg.idx[i].key = cc_album_key(rec);
             sg.idx[i].letter = sg_rank(rec);
+            sg_set_sig(&sg.idx[i], sg_sig(rec, sg.idx[i].key, sg.idx[i].letter));
         }
         if (sg_lib() && sg.sort == 0) az_sections(&sg.al, &sg.idx[0].letter, sizeof(song_t));
     }
+    /* The same rows as before (count and every sig; the tiles hold their texts and covers by row): the tiles and the placeholder stay, so a list read again
+     * does not flash its covers away. Anything else, or a doubt, drops them. A cover that was not there (art 2) is looked for again. */
+    if (old && old_n && old_n == sg.count && sg.g.tiles && sg.g.placeholder) {
+        same = 1;
+        for (i = 0; i < old_n && same; ++i)
+            same = old[i].key == sg.idx[i].key && old[i].letter == sg.idx[i].letter && sg_same_sig(&old[i], &sg.idx[i]);
+    }
+    free(old);
+    if (same) {
+        for (i = 0; i < (unsigned)sg.g.n; ++i)
+            if (sg.g.tiles[i].art == 2) sg.g.tiles[i].art = 0;
+    } else
+        grid_drop(&sg.g);
     sg_head_prep();
-    grid_placeholder(&sg.g);
+    if (!same) grid_placeholder(&sg.g);
     sg_show(sg.view, sg.count != 0);
     sg_show(sg.status, sg.count == 0);
     if (!sg.count)
@@ -934,6 +968,10 @@ static int sg_on_search(void *ctx, void *e) {
 /* ---------------------------------------------------------------------------
  * The window
  */
+/* The lists whose content changes while the page is behind another: a play changes Recently Played and Most Played, Now Playing's star the Favourites. The others
+ * (the library, a playlist, a genre, an artist, Recently Added, Hi-Res) change only through this page (its own delete and add read again) or the picker. */
+static int sg_changes(void) { return sg.cls == CLASS_FAV || sg.cls == CLASS_RECENT || sg.cls == CLASS_OFTEN; }
+
 static int sg_on_fg(void *ctx, void *e) {
     (void)ctx;
     (void)e;
@@ -944,9 +982,8 @@ static int sg_on_fg(void *ctx, void *e) {
         memcpy((void *)NAV_TITLE, sg.title_save, sizeof sg.title_save);
         sg_select(0);
         sg_load(1);
-    } else if (!sg_valid() || !sg_lib())
-        sg_load(
-            1); /* a list is read every time: playing changes Recently Played and Most Played, Now Playing's star the Favourites */
+    } else if (!sg_valid() || sg_changes())
+        sg_load(1); /* (a list read again whose rows are the same keeps its tiles: sg_load) */
     sg_build_later();
     sg_kick(); /* the loader stops on a list another page replaced (Search's queries), and the list can be valid again by now: covers still to load start it here */
     return RET_OK;

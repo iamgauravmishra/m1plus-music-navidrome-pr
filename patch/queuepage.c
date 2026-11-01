@@ -208,13 +208,7 @@ static int qp_next_load(void) {
     return best;
 }
 
-static int qp_moving(void) {
-    void *wa;
-    if (!qp.sv) return 0;
-    if (B(qp.sv, SC_PRESSED) && B(qp.sv, SC_DRAGGED)) return 1;
-    wa = P(qp.sv, SC_WA);
-    return wa && I(wa, SC_AN_STATE) == SC_AN_RUNNING && P(wa, SC_AN_WIDGET) == qp.sv;
-}
+static int qp_moving(void) { return grid_moving(qp.sv); }
 
 static void qp_kick(void) {
     if (!qp.more_timer && qp.view && (qp.noscroll || qp_next_load() >= 0))

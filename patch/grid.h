@@ -70,6 +70,9 @@ void grid_placeholder(grid_t *g); /* the placeholder bitmap: the theme's disc re
 void grid_free_art(grid_tile_t *t);
 
 grid_tile_t *grid_find(grid_t *g, int album);
+/* The scroll_view sv is moving: a finger is dragging it (pressed and past the drag threshold) or its scroll animator (the fling) is running.
+ * 0 for a null sv. The loaders decode nothing meanwhile (a decode is a few ms on the UI thread and the next touch would wait behind it). */
+int grid_moving(void *sv);
 /* The tile of album a: the one it has, else a free one, else the least recently used one outside [lo, hi] (the window). *fresh is 1 when
  * the tile was just reset: the caller then sets its texts and cover key (grid_set). */
 grid_tile_t *grid_tile(grid_t *g, int a, int lo, int hi, int *fresh);
@@ -105,8 +108,9 @@ void grid_list_paint(void *canvas, grid_t *g, void *st_title, void *st_sub, int 
 /* A playlist's mosaic: the first (up to) four distinct albums of its songs that have a Cover Flow cache file, as cache keys in key[4], and how many (0..4). From the
  * first PL_SCAN songs of the list `songs` (a stock song list); the key is the cc_album_key of the song (its artist and album as the playlist stored them), and when
  * that has no file the album of that name in `albums` (the library's copy, cc_albums; NULL: no lookup), whose record carries the artist the cache key was made from.
+ * *miss (NULL: not wanted) is set to 1 when a scanned song's album had a key but no file under any of them (the file may be written later), else 0.
  * Shared by the Playlists page (one playlist a tick) and the Songs page's playlist header. */
-int grid_mosaic_keys(void *songs, void *albums, unsigned *key);
+int grid_mosaic_keys(void *songs, void *albums, unsigned *key, int *miss);
 
 /* Cells [first, last): the covers, then the albums, then the artists. tile_of(ctx, a) gives cell a's tile. */
 void grid_paint(void *canvas, grid_t *g, int first, int last, int origin_y, int view_h,

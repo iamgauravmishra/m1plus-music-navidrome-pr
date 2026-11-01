@@ -59,13 +59,17 @@ songs_open_playlist(int id,
 #define I(w, off) (*(int *)((char *)(w) + (off)))
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 
+#define PL_SIG 9 /* pl_dbsig: three files, three words each */
+#define PL_DB "/mnt/data/database.db"
+
 typedef grid_tile_t tile_t;
 
 typedef struct {
     unsigned key[4]; /* the first distinct albums of the playlist that have a cache file */
     int nk, songs;
-    int scanned;
+    int scanned; /* 0 not read, 1 read, PL_SCAN_MISS read and an album had a key but no cache file (its file may appear: read again when the page returns) */
 } info_t;
+#define PL_SCAN_MISS 2
 
 static struct {
     void *win, *view, *sv, *status, *btn_more, *scrim, *card, *btn; /* btn: the view toggle */
@@ -91,6 +95,8 @@ static struct {
     void *items[PL_MENU_ROWS],
         *labels[PL_MENU_ROWS]; /* the menu's row buttons and their labels (a label may be missing: no fit) */
     void *fade; /* the navbar's fade (img_nb_fade, optional): shown only while the list is scrolled */
+    unsigned sig[PL_SIG]; /* the database's state (pl_dbsig) when the playlists were last read */
+    int have_sig;
     int bg; /* another window is in front: the loader does not run (pl_on_bg) */
     grid_t g; /* LAST (test/pod/playlists.py reads the fields above by index) */
 } pl __attribute__((section(".scratch")));
@@ -359,7 +365,7 @@ static int pl_on_paint(void *ctx, void *e) {
  * in *pdeq_showlist, which the next query replaces (the library lookup is therefore loaded first). */
 static void pl_scan(int i) {
     info_t *in = &pl.info[i];
-    int n;
+    int n, miss;
     void *list;
     if (i < pl_v()) { /* the picker's New playlist and Favourites rows have nothing to read */
         in->scanned = 1;
@@ -374,9 +380,9 @@ static void pl_scan(int i) {
     list = *(void **)PDEQ_SHOWLIST;
     n = list ? (int)deque_size(list) : 0;
     in->songs = n;
-    in->nk =
-        grid_mosaic_keys(list, pl.albums, in->key); /* patch/grid.c: shared with the Songs page's playlist header */
-    in->scanned = 1;
+    in->nk = grid_mosaic_keys(list, pl.albums, in->key,
+                              &miss); /* patch/grid.c: shared with the Songs page's playlist header */
+    in->scanned = miss ? PL_SCAN_MISS : 1;
     picker_restore(); /* (the picker keeps the browsing record of the page it is over) */
 }
 
@@ -402,13 +408,7 @@ static int pl_next_load(void) {
 static int pl_on_load(const void *unused);
 
 /* The scroll_view is moving: a finger drags it, or its scroll animator (the fling) runs. Nothing is read or decoded meanwhile. */
-static int pl_moving(void) {
-    void *wa;
-    if (!pl.sv) return 0;
-    if (B(pl.sv, SC_PRESSED) && B(pl.sv, SC_DRAGGED)) return 1;
-    wa = P(pl.sv, SC_WA);
-    return wa && I(wa, SC_AN_STATE) == SC_AN_RUNNING && P(wa, SC_AN_WIDGET) == pl.sv;
-}
+static int pl_moving(void) { return grid_moving(pl.sv); }
 
 static void pl_kick(void) {
     if (!pl.more_timer && pl.view && !pl.bg && (pl.noscroll || pl_next_load() >= 0))
@@ -419,6 +419,15 @@ static void pl_dir(void) {
     int s = pl_off();
     if (s != pl.seen) pl.dir = s > pl.seen ? 1 : -1;
     pl.seen = s;
+}
+
+/* The tile's finished picture is made of the albums the scan found, in the same order: pl_prep would compose it again unchanged. */
+static int pl_same_art(const tile_t *t, const info_t *in) {
+    int i;
+    if (t->art != 1 || t->nq != (in->nk > 1 && !pl.tmp ? 1 : in->nk)) return 0;
+    for (i = 0; i < t->nq; ++i)
+        if (t->qkey[i] != in->key[i]) return 0;
+    return 1;
 }
 
 static int pl_on_load(const void *unused) {
@@ -436,8 +445,13 @@ static int pl_on_load(const void *unused) {
         tile_t *t = pl_tile(a);
         int top = pl_top(a);
         if (!pl.info[a].scanned) {
+            unsigned ck = t->ckey;
             pl_scan(a);
-            pl_prep(t, a);
+            if (pl_same_art(t, &pl.info[a])) { /* read again (PL_SCAN_MISS), the same albums: the mosaic stays */
+                pl_texts(t, a);
+                t->ckey = ck, t->fit = 0;
+            } else
+                pl_prep(t, a);
         } else if (!t->art)
             grid_mosaic(&pl.g, t, pl.tmp);
         if (top < GRID_VIEW_H && top + pl_height() > 0) pl_redraw();
@@ -466,20 +480,53 @@ static void pl_size(void) {
     widget_set_prop_int(pl.sv, "virtual_h", h);
 }
 
-/* The stock query again and the page rebuilt from it: tiles and scans dropped (they were of the old list). */
+/* The stock query again and the page rebuilt from it: tiles and scans dropped (they were of the old list) unless the list and the database are as they were. */
 static void pl_select(int on);
 
-static void pl_load(void) {
-    void *list;
+/* The database's state: modification time (seconds, nanoseconds) and size of the file and of its WAL and journal (a write may land only in those). Every playlist's
+ * songs are rows of that file, so an edit anywhere (the stock picker, our pages, the player's own writes) changes it. 0 when the file cannot be read (no signature:
+ * nothing is kept). struct stat (MIPS o32): st_size at +0x30, st_mtime at +0x40, its nanoseconds at +0x44. */
+static int pl_dbsig(unsigned sig[PL_SIG]) {
+    static const char *const path[3] = {PL_DB, PL_DB "-wal", PL_DB "-journal"};
+    unsigned st[40];
     int i;
+    for (i = 0; i < 3; ++i) {
+        memset(st, 0, sizeof st);
+        if (__xstat(3, path[i], st) != 0)
+            sig[3 * i] = sig[3 * i + 1] = sig[3 * i + 2] = 0xffffffffu;
+        else
+            sig[3 * i] = st[0x40 / 4], sig[3 * i + 1] = st[0x44 / 4], sig[3 * i + 2] = st[0x30 / 4];
+        if (i == 0 && sig[0] == 0xffffffffu) return 0;
+    }
+    return 1;
+}
+
+static int pl_same_str(const char *a, const char *b) {
+    while (*a && *a == *b) ++a, ++b;
+    return *a == *b;
+}
+
+/* The freshly read list is the page's: as many rows, the same id and name in each (a rename, delete, add or reorder changes one). */
+static int pl_same_list(void *old, unsigned oldn, void *fresh, unsigned n) {
+    unsigned i;
+    if (!old || !fresh || oldn != n) return 0;
+    for (i = 0; i < n; ++i) {
+        void *a = deque_at(old, i), *b = deque_at(fresh, i);
+        if (I(a, REC_DISC) != I(b, REC_DISC) || !pl_same_str(cc_str(a, REC_TITLE), cc_str(b, REC_TITLE))) return 0;
+    }
+    return 1;
+}
+
+static void pl_load(void) {
+    void *list, *old = pl.pls;
+    unsigned oldn = pl.count;
+    unsigned sig[PL_SIG];
+    int have, keep, i;
     pl_select(0); /* a page read again is not in select mode (the marks were of the old list) */
     if (pl.more_timer) timer_remove(pl.more_timer);
     pl.more_timer = 0;
-    grid_drop(&pl.g);
-    if (pl.pls) deque_destroy(pl.pls);
-    free(pl.info);
-    free(pl.sel);
-    pl.pls = (void *)0, pl.info = (info_t *)0, pl.sel = (unsigned char *)0, pl.count = pl.nsel = 0;
+    have = pl_dbsig(sig);
+    pl.pls = (void *)0;
     if (loadLocalClassList(CLASS_PLAYLISTS) > 0) {
         list = *(void **)PDEQ_PLAYLIST;
         if (list && deque_size(list)) pl.pls = cc_copy_list(list);
@@ -487,12 +534,30 @@ static void pl_load(void) {
     picker_restore();
     pl.count = (pl.pls ? deque_size(pl.pls) : 0) + (unsigned)pl_v();
     if (pl.count > PL_MAX + (unsigned)pl_v()) pl.count = PL_MAX + (unsigned)pl_v();
-    pl.info = pl.count ? calloc(pl.count, sizeof(info_t)) : (info_t *)0;
-    if (pl.count && !pl.info) pl.count = 0;
-    for (i = 0; pl.info && i < pl_v(); ++i) pl.info[i].scanned = 1; /* New playlist, Favourites: nothing to read */
+    /* Nothing changed (the same playlists, the database file untouched since the scans were made): the scans and the tiles stay (a visit to a playlist's songs page or a
+     * dialog and back does not grey and recompose every mosaic). Any doubt, and everything is dropped. */
+    keep = have && pl.have_sig && pl.info && pl.g.tiles && pl.count && oldn == pl.count &&
+           pl_same_list(old, oldn - (unsigned)pl_v(), pl.pls, pl.count - (unsigned)pl_v());
+    for (oldn = 0; keep && oldn < PL_SIG; ++oldn) keep = sig[oldn] == pl.sig[oldn];
+    if (old) deque_destroy(old);
+    /* The cover cache grows while another page is open (the Cover Flow build): a playlist whose scan found an album without a file is read again, and its
+     * tile composed again, by the loader. Complete scans (every album had its file or none) stay: no query, no decode. */
+    for (oldn = 0; keep && oldn < pl.count; ++oldn)
+        if (pl.info[oldn].scanned == PL_SCAN_MISS) pl.info[oldn].scanned = 0;
+    free(pl.sel);
+    pl.sel = (unsigned char *)0, pl.nsel = 0;
+    if (!keep) {
+        grid_drop(&pl.g);
+        free(pl.info);
+        pl.info = pl.count ? calloc(pl.count, sizeof(info_t)) : (info_t *)0;
+        if (pl.count && !pl.info) pl.count = 0;
+        for (i = 0; pl.info && i < pl_v(); ++i) pl.info[i].scanned = 1; /* New playlist, Favourites: nothing to read */
+        grid_placeholder(&pl.g);
+    }
+    pl.have_sig = have;
+    memcpy(pl.sig, sig, sizeof pl.sig);
     pl.sel = pl.count ? calloc((pl.count + 7) / 8, 1)
                       : (unsigned char *)0; /* none: no select mode (the menu's Delete opens the stock page) */
-    grid_placeholder(&pl.g);
     pl_show(pl.view, pl.count != 0);
     pl_show(pl.status, pl.count == 0);
     if (!pl.count) widget_set_tr_text(pl.status, "No playlists");

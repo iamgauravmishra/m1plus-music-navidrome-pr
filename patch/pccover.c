@@ -88,15 +88,16 @@ static int pv_out_begin(pv_out_t *o, unsigned ow, unsigned oh, const char *dst) 
 
 /* The next source row (ow pixels of n = 1 or 3 bytes) into the average; a finished target row goes to the encoder. 0 on failure. */
 static int pv_out_row(pv_out_t *o, const unsigned char *row, unsigned n) {
-    unsigned x, ow = o->ow, tw = o->tw;
+    unsigned x, q = 0, r = 0, ow = o->ow, tw = o->tw;
     unsigned char *line[1];
     if (o->y >= o->oh) return 0;
-    for (x = 0; x < ow; ++x) {
-        unsigned a = x * tw / ow * 3;
+    for (x = 0; x < ow; ++x) { /* q = x * tw / ow by stepping, no division per pixel (tw <= ow) */
+        unsigned a = q * 3;
         if (n == 3)
             o->acc[a] += row[3 * x], o->acc[a + 1] += row[3 * x + 1], o->acc[a + 2] += row[3 * x + 2];
         else
             o->acc[a] += row[x], o->acc[a + 1] += row[x], o->acc[a + 2] += row[x];
+        if ((r += tw) >= ow) r -= ow, ++q;
     }
     ++o->rows;
     ++o->y;

@@ -286,13 +286,7 @@ static int al_first(void);
 /* The scroll_view is moving: a finger is dragging it (pressed and past the drag threshold), or its scroll animator (the fling) is running.
  * A decode is a few ms on the UI thread and the next touch would wait behind it, so the loader decodes nothing meanwhile: the rows show the
  * placeholder disc. (scroll_view_t pressed / dragged / wa and the animator's state and widget: patch/scroll.c reads the same.) */
-static int al_moving(void) {
-    void *wa;
-    if (!al.sv) return 0;
-    if (B(al.sv, SC_PRESSED) && B(al.sv, SC_DRAGGED)) return 1;
-    wa = P(al.sv, SC_WA);
-    return wa && I(wa, SC_AN_STATE) == SC_AN_RUNNING && P(wa, SC_AN_WIDGET) == al.sv;
-}
+static int al_moving(void) { return grid_moving(al.sv); }
 
 /* Arms the loader if there is something to load and it is not running. */
 static void al_kick(void) {

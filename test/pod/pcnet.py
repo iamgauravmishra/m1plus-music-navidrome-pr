@@ -175,8 +175,8 @@ def machine(site=None, ca=True, **kw):
     return m
 
 
-def sub(m, folder, feed, title='', checked=0, image=''):
-    m.put(f'{ROOT_DIR}/{folder}/.show', f'M1PLUS-SHOW 1\ntitle={title or folder}\nfeed={feed}\nimage={image}\nchecked={checked}\n'.encode())
+def sub(m, folder, feed, title='', checked=0, image='', modified=0):
+    m.put(f'{ROOT_DIR}/{folder}/.show', f'M1PLUS-SHOW 1\ntitle={title or folder}\nfeed={feed}\nimage={image}\nchecked={checked}\n'.encode() + (f'modified={modified}\n'.encode() if modified else b''))
 
 
 def start(m, folders):
@@ -319,8 +319,91 @@ def run(ctx):
     s2 = show_of(m, 'WSJ Minute Briefing')
     expect((s2['author'], s2['category'], s2['desc']) == (s['author'], s['category'], s['desc']) and s2['checked'] == s['checked'] + 3600 and m.fs[f'{ROOT_DIR}/WSJ Minute Briefing/.episodes'] == eps_before and shown_before != m.fs[f'{ROOT_DIR}/WSJ Minute Briefing/.show'],
            'a refresh whose feed gives an empty author, category and summary keeps the old values in .show (only checked moves) and the old episode descriptions in .episodes')
+    # conditional GET: If-Modified-Since is the server's own Last-Modified (modified=, CURLINFO_FILETIME), never the device clock; a 304 is "unchanged", not an error
+    LM1, LM2, LM3 = 1799990000, 1799993000, 1799996000
+    folder = f'{ROOT_DIR}/WSJ Minute Briefing'
+    seen = []
+    m.wall += 7200
+    m.curl_site = lambda url, o: (seen.append(dict(o)), {'body': WSJ, 'filetime': LM1})[1]
+    r, th = start(m, ['WSJ Minute Briefing']); work(m, th)
+    s3 = show_of(m, 'WSJ Minute Briefing')
+    expect(seen and 33 not in seen[0] and 34 not in seen[0] and seen[0].get(69) == 1, 'no modified= yet: an unconditional request that asks for the file time (CURLOPT_FILETIME)')
+    expect(s3['modified'] == LM1 and b'\nmodified=%d\n' % LM1 in m.fs[f'{folder}/.show'], 'a 200 stores the server\'s Last-Modified as modified=')
+    eps_before, checked_before = m.fs[f'{folder}/.episodes'], s3['checked']
+    seen.clear()
+    m.wall += 7200   # the device clock is two hours fast: the condition must not follow it
+    m.curl_site = lambda url, o: (seen.append(dict(o)), {'code': 304})[1]
+    g0 = m.call(PSYMS['pn_gen'], count=2000)
+    r, th = start(m, ['WSJ Minute Briefing']); work(m, th)
+    s4 = show_of(m, 'WSJ Minute Briefing')
+    expect([o[10002] for o in seen].count(F_WSJ) == 1 and seen[0].get(33) == 1 and seen[0].get(34) == LM1, 'a stored modified=: TIMECONDITION IFMODSINCE with TIMEVALUE = exactly that (no device clock, no margin)')
+    expect(m.fs[f'{folder}/.episodes'] == eps_before and not [c for c in m.calls if c[0] == 'rename' and c[2].endswith('/.episodes')] and s4['checked'] == m.wall and s4['checked'] > checked_before and s4['modified'] == LM1
+           and (s4['title'], s4['feed'], s4['image'], s4['author'], s4['category'], s4['desc']) == (s2['title'], s2['feed'], s2['image'], s2['author'], s2['category'], s2['desc']),
+           'a 304: .episodes untouched, .show kept with checked moved to now and modified= unchanged')
+    expect(status(m, F_WSJ) == (PN['OK'], 0) and m.call(PSYMS['pn_gen'], count=2000) > g0 and not [p for p in m.fs if p.endswith('.tmp')], 'a 304 is OK with 0 new (not an error, not an empty feed), no temp file')
+    # a server whose content is newer than the stored time answers 200 although the device clock is far ahead; three refreshes in a row each see the update
+    server = {'lm': LM2, 'full': 0}
+
+    def live(url, o):
+        if url != F_WSJ: return {'body': b'x'}
+        seen.append(dict(o))
+        if o.get(34) is not None and o[34] >= server['lm']: return {'code': 304}
+        server['full'] += 1
+        return {'body': WSJ, 'filetime': server['lm']}
+    mf = machine(site=live); mf.wall += 7200; sub(mf, 'N', F_WSJ, checked=1799990000, modified=LM1)
+    for lm in (LM2, LM3, LM3 + 1000):
+        server['lm'] = lm; seen.clear(); full = server['full']; mf.wall += 60
+        r, th = start(mf, ['N']); work(mf, th)
+        got = re.search(rb'\nmodified=(\d+)\n', mf.fs[f'{ROOT_DIR}/N/.show'])
+        expect(server['full'] == full + 1 and got and int(got.group(1)) == lm and (not seen[0] or seen[0].get(34) is None or seen[0][34] < lm), f'the server changed at {lm}: a 200 (not a 304 from a fast device clock), modified= follows')
+    seen.clear(); mf.wall += 60
+    r, th = start(mf, ['N']); work(mf, th)
+    expect(seen[0].get(34) == LM3 + 1000 and server['full'] == full + 1 and status(mf, F_WSJ) == (PN['OK'], 0), 'nothing new since: the same time goes back and the server answers 304')
+    # a server that sends no Last-Modified: no condition, and the key is dropped
+    mn = machine(site=lambda url, o: (seen.append(dict(o)), {'body': WSJ})[1]); sub(mn, 'N', F_WSJ, checked=1799990000, modified=LM1)
+    mn.put(f'{ROOT_DIR}/N/.episodes', b'M1PLUS-EPISODES 1\n'); seen.clear()
+    r, th = start(mn, ['N']); work(mn, th)
+    expect(seen[0].get(34) == LM1 and b'modified=' not in mn.fs[f'{ROOT_DIR}/N/.show'], 'an answer with no Last-Modified clears modified=')
+    seen.clear(); mn.wall += 60
+    r, th = start(mn, ['N']); work(mn, th)
+    expect(33 not in seen[0] and 34 not in seen[0] and status(mn, F_WSJ) == (PN['OK'], 0), 'then no condition is sent')
+    m2 = machine(site=lambda url, o: (seen.append(dict(o)), {'body': WSJ})[1]); sub(m2, 'N', F_WSJ, checked=0); seen.clear()
+    r, th = start(m2, ['N']); work(m2, th)
+    expect(seen and 33 not in seen[0] and 34 not in seen[0] and status(m2, F_WSJ) == (PN['OK'], 3), 'checked 0: no condition is sent and the feed is read in full')
+    m2 = machine(site=lambda url, o: (seen.append(dict(o)), {'body': WSJ})[1]); sub(m2, 'N', F_WSJ, checked=1799990000); seen.clear()
+    r, th = start(m2, ['N']); work(m2, th)
+    expect(seen and 33 not in seen[0] and status(m2, F_WSJ) == (PN['OK'], 3), 'an old .show with checked= but no modified=: no condition (the device clock is not a validator)')
+    # no .episodes (deleted, or an earlier write failed): the request is unconditional and the file comes back
+    m2 = machine(site=lambda url, o: (seen.append(dict(o)), {'body': WSJ, 'filetime': LM1})[1]); sub(m2, 'N', F_WSJ, checked=1799990000, modified=LM1); seen.clear()
+    r, th = start(m2, ['N']); work(m2, th)
+    expect(seen and 33 not in seen[0] and status(m2, F_WSJ) == (PN['OK'], 3) and f'{ROOT_DIR}/N/.episodes' in m2.fs, 'modified= but no .episodes: no condition, the file is written')
+    m2.fs.pop(f'{ROOT_DIR}/N/.episodes')
+    seen.clear()
+    r, th = start(m2, ['N']); work(m2, th)
+    expect([o[10002] for o in seen].count(F_WSJ) == 1 and 33 not in seen[0] and f'{ROOT_DIR}/N/.episodes' in m2.fs and status(m2, F_WSJ) == (PN['OK'], 3), '.episodes deleted after a refresh: the next request is unconditional and restores it')
+    # a 304 although the cache went missing since the request was built: once more, without the condition
+    hits = []
+
+    def racy(url, o):
+        if url != F_WSJ: return {'body': b'x'}
+        hits.append(dict(o))
+        if len(hits) == 1:
+            m2.fs.pop(f'{ROOT_DIR}/N/.episodes', None)
+            return {'code': 304}
+        return {'body': WSJ, 'filetime': LM1}
+    m2.curl_site = racy
+    r, th = start(m2, ['N']); work(m2, th)
+    expect(len(hits) == 2 and hits[0].get(33) == 1 and 33 not in hits[1] and f'{ROOT_DIR}/N/.episodes' in m2.fs and status(m2, F_WSJ) == (PN['OK'], 3), 'a 304 with the cache gone: one unconditional retry, the feed is read in full')
+    # a 304 for a show with no cover still fetches it; the cover request carries no condition
+    seen.clear()
+    m3 = machine(site=lambda url, o: (seen.append(dict(o)), {'code': 304} if url == F_WSJ else {'body': b'x'})[1])
+    sub(m3, 'C', F_WSJ, checked=1799990000, image='https://image.simplecastcdn.com/c.jpg', modified=LM1)
+    m3.put(f'{ROOT_DIR}/C/.episodes', b'M1PLUS-EPISODES 1\n'); seen.clear()
+    r, th = start(m3, ['C']); work(m3, th)
+    expect(len(seen) == 2 and seen[0].get(33) == 1 and 33 not in seen[1] and status(m3, F_WSJ) == (PN['OK'], 0), 'a 304 with no cover: the cover is requested, without a condition')
+    m.curl_site = lambda url, o: (seen.append(dict(o)), {'body': WSJ})[1]
     # a downloaded file stays the episode's; an entry outside the window with its file is carried
-    dl = f'{ROOT_DIR}/WSJ Minute Briefing/' + lines[2]['f']
+    dl =f'{ROOT_DIR}/WSJ Minute Briefing/' + lines[2]['f']
     m.put(dl, b'audio')
     old = m.fs[f'{ROOT_DIR}/WSJ Minute Briefing/.episodes'].decode() + 'g=old-guid\tp=5\td=9\tl=7\tf=old file.mp3\tt=Old\tu=https://x/o.mp3\n'
     m.put(f'{ROOT_DIR}/WSJ Minute Briefing/.episodes', old.encode()); m.put(f'{ROOT_DIR}/WSJ Minute Briefing/old file.mp3', b'audio')

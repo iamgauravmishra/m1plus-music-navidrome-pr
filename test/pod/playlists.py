@@ -45,16 +45,25 @@ class LabelMachine(SelectMachine):
     def __init__(self):
         super().__init__()
         self.label_text, self.measure, self.measured = {}, None, []
+        self.db = {'/mnt/data/database.db': [100, 0, 4096]}   # path -> [mtime, nsec, size]: what __xstat answers (the page's database signature)
         for n in ('widget_get_text', 'widget_measure_text'):
             self.handlers[pod.FUNCTIONS[n][2]] = n
 
     def _hook(self, u, address, size, _):
         name = self.handlers.get(address, '')
-        a0, a1 = u.reg_read(UC_MIPS_REG_A0), u.reg_read(UC_MIPS_REG_A1)
+        a0, a1, a2 = u.reg_read(UC_MIPS_REG_A0), u.reg_read(UC_MIPS_REG_A1), u.reg_read(UC_MIPS_REG_A2)
         if name == 'widget_get_text':
             t, ret = self.label_text.get(a0), 0
             if t is not None:
                 ret = self.alloc(4 * len(t) + 4); self.u.mem_write(ret, struct.pack(f'<{len(t) + 1}I', *map(ord, t), 0))
+            u.reg_write(UC_MIPS_REG_V0, ret); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+            return
+        if name == '__xstat':
+            path = self.read_cstr(a1); self.calls.append(('__xstat', path))
+            ret = 0xffffffff
+            if path in self.db:
+                self.u.mem_write(a2, bytes(144)); mt, ns, sz = self.db[path]
+                self.setword(a2 + 0x40, mt); self.setword(a2 + 0x44, ns); self.setword(a2 + 0x30, sz); ret = 0
             u.reg_write(UC_MIPS_REG_V0, ret); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
             return
         if name == 'widget_measure_text':
@@ -107,10 +116,14 @@ class PM:
         return m
 
     @staticmethod
-    def add(m, pid, name, songs, other_artist=()):
+    def rec(m, pid, name):
         rec = m.record(album='', artist='', title=name, rid=pid)
         m.setword(rec + REC_DISC, pid)
-        m.playlists.append(rec)
+        return rec
+
+    @staticmethod
+    def add(m, pid, name, songs, other_artist=()):
+        m.playlists.append(PM.rec(m, pid, name))
         m.playlist_songs[pid] = [m.record(album=alb(a)[1], artist='Other' if a in other_artist else alb(a)[0], path=f'/mnt/mmc/m/{a}/1.flac',
                                           title=f'T{k}', rid=1000 + k) for k, a in enumerate(songs)]
 
@@ -134,11 +147,12 @@ def tick(m):
     return list(m.calls)
 
 
-def settle(m, limit=200):
-    """Fire the loader's timer until it stops re-arming itself; the decodes per tick (at most one), then a paint."""
+def settle(m, limit=200, log=None):
+    """Fire the loader's timer until it stops re-arming itself; the decodes per tick (at most one), then a paint. `log` collects every tick's calls."""
     most = 0
     for _ in range(limit):
         calls = tick(m)
+        if log is not None: log.extend(calls)
         most = max(most, sum(1 for c in calls if c[0] == 'widget_load_image' and c[1] not in ('p_default', 'unselect', 'selected')))
         if not any(c[0] == 'timer_add' and c[1] == PSYMS['pl_on_load'] for c in calls):
             m.most_per_tick = most
@@ -623,11 +637,75 @@ def run(ctx):
     expect(titles == ['Empty', 'One', 'Fresh'], f'the new list is what the page shows ({titles})')
     expect(all(near(a, b2) for a, b2 in zip(quadrants(m, cell_blit(blits, 2)), want_mosaic([5, 6]))), 'and the new playlist\'s mosaic is made')
     m.playlist_songs[2] = m.playlist_songs[2][:0]
+    m.db['/mnt/data/database.db'][0] += 1   # the edit wrote the database
     m.call(fn, a0=c, a1=0, count=60000000)
     blits, texts, styles = settle(m)
     subs = [t for (t, r), s in zip(texts, styles) if s == 'label_grid_sub']
     expect(subs[1:2] == ['0 tracks'] and near(quadrants(m, cell_blit(blits, 1))[0], GREY_DISC),
            f'a playlist emptied in the stock page shows 0 tracks and the placeholder after the next visit ({subs})')
+
+    # 9b. Back in the front with nothing changed (the same playlists, the database file as it was): the scans and the tiles stay, no playlist is queried and nothing is decoded
+    DB = '/mnt/data/database.db'
+    m = PM(lists); open_page(m); blits0, texts0, styles0 = settle(m)
+    subs0 = [t for (t, r), s in zip(texts0, styles0) if s == 'label_grid_sub']
+    fn, c = m.bound[(m.window, O['EVT_WINDOW_TO_BG'])]; m.call(fn, a0=c, a1=0, count=4000000)
+    fn, c = m.bound[(m.window, O['EVT_WINDOW_TO_FG'])]
+    m.call(fn, a0=c, a1=0, count=60000000)
+    classes = [c_[1] for c_ in m.calls if c_[0] == 'loadLocalClassList']
+    expect(classes == [O['CLASS_PLAYLISTS']], f'to the front with nothing changed: only the playlist list is queried, no per-playlist scan ({classes})')
+    blits, texts, styles = paint(m)
+    expect([t for (t, r), s in zip(texts, styles) if s == 'label_grid_sub' and t] == [t for t in subs0 if t], 'the counts show at once, before any tick')
+    log = []
+    blits, texts, styles = settle(m, log=log)
+    expect(not [c_ for c_ in log if c_[0] in ('loadLocalClassList', 'widget_load_image')], 'complete scans and mosaics (placeholder, one, two, four covers): nothing is scanned or decoded again')
+    subs = [t for (t, r), s in zip(texts, styles) if s == 'label_grid_sub']
+    expect(subs == subs0 and all(near(a, b2) for a, b2 in zip(quadrants(m, cell_blit(blits, 2)), want_mosaic([1, 2]))), f'the counts and the mosaics are still there ({subs})')
+    # a cover file written while another page was open (the Cover Flow build), the database untouched: the playlist whose album had no file is read and composed again, the rest stay
+    m = PM(lists, missing=(1, 3)); open_page(m); settle(m)
+    blits, texts, styles = paint(m)
+    expect(near(quadrants(m, cell_blit(blits, 2))[0], colour(2)), 'a playlist whose first album has no cache file shows the next one alone')
+    fn, c = m.bound[(m.window, O['EVT_WINDOW_TO_BG'])]; m.call(fn, a0=c, a1=0, count=4000000)
+    for i in (1, 3):
+        p = key_path(*alb(i)); m.present.add(p); m.files[p] = 4096; m.images['file://' + p] = (24, 24, struct.pack('<I', colour(i)) * (24 * 24))
+    fn, c = m.bound[(m.window, O['EVT_WINDOW_TO_FG'])]; m.call(fn, a0=c, a1=0, count=60000000)
+    log = []
+    blits, texts, styles = settle(m, log=log)
+    scanned = [c_[1:] for c_ in log if c_[0] == 'loadLocalClassList']
+    expect(sum(1 for c_ in log if c_[0] == 'widget_load_image' and c_[1] not in ('p_default', 'unselect', 'selected')) > 0, 'the new cover files are decoded after a Back with the database unchanged')
+    expect(all(near(a, b2) for a, b2 in zip(quadrants(m, cell_blit(blits, 2)), want_mosaic([1, 2]))), 'the tile now shows the new cover composed with the other')
+    expect(len(scanned) == 3, f'only the playlists that had a missing file are read again (Two, Three, Many) ({scanned})')
+    # the file still missing: those playlists are read again, but their mosaics (the same albums) are not decoded again
+    m = PM(lists, missing=(1, 3)); open_page(m); settle(m)
+    fn, c = m.bound[(m.window, O['EVT_WINDOW_TO_BG'])]; m.call(fn, a0=c, a1=0, count=4000000)
+    fn, c = m.bound[(m.window, O['EVT_WINDOW_TO_FG'])]; m.call(fn, a0=c, a1=0, count=60000000)
+    log = []
+    blits, texts, styles = settle(m, log=log)
+    scanned = [c_[1:] for c_ in log if c_[0] == 'loadLocalClassList']
+    expect(len(scanned) == 3 and not [c_ for c_ in log if c_[0] == 'widget_load_image' and c_[1] not in ('p_default', 'unselect', 'selected')],
+           f'a cover file still missing: the playlists are read again, their unchanged mosaics are not decoded again ({scanned})')
+    expect(near(quadrants(m, cell_blit(blits, 2))[0], colour(2)), 'and the tile still shows the album that has a file')
+    # a compilation: a guest artist's track of an album already in the mosaic (its own key has no file, the library's is the one added) is no missing cover
+    m = PM([(1, 'Comp', [0, 1])]); m.playlist_songs[1].append(m.record(album=alb(0)[1], artist='Guest', path='/mnt/mmc/m/0/2.flac', title='T2', rid=1002))
+    open_page(m); settle(m)
+    fn, c = m.bound[(m.window, O['EVT_WINDOW_TO_FG'])]; m.call(fn, a0=c, a1=0, count=60000000)
+    log = []
+    settle(m, log=log)
+    expect(not [c_ for c_ in log if c_[0] in ('loadLocalClassList', 'widget_load_image')], 'a guest artist\'s track of an album whose cover is in does not make the playlist read again')
+    for label, edit in (('renamed', lambda m: m.playlists.__setitem__(1, PM.rec(m, 2, 'Uno'))),
+                        ('a playlist added', lambda m: PM.add(m, 7, 'Fresh', [5])),
+                        ('a playlist deleted', lambda m: m.playlists.pop(0)),
+                        ('reordered', lambda m: m.playlists.reverse()),
+                        ('its songs changed (the database written)', lambda m: (m.playlist_songs.__setitem__(2, m.playlist_songs[2][:1]), m.db[DB].__setitem__(0, 101))),
+                        ('only the size changed', lambda m: m.db[DB].__setitem__(2, 8192)),
+                        ('only the WAL appeared', lambda m: m.db.__setitem__(DB + '-wal', [5, 5, 32])),
+                        ('the database unreadable', lambda m: m.db.clear())):
+        m = PM(lists[:3], missing=(7,)); open_page(m); settle(m)
+        edit(m)
+        fn, c = m.bound[(m.window, O['EVT_WINDOW_TO_FG'])]
+        m.call(fn, a0=c, a1=0, count=60000000)
+        blits, texts, styles = paint(m)
+        subs = [t for (t, r), s in zip(texts, styles) if s == 'label_grid_sub' and t]
+        expect(not subs, f'{label}: the page is rebuilt (no count shows before the scans are made again: {subs})')
 
     # 10. The empty state: a centred line, no grid; the menu is still there
     m = PM([]); open_page(m)

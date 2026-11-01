@@ -88,6 +88,26 @@ def run(ctx):
     dlg_tick(m)
     expect([c for c in m.calls if c[0] in ('widget_set_text_utf8', 'widget_resize')] == [] or text_of(m, 'pod_pd_name') is None, 'a tick with nothing new changes no name and no width')
 
+    # 1b. A show finishing under the dialog does not rescan the folders (the progress bar would stutter); the close reads them once
+    m = PF.opened()
+    started(m)
+    for g in (1, 2, 3):
+        PF.pn_set(m, busy=1, gen=m.word(PSYMS['pn'] + 12) + 1)
+        m.calls = []
+        PF.tick(m)
+        expect(not [c for c in m.calls if c[0] == 'opendir'], f'worker generation moved ({g}) while the dialog is up: the page tick scans no folder')
+    PF.pn_set(m, busy=0)
+    m.calls = []
+    dlg_tick(m)
+    scans = [c for c in m.calls if c[0] == 'opendir']
+    m.calls = []
+    PF.pn_set(m, gen=m.word(PSYMS['pn'] + 12) + 1)
+    PF.tick(m)   # the same reload with no dialog: what one scan costs
+    expect(scans and scans == [c for c in m.calls if c[0] == 'opendir'] and flags(m, 'pod_pd_card') == (0, 0), 'the dialog closing reads the folders once (as much as one reload of the page)')
+    m.calls = []
+    PF.tick(m)
+    expect(not [c for c in m.calls if c[0] == 'opendir'], 'and the next page tick has nothing to reload (the generation was taken)')
+
     # 2. The worker ends: the dialog closes by itself with the summary
     for label, site, line in (('two feeds and an HTML page', None, '2 updated, 1 failed'),
                               ('three feeds', lambda url, o: {'body': HEAD if url == F['one'] else WSJ}, '3 updated'),

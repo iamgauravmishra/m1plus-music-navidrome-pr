@@ -33,6 +33,7 @@ Per show folder, both optional, UTF-8, one record per line, `\n` or `\r\n`:
             feed=<feed url>
             image=<image url>
             checked=<seconds since 1970 of the last refresh>
+            modified=<the server's Last-Modified of the feed we hold, seconds since 1970; only when it sent one>
             author=<the channel's itunes:author>
             category=<the first itunes:category>
             desc=<the channel's summary, plain text>
@@ -118,6 +119,11 @@ and the parser test then compares the 20 newest items of each with Python's xml.
   pinned and installed by `tools/mod_cacerts.py`; a name of its own, so stock programs that look in `/etc/ssl` are unchanged; nothing on the card is read). Per show: read `.show`, stream the feed through libcurl into the parser (verification ON, no `SSL_VERIFY*` option ever set; at most 16 redirects (tracking chains reach 8 hops), limited to http(s); `FAILONERROR`; gzip accepted; connect 20 s, 30 s under
   1 kB/s, 120 s total; an 8 MiB cap: a longer feed is parsed up to the cap and kept when a feed and an item were seen by then, since feeds list the newest items first, e.g. TED Talks Daily at 8.5 MB; the item cut by the cap is left out), write `.episodes` then `.show` atomically (temp file, fsync, rename), set the status. The page only **reads** the status record from its 1 s timer (`pn_gen` moved: rows rebuilt from the files), so no widget is touched
   from the thread and `pc_scan_shows` (static sort state) is never called from it.
+  **Conditional GET**: validated with the **server's own time**, never the device clock (a fast clock would make the server answer 304 for content it has changed). A feed request sets `CURLOPT_FILETIME` 69 and reads `CURLINFO_FILETIME` 0x20000e after the transfer (the answer's Last-Modified, a long, -1 when none);
+  a 200 stores it in `.show` as `modified=` (dropped when the server sent none). The next request carries `CURLOPT_TIMECONDITION` 33 = `CURL_TIMECOND_IFMODSINCE` 1 and `CURLOPT_TIMEVALUE` 34 = exactly `modified=` (plain easy_setopt longs, `patch/curlopts.h`; no margin, no ETag). No `modified=` (the server never sent
+  one, or an old `.show`) or no `.episodes` on the card (deleted, or a write that failed): no condition, a plain GET that also restores the file. **HTTP 304** (`CURLINFO_RESPONSE_CODE`, already read) is "unchanged": `.episodes` is not read or written, `.show` is rewritten from its own fields with `checked` = now (display only) and `modified=` unchanged,
+  the status is OK with 0 new, and a missing cover is still fetched (cover and episode requests never carry the condition). A 304 that arrives although `.episodes` is gone is retried once without the condition. Cover and episode downloads are unconditional. The Show page's Refresh Feed uses the same path. The import writes a new show without `modified=`; Unsubscribe keeps it.
+  **No rescan under the dialog**: while the refresh dialog is up the Feeds level does not reload when `pn_gen` moves (each finished show would scan every folder and stutter the bar); `pg_dlg_finish` reads them once. The Show level already waited (`!pg.dlg`); download progress moves `pn_dl_gen`, not `pn_gen`, so no rescan there.
 * **Parser** (`pf_*`): a byte-at-a-time state machine (text / tag / comment / CDATA / declaration) over libcurl's chunks, any split; keeps the channel's title and picture (`itunes:image href`, else `<image><url>`) and the **20 newest items by pubDate**
   (stable; an item needs an enclosure that is not a picture or page): guid (else the url), title, pubDate (RFC 822, zones, 2-digit years), `itunes:duration` (seconds, MM:SS, HH:MM:SS), enclosure url / length / type; entities and CDATA decoded, white
   space collapsed (no tab or newline reaches a file), a 5000 byte title cut at 95 bytes on a character boundary. Atom feeds are "Not a podcast feed". Measured under Unicorn: three whole feeds (4 MB, 441-600 items) in about a second.

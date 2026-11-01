@@ -205,7 +205,7 @@ static void np_cover(void) {
     int busy;
     const char *path = np_cover_file(&busy);
     unsigned key, sig, px, album, tone;
-    char url[40];
+    char url[80]; /* cc_url's size */
     void *track;
     if (busy) return; /* the file is being replaced: keep the colour */
     if (!path) { /* no picture file: the neutral tone, once */
@@ -214,18 +214,27 @@ static void np_cover(void) {
     }
     sig = np_cover_sig(path, *(volatile int *)COVER_SRC);
     if (sig && sig == np.sig && np.key && np.key != NP_KEY_NEUTRAL)
-        return; /* same source, length and track as at the last full hash */
+        return; /* same source, length and track as at the last look */
+    track =
+        cc_playing(); /* the track's album: its tone may be known (the album page's, an earlier play); an untagged one has no key */
+    album = track && *cc_str(track, REC_ALBUM) ? cc_album_key(track) : 0;
+    if (sig && album && pod_tone_get(album, &tone)) { /* known: no hash of the file (up to NP_HASH_MAX bytes) */
+        np.sig = sig, np.key = NP_KEY_TONE; /* a key no hash is compared equal to: the next full look colours again */
+        np_set_color(tone);
+        return;
+    }
     key = np_file_key(path);
     if (!key) return; /* unreadable: try again next tick */
     if (*(volatile int *)COVER_SRC == COVER_SRC_BUSY) return; /* demo started over while we read */
     np.sig = sig;
     if (key == np.key) return; /* unchanged: nothing to do */
     np.key = key;
-    track =
-        cc_playing(); /* the track's album: its tone may be known (the album page's, an earlier play); an untagged one has no key */
-    album = track && *cc_str(track, REC_ALBUM) ? cc_album_key(track) : 0;
-    if (album && pod_tone_get(album, &tone)) {
+    /* the tone cache is RAM only: after a boot the album's Cover Flow cache file (168 px, the album page's source) is a far
+     * cheaper decode than the embedded picture (often 600-1400 px); no such file: the playing cover's own file */
+    if (album && cc_url(url, album) && cc_decode(np.win, url, 1, 1, 1, &px)) {
+        tone = np_tone(px & 255, px >> 8 & 255, px >> 16 & 255);
         np_set_color(tone);
+        pod_tone_put(album, tone);
         return;
     }
     snprintf(url, sizeof url, "file://%s", path);

@@ -13,7 +13,7 @@ of what it wrote starts the chain for the steps after it. A hit applies the stor
 result is byte-identical to a run (tools/check.py compares the package to the golden hash).
 Disable with M1_NO_CACHE=1 or build.py --no-cache.
 """
-import ast, hashlib, importlib.metadata as md, json, os, shutil, subprocess, sys, tempfile
+import ast, functools, hashlib, importlib.metadata as md, json, os, shutil, subprocess, sys, tempfile
 
 import paths
 
@@ -73,6 +73,7 @@ def versions():
         except md.PackageNotFoundError: out.append(f'{d}=none')
     return H(*out)
 
+@functools.cache  # once per build: no stage writes into assets/, patch/ or tools/
 def data_sha():
     """The repo's data inputs: assets/, patch/ and the non-Python files in tools/ (coarse on purpose)."""
     extra = [x for f in sorted(os.listdir(TOOLS)) if os.path.isfile(os.path.join(TOOLS, f)) and not f.endswith('.py')

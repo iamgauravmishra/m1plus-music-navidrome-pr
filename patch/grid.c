@@ -130,6 +130,14 @@ grid_tile_t *grid_find(grid_t *g, int a) {
     return (grid_tile_t *)0;
 }
 
+int grid_moving(void *sv) {
+    void *wa;
+    if (!sv) return 0;
+    if (*(unsigned char *)((char *)sv + SC_PRESSED) && *(unsigned char *)((char *)sv + SC_DRAGGED)) return 1;
+    wa = *(void **)((char *)sv + SC_WA);
+    return wa && *(int *)((char *)wa + SC_AN_STATE) == SC_AN_RUNNING && *(void **)((char *)wa + SC_AN_WIDGET) == sv;
+}
+
 grid_tile_t *grid_tile(grid_t *g, int a, int lo, int hi, int *fresh) {
     grid_tile_t *t = g->tiles, *victim = (grid_tile_t *)0, *any = g->tiles;
     int i;
@@ -298,10 +306,10 @@ void grid_list_paint(void *canvas, grid_t *g, void *st_title, void *st_sub, int 
     }
 }
 
-int grid_mosaic_keys(void *songs, void *albums, unsigned *key) {
+int grid_mosaic_keys(void *songs, void *albums, unsigned *key, int *miss) {
     unsigned tried[16];
     char url[80];
-    int n = songs ? (int)deque_size(songs) : 0, k, i, ntried = 0, nk = 0;
+    int n = songs ? (int)deque_size(songs) : 0, k, i, ntried = 0, nk = 0, nofile = 0;
     for (k = 0; k < n && k < PL_SCAN && nk < 4; ++k) {
         void *r = deque_at(songs, (unsigned)k);
         unsigned own = cc_album_key(r), c;
@@ -310,10 +318,14 @@ int grid_mosaic_keys(void *songs, void *albums, unsigned *key) {
         if (i < ntried) continue; /* a later song of an album looked at: its cover is in, or there is none */
         if (ntried < 16) tried[ntried++] = own;
         c = cc_cover_key(albums, own, cc_str(r, REC_ALBUM)); /* its own file, else the library album of that name's */
-        if (!cc_url(url, c)) continue;
+        if (!cc_url(url, c)) {
+            if (own) nofile = 1; /* a key without a file: the file may be written later */
+            continue;
+        }
         for (i = 0; i < nk && key[i] != c; ++i) {
         }
         if (i == nk) key[nk++] = c;
     }
+    if (miss) *miss = nofile;
     return nk;
 }

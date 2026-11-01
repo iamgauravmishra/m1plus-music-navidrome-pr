@@ -150,11 +150,11 @@ class Feeds:
     def category(self, p): return self.m.read_cstr(self.call('pf_category', p)).encode('latin-1').decode('utf-8')
     def summary(self, p): return self.m.read_cstr(self.call('pf_summary', p)).encode('latin-1').decode('utf-8')
 
-    def shown(self, title, feed, image, checked, author='', category='', desc=''):
+    def shown(self, title, feed, image, checked, author='', category='', desc='', modified=0):
         """pf_render_show's text."""
         m = self.m
         out = m.alloc(2048)
-        n = self.call('pf_render_show', m.cstr(title), m.cstr(feed), m.cstr(image), checked, m.cstr(author), m.cstr(category), m.cstr(desc), out, 2048)
+        n = self.call('pf_render_show', m.cstr(title), m.cstr(feed), m.cstr(image), checked, modified, m.cstr(author), m.cstr(category), m.cstr(desc), out, 2048)
         return bytes(m.u.mem_read(out, n)).decode('utf-8')
 
 
@@ -474,7 +474,13 @@ def run(ctx):
     expect(s == 'M1PLUS-SHOW 1\ntitle=T\nfeed=https://f/x\nimage=\nchecked=0\n', 'empty author, category and desc write no key')
     m.u.mem_write(sh, bytes(O['PC_SHOW_SIZE']))
     F.call('pc_parse_show', m.cstr(s), len(s), sh)
-    expect(rd('PC_SH_AUTHOR') == rd('PC_SH_CAT') == rd('PC_SH_DESC') == '', 'a show file without them reads empty fields')
+    expect(rd('PC_SH_AUTHOR') == rd('PC_SH_CAT') == rd('PC_SH_DESC') == '' and m.word(sh + O['PC_SH_MODIFIED']) == 0, 'a show file without them reads empty fields, modified 0')
+    # modified=: the server's Last-Modified, written only when not 0, read back by the model
+    s = show('T', 'https://f/x', '', 7, 'A', '', '', modified=1700000123)
+    expect(s == 'M1PLUS-SHOW 1\ntitle=T\nfeed=https://f/x\nimage=\nchecked=7\nmodified=1700000123\nauthor=A\n', 'modified= is written after checked when not 0')
+    m.u.mem_write(sh, bytes(O['PC_SHOW_SIZE']))
+    F.call('pc_parse_show', m.cstr(s), len(s), sh)
+    expect(m.word(sh + O['PC_SH_MODIFIED']) == 1700000123 and rd('PC_SH_AUTHOR') == 'A' and m.word(sh + O['PC_SH_CHECKED']) == 7, 'the model reads modified= back')
     longs = 'M1PLUS-SHOW 1\nauthor=' + 'a' * 100 + '\ncategory=' + 'c' * 100 + '\ndesc=' + 'd' * 400 + '\n'
     F.call('pc_parse_show', m.cstr(longs), len(longs), sh)
     expect((len(rd('PC_SH_AUTHOR')), len(rd('PC_SH_CAT')), len(rd('PC_SH_DESC'))) == (O['PC_AUTHOR'] - 1, O['PC_CAT'] - 1, O['PC_DESC'] - 1), 'over-long values in a hand-written file are cut to their fields, never overrun')

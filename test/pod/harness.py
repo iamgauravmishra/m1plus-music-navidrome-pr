@@ -1061,7 +1061,7 @@ class Machine:
             if r.get('xfer'): r['xfer'](o[10002], sent, total)
             if not o.get(20219): return 0
             return self.nested(o[20219], o.get(10057, 0), 0, total & 0xffffffff, total >> 32, sent & 0xffffffff, sent >> 32, 0, 0, 0, 0)
-        last = {0x200002: r['code'], 0x200014: r['redirects'], 0x20000d: r['verify'], 0x100001: r['eff'], 0x100012: r.get('ctype'), 0x100020: r['ip'], 0x600008: 0,
+        last = {0x200002: r['code'], 0x200014: r['redirects'], 0x20000d: r['verify'], 0x20000e: r.get('filetime', -1) & 0xffffffff, 0x100001: r['eff'], 0x100012: r.get('ctype'), 0x100020: r['ip'], 0x600008: 0,
                 0x600032: r['total'], 0x600033: r['dns'], 0x600034: r['conn'], 0x600038: r['tls'], 0x600036: r['first']}
         self.curl_last[h] = last   # (libcurl has the headers' facts ready before the first byte reaches the write callback: a download asks for the code and the Content-Type there)
         if r['rc'] == 0 and xfer(0): rc = 42   # CURLE_ABORTED_BY_CALLBACK

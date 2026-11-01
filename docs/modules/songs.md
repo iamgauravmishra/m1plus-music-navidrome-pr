@@ -61,8 +61,14 @@ Search out only for a genre's songs, `0xff09`):
   (`docs/modules/addresses.md` "Deleting by class"): Favourites lose the song from `myfav`, Most Played from `oftenplay`, Recently Played from `recentplay`, a playlist from the
   playlist, and Hi-Res and Recently Added from the library, as on Songs; the file goes too when the dialog's second answer is taken. **Add to Playlist** opens the picker with
   `PICKER_ADD | class` (the stock button's `1 << 16 | g_class_type`; `batch_add_file` takes its class from it).
-- **Read again whenever the page is back in front** (`sg_on_fg`), not only when the stock list was replaced: a play changes Recently Played and Most Played, Now Playing's star the
-  Favourites, the picker a playlist. The lists are small (the library is the only big one, and it keeps the replaced-list test). `sg_on_fg` always ends with `sg_kick`: the cover loader stops on a list another page replaced (Search's queries run while it is up), and a library list that is valid again when the page is back is not read again, so nothing else would restart it (`test/pod/search.py` `return_tests`).
+- **Read again when the page is back in front** (`sg_on_fg`) only for the lists that change while it is behind another (`sg_changes`): Recently Played and Most Played (a play),
+  Favourites (Now Playing's star); the picker's return reads its list too. Every other list (the library, Recently Added, Hi-Res, a playlist, a genre, an artist) is read
+  again only when another query replaced the stock list (`sg_valid`) or the page itself changed it (delete, add, sort). `sg_on_fg` always ends with `sg_kick`: the cover loader
+  stops on a list another page replaced (Search's queries run while it is up), and a list that is valid again when the page is back is not read again, so nothing else would
+  restart it (`test/pod/search.py` `return_tests`).
+- **A list read again keeps its tiles** when it is the same rows (`sg_load`: same count, and per row the cover key, the section and 24 bits of a hash of both text lines,
+  kept in `song_t.sig`; the library's old index is not held beside the new one, so it always drops). Same: no `grid_drop`, no new placeholder (covers that had no file are
+  tried again). Anything else drops them as before, so a play does not flash the covers to placeholders.
 - **Empty**: "No songs" (ours, 13 languages); the library keeps "Update Local Music first".
 
 **A genre's songs** (class `0xff09`; `songs_open_genre(name, unknown)`, called by the Genres page's row tap, `docs/modules/artists.md`). The stock row tap `0x535c4c` sets

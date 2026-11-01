@@ -571,6 +571,25 @@ def run(ctx):
     m = tone_run(album='')
     expect(len(next_cover(m, (20, 200, 20), b'cover two' * 31)) == 1 and m.styles[-1][2] == word_of(mn.tone(20, 200, 20)), 'an untagged track has no album key: no cache')
     expect(not [c for c in m.calls if (c[0] == 'fopen' and any(x in c[2] for x in 'wa+')) or c[0] in ('fwrite', 'write', 'open')], 'no card writes')
+    # the album's 168 px cache file is decoded before the embedded picture (the tone cache is RAM only, empty after a boot)
+    def cache_run(cached=True, size=(2, 2)):
+        m = NowMachine(); m.page(); m.src(2)
+        m.play([m.record(album='Kind of Blue', artist='Miles Davis')], 0)
+        if cached: m.jpeg(art_file(album_key('Miles Davis', 'Kind of Blue')), data=b'thumb' * 20, pix=bytes([20, 200, 20, 255]) * 4, size=size)
+        m.jpeg('/tmp/coverpic.jpg', data=b'cover one' * 30, pix=bytes([200, 40, 40, 255]) * 4, size=(2, 2)); m.init()
+        return m
+    m = cache_run()
+    loads = [c[1] for c in m.calls if c[0] == 'widget_load_image']
+    expect(loads == ['file://' + art_file(album_key('Miles Davis', 'Kind of Blue'))] and [s[2] for s in m.styles] == [word_of(mn.tone(20, 200, 20))],
+           f'a cache file of the album: it is decoded and not /tmp/coverpic.jpg, the tone from it ({loads})')
+    expect(next_cover(m, (30, 30, 200), b'cover two' * 31) == [] and len(m.styles) == 2, 'and the tone is cached for the album as before')
+    m = cache_run(cached=False)
+    loads = [c[1] for c in m.calls if c[0] == 'widget_load_image']
+    expect(loads == ['file:///tmp/coverpic.jpg'] and [s[2] for s in m.styles] == [word_of(mn.tone(200, 40, 40))], f'no cache file: the playing cover is decoded as before ({loads})')
+    m = NowMachine(); m.page(); m.src(2); m.play([m.record(album='Kind of Blue', artist='Miles Davis')], 0)
+    m.blobs[art_file(album_key('Miles Davis', 'Kind of Blue'))] = b''; m.present.add(art_file(album_key('Miles Davis', 'Kind of Blue')))
+    m.jpeg('/tmp/coverpic.jpg', data=b'cover one' * 30, pix=bytes([200, 40, 40, 255]) * 4, size=(2, 2)); m.init()
+    expect([c[1] for c in m.calls if c[0] == 'widget_load_image'] == ['file:///tmp/coverpic.jpg'], 'the empty "no art" marker is not a cache file: the playing cover is decoded')
     # an unchanged cover is not hashed again (review 2): the cheap look is the source type, the length and the track
     def big_run():
         m = NowMachine().with_bar(); m.page(); m.src(2)
@@ -595,15 +614,19 @@ def run(ctx):
     expect(not [c for c in m.calls if c[0] == 'fread'], 'same track, same length, same source: the cheap look says unchanged (no hash)')
     m.play([m.record(album='Kind of Blue', artist='Miles Davis', path='/mnt/mmc/a/2.flac')], 0)
     m.tick(count=50000000)
-    expect([c for c in m.calls if c[0] == 'fread'] and not [c for c in m.calls if c[0] == 'widget_load_image'], 'another track: the file is hashed (a hit in the tone cache: no decode, same album)')
+    expect(not [c for c in m.calls if c[0] in ('fread', 'widget_load_image')] and len(m.styles) == n + 1,
+           'another track of an album whose tone is cached: the colour is set again from the cache, the file is neither hashed nor decoded')
     m.tick(count=50000000)
     expect(not [c for c in m.calls if c[0] == 'fread'], 'and then not again')
     m.blobs['/tmp/coverpic.jpg'] = bytes(range(256)) * 255
-    m.tick(count=50000000)
-    expect([c for c in m.calls if c[0] == 'fread'], 'another length: hashed')
+    n = len(m.styles); m.tick(count=50000000)
+    expect(len(m.styles) == n + 1 and not [c for c in m.calls if c[0] == 'fread'], 'another length: looked at again (the cached tone, no hash)')
     m.src(3); m.blobs['/tmp/externpic.jpg'] = m.blobs['/tmp/coverpic.jpg']; m.present.add('/tmp/externpic.jpg')
     m.tick(count=50000000)
-    expect([c for c in m.calls if c[0] == 'fread'], 'another source type: hashed')
+    expect(len(m.styles) == n + 2 and not [c for c in m.calls if c[0] == 'fread'], 'another source type: looked at again')
+    m.play([m.record(album='Other', artist='Miles Davis', path='/mnt/mmc/a/3.flac')], 0)
+    m.tick(count=50000000)
+    expect([c for c in m.calls if c[0] == 'fread'], 'another album with no cached tone: hashed')
     # a cover that could not be read is looked at in full every tick until it can
     m = NowMachine().with_bar(); m.page(); m.src(2); m.init()
     m.tick(); m.tick()

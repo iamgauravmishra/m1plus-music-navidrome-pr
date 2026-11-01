@@ -725,22 +725,20 @@ se_artist_cover(const char *name) { /* an artist's picture: the cover of the fir
     return 0;
 }
 
-/* The texts and the cover key of row r into its tile: the title, then the grey line ("Artist", "Album · artist", "Song · artist", "Playlist"). */
+/* The texts of row r into its tile: the title, then the grey line ("Artist", "Album · artist", "Song · artist", "Playlist"). Paint calls this for a fresh
+ * tile, so it only formats: the cover key (cache file lookups on the SD card) is resolved by the loader (se_art). */
 static void se_prep(grid_tile_t *t, int r) {
     const se_row_t *w = &se.rows[r];
     void *rec = deque_at(se.lists[w->kind], w->idx);
     char sub[160];
     const char *a = cc_str(rec, REC_ARTIST), *title = cc_str(rec, REC_TITLE);
-    unsigned key = 0;
     switch (w->kind) {
     case SE_ARTIST:
         snprintf(sub, sizeof sub, "%s", TR("Artist"));
-        key = se_artist_cover(title);
         break;
     case SE_ALBUM:
         if (*cc_str(rec, REC_ALBUM)) title = cc_str(rec, REC_ALBUM);
         snprintf(sub, sizeof sub, *a ? "%s \xc2\xb7 %s" : "%s", TR("album"), a);
-        key = cc_cover_key(se.lists[SE_ALBUM], cc_album_key(rec), title);
         break;
     case SE_PLAYLIST:
         snprintf(sub, sizeof sub, "%s", TR("Playlist"));
@@ -748,10 +746,9 @@ static void se_prep(grid_tile_t *t, int r) {
     default:
         if (!*title) title = cc_str(rec, REC_NAME);
         snprintf(sub, sizeof sub, *a ? "%s \xc2\xb7 %s" : "%s", TR("Song"), a);
-        key = cc_cover_key(se.lists[SE_ALBUM], cc_album_key(rec), cc_str(rec, REC_ALBUM));
         break;
     }
-    grid_set(t, title, sub, key);
+    grid_set(t, title, sub, 0);
 }
 
 /* ---------------------------------------------------------------------------
@@ -1162,12 +1159,34 @@ static grid_tile_t *se_cover_next(grid_t **gp) {
     return (grid_tile_t *)0;
 }
 
-/* One cover per tick; 1 when one was made. */
+/* The cover of a tile: the key of its row (a song's or album's own cover, an artist's first album with one) and its decode; no file ends as the placeholder (art 2). */
+static void se_art(grid_t *g, grid_tile_t *t, int r) {
+    const se_row_t *w = &se.rows[r];
+    void *rec = deque_at(se.lists[w->kind], w->idx);
+    switch (w->kind) {
+    case SE_ARTIST:
+        t->ckey = se_artist_cover(cc_str(rec, REC_TITLE));
+        break;
+    case SE_ALBUM:
+        t->ckey = cc_cover_key(se.lists[SE_ALBUM], cc_album_key(rec),
+                               *cc_str(rec, REC_ALBUM) ? cc_str(rec, REC_ALBUM) : cc_str(rec, REC_TITLE));
+        break;
+    case SE_PLAYLIST:
+        break;
+    default:
+        t->ckey = cc_cover_key(se.lists[SE_ALBUM], cc_album_key(rec), cc_str(rec, REC_ALBUM));
+        break;
+    }
+    grid_art(g, t);
+}
+
+/* One cover per tick; 1 when one was made, or is waiting for the list to stop: nothing is read or decoded while the scroll_view moves. */
 static int se_cover_step(void) {
     grid_t *g;
     grid_tile_t *t = se_cover_next(&g);
     if (!t) return 0;
-    grid_art(g, t);
+    if (grid_moving(se.sv)) return 1;
+    se_art(g, t, t->album - 1);
     se_redraw();
     return 1;
 }

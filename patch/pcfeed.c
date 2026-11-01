@@ -942,8 +942,8 @@ static void pf_app_plain(char *out, unsigned *o, unsigned cap, const char *s) {
     pf_app(out, o, cap, tmp);
 }
 
-unsigned pf_render_show(const char *title, const char *feed, const char *image, unsigned checked, const char *author,
-                        const char *category, const char *desc, char *out, unsigned cap) {
+unsigned pf_render_show(const char *title, const char *feed, const char *image, unsigned checked, unsigned modified,
+                        const char *author, const char *category, const char *desc, char *out, unsigned cap) {
     unsigned o = 0;
     pf_app(out, &o, cap, "M1PLUS-SHOW 1\ntitle=");
     pf_app_plain(out, &o, cap, title);
@@ -954,6 +954,11 @@ unsigned pf_render_show(const char *title, const char *feed, const char *image, 
     pf_app(out, &o, cap, "\nchecked=");
     pf_app_u(out, &o, cap, checked);
     pf_app(out, &o, cap, "\n");
+    if (modified) { /* the server's Last-Modified of the copy we hold: the next request's condition */
+        pf_app(out, &o, cap, "modified=");
+        pf_app_u(out, &o, cap, modified);
+        pf_app(out, &o, cap, "\n");
+    }
     if (author[0]) { /* the descriptive keys only when there is something to say */
         pf_app(out, &o, cap, "author=");
         pf_app_plain(out, &o, cap, author);

@@ -26,7 +26,9 @@ for 2, 3, 5 reads the file through stdio (`np_file_key`: FNV-1a of at most 512 K
 try again next tick, no colour change). **Tone cache:** when the key changed, the playing track's album key (`cc_playing`, `cc_album_key`;
 none for no queued track or an untagged one: empty album name) is looked up in the tone cache (`pod_tone_get`, `patch/common.c`, shared with the
 album page; docs/modules/album-page.md): a hit sets that tone and decodes nothing (the hash only decides *when* to look, so a different cover
-file of an album keeps the album's cached tone); a miss decodes as below and `pod_tone_put`s the result. A key different from the last decodes the picture with `cc_decode` (`patch/covercache.c`, the stock
+file of an album keeps the album's cached tone); a miss (the cache is RAM only: every album after a boot) first decodes the album's 168 px Cover Flow cache file (`cc_url`, as the album page
+does; an empty "no art" marker is not one) and falls back to the playing cover's own file only without it, so the usual miss costs a 168 px
+decode, not the full embedded picture; the result is `pod_tone_put`. A key different from the last decodes the picture with `cc_decode` (`patch/covercache.c`, the stock
 loader, loaded and unloaded at once as the Cover Flow rows do, `box` mode reducing the centred square to one pixel = its average
 colour), `np_tone` makes the tone and `np_set_color` stores it as the window's `bg_color` with `widget_set_style(win, "normal:bg_color",
 &value_t)` (`0x66c448`, AWTK's `widget_set_style_color`: `widget_ensure_style_mutable` `0x666700`, then `style_set`; the `value_t` is
@@ -67,8 +69,10 @@ info work: a page above it costs a few hundred instructions a tick instead of a 
 (one bar style call for a changed colour), so the page is current when it reappears. When in front, `np_cover` first takes the cheap
 look `np_cover_sig` (no byte of the cover is read: `fopen`/`fseek`/`ftell` for the length, a hash of the source type, that length and
 the playing track's path; no `stat`, which the payload does not import) and skips the hash while it equals `np.sig`, the signature at
-the last full hash, and a real colour is held (`np.key` neither 0 nor neutral). Any difference, or an unreadable file, takes the full
-`np_file_key` as before. This relies on demo writing a new cover per track change (and via the busy state, which is not hashed); a
+the last look, and a real colour is held (`np.key` neither 0 nor neutral). On a difference the playing track's album is looked up in
+the tone cache first: a hit sets that tone with no hash (`np.key` becomes `NP_KEY_TONE`, which no hash compares equal to, so the next
+look of an uncached album colours again); a miss, or an unreadable file, takes the full `np_file_key` as before (a track change within
+a cached album hashed up to 512 KiB, about 3.2 million emulated instructions, for a colour the cache already had). This relies on demo writing a new cover per track change (and via the busy state, which is not hashed); a
 same-length, same-source cover swapped under the same track without a pass the tick could see would be missed until the track
 changes. Measured (Unicorn, 64 KiB cover): 396,187 instructions and 64 KiB read per tick before; after, an unchanged tick reads nothing
 and a covered tick is under 3,000 instructions with no cover, time or info calls (`test/pod/nowplaying.py`).

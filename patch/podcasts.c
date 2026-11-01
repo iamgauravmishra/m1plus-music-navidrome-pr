@@ -4146,9 +4146,9 @@ static int pg_tick(const void *timer) {
     if (pg.dlg && pod_screen_lit())
         pg_dlg_arm(); /* the screen is back on: the dialog's own timer stopped while it was dark */
     if (pod_screen_lit() && pg.level == L_SHOWS) {
-        if (pn_gen() != pg.gen)
+        if (!pg.dlg && pn_gen() != pg.gen)
             pg_load_shows(
-                1); /* the worker moved on (a show finished, a download came or went) or it ended: the files are read again, the covers and the place stay */
+                1); /* the worker moved on (a show finished, a download came or went) or it ended: the files are read again, the covers and the place stay (not under the refresh dialog: every finished show would scan every folder again; pg_dlg_finish reads them once) */
         else if (
             pg.dgen !=
             pn_dl_gen()) { /* a step of progress: the Downloads row's line and the refresh line are painted again (read at every paint) */

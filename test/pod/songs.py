@@ -1124,8 +1124,27 @@ def lists_tests(ctx):
     expect(m.word(G_CLASS) == fav and vis(m, 'sg_bar') == (0, 0), 'back from the picker: the list\'s class is put back, select mode is over')
     m.calls = []
     m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
-    expect([c[1] for c in m.calls if c[0] == 'loadLocalClassList'] == [fav], 'a list is read again every time the page is back in front (a play changes Recently Played, the star the Favourites)')
+    expect([c[1] for c in m.calls if c[0] == 'loadLocalClassList'] == [fav], 'Favourites (and Recently Played, Most Played) are read again when the page is back in front (a play, the star)')
+    # The tiles: an unchanged list read again keeps its covers; a changed one drops them; the lists that cannot change while away are not read at all
+    def covers(blits): return sorted(b[0] for b in blits if b[2][2] == 52)
+    blits, *_ = settle(m)
+    before, nloads = covers(blits), len(m.loads)
+    m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
+    queried = [c[1] for c in m.calls if c[0] == 'loadLocalClassList']
+    blits, *_ = settle(m)
+    expect(queried == [fav] and len(m.loads) == nloads and covers(blits) == before and before,
+           'an unchanged list read again keeps its tiles: no cover decoded again, the same bitmaps drawn')
+    m.class_lists[fav] = list(reversed(m.songs))
+    m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
+    blits, *_ = settle(m)
+    expect(len(m.loads) > nloads and covers(blits) != before, 'a changed list (another order) drops its tiles and decodes the covers again')
     m.call(PSYMS['sg_on_destroy'], count=4000000)
+    for cls, nm in ((O['CLASS_RECENTADD'], 'Recently Added'), (O['CLASS_HIRES'], 'Hi-Res')):
+        m = list_machine(titles, cls); m.call(PSYMS['songs_open_list'], a0={O['CLASS_RECENTADD']: O['HOME_RECENTADD'], O['CLASS_HIRES']: O['HOME_HIRES']}[cls], count=900000000)
+        settle(m); m.calls = []
+        m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
+        expect(not any(c[0] == 'loadLocalClassList' for c in m.calls), f'{nm}: a list that cannot change while the page is behind is not read again on the way back')
+        m.call(PSYMS['sg_on_destroy'], count=4000000)
     m = list_machine(titles, fav); m.class_lists[fav] = []; m.call(PSYMS['songs_open_list'], a0=O['HOME_FAV'], count=900000000)
     expect(vis(m, 'label_status') == (1, 1) and m.wtext[m.widgets['label_status']] == 'No songs' and vis(m, 'view_grid') == (0, 0), 'an empty list says "No songs"')
     m.call(PSYMS['sg_on_destroy'], count=4000000)
@@ -1148,12 +1167,16 @@ def lists_tests(ctx):
     foot = m.widgets['sg_foot']
     expect(m.wtext[foot] == '5 songs' and m.props.get((foot, 'y')) == O['PH_TOP'] + 5 * ROW + O['SG_FOOT_GAP'], f'the playlist\'s count under its last row: "5 songs" ({m.wtext.get(foot)!r})')
     m.setword(ci, 3)
+    m.calls = []
+    m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
+    expect(not any(c[0] == 'loadLocalClassList' for c in m.calls), 'a playlist is not read again on the way back while the stock list is still its own')
+    m.setword(SHOWLIST, m.new_deque([]))
     m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
     expect(m.word(ci) == 7 and m.props[(m.sv, 'virtual_h')] == pl_lay(5).content(), 'read again with its own id put back in classinfo[1]')
     m.playlist_songs[7] = list(m.songs[:1]); m.setword(SHOWLIST, m.new_deque([]))   # one song left (deleted elsewhere); another query replaced the list
     m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
     expect(m.wtext[foot] == '1 song' and m.props.get((foot, 'y')) == O['PH_TOP'] + ROW + O['SG_FOOT_GAP'], f'read again, the count follows: "1 song" ({m.wtext.get(foot)!r})')
-    m.playlist_songs[7] = list(m.songs[:5])
+    m.playlist_songs[7] = list(m.songs[:5]); m.setword(SHOWLIST, m.new_deque([]))
     m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
     settle(m); m.setword(ci, 3)
     calls = tap(m, 150, pl_lay(5).row_y(1) + 30)
@@ -1188,10 +1211,11 @@ def lists_tests(ctx):
     rows0 = [r for t, r in texts if t == titles[0]]
     expect(rows0 and rows0[0][1] >= O['PH_TOP'], 'the first row is under the header (its text from PH_TOP down)')
     keep = hb[0][0]
+    m.setword(SHOWLIST, m.new_deque([]))   # another query replaced the list: it is read again
     m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
     blits2, *_ = settle(m)
-    expect(head_blits(blits2)[0][0] == keep, 'a return to the front reads the list again and keeps the mosaic (the same albums: no new tile, no flicker)')
-    m.playlist_songs[7] = list(m.songs[2:4])
+    expect(head_blits(blits2)[0][0] == keep, 'a list read again keeps the mosaic (the same albums: no new tile, no flicker)')
+    m.playlist_songs[7] = list(m.songs[2:4]); m.setword(SHOWLIST, m.new_deque([]))
     m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
     blits3, *_ = settle(m)
     expect(all(near(a, b2) for a, b2 in zip(quad(m, head_blits(blits3)[0][0]), [colour(2), colour(3), colour(3), colour(2)])),
@@ -1270,7 +1294,7 @@ def lists_tests(ctx):
     blits, texts, styles, fills = settle(m)
     shown = [t for t, r in texts if t in titles]
     expect(vis(m, 'sg_rail')[0] == 0 and shown == titles[:len(shown)] and len(shown) >= 4, 'a plain list in the query\'s order, no rail')
-    corrupt(m)
+    corrupt(m); m.setword(SHOWLIST, m.new_deque([]))   # (the query that changed the record replaced the list too: a page behind another reads a replaced list again)
     m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
     expect(m.word(CI) == gen and ci_name(m) == 'Rock' and ci_unknown(m) == 0 and m.props[(m.sv, 'virtual_h')] == Layout(['A'] * 5, sections=False).content(),
            'read again with the browsing record put back (another page\'s query had changed it)')
@@ -1354,7 +1378,7 @@ def lists_tests(ctx):
     expect(vis(m, 'sg_rail')[0] == 0 and m.props[(m.sv, 'virtual_h')] == Layout(['A'] * 5, sections=False).content() and shown[:5] == titles[:5] and 'Album 0' in shown
            and not any(t.startswith('Artist ') for t in shown), f'a plain list in the query\'s order whose second line is the album, not the artist ({shown[:6]})')
     snap = bytes(m.u.mem_read(ci0, nci))
-    m.u.mem_write(ci0, b'\xaa' * nci)   # another page's query
+    m.u.mem_write(ci0, b'\xaa' * nci); m.setword(SHOWLIST, m.new_deque([]))   # another page's query
     m.calls = []
     m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
     expect([c[1] for c in m.calls if c[0] == 'loadLocalClassList'] == [art_cls] and m.props[(m.sv, 'virtual_h')] == Layout(['A'] * 5, sections=False).content()

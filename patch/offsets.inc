@@ -432,6 +432,7 @@
 #define NP_TICK_MS 500
 #define NP_HASH_MAX 524288
 #define NP_KEY_NEUTRAL 1
+#define NP_KEY_TONE 2
 #define NP_NEUTRAL 0xff202020u
 #define NP_V_MIN 32
 #define NP_V_MAX 192
@@ -1037,8 +1038,9 @@
 #define PC_LOCAL 0                /* pc_ep_t.state: the file is on the card */
 #define PC_PART 1                 /* a .part file only (a download under way or cut off) */
 #define PC_REMOTE 2               /* metadata only: not downloaded */
-#define PC_SHOW_SIZE 1332         /* pc_show_t: dir[PC_FILE] title[PC_TITLE] cover[PC_FILE] feed[PC_URL] image[PC_URL] count hash fresh checked author[PC_AUTHOR] category[PC_CAT] desc[PC_DESC] newest */
+#define PC_SHOW_SIZE 1336         /* pc_show_t: dir[PC_FILE] title[PC_TITLE] cover[PC_FILE] feed[PC_URL] image[PC_URL] count hash fresh checked author[PC_AUTHOR] category[PC_CAT] desc[PC_DESC] newest modified */
 #define PC_SH_NEWEST 1328         /* the newest episode's date (seconds since 1970; an entry's p=, remote or local; the files' dates when there is no .episodes), 0 = none: the Shows page's order */
+#define PC_SH_MODIFIED 1332       /* the show file's modified=: the server's Last-Modified of the feed we hold, 0 = none */
 #define PC_SH_AUTHOR 1008
 #define PC_SH_CAT 1072
 #define PC_SH_DESC 1120

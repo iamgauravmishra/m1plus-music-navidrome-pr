@@ -15,6 +15,11 @@
 #define CURLOPT_LOW_SPEED_LIMIT 19
 #define CURLOPT_LOW_SPEED_TIME 20
 #define CURLOPT_VERBOSE 41
+#define CURLOPT_TIMECONDITION \
+    33 /* CURL_TIMECOND_*: with the value below, a 304 and no body when the document is not newer */
+#define CURLOPT_TIMEVALUE 34 /* seconds since 1970 */
+#define CURL_TIMECOND_IFMODSINCE 1
+#define CURLOPT_FILETIME 69 /* long 1: the document's Last-Modified is kept for CURLINFO_FILETIME */
 #define CURLOPT_NOPROGRESS 43
 #define CURLOPT_XFERINFODATA 10057 /* the data of the callback below (CURLOPT_PROGRESSDATA) */
 #define CURLOPT_XFERINFOFUNCTION \
@@ -37,6 +42,8 @@
 /* CURLINFO_CONTENT_TYPE is CURLINFO_STRING + 18: the Content-Type header, a char * owned by libcurl (NULL when none). */
 #define CURLINFO_CONTENT_TYPE 0x100012
 #define CURLINFO_SSL_VERIFYRESULT 0x20000d
+#define CURLINFO_FILETIME \
+    0x20000e /* CURLINFO_LONG + 14: the server's Last-Modified, seconds since 1970, a long; -1 when it sent none */
 #define CURLINFO_REDIRECT_COUNT 0x200014
 #define CURLINFO_PRIMARY_IP 0x100020
 #define CURLINFO_SIZE_DOWNLOAD_T 0x600008

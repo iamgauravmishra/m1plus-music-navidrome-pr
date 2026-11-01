@@ -23,7 +23,8 @@ _Static_assert(
         __builtin_offsetof(pc_show_t, checked) == PC_SH_CHECKED && __builtin_offsetof(pc_show_t, feed) == PC_SH_FEED &&
         __builtin_offsetof(pc_show_t, image) == PC_SH_IMAGE && __builtin_offsetof(pc_ep_t, desc) == PC_EP_DESC &&
         __builtin_offsetof(pc_show_t, author) == PC_SH_AUTHOR && __builtin_offsetof(pc_show_t, category) == PC_SH_CAT &&
-        __builtin_offsetof(pc_show_t, desc) == PC_SH_DESC && __builtin_offsetof(pc_show_t, newest) == PC_SH_NEWEST,
+        __builtin_offsetof(pc_show_t, desc) == PC_SH_DESC && __builtin_offsetof(pc_show_t, newest) == PC_SH_NEWEST &&
+        __builtin_offsetof(pc_show_t, modified) == PC_SH_MODIFIED,
     "offsets");
 
 #define PM_ROOT "/mnt/mmc"
@@ -352,6 +353,8 @@ int pc_parse_show(const char *buf, unsigned n, pc_show_t *show) {
             pm_cpy_n(show->image, PC_URL, p + 6, (int)len - 6);
         else if (len >= 8 && pm_ieq_n(p, "checked=", 8))
             show->checked = pm_num(p + 8, len - 8);
+        else if (len >= 9 && pm_ieq_n(p, "modified=", 9))
+            show->modified = pm_num(p + 9, len - 9);
         else if (len >= 7 && pm_ieq_n(p, "author=", 7))
             pm_cpy_n(show->author, PC_AUTHOR, p + 7, (int)len - 7);
         else if (len >= 9 && pm_ieq_n(p, "category=", 9))

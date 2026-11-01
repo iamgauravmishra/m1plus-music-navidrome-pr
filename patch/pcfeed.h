@@ -59,10 +59,10 @@ unsigned pf_render_episodes(const pf_parser_t *p, const char *dir, const char *o
 unsigned pf_render_note(const pf_parser_t *p, int i, char *out, unsigned cap);
 /* The line of .episodes (eps, n bytes) whose file name is `file`: its enclosure url (u=) into url (usize bytes) and its length (l=, 0 when none or not a number) into *length. 0 when there is no such line, no url, or the url does not fit. */
 int pf_find_episode(const char *eps, unsigned n, const char *file, char *url, unsigned usize, unsigned *length);
-/* The .show text. title / feed / image / author / category / desc: plain text (control bytes become spaces; the last three are written only when not empty), checked: seconds since 1970 (0 = never).
+/* The .show text. title / feed / image / author / category / desc: plain text (control bytes become spaces; the last three are written only when not empty), checked: seconds since 1970 (0 = never), modified: the server's Last-Modified of the feed we hold, seconds since 1970 (written only when not 0).
  * Pure: the caller merges (a refresh passes the feed's value, else the show's old one). Returns its length. */
-unsigned pf_render_show(const char *title, const char *feed, const char *image, unsigned checked, const char *author,
-                        const char *category, const char *desc, char *out, unsigned cap);
+unsigned pf_render_show(const char *title, const char *feed, const char *image, unsigned checked, unsigned modified,
+                        const char *author, const char *category, const char *desc, char *out, unsigned cap);
 /* A title as a folder name (forbidden characters replaced, at most PF_MAX_FILE bytes, no leading or trailing dot or space); "" when nothing is left. */
 void pf_folder_name(char *out, unsigned size, const char *title);
 /* The date of an RFC 822 / 2822 pubDate ("Thu, 30 Oct 2026 11:00:00 GMT", "30 Oct 2026 07:00 -0400", zones UT GMT Z EST EDT CST CDT MST MDT PST PDT or +hhmm), seconds since 1970; 0 when it is not one. */

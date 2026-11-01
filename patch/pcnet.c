@@ -310,19 +310,32 @@ static int pn_rc(int rc, long http) {
     return PN_NET;
 }
 
-/* The feed at url through the parser. Returns a PN_* code (PN_OK: the answer was a feed). */
-static int pn_fetch(const char *url, pf_parser_t *p) {
+#define PN_NOTMOD \
+    100 /* pn_fetch: HTTP 304, the feed is as the last refresh left it (not an error, not a PN_ code of the page) */
+
+/* The feed at url through the parser. since: the server's own Last-Modified of the copy we hold (.show's modified=, never the device clock), 0 for no condition (If-Modified-Since). *modified: the
+ * server's Last-Modified of this answer (CURLINFO_FILETIME), 0 when it sent none. Returns a PN_* code (PN_OK: the answer was a feed; PN_NOTMOD: 304). */
+static int pn_fetch(const char *url, pf_parser_t *p, long since, unsigned *modified) {
     struct fx f;
     void *h;
-    long http = 0;
+    long http = 0, ft = -1;
     int rc;
     memset(&f, 0, sizeof f);
     f.p = p;
+    *modified = 0;
     h = pn_easy(url, pn_write, &f, f.err, (void *)0);
     if (!h) return PN_MEM;
+    curl_easy_setopt(h, CURLOPT_FILETIME, 1); /* the Last-Modified header, read back below */
+    if (since) {
+        curl_easy_setopt(h, CURLOPT_TIMECONDITION, CURL_TIMECOND_IFMODSINCE);
+        curl_easy_setopt(h, CURLOPT_TIMEVALUE, since);
+    }
     rc = curl_easy_perform(h);
     curl_easy_getinfo(h, CURLINFO_RESPONSE_CODE, &http);
+    curl_easy_getinfo(h, CURLINFO_FILETIME, &ft);
+    if (ft > 0) *modified = (unsigned)ft;
     curl_easy_cleanup(h);
+    if (rc == 0 && http == 304 && since) return PN_NOTMOD;
     if (rc == 0) return pf_is_feed(p) ? PN_OK : PN_NOTFEED;
     if (rc == CURLE_WRITE_ERROR) return f.capped && pf_is_feed(p) && pf_items(p) > 0 ? PN_OK : PN_NOTFEED;
     return pn_rc(rc, http);
@@ -424,7 +437,7 @@ static void pn_refresh_one(const struct pn_job *j, const char *dir) {
     pc_show_t s;
     pf_parser_t *p;
     char *buf, *old = (char *)0, *eps, shown[PC_TITLE];
-    unsigned n, oldn = 0, fresh = 0, feed;
+    unsigned n, oldn = 0, fresh = 0, feed, modified = 0;
     int code, first;
     if (!pn_join(path, sizeof path, j->root, dir, (const char *)0) ||
         !pn_join(file, sizeof file, path, ".show", (const char *)0))
@@ -445,10 +458,48 @@ static void pn_refresh_one(const struct pn_job *j, const char *dir) {
         pn.cur = 0;
         return;
     }
-    code = pn_fetch(s.feed, p);
+    /* the condition only while the local copy is whole: a show with no .episodes would answer 304 and stay empty */
+    pn_join(file, sizeof file, path, ".episodes", (const char *)0);
+    code = pn_fetch(s.feed, p, access(file, F_OK) ? 0 : (long)s.modified, &modified);
+    if (code == PN_NOTMOD &&
+        access(file,
+               F_OK)) { /* a 304 with nothing to keep (the file went in the meantime): once more, unconditionally */
+        pf_free(p);
+        p = pf_new();
+        if (!p) {
+            pn_set(feed, PN_MEM, 0);
+            pn.cur = 0;
+            return;
+        }
+        code = pn_fetch(s.feed, p, 0, &modified);
+    }
     if (code ==
         PN_CANCELLED) { /* Cancel: the transfer was aborted, nothing written, the show keeps the status it had */
         pf_free(p);
+        pn.cur = 0;
+        return;
+    }
+    if (code ==
+        PN_NOTMOD) { /* 304: .episodes stays as it is, only the time of the check moves; a missing cover is still fetched */
+        char *txt = calloc(PN_SHOW_MAX + 1, 1);
+        code = PN_OK;
+        if (!txt)
+            code = PN_MEM;
+        else {
+            n = pf_render_show(s.title, s.feed, s.image, (unsigned)time((long *)0), s.modified, s.author, s.category,
+                               s.desc, txt, PN_SHOW_MAX); /* modified= stays: it is the server's, of the copy we hold */
+            pn_join(file, sizeof file, path, ".show", (const char *)0);
+            pn_join(tmp, sizeof tmp, path, ".show.tmp", (const char *)0);
+            if (!pn_save(file, tmp, txt, n))
+                code = PN_STORAGE;
+            else {
+                if (pn.part < 900) pn.part = 900;
+                pn_cover(path, s.image);
+            }
+            free(txt);
+        }
+        pf_free(p);
+        pn_set(feed, code, 0);
         pn.cur = 0;
         return;
     }
@@ -469,10 +520,11 @@ static void pn_refresh_one(const struct pn_job *j, const char *dir) {
                 pn_join(file, sizeof file, path, ".show", (const char *)0);
                 pn_join(tmp, sizeof tmp, path, ".show.tmp", (const char *)0);
                 memcpy(shown, first && pf_title(p)[0] ? pf_title(p) : s.title, PC_TITLE);
-                n = pf_render_show(shown, s.feed, pf_image(p)[0] ? pf_image(p) : s.image, (unsigned)time((long *)0),
-                                   pf_author(p)[0] ? pf_author(p) : s.author,
-                                   pf_category(p)[0] ? pf_category(p) : s.category,
-                                   pf_summary(p)[0] ? pf_summary(p) : s.desc, eps, PN_EPS_MAX);
+                n = pf_render_show(
+                    shown, s.feed, pf_image(p)[0] ? pf_image(p) : s.image, (unsigned)time((long *)0),
+                    modified, /* the new answer's Last-Modified; 0 (none sent) drops the key: the next request is unconditional */
+                    pf_author(p)[0] ? pf_author(p) : s.author, pf_category(p)[0] ? pf_category(p) : s.category,
+                    pf_summary(p)[0] ? pf_summary(p) : s.desc, eps, PN_EPS_MAX);
                 if (!pn_save(file, tmp, eps, n))
                     code = PN_STORAGE;
                 else {
@@ -1256,6 +1308,7 @@ static void *pn_pmain(void *arg) {
     pf_parser_t *p = (pf_parser_t *)0;
     char feed[PC_URL];
     int code = PN_OK;
+    unsigned unused; /* the answer's Last-Modified: a preview keeps none (its first refresh is unconditional) */
     (void)arg;
     feed[0] = 0;
     if (pn.pid[0]) { /* an Apple Podcasts link: the store's lookup names the feed */
@@ -1280,7 +1333,7 @@ static void *pn_pmain(void *arg) {
         memcpy(feed, pn.purl, sizeof feed);
     if (code == PN_OK) {
         p = pf_new();
-        code = p ? pn_fetch(feed, p) : PN_MEM;
+        code = p ? pn_fetch(feed, p, 0, &unused) : PN_MEM;
     }
     if (code == PN_OK && pn.cancel) code = PN_CANCELLED;
     if (code == PN_OK) {
@@ -1360,7 +1413,7 @@ int pn_subscribe(const char *root, const pc_show_t *shows, int nshows, char *dir
     if (!pn_save(file, tmp, eps, n)) goto done;
     pn_join(file, sizeof file, path, ".show", (const char *)0);
     pn_join(tmp, sizeof tmp, path, ".show.tmp", (const char *)0);
-    n = pf_render_show(pf_title(p)[0] ? pf_title(p) : host, pn.purl, pf_image(p), (unsigned)time((long *)0),
+    n = pf_render_show(pf_title(p)[0] ? pf_title(p) : host, pn.purl, pf_image(p), (unsigned)time((long *)0), 0,
                        pf_author(p), pf_category(p), pf_summary(p), eps, PN_EPS_MAX);
     if (!pn_save(file, tmp, eps, n)) goto done;
     if (pn_join(cover, sizeof cover, path, "cover.jpg", (const char *)0))
@@ -1444,7 +1497,7 @@ static int pn_sub_one(struct pn_imp *im, char *line, const char *name) {
         !pn_join(tmp, sizeof tmp, show, ".show.tmp", (const char *)0))
         return PN_SUB_SKIP;
     if (!access(file, F_OK)) return PN_SUB_SKIP; /* a folder of this name is already a subscription */
-    n = pf_render_show(name && name[0] ? name : host, line, "", 0, "", "", "", text, sizeof text);
+    n = pf_render_show(name && name[0] ? name : host, line, "", 0, 0, "", "", "", text, sizeof text);
     if (!pn_save(file, tmp, text, n)) return PN_SUB_SKIP;
     im->seen[im->nseen++] = hash;
     ++im->added, ++im->subs;
@@ -1578,7 +1631,8 @@ int pn_unsubscribe(const char *root, const pc_show_t *s) {
     unsigned n;
     if (!pn_join(file, sizeof file, root, s->dir, ".show") || !pn_join(tmp, sizeof tmp, root, s->dir, ".show.tmp"))
         return 0;
-    n = pf_render_show(s->title, "", s->image, s->checked, s->author, s->category, s->desc, text, sizeof text);
+    n = pf_render_show(s->title, "", s->image, s->checked, s->modified, s->author, s->category, s->desc, text,
+                       sizeof text);
     return pn_save(file, tmp, text, n);
 }
 

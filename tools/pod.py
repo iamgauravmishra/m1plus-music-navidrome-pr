@@ -23,7 +23,7 @@ by value/SHA before anything is written.
 
 Usage: pod.py WORKDIR
 """
-import argparse, hashlib, json, os, pathlib, re, stat, struct, subprocess, sys
+import argparse, concurrent.futures, hashlib, json, os, pathlib, re, stat, struct, subprocess, sys
 from elftools.elf.elffile import ELFFile
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import pod_pages, pod_ui
@@ -1016,11 +1016,17 @@ def compile_payload(out, demo_path, tag=TAG):
     slots = gen_stock_h(out, demo_path)
     gen_scroll_h(out)
     gen_asm(out, slots)
-    objs = []
-    for src in SOURCES:
-        obj = out / (src + '.o')
-        run(CLANG, *FLAGS, f'-DM1PLUS_TAG="{tag}"', '-I', out, '-I', PATCH, '-c', os.path.join(PATCH, src), '-o', obj)
-        objs.append(obj)
+    objs = [out / (src + '.o') for src in SOURCES]   # (SOURCES order: the link is byte-identical to a serial compile)
+
+    def compile_one(src, obj):
+        cmd = [str(a) for a in (CLANG, *FLAGS, f'-DM1PLUS_TAG="{tag}"', '-I', out, '-I', PATCH, '-c', os.path.join(PATCH, src), '-o', obj)]
+        return subprocess.run(cmd, stderr=subprocess.PIPE, text=True)
+
+    with concurrent.futures.ThreadPoolExecutor(os.cpu_count() or 4) as pool:   # one clang a source; the sources do not depend on each other
+        done = list(pool.map(compile_one, SOURCES, objs))
+    for r in done:   # the first failing source in SOURCES order, its whole stderr
+        if r.stderr: sys.stderr.write(r.stderr)
+        if r.returncode: raise subprocess.CalledProcessError(r.returncode, r.args)
     run(CLANG, *FLAGS, '-c', out / 'pod_asm.S', '-o', out / 'pod_asm.o')
     # compact_set_row_layout is reached only from the patched stock call sites, so keep it
     keep = ['--undefined=compact_set_row_layout', '--undefined=m1plus_home_init',
