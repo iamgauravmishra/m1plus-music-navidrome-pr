@@ -295,40 +295,22 @@ void grid_list_paint(void *canvas, grid_t *g, void *st_title, void *st_sub, int 
     }
 }
 
-/* Adds key to the mosaic's albums when it has a cache file and is not there yet; `tried` keeps the keys looked at so none is looked at twice.
- * 1 added, 0 no key or no file, -1 looked at before. */
-static int grid_try_key(unsigned *key, int *nk, unsigned k, unsigned *tried, int *ntried) {
-    char url[80];
-    int i;
-    if (!k) return 0;
-    for (i = 0; i < *ntried; ++i)
-        if (tried[i] == k) return -1;
-    if (*ntried < 16) tried[(*ntried)++] = k;
-    if (!cc_url(url, k)) return 0;
-    key[(*nk)++] = k;
-    return 1;
-}
-
-/* The cache key of the library's album called `album`: its record is the one the cache file was made from (the library lists an album once, under the artist of one
- * of its tracks), so a track of a compilation finds the file its own artist would not. 0: none. */
-static unsigned grid_album_key(void *albums, const char *album) {
-    unsigned n = albums ? deque_size(albums) : 0, j;
-    if (!*album) return 0;
-    for (j = 0; j < n; ++j) {
-        void *r = deque_at(albums, j);
-        if (!cc_nocase(cc_str(r, REC_ALBUM), album)) return cc_album_key(r);
-    }
-    return 0;
-}
-
 int grid_mosaic_keys(void *songs, void *albums, unsigned *key) {
     unsigned tried[16];
-    int n = songs ? (int)deque_size(songs) : 0, k, ntried = 0, nk = 0;
+    char url[80];
+    int n = songs ? (int)deque_size(songs) : 0, k, i, ntried = 0, nk = 0;
     for (k = 0; k < n && k < PL_SCAN && nk < 4; ++k) {
         void *r = deque_at(songs, (unsigned)k);
-        /* the library's album of that name only for a key not looked at yet: a repeat had its lookup with the first song */
-        if (!grid_try_key(key, &nk, cc_album_key(r), tried, &ntried) && albums)
-            grid_try_key(key, &nk, grid_album_key(albums, cc_str(r, REC_ALBUM)), tried, &ntried);
+        unsigned own = cc_album_key(r), c;
+        for (i = 0; i < ntried && tried[i] != own; ++i) {
+        }
+        if (i < ntried) continue; /* a later song of an album looked at: its cover is in, or there is none */
+        if (ntried < 16) tried[ntried++] = own;
+        c = cc_cover_key(albums, own, cc_str(r, REC_ALBUM)); /* its own file, else the library album of that name's */
+        if (!cc_url(url, c)) continue;
+        for (i = 0; i < nk && key[i] != c; ++i) {
+        }
+        if (i == nk) key[nk++] = c;
     }
     return nk;
 }

@@ -359,29 +359,10 @@ static void sg_dir(void) {
     sg.seen = s;
 }
 
-/* The cache key of the library's album called `album` that has a cover file: a song of a compilation carries its own artist, whose key the cache has no
- * file for (the library lists an album once, under the artist of one of its tracks, and the cache is keyed by that record). 0: none. */
-static unsigned sg_album_key(const char *album) {
-    unsigned n = sg.albums ? deque_size(sg.albums) : 0, j;
-    char url[80];
-    if (!*album) return 0;
-    for (j = 0; j < n; ++j) {
-        void *r = deque_at(sg.albums, j);
-        if (!cc_nocase(cc_str(r, REC_ALBUM), album)) {
-            unsigned k = cc_album_key(r);
-            return cc_url(url, k) ? k : 0;
-        }
-    }
-    return 0;
-}
-
-/* The cover of a tile: its own key's file, else the library album's; a tile with neither shows the placeholder. */
+/* The cover of a tile: its own key's file, else the library album's (cc_cover_key); a tile with neither shows the placeholder. */
 static void sg_art(tile_t *t) {
-    char url[80];
-    if (!cc_url(url, t->ckey) && t->album - 1 < (int)sg.count) {
-        unsigned k = sg_album_key(cc_str(deque_at(sg.list, (unsigned)(t->album - 1)), REC_ALBUM));
-        if (k) t->ckey = k;
-    }
+    if (t->album - 1 < (int)sg.count)
+        t->ckey = cc_cover_key(sg.albums, t->ckey, cc_str(deque_at(sg.list, (unsigned)(t->album - 1)), REC_ALBUM));
     grid_art(&sg.g, t);
 }
 
