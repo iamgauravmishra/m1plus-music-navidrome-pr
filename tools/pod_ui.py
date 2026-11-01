@@ -85,10 +85,10 @@ NAV_SEARCH_X = SONGS_BUTTONS[0][2]
 NAV_SETTINGS_ICON = 'pod_nav_settings'   # the Extras page's Settings button: the capsule's left cap on the 214 slot (tools/mod_icons.py)
 
 
-def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, songs=False, settings=False, show_more=False, show_globe=False):
+def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, songs=False, settings=False, select=False, show_more=False, show_globe=False):
     nb = Widget('view', 0, 0, SCREEN_W, NAVBAR_H, [('name', 'navigationbar_view')])
     # a title runs under a toggle's button no further than the button's left edge
-    right = NAV_SEARCH_X if songs else NAV_CF_X if coverflow or more else NAV_VIEW_X if toggle or settings or show_more else NAV_TITLE_END
+    right = NAV_SEARCH_X if songs else NAV_CF_X if coverflow or more else NAV_VIEW_X if toggle or settings or select or show_more else NAV_TITLE_END
     lbl = Widget('label', NAV_TITLE_X, 14, right - NAV_TITLE_X, 22,
                  [('name', 'label_title'), ('style', 'navbar_label_white'), ('length', '31'), pod_i18n.text_prop(title)])
     ret = Widget('button', NAV_BACK_X, 0, NAV_BACK_W, NAVBAR_H, [
@@ -108,6 +108,10 @@ def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, 
         nb.children.append(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
             ('name', 'btn_settings'), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', NAV_SETTINGS_ICON + '_down'), ('style:normal:icon', NAV_SETTINGS_ICON), ('style:over:icon', NAV_SETTINGS_ICON)]))
+    if select:   # the Folders page's Select button (patch/folders.c shows it, as the capsule's left cap, below the root)
+        nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
+            ('name', 'btn_select'), ('enable', 'true'), ('style', 'img_btn_style'),
+            ('style:pressed:icon', 'pod_nav_selectl_down'), ('style:normal:icon', 'pod_nav_selectl'), ('style:over:icon', 'pod_nav_selectl')])))
     if show_more:   # the Podcasts page's "..." (opens a bottom sheet): the capsule's left cap on the 214 slot, shown on the Show level and on the Shows level when Import is possible (patch/podcasts.c)
         nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
             ('name', 'btn_more'), ('enable', 'true'), ('style', 'img_btn_style'),
@@ -991,6 +995,76 @@ def ab_button(name, x, w, rest, down):
                                                                  ('style:pressed:icon', down), ('style:normal:icon', rest), ('style:over:icon', rest)])
 
 
+# The Queue page (patch/queuepage.c, docs/modules/queue.md; the numbers are patch/offsets.inc QP_*): the play queue in the album page's structure. The list is the whole 450 px window
+# holding one content view, view_queue, that paints the rows (the Songs page's) and holds the header's widgets: the playing track's title and artist (hscroll_labels), the Shuffle and
+# Repeat buttons (the Songs page's flat pills, icon only), the section line "Queue" with the song count at its right. The cover is painted by the payload. The window is black; the
+# glass Back is the window's last child, over the rows.
+QP_HEAD_PX, QP_EMPTY_PX = 20, 16
+QP_EMPTY_RGB = '#9C9C9C'
+QP_OFF_RGB, QP_OFF_DOWN_RGB = '#2C2C2E', '#3A3A3C'   # a mode button that is off (the payload sets the lit look: #C8C8C8, pressed #A8A8A8, with the dark glyph); patch/offsets.inc QP_PILL_*
+
+
+def qp_button(name, x, icon):
+    """An icon-only flat button (the Songs page's pill without its label): the glyph is centred by the button's own style."""
+    o = OFFSETS
+    b = Widget('button', x, o['QP_PILL_Y'], o['QP_PILL_W'], o['SG_PILL_H'], [('name', name), ('enable', 'true')])
+    for st in STATES:
+        styled(b, (st,), 'bg_color', QP_OFF_DOWN_RGB if st == 'pressed' else QP_OFF_RGB)
+        styled(b, (st,), 'border_width', '0')
+        styled(b, (st,), 'border_color', '#00000000')
+        styled(b, (st,), 'round_radius', str(o['SG_PILL_R']))
+        styled(b, (st,), 'icon', icon)
+    return b
+
+
+def queue_navbar(page):
+    title = hidden(Widget('label', NAV_TITLE_X, 14, NAV_VIEW_X - NAV_TITLE_X, 22, [('name', 'label_title'), ('style', 'navbar_label_white'), pod_i18n.text_prop(page.title)]))   # never shown: the section line is the title
+    return [title,
+            ab_nav_button('btn_return', NAV_BACK_X, NAV_BACK_W, 'ah_nav_back', 'ah_nav_back_down')]
+
+
+def build_queue_page(page):
+    o = OFFSETS
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    lv = stock_list([], True, top=0)
+    lv.set('name', 'queue_listview')
+    sv = lv.children[0]
+    sv.set('name', 'queue_scrollview')
+    view = Widget('view', 0, 0, SCREEN_W, o['QP_WIN_H'], [('name', 'view_queue')])   # the content: the payload sizes it to the header and the rows
+    styled(view, ('normal',), 'bg_color', '#000000')
+    kids = []
+    for name, y, h, px, colour in (('qp_title', 'QP_TITLE_Y', 'QP_TITLE_H', 20, '#FFFFFF'), ('qp_artist', 'QP_ARTIST_Y', 'QP_ARTIST_H', 16, '#AAAAAA')):
+        lab = Widget('hscroll_label', o['QP_TEXT_X'], o[y], o['QP_TEXT_W'], o[h], [('name', name), ('text', ''), ('sensitive', 'false'), ('yoyo', 'true'), ('loop', 'true'), ('lull', CAPTION_LULL), ('ellipses', 'true')])
+        for st in ('normal', 'disable', 'focused'):
+            styled(lab, (st,), 'font_size', str(px))
+            styled(lab, (st,), 'text_color', colour)
+            styled(lab, (st,), 'text_align_h', 'left')
+        kids.append(lab)
+    kids.append(qp_button('btn_shuffle', o['QP_PILL_X0'], 'sg_shuffle'))
+    kids.append(qp_button('btn_repeat', o['QP_PILL_X1'], 'sg_repeat'))
+    head = Widget('label', o['SG_HDR_X'], o['QP_HEAD_Y'], 310 - o['SG_HDR_X'], o['QP_HEAD_H'], [('name', 'qp_head'), pod_i18n.text_prop('Queue'), ('sensitive', 'false')])
+    for prop, v in (('text_color', '#FFFFFF'), ('font_size', str(QP_HEAD_PX)), ('text_align_h', 'left'), ('text_align_v', 'middle')): styled(head, ('normal',), prop, v)
+    empty = hidden(Widget('label', o['SG_HDR_X'], o['QP_TOP'] + o['QP_EMPTY_Y'], 310 - o['SG_HDR_X'], o['QP_EMPTY_H'], [('name', 'qp_empty'), pod_i18n.text_prop('No upcoming songs')]))   # shown by the payload when nothing follows
+    for prop, v in (('text_color', QP_EMPTY_RGB), ('font_size', str(QP_EMPTY_PX)), ('text_align_h', 'left'), ('text_align_v', 'middle')): styled(empty, ('normal',), prop, v)
+    img = hidden(Widget('image', (SCREEN_W - o['QP_SHUF_IMG']) // 2, o['QP_TOP'] + o['QP_SHUF_IMG_Y'], o['QP_SHUF_IMG'], o['QP_SHUF_IMG'], [('name', 'qp_shuf_img'), ('image', 'sg_shuffle_big'), ('draw_type', 'center')]))
+    stitle = hidden(Widget('label', (SCREEN_W - o['QP_SHUF_W']) // 2, o['QP_TOP'] + o['QP_SHUF_TITLE_Y'], o['QP_SHUF_W'], o['QP_SHUF_TITLE_H'], [('name', 'qp_shuf_title'), pod_i18n.text_prop('Shuffle is on')]))
+    ssub = hidden(Widget('label', (SCREEN_W - o['QP_SHUF_W']) // 2, o['QP_TOP'] + o['QP_SHUF_SUB_Y'], o['QP_SHUF_W'], o['QP_SHUF_SUB_H'], [('name', 'qp_shuf_sub'), ('text', '')]))   # the payload sets "N songs play in random order"
+    for lab, px, colour in ((stitle, 20, '#FFFFFF'), (ssub, 16, QP_EMPTY_RGB)):   # shown by the payload (visible only) while the play mode is Shuffle; insensitive for good
+        for prop, v in (('text_color', colour), ('font_size', str(px)), ('text_align_h', 'center'), ('text_align_v', 'middle')): styled(lab, ('normal',), prop, v)
+    kids += [head, empty, img, stitle, ssub]
+    view.children = kids
+    sv.children.append(view)
+    root.children.append(lv)
+    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, '#FFFFFF')))
+    for name, px, colour in (('label_row_title', LIST_TITLE_PX, '#FFFFFF'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA')):
+        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))   # text styles only (widget_prepare_text_style); never shown
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+        root.children.append(lab)
+    root.children.extend(queue_navbar(page))   # last: the glass controls paint and take touches over the list
+    return root
+
+
 # The Daily Mix page (patch/dailymix.c dp_*, docs/modules/dailymix.md "The page"; tools/pod_dailymix.py DP_* and patch/offsets.inc carry the numbers): no navbar. The list is the
 # whole 450 px window (list_view > scroll_view + the mobile scroll bar, the library lists' structure) holding one content view, view_dm, that paints the art, the texts and the
 # songs itself (as the Albums page's view_grid) and holds the three widgets that need images or touches: the Shuffle disc, the white Play pill and the pill's dark play glyph
@@ -1503,7 +1577,48 @@ def build_keyboard_page(page):
     return root
 
 
+# The Folders page (patch/folders.c, docs/modules/folders.md): the Songs page's structure without its sections, rail, sort card and count. The glass navbar (Back, the small title, Select | Now Playing as one
+# capsule: Select is the left cap, Now Playing the right cap) over a stock list whose one child, view_grid, holds the large title and the Play / Shuffle pills (the payload shows the pills for a folder that holds an
+# audio file) and has the rows painted into it; the select mode's Select All text and bar are the Songs page's.
+def build_folders_page(page):
+    o = OFFSETS
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    nb = navbar(page.title, select=True)
+    nb.children[0].set('visible', 'false')   # the small title: the payload shows it once the large title has scrolled away
+    for c in nb.children:
+        if c.name == 'btn_select':   # shown from the start: the capsule's left cap
+            c.remove('visible'); c.remove('sensitive')
+        elif c.name == 'btn_backtoplayer':   # the capsule's right cap
+            for st, img in (('pressed', 'ah_nav_play_down'), ('normal', 'ah_nav_play'), ('over', 'ah_nav_play')): c.set(f'style:{st}:icon', img)
+    nb.children.append(selall_button())
+    root.children.append(nb)
+    lv = stock_list([], True)
+    lv.set('name', 'folders_listview')
+    sv = lv.children[0]
+    sv.set('name', 'folders_scrollview')
+    grid = Widget('view', 0, 0, SCREEN_W, GRID_VIEW_H, [('name', 'view_grid')])
+    styled(grid, ('normal',), 'bg_color', '#000000')
+    title = Widget('label', o['SG_TITLE_X'], 0, 250, o['SG_TITLE_H'], [('name', 'sg_title'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])
+    styled(title, ('normal',), 'text_color', '#FFFFFF')
+    styled(title, ('normal',), 'font_size', str(SG_TITLE_PX))
+    styled(title, ('normal',), 'text_align_h', 'left')
+    styled(title, ('normal',), 'text_align_v', 'middle')
+    grid.children = [title, hidden(sg_pill('btn_play', o['SG_PILL_X0'], o['SG_PILL_Y'], 'Play', 'sg_play')),
+                     hidden(sg_pill('btn_shuffle', o['SG_PILL_X1'], o['SG_PILL_Y'], 'Shuffle', 'sg_shuffle'))]
+    sv.children.append(grid)
+    root.children.append(lv)
+    root.children.append(nav_fade(shown=False))   # patch/folders.c shows it while yoffset > 0 (at rest it would darken the large title)
+    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, '#FFFFFF')))
+    lab = hidden(label('label_row_title', 0, 0, 10, 10, '', LIST_TITLE_PX, '#FFFFFF', 'left'))   # the text style only (widget_prepare_text_style); never shown
+    styled(lab, ('normal',), 'text_align_v', 'middle')
+    root.children.append(lab)
+    root.children.append(select_bar('sg_bar', 'sg_bar_line', [('sg_add', o['SG_PILL_X0'], 'Add to Playlist', 'sg_listplus', o['SG_BAR_PILL_W']),
+                                                              ('sg_del', o['SG_BAR_PILL_X1'], 'Delete', 'sg_trash', o['SG_BAR_PILL_W'])]))
+    return root
 def build_page(page):
+    if page.kind == 'folders':
+        return build_folders_page(page)
     if page.kind == 'cards':
         return build_cards_page(page)
     if page.kind == 'keyboard':
@@ -1524,6 +1639,8 @@ def build_page(page):
         return build_search_page(page)
     if page.kind == 'album':
         return build_album_page(page)
+    if page.kind == 'queue':
+        return build_queue_page(page)
     if page.kind == 'dailymix':
         return build_dailymix_page(page)
     if page.kind == 'ipod':

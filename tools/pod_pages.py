@@ -64,6 +64,7 @@ ACT_SORTSET = 30   # picker row (Album Order): choose the album order (arg 1 Art
 ACT_THEMESET = 31  # picker row (Cassette Theme): choose the theme (arg 0 Normal, 1 Chrome, 2 Metal); a check shows on the chosen row (patch/tape.c tape_theme_set)
 ACT_INFO = 33     # an information row of the About page: a label and a grey value at the right, no chevron, not tappable (arg = INFO_*: where patch/m1plus.c reads the value; INFO_STATIC: the Row's own text)
 ACT_PCSEARCH = 34  # switch row (Settings > Library > Podcasts): Podcast Search, off by default; on shows a Search button on the Podcasts page (patch/podcasts.c pcsearch_toggle, /mnt/data/m1plus-pcsearch)
+ACT_FOLDERS = 37  # open the Folders page: the card's folders and audio files in our list (patch/folders.c; arg = HOME_FOLDER, where a window that will not open falls back to the stock folder_page)
 ACT_BATTPCT = 36  # switch row (Settings > Home Screen > Status Bar): Battery Percentage, off by default; on shows the gauge's exact charge beside the battery outline (patch/battery.c battpct_toggle, /mnt/data/m1plus-battpct)
 _ACTS = [v for k, v in globals().items() if k.startswith('ACT_')]
 assert len(set(_ACTS)) == len(_ACTS), 'two ACT_* share an id (patch/m1plus.c mirrors them)'
@@ -155,7 +156,7 @@ ITEMS = [   # item id = index; the default order, essentials first (iPod classic
     Row('Playlists', ACT_PLAYLISTS),
     Row('Shuffle', ACT_PAGE, SHUFFLE_PAGE_INDEX),
     Row('Genres', ACT_ARTISTS, HOME_GENRE),
-    Row('Folders', ACT_HOME, HOME_FOLDER),
+    Row('Folders', ACT_FOLDERS, HOME_FOLDER),
     # The stock Home tiles the menu does not repeat (Songs, Albums, Artists, Genres, Folders and Playlists are items above,
     # Play/System Settings are on Settings; the HiFi Store, id 0, exists on the grid only in Simplified Chinese and is left
     # out). They are items too, hidden by default: Settings > Main Menu can show any of them in the menu. The five song lists (Favorites, Recently Added,
@@ -442,9 +443,15 @@ KEYBOARDS_PAGE = Page('m1plus_keyboards', 'm1plus_keyboards_page', 'Keyboards', 
 # (Artists, Albums and Songs sections); opened by search_open after our keyboard, from the Songs page's Search and the album page's search disc, no menu row.
 SEARCH = Page('m1plus_search', 'm1plus_search_page', 'Search', kind='search')
 
+# The Folders page (patch/folders.c, docs/modules/folders.md): the Songs page's structure (the glass navbar, a large title, Play / Shuffle pills, a stock list holding one view the payload paints) over the stock folder state; one window for every level.
+FOLDERS = Page('m1plus_folders', 'm1plus_folders_page', 'Folders', kind='folders')
+
+# The Queue page (patch/queuepage.c, docs/modules/queue.md): the play queue under the glass controls; opened by Now Playing's queue button, no menu row.
+QUEUE_PAGE = Page('m1plus_queue', 'm1plus_queue_page', 'Queue', kind='queue')
+
 # PAGES[0] is the entry page.
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
-         EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, SORT_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL]
+         EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, SORT_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL, FOLDERS, QUEUE_PAGE]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE

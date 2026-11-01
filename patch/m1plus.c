@@ -50,7 +50,8 @@ enum {
     ACT_THEMESET = 31,
     ACT_INFO = 33,
     ACT_PCSEARCH = 34,
-    ACT_BATTPCT = 36
+    ACT_BATTPCT = 36,
+    ACT_FOLDERS = 37
 };
 
 extern void shot_start(void); /* patch/shot.c: the Screenshot row: confirm, 5 s countdown, capture; or cancel */
@@ -62,6 +63,8 @@ extern int ipod_open(void); /* patch/ipod.c: the virtual iPod Classic, a fullscr
 extern int podcasts_open(void); /* patch/podcasts.c: the shows on the card and their episodes */
 extern int search_open(void); /* patch/search.c: our keyboard, then the results page; -1 when it did not open */
 extern int songs_open(void); /* patch/songs.c: Songs, the library as one list with sections and a jump rail */
+extern int folders_open(
+    int home); /* patch/folders.c: Folders, the card's folders and audio files; a window that will not open leaves the stock folder_page through the Home tile home */
 extern int songs_open_list(
     int home); /* patch/songs.c: another stock song list (Favourites ...) on the same page; arg = its Home tile */
 extern void menu_arrange(void *win, int extras); /* patch/menu.c: the menu / Extras rows as the saved list says */
@@ -185,6 +188,8 @@ static int on_row(void *ctx, void *e) {
         playlists_open();
     else if (row->action == ACT_SONGS)
         songs_open();
+    else if (row->action == ACT_FOLDERS)
+        folders_open(row->arg);
     else if (row->action == ACT_IPOD)
         ipod_open();
     else if (row->action == ACT_PODCASTS)

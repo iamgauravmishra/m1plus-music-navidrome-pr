@@ -9,6 +9,7 @@
 #include "i18n.h"
 #include "podcasts.h"
 #include "songops.h"
+#include "picker.h"
 
 extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
 extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one become List play */
@@ -59,16 +60,22 @@ int so_delete(int cls, void *list, unsigned count, const unsigned char *sel, uns
     return 1;
 }
 
-/* Add to playlist: the stock Add button's path (@0x5280c0) to its playlist picker: playlist_page with the add context; tapping a playlist there adds the
+/* Add to playlist: our picker (patch/picker.c: the Playlists page in pick mode) over the page, which adds the selection to the playlist that is tapped and closes. Where
+ * it cannot open, the stock Add button's path (@0x5280c0) to its playlist picker: playlist_page with the add context; tapping a playlist there adds the
  * selection (batch_add_file on *pdeq_showlist and the vector) and closes the picker. The title the picker may overwrite and the browsing class it sets are put back
- * by the page when its window is back in front. */
+ * by the page when its window is back in front (ours puts them back itself). */
 int so_add(int cls, unsigned count, const unsigned char *sel, unsigned nsel, int valid, char *title_save, int *picker) {
     if (!nsel) {
         pod_toast(TR("msg_addfailed"));
         return 0;
     }
-    if (!valid || !so_selection(count, sel)) return -1;
+    if (!valid) return -1;
     memcpy(title_save, (void *)NAV_TITLE, 0x200);
+    if (picker_open(cls, count, sel) > 0) {
+        *picker = 1;
+        return 1;
+    }
+    if (!so_selection(count, sel)) return -1;
     *(int *)NAVIGATION_STATUS =
         0; /* the picker's mode is a page that is not in multi-select (@0x53d300 tests navigation_status != 1) */
     *picker = 1;

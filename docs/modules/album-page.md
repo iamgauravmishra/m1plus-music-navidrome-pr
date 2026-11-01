@@ -128,7 +128,7 @@ songs, the queue. Approximate mock-ups.
   page no longer opens it (it opens our Songs page with the large title and Play / Shuffle, no hook:
   `docs/modules/songs.md` "The other lists"); it is reached from the stock Playlists page and as that page's
   fallback.
-- **The queue drawer** (`ui/dialog/playqueue_dialog.bin`, no preview): the 240x450
+- **The queue drawer** (the stock fallback of our own Queue page, `docs/modules/queue.md`; `ui/dialog/playqueue_dialog.bin`, no preview): the 240x450
   panel that slides in from the right over Now Playing (opened by name from `playerjumpinfo_page_init` `0x53b17c` and
   `0x4d126c`; `dialog_playqueue_dialog_init` `0x47a7cc`). Its rows are cloned from a template (`queue_table_row`) by the stock table code, `row_height` read
   from the file, and bound by `0x47a19c`: the song name in `scrlabel_name` with `srlabel_item_gold20_style` for the
@@ -140,7 +140,7 @@ songs, the queue. Approximate mock-ups.
   (`#1E1E1E`, pressed `#333333`, 20 px). No widget is renamed or moved except the row template's height; no code.
   Not done: a play marker image on the playing row and a count in the header (the row bind and the header are
   code), icons on the bottom button (it has none).
-- **The queue** (the Now Playing list page, `playerjumpinfo_page`): the playing track's row carries the
+- **The queue** (the Now Playing list page, `playerjumpinfo_page`; no longer reached from the queue button, `docs/modules/queue.md`): the playing track's row carries the
   stock red `icon_playing` disc in place of its icon (set by the row bind `0x539244`, `is_playing` `0x4d9d64`; now the wave
   marker at the right end, as in Songs, and no disc at the left on any row), the rows are the
   q2-pod rows (white title, grey artist), and the navbar title (the queue's name, a `srlabel_leftwhite22_style`

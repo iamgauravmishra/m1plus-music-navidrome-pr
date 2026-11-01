@@ -19,6 +19,7 @@ class NowMachine(Machine):
     def __init__(self):
         super().__init__()
         self.handlers[INIT + 12] = 'stock_playing_resume'
+        self.handlers[pod.NP_MODE_BUTTON] = 'np_mode_button'
         self.styles = []          # (widget, "normal:bg_color", uint32)
         self.style_ret = 0
         self.pt = (30, 200, 1)    # get_playtimeandlength: pos, len, return value
@@ -57,6 +58,8 @@ class NowMachine(Machine):
         ret = None
         if name == 'stock_playing_resume':
             self.calls.append(('stock_playing_init', a0, a1)); ret = self.stock_ret
+        elif name == 'np_mode_button':   # stock 0x539888, the mode button's picture
+            self.calls.append(('np_mode_button', a0)); ret = 0
         elif name == 'widget_set_style':
             v = self.word(a2 + 8); self.calls.append(('widget_set_style', a0, self.read_cstr(a1), v))
             ret = self.bar_style_ret if a0 == self.bar else self.style_ret
@@ -150,6 +153,7 @@ def run(ctx):
 
     # ------------------------------------------------------------------ installed hook: stock first, then ours
     m = NowMachine(); m.page(); m.src(0)
+    queue_btn = m.widget('btn_queue')
     ret = m.init()
     names = m.names()
     expect(ret == 0 and m.calls[0] == ('stock_playing_init', WIN, 0x55), f'the stock init runs first, with its arguments, and its result is returned ({names[:3]})')
@@ -159,6 +163,8 @@ def run(ctx):
     expect(m.timers == [(PSYMS['np_tick'], O['NP_TICK_MS'])] and O['NP_TICK_MS'] == 500, 'one page timer, 500 ms, created once')
     paint = [c for c in m.calls if c[0] == 'widget_on' and c[2] == EVT_AFTER_PAINT]
     expect(len(paint) == 1 and paint[0][1] == m.widgets['img_playcover'] and paint[0][3] == PSYMS['np_on_art_paint'], 'the cover widget paints its corners')
+    qc = [c for c in m.calls if c[0] == 'widget_on' and c[1] == queue_btn and c[2] == O['EVT_CLICK']]
+    expect(len(qc) == 1 and qc[0][3] == PSYMS['np_on_queue'], 'the queue button gets one click handler after the stock init (our Queue page, docs/modules/queue.md; it answers RET_OK where the stock drawer should open)')
     # the timer's first run is part of the init: no cover (type 0) -> the neutral tone, once
     expect(m.styles == [(WIN, 'normal:bg_color', O['NP_NEUTRAL'])], f'no cover file: the neutral tone ({[hex(x[2]) for x in m.styles]})')
     m.screen(False); m.calls = []; m.tick()
@@ -485,6 +491,7 @@ def run(ctx):
     m.fire(O['EVT_WINDOW_TO_FG'])
     expect(m.bar_color() == word_of(bar_model(mn.tone(20, 200, 20))) and len(m.bar_styles) == 2 and len(m.styles) == 2,
            'EVT_WINDOW_TO_FOREGROUND: the bar takes the current cover\'s colour with one style call')
+    expect(('np_mode_button', WIN) in m.calls, 'back in front the mode button\'s picture is set again from the play mode (stock sets it only in its own click handler; the Queue page changes the mode)')
     n = len(m.bar_styles); m.fire(O['EVT_WINDOW_TO_FG'])
     expect(len(m.bar_styles) == n + 1 and m.bar_color() == word_of(bar_model(mn.tone(20, 200, 20))), 'a repeated foreground event only sets the same colour again')
     n = len(m.bar_styles); m.tick(); m.tick()
@@ -501,7 +508,7 @@ def run(ctx):
     m.fire(O['EVT_WINDOW_TO_BG']); k = len(m.bar_styles)
     fn, _ = m.bound[(WIN, O['EVT_WINDOW_TO_FG'])]
     m.call(fn, a0=WIN + 0x100, a1=0, count=100000)
-    expect(len(m.bar_styles) == k and m.bar_color() == BLACK, 'an event whose context is not the current window changes nothing')
+    expect(len(m.bar_styles) == k and m.bar_color() == BLACK and not any(c[0] == 'np_mode_button' for c in m.calls), 'an event whose context is not the current window changes nothing')
     # the timer catches what the events missed
     m = tinted(); m.bar_styles.clear(); m.top_main = WIN + 0x100; m.tick()
     expect(m.bar_styles == [(m.bar, 'normal:bg_color', BLACK)], 'another normal window on top without an event: the next tick makes the bar black')

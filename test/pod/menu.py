@@ -104,8 +104,8 @@ def run(ctx):
            and [(r.label, r.action, r.arg) for r in page.rows[:22]] ==[(r.label, r.action, r.arg) for r in P.ITEMS],
            'Extras and the menu have a row for every item (same labels and actions), so an item opens the same way from either')
     homes = [r.arg for r in P.ITEMS if r.action in (P.ACT_HOME, P.ACT_LIST) or (r.action == P.ACT_ARTISTS and r.arg)] + [r.arg for r in P.SETTINGS_PAGE.rows if r.action == P.ACT_HOME]
-    expect(len(set(homes)) == len(homes) and len(homes) + 5 == 18,
-           'no tile is twice (Albums, id 5, Artists, id 6, Songs, id 3, and Playlists, id 14, are the payload pages; HiFi, id 0, is left out)')
+    expect(len(set(homes)) == len(homes) and len(homes) + 6 == 18,
+           'no tile is twice (Albums, id 5, Artists, id 6, Songs, id 3, Folders, id 4, and Playlists, id 14, are the payload pages; HiFi, id 0, is left out)')
     m = Machine()
     m.widgets = {n: 0x30000000 + i for i, n in enumerate(['btn_return', 'btn_backtoplayer', 'btn_settings'] + [f'pod_row{i}' for i in range(len(ex.rows))])}
     m.call(on_row, a0=rows0 + 12 * ex_i)

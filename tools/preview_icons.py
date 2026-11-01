@@ -311,7 +311,7 @@ def mosaic(rgbs, size, r):
     for q, k in enumerate(quad): im.paste(sample_cover(rgbs[k], h), ((q & 1) * h, (q >> 1) * h))
     return rounded(im, r)
 
-def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1, select=None):
+def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1, select=None, pick=False):
     """ui/m1plus_playlists.bin as patch/playlists.c paints it: the Albums grid's cells (a mosaic cover, the playlist's name in 18 px, "N tracks" in
     15 px #AAAAAA) under a navbar with the "..." button; menu=True: the popup card open (row `pressed` held down) under the button. select: the set of marked
     playlists (indexes into PLAYLISTS) in select mode (the menu's Delete Playlists): the glass x, "N Selected", Select All, a mark on every cell or row (the list's rows
@@ -326,6 +326,10 @@ def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1, sel
         PS.glass(s, im, 'ah_nav_close', 7, 44)
         s.text(im, o['NAV_TITLE_X'], 25, s.strings.get('%d Selected', '%d Selected').replace('%d', str(len(select))), title_px(s.tree))
         sa = s.strings.get('Select All', 'Select All'); s.text(im, o['SG_SELALL_X'] + 104 - 8 - s.font.width(sa, 18), 25, sa, 18)
+    elif pick:   # the Add to Playlist picker (patch/playlists.c pick mode): Back and the title only, list mode
+        s.text(im, o['NAV_TITLE_X'], 25, s.strings.get('Add to Playlist', 'Add to Playlist'), title_px(s.tree))
+        import preview_songs as PS
+        PS.glass(s, im, 'ah_nav_back', 7, 44)   # the asset's btn_return: the glass disc
     else:
         s.text(im, 36, 25, s.shown(root.find('label_title')), title_px(s.tree))
         im.alpha_composite(s.img('return'), (14, 14)); im.alpha_composite(s.img('back_to_player'), (278, 13))
@@ -344,15 +348,29 @@ def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1, sel
         def lcut(text, px):
             while s.font.width(text, px) > o['LIST_TEXT_W'] - shift and len(text) > 1: text = text[:-2] + '…' if text.endswith('…') else text[:-1] + '…'
             return text
-        for r, (name, tracks, albums) in enumerate(PLAYLISTS):
+        rows = [(s.strings.get('New playlist', 'New playlist'), None, []), (s.strings.get('Favorites', 'Favorites'), None, [])] + PLAYLISTS if pick else PLAYLISTS   # the picker's first rows make a playlist and add to Favourites: no count
+        for r, (name, tracks, albums) in enumerate(rows):
             y = 50 + r * rh
             if y + rh > H_: break
             if r == row_pressed: d.rectangle((0, y, W_ - 1, y + rh - 2), fill=(0x33, 0x33, 0x33))
             d.rectangle((0, y + rh - 1, W_ - 1, y + rh - 1), fill=(0x22, 0x22, 0x22))
+            if pick and r < 2:   # New playlist (a white plus, pl_plus) and Favorites (a white star, pl_star) on a dark rounded square, the title alone and centred in the row
+                ax, ay, A = o['LIST_ART_X'], y + o['LIST_ART_Y'], o['LIST_ART']
+                d.rounded_rectangle((ax, ay, ax + A - 1, ay + A - 1), o['LIST_R'], fill=(0x2C, 0x2C, 0x2E))
+                if r == 0:
+                    d.rectangle((ax + A // 2 - 10, ay + A // 2 - 1, ax + A // 2 + 9, ay + A // 2), fill=(255, 255, 255)); d.rectangle((ax + A // 2 - 1, ay + A // 2 - 10, ax + A // 2, ay + A // 2 + 9), fill=(255, 255, 255))
+                else:   # the filled five-point star of pl_make_star: outer radius 10.5 px, inner 4.75, centre 0.5 px below the art box's, 24 px square centred in the box
+                    import math
+                    k, bx, by = 8, ax + (A - 24) // 2, ay + (A - 24) // 2
+                    pts = [((12 + (10.5 if i % 2 == 0 else 4.75) * math.sin(i * math.pi / 5)) * k, (12.5 - (10.5 if i % 2 == 0 else 4.75) * math.cos(i * math.pi / 5)) * k) for i in range(10)]
+                    big = Image.new('L', (24 * k, 24 * k), 0); ImageDraw.Draw(big).polygon(pts, fill=255)
+                    im.paste(Image.new('RGBA', (24, 24), (255, 255, 255, 255)), (bx, by), big.resize((24, 24), Image.LANCZOS))
+                s.text(im, o['LIST_TEXT_X'] + shift, y + (rh - o['LIST_TITLE_H']) // 2 + o['LIST_TITLE_H'] / 2, lcut(name, 21), 21)
+                continue
             im.alpha_composite(mosaic([ALBUMS[i][2] for i in albums if ALBUMS[i][2]], o['LIST_ART'], o['LIST_R']), (o['LIST_ART_X'] + shift, y + o['LIST_ART_Y']))
             s.text(im, o['LIST_TEXT_X'] + shift, y + o['LIST_TITLE_Y'] + o['LIST_TITLE_H'] / 2, lcut(name, 21), 21)
             count = s.strings.get('%d track' if tracks == 1 else '%d tracks', '%d tracks').replace('%d', str(tracks))
-            s.text(im, o['LIST_TEXT_X'] + shift, y + o['LIST_SUB_Y'] + o['LIST_SUB_H'] / 2, lcut(count, 18), 18, (0xAA, 0xAA, 0xAA))
+            if tracks is not None: s.text(im, o['LIST_TEXT_X'] + shift, y + o['LIST_SUB_Y'] + o['LIST_SUB_H'] / 2, lcut(count, 18), 18, (0xAA, 0xAA, 0xAA))
             if select is not None: mark(o['LIST_ART_X'] + (shift - 6 - o['SG_MARK']) // 2, y + (rh - o['SG_MARK']) // 2, r)
         if select is not None: bar()
         return im

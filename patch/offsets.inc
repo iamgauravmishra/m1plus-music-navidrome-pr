@@ -314,6 +314,54 @@
 #define AB_PLAY_TEXT_W 50      /* the English "Play all" at 18 px: where the payload cannot measure the translated text, the pill's pair is centred for this width */
 #define AB_COVER_MS 200
 #define REC_CUE_END 0x4c       /* the CUE track's end (loadSongList's twin of REC_CUE_START); the stock row shows a CUE track by its file name when either is set (@0x524c98) */
+/* Our Queue page (patch/queuepage.c, docs/modules/queue.md; ui/m1plus_queue.bin, tools/pod_ui.py build_queue_page, which reads this file and must equal it), in place of the stock
+ * queue drawer. Window rows (the list is the whole window, QP_WIN_H, the glass Back floats over it): the playing track's QP_COVER px cover (QP_COVER_R corners cut in
+ * the alpha) at (QP_COVER_X, QP_COVER_Y) with its title and artist from QP_TEXT_X, QP_TEXT_W wide (QP_TITLE_Y / QP_ARTIST_Y); the Shuffle and Repeat buttons (icon only, QP_PILL_W x SG_PILL_H
+ * flat, at QP_PILL_X0 / QP_PILL_X1, y QP_PILL_Y); the "Queue" line at QP_HEAD_Y (QP_HEAD_H high, x SG_HDR_X); then the rows from QP_TOP (the tracks after the playing one; in Shuffle the QP_SHUF_* placeholder instead, or the grey "No upcoming
+ * songs" line QP_EMPTY_Y down from it): LIST_ROW_H high as the Songs page's (the LIST_ART px cover, title and artist from LIST_TEXT_X to QP_TEXT_END, the hairline under the text). A mode
+ * button that is on is the light QP_PILL_ON (pressed QP_PILL_ON_DOWN) with the dark glyph (sg_*_on images), off the dark QP_PILL_OFF (pressed QP_PILL_OFF_DOWN) with the white one. QP_TICK_MS: the page's refresh timer (the track and the mode change under it). */
+#define QP_ASSET "m1plus_queue"
+#define QP_WINDOW "m1plus_queue_page" /* the root widget's name (tools/pod_pages.py QUEUE_PAGE) */
+#define QP_WIN_H 450
+#define QP_VIEW_W 320
+#define QP_COVER 64
+#define QP_COVER_X 10
+#define QP_COVER_Y 56
+#define QP_COVER_R 8
+#define QP_TEXT_X 86
+#define QP_TEXT_W 224
+#define QP_TITLE_Y 65
+#define QP_TITLE_H 24
+#define QP_ARTIST_Y 91
+#define QP_ARTIST_H 20
+#define QP_PILL_Y 136
+#define QP_PILL_W 145
+#define QP_PILL_X0 10
+#define QP_PILL_X1 165
+#define QP_HEAD_Y 192
+#define QP_HEAD_H 28
+#define QP_EMPTY_Y 8
+#define QP_EMPTY_H 28
+#define QP_SHUF_IMG 40 /* the placeholder of Shuffle mode (below the Queue line, centred; y from QP_TOP): the glyph, a 20 px white line, a 16 px grey line */
+#define QP_SHUF_IMG_Y 28
+#define QP_SHUF_TITLE_Y 82
+#define QP_SHUF_TITLE_H 26
+#define QP_SHUF_SUB_Y 112
+#define QP_SHUF_SUB_H 22
+#define QP_SHUF_W 300
+#define QP_TOP 226
+#define QP_BOTTOM 24
+#define QP_TEXT_END 298
+#define QP_ROW_W 310
+#define QP_TICK_MS 500
+#define QP_PILL_ON 0xffc8c8c8u /* #C8C8C8 with the dark glyph (Apple's lit button) */
+#define QP_PILL_ON_DOWN 0xffa8a8a8u
+#define QP_PILL_OFF 0xff2e2c2cu /* #2C2C2E with the white glyph */
+#define QP_PILL_OFF_DOWN 0xff3c3a3au /* #3A3A3C */
+#define QP_STREAM_A 2 /* mclGetPlayType values of a stream: the stock queue drawer refuses a row while offline (@0x47a014), our page is for local playback only */
+#define QP_STREAM_B 3
+#define QP_STREAM_C 0xf0
+#define QP_STREAM_D 0xf1
 
 /* ---------------------------------------------------------------------------
  * The Albums grid (patch/albums.c, docs/ui.md). GRID_COLS columns of GRID_COVER px square covers with GRID_GAP px

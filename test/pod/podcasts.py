@@ -1072,7 +1072,7 @@ def asset_tests(ctx):
     expect(tree.find('label_status').h >= 60, 'the hint has room for three lines')
     # the item
     item = next(i for i, r in enumerate(P.ITEMS) if r.label == 'Podcasts')
-    expect(item == 20 == len(P.ITEMS) - 2 and P.ITEMS[item].action == P.ACT_PODCASTS == 23 and P.ID_CHARS[item] == 'l' and item not in P.DEFAULT_MENU and P.PAGES[P.PAGES.index(P.PODCASTS) + 1:] == [P.TAPE, P.NPSET_PAGE, P.KEYBOARD, P.KEYBOARDS_PAGE, P.SORT_PAGE, P.THEME_PAGE, P.ABOUT_PAGE, P.SEARCH, P.ALBUM_PAGE, P.VINYL]
+    expect(item == 20 == len(P.ITEMS) - 2 and P.ITEMS[item].action == P.ACT_PODCASTS == 23 and P.ID_CHARS[item] == 'l' and item not in P.DEFAULT_MENU and P.PAGES[P.PAGES.index(P.PODCASTS) + 1:] == [P.TAPE, P.NPSET_PAGE, P.KEYBOARD, P.KEYBOARDS_PAGE, P.SORT_PAGE, P.THEME_PAGE, P.ABOUT_PAGE, P.SEARCH, P.ALBUM_PAGE, P.VINYL, P.FOLDERS, P.QUEUE_PAGE]
            and P.PODCASTS.kind == 'podcasts', 'Podcasts is item 20 (saved as "l"), before Search, hidden from the menu by default; its page follows the Pod (the Tape pages come after it)')
     expect(P.EXTRAS_GROUPS[1][1][-2] == 'Podcasts' and P.EXTRAS_GROUP_OF[item] == 1 and P.EXTRAS_GROUPS[0][1] == ('Now Playing', 'Shuffle', 'Pod')
            and P.parse_menu_full(b'123456l\n') == ([1, 2, 3, 4, 5, 6, 20], []) and P.format_menu([1, 2, 20]) == '12l\n', 'Extras lists it in the Library group, before Search; the saved list carries it as l')

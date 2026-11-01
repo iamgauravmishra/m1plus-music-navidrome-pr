@@ -290,8 +290,11 @@ void grid_list_paint(void *canvas, grid_t *g, void *st_title, void *st_sub, int 
         widget_prepare_text_style(pass ? st_sub : st_title, canvas);
         for (r = r0; r <= r1; ++r)
             grid_text(canvas, tile_of(ctx, r), pass, LIST_TEXT_X + shift,
-                      r * LIST_ROW_H - off + (pass ? LIST_SUB_Y : LIST_TITLE_Y), LIST_TEXT_W - shift,
-                      pass ? LIST_SUB_H : LIST_TITLE_H, view_h);
+                      r * LIST_ROW_H - off +
+                          (pass                   ? LIST_SUB_Y
+                           : tile_of(ctx, r)->mid ? (LIST_ROW_H - LIST_TITLE_H) / 2
+                                                  : LIST_TITLE_Y),
+                      LIST_TEXT_W - shift, pass ? LIST_SUB_H : LIST_TITLE_H, view_h);
     }
 }
 

@@ -29,7 +29,7 @@ and measure the font from the tree being built.
 |---|---|
 | Fonts and theme | [Fonts](modules/fonts.md), [theme format/palette](modules/theme.md) |
 | Navigation | [Menu](modules/menu.md), [settings](modules/settings.md), [navbars](modules/navbar.md) |
-| Library | [Lists](modules/lists.md), [rows](modules/rows.md), [Albums](modules/albums.md), [album page](modules/album-page.md), [search](modules/search.md) (preview: `tools/preview_search.py`) |
+| Library | [Lists](modules/lists.md), [rows](modules/rows.md), [Albums](modules/albums.md), [album page](modules/album-page.md), [queue](modules/queue.md) (preview: `tools/preview_queue.py`), [Folders](modules/folders.md), [search](modules/search.md) (preview: `tools/preview_search.py`) |
 | Playback | [Now Playing](modules/nowplaying.md), [lyrics page](modules/lyrics.md), [More sheet](modules/playmore.md), [mini player](modules/minibar.md) |
 | Home content | [Recently Played](modules/recent.md), [Daily Mix](modules/dailymix.md) |
 | Extras | [Playlists](modules/playlists.md), [Songs](modules/songs.md), [Podcasts](modules/podcasts.md), [Cassette Mode](modules/tape.md), [Vinyl Mode](modules/vinyl.md), [virtual iPod](modules/ipod.md), [iPod Cover Flow](modules/ipod-coverflow.md), [Keyboard](modules/keyboard.md) |

@@ -23,9 +23,8 @@ def artists_tests(ctx):
     expect(('window_open', 'm1plus_artists') in m.calls, 'the Artists row opens m1plus_artists')
     expect('stock_resume' not in m.names(), 'the Artists row no longer opens the stock page')
     P = pod_pages
-    expect([(r.label, r.arg) for r in page.rows[:9] if r.action == P.ACT_HOME] ==
-           [('Folders', P.HOME_FOLDER)],
-           'the other library rows still open their stock Home pages; only Albums (the grid), Artists, Genres (our Artists page), Songs and Playlists (the mosaic grid) changed')
+    expect([(r.label, r.arg) for r in page.rows[:9] if r.action == P.ACT_HOME] == [],
+           'no library row opens a stock Home page any more: Albums (the grid), Artists, Genres (our Artists page), Songs, Playlists (the mosaic grid) and Folders (our page) are ours')
 
     # 32. Tap an artist: Cover Flow on exactly that artist's albums (the stock loadAlbumList(0xf004)),
     #     titled with the artist, the All albums card last, the covers the library's cached files.

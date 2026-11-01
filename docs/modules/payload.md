@@ -68,7 +68,7 @@ function past its 3-word prologue (`lui $gp,0xa03e; ori $gp,$gp,0x3ed0; j <fn+12
    `(0x3c1c004c, 0x279c6cec, 0x0399e021)`, `$gp` checked, overwritten with `j m1plus_playing_init; nop`; resume `0x53d1f0`. Its only
    caller is the navigator's page-init dispatcher (`0x4d1b3c`, behind the cut `tools/reach.py` uses), so it runs only when
    the page is built. The hook runs the stock function to completion and returns its result, then (if it returned `RET_OK`
-   for a non-null window and the kill switch is absent) starts the page timer; any failure leaves the stock page.
+   for a non-null window and the kill switch is absent) starts the page timer and binds the queue button's click (our Queue page, `docs/modules/queue.md`; RET_OK leaves the stock drawer); any failure leaves the stock page.
 
 4. **`get_id3info`'s tag copy** `0x4dff4c` (stock's tag reader, `0x4dfd58`; `patch/pcmodel.c` `pc_id3_path`, `docs/modules/podcasts.md` "Tags"). A **call-site** word, not a prologue: the `jalr strcpy(info, path)` that every fresh
    parse reaches after `toolsGetMusicInfo` has filled `playsong_id3info`, becomes `jal pc_id3_path` (the pinned words: the prologue `(0x3c1c0052, 0x279c4178, 0x0399e021)`, `lw t9` GOT strcpy `0x8f99f324` @0x4dff40, `lw a0` GOT info `0x8f84aa64` @0x4dff44, `sw v0,0x400(s1)` `0xae220400` @0x4dff48,
