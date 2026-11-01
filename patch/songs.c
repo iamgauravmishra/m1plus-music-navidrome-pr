@@ -52,14 +52,10 @@
 #include "grid.h"
 #include "azlist.h"
 #include "i18n.h"
-#include "podcasts.h"
+#include "songops.h"
 
 extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
 extern int search_open(void); /* patch/search.c: our keyboard, then the results page; -1 when it did not open */
-extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
-extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one become List play */
-extern void pod_set_mode(int mode); /* patch/shuffle.c: the stock play mode */
-extern unsigned pod_rand(unsigned n); /* patch/shuffle.c: 0 .. n - 1 */
 
 #define ROW LIST_ROW_H
 #define SG_W 320 /* the content's width: the list_view's (the scroll_view clips at 310) */
@@ -540,19 +536,7 @@ static void sg_size(void) {
 }
 
 /* "%d Selected" in the player's language, the number where the translation has its %d. */
-static void sg_fmt(char *out, unsigned size, const char *f, int n) {
-    char digits[12];
-    unsigned o = 0, d = 0, i;
-    for (i = (unsigned)(n < 0 ? 0 : n); d == 0 || i; i /= 10) digits[d++] = (char)('0' + i % 10);
-    while (*f && o + 1 < size) {
-        if (f[0] == '%' && f[1] == 'd') {
-            while (d && o + 1 < size) out[o++] = digits[--d];
-            f += 2;
-        } else
-            out[o++] = *f++;
-    }
-    out[o] = 0;
-}
+static void sg_fmt(char *out, unsigned size, const char *f, int n) { pod_fmt(out, size, f, n); }
 
 static const char *sg_name_text(void) { return sg.key ? TR(sg.key) : sg.name; } /* a list's title */
 
@@ -690,71 +674,30 @@ static int sg_on_stale(const void *unused) {
 /* ---------------------------------------------------------------------------
  * Playing: the stock Songs row's handler (@0x5275a4: loadSongList of the shown list, then Now Playing at the row), as Shuffle Songs does it (patch/shuffle.c)
  */
-enum {
-    SG_KEEP,
-    SG_IN_ORDER,
-    SG_SHUFFLE
-}; /* the play mode a start sets: a row tap keeps it (as stock), Play plays in order, a list's Shuffle shuffles */
-
-/* Song `at` (-1: a random one) of the list and the list as the queue, in Now Playing. */
-static void sg_play_at(int at, int how) {
-    void *pick, *queue, *first;
-    unsigned n, idx = 0;
-    int found;
+/* Now Playing on the queue: the stock Songs row's tail (start_player copies the queue). */
+static void sg_open_player(void *queue, int idx, int cls) {
     struct {
         void *dq;
         int idx, cls, mode;
     } context;
+    context.dq = queue, context.idx = idx, context.cls = cls, context.mode = PLAY_MODE;
+    navigator_to_with_context("playing_page", &context);
+}
+
+/* Song `at` (-1: a random one) of the list and the list as the queue, in Now Playing (patch/songops.c). */
+static void sg_play_at(int at, int how) {
     if (!sg_valid()) {
         sg_load(1);
         return;
     }
-    if (at < 0 && sg.count) at = (int)pod_rand(sg.count);
-    if (at < 0 || at >= (int)sg.count) return;
-    pick = deque_at(sg.list, (unsigned)at);
-    queue = _create_deque("stSongInfo");
-    if (!queue) return;
-    deque_init(queue);
     sg_classinfo(); /* loadSongList runs the class query again and keeps classinfo for the memory playback */
-    found = loadSongList(queue, cc_str(pick, REC_NAME), I(pick, REC_CUE_START), sg.cls);
-    n = deque_size(queue);
-    if (n) { /* loadSongList finds a song by file name and CUE start: a duplicate name (01.flac) would always start at the first, so the row's own index wins */
-        if ((unsigned)at < n && !strcmp(cc_str(deque_at(queue, (unsigned)at), REC_PATH), cc_str(pick, REC_PATH)))
-            idx = (unsigned)at;
-        else if (found >= 0 && (unsigned)found < n)
-            idx = (unsigned)found;
-    }
-    if (how == SG_SHUFFLE &&
-        n) { /* a shuffle leaves the podcast episodes out (patch/pcmodel.c; the queue itself when there are none) */
-        int at_i = (int)idx;
-        queue = pc_strip(queue, &at_i);
-        idx = (unsigned)at_i;
-        n = queue ? deque_size(queue) : 0;
-        if (!queue) {
-            pod_toast(TR("Update Local Music first"));
-            return;
-        }
-    }
-    first = n ? deque_at(queue, idx) : (void *)0;
-    if (!first || access(cc_str(first, REC_PATH), F_OK)) {
-        deque_destroy(queue);
-        pod_toast(TR(n ? "Storage unavailable" : "Update Local Music first"));
-        return;
-    }
-    if (how == SG_IN_ORDER)
-        pod_set_in_order(); /* Play: the list in order, even after a Shuffle; a row tap keeps the mode, as stock */
-    else if (how == SG_SHUFFLE)
-        pod_set_mode(MODE_SHUFFLE);
-    *(int *)G_CLASS_TYPE = sg.cls; /* as allmusic_page_init leaves it */
-    context.dq = queue, context.idx = (int)idx, context.cls = sg.cls, context.mode = PLAY_MODE;
-    navigator_to_with_context("playing_page", &context); /* start_player copies the queue */
-    deque_destroy(queue);
+    so_play(sg.cls, sg.list, at, how, sg_open_player);
 }
 
 static int sg_on_play(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    if (sg.view && sg.count) sg_play_at(0, SG_IN_ORDER);
+    if (sg.view && sg.count) sg_play_at(0, SO_IN_ORDER);
     return RET_OK;
 }
 
@@ -767,7 +710,7 @@ static int sg_on_shuffle(void *ctx, void *e) {
     if (sg_lib())
         shuffle_play(0);
     else
-        sg_play_at(-1, SG_SHUFFLE);
+        sg_play_at(-1, SO_SHUFFLE);
     return RET_OK;
 }
 
@@ -836,80 +779,29 @@ static int sg_on_selall(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* The page's selection into the stock one: a vector of ints as long as the shown list, 1 for each selected row. */
-static int sg_stock_selection(void) {
-    unsigned i;
-    if (!sg_valid() || !*(void **)SEL_VEC) return 0;
-    select_recordinit((int)sg.count);
-    for (i = 0; i < sg.count; ++i)
-        if (sg_is_sel((int)i)) set_selectindex((int)i);
-    return 1;
-}
-
-static void sg_ask(const char *text, int kind,
-                   int *answer) { /* the stock confirm dialog: modal, the button pressed is the result */
-    struct {
-        int kind, ms;
-        char text[MSGINFO_TEXT], text2[MSGINFO_TEXT];
-    } info;
-    unsigned i;
-    memset(&info, 0, sizeof info);
-    info.kind = kind;
-    for (i = 0; text[i] && i < sizeof info.text - 1; ++i) info.text[i] = text[i];
-    *answer = navigator_to_with_context("dialog/confirminfo_dialog", &info);
-}
-
-/* Delete: the stock handler's sequence (@0x527f48): nothing selected is a message; the confirm dialog (0xa: the library only, 0x14: the files too); then
- * batch_delete_file on the shown list and the selection; the message. The stock handler leaves the list as it was (the page rebuilds on its next show): this page reads it again.
- * The class is the list's, as the stock handler passes g_class_type: batch_delete_file removes the songs from the library (the generic loop: the library, Hi-Res,
- * Recently Added), from myfav, oftenplay, recentplay or the playlist (its jump tables @0x74b7b0, @0x74b7d4; docs/modules/addresses.md), and the files when asked. */
+/* Delete and Add run the stock code on the stock selection vector (patch/songops.c), filled from the page's marks at that moment. */
 static int sg_on_delete(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    if (!sg.select) return RET_OK;
+    if (so_delete(sg.cls, sg.list, sg.count, sg.sel, sg.nsel, sg_valid())) {
+        sg_select(0);
+        sg_load(1);
+    }
+    return RET_OK;
+}
+
+/* Add to playlist: the stock playlist picker over this page; the title the picker may overwrite and the browsing class it sets are put back when this window comes to the front. */
+static int sg_on_add(void *ctx, void *e) {
     int r;
     (void)ctx;
     (void)e;
     if (!sg.select) return RET_OK;
-    if (!sg.nsel) {
-        pod_toast(TR("msg_delsongfailed"));
-        return RET_OK;
-    }
-    sg_ask(TR("msg_delsong"), CONFIRM_KIND_DELETE, &r);
-    if (r != CONFIRM_DELETE_LIBRARY && r != CONFIRM_DELETE_FILE) return RET_OK;
-    if (!sg_stock_selection()) {
+    r = so_add(sg.cls, sg.count, sg.sel, sg.nsel, sg_valid(), sg.title_save, &sg.picker);
+    if (r < 0) {
         sg_select(0);
         sg_load(1);
-        return RET_OK;
     }
-    batch_delete_file(sg.cls, sg.list, *(void **)SEL_VEC, 0, r == CONFIRM_DELETE_FILE);
-    pod_toast(TR("msg_delsongsuccess"));
-    sg_select(0);
-    sg_load(1);
-    return RET_OK;
-}
-
-/* Add to playlist: the stock Add button's path (@0x5280c0) to its playlist picker: playlist_page with the add context; tapping a playlist there adds the
- * selection (batch_add_file on *pdeq_showlist and the vector) and closes the picker. The title the picker may overwrite and the browsing class it sets are put back
- * when this window comes to the front. */
-static int sg_on_add(void *ctx, void *e) {
-    (void)ctx;
-    (void)e;
-    if (!sg.select) return RET_OK;
-    if (!sg.nsel) {
-        pod_toast(TR("msg_addfailed"));
-        return RET_OK;
-    }
-    if (!sg_stock_selection()) {
-        sg_select(0);
-        sg_load(1);
-        return RET_OK;
-    }
-    memcpy(sg.title_save, (void *)NAV_TITLE, sizeof sg.title_save);
-    *(int *)NAVIGATION_STATUS =
-        0; /* the picker's mode is a page that is not in multi-select (@0x53d300 tests navigation_status != 1) */
-    sg.picker = 1;
-    navigator_to_with_context(
-        "playlist_page",
-        (const void *)(long)(PICKER_ADD |
-                             sg.cls)); /* batch_add_file takes the class from it, as from the stock button */
     return RET_OK;
 }
 
@@ -984,7 +876,7 @@ static int sg_on_up(void *ctx, void *e) {
         if (sg.select)
             sg_toggle(a);
         else
-            sg_play_at(a, SG_KEEP);
+            sg_play_at(a, SO_KEEP);
     }
     return RET_OK;
 }

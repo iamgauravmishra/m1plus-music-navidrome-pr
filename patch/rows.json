@@ -146,18 +146,6 @@
    ]
   },
   {
-   "value": 160,
-   "purpose": "AH_ART: the cover thread renders /tmp/abp/<md5>1.jpg, the album page header's cover (the only reader of the 1.jpg files, albuminfo_page), at AH_ART (stock 100), so the 160 px header cover is drawn 1:1 (not 168, Cover Flow's cache size: that cache is a different file the page never reads, so there is nothing to share and 160 keeps the header 8 px shorter)",
-   "sites": [
-    [
-     "0x4dd670",
-     "0x24130064",
-     "parse_albumcovertask_thd",
-     "cover thread, flag-1 branch (the album page header's task; runs only per queued task)"
-    ]
-   ]
-  },
-  {
    "value": 7,
    "purpose": "TITLE_Y: the title box in the two-line text container (21 px font in a 24 px box: 7..31 of the 60 px body)",
    "sites": [
@@ -381,7 +369,7 @@
   },
   {
    "value": 44,
-   "purpose": "AH_NAV_H: the album page's navbar builder (albuminfo_page_init+0x214, 0x526a3c; ui/albuminfo_page.bin's navigationbar_view is 44 high): the buttons' h, held in s2 (v0 in the last) for every button_create of every branch",
+   "purpose": "NAV_H: the shared navbar builder (albuminfo_page_init+0x214, 0x526a3c: the stock album page, allmusic_page, Songs and the other song lists; their navigationbar_view is centred in the bar, tools/mod_ipodrows.py center_navbar): the buttons' h, held in s2 (v0 in the last) for every button_create of every branch",
    "sites": [
     [
      "0x526aec",
@@ -411,7 +399,7 @@
   },
   {
    "value": 11,
-   "purpose": "the navbar title label's y, centred in AH_NAV_H: (44 - 22) / 2 (stock 14 in the 50 px bar)",
+   "purpose": "the navbar title label's y, centred in NAV_H: (44 - 22) / 2 (stock 14 in the 50 px bar)",
    "sites": [
     [
      "0x526d20",
@@ -429,7 +417,7 @@
   },
   {
    "value": 12,
-   "purpose": "the select-mode 'All' label's y, centred in AH_NAV_H: (44 - 20) / 2 (stock 16)",
+   "purpose": "the select-mode 'All' label's y, centred in NAV_H: (44 - 20) / 2 (stock 16)",
    "sites": [
     [
      "0x526b68",
@@ -597,7 +585,7 @@
   },
   {
    "value": 3,
-   "purpose": "Back x 0 -> 3: navbar_btnreturn_style draws its icon (icon_at left, x_offset -6) in an h x h square at the button's left, so its centre is x + h / 2 - 6; with the builder's AH_NAV_H (44) high button, x (50 - 44) / 2 puts the chevron where the Pod navbar's 50 px Back has it (device shots: 11..19 -> 14..22)",
+   "purpose": "Back x 0 -> 3: navbar_btnreturn_style draws its icon (icon_at left, x_offset -6) in an h x h square at the button's left, so its centre is x + h / 2 - 6; with the builder's NAV_H (44) high button, x (50 - 44) / 2 puts the chevron where the Pod navbar's 50 px Back has it (device shots: 11..19 -> 14..22)",
    "sites": [
     [
      "0x526f00",
@@ -785,27 +773,7 @@
    ]
   ]
  },
- "text_calls": {
-  "purpose": "the album detail track row's label builder (0x524b50, once per row) ends in widget_set_text_utf8(label, \"N title\") (tk_snprintf \"%d %s\" into a stack buffer); jalr $t9 -> jal rows_track_number (patch/rows.c: the title without its number on the stock label, the number in a small grey label before it). The delay slot (move $a0, $s2 = the label), the buffer move and the format load are pinned below",
-  "sites": [
-   [
-    "0x524cf4",
-    "0x0320f809",
-    "album_page_init+0x334 (album detail track label builder)",
-    "its only caller is albumdeinfo_listitem_layout+0x10c (0x5264a0), per row while the album page builds"
-   ]
-  ]
- },
  "pinned": [
-  {
-   "purpose": "the text call's neighbours: the \"%d %s\" format load, move $a1, $s0 (the formatted buffer), lw $gp, lw $t9 widget_set_text_utf8 GOT slot, move $a0, $s2 (the label) in the delay slot",
-   "sites": [
-    ["0x524cdc", "0x24c60e8c", "album_page_init+0x334 (track label builder)", "addiu $a2, $a2, 0xe8c (\"%d %s\")"],
-    ["0x524ce8", "0x02002825", "album_page_init+0x334 (track label builder)", "move $a1, $s0"],
-    ["0x524cf0", "0x8f99a86c", "album_page_init+0x334 (track label builder)", "GOT slot of widget_set_text_utf8"],
-    ["0x524cf8", "0x02402025", "album_page_init+0x334 (track label builder)", "move $a0, $s2"]
-   ]
-  },
   {
    "purpose": "the icon call's neighbours: lw $t9 image_base_set_image GOT slot, move $a1, $s4 (the name), move $a0, $s3 (img_icon) in the delay slot",
    "sites": [

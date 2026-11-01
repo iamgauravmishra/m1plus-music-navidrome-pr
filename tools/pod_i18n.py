@@ -244,7 +244,7 @@ TEXT = dict([
        '¿Recrear todas las carátulas? Puede tardar unos minutos.', 'Ricreare tutte le copertine? Potrebbe richiedere alcuni minuti.',
        'สร้างปกทั้งหมดใหม่หรือไม่ อาจใช้เวลาสองสามนาที', 'Odbudować wszystkie okładki? Może to potrwać kilka minut.',
        'Пересоздать все обложки? Это может занять несколько минут.', 'Оновити всі обкладинки? Це може тривати кілька хвилин.'),
-    # the track count of the album page's header: the payload chooses the key by n == 1 and puts the number where %d is;
+    # the track count of the album page's meta line: the payload chooses the key by n == 1 and puts the number where %d is;
     # languages with more than two plural forms (pl, ru, uk) use a label that needs none ("Tracks: 12")
     _t('%d track', '%d 首歌曲', '%d 首歌曲', '%d 曲', '%d곡', '%d titre', '%d Titel',
        '%d canción', '%d brano', '%d เพลง', 'Utwory: %d', 'Песен: %d', 'Пісень: %d'),

@@ -5,7 +5,7 @@ usage: python3 -I test/demo_diff.py <stock demo> <built demo>
 
 Allowed differences: the zeroed .pdr section (space step), the program headers (the payload PT_LOAD),
 the 8-byte Home-icon hook at 0x533b80, the 8-byte boot guard hook at home_page_init 0x534cd4, the 8-byte
-album header hook at albuminfo_listitem0_layout 0x526264, the 8-byte Now Playing hook at playing_page_init
+Now Playing hook at playing_page_init
 0x53d1e4, the 8-byte More dialog hook at dialog_playmore_dialog_init 0x479cc4, the one word at get_id3info 0x4dff4c (the tag reader's strcpy call, now a jal into the payload), the one data word g_scroll_view_vtable + 0x98 (0x97a330, patch/scroll.c), the words listed in patch/rows.json, the four cover-size immediates of the lock screen (each must be
 stock | 264), the five A-B marker immediates of Now Playing (tools/mod_nowplaying.py marker_edits) and bytes
 appended after the stock file. Anything else is an error. Exit status 0 = clean.
@@ -17,12 +17,11 @@ sys.path.append(os.path.join(ROOT, 'tools'))
 import mod_nowplaying as mn
 HOOK = (0x533b80, 8)
 HOME_INIT = (0x534cd4, 8)   # home_page_init: the boot guard's hook (docs/architecture.md)
-ALBUMINFO = (0x526264, 8)   # albuminfo_listitem0_layout: the album header hook (patch/albuminfo.c)
 PLAYING = (0x53d1e4, 8)     # playing_page_init: the Now Playing hook (patch/nowplaying.c)
 PLAYMORE = (0x479cc4, 8)    # dialog_playmore_dialog_init: the More menu hook (patch/playmore.c)
 ID3_SITE = (0x4dff4c, 4)    # get_id3info: the jalr strcpy of the parsed path, now jal pc_id3_path (patch/pcmodel.c, docs/modules/podcasts.md "Tags")
-QUERY = (0x5ee77c, 0x5ee9ac)   # toolsQueryDbTable, toolsQueryDbTableAndSort: the PIC prologue's first two words, now `j` into the payload and a nop (patch/pcmodel.c, docs/modules/payload.md hook 7)
-SCAN_SITE = (0x5ea6a8, 4)  # the library scan's folder test: the jalr strcmp(name, "."), now jal pod_scan_dir (patch/common.c, docs/modules/payload.md hook 6)
+QUERY = (0x5ee77c, 0x5ee9ac)   # toolsQueryDbTable, toolsQueryDbTableAndSort: the PIC prologue's first two words, now `j` into the payload and a nop (patch/pcmodel.c, docs/modules/payload.md hook 6)
+SCAN_SITE = (0x5ea6a8, 4)  # the library scan's folder test: the jalr strcmp(name, "."), now jal pod_scan_dir (patch/common.c, docs/modules/payload.md hook 5)
 SCROLL_SLOT =(0x97a330, 4) # g_scroll_view_vtable.on_event_before_children: 0 in stock, the payload's m1plus_scroll_event (patch/scroll.c)
 COVER = 264                 # the cover size demo writes (tools/mod_lockscreen.py, Now Playing's art)
 COVER_IMM = (0x4df1dc, 0x4df1e0, 0x4df21c, 0x4df220)
@@ -71,7 +70,6 @@ def main():
     pdr = sections(s)['.pdr']; allow(pdr[0], pdr[1], 'pdr')
     allow(va_to_off(s, HOOK[0]), HOOK[1], 'hook')
     allow(va_to_off(s, HOME_INIT[0]), HOME_INIT[1], 'home-init hook')
-    allow(va_to_off(s, ALBUMINFO[0]), ALBUMINFO[1], 'album header hook')
     allow(va_to_off(s, PLAYING[0]), PLAYING[1], 'playing init hook')
     allow(va_to_off(s, PLAYMORE[0]), PLAYMORE[1], 'more dialog init hook')
     allow(va_to_off(s, ID3_SITE[0]), ID3_SITE[1], 'tag reader hook')
@@ -106,9 +104,6 @@ def main():
     print(f'hook {h:#x}: {s[o:o + 8].hex()} -> {m[o:o + 8].hex()}', 'changed' if s[o:o + 8] != m[o:o + 8] else 'unchanged')
     h = HOME_INIT[0]; o = va_to_off(s, h)
     print(f'home-init hook {h:#x}: {s[o:o + 8].hex()} -> {m[o:o + 8].hex()}', 'changed' if s[o:o + 8] != m[o:o + 8] else 'UNCHANGED')
-    ok = ok and s[o:o + 8] != m[o:o + 8] and s[o + 8:o + 16] == m[va_to_off(m, h) + 8:va_to_off(m, h) + 16]
-    h = ALBUMINFO[0]; o = va_to_off(s, h)
-    print(f'album header hook {h:#x}: {s[o:o + 8].hex()} -> {m[o:o + 8].hex()}', 'changed' if s[o:o + 8] != m[o:o + 8] else 'UNCHANGED')
     ok = ok and s[o:o + 8] != m[o:o + 8] and s[o + 8:o + 16] == m[va_to_off(m, h) + 8:va_to_off(m, h) + 16]
     h = PLAYING[0]; o = va_to_off(s, h)
     print(f'Now Playing hook {h:#x}: {s[o:o + 8].hex()} -> {m[o:o + 8].hex()}', 'changed' if s[o:o + 8] != m[o:o + 8] else 'UNCHANGED')

@@ -34,11 +34,11 @@ the artist (q2-pod's `ARTIST_ALBUMS`, `cf.scoped`). Everything below holds for a
   instruction by the harness; roughly 180,000 string compares) before, 0.5 M with the index (`test/pod/artists.py`,
   which also pins the keys of both paths against a model, with case duplicates, a non-ASCII name and a missing album).
   Below 24 albums building the index (a pass over the whole library) costs more than the scans it saves, hence the threshold.
-- **The album** `loadAlbumList(0xf004, artist)` (the artist goes into the browsing record, the artist's
-  albums and the stock All songs row into `*pdeq_showlist`), `albumcoverinfo_init`, `batchadd_albumcover_task(0, 0)`, then
+- **The album** (a centre album, not the All albums card) `loadAlbumList(0xf004, artist)` (the artist goes into the browsing record, the artist's
+  albums and the stock All songs row into `*pdeq_showlist`), `albumcoverinfo_init`, `batchadd_albumcover_task(0, 0)`, then our album page, else
   `navigator_to_with_context("albuminfo_page", 0xff01 | row << 16)`, the context the stock artist page's row
   handler builds (`0x523d94`); the page runs `loadAlbumdetailList(0xff01, row)` itself and leaves class
-  `0xff11` (the All albums card: every song of the artist). On every open, as in the main Cover Flow.
+  `0xff11`. On every open, as in the main Cover Flow. The **All albums card** opens our Songs page on every song of the artist (`songs_open_artist`, the Songs button's call; the stock page on the All songs row if it will not open).
 - **Songs button.** `btn_songs` (the left cap of the Songs | Now Playing capsule at 214) opens our Songs page on the artist's songs (`songs_open_artist`: `loadAlbumList(0xf004)` + `loadAlbumdetailList(0xff01, the All songs row)`, class `0xff11`; docs/modules/coverflow.md, songs.md).
 - **Ends.** The shelf does not wrap (ring slots past either end stay empty, drag clamped, fling and
   side taps stop at an end); the main page still wraps.

@@ -301,7 +301,7 @@ int shuffle_play(int kind) {
     return 0;
 }
 
-/* The album page's and the Songs page's Play and Shuffle buttons (patch/albuminfo.c, patch/songs.c)
+/* The album page's and the Songs page's Play and Shuffle buttons (patch/albumpage.c, patch/songs.c)
  * use the same generator, message box and play-mode setters as the rows above: Shuffle sets stock
  * Shuffle, Play the in-order mode, so Now Playing plays what was asked for. */
 unsigned pod_rand(unsigned n) { return rand_below(n); }

@@ -697,15 +697,6 @@ def entry_tests(ctx):
     m.click('btn_search', count=40000000)
     expect(('navigator_to_with_context', 'search_page', 0) in m.calls and ('window_open', 'm1plus_search') not in m.calls, 'a Search page already under: the stock page (one at a time)')
     m.setword(PSYMS['se'], 0)
-    # the album page is untouched by Search: its header hook binds nothing on the bar and adds no timer but the tint poll
-    alb = sibling('albuminfo')
-    am = alb.AlbumMachine()
-    band = am.new_widget('view', 0, 0, 0, 320, 50)
-    am.wname[band] = 'navigationbar_view'; am.widgets['navigationbar_view'] = band
-    am.header(tracks=3)
-    expect(not am.bound.get(band) and all(c[1] == PSYMS['ah_tick'] for c in am.calls if c[0] == 'timer_add')
-           and not any(k in PSYMS for k in ('ah_on_search', 'ah_hide_search', 'ah_on_bar_paint')),
-           'the album page: nothing of Search (no button, no bar handler, no timer)')
 
 
 def return_tests(ctx):

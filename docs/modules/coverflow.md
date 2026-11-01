@@ -109,13 +109,13 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
   album (`cfpos.value`, or `slide_menu_set_value` in the flat fallback), so an artist's page opens on its first album, a
   one-album shelf has its captions on open, and the main page keeps its last-album memory
   (`/mnt/mmc/.m1plus/covers/album`, including album 0).
-- **The album.** Tapping the centre cover opens the stock `albuminfo_page` (section 8), as a stock
+- **The album.** Tapping the centre cover opens our album page (`docs/modules/album-page.md`), else the plain stock `albuminfo_page`, as a stock
   Albums row does (`cc_open_album`, `patch/covercache.c`, the same call the Albums grid makes): `loadAlbumList(0xf003, 0)` puts the stock album list back into `*pdeq_showlist` (the
   page's own copy was made from the same query, so the row is the same), `albumcoverinfo_init` rebuilds
-  the cover-task list from it, `batchadd_albumcover_task(0, 0)` releases the cover thread (see section 8, The cover), and `navigator_to_with_context("albuminfo_page", 0xf003 | row << 16)`
-  opens the page. The queries repeat on every tap (the page may have been left through Now Playing, and
+  the cover-task list from it, `batchadd_albumcover_task(0, 0)` releases the cover thread (see album-page.md, The cover thread's state), and `navigator_to_with_context("albuminfo_page", 0xf003 | row << 16)`
+  opens the stock page (this fallback runs only when ours does not open). The queries repeat on every tap (the page may have been left through Now Playing, and
   anything may have reused the list or the browsing record). Back from the album page returns to the
-  covers; the page keeps no track list, header or play code of its own.
+  covers. The artist page's All albums card is not an album: it opens our Songs page on all the artist's songs (`songs_open_artist`, as the Songs button does; a composer's card, or a Songs page that will not open, falls back to the stock page on the All songs row).
 - **Cache.** (The cache has one size, 168; the Pod's cover pane needs 264 and gets it without a second tier of files: from demo's own full-resolution file for the playing track and, for its random rotation, from one transient extraction into `/tmp/m1plus-pane.jpg` by this builder's worker (`cc_build_add_file`: no cache file, no marker), docs/modules/ipod.md "The cover pane".) The page keeps its own `/mnt/mmc/.m1plus/covers/<key>-168.jpg` thumbnails (the size is in the
   name; key = FNV-1a of artist then album, never 0; the key, path, decode and reduce helpers are in
   `patch/covercache.c`, which the Albums grid reads the same files through). The stock cache `/mnt/mmc/.downpic` is keyed by an

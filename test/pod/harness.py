@@ -199,6 +199,7 @@ class Machine:
         self.images = {}            # url -> (w, h, RGBA bytes) widget_load_image decodes when it succeeds
         self.parent = {}            # widget handle -> parent handle
         self.hooked = set()
+        self.real_album = False     # patch/albumpage.c album_open: trapped (it returns -1, the stock page opens) unless a test runs it
         self.handlers = Traps(self)
         self.handlers.update({a: n for n, (_, _, a) in pod.FUNCTIONS.items()})
         for name in pod.LIBC:       # the payload's libc stubs, trapped at their entry
@@ -206,6 +207,7 @@ class Machine:
                 self.handlers[PSYMS[f'pod_lib_{name}']] = name
         self.handlers.pop(pod.FUNCTIONS['widget_to_local'][2])   # stock's own, run for real: the payload and widget_find_target both call it
         self.handlers[HOME_CLICK_RESUME] = 'stock_resume'
+        if 'album_open' in PSYMS: self.handlers[PSYMS['album_open']] = 'album_open'
         # Cover Flow's shelf commits and moves (noinline in patch/coverflow.c): ('set_value', album), ('set_offset', off)
         self.watch = Traps(self)
         self.watch.update({PSYMS[n]: n for n in ('set_value', 'set_offset') if n in PSYMS})
@@ -336,6 +338,9 @@ class Machine:
         elif name == 'access':
             p = self.read_cstr(a0); ret = 0 if p in self.present or p in self.fs else -1
             self.calls.append(('access', p))
+        elif name == 'album_open':   # patch/albumpage.c, trapped: the callers' tests (the Albums grid, Cover Flow, Artists, Recently Played) see the stock album page open; test/pod/albumpage.py runs it for real (real_album)
+            if self.real_album: return
+            self.calls.append(('album_open', a0, self.word(a1 + O['REC_ID']))); ret = -1
         elif name == 'window_open':
             nm = self.read_cstr(a0); self.calls.append(('window_open', nm)); ret = self.windows.get(nm, self.window)
         elif name == 'widget_get_window':   # the page window of a widget (a test sets page_window; none: the widget is in no window)

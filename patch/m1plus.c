@@ -15,8 +15,6 @@
  * A second hook, home_page_init, does its work in patch/home.c behind a crash marker (the boot
  * guard, docs/architecture.md); m1plus.c only has the two launcher rows and the entry-page open
  * used by the Home timer (the menu's own arrangement, which items show and in which order, is patch/menu.c).
- * A third, albuminfo_listitem0_layout (patch/albuminfo.c), restyles the
- * stock album page's header while that page builds its list.
  */
 #include "offsets.inc"
 

@@ -15,8 +15,7 @@
  * albums) or from a row of the M1+ Music Artists list (one artist's
  * albums, coverflow_artist: q2-pod's ARTIST_ALBUMS scope, with the stock "All songs" row as its All
  * albums card), and everything here is reached only from that page's own widgets, timers and its
- * one worker thread. A tap on the centre cover opens the stock album page (open_album; the page
- * itself is restyled by patch/albuminfo.c).
+ * one worker thread. A tap on the centre cover opens our album page (open_album; the stock page when it does not open).
  *
  * The shelf is the 168 px one (offsets.inc: 276 px frame, DRAG_PX 108); the cache files carry
  * their size (<key>-168.jpg). The captions are hscroll_labels in the asset (tools/pod_ui.py). With
@@ -1063,23 +1062,25 @@ static void to_covers(void) {
 }
 
 /* ---------------------------------------------------------------------------
- * The album view is the stock albuminfo_page (restyled by patch/albuminfo.c and the assets, one view
- * everywhere). A tap on the centre cover does what a stock Albums row does (cc_open_album, patch/covercache.c,
- * which the Albums grid shares): the stock list goes back into *pdeq_showlist, the cover-task list is rebuilt
- * and the cover thread released, and the page opens on the row. Both queries repeat on every open.
+ * The album view is our album page (patch/albumpage.c), or the plain stock albuminfo_page when it does not open. A tap on the
+ * centre cover does what a stock Albums row does (cc_open_album, patch/covercache.c, which the Albums grid shares): the stock
+ * list goes back into *pdeq_showlist, the cover-task list is rebuilt and the cover thread released, and the page opens on
+ * the row. Both queries repeat on every open. An artist's All albums card is not an album: it opens our Songs page on
+ * all the artist's songs, as the Songs button does.
  */
 static void open_album(int index) {
     void *r = album_at((unsigned)index);
     if (!r) return;
     snap_stop();
     cf.album = index;
+    if (is_card(r) && has_songs() && songs_open_artist(deque_at(cf.artist_row, 0)) != -1) return;
     if (!cf.scoped) cf.saved_album = cc_album_key(r);
     cc_open_album(cf.scoped ? cf.artist_row : (void *)0, cf.scope,
                   (int)(cf.order ? cf.order[index] : (unsigned)index)); /* the stock row */
 }
 
-/* The artist page's Songs button: our Songs page on all the artist's songs, so Back returns here. A page that did not open falls back to what the All albums
- * card does (the stock album page on the All songs row, the last of the stock list). */
+/* The artist page's Songs button: our Songs page on all the artist's songs, so Back returns here. A page that did not open falls back to the stock page on the
+ * All songs row, the last of the stock list (what the All albums card does when ours does not open). */
 static int on_songs(void *ctx, void *e) {
     (void)ctx;
     (void)e;

@@ -897,6 +897,94 @@ def build_songs_page(page):
     return root
 
 
+# The album page (patch/albumpage.c, docs/modules/album-page.md; the numbers are patch/offsets.inc AH_* and AB_*): the stock album page's design with our own glass controls. The list is the
+# whole 450 px window (list_view > scroll_view + the mobile scroll bar, the library lists' structure) holding one content view, view_grid, that paints the cover, the tracks and
+# their press fill itself and holds the header's widgets: the title, the artist and the "year . N tracks" line (centred hscroll_labels that scroll a long text), the Shuffle disc (a
+# button, its picture the disc), the Play all pill (a button, its picture the pill) with its glyph (an image) and its text (a label) over it, which the payload centres as a pair.
+# The window's colour is the cover's tone (the payload sets it); the gradient image img_ah_tint, first in the window, darkens it from the top (the stock page's), and the list over it is
+# transparent. The glass controls are the window's last child, so they paint and take touches over the rows: Back, Select | Now Playing as one capsule (the genre songs list's), and
+# in select mode the all / none toggle, Add, Delete and Cancel in the places the stock builder gave them. Three hidden labels carry the rows' text styles (the number, the title, the
+# playing row's gold title); label_title (hidden) is the page's title for the i18n and asset tests.
+AB_STYLES = (('label_row_num', 'right', '#AAAAAA'), ('label_row_title', 'left', '#FFFFFF'), ('label_row_gold', 'left', '#FE7E40'))   # the stock rows' 19 px number (the grey line's colour) and title (white; gold: srlabel_item_gold20_style)
+AB_ROW_PX = 19
+AB_META = (('ab_title', 'AH_TITLE_Y', 'AH_TITLE_H', 22, '#FFFFFF'), ('ab_artist', 'AH_ARTIST_Y', 'AH_ARTIST_H', 18, '#AAAAAA'), ('ab_meta', 'AH_META_Y', 'AH_META_H', 15, '#9C9C9C'))   # srlabel_ah{title,artist,meta}_style
+AB_PLAY_TEXT_W = OFFSETS['AB_PLAY_TEXT_W']   # the English "Play all" at 18 px, where the payload cannot measure it; the payload centres the pair for the language
+
+
+def ab_nav_button(name, x, w, rest, down=None, hide=False):
+    b = Widget('button', x, 0, w, NAVBAR_H, [('name', name), ('enable', 'true'), ('style', 'img_btn_style'),
+                                             ('style:pressed:icon', down or rest), ('style:normal:icon', rest), ('style:over:icon', rest)])
+    return hidden(b) if hide else b
+
+
+def album_navbar(page):
+    """The glass controls of the album page, the window's last children: Back, the capsule Select | Now Playing (Select the left cap, Now Playing the right: the genre songs list's),
+    and the select mode's toggle, Add, Delete and Cancel (hidden until select mode). They are the window's own children, not a bar view's: a view over the list would take every touch
+    in its band (this AWTK's hit test never descends into an insensitive container), and a drag that starts between the discs must scroll the list."""
+    o = OFFSETS
+    title = hidden(Widget('label', NAV_TITLE_X, 14, NAV_VIEW_X - NAV_TITLE_X, 22, [('name', 'label_title'), ('style', 'navbar_label_white'), pod_i18n.text_prop(page.title)]))   # never shown: the page has no title
+    return [title,
+            ab_nav_button('btn_return', NAV_BACK_X, NAV_BACK_W, 'ah_nav_back', 'ah_nav_back_down'),
+            ab_nav_button('btn_select', NAV_VIEW_X, NAV_VIEW_W, 'pod_nav_selectl', 'pod_nav_selectl_down'),
+            ab_nav_button('btn_backtoplayer', NAV_PLAY_X, NAV_PLAY_W, 'ah_nav_play', 'ah_nav_play_down'),
+            ab_nav_button('btn_selall', o['AB_SELALL_X'], o['AB_SELALL_W'], 'ah_nav_unsel', 'ah_nav_unsel_down', hide=True),
+            ab_nav_button('sg_add', o['AB_ADD_X'], o['AB_BTN_W'], 'ah_nav_add', 'ah_nav_add_down', hide=True),
+            ab_nav_button('sg_del', o['AB_DEL_X'], o['AB_BTN_W'], 'ah_nav_del', 'ah_nav_del_down', hide=True),
+            ab_nav_button('btn_cancel', o['AB_CANCEL_X'], o['AB_BTN_W'], 'ah_nav_cancel', 'ah_nav_cancel_down', hide=True)]
+
+
+def build_album_page(page):
+    o = OFFSETS
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    root.children.append(Widget('image', 0, 0, SCREEN_W, CLIENT_H, [('name', PS_TINT_NAME), ('image', 'ah_tint'), ('draw_type', 'default'), ('clickable', 'false'), ('sensitive', 'false')]))   # first: under everything
+    lv = stock_list([], True, top=0)
+    lv.set('name', 'songs_listview')
+    sv = lv.children[0]
+    sv.set('name', 'songs_scrollview')
+    for w in (lv, sv):
+        for st in ('normal', 'disable', 'focused'): w.set(f'style:{st}:bg_color', '#00000000')   # the window's colour (the cover's tone) and the gradient show through
+    grid = Widget('view', 0, 0, SCREEN_W, o['AH_WIN_H'], [('name', 'view_grid')])   # the content: the payload sizes it to the header and the tracks
+    styled(grid, ('normal',), 'bg_color', '#00000000')
+    kids = []
+    for name, y, h, px, colour in AB_META:
+        lab = Widget('hscroll_label', o['AH_TEXT_X'], o[y], o['AH_TEXT_W'], o[h], [('name', name), ('text', ''), ('sensitive', 'false'), ('yoyo', 'true'), ('loop', 'true'), ('lull', CAPTION_LULL), ('ellipses', 'true')])
+        for st in ('normal', 'disable', 'focused'):
+            styled(lab, (st,), 'font_size', str(px))
+            styled(lab, (st,), 'text_color', colour)
+            styled(lab, (st,), 'text_align_h', 'center')
+        kids.append(lab)
+    kids.append(ab_button('btn_shuffle', o['AH_SHUF_X'], o['AH_SHUF_W'], 'ah_shuffle', 'ah_shuffle_down'))
+    kids.append(ab_button('btn_play', o['AH_PLAY_X'], o['AH_PLAY_W'], 'ah_pill', 'ah_pill_down'))
+    pair = o['AH_PILL_GLYPH'] + o['AH_PILL_GAP'] + AB_PLAY_TEXT_W
+    gx = o['AH_PLAY_X'] + (o['AH_PLAY_W'] - pair) // 2
+    kids.append(Widget('image', gx, o['AH_BTN_Y'] + (o['AH_BTN_H'] - o['AH_PILL_GLYPH']) // 2, o['AH_PILL_GLYPH'], o['AH_PILL_GLYPH'], [('name', 'ab_glyph'), ('image', 'ah_play'), ('draw_type', 'center'), ('sensitive', 'false')]))
+    grid.children = kids
+    sv.children.append(grid)
+    root.children.append(lv)
+    play_text = hidden(Widget('label', 0, 0, 10, 10, [('name', 'ab_play_text'), pod_i18n.text_prop('Play all')]))   # the pill's text style and its translated text; the payload paints the text over the pill
+    for st in ('normal', 'pressed', 'disable', 'focused'):
+        styled(play_text, (st,), 'font_size', '18')
+        styled(play_text, (st,), 'text_color', '#141414')
+        styled(play_text, (st,), 'text_align_h', 'left')
+        styled(play_text, (st,), 'text_align_v', 'middle')
+        styled(play_text, (st,), 'bg_color', '#FFFFFF')   # the dark text of the white pill: the contrast scan reads the label's own background
+    root.children.append(play_text)
+    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, '#FFFFFF')))
+    for name, align, colour in AB_STYLES:
+        lab = hidden(label(name, 0, 0, 10, 10, '', AB_ROW_PX, colour, align))   # text styles only (widget_prepare_text_style); never shown
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+        root.children.append(lab)
+    root.children.extend(album_navbar(page))   # last: the glass controls paint and take touches over the list
+    return root
+
+
+def ab_button(name, x, w, rest, down):
+    o = OFFSETS
+    return Widget('button', x, o['AH_BTN_Y'], w, o['AH_BTN_H'], [('name', name), ('enable', 'true'), ('style', 'img_btn_style'),
+                                                                 ('style:pressed:icon', down), ('style:normal:icon', rest), ('style:over:icon', rest)])
+
+
 # The Daily Mix page (patch/dailymix.c dp_*, docs/modules/dailymix.md "The page"; tools/pod_dailymix.py DP_* and patch/offsets.inc carry the numbers): no navbar. The list is the
 # whole 450 px window (list_view > scroll_view + the mobile scroll bar, the library lists' structure) holding one content view, view_dm, that paints the art, the texts and the
 # songs itself (as the Albums page's view_grid) and holds the three widgets that need images or touches: the Shuffle disc, the white Play pill and the pill's dark play glyph
@@ -1402,6 +1490,8 @@ def build_page(page):
         return build_songs_page(page)
     if page.kind == 'search':
         return build_search_page(page)
+    if page.kind == 'album':
+        return build_album_page(page)
     if page.kind == 'dailymix':
         return build_dailymix_page(page)
     if page.kind == 'ipod':

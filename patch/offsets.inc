@@ -222,30 +222,24 @@
 #define ROW_ART_INSET 4         /* the cover's left inset on x=0 rows */
 #define ROW_SEPARATOR 4         /* list_item_style draws a 4 px separator under each list_item row */
 #define ROW_MARKER_IMAGE "np_row_playing"   /* the playing row's marker: 40 x 20, a 20 px wave at its right end (tools/mod_icons.py NP) */
-#define ROW_NUM_W 22           /* the album tracks' number column (rows_track_number): every digit is 10 px at 19 px by AWTK's metrics, "99" = 20 */
+#define ROW_NUM_W 22           /* the album page's number column (patch/albumpage.c): every digit is 10 px at 19 px by AWTK's metrics, "99" = 20 */
 #define ROW_NUM_W3 32          /* the column of a 3-digit number (a 100+ track album): "999" = 30 */
-#define ROW_NUM_STYLE "srlabel_tracknum_style"   /* label style of the number: #AAAAAA, 19 px, right aligned (tools/mod_ipodrows.py) */
 #define ROW_MAX_CHILDREN 16   /* the row fit leaves anything with more children to the stock layout */
 
 
 /* ---------------------------------------------------------------------------
- * The album view (patch/albuminfo.c, docs/ui.md): the stock albuminfo_page's header item, rebuilt
- * in place by the hook on albuminfo_listitem0_layout. REC_YEAR: songtable's column 9 (`year`),
- * which the row callback @0x4e908c atoi()s into the stack record at +0x30; the insert (@0x5edfc4)
- * writes it from taglib_tag_year. There is no duration column (time / time_end are CUE offsets, 0
- * for ordinary files, @0x5edb88), so the page shows none. CLASSINFO_ALL_SONGS: the byte
- * loadAlbumdetailList sets in the browsing record for the stock All songs row (0xff01, @0x4eebec).
- * Geometry in the header list_item (310 wide, the 320 px list less its scroll bar; the item starts at
- * screen x 0, so item x is screen x and everything is centred on x AH_MID = 160, not on the item's 155):
- * the cover AH_ART square, centred (the cover thread renders /tmp/abp/<md5>1.jpg at AH_ART, rows.json),
- * its four AH_CORNER px corners masked by images; the title, artist and "year . N tracks" lines centred in
- * AH_TEXT_W; the round Shuffle (AH_SHUF_W) and the Play all pill (AH_PLAY_W), AH_GAP apart, centred as a
- * pair; the stock track rows follow at AH_HDR_H. The list starts at the window's top (the floating controls, AH_NAV_*, sit
- * over it), so the header's first AH_NAV_TOP rows are padding: the cover's AH_ART_Y is AH_NAV_TOP + 6.
+ * The album page's numbers (patch/albumpage.c, docs/modules/album-page.md; ui/m1plus_album.bin and the Podcasts Show level read them).
+ * REC_YEAR: songtable's column 9 (`year`), which the row callback @0x4e908c atoi()s into the stack record at +0x30; the insert
+ * (@0x5edfc4) writes it from taglib_tag_year. There is no duration column (time / time_end are CUE offsets, 0 for ordinary files,
+ * @0x5edb88), so the page shows none. CLASSINFO_ALL_SONGS: the byte loadAlbumdetailList sets in the browsing record for the stock
+ * All songs row (0xff01, @0x4eebec).
+ * Geometry in the window (320 wide, the lines centred on x 160): the cover AH_ART square at (AH_ART_X, AH_ART_Y) with its four AH_CORNER px
+ * corners cut; the title, artist and "year . N tracks" lines centred in AH_TEXT_W; the round Shuffle (AH_SHUF_W) and the Play all
+ * pill (AH_PLAY_W) centred as a pair; the track rows follow at AH_HDR_H. The list starts at the window's top (the glass controls
+ * sit over it), so the header's first rows are padding.
  */
 #define REC_YEAR 0x30
 #define CLASSINFO_ALL_SONGS 8
-#define AH_MID 160
 #define AH_ART 160
 #define AH_ART_X 80
 #define AH_ART_Y 50
@@ -265,47 +259,26 @@
 #define AH_SHUF_X 42
 #define AH_SHUF_W 44
 #define AH_DISC 38              /* the Shuffle disc as drawn (ah_shuffle*.png), centred in its AH_SHUF_W x AH_BTN_H touch rectangle */
-#define AH_GAP 12               /* drawn gap between the disc and the pill */
-#define AH_PLAY_X 95            /* AH_SHUF_X + (AH_SHUF_W + AH_DISC) / 2 + AH_GAP: the pill's touch rectangle starts where it is drawn */
+#define AH_PLAY_X 95            /* AH_SHUF_X + (AH_SHUF_W + AH_DISC) / 2 + 12 (the drawn gap): the pill's touch rectangle starts where it is drawn */
 #define AH_PLAY_W 180
-#define AH_PILL_H 40            /* the pill as drawn (ah_pill*.png, the style's bg_image), centred in its AH_BTN_H touch rectangle */
-/* The pill's glyph and text (tools/mod_ipodrows.py PLAY_*, docs/ui.md): AWTK centres the AH_PILL_GLYPH px glyph in a
- * square AH_BTN_H wide at margin_left, and draws the text left aligned at the square's end plus spacer. The hook sets
- * margin_left (per state, inline) so that glyph + AH_PILL_GAP + text is centred in the pill; the style carries
- * AH_PILL_MARGIN (the margin for an English text) for when the text cannot be measured. */
+#define AH_PILL_H 40            /* the pill as drawn (ah_pill*.png), centred in its AH_BTN_H touch rectangle */
+/* The pill's glyph and text: the AH_PILL_GLYPH px glyph, AH_PILL_GAP px, then the measured text, centred as a pair in the pill. */
 #define AH_PILL_GLYPH 16
 #define AH_PILL_GAP 8
-#define AH_PILL_MARGIN 37
 #define AH_HDR_H 344
-/* Play all and Shuffle open Now Playing like a track tap (ah_open_player): the widget name field the stock pop loop
- * compares (@0x525920 lw a0, 0x10(top)), at most AH_POP_MAX pages popped, and the stock Play all handler the hook takes
- * off the button (bound @0x526368 with the item as its context) */
+/* Now Playing opens like a track tap (pod_open_player, patch/songops.c): the widget name field the stock pop loop compares
+ * (@0x525920 lw a0, 0x10(top)), and at most POP_MAX pages popped. */
 #define WIDGET_NAME 0x10
-#define AH_POP_MAX 16
-#define AH_STOCK_PLAY 0x525d48u
-/* The album page's cover tint (patch/albuminfo.c, tools/mod_icons.py ah_tint): the window colour is the cover's tone (pod_tone,
+#define POP_MAX 16
+/* The cover tint (the album page, the Podcasts Show level; tools/mod_icons.py ah_tint): the window colour is the cover's tone (pod_tone,
  * the constants of Now Playing's) under a black gradient image, ah_tint.png (a window sized child of the page window, first,
  * insensitive), whose alpha runs from AH_TINT_A_TOP on window row 0 to AH_TINT_A_BOT on row AH_TINT_ROWS - 1 (the end of
- * the header: AH_HDR_H) and stays there below (200: the deep tint, 78 % dark), so the transparent track rows and the scroll bar strip show a deep version of the cover colour.
- * Only a real cover tints (the page's image is a file:// url): the placeholder disc and the All albums card stay black. The
- * cover's corners are painted in the colour behind them from its after-paint (the cover is AH_ART_Y below the header's top,
- * the header scrolls: window row = AH_ART_Y - yoffset + cover row). AH_TICK_MS: the poll that waits for the cover
- * thread's file; it works only while the page is in front and the screen is lit, and gives up (the page stays black) after
- * AH_TICK_MAX such ticks (30 s) or AH_DECODE_MAX cover files that do not decode.
- * The floating controls (docs/modules/album-page.md): the stock navbar view is a band over the top of the page, AH_NAV_W x AH_NAV_BAND_H at the
- * window's origin, last in the window (above the list, which starts at the window's top and is AH_WIN_H high); the stock builders'
- * buttons (main's slots, docs/modules/navbar.md; AH_NAV_H high in 0x526a3c) draw glass discs through the page theme. The header's first
- * AH_NAV_TOP rows are padding, so at rest the cover stays where it was, at row AH_ART_Y. */
-#define AH_NAV_H 44             /* the shared builder's buttons (rows.json) */
-#define AH_NAV_BAND_H 50        /* the band: tall enough for the page's own builder's 50 px buttons */
-#define AH_NAV_TOP 44
+ * the header: AH_HDR_H) and stays there below (200: the deep tint, 78 % dark), so the transparent track rows and the scroll bar
+ * strip show a deep version of the cover colour. AH_WIN_H: the window's height. */
 #define AH_WIN_H 450
 #define AH_TINT_A_TOP 64
 #define AH_TINT_A_BOT 200
 #define AH_TINT_ROWS 344        /* AH_HDR_H: the ramp ends with the header */
-#define AH_TICK_MS 300
-#define AH_TICK_MAX 100
-#define AH_DECODE_MAX 3
 /* The tone cache (patch/common.c): entries of {key, tone, stamp}, 12 bytes each. The album page names its album as the stock
  * header does: classinfo + 0xd the title, the artist at +0x10d (+0x20d when g_class_type is 0xff14, @0x524b00). */
 #define TONE_CACHE_N 64
@@ -313,6 +286,34 @@
 #define CLASSINFO_ARTIST 0x10d
 #define CLASSINFO_ARTIST_14 0x20d
 #define CLASS_14 0xff14
+/* Our album page (patch/albumpage.c, docs/modules/album-page.md; ui/m1plus_album.bin, tools/pod_ui.py build_album_page, which reads this file and must equal it): the
+ * header numbers (AH_*: the cover at (AH_ART_X, AH_ART_Y) with AH_CORNER px corners, the lines at AH_TITLE_Y / AH_ARTIST_Y / AH_META_Y, the Shuffle disc and the Play all pill at
+ * AH_BTN_Y, the rows from AH_HDR_H) in a list that is the whole window (AH_WIN_H, the glass controls float over it). A row is LIST_ROW_H high: the track's number (right aligned in
+ * ROW_NUM_W, ROW_NUM_W3 from 100) from x AB_NUM_X, the title AB_NUM_GAP after it to AB_TEXT_END, both in a AB_TEXT_H high line AB_TEXT_Y down the row; the press fill and the 1 px
+ * hairline are translucent white over the tint (AB_PRESS, AB_HAIR) across AB_ROW_W (the list less its scroll bar). The select mode's glass buttons (the all / none toggle at
+ * AB_SELALL_X, AB_SELALL_W wide; Add, Delete, Cancel AB_BTN_W wide) take the places the stock builder gave them. The Play all pill's text label is AB_TEXT_SLACK wider than its text.
+ * AB_COVER_MS: the poll of the cache worker that makes a missing cover. AB_ASSET: the window resource. */
+#define AB_ASSET "m1plus_album"
+#define AB_WINDOW "m1plus_album_page" /* the root widget's name (tools/pod_pages.py ALBUM_PAGE): what navigator_close and the window manager know it by */
+#define AB_VIEW_W 320
+#define AB_ROW_W 310
+#define AB_NUM_X 12
+#define AB_NUM_GAP 8
+#define AB_TEXT_END 298
+#define AB_TEXT_Y 19
+#define AB_TEXT_H 22
+#define AB_PRESS 0x33ffffffu
+#define AB_HAIR 0x22ffffffu
+#define AB_SELALL_X 0
+#define AB_SELALL_W 50
+#define AB_ADD_X 116
+#define AB_DEL_X 191
+#define AB_CANCEL_X 268
+#define AB_BTN_W 60
+#define AB_TEXT_SLACK 4
+#define AB_PLAY_TEXT_W 50      /* the English "Play all" at 18 px: where the payload cannot measure the translated text, the pill's pair is centred for this width */
+#define AB_COVER_MS 200
+#define REC_CUE_END 0x4c       /* the CUE track's end (loadSongList's twin of REC_CUE_START); the stock row shows a CUE track by its file name when either is set (@0x524c98) */
 
 /* ---------------------------------------------------------------------------
  * The Albums grid (patch/albums.c, docs/ui.md). GRID_COLS columns of GRID_COVER px square covers with GRID_GAP px

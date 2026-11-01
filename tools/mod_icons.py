@@ -101,13 +101,10 @@ LISTS = [('icon_folder', 'folder', 'folder'), ('icon_playlist', 'playlist', 'lis
          ('icon_composer', 'composer', 'feather'), ('icon_cdalbum', 'album', 'disc-3')]
 COVERS = ['albumcover_s', 'albumcover_m', 'albumcover_info']   # the "no cover" placeholder, 60/90/100 px
 COVER_GLYPH, COVER_FRAC = 'disc-3', 0.52      # the glyph's px as a fraction of the tile
-# The album page (patch/albuminfo.c): its header cover is 160 px, so its placeholder (albumcover_info, the only
-# stock reader besides the Tidal dialogs is that page) is 160 px too; the page's cover tint (ah_tint: a window sized black gradient, patch/offsets.inc AH_TINT_*; the cover's corners are
-# painted by the payload, no masks); Shuffle's 38 px disc
-# with its glyph (pressed one lighter) and the Play all pill's play glyph (dark, 16 px, no padding: the pill's style
-# places it, tools/mod_ipodrows.py pill_layout); the pill itself is an image too (180 x 40, ah_pill / ah_pill_down: the style's
-# bg_image, drawn centred in the 44 px high button, so the touch rectangle is taller than the pill). The sizes are AH_* in patch/offsets.inc (test/pod/albuminfo.py checks them).
-RESIZED = {'albumcover_info': 160}
+# The album page (patch/albumpage.c): the cover tint (ah_tint: a window sized black gradient, patch/offsets.inc AH_TINT_*; the cover's corners are
+# cut by the payload, no masks); Shuffle's 38 px disc
+# with its glyph (pressed one lighter) and the Play all pill's play glyph (dark, 16 px, no padding); the pill itself is an image too (180 x 40,
+# ah_pill / ah_pill_down, drawn centred in the 44 px high button, so the touch rectangle is taller than the pill). The sizes are AH_* in patch/offsets.inc (test/pod/albumpage.py checks them).
 AH_TINT = (64, 200, 344, 450)   # alpha at the top row, at row AH_TINT_ROWS - 1 and below (the held deep tint, 78 % dark), the rows, the window height
 ALBUM = ['ah_tint', 'ah_play', 'ah_shuffle', 'ah_shuffle_down', 'ah_pill', 'ah_pill_down']
 AH_SHUF_DISC, AH_SHUF_DISC_DOWN, AH_SHUF_GLYPH, AH_DISC_PX = (0x2A,) * 3, (0x44,) * 3, 19, 38   # AH_DISC (patch/offsets.inc)
@@ -629,7 +626,7 @@ def generate_all(sizes):
     f['bar_digital'] = fit(lambda p: glyph(STATUS['bar_digital'], p, 'small'), 18, 18, 20)
     # "no cover" tiles: the stock tile colour, a muted glyph at COVER_FRAC of the tile
     for n in COVERS:
-        w = RESIZED.get(n, sizes[n][0]); bg = sizes[n + ':bg']
+        w = sizes[n][0]; bg = sizes[n + ':bg']
         t = Image.new('RGBA', (w, w), bg + (255,))
         g = glyph(COVER_GLYPH, round(w * COVER_FRAC), 'cover', (0x8C,) * 3)       # stroke 2
         t.alpha_composite(g, ((w - g.width) // 2, (w - g.height) // 2))
@@ -846,7 +843,7 @@ def album_images():
     f['ah_pill'] = pill(AH_PILL_PX, AH_PILL_FILL)
     f['ah_pill_down'] = pill(AH_PILL_PX, AH_PILL_FILL_DOWN)
     p = glyph_fit('play:filled', AH_PLAY_GLYPH, AH_PLAY_GLYPH, AH_PLAY_INK, 0)
-    f['ah_play'] = p                 # no padding: the style's icon_at left centres it in a pill-high square (mod_ipodrows.pill_layout)
+    f['ah_play'] = p                 # no padding: the payload places it beside the pill's text (patch/albumpage.c)
     f.update(ah_nav_images())
     f.update(songs_images())
     f.update(keyboard_images())
@@ -963,22 +960,11 @@ def capsule_piece(position, glyph, pressed=False):
     w, x0, x1, cx, cap = CAPSULE_PIECES[position]
     return glass_piece(w, x0, x1, glyph, cx, pressed, cap)
 
-# image -> (width, glass columns, glyph centre, glyph, capsule columns or None): the lone discs and the album page's capsule. Back (the Pod pages' 44 px
-# button centres it: x 8 .. 50; the album page draws it in the stock Back button's icon square), Now Playing's disc (Pod pages, button x 260: glass
-# 269 .. 311), the album page's pieces in the stock builders' buttons (the glyph centres on the Pod's: search 198 in its 46 px slot at 168, a disc;
-# multi-select 244 at 214 and Now Playing 290 in its 60 px button at 262, the capsule AH_CAPSULE; the select mode's add / delete 146 / 221 centred in
-# their 60 px buttons at 116 / 191, cancel 290 in the one at 268, the all / unselect toggle 29 in its 50 px one at 0). Both builders make multi-select
-# and Now Playing together (or neither), so they are always the capsule's two caps; search (the toggle builder's only) stays a disc beside it. The
-# builders leave 2 px between them (260 .. 262): multi-select's image is 4 px wider than its button, and AWTK draws an icon centred at its own size
-# (canvas_draw_icon_in_rect 0x648f90: the rect's centre only), so it reaches from 212 to 262 and its glass meets Now Playing's.
-AH_CAPSULE = (216 + NAV_SHIFT, 311)      # window columns: 21 px left of multi-select's glyph to 21 px right of Now Playing's (the Artists capsule's)
-AH_MULTI_W = NAV_SLOT_W + 4  # multi-select's image: 2 px over its button on each side (x 212 .. 262), the glass from AH_CAPSULE[0], the glyph NAV_SHIFT right
-AH_MULTI_X0 = AH_CAPSULE[0] - (214 - 2)
+# image -> (width, glass columns, glyph centre, glyph, capsule columns or None): the lone discs. Back (the Pod pages' 44 px button centres it: x 8 .. 50),
+# Now Playing's disc (Pod pages, button x 260: glass 269 .. 311), the USB mode page's settings disc, and the album page's select mode (add / delete 146 / 221
+# centred in their 60 px buttons at 116 / 191, cancel 290 in the one at 268, the all / unselect toggle 29 in its 50 px one at 0).
 AH_NAV_PIECES = {'ah_nav_back': (42, 0, 42, 21, 'chevron-left', None), 'ah_nav_close': (42, 0, 42, 21, 'x', None), 'ah_nav_np': (NAV_PLAY_W, 9, 51, 30, 'audio-lines', None),
                  'ah_nav_set': (NAV_PLAY_W, 9, 51, 30, 'settings', None),   # the USB mode page's DAC settings (tools/mod_ipodrows.py edit_usbmode), on Now Playing's disc
-                 'ah_nav_search': (NAV_SHIFT_W, S2 + 2, S2 + 44, S2 + 23, 'search', None),
-                 'ah_nav_multi': (AH_MULTI_W, AH_MULTI_X0, AH_MULTI_W, 25 + NAV_SHIFT, 'list-checks', (AH_MULTI_X0, AH_MULTI_X0 + AH_CAPSULE[1] - AH_CAPSULE[0])),
-                 'ah_nav_npa': (NAV_PLAY_W, 0, AH_CAPSULE[1] - 262, 28, 'audio-lines', (AH_CAPSULE[0] - 262, AH_CAPSULE[1] - 262)),
                  'ah_nav_add': (NAV_PLAY_W, 9, 51, 30, 'plus', None), 'ah_nav_del': (NAV_PLAY_W, 9, 51, 30, 'trash', None), 'ah_nav_cancel': (NAV_PLAY_W, 1, 43, 22, 'x', None),
                  'ah_nav_unsel': (50, 8, 50, 29, 'circle', None)}
 AH_NAV_SELECTED = ('ah_nav_sel', 'T:circle-check:filled')    # the select-all toggle's "all selected" state (a 50 px disc; no pressed image: stock has none)
@@ -1487,7 +1473,7 @@ def cmd_generate():
     files.update(nps)
     shutil.rmtree(PNG, ignore_errors=True); os.makedirs(PNG)
     for n, im in sorted(files.items()):
-        want = (RESIZED[n],) * 2 if n in RESIZED else sizes.get(n)
+        want = sizes.get(n)
         assert n in pod_names() + np_names() or im.size == want, (n, im.size, want)
         im.save(os.path.join(PNG, n + '.png'), optimize=True)
     print(f'{len(files)} PNGs, {sum(os.path.getsize(os.path.join(PNG, f)) for f in os.listdir(PNG))} bytes -> {PNG}')
@@ -1523,7 +1509,7 @@ def check_assets(stock_dir, work_dir=None):
         sp = os.path.join(stock_dir, n + '.png')
         assert sha256(open(sp, 'rb').read()) == pins[n], f'{n}.png: stock file does not match the pin'
         s, a = read_png(sp), read_png(os.path.join(PNG, n + '.png'))
-        size = (RESIZED[n],) * 2 if n in RESIZED else s.size
+        size = s.size
         assert (a.size, a.mode, a.format) == (size, s.mode, 'PNG') and s.format == 'PNG', f'{n}.png: {a.size} {a.mode} vs {size} {s.mode}'
         if work_dir:
             w = read_png(os.path.join(work_dir, n + '.png'))
@@ -1621,8 +1607,8 @@ def add_nav_icons(out):
         shutil.copyfile(os.path.join(PNG, n + '.png'), q); os.chmod(q, IMG_MODE); os.utime(q, (IMG_MTIME, IMG_MTIME))
 
 def add_album_icons(out):
-    """The album page's images (ALBUM): the corner masks, Shuffle's disc and glyph, the play glyph; patch/albuminfo.c
-    and the page theme (tools/mod_ipodrows.py) refer to them by name."""
+    """The album page's images (ALBUM): the tint, Shuffle's disc and glyph, the pill and the play glyph; patch/albumpage.c
+    and tools/pod_ui.py build_album_page refer to them by name."""
     d = os.path.join(out, IMG)
     for n in ALBUM + DAILY:
         q = os.path.join(d, n + '.png'); assert not os.path.exists(q), f'{n}.png already in the tree'

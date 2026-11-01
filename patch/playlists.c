@@ -127,7 +127,7 @@ static void *pl_rec(int i) { return deque_at(pl.pls, (unsigned)i); }
 /* The playlist's id: REC_DISC, what the stock row handler hands to classinfo[1] (@0x53d5f4) */
 static int pl_id(int i) { return I(pl_rec(i), REC_DISC); }
 
-/* A text with its %d: "8 tracks", "3 Selected" (the number put where the player's language has its %d), as the album page's header */
+/* A text with its %d: "8 tracks", "3 Selected" (the number put where the player's language has its %d), as the album page's meta line */
 static unsigned pl_fmt(char *out, unsigned size, const char *f, int n) {
     char digits[12];
     unsigned o = 0, d = 0, i;

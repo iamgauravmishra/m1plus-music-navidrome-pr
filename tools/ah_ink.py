@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The album page header's visual rhythm: where the ink of each text line really is (tools/stb_raster.py, the stb_truetype
-rasterizer the device uses, on the tree's default.ttf) and the gaps between the lines. Shared by tools/preview_album_header.py
-and test/pod/albuminfo.py.
+rasterizer the device uses, on the tree's default.ttf) and the gaps between the lines. Shared by tools/pod_dailymix.py and
+the tests (test/pod/albumpage.py, test/pod/dmpage.py).
 
 An AWTK label draws its line box (font_size high) centred in the widget; the baseline is `StbFont.baseline(px)` below the line box
 top. The ink the eye measures a gap from: the top of the capitals / digits (CAP, from "H" and "0") above the baseline, and the
@@ -57,27 +57,7 @@ def cap_top(f, px, y, h):
     return baseline(f, px, y, h) - cap(f, px)
 
 
-VARIANTS = [('A', 14, 7), ('B', 16, 9)]   # (name, outer gap, text gap): A tighter text block, B airier (tools/preview_album_header.py)
-LINE_PAD = 0   # a label is its font size plus this high: the line box (descenders included) fits, and the rects do not overlap
 BOTTOM = 8     # the touch rectangles end this far above the first track row
-
-
-def layout(f, outer, gap, art_y=50, art=160, btn_h=44, pill_h=40):
-    """The header's AH_* rects for these ink gaps: `outer` from the cover's bottom to the title's capitals and from the year line's
-    baseline to the pill's top, `gap` from the title's baseline to the artist's capitals and from the artist's baseline to the
-    year line's digits. Returns {AH_TITLE_Y.. AH_HDR_H}."""
-    import mod_ipodrows as M
-    out, base = {}, art_y + art
-    prev_base, prev_gap = base, outer
-    for key, px in (('TITLE', M.TITLE_PX), ('ARTIST', M.ARTIST_PX), ('META', M.META_PX)):
-        h = px + LINE_PAD
-        want_cap_top = prev_base + prev_gap
-        y = want_cap_top + cap(f, px) - f.baseline(px) - (h - px) // 2
-        out[f'AH_{key}_Y'], out[f'AH_{key}_H'] = y, h
-        prev_base, prev_gap = baseline(f, px, y, h), gap
-    out['AH_BTN_Y'] = prev_base + outer - (btn_h - pill_h) // 2
-    out['AH_HDR_H'] = out['AH_BTN_Y'] + btn_h + BOTTOM
-    return out
 
 
 def gaps(f, c):
@@ -100,8 +80,6 @@ def main():
         print(f'{px} px: baseline {f.baseline(px)} below the line box top, cap height {cap(f, px)}, x-height {-ink_rows(f, px, "x")[0]}, '
               f'descender {ink_rows(f, px, "gjpqy")[1]}, "Kind of Blue" ink {ink_rows(f, px, "Kind of Blue")}')
     print('gaps (ink), the patch/offsets.inc numbers:', gaps(f, c))
-    for name, outer, gap in VARIANTS:
-        lay = layout(f, outer, gap); print(f'variant {name} (outer {outer}, text {gap}):', lay, gaps(f, {**c, **lay}))
 
 
 if __name__ == '__main__': main()

@@ -14,10 +14,12 @@ int pod_on_player(void *ctx, void *e); /* click handler: the stock "back to the 
 int pod_scan_dir(
     const char *name,
     const char *
-        dot); /* the library scan's strcmp(name, ".") replacement: 0 for any name starting with '.' (docs/modules/payload.md hook 6) */
+        dot); /* the library scan's strcmp(name, ".") replacement: 0 for any name starting with '.' (docs/modules/payload.md hook 5) */
 int pod_card_mounted(
     void); /* the SD card is mounted (statfs: /mnt/mmc is another file system than /mnt); never write under /mnt/mmc otherwise */
 int pod_is_type(void *w, const char *type); /* w is a widget of exactly this type name */
+/* The translated text f ("%d tracks") with n where it has its %d, into out (size bytes). */
+void pod_fmt(char *out, unsigned size, const char *f, int n);
 /* Bind fn to EVT_CLICK of the widget called name in win (ctx passed through); returns the widget, NULL if
  * the page has none (or fn is NULL). */
 

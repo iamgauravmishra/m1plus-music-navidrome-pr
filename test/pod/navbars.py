@@ -2,9 +2,9 @@
 disc at x 8, the title from x 58, the right-hand actions as one glass capsule on main's slots (46 px buttons at x 168 / 214, Now Playing 60 px at x 260; the glass ends
 at x 311, 21 px right of Now Playing's glyph column 290; a lone Now Playing is a disc), a soft fade under the bar. Stock pages are NOT restyled: every stock asset
 (ui, styles, images, strings) and the code-built navbars of the stock pages (their builders' bytes in demo) are byte-identical to main's build V2.1oC, pinned by the
-digests in test/navbars-stock.sha256. What this work adds or changes is named in EXEMPT (our pages, our images, the album page's own ui / style files, the About
+digests in test/navbars-stock.sha256. What this work adds or changes is named in EXEMPT (our pages, our images, the plain stock album page's ui file, the About
 page's release tag)."""
-import glob, hashlib, os, sys
+import glob, hashlib, os
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 import awtk_strings, awtk_ui, mod_icons, mod_overlays, pod_i18n, pod_ui
 
@@ -12,7 +12,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DIGESTS = os.path.join(os.path.dirname(HERE), 'navbars-stock.sha256')
 NEW_IMAGES = ('pod_nav_', 'nb_fade', 'ah_', 'pl_glass', 'pl_ic_', 'sg_', 'np_', 'dm_', 'dp_', 'pod_ic_', 'ipod_', 'tape_', 'qk_', 'pod_ci_', 'pod_cd_', 'pod_chev', 'pod_check', 'se_')      # the images this work adds or changes (all ours; ah_*: the album page's buttons, tint and navbar; np_*: Now Playing's glyphs and discs; pl_*: the Playlists page's menu, docs/modules/playlists.md; sg_*: the Songs page's); dm_ / dp_: the Daily Mix card and page; pod_ic_*: the menu and settings row glyphs (tools/mod_icons.py POD_ROWS); ipod_*: the Pod page's click wheel; tape_*: the Tape page's pictures
 OVERLAY_UI = ('confirminfo_dialog.bin', 'rippercompleted_dialog.bin', 'cardupdate_dialog.bin', 'formatcard_dialog.bin', 'dialog_autoshutdown.bin')   # the ui files tools/mod_overlays.py restyles (docs/modules/overlays.md; their window themes in styles/ stay stock)
-OUR_FILES = ('about_page.bin', 'albuminfo_page.bin')  # the About page (the digest was taken when it carried the release tag; it is stock again, our own About page is m1plus_about) and the album page (its ui and theme: docs/modules/album-page.md)
+OUR_FILES = ('about_page.bin', 'albuminfo_page.bin')  # the About page (the digest was taken when it carried the release tag; it is stock again, our own About page is m1plus_about) and the plain stock album page (its ui file: the navbar's y, as allmusic_page's)
 # the code-built stock navbars: (first, last + 1) of the builders' bytes in demo (the album pages' two, Folders, Artists/Genres/Composers, stock Playlists)
 BUILDERS = ((0x524e4c, 0x5251e0), (0x526a3c, 0x527010), (0x5312dc, 0x5316c0), (0x535188, 0x5357c0), (0x53d5f8, 0x53d900))
 
@@ -43,12 +43,6 @@ def builder_digest(demo):
 
 def run(ctx):
     expect = ctx.expect
-    import importlib.util
-    spec = importlib.util.spec_from_file_location('podtest_albuminfo', os.path.join(HERE, 'albuminfo.py'))
-    A = sys.modules.get('podtest_albuminfo')
-    if A is None:
-        A = importlib.util.module_from_spec(spec); sys.modules['podtest_albuminfo'] = A; spec.loader.exec_module(A)
-    O = A.O
     raw = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw')
     assets = os.path.join(WORK, 'rootfs', 'release', 'assets')
     xx = os.path.join(raw, 'images', 'xx')
@@ -144,7 +138,7 @@ def run(ctx):
            f'at scroll offset 0 no page\'s content is under the fade (alpha <= {FADE_REST_MAX}): {rest}')
 
     # ------------------------------------------------------------------ hit tests on the built pages (demo's own widget_find_target)
-    m = A.AlbumMachine()
+    m = sibling('rows').RowMachine()
     mark = m.next   # every hit test lays the whole page out again in scratch memory: each starts from here (nothing of a layout outlives its test)
     for pg in ('m1plus_settings.bin', 'm1plus_artists.bin', 'm1plus_albums.bin', 'm1plus_playlists.bin', 'm1plus_songs.bin'):
         a = asset_tree(os.path.join(stock_ui, pg))

@@ -184,8 +184,22 @@ void *cc_albums(void) {
     return copy;
 }
 
-/* Open the stock albuminfo_page on row `index` of the album list the page was built from, the way a
- * stock Albums row does: the stock list the page's own copy was made from goes back into
+extern int album_open(
+    unsigned cls,
+    void *
+        row); /* patch/albumpage.c: our album page on an album row; 0 opened, -1 not tried, -2 tried and left (the tracks' query replaced the list) */
+
+/* The stock album list the album page is opened from (the Albums rows, or an artist's / composer's): into *pdeq_showlist, the browsing record set. */
+static void cc_album_list(void *artist_row, unsigned scope) {
+    if (artist_row)
+        loadAlbumList(scope == CLASS_COMPOSERS ? CLASS_COMPOSERS : CLASS_ARTISTS, deque_at(artist_row, 0));
+    else
+        loadAlbumList(CLASS_ALBUMS, (void *)0);
+}
+
+/* Open the album page on row `index` of the album list the page was built from, the way a stock Albums row does. Ours first (patch/albumpage.c: album_open takes the album row,
+ * runs loadAlbumdetailList on it and opens ui/m1plus_album.bin); when it cannot (the kill switch, the All albums card, a window that will not open) the plain stock albuminfo_page, below:
+ * the stock list the page's own copy was made from goes back into
  * *pdeq_showlist (albuminfo_page_init reads the album row from it), the cover-task list is rebuilt
  * from it (album_page_init's albumcoverinfo_init, which add_albumcover_task indexes) and released, and
  * the page opens with the context the row handler builds, the browsing class in the low 16 bits and the
@@ -204,13 +218,18 @@ void *cc_albums(void) {
  * (@0x5261d8) then picks the finished /tmp/abp file up. Returns -1 when the row is not in the list. */
 int cc_open_album(void *artist_row, unsigned scope, int index) {
     void *list;
+    int r;
     unsigned cls = !artist_row ? CLASS_ALBUMS : scope == CLASS_COMPOSERS ? CLASS_COMPOSER_ALBUMS : CLASS_ARTIST_ALBUMS;
-    if (artist_row)
-        loadAlbumList(scope == CLASS_COMPOSERS ? CLASS_COMPOSERS : CLASS_ARTISTS, deque_at(artist_row, 0));
-    else
-        loadAlbumList(CLASS_ALBUMS, (void *)0);
+    cc_album_list(artist_row, scope);
     list = *(void **)PDEQ_SHOWLIST;
     if (!list || (unsigned)index >= deque_size(list)) return -1;
+    r = album_open(cls, deque_at(list, (unsigned)index)); /* our page (patch/albumpage.c) */
+    if (r == 0) return 0;
+    if (r < -1) { /* it queried the tracks: the album list again for the stock page */
+        cc_album_list(artist_row, scope);
+        list = *(void **)PDEQ_SHOWLIST;
+        if (!list || (unsigned)index >= deque_size(list)) return -1;
+    }
     albumcoverinfo_init(list);
     batchadd_albumcover_task(0, 0); /* no row queued: it only ends as stock's Albums list does, taskstate = 1 */
     navigator_to_with_context("albuminfo_page", (const void *)(cls | (unsigned)index << 16));

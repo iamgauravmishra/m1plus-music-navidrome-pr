@@ -4,7 +4,6 @@ previews from one finished tree. Approximate, not AWTK; sample data.
 
   Home pages 1 and 3 (Tabler icons, the M1+ Music icon) + status bar     preview_icons.home
   M1+ Music menu as Home (no top bar), Settings page, Shuffle page       preview_icons.pod_page (the tree's own ui files)
-  album page (header, Play, Shuffle)             preview_album
   artist Cover Flow, and the landscape Cover Flow (480 x 320, as the user sees it)   preview_cover
   Albums: the grid and the list mode of ui/m1plus_albums.bin, with the mode toggle    preview_icons.albums_grid / albums_list
   lock screen over The Starry Night, unified battery (playing, idle + charging)   preview_lockscreen
@@ -276,10 +275,9 @@ def main():
         p = lambda n: os.path.join(t, n)
         run('preview_lockscreen.py', raw, p('lock.png'), f'release={raw}/ui/screensaver_page.bin',
             f'release={raw}/ui/screensaver_page.bin,idle,charging,pct=40', '--wallpaper', 'stock')
-        run('preview_album.py', work, p('album.png'))
         run('preview_cover.py', work, p('cf.png'), p('land.png'))
         run('preview_battery.py', work, p('bat.png'))
-        lock, album, cf, bat, land = (Image.open(p(n + '.png')).convert('RGB') for n in ('lock', 'album', 'cf', 'bat', 'land'))
+        lock, cf, bat, land = (Image.open(p(n + '.png')).convert('RGB') for n in ('lock', 'cf', 'bat', 'land'))
     panel = lambda im, i, n: im.crop((i * im.width // n, 0, (i + 1) * im.width // n, im.height))
     home, home3 = PI.home(s, 0).convert('RGB'), PI.home(s, 2).convert('RGB')
     menu = menu_page(s, None, home=True)
@@ -321,7 +319,6 @@ def main():
             ('Settings > Extras (default: every hidden item listed, under the headers)', xc_def), ('Settings > Extras: Shuffle and Favorites turned off', xc_cust),
             ('The menu with that list', menu_cust), ('Extras (default menu: Play, Library, Collections, Tools under their headers)', extras),
             ('Extras with Shuffle, Genres hidden, Shuffle and Favorites off', extras_cust), ('Artists: Artist mode (toggle shows Album Artist)', art0), ('Artists: the rail jumps to K (bubble, pinned header, the small title)', art2), ('Artists: Album Artist mode (toggle shows Artist)', art1), ('Genres (the Artists page on class 0xf006: no toggle)', gen), ('Composers (class 0xf005)', comp),
-            ('Album page', panel(album, 0, 4)), ('Album page, long title', panel(album, 1, 4)),
             ('Artist Cover Flow', panel(cf, 2, 3)),
             ('Albums: grid view (toggle shows the list)', PI.albums_grid(s).convert('RGB')),
             ('Albums: list mode (toggle shows the grid; row 2 pressed)', PI.albums_list(s).convert('RGB')),

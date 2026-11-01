@@ -395,6 +395,9 @@ SORT_PAGE = Page('m1plus_albumorder', 'm1plus_albumorder_page', 'Album Order', l
 ])
 SORT_VALUES = ('Artist', 'Album')    # the value shown for the setting's two states (the default, Artist, first)
 
+# The album page (patch/albumpage.c, docs/modules/album-page.md): an album's tracks under the glass controls; opened by cc_open_album, never from a menu row.
+ALBUM_PAGE = Page('m1plus_album', 'm1plus_album_page', 'Album', kind='album')
+
 # The Daily Mix page (patch/dailymix.c dp_*): opened by a tap on the Home card; it has no navbar and no rows of its own (the payload paints the songs).
 DAILYMIX = Page('m1plus_dailymix', 'm1plus_dailymix_page', 'Daily Mix', kind='dailymix')
 
@@ -437,7 +440,7 @@ SEARCH = Page('m1plus_search', 'm1plus_search_page', 'Search', kind='search')
 
 # PAGES[0] is the entry page.
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
-         EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, MENUEXTRAS_PAGE, SORT_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH]
+         EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, MENUEXTRAS_PAGE, SORT_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE

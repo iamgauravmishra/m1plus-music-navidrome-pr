@@ -87,28 +87,26 @@ def artists_tests(ctx):
                  for y in range(0, O['CFL_ALBUM_Y'] - 6, 3) for x in range(0, lw, 2))
         expect(ok, 'at the first album nothing is drawn to its left in landscape (the host frame of that ring)')
 
-    # 33. The card: All albums over the artist; it opens the stock albuminfo_page on the stock All songs
-    #     row of the artist's list (class 0xff01, row = the card's index, the last), which the page
-    #     loads as every song of the artist (0xff11); the artist is put into the browsing record by
-    #     loadAlbumList(0xf004, artist) first, and the cover-task list is rebuilt from that list.
+    # 33. The card: All albums over the artist; it opens our Songs page on all the artist's songs (the Songs button's call: the artist is put into the
+    #     browsing record by loadAlbumList(0xf004, artist), loadAlbumdetailList turns it into the All songs class 0xff11), not an album page.
     put_value(m, 3)
     m.call(PSYMS['on_changed'], count=2000000)
     expect(('widget_set_text_utf8', m.widgets['label_album'], 'All albums') in m.calls, 'the card reads All albums')
     expect(('widget_set_text_utf8', m.widgets['label_artist'], 'Miles Davis') in m.calls, 'over the artist')
-    m.tap(O['CF_CX'])
-    order = [c[0] for c in m.calls if c[0] in ('loadAlbumList', 'albumcoverinfo_init', 'navigator_to_with_context')]
-    expect(order == ['loadAlbumList', 'albumcoverinfo_init', 'navigator_to_with_context'],
-           f'the artist goes into the browsing record, then the page opens ({order})')
-    la = [c for c in m.calls if c[0] == 'loadAlbumList']
-    expect(la and la[0][1] == O['CLASS_ARTISTS'] and la[0][3] == 'Miles Davis', f'for that artist ({la[:1]})')
-    expect(('batchadd_albumcover_task', 0, 0) in m.calls, 'the cover thread is released for the page\'s cover task')
-    expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_ARTIST_ALBUMS'], 3) in m.calls,
-           'albuminfo_page opens with class 0xff01 and the card row (3)')
-    cls, row, shown = m.opened_album
-    card = m.deques[shown][row]
-    expect(m.word(card + O['REC_ID']) == O['ID_ALL_SONGS'] & 0xffffffff and ('albumcoverinfo_init', shown) in m.calls,
-           'that row of the list is the stock All songs row')
-    expect(not any(c[0] in ('list_item_create', 'loadSongList') for c in m.calls), 'no track list or play code of our own')
+    m3 = artists_machine(); m3.call(open_, count=5000000); m3.call(PSYMS['ar_open'], a0=0, count=8000000)
+    put_value(m3, 3); m3.call(PSYMS['on_changed'], count=2000000)
+    m3.tap(O['CF_CX'], count=900000000)
+    calls = [c for c in m3.calls if c[0] in ('loadAlbumList', 'loadAlbumdetailList', 'window_open', 'navigator_to_with_context') and c[1] != 'm1plus_cover']
+    la = [c for c in calls if c[0] == 'loadAlbumList']
+    expect([c[:2] for c in calls][:3] == [('loadAlbumList', O['CLASS_ARTISTS']), ('loadAlbumdetailList', O['CLASS_ARTIST_ALBUMS']), ('window_open', 'm1plus_songs')]
+           and la[0][3] == 'Miles Davis' and not any(c[0] == 'navigator_to_with_context' and c[1] == 'albuminfo_page' for c in calls),
+           f'a tap on the card opens our Songs page on the artist\'s songs, no album page ({calls})')
+    expect(not any(c[0] in ('list_item_create', 'loadSongList') for c in m3.calls), 'no track list or play code of our own')
+    m3 = artists_machine(); m3.windows['m1plus_songs'] = 0; m3.call(open_, count=5000000); m3.call(PSYMS['ar_open'], a0=0, count=8000000)
+    put_value(m3, 3); m3.call(PSYMS['on_changed'], count=2000000)
+    m3.tap(O['CF_CX'], count=900000000)
+    expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_ARTIST_ALBUMS'], 3) in m3.calls and ('albumcoverinfo_init', m3.opened_album[2]) in m3.calls,
+           'a Songs page that will not open: the card falls back to the plain stock albuminfo_page on the All songs row')
 
     # 34. A centre album: the same, with its own row; Back from the covers returns to the Artists list.
     put_value(m, 1)
@@ -826,8 +824,8 @@ def genre_composer_tests(ctx):
     # the artist's own scope is untouched by a composer's (the scope is per open)
     m = artists_machine(composers=comps); m.call(open_, count=20000000); m.call(PSYMS['ar_open'], a0=0, count=8000000)
     la = [c for c in m.calls if c[0] == 'loadAlbumList']
-    put_value(m, 3); m.call(PSYMS['on_changed'], count=2000000); m.tap(O['CF_CX'])
-    expect(la[0][1] == O['CLASS_ARTISTS'] and ('navigator_to_with_context', 'albuminfo_page', O['CLASS_ARTIST_ALBUMS'], 3) in m.calls, 'an artist after a composer: class 0xf004 and 0xff01 again')
+    put_value(m, 3); m.call(PSYMS['on_changed'], count=2000000); m.tap(O['CF_CX'], count=900000000)
+    expect(la[0][1] == O['CLASS_ARTISTS'] and ('loadAlbumdetailList', O['CLASS_ARTIST_ALBUMS']) in [c[:2] for c in m.calls] and ('window_open', 'm1plus_songs') in m.calls, 'an artist after a composer: class 0xf004 and 0xff01 again, its card opens our Songs page')
     # a composer with one album: no card; the Unknown Composer row: No albums
     m = artists_machine(composers=comps); m.call(open_, a0=P.HOME_COMPOSER, count=20000000)
     m.call(PSYMS['ar_open'], a0=0, count=8000000)

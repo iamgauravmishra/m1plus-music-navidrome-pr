@@ -119,12 +119,16 @@ void az_span(const az_t *az, int *r0, int *r1) {
 /* ---------------------------------------------------------------------------
  * Paint: coordinates are the window's (its top is 0): the scroll_view has moved the canvas up by yoffset, which the page's paint adds back (CANVAS_OY).
  */
-void az_fill(void *canvas, int x, int y0, int y1, int w, unsigned c) {
+void az_fill_h(void *canvas, int x, int y0, int y1, int w, unsigned c, int view_h) {
     if (y0 < 0) y0 = 0;
-    if (y1 > GRID_VIEW_H) y1 = GRID_VIEW_H;
+    if (y1 > view_h) y1 = view_h;
     if (y1 <= y0) return;
     canvas_set_fill_color(canvas, c);
     canvas_fill_rect(canvas, x, y0, w, y1 - y0);
+}
+
+void az_fill(void *canvas, int x, int y0, int y1, int w, unsigned c) {
+    az_fill_h(canvas, x, y0, y1, w, c, GRID_VIEW_H);
 }
 
 /* The header letter of section s with its top at window y (only when it lies wholly inside the window, as every text). */

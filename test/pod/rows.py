@@ -197,18 +197,14 @@ def rows_tests(expect):
     stock_demo = open(os.path.join(paths.find_stock() or os.path.join(os.path.dirname(WORK), 'stock'), 'rootfs', pod.DEMO), 'rb').read()
     built = open(DEMO, 'rb').read()
     w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
-    kinds = {k: sum(e[3] == k for e in edits) for k in ('immediate', 'call', 'nop', 'icon', 'text')}
+    kinds = {k: sum(e[3] == k for e in edits) for k in ('immediate', 'call', 'nop', 'icon')}
     expect(kinds == {'immediate': sum(len(g['sites']) for g in J['immediates']),
-                     'call': len(J['row_layout_calls']['sites']), 'nop': len(J['nops']['sites']), 'icon': len(J['icon_calls']['sites']),
-                     'text': len(J['text_calls']['sites'])},
+                     'call': len(J['row_layout_calls']['sites']), 'nop': len(J['nops']['sites']), 'icon': len(J['icon_calls']['sites'])},
            f'the manifest lists every rows.json edit ({kinds})')
     icon_target = PSYMS['rows_track_icon']
     expect(sorted(int(a, 16) for a, _, _, k in edits if k == 'icon') == [0x5284e0, 0x5367b0, 0x53935c]
            and all(int(new, 16) == 0x0c000000 | (icon_target >> 2) for a, old, new, k in edits if k == 'icon'),
            'the Songs-family, Artists/Genres/Composers and queue rebinds\' image_base_set_image call is jal rows_track_icon')
-    expect([a for a, _, _, k in edits if k == 'text'] == ['0x524cf4']
-           and all(int(new, 16) == 0x0c000000 | (PSYMS['rows_track_number'] >> 2) for a, old, new, k in edits if k == 'text'),
-           'the album track label builder\'s widget_set_text_utf8 call (0x524cf4) is jal rows_track_number')
     expect(all(w(stock_demo, int(a, 16)) == int(old, 16) and w(built, int(a, 16)) == int(new, 16) for a, old, new, _ in edits),
            f'all {len(edits)} edits: stock word before, the patched word in the built demo')
     expect(all(int(new, 16) == 0x0c000000 | (target >> 2) for a, old, new, k in edits if k == 'call'),
@@ -231,7 +227,6 @@ def rows_tests(expect):
     allowed |= {pod.fileoff(built, int(a, 16)) for a, *_ in edits}
     # the boot guard's hook on home_page_init, the same two words
     allowed |= {pod.fileoff(built, pod.HOME_INIT), pod.fileoff(built, pod.HOME_INIT) + 4}
-    allowed |= {pod.fileoff(built, pod.ALBUMINFO_HEADER), pod.fileoff(built, pod.ALBUMINFO_HEADER) + 4}   # the album header hook
     allowed |= {pod.fileoff(built, pod.PLAYING_INIT), pod.fileoff(built, pod.PLAYING_INIT) + 4}           # the Now Playing init hook
     allowed |= {pod.fileoff(built, pod.PLAYMORE_INIT), pod.fileoff(built, pod.PLAYMORE_INIT) + 4}         # the More dialog init hook
     allowed |= {pod.fileoff(built, pod.ID3_SITE)}                                                            # the tag reader's call (Podcasts)
@@ -256,7 +251,7 @@ def rows_tests(expect):
     if pdr: allowed |= set(range(pdr[0]['sh_offset'] // 4 * 4, pdr[0]['sh_offset'] + pdr[0]['sh_size'] + 4, 4))
     extra = sorted(changed - allowed)
     expect(not extra, f'demo differs from stock only in .pdr, PH[10], the hook and the row edits ({[hex(x) for x in extra[:6]]})')
-    hook_words = {pod.fileoff(built, h + 4 * k) for h in (pod.HOME_CLICK, pod.HOME_INIT, pod.ALBUMINFO_HEADER) for k in range(3)}
+    hook_words = {pod.fileoff(built, h + 4 * k) for h in (pod.HOME_CLICK, pod.HOME_INIT) for k in range(3)}
     expect(not any(pod.fileoff(built, int(a, 16)) in hook_words for a, *_ in edits), 'no row edit touches a hook')
 
     # 38. Songs: the real music_create_tablerow builds a 64 px row with a 60 px button; its layout
@@ -342,9 +337,8 @@ def rows_tests(expect):
     m.call(ROW_BUILDERS['albumdeinfo_listitem_layout'], a0=item, a1=0, count=600000)
     m.layout(item)
     lab = [c for c in m.kids(item) if m.wtype[c] == 'hscroll_label'][0]
-    num = [c for c in m.kids(item) if m.wtype[c] == 'label'][0]
-    expect(m.geo(num) == (12, 0, O['ROW_NUM_W'], 60) and m.geo(lab) == (20 + O['ROW_NUM_W'], 0, 278 - O['ROW_NUM_W'], 60) and m.focus.get(lab) == 1,
-           f'album tracks: number column x 12 w {O["ROW_NUM_W"]}, the title label x {20 + O["ROW_NUM_W"]} w {278 - O["ROW_NUM_W"]} on the 60 px body, scrolls only focused ({m.geo(num)}, {m.geo(lab)})')
+    expect(m.geo(lab) == (12, 0, 286, 60) and m.focus.get(lab) == 1 and not [c for c in m.kids(item) if m.wtype[c] == 'label'],
+           f'album tracks (the plain stock page): one title label x 12 w 286 on the 60 px body, scrolls only focused, no number label ({m.geo(lab)})')
     m = row_machine(albums=3)
     item = m.new_widget('list_item', 0, 0, 0, 310, 64)
     m.call(ROW_BUILDERS['playlist_listitem_layout'], a0=item, a1=0, count=600000)
@@ -492,106 +486,6 @@ def rows_tests(expect):
     expect(shown() == (True, True), 'a null name: nothing hidden')
 
 
-def track_row(titles, index, kill=False, multi=False):
-    """The real albumdeinfo_listitem_layout (0x526394) building row `index` of an album with these titles (its label builder
-    0x524b50 formats "N title" and reaches the patched widget_set_text_utf8 call), then laid out by the row fit."""
-    m = row_machine()
-    m.setword(pod.DATA['PDEQ_SHOWLIST'][0], m.new_deque([m.record(title=t, name=t) for t in titles]))
-    if kill: m.present.add('/mnt/mmc/m1plus-off')
-    item = m.new_widget('list_item', 0, 0, 0, 310, 64)
-    m.call(ROW_BUILDERS['albumdeinfo_listitem_layout'], a0=item, a1=index, count=800000)
-    choice = m.kids(item)[0]
-    if multi: m.set_visible(choice, 1)
-    m.layout(item)
-    return m, item, choice
-
-
-def track_number_tests(expect):
-    from awtk_text import Ttf, StbText
-    utf8 = lambda s: s.encode('latin-1').decode('utf-8')
-    titles = [f'Track {i + 1}' for i in range(120)]
-    # 45. Album tracks: the number is its own grey label before the title, the title keeps the stock label.
-    m, item, choice = track_row(titles, 0)
-    kids = m.kids(item)
-    types = [m.wtype[c] for c in kids]
-    num, title = kids[1], kids[2]
-    expect(types == ['image', 'label', 'hscroll_label'], f'album track row: check box, number label, the stock title label ({types})')
-    expect(m.texts.get(num) == '1' and m.texts.get(title) == 'Track 1', f'text split: number "1", title "Track 1" ({m.texts.get(num)!r}, {m.texts.get(title)!r})')
-    expect(m.style.get(num) == 'srlabel_tracknum_style' and not (m.word(num + 0x24) & F_SENSITIVE) and m.visible(num),
-           'the number label uses srlabel_tracknum_style and is insensitive (a tap goes to the row)')
-    NW, NW3 = O['ROW_NUM_W'], O['ROW_NUM_W3']
-    tx, tx3 = 12 + NW + 8, 12 + NW3 + 8
-    expect(m.geo(num) == (12, 0, NW, 60) and m.geo(title) == (tx, 0, 298 - tx, 60) and m.focus.get(title) == 1,
-           f'column: number x 12 w {NW} (to {12 + NW}), title x {tx} (8 px spacing) to 298 ({m.geo(num)}, {m.geo(title)})')
-    expect(all(m.texts.get(c) != '1 Track 1' for c in kids), 'no label holds the stock "N title" text any more')
-    # numbers 1, 9, 10, 99 (and 100): the same title column for every 1 and 2 digit number, right aligned in the number column
-    ttf = Ttf(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/fonts/default.ttf'))
-    st = StbText(ttf, 19)   # the album page's track rows (tools/mod_ipodrows.py TRACK_PX)
-    expect(st.layout('99')[1] <= NW and st.layout('999')[1] <= NW3 and NW - st.layout('99')[1] <= 3 and NW3 - st.layout('999')[1] <= 3,
-           f'the columns hold "99" ({st.layout("99")[1]} px in {NW}) and "999" ({st.layout("999")[1]} px in {NW3}) with at most 3 px to spare')
-    for idx, digits in ((0, '1'), (8, '9'), (9, '10'), (98, '99')):
-        m, item, choice = track_row(titles, idx)
-        num, title = m.kids(item)[1], m.kids(item)[2]
-        expect(m.texts.get(num) == digits and m.texts.get(title) == f'Track {idx + 1}' and m.geo(num)[:3] == (12, 0, NW)
-               and m.geo(title)[0] == tx and st.layout(digits)[1] <= m.geo(num)[2],
-               f'number {digits}: label "{digits}" ({st.layout(digits)[1]} px) fits the {NW} px column, title at x {tx} ({m.geo(num)}, {m.geo(title)})')
-    m, item, choice = track_row(titles, 99)
-    num, title = m.kids(item)[1], m.kids(item)[2]
-    expect(m.texts.get(num) == '100' and m.geo(num)[2] == NW3 and st.layout('100')[1] <= NW3 and m.geo(title)[0] == tx3 and m.geo(title)[0] + m.geo(title)[2] == 298,
-           f'a 3 digit number: its column is {NW3} px ("100" is {st.layout("100")[1]}), the title x {tx3} .. 298 ({m.geo(num)}, {m.geo(title)})')
-    # long titles: the title label (ellipsis) is 256 px wide now (it was 286 with the number inside), ends at the same 298
-    long_title = 'The Rise and Fall of Ziggy Stardust and the Spiders from Mars'
-    m, item, choice = track_row([long_title], 0)
-    title = m.kids(item)[2]
-    expect(m.texts.get(title) == long_title and m.geo(title)[2] == 298 - tx and st.layout(long_title)[1] > 298 - tx and st.layout('Track 1')[1] < 298 - tx,
-           f'a long title keeps the stock label: {st.layout(long_title)[1]} px of text in a {298 - tx} px label ({m.texts.get(title)!r}, {m.geo(title)})')
-    expect(m.style.get(title) == 'srlabel_item_white_style' and m.focus.get(title) == 1,
-           'the title label keeps the builder\'s style (white; gold on the playing row) and the row fit\'s scroll-only-when-focused')
-    # CJK titles: split on the ASCII digits and one space, the UTF-8 bytes untouched
-    cjk = '七里香 (Live) 周杰伦演唱会纪念专辑'
-    m, item, choice = track_row([cjk], 0)
-    num, title = m.kids(item)[1], m.kids(item)[2]
-    expect(utf8(m.texts.get(title)) == cjk and m.texts.get(num) == '1', f'a CJK title: "{utf8(m.texts.get(title))}" and number 1')
-    # a title that starts with digits keeps them: only the leading number and the first space are cut
-    m, item, choice = track_row(['7 Rings'], 0)
-    expect(m.texts.get(m.kids(item)[2]) == '7 Rings' and m.texts.get(m.kids(item)[1]) == '1', 'a title "7 Rings": number 1, title "7 Rings"')
-    # multi-select: the check box (50 px) stays first, number and title follow it
-    m, item, choice = track_row(titles, 4, multi=True)
-    num, title = m.kids(item)[1], m.kids(item)[2]
-    cx, _, cw, _ = m.geo(choice)
-    expect(m.geo(num)[0] == cx + cw + 8 and m.geo(title)[0] == m.geo(num)[0] + NW + 8 and m.geo(title)[0] + m.geo(title)[2] == 298 and cx == 12,
-           f'multi-select: check box ({cx}, w {cw}), number, title to 298 ({m.geo(num)}, {m.geo(title)})')
-    m.set_visible(choice, 0); m.layout(item); m.layout(item)
-    expect(not m.resizes and m.geo(num)[0] == 12 and m.geo(title)[0] == tx, 'leaving multi-select puts the columns back, a second pass changes nothing')
-    # a recycled / rebuilt row: the same call again reuses the number label (no second one), the column follows the digit count
-    n_kids = len(m.kids(item))
-    def retext(text, row=item, mm=m):
-        mm.call(PSYMS['rows_track_number'], a0=mm.kids(row)[-1], a1=mm.cstr(text), count=100000)
-    retext('12 Another'); m.layout(item)
-    num, title = m.kids(item)[1], m.kids(item)[2]
-    expect(len(m.kids(item)) == n_kids and m.texts[num] == '12' and m.texts[title] == 'Another' and m.geo(num)[2] == NW, 'a recycled row: one number label, updated in place')
-    retext('105 Long Player'); m.layout(item)
-    expect(len(m.kids(item)) == n_kids and m.texts[num] == '105' and m.geo(num)[2] == NW3 and m.geo(title)[0] == tx3, 'recycled to a 3 digit number: the column widens')
-    retext('3 Short'); m.layout(item)
-    expect(m.texts[num] == '3' and m.geo(num)[2] == NW and m.geo(title)[0] == tx, f'and back: {NW} px')
-    # kill switch: the stock single label "N title", no number label
-    m, item, choice = track_row(titles, 2, kill=True)
-    types = [m.wtype[c] for c in m.kids(item)]
-    expect(types == ['image', 'hscroll_label'] and m.texts.get(m.kids(item)[1]) == '3 Track 3' and m.geo(m.kids(item)[1])[:2] == (12, 0),
-           f'kill switch: the stock "3 Track 3" in one label ({types}, {m.texts.get(m.kids(item)[1])!r})')
-    # fallbacks: no leading number / no space / too many digits / null: the whole text, stock behaviour, no label
-    for text in ('Intro', '12abc', '1234 Many', ' 5 x', '', '3'):
-        m = row_machine()
-        item = m.new_widget('list_item', 0, 0, 0, 310, 64); title = m.new_widget('hscroll_label', item, 12, 0, 286, 60)
-        m.call(PSYMS['rows_track_number'], a0=title, a1=m.cstr(text), count=100000)
-        expect(m.texts.get(title) == text and len(m.kids(item)) == 1, f'text {text!r}: set whole on the title, nothing added')
-    m = row_machine()
-    m.call(PSYMS['rows_track_number'], a0=0, a1=m.cstr('1 x'), count=100000)
-    expect(m.texts.get(0) == '1 x', 'a null label: only the stock setter (its own null check)')
-    # the rows keep their pins: only the label builder's text call moved
-    expect(PSYMS['rows_track_number'] != 0, 'rows_track_number is in the payload')
-
-
 def class_icon_tests(expect):
     """Artists / Genres / Composers (localclass_create_tablerow 0x5368ac, whose bind 0x536634 names the one placeholder icon of
     the page: icon_artist / icon_genre / icon_composer, or icon_playing, at the join 0x5367b0): the placeholder is hidden,
@@ -650,5 +544,4 @@ def class_icon_tests(expect):
 
 def run(ctx):
     rows_tests(ctx.expect)
-    track_number_tests(ctx.expect)
     class_icon_tests(ctx.expect)
