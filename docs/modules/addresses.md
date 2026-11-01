@@ -170,6 +170,17 @@ Screen state: exported byte `backlight_status` at `0x97cae4` is pinned in `tools
 | `toolsQueryDbTableAndSort` | `0x5ee9ac` | prologue `(0x3c1c0041, 0x279c5524, 0x0399e021)`; callers `sort_filename` `0x4ea18c`, `sort_format` `0x4ea218` (via `getAllMusic`); hooked: `pc_sorted_query` |
 | the SQL texts | `0x74ba4c`.. | `"songtable"` `0x74ba4c`, `"myfav"` `0x74ba58`, formats from `0x74ba6c` (`select * from %s ...`) to `0x74c510`; sprintf'd by the `getAll*` / `getMusicBy*` wrappers; `toolsCheckItemExist` `0x5ef578` (the scan's duplicate check) runs its own `sqlite3_exec` |
 
+## Status bar and battery (patch/battery.c, `BATTERY_PINS` in tools/pod.py; docs/modules/battery.md "The percentage")
+
+| What | Address | Evidence |
+|---|---|---|
+| `show_sysbar_face` | `0x544b48` | prologue `(0x3c1c004c, 0x279cf388, 0x0399e021)`; the status bar's refresh: called by `system_bar_init` `0x545490` (once, with the window) and by the 1 s timer `0x545394` (`widget_add_timer(.., 0x3e8)` in `systembar_timer_start` `0x5453c8`); fills `img_battery` / `pgbar_battery` from `power_capacity`; not on the reach.py boot path (system_bar_init is a navigator page-init call, `0x4d1cb8`) |
+| the hook site | `0x5450f8` | `jalr get_battery_capacity` (`lw t9` GOT `0x8f99be60` @`0x5450f4`, delay slot nop @`0x5450fc`, `beqz s3` `0x12600089` @`0x545100`, `lw gp, 0x10(sp)` `0x8fbc0010` @`0x5450f0` and `0x545104`): replaced by `jal bp_capacity`; the return value is dropped by stock; docs/modules/payload.md hook 8 |
+| `get_battery_capacity` | `0x4e6dd8` | prologue `(0x3c1c0052, 0x279cd0f8, 0x0399e021)`; buckets `toolsGetBatteryVoltage` `0x5e35b0` (the `0x97cad0` copy) into 0/20/40/60/80/100, or, charging (`toolsGetChargeStatus` `0x5e37a0` is 1), adds 10 per call (wraps to 0 past 100); stores the result in `power_capacity` and returns it; callers `platform_init` `0x50bf00` (boot, stock), `on_poweroff_keyup_fun` `0x53ed08`, `show_sysbar_face` |
+| `power_capacity` | `0xa059ec` | int, `lw s0, GOT` `0x8f90a9dc` @`0x4e6e88` and `0x545120`; read by `show_sysbar_face` (`0x545154` the fill / low picture, `0x54536c` the charging value), `dropdown_showface` `0x475c5c` (the pull-down's own timer), `poweroff_page_init` `0x53f5dc` / `0x53f670`, `on_poweroff_keyup_fun` `0x53eec0` / `0x53efb8`, `check_updatefw_exist` `0x4d8c1c` and `check_otginfo` `0x4d91dc` (only `capacity \| charge_status != 0`) |
+| `widget_t` fields | `+8` w, `+0xc` h, `+0x44` parent | `widget_resize` `lw v0, 8(s0)` @`0x66d194`, `lw v1, 0xc(s0)` @`0x66d1a0`; `widget_set_visible` hands `lw a0, 0x44(s0)` @`0x66c428` to `widget_set_need_relayout_children` `0x66c338` |
+| the gauge | `/sys/class/power_supply/battery/capacity` | AXP2101 (`axp2101_charger`), an integer 0..100 and a newline (read 100 on a charged device); stock never opens it |
+
 ## Podcasts (patch/pcmodel.c, `PODCAST_PINS` in tools/pod.py)
 
 | What | Address | Evidence |

@@ -22,7 +22,7 @@ from pathlib import Path
 
 ZIP = paths.ZIP     # this checkout's firmware/, else the main checkout's (tools/paths.py)
 ZIP_SHA = 'db7bdbc42ffe6d5c1e3fdca9363edb78a01898b9a725c34793394cf6abfa33c0'
-TAG = 'V2.1qA'
+TAG = 'V2.1qB'
 RESTORE_TAG = 'V2.1R'
 # The asset steps after the payload, in order: name -> (module, extra args). Each
 # tools/<module>.py WORKDIR WORKDIR [args] edits the tree in place (venv python: Pillow, fontTools);

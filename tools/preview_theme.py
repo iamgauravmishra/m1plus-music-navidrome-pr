@@ -46,8 +46,10 @@ def text(dr, t, xy, s, px, col, anchor='lm'):
 def paste(im, ic, x, y):
     if ic: im.alpha_composite(ic, (int(x), int(y)))
 
-def status_bar(im, t, pct=86, shot=False, clock='12:59 PM'):
-    """shot: the Screenshot countdown's camera shown (pod_shot, the last child of the right-aligned group, so the rightmost)."""
+def status_bar(im, t, pct=86, shot=False, clock='12:59 PM', label=None, state='bar_power', synclink=False):
+    """shot: the Screenshot countdown's camera shown (pod_shot, the last child of the right-aligned group, so the rightmost).
+    label: the Battery Percentage shown (pod_pct, the child before the camera): the gauge's percentage as its text, the label as wide as the text
+    (patch/battery.c), white and right-aligned; the icons to its left move aside, as the group's layouter does."""
     dr = ImageDraw.Draw(im); b = t.bar
     dr.rectangle((0, 0, W - 1, BAR - 1), fill=rgba(b.get('style:normal:bg_color', '#000000')))
     left = b.find('view_bar_left'); lay = left.get('children_layout')
@@ -59,9 +61,15 @@ def status_bar(im, t, pct=86, shot=False, clock='12:59 PM'):
     c = b.find('bar_dclock'); text(dr, t, (c.x + c.w / 2, BAR / 2), clock, int(c.get('style:normal:font_size')), (255, 255, 255, 255), 'mm')
     right = b.find('view_bar_right'); s = int(right.get('children_layout').split('s=')[1].rstrip(')'))
     x = right.x + right.w
-    for name, img in ((('pod_shot', 'pod_bar_shot'),) if shot else ()) + (('img_wifi', 'bar_wifi3'), ('img_btclass', 'bar_btcon')):
+    for name, img in ((('pod_shot', 'pod_bar_shot'),) if shot else ()) + ((('pod_pct', None),) if label is not None else ()) + (('img_wifi', 'bar_wifi3'),) + ((('img_synclink', 'bar_synclinkcon'),) if synclink else ()) + (('img_btclass', 'bar_btcon'),):
+        if img is None:   # the percentage: the text's own width, right-aligned in the box
+            from awtk_text import Ttf, StbText
+            lab = right.find(name); px = int(lab.get('style:normal:font_size'))
+            w = StbText(Ttf(t.ttf), px).layout(label)[1]
+            x -= w; text(dr, t, (x + w, BAR / 2), label, px, (255, 255, 255, 255), 'rm'); x -= s
+            continue
         ic = t.img(img); w = right.find(name).w; x -= w; paste(im, ic, x + w - ic.width, (BAR - ic.height) // 2); x -= s
-    battery(im, t, b, pct)
+    battery(im, t, b, pct, state)
 
 def battery(im, t, b, pct=86, state='bar_power'):
     """img_battery and pgbar_battery of a status bar (system_bar or the pull-down's): the number

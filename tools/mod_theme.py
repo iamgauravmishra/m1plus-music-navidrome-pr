@@ -524,9 +524,9 @@ def apply_bar(root):
     left, right, clock = root.find('view_bar_left'), root.find('view_bar_right'), root.find('bar_dclock')
     vol, pg, img = root.find('label_volume'), root.find('pgbar_battery'), root.find('img_battery')
     assert all(w is not None for w in (left, right, clock, vol, pg, img)), 'unexpected system_bar layout'
-    # stacks on mod_battery.py (the 18x11 outline over a horizontal fill, no number)
+    # stacks on mod_battery.py (the 22x12 outline over a horizontal fill, no number)
     assert (pg.get('show_text') == 'false' and pg.get('vertical') == 'false' and img.get('visible') != 'false'
-            and (img.w, img.h) == (18, 11) and pg.x == img.x + 2), 'system_bar.bin is not the mod_battery.py layout (run it first)'
+            and (img.w, img.h) == (22, 12) and pg.x == img.x + 2), 'system_bar.bin is not the mod_battery.py layout (run it first)'
     assert left.get('children_layout') == 'default(r=1,c=0,x=14,s=4)'
     assert right.get('children_layout') == 'default(r=1,c=0,a=right,s=5)'
     assert clock.get('self_layout') == 'default(x=108,y=0,w=90,h=100%)'

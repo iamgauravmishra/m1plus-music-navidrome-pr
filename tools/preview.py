@@ -245,13 +245,20 @@ def mainmenu_page(s, data, first=0):
 
 def shot_bars(work):
     """The status bar while a Screenshot is pending (the camera shown, Wi-Fi and a connected Bluetooth lit), with the 12 h and the 24 h
-    clock, then the same bar as it is for the capture (the camera hidden), drawn from the tree's own system_bar.bin; 3x."""
+    clock, then the same bar as it is for the capture (the camera hidden), then with Battery Percentage on (100%, 87%, 5%, and 87% with the
+    camera too), drawn from the tree's own system_bar.bin; 3x."""
     import preview_theme as PT
     t = PT.Tree(work)
     rows = []
-    for clock, shot in (('12:59 PM', True), ('12:59', True), ('12:59 PM', False)):
-        im = Image.new('RGBA', (320, PT.BAR), (0, 0, 0, 255)); PT.status_bar(im, t, shot=shot, clock=clock); rows.append(im)
-    sheet = Image.new('RGB', (320, 3 * PT.BAR + 12), (0x2A, 0x2A, 0x2A))
+    P, C, L = 'bar_power', 'bar_charge', 'bar_lowpower'
+    # (clock, camera, percentage text (None: the setting off), fill level, battery picture, SyncLink lit)
+    for clock, shot, pct, fill, state, sync in (('12:59 PM', True, None, 86, P, False), ('12:59', True, None, 86, P, False), ('12:59 PM', False, None, 86, P, False),
+                                                ('12:59 PM', False, 100, 100, P, False), ('12:59', False, 87, 87, P, False), ('12:59 PM', False, 5, 5, P, False),
+                                                ('12:59 PM', False, 63, 63, C, False), ('12:59 PM', False, 0, 0, L, False), ('12:59 PM', False, 100, 100, P, True),
+                                                ('12:59 PM', True, 87, 87, P, True)):
+        im = Image.new('RGBA', (320, PT.BAR), (0, 0, 0, 255))
+        PT.status_bar(im, t, pct=fill, shot=shot, clock=clock, label=None if pct is None else f'{pct}%', state=state, synclink=sync); rows.append(im)
+    sheet = Image.new('RGB', (320, len(rows) * PT.BAR + 6 * (len(rows) - 1)), (0x2A, 0x2A, 0x2A))
     for i, im in enumerate(rows): sheet.paste(im.convert('RGB'), (0, i * (PT.BAR + 6)))
     return sheet.resize((sheet.width * 3, sheet.height * 3), Image.NEAREST)
 
@@ -349,7 +356,7 @@ def main():
     sh2 = Image.new('RGB', (wid, sh.height + sb.height + lab + pad), (0x2A, 0x2A, 0x2A))
     sh2.paste(sh.crop((0, 0, wid, y + lab + bat.height + pad)), (0, 0))
     y2 = y + lab + bat.height + pad
-    ImageDraw.Draw(sh2).text((pad, y2), 'Status bar while a Screenshot is pending: 12 h clock, 24 h clock, then as captured (camera hidden); 3x', fill=(0xAA,) * 3, font=PI.ANN)
+    ImageDraw.Draw(sh2).text((pad, y2), 'Status bar while a Screenshot is pending: 12 h clock, 24 h clock, then as captured (camera hidden); then Battery Percentage on: 100%, 87%, 5%, with the camera too; 3x', fill=(0xAA,) * 3, font=PI.ANN)
     sh2.paste(sb, (pad, y2 + lab))
     PI.save_compact(sh2.crop((0, 0, wid, y2 + lab + sb.height + pad)), out); print('wrote', out, sh2.size)
 

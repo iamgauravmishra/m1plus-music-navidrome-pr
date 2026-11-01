@@ -1558,6 +1558,46 @@ def add_shot_indicator(rootfs):
     edit_ui(os.path.join(rootfs, SYSTEM_BAR), edit)
 
 
+PCT_WIDGET, PCT_WIDGET_DD = 'pod_pct', 'pod_pct_dd'   # patch/battery.h BP_LABEL, BP_LABEL_DD
+PCT_FONT = 'release/assets/default/raw/fonts/default.ttf'
+
+
+def pct_widths(font_path):
+    """The percentage label's box width (AWTK text width at statusbar.PCT_PX: truncated advances + 1 px per glyph, tools/awtk_text.py StbText) for a text of 2, 3 and 4
+    characters ("5%", "87%", "100%"); the widest digit decides, so every number of that length fits."""
+    import statusbar
+    from awtk_text import Ttf, StbText
+    st = StbText(Ttf(font_path), statusbar.PCT_PX)
+    wid = max(st.layout(d)[1] for d in '0123456789')
+    pct = st.layout('%')[1]
+    return tuple((n - 1) * wid + pct for n in (2, 3, 4))
+
+
+def add_battery_label(rootfs):
+    """The Battery Percentage label (patch/battery.c): a hidden, insensitive white label in the status bar's right-aligned icon group, and its twin in the pull-down's own bar (both
+    dropdown_dialog.bin themes). It is the group's last child but the Screenshot camera (the camera, when it counts down, stays against the battery outline), so shown it sits
+    4 px before the outline and the icons to its left move aside by its width (the group's layouter skips an invisible child); the payload sets its text and width."""
+    import statusbar
+    w3 = pct_widths(os.path.join(rootfs, PCT_FONT))[1]
+
+    def edit_for(name):
+        def edit(root):
+            right = root.find('view_bar_right')
+            assert right is not None and root.find(name) is None, 'unexpected status bar layout'
+            props = [('name', name), ('text', '87%')]
+            for st in statusbar.STATES:
+                props += [(f'style:{st}:text_color', '#FFFFFF'), (f'style:{st}:font_size', str(statusbar.PCT_PX)),
+                          (f'style:{st}:text_align_h', 'right'), (f'style:{st}:text_align_v', 'middle')]
+            label = hidden(Widget('label', 0, 0, w3, 0, props))
+            at = len(right.children) - 1 if right.children and right.children[-1].name == SHOT_WIDGET else len(right.children)
+            right.children.insert(at, label)
+        return edit
+    from modlib import edit_ui
+    edit_ui(os.path.join(rootfs, SYSTEM_BAR), edit_for(PCT_WIDGET))
+    for theme in ('default', 'theme1'):
+        edit_ui(os.path.join(rootfs, 'release/assets', theme, 'raw/ui/dialog/dropdown_dialog.bin'), edit_for(PCT_WIDGET_DD))
+
+
 def asset_rels(pages):
     return [f'{UI}/{p.key}.bin' for p in pages]
 

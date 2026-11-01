@@ -190,7 +190,7 @@ def home_tests(expect, page):
                                                               ('System Update', pod_pages.ACT_STOCK)]
            and HOMESET.title == 'Developer' and (start_i, grid_i) == (0, 1)
            and not [r for r in SETTINGS.rows if r.action in (pod_pages.ACT_GRID, pod_pages.ACT_STARTUP)]
-           and [(r.label, r.action) for r in pod_pages.HOMESET_PAGE.rows] == [('Recent Albums', pod_pages.ACT_SHELF), ('Daily Mix', pod_pages.ACT_DAILY), ('Regenerate Daily Mix', pod_pages.ACT_REGEN), ('Main Menu', pod_pages.ACT_PAGE), ('Extras', pod_pages.ACT_PAGE)],
+           and [(r.label, r.action) for r in pod_pages.HOMESET_PAGE.rows] == [('Recent Albums', pod_pages.ACT_SHELF), ('Daily Mix', pod_pages.ACT_DAILY), ('Regenerate Daily Mix', pod_pages.ACT_REGEN), ('Main Menu', pod_pages.ACT_PAGE), ('Extras', pod_pages.ACT_PAGE), ('Battery Percentage', pod_pages.ACT_BATTPCT)],
            'Settings ends with Developer, whose page holds the launcher rows: Boot to M1+ Music (switch) and Open Shanling Home, then Screenshot and System Update; the Home Screen page has the shelf and mix switches, Regenerate Daily Mix, Main Menu and Extras')
     expect(page.rows[0].label == 'Now Playing' and page.rows[-1].label == 'Extras' and page.rows[settings_i].label == 'Settings' and len(page.rows) == 23
            and not [r for r in page.rows if r.action in (pod_pages.ACT_GRID, pod_pages.ACT_STARTUP)],

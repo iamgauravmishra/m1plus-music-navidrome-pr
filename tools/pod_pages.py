@@ -64,7 +64,10 @@ ACT_SORTSET = 30   # picker row (Album Order): choose the album order (arg 1 Art
 ACT_THEMESET = 31  # picker row (Cassette Theme): choose the theme (arg 0 Normal, 1 Chrome, 2 Metal); a check shows on the chosen row (patch/tape.c tape_theme_set)
 ACT_INFO = 33     # an information row of the About page: a label and a grey value at the right, no chevron, not tappable (arg = INFO_*: where patch/m1plus.c reads the value; INFO_STATIC: the Row's own text)
 ACT_PCSEARCH = 34  # switch row (Settings > Library > Podcasts): Podcast Search, off by default; on shows a Search button on the Podcasts page (patch/podcasts.c pcsearch_toggle, /mnt/data/m1plus-pcsearch)
-SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH)
+ACT_BATTPCT = 36  # switch row (Settings > Home Screen > Status Bar): Battery Percentage, off by default; on shows the gauge's exact charge beside the battery outline (patch/battery.c battpct_toggle, /mnt/data/m1plus-battpct)
+_ACTS = [v for k, v in globals().items() if k.startswith('ACT_')]
+assert len(set(_ACTS)) == len(_ACTS), 'two ACT_* share an id (patch/m1plus.c mirrors them)'
+SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
 VALUE_ACTIONS = (ACT_SORT, ACT_CTHEME)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
 CHECK_ACTIONS = (ACT_SORTSET, ACT_THEMESET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
@@ -295,7 +298,8 @@ DEVELOPER_PAGE = Page('m1plus_developer', 'm1plus_developer_page', 'Developer', 
 ])
 
 # Settings > Home Screen: the Recent Albums and Daily Mix switches (the shelf and the card of the Home menu), and Regenerate Daily Mix in a card of its own, which
-# (with its note) is hidden while Daily Mix is off (patch/m1plus.c regen_show: pod_card1, pod_note1 and the row). Then the two pages that arrange the menu (patch/menu.c).
+# (with its note) is hidden while Daily Mix is off (patch/m1plus.c regen_show: pod_card1, pod_note1 and the row). Then the two pages that arrange the menu (patch/menu.c), and under a
+# Status Bar header the Battery Percentage switch (patch/battery.c).
 HOMESET_PAGE = Page('m1plus_homeset', 'm1plus_homeset_page', 'Home Screen', layout=[
     Row('Recent Albums', ACT_SHELF),
     Row('Daily Mix', ACT_DAILY),
@@ -306,6 +310,9 @@ HOMESET_PAGE = Page('m1plus_homeset', 'm1plus_homeset_page', 'Home Screen', layo
     Note('Show, hide and reorder the menu'),
     Row('Extras', ACT_PAGE, EXTRASCFG_PAGE_INDEX),
     Note('Items the menu does not show'),
+    Hdr('Status Bar'),
+    Row('Battery Percentage', ACT_BATTPCT),
+    Note('The exact charge beside the battery icon'),
 ])
 
 # Main Menu: the customise page (patch/menu.c builds its behaviour at run time): one row per item with a

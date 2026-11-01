@@ -136,7 +136,7 @@ CARD_GLYPHS = {'Wi-Fi': 'wifi', 'Bluetooth': 'bluetooth', 'Home Screen': 'house'
                'Keyboards': '+keyboard', 'About': 'info', 'All System Settings': 'settings', 'Developer': 'code', 'Main Menu': 'list-checks', 'Extras': 'ellipsis',
                'Recent Albums': 'history', 'Daily Mix': 'shuffle', 'Regenerate Daily Mix': 'refresh-cw', 'Update Library': 'refresh-cw', 'Album Order': 'arrow-down-wide-narrow',
                'Landscape': 'rotate-cw-square', 'Rebuild Covers': 'image-up', 'Theme': '+cassette-tape', 'Boot to M1+ Music': 'power', 'Open Shanling Home': '@shanling',
-               'Screenshot': 'camera', 'System Update': 'download', 'Podcast Search': 'search', 'English': 'languages', 'Chinese (Pinyin)': 'languages'}
+               'Screenshot': 'camera', 'System Update': 'download', 'Podcast Search': 'search', 'English': 'languages', 'Chinese (Pinyin)': 'languages', 'Battery Percentage': 'battery-charging'}
 
 
 def card_name(g):
