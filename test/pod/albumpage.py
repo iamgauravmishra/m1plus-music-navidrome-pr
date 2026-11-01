@@ -717,6 +717,7 @@ def select_tests(ctx):
     calls = click(m, 'sg_add')
     expect(any(c[0] == 'toast' and c[1] == 'msg_addfailed' for c in calls) and not any(c[0] == 'navigator_to_with_context' and c[1] == 'playlist_page' for c in calls), 'Add with nothing marked: the stock message')
     tap(m, 150, row_y(0) + 20)
+    m.windows['m1plus_playlists'] = 0   # our picker's page does not open: the stock picker (test/pod/picker.py is ours)
     m.u.mem_write(NAV_TITLE, b'Album title\0'); m.setword(G_CLASS, 0xf00b); m.setword(pod.DATA['NAVIGATION_STATUS'][0], 1)
     calls = click(m, 'sg_add')
     expect([c[1] for c in calls if c[0] == 'set_selectindex'] == [0] and ('navigator_to_with_context', 'playlist_page', O['PICKER_ADD'] | LIB) in calls and m.word(pod.DATA['NAVIGATION_STATUS'][0]) == 0,

@@ -1,0 +1,584 @@
+/* M1+ Music Queue page: the play queue, our own page in place of the stock queue drawer (docs/modules/queue.md has the design and the geometry).
+ *
+ * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
+ *
+ * One page, ui/m1plus_queue.bin (tools/pod_ui.py build_queue_page): the stock list (list_view > scroll_view) holding ONE content view, view_queue, that is the window's whole
+ * 450 px with the glass Back floating over it. The content view holds the header's widgets (the playing track's title and artist, the icon-only Shuffle and Repeat buttons,
+ * the "Queue" line, the "No upcoming songs" line) and paints the rest itself in its EVT_AFTER_PAINT: the playing track's rounded cover and the rows (cover, title, artist, press fill,
+ * hairline).
+ *
+ *   entry     queue_open(), called by Now Playing's queue button (a click handler bound after the stock init, patch/nowplaying.c: RET_STOP when this page opened, else the stock drawer
+ *             opens as before). The kill switch, an empty queue, a stream (mclGetPlayType 2, 3, 0xf0, 0xf1: the stock drawer's own offline test) and a window that will not open leave
+ *             the stock drawer.
+ *   queue     the stock play queue, the deque at PLAY_QUEUE (stSongInfo rows start_player copied) and the play position mclGetPlayPos, exactly what the stock drawer reads
+ *             (@0x47a8f0, row bind @0x47a19c). Rows are read from it while painting; the page notices a queue that was replaced (another pointer, size or first record).
+ *   rows      Up Next: the tracks after the play position, in queue order; the playing track is only in the header. While the stock mode is Shuffle (stock draws the next track at random
+ *             when one ends: no order exists) there are no rows: a placeholder says so, and the list returns when the mode changes (our buttons or the refresh tick).
+ *   play      a row tap: start_playqueue(queue index) (the stock drawer's row handler, @0x47a0c8), then force_refreshflag; the page stays, Now Playing below follows.
+ *   modes     Shuffle and Repeat are the one stock play mode (pod_set_mode / pod_set_in_order, patch/shuffle.c): Shuffle toggles shuffle; Repeat cycles off, all, one.
+ *   covers    the Cover Flow cache file of the row's artist and album, one per tick on the page's timer, none while the list moves (the Songs page's loader); else the placeholder.
+ * No hook; everything runs from the page's widgets and timers.
+ */
+#include "offsets.inc"
+#include "stock.h"
+#include "home.h"
+#include "scroll.h"
+#include "covercache.h"
+#include "common.h"
+#include "grid.h"
+#include "azlist.h"
+#include "i18n.h"
+
+extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one become List play */
+extern void pod_set_mode(int mode); /* patch/shuffle.c: the stock play mode */
+
+#define ROW LIST_ROW_H
+#define QP_AHEAD 2 /* rows kept beyond the view in the scroll direction */
+#define QP_MORE_MS 16
+
+#define B(w, off) (*(unsigned char *)((char *)(w) + (off)))
+#define I(w, off) (*(int *)((char *)(w) + (off)))
+#define P(w, off) (*(void **)((char *)(w) + (off)))
+
+static struct {
+    void *win, *view, *sv, *status;
+    void *back, *btn_shuffle, *btn_repeat;
+    void *st_title, *st_sub; /* hidden labels whose styles are the rows' title and artist */
+    void *htitle, *hartist, *empty; /* the header's labels, and the line shown when nothing follows */
+    void *shuf_w[3]; /* the Shuffle placeholder: the glyph, the title, the count line */
+    int shuf; /* the play mode is Shuffle: no rows, the placeholder */
+    void *list; /* the stock play queue the page is of (*PLAY_QUEUE when valid) */
+    void *first; /* its first record: with the size, tells a queue that was replaced */
+    unsigned count; /* the queue's size */
+    int base; /* the queue index of the first row (the play position + 1) */
+    unsigned n; /* the rows */
+    int row; /* the playing row, -1 for none */
+    int mode; /* the play mode the pills show */
+    unsigned hkey; /* the cover key of the header's track */
+    int press; /* the row under the finger, + 1 */
+    int down, down_x, down_y; /* the row a press began on, + 1, and where */
+    int dir, seen; /* the scroll direction (+1 down), and the offset it was last read at */
+    int noscroll; /* the scroll events could not be registered: the loader runs from its own timer only */
+    int fg; /* 1 from the page's start and EVT_WINDOW_TO_FG, 0 after EVT_WINDOW_TO_BG */
+    unsigned more_timer, stale_timer, tick_timer;
+    unsigned tick_ms;
+    grid_t hg; /* the header's cover: one tile, QP_COVER px with QP_COVER_R px corners cut in the alpha */
+    grid_t g; /* the rows' covers and texts: the ring */
+} qp __attribute__((section(".scratch")));
+
+static int qp_on_stale(const void *unused);
+static int qp_on_load(const void *unused);
+
+static void qp_show(void *w, int on) {
+    if (!w) return;
+    widget_set_visible(w, on, 0);
+    widget_set_sensitive(w, on);
+}
+
+static int qp_off(void) { return qp.sv ? I(qp.sv, SC_YOFF) : 0; }
+static void qp_redraw(void) { widget_invalidate_force(qp.sv, (void *)0); }
+static int qp_abs(int v) { return v < 0 ? -v : v; }
+
+/* The index is of the stock queue `list` as long as that queue is still the player's, as big, and starts with the same record. */
+static int qp_valid(void) {
+    void *cur = *(void **)PLAY_QUEUE;
+    return qp.list && cur == qp.list && deque_size(cur) == qp.count && (!qp.count || deque_at(cur, 0) == qp.first);
+}
+
+/* The play position in the queue the page is of, -1 for none. */
+static int qp_playing_row(void) {
+    int pos = mclGetPlayPos();
+    return pos >= 0 && (unsigned)pos < qp.count ? pos : -1;
+}
+
+/* ---------------------------------------------------------------------------
+ * Geometry: the header is QP_TOP high, then one ROW per queued track and QP_BOTTOM of air
+ */
+static int qp_row_y(int i) { return QP_TOP + i * ROW; }
+static int qp_content(void) { return QP_TOP + (int)qp.n * ROW + QP_BOTTOM; }
+
+static int qp_max_scroll(void) {
+    int m = qp_content() - QP_WIN_H;
+    return m > 0 ? m : 0;
+}
+
+/* The row under content point y, -1 for the header and the air below the last row. */
+static int qp_at(int y) {
+    int i = (y - QP_TOP) / ROW;
+    return y < QP_TOP || i >= (int)qp.n ? -1 : i;
+}
+
+/* The rows [*r0, *r1] that touch the view (r1 < r0 for none). */
+static void qp_span(int *r0, int *r1) {
+    int s = qp_off(), n = (int)qp.n;
+    *r0 = s <= QP_TOP ? 0 : (s - QP_TOP) / ROW;
+    *r1 = s + QP_WIN_H - 1 < QP_TOP ? -1 : (s + QP_WIN_H - 1 - QP_TOP) / ROW;
+    if (*r1 > n - 1) *r1 = n - 1;
+}
+
+/* The rows the tiles are kept for: those in view and QP_AHEAD beyond them in the scroll direction. */
+static void qp_window(int *lo, int *hi) {
+    int r0, r1;
+    qp_span(&r0, &r1);
+    if (qp.dir < 0)
+        r0 -= QP_AHEAD;
+    else
+        r1 += QP_AHEAD;
+    if (r0 < 0) r0 = 0;
+    if (r1 > (int)qp.n - 1) r1 = (int)qp.n - 1;
+    *lo = r0, *hi = r1;
+}
+
+/* The text of a track as the stock drawer shows it (@0x47a22c): the file name for a CUE track, else the title, else the file name. */
+static const char *qp_text(void *rec) {
+    const char *t;
+    if (I(rec, REC_CUE_START) > 0 || I(rec, REC_CUE_END) > 0) return cc_str(rec, REC_NAME);
+    t = cc_str(rec, REC_TITLE);
+    return *t ? t : cc_str(rec, REC_NAME);
+}
+
+/* The tile of row a (cover key and the two texts), made from the stock record (the caller has checked qp_valid). */
+static grid_tile_t *qp_tile(int a) {
+    int lo, hi, fresh;
+    grid_tile_t *t;
+    qp_window(&lo, &hi);
+    t = grid_tile(&qp.g, a, lo, hi, &fresh);
+    if (fresh) {
+        void *rec = deque_at(qp.list, (unsigned)(qp.base + a));
+        grid_set(t, qp_text(rec), cc_str(rec, REC_ARTIST), cc_album_key(rec));
+    }
+    return t;
+}
+
+/* ---------------------------------------------------------------------------
+ * Paint: the header's cover, and the rows, in one EVT_AFTER_PAINT of the content view. Coordinates are the window's (its top is 0): the scroll_view
+ * has moved the canvas up by yoffset, which the paint adds back (CANVAS_OY) for its duration, as the Songs page does.
+ */
+static void qp_paint(void *canvas) {
+    int r0, r1, r, pass, off = qp_off(), room = QP_TEXT_END - LIST_TEXT_X;
+    grid_tile_t *h = qp.hg.tiles ? grid_find(&qp.hg, 0) : (grid_tile_t *)0;
+    if (h) grid_blit(canvas, &qp.hg, h, QP_COVER_X, QP_COVER_Y - off, QP_WIN_H);
+    qp_span(&r0, &r1);
+    for (r = r0; r <= r1; ++r) {
+        grid_tile_t *t = qp_tile(r);
+        int y = qp_row_y(r) - off;
+        if (qp.press == r + 1) az_fill_h(canvas, 0, y, y + ROW - 1, QP_ROW_W, LIST_PRESS, QP_WIN_H);
+        grid_blit(canvas, &qp.g, t, LIST_ART_X, y + LIST_ART_Y, QP_WIN_H);
+        az_fill_h(canvas, LIST_TEXT_X, y + ROW - 1, y + ROW, room, LIST_HAIR, QP_WIN_H);
+    }
+    for (pass = 0; pass < 2; ++pass) { /* titles, then artists: one text style at a time */
+        widget_prepare_text_style(pass ? qp.st_sub : qp.st_title, canvas);
+        for (r = r0; r <= r1; ++r)
+            grid_text(canvas, qp_tile(r), pass, LIST_TEXT_X, qp_row_y(r) - off + (pass ? LIST_SUB_Y : LIST_TITLE_Y),
+                      room, pass ? LIST_SUB_H : LIST_TITLE_H, QP_WIN_H);
+    }
+}
+
+static int qp_on_paint(void *ctx, void *e) {
+    void *canvas = e ? *(void **)((char *)e + EVENT_PAINT_CANVAS) : (void *)0;
+    int off = qp_off();
+    (void)ctx;
+    if (!canvas || !qp.view || !qp.g.tiles) return RET_OK;
+    if (qp.list &&
+        !qp_valid()) { /* the player's queue was replaced: nothing of it is read; the page reads it again when it is on top */
+        if (!qp.stale_timer) qp.stale_timer = timer_add(qp_on_stale, (void *)0, 100);
+        return RET_OK;
+    }
+    I(canvas, CANVAS_OY) += off;
+    qp_paint(canvas);
+    I(canvas, CANVAS_OY) -= off;
+    return RET_OK;
+}
+
+/* ---------------------------------------------------------------------------
+ * The loader: one cover per tick on the page's own timer, none while the scroll_view moves (the Songs page's)
+ */
+static int qp_next_load(void) {
+    int lo, hi, a, best = -1, bd = 0x7fffffff, s = qp_off();
+    if (!qp.g.tiles || !qp.n || !qp_valid()) return -1;
+    qp_window(&lo, &hi);
+    for (a = lo; a <= hi; ++a) {
+        grid_tile_t *t = grid_find(&qp.g, a);
+        int top = qp_row_y(a) - s, d;
+        if (t && t->art) continue;
+        d = qp_abs(top + ROW / 2 - QP_WIN_H / 2);
+        if (top >= QP_WIN_H || top + ROW <= 0) d += 100000; /* ahead of the view */
+        if (d < bd) bd = d, best = a;
+    }
+    return best;
+}
+
+static int qp_moving(void) {
+    void *wa;
+    if (!qp.sv) return 0;
+    if (B(qp.sv, SC_PRESSED) && B(qp.sv, SC_DRAGGED)) return 1;
+    wa = P(qp.sv, SC_WA);
+    return wa && I(wa, SC_AN_STATE) == SC_AN_RUNNING && P(wa, SC_AN_WIDGET) == qp.sv;
+}
+
+static void qp_kick(void) {
+    if (!qp.more_timer && qp.view && (qp.noscroll || qp_next_load() >= 0))
+        qp.more_timer = timer_add(qp_on_load, (void *)0, QP_MORE_MS);
+}
+
+static void qp_dir(void) {
+    int s = qp_off();
+    if (s != qp.seen) qp.dir = s > qp.seen ? 1 : -1;
+    qp.seen = s;
+}
+
+static int qp_on_load(const void *unused) {
+    int a;
+    (void)unused;
+    qp.more_timer = 0;
+    if (!qp.view) return RET_OK;
+    qp_dir();
+    if (qp_moving()) { /* nothing is decoded while it moves: look again next tick */
+        qp_kick();
+        return RET_OK;
+    }
+    a = qp_next_load();
+    if (a >= 0) {
+        grid_tile_t *t = qp_tile(a);
+        int top = qp_row_y(a) - qp_off();
+        grid_art(&qp.g, t);
+        if (top < QP_WIN_H && top + ROW > 0) qp_redraw();
+    }
+    qp_kick();
+    return RET_OK;
+}
+
+static int qp_on_scroll(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    if (!qp.view) return RET_OK;
+    qp_dir();
+    qp_kick();
+    return RET_OK;
+}
+
+/* ---------------------------------------------------------------------------
+ * The header: the playing track's cover, title and artist, and the song count
+ */
+static void qp_cover(unsigned key) {
+    grid_tile_t *t = qp.hg.tiles ? grid_find(&qp.hg, 0) : (grid_tile_t *)0;
+    if (!t || key == qp.hkey) return;
+    qp.hkey = key;
+    grid_free_art(t);
+    t->ckey = key;
+    grid_art(&qp.hg, t);
+    if (!qp.hg.placeholder && t->art != 1) grid_placeholder(&qp.hg);
+}
+
+static void qp_header(void) {
+    void *t = qp.list && qp.row >= 0 ? deque_at(qp.list, (unsigned)qp.row) : cc_playing();
+    widget_set_text_utf8(qp.htitle, t ? qp_text(t) : "");
+    widget_set_text_utf8(qp.hartist, t ? cc_str(t, REC_ARTIST) : "");
+    qp_cover(t ? cc_album_key(t) : 0);
+}
+
+/* ---------------------------------------------------------------------------
+ * The pills: one stock play mode shown as two switches (a pill that is on is lighter; Repeat's glyph is repeat-1 for Repeat one)
+ */
+static void qp_pill(void *btn, int on, const char *icon) {
+    static const char *const state[4] = {"normal", "over", "pressed", "focused"};
+    unsigned v[4]; /* value_t: type at 0, the uint32 at 8 */
+    char name[40], picture[24];
+    int i;
+    snprintf(picture, sizeof picture, on ? "%s_on" : "%s",
+             icon); /* the dark glyph on the light fill, the white one on the dark fill */
+    for (i = 0; i < 4; ++i) {
+        memset(v, 0, sizeof v);
+        value_set_uint32(v, i == 2 ? (on ? QP_PILL_ON_DOWN : QP_PILL_OFF_DOWN) : (on ? QP_PILL_ON : QP_PILL_OFF));
+        snprintf(name, sizeof name, "%s:bg_color", state[i]);
+        widget_set_style(btn, name, v);
+        snprintf(name, sizeof name, "style:%s:icon", state[i]);
+        widget_set_prop_str(btn, name, picture);
+    }
+}
+
+static void qp_pills(void) {
+    int mode = mclGetPlayMode();
+    qp.mode = mode;
+    qp_pill(qp.btn_shuffle, mode == MODE_SHUFFLE, "sg_shuffle");
+    qp_pill(qp.btn_repeat, mode == MODE_REPEAT_ALL || mode == MODE_REPEAT_ONE,
+            mode == MODE_REPEAT_ONE ? "sg_repeat1" : "sg_repeat");
+    widget_invalidate_force(qp.btn_shuffle, (void *)0);
+    widget_invalidate_force(qp.btn_repeat, (void *)0);
+}
+
+static void qp_load(int keep);
+
+/* The play mode changed (our buttons, the refresh tick finding another page's change): entering or leaving Shuffle swaps the list and the placeholder, any other change only the buttons. */
+static void qp_mode_changed(void) {
+    if ((mclGetPlayMode() == MODE_SHUFFLE) != qp.shuf)
+        qp_load(0);
+    else
+        qp_pills();
+}
+
+static int qp_on_shuffle(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    if (!qp.view) return RET_OK;
+    if (mclGetPlayMode() == MODE_SHUFFLE)
+        pod_set_in_order();
+    else
+        pod_set_mode(MODE_SHUFFLE);
+    qp_mode_changed();
+    return RET_OK;
+}
+
+static int qp_on_repeat(void *ctx, void *e) {
+    int mode;
+    (void)ctx;
+    (void)e;
+    if (!qp.view) return RET_OK;
+    mode = mclGetPlayMode();
+    pod_set_mode(mode == MODE_REPEAT_ALL ? MODE_REPEAT_ONE : mode == MODE_REPEAT_ONE ? MODE_ORDER : MODE_REPEAT_ALL);
+    qp_mode_changed();
+    return RET_OK;
+}
+
+/* ---------------------------------------------------------------------------
+ * Reading the stock queue
+ */
+static void qp_size(void) {
+    int h = qp.n ? qp_content() : QP_WIN_H;
+    widget_resize(qp.view, QP_VIEW_W, h);
+    widget_set_prop_int(qp.sv, "virtual_h", h);
+}
+
+/* The placeholder of Shuffle mode: the glyph and the two lines (visible only: they are insensitive for good), with the queue's size. */
+static void qp_shuffle_state(void) {
+    char line[64];
+    int i;
+    for (i = 0; i < 3; ++i) widget_set_visible(qp.shuf_w[i], qp.shuf, 0);
+    if (!qp.shuf) return;
+    pod_fmt(line, sizeof line, TR(qp.count == 1 ? "%d song plays in random order" : "%d songs play in random order"),
+            (int)qp.count);
+    widget_set_text_utf8(qp.shuf_w[2], line);
+}
+
+/* The queue again (the player's deque, the position and mode read) and the page rebuilt from it: the rows are the tracks after the play position, in queue order. keep: the scroll offset stays; else the page opens at the top. */
+static void qp_load(int keep) {
+    int at = keep ? qp_off() : 0;
+    void *list = *(void **)PLAY_QUEUE;
+    grid_drop(&qp.g);
+    qp.list = qp.first = (void *)0, qp.count = 0, qp.press = qp.down = 0;
+    if (list) qp.count = deque_size(list);
+    if (qp.count) qp.list = list, qp.first = deque_at(list, 0);
+    qp.row = qp_playing_row();
+    qp.base = qp.row + 1; /* -1 (no track): from the first */
+    qp.shuf =
+        mclGetPlayMode() ==
+        MODE_SHUFFLE; /* Shuffle: no rows (stock draws the next track at random when one ends), a placeholder instead */
+    qp.n = !qp.shuf && qp.count > (unsigned)qp.base ? qp.count - (unsigned)qp.base : 0;
+    qp.hkey = 0;
+    qp_show(qp.empty, qp.n == 0 && !qp.shuf);
+    qp_shuffle_state();
+    qp_size();
+    widget_set_prop_int(qp.sv, "yoffset", at < 0 ? 0 : at > qp_max_scroll() ? qp_max_scroll() : at);
+    qp.seen = qp_off();
+    grid_placeholder(&qp.g);
+    qp_header();
+    qp_pills();
+    qp_redraw();
+    qp_kick();
+}
+
+/* The queue was replaced under a page that is on top (a paint found it): read it again. A page behind another reads it when it comes back. */
+static int qp_on_stale(const void *unused) {
+    (void)unused;
+    qp.stale_timer = 0;
+    if (qp.view && qp.g.tiles && !qp_valid() && pod_is_top(qp.win)) qp_load(1);
+    return RET_OK;
+}
+
+/* What the player does under the page: another track (the header and the rows after it), another mode (the buttons), another queue. */
+static void qp_sync(void) {
+    int row, mode;
+    if (!qp.view || !qp.g.tiles) return;
+    if (!qp_valid()) {
+        if (qp.fg && pod_is_top(qp.win)) qp_load(1);
+        return;
+    }
+    row = qp_playing_row();
+    mode = mclGetPlayMode();
+    if (mode != qp.mode) qp_mode_changed();
+    if (row != qp.row) qp_load(0);
+}
+
+static int qp_on_tick(const void *unused) {
+    unsigned want;
+    (void)unused;
+    if (!qp.view) return RET_OK;
+    want = pod_screen_lit() ? QP_TICK_MS : POD_DARK_MS;
+    if (qp.tick_timer && qp.tick_ms != want && timer_modify(qp.tick_timer, want) == RET_OK) qp.tick_ms = want;
+    if (qp.fg) qp_sync();
+    return RET_REPEAT;
+}
+
+/* ---------------------------------------------------------------------------
+ * Playing: the stock drawer's row handler (@0x479f60): start_playqueue(row); Now Playing below follows (force_refreshflag, as the handler sets it)
+ */
+static void qp_play_at(int at) {
+    if (!qp_valid()) {
+        qp_load(1);
+        return;
+    }
+    start_playqueue(qp.base + at);
+    *(unsigned char *)FORCE_REFRESH = 1;
+    qp_load(0); /* the rows are the ones after the new track */
+}
+
+/* ---------------------------------------------------------------------------
+ * Touch on the rows (the Songs page's: DOWN remembers, ABORT forgets, UP within the drag threshold on the same row acts)
+ */
+static int qp_item_of(void *e) {
+    int pt[2];
+    pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
+    widget_to_local(qp.view, pt);
+    return qp_at(pt[1]);
+}
+
+static void qp_set_press(int p) {
+    if (qp.press == p) return;
+    qp.press = p;
+    qp_redraw();
+}
+
+static int qp_on_down(void *ctx, void *e) {
+    int a;
+    (void)ctx;
+    qp.down = 0;
+    if (!e || !qp.view || !qp.n || !qp_valid()) return RET_OK;
+    a = qp_item_of(e);
+    qp.down = a + 1, qp.down_x = I(e, PE_X), qp.down_y = I(e, PE_Y);
+    qp_set_press(a + 1);
+    return RET_OK;
+}
+
+static int qp_on_up(void *ctx, void *e) {
+    int a = qp.down - 1;
+    (void)ctx;
+    qp.down = 0;
+    qp_set_press(0);
+    if (a < 0 || !e || !qp.view) return RET_OK;
+    if (qp_abs(I(e, PE_X) - qp.down_x) < SC_DRAG_PX && qp_abs(I(e, PE_Y) - qp.down_y) < SC_DRAG_PX &&
+        qp_item_of(e) == a)
+        qp_play_at(a);
+    return RET_OK;
+}
+
+static int qp_on_abort(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    qp.down = 0;
+    qp_set_press(0);
+    return RET_OK;
+}
+
+/* ---------------------------------------------------------------------------
+ * The window
+ */
+static int qp_on_back(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    navigator_back();
+    return RET_OK;
+}
+
+static int qp_on_fg(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    if (!qp.view || !qp.g.tiles) return RET_OK;
+    qp.fg = 1;
+    if (!qp_valid())
+        qp_load(1);
+    else
+        qp_sync();
+    qp_kick();
+    return RET_OK;
+}
+
+static int qp_on_bg(void *ctx, void *e) {
+    qp.fg = 0;
+    return qp_on_abort(ctx, e);
+}
+
+static int qp_on_destroy(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    if (qp.more_timer) timer_remove(qp.more_timer);
+    if (qp.stale_timer) timer_remove(qp.stale_timer);
+    if (qp.tick_timer) timer_remove(qp.tick_timer);
+    grid_free(&qp.g);
+    grid_free(&qp.hg);
+    memset(&qp, 0, sizeof qp);
+    return RET_OK;
+}
+
+/* A play type the page leaves to the stock drawer: a stream (the drawer refuses its rows while offline and plays them through the network state). */
+static int qp_stream(void) {
+    int t = mclGetPlayType();
+    return t == QP_STREAM_A || t == QP_STREAM_B || t == QP_STREAM_C || t == QP_STREAM_D;
+}
+
+/* Open the page on the player's queue (Now Playing's queue button). 0 once the page is up; -1 when it was not tried (the stock drawer opens); -2 when the window did not open
+ * or the asset is not ours (the stock drawer opens). */
+int queue_open(void) {
+    void *list = *(void **)PLAY_QUEUE;
+    int fresh;
+    if (qp.win || home_off() || !list || !deque_size(list) || !cc_playing() || qp_stream()) return -1;
+    memset(&qp, 0, sizeof qp);
+    qp.win = window_open(QP_ASSET);
+    if (!qp.win) {
+        memset(&qp, 0, sizeof qp);
+        return -2;
+    }
+    widget_on(qp.win, EVT_DESTROY, qp_on_destroy, (void *)0);
+    qp.back = pod_bind(qp.win, "btn_return", qp_on_back, (void *)0);
+    qp.btn_shuffle = pod_bind(qp.win, "btn_shuffle", qp_on_shuffle, (void *)0);
+    qp.btn_repeat = pod_bind(qp.win, "btn_repeat", qp_on_repeat, (void *)0);
+    qp.view = widget_lookup(qp.win, "view_queue", 1);
+    qp.sv = widget_lookup(qp.win, "queue_scrollview", 1);
+    qp.status = widget_lookup(qp.win, "label_status", 1);
+    qp.st_title = widget_lookup(qp.win, "label_row_title", 1);
+    qp.st_sub = widget_lookup(qp.win, "label_row_sub", 1);
+    qp.htitle = widget_lookup(qp.win, "qp_title", 1);
+    qp.hartist = widget_lookup(qp.win, "qp_artist", 1);
+    qp.empty = widget_lookup(qp.win, "qp_empty", 1);
+    qp.shuf_w[0] = widget_lookup(qp.win, "qp_shuf_img", 1);
+    qp.shuf_w[1] = widget_lookup(qp.win, "qp_shuf_title", 1);
+    qp.shuf_w[2] = widget_lookup(qp.win, "qp_shuf_sub", 1);
+    if (!qp.back || !qp.btn_shuffle || !qp.btn_repeat || !qp.view || !qp.sv || !qp.status || !qp.st_title ||
+        !qp.st_sub || !qp.htitle || !qp.hartist || !qp.empty || !qp.shuf_w[0] || !qp.shuf_w[1] || !qp.shuf_w[2]) {
+        navigator_back(); /* an asset that is not ours */
+        return -2;
+    }
+    qp.fg = 1;
+    widget_on(qp.win, EVT_WINDOW_TO_FG, qp_on_fg, (void *)0);
+    widget_on(qp.win, EVT_WINDOW_TO_BG, qp_on_bg, (void *)0);
+    qp.noscroll = !widget_on(qp.sv, EVT_SCROLL, qp_on_scroll, (void *)0) ||
+                  !widget_on(qp.sv, EVT_SCROLL_END, qp_on_scroll, (void *)0);
+    widget_on(qp.view, EVT_POINTER_DOWN, qp_on_down, (void *)0);
+    widget_on(qp.view, EVT_POINTER_UP, qp_on_up, (void *)0);
+    widget_on(qp.view, EVT_POINTER_ABORT, qp_on_abort, (void *)0);
+    widget_on(qp.view, EVT_AFTER_PAINT, qp_on_paint, (void *)0);
+    if (!grid_init(&qp.hg, qp.win, 1, QP_COVER, QP_COVER_R) || !grid_init(&qp.g, qp.win, GRID_TILES, LIST_ART, 0)) {
+        grid_free(&qp.hg);
+        grid_free(&qp.g);
+        qp_show(qp.view, 0);
+        qp_show(qp.status, 1);
+        widget_set_tr_text(qp.status, "Not enough memory");
+        return 0;
+    }
+    grid_shape(&qp.hg, QP_COVER, QP_COVER_R, 1); /* the corners are cut in the alpha */
+    grid_shape(&qp.g, LIST_ART, LIST_R, 1);
+    grid_tile(&qp.hg, 0, 0, 0, &fresh);
+    qp.tick_ms = QP_TICK_MS;
+    qp.tick_timer = timer_add(qp_on_tick, (void *)0, QP_TICK_MS);
+    qp_load(0);
+    return 0;
+}

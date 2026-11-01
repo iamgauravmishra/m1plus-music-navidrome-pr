@@ -231,7 +231,7 @@ def run(ctx):
     over = []
     for loc in LOC:
         for key in ('Update Local Music first', 'Not enough memory', 'Storage unavailable', 'Too many songs to shuffle',
-                    'Screenshot saved', 'Screenshot failed'):
+                    'Screenshot saved', 'Screenshot failed', 'No music in this folder'):
             if width(tr_text(loc, key), msg_px) > 260: over.append((loc, key))          # the message box's line is 260 px (@0x4788a0)
         for key in ('Update Local Music first', 'Library too large', 'No albums', 'Not enough memory'):
             if width(tr_text(loc, key), 20) > cover.find('label_status').w: over.append((loc, key, 'status'))
@@ -258,7 +258,7 @@ def run(ctx):
             while width(cur.rstrip(), px) > maxw: lines, cur = lines + 1, cur[len(cur) // 2:]     # a unit wider than a line
         return lines
     for key, what in (('Rebuild all covers? This may take a few minutes.', 'Rebuild Covers'), ('Take a screenshot in 5 s?', 'Screenshot'),
-                      ('Cancel the screenshot?', 'Cancel Screenshot')):
+                      ('Cancel the screenshot?', 'Cancel Screenshot'), ('Delete folder and everything in it?', 'Delete folder')):
         lines = {loc: wrapped(tr_text(loc, key), wrap_px, 260) for loc in LOC}
         expect(wrap_px == 20 and max(lines.values()) <= 3, f'the {what} confirm wraps to at most 3 lines of 260 px at {wrap_px} px in all languages ({lines})')
         expect(all(len(pod_i18n.TEXT[key][loc].encode()) < 0x1ff for loc in LOC), 'and fits the dialog context\'s 0x200 byte text')

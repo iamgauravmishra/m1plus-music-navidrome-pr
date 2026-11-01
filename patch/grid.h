@@ -43,6 +43,7 @@ typedef struct {
     unsigned qkey
         [4]; /* a mosaic tile (grid_mosaic): the distinct cover keys, nq of them (0..4), qi of them already placed in bmp */
     int nq, qi;
+    int mid; /* list mode: the title alone in the row, centred vertically (the picker's New playlist row) */
 } grid_tile_t;
 
 typedef struct {

@@ -27,7 +27,7 @@ int so_selection(unsigned count, const unsigned char *sel);
  * the page's any more). The caller leaves select mode and reads the list again for 1 and -1. */
 int so_delete(int cls, void *list, unsigned count, const unsigned char *sel, unsigned nsel, int valid);
 
-/* The Add button (@0x5280c0): the stock playlist picker (playlist_page with PICKER_ADD | cls) over the page, which adds the selection to the playlist that is tapped and closes
+/* The Add button: our picker (patch/picker.h) over the page, or where it cannot open the stock one (@0x5280c0: playlist_page with PICKER_ADD | cls). Either adds the selection to the playlist that is tapped and closes
  * itself. title_save (0x200 bytes) takes nagvation_title, which the picker may overwrite; *picker is set before the picker opens. 0: nothing marked; 1: the picker is open;
  * -1: the selection could not be made. */
 int so_add(int cls, unsigned count, const unsigned char *sel, unsigned nsel, int valid, char *title_save, int *picker);

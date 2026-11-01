@@ -909,6 +909,7 @@ def collapse_and_select_tests(ctx):
     calls = click(m, 'sg_add')
     expect(any(c[0] == 'toast' and c[1] == 'msg_addfailed' for c in calls) and not any(c[0] == 'navigator_to_with_context' and c[1] != 'dialog/msginfo_dialog' for c in calls), 'Add with nothing selected: the stock "Adding Failed" message')
     tap(m, 150, lay.row_y(3) + 30); tap(m, 150, lay.row_y(7) + 30)
+    m.windows['m1plus_playlists'] = 0   # our picker's page does not open: the stock picker (test/pod/picker.py is ours)
     m.u.mem_write(NAV_TITLE, b'Songs title\0'); m.setword(G_CLASS, 0xf00b); m.setword(pod.DATA['NAVIGATION_STATUS'][0], 1)
     calls = click(m, 'sg_add')
     expect(m.word(pod.DATA['NAVIGATION_STATUS'][0]) == 0, 'the picker is opened with navigation_status 0 (the stock row handler adds only when it is not 1)')
@@ -1115,6 +1116,7 @@ def lists_tests(ctx):
     expect(vis(m, 'btn_sort') == (0, 0) and vis(m, 'btn_search') == (1, 1) and vis(m, 'btn_select') == (1, 1) and m.props[(lt, 'w')] == O['NAV_CF_X'] - 58
            and m.wtext[lt] == fitted('Favorites', 110), 'leaving select mode brings back Search and Select, not Sort, and the list\'s title in its 110 px')
     click(m, 'btn_select'); tap(m, 150, lay.row_y(2) + 30)
+    m.windows['m1plus_playlists'] = 0   # the stock picker (our page does not open)
     calls = click(m, 'sg_add')
     expect(('navigator_to_with_context', 'playlist_page', O['PICKER_ADD'] | fav) in calls, 'Add opens the stock playlist picker with the list\'s class (1 << 16 | class, as the stock button)')
     m.setword(G_CLASS, 0xf00b)   # what the picker leaves
@@ -1297,6 +1299,7 @@ def lists_tests(ctx):
     expect(vis(m, 'btn_search') == (0, 0) and vis(m, 'btn_sort') == (0, 0) and vis(m, 'btn_select') == (1, 1) and vis(m, 'btn_backtoplayer') == (1, 1)
            and m.props[(lt, 'w')] == O['NAV_VIEW_X'] - 58, 'leaving select mode brings back Select and Now Playing only, the title in its 156 px')
     click(m, 'btn_select'); tap(m, 150, lay.row_y(2) + 30)
+    m.windows['m1plus_playlists'] = 0   # the stock picker (our page does not open)
     calls = click(m, 'sg_add')
     expect(('navigator_to_with_context', 'playlist_page', O['PICKER_ADD'] | gen) in calls, 'Add opens the stock playlist picker with 1 << 16 | 0xff09')
     m.call(PSYMS['sg_on_destroy'], count=4000000)
@@ -1392,6 +1395,7 @@ def lists_tests(ctx):
            'Delete: batch_delete_file with class 0xff11, then the list is read again')
     m.confirm_answer = None
     click(m, 'btn_select'); tap(m, 150, lay.row_y(2) + 30)
+    m.windows['m1plus_playlists'] = 0   # the stock picker (our page does not open)
     calls = click(m, 'sg_add')
     expect(('navigator_to_with_context', 'playlist_page', O['PICKER_ADD'] | art_cls) in calls, 'Add opens the playlist picker with class 0xff11')
     m.call(PSYMS['sg_on_destroy'], count=4000000)

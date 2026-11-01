@@ -37,6 +37,7 @@ STOCK = {
     'msg_playlistfull': 'Playlist Is Full',        # the message boxes of a New playlist that cannot be made (the stock create handler's)
     'msg_playlistexist': 'Playlist Already Exists',
     'msg_addplaylistsuccess': 'Added To Playlist',   # the Daily Mix page's Add disc and the stock playlist picker (@0x53d51c) after a successful add
+    'msg_addfavsuccess': 'Added To Fav',   # the picker's Favourites row after a successful add (stock Add button's Favourites path, @0x52822c)
     'sort_alphabet': 'Alphabetical',           # the Songs page's sort card: the stock sort dialog's five labels, in sort_flag order (patch/songs.c)
     'sort_filename': 'File name',
     'sort_format': 'File format',
@@ -49,6 +50,13 @@ STOCK = {
     'msg_delplaylist': 'Delete Playlist?',     # the Playlists page's select mode: the stock delete handler's confirm dialog and message boxes (@0x53dbcc)
     'msg_delplaylistfailed': 'Failed To Delete Playlist',
     'msg_delplaylistsuccess': 'Playlist Deleted',
+    'msg_delfile': 'Delete File?',             # the Folders page's select mode: the stock folder handler's confirm dialog and message boxes (@0x5324d0), and the stock messages of a level that cannot be entered
+    'msg_delfilefailed': 'Failed To Delete File',
+    'msg_delfilesuccess': 'File Deleted',
+    'msg_notsupportdel': "Can't be removed",
+    'msg_nottf': 'No TF Card Found',
+    'msg_nototg': 'No OTG Found',
+    'msg_notfile': 'File Not Found',
 }
 
 _L = LOCALES[1:]    # the order of the translations below (English is the key)
@@ -242,6 +250,13 @@ TEXT = dict([
        '¿Recrear todas las carátulas? Puede tardar unos minutos.', 'Ricreare tutte le copertine? Potrebbe richiedere alcuni minuti.',
        'สร้างปกทั้งหมดใหม่หรือไม่ อาจใช้เวลาสองสามนาที', 'Odbudować wszystkie okładki? Może to potrwać kilka minut.',
        'Пересоздать все обложки? Это может занять несколько минут.', 'Оновити всі обкладинки? Це може тривати кілька хвилин.'),
+    # the Folders page's Delete confirm when a marked row is a folder (stock removes it with rm -rf; the dialog's wrapped label, at most three lines)
+    _t('Delete folder and everything in it?', '删除文件夹及其中的所有内容？', '刪除資料夾及其中的所有內容？',
+       'フォルダとその中身をすべて削除しますか？', '폴더와 그 안의 모든 항목을 삭제할까요?',
+       'Supprimer le dossier et tout son contenu ?', 'Ordner und alles darin löschen?',
+       '¿Eliminar la carpeta y todo su contenido?', 'Eliminare la cartella e tutto il suo contenuto?',
+       'ลบโฟลเดอร์และทุกอย่างในโฟลเดอร์นี้หรือไม่', 'Usunąć folder i całą jego zawartość?',
+       'Удалить папку и всё её содержимое?', 'Видалити папку та весь її вміст?'),
     # the track count of the album page's meta line: the payload chooses the key by n == 1 and puts the number where %d is;
     # languages with more than two plural forms (pl, ru, uk) use a label that needs none ("Tracks: 12")
     _t('%d track', '%d 首歌曲', '%d 首歌曲', '%d 曲', '%d곡', '%d titre', '%d Titel',
@@ -263,6 +278,12 @@ TEXT = dict([
     # the Songs page's line for an empty list (Favourites, a playlist ...; the library's empty line is "Update Local Music first")
     _t('No songs', '没有歌曲', '沒有歌曲', '曲がありません', '노래 없음', 'Aucun titre', 'Keine Titel',
        'Sin canciones', 'Nessun brano', 'ไม่มีเพลง', 'Brak utworów', 'Нет песен', 'Немає пісень'),
+    # the Folders page's line for a folder with nothing to show (patch/folders.c)
+    _t('Empty folder', '空文件夹', '空資料夾', '空のフォルダ', '빈 폴더', 'Dossier vide', 'Leerer Ordner',
+       'Carpeta vacía', 'Cartella vuota', 'โฟลเดอร์ว่าง', 'Pusty folder', 'Пустая папка', 'Порожня папка'),
+    # the Folders page's toast for a folder (or storage) that folder_enter could not load: toolsLoadDirectory returned 0 (patch/folders.c fo_enter)
+    _t('No music in this folder', '此文件夹中没有音乐', '此資料夾中沒有音樂', '音楽がありません', '이 폴더에 음악이 없습니다', 'Aucune musique ici', 'Keine Musik in diesem Ordner',
+       'No hay música en esta carpeta', 'Nessuna musica qui', 'ไม่มีเพลงในโฟลเดอร์นี้', 'Brak muzyki w tym folderze', 'В этой папке нет музыки', 'У цій папці немає музики'),
     # the iPod page's Now Playing screen (patch/ipod.c): the line for an empty player (the track's place in the queue is the neutral "3 / 12": the table format allows one %d a text)
     _t('Not Playing', '未在播放', '未在播放', '再生していません', '재생 중이 아님', 'Aucune lecture', 'Keine Wiedergabe',
        'Sin reproducción', 'Nessuna riproduzione', 'ไม่ได้เล่น', 'Nie odtwarza', 'Не воспроизводится', 'Не відтворюється'),
@@ -381,6 +402,14 @@ TEXT = dict([
     _t('Not audio', '不是音频', '不是音訊', '音声ではありません', '오디오가 아님', "Pas de l'audio", 'Kein Audio', 'No es audio', 'Non è audio', 'ไม่ใช่เสียง', 'To nie audio', 'Не аудио', 'Не аудіо'),
     _t('Card is full', '存储卡已满', '記憶卡已滿', 'カードがいっぱいです', '카드가 가득 참', 'Carte pleine', 'Karte voll', 'Tarjeta llena', 'Scheda piena', 'การ์ดเต็ม', 'Karta pełna', 'Карта заполнена', 'Картка заповнена'),
     _t('Queue is full', '队列已满', '佇列已滿', 'キューがいっぱいです', '대기열이 가득 참', "File d'attente pleine", 'Warteschlange voll', 'Cola llena', 'Coda piena', 'คิวเต็ม', 'Kolejka pełna', 'Очередь заполнена', 'Черга заповнена'),
+    # The Queue page (patch/queuepage.c): the section line and the page's title, the line under it when nothing follows
+    _t('Queue', '播放队列', '播放佇列', '再生キュー', '재생 대기열', "File d'attente", 'Warteschlange', 'Cola', 'Coda', 'คิว', 'Kolejka', 'Очередь', 'Черга'),
+    _t('Shuffle is on', '随机播放已开启', '隨機播放已開啟', 'シャッフル オン', '임의 재생 켜짐', 'Lecture aléatoire activée', 'Zufall ist an', 'Aleatorio activado', 'Casuale attivo', 'เปิดสุ่มเพลงอยู่', 'Losowo włączone', 'Перемешивание включено', 'Перемішування увімкнено'),
+    _t('%d song plays in random order', '%d 首歌曲将随机播放', '%d 首歌曲將隨機播放', '%d 曲をランダムに再生', '%d곡을 무작위로 재생', '%d titre en ordre aléatoire', '%d Titel in zufälliger Reihenfolge',
+       '%d canción en orden aleatorio', '%d brano in ordine casuale', '%d เพลงเล่นแบบสุ่ม', 'Utwory w losowej kolejności: %d', 'Песен в случайном порядке: %d', 'Пісень у випадковому порядку: %d'),
+    _t('%d songs play in random order', '%d 首歌曲将随机播放', '%d 首歌曲將隨機播放', '%d 曲をランダムに再生', '%d곡을 무작위로 재생', '%d titres en ordre aléatoire', '%d Titel in zufälliger Reihenfolge',
+       '%d canciones en orden aleatorio', '%d brani in ordine casuale', '%d เพลงเล่นแบบสุ่ม', 'Utwory w losowej kolejności: %d', 'Песен в случайном порядке: %d', 'Пісень у випадковому порядку: %d'),
+    _t('No upcoming songs', '没有待播歌曲', '沒有待播歌曲', '次の曲はありません', '다음 곡 없음', 'Aucun titre à suivre', 'Keine weiteren Titel', 'No hay más canciones', 'Nessun brano in coda', 'ไม่มีเพลงถัดไป', 'Brak kolejnych utworów', 'Нет следующих песен', 'Немає наступних пісень'),
     # The Downloads level and the select mode of the Show level (patch/podcasts.c; "N Selected", "Select All" and "Delete" are the Songs page's keys)
     _t('No downloads', '没有下载', '沒有下載', 'ダウンロードはありません', '다운로드 없음', 'Aucun téléchargement', 'Keine Downloads', 'Sin descargas', 'Nessun download', 'ไม่มีการดาวน์โหลด', 'Brak pobrań', 'Нет загрузок', 'Немає завантажень'),
     _t('Delete the selected episodes?', '删除所选节目？', '刪除所選節目？', '選択したエピソードを削除しますか？', '선택한 에피소드를 삭제할까요?', 'Supprimer les épisodes sélectionnés ?', 'Ausgewählte Folgen löschen?',

@@ -34,6 +34,7 @@
 #include "grid.h"
 #include "i18n.h"
 #include "keyboard.h"
+#include "picker.h"
 
 extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
 extern int
@@ -46,6 +47,7 @@ songs_open_playlist(int id,
 #define PL_TAP_PX SC_DRAG_PX
 #define PL_AHEAD (pl.list ? 2 : 1)
 #define HOME_PLAYLIST 14
+#define PL_PICK_MS 400 /* the picker's add after a New playlist: the keyboard page's close is over */
 #if GRID_TILES < GRID_COLS * ((GRID_VIEW_H + CELL_H) / PITCH + 2 + 1) + 2
 #error GRID_TILES cannot hold the visible cells, the next row and the history
 #endif
@@ -123,7 +125,16 @@ static void pl_fade(void) {
 static void pl_redraw(void) { widget_invalidate_force(pl.sv, (void *)0); }
 static int pl_abs(int v) { return v < 0 ? -v : v; }
 
-static void *pl_rec(int i) { return deque_at(pl.pls, (unsigned)i); }
+/* Pick mode (the Add to Playlist picker, patch/picker.c; docs/modules/picker.md): "New playlist" is row 0, the playlists follow. When the picker opens over
+ * our own Songs page of a playlist, the Playlists page below it has a state, kept aside here and put back when the picker goes. */
+static struct {
+    int on, id;
+    unsigned timer;
+    void *stash;
+    void *star; /* the Favourites row's glyph: a 24 px white star, alpha bitmap */
+} pick __attribute__((section(".scratch")));
+static int pl_v(void) { return pick.on ? 2 : 0; } /* the rows before the playlists: New playlist, Favourites */
+static void *pl_rec(int i) { return deque_at(pl.pls, (unsigned)(i - pl_v())); }
 /* The playlist's id: REC_DISC, what the stock row handler hands to classinfo[1] (@0x53d5f4) */
 static int pl_id(int i) { return I(pl_rec(i), REC_DISC); }
 
@@ -184,6 +195,10 @@ static void pl_texts(tile_t *t, int a) {
     info_t *in = &pl.info[a];
     char sub[48];
     sub[0] = 0;
+    if (a < pl_v()) {
+        grid_set(t, TR(a ? "Favorites" : "playlist_create"), sub, 0);
+        return;
+    }
     if (in->scanned) pl_fmt(sub, sizeof sub, TR(in->songs == 1 ? "%d track" : "%d tracks"), in->songs);
     grid_set(t, cc_str(pl_rec(a), REC_TITLE), sub, 0);
 }
@@ -193,6 +208,7 @@ static void pl_prep(tile_t *t, int a) {
     info_t *in = &pl.info[a];
     grid_free_art(t);
     t->fit = 0, t->art = 0, t->qi = 0;
+    t->mid = a < pl_v();
     t->nq = in->nk > 1 && !pl.tmp ? 1 : in->nk;
     memcpy(t->qkey, in->key, sizeof t->qkey);
     if (in->scanned && !in->nk) t->art = 2; /* no album with a cover: the placeholder */
@@ -237,6 +253,77 @@ static void pl_mark(void *canvas, int a, int x, int y) {
     canvas_draw_image(canvas, pl.mark[pl_is_sel(a)], src, dst);
 }
 
+/* The picker's New playlist row: a dark rounded square over the placeholder disc and a plus (two 2 px bars, as Lucide's plus at this size) in the art box. Only when
+ * wholly inside the window (a row half under the navbar shows the disc, as the marks are drawn). */
+static void pl_plus(void *canvas, int y) {
+    int i, x = LIST_ART_X, c = LIST_ART_X + LIST_ART / 2, cy = y + LIST_ART / 2;
+    if (y < 0 || y + LIST_ART > GRID_VIEW_H) return;
+    canvas_set_fill_color(canvas, 0xff2c2c2eu);
+    for (i = 0; i < 2; ++i) { /* the corners of a LIST_R 4 arc: the first line starts 2 px in, the second 1 */
+        canvas_fill_rect(canvas, x + 2 - i, y + i, LIST_ART - 2 * (2 - i), 1);
+        canvas_fill_rect(canvas, x + 2 - i, y + LIST_ART - 1 - i, LIST_ART - 2 * (2 - i), 1);
+    }
+    canvas_fill_rect(canvas, x, y + 2, LIST_ART, LIST_ART - 4);
+    canvas_set_fill_color(canvas, 0xffffffffu);
+    canvas_fill_rect(canvas, c - 10, cy - 1, 20, 2);
+    canvas_fill_rect(canvas, c - 1, cy - 10, 2, 20);
+}
+
+/* The Favourites row's glyph: the star of the Favorites icon (the filled five-point star, outer radius 10.5 px), 4 x 4 samples a pixel into the alpha of a white bitmap
+ * (the cross and the chevron are made the same way). Coordinates are eighths of a pixel; the unit vectors are thousandths. */
+#define PL_STAR 24
+static void *pl_make_star(void) {
+    static const int ox[5] = {0, 951, 588, -588, -951}, oy[5] = {-1000, -309, 809, 809, -309};
+    static const int ix[5] = {588, 951, 0, -951, -588}, iy[5] = {-809, 309, 1000, 309, -809};
+    int vx[10], vy[10], x, y, i, j, k, n;
+    unsigned *px;
+    void *b = bitmap_create_ex(PL_STAR, PL_STAR, PL_STAR * 4, BITMAP_RGBA8888);
+    if (!b) return b;
+    px = (unsigned *)bitmap_lock_buffer_for_write(b);
+    if (!px || bitmap_get_line_length(b) != PL_STAR * 4) {
+        if (px) bitmap_unlock_buffer(b);
+        bitmap_destroy(b);
+        return (void *)0;
+    }
+    for (k = 0; k < 5; ++k) { /* centre (12, 12.5) px: a star's visual centre is a little below its circle's */
+        vx[2 * k] = 96 + 84 * ox[k] / 1000, vy[2 * k] = 100 + 84 * oy[k] / 1000;
+        vx[2 * k + 1] = 96 + 38 * ix[k] / 1000, vy[2 * k + 1] = 100 + 38 * iy[k] / 1000;
+    }
+    for (y = 0; y < PL_STAR; ++y)
+        for (x = 0; x < PL_STAR; ++x) {
+            for (n = 0, i = 0; i < 4; ++i)
+                for (j = 0; j < 4; ++j) {
+                    int sx = x * 8 + 2 * j + 1, sy = y * 8 + 2 * i + 1, in = 0;
+                    for (k = 0; k < 10; ++k) { /* even-odd: the edges a ray to +x crosses */
+                        int a = k, c = (k + 1) % 10;
+                        if ((vy[a] > sy) != (vy[c] > sy) &&
+                            ((sx - vx[a]) * (vy[c] - vy[a]) < (vx[c] - vx[a]) * (sy - vy[a])) == (vy[c] > vy[a]))
+                            in ^= 1;
+                    }
+                    n += in;
+                }
+            px[y * PL_STAR + x] = (unsigned)(n * 255 / 16) << 24 | 0xffffffu;
+        }
+    bitmap_unlock_buffer(b);
+    return b;
+}
+
+/* The picker's Favourites row: the New playlist row's dark rounded square with the star centred in the art box. */
+static void pl_star(void *canvas, int y) {
+    int i, x = LIST_ART_X, src[4], dst[4];
+    if (y < 0 || y + LIST_ART > GRID_VIEW_H) return;
+    canvas_set_fill_color(canvas, 0xff2c2c2eu);
+    for (i = 0; i < 2; ++i) {
+        canvas_fill_rect(canvas, x + 2 - i, y + i, LIST_ART - 2 * (2 - i), 1);
+        canvas_fill_rect(canvas, x + 2 - i, y + LIST_ART - 1 - i, LIST_ART - 2 * (2 - i), 1);
+    }
+    canvas_fill_rect(canvas, x, y + 2, LIST_ART, LIST_ART - 4);
+    if (!pick.star) return;
+    src[0] = src[1] = 0, src[2] = src[3] = PL_STAR;
+    dst[0] = x + (LIST_ART - PL_STAR) / 2, dst[1] = y + (LIST_ART - PL_STAR) / 2, dst[2] = dst[3] = PL_STAR;
+    canvas_draw_image(canvas, pick.star, src, dst);
+}
+
 static int pl_on_paint(void *ctx, void *e) {
     void *canvas = e ? *(void **)((char *)e + EVENT_PAINT_CANVAS) : (void *)0;
     int off = pl_off(), r0, r1, last, a;
@@ -247,6 +334,8 @@ static int pl_on_paint(void *ctx, void *e) {
     if (r1 >= r0 && pl.list) {
         grid_list_paint(canvas, &pl.g, pl.st_ltitle, pl.st_lsub, r0, r1, off, GRID_VIEW_H, pl.select ? 0 : pl.press,
                         pl.select ? SG_SEL_COL : 0, pl_tile_of, (void *)0);
+        if (pl_v() && r0 == 0) pl_plus(canvas, LIST_ART_Y - off);
+        if (pl_v() && r0 <= 1 && r1 >= 1) pl_star(canvas, LIST_ROW_H + LIST_ART_Y - off);
         for (a = r0; pl.select && pl.mark[0] && a <= r1; ++a)
             pl_mark(canvas, a, LIST_ART_X + (SG_SEL_COL - 6 - SG_MARK) / 2,
                     a * LIST_ROW_H - off + (LIST_ROW_H - SG_MARK) / 2);
@@ -272,6 +361,10 @@ static void pl_scan(int i) {
     info_t *in = &pl.info[i];
     int n;
     void *list;
+    if (i < pl_v()) { /* the picker's New playlist and Favourites rows have nothing to read */
+        in->scanned = 1;
+        return;
+    }
     if (!pl.albums_tried) {
         pl.albums_tried = 1;
         pl.albums = cc_albums();
@@ -284,6 +377,7 @@ static void pl_scan(int i) {
     in->nk =
         grid_mosaic_keys(list, pl.albums, in->key); /* patch/grid.c: shared with the Songs page's playlist header */
     in->scanned = 1;
+    picker_restore(); /* (the picker keeps the browsing record of the page it is over) */
 }
 
 /* ---------------------------------------------------------------------------
@@ -377,6 +471,7 @@ static void pl_select(int on);
 
 static void pl_load(void) {
     void *list;
+    int i;
     pl_select(0); /* a page read again is not in select mode (the marks were of the old list) */
     if (pl.more_timer) timer_remove(pl.more_timer);
     pl.more_timer = 0;
@@ -389,10 +484,12 @@ static void pl_load(void) {
         list = *(void **)PDEQ_PLAYLIST;
         if (list && deque_size(list)) pl.pls = cc_copy_list(list);
     }
-    pl.count = pl.pls ? deque_size(pl.pls) : 0;
-    if (pl.count > PL_MAX) pl.count = PL_MAX;
+    picker_restore();
+    pl.count = (pl.pls ? deque_size(pl.pls) : 0) + (unsigned)pl_v();
+    if (pl.count > PL_MAX + (unsigned)pl_v()) pl.count = PL_MAX + (unsigned)pl_v();
     pl.info = pl.count ? calloc(pl.count, sizeof(info_t)) : (info_t *)0;
     if (pl.count && !pl.info) pl.count = 0;
+    for (i = 0; pl.info && i < pl_v(); ++i) pl.info[i].scanned = 1; /* New playlist, Favourites: nothing to read */
     pl.sel = pl.count ? calloc((pl.count + 7) / 8, 1)
                       : (unsigned char *)0; /* none: no select mode (the menu's Delete opens the stock page) */
     grid_placeholder(&pl.g);
@@ -433,8 +530,20 @@ static int pl_item_of(void *e) {
 /* Our Songs page on the playlist (patch/songs.c songs_open_playlist: its name the title, its id in classinfo[1]); a page that does not open leaves the
  * stock Playlists page's row handler (@0x53d300, mode 0): the name for the page's title, the id into classinfo[1], then the stock Songs page with the
  * playlist class. Back returns here. */
+static void pl_create(void);
+static void pl_pick_add(int id);
+static void pl_pick_later(int id);
+
 static void pl_open(int i) {
-    void *rec = pl_rec(i);
+    void *rec;
+    if (pl_v()) { /* the picker: New playlist (row 0), Favourites (row 1), or the add to that playlist */
+        if (i == 0)
+            pl_create();
+        else
+            pl_pick_add(i == 1 ? PICKER_FAVOURITES : pl_id(i));
+        return;
+    }
+    rec = pl_rec(i);
     if (songs_open_playlist(I(rec, REC_DISC), cc_str(rec, REC_TITLE)) != -1) return;
     snprintf((char *)NAV_TITLE, 0x200, "%s", cc_str(rec, REC_TITLE));
     *(int *)(CLASSINFO + 4) = I(rec, REC_DISC);
@@ -450,7 +559,7 @@ static void pl_head(void) { /* the navbar's title: "N Selected" in select mode, 
     char buf[64];
     if (!pl.title) return;
     if (!pl.select) {
-        widget_set_tr_text(pl.title, "Playlists");
+        widget_set_tr_text(pl.title, pl_v() ? "Add to Playlist" : "Playlists");
         return;
     }
     pl_fmt(buf, sizeof buf, TR("%d Selected"), (int)pl.nsel);
@@ -615,11 +724,42 @@ static void pl_named(const char *name) {
     int r;
     loadLocalClassList(CLASS_PLAYLISTS);
     r = createPlayListItem(*(void **)PDEQ_PLAYLIST, name);
+    picker_restore();
     if (r == -1)
         pl_toast(TR("msg_playlistfull"));
     else if (r == -2)
         pl_toast(TR("msg_playlistexist"));
+    else if (
+        r >= 0 && pl_v() &&
+        pl.win) { /* the picker: the new playlist gets the songs, the page closes, once the keyboard page has gone (pl_pick_later) */
+        pl_pick_later(r);
+        return;
+    }
     if (pl.win && pl.view) pl_load();
+}
+
+/* The picker's add (patch/picker.c: batch_add_file, the message), then the page closes as the stock picker's handler closes its window (window_close on the row's window). */
+static void pl_pick_add(int id) {
+    void *win = pl.win;
+    picker_add(id);
+    if (win) window_close(win);
+}
+
+/* The keyboard calls pl_named from its own click handler right after navigator_back, so its window is still going (its close animation, its widgets about to be destroyed
+ * under the handler). The add, its message dialog and the picker's own window_close are three more window operations on top of that; they wait PL_PICK_MS on a timer of the
+ * picker's page (removed with it), when the keyboard is gone and the picker is the front window. */
+static int pl_pick_fire(const void *unused) {
+    (void)unused;
+    pick.timer = 0;
+    if (pick.on && pl.win) pl_pick_add(pick.id);
+    return RET_OK;
+}
+
+static void pl_pick_later(int id) {
+    if (pick.timer) return;
+    pick.id = id;
+    pick.timer = timer_add(pl_pick_fire, (void *)0, PL_PICK_MS);
+    if (!pick.timer) pl_pick_add(id); /* no timer: now */
 }
 
 static void pl_create(void) {
@@ -815,6 +955,19 @@ static int pl_on_destroy(void *ctx, void *e) {
     if (pl.mark[0]) bitmap_destroy(pl.mark[0]);
     if (pl.mark[1]) bitmap_destroy(pl.mark[1]);
     memset(&pl, 0, sizeof pl);
+    if (pick.timer) timer_remove(pick.timer);
+    pick.timer = 0;
+    if (pick.star) bitmap_destroy(pick.star);
+    pick.star = (void *)0;
+    if (pick.on) { /* the picker's page: its copies freed, the page below it (if there was one) as it was */
+        pick.on = 0;
+        picker_release();
+    }
+    if (pick.stash) {
+        memcpy(&pl, pick.stash, sizeof pl);
+        free(pick.stash);
+        pick.stash = (void *)0;
+    }
     return RET_OK;
 }
 
@@ -880,9 +1033,15 @@ static int pl_open_page(void) {
         if (pl.mark[1]) bitmap_destroy(pl.mark[1]);
         pl.mark[0] = pl.mark[1] = (void *)0;
     }
-    pl.list = !pl_use_grid();
+    if (pl_v() && !pick.star) pick.star = pl_make_star();
+    pl.list = pl_v() || !pl_use_grid(); /* the picker is always the list (the saved choice is the page's own) */
     pl_shape(pl.list);
     pl_glyph();
+    if (pl_v()) { /* the picker: Back and the title only */
+        pl_show(pl.btn_more, 0), pl_show(pl.btn, 0), pl_show(pl.np, 0);
+        if (pl.title) widget_resize(pl.title, SG_SELALL_X - NAV_TITLE_X, 22);
+        pl_head();
+    }
     pl.noscroll = !widget_on(pl.sv, EVT_SCROLL, pl_on_scroll, (void *)0) ||
                   !widget_on(pl.sv, EVT_SCROLL_END, pl_on_scroll, (void *)0);
     widget_on(pl.win, EVT_WINDOW_TO_FG, pl_on_fg, (void *)0);
@@ -899,5 +1058,29 @@ static int pl_open_page(void) {
 int playlists_open(void) {
     int r = pl_open_page();
     if (r == -1 && !pl.win) return pod_home_open(HOME_PLAYLIST);
+    return r;
+}
+
+/* The Add to Playlist picker's page (patch/picker.c picker_open): this page in pick mode. Over our own Playlists page's Songs page the state of the Playlists page below
+ * is kept aside first (pl is one struct) and put back by pl_on_destroy. 0 once the page is up; < 0 where it could not open (the caller falls back to the stock picker). */
+int playlists_pick(void) {
+    int r;
+    if (pick.on) return -1;
+    if (pl.win) {
+        pick.stash = calloc(1, sizeof pl);
+        if (!pick.stash) return -1;
+        memcpy(pick.stash, &pl, sizeof pl);
+        memset(&pl, 0, sizeof pl);
+    }
+    pick.on = 1;
+    r = pl_open_page();
+    if (r < 0) {
+        pick.on = 0; /* (a page left again, -2, ends in pl_on_destroy, which puts the stash back) */
+        if (r == -1 && pick.stash) {
+            memcpy(&pl, pick.stash, sizeof pl);
+            free(pick.stash);
+            pick.stash = (void *)0;
+        }
+    }
     return r;
 }

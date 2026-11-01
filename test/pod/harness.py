@@ -1172,7 +1172,7 @@ class SelectMachine(Machine):
     def __init__(self):
         super().__init__()
         self.styled, self.sel_vec = [], None
-        for n in ('select_recordinit', 'set_selectindex', 'batch_delete_file', 'widget_set_style', 'value_set_uint32'):
+        for n in ('select_recordinit', 'set_selectindex', 'batch_delete_file', 'batch_add_file', 'widget_set_style', 'value_set_uint32'):
             self.handlers[pod.FUNCTIONS[n][2]] = n
 
     def _hook(self, u, address, size, _):
@@ -1190,6 +1190,9 @@ class SelectMachine(Machine):
         elif name == 'batch_delete_file':
             flag = self.word(sp + 16)
             self.calls.append(('batch_delete_file', a0, a1, a2, a3, flag, [i for i, v in enumerate(self.sel_vec or []) if v]))
+            ret = 1
+        elif name == 'batch_add_file':   # (class, 0xf00b, the list, the vector, playlist id): recorded with the selected rows
+            self.calls.append(('batch_add_file', a0, a1, a2, a3, self.word(sp + 16), [i for i, v in enumerate(self.sel_vec or []) if v]))
             ret = 1
         elif name == 'widget_set_style':
             self.styled.append((a0, self.read_cstr(a1), self.word(a2 + 8)))

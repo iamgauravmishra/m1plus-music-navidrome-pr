@@ -5,7 +5,8 @@
  *
  * One hook, playing_page_init (0x53d1e4): the page's init, run when Now Playing is built, never at boot or in the
  * main loop. It runs the stock function to completion and then, unless the kill switch /mnt/mmc/m1plus-off exists,
- * starts a page-scoped 500 ms timer (np_tick) and registers EVT_DESTROY on the window, which removes the timer.
+ * starts a page-scoped 500 ms timer (np_tick) and registers EVT_DESTROY on the window, which removes the timer. It also binds a click handler on the queue
+ * button (np_on_queue: our Queue page, patch/queuepage.c; the stock drawer opens when it answers RET_OK).
  * The timer does three things and nothing else:
  *   - the tint: demo writes the track's cover to /tmp/coverpic.jpg or /tmp/externpic.jpg (parseplaycover_thd,
  *     source type word 0x97cad8: 2 and 3/5; 1 while it works); when the file changes (a hash of its bytes) the
@@ -33,6 +34,17 @@
 #include "i18n.h"
 #include "common.h"
 #include "lyrics.h"
+
+extern int
+queue_open(void); /* patch/queuepage.c: our Queue page; 0 once it is open, else the stock drawer should open */
+
+/* The queue button (btn_queue, stock handler 0x53b14c: navigator_to("dialog/playqueue_dialog")) opens our Queue page instead. Bound after the stock init, so it runs before the stock
+ * handler: RET_STOP keeps the drawer from opening once our page is up, RET_OK lets it open (kill switch, a stream, a window that will not open). docs/modules/queue.md. */
+static int np_on_queue(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    return queue_open() == 0 ? RET_STOP : RET_OK;
+}
 
 static struct {
     void *win, *rem, *tot; /* the window, np_remaining (ours), label_playlen (stock) */
@@ -421,6 +433,8 @@ static int np_on_foreground(void *ctx, void *e) {
     (void)e;
     if (!np.win || ctx != np.win) return RET_OK;
     np_work(); /* the page is current when it reappears (fg still 0: a new colour tints the bar once, below) */
+    /* the mode button's picture follows the play mode: stock sets it only in its own click handler, so a mode set on the Queue page (or elsewhere) is shown now */
+    stock_np_mode_button(ctx);
     np.fg = 1;
     np_bar_apply();
     return RET_OK;
@@ -455,6 +469,7 @@ static void np_start(void *win) {
         np_corner_init();
         widget_on(art, EVT_AFTER_PAINT, np_on_art_paint, (void *)0);
     }
+    pod_bind(win, "btn_queue", np_on_queue, (void *)0);
     ly_start(win);
     np.fg = 1;
     np.barok = widget_on(win, EVT_WINDOW_TO_BG, np_on_background, win) &&
