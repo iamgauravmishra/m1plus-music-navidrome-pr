@@ -1213,10 +1213,10 @@ def build_menucfg_page(page):
 # The Extras page's section headers (patch/menu.c mn_extras; iOS grouped-list captions): one per group of pod_pages.EXTRAS_GROUPS, pod_hdr0 ..,
 # a plain view HDR_H (40) high, shorter than a row, the child of the list's scroll_view like a row (the stock list_view layouter keeps the height of a child that is not
 # a row, as it does the shelf's, and sums it). The caption is a stock hscroll_label (never scrolls, ellipsis) in the style of the Home menu's "Made for You" heading
-# (pod_dm_head) and the Recently Played shelf's: x 10, 20 px, white (SH_HEAD_X, SH_HEAD_PX, SH_TITLE_RGB, defined below; test/pod/menu.py asserts they agree), left aligned,
+# (pod_dm_head) and the Recently Played shelf's: x 10, 20 px (SH_HEAD_X, SH_HEAD_PX, defined below; test/pod/menu.py asserts they agree), but in the secondary grey, left aligned,
 # so every section heading of the Music pages sits on one left edge. Insensitive always and hidden in the asset (the payload shows it by visible alone): never a touch target, and no list_item (no press visual, no
 # chevron or icon). The label is 22 px high in the strip's bottom 26 px.
-HDR_X, HDR_PX, HDR_RGB = 10, 20, '#FFFFFF'
+HDR_X, HDR_PX, HDR_RGB = 10, 20, '#AAAAAA'   # the secondary grey (SH_SUB_RGB, pod_settings.GREY): a group caption, dimmer than its rows
 HDR_LABEL_Y, HDR_LABEL_H = 14, 22
 HDR_NAMES = tuple(f'pod_hdr{g}' for g in range(len(pod_pages.EXTRAS_GROUPS)))
 

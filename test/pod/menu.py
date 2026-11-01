@@ -783,9 +783,9 @@ def header_asset_tests(ctx, tree, what):
            f'{what}: they show Play, Library, Collections and Tools (translated by their keys)')
     expect(all(len(h.children) == 1 and h.children[0].type == 'hscroll_label' and h.children[0].get('sensitive') == 'false' and h.children[0].x == pod_ui.HDR_X == pod_ui.SH_HEAD_X == 10
                and h.children[0].get('style:normal:font_size') == str(pod_ui.HDR_PX) == str(pod_ui.SH_HEAD_PX) == '20'
-               and h.children[0].get('style:normal:text_color') == pod_ui.HDR_RGB == pod_ui.SH_TITLE_RGB
+               and h.children[0].get('style:normal:text_color') == pod_ui.HDR_RGB == pod_ui.SH_SUB_RGB
                and 0 < h.children[0].y and h.children[0].y + h.children[0].h <= h.h for h in hdrs),
-           f'{what}: the caption is in the style of the Home menu\'s "Made for You" heading (x 10, 20 px, white), inside the strip, insensitive')
+           f'{what}: the caption is in the style of the Home menu\'s "Made for You" heading (x 10, 20 px) in the secondary grey, inside the strip, insensitive')
     expect(not [w for h in hdrs for w in h.walk() if w.type in ('list_item', 'image', 'button')], f'{what}: no list_item, chevron, icon or button in a header (no press visual)')
     expect(sv.children[-4:] == hdrs and len([c for c in sv.children if c.name.startswith('pod_row')]) == len(sv.children) - 4, f'{what}: the headers follow the rows')
 
