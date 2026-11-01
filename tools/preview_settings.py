@@ -3,7 +3,7 @@
 widgets tools/pod_ui.py build_cards_page made from the numbers of tools/pod_settings.py (shared with the tests), with the font, images and navbar of the tree. A value takes the room its text
 needs and the row's label gets the rest, as patch/m1plus.c value_fit does. Approximate (PIL, not AWTK); the sample state (values, switches, checks) is what a typical device shows.
 
-  out/preview/settings-mock-3.png   Settings (first screen and whole list), Menu & Extras, Home Screen, Library, Album Order, Now Playing, Theme, Developer, Keyboards, About
+  out/preview/settings-mock-3.png   Settings (first screen and whole list), Home Screen, Library, Album Order, Now Playing, Theme, Developer, Keyboards, About
 
 Usage: uv run python -I tools/preview_settings.py WORKDIR [OUT.png]     (en_US; WORKDIR e.g. work/mod-release after a build)
 """
@@ -109,7 +109,6 @@ def main():
     out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(build.ROOT, 'out', 'preview', 'settings-mock-3.png')
     sheet([('Settings, first screen', draw_page(s, 'm1plus_settings')),
            ('Settings, whole list (red = screen bottom)', draw_page(s, 'm1plus_settings', full=True)),
-           ('Settings > Menu & Extras', draw_page(s, 'm1plus_menuextras')),
            ('Settings > Home Screen', draw_page(s, 'm1plus_homeset')),
            ('Settings > Library', draw_page(s, 'm1plus_library')),
            ('Settings > Library > Album Order', draw_page(s, 'm1plus_albumorder')),

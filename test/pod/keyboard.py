@@ -28,7 +28,6 @@ DEFS = {}
 for _line in open(os.path.join(ROOT, 'patch', 'keyboard.h')):
     _m = re.match(r'#define (\w+) (\d+)\s*(?:/\*.*)?$', _line.strip())
     if _m: DEFS[_m.group(1)] = int(_m.group(2))
-LOG = '/mnt/mmc/m1plus-probe.log'
 PAD_Y = 270            # the pad's top in the window; the window is 30 px down the screen
 WIN_Y = 30
 DESTROY, TO_BG = O['EVT_DESTROY'], O['EVT_WINDOW_TO_BG']
@@ -451,56 +450,6 @@ def base_tests(ctx):
     m.call(fn, a0=m.alloc(8), a1=0, count=4000000)
     expect(kopen(m) == -1, 'a destroy event of another window changes nothing')
 
-    # 10. The Developer row: keyboard_test
-    m = keyboard_machine()
-    m.call(PSYMS['keyboard_test'], count=40000000)
-    expect(('window_open', 'm1plus_keyboard') in m.calls and said(m, 'kb_hint') == 'Type here', 'the Developer row opens the keyboard with its placeholder')
-    typ(m, 'H'); typ(m, 'i')
-    out = press(m, 'kb_go')
-    expect(('navigator_back',) in out and [c[1] for c in out if c[0] == 'toast'] == ['Hi'], 'Search in the test shows the typed text in a toast')
-    m = keyboard_machine()
-    m.present.add('/mnt/mmc/m1plus-off')
-    m.call(PSYMS['keyboard_test'], count=40000000)
-    expect('window_open' not in m.names(), 'the kill switch keeps the row from opening anything')
-
-    # 11. The log of the touches
-    m = keyboard_machine()
-    m.wall = 1800000000
-    m.call(PSYMS['keyboard_test'], count=40000000)
-    log = lambda: m.fs.get(LOG, b'').decode().split('\n')[:-1]
-    expect(log() == ['[1800000000] kb open'], f'the log opens with a line ({log()})')
-    qx, qy = centre(m, 'kb_k1')
-    ptr(m, 'kb_k1', 'down', qx, qy, 2000)
-    ln = log()[-1]
-    expect(ln == f'[1800000000] kb down x={qx} y={qy} pad={qx},{qy - WIN_Y - PAD_Y} hit=W off=0,0', f'a touch on a key: the screen position, the pad position, the key, the offset from its centre ({ln})')
-    ptr(m, 'kb_k1', 'down', qx + 5, qy - 7, 2100)
-    expect(log()[-1].endswith('hit=W off=5,-7'), f'an offset from the centre ({log()[-1]})')
-    ptr(m, 'kb_pad', 'down', qx + 5, qy - 7, 2100)
-    expect(len(log()) == 3, 'the pad seeing the same touch as its key does not log it twice')
-    ptr(m, 'kb_pad', 'down', 31, WIN_Y + PAD_Y + 6 + 18, 3000)
-    expect(log()[-1] == '[1800000000] kb down x=31 y=324 pad=31,24 hit=Q via=gap gap=1 off=15,0', f'a touch between two keys: the key it goes to, via=gap, the gap in px and the offset from that key\'s centre ({log()[-1]})')
-    ptr(m, 'kb_pad', 'abort', 31, WIN_Y + PAD_Y + 6 + 18, 3050)
-    ptr(m, 'kb_pad', 'down', 160, WIN_Y + PAD_Y + 176, 3100)
-    expect('hit=space via=gap gap=3' in log()[-1], f'a touch under the keys ({log()[-1]})')
-    ptr(m, 'kb_pad', 'abort', 160, WIN_Y + PAD_Y + 176, 3150)
-    ptr(m, 'kb_k1', 'up', qx, qy, 2080)
-    run_evt(m, 'kb_k1', O['EVT_CLICK'])
-    expect(log()[-1].endswith('kb key W'), f'the key itself is logged when it is typed ({log()[-1]})')
-    ptr(m, 'kb_shift', 'down', *centre(m, 'kb_shift'), 4000)
-    expect(log()[-1].endswith('hit=shift off=0,0'), 'a function key is named')
-    typ(m, 'o')
-    press(m, 'kb_go')
-    expect(log()[-1].endswith('kb search'), 'Search is logged')
-    expect(all(ln.startswith('[1800000000] kb ') for ln in log()) and not [c for c in m.calls if c[0] == 'fsync'], 'every line is stamped and carries kb')
-    m = opened()
-    ptr(m, 'kb_k1', 'down', *centre(m, 'kb_k1'))
-    press(m, 'kb_go')
-    expect(LOG not in m.fs, 'without KB_LOG nothing is written to the card')
-    m = keyboard_machine()
-    kopen(m, flags=DEFS['KB_LOG'])
-    ptr(m, 'kb_k1', 'down', *centre(m, 'kb_k1'))
-    expect(m.fs.get(LOG, b'').count(b'\n') == 2 and DEFS['KB_LOG'] == 1, 'KB_LOG through the API logs too (the open line and the touch)')
-
     # 12. Touches, by demo's own hit test: a key takes a touch inside it, a gap lands on the pad, the pop-up takes none, what is hidden takes none
     def hit_tree(m):
         root = asset_tree(os.path.join(RAW, 'ui', 'm1plus_keyboard.bin'))
@@ -558,7 +507,7 @@ def base_tests(ctx):
     built = {loc: dict(awtk_strings.load(os.path.join(RAW, 'strings', loc + '.bin'))) for loc in pod_i18n.LOCALES}
     worst = {}
     title = node('label_title')
-    for key, px, room in (('Search', 15, PK.KB_MODE_W - 8), ('space', 15, geo_w('kb_space') - 8), ('Type here', 18, PK.FIELD_TEXT_W), ('Keyboard', 22, title.w)):   # a key's label keeps 4 px each side
+    for key, px, room in (('Search', 15, PK.KB_MODE_W - 8), ('space', 15, geo_w('kb_space') - 8), ('Keyboard', 22, title.w)):   # a key's label keeps 4 px each side
         worst[key] = max((width(built[loc][key], px), loc) for loc in pod_i18n.LOCALES), room
     print('  widest keyboard texts (px, room):', worst)
     expect(all(w <= room for (w, _), room in worst.values()), f'Search, space, the placeholder and the title fit their room in all 13 languages ({worst})')
@@ -569,12 +518,12 @@ def base_tests(ctx):
 # ====================================================================================================================================
 def gap_tests(ctx):
     expect = ctx.expect
-    NAMES = {'shift': 'shift', 'sym': 'sym', 'del': 'del', 'mode': 'mode', 'lang': 'lang', 'space': 'space', 'go': 'go'}
 
     def sweep(m, page, lang=False, zh=False):
-        """Every point of a grid over the pad, as a pad touch (aborted, so no key is clicked): the key the payload logs against pod_keyboard.nearest_key."""
+        """Every point of a grid over the pad, as a pad touch (aborted, so no key is clicked): the key that looks pressed against pod_keyboard.nearest_key (none for a touch inside a key: the key takes it)."""
         lay = PK.layout(page, lang=lang, zh=zh)
-        log = lambda: m.fs.get(LOG, b'').decode().split('\n')[:-1]
+        by_handle = {h: n for n, h in m.widgets.items()}
+        fn_widget = {'shift': 'kb_shifton' if page == 'ABC' else 'kb_shift', 'sym': 'kb_sym', 'del': 'kb_del', 'mode': 'kb_mode', 'lang': 'kb_lang', 'space': 'kb_space', 'go': 'kb_go'}
         xs = sorted(set(range(0, 320, 13)) | {0, 1, 2, 29, 30, 31, 32, 33, 34, 317, 318, 319})
         ys = sorted(set(range(0, 180, 7)) | {0, 5, 6, 41, 42, 43, 49, 50, 85, 86, 87, 93, 94, 129, 130, 131, 137, 138, 173, 174, 175, 179})
         bad, n, gaps, t = [], 0, 0, 10000
@@ -582,33 +531,26 @@ def gap_tests(ctx):
             for x in xs:
                 t += 1
                 ptr(m, 'kb_pad', 'down', x, WIN_Y + PAD_Y + y, t)
-                ln = log()[-1]
+                pressed = [by_handle.get(c[1]) for c in m.calls if c[0] == 'widget_set_state' and c[2] == 'pressed']
                 kind, ident, d2 = PK.nearest_key(lay, x, y)
-                name = lay['keys'][ident][0] if kind == 'char' else NAMES[ident]
-                got = re.search(r'hit=(\S+)( via=gap gap=(\d+))? off=(-?\d+),(-?\d+)', ln)
-                if kind == 'char': cx, cy, cw = lay['keys'][ident][1:]
-                else: cx, cy, cw = lay['fn'][ident]
-                dx = cx - x if x < cx else x - (cx + cw - 1) if x >= cx + cw else 0
-                dy = cy - y if y < cy else y - (cy + PK.KB_KH - 1) if y >= cy + PK.KB_KH else 0
-                want_gap = max(dx, dy)
-                if not got or got.group(1) != name or bool(got.group(2)) != (d2 > 0) or (d2 > 0 and int(got.group(3)) != want_gap) or (int(got.group(4)), int(got.group(5))) != (x - (cx + cw // 2), y - (cy + PK.KB_KH // 2)):
-                    bad.append((page, x, y, ln, name, want_gap))
+                name = f'kb_k{ident}' if kind == 'char' else fn_widget[ident]
+                if pressed != ([name] if d2 > 0 else []): bad.append((page, x, y, pressed, name, d2))
                 n += 1; gaps += d2 > 0
                 ptr(m, 'kb_pad', 'abort', x, WIN_Y + PAD_Y + y, t)
         return bad, n, gaps
 
     # 1. The model: the payload's nearest key against the model, over every page
-    m = opened(flags=DEFS['KB_LOG'])
+    m = opened()
     res = []
     for page, action in (('ABC', None), ('abc', 'kb_shifton'), ('123', 'kb_mode'), ('#+=', 'kb_sym')):
         if action: press(m, action)
         res.append((page, sweep(m, page)))
     for page, (bad, n, gaps) in res:
-        expect(not bad and n > 800 and gaps > 100, f'the {page} page: {n} touches over the pad ({gaps} in gaps or margins): each one goes to the key pod_keyboard.nearest_key picks, with the gap and the offset logged ({bad[:2]})')
+        expect(not bad and n > 800 and gaps > 100, f'the {page} page: {n} touches over the pad ({gaps} in gaps or margins): each one presses the key pod_keyboard.nearest_key picks (none inside a key) ({bad[:2]})')
     expect(not [c for c in m.calls if c[0] == 'atoi'] and field(m) == '', 'aborted touches type nothing')
 
     # 2. The behaviour: a gap touch presses the nearest key at once and types it when the finger lifts
-    m = opened(flags=DEFS['KB_LOG'])
+    m = opened()
     qx, qy = 31, WIN_Y + PAD_Y + 24                  # between Q and W, nearer Q
     ptr(m, 'kb_pad', 'down', qx, qy, 100)
     expect(said(m, 'kb_pop_l') == 'Q' and shown(m, 'kb_pop')[0] == 1 and shown(m, 'kb_stem')[0] == 1 and ('widget_set_state', m.widgets['kb_k0'], 'pressed') in m.calls and field(m) == '',
@@ -623,8 +565,6 @@ def gap_tests(ctx):
     ptr(m, 'kb_pad', 'down', qx, qy, 220); m.call(m.bound[(m.window, TO_BG)][0], a0=m.bound[(m.window, TO_BG)][1], count=4000000)
     ptr(m, 'kb_pad', 'up', qx, qy, 230)
     expect(field(m) == 'Q' and shown(m, 'kb_pop')[0] == 0, 'the page going to the background while a gap touch is down lets it go, and its lift types nothing')
-    log = m.fs.get(LOG, b'').decode()
-    expect(f'kb down x={qx} y={qy} pad={qx},24 hit=Q via=gap gap=1 off=15,0' in log and log.count('kb key Q') == 1, 'the log names the key and says via=gap; the key is logged once, when typed')
 
     # 3. The gaps of the device log: just above delete (the 8 px between rows) goes to delete, which acts on touch down and repeats
     m = opened(initial='abcd')
@@ -755,8 +695,6 @@ def setting_tests(ctx):
     expect(m.word(ENG) == 0 and 'im_open_decoder' not in [c[0] for c in m.calls] and PY.SYS_PATH not in m.opened, 'the engine is not opened yet (it is when the Chinese layer is first used)')
     press(m, 'kb_mode')
     expect(shown(m, 'kb_lang') == (1, 1) and geo(m, 'kb_lang')[:3] == (79, 138, 40), 'the language key is there on the 123 page too')
-    m2 = zh_opened(flags=DEFS['KB_LOG'])
-    expect(not [c for c in m2.calls if c[0] == 'im_open_decoder'], 'logging does not open it either')
 
     # 3. Switching: the engine opens, the layer's page, the key's label, shift gone
     m = zh_opened()
@@ -813,19 +751,19 @@ def setting_tests(ctx):
     expect(said(m, 'kb_lang') == '中' and keys(m)[0] == 'Q', 'turned on again: the keyboard starts on English')
 
     # 6. The engine that will not open: the key goes away, English stays, nothing crashes
-    m = zh_opened(dictionary=False, flags=DEFS['KB_LOG'])
-    expect(shown(m, 'kb_lang') == (0, 0) and geo(m, 'kb_space')[0] == 79 and m.word(ENG) == 0 and b'zh dictionary missing' in m.fs.get(LOG, b''), 'the dictionary missing: no language key, logged, English as ever')
+    m = zh_opened(dictionary=False)
+    expect(shown(m, 'kb_lang') == (0, 0) and geo(m, 'kb_space')[0] == 79 and m.word(ENG) == 0, 'the dictionary missing: no language key, English as ever')
     typ(m, 'H'); typ(m, 'i')
     expect(field(m) == 'Hi', 'and typing works')
     m = keyboard_machine(); m.fs[KBZH] = b'1\n'; m.present.add(PY.SYS_PATH); m.py_open_ok = False
-    kopen(m, flags=DEFS['KB_LOG'])
+    kopen(m)
     expect(shown(m, 'kb_lang') == (1, 1), 'a dictionary that is there: the key shows')
     press(m, 'kb_lang')
     names_ = [c[0] for c in m.calls]
     expect(names_.count('im_open_decoder') == 1 and names_.count('im_close_decoder') == 1 and shown(m, 'kb_lang') == (0, 0) and geo(m, 'kb_space')[0] == 79 and keys(m)[0] == 'Q' and said(m, 'kb_lang') == '中' and m.word(ENG) == 0,
            'an engine that fails to initialise: closed again (no dead object left), the key goes away, space is wide again, still English')
     typ(m, 'H')
-    expect(field(m) == 'H' and b'zh engine did not open' in m.fs.get(LOG, b''), 'typing still works; the failure is logged')
+    expect(field(m) == 'H', 'typing still works after the engine failed to open')
     m = zh_machine()
     m.run(PY.IM['im_open_decoder'], m.cstr('/usr/dict_pinyin.dat'), m.cstr('/usr/dict/dict_pinyin_user.dat'))   # stock's keyboard was opened once: a dead object sits there
     expect(m.engine()[0] and m.engine()[1] == 0, 'setup: stock\'s failed init left an object that is not initialised')
@@ -1177,21 +1115,21 @@ def hit_tests(ctx):
 # ====================================================================================================================================
 def lang_gap_tests(ctx):
     expect = ctx.expect
-    m = zh_opened(flags=DEFS['KB_LOG']); press(m, 'kb_lang')
-    NAMES = {'shift': 'shift', 'sym': 'sym', 'del': 'del', 'mode': 'mode', 'lang': 'lang', 'space': 'space', 'go': 'go'}
+    m = zh_opened(); press(m, 'kb_lang')
+    by_handle = {h: n for n, h in m.widgets.items()}
+    fn_widget = {'shift': 'kb_shift', 'sym': 'kb_sym', 'del': 'kb_del', 'mode': 'kb_mode', 'lang': 'kb_lang', 'space': 'kb_space', 'go': 'kb_go'}
     lay = PK.layout('abc', lang=True, zh=True)
-    log = lambda: m.fs.get(LOG, b'').decode().split('\n')[:-1]
     bad, t = [], 20000
     for y in sorted(set(range(0, 180, 9)) | {131, 137, 138, 175}):
         for x in sorted(set(range(0, 320, 11)) | {2, 41, 42, 43, 78, 79, 80, 118, 119, 120, 121, 122, 123, 240, 241, 242, 243, 244, 245}):
             t += 1
             ptr(m, 'kb_pad', 'down', x, WIN_Y + PAD_Y + y, t)
+            pressed = [by_handle.get(c[1]) for c in m.calls if c[0] == 'widget_set_state' and c[2] == 'pressed']
             kind, ident, d2 = PK.nearest_key(lay, x, y)
-            name = lay['keys'][ident][0] if kind == 'char' else NAMES[ident]
-            got = re.search(r'hit=(\S+)', log()[-1])
-            if not got or got.group(1) != name: bad.append((x, y, log()[-1], name))
+            name = f'kb_k{ident}' if kind == 'char' else fn_widget[ident]
+            if pressed != ([name] if d2 > 0 else []): bad.append((x, y, pressed, name))
             ptr(m, 'kb_pad', 'abort', x, WIN_Y + PAD_Y + y, t)
-    expect(not bad, f'with the language key and without shift (the Chinese layer) every point of the pad goes to the key the model picks ({bad[:2]})')
+    expect(not bad, f'with the language key and without shift (the Chinese layer) every point of the pad presses the key the model picks ({bad[:2]})')
     # a gap touch that resolves to the language key switches layers when the finger lifts; one to a char key composes pinyin
     ptr(m, 'kb_pad', 'down', 78, WIN_Y + PAD_Y + 150, 2); ptr(m, 'kb_pad', 'up', 78, WIN_Y + PAD_Y + 150, 82)
     expect(said(m, 'kb_lang') == '中' and keys(m)[0] == 'Q', 'a touch in the gap between 123 and the language key (one px from it) taps the key: back to English')

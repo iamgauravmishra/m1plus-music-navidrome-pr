@@ -3163,7 +3163,7 @@ static int pg_tick(const void *timer) {
 }
 
 /* The downloads' timer (1 s), page-scoped like the others but kept in the background too: while a download runs it calls stock's reset_poweroptions_timer(1, 1, 0), which sets the standby and
- * auto power-off countdowns again and leaves the screen's alone (stock standby would stop the Wi-Fi and the CPU, docs/modules/probe.md). It runs on the UI thread, never from the worker. It also starts the
+ * auto power-off countdowns again and leaves the screen's alone (stock standby would stop the Wi-Fi and the CPU, found by a device probe). It runs on the UI thread, never from the worker. It also starts the
  * queue again when no thread runs (after a refresh, or a tap that raced the worker's end) and drops a refresh nobody can see start. No widget is touched. It ends when nothing is queued. */
 static int pg_awake_tick(const void *timer) {
     (void)timer;

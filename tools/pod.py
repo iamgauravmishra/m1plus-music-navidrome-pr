@@ -42,7 +42,7 @@ LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
 SOURCES = ['m1plus.c', 'common.c', 'menu.c', 'covercache.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c',
-           'scroll.c', 'playmore.c', 'playlists.c', 'azlist.c', 'songops.c', 'songs.c', 'albumpage.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnet.c', 'podcasts.c', 'tape.c', 'probe.c', 'keyboard.c', 'search.c']
+           'scroll.c', 'playmore.c', 'playlists.c', 'azlist.c', 'songops.c', 'songs.c', 'albumpage.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnet.c', 'podcasts.c', 'tape.c', 'keyboard.c', 'search.c']
 
 FLAGS = ['--target=mipsel-linux-gnu', '-march=mips32r2', '-mabi=32', '-mfp64',
          '-mno-abicalls', '-fno-pic', '-G0', '-ffreestanding', '-fno-builtin',
@@ -149,7 +149,7 @@ FUNCTIONS = {
     'write_int_config':        ('int', 'int, const char *, const char *', 0x4d6a2c),
     'toolsRandnum':            ('int', 'int', 0x5e0c58),
     'time_now_ms':             ('unsigned', 'void', 0x70cf58),   # uint64_t; o32 LE returns the low word in $v0
-    'get_wifisignal':          ('int', 'void', 0x506cc8),        # Network probe: -1 when not connected, else a level 2..5 (networkGetWifiSignal / ConnectStatus / PhysicStatus)
+    'get_wifisignal':          ('int', 'void', 0x506cc8),        # Podcast network guard: -1 when not connected, else a level 2..5 (networkGetWifiSignal / ConnectStatus / PhysicStatus)
     # Home (patch/home.c): the window stack, to open the menu only when the stock Home is the topmost
     # normal window and fully opened
     'window_manager':          ('void *', 'void', 0x6774b4),
@@ -327,7 +327,7 @@ SETTINGS_PINS = (   # (address, stock word, what it proves)
     (0x4b1460, 0x0320f809, 'the Wi-Fi hub row (0x4b1448): jalr navigator_to'), (0x4b1464, 0x24848f1c, 'its delay slot: a0 = "systemset/wifi_page"'),
     (0x4b1428, 0x0320f809, 'the Bluetooth hub row (0x4b1410): jalr navigator_to'), (0x4b142c, 0x24848f00, 'its delay slot: a0 = "systemset/bluetooth_page"'),
     (0x4ad830, 0x0320f809, 'the Settings rows\' shared call: jalr navigator_to'), (0x4ada74, 0x24848ab4, 'Settings row 3: a0 = "systemset/display_page"'),
-    (0x4ada20, 0x24848a34, 'Settings row 0: a0 = "systemset/language_page"'),
+    (0x4ada38, 0x24848a68, 'Settings row 1: a0 = "systemset/fwupdate_page"'),
     (0x4a0068, 0x0320f809, 'the Play Settings rows\' shared call: jalr navigator_to'), (0x4a04a4, 0x248475a0, 'Play Settings row: a0 = "playset/playmode_page"'),
     (0x4a0218, 0x248474d4, 'Play Settings row: a0 = "playset/equalizer_page"'),
     # About: the stock page's values (the widget walk's callback inside what the symbol table calls on_sn_qrcode_onclick, @0x4a1240..0x4a170c; the init 0x4a170c-): the model and firmware version literals, the card
@@ -534,7 +534,7 @@ DATA = {
     'SORT_FLAG':          (0xa059d4, 'sort_flag'),
     # the stock multi-select's selection: a pointer to a vector<int> (created once at start-up, ~0x50bb34) indexed by the row of *pdeq_showlist, 1 = selected
     'SEL_VEC':            (0xa045e0, None),
-    # the Pinyin engine's global MatrixSearch* (patch/probe.c; PINYIN_PINS): NULL until im_open_decoder, and its first byte is inited_
+    # the Pinyin engine's global MatrixSearch* (PINYIN_PINS): NULL until im_open_decoder, and its first byte is inited_
     'PY_ENGINE':          (0xa0a360, None),
     # the iPod page's battery (patch/ipod.c): the stock status bar window; the app keeps it (system_bar_init @0x545490); its pgbar_battery value and img_battery picture are what the real bar shows
     'SYSTEM_BAR':         (0xa06f90, 'system_bar'),
@@ -551,7 +551,6 @@ DATA = {
     'BT_FLAG':            (0xa05ac0, 'bluetoothflag'),
     'EQ_FLAG':            (0xa05ac2, 'equalizer_flag'),
     'EQ_MODE':            (0x97cb00, 'equalizer_mode'),
-    'LANGUAGE':           (0xa05ab8, 'language'),
     # About: the serial number (a string of 16 bytes) and the Wi-Fi MAC (32), and the stock literals the model and firmware rows show
     'PRODUCT_SN':         (0xa0553c, 'product_sncode'),
     'WIFI_MAC':           (0xa061a8, 'wifi_mac'),
@@ -591,12 +590,11 @@ LIBC = {
     # struct stat 144 bytes, st_mtime at +0x40; stock's own stat(), @0x741b20, is __xstat(3, ..)), the ring is moved in place
     'opendir': ('void *', 'const char *'), 'readdir': ('char *', 'void *'), 'closedir': ('int', 'void *'),
     '__xstat': ('int', 'int, const char *, void *'), 'memmove': ('void *', 'void *, const void *, unsigned'),
-    # Network probe (patch/probe.c): the libcurl easy interface and the shell, all already imported by demo (stock's curl_init, system / popen users)
+    # Podcast network (patch/pcnet.c): the libcurl easy interface, already imported by demo (stock's curl_init)
     'curl_global_init': ('int', 'long'), 'curl_easy_init': ('void *', 'void'), 'curl_easy_setopt': ('int', 'void *, int, ...'),
     'curl_easy_perform': ('int', 'void *'), 'curl_easy_getinfo': ('int', 'void *, int, ...'), 'curl_easy_cleanup': ('void', 'void *'),
-    'curl_easy_strerror': ('const char *', 'int'), 'pthread_detach': ('int', 'unsigned long'), 'sleep': ('unsigned', 'unsigned'),
+    'pthread_detach': ('int', 'unsigned long'), 'sleep': ('unsigned', 'unsigned'),
     'lseek': ('long', 'int, long, int'),   # Podcast downloads (patch/pcnet.c): the size of a .part file, lseek(fd, 0, SEEK_END)
-    'popen': ('void *', 'const char *, const char *'), 'pclose': ('int', 'void *'), 'fgets': ('char *', 'char *, int, void *'),
     # Podcast cover shrink (patch/pccover.c): demo's own libjpeg 7 (stock's picture decoder / encoder at 0x5dd5ec, 0x5de554 call the same ones), and _setjmp for its error exit (JPEG_PINS)
     'jpeg_std_error': ('void *', 'void *'), 'jpeg_CreateDecompress': ('void', 'void *, int, unsigned'), 'jpeg_stdio_src': ('void', 'void *, void *'),
     'jpeg_read_header': ('int', 'void *, int'), 'jpeg_start_decompress': ('int', 'void *'), 'jpeg_read_scanlines': ('unsigned', 'void *, unsigned char **, unsigned'),

@@ -190,8 +190,7 @@ class Machine:
         self.free_mb = 1024
         self.thread_ok = True
         self.thread = None          # (start routine, argument) of the last pthread_create
-        self.curl, self.curl_site, self.curl_last = {}, None, {}   # the network probe (patch/probe.c): handle -> options set; the scripted server; handle -> what the last request returned
-        self.pipes, self.fgets_pos = {}, {}   # popen handle -> output lines left; fgets position in a file's text
+        self.curl, self.curl_site, self.curl_last = {}, None, {}   # libcurl (patch/pcnet.c): handle -> options set; the scripted server; handle -> what the last request returned
         self.confirm_yes = False    # the answer of the stock confirm dialog (dialog/confirminfo_dialog)
         self.album_cover = 0        # toolsGetAlbumCover's result
         self.extern_cover = 0
@@ -938,7 +937,7 @@ class Machine:
             ret = int(self.py_open_ok); eng = self.alloc(0x30d8); self.u.mem_write(eng, bytes([ret])); self.setword(pod.DATA['PY_ENGINE'][0], eng)   # a failed open leaves an object that is not initialised, as stock's
         elif name == 'im_close_decoder':
             self.calls.append(('im_close_decoder',)); self.setword(pod.DATA['PY_ENGINE'][0], 0)
-        # ---- the network probe (patch/probe.c): libcurl's easy interface, the shell and a worker thread
+        # ---- libcurl's easy interface, the Wi-Fi level and worker threads (patch/pcnet.c)
         elif name == 'get_wifisignal':
             ret = self.wifi; self.calls.append(('get_wifisignal',))
         elif name == 'reset_poweroptions_timer':   # stock: standby / auto power-off / screen countdowns set again for a non-zero argument (patch/podcasts.c keeps the device awake with (1, 1, 0))
@@ -962,35 +961,15 @@ class Machine:
             else: self.setword(a2, v)
         elif name == 'curl_easy_cleanup':
             self.calls.append(('curl_easy_cleanup', a0)); self.curl.pop(a0, None)
-        elif name == 'curl_easy_strerror':
-            ret = self.cstr(f'curl error {a0}')
         elif name == 'pthread_detach':
             self.calls.append(('pthread_detach', a0))
         elif name == 'sleep':
             self.calls.append(('sleep', a0)); self.wall += a0
             if getattr(self, 'on_sleep', None): self.on_sleep(len([c for c in self.calls if c[0] == 'sleep']))   # a test's way to act while the worker waits (the number of sleeps so far)
-        elif name == 'popen':
-            cmd = self.read_cstr(a0); self.calls.append(('popen', cmd, self.read_cstr(a1)))
-            ret = self.alloc(4); self.pipes[ret] = list(self.shell(cmd))
-        elif name == 'pclose':
-            self.calls.append(('pclose',)); self.pipes.pop(a0, None)
-        elif name == 'fgets':   # a pipe's next line, or the next line of the file fopen opened (its text in self.fs, read from where the last call stopped)
-            if a2 in self.pipes:
-                line = self.pipes[a2].pop(0) if self.pipes[a2] else None
-            else:
-                text = self.fs.get(self.fh[1], b''); pos = self.fgets_pos.get(a2, 0)
-                line = None if pos >= len(text) else text[pos:text.index(b'\n', pos) + 1 if b'\n' in text[pos:] else len(text)]
-                if line is not None: self.fgets_pos[a2] = pos + len(line)
-            if line is not None:
-                line = line[:a1 - 1]; self.u.mem_write(a0, (line.encode() if isinstance(line, str) else line) + b'\0'); ret = a0
         else:
             raise AssertionError(f'unmocked call {name} at {address:#x}')
         u.reg_write(UC_MIPS_REG_V0, ret & 0xffffffff)
         u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
-
-    def shell(self, cmd):
-        """The output lines of a shell command the probe runs (a test sets self.shell_out: command -> lines; others print nothing)."""
-        return getattr(self, 'shell_out', {}).get(cmd[:-5] if cmd.endswith(' 2>&1') else cmd, [])
 
     def nested(self, fn, *args):
         """Payload code run from inside a mock (a libcurl callback): the registers are saved, the frame is below the caller's, and the

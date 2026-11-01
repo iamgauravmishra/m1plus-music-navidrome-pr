@@ -131,12 +131,12 @@ DAILY = DAILY + TAPE
 # The Settings pages (tools/pod_settings.py, docs/modules/settings.md "Cards"): a 20 px glyph (CARD_GLYPH_PX, stroke 2) centred in a 24 px image on each row, by the row's label; the card's
 # chevron (Lucide chevron-right fitted to 9 x 15, #777777, stroke 2) and the picker's check (20 px, white).
 CARD_GLYPH_PX, CARD_CHEVRON, CARD_CHECK = 20, ('pod_chev', 9, 15, (0x77,) * 3, 2), ('pod_check', 20)
-CARD_GLYPHS = {'Wi-Fi': 'wifi', 'Bluetooth': 'bluetooth', 'Menu & Extras': 'list-checks', 'Home Screen': 'house', 'Library': 'disc-3', 'Now Playing': 'audio-lines',
-               'Play Mode': 'repeat', 'EQ': 'sliders-vertical', 'All Playback Settings': 'headphones', 'Display': 'sun', 'Language': 'languages',
+CARD_GLYPHS = {'Wi-Fi': 'wifi', 'Bluetooth': 'bluetooth', 'Home Screen': 'house', 'Library': 'disc-3', 'Now Playing': 'audio-lines',
+               'Play Mode': 'repeat', 'EQ': 'sliders-vertical', 'All Playback Settings': 'headphones', 'Display': 'sun',
                'Keyboards': '+keyboard', 'About': 'info', 'All System Settings': 'settings', 'Developer': 'code', 'Main Menu': 'list-checks', 'Extras': 'ellipsis',
                'Recent Albums': 'history', 'Daily Mix': 'shuffle', 'Regenerate Daily Mix': 'refresh-cw', 'Update Library': 'refresh-cw', 'Album Order': 'arrow-down-wide-narrow',
                'Landscape': 'rotate-cw-square', 'Rebuild Covers': 'image-up', 'Theme': '+cassette-tape', 'Boot to M1+ Music': 'power', 'Open Shanling Home': '@shanling',
-               'Screenshot': 'camera', 'Network Probe': 'globe', 'Keyboard': '+keyboard', 'Podcast Search': 'search', 'English': 'languages', 'Chinese (Pinyin)': 'languages'}
+               'Screenshot': 'camera', 'System Update': 'download', 'Podcast Search': 'search', 'English': 'languages', 'Chinese (Pinyin)': 'languages'}
 
 
 def card_name(g):

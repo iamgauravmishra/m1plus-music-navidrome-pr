@@ -266,9 +266,7 @@ def run(ctx):
     # every value text of every language fits with its label, and the headers and notes fit their 272 px labels
     import pod_settings as ST
     stock_values = {'wifi': ('On', 'Off'), 'bluetooth': ('On', 'Off'), 'playmode': ('playmode_listplay', 'playmode_repeattrack', 'playmode_shuffle', 'playmode_repeatall'),
-                    'eq': ('Off', 'eq_custom1', 'eq_custom2', 'eq_custom3', 'eq_pop', 'eq_rock', 'eq_dance', 'eq_blues', 'eq_metal', 'eq_vocal', 'eq_classical', 'eq_jazz'),
-                    'language': ('lan_simplified', 'lan_traditional', 'lan_english', 'lan_japanese', 'lan_korean', 'lan_french', 'lan_german', 'lan_spanish', 'lan_italian', 'lan_thai',
-                                 'lan_polish', 'lan_russian', 'lan_ukrainian')}
+                    'eq': ('Off', 'eq_custom1', 'eq_custom2', 'eq_custom3', 'eq_pop', 'eq_rock', 'eq_dance', 'eq_blues', 'eq_metal', 'eq_vocal', 'eq_classical', 'eq_jazz')}
     cards_over, room = [], ST.chevron_left() - ST.VALUE_GAP - ST.TEXT_X
     for page in [p for p in pod_pages.PAGES if p.kind == 'cards']:
         tree = awtk_ui.parse(open(os.path.join(WORK, RAW, 'ui', page.key + '.bin'), 'rb').read())

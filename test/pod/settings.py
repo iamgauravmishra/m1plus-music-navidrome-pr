@@ -54,8 +54,8 @@ def layout_tests(ctx):
     """Every cards page under demo's own layouter, plus the asset against the model."""
     expect, P = ctx.expect, pod_pages
     pages = [p for p in P.PAGES if p.kind == 'cards']
-    expect([p.key for p in pages] == ['m1plus_settings', 'm1plus_library', 'm1plus_homeset', 'm1plus_developer', 'm1plus_npset', 'm1plus_keyboards', 'm1plus_menuextras', 'm1plus_albumorder', 'm1plus_tapetheme', 'm1plus_about'],
-           'the cards pages: Settings, Library, Home Screen, Developer, Now Playing, Keyboards, Menu & Extras, the two pickers and About')
+    expect([p.key for p in pages] == ['m1plus_settings', 'm1plus_library', 'm1plus_homeset', 'm1plus_developer', 'm1plus_npset', 'm1plus_keyboards', 'm1plus_albumorder', 'm1plus_tapetheme', 'm1plus_about'],
+           'the cards pages: Settings, Library, Home Screen, Developer, Now Playing, Keyboards, the two pickers and About')
     expect(mod_icons.CARD_PIECE == {'ROW_W': ST.ROW_W, 'ROW_H': ST.ROW_H, 'CARD_X': ST.CM, 'CARD_W': ST.CARD_W, 'CARD_R': ST.CARD_R, 'FILL': (0x1C,) * 3, 'LIT': (0x2C, 0x2C, 0x2E)}
            and ST.CARD_RGB == '#1C1C1C' and ST.PRESSED_RGB == '#2C2C2E', 'the pieces\' geometry in tools/mod_icons.py is the layout model\'s')
     for page in pages:
@@ -151,8 +151,11 @@ def layout_tests(ctx):
     placed, end = ST.layout(page.layout)
     expect(ST.pieces(page.layout)[2] == 'single', 'Regenerate Daily Mix is a card of its own: a single piece, correct whatever its neighbours do')
     keep = [n for n in full.kid if n not in ('pod_row2', 'pod_note1')]
-    expect(all(hid.box(n) == full.box(n) for n in keep if n != 'pod_end') and full.vh() == end and hid.vh() == end - ST.ROW_H - ST.NOTE_H
-           and hid.box('pod_end')[1] == full.box('pod_end')[1] - ST.ROW_H - ST.NOTE_H, 'Daily Mix off: the layouter skips the regen row and its note, every other item stays where it was and virtual_h shrinks by exactly their heights')
+    gone = ST.ROW_H + ST.NOTE_H
+    before = [n for n in keep if full.box(n)[1] < full.box('pod_row2')[1]]
+    after = [n for n in keep if n not in before]
+    expect(all(hid.box(n) == full.box(n) for n in before) and all(hid.box(n)[1] == full.box(n)[1] - gone and hid.box(n)[:1] == full.box(n)[:1] for n in after) and after
+           and full.vh() == end and hid.vh() == end - gone, 'Daily Mix off: the layouter skips the regen row and its note, the items above stay where they were, those below close up by exactly their heights and virtual_h shrinks by the same')
     # and the page opens that way by itself: the payload hides them when no mix can be made
     sm = settings_page_machine(P.HOMESET_PAGE, daily=b'0\n')
     expect([c[2] for c in sm.calls if c[0] == 'widget_set_visible' and c[1] == sm.widgets['pod_row2']][-1:] == [0]
@@ -227,7 +230,7 @@ def settings_machine(language=None, **state):
     m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(names)}
     for key, v in [(k, v) for k, v in state.items() if k != 'mode']:
         addr = pod.DATA[key][0]
-        if key in ('EQ_MODE', 'LANGUAGE'): m.setword(addr, v)
+        if key == 'EQ_MODE': m.setword(addr, v)
         else: m.u.mem_write(addr, bytes([v]))
     if 'mode' in state: m.mode = state['mode']
     if language: m.set_language(language)
@@ -243,7 +246,7 @@ def stock_tests(ctx):
     expect(('window_open', S.key) in m.calls, 'the menu row opens the Settings page')
     # the deep links: a plain navigator_to of the stock page's name (the names stock's own lists call it with: tools/pod.py SETTINGS_PINS)
     want = {'Wi-Fi': 'systemset/wifi_page', 'Bluetooth': 'systemset/bluetooth_page', 'Play Mode': 'playset/playmode_page', 'EQ': 'playset/equalizer_page',
-            'Display': 'systemset/display_page', 'Language': 'systemset/language_page'}
+            'Display': 'systemset/display_page'}
     expect({P.STOCK_PAGES[S.rows[rows[k]].arg][0] for k in want} == set(want.values()),
            'the stock pages the rows open are the ones stock\'s Settings and Play Settings lists open')
     for label, name in want.items():
@@ -255,21 +258,20 @@ def stock_tests(ctx):
     m.click(f'pod_row{rows["All Playback Settings"]}'); m.click(f'pod_row{rows["All System Settings"]}')
     # (the Home dispatcher's ids 16 and 17 are bound to the two rows: tests/pod/menu.py checks the table)
     expect(len(P.STOCK_PAGES) == 6 and all(r.action == P.ACT_STOCK for r in S.rows if r.label in want), 'six stock pages, each opened by an ACT_STOCK row')
+    upd = next(r for r in P.DEVELOPER_PAGE.rows if r.label == 'System Update')
+    expect(upd.action == P.ACT_STOCK and P.STOCK_PAGES[upd.arg] == ('systemset/fwupdate_page', None), 'Developer > System Update is a plain navigator_to of the stock firmware update page, no value')
     # the values: the stock state, by the stock keys
     def value(m, label):
         keys = [c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets[f'pod_value{rows[label]}']]
         return keys[-1] if keys else None
     m = settings_machine()
-    expect([value(m, k) for k in ('Wi-Fi', 'Bluetooth', 'Play Mode', 'EQ', 'Language')] == ['Off', 'Off', 'playmode_listplay', 'Off', 'lan_simplified'], f'nothing on: Off, Off, List Play, EQ Off, language 0 (the default zh_CN) ({[value(m, k) for k in ("Wi-Fi", "Bluetooth", "Play Mode", "EQ", "Language")]})')
-    m = settings_machine(WIFI_FLAG=1, BT_FLAG=1, mode=3, EQ_FLAG=1, EQ_MODE=4, LANGUAGE=5)
-    expect([value(m, k) for k in ('Wi-Fi', 'Bluetooth', 'Play Mode', 'EQ', 'Language')] == ['On', 'On', 'playmode_repeatall', 'eq_4', 'lan_french'], 'Wi-Fi and Bluetooth on, Repeat All, an EQ preset (the stock name lookup), French')
+    expect([value(m, k) for k in ('Wi-Fi', 'Bluetooth', 'Play Mode', 'EQ')] == ['Off', 'Off', 'playmode_listplay', 'Off'], f'nothing on: Off, Off, List Play, EQ Off ({[value(m, k) for k in ("Wi-Fi", "Bluetooth", "Play Mode", "EQ")]})')
+    m = settings_machine(WIFI_FLAG=1, BT_FLAG=1, mode=3, EQ_FLAG=1, EQ_MODE=4)
+    expect([value(m, k) for k in ('Wi-Fi', 'Bluetooth', 'Play Mode', 'EQ')] == ['On', 'On', 'playmode_repeatall', 'eq_4'], 'Wi-Fi and Bluetooth on, Repeat All, an EQ preset (the stock name lookup)')
     for mode, key in enumerate(('playmode_listplay', 'playmode_repeattrack', 'playmode_shuffle', 'playmode_repeatall')):
         expect(value(settings_machine(mode=mode), 'Play Mode') == key, f'play mode {mode} reads {key}')
     expect(value(settings_machine(mode=9), 'Play Mode') == 'playmode_listplay', 'an unknown play mode reads as the first')
     expect(value(settings_machine(EQ_FLAG=1, EQ_MODE=12), 'EQ') == 'Off', 'a preset the name lookup refuses reads Off')
-    for lang, key in enumerate(('lan_simplified', 'lan_traditional', 'lan_english', 'lan_japanese', 'lan_korean', 'lan_french', 'lan_german', 'lan_spanish', 'lan_italian', 'lan_thai', 'lan_polish', 'lan_russian', 'lan_ukrainian')):
-        expect(value(settings_machine(LANGUAGE=lang), 'Language') == key, f'language {lang} reads {key}')
-    expect(value(settings_machine(LANGUAGE=77), 'Language') == 'lan_english', 'an unknown language index reads English')
     expect(not any(c[0] in ('write_int_config', 'mclSetPlayMode', 'open', 'write') for c in settings_machine().calls), 'opening the page reads state and writes nothing')
     # the value takes the room its text needs: the box is moved and resized, and the label gets the rest (patch/m1plus.c value_fit)
     m = settings_machine()

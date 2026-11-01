@@ -1,5 +1,5 @@
 /* libcurl 7.73 option and info numbers (curl/curl.h), the ones the payload uses: demo imports the easy interface, there is no header on the build host's side of the cross compile.
- * Shared by patch/probe.c and patch/pcnet.c; test/pod/probe.py and test/pod/pcnet.py mock curl_easy_setopt / getinfo with the same numbers.
+ * Used by patch/pcnet.c; test/pod/pcnet.py mocks curl_easy_setopt / getinfo with the same numbers.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  */
