@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="1.0">
+  <head>
+    <title>Apple Podcasts Subscriptions</title>
+  </head>
+  <body>
+    <outline text="feeds">
+      <outline type="rss" text="Planet Money" xmlUrl="https://feeds.npr.org/510289/podcast.xml" />
+      <outline type="rss" text="The Daily" xmlUrl="https://feeds.simplecast.com/54nAGcIl" />
+      <outline type="rss" text="99% Invisible" xmlUrl="https://feeds.simplecast.com/BqbsxVfO" />
+      <outline type="rss" text="Radiolab" xmlUrl="https://feeds.simplecast.com/EmVW7VGp" />
+      <outline type="rss" text="Hard Fork" xmlUrl="https://feeds.simplecast.com/l2i9YnTd" />
+      <outline type="rss" text="Reply All &amp; Friends" xmlUrl="https://feeds.megaphone.fm/replyall?x=1&amp;y=2" />
+      <outline type="rss" text="日谈公园" xmlUrl="https://rss.lizhi.fm/rss/14275.xml" />
+      <outline type="rss" text="Stuff You Should Know" xmlUrl="https://feeds.megaphone.fm/stuffyoushouldknow" />
+    </outline>
+  </body>
+</opml>

@@ -319,7 +319,7 @@ def subscribe_tests(ctx):
     dir_b = f'{ROOT_DIR}/{m.read_cstr(out)}'
     files_b = {p.rsplit('/', 1)[1]: v for p, v in m.fs.items() if p.startswith(dir_b + '/')}
     expect(r == 0 and dir_b == dir_a == f'{ROOT_DIR}/WSJ Minute Briefing', f'Subscribe returns the folder named from the feed\'s title ({dir_b})')
-    expect(sorted(files_b) == sorted(files_a) == ['.episodes', '.show', 'cover.jpg'], f'the same files: .episodes, .show, cover.jpg ({sorted(files_b)})')
+    expect(sorted(files_b) == sorted(files_a) == ['.episodes', '.notes', '.show', 'cover.jpg'], f'the same files: .episodes, .notes, .show, cover.jpg ({sorted(files_b)})')
     expect(files_b['.episodes'] == files_a['.episodes'] and files_b['.show'] == files_a['.show'], 'and the same .episodes and .show, byte for byte (feed, title, image, author, category, description)')
     expect(Image_size(files_b['cover.jpg']) == Image_size(files_a['cover.jpg']) == (192, 192) and f'{SDIR}/preview.jpg' not in m.fs, 'cover.jpg is the preview\'s picture moved into the folder')
     expect(fn(m, 'pn_preview_parser') == 0 and not [p for p in m.fs if p.endswith('.tmp')], 'the preview is dropped, no temp file is left')

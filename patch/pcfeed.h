@@ -22,7 +22,11 @@ typedef struct {
     char desc
         [PC_DESC]; /* itunes:summary, else description, else content:encoded: plain text (HTML stripped), at most PC_DESC_CUT bytes; "" = none */
     unsigned pub, dur, length; /* seconds since 1970 (0 = none), seconds, bytes */
+    char *
+        note; /* the same element's long plain text (up to PF_NOTE bytes, '\n' between paragraphs: the episode page); heap, owned by the parser; NULL = none (or no memory) */
 } pf_item_t;
+
+#define PF_NOTE 4096 /* bytes of an item's long description (UTF-8, cut before a split character) */
 
 typedef struct pf_parser pf_parser_t;
 
@@ -32,6 +36,7 @@ void pf_push(pf_parser_t *p, const char *data, unsigned n); /* the next bytes of
 int pf_is_feed(const pf_parser_t *p); /* an <rss> or <channel> element was seen */
 int pf_items(const pf_parser_t *p); /* items kept (at most PF_KEEP), newest first */
 const pf_item_t *pf_item(const pf_parser_t *p, int i); /* kept item i, 0 <= i < pf_items (newest first), else NULL */
+const char *pf_note(const pf_parser_t *p, int i); /* kept item i's long description ("" = none) */
 int pf_seen(const pf_parser_t *p); /* items with an enclosure seen in the whole feed */
 const char *pf_title(const pf_parser_t *p); /* the channel's title ("" = none) */
 const char *
@@ -48,6 +53,10 @@ const char *pf_summary(
  * An item whose guid an old line has keeps that line's file name; the others get "YYYY-MM-DD Title.ext". *fresh: kept items no old line had. dir: the show folder's path (the files are looked at with access). */
 unsigned pf_render_episodes(const pf_parser_t *p, const char *dir, const char *old, unsigned oldn, char *out,
                             unsigned cap, unsigned *fresh);
+/* One line of the show's .notes file for kept item i (docs/modules/podcasts.md "The notes file"): "g=<guid>\t<text>\n", the text's backslash written "\\" and its paragraph break "\n" (two characters). Returns its length, 0 when the item has no
+ * long description or the line does not fit cap whole (a line of at most PF_NOTE_LINE bytes always fits). */
+#define PF_NOTE_LINE (2 + PF_GUID + 1 + 2 * PF_NOTE + 2)
+unsigned pf_render_note(const pf_parser_t *p, int i, char *out, unsigned cap);
 /* The line of .episodes (eps, n bytes) whose file name is `file`: its enclosure url (u=) into url (usize bytes) and its length (l=, 0 when none or not a number) into *length. 0 when there is no such line, no url, or the url does not fit. */
 int pf_find_episode(const char *eps, unsigned n, const char *file, char *url, unsigned usize, unsigned *length);
 /* The .show text. title / feed / image / author / category / desc: plain text (control bytes become spaces; the last three are written only when not empty), checked: seconds since 1970 (0 = never).

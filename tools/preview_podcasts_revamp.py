@@ -5,7 +5,9 @@ static Continue Listening row, Downloads row, "..." sheet). Every frame is a 320
 
   preview_podcasts_revamp.py WORKDIR OUTDIR [--logo /tmp/m1plus-allin-check/logo.png] [--lang CODE]
 
-Writes OUTDIR/podcasts-final-show.png, -shows.png, -states.png and OUTDIR/podcasts-search.png (round 3: the Search capsule, the keyboard page, the results, the preview with Subscribe, the Settings row).
+Writes OUTDIR/podcasts-final-show.png, -shows.png, -states.png and OUTDIR/podcasts-search.png (round 3: the Search capsule, the keyboard page, the results, the preview with Subscribe, the Settings row)
+and OUTDIR/podcasts-search2.png (the four capsule states, the caption marker).
+(and OUTDIR/podcasts-subs.png: the Subscriptions page and OPML; OUTDIR/podcasts-downloads2.png: the Library rows of the Shows page and the Downloads page.)
 
 WORKDIR is a built tree (work/mod-release): the font (measured with the stb model of tools/stb_raster.py: advance + 1 px a glyph), the glass navbar pieces and
 the menu glass come from it and from tools/mod_icons.py (Lucide). The page tint is the album page's: tone() of the cover's average colour (mod_nowplaying.tone)
@@ -208,7 +210,7 @@ def make_shows(s, logo):
         mk('night', '夜听故事会', synth_cover(s, 'night'), '夜听团队', '社会文化', '1 new', night_eps),
         mk('deep', 'Deep Dive with a Very Long Podcast Title', synth_cover(s, 'deep'), 'Deep Media', 'Society & Culture', 'Updated 2d ago', generic('culture', 'Why we collect things')),
         mk('tech', 'Tech Daily', synth_cover(s, 'tech'), 'Tech Daily', 'Technology', '2 new', generic('technology', 'A new chip, a new phone and a new argument')),
-        mk('local', 'Lecture Series (from the card)', None, '', '', '12 episodes', allin_eps[:2], local=True),
+        mk('local', 'Lecture Series (from the card)', None, '', '', 'Local · 12 episodes' if FONT.width('Local · 12 episodes', 15) <= O['GRID_COVER'] else 'Local', allin_eps[:2], local=True),
     ]
 
 
@@ -227,13 +229,17 @@ def bg_rgb(tone, y):
     return tuple(v * (255 - a) // 255 for v in tone)
 
 
+def capsule_pieces(globe, more):
+    """The glass pieces left of Now Playing (patch/podcasts.c pg_nav): the globe (the left cap), then the "..." (the middle piece beside the globe, else the left cap)."""
+    return (['pod_nav_globe'] if globe else []) + ([('pod_nav_moremid' if globe else 'pod_nav_more')] if more else [])
+
+
 def capsule(s, win, kind='more'):
-    """The navbar's right end: '...' | Now Playing ('more'), Search | Now Playing ('search'), Search | ... | Now Playing ('search_more': the Songs page's three pieces, the \"...\" the middle one),
-    or the round Now Playing alone ('none')."""
-    if kind == 'more': PS.glass(s, win, 'pod_nav_more', O['NAV_VIEW_X'])
-    elif kind == 'search': PS.glass(s, win, 'pod_nav_search', O['NAV_VIEW_X'])
-    elif kind == 'search_more': PS.glass(s, win, 'pod_nav_search', O['NAV_CF_X']); PS.glass(s, win, 'pod_nav_moremid', O['NAV_VIEW_X'])
-    PS.glass(s, win, 'ah_nav_np' if kind == 'none' else 'ah_nav_play', 260, 60)
+    """The navbar's right end: '...' | Now Playing ('more'), Globe | Now Playing ('globe'), Globe | ... | Now Playing ('globe_more'), or the round Now Playing alone ('none')."""
+    names = capsule_pieces('globe' in kind, kind.endswith('more'))
+    for i, n in enumerate(names): PS.glass(s, win, n, O['NAV_VIEW_X'] - O['NAV_VIEW_W'] * (len(names) - 1 - i))
+    PS.glass(s, win, 'ah_nav_play' if names else 'ah_nav_np', 260, 60)
+
 
 
 def window(s, tone, content, scroll, title=None, band=False, top=0, caps='more'):
@@ -465,14 +471,14 @@ def combos(s, sh):
 # ------------------------------------------------------------------ the Shows page
 
 
-def build_shows(s, shows, shelf_n, downloads, refreshing):
+def build_shows(s, shows, shelf_n, dl, refreshing):
     """The Shows page's content (window x, content y from the navbar's bottom; black), laid out by tools/pod_show.py shows_layout and drawn with the PP_* numbers of patch/offsets.inc as
-    patch/podcasts.c pg_paint_home does: the large title, the refresh line (when a show has a feed), Continue Listening (a static row of at most PP_SHELF_MAX covers, only when something is partly
-    played), Downloads (n) (only while pending: the atlas' tile and chevron), the "Shows" header (only when one of those shows) and the Albums grid (no badge on the covers)."""
+    patch/podcasts.c pg_paint_home does: the large title, the refresh line (when a show has a feed), the Library rows (Downloads always, its grey line dl; Subscriptions while a show has a feed: the atlas' tile
+    and the podcast tile, a chevron, a hairline), Continue Listening (a static row of at most PP_SHELF_MAX covers, only when something is partly played), the "Shows" header and the Albums grid (no badge on the covers)."""
     o = O
     shelf = [(shows[0], 'The Real Reason Markets Moved', '35m left'), (shows[4], '第126期｜深夜食堂', '12m left'), (shows[1], 'Markets open lower', '48m left')][:shelf_n]
     has_line = any(sh.key != 'local' for sh in shows)
-    L = pod_show.shows_layout(len(shows), has_line, len(shelf), downloads)
+    L = pod_show.shows_layout(len(shows), has_line, len(shelf))
     im = Image.new('RGBA', (W, L['h']), (0, 0, 0, 255)); info = dict(layout=L)
     s.text(im, o['PP_TITLE_X'], o['PP_TITLE_H'] / 2, 'Podcasts', o['PP_TITLE_PX'], WHITE)
     if has_line:
@@ -488,14 +494,16 @@ def build_shows(s, shows, shelf_n, downloads, refreshing):
             _paste(im, sprite(o['PA_PLAYB_X'], o['PA_PLAYB_Y'], o['PA_PLAYB_PX'], o['PA_PLAYB_PX']), *pod_show.shelf_play(i, L['y_shelf']))
             s.text(im, x, ty + o['PP_SHELF_TITLE_H'] / 2, PS.fit(s, t, 14, o['PP_SHELF_W']), 14, WHITE)
             s.text(im, x, ly + o['PP_SHELF_LEFT_H'] / 2, left, 13, GREY)
-    if downloads:
-        y = L['y_dl']
-        _paste(im, sprite(o['PA_TILE_X'], o['PA_TILE_Y'], o['PA_TILE_PX'], o['PA_TILE_PX']), o['PP_DL_TILE_X'], y + o['PP_DL_TILE_Y'])
-        s.text(im, o['PP_DL_TEXT_X'], y + o['LIST_TITLE_Y'] + o['LIST_TITLE_H'] / 2, 'Downloads (2)', 21, WHITE)
-        s.text(im, o['PP_DL_TEXT_X'], y + o['LIST_SUB_Y'] + o['LIST_SUB_H'] / 2, 'Downloading 42%', 18, GREY)
+    n_subs = sum(1 for sh in shows if sh.key != 'local')
+    for y, name, sub, tile in ((L['y_dl'], 'Downloads', dl, IMGS[M.PC_ATLAS].crop((o['PA_TILE_X'], o['PA_TILE_Y'], o['PA_TILE_X'] + o['PA_TILE_PX'], o['PA_TILE_Y'] + o['PA_TILE_PX']))),
+                               (L['y_sub'], 'Subscriptions', '%d shows' % n_subs, IMGS[M.PC_LIB_TILE])):
+        if not y: continue
+        _paste(im, tile, o['PP_DL_TILE_X'], y + o['PP_DL_TILE_Y'])
+        s.text(im, o['PP_DL_TEXT_X'], y + o['LIST_TITLE_Y'] + o['LIST_TITLE_H'] / 2, name, 21, WHITE)
+        s.text(im, o['PP_DL_TEXT_X'], y + o['LIST_SUB_Y'] + o['LIST_SUB_H'] / 2, PS.fit(s, sub, 18, o['PP_DL_TEXT_W']), 18, GREY)
         _paste(im, glyph16(o['PA_CHEV']), o['PP_DL_CHEV_CX'] - o['PA_G_PX'] // 2, y + o['PC_ROW_H'] // 2 - o['PA_G_PX'] // 2)
         hline(im, o['PP_DL_TEXT_X'], W, y + o['PC_ROW_H'] - 1, FOLD + (255,))
-    if L['y_shows']: s.text(im, o['PP_SHOWS_X'], L['y_shows'] + o['PP_HEAD_H'] / 2, 'Shows', 20, WHITE)
+    s.text(im, o['PP_SHOWS_X'], L['y_shows'] + o['PP_HEAD_H'] / 2, 'Shows', 20, WHITE)
     for a, sh in enumerate(shows):
         x, y, ty, sy = pod_show.grid_cell(a, L['y_grid'])
         _paste(im, cover_img(sh, o['GRID_COVER'], o['GRID_R']), x, y)
@@ -505,15 +513,17 @@ def build_shows(s, shows, shelf_n, downloads, refreshing):
     return im, info
 
 
-def shows_frame(s, shows, shelf_n=3, downloads=True, scroll=0, refreshing=False, sheet=None, end=False, caps='more'):
-    content, info = build_shows(s, shows, shelf_n, downloads, refreshing)
+def shows_frame(s, shows, shelf_n=3, dl='12 episodes · 1.4 GB', scroll=0, refreshing=False, sheet=None, end=False, caps='none'):
+    content, info = build_shows(s, shows, shelf_n, dl, refreshing)
     if end: scroll = max(0, info['end'] - (WIN - NAV))
     win = Image.new('RGBA', (W, WIN), (0, 0, 0, 255))
     win.alpha_composite(content.crop((0, scroll, W, scroll + WIN - NAV)), (0, NAV))
     if scroll:
         for y in range(20): _paste(win, Image.new('RGBA', (W, 1), (0, 0, 0, M.nb_fade_alpha(y, 20))), 0, NAV + y)
     ImageDraw.Draw(win).rectangle((0, 0, W - 1, NAV - 1), fill=(0, 0, 0, 255))
-    if scroll > O['SG_COLLAPSE']: s.text(win, O['NAV_TITLE_X'], 25, 'Podcasts', PI.title_px(s.tree))
+    if scroll > O['SG_COLLAPSE']:
+        n = len(capsule_pieces('globe' in caps, caps.endswith('more')))
+        s.text(win, O['NAV_TITLE_X'], 25, PS.fit(s, 'Podcasts', PI.title_px(s.tree), O['NAV_VIEW_X'] - O['NAV_VIEW_W'] * (n - 1) - O['NAV_TITLE_X']), PI.title_px(s.tree))
     PS.glass(s, win, 'ah_nav_back', 7, 44); capsule(s, win, caps)
     fr = frame(s, win, None)
     if sheet: bottom_sheet(s, fr, sheet)
@@ -542,7 +552,6 @@ def search_page(s, shows, results, text='all in', hint=None, status=None):
         if not feed: _paste(win, Image.new('RGBA', (W, o['PC_ROW_H'] - 1), (0, 0, 0, o['PQ_DIM'] >> 24)), 0, y)
     if status: s.text(win, W // 2, NAV + o['PQ_TOP'] + o['PQ_HINT_Y'] + 45, status, 18, WHITE, 'm')
     ImageDraw.Draw(win).rectangle((0, 0, W - 1, NAV - 1), fill=(0, 0, 0, 255))
-    s.text(win, O['NAV_TITLE_X'], 25, 'Search', PI.title_px(s.tree))
     PS.glass(s, win, 'ah_nav_back', 7, 44); PS.glass(s, win, 'ah_nav_np', 260, 60)
     return frame(s, win, None)
 
@@ -583,9 +592,8 @@ def search_sheet(s, shows, workdir, path):
     on = PSET.draw_page(s, 'm1plus_library', full=True, state={'switches': {'pod_switch4': True}}).convert('RGBA')
     on = on.crop((0, on.height - (STAT + WIN), W, on.height)) if on.height > STAT + WIN else on
     onf = Image.new('RGBA', (W, STAT + WIN), (0, 0, 0, 255)); PI.status_bar(s, onf, 0, bg=(0, 0, 0)); onf.alpha_composite(on, (0, STAT + WIN - on.height))
-    frames = [('Shows page, Podcast Search on, Import possible:\nSearch | ... | Now Playing', shows_frame(s, shows, shelf_n=0, downloads=False, caps='search_more')[0]),
-              ('... nothing to import: Search | Now Playing', shows_frame(s, shows, shelf_n=0, downloads=False, caps='search')[0]),
-              ('Podcast Search off: the capsule as before\n(here without Import: the round Now Playing)', shows_frame(s, shows, shelf_n=0, downloads=False, caps='none')[0]),
+    frames = [('Shows page, Import possible:\n... | Now Playing (the globe: podcasts-search2.png)', shows_frame(s, shows, shelf_n=0, caps='more')[0]),
+              ('... nothing to import: the plain Now Playing disc', shows_frame(s, shows, shelf_n=0, caps='none')[0]),
               ('Search: the field opens our keyboard page', PK2.screen(s, pg, 'all in', 'abc', held='n', hint='Search')),
               ('Results: the show, its author in grey,\none with no feed: Not available, dimmed', search_page(s, shows, res[:6])),
               ('Searching...', search_page(s, shows, [], 'all in', status='Searching…')),
@@ -598,6 +606,103 @@ def search_sheet(s, shows, workdir, path):
               ('Settings > Library > Podcasts: Podcast Search off', libf),
               ('... on', onf)]
     assemble(frames, 4, path)
+
+
+# ------------------------------------------------------------------ the episode page (round 4): patch/podcasts.c pg_paint_det, patch/pcdetail.c; the layout is tools/pod_show.py detail_layout
+
+NOTE_EN = '\n'.join([
+    "Chamath, Jason, Sacks and Friedberg break down the week's biggest stories: the market's reaction to the Fed, what the next move means for tech valuations, and why the shutdown is dragging on.",
+    'Topics: 0:00 intro; 4:10 Nvidia hits five trillion; 22:45 the AI bubble debate; 41:30 tariffs and the supreme court; 58:00 closing thoughts and what we are watching next week in the markets.',
+    'Follow the besties on social media, subscribe to the newsletter and send us your questions for the next episode. Thank you for listening, and see you next week.',
+    'Sponsors: this episode is brought to you by the people who make the tools we use every day. Visit the links in the show notes to support the show and to get a discount.'])
+NOTE_ZH = '\n'.join([
+    '本期节目中，几位主持人讨论了本周最重要的新闻：市场对美联储降息的反应、科技股估值的变化，以及政府停摆为何迟迟没有结束。他们还谈到了关税、人工智能泡沫和英伟达的五万亿美元时刻。',
+    '时间线：0:00 开场；4:10 英伟达市值突破五万亿美元（这是一个历史性的时刻）；22:45 人工智能泡沫之争；41:30 关税与最高法院；58:00 结语。',
+    '欢迎在社交媒体上关注我们，订阅新闻简报，并把您的问题发给我们！“谢谢收听”，下周再见。',
+    '本节目由生活中常用的工具赞助。请访问节目说明中的链接支持我们，并获得优惠。'])
+NOTE_WSJ = '\n'.join([
+    'Hosted by Sing Lee. Stocks rally on hopes for a rate cut, oil slips for a third day and the dollar steadies ahead of the jobs report.',
+    'Plus: what the latest earnings tell us about the consumer, and why retailers are betting on a late holiday surge.'])
+
+
+def detail_frame(s, sh, e, note, length, scroll=0, preview=False, sheet=None):
+    """The episode page (Apple Podcasts' layout, plain black): the date line with the cell's badges and the size, the title, the show row (a small cover, the name, a chevron), the cell's pill and "...", the full
+    description; scrolled as a whole, the navbar's fade black."""
+    o, top, P = O, O['PG_LIST_Y'], pod_show.PD
+    L = pod_show.detail_layout(FONT, e['title'], sh.title, note, has_pill=not preview)
+    im = Image.new('RGBA', (W, top + L['h'] + 8), (0, 0, 0, 0))
+    x = P['PD_X']; cy = top + L['y_date'] + P['PD_DATE_H'] // 2
+    if e['played']: _paste(im, glyph16(o['PA_CHECK']), x - 1, cy - 8); x += o['PS_BADGE_CHECK_W']
+    if e['state'] in ('card', 'partial'): _paste(im, dl_badge(), x, cy - o['PA_BADGE_PX'] // 2); x += o['PS_BADGE_DISC_W']
+    s.text(im, x, cy, pod_show.detail_date(e['date'], length), 15, GREY)
+    for k, l in enumerate(L['title']): s.text(im, P['PD_X'], top + L['y_title'] + k * P['PD_TITLE_PITCH'] + P['PD_TITLE_PITCH'] // 2, l, 22, WHITE)
+    ry = top + L['y_show']
+    im.alpha_composite(cover_img(sh, P['PD_COVER'], P['PD_COVER_R']), (P['PD_X'], ry + (P['PD_SHOW_H'] - P['PD_COVER']) // 2))
+    s.text(im, P['PD_SHOW_TEXT_X'], ry + P['PD_SHOW_H'] // 2, L['show'], 15, GREY)
+    if L['y_pill']: _paste(im, glyph16(o['PA_CHEV']), P['PD_CHEV_CX'] - o['PA_G_PX'] // 2, ry + P['PD_SHOW_H'] // 2 - o['PA_G_PX'] // 2)
+    if L['y_pill']:
+        y0 = top + L['y_pill']
+        state_pill(s, im, pod_show.PD['PD_X'], y0, e['state'], e['label'], e.get('pct', 0))
+        _paste(im, sprite(0, o['PA_DOTS_Y'], o['PA_DOTS_PX'], o['PA_DOTS_PX']), o['PS_DOTS_CX'] - o['PA_DOTS_PX'] // 2, y0 + o['PS_PILL_H'] // 2 - o['PA_DOTS_PX'] // 2)
+    for t, y in L['desc']: s.text(im, pod_show.PD['PD_X'], top + y + pod_show.PD['PD_PITCH'] // 2, t, 15 if L['hint'] else 16, GREY if L['hint'] else SEC)
+    scroll = min(scroll, max(0, L['h'] - WIN))
+    win = window(s, None, im, scroll, '', scroll > 0, caps='none')
+    fr = frame(s, win, None)
+    if sheet: bottom_sheet(s, fr, sheet)
+    return fr
+
+
+def detail_sheet(s, shows, path):
+    allin, night, minute = shows[0], shows[4], shows[3]
+    en, zh, wsj = allin.eps[0], night.eps[0], minute.eps[0]
+    remote = allin.eps[3]
+    frames = [('Episode page: a downloaded episode, long English\ndescription (scrollable), pill and "..." as the cell', detail_frame(s, allin, en, NOTE_EN, 48 << 20)),
+              ('the same, scrolled: the page scrolls as a whole,\nthe navbar fades in black', detail_frame(s, allin, en, NOTE_EN, 48 << 20, 330)),
+              ('... scrolled to the end', detail_frame(s, allin, en, NOTE_EN, 48 << 20, 5000)),
+              ('a Chinese show: long Chinese description,\nwrapped between characters (kinsoku)', detail_frame(s, night, zh, NOTE_ZH, 36 << 20)),
+              ('Chinese, scrolled', detail_frame(s, night, zh, NOTE_ZH, 36 << 20, 330)),
+              ('not downloaded: the outlined "48 MB" pill\n(a tap downloads it, as in the cell)', detail_frame(s, allin, remote, NOTE_EN.split('\n')[0] + '\n' + NOTE_EN.split('\n')[2], 48 << 20)),
+              ('the "..." on the page: the cell\'s bottom sheet', detail_frame(s, allin, remote, NOTE_EN.split('\n')[0], 48 << 20, sheet=cell_rows(remote))),
+              ('from the search preview: no pill, no "...",\nthe description from the held feed', detail_frame(s, minute, dict(wsj, state='remote', played=False), NOTE_WSJ, 6 << 20, preview=True)),
+              ('no description (a local show with no tag):\nthe hint, in the grey line\'s style', detail_frame(s, shows[7], shows[7].eps[1], '', 0))]
+    assemble(frames, 3, path)
+
+
+def nav_strip(s, globe, more):
+    """The Shows page's navbar in one capsule state (patch/podcasts.c pg_nav): Back, the small title cut to the room left of the first piece, the globe (the left cap; Apple Podcasts, only with
+    Podcast Search on) and the "..." (Import possible) as middle pieces, 46 px apart right-aligned to Now Playing; a 320 x 50 strip."""
+    o = O
+    win = Image.new('RGBA', (W, NAV), (0, 0, 0, 255))
+    names = capsule_pieces(globe, more)
+    x0 = o['NAV_VIEW_X'] - o['NAV_VIEW_W'] * (len(names) - 1)
+    for i, n in enumerate(names): PS.glass(s, win, n, x0 + i * o['NAV_VIEW_W'])
+    PS.glass(s, win, 'ah_nav_back', 7, 44); PS.glass(s, win, 'ah_nav_play' if names else 'ah_nav_np', 260, 60)
+    px = PI.title_px(s.tree)
+    s.text(win, o['NAV_TITLE_X'], 25, PS.fit(s, 'Podcasts', px, x0 - o['NAV_TITLE_X']), px)
+    return win
+
+
+def capsule_panel(s):
+    """The four capsule states, one under the other, each with the small title as it is cut."""
+    out = Image.new('RGBA', (W, STAT + 4 * (NAV + 22)), (0, 0, 0, 255))
+    PI.status_bar(s, out, 0, bg=(0, 0, 0))
+    d = ImageDraw.Draw(out)
+    for i, (g, m, cap) in enumerate(((False, False, 'Now Playing disc'), (True, False, 'globe | Now Playing'), (False, True, '... | Now Playing'),
+                                     (True, True, 'globe | ... | Now Playing'))):
+        y = STAT + i * (NAV + 22)
+        d.text((8, y + 4), cap, fill=(0xAA,) * 3, font=PI.ANN)
+        out.alpha_composite(nav_strip(s, g, m), (0, y + 22))
+    return out
+
+
+def search2_sheet(s, shows, path):
+    """podcasts-search2.png: the four capsule states with the small title as it is cut; a grid with local and subscribed captions (the "Local" marker)."""
+    frames = [("The Shows page's capsule in its four states\n(the small title is cut to the room left of it)", capsule_panel(s)),
+              ('Shows grid: a show that is only on the card\nsays Local (the count where it fits)', shows_frame(s, shows, shelf_n=0, scroll=330, end=True, caps='globe_more')[0])]
+    assemble(frames, 2, path)
+    assemble(frames, 3, path)
+
+
 def assemble(frames, cols, path, lab=34, pad=12):
     rows = (len(frames) + cols - 1) // cols
     sheet = Image.new('RGB', (cols * (W + pad) + pad, rows * (STAT + WIN + lab + pad) + pad), (0x2A, 0x2A, 0x2A)); d = ImageDraw.Draw(sheet)
@@ -607,6 +712,147 @@ def assemble(frames, cols, path, lab=34, pad=12):
         sheet.paste(im.convert('RGB'), (x, y + lab))
     sheet.save(path, optimize=True)
     print('wrote', path, sheet.size)
+
+
+def subs_page(s, shows, marked=None, empty=False):
+    """The Subscriptions page as patch/podcasts.c paints it (docs/modules/podcasts.md "Subscriptions and OPML"): the Downloads level's rows (a LIST_ART px cover, the name 21 px, the feed status 18 px grey, a
+    hairline from LIST_TEXT_X) for every show with a feed, by title (a leading "The " and the case aside); the capsule "..." | Now Playing. marked: a set of titles = select mode (the x, N Selected, Select All,
+    a mark column of SG_SEL_COL, the bar with the Unsubscribe pill); empty: no subscription left, the status line."""
+    o = O
+    subs = [] if empty else sorted((sh for sh in shows if sh.key != 'local'), key=lambda sh: (sh.title[4:] if sh.title.lower().startswith('the ') else sh.title).lower())
+    win = Image.new('RGBA', (W, WIN), (0, 0, 0, 255))
+    shift = o['SG_SEL_COL'] if marked is not None else 0
+    room = o['LIST_TEXT_W'] - shift
+    for r, sh in enumerate(subs):
+        y = NAV + o['PP_TITLE_H'] + r * o['PC_ROW_H']
+        if y + o['PC_ROW_H'] > WIN - (o['SG_BAR_H'] if marked is not None else 0): break
+        _paste(win, cover_img(sh, o['LIST_ART'], o['LIST_R']), o['LIST_ART_X'] + shift, y + o['LIST_ART_Y'])
+        s.text(win, o['LIST_TEXT_X'] + shift, y + o['LIST_TITLE_Y'] + o['LIST_TITLE_H'] / 2, PS.fit(s, sh.title, 21, room), 21, WHITE)
+        s.text(win, o['LIST_TEXT_X'] + shift, y + o['LIST_SUB_Y'] + o['LIST_SUB_H'] / 2, PS.fit(s, sh.sub, 18, room), 18, GREY)
+        hline(win, o['LIST_TEXT_X'] + shift, W, y + o['PC_ROW_H'] - 1)
+        if marked is not None:
+            _paste(win, s.img('selected' if sh.title in marked else 'unselect'), o['LIST_ART_X'] + (shift - 6 - o['SG_MARK']) // 2, y + (o['PC_ROW_H'] - o['SG_MARK']) // 2)
+    if marked is None: s.text(win, o['PP_TITLE_X'], NAV + o['PP_TITLE_H'] / 2, 'Subscriptions', o['PP_TITLE_PX'], WHITE)   # (the large heading; the navbar has no title)
+    if empty: s.text(win, W // 2, 180 + 45, 'No subscriptions', 18, WHITE, 'm')
+    d = ImageDraw.Draw(win); d.rectangle((0, 0, W - 1, NAV - 1), fill=(0, 0, 0, 255))
+    if marked is not None:
+        PS.glass(s, win, 'ah_nav_close', 7, 44)
+        s.text(win, o['NAV_TITLE_X'], 25, '%d Selected' % len(marked), PI.title_px(s.tree))
+        s.text(win, o['SG_SELALL_X'] + 104 - 8 - FONT.width('Select All', 18), 25, 'Select All', 18)
+        d.rectangle((0, WIN - o['SG_BAR_H'], W - 1, WIN - 1), fill=(0, 0, 0, 255)); hline(win, 0, W, WIN - o['SG_BAR_H'], PS.HAIR + (255,) if len(PS.HAIR) == 3 else PS.HAIR)
+        PS.pill(s, win, o['SG_PILL_X0'], WIN - o['SG_BAR_H'] + (o['SG_BAR_H'] - o['SG_PILL_H']) // 2, 'Unsubscribe', s.img('sg_trash'), w=o['PL_BAR_PILL_W'])
+    else:
+        PS.glass(s, win, 'ah_nav_back', 7, 44)
+        capsule(s, win, 'none' if empty else 'more')
+    return frame(s, win, None)
+
+
+def subs_sheet(s, shows, path):
+    """podcasts-subs.png: the Shows page with its Subscriptions row and the "..." sheet that holds Import from Card only, the Subscriptions page, its sheet (Select Shows, Export OPML), its select mode
+    with two shows marked, and the empty state."""
+    page_rows = [('pc_ic_select', 'Select Shows', '', WHITE), ('pod_ic_export', 'Export OPML', '', WHITE)]
+    sf = lambda **k: shows_frame(s, shows, shelf_n=0, **k)[0]
+    frames = [('Shows page: the Subscriptions row is a Library row\n(a tap opens the page); no "..." without an import', sf()),
+              ('the "..." appears only beside an import source\n(subscriptions.txt or an .opml): Import from Card', sf(sheet=SHOWS_ROWS, caps='more')),
+              ('Subscriptions: a row per show with a feed,\nby title; its feed status in grey', subs_page(s, shows)),
+              ('its "..." sheet: Select Shows, Export OPML\n(a toast says "Exported 6 shows")', bottom_sheet(s, subs_page(s, shows), page_rows)),
+              ('select mode: the x, 2 Selected, marks,\nthe bar with Unsubscribe', subs_page(s, shows, marked={'The Brief', 'Tech Daily'})),
+              ('no subscription left', subs_page(s, shows, empty=True))]
+    assemble(frames, 3, path)
+
+
+# ------------------------------------------------------------------ the Downloads page: patch/podcasts.c pg_paint_dls; the layout is tools/pod_show.py downloads_layout
+
+def downloads_page(s, ip, dl, scroll=0, marked=None, line='7 episodes · 217 MB · 18 GB free', empty=False):
+    """The Downloads page as patch/podcasts.c paints it (docs/modules/podcasts.md "The Downloads page"): the storage line (15 px grey), the In Progress header and rows, PP_SEC_GAP, the Downloaded header and rows
+    (a LIST_ART px cover, the episode 21 px, "show · date · size" or "... · 35m left · ..." 18 px grey, the played check before it, a full width hairline); the capsule "..." | Now Playing. ip: (show, title, line);
+    dl: (show, title, tail, played); marked: a set of row indexes = select mode (the x, N Selected, Select All, a mark column of SG_SEL_COL, the bar with the Delete pill); empty: the status line."""
+    o = O
+    L = pod_show.downloads_layout(len(ip), len(dl), marked is not None)
+    shift = o['SG_SEL_COL'] if marked is not None else 0
+    im = Image.new('RGBA', (W, max(L['h'], WIN - NAV)), (0, 0, 0, 255))
+    s.text(im, o['PP_TITLE_X'], o['PP_TITLE_H'] / 2, 'Downloads', o['PP_TITLE_PX'], WHITE)   # (the large heading scrolls with the content; the navbar has no title)
+    if not empty:
+        if line: s.text(im, o['PP_LINE_X'], L['y_line'] + o['PP_LINE_H'] / 2, PS.fit(s, line, 15, W - 2 * o['PP_LINE_X']), 15, GREY)
+        if ip: s.text(im, o['PP_SHOWS_X'], L['y_ip'] + o['PP_HEAD_H'] / 2, 'In Progress', 20, WHITE)
+        if dl: s.text(im, o['PP_SHOWS_X'], L['y_dh'] + o['PP_HEAD_H'] / 2, 'Downloaded', 20, WHITE)
+    for i, y in enumerate(L['rows'] if not empty else []):
+        if i < len(ip): sh, title, sub = ip[i]; played = False
+        else:
+            sh, title, tail, played = dl[i - len(ip)]
+            sub = PS.fit(s, sh.title, 18, o['LIST_TEXT_W'] - shift - (o['PS_BADGE_CHECK_W'] if played else 0) - FONT.width(tail, 18)) + tail
+        _paste(im, cover_img(sh, o['LIST_ART'], o['LIST_R']), o['LIST_ART_X'] + shift, y + o['LIST_ART_Y'])
+        s.text(im, o['LIST_TEXT_X'] + shift, y + o['LIST_TITLE_Y'] + o['LIST_TITLE_H'] / 2, PS.fit(s, title, 21, o['LIST_TEXT_W'] - shift), 21, WHITE)
+        bx = o['PS_BADGE_CHECK_W'] if played else 0
+        if played: _paste(im, glyph16(o['PA_CHECK']), o['LIST_TEXT_X'] + shift - 1, y + o['LIST_SUB_Y'] + o['LIST_SUB_H'] // 2 - 8)
+        s.text(im, o['LIST_TEXT_X'] + shift + bx, y + o['LIST_SUB_Y'] + o['LIST_SUB_H'] / 2, PS.fit(s, sub, 18, o['LIST_TEXT_W'] - shift - bx), 18, GREY)
+        hline(im, 0, W, y + o['PC_ROW_H'] - 1, (0x22, 0x22, 0x22, 255))
+        if marked is not None and not (i == 0 and ip and ip[0][2].startswith('Downloading')):
+            _paste(im, s.img('selected' if i in marked else 'unselect'), o['LIST_ART_X'] + (shift - 6 - o['SG_MARK']) // 2, y + (o['PC_ROW_H'] - o['SG_MARK']) // 2)
+    win = Image.new('RGBA', (W, WIN), (0, 0, 0, 255))
+    win.alpha_composite(im.crop((0, scroll, W, scroll + WIN - NAV)), (0, NAV))
+    if scroll:
+        for y in range(20): _paste(win, Image.new('RGBA', (W, 1), (0, 0, 0, M.nb_fade_alpha(y, 20))), 0, NAV + y)
+    d = ImageDraw.Draw(win); d.rectangle((0, 0, W - 1, NAV - 1), fill=(0, 0, 0, 255))
+    if marked is not None:
+        PS.glass(s, win, 'ah_nav_close', 7, 44)
+        s.text(win, o['NAV_TITLE_X'], 25, '%d Selected' % len(marked), PI.title_px(s.tree))
+        s.text(win, o['SG_SELALL_X'] + 104 - 8 - FONT.width('Select All', 18), 25, 'Select All', 18)
+        d.rectangle((0, WIN - o['SG_BAR_H'], W - 1, WIN - 1), fill=(0, 0, 0, 255)); hline(win, 0, W, WIN - o['SG_BAR_H'], PS.HAIR + (255,) if len(PS.HAIR) == 3 else PS.HAIR)
+        PS.pill(s, win, o['SG_PILL_X0'], WIN - o['SG_BAR_H'] + (o['SG_BAR_H'] - o['SG_PILL_H']) // 2, 'Delete', s.img('sg_trash'), w=o['PL_BAR_PILL_W'])
+    else:
+        PS.glass(s, win, 'ah_nav_back', 7, 44)
+        capsule(s, win, 'none' if empty else 'more')
+    if empty: s.text(win, W // 2, 180 + 45, 'No downloads', 18, WHITE, 'm')
+    return frame(s, win, None)
+
+
+def confirm_frame(fr, workdir, text):
+    """The stock confirm dialog (tools/mod_overlays.py: confirminfo_bg, the highlight alpha 100) over a frame, as tools/preview_overlays.py draws it."""
+    import preview_overlays as PO
+    from PIL import ImageFont
+    fr = fr.copy(); fr.alpha_composite(Image.new('RGBA', fr.size, (0, 0, 0, 100)))
+    card = PO.load(workdir, 'confirminfo_bg'); x, y = (W - 260) // 2, (fr.height - 180) // 2
+    fr.alpha_composite(card, (x, y)); fr.alpha_composite(Image.new('RGBA', (1, 48), (255, 255, 255, 0x22)), (x + 129, y + 131))
+    d = ImageDraw.Draw(fr); font = ImageFont.truetype(os.path.join(workdir, PO.RAW, 'fonts/default.ttf'), 20)
+    d.text((W // 2, y + 56), text, font=font, fill='white', anchor='mm'); d.text((x + 65, y + 155), 'No', font=font, fill='white', anchor='mm'); d.text((x + 195, y + 155), 'Yes', font=font, fill='white', anchor='mm')
+    return fr
+
+
+def downloads2_sheet(s, shows, workdir, path):
+    """podcasts-downloads2.png: the Shows page's Library rows (downloading, idle) with the slimmer capsule, the Downloads page (both sections, the storage line), scrolled to played and partly played rows, its "..." sheet,
+    select mode across both sections, the Delete Played confirm and the empty state."""
+    allin, brief, headlines, minute, night, deep, tech = shows[:7]
+    ip = [(allin, 'Ep 214: The Real Reason Markets Moved This Quarter', 'Downloading 42%'), (brief, 'Markets open lower, a deal in Brussels and the weather that will not quit', 'Waiting'),
+          (headlines, 'Elections, earnings and everything else you missed overnight', "Failed: Can't connect"), (allin, 'Ep 213: Venture Capital Is Broken (And What Replaces It)', 'Paused')]
+    dl = [(allin, "Trump's Tariffs, Nvidia's $5T Moment, AI Bubble Debate", ' · 2d ago · 48 MB', False), (night, '第128期｜为什么年轻人不再相信“努力就会有回报”', ' · 5天前 · 31 MB', False),
+          (allin, "Amazon's Big Earnings Beat, Intel Gets a Lifeline", ' · 35m left · 66 MB', False), (minute, 'Stocks rally, oil slips and the Fed speaks', ' · Oct 10 · 12 MB', True),
+          (brief, 'The week in review', ' · Oct 8 · 24 MB', True), (tech, 'A new chip, a new phone and a new argument', ' · Oct 2 · 19 MB', False),
+          (deep, 'Why we collect things', ' · Sep 28 · 38 MB', False), (headlines, 'Elections, earnings and everything else', ' · Sep 21 · 9 MB', True)]
+    line = '8 episodes · 1.4 GB · 18 GB free'
+    sheet_rows = [('pc_ic_select', 'Select', '', WHITE), ('pc_ic_trash', 'Delete Played Episodes', '', WHITE)]
+    page = lambda **k: downloads_page(s, ip, dl, line=line, **k)
+    L = pod_show.downloads_layout(len(ip), len(dl))
+    played_scroll = L['rows'][len(ip) + 2] - 60
+    shows_a = shows_frame(s, shows, shelf_n=0, dl='Downloading 42%', caps='none')[0]
+    shows_b = shows_frame(s, shows, shelf_n=0, caps='none')[0]
+    frames = [('Shows page: the Library rows, a download running;\nthe capsule is the plain Now Playing disc', shows_a), ('idle: "12 episodes · 1.4 GB"\n(also "2 waiting", "1 paused", "No downloads")', shows_b),
+              ('Downloads: storage line, In Progress,\nDownloaded (newest download first)', page()), ('scrolled: a partly played row ("35m left"),\nplayed rows with the check', page(scroll=played_scroll)),
+              ('the "..." sheet: Select, Delete Played Episodes', bottom_sheet(s, page(), sheet_rows)), ('select mode across both sections\n(the running one cannot be marked)', page(marked={1, 4, 6})),
+              ('Delete Played Episodes: the confirm', confirm_frame(page(), workdir, 'Delete all played episodes?')), ('the toast after it (stock message box)', toast_frame(page(scroll=0), workdir, '2 deleted, 105 MB freed')),
+              ('nothing downloaded: No downloads', downloads_page(s, [], [], empty=True))]
+    assemble(frames, 3, path)
+
+
+def toast_frame(fr, workdir, text):
+    """The stock message box (msginfo_bg) over a frame, as tools/preview_overlays.py draws it."""
+    import preview_overlays as PO
+    from PIL import ImageFont
+    fr = fr.copy(); fr.alpha_composite(Image.new('RGBA', fr.size, (0, 0, 0, 100)))
+    card = PO.load(workdir, 'msginfo_bg'); x, y = (W - 260) // 2, (fr.height - 180) // 2
+    fr.alpha_composite(card, (x, y)); d = ImageDraw.Draw(fr); font = ImageFont.truetype(os.path.join(workdir, PO.RAW, 'fonts/default.ttf'), 18)
+    d.text((W // 2, y + 56), text, font=font, fill='white', anchor='mm')
+    return fr
 
 
 def main():
@@ -634,8 +880,8 @@ def main():
     assemble(frames, 4, out('show'))
 
     sf = lambda **k: shows_frame(s, shows, **k)[0]
-    assemble([('Shows: top with Continue Listening x3,\nDownloads (2)', sf()), ('top with Continue Listening x2, no Downloads row', sf(shelf_n=2, downloads=False)),
-              ('scrolled: the title collapsed into the navbar', sf(scroll=330)), ('the "..." sheet: Import from Card (Add Show is hidden)', sf(sheet=SHOWS_ROWS)),
+    assemble([('Shows: the Library rows (Downloads running,\nSubscriptions), Continue Listening x3 below', sf(dl='Downloading 42%')), ('idle: "12 episodes · 1.4 GB", Continue Listening x2', sf(shelf_n=2)),
+              ('scrolled: the title collapsed into the navbar', sf(scroll=330)), ('the "..." sheet: Import from Card only', sf(sheet=SHOWS_ROWS, caps='more')),
               ('while refreshing: "Refreshing 2/5"', sf(refreshing=True)), ('end of the grid', sf(end=True))], 3, out('shows'))
 
     strip = pill_strip(s, allin.tone); col = combos(s, allin)
@@ -644,6 +890,10 @@ def main():
     sheet.paste(col, (12, strip.height + 30)); sheet.save(out('states'), optimize=True)
     print('wrote', out('states'), sheet.size)
     search_sheet(s, shows, a.workdir, os.path.join(a.outdir, 'podcasts-search.png'))
+    detail_sheet(s, shows, os.path.join(a.outdir, 'podcasts-detail.png'))
+    search2_sheet(s, shows, os.path.join(a.outdir, 'podcasts-search2.png'))
+    subs_sheet(s, shows, os.path.join(a.outdir, 'podcasts-subs.png'))
+    downloads2_sheet(s, shows, a.workdir, os.path.join(a.outdir, 'podcasts-downloads2.png'))
 
 
 if __name__ == '__main__': main()

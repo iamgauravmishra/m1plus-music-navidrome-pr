@@ -106,6 +106,8 @@ static unsigned pm_fnv_n(const char *s, unsigned n) {
     return h | !h;
 }
 
+unsigned pc_guid_hash(const char *s, unsigned n) { return pm_fnv_n(s, n); }
+
 /* fmt with its %d replaced by n (the translation tables allow one %d a text). */
 void pc_fmt(char *out, unsigned size, const char *fmt, unsigned n) {
     char num[12];
@@ -598,6 +600,43 @@ static int pm_files(const char *root, const char *dir, pm_file_t *files, int max
         files[n].mtime = 0;
         memset(st, 0, sizeof st);
         if (pm_join(full, sizeof full, root, dir, name) && __xstat(3, full, st) == 0) files[n].mtime = st[0x40 / 4];
+        ++n;
+    }
+    closedir(d);
+    return n;
+}
+
+/* One file of a show folder: its modification time and its size in KB (struct stat, MIPS o32: st_size at +0x30, st_mtime at +0x40). 1 when it exists. */
+int pc_stat(const char *root, const char *dir, const char *file, unsigned *mtime, unsigned *kb) {
+    char full[PM_PATH];
+    unsigned st[40];
+    memset(st, 0, sizeof st);
+    *mtime = *kb = 0;
+    if (!pm_join(full, sizeof full, root, dir, file) || __xstat(3, full, st) != 0) return 0;
+    *mtime = st[0x40 / 4];
+    *kb = st[0x30 / 4] >> 10;
+    return 1;
+}
+
+/* The audio files and .part files of a show folder, one callback each (the name, the audio's or .part's size in KB, 1 for a .part): the Shows page's totals. No .episodes is read. At most PM_MAX_FILES files. */
+int pc_walk(const char *root, const char *dir, void (*cb)(void *ctx, const char *name, unsigned kb, int part),
+            void *ctx) {
+    char path[PM_PATH];
+    unsigned st[40];
+    void *d;
+    char *ent;
+    int n = 0;
+    if (!pm_join(path, sizeof path, root, dir, (const char *)0) || !(d = opendir(path))) return 0;
+    while (n < PM_MAX_FILES && (ent = readdir(d)) != (char *)0) {
+        const char *name = pm_name(ent);
+        char full[PM_PATH];
+        int part;
+        if (!*name || name[0] == '.' || pm_len(name) >= PC_FILE) continue;
+        part = pm_part(name);
+        if (!part && !pm_audio(name)) continue;
+        memset(st, 0, sizeof st);
+        if (pm_join(full, sizeof full, root, dir, name)) __xstat(3, full, st);
+        cb(ctx, name, st[0x30 / 4] >> 10, part);
         ++n;
     }
     closedir(d);

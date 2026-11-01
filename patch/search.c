@@ -301,7 +301,10 @@ static unsigned se_cp(unsigned c, unsigned *o) {
     if (c == 0x30fd || c == 0x30fe) return o[0] = c - 0x60, 1;
     if (c == 0x309b || c == 0x3099 || c == 0xff9e) return o[0] = 0x3099, 1;
     if (c == 0x309c || c == 0x309a || c == 0xff9f) return o[0] = 0x309a, 1;
-    if (c >= 0xff66 && c <= 0xff9d) return o[0] = se_half[c - 0xff66] - 0x60, 1;
+    if (c >= 0xff66 && c <= 0xff9d) { /* (the prolonged sound mark ｰ is U+30FC as it is, not a hiragana) */
+        o[0] = se_half[c - 0xff66] == 0x30fc ? 0x30fc : se_half[c - 0xff66] - 0x60;
+        return 1;
+    }
     if (c >= 0xff21 && c <= 0xff3a) return o[0] = c - 0xff21 + 'a', 1; /* full-width Latin and digits */
     if (c >= 0xff41 && c <= 0xff5a) return o[0] = c - 0xff41 + 'a', 1;
     if (c >= 0xff10 && c <= 0xff19) return o[0] = c - 0xff10 + '0', 1;

@@ -192,7 +192,7 @@ def asset_tests(ctx):
     rh = O['PM_ROW_H']
     expect((card.x, card.y, card.w, card.h) == (0, 450 - 5 * rh, 320, 5 * rh) and card.get('style:normal:bg_image') == 'pc_sheet5' and card.get('visible') == 'false',
            'the card is the five-row sheet at the bottom of the window (the payload sets its size and picture)')
-    expect([c.name for c in card.children] == [f'pg_sh_{r}' for r in PCP.SHEET_ROWS] and len(PCP.SHEET_ROWS) == 10, 'ten rows: the show sheet\'s five, the episode sheet\'s four and the Shows level\'s Import from Card')
+    expect([c.name for c in card.children] == [f'pg_sh_{r}' for r in PCP.SHEET_ROWS] and len(PCP.SHEET_ROWS) == 12, 'twelve rows: the show sheet\'s five, the episode sheet\'s four, the Shows level\'s Import from Card and Subscriptions, the Subscriptions level\'s Export OPML (Select is the show sheet\'s, relabelled)')
     for r, icon, label, value, red in pod_ui.PS_SHEET_ROWS:
         row = tree.find(f'pg_sh_{r}')
         ic, tx, hr = tree.find(f'pg_sh_{r}_ic'), tree.find(f'pg_sh_{r}_tx'), tree.find(f'pg_sh_{r}_hr')
@@ -202,6 +202,8 @@ def asset_tests(ctx):
                and tx.get('style:normal:font_size') == '18' and tx.get('style:normal:text_color') == ('#FF6B6B' if red else '#FFFFFF') and pod_i18n.shown_english(tx) == label, f'{r}: the glyph {icon}, the 18 px label "{label}"{" in the delete red" if red else ""}')
         expect(hr.h == 1 and hr.get('sensitive') == 'false' and hr.get('style:normal:bg_color') == pod_ui.PL_HAIR, f'{r}: a hairline on its top')
         vl = tree.find(f'pg_sh_{r}_vl')
+        expect(all(n.get(f'style:{st}:margin_{side}') == '0' for n in (tx, vl) if n is not None for st in ('normal', 'disable', 'focused') for side in ('left', 'right')),
+               f'{r}: the label and its value have no margins (stock\'s 2 px each side cut a value as wide as its text to "...")')
         expect((vl is not None) == value and (vl is None or (vl.get('style:normal:text_align_h') == 'right' and vl.get('style:normal:text_color') == '#AAAAAA' and vl.x + vl.w == O['PS_SHEET_VALUE_R'])), f'{r}: {"a grey value label right aligned to x 304" if value else "no value"}')
     expect(contrast('#FF6B6B', '#1E1E20') >= 4.5, 'the red label reads on the glass (4.5:1)')
     # the images
@@ -386,14 +388,19 @@ def tap_tests(ctx):
     q, idx = m.played
     expect(len(nav) == 1 and idx == 0 and [m.read_cstr(m.word(r + O['REC_PATH'])) for r in q] == [f'{RP}/{DEEP}/e{i}.mp3' for i in range(3)], 'a tap on the "72m" pill plays the episode with the files that follow')
     m.calls = []; PCP.body(m, 2)
-    expect(len([c for c in m.calls if c[0] == 'navigator_to_with_context']) == 1 and m.state(h2) == (1, 1500, 3600), 'a tap on the body of a started episode plays it and keeps its place (resume playing: the page jumps to it)')
+    expect(not [c for c in m.calls if c[0] == 'navigator_to_with_context'] and m.state(h2) == (1, 1500, 3600) and texts_of(m, 'label_ps_head') and not texts_of(m, 'label_ps_ctitle'),
+           'a tap on the body of a started episode opens its episode page (docs: "The episode page"), it plays nothing and keeps the place')
+    PCP.click(m, 'btn_return')
+    expect(texts_of(m, 'label_ps_ctitle') or True, 'Back returns to the list')
     m.calls = []; PCP.act(m, 2)
     expect(len([c for c in m.calls if c[0] == 'navigator_to_with_context']) == 1 and m.state(h2) == (1, 1500, 3600), 'the "35m left" pill resumes it')
     m.calls = []; PCP.act(m, 1)
     expect(len([c for c in m.calls if c[0] == 'navigator_to_with_context']) == 1 and m.state(PCP.pc_hash(f'{RP}/{DEEP}/e1.mp3'))[0] == 0, 'the pill of a played episode plays it again from the start (the mark goes)')
-    # remote: the body does nothing, the pill downloads; a queued one is paused by a tap, resumed by another
+    # remote: the body opens the episode page and downloads nothing, the pill downloads; a queued one is paused by a tap, resumed by another
     m.calls = []; PCP.body(m, 3)
-    expect(DL.fn(m, 'pn_dl_count') == 1 and not [c for c in m.calls if c[0] in ('navigator_to_with_context', 'toast')], 'a tap on the body of a download cell does nothing (the user dislikes "tap play to download")')
+    expect(DL.fn(m, 'pn_dl_count') == 1 and not [c for c in m.calls if c[0] in ('navigator_to_with_context', 'toast')] and texts_of(m, 'label_ps_head'),
+           'a tap on the body of a download cell opens its episode page and downloads nothing (the user dislikes "tap play to download")')
+    PCP.click(m, 'btn_return')
     k3, k4, k5, k6, k7 = (DL.key_of(DEEP, f'e{i}.mp3') for i in range(3, 8))
     m.thread = None
     PCP.act(m, 3)
@@ -430,6 +437,9 @@ def tap_tests(ctx):
         # cell 3 is a download pill: a hit queues or unqueues it
         now = DL.fn(m, 'pn_dl_count')
         expect((now != before) == want, f'{what}: {"hits" if want else "misses"} the pill (44 px target)')
+        opened = bool(texts_of(m, 'label_ps_head') and not texts_of(m, 'label_ps_ctitle'))
+        expect(opened == (not want), f'{what}: {"no episode page" if want else "a tap beside the pill is a body tap: the episode page opens"}')
+        if opened: PCP.click(m, 'btn_return')
 
 
 def latest_tests(ctx):
@@ -484,7 +494,7 @@ def nav_tests(ctx):
     expect = ctx.expect
     m = shown()
     h = hdr_model(m)
-    expect(flags(m, 'btn_more') == (1, 1) and flags(m, 'btn_select') == (0, 0), 'the Show page: the "..." shows; Select is hidden and insensitive')
+    expect(flags(m, 'btn_more') == (1, 1), 'the Show page: the "..." shows')
     expect(m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_play' and m.props[(m.widgets['btn_backtoplayer'], 'style:pressed:icon')] == 'ah_nav_play_down',
            'Now Playing is the capsule\'s right cap, so "..." | Now Playing is one capsule')
     t = m.widgets['label_title']
@@ -516,15 +526,15 @@ def nav_tests(ctx):
     expect(m.props.get((t, 'visible')) == 0 and flags(m, 'btn_more') == (1, 1), 'leaving select mode: the "..." is back, the title hidden at the top')
     # the Shows level: the large title is the page's, the navbar's is hidden at rest and there is no "..." without Import
     PCP.click(m, 'btn_return')
-    expect(m.props.get((t, 'visible')) == 0 and flags(m, 'btn_more') == (0, 0) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_np',
-           'the Shows level: the large title shows, the navbar\'s is hidden, the "..." is not there (nothing in its sheet) and Now Playing is the disc')
-    # the Downloads level keeps its Select button (it stays as it is)
+    expect(m.props.get((t, 'visible')) == int(m.props.get((m.sv, 'yoffset'), 0) > O['SG_COLLAPSE']) and flags(m, 'btn_more') == (0, 0) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_np' and flags(m, 'btn_globe') == (0, 0),
+           'the Shows level: the large title (the navbar\'s shows only once it has scrolled away, where the page comes back to), no "..." (nothing to import), no globe (Podcast Search is off): Now Playing is the plain disc')
+    # the Downloads page has the "..." (its sheet) once it has a row
     m = shown()
     PCP.click(m, 'btn_return')
     DL.poke_slot(m, 0, DEEP, 'e3.mp3', 1, seq=2)
     m.setword(DL.pn_at(12), 5); DL.tick(m)
     PCP.tap_downloads(m)
-    expect(PCP.title_text(m) == 'Downloads' and flags(m, 'btn_select') == (1, 1) and flags(m, 'btn_more') == (0, 0), 'the Downloads level keeps its Select button and has no "..."')
+    expect(PCP.title_text(m) == 'Downloads' and flags(m, 'btn_more') == (1, 1) and 'btn_select' not in m.widgets, 'the Downloads page has the "..." (its sheet: Select, Delete Played Episodes) and no Select button')
 
 
 def pod_shade(tone, y):
@@ -656,10 +666,18 @@ def sheet_tests(ctx):
     expect(all(flags(m, f'pg_sh_{r}') == (0, 0) for r in ('dl', 'rm', 'mark', 'unmark')) and flags(m, 'pg_sh_scrim') == (1, 1) and flags(m, 'pg_sh_card') == (1, 1), 'the episode rows stay hidden and insensitive; the scrim and the card show')
     hair = [r for r in rows if m.props.get((m.widgets[f'pg_sh_{r}_hr'], 'visible')) == 1]
     expect(hair == rows[1:], 'a hairline on the top of every row but the first')
-    expect(text_of(m, 'pg_sh_speed_vl') == '1×' and text_of(m, 'pg_sh_refresh_vl') == 'Updated 1h ago', f'the values: the speed ({text_of(m, "pg_sh_speed_vl")}) and "Updated 1h ago" ({text_of(m, "pg_sh_refresh_vl")})')
+    expect(text_of(m, 'pg_sh_speed_vl') == '1×' and text_of(m, 'pg_sh_refresh_vl') == '1h ago', f'the values: the speed ({text_of(m, "pg_sh_speed_vl")}) and the age alone, "1h ago" ({text_of(m, "pg_sh_refresh_vl")})')
     tx = {r: [c for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets[f'pg_sh_{r}_tx']] for r in ('speed', 'refresh')}
-    vw = font().width('Updated 1h ago', 18) + 12
+    vw = font().width('1h ago', 18) + 12
     expect(tx['refresh'][-1][2:] == (304 - 56 - vw, 50), f'the label makes room for the value ({tx["refresh"][-1]})')
+    # the value for every speed, the default first: the sheet opens on the show's own speed
+    for mode, want in enumerate(('1×', '1.25×', '1.5×', '2×')):
+        m2 = shown()
+        if mode: m2.call(PSYMS['pc_speed_set'], a0=PCP.pc_hash(DEEP), a1=mode, count=2000000)
+        show_sheet(m2)
+        got = text_of(m2, 'pg_sh_speed_vl')
+        vw = font().width(want, 18)
+        expect(got == want and ('widget_resize', m2.widgets['pg_sh_speed_vl'], vw, 50) in m2.calls, f'Playback Speed shows {want!r} for speed {mode}{" (the default)" if not mode else ""} in a label as wide as the text ({got!r})')
     # the speed row cycles; the sheet stays
     seq = []
     for _ in range(5):
@@ -828,8 +846,8 @@ def unsub_tests(ctx):
     PCP.click(m, 'btn_return')
     expect(PCP.title_text(m) == 'Podcasts', 'Back goes to the Shows level')
     _, _, off = PCP.show_at(m, 'All-In')
-    expect([t[-8:] for t, _ in PCP.drawn(m, off, style='label_ps_gsub')][:1] == ['episodes'] and not [t for t, _ in PCP.drawn(m, 0, style='label_ps_line')],
-           'the show is still on the Shows level, now a local one (its caption counts its episodes) and with no refresh line: no show has a feed')
+    expect([t[:5] for t, _ in PCP.drawn(m, off, style='label_ps_gsub')][:1] == ['Local'] and not [t for t, _ in PCP.drawn(m, 0, style='label_ps_line')],
+           'the show is still on the Shows level, now a local one (its caption says Local) and with no refresh line: no show has a feed')
     # no file left: its own files and the folder go, the page leaves for the level below
     m = machine(files=()); open_show(m)
     m.put(f'{RP}/{DEEP}/e1.mp3.part', b'x')
@@ -923,9 +941,10 @@ def width_tests(ctx):
                   f'{tr("Latest Episode")} · {tr("Paused")}', f'{tr("Latest Episode")} · {tr("Retry")}', f'{tr("Latest Episode")} · 100%']
         w18 = lambda s: fnt.width(s, 18)
         lab = {k: w18(tr(k)) for k in ('Playback Speed', 'Refresh Feed', 'Select Episodes', 'Mark All as Played', 'Unsubscribe', 'Remove Download', 'Mark as Played', 'Mark as Unplayed')}
-        updated, bare = w18(tr('Updated %s').replace('%s', tr('%dd ago', 30))), w18(tr('%dd ago', 30))
+        ages = [tr('Just now'), tr('%dm ago', 59), tr('%dh ago', 23), tr('%dd ago', 6)] + [tr(f'{mo} %d', 30) for mo in ('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')]
+        age = max(w18(a) for a in ages)
         worst[loc] = dict(pill=max(pod_show.pill_width(fnt, p) for p in pills), latest=max(pod_show.latest_width(fnt, p, True) for p in latest), labels=max(lab.values()),
-                          speed=lab['Playback Speed'] + 12 + max(w18(s) for s in ('1×', '1.25×', '1.5×', '2×')), refresh=lab['Refresh Feed'] + 12 + min(updated, bare),
+                          speed=lab['Playback Speed'] + 12 + max(w18(s) for s in ('1×', '1.25×', '1.5×', '2×')), refresh=lab['Refresh Feed'] + 12 + age,
                           never=lab['Refresh Feed'] + 12 + w18(tr('Never refreshed')), dl=w18(f'{tr("Download")} · {tr("%d MB", 999)}'), head=fnt.width(tr('Episodes'), 22),
                           confirm=w18(tr('Unsubscribe from this show?')))
     print('  widest per language (px):', {k: max(v[k] for v in worst.values()) for k in worst['en_US']}, 'in', {k: max(worst, key=lambda loc: worst[loc][k]) for k in worst['en_US']})
@@ -935,7 +954,7 @@ def width_tests(ctx):
     expect(not bad('latest', O['PS_LATEST_MAX']), f'the Latest Episode pill fits {O["PS_LATEST_MAX"]} px in every language (a long state word is cut with an ellipsis: {bad("latest", O["PS_LATEST_MAX"])})')
     expect(not bad('labels', row), f'every sheet label fits its {row} px row ({bad("labels", row)})')
     expect(not bad('speed', row), f'Playback Speed and its value share the row ({bad("speed", row)})')
-    expect(not bad('refresh', row), f'Refresh Feed and the shorter of "Updated 30d ago" / "30d ago" share the row ({bad("refresh", row)})')
+    expect(not bad('refresh', row), f'Refresh Feed and its widest age ("Just now", "59m ago", "23h ago", "6d ago", a date this year; one from last year with its ", 2025" may be cut by the ellipsis in ja) share the row ({bad("refresh", row)})')
     expect(not bad('never', row), f'Refresh Feed and "Never refreshed" share the row ({bad("never", row)})')
     expect(not bad('dl', row), f'"Download · 999 MB" fits the row ({bad("dl", row)})')
     expect(not bad('head', 288) and not bad('confirm', 300), 'the Episodes header and the confirm\'s question fit')

@@ -48,11 +48,12 @@ struct pf_parser {
     int mode, want, in_item, in_image, saw_feed, img_itunes, nitems, seen, drank, srank;
     unsigned tl, tn, en, dn, dtn, dnl, den;
     char quote, trunc, d1, d2, tover, inent;
-    char dm, dq, dcut, dcont, dspace, dnend, dent_on, dc1, dc2, dhead[3];
+    char dm, dq, dcut, dcont, dspace, dnend, dent_on, dc1, dc2, dhead[3], dnlc;
+    unsigned dlim; /* the sink's budget: PF_NOTE for an item, PC_DESC_CUT for the channel */
     char ent[12];
     char dname[12];
     char dent[12];
-    char dbuf[PC_DESC]; /* the description being collected (the sink's output) */
+    char dbuf[PF_NOTE + 1]; /* the description being collected (the sink's output; '\n' marks a paragraph) */
     char txt[PF_TEXT];
     char tag[PF_TAG];
     char title[PC_TITLE];
@@ -310,7 +311,16 @@ static int pf_attr(const char *tag, unsigned n, const char *name, char *out, uns
  * The parser
  */
 pf_parser_t *pf_new(void) { return calloc(1, sizeof(pf_parser_t)); }
-void pf_free(pf_parser_t *p) { free(p); }
+void pf_free(pf_parser_t *p) {
+    int i;
+    if (!p) return;
+    for (i = 0; i < p->nitems; ++i) free(p->items[i].note);
+    free(p->cur.note);
+    free(p);
+}
+const char *pf_note(const pf_parser_t *p, int i) {
+    return i >= 0 && i < p->nitems && p->items[i].note ? p->items[i].note : "";
+}
 int pf_is_feed(const pf_parser_t *p) { return p->saw_feed; }
 int pf_items(const pf_parser_t *p) { return p->nitems; }
 const pf_item_t *pf_item(const pf_parser_t *p, int i) {
@@ -329,23 +339,37 @@ const char *pf_summary(const pf_parser_t *p) { return p->summary; }
  * that does not start one stays text), the common entities are decoded once more, white space runs (and U+00A0) become one space, the ends are trimmed, and the text is cut at PC_DESC_CUT bytes before
  * a split UTF-8 character. After the cut the sink ignores everything, so the rest of a long element costs a compare per byte.
  */
+/* dspace: 0 nothing pending, 1 a space, 2 a paragraph break ('\n'); a break tag or a blank line sets 2, any other white space 1. The text is at most dlim bytes (PF_NOTE for an item: the notes; the cells'
+ * x= is its first PC_DESC_CUT bytes with the breaks as spaces, pf_flat). */
+static void pf_dbrk(pf_parser_t *p, int level) {
+    if (p->dn && level > p->dspace) p->dspace = (char)level;
+}
+
 static void pf_dout(pf_parser_t *p, unsigned char c) { /* an output byte */
     if (p->dcut) return;
     if (c == 0xa0 && p->dn && (unsigned char)p->dbuf[p->dn - 1] == 0xc2) { /* U+00A0 (also from an entity): a space */
+        int was = 1;
         --p->dn;
-        if (p->dn && p->dbuf[p->dn - 1] == ' ') --p->dn; /* the space put before it, the pending one replaces it */
-        p->dspace = p->dn != 0;
+        if (p->dn && (p->dbuf[p->dn - 1] == ' ' ||
+                      p->dbuf[p->dn - 1] == '\n')) /* the one put before it: the pending one replaces it */
+            was = p->dbuf[p->dn - 1] == '\n' ? 2 : 1, --p->dn;
+        p->dspace = 0;
+        pf_dbrk(p, was);
         return;
     }
     if (c <= 32) {
-        p->dspace = p->dn != 0;
+        if (c == '\n' && ++p->dnlc >= 2)
+            pf_dbrk(p, 2); /* a blank line is a paragraph break (plain text); a single newline is a space (HTML) */
+        else
+            pf_dbrk(p, 1);
         return;
     }
-    if (p->dn + (p->dspace ? 2 : 1) > PC_DESC_CUT) {
+    if (p->dn + (p->dspace ? 2 : 1) > p->dlim) {
         p->dcut = 1, p->dcont = (c & 0xc0) == 0x80;
         return;
     }
-    if (p->dspace) p->dbuf[p->dn++] = ' ', p->dspace = 0;
+    if (p->dspace) p->dbuf[p->dn++] = p->dspace == 2 ? '\n' : ' ', p->dspace = 0;
+    p->dnlc = 0;
     p->dbuf[p->dn++] = (char)c;
 }
 
@@ -424,7 +448,8 @@ static void pf_dbyte(pf_parser_t *p, unsigned char c) {
         } else if (c == '"' || c == '\'')
             p->dq = (char)c;
         else if (c == '>') {
-            if (pf_dboundary(p)) pf_dout(p, ' ');
+            if (pf_dboundary(p))
+                pf_dbrk(p, pf_is(p->dname, p->dnl, "td") ? 1 : 2); /* a cell is a space, the rest a paragraph */
             p->dm = DM_TEXT;
         } else if (p->dtn == 3 && p->dhead[0] == '!' && p->dhead[1] == '-' && p->dhead[2] == '-')
             p->dm = DM_COMMENT, p->dc1 = p->dc2 = 0;
@@ -446,7 +471,9 @@ static void pf_dbyte(pf_parser_t *p, unsigned char c) {
 
 static void pf_start_desc(pf_parser_t *p, int want) {
     p->dm = DM_TEXT, p->dn = 0, p->dspace = p->dcut = p->dcont = p->dent_on = 0;
-    p->dq = 0, p->den = 0;
+    p->dq = 0, p->den = 0, p->dnlc = 0;
+    p->dlim =
+        want < W_CSUM ? PF_NOTE : PC_DESC_CUT; /* an item's text is kept long (the episode page), the channel's short */
     p->dbuf[0] = 0;
     p->want = want, p->tn = 0, p->tover = 0, p->inent = 0, p->en = 0;
 }
@@ -463,9 +490,23 @@ static void pf_dfinish(pf_parser_t *p) {
         while (n && ((unsigned char)p->dbuf[n - 1] & 0xc0) == 0x80) --n;
         if (n) --n;
     }
-    while (n && p->dbuf[n - 1] == ' ') --n;
+    while (n && (p->dbuf[n - 1] == ' ' || p->dbuf[n - 1] == '\n')) --n;
     p->dbuf[n] = 0;
     p->dn = n;
+}
+
+/* The cell description x= from the long text: its first PC_DESC_CUT bytes with every paragraph break a space, cut before a split UTF-8 character, no trailing space (what the sink gave before the long text existed). */
+static void pf_flat(char *dst, const char *src, unsigned n) {
+    unsigned m = n, i;
+    int cut = 0;
+    if (m > PC_DESC_CUT) m = PC_DESC_CUT, cut = ((unsigned char)src[m] & 0xc0) == 0x80;
+    for (i = 0; i < m; ++i) dst[i] = src[i] == '\n' ? ' ' : src[i];
+    if (cut) {
+        while (m && ((unsigned char)dst[m - 1] & 0xc0) == 0x80) --m;
+        if (m) --m;
+    }
+    while (m && dst[m - 1] == ' ') --m;
+    dst[m] = 0;
 }
 
 static void pf_txt_cp(pf_parser_t *p, unsigned cp) {
@@ -542,10 +583,15 @@ static void pf_finish_text(pf_parser_t *p) {
         int item = w < W_CSUM, rank = w - (item ? W_ISUM : W_CSUM) + 1;
         pf_dfinish(p);
         if (p->dbuf[0]) { /* present: the first of the preference order wins */
-            memcpy(item ? p->cur.desc : p->summary, p->dbuf, p->dn + 1);
-            if (item)
+            pf_flat(item ? p->cur.desc : p->summary, p->dbuf, p->dn);
+            if (item) {
+                free(
+                    p->cur
+                        .note); /* (the long text of the same element, for the notes file and the episode page; none when there is no memory) */
+                p->cur.note = calloc(p->dn + 1, 1);
+                if (p->cur.note) memcpy(p->cur.note, p->dbuf, p->dn);
                 p->drank = rank;
-            else
+            } else
                 p->srank = rank;
         }
     } else if (w == W_AUTHOR) {
@@ -603,6 +649,7 @@ static void pf_keep(pf_parser_t *p) {
     if (p->nitems == PF_KEEP) {
         if (c->pub <= p->items[PF_KEEP - 1].pub) return;
         i = PF_KEEP - 1;
+        free(p->items[i].note); /* the oldest goes */
     } else
         i = p->nitems++;
     while (i > 0 && p->items[i - 1].pub < c->pub) {
@@ -610,6 +657,7 @@ static void pf_keep(pf_parser_t *p) {
         --i;
     }
     memcpy(&p->items[i], c, sizeof *c);
+    c->note = (char *)0; /* (the kept item owns it now) */
 }
 
 static void pf_open(pf_parser_t *p, int code, int selfclose) {
@@ -620,6 +668,7 @@ static void pf_open(pf_parser_t *p, int code, int selfclose) {
     else if (code == E_ITEM) {
         p->in_item = 1;
         p->drank = 0;
+        free(p->cur.note);
         memset(&p->cur, 0, sizeof p->cur);
     } else if (code == E_ISUM || code == E_DESC || code == E_ENC) {
         int rank = code == E_ISUM ? 1 : code == E_DESC ? 2 : 3;
@@ -989,6 +1038,36 @@ int pf_find_episode(const char *eps, unsigned n, const char *file, char *url, un
         return 1;
     }
     return 0;
+}
+
+unsigned pf_render_note(const pf_parser_t *p, int i, char *out, unsigned cap) {
+    const pf_item_t *it = pf_item(p, i);
+    unsigned o = 0, k;
+    char g[PF_GUID + 4];
+    if (!it || !it->note || !it->note[0]) return 0;
+    g[0] = 0;
+    {
+        unsigned go = 0;
+        pf_app_plain(g, &go, sizeof g, it->guid);
+        g[go] = 0;
+    }
+    pf_app(out, &o, cap, "g=");
+    pf_app(out, &o, cap, g);
+    pf_app(out, &o, cap, "\t");
+    for (k = 0; it->note[k]; ++k) {
+        char c = it->note[k];
+        if (o + 3 >= cap) return 0;
+        if (c == '\\')
+            pf_app(out, &o, cap, "\\\\");
+        else if (c == '\n')
+            pf_app(out, &o, cap, "\\n");
+        else
+            out[o++] = c;
+    }
+    if (o + 2 > cap) return 0;
+    out[o++] = '\n';
+    out[o] = 0;
+    return o;
 }
 
 unsigned pf_render_episodes(const pf_parser_t *p, const char *dir, const char *old, unsigned oldn, char *out,

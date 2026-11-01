@@ -15,6 +15,10 @@
 #define PN_FEED_CAP 8388608u /* a feed larger than this (after gzip) is refused */
 #define PN_COVER_CAP 6291456u /* a cover picture larger than this is refused while it downloads */
 #define PN_IMPORT_FILE "subscriptions.txt" /* in the Podcasts folder: one feed url a line */
+#define PN_OPML_FILE \
+    "subscriptions.opml" /* in the Podcasts folder: an OPML export of another app (any *.opml in the card root is read too) */
+#define PN_EXPORT_FILE \
+    "subscriptions-export.opml" /* what the Subscriptions page's Export OPML writes, in the Podcasts folder */
 
 /* Results of a refresh, per feed (and what the guards say): the page shows the words. */
 enum {
@@ -75,11 +79,18 @@ int pn_status(
     unsigned feed, int *code,
     unsigned *
         fresh); /* the last result of the feed (pc_hash of its url) in this session: 1 and *code (PN_*), *fresh new items; 0 when there is none */
-/* Subscribe to the urls in <root>/subscriptions.txt that no show has yet: a folder and a .show file each (the title is the host until the first refresh names it). Returns how many were
- * added (the shows in the file already there do not count), -1 when there is no such file. shows[0..nshows): the folders now there. */
+/* Subscribe to the feeds the card offers that no show has yet: the lines of <root>/subscriptions.txt and the outlines of <root>/subscriptions.opml and of every *.opml in the card's root (patch/pcopml.h), one
+ * source after another sharing the 40 shows' room. A folder and a .show file each (the title is the OPML's name, else the host, until the first refresh names it). An OPML file all of whose outlines were seen
+ * (and that held one) is renamed <name>.imported; subscriptions.txt stays. Returns how many were added (the shows already there do not count), -1 when there is no source at all. shows[0..nshows): the folders now there. */
 int pn_import(const char *root, const pc_show_t *shows, int nshows);
+/* How many import sources the card has now (subscriptions.txt, subscriptions.opml, *.opml in the card's root): the Shows page's "..." shows Import from Card when it is not 0. */
+int pn_import_found(const char *root);
+/* Write Podcasts/subscriptions-export.opml: OPML 2.0, one outline per show with a feed address, by title, atomically. *count: the shows written. 1 when written, 0 when not (nothing is left behind). */
+int pn_export(const char *root, const pc_show_t *shows, int nshows, int *count);
 /* Unsubscribe: the show's .show rewritten without its feed address (nothing else changes; the .episodes stay). 1 when written. */
 int pn_unsubscribe(const char *root, const pc_show_t *show);
+/* Unsubscribe completely, as the Show page does: pn_unsubscribe, the .part files and queued downloads of the show gone, and with no episode file left its own files and folder too. 0 not written (nothing touched), 1 the show stays (files left), 2 gone. */
+int pn_unsubscribe_show(const char *root, const pc_show_t *show);
 
 /* ---- Downloads. All of these run on the UI thread; the worker thread (one at a time, never beside a refresh) only reads and writes the status record. */
 /* The key of an episode in the queue and the failure table: pc_hash of "<show folder>/<file name>". */
@@ -106,6 +117,8 @@ unsigned pn_dl_current(unsigned *got, unsigned *total);
 void pn_dl_clear(unsigned key);
 /* The n-th download the Downloads page lists, from 0: the queue in the order it was asked (dir, file, *code 0), then the failed ones (*code the PN_* reason). Returns its key, 0 past the last. dir and file take PC_FILE bytes. */
 unsigned pn_dl_listed(int n, char *dir, char *file, int *code);
+/* KB free for a non-root user on the file system of path (statfs); 0 when it fails (*kb is then not set). The Downloads page's storage line. */
+int pn_free_kb(const char *path, unsigned *kb);
 
 /* ---- Search (docs/modules/podcasts.md "Search"). One worker at a time, never beside a refresh or a download (the page pauses the downloads first, as for a refresh). All of these run on the UI thread; the worker only
  * writes the record they read. The country of the store is a constant: a region switch comes later. */
