@@ -24,7 +24,9 @@ Follow the [installation guide](docs/install.md) for preparation, updates and re
 
 ## Documentation
 
-Start with the [development workflow](docs/workflow.md); the [documentation index](docs/README.md) lists the rest.
+Start with [installation](docs/install.md), then the [user guide](docs/guide.md).
+For building or contributing, see the [development workflow](docs/workflow.md).
+The [documentation index](docs/README.md) lists technical references.
 
 ## License
 

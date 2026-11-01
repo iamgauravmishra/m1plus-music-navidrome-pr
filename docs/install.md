@@ -1,7 +1,7 @@
 # Install and update
 
-You need a Shanling M1 Plus, a working TF/microSD card and a verified M1 Plus package.
-This repository builds packages from the official V2.1 zip; see the [development guide](workflow.md).
+You need a Shanling M1 Plus, a working TF/microSD card and the `update.bin` from the latest
+[M1+ Music release](https://github.com/imfing/m1plus-music/releases/latest).
 
 Only kernel and rootfs are updated. The bootloader and recovery kernel stay unchanged, but the
 M1 Plus recovery button combination remains unverified. Keep the battery charged and leave
@@ -10,31 +10,30 @@ the card inserted until the update finishes.
 ## Install
 
 1. Back up the card and shut down the player before removing it.
-2. Copy the verified package to the card root as `update.bin`. For a tested dev build, `make flash`
-   performs the copy, read-back verification and eject; see [development](workflow.md#development).
+2. Copy the release's `update.bin` to the card root.
 3. Insert the card with the player off, then turn it on.
 4. Open **System settings → System Update → TF card update** and confirm.
 5. Wait for the player to restart. Check the **M1+ Music** tag in About, below stock V2.1.
+6. Follow the [user guide](guide.md#start-listening) to scan your music and start listening.
 
 Music stays on the card. Overwrite the retained `update.bin` for the next update.
-First-time package-path validation should use a restore package (official V2.1 or `V2.1R`).
 
 ## Update
 
-Repeat with a new verified package. Developers use `make dev` for a fresh tag; integration
-assigns release tags. Confirm the update manually on the player.
+Repeat the installation steps with the newer release's `update.bin`.
 
 ## Disable M1+ Music
 
-Create an empty `m1plus-off` file at the card root. Remove it to enable the payload again.
+Create an empty file named exactly `m1plus-off` at the card root. Remove it to enable
+M1+ Music again.
 The boot guard also falls back to stock Home after a failed custom startup.
 
 ## Restore stock
 
-Download Shanling's official M1 Plus firmware from Shanling's download page, copy its `update.bin`
-to the card root and install it through the same TF-card menu (steps above). The updater accepts it
-over the mod (`modules/version.md`). Developers can also build the `V2.1R` stock-image package
-([development guide](workflow.md#integration-and-restore)).
+Download the official M1 Plus firmware from [Shanling](https://en.shanling.com/download/118),
+unzip it, copy its `update.bin` to the card root and install it through the same TF-card menu.
 
-Do not assume the Q2's recovery buttons work on the M1 Plus. See [firmware facts](firmware.md)
-and [boot-guard recovery](modules/home-guard.md#recovery) before investigating a boot failure.
+If M1+ Music fails to open, try disabling it with `m1plus-off` first. Do not assume the Q2's
+recovery buttons work on the M1 Plus.
+
+Package builders: see [build and restore instructions](workflow.md#integration-and-restore).

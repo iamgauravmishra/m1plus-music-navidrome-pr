@@ -2,15 +2,22 @@
 
 For installation, updates and restore, see [Install](install.md).
 
-## Home and menus
+## Start listening
+
+1. Copy music to the card.
+2. Open **Extras → Update Library** to scan it.
+3. Open **Albums**, **Artists** or **Songs**, then tap a track to play.
+
+Tap the mini player's cover to open Now Playing. Its buttons pause/resume or skip.
+
+## Find your way around
 
 M1+ Music opens at startup and from its icon on Shanling Home. The default menu shows Cover Flow,
 Albums, Artists, Songs, Playlists and Extras. Daily Mix and Recently Played appear below it;
 the mini player appears while a track is queued.
-Open **Extras → Settings** using the navbar button. **Settings → Home Screen** holds **Main Menu**
-(show, hide and reorder items) and **Extras** (turn off items you do not want listed there). Settings
-remains reachable. **Developer → Open Shanling Home** returns to the stock grid; **Boot to M1+ Music**
-(Developer → Startup) changes startup.
+Open **Extras → Settings** to customize the player. To return to the stock grid, use
+**Settings → Developer → Open Shanling Home**. Change **Boot to M1+ Music** under
+**Settings → Developer → Startup** to choose what opens at startup.
 
 ## Browse and play
 
@@ -24,24 +31,26 @@ remains reachable. **Developer → Open Shanling Home** returns to the stock gri
 | Playlists | Open a playlist or use its menu to create, import, export or delete |
 | Shuffle | Shuffle songs, albums or folders from Extras |
 
-The mini player's cover opens Now Playing; its buttons pause/resume or skip. Now Playing's
-More sheet provides playback options, Look up album, Cassette Mode, Vinyl Mode and (on its More page, with Wi-Fi on) Find Cover & Lyrics. A drag on a list scrolls;
-a tap opens or plays a row.
+In Now Playing, tap **…** for playback options, Look up album, Cassette Mode and Vinyl Mode.
+Open its **More** page for the online cover and lyrics lookup (Wi-Fi required).
 
-Copy music to the card, then use **Extras → Update Library** to scan it.
+Drag a list to scroll; tap a row to open or play it.
 
 ## Settings
 
 Grey values show the current setting.
 
+To show, hide or reorder menu items, open **Settings → Home Screen → Main Menu**.
+Use **Home Screen → Extras** to hide items from Extras. Settings stays accessible.
+
 | Page | Options |
 |---|---|
 | Wi-Fi / Bluetooth | Stock connection pages; values show On/Off |
-| Home Screen | Recent Albums, Daily Mix, Main Menu and Extras; Battery Percentage (off by default, reads the fuel gauge); Regenerate Daily Mix (while enabled, takes effect next Home visit) |
+| Home Screen | Recent Albums, Daily Mix, menu items and Battery Percentage (off by default); Regenerate Daily Mix takes effect next Home visit |
 | Library | Update Library, Album Order (Artist/Album, for Albums and Cover Flow), Rebuild Covers and landscape Cover Flow |
 | Now Playing | Cassette Theme: Normal, Chrome or Metal; applies next time Cassette Mode opens |
 | Playback | Stock Play Mode and EQ pages; All Playback Settings includes Gapless |
-| System | Stock Display and All System Settings (including Language); Keyboards; About shows build/firmware, model, serial, Wi-Fi MAC/IP and card capacity/free space |
+| System | Display, Language (under All System Settings), Keyboards and About; About shows firmware, device, network and storage details |
 | Keyboards | English always enabled; Chinese (Pinyin) adds a language key and candidates above the keys. Swipe candidates sideways; space selects the first |
 | Developer → Startup | Boot to M1+ Music; Open Shanling Home |
 | Developer → Tools | Screenshot, Cover Cache and stock System Update |
@@ -52,7 +61,7 @@ shows cached/missing/stale counts and current work; **Clear Cover Cache** asks b
 then Home regenerates covers.
 
 **Screenshot** asks first: leave the page within five seconds to capture another screen.
-Cancel during the countdown if needed; see [capture details](modules/screenshot.md).
+Cancel during the countdown if needed. Pictures are saved in the card's `screenshots` folder.
 
 ## Extras
 
@@ -65,16 +74,19 @@ chevron to close.
 
 **Cover & Lyrics** (Now Playing > ... > More > Cover & Lyrics, needs Wi-Fi) looks up the playing album's covers
 (iTunes, then Deezer) and its lyrics (LRCLIB). Tap a cover to use it for the album everywhere; Save Lyrics writes
-`<song>.lrc` next to the song (Replace Lyrics when one is there). See [details](modules/onlineart.md).
+`<song>.lrc` next to the song (Replace Lyrics when one is there).
 
-**Pod** opens a virtual iPod with a touch click wheel. See its [controls and limits](modules/ipod.md).
+**Pod** opens a virtual iPod. Slide around the wheel to browse and tap its centre to select.
+Tap MENU to go back; hold it to return to the Pod's main menu, then tap it to close.
+The bottom button pauses/resumes; the side buttons skip tracks. The wheel does not seek
+or change volume on its Now Playing screen.
 
-**Podcasts** reads local episodes from `Podcasts/<Show>/` on the card. Tap a show, then an
-episode to play; tap the unplayed dot to change its played state. The show header cycles playback
-speed. Feeds, downloads and the search for new shows (Settings > Library > Podcast Search, off by default: a Search button on the Podcasts page, then Subscribe on a show's preview) are described in [formats and limits](modules/podcasts.md).
+**Podcasts** reads local episodes from `Podcasts/<Show>/` on the card. Open a show, then an
+episode; its button offers Play or Download. Use an episode's **…** menu to mark it played
+or unplayed. To find shows online, enable **Settings → Library → Podcast Search**, connect
+to Wi-Fi, then use **Search** on the Podcasts page and **Subscribe** on a show's preview.
 
-**Search** (hidden from the menu by default) opens the library search, the same page as the Songs page's Search button; show it in the menu through **Settings → Home Screen → Main Menu**.
+**Search** opens the same library search as the Songs page's Search button. It is hidden from
+the main menu by default.
 
 For a missing feature, enable it through **Settings → Home Screen → Main Menu**, or find it under Extras.
-The [UI reference](ui.md) includes a preview; [module docs](architecture.md) describe implementation
-and hardware-validation limits.
