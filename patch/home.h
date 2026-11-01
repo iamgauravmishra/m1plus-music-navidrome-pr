@@ -39,6 +39,9 @@
 #define RECENT_FILE \
     "/mnt/data/m1plus-recent" /* the albums played last, most recent first (patch/recent.c); missing or malformed = none */
 #define RECENT_TMP "/mnt/data/m1plus-recent.tmp"
+#define SEARCH_RECENT_FILE \
+    "/mnt/data/m1plus-search-recent" /* the last searches, newest first, one UTF-8 line each (patch/search.c); missing or malformed = none */
+#define SEARCH_RECENT_TMP "/mnt/data/m1plus-search-recent.tmp"
 #define SHELF_FILE \
     "/mnt/data/m1plus-shelf" /* the Recently Played shelf: "0" = off, anything else or missing = on (Settings > Home Screen) */
 #define SHELF_TMP "/mnt/data/m1plus-shelf.tmp"

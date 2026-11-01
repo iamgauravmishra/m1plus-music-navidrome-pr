@@ -13,11 +13,11 @@ layout/hit-testing. User instructions are in the [guide](../guide.md#home-and-me
 
 Both use stock `list_view > scroll_view` with `scroll_bar_m`, 52 px `list_item` rows and the
 stock row theme. The asset contains one row per `ITEMS` entry, then Extras. Never hard-code the
-row count: Pod and Podcasts are items too.
+row count: Pod, Podcasts and Search are items too.
 
 Default shown IDs are `12345`: Cover Flow, Albums, Artists, Songs and Playlists. Extras is
 always visible and last. Settings (ID 18, `j`) is hidden by default and stays reachable from
-the Extras navbar. Pod is ID 19 (`k`), Podcasts ID 20 (`l`). Their actions/pages are defined
+the Extras navbar. Pod is ID 19 (`k`), Podcasts ID 20 (`l`), Search ID 21 (`m`: opens the library search page, `search_open()`, else the stock `search_page`; hidden from the menu by default, in the Library group of Extras). Their actions/pages are defined
 once in `pod_pages.py`.
 
 Hidden rows are invisible, insensitive, parked at y 0 and restacked after shown children.
@@ -38,8 +38,8 @@ and [Recently Played](recent.md).
 ## Saved menu
 
 `/mnt/data/m1plus-menu` contains `<shown IDs in order>[-<off IDs>]` with an optional final
-newline. Characters are `ID_CHARS` (`0`–`8`, then `a`–`l`); total file length must be nonzero
-and less than `MENU_FILE_MAX` (24 bytes).
+newline. Characters are `ID_CHARS` (`0`–`8`, then `a`–`m`); total file length must be nonzero
+and less than `MENU_FILE_MAX` (25 bytes).
 
 - Each ID may appear once across both parts; at most one `-` is allowed.
 - Settings cannot be off. Unknown characters, duplicates or oversized/missing data select

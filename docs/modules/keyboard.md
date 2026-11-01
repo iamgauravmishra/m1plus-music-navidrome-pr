@@ -230,7 +230,7 @@ Feasible, from the same dictionary, with three stock member functions the payloa
 `DictList::get_splids_for_hanzi(dl, ch, 0, ids, 8)` gives the spelling ids (all readings: 行 -> hang heng xing, 大 -> da dai), and `SpellingTrie::get_spelling_str(spt, id)` the text (upper case, `ZhOU`; lower it).
 周杰伦 gives `zhou` `jie` `lun` (initials `zjl`), 林俊杰 `lin jun jie`, 北京大学 `bei jing da|dai xue`, 王力宏 `wlh`. **Never call `get_splids_for_hanzi` for a character without the `get_lemma_id` check**: it
 dereferences the result of its binary search and crashes (Latin and fullwidth letters, a rare Ext A character, an unassigned code point). It needs the engine open (1 MB, 76 ms): a search page would open it for
-the page's life as the keyboard does. Test: `test/pod/pinyin.py` (all of the above on demo's real code; `Engine.hanzi_spellings`). Nothing of this is in the payload: no search page was built.
+the page's life as the keyboard does. Test: `test/pod/pinyin.py` (all of the above on demo's real code; `Engine.hanzi_spellings`). The payload uses it for the library search's initials index (`patch/search.c` `se_read_hanzi`, `search.md`); the page holds the engine open through `pinyin_hold` / `pinyin_release` (patch/keyboard.c), which also stops the Chinese layer closing it under the page.
 
 ### Stock's own keyboard
 

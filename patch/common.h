@@ -62,3 +62,6 @@ void *pod_make_mark(void *win, const char *name);
 #define POD_CHEV_H 16
 #define POD_CHEV_RGB 0x8a8a8a
 void *pod_make_chevron(void);
+/* A POD_CROSS px square bitmap of a grey x (the Search page's recent searches remove it), made as the chevron; NULL when it cannot be made. */
+#define POD_CROSS 12
+void *pod_make_cross(void);

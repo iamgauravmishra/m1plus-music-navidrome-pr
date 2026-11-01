@@ -58,6 +58,8 @@ top-left screw to close. Change its theme under Settings.
 episode to play; tap the unplayed dot to change its played state. The show header cycles playback
 speed. Feeds, downloads and the search for new shows (Settings > Library > Podcast Search, off by default: a Search button on the Podcasts page, then Subscribe on a show's preview) are described in [formats and limits](modules/podcasts.md).
 
+**Search** (hidden from the menu by default) opens the library search, the same page as the Songs page's Search button; show it in the menu through **Settings → Home Screen → Main Menu**.
+
 For a missing feature, show its row through **Settings → Main Menu**, or find it under Extras.
 The [UI reference](ui.md) includes a preview; [module docs](architecture.md) describe implementation
 and hardware-validation limits.

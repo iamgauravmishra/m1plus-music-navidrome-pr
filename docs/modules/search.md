@@ -2,15 +2,15 @@
 
 Our own library search, in the Apple Music manner (the reference is the iOS search screen): a rounded field with a clear disc and a round X, a row of chips (**Top Results, Artists, Albums,
 Songs, Playlists**) of which exactly one is selected, and rows with a thumbnail, a title and a grey line, results that follow the typing, and **our keyboard embedded at the bottom of the same
-page**. It replaces stock's `search_page` (a T9 dialog, then `SearchMusicByName` and its siblings, SQLite `LIKE '%x%'`) on the Songs page. A pinyin-initials index is round 2
-and is not built (the code is structured for it, below).
+page**. It replaces stock's `search_page` (a T9 dialog, then `SearchMusicByName` and its siblings, SQLite `LIKE '%x%'`) on the Songs page. A Chinese title also matches the
+initials of its pinyin (`zjl` finds 周杰伦, below).
 
 Code: `patch/search.c` (all of it), `patch/search.h` (the entry point and the page's geometry), `patch/keyboard.c` (`keyboard_attach`, below), `patch/songs.c` `sg_on_search`. Asset: `ui/m1plus_search.bin` (`tools/pod_ui.py` `build_search_page` and `keyboard_pad_widgets`), `tools/pod_pages.py` `SEARCH`. Layout
 model: `tools/pod_search.py` (parses the `#define`s of `patch/search.h`: one set of numbers for the builder, `tools/preview_search.py` and the tests). Tests: `test/pod/search.py` (sections
-`fold_tests`, `query_tests`, `rank_tests`, `incremental_tests`, `page_tests`, `chips_tests`, `live_tests`, `tap_tests`, `perf_tests`, `entry_tests`, `embed_tests`, `asset_tests`).
-Preview: `uv run python -I tools/preview_search.py work/mod-release out/preview/search.png` (Top Results with the keyboard up, the Albums chip with it hidden, the empty state, the Songs chip;
+`fold_tests`, `query_tests`, `rank_tests`, `incremental_tests`, `page_tests`, `chips_tests`, `live_tests`, `tap_tests`, `perf_tests`, `recent_tests`, `entry_tests`, `embed_tests`, `asset_tests`).
+Preview: `uv run python -I tools/preview_search.py work/mod-release out/preview/search.png` (Top Results with the keyboard up, the Albums chip with it hidden, the empty state, the empty state with recent searches, the Songs chip;
 each panel also as `search-<name>.png`; thumbnails are stand-in colours). **No hook, no new import, no thread; one page-scoped timer; nothing else runs from outside the page's widgets.**
-Strings: `Top Results`, `Song`, `Playlist` (new, 13 languages), `No Results`, `Artist`, `Search`, `Artists`, `Albums`, `Songs`, `Playlists` and the stock `album` (existing keys).
+Strings: `Top Results`, `Song`, `Playlist`, `Recently Searched` (new, 13 languages), `No Results`, `Artist`, `Search`, `Artists`, `Albums`, `Songs`, `Playlists` and the stock `album` (existing keys).
 
 ## The page
 
@@ -33,8 +33,24 @@ Window 320 x 450 (the numbers are `patch/search.h`; `pod_search.py` mirrors them
   all through the Albums grid's ring (`patch/grid.c`; `grid_art` decodes one cover; `GRID_MAX_ROUND` is 22 for the round ones). Text and thumbnail of a row are made when it is first painted (16 tiles
   of each shape: the rows in view, two beyond and the history); **one cover is decoded per tick of the page's timer**, never while a query is waiting, so typing is not blocked by decoding. The timer ends when nothing is left, so **a paint that finds a tile without its thumbnail starts it again** (`se_cover_next` in `se_on_paint`): a chip change or a scroll makes
   new tiles after the timer ended. The source is the cache's only size (168 px JPEG, the Songs page's rows read the same file), box-reduced to 44 px per decode; there is no smaller tier.
-* **Empty state** (the page as it opens): the keyboard up on its capital page, the field with its placeholder and caret, the chips, an empty list and no text. **No Results** (`label_status`) shows
+* **Empty state** (the page as it opens): the keyboard up on its capital page, the field with its placeholder and caret, the chips, and **the recent searches** (below) or, with none, an empty list and no text. **No Results** (`label_status`) shows
   for a query that matches nothing; an emptied field goes back to the empty state.
+
+## Recent searches
+
+The last `SE_REC_MAX` (5) queries the user **committed to**, newest first: a tap on a result (`se_open_row`, the applied query) or the keyboard's action key with a non-empty field (`se_on_go`, `keyboard_text()`). Typing saves nothing.
+The text is trimmed (spaces, tabs); an empty one is ignored. An entry that folds the same (`se_fold`: case, diacritics, kana, width) moves to the top, replaced by the new spelling; the sixth drops the oldest. The file is written
+**only when the list changed** (the same query again at the top writes nothing).
+
+* **Storage:** `/mnt/data/m1plus-search-recent` (`SEARCH_RECENT_FILE`, patch/home.h; `.tmp` beside it, `home_write_atomic`): UTF-8, one query per line, newest first, each a `\n` end, at most 63 bytes a line. It is read once when the page opens
+  (`se_rec_load`); a file that is oversized, has more than 5 lines, an empty line, a line of 64 bytes or more, a control character or a repeat (by the same fold) is **no history at all** and is left as it is until the next save. A failed write keeps the old file.
+* **Shown** when the field has no terms and nothing is listed (`se.rm`, set by `se_layout`): the list view is the same content view, now painting `se_paint_recent`: a header `Recently Searched` (grey, 18 px, in a `SE_REC_HEAD_H` 40 px band,
+  x 16), then rows `SE_REC_ROW_H` 50 px high: the query (white, 21 px, the results' title style, cut with an ellipsis at `SE_REC_TEXT_END` 262), an x (`pod_make_cross`, a 12 px grey stroke drawn like the chevron, no image file, centre x 292) and the
+  hairline from x 16. Texts are the grid's tiles (`se.rt`, cut once). Nothing is shown with no history: the page stays blank as before. No Clear button.
+* **Touch** (the same press / lift rule as the results, `SC_DRAG_PX`, the press must start and end in the same row **and the same zone**): the x zone is `SE_REC_X` 266 .. +44 px (44 x 50 px); a tap there removes the entry (`se_rec_remove`, the file is rewritten, the list laid out again;
+  nothing is searched). A tap elsewhere on a row puts the query into the field and the keyboard's text (`keyboard_set_text`, patch/keyboard.c, as if typed) and applies it at once (no debounce); it does not save or reorder. The header and the air
+  under the rows are dead; a drag does nothing (and hides the keyboard, as everywhere on the list).
+* **Kill switch:** the page does not open with the payload off, so nothing reads or writes the file then.
 
 ## Live search
 
@@ -79,8 +95,23 @@ records that match are kept per type in library order with their quality (`cand`
 one they are of (`se_search`: the previous code points compared) can only match what matched before, so only those are tested, in place (a match is written at or before where it was read); any
 other query (a deleted letter, a different word) scans the library. `have_prev` is cleared whenever the library is read again.
 
-**Round 2 (pinyin initials, not built).** `se_key` builds one key per record and `se_test` tests one array. A second key (the initials of the characters' readings, from the engine's
-`get_splids_for_hanzi`, `keyboard.md` "Hanzi to pinyin") is another array tested the same way, the best quality of the two kept; the folding, the terms and `se_find` do not change.
+**Pinyin initials (round 2).** Where a record has a character of U+4E00 .. U+9FFF (`se.seen`, set by `se_cat` while the first key is built), `se_search` builds a second key, `se_key(.., py=1)`:
+the same folding, but a character with readings is an entry `SE_MASK | set of initials` (bit 0 `a` .. bit 25 `z`). `se_test` runs on it as on the first key; `se_find` takes an entry with the mask bit
+as a match for any letter in its set. The better quality of the two is kept. It is built only when the first key found nothing or only quality 2 (an initials match is never quality 0 and a
+prefix of initials is quality 1: a Latin title that is the query ranks above 周杰伦), and only when the engine is held, so a library without Chinese costs nothing extra.
+
+* **Where the initials come from:** the keyboard's engine (`keyboard.md` "Hanzi to pinyin"). `se_load` (first tick) calls `pinyin_hold` (patch/keyboard.c): the engine is opened (1 MB, about 76 ms)
+  or taken over from the Chinese layer, and stays open for the page's life, whatever the layer does; `se_on_destroy` calls `pinyin_release` after `keyboard_detach`. Per character
+  `se_read_hanzi`: `get_lemma_id` first (0 means not in the dictionary: no reading, never `get_splids_for_hanzi`, which crashes), then `get_splids_for_hanzi`, then the first letter of each
+  `get_spelling_str` (Zh, Ch, Sh are z, c, s). The three members are pinned prologues in `tools/pod.py` (`PINYIN_PINS`, `py_lemma_id` / `py_splids` / `py_spelling` in stock.h); no new hook.
+* **Polyphones: every reading counts.** 行 (hang heng xing) is h and x, so `yh` and `yx` both find 银行 and `xz` and `hz` find 行走. More matches than the right reading alone (`yz` is not one),
+  never fewer; the engine gives no frequency to pick one by. A term is initials only: `zhou` does not find 周 (the initial of 周 is `z`); a mixed Latin and initials query (`jay zjl`) does not match on the device (accepted; the scripted test's mix passes, the real dictionary's does not), and any term of 1 letter matches any character with that initial.
+* **Memory:** one 20,992 byte table (a byte per character: not asked, no reading, or an index) allocated with the library and freed with the page, and a palette of at most 254 distinct sets
+  (1 KB; the 26 single letters first, a full palette falls back to the first reading's letter). Keys stay on the stack (2 x 162 words). Each distinct character asks the engine once.
+* **Cost** (emulation, payload instructions of the first scan): 20,000 songs with Chinese titles and artists 44.1 M without initials, 79.2 M with (5,000: 11.4 M, 20.1 M; the engine's own
+  calls are stock code and not counted); a Latin library adds nothing. Without the dictionary file, with an engine that fails to open or with no dictionary objects the search runs as before and
+  nothing calls the engine (`pinyin_tests`: `test/pod/search.py`, the engine scripted in `harness.py` by `py_dict`; the real engine's functions are tested in `test/pod/pinyin.py`).
+* On the device (build zEQLAAAAB): `zjl` finds 周杰伦 against the real dictionary; a mixed `jay zjl` does not match (accepted). Not verified: the first tick's extra 76 ms.
 
 ## Rows by chip
 
@@ -104,14 +135,17 @@ A tap is a press and a lift within `SC_DRAG_PX` on the same row (a drag, an abor
 first page and layers (the same for both ways of having the pad); `keyboard_open` adds the window, the title, `KB_DONE`, Back and the destroy handler. `keyboard_attach(win, placeholder, text_x,
 text_w, caret_y, on_change, on_go)` runs the same `kb_init` on another page's window (`kb.embedded`): the field's inner geometry is the caller's (`kb.tx`, `kb.tw`, `kb.cy` instead of the page's
 constants), `kb_refresh` ends by calling `on_change` with the text, the action key calls `on_go` (after committing a pending candidate; no page is closed), and the page's destroy handler calls
-`keyboard_detach` (the timer, the engine's megabyte, the state). `keyboard_show(0/1)`, `keyboard_shown()` and `keyboard_text()` are the rest of it. One keyboard at a time: an attach or an open
+`keyboard_detach` (the timer, the engine's megabyte, the state). `keyboard_show(0/1)`, `keyboard_shown()`, `keyboard_text()` and `keyboard_set_text(s)` (the field replaced as if typed; a recent search tapped) are the rest of it. One keyboard at a time: an attach or an open
 refuses while one exists. The asset side is `keyboard_pad_widgets()` in `tools/pod_ui.py`, which both pages end with: the pad, the strip and the pop-up are the same widgets by the same names
 (a test compares the two assets' copies byte for byte).
 
 ## Entry points
 
+* **`search_open_in(scope)`** (patch/search.h; `search_open()` is `search_open_in(SEARCH_ALL)`): `SEARCH_ALL`, `SEARCH_ARTISTS`, `SEARCH_ALBUMS`, `SEARCH_SONGS`, `SEARCH_PLAYLISTS` (0..4, the chip order); any other value returns -1. A scoped page opens with that chip selected and is the same page otherwise: the chip row draws and hit-tests only that chip (`se.lo` .. `se.hi`, the chips' places start at `SE_CHIP_X`, so a tap where another chip would be does nothing), `se_search` matches only that type (the other types' counts stay 0), recent searches are shared. Same -1 fallback as `search_open`; no caller uses a scope yet (`scope_tests`).
+
 * **Songs page**: `sg_on_search` calls `search_open()` instead of `navigator_to("search_page")`; the button does nothing in select mode or with the sort card open, as before. The other lists on
   that page (Favourites, a playlist, an artist's songs ...) search the whole library as the stock search did. When ours will not open the stock page does (`search_open() < 0`).
+* **Menu and Extras**: the **Search** item (ID 21, `m`, `ACT_SEARCH`; hidden from the menu by default, listed on Extras, movable to the Main Menu in Settings > Home Screen > Main Menu) calls `search_open()` from `on_row`, and the stock `search_page` when that returns < 0, as the Songs page does. The menu or Extras page stays under the Search page untouched, so Back returns to it at the same scroll place.
 * **Album page**: untouched. Stock's search disc (made by the toggle navbar builder `0x526a3c` after a select cycle) still opens the stock search page; a custom album page will replace it. A result's album row opens the album page.
 
 ## Cost
@@ -123,13 +157,14 @@ deleted letter one scan.
 
 ## Not verified on a device
 
-1. Everything about the embedded keyboard on the real page: the pad's touches with the list and chips behind and above, the hide/show by drag (the abort that the scroll_view's takeover sends to the
-   content view), the tap on the field (a pointer-up on a view), the pop-up over the list.
-2. The time of the first query on a 20,000 song library on the device (the emulation says about 76 M instructions), and the first tick's stock queries.
-3. The thumbnails: the lazy loader's feel while scrolling, the round artist picture (a corner table of radius 22, blended in the alpha), the placeholder, the artist's cover being the first album's.
-4. The chip row's drag and tap, the pill following it, the texts in the 13 languages (widths checked against the font, not seen).
+Tried on the device with zEQLAAAAB and working: the embedded keyboard on the page, scrolling results with thumbnails, the chips, the menu item, pinyin initials, recent searches with the x.
+
+1. The time of the first query on a 20,000 song library (the emulation says about 76 M instructions), with the first tick's stock queries and pinyin engine.
+2. The texts in the 13 languages (widths checked against the font, not seen).
+3. The CJK text cut in recent rows (the test's measure is the harness's 8 / 16 px per character).
+4. The scoped mode (`search_open_in`, below): emulation only, and nothing opens it yet.
 
 ## Deferred
 
-A pinyin-initials key, highlighting the matched text, a "show all" row past the caps, scoped search from a type, recent searches (the empty state is blank), the Folders and stock Artists / Albums
+Highlighting the matched text, a "show all" row past the caps, a Clear button for the recent searches, the Folders and stock Artists / Albums
 pages' own search buttons (stock pages; the Albums grid and Artists pages have none), album and song covers beyond the cache (no extraction here), playlist mosaics.

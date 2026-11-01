@@ -213,6 +213,8 @@ TEXT = dict([
        'Librería demasiado grande', 'Libreria troppo grande', 'รายการเพลงมากเกินไป', 'Biblioteka jest za duża', 'Библиотека слишком велика', 'Медіатека завелика'),
     _t('Top Results', '热门结果', '熱門結果', '上位の結果', '상위 결과', 'Meilleurs résultats', 'Top-Ergebnisse',
        'Mejores resultados', 'Risultati migliori', 'ผลลัพธ์ยอดนิยม', 'Najlepsze wyniki', 'Лучшие результаты', 'Найкращі результати'),
+    _t('Recently Searched', '最近搜索', '最近搜尋', '最近の検索', '최근 검색', 'Recherches récentes', 'Zuletzt gesucht',
+       'Búsquedas recientes', 'Ricerche recenti', 'การค้นหาล่าสุด', 'Ostatnie wyszukiwania', 'Недавние запросы', 'Нещодавні пошуки'),
     _t('Song', '歌曲', '歌曲', '曲', '노래', 'Titre', 'Titel',
        'Canción', 'Brano', 'เพลง', 'Utwór', 'Песня', 'Пісня'),
     _t('Playlist', '歌单', '歌單', 'プレイリスト', '플레이리스트', 'Playlist', 'Playlist',

@@ -308,6 +308,33 @@ static int pod_seg2(int px, int py, int ax, int ay, int bx,
     return cx * cx + cy * cy;
 }
 
+void *pod_make_cross(void) {
+    unsigned *px;
+    int x, y, i, j, n, d, e;
+    void *b = bitmap_create_ex(POD_CROSS, POD_CROSS, POD_CROSS * 4, BITMAP_RGBA8888);
+    if (!b) return (void *)0;
+    px = (unsigned *)bitmap_lock_buffer_for_write(b);
+    if (!px || bitmap_get_line_length(b) != POD_CROSS * 4) {
+        if (px) bitmap_unlock_buffer(b);
+        bitmap_destroy(b);
+        return (void *)0;
+    }
+    e = POD_CROSS * 8 - 16; /* the strokes run from 2 px in from each corner */
+    for (y = 0; y < POD_CROSS; ++y)
+        for (x = 0; x < POD_CROSS; ++x) {
+            for (n = 0, i = 0; i < 4; ++i)
+                for (j = 0; j < 4; ++j) {
+                    int sx = x * 8 + 2 * j + 1, sy = y * 8 + 2 * i + 1;
+                    d = pod_seg2(sx, sy, 16, 16, e, e);
+                    if (pod_seg2(sx, sy, e, 16, 16, e) < d) d = pod_seg2(sx, sy, e, 16, 16, e);
+                    if (d <= 49) ++n; /* a stroke 1.75 px wide */
+                }
+            px[y * POD_CROSS + x] = (unsigned)(n * 255 / 16) << 24 | POD_CHEV_RGB;
+        }
+    bitmap_unlock_buffer(b);
+    return b;
+}
+
 void *pod_make_chevron(void) {
     unsigned *px;
     int x, y, i, j, n, d;

@@ -498,15 +498,13 @@ static void zh_hide(void) { /* nothing to show: predictions or candidates off */
 }
 
 /* ---- the engine ---- */
-static int zh_enter(void) {
+/* Open the engine, or find it open: 0 when it is ready; *own says whether this call opened it (and so whoever asked must close it). */
+static int kb_engine_open(int *own) {
     void *eng = PY_ENGINE_PTR;
-    if (zh.ready) return 0;
+    *own = 0;
     if (eng && *(volatile unsigned char *)
-                   eng) { /* an engine somebody else opened and initialised: use it as it is, leave it open */
-        zh.own = 0;
-        zh.ready = 1;
+                   eng) /* an engine somebody else opened and initialised: use it as it is, leave it open */
         return 0;
-    }
     if (access(PINYIN_DICT, 0) != 0) {
         return -1;
     }
@@ -518,7 +516,13 @@ static int zh_enter(void) {
         im_close_decoder();
         return -1;
     }
-    zh.own = 1;
+    *own = 1;
+    return 0;
+}
+
+static int zh_enter(void) {
+    if (zh.ready) return 0;
+    if (kb_engine_open(&zh.own) != 0) return -1;
     zh.ready = 1;
     return 0;
 }
@@ -526,6 +530,29 @@ static int zh_enter(void) {
 static void zh_leave(void) {
     if (zh.ready && zh.own) im_close_decoder();
     zh.ready = zh.own = 0;
+}
+
+static int py_own __attribute__((
+    section(".scratch"))); /* the search page opened the engine (pinyin_hold) and closes it (pinyin_release) */
+
+/* The engine held open for the page's life, whatever the keyboard's Chinese layer does (the layer closes only an engine it opened itself: one it finds open it leaves). 0 when it is ready.
+ * An engine the layer opened is taken over: the layer no longer closes it. */
+int pinyin_hold(void) {
+    int own;
+    if (py_own) return 0;
+    if (zh.ready && zh.own) {
+        zh.own = 0, py_own = 1;
+        return 0;
+    }
+    if (kb_engine_open(&own) != 0) return -1;
+    py_own = own;
+    return 0;
+}
+
+/* Let go of what pinyin_hold opened (after keyboard_detach: the layer is gone). */
+void pinyin_release(void) {
+    if (py_own) im_close_decoder();
+    py_own = 0;
 }
 
 /* A new search of the pinyin typed: the candidates, the engine's segmentation. */
@@ -1178,3 +1205,16 @@ void keyboard_show(int on) {
 int keyboard_shown(void) { return kb.win && kb.embedded && !kb.hidden; }
 
 const char *keyboard_text(void) { return kb.win ? kb.buf : ""; }
+
+/* The field's text replaced by s (whole characters up to the limit), as if typed: a pending composition is dropped, the change is reported. */
+void keyboard_set_text(const char *s) {
+    const struct kb_layer *l;
+    if (!kb.win || kb.finished) return;
+    l = kb_layer_of(kb.layer);
+    if (l->reset) l->reset();
+    kb.len = 0;
+    kb.buf[0] = 0;
+    kb_insert_fit(s);
+    if (kb.page >= P_NUM) kb_page(kb_letters());
+    kb_changed();
+}

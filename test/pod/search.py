@@ -6,6 +6,7 @@ Search, the album page's search button), the page's asset and a big library's co
 import os, re, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 import awtk_ui
+import mod_icons
 import pod_search as PS
 from awtk_text import Ttf, StbText
 
@@ -27,7 +28,7 @@ RET_REPEAT = 8
 # struct se (patch/search.c), field by field: the offsets are worked out from the declaration, and checked against the payload's own state in `state()`
 _FIELDS = [('win', 4), ('view', 4), ('sv', 4), ('list', 4), ('status', 4), ('chips', 4), ('chl', 4), ('field', 4), ('st_title', 4), ('st_sub', 4), ('st_chip', 4), ('st_chip_on', 4),
            ('query', 64), ('typed', 64), ('q', 264), ('pq', 264), ('toff', 32), ('tlen', 32), ('nterms', 4), ('nq', 4), ('pn', 4), ('have_prev', 4), ('loaded', 4),
-           ('lists', 16), ('n', 16), ('cand', 16), ('sc', 16), ('nc', 16), ('rows', 4), ('nrows', 4), ('chip', 4), ('content', 4), ('chip_x', 24), ('chip_sx', 4), ('chip_down', 4),
+           ('lists', 16), ('n', 16), ('cand', 16), ('sc', 16), ('nc', 16), ('rows', 4), ('nrows', 4), ('chip', 4), ('content', 4), ('lo', 4), ('hi', 4), ('chip_x', 24), ('chip_sx', 4), ('chip_down', 4),
            ('chip_dx', 4), ('chip_sx0', 4), ('chip_drag', 4), ('chip_text', 480), ('chip_len', 20), ('press', 4), ('down', 4), ('down_x', 4), ('down_y', 4), ('pressing', 4),
            ('wait', 4), ('timer', 4), ('chev', 4)]
 OFF, _o = {}, 0
@@ -99,7 +100,10 @@ def said(m, name):
     return None if t is None else t.encode('latin-1').decode('utf-8')
 
 
-def page_machine(songs=(), artists=(), albums=(), playlists=(), window=0x20003000, covers=()):
+PY_DICT_PATH = '/release/assets/default/raw/data/gpinyin.dat'   # PINYIN_DICT (patch/keyboard.h)
+
+
+def page_machine(songs=(), artists=(), albums=(), playlists=(), window=0x20003000, covers=(), pinyin=None):
     """A machine with the Search page's widgets and a library: songs [(title, artist, album)], artists [name], albums [(album, artist)], playlists [name]. covers: (artist, album) pairs that
     have a cover file in the cache."""
     m = search_widgets(cover_machine(albums=0, cls=ListMachine), window)
@@ -117,6 +121,7 @@ def page_machine(songs=(), artists=(), albums=(), playlists=(), window=0x2000300
         m.images['file://' + p] = (24, 24, struct.pack('<I', 0xff3070a0) * (24 * 24))
     m.stock_songlist = True
     m.showlist = m.songs
+    if pinyin is not None: m.present.add(PY_DICT_PATH); m.py_dict = pinyin; m.py_ids = {}; m.handlers.update({0x5c01a4: 'py_lemma_id', 0x5bffd4: 'py_splids', 0x5c922c: 'py_spelling'})   # the engine's dictionary (character -> readings) and the three members that read it (the real engine's own tests, test/pod/pinyin.py, run them for real)
     return m
 
 
@@ -472,6 +477,53 @@ def chips_tests(ctx):
         expect(all(w < 200 for w in ws), f'{loc}: the chips\' texts are short enough for a chip ({max(ws)})')
 
 
+def scope_tests(ctx):
+    """search_open_in: a page scoped to one type shows that chip only, cannot change it and matches that type only; search_open is the unscoped page."""
+    expect = ctx.expect
+    lib = dict(songs=[('Love', 'A', 'B')], artists=['Love'], albums=[('Love', 'A')], playlists=['Love'])
+    m = page_machine(**lib)
+    expect(m.call(PSYMS['search_open_in'], a0=CH_ALBUMS, count=40000000) == 0 and ('window_open', 'm1plus_search') in m.calls, 'search_open_in(SEARCH_ALBUMS) opens the page')
+    expect(D['SE_CHIPS'] == 5 and state(m, 'chip') == CH_ALBUMS and (state(m, 'lo'), state(m, 'hi')) == (CH_ALBUMS, CH_ALBUMS + 1), 'it opens with Albums selected, the row holding that chip alone')
+    widths = [width(PS.CHIPS[i], D['SE_CHIP_PX']) for i in range(5)]
+    lay = PS.chip_layout(widths)
+    xs = [state(m, 'chip_x', i) for i in range(6)]
+    expect(xs[CH_ALBUMS] == D['SE_CHIP_X'] and xs[CH_ALBUMS + 1] - D['SE_CHIP_GAP'] - xs[CH_ALBUMS] == lay[CH_ALBUMS][1], f'the one chip is at the row\'s first place, its own width ({xs})')
+    hl = m.widgets['se_chip_hl']
+    expect(tuple(m.props[(hl, k)] for k in 'xywh') == (D['SE_CHIP_X'], D['SE_CHIP_Y'], lay[CH_ALBUMS][1], D['SE_CHIP_H']), 'the pill is under it')
+    typed(m, 'love')
+    expect(titles(m) == ['Love'] and all(k == ALBUM for k, _ in rows(m)), f'only album rows appear ({rows(m)})')
+    expect(state(m, 'nc', ARTIST) == 0 and state(m, 'nc', SONG) == 0 and state(m, 'nc', PLAYLIST) == 0 and state(m, 'nc', ALBUM) == 1, 'only the scope\'s type is matched')
+    def touch(kind, x, t):
+        e = m.alloc(0x30); m.u.mem_write(e, bytes(0x30))
+        m.setword(e, {'down': 0xff, 'up': 0x103}[kind]); m.setword(e + 8, t); m.setword(e + 0x18, x); m.setword(e + 0x1c, 30 + D['SE_CHIPS_Y'] + 10)
+        fn, ctx_ = m.bound[(m.widgets['se_chips'], O['EVT_POINTER_DOWN'] if kind == 'down' else O['EVT_POINTER_UP'])]
+        m.call(fn, a0=ctx_, a1=e, count=40000000)
+    for k in (CH_TOP, CH_ARTISTS, CH_SONGS, CH_PLAYLISTS):   # where the full row has that chip, and on the chip itself
+        x = lay[k][0] + lay[k][1] // 2
+        touch('down', x, 1000); touch('up', x, 1080)
+        expect(state(m, 'chip') == CH_ALBUMS and all(kd == ALBUM for kd, _ in rows(m)), f'a tap where chip {k} would be changes nothing')
+    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    m.texts.clear(); m.text_styles.clear()
+    m.call(m.bound[(m.widgets['se_chips'], O['EVT_AFTER_PAINT'])][0], a0=0, a1=ev, count=2000000)
+    expect([t[0] for t in m.texts] == ['Albums'] and m.text_styles == ['label_chip_on'], f'only the selected chip is painted ({[t[0] for t in m.texts]})')
+    typed(m, 'lov'); typed(m, 'love')   # a shorter and a longer query: still only albums
+    expect(all(k == ALBUM for k, _ in rows(m)) and rows(m), 'a changed query keeps the scope')
+    for scope, kind in ((CH_ARTISTS, ARTIST), (CH_SONGS, SONG), (CH_PLAYLISTS, PLAYLIST)):
+        mm = page_machine(**lib)
+        expect(mm.call(PSYMS['search_open_in'], a0=scope, count=40000000) == 0, f'scope {scope} opens')
+        typed(mm, 'love')
+        expect(state(mm, 'chip') == scope and len(rows(mm)) == 1 and rows(mm)[0][0] == kind, f'scope {scope}: only that type\'s row ({rows(mm)})')
+    for bad in (-1, 5, 99):
+        mm = page_machine(**lib)
+        expect(mm.call(PSYMS['search_open_in'], a0=bad & 0xffffffff, count=40000000) == 0xffffffff and ('window_open', 'm1plus_search') not in mm.calls, f'scope {bad} is refused: the caller opens the stock page')
+    mm = page_machine(**lib)
+    expect(mm.call(PSYMS['search_open_in'], a0=0, count=40000000) == 0 and state(mm, 'chip') == CH_TOP and (state(mm, 'lo'), state(mm, 'hi')) == (0, 5), 'SEARCH_ALL is the full page, Top Results selected')
+    typed(mm, 'love')
+    expect(sorted(k for k, _ in rows(mm)) == [ARTIST, ALBUM, SONG, PLAYLIST], 'and finds every type')
+    mm = page_machine(**lib)
+    expect(mm.call(PSYMS['search_open_in'], a0=CH_SONGS, count=40000000) == 0 and mm.call(PSYMS['search_open_in'], a0=CH_ALBUMS, count=40000000) == 0xffffffff, 'a second page refuses, scoped or not')
+
+
 def chip_cover_tests(ctx):
     """Switching chips after the covers of the first tab were loaded (the page's timer has ended): the new tab's rows get their thumbnails, loaded on the timer, which the paint of the new rows starts again."""
     expect = ctx.expect
@@ -697,6 +749,36 @@ def entry_tests(ctx):
     m.click('btn_search', count=40000000)
     expect(('navigator_to_with_context', 'search_page', 0) in m.calls and ('window_open', 'm1plus_search') not in m.calls, 'a Search page already under: the stock page (one at a time)')
     m.setword(PSYMS['se'], 0)
+    # the menu's Search item (pod_pages.ACT_SEARCH): the same entry from the M1+ Music menu and the Extras page
+    P = pod_pages
+    item = next(i for i, r in enumerate(P.ITEMS) if r.label == 'Search')
+    expect(item == 21 == len(P.ITEMS) - 1 and P.ITEMS[item].action == P.ACT_SEARCH == 35 and P.ID_CHARS[item] == 'm' and item not in P.DEFAULT_MENU
+           and P.EXTRAS_GROUPS[1][1][-1] == 'Search' and P.parse_menu_full(b'123456m\n') == ([1, 2, 3, 4, 5, 6, 21], []) and P.format_menu([1, 2, 21]) == '12m\n'
+           and pod_i18n.key_for('Search') == 'Search' and all(pod_i18n.TEXT['Search'][pod_i18n.table_for(loc)] for loc in pod_i18n.LOCALES)
+           and os.path.isfile(os.path.join(mod_icons.PNG, 'pod_ic_search.png')) and mod_icons.POD_ROWS['Search'][0] == 'pod_ic_search',
+           'Search is item 21 (saved as "m"), hidden from the menu by default, in the Library group of Extras, with a translated label and its glyph')
+    on_row = PSYMS['on_row']
+    for page_i, where in ((0, 'the menu'), (P.EXTRAS_PAGE_INDEX, 'the Extras page')):
+        row = PSYMS[f'pod_rows_{page_i}'] + 12 * item
+        m = page_machine()
+        m.calls = []
+        m.call(on_row, a0=row, count=40000000)
+        expect(('window_open', 'm1plus_search') in m.calls and not [c for c in m.calls if c[0] in ('navigator_to_with_context', 'navigator_back')],
+               f'the Search row on {where} opens the Search page, not the stock one')
+        m.calls = []
+        m.call(PSYMS['se_on_destroy'], count=2000000)
+        expect(not [c for c in m.calls if c[0] in ('window_open', 'navigator_to_with_context', 'navigator_back', 'widget_move', 'widget_restack', 'scroll_view_set_offset', 'widget_set_prop_int')],
+               f'back from Search to {where}: nothing is arranged or scrolled again, so it keeps its place')
+        m = page_machine()
+        m.windows['m1plus_search'] = 0
+        m.calls = []
+        m.call(on_row, a0=row, count=40000000)
+        expect(('navigator_to_with_context', 'search_page', 0) in m.calls, f'{where}: where the Search page will not open the stock search page does')
+        m = page_machine()
+        m.setword(PSYMS['se'], 0x1234)
+        m.calls = []
+        m.call(on_row, a0=row, count=40000000)
+        expect(('navigator_to_with_context', 'search_page', 0) in m.calls and ('window_open', 'm1plus_search') not in m.calls, f'{where}: a Search page already under: the stock page')
 
 
 def return_tests(ctx):
@@ -807,8 +889,8 @@ def asset_tests(ctx):
         c = c.lstrip('#'); r, g, b = (int(c[i:i + 2], 16) for i in (0, 2, 4)); return max(r, g, b) - min(r, g, b) <= 12
     expect(all(neutral(c) for c in cols), f'no accent colour: every colour is a grey ({sorted({c for c in cols if not neutral(c)})})')
     P = pod_pages
-    expect(P.SEARCH in P.PAGES and P.SEARCH.key == 'm1plus_search' and P.SEARCH.kind == 'search' and P.SEARCH.rows == [] and not any(r.label == 'Search' for p in P.PAGES for r in p.rows),
-           'the page is registered, with no menu row')
+    expect(P.SEARCH in P.PAGES and P.SEARCH.key == 'm1plus_search' and P.SEARCH.kind == 'search' and P.SEARCH.rows == [] and not any(r.label == 'Search' for p in P.PAGES if p is not P.MENU and p is not P.EXTRAS_PAGE for r in p.rows),
+           'the page is registered, its Search row is only the menu item (and Extras)')
     # the model and the header agree with the payload's own text for the geometry the builder does not hold
     src = open(os.path.join(ROOT, 'patch', 'search.h')).read()
     expect(all(f'#define {k} {v}' in src for k, v in D.items()), 'tools/pod_search.py reads patch/search.h: one set of numbers')
@@ -827,7 +909,228 @@ def asset_tests(ctx):
     expect(all(w <= D['SE_TEXT_W'] for _, w in hint), 'the placeholder fits the field in every language')
 
 
-SECTIONS = [fold_tests, query_tests, rank_tests, incremental_tests, page_tests, chips_tests, chip_cover_tests, live_tests, tap_tests, perf_tests, entry_tests, return_tests, embed_tests, asset_tests]   # tools/check.py runs each as its own task
+PINYIN = {'周': ['zhou'], '杰': ['jie'], '伦': ['lun'], '七': ['qi'], '里': ['li'], '香': ['xiang'], '林': ['lin'], '俊': ['jun'], '晴': ['qing'], '天': ['tian'], '银': ['yin'],
+          '行': ['hang', 'heng', 'xing'], '走': ['zou'], '歌': ['ge'], '大': ['da', 'dai']}   # 精 and 选 are not in it: a character the dictionary lacks stays as it is
+
+
+def pinyin_found(q, pinyin=PINYIN, songs=None, **kw):
+    songs = songs or [('七里香', '周杰伦', 'Jay'), ('晴天', '周杰伦', 'Jay'), ('晴天', '林俊杰', 'JJ'), ('银行', 'Bank', 'x'), ('行走', 'Walk', 'x'), ('Jay Chou Mix', 'Other', 'x'), ('歌', '大', 'x')]
+    m = page_machine(songs, ['周杰伦', '林俊杰', 'Jay Chou'], [('七里香', '周杰伦'), ('Jay', 'Jay Chou')], playlists=['周杰伦精选', 'Road'], pinyin=pinyin, **kw)
+    m.call(PSYMS['search_open'], count=40000000)
+    typed(m, q)
+    out = []
+    for c in (CH_SONGS, CH_ARTISTS, CH_ALBUMS, CH_PLAYLISTS):
+        chip(m, c)
+        out.append(titles(m))
+    return m, tuple(out)
+
+
+def pinyin_tests(ctx):
+    """Pinyin initials (round 2): the initials of the readings of Chinese characters are a second key tested like the first."""
+    expect = ctx.expect
+    m, (s, a, al, pl) = pinyin_found('zjl')
+    expect(s == ['七里香', '晴天'] and a == ['周杰伦'] and al == ['七里香'] and pl == ['周杰伦精选'],
+           f'zjl finds 周杰伦 as an artist, in the songs\' artist field, the album\'s artist and a playlist name that starts with it (精选 is not in the dictionary and stays): {s} {a} {al} {pl}')
+    expect(pinyin_found('qlx')[1][0] == ['七里香'] and pinyin_found('qlx')[1][2] == ['七里香'], 'qlx finds 七里香 (a song and an album)')
+    expect(pinyin_found('ljj')[1][1] == ['林俊杰'] and pinyin_found('qt')[1][0] == ['晴天', '晴天'], 'ljj finds 林俊杰; qt finds both 晴天')
+    expect(pinyin_found('ZJL')[1] == pinyin_found('zjl')[1] and pinyin_found('周杰伦')[1][1] == ['周杰伦'], 'the query is folded as before; the characters themselves still match')
+    expect(pinyin_found('zhou')[1][1] == [] and pinyin_found('zh')[1][1] == [], 'a syllable is not an initials query: zhou finds no 周 (Zh is z)')
+    expect(pinyin_found('jl')[1][1] == ['周杰伦'] and pinyin_found('jlx')[1][1] == [], 'initials match anywhere in a field (jl finds 周杰伦 at its second character), and every letter must')
+    # several terms: a Latin word and initials, in any order; each is tested on the same key
+    s, a, al, pl = pinyin_found('jay zjl')[1]
+    expect(s == ['七里香', '晴天'] and a == [] and al == [] and pl == [], f'jay zjl: the album Jay and the artist initials: {s} {a} {al} {pl}')
+    expect(pinyin_found('zjl jay')[1] == (s, a, al, pl) and pinyin_found('jj ljj')[1][0] == ['晴天'] and pinyin_found('jay zjl nobody')[1][0] == [], 'in either order; a term that matches nothing leaves nothing')
+    expect(pinyin_found('chou zjl')[1][0] == [], 'Latin text and initials are in separate fields: chou does not match what zjl does')
+    # polyphones: any reading's initial counts (行: hang heng xing)
+    expect(pinyin_found('yh')[1][0] == ['银行'] and pinyin_found('yx')[1][0] == ['银行'] and pinyin_found('yz')[1][0] == [], 'a polyphone matches the initial of any of its readings: 银行 is yh and yx, not yz')
+    expect(pinyin_found('hz')[1][0] == ['行走'] and pinyin_found('xz')[1][0] == ['行走'] and pinyin_found('zh')[1][0] == [], '行走 is hz and xz')
+    expect(pinyin_found('gd')[1][0] == [] and pinyin_found('dg')[1][0] == [], 'two fields are not one run: 歌 (title) then 大 (artist) is not gd')
+    # the ranking: a whole-title Latin match is quality 0, an initials match never is
+    m = page_machine([('周杰伦', 'x', 'y'), ('zjl', 'x', 'y'), ('zjl live', 'x', 'y')], [], [], pinyin=PINYIN)
+    m.call(PSYMS['search_open'], count=40000000); typed(m, 'zjl'); chip(m, CH_SONGS)
+    expect(titles(m) == ['zjl', '周杰伦', 'zjl live'], f'the exact title first (quality 0), then the title that starts with it and the initials match (quality 1) in library order: {titles(m)}')
+    # the engine: opened once for the page's life, closed with it; asked per distinct character, only in the hanzi range, never for one it lacks (the dictionary check comes first)
+    m, _ = pinyin_found('zjl')
+    names = [c[0] for c in m.py_log]
+    expect(names.count('im_open_decoder') == 1 and 'im_close_decoder' not in names, 'the engine is opened once, when the library is read, and stays open while the page does')
+    lem = [c[1] for c in m.py_log if c[0] == 'py_lemma_id']
+    expect(len(lem) == len(set(lem)) and set(lem) <= set(PINYIN) | {'精', '选'} and {'周', '精'} <= set(lem), f'one dictionary check per distinct character, none for Latin: {len(lem)} asked')
+    expect(sorted(c[1] for c in m.py_log if c[0] == 'py_splids') == sorted(c for c in lem if c in PINYIN), 'get_splids_for_hanzi only for a character the dictionary has')
+    n0 = len(lem)
+    typed(m, 'qlx'); typed(m, 'zj')
+    expect(len([c for c in m.py_log if c[0] == 'py_lemma_id']) == n0, 'later queries read the cached sets, not the engine')
+    m.call(PSYMS['se_on_destroy'], count=2000000)
+    expect([c[0] for c in m.py_log].count('im_close_decoder') == 1 and m.word(pod.DATA['PY_ENGINE'][0]) == 0, 'the page closes the engine with it')
+    # fallbacks: no dictionary file, an engine that fails to open, an engine without its dictionary objects: Latin search is as before and nothing asks the engine
+    m, r = pinyin_found('zjl', pinyin=None)
+    expect(r == ([], [], [], []) and not m.py_log, 'no dictionary file: no initials, no engine call')
+    expect(pinyin_found('jay', pinyin=None)[1] == pinyin_found('jay')[1], 'Latin queries find the same with and without the engine')
+    def failing():
+        m = page_machine([('周杰伦', 'x', 'y'), ('Jay', 'x', 'y')], [], [], pinyin=PINYIN); m.py_open_ok = False
+        m.call(PSYMS['search_open'], count=40000000); typed(m, 'zjl'); chip(m, CH_SONGS)
+        return m, titles(m)
+    m, t = failing()
+    expect(t == [] and not [c for c in m.py_log if c[0] == 'py_lemma_id'] and ('im_close_decoder',) in m.py_log, 'an engine that does not open: no initials, no crash')
+    typed(m, 'jay'); chip(m, CH_SONGS)
+    expect(titles(m) == ['Jay'], 'and the search still works')
+    m = page_machine([('周杰伦', 'x', 'y')], [], [], pinyin={}); m.call(PSYMS['search_open'], count=40000000); typed(m, 'zjl'); chip(m, CH_SONGS)
+    expect(titles(m) == [] and titles(m) == [] and 'py_splids' not in [c[0] for c in m.py_log], 'a dictionary without the characters: no initials, get_splids_for_hanzi never called')
+    # the cost: a library of Chinese titles (20,000 songs), the first scan and the initials of every distinct character
+    chars = list(PINYIN)
+    for count in (5000, 20000):
+        songs = [(''.join(chars[(i * 7 + j * 3) % len(chars)] for j in range(4)), f'{chars[i % 15]}{chars[(i // 15) % 15]}{chars[(i // 225) % 15]}', f'Album {i % 800}') for i in range(count)]
+        base = page_machine(songs, [], [], pinyin=None); init = page_machine(songs, [], [], pinyin=PINYIN)
+        costs = []
+        for mm in (base, init):
+            assert mm.call(PSYMS['search_open'], count=40000000) == 0
+            mm.call(PSYMS['se_tick'], count=900000000)
+            mm.count(); mm.call(PSYMS['se_on_text'], a0=mm.cstr('zjl'), count=2000000)
+            for _ in range(D['SE_DEBOUNCE']): mm.call(PSYMS['se_tick'], count=900000000)
+            costs.append(mm.icount)
+        print(f'PERF pinyin {count}: first query without the engine {costs[0] / 1e6:.1f} M, with initials {costs[1] / 1e6:.1f} M')
+        expect(costs[1] < costs[0] * 3.5 and costs[1] / count < 9000, f'{count} Chinese songs: the first scan with initials costs {costs[1] / 1e6:.1f} M instructions ({costs[1] / count:.0f} a song; {costs[0] / 1e6:.1f} M without)')
+
+
+REC_FILE, REC_TMP = '/mnt/data/m1plus-search-recent', '/mnt/data/m1plus-search-recent.tmp'
+REC_HEAD, REC_ROW, REC_MAX = D['SE_REC_HEAD_H'], D['SE_REC_ROW_H'], D['SE_REC_MAX']
+
+
+def recent_tests(ctx):
+    """Recent searches: the last five queries the user committed to (a result tapped, the action key), newest first, in /mnt/data/m1plus-search-recent; shown in the empty state under a
+    header; a row searches, its x removes it; bad files read as no history."""
+    expect = ctx.expect
+    kb = sibling('keyboard')
+    songs = [('Alpha one', 'Ann', 'First'), ('Alpha two', 'Bob', 'Second'), ('Beta', 'Ann', 'First')]
+    def fresh(data=None):
+        m = page_machine(songs, ['Alphaville'], [('Alpha Album', 'Ann')], playlists=['Alpha Mix'])
+        if data is not None: m.fs[REC_FILE] = data
+        assert m.call(PSYMS['search_open'], count=40000000) == 0
+        ticks(m)
+        return m
+    shown = lambda m, n: (m.props[(m.widgets[n], 'visible')], m.props[(m.widgets[n], 'sensitive')])
+    writes = lambda m: [c for c in m.calls if c[0] == 'write' and c[1] == REC_TMP]
+    ry = lambda i: REC_HEAD + i * REC_ROW + REC_ROW // 2
+    X = D['SE_REC_X_C']
+    # geometry
+    expect(D['SE_REC_X_W'] >= 40 and D['SE_REC_ROW_H'] >= 44 and D['SE_REC_X'] <= X - 6 and X + 6 <= D['SE_REC_X'] + D['SE_REC_X_W'] <= 320 and D['SE_REC_TEXT_END'] <= D['SE_REC_X'],
+           'the x has a 44 px touch area, the row is at least 44 px high, the text ends before the area')
+    # no file, no history: the empty state stays blank
+    m = fresh()
+    expect(shown(m, 'se_listview') == (0, 0) and paint(m)[0] == [] and REC_FILE not in m.fs, 'no history: the empty state is blank and nothing is written')
+    # a saved history in the empty state
+    m = fresh(b'taylor\nzed\n')
+    texts, _, fills, blits = paint(m)
+    expect(shown(m, 'se_listview') == (1, 1) and shown(m, 'label_status')[0] == 0, 'a history shows the list in the empty state')
+    expect([t[0] for t in texts] == ['taylor', 'zed', 'Recently Searched'], f'the rows, then the header ({[t[0] for t in texts]})')
+    expect([t[1][1] for t in texts[:2]] == [REC_HEAD + (REC_ROW - O['LIST_TITLE_H']) // 2, REC_HEAD + REC_ROW + (REC_ROW - O['LIST_TITLE_H']) // 2], f'the rows are {REC_ROW} px apart under the header ({texts})')
+    expect(texts[2][1][1] + texts[2][1][3] <= REC_HEAD and texts[2][1][0] == D['SE_REC_TEXT_X'], 'the header sits in its band, at the text x')
+    xs = [b for b in blits if (b[2][2], b[2][3]) == (12, 12)]
+    expect(len(xs) == 2 and all(b[2][0] + 6 == X for b in xs) and [b[2][1] for b in xs] == [REC_HEAD + (REC_ROW - 12) // 2, REC_HEAD + REC_ROW + (REC_ROW - 12) // 2], f'an x on the right of each row ({xs})')
+    expect(len([f for f in fills if f[0] == O['LIST_HAIR']]) == 2 and not [b for b in blits if (b[2][2], b[2][3]) == (D['SE_ART'], D['SE_ART'])], 'a hairline under each row, no thumbnails')
+    expect(not writes(m) and m.fs[REC_FILE] == b'taylor\nzed\n', 'reading the file writes nothing')
+    # a long query is cut to its room
+    longq = '中' * 20
+    m = fresh((longq + '\n').encode())
+    t = paint(m)[0][0][0]
+    expect(t.endswith('…') and len(t) < 20 and 16 * len(t) <= D['SE_REC_TEXT_END'] - D['SE_REC_TEXT_X'], f'a long query is cut with an ellipsis to its room ({t})')
+    # bad files: no history, no crash, the file is left alone
+    bad = {'oversized': b'a\n' * 200, 'a line over 63 bytes': b'x' * 64 + b'\n', 'six lines': b'a\nb\nc\nd\ne\nf\n', 'a repeat': b'Abc\nabc\n', 'an empty line': b'a\n\nb\n',
+           'a control character': b'a\x01b\n', 'only a newline': b'\n'}
+    for name, data in bad.items():
+        m = fresh(data)
+        expect(shown(m, 'se_listview') == (0, 0) and paint(m)[0] == [] and m.fs[REC_FILE] == data and not writes(m), f'{name}: no history, nothing written')
+    m = fresh(b'')
+    expect(shown(m, 'se_listview') == (0, 0), 'an empty file: no history')
+    m = fresh(b'no newline')
+    expect([t[0] for t in paint(m)[0]][:1] == ['no newline'], 'a last line without a newline is taken')
+    # tap a row: searches it as if typed, the field and the keyboard's text hold it
+    m = fresh(b'alpha\nzed\n')
+    tap(m, ry(0))
+    r = rows(m)
+    expect(kb.said(m, 'kb_text') == 'alpha' and keyboard_text(m) == 'alpha' and len(r) == 5 and shown(m, 'se_listview') == (1, 1), f'a row tap puts the query in the field and searches at once ({r})')
+    expect(state(m, 'wait') == 0 and not writes(m) and m.fs[REC_FILE] == b'alpha\nzed\n', 'no debounce, no write')
+    typed(m, '')
+    expect(rows(m) == [] and [t[0] for t in paint(m)[0]] == ['alpha', 'zed', 'Recently Searched'], 'an emptied field shows the history again')
+    # taps in the header, below the rows, and drags do nothing
+    m = fresh(b'alpha\nzed\n')
+    for y, dx, dy, x in ((10, 0, 0, 100), (REC_HEAD + 2 * REC_ROW + 10, 0, 0, 100), (ry(0), 0, 15, 100), (ry(0), 0, 15, X), (ry(1), 100, 0, 100)):
+        tap(m, y, dx, dy, x)
+        expect(m.fs[REC_FILE] == b'alpha\nzed\n' and kb.said(m, 'kb_text') in (None, '') and rows(m) == [], f'tap at y {y} dx {dx} dy {dy} x {x}: nothing happens')
+    # the x removes one entry, rewrites the file, lays the list out again
+    m = fresh(b'a1\nb2\nc3\n')
+    m.calls = []
+    tap(m, ry(1), x=X)
+    expect(m.fs[REC_FILE] == b'a1\nc3\n' and len(writes(m)) == 1, f'the x of the middle row removes it, one atomic write ({m.fs[REC_FILE]})')
+    expect(kb.said(m, 'kb_text') in (None, '') and rows(m) == [] and [t[0] for t in paint(m)[0]] == ['a1', 'c3', 'Recently Searched'], 'it searches nothing, and the list has two rows')
+    tap(m, ry(1), x=X + 15)
+    expect(m.fs[REC_FILE] == b'a1\n', 'the right end of the touch area counts')
+    tap(m, ry(0), x=X - 20)
+    expect(m.fs[REC_FILE] == b'', 'the last entry goes: an empty file')
+    expect(shown(m, 'se_listview') == (0, 0) and paint(m)[0] == [], 'with none left the empty state is blank again')
+    # saving: on a result tap and on the action key, not while typing
+    m = fresh()
+    m.calls = []
+    typed(m, 'alpha')
+    expect(REC_FILE not in m.fs and not writes(m), 'typing saves nothing')
+    tap(m, ROW_H * 3 + 30)     # a song
+    expect(m.fs.get(REC_FILE) == b'alpha\n' and len(writes(m)) == 1, f'a result tap saves the query ({m.fs.get(REC_FILE)})')
+    tap(m, ROW_H * 3 + 30)
+    expect(m.fs.get(REC_FILE) == b'alpha\n' and not writes(m), 'the same query again: no rewrite')
+    m = fresh()
+    kb.typ(m, 'Beta'); ticks(m)
+    expect(REC_FILE not in m.fs, 'keys save nothing')
+    m.calls = []
+    kb.press(m, 'kb_go')
+    expect(m.fs.get(REC_FILE) == b'Beta\n' and len(writes(m)) == 1 and not shown(m, 'kb_pad')[0], f'the action key saves the query and hides the keyboard ({m.fs.get(REC_FILE)})')
+    m = fresh(b'x\n')
+    kb.press(m, 'kb_go')
+    expect(m.fs[REC_FILE] == b'x\n' and not writes(m), 'the action key with an empty field saves nothing')
+    m = fresh(b'x\n')
+    kb.press(m, 'kb_space'); kb.press(m, 'kb_space'); kb.press(m, 'kb_go')
+    expect(m.fs[REC_FILE] == b'x\n' and not writes(m), 'whitespace only is not a query')
+    m = fresh()
+    kb.press(m, 'kb_space'); kb.typ(m, 'Ab'); kb.press(m, 'kb_space'); kb.press(m, 'kb_go')
+    expect(m.fs.get(REC_FILE) == b'Ab\n', f'the query is trimmed ({m.fs.get(REC_FILE)})')
+    # dedupe (fold), move to top, the cap
+    m = fresh(b'c\nb\na\n')
+    kb.typ(m, 'Aa'); m.calls = []; kb.press(m, 'kb_go')
+    expect(m.fs[REC_FILE] == b'Aa\nc\nb\na\n', f'a new query goes to the top ({m.fs[REC_FILE]})')
+    m = fresh(b'c\nb\na\n')
+    kb.typ(m, 'A'); kb.press(m, 'kb_go')
+    expect(m.fs[REC_FILE] == b'A\nc\nb\n', f'a query that folds like an entry replaces it and moves to the top ({m.fs[REC_FILE]})')
+    m = fresh(b'e\nd\nc\nb\na\n')
+    kb.typ(m, 'Zz'); kb.press(m, 'kb_go')
+    expect(m.fs[REC_FILE] == b'Zz\ne\nd\nc\nb\n', f'only the last {REC_MAX} are kept ({m.fs[REC_FILE]})')
+    m = fresh(b'e\nd\nc\nb\na\n')
+    kb.typ(m, 'A'); kb.press(m, 'kb_go')
+    expect(m.fs[REC_FILE] == b'A\ne\nd\nc\nb\n', f're-searching the oldest moves it to the top ({m.fs[REC_FILE]})')
+    m = fresh('Éclair\nb\n'.encode())
+    kb.typ(m, 'Eclair'); kb.press(m, 'kb_go')
+    expect(m.fs[REC_FILE] == b'Eclair\nb\n', f'the page\'s fold ignores diacritics ({m.fs[REC_FILE]})')
+    m = fresh(b'abc\nb\n')
+    kb.typ(m, 'Abc'); kb.press(m, 'kb_go')
+    expect(m.fs[REC_FILE].count(b'\n') == 2 and m.fs[REC_FILE].startswith(b'Abc\n'), 'no duplicates')
+    m = fresh(b'abc\n')
+    m.fail.add(('write', REC_TMP))
+    kb.typ(m, 'Zz'); kb.press(m, 'kb_go')
+    expect(m.fs[REC_FILE] == b'abc\n' and shown(m, 'se_listview') == (1, 1), 'a write that fails leaves the old file; the page carries on')
+    # the new page after a save shows it
+    m = fresh(b'zed\n')
+    kb.typ(m, 'Q'); kb.press(m, 'kb_go')
+    m2 = fresh(m.fs[REC_FILE])
+    expect([t[0] for t in paint(m2)[0]] == ['Q', 'zed', 'Recently Searched'], 'a later page lists what was saved')
+    # i18n
+    expect('Recently Searched' in pod_i18n.TEXT and set(pod_i18n.TEXT['Recently Searched']) == set(pod_i18n.LOCALES), 'Recently Searched is translated in the 13 languages')
+    hw = [(loc, width(pod_i18n.TEXT['Recently Searched'][loc], 18)) for loc in pod_i18n.LOCALES]
+    expect(all(w <= D['SE_REC_TEXT_END'] - D['SE_REC_TEXT_X'] for _, w in hw), f'the header fits its room in every language ({max(hw, key=lambda t: t[1])})')
+
+
+def keyboard_text(m):
+    """The embedded keyboard's committed text (patch/keyboard.c keyboard_text)."""
+    return m.read_cstr(m.call(PSYMS['keyboard_text'], count=400000))
+
+
+SECTIONS = [recent_tests, fold_tests, query_tests, pinyin_tests, rank_tests, incremental_tests, page_tests, chips_tests, scope_tests, chip_cover_tests, live_tests, tap_tests, perf_tests, entry_tests, return_tests, embed_tests, asset_tests]   # tools/check.py runs each as its own task
 
 
 def run(ctx):
