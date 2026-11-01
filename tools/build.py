@@ -8,7 +8,7 @@
   build.py --pack-only package an existing work/mod-release tree (the second half of a full build)
   build.py --no-cache  ignore work/cache/build (tools/buildcache.py; same as M1_NO_CACHE=1)
 
-Use --dev for a fresh test tag; only integration edits release TAG (docs/workflow.md).
+Use --dev for a fresh test tag; only integration edits VERSION (docs/workflow.md).
 Pins the official zip by SHA-256 so a wrong or corrupted input
 is refused. Every stage prints its time; "cached" marks a stage reused from work/cache/build.
 """
@@ -22,8 +22,16 @@ from pathlib import Path
 
 ZIP = paths.ZIP     # this checkout's firmware/, else the main checkout's (tools/paths.py)
 ZIP_SHA = 'db7bdbc42ffe6d5c1e3fdca9363edb78a01898b9a725c34793394cf6abfa33c0'
-TAG = 'V2.1qP'
+VERSION = '1.0.0'  # major.minor.patch: the release, its git tag and GitHub release, About
+TAG = 'V2.1-' + VERSION  # what the updater compares (firmware_v20.info line 2: must contain V and differ from V2.1)
 RESTORE_TAG = 'V2.1R'
+
+
+def about(tag):
+    """The About row's text: the semantic version of a release tag, a dev tag as it is."""
+    return tag.removeprefix('V2.1-')
+
+
 # The asset steps after the payload, in order: name -> (module, extra args). Each
 # tools/<module>.py WORKDIR WORKDIR [args] edits the tree in place (venv python: Pillow, fontTools);
 # <module>.added_rels(stock rootfs, *args), where defined, lists the files it adds (fwtool --allow-added).

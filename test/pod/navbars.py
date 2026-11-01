@@ -103,8 +103,8 @@ def run(ctx):
     # ------------------------------------------------------------------ images
     for n, pos in mod_icons.NAV_VIEW_POS.items():
         for suffix, pressed in (('', False), ('_down', True)):
-            expect(open(os.path.join(xx, n + suffix + '.png'), 'rb').read() == png_of(mod_icons.capsule_piece(pos, mod_icons.NAV_VIEW[n], pressed)),
-                   f'{n}{suffix}.png is the {pos} glass piece with its glyph, byte for byte')
+            expect(same_pixels(os.path.join(xx, n + suffix + '.png'), mod_icons.capsule_piece(pos, mod_icons.NAV_VIEW[n], pressed)),
+                   f'{n}{suffix}.png is the {pos} glass piece with its glyph, pixel for pixel')
     png = asset_image('nb_fade')
     col = [png.getpixel((0, y)) for y in range(png.height)]
     expect(png.size == (320, mod_icons.NB_FADE[2]) and all(c[:3] == (0, 0, 0) for c in col) and [c[3] for c in col] == [mod_icons.nb_fade_alpha(y) for y in range(png.height)]

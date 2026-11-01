@@ -273,7 +273,7 @@ def run(ctx):
         for loc in LOC:
             for i, r in enumerate(page.rows):
                 if pod_pages.row_kind(r) == 'info':   # an About row: the label and a realistic value (the longest each can be) share the room from the label to the right ink edge
-                    sample = {pod_pages.INFO_TAG: build.TAG, pod_pages.INFO_FW: 'V2.1', pod_pages.INFO_MODEL: 'Shanling M1 Plus', pod_pages.INFO_SN: '888888888888', pod_pages.INFO_MAC: '88:88:88:88:88:88',
+                    sample = {pod_pages.INFO_TAG: build.about(build.TAG), pod_pages.INFO_FW: 'V2.1', pod_pages.INFO_MODEL: 'Shanling M1 Plus', pod_pages.INFO_SN: '888888888888', pod_pages.INFO_MAC: '88:88:88:88:88:88',
                               pod_pages.INFO_IP: '192.168.188.188', pod_pages.INFO_CAP: '188.88 GB', pod_pages.INFO_FREE: '188.88 GB'}.get(r.arg)
                     lk = pod_i18n.key_for(r.label)
                     need = width(tr_text(loc, lk) if lk else r.label, row_px) + ST.VALUE_LABEL_GAP + min(width(sample, ST.INFO_PX) + 6, ST.INFO_MAX)

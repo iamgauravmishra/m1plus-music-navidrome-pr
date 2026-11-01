@@ -6,7 +6,7 @@ VOLUME ?= /Volumes/Music
 CLANG_FORMAT ?= $(if $(LLVM_BIN),$(LLVM_BIN),/opt/homebrew/opt/llvm/bin)/clang-format
 C_SOURCES := $(shell git ls-files 'patch/*.c' 'patch/*.h')
 
-.PHONY: help setup doctor test dev preview flash check accept clean format format-check lint
+.PHONY: help setup doctor test dev preview flash check accept publish clean format format-check lint
 help:
 	@echo 'make setup                  Sync the uv environment (Python 3.15)'
 	@echo 'make doctor                 Check inputs, toolchain and native emulator'
@@ -16,6 +16,7 @@ help:
 	@echo 'make flash [BUILD=latest]   Copy the tested dev package to the card'
 	@echo 'make check                  Full release + restore integration check'
 	@echo 'make accept                 Integration-only golden acceptance'
+	@echo 'make publish [PUBLISH=1]    Upload the golden package as a draft GitHub release named VERSION'
 	@echo 'make clean                  Remove retained check scratch files/logs'
 	@echo 'make format                 Format payload C and headers'
 	@echo 'make format-check           Check payload formatting without edits'
@@ -37,6 +38,8 @@ check: lint
 	$(RUN) tools/check.py $(if $(JOBS),--jobs "$(JOBS)")
 accept:
 	$(RUN) tools/check.py --update $(if $(JOBS),--jobs "$(JOBS)")
+publish:
+	$(RUN) tools/publish.py $(if $(PUBLISH),--publish) $(if $(DRY_RUN),--dry-run)
 clean:
 	$(RUN) tools/check.py --clean
 format:

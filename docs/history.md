@@ -147,10 +147,13 @@ the recovery button combination for this model remains unverified.
   an exact area average, quality 90, stock's fit) instead of stock's corner-mapped bilinear, which aliased 600 to 1500 px art
   down to 168 px; `cc_box` weights edge pixels by coverage. Cache files `r<key>-168.jpg`, rebuilt once. Test build zIPUGAAAC
   flashed, accepted. `tools/preview_cover_resample.py` compares both pipelines on the laptop.
-- **V2.1qP** (2026-11-01, current release): **Vinyl Mode colours**: Settings > Now Playing > Vinyl Mode > Record (Black, or Cover: the
+- **V2.1qP** (2026-11-01): **Vinyl Mode colours**: Settings > Now Playing > Vinyl Mode > Record (Black, or Cover: the
   record tinted from the playing cover, composed once a track into the page's base, the playing tick unchanged) and Base (Graphite, or
   Snow, a light plinth). Red, smoke, clear and a Walnut plinth were mocked and dropped (rootfs headroom); the vinyl PNGs are re-encoded
   losslessly (`tools/png_pack.py`, four palette + tRNS). Test builds zTUKNAAAB to zTUKNAAAG flashed, accepted.
+- **1.0.0** (2026-11-01, current release; package tag `V2.1-1.0.0`): semantic versions as in q2-pod, a manual macOS CI
+  (`make dev` on the runner, the package as the run's artifact), `make publish` (draft GitHub release named `VERSION`),
+  deterministic cold builds. Same features as V2.1qP.
 
 ## Hardware results (what broke on the device, and why)
 - **Vinyl Cover record rim (zTUKNAAAD).** On a track change the previous tint's disc edge stayed. The anti-aliased rim blended onto
@@ -330,6 +333,8 @@ Boot, build, process
   hit test, text layout and fills with demo's own code (`test/awtk_fill.py`), but playback, gapless, real frame timing and the
   panel were only ever checked on the device. A UI bug starts with a reproducer.
 - **Determinism.** Added files get a fixed mtime, PNGs are written without metadata or by a plain zlib writer, fontTools is pinned
-  (4.67.0): two clean builds are byte-identical, which is what makes golden hashes useful.
+  (4.67.0): two clean builds are byte-identical, which is what makes golden hashes useful. The build cache hid two
+  build-time mtimes (rewritten `m1plus_*.bin`, the added `lyrics.ttf`) until the first CI build ran cold (2026-11-01):
+  compare two `--no-cache` builds after adding a file.
 - **The updater checks** `firmware_v20.info` lines, MD5s, "V" in the version, and that the version differs from the installed one
   (`docs/firmware.md`).

@@ -1,0 +1,58 @@
+name: ci
+
+# Manual only (Actions > ci > Run workflow, or `gh workflow run ci`): macOS runners cost 10x.
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # the maintainer's toolchain: Homebrew LLVM/LLD, squashfs and the macOS Pillow wheel
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          python-version: "3.15"
+          enable-cache: true
+      - run: brew install llvm lld squashfs librsvg
+      - run: /opt/homebrew/opt/llvm/bin/clang --version | head -1; mksquashfs -version | head -1
+      - name: Stock firmware (private prerelease asset)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p firmware
+          gh release download m1plus-firmware-v2.1 --pattern M1-Plus-Firmware-V2.1.zip -O "firmware/M1 Plus Firmware V2.1.zip"
+          echo "db7bdbc42ffe6d5c1e3fdca9363edb78a01898b9a725c34793394cf6abfa33c0  firmware/M1 Plus Firmware V2.1.zip" | shasum -a 256 -c -
+      - run: make setup
+      - uses: actions/cache@v6
+        with:
+          path: fonts/01_SourceHanSans.ttc.zip
+          key: shs-2.005R
+      - run: uv run python -I tools/mod_font.py --fetch
+      - run: make doctor
+      - run: make format-check
+      - name: Dev counter from the run number (a new dev tag each run)
+        run: >
+          uv run python -I -c "import json, sys; sys.path.insert(0, 'tools'); import workflow;
+          json.dump({'namespace': workflow.namespace(workflow.ROOT), 'number': int(sys.argv[1])}, open('.dev-number.json', 'w'))"
+          "$GITHUB_RUN_NUMBER"
+      - run: make dev
+      - name: Dev tag
+        id: dev
+        run: echo "tag=$(basename out/dev/V2.1z*)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: M1Plus-${{ steps.dev.outputs.tag }}-update
+          path: out/dev/${{ steps.dev.outputs.tag }}/update.bin
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: check-logs
+          path: work/check/logs
+          if-no-files-found: ignore

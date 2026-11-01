@@ -49,7 +49,7 @@ def run(ctx):
     expect(any(w.name == 'img_screensaver' for w in lock.walk()), 'the lock screen still has the img_screensaver the app feeds')
 
     # 39b. The lock screen's glass card (mod_icons.glass_image, mod_lockscreen): the card's whole look is lk_card, no fill or radius of
-    #      its own; the mini bar's glass PNGs are still the generator's output byte for byte (the generator is shared); the white title
+    #      its own; the mini bar's glass PNGs are still the generator's output pixel for pixel (the generator is shared); the white title
     #      (7:1) and the #DDDDDD artist (4.5:1) hold over every pixel of their boxes with the glass over pure white and pure black.
     import mod_icons
     from PIL import Image
@@ -59,11 +59,11 @@ def run(ctx):
                and card.get(f'style:{st}:round_radius') is None for st in ('normal', 'disable', 'focused')),
            'the lock card is the lk_card glass image, no fill or radius of its own')
     for n, pressed in (('mb_glass', False), ('mb_glass_down', True)):
-        expect(open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read() == png_of(mod_icons.glass_image(*mod_icons.GLASS, pressed))
+        expect(same_pixels(os.path.join(mod_icons.PNG, n + '.png'), mod_icons.glass_image(*mod_icons.GLASS, pressed))
                and open(os.path.join(xx, n + '.png'), 'rb').read() == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read(),
-               f'{n}.png is the glass generator output, byte for byte (size {mod_icons.GLASS[:2]}, r {mod_icons.GLASS[2]})')
+               f'{n}.png is the glass generator output, pixel for pixel (size {mod_icons.GLASS[:2]}, r {mod_icons.GLASS[2]})')
     lk = Image.open(os.path.join(xx, 'lk_card.png')).convert('RGBA')
-    expect(open(os.path.join(mod_icons.PNG, 'lk_card.png'), 'rb').read() == png_of(mod_icons.glass_image(*mod_icons.GLASS_CARD, fill=mod_icons.GLASS_CARD_FILL))
+    expect(same_pixels(os.path.join(mod_icons.PNG, 'lk_card.png'), mod_icons.glass_image(*mod_icons.GLASS_CARD, fill=mod_icons.GLASS_CARD_FILL))
            and lk.size == (card.w, card.h) == mod_icons.GLASS_CARD[:2] and lk.getpixel((0, 0))[3] == 0 and lk.getpixel((card.w - 1, card.h - 1))[3] == 0
            and 0.6 * 255 <= lk.getpixel((card.w // 2, card.h - 3))[3] <= 0.8 * 255,
            f'lk_card.png is {lk.size} (the card), translucent, the corners transparent, the generator output')
@@ -250,11 +250,11 @@ def run(ctx):
            'the internal name is m1plus: m1plus_menu.bin, /mnt/data/m1plus-start, /mnt/mmc/m1plus-off')
     old_files = sorted(os.path.relpath(os.path.join(d, f), raw) for d, _, fs in os.walk(raw) for f in fs if 'm1pod' in f)
     expect(not old_files and b'm1pod' not in demo, f'the old internal name m1pod is gone: no asset is named so, demo has no such string ({old_files})')
-    expect(re.fullmatch(r'V2\.1[a-z][A-Z]+', build.TAG) is not None, f'the tag comes from tools/build.py ({build.TAG})')
+    expect(re.fullmatch(r'V2\.1(z[A-Z]+|-\d+\.\d+\.\d+)', build.TAG) is not None, f'the tag comes from tools/build.py ({build.TAG})')
     about = awtk_ui.parse(open(os.path.join(ui_dir, 'systemset/about_page.bin'), 'rb').read())
     expect(about.find('listitem7') is None and len(about.find('about_scrollview').children) == 7, 'the stock About page keeps its seven rows (our own About page, m1plus_about, shows the tag and the values: tools/mod_about.py is gone)')
     stock_len = os.path.getsize(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', 'release/bin/demo'))   # the payload is appended after the stock file's length
-    expect(demo.count(b'V2.1\0') >= 1 and build.TAG.encode() + b'\0' not in demo[:stock_len], 'demo\'s own data still carries the stock version literal V2.1 (FW. Version), not our tag (only the appended payload has it: the iPod About row)')
+    expect(demo.count(b'V2.1\0') >= 1 and build.TAG.encode() + b'\0' not in demo[:stock_len] and build.about(build.TAG).encode() + b'\0' in demo[stock_len:], 'demo\'s own data still carries the stock version literal V2.1 (FW. Version), not our tag (only the appended payload has it: the iPod About row)')
 
     # 51. The on/off switch (sset_on / sset_off): no text, a pill track and a round knob, the stock 57x28 canvas.
     from PIL import Image

@@ -376,13 +376,12 @@ def asset_tests(ctx):
     gw, gh, gr = mod_icons.GLASS_SORT
     raw_ = open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx/sg_glass.png'), 'rb').read()
     gen = mod_icons.glass_image(gw, gh, gr, fill=mod_icons.GLASS_SHEET_FILL)
-    buf = io.BytesIO(); gen.save(buf, 'PNG', optimize=True)
     g = Image.open(io.BytesIO(raw_)).convert('RGBA')
     third = gw // 3
-    expect(raw_ == open(os.path.join(mod_icons.PNG, 'sg_glass.png'), 'rb').read() == buf.getvalue() and (gw, gh, gr) == (72, card.h, O['PL_CARD_R'])
+    expect(raw_ == open(os.path.join(mod_icons.PNG, 'sg_glass.png'), 'rb').read() and same_pixels(raw_, gen) and (gw, gh, gr) == (72, card.h, O['PL_CARD_R'])
            and all(g.getpixel(p)[3] == 0 for p in ((0, 0), (gw - 1, 0), (0, gh - 1), (gw - 1, gh - 1))) and g.getpixel((gw // 2, gh // 2))[3] >= 0.85 * 255
            and all(len({g.getpixel((x, y)) for x in range(third, gw - third)}) == 1 for y in range(gh)),
-           f'sg_glass.png is the generator output byte for byte ({gw}x{gh}, the card\'s height, r {gr}, the sheet\'s fill), four transparent corners, the middle third the same in every column (patch3_x stretches it exactly)')
+           f'sg_glass.png is the generator output pixel for pixel ({gw}x{gh}, the card\'s height, r {gr}, the sheet\'s fill), four transparent corners, the middle third the same in every column (patch3_x stretches it exactly)')
     labs = [next(c for c in i.children if c.type == 'hscroll_label') for i in items]
     expect([l.get('tr_text') for l in labs] == list(pod_pages.SORT_MENU) and all(c.get('sensitive') == 'false' for l in labs for c in [l]), 'the card rows carry the five stock keys')
     expect(all(any(c.type == 'image' and c.get('image') == 'sg_tick' for c in i.children) for i in items), 'each row has a tick image (shown on the current order)')

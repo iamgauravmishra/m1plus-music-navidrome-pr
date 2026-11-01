@@ -246,24 +246,23 @@ def glass_checks(expect, theme, built_ui, stock_t, lum):
     """The glass sheet (pm_sheet): the image is the generator's output, top corners transparent and bottom corners and edge opaque; the dialog
     and every row are transparent over it, the pressed band and hairline translucent, inline in this dialog only; every label, badge and
     chevron keeps its contrast with the glass over black, over white under the dim and over pure white, at rest and on a pressed row."""
-    import io, mod_icons
+    import mod_icons
     from PIL import Image
     xx = os.path.join(WORK, RAW, 'images', 'xx')
-    png = lambda im: (lambda b: (im.save(b, 'PNG', optimize=True), b.getvalue())[1])(io.BytesIO())
     sheets = {}
     for name, spec in (('pm_sheet', mod_icons.GLASS_SHEET), ('pm_sheet6', mod_icons.GLASS_SHEET6)):   # page 2's glass (4 rows, 200 px) and page 1's (6 rows, 300 px): each its own picture, none a crop of the other
         gen = mod_icons.glass_image(*spec, fill=mod_icons.GLASS_SHEET_FILL, top_only=True)
         raw = open(os.path.join(xx, name + '.png'), 'rb').read()
         sheets[name] = im = Image.open(os.path.join(xx, name + '.png')).convert('RGBA')
         w, h, r = spec
-        expect(raw == open(os.path.join(mod_icons.PNG, name + '.png'), 'rb').read() == png(gen) and im.size == (w, h) == (built_ui.w, ROW_H * (O['PM_PAGE2_N'] if name == 'pm_sheet' else O['PM_PAGE_N'])),
-               f'{theme}: {name}.png is the generator output byte for byte, {w}x{h} = the page\'s own sheet height, r {r}, top corners only')
+        expect(raw == open(os.path.join(mod_icons.PNG, name + '.png'), 'rb').read() and same_pixels(raw, gen) and im.size == (w, h) == (built_ui.w, ROW_H * (O['PM_PAGE2_N'] if name == 'pm_sheet' else O['PM_PAGE_N'])),
+               f'{theme}: {name}.png is the generator output pixel for pixel, {w}x{h} = the page\'s own sheet height, r {r}, top corners only')
         a = lambda x, y, im=im: im.getpixel((x, y))[3]
         expect(a(0, 0) == 0 and a(w - 1, 0) == 0 and a(0, h - 1) >= 0.7 * 255 and a(w - 1, h - 1) >= 0.7 * 255 and all(a(x, h - 1) >= 0.7 * 255 for x in range(w))
                and a(w // 2, 0) >= 0.7 * 255 and all(a(x, y) == 0 for x in range(2) for y in range(2)),
                f'{theme}: {name}: the top corners are transparent, the bottom corners and the whole foot opaque (alpha {a(0, h - 1)})')
     gen = mod_icons.glass_image(320, 100, 18, fill=mod_icons.GLASS_SHEET_FILL, top_only=True)   # a podcast episode's page 1 (two rows) uses the Podcasts page's 100 px glass
-    expect(open(os.path.join(xx, 'pc_sheet2.png'), 'rb').read() == png(gen) and Image.open(os.path.join(xx, 'pc_sheet2.png')).size == (320, 2 * ROW_H),
+    expect(same_pixels(open(os.path.join(xx, 'pc_sheet2.png'), 'rb').read(), gen) and Image.open(os.path.join(xx, 'pc_sheet2.png')).size == (320, 2 * ROW_H),
            f'{theme}: pc_sheet2.png is the generator output at the two-row sheet height (the episode page 1\'s glass)')
     sheet, sheet6 = sheets['pm_sheet'], sheets['pm_sheet6']
     # the same top edge: the first 18 rows of both are the rim and the rounded corners (a 300 px sheet is the 200 px one with 100 more rows of body)

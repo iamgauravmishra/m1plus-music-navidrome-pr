@@ -206,7 +206,7 @@ def about_tests(ctx):
     m = open_about(b'SN12345678', b'98:b3:ec:00:11:22', True, (119.25, 100.5), 1, b'192.168.1.20')
     got = {k: text(m, k) for k in ('M1+ Music', 'Firmware', 'Model', 'Serial Number', 'Wi-Fi MAC', 'IP Address', 'Capacity', 'Available')}
     import build
-    expect(('window_open', A.key) in m.calls and got == {'M1+ Music': build.TAG, 'Firmware': 'V2.1', 'Model': 'Shanling M1 Plus', 'Serial Number': 'SN12345678', 'Wi-Fi MAC': '98:b3:ec:00:11:22',
+    expect(('window_open', A.key) in m.calls and got == {'M1+ Music': build.about(build.TAG), 'Firmware': 'V2.1', 'Model': 'Shanling M1 Plus', 'Serial Number': 'SN12345678', 'Wi-Fi MAC': '98:b3:ec:00:11:22',
                                                           'IP Address': '192.168.1.20', 'Capacity': '119.25 GB', 'Available': '100.50 GB'}, f'every value is the stock source\'s ({got})')
     expect(('getDiskMemoryInfo', '/mnt/mmc') in m.calls and ('networkGetIPAddr', 0) in m.calls, 'the card numbers come from getDiskMemoryInfo(/mnt/mmc), the IP from networkGetIPAddr(0, buf)')
     m = open_about()

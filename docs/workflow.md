@@ -46,8 +46,7 @@ latest selected; check the printed tag, or choose `BUILD=out/dev/<tag>` explicit
 
 Dev tags reserve `V2.1z` plus four checkout-namespace letters and four counter letters. Keep
 the gitignored `.dev-number.json`; never reset the counter or reuse an output directory.
-Namespace collisions, moved worktrees and exhausted counters fail explicitly. Releases must
-use another series. No shared checkout state is written.
+Namespace collisions, moved worktrees and exhausted counters fail explicitly. Releases use `V2.1-<VERSION>` tags. No shared checkout state is written.
 
 ```sh
 uv run python -I tools/check.py --list
@@ -60,6 +59,21 @@ line (`--verbose` prints every pass too); it reports completed tasks, native cra
 totals separately. Missing inputs/results fail; subprocess groups have
 wall-time limits. Logs and failed trees are retained. `make clean` removes `work/check` only,
 keeping dev artifacts, counters and caches. Locks prevent overlapping writes.
+
+## CI
+
+`.github/workflows/ci.yml` runs only when started (Actions > ci > Run workflow, or
+`gh workflow run ci --repo imfing/m1plus-music`): macOS runners cost 10x. One `macos-latest` job
+mirrors local use: Homebrew `llvm lld squashfs librsvg`, the stock firmware zip, `make setup`,
+Source Han Sans, `make doctor`, `make format-check`, `make dev` (lint, all tests and a verified dev package;
+the dev counter is seeded from the run number, so each run gets a new `V2.1z...` tag). The run's
+artifact is that `update.bin` (14 days). It checks no golden and publishes nothing; releases stay
+local (`make check`, `make publish`). Linux cannot reproduce the goldens: Pillow's Linux wheel has zlib, not zlib-ng, so the
+built PNGs differ in bytes, and so does the merged CJK font. Tests compare generated PNGs by pixels.
+
+The firmware zip is the asset of a private prerelease (tag `m1plus-firmware-v2.1`) in this
+repository, downloaded with `GITHUB_TOKEN`. The repository must never be made public while that
+release exists.
 
 Start UI fixes with a failing emulation test or device capture. Previews use the shared AWTK
 layout/text model and the built font. Keep feature details and device checks in `docs/modules/`.
@@ -104,8 +118,9 @@ off there, and `test/pod/harness.py` may import names only to re-export them to 
 
 ## Integration and restore
 
-Feature branches leave release `TAG`, goldens and history unchanged. The README names no release.
-At integration, bump `TAG` in `tools/build.py`, then run:
+Feature branches leave release `VERSION`, goldens and history unchanged. The README names no release.
+At integration, bump `VERSION` in `tools/build.py` (semantic: patch for fixes, minor for features, major by decision;
+`TAG = V2.1-<VERSION>` is the package version the updater compares, About shows the plain `VERSION`; dev tags stay `V2.1z...`), then run:
 
 ```sh
 make check                     # both packages and all tests against existing goldens
@@ -132,6 +147,16 @@ Release/restore copies require golden bytes; dev copies require a full receipt. 
 `--force` bypass. `build.py --dev` alone creates no test receipt; use `make dev` for installation.
 `--pack-only` rejects stale trees. Payload edits retain the font/base cache; `--no-cache`
 supports cold-build comparisons.
+
+## Publish
+
+After the integration commit and a matching `make check`, `make publish` uploads the golden release
+package (as `update.bin`, with `SHA256SUMS`) to a draft GitHub release named `VERSION` (for example `1.0.0`) created with
+`--target HEAD`, notes = the golden's last commit message; it downloads the assets back and compares
+hashes. It creates and pushes no tag (q2-pod's model): GitHub creates the tag `VERSION` at HEAD when the draft
+is published. Review the draft, then `make publish PUBLISH=1` (or publish it on GitHub). `DRY_RUN=1`
+checks and stages `out/publish/<VERSION>/` only. It refuses a dirty tree, a package that is not the
+golden, a local tag on another commit and an already published release. The restore image stays local.
 
 ## Device checks
 

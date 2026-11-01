@@ -4,11 +4,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_ui
 
 def write_keep_mode(p, data):
-    """Overwrite p with data, keeping its permission bits."""
-    mode = stat.S_IMODE(os.stat(p).st_mode)
+    """Overwrite p, preserving permissions and deterministic timestamps of added files."""
+    original = os.stat(p)
+    mode = stat.S_IMODE(original.st_mode)
     os.chmod(p, mode | 0o200)
     with open(p, 'wb') as f: f.write(data)
     os.chmod(p, mode)
+    os.utime(p, ns=(original.st_atime_ns, original.st_mtime_ns))
 
 def clone_workdir(src, out):
     """Fresh copy of an unpacked workdir in OUT (APFS clone when possible). OUT == SRC edits in place."""

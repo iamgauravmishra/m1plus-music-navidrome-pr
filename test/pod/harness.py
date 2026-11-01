@@ -76,10 +76,15 @@ def asset_image(n):
     return Image.open(asset_path(n)).convert('RGBA')
 
 
-def png_of(im):
-    """An image's PNG bytes as the build writes them (optimize=True): compare with a shipped file byte for byte."""
+def same_pixels(a, b):
+    """Two PNGs (path, bytes or PIL image) hold the same RGBA pixels. Compressed bytes differ between zlib builds (macOS wheel vs Linux), pixels do not."""
     import io
-    b = io.BytesIO(); im.save(b, 'PNG', optimize=True); return b.getvalue()
+    from PIL import Image
+    def load(x):
+        if isinstance(x, Image.Image): return x.convert('RGBA')
+        return Image.open(io.BytesIO(x) if isinstance(x, bytes) else x).convert('RGBA')
+    a, b = load(a), load(b)
+    return a.size == b.size and a.tobytes() == b.tobytes()
 
 
 def lum(c):

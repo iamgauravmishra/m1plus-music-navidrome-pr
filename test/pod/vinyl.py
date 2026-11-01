@@ -444,8 +444,7 @@ def asset_tests(ctx):
     gen = A.images()
     for n, size in sizes.items():
         im = asset_image(n); built = open(asset_path(n), 'rb').read()
-        expect(im.size == size == gen[n].size and built == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read() and im.convert('RGBA').tobytes() == gen[n].tobytes()
-               and len(built) <= len(png_of(gen[n])), f'{n}: {size}, the generator\'s RGBA pixels exactly, in no more bytes than the plain PNG')
+        expect(im.size == size == gen[n].size and built == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read() and same_pixels(built, gen[n]), f'{n}: {size}, the generator\'s RGBA pixels exactly')
     expect(set(sizes) == set(A.NAMES) and len(sizes) == 6 * len(A.THEME_NAMES) + 2, 'the pictures: six a plinth theme and two shared')
     total = sum(os.path.getsize(asset_path(n)) for n in sizes) + os.path.getsize(asset_path('pod_ic_vinyl'))
     print('  vinyl pictures: %d bytes (%s)' % (total, {n: os.path.getsize(asset_path(n)) for n in sizes}))

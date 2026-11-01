@@ -62,19 +62,21 @@ gets the Source Han Sans zip.
 
 ## Version tags
 
-Format `V2.1` + lowercase series + capital letters. The updater refuses a package whose version
-equals the installed one, so each flashed package needs a new tag.
+A release has a semantic `VERSION` (`major.minor.patch`, `tools/build.py`) and its package tag is `TAG = V2.1-<VERSION>`
+(what the updater compares: it refuses a package whose version equals the installed one). The About row shows
+the plain `VERSION` for a release (`build.about`) and the dev tag for a dev build; the GitHub release and its git
+tag are named `VERSION` (no `v`). Dev tags are `V2.1z` + capital letters.
 
 `make dev` reserves series `z`: four checkout-namespace letters plus four local counter letters.
 Keep `.dev-number.json` (gitignored); do not reset it or reuse a dev output directory. It never
-changes `TAG`. Dev artifacts and test receipts stay together under `out/dev/<tag>`.
+changes `VERSION`. Dev artifacts and test receipts stay together under `out/dev/<tag>`.
 
-**Feature branches do not bump `TAG`, update `test/golden.sha256` or edit `docs/history.md`** (every
+**Feature branches do not bump `VERSION`, update `test/golden.sha256` or edit `docs/history.md`** (every
 branch doing so conflicts on merge). Their done-criterion is `check.py --tests-only`
 (all tests pass) and the feature's docs in `docs/modules/`. Only the **integration step** (merge into the
-release branch) bumps `TAG` in `tools/build.py` (the one source; `check.py` and `preview.py` read it),
+release branch) bumps `VERSION` in `tools/build.py` (the one source: `TAG` and the About text derive from it; patch for fixes, minor for features, major by decision),
 runs `check.py` then `check.py --update` and commits the golden. The README names no release (the
-release is `TAG`, its changes the squash commit). `docs/history.md` is not a per-tag log (git is): add a milestone line only for a
+release is `VERSION`, its changes the squash commit). `docs/history.md` is not a per-tag log (git is): add a milestone line only for a
 notable or accepted release, and any new device finding or lesson. A golden or history conflict is resolved by taking the integration side and rerunning, not by hand.
 
 ## Safety rules (do not relax)

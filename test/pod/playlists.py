@@ -205,12 +205,11 @@ def glass_checks(expect, tree, scrim, card, items):
     code draws patch3_x as assumed; white labels keep 7:1 at rest and pressed over black and over white under the dim."""
     import io, mod_icons
     from PIL import Image
-    png = lambda im: (lambda b: (im.save(b, 'PNG', optimize=True), b.getvalue())[1])(io.BytesIO())
     w, h, r = mod_icons.GLASS_MENU
     raw_ = open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx/pl_glass.png'), 'rb').read()
     gen = mod_icons.glass_image(w, h, r, fill=mod_icons.GLASS_SHEET_FILL)
-    expect(raw_ == open(os.path.join(mod_icons.PNG, 'pl_glass.png'), 'rb').read() == png(gen) and (w, h, r) == (72, card.h, pod_ui.PL_CARD_R),
-           f'pl_glass.png is the generator output byte for byte: {w}x{h} (the card\'s height), r {r}, the sheet\'s fill {mod_icons.GLASS_SHEET_FILL[2]}')
+    expect(raw_ == open(os.path.join(mod_icons.PNG, 'pl_glass.png'), 'rb').read() and same_pixels(raw_, gen) and (w, h, r) == (72, card.h, pod_ui.PL_CARD_R),
+           f'pl_glass.png is the generator output pixel for pixel: {w}x{h} (the card\'s height), r {r}, the sheet\'s fill {mod_icons.GLASS_SHEET_FILL[2]}')
     g = Image.open(io.BytesIO(raw_)).convert('RGBA')
     a = lambda x, y: g.getpixel((x, y))[3]
     third = w // 3

@@ -272,7 +272,7 @@ def asset_tests(ctx):
     wp = asset_image('ipod_wheel')
     expect(wp.size == (220, 220) and wp.getpixel((0, 0))[3] == 0 and wp.getpixel((219, 219))[3] == 0 and wp.getpixel((110, 110))[3] == 255 and wp.getpixel((110, 3))[3] == 255,
            'the wheel image is 220 px: transparent corners, opaque ring and centre button')
-    expect(open(os.path.join(mod_icons.PNG, 'ipod_wheel.png'), 'rb').read() == png_of(mod_icons.ipod_wheel()) and mod_icons.ipod_wheel().size == (220, 220),
+    expect(same_pixels(os.path.join(mod_icons.PNG, 'ipod_wheel.png'), mod_icons.ipod_wheel()) and mod_icons.ipod_wheel().size == (220, 220),
            'the committed PNG is the generator\'s output')
     ph = asset_image('ipod_placeholder')
     expect(ph.size == (256, 256) and 'ipod_placeholder' in mod_icons.IPOD and all(ph.getpixel(p)[3] == 255 for p in ((0, 0), (255, 255), (128, 128), (255, 0))) and ph.getpixel((5, 250))[:3] < (40, 40, 40)

@@ -350,7 +350,8 @@ def apply(work, shs_zip=paths.SHS_ZIP):
     lyric = lyric_face(lb, stock, LYRIC_TRACKING)
     lp = os.path.join(work, LYRIC_FONT)
     with open(lp, 'wb') as fh: fh.write(lyric)
-    os.chmod(lp, os.stat(p).st_mode & 0o7777)           # the permission bits of default.ttf
+    st = os.stat(p); os.chmod(lp, st.st_mode & 0o7777)  # the permission bits of default.ttf
+    os.utime(lp, ns=(st.st_atime_ns, st.st_mtime_ns))    # and its stock mtime: an added file, keep the build deterministic
     print(f'font: {LYRIC_FONT} {len(lyric)} bytes (Inter Bold, tracking -{LYRIC_TRACKING}), sha256 {sha256(lyric)}')
     print(f'font: {FONT} {len(stock)} -> {len(new)} bytes, sha256 {sha256(new)}; {r["stock_cps"]} stock code points all '
           f'kept with ink, {r["replaced"]} replaced, {r["added"]} added, {r["unchanged"]} unchanged; vertical metrics stock')

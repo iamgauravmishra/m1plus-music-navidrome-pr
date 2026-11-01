@@ -2,7 +2,7 @@
 
 What is proved, on the real compiled payload under Unicorn (the stock calls it makes mocked, the glyphs and bitmaps real memory):
   * the numbers of offsets.inc against tools/tape_art.py (the geometry, the text fields), the built asset (a fullscreen window, one 320 x 480 view, a hidden font label,
-    the four installed pictures with the sizes the payload loads), and that the pictures are the generator's output byte for byte;
+    the four installed pictures with the sizes the payload loads), and that the pictures are the generator's output pixel for pixel;
   * the rotation, drawing: landscape (x, y) is the frame's row x, column 319 - y: a glyph block drawn at a known landscape place lands there and nowhere else, clipped to its field's
     rectangle, and the field is restored from the shell before it is drawn again;
   * the rotation, touch: portrait pointer events become landscape taps: a tap on the top left screw (50 x 50 px, drawn darker and turned while held) closes, a tap elsewhere
@@ -255,14 +255,14 @@ def asset_tests(ctx):
     for x, y in ((160, 240), (5, 5), (315, 475)):
         got = stock_target(m, root, x, y)
         expect(got[-1] == 'tape_view', f'a touch at ({x}, {y}) reaches tape_view ({got})')
-    # the pictures: sizes the payload loads, the generator's output byte for byte, no image in the tree is bigger than the budget
+    # the pictures: sizes the payload loads, the generator's output pixel for pixel, no image in the tree is bigger than the budget
     sizes = {'tape_top': (74, 280), 'tape_screw': (26, 26)}
     for t in THEMES: sizes.update({f'tape_shell_{t}': (320, 480), f'tape_hubs_{t}': (30, 720), f'tape_marks_{t}': (26, 78)})
     gen = tape_art.images()
     for n, size in sizes.items():
         im = asset_image(n)
         built = open(asset_path(n), 'rb').read()
-        expect(im.size == size == gen[n].size and built == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read() == png_of(gen[n]), f'{n}: {size}, the generator\'s PNG byte for byte')
+        expect(im.size == size == gen[n].size and built == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read() and same_pixels(built, gen[n]), f'{n}: {size}, the generator\'s PNG pixel for pixel')
     expect(set(sizes) == set(tape_art.NAMES) and len(sizes) == 11, 'the pictures: two shared (tape_top, tape_screw) and three a theme (shell, hubs, marks)')
     expect((tape_art.TOP_RECT[2] - tape_art.TOP_RECT[0], tape_art.TOP_RECT[3] - tape_art.TOP_RECT[1]) == (280, 74), 'tape_top: 280 x 74 landscape, 74 x 280 turned')
     total = sum(os.path.getsize(asset_path(n)) for n in sizes) + os.path.getsize(asset_path('pod_ic_tape'))

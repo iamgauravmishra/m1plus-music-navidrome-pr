@@ -27,7 +27,7 @@ import argparse, concurrent.futures, hashlib, json, os, pathlib, re, stat, struc
 from elftools.elf.elffile import ELFFile
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import pod_pages, pod_ui
-from build import TAG   # the About row of the iPod page shows it (patch/ipod.c M1PLUS_TAG)
+from build import TAG, about   # the About row of the iPod page shows about(tag) (patch/m1plus.c M1PLUS_TAG)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PATCH = os.path.join(ROOT, 'patch')
@@ -1045,7 +1045,7 @@ def compile_payload(out, demo_path, tag=TAG):
     objs = [out / (src + '.o') for src in SOURCES]   # (SOURCES order: the link is byte-identical to a serial compile)
 
     def compile_one(src, obj):
-        cmd = [str(a) for a in (CLANG, *FLAGS, f'-DM1PLUS_TAG="{tag}"', '-I', out, '-I', PATCH, '-c', os.path.join(PATCH, src), '-o', obj)]
+        cmd = [str(a) for a in (CLANG, *FLAGS, f'-DM1PLUS_TAG="{about(tag)}"', '-I', out, '-I', PATCH, '-c', os.path.join(PATCH, src), '-o', obj)]
         return subprocess.run(cmd, stderr=subprocess.PIPE, text=True)
 
     with concurrent.futures.ThreadPoolExecutor(os.cpu_count() or 4) as pool:   # one clang a source; the sources do not depend on each other
@@ -1230,7 +1230,7 @@ def main():
     raw = open(demo_path, 'rb').read()
     check(sha(raw) == ZEROED_DEMO_SHA, f'demo is not the .pdr-zeroed stock V2.1 binary (got {sha(raw)})')
     build = pathlib.Path(a.workdir) / 'podbuild'; build.mkdir(exist_ok=True)
-    check(re.fullmatch(r'V2\.1[a-z][A-Z]+', a.tag) is not None and len(a.tag) <= 31, 'invalid build tag')
+    check(re.fullmatch(r'V2\.1(z[A-Z]+|-\d+\.\d+\.\d+)', a.tag) is not None and len(a.tag) <= 31, 'invalid build tag')
     ps, payload, scratch = compile_payload(build, demo_path, a.tag)
     patched, seg_off, edits, scroll = patch_demo(raw, payload, ps, demo_path)
     # keep demo's permission bits
