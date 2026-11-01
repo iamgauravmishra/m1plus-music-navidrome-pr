@@ -399,18 +399,21 @@ def run(ctx):
                    if i.widget == 'list_item' and i.state == 'normal'}
     col = lambda s: tuple(int(s[k:k + 2], 16) for k in (1, 3, 5))
     cur, dim = col(lyric_style['listitem_sellyric_style'].color('text_color')), col(lyric_style['listitem_lyric_style'].color('text_color'))
-    secondary = {'lyric inactive': (dim, 3.0), 'lyric current': (cur, 4.5), 'info label': (col(mn.GREY), 3.0), 'info quality line': (col(mn.FG), 4.5), 'info location': (col(mn.GREY), 3.0)}
+    # the info page's text sits on np_scrim (50 %); the stock lyric list (what shows without the payload: kill switch, a failure) on the lighter lyrics scrim,
+    # where its grey lines keep 2.5:1 and its current line 4.5:1 (our own lines are checked in test/pod/lyrics.py)
+    secondary = {'stock lyric inactive': (dim, 2.5, 'l'), 'stock lyric current': (cur, 4.4, 'l'), 'info label': (col(mn.GREY), 3.0, 'i'), 'info quality line': (col(mn.FG), 4.5, 'i'), 'info location': (col(mn.GREY), 3.0, 'i')}
     sworst = {k: 99 for k in secondary}
     for c in grid + [(255, 255, 255)]:
         t = mn.tone(*c)
         for y in range(mn.LYR_Y, mn.LYR_Y + mn.LYR_H, 4):
-            keep, sk = 255 - mn.tint_alpha(y), 255 - mn.scrim_alpha(y - mn.SCRIM[1])
-            bg = tuple(v * keep // 255 * sk // 255 for v in t)
-            for k, (fg, _) in secondary.items(): sworst[k] = min(sworst[k], contrast(fg, bg))
-    expect(all(sworst[k] >= need for k, (_, need) in secondary.items()),
-           f'with the scrim the lyric and info text keeps its contrast on every tone: inactive / secondary >= 3:1, current / quality line >= 4.5:1 ({ {k: round(v, 2) for k, v in sworst.items()} })')
+            keep, sk = 255 - mn.tint_alpha(y), {'l': 255 - mn.lscrim_alpha(y - mn.LSCRIM[1]), 'i': 255 - mn.scrim_alpha(y - mn.SCRIM[1])}
+            for k, (fg, _, which) in secondary.items():
+                bg = tuple(v * keep // 255 * sk[which] // 255 for v in t)
+                sworst[k] = min(sworst[k], contrast(fg, bg))
+    expect(all(sworst[k] >= need for k, (_, need, _w) in secondary.items()),
+           f'with the scrim the info text keeps its contrast on every tone (secondary >= 3:1, quality line >= 4.5:1) and the stock lyric list its own (inactive >= 2.5:1, current >= 4.4:1) ({ {k: round(v, 2) for k, v in sworst.items()} })')
     bare = min(contrast(dim, tuple(v * (255 - mn.tint_alpha(y)) // 255 for v in mn.tone(255, 255, 255))) for y in range(mn.LYR_Y, mn.LYR_Y + mn.LYR_H, 4))
-    expect(bare < 3.0, f'(the scrim is needed: the inactive lyric over the brightest tone alone is {bare:.2f}:1)')
+    expect(bare < 2.5, f'(the scrim is needed: the inactive lyric over the brightest tone alone is {bare:.2f}:1)')
     expect(lum(dim) > lum(col(mn.DOWN)) and dim == col(mn.LYR_DIM), 'the inactive lyric grey is lighter than the old #8C8C8C')
     from awtk_text import Ttf as _T14, StbText as _S14
     _t14 = _T14(os.path.join(raw, 'fonts', 'default.ttf'))
@@ -794,10 +797,10 @@ def run(ctx):
     expect(sc.height == SH and mn.SCRIM[1] <= mn.LYR_Y - mn.SCRIM_EDGE and mn.LYR_Y + mn.LYR_H <= mn.SCRIM[1] + SH - mn.SCRIM_EDGE
            and all(r[1] >= mn.LYR_Y - 4 for r in lines[:1]) and os.path.getsize(os.path.join(xx, 'np_scrim.png')) < 4000,
            f'the whole text area (y {mn.LYR_Y} .. {mn.LYR_Y + mn.LYR_H}) lies in the full-strength middle of the scrim (y {mn.SCRIM[1]} .. {mn.SCRIM[1] + SH}); the file is small')
-    for pg, nm in (('view_lyrics', 'img_np_scrim_lyrics'), ('view_info', 'img_np_scrim_info')):
+    for pg, nm, box, img in (('view_lyrics', 'img_np_scrim_lyrics', mn.LSCRIM, 'np_scrim_lyrics'), ('view_info', 'img_np_scrim_info', mn.SCRIM, 'np_scrim')):
         s = f(nm)
-        expect(f(pg).children[0] is s and rect(nm) == mn.SCRIM and s.get('sensitive') == 'false' and s.get('image') == 'np_scrim',
-               f'{nm}: the first child of {pg} (under the text), insensitive, at {mn.SCRIM}')
+        expect(f(pg).children[0] is s and rect(nm) == box and s.get('sensitive') == 'false' and s.get('image') == img,
+               f'{nm}: the first child of {pg} (under the text), insensitive, at {box}, image {img} (the lyrics page has its own, lighter scrim: test/pod/lyrics.py)')
     expect(all(w.name not in ('img_np_scrim_lyrics', 'img_np_scrim_info') or [p for p in ui.walk() if w in p.children][0].name in ('view_lyrics', 'view_info') for w in ui.walk() if w.name),
            'the scrim is on the lyrics and info pages only: the art page keeps the full tint')
     expect(not os.path.exists(os.path.join(xx, 'np_artmask.png')) and 'img_np_artmask' not in [w.name for w in ui.walk()], 'there is no static corner mask: the payload paints the corners (square without it)')

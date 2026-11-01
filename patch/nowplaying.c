@@ -32,6 +32,7 @@
 #include "home.h"
 #include "i18n.h"
 #include "common.h"
+#include "lyrics.h"
 
 static struct {
     void *win, *rem, *tot; /* the window, np_remaining (ours), label_playlen (stock) */
@@ -376,6 +377,7 @@ static void np_work(void) {
     np_cover();
     np_time();
     np_info();
+    ly_tick(); /* the lyrics page (patch/lyrics.c) */
 }
 
 static int np_tick(const void *timer) {
@@ -394,6 +396,7 @@ static int np_tick(const void *timer) {
 /* The page is over (or replaced): the timer goes, the status bar is black again, the state is cleared. */
 static void np_stop(void) {
     np_bar_black();
+    ly_stop();
     if (np.timer) timer_remove(np.timer);
     memset(&np, 0, sizeof np);
 }
@@ -452,6 +455,7 @@ static void np_start(void *win) {
         np_corner_init();
         widget_on(art, EVT_AFTER_PAINT, np_on_art_paint, (void *)0);
     }
+    ly_start(win);
     np.fg = 1;
     np.barok = widget_on(win, EVT_WINDOW_TO_BG, np_on_background, win) &&
                widget_on(win, EVT_WINDOW_TO_FG, np_on_foreground, win);

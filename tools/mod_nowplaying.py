@@ -56,7 +56,7 @@ BTN_STATES = ('normal', 'disable', 'focused', 'over', 'pressed')
 BG = '#202020'                   # the neutral tone: the window until a cover tints it (patch/offsets.inc NP_NEUTRAL)
 FG = '#EEEEEC'                   # q2-pod MINIMAL_FILL: glyphs, selected lyric
 DOWN = '#8C8C8C'                 # q2-pod SUDO_MUTED: pressed glyphs
-LYR_DIM = '#A0A0A0'              # the other lyric lines: lighter than DOWN, 3:1 or better under the scrim on every tone (test/pod/nowplaying.py)
+LYR_DIM = '#C4C4C4'              # the other lines of the stock lyric list (shown only without the payload): lighter than DOWN, 2.5:1 or better under the lyrics scrim on every tone (test/pod/nowplaying.py)
 TITLE_RGB, GREY = '#FFFFFF', '#AAAAAA'      # secondary text is one grey (V2.1lA)
 TITLE_PX, META_PX, TIMES_PX = 20, 18, 14
 TRACK, FILL = '#FFFFFF4D', '#FFFFFFEB'      # progress bar: white 30 % track (was 20 %: lost on dark tints), 92 % fill (over the tint)
@@ -67,6 +67,12 @@ TINT_ALPHA = (38, 235)           # np_tint.png: black, alpha at the top .. at th
 # edges. The art page keeps the full tint.
 SCRIM = (0, 8, W, 324)            # x, y, w, h in the page: y 8 .. 332; the text lies in 44 .. 288, inside the full-strength middle
 SCRIM_ALPHA, SCRIM_EDGE = 128, 36 # 50 % black; the edges ramp from 0 over SCRIM_EDGE rows (test/pod/nowplaying.py)
+# The lyrics page has its own, lighter scrim (np_scrim_lyrics.png): Apple Music shows the cover's colour with no heavy black band. The bold white
+# lines need less behind them than the info page's small grey text; 68 (27 %) is the lowest alpha that keeps the current line at 4.5:1 and the next at
+# 2.3:1 on the worst tone (test/pod/lyrics.py). The edges ease in over LSCRIM_EDGE rows (smoothstep), so there is no visible band edge; the text area (44..288) is the full-strength middle.
+LSCRIM = (0, 0, W, 332)
+LSCRIM_ALPHA, LSCRIM_EDGE = 68, 44
+DOT = 10                         # the interlude dots' diameter (patch/offsets.inc LY_DOT): np_dot.png, white, anti-aliased; the payload makes three image widgets
 
 M = 28                           # side margin: the cover, the text column and the bar share it
 ART, ART_R = 264, 12             # cover = what demo writes (mod_lockscreen.COVER_SIZE, 1:1), corner radius
@@ -94,6 +100,12 @@ ROW_H = H - ROW_Y
 SVV_H = TIMES_Y + TIMES_H        # slide_view_view ends under the times, which it parents (the row overlaps its last 5 px, on top)
 # transport slots: x, w (sum 320 incl. 4 px edges); the image_wait spinner centres on play
 SLOTS = {'btn_playmode': (4, 56), 'btn_prev': (64, 60), 'btn_play': (124, 72), 'btn_next': (196, 60), 'btn_queue': (260, 56)}
+LYR_FONT, LYR_LEFT = 30, 2   # patch/offsets.inc LY_FONT; text_align_h in this build: 0 none, 1 centre, 2 left, 3 right (the stock 'msg*_style' names)
+LYR_SPACER = 4               # AWTK's row pitch inside a wrapped label is font_size + the style's `spacer` (label paint, 0x62e9f8; default 2): LY_LINE_H = 30 + 4 = 34
+LYR_WHITE = '#FFFFFF'        # every lyric line is white; the current one is only the most opaque (patch/lyrics.c ly_opacity)
+LYR_FACE = 'lyrics'          # font_name of the bold face: assets/default/raw/fonts/lyrics.ttf (tools/mod_font.py lyric_face)
+# patch/lyrics.c: a line of Latin, Greek and Cyrillic only is drawn in the bold file, any other line in the default font (AWTK has no per-glyph fallback)
+LYRIC_LABEL_STYLES = {'np_lyric_style': LYR_FACE, 'np_lyric_cjk_style': None}
 LYR_Y, LYR_H = 44, 244           # the lyrics list; the info lines end at 288 too (the dots sit at 296)
 
 # The A-B repeat markers: demo moves img_repeata/b to x = 12 + (pos - cue) * 296 / len, y = 364 (getx_by_playtime
@@ -153,10 +165,29 @@ def scrim_alpha(y):
     d = min(y, SCRIM[3] - 1 - y)
     return SCRIM_ALPHA if d >= SCRIM_EDGE else SCRIM_ALPHA * d // SCRIM_EDGE
 
-def scrim_image():
+def lscrim_alpha(y):
+    """np_scrim_lyrics.png's alpha on row y of its LSCRIM[3] rows: LSCRIM_ALPHA in the middle, easing (smoothstep 3t^2 - 2t^3) to 0 over LSCRIM_EDGE rows at both ends."""
+    d = min(y, LSCRIM[3] - 1 - y)
+    return LSCRIM_ALPHA if d >= LSCRIM_EDGE else LSCRIM_ALPHA * (3 * d * d * LSCRIM_EDGE - 2 * d ** 3) // LSCRIM_EDGE ** 3
+
+def scrim_image(lyrics=False):
     from PIL import Image
-    im = Image.new('RGBA', SCRIM[2:], (0, 0, 0, 0))
-    for y in range(SCRIM[3]): im.paste((0, 0, 0, scrim_alpha(y)), (0, y, SCRIM[2], y + 1))
+    box, alpha = (LSCRIM, lscrim_alpha) if lyrics else (SCRIM, scrim_alpha)
+    im = Image.new('RGBA', box[2:], (0, 0, 0, 0))
+    for y in range(box[3]): im.paste((0, 0, 0, alpha(y)), (0, y, box[2], y + 1))
+    return im
+
+def dot_alpha(x, y):
+    """np_dot.png's alpha on pixel (x, y) of its DOT square: a white disc of diameter DOT, 8 x 8 samples a pixel (coverage 0..255)."""
+    n, c = 8, DOT / 2
+    hit = sum((x + (i + .5) / n - c) ** 2 + (y + (j + .5) / n - c) ** 2 <= c * c for i in range(n) for j in range(n))
+    return round(255 * hit / (n * n))
+
+def dot_image():
+    from PIL import Image
+    im = Image.new('RGBA', (DOT, DOT)); px = im.load()
+    for y in range(DOT):
+        for x in range(DOT): px[x, y] = (255, 255, 255, dot_alpha(x, y))
     return im
 
 def shadow_alpha(x, y):
@@ -188,12 +219,14 @@ def write_images(rootfs_xx):
         assert not os.path.exists(p), p
         if name == 'np_tint': tint_gradient().save(p, optimize=True)     # PIL PNG output has no timestamp
         elif name == 'np_scrim': scrim_image().save(p, optimize=True)
+        elif name == 'np_scrim_lyrics': scrim_image(True).save(p, optimize=True)
+        elif name == 'np_dot': dot_image().save(p, optimize=True)
         elif name == 'np_shadow': shadow_image().save(p, optimize=True)
         else: shutil.copyfile(os.path.join(mod_icons.PNG, name + '.png'), p)
         os.chmod(p, IMG_MODE); os.utime(p, (IMG_MTIME, IMG_MTIME))
     return list(NP_IMAGES)
 
-NP_IMAGES = sorted(mod_icons.np_names() + ['np_tint', 'np_scrim', 'np_shadow'])
+NP_IMAGES = sorted(mod_icons.np_names() + ['np_tint', 'np_scrim', 'np_scrim_lyrics', 'np_dot', 'np_shadow'])
 
 def added_rels(stock_rootfs=None):
     """Rootfs-relative paths of the added images (for fwtool --allow-added; all new in any tree)."""
@@ -243,9 +276,9 @@ def apply_ui(root):
     local.children.insert(0, tint)
 
     # the scrim behind the text of the lyrics and info pages (the first child: painted under the lines, never takes a touch)
-    for page in (lyr, info):
-        page.children.insert(0, awtk_ui.Widget('image', *SCRIM, [('name', 'img_np_scrim_' + page.name.removeprefix('view_')), ('image', 'np_scrim'), ('draw_type', 'default'),
-                                                          ('clickable', 'false'), ('sensitive', 'false')]))
+    for page, box, img in ((lyr, LSCRIM, 'np_scrim_lyrics'), (info, SCRIM, 'np_scrim')):
+        page.children.insert(0, awtk_ui.Widget('image', *box, [('name', 'img_np_scrim_' + page.name.removeprefix('view_')), ('image', img), ('draw_type', 'default'),
+                                                       ('clickable', 'false'), ('sensitive', 'false')]))
 
     # slide_view_view spans the window down to the times row so the controls it parents (more, fav, times, dots) stay
     # inside it; later siblings (btn_return, slider, buttons) sit on top for touch
@@ -273,6 +306,10 @@ def apply_ui(root):
 
     # ---- page 2: lyrics (below the grabber, above the dots); page 3: info (album, genre, year, size, location)
     lrc = find(root, 'view_lrc'); move(lrc, M, LYR_Y, W - 2 * M, LYR_H)
+    # our own lyrics (patch/lyrics.c, docs/modules/lyrics.md): a scroll_view (it clips its children) on the stock list's rectangle, empty in the asset, sensitive (it takes the touches: patch/lyrics.c listeners; neither axis slidable, so it never scrolls itself); the
+    # payload fills it with a pool of labels and hides view_lrc. Without the payload the stock list shows and this box is empty.
+    assert lrc in lyr.children and root.find('np_lyrics') is None
+    lyr.children.insert(lyr.children.index(lrc) + 1, awtk_ui.Widget('scroll_view', M, LYR_Y, W - 2 * M, LYR_H, [('name', 'np_lyrics'), ('floating', 'false')]))
     msg = find(root, 'label_lyricmsg'); move(msg, 0, LYR_Y + (LYR_H - 28) // 2, W, 28); text_style(msg, META_PX, GREY, 'center')
     mqa = find(root, 'img_mqa'); move(mqa, mqa.x, 22, mqa.w, mqa.h)
     y = 52
@@ -314,7 +351,7 @@ def apply_ui(root):
     for n in ('img_repeata', 'img_repeatb'): w = find(root, n); move(w, SLIDER[0], SLIDER[1] + SLIDER[3] // 2 + 7, w.w, w.h)
 
     after = [w.name for w in root.walk() if w.name]
-    assert sorted(set(names)) == sorted(set(after) - {'img_np_tint', 'np_remaining', 'np_elapsed', 'img_np_scrim_lyrics', 'img_np_scrim_info', 'img_np_shadow'}), 'a widget name was lost'
+    assert sorted(set(names)) == sorted(set(after) - {'img_np_tint', 'np_remaining', 'np_elapsed', 'img_np_scrim_lyrics', 'img_np_scrim_info', 'img_np_shadow', 'np_lyrics'}), 'a widget name was lost'
     assert album in info.children
     return root
 
@@ -412,6 +449,16 @@ def apply_style(th):
             s.set('text_align_h', 1, awtk_style.T_INT32)       # as default.bin (centre)
             s.set_color('bg_color', '#00000000'); s.set_color('border_color', '#00000000')
             s.set('font_size', 18); s.set_color('text_color', rgb); th.items.append(s)
+    # our lyrics page's labels (patch/lyrics.c np_lyric_style, bold face / np_lyric_cjk_style, default font): white, as label styles (a style is found by widget type and name)
+    for name, face in LYRIC_LABEL_STYLES.items():
+        assert not th.find(style=name)
+        for st in BTN_STATES:
+            s = awtk_style.Item('label', name, st)
+            s.set('text_align_h', LYR_LEFT, awtk_style.T_INT32)       # left, the Apple Music lyrics look (the hidden stock list_item styles stay centred)
+            s.set_color('bg_color', '#00000000'); s.set_color('border_color', '#00000000')
+            s.set('font_size', LYR_FONT); s.set('spacer', LYR_SPACER, awtk_style.T_INT32); s.set_color('text_color', LYR_WHITE)
+            if face: s.set('font_name', face)
+            th.items.append(s)
     return th
 
 def edit_style(path):

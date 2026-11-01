@@ -30,7 +30,7 @@ and measure the font from the tree being built.
 | Fonts and theme | [Fonts](modules/fonts.md), [theme format/palette](modules/theme.md) |
 | Navigation | [Menu](modules/menu.md), [settings](modules/settings.md), [navbars](modules/navbar.md) |
 | Library | [Lists](modules/lists.md), [rows](modules/rows.md), [Albums](modules/albums.md), [album page](modules/album-page.md), [search](modules/search.md) (preview: `tools/preview_search.py`) |
-| Playback | [Now Playing](modules/nowplaying.md), [More sheet](modules/playmore.md), [mini player](modules/minibar.md) |
+| Playback | [Now Playing](modules/nowplaying.md), [lyrics page](modules/lyrics.md), [More sheet](modules/playmore.md), [mini player](modules/minibar.md) |
 | Home content | [Recently Played](modules/recent.md), [Daily Mix](modules/dailymix.md) |
 | Extras | [Playlists](modules/playlists.md), [Songs](modules/songs.md), [Podcasts](modules/podcasts.md), [Cassette Mode](modules/tape.md), [Vinyl Mode](modules/vinyl.md), [virtual iPod](modules/ipod.md), [iPod Cover Flow](modules/ipod-coverflow.md), [Keyboard](modules/keyboard.md) |
 | System appearance | [Boot logo/slides](modules/boot.md), [icons](modules/icons.md), [battery](modules/battery.md), [pull-down](modules/pulldown.md), [lock screen](modules/lockscreen.md), [wallpaper](modules/wallpaper.md), [About/polish](modules/polish.md), [dialogs, power-off splash](modules/overlays.md) |

@@ -22,7 +22,7 @@ from pathlib import Path
 
 ZIP = paths.ZIP     # this checkout's firmware/, else the main checkout's (tools/paths.py)
 ZIP_SHA = 'db7bdbc42ffe6d5c1e3fdca9363edb78a01898b9a725c34793394cf6abfa33c0'
-TAG = 'V2.1qE'
+TAG = 'V2.1qF'
 RESTORE_TAG = 'V2.1R'
 # The asset steps after the payload, in order: name -> (module, extra args). Each
 # tools/<module>.py WORKDIR WORKDIR [args] edits the tree in place (venv python: Pillow, fontTools);
@@ -79,7 +79,7 @@ def pack_args(stock):
     """The --allow-added / --allow-removed flags of the release repack."""
     import pod_pages, pod_ui
     added = [x for rel in pod_ui.asset_rels(pod_pages.PAGES) for x in ('--allow-added', rel)]
-    for module, args in STEPS:
+    for module, args in [(m, []) for m in BASE] + STEPS:
         rels = getattr(importlib.import_module(module), 'added_rels', None)
         added += [x for rel in (rels(os.path.join(stock, 'rootfs'), *args) if rels else []) for x in ('--allow-added', rel)]
     return [x for p in mod_space.REMOVE for x in ('--allow-removed', p)], added

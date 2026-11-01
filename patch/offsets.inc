@@ -413,6 +413,50 @@
 #define EVT_WINDOW_TO_FG 0x12d
 #define NP_BAR_STOCK 0xff000000u
 #define NP_BAR_LUM_MAX 119000000u
+/* The lyrics page (patch/lyrics.c, docs/modules/lyrics.md). The view np_lyrics is LY_W x LY_VIEW_H (tools/mod_nowplaying.py LYR_*: the stock list's rectangle);
+ * the current line's top is LY_ANCHOR (0.35 of the view) down it. The text is LY_FONT px, left aligned, in a label LY_W wide (the page's 28 px margin each side). A text row is LY_LINE_H px (the font plus the style's `spacer`, tools/mod_nowplaying.py LYR_SPACER: AWTK's own row pitch inside a wrapped label), a line has 1..LY_LINES_MAX of them (a wrapped line) and LY_GAP below. A line of only Latin, Greek and Cyrillic takes the bold face (font file lyrics.ttf), any other line the default font (AWTK has no per-glyph fallback).
+ * The labels are a pool of LY_POOL (slot = line % LY_POOL; a view touches at most 6 lines of the smallest pitch, 9 with the one above and below). Lines are read from the stock rows
+ * (at most LY_MAX; each row's int property "lrc_time" and its text, LY_BUF bytes). A move of the anchored line is a damped spring of LY_SPRING_MS per line (a table of 65 entries, overshoot cut at LY_OVERSHOOT_MAX px), each line starting LY_DELAY_MS
+ * (shrinking 20/21 a line) after the one before, in LY_FRAME_MS steps; a move over LY_SNAP_LINES lines jumps. The window of lines laid out round the anchor is LY_POOL, those
+ * further than LY_OFF_MAX px are not measured. Touch: a vertical drag over LY_TAP_PX scrolls, LY_IDLE_MS after the last touch the lines come back, a tap under LY_TAP_PX (not within
+ * LY_COAST_MS of a started move) seeks (seek_time) and the tick leaves the lines alone for LY_HOLD_MS. Opacity table 1.0 / 0.45 / 0.32 / 0.24 / 0.18, times an edge factor over the last LY_FADE px at the top and bottom of the view. LY_WRAP_SLACK px (LY_WRAP_SLACK_CJK for the default font): what a word wrap wastes of a row. get_playtime is the stock call the lyric timers compare "lrc_time" with (0x5385e0). */
+#define LY_W 264
+#define LY_VIEW_H 244
+#define LY_ANCHOR 85
+#define LY_FONT 30
+#define LY_LINE_H 34
+#define LY_GAP 12
+#define LY_FADE 56
+#define LY_BROWSE_OP 153
+#define LY_LINES_MAX 3
+#define LY_POOL 20
+#define LY_MAX 400
+#define LY_BUF 256
+#define LY_FRAME_MS 40
+#define LY_SPRING_MS 640
+#define LY_OVERSHOOT_MAX 6
+#define LY_DELAY_MS 50
+#define LY_SNAP_LINES 4
+#define LY_OFF_MAX 400
+#define LY_IDLE_MS 3000
+#define LY_TAP_PX 10
+#define LY_COAST_MS 200
+#define LY_HOLD_MS 1000
+#define LY_WRAP_SLACK 56
+#define LY_WRAP_SLACK_CJK 8
+/* The interlude dots (docs/modules/lyrics.md, stage 4): LY_DOT px white circles (the image np_dot), LY_DOT_PITCH apart from x LY_DOT_X, centred on the anchor row (LY_DOT_PAD = LY_LINE_H + LY_GAP: the lines sit
+ * that far below while they show) for a gap before the first line of at least LY_DOT_MIN_S seconds. Dot k fills from LY_DOT_DIM (0.25) to 255 as the k-th third of the gap (less its last fade) passes, the group breathes
+ * between 255 and LY_DOT_BREATH_MIN every LY_DOT_BREATH_MS, and fades out over the last LY_DOT_FADE_MS. One LY_DOT_MS timer exists while they show and the player plays. */
+#define LY_DOT 10
+#define LY_DOT_PITCH 18
+#define LY_DOT_X 2
+#define LY_DOT_PAD 46
+#define LY_DOT_MIN_S 4
+#define LY_DOT_MS 80
+#define LY_DOT_DIM 64
+#define LY_DOT_FADE_MS 500
+#define LY_DOT_BREATH_MS 2400
+#define LY_DOT_BREATH_MIN 160
 
 /* ---------------------------------------------------------------------------
  * The mini player bar on the Home instance of the menu (patch/minibar.c, docs/modules/minibar.md; the widgets are in
