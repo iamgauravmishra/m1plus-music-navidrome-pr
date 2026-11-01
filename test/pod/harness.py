@@ -477,6 +477,11 @@ class Machine:
             self.calls.append(('widget_move', a0, a1, a2))
         elif name == 'widget_restack':   # the menu lists keep their rows' children in page order: recorded as (row, index)
             self.calls.append(('widget_restack', a0, a1))
+        elif name == 'get_battery_capacity':   # stock: the bucketed capacity, left in power_capacity as well (patch/battery.c); a test sets stock_cap
+            ret = getattr(self, 'stock_cap', 40); self.setword(pod.DATA['POWER_CAPACITY'][0], ret)
+            self.calls.append(('get_battery_capacity',))
+        elif name == 'widget_set_need_relayout_children':
+            self.calls.append(('widget_set_need_relayout_children', a0)); ret = 0
         elif name == 'widget_resize':
             self.props[(a0, 'w')], self.props[(a0, 'h')] = a1, a2
             if self.mem_geometry: self.setword(a0 + 8, a1); self.setword(a0 + 0xc, a2)   # w, h @8, 0xc

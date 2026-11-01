@@ -1,8 +1,9 @@
 # Payload safety
 
 - **Keep the approved entry points.** Home icon tap, guarded Home initialization,
-  Now Playing initialization, More-dialog initialization, the podcast tag-copy call site and
-  the previously empty `scroll_view` event slot. See [payload](payload.md) and `AGENTS.md` for
+  Now Playing initialization, More-dialog initialization, the podcast tag-copy call site, the
+  status bar's battery-capacity call site (Battery Percentage, off by default, not on the boot path)
+  and the previously empty `scroll_view` event slot. See [payload](payload.md) and `AGENTS.md` for
   their scope. Do not add global paint or main-loop work.
 - **Treat startup as critical.** Home initialization needs the crash marker. The tag-reader
   hook is also reachable through Memory Playback at boot: run stock's copy first and restrict

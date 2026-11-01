@@ -38,7 +38,7 @@ Settings is iOS-style grouped cards; a grey value at the right shows the current
 - **Home Screen, Library, Now Playing, Keyboards:** the pages below.
 - **Playback:** **Play Mode** and **EQ** open the stock pages (the value shows the mode and the preset); **All Playback Settings** opens the stock list (Gapless is there).
 - **System:** **Display** opens the stock page (Language is on the stock System Settings list), **Keyboards** is below, **About** is our own page (the build and firmware versions; Device: model, serial number, Wi-Fi MAC and IP address; Storage: card capacity and free space), **All System Settings** opens the stock list.
-- **Home Screen:** the Recent Albums and Daily Mix switches; Regenerate Daily Mix appears while Daily Mix is on; then Main Menu and Extras, as above.
+- **Home Screen:** the Recent Albums and Daily Mix switches; Regenerate Daily Mix appears while Daily Mix is on; then Main Menu and Extras, as above; and under Status Bar the Battery Percentage switch (off by default), which shows the battery's exact charge, such as 87%, beside the battery icon (the charge is the fuel gauge's reading, not the voltage steps stock shows).
 - **Library:** Update Library; **Album Order** (Artist or Album, a picker with a check mark, for Albums and Cover Flow); under Cover Flow, landscape presentation and Rebuild Covers.
 - **Now Playing:** under Cassette Mode, **Theme** (Normal, Chrome or Metal; a picker, applied the next time Cassette Mode opens).
 - **Keyboards:** English is always on; switch on Chinese (Pinyin) to get a language key and pinyin input on the on-screen keyboard (candidates above the keys, swipe them sideways, space takes the first).

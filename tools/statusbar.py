@@ -14,7 +14,8 @@ Usage: imported by tools/mod_theme.py (system bar) and tools/mod_pulldown.py (pu
 
 EDGE, GAP = 10, 4                # left margin of the left group and right margin of the battery; spacing inside both groups
 SMALL_PX, CLOCK_PX = 16, 18      # volume number, clock
-VOLUME_W = 30                    # the volume label's box ("100" at 16 px)
+PCT_PX = 13                      # the battery percentage label (patch/battery.c; hidden unless Settings > Home Screen > Battery Percentage is on): white, right-aligned in the right group
+VOLUME_W = 30                 # the volume label's box ("100" at 16 px)
 CLOCK_X, CLOCK_W = 104, 90       # centre 149: "12:59 PM" (66 px at 18) spans 116..182
 BAR_BG = '#000000'               # the bar's colour (system_bar's own style; the pull-down panel behind it is #141414)
 STATES = ('normal', 'disable', 'focused')

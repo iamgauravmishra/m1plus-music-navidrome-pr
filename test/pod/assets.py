@@ -296,16 +296,17 @@ def run(ctx):
         return (w.type, w.name, w.x, w.y, w.w, w.h if (clock_h or w.name != 'bar_dclock') else None, props)
     # the one difference by design: the Screenshot countdown's camera (pod_shot, hidden, patch/shot.h) is in the real bar only; the pull-down covers
     # the bar while it is open, and the payload looks the camera up in the window manager's tree (the real bar), so the pull-down gets no copy
-    def own(bar): return [w for w in bar.walk() if w is not bar and w.name != 'pod_shot']
+    # and the Battery Percentage label (pod_pct in the real bar, pod_pct_dd in the pull-down's: hidden, test/pod/battery.py checks both)
+    def own(bar): return [w for w in bar.walk() if w is not bar and w.name not in ('pod_shot', 'pod_pct', 'pod_pct_dd')]
     ref = [sig(w) for w in own(real)]
     font = Ttf(os.path.join(WORK, 'rootfs/release/assets/default/raw/fonts/default.ttf'))
     for theme in ('default', 'theme1'):
         dd = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets', theme, 'raw/ui/dialog/dropdown_dialog.bin'), 'rb').read())
         pb = dd.find('view_sysbar')
         # the pull-down's own view_sysbar and the system_bar window: the clock's h differs in the file only (h=100% resolves to 30 under its self_layout)
-        got = [sig(w, False) for w in pb.walk() if w is not pb]
+        got = [sig(w, False) for w in own(pb)]
         want = [sig(w, False) for w in own(real)]
-        expect(got == want and [w.name for w in pb.walk()][1:] == [w.name for w in own(real)] and not any(w.name == 'pod_shot' for w in pb.walk()),
+        expect(got == want and [w.name for w in own(pb)] == [w.name for w in own(real)] and not any(w.name == 'pod_shot' for w in pb.walk()),
                f'{theme}: the pull-down\'s bar has the real bar\'s {len(want)} widgets in order, with the same geometry, images, fonts, colours, alignment and layouts'
                + ('' if got == want else f' (differs: {[(a[1], a[2:]) for a, b in zip(got, want) if a != b][:3]})'))
         expect((pb.x, pb.y, pb.w, pb.h) == (0, 0, 320, 30) and real.h == 30 and (dd.x, dd.y) == (0, -340)
@@ -314,7 +315,7 @@ def run(ctx):
         vol, clk, lv, rv = (pb.find(n) for n in ('label_volume', 'bar_dclock', 'view_bar_left', 'view_bar_right'))
         expect(all(vol.get(f'style:{st}:font_size') == '16' and vol.get(f'style:{st}:text_align_v') == 'middle' for st in ('normal', 'disable', 'focused'))
                and clk.get('style:normal:font_size') == '18' and (clk.x, clk.w) == (104, 90) and lv.get('children_layout') == 'default(r=1,c=0,x=10,s=4)'
-               and rv.get('children_layout') == 'default(r=1,c=0,a=right,s=4)' and pb.find('img_battery').x + 18 == 310,
+               and rv.get('children_layout') == 'default(r=1,c=0,a=right,s=4)' and pb.find('img_battery').x + 22 == 310,
                f'{theme}: volume 16 px middle, clock 18 px at x 104 (90 wide), left group from x 10, right group 4 px apart, battery outline ends 10 px from the edge')
         expect(StbText(font, 16).layout('100')[1] <= vol.w and StbText(font, 18).layout('12:59 PM')[1] <= clk.w,
                f'{theme}: "100" fits the volume label and "12:59 PM" (12 h mode) the clock box in the shipped font')

@@ -11,7 +11,7 @@ image (stock child order), so the image is the outline only and the fill lands i
 Same drawing at both sizes (stroke 1.5 px like the Tabler status icons, rounded body corners, a 2 px
 rounded nub), only the canvas and the body rectangle differ; each widget keeps its stock geometry:
 
-  STATUS  18 x 11 canvas, body 16 x 11, fill (pgbar_battery) 12 x 7 at (2, 2)   bar_power/charge/lowpower
+  STATUS  22 x 12 canvas, body 20 x 12, fill (pgbar_battery) 16 x 8 at (2, 2)   bar_power/charge/lowpower
   LOCK    34 x 12 canvas, body 22 x 12 at x 9, fill 16 x 6 at (12, 3)            screens_battery/charge/lowbattery
 
 `fill_gap` checks the fill rectangle stays inside the outline's inner edge. Output is a plain zlib
@@ -28,7 +28,7 @@ class Spec:
     def __init__(self, canvas, body, nub, radius, fill, bolt_h):
         self.canvas, self.body, self.nub, self.radius, self.fill, self.bolt_h = canvas, body, nub, radius, fill, bolt_h
 
-STATUS = Spec((18, 11), (0, 0, 16, 11), (16, 3, 2, 5), 2.5, (2, 2, 12, 7), 7.0)
+STATUS = Spec((22, 12), (0, 0, 20, 12), (20, 3, 2, 6), 3.0, (2, 2, 16, 8), 8.0)
 LOCK = Spec((34, 12), (9, 0, 22, 12), (31, 4, 2, 4), 3.0, (12, 3, 16, 6), 8.0)
 STATES = {'normal': (WHITE, False), 'charge': (CHARGE, True), 'low': (LOW, False)}
 

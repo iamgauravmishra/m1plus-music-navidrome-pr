@@ -22,6 +22,7 @@ PLAYMORE = (0x479cc4, 8)    # dialog_playmore_dialog_init: the More menu hook (p
 ID3_SITE = (0x4dff4c, 4)    # get_id3info: the jalr strcpy of the parsed path, now jal pc_id3_path (patch/pcmodel.c, docs/modules/podcasts.md "Tags")
 QUERY = (0x5ee77c, 0x5ee9ac)   # toolsQueryDbTable, toolsQueryDbTableAndSort: the PIC prologue's first two words, now `j` into the payload and a nop (patch/pcmodel.c, docs/modules/payload.md hook 6)
 SCAN_SITE = (0x5ea6a8, 4)  # the library scan's folder test: the jalr strcmp(name, "."), now jal pod_scan_dir (patch/common.c, docs/modules/payload.md hook 5)
+BATTERY_SITE = (0x5450f8, 4)  # show_sysbar_face: the jalr get_battery_capacity, now jal bp_capacity (patch/battery.c, docs/modules/payload.md hook 8)
 SCROLL_SLOT =(0x97a330, 4) # g_scroll_view_vtable.on_event_before_children: 0 in stock, the payload's m1plus_scroll_event (patch/scroll.c)
 COVER = 264                 # the cover size demo writes (tools/mod_lockscreen.py, Now Playing's art)
 COVER_IMM = (0x4df1dc, 0x4df1e0, 0x4df21c, 0x4df220)
@@ -74,6 +75,7 @@ def main():
     allow(va_to_off(s, PLAYMORE[0]), PLAYMORE[1], 'more dialog init hook')
     allow(va_to_off(s, ID3_SITE[0]), ID3_SITE[1], 'tag reader hook')
     allow(va_to_off(s, SCAN_SITE[0]), SCAN_SITE[1], 'library scan hook')
+    allow(va_to_off(s, BATTERY_SITE[0]), BATTERY_SITE[1], 'battery percentage hook')
     for q in QUERY: allow(va_to_off(s, q), 8, 'library query hook')
     allow(va_to_off(s, SCROLL_SLOT[0]), SCROLL_SLOT[1], 'scroll vtable slot')
     markers = mn.marker_edits()
@@ -123,6 +125,10 @@ def main():
     o = va_to_off(s, SCAN_SITE[0]); sw = struct.unpack_from('<I', s, o)[0]; mw = struct.unpack_from('<I', m, o)[0]
     good = sw == 0x0320f809 and mw >> 26 == 3 and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s))
     print(f'library scan hook {SCAN_SITE[0]:#x}: {sw:#010x} -> {mw:#010x}', 'ok' if good else 'WRONG')
+    ok = ok and good
+    o = va_to_off(s, BATTERY_SITE[0]); sw = struct.unpack_from('<I', s, o)[0]; mw = struct.unpack_from('<I', m, o)[0]
+    good = sw == 0x0320f809 and mw >> 26 == 3 and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s))
+    print(f'battery percentage hook {BATTERY_SITE[0]:#x}: {sw:#010x} -> {mw:#010x}', 'ok' if good else 'WRONG')
     ok = ok and good
     o = va_to_off(s, SCROLL_SLOT[0]); sw = struct.unpack_from('<I', s, o)[0]; mw = struct.unpack_from('<I', m, o)[0]
     good = sw == 0 and 0xb00000 <= mw < 0xb00000 + (len(m) - len(s)) and mw % 4 == 0   # an empty slot, now a word inside the payload

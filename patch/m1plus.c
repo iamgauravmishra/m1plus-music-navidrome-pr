@@ -49,7 +49,8 @@ enum {
     ACT_SORTSET = 30,
     ACT_THEMESET = 31,
     ACT_INFO = 33,
-    ACT_PCSEARCH = 34
+    ACT_PCSEARCH = 34,
+    ACT_BATTPCT = 36
 };
 
 extern void shot_start(void); /* patch/shot.c: the Screenshot row: confirm, 5 s countdown, capture; or cancel */
@@ -223,7 +224,7 @@ struct swctx {
     int action;
     void *img;
 };
-static struct swctx sw_slot[7] __attribute__((section(".scratch")));
+static struct swctx sw_slot[8] __attribute__((section(".scratch")));
 
 static void switch_show(void *img, int on) {
     if (img) image_base_set_image(img, on ? "sset_on" : "sset_off");
@@ -250,6 +251,7 @@ static int switch_state(int action) {
            : action == ACT_KB_EN    ? 1 /* English: always on */
            : action == ACT_KB_ZH    ? kb_zh_setting()
            : action == ACT_PCSEARCH ? pcsearch_setting()
+           : action == ACT_BATTPCT  ? battpct_setting()
                                     : coverflow_landscape();
 }
 
@@ -263,6 +265,7 @@ static int on_switch(void *ctx, void *e) {
          : s->action == ACT_DAILY    ? dailymix_toggle()
          : s->action == ACT_KB_ZH    ? kb_zh_toggle()
          : s->action == ACT_PCSEARCH ? pcsearch_toggle()
+         : s->action == ACT_BATTPCT  ? battpct_toggle()
                                      : coverflow_landscape_toggle(); /* -1: not saved, unchanged */
     if (on >= 0) switch_show(s->img, on);
     if (s->action == ACT_DAILY) regen_show();
@@ -278,6 +281,7 @@ static void bind_switch(void *win, unsigned i, const struct pod_row *row) {
             : row->action == ACT_KB_EN    ? 4
             : row->action == ACT_KB_ZH    ? 5
             : row->action == ACT_PCSEARCH ? 6
+            : row->action == ACT_BATTPCT  ? 7
                                           : 0;
     snprintf(name, sizeof name, "pod_switch%u", i);
     sw_slot[k].action = row->action;
@@ -388,7 +392,7 @@ static void page_refresh(void *win, const struct pod_page *page) {
         int kind = row_value(row);
         if (row->action == ACT_STARTUP || row->action == ACT_LANDSCAPE || row->action == ACT_SHELF ||
             row->action == ACT_DAILY || row->action == ACT_KB_EN || row->action == ACT_KB_ZH ||
-            row->action == ACT_PCSEARCH) {
+            row->action == ACT_PCSEARCH || row->action == ACT_BATTPCT) {
             snprintf(name, sizeof name, "pod_switch%d", i);
             switch_show(widget_lookup(win, name, 1), switch_state(row->action));
         } else if (row->action == ACT_INFO) {
@@ -454,7 +458,7 @@ static int open_page(int index, int as_home) {
         const struct pod_row *row = &page->rows[i];
         if (row->action == ACT_STARTUP || row->action == ACT_LANDSCAPE || row->action == ACT_SHELF ||
             row->action == ACT_DAILY || row->action == ACT_KB_EN || row->action == ACT_KB_ZH ||
-            row->action == ACT_PCSEARCH)
+            row->action == ACT_PCSEARCH || row->action == ACT_BATTPCT)
             bind_switch(win, i, row), refresh = 1;
         else {
             if (row->action != ACT_INFO) pod_bind(win, row->name, on_row, row); /* an information row takes no tap */
