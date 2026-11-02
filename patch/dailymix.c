@@ -142,27 +142,6 @@ static int dm_read(const char *path, void *buf, unsigned max) {
     return n;
 }
 
-/* Temp file, fsync, rename onto the target, fsync of the directory (patch/home.c home_write_atomic, for two parts that may hold zero bytes). 0 on success. */
-static int dm_write_atomic(const char *path, const char *tmp, const void *a, unsigned na, const void *b, unsigned nb) {
-    int fd, ok, d;
-    if (!pod_card_mounted()) return -1; /* never write to the internal flash under the mount point */
-    mkdir(CARD_DIR,
-          0755); /* the card folder, then the Daily Mix's own (EEXIST is fine; a failure shows in the open below) */
-    mkdir(MIX_DIR, 0755);
-    fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (fd < 0) return -1;
-    ok = write(fd, a, na) == (int)na && (!nb || write(fd, b, nb) == (int)nb) && fsync(fd) == 0;
-    ok = (close(fd) == 0) && ok;
-    if (!ok || rename(tmp, path) != 0) {
-        unlink(tmp);
-        return -1;
-    }
-    d = open(MIX_DIR, O_RDONLY, 0);
-    if (d < 0) return -1;
-    ok = fsync(d) == 0;
-    return (close(d) == 0 && ok) ? 0 : -1;
-}
-
 /* The local calendar day as a count of days since 1970-01-01 (0: the clock is not set, any time before 2020). */
 static unsigned dm_today(void) {
     long t = time((long *)0);
@@ -1107,7 +1086,7 @@ static int dm_save_art(const job_t *j) {
     hdr[4] = DM_W & 255, hdr[5] = DM_W >> 8, hdr[6] = DM_H & 255, hdr[7] = DM_H >> 8;
     memcpy(hdr + 8, &j->aseed, 4);
     memcpy(hdr + 12, &ck, 4);
-    return dm_write_atomic(MIX_ART_FILE, MIX_ART_TMP, hdr, DM_ART_HEAD, j->px, DM_W * DM_H * 2);
+    return pod_card_write(MIX_DIR, MIX_ART_FILE, MIX_ART_TMP, hdr, DM_ART_HEAD, j->px, DM_W * DM_H * 2);
 }
 
 /* The art file read back into the card's bitmap; 1 when it is whole and was made for the mix's art seed. */
@@ -1171,7 +1150,7 @@ static int dm_ph_commit(job_t *j) {
             dm_put(&o, end,
                    "\n"); /* (every path was checked by dm_path_ok in the copy phase: the file holds them all) */
     *o = 0;
-    if (dm_write_atomic(MIX_FILE, MIX_TMP, buf, (unsigned)(o - buf), (const void *)0, 0) != 0) return 0;
+    if (pod_card_write(MIX_DIR, MIX_FILE, MIX_TMP, buf, (unsigned)(o - buf), (const void *)0, 0) != 0) return 0;
     dm_save_art(
         j); /* (after the mix file: a failed mix file leaves yesterday's art file alone; a failed art file costs the next start a re-render) */
     if (!dm_load())

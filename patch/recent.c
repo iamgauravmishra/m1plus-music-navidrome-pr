@@ -14,7 +14,7 @@
  * (patch/minibar.c, the Home menu in front) and Now Playing's tick (patch/nowplaying.c). The album's IDENTITY is its title, ASCII case
  * folded (rc_id: the stock list groups albums by title alone), compared with the most recent one held in RAM first: nothing is read or
  * written while it is the same. An empty album tag is not recorded. A new album goes to the front of RECENT_FILE, an album already in
- * it moves there, at most RC_MAX are kept, and the file is written (home_write_atomic) only then. The file (tools/pod_recent.py is the
+ * it moves there, at most RC_MAX are kept, and the file (on the card, pod_card_write) is written only then, from a fresh read of it (a card swap never carries a list over). The file (tools/pod_recent.py is the
  * model the tests compare with), strictly validated when read (anything else is an empty list):
  *     M1R2\n
  *     <id 8 hex>\t<cover key 8 hex>\t<0|1>\t<album>\t<artist>\t<path>\n      (one line per album, the most recent first)
@@ -127,6 +127,7 @@ static void rc_load(void) {
     unsigned i, j, key, ckey;
     rc.n = 0;
     rc.loaded = 1;
+    if (!pod_card_mounted()) return; /* the list belongs to the card: no card, no list */
     fd = open(RECENT_FILE, O_RDONLY, 0);
     if (fd < 0) return;
     n = read(fd, buf, sizeof buf);
@@ -173,7 +174,7 @@ static void rc_puthex(char **o, const char *end, unsigned v) {
     rc_put(o, end, hex);
 }
 
-/* The list as the file holds it; 0 when it was written. */
+/* The list as the file holds it, on the card (pod_card_write); 0 when it was written. */
 static int rc_save(void) {
     char buf[RC_FILE_MAX + 1], *o = buf;
     const char *end = buf + RC_FILE_MAX;
@@ -192,7 +193,7 @@ static int rc_save(void) {
         rc_put(&o, end, "\n");
     }
     *o = 0;
-    return home_write_atomic(RECENT_FILE, RECENT_TMP, buf);
+    return pod_card_write(CARD_DIR, RECENT_FILE, RECENT_TMP, buf, (unsigned)(o - buf), (const void *)0, 0);
 }
 
 /* s into out (size bytes with the NUL), control bytes as spaces, cut before a UTF-8 continuation byte that would be split. */
@@ -230,7 +231,8 @@ int recent_note(void *t) {
     if (!*album) return 0; /* an untagged album is not recorded */
     key = rc_id(album);
     if (rc.loaded && rc.n && rc.ent[0].key == key) return 0; /* the common case: nothing changed, nothing read */
-    if (!rc.loaded) rc_load();
+    if (!pod_card_mounted()) return 0; /* the list lives on the card: no card, nothing recorded */
+    rc_load(); /* a change is rare: start from what the card in the slot holds now, never from a list kept from another card */
     if (rc.n && rc.ent[0].key == key) return 0;
     for (at = 0; at < rc.n && rc.ent[at].key != key; ++at) {
     }
@@ -253,7 +255,7 @@ int recent_note(void *t) {
         memcpy(&rc.ent[i], &rc.ent[i - 1],
                sizeof e); /* (an explicit call: the payload links no compiler-made memcpy) */
     memcpy(&rc.ent[0], &e, sizeof e);
-    rc_save(); /* a failed write is tried again with the next album change; the list in RAM is current */
+    rc_save(); /* a failed write loses nothing but this entry: the list in RAM is current until the next read */
     return 1;
 }
 

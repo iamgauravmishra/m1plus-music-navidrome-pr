@@ -58,7 +58,7 @@ Vertical stack from the card's bottom: 16 px, artists 164..204, 4 px, title 122.
 - **`/mnt/mmc/.m1plus/daily-mix/art`** (`MIX_ART_FILE`): `M1XA`, width, height (u16), the art seed (u32), the FNV-1a of the pixels (u32), then 296 x 220 RGB565 words (130,256 bytes). Read whole (`dm_load_art`): the size, magic,
   the size fields, **the art seed of the mix file** and the checksum must all agree, else the art is made again from the mix's own tones and seed (no mix change). It is the *uncornered* art; the bitmap gets its corners when it is expanded.
 - **`/mnt/data/m1plus/home-daily-mix`** (`DAILY_SET_FILE`): the Settings switch, exactly `0` or `0\n` off, anything else or no file on (read by `set_read`, docs/modules/settings.md), written atomically, a failed save changes nothing. It stays in `/mnt/data`: a device preference, not part of a card.
-- All writes are `dm_write_atomic` (temp file, `fsync`, `rename`, directory `fsync` of `MIX_DIR`, after the mounted-card check and the two `mkdir`s). The mix file is written **before** the art file, and both at the very end of the job (the `COMMIT` phase), so a job that fails or is dropped has written nothing.
+- All writes are `pod_card_write` (patch/common.c: temp file, `fsync`, `rename`, directory `fsync` of `MIX_DIR`, after the mounted-card check and the two `mkdir`s). The mix file is written **before** the art file, and both at the very end of the job (the `COMMIT` phase), so a job that fails or is dropped has written nothing.
 
 ## The art (`dm_*` in C; `tools/pod_dailymix.py` `art(tones, seed)` is the model, **integers only; the test compares the pixels**)
 

@@ -43,8 +43,9 @@
     "/mnt/data/m1plus/home-menu" /* the menu's visible items in order, one digit (item id) each (patch/menu.c); missing or invalid = the defaults */
 #define MENU_TMP "/mnt/data/m1plus/home-menu.tmp"
 #define RECENT_FILE \
-    "/mnt/data/m1plus/recently-played" /* the albums played last, most recent first (patch/recent.c); missing or malformed = none */
-#define RECENT_TMP "/mnt/data/m1plus/recently-played.tmp"
+    CARD_DIR \
+    "/recently-played" /* the albums played last, most recent first (patch/recent.c): on the card, like the keys and paths it holds; missing, malformed or no card = none */
+#define RECENT_TMP CARD_DIR "/recently-played.tmp"
 #define SEARCH_RECENT_FILE \
     "/mnt/data/m1plus/search-history" /* the last searches, newest first, one UTF-8 line each (patch/search.c); missing or malformed = none */
 #define SEARCH_RECENT_TMP "/mnt/data/m1plus/search-history.tmp"
@@ -141,7 +142,7 @@ extern void homecover_stat(
     int idx, char *buf,
     unsigned n); /* a value of that page: 0 Albums, 1 Covers, 2 No art, 3 Missing, 4 Old files, 5 Size, 6 Status */
 extern void setfiles_open(void); /* the Settings Files page is opening: read the files once (patch/setfiles.c) */
-extern void setfiles_stat(int idx, char *buf, unsigned n); /* a row's text as read: 0..21 the files */
+extern void setfiles_stat(int idx, char *buf, unsigned n); /* a row's text as read: 0..20 the files */
 extern int homecover_clear(
     void); /* Settings > Developer > Clear Cover Cache, after its confirm: 1 under way, 0 the cover worker is busy */
 extern void pod_toast(const char *text); /* patch/shuffle.c */

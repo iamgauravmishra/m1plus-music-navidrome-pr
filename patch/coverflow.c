@@ -1090,19 +1090,11 @@ static int on_songs(void *ctx, void *e) {
  * later opens resume where a cancel left off).
  */
 /* The centre album's key as 8 lowercase hex digits and a newline, in a file of the card's own (the keys belong to the card's
- * library, so the file stays on it): temp file, fsync, rename. Only with the card mounted. */
+ * library, so the file stays on it), written by pod_card_write. Only with the card mounted. */
 static void position_save(unsigned key) {
-    char text[16], tmp[sizeof POSITION_FILE + 4];
-    int fd, ok;
-    if (!pod_card_mounted()) return; /* never write to the internal flash under the mount point */
-    mkdir(CARD_DIR, 0755); /* EEXIST is fine; a failure shows in the open below */
+    char text[16];
     snprintf(text, sizeof text, "%08x\n", key);
-    snprintf(tmp, sizeof tmp, "%s.tmp", POSITION_FILE);
-    fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (fd < 0) return;
-    ok = write(fd, text, 9) == 9 && fsync(fd) == 0;
-    ok = (close(fd) == 0) && ok;
-    if (!ok || rename(tmp, POSITION_FILE) != 0) unlink(tmp);
+    pod_card_write(CARD_DIR, POSITION_FILE, POSITION_FILE ".tmp", text, 9, (const void *)0, 0);
 }
 
 /* The saved key: exactly 8 hex digits and an optional newline; anything else, a missing file or the card not mounted is 0. */

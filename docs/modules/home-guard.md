@@ -92,7 +92,7 @@ marker is durable; a later misbehaviour after the 5 s window is not caught.
 | `/mnt/data/m1plus-run` | the crash marker: exists from "armed" until 5 s later |
 | `/mnt/data/m1plus-bad` | the sticky note when a marker was found; removed by turning on **Boot to M1+ Music** |
 | `/mnt/data/m1plus-start` | the setting: `1`/missing = M1+ Music, `0` = Shanling (temp + `fsync` + `rename`) |
-| `/mnt/data/m1plus/recently-played` | the albums played last, up to 6, most recent first (`patch/recent.c`; written only when the most recent album changes; malformed = empty) |
+| `/mnt/mmc/.m1plus/recently-played` | on the card (its keys and paths belong to its library; nothing is read or written without it): the albums played last, up to 6, most recent first (`patch/recent.c`; written only when the most recent album changes; malformed = empty) |
 | `/mnt/data/m1plus/home-recent-albums` | Settings > Home Screen > Recent Albums: `0` = the shelf is off, missing or anything else = on |
 | `/mnt/data/m1plus/albums-view` | the Albums page's mode: `1`/missing = the grid (`ALBUMS_DEFAULT_GRID`), `0` = the list (same write; section 5a) |
 | `/mnt/data/m1plus/coverflow-landscape` | Cover Flow's presentation: `1` = landscape, `0`/missing = portrait (atomic write at each switch tap; section 4) |
@@ -133,7 +133,7 @@ the stock list code assumes it owns that layout:
   gone, the first row left). The pages clear that one word (`mn_plain_paint`: only if the widget's vtable is `g_scroll_view_vtable`
   `0x97a298` and the word is exactly `0x60c164`; anything else is left as it is), so the stock default painter paints them.
 - *The Recently Played shelf.* `home_menu_opened` calls `recent_start` (patch/recent.c, `docs/modules/recent.md`) right after `minibar_start`, same conditions (the Home instance, the navbar and the list found, no kill switch). It looks up four widgets, registers eight handlers (the list's scroll event too) and arms one 150 ms one-shot,
-  and then reads one small file (`/mnt/data/m1plus/recently-played`, at most 3 KB, strictly parsed: anything malformed is empty) and the switch file (`/mnt/data/m1plus/home-recent-albums`, one byte), and shows the shelf if an album is recorded (`menu_shelf`: a visibility change and a move of the rows). That is inside the 5 s window of the marker but
+  and then checks that the card is mounted (one `statfs`) and reads one small file (`/mnt/mmc/.m1plus/recently-played`, at most 3 KB, strictly parsed: anything malformed, or no card, is empty) and the switch file (`/mnt/data/m1plus/home-recent-albums`, one byte), and shows the shelf if an album is recorded (`menu_shelf`: a visibility change and a move of the rows). That is inside the 5 s window of the marker but
   it decodes nothing, allocates only the grid's six tile records (about 2.4 KB, no bitmap), loads no album list and hooks nothing; covers are made one per tick by the page timer afterwards. Any failure leaves the menu as `hm_fill_window` made it. The kill switch and a missing widget stop it before any call.
 - *The mini player bar.* `home_menu_opened` calls `minibar_start` (patch/minibar.c) right after `hm_fill_window` for the Home instance only, and only when
   that laid the list out (navbar and list found). The list then is 10..440 until the bar's first work (a one-shot `MB_FIRST_MS` later, so the menu's first

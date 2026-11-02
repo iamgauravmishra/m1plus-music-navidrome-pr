@@ -35,7 +35,7 @@ ellipsis). The 20 / 8 px air is the result of measuring `tools/preview.py`'s ren
 With the shelf (six albums) and the mini player bar up a menu of 8 rows (416 px; the default menu has 6, so everything below is 104 px higher) is 416 + 634 + 64 (`MB_PAD`) = 1114 px in a 430 px list; at the top the shelf's first row is already within a row of the
 viewport (416 < 430), at the end the last row fills the bottom of the list above the pill. One album: 416 + 234 + 64 = 714 px.
 
-## The list file (`/mnt/data/m1plus/recently-played`, `tools/pod_recent.py` is the model)
+## The list file (`/mnt/mmc/.m1plus/recently-played`, `tools/pod_recent.py` is the model)
 
 ```
 M1R2\n
@@ -63,9 +63,9 @@ when an album moves to the front); it is the last way to find the stock album ro
 `recent_note(track)` is the one shared helper. Callers: the mini player bar's `mb_work` (the Home menu in front, every 500 ms tick) and Now Playing's `np_work` (its 500 ms tick,
 `recent_note(cc_playing())`, and nothing else: no stock query runs from that tick). It is cheap while nothing changed: **the album key is compared with the most recent one held in RAM first** and the function returns,
 touching no file and calling no stock function but the key hash. An empty album tag is not recorded. A new album goes to the front, an album already in the list moves
-there (not added twice), the list is capped at six (the oldest falls off), and RECENT_FILE is written with `home_write_atomic` (temp file, `fsync`, `rename`, directory `fsync`):
-**one write per change of the most recent album**, none otherwise. A failed write leaves the RAM list current and is tried again with the next change (the next
-to-foreground read drops what the card does not hold). The first call reads the file (lazily), so a note before any shelf exists starts from the file. The bar's tick
+there (not added twice), the list is capped at six (the oldest falls off), and RECENT_FILE is written on the card by `pod_card_write` (patch/common.c: card mounted, `mkdir` of the card folder, temp file, `fsync`, `rename`, directory `fsync`), after a fresh read of the file (a card swap never carries the old card's list onto the new one); with no card nothing is recorded:
+**one write per change of the most recent album**, none otherwise. A failed write loses only that entry (the RAM list is current until the next read, which comes from the card; the next
+to-foreground read drops what the card does not hold). Every change starts from a read of the card's file, so a note before any shelf exists starts from the file. The bar's tick
 calls `recent_refresh()` when `recent_note` returned 1, so a new album shows under a menu in front at once.
 Recording runs whether or not the shelf is switched on (the switch only shows or hides it).
 

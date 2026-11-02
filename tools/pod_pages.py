@@ -324,7 +324,7 @@ COVLIST = Page('m1plus_covlist', 'm1plus_covlist_page', 'Missing Covers', kind='
 
 # Settings > Developer > Tools > Settings Files (patch/setfiles.c, docs/modules/settings.md "Settings Files"): the payload's own files as read when the page opens. The labels are the file names (identifiers, not translated).
 SETTING_FILES = ('albums-view', 'playlists-view', 'album-order', 'coverflow-landscape', 'cassette-theme', 'vinyl-record', 'vinyl-base', 'pod-appearance', 'home-recent-albums',
-                 'home-daily-mix', 'home-menu', 'keyboard-pinyin', 'podcast-online-search', 'battery-percentage', 'search-history', 'recently-played', 'covers-rebuild')
+                 'home-daily-mix', 'home-menu', 'keyboard-pinyin', 'podcast-online-search', 'battery-percentage', 'search-history', 'covers-rebuild')
 GUARD_FILES = ('m1plus-start', 'm1plus-run', 'm1plus-bad', 'm1plus-off')
 FOLDER_LABEL = 'm1plus/'
 INFO_SF = INFO_CC_STATUS + 1   # patch/m1plus.c INFO_SF = INFO_CC + 7; row k reads setfiles_stat(k): 4 guard files, the folder, the settings

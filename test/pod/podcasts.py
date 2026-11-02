@@ -1021,9 +1021,9 @@ def lifecycle_tests(ctx):
     m2 = PM(); m2.dirs.add('/mnt/data')
     rec = m2.track(f'{ROOT}/bravo/b3.mp3'); m2.pt = (400, 3600, 1)
     r = m2.call(PSYMS['recent_note'], a0=rec, count=40000000)
-    expect(r == 0 and m2.state(pc_hash(f'{ROOT}/bravo/b3.mp3')) == (1, 400, 3600) and '/mnt/data/m1plus/recently-played' not in m2.fs, 'recent_note (the Now Playing and mini bar timers): the place is noted; the shelf does not take an episode')
+    expect(r == 0 and m2.state(pc_hash(f'{ROOT}/bravo/b3.mp3')) == (1, 400, 3600) and '/mnt/mmc/.m1plus/recently-played' not in m2.fs, 'recent_note (the Now Playing and mini bar timers): the place is noted; the shelf does not take an episode')
     music = m2.record(album='Alb', artist='Art', path='/mnt/mmc/Music/a.flac')
-    expect(m2.call(PSYMS['recent_note'], a0=music, count=40000000) == 1 and '/mnt/data/m1plus/recently-played' in m2.fs, 'music is recorded on the shelf as before')
+    expect(m2.call(PSYMS['recent_note'], a0=music, count=40000000) == 1 and '/mnt/mmc/.m1plus/recently-played' in m2.fs, 'music is recorded on the shelf as before')
     # destroy
     m = opened()
     for _ in range(3): m.call(PSYMS['pg_on_load'], a0=0, count=40000000)

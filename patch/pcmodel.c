@@ -815,22 +815,6 @@ static struct {
     int speed_on, orig; /* we changed playspeed_mode; the mode it was */
 } pcs __attribute__((section(".scratch")));
 
-static int pm_save(const char *path, const char *tmp, const void *head, unsigned hn, const void *body, unsigned bn) {
-    int fd, ok;
-    if (!pod_card_mounted()) return -1;
-    mkdir(CARD_DIR, 0755);
-    mkdir(PM_STATE_DIR, 0755);
-    fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (fd < 0) return -1;
-    ok = write(fd, head, hn) == (int)hn && (!bn || write(fd, body, bn) == (int)bn) && fsync(fd) == 0;
-    ok = (close(fd) == 0) && ok;
-    if (!ok || rename(tmp, path) != 0) {
-        unlink(tmp);
-        return -1;
-    }
-    return 0;
-}
-
 static void pm_ring_load(void) {
     unsigned head[2];
     int fd;
@@ -850,7 +834,7 @@ void pc_flush(void) {
     unsigned head[2];
     if (!pm.dirty || !pm.s) return;
     head[0] = 0x31524350u, head[1] = pm.n;
-    if (pm_save(PM_RING_FILE, PM_RING_TMP, head, 8, pm.s, pm.n * (unsigned)sizeof *pm.s) == 0)
+    if (pod_card_write(PM_STATE_DIR, PM_RING_FILE, PM_RING_TMP, head, 8, pm.s, pm.n * (unsigned)sizeof *pm.s) == 0)
         pm.dirty = 0; /* a failed write is tried again with the next change */
     pcs.save_ms = time_now_ms();
 }
@@ -1026,7 +1010,7 @@ int pc_speed_set(unsigned show, int mode) {
         at = pm.sp[1] - 1;
     }
     pm.sp[2 + 2 * at] = show, pm.sp[3 + 2 * at] = (unsigned)mode;
-    if (pm_save(PM_SPEED_FILE, PM_SPEED_TMP, pm.sp, 8, pm.sp + 2, pm.sp[1] * 8) == 0) return 1;
+    if (pod_card_write(PM_STATE_DIR, PM_SPEED_FILE, PM_SPEED_TMP, pm.sp, 8, pm.sp + 2, pm.sp[1] * 8) == 0) return 1;
     memcpy(pm.sp, saved, sizeof saved); /* not saved: the old table stays */
     return 0;
 }

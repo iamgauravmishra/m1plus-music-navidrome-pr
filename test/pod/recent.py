@@ -13,7 +13,8 @@ EX = len(pod_pages.ITEMS)   # the Extras row's index, the last of the menu's row
 
 pulldown, minibar, nowplaying = sibling('pulldown'), sibling('minibar'), sibling('nowplaying')
 
-RECENT, RECENT_TMP = '/mnt/data/m1plus/recently-played', '/mnt/data/m1plus/recently-played.tmp'
+CARD = '/mnt/mmc/.m1plus'
+RECENT, RECENT_TMP = '/mnt/mmc/.m1plus/recently-played', '/mnt/mmc/.m1plus/recently-played.tmp'
 SHELF_SET, SHELF_TMP = '/mnt/data/m1plus/home-recent-albums', '/mnt/data/m1plus/home-recent-albums.tmp'
 KILL_SD, KILL_DATA = '/mnt/mmc/m1plus-off', '/mnt/data/m1plus-off'
 WIN = 0x24000000
@@ -379,6 +380,12 @@ def file_and_layout_tests(ctx):
     expect(not differ, f'every one of the {len(good) + len(bad)} files: the shelf shows the albums the model reads, or no shelf when it reads none {differ}')
     m = ST(None)
     expect(not m.shelf_up(), 'no file at all: no shelf')
+    m = ST(e3, start=False); m.card_mounted = False; m.start()
+    expect(not m.shelf_up() and not [c for c in m.calls if c[0] == 'open' and c[1] == RECENT], 'no card: the file under the mount point is not read, no shelf')
+    m = ST(e3); m.card_mounted = False; m.fire(EVT_FG); m.relayout()
+    expect(not m.shelf_up(), 'the card taken out while the menu is open: the next to-foreground empties the shelf')
+    m.card_mounted = True; m.fs[RECENT] = pod_recent.dump(ents(2)); m.fire(EVT_FG); m.relayout()
+    expect(m.shelf_up(), 'another card in: its list is shown')
     m2 = ST(e3, start=False); m2.fail.add(('open', RECENT)); m2.start()
     expect(not m2.shelf_up(), 'a file that cannot be opened: no shelf')
 
@@ -436,13 +443,29 @@ def file_and_layout_tests(ctx):
     expect(pod_recent.parse(m.fs[RECENT]) == [entry('Portishead', 'Dummy')], 'a malformed file reads as empty: the list starts again with this album')
     m = plain_machine(); m.fs[RECENT] = pod_recent.dump(e3); note(track(e3[0][3], e3[0][4]))
     expect(m.fs[RECENT] == pod_recent.dump(e3), 'the most recent album of a file is not written again')
-    # a failed write: the list in RAM is current, the next change writes it all
+    # a failed write: this entry is lost (the next change starts from the card), the file is as it was
     m = plain_machine(); m.fail.add(('write', RECENT_TMP))
-    r = note(tracks[0]) if False else m.call(PSYMS['recent_note'], a0=m.record(album='A', artist='B', path='/p', title='t', name='n'), count=3000000)
-    expect(r == 1 and RECENT not in m.fs, 'a write that fails is no change on the card (and the temp file is gone)')
+    r = m.call(PSYMS['recent_note'], a0=m.record(album='A', artist='B', path='/p', title='t', name='n'), count=3000000)
+    expect(r == 1 and RECENT not in m.fs and RECENT_TMP not in m.fs, 'a write that fails is no change on the card (and the temp file is gone)')
     m.fail.clear()
     m.call(PSYMS['recent_note'], a0=m.record(album='C', artist='D', path='/q', title='t', name='n'), count=3000000)
-    expect(len(pod_recent.parse(m.fs[RECENT])) == 2, 'the next album change writes the whole list, the album that failed included')
+    expect([e[3] for e in pod_recent.parse(m.fs[RECENT])] == ['C'], 'the next album change writes the card\'s list with the new album')
+    # the list lives on the card: every write is under CARD_DIR, nothing without a card, a swapped card's list is the new card's
+    expect(RECENT.startswith(CARD) and RECENT_TMP.startswith(CARD) and ('mkdir', CARD) in m.calls, 'the file and its temp file are in the card folder, made first')
+    m = plain_machine(); m.card_mounted = False
+    r = m.call(PSYMS['recent_note'], a0=m.record(album='A', artist='B', path='/p', title='t', name='n'), count=3000000)
+    expect(r == 0 and not [c for c in m.calls if c[0] in ('open', 'write', 'rename', 'mkdir', 'fsync', 'unlink')] and not m.fs and CARD not in m.dirs, 'no card: nothing is recorded, opened or written')
+    m = plain_machine(); m.fs['/mnt/data/m1plus/recently-played'] = pod_recent.dump(e3)
+    m.call(PSYMS['recent_note'], a0=m.record(album='Dummy', artist='Portishead', path='/p', title='t', name='n'), count=3000000)
+    expect(RECENT in m.fs and m.fs['/mnt/data/m1plus/recently-played'] == pod_recent.dump(e3) and len(pod_recent.parse(m.fs[RECENT])) == 1, 'the old flash file is neither read nor touched')
+    m = plain_machine(); m.fs[RECENT] = pod_recent.dump(e3)
+    t1 = m.record(album='Dummy', artist='Portishead', path='/p', title='t', name='n')
+    m.call(PSYMS['recent_note'], a0=t1, count=3000000)
+    other = [entry('Radiohead', 'Kid A')]
+    m.fs[RECENT] = pod_recent.dump(other)            # the card in the slot is swapped for another one: it holds its own list
+    m.call(PSYMS['recent_note'], a0=m.record(album='Mezzanine', artist='Massive Attack', path='/q', title='t', name='n'), count=3000000)
+    got = [e[3] for e in pod_recent.parse(m.fs[RECENT])]
+    expect(got == ['Mezzanine', 'Kid A'], f'a card swap: the new album joins the new card\'s list, nothing of the old card is written onto it ({got})')
 
     # ------------------------------------------------------------------ start: nothing decoded, one short one-shot, the shelf up with its texts
     m = covered(ST(e3, start=False))

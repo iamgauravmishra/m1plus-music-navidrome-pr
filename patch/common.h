@@ -17,6 +17,10 @@ int pod_scan_dir(
         dot); /* the library scan's strcmp(name, ".") replacement: 0 for any name starting with '.' (docs/modules/payload.md hook 5) */
 int pod_card_mounted(
     void); /* the SD card is mounted (statfs: /mnt/mmc is another file system than /mnt); never write under /mnt/mmc otherwise */
+/* a (na bytes) then b (nb) into path in dir (CARD_DIR or a folder in it) on the card, atomically (tmp, fsync, rename, fsync of dir);
+ * the folders made first. 0 on success, -1 (nothing written) with the card not mounted. */
+int pod_card_write(const char *dir, const char *path, const char *tmp, const void *a, unsigned na, const void *b,
+                   unsigned nb);
 int pod_is_type(void *w, const char *type); /* w is a widget of exactly this type name */
 /* The translated text f ("%d tracks") with n where it has its %d, into out (size bytes). */
 void pod_fmt(char *out, unsigned size, const char *f, int n);

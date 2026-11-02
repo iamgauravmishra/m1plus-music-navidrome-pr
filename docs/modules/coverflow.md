@@ -108,7 +108,7 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
 - **Start index.** The stock `slide_menu` starts on item 1, not 0; the page always sets the start
   album (`cfpos.value`, or `slide_menu_set_value` in the flat fallback), so an artist's page opens on its first album, a
   one-album shelf has its captions on open, and the main page keeps its last-album memory
-  (`/mnt/mmc/.m1plus/coverflow-position`, including album 0): the centre album key as 8 lowercase hex digits and a newline, written on close by a temp file, fsync and rename (`position_save`, card mounted only; it belongs to the card's library and survives a cover cache wipe). `position_load` takes exactly 8 hex digits and an optional newline; a missing, short, junk or all-zero file is no saved album. The old `covers/album` file is not read.
+  (`/mnt/mmc/.m1plus/coverflow-position`, including album 0): the centre album key as 8 lowercase hex digits and a newline, written on close by `pod_card_write` (patch/common.c: temp file, fsync, rename, directory fsync; `position_save`, card mounted only; it belongs to the card's library and survives a cover cache wipe). `position_load` takes exactly 8 hex digits and an optional newline; a missing, short, junk or all-zero file is no saved album. The old `covers/album` file is not read.
 - **The album.** Tapping the centre cover opens our album page (`docs/modules/album-page.md`), else the plain stock `albuminfo_page`, as a stock
   Albums row does (`cc_open_album`, `patch/covercache.c`, the same call the Albums grid makes): `loadAlbumList(0xf003, 0)` puts the stock album list back into `*pdeq_showlist` (the
   page's own copy was made from the same query, so the row is the same), `albumcoverinfo_init` rebuilds

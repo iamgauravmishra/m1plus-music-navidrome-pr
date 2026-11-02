@@ -27,6 +27,28 @@ int pod_card_mounted(void) {
              a[9] == b[9]); /* f_type, f_fsid (MIPS o32 statfs words 0, 8, 9): the same, nothing mounted */
 }
 
+/* The one writer of the payload's card files: CARD_DIR then dir made (EEXIST is fine; a failure shows in the open), a then b (either may
+ * be empty) into tmp, fsync, rename onto path, fsync of dir. 0 on success; -1, and nothing written, while the card is not mounted. */
+int pod_card_write(const char *dir, const char *path, const char *tmp, const void *a, unsigned na, const void *b,
+                   unsigned nb) {
+    int fd, ok, d;
+    if (!pod_card_mounted()) return -1; /* never write to the internal flash under the mount point */
+    mkdir(CARD_DIR, 0755);
+    if (strcmp(dir, CARD_DIR)) mkdir(dir, 0755);
+    fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) return -1;
+    ok = (!na || write(fd, a, na) == (int)na) && (!nb || write(fd, b, nb) == (int)nb) && fsync(fd) == 0;
+    ok = (close(fd) == 0) && ok;
+    if (!ok || rename(tmp, path) != 0) {
+        unlink(tmp);
+        return -1;
+    }
+    d = open(dir, O_RDONLY, 0);
+    if (d < 0) return -1;
+    ok = fsync(d) == 0;
+    return (close(d) == 0 && ok) ? 0 : -1;
+}
+
 int pod_on_back(void *ctx, void *e) {
     (void)ctx;
     (void)e;
