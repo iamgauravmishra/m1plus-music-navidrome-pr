@@ -59,6 +59,7 @@ TOGGLE_NAME = {'list': 'btn_albumview', 'grid': 'btn_albumview', 'artist': 'btn_
 NAV_CF_W = NAV_VIEW_W
 NAV_CF_X = NAV_VIEW_X - NAV_CF_W     # 168; patch/offsets.inc NAV_CF_X, NAV_CF_W
 NAV_CF_ICON = 'pod_nav_coverflow'
+NAV_ICON_OVERFLOW = 7               # 60 px icons centred in 46 px slots paint 7 px beyond their touch rectangles
 NAV_BACK_X, NAV_BACK_W = 7, 44       # Back: the glass disc ah_nav_back (42 px) centred in a 44 x 50 button: x 8 .. 50, y 4 .. 46 (img_btn_style, so the shared navbar_btnreturn_style and the stock pages are untouched)
 NAV_TITLE_X = 58                     # the title starts 8 px after the disc
 NAV_PLAY_X, NAV_PLAY_W = 260, 60     # Now Playing: main's button; its image is the disc ah_nav_np alone (glyph centre 290) or a capsule's right cap ah_nav_play (same glyph, the glass ends at x 311)
@@ -141,6 +142,9 @@ def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, 
         nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [   # the capsule's left cap: opens our Songs page on the artist's songs
             ('name', 'btn_songs'), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', NAV_SONGS_ICON + '_down'), ('style:normal:icon', NAV_SONGS_ICON), ('style:over:icon', NAV_SONGS_ICON)])))
+    for child in nb.children:
+        if child.type == 'button' and child.w == NAV_VIEW_W:
+            child.set('dirty_rect_tolerance', str(NAV_ICON_OVERFLOW))
     return nb
 
 
@@ -924,6 +928,7 @@ AB_PLAY_TEXT_W = OFFSETS['AB_PLAY_TEXT_W']   # the English "Play all" at 18 px, 
 def ab_nav_button(name, x, w, rest, down=None, hide=False):
     b = Widget('button', x, 0, w, NAVBAR_H, [('name', name), ('enable', 'true'), ('style', 'img_btn_style'),
                                              ('style:pressed:icon', down or rest), ('style:normal:icon', rest), ('style:over:icon', rest)])
+    if w == NAV_VIEW_W: b.set('dirty_rect_tolerance', str(NAV_ICON_OVERFLOW))
     return hidden(b) if hide else b
 
 
