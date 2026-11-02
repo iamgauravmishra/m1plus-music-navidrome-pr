@@ -809,7 +809,8 @@ int cc_build_total(void) { return cb.total; }
 int cc_build_running(void) { return cb.running; }
 int cc_build_busy(void) { return cb.jobs != (job_t *)0; }
 
-int cc_build_near_step(void *albums, const unsigned *order, unsigned centre, unsigned *cursor, unsigned batch) {
+int cc_build_near_step(void *albums, const unsigned *order, const unsigned *keys, unsigned centre, unsigned *cursor,
+                       unsigned batch) {
     unsigned n = albums ? deque_size(albums) : 0, c = *cursor, left = batch;
     if (centre >= n) centre = n ? n - 1 : 0;
     while ((c >> 1) < n && left) { /* the cursor is 2 x distance + (0 after the centre, 1 before it) */
@@ -820,7 +821,9 @@ int cc_build_near_step(void *albums, const unsigned *order, unsigned centre, uns
         i = k ? centre - d : centre + d;
         r = cc_row(albums, order, i);
         --left;
-        if (cc_build_add(cc_str(r, REC_PATH), cc_album_key(r)) < 0) c = n << 1; /* full: done */
+        if (I(r, REC_ID) == ID_ALL_SONGS || (keys && !keys[i]))
+            continue; /* a scoped list's All songs row has no cover */
+        if (cc_build_add(cc_str(r, REC_PATH), keys ? keys[i] : cc_album_key(r)) < 0) c = n << 1; /* full: done */
     }
     *cursor = c;
     return (c >> 1) >= n;
@@ -828,7 +831,7 @@ int cc_build_near_step(void *albums, const unsigned *order, unsigned centre, uns
 
 int cc_build_near(void *albums, const unsigned *order, unsigned centre) {
     unsigned c = 0;
-    cc_build_near_step(albums, order, centre, &c, ~0u);
+    cc_build_near_step(albums, order, (const unsigned *)0, centre, &c, ~0u);
     return cb.total;
 }
 #endif /* CF_HOST */

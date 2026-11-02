@@ -56,6 +56,8 @@ class PM(pulldown.SM):
         self.handlers[PSYMS['onlineart_open']] = 'onlineart_open'
         self.cf_ret = 0                 # what coverflow_artist returns (patch/coverflow.c, trapped here: test/pod/coverflow.py and artists.py run it)
         self.handlers[PSYMS['coverflow_artist']] = 'coverflow_artist'
+        self.am_ret = 0                 # what albums_open_artist returns (patch/albums.c, trapped here: test/pod/artists.py runs it); -1 = the window will not open
+        self.handlers[PSYMS['albums_open_artist']] = 'albums_open_artist'
         self.init_ret = 0
         self.navs = []                 # the navigator's stack: (name, window)
         self.no_window = False         # the navigator opens no window (the top window is not the album page)
@@ -116,6 +118,11 @@ class PM(pulldown.SM):
             self.calls.append(('coverflow_artist', tuple(rows), a1, a2))
             if self.cf_ret == 0 and not self.no_window: self.page('m1plus_cover')
             u.reg_write(UC_MIPS_REG_V0, self.cf_ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
+        if name == 'albums_open_artist':
+            rows = [self.read_cstr(self.word(r + O['REC_TITLE'])) for r in self.deques.get(a0, [])]
+            self.calls.append(('albums_open_artist', tuple(rows), a1, a2))
+            if self.am_ret == 0 and not self.no_window: self.page('m1plus_albums')
+            u.reg_write(UC_MIPS_REG_V0, self.am_ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
         if name == 'tape_open':
             self.calls.append(('tape_open',)); u.reg_write(UC_MIPS_REG_V0, self.tape_ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
         if name == 'podcasts_go':
@@ -774,18 +781,18 @@ def run(ctx):
         fn, c = m.bound[(m.rows[GO_ARTIST], CLICK)]
         ret = m.call(fn, a0=c, a1=0, count=4000000); m.sync()
         return ret
-    def cf_calls(m): return [c[1:] for c in m.calls if c[0] == 'coverflow_artist']
+    def cf_calls(m): return [c[1:] for c in m.calls if c[0] == 'albums_open_artist']
     m = PM(); alib(m)
     expect(m.handlers_of(m.rows[GO_ARTIST], CLICK) == [(STOCK_CLICK['listitem5'], m.dialog), (PSYMS['pm_on_lookup_artist'], m.dialog)],
            'Look up artist: the stock handler first, ours bound after it (so it runs before it)')
     ret = artist_tap(m)
     expect(ret == RET_STOP and cf_calls(m) == [(('MILES DAVIS',), 0, CLS_ART)],
-           f'Look up artist: our Cover Flow artist page opens on the playing artist\'s row, matched without case, scope CLASS_ARTISTS, the stock handler stopped ({ret}, {cf_calls(m)})')
+           f'Look up artist: our scoped Albums page opens on the playing artist\'s row, matched without case, scope CLASS_ARTISTS, the stock handler stopped ({ret}, {cf_calls(m)})')
     names = [c[0] for c in m.calls]
     expect(('loadLocalClassList', CLS_ART) in m.calls, 'Look up artist: the list is the stock Artists list (getAllArtist / album artist as the setting says)')
-    expect(('window_close', m.dialog) in m.calls and names.index('window_close') > names.index('coverflow_artist'), 'Look up artist: the page opens first, the sheet closes after')
+    expect(('window_close', m.dialog) in m.calls and names.index('window_close') > names.index('albums_open_artist'), 'Look up artist: the page opens first, the sheet closes after')
     expect('deque_destroy' in names and 'navigator_to_with_context' not in names, 'Look up artist: the one-row carrier list is freed, no stock page is opened')
-    expect(flag(m) == 1 and [n for n, _ in m.navs] == ['playing_page', 'm1plus_cover'], f'Look up artist: songerinfoflag set, the artist page on top of Now Playing ({flag(m)}, {[n for n, _ in m.navs]})')
+    expect(flag(m) == 1 and [n for n, _ in m.navs] == ['playing_page', 'm1plus_albums'], f'Look up artist: songerinfoflag set, the artist\'s Albums page on top of Now Playing ({flag(m)}, {[n for n, _ in m.navs]})')
     page = m.navs[-1][1]
     expect(m.bound.get((page, DESTROY), (0,))[0] == PSYMS['pm_on_album_gone'], 'Look up artist: the page\'s destroy is watched')
     m.call(m.bound[(page, DESTROY)][0], a0=page, a1=0, count=200000)
@@ -806,7 +813,11 @@ def run(ctx):
     m = PM(); alib(m, playing='Unknown Artist'); stock_runs_a(m, 'artist: the Unknown Artist row is never matched')
     m = PM(); alib(m, artists=()); stock_runs_a(m, 'artist: an empty library')
     m = PM(); alib(m, pos=5); stock_runs_a(m, 'artist: a play position outside the queue')
-    m = PM(); alib(m); m.cf_ret = -1; stock_runs_a(m, 'artist: Cover Flow refuses (open already / page will not open)')
+    m = PM(); alib(m); m.am_ret = -1; m.cf_ret = -1; stock_runs_a(m, 'artist: neither the Albums page nor Cover Flow opens')
+    m = PM(); alib(m); m.am_ret = -2; stock_runs_a(m, 'artist: the Albums asset is not ours (left again): the stock handler')
+    m = PM(); alib(m); m.am_ret = -1; ret = artist_tap(m)
+    expect(ret == RET_STOP and [c[0] for c in m.calls if c[0] in ('albums_open_artist', 'coverflow_artist')] == ['albums_open_artist', 'coverflow_artist']
+           and [n for n, _ in m.navs] == ['playing_page', 'm1plus_cover'] and flag(m) == 1, 'artist: the Albums window will not open: Cover Flow on the artist, the same flag and sheet handling')
     m = PM(); alib(m); m.no_window = True; ret = artist_tap(m)
     expect(flag(m) == 0 and ret == RET_STOP, f'artist: no window to watch after the open: the flag is not left set ({flag(m)}, {ret})')
     m = PM(); alib(m); m.widget_on_fail = frozenset({DESTROY}); ret = artist_tap(m)

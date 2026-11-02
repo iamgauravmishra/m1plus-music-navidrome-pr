@@ -50,6 +50,8 @@
 #define GO_ARTIST 5 /* listitem5, Look up artist */
 extern int coverflow_artist(void *artists, unsigned index,
                             unsigned scope); /* patch/coverflow.c: 0 once the page is up */
+extern int albums_open_artist(void *artists, unsigned index,
+                              unsigned scope); /* patch/albums.c: 0 once up, -1 when the window will not open */
 
 /* what each page shows, top to bottom, as indices into pm.row[]; the sheet is as high as its page's rows (PM_PAGE_N, PM_PAGE2_N) */
 static const unsigned char pm_page[3][PM_PAGE_N] = {
@@ -262,14 +264,14 @@ static int pm_on_lookup_album(void *ctx, void *e) {
     return RET_STOP;
 }
 
-/* Look up artist (listitem5): our Cover Flow artist page (coverflow_artist, the page the Artists list opens) instead of the stock album_page.
+/* Look up artist (listitem5): our Albums page scoped to the artist (albums_open_artist, what the Artists list opens; Cover Flow if that window will not open) instead of the stock album_page.
  * Same mechanism as Look up album: bound after the stock init, so it runs first; RET_STOP keeps the stock handler (0x4793ac) from running, RET_OK
  * lets it run. The artist is the playing track's REC_ARTIST, looked up in the Artists list the stock page would show (loadLocalClassList(0xf004):
  * getAllArtist, or the album-artist list when Settings' artist type says so; a row's name is REC_TITLE, compared ASCII case-insensitively as the list
  * groups; the Unknown Artist row, id -1, never matches). The page opens FIRST (as Cassette Mode does) and the sheet closes once it is up, so any
  * failure (nothing playing, no artist tag, not in the list, Cover Flow already open, the page will not open) leaves everything as it was for the
  * stock handler. Like the stock one it sets songerinfoflag (a track tap or Play all on an album page above then unwinds to the Now Playing that is
- * in the stack) and closes an albuminfo_page in the stack; the flag is released by the destroy of the Cover Flow page (pm_on_album_gone). */
+ * in the stack) and closes an albuminfo_page in the stack; the flag is released by the destroy of that page (pm_on_album_gone). */
 static int pm_on_lookup_artist(void *ctx, void *e) {
     void *track, *list, *one, *top, *below;
     const char *name;
@@ -298,7 +300,8 @@ static int pm_on_lookup_artist(void *ctx, void *e) {
     prev = *(unsigned char *)SONGER_FLAG;
     *(unsigned char *)SONGER_FLAG = 1;
     below = window_manager_get_top_window(window_manager());
-    ret = coverflow_artist(one, 0, CLASS_ARTISTS);
+    ret = albums_open_artist(one, 0, CLASS_ARTISTS);
+    if (ret == -1) ret = coverflow_artist(one, 0, CLASS_ARTISTS);
     deque_destroy(one);
     if (ret != 0) {
         *(unsigned char *)SONGER_FLAG = prev;

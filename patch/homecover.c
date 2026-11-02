@@ -282,7 +282,7 @@ static int hc_on_start(const void *unused) {
         hc.own = hc.scanning = 1;
         hc.cur = 0;
     }
-    if (!cc_build_near_step(hc.albums, hc.order, 0, &hc.cur, HC_BATCH)) {
+    if (!cc_build_near_step(hc.albums, hc.order, (const unsigned *)0, 0, &hc.cur, HC_BATCH)) {
         hc.timer = timer_add(hc_on_start, (void *)0, HC_SCAN_MS);
         if (!hc.timer) hc_end(); /* no way to continue: nothing built, the next foreground retries */
         return RET_OK;

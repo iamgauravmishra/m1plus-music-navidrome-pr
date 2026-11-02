@@ -57,9 +57,18 @@
 #include "covercache.h"
 #include "common.h"
 #include "grid.h"
+#include "azlist.h"
+#include "i18n.h"
 
 extern int coverflow_open(void); /* patch/coverflow.c: the menu's Cover Flow row, opened over this page */
 extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
+extern int coverflow_artist(void *artists, unsigned index,
+                            unsigned scope); /* patch/coverflow.c: Cover Flow scoped to an artist */
+extern int
+songs_open_artist(void *artist); /* patch/songs.c: our Songs page on all the artist's songs; -1 when it did not open */
+extern int
+coverflow_artist_albums(void *artist_row, unsigned scope, int keep_card, void **albums,
+                        unsigned **keys); /* patch/coverflow.c: one artist's album rows and their cache keys */
 
 #define CELL_H GRID_CELL_H /* the cell geometry is the grid's (patch/grid.h), shared with the Recently Played shelf */
 #define PITCH GRID_PITCH
@@ -89,6 +98,10 @@ static struct {
     void *st_title, *st_sub; /* hidden labels whose styles are the list's two text styles */
     void *st_gtitle, *st_gsub; /* and the grid's two */
     void *albums; /* our copy of the stock album rows */
+    /* scoped to one artist or composer (albums_open_artist), else all NULL / 0: artist_row is a deque holding a copy of the stock row,
+     * scope its list class, keys the albums' cache keys (the library albums' of the same names; NULL: each album keys itself) */
+    void *artist_row;
+    unsigned scope, *keys;
     unsigned *
         order; /* display order as stock row numbers (cc_album_order, Settings > Library > Album Order); NULL = stock order */
     unsigned count;
@@ -187,6 +200,9 @@ static void al_window(int *lo, int *hi) {
     if (*hi > (int)al.count - 1) *hi = (int)al.count - 1;
 }
 
+/* The scoped list's stock "All songs" row (kept as the last tile with two albums or more). */
+static int al_is_card(void *rec) { return al.artist_row && rec && I(rec, REC_ID) == ID_ALL_SONGS; }
+
 /* The tile that holds album a, or NULL. */
 static tile_t *al_find(int a) { return grid_find(&al.g, a); }
 
@@ -199,7 +215,10 @@ static tile_t *al_tile(int a) {
     t = grid_tile(&al.g, a, lo, hi, &fresh);
     if (fresh) {
         void *rec = cc_row(al.albums, al.order, (unsigned)a);
-        grid_set(t, cc_str(rec, REC_ALBUM), cc_str(rec, REC_ARTIST), cc_album_key(rec));
+        if (al_is_card(rec)) /* All Songs over the artist: no cover file (key 0), the placeholder */
+            grid_set(t, TR("local_allsong"), cc_str(deque_at(al.artist_row, 0), REC_TITLE), 0);
+        else
+            grid_set(t, cc_str(rec, REC_ALBUM), cc_str(rec, REC_ARTIST), al.keys ? al.keys[a] : cc_album_key(rec));
     }
     return t;
 }
@@ -392,7 +411,7 @@ static int al_on_build_start(const void *unused) {
         al.own = al.scanning = 1;
         al.scan_cur = 0, al.scan_centre = (unsigned)al_first();
     }
-    if (!cc_build_near_step(al.albums, al.order, al.scan_centre, &al.scan_cur, AL_SCAN_BATCH)) {
+    if (!cc_build_near_step(al.albums, al.order, al.keys, al.scan_centre, &al.scan_cur, AL_SCAN_BATCH)) {
         al.build_timer = timer_add(al_on_build_start, (void *)0, AL_SCAN_MS);
         if (!al.build_timer) al_build_end(); /* no way to continue: nothing built, the next foreground retries */
         return RET_OK;
@@ -476,8 +495,15 @@ static int al_on_up(void *ctx, void *e) {
     if (a < 0 || !e || !al.view) return RET_OK;
     dx = al_abs(I(e, PE_X) - al.down_x);
     dy = al_abs(I(e, PE_Y) - al.down_y);
-    if (dx < AL_TAP_PX && dy < AL_TAP_PX && al_item_of(e) == a)
-        cc_open_album((void *)0, 0, (int)(al.order ? al.order[a] : (unsigned)a)); /* the stock row */
+    if (dx < AL_TAP_PX && dy < AL_TAP_PX && al_item_of(e) == a) {
+        int row = (int)(al.order ? al.order[a] : (unsigned)a); /* the stock row */
+        /* the All Songs tile of an artist: our Songs page on every song (Cover Flow's All albums card; a composer's has none, and a page that
+         * does not open leaves the stock page on the All songs row) */
+        if (al_is_card(deque_at(al.albums, (unsigned)row)) && al.scope == CLASS_ARTISTS &&
+            songs_open_artist(deque_at(al.artist_row, 0)) != -1)
+            return RET_OK;
+        cc_open_album(al.artist_row, al.scope, row); /* scoped: the artist's list, class 0xff01 / 0xff02 */
+    }
     return RET_OK;
 }
 
@@ -507,7 +533,10 @@ static int al_on_cover(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     al_build_end(); /* one worker at a time: Cover Flow builds what is missing itself, with its Preparing screen */
-    coverflow_open();
+    if (al.artist_row)
+        coverflow_artist(al.artist_row, 0, al.scope); /* the same artist's covers */
+    else
+        coverflow_open();
     return RET_OK;
 }
 
@@ -518,6 +547,8 @@ static int al_on_destroy(void *ctx, void *e) {
     al_build_end(); /* the timer removed, the worker cancelled and joined */
     grid_free(&al.g);
     if (al.albums) deque_destroy(al.albums);
+    if (al.artist_row) deque_destroy(al.artist_row);
+    free(al.keys);
     free(al.order);
     memset(&al, 0, sizeof al);
     return RET_OK;
@@ -588,13 +619,15 @@ static int al_on_toggle(void *ctx, void *e) {
 }
 
 /* The page in the given mode. 0 once it is up, -1 if the window could not open, -2 if the asset is not ours (the
- * page is left again). */
-static int al_open(int list) {
+ * page is left again). artist_row (a deque holding the stock row of an artist, or a composer when scope says so) scopes it to that artist's albums: the
+ * page then owns the deque, from the moment the window is up. */
+static int al_open(int list, void *artist_row, unsigned scope) {
     if (al.win) return -1;
     memset(&al, 0, sizeof al);
     al.win = window_open("m1plus_albums");
     if (!al.win) return -1;
     al.list = list;
+    al.artist_row = artist_row, al.scope = scope;
     widget_on(al.win, EVT_DESTROY, al_on_destroy, (void *)0);
     pod_bind(al.win, "btn_return", pod_on_back, (void *)0);
     pod_bind(al.win, "btn_backtoplayer", pod_on_player, (void *)0);
@@ -615,14 +648,22 @@ static int al_open(int list) {
     }
     al_glyph();
     al_show(al.status, 0);
-    al.albums = cc_albums();
-    al.count = al.albums ? deque_size(al.albums) : 0;
-    al.order = cc_album_order(al.albums);
+    if (artist_row) { /* the artist's albums and, with two or more, the All Songs row last, titled with the artist (Cover Flow's scoped list) */
+        void *title = widget_lookup(al.win, "label_title", 1);
+        al.count = (unsigned)coverflow_artist_albums(artist_row, scope, 1, &al.albums, &al.keys);
+        if (title) az_fit(title, cc_str(deque_at(artist_row, 0), REC_TITLE));
+    } else {
+        al.albums = cc_albums();
+        al.count = al.albums ? deque_size(al.albums) : 0;
+        al.order = cc_album_order(al.albums);
+    }
     if (!al.count || !grid_init(&al.g, al.win, GRID_TILES, GRID_COVER, 0)) {
         grid_free(&al.g);
         al_show(al.view, 0);
         al_show(al.status, 1);
-        widget_set_tr_text(al.status, al.count ? "Not enough memory" : "Update Local Music first");
+        widget_set_tr_text(al.status, al.count     ? "Not enough memory"
+                                      : artist_row ? "No albums"
+                                                   : "Update Local Music first");
         return 0;
     }
     al_shape(list);
@@ -650,7 +691,23 @@ static int al_open(int list) {
 /* The M1+ Music menu's Albums row: the mode used last (the grid on a first use). A window that will not open leaves
  * the stock Albums list, through the Home dispatcher. 0 once something is requested. */
 int albums_open(void) {
-    int r = al_open(!al_use_grid());
+    int r = al_open(!al_use_grid(), (void *)0, 0);
     if (r == -1 && !al.win) return pod_home_open(HOME_ALBUM);
+    return r;
+}
+
+/* The Artists page's row `index` of `artists` (patch/artists.c; the caller keeps its list): the same page, in the mode used last, on that artist's
+ * albums (scope CLASS_ARTISTS, or CLASS_COMPOSERS for a composer), the name as its title. 0 once the page is up, -1 if it could not open (the caller
+ * opens Cover Flow on the artist), -2 if the asset is not ours. */
+int albums_open_artist(void *artists, unsigned index, unsigned scope) {
+    void *row = artists && index < deque_size(artists) ? deque_at(artists, index) : (void *)0, *d;
+    int r;
+    if (al.win || !row) return -1;
+    d = _create_deque("stSongInfo");
+    if (!d) return -1;
+    deque_init(d);
+    _deque_push_back(d, row); /* a copy, as the stock queries push rows */
+    r = al_open(!al_use_grid(), d, scope == CLASS_COMPOSERS ? CLASS_COMPOSERS : CLASS_ARTISTS);
+    if (!al.win) deque_destroy(d); /* else the window's destroy frees it */
     return r;
 }

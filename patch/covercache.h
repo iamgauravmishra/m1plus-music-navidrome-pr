@@ -124,6 +124,8 @@ void cc_build_stop(void); /* cancel, join (bounded by one album's art), free; sa
 int cc_build_near(void *albums, const unsigned *order, unsigned centre);
 /* The same walk in bounded steps: `*cursor` starts at 0 and is advanced; at most `batch` albums are considered (and so
  * stat'ed) per call. 1 once the walk is complete (or the set is full), 0 when more remains. The caller keeps `centre`
- * and the set unchanged between calls, and starts the worker only after the last step (jobs are never written while it runs). */
-int cc_build_near_step(void *albums, const unsigned *order, unsigned centre, unsigned *cursor, unsigned batch);
+ * and the set unchanged between calls, and starts the worker only after the last step (jobs are never written while it runs). `keys`, if not NULL, holds the cache key of each album by
+ * display position (a scoped list's, patch/coverflow.c coverflow_artist_albums); NULL keys every album by cc_album_key. */
+int cc_build_near_step(void *albums, const unsigned *order, const unsigned *keys, unsigned centre, unsigned *cursor,
+                       unsigned batch);
 #endif

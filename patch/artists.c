@@ -40,6 +40,7 @@
 #include "i18n.h"
 
 extern int coverflow_artist(void *artists, unsigned index, unsigned scope); /* patch/coverflow.c */
+extern int albums_open_artist(void *artists, unsigned index, unsigned scope); /* patch/albums.c */
 extern int songs_open_genre(const char *name, int unknown); /* patch/songs.c */
 extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
 
@@ -101,14 +102,14 @@ static const char *ar_name(void *r) {
 /* The stock row shown at display position i. */
 static unsigned ar_stock(unsigned i) { return ar.order ? ar.order[i] : i; }
 
-/* A tap: an artist's or a composer's albums in Cover Flow; a genre's songs on our Songs page (the stock row tap's classinfo and class 0xff09, songs_open_genre). */
+/* A tap: an artist's or a composer's albums on our Albums page (Cover Flow if that window will not open); a genre's songs on our Songs page (the stock row tap's classinfo and class 0xff09, songs_open_genre). */
 static __attribute__((noinline)) int
 ar_open(unsigned i) { /* (a symbol of its own: the tests call it with a display position) */
     if (!ar.artists || i >= ar.count) return RET_OK;
     if (ar.cls == CLASS_GENRES) {
         void *r = deque_at(ar.artists, ar_stock(i));
         songs_open_genre(ar_name(r), *(int *)((char *)r + REC_ID) == -1);
-    } else
+    } else if (albums_open_artist(ar.artists, ar_stock(i), ar.cls) == -1)
         coverflow_artist(ar.artists, ar_stock(i), ar.cls);
     return RET_OK;
 }

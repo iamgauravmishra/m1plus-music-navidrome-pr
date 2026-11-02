@@ -1708,13 +1708,23 @@ def artists_tap(m, i, starts=(0, 1), dx=0, dy=0, count=30000000):
     m.calls = calls + m.calls
 
 
-def artists_machine(artists=('Miles Davis', 'Nina Simone', 'Unknown Artist'), composers=(), genres=()):
+ALBUMS_PAGE_WIDGETS = ('btn_albumview', 'btn_coverflow', 'label_row_sub', 'label_grid_title', 'label_grid_sub')
+
+
+def artists_machine(artists=('Miles Davis', 'Nina Simone', 'Unknown Artist'), composers=(), genres=(), albums_page=False):
     """A machine with the Artists page's widgets, the stock artist list (class 0xf004), each
     artist's albums (loadAlbumList) and the library album list (getAllAlbum). Miles Davis has
     three albums, one of them (Jazz Hits) filed under Various Artists in the library list; Nina
-    Simone has one; Unknown Artist none. Every library album is cached under its library key."""
+    Simone has one; Unknown Artist none. Every library album is cached under its library key.
+    A row's tap opens our Albums page scoped to the artist when albums_page is set (its widgets exist);
+    otherwise that window will not open and the tap falls back to Cover Flow on the artist, which
+    the Cover Flow tests of this module drive."""
     m = cover_machine(albums=0, cls=ListMachine)
     for n in AR_WIDGETS: m.widget(n)
+    if albums_page:
+        for n in ALBUMS_PAGE_WIDGETS: m.widget(n)
+    else:
+        m.windows['m1plus_albums'] = 0
     # the page's widgets as widget structs (window > list_view > scroll_view > view_grid, and the rail), for demo's own widget_to_local (as songs_machine)
     win, lv, sv, view, rail = m.alloc(0x80), m.widgets['artists_listview'], m.alloc(0x180), m.widgets['view_grid'], m.widgets['sg_rail']
     m.u.mem_write(sv, bytes(0x180)); m.u.mem_write(lv, bytes(0x80)); m.u.mem_write(view, bytes(0x80)); m.u.mem_write(rail, bytes(0x80))
@@ -1723,6 +1733,7 @@ def artists_machine(artists=('Miles Davis', 'Nina Simone', 'Unknown Artist'), co
     m.setword(sv + 8, 310)
     for off, v in ((0, O['SG_RAIL_X']), (4, 50), (8, O['SG_RAIL_W']), (0xc, O['GRID_VIEW_H']), (0x44, win)): m.setword(rail + off, v)
     m.widgets['artists_scrollview'] = sv
+    if albums_page: m.widgets['albums_scrollview'] = sv   # the Albums page's stock list, the same geometry
     m.mem_geometry, m.live_scroll = True, frozenset({sv, rail})
     m.sv, m.rail, m.view, m.lv = sv, rail, view, lv
     m.canvas = m.alloc(0x80); m.oy_canvas = m.canvas

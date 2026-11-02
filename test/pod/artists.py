@@ -151,7 +151,7 @@ def artists_tests(ctx):
     expect(shown and not any(c[0] == 'widget_set_text_utf8' for c in m.calls), 'an artist with one album gets no card')
     put_value(m, 0)
     r2 = m.call(PSYMS['ar_open'], a0=0, count=200000)
-    expect([c for c in m.calls if c[0] == 'window_open'] == [], f'Cover Flow does not open twice ({r2}, {m.calls[:6]})')
+    expect(('window_open', 'm1plus_cover') not in m.calls, f'Cover Flow does not open twice ({r2}, {m.calls[:6]})')
     m = artists_machine(); m.call(open_, count=5000000)
     m.call(PSYMS['ar_open'], a0=2, count=8000000)
     expect('view' not in m.names() and
@@ -838,7 +838,125 @@ def genre_composer_tests(ctx):
     expect(any(c[0] == 'widget_set_text_utf8' and c[2] == 'No albums' for c in m.calls), 'a composer without albums says No albums')
 
 
-SECTIONS = [artists_tests, genre_composer_tests, index_tests, sort_tests]
+def scoped_albums_tests(ctx):
+    """A tap on an artist or composer opens our Albums page scoped to them (the shared grid / list mode, the name as the title, the All songs row dropped);
+    its Cover Flow button opens the old scoped Cover Flow; a window that will not open falls back to Cover Flow."""
+    expect = ctx.expect
+    open_ = PSYMS['artists_open']
+    ROWH, RGAP = O['LIST_ROW_H'], O['GRID_ROW_GAP']
+    CELL_PITCH = O['GRID_COVER'] + O['GRID_TITLE_GAP'] + O['GRID_TITLE_H'] + O['GRID_SUB_H'] + RGAP   # the grid's row pitch (patch/grid.h)
+    sv_y = SCREEN_Y0
+
+    def content(m): return [c[3] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.view][-1]
+    def tap(m, x, y):
+        m.touch('down', x, sv_y + y, 1000, fn='al_on_down'); calls = list(m.calls)
+        m.touch('up', x, sv_y + y, 1080, fn='al_on_up', count=40000000); m.calls = calls + m.calls
+    def opened(artists=('Miles Davis', 'Nina Simone', 'Unknown Artist'), composers=(), view=b'0\n', i=0, home=0):
+        m = artists_machine(artists=artists, composers=composers, albums_page=True)
+        if view is not None: m.fs['/mnt/data/m1plus/albums-view'] = view
+        m.call(open_, a0=home, count=20000000)
+        m.calls = []
+        m.call(PSYMS['ar_open'], a0=i, count=40000000)
+        return m
+
+    # an artist: the Albums page (list mode as saved), the artist's albums without the All songs row, the artist as the title
+    m = opened()
+    la = [c for c in m.calls if c[0] == 'loadAlbumList']
+    expect(('window_open', 'm1plus_albums') in m.calls and ('window_open', 'm1plus_cover') not in m.calls,
+           'a tap on an artist opens the Albums page, not Cover Flow')
+    expect(la and la[0][1] == O['CLASS_ARTISTS'] and la[0][3] == 'Miles Davis', f'the stock artist query runs for that artist ({la[:1]})')
+    expect(content(m) == 4 * ROWH, f'three albums and the All Songs row last ({content(m)} px of list rows)')
+    expect(('widget_set_text_utf8', m.widgets['label_title'], 'Miles Davis') in m.calls, 'the title is the artist')
+    expect(m.fs['/mnt/data/m1plus/albums-view'] == b'0\n' and m.props.get((m.widgets['btn_albumview'], 'style:normal:icon')) == 'pod_nav_grid',
+           'the list mode saved for Albums is the mode used, the toggle shows the grid glyph')
+    # the covers are the library's files (Jazz Hits is filed under Various Artists there)
+    loads = []
+    for _ in range(12):
+        m.call(PSYMS['al_on_load'], count=40000000); loads += [c[1] for c in m.calls if c[0] == 'widget_load_image']
+        if not any(c[0] == 'timer_add' and c[1] == PSYMS['al_on_load'] for c in m.calls): break
+    jazz = 'file://' + art_file(fnv(fnv(O['FNV_SEED'], 'Various Artists'), 'Jazz Hits'))
+    expect(jazz in loads and len(set(loads)) == 3, f'the covers take the library album\'s cache keys ({loads})')
+    # a tap on the second row opens the artist's album page (class 0xff01)
+    m.calls = []
+    tap(m, 100, ROWH + 10)
+    expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_ARTIST_ALBUMS'], 1) in m.calls
+           and [c for c in m.calls if c[0] == 'loadAlbumList'][-1][3] == 'Miles Davis', 'a tap on an album opens its page as the artist\'s album (0xff01, its row)')
+    # the toggle persists in the shared file and keeps the artist's albums
+    m.calls = []
+    m.call(PSYMS['al_on_toggle'], count=40000000)
+    expect(m.fs.get('/mnt/data/m1plus/albums-view') == b'1\n' and content(m) == RGAP + 2 * CELL_PITCH, 'the toggle switches to the grid and writes the shared file')
+    # Cover Flow, one tap away, on the same artist
+    m.calls = []
+    m.call(PSYMS['al_on_cover'], count=40000000)
+    la = [c for c in m.calls if c[0] == 'loadAlbumList']
+    expect(('window_open', 'm1plus_cover') in m.calls and la and la[0][3] == 'Miles Davis' and ('widget_set_text_utf8', m.widgets['label_title'], 'Miles Davis') in m.calls,
+           'the Cover Flow button opens Cover Flow scoped to the same artist')
+    expect(m.fs.get('/mnt/data/m1plus/albums-view') == b'1\n', 'Cover Flow is never stored as the mode: the file still says grid')
+    m.call(PSYMS['pod_on_back'], count=2000000)
+    m.calls = []
+    m.call(PSYMS['al_on_destroy'], count=2000000)
+    expect(m.names().count('deque_destroy') >= 2, 'closing frees the album list and the artist row')
+    expect(m.fs.get('/mnt/data/m1plus/albums-view') == b'1\n', 'Back from the scoped page leaves the stored mode alone')
+
+    # the mode is the one shared file: the grid chosen on the artist's page is the next artist's and Home > Albums', and the other way round
+    grid = lambda m: m.props.get((m.widgets['btn_albumview'], 'style:normal:icon')) == 'pod_nav_list'
+    m2 = opened(view=b'1\n', i=1)
+    expect(grid(m2) and content(m2) == RGAP + CELL_PITCH, 'an artist tap opens the grid when the grid was chosen last')
+    m3 = artists_machine(albums_page=True); m3.fs.update(m.fs); m3.call(PSYMS['albums_open'], count=20000000)
+    expect(grid(m3), 'Home > Albums opens in the mode chosen on the artist page')
+    m3.call(PSYMS['al_on_toggle'], count=40000000)
+    expect(m3.fs.get('/mnt/data/m1plus/albums-view') == b'0\n', 'toggled on Home > Albums: list')
+    m4 = artists_machine(albums_page=True); m4.fs.update(m3.fs); m4.call(open_, count=5000000); m4.calls = []
+    m4.call(PSYMS['ar_open'], a0=0, count=40000000)
+    expect(not grid(m4) and content(m4) == 4 * ROWH and ('window_open', 'm1plus_cover') not in m4.calls, 'and the next artist tap opens the list, never Cover Flow')
+
+    # the All Songs row: the last tile, the artist as its second line, our Songs page on every song of the artist
+    m = opened(); m.strings = {'local_allsong': 'All Songs'}
+    m.canvas = m.alloc(0x80); m.oy_canvas = m.canvas
+    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    m.setword(m.canvas + O['CANVAS_OY'], SCREEN_Y0 & 0xffffffff)
+    m.texts.clear(); m.blits.clear()
+    m.call(PSYMS['al_on_paint'], a0=0, a1=ev, count=400000000)
+    tx = [t for t, r in m.texts]
+    expect(tx == ['Kind of Blue', 'Jazz Hits', 'Bitches Brew', 'All Songs'] + ['Miles Davis'] * 4, f'the fourth row is All Songs over the artist ({tx})')
+    m.calls = []
+    tap(m, 100, 3 * ROWH + 10)
+    expect(('window_open', 'm1plus_songs') in m.calls and not any(c[0] == 'navigator_to_with_context' for c in m.calls), 'a tap on All Songs opens our Songs page on the artist\'s songs')
+    m = opened(); m.windows['m1plus_songs'] = 0; m.calls = []
+    tap(m, 100, 3 * ROWH + 10)
+    expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_ARTIST_ALBUMS'], 3) in m.calls, 'the Songs page will not open: the stock page on the All songs row')
+    m = opened(i=1, view=b'1\n')
+    expect(content(m) == RGAP + CELL_PITCH, 'one album: no All Songs tile')
+    m = opened(i=0, view=b'1\n'); m.calls = []
+    tap(m, O['GRID_MARGIN'] + O['GRID_COVER'] + O['GRID_GAP'] + 10, RGAP + CELL_PITCH + 10)   # the grid's fourth tile: row 1, column 1
+    expect(('window_open', 'm1plus_songs') in m.calls, 'the grid\'s last tile is All Songs too')
+
+    # one album, none
+    m = opened(i=1)
+    expect(content(m) == ROWH, 'one album: one row')
+    m = opened(i=2)
+    expect(any(c[0] == 'widget_set_text_utf8' and c[2] == 'No albums' for c in m.calls), 'an artist without albums says No albums')
+
+    # a composer: loadAlbumList(0xf005), class 0xff02
+    m = opened(composers=('Mozart', 'Bach', 'Unknown Composer'), home=pod_pages.HOME_COMPOSER, i=1)
+    la = [c for c in m.calls if c[0] == 'loadAlbumList']
+    expect(('window_open', 'm1plus_albums') in m.calls and la and la[0][1] == O['CLASS_COMPOSERS'] and la[0][3] == 'Bach'
+           and ('widget_set_text_utf8', m.widgets['label_title'], 'Bach') in m.calls and content(m) == 3 * ROWH, 'a composer: his two albums and the All Songs row on the Albums page')
+    m.calls = []
+    tap(m, 100, 10)
+    expect(any(c[:3] == ('navigator_to_with_context', 'albuminfo_page', O['CLASS_COMPOSER_ALBUMS']) for c in m.calls), 'and his album page opens as a composer\'s (0xff02)')
+    m.calls = []
+    tap(m, 100, 2 * ROWH + 10)
+    expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_COMPOSER_ALBUMS'], 2) in m.calls and ('window_open', 'm1plus_songs') not in m.calls,
+           'a composer\'s All Songs row is the stock page on the All songs row, as Cover Flow\'s card (no composer songs page)')
+
+    # a window that will not open: Cover Flow on the artist, as before
+    m = artists_machine(); m.call(open_, count=5000000); m.calls = []
+    m.call(PSYMS['ar_open'], a0=0, count=8000000)
+    expect(('window_open', 'm1plus_albums') in m.calls and ('window_open', 'm1plus_cover') in m.calls, 'the Albums window will not open: Cover Flow on the artist')
+
+
+SECTIONS = [artists_tests, scoped_albums_tests, genre_composer_tests, index_tests, sort_tests]
 
 
 def run(ctx):

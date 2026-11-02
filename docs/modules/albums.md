@@ -8,6 +8,20 @@ Albums opens a grid or list in the last selected mode. Tapping an album calls
 `cc_open_album`; Back returns to the same position. Cover Flow opens above this page.
 If the window cannot open, the Home dispatcher opens stock Albums.
 
+Scoped to an artist or composer: a tap on a row of the Artists page (`albums_open_artist(list, row, scope)`)
+opens the same window and mode on that artist's albums. The page holds a copy of the artist's row and the album list
+and cache keys from `coverflow_artist_albums` (`patch/coverflow.c`: `loadAlbumList(0xf004 / 0xf005, artist)`, each album
+keyed like the library album of the same name, the case-insensitive index from 24 albums; shared with Cover Flow's
+scoped page). The stock trailing "All songs" row (id -2) is kept as the last tile with two albums or more (dropped with one):
+same tile size, the cards' placeholder disc (key 0: no cache file, never scanned or built), "All Songs" (stock key
+`local_allsong`) over the artist's name. Its tap opens our Songs page on every song of the artist (`songs_open_artist`;
+the stock page on the All songs row if it will not open, and for a composer, which has no songs page, as Cover Flow's card). The title is the name, fitted with an ellipsis; an empty
+list says "No albums". An album tap is `cc_open_album(row, scope, index)`: class `0xff01` / `0xff02`. The Cover Flow
+button opens Cover Flow scoped to the same artist (`coverflow_artist`) above the page; Back returns here, then to
+the Artists page. The mode file is shared with Home > Albums, toggling writes it, and Cover Flow is never stored.
+The cache scan uses the scoped keys (`cc_build_near_step`'s `keys`; it skips the All songs row). The deque, list and keys are freed on destroy.
+If the window cannot open the caller opens Cover Flow on the artist.
+
 ## Layout and state
 
 | Element | Contract |

@@ -1232,23 +1232,27 @@ static void *name_find(void *all, const unsigned *t, unsigned mask, const char *
     return (void *)0;
 }
 
-static int load_artist(void) {
+/* One artist's (or composer's) albums for any page: the rows of loadAlbumList(scope, the artist) copied into *albums (the stock All songs row last, kept
+ * when keep_card and two albums or more, else dropped from the count), their cache keys into *keys (calloc, n entries; NULL when it cannot be made or
+ * the list is over MAX_ALBUMS: each album then keys itself). Returns the count (0: none, *albums NULL). The caller frees both. The Cover Flow page and
+ * the Albums page's scoped mode (patch/albums.c) share it. */
+int coverflow_artist_albums(void *artist_row, unsigned scope, int keep_card, void **albums, unsigned **keys) {
     void *list, *all;
     unsigned n, i, j, m, mask = 0, *ix = (unsigned *)0;
-    loadAlbumList(cf.scope, deque_at(cf.artist_row, 0));
+    *albums = (void *)0, *keys = (unsigned *)0;
+    loadAlbumList(scope, deque_at(artist_row, 0));
     list = *(void **)PDEQ_SHOWLIST;
     n = list ? deque_size(list) : 0;
-    if (!n || !(cf.albums = cc_copy_list(list))) return 0;
-    if (I(deque_at(cf.albums, n - 1), REC_ID) == ID_ALL_SONGS && n - 1 < 2) --n;
-    cf.count = n;
+    if (!n || !(*albums = cc_copy_list(list))) return 0;
+    if (I(deque_at(*albums, n - 1), REC_ID) == ID_ALL_SONGS && (!keep_card || n - 1 < 2)) --n;
     if (!n || n > MAX_ALBUMS) return (int)n;
-    cf.keys = calloc(n, sizeof *cf.keys); /* none: each album keys itself (key_at) */
-    all = cf.keys && loadLocalClassList(CLASS_ALBUMS) > 0 ? *(void **)PDEQ_SHOWLIST : (void *)0;
+    *keys = calloc(n, sizeof **keys); /* none: each album keys itself */
+    all = *keys && loadLocalClassList(CLASS_ALBUMS) > 0 ? *(void **)PDEQ_SHOWLIST : (void *)0;
     m = all ? deque_size(all) : 0;
     if (n >= IDX_MIN && m) ix = name_index(all, m, &mask); /* none (few albums, or no memory): the scan below */
-    for (i = 0; cf.keys && i < n; ++i) {
-        void *r = deque_at(cf.albums, i), *same = r, *hit;
-        if (is_card(r)) continue; /* key 0: no art */
+    for (i = 0; *keys && i < n; ++i) {
+        void *r = deque_at(*albums, i), *same = r, *hit;
+        if (I(r, REC_ID) == ID_ALL_SONGS) continue; /* key 0: no art */
         if (ix) {
             hit = name_find(all, ix, mask, cc_str(r, REC_ALBUM));
             if (hit) same = hit;
@@ -1259,10 +1263,15 @@ static int load_artist(void) {
                     break;
                 }
         }
-        cf.keys[i] = cc_album_key(same);
+        (*keys)[i] = cc_album_key(same);
     }
     free(ix);
     return (int)n;
+}
+
+static int load_artist(void) {
+    cf.count = (unsigned)coverflow_artist_albums(cf.artist_row, cf.scope, 1, &cf.albums, &cf.keys);
+    return (int)cf.count;
 }
 
 /* Jobs for the albums with no cache file yet. 1 when a

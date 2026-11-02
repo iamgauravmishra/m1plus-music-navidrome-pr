@@ -33,6 +33,8 @@
 #include "i18n.h"
 
 extern int coverflow_artist(void *artists, unsigned index, unsigned scope); /* patch/coverflow.c */
+extern int albums_open_artist(void *artists, unsigned index,
+                              unsigned scope); /* patch/albums.c: -1 when the window will not open */
 extern int songs_open_playlist(int id, const char *name); /* patch/songs.c: -1 when it did not open */
 extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
 
@@ -1037,7 +1039,8 @@ static __attribute__((noinline)) void se_open_row(int i) {
     se_rec_add(se.query);
     switch (se.rows[i].kind) {
     case SE_ARTIST:
-        coverflow_artist(se.lists[SE_ARTIST], se.rows[i].idx, CLASS_ARTISTS);
+        if (albums_open_artist(se.lists[SE_ARTIST], se.rows[i].idx, CLASS_ARTISTS) == -1)
+            coverflow_artist(se.lists[SE_ARTIST], se.rows[i].idx, CLASS_ARTISTS);
         break;
     case SE_ALBUM:
         cc_open_album((void *)0, 0, (int)se.rows[i].idx); /* the Albums list's rows are the stock rows */

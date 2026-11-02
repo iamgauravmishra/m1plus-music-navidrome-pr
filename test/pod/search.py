@@ -623,8 +623,11 @@ def tap_tests(ctx):
     """A tap: a song plays in the library's order, an artist opens Cover Flow, an album our album page, a playlist our Songs page; a drag or an abort does nothing; a stale list is read again."""
     expect = ctx.expect
     songs = [('Alpha one', 'Ann', 'First'), ('Alpha two', 'Bob', 'Second'), ('Beta', 'Ann', 'First')]
+    def albums_widgets(m):   # the Albums page's widgets (an artist's tap opens it)
+        for n in ('view_grid', 'albums_scrollview', 'label_status', 'label_row_title', 'label_row_sub', 'label_grid_title', 'label_grid_sub', 'btn_albumview', 'btn_coverflow'): m.widget(n)
     def fresh(**kw):
         m = opened(songs, ['Alphaville', 'Ann'], [('Alpha Album', 'Ann'), ('Gamma', 'Bob')], playlists=['Alpha Mix'], **kw)
+        albums_widgets(m)
         m.artist_albums['Alphaville'] = [m.record(album='X', artist='Alphaville', path='/mnt/mmc/a/1.flac', rid=7)]
         typed(m, 'alpha')
         return m
@@ -653,13 +656,18 @@ def tap_tests(ctx):
            'the album page gets its cover task list once, from the album list (init, then the thread released), and only from the tap: the page\'s queries (the library read) never touch it')
     m = fresh()
     tap(m, y_of(0))        # the artist
-    expect(('window_open', 'm1plus_cover') in m.calls and any(c[0] == 'loadAlbumList' and c[1] == ARTISTS and c[3] == 'Alphaville' for c in m.calls), 'an artist: Cover Flow on that artist (coverflow_artist)')
+    expect(('window_open', 'm1plus_albums') in m.calls and ('window_open', 'm1plus_cover') not in m.calls
+           and any(c[0] == 'loadAlbumList' and c[1] == ARTISTS and c[3] == 'Alphaville' for c in m.calls), 'an artist: the Albums page scoped to that artist (albums_open_artist)')
+    m = fresh(); m.windows['m1plus_albums'] = 0
+    tap(m, y_of(0))
+    expect(('window_open', 'm1plus_cover') in m.calls and any(c[0] == 'loadAlbumList' and c[1] == ARTISTS and c[3] == 'Alphaville' for c in m.calls), 'the Albums window will not open: Cover Flow on that artist')
     m = fresh()
     tap(m, y_of(2))        # the playlist
     expect(any(c[0] == 'window_open' and c[1] == 'm1plus_songs' for c in m.calls) or any(c[0] == 'navigator_to_with_context' for c in m.calls), 'a playlist opens our Songs page (or the stock one)')
     # the artist that is the second stock row opens itself, not row 0
     m = opened(songs, ['Zed', 'Alphaville'], [('Alpha Album', 'Ann')])
     m.artist_albums['Alphaville'] = [m.record(album='X', artist='Alphaville', path='/mnt/mmc/a/1.flac', rid=7)]
+    albums_widgets(m)
     typed(m, 'alpha')
     tap(m, ROW_H // 2)
     expect(any(c[0] == 'loadAlbumList' and c[3] == 'Alphaville' for c in m.calls), 'the tap opens the artist it shows, not the stock row 0')
@@ -692,7 +700,7 @@ def tap_tests(ctx):
     m.setword(SHOWLIST, m.new_deque([]))
     m.calls = []
     tap(m, y_of(0))
-    expect(('window_open', 'm1plus_cover') in m.calls, 'an artist still opens when the song list was replaced (the page keeps its own copy)')
+    expect(('window_open', 'm1plus_albums') in m.calls, 'an artist still opens when the song list was replaced (the page keeps its own copy)')
 
 
 def perf_tests(ctx):
