@@ -55,7 +55,7 @@ in `offsets.inc`. Tests check the shared geometry: `test/pod/minibar.py`. Previe
 - Hit testing (`test/pod/minibar.py`, demo's own `widget_find_target`): each control is reached at its centre and 14 px from its top and bottom; the
   title, cover, corners and the gap before play fall to the card; the pause button takes play's place only while playing; a hidden bar takes none.
 
-## Backdrop blur (EXPERIMENTAL, its own commit: `git revert` it to get the plain glass)
+## Backdrop blur (experimental)
 
 The glass is translucent, so the rows scrolling behind it show through sharp. The payload blurs what is under the pill in the card's own
 `EVT_BEFORE_PAINT` (`0x11f`: `widget_paint` dispatches it right after `canvas_translate` to the widget and before the background, `0x66dd98`; the glass image is painted by the

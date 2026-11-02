@@ -164,14 +164,17 @@ and the navigator's page-init dispatcher: unedited stock paths. The payload's ow
 entry is the Home menu's opening (`home_menu_opened` -> `dailymix_start`, from the guard's open timer, as `recent_start` and `minibar_start`): it reads the 1 KB mix file and registers events; the art file is read DM_FIRST_MS later, a mix is
 made no earlier than DM_START_MS (8 s) after that.
 
-## Verified in emulation only (`test/pod/dailymix.py`)
+## Validation
 
-The compiled payload under Unicorn on the Home menu as real widget structs (demo's own layouter, scroll_view and pointer code) with the stock library, clock (`time`, `localtime`) and canvas mocked: constants
-and the stock words/calls; the art in C against the model, byte for byte (file) and pixel for pixel (bitmap with the blended corners), on 13 palettes and seeds; the mix file corpus; the whole job on a 556-song library
-(the picks against `pod_mix.select`, the constraints, the mix file's paths, yesterday's file replaced, no stock playlist class read, every written path under `/mnt/mmc/.m1plus` and no `.m3u`, the directory made when missing, no card (nothing read or written, section hidden), a card swap (no mix file on the new card: a new mix after DM_START_MS), the files, Regenerate, the next day, the local day,
-every failure); the text lines in 13 languages x 6 name lists against the model's wrap; taps, drag, abort, the disc's queue in the mix's order; the section in the list (order, heights, the shelf below,
-the scroll position kept, hit tests); every fall-back. **Not seen on a device** (`docs/modules/device-checks.md`): a card swap (the new card's own mix, or a new mix made on it; the first card's back with its mix), the Home menu with no card (no section, no mix made, nothing written to flash), the look of the gradient on the real panel, the 36 px title in AWTK, the cost of the stock queries
-(`getAllMusic`, `getAllOftenRecord`, the album list) on a library of thousands, and the stock player resuming a Daily Mix after a reboot in library order.
+`test/pod/dailymix.py` checks the compiled job against the selection/art models,
+file parsing and atomic writes, card absence/swaps, generation failures, translated layout,
+input and shared stock scrolling. `test/pod/dmpage.py` covers the detail page.
+Tests use real stock widget structures and selected layout/pointer code with modeled library,
+clock and canvas services.
+
+Device checks cover card changes, flash-write avoidance without a card, panel appearance,
+AWTK title rendering, large-library query cost and playback resume after reboot.
+See [device checks](device-checks.md); emulation does not establish those results.
 
 ## The page (`dp_*` in `patch/dailymix.c`, `ui/m1plus_dailymix.bin`, `tools/pod_ui.py build_dailymix_page`, `tools/pod_dailymix.py` DP_*, `patch/offsets.inc` DP_*, `test/pod/dmpage.py`, previews `tools/preview_dmpage.py` -> `out/dailymix-page/`)
 

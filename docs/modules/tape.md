@@ -24,7 +24,7 @@ TYPE IV METAL fine print. Current sizes and rootfs headroom come from the build 
 
 Cover-derived band tint, a control strip, rewind/fast-forward, track-skip swipes, a lock-screen
 skin and hardware Back handling are not implemented. Seek needs a reviewed stock path; see
-[virtual iPod limits](ipod.md#now-playing-the-ipods-cycle-why-not).
+[virtual iPod limits](ipod.md#playback-limits).
 
 ## Landscape and rotation
 
@@ -177,7 +177,7 @@ fields dropped in this order when it does not fit: the clock, then the format (`
 1 Normal, near the start, playing; 2 Chrome, mid-track, repeat on; 3 Metal, near the end, paused; 4 Chrome with the tap control strip (not built). The page shows frame 1's look
 (`out/preview/tape-emu-*.png` are the emulated device frames).
 
-## Device checklist (first flash)
+## Device checklist
 
 Open Now Playing on a playing track, More (page 1), tap **Cassette Mode**: the sheet closes and the cassette appears, readable when the player is held with its **right edge up**.
 - Is the sheet's top edge right now on both pages (page 1 five rows with its own 250 px glass, page 2 four rows, 200 px, rounded corners and rim)?

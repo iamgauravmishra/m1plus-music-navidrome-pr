@@ -30,5 +30,7 @@ Before searching stock binaries, read [payload](modules/payload.md) and [address
 | `test/` | MIPS/host tests and package goldens |
 | `assets/` | Fonts, icon sources, boot logo and wallpaper |
 
-Module notes preserve evidence and experiments. Use `tools/pod.py` for current pins/sources
-and build manifests for sizes. Device results apply only to their recorded build.
+Module references describe current behavior, source files, safety constraints and validation
+limits. Keep implementation plans and superseded designs in git history. Use `tools/pod.py`
+for current pins/sources and build manifests for sizes. Device results apply only to their
+recorded build.

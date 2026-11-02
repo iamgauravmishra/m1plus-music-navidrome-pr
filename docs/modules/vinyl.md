@@ -158,7 +158,7 @@ carry on from where they were.
 
 Seek by dragging the arm, a scratch / cue gesture, picture-disc records, a speed (45 rpm) choice, a lock-screen skin, hardware Back handling.
 
-## Device checklist (first flash)
+## Device checklist
 
 Now Playing on a playing track, More: six rows (Look up album, Look up artist, Add to playlist, Cassette Mode, **Vinyl Mode**, More), the sheet 300 px with a
 clean rounded top. Tap Vinyl Mode: the sheet closes and the turntable appears, the status bar gone.

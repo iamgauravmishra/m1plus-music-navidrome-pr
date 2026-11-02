@@ -2,7 +2,7 @@
 
 Sources: `patch/homecover.c`, `tools/pod_ui.py` (`cover_progress`), `HC_*` in `patch/offsets.inc`, `Preparing covers` in
 `tools/pod_i18n.py`; test `test/pod/homecover.py`. The shared builder is described in [Cover Flow](coverflow.md) (`cc_build_*`),
-its Albums-page use in [Albums](albums.md) "Background cache build".
+its Albums-page use in [Albums](albums.md) "Cache building".
 
 The Home page ([menu](menu.md)) builds the album covers that have no cache file in the background, with the same shared worker as
 the Albums page, and shows a plain progress line at the top of the page while it runs: `Preparing covers 120/840`.

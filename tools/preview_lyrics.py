@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Preview of the Now Playing lyrics page: the stage-2 look (28 px Medium, greys, hard clip) beside the new one (bold face, white
+"""Preview of the Now Playing lyrics page: the earlier look (28 px Medium, greys, hard clip) beside the current one (bold face, white
 at falling opacity, edge fade), over the background of a device screenshot. docs/modules/lyrics.md.
 
-  preview_lyrics.py OUT.png [--mode look|scrim|intro] [--shot SHOT.bmp] [--tree RAW_TREE_ROOT] [--bold FILE.ttf]
+  preview_lyrics.py OUT.png --shot SHOT.bmp [--mode look|scrim|intro] [--tree RAW_TREE_ROOT] [--bold FILE.ttf]
 
-Stage 4: --mode scrim puts the stage-3 scrim (np_scrim, 50 % black) beside the lyrics scrim (np_scrim_lyrics, 27 %, eased edges) over the screenshot's window and
+The --mode scrim option puts the info scrim (np_scrim, 50 % black) beside the lyrics scrim (np_scrim_lyrics, 27 %, eased edges) over the screenshot's window and
 over two cover tones; --mode intro shows the interlude dots at four moments of a 12 s intro, the first line waiting under them.
 
 The layout is the page's own: the line geometry of patch/offsets.inc (LY_*), a line's rows from a greedy word wrap with the text model of the
@@ -172,8 +172,8 @@ def sheets(a, fonts):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('out'); ap.add_argument('--shot', default='/Users/xinfu/Downloads/shot-0022.bmp')
-    ap.add_argument('--mode', choices=('look', 'scrim', 'intro'), default='look', help='look: the stage-2 and stage-3 looks; scrim: the old and the new lyrics scrim; intro: the interlude dots')
+    ap.add_argument('out'); ap.add_argument('--shot', required=True, help='device screenshot used as the preview background')
+    ap.add_argument('--mode', choices=('look', 'scrim', 'intro'), default='look', help='look: earlier and current typography; scrim: info and lyrics scrims; intro: interlude dots')
     ap.add_argument('--tree', help='the raw tree with fonts/default.ttf (default: the release tree in work/)')
     ap.add_argument('--bold', help='the lyric face file (default: mod_font.lyric_face of the committed subset)')
     a = ap.parse_args()

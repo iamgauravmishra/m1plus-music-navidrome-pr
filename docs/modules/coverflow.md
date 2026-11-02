@@ -112,7 +112,7 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
 - **The album.** Tapping the centre cover opens our album page (`docs/modules/album-page.md`), else the plain stock `albuminfo_page`, as a stock
   Albums row does (`cc_open_album`, `patch/covercache.c`, the same call the Albums grid makes): `loadAlbumList(0xf003, 0)` puts the stock album list back into `*pdeq_showlist` (the
   page's own copy was made from the same query, so the row is the same), `albumcoverinfo_init` rebuilds
-  the cover-task list from it, `batchadd_albumcover_task(0, 0)` releases the cover thread (see album-page.md, The cover thread's state), and `navigator_to_with_context("albuminfo_page", 0xf003 | row << 16)`
+  the cover-task list from it, `batchadd_albumcover_task(0, 0)` releases the cover thread (see album-page.md, Opening and fallback), and `navigator_to_with_context("albuminfo_page", 0xf003 | row << 16)`
   opens the stock page (this fallback runs only when ours does not open). The queries repeat on every tap (the page may have been left through Now Playing, and
   anything may have reused the list or the browsing record). Back from the album page returns to the
   covers. The artist page's All albums card is not an album: it opens our Songs page on all the artist's songs (`songs_open_artist`, as the Songs button does; a composer's card, or a Songs page that will not open, falls back to the stock page on the All songs row).

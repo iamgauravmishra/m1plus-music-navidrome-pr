@@ -78,7 +78,7 @@ or searches. The flow:
 ## Matching
 
 Everything is code points. `se_next` decodes UTF-8 (a byte that is not UTF-8 is its own code point), `se_cp` folds one, `se_cat` appends a text's folding to a key, `se_fold` is the test entry
-(external, so the compiler keeps its general form). **The folding and the multi-term AND are unchanged from round 1:**
+(external, so the compiler keeps its general form). **Folding and multi-term matching:**
 
 * Case: ASCII, Latin, Greek (capitals and small letters, final sigma, tonos) and Cyrillic (`ё` is `е`).
 * Latin diacritics: Latin-1, Extended-A, the Extended-B letters songs use, Extended Additional and the Vietnamese block, as one table of ranges (`se_latin`): `é ü` give `e u`, `ß` gives `ss`,
@@ -95,7 +95,7 @@ records that match are kept per type in library order with their quality (`cand`
 one they are of (`se_search`: the previous code points compared) can only match what matched before, so only those are tested, in place (a match is written at or before where it was read); any
 other query (a deleted letter, a different word) scans the library. `have_prev` is cleared whenever the library is read again.
 
-**Pinyin initials (round 2).** Where a record has a character of U+4E00 .. U+9FFF (`se.seen`, set by `se_cat` while the first key is built), `se_search` builds a second key, `se_key(.., py=1)`:
+**Pinyin initials.** Where a record has a character of U+4E00 .. U+9FFF (`se.seen`, set by `se_cat` while the first key is built), `se_search` builds a second key, `se_key(.., py=1)`:
 the same folding, but a character with readings is an entry `SE_MASK | set of initials` (bit 0 `a` .. bit 25 `z`). `se_test` runs on it as on the first key; `se_find` takes an entry with the mask bit
 as a match for any letter in its set. The better quality of the two is kept. It is built only when the first key found nothing or only quality 2 (an initials match is never quality 0 and a
 prefix of initials is quality 1: a Latin title that is the query ranks above 周杰伦), and only when the engine is held, so a library without Chinese costs nothing extra.

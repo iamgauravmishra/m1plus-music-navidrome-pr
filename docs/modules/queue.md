@@ -11,7 +11,7 @@
   from the right: a play-mode header (`img_playmode`, `label_playmode`, the stock mode cycle `0x47a530`), the rows, a bottom button.
 - **`playerjumpinfo_page`** (the full-screen queue list, `playerjumpinfo_page_init` `0x5393bc`) is **not** reached from the queue button. Only the stock More sheet's *Look up album*
   (`0x4795cc`) opened it, and our Look up album opens our album page first (`docs/modules/playmore.md`), so it remains the fallback of that fallback. Its asset and page theme are
-  untouched (`docs/modules/album-page.md` "Other stock pages").
+  untouched (`docs/modules/album-page.md` "Stock pages").
 - **The queue** is the deque `*0xa0394c` (`PLAY_QUEUE`, `stSongInfo` rows `start_player` copied) and the play position `mclGetPlayPos` (`0x5d4290`): every stock reader pairs them
   (`get_playtimeandlength`, the lock screen, the drawer's init `0x47a8f0..0x47a93c`, which also scrolls the drawer to the playing row).
 - **A drawer row** is bound by `0x47a19c`: the text is the file name for a CUE track (`+0x48 > 0` or `+0x4c > 0`, or `mclGetPlayType() == 1`), else the title (`+0x10`); the row of the

@@ -2,6 +2,20 @@
 
 Run `make help` for common tasks. Direct tools use `uv run python -I tools/<name>.py`.
 
+## Editing rules
+
+Run builds and tests in the foreground; never background them and sleep-poll.
+Edit with the editor tool. Use `tools/sub.py --pairs` for checked mechanical replacements,
+`tools/peek.py` for image crops/zooms/diffs, and `tools/stock.py` for stock-tree searches.
+Do not use heredoc scripts, `VAR=value cmd` prefixes or `cd X && ...` chains;
+use tool flags, absolute paths and `git -C` instead. Stage explicit paths with `git add`,
+never `-A`; never commit virtual environments or generated packages/previews.
+
+Worktrees require their own `make setup`; never borrow another checkout's interpreter,
+symlink inputs or write into another checkout's `work/` or `out/`.
+`tools/paths.py` resolves shared read-only inputs. Python stays at 3.15 with dependencies
+managed by `uv sync --locked`, `pyproject.toml` and `uv.lock`. Do not run `ruff format`.
+
 ## Setup
 
 ```sh
@@ -115,6 +129,7 @@ check targets run it first. Star-import exceptions cover `test/pod/*.py` and
 ## Integration and restore
 
 Feature branches leave release `VERSION`, goldens and history unchanged. The README names no release.
+GitHub releases and git tags use plain `VERSION` without a `v`; dev About shows the dev tag.
 At integration, bump `VERSION` in `tools/build.py` (semantic: patch for fixes, minor for features, major by decision;
 `TAG = V2.1-<VERSION>` is the package version the updater compares, About shows the plain `VERSION`; dev tags stay `V2.1z...`), then run:
 

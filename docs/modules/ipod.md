@@ -35,7 +35,7 @@ with Albums, Songs, the mini player and Cover Flow.
 - **Main, Music and Settings menus:** the list and title bar in x 0 .. 160 (`IP_SPLIT_X`), and the right pane flush against it with no rule between (160 .. 320 x 0 .. 240, 160 x 240 px: `IP_PANE_X/W/H`), on which the menu casts a soft shadow (below) with the
   **cover pane** ("The cover pane", below).
 - **Main menu:** Music, Cover Flow, **Podcasts**, Shuffle Songs, **Now Playing** (only while something plays or is paused, `mclGetPlayStatus` 2 or 3, as the reference), Settings. When the row appears or goes the cursor stays on the same item (`ip_look`, `ip_root_id`).
-- **Now Playing screen:** the screen's white field with the playing cover at (10, 30), 150 px, flat and square (a tilt was tried: its whole-pixel column steps tore a seam through the picture), drawn as a straight 1:1 copy of the decoded square, and a 20 row reflection under it (`IP_NP_REFLECT`, y 180 .. 200: a mirror of the cover's last rows, 30 % opaque at the edge, fading into the background) made once per cover or appearance change into a 150 x 20 bitmap (`ip_reflect`); paint only copies both without allocating. If the reflection bitmap cannot be allocated, the cover is drawn alone. The text column (x 176): the title 18 px black, artist and album 16 px grey, and `n / N` (14 px grey) is the place in the queue (the translation table allows one
+- **Now Playing screen:** the screen's white field with the playing cover at (10, 30), 150 px, flat and square, drawn as a straight 1:1 copy of the decoded square, and a 20 row reflection under it (`IP_NP_REFLECT`, y 180 .. 200: a mirror of the cover's last rows, 30 % opaque at the edge, fading into the background) made once per cover or appearance change into a 150 x 20 bitmap (`ip_reflect`); paint only copies both without allocating. If the reflection bitmap cannot be allocated, the cover is drawn alone. The text column (x 176): the title 18 px black, artist and album 16 px grey, and `n / N` (14 px grey) is the place in the queue (the translation table allows one
   `%d` a text, so no "n of N"). The active stock play mode is marked top right (right edge x 312, y 28) by a 16 px anti-aliased icon: shuffle, repeat or repeat one, the Lucide glyphs drawn heavy (4 px stroke at 32 px) into the built images `ipod_mode_shuffle` / `ipod_mode_repeat` / `ipod_mode_repeat1`, reduced with the box filter by `cc_decode` on first use into a page-owned bitmap whose pixels are the coverage mixed from the screen colour to black (`ip_mode_bitmap`; the screen is white in both appearances); none in list play. The progress bar is the reference's: a 14 px track (x 58 .. 262, white with its top and bottom edges shaded in, a 1 px outline), the fill the six glossy blue stops `#86ABFF` 0, `#6B99F5` 0.20, `#3D89EB` 0.58, `#3698F9` 0.58, `#37B0FF` 0.82, `#5CBBFF` 1, and a 6 px reflection under it (30 % fading out); the times are 15 px, zero padded `mm:ss` on the left and `-mm:ss` on the right in 50 px side columns
   (`get_playtimeandlength`, seconds). Nothing queued: `Not Playing`. It does not blink while the player changes track: for a moment the player has no time (`get_playtimeandlength` fails or says 0) or no track (`cc_playing` NULL), so the bar is always drawn from the last valid position and length (a new track starts empty at `00:00` with the last length, the song record has no duration), the last track's text and cover stay for `IP_NP_GONE` = 3 looks without one, and only then does it say `Not Playing` (and the cover become the placeholder).
 - **The wheel** `ipod_wheel` (view 220 x 220 at (50, 250), the touch target) with the picture `ipod_wheel` as an insensitive image child (decorative overlays
@@ -52,7 +52,7 @@ centre (110, 110).
 - **Angle:** `ip_angle(dx, dy)` = degrees clockwise from 12 o'clock in sixteenths, pure integer code: `atan(x) = x / (1 + 0.28125 x^2)` on the octant (error under
   0.2 degree on large coordinates; the test compares it with `math.atan2` at 1,800 points and the pixel rounding of a small radius allows 1.5 degrees). `ip_turn(a, b)` is the
   shorter way round, so crossing 12 o'clock is smooth.
-- **Step: one row per 15 degrees** (`IP_STEP` = 240 sixteenths, 24 steps a turn; the one constant to tune on the device, 288 = 18 degrees was the first guess). The unspent
+- **Step: one row per 15 degrees** (`IP_STEP` = 240 sixteenths, 24 steps a turn). The unspent
   turn accumulates (`ip.acc`, signed, sixteenths of a degree); a step fires every time it passes +-`IP_STEP`, the **leftover carries** into the next step, and a new touch, a push or a pop
   of a level (`ip_wheel_reset`) clears it. The cursor moves, **no wrap** (the iPod stops at the ends; clamped: the hard stop below), and the window of 8 rows
   follows it (`top` is the first row shown; the cursor never leaves it).
@@ -68,8 +68,7 @@ centre (110, 110).
   (0.15; `IP_SMOOTH_NUM` / `IP_SMOOTH_DEN`). A gap over `IP_PAUSE_MS` = 250 ms between two moves, or a reversal, sets it to 0. While `v` is above `IP_FAST` = 2880 (180 degrees a second) the tier index is the time
   held above it divided by `IP_TIER_MS` = 500 ms; rows a step by tier: **1, 2, 3, 5, 8, 13, 21, 34** (the last holds). Below `IP_FAST` the tier is 0 at once. These numbers (tiers, the 400 degrees a second clamp, the 0.15 smoothing, 180 degrees a second, 500 ms, 250 ms) follow the Apple Music 404-page iPod's; numbers only, the code is ours. At 375 degrees a second the first 2-row step comes about 0.6 s into the turn (the smoothed speed passes 180 on the 5th move).
 - **Hard stop at the ends:** a step that wanted to go past the first or last row clamps there and nothing else happens: no wrap, no bump, no animation, the timer untouched,
-  as the iPod (and the Apple Music 404 page iPod). An end-of-list bump (10 px, iOS-style overscroll, on the page's timer) was tried in test build V2.1oPJ and removed: on the
-  device it felt bouncy, not like an iPod.
+  as the iPod (and the Apple Music 404 page iPod).
 - **Tap:** a touch that turned no step and travelled less than 12 px (`IP_TAP_PX`) is a tap. On the centre button: **select**. On the ring, by where it began:
   the top sector (|dy| > |dx|, up) **MENU** (back; on the main menu it closes the page: `navigator_back`), the bottom sector **play / pause**
   (`playpause_quick_click`), the left sector **previous** (`prev_quick_click(e, 0)`), the right sector **next** (`next_quick_click(e, 0)`); the two skip calls read the
@@ -77,11 +76,11 @@ centre (110, 110).
   scroll hook's abort) ends the touch and acts on nothing.
 - **Long press of MENU** (`IP_LONG_MS` = 500 ms, a touch that began on the top sector and neither turned nor travelled): pops every level to the main menu with the slide of the last one (`ip_pop_root`). The page timer watches the clock at 100 ms while such a touch is held (`ip_want_ms`), and the release checks it too; on the main menu a held MENU does nothing (it does not close the page).
 - **On Now Playing rotation does nothing** and select is play / pause: the iPod's centre-press cycle (scrubber with seek tiers of 1, 2, 3, 5 s a step, shuffle, rating; wheel volume on the default
-  screen) was **not built**, because the stock setters cannot be called safely from here with the evidence at hand (findings below, "Now Playing: the iPod's cycle, why not").
+  screen) was **not built**, because the stock setters cannot be called safely from here with the evidence at hand (“Playback limits” below).
 
 ## The cover pane (the reference's artwork pane)
 
-The split pages (main, Music, Settings) show album art in the right pane (x 160 .. 320, 160 x 240: `IP_PANE_X/W/H`), flush against the white menu (no divider line), edge to edge. **The menu casts a shadow on the pane** as on a real iPod Classic and in iPlayr (`.shadow(black 0.7, radius 8, x 4)` on the menu background): `IP_SHADOW_W` = 10 columns of black over the pane's left edge, 52 % opaque at x 160 (alpha 132) and falling like a gaussian (sigma 3.6: 132, 122, 105, 83, 61, 41, 26, 15, 8, 4) to nothing beyond x 170, the full pane height, over the cover and over the plain fill alike. It is one straight-alpha RGBA bitmap made once at open (`ip_shadow_make`, no allocation in paint), drawn by `ip_paint_pane` after the pane with `canvas_draw_image`; demo's canvas alpha-blends RGBA images over the screen (`test/awtk_fill.py`, `canvas_draw_image_ex` of a translucent image). It belongs to the menu half: while two split menus swap it stays with the pane, in the split open and close it travels with the menu half (`ip_render_edge`: the renderer replays it with the left half, `ip_paint_split` widens that half's clip by its width and the pass that draws the pane's right half skips it), and fullscreen pages have none. Test build V2.1oSIP's per-frame Ken Burns jiggled on the device (a window whose size changes each frame is resampled differently each time), so the technique stays: **whole-pixel copies of one pre-scaled cover**, nothing resampled while it moves (`test/awtk_fill.py` proves with demo's own code that a same-size window is copied pixel for pixel at any offset). The timing is the reference's. All on the page's **one timer** (`ip_tick`); no hook, no event, no new timer; paint only copies.
+The split pages (main, Music, Settings) show album art in the right pane (x 160 .. 320, 160 x 240: `IP_PANE_X/W/H`), flush against the white menu (no divider line), edge to edge. **The menu casts a shadow on the pane** as on a real iPod Classic and in iPlayr (`.shadow(black 0.7, radius 8, x 4)` on the menu background): `IP_SHADOW_W` = 10 columns of black over the pane's left edge, 52 % opaque at x 160 (alpha 132) and falling like a gaussian (sigma 3.6: 132, 122, 105, 83, 61, 41, 26, 15, 8, 4) to nothing beyond x 170, the full pane height, over the cover and over the plain fill alike. It is one straight-alpha RGBA bitmap made once at open (`ip_shadow_make`, no allocation in paint), drawn by `ip_paint_pane` after the pane with `canvas_draw_image`; demo's canvas alpha-blends RGBA images over the screen (`test/awtk_fill.py`, `canvas_draw_image_ex` of a translucent image). It belongs to the menu half: while two split menus swap it stays with the pane, in the split open and close it travels with the menu half (`ip_render_edge`: the renderer replays it with the left half, `ip_paint_split` widens that half's clip by its width and the pass that draws the pane's right half skips it), and fullscreen pages have none. The pane uses **whole-pixel copies of one pre-scaled cover**, nothing resampled while it moves (`test/awtk_fill.py` proves with demo's own code that a same-size window is copied pixel for pixel at any offset). The timing is the reference's. All on the page's **one timer** (`ip_tick`); no hook, no event, no new timer; paint only copies.
 
 - **Slots:** two 264 x 264 RGBA bitmaps (`IP_PANE_ART`: the pane's height zoomed 110%, one scale made once per cover with `cc_decode` from the 168 px cache file, `cc_box` averaging) and one pane-sized `mix` bitmap for fade frames; made on first use, freed at destroy (about 710 KB).
 - **Pan** (`ip_pane_pos`, in 1/256 px): a cover pans linearly across the margin (`IP_PANE_R` = 24 px, about +-8 % of the pane: the reference's slow drift, kept) in `IP_PANE_PAN_MS` = 7.5 s from its own start, every other cover the other way; vertically centred. That is 3.2 px a second, so each 40 ms frame is a step of about 0.13 px: **the position is fixed point (1/256 px) and the frame is built at the fraction**. The phase counts only time shown (`time_now_ms`, a step at most `IP_DRIFT_MAX_MS` = 250 ms, so a stall never jumps). The placeholder stands still (one frame, no more work).
@@ -186,57 +185,26 @@ queue size; a change repaints the screen. A new track makes the cover (the decod
 file demo writes a little after the track changes, else the placeholder). The timer goes on `EVT_WINDOW_TO_BG` and returns on `TO_FG` (which also reads the list again); destroy removes it
 and frees the cover. State is one struct in `.scratch`, cleared at open and destroy; a destroy of another window leaves the page alone.
 
-## Now Playing: the iPod's cycle, why not
+## Playback limits
 
-The wish: centre press on Now Playing cycles default -> scrubber (the wheel seeks 1, 2, 3, 5 s a step) -> shuffle -> rating; on the default screen the wheel changes the volume. Candidates found in the stock `demo`
-(`tools/stock.py`, `tools/disasm.py`), none of them used:
+Now Playing rotation has no action; select toggles play/pause. Scrubbing, wheel volume and
+a center-press mode cycle are unsupported. Stock `seek_time` (`0x4e0544`) can block
+the UI thread for 2 seconds; direct `mclSetSeek` bypasses the stock pause/DLNA handshake.
+`set_devicevolume` (`0x4d6cf8`) depends on output-specific state without a verified
+universal volume readback. Hardware volume keys retain the tested stock path.
 
-- **Seek:** `seek_time(int secs)` `0x4e0544` (a0 + the playing record's cue start at `+0x48` -> `dmrSendPause`, `mclSetSeek` `0x5d26dc`; paused (status 3) also `set_outputchannel` + `mclSetResume`; then a **busy loop of up to 200
-  x `usleep(10000)`** polling `get_playtimeandlength` until the position is within 1 s of the target, then `dmrSendPlay`). The loop **blocks the UI thread for up to 2 s** (per call; a wheel step is a call), which is
-  what the stock progress bar does on release, not 12 times a second. `mclSetSeek` alone does not block, but skips the DLNA / pause handshake the stock path does and has had no hardware test. The position to seek
-  from is `get_playtimeandlength` (whole seconds), so 1 s steps would also race the player's own position updates. Needs a design (seek on release of the finger, not per step) and a device test of gapless, DSD, CUE and
-  Bluetooth playback; a bad seek can leave `hciplayer` paused.
-- **Volume:** `set_devicevolume(int 0..100)` `0x4d6cf8` branches on the output way (`mclGetOutputWay`: wired `mclSetVol`, USB DAC `mclUsbAudioSetVol`, AirPlay `airplaySendVol`, Bluetooth with the `bt_recv_volume`
-  scaling), then `notifyVolume` `0x50ef5c` and the DLNA volume send (`0x4f1050`). The volume it sets is not returned by it: the current value lives in more than one data word (`volume` `0x97cb10`, `btsource_volume`, `max_volume`, the BT
-  device's own) and the stock volume dialog (`dialog_volume_dialog_init` `0x47e41c`, `on_volume_tsup_fun` `0x47dd9c`) also keeps the on-screen overlay in step. A wheel that sets it blindly could jump the level
-  in the headphones on a high-gain output; the stock volume keys are the only tested path.
-- **Shuffle / rating** items of the cycle would be the Settings rows' play mode (done there) and a rating (no stock rating exists; Favorites is the only mark).
-- Verdict: the scrubber and wheel volume each need a hardware-tested design; nothing built, so nothing can wedge playback or blast a volume. The first step would be to read `volume` back safely and to call
-  `mclSetSeek` once on release; both need a device log first.
-
-## The click sound: not implemented, on purpose
-
-The brief wanted a tick on every wheel step and select. Research (stock `demo`, `hciplayer`, the rootfs):
-
-- **No stock key tone.** `demo` has no key-tone, beep, click-sound or sound-effect strings or files (`tools/stock.py strings` for keytone, key_tone, keysound, beep,
-  click_sound, touchsound, tone, buzz: nothing; the only `.wav` strings are the file-type table and `process_wav_files`). It does not open a PCM device: its ALSA
-  imports are `snd_ctl_*` / `snd_hctl_*` (the mixer: volume), `system`, `popen`, `fork` and `execl` exist as imports.
-- **Audio is owned by `hciplayer`**, an MPlayer 1.3 fork started as `nice -n -5 hciplayer -ao alsa &` (`mclWaitAccept`). Its ALSA output calls `snd_pcm_open`
-  on `hw:1,0` / `hw:2,0` or `surround*` devices (Bluetooth: `plug:bluealsa`), sets the **file's exact rate and format**, and closes the PCM at `alsa-uninit` (between
-  tracks, stop, seek). The rootfs has **no `/etc/asound.conf`**: the default PCM is the card's own (no `dmix`), so a second process opening the same playback device either
-  fails (while a track plays) or, **in the gaps where hciplayer has the device closed** (paused, between tracks, stopped, just before a track starts), succeeds and then makes
-  hciplayer's next `snd_pcm_open` fail with EBUSY. A click that races a track start is exactly the case that wedges playback; the PCM open also powers the DAC and amp (a pop
-  in the headphones at every tick, on a device with a bit-perfect and DSD path).
-- The only ways to make a sound from `demo` are a process spawn (`system("aplay file.wav")`; `/usr/bin/aplay` exists) or a new libc/ALSA import; both are new code paths with the
-  race above, and a process per wheel step is 20 spawns a turn. Patching `hciplayer` is deferred (`AGENTS.md`).
-
-**Decision: no sound.** Everything else is in. What a sound would need, in order of preference: (1) a mixing PCM for the system: an `asound.conf` with a `dmix` default over the
-card, a change of `hciplayer`'s device choice and a device test of gapless, DSD and USB-DAC modes (an audio-path change, not a UI one); (2) a short click mixed into `hciplayer`'s
-output (`hciplayer` patch: deferred); (3) haptics: the board has no vibrator that `demo` drives. Until one of these is chosen a tick cannot be made safe.
-
-### The clicker, when the audio path allows it (design only, nothing built)
-
-A setting **Clicker** On / Off, default **On**. A click is a ~3 ms transient (a short decaying burst, a few hundred samples at the output rate, quiet), at most **one per 50 ms**,
-**one per row actually moved** (a multi-row tier step is one click; a clamped step at an end makes none), plus the select tap, and **skipped while the PCM is closed**
-(paused, between tracks, stopped: opening it would race `hciplayer`, above). It must come from the audio owner (options 1 or 2 above), not from `demo`.
+The wheel is silent. `hciplayer` owns the PCM at the track's exact format/rate; there
+is no dmix configuration. A second PCM opener can race a track transition, cause EBUSY
+or power the DAC/amp unexpectedly. No process is spawned for wheel sounds and no audio
+daemon patch is added.
 
 ## Research sources (ideas and constants only, no code)
 
 - **Apple's Music 404-page iPod** (a web page that mimics the wheel): the ideas of a reversal threshold, a dead zone judged on the chord of a move rather than the point, a
   smoothed angular speed with a threshold, tiers of rows per step that climb with the time held fast, and a nudge at the end of a list. Its code is proprietary: nothing is
   copied, and only its numbers are followed (tiers 1, 2, 3, 5, 8, 13, 21, 34; speed clamp 400 degrees a second; smoothing 0.15; 180 degrees a second; 500 ms a tier; 250 ms reset).
-- **q2-pod** (`patch/navigation.c`, read for its end bump): nothing was borrowed (the bump tried here was our own, and is gone).
-- **iPlayr / keremersu35/ipod-player**, inspected at `76f9a730db27d0ce281e89a46db018c432178e6c`: the equal-width split menu with a full-height cover pane, primary black and secondary grey text, glossy materials and light/dark appearance informed the first polish; its title bar, battery, selection, Now Playing, 280 ms slides, split open, long-press MENU and artwork pane timing followed it in the second (values, metrics, timings and behaviour; the repository had no licence then; it is MIT now, and still nothing else is taken). No reference code or media was copied or executed. The navigation display model and timer integration are specific to this firmware.
+- **q2-pod**: navigation research only; no code borrowed.
+- **iPlayr / keremersu35/ipod-player**, inspected at `76f9a730db27d0ce281e89a46db018c432178e6c`: the equal-width split menu with a full-height cover pane, primary black and secondary grey text, glossy materials and light/dark appearance inform the appearance, title bar, battery, selection, Now Playing, 280 ms slides, split navigation, long-press MENU and artwork timing. No reference code or media was copied or executed. The navigation display model and timer integration are specific to this firmware.
 
 ## Addresses used
 
@@ -252,7 +220,7 @@ Pinned in `tools/pod.py`: `prev_quick_click` `0x4cccb0` (the twin of `next_quick
 - The page timer's interval is set in one place (`ip_want_ms`: `IPCF_FRAME_MS` while a page slides, row art prepares/decodes or Cover Flow is busy; `IP_DRIFT_MS` while the cover pane pans or the owned row-art worker runs; else `IP_TICK_MS`) and changed in place
   with `timer_modify`; the timer is never removed or added while the page lives.
 - No sound (above). No rotation action on Now Playing (above), no scrubber. No cover flip in Cover Flow (the centre opens the tracks as a list). No search, no Genres,
-  Composers or Folders, no Shuffle Albums value. The cover pane does not follow the row and shows only covers already in the Cover Flow cache (from its 168 px file, upscaled to 264). Not built from the reference: the volume overlay and wheel volume (no safe stock volume read-back, "Now Playing: the iPod's cycle, why not"), the progress / scrubber cycle, held next / previous seeking (`seek_time` blocks the UI thread; `mclSetSeek` alone is unpinned and untested), and the Cover Flow to Now Playing cover flip (80 to 5 degrees: the Cover Flow renderer has no cheap rotation of a single cover).
+  Composers or Folders, no Shuffle Albums value. The cover pane does not follow the row and shows only covers already in the Cover Flow cache (from its 168 px file, upscaled to 264). Not built from the reference: the volume overlay and wheel volume (no safe stock volume read-back, “Playback limits”), the progress / scrubber cycle, held next / previous seeking (`seek_time` blocks the UI thread; `mclSetSeek` alone is unpinned and untested), and the Cover Flow to Now Playing cover flip (80 to 5 degrees: the Cover Flow renderer has no cheap rotation of a single cover).
 - No clock in the title bar (the iPod's has none); long translated labels are cut with an ellipsis to the 130 px root text box (Spanish, Russian and Ukrainian Shuffle Songs; the Settings rows French Shuffle and Appearance, German Repeat and Appearance, Polish Repeat, Spanish Shuffle and Repeat values, Russian Shuffle and Appearance, Ukrainian Shuffle: `test/pod/ipod.py` i18n_tests lists them).
 - Albums are in the stock query's order, not Settings > Library > Album Order.
 - The play queue is the stock one: `start_player` copies the shown list; a Songs list of thousands of rows is copied once per play, as the Songs page does.
@@ -272,7 +240,7 @@ Pinned in `tools/pod.py`: `prev_quick_click` `0x4cccb0` (the twin of `next_quick
 - Lists: Albums -> an album -> a track plays and Now Playing shows title, artist, album, `n / N`, the bar moves, the time counts; MENU returns to the tracks (same cursor); Artists -> albums
   -> tracks; Songs; Playlists -> tracks; Cover Flow and Settings open and Back returns; Shuffle Songs plays.
 - Title bar: the title on the left, no clock; the battery agrees with the real one (charge it); the blue play glyph next to it follows play / pause.
-- Cover pane: the cover fills the pane edge to edge and pans about 3 px a second with **no jiggle** (the slideshow's fault in V2.1oSIP); every 6 s the next random cached cover cross-fades in over 1.5 s (check the fade is smooth, not choppy, and the wheel stays responsive during it: if it is too slow, raise `IP_FADE_TICK_MS` or cut instead); it is the playing album's cover (play a track from a
+- Cover pane: the cover fills the pane edge to edge and pans about 3 px a second with **no jiggle**; every 6 s the next random cached cover cross-fades in over 1.5 s (check the fade is smooth, not choppy, and the wheel stays responsive during it: if it is too slow, raise `IP_FADE_TICK_MS` or cut instead); it is the playing album's cover (play a track from a
   cached album, MENU back: it changes and stays), else the random rotation, new after MENU back to the main menu; the wheel and music stay responsive; with no cover cache (never opened Cover Flow / Albums)
   the placeholder, still; the pane stops moving on every other level (the timer slows to 500 ms) and in a message box.
 - Shuffle Songs: playback starts at a random song with shuffle on, the iPod's Now Playing shows it, Next picks another random song. Settings: Shuffle and Repeat values change on the centre press and agree with

@@ -52,16 +52,16 @@ in [history](../history.md); feature modules retain their detailed edge cases.
 - **EXTRA-01:** playlist grid/list and actions; Artists/Album Artists, Genres and Composers;
   menu show/hide/reorder and empty Extras groups; translated text fits.
 - **EXTRA-02:** local podcast scan, dates, resume, played marks, speed and covers.
-  [Podcast checklist](podcasts.md#device-checks-not-run-on-a-device)
+  [Podcast checklist](podcasts.md#device-checks)
 - **EXTRA-03:** virtual iPod wheel/navigation/playback and embedded Cover Flow.
   [iPod checklist](ipod.md#device-checklist)
 - **EXTRA-04:** Cassette Mode orientation, text, theme, progress/reels, pause/resume, close
-  and dark-screen timer behaviour. [Cassette checklist](tape.md#device-checklist-first-flash)
+  and dark-screen timer behaviour. [Cassette checklist](tape.md#device-checklist)
 - **EXTRA-06:** Find Cover & Lyrics (More sheet, More page): row dimmed with Wi-Fi off, covers from iTunes and Deezer,
   a tapped cover on Albums, Cover Flow, the album page, mini player and Vinyl, the folder picture, LRCLIB lyrics saved as
   `.lrc`. [Checklist](onlineart.md#device-checks-not-run)
 - **EXTRA-05:** Vinyl Mode cover label, turning and stopping, arm on the groove and parked, keys,
-  record tap, close and dark-screen timer behaviour. [Vinyl checklist](vinyl.md#device-checklist-first-flash)
+  record tap, close and dark-screen timer behaviour. [Vinyl checklist](vinyl.md#device-checklist)
 
 For captures use Settings → Developer → Screenshot, then `tools/pull_shots.py --build latest`.
 See [installation/restore](../install.md) and [capture details](screenshot.md).
