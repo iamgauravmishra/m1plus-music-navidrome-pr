@@ -3,7 +3,7 @@ design (180 px pad, 44 px pitch, 29 x 36 keys, 3 px gaps, rows centred, no accen
 the 123 and #+= pages, delete and its repeat, the clear button, the caret by the measured width, a long text, the key pop-up (insensitive), Search and Back, the log of the touches,
 and the strings in every language. The compiled payload runs under Unicorn; the callbacks are stock functions the harness traps (atoi records its string, on_backtoplayer_onclick is
 recorded), the field's width is the stb model's (tools/awtk_text.py)."""
-import importlib.util, os, re, sys
+import functools, importlib.util, os, re, sys
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 import awtk_strings, pod_keyboard as PK
 from awtk_text import Ttf, StbText
@@ -35,7 +35,8 @@ PTR = {'down': O['EVT_POINTER_DOWN'], 'up': O['EVT_POINTER_UP'], 'abort': O['EVT
 RET_REPEAT = 8
 
 
-def width(t, px=18): return StbText(FONT, px).layout(t)[1]
+@functools.lru_cache(maxsize=None)
+def width(t, px=18): return StbText(FONT, px).layout(t)[1]   # (pure: the font is fixed)
 
 
 def tree():
@@ -913,6 +914,10 @@ def zh_tests(ctx):
     press(m, 'kb_sym')
     expect(not strip_on(m) and field(m) == '', 'the separator with nothing typed does nothing')
 
+
+
+def zh_search_tests(ctx):
+    expect = ctx.expect
     # 5. Search with pinyin pending: it is committed first, as its first candidate
     m = zh_opened(); press(m, 'kb_lang')
     typ(m, 'nihao')
@@ -957,6 +962,10 @@ def zh_tests(ctx):
     expect(not strip_on(m) and r == 0 and field(m) == '', 'when the pinyin and the text are both gone the repeat ends')
     ptr(m, 'kb_del', 'up', x, y)
 
+
+
+def zh_limit_tests(ctx):
+    expect = ctx.expect
     # 7. Limits: the input length, the field's 63 bytes
     m = zh_opened(); press(m, 'kb_lang')
     for _ in range(45): typ(m, 'a')
@@ -1187,7 +1196,7 @@ def name_tests(ctx):
         expect(width(t, 15) <= PK.KB_MODE_W - 8, f'Done fits the action key in {loc} ({t}: {width(t, 15)} px)')
 
 
-SECTIONS = [base_tests, name_tests,gap_tests, asset_tests, setting_tests, zh_tests, strip_tests, hit_tests, lang_gap_tests]   # tools/check.py runs each as its own task
+SECTIONS = [base_tests, name_tests,gap_tests, asset_tests, setting_tests, zh_tests, zh_search_tests, zh_limit_tests, strip_tests, hit_tests, lang_gap_tests]   # tools/check.py runs each as its own task
 
 
 def run(ctx):

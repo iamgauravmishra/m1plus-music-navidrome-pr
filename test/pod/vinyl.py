@@ -600,8 +600,10 @@ def cover_change_tests(ctx):
         assert m.open() == 0; m.timers = []; m.calls_all = []; m.first()
         sp = Spin(g); sp.step(0, True, 200, 243, force=True)
         for step, k in enumerate(('blue', 'sunset', 'green', 'red', 'grey', 'blue', 'red', 'sunset')):
-            m.playing(title=k, artist=k, album=k); m.count(); m.tick(50); sp.step(50, True, 200, 243)
-            if step == 1: expect(m.icount < COVER_MAX, f'a track change from one tint to another costs {m.icount} instructions (budget {COVER_MAX})'); print('  cover record, tint to tint: %d instructions' % m.icount)
+            m.playing(title=k, artist=k, album=k)
+            if PERF: m.count()
+            m.tick(50); sp.step(50, True, 200, 243)
+            if PERF and step == 1: expect(m.icount < COVER_MAX, f'a track change from one tint to another costs {m.icount} instructions (budget {COVER_MAX})'); print('  cover record, tint to tint: %d instructions' % m.icount)
             tint = A.cover_tint_px(words_of_cover(m))
             rb = rec_base(A.tint_stops(tint), tname) if tint else None
             n, first = ndiff(m.frame_words(), model(sp.ang, sp.arm, m.cover_words(), playkey=1, rec_base_=rb, theme=tname))

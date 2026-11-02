@@ -167,26 +167,26 @@ def scan_tests(ctx):
     grown = [h for h, p in zip(shown, per) if p]
     expect(grown == sorted(grown) and grown[0] < grown[-1], f'the content grows with the slices: {grown}')
     expect(per[-1] == [] and not [c for c in m.calls if c[0] in ('opendir', 'open')], 'when the shows are done a tick reads nothing')
-    # the cap and the order across shows, the cost of a slice
-    m = page(lambda mm: setattr(mm, 'reuse_heap', True), cardf=big_card)
-    m.count()
-    PCS.tap_row(m, 'Downloads')
-    cost, reads = [], []
-    for _ in range(80):
-        m.call(PSYMS['pg_on_load'], a0=0, count=400000000)
-        r = [c[1] for c in m.calls if c[0] == 'opendir' and c[1].startswith(RP + '/S')]
-        reads += r
-        if r: cost.append(m.icount)
-    expect(len(reads) == 40 and len(set(reads)) == 40 and all(len([1 for c in m.calls if c[0] == 'opendir']) <= 1 for _ in [0]), f'40 shows, one a tick, each once ({len(reads)})')
-    L = lay(0, 300)
-    expect(m.props.get((m.sv, 'virtual_h')) == L['h'], f'12000 files on the card, 300 rows: the content is {L["h"]} px')
-    got = rows(m)
-    want = [f'S{i:02d} E{k:03d}' for k, i in (divmod(n, 40) for n in range(300))]
-    expect([t for t, _ in got] == want, f'the newest 300 of all shows by file date, interleaved ({[t for t, _ in got][:5]} ... {[t for t, _ in got][-2:]})')
-    line = texts_at(m, 'label_ps_meta')[0][0]
-    expect(line == '12000 episodes · 18 GB free', f'the storage line counts every file, past the cap too (no sizes here) ({line})')
-    print(f'  Downloaded scan: a slice (300 episodes: read, parse, merge, sort, 300 stats and the sorted insert into 300 rows) costs {min(cost)}..{max(cost)} instructions (the first slice includes the page\'s own read of the shows); {len(cost)} slices in all')
-    expect(max(cost) < 8_000_000, f'a slice stays under 8 million instructions ({max(cost)}): about 10 ms at the X2000\'s speed plus the card reads')
+    if PERF:   # the cap and the order across shows, the cost of a slice: 40 shows of 300 episodes (stress scale)
+        m = page(lambda mm: setattr(mm, 'reuse_heap', True), cardf=big_card)
+        m.count()
+        PCS.tap_row(m, 'Downloads')
+        cost, reads = [], []
+        for _ in range(80):
+            m.call(PSYMS['pg_on_load'], a0=0, count=400000000)
+            r = [c[1] for c in m.calls if c[0] == 'opendir' and c[1].startswith(RP + '/S')]
+            reads += r
+            if r: cost.append(m.icount)
+        expect(len(reads) == 40 and len(set(reads)) == 40 and all(len([1 for c in m.calls if c[0] == 'opendir']) <= 1 for _ in [0]), f'40 shows, one a tick, each once ({len(reads)})')
+        L = lay(0, 300)
+        expect(m.props.get((m.sv, 'virtual_h')) == L['h'], f'12000 files on the card, 300 rows: the content is {L["h"]} px')
+        got = rows(m)
+        want = [f'S{i:02d} E{k:03d}' for k, i in (divmod(n, 40) for n in range(300))]
+        expect([t for t, _ in got] == want, f'the newest 300 of all shows by file date, interleaved ({[t for t, _ in got][:5]} ... {[t for t, _ in got][-2:]})')
+        line = texts_at(m, 'label_ps_meta')[0][0]
+        expect(line == '12000 episodes · 18 GB free', f'the storage line counts every file, past the cap too (no sizes here) ({line})')
+        print(f'  Downloaded scan: a slice (300 episodes: read, parse, merge, sort, 300 stats and the sorted insert into 300 rows) costs {min(cost)}..{max(cost)} instructions (the first slice includes the page\'s own read of the shows); {len(cost)} slices in all')
+        expect(max(cost) < 8_000_000, f'a slice stays under 8 million instructions ({max(cost)}): about 10 ms at the X2000\'s speed plus the card reads')
     # the screen off: the loader reads nothing; the first lit tick starts it again
     m = page()
     PCS.tap_row(m, 'Downloads')

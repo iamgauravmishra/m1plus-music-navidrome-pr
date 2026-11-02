@@ -12,6 +12,7 @@ from unicorn.mips_const import (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, 
                                 UC_MIPS_REG_V0, UC_MIPS_REG_SP, UC_MIPS_REG_RA, UC_MIPS_REG_T9, UC_MIPS_REG_PC, UC_MIPS_REG_GP, UC_MIPS_REG_F0,
                                 UC_MIPS_REG_CP0_STATUS as _STATUS, UC_MIPS_REG_0 as UC_MIPS_REG_0)
 
+PERF = os.environ.get('M1_PERF') == '1'   # cost measurement and stress-scale checks; off by default (make test PERF=1; dev/check/accept always set it)
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TOOLS = os.path.join(ROOT, 'tools')
 sys.path.insert(0, TOOLS)
@@ -132,20 +133,34 @@ def art_file(key):
 REC_SIZE = 0x58
 
 
+_ARG_REGS = (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3, UC_MIPS_REG_SP)
+
+
 class Traps(dict):
     """address -> name, with a code hook at each address added (one per address, however many tables hold it):
     only the mocked and watched instructions call back into Python, not every instruction."""
-    def __init__(self, m): super().__init__(); self.m = m
+    def __init__(self, m): super().__init__(); self.m = m; self.building = True   # building: Machine.__init__ is still adding, nothing is translated yet to flush
 
     def __setitem__(self, address, name):
         super().__setitem__(address, name)
         if address not in self.m.hooked:
             self.m.hooked.add(address)
             self.m.u.hook_add(UC_HOOK_CODE, lambda u, a, s, d: self.m._hook(u, a, s, d), begin=address, end=address)
-            self.m.u.ctl_flush_tb() if hasattr(self.m.u, 'ctl_flush_tb') else None
+            if not self.building and hasattr(self.m.u, 'ctl_flush_tb'): self.m.u.ctl_flush_tb()
 
     def update(self, other):
         for k, v in dict(other).items(): self[k] = v
+
+
+_IMAGES = {}
+
+
+def _demo_image():
+    """(the built demo's bytes, its LOAD segments as (vaddr, file offset, file size, memory size)), read once per path: every Machine loads the same immutable image."""
+    if DEMO not in _IMAGES:
+        data = open(DEMO, 'rb').read()
+        _IMAGES[DEMO] = data, [(v, o, f, m) for _, (t, o, v, _, f, m, _, _) in pod.segments(data) if t == 1]
+    return _IMAGES[DEMO]
 
 
 class Machine:
@@ -153,9 +168,8 @@ class Machine:
 
     def __init__(self):
         self.u = Uc(UC_ARCH_MIPS, UC_MODE_MIPS32 | UC_MODE_LITTLE_ENDIAN)
-        self.data = open(DEMO, 'rb').read()
-        for _, (t, o, v, _, f, m, _, _) in pod.segments(self.data):
-            if t != 1: continue
+        self.data, loads = _demo_image()
+        for v, o, f, m in loads:
             start = v & ~0xfff
             self.u.mem_map(start, ((v + m + 0xfff) & ~0xfff) - start)
             self.u.mem_write(v, self.data[o:o + f])
@@ -229,6 +243,7 @@ class Machine:
         self.timer_fail = False
         self.create_fail = set()    # widget constructors (view_create, ..) that return 0
         self.wm, self.top_main, self.home_opened, self.init_ret = 0x22000000, 0, 1, 0
+        self.handlers.building = self.watch.building = False   # (no code has run yet, so the hooks added so far need no translation flush)
         self._icount, self.limit, self.counting = 0, 0, False
         self._nested_contexts = []  # reusable CPU snapshots; active nested calls each hold their own
         self.bitmaps, self.free_blocks = {}, {}   # bitmap_create_ex's results; destroyed data blocks to reuse
@@ -276,10 +291,21 @@ class Machine:
     def read_cstr(self, a):
         out = b''
         while a:
-            c = self.u.mem_read(a, 1)
-            if c == b'\0': break
-            out += c; a += 1
+            n = 256 - (a & 255)   # to the next 256-byte boundary: never past a page, so no byte is read that a byte-wise scan would not
+            c = bytes(self.u.mem_read(a, n)); z = c.find(b'\0')
+            if z >= 0: out += c[:z]; break
+            out += c; a += n
         return out.decode('latin-1')
+
+    def words_until_zero(self, a):
+        """The 32-bit words from a up to the first zero one, read in chunks that never pass a 256-byte boundary (a word-by-word scan reads no further)."""
+        out = []
+        while True:
+            n = max(4, (256 - (a & 255)) & ~3)
+            ws = struct.unpack(f'<{n // 4}I', self.u.mem_read(a, n))
+            z = ws.index(0) if 0 in ws else -1
+            if z >= 0: return out + list(ws[:z])
+            out += ws; a += n
 
     def word(self, a): return struct.unpack('<I', self.u.mem_read(a, 4))[0]
     def s32(self, a): return struct.unpack('<i', self.u.mem_read(a, 4))[0]
@@ -339,8 +365,7 @@ class Machine:
             w = self.watch.get(address)   # a payload function of our own: recorded, then run for real
             if w: self.calls.append((w, struct.unpack('<i', struct.pack('<I', u.reg_read(UC_MIPS_REG_A0)))[0]))
             return
-        a0, a1, a2, a3 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3))
-        sp = u.reg_read(UC_MIPS_REG_SP)
+        a0, a1, a2, a3, sp = u.reg_read_batch(_ARG_REGS)
         stack = lambda i: self.word(sp + 16 + 4 * i)   # o32: arguments 4.. are on the stack
         ret = 0
         if name == 'atoi':
@@ -1297,9 +1322,7 @@ class ListMachine(SelectMachine):
                 t = t.encode('latin-1').decode('utf-8')
                 ret = self.alloc(4 * len(t) + 4); self.u.mem_write(ret, struct.pack(f'<{len(t) + 1}I', *map(ord, t), 0))
         elif name == 'widget_measure_text':
-            n = 0
-            while self.word(a1 + 4 * n): n += 1
-            t = ''.join(chr(c) for c in struct.unpack(f'<{n}I', self.u.mem_read(a1, 4 * n))) if n else ''
+            t = ''.join(map(chr, self.words_until_zero(a1)))
             w = float(self.measure_w(a0, t) if self.measure_w else self.measure(t)) if t else 0.0
             u.reg_write(UC_MIPS_REG_F0, struct.unpack('<I', struct.pack('<f', w))[0]); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
             return

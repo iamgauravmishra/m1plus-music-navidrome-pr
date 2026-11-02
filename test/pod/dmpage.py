@@ -351,11 +351,10 @@ def run(ctx):
            'every art pixel is an RGB565 value expanded to 8 bits (the panel\'s own grid)')
 
     # ===== 3. the page opens from the card: the stock sequence, the widgets, the tint, the sizes, the events, one timer
-    m = PG(count=True); m.world(uniq, 12); m.boot()
+    m = PG(count=PERF); m.world(uniq, 12); m.boot()
     for n in range(12): m.cover(m.songs[n]['artist'], m.songs[n]['album'], (60 + n * 10, 120, 200 - n * 8))
     before_bmps = set(m.bitmaps)
     calls = m.card_tap()
-    cost_open = m.icount
     expect([c for c in calls if c[0] == 'window_open'] == [('window_open', 'm1plus_dailymix')] and not [c for c in calls if c[0] == 'navigator_to_with_context'],
            f'a tap on the card opens ui/m1plus_dailymix.bin and not the stock Songs page ({[c[:2] for c in calls if c[0] in ("window_open", "navigator_to_with_context")]})')
     looked = [c[1] for c in calls if c[0] == 'widget_lookup']
@@ -366,8 +365,10 @@ def run(ctx):
     pxs = struct.unpack(f'<{w_ * h_}I', bytes(m.u.mem_read(data, w_ * h_ * 4)))
     mdl_rows, mdl_tint = D.page_art(m.tones, m.aseed)
     expect(list(pxs) == [word_of(px) for row in mdl_rows for px in row], 'the art the payload made at open equals pod_dailymix.page_art pixel for pixel')
-    print(f'  (opening the page: {cost_open} instructions for the card tap, art 320 x 180 included)')
-    expect(cost_open < 25_000_000, f'opening the page costs under 25 million instructions ({cost_open}; about 20 ms on the device)')
+    if PERF:
+        cost_open = m.icount
+        print(f'  (opening the page: {cost_open} instructions for the card tap, art 320 x 180 included)')
+        expect(cost_open < 25_000_000, f'opening the page costs under 25 million instructions ({cost_open}; about 20 ms on the device)')
     flags = struct.unpack('<H', m.u.mem_read(paint_arts[0][0] + O['BITMAP_FLAGS'], 2))[0]
     expect(flags & 1, 'the art bitmap is flagged opaque (a plain blit)')
     tw = 0xff000000 | mdl_tint[0] | mdl_tint[1] << 8 | mdl_tint[2] << 16
@@ -824,16 +825,17 @@ def run(ctx):
     t.card_tap(); blits, texts, styles, fills = t.paint(SCR)
     rt_ = [t_ for (t_, r), s in zip(texts, styles) if s == 'label_dp_row']
     expect(rt_[:5] == [t.songs[i]['title'] for i in (0, 2, 4, 5, 6)], f'songs missing from the library or the card are skipped, the rest keep the mix\'s order ({rt_[:5]})')
-    # the cost of opening: the library pass on a small library and on one at the cap (DM_LIB_MAX songs, the mix spread over it); no file is touched
-    def open_cost(lib, order):
-        t = PG(count=True); t.world(lib, len(order), order=order); t.boot(); t.bitmap_ok = False
-        t.card_tap()
-        return t.icount, t
-    c_small, _ = open_cost(uniq, list(range(12)))
-    big = [dict(path=f'/mnt/mmc/B/{i // 12}/{i}.flac', artist=f'Band {i // 60}', album=f'Disc {i // 12}', title=f'Track number {i}', name=f'{i}.flac') for i in range(O['DM_LIB_MAX'])]
-    c_big, tb = open_cost(big, [i * 1000 + 11 for i in range(12)])
-    expect(c_big < 15_000_000 and not written(tb, [tb.calls_all]), f'opening the page on {O["DM_LIB_MAX"]} songs: {c_big} instructions without the art ({c_small} on {len(uniq)} songs), under 15 million, nothing written')
-    print(f'  (page open without the art: {c_small} instructions on {len(uniq)} songs, {c_big} on {O["DM_LIB_MAX"]})')
+    # (PERF only) the cost of opening: the library pass on a small library and on one at the cap (DM_LIB_MAX songs, the mix spread over it); no file is touched
+    if PERF:
+        def open_cost(lib, order):
+            t = PG(count=True); t.world(lib, len(order), order=order); t.boot(); t.bitmap_ok = False
+            t.card_tap()
+            return t.icount, t
+        c_small, _ = open_cost(uniq, list(range(12)))
+        big = [dict(path=f'/mnt/mmc/B/{i // 12}/{i}.flac', artist=f'Band {i // 60}', album=f'Disc {i // 12}', title=f'Track number {i}', name=f'{i}.flac') for i in range(O['DM_LIB_MAX'])]
+        c_big, tb = open_cost(big, [i * 1000 + 11 for i in range(12)])
+        expect(c_big < 15_000_000 and not written(tb, [tb.calls_all]), f'opening the page on {O["DM_LIB_MAX"]} songs: {c_big} instructions without the art ({c_small} on {len(uniq)} songs), under 15 million, nothing written')
+        print(f'  (page open without the art: {c_small} instructions on {len(uniq)} songs, {c_big} on {O["DM_LIB_MAX"]})')
     # freeing
     t = opened(25)
     for _ in range(12): tick(t)

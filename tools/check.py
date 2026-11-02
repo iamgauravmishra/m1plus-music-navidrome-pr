@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Test features, produce a tested dev package, or validate integration.
 
-  make test [TEST=albums]     tree + tests; no package or goldens
+  make test [TEST=albums]     tree + tests; no package or goldens; cost/stress checks only with PERF=1
   make dev                    one dev tree + full tests + verified package
   make check                  release + restore + full tests vs goldens
   make accept                 accept goldens after complete integration validation
@@ -43,6 +43,7 @@ def counts(text):
 
 def test_ok(t): return t['rc'] == 0 and (t['counts'] is None or t['counts'][1] == 0)
 def outcome(bad, changed, update): return bad or (changed and not update), update and not bad
+def perf_enabled(a): return a.perf or not a.tests_only   # receipts and goldens need the full suite, cost checks included
 def tree_key(): return workflow.input_key()
 
 
@@ -145,6 +146,7 @@ def main():
     ap.add_argument('--dev', action='store_true', help='build, fully test and package one development artifact')
     ap.add_argument('--clean', action='store_true', help='remove retained integration/test scratch files')
     ap.add_argument('--no-cache', action='store_true')
+    ap.add_argument('--perf', action='store_true', help='also run the cost and stress-scale checks (always on for --dev, integration and --update)')
     ap.add_argument('--verbose', action='store_true', help='print every passing test, not only failures')
     ap.add_argument('--jobs', type=int, default=min(8, os.cpu_count() or 4))
     ap.add_argument('--timeout', type=int, default=300, help='seconds per test (default 300)')
@@ -157,6 +159,8 @@ def main():
     if a.update and (a.no_tests or a.only): ap.error('--update requires the full integration scope, including tests')
     if a.dev and (a.tests_only or a.update or a.no_tests or a.only): ap.error('--dev always builds and tests the complete development package')
     if a.no_cache: os.environ['M1_NO_CACHE'] = '1'
+    a.perf = perf_enabled(a)
+    os.environ['M1_PERF'] = '1' if a.perf else '0'
     selected = parse_tests(a.test) if a.test else None
     names = [] if a.no_tests else selected or (LIGHT if a.only == ['restore'] else ALL_TESTS)
     a.expected = names
@@ -170,7 +174,7 @@ def main():
         golden = read_golden(); builds = {}; tests = []
         base = workflow.new_dev_dir() if a.dev else Path(ROOT) / 'work/check'
         logs = base / 'logs'; logs.mkdir(parents=True, exist_ok=True)
-        print(f'run: {base}; {len(names)} tests, {a.jobs} workers', flush=True)
+        print(f'run: {base}; {len(names)} tests, {a.jobs} workers' + ('' if a.perf else '; perf checks skipped (PERF=1 to run)'), flush=True)
         if any(n == 'awtk_fill' or n.startswith('patch:') for n in names):
             rc, log = workflow.run_logged([sys.executable, '-I', os.path.join(TOOLS, 'doctor.py'), '--emulator'], logs / 'emulator.log', 15)
             if rc:

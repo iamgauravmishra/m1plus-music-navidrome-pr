@@ -24,7 +24,12 @@ class Ttf:
         for i in range(struct.unpack_from('>H', d, c + 2)[0]):
             pid, eid, off = struct.unpack_from('>HHI', d, c + 4 + 8 * i); subs[(pid, eid)] = c + off
         self.cmap = next(subs[k] for k in ((3, 10), (0, 4), (3, 1), (0, 3)) if k in subs)
+        self._glyphs = {}      # ch -> glyph index (the cmap is immutable, and measuring asks for the same few characters over and over)
     def glyph(self, ch):
+        g = self._glyphs.get(ch)
+        if g is None: g = self._glyphs[ch] = self._lookup(ch)
+        return g
+    def _lookup(self, ch):
         d, o, cp = self.d, self.cmap, ord(ch)
         fmt = struct.unpack_from('>H', d, o)[0]
         if fmt == 12:

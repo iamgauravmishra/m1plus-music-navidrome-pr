@@ -43,7 +43,8 @@ their signal and log path without silently retrying or escalating.
 
 ```sh
 make test TEST=albums           # selected tests; comma-separated modules or module/section
-make test                      # feature-branch done criterion; no package or goldens
+make test                      # feature-branch done criterion; no package or goldens; skips cost/stress checks
+make test PERF=1               # the same plus instruction budgets and stress-scale inputs
 make dev                       # fresh dev tag, one tree, full tests and verified package
 make preview                   # approximate render of that dev tree
 make flash                     # verified SD copy, then eject

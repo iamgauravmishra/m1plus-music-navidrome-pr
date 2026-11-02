@@ -74,6 +74,9 @@ def workflow_tests():
     for args in (['--update', '--no-tests'], ['--update', '--only', 'release'], ['--dev', '--test', 'tools']):
         r = subprocess.run([sys.executable, '-I', os.path.join(ROOT, 'tools/check.py'), *args], capture_output=True)
         expect('invalid validation scope rejected: ' + ' '.join(args), r.returncode == 2)
+    ns = lambda **k: type('A', (), {'perf': False, 'tests_only': False, **k})
+    expect('cost/stress checks run unless a tests-only run omits --perf',
+           check.perf_enabled(ns()) and check.perf_enabled(ns(tests_only=True, perf=True)) and not check.perf_enabled(ns(tests_only=True)))
     expect('empty test selection refused', refused(lambda: check.parse_tests([','])))
     expect('SIGILL named in diagnostics', workflow.exit_description(-signal.SIGILL) == 'SIGILL')
 

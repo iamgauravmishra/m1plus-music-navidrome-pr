@@ -3,7 +3,7 @@ import os
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 
-def run(ctx):
+def entry_tests(ctx):
     expect, page = ctx.expect, ctx.page
     entry = PSYMS['m1plus_home_click']
     binds = 3 + len(page.rows)                  # btn_return, btn_backtoplayer, each row, and the foreground handler that arranges the menu again
@@ -149,8 +149,10 @@ def run(ctx):
         got = stock_target(m, asset, 160, 50 + r.y + r.h // 2)
         expect(f'pod_row{i}' in got and 'pod_icon' not in got, f'Extras row {i} is hit through the scroll view ({got})')
 
-    arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i)
-    settings_tests(ctx, on_row, rows0)
+
+def addresses():
+    """(entry, on_row, rows0): the payload's Home click, row handler and menu row table."""
+    return PSYMS['m1plus_home_click'], PSYMS['on_row'], PSYMS['pod_rows_0']
 
 
 # ---------------------------------------------------------------------------
@@ -245,14 +247,19 @@ def extras_open(data=None, rows=len(pod_pages.ITEMS)):
     return m, [pod_pages.EXTRAS_PAGE.rows[i].label for _, i in sorted((y, i) for i, (y, on) in a.items() if on)], a
 
 
+def extras(data=None):
+    return extras_open(data, len(pod_pages.ITEMS))
+
+
 def shown_order(m, rows=MENU_ROWS):
     """The labels of the shown rows of the page, top to bottom, from the arrangement."""
     a = arranged(m, rows)
     return [pod_pages.MENU.rows[i].label for _, i in sorted((y, i) for i, (y, on) in a.items() if on)]
 
 
-def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
+def arrange_tests(ctx):
     expect, P = ctx.expect, pod_pages
+    entry, on_row, rows0 = addresses()
     items = [r.label for r in P.ITEMS]
     default = ['Cover Flow', 'Albums', 'Artists', 'Songs', 'Playlists', 'Extras']
     ROW_H = pod_ui.ROW_H
@@ -326,6 +333,12 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
     m.call(PSYMS['menu_arrange'], a0=m.window, a1=1, count=3000000)
     expect(extras_ok(m, b'12345-ab') == '', f'the Extras page: the items turned off are restacked with the hidden ones, last ({extras_ok(m, b'12345-ab')})')
 
+
+
+def arrange_invalid_tests(ctx):
+    expect, P = ctx.expect, pod_pages
+    entry, on_row, rows0 = addresses()
+    default = ['Cover Flow', 'Albums', 'Artists', 'Songs', 'Playlists', 'Extras']
     # 11. Anything invalid is the default list: unknown ids, duplicates, too long, empty, binary, text after the list
     bad = [b'9\n', b'0129\n', b'00\n', b'01234567801\n', b'0123456789\n', b'', b'01 2\n', b'01\n\n',
            # 'x' was the Extras row's character: unknown now, so an old file with it is invalid (no compatibility)
@@ -340,12 +353,19 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
            b'1-2 \n', b'1-x\n', b'1-9\n', b'-0123456789', b'012345678-abcdefghij\n', b'012345678-abcdefgh0\n', b'0123456-abcdefghij1\n', b'012345678-abcdefghi-\n',
            b'0123456789-abcdefghij', b'012345678abcdefghi-j\n', b'012345678abcdefghij-\n\n']
     for data in bad:
-        m = open_menu(data, count=True)
+        m = open_menu(data, count=PERF)
         expect(shown_order(m) == default and P.parse_menu(data) == P.DEFAULT_MENU
                and P.parse_menu_full(data) == (P.DEFAULT_MENU, []), f'saved {data[:20]!r} ({len(data)} bytes): the default menu, nothing turned off')
-        expect(m.icount < 200000, f'saved {len(data)} bytes: read is bounded, the open stays cheap ({m.icount} instructions)')
+        if PERF: expect(m.icount < 200000, f'saved {len(data)} bytes: read is bounded, the open stays cheap ({m.icount} instructions)')
         _, ex, _ = extras_open(data)
         expect(ex == DEF_EXTRAS, f'saved {data[:20]!r}: the default Extras page, nothing turned off ({ex})')
+
+
+def arrange_model_tests(ctx):
+    expect, P = ctx.expect, pod_pages
+    items = [r.label for r in P.ITEMS]
+    ROW_H = pod_ui.ROW_H
+    NI = len(P.ITEMS)
     # the Python model of the parser (tools/pod_pages.py parse_menu_full, which the docs and previews use) agrees with the payload, for the
     # menu and for what the Extras page lists
     import random
@@ -383,10 +403,10 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
            'the Python model: "<shown>[-<off>]", the default 12345, the off part in the Extras order, Settings never off, the longest list fits the file cap')
     m = open_menu(b'0\n'); m.fs[MENU_FILE] = b'0\n'
     expect(m.fs[MENU_FILE] == b'0\n', 'a valid list is never rewritten by reading it')
-    m = open_menu(b'mlkjihgfedcba876543210\n', count=True)
-    expect(m.icount < 200000, f'the longest valid list: arranging twenty-two rows stays cheap ({m.icount} instructions)')
-    m = open_menu(b'876543210-abcdefghi\n', count=True)
-    expect(m.icount < 200000, f'a long list with a long off part: arranging stays cheap ({m.icount} instructions)')
+    m = open_menu(b'mlkjihgfedcba876543210\n', count=PERF)
+    if PERF: expect(m.icount < 200000, f'the longest valid list: arranging twenty-two rows stays cheap ({m.icount} instructions)')
+    m = open_menu(b'876543210-abcdefghi\n', count=PERF)
+    if PERF: expect(m.icount < 200000, f'a long list with a long off part: arranging stays cheap ({m.icount} instructions)')
 
     # 11b. A page that is not ours (a row or the list missing) is left exactly as the asset has it
     for gone in ('pod_scrollview', 'pod_row5', 'pod_row12', 'pod_row18', 'pod_row19'):
@@ -402,9 +422,17 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
     expect([items[i] for i in on_] == DEF_EXTRAS and [a[i][0] for i in on_] == [k * ROW_H for k in range(len(on_))]
            and ('widget_set_prop_int', m.widgets['pod_scrollview'], 'virtual_h', len(on_) * ROW_H) in m.calls, 'no headers in the asset: Extras stacks its rows from y 0 as before')
 
+
+
+def arrange_extras_tests(ctx):
+    expect, P = ctx.expect, pod_pages
+    entry, on_row, rows0 = addresses()
+    items = [r.label for r in P.ITEMS]
+    default = ['Cover Flow', 'Albums', 'Artists', 'Songs', 'Playlists', 'Extras']
+    ROW_H = pod_ui.ROW_H
+    NI = len(P.ITEMS)
+    CU = P.SETTINGS_ID
     # 12. Extras: every item the menu does not show, in id order (the hidden menu items, then the stock tiles)
-    def extras(data=None):
-        return extras_open(data, NI)
     # The fixed order, the same in every language (the English labels): four titled groups in a deliberate order, each with a section header
     # (pod_hdr<group>, HDR_H high, a plain view that is never a touch target) above its first shown row; Settings, when the menu does not show it, is a Tool.
     hdr_h = P.HDR_H
@@ -482,7 +510,7 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
         expect(not err, f'saved {data!r}: Extras restacks its headers and rows in display order, the hidden headers then the hidden rows last ({err})')
     # no item is ever in neither place, in any saved list without a turned-off part
     for data in (None, b'\n', b'8\n', b'0123\n', b'87654321\n', b'0123456\n', b'a\n', b'ie0\n', b'j\n', b'0123456abcdefghi\n', b'012345678abcdefghi\n', b'012345678abcdefghij\n'):
-        mm = open_menu(data); ids = P.parse_menu(data)
+        mm = open_menu(data)
         _, ex_order, _ = extras(data)
         in_menu = set(shown_order(mm)) - {'Extras'}
         expect(in_menu | set(ex_order) >= set(items) - {'Settings'} and not in_menu & set(ex_order), f'saved {data!r}: every item is in exactly one of the menu and Extras')
@@ -495,6 +523,12 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
         mm.call(on_row, a0=rows0 + 12 * i)
         expect([c for c in m.calls if c[0] != 'widget_on'] == [c for c in mm.calls if c[0] != 'widget_on'], f'Extras > {r.label} acts as the menu row')
 
+
+
+def arrange_hit_tests(ctx):
+    expect, P = ctx.expect, pod_pages
+    entry, on_row, rows0 = addresses()
+    ROW_H = pod_ui.ROW_H
     # 13. Hit testing on the arranged menu, by demo's own code: a touch in the middle of every shown row reaches that row, one
     #     over the place a hidden row was parked reaches the row that is there, and none below the last row hits any
     def apply_arrangement(m, tree):
@@ -560,12 +594,11 @@ def arrange_tests(ctx, entry, on_row, rows0, rows_ex, ex_i):
     expect(m.props[(sw, 'yoffset')] == 0, f'a list now shorter than its window is back at the top (yoffset {m.props[(sw, "yoffset")]})')
 
 
-def settings_tests(ctx, on_row, rows0):
+def settings_tests(ctx):
     expect, P = ctx.expect, pod_pages
+    _, on_row, rows0 = addresses()
     S = P.SETTINGS_PAGE
     rows_s = PSYMS[f'pod_rows_{P.SETTINGS_PAGE_INDEX}']
-    rows_me = PSYMS[f'pod_rows_{P.HOMESET_PAGE_INDEX}']
-    mm_i = next(i for i, r in enumerate(P.HOMESET_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.MENUCFG_PAGE_INDEX)
     cf_i = next(i for i, r in enumerate(S.rows) if r.action == P.ACT_PAGE and r.arg == P.LIBRARY_PAGE_INDEX)
     settings_i = next(i for i, r in enumerate(P.MENU.rows) if r.action == P.ACT_PAGE and r.arg == P.SETTINGS_PAGE_INDEX)
 
@@ -607,13 +640,23 @@ def settings_tests(ctx, on_row, rows0):
     keyboards_tests(ctx, on_row, rows_s)
     pcsearch_row_tests(ctx, on_row, rows_s)
 
+
+def mainmenu_section(ctx):
+    expect, P = ctx.expect, pod_pages
+    _, on_row, _ = addresses()
+    rows_me = PSYMS[f'pod_rows_{P.HOMESET_PAGE_INDEX}']
+    mm_i = next(i for i, r in enumerate(P.HOMESET_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.MENUCFG_PAGE_INDEX)
     # 17. The Main Menu row (on Menu & Extras) opens the customise page (the generic page open: navbar bound, no row table)
     m = Machine()
     m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'])}
     m.call(on_row, a0=rows_me + 12 * mm_i, count=3000000)
     expect(('window_open', P.MENUCFG_PAGE.key) in m.calls and P.MENUCFG_PAGE.rows == [], 'the Main Menu row opens the Main Menu page')
     mainmenu_tests(ctx, on_row, rows_me, mm_i)
-    extrascfg_tests(ctx, on_row, rows_me)
+
+
+def extrascfg_section(ctx):
+    _, on_row, _ = addresses()
+    extrascfg_tests(ctx, on_row, PSYMS[f'pod_rows_{pod_pages.HOMESET_PAGE_INDEX}'])
 
 
 def extrascfg_tests(ctx, on_row, rows_s):
@@ -1302,3 +1345,10 @@ def mainmenu_tests(ctx, on_row, rows_s, mm_i):
         for x in (160, r.x + 220, r.x + 270):
             got = stock_target(m, asset_tree(path), x, y)
             expect(f'pod_row{i}' in got and (got[-1] == f'pod_row{i}' or x == 160), f'row {i}: a touch at x {x} goes to the row ({got}): the arrow is a picture, the row decides by the position')
+
+
+SECTIONS = [entry_tests, arrange_tests, arrange_invalid_tests, arrange_model_tests, arrange_extras_tests, arrange_hit_tests, settings_tests, mainmenu_section, extrascfg_section]   # tools/check.py runs each as its own task
+
+
+def run(ctx):
+    for section in SECTIONS: section(ctx)

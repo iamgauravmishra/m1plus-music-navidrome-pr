@@ -10,7 +10,7 @@ C_SOURCES := $(shell git ls-files 'patch/*.c' 'patch/*.h')
 help:
 	@echo 'make setup                  Sync the uv environment (Python 3.15)'
 	@echo 'make doctor                 Check inputs, toolchain and native emulator'
-	@echo 'make test [TEST=albums]      Feature tests; no package or goldens'
+	@echo 'make test [TEST=albums]      Feature tests; no package or goldens; PERF=1 adds cost/stress checks'
 	@echo 'make dev                    Build, test and package a fresh dev version'
 	@echo 'make preview [BUILD=latest] Preview that dev build'
 	@echo 'make flash [BUILD=latest]   Copy the tested dev package to the card'
@@ -27,7 +27,7 @@ setup:
 doctor:
 	$(RUN) tools/doctor.py
 test: lint
-	$(RUN) tools/check.py $(if $(TEST),--test "$(TEST)",--tests-only) $(if $(JOBS),--jobs "$(JOBS)")
+	$(RUN) tools/check.py $(if $(TEST),--test "$(TEST)",--tests-only) $(if $(JOBS),--jobs "$(JOBS)") $(if $(PERF),--perf)
 dev: lint
 	$(RUN) tools/check.py --dev $(if $(JOBS),--jobs "$(JOBS)")
 preview:

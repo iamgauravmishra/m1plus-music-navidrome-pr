@@ -3,6 +3,10 @@
 Use `make test` for feature branches, `make dev` for a tested package and `make check` for
 integration. Commands, receipts and golden acceptance are defined in [workflow](../workflow.md).
 
+`make test` skips cost and stress-scale checks (instruction budgets, big-library and fuzz loops;
+`PERF` in `test/pod/harness.py`, from `M1_PERF=1`); `PERF=1` runs them, and `make dev`, `check` and
+`accept` always do, so receipts and goldens cover the full suite.
+
 ## Test boundaries
 
 | Test | Evidence |

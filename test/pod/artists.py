@@ -682,23 +682,25 @@ def index_tests(ctx):
             exp.append(fnv(fnv(O['FNV_SEED'], a), nm) or 1)
         return m, exp + [0]                                # the All albums card: key 0
     for lib_n, k in ((1000, 16), (1000, 30), (1000, 200), (40, 30)):
-        m, exp = build(lib_n, k); m.count()
+        m, exp = build(lib_n, k)
+        if PERF: m.count()
         m.call(PSYMS['artists_open'], count=5000000)
         m.call(PSYMS['ar_open'], a0=0, count=900000000)
         got = keys(m, len(exp))
         expect(got == exp, f'{k} artist albums over {lib_n} library albums: every key is the first case-insensitive match\'s (or its own)')
-        INDEX_COST[(lib_n, k)] = m.icount
+        if PERF: INDEX_COST[(lib_n, k)] = m.icount
         idx = [c for c in m.calls if c[0] == 'calloc' and c[1] == 4 * 2048]
         frees = [c[1] for c in m.calls if c[0] == 'free']
         expect(bool(idx) == (k >= 24 and lib_n == 1000) and all(c[2] in frees for c in idx), f'{k} albums: the index is built only from 24 albums up, and freed')
     # no memory for the index: the scan gives the same keys
-    m, exp = build(1000, 200); m.count()
+    m, exp = build(1000, 200)
+    if PERF: m.count()
     m.calloc_fail_size = 4 * 2048
     m.call(PSYMS['artists_open'], count=5000000)
     m.call(PSYMS['ar_open'], a0=0, count=900000000)
     got = keys(m, len(exp))
     expect(got == exp and not [c for c in m.calls if c[0] == 'calloc' and c[1] == 4 * 2048 and c[2]], 'a refused index: the scan finds the same keys')
-    expect(INDEX_COST[(1000, 200)] < 1000000 and m.icount > 8000000,
+    if PERF: expect(INDEX_COST[(1000, 200)] < 1000000 and m.icount > 8000000,
            f'200 albums over 1000: {INDEX_COST[(1000, 200)]:,} payload instructions with the index, {m.icount:,} with the scan (10.2 M before the index existed)')
 
 

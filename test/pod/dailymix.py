@@ -393,7 +393,7 @@ def run(ctx):
            and X.parse_art(art_ok[:100] + b'\0\0' + art_ok[102:], 0x0badf00d) is None and len(art_ok) == 16 + W * H * 2, 'the art file model: size, magic, art seed and checksum')
     # the card reads a valid art file into its bitmap (the corners blended into black); a bad one makes the art again
     words = [(x * 7 + y * 3) & 0xffff for y in range(H) for x in range(W)]
-    mm = DM(count=True); mm.fs[MIX] = good; mm.fs[ART] = X.dump_art(words, 0x0badf00d); mm.start_dm(); mm.clock = 1
+    mm = DM(count=PERF); mm.fs[MIX] = good; mm.fs[ART] = X.dump_art(words, 0x0badf00d); mm.start_dm(); mm.clock = 1
     c0 = mm.ticks()
     bm = [b for b in mm.bitmaps]
     data, bw, bh = mm.bitmaps[bm[-1]]
@@ -415,7 +415,7 @@ def run(ctx):
             ([(0, 255, 255), (255, 0, 255), (255, 255, 0), (255, 255, 255)], 0xdeadbeef), ([(128, 128, 128), (60, 60, 60), (200, 200, 200)], 7), ([(10, 10, 12)] * 2, 0)]
     arts += [([tuple(rnd.randrange(256) for _ in range(3)) for _ in range(rnd.randrange(2, 5))], rnd.getrandbits(32) | 1) for _ in range(1)]
     worst_cost, total_cost, nart = 0, 0, 0
-    ma = DM(count=True)
+    ma = DM(count=PERF)
     bad = []
     for k, (tn, seed) in enumerate(arts):
         mix = X.dump_mix(day0, 0x1111, seed & 0xffffffff, 0, tn, ['Radiohead'], PATHS)
@@ -424,14 +424,15 @@ def run(ctx):
         rows, a64 = D.art(tn, seed)
         want = X.dump_art(words_of(rows), seed & 0xffffffff)
         got = ma.fs.get(ART)
-        total_cost += sum(cs); worst_cost = max(worst_cost, max(cs)); nart += 1
+        if PERF: total_cost += sum(cs); worst_cost = max(worst_cost, max(cs)); nart += 1
         data, _, _ = ma.bitmaps[list(ma.bitmaps)[-1]]
         pxs = struct.unpack(f'<{W * H}I', bytes(ma.u.mem_read(data, W * H * 4)))
         er = [[tuple(px) for px in row] for row in rows]; D.round_corners(er)
         if got != want or list(pxs) != [0xff000000 | r | g << 8 | b_ << 16 for row in er for r, g, b_ in row]: bad.append((k, got is not None and got == want))
     expect(not bad, f'the card art made by the payload equals pod_dailymix.art + the blended corners, byte for byte (the file) and pixel for pixel (the bitmap), on {len(arts)} palettes and seeds ({bad})')
-    print(f'  (art: {total_cost // nart} instructions for one card on average over {nart}, at most {worst_cost} in one tick of {O["DM_ROWS"]} rows)')
-    expect(worst_cost < 3_000_000, f'one art tick stays under 3 million instructions ({worst_cost})')
+    if PERF:
+        print(f'  (art: {total_cost // nart} instructions for one card on average over {nart}, at most {worst_cost} in one tick of {O["DM_ROWS"]} rows)')
+        expect(worst_cost < 3_000_000, f'one art tick stays under 3 million instructions ({worst_cost})')
 
     # ===== 8. the whole job on a library
     songs, rr = library()
@@ -452,7 +453,7 @@ def run(ctx):
 
     day = day_of(1800000000, tz)
     mdl, picks, seed, aseed = expect_mix(None, songs, plays, rec_, fav, day, 0)
-    m = fresh(count=True)
+    m = fresh(count=PERF)
     m.screen(False); m.clock = START_MS + 1000; m.call(PSYMS['dm_tick'], count=2000000)
     expect([c[2] for c in m.calls if c[0] == 'timer_add'] == [1000] and not any(c[0] == 'loadLocalClassList' for c in m.calls), 'dark Daily Mix defers pending work with one one-second check')
     m.screen(True); m.call(PSYMS['dm_tick'], count=2000000)
@@ -463,7 +464,7 @@ def run(ctx):
     expect([c[2] for c in m.calls if c[0] == 'timer_add'] == [1000] and not any(c[0] in ('loadLocalClassList', 'widget_load_image') for c in m.calls), 'an active job pauses with one one-second check')
     m.fire(EVT_DESTROY); m.call(PSYMS['dm_tick'], count=2000000)
     expect(not m.calls, 'a stray Daily Mix timer after destroy does nothing')
-    m = fresh(count=True)
+    m = fresh(count=PERF)
     expect(not m.up(), 'no mix yet: the card is hidden')
     # nothing is made inside the boot guard's window: the first ticks only arm the timer
     m.clock = 3000; m.call(PSYMS['dm_tick'], a0=0, count=2000000)
@@ -490,8 +491,9 @@ def run(ctx):
     rows_art, _ = D.art(want_tones, aseed)
     expect(m.fs.get(ART) == X.dump_art(words_of(rows_art), aseed), 'the art file is the model\'s art for the mix\'s tones and art seed')
     expect(m.up() and not [c for c in m.calls if c[0] == 'deletePlaylist'], 'the card is shown with the new mix')
-    expect(len(costs) < 120 and max(costs) < 5_000_000, f'the job: {len(costs)} ticks, the most expensive {max(costs)} instructions, {sum(costs)} in all (30 ms apart)')
-    print(f'  (daily mix, {len(songs)} songs: {len(costs)} ticks, {sum(costs)} instructions in all, at most {max(costs)} in one tick; art {O["DM_ROWS"]} rows a tick)')
+    if PERF:
+        expect(len(costs) < 120 and max(costs) < 5_000_000, f'the job: {len(costs)} ticks, the most expensive {max(costs)} instructions, {sum(costs)} in all (30 ms apart)')
+        print(f'  (daily mix, {len(songs)} songs: {len(costs)} ticks, {sum(costs)} instructions in all, at most {max(costs)} in one tick; art {O["DM_ROWS"]} rows a tick)')
     # the same day again: nothing to do
     m.call(PSYMS['dm_tick'], a0=0, count=2000000)
     expect('timer_add' not in m.names() and not [c for c in m.calls if c[0] == 'loadLocalClassList'], 'the same day: no job')
@@ -562,16 +564,16 @@ def run(ctx):
     plays_b = {i: rb.choice([1, 2, 3, 8, 30, 300]) for i in range(nb) if rb.random() < 0.5}
     rec_b = rb.sample(sorted(plays_b), 100)
     fav_b = set(rb.sample(range(nb), 300))
-    m = fresh(songs_=bigl, plays_=plays_b, rec__=rec_b, fav_=fav_b, count=True)
+    m = fresh(songs_=bigl, plays_=plays_b, rec__=rec_b, fav_=fav_b, count=PERF)
     costs_b = run_job(m)
     mdl_b = model(bigl, plays_b, rec_b, fav_b)
     picks_b = X.select(mdl_b, X.seed_for(day, 0))
     expect(mpaths(m) == [mdl_b[i]['path'] for i in picks_b] and len(picks_b) == 25, f'{nb} songs: the same 25 picks as the model')
-    expect(max(costs_b) < 3_000_000 and len(costs_b) < 160, f'{nb} songs: {len(costs_b)} ticks, {sum(costs_b)} instructions in all, the most expensive tick {max(costs_b)} (3 million at most)')
+    if PERF: expect(max(costs_b) < 3_000_000 and len(costs_b) < 160, f'{nb} songs: {len(costs_b)} ticks, {sum(costs_b)} instructions in all, the most expensive tick {max(costs_b)} (3 million at most)')
     wr_b = written(m, m.tick_log)
     expect({MIX, MIX_TMP, ART, ART_TMP} <= wr_b and all((p == CARD_DIR or p.startswith(CARD_DIR + '/')) and not p.lower().endswith(('.m3u', '.m3u8')) and '_explaylist_data' not in p for p in wr_b),
            f'{nb} songs: every file the job writes or renames is under /mnt/mmc/.m1plus (or is its directory) and is no .m3u / .m3u8 ({sorted(wr_b)})')
-    print(f'  (daily mix, {nb} songs: {len(costs_b)} ticks, {sum(costs_b)} instructions in all, at most {max(costs_b)} in one tick)')
+    if PERF: print(f'  (daily mix, {nb} songs: {len(costs_b)} ticks, {sum(costs_b)} instructions in all, at most {max(costs_b)} in one tick)')
 
     # ---- failures: yesterday's mix stays whole
     def stays(m, what, mix=None):

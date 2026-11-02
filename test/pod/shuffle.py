@@ -241,29 +241,30 @@ def shuffle_tests(expect, menu):
            and not any(c[0] == 'toast' and c[1] == 'Too many songs to shuffle' for c in m.calls),
            f'{big} songs pass the cap: the {16 * big}-byte index is the only extra allocation')
     m.calloc_fail = False
-    # the cost on a real-shaped library: 128 albums of 16 tracks, every album intact
-    m2 = shuffle_machine([(f'/mnt/mmc/l/{a:03d}/{t:02d}.flac', f'Album {a:03d}', 16 - t) for a in range(128)
-                          for t in range(16)]).count()
-    v = m2.call(play, a0=pod_pages.SHUFFLE_ALBUMS, count=2000000000)
-    got = runs(m2.played[0], lambda r: field(m2, r, O['REC_ALBUM'])) if m2.played else []
-    expect(v == 0 and len(got) == 128 and all(len(rs) == 16 and [m2.word(r + O['REC_TRACK']) for r in rs]
-                                              == list(range(1, 17)) for _, rs in got),
-           '2048 songs in 128 albums: every album once, tracks 1-16 in order')
-    print(f'  Shuffle Albums over 2048 songs (128 albums): {m2.icount:,} payload instructions')
-    # Shuffle Folders on the same size: the folder length is kept per song, not found again in every comparison
-    FOLDER_COST = {}
-    deep = '/mnt/mmc/Music/Library/Collection/Artist'
-    for tag, prefix in (('short', '/mnt/mmc/l'), ('long', deep)):
-        m3 = shuffle_machine([(f'{prefix}/{a:03d}/{t:02d}.flac', f'Album {a:03d}', 16 - t) for a in range(128) for t in range(16)]).count()
-        v = m3.call(play, a0=pod_pages.SHUFFLE_FOLDERS, count=2000000000)
-        got = runs(m3.played[0], lambda r: field(m3, r, O['REC_PATH']).rsplit('/', 1)[0]) if m3.played else []
-        expect(v == 0 and len(got) == 128 and len({k for k, _ in got}) == 128
-               and all(len(rs) == 16 and [field(m3, r, O['REC_PATH']) for r in rs] == sorted(field(m3, r, O['REC_PATH']) for r in rs) for _, rs in got),
-               f'2048 songs in 128 {tag}-path folders: every folder once, contiguous, in file-name order')
-        print(f'  Shuffle Folders over 2048 songs ({tag} paths, {len(m3.played[0] and field(m3, m3.played[0][0], O["REC_PATH"]))} bytes): {m3.icount:,} payload instructions')
-        FOLDER_COST[tag] = m3.icount
-    expect(FOLDER_COST['short'] < 14000000 and FOLDER_COST['long'] < 30000000,
-           f'the folder length is found once per song: {FOLDER_COST["short"]:,} / {FOLDER_COST["long"]:,} instructions (26.4 M / 59.1 M before)')
+    # (PERF only) the cost on a real-shaped library: 128 albums of 16 tracks, every album intact
+    if PERF:
+        m2 = shuffle_machine([(f'/mnt/mmc/l/{a:03d}/{t:02d}.flac', f'Album {a:03d}', 16 - t) for a in range(128)
+                              for t in range(16)]).count()
+        v = m2.call(play, a0=pod_pages.SHUFFLE_ALBUMS, count=2000000000)
+        got = runs(m2.played[0], lambda r: field(m2, r, O['REC_ALBUM'])) if m2.played else []
+        expect(v == 0 and len(got) == 128 and all(len(rs) == 16 and [m2.word(r + O['REC_TRACK']) for r in rs]
+                                                  == list(range(1, 17)) for _, rs in got),
+               '2048 songs in 128 albums: every album once, tracks 1-16 in order')
+        print(f'  Shuffle Albums over 2048 songs (128 albums): {m2.icount:,} payload instructions')
+        # Shuffle Folders on the same size: the folder length is kept per song, not found again in every comparison
+        FOLDER_COST = {}
+        deep = '/mnt/mmc/Music/Library/Collection/Artist'
+        for tag, prefix in (('short', '/mnt/mmc/l'), ('long', deep)):
+            m3 = shuffle_machine([(f'{prefix}/{a:03d}/{t:02d}.flac', f'Album {a:03d}', 16 - t) for a in range(128) for t in range(16)]).count()
+            v = m3.call(play, a0=pod_pages.SHUFFLE_FOLDERS, count=2000000000)
+            got = runs(m3.played[0], lambda r: field(m3, r, O['REC_PATH']).rsplit('/', 1)[0]) if m3.played else []
+            expect(v == 0 and len(got) == 128 and len({k for k, _ in got}) == 128
+                   and all(len(rs) == 16 and [field(m3, r, O['REC_PATH']) for r in rs] == sorted(field(m3, r, O['REC_PATH']) for r in rs) for _, rs in got),
+                   f'2048 songs in 128 {tag}-path folders: every folder once, contiguous, in file-name order')
+            print(f'  Shuffle Folders over 2048 songs ({tag} paths, {len(m3.played[0] and field(m3, m3.played[0][0], O["REC_PATH"]))} bytes): {m3.icount:,} payload instructions')
+            FOLDER_COST[tag] = m3.icount
+        expect(FOLDER_COST['short'] < 14000000 and FOLDER_COST['long'] < 30000000,
+               f'the folder length is found once per song: {FOLDER_COST["short"]:,} / {FOLDER_COST["long"]:,} instructions (26.4 M / 59.1 M before)')
     m.showlist = [one] * (big + 1)
     v = m.call(play, a0=pod_pages.SHUFFLE_SONGS, count=COUNT)
     expect(v == 0 and m.played and len(m.played[0]) == big + 1, 'Shuffle Songs plays a library of any size')

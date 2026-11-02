@@ -180,7 +180,7 @@ def run(ctx):
         s = min(1.0, 192 / max(w, h))
         expect(r == 1 and got and got.size == (max(1, int(w * s)), max(1, int(h * s))), f'{w} x {h}: fitted inside 192, never upscaled ({got.size if got else None})')
 
-    # 4. The real shapes: 2000 x 2000 RGBA (the All-In cover) and 3000 x 3000 RGB, with PIL's own encoder
+    # 4. The real shapes (PERF only: stress scale): 2000 x 2000 RGBA (the All-In cover) and 3000 x 3000 RGB, with PIL's own encoder
     def pil_png(w, h, mode):
         ax = Image.linear_gradient('L').rotate(90).resize((w, h))
         ay = Image.linear_gradient('L').resize((w, h))
@@ -188,15 +188,16 @@ def run(ctx):
         im = Image.merge(mode, bands)
         b = io.BytesIO(); im.save(b, 'PNG', optimize=True)
         return b.getvalue(), im
-    data, im = pil_png(2000, 2000, 'RGBA')
-    r, out = shrink(m, data)
-    ref = Image.alpha_composite(Image.new('RGBA', im.size, 'white'), im).convert('RGB')
-    ok, why = close_to(m, out, ref, 4.0, 40) if out else (False, 'no output')
-    expect(r == 1 and ok, f'2000 x 2000 RGBA ({len(data) // 1024} kB): a 192 x 192 JPEG like PIL\'s ({why})')
-    data, im = pil_png(3000, 3000, 'RGB')
-    r, out = shrink(m, data)
-    ok, why = close_to(m, out, im, 4.0, 40) if out else (False, 'no output')
-    expect(r == 1 and ok and m.jlog.count('std_error') == 1, f'3000 x 3000 RGB ({len(data) // 1024} kB) ({why})')
+    if PERF:
+        data, im = pil_png(2000, 2000, 'RGBA')
+        r, out = shrink(m, data)
+        ref = Image.alpha_composite(Image.new('RGBA', im.size, 'white'), im).convert('RGB')
+        ok, why = close_to(m, out, ref, 4.0, 40) if out else (False, 'no output')
+        expect(r == 1 and ok, f'2000 x 2000 RGBA ({len(data) // 1024} kB): a 192 x 192 JPEG like PIL\'s ({why})')
+        data, im = pil_png(3000, 3000, 'RGB')
+        r, out = shrink(m, data)
+        ok, why = close_to(m, out, im, 4.0, 40) if out else (False, 'no output')
+        expect(r == 1 and ok and m.jlog.count('std_error') == 1, f'3000 x 3000 RGB ({len(data) // 1024} kB) ({why})')
 
     # 5. What is refused or damaged: nothing is left, nothing breaks
     raw, exp, plte, trns = picture(300, 300, 2, 8, filters=(0, 1, 2, 3, 4))
@@ -239,21 +240,22 @@ def run(ctx):
     rng = random.Random(20261030)
     raw, exp, plte, trns = picture(120, 90, 6, 8, filters=(0, 1, 2, 3, 4))
     base = png(120, 90, 6, 8, raw, split=500)
+    N1, N2 = (300, 150) if PERF else (30, 15)   # the fuzz loops are stress-sized
     flips = results = 0
-    for i in range(300):
+    for i in range(N1):
         d = bytearray(base)
         for _ in range(1 + i % 4): d[rng.randrange(8, len(d))] ^= 1 << rng.randrange(8)
         if i % 10 == 0: d = d[:rng.randrange(8, len(d))]
         r, out = shrink(m, bytes(d))
         flips += 1
         results += r in (0, 1) and ((out is not None) == (r == 1)) and m.jlog.count('create_compress') == m.jlog.count('destroy_compress')
-    expect(flips == 300 and results == 300, f'300 random byte flips and cuts: never a crash, a result of 0 or 1, an output only for 1, the encoder always destroyed ({results} of {flips})')
+    expect(flips == N1 and results == N1, f'{N1} random byte flips and cuts: never a crash, a result of 0 or 1, an output only for 1, the encoder always destroyed ({results} of {flips})')
     pal_raw, pal_exp, plte, trns = picture(100, 60, 3, 4, filters=(1, 4))
     base = png(100, 60, 3, 4, pal_raw, plte, trns, mode='fixed')
     results = 0
-    for i in range(150):
+    for i in range(N2):
         d = bytearray(base)
         for _ in range(1 + i % 3): d[rng.randrange(8, len(d))] ^= 1 << rng.randrange(8)
         r, out = shrink(m, bytes(d))
         results += r in (0, 1) and ((out is not None) == (r == 1))
-    expect(results == 150, f'150 flips in a palette picture with fixed blocks ({results} of 150)')
+    expect(results == N2, f'{N2} flips in a palette picture with fixed blocks ({results} of {N2})')

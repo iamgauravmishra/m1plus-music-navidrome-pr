@@ -698,6 +698,7 @@ def tap_tests(ctx):
 def perf_tests(ctx):
     """A big library: the first query (a full scan), an extending query, a shortening one, and the first tick that reads the library."""
     expect = ctx.expect
+    if not PERF: return
     for count in (5000, 20000):
         words = ('qzebra', 'alpha', 'beta', 'gamma', 'delta', 'omega', 'sigma', 'theta')   # one title in eight has the rare word the first query is for
         songs = [(f'{words[i % 8]} {i} Ünder ñandú', f'Artist {i % 300}', f'Album {i % 800}') for i in range(count)]
@@ -1011,6 +1012,7 @@ def pinyin_tests(ctx):
     expect(titles(m) == ['Jay'], 'and the search still works')
     m = page_machine([('周杰伦', 'x', 'y')], [], [], pinyin={}); m.call(PSYMS['search_open'], count=40000000); typed(m, 'zjl'); chip(m, CH_SONGS)
     expect(titles(m) == [] and titles(m) == [] and 'py_splids' not in [c[0] for c in m.py_log], 'a dictionary without the characters: no initials, get_splids_for_hanzi never called')
+    if not PERF: return
     # the cost: a library of Chinese titles (20,000 songs), the first scan and the initials of every distinct character
     chars = list(PINYIN)
     for count in (5000, 20000):
