@@ -1163,19 +1163,22 @@ static grid_tile_t *se_cover_next(grid_t **gp) {
 static void se_art(grid_t *g, grid_tile_t *t, int r) {
     const se_row_t *w = &se.rows[r];
     void *rec = deque_at(se.lists[w->kind], w->idx);
+    char url[80];
     switch (w->kind) {
     case SE_ARTIST:
         t->ckey = se_artist_cover(cc_str(rec, REC_TITLE));
         break;
     case SE_ALBUM:
         t->ckey = cc_cover_key(se.lists[SE_ALBUM], cc_album_key(rec),
-                               *cc_str(rec, REC_ALBUM) ? cc_str(rec, REC_ALBUM) : cc_str(rec, REC_TITLE));
-        break;
+                               *cc_str(rec, REC_ALBUM) ? cc_str(rec, REC_ALBUM) : cc_str(rec, REC_TITLE), url);
+        grid_art_url(g, t, *url ? url : (const char *)0);
+        return;
     case SE_PLAYLIST:
         break;
     default:
-        t->ckey = cc_cover_key(se.lists[SE_ALBUM], cc_album_key(rec), cc_str(rec, REC_ALBUM));
-        break;
+        t->ckey = cc_cover_key(se.lists[SE_ALBUM], cc_album_key(rec), cc_str(rec, REC_ALBUM), url);
+        grid_art_url(g, t, *url ? url : (const char *)0);
+        return;
     }
     grid_art(g, t);
 }

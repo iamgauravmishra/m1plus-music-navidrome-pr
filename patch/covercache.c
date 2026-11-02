@@ -216,15 +216,17 @@ const char *cc_url(char *out, unsigned key) {
 
 /* A song's or an album's cover: the cache is keyed by the library's album record, which lists an album once under the artist of
  * one of its tracks, so a track of a compilation (its own artist) finds no file under its own key, and the album of that name has it. */
-unsigned cc_cover_key(void *albums, unsigned key, const char *album) {
-    char url[80];
+unsigned cc_cover_key(void *albums, unsigned key, const char *album, char *url) {
+    char tmp[80];
     unsigned n = albums ? deque_size(albums) : 0, i;
+    if (!url) url = tmp;
     if (cc_url(url, key)) return key;
     for (i = 0; album && *album && i < n; ++i) {
         void *r = deque_at(albums, i);
         if (I(r, REC_ID) != -1 && !cc_nocase(cc_str(r, REC_ALBUM), album) && cc_url(url, cc_album_key(r)))
             return cc_album_key(r);
     }
+    url[0] = 0;
     return key;
 }
 

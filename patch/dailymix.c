@@ -2424,7 +2424,7 @@ static void dp_keys(void) {
     for (i = 0; i < dp.n; ++i) {
         void *rec = dp.rows[i].raw;
         const char *album = cc_str(rec, REC_ALBUM);
-        dp.key[i] = *album ? cc_cover_key(albums, cc_album_key(rec), album) : 0;
+        dp.key[i] = *album ? cc_cover_key(albums, cc_album_key(rec), album, (char *)0) : 0;
     }
     if (albums) deque_destroy(albums);
 }

@@ -317,8 +317,9 @@ int grid_mosaic_keys(void *songs, void *albums, unsigned *key, int *miss) {
         }
         if (i < ntried) continue; /* a later song of an album looked at: its cover is in, or there is none */
         if (ntried < 16) tried[ntried++] = own;
-        c = cc_cover_key(albums, own, cc_str(r, REC_ALBUM)); /* its own file, else the library album of that name's */
-        if (!cc_url(url, c)) {
+        c = cc_cover_key(albums, own, cc_str(r, REC_ALBUM),
+                         url); /* its own file, else the library album of that name's */
+        if (!*url) {
             if (own) nofile = 1; /* a key without a file: the file may be written later */
             continue;
         }

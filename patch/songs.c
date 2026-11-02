@@ -375,9 +375,13 @@ static void sg_dir(void) {
 
 /* The cover of a tile: its own key's file, else the library album's (cc_cover_key); a tile with neither shows the placeholder. */
 static void sg_art(tile_t *t) {
-    if (t->album - 1 < (int)sg.count)
-        t->ckey = cc_cover_key(sg.albums, t->ckey, cc_str(deque_at(sg.list, (unsigned)(t->album - 1)), REC_ALBUM));
-    grid_art(&sg.g, t);
+    char url[80];
+    if (t->album - 1 >= (int)sg.count) {
+        grid_art(&sg.g, t);
+        return;
+    }
+    t->ckey = cc_cover_key(sg.albums, t->ckey, cc_str(deque_at(sg.list, (unsigned)(t->album - 1)), REC_ALBUM), url);
+    grid_art_url(&sg.g, t, *url ? url : (const char *)0);
 }
 
 static int sg_on_load(const void *unused) {
@@ -648,7 +652,9 @@ static void sg_load(int keep) {
             void *rec = deque_at(list, i);
             sg.idx[i].key = cc_album_key(rec);
             sg.idx[i].letter = sg_rank(rec);
-            sg_set_sig(&sg.idx[i], sg_sig(rec, sg.idx[i].key, sg.idx[i].letter));
+            if (!sg_lib())
+                sg_set_sig(&sg.idx[i], sg_sig(rec, sg.idx[i].key,
+                                              sg.idx[i].letter)); /* (the library keeps no old index to compare) */
         }
         if (sg_lib() && sg.sort == 0) az_sections(&sg.al, &sg.idx[0].letter, sizeof(song_t));
     }
