@@ -1156,48 +1156,58 @@ void *pc_strip(void *queue, int *idx) {
 /* ---------------------------------------------------------------------------
  * The Library query filter (docs/modules/payload.md hook 6). Every Library list (Songs, Albums, Artists, Genres, Composers, Hi-Res, Recently Added, the search, an album's and an
  * artist's songs, Cover Flow's source, Memory Playback's queue) is a `select ... from songtable ...` that stock formats with sprintf and runs through toolsQueryDbTable (0x5ee77c) or
- * toolsQueryDbTableAndSort (0x5ee9ac, the Songs title sorts). Both prologues are hooked (q2-pod's dbquery / sorted_query, ringnav_library_query); the table is replaced by a
- * filtered subquery BEFORE stock's grouping, so an album shared by music and an episode keeps the music row (its artwork) and untagged episodes add no Unknown rows. The filter is
+ * toolsQueryDbTableAndSort (0x5ee9ac, the Songs title sorts). Both prologues are hooked (q2-pod's dbquery / sorted_query, ringnav_library_query); the podcast filter applies
+ * BEFORE stock's grouping, so an album shared by music and an episode keeps the music row (its artwork) and untagged episodes add no Unknown rows. The filter is
  * on for every such query (q2-pod scopes it with a flag because its Cover Flow and Folders also read songtable; here nothing needs the episodes: our Podcasts pages and Folder play
  * list directories, the other tables (myfav, the recents, the playlists) are not songtable, and the scan's duplicate check is its own sqlite3_exec). The path test is SQLite's LIKE (case
  * insensitive for ASCII), bounded by the slash: '/mnt/mmc/Podcasts Extra/' and '/mnt/mmc/Music/Podcasts/' stay. Anything that is not a plain songtable select, or does not fit, goes to stock
- * untouched; no file I/O, no allocation, a 1 KB buffer on the caller's stack. The subquery is also ordered so an album is its first track (below).
+ * untouched; no file I/O, no allocation, a 1 KB buffer on the caller's stack. Album lists and an album's own tracks join the filter to their WHERE so the first track leads (below);
+ * other statements read the table through a filtered subquery.
  */
 #define PQ_BUF 1024
-static const char pq_head[] =
-    " from (select * from songtable where ifnull(fileurl,'') not like '" PM_ROOT "/podcasts/%'";
-/* An album is its first track: lowest track number, an untagged one (NULL or <= 0) after the tagged, then the lowest path. */
-static const char pq_first[] = " order by (ifnull(track,0)<=0), ifnull(track,0), fileurl)";
-/* The same order reversed, for `group by album`: SQLite 3.19.3 (the device's) gives a GROUP BY's bare columns (id, songer, fileurl) the LAST row of the group in the
- * order its input arrives (verified with the 3.19.3 amalgamation; SQLite 3.54's sorter takes the first, so this is implementation behaviour, pinned by the device's SQLite). */
-static const char pq_last[] = " order by (ifnull(track,0)<=0) desc, ifnull(track,0) desc, fileurl desc)";
+#define PQ_MUSIC "ifnull(fileurl,'') not like '" PM_ROOT "/podcasts/%'"
+static const char pq_head[] = " from (select * from songtable where " PQ_MUSIC ")";
+/* An album list (getAllAlbum, getAlbumBy*, SearchAlbumByName): stock's text is "select <columns> from songtable[ where <condition>] group by album COLLATE NOCASE". */
+static const char pq_where[] = " where ", pq_group[] = " group by album COLLATE NOCASE";
+/* An album is its first track: lowest track number, an untagged one (NULL or <= 0) after the tagged, then the lowest path (NULL first, then BINARY). The list's one min() gives
+ * the bare columns (id, songer, fileurl) the row of that minimum (SQLite's documented bare-column rule, checked on the device's 3.19.3 amalgamation); it sits in HAVING so the
+ * column list, whose count stock's callbacks check (getAllAlbum's 0x4e93c8 wants 4, getAlbumByGenre's list has 5), stays stock's, and printf is never NULL, so no group is dropped.
+ * The key is fixed width before the path: "%08x" of track + 2^31 sorts a signed 32-bit track numerically, which stock always stores (its INSERT formats track with %d).
+ * One sort, the grouping's, instead of an ordered copy of the whole table. */
+static const char pq_having[] = " having min(printf('%d%08x%d%s',ifnull(track,0)<=0,ifnull(track,0)+2147483648,"
+                                "fileurl is not null,fileurl)) is not null";
+/* An album's own tracks (getMusicByAlbum and the ...AndSonger/AlbumSonger/Composer/Genre variants: `where album=""`, `where album like '...'[ and ...]`), first track first */
+static const char pq_album[] = "select * from songtable where ";
+static const char pq_order[] = " order by (ifnull(track,0)<=0), ifnull(track,0), fileurl";
 
 /* The Favourites list (getAllFav, 0x4ec45c: exactly "select * from myfav") is music only; the Saved page (patch/podcasts.c) asks for the same statement with pc_saved_scope set around its
  * loadLocalClassList(0xf00a) and gets the episodes only, the last saved first. Stock's own star adds and removes the episodes (myfav), so Saved is a view of that table. */
 unsigned char pc_saved_scope __attribute__((section(".scratch")));
 static const char pq_fav_sql[] = "select * from myfav";
-static const char pq_fav_music[] = "select * from myfav where ifnull(fileurl,'') not like '" PM_ROOT "/podcasts/%'";
+static const char pq_fav_music[] = "select * from myfav where " PQ_MUSIC;
 static const char pq_fav_saved[] =
     "select * from myfav where ifnull(fileurl,'') like '" PM_ROOT "/podcasts/%' order by id desc";
 
-/* The end of the first pat in sql when the next character is not an s (albumsonger is not album); 0 when there is none */
-static const char *pq_find(const char *sql, const char *pat) {
-    unsigned i, n;
-    for (n = 0; sql[n]; ++n) {
-        for (i = 0; pat[i] && sql[n + i] == pat[i]; ++i) {
-        }
-        if (!pat[i] && sql[n + i] != 's') return sql + n + i;
-    }
-    return 0;
+/* 1 when the n bytes at a are b's */
+static int pq_eq(const char *a, const char *b, unsigned n) {
+    while (n && *a == *b) ++a, ++b, --n;
+    return !n;
 }
 
-/* sql with " from songtable" replaced by the filtered subquery, in out; 0 when sql is not such a select or does not fit. An album list (`group by album`) gets the subquery
- * ordered so the row SQLite keeps per album is its first track; an album's own tracks (`where album ...`) come in track order, so the first is the album's first track. The Favourites statement is
- * replaced whole (above). */
+/* n bytes of s appended at *at; 0 when they would leave no room for the NUL */
+static int pq_put(char *out, unsigned *at, const char *s, unsigned n) {
+    if (n >= PQ_BUF - *at) return 0;
+    memcpy(out + *at, s, n);
+    *at += n;
+    return 1;
+}
+
+/* sql with the podcast filter, in out; 0 when sql is not a songtable select or does not fit. The Favourites statement is replaced whole (above). */
 static char *pq_filter(char *out, const char *sql) {
     static const char tbl[] = " from songtable", sel[] = "select ";
-    unsigned i, n, m = sizeof pq_head - 1, t, len;
-    const char *tail, *rest;
+    unsigned i, n, at = 0, end, semi, g = sizeof pq_group - 1, w = sizeof pq_where - 1, a = sizeof pq_album - 1;
+    const char *rest;
+    int ok;
     if (!sql) return 0;
     for (i = 0; i < sizeof pq_fav_sql && sql[i] == pq_fav_sql[i]; ++i) {
     }
@@ -1208,24 +1218,38 @@ static char *pq_filter(char *out, const char *sql) {
             memcpy(out, pq_fav_music, sizeof pq_fav_music);
         return out;
     }
-    for (i = 0; i < sizeof sel - 1; ++i)
-        if (sql[i] != sel[i]) return 0;
+    if (!pq_eq(sql, sel, sizeof sel - 1)) return 0;
     for (n = 0; sql[n]; ++n) {
         for (i = 0; i < sizeof tbl - 1 && sql[n + i] == tbl[i]; ++i) {
         }
         if (i == sizeof tbl - 1 && (sql[n + i] == 0 || sql[n + i] == ' ' || sql[n + i] == ';')) break;
     }
     if (!sql[n]) return 0;
-    len = pm_len(sql);
-    if (len - (sizeof tbl - 1) + m + sizeof pq_last > PQ_BUF)
-        return 0; /* fits with the longest tail (its size counts the NUL) */
     rest = sql + n + sizeof tbl - 1;
-    tail = pq_find(rest, "group by album") ? pq_last : pq_find(rest, " where album") ? pq_first : ")";
-    t = pm_len(tail);
-    memcpy(out, sql, n);
-    memcpy(out + n, pq_head, m);
-    memcpy(out + n + m, tail, t);
-    memcpy(out + n + m + t, sql + n + sizeof tbl - 1, len - n - (sizeof tbl - 1) + 1);
+    end = pm_len(rest);
+    semi = end && rest[end - 1] == ';'; /* stock's trailing ';' stays last */
+    end -= semi;
+    for (i = 0; i < n && sql[i] != '('; ++i) {
+    }
+    if (i == n && end >= g && pq_eq(rest + end - g, pq_group, g) &&
+        (end == g || (end > g + w && pq_eq(rest, pq_where, w)))) {
+        /* select <columns> from songtable where [(<condition>) and ]<filter> group by album COLLATE NOCASE having min(<key>) is not null[;] */
+        ok = pq_put(out, &at, sql, n + sizeof tbl - 1) && pq_put(out, &at, pq_where, w);
+        if (end > g)
+            ok = ok && pq_put(out, &at, "(", 1) && pq_put(out, &at, rest + w, end - g - w) &&
+                 pq_put(out, &at, ") and ", 6);
+        ok = ok && pq_put(out, &at, PQ_MUSIC, sizeof PQ_MUSIC - 1) && pq_put(out, &at, pq_group, g) &&
+             pq_put(out, &at, pq_having, sizeof pq_having - 1);
+    } else if (pq_eq(sql, pq_album, a) && pq_eq(sql + a, "album", 5) && sql[a + 5] != 's') {
+        /* select * from songtable where (<condition>) and <filter> order by <first track first>[;] */
+        ok = pq_put(out, &at, pq_album, a) && pq_put(out, &at, "(", 1) &&
+             pq_put(out, &at, sql + a, n + sizeof tbl - 1 + end - a) && pq_put(out, &at, ") and ", 6) &&
+             pq_put(out, &at, PQ_MUSIC, sizeof PQ_MUSIC - 1) && pq_put(out, &at, pq_order, sizeof pq_order - 1);
+    } else {
+        ok = pq_put(out, &at, sql, n) && pq_put(out, &at, pq_head, sizeof pq_head - 1) && pq_put(out, &at, rest, end);
+    }
+    if (!ok || !pq_put(out, &at, rest + end, semi)) return 0;
+    out[at] = 0;
     return out;
 }
 

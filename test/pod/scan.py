@@ -101,66 +101,104 @@ class QueryMachine(Machine):
         return n, self.sql
 
 
-def first_track_tests(expect):
-    """An album is its first track: the album lists keep the lowest track number (untagged after tagged, then the lowest path) and an album's own query lists in that order.
-    The device's SQLite 3.19.3 keeps the LAST row of a group for bare columns, newer ones the first, so the engine's rule is probed and the chosen row is checked against the
-    rule applied to the ordered subquery; where the rule is the device's (last row) it must be the album's first track."""
-    import sqlite3
-    probe = sqlite3.connect(':memory:')
-    probe.execute('create table t(a,b)')
-    probe.executemany('insert into t values(?,?)', [('x', 1), ('x', 2), ('x', 3), ('y', 5), ('y', 4)])
-    last_row = probe.execute('select b from (select * from t order by b) group by a COLLATE NOCASE order by a').fetchall() == [(3,), (5,)]
+MUSIC = "ifnull(fileurl,'') not like '/mnt/mmc/podcasts/%'"
+HAVING = " having min(printf('%d%08x%d%s',ifnull(track,0)<=0,ifnull(track,0)+2147483648,fileurl is not null,fileurl)) is not null"
+ORDER = ' order by (ifnull(track,0)<=0), ifnull(track,0), fileurl'
+# stock's album lists (getAllAlbum, getAlbumByArtist/AlbumArtist/Composer/Genre, SearchAlbumByName) and an album's own tracks (getMusicByAlbum, getMusicByAlbumAnd*): the format, its arguments
+ALBUM_LISTS = (('select id,album,songer,fileurl from %s group by album COLLATE NOCASE', ()),
+               ('select id,album,songer,fileurl from %s where songer="" group by album COLLATE NOCASE', ()),
+               ("select id,album,songer,fileurl from %s where songer like '%s' group by album COLLATE NOCASE", ('A',)),
+               ("select id,album,songer,fileurl from %s where songer like '%s' group by album COLLATE NOCASE", ('B',)),
+               ('select id,album,songer,fileurl from %s where albumsonger="" group by album COLLATE NOCASE', ()),
+               ("select id,album,songer,fileurl from %s where albumsonger like '%s' group by album COLLATE NOCASE", ('C',)),
+               ('select id,album,composer,fileurl from %s where composer="" group by album COLLATE NOCASE', ()),
+               ("select id,album,composer,fileurl from %s where composer like '%s' group by album COLLATE NOCASE", ('C3',)),
+               ('select id,album,songer,style,fileurl from %s where style="" group by album COLLATE NOCASE', ()),
+               ("select id,album,songer,style,fileurl from %s where style like '%s' group by album COLLATE NOCASE", ('Pop',)),
+               ("select id,album,songer,fileurl from %s where album like '%%%s%%' group by album COLLATE NOCASE", ('lph',)),
+               ("select id,album,songer,fileurl from %s where songer like '%s' group by album COLLATE NOCASE", ('Nobody',)))
+ALBUM_TRACKS = (('select * from %s where album=""', ()), ("select * from %s where album like '%s'", ('alpha',)),
+                ('select * from %s where album like \'%s\' and songer=""', ('zeta',)), ("select * from %s where album like '%s' and songer like '%s'", ('alpha', 'B')),
+                ('select * from %s where album like \'%s\' and albumsonger=""', ('zeta',)), ("select * from %s where album like '%s' and albumsonger like '%s'", ('Beta', 'C')),
+                ('select * from %s where album like \'%s\' and composer=""', ('zeta',)), ("select * from %s where album like '%s' and composer like '%s'", ('Gamma', 'C3')),
+                ('select * from %s where album like \'%s\' and style=""', ('zeta',)), ("select * from %s where album like '%s' and style like '%s'", ('Delta', 'Jazz')))
+
+
+def first_track_tests(expect, stock_demo):
+    """An album is its first track: the album lists keep the lowest track number (untagged, NULL or <= 0, after tagged; then the lowest path, NULL first) through one min() in
+    HAVING, the bare-column rule SQLite documents (the host's SQLite and the device's 3.19.3 agree), and an album's own query lists its tracks in that order. Every stock statement
+    of both kinds runs, rewritten, against SQLite; the column list stays stock's (its callbacks count the columns)."""
+    import re
     #        id, album, songer, albumsonger, composer, style, fileurl, track
     rows = [(1, 'Alpha', 'A', 'A', 'C1', 'Rock', '/mnt/mmc/m/a/03.flac', 3), (2, 'alpha', 'A', 'A', 'C1', 'Rock', '/mnt/mmc/m/a/02.flac', 2),
             (3, 'ALPHA', 'B', 'A', 'C2', 'Pop', '/mnt/mmc/m/a/01.flac', 1), (4, 'Alpha', 'A', 'A', 'C1', 'Rock', '/mnt/mmc/m/a/00.flac', 0),
             (5, 'Beta', 'C', 'C', 'C3', 'Pop', '/mnt/mmc/m/b/z.flac', None), (6, 'Beta', 'C', 'C', 'C3', 'Pop', '/mnt/mmc/m/b/y.flac', 0),
             (7, 'Beta', 'C', 'C', 'C3', 'Pop', '/mnt/mmc/m/b/x.flac', 7), (8, 'Gamma', 'C', 'C', 'C3', 'Pop', '/mnt/mmc/m/g/b.flac', 5),
             (9, 'Gamma', 'C', 'C', 'C3', 'Pop', '/mnt/mmc/m/g/a.flac', 5), (10, 'Delta', 'D', 'D', 'C4', 'Jazz', '/mnt/mmc/m/d/b.flac', None),
-            (11, 'Delta', 'D', 'D', 'C4', 'Jazz', '/mnt/mmc/m/d/a.flac', None), (12, 'Alpha', 'A', 'A', 'C1', 'Rock', '/mnt/mmc/Podcasts/a/ep.mp3', 1)]
-    first = {'alpha': 3, 'beta': 7, 'gamma': 9, 'delta': 11}   # per album (NOCASE), the lowest tagged track, then the lowest path; untagged only when nothing is tagged
+            (11, 'Delta', 'D', 'D', 'C4', 'Jazz', '/mnt/mmc/m/d/a.flac', None), (12, 'Alpha', 'A', 'A', 'C1', 'Rock', '/mnt/mmc/Podcasts/a/ep.mp3', 1),
+            (13, 'Edge', 'E', 'E', 'C5', 'Edge', '/mnt/mmc/m/e/b.flac', 2147483647), (14, 'edge', 'E', 'E', 'C5', 'Edge', '/mnt/mmc/m/e/a.flac', 0),
+            (15, 'Neg', 'E', 'E', 'C5', 'Edge', '/mnt/mmc/m/n/a.flac', -2147483648), (16, 'Neg', 'E', 'E', 'C5', 'Edge', '/mnt/mmc/m/n/b.flac', 1),
+            (17, 'Paths', 'E', 'E', 'C5', 'Edge', '', 1), (18, 'Paths', 'E', 'E', 'C5', 'Edge', None, 1), (19, 'Paths', 'E', 'E', 'C5', 'Edge', '/a', 1),
+            (20, 'Paths2', 'E', 'E', 'C5', 'Edge', '/a', 1), (21, 'Paths2', 'E', 'E', 'C5', 'Edge', '', 1),
+            (22, 'Zeta', '', '', '', '', '/mnt/mmc/m/z/2.flac', 2), (23, 'zeta', '', '', '', '', '/mnt/mmc/m/z/1.flac', 2)]
+    first = {'alpha': 3, 'beta': 7, 'gamma': 9, 'delta': 11, 'edge': 13, 'neg': 16, 'paths': 18, 'paths2': 21, 'zeta': 23}   # per album (NOCASE)
+    wants = (first, {'zeta': 23}, {'alpha': 2}, {'alpha': 3}, {'zeta': 23}, {'beta': 7, 'gamma': 9}, {'zeta': 23}, {'beta': 7, 'gamma': 9}, {'zeta': 23},
+             {'alpha': 3, 'beta': 7, 'gamma': 9}, {'alpha': 3}, {})
+    tracks = ([], [3, 2, 1, 4], [23, 22], [3], [23, 22], [7, 6, 5], [23, 22], [9, 8], [23, 22], [11, 10])
     q = QueryMachine(rows)
-
-    def chosen(sql, fn='pc_library_query'):
-        q.query(sql, fn)
-        return {r[1].lower(): r[0] for r in q.results}
-    for fn in ('pc_library_query', 'pc_sorted_query'):
-        for sql, want in (('select id,album,songer,fileurl from songtable group by album COLLATE NOCASE', first),
-                          ("select id,album,songer,fileurl from songtable where songer like 'A' group by album COLLATE NOCASE", {'alpha': 2}),
-                          ("select id,album,songer,fileurl from songtable where songer like 'B' group by album COLLATE NOCASE", {'alpha': 3}),
-                          ("select id,album,songer,fileurl from songtable where albumsonger like 'C' group by album COLLATE NOCASE", {'beta': 7, 'gamma': 9}),
-                          ("select id,album,composer,fileurl from songtable where composer like 'C3' group by album COLLATE NOCASE", {'beta': 7, 'gamma': 9}),
-                          ("select id,album,songer,style,fileurl from songtable where style like 'Pop' group by album COLLATE NOCASE", {'alpha': 3, 'beta': 7, 'gamma': 9}),
-                          ('select id,album,songer,fileurl from songtable where songer="Nobody" group by album COLLATE NOCASE', {}),
-                          ('select id,album,songer,fileurl from songtable group by album COLLATE NOCASE;', first)):
-            got = chosen(sql, fn)
-            expect('order by' in q.sql and 'podcasts/%' in q.sql, f'{fn}: {sql[:50]!r}: the rewrite orders the filtered subquery')
-            if last_row: expect(got == want, f'{fn}: {sql[:70]!r} -> {got} (want {want}): the first track of each album')
-            else: expect(len(got) == len(want) and set(got) == set(want), f'{fn}: {sql[:70]!r}: the same albums ({got})')
-    # the text verified by hand against the SQLite 3.19.3 amalgamation (shell: first tracks 3, 7, 11, 9 in the rows above)
+    album_text = lambda m: f'{m[1]} where ' + (f'({m[2]}) and ' if m[2] else '') + f'{MUSIC} group by album COLLATE NOCASE{HAVING}{m[3]}'
+    for (fmt, args), want in zip(ALBUM_LISTS, wants):
+        expect(b'\0' + fmt.encode() + b'\0' in stock_demo, f'{fmt[:60]!r} is a stock format')
+        for sql in (fmt % (('songtable',) + args), fmt % (('songtable',) + args) + ';'):
+            for fn in ('pc_library_query', 'pc_sorted_query'):
+                q.query(sql, fn)
+                got = {r[1].lower(): r[0] for r in q.results}
+                m = re.fullmatch(r'(select [a-z,]+ from songtable)(?: where (.*))? group by album COLLATE NOCASE(;?)', sql)
+                expect(q.sql == album_text(m), f'{fn}: {sql[:70]!r}: one grouping with the filter in its WHERE and the first track in HAVING: {q.sql}')
+                expect(got == want, f'{fn}: {sql[:70]!r} -> {got} (want {want}): the first track of each album')
+                stock = q.db.execute(sql)
+                expect(len(q.db.execute(q.sql).description) == len(stock.description) and {r[1].lower() for r in stock} == set(got),
+                       f'{sql[:70]!r}: stock\'s columns, no album beyond stock\'s')
+    # the texts verified by hand against the SQLite 3.19.3 amalgamation
     q.query("select id,album,songer,fileurl from songtable where songer like 'A' group by album COLLATE NOCASE")
-    expect(q.sql == "select id,album,songer,fileurl from (select * from songtable where ifnull(fileurl,'') not like '/mnt/mmc/podcasts/%' order by (ifnull(track,0)<=0) desc, "
-                    "ifnull(track,0) desc, fileurl desc) where songer like 'A' group by album COLLATE NOCASE", f'the album list text: {q.sql}')
-    # the other grouping queries are not ordered; an album's own tracks are, ascending (the first is the album's first track)
-    for sql in ('select id,songer from songtable group by songer COLLATE NOCASE', 'select id,albumsonger from songtable group by albumsonger COLLATE NOCASE',
-                'select id,style from songtable group by style COLLATE NOCASE', 'select * from songtable where albumsonger like \'A\''):
-        q.query(sql)
-        expect('order by' not in q.sql, f'{sql[:50]!r}: not an album list, no order added')
-    for sql, want in (("select * from songtable where album like 'alpha'", [3, 2, 1, 4]),   # tracks 1, 2, 3, then the untagged one
-                      ("select * from songtable where album like 'Beta'", [7, 6, 5]), ('select * from songtable where album="Gamma"', [9, 8]),
-                      ("select * from songtable where album like 'Delta' and songer like 'D'", [11, 10]),
-                      ("select * from songtable where album like 'alpha' and songer='B'", [3])):
+    expect(q.sql == "select id,album,songer,fileurl from songtable where (songer like 'A') and ifnull(fileurl,'') not like '/mnt/mmc/podcasts/%' group by album COLLATE NOCASE "
+                    "having min(printf('%d%08x%d%s',ifnull(track,0)<=0,ifnull(track,0)+2147483648,fileurl is not null,fileurl)) is not null", f'the album list text: {q.sql}')
+    expect(q.icount < 3500 and q.calls == [], f'the album list rewrite costs {q.icount} instructions and calls nothing but the trampoline ({q.calls})')
+    q.query("select * from songtable where album like 'Beta' and songer like 'C'")
+    expect(q.sql == "select * from songtable where (album like 'Beta' and songer like 'C') and ifnull(fileurl,'') not like '/mnt/mmc/podcasts/%' "
+                    "order by (ifnull(track,0)<=0), ifnull(track,0), fileurl", f'the album tracks text: {q.sql}')
+    for (fmt, args), want in zip(ALBUM_TRACKS, tracks):
+        expect(b'\0' + fmt.encode() + b'\0' in stock_demo, f'{fmt[:60]!r} is a stock format')
+        sql = fmt % (('songtable',) + args)
+        for fn in ('pc_library_query', 'pc_sorted_query'):
+            q.query(sql, fn)
+            ids = [r[0] for r in q.results]
+            expect(q.sql == f'select * from songtable where ({sql[30:]}) and {MUSIC}{ORDER}', f'{fn}: {sql[:60]!r}: the filter and the order in its WHERE: {q.sql}')
+            expect(ids == want, f'{fn}: {sql[:60]!r}: tracks in order, ids {ids} (want {want})')
+    for sql, want in (("select * from songtable where album like 'paths'", [18, 17, 19]), ("select * from songtable where album like 'paths2'", [21, 20]),
+                      ("select * from songtable where album like 'Neg'", [16, 15]), ("select * from songtable where album like 'edge'", [13, 14]),
+                      ("select * from songtable where album like 'Delta' and songer like 'D'", [11, 10]), ('select * from songtable where album="Gamma";', [9, 8])):
         q.query(sql)
         ids = [r[0] for r in q.results]
-        expect(ids == want, f'{sql[:60]!r}: tracks in order, ids {ids} (want {want})')
-    # a text that does not fit once ordered goes to stock untouched; one that fits is rewritten within the buffer
-    seen = set()
-    for pad in range(800, 1000, 4):
-        sql = 'select id,album,songer,fileurl from songtable group by album COLLATE NOCASE' + ' ' * (pad - 77)
-        qq = QueryMachine([])
-        qq.query(sql)
-        seen.add(qq.sql == sql)
-        expect(qq.sql == sql or ('order by' in qq.sql and len(qq.sql) < 1024), f'a {len(sql)} byte album list: stock or rewritten within the buffer')
-    expect(seen == {True, False}, 'the long album lists reach both outcomes')
+        expect(ids == want and q.sql.endswith(ORDER + (';' if sql.endswith(';') else '')), f'{sql[:60]!r}: tracks in order, ids {ids} (want {want})')
+    # anything else (other groupings, other album-list shapes) reads the filtered subquery, unordered
+    for sql in ('select id,songer from songtable group by songer COLLATE NOCASE', 'select id,albumsonger from songtable group by albumsonger COLLATE NOCASE',
+                'select id,style from songtable group by style COLLATE NOCASE', 'select * from songtable where albumsonger like \'A\'',
+                'select id,album,songer,fileurl from songtable group by album COLLATE NOCASE ', 'select id,album,songer,fileurl from songtable group by album',
+                'select count(id),album from songtable group by album COLLATE NOCASE', 'select id,album from songtable group by album COLLATE NOCASE order by id',
+                'select *,album from songtable where album=""', 'select * from songtable where albumsonger=""'):
+        q.query(sql)
+        expect(q.sql == sql.replace(' from songtable', f' from (select * from songtable where {MUSIC})', 1), f'{sql[:60]!r}: not a stock album shape, the plain filter: {q.sql}')
+    # a text that does not fit once rewritten goes to stock untouched; one that fits is rewritten within the buffer
+    for kind, make, mark in (('album list', lambda p: f"select id,album,songer,fileurl from songtable where songer like '{p}' group by album COLLATE NOCASE", HAVING),
+                             ('album', lambda p: f"select * from songtable where album like '{p}'", ORDER), ('songs', lambda p: f"select * from songtable where songer like '{p}'", MUSIC)):
+        seen, qq = set(), QueryMachine([])
+        for pad in range(700, 1000, 3):
+            sql = make('x' * pad)
+            qq.query(sql)
+            seen.add(qq.sql == sql)
+            expect(qq.sql == sql or (mark in qq.sql and len(qq.sql) < 1024), f'a {len(sql)} byte {kind} query: stock or rewritten within the buffer')
+        expect(seen == {True, False}, f'the long {kind} queries reach both outcomes')
 
 
 def query_tests(ctx):
@@ -211,7 +249,7 @@ def query_tests(ctx):
         try: qq.query(sql)
         except Exception: pass
         expect(qq.sql == sql, f'{sql[:50]!r}: stock SQL, untouched')
-    first_track_tests(expect)
+    first_track_tests(expect, stock_demo)
     # Favourites (getAllFav: exactly "select * from myfav") is music only; with pc_saved_scope set (the Saved page) it is the episodes only, the last saved first
     fav = [(1, '/mnt/mmc/Music/a.flac'), (2, '/mnt/mmc/Podcasts/Show/ep1.mp3'), (3, '/mnt/mmc/Music/Podcasts/b.flac'), (4, '/mnt/mmc/pOdCaStS/Show/ep2.mp3'), (5, None), (6, '/mnt/mmc/Podcasts Extra/c.mp3'), (7, '/mnt/mmc/Podcasts/Other/ep3.mp3')]
     qf = QueryMachine([])
