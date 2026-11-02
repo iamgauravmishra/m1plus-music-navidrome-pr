@@ -25,6 +25,7 @@
 #include "home.h"
 #include "scroll.h"
 #include "covercache.h"
+#include "durations.h"
 #include "common.h"
 #include "grid.h"
 #include "azlist.h"
@@ -41,6 +42,8 @@ static struct {
     void *back, *np, *btn_select, *btn_selall, *btn_add, *btn_del, *btn_cancel, *btn_play, *btn_shuffle;
     void *st_num, *st_title,
         *st_gold; /* hidden labels whose styles are the number's, the title's and the playing title's */
+    void *
+        foot; /* the footer under the last row (ab_foot, a label of the content view): "13 tracks, 49 minutes", hidden while the duration is unknown */
     void *hname, *hartist, *hmeta, *glyph,
         *ptext; /* the header's labels, the Play all pill's glyph and its hidden text label (the text style and the translated text; the page paints it) */
     int ptx, ptw; /* where the pill's text is painted: x, and its width */
@@ -58,8 +61,12 @@ static struct {
     unsigned char ci
         [CLASSINFO_SIZE]; /* the browsing record of the album (CLASSINFO, as loadAlbumdetailList left it), put back before every query and play */
     unsigned cover_key; /* cc_album_key of the album row: the cache file's name; also the tone cache's key */
-    unsigned stale_timer, build_timer;
+    unsigned stale_timer, build_timer, dur_timer;
     int own; /* the page holds the cache worker's job set */
+    int lown; /* ... or the durations set (a CC_DURATIONS one: the missing tracks of this album) */
+    int lheld; /* the durations table is acquired */
+    int ltried; /* a durations set ran since the list was read: no second one */
+    unsigned dur; /* the album's total seconds when every track's length is known, else 0 */
     unsigned tone; /* the window's colour as 0x00BBGGRR once tinted */
     int tinted;
     int fg; /* 1 from the page's start and EVT_WINDOW_TO_FG, 0 after EVT_WINDOW_TO_BG */
@@ -94,7 +101,9 @@ static void ab_classinfo(void) { memcpy((void *)CLASSINFO, ab.ci, CLASSINFO_SIZE
  * Geometry: the header is AH_HDR_H high (the cover at AH_ART_Y, the controls' band over its first rows), then one ROW per track
  */
 static int ab_row_y(int i) { return AH_HDR_H + i * ROW; }
-static int ab_content(void) { return AH_HDR_H + (int)ab.count * ROW; }
+static int ab_content(void) {
+    return AH_HDR_H + (int)ab.count * ROW + (ab.count && ab.dur ? AB_FOOT_GAP + AB_FOOT_TEXT_H + AB_FOOT_PAD : 0);
+}
 
 static int ab_max_scroll(void) {
     int m = ab_content() - AH_WIN_H;
@@ -274,9 +283,10 @@ static void ab_tint_cover(void) {
  */
 static void ab_build_end(void) {
     if (ab.build_timer) timer_remove(ab.build_timer);
-    ab.build_timer = 0;
-    if (ab.own) cc_build_stop();
-    ab.own = 0;
+    if (ab.dur_timer) timer_remove(ab.dur_timer);
+    ab.build_timer = ab.dur_timer = 0;
+    if (ab.own || ab.lown) cc_build_stop();
+    ab.own = ab.lown = 0;
 }
 
 /* The header's cover from what the cache has now. 1: a picture (decoded, the tint follows); 0: an empty "no art" marker, or no key (the placeholder, a black page); -1: no file. */
@@ -297,6 +307,7 @@ static int ab_cover_now(void) {
 }
 
 static int ab_on_cover(const void *unused);
+static void ab_durations(void);
 
 /* The worker makes the album's file (CC_MISSING: one job, polled every AB_COVER_MS); nothing to build, no card, no space or another page's set held: the placeholder stays. */
 static void ab_cover_build(void) {
@@ -329,10 +340,103 @@ static int ab_on_cover(const void *unused) {
         ab_cover_now();
         if (!ab.hg.placeholder && ab.hg.tiles && grid_find(&ab.hg, 0)->art != 1) grid_placeholder(&ab.hg);
         ab_redraw();
+        ab_durations(); /* the worker is free for the tracks' durations */
         return RET_OK;
     }
     ab.build_timer = timer_add(ab_on_cover, (void *)0, AB_COVER_MS);
     if (!ab.build_timer) ab_build_end();
+    return RET_OK;
+}
+
+/* ---------------------------------------------------------------------------
+ * The album's length (docs/modules/album-page.md "Album length"): every track's seconds from the durations table (patch/durations.c); the missing ones are measured by the
+ * cache worker when it is free (one set for this album, polled every AB_DUR_MS), and the duration is shown only when all are known.
+ */
+#define AB_DUR_MS 400
+
+static int ab_on_dur(const void *unused);
+static void ab_foot(void);
+
+/* The footer under the last row, its own block at the number column's left edge (AB_NUM_X): "13 tracks, 49 minutes", AB_FOOT_GAP under the last row, only when the duration is
+ * known; otherwise hidden and no band is kept. The content grows by AB_FOOT_GAP + AB_FOOT_TEXT_H + AB_FOOT_PAD when it appears; the scroll offset is untouched. */
+static void ab_size(void);
+static void ab_foot(void) {
+    char dur[64], line[128];
+    if (!ab.foot) return;
+    if (ab.count && ab.dur) {
+        dur_text(dur, sizeof dur, ab.dur);
+        dur_subst(line, sizeof line, TR(ab.count == 1 ? "%d track, %s" : "%d tracks, %s"), (int)ab.count, dur,
+                  (const char *)0);
+        widget_set_text_utf8(ab.foot, line);
+        widget_move(ab.foot, AB_NUM_X, ab_row_y((int)ab.count) + AB_FOOT_GAP);
+        widget_resize(ab.foot, AB_VIEW_W - AB_NUM_X - AB_FOOT_R, AB_FOOT_TEXT_H);
+    }
+    widget_set_visible(ab.foot, ab.count != 0 && ab.dur != 0, 0); /* (never sensitive: the label takes no touch) */
+    ab_size();
+}
+
+/* The album's total from the table, or its missing tracks queued for the worker. The line is rewritten when the total became known. */
+static void ab_durations(void) {
+    unsigned i, size, total = 0, miss = 0, bad = 0;
+    int v;
+    if (!ab.count || !ab.list || ab.own || ab.lown || ab.dur_timer || ab.dur || home_off() || !pod_card_mounted())
+        return; /* (no card, or USB mode: no table, nothing measured) */
+    if (!ab.lheld) {
+        dur_acquire();
+        ab.lheld = 1;
+    }
+    for (i = 0; i < ab.count; ++i) {
+        v = dur_song(deque_at(ab.list, i), &size);
+        if (v < 0)
+            ++miss;
+        else if (v == 0)
+            ++bad; /* unreadable, or no file: no total (and nothing to measure) */
+        else
+            total += (unsigned)v;
+    }
+    if (bad) return;
+    if (!miss) {
+        ab.dur = total;
+        ab_foot();
+        ab_redraw();
+        return;
+    }
+    if (ab.ltried || !cc_build_open(miss, CC_DURATIONS)) return; /* the worker is busy: no duration this time */
+    ab.lown = 1, ab.ltried = 1;
+    for (i = 0; i < ab.count; ++i) {
+        void *rec = deque_at(ab.list, i);
+        v = dur_song(rec, &size);
+        if (v < 0 && cc_build_add_dur(cc_str(rec, REC_PATH), dur_key(cc_str(rec, REC_PATH)), size) < 0) {
+            ab_build_end();
+            return;
+        }
+    }
+    if (!cc_build_start()) {
+        ab_build_end();
+        return;
+    }
+    ab.dur_timer = timer_add(ab_on_dur, (void *)0, AB_DUR_MS);
+    if (!ab.dur_timer) ab_build_end();
+}
+
+/* The worker finished the album's files: their durations go into the table and the line is read again. */
+static int ab_on_dur(const void *unused) {
+    (void)unused;
+    ab.dur_timer = 0;
+    if (!ab.view || !ab.lown) return RET_OK;
+    if (cc_build_done() >= cc_build_total()) {
+        int n = cc_build_total(), i, k = 0;
+        dur_ent_t *e = calloc(1, ((unsigned)(n > 0 ? n : 1) * sizeof *e));
+        for (i = 0; e && i < n; ++i)
+            if (cc_build_dur(i, &e[k].key, &e[k].size, &e[k].sec)) ++k;
+        if (e) dur_merge(e, (unsigned)k);
+        free(e);
+        ab_build_end();
+        ab_durations();
+        return RET_OK;
+    }
+    ab.dur_timer = timer_add(ab_on_dur, (void *)0, AB_DUR_MS);
+    if (!ab.dur_timer) ab_build_end();
     return RET_OK;
 }
 
@@ -403,7 +507,9 @@ static void ab_load(int keep) {
     void *list = (void *)0;
     grid_drop(&ab.g);
     free(ab.sel);
+    ab_build_end(); /* a set of an earlier read: the tracks may have changed */
     ab.sel = (unsigned char *)0, ab.list = ab.first = (void *)0, ab.count = ab.nsel = 0, ab.press = ab.down = 0;
+    ab.dur = 0, ab.ltried = 0;
     ab_classinfo();
     if (loadLocalClassList(ab.cls) > 0) list = *(void **)PDEQ_SHOWLIST;
     if (list) ab.count = deque_size(list);
@@ -415,10 +521,11 @@ static void ab_load(int keep) {
     ab_show(ab.view, ab.count != 0);
     ab_show(ab.status, ab.count == 0);
     if (!ab.count) widget_set_tr_text(ab.status, list ? "Not enough memory" : "No songs");
-    ab_size();
+    ab_foot(); /* (sizes the content: the footer's lines are part of it) */
     widget_set_prop_int(ab.sv, "yoffset", at < 0 ? 0 : at > ab_max_scroll() ? ab_max_scroll() : at);
     ab_texts();
     if (ab.count) ab_cover();
+    ab_durations();
     ab_redraw();
 }
 
@@ -643,6 +750,7 @@ static int ab_on_destroy(void *ctx, void *e) {
     (void)e;
     if (ab.stale_timer) timer_remove(ab.stale_timer);
     ab_build_end();
+    if (ab.lheld) dur_release();
     ab_bar_black();
     grid_free(&ab.g);
     grid_free(&ab.hg);
@@ -689,11 +797,12 @@ int album_open(unsigned cls, void *row) {
     ab.hname = widget_lookup(ab.win, "ab_title", 1);
     ab.hartist = widget_lookup(ab.win, "ab_artist", 1);
     ab.hmeta = widget_lookup(ab.win, "ab_meta", 1);
+    ab.foot = widget_lookup(ab.win, "ab_foot", 1);
     ab.glyph = widget_lookup(ab.win, "ab_glyph", 1);
     ab.ptext = widget_lookup(ab.win, "ab_play_text", 1);
     if (!ab.back || !ab.np || !ab.btn_select || !ab.btn_selall || !ab.btn_add || !ab.btn_del || !ab.btn_cancel ||
         !ab.btn_play || !ab.btn_shuffle || !ab.view || !ab.sv || !ab.status || !ab.st_num || !ab.st_title ||
-        !ab.st_gold || !ab.hname || !ab.hartist || !ab.hmeta || !ab.glyph || !ab.ptext) {
+        !ab.st_gold || !ab.hname || !ab.hartist || !ab.hmeta || !ab.foot || !ab.glyph || !ab.ptext) {
         navigator_back(); /* an asset that is not ours */
         return -2;
     }

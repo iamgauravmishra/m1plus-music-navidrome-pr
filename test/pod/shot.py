@@ -147,7 +147,7 @@ def run(ctx):
     # 2. The Developer row: the only row of Settings > Developer, bound to ACT_SHOT; a tap asks first.
     S = P.DEVELOPER_PAGE
     item = 2
-    expect(S.key == 'm1plus_developer' and [r.label for r in S.rows] == ['Boot to M1+ Music', 'Open Shanling Home', 'Screenshot', 'Cover Cache', 'Settings Files', 'System Update'] and S.rows[item].action == P.ACT_SHOT == 14 and P.PAGES[P.DEVELOPER_PAGE_INDEX] is S,
+    expect(S.key == 'm1plus_developer' and [r.label for r in S.rows] == ['Boot to M1+ Music', 'Open Shanling Home', 'Screenshot', 'Cover Cache', 'Clear Track Durations', 'Settings Files', 'System Update'] and S.rows[item].action == P.ACT_SHOT == 14 and P.PAGES[P.DEVELOPER_PAGE_INDEX] is S,
            'Screenshot is the third row of the Developer page (under Startup; System Update next)')
     expect(not [r for page in P.PAGES if page is not S for r in page.rows if r.action == P.ACT_SHOT],
            'no other page has a Screenshot row (menu, Extras and Main Menu page have none)')

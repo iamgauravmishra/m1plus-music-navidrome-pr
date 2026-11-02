@@ -33,7 +33,7 @@ ALBUM, ARTIST = 'Kind of Blue', 'Miles Davis'
 RED = (190, 50, 55)
 NAMES = ['So What', 'Freddie Freeloader', 'Blue in Green', 'All Blues', 'Flamenco Sketches', 'Flamenco Sketches (Alt)', 'So What (Alt)', 'Blue in Green (Alt)']
 WIDGETS = ('view_grid', 'btn_return', 'btn_backtoplayer', 'btn_select', 'btn_selall', 'sg_add', 'sg_del', 'btn_cancel', 'btn_play', 'btn_shuffle', 'label_status', 'label_row_num', 'label_row_title',
-           'label_row_gold', 'ab_title', 'ab_artist', 'ab_meta', 'ab_glyph', 'ab_play_text', 'label_title', 'img_ah_tint')
+           'label_row_gold', 'ab_title', 'ab_artist', 'ab_meta', 'ab_foot', 'ab_glyph', 'ab_play_text', 'label_title', 'img_ah_tint')
 NAV_BTNS = ('btn_return', 'btn_backtoplayer', 'btn_select', 'btn_selall', 'sg_add', 'sg_del', 'btn_cancel')
 BAR_BLACK = O['NP_BAR_STOCK']
 
@@ -272,7 +272,7 @@ def open_tests(ctx):
            and all((m.view, O[e]) in m.bound for e in ('EVT_POINTER_DOWN', 'EVT_POINTER_UP', 'EVT_POINTER_ABORT', 'EVT_AFTER_PAINT'))
            and all((m.window, O[e]) in m.bound for e in ('EVT_WINDOW_TO_FG', 'EVT_WINDOW_TO_BG', 'EVT_DESTROY')), 'the buttons, the content view\'s touch and paint events and the window\'s events are bound')
     sizes = [c for c in calls if c[0] == 'widget_resize' and c[1] == m.view]
-    expect(sizes and sizes[-1][2:] == (320, HDR + 8 * ROW) and m.props[(m.sv, 'virtual_h')] == HDR + 8 * ROW, f'the content is the {HDR} px header and 8 rows of {ROW}: {HDR + 8 * ROW} px, the scroll_view is told (no count under the rows)')
+    expect(sizes and sizes[-1][2:] == (320, HDR + 8 * ROW) and m.props[(m.sv, 'virtual_h')] == HDR + 8 * ROW, f'the content is the {HDR} px header and 8 rows of {ROW}: {HDR + 8 * ROW} px, the scroll_view is told (no footer without a known duration)')
     expect(vis(m, 'view_grid') == (1, 1) and vis(m, 'label_status') == (0, 0) and not any(c[0] == 'widget_set_visible' and c[1] in [m.widgets[n] for n in ('btn_selall', 'sg_add', 'sg_del', 'btn_cancel')] for c in calls),
            'the list shows, the status line is hidden, the select mode\'s buttons stay as the asset has them (hidden)')
     expect(not [c for c in calls if c[0] == 'widget_load_image' and c[1] not in ('p_default', 'unselect', 'selected') and not c[1].endswith('.jpg')], 'only the cover file is decoded (no cover per row)')

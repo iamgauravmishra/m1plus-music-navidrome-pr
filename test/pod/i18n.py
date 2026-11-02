@@ -7,6 +7,7 @@ from awtk_text import Ttf, StbText
 
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
 SAME_AS_ENGLISH = {'Cover Flow', 'Playlists', 'Playlist', 'Genres', 'Extras', 'Albums', 'Artists', 'Local', '%s, %s'}   # translations that are the English word by design
+SAME_AS_ENGLISH |= {'%d minute', '%d minutes'}    # French writes minute(s) as English does
 SAME_AS_ENGLISH |= {'Podcasts', ', %d', 'Normal', 'Chrome', 'Metal', 'Graphite', '5 s', '10 s'}    # Podcasts in French and German
 SAME_AS_ENGLISH |= {'Downloads', '%d MB', '%d.%d GB', '%d GB'}    # German writes Downloads as English does
 SAME_AS_ENGLISH |= {'Genre', 'Screenshot', 'Collections', 'Cover'}    # French and German write Genre the same; German and Italian say Screenshot; French writes Collections the same; German says Cover
@@ -232,12 +233,12 @@ def run(ctx):
     for loc in LOC:
         for key in ('Update Local Music first', 'Not enough memory', 'Storage unavailable', 'Too many songs to shuffle',
                     'Screenshot saved', 'Screenshot failed', 'No music in this folder', 'New mix when Home opens', 'Covers will rebuild on Home',
-                    'Cover cache cleared', 'Covers are being made, try later'):
+                    'Cover cache cleared', 'Covers are being made, try later', 'Track durations cleared'):
             if width(tr_text(loc, key), msg_px) > 260: over.append((loc, key))          # the message box's line is 260 px (@0x4788a0)
         for key in ('Update Local Music first', 'Library too large', 'No albums', 'Not enough memory'):
             if width(tr_text(loc, key), 20) > cover.find('label_status').w: over.append((loc, key, 'status'))
         if width(tr_text(loc, 'Preparing covers...') + ' 4000/4000', 20) > cover.find('label_status').w: over.append((loc, 'progress'))
-        for key in ('Preparing covers', 'Rebuilding covers'):
+        for key in ('Preparing covers', 'Rebuilding covers', 'Measuring tracks'):
             if width(tr_text(loc, key) + ' 4000/4000', pod_ui.HC_PX) > A['HC_W'] - 2: over.append((loc, key, 'Home progress line'))   # the Home line (patch/homecover.c): one 15 px line in a 300 px label with its 2 px margin
         if width(tr_text(loc, 'Cancel'), 20) > cover.find('btn_cancel').w - 10: over.append((loc, 'Cancel'))
         if width(tr_text(loc, 'All albums'), 22) > 288: over.append((loc, 'All albums'))
@@ -261,7 +262,7 @@ def run(ctx):
             while width(cur.rstrip(), px) > maxw: lines, cur = lines + 1, cur[len(cur) // 2:]     # a unit wider than a line
         return lines
     for key, what in (('Rebuild all covers? This may take a few minutes.', 'Rebuild Covers'), ('Take a screenshot?', 'Screenshot'), ('Take a screenshot in:', 'Screenshot delay'),
-                      ('Cancel the screenshot?', 'Cancel Screenshot'), ('Delete all cached covers? They will be made again on Home.', 'Clear Cover Cache'), ('Delete folder and everything in it?', 'Delete folder')):
+                      ('Cancel the screenshot?', 'Cancel Screenshot'), ('Delete all cached covers? They will be made again on Home.', 'Clear Cover Cache'), ('Delete all measured track durations? They will be measured again on Home.', 'Clear Track Durations'), ('Delete folder and everything in it?', 'Delete folder')):
         lines = {loc: wrapped(tr_text(loc, key), wrap_px, 260) for loc in LOC}
         expect(wrap_px == 20 and max(lines.values()) <= 3, f'the {what} confirm wraps to at most 3 lines of 260 px at {wrap_px} px in all languages ({lines})')
         expect(all(len(pod_i18n.TEXT[key][loc].encode()) < 0x1ff for loc in LOC), 'and fits the dialog context\'s 0x200 byte text')
@@ -280,7 +281,7 @@ def run(ctx):
                               pod_pages.INFO_IP: '192.168.188.188', pod_pages.INFO_CAP: '188.88 GB', pod_pages.INFO_FREE: '188.88 GB'}.get(r.arg, '99999')   # (the Cover Cache counts: five digits)
                     samples = [sample]
                     if r.arg == pod_pages.INFO_CC_STATUS:   # every Status word, with a count after the three that have one
-                        samples = [tr_text(loc, k) + (' 4000/4000' if k in ('Preparing', 'Rebuilding', 'Building') else '') for k in ('Idle', 'Preparing', 'Rebuilding', 'Rebuild requested', 'Clearing', 'Building')]
+                        samples = [tr_text(loc, k) + (' 4000/4000' if k in ('Preparing', 'Rebuilding', 'Building', 'Measuring tracks') else '') for k in ('Idle', 'Preparing', 'Rebuilding', 'Rebuild requested', 'Clearing', 'Building', 'Measuring tracks')]
                     lk = pod_i18n.key_for(r.label)
                     for sample in samples:
                         need = width(tr_text(loc, lk) if lk else r.label, row_px) + ST.VALUE_LABEL_GAP + min(width(sample, ST.INFO_PX) + 6, ST.INFO_MAX)

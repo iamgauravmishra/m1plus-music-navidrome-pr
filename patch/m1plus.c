@@ -57,7 +57,8 @@ enum {
     ACT_VTHEME = 40,
     ACT_VTHSET = 41,
     ACT_CLEARCACHE = 42,
-    ACT_CCLIST = 43
+    ACT_CCLIST = 43,
+    ACT_CLEARDUR = 44
 };
 
 extern void shot_start(void); /* patch/shot.c: the Screenshot row: confirm, 5 s countdown, capture; or cancel */
@@ -117,6 +118,7 @@ enum { VK_NONE = 0, VK_WIFI, VK_BLUETOOTH, VK_PLAYMODE, VK_EQ, VK_SORT, VK_THEME
 #include "stock.h"
 #include "pages.h"
 #include "covercache.h" /* the Sort setting (cc_sort_artist, cc_sort_set) */
+#include "durations.h" /* Clear Track Durations */
 
 /* The stock Home dispatcher reads only the clicked icon's name (widget_t + W_NAME): it atoi()s it
  * to a Home id and opens that destination. A fake icon with a numeric name reuses it to open any
@@ -198,6 +200,13 @@ __attribute__((noinline)) static void clear_ask(void) {
         pod_toast(TR("Covers are being made, try later"));
 }
 
+/* Settings > Developer > Clear Track Durations: the confirm dialog, then the table is deleted (Home measures the songs again). */
+__attribute__((noinline)) static void durations_clear_ask(void) {
+    if (!pod_confirm(TR("Delete all measured track durations? They will be measured again on Home."))) return;
+    dur_clear();
+    pod_toast(TR("Track durations cleared"));
+}
+
 static void pick_choose(const struct pod_row *row);
 
 static int is_pick(const struct pod_row *row) { /* the pickers' check rows */
@@ -254,6 +263,8 @@ static int on_row(void *ctx, void *e) {
             INFO_CC); /* the albums with no art / no cache file, a plain list (nothing when the count is 0 or still being made) */
     else if (row->action == ACT_CLEARCACHE)
         clear_ask(); /* a confirm dialog, then the cache files are removed in steps */
+    else if (row->action == ACT_CLEARDUR)
+        durations_clear_ask(); /* a confirm dialog, then the track durations table is deleted */
     else if (row->action == ACT_REGEN)
         dailymix_regen(); /* patch/dailymix.c: no page, a toast when asked; the card is made again when the Home menu is back in front */
     else if (row->action == ACT_STOCK)

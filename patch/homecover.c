@@ -20,8 +20,12 @@
 #include "stock.h"
 #include "home.h"
 #include "covercache.h"
+#include "durations.h"
 #include "common.h"
 #include "i18n.h"
+
+#define I(w, off) (*(int *)((char *)(w) + (off)))
+#define P(w, off) (*(void **)((char *)(w) + (off)))
 
 #define HC_START_MS \
     RC_RESOLVE_MS /* after the page is in front: nothing is scanned while the menu opens and settles (Recently Played's album list load waits as long) */
@@ -37,7 +41,18 @@ static struct {
     void *albums; /* the library's albums (cc_albums), held for the scan only */
     unsigned *order;
     unsigned count, cur;
+    /* the song length pass (after the covers): len 1 = reading the library's songs, 2 = the worker measures */
+    void *songs;
+    unsigned lcur, lcount, lsaved;
+    int len, lmore, lerr;
 } hc __attribute__((section(".scratch")));
+
+#define HC_LBATCH 1024 /* songs looked up per step (in memory) */
+#define HC_LSTAT 64 /* files stat'ed per step: the songs the table lacks */
+#define HC_LSAVE 500 /* measured songs between two saves of the table */
+static unsigned hl_clean __attribute__((section(".scratch"))),
+    hl_epoch __attribute__((section(
+        ".scratch"))); /* albums + 1 of a pass that found every song in the table (and the clears then): not read again until that changes */
 
 /* The line shown or hidden (visible and sensitive together) and the list below it made room for. */
 static void hc_show(int on) {
@@ -59,28 +74,143 @@ static void hc_show(int on) {
 
 static void hc_text(void) {
     char text[64];
-    snprintf(text, sizeof text, "%s %d/%d", TR(hc.rebuild ? "Rebuilding covers" : "Preparing covers"), cc_build_done(),
-             cc_build_total());
+    snprintf(text, sizeof text, "%s %d/%d",
+             TR(hc.len       ? "Measuring tracks"
+                : hc.rebuild ? "Rebuilding covers"
+                             : "Preparing covers"),
+             cc_build_done(), cc_build_total());
     widget_set_text_utf8(hc.lab, text);
     widget_invalidate_force(hc.lab, (void *)0);
 }
 
 static void hc_free_scan(void) {
     if (hc.albums) deque_destroy(hc.albums);
+    if (hc.songs) deque_destroy(hc.songs);
+    hc.songs = (void *)0;
     free(hc.order);
     hc.albums = (void *)0;
     hc.order = (unsigned *)0;
     hc.scanning = 0;
 }
 
-/* The page's build released: the timer removed, a running worker cancelled and joined (bounded by one album's art), the line hidden. */
+/* The durations the worker finished since the last save go into the table (merged, written atomically). */
+static void hc_dur_save(void) {
+    int done = cc_build_done(), i;
+    unsigned n = 0;
+    dur_ent_t *e;
+    if (hc.len != 2 || done <= (int)hc.lsaved) return;
+    e = calloc(1, ((unsigned)(done - (int)hc.lsaved) * sizeof *e));
+    if (!e) {
+        hc.lerr = 1;
+        return;
+    }
+    for (i = (int)hc.lsaved; i < done; i++)
+        if (cc_build_dur(i, &e[n].key, &e[n].size, &e[n].sec)) n++;
+    if (dur_merge(e, n)) hc.lerr = 1;
+    free(e);
+    hc.lsaved = (unsigned)done;
+}
+
+/* The page's build released: the timer removed, what was measured saved, a running worker cancelled and joined (bounded by one album's art or one file), the line hidden. */
 static void hc_end(void) {
     if (hc.timer) timer_remove(hc.timer);
     hc.timer = 0;
     hc_free_scan();
+    hc_dur_save();
     if (hc.own) cc_build_stop();
     hc.own = 0;
+    if (hc.len) dur_release();
+    hc.len = 0;
     hc_show(0);
+}
+
+static int hc_on_dscan(const void *unused);
+
+/* The song length pass: the library's songs are read (one stock query, as the covers' albums are), looked up in the table in steps, the ones it lacks queued for the worker. */
+static void hc_dur_begin(void) {
+    unsigned cap;
+    if (!hc.win || !hc.fg || hc.own || hc.len || hc.timer || cc_build_busy() || !pod_card_mounted() ||
+        (hl_clean == hc.count + 1 && hl_epoch == dur_epoch()))
+        return;
+    hc.songs = cc_songs();
+    hc.lcount = hc.songs ? deque_size(hc.songs) : 0;
+    cap = hc.lcount < CC_MAX_LEN_JOBS ? hc.lcount : CC_MAX_LEN_JOBS;
+    if (!cap || !cc_build_open(cap, CC_DURATIONS)) {
+        hc_free_scan();
+        return;
+    }
+    dur_acquire();
+    dur_pass_begin();
+    hc.len = 1, hc.own = 1, hc.lcur = hc.lsaved = 0, hc.lmore = hc.lerr = 0;
+    hc.timer = timer_add(hc_on_dscan, (void *)0, HC_SCAN_MS);
+    if (!hc.timer) hc_end();
+}
+
+static int hc_on_dpoll(const void *unused) {
+    int done, more;
+    (void)unused;
+    hc.timer = 0;
+    if (!hc.win || !hc.own || hc.len != 2) return RET_OK;
+    done = cc_build_done();
+    if (done != hc.done) {
+        hc.done = done;
+        hc_text();
+        if (done - (int)hc.lsaved >= HC_LSAVE) hc_dur_save();
+    }
+    if (done >= cc_build_total()) {
+        hc_dur_save();
+        more = hc.lmore && !hc.lerr; /* more songs than one set holds: another pass */
+        if (!hc.lmore && !hc.lerr) hl_clean = hc.count + 1, hl_epoch = dur_epoch();
+        hc_end();
+        if (more) hc_dur_begin();
+        return RET_OK;
+    }
+    hc.timer = timer_add(hc_on_dpoll, (void *)0, HC_POLL_MS);
+    if (!hc.timer) hc_end(); /* no way to watch it: what was measured is saved */
+    return RET_OK;
+}
+
+static int hc_on_dscan(const void *unused) {
+    unsigned stop, stat = 0;
+    (void)unused;
+    hc.timer = 0;
+    if (!hc.win || !hc.fg || hc.len != 1 || !hc.songs) return RET_OK;
+    stop = hc.lcur + HC_LBATCH;
+    for (; hc.lcur < hc.lcount && hc.lcur < stop && stat < HC_LSTAT; hc.lcur++) {
+        void *r = deque_at(hc.songs, hc.lcur);
+        const char *path = (const char *)P(r, REC_PATH);
+        long size;
+        if (!path || !*path) continue;
+        dur_pass_seen(path);
+        if (I(r, REC_CUE_END) > I(r, REC_CUE_START) || dur_has(path) || hc.lmore)
+            continue; /* nothing to measure, or the set is full */
+        ++stat;
+        size = cc_file_size(path);
+        if (size > 0 && size <= 0x7fffffff && cc_build_add_dur(path, dur_key(path), (unsigned)size) < 0) hc.lmore = 1;
+    }
+    if (hc.lcur < hc.lcount) {
+        hc.timer = timer_add(hc_on_dscan, (void *)0, HC_SCAN_MS);
+        if (!hc.timer) hc_end();
+        return RET_OK;
+    }
+    hc_free_scan();
+    dur_pass_end(); /* the entries of files no song names any more */
+    if (!cc_build_total()) { /* every song is in the table */
+        if (!hc.lmore) hl_clean = hc.count + 1, hl_epoch = dur_epoch();
+        hc_end();
+        return RET_OK;
+    }
+    if (!cc_build_start()) {
+        hc.own = 0; /* the set is freed */
+        hc_end();
+        return RET_OK;
+    }
+    hc.len = 2, hc.done = 0;
+    hc_show(1);
+    hc_text();
+    hc.timer = timer_add(hc_on_dpoll, (void *)0, HC_POLL_MS);
+    if (!hc.timer) hc_end();
+    return RET_OK;
 }
 
 static int hc_on_poll(const void *unused) {
@@ -97,6 +227,7 @@ static int hc_on_poll(const void *unused) {
     if (done >= cc_build_total()) {
         if (hc.rebuild) unlink(REBUILD_FILE); /* the request is done only when every album was extracted again */
         hc_end();
+        hc_dur_begin(); /* then the songs' durations */
         return RET_OK;
     }
     hc.timer = timer_add(hc_on_poll, (void *)0, HC_POLL_MS);
@@ -161,6 +292,7 @@ static int hc_on_start(const void *unused) {
         unlink(REBUILD_FILE); /* nothing to extract (no album has a track): nothing to wait for */
     if (!cc_build_start()) { /* nothing missing, no card, no space, no thread: the set is already freed */
         hc.own = 0;
+        hc_dur_begin(); /* the covers are as built as they will be: the songs' durations */
         return RET_OK;
     }
     hc.done = 0;
@@ -404,7 +536,11 @@ static void cp_status(char *buf, unsigned n) {
     if (cl.timer)
         snprintf(buf, n, "%s", TR("Clearing"));
     else if (hc.own)
-        snprintf(buf, n, "%s %d/%d", TR(hc.rebuild ? "Rebuilding" : "Preparing"), cc_build_done(), total);
+        snprintf(buf, n, "%s %d/%d",
+                 TR(hc.len       ? "Measuring tracks"
+                    : hc.rebuild ? "Rebuilding"
+                                 : "Preparing"),
+                 cc_build_done(), total);
     else if (cc_build_busy()) {
         if (total > 0)
             snprintf(buf, n, "%s %d/%d", TR("Building"), cc_build_done(), total);

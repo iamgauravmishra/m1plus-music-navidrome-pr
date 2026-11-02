@@ -217,12 +217,16 @@ class Machine:
         self.listing, self.open_dirs = {}, {}   # opendir / readdir (patch/covercache.c art_folder): directory path -> [(name, d_type)], open handle -> entries left
         self.taglib_kind, self.taglib_data = None, None   # taglib_album_picture's result (2 JPEG, 1 PNG, 0 none; None: 2 when album_cover is set) and the picture it saves to /tmp/.tmp_picture (None: no file)
         self.extern_cover = 0
+        self.durations = {}           # path -> seconds TagLib reads (patch/durations.c dur_probe); 0: the file opens but has no audio properties; a path not here: taglib_file_new fails
+        self.tag_objs = {}          # taglib_file_new's handles -> path
+        self.tag_len_fn = self.alloc(16)   # where the vtable's slot 3 (AudioProperties::length) points: trapped
         self.load_image = 1         # widget_load_image: 0 = success
         self.images = {}            # url -> (w, h, RGBA bytes) widget_load_image decodes when it succeeds
         self.parent = {}            # widget handle -> parent handle
         self.hooked = set()
         self.real_album = False     # patch/albumpage.c album_open: trapped (it returns -1, the stock page opens) unless a test runs it
         self.handlers = Traps(self)
+        self.handlers[self.tag_len_fn] = 'taglib_length'
         self.handlers.update({a: n for n, (_, _, a) in pod.FUNCTIONS.items()})
         for name in pod.LIBC:       # the payload's libc stubs, trapped at their entry
             if f'pod_lib_{name}' in PSYMS:   # --gc-sections drops the ones it does not call
@@ -834,6 +838,20 @@ class Machine:
             self.calls.append(('taglib_album_picture', self.read_cstr(a0), self.read_cstr(a1), a2, a3))
             ret = self.taglib_kind if self.taglib_kind is not None else 2 if self.album_cover else 0
             if ret and self.taglib_data is not None: self.fs['/tmp/.tmp_picture'] = self.taglib_data
+        elif name == 'taglib_file_new':   # libtag_c (patch/durations.c dur_probe): a handle for the file, or NULL
+            p = self.read_cstr(a0); self.calls.append(('taglib_file_new', p, a1))
+            ret = 0
+            if p in self.durations: ret = self.alloc(8); self.tag_objs[ret] = p
+        elif name == 'taglib_file_audioproperties':   # the AudioProperties object: its vtable word 3 is the (trapped) length()
+            self.calls.append(('taglib_file_audioproperties',)); ret = 0
+            sec = self.durations.get(self.tag_objs.get(a0), 0)
+            if sec:
+                vt = self.alloc(32); self.setword(vt + 12, self.tag_len_fn)
+                ret = self.alloc(8); self.setword(ret, vt); self.setword(ret + 4, sec)
+        elif name == 'taglib_length':
+            self.calls.append(('taglib_length',)); ret = self.word(a0 + 4)
+        elif name == 'taglib_file_free':
+            self.calls.append(('taglib_file_free',)); self.tag_objs.pop(a0, None)
         elif name == 'opendir':
             p = self.read_cstr(a0); self.calls.append(('opendir', p)); ret = 0
             if p in self.listing: ret = self.alloc(4); self.open_dirs[ret] = list(self.listing[p])
@@ -894,14 +912,14 @@ class Machine:
             path, mode = self.read_cstr(a0), self.read_cstr(a1)
             self.calls.append(('fopen', path, mode))
             if 'w' in mode: self.files[path] = 0; self.present.add(path)
-            ret = (self.alloc(4) if path in self.files else 0)
+            ret = (self.alloc(4) if path in self.files or path in self.fs else 0)
             self.fh = (ret, path)
         elif name == 'fclose':
             self.calls.append(('fclose',))
         elif name == 'fseek':
             self.calls.append(('fseek',))
         elif name == 'ftell':
-            ret = self.files.get(self.fh[1], 0)
+            ret = self.files.get(self.fh[1], len(self.fs.get(self.fh[1], b'')))
         elif name == 'fread':
             data = getattr(self, 'contents', {}).get(self.fh[1])
             if data is not None:   # a file with real bytes (a test's JPEG header): size * count of them, from the start
@@ -1640,7 +1658,13 @@ def build_state(m):
 def build_jobs(m):
     """[(track, key)] of the held job set, in the order the worker takes them."""
     s = build_state(m)
-    return [(m.read_cstr(m.word(s['jobs'] + 8 * i)), m.word(s['jobs'] + 8 * i + 4)) for i in range(s['total'])] if s['jobs'] else []
+    return [(m.read_cstr(m.word(s['jobs'] + 16 * i)), m.word(s['jobs'] + 16 * i + 4)) for i in range(s['total'])] if s['jobs'] else []
+
+
+def build_durs(m):
+    """[(track, key, size, seconds)] of a CC_DURATIONS set (job_t is track, key, size, sec)."""
+    s = build_state(m)
+    return [(m.read_cstr(m.word(s['jobs'] + 16 * i)),) + tuple(m.word(s['jobs'] + 16 * i + 4 * k) for k in (1, 2, 3)) for i in range(s['total'])] if s['jobs'] else []
 
 
 def count_of(m, name):

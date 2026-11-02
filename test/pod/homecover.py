@@ -28,6 +28,7 @@ def home_machine(n=8, missing=(), empty=(), rebuild=False):
     for w in ('pod_cover_prog', 'pod_listview', 'pod_scrollview', 'scroll_bar_m'): m.widget(w)
     m.props[(m.widgets['pod_scrollview'], 'w')] = 310
     m.props[(m.widgets['scroll_bar_m'], 'w')] = 10
+    m.class_lists[O['CLASS_ALL_SONGS']] = []   # no songs: Home's song length pass (test/pod/durations.py) has nothing to read
     m.showlist = [m.record(album=f'Album {i}', artist=f'Artist {i}', path=f'/mnt/mmc/m/{i}/1.flac', rid=i + 1) for i in range(n)]
     m.present |= {f'/mnt/mmc/m/{i}/1.flac' for i in range(n)}
     for i in range(n):

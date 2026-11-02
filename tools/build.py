@@ -22,7 +22,7 @@ from pathlib import Path
 
 ZIP = paths.ZIP     # this checkout's firmware/, else the main checkout's (tools/paths.py)
 ZIP_SHA = 'db7bdbc42ffe6d5c1e3fdca9363edb78a01898b9a725c34793394cf6abfa33c0'
-VERSION = '1.0.1'  # major.minor.patch: the release, its git tag and GitHub release, About
+VERSION = '1.1.0'  # major.minor.patch: the release, its git tag and GitHub release, About
 TAG = 'V2.1-' + VERSION  # what the updater compares (firmware_v20.info line 2: must contain V and differ from V2.1)
 RESTORE_TAG = 'V2.1R'
 

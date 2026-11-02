@@ -66,6 +66,7 @@ ACT_INFO = 33     # an information row of the About page: a label and a grey val
 ACT_PCSEARCH = 34  # switch row (Settings > Library > Podcasts): Podcast Search, off by default; on shows a Search button on the Podcasts page (patch/podcasts.c pcsearch_toggle, /mnt/data/m1plus/podcast-online-search)
 ACT_FOLDERS = 37  # open the Folders page: the card's folders and audio files in our list (patch/folders.c; arg = HOME_FOLDER, where a window that will not open falls back to the stock folder_page)
 ACT_CLEARCACHE = 42  # action row (Settings > Developer > Tools): a confirm dialog, then every cached cover but Cover Flow's position is deleted in steps (patch/homecover.c homecover_clear)
+ACT_CLEARDUR = 44  # action row (Settings > Developer > Tools): a confirm dialog, then the track durations table is deleted (patch/durations.c dur_clear); Home measures the songs again
 ACT_CCLIST = 43    # value row (Settings > Developer > Cover Cache: No art, Missing): a count, and when it is not zero a chevron and a tap that opens the plain list of those albums (arg = the INFO_CC_* of its count; patch/covlist.c)
 ACT_BATTPCT = 36  # switch row (Settings > Home Screen > Status Bar): Battery Percentage, off by default; on shows the gauge's exact charge beside the battery outline (patch/battery.c battpct_toggle, /mnt/data/m1plus/battery-percentage)
 ACT_VREC = 38     # value row (Settings > Now Playing > Vinyl Mode): the record colour, Black or Cover (tinted from the cover); opens its picker page (arg = the page index; patch/vinyl.c vinyl_record)
@@ -78,7 +79,7 @@ SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, A
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
 VALUE_ACTIONS = (ACT_SORT, ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
 CHECK_ACTIONS = (ACT_SORTSET, ACT_THEMESET, ACT_RECSET, ACT_VTHSET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
-ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_CLEARCACHE, ACT_GRID)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
+ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_CLEARCACHE, ACT_CLEARDUR, ACT_GRID)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
 VALUE_INIT = {ACT_SORT: 'Artist', ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite'}   # what the asset's value label says before the payload sets it
 # The stock pages ACT_STOCK opens: (the name navigator_to takes = ui/<name>.bin, the value the row shows at the right: the payload reads the stock state, patch/m1plus.c VK_*, or None).
 # Each is a plain navigator_to(name) with no context in stock (docs/modules/settings.md "Stock pages"): the Settings and Play Settings lists' rows, the Wi-Fi hub's two; Back returns to our page.
@@ -343,6 +344,7 @@ DEVELOPER_PAGE = Page('m1plus_developer', 'm1plus_developer_page', 'Developer', 
     Hdr('Tools'),
     Row('Screenshot', ACT_SHOT),
     Row('Cover Cache', ACT_PAGE, CACHE_PAGE_INDEX),
+    Row('Clear Track Durations', ACT_CLEARDUR),
     Row('Settings Files', ACT_PAGE, FILES_PAGE_INDEX),
     Row('System Update', ACT_STOCK, STOCK_FWUPDATE),
 ])

@@ -20,6 +20,7 @@
 #include "pccover.h"
 #endif
 #include "covercache.h"
+#include "durations.h"
 
 /* FNV-1a over a string, with a separator so "ab"+"c" and "a"+"bc" differ (q2-pod). */
 unsigned cc_fnv(unsigned h, const char *s) {
@@ -277,6 +278,20 @@ void *cc_albums(void) {
     return copy;
 }
 
+/* The library's songs as the Songs page lists them (loadLocalClassList 0xf001 = getAllMusic into *pdeq_showlist), copied; NULL when there are none. */
+void *cc_songs(void) {
+    void *list, *copy;
+    if (loadLocalClassList(CLASS_ALL_SONGS) <= 0) return (void *)0;
+    list = *(void **)PDEQ_SHOWLIST;
+    if (!list || !deque_size(list)) return (void *)0;
+    copy = cc_copy_list(list);
+    if (copy && !deque_size(copy)) {
+        deque_destroy(copy);
+        copy = (void *)0;
+    }
+    return copy;
+}
+
 extern int album_open(
     unsigned cls,
     void *
@@ -462,7 +477,10 @@ void *cc_playing(void) {
 
 typedef struct {
     char *track; /* the album's first track, copied so the thread never reads stock deques */
-    unsigned key; /* 0: the one transient job (xf below), not a cache job (cc_build_add refuses key 0) */
+    unsigned
+        key; /* 0: the one transient job (xf below), not a cache job (cc_build_add refuses key 0); CC_DURATIONS: the path's dur_key */
+    unsigned size,
+        sec; /* CC_DURATIONS: the file's size when queued, and its measured seconds (written by the worker before done advances) */
 } job_t;
 
 /* The one transient extraction a set may hold instead of cache jobs (cc_build_add_file): where it writes and how big. Set before the worker starts, read only by it. */
@@ -680,7 +698,10 @@ static void build_art(const job_t *j) {
 static void *cc_worker(void *unused) {
     (void)unused;
     while (cb.done < cb.total && !cb.cancelled) {
-        build_art(&cb.jobs[cb.done]);
+        if (cb.mode == CC_DURATIONS)
+            cb.jobs[cb.done].sec = (unsigned)dur_probe(cb.jobs[cb.done].track);
+        else
+            build_art(&cb.jobs[cb.done]);
         ++cb.done;
     }
     return (void *)0;
@@ -688,7 +709,8 @@ static void *cc_worker(void *unused) {
 
 int cc_build_open(unsigned capacity, int mode) {
     if (cb.jobs) return 0;
-    if (capacity > CC_MAX_JOBS) capacity = CC_MAX_JOBS;
+    if (capacity > (mode == CC_DURATIONS ? CC_MAX_LEN_JOBS : CC_MAX_JOBS))
+        capacity = mode == CC_DURATIONS ? CC_MAX_LEN_JOBS : CC_MAX_JOBS;
     cb.jobs = calloc(capacity ? capacity : 1, sizeof(job_t));
     if (!cb.jobs) return 0;
     cb.cap = capacity;
@@ -700,7 +722,7 @@ int cc_build_open(unsigned capacity, int mode) {
 int cc_build_add(const char *track, unsigned key) {
     char path[64];
     job_t *j;
-    if (!cb.jobs || cb.running || !key || !track || !*track) return 0;
+    if (!cb.jobs || cb.running || cb.mode == CC_DURATIONS || !key || !track || !*track) return 0;
     if (cb.mode == CC_MISSING && !access(cc_path(path, sizeof path, key, ""), F_OK)) return 0;
     if ((unsigned)cb.total >= cb.cap) return -1;
     j = &cb.jobs[cb.total];
@@ -708,6 +730,27 @@ int cc_build_add(const char *track, unsigned key) {
     if (!j->track) return -1;
     j->key = key;
     ++cb.total;
+    return 1;
+}
+
+int cc_build_add_dur(const char *track, unsigned key, unsigned size) {
+    int i;
+    job_t *j;
+    if (!cb.jobs || cb.running || cb.mode != CC_DURATIONS || !key || !track || !*track) return 0;
+    for (i = 0; i < cb.total; ++i)
+        if (cb.jobs[i].key == key) return 0; /* one file, one measurement (the tracks of a CUE image) */
+    if ((unsigned)cb.total >= cb.cap) return -1;
+    j = &cb.jobs[cb.total];
+    j->track = strdup(track);
+    if (!j->track) return -1;
+    j->key = key, j->size = size, j->sec = 0;
+    ++cb.total;
+    return 1;
+}
+
+int cc_build_dur(int i, unsigned *key, unsigned *size, unsigned *sec) {
+    if (!cb.jobs || cb.mode != CC_DURATIONS || i < 0 || i >= cb.done) return 0;
+    *key = cb.jobs[i].key, *size = cb.jobs[i].size, *sec = cb.jobs[i].sec;
     return 1;
 }
 
@@ -748,9 +791,12 @@ int cc_build_start(void) {
         cc_build_stop(); /* nothing to build: free the job array */
         return 0;
     }
-    mkdir(CARD_DIR, 0755); /* the folder, then the cache in it (EEXIST is fine) */
-    mkdir(ART_DIR, 0755);
-    if (!card_space(ART_DIR) || pthread_create(&cb.thread, (void *)0, cc_worker, (void *)0)) {
+    if (cb.mode != CC_DURATIONS) {
+        mkdir(CARD_DIR, 0755); /* the folder, then the cache in it (EEXIST is fine) */
+        mkdir(ART_DIR, 0755);
+    }
+    if ((cb.mode != CC_DURATIONS && !card_space(ART_DIR)) ||
+        pthread_create(&cb.thread, (void *)0, cc_worker, (void *)0)) {
         cc_build_stop(); /* no card, no space, or no thread: the caller shows what is cached already */
         return 0;
     }

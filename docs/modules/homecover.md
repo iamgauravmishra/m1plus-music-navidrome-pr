@@ -1,6 +1,6 @@
 # Home cover build
 
-Sources: `patch/homecover.c`, `tools/pod_ui.py` (`cover_progress`), `HC_*` in `patch/offsets.inc`, `Preparing covers` in
+Sources: `patch/homecover.c`, `patch/durations.c`, `tools/pod_ui.py` (`cover_progress`), `HC_*` in `patch/offsets.inc`, `Preparing covers` in
 `tools/pod_i18n.py`; test `test/pod/homecover.py`. The shared builder is described in [Cover Flow](coverflow.md) (`cc_build_*`),
 its Albums-page use in [Albums](albums.md) "Cache building".
 
@@ -44,6 +44,29 @@ widget: nothing). **No new hook, nothing at boot:** `homecover_start` looks up t
   rescans (about one `access` per album, 64 per 20 ms step; a built library finds nothing and shows nothing). `EVT_DESTROY` ends it likewise
   and clears the state (an earlier window's destroy is ignored).
 
+## Track durations
+
+After the cover phase (or at once when no cover is missing), the same line shows `Measuring tracks n/m` (key `Measuring tracks`,
+13 languages; `test/pod/i18n.py` checks the widest `... 4000/4000`) while the worker measures the library's songs the
+durations table lacks ([Album length](album-page.md#album-length)). The line, its placement and the hide/show rules are the
+cover phase's.
+
+- `hc_dur_begin` runs when the page is in front, Home owns no set and the worker is free: `cc_songs` copies the stock Songs list
+  (one query), a `CC_DURATIONS` set is opened (up to `CC_MAX_LEN_JOBS` 30000 files; a longer library runs more passes) and
+  `hc_on_dscan` walks it in steps (`HC_LBATCH` 1024 songs looked up, `HC_LSTAT` 64 files `stat`ed, `HC_SCAN_MS` apart).
+  A song is queued when its path has no table entry (CUE tracks with both ends and repeated paths are not queued).
+  Home does not `stat` songs already in the table, so a replaced file is re-measured when its album page opens, not by Home.
+- **Prune:** each pass names the paths of the in-memory song list (`dur_pass_seen`); entries nobody names are dropped and the
+  table is rewritten (`dur_pass_end`). An empty list prunes nothing. No file is touched.
+- `hc_on_dpoll` (500 ms) updates the line and saves the finished jobs every `HC_LSAVE` 500 songs (merge, sort, atomic write).
+  At the end the rest is saved and the set stopped. `EVT_WINDOW_TO_BG`, destroy and `hc_end` save what was finished and stop
+  the worker (the job in flight is lost). The next foreground resumes with the songs still missing.
+- A pass that finds every song in the table is not repeated until the album count changes or Developer > Clear Track
+  Durations is used (`hl_clean`, `dur_epoch`); songs added to existing albums are found by the album page or after a restart.
+- The set needs the card (the table is `/mnt/mmc/.m1plus/durations`; without it the pass does not start) but not 16 MB free. The kill switch stops Home's start.
+- Cost: not measured on hardware. Per file, TagLib reads the header and tags (an ID3v2 tag with a multi-MB cover is read
+  whole); the work runs in the background worker, beside the player.
+
 ## Rebuild Covers
 
 Settings > Library > Rebuild Covers ([settings](settings.md)) no longer opens Cover Flow. Its Yes writes the request file
@@ -68,3 +91,4 @@ Settings > Developer > Cover Cache shows the cache's counts and this build's sta
 - Tests (`test/pod/homecover.py`, Unicorn on the real payload with the harness's cache-file and worker mocks): hidden with nothing missing
   (also an empty library), `0/2` then `1/2` then hidden with the list restored, scan bounded at 64 albums a step, stop on background and
   destroy (also mid-scan), foreground re-offers once, a held worker / full card / refused thread / refused timer / asset without the line.
+  `test/pod/durations.py` covers the song phase (phases, saves, prune, stop, resume, held worker).

@@ -7,7 +7,7 @@
 #pragma once
 
 #define CARD_DIR \
-    "/mnt/mmc/.m1plus" /* the one hidden folder the payload keeps on the card: covers/ (the cache), daily-mix/ (the Daily Mix: tracks, art), the Cover Flow position and recently-played (the Home shelf's albums); made by the writers, only while the card is mounted */
+    "/mnt/mmc/.m1plus" /* the one hidden folder the payload keeps on the card: covers/ (the cache), daily-mix/ (the Daily Mix: tracks, art), durations (the track durations table), the Cover Flow position and recently-played (the Home shelf's albums); made by the writers, only while the card is mounted */
 #define ART_DIR CARD_DIR "/covers" /* the cache: r<key>-168.jpg per album, an empty file for "no art" */
 
 /* Pure pixel helpers, also built for the host (test/coverflow.py). */
@@ -57,6 +57,7 @@ unsigned cc_cover_key(
 int cc_decode(void *w, const char *url, int unload, unsigned size, int box, unsigned *out);
 void *cc_copy_list(void *list); /* a stock list copied into a deque of our own */
 void *cc_albums(void); /* the stock Albums list (getAllAlbum), copied; NULL if empty */
+void *cc_songs(void); /* the stock Songs list (getAllMusic), copied; NULL if empty */
 int cc_open_album(
     void *artist_row, unsigned scope,
     int index); /* the stock Albums row sequence (artist_row NULL), or that artist's (scope CLASS_ARTISTS) or composer's (CLASS_COMPOSERS); 0 once the page is requested */
@@ -92,8 +93,18 @@ void *cc_playing(void); /* the stSongInfo of the track the player is on, NULL if
  *   CC_MISSING  only albums with no cache file (neither a picture nor the empty "no art" marker); cc_build_add skips the rest
  *   CC_REBUILD  every album is extracted again and its file replaced (temp + rename), a marker too, so an album that gained
  *               art gets it; an album that now yields none keeps what it has (old files stay until a new one replaces them) */
-enum { CC_MISSING = 0, CC_REBUILD = 1 };
+enum { CC_MISSING = 0, CC_REBUILD = 1, CC_DURATIONS = 2 };
+/* CC_DURATIONS is a set of another kind (patch/durations.c): its jobs are files whose length TagLib reads (cc_build_add_dur), nothing is written to the card and cc_build_start needs
+ * no card space. The owner merges what finished (cc_build_dur, i < cc_build_done) into the durations table. */
+int cc_build_add_dur(
+    const char *track, unsigned key,
+    unsigned size); /* 1 added; 0 skipped (not a CC_DURATIONS set, or the key is already a job); -1 full or no memory */
+int cc_build_dur(
+    int i, unsigned *key, unsigned *size,
+    unsigned *sec); /* the finished job i: 1, or 0 when it is not finished or the set is not a CC_DURATIONS one */
 #define CC_MAX_JOBS 4000 /* the job array is bounded (Cover Flow's MAX_ALBUMS) */
+#define CC_MAX_LEN_JOBS \
+    30000 /* a CC_DURATIONS set's bound (a job is 16 bytes and a path copy); a longer library is measured in more passes */
 int cc_build_open(unsigned capacity, int mode); /* 1: an empty job set held; 0: another set is held, or no memory */
 int cc_build_add(const char *track,
                  unsigned key); /* 1 added; 0 skipped (CC_MISSING and the file exists); -1 full or no memory */

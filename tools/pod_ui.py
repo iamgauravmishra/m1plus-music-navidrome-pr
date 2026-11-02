@@ -922,6 +922,7 @@ def build_songs_page(page):
 AB_STYLES = (('label_row_num', 'right', '#AAAAAA'), ('label_row_title', 'left', '#FFFFFF'), ('label_row_gold', 'left', '#FE7E40'))   # the stock rows' 19 px number (the grey line's colour) and title (white; gold: srlabel_item_gold20_style)
 AB_ROW_PX = 19
 AB_META = (('ab_title', 'AH_TITLE_Y', 'AH_TITLE_H', 22, '#FFFFFF'), ('ab_artist', 'AH_ARTIST_Y', 'AH_ARTIST_H', 18, '#AAAAAA'), ('ab_meta', 'AH_META_Y', 'AH_META_H', 15, '#9C9C9C'))   # srlabel_ah{title,artist,meta}_style
+AB_FOOT_RGB = '#AAAAAA'   # the footer's grey: the artist line's (not the meta line's #9C9C9C)
 AB_PLAY_TEXT_W = OFFSETS['AB_PLAY_TEXT_W']   # the English "Play all" at 18 px, where the payload cannot measure it; the payload centres the pair for the language
 
 
@@ -974,6 +975,9 @@ def build_album_page(page):
     pair = o['AH_PILL_GLYPH'] + o['AH_PILL_GAP'] + AB_PLAY_TEXT_W
     gx = o['AH_PLAY_X'] + (o['AH_PLAY_W'] - pair) // 2
     kids.append(Widget('image', gx, o['AH_BTN_Y'] + (o['AH_BTN_H'] - o['AH_PILL_GLYPH']) // 2, o['AH_PILL_GLYPH'], o['AH_PILL_GLYPH'], [('name', 'ab_glyph'), ('image', 'ah_play'), ('draw_type', 'center'), ('sensitive', 'false')]))
+    foot = hidden(label('ab_foot', o['AB_NUM_X'], 0, SCREEN_W - o['AB_NUM_X'] - o['AB_FOOT_R'], o['AB_FOOT_TEXT_H'], '', o['AB_FOOT_PX'], AB_FOOT_RGB, 'left'))   # the track count and the duration under the last row: the payload sets the text and the place, and shows it once the duration is known
+    styled(foot, ('normal',), 'text_align_v', 'middle')
+    kids.append(foot)
     grid.children = kids
     sv.children.append(grid)
     root.children.append(lv)

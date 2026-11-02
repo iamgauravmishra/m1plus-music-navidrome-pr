@@ -1,9 +1,9 @@
 # Album page
 
-**Sources:** `patch/albumpage.c`, `patch/songops.c`, `patch/covercache.c`,
+**Sources:** `patch/albumpage.c`, `patch/songops.c`, `patch/covercache.c`, `patch/durations.c`,
 `tools/pod_ui.py` (`build_album_page`).
-**Tests:** `test/pod/albumpage.py`, `test/pod/shared.py`.
-Preview: `tools/ah_ink.py` measures header typography.
+**Tests:** `test/pod/albumpage.py`, `test/pod/durations.py`, `test/pod/shared.py`.
+Preview: `tools/ah_ink.py` measures header typography; `tools/preview_albumlen.py` draws the scrolled page with its footer and the footer line in all languages.
 
 Albums, Cover Flow, Recently Played and Look up album open `m1plus_album_page`
 (`ui/m1plus_album.bin`) through `cc_open_album`.
@@ -40,10 +40,48 @@ list so an enclosing view cannot intercept the whole navigation band.
 | Metadata | 15 px at y 267: year and track count, or track count alone |
 | Playback | Shuffle target 44 × 44 at x 42; Play all target 180 × 44 at x 95; y 292 |
 | Tracks | Number column, 19 px title, gold playing title, 20% white press fill, 13% white hairline |
+| Footer | `ab_foot` (`13 tracks, 49 minutes`): 15 px `#AAAAAA` left-aligned label at x 12 (`AB_NUM_X`, the number column's left edge), `AB_FOOT_GAP` 14 px under the last row, 20 px high; only when the duration is known (52 px of content), else none |
 
-Year is the first track year in 1000..2999. There is no album duration:
-database `time/time_end` fields are CUE offsets, not ordinary-file lengths.
+Year is the first track year in 1000..2999.
 Track numbers use a wider column from 100 onward. CUE titles use the file name.
+
+## Album length
+
+The database has no duration: `time/time_end` are CUE offsets, 0 for ordinary files. File durations are measured once
+through stock's TagLib and kept on the card in `/mnt/mmc/.m1plus/durations` beside the cover cache (`patch/durations.c`, `DUR_FILE`; written by `pod_card_write`; no card or USB mode: no table, nothing measured, no duration shown; a card swapped while a page holds the table is not noticed):
+`taglib_file_new(path, 1)`, `taglib_file_audioproperties`, then `AudioProperties::length()` through vtable slot 3
+(`+0xc`, what libtag_c's `taglib_audioproperties_length` does; `demo` imports the first, second and `taglib_file_free`, not
+that one). `.iso` images are never opened, as stock never reads their properties. The design follows q2-pod's Long Songs
+lengths cache (`patch/navigation.c`, `docs/internals.md#long-songs`).
+
+- **File:** 12-byte header (`M1LN`, count, FNV-1a of the entries), then `{key, size, seconds}` entries (12 bytes) sorted by
+  key; key = FNV-1a of the path (never 0). It is read whole and searched by bisection. Wrong magic, count, checksum, order
+  or size means the file is ignored and the next write replaces it. Writes merge, sort and drop duplicates, go to `.tmp`,
+  `fsync`, then `rename`; a failed write keeps the old file. 0 seconds records a file TagLib could not read; it is not
+  measured again until its size changes.
+- **Track seconds** (`dur_song`): a CUE track with both ends is `end - start` and is never measured; otherwise the file's
+  length less the CUE start (the last CUE track). A start at or past the length, a missing file, an unreadable file or a
+  size different from the entry's is unusable (0) or missing (-1, to be measured).
+- **Page:** `ab_durations` looks up every track (a `stat` per track; the album is small). With all known, the total is
+  formatted by `dur_text` and shown. Otherwise, only while the worker is free, one `CC_DURATIONS` set of this album's missing
+  files runs (polled every `AB_DUR_MS` 400 ms, after the cover set when there is one), the results are merged into the table
+  and the footer appears. A busy worker, an unreadable track or a missing file shows no footer: the total is shown
+  only when every track's length is known. The page leaves the table acquired until destroy; destroy stops its set.
+- **Footer:** the Apple Music footer without the label line, its own block at the number column's left edge (x 12, not the
+  title's, so it does not depend on the track count). `ab_foot` is a label of the content view (it scrolls with the rows),
+  insensitive, 15 px `#AAAAAA`, left-aligned, 20 px high, `AB_FOOT_GAP` 14 px under the last row, `AB_FOOT_R` from the right
+  edge. It shows only when the duration is known; otherwise it is hidden and no band is kept. It is not a row (`ab_at`), so
+  select mode, All and None never count it, and it takes no touch or press fill. The content (`virtual_h`, `ab_max_scroll`)
+  is 52 px longer (`AB_FOOT_GAP + AB_FOOT_TEXT_H + AB_FOOT_PAD` = 14 + 20 + 18) while it shows, so the last row is never
+  hidden; when the measurement finishes the content grows at the bottom and the scroll offset does not change. The header
+  line is unchanged: the stock song table keeps only a year, which the header already shows.
+- **Text:** rounded to the minute, at least one: `49 minutes`, `1 hour, 12 minutes`, `2 hours`; singular and plural by
+  count. Parts are keys (`%d minute(s)`, `%d hour(s)`), hours with minutes one key per singular/plural pair so each language
+  controls its own join (Chinese and Korean a space, Japanese none), and the line is `%d track(s), %s` as one key per language
+  (`13 首歌，1 小时 12 分钟`, `13曲、1時間12分`, `13곡, 1시간 12분`). Russian, Polish and Ukrainian abbreviate the units.
+  With the built font the widest case (`999 tracks, 24 hours, 59 minutes`) is 226 px (Spanish) in the 298 px line.
+- **Limits:** TagLib's MP3 length is an estimate for constant-bitrate files without a Xing header, otherwise exact to the
+  second. Home measures songs ahead of the page ([Home cover build](homecover.md#track-durations)).
 
 ## Artwork and shared tint
 
@@ -99,5 +137,5 @@ shared wave marker and a 20 px navbar title. See [Queue](queue.md) and [rows](ro
 `SONGS_PINS` checks `is_playing` (`0x4d9d64`) and album row-builder calls
 at `0x524c40..0x524ca4`. This page adds no hook.
 Tests cover layout, tint contrast, tone-cache bounds/LRU, playback mode changes, stack
-navigation and failures. Hardware appearance and input remain unverified by those models;
+navigation and failures; `test/pod/durations.py` covers the table, CUE math, measuring and the line. Hardware appearance and input remain unverified by those models;
 use [device checks](device-checks.md).

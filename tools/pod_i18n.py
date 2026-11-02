@@ -262,6 +262,29 @@ TEXT = dict([
        'Удалить все кэшированные обложки? Они будут созданы заново в Home.', 'Видалити всі кешовані обкладинки? Їх буде створено знову в Home.'),
     _t('Cover cache cleared', '封面缓存已清除', '封面快取已清除', 'キャッシュを消去しました', '커버 캐시를 지웠습니다', 'Cache des pochettes vidé', 'Cover-Cache geleert',
        'Caché de carátulas borrada', 'Cache copertine svuotata', 'ล้างแคชปกแล้ว', 'Pamięć okładek wyczyszczona', 'Кэш обложек очищен', 'Кеш обкладинок очищено'),
+    # Track durations (patch/durations.c, patch/homecover.c, patch/albumpage.c; docs/modules/album-page.md "Album length"): the Home line "Measuring tracks n/m", the album page's meta line
+    # "N tracks, 49 minutes" / "1 hour, 12 minutes" (ru, pl, uk abbreviate the units: no plural forms, as their track counts are label forms), Settings > Developer > Clear Track Durations.
+    # A native-speaker pass is wanted.
+    _t('Measuring tracks', '正在测量曲目', '正在測量曲目', '曲の長さを測定中', '곡 길이 측정 중', 'Mesure des titres', 'Titeldauern werden gemessen', 'Midiendo pistas', 'Misura delle tracce',
+       'กำลังวัดความยาวเพลง', 'Mierzenie utworów', 'Измерение треков', 'Вимірювання треків'),
+    _t('%d track, %s', '%d 首歌，%s', '%d 首歌，%s', '%d曲、%s', '%d곡, %s', '%d titre, %s', '%d Titel, %s', '%d canción, %s', '%d brano, %s', '%d เพลง, %s', 'Utwory: %d, %s', 'Песен: %d, %s', 'Пісень: %d, %s'),
+    _t('%d tracks, %s', '%d 首歌，%s', '%d 首歌，%s', '%d曲、%s', '%d곡, %s', '%d titres, %s', '%d Titel, %s', '%d canciones, %s', '%d brani, %s', '%d เพลง, %s', 'Utwory: %d, %s', 'Песен: %d, %s', 'Пісень: %d, %s'),
+    _t('%d minute', '%d 分钟', '%d 分鐘', '%d分', '%d분', '%d minute', '%d Minute', '%d minuto', '%d minuto', '%d นาที', '%d min', '%d мин', '%d хв'),
+    _t('%d minutes', '%d 分钟', '%d 分鐘', '%d分', '%d분', '%d minutes', '%d Minuten', '%d minutos', '%d minuti', '%d นาที', '%d min', '%d мин', '%d хв'),
+    _t('%d hour', '%d 小时', '%d 小時', '%d時間', '%d시간', '%d heure', '%d Stunde', '%d hora', '%d ora', '%d ชั่วโมง', '%d godz.', '%d ч', '%d год'),
+    _t('%d hours', '%d 小时', '%d 小時', '%d時間', '%d시간', '%d heures', '%d Stunden', '%d horas', '%d ore', '%d ชั่วโมง', '%d godz.', '%d ч', '%d год'),
+    # hours and minutes together (one key per singular / plural pair: each language controls its own join)
+    _t('%d hour, %d minute', '%d 小时 %d 分钟', '%d 小時 %d 分鐘', '%d時間%d分', '%d시간 %d분', '%d heure, %d minute', '%d Stunde, %d Minute', '%d hora, %d minuto', '%d ora, %d minuto', '%d ชั่วโมง, %d นาที', '%d godz., %d min', '%d ч, %d мин', '%d год, %d хв'),
+    _t('%d hour, %d minutes', '%d 小时 %d 分钟', '%d 小時 %d 分鐘', '%d時間%d分', '%d시간 %d분', '%d heure, %d minutes', '%d Stunde, %d Minuten', '%d hora, %d minutos', '%d ora, %d minuti', '%d ชั่วโมง, %d นาที', '%d godz., %d min', '%d ч, %d мин', '%d год, %d хв'),
+    _t('%d hours, %d minute', '%d 小时 %d 分钟', '%d 小時 %d 分鐘', '%d時間%d分', '%d시간 %d분', '%d heures, %d minute', '%d Stunden, %d Minute', '%d horas, %d minuto', '%d ore, %d minuto', '%d ชั่วโมง, %d นาที', '%d godz., %d min', '%d ч, %d мин', '%d год, %d хв'),
+    _t('%d hours, %d minutes', '%d 小时 %d 分钟', '%d 小時 %d 分鐘', '%d時間%d分', '%d시간 %d분', '%d heures, %d minutes', '%d Stunden, %d Minuten', '%d horas, %d minutos', '%d ore, %d minuti', '%d ชั่วโมง, %d นาที', '%d godz., %d min', '%d ч, %d мин', '%d год, %d хв'),
+    _t('Clear Track Durations', '清除曲目时长', '清除曲目時長', '再生時間を消去', '트랙 길이 지우기', 'Vider les durées', 'Titeldauern leeren', 'Borrar duraciones', 'Elimina durate', 'ล้างความยาวเพลง', 'Wyczyść czasy', 'Сбросить длительности', 'Скинути тривалості'),
+    _t('Delete all measured track durations? They will be measured again on Home.', '删除所有已测量的曲目时长？它们将在主页重新测量。', '刪除所有已測量的曲目時長？它們將在主畫面重新測量。',
+       'すべての再生時間を削除しますか？ホームで再度測定されます。', '측정된 모든 트랙 길이를 삭제할까요? 홈에서 다시 측정됩니다.', 'Supprimer toutes les durées mesurées ? Elles seront mesurées à nouveau sur Home.',
+       'Alle gemessenen Titeldauern löschen? Sie werden auf Home neu gemessen.', '¿Borrar todas las duraciones medidas? Se medirán de nuevo en Home.', 'Eliminare tutte le durate misurate? Verranno misurate di nuovo in Home.',
+       'ลบความยาวเพลงที่วัดแล้วทั้งหมด? จะวัดใหม่ที่หน้าหลัก', 'Usunąć zmierzone czasy utworów? Zostaną zmierzone ponownie w Home.', 'Удалить все измеренные длительности? Они будут измерены заново в Home.',
+       'Видалити всі виміряні тривалості? Їх буде виміряно знову в Home.'),
+    _t('Track durations cleared', '曲目时长已清除', '曲目時長已清除', '再生時間を消去しました', '트랙 길이를 지웠습니다', 'Durées effacées', 'Titeldauern gelöscht', 'Duraciones borradas', 'Durate eliminate', 'ล้างความยาวเพลงแล้ว', 'Czasy wyczyszczone', 'Длительности сброшены', 'Тривалості скинуто'),
     # Settings > Developer > Cover Cache (patch/homecover.c): the row and page title, the seven labels, the Status values (a count "n/m" follows Preparing, Rebuilding and Building)
     _t('Settings Files', '设置文件', '設定檔案', '設定ファイル', '설정 파일', 'Fichiers de réglages', 'Einstellungsdateien', 'Archivos de ajustes', 'File delle impostazioni', 'ไฟล์การตั้งค่า', 'Pliki ustawień', 'Файлы настроек', 'Файли налаштувань'),
     _t('Cover Cache', '封面缓存', '封面快取', 'カバーキャッシュ', '커버 캐시', 'Cache des pochettes', 'Cover-Cache', 'Caché de carátulas', 'Cache copertine', 'แคชปก', 'Pamięć okładek', 'Кэш обложек', 'Кеш обкладинок'),

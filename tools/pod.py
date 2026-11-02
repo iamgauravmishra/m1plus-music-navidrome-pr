@@ -41,7 +41,7 @@ OBJCOPY = os.path.join(LLVM, 'llvm-objcopy')
 LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
-SOURCES = ['m1plus.c', 'common.c', 'menu.c', 'covercache.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c',
+SOURCES = ['m1plus.c', 'common.c', 'menu.c', 'covercache.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c',
            'scroll.c', 'playmore.c', 'playlists.c', 'azlist.c', 'songops.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'pcnet.c', 'podcasts.c', 'tape.c', 'vinyl.c', 'onlineart.c', 'keyboard.c', 'search.c', 'battery.c', 'lyrics.c', 'picker.c', 'folders.c']
 
 FLAGS = ['--target=mipsel-linux-gnu', '-march=mips32r2', '-mabi=32', '-mfp64',
@@ -740,6 +740,8 @@ LIBC = {
     'rmdir': ('int', 'const char *'),   # Podcasts unsubscribe (patch/podcasts.c): the show folder left empty
     # Album cover extraction (patch/covercache.c art_embedded): libtag_c's taglib_album_picture(track, out, 0x100000, 0x600000), exactly as toolsGetAlbumCover calls it (the picture goes to /tmp/.tmp_picture; out is not used); 2 = JPEG, 1 = PNG, 0 = none
     'taglib_album_picture': ('int', 'const char *, char *, int, int'),
+    # Track durations (patch/durations.c dur_probe): libtag_c's taglib_file_new(path, readAudioProperties) / taglib_file_audioproperties / taglib_file_free, as toolsGetMusicInfo (0x5ec6a8) calls them (demo imports all three)
+    'taglib_file_new': ('void *', 'const char *, int'), 'taglib_file_audioproperties': ('void *', 'void *'), 'taglib_file_free': ('void', 'void *'),
 }
 
 

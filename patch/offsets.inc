@@ -237,7 +237,7 @@
  * The album page's numbers (patch/albumpage.c, docs/modules/album-page.md; ui/m1plus_album.bin and the Podcasts Show level read them).
  * REC_YEAR: songtable's column 9 (`year`), which the row callback @0x4e908c atoi()s into the stack record at +0x30; the insert
  * (@0x5edfc4) writes it from taglib_tag_year. There is no duration column (time / time_end are CUE offsets, 0 for ordinary files,
- * @0x5edb88), so the page shows none. CLASSINFO_ALL_SONGS: the byte loadAlbumdetailList sets in the browsing record for the stock
+ * @0x5edb88): the page's total comes from the durations table (patch/durations.c). CLASSINFO_ALL_SONGS: the byte loadAlbumdetailList sets in the browsing record for the stock
  * All songs row (0xff01, @0x4eebec).
  * Geometry in the window (320 wide, the lines centred on x 160): the cover AH_ART square at (AH_ART_X, AH_ART_Y) with its four AH_CORNER px
  * corners cut; the title, artist and "year . N tracks" lines centred in AH_TEXT_W; the round Shuffle (AH_SHUF_W) and the Play all
@@ -320,6 +320,11 @@
 #define AB_TEXT_SLACK 4
 #define AB_PLAY_TEXT_W 50      /* the English "Play all" at 18 px: where the payload cannot measure the translated text, the pill's pair is centred for this width */
 #define AB_COVER_MS 200
+#define AB_FOOT_GAP 14         /* the footer ("13 tracks, 49 minutes", ab_foot) starts this far under the last row, at the number column's left edge AB_NUM_X */
+#define AB_FOOT_TEXT_H 20      /* its label's height; AB_FOOT_PX 15 grey #AAAAAA */
+#define AB_FOOT_PAD 18         /* the content ends this far under the line (14 + 20 + 18 = 52, the Songs page's count has the same) */
+#define AB_FOOT_R 10           /* the right margin */
+#define AB_FOOT_PX 15
 #define REC_CUE_END 0x4c       /* the CUE track's end (loadSongList's twin of REC_CUE_START); the stock row shows a CUE track by its file name when either is set (@0x524c98) */
 /* Our Queue page (patch/queuepage.c, docs/modules/queue.md; ui/m1plus_queue.bin, tools/pod_ui.py build_queue_page, which reads this file and must equal it), in place of the stock
  * queue drawer. Window rows (the list is the whole window, QP_WIN_H, the glass Back floats over it): the playing track's QP_COVER px cover (QP_COVER_R corners cut in
