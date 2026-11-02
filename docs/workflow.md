@@ -75,9 +75,8 @@ CI neither checks goldens nor publishes. Releases stay local (`make check`, `mak
 Linux Pillow uses zlib rather than zlib-ng, changing PNG and merged CJK-font bytes.
 PNG tests compare pixels.
 
-The firmware zip is the asset of a private prerelease (tag `m1plus-firmware-v2.1`) in this
-repository, downloaded with `GITHUB_TOKEN`. The repository must never be made public while that
-release exists.
+The firmware zip is the asset of a prerelease (tag `m1plus-firmware-v2.1`) in this
+repository, downloaded by CI with `GITHUB_TOKEN`.
 
 Start UI fixes with a failing emulation test or device capture. Previews use the shared AWTK
 layout/text model and the built font. Keep feature details and device checks in `docs/modules/`.
