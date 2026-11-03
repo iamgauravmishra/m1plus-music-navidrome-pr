@@ -11,7 +11,7 @@ SAME_AS_ENGLISH |= {'%d minute', '%d minutes'}    # French writes minute(s) as E
 SAME_AS_ENGLISH |= {'Podcasts', ', %d', 'Normal', 'Chrome', 'Metal', 'Graphite', '5 s', '10 s'}    # Podcasts in French and German
 SAME_AS_ENGLISH |= {'Downloads', '%d MB', '%d.%d GB', '%d GB'}    # German writes Downloads as English does
 SAME_AS_ENGLISH |= {'Genre', 'Screenshot', 'Collections', 'Cover'}    # French and German write Genre the same; German and Italian say Screenshot; French writes Collections the same; German says Cover
-SAME_AS_ENGLISH |= {'Apple Podcasts', 'Wi-Fi', 'Wi-Fi MAC', 'Bluetooth', 'EQ', 'System', 'Display', 'Firmware', 'Model', 'Device', 'Status'}    # brand and technical words (Wi-Fi, Bluetooth, EQ); System in German and Polish, Display in Italian
+SAME_AS_ENGLISH |= {'Version %s', 'Apple Podcasts', 'Wi-Fi', 'Wi-Fi MAC', 'Bluetooth', 'EQ', 'System', 'Display', 'Firmware', 'Model', 'Device', 'Status'}    # brand and technical words (Wi-Fi, Bluetooth, EQ); System in German and Polish, Display in Italian
 
 
 
@@ -252,6 +252,9 @@ def run(ctx):
     # The Rebuild Covers confirm: the stock dialog's wrapped label (centred white 20 px, 260 x 80 at y 25, @0x472e1c) takes at most
     # three lines. A line breaks at a space; a CJK or Thai character is a break of its own (conservative for Thai, which has none).
     wrap_px = px_of('label', 'label_centerwhite20_style')
+    pads = [(t.get('margin_left'), t.get('margin_right')) for t in th.find('label', 'label_centerwhite20_style')]   # the label of the confirm dialog's kind 5 (0x472e1c) is used by that one dialog only: its margins are the padding
+    expect(pads == [(12, 12)] * 3, f'the confirm dialog message label (label_centerwhite20_style) has a 12 px margin each side in all three states ({pads})')
+    wrap_w = 260 - 2 * 12
     unit = re.compile(r'[^\s⺀-鿿＀-￯฀-๿]+\s*|[⺀-鿿＀-￯฀-๿]\s*|\s+')
 
     def wrapped(text, px, maxw):
@@ -262,10 +265,11 @@ def run(ctx):
             while width(cur.rstrip(), px) > maxw: lines, cur = lines + 1, cur[len(cur) // 2:]     # a unit wider than a line
         return lines
     for key, what in (('Rebuild all covers? This may take a few minutes.', 'Rebuild Covers'), ('Take a screenshot?', 'Screenshot'), ('Take a screenshot in:', 'Screenshot delay'),
-                      ('Cancel the screenshot?', 'Cancel Screenshot'), ('Delete all cached covers? They will be made again on Home.', 'Clear Cover Cache'), ('Delete all measured track durations? They will be measured again on Home.', 'Clear Track Durations'), ('Delete folder and everything in it?', 'Delete folder')):
-        lines = {loc: wrapped(tr_text(loc, key), wrap_px, 260) for loc in LOC}
-        expect(wrap_px == 20 and max(lines.values()) <= 3, f'the {what} confirm wraps to at most 3 lines of 260 px at {wrap_px} px in all languages ({lines})')
-        expect(all(len(pod_i18n.TEXT[key][loc].encode()) < 0x1ff for loc in LOC), 'and fits the dialog context\'s 0x200 byte text')
+                      ('Cancel the screenshot?', 'Cancel Screenshot'), ('Delete all cached covers? They will be made again on Home.', 'Clear Cover Cache'), ('Delete all measured track durations? They will be measured again on Home.', 'Clear Track Durations'), ('Delete folder and everything in it?', 'Delete folder'), ('Download %s (55 MB)? It replaces update.bin on the card.', 'Software Update'),
+                      ('msg_bt_open', 'stock: Bluetooth is off'), ('msg_wifi_open', 'stock: Wi-Fi is off')):
+        lines = {loc: wrapped((dict(built[loc]).get(key, dict(built['en_US'])[key]) if key.startswith('msg_') else tr_text(loc, key)).replace('%s', '10.0.1'), wrap_px, wrap_w) for loc in LOC}
+        expect(wrap_px == 20 and max(lines.values()) <= 3, f'the {what} confirm wraps to at most 3 lines of {wrap_w} px at {wrap_px} px in all languages ({lines})')
+        expect(key.startswith('msg_') or all(len(pod_i18n.TEXT[key][loc].encode()) < 0x1ff for loc in LOC), 'and fits the dialog context\'s 0x200 byte text')
     # the Settings cards (tools/pod_settings.py): a value and the row's label share the room between the glyph column and the chevron (the payload gives the value the room its text needs, at most VALUE_MAX);
     # every value text of every language fits with its label, and the headers and notes fit their 272 px labels
     import pod_settings as ST

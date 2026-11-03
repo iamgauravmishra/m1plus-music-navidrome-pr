@@ -57,6 +57,7 @@ def run(ctx):
     t = awtk_ui.parse(open(os.path.join(ui, 'dialog/confirminfo_dialog.bin'), 'rb').read())
     c, e = t.find('btn_cancel'), t.find('btn_enter')
     expect((c.x, c.y, c.w, c.h) == (1, 131, 128, 48) and (e.x, e.y, e.w, e.h) == (131, 131, 128, 48), 'confirm buttons keep their geometry')
+    expect(t.get('highlight') == mo.CONFIRM_DIM == 'default(alpha=130)', 'the confirm dialog dims the window below like our popups\' scrim (the highlighter\'s alpha 130)')
     expect(c.get('style:normal:border') == 'right' and c.get('style:normal:border_color') == mo.BTN_BORDER, 'Cancel draws the vertical divider as its right border')
     p = open(os.path.join(ui, 'poweroff_page.bin'), 'rb').read()
     q = open(os.path.join(stock, '..', '..', 'ui', 'poweroff_page.bin'), 'rb').read()

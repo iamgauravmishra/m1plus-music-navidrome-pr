@@ -58,7 +58,8 @@ enum {
     ACT_VTHSET = 41,
     ACT_CLEARCACHE = 42,
     ACT_CCLIST = 43,
-    ACT_CLEARDUR = 44
+    ACT_CLEARDUR = 44,
+    ACT_UPDATE = 45
 };
 
 extern void shot_start(void); /* patch/shot.c: the Screenshot row: confirm, 5 s countdown, capture; or cancel */
@@ -68,6 +69,7 @@ extern int albums_open(void); /* patch/albums.c: Albums, our page in the mode us
 extern int playlists_open(void); /* patch/playlists.c: Playlists, a grid of mosaics of each playlist's covers */
 extern int ipod_open(void); /* patch/ipod.c: the virtual iPod Classic, a fullscreen page with a touch click wheel */
 extern int podcasts_open(void); /* patch/podcasts.c: the shows on the card and their episodes */
+extern int update_open(void); /* patch/update.c: Software Update, our page; -1 when it did not open */
 extern int search_open(void); /* patch/search.c: our keyboard, then the results page; -1 when it did not open */
 extern int songs_open(void); /* patch/songs.c: Songs, the library as one list with sections and a jump rail */
 extern int folders_open(
@@ -261,6 +263,8 @@ static int on_row(void *ctx, void *e) {
         homecover_list_open(
             row->arg -
             INFO_CC); /* the albums with no art / no cache file, a plain list (nothing when the count is 0 or still being made) */
+    else if (row->action == ACT_UPDATE)
+        update_open(); /* patch/update.c: our page; the check, the download and the hand-over to the firmware's TF card update */
     else if (row->action == ACT_CLEARCACHE)
         clear_ask(); /* a confirm dialog, then the cache files are removed in steps */
     else if (row->action == ACT_CLEARDUR)

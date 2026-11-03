@@ -41,7 +41,9 @@ enum {
     PN_PAUSED, /* a download stopped for a refresh and kept in the queue (never shown) */
     PN_NOFEED, /* search: an Apple Podcasts address whose show has no feed address */
     PN_NOLYRICS, /* lyrics: no LRCLIB record has any */
-    PN_OVERLOAD /* find cover & lyrics: the service answered 503 or 429 (busy) on every try */
+    PN_OVERLOAD, /* find cover & lyrics: the service answered 503 or 429 (busy) on every try */
+    PN_UPCHECK, /* software update: GitHub's answer is not the redirect to a release of the repository (any other status, address or tag) */
+    PN_UPBAD /* software update: the downloaded file is not the package of the version offered (short, too large or another version) */
 };
 
 /* Episode downloads (docs/modules/podcasts.md "Downloads"). The policy follows q2-podcasts (MIT): one at a time, chunks written with open / write / fsync / close, Range resume, a stall limit,
@@ -237,3 +239,39 @@ int pn_pick_code(
     void); /* PN_OK: the cover is in the cache (or, after pn_art_fetch, the picture is there); else why not */
 void pn_art_clean(
     void); /* remove the thumbnails, the larger picture and the held lyrics, forget the results (no worker must run) */
+
+/* ---- Software Update (docs/modules/update.md): the newest release of the project from GitHub, downloaded to the card as update.bin for stock's own TF card update. Two jobs of the one worker slot (never beside
+ * another job; the page pauses the Podcasts downloads first). All of these run on the UI thread; the worker only writes the record they read. Cancel is pn_cancel(). */
+#define PN_UP_DIR "/mnt/mmc"
+#define PN_UP_FILE PN_UP_DIR "/update.bin" /* where stock's TF card update looks */
+#define PN_UP_PART PN_UP_FILE ".part" /* the download, until it is checked */
+#define PN_UP_NEED_KB \
+    112640u /* free on the card before a download starts: 110 MB (the package is about 55 MB, and the one it replaces stays until the rename) */
+#define PN_UP_CAP 134217728u /* a package larger than this (128 MB) is refused while it downloads */
+
+enum {
+    PN_U_IDLE = 0, /* nothing checked (also after a check that was cancelled) */
+    PN_U_CHECKING = 1,
+    PN_U_CHECKED = 2, /* pn_up_result says what the check found */
+    PN_U_DOWNLOADING = 3,
+    PN_U_DOWNLOADED = 4, /* update.bin on the card is the package of pn_up_tag() */
+    PN_U_FAILED = 5 /* pn_up_code() is why, pn_up_stage() which job */
+};
+enum {
+    PN_U_CURRENT = 1,
+    PN_U_AVAILABLE = 2
+}; /* pn_up_result: the build is as new as the latest release / a release is offered */
+
+/* Ask GitHub for the latest release: the guards (card, Wi-Fi, clock, CA bundle), then the worker. 0 when it runs; PN_BUSY when another job runs; else the guard's PN_* (also the state: PN_U_FAILED). */
+int pn_up_check(void);
+/* Download the release the last check offered: the guards, a card with PN_UP_NEED_KB free (PN_CARDFULL), then the worker. Same returns, and PN_UPCHECK when no release is offered. */
+int pn_up_download(void);
+int pn_up_state(void); /* PN_U_* */
+int pn_up_code(
+    void); /* the failure's PN_*: PN_NOWIFI, PN_NOCLOCK, PN_NOCERT, PN_CERT, PN_NET, PN_UPCHECK, PN_UPBAD, PN_CARDFULL, PN_STORAGE, PN_MEM, PN_CANCELLED */
+int pn_up_stage(void); /* 1 the check, 2 the download: the job of the last failure or the running one */
+int pn_up_result(void); /* PN_U_CURRENT, PN_U_AVAILABLE, or 0 (no check has found anything) */
+const char *pn_up_tag(void); /* the offered release ("1.0.1"), "" when none */
+unsigned pn_up_pct(void); /* the download's progress, 0..100 */
+/* Forget an old answer or failure when the page opens (nothing while a job runs; a download whose file is still on the card is kept). */
+void pn_up_reset(void);

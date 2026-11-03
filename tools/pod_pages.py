@@ -73,6 +73,7 @@ ACT_VREC = 38     # value row (Settings > Now Playing > Vinyl Mode): the record 
 ACT_RECSET = 39   # picker row (Record): choose the colour (arg = its index in vinyl_art.RECORD_NAMES); a check shows on the chosen row (patch/vinyl.c vinyl_record_set)
 ACT_VTHEME = 40   # value row (Settings > Now Playing > Vinyl Mode): the plinth theme, Graphite or White; opens its picker page (arg = the page index; patch/vinyl.c vinyl_theme)
 ACT_VTHSET = 41   # picker row (Base): choose the theme (arg = its index in vinyl_art.THEME_NAMES); a check shows on the chosen row (patch/vinyl.c vinyl_theme_set)
+ACT_UPDATE = 45   # link row (Settings > System > About): Software Update, our own page (patch/update.c update_open): check GitHub for a newer release, download it to the card, hand over to the stock TF card update
 _ACTS = [v for k, v in globals().items() if k.startswith('ACT_')]
 assert len(set(_ACTS)) == len(_ACTS), 'two ACT_* share an id (patch/m1plus.c mirrors them)'
 SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT)
@@ -292,6 +293,7 @@ SETTINGS_PAGE = Page('m1plus_settings', 'm1plus_settings_page', 'Settings', layo
 INFO_TAG, INFO_FW, INFO_MODEL, INFO_SN, INFO_MAC, INFO_IP, INFO_CAP, INFO_FREE = range(8)
 ABOUT_PAGE = Page('m1plus_about', 'm1plus_about_page', 'About', layout=[
     Row('M1+ Music', ACT_INFO, INFO_TAG),
+    Row('Software Update', ACT_UPDATE),
     Row('Firmware', ACT_INFO, INFO_FW),
     Hdr('Device'),
     Row('Model', ACT_INFO, INFO_MODEL),
@@ -473,6 +475,9 @@ VINYL_WHITE.theme = 'white'
 # More dialog, not from a menu row).
 ONLINEART = Page('m1plus_onlineart', 'm1plus_onlineart_page', 'Cover & Lyrics', kind='onlineart')
 
+# Software Update (patch/update.c, docs/modules/update.md): the stock navbar over one centred block the payload fills (a glyph, a title, an explanation, a progress bar and one pill); opened by the Settings > System row.
+UPDATE = Page('m1plus_update', 'm1plus_update_page', 'Software Update', kind='update')
+
 # Settings > Now Playing: the cassette's look. Theme shows its value (Normal, Chrome or Metal) at the right and opens a picker; the choice is saved and the Tape page reads it when it opens.
 NPSET_PAGE = Page('m1plus_npset', 'm1plus_npset_page', 'Now Playing', layout=[
     Hdr('Cassette Mode'),
@@ -527,7 +532,7 @@ QUEUE_PAGE = Page('m1plus_queue', 'm1plus_queue_page', 'Queue', kind='queue')
 # PAGES[0] is the entry page.
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
          EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, SORT_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL, FOLDERS, QUEUE_PAGE,
-         RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST, FILES_PAGE]
+         RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST, FILES_PAGE, UPDATE]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE

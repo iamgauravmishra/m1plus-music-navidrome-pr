@@ -20,6 +20,7 @@
 #include "pcnet.h"
 #include "pccover.h"
 #include "pcnotes.h"
+#include "upver.h"
 #include "curlopts.h"
 #include "covercache.h"
 
@@ -88,6 +89,10 @@ static struct {
     char aq[3][PN_ART_Q], pkdir[PN_PATH];
     unsigned adur, pkkey[2];
     int amask; /* the parts the worker looks up: PN_PART_COVERS | PN_PART_LYRICS */
+    /* Software Update (docs/modules/update.md; new fields go below). ustate: PN_U_*; ucode: the PN_* of a failure; ustage: what the last failure or the running job was (1 the check, 2 the download); ures: the check's verdict
+     * (PN_U_CURRENT, PN_U_AVAILABLE, 0 none); umode: 0 the worker checks, 1 it downloads; utag: the release the check offered (held for the download). The state is written after the code and the tag. */
+    volatile int ustate, ucode, ustage, ures, umode;
+    char utag[UP_TAG];
 } pn __attribute__((section(".scratch")));
 
 enum {
@@ -96,7 +101,8 @@ enum {
     PN_KIND_SEARCH = 3,
     PN_KIND_PREVIEW = 4,
     PN_KIND_ART = 5,
-    PN_KIND_PICK = 6
+    PN_KIND_PICK = 6,
+    PN_KIND_UPDATE = 7
 };
 enum { PN_Q_FREE = 0, PN_Q_WAIT = 1, PN_Q_ACTIVE = 2 };
 
@@ -153,7 +159,7 @@ static void pn_set(unsigned feed, int code, unsigned fresh) {
 int pn_busy(void) { return pn.busy && (pn.kind == PN_KIND_REFRESH || !pn.kind); }
 int pn_job_busy(void) {
     return pn.busy && (pn.kind == PN_KIND_SEARCH || pn.kind == PN_KIND_PREVIEW || pn.kind == PN_KIND_ART ||
-                       pn.kind == PN_KIND_PICK);
+                       pn.kind == PN_KIND_PICK || pn.kind == PN_KIND_UPDATE);
 }
 void pn_cancel(void) { pn.cancel = 1; }
 int pn_cancelling(void) { return pn_busy() && pn.cancel; }
@@ -2184,3 +2190,218 @@ int pn_unsubscribe_show(const char *root, const pc_show_t *s) {
     if (pn_join(path, sizeof path, root, s->dir, (const char *)0)) rmdir(path);
     return 2;
 }
+
+/* ---------------------------------------------------------------------------
+ * Software Update (patch/update.c is the page; docs/modules/update.md)
+ *
+ * Two jobs of the one worker slot (PN_KIND_UPDATE). The check asks GitHub where /releases/latest goes and reads the tag from that address: the answer is not followed and nothing else is read. The download fetches
+ * that tag's update.bin (/releases/download/<tag>/update.bin, never "latest": the file is the version the page showed) into /mnt/mmc/update.bin.part, checks that the package says it is that version, and only
+ * then renames it over update.bin. A failure removes the .part and leaves the card's update.bin as it was. Every request keeps verification on and allows https only.
+ */
+
+static unsigned pn_unull(char *d, unsigned size, unsigned nmemb, void *user) {
+    (void)d, (void)user;
+    return size * nmemb;
+}
+
+struct ux { /* the download's write callback's data */
+    int fd, werr, capped;
+    unsigned total;
+};
+
+static unsigned pn_uwrite(char *d, unsigned size, unsigned nmemb, void *user) {
+    struct ux *x = user;
+    unsigned len = size * nmemb, at = 0;
+    if (len > PN_UP_CAP - x->total) {
+        x->capped = 1;
+        return 0;
+    }
+    while (at < len) {
+        int w = write(x->fd, d + at, len - at);
+        if (w <= 0) {
+            x->werr = 1;
+            return 0;
+        }
+        at += (unsigned)w;
+    }
+    x->total += len;
+    return len;
+}
+
+/* The job is over: the code, then the state, then the slot is free. */
+static void pn_up_end(int state, int code) {
+    pn.ucode = code;
+    __sync_synchronize();
+    pn.ustate = state;
+    pn.stopped = pn.cancel;
+    pn.kind = 0;
+    pn.busy = 0;
+    pn_bump();
+}
+
+static void pn_up_https(void *h) {
+    curl_easy_setopt(h, CURLOPT_PROTOCOLS,
+                     CURLPROTO_HTTPS); /* an address that is not https, or a redirect to one, is refused */
+    curl_easy_setopt(h, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTPS);
+}
+
+static void pn_up_check_run(void) {
+    char url[128], err[160], tag[UP_TAG];
+    const char *loc = (const char *)0;
+    long http = 0;
+    int rc, code = PN_UPCHECK, res = 0;
+    void *h;
+    snprintf(url, sizeof url, "https://github.com/%s/releases/latest", up_repo);
+    h = pn_easy(url, pn_unull, (void *)0, err, (void *)0);
+    if (!h) {
+        pn_up_end(PN_U_FAILED, PN_MEM);
+        return;
+    }
+    curl_easy_setopt(h, CURLOPT_FOLLOWLOCATION, 0); /* the redirect's address is the answer */
+    curl_easy_setopt(h, CURLOPT_NOBODY, 1);
+    pn_up_https(h);
+    rc = curl_easy_perform(h);
+    curl_easy_getinfo(h, CURLINFO_RESPONSE_CODE, &http);
+    curl_easy_getinfo(h, CURLINFO_REDIRECT_URL, &loc);
+    if (rc == 0) {
+        if ((http == 301 || http == 302 || http == 303 || http == 307 || http == 308) &&
+            up_redirect_tag(loc, up_repo, tag, sizeof tag))
+            res = up_offer(tag, up_own, up_dev);
+        if (res) code = PN_OK;
+    } else {
+        code = pn_rc(rc, http);
+        if (code == PN_GONE || code == PN_HTTP) code = PN_UPCHECK; /* an HTTP error is no release news */
+    }
+    curl_easy_cleanup(h);
+    if (pn.cancel) {
+        pn_up_end(PN_U_IDLE, PN_CANCELLED);
+        return;
+    }
+    if (code) {
+        pn_up_end(PN_U_FAILED, code);
+        return;
+    }
+    pn.ures = res == 2 ? PN_U_AVAILABLE : PN_U_CURRENT;
+    if (res == 2) memcpy((char *)pn.utag, tag, sizeof tag);
+    pn_up_end(PN_U_CHECKED, PN_OK);
+}
+
+/* The card's root directory made durable after the rename. */
+static int pn_up_sync_dir(void) {
+    int fd = open(PN_UP_DIR, O_RDONLY, 0), ok;
+    if (fd < 0) return 0;
+    ok = fsync(fd) == 0;
+    close(fd);
+    return ok;
+}
+
+static void pn_up_download_run(void) {
+    char url[160], err[160], tag[UP_TAG];
+    struct ux x;
+    long http = 0;
+    long long clen = -1;
+    unsigned kb = 0;
+    int rc, code = PN_OK;
+    void *h;
+    memcpy(tag, (const char *)pn.utag, sizeof tag);
+    memset(&x, 0, sizeof x);
+    unlink(PN_UP_PART); /* nothing is resumed: the half file of another try is not trusted */
+    x.fd = open(PN_UP_PART, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (x.fd < 0) {
+        pn_up_end(PN_U_FAILED, PN_STORAGE);
+        return;
+    }
+    snprintf(url, sizeof url, "https://github.com/%s/releases/download/%s/update.bin", up_repo, tag);
+    h = pn_easy(url, pn_uwrite, &x, err, (void *)0);
+    if (!h) {
+        close(x.fd);
+        unlink(PN_UP_PART);
+        pn_up_end(PN_U_FAILED, PN_MEM);
+        return;
+    }
+    curl_easy_setopt(
+        h, CURLOPT_TIMEOUT,
+        0); /* no limit on the whole transfer (55 MB on a slow link); the low-speed limit still ends a stalled one */
+    curl_easy_setopt(h, CURLOPT_ACCEPT_ENCODING, (void *)0); /* a package is sent as it is */
+    pn_up_https(h);
+    rc = curl_easy_perform(h);
+    curl_easy_getinfo(h, CURLINFO_RESPONSE_CODE, &http);
+    curl_easy_getinfo(h, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &clen);
+    curl_easy_cleanup(h);
+    if (rc) {
+        if (x.werr)
+            code = pn_free_kb(PN_UP_DIR, &kb) && kb < 1024 ? PN_CARDFULL : PN_STORAGE;
+        else
+            code = x.capped ? PN_UPBAD : pn_rc(rc, http);
+    } else if (http != 200 || x.total == 0 || (clen > 0 && (unsigned long long)clen != x.total))
+        code = PN_UPBAD; /* not the whole answer */
+    if (!code && fsync(x.fd)) code = PN_STORAGE;
+    if (close(x.fd) && !code) code = PN_STORAGE;
+    if (!code && !up_info_ok(PN_UP_PART, tag)) code = PN_UPBAD; /* the package is not the version the page offered */
+    if (!code && rename(PN_UP_PART, PN_UP_FILE)) code = PN_STORAGE;
+    if (code) {
+        unlink(PN_UP_PART);
+        pn_up_end(PN_U_FAILED, code);
+        return;
+    }
+    code =
+        pn_up_sync_dir() ? PN_OK : PN_STORAGE; /* (renamed, so the file stays; the page says the card is not right) */
+    pn_up_end(code ? PN_U_FAILED : PN_U_DOWNLOADED, code);
+}
+
+static void *pn_umain(void *arg) {
+    (void)arg;
+    if (pn.umode)
+        pn_up_download_run();
+    else
+        pn_up_check_run();
+    return (void *)0;
+}
+
+/* The guards, then the worker. A guard that fails is the job's failure too, so the page reads one place. */
+static int pn_up_start(int mode) {
+    unsigned kb = 0, v[3];
+    int g;
+    if (pn.busy) return PN_BUSY;
+    pn.ustage = mode + 1;
+    g = pn_guard();
+    if (!g && mode) {
+        if (pn.ures != PN_U_AVAILABLE || !up_parse((const char *)pn.utag, v))
+            g = PN_UPCHECK; /* no release was offered */
+        else if (!pn_free_kb(PN_UP_DIR, &kb))
+            g = PN_STORAGE;
+        else if (kb < PN_UP_NEED_KB)
+            g = PN_CARDFULL;
+    }
+    if (g) {
+        pn.ucode = g;
+        __sync_synchronize();
+        pn.ustate = PN_U_FAILED;
+        pn_bump();
+        return g;
+    }
+    if (!mode) pn.ures = 0, pn.utag[0] = 0; /* a new check forgets the offer */
+    pn.umode = mode, pn.ucode = 0;
+    __sync_synchronize();
+    pn.ustate = mode ? PN_U_DOWNLOADING : PN_U_CHECKING;
+    g = pn_spawn(pn_umain, PN_KIND_UPDATE);
+    if (g) {
+        pn.ucode = g;
+        __sync_synchronize();
+        pn.ustate = PN_U_FAILED;
+    }
+    return g;
+}
+
+void pn_up_reset(void) {
+    if (pn.busy || (pn.ustate == PN_U_DOWNLOADED && !access(PN_UP_FILE, F_OK))) return;
+    pn.ustate = PN_U_IDLE, pn.ures = 0, pn.ucode = 0, pn.utag[0] = 0;
+}
+int pn_up_check(void) { return pn_up_start(0); }
+int pn_up_download(void) { return pn_up_start(1); }
+int pn_up_state(void) { return pn.ustate; }
+int pn_up_code(void) { return pn.ucode; }
+int pn_up_stage(void) { return pn.ustage; }
+int pn_up_result(void) { return pn.ures; }
+const char *pn_up_tag(void) { return pn.ures ? (const char *)pn.utag : ""; }
+unsigned pn_up_pct(void) { return pn.part >= 1000 ? 100 : pn.part / 10; }

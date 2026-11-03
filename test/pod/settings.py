@@ -91,7 +91,7 @@ def layout_tests(ctx):
         for n, it in enumerate(page.rows):
             r, kind = rows[n], P.row_kind(it)
             last = kinds[n] in ('single', 'bot')
-            has_icon = kind not in ('check', 'info') and it.action != P.ACT_CCLIST
+            has_icon = kind not in ('check', 'info') and it.action not in (P.ACT_CCLIST, P.ACT_UPDATE)
             lab = next(c for c in r.children if c.name == f'pod_label{n}')
             lx, lw = ST.label_box(kind, has_icon)
             normal, down = ST.piece_images(kinds[n])
@@ -181,10 +181,10 @@ def about_tests(ctx):
     A = P.ABOUT_PAGE
     S = P.SETTINGS_PAGE
     ab_i = next(i for i, r in enumerate(S.rows) if r.label == 'About')
-    expect((S.rows[ab_i].action, S.rows[ab_i].arg) == (P.ACT_PAGE, P.ABOUT_PAGE_INDEX) and A.title == 'About' and A.key == 'm1plus_about' and all(P.row_kind(r) == 'info' for r in A.rows)
+    expect((S.rows[ab_i].action, S.rows[ab_i].arg) == (P.ACT_PAGE, P.ABOUT_PAGE_INDEX) and A.title == 'About' and A.key == 'm1plus_about' and all(P.row_kind(r) == 'info' for r in A.rows if r.action != P.ACT_UPDATE) and [r.label for r in A.rows][:2] == ['M1+ Music', 'Software Update'] and P.row_kind(A.rows[1]) == 'link'
            and not any(n == 'systemset/about_page' for n, _ in P.STOCK_PAGES), 'Settings > About opens our own page of information rows; the stock About page is not linked')
     sections = [x.text if isinstance(x, P.Hdr) else x.label if isinstance(x, P.Row) else None for x in A.layout]
-    expect(sections == ['M1+ Music', 'Firmware', 'Device', 'Model', 'Serial Number', 'Wi-Fi MAC', 'IP Address', 'Storage', 'Capacity', 'Available'], f'the sections: build and firmware, Device, Storage ({sections})')
+    expect(sections == ['M1+ Music', 'Software Update', 'Firmware', 'Device', 'Model', 'Serial Number', 'Wi-Fi MAC', 'IP Address', 'Storage', 'Capacity', 'Available'], f'the sections: build and firmware, Device, Storage ({sections})')
     names = {r.label: i for i, r in enumerate(A.rows)}
 
     def open_about(sn=b'', mac=b'', card=False, disk=(0.0, 0.0), net=0, ip=b''):
@@ -217,7 +217,7 @@ def about_tests(ctx):
     # the page's rows are not bound: a tap on one does nothing (the rows are insensitive in the asset too)
     expect(not [k for k in m.bound if k[0] in {m.widgets.get(f'pod_row{i}') for i in range(len(A.rows))} and False], 'no row of the page is bound')
     tree = page_tree(A)
-    expect(all(tree.find(f'pod_row{i}').get('sensitive') == 'false' for i in range(len(A.rows))), 'every row is insensitive: not tappable')
+    expect(all((tree.find(f'pod_row{i}').get('sensitive') == 'false') == (A.rows[i].action != P.ACT_UPDATE) for i in range(len(A.rows))), 'every information row is insensitive: not tappable; the Software Update link row takes the tap')
     rows_with_value_fit = [c for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets[f'pod_label{names["Wi-Fi MAC"]}']]
     expect(rows_with_value_fit, 'the value takes the room its text needs and the row\'s label gets the rest (value_fit)')
 

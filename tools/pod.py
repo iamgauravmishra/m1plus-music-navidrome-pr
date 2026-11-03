@@ -27,7 +27,7 @@ import argparse, concurrent.futures, hashlib, json, os, pathlib, re, stat, struc
 from elftools.elf.elffile import ELFFile
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import pod_pages, pod_ui
-from build import TAG, about   # the About row of the iPod page shows about(tag) (patch/m1plus.c M1PLUS_TAG)
+from build import TAG, VERSION, REPO, about   # the About row of the iPod page shows about(tag) (patch/m1plus.c M1PLUS_TAG)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PATCH = os.path.join(ROOT, 'patch')
@@ -42,7 +42,7 @@ LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
 SOURCES = ['m1plus.c', 'common.c', 'menu.c', 'covercache.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c',
-           'scroll.c', 'playmore.c', 'playlists.c', 'azlist.c', 'songops.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'pcnet.c', 'podcasts.c', 'tape.c', 'vinyl.c', 'onlineart.c', 'keyboard.c', 'search.c', 'battery.c', 'lyrics.c', 'picker.c', 'folders.c']
+           'scroll.c', 'playmore.c', 'playlists.c', 'azlist.c', 'songops.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'upver.c', 'pcnet.c', 'podcasts.c', 'tape.c', 'vinyl.c', 'onlineart.c', 'update.c', 'keyboard.c', 'search.c', 'battery.c', 'lyrics.c', 'picker.c', 'folders.c']
 
 FLAGS = ['--target=mipsel-linux-gnu', '-march=mips32r2', '-mabi=32', '-mfp64',
          '-mno-abicalls', '-fno-pic', '-G0', '-ffreestanding', '-fno-builtin',
@@ -582,6 +582,20 @@ UPDATE_PINS = (   # (address, stock word, what it proves)
     (0x74773c, 0x312e3256, 'the literal "V2.1"'), (0x747738, 0x0000006e, 'the end of "about_version": "n", NUL, padding'),
     (0x74772c, 0x756f6261, 'the string "about_version" ("abou"): the compare\'s new operand, a text no package tag equals'),
 )
+# Software Update (patch/update.c, docs/modules/update.md): the TF card update's own click handler on systemset/fwupdate_page (the "listitem_sd" row, bound by the page init's widget walk, @0x4a6d10..): called, not hooked. It is
+# self-contained and ignores its arguments: the confirm dialog (msg_confirmupdate), check_updatefw_exist("/mnt/mmc", "/mnt/mmc/update.bin"), then navigator_to("dialog/cardupdate_dialog") (whose init stops the player and
+# starts the flash thread; the codes of check_updatefw_exist answer with the stock low-battery and not-found messages). The payload calls it on the UI thread from a click handler, as stock's event loop does.
+TF_UPDATE = 0x4a7160
+
+TFUPDATE_PINS = (   # (address, stock word, what it proves)
+    (TF_UPDATE, 0x3c1c0056, 'TF card update handler prologue'), (TF_UPDATE + 4, 0x279ccd70, 'TF card update handler prologue'), (TF_UPDATE + 8, 0x0399e021, 'TF card update handler prologue'),
+    (0x4a71b8, 0x24847f44, 'TF card update: a0 = "msg_confirmupdate" (getFormatString)'), (0x4a71cc, 0x0320f809, 'TF card update: jalr navigator_to_with_context (the modal confirm)'),
+    (0x4a71d0, 0x24844570, 'TF card update: a0 = "dialog/confirminfo_dialog"'), (0x4a71d8, 0x14430029, 'TF card update: bne v0, 0xa: only Yes goes on'),
+    (0x4a71ec, 0x24a53ed8, 'TF card update: a1 = "/mnt/mmc/update.bin"'), (0x4a71f0, 0x0320f809, 'TF card update: jalr check_updatefw_exist'), (0x4a71f4, 0x24844bd0, 'TF card update: a0 = "/mnt/mmc"'),
+    (0x4a7208, 0x0320f809, 'TF card update: jalr navigator_to'), (0x4a720c, 0x24847e00, 'TF card update: a0 = "dialog/cardupdate_dialog"'),
+    (0x4a6cf4, 0x24a57e80, 'widget walk: a1 = "listitem_sd"'), (0x4a6d10, 0x8f86add4, 'widget walk: lw a2, GOT page 0x4a0000'), (0x4a6d14, 0x1000ffde, 'widget walk: b 0x4a6c90 (widget_on EVT_CLICK)'),
+    (0x4a6d18, 0x24c67160, 'widget walk: a2 = 0x4a7160 (the delay slot): the row\'s click handler is the one called here'),
+)
 PLAYLIST_IMPORT, PLAYLIST_EXPORT = 0x53dedc, 0x53dd34
 PLAYLIST_PINS = (   # (address, stock word, what it proves)
     (PLAYLIST_IMPORT, 0x3c1c004c, 'import click handler prologue'), (PLAYLIST_IMPORT + 4, 0x279c5ff4, 'import click handler prologue'),
@@ -938,6 +952,7 @@ def gen_stock_h(out, demo_path):
     h.append(f'#define stock_np_mode_button ((int (*)(void *))0x{NP_MODE_BUTTON:x}u)')   # Now Playing's mode button picture (patch/nowplaying.c)
     h.append(f'#define stock_playlist_import ((int (*)(void *, void *))0x{PLAYLIST_IMPORT:x}u)')   # the stock Playlists page's Import / Export rows
     h.append(f'#define stock_playlist_export ((int (*)(void *, void *))0x{PLAYLIST_EXPORT:x}u)')
+    h.append(f'#define tf_update_click ((int (*)(void *, void *))0x{TF_UPDATE:x}u)')   # the stock TF card update's click handler (patch/update.c; TFUPDATE_PINS)
     # the engine's dictionary members (patch/search.c pinyin initials; not exported, pinned by PINYIN_PINS): DictList::get_lemma_id(this, char16 *, len), get_splids_for_hanzi(this, hanzi, half_splid, splids, max), SpellingTrie::get_spelling_str(this, id)
     h.append('#define py_lemma_id ((unsigned (*)(void *, const unsigned short *, unsigned))0x5c01a4u)')
     h.append('#define py_splids ((unsigned short (*)(void *, unsigned short, unsigned short, unsigned short *, unsigned short))0x5bffd4u)')
@@ -1059,7 +1074,7 @@ def compile_payload(out, demo_path, tag=TAG):
     objs = [out / (src + '.o') for src in SOURCES]   # (SOURCES order: the link is byte-identical to a serial compile)
 
     def compile_one(src, obj):
-        cmd = [str(a) for a in (CLANG, *FLAGS, f'-DM1PLUS_TAG="{about(tag)}"', '-I', out, '-I', PATCH, '-c', os.path.join(PATCH, src), '-o', obj)]
+        cmd = [str(a) for a in (CLANG, *FLAGS, f'-DM1PLUS_TAG="{about(tag)}"', f'-DM1PLUS_VERSION="{VERSION}"', f'-DM1PLUS_DEV={int(about(tag) != VERSION)}', f'-DM1PLUS_REPO="{REPO}"', '-I', out, '-I', PATCH, '-c', os.path.join(PATCH, src), '-o', obj)]
         return subprocess.run(cmd, stderr=subprocess.PIPE, text=True)
 
     with concurrent.futures.ThreadPoolExecutor(os.cpu_count() or 4) as pool:   # one clang a source; the sources do not depend on each other
@@ -1207,7 +1222,7 @@ def patch_demo(raw, payload, ps, demo_path):
     check(BASE <= target4 < BASE + len(payload), 'playing init entry symbol outside payload')
     hook(patched, PLAYING_INIT, PLAYING_INIT_PROLOGUE, target4, 'playing_page_init')
     patch_playmore(patched, ps, len(payload))
-    for a, old, what in PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + BATTERY_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS:   # stock code the Playlists and Songs pages call: checked, not written
+    for a, old, what in PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + BATTERY_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS:   # stock code the Playlists and Songs pages call: checked, not written
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     target5 = ps['pc_id3_path']

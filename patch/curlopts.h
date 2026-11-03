@@ -34,6 +34,8 @@
 #define CURLOPT_ACCEPT_ENCODING 10102
 #define CURLOPT_FAILONERROR \
     45 /* an HTTP code of 400 or more fails the request (CURLE_HTTP_RETURNED_ERROR, 22) instead of handing over the error page */
+#define CURLOPT_NOBODY 44 /* long 1: a header-only request (HEAD) */
+#define CURLPROTO_HTTPS 2
 #define CURLOPT_PROTOCOLS 181
 #define CURLOPT_REDIR_PROTOCOLS 182
 #define CURLPROTO_HTTP_HTTPS 3 /* CURLPROTO_HTTP | CURLPROTO_HTTPS: a redirect to file:// or ftp:// is refused */
@@ -45,6 +47,10 @@
 #define CURLINFO_FILETIME \
     0x20000e /* CURLINFO_LONG + 14: the server's Last-Modified, seconds since 1970, a long; -1 when it sent none */
 #define CURLINFO_REDIRECT_COUNT 0x200014
+#define CURLINFO_REDIRECT_URL \
+    0x10001f /* CURLINFO_STRING + 31: the Location of a redirect that was not followed, absolute; owned by the handle */
+#define CURLINFO_CONTENT_LENGTH_DOWNLOAD_T \
+    0x60000f /* CURLINFO_OFF_T + 15: the length the server announced, -1 when it gave none */
 #define CURLINFO_PRIMARY_IP 0x100020
 #define CURLINFO_SIZE_DOWNLOAD_T 0x600008
 #define CURLINFO_TOTAL_TIME_T 0x600032

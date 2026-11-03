@@ -238,6 +238,7 @@ class Machine:
         self.watch = Traps(self)
         self.watch.update({PSYMS[n]: n for n in ('set_value', 'set_offset') if n in PSYMS})
         self.handlers[pod.HOME_INIT + 12] = 'stock_init_resume'
+        self.handlers[pod.TF_UPDATE] = 'tf_update_click'
         self.handlers[pod.PLAYLIST_IMPORT] = 'stock_playlist_import'   # the stock Playlists page's Import / Export click handlers
         self.handlers[pod.PLAYLIST_EXPORT] = 'stock_playlist_export'
         # the Home guard's world (patch/home.c): flash/SD files, file descriptors, the window stack
@@ -797,6 +798,8 @@ class Machine:
         # ---- Settings: stock pages by name, the EQ preset name, the text measure (a base machine has no text: 0 wide)
         elif name == 'navigator_to':
             self.calls.append(('navigator_to', self.read_cstr(a0))); ret = 0
+        elif name == 'tf_update_click':   # the stock TF card update's click handler (its confirmation, the battery check, the flash): called with no event
+            self.calls.append(('tf_update_click', a0, a1)); ret = 0
         elif name == 'getDiskMemoryInfo':   # (path, &capacity, &free) in G as floats, the card's numbers a test sets in self.disk
             cap, rem = getattr(self, 'disk', (0.0, 0.0)); self.calls.append(('getDiskMemoryInfo', self.read_cstr(a0)))
             self.u.mem_write(a1, struct.pack('<f', cap)); self.u.mem_write(a2, struct.pack('<f', rem)); ret = 0
@@ -1075,13 +1078,13 @@ class Machine:
         elif name == 'curl_easy_init':
             ret = self.alloc(8); self.curl[ret] = {}; self.calls.append(('curl_easy_init',))
         elif name == 'curl_easy_setopt':
-            self.curl[a0][a1] = self.read_cstr(a2) if a1 in (10002, 10007, 10018, 10065, 10102) else a2   # URL, RANGE, USERAGENT, CAINFO, ACCEPT_ENCODING: strings
+            self.curl[a0][a1] = (self.read_cstr(a2) if a2 else None) if a1 in (10002, 10007, 10018, 10065, 10102) else a2   # URL, RANGE, USERAGENT, CAINFO, ACCEPT_ENCODING: strings (NULL: None)
         elif name == 'curl_easy_perform':
             ret = self.curl_perform(a0)
         elif name == 'curl_easy_getinfo':
             v = self.curl_last[a0].get(a1, 0)
-            if a1 in (0x100001, 0x100012, 0x100020): self.setword(a2, self.cstr(v) if v else 0)   # strings: the effective url, Content-Type, the primary IP
-            elif a1 >> 20 == 6: self.u.mem_write(a2, struct.pack('<Q', v))
+            if a1 in (0x100001, 0x100012, 0x100020, 0x10001f): self.setword(a2, self.cstr(v) if v else 0)   # strings: the effective url, Content-Type, the primary IP, the Location of a redirect not followed
+            elif a1 >> 20 == 6: self.u.mem_write(a2, struct.pack('<Q', v & 0xffffffffffffffff))
             else: self.setword(a2, v)
         elif name == 'curl_easy_cleanup':
             self.calls.append(('curl_easy_cleanup', a0)); self.curl.pop(a0, None)
@@ -1132,7 +1135,7 @@ class Machine:
             if r.get('xfer'): r['xfer'](o[10002], sent, total)
             if not o.get(20219): return 0
             return self.nested(o[20219], o.get(10057, 0), 0, total & 0xffffffff, total >> 32, sent & 0xffffffff, sent >> 32, 0, 0, 0, 0)
-        last = {0x200002: r['code'], 0x200014: r['redirects'], 0x20000d: r['verify'], 0x20000e: r.get('filetime', -1) & 0xffffffff, 0x100001: r['eff'], 0x100012: r.get('ctype'), 0x100020: r['ip'], 0x600008: 0,
+        last = {0x200002: r['code'], 0x200014: r['redirects'], 0x20000d: r['verify'], 0x20000e: r.get('filetime', -1) & 0xffffffff, 0x100001: r['eff'], 0x100012: r.get('ctype'), 0x100020: r['ip'], 0x600008: 0, 0x10001f: r.get('redirect_url'), 0x60000f: r.get('clen', r.get('length', len(body))),
                 0x600032: r['total'], 0x600033: r['dns'], 0x600034: r['conn'], 0x600038: r['tls'], 0x600036: r['first']}
         self.curl_last[h] = last   # (libcurl has the headers' facts ready before the first byte reaches the write callback: a download asks for the code and the Content-Type there)
         if r['rc'] == 0 and xfer(0): rc = 42   # CURLE_ABORTED_BY_CALLBACK

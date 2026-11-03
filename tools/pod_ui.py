@@ -510,16 +510,17 @@ PD_CANCEL_PX = 18
 PD_TRACK_RGB, PD_FILL_RGB, PD_NAME_RGB, PD_COUNT_RGB, PD_CANCEL_RGB = '#FFFFFF33', '#EBEBEB', '#EBEBEB', '#AAAAAA', '#FFFFFF'   # neutral: no accent colour
 
 
-def podcasts_dialog():
+def podcasts_dialog(prefix='pod_pd', title='Refreshing Podcasts', big=False):
     """(scrim, card) of the refresh dialog."""
+    ty, th, tpx, ny, nh, npx, by, bh, cy, ch, cpx, row = (14, 30, 20, 48, 26, 18, 92, 6, 104, 28, 20, 48) if big else (PD_TITLE_Y, PD_TITLE_H, PD_TITLE_PX, PD_NAME_Y, PD_NAME_H, PD_NAME_PX, PD_BAR_Y, PD_BAR_H, PD_COUNT_Y, PD_COUNT_H, PD_COUNT_PX, PL_ROW_H)   # big: the Software Update popup, larger type, a 6 px bar, the stock dialog's 48 px button row
     assert PD_CARD_H == OFFSETS['PL_MENU_ROWS'] * PL_ROW_H
-    scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', 'pod_pd_scrim'), ('enable', 'true')]))
+    scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', prefix + '_scrim'), ('enable', 'true')]))
     for st in STATES:
         styled(scrim, (st,), 'bg_color', PL_DIM)
         styled(scrim, (st,), 'text_color', '#FFFFFF')
         styled(scrim, (st,), 'border_width', '0')
         styled(scrim, (st,), 'border_color', '#00000000')
-    card = hidden(Widget('view', (SCREEN_W - PD_CARD_W) // 2, (CLIENT_H - PD_CARD_H) // 2, PD_CARD_W, PD_CARD_H, [('name', 'pod_pd_card')]))
+    card = hidden(Widget('view', (SCREEN_W - PD_CARD_W) // 2, (CLIENT_H - PD_CARD_H) // 2, PD_CARD_W, PD_CARD_H, [('name', prefix + '_card')]))
     for st in STATES:
         styled(card, (st,), 'bg_color', '#00000000')
         styled(card, (st,), 'bg_image', PL_GLASS)
@@ -533,21 +534,21 @@ def podcasts_dialog():
             styled(lab, (st,), 'text_align_h', 'center')
             styled(lab, (st,), 'text_align_v', 'middle')
         return lab
-    card.children.append(text('pod_pd_title', PD_TITLE_Y, PD_TITLE_H, PD_TITLE_PX, '#FFFFFF', pod_i18n.text_prop('Refreshing Podcasts')))
-    card.children.append(text('pod_pd_name', PD_NAME_Y, PD_NAME_H, PD_NAME_PX, PD_NAME_RGB, ('text', '')))
-    for name, w, rgb in (('pod_pd_track', PD_BAR_W, PD_TRACK_RGB), ('pod_pd_fill', 1, PD_FILL_RGB)):
-        bar = Widget('view', PD_MARGIN, PD_BAR_Y, w, PD_BAR_H, [('name', name), ('sensitive', 'false')])
+    card.children.append(text(prefix + '_title', ty, th, tpx, '#FFFFFF', pod_i18n.text_prop(title)))
+    card.children.append(text(prefix + '_name', ny, nh, npx, PD_NAME_RGB, ('text', '')))
+    for name, w, rgb in ((prefix + '_track', PD_BAR_W, PD_TRACK_RGB), (prefix + '_fill', 1, PD_FILL_RGB)):
+        bar = Widget('view', PD_MARGIN, by, w, bh, [('name', name), ('sensitive', 'false')])
         for st in STATES:
             styled(bar, (st,), 'bg_color', rgb)
             styled(bar, (st,), 'border_width', '0')
-            styled(bar, (st,), 'round_radius', str(PD_BAR_H // 2))
+            styled(bar, (st,), 'round_radius', str(bh // 2))
         card.children.append(bar)
-    card.children.append(text('pod_pd_count', PD_COUNT_Y, PD_COUNT_H, PD_COUNT_PX, PD_COUNT_RGB, ('text', '')))
-    cancel = Widget('button', 0, PD_CARD_H - PL_ROW_H, PD_CARD_W, PL_ROW_H, [('name', 'pod_pd_cancel'), ('enable', 'true'), pod_i18n.text_prop('Cancel')])
+    card.children.append(text(prefix + '_count', cy, ch, cpx, PD_COUNT_RGB, ('text', '')))
+    cancel = Widget('button', 0, PD_CARD_H - row, PD_CARD_W, row, [('name', prefix + '_cancel'), ('enable', 'true'), pod_i18n.text_prop('Cancel')])
     for st in STATES:
         styled(cancel, (st,), 'bg_color', PL_PRESSED if st == 'pressed' else '#00000000')
         styled(cancel, (st,), 'text_color', PD_CANCEL_RGB)
-        styled(cancel, (st,), 'font_size', str(PD_CANCEL_PX))
+        styled(cancel, (st,), 'font_size', str(cpx if big else PD_CANCEL_PX))
         styled(cancel, (st,), 'border', 'top')
         styled(cancel, (st,), 'border_width', '1')
         styled(cancel, (st,), 'border_color', PL_HAIR)
@@ -1262,15 +1263,15 @@ def _oa_label(name, x, y, w, h, px, colour, align='center', text=None, valign='m
     return lab
 
 
-def _oa_pill(name, x, y, w, h):
+def _oa_pill(name, x, y, w, h, px=18):
     pill = hidden(Widget('button', x, y, w, h, [('name', name), ('enable', 'true'), ('text', '')]))
     for st in STATES:
         styled(pill, (st,), 'bg_color', SG_PILL_DOWN_RGB if st == 'pressed' else SG_PILL_OFF_RGB if st == 'disable' else SG_PILL_RGB)
         styled(pill, (st,), 'text_color', '#FFFFFF')
-        styled(pill, (st,), 'font_size', '18')
+        styled(pill, (st,), 'font_size', str(px))
         styled(pill, (st,), 'border_width', '0')
         styled(pill, (st,), 'border_color', '#00000000')
-        styled(pill, (st,), 'round_radius', str(OFFSETS['SG_PILL_R']))
+        styled(pill, (st,), 'round_radius', str(max(OFFSETS['SG_PILL_R'], h // 2)))
     return pill
 
 
@@ -1328,6 +1329,31 @@ def build_onlineart_page(page):
     return root
 
 
+
+
+# Software Update (patch/update.c, docs/modules/update.md): the stock navbar over one block with FIXED places (the same in every state, so nothing jumps between states), centred in the 400 px under the navbar: a 48 px glyph, 16 px, the title
+# (22 px white, UP_TITLE_W wide), 8 px, the detail (18 px grey #AAAAAA, centred, wrapped to at most two lines, UP_TEXT_W), 24 px, a pill (UP_PILL_W x UP_PILL_H, 20 px text), 12 px, a second pill. The payload shows the parts a state has. A download runs in
+# a modal popup over the page: the Podcasts refresh dialog's scrim and card (podcasts_dialog(big=True), names up_pd_*: the title "Downloading 1.0.1", a grey line, a 6 px bar, the percentage and Cancel). Neutral white and grey, no accent colour.
+UP_ICON, UP_ICON_GAP, UP_TITLE_H, UP_TITLE_GAP, UP_TITLE_W = 48, 16, 30, 8, 288
+UP_TEXT_H, UP_TEXT_W, UP_TEXT_PX, UP_TITLE_PX, UP_PILL_PX = 48, 280, 18, 22, 20
+UP_PILL_GAP, UP_PILL_W, UP_PILL_H, UP_PILL2_GAP = 24, 260, 48, 12
+UP_BLOCK_H = UP_ICON + UP_ICON_GAP + UP_TITLE_H + UP_TITLE_GAP + UP_TEXT_H + UP_PILL_GAP + UP_PILL_H + UP_PILL2_GAP + UP_PILL_H
+UP_TOP = NAVBAR_H + (CLIENT_H - NAVBAR_H - UP_BLOCK_H) // 2
+UP_YS = (UP_TOP, UP_TOP + UP_ICON + UP_ICON_GAP, UP_TOP + UP_ICON + UP_ICON_GAP + UP_TITLE_H + UP_TITLE_GAP)   # icon, title, detail
+UP_YS += (UP_YS[2] + UP_TEXT_H + UP_PILL_GAP, UP_YS[2] + UP_TEXT_H + UP_PILL_GAP + UP_PILL_H + UP_PILL2_GAP)   # pill, second pill
+
+
+def build_update_page(page):
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    root.children.append(navbar(page.title))
+    root.children.append(hidden(Widget('image', (SCREEN_W - UP_ICON) // 2, UP_YS[0], UP_ICON, UP_ICON, [('name', 'up_icon'), ('image', 'pod_es_download'), ('draw_type', 'center'), ('sensitive', 'false')])))
+    root.children.append(_oa_label('up_title', (SCREEN_W - UP_TITLE_W) // 2, UP_YS[1], UP_TITLE_W, UP_TITLE_H, UP_TITLE_PX, '#FFFFFF'))
+    root.children.append(hidden(_oa_label('up_text', (SCREEN_W - UP_TEXT_W) // 2, UP_YS[2], UP_TEXT_W, UP_TEXT_H, UP_TEXT_PX, '#AAAAAA', valign='top')))
+    root.children.append(_oa_pill('up_pill', (SCREEN_W - UP_PILL_W) // 2, UP_YS[3], UP_PILL_W, UP_PILL_H, UP_PILL_PX))
+    root.children.append(_oa_pill('up_pill2', (SCREEN_W - UP_PILL_W) // 2, UP_YS[4], UP_PILL_W, UP_PILL_H, UP_PILL_PX))
+    root.children.extend(podcasts_dialog('up_pd', 'Downloading %s', big=True))   # last: above everything
+    return root
 
 
 def build_menucfg_page(page):
@@ -1408,7 +1434,7 @@ def cards_row(i, row, piece, last):
     import pod_settings as ST
     from mod_icons import CARD_GLYPHS, card_name, CARD_CHEVRON, CARD_CHECK
     kind = pod_pages.row_kind(row)
-    has_icon = kind not in ('check', 'info') and row.action != pod_pages.ACT_CCLIST   # (the Cover Cache counts have no glyph)
+    has_icon = kind not in ('check', 'info') and row.action not in (pod_pages.ACT_CCLIST, pod_pages.ACT_UPDATE)   # (the Cover Cache counts and About's Software Update link have no glyph, like the rows around them)
     item = Widget('list_item', 0, 0, ST.LIST_W, ST.ROW_H, [('name', f'pod_row{i}'), ('style', 'list_item_style')] + ([('sensitive', 'false')] if kind == 'info' else []))
     normal, down = ST.piece_images(piece)
     for st in ('normal', 'over', 'pressed', 'focused', 'disable'):
@@ -1811,6 +1837,8 @@ def build_page(page):
         return build_vinyl_page(page)
     if page.kind == 'onlineart':
         return build_onlineart_page(page)
+    if page.kind == 'update':
+        return build_update_page(page)
     if page.kind == 'cover':
         return build_cover_page(page)
     if page.kind == 'artists':

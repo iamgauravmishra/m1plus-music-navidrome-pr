@@ -73,6 +73,8 @@ def edit_confirm(root):
     """The dialog's two buttons (confirm: Cancel left, Enter right; ripper completed: one Enter button): no black fill over the card, the pressed corner
     follows the card's radius, and the Cancel button's right edge is the vertical divider."""
     two = root.find('btn_cancel') is not None
+    assert root.get('highlight') == 'default(alpha=100)', f'{root.name}: not the stock highlighter'
+    root.set('highlight', CONFIRM_DIM)   # the dialog highlighter dims the window below as our popups' scrim does (the stock alpha 100 left the page's buttons at nearly full brightness)
     for n in ('btn_cancel', 'btn_enter'):
         b = root.find(n)
         if b is None: continue
@@ -85,6 +87,29 @@ def edit_confirm(root):
         else:   # the ripper dialog's one button spans the card
             _states(b, 'round_radius_bottom_left', str(BTN_RADIUS)); _states(b, 'round_radius_bottom_right', str(BTN_RADIUS))
 
+
+# The confirm dialog's message (kind 5: a word-wrapped label created by the dialog's init, 260 x 80 at y 25, @0x472e1c) takes its look from the style label_centerwhite20_style, which no other widget uses:
+# a 12 px margin each side there is the text's padding (AWTK's label paints and wraps inside its margins), for every page that asks in kind 5 (Screenshot, Rebuild Covers, Clear Cover Cache, the Podcasts questions,
+# Software Update, stock's Bluetooth / Wi-Fi switch-on questions). Widget geometry and names are untouched.
+CONFIRM_DIM = 'default(alpha=130)'   # = tools/pod_ui.py PL_DIM (0x82) and the More sheet's highlighter
+CONFIRM_LABEL_STYLE, CONFIRM_PAD = 'label_centerwhite20_style', 12
+STYLES = 'rootfs/release/assets/{theme}/raw/styles/default.bin'
+
+def edit_confirm_label(out):
+    import awtk_style, stat
+    done = 0
+    for theme in THEMES:
+        path = os.path.join(out, STYLES.format(theme=theme))
+        old = open(path, 'rb').read(); th = awtk_style.parse(old)
+        assert awtk_style.serialize(th) == old, f'{path}: style round trip is not byte-exact'
+        items = th.find('label', CONFIRM_LABEL_STYLE)
+        if not items: continue
+        assert len(items) == 3 and all(not it.has('margin_left') and not it.has('margin_right') for it in items), f'{path}: not the stock style'
+        for it in items: it.set('margin_left', CONFIRM_PAD, awtk_style.T_INT32); it.set('margin_right', CONFIRM_PAD, awtk_style.T_INT32)
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+        os.chmod(path, mode | 0o200); open(path, 'wb').write(awtk_style.serialize(th)); os.chmod(path, mode)
+        done += 1
+    assert done, 'no theme has the confirm label style'
 
 # The other stock 260 x 180 message-like dialogs (cardupdate: card update, formatcard: formatting, dialog_autoshutdown: the sleep countdown) were black with a grey
 # border, unlike the message box: the same card as msginfo / confirminfo (autoshutdown has the one full-width button under the confirm card's divider).
@@ -143,6 +168,7 @@ def apply(src, out):
         edit_ui(os.path.join(out, UI, rel), edit_confirm)
     for rel, image in CARD_DIALOGS.items():
         edit_ui(os.path.join(out, UI, rel), edit_card(image))
+    edit_confirm_label(out)
     print(f'overlays: {len(NAMES)} images (+{len(BOTH_THEMES)} for theme1), {old} -> {new} bytes ({new - old:+d}); dialog buttons restyled')
 
 def main():

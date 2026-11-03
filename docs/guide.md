@@ -50,7 +50,7 @@ Use **Home Screen → Extras** to hide items from Extras. Settings stays accessi
 | Library | Update Library, Album Order (Artist/Album, for Albums and Cover Flow), Rebuild Covers and landscape Cover Flow |
 | Now Playing | Cassette Theme: Normal, Chrome or Metal; applies next time Cassette Mode opens |
 | Playback | Stock Play Mode and EQ pages; All Playback Settings includes Gapless |
-| System | Display, Language (under All System Settings), Keyboards and About; About shows firmware, device, network and storage details |
+| System | Display, Language (under All System Settings), Keyboards and About (firmware, device, network and storage details; **Software Update** is the row under the version) |
 | Keyboards | English always enabled; Chinese (Pinyin) adds a language key and candidates above the keys. Swipe candidates sideways; space selects the first |
 | Developer → Startup | Boot to M1+ Music; Open Shanling Home |
 | Developer → Tools | Screenshot, Cover Cache and stock System Update |
@@ -59,6 +59,11 @@ Use **Home Screen → Extras** to hide items from Extras. Settings stays accessi
 "Rebuilding covers n/m" progress. Leaving Home restarts it on the next visit. **Cover Cache**
 shows cached/missing/stale counts and current work; **Clear Cover Cache** asks before deleting,
 then Home regenerates covers.
+
+**Software Update** (Settings → System → About, the row under the version; needs Wi-Fi) checks GitHub for a newer release: **Check for Update**, then **Download and Install**.
+A dialog asks first (about 55 MB, replaces the card's `update.bin`; 110 MB of free card space needed); a popup shows the progress and **Cancel** (Back is Cancel too; the card's old `update.bin` stays). When the download
+is complete the firmware's own TF card update takes over with its confirmation, battery check and checksums; the flashing is unchanged. If you say No there, the page offers **Install** again and **Check Again**.
+A development build is always offered the latest release.
 
 **Screenshot** asks first: leave the page within five seconds to capture another screen.
 Cancel during the countdown if needed. Pictures are saved in the card's `screenshots` folder.
