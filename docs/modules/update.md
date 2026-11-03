@@ -1,4 +1,4 @@
-# Software Update (`patch/update.c`, `patch/upver.c`, `patch/pcnet.c` "Software Update", `test/pod/update.py`, `test/pod/updatepage.py`)
+# Software Update (`patch/update.c`, `patch/relnotes.c`, `patch/upver.c`, `patch/pcnet.c` "Software Update", `test/pod/update.py`, `test/pod/updatepage.py`)
 
 An over-the-air update for this project: over Wi-Fi the page finds the newest GitHub release, downloads its `update.bin` to the TF card's `/mnt/mmc/update.bin`, then calls the firmware's own TF card update, so the user
 lands on stock's confirmation. **Stock still does the battery check, the confirmation, the MD5 checks and the flash**; nothing here touches flashing, the bootloader or the recovery kernel.
@@ -9,7 +9,7 @@ The design follows q2-pod's Network Update (github.com/DiamondBond/q2-pod, `patc
 into `<asset>.part` that is renamed into place only when complete (a failure deletes the `.part` and keeps the old file), a page that shows the progress, keeps the device awake and cancels on a second press, and the
 firmware's TF card update at the end. The code is our own. Differences: the asset is fetched by its tag (not `latest`), the version is compared as numbers, and the downloaded package's own version lines are checked.
 
-Preview: `uv run python -I tools/preview_update.py work/mod-release out/preview/update.png [--lang CODE]` (fourteen states; the asset walked by the shared painter, not pixel-exact; not tracked).
+Preview: `uv run python -I tools/preview_update.py work/mod-release out/preview/update.png [--lang CODE]` (sixteen states, the notes page not drawn; the asset walked by the shared painter, not pixel-exact; not tracked).
 
 ## What the user sees
 
@@ -22,7 +22,7 @@ Preview: `uv run python -I tools/preview_update.py work/mod-release out/preview/
   | idle | download | M1+ Music | Version 1.0.0 (the installed version; a development build shows its `V2.1z...` tag) | Check for Update |
   | checking | | Checking… | | |
   | up to date | check | Up to Date | You have the latest version. | Check for Update |
-  | offered | download | Version 1.0.1 available | Current version: 1.0.0 | Download and Install |
+  | offered | download | Version 1.0.1 available | Current version: 1.0.0 | Download and Install, Release Notes (only when the check kept the release's notes) |
   | downloading | | the popup (below) over the offer | | |
   | downloaded | check | Update Downloaded | Version 1.0.1 is ready to install. | Install, Check Again |
   | no Wi-Fi | wifi | Connect to Wi-Fi first | Turn on Wi-Fi and try again. | Try Again |
@@ -38,6 +38,7 @@ Preview: `uv run python -I tools/preview_update.py work/mod-release out/preview/
   | cancelled | download | Download cancelled | | Download and Install |
 
   **Try Again** repeats the job that failed: the check, or the download of the release already offered (without asking again). The title of "Version 1.x.y available" is sized for two digits a part; a longer number is clipped by its label.
+- **Release Notes** (offered state only, the second pill) opens a page of its own (below) with the release's notes. Back returns to the update page, still offering the release; Now Playing is the update page's own handler (`pod_on_player`: it leaves and cancels what runs).
 - **Download and Install** asks first in the **stock confirm dialog** (`pod_confirm_code`, `dialog/confirminfo_dialog`, kind 5, modal): "Download 1.0.1 (55 MB)? It replaces update.bin on the card." in the dialog's own 20 px type (the same as Screenshot, Rebuild Covers and the others). The label is 260 px less the style's 12 px margins (236 px) and breaks at spaces only; `test/pod/updatepage.py` wraps every translation at that width (three lines at most, "55 MB" never split); the page behind the translucent dialog is cleared while it is up. Its two buttons are relabelled **Cancel** (left, `btn_cancel`)
   and **Download** (right, `btn_enter`) by a timer that finds the dialog by name, the way the Screenshot dialog's buttons become 5 s / 10 s (`patch/shot.c`; stock reads the results 4 and 0xa). **Cancel (or the back key) starts nothing and makes no request.**
 - **The download popup**: Yes opens a modal popup over the page, the Podcasts refresh dialog's own pieces (a full-client scrim that takes every touch, the glass card with a Cancel row; `tools/pod_ui.py podcasts_dialog('up_pd', ...)`): the title
@@ -55,6 +56,21 @@ Preview: `uv run python -I tools/preview_update.py work/mod-release out/preview/
   Podcasts downloads do (`docs/modules/payload.md`). It is the page's own timer (removed with the window), not a global one. Under a stock dialog (a modal call) the timer and the pills leave everything alone (`up.modal`).
 - **One job at a time.** The check and the download are jobs of the one worker slot of `patch/pcnet.c` (`PN_KIND_UPDATE`, counted by `pn_job_busy`). A running Podcasts download is paused first (`pn_dl_pause`; its queue stays), the job starts from the tick
   once the slot is free (the title already says Checking… / Downloading 0%), and the queued downloads start again when the slot is free and the page has nothing waiting (and on destroy).
+
+## Release notes (`patch/relnotes.c`, `patch/upver.c up_notes`, `pcnet.c pn_up_notes_fetch`)
+
+Right after a check that results in an offer, the same worker job asks `https://api.github.com/repos/<repo>/releases/tags/<tag>` (the tag the check found, never `latest`; same options as every request: https only, verification on, the firmware CA bundle,
+the worker's `User-Agent`, no `SSL_VERIFY*`) and keeps the release's `body` in memory (`pn_up_notes`, heap, freed by the next check or `pn_up_reset`; nothing on the card). **Only HTTP 200 counts and every failure is non-fatal**: a 404, a 403 rate limit,
+a network or certificate error, an answer over `PN_UP_API_CAP` (64 KB; a larger one fails the transfer), JSON without a top-level body, `null`, empty or malformed leave the offer standing without notes (no pill). Up to Date and the error states fetch nothing; a new check clears the old notes;
+Cancel during the notes request cancels the check.
+
+`up_notes` finds the top-level `"body"` string with a depth-tracking scan (a `body` key of the `author` or `assets` objects is never taken; only the exact raw key `body` matches), decodes it in place (`\n \r \t \" \\ \/ \b \f`, `\uXXXX` to UTF-8 with surrogate pairs; a lone surrogate becomes U+FFFD, `\u0000` is dropped; a bad escape, a raw control character or an unterminated string is no notes) and cleans it for the screen:
+`\r` dropped, `#`..`######` heading markers and `**` dropped, `- ` and `* ` items shown as `• `, three line feeds made two, blank edges trimmed, everything else plain text. The result is cut at `UP_NOTES_MAX` (8192 bytes) between two UTF-8 characters.
+The `Accept: application/vnd.github+json` header is **not sent**: it needs `curl_slist_append`, which the payload does not import, and GitHub's API answers JSON without it.
+
+**The page** (`m1plus_relnotes`, `tools/pod_ui.py build_relnotes_page`, `Release Notes` is its navbar title and the pill's text): black, the stock navbar with Back and Now Playing, and the Find Cover & Lyrics lyrics detail's scroll mechanism: a stock list (`list_view > scroll_view` + scroll bar) holding ONE content view that
+the payload paints in its `EVT_AFTER_PAINT` with the scroll offset taken off the canvas (`SC_YOFF`), and sizes with `widget_resize` and `virtual_h`, so the stock scroll view does the dragging and the fling. The text is wrapped once by the Podcasts episode page's wrapper (`pd_lines`, `patch/pcwrap.c`: from the font's own advances, kinsoku, CJK anywhere) to 288 px at x 16:
+the heading "Version 1.0.1" (22 px white) at y 12, then the notes (18 px, #E6E6E6) 24 px apart, 12 px for an empty line. A line shows only when wholly inside the 400 px view. Limits: 600 characters a source line, 40 wrapped lines a source line, 700 lines in all (8 KB of notes need about 270). Neutral white and grey, no accent colour.
 
 ## The version rules (`patch/upver.c`, tested as tables)
 
@@ -104,23 +120,23 @@ Not run on a device: the flash itself is stock's, untouched.
 
 `reset_poweroptions_timer` (`0x4d7874`, `PODCAST_PINS`) and `navigator_back` were pinned already; this page's timer is a second caller of the first. `tools/pod.py` `SOURCES` gains `upver.c` (before `pcnet.c`) and `update.c`, and compiles with
 `-DM1PLUS_VERSION`, `-DM1PLUS_DEV`, `-DM1PLUS_REPO`; `patch/curlopts.h` gains `CURLOPT_NOBODY`, `CURLPROTO_HTTPS`, `CURLINFO_REDIRECT_URL` and `CURLINFO_CONTENT_LENGTH_DOWNLOAD_T`; `up_dev` is placed in a `.data.up_dev` section (a zero would be `.bss`,
-which the payload has none of). Assets: `ui/m1plus_update.bin` (`tools/pod_ui.py build_update_page`, `pod_pages.UPDATE`; `podcasts_dialog` takes the widget prefix and the title key), the About page's row `ACT_UPDATE` (44), the glyphs `pod_es_download` and
-`pod_es_check` (`tools/mod_icons.py ES_ICONS`, `assets/icons/png`), 28 translation keys (`tools/pod_i18n.py`). No import is added (open, read, write, fsync, rename, unlink, statfs, access, snprintf and libcurl's easy interface were there).
+which the payload has none of). Assets: `ui/m1plus_update.bin` (`tools/pod_ui.py build_update_page`, `pod_pages.UPDATE`; `podcasts_dialog` takes the widget prefix and the title key), the About page's row `ACT_UPDATE` (44), `ui/m1plus_relnotes.bin` (`build_relnotes_page`, `pod_pages.RELNOTES`), the glyphs `pod_es_download` and
+`pod_es_check` (`tools/mod_icons.py ES_ICONS`, `assets/icons/png`), 29 translation keys (`tools/pod_i18n.py`; "Release Notes" is the new one). `pcnet.c` gains no import (`calloc` and `free` were there); `tools/pod.py` `SOURCES` gains `relnotes.c`. No import is added (open, read, write, fsync, rename, unlink, statfs, access, snprintf and libcurl's easy interface were there).
 
 ## Tests
 
 - `test/pod/update.py` (worker, scripted libcurl): the parser and comparison tables (valid, leading zeros, six digits, `v1.0.0`, `1.0`, `1.0.0.0`, `1.0.0-rc1`, empty, trailing CR/LF/space, a query, a fragment, non-ASCII digits), what a tag means for a release and a development build, the redirect
   table (exact prefix, other host / repo / scheme / case / path, bad tags), the build's version, flag and repository against `tools/build.py`, `up_info_ok` on real tars (valid, an older or other version, the stock version, a dev tag, another model, one line, no line feed, CRLF, cut at every
-  header boundary, a bad checksum, another member name, not first, a link, zeros), the check (options, every verdict, 200 / 404 / 500 / 503 / 304, no Location, the five redirect codes, network failures, the guards, no thread, Cancel, a failed second check forgetting the first offer), a development
+  header boundary, a bad checksum, another member name, not first, a link, zeros), the release notes (`up_notes` on the real GitHub answer for 1.0.0 saved in `test/data/release/`: assets, uploader and author objects before the body; escapes, surrogate pairs, a nested `body` key before the real one, null, empty and truncated bodies, bad strings, markdown, the byte cap at every character size; the notes request's address by tag, its options, every failure (403 / 404 / 500, network and certificate, 64 KB limit, bad JSON) leaving the offer without notes, old notes cleared by a new check, nothing fetched for Up to Date or an error, Cancel during the request), the check (options, every verdict, 200 / 404 / 500 / 503 / 304, no Location, the five redirect codes, network failures, the guards, no thread, Cancel, a failed second check forgetting the first offer), a development
   build (offered 1.0.0, 0.0.1, 1.0.1, 9.9.9 and downloads each, with every reliability check still applied), the download (the tag's address, the options, the `.part` and the rename order with the directory `fsync`, the old `update.bin` intact during the transfer, the progress, wrong packages,
   announced lengths, network and HTTP failures and a second try, write / open / fsync / rename / directory-fsync failures, card full, 109 / 110 MB, no Wi-Fi, Cancel and starting again, `pn_up_reset`).
 - `test/pod/updatepage.py` (the page under Unicorn): the asset (boxes, hidden and insensitive widgets, the popup's scrim and card, contrast, neutral colours, every text in 13 languages, the confirm text in three lines, the About row), the flow (idle, check, offer, the confirm dialog,
   the popup watched by the page's timer, the direct call of stock's TF card update and no page), the confirm dialog (Cancel / back / 0 start nothing and make no request; its buttons relabelled; the text in 13 languages), the popup (Cancel, Cancelling… until the worker stopped, Back is Cancel,
   errors close it, a waiting download), Check Again and a second download over an existing `update.bin` (a failure, a cancel and a wrong package keep the first file; success replaces it through the `.part`; up to date; a failed check; a development build), reopening, a page in the background,
-  every failure in 13 languages and Try Again, every state in 13 languages, waiting for a busy slot, the power timers, destroy, the kill switch, a wrong asset, the About row. The call of `tf_update_click` is mocked (it is stock's flash path).
+  every failure in 13 languages and Try Again, every state in 13 languages, waiting for a busy slot, the power timers, destroy, the kill switch, a wrong asset, the About row. The call of `tf_update_click` is mocked (it is stock's flash path). The Release Notes pill only when the check kept notes (and not under the popup, in Up to Date or Update Downloaded), the notes page (asset, neutral colours, heading and wrapped lines at their places, a long text scrolling to its last line, CJK and unbroken words wrapped, Back returning to the same offer, destroy and reopening, a window or asset that fails, the pill and heading in 13 languages).
 
 ## Device checks (not run)
 
 TLS to `github.com` and the asset host with the firmware CA bundle (a `Certificate problem` says a root is missing); the 302 of `releases/latest` as the device's libcurl sees it (`CURLINFO_REDIRECT_URL`); a 55 MB download on the card (speed, the 120 s limit gone, the stall limit); the power timers
 (no standby or auto power-off during a long download with the screen off); the confirm dialog's relabelled buttons (the dialog's name and button names as stock has them); the popup over the page; **the direct call of stock's TF card update handler** from our page and our timer (its
-confirmation, the battery check, the flash dialog; what Back does afterwards); Check Again and a second download over an existing file; a card under 110 MB free; Wi-Fi lost mid-download (`Can't reach GitHub`, the `.part` gone); Cancel and Back during a download.
+confirmation, the battery check, the flash dialog; what Back does afterwards); the notes: `api.github.com` with the firmware CA bundle (a `Certificate problem` on the notes only leaves no pill, so look for the pill on a release that has a body), the unauthenticated rate limit (60 requests an hour per address: a 403 just hides the pill), the pill and the page on the device (scrolling by finger, the scroll bar, Back to the same offer, Now Playing); Check Again and a second download over an existing file; a card under 110 MB free; Wi-Fi lost mid-download (`Can't reach GitHub`, the `.part` gone); Cancel and Back during a download.

@@ -19,6 +19,8 @@ REPO = build.REPO
 LATEST = f'https://github.com/{REPO}/releases/latest'
 TAGURL = f'https://github.com/{REPO}/releases/tag/'
 DOWNLOAD = f'https://github.com/{REPO}/releases/download/'
+NOTES = f'https://api.github.com/repos/{REPO}/releases/tags/'
+RELEASE_JSON = os.path.join(ROOT, 'test', 'data', 'release', 'github-release-1.0.0.json')   # the real answer of GitHub for imfing/m1plus-music 1.0.0 (assets, uploader, author objects included)
 FILE, PART, CARD = '/mnt/mmc/update.bin', '/mnt/mmc/update.bin.part', '/mnt/mmc'
 OLD = b'the update.bin of an earlier download'
 
@@ -152,12 +154,18 @@ def info_tests(ctx):
 # ---- the jobs against a scripted libcurl
 class Site:
     """The scripted GitHub: /releases/latest answers with `latest` (a dict for the harness), the tag's asset with `asset`; every request is written down."""
-    def __init__(self, tag='1.0.1', pkg=None, latest=None, asset=None):
-        self.reqs, self.pkg = [], pkg if pkg is not None else package(tag)
+    def __init__(self, tag='1.0.1', pkg=None, latest=None, asset=None, notes=None):
+        self.reqs, self.nreqs, self.pkg = [], [], pkg if pkg is not None else package(tag)
+        self.order = []   # every URL asked, in order
+        self.notes = notes   # the release JSON's answer: None a 404, bytes a 200 body, a dict the harness answer (code, rc, body, xfer ...)
         self.latest = latest if latest is not None else {'code': 302, 'redirect_url': TAGURL + tag, 'body': b''}
         self.asset = asset or {}
 
     def __call__(self, url, o):
+        self.order.append(url)
+        if url.startswith(NOTES):   # the notes request is written down apart from the others
+            self.nreqs.append((url, dict(o)))
+            return {'code': 404, 'rc': 22} if self.notes is None else dict(self.notes) if isinstance(self.notes, dict) else {'body': self.notes}
         self.reqs.append((url, dict(o)))
         if url == LATEST: return dict(self.latest)
         return {'body': self.pkg, 'chunk': 1000, 'length': len(self.pkg), **self.asset}
@@ -412,7 +420,170 @@ def download_tests(ctx):
     expect(st(m)[0] == U['IDLE'] and st(m)[4] == '', 'and forgets it once update.bin is gone')
 
 
-SECTIONS = [parse_tests, redirect_tests, build_tests, info_tests, check_tests, dev_tests, download_tests]   # tools/check.py runs each as its own task
+def up_notes(m, js, cap=8193):
+    """up_notes on a JSON text (bytes or str): (length, the notes as text). The notes must be valid UTF-8 and as long as they say."""
+    js = js.encode() if isinstance(js, str) else js
+    if not hasattr(m, 'nbuf'): m.nbuf = (m.alloc(100000), m.alloc(9000))   # (the heap is small: the buffers are made once)
+    p, out = m.nbuf
+    assert len(js) < 100000 and cap + 8 < 9000
+    m.u.mem_write(p, js)
+    n = fn(m, 'up_notes', p, len(js), out, cap)
+    raw = bytes(m.u.mem_read(out, n + 1))
+    assert raw[-1] == 0 and 0 not in raw[:-1], 'a NUL-ended text of the length it says'
+    return n, raw[:-1].decode('utf-8')
+
+
+def js(**kw): return json.dumps(kw, ensure_ascii=False)
+
+
+def clean_py(body):
+    """The same cleanup written the other way round (for the real release text)."""
+    import re
+    out = []
+    for ln in body.replace('\r', '').split('\n'):
+        h = re.match(r'^ *#{1,6} +(.*)$', ln)
+        b = re.match(r'^( *)[-*] (.*)$', ln)
+        out.append(h.group(1) if h else b.group(1) + '• ' + b.group(2) if b else ln)
+    return re.sub(r'\n{3,}', '\n\n', '\n'.join(out).replace('**', '')).strip(' \n\t')
+
+
+def notes_parse_tests(ctx):
+    expect, m = ctx.expect, Machine()
+    raw = open(RELEASE_JSON, 'rb').read()
+    real = json.loads(raw)
+    n, t = up_notes(m, raw)
+    expect(n > 500 and t == clean_py(real['body']) and '**' not in t and '\r' not in t and not t.startswith('#') and '• Browse:' in t and t.startswith('The first release of M1+ Music'),
+           f'the real release JSON of {REPO} 1.0.0 (author, assets and uploader objects before the body): its body, bold and list markers cleaned ({n} bytes)')
+    expect('"body"' in raw.decode() and raw.count(b'"body"') == 1, 'the fixture is the real shape: one body key')
+    cases = [
+        ('escapes', js(body='a\nb\r\nc\t"q" \\ / x'), 'a\nb\nc\t"q" \\ / x'),
+        ('every escape', '{"body":"\\n\\r\\t\\"\\\\\\/\\b\\f|"}', '\t"\\/\b\f|'.rjust(0)),
+        ('unicode', '{"body":"\\u00e9\\u4e2d\\u0041 \\u20ac"}', 'é中A €'),
+        ('surrogate pair', '{"body":"x\\ud83d\\ude00y\\uD83C\\uDDEF"}', 'x\U0001f600y\U0001f1ef'),
+        ('lone surrogates', '{"body":"a\\ud83dz \\ude00 \\ud83d\\u0041"}', 'a�z � �A'),
+        ('NUL escape dropped', '{"body":"a\\u0000b"}', 'ab'),
+        ('raw UTF-8', js(body='café 中文 \U0001f600'), 'café 中文 \U0001f600'),
+        ('body first, spaces around the colon', '{ "body" :  "hi" , "tag_name":"1.0.1"}', 'hi'),
+        ('a nested body before the real one', '{"author":{"body":"NO","x":[{"body":"NO"}]},"assets":[{"body":"NO2","uploader":{"body":"NO3"}}],"body":"real"}', 'real'),
+        ('an array of bodies is not a body', '{"list":[{"body":"NO"},"body"],"x":{"y":{"body":"NO"}},"body":"real"}', 'real'),
+        ('a string that looks like the key', '{"name":"body","t":"\\"body\\":\\"NO\\"","body":"yes"}', 'yes'),
+        ('a body value that holds braces and quotes', '{"body":"{\\"body\\": [1,2}]}","x":1}', '{"body": [1,2}]}'),
+        ('markdown', js(body='# Title\n## Sub heading\n### Three\n- a\n* b\n  - c\n**bold** and **more**\n#tag\n####### seven\n\n\n\n\npara\n-x\n---'), 'Title\nSub heading\nThree\n• a\n• b\n  • c\nbold and more\n#tag\n####### seven\n\npara\n-x\n---'),
+        ('edges trimmed', js(body='\n\n  \n lead\n\n\n'), 'lead'),
+        ('an empty heading or item', js(body='#\n# \n- \nx'), '#\n\n• \nx'),
+    ]
+    for what, doc, want in cases:
+        if what == 'every escape': want = '\t"\\/\b\f|'   # (the leading line feed and carriage return are trimmed / dropped)
+        n, t = up_notes(m, doc)
+        expect(t == want and n == len(want.encode()), f'{what}: {want!r} (got {t!r})')
+    none = [
+        ('null', '{"body":null}'), ('empty', '{"body":""}'), ('blank', '{"body":" \\n \\r\\n"}'), ('only markers', '{"body":"**\\r\\n"}'), ('no body', '{"tag_name":"1.0.1"}'), ('a number', '{"body":5}'), ('an object', '{"body":{"a":"b"}}'),
+        ('an array', '{"body":["x"]}'), ('true', '{"body":true}'), ('only nested bodies', '{"a":{"body":"NO"},"b":[{"body":"NO"}]}'), ('not an object', '["body","x"]'), ('a string', '"body"'), ('empty', ''), ('spaces', '   '),
+        ('truncated in the string', '{"body":"abc'), ('truncated at the colon', '{"body":'), ('truncated key', '{"bo'), ('truncated in an escape', '{"body":"ab\\'), ('truncated in a \\u escape', '{"body":"ab\\u12'),
+        ('bad escape', '{"body":"a\\xb"}'), ('bad hex', '{"body":"a\\u12G4"}'), ('raw line feed in the string', '{"body":"a\nb"}'), ('raw tab', '{"body":"a\tb"}'), ('the string never ends', '{"body":"abc}'),
+        ('an unterminated string before the body', '{"x":"abc,"body":"real"}'), ('the object closes first', '{"a":1}{"body":"NO"}'), ('a key that is not body', '{"bodyx":"NO","xbody":"NO","Body":"NO","bod\\u0079":"NO"}'),
+    ]
+    for what, doc in none:
+        n, t = up_notes(m, doc)
+        expect(n == 0 and t == '', f'{what}: no notes')
+    expect(fn(m, 'up_notes', m.cstr('{"body":"x"}'), 12, m.alloc(8), 0) == 0, 'a buffer of no bytes: no notes')
+    # the cap: cut between two characters, whatever the character's size
+    for ch, size in (('a', 1), ('é', 2), ('中', 3), ('\U0001f600', 4)):
+        for cap in (8193, 8192, 8191, 8190, 8189, 100, 5, 2):
+            n, t = up_notes(m, js(body=ch * 9000), cap=cap)
+            expect(n <= cap - 1 and t == ch * (n // size) and n // size == (cap - 1) // size, f'{size}-byte characters, a buffer of {cap}: {n} bytes, whole characters only')
+    n, t = up_notes(m, js(body='- ' + 'x' * 9000), cap=11)
+    expect(t == '• xxxxxx' and n == 10, f'a bullet counts its bytes ({t!r})')
+    n, t = up_notes(m, js(body=' ' * 7 + '- ' + 'x'), cap=8)
+    expect(n == 0 or n < 8, 'a bullet that does not fit is not cut in the middle')
+    n, t = up_notes(m, js(body='ab\n' + 'x' * 9000), cap=6)
+    expect(t == 'ab\nxx', f'cut after the first line ({t!r})')
+    big = '{"pad":"' + 'p' * 60000 + '","body":"' + 'line\\n' * 3000 + '"}'
+    n, t = up_notes(m, big)
+    expect(n == 8192 or n == 8191 or n == 8190, f'a 60 KB document with a long body is cut at 8 KB ({n})')
+
+
+def notes_check_tests(ctx):
+    expect = ctx.expect
+    raw = open(RELEASE_JSON, 'rb').read()
+    want = clean_py(json.loads(raw)['body'])
+
+    def notes_of(m): return m.read_cstr(fn(m, 'pn_up_notes')).encode('latin-1').decode('utf-8')
+    offered = (U['CHECKED'], 0, 1, 2, '1.0.1')
+    site = Site('1.0.1', notes=raw)
+    m = machine(site, own='1.0.0', dev=0)
+    expect(notes_of(m) == '', 'no check yet: no notes')
+    check(m)
+    expect(st(m) == offered and notes_of(m) == want, f'an offer with the notes of the release ({len(want)} bytes)')
+    expect(site.order == [LATEST, NOTES + '1.0.1'], f'two requests in order: the redirect, then the release JSON of that tag ({site.order})')
+    url, o = site.nreqs[0]
+    expect(url == NOTES + '1.0.1' and 'latest' not in url and url.startswith(f'https://api.github.com/repos/{build.REPO}/releases/tags/'), f'the address is built from the repository and the tag the check found: {url}')
+    expect(o[10018].startswith('M1PlusMusic/') and o[10018].strip() and o[181] == 2 and o[182] == 2 and o[10065] == PCN.CA and 64 not in o and 81 not in o and o[52] == 1 and 44 not in o,
+           'a User-Agent (GitHub\'s API needs one), https only, the firmware CA bundle, verification never switched off, a GET')
+    expect(fn(m, 'pn_job_busy') == 0, 'the slot is free after the check')
+    # the offer stands, without notes, on every failure of the notes request
+    fails = [('a 404', {'code': 404, 'rc': 22}), ('a 403 rate limit', {'code': 403, 'rc': 22, 'body': b'{"message":"API rate limit exceeded"}'}), ('a 500', {'code': 500, 'rc': 22}), ('a 503', {'code': 503, 'rc': 22}),
+             ('a 204', {'code': 204, 'body': raw}), ('a 201', {'code': 201, 'body': raw}), ('a 304', {'code': 304, 'body': raw}), ('a redirect with a body', {'code': 302, 'body': raw}),
+             ('no DNS', {'rc': 6, 'code': 0}), ('a time-out', {'rc': 28, 'code': 0}), ('a certificate', {'rc': 60, 'code': 0}), ('the host name', {'rc': 51, 'code': 0}), ('no CA file', {'rc': 77, 'code': 0}),
+             ('a reset part way', {'rc': 56, 'body': raw, 'partial': True}), ('a 70 KB answer', {'body': b'{"pad":"' + b'p' * 70000 + b'","body":"x"}'}),
+             ('JSON that is not JSON', {'body': b'<html>rate limited</html>'}), ('JSON cut short', {'body': raw[:3000]}), ('an empty answer', {'body': b''}), ('a null body', {'body': b'{"tag_name":"1.0.1","body":null}'}),
+             ('an empty body', {'body': b'{"tag_name":"1.0.1","body":""}'}), ('no body key', {'body': b'{"tag_name":"1.0.1"}'}), ('a bad string', {'body': b'{"body":"a\\qb"}'}),
+             ('a body only in the assets', {'body': b'{"assets":[{"body":"NO"}],"tag_name":"1.0.1"}'})]
+    for what, ans in fails:
+        site = Site('1.0.1', notes=ans)
+        m = machine(site, own='1.0.0', dev=0); check(m)
+        expect(st(m) == offered and notes_of(m) == '' and fn(m, 'pn_job_busy') == 0 and len(site.nreqs) == 1, f'{what}: the offer stands, no notes ({st(m)})')
+        expect(fn(m, 'pn_up_download') == 0, f'{what}: and the download starts')
+    # the size limit: 64 KB read, the 65537th byte is too much
+    for size, good in ((65536, True), (65537, False)):
+        pad = size - len(b'{"pad":"","body":"hello"}')
+        doc = b'{"pad":"' + b'p' * pad + b'","body":"hello"}'
+        assert len(doc) == size
+        m = machine(Site('1.0.1', notes=doc), own='1.0.0', dev=0); check(m)
+        expect(st(m) == offered and notes_of(m) == ('hello' if good else ''), f'an answer of {size} bytes: {"read" if good else "too big, no notes"}')
+    # a release whose JSON carries a body only after nested objects (the real shape): found; a dev build is offered the same way
+    m = machine(Site('1.0.0', notes=raw), own='1.0.0', dev=1); check(m)
+    expect(st(m) == (U['CHECKED'], 0, 1, 2, '1.0.0') and notes_of(m) == want, 'a development build, offered the latest release, gets its notes too')
+    # nothing is fetched when there is no offer
+    for what, site in (('up to date', Site('1.0.0', notes=raw)), ('an older release', Site('0.9.0', notes=raw)), ('a bad redirect', Site(latest={'code': 302, 'redirect_url': 'https://evil.example/x'}, notes=raw)),
+                       ('a 404', Site(latest={'code': 404, 'rc': 22}, notes=raw)), ('a network failure', Site(latest={'rc': 6, 'code': 0}, notes=raw))):
+        m = machine(site, own='1.0.0', dev=0); check(m)
+        expect(site.nreqs == [] and notes_of(m) == '', f'{what}: no notes request, no notes')
+    m = machine(Site('1.0.1', notes=raw), own='1.0.0', dev=0); m.wifi = -1
+    expect(check(m) == PN['NOWIFI'] and notes_of(m) == '', 'no Wi-Fi: no check, no notes')
+    # a new check forgets the old notes; Up to Date or a failure leaves none
+    site = Site('1.0.1', notes=raw)
+    m = machine(site, own='1.0.0', dev=0); check(m)
+    expect(notes_of(m) == want, 'notes kept')
+    m.curl_site = Site('1.0.1', notes={'code': 404, 'rc': 22}); check(m)
+    expect(st(m) == offered and notes_of(m) == '', 'a second check whose notes fail: the old notes are gone')
+    m.curl_site = Site('1.0.1', notes=raw); check(m)
+    expect(notes_of(m) == want, 'a third check has them again')
+    m.curl_site = Site('1.0.0', notes=raw); check(m)
+    expect(st(m)[3] == 1 and notes_of(m) == '', 'Up to Date: no notes')
+    m.curl_site = Site('1.0.1', notes=raw); check(m)
+    m.curl_site = Site(latest={'code': 404, 'rc': 22}); check(m)
+    expect(st(m)[0] == U['FAILED'] and notes_of(m) == '', 'a failed check: no notes')
+    m.curl_site = Site('1.0.1', notes=raw); check(m)
+    fn(m, 'pn_up_reset')
+    expect(notes_of(m) == '' and st(m)[0] == U['IDLE'], 'pn_up_reset forgets them with the answer')
+    # the notes survive the download job (the offer is still the one they belong to)
+    m = machine(Site('1.0.1', notes=raw), own='1.0.0', dev=0); check(m)
+    m.thread = None
+    expect(fn(m, 'pn_up_download') == 0 and notes_of(m) == want, 'a download starting leaves the notes')
+    work(m, m.thread)
+    expect(st(m)[0] == U['DOWNLOADED'] and notes_of(m) == want, 'and so does a finished one (the page shows the notes in the offered state only)')
+    # Cancel while the notes arrive: the check is cancelled, nothing is kept
+    site = Site('1.0.1', notes={'body': raw, 'chunk': 500})
+    site.notes['xfer'] = lambda url, sent, total: m.nested(PSYMS['pn_cancel']) if sent >= 1000 else None
+    m = machine(site, own='1.0.0', dev=0); check(m)
+    expect(st(m)[:2] == (U['IDLE'], PN['CANCELLED']) and st(m)[3] == 0 and notes_of(m) == '' and fn(m, 'pn_job_busy') == 0, f'Cancel during the notes request: back to idle, no offer, no notes ({st(m)})')
+    # memory: no thread run leaves a notes buffer behind a failed or cancelled check, and a second check frees the first's
+    m = machine(Site('1.0.1', notes=raw), own='1.0.0', dev=0); check(m); check(m); check(m)
+    expect(notes_of(m) == want, 'three checks in a row: the notes of the last')
+
+
+SECTIONS = [parse_tests, redirect_tests, build_tests, info_tests, check_tests, dev_tests, download_tests, notes_parse_tests, notes_check_tests]   # tools/check.py runs each as its own task
 
 
 def run(ctx):

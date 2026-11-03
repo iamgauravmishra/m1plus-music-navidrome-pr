@@ -25,6 +25,7 @@ STATES = [
     ('checking', ((None, 'Checking…', None, None, None), None)),
     ('up to date', (('pod_es_check', 'Up to Date', 'You have the latest version.', 'Check for Update', None), None)),
     ('available', (OFFER[:3] + ('Download and Install', None), None)),
+    ('available + notes', (OFFER[:3] + ('Download and Install', 'Release Notes'), None)),
     ('confirm dialog', ((None, '', None, None, None), 'confirm')),   # (the page's block is hidden while the dialog is up)
     ('popup 0 %', (OFFER, (0, '0%'))),
     ('popup 42 %', (OFFER, (42, '42%'))),

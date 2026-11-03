@@ -614,6 +614,8 @@ TEXT = dict([
        'Aktualizacja', 'Обновление ПО', 'Оновлення ПЗ'),
     _t('Check for Update', '检查更新', '檢查更新', 'アップデートを確認', '업데이트 확인', 'Rechercher', 'Nach Update suchen', 'Buscar actualización', 'Controlla aggiornamenti', 'ตรวจสอบอัปเดต',
        'Sprawdź aktualizację', 'Проверить обновление', 'Перевірити оновлення'),
+    _t('Release Notes', '发行说明', '版本說明', 'リリースノート', '릴리스 노트', 'Notes de version', 'Versionshinweise', 'Notas de la versión', 'Note di rilascio', 'บันทึกประจำรุ่น', 'Informacje o wersji',
+       'Список изменений', 'Список змін'),
     _t('Checking…', '正在检查…', '正在檢查…', '確認中…', '확인하는 중…', 'Vérification…', 'Prüfe …', 'Comprobando…', 'Controllo…', 'กำลังตรวจสอบ…', 'Sprawdzanie…', 'Проверка…', 'Перевірка…'),
     _t('Up to Date', '已是最新', '已是最新', '最新です', '최신 버전', 'À jour', 'Aktuell', 'Actualizado', 'Aggiornato', 'ล่าสุดแล้ว', 'Aktualne', 'Актуально', 'Оновлено'),
     _t('You have the latest version.', '你使用的已是最新版本。', '你使用的已是最新版本。', '最新バージョンをお使いです。', '최신 버전을 사용 중입니다.', 'Vous avez la dernière version.',

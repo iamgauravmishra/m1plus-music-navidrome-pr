@@ -23,6 +23,12 @@ int up_redirect_tag(const char *location, const char *repo, char *out, unsigned 
 /* 1 when the tar file at path starts with the member firmware_v20.info (a valid header, its checksum right) whose first two lines are UP_MODEL and UP_PKG_PREFIX + tag, each ended by a line feed. */
 int up_info_ok(const char *path, const char *tag);
 
+/* The release notes of GitHub's release JSON (js, n bytes; DECODED IN PLACE, so it is changed): the top-level "body" string (a "body" key of a nested object is never taken), its JSON escapes decoded to UTF-8
+ * and cleaned for the screen (carriage returns dropped, heading # and bold ** dropped, "- " / "* " items shown as a bullet, no blank edges), into out (cap bytes, the NUL included; cut between two UTF-8 characters).
+ * Returns the length, 0 for no notes: no body, null, an empty or malformed string, not an object. */
+#define UP_NOTES_MAX 8192 /* bytes of notes kept, without the NUL */
+unsigned up_notes(char *js, unsigned n, char *out, unsigned cap);
+
 /* The build's own version (tools/build.py VERSION, the compiler's M1PLUS_VERSION), whether it is a development build (M1PLUS_DEV) and the repository (M1PLUS_REPO). Writable so a test can change them. */
 extern char up_own[UP_TAG];
 extern int up_dev;

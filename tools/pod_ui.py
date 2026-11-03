@@ -1359,6 +1359,31 @@ def build_update_page(page):
     return root
 
 
+# Release Notes (patch/relnotes.c, docs/modules/update.md "Release notes"): the stock navbar over a stock list (list_view > scroll_view + scroll bar) holding one content view the payload paints the heading and the wrapped
+# notes on, as the Find Cover & Lyrics lyrics detail does. Two hidden labels only carry the text styles (22 px white heading, 18 px light grey text). Neutral, no accent colour.
+RN_HEAD_PX, RN_LINE_PX, RN_LINE_RGB = 22, 18, '#E6E6E6'
+
+
+def build_relnotes_page(page):
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    root.children.append(navbar(page.title))
+    lv = stock_list([], True)
+    lv.set('name', 'rn_listview')
+    sv = lv.children[0]
+    sv.set('name', 'rn_scrollview')
+    view = Widget('view', 0, 0, SCREEN_W, CLIENT_H - NAVBAR_H, [('name', 'rn_view')])
+    styled(view, ('normal',), 'bg_color', '#000000')
+    sv.children.append(view)
+    root.children.append(lv)
+    root.children.append(nav_fade())
+    for name, px, colour in (('label_head', RN_HEAD_PX, '#FFFFFF'), ('label_line', RN_LINE_PX, RN_LINE_RGB)):
+        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+        root.children.append(lab)
+    return root
+
+
 def build_menucfg_page(page):
     """The Main Menu page (patch/menu.c): a row per menu item in the default order, each with an up arrow (a stock
     button with the stock chevron-up art, expansion_2, insensitive: a picture, the row decides by the tap position)
@@ -1842,6 +1867,8 @@ def build_page(page):
         return build_onlineart_page(page)
     if page.kind == 'update':
         return build_update_page(page)
+    if page.kind == 'relnotes':
+        return build_relnotes_page(page)
     if page.kind == 'cover':
         return build_cover_page(page)
     if page.kind == 'artists':

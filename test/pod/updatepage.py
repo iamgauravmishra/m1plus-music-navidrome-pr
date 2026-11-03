@@ -634,7 +634,192 @@ def life_tests(ctx):
     expect(('window_open', 'm1plus_update') in m.calls, 'the About row opens the page')
 
 
-SECTIONS = [asset_tests, flow_tests, confirm_tests, popup_tests, again_tests, reopen_tests, background_tests, fail_tests, state_tests, wait_tests, life_tests]   # tools/check.py runs each as its own task
+RWIN = 0x24500000
+RN_NAMES = ('rn_scrollview', 'rn_view', 'label_head', 'label_line')
+RN_UI = os.path.join(RAW, 'ui', 'm1plus_relnotes.bin')
+RELEASE = open(UP.RELEASE_JSON, 'rb').read()
+
+
+def with_notes(tag='1.0.1', notes=RELEASE, **kw):
+    """An update page that has found Version <tag> and, when notes is not None, its release JSON."""
+    m = UM(UP.Site(tag, notes=notes), **kw)
+    get_offer(m)
+    return m
+
+
+def notes_page(m):
+    """The Release Notes pill pressed: the notes page's window and widgets, ready to be painted and scrolled."""
+    m.windows['m1plus_relnotes'] = RWIN
+    for n in RN_NAMES: Machine.widget(m, n)   # noqa: F821
+    m.sv = m.alloc(0x100)
+    m.widgets['rn_scrollview'] = m.sv
+    m.rview = m.widgets['rn_view']
+    m.canvas = m.alloc(0x80)
+    m.hist = []
+    m.click('up_pill2')
+    return m
+
+
+def rn_paint(m, off=0):
+    m.setword(m.sv + 0x84, off)
+    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    m.texts, m.text_styles = [], []
+    fn_, ctx = m.bound[(m.rview, O['EVT_AFTER_PAINT'])]
+    m.call(fn_, a0=ctx, a1=ev, count=40000000)
+    return list(zip(m.text_styles, [t for t, r in m.texts], [r for t, r in m.texts]))
+
+
+def notes_asset_tests(ctx):
+    expect = ctx.expect
+    tree = awtk_ui.parse(open(os.path.join(WORK, RN_UI), 'rb').read())
+    by = {w.name: w for w in tree.walk() if w.name}
+    expect(pod_pages.RELNOTES in pod_pages.PAGES and pod_pages.RELNOTES.key == 'm1plus_relnotes' and tree.type == 'window' and tree.name == 'm1plus_relnotes_page', 'the page is registered and built: a normal window')
+    expect(all(n in by for n in RN_NAMES + ('btn_return', 'btn_backtoplayer', 'label_title', 'navigationbar_view')), 'every widget the payload looks up is there, with the stock navbar (Back, Now Playing)')
+    expect(by['navigationbar_view'].h == 50 and by['rn_listview'].y == 50 and by['rn_listview'].h == 400 and by['rn_listview'].type == 'list_view' and by['rn_scrollview'].type == 'scroll_view'
+           and by['rn_view'].type == 'view' and by['scroll_bar_m'].type == 'scroll_bar_m' and by['rn_view'].w == 320, 'a stock list (list_view > scroll_view + scroll bar) of 400 px under the navbar holding one content view')
+    expect(by['rn_listview'].get('style:normal:bg_color') == '#000000' and tree.get('style:normal:bg_color') == '#000000' and by['rn_view'].get('style:normal:bg_color') == '#000000', 'black')
+    expect(by['label_head'].get('visible') == 'false' and by['label_line'].get('visible') == 'false' and by['label_head'].get('style:normal:font_size') == '22' and by['label_line'].get('style:normal:font_size') == '18'
+           and by['label_head'].get('style:normal:text_color') == '#FFFFFF' and by['label_line'].get('style:normal:text_color') in ('#E6E6E6', '#FFFFFF'), 'the two text styles: a 22 px white heading, 18 px light grey text (no accent colour)')
+    colours = {w.get(k) for w in tree.walk() for k in ('style:normal:text_color', 'style:normal:bg_color') if w.get(k)}
+    expect(all(c[1:3] == c[3:5] == c[5:7] for c in colours if len(c) == 7), f'every colour of the page is neutral grey ({sorted(colours)})')
+    built = {f[:-4]: dict(__import__('awtk_strings').load(os.path.join(WORK, RAW, 'strings', f))) for f in sorted(os.listdir(os.path.join(WORK, RAW, 'strings')))}
+    font = Ttf(os.path.join(WORK, RAW, 'fonts', 'default.ttf'))
+    bad = []
+    for loc in pod_i18n.LOCALES:
+        key = built[loc].get('Release Notes', 'Release Notes')
+        if StbText(font, PILL_PX).layout(key)[1] > 220 - 24: bad.append((loc, 'the pill', key))
+        if StbText(font, 22).layout(key)[1] > by['label_title'].w: bad.append((loc, 'the navbar title', key))
+        head = sub(built[loc].get('Version %s', 'Version %s'), '10.10.10')
+        if StbText(font, 22).layout(head)[1] > 288: bad.append((loc, 'the heading', head))
+    expect('Release Notes' in pod_i18n.TEXT and not bad, f'"Release Notes" has its 13 translations; the pill, the navbar title and the heading fit in all of them ({bad[:6]})')
+
+
+def notes_flow_tests(ctx):
+    expect = ctx.expect
+    # the pill only when the check kept notes
+    m = with_notes()
+    v = m.view()
+    expect(v == ('pod_es_download', 'Version 1.0.1 available', f'Current version: {VERSION}', 'Download and Install', 'Release Notes'), f'an offer with notes: Download and Install and, below it, Release Notes ({v})')
+    for what, notes in (('a 404', None), ('a 403', {'code': 403, 'rc': 22}), ('a null body', b'{"body":null}'), ('an empty body', b'{"body":""}'), ('truncated JSON', RELEASE[:2000]), ('bad JSON', b'nope')):
+        m = with_notes(notes=notes)
+        expect(m.view() == ('pod_es_download', 'Version 1.0.1 available', f'Current version: {VERSION}', 'Download and Install', None), f'{what}: the offer without the pill')
+        m.click(); m.work(); m.tick(2)
+        expect(m.view()[1] == 'Update Downloaded', f'{what}: and the download still works')
+    m = UM(UP.Site('1.0.0', notes=RELEASE)); get_offer(m)
+    expect(m.view()[1] == 'Up to Date' and m.view()[4] is None, 'Up to Date: no pill, and nothing was asked')
+    m = with_notes()
+    m.click(); m.work(); m.tick(2)
+    expect(m.view()[4] == 'Check Again', 'Update Downloaded keeps its own second pill (Check Again)')
+    m = with_notes()
+    m.click()
+    expect(m.pop() is not None and not m.shown('up_pill2'), 'under the download popup the pill is hidden')
+    # a new check clears the old notes and the pill
+    m = with_notes()
+    m.curl_site = UP.Site('1.0.1', notes=None)
+    m.click('up_pill'); m.hist = []
+    m.fire(EVT_DESTROY)
+    m = UM(UP.Site('1.0.1', notes=RELEASE)); m.open(); m.click(); m.work(); m.tick()
+    expect(m.view()[4] == 'Release Notes', 'the first check kept notes')
+    m.curl_site = UP.Site('1.0.1', notes=None)
+    m.fire(EVT_DESTROY); m.open(); m.click(); m.work(); m.tick()
+    expect(m.view()[4] is None, 'the next check (notes failed) shows no pill: the old notes are gone')
+    # the pill opens the page
+    m = notes_page(with_notes())
+    names = [c[0] for c in m.hist]
+    expect(('window_open', 'm1plus_relnotes') in m.hist and 'pthread_create' not in names and 'timer_add' not in names, 'the pill opens the notes page: no thread, no timer, no request')
+    expect(m.bound[(m.widgets['btn_return'], EVT_CLICK)][0] == PSYMS['pod_on_back'] and m.bound[(m.widgets['btn_backtoplayer'], EVT_CLICK)][0] == PSYMS['pod_on_player'], 'Back goes back, Now Playing is the update page\'s own handler')
+    expect(len(m.curl_site.nreqs) == 1, 'the notes come from the check, nothing more is fetched')
+    texts = rn_paint(m)
+    head = [t for t in texts if t[0] == 'label_head']
+    expect(head == [('label_head', 'Version 1.0.1', (16, 12, 288, 30))], f'the heading "Version 1.0.1" at the top ({head})')
+    lines = [t for t in texts if t[0] == 'label_line']
+    expect(lines and all(r[0] == 16 and r[2] == 288 and r[3] == 24 for _, _, r in lines) and all(r[1] >= 0 and r[1] + r[3] <= 400 for _, _, r in texts) and lines[0][1].startswith('The first release of M1+'),
+           f'the notes below it, 288 px wide lines, every one wholly inside the 400 px view ({len(lines)} lines)')
+    ys = [r[1] for _, _, r in lines]
+    expect(ys[0] == 12 + 30 + 12 and all(b - a in (24, 36) for a, b in zip(ys, ys[1:])), f'24 px between lines, 36 where the notes have a blank line ({ys[:6]})')
+    expect(all(len(t) <= 36 for _, t, _ in lines), 'wrapped at the 288 px width (36 characters of the mocked font)')
+    h = [c for c in m.hist if c[0] == 'widget_resize' and c[1] == m.rview]
+    vh = [c for c in m.hist if c[0] == 'widget_set_prop_int' and c[1] == m.sv and c[2] == 'virtual_h']
+    expect(h and vh and h[-1][3] == vh[-1][3] > 400 and h[-1][2] == 320, f'the content view is as tall as the text ({h[-1][3] if h else None} px): the stock scroll view scrolls it')
+    # Back returns to the update page in the same state; the page's state is untouched
+    before = m.view()
+    m.hist = []
+    m.click('btn_return')
+    expect(('navigator_back',) in m.hist and m.view() == before and m.shown('up_pill2') and m.text('up_pill2') == 'Release Notes', 'Back: the update page again, still offering the release with both pills')
+    m.fire(EVT_DESTROY)   # (the notes window's own destroy is bound on its window)
+    # the window's destroy frees it: a second open works
+    m = with_notes()
+    notes_page(m)
+    fn_, ctx_ = m.bound[(RWIN, EVT_DESTROY)]
+    m.call(fn_, a0=ctx_, a1=0, count=1000000)
+    m.hist = []
+    m.click('up_pill2')
+    expect(('window_open', 'm1plus_relnotes') in m.hist, 'after the page was destroyed the pill opens it again')
+    m.call(PSYMS['relnotes_open'], count=1000000)
+    expect(m.hist.count(('window_open', 'm1plus_relnotes')) == 1, 'a second open while it is up does nothing')
+    # no notes: the entry point refuses (the pill would not be there)
+    m = UM(UP.Site('1.0.1', notes=None)); get_offer(m); m.hist = []
+    expect(m.call(PSYMS['relnotes_open'], count=1000000) == 0xffffffff and ('window_open', 'm1plus_relnotes') not in m.hist, 'no notes: -1 and no window')
+    # a window that will not open, an asset without the scroll view
+    m = with_notes(); m.windows['m1plus_relnotes'] = 0; m.hist = []
+    m.click('up_pill2')
+    expect(('window_open', 'm1plus_relnotes') in m.hist and m.view()[4] == 'Release Notes' and ('navigator_back',) not in m.hist, 'a window that will not open: nothing happens, the update page stays')
+    m = with_notes(); m.windows['m1plus_relnotes'] = RWIN
+    for n in RN_NAMES[1:]: Machine.widget(m, n)   # noqa: F821
+    m.hist = []
+    m.click('up_pill2')
+    expect(('navigator_back',) in m.hist, 'an asset without a widget the payload needs: the page goes again')
+
+
+def notes_scroll_tests(ctx):
+    expect = ctx.expect
+    long = '# Release\n\n' + '\n\n'.join(f'- item {i}: ' + 'word ' * 12 for i in range(40)) + '\n\nTHE END'
+    doc = UP.json.dumps({'author': {'body': 'no'}, 'body': long}).encode()
+    m = notes_page(with_notes(notes=doc))
+    seen = {}
+    texts = rn_paint(m)
+    first = [t for _, t, _ in texts]
+    expect(first[0] == 'Version 1.0.1' and first[1] == 'Release' and len(texts) <= 17, f'the top: the heading and the first lines only ({len(texts)} texts)')
+    h = [c for c in m.hist if c[0] == 'widget_resize' and c[1] == m.rview][-1][3]
+    expect(h > 2000, f'a long text is a tall content view ({h} px)')
+    for off in list(range(0, h - 400, 37)) + [h - 400]:
+        for _, t, r in rn_paint(m, off):
+            seen[t] = seen.get(t, 0) + 1
+            if not (0 <= r[1] and r[1] + r[3] <= 400): expect(False, f'a text outside the view at offset {off}: {r}')
+    expect('THE END' in seen and any(t.startswith('• item 0:') for t in seen) and any(t.startswith('• item 39:') for t in seen) and any(t.startswith('word word') for t in seen), f'scrolling the whole way shows the first item, the last item and THE END ({sorted(seen)[:5]}, {len(seen)})')
+    last = rn_paint(m, h - 400)
+    expect(last[-1][1] == 'THE END' and last[-1][2][1] + last[-1][2][3] <= 400 and 'Version 1.0.1' not in [t for _, t, _ in last], 'at the bottom the last line is in view, the heading has scrolled away')
+    mid = [t for _, t, _ in rn_paint(m, 1000)]
+    expect(mid and mid[0] != 'Version 1.0.1' and not any('item 0:' in t for t in mid), 'in the middle other lines are painted')
+    # a CJK line wraps between characters and a word wider than the view anywhere
+    cjk = '示例发行说明' * 30
+    m = notes_page(with_notes(notes=UP.json.dumps({'body': cjk + '\n' + 'x' * 100}).encode()))
+    t = [(t, r) for s, t, r in rn_paint(m) if s == 'label_line']
+    expect(''.join(x for x, _ in t[:-3]) + ''.join(x for x, _ in t[-3:]) == cjk + 'x' * 100 or ''.join(x for x, _ in t) == cjk + 'x' * 100, f'CJK and an unbroken word wrap without losing a character ({len(t)} lines)')
+    expect(all(len(x) <= 36 for x, _ in t), 'and no line is wider than 288 px (the mocked font is 8 px a character)')
+    # the cap: 8 KB of notes fit in the tables (the last line is reachable)
+    body = '\n'.join(f'line {i} ' + 'x' * 20 for i in range(2000))
+    m = notes_page(with_notes(notes=UP.json.dumps({'body': body}).encode()))
+    h = [c for c in m.hist if c[0] == 'widget_resize' and c[1] == m.rview][-1][3]
+    last = rn_paint(m, h - 400)
+    expect(last and last[-1][1].startswith('line ') and h > 4000, f'the largest notes (8 KB) still scroll to their end ({last[-1][1] if last else None})')
+
+
+def notes_lang_tests(ctx):
+    expect = ctx.expect
+    for loc in pod_i18n.LOCALES:
+        m = UM(UP.Site('1.0.1', notes=RELEASE)); m.set_language(None if loc == 'en_US' else loc)
+        get_offer(m)
+        ok = m.view()[4] == trl(loc, 'Release Notes')
+        notes_page(m)
+        head = [t for s, t, _ in rn_paint(m) if s == 'label_head']
+        ok = ok and head == [sub(trl(loc, 'Version %s'), '1.0.1')]
+        if not ok or loc == 'en_US': expect(ok, f'{loc}: the pill reads {trl(loc, "Release Notes")} and the heading {sub(trl(loc, "Version %s"), "1.0.1")} ({m.view()[4]!r}, {head})')
+        if not ok: break
+    else: expect(True, 'the pill and the heading are translated in all 13 languages (the notes text itself is shown as it is)')
+
+
+SECTIONS = [asset_tests, flow_tests, confirm_tests, popup_tests, again_tests, reopen_tests, background_tests, fail_tests, state_tests, wait_tests, life_tests, notes_asset_tests, notes_flow_tests, notes_scroll_tests, notes_lang_tests]   # tools/check.py runs each as its own task
 
 
 def run(ctx):

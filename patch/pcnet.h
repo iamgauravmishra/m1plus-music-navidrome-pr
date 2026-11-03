@@ -273,5 +273,8 @@ int pn_up_stage(void); /* 1 the check, 2 the download: the job of the last failu
 int pn_up_result(void); /* PN_U_CURRENT, PN_U_AVAILABLE, or 0 (no check has found anything) */
 const char *pn_up_tag(void); /* the offered release ("1.0.1"), "" when none */
 unsigned pn_up_pct(void); /* the download's progress, 0..100 */
+/* The notes of the offered release (GitHub's release body, cleaned for the screen, at most UP_NOTES_MAX bytes of UTF-8), "" when there are none. Memory only; the next check forgets them. */
+const char *pn_up_notes(void);
+#define PN_UP_API_CAP 65536u /* the release JSON is read up to this many bytes; a larger answer gives no notes */
 /* Forget an old answer or failure when the page opens (nothing while a job runs; a download whose file is still on the card is kept). */
 void pn_up_reset(void);

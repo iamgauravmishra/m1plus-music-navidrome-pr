@@ -30,7 +30,9 @@ extern int pod_confirm_code(
     const char
         *text); /* patch/m1plus.c: the stock confirm dialog, modal: CONFIRM_YES (btn_enter), 4 (btn_cancel), else 0 */
 
-enum { UA_NONE = 0, UA_CHECK, UA_ASK, UA_RETRY, UA_INSTALL };
+extern int relnotes_open(void); /* patch/relnotes.c: the offered release's notes, a page of their own */
+
+enum { UA_NONE = 0, UA_CHECK, UA_ASK, UA_RETRY, UA_INSTALL, UA_NOTES };
 
 typedef struct {
     const char *glyph, *pill, *pill2;
@@ -163,6 +165,8 @@ static void up_state(up_view_t *v) {
         up_offer_view(v);
         v->pill = TR("Download and Install");
         v->act = UA_ASK;
+        if (pn_up_notes()[0])
+            v->pill2 = TR("Release Notes"), v->act2 = UA_NOTES; /* only when the check kept the notes */
     } else if (st == PN_U_CHECKED) {
         v->glyph = "pod_es_check";
         up_set(v->title, sizeof v->title, TR("Up to Date"));
@@ -335,6 +339,9 @@ static void up_do(int act) {
         return;
     case UA_INSTALL:
         up_install();
+        return;
+    case UA_NOTES:
+        relnotes_open(); /* (this page stays as it is; Back returns to it) */
         return;
     default:
         return;

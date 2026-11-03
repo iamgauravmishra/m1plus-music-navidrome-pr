@@ -93,6 +93,8 @@ static struct {
      * (PN_U_CURRENT, PN_U_AVAILABLE, 0 none); umode: 0 the worker checks, 1 it downloads; utag: the release the check offered (held for the download). The state is written after the code and the tag. */
     volatile int ustate, ucode, ustage, ures, umode;
     char utag[UP_TAG];
+    char *
+        unotes; /* the offered release's notes (heap, UP_NOTES_MAX + 1 bytes, set by the check before its state, freed by the next check), NULL for none */
 } pn __attribute__((section(".scratch")));
 
 enum {
@@ -2245,6 +2247,48 @@ static void pn_up_https(void *h) {
     curl_easy_setopt(h, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTPS);
 }
 
+struct un { /* the notes request's write callback's data: the answer, cut off at PN_UP_API_CAP */
+    char *buf;
+    unsigned total;
+};
+
+static unsigned pn_unwrite(char *d, unsigned size, unsigned nmemb, void *user) {
+    struct un *x = user;
+    unsigned len = size * nmemb, k;
+    if (len > PN_UP_API_CAP - x->total) return 0; /* too big: the transfer fails (CURLE_WRITE_ERROR) */
+    for (k = 0; k < len; ++k) x->buf[x->total + k] = d[k];
+    x->total += len;
+    return len;
+}
+
+/* The notes of the release the check just offered: GitHub's JSON of that tag (never "latest"), its top-level body for the screen, kept in pn.unotes. Only HTTP 200 counts; every failure (a 403 rate limit, a 404, the
+ * network, a certificate, too big an answer, JSON without a body, null, empty) just leaves no notes: the offer stands. */
+static void pn_up_notes_fetch(const char *tag) {
+    char url[160], err[160];
+    struct un x;
+    long http = 0;
+    int rc;
+    void *h;
+    char *notes;
+    x.total = 0;
+    x.buf = calloc(PN_UP_API_CAP + 1, 1);
+    notes = calloc(UP_NOTES_MAX + 1, 1);
+    snprintf(url, sizeof url, "https://api.github.com/repos/%s/releases/tags/%s", up_repo, tag);
+    h = x.buf && notes ? pn_easy(url, pn_unwrite, &x, err, (void *)0) : (void *)0;
+    if (h) {
+        pn_up_https(h);
+        rc = curl_easy_perform(h);
+        curl_easy_getinfo(h, CURLINFO_RESPONSE_CODE, &http);
+        curl_easy_cleanup(h);
+        if (rc == 0 && http == 200 && !pn.cancel && up_notes(x.buf, x.total, notes, UP_NOTES_MAX + 1)) {
+            pn.unotes = notes;
+            notes = (char *)0;
+        }
+    }
+    free(notes);
+    free(x.buf);
+}
+
 static void pn_up_check_run(void) {
     char url[128], err[160], tag[UP_TAG];
     const char *loc = (const char *)0;
@@ -2273,7 +2317,10 @@ static void pn_up_check_run(void) {
         if (code == PN_GONE || code == PN_HTTP) code = PN_UPCHECK; /* an HTTP error is no release news */
     }
     curl_easy_cleanup(h);
+    if (!pn.cancel && !code && res == 2) pn_up_notes_fetch(tag); /* (its failure is no failure of the check) */
     if (pn.cancel) {
+        free(pn.unotes);
+        pn.unotes = (char *)0;
         pn_up_end(PN_U_IDLE, PN_CANCELLED);
         return;
     }
@@ -2380,7 +2427,11 @@ static int pn_up_start(int mode) {
         pn_bump();
         return g;
     }
-    if (!mode) pn.ures = 0, pn.utag[0] = 0; /* a new check forgets the offer */
+    if (!mode) {
+        pn.ures = 0, pn.utag[0] = 0; /* a new check forgets the offer and its notes */
+        free(pn.unotes);
+        pn.unotes = (char *)0;
+    }
     pn.umode = mode, pn.ucode = 0;
     __sync_synchronize();
     pn.ustate = mode ? PN_U_DOWNLOADING : PN_U_CHECKING;
@@ -2396,7 +2447,10 @@ static int pn_up_start(int mode) {
 void pn_up_reset(void) {
     if (pn.busy || (pn.ustate == PN_U_DOWNLOADED && !access(PN_UP_FILE, F_OK))) return;
     pn.ustate = PN_U_IDLE, pn.ures = 0, pn.ucode = 0, pn.utag[0] = 0;
+    free(pn.unotes);
+    pn.unotes = (char *)0;
 }
+const char *pn_up_notes(void) { return pn.ures == PN_U_AVAILABLE && pn.unotes ? pn.unotes : ""; }
 int pn_up_check(void) { return pn_up_start(0); }
 int pn_up_download(void) { return pn_up_start(1); }
 int pn_up_state(void) { return pn.ustate; }
