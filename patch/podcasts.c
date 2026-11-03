@@ -1553,7 +1553,7 @@ static void pg_kick(void) {
 }
 
 /* The path of a show's cover picture as a file:// url. */
-static const char *pg_cover_url(const pc_show_t *s, char *url, unsigned size) {
+static const char *pg_has_tone_url(const pc_show_t *s, char *url, unsigned size) {
     char path[PC_FILE * 2 + 40];
     unsigned n = 0, k;
     if (!s->cover[0]) return (const char *)0;
@@ -1575,7 +1575,7 @@ static const char *pg_cover_url(const pc_show_t *s, char *url, unsigned size) {
 
 static void pg_art(grid_t *g, grid_tile_t *t, const pc_show_t *s) {
     char url[PC_FILE * 2 + 60];
-    grid_art_url(g, t, pg_cover_url(s, url, sizeof url));
+    grid_art_url(g, t, pg_has_tone_url(s, url, sizeof url));
 }
 
 /* ---------------------------------------------------------------------------
@@ -1603,6 +1603,9 @@ __attribute__((noinline)) static void pg_bar_black(void) {
     pod_bar_black(pg.win);
 }
 
+static unsigned pg_tone_raw __attribute__((section(
+    ".scratch"))); /* the tone as chosen (the page shows pal_tone of it: neutral in Light Mode), for pg_relight */
+
 /* The tint on the window: shown on the Show page, plain black (window, gradient, status bar) on an episode's page; called when the tint changes and when the page opens and closes. */
 static void pg_tint_view(void) {
     int on = pg.tint_on && !pg.det;
@@ -1616,9 +1619,18 @@ static void pg_tint_view(void) {
 }
 
 static void pg_tint_set(unsigned tone) {
-    pg.tint = tone & 0xffffff;
+    unsigned color = pal_tone(tone);
+    pg_tone_raw = tone;
+    pg.tint = color & 0xffffff;
     pg.tint_on = 1;
     pg_tint_view();
+}
+
+/* The Show page shows a cover's tone now (not the shows list, not an episode: pg_tint_view). */
+int pg_has_tone(void) { return pg.win && pg.tint_on && !pg.det; }
+
+void pg_relight(void) {
+    if (pg.win && pg.tint_on) pg_tint_set(pg_tone_raw); /* (patch/palette.c pal_apply) */
 }
 
 static void pg_tint_clear(void) {
@@ -1644,7 +1656,7 @@ static void pg_tint_cover(void) {
     char url[PC_FILE * 2 + 60];
     unsigned px, tone;
     if (pg.tint_on || pg.level != L_EPS || !pg.hg.tiles || pg.hg.tiles[0].art != 1) return;
-    if (pg_cover_url(&pg.shows[pg.sel], url, sizeof url) && cc_decode(pg.win, url, 1, 1, 1, &px)) {
+    if (pg_has_tone_url(&pg.shows[pg.sel], url, sizeof url) && cc_decode(pg.win, url, 1, 1, 1, &px)) {
         tone = pod_tone(px & 255, px >> 8 & 255, px >> 16 & 255);
         pod_tone_put(pg.tint_key, tone);
         pg_tint_set(tone);
@@ -2777,7 +2789,7 @@ static void pg_srch_tap(int a, int part) {
 }
 
 /* The preview: the held feed as a Show level (docs/modules/podcasts.md "Search"). The show is the spare slot after the folders' (shows[PC_MAX_SHOWS]); its folder name ".pv<hash>" makes the tone cache's key
- * its own, its cover is the search directory's preview.jpg (pg_cover_url), its episodes are the feed's items (remote, greyed, nothing to tap); the Latest Episode pill is Subscribe. */
+ * its own, its cover is the search directory's preview.jpg (pg_has_tone_url), its episodes are the feed's items (remote, greyed, nothing to tap); the Latest Episode pill is Subscribe. */
 static void pg_open_preview(void) {
     const pf_parser_t *p = pn_preview_parser();
     pc_show_t *s = &pg.shows[PC_MAX_SHOWS];

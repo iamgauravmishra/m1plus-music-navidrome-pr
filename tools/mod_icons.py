@@ -137,7 +137,7 @@ DAILY = DAILY + VINYL
 # chevron (Lucide chevron-right fitted to 9 x 15, #777777, stroke 2) and the picker's check (20 px, white).
 CARD_GLYPH_PX, CARD_CHEVRON, CARD_CHECK = 20, ('pod_chev', 10, 16, (0x8A,) * 3), ('pod_check', 20)
 CARD_GLYPHS = {'Wi-Fi': 'wifi', 'Bluetooth': 'bluetooth', 'Home Screen': 'house', 'Library': 'disc-3', 'Now Playing': 'audio-lines',
-               'Play Mode': 'repeat', 'EQ': 'sliders-vertical', 'All Playback Settings': 'headphones', 'Display': 'sun',
+               'Play Mode': 'repeat', 'EQ': 'sliders-vertical', 'All Playback Settings': 'headphones', 'Display': 'sun', 'Appearance': 'palette', 'Accent': 'palette', 'Background': '+contrast',
                'Keyboards': '+keyboard', 'About': 'info', 'All System Settings': 'settings', 'Developer': 'code', 'Main Menu': 'list-checks', 'Extras': 'ellipsis',
                'Recent Albums': 'history', 'Daily Mix': 'shuffle', 'Regenerate Daily Mix': 'refresh-cw', 'Update Library': 'refresh-cw', 'Album Order': 'arrow-down-wide-narrow',
                'Landscape': 'rotate-cw-square', 'Rebuild Covers': 'image-up', 'Theme': '+cassette-tape', 'Record': '+turntable', 'Base': 'palette', 'Boot to M1+ Music': 'power', 'Open Shanling Home': '@shanling',
@@ -155,7 +155,10 @@ def card_name(g):
 CARD_PIECE = {'ROW_W': 320, 'ROW_H': 52, 'CARD_X': 10, 'CARD_W': 300, 'CARD_R': 12, 'FILL': (0x1C,) * 3, 'LIT': (0x2C, 0x2C, 0x2E)}
 CARD_PIECES = ('single', 'top', 'mid', 'bot')
 CARD_PIECE_IMAGES = [f'pod_cd_{p}{d}' for p in CARD_PIECES for d in ('', '_down')]
-CARD_IMAGES = sorted({card_name(g) for g in CARD_GLYPHS.values()}) + [CARD_CHEVRON[0], CARD_CHECK[0]] + CARD_PIECE_IMAGES
+# The Accent picker's swatches (docs/modules/accent.md): a round disc of accent i (tools/palette.py ACCENTS' order; Neutral is today's #EEEEEC fill) where a row's glyph goes, SWATCH_PX in the glyph's canvas.
+SWATCH_PX = 20
+SWATCHES = [f'pod_sw{i}' for i in range(7)]
+CARD_IMAGES = sorted({card_name(g) for g in CARD_GLYPHS.values()}) + [CARD_CHEVRON[0], CARD_CHECK[0]] + CARD_PIECE_IMAGES + SWATCHES
 # Find Cover & Lyrics' empty and failed states (docs/modules/onlineart.md): a muted grey glyph, ES_PX px, stroke 2, over the state's title (tools/pod_ui.py oa_es_icon; patch/onlineart.c names them)
 ES_ICONS = {'pod_es_timer': 'timer', 'pod_es_music': 'music', 'pod_es_image': 'image', 'pod_es_wifi': 'wifi-low', 'pod_es_calendar': 'calendar', 'pod_es_lock': 'lock', 'pod_es_plug': 'plug',
             'pod_es_info': 'info', 'pod_es_card': 'memory-stick', 'pod_es_drive': 'hard-drive', 'pod_es_download': 'download', 'pod_es_check': 'badge-check'}
@@ -497,6 +500,17 @@ def card_piece(piece, lit=False, ss=8):
     d.rounded_rectangle(box, r * ss, fill=255, corners=rounded)
     im = Image.new('RGBA', (w, h), (c['LIT'] if lit else c['FILL']) + (0,)); im.putalpha(big.resize((w, h), Image.LANCZOS)); return im
 
+def swatch(i):
+    """The Accent picker's swatch i: an antialiased disc (4 x 4 samples per pixel) of SWATCH_PX in a POD_ICON canvas, in the accent's colour (Neutral: #EEEEEC)."""
+    from PIL import Image, ImageDraw
+    import palette
+    rgb = palette.NEUTRAL_FILL if i == 0 else palette.ACCENT_RGB[palette.ACCENTS[i]]
+    ss = 8; big = Image.new('L', (POD_ICON * ss,) * 2, 0)
+    o = (POD_ICON - SWATCH_PX) * ss // 2
+    ImageDraw.Draw(big).ellipse((o, o, o + SWATCH_PX * ss - 1, o + SWATCH_PX * ss - 1), fill=255)
+    im = Image.new('RGBA', (POD_ICON,) * 2, tuple(rgb) + (0,)); im.putalpha(big.resize((POD_ICON,) * 2, Image.LANCZOS)); return im
+
+
 def card_icon(g):
     """A Settings card row's glyph: the glyph at CARD_GLYPH_PX (stroke 2) centred in a POD_ICON canvas; a badge and the Shanling mark keep their size."""
     from PIL import Image
@@ -676,6 +690,7 @@ def generate_all(sizes):
     name, w, h, rgb = CARD_CHEVRON
     f[name] = pod_chevron(rgb)
     f[CARD_CHECK[0]] = glyph_fit('check', CARD_CHECK[1], CARD_CHECK[1])
+    for i, n in enumerate(SWATCHES): f[n] = swatch(i)
     for p in CARD_PIECES:
         f[f'pod_cd_{p}'] = card_piece(p); f[f'pod_cd_{p}_down'] = card_piece(p, True)
     for n, g in PL_MENU_ICONS: f[n] = glyph(g, PL_MENU_PX, 'bare')

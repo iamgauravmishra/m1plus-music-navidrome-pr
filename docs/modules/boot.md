@@ -49,3 +49,5 @@ three levels), not a device test; `--no-anim` is gone, so a stuck page needs a c
 `mod_boot.apply_anim`. Behaviour differences without hanging: the folder-scan dialog on the
 specified-folder page opens ~200 ms late after Back; two closes or opens within one slide share a
 pending slot; the pull-down to settings slides in while the finger is down.
+
+- **Theme at boot.** `config_init` reads `[SYSSET] THEME`; a pinned clamp in demo reads any non-zero value as 0, so `awtk_configinit` always loads the `default` theme and the System page lists no Theme row ([theme](theme.md) "theme1 is off"). No boot hook or payload code is involved, so the kill switch does not change it.

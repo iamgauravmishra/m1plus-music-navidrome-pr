@@ -3,6 +3,7 @@
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  */
 #pragma once
+#include "palette.h" /* Light Mode: ui_ink, ui_fill_color, pal_tone (every page that paints its own colours includes this file) */
 
 #define ELLIPSIS 0x2026 /* U+2026 HORIZONTAL ELLIPSIS, the wide char texts are cut with */
 #define POD_DARK_MS 1000

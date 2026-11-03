@@ -539,6 +539,7 @@ class Machine:
             self.calls.append(('image_set_draw_type', a0, a1))
         elif name == 'image_base_set_image':
             self.calls.append(('image_base_set_image', a0, self.read_cstr(a1)))
+            self.props[(a0, 'image')] = self.cstr(self.read_cstr(a1))
         elif name == 'widget_load_image':
             url = self.read_cstr(a1)
             self.loads.append(url); self.load_into.append((url, self.locked))

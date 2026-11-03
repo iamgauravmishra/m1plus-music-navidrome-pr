@@ -48,7 +48,7 @@ STYLE_SHA = '24a8f765f315d836afa85731ca923512a506138930398683242ffaaa831b00c9'  
 
 # Palette (docs/ui.md). Rows/pressed after q2-pod's pinned style edits; MUTED = q2-pod
 # SUDO_MUTED; DISC = q2-pod MINIMAL_CHEVRON (the Minimal settings disc grey).
-BLACK, LINE, PRESSED = '#000000FF', '#222222FF', '#333333FF'
+BLACK, LINE, PRESSED = '#000000FF', '#222222FF', '#333334FF'   # PRESSED: palette.ROLE_PRESS_ROW (one blue level off #333333, so only a pressed row has it: the accent maps it)
 WHITE, MUTED, DISC = '#FFFFFFFF', '#8C8C8CFF', 0x77
 ORANGE, SALMON, STOCK_ROW, STOCK_PRESSED = '#FE7E40FF', '#FA7268FF', '#131313FF', '#362221FF'
 

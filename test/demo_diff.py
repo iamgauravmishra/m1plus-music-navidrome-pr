@@ -8,14 +8,14 @@ the 8-byte Home-icon hook at 0x533b80, the 8-byte boot guard hook at home_page_i
 Now Playing hook at playing_page_init
 0x53d1e4, the 8-byte More dialog hook at dialog_playmore_dialog_init 0x479cc4, the pinned literals of tools/autotime.py (hwclock -su/-wu), the one word at get_id3info 0x4dff4c (the tag reader's strcpy call, now a jal into the payload), the one data word g_scroll_view_vtable + 0x98 (0x97a330, patch/scroll.c), the words listed in patch/rows.json, the four cover-size immediates of the lock screen (each must be
 stock | 264), the five A-B marker immediates of Now Playing (tools/mod_nowplaying.py marker_edits) and bytes
-appended after the stock file. Anything else is an error. Exit status 0 = clean.
+the pinned words of tools/themeoff.py (theme1 off), appended after the stock file. Anything else is an error. Exit status 0 = clean.
 """
 import json, os, struct, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(ROOT, 'tools'))
 import mod_nowplaying as mn
-import autotime, timezones
+import autotime, themeoff, timezones
 HOOK = (0x533b80, 8)
 HOME_INIT = (0x534cd4, 8)   # home_page_init: the boot guard's hook (docs/architecture.md)
 PLAYING = (0x53d1e4, 8)     # playing_page_init: the Now Playing hook (patch/nowplaying.c)
@@ -25,6 +25,7 @@ QUERY = (0x5ee77c, 0x5ee9ac)   # toolsQueryDbTable, toolsQueryDbTableAndSort: th
 SCAN_SITE = (0x5ea6a8, 4)  # the library scan's folder test: the jalr strcmp(name, "."), now jal pod_scan_dir (patch/common.c, docs/modules/payload.md hook 5)
 UPDATE_SITE = (0x4e1124, 4)  # update_firmware: the compare's operand addiu a1 (the literal "V2.1" 0x74773c -> the string "about_version" 0x74772c; docs/modules/version.md)
 BATTERY_SITE = (0x5450f8, 4)  # show_sysbar_face: the jalr get_battery_capacity, now jal bp_capacity (patch/battery.c, docs/modules/payload.md hook 8)
+LIGHT = (0x659fcc, 0x655638, 0x659f9c)   # Light Mode's hooks (patch/palette.c, docs/modules/payload.md hooks 10 - 12): style_get_color and image_manager_add (PIC prologues: `j` and a nop) and the style_get_gradient leaf (the same two words)
 SCROLL_SLOT =(0x97a330, 4) # g_scroll_view_vtable.on_event_before_children: 0 in stock, the payload's m1plus_scroll_event (patch/scroll.c)
 COVER = 264                 # the cover size demo writes (tools/mod_lockscreen.py, Now Playing's art)
 COVER_IMM = (0x4df1dc, 0x4df1e0, 0x4df21c, 0x4df220)
@@ -82,7 +83,9 @@ def main():
     allow(va_to_off(s, timezones.SELECT), 8, 'select_timezone hook')   # time zones (tools/timezones.py): the hook, the clamp, the row count and limit, the two call sites
     for a, *_ in timezones.edits(0, 0): allow(va_to_off(s, a), 4, 'time zone words')
     for a, old, new, _ in autotime.EDITS: allow(va_to_off(s, a), len(old), 'auto time literals')
+    for a, *_ in themeoff.EDITS: allow(va_to_off(s, a), 4, 'theme1 off')
     for q in QUERY: allow(va_to_off(s, q), 8, 'library query hook')
+    for q in LIGHT: allow(va_to_off(s, q), 8, 'Light Mode hook')
     allow(va_to_off(s, SCROLL_SLOT[0]), SCROLL_SLOT[1], 'scroll vtable slot')
     markers = mn.marker_edits()
     for va in markers: allow(va_to_off(s, va), 4, 'markers')
@@ -128,6 +131,11 @@ def main():
         good = mw >> 26 == 2 and m[o + 4:o + 8] == bytes(4) and s[o + 8:o + 12] == m[o + 8:o + 12] and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s))
         print(f'library query hook {q:#x}: {s[o:o + 8].hex()} -> {m[o:o + 8].hex()}', 'ok' if good else 'WRONG')
         ok = ok and good
+    for q in LIGHT:
+        o = va_to_off(s, q); mw = struct.unpack_from('<I', m, o)[0]
+        good = mw >> 26 == 2 and m[o + 4:o + 8] == bytes(4) and s[o + 8:o + 12] == m[o + 8:o + 12] and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s))
+        print(f'Light Mode hook {q:#x}: {s[o:o + 8].hex()} -> {m[o:o + 8].hex()}', 'ok' if good else 'WRONG')
+        ok = ok and good
     o = va_to_off(s, SCAN_SITE[0]); sw = struct.unpack_from('<I', s, o)[0]; mw = struct.unpack_from('<I', m, o)[0]
     good = sw == 0x0320f809 and mw >> 26 == 3 and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s))
     print(f'library scan hook {SCAN_SITE[0]:#x}: {sw:#010x} -> {mw:#010x}', 'ok' if good else 'WRONG')
@@ -159,6 +167,11 @@ def main():
     for a, text in autotime.NEIGHBOURS:
         o = va_to_off(s, a); good = s[o:o + len(text)] == m[o:o + len(text)] == text
         print(f'auto time neighbour {a:#x}', 'ok' if good else 'WRONG')
+        ok = ok and good
+    for a, old, new, what in themeoff.EDITS:   # docs/modules/theme.md: the stock word in stock, the new one in the build
+        o = va_to_off(s, a); sw = struct.unpack_from('<I', s, o)[0]; mw = struct.unpack_from('<I', m, o)[0]
+        good = (sw, mw) == (old, new)
+        print(f'theme1 off {a:#x} ({what}): {sw:#010x} -> {mw:#010x}', 'ok' if good else 'WRONG')
         ok = ok and good
     o = va_to_off(s, SCROLL_SLOT[0]); sw = struct.unpack_from('<I', s, o)[0]; mw = struct.unpack_from('<I', m, o)[0]
     good = sw == 0 and 0xb00000 <= mw < 0xb00000 + (len(m) - len(s)) and mw % 4 == 0   # an empty slot, now a word inside the payload

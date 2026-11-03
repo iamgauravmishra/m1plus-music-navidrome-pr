@@ -9,7 +9,7 @@ is only the fallback. Files: `patch/picker.c` / `picker.h` (the add and the copi
 Our Playlists page in list mode, titled "Add to Playlist". A glass sheet (the Playlists "..." menu, the Songs Sort card) is for a handful of fixed rows; the picker
 lists up to 100 playlists with mosaics and counts, so it needs the scrolling list, the mosaic loader and the row painter the Playlists page already has. One
 code path, the same rows the user knows, nothing new to keep in step. The design is the page's: neutral greys, 64 px rows (52 px mosaic, name, count), the
-pressed row `#333333`.
+pressed row `#333334`.
 
 - Navbar: Back (glass chevron) and the title "Add to Playlist" (the Songs pill's text, short in all 13 languages; its label is widened to `SG_SELALL_X`, as
   in select mode). The "..." button, the view toggle and Now Playing are hidden and insensitive; the page is always the list (the saved grid / list choice is

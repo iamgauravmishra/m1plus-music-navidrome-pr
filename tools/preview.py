@@ -25,7 +25,7 @@ from awtk_ui import RAW
 def run(script, *args):
     subprocess.run([sys.executable, '-I', os.path.join(HERE, script), *args], check=True, stdout=subprocess.DEVNULL)
 
-def controls(s, work):
+def controls(s, work, bg=(0x14, 0x14, 0x14, 255), ink=lambda c: c):
     """The pull-down laid out from the tree's ui/dialog/dropdown_dialog.bin (tile images in a sample state,
     captions word-wrapped with mod_pulldown's model), then the toggle and slider images at 1:1."""
     import awtk_ui, mod_pulldown as MP
@@ -33,7 +33,7 @@ def controls(s, work):
     raw = os.path.join(work, RAW)
     root = awtk_ui.parse(open(os.path.join(raw, 'ui/dialog/dropdown_dialog.bin'), 'rb').read())
     ttf = Ttf(os.path.join(work, MP.FONT)); en = MP.strings(os.path.join(raw, 'strings/en_US.bin'), MP.TILE_KEYS)
-    im = Image.new('RGBA', (320, 640), (0x14, 0x14, 0x14, 255)); d = ImageDraw.Draw(im)
+    im = Image.new('RGBA', (320, 640), bg); d = ImageDraw.Draw(im)   # (bg, ink: tools/preview_accent.py draws it through the palette model)
     PI.asset_bar(s, root.find('view_sysbar'), im)
     tiles = {'img_wifiswitch': ('drop_wifiopen', 'label_wifi', 'wifiset_wifi'), 'img_btswitch': ('drop_bt', 'label_bt', 'wifiset_bt'),
              'img_keylockswitch': ('drop_keylock', 'label_lock', 'system_keylock'), 'img_gainswitch': ('drop_highgain', 'label_gain', 'gain_high'),
@@ -57,7 +57,7 @@ def controls(s, work):
         im.alpha_composite(s.img(n), (x, y)); x += 74
     y += 40
     # Now Playing's progress line for comparison, the volume bar, the waveform volume, brightness and balance
-    d.rectangle((12, y + 6, 12 + 295, y + 9), fill=(0x1C, 0x1C, 0x1C)); d.rectangle((12, y + 6, 12 + 170, y + 9), fill=(0xEE, 0xEE, 0xEC))
+    d.rectangle((12, y + 6, 12 + 295, y + 9), fill=ink((0x1C, 0x1C, 0x1C))); d.rectangle((12, y + 6, 12 + 170, y + 9), fill=ink((0xEE, 0xEE, 0xEC)))
     y += 22
     im.alpha_composite(s.img('volume_bg'), (40, y)); im.alpha_composite(s.img('volume_fg').crop((0, 0, 150, 8)), (40, y)); y += 20
     wb, wf = s.img('vol_progressbak'), s.img('vol_progress')
@@ -278,6 +278,7 @@ def main():
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     raw = os.path.join(work, RAW)
     s = PI.Side(work, True); s.mark = lambda *a: None   # no C/K markers here
+    run('preview_accent.py', work, os.path.dirname(os.path.abspath(out)))   # accent-black.png, accent-graphite.png: the planned Accent + Background picker (a mock-up, not in the firmware)
     with tempfile.TemporaryDirectory() as t:
         p = lambda n: os.path.join(t, n)
         run('preview_lockscreen.py', raw, p('lock.png'), f'release={raw}/ui/screensaver_page.bin',

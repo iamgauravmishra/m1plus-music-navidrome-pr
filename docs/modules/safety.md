@@ -3,7 +3,10 @@
 - **Keep the approved entry points.** Home icon tap, guarded Home initialization,
   Now Playing initialization, More-dialog initialization, the podcast tag-copy call site, the
   dot-folder scan, library query functions, status bar's battery-capacity call site
-  (Battery Percentage, off by default) and the previously empty `scroll_view` event slot.
+  (Battery Percentage, off by default), the previously empty `scroll_view` event slot, and the
+  palette's three paint-time hooks: `style_get_color` `0x659fcc`, `style_get_gradient` `0x659f9c` and
+  `image_manager_add` `0x655638` ([accent](accent.md), payload hooks 10 - 12). Each is pinned, falls back to
+  stock and is a pass-through while the palette is inactive (Black + Neutral) or `/mnt/mmc/m1plus-off` exists.
   [Payload](payload.md) defines the hook sites and fallbacks. Do not add global paint or
   main-loop work outside that scope.
 - **Boot-reachable hooks are a paved path.** A new pinned prologue or call-site hook on a stock

@@ -112,7 +112,7 @@ static void *bar_owner __attribute__((section(".scratch")));
 __attribute__((noinline)) unsigned pod_bar_color(unsigned color) {
     unsigned r = color & 255, g = color >> 8 & 255, b = color >> 16 & 255;
     while (POD_LUM(r, g, b) > NP_BAR_LUM_MAX) r = r * 15 >> 4, g = g * 15 >> 4, b = b * 15 >> 4;
-    return 0xff000000u | r | g << 8 | b << 16;
+    return pal_not_role(0xff000000u | r | g << 8 | b << 16);
 }
 
 static void *bar_find(void) {
@@ -198,7 +198,7 @@ __attribute__((noinline)) unsigned pod_alpha(unsigned y, unsigned a_top, unsigne
 __attribute__((noinline)) unsigned pod_shade(unsigned color, unsigned y, unsigned a_top, unsigned a_bot,
                                              unsigned rows) {
     unsigned keep = 255 - pod_alpha(y, a_top, a_bot, rows);
-    return (color & 255) * keep / 255 | (color >> 8 & 255) * keep / 255 << 8 | (color >> 16 & 255) * keep / 255 << 16;
+    return pal_not_role((color & 255) * keep / 255 | (color >> 8 & 255) * keep / 255 << 8 | (color >> 16 & 255) * keep / 255 << 16);
 }
 
 /* The coverage of the area outside a quarter circle of radius r in the corner square of r pixels (the circle's centre at
@@ -227,7 +227,7 @@ __attribute__((noinline)) void pod_corners(void *canvas, const unsigned char *ta
             for (x = 0; x < r; ++x) {
                 unsigned a = tab[y * r + x];
                 if (!a) continue;
-                canvas_set_fill_color(canvas, shade | a << 24);
+                ui_fill_color(canvas, shade | a << 24);
                 canvas_fill_rect(canvas, k & 1 ? side - 1 - x : x, ly, 1, 1);
             }
         }

@@ -161,14 +161,23 @@ static int np_bar_sync(void) {
     return top;
 }
 
-static void np_set_color(unsigned color) {
-    unsigned v[4]; /* value_t: type at 0, the uint32 at 8 */
+/* The cover's tone as the page shows it: in Light Mode the page is neutral (pal_tone: the dark chromatic tone cannot flip, and the page's white text does). np_tone_raw is
+ * the tone as chosen, so np_relight can put the page right when the mode changes while it is open. */
+static unsigned np_tone_raw __attribute__((section(".scratch")));
+
+static void np_set_color(unsigned tone) {
+    unsigned v[4], color = pal_tone(tone); /* value_t: type at 0, the uint32 at 8 */
+    np_tone_raw = tone;
     memset(v, 0, sizeof v);
     value_set_uint32(v, color);
     if (widget_set_style(np.win, "normal:bg_color", v) != RET_OK) return;
     np.color = color & 0xffffff;
     widget_invalidate_force(np.win, (void *)0);
     np_bar_apply();
+}
+
+void np_relight(void) {
+    if (np.win && np_tone_raw) np_set_color(np_tone_raw); /* (patch/palette.c pal_apply) */
 }
 
 /* The cover file of the source type, or NULL for a source with no JPEG file; busy is set while demo is still making it. */

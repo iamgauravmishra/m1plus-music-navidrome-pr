@@ -23,6 +23,7 @@
 #include "offsets.inc"
 #include "stock.h"
 #include "home.h"
+#include "palette.h"
 #include "scroll.h"
 #include "covercache.h"
 #include "durations.h"
@@ -177,7 +178,7 @@ static void ab_number(void *canvas, int i, int y) {
 
 /* The playing track's marker: the image ah_wave (white-ish bars on black, as cc_decode flattens it) as a bitmap whose alpha is the bars' coverage and whose colour is AB_WAVE_RGB. */
 static void *ab_make_wave(void *win) {
-    unsigned *px, i;
+    unsigned *px, i, col;
     void *b = bitmap_create_ex(AB_WAVE, AB_WAVE, AB_WAVE * 4, BITMAP_RGBA8888);
     int ok;
     if (!b) return b;
@@ -188,7 +189,8 @@ static void *ab_make_wave(void *win) {
         return (void *)0;
     }
     ok = cc_decode(win, "ah_wave", 1, AB_WAVE, 1, px);
-    for (i = 0; ok && i < AB_WAVE * AB_WAVE; ++i) px[i] = (px[i] & 0xff) * 255 / 0xee << 24 | AB_WAVE_COLOR;
+    col = pal_fill() & 0xffffffu; /* the accent's, or Neutral's AB_WAVE_COLOR (#EEEEEC): the wave is made when the page opens */
+    for (i = 0; ok && i < AB_WAVE * AB_WAVE; ++i) px[i] = (px[i] & 0xff) * 255 / 0xee << 24 | col;
     bitmap_unlock_buffer(b);
     if (!ok) {
         bitmap_destroy(b);
@@ -287,12 +289,25 @@ __attribute__((noinline)) static void ab_bar_black(void) {
     pod_bar_black(ab.win);
 }
 
+/* The tone as the page shows it: in Light Mode neutral (pal_tone: a chromatic dark tone cannot flip, and the page's white text does). ab_tone_raw is the tone as chosen,
+ * for ab_relight when the mode changes while the page is open. */
+static unsigned ab_tone_raw __attribute__((section(".scratch")));
+
 static void ab_tint_set(unsigned tone) {
-    ab.tone = tone & 0xffffff;
+    unsigned color = pal_tone(tone);
+    ab_tone_raw = tone;
+    ab.tone = color & 0xffffff;
     ab.tinted = 1;
-    ab_win_color(tone);
+    ab_win_color(color);
     widget_invalidate_force(ab.win, (void *)0);
     ab_bar_apply();
+}
+
+/* The page shows a cover's tone now (patch/palette.c pal_cover_page: the Tinted wash leaves it alone). */
+int ab_has_tone(void) { return ab.win && ab.tinted; }
+
+void ab_relight(void) {
+    if (ab.win && ab.tinted) ab_tint_set(ab_tone_raw); /* (patch/palette.c pal_apply) */
 }
 
 /* The page's tone: the tone cache, else the average colour of the cover file (one 168 px decode, box-averaged to one pixel), which is remembered. */

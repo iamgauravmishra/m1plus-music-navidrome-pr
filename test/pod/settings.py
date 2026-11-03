@@ -54,8 +54,8 @@ def layout_tests(ctx):
     """Every cards page under demo's own layouter, plus the asset against the model."""
     expect, P = ctx.expect, pod_pages
     pages = [p for p in P.PAGES if p.kind == 'cards']
-    expect([p.key for p in pages] == ['m1plus_settings', 'm1plus_library', 'm1plus_homeset', 'm1plus_developer', 'm1plus_npset', 'm1plus_keyboards', 'm1plus_albumorder', 'm1plus_tapetheme', 'm1plus_about', 'm1plus_vinylrec', 'm1plus_vinyltheme', 'm1plus_cache', 'm1plus_files'],
-           'the cards pages: Settings, Library, Home Screen, Developer, Now Playing, Keyboards, the four pickers, About, Cover Cache and Settings Files')
+    expect([p.key for p in pages] == ['m1plus_settings', 'm1plus_library', 'm1plus_homeset', 'm1plus_developer', 'm1plus_npset', 'm1plus_keyboards', 'm1plus_albumorder', 'm1plus_tapetheme', 'm1plus_about', 'm1plus_vinylrec', 'm1plus_vinyltheme', 'm1plus_cache', 'm1plus_files', 'm1plus_background', 'm1plus_accent', 'm1plus_appearance'],
+           'the cards pages: Settings, Library, Home Screen, Developer, Now Playing, Keyboards, the four pickers, About, Cover Cache, Settings Files, the Background picker, the Accent picker and Appearance')
     expect(mod_icons.CARD_PIECE == {'ROW_W': ST.ROW_W, 'ROW_H': ST.ROW_H, 'CARD_X': ST.CM, 'CARD_W': ST.CARD_W, 'CARD_R': ST.CARD_R, 'FILL': (0x1C,) * 3, 'LIT': (0x2C, 0x2C, 0x2E)}
            and ST.CARD_RGB == '#1C1C1C' and ST.PRESSED_RGB == '#2C2C2E', 'the pieces\' geometry in tools/mod_icons.py is the layout model\'s')
     for page in pages:
@@ -91,16 +91,18 @@ def layout_tests(ctx):
         for n, it in enumerate(page.rows):
             r, kind = rows[n], P.row_kind(it)
             last = kinds[n] in ('single', 'bot')
-            has_icon = kind not in ('check', 'info') and it.action not in (P.ACT_CCLIST, P.ACT_UPDATE)
+            swatch = it.action == P.ACT_ACCENTSET   # the Accent picker's rows: a round swatch where a glyph goes (pod_swatch)
+            has_icon = swatch or (kind not in ('check', 'info') and it.action not in (P.ACT_CCLIST, P.ACT_UPDATE))
             lab = next(c for c in r.children if c.name == f'pod_label{n}')
             lx, lw = ST.label_box(kind, has_icon)
             normal, down = ST.piece_images(kinds[n])
             expect((r.x, r.h) == (0, ST.ROW_H) and r.get('style') == 'list_item_style' and (lab.x, lab.w) == (lx, lw) and lab.get('style') == 'srlabel_leftwhite21_style'
                    and r.get('style:normal:bg_image') == normal and r.get('style:pressed:bg_image') == down and r.get('style:normal:bg_image_draw_type') == 'default'
                    and r.get('style:normal:bg_color') == '#00000000', f'{page.key}:{it.label}: the {kinds[n]} piece of its card (lit when pressed), the label box from x {lx} to {lx + lw}')
-            ic = [c for c in r.children if c.name == 'pod_icon']
+            ic = [c for c in r.children if c.name in ('pod_icon', 'pod_swatch')]
             expect(bool(ic) == has_icon and (not ic or ((ic[0].x, ic[0].y, ic[0].w, ic[0].h) == (ST.ICON_X, ST.ICON_Y, 24, 24) and ic[0].get('sensitive') == 'false'
-                                                         and ic[0].get('image') == mod_icons.card_name(mod_icons.CARD_GLYPHS[it.label]))), f'{page.key}:{it.label}: the 20 px glyph in its 24 px image, or none on a picker row')
+                                                         and ic[0].name == ('pod_swatch' if swatch else 'pod_icon')
+                                                         and ic[0].get('image') == (f'pod_sw{it.arg}' if swatch else mod_icons.card_name(mod_icons.CARD_GLYPHS[it.label])))), f'{page.key}:{it.label}: the 20 px glyph (or the swatch) in its 24 px image, or none on a picker row')
             hair = [c for c in r.children if c.name == 'pod_hair']
             expect(bool(hair) == (not last) and (not hair or ((hair[0].x, hair[0].y, hair[0].w, hair[0].h) == (lx, ST.ROW_H - 1, ST.CM + ST.CARD_W - lx, 1) and hair[0].get('sensitive') == 'false'
                                                               and hair[0].get('style:normal:bg_color') == ST.CARD_HAIR_RGB)), f'{page.key}:{it.label}: a hairline from the label to the card\'s edge, none on the last row')
@@ -275,11 +277,12 @@ def stock_tests(ctx):
         expect(value(settings_machine(mode=mode), 'Play Mode') == key, f'play mode {mode} reads {key}')
     expect(value(settings_machine(mode=9), 'Play Mode') == 'playmode_listplay', 'an unknown play mode reads as the first')
     expect(value(settings_machine(EQ_FLAG=1, EQ_MODE=12), 'EQ') == 'Off', 'a preset the name lookup refuses reads Off')
-    expect(not any(c[0] in ('write_int_config', 'mclSetPlayMode', 'open', 'write') for c in settings_machine().calls), 'opening the page reads state and writes nothing')
+    expect(not any(c[0] in ('write_int_config', 'mclSetPlayMode', 'write') or (c[0] == 'open' and c[2] != 0) for c in settings_machine().calls), 'opening the page reads state and writes nothing (the Light Mode value reads its file)')
     # the value takes the room its text needs: the box is moved and resized, and the label gets the rest (patch/m1plus.c value_fit)
     m = settings_machine()
     vi = rows['Play Mode']
     expect(any(c[0] == 'widget_resize' and c[1] == m.widgets[f'pod_label{vi}'] for c in m.calls) and any(c[0] == 'widget_move' and c[1] == m.widgets[f'pod_value{vi}'] for c in m.calls), 'value_fit moves the value box and resizes the row\'s label')
+
     # coming back to the page (a stock page may have changed the state) shows it again
     m = settings_machine()
     fg = [(k, v) for k, v in m.bound.items() if k[1] == O['EVT_WINDOW_TO_FG']]

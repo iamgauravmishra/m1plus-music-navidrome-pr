@@ -6,13 +6,13 @@
 100-byte item per (state, style name, widget type) with the offset of its property block, then blocks
 of `{u8 type, u8 key size, u16 value size, key\0, value}` (types 6 int32, 7 uint32 -- colours r,g,b,a
 -- 14 string). All stock theme files (default and theme1) round-trip byte-exact. Only the **default
-theme** is modded: theme1 (accent salmon `#FA7268`, its own image files) keeps its stock look.
+theme** is modded: theme1 (accent salmon `#FA7268`, its own image files) keeps its stock look in the asset tree, but is forced off at run time (below).
 
 | role | colour | stock |
 |---|---|---|
 | row surface | `#000000` | `#131313` |
 | row hairline | `#222222`, 1 px bottom (M1+ Music rows: from x 56, under the title) | 4 px black gap |
-| pressed row / key | `#333333` | `#362221` (default), `#2E2A1A` (theme1) |
+| pressed row / key | `#333334` (one blue level off `#333333`: the accent maps it, nothing else has it) | `#362221` (default), `#2E2A1A` (theme1) |
 | title text | `#FFFFFF` | same |
 | former accent text | `#FFFFFF` | `#FE7E40` / `#FA7268` |
 | muted partner text | `#8C8C8C` | `#FFFFFF` |
@@ -67,3 +67,15 @@ style a row can hold (no light row surface; worst text >= 4.5:1 at rest and pres
 5.44, white 21 / 12.6); `page_audit()` checks every text-drawing widget of every `ui/*.bin` against the
 nearest opaque ancestor, stock vs mod, and fails if any pair falls below 4.5:1 and got worse;
 `mod_theme.py --scan TREE STOCK` repeats the page scan on the finished tree (window themes included).
+
+The colours above are the Black background with the Neutral accent. A user-picked accent and the Light background map them at run time ([accent and palette](accent.md)). Two colours exist only for that mapping and are one level off their neutral: a pressed row/key `#333334` (`PRESSED`, `LIST_PRESS`) and the Now Playing progress fill `#FFFFFEEB`; a test proves no other style or source has them.
+
+## theme1 is off (`tools/themeoff.py`, `test/pod/themeoff.py`)
+
+The palette ([accent](accent.md)) only maps the modded default theme, so stock's System > Theme choice is gone. Stock keeps it in `/mnt/data/config.ini [SYSSET] THEME` (0 default, 1 theme1; RAM word `0xa05a98`): `config_init` (`0x4e5030`, key read at `0x4e63b8`) does `atoi` and treats a value >= 2 as 0, `awtk_configinit` (`0x4ccb5c`, called from `application_init` after `platform_init`) calls `widget_set_theme(window_manager(), flag ? "theme1" : "default")`, and the Theme page (`systemset/theme_page`, init `0x4ae7c4`; rows `theme_item0/1`, handlers `0x4ae730` / `0x4ae77c` -> `0x4ae588`) writes it with `write_int_config`. Three pinned word edits in demo, no payload code and no boot hook (so the kill switch cannot undo them and boot has no new work):
+
+- the clamp in `config_init`, `sltiu v1, v0, 2` (`0x4e63d8`) -> `sltiu v1, v0, 1`: any stored THEME other than 0 is read as 0, so `awtk_configinit` picks `"default"` on the first and only theme load of the boot. A device that was on theme1 comes up on default; the file keeps `THEME=1` (never rewritten: there is nothing left that reads it as 1, and a stock restore brings theme1 back as it was);
+- the row table of the stock System page (`All System Settings`, `sysset` id 17): `systemset_sysset_page_init` (`0x4ada7c`) lists rows `0 .. count-1` of the table at `0x97c8c0` (identity 0..15) and the click handler (`0x4ad7b0`) maps the tapped row's name (`"%d"`) through the same table to a jump table (`0x748ae0`); index 10 is `sset_theme` -> `systemset/theme_page`. Entry 10 moves to the end of the table;
+- the row count (`addiu v0, v0, 0xf` at `0x4adb1c`; one more for language 3) is one less. The rows built in code, so there is no Theme row in any asset (`ui/systemset/system_page.bin` and `theme_page.bin` have only the empty list and the navbar). The switch rows keep their positions 6 and 7 (`img_carmode%d`, `img_doublewake%d`).
+
+`systemset/theme_page` is named only by the click dispatcher (`0x4ad9fc`, now unreachable) and by the page-init dispatcher `0x4d13d8`; nothing else opens it. `assets/theme1` is still in the tree: the building steps still edit it (`ASSET_THEMES` and the `THEMES` tuples in `mod_theme`, `mod_lists`, `mod_overlays`, `mod_pulldown`, `mod_battery`, `mod_polish`, `mod_lockscreen`, `mod_boot`, `pod_ui`) and `test/pod/navbars.py` / `test/navbars-stock.sha256` keep its stock bytes. Removing it needs those steps and tests trimmed, and demo has two names for it: the `"theme1"` literal (`0x748b84`) in `awtk_configinit` and the theme page, the latter now unreachable, the former reached only with the flag set, which the clamp prevents. A stock-only boot (no clamp: the stock `demo`) would still ask `assets_manager` for `theme1` when `THEME=1` is in `config.ini`, so deleting the assets is safe only together with this clamp.

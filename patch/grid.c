@@ -282,7 +282,7 @@ static void grid_fill(void *canvas, int x0, int x1, int y0, int y1, unsigned c, 
     if (y0 < 0) y0 = 0;
     if (y1 > view_h) y1 = view_h;
     if (y1 <= y0 || x1 <= x0) return;
-    canvas_set_fill_color(canvas, c);
+    ui_fill_color(canvas, c);
     canvas_fill_rect(canvas, x0, y0, x1 - x0, y1 - y0);
 }
 

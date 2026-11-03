@@ -31,7 +31,7 @@ and measure the font from the tree being built.
 | Playback | [Now Playing](modules/nowplaying.md), [lyrics page](modules/lyrics.md), [More sheet](modules/playmore.md), [Find Cover & Lyrics](modules/onlineart.md), [Software Update](modules/update.md) (preview: `tools/preview_update.py`), [mini player](modules/minibar.md) |
 | Home content | [Recently Played](modules/recent.md), [Daily Mix](modules/dailymix.md), [cover build line](modules/homecover.md) |
 | Extras | [Playlists](modules/playlists.md), [Songs](modules/songs.md), [Podcasts](modules/podcasts.md), [Cassette Mode](modules/tape.md), [Vinyl Mode](modules/vinyl.md), [virtual iPod](modules/ipod.md), [iPod Cover Flow](modules/ipod-coverflow.md), [Keyboard](modules/keyboard.md) |
-| System appearance | [Boot logo/slides](modules/boot.md), [icons](modules/icons.md), [battery](modules/battery.md), [pull-down](modules/pulldown.md), [lock screen](modules/lockscreen.md), [wallpaper](modules/wallpaper.md), [About/polish](modules/polish.md), [dialogs, power-off splash](modules/overlays.md) |
+| System appearance | [Accent and palette](modules/accent.md), [Boot logo/slides](modules/boot.md), [icons](modules/icons.md), [battery](modules/battery.md), [pull-down](modules/pulldown.md), [lock screen](modules/lockscreen.md), [wallpaper](modules/wallpaper.md), [About/polish](modules/polish.md), [dialogs, power-off splash](modules/overlays.md) |
 | Languages | [Translation and sizing](modules/i18n.md) |
 
 Older source comments refer to former UI sections: 1 rules, 2 text width, 3 fonts, 4 theme/lists/

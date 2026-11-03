@@ -19,4 +19,4 @@ glyph (`drop_wifi`, `bt`, `keylock`, `eq`, `lowgain`, `po`, `playset`, `sysset`)
 `#141414` glyph (the `*open` images, `highgain`, `lo`, `usbaudio`, `usbdac`, `usbstorage`, the pressed
 `playsetdown`/`syssetdown`), disabled `#444444` (`lowgaindisable`, `highgaindisable`). Gain uses custom
 2-/5-bar glyphs, Output the text "PO"/"LO" in Inter Medium 17 px. White disc was chosen over a white ring
-(only a brightness step from the grey ring; the disc is what stock does with its orange fill).
+(only a brightness step from the grey ring; the disc is what stock does with its orange fill). With an accent the ON tiles' disc is the accent and the glyph stays `#141414` ([accent](accent.md), `ACCENT_DISC`).

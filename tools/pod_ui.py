@@ -1462,7 +1462,8 @@ def cards_row(i, row, piece, last):
     import pod_settings as ST
     from mod_icons import CARD_GLYPHS, card_name, CARD_CHEVRON, CARD_CHECK
     kind = pod_pages.row_kind(row)
-    has_icon = kind not in ('check', 'info') and row.action not in (pod_pages.ACT_CCLIST, pod_pages.ACT_UPDATE)   # (the Cover Cache counts and About's Software Update link have no glyph, like the rows around them)
+    swatch = row.action == pod_pages.ACT_ACCENTSET   # the Accent picker's rows show the accent's round swatch where a glyph goes (never tinted: docs/modules/accent.md)
+    has_icon = swatch or (kind not in ('check', 'info') and row.action not in (pod_pages.ACT_CCLIST, pod_pages.ACT_UPDATE))   # (the Cover Cache counts and About's Software Update link have no glyph, like the rows around them)
     item = Widget('list_item', 0, 0, ST.LIST_W, ST.ROW_H, [('name', f'pod_row{i}'), ('style', 'list_item_style')] + ([('sensitive', 'false')] if kind == 'info' else []))
     normal, down = ST.piece_images(piece)
     for st in ('normal', 'over', 'pressed', 'focused', 'disable'):
@@ -1474,7 +1475,7 @@ def cards_row(i, row, piece, last):
     x, w = ST.label_box(kind, has_icon)
     if has_icon:
         item.children.append(Widget('image', ST.ICON_X, ST.ICON_Y, ST.ICON_PX, ST.ICON_PX, [
-            ('name', 'pod_icon'), ('image', card_name(CARD_GLYPHS[row.label])), ('draw_type', 'icon'), ('sensitive', 'false')]))
+            ('name', 'pod_swatch' if swatch else 'pod_icon'), ('image', f'pod_sw{row.arg}' if swatch else card_name(CARD_GLYPHS[row.label])), ('draw_type', 'icon'), ('sensitive', 'false')]))
     item.children.append(Widget('hscroll_label', x, 0, w, ST.ROW_H, [
         ('name', f'pod_label{i}'), ('style', 'srlabel_leftwhite21_style'), pod_i18n.text_prop(row.label), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('yoyo', 'true'), ('loop', 'true')]))
     if kind in ('link', 'value'):

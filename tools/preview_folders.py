@@ -5,7 +5,7 @@ files (Play / Shuffle pills, the wave on what plays), the list scrolled past the
 folder with long names and an empty one.
 Not pixel-exact AWTK (the text is the project's own text model).
 
-  preview_folders.py WORKDIR OUT.png [--lang CODE]
+  preview_folders.py WORKDIR OUT.png [--lang CODE] [--accent NAME]
 
 WORKDIR is a built tree (work/mod-release).
 """
@@ -126,8 +126,13 @@ def extras_panel(s):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('workdir'); ap.add_argument('out'); ap.add_argument('--lang', default='en_US')
+    ap.add_argument('--accent', default='neutral', help='an accent (red, orange, ...): every image through palette.render_image, so the pod_ic_ / fo_ic_ glyphs are the accent')
     a = ap.parse_args()
     s = PI.Side(a.workdir, True, a.lang)
+    if a.accent != 'neutral':
+        import palette
+        img0 = s.img
+        s.img = lambda n: palette.render_image(n, img0(n), 'black', a.accent)
     asset = awtk_ui.parse(open(os.path.join(a.workdir, PI.RAW, 'ui', 'm1plus_folders.bin'), 'rb').read())
     assert asset.find('folders_scrollview') is not None and asset.find('btn_select') is not None, 'not the Folders asset'
     root = PS.tr(s, 'Folders')

@@ -64,6 +64,26 @@ in [history](../history.md); feature modules retain their detailed edge cases.
   `.lrc`. [Checklist](onlineart.md#device-checks-not-run)
 - **EXTRA-05:** Vinyl Mode cover label, turning and stopping, arm on the groove and parked, keys,
   record tap, close and dark-screen timer behaviour. [Vinyl checklist](vinyl.md#device-checklist)
+- **ACCENT-01 defaults:** with no `appearance-accent` file everything looks as on main: Settings, Home, lists, keyboard,
+  Now Playing; a pressed row is `#333334` and a pressed Settings card `#2C2C2E`, every glyph stays white. Settings > System shows
+  Appearance (between Display and Keyboards, a chevron, no value) opens a page with Accent = Neutral, which opens the picker; back from the
+  picker returns to Appearance; the Light row stays hidden.
+- **ACCENT-05 Tinted background and menu glyphs:** Appearance > Background > Tinted with an accent: pages, cards, hairlines, sheets, mini player glass and navbar fade take the wash at once (Teal page `#08181B`); text, secondary greys and chevrons unchanged; Now Playing, album page, Show page and Daily Mix page keep their cover backgrounds and black fades; lock screen, full-screen cover, power-off splash, Pod and Cassette unchanged; Neutral + Tinted looks Black; reboot keeps both; `m1plus-off` returns Black + Neutral. With any accent the M1+ Music rows' glyphs (main menu, Shuffle, Extras, Main Menu pages) are the accent at rest (white text; the Settings cards' glyphs are the accent too, see ACCENT-06; the Folders list, all of it (storage, folder, playlist, CD Library, audio file glyphs: one colour, none white), and Now Playing's More sheet glyphs are the accent too), changing the accent updates them when back on the page; a press and release does not flash white. Open the main menu right after a boot (glyphs are the accent from the first paint), idle in front for over a minute, and leave it behind another page and come back: the glyphs are still the accent, never blank or white; open and close the pull-down (and Now Playing's mini bar) after 15 s idle: no glyph blanks.
+- **ACCENT-02 each accent (Red, Orange, Green, Teal, Purple, Champagne), applied at once with the picker open:** the check and
+  Settings value follow; pressed Settings card, M1+ menu row (Music, Shuffle, Extras, Main Menu) and list row tint, with the
+  row's glyph already the accent (nothing changes on the glyph at a press or a release); switch on is accent with white knob;
+  pull-down brightness/volume fills, the lit (ON) pull-down tiles (Wi-Fi, Bluetooth, EQ, Key Lock, USB Audio/DAC/Storage, High Gain, LO, the pressed Play/System Settings: an accent disc with the dark glyph; off and disabled tiles unchanged), the date selector line, the Now Playing progress fill, the playing wave in a list and on
+  the album page (reopen the page after a change); picker check and swatches (Neutral light grey, never tinted).
+- **ACCENT-06 Settings glyphs in the accent at rest:** with an accent, every glyph of the Settings pages (Settings, System, Appearance, Library, Playback, Developer, the pickers' link rows; Wi-Fi
+  to Open Shanling Home) is the accent while the row is idle, white text beside it; the pressed row is the 22 % tint with the same accent glyph, nothing flashes white at a press, release or scroll. The
+  accent swatches in the Accent picker, the chevrons and the stock Settings pages' 40 px disc icons keep their colours. Leave Settings, wait over a minute, come back, and open a deep page cold: the glyphs
+  are the accent, never white or blank. Neutral: all white. [Accent](accent.md)
+- **ACCENT-03 unchanged under any accent:** lock screen, full-screen cover, power-off splash, Pod, Cassette Mode, cover-tinted
+  page backgrounds, chevrons, secondary text, navbars.
+- **THEME-01 theme1 off:** Settings > All System Settings lists no Theme row (the rows after it moved up; the tap of every row opens its own page). To prove the clamp, first flash the previous build or stock, pick System > Theme > the second theme (salmon look), then flash this build: it comes up on the default look at the first boot, and `config.ini` still says `THEME=1`. With `/mnt/mmc/m1plus-off` present the look stays the default (the edits are in `demo`). [Theme](theme.md)
+- **ACCENT-04 persistence and kill switch:** the accent survives a reboot; `/mnt/mmc/m1plus-off` returns Neutral within a
+  minute (all glyphs white again); removing it brings the accent back.
+  [Accent](accent.md)
 
 For captures use Settings → Developer → Screenshot, then `tools/pull_shots.py --build latest`.
 See [installation/restore](../install.md) and [capture details](screenshot.md).

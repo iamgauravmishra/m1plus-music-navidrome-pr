@@ -74,14 +74,18 @@ ACT_RECSET = 39   # picker row (Record): choose the colour (arg = its index in v
 ACT_VTHEME = 40   # value row (Settings > Now Playing > Vinyl Mode): the plinth theme, Graphite or White; opens its picker page (arg = the page index; patch/vinyl.c vinyl_theme)
 ACT_VTHSET = 41   # picker row (Base): choose the theme (arg = its index in vinyl_art.THEME_NAMES); a check shows on the chosen row (patch/vinyl.c vinyl_theme_set)
 ACT_UPDATE = 45   # link row (Settings > System > About): Software Update, our own page (patch/update.c update_open): check GitHub for a newer release, download it to the card, hand over to the stock TF card update
+ACT_BG = 46       # value row (Settings > System > Appearance > Background): Black or Tinted; opens its picker page (arg = the page index); the payload shows the saved background (patch/palette.c pal_bg_mode)
+ACT_BGSET = 47    # picker row (Background): choose the background (arg 0 Black, 1 Tinted); a check shows on the chosen row, and the choice applies at once (patch/palette.c pal_bg_set)
+ACT_ACCENT = 48    # value row (Settings > System > Accent): the accent's name; opens its picker page (arg = the page index); the payload shows the saved accent (patch/palette.c pal_accent_saved)
+ACT_ACCENTSET = 49 # picker row (Accent): choose the accent (arg = its index in ACCENT_VALUES); a check shows on the chosen row and the choice applies at once (patch/palette.c pal_accent_set)
 _ACTS = [v for k, v in globals().items() if k.startswith('ACT_')]
 assert len(set(_ACTS)) == len(_ACTS), 'two ACT_* share an id (patch/m1plus.c mirrors them)'
 SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
-VALUE_ACTIONS = (ACT_SORT, ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
-CHECK_ACTIONS = (ACT_SORTSET, ACT_THEMESET, ACT_RECSET, ACT_VTHSET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
+VALUE_ACTIONS = (ACT_SORT, ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_BG, ACT_ACCENT)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
+CHECK_ACTIONS = (ACT_SORTSET, ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
 ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_CLEARCACHE, ACT_CLEARDUR, ACT_GRID)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
-VALUE_INIT = {ACT_SORT: 'Artist', ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite'}   # what the asset's value label says before the payload sets it
+VALUE_INIT = {ACT_SORT: 'Artist', ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral'}   # what the asset's value label says before the payload sets it
 # The stock pages ACT_STOCK opens: (the name navigator_to takes = ui/<name>.bin, the value the row shows at the right: the payload reads the stock state, patch/m1plus.c VK_*, or None).
 # Each is a plain navigator_to(name) with no context in stock (docs/modules/settings.md "Stock pages"): the Settings and Play Settings lists' rows, the Wi-Fi hub's two; Back returns to our page.
 STOCK_WIFI, STOCK_BLUETOOTH, STOCK_PLAYMODE, STOCK_EQ, STOCK_DISPLAY, STOCK_FWUPDATE = range(6)
@@ -158,6 +162,9 @@ ABOUT_PAGE_INDEX = 23
 RECORD_PAGE_INDEX = 29
 VINYL_WHITE_INDEX = 30
 VTHEME_PAGE_INDEX = 31
+BG_PAGE_INDEX = 38   # after UPDATE
+ACCENT_PAGE_INDEX = 39  # after BG_PAGE
+APPEARANCE_PAGE_INDEX = 40  # the last of PAGES
 ITEMS = [   # item id = index; the default order, essentials first (iPod classic style)
     Row('Now Playing', ACT_PLAYER),
     Row('Cover Flow', ACT_COVER),
@@ -266,7 +273,7 @@ SHUFFLE_PAGE = Page('m1plus_shuffle', 'm1plus_shuffle_page', 'Shuffle', rows=[
 ])
 
 # Settings (iOS style grouped cards, tools/pod_settings.py places them; the design is tools/preview_settings.py's): the stock Wi-Fi and Bluetooth pages, the M1+ Music pages
-# (Home Screen, Library, Now Playing, Keyboards), Playback (Play Mode, EQ, the stock Play Settings list) and System (Display, Keyboards, About, the stock
+# (Home Screen, Library, Now Playing, Keyboards), Playback (Play Mode, EQ, the stock Play Settings list) and System (Display, Appearance, Keyboards, About, the stock
 # System Settings list), then Developer. Every "stock page" row is a plain navigator_to of the page stock's own list calls (STOCK_PAGES).
 SETTINGS_PAGE = Page('m1plus_settings', 'm1plus_settings_page', 'Settings', layout=[
     Row('Wi-Fi', ACT_STOCK, STOCK_WIFI),
@@ -281,6 +288,7 @@ SETTINGS_PAGE = Page('m1plus_settings', 'm1plus_settings_page', 'Settings', layo
     Row('All Playback Settings', ACT_HOME, HOME_PLAYSET),
     Hdr('System'),
     Row('Display', ACT_STOCK, STOCK_DISPLAY),
+    Row('Appearance', ACT_PAGE, APPEARANCE_PAGE_INDEX),
     Row('Keyboards', ACT_PAGE, KEYBOARDS_PAGE_INDEX),
     Row('About', ACT_PAGE, ABOUT_PAGE_INDEX),
     Row('All System Settings', ACT_HOME, HOME_SYSSET),
@@ -512,6 +520,22 @@ VTHEME_VALUES = ('Graphite', 'Snow')   # the value the Base row shows, in the or
 RECORD_VALUES = ('Black', 'Cover')   # the value the Record row shows, in the order of the saved index (tools/vinyl_art.py RECORD_NAMES)
 CTHEME_VALUES = ('Normal', 'Chrome', 'Metal')   # the value shown for the setting's three states, in the order of the saved index (tools/tape_art.py THEME_NAMES)
 
+# Settings > System > Appearance > Background (docs/modules/accent.md): the picker, a check on the chosen row. The choice applies at once (patch/palette.c pal_bg_set: cached images dropped, the screen
+# repainted). The saved file also knows 2 Light and 3 Light Auto (patch/palette.c); they are not offered.
+BG_PAGE = Page('m1plus_background', 'm1plus_background_page', 'Background', layout=[
+    Row('Black', ACT_BGSET, 0),
+    Row('Tinted', ACT_BGSET, 1),
+])
+BG_VALUES = ('Black', 'Tinted')   # the value the Background row shows for the saved background 0, 1
+
+# Settings > System > Accent (docs/modules/accent.md): the picker, one row per accent with its round swatch where a row's glyph goes (the image pod_sw<arg>, tools/mod_icons.py) and a check on the
+# chosen one. The choice applies at once (patch/palette.c pal_accent_set). ACCENT_VALUES is tools/palette.py ACCENTS in the saved order, as the names the rows show.
+ACCENT_VALUES = ('Neutral', 'Red', 'Orange', 'Green', 'Teal', 'Purple', 'Champagne')
+ACCENT_PAGE = Page('m1plus_accent', 'm1plus_accent_page', 'Accent', layout=[Row(n, ACT_ACCENTSET, i) for i, n in enumerate(ACCENT_VALUES)])
+
+# Settings > System > Appearance: one card with the Background value row (Black or Tinted) and the Accent value row (the accent's name); each opens its picker.
+APPEARANCE_PAGE = Page('m1plus_appearance', 'm1plus_appearance_page', 'Appearance', layout=[Row('Background', ACT_BG, BG_PAGE_INDEX), Row('Accent', ACT_ACCENT, ACCENT_PAGE_INDEX)])
+
 # The keyboard page (patch/keyboard.c, docs/modules/keyboard.md): the navbar, a search field and our own QWERTY pad; opened by keyboard_open (the Developer row, later podcast search), no menu row.
 KEYBOARD = Page('m1plus_keyboard', 'm1plus_keyboard_page', 'Keyboard', kind='keyboard')
 
@@ -535,13 +559,13 @@ QUEUE_PAGE = Page('m1plus_queue', 'm1plus_queue_page', 'Queue', kind='queue')
 # PAGES[0] is the entry page.
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
          EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, SORT_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL, FOLDERS, QUEUE_PAGE,
-         RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST, FILES_PAGE, UPDATE, RELNOTES]
+         RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST, FILES_PAGE, UPDATE, RELNOTES, BG_PAGE, ACCENT_PAGE, APPEARANCE_PAGE]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE
 assert PAGES[EXTRASCFG_PAGE_INDEX] is EXTRASCFG_PAGE and PAGES[DEVELOPER_PAGE_INDEX] is DEVELOPER_PAGE
 assert PAGES[EXTRAS_PAGE_INDEX] is EXTRAS_PAGE and PAGES[MENUCFG_PAGE_INDEX] is MENUCFG_PAGE
 assert PAGES[LIBRARY_PAGE_INDEX] is LIBRARY_PAGE and PAGES[HOMESET_PAGE_INDEX] is HOMESET_PAGE
-assert PAGES[ABOUT_PAGE_INDEX] is ABOUT_PAGE and PAGES[RECORD_PAGE_INDEX] is RECORD_PAGE
+assert PAGES[ABOUT_PAGE_INDEX] is ABOUT_PAGE and PAGES[RECORD_PAGE_INDEX] is RECORD_PAGE and PAGES[BG_PAGE_INDEX] is BG_PAGE and PAGES[ACCENT_PAGE_INDEX] is ACCENT_PAGE and PAGES[APPEARANCE_PAGE_INDEX] is APPEARANCE_PAGE
 assert PAGES[VINYL_WHITE_INDEX] is VINYL_WHITE and PAGES[VTHEME_PAGE_INDEX] is VTHEME_PAGE and PAGES[CACHE_PAGE_INDEX] is CACHE_PAGE and PAGES[FILES_PAGE_INDEX] is FILES_PAGE
 assert PAGES[SORT_PAGE_INDEX] is SORT_PAGE and PAGES[THEME_PAGE_INDEX] is THEME_PAGE

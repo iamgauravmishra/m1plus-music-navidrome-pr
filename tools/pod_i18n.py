@@ -749,6 +749,28 @@ TEXT = dict([
        'Nieve', 'Neve', 'หิมะ', 'Śnieg', 'Снег', 'Сніг'),
     _t('Applies the next time Vinyl Mode opens.', '下次打开黑胶模式时生效。', '下次開啟黑膠模式時生效。', '次回レコードモード起動時に反映', '다음에 바이닐 모드를 열 때 적용됩니다.', "S'applique à la prochaine ouverture.", 'Gilt beim nächsten Öffnen.',
        'Se aplica la próxima vez que se abre.', 'Si applica alla prossima apertura.', 'มีผลเมื่อเปิดครั้งถัดไป', 'Zastosowane przy następnym otwarciu.', 'Применится при следующем открытии.', 'Застосується при наступному відкритті.'),
+    # Settings > System > Appearance > Background (patch/palette.c, docs/modules/accent.md): the row and its picker's title, and the Tinted value (Black is the key above)
+    _t('Background', '背景', '背景', '背景', '배경', 'Arrière-plan', 'Hintergrund',
+       'Fondo', 'Sfondo', 'พื้นหลัง', 'Tło', 'Фон', 'Тло'),
+    _t('Tinted', '着色', '著色', 'ティント', '색조', 'Teinté', 'Getönt',
+       'Teñido', 'Colorato', 'ปรับสี', 'Zabarwione', 'Тонированный', 'Тонований'),
+    # Settings > System > Accent (patch/palette.c, docs/modules/accent.md): the row and its picker's title, then the seven accents (the picker's rows and the row's value)
+    _t('Accent', '强调色', '強調色', 'アクセント', '강조 색상', 'Couleur', 'Akzentfarbe',
+       'Color de énfasis', 'Accento', 'สีเน้น', 'Akcent', 'Акцент', 'Акцент'),
+    _t('Neutral', '中性', '中性', 'ニュートラル', '중립', 'Neutre', 'Neutral',
+       'Neutro', 'Neutro', 'เป็นกลาง', 'Neutralny', 'Нейтральный', 'Нейтральний'),
+    _t('Red', '红色', '紅色', 'レッド', '레드', 'Rouge', 'Rot',
+       'Rojo', 'Rosso', 'แดง', 'Czerwony', 'Красный', 'Червоний'),
+    _t('Orange', '橙色', '橙色', 'オレンジ', '오렌지', 'Orange', 'Orange',
+       'Naranja', 'Arancione', 'ส้ม', 'Pomarańczowy', 'Оранжевый', 'Помаранчевий'),
+    _t('Green', '绿色', '綠色', 'グリーン', '그린', 'Vert', 'Grün',
+       'Verde', 'Verde', 'เขียว', 'Zielony', 'Зелёный', 'Зелений'),
+    _t('Teal', '青绿色', '青綠色', 'ティール', '틸', 'Sarcelle', 'Türkis',
+       'Turquesa', 'Turchese', 'เขียวอมฟ้า', 'Morski', 'Бирюзовый', 'Бірюзовий'),
+    _t('Purple', '紫色', '紫色', 'パープル', '퍼플', 'Violet', 'Violett',
+       'Morado', 'Viola', 'ม่วง', 'Fioletowy', 'Фиолетовый', 'Фіолетовий'),
+    _t('Champagne', '香槟色', '香檳色', 'シャンパン', '샴페인', 'Champagne', 'Champagner',
+       'Champán', 'Champagne', 'แชมเปญ', 'Szampański', 'Шампань', 'Шампань'),
     # The Songs page (patch/songs.c): the Play pill (Shuffle is above), the select mode's navbar ("N Selected", the Select All text button) and its
     # Delete pill. The count goes where %d is (the payload puts the number there). Add to playlist is the stock key (STOCK).
     _t('Play', '播放', '播放', '再生', '재생', 'Lire', 'Abspielen',

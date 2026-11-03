@@ -26,7 +26,7 @@ Usage: pod.py WORKDIR
 import argparse, concurrent.futures, hashlib, json, os, pathlib, re, stat, struct, subprocess, sys
 from elftools.elf.elffile import ELFFile
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import autotime, pod_pages, pod_ui, timezones
+import autotime, palette, pod_pages, pod_ui, themeoff, timezones
 from build import TAG, VERSION, REPO, about   # the About row of the iPod page shows about(tag) (patch/m1plus.c M1PLUS_TAG)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -42,7 +42,7 @@ LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
 SOURCES = ['m1plus.c', 'common.c', 'menu.c', 'covercache.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c',
-           'scroll.c', 'playmore.c', 'playlists.c', 'azlist.c', 'songops.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'upver.c', 'pcnet.c', 'podcasts.c', 'tape.c', 'vinyl.c', 'onlineart.c', 'update.c', 'relnotes.c', 'keyboard.c', 'search.c', 'battery.c', 'lyrics.c', 'picker.c', 'folders.c', 'timezones.c']
+           'scroll.c', 'playmore.c', 'playlists.c', 'azlist.c', 'songops.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'upver.c', 'pcnet.c', 'podcasts.c', 'tape.c', 'palette.c', 'vinyl.c', 'onlineart.c', 'update.c', 'relnotes.c', 'keyboard.c', 'search.c', 'battery.c', 'lyrics.c', 'picker.c', 'folders.c', 'timezones.c']
 
 FLAGS = ['--target=mipsel-linux-gnu', '-march=mips32r2', '-mabi=32', '-mfp64',
          '-mno-abicalls', '-fno-pic', '-G0', '-ffreestanding', '-fno-builtin',
@@ -72,6 +72,31 @@ HOME_INIT_PROLOGUE = (0x3c1c004d, 0x279cf1fc, 0x0399e021)
 # first, then starts the page-scoped tint and remaining-time timer.
 PLAYING_INIT = 0x53d1e4
 PLAYING_INIT_PROLOGUE = (0x3c1c004c, 0x279c6cec, 0x0399e021)
+
+# Light Mode (patch/palette.c, docs/modules/accent.md, docs/modules/payload.md hooks 10 - 12): three hooks on the painter's inputs, q2-pod's (its style_get_color / style_get_gradient / image_manager_add hooks).
+# Each is a plain pass-through while Light Mode is off (the setting, the kill switch, the bad-boot note).
+#   style_get_color    0x659fcc  PIC prologue, the hook is `j m1plus_style_color` and a trampoline resumes at +12 (addiu sp, sp, -0x80)
+#   style_get_gradient 0x659f9c  a leaf without prologue: beqz a0; nop; lw v0, (a0). Its first two words become `j m1plus_style_gradient; nop`, which does the whole of it (null style, no vtable
+#                                or no get_gradient slot +0x18: 0; else the slot). style_get_color's own `bal` to it (0x65a048, returning to STYLE_COLOR_GRADIENT_RET 0x65a050) stays unmapped
+#   image_manager_add  0x655638  PIC prologue, the trampoline resumes at +12 (beqz a0, ...)
+STYLE_COLOR, STYLE_COLOR_PROLOGUE = 0x659fcc, (0x3c1c003b, 0x279c9f04, 0x0399e021)
+IMAGE_ADD, IMAGE_ADD_PROLOGUE = 0x655638, (0x3c1c003b, 0x279ce898, 0x0399e021)
+STYLE_GRADIENT, STYLE_GRADIENT_WORDS = 0x659f9c, (0x10800009, 0, 0x8c820000)
+STYLE_COLOR_RET = 0x65a050   # patch/offsets.inc STYLE_COLOR_GRADIENT_RET (the test compares the two)
+LIGHT_PINS = (   # (address, stock word, what it proves)
+    (0x659fd8, 0x27bdff80, 'style_get_color: addiu sp, sp, -0x80 (the trampoline resumes here)'),
+    (0x65a048, 0x0411ffd4, 'style_get_color: bal style_get_gradient (0x659f9c), returning to STYLE_COLOR_GRADIENT_RET: unmapped there'),
+    (0x65a050, 0x8fbc0010, 'style_get_color: lw gp, 0x10(sp) at the gradient call\'s return address'),
+    (0x65a080, 0x8c590014, 'style_get_color: lw t9, 0x14(v0): the style\'s get_color slot, called when the style has no gradient'),
+    (0x659fb0, 0x8c590018, 'style_get_gradient: lw t9, 0x18(v0): the get_gradient slot (the leaf the hook reimplements)'),
+    (0x659fb4, 0x13200003, 'style_get_gradient: beqz t9, return 0'),
+    (0x655644, 0x10800075, 'image_manager_add: beqz a0 (the trampoline resumes here)'),
+    (0x655adc, 0x0411fed6, 'image_manager_lookup: bal image_manager_add (the first of the only two callers: a decoded image is added once, before it is cached)'),
+    (0x655b50, 0x0411feb9, 'image_manager_lookup: bal image_manager_add (the second)'),
+    (0x655694, 0x0320f809, 'image_manager_add: jalr tk_calloc: the manager copies the bitmap_t it is given (memcpy 0x48 at 0x6556b4), sharing its pixel buffer'),
+    (0x6556b4, 0x0320f809, 'image_manager_add: jalr memcpy(copy, bitmap_t, 0x48)'),
+    (0x655ff4, 0x03200008, 'image_manager_unload_all: jr darray_clear (times are not looked at)'),
+)
 
 # Stock functions the payload calls, by absolute address (pinned). (return, args, address)
 FUNCTIONS = {
@@ -203,6 +228,12 @@ FUNCTIONS.update({
     'locale_info':             ('void *', 'void', 0x6588b0),
     'locale_info_tr':          ('const char *', 'void *, const char *', 0x658db4),
     'widget_set_tr_text':      ('int', 'void *, const char *', 0x66f994),
+})
+# Light Mode (patch/palette.c): a change of the effective mode drops the cached images (the image manager: AWTK's image_manager() and image_manager_unload_all, which the window manager's
+# locale handler also calls) and repaints the window manager
+FUNCTIONS.update({
+    'image_manager':           ('void *', 'void', 0x655544),
+    'image_manager_unload_all': ('int', 'void *', 0x655fdc),
 })
 # Now Playing's info page (patch/nowplaying.c np_info): the label text is read back (the buffer is zero-filled, then
 # at most size - 1 bytes of the text are copied) and rewritten with the stock setter
@@ -971,6 +1002,8 @@ def gen_stock_h(out, demo_path):
     h.append('extern int stock_playmore_init_trampoline(void *, void *);')
     h.append('extern int stock_dbquery_trampoline(const char *, const char *, void *, int);')
     h.append('extern int stock_sorted_query_trampoline(const char *, const char *, void *, int);')
+    for macro, names in (('LIGHT_KEEP', palette.KEEP), ('LIGHT_WHOLE', palette.WHOLE), ('TINT_SURFACE', palette.TINT_SURFACE), ('LIGHT_EXEMPT', palette.EXEMPT), ('LIGHT_COVER', palette.COVER_PAGES), ('ACCENT_FILL', palette.ACCENT_FILL), ('ACCENT_SWITCH', palette.ACCENT_SWITCH), ('ACCENT_PRESS', palette.ACCENT_PRESS), ('ACCENT_DISC', palette.ACCENT_DISC), ('ACCENT_GLYPH', palette.ACCENT_GLYPH), ('ACCENT_GLYPH_NOT', palette.ACCENT_GLYPH_NOT)):   # Light Mode's image name prefixes (tools/palette.py): a string literal of NUL-ended names
+        h.append(f'#define {macro} "' + ''.join(n + '\\0' for n in names) + '"')
     h.append('extern int coverflow_open(void);')
     h.append('extern int coverflow_landscape(void);')
     h.append('extern int coverflow_landscape_toggle(void);')
@@ -1054,6 +1087,10 @@ def gen_asm(out, slots):
     for nm, at in (('dbquery', QUERY_DB), ('sorted_query', QUERY_SORT)):
         asm += [f'.globl stock_{nm}_trampoline', f'stock_{nm}_trampoline:',
                 f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{at + 12:x}', 'nop']
+    # and for Light Mode's style_get_color and image_manager_add (style_get_gradient is a leaf the hook reimplements: no trampoline)
+    for nm, at in (('style_color', STYLE_COLOR), ('image_add', IMAGE_ADD)):
+        asm += [f'.globl stock_{nm}_trampoline', f'stock_{nm}_trampoline:',
+                f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{at + 12:x}', 'nop']
     # and for select_timezone (patch/timezones.c)
     asm += ['.globl stock_timezone_trampoline', 'stock_timezone_trampoline:',
             f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{timezones.SELECT + 12:x}', 'nop']
@@ -1100,6 +1137,7 @@ def compile_payload(out, demo_path, tag=TAG):
             '--undefined=stock_home_init_trampoline', '--undefined=m1plus_playing_init',
             '--undefined=stock_playing_init_trampoline', '--undefined=m1plus_scroll_event',
             '--undefined=m1plus_playmore_init', '--undefined=stock_playmore_init_trampoline', '--undefined=pc_id3_path', '--undefined=pc_library_query', '--undefined=pc_sorted_query', '--undefined=stock_dbquery_trampoline', '--undefined=stock_sorted_query_trampoline',
+            '--undefined=m1plus_style_color', '--undefined=m1plus_style_gradient', '--undefined=m1plus_image_add', '--undefined=stock_style_color_trampoline', '--undefined=stock_image_add_trampoline', '--undefined=pal_map', '--undefined=pal_active', '--undefined=pal_background', '--undefined=pal_accent', '--undefined=pal_accent_saved', '--undefined=pal_accent_set', '--undefined=pal_accent_color', '--undefined=pal_fill',
             '--undefined=pod_scan_dir', '--undefined=tz_select', '--undefined=tz_row', '--undefined=tz_label', '--undefined=stock_timezone_trampoline', '--undefined=bp_capacity', '--undefined=pf_items', '--undefined=pf_seen']   # (the last two: accessors of the parser the tests read; nothing in the payload calls them)
     run(LD, '-m', 'elf32ltsmip', '--gc-sections', '-T', os.path.join(PATCH, 'link.ld'),
         '-e', 'm1plus_home_click', '--undefined=m1plus_home_click', '--undefined=stock_home_click_trampoline',
@@ -1250,7 +1288,7 @@ def patch_demo(raw, payload, ps, demo_path):
     hook(patched, PLAYING_INIT, PLAYING_INIT_PROLOGUE, target4, 'playing_page_init')
     patch_playmore(patched, ps, len(payload))
     patch_timezones(patched, ps, len(payload))
-    for a, old, what in PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + BATTERY_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS:   # stock code the Playlists and Songs pages call: checked, not written
+    for a, old, what in PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + BATTERY_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS:   # stock code the Playlists and Songs pages call: checked, not written
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     target5 = ps['pc_id3_path']
@@ -1267,10 +1305,22 @@ def patch_demo(raw, payload, ps, demo_path):
     struct.pack_into('<I', patched, fileoff(patched, BATTERY_SITE), jal(target8, BATTERY_SITE))   # (the pins above checked the site's word, its delay slot and its neighbours)
     struct.pack_into('<I', patched, fileoff(patched, UPDATE_SITE), UPDATE_NEW)   # (the pins above checked the site's word and its neighbours)
     autotime.apply(patched, fileoff)   # two pinned string literals: hwclock -su / -wu, the RTC as UTC (docs/modules/autotime.md)
+    themeoff.apply(patched, fileoff)   # stock theme1 off: the config_init clamp and the System page's row table and count (docs/modules/theme.md)
+    # Light Mode (the pins above checked the words after each prologue, the gradient call and image_manager_add's callers): the two PIC prologue hooks and the gradient leaf
+    check(all(BASE <= ps[n] < BASE + len(payload) for n in ('m1plus_style_color', 'm1plus_style_gradient', 'm1plus_image_add')), 'Light Mode hook symbol outside payload')
+    hook(patched, STYLE_COLOR, STYLE_COLOR_PROLOGUE, ps['m1plus_style_color'], 'style_get_color')
+    hook(patched, IMAGE_ADD, IMAGE_ADD_PROLOGUE, ps['m1plus_image_add'], 'image_manager_add')
+    check(dynsym(demo_path).get('style_get_gradient') == STYLE_GRADIENT and dynsym(demo_path).get('style_get_color') == STYLE_COLOR and dynsym(demo_path).get('image_manager_add') == IMAGE_ADD,
+          'Light Mode: a hooked symbol moved')
+    off = fileoff(patched, STYLE_GRADIENT)
+    check(struct.unpack_from('<III', patched, off) == STYLE_GRADIENT_WORDS, 'style_get_gradient: unexpected leaf')
+    struct.pack_into('<II', patched, off, j(ps['m1plus_style_gradient']), 0)
+    check(STYLE_COLOR_RET == 0x65a048 + 8 and struct.unpack_from('<I', patched, fileoff(patched, 0x65a048))[0] == 0x0411ffd4,
+          'style_get_color: unexpected gradient call')   # (bal at 0x65a048 with its delay slot: it returns to 0x65a050 and still reaches the leaf's first word: the hook's jump)
     check(dynsym(demo_path).get('playsong_id3info') == 0xa0d88c, 'playsong_id3info moved')
     edits = patch_rows(patched, ps)
     # no row edit may touch a PIC prologue (the hooks are the only ones) or a hook site
-    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, PLAYING_INIT, PLAYMORE_INIT, QUERY_DB, QUERY_SORT, timezones.SELECT)) and not ID3_SITE <= int(a, 16) < ID3_SITE + 4 and not SCAN_SITE <= int(a, 16) < SCAN_SITE + 4 and not BATTERY_SITE <= int(a, 16) < BATTERY_SITE + 4
+    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, PLAYING_INIT, PLAYMORE_INIT, QUERY_DB, QUERY_SORT, STYLE_COLOR, IMAGE_ADD, timezones.SELECT)) and not STYLE_GRADIENT <= int(a, 16) < STYLE_GRADIENT + 8 and not ID3_SITE <= int(a, 16) < ID3_SITE + 4 and not SCAN_SITE <= int(a, 16) < SCAN_SITE + 4 and not BATTERY_SITE <= int(a, 16) < BATTERY_SITE + 4
               for a, *_ in edits), 'row edit on a hook')
     check(all(not (SCROLL_SLOT <= int(a, 16) < SCROLL_SLOT + 4 or a in {hex(p[0]) for p in SCROLL_PINS}) for a, *_ in edits),
           'row edit on a list gesture word')
@@ -1310,6 +1360,8 @@ def main():
         'hook_scan': {'addr': SCAN_SITE, 'target': ps['pod_scan_dir']},
         'hook_battery': {'addr': BATTERY_SITE, 'target': ps['bp_capacity']},
         'hook_timezone': {'addr': timezones.SELECT, 'target': ps['tz_select']}, 'timezone_row': {'addr': timezones.ROW_CALL, 'target': ps['tz_row']}, 'timezone_label': {'addr': timezones.LABEL_CALL, 'target': ps['tz_label']},
+        'hook_style_color': {'addr': STYLE_COLOR, 'target': ps['m1plus_style_color']}, 'hook_style_gradient': {'addr': STYLE_GRADIENT, 'target': ps['m1plus_style_gradient']},
+        'hook_image_add': {'addr': IMAGE_ADD, 'target': ps['m1plus_image_add']},
         'scroll_slot': {'addr': SCROLL_SLOT, 'target': ps['m1plus_scroll_event']}, 'scroll_edit': scroll,
         'zeroed_demo_sha256': ZEROED_DEMO_SHA, 'patched_demo_sha256': sha(patched),
         'assets': assets, 'entry_home_id': pod_pages.HOME_ENTRY,

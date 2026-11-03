@@ -59,7 +59,7 @@ DOWN = '#8C8C8C'                 # q2-pod SUDO_MUTED: pressed glyphs
 LYR_DIM = '#C4C4C4'              # the other lines of the stock lyric list (shown only without the payload): lighter than DOWN, 2.5:1 or better under the lyrics scrim on every tone (test/pod/nowplaying.py)
 TITLE_RGB, GREY = '#FFFFFF', '#AAAAAA'      # secondary text is one grey (V2.1lA)
 TITLE_PX, META_PX, TIMES_PX = 20, 18, 14
-TRACK, FILL = '#FFFFFF4D', '#FFFFFFEB'      # progress bar: white 30 % track (was 20 %: lost on dark tints), 92 % fill (over the tint)
+TRACK, FILL = '#FFFFFF4D', '#FFFFFEEB'      # progress bar: white 30 % track (was 20 %: lost on dark tints), 92 % fill (over the tint; #FFFFFE not #FFFFFF: palette.ROLE_PROGRESS, the accent maps it, the page dots keep #FFFFFFEB)
 DOT_OFF, DOT_ON = '#FFFFFF46', '#FFFFFFEB'
 TINT_ALPHA = (38, 235)           # np_tint.png: black, alpha at the top .. at the bottom (0.15 .. 0.92)
 # The lyrics and info pages put text over whatever the cover's tone is; a translucent black scrim (np_scrim.png, an asset-only

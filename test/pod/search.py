@@ -739,7 +739,7 @@ def loader_tests(ctx):
     songs = [('Taylor Song', 'Taylor Swift', 'Folklore'), ('Taylor Lone', 'Nobody', 'Nowhere')]
     albums = [('Encore', 'Taylor Swift'), ('Folklore', 'Taylor Swift')]
     cover = 'file://' + art_file(album_key('Taylor Swift', 'Folklore'))
-    cache_reads = lambda calls: [c for c in calls if c[0] in ('fopen', 'access', 'stat', 'widget_load_image')]
+    cache_reads = lambda calls: [c for c in calls if c[0] in ('fopen', 'access', 'stat', 'widget_load_image') and c[1] not in ('/mnt/mmc/m1plus-off', '/mnt/data/m1plus-off', '/mnt/data/m1plus-bad')]   # (the palette's first look at the kill switch and the bad-boot note, patch/palette.c)
     m = opened(songs, ['Taylor Swift'], albums, playlists=['Taylor Mix'], covers=[('Taylor Swift', 'Folklore')])
     settle(m)
     m.setword(m.sv + 0xa0, 0x101)   # pressed and dragged (SC_PRESSED, SC_DRAGGED bytes)

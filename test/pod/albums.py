@@ -394,7 +394,7 @@ def layout_tests(ctx):
     expect(ROW == 64 and LAX == 10 and TX == LAX + LART + 12 and LAY + LART <= ROW - 1 and TX + O['LIST_TEXT_W'] + 12 == 320 and TX + TW == 278
            and TY + TH <= SY and SY + SH <= ROW - 1 and ROW == O['LIST_ROW_H'],
            'list rows: 64 px like the library rows, 52 px cover at (10, 4), text from 74 (12 px after the cover) to a 12 px right margin, two lines and a hairline fit')
-    expect(O['LIST_HAIR'] == 0xff222222 and O['LIST_PRESS'] == 0xff333333, 'hairline #222222, pressed #333333 (the other lists\' colours)')
+    expect(O['LIST_HAIR'] == 0xff222222 and O['LIST_PRESS'] == 0xff343333, 'hairline #222222, pressed #333334 (the other lists\' colours; one blue level off #333333 so the accent can find a pressed row)')
     expect(not [w for w in tree.walk() if w.name in ('btn_stocklist',)] and O.get('NAV_LIST_X') is None, 'no trace of the stock-list toggle')
     imgs = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx')
     expect(all(os.path.isfile(os.path.join(imgs, f'pod_nav_{k}{s}.png')) for k in ('grid', 'list', 'coverflow') for s in ('', '_down')),

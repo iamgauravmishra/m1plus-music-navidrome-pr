@@ -1886,6 +1886,10 @@ static void dp_art(void) {
         for (i = 0; i < 3; ++i) avg[i] += row[x * 3 + i];
     dp.barc = avg[0] / DP_W | avg[1] / DP_W << 8 | avg[2] / DP_W << 16;
     tint = dp.tint;
+    if (pal_light()) { /* Light Mode: no tint. The window's colour is black (the style hook flips it to paper), the art fades into that paper, the greys are neutral (they flip too) */
+        dp.tint = dp.barc = 0, dp.grey = 0xaaaaaau, dp.accent = 0xddddddu;
+        tint = pal_map(0xff000000u) & 0xffffff;
+    }
     for (i = 0; i < 3; ++i) tc[i] = tint >> (8 * i) & 255;
     dp.art = bitmap_create_ex(DP_W, DP_ART_H, DP_W * 4, BITMAP_RGBA8888);
     d = dp.art ? (unsigned *)bitmap_lock_buffer_for_write(dp.art) : (unsigned *)0;
@@ -2051,7 +2055,7 @@ static void dp_fill(void *canvas, int x, int y0, int w, int y1, unsigned c) {
     if (y0 < 0) y0 = 0;
     if (y1 > DP_VIEW_H) y1 = DP_VIEW_H;
     if (y1 <= y0) return;
-    canvas_set_fill_color(canvas, c);
+    ui_fill_color(canvas, c);
     canvas_fill_rect(canvas, x, y0, w, y1 - y0);
 }
 

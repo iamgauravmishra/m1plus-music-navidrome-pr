@@ -14,7 +14,7 @@ Preview: `uv run python -I tools/preview_update.py work/mod-release out/preview/
 ## What the user sees
 
 - **The row**: Settings > System > About > **Software Update**, a link row (chevron, no glyph, the About page's row style; `ACT_UPDATE`) **right below the version row** (M1+ Music) in the About page's first card. It is not in the System card
-  (Settings > System lists Display, Keyboards, About, All System Settings as on main); Developer > Tools > System Update (the stock page) stays. Back from the update page returns to About. With the kill switch `/mnt/mmc/m1plus-off` `update_open` refuses.
+  (Settings > System lists Display, Appearance, Keyboards, About, All System Settings as on main); Developer > Tools > System Update (the stock page) stays. Back from the update page returns to About. With the kill switch `/mnt/mmc/m1plus-off` `update_open` refuses.
 - **The page** (black, the stock navbar with Back and Now Playing, neutral white and grey, no accent colour): one block with **fixed places** (`tools/pod_ui.py UP_YS`: the same in every state, so nothing jumps), centred in the 400 px under the navbar: a 48 px glyph, 16 px, the title (22 px white), 8 px, the detail (18 px grey #AAAAAA, centred, at most two lines of 280 px), 24 px, a pill (260 x 48, 20 px text), 12 px, a second pill; a state shows the parts it has (`patch/update.c up_apply`). Every string is one of our translation keys (13 languages, `docs/modules/i18n.md`); `%s` is the version, put in by the payload.
 
   | State | Glyph | Title | Explanation | Pills |

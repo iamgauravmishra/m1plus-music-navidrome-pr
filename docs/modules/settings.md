@@ -3,7 +3,7 @@
 Sources: `patch/m1plus.c`, `patch/home.c`, `patch/covercache.c`, `patch/tape.c`, `tools/pod_settings.py`, `tools/pod_ui.py` and
 `tools/pod_pages.py`. User instructions are in the [guide](../guide.md#settings).
 
-Settings is item 18 (`j`), hidden from the main menu by default. The Extras navbar always provides access, and it cannot be turned off. It is iOS-style grouped cards (below): **Wi-Fi**, **Bluetooth**; **Home Screen**, **Library**, **Now Playing**; under **Playback** Play Mode, EQ and **All Playback Settings** (stock playset page, Home dispatcher id 16; Gapless is on it); under **System** Display, Keyboards, **About** (our own page) and **All System Settings** (stock sysset page, id 17); then **Developer** (Startup: Boot to M1+ Music, Open Shanling Home; Tools: Screenshot, Cover Cache, System Update (the stock firmware update page)). Keyboards sits under System: the design had no place for it, and dropping the pinyin switch would have lost a feature.
+Settings is item 18 (`j`), hidden from the main menu by default. The Extras navbar always provides access, and it cannot be turned off. It is iOS-style grouped cards (below): **Wi-Fi**, **Bluetooth**; **Home Screen**, **Library**, **Now Playing**; under **Playback** Play Mode, EQ and **All Playback Settings** (stock playset page, Home dispatcher id 16; Gapless is on it); under **System** Display, **Appearance** (a page of its own, `m1plus_appearance`: the Accent value row opening the picker; a Background row joins it later), Keyboards, **About** (our own page) and **All System Settings** (stock sysset page, id 17; its Theme row is removed, [theme](theme.md)); then **Developer** (Startup: Boot to M1+ Music, Open Shanling Home; Tools: Screenshot, Cover Cache, System Update (the stock firmware update page)). Keyboards sits under System: the design had no place for it, and dropping the pinyin switch would have lost a feature.
 
 ## Cards
 
@@ -35,6 +35,8 @@ Feature settings live in their own folder, `/mnt/data/m1plus/` (`SET_DIR`, patch
 | Pod Appearance | `pod-appearance` | `1` Dark; missing/other Light |
 | Chinese (Pinyin) keyboard | `keyboard-pinyin` | `1` on; missing/other off |
 | Podcast Search | `podcast-online-search` | `1` on; missing/other off (the default) |
+| Background | `appearance-background` | `0` Black (default), `1` Tinted; `2` Light and `3` Light Auto are not offered; missing/other Black; Settings > System > Appearance > Background ([accent](accent.md)) |
+| Accent | `appearance-accent` | one digit, the index 0 Neutral (default) .. 6 Champagne; missing/other Neutral; Settings > System > Appearance > Accent ([accent](accent.md)) |
 | Battery Percentage | `battery-percentage` | `1` on; missing/other off (the default) |
 | Main Menu / Extras | `home-menu` | item ids in order, optional `-` then the hidden ids ([menu](menu.md)); invalid = defaults |
 | Recent searches | `search-history` | up to 5 UTF-8 lines, newest first ([search](search.md)); malformed = none |

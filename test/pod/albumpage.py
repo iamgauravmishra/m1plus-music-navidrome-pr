@@ -491,6 +491,7 @@ def cover_tests(ctx):
     m = album_machine(); m.children[m.wm] = []
     open_album(m)
     expect(m.win_colors() == [tone_word(RED)], 'no status bar among the windows: the page is tinted all the same')
+    expect(m.call(PSYMS['ab_has_tone'], count=20000) == 1, 'ab_has_tone: a tinted page shows a cover\'s tone (the Tinted wash leaves it alone)')
     m.call(PSYMS['ab_on_destroy'], count=4000000)
 
 

@@ -17,6 +17,7 @@ for commands, [UI](ui.md) for layout/assets, and [history](history.md) for recor
 | [Addresses](modules/addresses.md) | Stock symbols, offsets and record layouts |
 | [Home and boot guard](modules/home-guard.md) | Startup marker, grid entry, window stack and fallback |
 | [Settings](modules/settings.md) | Settings pages and persisted choices |
+| [Accent and palette](modules/accent.md) | The colour-mapping layer: three paint-time hooks, background (Black, Light), accent, image rules, exempt pages |
 | [Updater version compare](modules/version.md) | Why the official V2.1 package installs over the mod |
 | [Automatic time](modules/autotime.md) | RTC kept as UTC for stock's NTP sync (`hwclock -su` / `-wu`) |
 | [Time zones](modules/timezones.md) | 43-zone picker west to east, TZ mapping for the saved index (select_timezone hook) |

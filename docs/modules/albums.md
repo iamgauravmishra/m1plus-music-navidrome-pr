@@ -82,7 +82,7 @@ A completed scan with no missing files is not repeated during that page's lifeti
 The stock scroll view owns drag, fling and end stops; [list gestures](gestures.md) handles
 coasting catches. Page listeners return without consuming events. A release on the original
 cell within 10 px on both axes opens the album. Drag, abort, backgrounding or a touch that
-stops coasting clears the press and opens nothing. List presses use `#333333`.
+stops coasting clears the press and opens nothing. List presses use `#333334` (`LIST_PRESS`, the pressed-row role colour).
 
 Tests cover both modes, real stock layout and pointer handlers, large-library content
 heights, tile bounds, loader deferral, cache-worker ownership, persistence and failure paths.

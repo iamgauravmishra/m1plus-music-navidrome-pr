@@ -401,8 +401,18 @@ static void fx_close(void) {
     memset(&fx, 0, sizeof fx);
 }
 
-/* The page's shelf now: the portrait one, or the landscape one turned a quarter. */
-static const cfg_t *shelf(void) { return cf.land ? &cf_land : &cf_portrait; }
+/* The page's shelf now: the portrait one, or the landscape one turned a quarter; in Light Mode the same over paper (bg: the fade turns the covers transparent, as on the Pod's white
+ * Cover Flow). */
+static const cfg_t *shelf(void) {
+    static cfg_t lit __attribute__((section(".scratch")));
+    const cfg_t *g = cf.land ? &cf_land : &cf_portrait;
+    unsigned i;
+    if (!pal_light()) return g;
+    for (i = 0; i < sizeof lit / sizeof(int); ++i)
+        ((int *)&lit)[i] = ((const int *)g)[i]; /* (a struct copy would call memcpy) */
+    lit.bg = LIGHT_PAPER * 0x010101u;
+    return &lit;
+}
 
 /* An opaque frame bitmap for g: its logical w x h, or h x w when it is turned. */
 static void *frame_new(const cfg_t *g) {
@@ -661,8 +671,8 @@ static void captions_land(unsigned *d, int pitch, void *canvas) {
     void *r = album_at((unsigned)cf.album);
     if (!r) return;
     caption_line(d, pitch, canvas, cf.name, is_card(r) ? TR("All albums") : cc_str(r, REC_ALBUM), CFL_ALBUM_Y,
-                 0xffffffu);
-    caption_line(d, pitch, canvas, cf.artist, cc_str(r, REC_ARTIST), CFL_ARTIST_Y, 0xaaaaaau);
+                 ui_ink(0xffffffffu) & 0xffffffu);
+    caption_line(d, pitch, canvas, cf.artist, cc_str(r, REC_ARTIST), CFL_ARTIST_Y, ui_ink(0xffaaaaaau) & 0xffffffu);
 }
 
 /* The touch layer's EVT_AFTER_PAINT: the frame, from resident textures only (an artist's shelf

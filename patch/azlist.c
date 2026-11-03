@@ -123,7 +123,7 @@ void az_fill_h(void *canvas, int x, int y0, int y1, int w, unsigned c, int view_
     if (y0 < 0) y0 = 0;
     if (y1 > view_h) y1 = view_h;
     if (y1 <= y0) return;
-    canvas_set_fill_color(canvas, c);
+    ui_fill_color(canvas, c);
     canvas_fill_rect(canvas, x, y0, w, y1 - y0);
 }
 
@@ -301,7 +301,7 @@ void az_rail_paint(az_t *az, void *e) {
     step = dots ? 2 : 1; /* the items a letter takes with the dot after it */
     if (dots) {
         int x = SG_RAIL_CX - SG_RAIL_X - SG_RAIL_DOT / 2;
-        canvas_set_fill_color(canvas, SG_RAIL_DOT_RGB);
+        ui_fill_color(canvas, SG_RAIL_DOT_RGB);
         for (j = 0; j + 1 < l; ++j) { /* a dot of four pixels: the cross of two bars cuts its corners */
             int y = y0 + (step * j + 1) * SG_RAIL_PITCH + SG_RAIL_DOT_Y;
             canvas_fill_rect(canvas, x, y + 1, SG_RAIL_DOT, SG_RAIL_DOT - 2);

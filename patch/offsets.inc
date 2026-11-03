@@ -427,7 +427,7 @@
 #define LIST_SUB_Y 35
 #define LIST_SUB_H 20
 #define LIST_HAIR 0xff222222u
-#define LIST_PRESS 0xff333333u
+#define LIST_PRESS 0xff343333u /* ROLE_PRESS_ROW #333334 as a color_t word: a pressed row, unique so the accent can find it */
 
 /* ---------------------------------------------------------------------------
  * Now Playing (patch/nowplaying.c, docs/architecture.md section 8a, ui assets tools/mod_nowplaying.py). The hook is
@@ -1356,3 +1356,42 @@
 #define VN_FIRST_MS 50
 #define VN_COVER_MS 500           /* after a track change the /tmp cover is looked at again every VN_COVER_MS, VN_SETTLE times */
 #define VN_SETTLE 8
+/* ---------------------------------------------------------------------------
+ * Light Mode (patch/palette.c, docs/modules/accent.md; the numbers are q2-pod's, tools/palette.py reads them from here). A neutral colour (its channels within LIGHT_SPREAD of each other)
+ * flips per channel, black to LIGHT_PAPER and white to LIGHT_INK, alpha kept; any other hue stays. A theme image with no pixel more than LIGHT_CHROMA saturated flips too when it is
+ * mostly glyph: under 1/LIGHT_SURFACE of its area opaque and darker than LIGHT_GLYPH, so a grey or dark disc keeps its white glyph.
+ * STYLE_*: the hook sites, stock's style_get_color (0x659fcc: the PIC prologue is the hook; it calls style_get_gradient with a bal at 0x65a048 that returns to
+ * STYLE_COLOR_GRADIENT_RET and stays unmapped, its colour being mapped once by the colour hook), style_get_gradient (0x659f9c, a leaf without prologue) and image_manager_add (0x655638).
+ */
+#define LIGHT_PAPER 0xf4
+#define LIGHT_INK 0x16
+#define LIGHT_SPREAD 16
+#define LIGHT_CHROMA 40
+#define LIGHT_GLYPH 0xa0
+#define LIGHT_SURFACE 4
+#define LIGHT_FROM 7    /* Auto: light from this hour (07:00) ... */
+#define LIGHT_UNTIL 19  /* ... to this one (18:59) by the device clock */
+#define LIGHT_TICK_MS 60000 /* how often Auto looks at the clock: one timer, only while Auto is chosen */
+/* The accent (patch/palette.c, tools/palette.py reads these): colours as 0xRRGGBB (the C swaps them into color_t words). ACC_* are the picker's accents, in index order after Neutral (0);
+ * ROLE_* the built theme's unique colours of the roles an accent changes (the hooks see a colour, not the style it came from): a pressed row (also LIST_PRESS) turns
+ * mix(black, accent, ACC_TINT %), the Now Playing progress fill (alpha kept) the accent. A test over the built tree proves no other style or payload colour is one. ACC_CARD is the settings
+ * card colour (the pressed card piece becomes mix(ACC_CARD, accent, ACC_TINT %)); the image rules' end points: a fill image's pixels run from ACC_TRACK_R (the #333333 track) to ACC_FILL_R
+ * (#EEEEEC fill), a switch's from ACC_FILL_R (track) down to ACC_KNOB_R (#141414 knob, white in an accent). */
+#define ACC_COUNT 7
+#define ACC_RED 0xff453a
+#define ACC_ORANGE 0xff9f0a
+#define ACC_GREEN 0x30d158
+#define ACC_TEAL 0x40c8e0
+#define ACC_PURPLE 0xbf5af2
+#define ACC_CHAMPAGNE 0xc8a96a
+#define ACC_TINT 22
+#define ACC_WASH 12  /* the Tinted background: a dark neutral colour (channels within LIGHT_SPREAD, none above ACC_DARK) takes this percent of the accent */
+#define ACC_DARK 0x40
+#define ACC_CARD 0x1c1c1c
+#define ACC_TRACK_R 51
+#define ACC_FILL_R 238
+#define ACC_KNOB_R 20
+#define ROLE_PRESS_ROW 0x333334
+#define ROLE_PROGRESS 0xfffffe
+#define STYLE_COLOR_GRADIENT_RET 0x65a050
+#define BITMAP_PREMULTI 16 /* AWTK's BITMAP_FLAG_PREMULTI_ALPHA in bitmap_t's u16 flags @0xc */

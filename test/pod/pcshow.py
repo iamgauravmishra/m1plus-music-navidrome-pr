@@ -596,8 +596,10 @@ def tint_tests(ctx):
     expect(m.bar_styles()[-1] == BAR_BLACK, 'the page goes to the background: the bar is black again')
     m.fire_ev(FG)
     expect(m.bar_styles()[-1] == bar_model(tone) and len(m.bar_styles()) == 3, 'back in front: the bar is the page\'s colour again')
+    expect(m.call(PSYMS['pg_has_tone'], count=20000) == 1, 'pg_has_tone: the Show page shows a cover\'s tone (the Tinted wash leaves it alone)')
     # another level: black again (the tint and the bar go)
     PCP.click(m, 'btn_return')
+    expect(m.call(PSYMS['pg_has_tone'], count=20000) == 0, 'pg_has_tone: the Shows level does not')
     win = [s for s in m.styled if s[0] == m.window and s[1] == 'normal:bg_color']
     expect(win[-1][2] == 0xff000000 and m.props.get((img, 'visible')) == 0 and m.bar_styles()[-1] == BAR_BLACK, 'the Shows level: the window, the gradient and the bar are black')
     # the tone cache: the show again tints at once, with no decode

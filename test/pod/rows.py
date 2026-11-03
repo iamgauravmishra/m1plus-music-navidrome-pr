@@ -234,10 +234,13 @@ def rows_tests(expect):
     allowed.add(pod.fileoff(built, pod.SCAN_SITE))                                                       # the library scan's folder test (patch/common.c pod_scan_dir)
     allowed.add(pod.fileoff(built, pod.UPDATE_SITE))                                                     # update_firmware's version compare operand (docs/modules/version.md)
     for a, old, *_ in pod.autotime.EDITS: allowed |= {pod.fileoff(built, a) + k for k in range(0, len(old), 4)}   # the clock sync's string literals (tools/autotime.py)
+    allowed |= {pod.fileoff(built, a) for a, *_ in pod.themeoff.EDITS}                                   # stock theme1 off: the clamp, the System page's row table and count (tools/themeoff.py)
     allowed.add(pod.fileoff(built, pod.BATTERY_SITE))                                                    # show_sysbar_face's get_battery_capacity call (patch/battery.c)
     allowed |= {pod.fileoff(built, pod.timezones.SELECT), pod.fileoff(built, pod.timezones.SELECT) + 4}   # select_timezone's hook (tools/timezones.py)
     allowed |= {pod.fileoff(built, a) for a, *_ in pod.timezones.edits(0, 0)}                           # the time zone picker's clamp, counts and two call sites
     allowed.add(pod.fileoff(built, pod.SCROLL_SLOT))                                                   # the scroll_view vtable slot (patch/scroll.c)
+    allowed |= {pod.fileoff(built, a) + k for a in (pod.STYLE_COLOR, pod.IMAGE_ADD, pod.STYLE_GRADIENT) for k in (0, 4)}   # Light Mode's three hooks: two words each (patch/palette.c)
+    allowed.add(pod.fileoff(built, pod.SCROLL_SLOT))                                                     # the scroll_view vtable slot (patch/scroll.c)
     import mod_nowplaying   # the A-B marker immediates (five pinned words, disjoint from the row edits)
     expect(not {hex(a) for a in mod_nowplaying.MARKER_WORDS} & {e[0] for e in edits}, 'the 5 A-B marker sites are not among the row edits')
     allowed |= {pod.fileoff(built, a) for a in mod_nowplaying.MARKER_WORDS}

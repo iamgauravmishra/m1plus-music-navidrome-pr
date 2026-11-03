@@ -24,8 +24,8 @@ Read relevant ranges; avoid loading entire large files or history.
   firmware or reference-clone code.
 - UI fixes require a reproducer. Use the shared layout/text model and built font for previews.
 - Pin every binary edit and fail on mismatch; hooks must fall back to stock.
-- Never expand the approved global paint or main-loop scope. Pinned boot-reachable hooks that
-  fall back to stock and do bounded work are a paved path ([safety](docs/modules/safety.md)). Preserve the crash guard and
+- Never expand the approved global paint or main-loop scope (paint: only the palette's three hooks,
+  `docs/modules/accent.md`). Pinned boot-reachable hooks that fall back to stock and do bounded work are a paved path ([safety](docs/modules/safety.md)). Preserve the crash guard and
   `/mnt/mmc/m1plus-off` kill switch. Never write bootloader or recovery kernel;
   rebuilt rootfs must fit within stock size.
 - Preserve widget names. Hidden widgets must also be insensitive.
