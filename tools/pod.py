@@ -26,7 +26,7 @@ Usage: pod.py WORKDIR
 import argparse, concurrent.futures, hashlib, json, os, pathlib, re, stat, struct, subprocess, sys
 from elftools.elf.elffile import ELFFile
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import pod_pages, pod_ui
+import autotime, pod_pages, pod_ui
 from build import TAG, VERSION, REPO, about   # the About row of the iPod page shows about(tag) (patch/m1plus.c M1PLUS_TAG)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -1238,6 +1238,7 @@ def patch_demo(raw, payload, ps, demo_path):
     check(BASE <= target8 < BASE + len(payload), 'battery hook symbol outside payload')
     struct.pack_into('<I', patched, fileoff(patched, BATTERY_SITE), jal(target8, BATTERY_SITE))   # (the pins above checked the site's word, its delay slot and its neighbours)
     struct.pack_into('<I', patched, fileoff(patched, UPDATE_SITE), UPDATE_NEW)   # (the pins above checked the site's word and its neighbours)
+    autotime.apply(patched, fileoff)   # two pinned string literals: hwclock -su / -wu, the RTC as UTC (docs/modules/autotime.md)
     check(dynsym(demo_path).get('playsong_id3info') == 0xa0d88c, 'playsong_id3info moved')
     edits = patch_rows(patched, ps)
     # no row edit may touch a PIC prologue (the hooks are the only ones) or a hook site

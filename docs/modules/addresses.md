@@ -246,3 +246,14 @@ AOSP's PinyinIME (`ime_pinyin::*`, `0x5bf9b0`..`0x5ceb40`) over one global. All 
 | the EQ switch handler | `0x49d750` | flips `equalizer_flag` and saves `[PLAYSET] EQFLAG` |
 | `wififlag` / `bluetoothflag` / `equalizer_flag` / `equalizer_mode` / `language` (data, dynsym) | `0x97caf8` / `0xa05ac0` / `0xa05ac2` / `0x97cb00` / `0xa05ab8` | `wifi_switch` `0x507a8c` clears `wififlag` and saves `[SYSSET] WIFI`; the language index is `switch_language`'s (0 zh_CN .. 12 uk_UK), its names the `lan_*` keys |
 | the play mode's keys | `0x47a454`, `0x47a4d4`, `0x47a4e8`, `0x47a500` | the stock More dialog sets `playmode_listplay`, `playmode_repeattrack`, `playmode_shuffle`, `playmode_repeatall` for `mclGetPlayMode` 0..3 |
+
+## Automatic time (`tools/autotime.py` `EDITS`; docs/modules/autotime.md)
+
+| What | Address | Evidence |
+|---|---|---|
+| `AUTOSYNCTIME` key / byte / need-sync byte | `0x747a2c` / `0xa05ab1` / `0xa05a66` | `config_init` `0x4e6558` reads it (default text `"0"` `0x74c728`); `network_checkstatus` `0x5068e0` sets `0xa05a66` at `0x506a04` only when on |
+| `networktime_adjust_thd` | `0x4d92bc` (thread created `0x50bd2c`) | 1 s loop; server literals `0x74ab24` time.nist.gov, `0x74ab34` time.apple.com, `0x74ab44` cn.pool.ntp.org, `0x74ab54` time.windows.com (all stock) |
+| `toolsGetNetworkTime` | `0x5e32d4` | `ntpdate %s &> /tmp/result_ntpdate` slot `0x756f38` (stock), file `0x756f5c`, `"no server"` `0x756f70` |
+| `toolsGetRtcTime` / `toolsSetRtcTime` | `0x5e34d8` / `0x5e34f4` | `hwclock -s` slot `0x756f7c` (12 bytes, now `hwclock -su`), `date -s` format `0x756f88`, `hwclock -w` slot `0x756fa4` (12, now `hwclock -wu`); callers `0x50be94` (`platform_init`), `0x4d77cc` (`set_systime`), `0x4d9470` |
+| `select_timezone` / `toolsSetTimeZone` | `0x4d6b2c` / `0x5e3288` | `config_init` calls the first at `0x4e65ec`; the second is `setenv("TZ", name, 1)` |
+| default config | `/release/assets/default/raw/config.ini` | `AUTOSYNCTIME=1`, `TIMEZONE=22`; copied to `/mnt/data/config.ini` only when missing (`config_init` `0x4e507c`) |

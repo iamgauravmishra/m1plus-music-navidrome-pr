@@ -11,7 +11,7 @@ from unittest.mock import patch
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
 import fwtool, check   # noqa: E402
-import workflow, buildcache
+import workflow, buildcache, autotime
 
 ok = fail = 0
 
@@ -205,6 +205,24 @@ def main():
         expect('sub: ambiguous OLD refused', sub('x = 1', 'x = 3') == 1 and open(f).read() == 'x = 1\nx = 1\ny = 2\n')
         expect('sub: missing OLD refused', sub('z', 'w') == 1)
         expect('sub: --all replaces every occurrence', sub('x = 1', 'x = 3', '--all') == 0 and open(f).read() == 'x = 3\nx = 3\ny = 2\n')
+    # autotime: every literal keeps its slot length and ends in NUL; a changed stock byte or neighbour is refused, nothing written
+    expect('autotime slots keep their length and NUL end', all(len(o) == len(n) and n.endswith(b'\0') and b'\0' not in n.rstrip(b'\0') for _, o, n, _ in autotime.EDITS))
+    expect('autotime commands', {n for _, _, n, _ in autotime.EDITS} >= {b'hwclock -su\0', b'hwclock -wu\0'}
+           and len(autotime.EDITS) == 2)
+    def stock_image():
+        img = bytearray(0x757000)   # identity address -> offset
+        for a, o, _, _ in autotime.EDITS: img[a:a + len(o)] = o
+        for a, x in autotime.NEIGHBOURS: img[a:a + len(x)] = x
+        return img
+    ident = lambda b, a: a
+    img = stock_image(); autotime.apply(img, ident)
+    expect('autotime writes every new slot and keeps the neighbours', all(img[a:a + len(n)] == n for a, _, n, _ in autotime.EDITS)
+           and all(img[a:a + len(x)] == x for a, x in autotime.NEIGHBOURS))
+    for a, _, _, what in autotime.EDITS + tuple((a, 0, 0, 'neighbour') for a, _ in autotime.NEIGHBOURS):
+        img = stock_image(); img[a] ^= 1; before = bytes(img)
+        try: autotime.apply(img, ident); refused = False
+        except ValueError: refused = True
+        expect(f'autotime refuses a changed byte at {a:#x} and writes nothing', refused and bytes(img) == before)
     workflow_tests()
     print(f'{ok} passed, {fail} failed')
     sys.exit(1 if fail else 0)

@@ -6,7 +6,7 @@ usage: python3 -I test/demo_diff.py <stock demo> <built demo>
 Allowed differences: the zeroed .pdr section (space step), the program headers (the payload PT_LOAD),
 the 8-byte Home-icon hook at 0x533b80, the 8-byte boot guard hook at home_page_init 0x534cd4, the 8-byte
 Now Playing hook at playing_page_init
-0x53d1e4, the 8-byte More dialog hook at dialog_playmore_dialog_init 0x479cc4, the one word at get_id3info 0x4dff4c (the tag reader's strcpy call, now a jal into the payload), the one data word g_scroll_view_vtable + 0x98 (0x97a330, patch/scroll.c), the words listed in patch/rows.json, the four cover-size immediates of the lock screen (each must be
+0x53d1e4, the 8-byte More dialog hook at dialog_playmore_dialog_init 0x479cc4, the pinned literals of tools/autotime.py (hwclock -su/-wu), the one word at get_id3info 0x4dff4c (the tag reader's strcpy call, now a jal into the payload), the one data word g_scroll_view_vtable + 0x98 (0x97a330, patch/scroll.c), the words listed in patch/rows.json, the four cover-size immediates of the lock screen (each must be
 stock | 264), the five A-B marker immediates of Now Playing (tools/mod_nowplaying.py marker_edits) and bytes
 appended after the stock file. Anything else is an error. Exit status 0 = clean.
 """
@@ -15,6 +15,7 @@ import json, os, struct, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(ROOT, 'tools'))
 import mod_nowplaying as mn
+import autotime
 HOOK = (0x533b80, 8)
 HOME_INIT = (0x534cd4, 8)   # home_page_init: the boot guard's hook (docs/architecture.md)
 PLAYING = (0x53d1e4, 8)     # playing_page_init: the Now Playing hook (patch/nowplaying.c)
@@ -78,6 +79,7 @@ def main():
     allow(va_to_off(s, SCAN_SITE[0]), SCAN_SITE[1], 'library scan hook')
     allow(va_to_off(s, BATTERY_SITE[0]), BATTERY_SITE[1], 'battery percentage hook')
     allow(va_to_off(s, UPDATE_SITE[0]), UPDATE_SITE[1], 'updater version compare')
+    for a, old, new, _ in autotime.EDITS: allow(va_to_off(s, a), len(old), 'auto time literals')
     for q in QUERY: allow(va_to_off(s, q), 8, 'library query hook')
     allow(va_to_off(s, SCROLL_SLOT[0]), SCROLL_SLOT[1], 'scroll vtable slot')
     markers = mn.marker_edits()
@@ -137,6 +139,14 @@ def main():
     good = (sw, mw) == (0x24a5773c, 0x24a5772c) and s[lit:lit + 5] == m[lit:lit + 5] == b'V2.1\0' and m[neu:neu + 14] == b'about_version\0'   # the literal stays, the compare reads another string
     print(f'updater compare {UPDATE_SITE[0]:#x}: {sw:#010x} -> {mw:#010x}', 'ok' if good else 'WRONG')
     ok = ok and good
+    for a, old, new, what in autotime.EDITS:   # docs/modules/autotime.md: each slot holds the stock text in stock and the new text in the build, NUL-padded to the same length
+        o = va_to_off(s, a); good = s[o:o + len(old)] == old and m[o:o + len(new)] == new
+        print(f'auto time literal {a:#x}: {old.rstrip(bytes(1))!r} -> {new.rstrip(bytes(1))!r}', 'ok' if good else 'WRONG')
+        ok = ok and good
+    for a, text in autotime.NEIGHBOURS:
+        o = va_to_off(s, a); good = s[o:o + len(text)] == m[o:o + len(text)] == text
+        print(f'auto time neighbour {a:#x}', 'ok' if good else 'WRONG')
+        ok = ok and good
     o = va_to_off(s, SCROLL_SLOT[0]); sw = struct.unpack_from('<I', s, o)[0]; mw = struct.unpack_from('<I', m, o)[0]
     good = sw == 0 and 0xb00000 <= mw < 0xb00000 + (len(m) - len(s)) and mw % 4 == 0   # an empty slot, now a word inside the payload
     print(f'scroll_view before-children slot {SCROLL_SLOT[0]:#x}: {sw:#010x} -> {mw:#010x}', 'ok' if good else 'WRONG')
