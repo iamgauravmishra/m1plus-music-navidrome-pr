@@ -744,15 +744,15 @@ def run(ctx):
     expect(rect('btn_return') == (100, 0, 120, 44) and f('btn_return').get('style') == 'img_btn_style' and f('btn_return').get('style:normal:bg_image') == 'np_grabber',
            'Back is the grabber: 120x44, the pill in its image')
     expect(rect('slide_indicator') == (145, 296, 30, 4) and f('slide_indicator').get('size') == '4', 'micro dots: 4 px, centred under the art')
-    expect(rect('scrlabel_title') == (28, 305, 176, 24) and rect('scrlabel_artist') == (28, 329, 176, 22), 'title and artist in the 28 px text column left of the buttons')
+    expect(rect('scrlabel_title') == (28, 305, 182, 24) and rect('scrlabel_artist') == (28, 329, 182, 22), 'title and artist in the 28 px text column left of the buttons')
     expect(mn.TITLE_PX == 20 and mn.META_PX == 18 and mn.TITLE_H >= mn.TITLE_PX + 4 and mn.ARTIST_H >= mn.META_PX + 4
            and mn.TITLE_Y + mn.TITLE_H == mn.ARTIST_Y and (mn.TITLE_Y + mn.ARTIST_Y + mn.ARTIST_H) / 2 == mn.BTN_Y + mn.BTN // 2 + 0.0
            and mn.FAV_X - mn.M >= mn.TEXT_W, 'title 20 px, artist 18 px: the 46 px block is centred on the discs (y 328) and the column ends before the star')
     from awtk_text import Ttf as _T, StbText as _S
     _t = _T(os.path.join(raw, 'fonts', 'default.ttf'))
     _w20 = lambda s: _S(_t, 20).layout(s)[1]
-    expect(_w20('Hello, World') < mn.TEXT_W and _w20('A' * 40) > mn.TEXT_W and _S(_t, 20).layout('Hg')[1] > 0, 'the 20 px title measures with the pinned font: a short title fits the 176 px column, a long one is cut (ellipsis)')
-    expect(rect('btn_fav') == (204, 306, 44, 44) and rect('btn_more') == (248, 306, 44, 44), 'star and More: 44x44 targets, 4 px apart, right edge on the 28 px margin')
+    expect(_w20('Hello, World') < mn.TEXT_W and _w20('A' * 40) > mn.TEXT_W and _S(_t, 20).layout('Hg')[1] > 0, 'the 20 px title measures with the pinned font: a short title fits the 182 px column, a long one is cut (ellipsis)')
+    expect(rect('btn_fav') == (210, 306, 44, 44) and rect('btn_more') == (254, 306, 44, 44), 'star and More: 44x44 targets side by side, the More disc (6 px inset) ends on the 28 px margin the text starts on')
     expect(rect('slider_play') == (28, 348, 264, 30) and f('slider_play').get('bar_size') == '6' and f('slider_play').get('style:normal:icon') == '', 'progress: the stock 30 px target, a 6 px bar, no thumb')
     expect(rect('label_playtime')[:2] == (28, mn.TIMES_Y) and rect('np_remaining') == rect('label_playlen') and rect('np_elapsed') == rect('label_playtime') and rect('label_playlen')[0] + rect('label_playlen')[2] == 292,
            'times under the bar on the margins; the remaining time sits on the total')
