@@ -4,8 +4,13 @@
   Now Playing initialization, More-dialog initialization, the podcast tag-copy call site, the
   dot-folder scan, library query functions, status bar's battery-capacity call site
   (Battery Percentage, off by default) and the previously empty `scroll_view` event slot.
-  [Payload](payload.md) defines the hook sites and fallbacks. Do not add boot, global paint
-  or main-loop work outside that scope.
+  [Payload](payload.md) defines the hook sites and fallbacks. Do not add global paint or
+  main-loop work outside that scope.
+- **Boot-reachable hooks are a paved path.** A new pinned prologue or call-site hook on a stock
+  function that also runs at boot (such as `select_timezone` from `config_init`) needs no
+  separate approval when it falls back to stock on the kill switch, invalid input or any error,
+  and does only bounded work: no thread, timer, loop over files or network. Document it in
+  [payload](payload.md) with its `tools/reach.py` boot reachability and add it to the list above.
 - **Treat startup as critical.** Home initialization needs the crash marker. The tag-reader
   hook is also reachable through Memory Playback at boot: run stock's copy first and restrict
   podcast processing to its card path. The recovery button combination remains unverified.
