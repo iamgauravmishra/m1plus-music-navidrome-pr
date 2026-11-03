@@ -15,7 +15,7 @@ import json, os, struct, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(ROOT, 'tools'))
 import mod_nowplaying as mn
-import autotime
+import autotime, timezones
 HOOK = (0x533b80, 8)
 HOME_INIT = (0x534cd4, 8)   # home_page_init: the boot guard's hook (docs/architecture.md)
 PLAYING = (0x53d1e4, 8)     # playing_page_init: the Now Playing hook (patch/nowplaying.c)
@@ -79,6 +79,8 @@ def main():
     allow(va_to_off(s, SCAN_SITE[0]), SCAN_SITE[1], 'library scan hook')
     allow(va_to_off(s, BATTERY_SITE[0]), BATTERY_SITE[1], 'battery percentage hook')
     allow(va_to_off(s, UPDATE_SITE[0]), UPDATE_SITE[1], 'updater version compare')
+    allow(va_to_off(s, timezones.SELECT), 8, 'select_timezone hook')   # time zones (tools/timezones.py): the hook, the clamp, the row count and limit, the two call sites
+    for a, *_ in timezones.edits(0, 0): allow(va_to_off(s, a), 4, 'time zone words')
     for a, old, new, _ in autotime.EDITS: allow(va_to_off(s, a), len(old), 'auto time literals')
     for q in QUERY: allow(va_to_off(s, q), 8, 'library query hook')
     allow(va_to_off(s, SCROLL_SLOT[0]), SCROLL_SLOT[1], 'scroll vtable slot')
@@ -134,6 +136,17 @@ def main():
     good = sw == 0x0320f809 and mw >> 26 == 3 and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s))
     print(f'battery percentage hook {BATTERY_SITE[0]:#x}: {sw:#010x} -> {mw:#010x}', 'ok' if good else 'WRONG')
     ok = ok and good
+    o = va_to_off(s, timezones.SELECT); mw = struct.unpack_from('<I', m, o)[0]
+    good = mw >> 26 == 2 and m[o + 4:o + 8] == bytes(4) and s[o + 8:o + 12] == m[o + 8:o + 12] and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s))
+    print(f'select_timezone hook {timezones.SELECT:#x}: {s[o:o + 8].hex()} -> {m[o:o + 8].hex()}', 'ok' if good else 'WRONG')
+    ok = ok and good
+    for a, old, _, _ in timezones.edits(0, 0):
+        o = va_to_off(s, a); sw = struct.unpack_from('<I', s, o)[0]; mw = struct.unpack_from('<I', m, o)[0]
+        good = sw == old and mw != old
+        if a in (timezones.ROW_CALL, timezones.LABEL_CALL):
+            good = good and mw >> 26 == 3 and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s))
+        print(f'time zone word {a:#x}: {sw:#010x} -> {mw:#010x}', 'ok' if good else 'WRONG')
+        ok = ok and good
     o = va_to_off(s, UPDATE_SITE[0]); sw = struct.unpack_from('<I', s, o)[0]; mw = struct.unpack_from('<I', m, o)[0]
     lit = va_to_off(s, 0x74773c); neu = va_to_off(s, 0x74772c)
     good = (sw, mw) == (0x24a5773c, 0x24a5772c) and s[lit:lit + 5] == m[lit:lit + 5] == b'V2.1\0' and m[neu:neu + 14] == b'about_version\0'   # the literal stays, the compare reads another string

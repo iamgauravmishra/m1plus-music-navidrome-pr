@@ -257,3 +257,9 @@ AOSP's PinyinIME (`ime_pinyin::*`, `0x5bf9b0`..`0x5ceb40`) over one global. All 
 | `toolsGetRtcTime` / `toolsSetRtcTime` | `0x5e34d8` / `0x5e34f4` | `hwclock -s` slot `0x756f7c` (12 bytes, now `hwclock -su`), `date -s` format `0x756f88`, `hwclock -w` slot `0x756fa4` (12, now `hwclock -wu`); callers `0x50be94` (`platform_init`), `0x4d77cc` (`set_systime`), `0x4d9470` |
 | `select_timezone` / `toolsSetTimeZone` | `0x4d6b2c` / `0x5e3288` | `config_init` calls the first at `0x4e65ec`; the second is `setenv("TZ", name, 1)` |
 | default config | `/release/assets/default/raw/config.ini` | `AUTOSYNCTIME=1`, `TIMEZONE=22`; copied to `/mnt/data/config.ini` only when missing (`config_init` `0x4e507c`) |
+
+## Time zones (`tools/timezones.py` `PINS`; docs/modules/timezones.md)
+
+| What | Address | Evidence |
+|---|---|---|
+| `time_zone` / picker | `0xa05ab4` / page builder `0x4a2424`, row builder `timezone_listitem_layout` `0x4a21c8`, click `0x4a25b8` | [timezones](timezones.md): clamp `0x4e65dc`, rows `0x4a246c`, click limit `0x4a2604`, row call `0x4a25a8`, label `0x4a2248`/`0x4a224c`; label key array `0x97c810` (27 pointers, strings from `0x747834`); row height `0x4a2518`, label style `0x4a22a4` (`srlabel_leftwhite18_style` `0x745f2c`), label y `0x4a225c`, tick y `0x4a2308` |

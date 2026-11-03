@@ -26,7 +26,7 @@ Usage: pod.py WORKDIR
 import argparse, concurrent.futures, hashlib, json, os, pathlib, re, stat, struct, subprocess, sys
 from elftools.elf.elffile import ELFFile
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import autotime, pod_pages, pod_ui
+import autotime, pod_pages, pod_ui, timezones
 from build import TAG, VERSION, REPO, about   # the About row of the iPod page shows about(tag) (patch/m1plus.c M1PLUS_TAG)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -42,7 +42,7 @@ LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
 SOURCES = ['m1plus.c', 'common.c', 'menu.c', 'covercache.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c',
-           'scroll.c', 'playmore.c', 'playlists.c', 'azlist.c', 'songops.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'upver.c', 'pcnet.c', 'podcasts.c', 'tape.c', 'vinyl.c', 'onlineart.c', 'update.c', 'relnotes.c', 'keyboard.c', 'search.c', 'battery.c', 'lyrics.c', 'picker.c', 'folders.c']
+           'scroll.c', 'playmore.c', 'playlists.c', 'azlist.c', 'songops.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'upver.c', 'pcnet.c', 'podcasts.c', 'tape.c', 'vinyl.c', 'onlineart.c', 'update.c', 'relnotes.c', 'keyboard.c', 'search.c', 'battery.c', 'lyrics.c', 'picker.c', 'folders.c', 'timezones.c']
 
 FLAGS = ['--target=mipsel-linux-gnu', '-march=mips32r2', '-mabi=32', '-mfp64',
          '-mno-abicalls', '-fno-pic', '-G0', '-ffreestanding', '-fno-builtin',
@@ -219,6 +219,11 @@ FUNCTIONS.update({
 })
 # Now Playing opens the way a track row does (the row handler @0x52569c, loop @0x525904..0x5259d8; patch/songops.c
 # pod_open_player): the window stack calls
+# Time zones (patch/timezones.c, docs/modules/timezones.md): setenv("TZ") and the picker's row builder, both stock's own, called by the hooks
+FUNCTIONS.update({
+    'toolsSetTimeZone':           ('int', 'const char *', 0x5e3288),
+    'timezone_listitem_layout':   ('void *', 'void *, int', 0x4a21c8),
+})
 FUNCTIONS.update({
     'navigator_window_is_exist':  ('int', 'const char *', 0x4d2040),
     'navigator_close':         ('int', 'const char *', 0x4d2118),   # closes the named page (Now Playing's Look up album / artist, patch/playmore.c)
@@ -813,6 +818,7 @@ FUNCTIONS.update({
     'is_folderplaying':        ('int', 'const char *', 0x5329d8),  # the folder (record url) holds the song being played from a folder queue
 })
 DATA.update({
+    'TIME_ZONE':          (0xa05ab4, 'time_zone'),   # int: [SYSSET] TIMEZONE, the saved zone index (patch/timezones.c)
     'FOLDER_LAYER':       (0xa0554c, None),
     'FOLDER_TITLE':       (0xa0533c, None),
     'FOLDER_M3U':         (0xa0483c, None),
@@ -957,6 +963,9 @@ def gen_stock_h(out, demo_path):
     h.append('#define py_lemma_id ((unsigned (*)(void *, const unsigned short *, unsigned))0x5c01a4u)')
     h.append('#define py_splids ((unsigned short (*)(void *, unsigned short, unsigned short, unsigned short *, unsigned short))0x5bffd4u)')
     h.append('#define py_spelling ((const char *(*)(void *, unsigned short))0x5c922cu)')
+    h.append('#define TIMEZONE_NAMES {' + ','.join(json.dumps(tz) for _, tz in timezones.TIMEZONES) + '}')   # patch/timezones.c
+    h.append('#define TIMEZONE_LABELS {' + ','.join(json.dumps(label) for label, _ in timezones.TIMEZONES) + '}')
+    h.append('#define TIMEZONE_ORDER {' + ','.join(map(str, timezones.ORDER)) + '}')
     h.append('extern int stock_home_click_trampoline(void *, void *);')
     h.append('extern int stock_playing_init_trampoline(void *, void *);')
     h.append('extern int stock_playmore_init_trampoline(void *, void *);')
@@ -1045,6 +1054,9 @@ def gen_asm(out, slots):
     for nm, at in (('dbquery', QUERY_DB), ('sorted_query', QUERY_SORT)):
         asm += [f'.globl stock_{nm}_trampoline', f'stock_{nm}_trampoline:',
                 f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{at + 12:x}', 'nop']
+    # and for select_timezone (patch/timezones.c)
+    asm += ['.globl stock_timezone_trampoline', 'stock_timezone_trampoline:',
+            f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{timezones.SELECT + 12:x}', 'nop']
     # libc GOT-slot stubs (load the resolved pointer from demo's own GOT, tail-call it).
     for name, addr in slots.items():
         asm += [f'.section .text.pod_lib_{name},"ax",@progbits', f'.globl pod_lib_{name}', f'pod_lib_{name}:',
@@ -1088,7 +1100,7 @@ def compile_payload(out, demo_path, tag=TAG):
             '--undefined=stock_home_init_trampoline', '--undefined=m1plus_playing_init',
             '--undefined=stock_playing_init_trampoline', '--undefined=m1plus_scroll_event',
             '--undefined=m1plus_playmore_init', '--undefined=stock_playmore_init_trampoline', '--undefined=pc_id3_path', '--undefined=pc_library_query', '--undefined=pc_sorted_query', '--undefined=stock_dbquery_trampoline', '--undefined=stock_sorted_query_trampoline',
-            '--undefined=pod_scan_dir', '--undefined=bp_capacity', '--undefined=pf_items', '--undefined=pf_seen']   # (the last two: accessors of the parser the tests read; nothing in the payload calls them)
+            '--undefined=pod_scan_dir', '--undefined=tz_select', '--undefined=tz_row', '--undefined=tz_label', '--undefined=stock_timezone_trampoline', '--undefined=bp_capacity', '--undefined=pf_items', '--undefined=pf_seen']   # (the last two: accessors of the parser the tests read; nothing in the payload calls them)
     run(LD, '-m', 'elf32ltsmip', '--gc-sections', '-T', os.path.join(PATCH, 'link.ld'),
         '-e', 'm1plus_home_click', '--undefined=m1plus_home_click', '--undefined=stock_home_click_trampoline',
         *keep, *objs, out / 'pod_asm.o', '-o', out / 'patch.elf')
@@ -1211,6 +1223,21 @@ def patch_scroll(image, ps, payload_len, demo_path):
     return [hex(SCROLL_SLOT), '0x0', hex(target)]
 
 
+def patch_timezones(image, ps, payload_len):
+    """Time zones (docs/modules/timezones.md): check every pinned word, then the select_timezone hook, the saved-index clamp, the row count and limit, and the picker's two call sites."""
+    for name in ('tz_select', 'tz_row', 'tz_label'):
+        check(BASE <= ps[name] < BASE + payload_len, f'{name} outside payload')
+    check(timezones.COUNT < 0x8000 - 3 and timezones.COUNT == len(timezones.ORDER) and sorted(timezones.ORDER) == list(range(timezones.COUNT)), 'bad zone table')
+    check(all(len(label) <= timezones.MAX_LABEL for label, _ in timezones.TIMEZONES), 'zone label too long')
+    edits = timezones.edits(jal(ps['tz_row'], timezones.ROW_CALL), jal(ps['tz_label'], timezones.LABEL_CALL))
+    for a, old, what in timezones.PINS + tuple((a, old, what) for a, old, _, what in edits):
+        got = struct.unpack_from('<I', image, fileoff(image, a))[0]
+        check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
+    hook(image, timezones.SELECT, timezones.SELECT_PROLOGUE, ps['tz_select'], 'select_timezone')
+    for a, _, new, _ in edits:
+        struct.pack_into('<I', image, fileoff(image, a), new)
+
+
 def patch_demo(raw, payload, ps, demo_path):
     patched = bytearray(raw)
     target, target2 = ps['m1plus_home_click'], ps['m1plus_home_init']
@@ -1222,6 +1249,7 @@ def patch_demo(raw, payload, ps, demo_path):
     check(BASE <= target4 < BASE + len(payload), 'playing init entry symbol outside payload')
     hook(patched, PLAYING_INIT, PLAYING_INIT_PROLOGUE, target4, 'playing_page_init')
     patch_playmore(patched, ps, len(payload))
+    patch_timezones(patched, ps, len(payload))
     for a, old, what in PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + BATTERY_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS:   # stock code the Playlists and Songs pages call: checked, not written
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
@@ -1242,7 +1270,7 @@ def patch_demo(raw, payload, ps, demo_path):
     check(dynsym(demo_path).get('playsong_id3info') == 0xa0d88c, 'playsong_id3info moved')
     edits = patch_rows(patched, ps)
     # no row edit may touch a PIC prologue (the hooks are the only ones) or a hook site
-    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, PLAYING_INIT, PLAYMORE_INIT, QUERY_DB, QUERY_SORT)) and not ID3_SITE <= int(a, 16) < ID3_SITE + 4 and not SCAN_SITE <= int(a, 16) < SCAN_SITE + 4 and not BATTERY_SITE <= int(a, 16) < BATTERY_SITE + 4
+    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, PLAYING_INIT, PLAYMORE_INIT, QUERY_DB, QUERY_SORT, timezones.SELECT)) and not ID3_SITE <= int(a, 16) < ID3_SITE + 4 and not SCAN_SITE <= int(a, 16) < SCAN_SITE + 4 and not BATTERY_SITE <= int(a, 16) < BATTERY_SITE + 4
               for a, *_ in edits), 'row edit on a hook')
     check(all(not (SCROLL_SLOT <= int(a, 16) < SCROLL_SLOT + 4 or a in {hex(p[0]) for p in SCROLL_PINS}) for a, *_ in edits),
           'row edit on a list gesture word')
@@ -1281,6 +1309,7 @@ def main():
         'hook_query': {'addr': QUERY_DB, 'target': ps['pc_library_query']}, 'hook_sorted_query': {'addr': QUERY_SORT, 'target': ps['pc_sorted_query']},
         'hook_scan': {'addr': SCAN_SITE, 'target': ps['pod_scan_dir']},
         'hook_battery': {'addr': BATTERY_SITE, 'target': ps['bp_capacity']},
+        'hook_timezone': {'addr': timezones.SELECT, 'target': ps['tz_select']}, 'timezone_row': {'addr': timezones.ROW_CALL, 'target': ps['tz_row']}, 'timezone_label': {'addr': timezones.LABEL_CALL, 'target': ps['tz_label']},
         'scroll_slot': {'addr': SCROLL_SLOT, 'target': ps['m1plus_scroll_event']}, 'scroll_edit': scroll,
         'zeroed_demo_sha256': ZEROED_DEMO_SHA, 'patched_demo_sha256': sha(patched),
         'assets': assets, 'entry_home_id': pod_pages.HOME_ENTRY,
