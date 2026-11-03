@@ -13,7 +13,7 @@
   (`screensaver_page`) get 480. 68 stock pages end exactly at y = 450 (`systemset/sysset_page.bin`:
   navbar 0-50, list 50-450). Lists use the stock structure `list_view` > `scroll_view` +
   `scroll_bar_m` with stock `list_item` rows (`list_item_style`, an `hscroll_label` themed
-  `srlabel_leftwhite21_style`, the `right_arrow` image); bare `list_item`s fall to the light default
+  `srlabel_leftwhite21_style`, the `right_arrow` image, a 13 px widget at x 285 so its ink is the shared list chevron at x 288..298; the text ends at 278 and the hairline at 310); bare `list_item`s fall to the light default
   theme (white on white).
 - **Window theme first.** A widget's style is resolved in its window's theme (`styles/<window name>.bin`,
   or its `theme` property) before `styles/default.bin` (`style_const` `0x6d3038`,

@@ -248,7 +248,7 @@ static void al_paint_grid(void *canvas) {
 static void al_paint_list(void *canvas) {
     int r0, r1;
     al_span(&r0, &r1);
-    grid_list_paint(canvas, &al.g, al.st_title, al.st_sub, r0, r1, al_off(), GRID_VIEW_H, al.press, 0, al_tile_of,
+    grid_list_paint(canvas, &al.g, al.st_title, al.st_sub, r0, r1, al_off(), GRID_VIEW_H, al.press, 0, 1, al_tile_of,
                     (void *)0); /* patch/grid.c */
 }
 

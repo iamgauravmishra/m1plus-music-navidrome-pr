@@ -168,9 +168,9 @@ def layout_tests(ctx):
     LO = max(0, L['h'] - 400)   # (the Library rows close the page: the frame scrolled to the bottom)
     bl, texts, styles, fills = PCP.paint(m, LO)
     tiles = sorted(tuple(b[2]) + (tuple(b[1][:2]),) for b in bl if tuple(b[1]) in ((o['PA_TILE_X'], o['PA_TILE_Y'], o['PA_TILE_PX'], o['PA_TILE_PX']), (0, 0, o['PA_TILE_PX'], o['PA_TILE_PX'])))
-    chev = sorted(tuple(b[2]) for b in bl if b[1] == (o['PA_CHEV'] * o['PA_G_PX'], o['PA_G_Y'], o['PA_G_PX'], o['PA_G_PX']))
+    chev = sorted(tuple(b[2]) for b in bl if tuple(b[1]) == (0, 0, 10, 16))   # the shared chevron bitmap
     expect(tiles == [(o['PP_DL_TILE_X'], L['y_dl'] - LO + o['PP_DL_TILE_Y'], 44, 44, (o['PA_TILE_X'], o['PA_TILE_Y'])), (o['PP_DL_TILE_X'], L['y_sub'] - LO + o['PP_DL_TILE_Y'], 44, 44, (0, 0)), (o['PP_DL_TILE_X'], L['y_sav'] - LO + o['PP_DL_TILE_Y'], 44, 44, (0, 0))]
-           and chev == [(o['PP_DL_CHEV_CX'] - 8, L[k] - LO + o['PC_ROW_H'] // 2 - 8, 16, 16) for k in ('y_dl', 'y_sub', 'y_sav')],
+           and chev == [(o['PP_DL_CHEV_X'], L[k] - LO + (o['PC_ROW_H'] - 1 - 16) // 2, 10, 16) for k in ('y_dl', 'y_sub', 'y_sav')] and o['PP_DL_CHEV_X'] == o['LIST_CHEV_X'] and o['PP_DL_TEXT_X'] + o['PP_DL_TEXT_W'] == o['LIST_CHEV_X'] - 10,
            f'three Library rows: the atlas\' download tile and the podcast and bookmark tiles (images of their own) at x 16, a chevron each ({tiles}, {chev})')
     rows = [(t, s, r) for (t, r), s in zip(texts, styles) if s in ('label_row_title', 'label_row_sub')]
     want = [('Downloads', 'label_row_title', (o['PP_DL_TEXT_X'], L['y_dl'] - LO + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H'])), ('5 episodes', 'label_row_sub', (o['PP_DL_TEXT_X'], L['y_dl'] - LO + o['LIST_SUB_Y'], o['PP_DL_TEXT_W'], o['LIST_SUB_H'])),

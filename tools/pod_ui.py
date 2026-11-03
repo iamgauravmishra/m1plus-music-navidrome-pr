@@ -179,6 +179,10 @@ def value_label(name, w, h, english):
     return lab
 
 
+CHEV_X, CHEV_TEXT_END = 288, 278      # the shared list chevron's left edge (patch/offsets.inc LIST_CHEV_X) and where a row with one ends its text
+CHEV_BTN_X = CHEV_X - 3               # the 13 px wide right_arrow image: the 10 px glyph is right aligned in it
+
+
 def row_item(name, y, label, chevron, h=ROW_H, w=SCREEN_W, switch=None, value=None):
     """A row built like stock's scrolling rows (systemset_sysset_page_init @0x4adb7c): a list_item
     themed "list_item_style" holding an hscroll_label themed "srlabel_leftwhite21_style" (white,
@@ -186,12 +190,12 @@ def row_item(name, y, label, chevron, h=ROW_H, w=SCREEN_W, switch=None, value=No
     stock "right_arrow" image. Stock's own widget and theme styles, so the look matches the
     settings lists in every state and drags reach the scroll_view as in every stock list."""
     item = Widget('list_item', 0, y, w, h, [('name', name), ('style', 'list_item_style')])
-    text_w = (switch_x(w) if switch else value_x(w) if value else w - (44 if chevron else 12)) - 24
+    text_w = (switch_x(w) if switch else value_x(w) if value else (CHEV_TEXT_END if chevron else w - 12)) - 24
     item.children.append(Widget('hscroll_label', 24, 0, text_w, h, [
         ('style', 'srlabel_leftwhite21_style'), pod_i18n.text_prop(label), ('only_parent_focus', 'true'),
         ('ellipses', 'true'), ('yoyo', 'true'), ('loop', 'true')]))
     if chevron:
-        item.children.append(Widget('image', w - 44, 0, 40, h, [
+        item.children.append(Widget('image', CHEV_BTN_X, 0, 13, h - 1, [   # the shared list chevron: right_arrow's 13 x 22 canvas holds it right aligned, so its ink is x 288..298, centred above the hairline
             ('image', 'right_arrow'), ('draw_type', 'icon')]))
     if switch:   # switch = (widget name, state)
         item.children.append(switch_image(switch[0], w, h, switch[1]))
@@ -918,9 +922,8 @@ def build_songs_page(page):
 # button, its picture the disc), the Play all pill (a button, its picture the pill) with its glyph (an image) and its text (a label) over it, which the payload centres as a pair.
 # The window's colour is the cover's tone (the payload sets it); the gradient image img_ah_tint, first in the window, darkens it from the top (the stock page's), and the list over it is
 # transparent. The glass controls are the window's last child, so they paint and take touches over the rows: Back, Select | Now Playing as one capsule (the genre songs list's), and
-# in select mode the all / none toggle, Add, Delete and Cancel in the places the stock builder gave them. Three hidden labels carry the rows' text styles (the number, the title, the
-# playing row's gold title); label_title (hidden) is the page's title for the i18n and asset tests.
-AB_STYLES = (('label_row_num', 'right', '#AAAAAA'), ('label_row_title', 'left', '#FFFFFF'), ('label_row_gold', 'left', '#FE7E40'))   # the stock rows' 19 px number (the grey line's colour) and title (white; gold: srlabel_item_gold20_style)
+# in select mode the all / none toggle, Add, Delete and Cancel in the places the stock builder gave them. Two hidden labels carry the rows' text styles (the number, the title; the playing row's number is the ah_wave image); label_title (hidden) is the page's title for the i18n and asset tests.
+AB_STYLES = (('label_row_num', 'right', '#AAAAAA'), ('label_row_title', 'left', '#FFFFFF'))   # the stock rows' 19 px number (the grey line's colour) and title (white)
 AB_ROW_PX = 19
 AB_META = (('ab_title', 'AH_TITLE_Y', 'AH_TITLE_H', 22, '#FFFFFF'), ('ab_artist', 'AH_ARTIST_Y', 'AH_ARTIST_H', 18, '#AAAAAA'), ('ab_meta', 'AH_META_Y', 'AH_META_H', 15, '#9C9C9C'))   # srlabel_ah{title,artist,meta}_style
 AB_FOOT_RGB = '#AAAAAA'   # the footer's grey: the artist line's (not the meta line's #9C9C9C)

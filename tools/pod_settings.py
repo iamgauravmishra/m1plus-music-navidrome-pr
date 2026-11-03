@@ -28,7 +28,8 @@ GREY = '#AAAAAA'             # headers, notes and values
 VALUE_PX, VALUE_GAP, VALUE_W, VALUE_MAX, VALUE_LABEL_GAP = 18, 8, 100, 140, 6   # a value: its size, the gap to the chevron, its box at rest (right aligned), the most the payload gives it (it takes the room its text needs: patch/m1plus.c value_fit), the gap to the label
 INFO_PX, INFO_W, INFO_MAX = 16, 100, 190   # an About row's value: 16 px grey, its box at rest (right aligned, ink at RIGHT), the most the payload gives it (it takes the room its text needs; the label gets the rest)
 SWITCH_W, SWITCH_H = 57, 28  # the stock switch images sset_on / sset_off (their ink fills the image)
-CHEV_W, CHEV_H, CHEV_RGB, CHEV_STROKE = 9, 15, (0x77,) * 3, 2   # the chevron image pod_chev: Lucide chevron-right fitted to 9 x 15
+CHEV_W, CHEV_H, CHEV_RGB = 10, 16, (0x8A,) * 3   # the chevron image pod_chev: the shared list chevron (patch/common.c pod_make_chevron, mod_icons.pod_chevron)
+CHEV_INSET = 12   # the chevron's left edge is this far from the card's right edge (x 288 in the 320 px row); a link's label box and a value end VALUE_GAP before it (x 280: the hscroll_label insets its text 2 px, so the text ends at 278)
 CHECK_PX = 20                # the picker's check image pod_check
 LIST_W = 310                 # the items' width in the asset (the scroll_view's; the layouter sets it)
 ROW_W = 320                  # the pieces' width: the list_view's (the layouter gives a child that width, or the scroll_view's 310: the piece is drawn from the left edge either way)
@@ -82,7 +83,7 @@ def ink(name):
     """(left, top, right, bottom) of the ink of an image of ours inside its canvas: the chevron and the check, drawn by tools/mod_icons.py."""
     if name not in _ink:
         import mod_icons as M
-        im = {'chev': lambda: M.glyph_fit('chevron-right', CHEV_W, CHEV_H, CHEV_RGB, 0, CHEV_STROKE), 'check': lambda: M.glyph_fit('check', CHECK_PX, CHECK_PX)}[name]()
+        im = {'chev': lambda: M.pod_chevron(CHEV_RGB), 'check': lambda: M.glyph_fit('check', CHECK_PX, CHECK_PX)}[name]()
         _ink[name] = im.getchannel('A').getbbox()
     return _ink[name]
 
@@ -90,15 +91,15 @@ def ink(name):
 def accessory(kind):
     """(x, y, w, h) of a row's right accessory, card relative, so that its ink ends at RIGHT and is centred in the row: 'chevron', 'check' or 'switch'."""
     if kind == 'switch': return RIGHT - SWITCH_W, (ROW_H - SWITCH_H) // 2, SWITCH_W, SWITCH_H
-    name, w, h = ('chev', CHEV_W, CHEV_H) if kind == 'chevron' else ('check', CHECK_PX, CHECK_PX)
+    if kind == 'chevron': return chevron_left(), (ROW_H - 1 - CHEV_H) // 2, CHEV_W, CHEV_H
+    name, w, h = 'check', CHECK_PX, CHECK_PX
     b = ink(name)
     return RIGHT - b[2], (ROW_H - (b[3] - b[1])) // 2 - b[1], w, h
 
 
 def chevron_left():
-    """The left edge of the chevron's ink, card relative."""
-    b = ink('chev')
-    return RIGHT - (b[2] - b[0])
+    """The left edge of the chevron's image (row relative; x 288 in the 320 px row)."""
+    return CM + CARD_W - CHEV_INSET - CHEV_W
 
 
 def label_box(kind, has_icon):

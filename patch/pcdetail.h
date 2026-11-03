@@ -20,10 +20,10 @@
 #define PD_SHOW_H 40 /* the show row: a rounded cover, the show's name, a chevron */
 #define PD_COVER 32 /* the show row's cover, at x PD_X, centred in the row */
 #define PD_COVER_R 6
-#define PD_SHOW_TEXT_X 58 /* the show's name: x and width (the chevron's cell is 290..306) */
-#define PD_SHOW_TEXT_W 224
+#define PD_SHOW_TEXT_X 58 /* the show's name: x and width (it ends at x 278, 10 px before the shared chevron) */
+#define PD_SHOW_TEXT_W 220
 #define PD_SHOW_TEXT_H 22 /* the name's line, centred in the row */
-#define PD_CHEV_CX 298
+#define PD_CHEV_X 288 /* the shared chevron's left edge (LIST_CHEV_X) */
 #define PD_GAP_SHOW 14 /* the show row to the pill row (or to the description when there is no pill) */
 #define PD_PILL_ROW 30
 #define PD_GAP_PILL 18

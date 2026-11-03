@@ -15,7 +15,7 @@ with `(y + 63) >> 6` at `0x531bac/0x531bb8` and `0x532488/0x532498`), `BODY 60`,
 | page | stock | now |
 |---|---|---|
 | Songs | row 60, button 56; title 200 wide, 20 px at y 10; artist 175 at y 30 | row 64, body 60; title x 60..298 (238), 21 px in 24 at y 7; grey 18 px line at y 33 (20) full width, 213 after the MQA badge; multi-select 94..298 |
-| Folders | row 64/60; title 220, chevron at 288 | title 60..277, chevron 285..298; 60..298 for a song file |
+| Folders | row 64/60; title 220, chevron at 288 | title 60..277, chevron button 285..298 (the `right_arrow` ink is 288..298); 60..298 for a song file |
 | Artists / Genres / Composers | row 60, button 56, title 220 | row 64, body 60, title 60..277, chevron 285..298 |
 | Albums | item 60, cover 60 at x 0, title 180 at y 10, chevron 296 | item 64, cover 52 drawn 1:1 at (4,4), title/artist 60..277 at y 7/33; 8 covers per batch |
 | an album | track rows 60, "N title" 260 wide; header boxes 20/18 at y 10/30 | track rows 64, "N title" 12..298; header boxes 24/20 at y 7/33 |

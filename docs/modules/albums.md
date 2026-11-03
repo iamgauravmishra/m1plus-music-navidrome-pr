@@ -30,7 +30,7 @@ If the window cannot open the caller opens Cover Flow on the artist.
 | Scrolling | `albums_listview` > `albums_scrollview` > `view_grid`, plus `scroll_bar_m` |
 | Grid | Two 144 px covers, 12 px margins, 8 px column gap; 190 px cells on a 200 px pitch |
 | Grid text | Album 18 px white, artist 15 px grey; one ellipsized line each |
-| List | 64 px rows, 52 px covers at (10, 4), text from x 74; title 21 px, artist 18 px |
+| List | 64 px rows, 52 px covers at (10, 6) (6 px above, 5 + the 1 px hairline below), text from x 74 (title y 9, artist y 35) to x 278 (`LIST_TEXT_W_CHEV`); title 21 px, artist 18 px; the hairline runs from the text to x 310 (`LIST_HAIR_END`, Apple's inset) and the grey chevron (`pod_make_chevron`, 10 x 16, x 288 `LIST_CHEV_X`, centred above the hairline) marks that a row opens a page (the artist-scoped page and its All Songs row too) |
 | Corners | Grid 8 px blended into black; list 4 px in the bitmap alpha |
 | Navbar | Back, title, Cover Flow at x 168, view toggle at x 214, Now Playing at x 260 |
 | Mode file | `/mnt/data/m1plus/albums-view`: 1 grid, 0 list; otherwise `ALBUMS_DEFAULT_GRID` |

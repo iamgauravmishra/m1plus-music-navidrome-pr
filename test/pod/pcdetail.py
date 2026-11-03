@@ -357,8 +357,8 @@ def page_tests(ctx):
     bl, texts, styles, _ = PCP.paint(m, 0)
     ry = L['y_show'] + (PD['PD_SHOW_H'] - PD['PD_COVER']) // 2
     expect(not [b for b in bl if tuple(b[2][2:]) == (O['PS_ART'], O['PS_ART'])] and [tuple(b[2]) for b in bl if tuple(b[2][2:]) == (PD['PD_COVER'], PD['PD_COVER'])] == [(PD['PD_X'], ry, 32, 32)], 'no big cover: the show row has the show\'s cover, 32 px at the text edge')
-    chev = [b for b in bl if tuple(b[1]) == (O['PA_CHEV'] * O['PA_G_PX'], O['PA_G_Y'], O['PA_G_PX'], O['PA_G_PX'])]
-    expect(len(chev) == 1 and tuple(chev[0][2][:2]) == (PD['PD_CHEV_CX'] - 8, L['y_show'] + PD['PD_SHOW_H'] // 2 - 8), 'and a chevron at the row\'s right')
+    chev = [b for b in bl if tuple(b[1]) == (0, 0, 10, 16)]   # the shared chevron bitmap (POD_CHEV_W x POD_CHEV_H)
+    expect(len(chev) == 1 and tuple(chev[0][2]) == (PD['PD_CHEV_X'], L['y_show'] + (PD['PD_SHOW_H'] - 16) // 2, 10, 16) and PD['PD_CHEV_X'] == O['LIST_CHEV_X'] and PD['PD_SHOW_TEXT_X'] + PD['PD_SHOW_TEXT_W'] == O['LIST_CHEV_X'] - 10, 'and the shared chevron at the row\'s right (x 288, the name ends at 278)')
     expect(L['y_title'] == L['y_date'] + PD['PD_DATE_H'] + PD['PD_GAP_DATE'] and L['y_pill'] == L['y_show'] + PD['PD_SHOW_H'] + PD['PD_GAP_SHOW'] and L['y_desc'] == L['y_pill'] + PD['PD_PILL_ROW'] + PD['PD_GAP_PILL'], 'top to bottom: the date line, the title, the show row, the pill row, the description')
     ypill = L['y_pill']
     pill = [(t, r) for (t, r), s in zip(texts, styles) if s == 'label_ps_pill']
@@ -595,7 +595,7 @@ def preview_tests(ctx):
     expect(sorted((t[1], t[3]) for t in desc) == sorted(L['desc']) and m.props[(m.sv, 'virtual_h')] == L['h'], f'the description is the held feed\'s note for that item ({len(L["desc"])} lines) {sorted((t[1][:12], t[3]) for t in desc)[:2]} {sorted((t[:12], y) for t, y in L["desc"])[:2]} {m.props[(m.sv, "virtual_h")]} {L["h"]}')
     m.thread = None
     PCP.tap(m, 30, 200); PCP.tap(m, O['PS_DOTS_CX'], 300); tap_show_row(m)
-    expect(not m.thread and m.props.get((m.widgets['pg_sh_card'], 'visible'), 0) == 0 and is_page(m) and not [b for b in PCP.paint(m, 0)[0] if tuple(b[1]) == (O['PA_CHEV'] * O['PA_G_PX'], O['PA_G_Y'], O['PA_G_PX'], O['PA_G_PX'])],
+    expect(not m.thread and m.props.get((m.widgets['pg_sh_card'], 'visible'), 0) == 0 and is_page(m) and not [b for b in PCP.paint(m, 0)[0] if tuple(b[1]) == (0, 0, 10, 16)],
            'nothing on the page starts a download or a sheet; the show row has no chevron and a tap on it does nothing')
     PCP.click(m, 'btn_return')
     expect(not is_page(m) and [t for (t, r), s in zip(*PCP.paint(m, 0)[1:3]) if s == 'label_ps_latest'], 'Back: the preview\'s list with its Subscribe pill')

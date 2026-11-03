@@ -102,12 +102,12 @@ LISTS = [('icon_folder', 'folder', 'folder'), ('icon_playlist', 'playlist', 'lis
 COVERS = ['albumcover_s', 'albumcover_m', 'albumcover_info']   # the "no cover" placeholder, 60/90/100 px
 COVER_GLYPH, COVER_FRAC = 'disc-3', 0.52      # the glyph's px as a fraction of the tile
 # The album page (patch/albumpage.c): the cover tint (ah_tint: a window sized black gradient, patch/offsets.inc AH_TINT_*; the cover's corners are
-# cut by the payload, no masks); Shuffle's 38 px disc
+# cut by the payload, no masks); Shuffle's 40 px disc
 # with its glyph (pressed one lighter) and the Play all pill's play glyph (dark, 16 px, no padding); the pill itself is an image too (180 x 40,
 # ah_pill / ah_pill_down, drawn centred in the 44 px high button, so the touch rectangle is taller than the pill). The sizes are AH_* in patch/offsets.inc (test/pod/albumpage.py checks them).
 AH_TINT = (64, 200, 344, 450)   # alpha at the top row, at row AH_TINT_ROWS - 1 and below (the held deep tint, 78 % dark), the rows, the window height
-ALBUM = ['ah_tint', 'ah_play', 'ah_shuffle', 'ah_shuffle_down', 'ah_pill', 'ah_pill_down']
-AH_SHUF_DISC, AH_SHUF_DISC_DOWN, AH_SHUF_GLYPH, AH_DISC_PX = (0x2A,) * 3, (0x44,) * 3, 19, 38   # AH_DISC (patch/offsets.inc)
+ALBUM = ['ah_tint', 'ah_play', 'ah_shuffle', 'ah_shuffle_down', 'ah_pill', 'ah_pill_down', 'ah_wave']
+AH_SHUF_DISC, AH_SHUF_DISC_DOWN, AH_SHUF_GLYPH, AH_DISC_PX = (0x2A,) * 3, (0x44,) * 3, 19, 40   # AH_DISC (patch/offsets.inc)
 AH_PLAY_GLYPH, AH_PLAY_INK = 16, (0x14,) * 3
 AH_PILL_PX, AH_PILL_FILL, AH_PILL_FILL_DOWN = (180, 40), (0xFF,) * 3, (0xBE,) * 3   # AH_PLAY_W x AH_PILL_H
 DPAGE = ['dp_back', 'dp_back_down', 'dp_pill', 'dp_pill_down', 'dp_play', 'dp_add', 'dp_add_down', 'dp_added', 'dp_added_down']   # the Daily Mix page (patch/dailymix.c dp_*): the glass back disc (a white chevron), the white Play pill (pressed a light grey), its dark play glyph, the Add disc (Shuffle's disc and pressed colours, a plus: saves the mix as a playlist; a check once it is saved)
@@ -135,7 +135,7 @@ VINYL = list(vinyl_art.NAMES)
 DAILY = DAILY + VINYL
 # The Settings pages (tools/pod_settings.py, docs/modules/settings.md "Cards"): a 20 px glyph (CARD_GLYPH_PX, stroke 2) centred in a 24 px image on each row, by the row's label; the card's
 # chevron (Lucide chevron-right fitted to 9 x 15, #777777, stroke 2) and the picker's check (20 px, white).
-CARD_GLYPH_PX, CARD_CHEVRON, CARD_CHECK = 20, ('pod_chev', 9, 15, (0x77,) * 3, 2), ('pod_check', 20)
+CARD_GLYPH_PX, CARD_CHEVRON, CARD_CHECK = 20, ('pod_chev', 10, 16, (0x8A,) * 3), ('pod_check', 20)
 CARD_GLYPHS = {'Wi-Fi': 'wifi', 'Bluetooth': 'bluetooth', 'Home Screen': 'house', 'Library': 'disc-3', 'Now Playing': 'audio-lines',
                'Play Mode': 'repeat', 'EQ': 'sliders-vertical', 'All Playback Settings': 'headphones', 'Display': 'sun',
                'Keyboards': '+keyboard', 'About': 'info', 'All System Settings': 'settings', 'Developer': 'code', 'Main Menu': 'list-checks', 'Extras': 'ellipsis',
@@ -215,7 +215,7 @@ POD_ICON_X, POD_ICON = 16, BARE_PX
 POD_TEXT_X = 56
 HAIR_X, HAIR_COLOUR = POD_TEXT_X, '#222222'
 ROW_STATES = ('normal', 'over', 'pressed', 'focused', 'disable')
-CHEVRON, CHEVRON_DOWN = (0x8C,) * 3, (0x6E,) * 3     # every list chevron (stock right_arrow, the Main Menu's arrows): grey, darker pressed
+CHEVRON, CHEVRON_DOWN = (0x8A,) * 3, (0x6E,) * 3     # every list chevron (stock right_arrow, the Main Menu's arrows): grey, darker pressed
 # The status bar's Screenshot camera (patch/shot.c shows it while the 5 s countdown runs; tools/pod_ui.py adds the hidden widget): 16 px, white
 SHOT_BAR = ('pod_bar_shot', 'camera')
 SHOT_BAR_PX = 16
@@ -504,6 +504,31 @@ def card_icon(g):
     gi = glyph(g, CARD_GLYPH_PX, 'bare'); c = Image.new('RGBA', (POD_ICON,) * 2, WHITE + (0,))
     c.alpha_composite(gi, ((POD_ICON - gi.width) // 2, (POD_ICON - gi.height) // 2)); return c
 
+POD_CHEV_W, POD_CHEV_H = 10, 16
+
+def pod_chevron(rgb, canvas=None):
+    """patch/common.c pod_make_chevron, pixel for pixel: a two segment stroke 2 px wide, 4 x 4 samples per pixel (integer eighths of
+    a pixel), POD_CHEV_W x POD_CHEV_H. `canvas` (w, h) puts it right aligned and vertically centred on a larger transparent canvas."""
+    from PIL import Image
+    def seg2(px, py, ax, ay, bx, by):
+        dx, dy = bx - ax, by - ay; n = (px - ax) * dx + (py - ay) * dy; d = dx * dx + dy * dy
+        if n <= 0: return (px - ax) ** 2 + (py - ay) ** 2
+        if n >= d: return (px - bx) ** 2 + (py - by) ** 2
+        cr = (px - ax) * dy - (py - ay) * dx
+        return cr * cr // d
+    im = Image.new('RGBA', (POD_CHEV_W, POD_CHEV_H), tuple(rgb) + (0,))
+    for y in range(POD_CHEV_H):
+        for x in range(POD_CHEV_W):
+            n = 0
+            for i in range(4):
+                for j in range(4):
+                    sx, sy = x * 8 + 2 * j + 1, y * 8 + 2 * i + 1
+                    if min(seg2(sx, sy, 14, 14, 68, 64), seg2(sx, sy, 68, 64, 14, 114)) <= 64: n += 1
+            im.putpixel((x, y), tuple(rgb) + (n * 255 // 16,))
+    if canvas:
+        c = Image.new('RGBA', canvas, tuple(rgb) + (0,)); c.paste(im, (canvas[0] - POD_CHEV_W, (canvas[1] - POD_CHEV_H) // 2)); im = c
+    return im
+
 def disc(size, rgb, ss=4):
     from PIL import Image, ImageDraw
     big = Image.new('L', (size * ss, size * ss), 0)
@@ -648,8 +673,8 @@ def generate_all(sizes):
     for n, g in POD_ROWS.values(): f[n] = bare_icon(g, POD_ICON)
     for n, g in FOLDER_ROWS.items(): f[n] = bare_icon(g, POD_ICON)
     for g in set(CARD_GLYPHS.values()): f[card_name(g)] = card_icon(g)
-    name, w, h, rgb, sw = CARD_CHEVRON
-    f[name] = glyph_fit('chevron-right', w, h, rgb, 0, sw)
+    name, w, h, rgb = CARD_CHEVRON
+    f[name] = pod_chevron(rgb)
     f[CARD_CHECK[0]] = glyph_fit('check', CARD_CHECK[1], CARD_CHECK[1])
     for p in CARD_PIECES:
         f[f'pod_cd_{p}'] = card_piece(p); f[f'pod_cd_{p}_down'] = card_piece(p, True)
@@ -669,6 +694,8 @@ def generate_all(sizes):
             if n in DIALOG_GLYPHS: return glyph_box(g, size, DIALOG_K, rgb)
             if n in MARK_GLYPHS: return glyph_mark(g, size, MARK_K, rgb)
             return glyph_fit(g, *size, rgb, 6 if min(size) >= 48 else 1)
+        if n == 'right_arrow':      # the shared list chevron, its right edge on the stock canvas' (a 13 x 22 button at x 285 lands the glyph at 288..298)
+            f[n] = pod_chevron(col, sizes[n]); f[down] = pod_chevron(col_down, sizes[down]); continue
         f[n] = make(sizes[n], col)
         if down: f[down] = make(sizes[down], col_down)
     for n, g in DISCS: f[n] = bare_icon(g, 40)
@@ -862,6 +889,7 @@ def album_images():
     g = glyph_fit('shuffle', AH_SHUF_GLYPH, AH_SHUF_GLYPH, WHITE, 0)
     f['ah_shuffle'] = on_disc(g, AH_DISC_PX, AH_SHUF_DISC)
     f['ah_shuffle_down'] = on_disc(g, AH_DISC_PX, AH_SHUF_DISC_DOWN)
+    f['ah_wave'] = ab_wave()
     f['ah_pill'] = pill(AH_PILL_PX, AH_PILL_FILL)
     f['ah_pill_down'] = pill(AH_PILL_PX, AH_PILL_FILL_DOWN)
     p = glyph_fit('play:filled', AH_PLAY_GLYPH, AH_PLAY_GLYPH, AH_PLAY_INK, 0)
@@ -1172,6 +1200,16 @@ def g_wave(d, s, w, h):
     for i, bh in enumerate(WAVE_BARS):
         x, y = x0 + i * (WAVE_W + WAVE_GAP), (h - bh) / 2
         d.rounded_rectangle([round(x * s), round(y * s), round((x + WAVE_W) * s) - 1, round((y + bh) * s) - 1], radius=WAVE_W / 2 * s, fill=255)
+
+AB_WAVE_PX, AB_WAVE_RGB = 12, (0xEE, 0xEE, 0xEC)   # AB_WAVE (patch/offsets.inc): the playing track's marker on the album page, the rows' wave (np_row_playing, 20 px) scaled to a square canvas
+def ab_wave():
+    from PIL import Image
+    k, px = AB_WAVE_PX / WAVE_PX, AB_WAVE_PX
+    def shape(d, s):
+        for i, bh in enumerate(WAVE_BARS):
+            x, y, w, h = i * (WAVE_W + WAVE_GAP) * k, (px - bh * k) / 2, WAVE_W * k, bh * k
+            d.rounded_rectangle([round(x * s), round(y * s), round((x + w) * s) - 1, round((y + h) * s) - 1], radius=w / 2 * s, fill=255)
+    im = Image.new('RGBA', (px, px), AB_WAVE_RGB); im.putalpha(_aa((px, px), shape, 16, True)); return im
 
 def pil_glyph(kind, size, rgb, alpha=255):
     """The solid glyph `kind` (play, pause, next, prev, grabber) on a size (px or (w, h)) canvas, in rgb at alpha."""
@@ -1615,13 +1653,13 @@ def apply_pod_rows(out, rows):
             assert not any(c.name == 'pod_icon' for c in row.children), 'already has icons'
             text = pod_i18n.shown_english(lab); assert text in rows, f'no icon for the row {text!r}'
             img = rows[text][0]; used[img] = 1
-            right = min([c.x for c in row.children if c.type in ('image', 'button') or c.name.startswith('pod_value')] or [row.w - 12])   # the chevron, switch, up arrow or value
+            right = min([c.x - 7 if c.get('image') == 'right_arrow' else c.x for c in row.children if c.type in ('image', 'button') or c.name.startswith('pod_value')] or [row.w - 12])   # the chevron, switch, up arrow or value
             lab.x, lab.w = POD_TEXT_X, right - POD_TEXT_X
             ic = Widget('image', POD_ICON_X, (row.h - POD_ICON) // 2, POD_ICON, POD_ICON,
                         [('name', 'pod_icon'), ('image', img), ('draw_type', 'icon'), ('sensitive', 'false')])
             row.children.insert(0, ic)
             for st in ROW_STATES: row.set(f'style:{st}:border_width', '0')
-            hair = Widget('view', HAIR_X, row.h - 1, row.w - HAIR_X, 1, [('name', 'pod_hair'), ('sensitive', 'false')])
+            hair = Widget('view', HAIR_X, row.h - 1, min(row.w, 310) - HAIR_X, 1, [('name', 'pod_hair'), ('sensitive', 'false')])
             for st in ROW_STATES: hair.set(f'style:{st}:bg_color', HAIR_COLOUR)
             row.children.append(hair)
     for k in POD_UI:

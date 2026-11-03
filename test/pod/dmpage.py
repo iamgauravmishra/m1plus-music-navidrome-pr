@@ -257,9 +257,9 @@ def run(ctx):
     shuf_l, shuf_r = D.DP_SHUF_X + (D.DP_SHUF_W - D.DP_DISC) // 2, D.DP_SHUF_X + (D.DP_SHUF_W + D.DP_DISC) // 2      # the Shuffle disc as drawn
     add_l, add_r = D.DP_ADD_X + (D.DP_ADD_W - D.DP_DISC) // 2, D.DP_ADD_X + (D.DP_ADD_W + D.DP_DISC) // 2           # the Add disc as drawn
     pill_l, pill_r = D.DP_PLAY_X, D.DP_PLAY_X + D.DP_PLAY_W
-    expect((shuf_l, shuf_r, pill_l, pill_r, add_l, add_r) == (36, 74, 86, 234, 246, 284) and pill_l - shuf_r == add_l - pill_r == D.DP_BTN_GAP == 12 and D.DP_ADD_W == D.DP_SHUF_W
+    expect((shuf_l, shuf_r, pill_l, pill_r, add_l, add_r) == (34, 74, 86, 234, 246, 286) and pill_l - shuf_r == add_l - pill_r == D.DP_BTN_GAP == 12 and D.DP_ADD_W == D.DP_SHUF_W
            and shuf_l + add_r == 320 and D.DP_SHUF_X + D.DP_ADD_X + D.DP_ADD_W == 320 and D.DP_PLAY_X + pill_r == 320 and (shuf_l + add_r) // 2 == 160,
-           'Shuffle disc | Play pill | Add disc are symmetric about x 160: drawn 36..74, 86..234, 246..284, equal gaps of 12 px')
+           'Shuffle disc | Play pill | Add disc are symmetric about x 160: drawn 34..74, 86..234, 246..286, equal gaps of 12 px')
     expect(D.DP_SHUF_X + D.DP_SHUF_W < D.DP_PLAY_X and D.DP_PLAY_X + D.DP_PLAY_W < D.DP_ADD_X and D.DP_ADD_X + D.DP_ADD_W <= 320 and D.DP_PLAY_W < 180, 'the touch rectangles do not overlap and the pill is shorter than the old 180')
     expect(all(O[k] == getattr(D, k) for k in ('DP_ADD_X', 'DP_ADD_W')), 'patch/offsets.inc has the Add disc\'s numbers')
     expect(D.DP_BACK_BTN >= 44 and D.DP_BACK_DISC <= D.DP_BACK_BTN and D.DP_BTN_H >= 44 and D.DP_SHUF_W >= 44 and D.DP_ADD_W >= 44 and D.DP_PLAY_W >= 44, 'every control is at least 44 px')
@@ -272,8 +272,8 @@ def run(ctx):
     expect((back.x, back.y, back.w, back.h) == (8, 8, 44, 44) and back.get('style:normal:icon') == 'dp_back' and back.get('style:pressed:icon') == 'dp_back_down', 'the back disc is a 44 px touch square at (8, 8) with the glass images, the window\'s last control')
     kids = [c.name for c in view.children]
     shuf, play, glyph, add = (view.find(n) for n in ('btn_dp_shuffle', 'btn_dp_play', 'img_dp_glyph', 'btn_dp_add'))
-    expect(kids == ['btn_dp_shuffle', 'btn_dp_play', 'img_dp_glyph', 'btn_dp_add'] and (shuf.x, shuf.y, shuf.w, shuf.h) == (33, 263, 44, 44) and (play.x, play.y, play.w, play.h) == (86, 263, 148, 44)
-           and (add.x, add.y, add.w, add.h) == (243, 263, 44, 44)
+    expect(kids == ['btn_dp_shuffle', 'btn_dp_play', 'img_dp_glyph', 'btn_dp_add'] and (shuf.x, shuf.y, shuf.w, shuf.h) == (32, 263, 44, 44) and (play.x, play.y, play.w, play.h) == (86, 263, 148, 44)
+           and (add.x, add.y, add.w, add.h) == (244, 263, 44, 44)
            and shuf.get('style:normal:icon') == 'ah_shuffle' and play.get('style:normal:icon') == 'dp_pill' and play.get('style:pressed:icon') == 'dp_pill_down'
            and glyph.get('sensitive') == 'false' and glyph.get('image') == 'dp_play', 'the content view holds the Shuffle disc, the Play pill and its insensitive dark glyph (the glass images of the album page and the white pill) and the Add disc')
     expect(add.get('style') == shuf.get('style') == 'img_btn_style' and add.get('enable') == 'true' and add.get('visible') != 'false' and add.get('sensitive') != 'false'
@@ -294,11 +294,11 @@ def run(ctx):
            and Image.open(os.path.join(xx, 'dp_play.png')).size == (16, 16), 'the white pill is 148 x 40 and opaque white inside, the disc 40, the glyph 16')
     a_n, a_d, s_n, s_d = (Image.open(os.path.join(xx, n + '.png')).convert('RGBA') for n in ('dp_add', 'dp_add_down', 'ah_shuffle', 'ah_shuffle_down'))
     plus_ink = lambda im: Image.eval(im.convert('L'), lambda v: 255 if v > 200 else 0).getbbox()   # the white glyph on the grey disc (0x2A / 0x44)
-    expect(a_n.size == s_n.size == a_d.size == s_d.size == (38, 38) and a_n.getpixel((2, 19)) == s_n.getpixel((2, 19)) and a_d.getpixel((2, 19)) == s_d.getpixel((2, 19))
+    expect(a_n.size == s_n.size == a_d.size == s_d.size == (40, 40) and a_n.getpixel((2, 19)) == s_n.getpixel((2, 19)) and a_d.getpixel((2, 19)) == s_d.getpixel((2, 19))
            and a_n.getchannel('A').tobytes() == s_n.getchannel('A').tobytes() and a_n.getpixel((0, 0))[3] == 0 and a_n.getpixel((5, 19)) == (0x2A, 0x2A, 0x2A, 255) and a_d.getpixel((5, 19)) == (0x44, 0x44, 0x44, 255)
            and a_n.tobytes() != s_n.tobytes() and a_d.tobytes() != a_n.tobytes(), 'the Add disc is the Shuffle disc\'s size, shape and two greys (normal 0x2A, pressed 0x44) with another glyph')
     pb, sb = plus_ink(a_n), plus_ink(s_n)
-    expect(pb and sb and pb[2] - pb[0] <= sb[2] - sb[0] + 1 and pb[3] - pb[1] <= sb[3] - sb[1] + 1 and abs((pb[0] + pb[2]) - 38) <= 1 and abs((pb[1] + pb[3]) - 38) <= 1 and pb[2] - pb[0] >= 17,
+    expect(pb and sb and pb[2] - pb[0] <= sb[2] - sb[0] + 1 and pb[3] - pb[1] <= sb[3] - sb[1] + 1 and abs((pb[0] + pb[2]) - 40) <= 1 and abs((pb[1] + pb[3]) - 40) <= 1 and pb[2] - pb[0] >= 17,
            f'the plus is centred on the disc and as large as the Shuffle glyph ({pb} against {sb})')
     expect(set(mod_icons.DPAGE) <= set(mod_icons.pod_names()), 'the images are added by the build (pod_names)')
 

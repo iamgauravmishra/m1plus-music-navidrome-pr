@@ -33,7 +33,7 @@ ALBUM, ARTIST = 'Kind of Blue', 'Miles Davis'
 RED = (190, 50, 55)
 NAMES = ['So What', 'Freddie Freeloader', 'Blue in Green', 'All Blues', 'Flamenco Sketches', 'Flamenco Sketches (Alt)', 'So What (Alt)', 'Blue in Green (Alt)']
 WIDGETS = ('view_grid', 'btn_return', 'btn_backtoplayer', 'btn_select', 'btn_selall', 'sg_add', 'sg_del', 'btn_cancel', 'btn_play', 'btn_shuffle', 'label_status', 'label_row_num', 'label_row_title',
-           'label_row_gold', 'ab_title', 'ab_artist', 'ab_meta', 'ab_foot', 'ab_glyph', 'ab_play_text', 'label_title', 'img_ah_tint')
+           'ab_title', 'ab_artist', 'ab_meta', 'ab_foot', 'ab_glyph', 'ab_play_text', 'label_title', 'img_ah_tint')
 NAV_BTNS = ('btn_return', 'btn_backtoplayer', 'btn_select', 'btn_selall', 'sg_add', 'sg_del', 'btn_cancel')
 BAR_BLACK = O['NP_BAR_STOCK']
 
@@ -94,7 +94,8 @@ def album_machine(n=8, album=ALBUM, artist=ARTIST, rgb=RED, cover='file', titles
     m.load_image = 0
     for w in WIDGETS: Machine.widget(m, w)
     m.canvas = m.alloc(0x80); m.oy_canvas = m.canvas
-    m.images = {'p_default': (24, 24, bytes((0x40, 0x40, 0x40, 255)) * (24 * 24)), 'unselect': (26, 26, struct.pack('<I', 0xff111111) * 676), 'selected': (26, 26, struct.pack('<I', 0xff2222ee) * 676)}
+    m.images = {'p_default': (24, 24, bytes((0x40, 0x40, 0x40, 255)) * (24 * 24)), 'unselect': (26, 26, struct.pack('<I', 0xff111111) * 676), 'selected': (26, 26, struct.pack('<I', 0xff2222ee) * 676),
+                'ah_wave': (12, 12, b''.join(struct.pack('<I', 0xff0000ee if 4 <= x < 7 else 0xff000000) for y in range(12) for x in range(12)))}   # (a bar at columns 4..6, flattened over black as cc_decode gives it)
     m.setword(SEL_VEC, m.alloc(8))
     m.stock_songlist = True
     recs = []
@@ -209,7 +210,7 @@ def asset_tests(ctx):
            'the list is the whole window (y 0, 450 high), its scroll_view 310 wide with the stock scroll bar, all transparent: the window\'s colour and the gradient show through')
     # the header: the stock page's numbers (docs/modules/album-page.md)
     expect((O['AH_ART'], O['AH_ART_X'], O['AH_ART_Y'], O['AH_CORNER'], O['AH_HDR_H'], O['AH_TITLE_Y'], O['AH_ARTIST_Y'], O['AH_META_Y'], O['AH_BTN_Y']) == (160, 80, 50, 10, 344, 224, 247, 267, 292)
-           and (O['AH_SHUF_X'], O['AH_SHUF_W'], O['AH_PLAY_X'], O['AH_PLAY_W'], O['AH_BTN_H']) == (42, 44, 95, 180, 44), 'the geometry constants are the stock album page\'s')
+           and (O['AH_SHUF_X'], O['AH_SHUF_W'], O['AH_PLAY_X'], O['AH_PLAY_W'], O['AH_BTN_H']) == (42, 44, 96, 180, 44), 'the geometry constants are the stock album page\'s')
     for name, y, h, px, colour in (('ab_title', 224, 22, 22, '#FFFFFF'), ('ab_artist', 247, 18, 18, '#AAAAAA'), ('ab_meta', 267, 15, 15, '#9C9C9C')):
         w = f(name)
         expect(w.type == 'hscroll_label' and (w.x, w.y, w.w, w.h) == (17, y, 286, h) and w.get('sensitive') == 'false' and w.get('ellipses') == 'true' and w.get('yoyo') == 'true'
@@ -217,14 +218,16 @@ def asset_tests(ctx):
                f'{name}: a centred {px} px {colour} hscroll_label at (17, {y}), 286 x {h}, insensitive (a drag over it scrolls the list), scrolling a long text')
     shuf, play, glyph, ptext = f('btn_shuffle'), f('btn_play'), f('ab_glyph'), f('ab_play_text')
     expect((shuf.x, shuf.y, shuf.w, shuf.h) == (42, 292, 44, 44) and shuf.get('style:normal:icon') == 'ah_shuffle' and shuf.get('style:pressed:icon') == 'ah_shuffle_down'
-           and (play.x, play.y, play.w, play.h) == (95, 292, 180, 44) and play.get('style:normal:icon') == 'ah_pill' and play.get('style:pressed:icon') == 'ah_pill_down',
-           'Shuffle is a 44 x 44 touch rectangle with the 38 px disc, Play all a 180 x 44 one with the 180 x 40 pill, 12 px apart')
+           and (play.x, play.y, play.w, play.h) == (96, 292, 180, 44) and play.get('style:normal:icon') == 'ah_pill' and play.get('style:pressed:icon') == 'ah_pill_down',
+           'Shuffle is a 44 x 44 touch rectangle with the 40 px disc, Play all a 180 x 44 one with the 180 x 40 pill (the disc as high as the pill), 12 px apart')
+    import mod_icons as _mi
+    expect(O['AH_DISC'] == 40 == _mi.AH_DISC_PX == O['AH_PILL_H'] and O['AH_PLAY_X'] == O['AH_SHUF_X'] + (O['AH_SHUF_W'] + O['AH_DISC']) // 2 + 12, 'the Shuffle disc is the pill\'s 40 px high; the pill starts 12 px after it')
     expect(glyph.type == 'image' and (glyph.w, glyph.h) == (16, 16) and glyph.get('image') == 'ah_play' and glyph.get('sensitive') == 'false' and glyph.y == 292 + 14
            and glyph.x == pill(O['AB_PLAY_TEXT_W']), 'the pill\'s play glyph is a 16 px insensitive image over the pill (the English pair centred where the payload cannot measure)')
     expect(ptext.get('visible') == 'false' and ptext.get('sensitive') == 'false' and ptext.get('style:normal:font_size') == '18' and ptext.get('style:normal:text_color') == '#141414'
            and ptext.get('style:normal:bg_color') == '#FFFFFF' and ptext.get('text') in (None, 'Play all') and ptext.get('tr_text', 'Play all') == 'Play all',
            'the pill\'s text is a hidden label (the 18 px #141414 style and the translated "Play all"; its white background is the pill\'s for the contrast scan)')
-    for name, align, colour in (('label_row_num', 'right', '#AAAAAA'), ('label_row_title', 'left', '#FFFFFF'), ('label_row_gold', 'left', '#FE7E40')):
+    for name, align, colour in (('label_row_num', 'right', '#AAAAAA'), ('label_row_title', 'left', '#FFFFFF')):
         w = f(name)
         expect(w.get('visible') == 'false' and w.get('sensitive') == 'false' and w.get('style:normal:font_size') == '19' and w.get('style:normal:text_color') == colour and w.get('style:normal:text_align_h') == align,
                f'{name}: the hidden 19 px {colour} {align} text style of the rows')
@@ -275,7 +278,7 @@ def open_tests(ctx):
     expect(sizes and sizes[-1][2:] == (320, HDR + 8 * ROW) and m.props[(m.sv, 'virtual_h')] == HDR + 8 * ROW, f'the content is the {HDR} px header and 8 rows of {ROW}: {HDR + 8 * ROW} px, the scroll_view is told (no footer without a known duration)')
     expect(vis(m, 'view_grid') == (1, 1) and vis(m, 'label_status') == (0, 0) and not any(c[0] == 'widget_set_visible' and c[1] in [m.widgets[n] for n in ('btn_selall', 'sg_add', 'sg_del', 'btn_cancel')] for c in calls),
            'the list shows, the status line is hidden, the select mode\'s buttons stay as the asset has them (hidden)')
-    expect(not [c for c in calls if c[0] == 'widget_load_image' and c[1] not in ('p_default', 'unselect', 'selected') and not c[1].endswith('.jpg')], 'only the cover file is decoded (no cover per row)')
+    expect(not [c for c in calls if c[0] == 'widget_load_image' and c[1] not in ('p_default', 'unselect', 'selected', 'ah_wave') and not c[1].endswith('.jpg')], 'only the cover file is decoded (no cover per row)')
     m.call(PSYMS['ab_on_destroy'], count=4000000)
     expect(len(m.bitmaps) == 0 and not m.timers_open() if hasattr(m, 'timers_open') else len(m.bitmaps) == 0, f'closing frees every bitmap ({len(m.bitmaps)} left)')
     # the artist's and the composer's album: the same page, the classes 0xff11 / 0xff14, the artist from the record loadAlbumList filled
@@ -508,9 +511,9 @@ def rows_tests(ctx):
     blits, texts, fills = paint(m)
     num = [(t, r) for (t, r), s in texts if s == 'label_row_num']
     ttl = [(t, r) for (t, r), s in texts if s == 'label_row_title']
-    expect(num == [(str(i + 1), (12, row_y(i) + 19, 22, 22)) for i in range(2)], f'the number (position + 1) right aligned in a 22 px column at x 12, a 22 px line 19 px down the row: {num}')
-    expect(ttl == [(NAMES[i], (42, row_y(i) + 19, 256, 22)) for i in range(2)], f'the title from x 42 (8 px after the number) to 298: {ttl}')
-    order = [s for _, s in texts if s in ('label_row_num', 'label_row_title', 'label_row_gold')]
+    expect(num == [(str(i + 1), (12, row_y(i) + O['AB_TEXT_Y'], 22, 22)) for i in range(2)], f'the number (position + 1) right aligned in a 22 px column at x 12, a 22 px line AB_TEXT_Y down the row: {num}')
+    expect(ttl == [(NAMES[i], (42, row_y(i) + O['AB_TEXT_Y'], 256, 22)) for i in range(2)], f'the title from x 42 (8 px after the number) to 298: {ttl}')
+    order = [s for _, s in texts if s in ('label_row_num', 'label_row_title')]
     expect(order == ['label_row_num'] * 2 + ['label_row_title'] * 2, 'the numbers, then the titles: one text style at a time')
     hair = [f_ for f_ in fills if f_[0] == O['AB_HAIR']]
     expect(hair == [(O['AB_HAIR'], 0, row_y(0) + 63, 310, 1)] and O['AB_HAIR'] == 0x22ffffff and O['AB_PRESS'] == 0x33ffffff, f'a 1 px hairline of 13 % white across the row\'s foot (row 1\'s lies below the window): {hair}')
@@ -518,8 +521,8 @@ def rows_tests(ctx):
     scroll_to(m, 300)
     blits, texts, fills = paint(m)
     seen = [t for (t, r), s in texts if s == 'label_row_title']
-    last = (300 + WIN_H - 41 - HDR) // ROW   # the last row whose 22 px line (19 px down the row) is wholly inside the window
-    expect(seen == NAMES[:last + 1] and all(r[1] == row_y(i) + 19 - 300 for i, ((t, r), s) in enumerate(x for x in texts if x[1] == 'label_row_title')),
+    last = (300 + WIN_H - O['AB_TEXT_Y'] - 22 - HDR) // ROW   # the last row whose 22 px line (AB_TEXT_Y down the row) is wholly inside the window
+    expect(seen == NAMES[:last + 1] and all(r[1] == row_y(i) + O['AB_TEXT_Y'] - 300 for i, ((t, r), s) in enumerate(x for x in texts if x[1] == 'label_row_title')),
            f'scrolled 300 px: rows 0 to {last} (the header is above the window), at their y less the offset ({seen})')
     # long titles are cut with an ellipsis at the room's end
     long_title = 'The Complete Concert in Paris, Olympia, 1961 (Remastered Live Edition)'
@@ -535,14 +538,21 @@ def rows_tests(ctx):
     got = [t for (t, r), s in texts if s == 'label_row_title']
     expect(got == ['A', '1.flac', '2.flac', 'D'], f'a track with no title shows its file name, a CUE track (start > 0) always its file name ({got})')
     m2.call(PSYMS['ab_on_destroy'], count=4000000)
-    # the playing row: the gold title, only that row
+    # the playing row: a white title like the others, the wave marker in place of the number
     m.playing = ('1.flac', '/mnt/mmc/m/1.flac', 0)
     blits, texts, fills = paint(m)
     scroll_to(m, 0)
     blits, texts, fills = paint(m)
-    pairs = [(t, s) for (t, r), s in texts if s in ('label_row_title', 'label_row_gold')]
-    expect(pairs == [(NAMES[0], 'label_row_title'), (NAMES[1], 'label_row_gold')] or sorted(pairs) == sorted([(NAMES[0], 'label_row_title'), (NAMES[1], 'label_row_gold')]),
-           f'the track that is playing (is_playing: the file name and the url, the CUE start) has the gold title: {pairs}')
+    styles = {s for _, s in texts}
+    expect(styles - {'ab_play_text'} == {'label_row_num', 'label_row_title'} and [t for (t, r), s in texts if s == 'label_row_title'] == NAMES[:2],
+           f'the playing track (is_playing: the file name and the url, the CUE start) keeps the white title style: no gold style ({styles})')
+    num = [t for (t, r), s in texts if s == 'label_row_num']
+    wv = [b for b in blits if b[2][2] == O['AB_WAVE'] and b[2][3] == O['AB_WAVE']]
+    expect(num == ['1'] and len(wv) == 1 and wv[0][2][:2] == (12 + 22 - O['AB_WAVE'], row_y(1) + O['AB_TEXT_Y'] + (O['AB_TEXT_H'] - O['AB_WAVE']) // 2) and wv[0][1] == (0, 0, O['AB_WAVE'], O['AB_WAVE']),
+           f'the playing row (row 1, the second) has no number but an AB_WAVE px wave right aligned in the number column, centred on the title line: {num} {[b[2] for b in wv]}')
+    bm = wv[0][0]
+    expect(SG.pixel(m, bm, 0, 0) >> 24 == 0 and SG.pixel(m, bm, 5, 8) == 0xff000000 | 0xECEEEE and (SG.pixel(m, bm, 5, 8) & 0xffffff) == 0xECEEEE,
+           'the wave is #EEEEEC where the image has ink, transparent elsewhere')
     ip = [c for c in m.calls if c[0] == 'is_playing']
     expect(ip and all(c[1] == LIB and c[2] == 0 for c in ip), 'is_playing is asked with the browsing class and the CUE start, as the stock row builder does')
     # three-digit numbers: a 32 px column, the title 10 px further

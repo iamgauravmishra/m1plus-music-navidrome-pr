@@ -325,12 +325,12 @@ DP_TEXT_X, DP_TEXT_W = 16, 288                                       # the centr
 DP_TITLE_PX, DP_SUB_PX, DP_UPD_PX, DP_DESC_PX = 24, 17, 14, 15
 DP_OUTER, DP_GAP = 16, 9                                             # ink gaps (the album page's, docs/modules/album-page.md): outer 16, between text lines 9
 DP_DESC_PITCH, DP_DESC_LINES, DP_DESC_BELOW = 20, 2, 14
-DP_BTN_H, DP_PILL_H, DP_PLAY_W, DP_DISC, DP_BTN_GAP = 44, 40, 148, 38, 12   # the buttons: touch 44 high, drawn pill 148 x 40, discs 38, 12 apart (Shuffle | Play | Add, symmetric about x 160)
-DP_SHUF_W = 44                                                       # the Shuffle touch rectangle (the disc 38 centred in it)
+DP_BTN_H, DP_PILL_H, DP_PLAY_W, DP_DISC, DP_BTN_GAP = 44, 40, 148, 40, 12   # the buttons: touch 44 high, drawn pill 148 x 40, discs 40, 12 apart (Shuffle | Play | Add, symmetric about x 160)
+DP_SHUF_W = 44                                                       # the Shuffle touch rectangle (the disc 40 centred in it)
 DP_PILL_GLYPH, DP_PILL_GAP = 16, 8                                   # the pill's play glyph and the gap to its text
 DP_TITLE_Y, DP_SUB_Y, DP_UPD_Y, DP_BTN_Y, DP_DESC_Y = 193, 218, 239, 263, 317    # page_layout(font) on the shipped font (test/pod/dmpage.py asserts it); patch/offsets.inc has the same
-DP_SHUF_X, DP_PLAY_X = 33, 86                                        # the Shuffle touch rectangle and the pill: 38 + 12 + 148 + 12 + 38 = 248 px centred on x 160 (drawn 36 .. 284)
-DP_ADD_X, DP_ADD_W = 243, 44                                         # the Add disc's touch rectangle: the Shuffle one mirrored about x 160 (DP_SHUF_X + DP_ADD_X + DP_ADD_W = 320)
+DP_SHUF_X, DP_PLAY_X = 32, 86                                        # the Shuffle touch rectangle and the pill: 40 + 12 + 148 + 12 + 40 = 252 px centred on x 160 (drawn 34 .. 286)
+DP_ADD_X, DP_ADD_W = 244, 44                                         # the Add disc's touch rectangle: the Shuffle one mirrored about x 160 (DP_SHUF_X + DP_ADD_X + DP_ADD_W = 320)
 DP_ROWS_Y = DP_DESC_Y + DP_DESC_LINES * DP_DESC_PITCH + DP_DESC_BELOW    # 371: the first song's row (the description is two lines' high in every language, so the rows never move)
 DP_PILL_INK = 0x1e1c1c                                               # the pill's text colour #1C1C1E as r | g << 8 | b << 16 (the glyph image dp_play is the same)
 DP_BOTTOM = 16                                                       # air under the last row

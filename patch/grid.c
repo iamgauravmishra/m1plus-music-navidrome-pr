@@ -39,6 +39,8 @@ void grid_drop(grid_t *g) {
 
 void grid_free(grid_t *g) {
     grid_drop(g);
+    if (g->chev) bitmap_destroy(g->chev);
+    g->chev = (void *)0;
     free(g->tiles);
     g->tiles = (grid_tile_t *)0;
 }
@@ -275,24 +277,34 @@ void grid_paint(void *canvas, grid_t *g, int first, int last, int origin_y, int 
     }
 }
 
-/* Fills the rows [y0, y1) of the window with colour c (cut to the window by hand). */
-static void grid_fill(void *canvas, int y0, int y1, unsigned c, int view_h) {
+/* Fills x0..x1 of the rows [y0, y1) of the window with colour c (cut to the window by hand). */
+static void grid_fill(void *canvas, int x0, int x1, int y0, int y1, unsigned c, int view_h) {
     if (y0 < 0) y0 = 0;
     if (y1 > view_h) y1 = view_h;
-    if (y1 <= y0) return;
+    if (y1 <= y0 || x1 <= x0) return;
     canvas_set_fill_color(canvas, c);
-    canvas_fill_rect(canvas, 0, y0, GRID_LIST_W, y1 - y0);
+    canvas_fill_rect(canvas, x0, y0, x1 - x0, y1 - y0);
 }
 
 void grid_list_paint(void *canvas, grid_t *g, void *st_title, void *st_sub, int r0, int r1, int off, int view_h,
-                     int press, int shift, grid_tile_t *(*tile_of)(void *, int), void *ctx) {
+                     int press, int shift, int chev, grid_tile_t *(*tile_of)(void *, int), void *ctx) {
     int r, pass;
+    if (chev && !g->chev) g->chev = pod_make_chevron();
     for (r = r0; r <= r1; ++r) {
         grid_tile_t *t = tile_of(ctx, r);
         int y = r * LIST_ROW_H - off;
-        if (press == t->album) grid_fill(canvas, y, y + LIST_ROW_H - 1, LIST_PRESS, view_h);
+        if (press == t->album) grid_fill(canvas, 0, GRID_LIST_W, y, y + LIST_ROW_H - 1, LIST_PRESS, view_h);
         grid_blit(canvas, g, t, LIST_ART_X + shift, y + LIST_ART_Y, view_h);
-        grid_fill(canvas, y + LIST_ROW_H - 1, y + LIST_ROW_H, LIST_HAIR, view_h);
+        grid_fill(canvas, LIST_TEXT_X + shift, LIST_HAIR_END, y + LIST_ROW_H - 1, y + LIST_ROW_H, LIST_HAIR, view_h);
+        if (chev && !t->nochev && g->chev) { /* centred on the row above its hairline, cut to the window by hand */
+            int cy = y + (LIST_ROW_H - 1 - POD_CHEV_H) / 2, top = cy < 0 ? -cy : 0,
+                bottom = view_h > 0 && cy + POD_CHEV_H > view_h ? view_h - cy : POD_CHEV_H, src[4], dst[4];
+            if (bottom > top) {
+                src[0] = 0, src[1] = top, src[2] = POD_CHEV_W, src[3] = bottom - top;
+                dst[0] = LIST_CHEV_X, dst[1] = cy + top, dst[2] = POD_CHEV_W, dst[3] = bottom - top;
+                canvas_draw_image(canvas, g->chev, src, dst);
+            }
+        }
     }
     for (pass = 0; pass < 2; ++pass) { /* titles, then subtitles: one text style at a time */
         widget_prepare_text_style(pass ? st_sub : st_title, canvas);
@@ -302,7 +314,7 @@ void grid_list_paint(void *canvas, grid_t *g, void *st_title, void *st_sub, int 
                           (pass                   ? LIST_SUB_Y
                            : tile_of(ctx, r)->mid ? (LIST_ROW_H - LIST_TITLE_H) / 2
                                                   : LIST_TITLE_Y),
-                      LIST_TEXT_W - shift, pass ? LIST_SUB_H : LIST_TITLE_H, view_h);
+                      (chev && !tile_of(ctx, r)->nochev ? LIST_TEXT_W_CHEV : LIST_TEXT_W) - shift, pass ? LIST_SUB_H : LIST_TITLE_H, view_h);
     }
 }
 

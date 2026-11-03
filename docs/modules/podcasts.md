@@ -23,7 +23,7 @@ github.com/m-d-e-v/q2-podcasts, `internal/library/download.go` and
 
 ## Pages and controls
 
-Shows contains Continue Listening, a show grid and Downloads/Subscriptions rows.
+Shows contains Continue Listening, a show grid and Downloads/Subscriptions rows (text ends at x 278, the shared list chevron `pod_make_chevron` at x 288, hairline to 310; the episode page's show row likewise).
 Shows sort by newest remote or local episode date. The show page has artwork, metadata,
 Latest Episode and all known episodes, newest first. A body tap opens episode details;
 the pill plays, downloads, pauses, resumes or retries according to state.
@@ -33,7 +33,7 @@ Show and episode sheets provide refresh, unsubscribe, played marks and download 
 Selection supports bulk deletion; the currently playing file is retained.
 Deleting an episode clears its saved resume/played state. Unsubscribing preserves local files.
 
-Search accepts directory terms, feed URLs and Apple Podcasts links. Results open a preview;
+Search accepts directory terms, feed URLs and Apple Podcasts links. Results open a preview (rows of the shared list painter: the hairline from the text to x 310 and the list chevron at x 288, on a result that has a feed only: a dimmed Not available row opens nothing, so it has no chevron and its text runs to x 308 (`grid_tile_t.nochev`));
 Subscribe creates a show folder and its metadata. Search previews do not play remote episodes.
 Subscriptions supports card import/export, including OPML. The import also accepts
 `Podcasts/subscriptions.txt`: one HTTP(S) feed URL per line, with `#` comments.

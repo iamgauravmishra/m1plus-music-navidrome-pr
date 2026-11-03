@@ -248,6 +248,7 @@ static struct {
     void *
         subtile; /* pod_ic_subtile (the Subscriptions row's tile), decoded the same way once the Shows level first paints */
     void *savetile; /* pod_ic_savetile (the Saved row's tile) */
+    void *chev; /* the shared list chevron (pod_make_chevron), made on first use */
     pg_cell_t *cells; /* PG_CELLS layouts of the Show level's cells */
     pg_hdr_t *hdr; /* the Show header's layout */
     pd_t *
@@ -899,7 +900,7 @@ static grid_tile_t *pg_stile(int a) {
     grid_tile_t *t = grid_tile(&pg.g, a, 0, pg.srn - 1, &fresh);
     if (fresh) {
         const pj_result_t *r = pn_search_result(a);
-        if (r) grid_set(t, r->name, r->feed[0] ? r->author : TR("Not available"), 0);
+        if (r) grid_set(t, r->name, r->feed[0] ? r->author : TR("Not available"), 0), t->nochev = !r->feed[0];
     }
     return t;
 }
@@ -913,7 +914,7 @@ static void pg_paint_srch(void *canvas) {
     int r0, r1, r;
     pg_span(&r0, &r1);
     if (r1 < r0) return;
-    grid_list_paint(canvas, &pg.g, pg.st_title, pg.st_sub, r0, r1, pg_off() - PQ_TOP, GRID_VIEW_H, pg.press, 0,
+    grid_list_paint(canvas, &pg.g, pg.st_title, pg.st_sub, r0, r1, pg_off() - PQ_TOP, GRID_VIEW_H, pg.press, 0, 1,
                     pg_stile_of, (void *)0);
     for (r = r0; r <= r1; ++r) {
         const pj_result_t *p = pn_search_result(r);
@@ -982,6 +983,12 @@ static void pg_blit_from(void *canvas, void *bmp, int sx, int sy, int w, int h, 
 
 static void pg_sprite(void *canvas, int sx, int sy, int w, int h, int x, int y) {
     pg_blit_from(canvas, pg.atlas, sx, sy, w, h, x, y);
+}
+
+/* The shared list chevron (POD_CHEV_W x POD_CHEV_H) at (x, y) of the view. */
+static void pg_chev(void *canvas, int x, int y) {
+    if (!pg.chev) pg.chev = pod_make_chevron();
+    pg_blit_from(canvas, pg.chev, 0, 0, POD_CHEV_W, POD_CHEV_H, x, y);
 }
 
 static void pg_glyph(void *canvas, int idx, int x, int y) {
@@ -1162,7 +1169,7 @@ static void pg_paint_det(void *canvas) {
     e = &pg.eps[pg.det - 1];
     y = d->y_show - off + (PD_SHOW_H - PD_COVER) / 2;
     grid_blit(canvas, &pg.g, &pg.g.tiles[0], PD_X, y, GRID_VIEW_H);
-    if (d->y_pill) pg_glyph(canvas, PA_CHEV, PD_CHEV_CX - PA_G_PX / 2, d->y_show - off + PD_SHOW_H / 2 - PA_G_PX / 2);
+    if (d->y_pill) pg_chev(canvas, PD_CHEV_X, d->y_show - off + (PD_SHOW_H - POD_CHEV_H) / 2);
     y = d->y_date - off;
     if (pg_ep_state(e, &pos, &len) == PC_DONE) {
         pg_glyph(canvas, PA_CHECK, x - 1, y + PD_DATE_H / 2 - PA_G_PX / 2);
@@ -1378,7 +1385,7 @@ static void pg_paint_home(void *canvas) {
                          y + PP_DL_TILE_Y);
         else
             pg_sprite(canvas, PA_TILE_X, PA_TILE_Y, PA_TILE_PX, PA_TILE_PX, PP_DL_TILE_X, y + PP_DL_TILE_Y);
-        pg_glyph(canvas, PA_CHEV, PP_DL_CHEV_CX - PA_G_PX / 2, y + PC_ROW_H / 2 - PA_G_PX / 2);
+        pg_chev(canvas, PP_DL_CHEV_X, y + (PC_ROW_H - 1 - POD_CHEV_H) / 2);
         az_fill(canvas, PP_DL_TEXT_X, y + PC_ROW_H - 1, y + PC_ROW_H, PG_W - PP_DL_TEXT_X, LIST_HAIR);
     }
     pg_gspan(&c0, &c1);
@@ -4313,6 +4320,7 @@ static int pg_on_destroy(void *ctx, void *e) {
     if (pg.atlas) bitmap_destroy(pg.atlas);
     if (pg.subtile) bitmap_destroy(pg.subtile);
     if (pg.savetile) bitmap_destroy(pg.savetile);
+    if (pg.chev) bitmap_destroy(pg.chev);
     free(pg.sv_h);
     free(pg.sv_d);
     free(pg.cells);

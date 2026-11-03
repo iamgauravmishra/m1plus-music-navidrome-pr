@@ -34,7 +34,7 @@ def footer(b, n, sec):
 TRACKS = ['So What', 'Freddie Freeloader', 'Blue in Green', 'All Blues', 'Flamenco Sketches', 'Flamenco Sketches (Alt)', 'So What (Alt)', 'Blue in Green (Alt)']
 
 
-def page(s, n=8, sec=2745, scroll=None):
+def page(s, n=8, sec=2745, scroll=None, playing=2):
     """The album page's list scrolled to its end (patch/albumpage.c: rows from AH_HDR_H, LIST_ROW_H high; the footer AB_FOOT_GAP under the last one at x AB_NUM_X: the
     count with the duration, only when known, AB_FOOT_PAD under it), under the 30 px status bar."""
     row, hdr, win = O['LIST_ROW_H'], O['AH_HDR_H'], O['AH_WIN_H']
@@ -48,7 +48,10 @@ def page(s, n=8, sec=2745, scroll=None):
         y = 30 + hdr + i * row - off
         if y + row < 30 or y > 30 + win: continue
         d.rectangle((0, y + row - 1, 309, y + row - 1), fill=(0x3A, 0x3A, 0x3E))
-        s.text(im, O['AB_NUM_X'] + 22, y + O['AB_TEXT_Y'] + O['AB_TEXT_H'] / 2, str(i + 1), 19, (0xAA, 0xAA, 0xAA), 'r')
+        if i == playing:   # the playing track: the wave (ah_wave) in place of the number, the title stays white
+            im.alpha_composite(s.img('ah_wave'), (O['AB_NUM_X'] + 22 - O['AB_WAVE'], y + O['AB_TEXT_Y'] + (O['AB_TEXT_H'] - O['AB_WAVE']) // 2))
+        else:
+            s.text(im, O['AB_NUM_X'] + 22, y + O['AB_TEXT_Y'] + O['AB_TEXT_H'] / 2, str(i + 1), 19, (0xAA, 0xAA, 0xAA), 'r')
         s.text(im, O['AB_NUM_X'] + 22 + O['AB_NUM_GAP'], y + O['AB_TEXT_Y'] + O['AB_TEXT_H'] / 2, TRACKS[i % len(TRACKS)], 19)
     fy = 30 + hdr + n * row + O['AB_FOOT_GAP'] - off
     for k, line in enumerate(lines):

@@ -339,7 +339,7 @@ static int pl_on_paint(void *ctx, void *e) {
     pl_span(&r0, &r1);
     if (r1 >= r0 && pl.list) {
         grid_list_paint(canvas, &pl.g, pl.st_ltitle, pl.st_lsub, r0, r1, off, GRID_VIEW_H, pl.select ? 0 : pl.press,
-                        pl.select ? SG_SEL_COL : 0, pl_tile_of, (void *)0);
+                        pl.select ? SG_SEL_COL : 0, !pl.select && !pl_v(), pl_tile_of, (void *)0);
         if (pl_v() && r0 == 0) pl_plus(canvas, LIST_ART_Y - off);
         if (pl_v() && r0 <= 1 && r1 >= 1) pl_star(canvas, LIST_ROW_H + LIST_ART_Y - off);
         for (a = r0; pl.select && pl.mark[0] && a <= r1; ++a)

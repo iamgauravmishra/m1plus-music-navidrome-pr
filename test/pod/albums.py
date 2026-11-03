@@ -20,7 +20,9 @@ CW = 320                  # the content view's width (the list_view layouter giv
 TAP = O['SC_DRAG_PX']     # a release closer than this to the press on both axes is a tap (AL_TAP_PX): the scroll_view's own drag threshold
 SC_YOFF, SC_VH = O['SC_YOFF'], 0x7c   # the scroll_view's yoffset and virtual_h (its widget_t fields)
 ROW, LART, LAX, LAY = O['LIST_ROW_H'], O['LIST_ART'], O['LIST_ART_X'], O['LIST_ART_Y']
-TX, TW, TY, TH, SY, SH = O['LIST_TEXT_X'], O['LIST_TEXT_W'], O['LIST_TITLE_Y'], O['LIST_TITLE_H'], O['LIST_SUB_Y'], O['LIST_SUB_H']
+TX, TW, TY, TH, SY, SH = O['LIST_TEXT_X'], O['LIST_TEXT_W_CHEV'], O['LIST_TITLE_Y'], O['LIST_TITLE_H'], O['LIST_SUB_Y'], O['LIST_SUB_H']
+CHEV_PX = (10, 16)   # POD_CHEV_W x POD_CHEV_H (patch/common.h)
+HX, HW = TX, O['LIST_HAIR_END'] - TX   # the hairline: from the text to LIST_HAIR_END
 
 
 class Images(dict):
@@ -106,7 +108,13 @@ def paint(m):
     m.blits.clear(); m.texts.clear(); m.measures.clear(); m.fills.clear(); m.text_styles.clear(); m.draw_oy.clear()
     m.call(PSYMS['al_on_paint'], a0=0, a1=ev, count=400000000)
     m.oy_after = m.s32(m.canvas + O['CANVAS_OY'])
-    return list(m.blits), list(m.texts)
+    m.chevs = [b for b in m.blits if m.bitmaps[b[0]][1:] == CHEV_PX]   # the list rows' chevron (pod_make_chevron) is drawn with the covers: set apart
+    return [b for b in m.blits if b not in m.chevs], list(m.texts)
+
+
+def nbmp(m):
+    """The live bitmaps but the chevron the list's rows share."""
+    return sum(1 for v in m.bitmaps.values() if v[1:] != CHEV_PX)
 
 
 def content_h(m):
@@ -383,7 +391,7 @@ def layout_tests(ctx):
         expect(w is not None and w.type == 'label' and w.get('visible') == 'false' and w.get('sensitive') == 'false'
                and w.get('style:normal:font_size') == str(px) and w.get('style:normal:text_color') == col and w.get('style:normal:text_align_h') == 'left',
                f'{nm}: a hidden, insensitive label whose style is {px} px {col} (the grid\'s album / artist text)')
-    expect(ROW == 64 and LAX == 10 and TX == LAX + LART + 12 and LAY + LART <= ROW - 1 and TX + TW + 12 == 320
+    expect(ROW == 64 and LAX == 10 and TX == LAX + LART + 12 and LAY + LART <= ROW - 1 and TX + O['LIST_TEXT_W'] + 12 == 320 and TX + TW == 278
            and TY + TH <= SY and SY + SH <= ROW - 1 and ROW == O['LIST_ROW_H'],
            'list rows: 64 px like the library rows, 52 px cover at (10, 4), text from 74 (12 px after the cover) to a 12 px right margin, two lines and a hairline fit')
     expect(O['LIST_HAIR'] == 0xff222222 and O['LIST_PRESS'] == 0xff333333, 'hairline #222222, pressed #333333 (the other lists\' colours)')
@@ -430,7 +438,7 @@ def layout_tests(ctx):
            'no widget is created per album')
     expect(not any(n in names for n in ('pthread_create', 'toolsGetAlbumCover', 'toolsGetExternCover', 'mkdir')),
            'opening the grid starts no worker (the background build is a timer a moment later: section 13)')
-    expect(len(m.bitmaps) == 1 and ('widget_load_image', 'p_default') in calls, 'the placeholder disc is the only bitmap before the first frame')
+    expect(nbmp(m) == 1 and ('widget_load_image', 'p_default') in calls, 'the placeholder disc is the only bitmap before the first frame')
     expect(('widget_set_visible', m.widgets['label_status'], 0) in calls, 'the status line starts hidden')
 
     # 4. The first frame: the cells that touch the view, each cover blitted 1:1, titles under them; decoding is
@@ -447,7 +455,7 @@ def layout_tests(ctx):
     expect(len(ts) == 4 and len(ss) == 4 and ts['Album 0'] == (MARGIN, RGAP + COVER + TGAP, COVER, THEIGHT) and ss['Artist 1'] == (MARGIN + CPITCH, RGAP + COVER + TGAP + THEIGHT, COVER, SUBH),
            f'album 0\'s title at ({MARGIN}, {RGAP + COVER + TGAP}), album 1\'s artist directly under its title')
     expect(m.text_styles == ['label_grid_title'] * 4 + ['label_grid_sub'] * 4, 'two text-style passes: the albums, then the artists')
-    expect(not [c for c in m.calls if c[0] in ('widget_load_image', 'bitmap_create_ex', 'timer_add')] and len(m.bitmaps) == 1
+    expect(not [c for c in m.calls if c[0] in ('widget_load_image', 'bitmap_create_ex', 'timer_add')] and nbmp(m) == 1
            and len({b[0] for b in blits}) == 1,
            'paint never decodes, allocates a bitmap or arms a timer: every cover is the one placeholder until the loader has run')
     expect(any(c[0] == 'timer_add' and c[1] == PSYMS['al_on_load'] and c[2] == 16 for c in calls),
@@ -472,7 +480,7 @@ def layout_tests(ctx):
     expect(order[:4] == [0, 1, 2, 3] and sorted(order[4:]) == [4, 5] and len(order) == 6,
            f'the four cells in view first (the first row is the nearer to the middle of the view), then the next row ahead ({order})')
     blits, texts = settle(m)
-    expect(len(blits) == 4 and len(m.bitmaps) == 1 + 6, f'every visible cover is a tile of its own once loaded, and the next row is ready ({len(m.bitmaps)} bitmaps)')
+    expect(len(blits) == 4 and nbmp(m) == 1 + 6, f'every visible cover is a tile of its own once loaded, and the next row is ready ({nbmp(m)} bitmaps)')
     first = m.blits[0][0]
     data, bw, bh = m.bitmaps[first]
     tile = struct.unpack(f'<{bw * bh}I', bytes(m.u.mem_read(data, bw * bh * 4)))
@@ -573,7 +581,7 @@ def layout_tests(ctx):
     expect(got == [], f'and back to 1100 px again: nothing is decoded, the history held it ({got})')
     got_urls = [u for u in m.loads if u.startswith('file://')]
     expect(len(got_urls) == len(set(got_urls)), 'no cover was decoded twice in all of that')
-    expect(len(m.bitmaps) == 1 + 12, f'the ring is full and bounded: {len(m.bitmaps)} bitmaps')
+    expect(nbmp(m) == 1 + 12, f'the ring is full and bounded: {nbmp(m)} bitmaps')
     #     (the ring is bounded for any library: section 10)
     #     the view is redrawn only for a cover that is in it
     m = albums_machine(30); open_grid(m)
@@ -780,20 +788,20 @@ def taps_list_tests(ctx):
     settle(m)
     rows = (n + COLS - 1) // COLS
     mx = RGAP + rows * PITCH - VIEW_H
-    loaded, peak = [len(m.bitmaps)], 0
+    loaded, peak = [nbmp(m)], 0
     for target in (mx // 2, mx, 0):
         scroll_to(m, target)
         blits, texts = settle(m)
         expect(dsts(blits) == want_dsts(reference(target, n)), f'4000 albums, scroll {target}: the frame is the visible cells only ({len(blits)})')
-        expect(len(m.bitmaps) <= TILES + 1, f'live bitmaps stay within {TILES} tiles + the placeholder ({len(m.bitmaps)})')
+        expect(nbmp(m) <= TILES + 1, f'live bitmaps stay within {TILES} tiles + the placeholder ({nbmp(m)})')
         peak = max(peak, sum(w * h * 4 for _, w, h in m.bitmaps.values()))
-        loaded.append(len(m.bitmaps))
+        loaded.append(nbmp(m))
     expect(peak <= (TILES + 1) * COVER * COVER * 4 <= 1100000,
            f'bitmap memory peaks at {peak} B (<= {(TILES + 1) * COVER * COVER * 4} B = {TILES} tiles + the placeholder)')
     top_urls = [u for u in m.loads if u.startswith('file://')]
     expect(m.destroyed > 0 and len(top_urls) > len(set(top_urls)), f'old tiles are recycled as the view moves, and the albums back at the top are decoded again ({m.destroyed} destroyed, {len(top_urls)} loads of {len(set(top_urls))} covers)')
     m.call(PSYMS['al_on_destroy'], count=2000000)
-    expect(len(m.bitmaps) == 0, f'closing the page destroys every bitmap ({len(m.bitmaps)} left)')
+    expect(len(m.bitmaps) == 0, f'closing the page destroys every bitmap ({nbmp(m)} left)')
     expect(any(c[0] == 'deque_destroy' for c in m.calls) and any(c[0] == 'free' for c in m.calls), 'and frees the list copy and the tile ring')
     print(f'  4000 albums: open {opened_cost:,} payload instructions, at most {max(loaded)} bitmaps live, {peak} B of bitmaps')
 
@@ -837,11 +845,13 @@ def taps_list_tests(ctx):
     prep = [c[1] for c in m.calls if c[0] == 'widget_prepare_text_style']
     expect(prep == [m.widgets['label_row_title'], m.widgets['label_row_sub']] and m.text_styles == ['label_row_title'] * len(want_t) + ['label_row_sub'] * len(want_a),
            'two text-style switches a frame: all titles, then all artists')
-    expect(sorted(f[1:] for f in m.fills if f[0] == O['LIST_HAIR']) == sorted((0, c[4], CW, 1) for c in ref if c[4] is not None)
+    expect(sorted(f[1:] for f in m.fills if f[0] == O['LIST_HAIR']) == sorted((HX, c[4], HW, 1) for c in ref if c[4] is not None)
            and not [f for f in m.fills if f[0] == O['LIST_PRESS']], 'a one pixel hairline under every row whose last line is in view, no pressed fill')
+    expect(sorted(b[2] for b in m.chevs) == sorted((O['LIST_CHEV_X'], c[0] * ROW + (ROW - 1 - CHEV_PX[1]) // 2, *CHEV_PX) for c in ref if c[4] is not None) and O['LIST_CHEV_X'] == 288,
+           f'a chevron {CHEV_PX} at x {O["LIST_CHEV_X"]}, centred above the hairline, on every row whose last line is in view')
     expect('widget_load_image' not in m.names(), 'list paint decodes nothing either')
     blits, texts = settle(m)
-    expect(len(blits) == 7 and len(m.bitmaps) == 1 + 7 + 2, f'every visible row has its own cover once loaded, and the next two rows are ready ({len(m.bitmaps)} bitmaps)')
+    expect(len(blits) == 7 and nbmp(m) == 1 + 7 + 2, f'every visible row has its own cover once loaded, and the next two rows are ready ({nbmp(m)} bitmaps)')
     data, bw, bh = m.bitmaps[m.blits[0][0]]
     lt, LR = struct.unpack(f'<{bw * bh}I', bytes(m.u.mem_read(data, bw * bh * 4))), O['LIST_R']
     expect((bw, bh) == (LART, LART) and {lt[y * bw + x] for y in range(bh) for x in range(bw) if not (min(x, bw - 1 - x) < LR and min(y, bh - 1 - y) < LR)} == {colour(0)},
@@ -1000,7 +1010,7 @@ def taps_list_tests(ctx):
     mx = 4000 * ROW - VIEW_H
     for target in (mx // 2, mx, 0):
         scroll_to(m, target); settle(m)
-        expect(len(m.bitmaps) <= TILES + 1, f'list of 4000: live bitmaps stay within {TILES} tiles + the placeholder ({len(m.bitmaps)})')
+        expect(nbmp(m) <= TILES + 1, f'list of 4000: live bitmaps stay within {TILES} tiles + the placeholder ({nbmp(m)})')
     m.call(PSYMS['al_on_destroy'], count=2000000)
     expect(len(m.bitmaps) == 0, 'closing the list frees every bitmap')
 
@@ -1032,7 +1042,7 @@ def toggle_tests(ctx):
     sv_ = m.widgets['albums_scrollview']
     expect(content_h(m) == 60 * ROW and m.s32(sv_ + SC_VH) == 60 * ROW, f'the content is now 60 rows of {ROW} px, in the view and the scroll_view ({content_h(m)})')
     expect(scroll_of(m) == first_row * ROW * COLS, f'the scroll_view is at the first album\'s row ({scroll_of(m)} = album {first_row * COLS} x {ROW})')
-    expect(len(m.bitmaps) == 1 and m.bitmaps[next(iter(m.bitmaps))][1:] == (LART, LART), 'the grid\'s covers are dropped; the placeholder is the list\'s size')
+    expect(nbmp(m) == 1 and m.bitmaps[next(iter(m.bitmaps))][1:] == (LART, LART), 'the grid\'s covers are dropped; the placeholder is the list\'s size')
     blits, texts = paint(m)
     top = [t for t, sty in zip(texts, m.text_styles) if sty == 'label_row_title' and t[1][1] < 40]
     expect(top and top[0][0] == f'Album {first_row * COLS}', f'the first album in view stays first: Album {first_row * COLS} ({top[0][0] if top else None})')
@@ -1050,7 +1060,7 @@ def toggle_tests(ctx):
     seen = []
     for _ in range(8):
         m.call(PSYMS['al_on_toggle'], a0=0, count=20000000); seen += m.calls; settle(m); seen += m.calls
-    expect(len(m.bitmaps) <= TILES + 1, f'after many switches the live bitmaps are still bounded ({len(m.bitmaps)})')
+    expect(nbmp(m) <= TILES + 1, f'after many switches the live bitmaps are still bounded ({nbmp(m)})')
     expect(not [c for c in seen if c[0] in opened_ev], 'eight more switches opened and closed no window')
     # a pending reload timer and a fling are cancelled by the switch
     m = albums_machine(60); calls = open_grid(m)

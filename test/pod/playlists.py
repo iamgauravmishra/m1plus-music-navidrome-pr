@@ -133,6 +133,11 @@ def open_page(m):
     return list(m.calls)
 
 
+def chevs_of(m, blits):
+    """The blits of the shared chevron bitmap (POD_CHEV_W x POD_CHEV_H) among a frame's."""
+    return [b for b in blits if m.bitmaps[b[0]][1:] == (10, 16)]
+
+
 def paint(m):
     """One EVT_AFTER_PAINT on the content view: (blits, texts, styles) of that frame, the canvas where the scroll_view leaves it."""
     ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
@@ -383,6 +388,7 @@ def select_tests(expect, lists):
     expect(all(c[0] == O['LIST_ART_X'] + SEL_COL for c in covers) and len(covers) == 6, 'the covers move right by the mark column')
     rows = [(t, r) for (t, r), s in zip(texts, styles) if s == 'label_row_title']
     expect(rows and all(r[0] == O['LIST_TEXT_X'] + SEL_COL and r[2] == O['LIST_TEXT_W'] - SEL_COL for _, r in rows), f'the texts too, 30 px narrower ({rows[:1]})')
+    expect(not chevs_of(m, blits), 'no chevron in select mode (a tap marks, it opens nothing)')
     calls = tap(m, 150, 1 * O['LIST_ROW_H'] + 20)
     expect(('widget_set_text_utf8', m.widgets['label_title'], '1 Selected') in calls and not [c for c in calls if c[0] == 'window_open'], 'a tap on a row marks it')
     m.touch('down', 150, SCREEN_Y0 + 2 * O['LIST_ROW_H'] + 20, 5000, fn='pl_on_down'); paint(m)
@@ -391,7 +397,8 @@ def select_tests(expect, lists):
     m.click('btn_return')
     blits, texts, styles = settle(m)
     rows = [(t, r) for (t, r), s in zip(texts, styles) if s == 'label_row_title']
-    expect(all(r[0] == O['LIST_TEXT_X'] and r[2] == O['LIST_TEXT_W'] for _, r in rows) and not marks_of(blits), 'leaving select mode puts the texts back at their width')
+    expect(all(r[0] == O['LIST_TEXT_X'] and r[2] == O['LIST_TEXT_W_CHEV'] for _, r in rows) and not marks_of(blits), 'leaving select mode puts the texts back at their width (ending before the chevrons)')
+    expect(len(chevs_of(m, blits)) == 6, 'and the chevrons are back on the rows')
 
     # fallbacks: the stock Playlists page where the page cannot do it, nothing when there is nothing to select
     for what, tweak in (('the select widgets are not in the asset', lambda m: m.widgets.pop('pl_bar')), ('the Delete pill is not in the asset', lambda m: m.widgets.pop('pl_del')),
@@ -798,7 +805,7 @@ def run(ctx):
 
     # 13. List mode (the Albums page's): 64 px rows, a 52 px mosaic (quadrants of 26 px), the name and the count in the list's two text styles
     ROW, LART, LAX, LAY = O['LIST_ROW_H'], O['LIST_ART'], O['LIST_ART_X'], O['LIST_ART_Y']
-    TX, TW, TY, TH, SY, SH = O['LIST_TEXT_X'], O['LIST_TEXT_W'], O['LIST_TITLE_Y'], O['LIST_TITLE_H'], O['LIST_SUB_Y'], O['LIST_SUB_H']
+    TX, TW, TY, TH, SY, SH = O['LIST_TEXT_X'], O['LIST_TEXT_W_CHEV'], O['LIST_TITLE_Y'], O['LIST_TITLE_H'], O['LIST_SUB_Y'], O['LIST_SUB_H']
     glyph = lambda m: m.props.get((m.widgets['btn_albumview'], 'style:normal:icon'))
     m = PM(lists, missing=(7,)); open_page(m)
     expect(glyph(m) == 'pod_nav_list' and m.fs.get(PL_FILE) is None, 'with no setting the page opens as the grid (the toggle shows the list glyph)')
@@ -822,7 +829,9 @@ def run(ctx):
     expect(got['label_row_title'] == {i: l[1] for i, l in enumerate(lists)}
            and got['label_row_sub'] == {i: ('1 track' if len(l[2]) == 1 else f'{len(l[2])} tracks') for i, l in enumerate(lists)}, f'each row shows the name and the count ({got})')
     expect(all(r[0] == TX and r[2] == TW and (r[1] % ROW, r[3]) in ((TY, TH), (SY, SH)) for (t, r) in texts), 'the texts are in the list rows\' rects')
-    expect(sum(1 for f in m.fills if f[0] == O['LIST_HAIR']) == len(lists) and not [f for f in m.fills if f[0] == O['LIST_PRESS']], 'a hairline closes each row, no row is pressed')
+    expect(sorted(f[1:] for f in m.fills if f[0] == O['LIST_HAIR']) == [(TX, i * ROW + ROW - 1, O['LIST_HAIR_END'] - TX, 1) for i in range(len(lists))], 'a hairline from the text to LIST_HAIR_END closes each row')
+    expect(sorted(b[2] for b in chevs_of(m, blits)) == [(O['LIST_CHEV_X'], i * ROW + (ROW - 1 - 16) // 2, 10, 16) for i in range(len(lists))], 'and a chevron ends it')
+    expect(not [f for f in m.fills if f[0] == O['LIST_PRESS']], 'a hairline closes each row, no row is pressed')
     #     a tap on a row (any x) opens its playlist; the press fills the row until the release
     m.touch('down', 300, SCREEN_Y0 + 3 * ROW + 20, 1000, fn='pl_on_down')
     blits, texts, styles = paint(m)
@@ -849,13 +858,13 @@ def run(ctx):
            'the first playlist in view stays at the top; the content is 12 rows')
     blits, texts, styles = settle(m)
     expect(('bitmap_create_ex', LART, LART) in m.calls or any(m.bitmaps[b][1] == LART for b in m.bitmaps), 'the tiles were remade at 52 px')
-    tiles_ = [b for b in m.bitmaps if m.bitmaps[b][1] != MARK]   # (the two select marks are 26 px and live as long as the page)
+    tiles_ = [b for b in m.bitmaps if m.bitmaps[b][1:] != (10, 16) and m.bitmaps[b][1] != MARK]   # (the two select marks are 26 px and live as long as the page)
     expect(all(m.bitmaps[b][1] == LART for b in tiles_) and len(tiles_) <= TILES + 1, 'no 144 px tile survives the switch; the ring is bounded')
     m.calls = []; m.click('btn_albumview', count=60000000)
     expect(glyph(m) == 'pod_nav_list' and m.fs.get(PL_FILE) == b'1\n' and m.word(m.sv + SC_YOFF) == first_grid // COLS * PITCH == 0 + 2 // COLS * PITCH,
            'back to the grid: "1" saved, the glyph back, the first playlist in view kept')
     settle(m)
-    expect(all(m.bitmaps[b][1] in (COVER, MARK) for b in m.bitmaps), 'and the tiles are 144 px again')
+    expect(all(m.bitmaps[b][1] in (COVER, MARK) or m.bitmaps[b][1:] == (10, 16) for b in m.bitmaps), 'and the tiles are 144 px again')
     #     the choice survives a re-open, and is the Albums page's own file apart
     m.click('btn_albumview', count=60000000)
     fn, c = m.bound[(m.window, O['EVT_DESTROY'])]

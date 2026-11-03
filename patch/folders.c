@@ -43,14 +43,14 @@ extern unsigned pod_rand(unsigned n); /* patch/shuffle.c: 0 .. n - 1 */
 #define FO_TOP_PLAIN 60 /* the first row when there are no pills: under the large title (SG_PILL_Y 52 + 8) */
 #define FO_END 24 /* the air under the last row */
 /* The menu rows' numbers (tools/mod_icons.py POD_ICON 24, POD_ICON_X 16, POD_TEXT_X 56): a 24 px bare white Lucide glyph at x 16, the text at x 56, the hairline from there. The names are cut at
- * FO_TEXT_END: the wave (24 px, x 262) and the chevron (the stock right_arrow's place in a menu row, x 289) follow. */
+ * FO_TEXT_END: the wave (24 px, x 262) and the chevron (the shared list chevron, x 288) follow. */
 #define FO_ICON 24
 #define FO_ICON_X 16
 #define FO_ICON_Y ((ROW - FO_ICON) / 2)
 #define FO_TEXT_X 56
 #define FO_TEXT_END 256
 #define FO_MARK_X 262
-#define FO_CHEV_X 289
+#define FO_CHEV_X LIST_CHEV_X /* 288: the shared list chevron */
 #define FO_TEXT_Y ((ROW - LIST_TITLE_H) / 2) /* the name centred in the row */
 #define FO_NAME_MAX 160 /* bytes of a name kept (the tile keeps 47 characters anyway) */
 #define FO_PLAYING_MAX 32 /* rows in view are at most GRID_VIEW_H / ROW + 2 */
@@ -245,7 +245,7 @@ static void fo_paint_rows(void *canvas) {
         }
         fo_blit(canvas, fo_glyph(rec), FO_ICON, FO_ICON, FO_ICON_X + fo_shift(), y + FO_ICON_Y);
         if ((playing >> (r - r0)) & 1) fo_blit(canvas, fo.ic[FO_I_WAVE], FO_ICON, FO_ICON, FO_MARK_X, y + FO_ICON_Y);
-        if (type != T_FILE) fo_blit(canvas, fo.chev, POD_CHEV_W, POD_CHEV_H, FO_CHEV_X, y + (ROW - POD_CHEV_H) / 2);
+        if (type != T_FILE) fo_blit(canvas, fo.chev, POD_CHEV_W, POD_CHEV_H, FO_CHEV_X, y + (ROW - 1 - POD_CHEV_H) / 2);
         az_fill(canvas, tx, y + ROW - 1, y + ROW, FO_W - 10 - tx, LIST_HAIR);
     }
     widget_prepare_text_style(fo.st_title, canvas);

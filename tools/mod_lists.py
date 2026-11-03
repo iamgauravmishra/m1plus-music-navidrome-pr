@@ -289,7 +289,7 @@ def edit_playmore(root, pal):
     row('pod_more', [
         awtk_ui.Widget('image', 14, 13, 24, 24, [('name', 'pod_more_icon'), ('draw_type', 'default'), ('image', 'pod_ic_extras'), ('sensitive', 'false')]),
         awtk_ui.Widget('hscroll_label', 48, 15, 200, 20, [('name', 'pod_more_label'), ('style', 'srlabel_item_white_style')]),
-        awtk_ui.Widget('image', 283, 14, 13, 22, [('name', 'pod_more_chev'), ('draw_type', 'default'), ('image', 'right_arrow'), ('sensitive', 'false')])])
+        awtk_ui.Widget('image', 285, 14, 13, 22, [('name', 'pod_more_chev'), ('draw_type', 'default'), ('image', 'right_arrow'), ('sensitive', 'false')])])
     back = row('pod_back', [
         awtk_ui.Widget('image', 14, 14, 13, 22, [('name', 'pod_back_chev'), ('draw_type', 'default'), ('image', 'return'), ('sensitive', 'false')]),
         awtk_ui.Widget('hscroll_label', 40, 15, 200, 20, [('name', 'pod_back_label'), ('style', 'srlabel_item_white_style')])])

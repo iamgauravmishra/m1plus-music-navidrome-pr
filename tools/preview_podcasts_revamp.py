@@ -501,7 +501,7 @@ def build_shows(s, shows, shelf_n, dl, refreshing):
         _paste(im, tile, o['PP_DL_TILE_X'], y + o['PP_DL_TILE_Y'])
         s.text(im, o['PP_DL_TEXT_X'], y + o['LIST_TITLE_Y'] + o['LIST_TITLE_H'] / 2, name, 21, WHITE)
         s.text(im, o['PP_DL_TEXT_X'], y + o['LIST_SUB_Y'] + o['LIST_SUB_H'] / 2, PS.fit(s, sub, 18, o['PP_DL_TEXT_W']), 18, GREY)
-        _paste(im, glyph16(o['PA_CHEV']), o['PP_DL_CHEV_CX'] - o['PA_G_PX'] // 2, y + o['PC_ROW_H'] // 2 - o['PA_G_PX'] // 2)
+        _paste(im, M.pod_chevron(M.CARD_CHEVRON[3]), o['PP_DL_CHEV_X'], y + (o['PC_ROW_H'] - 1 - M.POD_CHEV_H) // 2)
         hline(im, o['PP_DL_TEXT_X'], W, y + o['PC_ROW_H'] - 1, FOLD + (255,))
     s.text(im, o['PP_SHOWS_X'], L['y_shows'] + o['PP_HEAD_H'] / 2, 'Shows', 20, WHITE)
     for a, sh in enumerate(shows):
@@ -639,7 +639,7 @@ def detail_frame(s, sh, e, note, length, scroll=0, preview=False, sheet=None):
     ry = top + L['y_show']
     im.alpha_composite(cover_img(sh, P['PD_COVER'], P['PD_COVER_R']), (P['PD_X'], ry + (P['PD_SHOW_H'] - P['PD_COVER']) // 2))
     s.text(im, P['PD_SHOW_TEXT_X'], ry + P['PD_SHOW_H'] // 2, L['show'], 15, GREY)
-    if L['y_pill']: _paste(im, glyph16(o['PA_CHEV']), P['PD_CHEV_CX'] - o['PA_G_PX'] // 2, ry + P['PD_SHOW_H'] // 2 - o['PA_G_PX'] // 2)
+    if L['y_pill']: _paste(im, M.pod_chevron(M.CARD_CHEVRON[3]), P['PD_CHEV_X'], ry + (P['PD_SHOW_H'] - M.POD_CHEV_H) // 2)
     if L['y_pill']:
         y0 = top + L['y_pill']
         state_pill(s, im, pod_show.PD['PD_X'], y0, e['state'], e['label'], e.get('pct', 0))

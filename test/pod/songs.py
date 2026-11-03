@@ -436,16 +436,16 @@ def open_and_paint_tests(ctx):
     expect(m.most_per_tick <= 1, f'at most one cover decoded per tick ({m.most_per_tick})')
     covers = [b for b in blits if b[2][2] == O['LIST_ART']]
     rows_in = [i for i in range(len(TITLES)) if lay.row_y(i) < VIEW_H and lay.row_y(i) + ROW > 0]
-    expect(sorted(b[2][1] for b in covers) == [lay.row_y(i) + 4 for i in rows_in] and all(b[2][0] == 10 and b[2][3] == min(52, VIEW_H - b[2][1]) for b in covers),
-           f'a 52 px cover at (10, row + 4) for each row in view ({len(rows_in)}): {sorted(b[2][1] for b in covers)} vs {[lay.row_y(i) + 4 for i in rows_in]}')
+    expect(sorted(b[2][1] for b in covers) == [lay.row_y(i) + O['LIST_ART_Y'] for i in rows_in] and all(b[2][0] == 10 and b[2][3] == min(52, VIEW_H - b[2][1]) for b in covers),
+           f'a 52 px cover at (10, row + LIST_ART_Y) for each row in view ({len(rows_in)}): {sorted(b[2][1] for b in covers)} vs {[lay.row_y(i) + O['LIST_ART_Y'] for i in rows_in]}')
     tx = {t: r for t, r in texts}
     titles = [(t, r) for t, r in texts if t in TITLES or t.endswith('…')]
     expect(all(r[0] == TEXT_X and r[2] == TEXT_END - TEXT_X == 222 and r[3] == 24 for t, r in titles) and
-           all(tx[TITLES[i]][1] == lay.row_y(i) + 7 for i in rows_in if TITLES[i] in tx),
-           'a title at (74, row + 7) in a 222 x 24 rect: from x 74 to 296 (the rail\'s touch column starts there)')
+           all(tx[TITLES[i]][1] == lay.row_y(i) + O['LIST_TITLE_Y'] for i in rows_in if TITLES[i] in tx),
+           'a title at (74, row + LIST_TITLE_Y) in a 222 x 24 rect: from x 74 to 296 (the rail\'s touch column starts there)')
     sub = [(t, r) for t, r in texts if t.startswith('Artist')]
     expect(sub and all(r[0] == TEXT_X and r[2] == 222 and r[3] == 20 for t, r in sub) and all(s == 'label_row_sub' for (t, _), s in zip(texts, styles) if t.startswith('Artist')),
-           'the artist at (74, row + 33), 222 x 20, in the 18 px #AAAAAA style')
+           'the artist at (74, row + LIST_SUB_Y), 222 x 20, in the 18 px #AAAAAA style')
     expect(all(s == 'label_row_title' for (t, _), s in zip(texts, styles) if t in TITLES) and all(s == 'label_hdr' for (t, _), s in zip(texts, styles) if len(t) == 1),
            'titles in the 21 px style, header letters in the 20 px one')
     hdr_texts = [(t, r) for t, r in texts if len(t) == 1]
@@ -703,7 +703,7 @@ def order_search_and_stale_tests(ctx):
     expect(m.props[(m.sv, 'virtual_h')] == plain.content() == TOP + len(TITLES) * ROW + FOOT and vis(m, 'sg_rail') == (0, 0), 'sort_flag 1 (file name): a plain list, TOP + rows x 64, and no rail')
     blits, texts, styles, fills = settle(m)
     expect(not [t for t, _ in texts if len(t) == 1] and not [fl for fl in fills if fl[0] == O['SG_HDR_BG']] and any(t == TITLES[0] for t, _ in texts), 'no header, no pinned backing')
-    expect(dict(texts)[TITLES[0]][1] == TOP + 7 and dict(texts)[TITLES[1]][1] == TOP + ROW + 7, 'rows start at the top block\'s end, one every 64 px')
+    expect(dict(texts)[TITLES[0]][1] == TOP + O['LIST_TITLE_Y'] and dict(texts)[TITLES[1]][1] == TOP + ROW + O['LIST_TITLE_Y'], 'rows start at the top block\'s end, one every 64 px')
     # The device case (V2.1oGS showed no headers and no rail): the stock Title order sorts by the whole title, the Initial is the scan's first surviving character,
     # so the letters only roughly follow the order. Strays (a title placed elsewhere, a symbol after 'z', an accented letter, a dropped kana) must not make the list
     # plain, and one stray must not open a section early (夜 'Y' between C and D would otherwise swallow D and M): the sections are the non-decreasing labelling
@@ -858,7 +858,7 @@ def collapse_and_select_tests(ctx):
     blits, texts, styles, fills = settle(m)
     marks = [b for b in blits if b[2][2] == O['SG_MARK']]
     covers = [b for b in blits if b[2][2] == O['LIST_ART']]
-    expect(len(marks) == len(covers) and all(b[2][0] == 9 and b[2][1] == c[2][1] - 4 + 19 for b, c in zip(marks, covers)) and all(c[2][0] == 40 for c in covers),
+    expect(len(marks) == len(covers) and all(b[2][0] == 9 and b[2][1] == c[2][1] - O['LIST_ART_Y'] + 19 for b, c in zip(marks, covers)) and all(c[2][0] == 40 for c in covers),
            'a 26 px mark at x 9 on each row, the cover at x 40 (30 px right)')
     ttl = [(t, r) for t, r in texts if t in TITLES]
     expect(ttl and all(r[0] == 104 and r[2] == 192 for t, r in ttl), 'and the text from x 104 to 296 (192 px)')

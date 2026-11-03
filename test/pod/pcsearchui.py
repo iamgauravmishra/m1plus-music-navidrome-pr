@@ -259,8 +259,11 @@ def search_tests(ctx):
     m = opened(site=site_for(**{SEARCH + 'x': {'body': ans}}))
     stage(m, 'x')
     rows = level_rows(m)
-    _, texts, styles, fills = PCP.paint(m, 0)
+    bl, texts, styles, fills = PCP.paint(m, 0)
     L = pod_show.search_layout(2)
+    chev = [tuple(b[2]) for b in bl if tuple(b[1]) == (0, 0, 10, 16)]   # the shared chevron bitmap
+    expect(chev == [(O['LIST_CHEV_X'], L['rows'][0] + (O['PC_ROW_H'] - 1 - 16) // 2, 10, 16)],
+           f'a chevron on the available result only, none on the dimmed Not available row, which opens nothing ({chev})')
     expect(len(rows) == 2 and same(rows[0][0], names[1]) and same(rows[0][1], docs[1]['artistName']) and rows[1] == ('Gone Show', 'Not available') and (O['PQ_DIM'], 0, L['rows'][1], 320, O['PC_ROW_H'] - 1) in fills and not [f for f in fills if f[0] == O['PQ_DIM'] and f[2] == L['rows'][0]],
            f'a result with no feed: its grey line reads Not available and the row is dimmed; the other is not ({rows})')
     m.calls = []; m.thread = None

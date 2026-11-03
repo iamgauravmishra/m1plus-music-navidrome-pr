@@ -264,8 +264,8 @@
 #define AH_BTN_H 44
 #define AH_SHUF_X 42
 #define AH_SHUF_W 44
-#define AH_DISC 38              /* the Shuffle disc as drawn (ah_shuffle*.png), centred in its AH_SHUF_W x AH_BTN_H touch rectangle */
-#define AH_PLAY_X 95            /* AH_SHUF_X + (AH_SHUF_W + AH_DISC) / 2 + 12 (the drawn gap): the pill's touch rectangle starts where it is drawn */
+#define AH_DISC 40              /* the Shuffle disc as drawn (ah_shuffle*.png), centred in its AH_SHUF_W x AH_BTN_H touch rectangle */
+#define AH_PLAY_X 96            /* AH_SHUF_X + (AH_SHUF_W + AH_DISC) / 2 + 12 (the drawn gap): the pill's touch rectangle starts where it is drawn */
 #define AH_PLAY_W 180
 #define AH_PILL_H 40            /* the pill as drawn (ah_pill*.png), centred in its AH_BTN_H touch rectangle */
 /* The pill's glyph and text: the AH_PILL_GLYPH px glyph, AH_PILL_GAP px, then the measured text, centred as a pair in the pill. */
@@ -307,8 +307,10 @@
 #define AB_NUM_X 12
 #define AB_NUM_GAP 8
 #define AB_TEXT_END 298
-#define AB_TEXT_Y 19
+#define AB_TEXT_Y 20
 #define AB_TEXT_H 22
+#define AB_WAVE 12             /* the playing track's marker (ah_wave): a square bitmap right-aligned in the number column, centred on the title's line */
+#define AB_WAVE_COLOR 0x00ECEEEEu /* its colour #EEEEEC as a RGBA8888 word (red in the low byte), the rows' wave */
 #define AB_PRESS 0x33ffffffu
 #define AB_HAIR 0x22ffffffu
 #define AB_SELALL_X 0
@@ -414,12 +416,15 @@
 #define LIST_ART 52
 #define LIST_R 4                /* the list covers' corner radius: cut in the bitmap's alpha (a pressed row's fill shows behind them; patch/grid.c blend) */
 #define LIST_ART_X 10
-#define LIST_ART_Y 4
+#define LIST_ART_Y 6            /* centred above the row's 1 px hairline: 6 px over the cover, 5 under it */
 #define LIST_TEXT_X 74          /* LIST_ART_X + LIST_ART + 12 */
 #define LIST_TEXT_W 234         /* to the 12 px right margin: 74 + 234 + 12 = 320 */
-#define LIST_TITLE_Y 7
+#define LIST_HAIR_END 310       /* the hairline of a list row runs from its text to here (Search's rows': 68..310), the Apple inset */
+#define LIST_CHEV_X 288         /* a row that opens a page: the shared chevron (pod_make_chevron, POD_CHEV_W x POD_CHEV_H) from this x (Search's SE_CHEV_X), on the row's middle above the hairline */
+#define LIST_TEXT_W_CHEV 204    /* the text of such a row ends at 278 (Search's SE_END_CHEV): 74 + 204 */
+#define LIST_TITLE_Y 9
 #define LIST_TITLE_H 24
-#define LIST_SUB_Y 33
+#define LIST_SUB_Y 35
 #define LIST_SUB_H 20
 #define LIST_HAIR 0xff222222u
 #define LIST_PRESS 0xff333333u
@@ -903,11 +908,11 @@
 #define DP_UPD_Y 239
 #define DP_BTN_Y 263
 #define DP_BTN_H 44
-#define DP_SHUF_X 33            /* Shuffle disc | Play pill | Add disc, symmetric about x 160: drawn 38 px discs and a 148 px pill 12 px apart (36 .. 284) */
+#define DP_SHUF_X 32            /* Shuffle disc | Play pill | Add disc, symmetric about x 160: drawn 40 px discs and a 148 px pill 12 px apart (34 .. 286) */
 #define DP_SHUF_W 44
 #define DP_PLAY_X 86
 #define DP_PLAY_W 148
-#define DP_ADD_X 243            /* the Add disc (saves the mix as a stock playlist), the Shuffle disc mirrored: DP_SHUF_X + DP_ADD_X + DP_ADD_W = 320 */
+#define DP_ADD_X 244            /* the Add disc (saves the mix as a stock playlist), the Shuffle disc mirrored: DP_SHUF_X + DP_ADD_X + DP_ADD_W = 320 */
 #define DP_ADD_W 44
 #define DP_PILL_H 40
 #define DP_PILL_GLYPH 16
@@ -1173,7 +1178,7 @@
  * (window row PG_LIST_Y), x the window's. In order: the large title (a label, PP_TITLE_H high at x PP_TITLE_X, PP_TITLE_PX px, shared by the Downloads and Subscriptions pages; it scrolls away with the content and the navbar shows no title), the refresh line (PP_LINE_H high at PP_LINE_Y, 15 px: "Updated
  * 1h ago · Refresh", only when a show has a feed; PP_LINE_PITCH to the next block, PP_NOLINE_PITCH when there is no line; its touch is PP_LINE_HIT high around the text's middle), Continue Listening (PP_HEAD_H header at x PP_HEAD_X, 20 px, then PP_HEAD_PITCH to the
  * covers: at most PP_SHELF_MAX PP_SHELF_ART px covers at x PP_SHELF_X + i * PP_SHELF_PITCH, the title (14 px, one line, PP_SHELF_W wide) PP_SHELF_TITLE_Y under the cover's top and the "35m left" (13 px) at PP_SHELF_LEFT_Y; PP_SHELF_PITCH_Y the block's height; each cover has the atlas' PA_PLAYB_PX play disc PP_SHELF_PLAY_INSET from its right and bottom edges),
- * the Library rows, last, PP_LIB_GAP under the grid (the Downloads row: PC_ROW_H high: the PA_TILE_PX tile (the atlas') at x PP_DL_TILE_X, PP_DL_TILE_Y down, the texts from PP_DL_TEXT_X, PP_DL_TEXT_W wide at LIST_TITLE_Y / LIST_SUB_Y, the chevron's middle at PP_DL_CHEV_CX, hairline from the text),
+ * the Library rows, last, PP_LIB_GAP under the grid (the Downloads row: PC_ROW_H high: the PA_TILE_PX tile (the atlas') at x PP_DL_TILE_X, PP_DL_TILE_Y down, the texts from PP_DL_TEXT_X, PP_DL_TEXT_W wide at LIST_TITLE_Y / LIST_SUB_Y, the shared chevron at PP_DL_CHEV_X, hairline from the text),
  * after the shelf PP_SEC_GAP of air and the "Shows" header (at x PP_SHOWS_X), then the Albums grid (GRID_*: GRID_COVER covers, the title and the grey line under each) from the grid's top; PP_BOTTOM under the last row. */
 #define PP_TITLE_X 16
 #define PP_TITLE_H 52
@@ -1203,8 +1208,8 @@
 #define PP_DL_TILE_X 16
 #define PP_DL_TILE_Y 10
 #define PP_DL_TEXT_X 72
-#define PP_DL_TEXT_W 214
-#define PP_DL_CHEV_CX 298
+#define PP_DL_TEXT_W 206 /* the text ends at x 278 (72 + 206), 10 px before the shared chevron */
+#define PP_DL_CHEV_X 288 /* = LIST_CHEV_X: the shared chevron (pod_make_chevron), centred on the row above its hairline */
 #define PP_SEC_GAP 12
 #define PP_LIB_GAP 24 /* the air between the grid's last row and the Library rows (Downloads, Subscriptions) that close the Shows page */
 #define PP_BOTTOM 10

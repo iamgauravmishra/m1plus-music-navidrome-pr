@@ -221,7 +221,7 @@ def asset_tests(ctx):
     expect(all(os.path.exists(os.path.join(xx, n + '.png')) and Image.open(os.path.join(xx, n + '.png')).size == (F['FO_ICON'],) * 2 for n in ICONS), 'the seven glyphs the rows draw are in the tree, 24 x 24 (FO_ICON)')
     import mod_icons
     expect((F['FO_ICON'], F['FO_ICON_X'], F['FO_TEXT_X'], ROW) == (mod_icons.POD_ICON, mod_icons.POD_ICON_X, mod_icons.POD_TEXT_X, pod_ui.ROW_H) == (24, 16, 56, 52)
-           and F['FO_CHEV_X'] == 320 - 44 + (40 - 13) // 2 and F['FO_ICON_Y'] == (ROW - 24) // 2 and set(mod_icons.FOLDER_ROWS) <= set(ICONS)
+           and F['FO_CHEV_X'] == O['LIST_CHEV_X'] == 288 and F['FO_ICON_Y'] == (ROW - 24) // 2 and set(mod_icons.FOLDER_ROWS) <= set(ICONS)
            and {'pod_ic_folders', 'pod_ic_playlists', 'pod_ic_cdripper', 'pod_ic_nowplaying'} <= {v[0] for v in mod_icons.POD_ROWS.values()} | {'pod_ic_cdripper'},
            'the menu rows\' numbers: a 24 px glyph at x 16, the text at x 56, the 52 px pitch, the stock chevron\'s place; the glyphs are theirs')
     expect(F['FO_TOP_PLAIN'] >= O['SG_PILL_Y'] and F['FO_TEXT_END'] <= F['FO_MARK_X'] + 8 and F['FO_MARK_X'] + F['FO_ICON'] - 4 <= F['FO_CHEV_X'] + 4 and F['FO_TEXT_Y'] == (ROW - O['LIST_TITLE_H']) // 2,

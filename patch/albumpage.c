@@ -15,7 +15,7 @@
  *   cover     the Cover Flow cache file of the album (/mnt/mmc/.m1plus/covers/<key>-168.jpg, the key of the album row), box-reduced to 160 px with its corners cut in the alpha;
  *             a file that is not there is made by the cache worker (one job, polled), an empty "no art" marker leaves the placeholder disc and a black page.
  *   tint      the tone cache (pod_tone_get) or the cover file's average colour; none for a page without a cover.
- *   rows      the stock row's number (position + 1) and title (gold when the track plays: the stock is_playing), 64 px, from the stock list while painting.
+ *   rows      the stock row's number (position + 1) and title (the stock is_playing: a playing track's number is the wave marker), 64 px, from the stock list while painting.
  *   play      Play all / Shuffle / a track: patch/songops.c, and Now Playing opens the way the stock album page's rows do (pod_open_player: with songerinfoflag set the
  *             pages above the Now Playing in the stack are popped first).
  * No hook; everything runs from the page's widgets and timers.
@@ -40,8 +40,7 @@
 static struct {
     void *win, *view, *sv, *status;
     void *back, *np, *btn_select, *btn_selall, *btn_add, *btn_del, *btn_cancel, *btn_play, *btn_shuffle;
-    void *st_num, *st_title,
-        *st_gold; /* hidden labels whose styles are the number's, the title's and the playing title's */
+    void *st_num, *st_title; /* hidden labels whose styles are the number's and the title's */
     void *
         foot; /* the footer under the last row (ab_foot, a label of the content view): "13 tracks, 49 minutes", hidden while the duration is unknown */
     void *hname, *hartist, *hmeta, *glyph,
@@ -73,6 +72,7 @@ static struct {
     int barok; /* both window events are registered: the status bar may be tinted */
     int bar; /* the status bar's bg_color is ours and must go back to black */
     void *mark[2]; /* the select marks: unselect, selected */
+    void *wave; /* the playing track's marker (ah_wave, AB_WAVE px), NULL when it did not decode: the number stays */
     grid_t hg; /* the cover: one tile, AH_ART px with AH_CORNER px corners cut in the alpha */
     grid_t g; /* the tracks' texts: the ring (a tile holds a title cut to its width; no cover) */
 } ab __attribute__((section(".scratch")));
@@ -175,6 +175,36 @@ static void ab_number(void *canvas, int i, int y) {
     if (rect[1] >= 0 && rect[1] + AB_TEXT_H <= AH_WIN_H) canvas_draw_text_in_rect(canvas, w, n, rect);
 }
 
+/* The playing track's marker: the image ah_wave (white-ish bars on black, as cc_decode flattens it) as a bitmap whose alpha is the bars' coverage and whose colour is AB_WAVE_RGB. */
+static void *ab_make_wave(void *win) {
+    unsigned *px, i;
+    void *b = bitmap_create_ex(AB_WAVE, AB_WAVE, AB_WAVE * 4, BITMAP_RGBA8888);
+    int ok;
+    if (!b) return b;
+    px = (unsigned *)bitmap_lock_buffer_for_write(b);
+    if (!px || bitmap_get_line_length(b) != AB_WAVE * 4) {
+        if (px) bitmap_unlock_buffer(b);
+        bitmap_destroy(b);
+        return (void *)0;
+    }
+    ok = cc_decode(win, "ah_wave", 1, AB_WAVE, 1, px);
+    for (i = 0; ok && i < AB_WAVE * AB_WAVE; ++i) px[i] = (px[i] & 0xff) * 255 / 0xee << 24 | AB_WAVE_COLOR;
+    bitmap_unlock_buffer(b);
+    if (!ok) {
+        bitmap_destroy(b);
+        return (void *)0;
+    }
+    return b;
+}
+
+static void ab_paint_wave(void *canvas, int i, int y) {
+    int src[4], dst[4];
+    dst[0] = AB_NUM_X + ab_shift() + ab_numw(i) - AB_WAVE, dst[1] = y + AB_TEXT_Y + (AB_TEXT_H - AB_WAVE) / 2;
+    dst[2] = dst[3] = AB_WAVE;
+    src[0] = src[1] = 0, src[2] = src[3] = AB_WAVE;
+    if (dst[1] >= 0 && dst[1] + AB_WAVE <= AH_WIN_H) canvas_draw_image(canvas, ab.wave, src, dst);
+}
+
 static void ab_paint_pill(void *canvas, int off);
 
 static void ab_paint(void *canvas) {
@@ -203,13 +233,16 @@ static void ab_paint(void *canvas) {
         }
         az_fill_h(canvas, 0, y + ROW - 1, y + ROW, AB_ROW_W, AB_HAIR, AH_WIN_H);
     }
-    for (pass = 0; pass < 3; ++pass) { /* numbers, titles, the playing title: one text style at a time */
-        widget_prepare_text_style(pass == 0 ? ab.st_num : pass == 1 ? ab.st_title : ab.st_gold, canvas);
+    for (pass = 0; pass < 2; ++pass) { /* numbers (the wave marker for the playing track), then titles: one text style at a time */
+        widget_prepare_text_style(pass == 0 ? ab.st_num : ab.st_title, canvas);
         for (r = r0; r <= r1; ++r) {
-            int y = ab_row_y(r) - off, gold = (playing >> (r - r0)) & 1;
-            if (pass == 0)
-                ab_number(canvas, r, y);
-            else if (gold == (pass == 2))
+            int y = ab_row_y(r) - off;
+            if (pass == 0) {
+                if (ab.wave && ((playing >> (r - r0)) & 1))
+                    ab_paint_wave(canvas, r, y);
+                else
+                    ab_number(canvas, r, y);
+            } else
                 grid_text(canvas, ab_tile(r), 0, ab_tx(r), y + AB_TEXT_Y, AB_TEXT_END - ab_tx(r), AB_TEXT_H, AH_WIN_H);
         }
     }
@@ -756,6 +789,7 @@ static int ab_on_destroy(void *ctx, void *e) {
     grid_free(&ab.hg);
     for (i = 0; i < 2; ++i)
         if (ab.mark[i]) bitmap_destroy(ab.mark[i]);
+    if (ab.wave) bitmap_destroy(ab.wave);
     free(ab.sel);
     memset(&ab, 0, sizeof ab);
     return RET_OK;
@@ -793,7 +827,6 @@ int album_open(unsigned cls, void *row) {
     ab.status = widget_lookup(ab.win, "label_status", 1);
     ab.st_num = widget_lookup(ab.win, "label_row_num", 1);
     ab.st_title = widget_lookup(ab.win, "label_row_title", 1);
-    ab.st_gold = widget_lookup(ab.win, "label_row_gold", 1);
     ab.hname = widget_lookup(ab.win, "ab_title", 1);
     ab.hartist = widget_lookup(ab.win, "ab_artist", 1);
     ab.hmeta = widget_lookup(ab.win, "ab_meta", 1);
@@ -802,7 +835,7 @@ int album_open(unsigned cls, void *row) {
     ab.ptext = widget_lookup(ab.win, "ab_play_text", 1);
     if (!ab.back || !ab.np || !ab.btn_select || !ab.btn_selall || !ab.btn_add || !ab.btn_del || !ab.btn_cancel ||
         !ab.btn_play || !ab.btn_shuffle || !ab.view || !ab.sv || !ab.status || !ab.st_num || !ab.st_title ||
-        !ab.st_gold || !ab.hname || !ab.hartist || !ab.hmeta || !ab.foot || !ab.glyph || !ab.ptext) {
+        !ab.hname || !ab.hartist || !ab.hmeta || !ab.foot || !ab.glyph || !ab.ptext) {
         navigator_back(); /* an asset that is not ours */
         return -2;
     }
@@ -814,6 +847,7 @@ int album_open(unsigned cls, void *row) {
     if (!ab.mark[0] || !ab.mark[1])
         ab.mark[0] = ab.mark[1] =
             (void *)0; /* (one that did not decode is freed with the other at destroy: the pair is all or none) */
+    ab.wave = ab_make_wave(ab.win);
     widget_on(ab.view, EVT_POINTER_DOWN, ab_on_down, (void *)0);
     widget_on(ab.view, EVT_POINTER_UP, ab_on_up, (void *)0);
     widget_on(ab.view, EVT_POINTER_ABORT, ab_on_abort, (void *)0);

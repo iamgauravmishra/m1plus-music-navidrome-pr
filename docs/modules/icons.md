@@ -31,7 +31,7 @@ pause, skip, lock); `ellipsis` is always filled.
 - **List icons:** a bare white glyph on a 24 px canvas, centred in the stock 40x40 image, no disc.
 - **Navbar and other glyph buttons (`SMALL_GLYPHS`):** a 20 px ink box (stock 22), pressed `#777777`.
 - **Dialog glyphs and selection marks:** dialog glyphs (`DIALOG_GLYPHS`) and selection marks (`MARK_GLYPHS`) are drawn at 0.88 x.
-- **Chevrons:** `right_arrow`, `expansion`, `expansion_2` are `#8C8C8C`, pressed `#6E6E6E`.
+- **Chevrons:** `right_arrow`, `expansion`, `expansion_2` are `#8A8A8A`, pressed `#6E6E6E`. `right_arrow` (13 x 22) and `pod_chev` (10 x 16) hold the shared list chevron of `patch/common.c` `pod_make_chevron` pixel for pixel (`mod_icons.pod_chevron`, same 4 x 4 sampling), right aligned in the 13 px canvas: a 13 px image at x 285 lands the ink at 288..298, as every list chevron does (see `ui-rules.md`).
 - **Translucent discs:** 32 px, white at 20 % (pressed 35-40 %). Glyphs are centred optically: box and centroid are averaged, placed in quarter-pixel steps (`np_glyph`).
 - **Unchanged:** every touch target.
 

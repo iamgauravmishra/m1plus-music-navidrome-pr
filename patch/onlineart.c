@@ -884,22 +884,22 @@ static void oa_paint_rows(void *canvas, int off) {
         const pn_lyr_t *c = pn_lyr_get(r);
         if (oa.press == r + 1) az_fill_h(canvas, 0, y, y + SE_ROW_H - 1, 320, LIST_PRESS, SE_LIST_H);
         az_fill_h(canvas, OA_ROW_X, y + SE_ROW_H - 1, y + SE_ROW_H, OA_ROW_END - OA_ROW_X, LIST_HAIR, SE_LIST_H);
-        if (c && (c->synced || oa_row_saved(r)) && y + LIST_TITLE_Y >= 0 &&
-            y + LIST_TITLE_Y + LIST_TITLE_H <= SE_LIST_H)
-            oa_badge_fill(canvas, OA_ROW_END - oa.bw, y + LIST_TITLE_Y + (LIST_TITLE_H - OA_BADGE_H) / 2, oa.bw,
+        if (c && (c->synced || oa_row_saved(r)) && y + SE_TITLE_Y >= 0 &&
+            y + SE_TITLE_Y + LIST_TITLE_H <= SE_LIST_H)
+            oa_badge_fill(canvas, OA_ROW_END - oa.bw, y + SE_TITLE_Y + (LIST_TITLE_H - OA_BADGE_H) / 2, oa.bw,
                           oa_row_saved(r) ? OA_BADGE_ON_RGB : OA_BADGE_RGB);
     }
     for (pass = 0; pass < 2; ++pass) { /* the titles, then the grey lines: one text style at a time */
         widget_prepare_text_style(pass ? oa.st_sub : oa.st_title, canvas);
         for (r = r0; r <= r1; ++r)
-            grid_text(canvas, oa_ltile(r), pass, OA_ROW_X, r * SE_ROW_H - off + (pass ? LIST_SUB_Y : LIST_TITLE_Y),
+            grid_text(canvas, oa_ltile(r), pass, OA_ROW_X, r * SE_ROW_H - off + (pass ? SE_SUB_Y : SE_TITLE_Y),
                       pass ? OA_ROW_END - OA_ROW_X : tw, pass ? LIST_SUB_H : LIST_TITLE_H, SE_LIST_H);
     }
     for (pass = 0; pass < 2; ++pass) { /* the badges' texts: Synced (grey), Saved (dark on the light fill) */
         widget_prepare_text_style(pass ? oa.st_badge_on : oa.st_badge, canvas);
         for (r = r0; r <= r1; ++r) {
             const pn_lyr_t *c = pn_lyr_get(r);
-            int y = r * SE_ROW_H - off + LIST_TITLE_Y + (LIST_TITLE_H - OA_BADGE_H) / 2, rect[4];
+            int y = r * SE_ROW_H - off + SE_TITLE_Y + (LIST_TITLE_H - OA_BADGE_H) / 2, rect[4];
             if (!c || oa_row_saved(r) != pass || (!pass && !c->synced) || y < 0 || y + OA_BADGE_H > SE_LIST_H) continue;
             rect[0] = OA_ROW_END - oa.bw, rect[1] = y, rect[2] = oa.bw, rect[3] = OA_BADGE_H;
             {

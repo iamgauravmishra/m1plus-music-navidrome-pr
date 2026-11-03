@@ -798,7 +798,7 @@ static void se_paint_rows(void *canvas) {
         widget_prepare_text_style(pass ? se.st_sub : se.st_title, canvas);
         for (r = r0; r <= r1; ++r) {
             int end = se.rows[r].kind == SE_SONG ? SE_END_PLAIN : SE_END_CHEV;
-            grid_text(canvas, se_tile(r), pass, SE_TEXT_LEFT, r * SE_ROW_H - off + (pass ? LIST_SUB_Y : LIST_TITLE_Y),
+            grid_text(canvas, se_tile(r), pass, SE_TEXT_LEFT, r * SE_ROW_H - off + (pass ? SE_SUB_Y : SE_TITLE_Y),
                       end - SE_TEXT_LEFT, pass ? LIST_SUB_H : LIST_TITLE_H, SE_LIST_H);
         }
     }

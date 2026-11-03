@@ -44,6 +44,7 @@ typedef struct {
         [4]; /* a mosaic tile (grid_mosaic): the distinct cover keys, nq of them (0..4), qi of them already placed in bmp */
     int nq, qi;
     int mid; /* list mode: the title alone in the row, centred vertically (the picker's New playlist row) */
+    int nochev; /* list mode with chevrons: this row opens nothing (a dimmed Not available result): no chevron, the text runs to LIST_TEXT_W */
 } grid_tile_t;
 
 typedef struct {
@@ -57,6 +58,7 @@ typedef struct {
     grid_tile_t *tiles; /* n tiles, heap */
     int n;
     void *placeholder; /* bitmap of the disc */
+    void *chev; /* the list rows' chevron (pod_make_chevron), made on first use; freed by grid_free */
     unsigned clock;
 } grid_t;
 
@@ -101,9 +103,10 @@ void grid_blit(void *canvas, grid_t *g, grid_tile_t *t, int x, int y, int view_h
 void grid_text(void *canvas, grid_tile_t *t, int pass, int x, int y, int w, int h, int view_h);
 /* The list mode's rows [r0, r1] (row r is tile_of(ctx, r)) of a view scrolled `off` px: the pressed fill (row press - 1, 0 none), the cover, the hairline,
  * then the titles (style label st_title) and the subtitles (st_sub), each drawn only when wholly inside view_h. Shared by the Albums and Playlists lists. shift: the
- * cover, the texts (and their width) move right by it (the Playlists page's select mode makes room for the mark; 0 elsewhere); the pressed fill and the hairline stay. */
+ * cover, the texts (and their width) and the hairline's start move right by it (the Playlists page's select mode makes room for the mark; 0 elsewhere); the pressed fill stays.
+ * The hairline runs from the text to LIST_HAIR_END (Apple's inset). chev: the row opens a page: the shared grey chevron (pod_make_chevron) at LIST_CHEV_X and the texts end LIST_TEXT_W_CHEV after LIST_TEXT_X (0: no chevron, the texts to LIST_TEXT_W). */
 void grid_list_paint(void *canvas, grid_t *g, void *st_title, void *st_sub, int r0, int r1, int off, int view_h,
-                     int press, int shift, grid_tile_t *(*tile_of)(void *, int), void *ctx);
+                     int press, int shift, int chev, grid_tile_t *(*tile_of)(void *, int), void *ctx);
 
 /* A playlist's mosaic: the first (up to) four distinct albums of its songs that have a Cover Flow cache file, as cache keys in key[4], and how many (0..4). From the
  * first PL_SCAN songs of the list `songs` (a stock song list); the key is the cc_album_key of the song (its artist and album as the playlist stored them), and when

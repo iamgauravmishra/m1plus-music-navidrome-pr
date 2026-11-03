@@ -219,7 +219,7 @@ def pod_page(s, key, tree_rows=8, home=False, first=0, title=None, icon=None, or
                 if arrows is None or c.name in arrows:
                     ic = s.img(c.get('style:normal:icon')); im.alpha_composite(ic, (c.x + (c.w - ic.width) // 2, y + (c.h - ic.height) // 2))
             elif c.type == 'image' and c.get('image') != 'right_arrow': im.alpha_composite(s.img(c.get('image')), (c.x, y + c.y))
-            elif c.type == 'image': im.alpha_composite(s.img(c.get('image')), (c.x + 8, y + 16))
+            elif c.type == 'image': ic = s.img(c.get('image')); im.alpha_composite(ic, (c.x + (c.w - ic.width) // 2, y + (c.h - ic.height) // 2))   # (draw_type icon: centred in the widget)
     if home: d.rectangle((0, 450 - pad, W - 1, 449), fill=(0, 0, 0))     # the list ends HOME_PAD above the screen edge
     return im
 

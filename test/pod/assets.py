@@ -104,7 +104,7 @@ def run(ctx):
             used.update(c.get('image') for c in ic)
             lab = next(c for c in row.children if c.type == 'hscroll_label'); hair = [c for c in row.children if c.name == 'pod_hair']
             expect((ic[0].x, ic[0].w, ic[0].h) == (16, 24, 24) and ic[0].y == (row.h - 24) // 2 and lab.x == 56
-                   and len(hair) == 1 and (hair[0].x, hair[0].y, hair[0].w, hair[0].h) == (56, row.h - 1, row.w - 56, 1) and hair[0].get('sensitive') == 'false'
+                   and len(hair) == 1 and (hair[0].x, hair[0].y, hair[0].w, hair[0].h) == (56, row.h - 1, min(row.w, 310) - 56, 1) and hair[0].get('sensitive') == 'false'
                    and all(hair[0].get(f'style:{st}:bg_color') == '#222222' for st in mod_icons.ROW_STATES)
                    and all(row.get(f'style:{st}:border_width') == '0' for st in mod_icons.ROW_STATES) and row.get('style') == 'list_item_style',
                    f'{key}:{row.name}: bare 24 px glyph at x 16, title at x 56, the #222222 hairline inset to x 56 (the theme\'s full-width one off), pressed band is the stock style\'s')
@@ -149,8 +149,12 @@ def run(ctx):
            {'pset_dac': 'badge:DAC', 'pset_dsdoutput': 'badge:DSD', 'sset_dsdoutput': 'badge:DSD', 'pset_replaygain': 'badge:RG'},
            'the DAC, DSD output and ReplayGain settings icons are redrawn text badges')
     chev = {n: (Image.open(os.path.join(mod_icons.PNG, n + '.png')).convert('RGBA')) for n in ('right_arrow', 'right_arrow_down')}
-    expect({p[:3] for p in chev['right_arrow'].getdata() if p[3] == 255} <= {(0x8C,) * 3} and {p[:3] for p in chev['right_arrow_down'].getdata() if p[3] == 255} <= {(0x6E,) * 3},
-           'the list chevron is #8C8C8C, #6E6E6E pressed')
+    expect({p[:3] for p in chev['right_arrow'].getdata() if p[3] == 255} <= {(0x8A,) * 3} and {p[:3] for p in chev['right_arrow_down'].getdata() if p[3] == 255} <= {(0x6E,) * 3},
+           'the list chevron is #8A8A8A, #6E6E6E pressed')
+    ref = mod_icons.pod_chevron((0x8A,) * 3)
+    expect(chev['right_arrow'].size == (13, 22) and chev['right_arrow'].crop((3, 3, 13, 19)).tobytes() == ref.tobytes() and chev['right_arrow'].getbbox() is not None
+           and Image.open(os.path.join(mod_icons.PNG, 'pod_chev.png')).convert('RGBA').tobytes() == ref.tobytes(),
+           'right_arrow (13 x 22, the glyph right aligned: ink at 3..13) and pod_chev are pixel for pixel the shared chevron of patch/common.c pod_make_chevron')
     # the Settings rows' icons: Now Playing's wave is the navbar button's glyph (Lucide audio-lines), Shanling Home's mark is cut
     # from the pinned stock shutdown screen (the committed disc is what the derivation makes), the rest are existing mappings
     glyphs = {n: g for n, g, _ in mod_icons.GLYPHS}
@@ -177,7 +181,7 @@ def run(ctx):
                 if pod_pages.row_kind(r) not in ('check', 'info') and r.action not in (pod_pages.ACT_CCLIST, pod_pages.ACT_UPDATE): expect(r.label in cg, f'{page.key}: {r.label} has a card glyph')
     for n in mod_icons.CARD_IMAGES:
         im = Image.open(os.path.join(mod_icons.PNG, n + '.png')).convert('RGBA')
-        expect(im.size == {'pod_chev': (9, 15), 'pod_check': (20, 20), **{p: (320, 52) for p in mod_icons.CARD_PIECE_IMAGES}}.get(n, (24, 24)) and im.getchannel('A').getbbox(), f'{n} is a drawn image of its size')
+        expect(im.size == {'pod_chev': (mod_icons.CARD_CHEVRON[1], mod_icons.CARD_CHEVRON[2]), 'pod_check': (20, 20), **{p: (320, 52) for p in mod_icons.CARD_PIECE_IMAGES}}.get(n, (24, 24)) and im.getchannel('A').getbbox(), f'{n} is a drawn image of its size')
     lock_imgs = {n: open(os.path.join(img_dir, n + '.png'), 'rb').read() for n in ('screens_battery', 'screens_charge', 'screens_lowbattery')}
     expect(all(lock_imgs[n] == battery_art.png(battery_art.LOCK, s) for n, s in
                (('screens_battery', 'normal'), ('screens_charge', 'charge'), ('screens_lowbattery', 'low'))),

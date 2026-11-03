@@ -117,9 +117,9 @@ def extras_panel(s):
     for i, r in enumerate(pod_pages.ITEMS[:8]):
         y = NAV + i * pod_ui.ROW_H
         im.alpha_composite(s.img(M.POD_ROWS[r.label][0]), (M.POD_ICON_X, y + (pod_ui.ROW_H - M.POD_ICON) // 2))
-        s.text(im, M.POD_TEXT_X, y + pod_ui.ROW_H / 2, s.clip(PS.tr(s, r.label), 21, W - 44 - M.POD_TEXT_X), 21)
-        ra = s.img('right_arrow'); im.alpha_composite(ra, (W - 44 + (40 - ra.width) // 2, y + (pod_ui.ROW_H - ra.height) // 2))
-        d.rectangle((M.HAIR_X, y + pod_ui.ROW_H - 1, W - 1, y + pod_ui.ROW_H - 1), fill=HAIR)
+        s.text(im, M.POD_TEXT_X, y + pod_ui.ROW_H / 2, s.clip(PS.tr(s, r.label), 21, pod_ui.CHEV_TEXT_END - M.POD_TEXT_X), 21)
+        ra = s.img('right_arrow'); im.alpha_composite(ra, (pod_ui.CHEV_BTN_X, y + (pod_ui.ROW_H - 1 - ra.height) // 2))
+        d.rectangle((M.HAIR_X, y + pod_ui.ROW_H - 1, 309, y + pod_ui.ROW_H - 1), fill=HAIR)
     return im
 
 

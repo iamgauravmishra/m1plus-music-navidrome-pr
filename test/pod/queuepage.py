@@ -317,17 +317,17 @@ def rows_tests(ctx):
     ttl = [(t, r) for (t, r), s in texts if s == 'label_row_title']
     sub = [(t, r) for (t, r), s in texts if s == 'label_row_sub']
     room = O['QP_TEXT_END'] - O['LIST_TEXT_X']
-    expect(ttl == [(NAMES[2 + i], (74, row_y(i) + 7, room, 24)) for i in range(4)], f'the rows are the tracks after the playing one, never the playing track: titles from x 74 to 298, 24 px high 7 px down ({ttl})')
-    expect(sub == [(f'Artist {(2 + i) // 3}', (74, row_y(i) + 33, room, 20)) for i in range(3)], f'the artists 33 px down, 20 px high (row 3\'s line ends below the window): {sub}')
-    expect([s for _, s in texts] == ['label_row_title'] * 4 + ['label_row_sub'] * 3, 'the titles, then the artists: one text style at a time')
+    expect(ttl == [(NAMES[2 + i], (74, row_y(i) + O['LIST_TITLE_Y'], room, 24)) for i in range(3)], f'the rows are the tracks after the playing one, never the playing track: titles from x 74 to 298 (row 3\'s line ends below the window), 24 px high LIST_TITLE_Y down ({ttl})')
+    expect(sub == [(f'Artist {(2 + i) // 3}', (74, row_y(i) + O['LIST_SUB_Y'], room, 20)) for i in range(3)], f'the artists LIST_SUB_Y down, 20 px high (row 3\'s line ends below the window): {sub}')
+    expect([s for _, s in texts] == ['label_row_title'] * 3 + ['label_row_sub'] * 3, 'the titles, then the artists: one text style at a time')
     expect(fills_of(fills, O['LIST_HAIR']) == [(O['LIST_HAIR'], 74, row_y(i) + 63, room, 1) for i in range(3)], 'a 1 px hairline under the text of the rows wholly in view')
     rowcov = [b for b in blits if tuple(b[2][2:]) == (52, 52)]
-    expect([tuple(b[2][:2]) for b in rowcov] == [(10, row_y(i) + 4) for i in range(3)], f'a 52 px cover at x 10, 4 px down each row that is wholly in view: {[tuple(b[2]) for b in rowcov]}')
+    expect([tuple(b[2][:2]) for b in rowcov] == [(10, row_y(i) + O['LIST_ART_Y']) for i in range(3)], f'a 52 px cover at x 10, LIST_ART_Y down each row that is wholly in view: {[tuple(b[2]) for b in rowcov]}')
     expect(len(fills) == 3 and not [f_ for f_ in fills if f_[0] == O['LIST_PRESS']], 'no wave, no dim, no mark: only the hairlines; nothing is pressed at rest')
     scroll_to(m, 200)
     blits, texts, fills = paint(m)
     got = [(t, r[1]) for (t, r), s in texts if s == 'label_row_title']
-    expect(got == [(NAMES[2 + i], row_y(i) + 7 - 200) for i in range(4)], f'scrolled 200 px: the rows at their y less the offset ({got})')
+    expect(got == [(NAMES[2 + i], row_y(i) + O['LIST_TITLE_Y'] - 200) for i in range(4)], f'scrolled 200 px: the rows at their y less the offset ({got})')
     cover_blits = [b for b in blits if tuple(b[2][2:]) == (64, 64)]
     expect(not cover_blits or cover_blits[0][2][1] == O['QP_COVER_Y'] - 200, 'the header\'s cover goes up with the list')
     destroy(m)
@@ -525,7 +525,7 @@ def shuffle_tests(ctx):
     click(m, 'btn_shuffle')
     expect(m.mode == OR and vis(m) == [0, 0, 0] and vh(m) == TOP + 4 * ROW + O['QP_BOTTOM'] and m.props.get((m.sv, 'yoffset')) == 0 and not shown(m, 'qp_empty'), 'Shuffle off: the placeholder goes, Up Next is back (the four after the playing track), at the top')
     _, texts, _ = paint(m)
-    expect([t for (t, r), s in texts if s == 'label_row_title'] == NAMES[2:6], 'and painted')
+    expect([t for (t, r), s in texts if s == 'label_row_title'] == NAMES[2:5], 'and painted (the fourth row\'s line ends below the window)')
     click(m, 'btn_shuffle')
     expect(m.mode == SH and vis(m) == [1, 1, 1] and vh(m) == WIN_H, 'Shuffle on from our button: the list gives way to the placeholder at once')
     # Repeat from Shuffle gives Repeat all: the list returns
