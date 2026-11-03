@@ -53,6 +53,7 @@ Still early in development and tested only on my own M1 Plus.
 
 Download `update.bin` and `SHA256SUMS` from the [latest release](https://github.com/imfing/m1plus-music/releases/latest).
 Verify the checksum, then install `update.bin` from the TF card using the player's System Update menu.
+Once installed, later releases can be installed over Wi-Fi from **Settings → System → About → Software Update**.
 Follow the [installation guide](docs/install.md) for preparation, updates and restoring stock.
 
 ## Documentation

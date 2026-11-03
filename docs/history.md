@@ -12,6 +12,8 @@ and [UI reference](ui.md). Hardware observations below do not validate later bui
 - **1.0.0, 2026-11-01:** flashed and accepted. Introduced semantic release tags, cold-build
   verification, manual macOS CI and draft-release publishing. Included Find Cover & Lyrics,
   the Home cover build and Rebuild Covers.
+- **1.1.0, 2026-11-03:** Software Update over Wi-Fi with release notes, album length footers,
+  artist albums on the Albums page and the RTC kept as UTC for stock auto time.
 
 ## Device findings
 

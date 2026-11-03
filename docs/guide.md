@@ -27,7 +27,7 @@ Open **Extras → Settings** to customize the player. To return to the stock gri
 | Albums | Switch grid/list mode with the navbar button; the choice is remembered |
 | Artists | Switch Artist/Album Artist in the navbar, then open an artist's albums |
 | Songs | Jump with the A–Z rail; use Search, Sort or Select from the navbar |
-| Album | Play all, shuffle the album, or tap a track |
+| Album | Play all, shuffle the album, or tap a track; the footer shows the track count and length once measured |
 | Playlists | Open a playlist or use its menu to create, import, export or delete |
 | Shuffle | Shuffle songs, albums or folders from Extras |
 
@@ -53,14 +53,14 @@ Use **Home Screen → Extras** to hide items from Extras. Settings stays accessi
 | System | Display, Language (under All System Settings), Keyboards and About (firmware, device, network and storage details; **Software Update** is the row under the version) |
 | Keyboards | English always enabled; Chinese (Pinyin) adds a language key and candidates above the keys. Swipe candidates sideways; space selects the first |
 | Developer → Startup | Boot to M1+ Music; Open Shanling Home |
-| Developer → Tools | Screenshot, Cover Cache and stock System Update |
+| Developer → Tools | Screenshot, Cover Cache, Clear Track Durations and stock System Update |
 
 **Rebuild Covers** asks for confirmation, then Home rebuilds in the background with
 "Rebuilding covers n/m" progress. Leaving Home restarts it on the next visit. **Cover Cache**
 shows cached/missing/stale counts and current work; **Clear Cover Cache** asks before deleting,
 then Home regenerates covers.
 
-**Software Update** (Settings → System → About, the row under the version; needs Wi-Fi) checks GitHub for a newer release: **Check for Update**, then **Download and Install**.
+**Software Update** (Settings → System → About, the row under the version; needs Wi-Fi) checks GitHub for a newer release: **Check for Update**, then **Download and Install**; **Release Notes** shows what changed.
 A dialog asks first (about 55 MB, replaces the card's `update.bin`; 110 MB of free card space needed); a popup shows the progress and **Cancel** (Back is Cancel too; the card's old `update.bin` stays). When the download
 is complete the firmware's own TF card update takes over with its confirmation, battery check and checksums; the flashing is unchanged. If you say No there, the page offers **Install** again and **Check Again**.
 A development build is always offered the latest release.
