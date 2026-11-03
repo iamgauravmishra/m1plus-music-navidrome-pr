@@ -12,12 +12,11 @@
  *             the stock drawer.
  *   queue     the stock play queue, the deque at PLAY_QUEUE (stSongInfo rows start_player copied) and the play position mclGetPlayPos, exactly what the stock drawer reads
  *             (@0x47a8f0, row bind @0x47a19c). Rows are read from it while painting; the page notices a queue that was replaced (another pointer, size or first record).
- *   rows      Up Next: the tracks after the play position, in queue order; the playing track is only in the header. While the stock mode is Shuffle (stock draws the next track at random
- *             when one ends: no order exists) there are no rows: a placeholder says so, and the list returns when the mode changes (our buttons or the refresh tick).
+ *   rows      Up Next: the tracks after the play position, in queue order (the real order, shuffled or not: Shuffle reorders the queue itself, patch/shuffle.c); the playing track is only in the header.
  *   play      a row tap: start_playqueue(queue index) (the stock drawer's row handler, @0x47a0c8), then force_refreshflag; the page stays, Now Playing below follows.
- *   modes     Shuffle and Repeat are the one stock play mode (pod_set_mode / pod_set_in_order, patch/shuffle.c): Shuffle toggles shuffle; Repeat cycles off, all, one.
+ *   modes     Shuffle (the payload's flag, pod_set_shuffle) and Repeat (stock's mode 0, 3, 1: pod_set_repeat) are independent: Shuffle toggles the flag; Repeat cycles off, all, one whatever the flag is.
  *   covers    the Cover Flow cache file of the row's artist and album, one per tick on the page's timer, none while the list moves (the Songs page's loader); else the placeholder.
- * No hook; everything runs from the page's widgets and timers.
+ * No hook of its own; everything runs from the page's widgets and timers.
  */
 #include "offsets.inc"
 #include "stock.h"
@@ -28,9 +27,6 @@
 #include "grid.h"
 #include "azlist.h"
 #include "i18n.h"
-
-extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one become List play */
-extern void pod_set_mode(int mode); /* patch/shuffle.c: the stock play mode */
 
 #define ROW LIST_ROW_H
 #define QP_AHEAD 2 /* rows kept beyond the view in the scroll direction */
@@ -45,15 +41,13 @@ static struct {
     void *back, *btn_shuffle, *btn_repeat;
     void *st_title, *st_sub; /* hidden labels whose styles are the rows' title and artist */
     void *htitle, *hartist, *empty; /* the header's labels, and the line shown when nothing follows */
-    void *shuf_w[3]; /* the Shuffle placeholder: the glyph, the title, the count line */
-    int shuf; /* the play mode is Shuffle: no rows, the placeholder */
     void *list; /* the stock play queue the page is of (*PLAY_QUEUE when valid) */
     void *first; /* its first record: with the size, tells a queue that was replaced */
     unsigned count; /* the queue's size */
     int base; /* the queue index of the first row (the play position + 1) */
     unsigned n; /* the rows */
     int row; /* the playing row, -1 for none */
-    int mode; /* the play mode the pills show */
+    int mode; /* what the pills show: stock's repeat mode, plus 0x100 while the Shuffle flag is on */
     unsigned hkey; /* the cover key of the header's track */
     int press; /* the row under the finger, + 1 */
     int down, down_x, down_y; /* the row a press began on, + 1, and where */
@@ -291,10 +285,12 @@ static void qp_pill(void *btn, int on, const char *icon) {
     }
 }
 
+static int qp_mode(void) { return mclGetPlayMode() | (pod_shuffle_on() ? 0x100 : 0); }
+
 static void qp_pills(void) {
     int mode = mclGetPlayMode();
-    qp.mode = mode;
-    qp_pill(qp.btn_shuffle, mode == MODE_SHUFFLE, "sg_shuffle");
+    qp.mode = qp_mode();
+    qp_pill(qp.btn_shuffle, pod_shuffle_on(), "sg_shuffle");
     qp_pill(qp.btn_repeat, mode == MODE_REPEAT_ALL || mode == MODE_REPEAT_ONE,
             mode == MODE_REPEAT_ONE ? "sg_repeat1" : "sg_repeat");
     widget_invalidate_force(qp.btn_shuffle, (void *)0);
@@ -303,9 +299,9 @@ static void qp_pills(void) {
 
 static void qp_load(int keep);
 
-/* The play mode changed (our buttons, the refresh tick finding another page's change): entering or leaving Shuffle swaps the list and the placeholder, any other change only the buttons. */
+/* The play mode changed (our buttons, the refresh tick finding another page's change): turning Shuffle on or off reorders the queue, so the rows are read again; a repeat change only touches the buttons. */
 static void qp_mode_changed(void) {
-    if ((mclGetPlayMode() == MODE_SHUFFLE) != qp.shuf)
+    if (((qp.mode ^ qp_mode()) & 0x100) != 0)
         qp_load(0);
     else
         qp_pills();
@@ -315,10 +311,7 @@ static int qp_on_shuffle(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     if (!qp.view) return RET_OK;
-    if (mclGetPlayMode() == MODE_SHUFFLE)
-        pod_set_in_order();
-    else
-        pod_set_mode(MODE_SHUFFLE);
+    pod_set_shuffle(!pod_shuffle_on());
     qp_mode_changed();
     return RET_OK;
 }
@@ -329,7 +322,7 @@ static int qp_on_repeat(void *ctx, void *e) {
     (void)e;
     if (!qp.view) return RET_OK;
     mode = mclGetPlayMode();
-    pod_set_mode(mode == MODE_REPEAT_ALL ? MODE_REPEAT_ONE : mode == MODE_REPEAT_ONE ? MODE_ORDER : MODE_REPEAT_ALL);
+    pod_set_repeat(mode == MODE_REPEAT_ALL ? MODE_REPEAT_ONE : mode == MODE_REPEAT_ONE ? MODE_ORDER : MODE_REPEAT_ALL);
     qp_mode_changed();
     return RET_OK;
 }
@@ -343,17 +336,6 @@ static void qp_size(void) {
     widget_set_prop_int(qp.sv, "virtual_h", h);
 }
 
-/* The placeholder of Shuffle mode: the glyph and the two lines (visible only: they are insensitive for good), with the queue's size. */
-static void qp_shuffle_state(void) {
-    char line[64];
-    int i;
-    for (i = 0; i < 3; ++i) widget_set_visible(qp.shuf_w[i], qp.shuf, 0);
-    if (!qp.shuf) return;
-    pod_fmt(line, sizeof line, TR(qp.count == 1 ? "%d song plays in random order" : "%d songs play in random order"),
-            (int)qp.count);
-    widget_set_text_utf8(qp.shuf_w[2], line);
-}
-
 /* The queue again (the player's deque, the position and mode read) and the page rebuilt from it: the rows are the tracks after the play position, in queue order. keep: the scroll offset stays; else the page opens at the top. */
 static void qp_load(int keep) {
     int at = keep ? qp_off() : 0;
@@ -364,13 +346,9 @@ static void qp_load(int keep) {
     if (qp.count) qp.list = list, qp.first = deque_at(list, 0);
     qp.row = qp_playing_row();
     qp.base = qp.row + 1; /* -1 (no track): from the first */
-    qp.shuf =
-        mclGetPlayMode() ==
-        MODE_SHUFFLE; /* Shuffle: no rows (stock draws the next track at random when one ends), a placeholder instead */
-    qp.n = !qp.shuf && qp.count > (unsigned)qp.base ? qp.count - (unsigned)qp.base : 0;
+    qp.n = qp.count > (unsigned)qp.base ? qp.count - (unsigned)qp.base : 0;
     qp.hkey = 0;
-    qp_show(qp.empty, qp.n == 0 && !qp.shuf);
-    qp_shuffle_state();
+    qp_show(qp.empty, qp.n == 0);
     qp_size();
     widget_set_prop_int(qp.sv, "yoffset", at < 0 ? 0 : at > qp_max_scroll() ? qp_max_scroll() : at);
     qp.seen = qp_off();
@@ -391,15 +369,14 @@ static int qp_on_stale(const void *unused) {
 
 /* What the player does under the page: another track (the header and the rows after it), another mode (the buttons), another queue. */
 static void qp_sync(void) {
-    int row, mode;
+    int row;
     if (!qp.view || !qp.g.tiles) return;
     if (!qp_valid()) {
         if (qp.fg && pod_is_top(qp.win)) qp_load(1);
         return;
     }
     row = qp_playing_row();
-    mode = mclGetPlayMode();
-    if (mode != qp.mode) qp_mode_changed();
+    if (qp_mode() != qp.mode) qp_mode_changed();
     if (row != qp.row) qp_load(0);
 }
 
@@ -543,11 +520,8 @@ int queue_open(void) {
     qp.htitle = widget_lookup(qp.win, "qp_title", 1);
     qp.hartist = widget_lookup(qp.win, "qp_artist", 1);
     qp.empty = widget_lookup(qp.win, "qp_empty", 1);
-    qp.shuf_w[0] = widget_lookup(qp.win, "qp_shuf_img", 1);
-    qp.shuf_w[1] = widget_lookup(qp.win, "qp_shuf_title", 1);
-    qp.shuf_w[2] = widget_lookup(qp.win, "qp_shuf_sub", 1);
     if (!qp.back || !qp.btn_shuffle || !qp.btn_repeat || !qp.view || !qp.sv || !qp.status || !qp.st_title ||
-        !qp.st_sub || !qp.htitle || !qp.hartist || !qp.empty || !qp.shuf_w[0] || !qp.shuf_w[1] || !qp.shuf_w[2]) {
+        !qp.st_sub || !qp.htitle || !qp.hartist || !qp.empty) {
         navigator_back(); /* an asset that is not ours */
         return -2;
     }

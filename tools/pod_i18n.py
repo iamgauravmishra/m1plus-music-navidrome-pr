@@ -470,11 +470,6 @@ TEXT = dict([
     _t('Queue is full', '队列已满', '佇列已滿', 'キューがいっぱいです', '대기열이 가득 참', "File d'attente pleine", 'Warteschlange voll', 'Cola llena', 'Coda piena', 'คิวเต็ม', 'Kolejka pełna', 'Очередь заполнена', 'Черга заповнена'),
     # The Queue page (patch/queuepage.c): the section line and the page's title, the line under it when nothing follows
     _t('Queue', '播放队列', '播放佇列', '再生キュー', '재생 대기열', "File d'attente", 'Warteschlange', 'Cola', 'Coda', 'คิว', 'Kolejka', 'Очередь', 'Черга'),
-    _t('Shuffle is on', '随机播放已开启', '隨機播放已開啟', 'シャッフル オン', '임의 재생 켜짐', 'Lecture aléatoire activée', 'Zufall ist an', 'Aleatorio activado', 'Casuale attivo', 'เปิดสุ่มเพลงอยู่', 'Losowo włączone', 'Перемешивание включено', 'Перемішування увімкнено'),
-    _t('%d song plays in random order', '%d 首歌曲将随机播放', '%d 首歌曲將隨機播放', '%d 曲をランダムに再生', '%d곡을 무작위로 재생', '%d titre en ordre aléatoire', '%d Titel in zufälliger Reihenfolge',
-       '%d canción en orden aleatorio', '%d brano in ordine casuale', '%d เพลงเล่นแบบสุ่ม', 'Utwory w losowej kolejności: %d', 'Песен в случайном порядке: %d', 'Пісень у випадковому порядку: %d'),
-    _t('%d songs play in random order', '%d 首歌曲将随机播放', '%d 首歌曲將隨機播放', '%d 曲をランダムに再生', '%d곡을 무작위로 재생', '%d titres en ordre aléatoire', '%d Titel in zufälliger Reihenfolge',
-       '%d canciones en orden aleatorio', '%d brani in ordine casuale', '%d เพลงเล่นแบบสุ่ม', 'Utwory w losowej kolejności: %d', 'Песен в случайном порядке: %d', 'Пісень у випадковому порядку: %d'),
     _t('No upcoming songs', '没有待播歌曲', '沒有待播歌曲', '次の曲はありません', '다음 곡 없음', 'Aucun titre à suivre', 'Keine weiteren Titel', 'No hay más canciones', 'Nessun brano in coda', 'ไม่มีเพลงถัดไป', 'Brak kolejnych utworów', 'Нет следующих песен', 'Немає наступних пісень'),
     # The Downloads level and the select mode of the Show level (patch/podcasts.c; "N Selected", "Select All" and "Delete" are the Songs page's keys)
     _t('No downloads', '没有下载', '沒有下載', 'ダウンロードはありません', '다운로드 없음', 'Aucun téléchargement', 'Keine Downloads', 'Sin descargas', 'Nessun download', 'ไม่มีการดาวน์โหลด', 'Brak pobrań', 'Нет загрузок', 'Немає завантажень'),

@@ -1123,7 +1123,7 @@ static int ip_look(void) {
     }
     if (ip_top()->kind == K_NOW && t && get_playtimeandlength(&pos, &len) == 1)
         sig[3] = (unsigned)(pos + 1) * 4099u ^ (unsigned)len;
-    sig[4] = (q ? deque_size(q) : 0) ^ ((unsigned)mclGetPlayMode() << 24);
+    sig[4] = (q ? deque_size(q) : 0) ^ ((unsigned)pod_play_mode() << 24);
     if (sig[2] != ip.track &&
         (t || !ip.np_have)) { /* (no track for a moment, the last one still shown: its cover stays, not the disc) */
         ip.track = sig[2];
@@ -1308,7 +1308,7 @@ static void ip_text_edge(void *canvas, const char *utf8, int x, int left, int y,
 
 /* The value a Settings row shows: the play mode as the stock Play settings page names it (Shuffle is mode 2; Repeat is mode 1 or 3), the version tag on About. NULL: none. */
 static const char *ip_set_value(int row) {
-    int mode = mclGetPlayMode();
+    int mode = pod_play_mode();
     if (row == S_SHUFFLE) return TR(mode == MODE_SHUFFLE ? "Songs" : "Off");
     if (row == S_REPEAT) return mode == MODE_REPEAT_ONE ? TR("One") : mode == MODE_REPEAT_ALL ? TR("All") : TR("Off");
     if (row == S_APPEARANCE) return TR(ip_theme_dark() ? "Dark" : "Light");
@@ -1474,7 +1474,7 @@ static void ip_paint_now(void *canvas) {
         ip_text(canvas, TR("Not Playing"), IP_TEXT_X, IP_BAR_H + 80, IP_W - 2 * IP_TEXT_X, 30);
         return;
     }
-    ip_mode_draw(canvas, mclGetPlayMode());
+    ip_mode_draw(canvas, pod_play_mode());
     if (ip.art) { /* the cover, flat and square: a straight copy */
         src[0] = 0, src[1] = 0, src[2] = IP_ART, src[3] = IP_ART;
         dst[0] = IP_NP_ART_X, dst[1] = IP_NP_ART_Y, dst[2] = IP_ART, dst[3] = IP_ART;
@@ -1755,7 +1755,7 @@ static void ip_play(int at, int shuffle) {
     }
     *(int *)G_CLASS_TYPE = ip.cls;
     if (shuffle)
-        pod_set_mode(
+        pod_set_mode_for_queue(
             MODE_SHUFFLE); /* Shuffle Songs: stock Shuffle over the whole queue, as the Shuffle page sets it (patch/shuffle.c) */
     start_player(queue, (int)idx, ip.cls, PLAY_MODE);
     *(unsigned char *)FORCE_REFRESH = 1;
@@ -1779,7 +1779,7 @@ static void ip_shuffle_all(void) {
 /* Centre press on a Settings row: Shuffle flips Off / Songs, Repeat cycles Off, One, All (both are the one stock play mode: Shuffle is mode 2, which has no repeat of its own, so
  * turning Repeat on turns Shuffle off and the reverse). */
 static void ip_settings_select(int row) {
-    int mode = mclGetPlayMode();
+    int mode = pod_play_mode();
     if (row == S_SHUFFLE) {
         if (mode == MODE_SHUFFLE)
             pod_set_in_order();

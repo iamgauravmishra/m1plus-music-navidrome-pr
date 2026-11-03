@@ -113,7 +113,7 @@ enum {
     INFO_CAP,
     INFO_FREE,
     INFO_CC, /* the Cover Cache page's seven values start here: homecover_stat(kind - INFO_CC) */
-    INFO_SF = INFO_CC + 7 /* the Settings Files page's 21 values: setfiles_stat(kind - INFO_SF) */
+    INFO_SF = INFO_CC + 7 /* the Settings Files page's 22 values: setfiles_stat(kind - INFO_SF) */
 };
 
 enum { VK_NONE = 0, VK_WIFI, VK_BLUETOOTH, VK_PLAYMODE, VK_EQ, VK_SORT, VK_THEME, VK_RECORD, VK_VTHEME, VK_BG, VK_ACCENT };
@@ -386,7 +386,7 @@ static void value_text(void *label, int kind) {
     else if (kind == VK_BLUETOOTH)
         key = *(volatile unsigned char *)BT_FLAG ? "On" : "Off";
     else if (kind == VK_PLAYMODE)
-        n = mclGetPlayMode(), key = playmode_key[n >= 0 && n < 4 ? n : 0];
+        n = pod_play_mode(), key = playmode_key[n >= 0 && n < 4 ? n : 0];
     else if (kind == VK_EQ)
         key = *(volatile unsigned char *)EQ_FLAG && get_equalizer_preset_name(*(volatile int *)EQ_MODE, buf) ? buf
                                                                                                              : "Off";

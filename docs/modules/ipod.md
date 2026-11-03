@@ -125,7 +125,7 @@ queue is copied). No stock Now Playing page opens: the iPod page pushes its own 
 
 **Shuffle Songs** (`ip_shuffle_all`) stays on the iPod page: `loadLocalClassList(0xf001)` (the Songs query), a random row (`pod_rand`, the Shuffle page's generator) is the first song, then
 `ip_play` as for a tapped track with one addition: `pod_set_mode(MODE_SHUFFLE)` (`patch/shuffle.c`: `mclSetPlayMode(2)`, `notifyPlayMode`, `dmrSendPlayMode`, `write_int_config`, exactly the Play settings
-page's sequence, nothing written when the mode is already 2) before `start_player`. The queue is the whole library, stock Shuffle draws the following songs from the unplayed pool, and the
+page's sequence, nothing written when Shuffle is already on; the hook turns the request into the payload's flag with stock in List play, [shuffle](shuffle.md)) before `start_player`. The queue is the whole library, the load hook shuffles the songs after the first, and the
 iPod's Now Playing level opens (no stock page). An empty library: the stock message `Update Local Music first`; a missing first file: `Storage unavailable`; the mode is then untouched.
 
 ## Podcasts (main menu, after Cover Flow)
@@ -141,7 +141,7 @@ The main menu's **Settings** row pushes `K_SETTINGS`, a static list of three row
 
 | row | value | centre press |
 |---|---|---|
-| Shuffle | `Off` / `Songs` (play mode 2) | `pod_set_mode(MODE_SHUFFLE)`; on `pod_set_in_order()` (List play, or Repeat all kept) |
+| Shuffle | `Off` / `Songs` (Shuffle on: the payload's flag, shown as mode 2) | `pod_set_mode(MODE_SHUFFLE)`; on `pod_set_in_order()` (List play, or Repeat all kept) |
 | Repeat | `Off` / `One` (mode 1) / `All` (mode 3) | cycles Off -> One -> All -> Off with `pod_set_mode` |
 | Appearance | `Light` / `Dark` | atomically saves the Pod appearance, then updates the live page |
 

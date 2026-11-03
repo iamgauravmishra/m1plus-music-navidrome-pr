@@ -55,7 +55,7 @@ audio file, the Play / Shuffle pills, and paints the rows itself. Mock: `out/pre
   as stock: Now Playing and the dialogs open over the window, and it needs no window stack bookkeeping. When the window comes to the front the list is read again (`folder_reload`)
   **only** if another query replaced it (pointer, size and first record checked, as the Songs page does; a dialog closing keeps the select marks); a paint over a replaced list reads nothing and
   a 100 ms timer reads it again when the page is on top.
-- **Play / Shuffle:** Play is the first audio file in order (`SO_IN_ORDER`), Shuffle a random audio file with the stock Shuffle mode (`SO_SHUFFLE`; the queue is the folder's files);
+- **Play / Shuffle:** Play is the first audio file in order (`SO_IN_ORDER`), Shuffle a random audio file with Shuffle on (`SO_SHUFFLE`, the payload's flag: [shuffle](shuffle.md); the queue is the folder's files);
   both through `so_play(class 1)`. A file's tap is `SO_KEEP` and the stock open (`navigator_to_with_context`, as the stock folder row; not `pod_open_player`).
 - **Select** (`Select` in the capsule, not at the root; a list that becomes the root while the mode is on ends it): the page's own marks in a bitset by record, on **folders and audio files** (as stock,
   which marks any row; not the storages, which only the root lists, and not playlist `.m3u8` files, which Add ignores). In select mode a tap on a folder row toggles its mark instead of entering; the marks of a level are dropped when it is reloaded,

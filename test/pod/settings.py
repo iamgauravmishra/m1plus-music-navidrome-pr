@@ -233,6 +233,7 @@ def settings_machine(language=None, **state):
     names = ['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(S.rows))] + [f'pod_value{i}' for i, r in enumerate(S.rows) if P.row_kind(r) == 'value']
     names += [f'pod_label{i}' for i in range(len(S.rows))] + [f'pod_switch{i}' for i, r in enumerate(S.rows) if P.row_kind(r) == 'switch']
     m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(names)}
+    if state.pop('shuffle', False): m.fs['/mnt/data/m1plus/playback-shuffle'] = b'1\n'   # Shuffle on (the payload's flag; stock's mode stays 0, 1 or 3)
     for key, v in [(k, v) for k, v in state.items() if k != 'mode']:
         addr = pod.DATA[key][0]
         if key == 'EQ_MODE': m.setword(addr, v)
@@ -278,6 +279,7 @@ def stock_tests(ctx):
     expect(value(settings_machine(mode=9), 'Play Mode') == 'playmode_listplay', 'an unknown play mode reads as the first')
     expect(value(settings_machine(EQ_FLAG=1, EQ_MODE=12), 'EQ') == 'Off', 'a preset the name lookup refuses reads Off')
     expect(not any(c[0] in ('write_int_config', 'mclSetPlayMode', 'write') or (c[0] == 'open' and c[2] != 0) for c in settings_machine().calls), 'opening the page reads state and writes nothing (the Light Mode value reads its file)')
+    expect(value(settings_machine(mode=3, shuffle=True), 'Play Mode') == 'playmode_shuffle' and value(settings_machine(mode=0, shuffle=True), 'Play Mode') == 'playmode_shuffle', 'Shuffle on shows Shuffle whatever stock\'s mode is (the payload\'s flag: the display sites)')
     # the value takes the room its text needs: the box is moved and resized, and the label gets the rest (patch/m1plus.c value_fit)
     m = settings_machine()
     vi = rows['Play Mode']

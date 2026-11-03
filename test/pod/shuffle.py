@@ -13,10 +13,47 @@ def song(m, path, album='', track=0, disc=0, cue=0, kind=8):
     return r
 
 
-def shuffle_machine(rows, mode=0, clock=1, present=True):
+FLAG_FILE = '/mnt/data/m1plus/playback-shuffle'
+STR_FIELDS = ('REC_PATH', 'REC_TITLE', 'REC_ALBUM', 'REC_ARTIST', 'REC_NAME')
+flag_on = lambda m: m.fs.get(FLAG_FILE) == b'1\n'   # the Shuffle flag as saved
+
+
+class HookedMachine(Machine):
+    """The build's hook on mclSetPlayMode in the loop: a call of stock's function runs sh_set_mode first, as the patched prologue does (the trampoline is the harness's
+    stock_setmode). mclLoadPlayList's hook is run by the test itself (start_player is not emulated).
+
+    Two "threads" (spawn / run_thread below) can share the machine: each is a saved CPU context on its own stack, and the scheduler is the test. With `sched` on, the
+    payload mutex is modelled (pthread_mutex_lock of a held mutex stops the caller where it is, to be retried when it is resumed) and a thread can be paused by
+    the mocks themselves: after `yield_at` memcpy calls of thread `yield_thread` (mid-permutation) or right after stock's loader trampoline (`pause_load`)."""
+    sched = False
+    owner, cur, blocked, yield_thread, yield_at, copies, pause_load, pause_clear = None, '', None, '', 0, 0, False, False
+
+    def _hook(self, u, address, size, _):
+        name = self.handlers.get(address, '')
+        if name == 'mclSetPlayMode':
+            self.calls.append(('mclSetPlayMode', u.reg_read(UC_MIPS_REG_A0)))
+            u.reg_write(UC_MIPS_REG_PC, PSYMS['sh_set_mode'])
+            return
+        if self.sched:
+            if name == 'pthread_mutex_lock':
+                if self.owner not in (None, self.cur):   # held by the other thread: wait here (the instruction is retried on resume)
+                    self.blocked = self.cur; u.emu_stop(); return
+                self.owner = self.cur
+            elif name == 'pthread_mutex_unlock': self.owner = None
+            elif name == 'stock_loadplaylist': self.loads_held.append(self.owner == self.cur)
+            elif name == 'deque_clear': self.clears_held.append(self.owner == self.cur)
+            self.events.append((self.cur, name))
+        super()._hook(u, address, size, _)
+        if self.sched and ((name == 'stock_loadplaylist' and self.pause_load) or (name == 'deque_clear' and self.pause_clear) or (name == 'memcpy' and self.cur == self.yield_thread and self.yield_at)):
+            if name == 'memcpy': self.copies += 1
+            if name in ('stock_loadplaylist', 'deque_clear') or self.copies == self.yield_at: u.emu_stop()
+
+
+def shuffle_machine(rows, mode=0, clock=1, present=True, flag=False):
     """A library (rows of song() arguments) that loadLocalClassList(0xf001) loads, and a stock
     loadSongList that copies it as the Songs page's row handler gets it."""
-    m = Machine()
+    m = HookedMachine()
+    if flag: m.fs[FLAG_FILE] = b'1\n'
     m.stock_songlist = True
     m.mode, m.clock = mode, clock
     m.showlist = [song(m, *r) for r in rows]
@@ -88,6 +125,7 @@ def shuffle_tests(expect, menu):
     seq = [c for c in n if c in ('loadLocalClassList', '_create_deque', 'loadSongList', 'access', 'mclSetPlayMode',
                                  'notifyPlayMode', 'dmrSendPlayMode', 'write_int_config',
                                  'navigator_to_with_context', 'deque_destroy')]
+    seq = [c for i, c in enumerate(seq) if c != 'access' or 'access' not in seq[:i]]   # (the hook's kill switch checks add accesses: the first one is the song's)
     expect(seq == ['loadLocalClassList', '_create_deque', 'loadSongList', 'access', 'mclSetPlayMode', 'notifyPlayMode',
                    'dmrSendPlayMode', 'write_int_config', 'navigator_to_with_context', 'deque_destroy'],
            f'Shuffle Songs runs the stock sequence in order ({seq})')
@@ -95,8 +133,8 @@ def shuffle_tests(expect, menu):
     ls = [c for c in m.calls if c[0] == 'loadSongList']
     expect(ls and ls[0][3] == O['CLASS_ALL_SONGS'], f'loadSongList with the Songs class ({ls})')
     expect(('mclSetPlayMode', O['MODE_SHUFFLE']) in m.calls and ('dmrSendPlayMode', O['MODE_SHUFFLE']) in m.calls
-           and ('write_int_config', O['MODE_SHUFFLE'], 'PLAYSET', 'PLAYMODE') in m.calls and m.mode == O['MODE_SHUFFLE'],
-           'the stock play mode becomes Shuffle, saved as [PLAYSET] PLAYMODE=2')
+           and ('write_int_config', O['MODE_SHUFFLE'], 'PLAYSET', 'PLAYMODE') in m.calls and m.mode == O['MODE_ORDER'] and flag_on(m),
+           'the request for Shuffle is asked as Play settings asks it (saved as [PLAYSET] PLAYMODE=2) and the hook turns it into the flag on with stock in List play')
     nav = [c for c in m.calls if c[0] == 'navigator_to_with_context']
     q, idx = m.played
     expect(len(nav) == 1 and nav[0][1] == 'playing_page' and nav[0][3] == O['CLASS_ALL_SONGS']
@@ -130,11 +168,15 @@ def shuffle_tests(expect, menu):
         starts.add(m.played[1])
     expect(len(starts) >= 4, f'with duplicate names the start is still random ({sorted(starts)})')
 
-    # 29. Already in Shuffle: nothing is written.
-    m = shuffle_machine(lib, mode=O['MODE_SHUFFLE'])
+    # 29. Already in Shuffle: nothing is written; Shuffle on over Repeat all becomes List play under it.
+    m = shuffle_machine(lib, flag=True)
     m.call(play, a0=pod_pages.SHUFFLE_SONGS, count=COUNT)
     expect(not any(c[0] in ('mclSetPlayMode', 'write_int_config') for c in m.calls) and m.played,
-           'Shuffle Songs in Shuffle mode plays without touching the setting')
+           'Shuffle Songs with Shuffle on plays without touching the setting')
+    m = shuffle_machine(lib, mode=O['MODE_REPEAT_ALL'], flag=True)
+    m.call(play, a0=pod_pages.SHUFFLE_SONGS, count=COUNT)
+    expect(m.mode == O['MODE_ORDER'] and flag_on(m) and ('write_int_config', O['MODE_SHUFFLE'], 'PLAYSET', 'PLAYMODE') in m.calls and m.played,
+           'Shuffle Songs with Shuffle on and Repeat all: the flag stays, stock goes to List play')
 
     # 30. Shuffle Albums: every album once, as one run, in a random order; each album in the stock
     #     album page's order (disc, then track), untagged ones by file name; album names grouped as
@@ -278,6 +320,362 @@ def shuffle_tests(expect, menu):
     expect('stock_resume' in m.names() and 'loadLocalClassList' not in m.names() and 'window_open' not in m.names(),
            'kill switch: the entry icon is stock again, no menu, no shuffle')
 
+def apple_machine(n=12, pos=3, mode=0, flag=False, boot=True):
+    """A HookedMachine with the player on n songs at pos (07 = Album 1 track 3 ...). boot: stock's own first mclSetPlayMode (config_init) has run: the hook's
+    session-first call keeps the flag as the file has it, so the tests that are about later requests pass it by."""
+    m = HookedMachine()
+    m.mode = mode
+    if flag: m.fs[FLAG_FILE] = b'1\n'
+    recs = [song(m, f'/mnt/mmc/q/{i:02d}.flac', f'Album {i // 4}', i % 4 + 1) for i in range(n)]
+    m.play(recs, pos)
+    if boot: m.call(PSYMS['sh_set_mode'], a0=mode, count=900000000)
+    m.calls = []
+    return m
+
+
+def queue_of(m): return m.deques[m.word(pod.DATA['PLAY_QUEUE'][0])]
+def order(m): return [field(m, r, O['REC_PATH']) for r in queue_of(m)]
+def strings(m): return sorted(m.word(r + O[f]) for r in queue_of(m) for f in STR_FIELDS)
+def hook(m, mode): return m.call(PSYMS['sh_set_mode'], a0=mode, count=900000000)
+def load(m, h, pos, cls=0xf001): return m.call(PSYMS['sh_load_playlist'], a0=h, a1=pos, a2=cls, count=900000000)
+
+
+def apple_tests(expect):
+    SH, OR, RO, RA = O['MODE_SHUFFLE'], O['MODE_ORDER'], O['MODE_REPEAT_ONE'], O['MODE_REPEAT_ALL']
+    GAPLESS = pod.DATA['MCL_GAPLESS'][0]
+
+    # 40. Shuffle on (a request for 2): our flag on, stock List play; the songs after the playing one are permuted in place, the rest stays; every string keeps one owner.
+    for clock in (1, 90, 4099):
+        m = apple_machine()
+        m.clock = clock
+        before, owned = order(m), strings(m)
+        hook(m, SH)
+        after = order(m)
+        expect(flag_on(m) and m.mode == OR and ('stock_setmode', OR) in m.calls and m.fs.get(FLAG_FILE) == b'1\n', f'clock {clock}: a request for Shuffle is "flag on" and stock List play')
+        expect(after[:4] == before[:4] and sorted(after[4:]) == sorted(before[4:]) and m.play_pos == 3,
+               f'clock {clock}: the playing song (and the ones before it) stay at their slots, the eight after it are a permutation ({after[4:]})')
+        expect(strings(m) == owned and len(set(strings(m))) == len(owned), f'clock {clock}: every record still owns its own strings (no copy, none lost)')
+        if clock == 90: moved = after != before
+    expect(moved, 'the shuffle moved songs')
+    ranks = set()
+    for clock in range(1, 30):
+        m = apple_machine(); m.clock = clock * 7919; hook(m, SH); ranks.add(tuple(order(m)))
+    expect(len(ranks) >= 25, f'different draws give different orders ({len(ranks)} of 29)')
+
+    # 41. Shuffle off: the original order is back, the same song keeps playing and the songs that followed it originally come next.
+    m = apple_machine(); before = order(m); owned = strings(m); hook(m, SH)
+    shuffled = order(m); m.play_pos = 7   # the player moved on inside the shuffled queue
+    playing = shuffled[7]
+    hook(m, OR)
+    back = order(m)
+    expect(not flag_on(m) and back == before and back[m.play_pos] == playing, f'Shuffle off: the original order, the playing song at its own place ({m.play_pos})')
+    expect(back[m.play_pos + 1:] == before[before.index(playing) + 1:] and ('mclSetPlayPos', before.index(playing)) in m.calls, 'the songs that follow it in the original order come next')
+    expect(strings(m) == owned and len(set(strings(m))) == 5 * len(back), 'every string still has one owner')
+    hook(m, SH); hook(m, RA)
+    expect(not flag_on(m) and order(m) == before and m.mode == RA and ('stock_setmode', RA) in m.calls, 'any other request (Repeat all) is flag off and that stock mode, the order restored')
+    m = apple_machine(); before = order(m); hook(m, SH)
+    m.deques[m.word(pod.DATA['PLAY_QUEUE'][0])].pop()   # a song was deleted: the saved order no longer matches
+    shuffled = order(m); hook(m, OR)
+    expect(not flag_on(m) and order(m) == shuffled and not [c for c in m.calls if c[0] == 'mclSetPlayPos'], 'a queue whose size changed keeps its order (nothing to restore from), the flag still goes off')
+
+    # 42. A queue loaded while Shuffle is on (a tap, Play all, the stock folder browser, the resume): the song at the index first, the rest shuffled, playing at slot 0.
+    songs = lambda m: [song(m, f'/mnt/mmc/q/{i:02d}.flac', f'Album {i // 4}', i % 4 + 1) for i in range(12)]
+    m = apple_machine(n=2, pos=0, flag=True)
+    recs = songs(m); h = m.new_deque(recs); before = [field(m, r, O['REC_PATH']) for r in recs]; owned = sorted(m.word(r + O[f]) for r in recs for f in STR_FIELDS)
+    load(m, h, 5)
+    got = order(m)
+    expect(('stock_loadplaylist', 5, 0xf001) in m.calls and m.names().index('stock_loadplaylist') < m.names().index('mclSetPlayPos'), 'stock loads the queue first (the trampoline), then the hook reorders it')
+    expect(got[0] == before[5] and sorted(got) == sorted(before) and got != before and m.play_pos == 0 and ('mclSetPlayPos', 0) in m.calls, f'the tapped song is first and playing, the rest a permutation ({got[:4]})')
+    expect(strings(m) == owned, 'the records own their strings')
+    m.play_pos = 4; playing = got[4]; hook(m, OR)
+    expect(order(m) == before and order(m)[m.play_pos] == playing, 'turning Shuffle off afterwards restores the loaded order around the song that is playing')
+    m = apple_machine(n=2, pos=0)
+    recs = songs(m); h = m.new_deque(recs); load(m, h, 5)
+    expect(order(m) == [field(m, r, O['REC_PATH']) for r in recs] and m.play_pos == 5 and not [c for c in m.calls if c[0] == 'mclSetPlayPos'], 'with Shuffle off the loaded queue is left alone')
+    m = apple_machine(n=2, pos=0, flag=True); h = m.new_deque(songs(m)[:1]); load(m, h, 0)
+    expect(m.play_pos == 0 and len(order(m)) == 1 and not [c for c in m.calls if c[0] == 'calloc'], 'a one-song queue needs no shuffle (and allocates nothing)')
+    m = apple_machine(n=2, pos=0, flag=True); h = m.new_deque(songs(m)); load(m, h, 99)
+    expect(order(m)[0] == '/mnt/mmc/q/00.flac' and sorted(order(m)) == sorted(f'/mnt/mmc/q/{i:02d}.flac' for i in range(12)), 'an index outside the queue starts from the first song')
+    m = apple_machine(n=2, pos=0, flag=True); m.present.add('/mnt/mmc/m1plus-off'); h = m.new_deque(songs(m)); load(m, h, 5)
+    expect(order(m) == [f'/mnt/mmc/q/{i:02d}.flac' for i in range(12)] and m.play_pos == 5, 'kill switch: stock\'s own load')
+
+    # 43. Limits: more than SHUFFLE_MAX songs or no memory leave the queue alone with the flag off; the buttons say so.
+    big = O['SHUFFLE_MAX']
+    m = apple_machine(n=2, pos=0, flag=True); one = song(m, '/mnt/mmc/big/1.flac', 'Big', 1)
+    h = m.new_deque([one] * (big + 1)); before = list(m.deques[h]); load(m, h, 7)
+    expect(not flag_on(m) and queue_of(m) == before and m.play_pos == 7 and not [c for c in m.calls if c[0] == 'calloc'], f'{big + 1} songs: the queue is as loaded, the flag is off, nothing allocated')
+    m = apple_machine(n=2, pos=0); m.deques[m.word(pod.DATA['PLAY_QUEUE'][0])] = [one] * (big + 1)
+    hook(m, SH)
+    expect(not flag_on(m) and m.mode == OR and not [c for c in m.calls if c[0] == 'calloc'], f'{big + 1} songs: a request for Shuffle leaves the flag off (stock List play)')
+    m = apple_machine(); m.deques[m.word(pod.DATA['PLAY_QUEUE'][0])] = [one] * (big + 1); m.call(PSYMS['pod_set_shuffle'], a0=1, count=900000000)
+    expect(not flag_on(m) and ('toast', 'Too many songs to shuffle', O['MSGINFO_KIND'], O['MSGINFO_MS']) in m.calls, 'the Queue page\'s button shows "Too many songs to shuffle"')
+    m = apple_machine(); before = order(m); m.calloc_fail = True; m.call(PSYMS['pod_set_shuffle'], a0=1, count=900000000)
+    expect(not flag_on(m) and order(m) == before and ('toast', 'Not enough memory', O['MSGINFO_KIND'], O['MSGINFO_MS']) in m.calls, 'no memory: the queue stays, the flag stays off, "Not enough memory"')
+    m = apple_machine(n=2, pos=0, flag=True); m.calloc_fail = True; h = m.new_deque(songs(m)); before = [m.read_cstr(m.word(r + O['REC_PATH'])) for r in m.deques[h]]; load(m, h, 5)
+    expect(not flag_on(m) and order(m) == before and m.play_pos == 5, 'no memory at a load: the queue is as stock loaded it, the flag is off')
+    # bounded memory: the shuffle holds one array of 4 bytes a song (and frees its temporaries)
+    m = apple_machine(); hook(m, SH)
+    allocs = [c[1] for c in m.calls if c[0] == 'calloc']
+    expect(allocs == [4 * 12, 2] and len([c for c in m.calls if c[0] == 'free' and c[1]]) == 1, f'the in-place shuffle allocates one array of 4 bytes a song (the identity, its tail permuted in place, then kept as the original order) and a bitmap, and frees the bitmap ({allocs})')
+    m = apple_machine(); before = order(m); m.calloc_fail_size = 2; hook(m, SH)
+    expect(not flag_on(m) and order(m) == before and len([c for c in m.calls if c[0] == 'free' and c[1]]) == 1 and not [c for c in m.calls if c[0] == 'mclSetPlayPos'],
+           'no memory for the bitmap: the array is freed, the queue untouched, the flag stays off')
+
+    # 44. The mode choke point.
+    m = apple_machine(mode=RA, flag=False)
+    hook(m, SH)
+    expect(flag_on(m) and ('stock_setmode', OR) in m.calls and m.mode == OR, 'a request for 2 maps to our flag, stock mode 0 (also from Repeat all)')
+    m.calls = []; hook(m, SH)
+    expect('stock_setmode' not in m.names() and not [c for c in m.calls if c[0] in ('mclSetPlayPos', 'calloc')], 'asked again while on (stock\'s boot restore of the mode shown, config_mplayer): nothing changes')
+    for req in (OR, RO, RA):
+        m = apple_machine(flag=True); hook(m, req)
+        expect(not flag_on(m) and m.mode == req and ('stock_setmode', req) in m.calls, f'a request for {req} is flag off and that mode')
+    m = apple_machine(mode=RA, flag=True)
+    m.call(PSYMS['pod_set_repeat'], a0=RO, count=900000000)
+    expect(flag_on(m) and m.mode == RO and ('write_int_config', RO, 'PLAYSET', 'PLAYMODE') in m.calls and ('mclSetPlayMode', RO) in m.calls, 'the Queue page\'s Repeat keeps the flag')
+    m = apple_machine(mode=RA, flag=True, boot=False)   # stock's boot restore is the first call: flag and mode as the files have them
+    hook(m, RA)
+    expect(flag_on(m) and m.mode == RA, 'boot: the stock mode comes from the config, the flag stays on')
+    m = apple_machine(mode=RA, flag=True, boot=False); hook(m, SH)
+    expect(flag_on(m) and m.mode == OR, 'boot with [PLAYSET] PLAYMODE=2 (saved by stock, or by an older build): flag on, stock List play')
+    m = apple_machine(mode=RA, flag=False, boot=False); hook(m, SH)
+    expect(flag_on(m) and m.mode == OR and m.fs.get(FLAG_FILE) == b'1\n', 'boot with PLAYMODE=2 and no flag file: the flag turns on (an upgrade keeps Shuffle)')
+    m = apple_machine(mode=OR, flag=False, boot=False); hook(m, RA)
+    expect(not flag_on(m), 'boot with no flag: off')
+    m = apple_machine(flag=True); m.present.add('/mnt/mmc/m1plus-off'); hook(m, SH)
+    expect(m.mode == SH and ('stock_setmode', SH) in m.calls and not [c for c in m.calls if c[0] in ('calloc', 'mclSetPlayPos', 'write')], 'kill switch: stock\'s own mode 2, no flag, no reorder, nothing written')
+    # the display: what the stock sites show and send (2 while the flag is on)
+    for flag, raw, want in ((True, OR, SH), (True, RA, SH), (False, RA, RA), (False, OR, OR), (False, RO, RO)):
+        m = apple_machine(mode=raw, flag=flag)
+        expect(m.call(PSYMS['sh_display_mode'], count=100000) == want, f'display mode with the flag {"on" if flag else "off"} and stock mode {raw}: {want}')
+    # the gapless preload of the old next song is closed after a reorder (and only then)
+    m = apple_machine(); m.setword(GAPLESS, 1); hook(m, SH)
+    expect(m.names().count('closegapless') == 1 and m.s32(GAPLESS) == -1 and m.mode == OR, 'a preload is closed after the reorder (stock\'s own mode-1 rule, then the mode put back)')
+    m = apple_machine(); hook(m, SH); m.setword(GAPLESS, 1); m.calls = []; hook(m, OR)
+    expect(m.names().count('closegapless') == 1 and m.mode == OR, 'and after the order is restored')
+    m = apple_machine(); hook(m, SH)
+    expect('closegapless' not in m.names(), 'no preload open: nothing to close')
+
+    # 45. Now Playing's own button: stock's picture function (0x539888) and click handler (0x53b5fc) run under emulation with the display sites patched as built.
+    STYLES = {OR: 'btn_imgorder_style', RO: 'btn_imgcycle1_style', SH: 'btn_imgrandom_style', RA: 'btn_imgcycle_style'}
+
+    def np_machine(mode, flag):
+        m = apple_machine(mode=mode, flag=flag)
+        m.widget('btn_playmode')
+        m.win = m.alloc(0x40)
+        return m
+
+    def style(m):
+        m.call(0x539888, a0=m.win, count=900000000)
+        return next(c[2] for c in m.calls if c[0] == 'widget_use_style')
+    for mode, flag, want in ((OR, False, OR), (RO, False, RO), (RA, False, RA), (OR, True, SH), (RA, True, SH), (RO, True, SH)):
+        m = np_machine(mode, flag)
+        expect(style(m) == STYLES[want], f'the Now Playing button with stock mode {mode} and Shuffle {"on" if flag else "off"} shows {STYLES[want]}')
+    m = np_machine(OR, False)
+    seen = []
+    for _ in range(5):
+        m.call(0x53b5fc, a0=m.win, count=900000000)
+        seen.append((next(c[2] for c in m.calls if c[0] == 'widget_use_style'), flag_on(m), m.mode))
+    expect(seen == [(STYLES[RO], False, RO), (STYLES[SH], True, OR), (STYLES[RA], False, RA), (STYLES[OR], False, OR), (STYLES[RO], False, RO)],
+           f'the stock 4-step cycle: Repeat one, Shuffle (flag on, stock 0), Repeat all (flag off), List play ({seen})')
+    m = np_machine(RA, True)
+    m.call(0x53b5fc, a0=m.win, count=900000000)
+    expect(not flag_on(m) and m.mode == RA and next(c[2] for c in m.calls if c[0] == 'widget_use_style') == STYLES[RA], 'Shuffle plus Repeat all (set from the Queue page): the button shows Shuffle; its next step is Repeat all with Shuffle off')
+
+    # 46. The hooks and display sites in the build: pinned words, the jal to sh_display_mode, the prologue jumps.
+    stock_demo = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
+    built = open(DEMO, 'rb').read()
+    w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
+    sites = {a for a, _ in pod.MODE_SITES}
+    expect(len(sites) == 19 and all(w(stock_demo, a) == 0x0320f809 and w(built, a) == pod.jal(PSYMS['sh_display_mode'], a) for a in sites), 'the 19 display sites: stock `jalr mclGetPlayMode` became `jal sh_display_mode`')
+    cs = pod.CLEAR_SITE
+    expect(all(w(stock_demo, a) == old and (a in sites or a == cs or w(built, a) == old) for a, old, _ in pod.SHUFFLE_PINS), 'every pinned word is stock\'s in the stock demo and unchanged in the build (but the sites)')
+    expect(w(stock_demo, cs) == 0x0320f809 and w(stock_demo, cs + 4) == 0x8c440000 and w(built, cs) == pod.jal(PSYMS['sh_clear_queue'], cs) and w(built, cs + 4) == 0x8c440000 and w(built, cs - 4) == w(stock_demo, cs - 4)
+           and MANIFEST['hook_clear_queue'] == {'addr': cs, 'target': PSYMS['sh_clear_queue']}, 'dmr_serverstart @0x5089e4: `jalr deque_clear` became `jal sh_clear_queue`, the delay slot `lw a0, (v0)` is stock\'s')
+    expect(w(built, 0x5d3628) == w(stock_demo, 0x5d3628) and w(built, 0x5d363c) == w(stock_demo, 0x5d363c), 'mclGetPlayMode itself is not hooked (change_music and the mcl core read the raw mode)')
+    for nm, at, tr in (('sh_set_mode', pod.SETMODE, 'stock_setmode_trampoline'), ('sh_load_playlist', pod.LOADPL, 'stock_loadplaylist_trampoline')):
+        expect(w(built, at) == pod.j(PSYMS[nm]) and w(built, at + 4) == 0 and w(built, at + 8) == w(stock_demo, at + 8) == pod.SETMODE_PROLOGUE[2], f'{nm}: the prologue is `j {nm}; nop`')
+        gp = struct.unpack_from('<4I', open(os.path.join(BUILD, 'patch.bin'), 'rb').read(), PSYMS[tr] - pod.BASE)
+        expect(gp == (0x3c1c0000 | pod.GP >> 16, 0x379c0000 | pod.GP & 0xffff, pod.j(at + 12), 0), f'{tr}: restores $gp and resumes at the 4th instruction')
+    expect(MANIFEST['hook_setmode'] == {'addr': pod.SETMODE, 'target': PSYMS['sh_set_mode']} and MANIFEST['hook_loadplaylist'] == {'addr': pod.LOADPL, 'target': PSYMS['sh_load_playlist']}
+           and MANIFEST['hook_display_mode']['target'] == PSYMS['sh_display_mode'], 'the manifest records the hooks')
+
+    # 47. Shuffle off needs no memory: the records go back by following the cycles of the saved order.
+    for n, pos in ((12, 3), (40, 0), (40, 39), (2, 0), (3, 1)):
+        for clock in (1, 90, 4099):
+            m = apple_machine(n=n, pos=pos); m.clock = clock; before, owned = order(m), strings(m); hook(m, SH)
+            shuffled = order(m); at = min(n - 1, pos + 1 + (clock % max(1, n - pos - 1))) if n > 1 else 0; m.play_pos = at
+            playing = shuffled[at]; m.calloc_fail = True; m.calls = []; hook(m, OR)
+            expect(not flag_on(m) and order(m) == before and strings(m) == owned and order(m)[m.play_pos] == playing and not [c for c in m.calls if c[0] == 'calloc'],
+                   f'{n} songs from {pos}, clock {clock}: Shuffle off with every allocation refused restores the order, keeps the playing song and allocates nothing')
+    m = apple_machine(); before = order(m); hook(m, SH); m.calloc_fail = True; m.play_pos = 7; playing = order(m)[7]
+    m.call(PSYMS['pod_set_shuffle'], a0=0, count=900000000)
+    expect(not flag_on(m) and order(m) == before and order(m)[m.play_pos] == playing and not [c for c in m.calls if c[0] == 'toast'], 'the Queue page\'s Shuffle off restores with no memory and shows no message')
+
+    # 48. A queue that is about to be replaced is not reordered: Shuffle Songs, Play and the other paths of ours set the flag only; sh_load_playlist shuffles the new queue.
+    big = O['SHUFFLE_MAX']
+    m = apple_machine(); one = song(m, '/mnt/mmc/big/1.flac', 'Big', 1)
+    qh = m.word(pod.DATA['PLAY_QUEUE'][0]); m.deques[qh] = [one] * (big + 1); old = list(m.deques[qh]); m.calls = []
+    m.call(PSYMS['pod_set_mode_for_queue'], a0=SH, count=900000000)
+    expect(flag_on(m) and m.fs.get(FLAG_FILE) == b'1\n' and m.deques[qh] == old and m.mode == OR and not [c for c in m.calls if c[0] in ('calloc', 'mclSetPlayPos')],
+           f'{big + 1} songs playing, Shuffle Songs: the flag is on, the old queue is not touched and nothing is allocated (no "Too many songs")')
+    recs = songs(m); h = m.new_deque(recs[:8]); before = [field(m, r, O['REC_PATH']) for r in recs[:8]]; load(m, h, 3)
+    expect(flag_on(m) and order(m)[0] == before[3] and sorted(order(m)) == sorted(before) and m.play_pos == 0, 'the 8-song replacement queue is shuffled, the chosen song first')
+    m = apple_machine(n=2048, pos=5); before = order(m); m.calls = []
+    m.call(PSYMS['pod_set_mode_for_queue'], a0=SH, count=900000000)
+    expect(flag_on(m) and order(m) == before and not [c for c in m.calls if c[0] in ('calloc', 'mclSetPlayPos') or c[0] == 'free' and c[1]], '2048 songs to a Shuffle queue: the old queue is not reordered (no record copied, no allocation)')
+    recs = [song(m, f'/mnt/mmc/n/{i:02d}.flac', 'N', i + 1) for i in range(16)]; h = m.new_deque(recs); load(m, h, 0)
+    expect(flag_on(m) and len(order(m)) == 16 and order(m)[0] == '/mnt/mmc/n/00.flac' and sorted(order(m)) == sorted(f'/mnt/mmc/n/{i:02d}.flac' for i in range(16)), 'the 16-song queue arrives shuffled')
+    # Play before a new queue: the flag goes off, the old queue keeps its (shuffled) order
+    m = apple_machine(); hook(m, SH); shuffled = order(m); m.calls = []
+    m.call(PSYMS['pod_set_in_order_for_queue'], count=900000000)
+    expect(not flag_on(m) and m.fs.get(FLAG_FILE) == b'0\n' and order(m) == shuffled and not [c for c in m.calls if c[0] in ('calloc', 'mclSetPlayPos')],
+           'Play before a queue load: the flag goes off, the old queue is not restored')
+    m = apple_machine(n=2, pos=0, flag=True); m.deques[m.word(pod.DATA['PLAY_QUEUE'][0])] = [one] * (big + 1); h = m.new_deque(songs(m)[:3]); m.call(PSYMS['pod_set_in_order_for_queue'], count=900000000); load(m, h, 1)
+    expect(not flag_on(m) and len(order(m)) == 3 and order(m)[1] == '/mnt/mmc/q/01.flac', 'Play over an oversized shuffled queue is not blocked and loads in order')
+    m = apple_machine(mode=RO, flag=True); m.call(PSYMS['pod_set_in_order_for_queue'], count=900000000)
+    expect(not flag_on(m) and m.mode == OR, 'Play for a queue also turns Repeat one into List play')
+    # the paths that load no queue still reorder
+    m = apple_machine(); before = order(m); m.call(PSYMS['pod_set_mode'], a0=SH, count=900000000)
+    expect(flag_on(m) and order(m) != before and sorted(order(m)) == sorted(before), 'pod_set_mode (no queue load follows) shuffles the current queue')
+    m.call(PSYMS['pod_set_in_order'], count=900000000)
+    expect(not flag_on(m) and order(m) == before, 'pod_set_in_order restores the current queue')
+    m = apple_machine(); before = order(m); m.call(PSYMS['pod_set_shuffle'], a0=1, count=900000000)
+    expect(flag_on(m) and order(m) != before, 'the Queue page\'s Shuffle button shuffles the current queue')
+
+    # 49. The payload lock: taken and released in pairs on every path (early returns included), one at a time, never across a stock mode / load call.
+    def locked(m):
+        depth, addrs, bad = 0, set(), ''
+        for c in m.calls:
+            if c[0] == 'lock':
+                depth += 1; addrs.add(c[1])
+                if depth > 1: bad = 'taken twice'
+            elif c[0] == 'unlock':
+                depth -= 1; addrs.add(c[1])
+                if depth < 0: bad = 'released unheld'
+            elif depth and c[0] in ('stock_setmode', 'mclSetPlayMode', 'closegapless', 'toast', 'write_int_config'):
+                bad = f'{c[0]} under the lock'
+            elif c[0] == 'stock_loadplaylist' and depth != 1:   # stock's loader clears the deque a reorder may be walking: only ever with the lock held
+                bad = 'stock_loadplaylist without the lock'
+        return not bad and depth == 0 and len(addrs) <= 1, bad or f'depth {depth}, {len(addrs)} addresses'
+    done_paths = []
+    def case(name, m, fn):
+        m.calls = []; fn(m); ok, why = locked(m)
+        done_paths.append(name)
+        expect(ok and any(c[0] == 'lock' for c in m.calls), f'lock path "{name}": balanced ({why})')
+    def pc(m, sym, **kw): return lambda m: m.call(PSYMS[sym], count=900000000, **kw)
+    case('request Shuffle', apple_machine(), lambda m: hook(m, SH))
+    case('Shuffle off', apple_machine(flag=True), lambda m: hook(m, OR))
+    case('Shuffle on, one-song queue', apple_machine(n=1, pos=0), lambda m: hook(m, SH))
+    case('Shuffle off, stale order', apple_machine(), lambda m: (hook(m, SH), queue_of(m).pop(), hook(m, OR)))
+    mb = apple_machine(); one = song(mb, '/mnt/mmc/big/1.flac', 'Big', 1); mb.deques[mb.word(pod.DATA['PLAY_QUEUE'][0])] = [one] * (big + 1)
+    case('Shuffle on, too many songs', mb, lambda m: hook(m, SH))
+    mm = apple_machine(); mm.calloc_fail = True
+    case('Shuffle on, no memory', mm, lambda m: hook(m, SH))
+    case('Queue page Shuffle', apple_machine(), pc(None, 'pod_set_shuffle', a0=1))
+    case('Queue page Shuffle, no memory', mm, pc(None, 'pod_set_shuffle', a0=1))
+    case('Shuffle for a queue', apple_machine(), pc(None, 'pod_set_mode_for_queue', a0=SH))
+    case('Play for a queue', apple_machine(flag=True), pc(None, 'pod_set_in_order_for_queue'))
+    mk = apple_machine(flag=True); mk.present.add('/mnt/mmc/m1plus-off')
+    case('kill switch, mode', mk, lambda m: hook(m, SH))
+    ml = apple_machine(n=2, pos=0, flag=True)
+    case('load, flag on', ml, lambda m: load(m, m.new_deque(songs(m)), 5))
+    case('load, flag off', apple_machine(n=2, pos=0), lambda m: load(m, m.new_deque(songs(m)), 5))
+    ml = apple_machine(n=2, pos=0, flag=True); ml.calloc_fail = True
+    case('load, no memory', ml, lambda m: load(m, m.new_deque(songs(m)), 5))
+    ml = apple_machine(n=2, pos=0, flag=True); ml.present.add('/mnt/mmc/m1plus-off')
+    case('load, kill switch', ml, lambda m: load(m, m.new_deque(songs(m)), 5))
+    ml = apple_machine(n=2, pos=0, flag=True)
+    case('load, one song', ml, lambda m: load(m, m.new_deque(songs(m)[:1]), 0))
+
+    # 50. Queue replacement and reordering exclude each other for the whole operation (the DLNA thread vs. the UI thread). The emulator has no threads, so the test is the
+    #     scheduler: a "thread" is a saved CPU context on its own stack; the mocks model the payload mutex (a lock of a held mutex stops the caller until it is
+    #     resumed) and pause a thread at a chosen point (after N memcpy of the reorder = mid-permutation, with duplicates in the queue; or right after stock's loader
+    #     trampoline). Events record who did what in what order.
+    from unicorn.mips_const import UC_MIPS_REG_PC as PC_, UC_MIPS_REG_SP as SP_, UC_MIPS_REG_RA as RA_, UC_MIPS_REG_T9 as T9_
+    PLAYQ = pod.DATA['PLAY_QUEUE'][0]
+    def sched(m): m.sched, m.events, m.loads_held, m.clears_held, m.limit, m.calls = True, [], [], [], 10 ** 9, []
+    def spawn(m, name, sym, sp, a0=0, a1=0, a2=0):
+        u = m.u
+        for r, v in ((SP_, sp), (RA_, RET), (T9_, PSYMS[sym]), (UC_MIPS_REG_A0, a0), (UC_MIPS_REG_A1, a1), (UC_MIPS_REG_A2, a2), (PC_, PSYMS[sym])): u.reg_write(r, v & 0xffffffff)
+        return {'name': name, 'ctx': u.context_save(), 'done': False}
+    def go(m, th):
+        m.cur, m.blocked = th['name'], None
+        m.u.context_restore(th['ctx']); m.u.emu_start(m.u.reg_read(PC_), RET)
+        th['ctx'] = m.u.context_save(); th['done'] = m.u.reg_read(PC_) == RET
+    def fresh(m): return [song(m, f'/mnt/mmc/n/{i}.flac', 'New', i + 1) for i in range(5)]
+    NEW = [f'/mnt/mmc/n/{i}.flac' for i in range(5)]
+    # (a) DLNA's reorder holds the lock and is paused mid-permutation; the UI thread's load must wait: stock's loader (which frees the deque's blocks) does not run
+    #     and the deque is not touched until the reorder has released the lock.
+    m = apple_machine(n=12, pos=3); sched(m); before, owned, q0 = order(m), strings(m), m.word(PLAYQ)
+    h = m.new_deque(fresh(m))
+    dl = spawn(m, 'dlna', 'sh_set_mode', STACK, a0=SH); m.yield_thread, m.yield_at = 'dlna', 2
+    go(m, dl); mid = order(m)
+    expect(not dl['done'] and m.owner == 'dlna' and len(set(mid)) < len(mid), f'interleaving A: the reorder is paused mid-permutation, lock held, records duplicated ({len(set(mid))} distinct of {len(mid)})')
+    ui = spawn(m, 'ui', 'sh_load_playlist', STACK - 0x4000, a0=h, a1=2, a2=0xf001)
+    go(m, ui)
+    expect(m.blocked == 'ui' and not ui['done'] and 'stock_loadplaylist' not in m.names() and m.word(PLAYQ) == q0 and order(m) == mid,
+           'interleaving A: the load waits at the lock; stock\'s loader has not run and the deque is untouched')
+    m.yield_at = 0; go(m, dl)
+    expect(dl['done'] and m.owner is None and sorted(order(m)) == sorted(before) and order(m) != before and strings(m) == owned and flag_on(m),
+           'interleaving A: the reorder finishes whole (a permutation, every record owning its strings) and releases the lock')
+    go(m, ui)
+    ev = m.events; unl = max(i for i, e in enumerate(ev) if e == ('dlna', 'pthread_mutex_unlock')); ld = ev.index(('ui', 'stock_loadplaylist'))
+    expect(ui['done'] and unl < ld and m.loads_held == [True] and sorted(order(m)) == NEW and order(m)[0] == NEW[2] and m.owner is None,
+           f'interleaving A: stock\'s loader runs only after the reorder released the lock, under the lock; the new queue is shuffled with the load index first ({order(m)})')
+    # (b) the reverse: the load holds the lock (paused right after stock's loader), a restore request arrives: it waits, then restores the NEW queue's order from the
+    #     NEW order, never the old one's.
+    m = apple_machine(n=12, pos=3); hook(m, SH); sched(m)
+    recs = fresh(m); h = m.new_deque(recs)
+    ui = spawn(m, 'ui', 'sh_load_playlist', STACK - 0x4000, a0=h, a1=2, a2=0xf001); m.pause_load = True
+    go(m, ui); loaded = order(m)
+    expect(not ui['done'] and m.owner == 'ui' and loaded == NEW and m.loads_held == [True], 'interleaving B: the load is paused inside stock\'s loader with the lock held')
+    m.pause_load = False
+    dl = spawn(m, 'dlna', 'sh_set_mode', STACK, a0=OR); go(m, dl)
+    expect(m.blocked == 'dlna' and not dl['done'] and order(m) == NEW and flag_on(m) and ('mclSetPlayPos',) not in m.calls,
+           'interleaving B: the restore request waits at the lock; the queue is the loaded one, the old order is not applied to it')
+    go(m, ui)
+    expect(ui['done'] and m.owner is None and sorted(order(m)) == NEW and order(m)[0] == NEW[2], f'interleaving B: the load finishes and shuffles ({order(m)})')
+    go(m, dl)
+    expect(dl['done'] and m.owner is None and order(m) == NEW and not flag_on(m), f'interleaving B: the restore then puts the new queue back in load order ({order(m)})')
+
+
+    # 51. dmr_serverstart's own deque_clear of the playing queue (patched call site -> sh_clear_queue) takes the same lock.
+    N12 = [f'/mnt/mmc/n/{i}.flac' for i in range(12)]
+    def fresh12(m): return m.new_deque([song(m, p, 'New', i + 1) for i, p in enumerate(N12)])
+    # (a) a reorder paused mid-permutation holds the lock: the clear waits, the deque is neither freed nor changed until the reorder is done; the order is dropped after.
+    m = apple_machine(n=12, pos=3); sched(m); before, owned, q0 = order(m), strings(m), m.word(PLAYQ)
+    dl = spawn(m, 'dlna', 'sh_set_mode', STACK, a0=SH); m.yield_thread, m.yield_at = 'dlna', 2
+    go(m, dl); mid = order(m)
+    expect(not dl['done'] and m.owner == 'dlna' and len(set(mid)) < len(mid), 'clear A: the reorder is paused mid-permutation, lock held')
+    ui = spawn(m, 'ui', 'sh_clear_queue', STACK - 0x4000, a0=q0); go(m, ui)
+    expect(m.blocked == 'ui' and not ui['done'] and 'deque_clear' not in m.names() and m.word(PLAYQ) == q0 and order(m) == mid and m.deques[q0] is not None and len(m.deques[q0]) == 12,
+           'clear A: the clear waits at the lock; the deque is not freed and not changed')
+    m.yield_at = 0; go(m, dl)
+    expect(dl['done'] and m.owner is None and sorted(order(m)) == sorted(before) and strings(m) == owned and flag_on(m) and 'deque_clear' not in m.names(), 'clear A: the reorder finishes whole and releases the lock, still no clear')
+    go(m, ui)
+    unl = max(i for i, e in enumerate(m.events) if e == ('dlna', 'pthread_mutex_unlock')); cl = m.events.index(('ui', 'deque_clear'))
+    expect(ui['done'] and unl < cl and m.clears_held == [True] and m.owner is None and ('deque_clear', q0) in m.calls and m.deques[q0] == [], 'clear A: the clear runs after the reorder released the lock, under the lock, on the same deque as stock\'s call')
+    m.setword(PLAYQ, fresh12(m)); hook(m, OR)
+    expect(order(m) == N12 and not flag_on(m), 'clear A: the saved order was dropped by the clear (a same-size queue loaded after it is not permuted by a restore)')
+    # (b) the reverse: the clear holds the lock (paused inside deque_clear), a reorder request waits and then finds no saved order.
+    m = apple_machine(n=12, pos=3); hook(m, SH); sched(m); q0 = m.word(PLAYQ)
+    ui = spawn(m, 'ui', 'sh_clear_queue', STACK - 0x4000, a0=q0); m.pause_clear = True; go(m, ui)
+    expect(not ui['done'] and m.owner == 'ui' and m.clears_held == [True], 'clear B: the clear is paused inside stock\'s deque_clear with the lock held')
+    m.pause_clear = False; m.setword(PLAYQ, fresh12(m)); m.calls = []
+    dl = spawn(m, 'dlna', 'sh_set_mode', STACK, a0=OR); go(m, dl)
+    expect(m.blocked == 'dlna' and not dl['done'] and order(m) == N12 and flag_on(m) and ('mclSetPlayPos',) not in m.calls, 'clear B: the restore request waits at the lock, the queue is untouched')
+    go(m, ui); go(m, dl)
+    expect(ui['done'] and dl['done'] and m.owner is None and order(m) == N12 and not flag_on(m) and ('mclSetPlayPos',) not in m.calls, 'clear B: after the clear the restore finds no saved order and leaves the queue as it is')
+    # (c) the kill switch keeps the exclusion: switched on while a reorder holds the lock, the clear still waits for it.
+    m = apple_machine(n=12, pos=3); sched(m); q0 = m.word(PLAYQ)
+    dl = spawn(m, 'dlna', 'sh_set_mode', STACK, a0=SH); m.yield_thread, m.yield_at = 'dlna', 2
+    go(m, dl); m.yield_at = 0; m.present.add('/mnt/mmc/m1plus-off')
+    th = spawn(m, 'ui', 'sh_clear_queue', STACK - 0x4000, a0=q0); go(m, th)
+    expect(m.blocked == 'ui' and not th['done'] and 'deque_clear' not in m.names(), 'clear C: with the kill switch the clear still waits for an in-flight reorder')
+    go(m, dl); go(m, th)
+    expect(dl['done'] and th['done'] and m.owner is None and m.clears_held == [True], 'clear C: with the kill switch the clear runs under the lock once the reorder releases it')
+
 
 def shuffle_page_tests(expect, menu, spi, page):
     """Stage H: the menu's one Shuffle row (q2-pod's Library > Shuffle) opens the Shuffle page."""
@@ -337,3 +735,4 @@ def shuffle_page_tests(expect, menu, spi, page):
 
 def run(ctx):
     shuffle_tests(ctx.expect, ctx.page)
+    apple_tests(ctx.expect)

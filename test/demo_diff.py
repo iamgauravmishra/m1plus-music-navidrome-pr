@@ -16,6 +16,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(ROOT, 'tools'))
 import mod_nowplaying as mn
 import autotime, themeoff, timezones
+import pod   # the Shuffle hooks and display sites (tools/pod.py SETMODE, LOADPL, MODE_SITES)
 HOOK = (0x533b80, 8)
 HOME_INIT = (0x534cd4, 8)   # home_page_init: the boot guard's hook (docs/architecture.md)
 PLAYING = (0x53d1e4, 8)     # playing_page_init: the Now Playing hook (patch/nowplaying.c)
@@ -26,6 +27,8 @@ SCAN_SITE = (0x5ea6a8, 4)  # the library scan's folder test: the jalr strcmp(nam
 UPDATE_SITE = (0x4e1124, 4)  # update_firmware: the compare's operand addiu a1 (the literal "V2.1" 0x74773c -> the string "about_version" 0x74772c; docs/modules/version.md)
 BATTERY_SITE = (0x5450f8, 4)  # show_sysbar_face: the jalr get_battery_capacity, now jal bp_capacity (patch/battery.c, docs/modules/payload.md hook 8)
 LIGHT = (0x659fcc, 0x655638, 0x659f9c)   # Light Mode's hooks (patch/palette.c, docs/modules/payload.md hooks 10 - 12): style_get_color and image_manager_add (PIC prologues: `j` and a nop) and the style_get_gradient leaf (the same two words)
+SHUFFLE_HOOKS = (pod.SETMODE, pod.LOADPL)   # mclSetPlayMode, mclLoadPlayList: the PIC prologue's first two words, now `j` into the payload and a nop (patch/shuffle.c, docs/modules/payload.md hooks 13, 14)
+MODE_SITES = tuple(a for a, _ in pod.MODE_SITES)   # the 19 `jalr mclGetPlayMode` call sites, now `jal sh_display_mode`
 SCROLL_SLOT =(0x97a330, 4) # g_scroll_view_vtable.on_event_before_children: 0 in stock, the payload's m1plus_scroll_event (patch/scroll.c)
 COVER = 264                 # the cover size demo writes (tools/mod_lockscreen.py, Now Playing's art)
 COVER_IMM = (0x4df1dc, 0x4df1e0, 0x4df21c, 0x4df220)
@@ -82,6 +85,9 @@ def main():
     allow(va_to_off(s, UPDATE_SITE[0]), UPDATE_SITE[1], 'updater version compare')
     allow(va_to_off(s, timezones.SELECT), 8, 'select_timezone hook')   # time zones (tools/timezones.py): the hook, the clamp, the row count and limit, the two call sites
     for a, *_ in timezones.edits(0, 0): allow(va_to_off(s, a), 4, 'time zone words')
+    for q in SHUFFLE_HOOKS: allow(va_to_off(s, q), 8, 'shuffle hook')
+    for q in MODE_SITES: allow(va_to_off(s, q), 4, 'play mode display site')
+    allow(va_to_off(s, pod.CLEAR_SITE), 4, 'dmr_serverstart deque_clear site')
     for a, old, new, _ in autotime.EDITS: allow(va_to_off(s, a), len(old), 'auto time literals')
     for a, *_ in themeoff.EDITS: allow(va_to_off(s, a), 4, 'theme1 off')
     for q in QUERY: allow(va_to_off(s, q), 8, 'library query hook')
@@ -144,6 +150,16 @@ def main():
     good = sw == 0x0320f809 and mw >> 26 == 3 and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s))
     print(f'battery percentage hook {BATTERY_SITE[0]:#x}: {sw:#010x} -> {mw:#010x}', 'ok' if good else 'WRONG')
     ok = ok and good
+    for q in SHUFFLE_HOOKS:
+        o = va_to_off(s, q); mw = struct.unpack_from('<I', m, o)[0]
+        good = mw >> 26 == 2 and m[o + 4:o + 8] == bytes(4) and s[o + 8:o + 12] == m[o + 8:o + 12] and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s))
+        print(f'shuffle hook {q:#x}: {s[o:o + 8].hex()} -> {m[o:o + 8].hex()}', 'ok' if good else 'WRONG')
+        ok = ok and good
+    for q in MODE_SITES + (pod.CLEAR_SITE,):   # the clear site is the same shape: jalr -> jal into the payload (dmr_serverstart's deque_clear, sh_clear_queue)
+        o = va_to_off(s, q); sw = struct.unpack_from('<I', s, o)[0]; mw = struct.unpack_from('<I', m, o)[0]
+        good = sw == 0x0320f809 and mw >> 26 == 3 and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s))
+        print(f'play mode display site {q:#x}: {sw:#010x} -> {mw:#010x}', 'ok' if good else 'WRONG')
+        ok = ok and good
     o = va_to_off(s, timezones.SELECT); mw = struct.unpack_from('<I', m, o)[0]
     good = mw >> 26 == 2 and m[o + 4:o + 8] == bytes(4) and s[o + 8:o + 12] == m[o + 8:o + 12] and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s))
     print(f'select_timezone hook {timezones.SELECT:#x}: {s[o:o + 8].hex()} -> {m[o:o + 8].hex()}', 'ok' if good else 'WRONG')

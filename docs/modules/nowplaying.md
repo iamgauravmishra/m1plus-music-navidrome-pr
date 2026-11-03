@@ -34,6 +34,9 @@ alpha 68 with 44-row smoothstep edges. Decorative images and time labels are ins
 
 Favorite is a filled/outline star; while a podcast plays it becomes a saved/unsaved bookmark.
 Mode and queue glyphs use `#C8C8C8` (repeat-off `#6E6E6E`).
+The stock mode button (`btn_playmode`) keeps its four steps and looks. Its picture (`0x539888`) and click handler (`0x53b5fc`) read the *shown* mode,
+which is Shuffle while the payload's Shuffle flag is on (also with Repeat all, set from the Queue page): the Shuffle step turns the flag on (stock mode 0),
+the next step (Repeat all) turns it off. Two call sites and the mode hook make this ([shuffle](shuffle.md) "Where the mode is shown"); the page itself is unchanged.
 The stock `slider_play` retains a 30 px seek target with a 6 px track, 30% white track,
 `#FFFFFFEB` fill and radius 4.
 

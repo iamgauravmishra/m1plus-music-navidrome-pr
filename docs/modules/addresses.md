@@ -248,6 +248,7 @@ AOSP's PinyinIME (`ime_pinyin::*`, `0x5bf9b0`..`0x5ceb40`) over one global. All 
 | `get_equalizer_preset_name(i, buf)` | `0x49daec` | prologue `(0x3c1c0056, 0x279c63e4, 0x0399e021)`; `sltiu v1, a0, 12`; copies the tr key of `equalizer preset i` (table `0x97c7a0`: 1..3 `eq_custom1..3`, `eq_pop`, `eq_rock`, `eq_dance`, `eq_blues`, `eq_metal`, `eq_vocal`, `eq_classical`, `eq_jazz`) |
 | the EQ switch handler | `0x49d750` | flips `equalizer_flag` and saves `[PLAYSET] EQFLAG` |
 | `wififlag` / `bluetoothflag` / `equalizer_flag` / `equalizer_mode` / `language` (data, dynsym) | `0x97caf8` / `0xa05ac0` / `0xa05ac2` / `0x97cb00` / `0xa05ab8` | `wifi_switch` `0x507a8c` clears `wififlag` and saves `[SYSSET] WIFI`; the language index is `switch_language`'s (0 zh_CN .. 12 uk_UK), its names the `lan_*` keys |
+| the play mode (Shuffle hooks, `SHUFFLE_PINS`; [shuffle](shuffle.md)) | `mclSetPlayMode` `0x5d278c` (mode word `0xa0abe0`, gapless state `0xa0abd0`), `mclLoadPlayList` `0x5d1f28` (position `0xa0abdc`), `mclSetPlayPos` `0x5d42d8`; raw mode readers `0x5d58fc` (`mclNextSong`), `0x5d5748` (`mclPrevSong`), `0x5d0edc` | the display sites `MODE_SITES` (19 `jalr mclGetPlayMode`, loaded by `lw t9 0x8f99aab0`) become `jal sh_display_mode` |
 | the play mode's keys | `0x47a454`, `0x47a4d4`, `0x47a4e8`, `0x47a500` | the stock More dialog sets `playmode_listplay`, `playmode_repeattrack`, `playmode_shuffle`, `playmode_repeatall` for `mclGetPlayMode` 0..3 |
 
 ## Theme setting (`tools/themeoff.py` `EDITS`; docs/modules/theme.md "theme1 is off")

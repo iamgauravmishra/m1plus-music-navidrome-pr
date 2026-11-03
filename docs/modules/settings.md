@@ -38,6 +38,7 @@ Feature settings live in their own folder, `/mnt/data/m1plus/` (`SET_DIR`, patch
 | Background | `appearance-background` | `0` Black (default), `1` Tinted; `2` Light and `3` Light Auto are not offered; missing/other Black; Settings > System > Appearance > Background ([accent](accent.md)) |
 | Accent | `appearance-accent` | one digit, the index 0 Neutral (default) .. 6 Champagne; missing/other Neutral; Settings > System > Appearance > Accent ([accent](accent.md)) |
 | Battery Percentage | `battery-percentage` | `1` on; missing/other off (the default) |
+| Shuffle (the payload's flag; stock's mode is never 2) | `playback-shuffle` | `1` on; missing/other off ([shuffle](shuffle.md)) |
 | Main Menu / Extras | `home-menu` | item ids in order, optional `-` then the hidden ids ([menu](menu.md)); invalid = defaults |
 | Recent searches | `search-history` | up to 5 UTF-8 lines, newest first ([search](search.md)); malformed = none |
 

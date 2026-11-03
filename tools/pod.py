@@ -220,6 +220,8 @@ FUNCTIONS.update({
     # Cover Flow opens on the playing album (patch/covercache.c cc_playing): the playing track's index in the play
     # queue, the call get_playtimeandlength and the lock screen refresh make (@0x4e0198, @0x53f718); -1 for none
     'mclGetPlayPos':           ('int', 'void', 0x5d4290),
+    # Shuffle (patch/shuffle.c): the play position word mclGetPlayPos reads is stored back after the queue is reordered
+    'mclSetPlayPos':           ('void', 'int', 0x5d42d8),
 })
 # Localisation (patch/i18n.h): the stock translation. locale_info() is the app's locale, locale_info_tr(locale, key) the
 # table lookup (the key itself when absent), widget_set_tr_text(widget, key) stores the key on the widget (the window
@@ -607,6 +609,34 @@ BATTERY_PINS = (   # (address, stock word, what it proves)
     (0x66d194, 0x8e020008, 'widget_resize: lw v0, 8(s0): widget_t.w'), (0x66d1a0, 0x8e03000c, 'widget_resize: lw v1, 0xc(s0): widget_t.h'),
     (0x66c428, 0x8e040044, 'widget_set_visible: lw a0, 0x44(s0): widget_t.parent, handed to widget_set_need_relayout_children'),
 )
+# Apple-style Shuffle (patch/shuffle.c, docs/modules/shuffle.md, docs/modules/payload.md hooks 13-14). Stock never plays in mode 2: mclSetPlayMode (0x5d278c, the one function that stores the mode word
+# 0xa0abe0 after boot, where initMclModule @0x5d1a6c stores 3) is hooked at its PIC prologue and maps a request for 2 to the payload's own shuffle flag with the stock mode 0; mclLoadPlayList
+# (0x5d1f28, called by start_player @0x4e46e0, refresh_playqueue @0x4df59c and the boot resume in networkinit_thread @0x506374 / @0x506474) is hooked at its prologue and shuffles a queue just loaded
+# while the flag is on. The mode is read raw (not through mclGetPlayMode) by mclNextSong @0x5d58fc, mclPrevSong @0x5d5748 and the next-index function @0x5d0edc, so those only ever see 0, 1, 3.
+# Where the mode is displayed (or handed to a remote), stock's `jalr mclGetPlayMode` becomes `jal sh_display_mode`, which answers 2 while the flag is on: the same 19 call sites, each pinned with the
+# `lw t9, GOT mclGetPlayMode` that loads it (0x8f99aab0). change_music @0x4e3d7c and autochange_updateplayqueue @0x4dfa08 keep the raw getter: they run the stock Shuffle branches for mode 2.
+SETMODE, SETMODE_PROLOGUE = 0x5d278c, (0x3c1c0043, 0x279c1744, 0x0399e021)
+LOADPL, LOADPL_PROLOGUE = 0x5d1f28, (0x3c1c0043, 0x279c1fa8, 0x0399e021)
+CLEAR_SITE = 0x5089e4   # dmr_serverstart: `jalr deque_clear` of the playing queue (delay slot lw a0, ($v0)); jal sh_clear_queue takes the payload lock around it
+MODE_SITES = (   # (the jalr mclGetPlayMode, the lw t9 that loads it)
+    (0x47a3fc, 0x47a3f8), (0x47a530, 0x47a51c), (0x49fb90, 0x49fb68), (0x49fd04, 0x49fcf8), (0x49fd58, 0x49fd4c), (0x49fdac, 0x49fda0), (0x49fe04, 0x49fdf4), (0x49fe7c, 0x49fe78),
+    (0x4d8720, 0x4d871c), (0x4f014c, 0x4f013c), (0x4f0164, 0x4f0160), (0x4f017c, 0x4f0178), (0x4f09d8, 0x4f09d4), (0x4f0a30, 0x4f0a2c), (0x4f0a50, 0x4f0a4c), (0x50ecf8, 0x50ece8),
+    (0x50ee34, 0x50ee30), (0x5398cc, 0x5398c8), (0x53b62c, 0x53b614))
+SHUFFLE_PINS = (   # (address, stock word, what it proves)
+    (SETMODE + 12, 0x27bdffe0, 'mclSetPlayMode: addiu sp, sp, -0x20 (the trampoline resumes here)'), (0x5d27b0, 0xac44abe0, 'mclSetPlayMode: sw a0, mode word 0xa0abe0'),
+    (0x5d27b8, 0x8c45abd0, 'mclSetPlayMode: lw a1, gapless state 0xa0abd0'), (0x5d27bc, 0x14a30013, 'mclSetPlayMode: a state other than 1 skips the preload close'),
+    (0x5d27c4, 0x10800011, 'mclSetPlayMode: mode 0 skips it'), (0x5d27d4, 0x1082000c, 'mclSetPlayMode: mode 3 skips it'), (0x5d27dc, 0x8c44abec, 'mclSetPlayMode: lw a0, the player socket 0xa0abec'),
+    (0x5d27f8, 0x0320f809, 'mclSetPlayMode: jalr send("{mcl-closegapless}")'), (0x5d2804, 0xae02abd0, 'mclSetPlayMode: sw -1, gapless state'),
+    (LOADPL + 12, 0x27bdffd0, 'mclLoadPlayList: addiu sp, sp, -0x30 (the trampoline resumes here)'), (0x5d1f60, 0x8f90aa5c, 'mclLoadPlayList: lw s0, GOT play queue 0xa0394c'),
+    (0x5d1f8c, 0xac52abdc, 'mclLoadPlayList: sw a1, play position 0xa0abdc'), (0x5d1f9c, 0xac51abd8, 'mclLoadPlayList: sw a2, class'),
+    (0x4e46dc, 0x8f99b8b8, 'start_player: lw t9, GOT mclLoadPlayList'), (0x4e46e0, 0x0320f809, 'start_player: jalr mclLoadPlayList(queue, index, class)'),
+    (0x5d58fc, 0x8c42abe0, 'mclNextSong: lw v0, mode word (raw)'), (0x5d5900, 0x10430047, 'mclNextSong: mode 2 branches to the unplayed pool 0x5d5a20'),
+    (0x5d5748, 0x8c42abe0, 'mclPrevSong: lw v0, mode word (raw)'), (0x5d0edc, 0x8c42abe0, 'next-index function 0x5d0ea4: lw v0, mode word (raw)'),
+    (0x5d3638, 0x03e00008, 'mclGetPlayMode: jr ra (the raw getter is not hooked)'), (0x5d363c, 0x8c42abe0, 'mclGetPlayMode: lw v0, mode word'),
+    (0x5d42d8, 0x3c1c0043, 'mclSetPlayPos prologue'), (0x5d42ec, 0xac44abdc, 'mclSetPlayPos: sw a0, play position 0xa0abdc'),
+    (0x5089dc, 0x8f82aa5c, 'dmr_serverstart: lw v0, GOT play queue 0xa0394c'), (0x5089e0, 0x8f99f494, 'dmr_serverstart: lw t9, GOT deque_clear'),
+    (CLEAR_SITE, 0x0320f809, 'dmr_serverstart: jalr deque_clear(*queue)'), (CLEAR_SITE + 4, 0x8c440000, 'dmr_serverstart: delay slot lw a0, (v0)'),
+) + tuple(p for a, l in MODE_SITES for p in ((a, 0x0320f809, f'jalr mclGetPlayMode {a:#x}'), (l, 0x8f99aab0, f'lw t9, GOT mclGetPlayMode (for {a:#x})')))
 # Official firmware over the mod (docs/modules/version.md): update_firmware (0x4e0f10) refuses a package whose line-2 version strcmp-equals the "V2.1" literal (0x74773c), which an official
 # V2.1 package is. Its compare (the addiu at 0x4e1124, a1 = literal) is pointed at the string "about_version" (0x74772c) instead: no package tag is that. The literal stays "V2.1" for the
 # online check (check_otginfo), the download page and the About row. Not on the boot path (tools/reach.py).
@@ -696,6 +726,8 @@ DATA = {
     # mclGetPlayPos: get_playtimeandlength `lw s1, 0xa0394c; deque_size(*s1)` then `deque_at(*s1, pos)` (@0x4e01cc..0x4e0268),
     # the lock screen refresh (@0x53f73c, "queued" = 0 <= pos < size), the queue drawer (@0x47a8f0)
     'PLAY_QUEUE':         (0xa0394c, None),
+    # the player's gapless state word (mclSetPlayMode @0x5d27b8 tests it for 1, a preload is open, and closes the preload with "{mcl-closegapless}"): patch/shuffle.c cancels the preload after a reorder
+    'MCL_GAPLESS':        (0xa0abd0, None),
     # the menu's list (patch/menu.c mn_plain_paint): g_scroll_view_vtable is a widget's vtable word (+0x70) when it is a scroll_view;
     # 0x60c164 is the paint-children hook list_view_on_add_child (0x60cc08) stores in a scroll_view (@0x60cd04..0x60cd10,
     # `addiu v1, v1, -0x3e9c`; its prologue `lui gp, 0x3f; addiu gp, gp, 0x7d6c`, test/pod/pulldown.py pins both words)
@@ -1084,7 +1116,7 @@ def gen_asm(out, slots):
     asm += ['.globl stock_playmore_init_trampoline', 'stock_playmore_init_trampoline:',
             f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{PLAYMORE_INIT + 12:x}', 'nop']
     # and for the two Library query functions
-    for nm, at in (('dbquery', QUERY_DB), ('sorted_query', QUERY_SORT)):
+    for nm, at in (('dbquery', QUERY_DB), ('sorted_query', QUERY_SORT), ('setmode', SETMODE), ('loadplaylist', LOADPL)):
         asm += [f'.globl stock_{nm}_trampoline', f'stock_{nm}_trampoline:',
                 f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{at + 12:x}', 'nop']
     # and for Light Mode's style_get_color and image_manager_add (style_get_gradient is a leaf the hook reimplements: no trampoline)
@@ -1138,7 +1170,7 @@ def compile_payload(out, demo_path, tag=TAG):
             '--undefined=stock_playing_init_trampoline', '--undefined=m1plus_scroll_event',
             '--undefined=m1plus_playmore_init', '--undefined=stock_playmore_init_trampoline', '--undefined=pc_id3_path', '--undefined=pc_library_query', '--undefined=pc_sorted_query', '--undefined=stock_dbquery_trampoline', '--undefined=stock_sorted_query_trampoline',
             '--undefined=m1plus_style_color', '--undefined=m1plus_style_gradient', '--undefined=m1plus_image_add', '--undefined=stock_style_color_trampoline', '--undefined=stock_image_add_trampoline', '--undefined=pal_map', '--undefined=pal_active', '--undefined=pal_background', '--undefined=pal_accent', '--undefined=pal_accent_saved', '--undefined=pal_accent_set', '--undefined=pal_accent_color', '--undefined=pal_fill',
-            '--undefined=pod_scan_dir', '--undefined=tz_select', '--undefined=tz_row', '--undefined=tz_label', '--undefined=stock_timezone_trampoline', '--undefined=bp_capacity', '--undefined=pf_items', '--undefined=pf_seen']   # (the last two: accessors of the parser the tests read; nothing in the payload calls them)
+            '--undefined=pod_scan_dir', '--undefined=sh_set_mode', '--undefined=sh_load_playlist', '--undefined=sh_display_mode', '--undefined=sh_clear_queue', '--undefined=stock_setmode_trampoline', '--undefined=stock_loadplaylist_trampoline', '--undefined=tz_select', '--undefined=tz_row', '--undefined=tz_label', '--undefined=stock_timezone_trampoline', '--undefined=bp_capacity', '--undefined=pf_items', '--undefined=pf_seen']   # (the last two: accessors of the parser the tests read; nothing in the payload calls them)
     run(LD, '-m', 'elf32ltsmip', '--gc-sections', '-T', os.path.join(PATCH, 'link.ld'),
         '-e', 'm1plus_home_click', '--undefined=m1plus_home_click', '--undefined=stock_home_click_trampoline',
         *keep, *objs, out / 'pod_asm.o', '-o', out / 'patch.elf')
@@ -1288,7 +1320,7 @@ def patch_demo(raw, payload, ps, demo_path):
     hook(patched, PLAYING_INIT, PLAYING_INIT_PROLOGUE, target4, 'playing_page_init')
     patch_playmore(patched, ps, len(payload))
     patch_timezones(patched, ps, len(payload))
-    for a, old, what in PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + BATTERY_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS:   # stock code the Playlists and Songs pages call: checked, not written
+    for a, old, what in PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + BATTERY_PINS + SHUFFLE_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS:   # stock code the Playlists and Songs pages call: checked, not written
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     target5 = ps['pc_id3_path']
@@ -1303,6 +1335,14 @@ def patch_demo(raw, payload, ps, demo_path):
     target8 = ps['bp_capacity']
     check(BASE <= target8 < BASE + len(payload), 'battery hook symbol outside payload')
     struct.pack_into('<I', patched, fileoff(patched, BATTERY_SITE), jal(target8, BATTERY_SITE))   # (the pins above checked the site's word, its delay slot and its neighbours)
+    for nm, at, pro in (('sh_set_mode', SETMODE, SETMODE_PROLOGUE), ('sh_load_playlist', LOADPL, LOADPL_PROLOGUE)):   # Apple-style Shuffle (patch/shuffle.c)
+        check(BASE <= ps[nm] < BASE + len(payload), f'{nm} outside payload')
+        hook(patched, at, pro, ps[nm], nm)
+    check(BASE <= ps['sh_display_mode'] < BASE + len(payload), 'sh_display_mode outside payload')
+    check(BASE <= ps['sh_clear_queue'] < BASE + len(payload), 'sh_clear_queue outside payload')
+    struct.pack_into('<I', patched, fileoff(patched, CLEAR_SITE), jal(ps['sh_clear_queue'], CLEAR_SITE))   # the delay slot (a0 = *queue) stays stock's
+    for a, _ in MODE_SITES:   # the pins above checked each site's jalr and the lw t9 of mclGetPlayMode before it
+        struct.pack_into('<I', patched, fileoff(patched, a), jal(ps['sh_display_mode'], a))
     struct.pack_into('<I', patched, fileoff(patched, UPDATE_SITE), UPDATE_NEW)   # (the pins above checked the site's word and its neighbours)
     autotime.apply(patched, fileoff)   # two pinned string literals: hwclock -su / -wu, the RTC as UTC (docs/modules/autotime.md)
     themeoff.apply(patched, fileoff)   # stock theme1 off: the config_init clamp and the System page's row table and count (docs/modules/theme.md)
@@ -1320,7 +1360,7 @@ def patch_demo(raw, payload, ps, demo_path):
     check(dynsym(demo_path).get('playsong_id3info') == 0xa0d88c, 'playsong_id3info moved')
     edits = patch_rows(patched, ps)
     # no row edit may touch a PIC prologue (the hooks are the only ones) or a hook site
-    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, PLAYING_INIT, PLAYMORE_INIT, QUERY_DB, QUERY_SORT, STYLE_COLOR, IMAGE_ADD, timezones.SELECT)) and not STYLE_GRADIENT <= int(a, 16) < STYLE_GRADIENT + 8 and not ID3_SITE <= int(a, 16) < ID3_SITE + 4 and not SCAN_SITE <= int(a, 16) < SCAN_SITE + 4 and not BATTERY_SITE <= int(a, 16) < BATTERY_SITE + 4
+    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, PLAYING_INIT, PLAYMORE_INIT, QUERY_DB, QUERY_SORT, STYLE_COLOR, IMAGE_ADD, SETMODE, LOADPL, timezones.SELECT)) and not STYLE_GRADIENT <= int(a, 16) < STYLE_GRADIENT + 8 and not any(int(a, 16) == s for s, _ in MODE_SITES) and int(a, 16) != CLEAR_SITE and not ID3_SITE <= int(a, 16) < ID3_SITE + 4 and not SCAN_SITE <= int(a, 16) < SCAN_SITE + 4 and not BATTERY_SITE <= int(a, 16) < BATTERY_SITE + 4
               for a, *_ in edits), 'row edit on a hook')
     check(all(not (SCROLL_SLOT <= int(a, 16) < SCROLL_SLOT + 4 or a in {hex(p[0]) for p in SCROLL_PINS}) for a, *_ in edits),
           'row edit on a list gesture word')
@@ -1362,6 +1402,9 @@ def main():
         'hook_timezone': {'addr': timezones.SELECT, 'target': ps['tz_select']}, 'timezone_row': {'addr': timezones.ROW_CALL, 'target': ps['tz_row']}, 'timezone_label': {'addr': timezones.LABEL_CALL, 'target': ps['tz_label']},
         'hook_style_color': {'addr': STYLE_COLOR, 'target': ps['m1plus_style_color']}, 'hook_style_gradient': {'addr': STYLE_GRADIENT, 'target': ps['m1plus_style_gradient']},
         'hook_image_add': {'addr': IMAGE_ADD, 'target': ps['m1plus_image_add']},
+        'hook_setmode': {'addr': SETMODE, 'target': ps['sh_set_mode']}, 'hook_loadplaylist': {'addr': LOADPL, 'target': ps['sh_load_playlist']},
+        'hook_clear_queue': {'addr': CLEAR_SITE, 'target': ps['sh_clear_queue']},
+        'hook_display_mode': {'sites': [hex(a) for a, _ in MODE_SITES], 'target': ps['sh_display_mode']},
         'scroll_slot': {'addr': SCROLL_SLOT, 'target': ps['m1plus_scroll_event']}, 'scroll_edit': scroll,
         'zeroed_demo_sha256': ZEROED_DEMO_SHA, 'patched_demo_sha256': sha(patched),
         'assets': assets, 'entry_home_id': pod_pages.HOME_ENTRY,

@@ -28,7 +28,9 @@ SC_YOFF = O['SC_YOFF']
 PLAY_QUEUE, FORCE = pod.DATA['PLAY_QUEUE'][0], pod.DATA['FORCE_REFRESH'][0]
 UI = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_queue.bin') if WORK else None
 KILL = '/mnt/mmc/m1plus-off'
-WIDGETS = ('view_queue', 'btn_return', 'btn_shuffle', 'btn_repeat', 'label_status', 'label_row_title', 'label_row_sub', 'qp_title', 'qp_artist', 'qp_empty', 'qp_head', 'label_title', 'qp_shuf_img', 'qp_shuf_title', 'qp_shuf_sub')
+FLAG_FILE = '/mnt/data/m1plus/playback-shuffle'
+flag_on = lambda m: m.fs.get(FLAG_FILE) == b'1\n'   # the Shuffle flag as saved
+WIDGETS = ('view_queue', 'btn_return', 'btn_shuffle', 'btn_repeat', 'label_status', 'label_row_title', 'label_row_sub', 'qp_title', 'qp_artist', 'qp_empty', 'qp_head', 'label_title')
 NAMES = ['So What', 'Freddie Freeloader', 'Blue in Green', 'All Blues', 'Flamenco Sketches', 'Chorus Complains', 'Come Together', 'Something', 'Hey Jude', 'Let It Be']
 RGB = (190, 50, 55)
 
@@ -183,21 +185,14 @@ def asset_tests(ctx):
         w = f(name)
         expect(w.get('visible') == 'false' and w.get('sensitive') == 'false' and w.get('style:normal:font_size') == str(px) and w.get('style:normal:text_color') == colour,
                f'{name}: the hidden {px} px {colour} text style of the rows (the Songs page\'s)')
-    img, st, ss = f('qp_shuf_img'), f('qp_shuf_title'), f('qp_shuf_sub')
-    mid = lambda w: w.x + w.w / 2
-    expect(img.type == 'image' and (img.w, img.h) == (O['QP_SHUF_IMG'], O['QP_SHUF_IMG']) and mid(img) == 160 and img.y == TOP + O['QP_SHUF_IMG_Y'] and img.get('image') == 'sg_shuffle_big'
-           and st.get('style:normal:font_size') == '20' and st.get('style:normal:text_color') == '#FFFFFF' and ss.get('style:normal:font_size') == '16' and ss.get('style:normal:text_color') == '#9C9C9C'
-           and mid(st) == 160 == mid(ss) and st.w == ss.w == O['QP_SHUF_W'] and st.y == TOP + O['QP_SHUF_TITLE_Y'] and ss.y == TOP + O['QP_SHUF_SUB_Y'] and st.get('tr_text', 'Shuffle is on') == 'Shuffle is on'
-           and all(w.get('visible') == 'false' and w.get('sensitive') == 'false' for w in (img, st, ss)) and all(w.get('style:normal:text_align_h') == 'center' for w in (st, ss)),
-           'the Shuffle placeholder: a 40 px glyph, a 20 px white line and a 16 px grey line, centred below the Queue line, hidden until Shuffle and insensitive for good')
-    expect(img.y + img.h < st.y and st.y + st.h <= ss.y and ss.y + ss.h < WIN_H, 'the glyph, the two lines and the air fit the list area under the Queue line')
     k = {c.name: c for c in root.children}
     xx = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw', 'images', 'xx')
     b = k['btn_return']
     expect((b.x, b.y, b.w, b.h) == (7, 0, 44, 50) and b.get('style') == 'img_btn_style' and b.get('style:normal:icon') == 'ah_nav_back' and b.get('style:pressed:icon') == 'ah_nav_back_down'
            and os.path.exists(os.path.join(xx, 'ah_nav_back.png')), 'btn_return: the glass ah_nav_back disc at x 7 (44 wide), pressed ah_nav_back_down: the only control, to leave')
     expect('navigationbar_view' not in k and k['label_title'].get('visible') == 'false', 'the control is a child of the window itself (no bar view); the section line is the page\'s title')
-    for img in ('sg_shuffle', 'sg_repeat', 'sg_repeat1', 'sg_shuffle_on', 'sg_repeat_on', 'sg_repeat1_on', 'sg_shuffle_big'): expect(os.path.exists(os.path.join(xx, img + '.png')), f'{img}.png is in the build')
+    for img in ('sg_shuffle', 'sg_repeat', 'sg_repeat1', 'sg_shuffle_on', 'sg_repeat_on', 'sg_repeat1_on'): expect(os.path.exists(os.path.join(xx, img + '.png')), f'{img}.png is in the build')
+    expect(not [n.name for n in root.walk() if (n.name or '').startswith('qp_shuf')] and not os.path.exists(os.path.join(xx, 'sg_shuffle_big.png')), 'the Shuffle placeholder (widgets and glyph) is gone: Up Next always shows the queue')
     # contrast of the glyph on its pill (WCAG): white on the off fill, the dark glyph on the lit fill, pressed too
     from PIL import Image
 
@@ -221,12 +216,7 @@ def asset_tests(ctx):
            f'Back is hit at the glass\'s centre and corner, everything else on the band is the list ({[top(29, 25), top(290, 25), top(160, 25)]})')
     expect(top(80, O['QP_PILL_Y'] + 20) == 'btn_shuffle' and top(230, O['QP_PILL_Y'] + 20) == 'btn_repeat' and top(160, O['QP_PILL_Y'] + 20) == 'view_queue', 'the buttons are hit, the 10 px between them is the list')
     import pod_i18n
-    from awtk_text import Ttf, StbText
-    font = Ttf(os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw', 'fonts', 'default.ttf'))
-    over = [(key, lc, StbText(font, px).layout(pod_i18n.TEXT[key][lc].replace('%d', '1000'))[1]) for key, px in (('Shuffle is on', 20), ('%d song plays in random order', 16), ('%d songs play in random order', 16))
-            for lc in pod_i18n.LOCALES if StbText(font, px).layout(pod_i18n.TEXT[key][lc].replace('%d', '1000'))[1] > O['QP_SHUF_W']]
-    expect(not over, f'the placeholder\'s lines fit their 300 px in all 13 languages ({over})')
-    for key in ('Queue', 'No upcoming songs', 'Shuffle is on', '%d song plays in random order', '%d songs play in random order'):
+    for key in ("Queue", "No upcoming songs"):
         expect(set(pod_i18n.TEXT[key]) == set(pod_i18n.LOCALES) and all(pod_i18n.TEXT[key][lc] for lc in pod_i18n.LOCALES) and pod_i18n.TEXT[key]['en_US'] == key, f'"{key}" is translated in all 13 languages')
 
 
@@ -433,7 +423,7 @@ def play_tests(ctx):
 def mode_tests(ctx):
     """7. The buttons: Shuffle toggles the stock Shuffle, Repeat cycles off / all / one; the buttons show the mode."""
     expect = ctx.expect
-    SH, RA, RO, OR = O['MODE_SHUFFLE'], O['MODE_REPEAT_ALL'], O['MODE_REPEAT_ONE'], O['MODE_ORDER']
+    RA, RO, OR = O['MODE_REPEAT_ALL'], O['MODE_REPEAT_ONE'], O['MODE_ORDER']
     on_n, on_d, off_n, off_d = O['QP_PILL_ON'], O['QP_PILL_ON_DOWN'], O['QP_PILL_OFF'], O['QP_PILL_OFF_DOWN']
 
     def look(m):
@@ -448,23 +438,31 @@ def mode_tests(ctx):
     expect(lk['btn_shuffle'] == (off_n, off_d, 'sg_shuffle', 'sg_shuffle') and lk['btn_repeat'] == (off_n, off_d, 'sg_repeat', 'sg_repeat'), f'List play: both buttons dark with the white glyph ({lk})')
     expect(O['QP_PILL_OFF'] == 0xff2e2c2c and O['QP_PILL_OFF_DOWN'] == 0xff3c3a3a and O['QP_PILL_ON_DOWN'] < O['QP_PILL_ON'], 'the off look is the asset\'s own colours (#2C2C2E, pressed #3A3A3C); the lit one is lighter, pressed a little darker')
     destroy(m)
-    for start, after, shuffle_on in ((OR, SH, True), (RA, SH, True), (RO, SH, True), (SH, OR, False)):
-        m = opened(); m.mode = start
-        m.call(PSYMS['qp_load'], a0=1, count=900000000)
+    for start in (OR, RA, RO):   # Shuffle is the payload's flag: stock's repeat mode is not touched, whatever it is
+        m = queue_machine(); m.top_main = m.window; m.mode = start; open_queue(m)
+        expect(not flag_on(m) and look(m)['btn_shuffle'][0] == off_n, f'repeat mode {start}: Shuffle starts off')
         calls = click(m, 'btn_shuffle')
-        expect(m.mode == after and (('mclSetPlayMode', after) in calls), f'Shuffle from mode {start}: mode {after}')
-        expect(look(m)['btn_shuffle'][0] == (on_n if shuffle_on else off_n), f'Shuffle from mode {start}: the button is {"on" if shuffle_on else "off"}')
+        expect(flag_on(m) and m.mode == start and not [c for c in calls if c[0] == 'mclSetPlayMode'] and ('write_int_config', start, 'PLAYSET', 'PLAYMODE') in calls,
+               f'Shuffle on from repeat mode {start}: the flag is saved, stock\'s mode stays {start} (and is saved as it is)')
+        expect(look(m)['btn_shuffle'] == (on_n, on_d, 'sg_shuffle_on', 'sg_shuffle_on') and look(m)['btn_repeat'][0] == (off_n if start == OR else on_n), 'the Shuffle button is lit, Repeat shows its own state')
+        click(m, 'btn_shuffle')
+        expect(not flag_on(m) and m.mode == start and look(m)['btn_shuffle'][0] == off_n, f'Shuffle off again: the flag goes, the repeat mode {start} stays')
         destroy(m)
-    m = opened(); m.mode = OR; m.call(PSYMS['qp_load'], a0=1, count=900000000)
+    m = queue_machine(); m.top_main = m.window; m.mode = OR; open_queue(m)
     seq = []
     for _ in range(4):
         click(m, 'btn_repeat'); seq.append((m.mode, look(m)['btn_repeat']))
     expect([s[0] for s in seq] == [RA, RO, OR, RA], f'Repeat cycles all, one, off, all ({[s[0] for s in seq]})')
     expect(seq[0][1] == (on_n, on_d, 'sg_repeat_on', 'sg_repeat_on') and seq[1][1] == (on_n, on_d, 'sg_repeat1_on', 'sg_repeat1_on') and seq[2][1] == (off_n, off_d, 'sg_repeat', 'sg_repeat'),
            f'Repeat all is the lit button with the dark repeat glyph, Repeat one with the dark repeat-1 glyph, off the dark button ({seq})')
-    m.mode = SH; click(m, 'btn_repeat')
-    expect(m.mode == RA and look(m)['btn_shuffle'][0] == off_n, 'Repeat from Shuffle gives Repeat all and puts Shuffle out')
-    expect(('write_int_config', RA, 'PLAYSET', 'PLAYMODE') in m.calls, 'the mode is saved as the Play settings page saves it')
+    expect(('write_int_config', RA, 'PLAYSET', 'PLAYMODE') in m.calls and not flag_on(m), 'the mode is saved as the Play settings page saves it')
+    destroy(m)
+    # independent, as on Apple: Repeat cycles the same with Shuffle on, and Shuffle plus Repeat all is allowed
+    m = queue_machine(); m.top_main = m.window; m.mode = OR; open_queue(m)
+    click(m, 'btn_shuffle'); seq = []
+    for _ in range(3):
+        click(m, 'btn_repeat'); seq.append((m.mode, flag_on(m), look(m)['btn_shuffle'][0], look(m)['btn_repeat'][0]))
+    expect(seq == [(RA, True, on_n, on_n), (RO, True, on_n, on_n), (OR, True, on_n, off_n)], f'Shuffle on: Repeat cycles all, one, off and Shuffle stays lit ({seq})')
     destroy(m)
 
 
@@ -486,8 +484,8 @@ def tick_tests(ctx):
     expect(shown(m, 'qp_empty') and vh(m) == WIN_H, 'the last track: "No upcoming songs" shows')
     m.play_pos = 0; tick(m)
     expect(not shown(m, 'qp_empty'), 'and goes when rows follow again')
-    m.mode = O['MODE_SHUFFLE']; tick(m)
-    expect(m.props.get((m.widgets['btn_shuffle'], 'style:normal:icon')) == 'sg_shuffle_on' and [s[2] for s in m.styled if s[0] == m.widgets['btn_shuffle'] and s[1] == 'normal:bg_color'][-1] == O['QP_PILL_ON'],
+    m.mode = O['MODE_REPEAT_ALL']; tick(m)
+    expect(m.props.get((m.widgets['btn_repeat'], 'style:normal:icon')) == 'sg_repeat_on' and [s[2] for s in m.styled if s[0] == m.widgets['btn_repeat'] and s[1] == 'normal:bg_color'][-1] == O['QP_PILL_ON'],
            'a mode set elsewhere (Now Playing\'s own button, the Play settings) lights the button')
     m.mode = O['MODE_ORDER']; tick(m)
     new = [m.record(album='New', artist='New Artist', path=f'/mnt/mmc/n/{i}.flac', title=f'New {i}', name=f'n{i}.flac', rid=500 + i) for i in range(4)]
@@ -508,47 +506,50 @@ def tick_tests(ctx):
 
 
 def shuffle_tests(ctx):
-    """9. Shuffle: no Up Next (stock draws the next track at random), a placeholder instead; the list returns when the mode changes, from our buttons or from elsewhere (the refresh tick)."""
+    """9. Shuffle (patch/shuffle.c): the page has no placeholder, Up Next is always the queue's own order; the button reorders the queue after the playing track and a flag turned on elsewhere (the hook on mclSetPlayMode) shows at the next tick."""
     expect = ctx.expect
-    SH, OR, RA = O['MODE_SHUFFLE'], O['MODE_ORDER'], O['MODE_REPEAT_ALL']
-    vis = lambda m: [m.props.get((m.widgets[n], 'visible'), 1) for n in ('qp_shuf_img', 'qp_shuf_title', 'qp_shuf_sub')]
-    sens = lambda m: [m.props.get((m.widgets[n], 'sensitive'), 0) for n in ('qp_shuf_img', 'qp_shuf_title', 'qp_shuf_sub')]
-    m = queue_machine(n=6, pos=1); m.top_main = m.window; m.mode = SH; open_queue(m)
-    expect(vis(m) == [1, 1, 1] and not shown(m, 'qp_empty') and vh(m) == WIN_H, 'opened in Shuffle: the placeholder shows, no rows, no "No upcoming songs", the content is the window (nothing to scroll)')
-    expect(text_of(m, 'qp_shuf_sub') == '6 songs play in random order' and text_of(m, 'qp_head') in (None, 'Queue'), 'the count line is the queue\'s size; the section label stays "Queue"')
-    expect(text_of(m, 'qp_title') == NAMES[1], 'the header keeps the playing track')
-    expect(not any(v for v in sens(m)), 'the placeholder is insensitive: no tap reaches it')
-    blits, texts, fills = paint(m)
-    expect(not [t for (t, r), s in texts if s.startswith('label_row')] and not [f_ for f_ in fills if f_[0] == O['LIST_HAIR']], 'no row is painted')
-    expect(not [c for c in tap(m, 150, row_y(0) + 20) if c[0] == 'start_playqueue'] and not [c for c in tap(m, 150, row_y(1) + 20) if c[0] == 'start_playqueue'], 'a tap where rows were plays nothing')
-    # Shuffle off from our button: the list comes back, at the top
+    SH, OR = O['MODE_SHUFFLE'], O['MODE_ORDER']
+    titles = lambda m: [m.read_cstr(m.word(r + O['REC_TITLE'])) for r in m.deques[m.word(PLAY_QUEUE)]]
+    rows = lambda m: [t for (t, r), s in paint(m)[1] if s == 'label_row_title']
+
+    # opened with Shuffle on (the flag file): the real rows, in the queue's order, and the lit button
+    m = queue_machine(n=6, pos=1); m.top_main = m.window; m.fs[FLAG_FILE] = b'1\n'; open_queue(m)
+    expect(vh(m) == TOP + 4 * ROW + O['QP_BOTTOM'] and not shown(m, 'qp_empty') and 'qp_shuf_img' not in m.widgets, 'opened with Shuffle on: Up Next shows the four songs after the playing one, no placeholder, "No upcoming songs" stays hidden')
+    expect(rows(m) == NAMES[2:5] and text_of(m, 'qp_title') == NAMES[1], 'the rows are the queue as it is (the header keeps the playing track)')
+    expect([s[2] for s in m.styled if s[0] == m.widgets['btn_shuffle'] and s[1] == 'normal:bg_color'][-1] == O['QP_PILL_ON'], 'and the Shuffle button is lit')
+    expect(m.call(PSYMS['pod_play_mode'], count=100000) == SH and m.mode == OR, 'pod_play_mode (the display sites) answers Shuffle while stock\'s own mode stays List play')
     click(m, 'btn_shuffle')
-    expect(m.mode == OR and vis(m) == [0, 0, 0] and vh(m) == TOP + 4 * ROW + O['QP_BOTTOM'] and m.props.get((m.sv, 'yoffset')) == 0 and not shown(m, 'qp_empty'), 'Shuffle off: the placeholder goes, Up Next is back (the four after the playing track), at the top')
-    _, texts, _ = paint(m)
-    expect([t for (t, r), s in texts if s == 'label_row_title'] == NAMES[2:5], 'and painted (the fourth row\'s line ends below the window)')
-    click(m, 'btn_shuffle')
-    expect(m.mode == SH and vis(m) == [1, 1, 1] and vh(m) == WIN_H, 'Shuffle on from our button: the list gives way to the placeholder at once')
-    # Repeat from Shuffle gives Repeat all: the list returns
-    click(m, 'btn_repeat')
-    expect(m.mode == RA and vis(m) == [0, 0, 0] and vh(m) == TOP + 4 * ROW + O['QP_BOTTOM'], 'Repeat from Shuffle (Repeat all): the list returns')
-    # another page changes the mode: the refresh tick swaps
+    expect(not flag_on(m) and titles(m) == NAMES[:6] and rows(m) == NAMES[2:5], 'Shuffle off from the button with no order to restore: the queue and the rows stay')
+    destroy(m)
+
+    # the button turns Shuffle on: the songs after the playing one are shuffled in place, the page shows the new order
+    for clock in (3, 77, 4099):
+        m = queue_machine(n=6, pos=1); m.top_main = m.window; m.clock = clock; open_queue(m)
+        before = titles(m)
+        click(m, 'btn_shuffle')
+        after = titles(m)
+        expect(flag_on(m) and after[:2] == before[:2] and sorted(after[2:]) == sorted(before[2:]) and not [c for c in m.calls if c[0] == 'mclSetPlayMode'] and m.play_pos == 1,
+               f'Shuffle on (clock {clock}): the playing song and the ones before it stay, the rest is a permutation, the position is unchanged ({after})')
+        expect(rows(m) == after[2:5] and vh(m) == TOP + 4 * ROW + O['QP_BOTTOM'] and text_of(m, 'qp_title') == NAMES[1], f'Up Next shows the new order at once ({rows(m)})')
+        if clock == 77: moved = after != before
+        click(m, 'btn_shuffle')
+        expect(not flag_on(m) and titles(m) == before and m.play_pos == 1 and rows(m) == before[2:5], 'Shuffle off: the original order is back and the same song is playing')
+        destroy(m)
+    expect(moved, 'the shuffle moved songs')
+
+    # turned on elsewhere (Now Playing's button, Play settings: the hook on mclSetPlayMode): the next tick shows the new order, and the repeat button follows stock's mode
+    m = queue_machine(n=6, pos=1); m.top_main = m.window; m.clock = 5; open_queue(m)
     scroll_to(m, 100)
-    m.mode = SH; tick(m)
-    expect(vis(m) == [1, 1, 1] and vh(m) == WIN_H, 'Shuffle turned on elsewhere (Now Playing\'s button, the Play settings): the tick shows the placeholder')
-    m.mode = OR; tick(m)
-    expect(vis(m) == [0, 0, 0] and vh(m) == TOP + 4 * ROW + O['QP_BOTTOM'] and m.props.get((m.sv, 'yoffset')) == 0, 'and off elsewhere: the tick brings the list back, scrolled to the top')
-    m.mode = RA; tick(m)
-    expect(vis(m) == [0, 0, 0] and not any(c[0] == 'widget_resize' for c in m.calls), 'a change between the other modes touches only the buttons')
-    # one song; the next track in Shuffle keeps the placeholder
-    m.mode = SH; tick(m)
-    m.play_pos = 3; tick(m)
-    expect(vis(m) == [1, 1, 1] and text_of(m, 'qp_title') == NAMES[3], 'a new track in Shuffle: the header follows, the placeholder stays')
+    m.call(PSYMS['sh_set_mode'], a0=SH, count=900000000)
+    expect(flag_on(m) and m.mode == OR, 'the hook turned the flag on and left stock in List play')
+    tick(m)
+    expect(rows(m) == titles(m)[2:5] and m.props.get((m.sv, 'yoffset')) == 0, 'the tick shows the shuffled order, from the top')
+    m.call(PSYMS['sh_set_mode'], a0=OR, count=900000000)
+    tick(m)
+    expect(not flag_on(m) and rows(m) == NAMES[2:5], 'and the original one when it is turned off elsewhere')
     destroy(m)
-    m = queue_machine(n=1, pos=0); m.top_main = m.window; m.mode = SH; open_queue(m)
-    expect(text_of(m, 'qp_shuf_sub') == '1 song plays in random order', 'one song: "1 song plays in random order"')
-    destroy(m)
-    m = queue_machine(n=6, pos=1); m.top_main = m.window; m.mode = SH; m.set_language('ge_DE'); open_queue(m)
-    expect(utf(text_of(m, 'qp_shuf_sub')) == '6 Titel in zufälliger Reihenfolge', f'translated: {utf(text_of(m, "qp_shuf_sub"))!r}')
+    m = queue_machine(n=1, pos=0); m.top_main = m.window; m.fs[FLAG_FILE] = b'1\n'; open_queue(m)
+    expect(shown(m, 'qp_empty') and vh(m) == WIN_H, 'one song with Shuffle on: "No upcoming songs"')
     destroy(m)
 
 

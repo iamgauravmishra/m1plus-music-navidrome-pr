@@ -58,7 +58,7 @@ Search out only for a genre's songs, `0xff09`):
 - **Play, Play pill, Shuffle**: `loadSongList(queue, name, cue, class)`, `g_class_type` = class, Now Playing's context class = class (the stock row handler passes
   `g_class_type`). For a playlist the page puts its id into `classinfo[1]` before every query and before `loadSongList` (which copies classinfo for the memory playback,
   0x4e2d80): another page's query (the Playlists grid's scan, which stops while it is behind, `pl_on_bg`) may have left another id. **Shuffle** on a list is that list in the
-  stock Shuffle mode from a random song of it (`pod_set_mode(MODE_SHUFFLE)`, `pod_rand`), as the album page's; Songs keeps Shuffle Songs.
+  Shuffle on (the payload's flag, [shuffle](shuffle.md)) from a random song of it (`pod_set_mode(MODE_SHUFFLE)`, `pod_rand`), as the album page's; Songs keeps Shuffle Songs.
 - **Select**: as on Songs. **Delete** is the stock dialog and `batch_delete_file(class, ...)`: the stock handler passes `g_class_type`, and `batch_delete_file` dispatches on it
   (`docs/modules/addresses.md` "Deleting by class"): Favourites lose the song from `myfav`, Most Played from `oftenplay`, Recently Played from `recentplay`, a playlist from the
   playlist, and Hi-Res and Recently Added from the library, as on Songs; the file goes too when the dialog's second answer is taken. **Add to Playlist** opens the picker with

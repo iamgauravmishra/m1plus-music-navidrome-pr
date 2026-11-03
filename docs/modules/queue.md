@@ -20,7 +20,7 @@
   `0x47a014..0x47a028`), `start_playqueue(index)` (`0x4e47d0`: `airplay_stop`, `mclSetPlayPos`, `mclStartPlayer`, `notifyPlayStatus`), the drawer's rows are bound again (`0x479f0c`)
   and `force_refreshflag` (`0xa05a63`) is set; a stream while offline shows `msg_notnetwork` instead. Nothing else reads or changes the queue: **stock cannot remove a track from it or clear
   it** (the Delete song of the More sheet deletes the file, `delete_playqueue_file`), nor reorder it; so the page has no Clear and no reordering.
-- The play mode is the one stock mode (`mclGetPlayMode` 0 List play, 1 Repeat one, 2 Shuffle, 3 Repeat all), changed as the Play settings page changes it (`pod_set_mode`, `pod_set_in_order`, `patch/shuffle.c`).
+- The play mode is stock's one mode word (`mclGetPlayMode` 0 List play, 1 Repeat one, 3 Repeat all; stock's Shuffle, 2, is never set now) plus the payload's **Shuffle flag** (`pod_shuffle_on`, [shuffle](shuffle.md)): `pod_set_shuffle` / `pod_set_repeat` / `pod_set_mode` / `pod_set_in_order` (`patch/shuffle.c`).
 
 ## Our page (ui/m1plus_queue.bin, window m1plus_queue_page)
 
@@ -43,20 +43,18 @@ y   0   (back)                                                  glass Back (band
         [cover] Artist                                           (or "No upcoming songs", 16 px #9C9C9C at x 10, where the first row would be)
 ```
 
-- **Up Next** is the tracks after the play position, **in queue order** while the mode is not Shuffle. The playing track is only in the header. A row's text rules are the stock drawer's (CUE: file name; no title: file name). Covers are
+- **Up Next** is the tracks after the play position, **in queue order**, which is the real play order (Shuffle reorders the queue itself, stock plays it in order). The playing track is only in the header. A row's text rules are the stock drawer's (CUE: file name; no title: file name). Covers are
   the Cover Flow cache file of the row's artist and album (`cc_album_key`), one per 16 ms tick on the page's timer, none while the list moves, nearest to the middle first (the Songs page's loader, `patch/grid.c`
   ring of `GRID_TILES`); a row with no file shows the placeholder disc. No drag handles, no marker, no count, no Clear (stock cannot clear, remove or reorder).
 - **Header**: the track at the play position (title, artist, cover). No tint: the page is black.
-- **Shuffle placeholder**: stock Shuffle has no order to show (`mclNextSong` draws one index at random from the unplayed pool, `toolsRandnum`, each time a track ends; the pool is filled when a queue loads, not when the mode is set; all demo code, hciplayer only gets the chosen file). So while `mclGetPlayMode` is Shuffle the page has **no Up Next**:
-  below the (unchanged) "Queue" line it shows a centred placeholder: the 40 px grey (`#8C8C8C`) Lucide shuffle glyph (`sg_shuffle_big`), "Shuffle is on" (20 px white), "N songs play in random order" (16 px `#9C9C9C`, N = the queue's size; "1 song plays ..."; pl, ru, uk the label form "Utwory w losowej kolejności: N" like the other counts). The widgets are visible only while Shuffle (insensitive for good, so no tap reaches them), the content is the window's height (nothing scrolls) and there are no rows to hit. The mode is read by every `qp_load` and
-  `qp_mode_changed`, called after our two buttons and by the refresh tick, so Shuffle turned on or off anywhere swaps list and placeholder without a rebuild of the header; the list returns at the top. All lines fit 300 px in the 13 languages (test).
-- **Buttons**: icon only (`sg_shuffle`, `sg_repeat`, `sg_repeat1`, `tools/mod_icons.py` `SONGS_IMAGES`), equal width. Shuffle toggles `MODE_SHUFFLE` (`pod_set_in_order` when it was on); Repeat cycles off -> all -> one -> off
-  (`MODE_ORDER`, `MODE_REPEAT_ALL`, `MODE_REPEAT_ONE`; from Shuffle it gives Repeat all, since stock Shuffle has no repeat). Apple's look: **on** is a light pill (`QP_PILL_ON` `#C8C8C8`, pressed `#A8A8A8`) with a near-black glyph (`sg_shuffle_on`, `sg_repeat_on`, `sg_repeat1_on`, the same
+- **No Shuffle placeholder.** Up Next always shows the queue's real order, shuffled or not. Turning Shuffle on shuffles the songs after the playing one in place ([shuffle](shuffle.md)); the page reads the queue again at once (our button) or at its next tick (`qp_sync` compares the stock repeat mode and the flag: a flag change reads the rows again from the top, a repeat change only touches the buttons).
+- **Buttons**: icon only (`sg_shuffle`, `sg_repeat`, `sg_repeat1`, `tools/mod_icons.py` `SONGS_IMAGES`), equal width. **Shuffle and Repeat are independent, as on Apple.** Shuffle toggles the flag (`pod_set_shuffle`: on shuffles the songs after the playing one, off restores the original order; stock's mode is not touched); Repeat cycles off -> all -> one -> off
+  (`pod_set_repeat`: `MODE_ORDER`, `MODE_REPEAT_ALL`, `MODE_REPEAT_ONE`, whatever the flag is, so Shuffle plus Repeat all is allowed). Over `SHUFFLE_MAX` songs or no memory, Shuffle stays off and the stock message box says why. Apple's look: **on** is a light pill (`QP_PILL_ON` `#C8C8C8`, pressed `#A8A8A8`) with a near-black glyph (`sg_shuffle_on`, `sg_repeat_on`, `sg_repeat1_on`, the same
   Lucide glyphs in `#141414`); **off** is a dark pill (`#2C2C2E`, pressed `#3A3A3C`) with the white glyph. Glyph on pill is >= 4.5:1 in every state (about 14:1 white on #2C2C2E, 11:1 #141414 on #C8C8C8, 7.7:1 on #A8A8A8; tested). Repeat one shows the repeat-1 glyph. Neutral greys, no accent; no autoplay / infinity (stock has none).
-- **Sync with Now Playing**: both read `mclGetPlayMode` (0 List play, 1 Repeat one, 2 Shuffle, 3 Repeat all; Now Playing's button cycles 0..3 and styles itself from it, `0x539888`, `btn_imgorder` / `cycle1` / `random` / `cycle`). Stock's click handler `0x53b5fc` does `mclSetPlayMode`,
-  `write_int_config`, the picture (`0x539888`), `notifyPlayMode`, `dmrSendPlayMode`; our `pod_set_mode` does the same calls (no cached copy: it reads `mclGetPlayMode` first) except the picture, which stock sets only there and at the page's init.
+- **Sync with Now Playing**: this page reads stock's own mode (`mclGetPlayMode`, 0 / 1 / 3) and the flag; Now Playing's button reads the *shown* mode (`sh_display_mode`: 2 while the flag is on, so it shows Shuffle also with Repeat all; its cycle starts from that, Shuffle -> Repeat all turns the flag off), `0x539888`, `btn_imgorder` / `cycle1` / `random` / `cycle`. Stock's click handler `0x53b5fc` does `mclSetPlayMode`,
+  `write_int_config`, the picture (`0x539888`), `notifyPlayMode`, `dmrSendPlayMode`; our setters do the same calls (no cached copy) except the picture, which stock sets only there and at the page's init.
   Bug found on the device: a mode set on this page left Now Playing's button showing the old mode. Fix: `np_on_foreground` (`patch/nowplaying.c`, the existing Now Playing hook's window event) calls the stock picture function `0x539888` (pinned, `stock_np_mode_button`) when the page is back in front. The mapping of the two buttons
-  (Shuffle = mode 2; Repeat off / all / one = 0 / 3 / 1) is Now Playing's own cycle's modes.
+  (Shuffle = the flag; Repeat off / all / one = stock 0 / 3 / 1) is Now Playing's own cycle's modes.
 - **Tap a row**: `start_playqueue(play position + 1 + row)`, `force_refreshflag` = 1; the page reads the player again (the header is the new track, Up Next the tracks after it, at the top) and stays, as the drawer does;
   Now Playing below follows. A drag, the header and the air play nothing.
 - **Refresh timer** (500 ms, `QP_TICK_MS`; 1 s with the screen dark, as Now Playing's): the play position moved (the next track, a key) -> the page is read again; the mode changed elsewhere -> the buttons; the queue was replaced ->
@@ -65,4 +63,4 @@ y   0   (back)                                                  glass Back (band
   `playing_page`, never over ours).
 
 Pinned stock (`tools/pod.py` `SONGS_PINS`): the queue button's handler (`0x53b178`, `0x53b17c`), the drawer's row handler (`0x47a014..0x47a028`, `0x47a0c4..0x47a0cc`), prologues of `start_playqueue` `0x4e47d0`,
-`mclGetPlayType` `0x5d3658` and `mclGetPlayPos` `0x5d4290`. Calls: `start_playqueue`, `mclGetPlayType`, `mclGetPlayPos`, `mclGetPlayMode`. Not verified on the device.
+`mclGetPlayType` `0x5d3658` and `mclGetPlayPos` `0x5d4290`. Calls: `start_playqueue`, `mclGetPlayType`, `mclGetPlayPos`, `mclGetPlayMode`, `pod_set_shuffle`, `pod_set_repeat`, `pod_shuffle_on`. Not verified on the device.

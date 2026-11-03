@@ -1578,9 +1578,9 @@ static void dm_play_at(const char *const *paths, unsigned np, const char *want, 
         }
         if (start < n) {
             if (shuffle)
-                pod_set_mode(MODE_SHUFFLE);
+                pod_set_mode_for_queue(MODE_SHUFFLE);
             else if (!want)
-                pod_set_in_order(); /* Play plays the mix in order, even after a Shuffle; a row tap keeps the mode */
+                pod_set_in_order_for_queue(); /* Play plays the mix in order, even after a Shuffle; a row tap keeps the mode */
             pod_open_player(queue, (int)start, CLASS_ALL_SONGS);
         }
     }

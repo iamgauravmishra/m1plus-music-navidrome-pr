@@ -61,6 +61,9 @@
 #define DAILY_SET_FILE \
     "/mnt/data/m1plus/home-daily-mix" /* the Daily Mix card: "0" = off, anything else or missing = on (Settings > Home Screen) */
 #define DAILY_SET_TMP "/mnt/data/m1plus/home-daily-mix.tmp"
+#define SHUFFLE_FILE \
+    "/mnt/data/m1plus/playback-shuffle" /* Shuffle (patch/shuffle.c): "1" = on, anything else or missing = off; stock's play mode is never 2 */
+#define SHUFFLE_TMP "/mnt/data/m1plus/playback-shuffle.tmp"
 #define REBUILD_FILE \
     "/mnt/data/m1plus/covers-rebuild" /* exists while a Settings > Library > Rebuild Covers is requested; Home's cover build (patch/homecover.c) does it and removes it when done */
 #define REBUILD_TMP "/mnt/data/m1plus/covers-rebuild.tmp"
@@ -152,6 +155,15 @@ extern void setfiles_stat(int idx, char *buf, unsigned n); /* a row's text as re
 extern int homecover_clear(
     void); /* Settings > Developer > Clear Cover Cache, after its confirm: 1 under way, 0 the cover worker is busy */
 extern void pod_toast(const char *text); /* patch/shuffle.c */
+extern int pod_play_mode(
+    void); /* patch/shuffle.c: the play mode as shown (2 while Shuffle is on, whatever stock's mode is), else stock's */
+extern int pod_shuffle_on(void); /* the Shuffle flag */
+extern int
+pod_set_shuffle(int on); /* Shuffle on / off, the repeat mode kept; 0 refused (the stock message box was shown) */
+extern void pod_set_mode_for_queue(
+    int mode); /* patch/shuffle.c: pod_set_mode right before a queue load: the flag only, the queue being replaced is not reordered */
+extern void pod_set_in_order_for_queue(void); /* patch/shuffle.c: pod_set_in_order right before a queue load: the flag only */
+extern void pod_set_repeat(int mode); /* the stock repeat mode (0 off, 3 all, 1 one), the Shuffle flag kept */
 extern void menu_arrange(void *win,
                          int extras); /* patch/menu.c: the rows as the saved list says (the scroll offset is clamped) */
 extern int dailymix_setting(void); /* the Settings > Home Screen switch: 1 on (the default) */

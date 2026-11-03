@@ -13,7 +13,8 @@
 
 extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
 extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one become List play */
-extern void pod_set_mode(int mode); /* patch/shuffle.c: the stock play mode */
+extern void pod_set_mode_for_queue(int mode); /* patch/shuffle.c: the play mode right before a queue load (the old queue is not reordered) */
+extern void pod_set_in_order_for_queue(void); /* the same for Play */
 extern unsigned pod_rand(unsigned n); /* patch/shuffle.c: 0 .. n - 1 */
 
 #define I(w, off) (*(int *)((char *)(w) + (off)))
@@ -155,9 +156,9 @@ void so_play(int cls, void *list, int at, int how, so_open_fn open) {
         return;
     }
     if (how == SO_IN_ORDER)
-        pod_set_in_order(); /* Play: the list in order, even after a Shuffle; a row tap keeps the mode, as stock */
+        pod_set_in_order_for_queue(); /* Play: the list in order, even after a Shuffle; a row tap keeps the mode, as stock */
     else if (how == SO_SHUFFLE)
-        pod_set_mode(MODE_SHUFFLE);
+        pod_set_mode_for_queue(MODE_SHUFFLE);
     *(int *)G_CLASS_TYPE = cls; /* as allmusic_page_init leaves it */
     open(queue, (int)idx, cls);
     deque_destroy(queue);

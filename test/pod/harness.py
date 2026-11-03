@@ -233,6 +233,8 @@ class Machine:
                 self.handlers[PSYMS[f'pod_lib_{name}']] = name
         self.handlers.pop(pod.FUNCTIONS['widget_to_local'][2])   # stock's own, run for real: the payload and widget_find_target both call it
         self.handlers[HOME_CLICK_RESUME] = 'stock_resume'
+        for sym, nm in (('stock_setmode_trampoline', 'stock_setmode'), ('stock_loadplaylist_trampoline', 'stock_loadplaylist')):   # the Shuffle hooks' way back into stock (patch/shuffle.c)
+            if sym in PSYMS: self.handlers[PSYMS[sym]] = nm
         if 'album_open' in PSYMS: self.handlers[PSYMS['album_open']] = 'album_open'
         # Cover Flow's shelf commits and moves (noinline in patch/coverflow.c): ('set_value', album), ('set_offset', off)
         self.watch = Traps(self)
@@ -821,6 +823,18 @@ class Machine:
             ret = self.play_pos & 0xffffffff; self.calls.append(('mclGetPlayPos',))
         elif name == 'mclSetPlayMode':
             self.mode = a0; self.calls.append(('mclSetPlayMode', a0))
+        elif name == 'mclSetPlayPos':
+            self.play_pos = a0; self.calls.append(('mclSetPlayPos', a0))
+        elif name == 'stock_setmode':   # stock's mclSetPlayMode behind the hook's trampoline (patch/shuffle.c sh_set_mode): the mode word, and the gapless preload closed for a mode other than 0 and 3
+            self.mode = a0; self.calls.append(('stock_setmode', a0))
+            if self.word(pod.DATA['MCL_GAPLESS'][0]) == 1 and a0 not in (0, 3): self.setword(pod.DATA['MCL_GAPLESS'][0], -1); self.calls.append(('closegapless',))
+            ret = 1
+        elif name == 'stock_loadplaylist':   # stock's mclLoadPlayList behind its trampoline: the play queue becomes a copy of the deque, the position the index
+            recs = []   # deque_assign copies the records (their strings are shared)
+            for r in self.deques[a0]:
+                if len(self.deques[a0]) > 4096: recs.append(r); continue   # (a cap test's huge queue shares one record: no room to copy it)
+                c = self.alloc(REC_SIZE); self.u.mem_write(c, bytes(self.u.mem_read(r, REC_SIZE))); recs.append(c)
+            self.setword(pod.DATA['PLAY_QUEUE'][0], self.new_deque(recs)); self.play_pos = a1; self.calls.append(('stock_loadplaylist', a1, a2))
         elif name == 'notifyPlayMode':
             self.calls.append(('notifyPlayMode',))
         elif name == 'dmrSendPlayMode':

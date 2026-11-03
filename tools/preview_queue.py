@@ -30,8 +30,7 @@ QUEUE = [('Chorus Complains', 'Driftless Pony Club', 3), ('When We Live In Circl
 
 
 def content(s, playing=1, shuffle=False, repeat=None):
-    total = len(QUEUE)
-    n = 0 if shuffle else len(QUEUE) - playing - 1    # Up Next: the tracks after the playing one; Shuffle: none, a placeholder
+    n = len(QUEUE) - playing - 1    # Up Next: the tracks after the playing one (the queue's own order, shuffled or not)
     im = Image.new('RGBA', (W, max(WIN, TOP + n * ROW + O['QP_BOTTOM'])), (0, 0, 0, 255)); d = ImageDraw.Draw(im)
     title, artist, ci = QUEUE[playing]
     cx, cy, c, r = O['QP_COVER_X'], O['QP_COVER_Y'], O['QP_COVER'], O['QP_COVER_R']
@@ -43,12 +42,7 @@ def content(s, playing=1, shuffle=False, repeat=None):
         PS.round_rect(im, x, O['QP_PILL_Y'], O['QP_PILL_W'], PS.PILL_H, PS.PILL_R, PILL_ON if on else PILL_OFF)
         g = s.img(glyph + '_on' if on else glyph); im.alpha_composite(g, (x + (O['QP_PILL_W'] - g.width) // 2, O['QP_PILL_Y'] + (PS.PILL_H - g.height) // 2))
     s.text(im, O['SG_HDR_X'], O['QP_HEAD_Y'] + O['QP_HEAD_H'] / 2, PS.tr(s, 'Queue'), 20)
-    if shuffle:    # the placeholder: the glyph, a 20 px white line, a 16 px grey line, centred
-        g = s.img('sg_shuffle_big'); im.alpha_composite(g, ((W - g.width) // 2, TOP + O['QP_SHUF_IMG_Y'] + (O['QP_SHUF_IMG'] - g.height) // 2))
-        s.text(im, W / 2, TOP + O['QP_SHUF_TITLE_Y'] + O['QP_SHUF_TITLE_H'] / 2, PS.tr(s, 'Shuffle is on'), 20, anchor='m')
-        sub = PS.tr(s, '%d songs play in random order').replace('%d', str(total))
-        s.text(im, W / 2, TOP + O['QP_SHUF_SUB_Y'] + O['QP_SHUF_SUB_H'] / 2, sub, 16, MUTED, anchor='m')
-    elif not n: s.text(im, O['SG_HDR_X'], TOP + O['QP_EMPTY_Y'] + O['QP_EMPTY_H'] / 2, PS.tr(s, 'No upcoming songs'), 16, MUTED)
+    if not n: s.text(im, O['SG_HDR_X'], TOP + O['QP_EMPTY_Y'] + O['QP_EMPTY_H'] / 2, PS.tr(s, 'No upcoming songs'), 16, MUTED)
     for i in range(n):
         t, a, k = QUEUE[playing + 1 + i]; y = TOP + i * ROW
         d.rectangle((TEXT_X, y + ROW - 1, TEXT_END - 1, y + ROW - 1), fill=PS.HAIR)
@@ -75,7 +69,7 @@ def main():
     asset = awtk_ui.parse(open(os.path.join(a.workdir, RAW, 'ui', 'm1plus_queue.bin'), 'rb').read())
     assert asset.find('btn_repeat') is not None and asset.find('view_queue') is not None, 'not the Queue asset'
     panels = [('Playing the 2nd track, modes off', page(s, playing=1)),
-              ('Shuffle on: the placeholder', page(s, playing=1, shuffle=True)),
+              ('Shuffle on, Repeat all: independent', page(s, playing=1, shuffle=True, repeat='all')),
               ('Repeat one', page(s, playing=1, repeat='one')),
               ('Repeat all, scrolled', page(s, playing=1, repeat='all', scroll=300)),
               ('The last track playing: nothing follows', page(s, playing=len(QUEUE) - 1))]

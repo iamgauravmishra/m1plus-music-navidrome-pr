@@ -1060,12 +1060,7 @@ def build_queue_page(page):
     for prop, v in (('text_color', '#FFFFFF'), ('font_size', str(QP_HEAD_PX)), ('text_align_h', 'left'), ('text_align_v', 'middle')): styled(head, ('normal',), prop, v)
     empty = hidden(Widget('label', o['SG_HDR_X'], o['QP_TOP'] + o['QP_EMPTY_Y'], 310 - o['SG_HDR_X'], o['QP_EMPTY_H'], [('name', 'qp_empty'), pod_i18n.text_prop('No upcoming songs')]))   # shown by the payload when nothing follows
     for prop, v in (('text_color', QP_EMPTY_RGB), ('font_size', str(QP_EMPTY_PX)), ('text_align_h', 'left'), ('text_align_v', 'middle')): styled(empty, ('normal',), prop, v)
-    img = hidden(Widget('image', (SCREEN_W - o['QP_SHUF_IMG']) // 2, o['QP_TOP'] + o['QP_SHUF_IMG_Y'], o['QP_SHUF_IMG'], o['QP_SHUF_IMG'], [('name', 'qp_shuf_img'), ('image', 'sg_shuffle_big'), ('draw_type', 'center')]))
-    stitle = hidden(Widget('label', (SCREEN_W - o['QP_SHUF_W']) // 2, o['QP_TOP'] + o['QP_SHUF_TITLE_Y'], o['QP_SHUF_W'], o['QP_SHUF_TITLE_H'], [('name', 'qp_shuf_title'), pod_i18n.text_prop('Shuffle is on')]))
-    ssub = hidden(Widget('label', (SCREEN_W - o['QP_SHUF_W']) // 2, o['QP_TOP'] + o['QP_SHUF_SUB_Y'], o['QP_SHUF_W'], o['QP_SHUF_SUB_H'], [('name', 'qp_shuf_sub'), ('text', '')]))   # the payload sets "N songs play in random order"
-    for lab, px, colour in ((stitle, 20, '#FFFFFF'), (ssub, 16, QP_EMPTY_RGB)):   # shown by the payload (visible only) while the play mode is Shuffle; insensitive for good
-        for prop, v in (('text_color', colour), ('font_size', str(px)), ('text_align_h', 'center'), ('text_align_v', 'middle')): styled(lab, ('normal',), prop, v)
-    kids += [head, empty, img, stitle, ssub]
+    kids += [head, empty]
     view.children = kids
     sv.children.append(view)
     root.children.append(lv)

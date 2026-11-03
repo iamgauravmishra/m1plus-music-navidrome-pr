@@ -3329,7 +3329,7 @@ void *pg_episode_queue(const char *root, const pc_show_t *s, const pc_ep_t *eps,
     }
     pc_restart(eps[at < neps ? at : 0].hash);
     pc_speed_apply(s->hash);
-    pod_set_in_order();
+    pod_set_in_order_for_queue(); /* the episode queue loads next: the flag only */
     *idx = at;
     return queue;
 }

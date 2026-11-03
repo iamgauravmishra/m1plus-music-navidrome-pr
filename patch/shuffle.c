@@ -6,13 +6,24 @@
  * patch/playback.c rand_below / shuffle / make_order). The xorshift32 generator and its seeding,
  * the Fisher-Yates shuffle of the groups, the group orders (an album's disc, then track, then
  * path; a folder's path) and the user-facing messages follow q2-pod. q2-pod keeps the groups
- * together at play time with hooks in the stock player (mclNextSong, mclLoadPlayList, ...); this
- * file installs none: Shuffle Albums/Folders build the whole queue up front, in its play order,
- * and hand it to the stock player in a sequential mode (docs/architecture.md).
+ * together at play time with hooks in the stock player (mclNextSong, mclLoadPlayList, ...); here
+ * Shuffle Albums/Folders build the whole queue up front, in its play order, and hand it to the
+ * stock player in a sequential mode (docs/architecture.md).
  *
- * No stock function is hooked. Everything here runs from a tap on a row of the M1+ Music menu
- * (patch/m1plus.c on_row), once, on the UI thread, and returns: no timer, no thread, no state kept
- * between taps except the random generator's word.
+ * Shuffle itself (Apple Music's): stock's own Shuffle (mode 2, which draws from a pool and leaves
+ * the queue in library order) is never used. The payload keeps its own flag (/mnt/data/m1plus/
+ * playback-shuffle); turning it on shuffles the queue after the playing song in place, turning it
+ * off puts the queue back in its original order, and a queue loaded while it is on arrives shuffled,
+ * its first song (the tapped or resumed one) first. Stock plays that queue in order in mode 0 or 3.
+ * Two pinned hooks make it hold for every way stock changes the mode or loads a queue: mclSetPlayMode
+ * (sh_set_mode: a request for 2 means "flag on, stock mode 0", any other request flag off, except for
+ * the Queue page's Repeat and the first call at boot) and mclLoadPlayList (sh_load_playlist); the
+ * display sites of stock that read the mode through mclGetPlayMode call sh_display_mode (2 while the
+ * flag is on) instead (tools/pod.py MODE_SITES, docs/modules/shuffle.md).
+ *
+ * Everything else here runs from a tap on a row of the M1+ Music menu (patch/m1plus.c on_row) or a
+ * button, once, on the UI thread, and returns: no timer, no thread, no state kept between taps
+ * except the random generator's word, the flag and the original order of a shuffled queue.
  *
  * The stock path is the Songs page's: loadLocalClassList(0xf001) (getAllMusic into
  * *pdeq_showlist), loadSongList(queue, name, cue, 0xf001) (the queue, as the page's row handler
@@ -24,6 +35,7 @@
 #include "stock.h"
 #include "i18n.h"
 #include "podcasts.h"
+#include "home.h"
 
 #define P(r, off) (*(char **)((char *)(r) + (off)))
 #define I(r, off) (*(int *)((char *)(r) + (off)))
@@ -63,21 +75,330 @@ static void toast(const char *text) {
     navigator_to_with_context("dialog/msginfo_dialog", &info);
 }
 
-/* The stock play mode, changed the way the Play settings page changes it (@0x49fc78): the player,
- * the SyncLink and DLNA remotes, and [PLAYSET] PLAYMODE in /mnt/data/config.ini. Nothing is
- * written when the mode is already the one wanted. */
-static void set_mode(int mode) {
-    if (mclGetPlayMode() == mode) return;
-    mclSetPlayMode(mode);
-    notifyPlayMode();
-    dmrSendPlayMode(mode);
-    write_int_config(mode, "PLAYSET", "PLAYMODE");
+/* ---------------------------------------------------------------------------
+ * Apple-style Shuffle: the flag, the queue's reorder and the two hooks.
+ */
+extern int stock_setmode_trampoline(int mode); /* stock mclSetPlayMode past the hook's prologue (patch/pod_asm) */
+extern int stock_loadplaylist_trampoline(void *queue, int pos, int cls); /* the same for mclLoadPlayList */
+
+static struct {
+    unsigned char loaded; /* the flag file has been read */
+    unsigned char on; /* the flag */
+    unsigned char keep; /* pod_set_repeat is changing the stock mode: the flag stays */
+    unsigned char fresh; /* set_mode / set_in_order for a queue about to load: the flag changes without reordering the current queue */
+    unsigned char booted; /* mclSetPlayMode has run once this session (stock's own boot restore is the first call) */
+    unsigned
+        *orig; /* orig[slot] = the position the song at that slot had before the shuffle; NULL when there is none */
+    unsigned n; /* the queue's size when orig was made: a different size means the queue changed and orig is stale */
+} sh __attribute__((section(".scratch")));
+
+static void *play_queue(void) { return *(void **)PLAY_QUEUE; }
+
+static int flag(void) {
+    if (!sh.loaded) {
+        sh.on = !home_off() && set_read(SHUFFLE_FILE, '0') == '1';
+        sh.loaded = 1;
+    }
+    return sh.on;
 }
 
-/* A mode that plays a queue in order: List play or Repeat all are kept, Shuffle and Repeat one become List play. */
-static void set_in_order(void) {
-    int mode = mclGetPlayMode();
-    set_mode(mode == MODE_SHUFFLE || mode == MODE_REPEAT_ONE ? MODE_ORDER : mode);
+static void flag_save(int on) {
+    sh.on = (unsigned char)on, sh.loaded = 1;
+    home_write_atomic(SHUFFLE_FILE, SHUFFLE_TMP,
+                      on ? "1\n" : "0\n"); /* a failed save leaves the flag for this session */
+}
+
+static void drop_order(void) { /* with the payload lock held */
+    free(sh.orig);
+    sh.orig = (unsigned *)0, sh.n = 0;
+}
+
+/* The payload lock (docs/modules/shuffle.md, Locking). One stock pthread mutex (libc's, imported by demo like the cover code's) over a zero-filled word
+ * block, which is PTHREAD_MUTEX_INITIALIZER. Not recursive: it is only taken in the functions below, which call no hook of ours (stock mclSetPlayPos,
+ * the file write and, in sh_load_playlist, stock's mclLoadPlayList, which reaches no hook, are the only calls made under it), and never across the stock
+ * trampoline of mclSetPlayMode. */
+static unsigned sh_mutex[8] __attribute__((section(".scratch"), aligned(8)));
+static void sh_enter(void) { pthread_mutex_lock(sh_mutex); }
+static void sh_leave(void) { pthread_mutex_unlock(sh_mutex); }
+
+/* Flag only, no reorder: for a request that is followed by a queue load (the loaded queue is shuffled by sh_load_playlist when the flag is on). The order
+ * saved for the queue about to be replaced is dropped. */
+static void flag_only(int on) {
+    sh_enter();
+    drop_order();
+    flag_save(on);
+    sh_leave();
+}
+
+/* The mode the player is shown to be in (the call sites of tools/pod.py MODE_SITES): 2 while the flag is on. */
+int sh_display_mode(void) { return flag() ? MODE_SHUFFLE : mclGetPlayMode(); }
+int pod_play_mode(void) { return sh_display_mode(); }
+int pod_shuffle_on(void) { return flag(); }
+
+/* A random permutation of p[0..m): Fisher-Yates with the payload's generator (the groups' ranks use the same loop). */
+static void permute(unsigned *p, unsigned m) {
+    unsigned i, j, t;
+    for (i = m; i > 1; --i) {
+        j = rand_below(i);
+        t = p[i - 1], p[i - 1] = p[j], p[j] = t;
+    }
+}
+
+/* Slots lo .. lo + m of the queue q become new[lo + i] = old[p[i]], p[i] being a slot number (lo .. lo + m), the same meaning as sh.orig: p = sh.orig + lo.
+ * Cycle-following with one record of temporary storage, so every string stays owned by one slot, as group_order
+ * does it. 0 when the done-bitmap cannot be allocated (nothing is touched then). */
+static int apply_perm(void *q, unsigned lo, unsigned m, const unsigned *p) {
+    unsigned char *done = calloc((m + 7) / 8 + 1, 1);
+    char tmp[REC_SIZE];
+    unsigned i, j, k;
+    if (!done) return 0;
+    for (i = 0; i < m; ++i) {
+        if (done[i >> 3] >> (i & 7) & 1) continue;
+        done[i >> 3] |= (unsigned char)(1 << (i & 7));
+        if (p[i] == lo + i) continue;
+        memcpy(tmp, deque_at(q, lo + i), REC_SIZE);
+        for (j = i;; j = k) {
+            k = p[j] - lo;
+            done[j >> 3] |= (unsigned char)(1 << (j & 7));
+            if (k == i) break;
+            memcpy(deque_at(q, lo + j), deque_at(q, lo + k), REC_SIZE);
+        }
+        memcpy(deque_at(q, lo + j), tmp, REC_SIZE);
+    }
+    free(done);
+    return 1;
+}
+
+/* A queue just loaded (n songs): the song at pos first, the rest shuffled. The permutation is the original order. 0 on a failed allocation. */
+static int shuffle_load(void *q, unsigned n, unsigned pos) {
+    unsigned *p = calloc(n, sizeof *p), i;
+    if (!p) return 0;
+    for (i = 0; i < n; ++i) p[i] = i;
+    p[0] = pos, p[pos] = 0;
+    permute(p + 1, n - 1);
+    if (!apply_perm(q, 0, n, p)) {
+        free(p);
+        return 0;
+    }
+    drop_order();
+    sh.orig = p, sh.n = n;
+    mclSetPlayPos(0);
+    return 1;
+}
+
+/* The playing queue (n songs): the songs after the playing one shuffled in place, orig keeping where each came from. 0 on a failed allocation. */
+static int shuffle_tail(void *q, unsigned n, int pos) {
+    unsigned lo = pos >= 0 && (unsigned)pos < n ? (unsigned)pos + 1 : 0, m = n - lo, i;
+    unsigned *orig;
+    if (m < 2) return 1;
+    orig = calloc(n, sizeof *orig); /* the one allocation (and apply_perm's bitmap): orig is the identity, its tail the permutation */
+    if (!orig) return 0;
+    for (i = 0; i < n; ++i) orig[i] = i;
+    permute(orig + lo, m);
+    if (!apply_perm(q, lo, m, orig + lo)) {
+        free(orig);
+        return 0;
+    }
+    drop_order();
+    sh.orig = orig, sh.n = n;
+    return 1;
+}
+
+/* The queue back in its original order; the play position follows the playing song. A stale or missing order leaves the queue as it is. Allocates nothing,
+ * so it cannot fail: the record at slot j goes to slot orig[j] (orig[j] is where it came from), following each cycle of orig with the record in hand; the
+ * slots done are marked with the high bit of their orig entry (n <= SHUFFLE_MAX; the array is freed right after, so the marks need no clearing).
+ * With the payload lock held. */
+#define SEEN 0x80000000u
+static void restore_order(void *q, unsigned n, int pos) {
+    unsigned *o = sh.orig, i, j, d;
+    char hold[REC_SIZE], tmp[REC_SIZE];
+    if (o && sh.n == n) {
+        for (i = 0; i < n && o[i] < n; ++i) {
+        }
+        if (i == n) { /* every entry is a valid slot */
+            unsigned want = pos >= 0 && (unsigned)pos < n ? o[pos] : n;
+            for (i = 0; i < n; ++i) {
+                if (o[i] & SEEN || o[i] == i) continue;
+                memcpy(hold, deque_at(q, i), REC_SIZE);
+                for (j = i;;) {
+                    d = o[j] & ~SEEN;
+                    o[j] |= SEEN;
+                    if (d == i) { /* the cycle closes: slot i takes the record that came last */
+                        memcpy(deque_at(q, i), hold, REC_SIZE);
+                        break;
+                    }
+                    if (o[d] & SEEN) break; /* not a permutation (cannot happen): stop, never loop */
+                    memcpy(tmp, deque_at(q, d), REC_SIZE);
+                    memcpy(deque_at(q, d), hold, REC_SIZE);
+                    memcpy(hold, tmp, REC_SIZE);
+                    j = d;
+                }
+            }
+            if (want < n) mclSetPlayPos((int)want);
+        }
+    }
+    drop_order();
+}
+
+/* The reorder changed which song comes next, so a gapless preload of the old next one is stale: mclSetPlayMode closes it for mode 1 (stock's
+ * own rule, @0x5d27b8..0x5d2804), then the real mode is put back (past the hook: no flag change). */
+static void cancel_preload(void) {
+    int mode;
+    if (*(int *)MCL_GAPLESS != 1) return;
+    mode = mclGetPlayMode();
+    stock_setmode_trampoline(MODE_REPEAT_ONE);
+    stock_setmode_trampoline(mode);
+}
+
+/* The flag on or off, with the reorder: 1 done, 0 more songs than SHUFFLE_MAX (the flag stays off), -1 out of memory (the same). Off always succeeds. */
+static int flag_set(int on) {
+    void *q;
+    unsigned n;
+    int r = 1;
+    sh_enter(); /* the queue's size, the reorder and who owns sh.orig change together; one exit */
+    q = play_queue();
+    n = q ? deque_size(q) : 0;
+    if (on) {
+        if (n > SHUFFLE_MAX)
+            r = 0;
+        else if (n > 1 && !shuffle_tail(q, n, mclGetPlayPos()))
+            r = -1;
+    } else if (q && sh.orig)
+        restore_order(q, n, mclGetPlayPos());
+    else
+        drop_order();
+    if (r > 0) flag_save(on);
+    sh_leave();
+    if (r > 0 && q && n > 1) cancel_preload();
+    return r;
+}
+
+/* The hook on mclSetPlayMode (tools/pod.py SETMODE): a request for 2 is "shuffle on, stock mode 0" (a flag already on is left alone), any other mode is
+ * "shuffle off" and that stock mode, except for the Queue page's Repeat (keep) and stock's boot restore of [PLAYSET] PLAYMODE, the session's first call,
+ * which leave the flag as its file has it. Stock's function does the rest (and closes a gapless preload for mode 1). The kill switch gives stock's own. */
+int sh_set_mode(int mode) {
+    int first = !sh.booted, was, want, r;
+    sh.booted = 1;
+    if (home_off()) {
+        sh_enter();
+        sh.loaded = 1, sh.on = 0;
+        drop_order();
+        sh_leave();
+        return stock_setmode_trampoline(mode);
+    }
+    was = flag();
+    if (mode == MODE_SHUFFLE && was && !first) return 1;
+    want = mode == MODE_SHUFFLE ? 1 : (sh.keep || first) ? was : 0;
+    r = stock_setmode_trampoline(mode == MODE_SHUFFLE ? MODE_ORDER : mode);
+    if (want != was) { /* a failed shuffle leaves the flag off: the request becomes List play */
+        if (sh.fresh)
+            flag_only(want); /* a queue load follows (set_mode): the replacement is shuffled by sh_load_playlist, the old one is not touched */
+        else
+            flag_set(want);
+    }
+    return r;
+}
+
+/* The hook on mclLoadPlayList (tools/pod.py LOADPL): stock loads the queue, then with the flag on it is shuffled, the song at pos first (and playing at slot 0).
+ * Over SHUFFLE_MAX songs or out of memory the flag goes off and the queue stays as loaded (silently: this also runs for the boot resume).
+ * The payload lock is held across stock's load: it clears and refills the very deque another thread (DLNA) may be reordering under the lock, and stock's clear
+ * frees the deque's blocks. Stock's function cannot re-enter a payload hook (docs/modules/shuffle.md, Locking), so the lock needs no recursion. */
+int sh_load_playlist(void *queue, int pos, int cls) {
+    int r;
+    void *q;
+    unsigned n;
+    sh_enter();
+    r = stock_loadplaylist_trampoline(queue, pos, cls);
+    drop_order();
+    if (!home_off() && flag()) {
+        q = play_queue();
+        n = q ? deque_size(q) : 0;
+        if (n > 1 && (n > SHUFFLE_MAX || !shuffle_load(q, n, pos >= 0 && (unsigned)pos < n ? (unsigned)pos : 0)))
+            flag_save(0);
+    }
+    sh_leave();
+    return r;
+}
+
+/* The call site in dmr_serverstart (tools/pod.py CLEAR_SITE, `jalr deque_clear` @0x5089e4, its delay slot loads a0 = the play queue): stock clears the playing
+ * queue directly, not through mclLoadPlayList, and the clear frees the deque's blocks. Same lock as the loader, so a reorder on another thread is never copying
+ * records of freed blocks; the saved order describes a queue that is gone, so it is dropped. deque_clear's element free callback is the stSongInfo destructor
+ * @0x5dabfc (free, memset), which reaches no hook of ours, so the lock is never taken twice. The kill switch keeps the lock too: switched on mid-reorder, the
+ * clear still waits for it. */
+void sh_clear_queue(void *deque) {
+    sh_enter();
+    deque_clear(deque);
+    drop_order();
+    sh_leave();
+}
+
+/* The mode changed: tell the remotes and the config as the stock mode button does after its change (@0x53b648..0x53b6a0). */
+static void announce(int config) {
+    notifyPlayMode();
+    dmrSendPlayMode(sh_display_mode());
+    write_int_config(config, "PLAYSET", "PLAYMODE");
+}
+
+/* The stock play mode, changed the way the Play settings page changes it (@0x49fc78): the player,
+ * the SyncLink and DLNA remotes, and [PLAYSET] PLAYMODE in /mnt/data/config.ini. Nothing is
+ * written when the mode is already the one shown. Asking for Shuffle also means List play under it. */
+static void set_mode_now(int mode) {
+    if (mode == MODE_SHUFFLE && flag() && mclGetPlayMode() != MODE_ORDER) {
+        sh.keep = 1;
+        mclSetPlayMode(MODE_ORDER);
+        sh.keep = 0;
+        announce(MODE_SHUFFLE);
+        return;
+    }
+    if (sh_display_mode() == mode) return;
+    mclSetPlayMode(mode);
+    announce(mode);
+}
+
+/* fresh: a queue load follows, so the flag changes without reordering (or restoring) the queue that is about to be replaced; sh_load_playlist shuffles the
+ * new one. Not fresh: the current queue is reordered now. */
+static void set_mode(int mode, int fresh) {
+    sh.fresh = (unsigned char)fresh;
+    set_mode_now(mode);
+    sh.fresh = 0;
+}
+
+/* Shuffle on or off from a button of ours (the Queue page): the repeat mode stays. 1 done; 0 refused with the stock message box. */
+int pod_set_shuffle(int on) {
+    int r;
+    if (flag() == on) return 1;
+    if (home_off()) return 0;
+    r = flag_set(on);
+    if (r <= 0) {
+        toast(TR(r ? "Not enough memory" : "Too many songs to shuffle"));
+        return 0;
+    }
+    announce(mclGetPlayMode());
+    return 1;
+}
+
+/* Repeat from the Queue page: off (0), all (3) or one (1), the shuffle flag kept. */
+void pod_set_repeat(int mode) {
+    if (mclGetPlayMode() == mode) return;
+    sh.keep = 1;
+    mclSetPlayMode(mode);
+    sh.keep = 0;
+    announce(mode);
+}
+
+/* A mode that plays a queue in order: Shuffle goes off, List play or Repeat all are kept, Repeat one becomes List play. */
+static void set_in_order(int fresh) {
+    int mode = mclGetPlayMode(), was = flag();
+    if (was) {
+        if (fresh)
+            flag_only(0);
+        else
+            flag_set(0);
+    }
+    if (mode == MODE_SHUFFLE || mode == MODE_REPEAT_ONE)
+        set_mode(MODE_ORDER, fresh);
+    else if (was)
+        announce(mode);
 }
 
 /* ---------------------------------------------------------------------------
@@ -287,13 +608,13 @@ int shuffle_play(int kind) {
         toast(TR(n ? "Storage unavailable" : "Update Local Music first"));
         return -1;
     }
-    /* Shuffle Songs is stock Shuffle over the whole library: it draws every next song from the
-     * songs not played yet and starts again when they are all played. Albums and folders play
-     * the queue in order. */
+    /* Shuffle Songs: shuffle on over the whole library (stock mode List play), the queue shuffled
+     * behind the drawn first song when Now Playing loads it (sh_load_playlist). Albums and folders
+     * play their queue in order, shuffle off. */
     if (kind == SHUFFLE_SONGS)
-        set_mode(MODE_SHUFFLE);
+        set_mode(MODE_SHUFFLE, 1); /* the queue about to load replaces the current one: no reorder of it */
     else
-        set_in_order();
+        set_in_order(1);
     *(int *)G_CLASS_TYPE = CLASS_ALL_SONGS; /* as allmusic_page_init leaves it (@0x5289e8) */
     context.dq = queue, context.idx = (int)idx, context.cls = CLASS_ALL_SONGS, context.mode = PLAY_MODE;
     navigator_to_with_context("playing_page", &context); /* start_player copies the queue */
@@ -302,9 +623,11 @@ int shuffle_play(int kind) {
 }
 
 /* The album page's and the Songs page's Play and Shuffle buttons (patch/albumpage.c, patch/songs.c)
- * use the same generator, message box and play-mode setters as the rows above: Shuffle sets stock
- * Shuffle, Play the in-order mode, so Now Playing plays what was asked for. */
+ * use the same generator, message box and play-mode setters as the rows above: Shuffle turns the
+ * flag on, Play turns it off (and Repeat one into List play), so Now Playing plays what was asked for. */
 unsigned pod_rand(unsigned n) { return rand_below(n); }
 void pod_toast(const char *text) { toast(text); }
-void pod_set_mode(int mode) { set_mode(mode); }
-void pod_set_in_order(void) { set_in_order(); }
+void pod_set_mode(int mode) { set_mode(mode, 0); } /* the current queue is reordered now (no queue load follows) */
+void pod_set_in_order(void) { set_in_order(0); }
+void pod_set_mode_for_queue(int mode) { set_mode(mode, 1); } /* a queue load follows: the flag only */
+void pod_set_in_order_for_queue(void) { set_in_order(1); }
