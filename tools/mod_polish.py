@@ -33,23 +33,22 @@ def edit(root):
     t.w = min(t.w, TITLE_W)   # a page with a navbar toggle (Cover Flow) already ends its title at the toggle's left edge
 
 
-STYLE_RAW = 'rootfs/release/assets/{theme}/raw/styles/default.bin'
+STYLE_RAW = 'rootfs/release/assets/default/raw/styles/default.bin'
 TITLE_STYLES = ('navbar_label_white', 'navbar_centerlabel_white')
 TITLE_OLD, TITLE_NEW = 22, 20
 
 
 def title_styles(out):
     n = 0
-    for theme in ('default',):
-        p = os.path.join(out, STYLE_RAW.format(theme=theme))
-        old = open(p, 'rb').read(); th = awtk_style.parse(old)
-        assert awtk_style.serialize(th) == old, f'{p}: style round trip is not byte-exact'
-        for it in th.items:
-            if it.widget == 'label' and it.style in TITLE_STYLES:
-                assert it.get('font_size') == TITLE_OLD, (it, it.get('font_size'))
-                it.set('font_size', TITLE_NEW, awtk_style.T_INT32); n += 1
-        mode = stat.S_IMODE(os.stat(p).st_mode)
-        os.chmod(p, mode | 0o200); open(p, 'wb').write(awtk_style.serialize(th)); os.chmod(p, mode)
+    p = os.path.join(out, STYLE_RAW)
+    old = open(p, 'rb').read(); th = awtk_style.parse(old)
+    assert awtk_style.serialize(th) == old, f'{p}: style round trip is not byte-exact'
+    for it in th.items:
+        if it.widget == 'label' and it.style in TITLE_STYLES:
+            assert it.get('font_size') == TITLE_OLD, (it, it.get('font_size'))
+            it.set('font_size', TITLE_NEW, awtk_style.T_INT32); n += 1
+    mode = stat.S_IMODE(os.stat(p).st_mode)
+    os.chmod(p, mode | 0o200); open(p, 'wb').write(awtk_style.serialize(th)); os.chmod(p, mode)
     assert n == 6, n
     print(f'polish: navbar title styles {TITLE_OLD} -> {TITLE_NEW} px ({n} style states)')
 

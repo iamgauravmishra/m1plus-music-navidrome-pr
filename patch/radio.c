@@ -619,7 +619,6 @@ void rd_recent_push(const rd_list_t *l, int i) {
         if (!strcmp(rd_url(&old, k), rd_url(l, i))) same = k; /* the station moves to the front */
     text = rd_m3u_make(l, i, -1, &old, -1, same, RD_RECENT_MAX, &len);
     if (text) home_write_atomic(RD_RECENT_FILE, RD_RECENT_TMP, text);
-    unlink(RD_LAST_OLD); /* one-off: an old release's file */
     free(text);
     rd_list_free(&old);
 }

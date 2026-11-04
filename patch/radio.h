@@ -10,7 +10,6 @@
 #define RD_DIR "/mnt/mmc/Radio" /* favourites.m3u (the Stations list), the user's own .m3u / .pls (read only by Import from Card) */
 #define RD_FAVS RD_DIR "/favourites.m3u"
 #define RD_FAVS_TMP RD_DIR "/favourites.m3u.tmp"
-#define RD_LAST_OLD RD_DIR "/.last" /* an old release's file: unlinked when radio-recent is written (one-off, remove in a later release) */
 #define RD_RECENT_FILE \
     "/mnt/data/m1plus/radio-recent" /* the last stations played, newest first, as an .m3u (settings folder) */
 #define RD_RECENT_TMP "/mnt/data/m1plus/radio-recent.tmp"

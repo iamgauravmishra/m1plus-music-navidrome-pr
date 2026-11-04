@@ -7,9 +7,9 @@ from PIL import Image
 
 def run(ctx):
     expect = ctx.expect
-    raw = lambda theme: os.path.join(WORK, 'rootfs', 'release', 'assets', theme, 'raw')
-    def img(n, theme='default'): return Image.open(os.path.join(raw(theme), 'images/xx', n + '.png'))
-    def shipped(n, theme='default'): return open(os.path.join(raw(theme), 'images/xx', n + '.png'), 'rb').read()
+    raw = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw')
+    def img(n): return Image.open(os.path.join(raw, 'images/xx', n + '.png'))
+    def shipped(n): return open(os.path.join(raw, 'images/xx', n + '.png'), 'rb').read()
     pins = mo.load_pins()
     expect(sorted(pins) == sorted(mo.NAMES) and len(mo.NAMES) == 3, 'every replaced image is pinned')
     for n in mo.NAMES:
@@ -33,7 +33,7 @@ def run(ctx):
 
     # the resolved styles of every message-like 260 x 180 dialog agree with the confirm box's: the same card (bg_image / bg_color / border / radius in the states the dialogs use),
     # no grey border; the message box (msginfo) and the confirm box differ only in the card picture's divider
-    dlg = os.path.join(raw('default'), 'ui', 'dialog')
+    dlg = os.path.join(raw, 'ui', 'dialog')
     def card(rel):
         t = awtk_ui.parse(open(os.path.join(dlg, rel), 'rb').read())
         return {(st, k): t.get(f'style:{st}:{k}') for st in mo.CARD_STATES for k in ('bg_color', 'border_color', 'round_radius')}, {t.get(f'style:{st}:bg_image') for st in mo.CARD_STATES} - {None}, (t.w, t.h)
@@ -47,7 +47,7 @@ def run(ctx):
     t = awtk_ui.parse(open(os.path.join(dlg, 'dialog_autoshutdown.bin'), 'rb').read()); b = t.find('btn_cancel')
     expect(b.get('style:normal:bg_color') == '#00000000' and b.get('style:normal:border_color') == '#00000000', 'the sleep countdown\'s button has no black fill or grey border')
     # ui edits
-    ui = os.path.join(raw('default'), 'ui')
+    ui = os.path.join(raw, 'ui')
     for rel in ('dialog/confirminfo_dialog.bin', 'dialog/rippercompleted_dialog.bin'):
         t = awtk_ui.parse(open(os.path.join(ui, rel), 'rb').read())
         btns = [b for b in (t.find('btn_cancel'), t.find('btn_enter')) if b is not None]

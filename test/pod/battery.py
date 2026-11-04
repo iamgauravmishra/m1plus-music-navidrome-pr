@@ -198,16 +198,15 @@ def run(ctx):
     for loc in pod_i18n.LOCALES:
         expect(all(pod_i18n.TEXT[k][pod_i18n.table_for(loc)] for k in ('Status Bar', 'Battery Percentage', 'The exact charge beside the battery icon')), f'the header, row and note have a text in {loc}')
 
-    # 7. The assets: the hidden label in the system bar and in both pull-downs
+    # 7. The assets: the hidden label in the system bar and in the pull-down
     import awtk_ui, statusbar
     from awtk_text import Ttf, StbText
     font = Ttf(os.path.join(WORK, 'rootfs', pod_ui.PCT_FONT))
     stock_bar = awtk_ui.parse(open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', 'release/assets/default/raw/ui/system_bar.bin'), 'rb').read())
     bar = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/system_bar.bin'), 'rb').read())
     bars = [('system_bar', bar, LABEL)]
-    for theme in ('default',):
-        dd = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets', theme, 'raw/ui/dialog/dropdown_dialog.bin'), 'rb').read())
-        bars.append((f'{theme} pull-down', dd.find('view_sysbar'), LABEL_DD))
+    dd = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/dialog/dropdown_dialog.bin'), 'rb').read())
+    bars.append(('pull-down', dd.find('view_sysbar'), LABEL_DD))
     for what, root, name in bars:
         group, lab = root.find('view_bar_right'), root.find(name)
         kids = [c.name for c in group.children]

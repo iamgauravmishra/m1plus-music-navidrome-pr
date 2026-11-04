@@ -227,13 +227,12 @@ def run(ctx):
     for x, y, want in ((100, 64 + 20, 'btn_table_row'), (120, 396 + 22, 'button'), (235, 200, 'scroll_bar_m'), (50, 30, 'list_item')):
         got = stock_target(m, tree, 80 + x, 30 + y)
         expect(want in got, f'a touch at ({x}, {y}) in the drawer lands on {want} ({got})')
-    for theme in ('default',):
-        th = awtk_style.parse(open(os.path.join(WORK, 'rootfs', 'release/assets', theme, 'raw/styles/playqueue_dialog.bin'), 'rb').read())
-        white = [i for i in th.items if (i.widget, i.style) == ('hscroll_label', 'srlabel_item_white_style')]
-        gold = [i for i in th.items if (i.widget, i.style) == ('hscroll_label', 'srlabel_item_gold20_style')]
-        expect(white and gold and all(i.get('font_size') == 18 for i in white) and all(i.get('font_size') == 20 for i in gold)
-               and all(i.color('text_color') == '#FFFFFFFF' for i in gold) and all(i.color('text_color') != '#FFFFFFFF' for i in white),
-               f'{theme}: other rows muted 18 px, the playing row white 20 px')
+    th = awtk_style.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/styles/playqueue_dialog.bin'), 'rb').read())
+    white = [i for i in th.items if (i.widget, i.style) == ('hscroll_label', 'srlabel_item_white_style')]
+    gold = [i for i in th.items if (i.widget, i.style) == ('hscroll_label', 'srlabel_item_gold20_style')]
+    expect(white and gold and all(i.get('font_size') == 18 for i in white) and all(i.get('font_size') == 20 for i in gold)
+           and all(i.color('text_color') == '#FFFFFFFF' for i in gold) and all(i.color('text_color') != '#FFFFFFFF' for i in white),
+           'other rows muted 18 px, the playing row white 20 px')
 
     # 41. The product name and the About row. "M1+ Music" is what the user sees: no old name ("M1 Pod", "M1+ Pod") is left
     #     in our ui files, the 16 string tables, demo's payload or the Home icon; the internal name is m1plus (m1pod is gone). About keeps
@@ -263,33 +262,31 @@ def run(ctx):
     # 51. The on/off switch (sset_on / sset_off): no text, a pill track and a round knob, the stock 57x28 canvas.
     from PIL import Image
     import mod_theme
-    for theme, names in (('default', ('sset_on', 'sset_off')),):
-        for name in names:
-            im = Image.open(os.path.join(WORK, 'rootfs', 'release/assets', theme, 'raw/images/xx', name + '.png')).convert('RGBA')
-            on = name == 'sset_on'; track, knob = mod_theme.TOGGLE_COLOURS[on]
-            a = im.getchannel('A')
-            expect(im.size == (57, 28) and a.getbbox() == (11, 2, 57, 26), f'{theme}/{name}: the stock 57x28 canvas, a 46x24 pill right-aligned in it, x 11..57, y 2..26 ({im.size}, {a.getbbox()})')
-            kx = 11 + 46 - 3 - 9 if on else 11 + 3 + 9               # the 18 px knob's centre, 3 px in: right when on, left when off
-            expect(im.getpixel((kx, 14))[:3] == knob and im.getpixel((68 - kx, 14))[:3] == track,
-                   f'{theme}/{name}: knob {knob} on the {"right" if on else "left"}, track {track} on the other side')
-            expect(im.getpixel((12, 14))[3] > 200 and im.getpixel((55, 14))[3] > 200 and im.getpixel((11, 2))[3] == 0 and im.getpixel((56, 25))[3] == 0
-                   and im.getpixel((11, 25))[3] == 0 and im.getpixel((56, 2))[3] == 0 and im.getpixel((5, 14))[3] == 0,
-                   f'{theme}/{name}: a pill (the corners are clear, the ends solid, nothing left of x 11)')
-            soft = sum(1 for v in a.getdata() if 0 < v < 255); lit = {p[:3] for p in im.getdata() if p[3] == 255}
-            expect(soft >= 30 and {track, knob} <= lit and len(lit) > 2, f'{theme}/{name}: anti-aliased ({soft} partly covered pixels, {len(lit)} opaque colours: track, knob and the blend of the knob\'s rim)')
-            # the track's rim keeps the track colour (no dark fringe from the transparent side of the mask)
-            rim = [p for p in im.getdata() if 0 < p[3] < 255 and p[:3] != track]
-            expect(not rim, f'{theme}/{name}: the pill\'s edge pixels are the track colour with partial alpha ({len(rim)} stray)')
+    for name in ('sset_on', 'sset_off'):
+        im = Image.open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx', name + '.png')).convert('RGBA')
+        on = name == 'sset_on'; track, knob = mod_theme.TOGGLE_COLOURS[on]
+        a = im.getchannel('A')
+        expect(im.size == (57, 28) and a.getbbox() == (11, 2, 57, 26), f'{name}: the stock 57x28 canvas, a 46x24 pill right-aligned in it, x 11..57, y 2..26 ({im.size}, {a.getbbox()})')
+        kx = 11 + 46 - 3 - 9 if on else 11 + 3 + 9               # the 18 px knob's centre, 3 px in: right when on, left when off
+        expect(im.getpixel((kx, 14))[:3] == knob and im.getpixel((68 - kx, 14))[:3] == track,
+               f'{name}: knob {knob} on the {"right" if on else "left"}, track {track} on the other side')
+        expect(im.getpixel((12, 14))[3] > 200 and im.getpixel((55, 14))[3] > 200 and im.getpixel((11, 2))[3] == 0 and im.getpixel((56, 25))[3] == 0
+               and im.getpixel((11, 25))[3] == 0 and im.getpixel((56, 2))[3] == 0 and im.getpixel((5, 14))[3] == 0,
+               f'{name}: a pill (the corners are clear, the ends solid, nothing left of x 11)')
+        soft = sum(1 for v in a.getdata() if 0 < v < 255); lit = {p[:3] for p in im.getdata() if p[3] == 255}
+        expect(soft >= 30 and {track, knob} <= lit and len(lit) > 2, f'{name}: anti-aliased ({soft} partly covered pixels, {len(lit)} opaque colours: track, knob and the blend of the knob\'s rim)')
+        # the track's rim keeps the track colour (no dark fringe from the transparent side of the mask)
+        rim = [p for p in im.getdata() if 0 < p[3] < 255 and p[:3] != track]
+        expect(not rim, f'{name}: the pill\'s edge pixels are the track colour with partial alpha ({len(rim)} stray)')
     on_l, off_l = mod_theme.TOGGLE_COLOURS[True][0], mod_theme.TOGGLE_COLOURS[False][0]
     lum_ = lambda c: 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
     expect(lum_(on_l) > 200 and lum_(off_l) < 70 and lum_(mod_theme.TOGGLE_COLOURS[True][1]) < 40 and 100 < lum_(mod_theme.TOGGLE_COLOURS[False][1]) < 160,
            'on: an off-white track with a dark knob; off: a dark grey track with a grey knob (read by brightness and side)')
-    for theme in ('default',):    # the two on/off words still left are the Dual / High art (no off counterpart)
-        for name in ('pset_dual', 'pset_high'):
-            expect(os.path.exists(os.path.join(WORK, 'rootfs', 'release/assets', theme, 'raw/images/xx', name + '.png')), f'{theme}/{name}: still there')
+    for name in ('pset_dual', 'pset_high'):
+        expect(os.path.exists(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx', name + '.png')), f'{name}: still there')
 
     # 52. The pull-down's status bar is the real one (tools/statusbar.py lays both out): the same widgets, in the same order, at
-    #     the same positions and sizes, with the same images, fonts, colours, alignment and spacing, in both dropdown themes; the
+    #     the same positions and sizes, with the same images, fonts, colours, alignment and spacing; the
     #     bar sits at y 0 of the dialog (open at y 0 of the screen) on the real bar's black, so nothing jumps when it opens.
     import statusbar
     from awtk_text import Ttf, StbText
@@ -304,23 +301,22 @@ def run(ctx):
     def own(bar): return [w for w in bar.walk() if w is not bar and w.name not in ('pod_shot', 'pod_pct', 'pod_pct_dd')]
     ref = [sig(w) for w in own(real)]
     font = Ttf(os.path.join(WORK, 'rootfs/release/assets/default/raw/fonts/default.ttf'))
-    for theme in ('default',):
-        dd = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets', theme, 'raw/ui/dialog/dropdown_dialog.bin'), 'rb').read())
-        pb = dd.find('view_sysbar')
-        # the pull-down's own view_sysbar and the system_bar window: the clock's h differs in the file only (h=100% resolves to 30 under its self_layout)
-        got = [sig(w, False) for w in own(pb)]
-        want = [sig(w, False) for w in own(real)]
-        expect(got == want and [w.name for w in own(pb)] == [w.name for w in own(real)] and not any(w.name == 'pod_shot' for w in pb.walk()),
-               f'{theme}: the pull-down\'s bar has the real bar\'s {len(want)} widgets in order, with the same geometry, images, fonts, colours, alignment and layouts'
-               + ('' if got == want else f' (differs: {[(a[1], a[2:]) for a, b in zip(got, want) if a != b][:3]})'))
-        expect((pb.x, pb.y, pb.w, pb.h) == (0, 0, 320, 30) and real.h == 30 and (dd.x, dd.y) == (0, -340)
-               and all(pb.get(f'style:{st}:bg_color') == '#000000' for st in ('normal', 'disable', 'focused')) and real.get('style:normal:bg_color') == '#000000',
-               f'{theme}: the bar is 320x30 at the dialog\'s top edge, black as the real bar')
-        vol, clk, lv, rv = (pb.find(n) for n in ('label_volume', 'bar_dclock', 'view_bar_left', 'view_bar_right'))
-        expect(all(vol.get(f'style:{st}:font_size') == '16' and vol.get(f'style:{st}:text_align_v') == 'middle' for st in ('normal', 'disable', 'focused'))
-               and clk.get('style:normal:font_size') == '18' and (clk.x, clk.w) == (104, 90) and lv.get('children_layout') == 'default(r=1,c=0,x=10,s=4)'
-               and rv.get('children_layout') == 'default(r=1,c=0,a=right,s=4)' and pb.find('img_battery').x + 22 == 310,
-               f'{theme}: volume 16 px middle, clock 18 px at x 104 (90 wide), left group from x 10, right group 4 px apart, battery outline ends 10 px from the edge')
-        expect(StbText(font, 16).layout('100')[1] <= vol.w and StbText(font, 18).layout('12:59 PM')[1] <= clk.w,
-               f'{theme}: "100" fits the volume label and "12:59 PM" (12 h mode) the clock box in the shipped font')
+    dd = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/dialog/dropdown_dialog.bin'), 'rb').read())
+    pb = dd.find('view_sysbar')
+    # the pull-down's own view_sysbar and the system_bar window: the clock's h differs in the file only (h=100% resolves to 30 under its self_layout)
+    got = [sig(w, False) for w in own(pb)]
+    want = [sig(w, False) for w in own(real)]
+    expect(got == want and [w.name for w in own(pb)] == [w.name for w in own(real)] and not any(w.name == 'pod_shot' for w in pb.walk()),
+           f'the pull-down\'s bar has the real bar\'s {len(want)} widgets in order, with the same geometry, images, fonts, colours, alignment and layouts'
+           + ('' if got == want else f' (differs: {[(a[1], a[2:]) for a, b in zip(got, want) if a != b][:3]})'))
+    expect((pb.x, pb.y, pb.w, pb.h) == (0, 0, 320, 30) and real.h == 30 and (dd.x, dd.y) == (0, -340)
+           and all(pb.get(f'style:{st}:bg_color') == '#000000' for st in ('normal', 'disable', 'focused')) and real.get('style:normal:bg_color') == '#000000',
+           'the bar is 320x30 at the dialog\'s top edge, black as the real bar')
+    vol, clk, lv, rv = (pb.find(n) for n in ('label_volume', 'bar_dclock', 'view_bar_left', 'view_bar_right'))
+    expect(all(vol.get(f'style:{st}:font_size') == '16' and vol.get(f'style:{st}:text_align_v') == 'middle' for st in ('normal', 'disable', 'focused'))
+           and clk.get('style:normal:font_size') == '18' and (clk.x, clk.w) == (104, 90) and lv.get('children_layout') == 'default(r=1,c=0,x=10,s=4)'
+           and rv.get('children_layout') == 'default(r=1,c=0,a=right,s=4)' and pb.find('img_battery').x + 22 == 310,
+           'volume 16 px middle, clock 18 px at x 104 (90 wide), left group from x 10, right group 4 px apart, battery outline ends 10 px from the edge')
+    expect(StbText(font, 16).layout('100')[1] <= vol.w and StbText(font, 18).layout('12:59 PM')[1] <= clk.w,
+           '"100" fits the volume label and "12:59 PM" (12 h mode) the clock box in the shipped font')
     expect(ref and all(real.find(n) is not None for n in statusbar.NAMES), 'the real bar still has every widget the stock code looks up')

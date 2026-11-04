@@ -90,7 +90,7 @@ the 46 immediates and 3 nops are static, so the way back from them is a stock re
 `tools/mod_ipodrows.py` edits the five row `ui/*.bin` (`localclass_page`, `allmusic_page`,
 `playerjumpinfo_page`, `album_page`, `playlist_page`: `row_height` / `default_item_height` 60 -> 64 and the jump list's template row) and the page
 themes (`allmusic_page`, `playerjumpinfo_page`, `playlist_page`, `search_page`, new
-`album_page`, both themes, 21 px titles, `srlabel_item_gray18_style` second line). Rows are 64 px with a
+`album_page`, 21 px titles, `srlabel_item_gray18_style` second line). Rows are 64 px with a
 60 px body above `list_item_style`'s separator, 52 px art at (4,4), titles to a 12 px right margin. Track rows of the Songs
 family and the queue show no per-row disc (below), so every title starts at x 12. The playing row has a small marker at the
 right end instead (`np_row_playing`, below the text column's end: four round bars, a 20x20 wave, `#EEEEEC`, x 278..298 of the

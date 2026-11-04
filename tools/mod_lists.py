@@ -53,8 +53,7 @@ import awtk_style, awtk_ui
 from awtk_style import T_INT32, T_UINT32
 from modlib import clone_workdir, edit_ui
 
-RAW = 'rootfs/release/assets/{theme}/raw'
-THEMES = ('default',)                       # asset themes
+RAW = 'rootfs/release/assets/default/raw'
 STYLE_MODE = 0o744                           # stock styles/*.bin mode
 STYLE_MTIME = 1750924035                     # a stock asset mtime: added files build deterministically
 TITLE_PX = 21                                # the M1+ Music menu's row text (srlabel_leftwhite21_style)
@@ -195,12 +194,12 @@ RECIPES = {'rows': r_rows, 'title': r_title, 'gray26': r_gray26, 'navtitle': r_n
 
 
 def style_rels():
-    """(theme, page, rel path under rootfs/) of every page theme this mod writes."""
-    return [(t, p, f'release/assets/{t}/raw/styles/{p}.bin') for t in THEMES for p in PAGES]
+    """(page, rel path under rootfs/) of every page theme this mod writes."""
+    return [(p, f'release/assets/default/raw/styles/{p}.bin') for p in PAGES]
 
 def added_rels(stock_rootfs):
     """Page themes that are new files (absent in the stock rootfs): fwtool --allow-added list."""
-    return [rel for _, _, rel in style_rels() if not os.path.exists(os.path.join(stock_rootfs, rel))]
+    return [rel for _, rel in style_rels() if not os.path.exists(os.path.join(stock_rootfs, rel))]
 
 def write_file(path, data, existed):
     if existed:
@@ -213,16 +212,16 @@ def read(path):
     return open(path, 'rb').read() if os.path.exists(path) else None
 
 def build_page_themes(work):
-    # Read every source before writing anything: a theme without its own page file falls back to
+    # Read every source before writing anything: a page without its own file falls back to
     # default's file as it was before this mod.
     sources = {}
-    for theme, page, rel in style_rels():
+    for page, rel in style_rels():
         own = read(os.path.join(work, 'rootfs', rel))
         sources[rel] = (own is not None, own if own is not None else
-                        read(os.path.join(work, RAW.format(theme='default'), 'styles', f'{page}.bin')))
+                        read(os.path.join(work, RAW, 'styles', f'{page}.bin')))
     report = []
-    for theme, page, rel in style_rels():
-        base_path = os.path.join(work, RAW.format(theme=theme), 'styles', 'default.bin')
+    for page, rel in style_rels():
+        base_path = os.path.join(work, RAW, 'styles', 'default.bin')
         base_raw = read(base_path)
         assert base_raw, f'{base_path} missing'
         base = parse(base_raw)
@@ -243,7 +242,7 @@ def build_page_themes(work):
 
 # ---- ui/*.bin edits -------------------------------------------------------------------------------
 def default_palette(work):
-    return palette(parse(open(os.path.join(work, RAW.format(theme='default'), 'styles', 'default.bin'), 'rb').read()))
+    return palette(parse(open(os.path.join(work, RAW, 'styles', 'default.bin'), 'rb').read()))
 
 def each_state(w, prop, value, only=None):
     """Set an inline style prop in every state the widget already styles it in (or `only`)."""
@@ -374,20 +373,19 @@ def ui_edit(rel, root, pal):
 def build_ui(work):
     pal, report = default_palette(work), []
     for rel in UI_EDITS:
-        for theme in THEMES:
-            path = os.path.join(work, RAW.format(theme=theme), 'ui', rel)
-            old, new, _ = edit_ui(path, lambda root, rel=rel: ui_edit(rel, root, pal))
-            shape = lambda d: [(w.type, w.name, w.x, w.y, w.w, w.h) for w in awtk_ui.parse(d).walk()]
-            if rel in ADD_EDITS:
-                ours = lambda s: s[1] in ('pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_goep', 'pod_art', PM_GLASS) or s[1].startswith(('pod_more_', 'pod_back_', 'pod_tape_', 'pod_vinyl_', 'pod_goep_', 'pod_art_'))
-                other = lambda s: s[:2] if s[1] in PM_SPEED else s   # the speed row's rectangles are ours (PM_SPEED)
-                assert [other(s) for s in shape(new) if not ours(s)] == [other(s) for s in shape(old)], f'{rel}: a stock widget was removed, renamed or moved'
-            elif rel in GEOMETRY_EDITS:
-                names = lambda d: [(w.type, w.name) for w in awtk_ui.parse(d).walk()]
-                assert names(old) == names(new), f'{rel}: a widget was added, removed or renamed'
-            else:
-                assert shape(old) == shape(new), f'{rel}: a widget was added, removed, renamed or moved'
-            report.append(f'{theme}/ui/{rel}: {len(old)} -> {len(new)} bytes')
+        path = os.path.join(work, RAW, 'ui', rel)
+        old, new, _ = edit_ui(path, lambda root, rel=rel: ui_edit(rel, root, pal))
+        shape = lambda d: [(w.type, w.name, w.x, w.y, w.w, w.h) for w in awtk_ui.parse(d).walk()]
+        if rel in ADD_EDITS:
+            ours = lambda s: s[1] in ('pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_goep', 'pod_art', PM_GLASS) or s[1].startswith(('pod_more_', 'pod_back_', 'pod_tape_', 'pod_vinyl_', 'pod_goep_', 'pod_art_'))
+            other = lambda s: s[:2] if s[1] in PM_SPEED else s   # the speed row's rectangles are ours (PM_SPEED)
+            assert [other(s) for s in shape(new) if not ours(s)] == [other(s) for s in shape(old)], f'{rel}: a stock widget was removed, renamed or moved'
+        elif rel in GEOMETRY_EDITS:
+            names = lambda d: [(w.type, w.name) for w in awtk_ui.parse(d).walk()]
+            assert names(old) == names(new), f'{rel}: a widget was added, removed or renamed'
+        else:
+            assert shape(old) == shape(new), f'{rel}: a widget was added, removed, renamed or moved'
+        report.append(f'default/ui/{rel}: {len(old)} -> {len(new)} bytes')
     return report
 
 

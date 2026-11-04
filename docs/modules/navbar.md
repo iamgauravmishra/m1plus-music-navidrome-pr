@@ -36,7 +36,7 @@ unreliable there: `cdripper_page_init+...`, `home_page_init+...`, `playing_page_
 |---|---|---|---|
 | M1+ Music pages: Menu, Albums, Playlists, Artists, Cover Flow's artist/albums page, Extras, Settings, Main Menu, Shuffle, Cover Flow settings | assets `m1plus_*.bin` (`pod_ui.navbar()`) | the reference | none |
 | Settings pages `systemset/*` (33), `playset/*` (all but Equalizer), `audiosetting_page`, the keyboard / edit dialogs: Back 80, title (36, 14) 20 px, Now Playing (260, 0, 60, 50) | assets | stock glyphs: a plain chevron and Now Playing glyph, the title at 36 | the glass navbar (`mod_ipodrows.glass_navbar`, every ui file with the stock Back, both themes; not the Bluetooth receiver): Back keeps its 80 px button and gets `ah_nav_back` with `x_offset` +4 (the disc at 8 .. 50), Now Playing the disc `ah_nav_np` (glyph 290), the title from 58, its right end kept or before the bar's next widget (a switch: 135 / 145 px on Atmosphere LED / Equalizer) |
-| Settings > Equalizer (`playset/equalizer_page`), both themes | asset | Now Playing (270, 0, 50, 50): glyph 295 | Now Playing (260, 0, 60, 50): `mod_ipodrows.edit_equalizer` |
+| Settings > Equalizer (`playset/equalizer_page`) | asset | Now Playing (270, 0, 50, 50): glyph 295 | Now Playing (260, 0, 60, 50): `mod_ipodrows.edit_equalizer` |
 | Update music > folder picker (`systemset/specfolder_page`) | asset | Now Playing (279, 0, 41, 50): glyph 299; select-all (229, 0, 38, 50), `icon_at` 5: glyph 246 | Now Playing (260, 0, 60, 50); select-all (214, 0, 46, 50), the multi-select slot; `mod_ipodrows.edit_specfolder` |
 | Settings > Screen saver, Atmosphere LED: an on/off image `image_switch` (193, 11, 57, 28) in the bar | asset | a control, not a button | left alone: it has no Pod counterpart, and a switch at the 214 slot would overlap Now Playing |
 | Equalizer's `img_switch` (203, 11, 57, 28) | asset | as above | left alone, same reason |
@@ -70,7 +70,7 @@ the builder 0x52c5e8), USB mode (its Back and DAC settings are the glass discs o
   by `tools/pod.py patch_rows`, all checked against stock. 20 words for the pages above; the shared builder `0x526a3c`'s (the stock album page, `allmusic_page`, Songs) are the `NAV_H` group of `rows.json`.
 - Titles: `tools/mod_lists.py` `PAGES`, recipe `navtitle` on `folder_page`, `localclass_page`, `allmusic_page`, `playerjumpinfo_page`,
   `playlist_page`.
-- Assets: `tools/mod_ipodrows.py` `NAVBAR_UI_EDITS` (both themes; stock rectangles asserted).
+- Assets: `tools/mod_ipodrows.py` `NAVBAR_UI_EDITS` (stock rectangles asserted).
 - Tests: `test/pod/rows.py` (every `rows.json` word) and `test/pod/navbars.py` (the stock pages' builders byte-identical to main's).
 
 ## Glass navbars on our pages

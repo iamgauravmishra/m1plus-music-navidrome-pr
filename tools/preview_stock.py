@@ -102,7 +102,7 @@ def main():
     a = ap.parse_args()
     raw = os.path.join(a.work, 'rootfs/release/assets/default/raw')
     p = Painter(raw, False)
-    st = lambda page: PL.Styles(a.work, 'default', page)
+    st = lambda page: PL.Styles(a.work, page)
     shelf = [((200, 60, 60), 0), ((60, 160, 200), 0), ((230, 190, 70), 0), ((90, 90, 220), 1),
              ((120, 200, 120), 0), ((200, 120, 200), 0), ((210, 140, 60), 0)]
     scoped = [None] * 3 + shelf[3:]

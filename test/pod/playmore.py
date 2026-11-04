@@ -42,7 +42,7 @@ class PM(pulldown.SM):
     bind_fail: the widget_on of the payload's that fails ('pod_more' / 'pod_back' / 'pod_tape' click, 'bg' to-background, 'destroy')."""
     EXTRA = pulldown.SM.EXTRA + ('stock_playmore_resume',)
 
-    def __init__(self, theme='default', ui=None):
+    def __init__(self, ui=None):
         super().__init__(True)
         self.handlers[pod.PLAYMORE_INIT + 12] = 'stock_playmore_resume'
         self.tr_fail, self.bind_fail = set(), None
@@ -63,7 +63,7 @@ class PM(pulldown.SM):
         self.no_window = False         # the navigator opens no window (the top window is not the album page)
         self.reg = []                # every widget_on, in order: (widget, event, handler, ctx)
         self.nodes = {}
-        tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets', theme, 'raw/ui/dialog/playmore_dialog.bin'), 'rb').read()) if ui is None else ui
+        tree = awtk_ui.parse(open(os.path.join(WORK, RAW, 'ui/dialog/playmore_dialog.bin'), 'rb').read()) if ui is None else ui
         self.dialog = self.root = self.win = self.make(tree, 0)
         self.wm = self.widget(LI_VT, 0, 0, 320, 480)
         self.kids(self.wm, [self.dialog]); self.setword(self.dialog + 0x44, self.wm)
@@ -253,7 +253,7 @@ DIM = 130                                        # the asset's highlight alpha: 
 BACKDROPS = {'black': 0, 'white under the dim': round(255 * (255 - DIM) / 255), 'pure white (no dim)': 255}   # grey levels under the glass
 
 
-def glass_checks(expect, theme, built_ui, stock_t, lum):
+def glass_checks(expect, built_ui, stock_ui, lum):
     """The glass sheet (pm_sheet): the image is the generator's output, top corners transparent and bottom corners and edge opaque; the dialog
     and every row are transparent over it, the pressed band and hairline translucent, inline in this dialog only; every label, badge and
     chevron keeps its contrast with the glass over black, over white under the dim and over pure white, at rest and on a pressed row."""
@@ -267,47 +267,46 @@ def glass_checks(expect, theme, built_ui, stock_t, lum):
         sheets[name] = im = Image.open(os.path.join(xx, name + '.png')).convert('RGBA')
         w, h, r = spec
         expect(raw == open(os.path.join(mod_icons.PNG, name + '.png'), 'rb').read() and same_pixels(raw, gen) and im.size == (w, h) == (built_ui.w, ROW_H * (O['PM_PAGE2_N'] if name == 'pm_sheet' else O['PM_PAGE_N'])),
-               f'{theme}: {name}.png is the generator output pixel for pixel, {w}x{h} = the page\'s own sheet height, r {r}, top corners only')
+               f'{name}.png is the generator output pixel for pixel, {w}x{h} = the page\'s own sheet height, r {r}, top corners only')
         a = lambda x, y, im=im: im.getpixel((x, y))[3]
         expect(a(0, 0) == 0 and a(w - 1, 0) == 0 and a(0, h - 1) >= 0.7 * 255 and a(w - 1, h - 1) >= 0.7 * 255 and all(a(x, h - 1) >= 0.7 * 255 for x in range(w))
                and a(w // 2, 0) >= 0.7 * 255 and all(a(x, y) == 0 for x in range(2) for y in range(2)),
-               f'{theme}: {name}: the top corners are transparent, the bottom corners and the whole foot opaque (alpha {a(0, h - 1)})')
+               f'{name}: the top corners are transparent, the bottom corners and the whole foot opaque (alpha {a(0, h - 1)})')
     gen = mod_icons.glass_image(320, 100, 18, fill=mod_icons.GLASS_SHEET_FILL, top_only=True)   # a podcast episode's page 1 (two rows) uses the Podcasts page's 100 px glass
     expect(same_pixels(open(os.path.join(xx, 'pc_sheet2.png'), 'rb').read(), gen) and Image.open(os.path.join(xx, 'pc_sheet2.png')).size == (320, 2 * ROW_H),
-           f'{theme}: pc_sheet2.png is the generator output at the two-row sheet height (the episode page 1\'s glass)')
+           'pc_sheet2.png is the generator output at the two-row sheet height (the episode page 1\'s glass)')
     sheet, sheet6 = sheets['pm_sheet'], sheets['pm_sheet6']
     # the same top edge: the first 18 rows of both are the rim and the rounded corners (a 300 px sheet is the 200 px one with 100 more rows of body)
     ea, eb = sheet.getchannel('A').crop((0, 0, 320, 24)).tobytes(), sheet6.getchannel('A').crop((0, 0, 320, 24)).tobytes()
-    expect(max(abs(p - q) for p, q in zip(ea, eb)) <= 2, f'{theme}: both sheets have the same top edge: the rim and the rounded corners (the alpha of their first 24 rows within 2 levels: the rim fades over the sheet\'s height)')
+    expect(max(abs(p - q) for p, q in zip(ea, eb)) <= 2, 'both sheets have the same top edge: the rim and the rounded corners (the alpha of their first 24 rows within 2 levels: the rim fades over the sheet\'s height)')
     expect(all(built_ui.get(f'style:{s}:bg_color') == '#00000000' and built_ui.get(f'style:{s}:border') == 'none' and built_ui.get(f'style:{s}:bg_image') is None
                and built_ui.get(f'style:{s}:round_radius') is None for s in ('normal', 'disable', 'focused')),
-           f'{theme}: the dialog itself is transparent (no fill, no image, no top line, no radius): the glass is its first child')
+           'the dialog itself is transparent (no fill, no image, no top line, no radius): the glass is its first child')
     glass = built_ui.find('pod_glass')
     expect(glass is not None and glass.type == 'image' and built_ui.children[0] is glass and glass.get('sensitive') == 'false' and glass.get('image') == 'pm_sheet'
            and (glass.x, glass.y, glass.w, glass.h) == (0, 0, 320, 250) and glass.get('draw_type') == 'default',
-           f'{theme}: pod_glass is the dialog\'s first child (under the list), an insensitive image of pm_sheet 320 x 250 (page 2\'s glass; the kill switch\'s look)')
+           'pod_glass is the dialog\'s first child (under the list), an insensitive image of pm_sheet 320 x 250 (page 2\'s glass; the kill switch\'s look)')
     lv, sv = built_ui.find('playmore_listview'), built_ui.find('playmore_scrollview')
-    expect(all(x.get(f'style:{s}:bg_color') == '#00000000' for x in (lv, sv) for s in ('normal', 'disable', 'focused')), f'{theme}: the list_view and its scroll_view are transparent')
+    expect(all(x.get(f'style:{s}:bg_color') == '#00000000' for x in (lv, sv) for s in ('normal', 'disable', 'focused')), 'the list_view and its scroll_view are transparent')
     states = ('normal', 'pressed', 'over', 'disable', 'focused')
     rows = [c for c in sv.children]
     expect(all(c.type == 'list_item' and all(c.get(f'style:{s}:bg_color') == ('#FFFFFF10' if s == 'pressed' else '#00000000') and c.get(f'style:{s}:border_color') == '#FFFFFF22' for s in states)
                for c in rows) and len(rows) == 13,
-           f'{theme}: all thirteen rows: transparent in every state but pressed (#FFFFFF10, 6 % white), the hairline #FFFFFF22 (13 % white)')
-    expect(not any('pm_sheet' in str(c.props) for c in stock_t.walk()) and 'pm_sheet' not in str([p for w_ in built_ui.walk() if w_.name not in ('pod_glass',) for p in w_.props]),
-           f'{theme}: only pod_glass refers to pm_sheet; the rows and every other widget carry inline styles of this dialog, no shared style name')
+           'all thirteen rows: transparent in every state but pressed (#FFFFFF10, 6 % white), the hairline #FFFFFF22 (13 % white)')
+    expect(not any('pm_sheet' in str(c.props) for c in stock_ui.walk()) and 'pm_sheet' not in str([p for w_ in built_ui.walk() if w_.name not in ('pod_glass',) for p in w_.props]),
+           'only pod_glass refers to pm_sheet; the rows and every other widget carry inline styles of this dialog, no shared style name')
     # the other pages' row styles are untouched: no ui asset but this one, and no style file, mentions the image or a transparent list_item_style
-    ui_root = os.path.join(WORK, 'rootfs/release/assets', theme, 'raw')
+    ui_root = os.path.join(WORK, RAW)
     users = []
     for base, _, files in os.walk(ui_root):
         for f in files:
             if f.endswith('.bin') and 'pm_sheet' in open(os.path.join(base, f), 'rb').read().decode('latin-1'): users.append(os.path.relpath(os.path.join(base, f), ui_root))
-    expect(users == ['ui/dialog/playmore_dialog.bin'], f'{theme}: pm_sheet is used by playmore_dialog.bin only ({users})')
+    expect(users == ['ui/dialog/playmore_dialog.bin'], f'pm_sheet is used by playmore_dialog.bin only ({users})')
     ths = awtk_style.parse(open(os.path.join(ui_root, 'styles', 'default.bin'), 'rb').read())
     its = ths.find('list_item', 'list_item_style')
     expect(its and all((it.get('bg_color') >> 24) == 255 or it.state in ('pressed', 'over', 'disable', 'focused', 'selected') for it in its)
            and next(it for it in its if it.state == 'normal').get('bg_color') >> 24 == 255 and next(it for it in its if it.state == 'normal').get('border_color') != 0x22FFFFFF,
-           f'{theme}: the shared list_item_style (other pages\' rows) is still opaque with its own hairline')
-    if theme != 'default': return     # the images and contrast are the same in both asset themes: measure once
+           'the shared list_item_style (other pages\' rows) is still opaque with its own hairline')
     # -- contrast: composite glass (+ the pressed band) over a flat grey, test what the row draws on it
     th = awtk_style.parse(open(os.path.join(ui_root, 'styles', 'default.bin'), 'rb').read())
     tc = th.find('hscroll_label', 'srlabel_item_white_style', 'normal')[0].color('text_color')[:7]
@@ -888,39 +887,37 @@ def run(ctx):
     expect(all(a.x + a.w <= b.x for a, b in zip(badges, badges[1:])) and badges[-1].x + badges[-1].w <= 310 and note_l.x + note_l.w <= 310 and all(b.w == 36 and b.h == 50 and b.y == 0 for b in badges),
            'the four badges (36 px, 50 px high) do not overlap and end inside the 310 px row; the note too')
 
-    # -- 9. the assets, both themes ---------------------------------------------------------------------------------------------------
+    # -- 9. the assets ---------------------------------------------------------------------------------------------------
     stock_ui = awtk_ui.parse(open(os.path.join(stock_raw, 'ui/dialog/playmore_dialog.bin'), 'rb').read())
     speed_names = ('scrlabel1', 'label1_msg', 'img_1x', 'img_1_25x', 'img_1_5x', 'img_2x')
-    for theme in ('default',):
-        built_ui = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets', theme, 'raw/ui/dialog/playmore_dialog.bin'), 'rb').read())
-        stock_t = stock_ui if theme == 'default' else awtk_ui.parse(open(os.path.join(stock_raw, '..', '..', theme, 'raw/ui/dialog/playmore_dialog.bin'), 'rb').read())
-        geo = lambda t: [(w.type, w.name, w.x, w.y, w.w, w.h) for w in t.walk() if not w.name.startswith(('pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_goep', 'pod_art', 'pod_glass')) and w.name not in speed_names]
-        expect(geo(built_ui) == geo(stock_t), f'{theme}: every stock widget but the speed row\'s keeps its type, name and rectangle (the M1+ Music ones are added)')
-        expect([(w.type, w.name) for w in built_ui.walk() if w.name in speed_names] == [(w.type, w.name) for w in stock_t.walk() if w.name in speed_names],
-               f'{theme}: the speed row\'s widgets keep their type and name')
-        expect([(built_ui.find(n).x, built_ui.find(n).y, built_ui.find(n).w, built_ui.find(n).h) for n in speed_names] ==
-               [(48, 8, 96, 20), (48, 31, 262, 14), (148, 0, 36, 50), (188, 0, 36, 50), (228, 0, 36, 50), (268, 0, 36, 50)], f'{theme}: the speed row\'s rectangles')
-        sv = built_ui.find('playmore_scrollview')
-        expect([c.name for c in sv.children] == STOCK_NAMES + ['pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_goep', 'pod_art'], f'{theme}: pod_more, pod_back, pod_tape, pod_vinyl, pod_goep and pod_art are the eighth to thirteenth children of the scroll_view, after the seven stock rows')
-        hl = built_ui.get('highlight')
-        expect(hl is not None and hl.startswith('default(alpha=') and hl.endswith(')') and 40 <= int(hl[len('default(alpha='):-1]) <= 200, f'{theme}: the dialog dims the page under it with the "default" highlighter ({hl!r})')
-        imgs = {f[:-4] for f in os.listdir(os.path.join(WORK, 'rootfs/release/assets/default/raw/images/xx'))}
-        for name, kids in (('pod_more', ['pod_more_icon', 'pod_more_label', 'pod_more_chev']), ('pod_back', ['pod_back_chev', 'pod_back_label']), ('pod_tape', ['pod_tape_icon', 'pod_tape_label']), ('pod_vinyl', ['pod_vinyl_icon', 'pod_vinyl_label']), ('pod_goep', ['pod_goep_icon', 'pod_goep_label']), ('pod_art', ['pod_art_icon', 'pod_art_label'])):
-            row = built_ui.find(name)
-            expect(row.type == 'list_item' and row.get('visible') == 'false' and row.get('sensitive') == 'false', f'{theme}: {name} starts hidden and insensitive')
-            expect([c.name for c in row.children] == kids and all(c.get('sensitive') == 'false' for c in row.children if c.type == 'image'), f'{theme}: {name}\'s children are {kids}, the pictures insensitive')
-            expect({c.get('image') for c in row.children if c.type == 'image'} <= imgs, f'{theme}: the images {name} uses exist')
-        expect(built_ui.find('pod_more_chev').get('image') == 'right_arrow' and built_ui.find('pod_back_chev').get('image') == 'return', f'{theme}: the stock chevrons: right_arrow (grey) for More, return for the back header')
-        ref = built_ui.find('listitem2')
-        expect([(k, v) for k, v in built_ui.find('pod_more').props if k.startswith('style')] == [(k, v) for k, v in ref.props if k.startswith('style')], f'{theme}: pod_more is styled as the Add to playlist row')
-        diff = [k for k, v in built_ui.find('pod_back').props if k.startswith('style') and (k, v) not in [(a, b) for a, b in ref.props]]
-        expect(diff == ['style:normal:border'] or all(k == 'style:normal:border' for k in diff), f'{theme}: pod_back is styled as the Add to playlist row, but for its hairline ({diff})')
-        lab = built_ui.find('scrlabel6')
-        reds = {lab.get(f'style:{s}:text_color') for s in ('normal', 'pressed', 'over', 'disable', 'focused')}
-        expect(reds == {'#FF5A4F'}, f'{theme}: the Delete label is red in every state ({reds})')
-        glass_checks(expect, theme, built_ui, stock_t, lum)
-        expect(built_ui.find('listitem4').get('style:normal:border') == 'none' and built_ui.find('pod_back').get('style:normal:border') == 'none' and built_ui.find('pod_goep').get('style:normal:border') == 'none' and built_ui.find('listitem0').get('style:normal:border') == 'top'
-               and all(built_ui.find(n).get('style:normal:border') == 'top' for n in ('listitem1', 'listitem2', 'listitem3', 'listitem5', 'listitem6', 'pod_more', 'pod_tape', 'pod_vinyl')),
-               f'{theme}: the hairlines follow the new order (the first row of each page has none, A-B repeat has one)')
-        expect(built_ui.type == 'dialog' and (built_ui.x, built_ui.y, built_ui.w, built_ui.h) == (0, 130, 320, 350),
-               f'{theme}: the dialog is the stock 320 x 350 sheet at y 130 (the kill switch shows the stock menu)')
+    built_ui = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets/default/raw/ui/dialog/playmore_dialog.bin'), 'rb').read())
+    geo = lambda t: [(w.type, w.name, w.x, w.y, w.w, w.h) for w in t.walk() if not w.name.startswith(('pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_goep', 'pod_art', 'pod_glass')) and w.name not in speed_names]
+    expect(geo(built_ui) == geo(stock_ui), 'every stock widget but the speed row\'s keeps its type, name and rectangle (the M1+ Music ones are added)')
+    expect([(w.type, w.name) for w in built_ui.walk() if w.name in speed_names] == [(w.type, w.name) for w in stock_ui.walk() if w.name in speed_names],
+           'the speed row\'s widgets keep their type and name')
+    expect([(built_ui.find(n).x, built_ui.find(n).y, built_ui.find(n).w, built_ui.find(n).h) for n in speed_names] ==
+           [(48, 8, 96, 20), (48, 31, 262, 14), (148, 0, 36, 50), (188, 0, 36, 50), (228, 0, 36, 50), (268, 0, 36, 50)], 'the speed row\'s rectangles')
+    sv = built_ui.find('playmore_scrollview')
+    expect([c.name for c in sv.children] == STOCK_NAMES + ['pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_goep', 'pod_art'], 'pod_more, pod_back, pod_tape, pod_vinyl, pod_goep and pod_art are the eighth to thirteenth children of the scroll_view, after the seven stock rows')
+    hl = built_ui.get('highlight')
+    expect(hl is not None and hl.startswith('default(alpha=') and hl.endswith(')') and 40 <= int(hl[len('default(alpha='):-1]) <= 200, f'the dialog dims the page under it with the "default" highlighter ({hl!r})')
+    imgs = {f[:-4] for f in os.listdir(os.path.join(WORK, 'rootfs/release/assets/default/raw/images/xx'))}
+    for name, kids in (('pod_more', ['pod_more_icon', 'pod_more_label', 'pod_more_chev']), ('pod_back', ['pod_back_chev', 'pod_back_label']), ('pod_tape', ['pod_tape_icon', 'pod_tape_label']), ('pod_vinyl', ['pod_vinyl_icon', 'pod_vinyl_label']), ('pod_goep', ['pod_goep_icon', 'pod_goep_label']), ('pod_art', ['pod_art_icon', 'pod_art_label'])):
+        row = built_ui.find(name)
+        expect(row.type == 'list_item' and row.get('visible') == 'false' and row.get('sensitive') == 'false', f'{name} starts hidden and insensitive')
+        expect([c.name for c in row.children] == kids and all(c.get('sensitive') == 'false' for c in row.children if c.type == 'image'), f'{name}\'s children are {kids}, the pictures insensitive')
+        expect({c.get('image') for c in row.children if c.type == 'image'} <= imgs, f'the images {name} uses exist')
+    expect(built_ui.find('pod_more_chev').get('image') == 'right_arrow' and built_ui.find('pod_back_chev').get('image') == 'return', 'the stock chevrons: right_arrow (grey) for More, return for the back header')
+    ref = built_ui.find('listitem2')
+    expect([(k, v) for k, v in built_ui.find('pod_more').props if k.startswith('style')] == [(k, v) for k, v in ref.props if k.startswith('style')], 'pod_more is styled as the Add to playlist row')
+    diff = [k for k, v in built_ui.find('pod_back').props if k.startswith('style') and (k, v) not in [(a, b) for a, b in ref.props]]
+    expect(diff == ['style:normal:border'] or all(k == 'style:normal:border' for k in diff), f'pod_back is styled as the Add to playlist row, but for its hairline ({diff})')
+    lab = built_ui.find('scrlabel6')
+    reds = {lab.get(f'style:{s}:text_color') for s in ('normal', 'pressed', 'over', 'disable', 'focused')}
+    expect(reds == {'#FF5A4F'}, f'the Delete label is red in every state ({reds})')
+    glass_checks(expect, built_ui, stock_ui, lum)
+    expect(built_ui.find('listitem4').get('style:normal:border') == 'none' and built_ui.find('pod_back').get('style:normal:border') == 'none' and built_ui.find('pod_goep').get('style:normal:border') == 'none' and built_ui.find('listitem0').get('style:normal:border') == 'top'
+           and all(built_ui.find(n).get('style:normal:border') == 'top' for n in ('listitem1', 'listitem2', 'listitem3', 'listitem5', 'listitem6', 'pod_more', 'pod_tape', 'pod_vinyl')),
+           'the hairlines follow the new order (the first row of each page has none, A-B repeat has one)')
+    expect(built_ui.type == 'dialog' and (built_ui.x, built_ui.y, built_ui.w, built_ui.h) == (0, 130, 320, 350),
+           'the dialog is the stock 320 x 350 sheet at y 130 (the kill switch shows the stock menu)')

@@ -67,7 +67,7 @@ def shots(work):
     raw = os.path.join(work, RAW)
     np_root = awtk_ui.parse(open(os.path.join(raw, 'ui', 'playing_page.bin'), 'rb').read())
     lock = awtk_ui.parse(open(os.path.join(raw, 'ui', 'screensaver_page.bin'), 'rb').read())
-    return [preview_theme.settings(preview_theme.Tree(work)), preview_lists.panels(work, 'default')[1],
+    return [preview_theme.settings(preview_theme.Tree(work)), preview_lists.panels(work)[1],
             preview_nowplaying.Painter(raw).render(np_root, 0), preview_lockscreen.Painter(raw, False).render(lock, 86, False, False),
             titles(work)]
 

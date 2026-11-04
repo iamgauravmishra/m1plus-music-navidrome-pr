@@ -22,8 +22,7 @@ from modlib import clone_workdir, edit_ui, write_keep_mode
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSET = os.path.join(ROOT, 'assets', 'overlays')
 PINS = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mod_overlays_pins.txt')
-THEMES = ('default',)
-IMG = 'rootfs/release/assets/{theme}/raw/images/xx'
+IMG = 'rootfs/release/assets/default/raw/images/xx'
 UI = 'rootfs/release/assets/default/raw/ui'
 
 WHITE = (255, 255, 255)
@@ -91,23 +90,19 @@ def edit_confirm(root):
 # Software Update, stock's Bluetooth / Wi-Fi switch-on questions). Widget geometry and names are untouched.
 CONFIRM_DIM = 'default(alpha=130)'   # = tools/pod_ui.py PL_DIM (0x82) and the More sheet's highlighter
 CONFIRM_LABEL_STYLE, CONFIRM_PAD = 'label_centerwhite20_style', 12
-STYLES = 'rootfs/release/assets/{theme}/raw/styles/default.bin'
+STYLES = 'rootfs/release/assets/default/raw/styles/default.bin'
 
 def edit_confirm_label(out):
     import awtk_style, stat
-    done = 0
-    for theme in THEMES:
-        path = os.path.join(out, STYLES.format(theme=theme))
-        old = open(path, 'rb').read(); th = awtk_style.parse(old)
-        assert awtk_style.serialize(th) == old, f'{path}: style round trip is not byte-exact'
-        items = th.find('label', CONFIRM_LABEL_STYLE)
-        if not items: continue
-        assert len(items) == 3 and all(not it.has('margin_left') and not it.has('margin_right') for it in items), f'{path}: not the stock style'
-        for it in items: it.set('margin_left', CONFIRM_PAD, awtk_style.T_INT32); it.set('margin_right', CONFIRM_PAD, awtk_style.T_INT32)
-        mode = stat.S_IMODE(os.stat(path).st_mode)
-        os.chmod(path, mode | 0o200); open(path, 'wb').write(awtk_style.serialize(th)); os.chmod(path, mode)
-        done += 1
-    assert done, 'no theme has the confirm label style'
+    path = os.path.join(out, STYLES)
+    old = open(path, 'rb').read(); th = awtk_style.parse(old)
+    assert awtk_style.serialize(th) == old, f'{path}: style round trip is not byte-exact'
+    items = th.find('label', CONFIRM_LABEL_STYLE)
+    assert items, 'default.bin has no confirm label style'
+    assert len(items) == 3 and all(not it.has('margin_left') and not it.has('margin_right') for it in items), f'{path}: not the stock style'
+    for it in items: it.set('margin_left', CONFIRM_PAD, awtk_style.T_INT32); it.set('margin_right', CONFIRM_PAD, awtk_style.T_INT32)
+    mode = stat.S_IMODE(os.stat(path).st_mode)
+    os.chmod(path, mode | 0o200); open(path, 'wb').write(awtk_style.serialize(th)); os.chmod(path, mode)
 
 # The other stock 260 x 180 message-like dialogs (cardupdate: card update, formatcard: formatting, dialog_autoshutdown: the sleep countdown) were black with a grey
 # border, unlike the message box: the same card as msginfo / confirminfo (autoshutdown has the one full-width button under the confirm card's divider).
@@ -131,10 +126,10 @@ def edit_card(image):
 def load_pins():
     return {n: h for h, n in (l.split() for l in open(PINS) if l.strip() and not l.startswith('#'))}
 
-def stock_dir(theme='default'):
+def stock_dir():
     stock = paths.find_stock(paths.ZIP)
     if not stock: sys.exit('no unpacked stock tree found (run tools/build.py once)')
-    return os.path.join(stock, IMG.format(theme=theme))
+    return os.path.join(stock, IMG)
 
 def cmd_pins():
     with open(PINS, 'w') as o:
@@ -153,13 +148,12 @@ def cmd_generate():
 def apply(src, out):
     clone_workdir(src, out)
     pins = load_pins(); old = new = 0
-    for theme in THEMES:
-        for n in NAMES:
-            p = os.path.join(out, IMG.format(theme=theme), n + '.png')
-            data = open(p, 'rb').read()
-            assert sha256(data) == pins[n], f'{p}: not the pinned stock file'
-            fresh = open(os.path.join(ASSET, n + '.png'), 'rb').read()
-            write_keep_mode(p, fresh); old += len(data); new += len(fresh)
+    for n in NAMES:
+        p = os.path.join(out, IMG, n + '.png')
+        data = open(p, 'rb').read()
+        assert sha256(data) == pins[n], f'{p}: not the pinned stock file'
+        fresh = open(os.path.join(ASSET, n + '.png'), 'rb').read()
+        write_keep_mode(p, fresh); old += len(data); new += len(fresh)
     for rel in ('dialog/confirminfo_dialog.bin', 'dialog/rippercompleted_dialog.bin'):
         edit_ui(os.path.join(out, UI, rel), edit_confirm)
     for rel, image in CARD_DIALOGS.items():

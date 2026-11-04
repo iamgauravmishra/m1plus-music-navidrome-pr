@@ -24,12 +24,12 @@ SONGS = [('All Blues', 'Miles Davis'), ('Blue in Green', 'Miles Davis'), ('Fredd
 
 class Styles:
     """Style lookup as demo's AWTK does it: window theme, then default theme; state, then normal."""
-    def __init__(self, work, theme, page):
-        def load(t, name):
-            p = os.path.join(work, 'rootfs/release/assets', t, 'raw/styles', name + '.bin')
+    def __init__(self, work, page):
+        def load(name):
+            p = os.path.join(work, 'rootfs/release/assets/default/raw/styles', name + '.bin')
             return {(s.widget, s.style, s.state): s for s in awtk_style.parse(open(p, 'rb').read()).items} if os.path.exists(p) else None
-        self.win = load(theme, page) or (load('default', page) if theme != 'default' else None) or {}
-        self.base = load(theme, 'default')
+        self.win = load(page) or {}
+        self.base = load('default')
     def get(self, wt, name, state='normal'):
         for st in (state, 'normal'):
             for th in (self.win, self.base):
@@ -150,19 +150,19 @@ def search_page(p, s, ui):
         pg.label(artist, 60, y + 32, 200, 20, 'hscroll_label', 'srlabel_item_gray18_style')
     return pg.im
 
-def panels(work, theme):
+def panels(work):
     raw = os.path.join(work, 'rootfs/release/assets/default/raw')
     p = Painter(raw, False)
     ui = awtk_ui.parse(open(os.path.join(raw, 'ui/allmusic_page.bin'), 'rb').read())
-    return [folder_page(p, Styles(work, theme, 'folder_page')),
-            songs_page(p, Styles(work, theme, 'allmusic_page'), ui),
-            search_page(p, Styles(work, theme, 'search_page'), None)]
+    return [folder_page(p, Styles(work, 'folder_page')),
+            songs_page(p, Styles(work, 'allmusic_page'), ui),
+            search_page(p, Styles(work, 'search_page'), None)]
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('stock'); ap.add_argument('mod'); ap.add_argument('out')
     a = ap.parse_args()
-    rows = [('stock', panels(a.stock, 'default')), ('mod', panels(a.mod, 'default'))]
+    rows = [('stock', panels(a.stock)), ('mod', panels(a.mod))]
     names = ['Folders (pressed row 4)', 'Songs + index letter', 'Search tabs']
     pad, top = 10, 34
     out = Image.new('RGB', (3 * (W + pad) + pad, 2 * (H + top) + 22), (40, 40, 40)); d = ImageDraw.Draw(out)

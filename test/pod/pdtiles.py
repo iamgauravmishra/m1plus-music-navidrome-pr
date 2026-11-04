@@ -2,7 +2,7 @@
 
 The hook runs the real compiled payload under the harness machine with the stock init mocked at its resume point (the dialog's handlers
 and the tiles' clicks are bound by stock code, which the hook never touches); the dialog's geometry is the built asset's own
-(ui/dialog/dropdown_dialog.bin, both asset themes). The page is the Main Menu page's twin and is tested the way menu.py tests that one."""
+(ui/dialog/dropdown_dialog.bin). The page is the Main Menu page's twin and is tested the way menu.py tests that one."""
 import os, random, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
@@ -10,23 +10,23 @@ FILE, TMP = '/mnt/data/m1plus/pulldown-tiles', '/mnt/data/m1plus/pulldown-tiles.
 KILL = '/mnt/mmc/m1plus-off'
 IMG = ('img_wifiswitch', 'img_btswitch', 'img_keylockswitch', 'img_gainswitch', 'img_usbmode', 'img_outputswitch', 'img_playset', 'img_sysset')
 LAB = ('label_wifi', 'label_bt', 'label_lock', 'label_gain', 'label_usbmode', 'label_outputway', 'label_playset', 'label_sysset')
-UI = os.path.join('rootfs', 'release/assets/{}/raw/ui/dialog/dropdown_dialog.bin')
+UI = os.path.join('rootfs', 'release/assets/default/raw/ui/dialog/dropdown_dialog.bin')
 N = 8
 
 
-def geometry(theme='default'):
+def geometry():
     """name -> (x, y, w, h) of the built dialog's tiles and captions."""
-    tree = awtk_ui.parse(open(os.path.join(WORK, UI.format(theme)), 'rb').read())
+    tree = awtk_ui.parse(open(os.path.join(WORK, UI), 'rb').read())
     return {n: (tree.find(n).x, tree.find(n).y, tree.find(n).w, tree.find(n).h) for n in IMG + LAB}
 
 
 class PD(Machine):
     """The dialog's sixteen widgets (the tiles and captions, at the built asset's places) and the stock init's resume point."""
 
-    def __init__(self, theme='default', fs=None, gone=()):
+    def __init__(self, fs=None, gone=()):
         super().__init__()
         self.handlers[pod.PULLDOWN_INIT + 12] = 'stock_pulldown_resume'
-        self.geo = geometry(theme)
+        self.geo = geometry()
         self.dlg = self.alloc(0x80)
         for n, (x, y, w, h) in self.geo.items():
             if n in gone: continue
@@ -95,13 +95,12 @@ def hook_tests(ctx):
     expect(m.calls[0] == ('stock_pulldown_resume', m.dlg, 0), 'the stock init runs first, with its arguments')
 
     # -- 1. the assets: the eight tiles on the stock grid, the captions at one offset from their tile --------------------
-    for theme in ('default',):
-        g = geometry(theme)
-        slots = [g[n][:2] for n in IMG]
-        expect(slots == [(24, 14), (98, 14), (172, 14), (246, 14), (24, 114), (98, 114), (172, 114), (246, 114)]
-               and all(g[n][2:] == (50, 50) for n in IMG), f'{theme}: the tiles are 50 x 50 on the stock grid of four columns, 74 px apart, rows at y 14 and 114')
-        offs = {(g[LAB[t]][0] - g[IMG[t]][0], g[LAB[t]][1] - g[IMG[t]][1]) for t in range(N)}
-        expect(offs == {(-10, 54)} and all(g[n][2:] == (71, 40) for n in LAB), f'{theme}: every caption is 71 x 40 at the same offset from its tile ({offs})')
+    g = geometry()
+    slots = [g[n][:2] for n in IMG]
+    expect(slots == [(24, 14), (98, 14), (172, 14), (246, 14), (24, 114), (98, 114), (172, 114), (246, 114)]
+           and all(g[n][2:] == (50, 50) for n in IMG), 'the tiles are 50 x 50 on the stock grid of four columns, 74 px apart, rows at y 14 and 114')
+    offs = {(g[LAB[t]][0] - g[IMG[t]][0], g[LAB[t]][1] - g[IMG[t]][1]) for t in range(N)}
+    expect(offs == {(-10, 54)} and all(g[n][2:] == (71, 40) for n in LAB), f'every caption is 71 x 40 at the same offset from its tile ({offs})')
 
     # -- 2. the stock layout: no file, a bad file, the default, the kill switch, a missing widget, a failed stock init ------
     default = list(range(N))
@@ -128,10 +127,9 @@ def hook_tests(ctx):
              ('hidden tiles listed in any order', b'6-5740132\n', [6]), ('without the hidden part', b'72\n', [7, 2]), ('one tile', b'3\n', [3]),
              ('the default order with the hidden part empty and tile 7 hidden', b'0123456-7\n', [0, 1, 2, 3, 4, 5, 6]), ('no newline', b'201', [2, 0, 1])]
     for name, fs, order in cases:
-        for theme in ('default',):
-            m = PD(theme, fs=fs); ret = m.open()
-            err = check_layout(m, order)
-            expect(ret == 0 and err is None and P.parse_pulldown(fs) == order, f'{name} ({fs!r}, {theme}): {order} shown in that order at the first places ({err})')
+        m = PD(fs=fs); ret = m.open()
+        err = check_layout(m, order)
+        expect(ret == 0 and err is None and P.parse_pulldown(fs) == order, f'{name} ({fs!r}): {order} shown in that order at the first places ({err})')
     for name, fs in (('a bare newline', b'\n'), ('a bare dash', b'-'), ('all listed as hidden', b'-01234567\n'), ('all hidden, any order', b'-76543210')):
         m = PD(fs=fs); m.open()
         expect(check_layout(m, []) is None and all(m.hidden(n) for n in IMG + LAB) and P.parse_pulldown(fs) == [], f'{name} ({fs!r}): all eight tiles and captions hidden and insensitive, none moved')

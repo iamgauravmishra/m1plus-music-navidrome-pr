@@ -105,7 +105,6 @@ Lists hold at most 300 rows (`RD_MAX`); names are cut at 120 bytes, invalid UTF-
 | `/mnt/mmc/Radio/favourites.m3u` | the My Stations list: `#EXTM3U`, per station `#EXTINF:-1,NAME`, optional `#M1+:country<TAB>codec<TAB>bitrate`, the address; rewritten whole through `pod_card_write` (`.tmp`, fsync, rename; nothing without the card, never when it holds more than 300 rows or a NUL) |
 | `/mnt/mmc/Radio/*.m3u`, `*.m3u8`, `*.pls` | the user's own playlists, read only by Import from Card (above), never edited; `.pls` `FileN=` / `TitleN=` match by N |
 | `/mnt/mmc/Radio/.logos/<hash>.jpg` | a station's logo (hash of its favicon address), a baseline JPEG of at most 192 px; `<hash>.no`: no picture to be had; past 400 files the folder is emptied |
-| `/mnt/mmc/Radio/.last` | no longer written or read (an old release's one-station `.m3u`); `rd_recent_push` unlinks a leftover one (`RD_LAST_OLD`, one-off: remove the line and the define in a later release) |
 | `/mnt/data/m1plus/radio-recent` | the last 10 stations, newest first (the first is the station last played: the root's Now Playing row, and what Now Playing starts when opened idle, `rd_last_read`), an `.m3u`, a station played again moves to the front (`home_write_atomic`) |
 
 ## Station logos

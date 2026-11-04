@@ -6,8 +6,7 @@ Sources: `tools/mod_pulldown.py`, `tools/mod_icons.py` (look); `patch/pulldown.c
 
 Runs after the font step on `ui/dialog/dropdown_dialog.bin` (no style file):
 its status bar (`view_sysbar`) is laid out from the same table as the real bar (`tools/statusbar.py`, section 4: volume number
-16 px middle, clock 18 px at x 104, left group from x 10, right group 4 px, black), so the two are identical in 12 h and 24 h mode
-and in both themes; the tile captions (`label_wifi`, `label_bt`, `label_lock`,
+16 px middle, clock 18 px at x 104, left group from x 10, right group 4 px, black), so the two are identical in 12 h and 24 h mode; the tile captions (`label_wifi`, `label_bt`, `label_lock`,
 `label_gain`, `label_usbmode`, `label_outputway`, `label_playset`, `label_sysset`; word-wrapped)
 18 -> 16 px normal, 16 -> 14 disabled/focused. The caption boxes are 71 x 40 instead of 57 x 40 (same centre,
 x - 7; the tiles are 74 px apart), because `Bluetooth` is 60 px at 16 and AWTK broke it as "Bluetoot/h" and
@@ -63,7 +62,7 @@ only sets the dialog's `highlight` property (the dim). Hardware keys therefore n
 only have been hit by a touch, which `sensitive=false` stops (this AWTK hit-tests hidden widgets, [UI rules](ui-rules.md)). The dialog keeps its stock height, so hiding
 tiles leaves empty room; resizing it and the slider is out of scope here. Replacement actions for the freed slots are not part of this.
 
-**Tests** (`test/pod/pdtiles.py`): the hook words, the manifest and the pins; the built assets' grid (both asset themes); the stock layout for no file, the default, ten
+**Tests** (`test/pod/pdtiles.py`): the hook words, the manifest and the pins; the built assets' grid; the stock layout for no file, the default, ten
 kinds of invalid file, the kill switch, a failed stock init, a null dialog and each of the sixteen widgets missing (nothing moved, hidden or re-stacked); a custom
 order, some hidden, hidden-part variants, all hidden (positions at the stock places, captions at their offset, hidden = invisible and insensitive, nothing renamed);
 300 random files against the Python parser; the Settings page (layout from a saved file, taps, arrows, atomic saves, failed save or rename undone, scroll, a page

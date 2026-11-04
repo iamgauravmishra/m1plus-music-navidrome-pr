@@ -20,11 +20,11 @@ template, which its table clones without any row constructor:
   ui/albuminfo_page.bin      (the plain stock album page, the fallback of ours) navigationbar_view y 0 -> 3, as allmusic_page
   ui/playlist_page.bin       playlist_listview default_item_height 60 -> 64 (its rows are created
                              0 high, so this is their pitch)
-  ui/playset/equalizer_page.bin, ui/systemset/specfolder_page.bin (both themes)
+  ui/playset/equalizer_page.bin, ui/systemset/specfolder_page.bin
                              Now Playing (and the folder picker's select-all button) onto the Pod
                              navbar's slots, docs/modules/navbar.md
 
-and page themes (both asset themes, derived from the tree's styles as tools/mod_lists.py does; run
+and page themes (derived from the tree's styles as tools/mod_lists.py does; run
 after it): srlabel_item_white_style and srlabel_item_gold20_style at 21 px on the pages whose title
 boxes are 24 px now (Songs and the other song lists, the jump list, Albums, Playlists,
 Search). Folders and Artists have them from the lists step. The grey line stays stock's
@@ -157,7 +157,7 @@ def edit_usbmode(root):
     dset.set('style:pressed:icon', USB_SET_ICON + '_down')
 
 
-NAVBAR_UI_EDITS = {   # edited in both themes (each has its own file)
+NAVBAR_UI_EDITS = {
     'playset/equalizer_page.bin': edit_equalizer,
     'systemset/specfolder_page.bin': edit_specfolder,
 }
@@ -201,23 +201,21 @@ def glass_navbar(root):
 def build_navbar_ui(work):
     report = []
     for rel, fn in NAVBAR_UI_EDITS.items():
-        for theme in mod_lists.THEMES:
-            path = os.path.join(work, mod_lists.RAW.format(theme=theme), 'ui', rel)
-            old, new, root = edit_ui(path, fn)
-            names = lambda d: [(w.type, w.name) for w in awtk_ui.parse(d).walk()]
-            assert names(old) == names(new), f'{rel}: a widget was added, removed or renamed'
-            report.append(f'{theme}/ui/{rel}: {len(old)} -> {len(new)} bytes')
+        path = os.path.join(work, mod_lists.RAW, 'ui', rel)
+        old, new, root = edit_ui(path, fn)
+        names = lambda d: [(w.type, w.name) for w in awtk_ui.parse(d).walk()]
+        assert names(old) == names(new), f'{rel}: a widget was added, removed or renamed'
+        report.append(f'default/ui/{rel}: {len(old)} -> {len(new)} bytes')
     bars = 0
-    for theme in mod_lists.THEMES:
-        ui = os.path.join(work, mod_lists.RAW.format(theme=theme), 'ui')
-        for d, _, files in sorted(os.walk(ui)):
-            for f in sorted(files):
-                if not f.endswith('.bin') or f in GLASS_NAV_SKIP: continue
-                path = os.path.join(d, f)
-                if b'return' not in open(path, 'rb').read(): continue
-                counted = []
-                old, new, root = edit_ui(path, lambda r: counted.append(glass_navbar(r)))
-                bars += counted[0]
+    ui = os.path.join(work, mod_lists.RAW, 'ui')
+    for d, _, files in sorted(os.walk(ui)):
+        for f in sorted(files):
+            if not f.endswith('.bin') or f in GLASS_NAV_SKIP: continue
+            path = os.path.join(d, f)
+            if b'return' not in open(path, 'rb').read(): continue
+            counted = []
+            old, new, root = edit_ui(path, lambda r: counted.append(glass_navbar(r)))
+            bars += counted[0]
     assert bars >= 45, f'glass navbar: only {bars} stock navbars found'
     report.append(f'glass navbar: {bars} stock navbars (Back, Now Playing, title)')
     return report
@@ -237,7 +235,7 @@ UI_EDITS = {
 def build_ui(work):
     report = []
     for rel, fn in UI_EDITS.items():
-        path = os.path.join(work, mod_lists.RAW.format(theme='default'), 'ui', rel)
+        path = os.path.join(work, mod_lists.RAW, 'ui', rel)
         old, new, root = edit_ui(path, fn)
         names = lambda d: [(w.type, w.name) for w in awtk_ui.parse(d).walk()]
         assert sorted(names(new), key=str) == sorted(names(old), key=str), f'{rel}: a widget was added, removed or renamed'
@@ -247,27 +245,27 @@ def build_ui(work):
 
 
 def style_rels():
-    return [(t, p, f'release/assets/{t}/raw/styles/{p}.bin') for t in mod_lists.THEMES for p in TITLE_PAGES]
+    return [(p, f'release/assets/default/raw/styles/{p}.bin') for p in TITLE_PAGES]
 
 
 def added_rels(stock_rootfs):
     """Page themes this step adds that neither stock nor the lists step has (fwtool --allow-added)."""
     lists = set(mod_lists.added_rels(stock_rootfs))
-    return [rel for _, _, rel in style_rels() if not os.path.exists(os.path.join(stock_rootfs, rel)) and rel not in lists]
+    return [rel for _, rel in style_rels() if not os.path.exists(os.path.join(stock_rootfs, rel)) and rel not in lists]
 
 
 def build_page_themes(work):
-    """The 21 px title on TITLE_PAGES, in each theme's page file (its own, else default's)."""
+    """The 21 px title on TITLE_PAGES, in each page's file (its own, else default's)."""
     sources = {}
-    for theme, page, rel in style_rels():
+    for page, rel in style_rels():
         own = mod_lists.read(os.path.join(work, 'rootfs', rel))
         sources[rel] = (own is not None, own if own is not None else
-                        mod_lists.read(os.path.join(work, mod_lists.RAW.format(theme='default'), 'styles', f'{page}.bin')))
+                        mod_lists.read(os.path.join(work, mod_lists.RAW, 'styles', f'{page}.bin')))
     report = []
-    for theme, page, rel in style_rels():
-        base_raw = mod_lists.read(os.path.join(work, mod_lists.RAW.format(theme=theme), 'styles', 'default.bin'))
+    for page, rel in style_rels():
+        base_raw = mod_lists.read(os.path.join(work, mod_lists.RAW, 'styles', 'default.bin'))
         base = mod_lists.parse(base_raw)
-        assert awtk_style.serialize(base.th) == base_raw, f'{theme}/default.bin: style round trip is not byte-exact'
+        assert awtk_style.serialize(base.th) == base_raw, 'default.bin: style round trip is not byte-exact'
         existed, old = sources[rel]
         th = mod_lists.parse(old) if old else mod_lists.Theme(awtk_style.Theme())
         if old: assert awtk_style.serialize(th.th) == old, f'{rel}: style round trip is not byte-exact'

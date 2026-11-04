@@ -339,24 +339,20 @@ def page_audit(ui_dir, th_stock, th_mod, threshold=4.5):
 # page_audit() runs inside the theme step, on the tree as the theme finds it. Later looks add
 # window themes (styles/<window>.bin, searched before default.bin: mod_lists, mod_nowplaying) and
 # edit ui files, so build.py re-runs a scan on the finished tree against stock: every ui file
-# resolved the way the app loads it (assets/<theme> first, then default), with its window theme in
-# front of that asset theme's default.bin, plus audit() of the code-built rows under every window
+# with its window theme in front of default.bin, plus audit() of the code-built rows under every window
 # theme. Failure = a text/background pair below 4.5:1 that is worse than in the stock tree.
-ASSET_THEMES = ('default',)
 
 def _load(path): return awtk_style.parse(open(path, 'rb').read()) if path and os.path.exists(path) else None
 
-def _asset(work, theme, kind, rel):
-    """assets/<theme>/raw/<kind>/<rel>, falling back to default's (the app's asset lookup)."""
-    for t in dict.fromkeys((theme, 'default')):
-        p = os.path.join(work, 'rootfs/release/assets', t, 'raw', kind, rel)
-        if os.path.exists(p): return p
-    return None
+def _asset(work, kind, rel):
+    """assets/default/raw/<kind>/<rel>, or None if the tree has no such file."""
+    p = os.path.join(work, 'rootfs/release/assets/default/raw', kind, rel)
+    return p if os.path.exists(p) else None
 
-def _chain(work, theme, window):
-    """[window theme (if any), the asset theme's default.bin] as Theme objects."""
-    win = _load(_asset(work, theme, 'styles', window + '.bin')) if window else None
-    return [t for t in (win, _load(_asset(work, theme, 'styles', 'default.bin'))) if t]
+def _chain(work, window):
+    """[window theme (if any), default.bin] as Theme objects."""
+    win = _load(_asset(work, 'styles', window + '.bin')) if window else None
+    return [t for t in (win, _load(_asset(work, 'styles', 'default.bin'))) if t]
 
 def _merged(chain):
     """One Theme: the window theme's items, then default's for (widget, style, state) it lacks."""
@@ -371,28 +367,27 @@ def tree_scan(work, stock, threshold=4.5):
     """Contrast scan of a finished tree against stock: (report lines, failures)."""
     import glob
     report, bad = [], []
-    for theme in ASSET_THEMES:
-        dirs = lambda kind: [os.path.join(work, 'rootfs/release/assets', t, 'raw', kind) for t in dict.fromkeys((theme, 'default'))]
-        rels = sorted({os.path.relpath(f, d) for d in dirs('ui') for f in glob.glob(os.path.join(d, '**', '*.bin'), recursive=True)})
-        for rel in rels:
-            f_mod, f_stock = _asset(work, theme, 'ui', rel), _asset(stock, theme, 'ui', rel)
-            root = awtk_ui.parse(open(f_mod, 'rb').read())
-            window = root.get('theme') or root.name or os.path.splitext(os.path.basename(rel))[0]
-            after = _ui_contrasts(root, _chain(work, theme, window))
-            before = _ui_contrasts(awtk_ui.parse(open(f_stock, 'rb').read()), _chain(stock, theme, window)) if f_stock else {}
-            bad += [f'{theme}: {x}' for x in _worse(rel, before, after, threshold)]
-        report.append(f'{theme}: {len(rels)} ui files, text vs background (window theme, then default.bin)')
-        # code-built rows (audit()): under default.bin alone and under every window theme
-        windows = sorted({os.path.splitext(os.path.basename(p))[0] for d in dirs('styles') for p in glob.glob(os.path.join(d, '*.bin'))} - {'default'})
-        for window in [None] + windows:
-            got, ref = audit(_merged(_chain(work, theme, window))), audit(_merged(_chain(stock, theme, window)))
-            for k in ('rest', 'pressed'):
-                c, row, text = got[k]
-                if row is not None and c < threshold and c < ref[k][0] - 0.01:
-                    bad.append(f'{theme}: rows under {window or "default.bin"} ({k}): {c:.2f} ({text} on {row}), stock {ref[k][0]:.2f}')
-        worst = {k: min((audit(_merged(_chain(work, theme, w)))[k][0], w or 'default.bin') for w in [None] + windows) for k in ('rest', 'pressed')}
-        report.append(f'{theme}: code-built rows under default.bin and {len(windows)} window themes: worst rest '
-                      f'{worst["rest"][0]:.2f} ({worst["rest"][1]}), pressed {worst["pressed"][0]:.2f} ({worst["pressed"][1]})')
+    dirs = lambda kind: os.path.join(work, 'rootfs/release/assets/default/raw', kind)
+    rels = sorted(os.path.relpath(f, dirs('ui')) for f in glob.glob(os.path.join(dirs('ui'), '**', '*.bin'), recursive=True))
+    for rel in rels:
+        f_mod, f_stock = _asset(work, 'ui', rel), _asset(stock, 'ui', rel)
+        root = awtk_ui.parse(open(f_mod, 'rb').read())
+        window = root.get('theme') or root.name or os.path.splitext(os.path.basename(rel))[0]
+        after = _ui_contrasts(root, _chain(work, window))
+        before = _ui_contrasts(awtk_ui.parse(open(f_stock, 'rb').read()), _chain(stock, window)) if f_stock else {}
+        bad += _worse(rel, before, after, threshold)
+    report.append(f'{len(rels)} ui files, text vs background (window theme, then default.bin)')
+    # code-built rows (audit()): under default.bin alone and under every window theme
+    windows = sorted({os.path.splitext(os.path.basename(p))[0] for p in glob.glob(os.path.join(dirs('styles'), '*.bin'))} - {'default'})
+    for window in [None] + windows:
+        got, ref = audit(_merged(_chain(work, window))), audit(_merged(_chain(stock, window)))
+        for k in ('rest', 'pressed'):
+            c, row, text = got[k]
+            if row is not None and c < threshold and c < ref[k][0] - 0.01:
+                bad.append(f'rows under {window or "default.bin"} ({k}): {c:.2f} ({text} on {row}), stock {ref[k][0]:.2f}')
+    worst = {k: min((audit(_merged(_chain(work, w)))[k][0], w or 'default.bin') for w in [None] + windows) for k in ('rest', 'pressed')}
+    report.append(f'code-built rows under default.bin and {len(windows)} window themes: worst rest '
+                  f'{worst["rest"][0]:.2f} ({worst["rest"][1]}), pressed {worst["pressed"][0]:.2f} ({worst["pressed"][1]})')
     return report, bad
 
 # ---------------------------------------------------------------- icons

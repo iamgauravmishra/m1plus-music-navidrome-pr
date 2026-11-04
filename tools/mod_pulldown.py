@@ -34,8 +34,7 @@ import statusbar
 from modlib import clone_workdir, edit_ui
 from awtk_text import Ttf, awtk_width
 
-RAW = 'rootfs/release/assets/{theme}/raw'
-THEMES = ('default',)
+RAW = 'rootfs/release/assets/default/raw'
 DIALOG = 'ui/dialog/dropdown_dialog.bin'
 FONT = 'rootfs/release/assets/default/raw/fonts/default.ttf'
 STATES = ('normal', 'disable', 'focused')
@@ -147,16 +146,15 @@ def edit(root, ttf, texts, report):
 
 def apply(work):
     ttf = Ttf(os.path.join(work, FONT))
-    langs = os.path.join(work, RAW.format(theme='default'), 'strings')
+    langs = os.path.join(work, RAW, 'strings')
     texts = {f[:-4]: strings(os.path.join(langs, f), TILE_KEYS) for f in sorted(os.listdir(langs)) if f.endswith('.bin')}
     check(all(len(texts[l]) == len(TILE_KEYS) for l in MUST_FIT), 'tile caption strings missing')
     out = []
-    for theme in THEMES:
-        path = os.path.join(work, RAW.format(theme=theme), DIALOG)
-        report = []
-        old, new, _ = edit_ui(path, lambda root: edit(root, ttf, texts, report))
-        out.append(f'{os.path.relpath(path, work)}: {len(old)} -> {len(new)} bytes')
-        out += [f'  {r}' for r in report]
+    path = os.path.join(work, RAW, DIALOG)
+    report = []
+    old, new, _ = edit_ui(path, lambda root: edit(root, ttf, texts, report))
+    out.append(f'{os.path.relpath(path, work)}: {len(old)} -> {len(new)} bytes')
+    out += [f'  {r}' for r in report]
     return out
 
 

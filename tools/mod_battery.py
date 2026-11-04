@@ -7,7 +7,7 @@ progress_bar_set_value(pgbar_battery, capacity) on every refresh (demo: dropdown
 system bar has a twin at 0x545168). So the three state images become an outline (a 20x12 body with
 a 2 px nub: white, green with a bolt while charging, red at 0; tools/battery_art.py, shared with the
 lock screen) and pgbar_battery the horizontal 16x8 fill inside it, drawn under the image (stock child
-order). No number. Applied to the status bar and to the pull-down's own bar, in both themes.
+order). No number. Applied to the status bar and to the pull-down's own bar.
 
 Usage: mod_battery.py STOCK_WORKDIR OUT_WORKDIR
   (STOCK_WORKDIR is what fwtool.py unpack produced; OUT_WORKDIR is cloned from it and modified.)
@@ -18,9 +18,8 @@ import awtk_ui, battery_art
 from modlib import clone_workdir, edit_ui, write_keep_mode
 
 UI = 'rootfs/release/assets/default/raw/ui/system_bar.bin'
-DROPDOWN = 'rootfs/release/assets/{theme}/raw/ui/dialog/dropdown_dialog.bin'
-IMAGES = 'rootfs/release/assets/{theme}/raw/images/xx/{name}.png'
-ICON_THEMES = ('default',)
+DROPDOWN = 'rootfs/release/assets/default/raw/ui/dialog/dropdown_dialog.bin'
+IMAGES = 'rootfs/release/assets/default/raw/images/xx/{name}.png'
 BODY_W, BODY_H, NUB_W = 20, 12, 2                    # the body (the lock screen's is 22 x 12) and the nub
 ICON_W = BODY_W + NUB_W                              # 22 x 12 canvas
 # the state images the app swaps between; the stock 14x20 files, pinned
@@ -46,17 +45,16 @@ def icon_gauge(root):
 def apply_icon_files(out):
     """The three state images and the pull-down's own battery."""
     done = []
-    for theme in ICON_THEMES:
-        for name, state in STATE.items():
-            p = os.path.join(out, IMAGES.format(theme=theme, name=name))
-            old = open(p, 'rb').read()
-            assert hashlib.sha256(old).hexdigest()[:12] == STOCK_ICONS[name], f'{p}: not the stock icon'
-            new = battery_art.png(battery_art.STATUS, state); write_keep_mode(p, new); done.append((p, len(old), len(new)))
-        p = os.path.join(out, DROPDOWN.format(theme=theme))
-        def edit(root):
-            right = root.find('view_bar_right'); assert right is not None
-            x = icon_gauge(root); right.x = x - 4 - right.w
-        o, n, _ = edit_ui(p, edit); done.append((p, len(o), len(n)))
+    for name, state in STATE.items():
+        p = os.path.join(out, IMAGES.format(name=name))
+        old = open(p, 'rb').read()
+        assert hashlib.sha256(old).hexdigest()[:12] == STOCK_ICONS[name], f'{p}: not the stock icon'
+        new = battery_art.png(battery_art.STATUS, state); write_keep_mode(p, new); done.append((p, len(old), len(new)))
+    p = os.path.join(out, DROPDOWN)
+    def edit(root):
+        right = root.find('view_bar_right'); assert right is not None
+        x = icon_gauge(root); right.x = x - 4 - right.w
+    o, n, _ = edit_ui(p, edit); done.append((p, len(o), len(n)))
     return done
 
 def apply(root):

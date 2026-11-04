@@ -14,7 +14,7 @@ supersampled and box-reduced, written as a plain zlib PNG (bytes independent of 
 outline, the level is the white fill; charging: green `#34C759` outline and bolt with a 0.5 px black
 keyline; low: red `#FF1448` outline. Status bar (`STATUS`): image 22x12 at (288,9), body 20x12, nub 2x6 at (20,3), corner radius 3, fill
 16x8 at (290,11) (0.5 px gap), right edge at x 310 as stock (it was 18x11 at (292,10) with a 12x7 fill until the sizing change), the right icon group ending 4 px before it
-(its box is x 183..284); the same in both `dropdown_dialog.bin` themes. Lock screen (`LOCK`): 34x12, body 22x12 at x 9,
+(its box is x 183..284); the same in `dropdown_dialog.bin`. Lock screen (`LOCK`): 34x12, body 22x12 at x 9,
 fill 16x6 at (12,3), for `screens_battery/charge/lowbattery`. `fill_gap` asserts the fill stays inside
 the outline; `tools/preview_battery.py` draws empty/half/full/charging/low from the tree's files.
 
@@ -34,7 +34,7 @@ a missing file or a read error is invalid), the percentage is written to `power_
 true level and the bolt picture (`bar_charge`, green) stays stock's logic. When charging is done stock's `100` is the same as the gauge's.
 
 **The label and the layout.** `pod_pct` is a hidden, insensitive `label` appended to the right icon group `view_bar_right` of `ui/system_bar.bin` (before the Screenshot camera `pod_shot`, which stays
-the group's last child, against the outline), and `pod_pct_dd` the same in `view_sysbar` of both `dropdown_dialog.bin` themes (the pull-down covers the real bar, so it needs its own; the hook sets both by
+the group's last child, against the outline), and `pod_pct_dd` the same in `view_sysbar` of `dropdown_dialog.bin` (the pull-down covers the real bar, so it needs its own; the hook sets both by
 name: the system bar by a lookup in its window, the pull-down's through the window manager only when the dialog is open, so it can show the number up to a second after it opens). White `#FFFFFF`,
 13 px (`statusbar.PCT_PX`), right-aligned and vertically centred in every style state, so the text's right edge is the group's right edge, 4 px before the outline (x 284, outline x 288). The group's layouter skips an
 invisible child, so the label **makes room**: the icons to its left move left by its width + 4. The width follows the text: the stock AWTK text width (`StbText`: truncated advances + 1 px per glyph; Inter's

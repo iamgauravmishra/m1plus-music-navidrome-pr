@@ -11,7 +11,7 @@ PCP = sibling('podcasts')
 PCN = sibling('pcnet')   # the podcast network machine: the card, libcurl and libjpeg mocks the logo worker runs on
 KB = sibling('keyboard')
 CA, RADIO_DIR, KILL = '/etc/m1plus-cacert.pem', '/mnt/mmc/Radio', '/mnt/mmc/m1plus-off'
-FAVS, LAST, RECENT = RADIO_DIR + '/favourites.m3u', RADIO_DIR + '/.last', '/mnt/data/m1plus/radio-recent'   # (LAST: a file of an old release, which the radio never writes and removes)
+FAVS, RECENT = RADIO_DIR + '/favourites.m3u', '/mnt/data/m1plus/radio-recent'
 PLAYSPEED = pod.DATA['PLAYSPEED_MODE'][0]
 DACOFF, G_OUT, G_VOL = pod.DATA['DACOFF_TIME'][0], pod.DATA['G_HEADSET_OUTPUT'][0], pod.DATA['G_VOLUME'][0]
 RESUME, RUNNING, SOCK = pod.DATA['RESUME_POS'][0], pod.DATA['HCI_RUNNING'][0], pod.DATA['HCI_SOCK_FD'][0]
@@ -297,8 +297,8 @@ def play_tests(ctx):
     order = [c[:2] if c[0] != 'mcl_tidalStartPlayer' else c for c in m.after if c[0] in ('stop_player', 'set_outputchannel', 'mclSetPcmMode', 'mclSetMute', 'set_devicevolume', 'mcl_tidalStartPlayer', 'timer_add', 'mclStop')]
     expect(order == [('stop_player',), ('set_outputchannel', 0), ('mclSetPcmMode',), ('mclSetMute', 0), ('set_devicevolume', 17), ('mcl_tidalStartPlayer', 'http://one.example/a', 0), ('mclSetMute', 0), ('timer_add', PSYMS['rd_tick'])],
            f"stock's stop_player, the DAC readied (output, PCM mode, unmute, volume), the resume position 0 at the call, the URL, then unmuted again, then the one timer ({order})")
-    expect(LAST not in m.fs and LAST + '.tmp' not in m.fs and m.fs.get(RECENT, b'').startswith(b'#EXTM3U\n#EXTINF:-1,One\n') and b'#M1+:Germany\tMP3\t128\n' in m.fs[RECENT] and m.fs[RECENT].count(b'EXTINF') == 1,
-           'no .last is written; the recent file has the station first (with its info)')
+    expect(m.fs.get(RECENT, b'').startswith(b'#EXTM3U\n#EXTINF:-1,One\n') and b'#M1+:Germany\tMP3\t128\n' in m.fs[RECENT] and m.fs[RECENT].count(b'EXTINF') == 1,
+           'the recent file has the station first (with its info)')
     expect(m.call(PSYMS['rd_at']) == 0 and m.call(PSYMS['rd_running']) == 1, 'running, on the first station')
     # ---- refusals
     m = machine()
@@ -735,7 +735,7 @@ def fetch_tests(ctx):
 
 
 def card_tests(ctx):
-    """5. The card: favourites.m3u (atomic), the user's lists, .last, the recent stations."""
+    """5. The card: favourites.m3u (atomic), the user's lists, the recent stations."""
     expect = ctx.expect
     m = machine()
     l = new_list(m, STATIONS)
@@ -786,7 +786,6 @@ def card_tests(ctx):
     m.put_text(RADIO_DIR + '/Jazz.m3u', '#EXTM3U\n#EXTINF:-1,Jazz One\nhttp://jazz.example/1\n#EXTINF:-1,Fav Again\nhttp://fav.example/f\n')
     m.put_text(RADIO_DIR + '/notes.txt', 'http://not.example/a\n')
     m.put_text(RADIO_DIR + '/.hidden.m3u', 'http://hidden.example/a\n')
-    m.put_text(RADIO_DIR + '/.last', '#EXTINF:-1,Last\nhttp://last.example/a\n')
     users = {k: bytes(v) for k, v in m.fs.items() if k != FAVS}
     s0 = m.call(PSYMS['rd_serial'], count=10000)
     r, full = imp(m)
@@ -804,7 +803,6 @@ def card_tests(ctx):
     # nothing to import
     m = machine()
     m.put_text(FAVS, '#EXTM3U\n#EXTINF:-1,Fav\nhttp://fav.example/f\n')
-    m.put_text(RADIO_DIR + '/.last', '#EXTINF:-1,Last\nhttp://last.example/a\n')
     m.put_text(RADIO_DIR + '/readme.txt', 'x\n')
     before = m.fs[FAVS]
     r, full = imp(m)
@@ -849,18 +847,14 @@ def card_tests(ctx):
     buf = m.word(out); got = [m.read_cstr(buf + m.word(out + 16 + 4 * i)) for i in range(m.s32(out + 8))]
     expect(got == [f'R{i}' for i in range(11, 1, -1)], f'recent: the last ten, newest first ({got})')
     m.call(PSYMS['rd_recent_push'], a0=L, a1=5, count=40000000)
+    expect(RECENT + '.tmp' not in m.fs and ('rename', RECENT + '.tmp', RECENT) in m.calls and ('fsync', '/mnt/data/m1plus') in m.calls, 'written through the settings folder\'s atomic writer (temp file, renamed over radio-recent, folder synced)')
     m.call(PSYMS['rd_recent_read'], a0=out, count=40000000)
     buf = m.word(out); got = [m.read_cstr(buf + m.word(out + 16 + 4 * i)) for i in range(m.s32(out + 8))]
     expect(got == ['R5', 'R11', 'R10', 'R9', 'R8', 'R7', 'R6', 'R4', 'R3', 'R2'], f'a station played again moves to the front, once ({got})')
-    expect(RECENT + '.tmp' not in m.fs and ('rename', RECENT + '.tmp', RECENT) in m.calls or True, 'written through the settings folder\'s atomic writer')
     m = machine(); m.present.add(KILL)
     L = new_list(m, big)
     m.call(PSYMS['rd_recent_push'], a0=L, a1=0, count=40000000)
     expect(RECENT not in m.fs, 'the kill switch: no recent file written')
-    # the one-off cleanup: an old release's .last goes when radio-recent is written
-    m = machine(); m.put_text(LAST, '#EXTINF:-1,Last\nhttp://last.example/a\n')
-    l, r = play(m)
-    expect(LAST not in m.fs and ('unlink', LAST) in m.calls and b'One' in m.fs.get(RECENT, b''), 'a leftover .last is removed when the first station is recorded')
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1151,8 +1145,6 @@ def open_tests(ctx):
     blits, texts, fills = paint(m)
     expect([(b[2][0], b[2][1]) for b in blits if b[2][2] == 24] == [(16, TOP + i * ROW_ROOT + 14) for i in range(3)] and len([b for b in blits if b[2][2] == 10]) == 3, 'a 24 px glyph at x 16 and a chevron on each row')
     expect([r for (t, r), s in texts if s == 'label_row_title'][0][0] == 56, 'the titles start at x 56')
-    m = page_machine(); m.put_text(LAST, '#EXTINF:-1,Last\nhttp://last.example/a\n'); open_radio(m)
-    expect(rows_text(m) == ['My Stations', 'Recently Played', 'Radio Browser'], 'a leftover .last alone is not read: no Now Playing row')
     m = page_machine(); m.put_text(RECENT, '#EXTM3U\n#EXTINF:-1,Rec One\nhttp://rec.example/1\n'); open_radio(m)
     expect(rows_text(m)[0] == 'Now Playing' and len(rows_text(m)) == 4, 'Recently Played has a station: a Now Playing row first')
     m = page_machine(); m.put_text(RECENT, '#EXTM3U\n'); open_radio(m)
@@ -1230,7 +1222,7 @@ def levels_tests(ctx):
     m.bound[(m.widgets['btn_return'], O['EVT_CLICK'])] = back
     expect(('window_open', 'm1plus_radionp') in calls and m.proc and m.proc[0][0] == 'start' and ('stop_player',) in calls, f'a tap on a station: stock stopped, the URL handed to hciplayer, Radio\'s Now Playing opens ({[c for c in calls if c[0] == "window_open"]})')
     expect(m.call(PSYMS['rd_at']) == 1 and m.call(PSYMS['rd_state']) == ST['CONNECTING'] and m.read_cstr(m.word(m.call(PSYMS['rd_list'])) + m.word(m.call(PSYMS['rd_list']) + 16 + 4)) == 'Fav Two', 'the second station plays, from a copy of the list')
-    expect(RECENT in m.fs and m.fs[RECENT].split(b'\n')[1] == b'#EXTINF:-1,Fav Two' and LAST not in m.fs, 'it is the newest recent one, first in the file; no .last')
+    expect(RECENT in m.fs and m.fs[RECENT].split(b'\n')[1] == b'#EXTINF:-1,Fav Two', 'it is the newest recent one, first in the file')
     calls = click(m, 'btn_return')
     expect(rows_text(m)[:3] == ['Now Playing', 'My Stations', 'Recently Played'] and ('navigator_back',) not in calls, 'Back from the list: the root, with a Now Playing row now a station is up')
     m.proc = []
@@ -1867,7 +1859,7 @@ def np_tests(ctx):
     m.call(PSYMS['rn_open'], count=900000000)
     ha = m.call(PSYMS['rd_logo_hash'], a0=m.buf('https://l.example/a.png'), count=100000)
     lp = f'{RADIO_DIR}/.logos/{ha:08x}.jpg'
-    expect(vis(m, 'rn_art_ic')[0] == 1 and m.call(PSYMS['rd_logo_running'], count=100000) == 1 or True, 'no logo yet: the glyph stays, the logo worker is asked for it')
+    expect(vis(m, 'rn_art_ic')[0] == 1 and m.call(PSYMS['rd_logo_running'], count=100000) == 1, 'no logo yet: the glyph stays, the logo worker is asked for it')
     m.curl_site = lambda u, o: {'body': b'GIF89a'}
     m.put(lp, jpeg_header(192)); m.sizes[lp] = 4000; m.load_image = 0
     m.canvas = m.alloc(0x80)
@@ -2109,9 +2101,6 @@ def entry_tests(ctx):
     for fn, kw in entries:
         m = np_machine(); m.call(PSYMS[fn], count=900000000, **kw)
         expect(len(stock_calls(m)) == 1 and not opens(m), f'{fn}: no station, stock Now Playing through the trampoline')
-        m = np_machine(); m.put_text(RADIO_DIR + '/.last', '#EXTM3U\n#EXTINF:-1,One\nhttp://a.example/s\n')
-        m.call(PSYMS[fn], count=900000000, **kw)
-        expect(len(stock_calls(m)) == 1 and not opens(m), f'{fn}: .last exists but the radio is stopped: stock Now Playing')
         m = np_machine(); l, r = play(m); m.call(PSYMS[fn], count=900000000, **kw)
         expect(not stock_calls(m) and opens(m) == 1 and ('window_open', 'm1plus_radionp') in m.calls, f'{fn}: a station connecting: Radio Now Playing opens, stock does not')
         m.call(PSYMS[fn], count=900000000, **kw)
