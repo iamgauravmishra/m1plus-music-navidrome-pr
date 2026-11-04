@@ -1328,6 +1328,7 @@
 #define VN_REC_COVER 1
 #define VN_THEMES 2               /* the plinth themes: Graphite, Snow (tools/vinyl_art.py THEME_NAMES) */
 #define VN_REC_K 15               /* the black record's grey at its rim (tools/vinyl_art.py REC_EDGE_K) */
+#define VN_GRAIN 6                /* Graphite's film grain amplitude (tools/vinyl_art.py GRAIN; Snow has none), added to the base where vinyl_grain says */
 #define VN_CAP_X 262              /* vinyl_cap (VN_CAP_PX square): the gimbal cap over the pivot */
 #define VN_CAP_Y 56
 #define VN_CAP_PX 32

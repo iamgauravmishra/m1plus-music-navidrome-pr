@@ -29,7 +29,7 @@ KILL = '/mnt/mmc/m1plus-off'
 REC_FILE = '/mnt/data/m1plus/vinyl-record'
 THEME_FILE = '/mnt/data/m1plus/vinyl-base'
 COMPOSE_MAX = 6000000   # instructions: the Cover record composed once into the base, the same on a track change (3.1 M measured, to be re-measured); not a tick's cost
-COVER_MAX = 18000000   # instructions: a track change with Cover (the tint, the ring composed, the box composed again; the black case loads vinyl_base). 14 M measured (tint to tint 12.4 M, to black 14.0 M), 5.5 M of it any track change
+COVER_MAX = 18000000   # instructions: a track change with Cover (the tint, the ring composed, the box composed again; the black case loads vinyl_base). 16.4 M measured (tint to tint 12.4 M, to black 16.4 M: only the disc written back, the grain kept), 5.5 M of it any track change
 W, H = 320, 480
 OUT = os.path.join(ROOT, 'out', 'preview')
 LABELS = ('vn_title', 'vn_title2', 'vn_artist', 'vn_times', 'vn_status')
@@ -227,6 +227,8 @@ def layers(theme='graphite'):
     """The words of every layer under a plinth theme (plain layer names)."""
     if theme not in _L:
         d = {n: words(asset_image(A.tname(n, theme)), n == 'vinyl_arm') for n in A.THEMED}
+        if A.theme_grain(theme):   # the page grains its base once loaded (vn_grain)
+            d['vinyl_base'] = words(A.grain_apply(asset_image(A.tname('vinyl_base', theme)), asset_image(A.tname('vinyl_grain', theme)).getchannel('R'), A.theme_grain(theme)))
         d['vinyl_label'] = words(asset_image('vinyl_label'))
         _L[theme] = d
     return _L[theme]
@@ -441,11 +443,16 @@ def asset_tests(ctx):
     base_sizes = {'vinyl_base': (320, 480), 'vinyl_lid': (160, 160), 'vinyl_arm': geo, 'vinyl_armsh': geo, 'vinyl_cap': (32, 32), 'vinyl_keys': A.KEY_SHEET}
     sizes = {A.tname(n, th): z for th in A.THEME_NAMES for n, z in base_sizes.items()}
     sizes.update({'vinyl_label': (152, 152), 'vinyl_rec': (A.REC_BOX[2] - A.REC_BOX[0], A.REC_BOX[3] - A.REC_BOX[1])})
+    sizes.update({n: (320, 480) for n in A.GRAINED})
     gen = A.images()
     for n, size in sizes.items():
         im = asset_image(n); built = open(asset_path(n), 'rb').read()
         expect(im.size == size == gen[n].size and built == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read() and same_pixels(built, gen[n]), f'{n}: {size}, the generator\'s RGBA pixels exactly')
-    expect(set(sizes) == set(A.NAMES) and len(sizes) == 6 * len(A.THEME_NAMES) + 2, 'the pictures: six a plinth theme and two shared')
+    expect(set(sizes) == set(A.NAMES) and len(sizes) == 6 * len(A.THEME_NAMES) + 2 + 1 and A.GRAINED == ('vinyl_grain',) and A.GRAIN == O['VN_GRAIN'] and not A.theme_grain('white'),
+           'the pictures: six a plinth theme, two shared, the grain\'s weight of Graphite (VN_GRAIN; Snow has no grain)')
+    gw = asset_image('vinyl_grain'); gd = list(gw.getdata())
+    expect(all(px[1:] == (0, 0, 255) for px in gd) and gw.getpixel((300, 200))[0] == 255 and gw.getpixel((96, 196))[0] == 0 and gw.getpixel((246, 449))[0] == 0,
+           'vinyl_grain: the weight in R (the plinth 255; the record and the keys 0), G, B 0, opaque')
     total = sum(os.path.getsize(asset_path(n)) for n in sizes) + os.path.getsize(asset_path('pod_ic_vinyl'))
     print('  vinyl pictures: %d bytes (%s)' % (total, {n: os.path.getsize(asset_path(n)) for n in sizes}))
     expect(total < 560000, f'the pictures add {total} bytes to the rootfs')
@@ -699,7 +706,8 @@ def theme_tests(ctx):
         m = machine(cover=True, theme=k); assert m.open() == 0; opened_calls = list(m.calls); m.timers = []; m.calls_all = []; m.first(); m.calls_all += m.calls
         expect(('window_open', key) in opened_calls, f'{th}: the page opens its asset {key}')
         loaded = [u for u in m.loads if u.startswith('vinyl_') and u != 'vinyl_label']
-        expect(sorted(loaded) == sorted(A.tname(n, th) for n in A.THEMED) and not any(u.endswith(x) for u in loaded for x in {'_white'} - ({'_' + th} if th != 'graphite' else set())), f'{th}: it loads its own six pictures and no other theme\'s ({sorted(loaded)})')
+        own = [A.tname(n, th) for n in A.THEMED] + ([A.tname('vinyl_grain', th)] if A.theme_grain(th) else [])
+        expect(sorted(loaded) == sorted(own) and not any(u.endswith(x) for u in loaded for x in {'_white'} - ({'_' + th} if th != 'graphite' else set())), f'{th}: it loads its own pictures (the grain\'s weight with grain) and no other theme\'s ({sorted(loaded)})')
         n, first = ndiff(m.frame_words(), model(0, groove_at(200, 243, g), m.cover_words(), playkey=1, theme=th))
         expect(n == 0, f'{th}: the frame is the model pixel for pixel ({n} differ {first})')
         f = dict(cover=A.cover('sunset', 168), title='Midnight City', artist='M83', pos=200, len=243, playing=True, fmt='FLAC', batt=60, charging=False, vol=42, clock='21:07')

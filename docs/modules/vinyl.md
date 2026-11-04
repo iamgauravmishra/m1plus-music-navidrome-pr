@@ -22,16 +22,19 @@ Sources: `patch/vinyl.c`, `tools/vinyl_art.py` (the design's drawing code and th
 
 | Picture | Size | Holds |
 | --- | --- | --- |
-| `vinyl_base` | 320 x 480, opaque | the plinth (grey 0x46, a gentle vertical gradient, film grain 6 at 1 px on the background only), the arm's pill plate and base, the record (grooves, smooth gaps, a weak static sheen 0.22, its shadow), the keys at rest, the chevron |
+| `vinyl_base` | 320 x 480, opaque | the plinth (grey 0x46, a gentle vertical gradient; no grain: the page adds it, see "Grain"), the arm's pill plate and base, the record (grooves, smooth gaps, a weak static sheen 0.22, its shadow), the keys at rest, the chevron |
 | `vinyl_lid` | 160 x 160 RGBA at (16, 116) | over the turning label, fixed: the pressed step at its edge, a soft paper gloss, the white rim, the spindle |
 | `vinyl_arm` | 353 x 59 RGBA | the arm pointing +x, its pivot at (73, 22) of the picture (a pixel corner); loaded premultiplied |
 | `vinyl_armsh` | 353 x 59 | its shadow: the arm's alpha blurred, alpha <= 150, drawn 5 px right and 7 px down of the arm |
 | `vinyl_cap` | 32 x 32 RGBA at (262, 56) | the gimbal cap over the pivot (round: it does not turn) |
 | `vinyl_keys` | 286 x 58, opaque | the key band (rows 420 .. 478) cut in cells: the play key at rest and pressed with the play or pause glyph (x 0, 46, 92, 138), previous pressed (184), next pressed (237) |
 | `vinyl_label` | 152 x 152, opaque | the label of a track without a cover: light grey paper |
+| `vinyl_grain` | 320 x 480 RGBA, Graphite only | the grain's weight in the red channel: 255 the plinth, 0 the record, plate, arm base, keys and chevron (soft at their edges) |
 | `vinyl_rec` | 258 x 324 RGBA at (0, 34) | the record map t of the Cover record in the red channel, 0 where the base stays (see "Record colours") |
 
-Installed sizes (Graphite's names; Snow's `_white` are 90 KB base, 9 KB lid, 3 KB arm, 2 KB shadow, 2 KB cap, 10 KB keys): base 124 KB (its grain), lid 10 KB, arm 3 KB, armsh 2 KB, cap 2 KB, keys 13 KB, `vinyl_label` 2.6 KB, `vinyl_rec` 28 KB; 301 KB for the 14 pictures of both themes. The test prints the sizes and the build output the rootfs headroom.
+Installed sizes (Graphite's names; Snow's `_white` are 62 KB base, 9 KB lid, 3 KB arm, 2 KB shadow, 2 KB cap, 8 KB keys): base 58 KB, lid 10 KB, arm 3 KB, armsh 2 KB, cap 2 KB, keys 13 KB, `vinyl_grain` 2.4 KB, `vinyl_label` 2.6 KB, `vinyl_rec` 28 KB; 208 KB for the 15 pictures of both themes.
+
+**Grain.** Film grain is noise no PNG packs (it was 66 KB of Graphite's base), so the page adds it once, when it loads the base (`vn_grain`): each pixel where `vinyl_grain` weighs is soft-light blended with a hash of its place (amplitude `VN_GRAIN` 6, the sum of three hash bytes: gaussian-like), by the weight, all integer (`vinyl_art.grain_apply`, `grain_n`, `soft_light`; the test model grains the installed base the same way). The soft-light values are a 37 x 256 table in `.scratch` (9.5 KB), made at the first grain. The key cells in `vinyl_keys` are cut from the grained frame, so they match. Snow has no grain (amplitude 0: no `vinyl_grain`, no pass). The test prints the sizes and the build output the rootfs headroom.
 
 **Encoding.** `tools/png_pack.py` writes the Vinyl PNGs (`mod_icons.py --generate` and `vinyl_art.py` use it for these names only): pure Python, each picture the smallest of RGBA or, when it has at most 256 colours (`vinyl_label`, `vinyl_rec`, both shadows), an 8 bit palette picture **with a tRNS chunk** (stb_image gives a palette picture four channels only when tRNS is there, which the payload's `vn_load` / `vn_recolour` need; stock ships such pictures, `scover_wait*`), over every filter plan and two zlib strategies. The pictures of few colours want no row filter (deflate repeats whole pixels). Every picture decodes to the same RGBA pixels as the plain `optimize=True` PNG it replaced (the packer asserts it, the test compares the pixels). Not done: Zopfli-class deflate (pinned `pyoxipng`) would save a few percent more; grey, RGB or LA pictures (the loader would give 1, 3 or 2 channels, the payload reads 4); cropping margins (the arm is 3 KB, the lid 10 KB: little to gain); sharing a layer between the themes (no layer is identical).
 
@@ -87,9 +90,9 @@ changed for Black: `vinyl_base` is pixel for pixel what V2.1qD installed, `vinyl
   `cover_tint` is within a few levels).
 - **Cost** (emulation, `test/pod/vinyl.py` `record_tests`, `cover_record_tests`, budgets enforced): a playing tick with Cover 2.21 M instructions, exactly Black's. The first
   look with Cover about 1.9 M more than Black's once (budget 6 M). A track change with a new tint about 12.4 M once, from black or from another tint (a Black record's is 5.5 M: the cover decode, the new text and
-  label), to a grey cover about 14 M (the black restore decodes `vinyl_base`), to a track of the same tint 5.9 M, as Black's (budget 18 M). The frames are the python model
+  label), to a grey cover about 16.4 M (the black restore decodes `vinyl_base` and writes back only the disc: inside the rim from it, the rim the pixels `vn_recolour` saved; the plinth keeps its grain, nothing is grained again), to a track of the same tint 5.9 M, as Black's (budget 18 M). The frames are the python model
   (`rec_base`) pixel for pixel and within a few levels of the mock.
-- **Memory.** Nothing kept beyond the 1 KB table, the 6 KB of saved rim and the 15 byte stops; transient 334 KB (`vinyl_rec`), 614 KB for the restore to black.
+- **Memory.** Nothing kept beyond the 1 KB table, the 6 KB of saved rim and the 15 byte stops; transient 334 KB (`vinyl_rec`), 614 KB for the restore to black (and the decoded `vinyl_grain` while it grains).
 
 ## Themes (the plinth)
 
@@ -98,12 +101,12 @@ matte off-white plinth, silver arm, grey keys, dark text). A value row opening t
 saved as `0` or `1` (optional newline; only `1` is Snow, anything else or no file is Graphite) in `/mnt/data/m1plus/vinyl-base` (`vinyl_theme`, `vinyl_theme_set`), read once when the page opens.
 The designs are `vinyl_art.THEMES` (selected by `use(theme)`; the mocks are `tools/preview_vinyl_themes.py`).
 
-- **Pictures.** A theme changes six: `vinyl_base`, `vinyl_lid` (the rim colour), `vinyl_arm`, `vinyl_armsh` (Snow's shadow is lighter), `vinyl_cap`, `vinyl_keys`. Graphite's keep their
+- **Pictures.** A theme changes six (and Graphite has `vinyl_grain`): `vinyl_base`, `vinyl_lid` (the rim colour), `vinyl_arm`, `vinyl_armsh` (Snow's shadow is lighter), `vinyl_cap`, `vinyl_keys`. Graphite's keep their
   names and are pixel for pixel what V2.1qD installed; Snow's end in `_white` (`vinyl_art.tname`, `vn_names`). `vinyl_label` and `vinyl_rec` are shared: the Cover record carries
   no plinth (its rim blends into the base already loaded), so it is the same under every theme.
 - **Text.** The labels' colours are in the page asset, so each theme has its own: `m1plus_vinyl` (Graphite), `m1plus_vinyl_white` (the same tree, `vinyl_art.text_rgb`;
   `vn_pages` opens the saved one). No stock call is needed to recolour a label. The chevron is in the base.
-- **Size.** Snow adds 116 KB of PNG (Walnut, 197 KB, was dropped for the rootfs headroom); see the table above.
+- **Size.** Snow adds 86 KB of PNG (Walnut, 197 KB, was dropped for the rootfs headroom); see the table above.
 - **Cost.** None at run time: the page loads its theme's six pictures instead of Graphite's; a playing tick is identical (test).
 
 ## Touch

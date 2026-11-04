@@ -8,9 +8,10 @@ is the playing track's cover (LAB_R), a tonearm turns about PIVOT on a raised pi
 AWTK labels (TEXT). Neutral greys only.
 
 Layers (the page composes them at run time, patch/vinyl.c; every one drawn at K x and reduced, deterministic):
-  vinyl_base   320 x 480, opaque: the plinth (a gentle vertical grey gradient with film grain on the background only), the arm's plate and base, the record (grooves and
+  vinyl_base   320 x 480, opaque: the plinth (a gentle vertical grey gradient), the arm's plate and base, the record (grooves and
                a weak static sheen: the light does not turn with the record, so the grooves are static and only the label turns), its shadow, the keys at rest, the close
-               chevron. No label, no spindle, no arm, no text.
+               chevron. No label, no spindle, no arm, no text, no grain (the page adds it: grain_apply).
+  vinyl_grain  320 x 480, RGBA, a theme with grain only (Graphite): the grain's weight in R (255 the background, 0 what stays clean, G, B 0, A 255).
   vinyl_lid    LID_RECT, RGBA: what lies on the turning label and does not turn: the pressed step at its edge, a soft paper gloss, the white rim, the spindle.
   vinyl_arm    the tonearm pointing +x (counterweight, tube, headshell, cartridge), ARM_SIZE, RGBA, the pivot at ARM_PIVOT (a pixel corner); the page turns it about PIVOT.
   vinyl_armsh  its shadow in the same frame: the arm's alpha blurred, ARM_SHADOW's alpha in A (RGB black); the page draws it ARM_SHADOW's (dx, dy) down-right of the arm.
@@ -34,7 +35,7 @@ PIVOT, ARM_L, ARM_BEND, BASE_R = (276, 70), 246, 24, 15
 ARM_C = dict(tube=(0xB8, 0xBB, 0xC0), shell=(0x24, 0x24, 0x26), weight=(0x1E, 0x1E, 0x20), cart=(0x2C, 0x2C, 0x2E), screw=(0x6A, 0x6A, 0x6E), base=(0x30, 0x30, 0x33))
 ARM_SHADOW = (5, 7, 3, 150)                  # the arm's shadow: dx, dy, blur, alpha
 BG = 0x46                                    # the plinth's grey (the middle of its gradient)
-GRAIN = (6, 1.0)                             # film grain amplitude and clump size (1 px), on the background only
+GRAIN = 6                                    # film grain amplitude (1 px, on the background only; 0 none), added by the page (grain_apply, patch/vinyl.c vn_grain)
 SHEEN = 0.22                                 # the record's static sheen (weak: a dark record)
 REC_SHADOW = (4, 9, 120)                     # the record's shadow: dy, blur, alpha
 GAPS = (104, 121, 138)                       # the smooth gaps between tracks (radius)
@@ -76,7 +77,7 @@ THEMES = {
     'graphite': {},
     # a matte off-white plinth (minimal, light), a black record, grey keys, dark text
     'white': dict(
-        grad=[(0xF0, 0xF0, 0xEF), (0xE4, 0xE4, 0xE4), (0xEA, 0xEA, 0xEA)], grain=(3, 1.0),
+        grad=[(0xF0, 0xF0, 0xEF), (0xE4, 0xE4, 0xE4), (0xEA, 0xEA, 0xEA)], grain=0,
         plate=(0xF4, 0xF4, 0xF4), plate_sh=70, plate_hi=0, rec_shadow=(5, 10, 85),
         key=(0x6A, 0x6A, 0x6E), key_down=(0x58, 0x58, 0x5C), key_sh=100, key_hi=(80, 40), key_lo=80,
         glyph=(0xFC, 0xFC, 0xFC), glyph_down=(0xD0, 0xD0, 0xD4), chevron=(0x58, 0x58, 0x5C, 255), rim=(0xFF, 0xFF, 0xFF),
@@ -563,16 +564,33 @@ def chevron(im, x=CHEVRON[0], y=CHEVRON[1]):
     im.alpha_composite(big.resize((n, n), Image.LANCZOS), (x - n // 2, y - n // 2))
 
 
-_NOISE = {}
-def film_grain(im, amp, grain, seed=41):
-    """Film grain at 1:1 over the whole frame: monochrome gaussian-like noise (sum of 3 uniforms), `grain` px clumps (made smaller and
-    enlarged), soft-light blended so mid-greys carry it most and the blacks stay black."""
-    w, h = im.size; key = (w, h, amp, grain, seed)
-    if key not in _NOISE:
-        gw, gh = max(2, int(w / grain)), max(2, int(h / grain)); r = random.Random(seed)
-        n = Image.frombytes('L', (gw, gh), bytes(clamp(128 + (r.random() + r.random() + r.random() - 1.5) * amp * 2) for _ in range(gw * gh)))
-        _NOISE[key] = Image.merge('RGB', ((n.resize((w, h), Image.BICUBIC) if grain > 1 else n),) * 3)
-    return ImageChops.soft_light(im.convert('RGB'), _NOISE[key]).convert('RGBA')
+def d255(x): return (x + 128 + ((x + 128) >> 8)) >> 8   # x / 255 rounded, x in 0 .. 65535 (patch/vinyl.c VN_D255)
+
+
+def grain_n(i, amp):
+    """The grain's soft-light value at pixel i (y * W + x): a hash of i, the sum of three of its bytes (gaussian-like), 128 +- 3 amp (patch/vinyl.c vn_grain)."""
+    h = ((i + 1) * 0x9E3779B1) & 0xFFFFFFFF; h ^= h >> 16; h = (h * 0x85EBCA6B) & 0xFFFFFFFF; h ^= h >> 13
+    return 128 - 3 * amp + d255(((h & 255) + (h >> 8 & 255) + (h >> 16 & 255)) * 2 * amp)
+
+
+def soft_light(c, n):
+    """A channel c soft-light blended with n (128 leaves it): mid-greys carry the grain most, the blacks stay black."""
+    return ((255 - c) * c * n >> 16) + d255(c * (255 - d255((255 - c) * (255 - n))))
+
+
+_SL = {}
+def grain_apply(im, weight, amp, rect=(0, 0, W, H)):
+    """Film grain at 1:1 on the W x H frame im (RGB) where weight (an L image: 255 all of it, 0 none) says, inside rect: the page's vn_grain, integer for integer."""
+    out = im.convert('RGB'); px = out.load(); wt = weight.load()
+    for y in range(rect[1], rect[3]):
+        for x in range(rect[0], rect[2]):
+            w = wt[x, y]
+            if not w: continue
+            n = grain_n(y * W + x, amp)
+            if (n, amp) not in _SL: _SL[n, amp] = [soft_light(c, n) for c in range(256)]
+            t = _SL[n, amp]
+            px[x, y] = tuple(d255(c * (255 - w) + t[c] * w) for c in px[x, y])
+    return out
 
 
 # ---- the scene -------------------------------------------------------------------------------------------------------------------
@@ -587,12 +605,17 @@ def plinth(size):
 
 
 def finish(im):
-    """3x -> 1x, the film grain on what is not in FG (the record, the plate, the arm's base, the keys stay clean)."""
+    """3x -> 1x, and the grain's weight: what is not in FG (the record, the plate, the arm's base, the keys stay clean). (1x RGBA, 1x L)"""
     size = im.size
     out = im.resize((W, H), Image.LANCZOS)
-    g = film_grain(out, *GRAIN)
     fg_add(disc_mask(size, S(REC_C[0]), S(REC_C[1]), S(REC_R)))
-    return Image.composite(out, g, FG[0].resize((W, H), Image.BOX))
+    return out, ImageOps.invert(FG[0].resize((W, H), Image.BOX))
+
+
+def with_chevron(out, wt):
+    """The chevron drawn over out (1x RGBA), and the grain's weight wt less what it covers."""
+    chevron(out); c = Image.new('RGBA', (W, H), (0, 0, 0, 0)); chevron(c)
+    return out, ImageChops.darker(wt, ImageOps.invert(c.getchannel('A')))
 
 
 def design(s, f):
@@ -608,10 +631,10 @@ def design(s, f):
         arm_base(im)
         tonearm(im, arm_turn(f['playing'], f['pos'] / f['len'] if f['len'] else 0))
         transport(im, f['playing'])
-        out = finish(im)
+        out, wt = with_chevron(*finish(im))
     finally:
         FG[0] = None
-    chevron(out)
+    if GRAIN: out = grain_apply(out, wt, GRAIN).convert('RGBA')
     text(s, out, f, status_text(f['vol'], f['fmt'], f['clock']), times_text(f['pos'], f['len']))
     return out
 
@@ -645,16 +668,28 @@ def scene_bare():
     return _SCENE['im'].copy(), _SCENE['fg'].copy()
 
 
-def base_frame(pause=False, pressed=None):
-    """The page's background with the keys in one look (1x RGB): vinyl_base is (play glyph, nothing pressed); the key cells are crops of the others."""
+def base_frame(pause=False, pressed=None, grain=True):
+    """The page's background with the keys in one look (1x RGB), grained as the page grains it: vinyl_base is (play glyph, nothing pressed, grain=False); the
+    key cells are crops of the others."""
     im, FG[0] = scene_bare()
     try:
         transport(im, pause, pressed)
-        out = finish(im)
+        out, wt = with_chevron(*finish(im))
     finally:
         FG[0] = None
-    chevron(out)
-    return out.convert('RGB')
+    return grain_apply(out, wt, GRAIN) if grain and GRAIN else out.convert('RGB')
+
+
+def grain_image():
+    """vinyl_grain as installed: the grain's weight of vinyl_base in R (G, B 0, A 255)."""
+    im, FG[0] = scene_bare()
+    try:
+        transport(im, False)
+        wt = with_chevron(*finish(im))[1]
+    finally:
+        FG[0] = None
+    z = Image.new('L', wt.size, 0)
+    return Image.merge('RGBA', (wt, z, z, Image.new('L', wt.size, 255)))
 
 
 def layer(draw, rect):
@@ -770,7 +805,11 @@ def tname(name, theme='graphite'):
     return name if theme == 'graphite' else '%s_%s' % (name, theme)
 
 
-NAMES = tuple(tname(n, t) for t in THEME_NAMES for n in THEMED) + SHARED
+def theme_grain(theme): return dict(GRAPHITE, **THEMES[theme])['grain']
+
+
+GRAINED = tuple(tname('vinyl_grain', t) for t in THEME_NAMES if theme_grain(t))                 # the grain's weight, a theme with grain only
+NAMES = tuple(tname(n, t) for t in THEME_NAMES for n in THEMED) + GRAINED + SHARED
 
 
 def text_rgb(field, theme='graphite'):
@@ -790,7 +829,8 @@ def images():
     try:
         for th in THEME_NAMES:
             use(th)
-            for n, im in zip(THEMED, (base_frame().convert('RGBA'), lid_image(), arm_image(), armsh_image(), cap_image(), keys_image())): out[tname(n, th)] = im
+            for n, im in zip(THEMED, (base_frame(grain=False).convert('RGBA'), lid_image(), arm_image(), armsh_image(), cap_image(), keys_image())): out[tname(n, th)] = im
+            if GRAIN: out[tname('vinyl_grain', th)] = grain_image()
     finally:
         use('graphite')
     out['vinyl_label'], out['vinyl_rec'] = label_image(), rec_image()

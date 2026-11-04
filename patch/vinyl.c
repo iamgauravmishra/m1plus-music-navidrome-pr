@@ -203,6 +203,54 @@ static const char *const vn_names[VN_THEMES][6] = {
     {"vinyl_base_white", "vinyl_lid_white", "vinyl_arm_white", "vinyl_armsh_white", "vinyl_cap_white",
      "vinyl_keys_white"}};
 static const char *const vn_pages[VN_THEMES] = {"m1plus_vinyl", "m1plus_vinyl_white"};
+/* The film grain of each theme: its amplitude and the picture of its weight (tools/vinyl_art.py GRAIN, GRAINED); Snow has none. */
+static const unsigned char vn_grain_amp[VN_THEMES] = {VN_GRAIN, 0};
+static const char *const vn_grain_name[VN_THEMES] = {"vinyl_grain", (const char *)0};
+
+#define VN_D255(x) (((x) + 128 + (((x) + 128) >> 8)) >> 8) /* x / 255 rounded, x in 0 .. 65535 (tools/vinyl_art.py d255) */
+
+/* soft[n - (128 - 3 amp)][c]: a channel c soft-light blended with n (tools/vinyl_art.py soft_light), n in 128 +- 3 amp; made for amp at the first grain. */
+static struct {
+    unsigned amp;
+    unsigned char soft[6 * VN_GRAIN + 1][256];
+} vg __attribute__((section(".scratch")));
+
+/* The theme's film grain on the rectangle (x0, y0) w x h of bmp (a VN_W x VN_H base of ours), once when it is loaded: each pixel soft-light blended with a hash of its
+ * place by the weight vinyl_grain holds in red (tools/vinyl_art.py grain_apply, integer for integer). The grain is noise that no PNG packs: shipping it costs the rootfs
+ * ~65 KB. Nothing when the theme has none or vinyl_grain will not load (the base stays clean). */
+static void vn_grain(void *bmp, int x0, int y0, int w, int h) {
+    static const unsigned char at[4][4] = BITMAP_RGBA_AT;
+    unsigned amp = vn_grain_amp[vn.theme], bitmap[32], format, stride, *p = (unsigned *)0, x, y, n0;
+    const unsigned char *m = (const unsigned char *)0;
+    if (!amp) return;
+    memset(bitmap, 0, sizeof bitmap);
+    if (widget_load_image(vn.win, vn_grain_name[vn.theme], bitmap)) return;
+    format = (unsigned)(*(unsigned short *)((char *)bitmap + BITMAP_FORMAT)) - 1u;
+    if (format < 4 && bitmap[0] == VN_W && bitmap[1] == VN_H) m = bitmap_lock_buffer_for_read(bitmap); /* read in place: the weight is R */
+    p = m ? (unsigned *)bitmap_lock_buffer_for_write(bmp) : (unsigned *)0;
+    if (p) {
+        if (vg.amp != amp)
+            for (vg.amp = amp, y = 0; y <= 6 * amp; ++y)
+                for (x = 0, n0 = 128 - 3 * amp + y; x < 256; ++x)
+                    vg.soft[y][x] = (unsigned char)(((255 - x) * x * n0 >> 16) + VN_D255(x * (255 - VN_D255((255 - x) * (255 - n0)))));
+        stride = bitmap_get_line_length(bitmap);
+        for (y = (unsigned)y0; y < (unsigned)(y0 + h); ++y)
+            for (x = (unsigned)x0; x < (unsigned)(x0 + w); ++x) {
+                unsigned i = y * VN_W + x, wt = m[y * stride + x * 4 + at[format][0]], v = p[i], hs, n, k, o;
+                if (!wt) continue;
+                hs = (i + 1) * 0x9E3779B1u, hs ^= hs >> 16, hs *= 0x85EBCA6Bu, hs ^= hs >> 13;
+                n = VN_D255(((hs & 255) + (hs >> 8 & 255) + (hs >> 16 & 255)) * 2 * amp); /* the value less 128 - 3 amp */
+                for (o = v & 0xff000000u, k = 0; k < 24; k += 8) {
+                    unsigned c = v >> k & 255;
+                    o |= VN_D255(c * (255 - wt) + vg.soft[n][c] * wt) << k;
+                }
+                p[i] = o;
+            }
+        bitmap_unlock_buffer(bmp);
+    }
+    if (m) bitmap_unlock_buffer(bitmap);
+    widget_unload_image(vn.win, bitmap);
+}
 
 static void vn_free(void) {
     void **b[9] = {&vn.frame, &vn.base, &vn.keys, &vn.arm, &vn.sh, &vn.lid, &vn.cap, &vn.fall, &vn.cover};
@@ -970,14 +1018,25 @@ static int vn_retint(void) {
         memcpy(vn.tst, st, sizeof st), vn.tinted = 1;
         return 1;
     }
-    if (vn.tinted) { /* back to black: the installed base's box again */
+    if (vn.tinted) { /* back to black: only the pixels vn_recolour wrote, so the plinth keeps its grain: inside the rim the
+                        installed base's (no grain there), the rim the pixels it saved (grained where the plinth shows through) */
         void *b = vn_load(vn_names[vn.theme][0], VN_W, VN_H, 0);
         unsigned *src = b ? (unsigned *)bitmap_lock_buffer_for_read(b) : (unsigned *)0,
                  *dst = src ? (unsigned *)bitmap_lock_buffer_for_write(vn.base) : (unsigned *)0;
-        int y;
+        int x, y, ri = 0;
         if (dst)
-            for (y = VN_RB_Y0; y < VN_RB_Y0 + VN_RB_H; ++y)
-                memcpy(dst + y * VN_W + VN_RB_X0, src + y * VN_W + VN_RB_X0, VN_RB_W * 4);
+            for (y = 0; y < VN_RB_H; ++y) {
+                unsigned *o = dst + (y + VN_RB_Y0) * VN_W + VN_RB_X0;
+                const unsigned *s = src + (y + VN_RB_Y0) * VN_W + VN_RB_X0;
+                int vy = 2 * (y + VN_RB_Y0 - VN_REC_Y) + 1;
+                for (x = 0; x < VN_RB_W; ++x) {
+                    int vx = 2 * (x + VN_RB_X0 - VN_REC_X) + 1, d2 = vx * vx + vy * vy;
+                    if (d2 <= (2 * VN_REC_R - 2) * (2 * VN_REC_R - 2))
+                        o[x] = s[x];
+                    else if (d2 < (2 * VN_REC_R + 2) * (2 * VN_REC_R + 2) && 8 * VN_REC_R + 4 - vn_isqrt(16 * d2) > 0)
+                        o[x] = ri < VN_RIM_MAX ? vr.rim[ri] : s[x], ++ri; /* vn_recolour's rim pixels, in its order */
+                }
+            }
         if (dst) bitmap_unlock_buffer(vn.base);
         if (src) bitmap_unlock_buffer(b);
         if (b) bitmap_destroy(b);
@@ -1010,6 +1069,7 @@ int vinyl_open(void) {
     if (vn.view && vn.title && vn.title2 && vn.artist && vn.times && vn.status) {
         unsigned *f;
         vn.base = vn_load(vn_names[vn.theme][0], VN_W, VN_H, 0);
+        if (vn.base) vn_grain(vn.base, 0, 0, VN_W, VN_H);
         vn.keys = vn_load(vn_names[vn.theme][5], VN_KEYS_W, VN_BAND_Y1 - VN_BAND_Y0, 0);
         vn.arm = vn_load(vn_names[vn.theme][2], VN_ARM_W, VN_ARM_H, 1);
         vn.sh = vn_load(vn_names[vn.theme][3], VN_ARM_W, VN_ARM_H, 0);
