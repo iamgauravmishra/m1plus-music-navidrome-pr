@@ -350,6 +350,21 @@ class Machine:
         if not self.u.mem_read(ci + O['CLASSINFO_ALL_SONGS'], 1)[0]: return []
         return list(self.artist_songs.get(self.read_cstr(ci + O['CLASSINFO_ARTIST']), []))
 
+    CSTL_BASE = 0x77000000   # where install_libcstl maps the "library"
+    pops = 0
+
+    def install_libcstl(self, bound=True):
+        """libcstl as the payload finds it (patch/shuffle.c cstl_pop_back): the real bytes of the stock library's text (the first 0x3c000 bytes: deque_size at CSTL_SIZE, deque_pop_back at CSTL_POP) mapped at
+        CSTL_BASE, demo's GOT slot of deque_size bound to it (bound False: still the stub inside demo, as before the first call), and deque_pop_back trapped (cstl_pop_back models what the code does)."""
+        slot = int(re.search(r'GOT_DEQUE_SIZE 0x([0-9a-f]+)u', open(os.path.join(BUILD, 'stock.h')).read()).group(1), 16)
+        lib = open(os.path.join(WORK, 'rootfs', pod.LIBCSTL), 'rb').read()
+        if not hasattr(self, 'got_deque_size'):
+            self.u.mem_map(self.CSTL_BASE, 0x3c000)
+            self.u.mem_write(self.CSTL_BASE, lib[:0x3c000])
+            self.handlers[self.CSTL_BASE + pod.CSTL_POP] = 'cstl_pop_back'
+        self.got_deque_size = slot
+        self.setword(slot, self.CSTL_BASE + pod.CSTL_SIZE if bound else 0x743590)
+
     def new_deque(self, items=()):
         h = self.alloc(8)
         self.deques[h] = list(items)
@@ -827,7 +842,7 @@ class Machine:
             self.play_pos = a0; self.calls.append(('mclSetPlayPos', a0))
         elif name == 'stock_setmode':   # stock's mclSetPlayMode behind the hook's trampoline (patch/shuffle.c sh_set_mode): the mode word, and the gapless preload closed for a mode other than 0 and 3
             self.mode = a0; self.calls.append(('stock_setmode', a0))
-            if self.word(pod.DATA['MCL_GAPLESS'][0]) == 1 and a0 not in (0, 3): self.setword(pod.DATA['MCL_GAPLESS'][0], -1); self.calls.append(('closegapless',))
+            if self.word(pod.DATA['MCL_PRELOAD'][0]) == 1 and a0 not in (0, 3): self.setword(pod.DATA['MCL_PRELOAD'][0], -1); self.calls.append(('closegapless',))
             ret = 1
         elif name == 'stock_loadplaylist':   # stock's mclLoadPlayList behind its trampoline: the play queue becomes a copy of the deque, the position the index
             recs = []   # deque_assign copies the records (their strings are shared)
@@ -1015,6 +1030,13 @@ class Machine:
             if a1 >= len(items): self.calls.append(('deque_at_oob', a1, len(items)))   # the device's deque_at reads past the end: a crash there
         elif name == 'deque_destroy':
             self.deques.pop(a0, None); self.calls.append(('deque_destroy',))
+        elif name == 'cstl_pop_back':   # libcstl's deque_pop_back(q) = _deque_shrink_at_end(q, 1) (0x3f3dc, read from the disassembly): the deque's element destroy callback on the last element, then the emptied block
+            items = self.deques[a0]   # freed. The callback of an stSongInfo deque is 0x5dabfc: free() of the pointers at +4 .. +0x2c (when set), memset(record, 0, 0x58). Nothing is allocated, copied or locked.
+            if not items: self.calls.append(('pop_back_empty', a0)); raise AssertionError('deque_pop_back on an empty deque')
+            r = items.pop(); self.calls.append(('pop_back', a0, r)); self.pops += 1
+            for off in range(4, 0x30, 4):
+                if self.word(r + off): self.calls.append(('free', self.word(r + off)))
+            self.u.mem_write(r, bytes(0x58))
         # ---- Home guard: files, descriptors, the window stack
         elif name == 'open':
             p, fl = self.read_cstr(a0), a1

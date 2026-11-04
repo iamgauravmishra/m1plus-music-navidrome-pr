@@ -30,7 +30,7 @@ UI = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_queue.bi
 KILL = '/mnt/mmc/m1plus-off'
 FLAG_FILE = '/mnt/data/m1plus/playback-shuffle'
 flag_on = lambda m: m.fs.get(FLAG_FILE) == b'1\n'   # the Shuffle flag as saved
-WIDGETS = ('view_queue', 'btn_return', 'btn_shuffle', 'btn_repeat', 'label_status', 'label_row_title', 'label_row_sub', 'qp_title', 'qp_artist', 'qp_empty', 'qp_head', 'label_title')
+WIDGETS = ('view_queue', 'btn_return', 'btn_shuffle', 'btn_repeat', 'label_status', 'label_row_title', 'label_row_sub', 'qp_title', 'qp_artist', 'qp_empty', 'qp_head', 'btn_qclear', 'label_title')
 NAMES = ['So What', 'Freddie Freeloader', 'Blue in Green', 'All Blues', 'Flamenco Sketches', 'Chorus Complains', 'Come Together', 'Something', 'Hey Jude', 'Let It Be']
 RGB = (190, 50, 55)
 
@@ -41,12 +41,17 @@ class QM(SG.SongsMachine):
 
     def __init__(self, *a, **k):
         super().__init__(*a, **k)
-        for n in ('mclGetPlayType', 'start_playqueue'): self.handlers[pod.FUNCTIONS[n][2]] = n
+        for n in ('mclGetPlayType', 'start_playqueue', 'mclSetGaplessMode'): self.handlers[pod.FUNCTIONS[n][2]] = n
+        self.install_libcstl()
 
     def _hook(self, u, address, size, _):
         name = self.handlers.get(address, '')
         a0 = u.reg_read(UC_MIPS_REG_A0)
         if name == 'mclGetPlayType': ret = self.ptype
+        elif name == 'mclSetGaplessMode':   # stock's setter: the byte, and for 0 with a preload open (state 1) {mcl-closegapless} and state -1
+            self.calls.append(('mclSetGaplessMode', a0)); self.u.mem_write(pod.DATA['MCL_GAPLESS'][0], bytes((a0 & 255,)))
+            if a0 == 0 and self.word(pod.DATA['MCL_PRELOAD'][0]) == 1: self.setword(pod.DATA['MCL_PRELOAD'][0], -1); self.calls.append(('closegapless',))
+            ret = 0
         elif name == 'start_playqueue': self.calls.append(('start_playqueue', a0)); self.play_pos = a0; ret = 0
         else: return super()._hook(u, address, size, _)
         u.reg_write(UC_MIPS_REG_V0, ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
@@ -553,7 +558,204 @@ def shuffle_tests(ctx):
     destroy(m)
 
 
-SECTIONS = [asset_tests, open_tests, header_tests, rows_tests, loader_tests, play_tests, mode_tests, tick_tests, shuffle_tests]   # tools/check.py runs each as its own task
+def clear_tests(ctx):
+    """10. Clear (patch/queuepage.c qp_on_clear, patch/shuffle.c pod_clear_upnext): the button, the engine (the tracks after the play position go, the rest stays and plays on), the
+    gapless preload, the Shuffle order, the refusals and the pins."""
+    expect = ctx.expect
+    PRE, PRE_NEXT, GAP = (pod.DATA[k][0] for k in ('MCL_PRELOAD', 'MCL_PRELOAD_NEXT', 'MCL_GAPLESS'))
+    recs = lambda m: list(m.deques[m.word(PLAY_QUEUE)])
+    strs = lambda m, rs: [m.word(r + O[f]) for r in rs for f in ('REC_TITLE', 'REC_ARTIST', 'REC_ALBUM', 'REC_PATH', 'REC_NAME')]
+    titles = lambda m: [m.read_cstr(m.word(r + O['REC_TITLE'])) for r in recs(m)]
+    rows = lambda m: [t for (t, r), s in paint(m)[1] if s == 'label_row_title']
+
+    # the asset: a flat grey text button right of "Queue", hidden and insensitive until songs follow
+    root = ui(); b = root.find('btn_qclear'); view = root.find('view_queue')
+    expect(b is not None and b.type == 'button' and (b.x, b.y, b.w, b.h) == (O['QP_CLEAR_X'], O['QP_CLEAR_Y'], O['QP_CLEAR_W'], O['QP_CLEAR_H']) and b.get('visible') == 'false' and b.get('sensitive') == 'false',
+           'btn_qclear: a 100 x 40 button at x 210, hidden and insensitive from the start')
+    expect(b.get('style:normal:text_color') == '#9C9C9C' and b.get('style:pressed:text_color') == '#7A7A7A' and b.get('style:normal:font_size') == '17' and b.get('style:normal:text_align_h') == 'right'
+           and b.get('style:normal:bg_color') == '#00000000' and b.get('style:pressed:bg_color') == '#00000000' and b.get('tr_text', 'Clear') == 'Clear', 'Clear: 17 px neutral grey #9C9C9C, #7A7A7A pressed, right aligned, no fill')
+    expect(O['QP_CLEAR_X'] + O['QP_CLEAR_W'] == 310 and O['QP_CLEAR_Y'] + O['QP_CLEAR_H'] // 2 == O['QP_HEAD_Y'] + O['QP_HEAD_H'] // 2 and O['QP_CLEAR_Y'] >= O['QP_PILL_Y'] + O['SG_PILL_H']
+           and O['QP_CLEAR_Y'] + O['QP_CLEAR_H'] <= TOP, 'it ends at x 310, is centred on the "Queue" line and touches neither the buttons above nor the rows below')
+    names = [c.name for c in view.children]
+    expect(names.index('btn_qclear') > names.index('qp_head'), f'it is above the line in z order ({names})')
+    import pod_i18n
+    expect(set(pod_i18n.TEXT['Clear']) == set(pod_i18n.LOCALES) and all(pod_i18n.TEXT['Clear'][lc] for lc in pod_i18n.LOCALES) and pod_i18n.TEXT['Clear']['en_US'] == 'Clear', '"Clear" is translated in all 13 languages')
+
+    # mid-queue: 0..pos stay as they are (the same records and string pointers, bytes untouched, nothing freed or copied), only the tail records are destroyed (last first, by libcstl's deque_pop_back)
+    m = opened(n=6, pos=2)
+    q = m.word(PLAY_QUEUE); before = recs(m); kept, tail = before[:3], before[3:]
+    owned, tail_owned = strs(m, kept), strs(m, tail)
+    raw = lambda m, rs: [bytes(m.u.mem_read(r, O['REC_SIZE'])) for r in rs]
+    kept_raw = raw(m, kept); m.calls.clear()
+    expect(shown(m, 'btn_qclear') and rows(m) == NAMES[3:6], 'songs follow: Clear shows (visible and sensitive)')
+    click(m, 'btn_qclear')
+    expect(recs(m) == kept and m.word(PLAY_QUEUE) == q and strs(m, kept) == owned and raw(m, kept) == kept_raw and titles(m) == NAMES[:3] and m.play_pos == 2 and len(m.deques[q]) == 3 == m.play_pos + 1,
+           f'Clear: the queue is the playing track and the ones before it ({titles(m)}): the same deque, the same records at the same addresses with the same bytes and string pointers, size = position + 1')
+    pops = [c for c in m.calls if c[0] == 'pop_back']
+    freed = [c[1] for c in m.calls if c[0] == 'free' and c[1]]   # (free(NULL) from the page's own reload is no free)
+    expect([c[2] for c in pops] == tail[::-1] and all(c[1] == q for c in pops), f'only the tail records are popped, the last first ({len(pops)} pops)')
+    expect(sorted(freed) == sorted(tail_owned) and not set(freed) & set(owned) and raw(m, tail) == [bytes(O['REC_SIZE'])] * 3,
+           'the tail records\' strings are freed once each (the stSongInfo destructor) and the records cleared; no retained string is freed')
+    expect(not [c for c in m.calls if c[0] in ('calloc', 'strdup', 'memcpy', 'memset', '_create_deque', 'deque_init', '_deque_push_back', 'deque_assign', 'deque_destroy', 'deque_clear', 'mclSetPlayPos', 'start_playqueue', 'mclStartPlayer')
+                                               or c[0] == 'free' and c[1] in owned],
+           'no allocation, no copy, no temporary deque, no assign; the player is not restarted or moved')
+    names = m.names(); lk, ul = names.index('lock'), names.index('unlock')
+    expect(names.count('lock') == names.count('unlock') == 1 and names[lk:ul].count('pop_back') == 3 == names.count('pop_back'),
+           'the payload lock is taken once and covers the three pops')
+    expect(shown(m, 'qp_empty') and not shown(m, 'btn_qclear') and vh(m) == WIN_H and rows(m) == [] and text_of(m, 'qp_title') == NAMES[2], 'the page: "No upcoming songs", Clear hidden and insensitive, the header keeps the track')
+    expect(m.props.get((m.widgets['btn_qclear'], 'sensitive')) == 0 and m.props.get((m.widgets['btn_qclear'], 'visible')) == 0, 'hidden also means insensitive')
+    m.calls.clear(); r = m.call(PSYMS['qp_on_clear'], count=900000000)
+    expect(not [c for c in m.calls if c[0] in ('pop_back', 'lock')] and recs(m) == kept, 'a second tap (nothing follows) changes nothing')
+    destroy(m)
+
+    # the engine: 1 done, 0 nothing after the position, an unknown position; the queue is shortened to pos + 1 with the retained records unchanged
+    for pos, want in ((0, 1), (4, 1), (5, 0), (-1, 0), (9, 0)):
+        m = queue_machine(n=6, pos=pos); m.top_main = m.window; m.play_pos = pos
+        before = recs(m); owned = strs(m, before[:pos + 1]) if pos >= 0 else []
+        r = m.call(PSYMS['pod_clear_upnext'], count=900000000)
+        r = r if r < 0x80000000 else r - 2 ** 32
+        expect(r == want and len(recs(m)) == (pos + 1 if want else 6) and recs(m) == before[:pos + 1 if want else 6] and m.play_pos == pos, f'pod_clear_upnext at {pos}: {want}, {len(recs(m))} left, retained records in place')
+        expect(not [c for c in m.calls if c[0] == 'free' and c[1] in owned] and len([c for c in m.calls if c[0] == 'pop_back']) == (5 - pos if want else 0), f'pod_clear_upnext at {pos}: {5 - pos if want else 0} pops, nothing retained freed')
+    m = queue_machine(n=6, pos=5); m.top_main = m.window; open_queue(m)
+    expect(not shown(m, 'btn_qclear') and shown(m, 'qp_empty'), 'the last track playing: Clear is hidden and insensitive')
+    destroy(m)
+
+    # the position and the size are read again under the lock: a player that moved on, or a queue that shrank, while the lock was waited for
+    m = opened(n=6, pos=2); q = m.word(PLAY_QUEUE); before = recs(m)
+    def moved(): m.play_pos = 3; m.on_lock = None
+    m.on_lock = moved
+    r = m.call(PSYMS['pod_clear_upnext'], count=900000000)
+    expect(r == 1 and recs(m) == before[:4] and m.play_pos == 3, 'the position moved to 3 while the lock was waited for: the playing track (now 3) is kept, not the old one\'s successor')
+    destroy(m)
+    m = opened(n=6, pos=2); q = m.word(PLAY_QUEUE); before = recs(m)
+    def shrank(): m.deques[q] = m.deques[q][:4]; m.on_lock = None
+    m.on_lock = shrank; m.calls.clear()
+    r = m.call(PSYMS['pod_clear_upnext'], count=900000000)
+    expect(r == 1 and recs(m) == before[:3] and len([c for c in m.calls if c[0] == 'pop_back']) == 1, 'the queue shrank to 4 while the lock was waited for: one pop (the size is read under the lock, never popped below pos + 1)')
+    destroy(m)
+    m = opened(n=6, pos=2); q = m.word(PLAY_QUEUE); before = recs(m)
+    def played_out(): m.play_pos = 5; m.on_lock = None
+    m.on_lock = played_out; m.calls.clear()
+    r = m.call(PSYMS['pod_clear_upnext'], count=900000000)
+    expect(r == 0 and recs(m) == before and not [c for c in m.calls if c[0] == 'pop_back'], 'the last track became the playing one while the lock was waited for: nothing to remove, no pop')
+    destroy(m)
+
+    # a preload that is open names the old next song: closed with stock's setter before the first pop, the Gapless setting put back; the remembered target is dropped
+    for gap in (0, 1):
+        m = opened(n=6, pos=2); m.setword(PRE, 1); m.setword(PRE_NEXT, 3); m.u.mem_write(GAP, bytes((gap,)))
+        click(m, 'btn_qclear')
+        sets = [c for c in m.calls if c[0] == 'mclSetGaplessMode']
+        first_pop = next(i for i, c in enumerate(m.calls) if c[0] == 'pop_back')
+        expect(sets == [('mclSetGaplessMode', 0), ('mclSetGaplessMode', gap)] and ('closegapless',) in m.calls and m.word(PRE) == 0xffffffff and m.u.mem_read(GAP, 1)[0] == gap and m.word(PRE_NEXT) == 0xffffffff
+               and max(i for i, c in enumerate(m.calls) if c[0] == 'mclSetGaplessMode') < first_pop,
+               f'gapless setting {gap}: the open preload is closed (state -1) before the first pop, the setting is back, the target is forgotten ({sets})')
+        destroy(m)
+    m = opened(n=6, pos=2); m.setword(PRE, 0); m.setword(PRE_NEXT, 1)
+    click(m, 'btn_qclear')
+    expect(not [c for c in m.calls if c[0] == 'mclSetGaplessMode'] and m.word(PRE) == 0 and m.word(PRE_NEXT) == 1, 'no preload open: the setter is not touched, a target at or before the position stays')
+    destroy(m)
+
+    # Shuffle: the flag stays on, the saved order is dropped (the queue shrank, Shuffle off keeps what is left)
+    m = queue_machine(n=6, pos=1); m.top_main = m.window; m.clock = 77; open_queue(m)
+    click(m, 'btn_shuffle')
+    expect(flag_on(m) and shown(m, 'btn_qclear'), 'Shuffle on, songs follow')
+    kept = recs(m)[:2]
+    click(m, 'btn_qclear')
+    expect(flag_on(m) and recs(m) == kept and rows(m) == [], 'Clear with Shuffle on: the flag stays, the queue is the first two')
+    click(m, 'btn_shuffle')
+    expect(not flag_on(m) and recs(m) == kept and titles(m) == NAMES[:2] and not [c for c in m.calls if c[0] == 'mclSetPlayPos'], 'Shuffle off afterwards restores nothing (the order is dropped) and does not touch the queue')
+    destroy(m)
+
+    # refusals: kill switch (engine and button), a stream
+    m = opened(n=6, pos=2); m.present.add(KILL); before = recs(m)
+    r = m.call(PSYMS['pod_clear_upnext'], count=900000000); click(m, 'btn_qclear')
+    expect(r == 0xffffffff and recs(m) == before and not [c for c in m.calls if c[0] == 'pop_back'], 'the kill switch: the engine answers -1, the queue is untouched')
+    destroy(m)
+    m = opened(n=6, pos=2); m.ptype = 2; before = recs(m)
+    click(m, 'btn_qclear')
+    expect(recs(m) == before, 'a stream play type: the tap does nothing')
+    m.setword(PLAY_QUEUE, m.new_deque(before)); tick(m)
+    expect(not shown(m, 'btn_qclear'), 'and a page read while a stream plays hides Clear')
+    destroy(m)
+
+    # libcstl's deque_pop_back is found from deque_size's resolved GOT slot and checked word for word; anything else refuses Clear (the button hidden, the engine -1, nothing called)
+    m = opened(n=6, pos=2); slot, base = m.got_deque_size, m.CSTL_BASE; destroy(m)
+    def refused(m, why):
+        before = recs(m); m.calls.clear()
+        r = m.call(PSYMS['pod_clear_upnext'], count=900000000); ready = m.call(PSYMS['pod_clear_ready'], count=900000000)
+        expect(r == 0xffffffff and ready == 0 and recs(m) == before and not [c for c in m.calls if c[0] in ('pop_back', 'free', 'mclSetGaplessMode')], f'{why}: Clear is refused (engine -1, not ready), the queue is untouched')
+    m = opened(n=6, pos=2)
+    expect(m.call(PSYMS['pod_clear_ready'], count=900000000) == 1 and shown(m, 'btn_qclear'), 'libcstl bound and as pinned: ready, Clear shows')
+    destroy(m)
+    m = queue_machine(n=6, pos=2); m.top_main = m.window; m.install_libcstl(bound=False); open_queue(m)
+    expect(m.word(slot) == 0x743590 and not shown(m, 'btn_qclear'), 'the GOT slot still holds the stub inside demo: Clear is hidden')
+    click(m, 'btn_qclear'); refused(m, 'an unbound slot')
+    destroy(m)
+    for why, patch in (('the slot points at another function of the library', lambda m: m.setword(slot, base + pod.CSTL_POP)),
+                       ('the slot is null', lambda m: m.setword(slot, 0)), ('the slot is unaligned', lambda m: m.setword(slot, base + pod.CSTL_SIZE + 1)),
+                       ('a word of deque_size differs', lambda m: m.setword(base + pod.CSTL_SIZE + 4 * 7, 0)), ('the first word of deque_pop_back differs', lambda m: m.setword(base + pod.CSTL_POP, 0)),
+                       ('the last word of deque_pop_back differs (n = 2)', lambda m: m.setword(base + pod.CSTL_POP + 20, 0x24050002)),
+                       ('another build of the library (pop_back moved)', lambda m: (m.setword(slot, base + pod.CSTL_SIZE + 0x100), m.u.mem_write(base + pod.CSTL_SIZE + 0x100, bytes(m.u.mem_read(base + pod.CSTL_SIZE, 32)))))):
+        m = opened(n=6, pos=2); patch(m); refused(m, why); destroy(m)
+    # the build pins: the library file and its symbols and words (tools/pod.py check_libcstl_bytes / check_libcstl)
+    lib = open(os.path.join(WORK, 'rootfs', pod.LIBCSTL), 'rb').read()
+    pod.check_libcstl_bytes(lib)
+    h = open(os.path.join(BUILD, 'stock.h')).read()
+    expect(pod.sha(lib) == pod.LIBCSTL_SHA and os.path.realpath(os.path.join(WORK, 'rootfs', pod.LIBCSTL_LINK)) == os.path.realpath(os.path.join(WORK, 'rootfs', pod.LIBCSTL)) and '#define STOCK_IMAGE_END 0xa11000u' in h,
+           'the tree\'s libcstl is the pinned file, libcstl.so.2 links to it, and the payload was built with demo\'s image end 0xa11000 (check_libcstl)')
+    for why, off in (('a deque_size word', pod.CSTL_SIZE + 8), ('a deque_pop_back word', pod.CSTL_POP + 12)):
+        bad = bytearray(lib); bad[off] ^= 1
+        try: pod.check_libcstl_bytes(bytes(bad)); ok = False
+        except ValueError: ok = True
+        expect(ok, f'build pin: {why} changed -> the build fails')
+    bad = bytearray(lib); bad[0x40000] ^= 1
+    expect(pod.sha(bytes(bad)) != pod.LIBCSTL_SHA, 'build pin: any other change to the file fails the SHA-256 check')
+
+    # another path clears it (the engine called under an open page): the tick finds the shrunk queue (same pointer, other size) and reads it again
+    m = opened(n=6, pos=2)
+    m.call(PSYMS['pod_clear_upnext'], count=900000000)
+    tick(m)
+    expect(rows(m) == [] and shown(m, 'qp_empty') and not shown(m, 'btn_qclear') and vh(m) == WIN_H, 'the refresh tick reads the shrunk queue')
+    destroy(m)
+
+    # the DLNA renderer service (dmr_serverflag == 1) can read the queue on the UPnP threads: Clear is hidden and insensitive, and refused by the engine, while it runs
+    DMR = pod.DATA['DMR_SERVERFLAG'][0]
+    m = opened(n=6, pos=2); before = recs(m)
+    expect(DMR == 0xa06020 and shown(m, 'btn_qclear') and m.word(DMR) == 0, 'the service flag is 0xa06020 (dmr_serverflag): off, Clear shows')
+    m.setword(DMR, 1); tick(m)
+    expect(not shown(m, 'btn_qclear') and m.props.get((m.widgets['btn_qclear'], 'sensitive')) == 0 and m.props.get((m.widgets['btn_qclear'], 'visible')) == 0 and rows(m) == NAMES[3:6],
+           'the service starts under the open page: the tick hides Clear (visible and sensitive), the rows stay')
+    m.calls.clear(); click(m, 'btn_qclear'); r = m.call(PSYMS['pod_clear_upnext'], count=900000000); ready = m.call(PSYMS['pod_clear_ready'], count=900000000)
+    names = m.names()
+    expect(r == 0xffffffff and ready == 0 and recs(m) == before and not [c for c in m.calls if c[0] in ('pop_back', 'free', 'mclSetGaplessMode')] and names.count('lock') == names.count('unlock'),
+           'service running: the tap does nothing, the engine answers -1 and releases the lock, not ready, the queue is untouched')
+    m.setword(DMR, 0); tick(m)
+    expect(shown(m, 'btn_qclear'), 'the service stops: the tick shows Clear again')
+    m.setword(DMR, 2); tick(m)
+    expect(shown(m, 'btn_qclear'), 'any other value than 1 (stock tests == 1) is not running')
+    destroy(m)
+    m = queue_machine(n=6, pos=2); m.top_main = m.window; m.setword(DMR, 1); open_queue(m)
+    expect(not shown(m, 'btn_qclear') and rows(m) == NAMES[3:6], 'a page opened while the service runs: no Clear')
+    destroy(m)
+    m = opened(n=6, pos=2); m.setword(DMR, 1); n0 = len(recs(m))
+    r = m.call(PSYMS['pod_clear_upnext'], count=900000000); m.setword(DMR, 0)
+    r2 = m.call(PSYMS['pod_clear_upnext'], count=900000000)
+    expect(r == 0xffffffff and n0 == 6 and r2 == 1 and len(recs(m)) == 3, 'the engine alone: -1 with the service running, then 1 once it stopped (the lock was released)')
+    destroy(m)
+    import struct
+    stock_demo = open(os.path.join(WORK, 'rootfs', pod.DEMO), 'rb').read()
+    pw = lambda a: struct.unpack_from('<I', stock_demo, pod.fileoff(stock_demo, a))[0]
+    dpins = {a: old for a, old, what in pod.SHUFFLE_PINS if 'dmr_serverflag' in what or 'dmrStartService' in what or 'dmrStopService' in what}
+    expect(sorted(dpins) == [0x507a78, 0x507bf8, 0x507bfc, 0x507c00, 0x5084a0] and all(pw(a) == old for a, old in dpins.items()), 'the flag\'s reader, setter and clearer are pinned and are stock\'s words (a mismatch fails the build)')
+    expect(pod.DATA['DMR_SERVERFLAG'][1] == 'dmr_serverflag', 'the flag is looked up by its stock symbol')
+
+    # the pinned stock words the engine relies on
+    pinned = {a for a, _, _ in pod.SHUFFLE_PINS}
+    expect({0x5d28ac, 0x5d28cc, 0x5d28d0, 0x5d28dc, 0x5d28e0, 0x5d290c, 0x5d2914} <= pinned and pod.FUNCTIONS['mclSetGaplessMode'][2] == 0x5d28ac and (PRE, PRE_NEXT, GAP) == (0xa0abd0, 0xa0abcc, 0xa0ab89),
+           'mclSetGaplessMode (prologue, the byte store, the preload test and close) and the three player words are pinned')
+
+
+SECTIONS = [asset_tests, open_tests, header_tests, rows_tests, loader_tests, play_tests, mode_tests, tick_tests, shuffle_tests, clear_tests]   # tools/check.py runs each as its own task
 
 
 def run(ctx):

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Approximate PIL mock-up of the Queue page (patch/queuepage.c, docs/modules/queue.md) drawn from the built asset (ui/m1plus_queue.bin) and the payload's constants
-(patch/offsets.inc QP_*, LIST_*): the playing track's rounded cover with its title and artist, the icon-only Shuffle and Repeat buttons (off, on, Repeat one), the "Queue" line,
+(patch/offsets.inc QP_*, LIST_*): the playing track's rounded cover with its title and artist, the icon-only Shuffle and Repeat buttons (off, on, Repeat one), the "Queue" line with its Clear text button,
 Up Next (the tracks after the playing one, the Songs page's rows) or the grey "No upcoming songs", the glass Back over the rows when scrolled.
 Not pixel-exact AWTK (the text is the project's own text model, the covers are stand-in gradients); the pill and row geometry is the Songs page's (tools/preview_songs.py).
 
@@ -42,6 +42,7 @@ def content(s, playing=1, shuffle=False, repeat=None):
         PS.round_rect(im, x, O['QP_PILL_Y'], O['QP_PILL_W'], PS.PILL_H, PS.PILL_R, PILL_ON if on else PILL_OFF)
         g = s.img(glyph + '_on' if on else glyph); im.alpha_composite(g, (x + (O['QP_PILL_W'] - g.width) // 2, O['QP_PILL_Y'] + (PS.PILL_H - g.height) // 2))
     s.text(im, O['SG_HDR_X'], O['QP_HEAD_Y'] + O['QP_HEAD_H'] / 2, PS.tr(s, 'Queue'), 20)
+    if n: s.text(im, O['QP_CLEAR_X'] + O['QP_CLEAR_W'], O['QP_CLEAR_Y'] + O['QP_CLEAR_H'] / 2, PS.tr(s, 'Clear'), 17, MUTED, 'r')    # Clear: right aligned to x 310, centred on the line, only while songs follow
     if not n: s.text(im, O['SG_HDR_X'], TOP + O['QP_EMPTY_Y'] + O['QP_EMPTY_H'] / 2, PS.tr(s, 'No upcoming songs'), 16, MUTED)
     for i in range(n):
         t, a, k = QUEUE[playing + 1 + i]; y = TOP + i * ROW

@@ -483,6 +483,7 @@ TEXT = dict([
     # The Queue page (patch/queuepage.c): the section line and the page's title, the line under it when nothing follows
     _t('Queue', '播放队列', '播放佇列', '再生キュー', '재생 대기열', "File d'attente", 'Warteschlange', 'Cola', 'Coda', 'คิว', 'Kolejka', 'Очередь', 'Черга'),
     _t('No upcoming songs', '没有待播歌曲', '沒有待播歌曲', '次の曲はありません', '다음 곡 없음', 'Aucun titre à suivre', 'Keine weiteren Titel', 'No hay más canciones', 'Nessun brano in coda', 'ไม่มีเพลงถัดไป', 'Brak kolejnych utworów', 'Нет следующих песен', 'Немає наступних пісень'),
+    _t('Clear', '清除', '清除', '消去', '지우기', 'Effacer', 'Leeren', 'Borrar', 'Svuota', 'ล้าง', 'Wyczyść', 'Очистить', 'Очистити'),
     # The Downloads level and the select mode of the Show level (patch/podcasts.c; "N Selected", "Select All" and "Delete" are the Songs page's keys)
     _t('No downloads', '没有下载', '沒有下載', 'ダウンロードはありません', '다운로드 없음', 'Aucun téléchargement', 'Keine Downloads', 'Sin descargas', 'Nessun download', 'ไม่มีการดาวน์โหลด', 'Brak pobrań', 'Нет загрузок', 'Немає завантажень'),
     _t('Delete the selected episodes?', '删除所选节目？', '刪除所選節目？', '選択したエピソードを削除しますか？', '선택한 에피소드를 삭제할까요?', 'Supprimer les épisodes sélectionnés ?', 'Ausgewählte Folgen löschen?',

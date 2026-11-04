@@ -4,7 +4,7 @@
  *
  * One page, ui/m1plus_queue.bin (tools/pod_ui.py build_queue_page): the stock list (list_view > scroll_view) holding ONE content view, view_queue, that is the window's whole
  * 450 px with the glass Back floating over it. The content view holds the header's widgets (the playing track's title and artist, the icon-only Shuffle and Repeat buttons,
- * the "Queue" line, the "No upcoming songs" line) and paints the rest itself in its EVT_AFTER_PAINT: the playing track's rounded cover and the rows (cover, title, artist, press fill,
+ * the "Queue" line with its Clear button, the "No upcoming songs" line) and paints the rest itself in its EVT_AFTER_PAINT: the playing track's rounded cover and the rows (cover, title, artist, press fill,
  * hairline).
  *
  *   entry     queue_open(), called by Now Playing's queue button (a click handler bound after the stock init, patch/nowplaying.c: RET_STOP when this page opened, else the stock drawer
@@ -15,6 +15,7 @@
  *   rows      Up Next: the tracks after the play position, in queue order (the real order, shuffled or not: Shuffle reorders the queue itself, patch/shuffle.c); the playing track is only in the header.
  *   play      a row tap: start_playqueue(queue index) (the stock drawer's row handler, @0x47a0c8), then force_refreshflag; the page stays, Now Playing below follows.
  *   modes     Shuffle (the payload's flag, pod_set_shuffle) and Repeat (stock's mode 0, 3, 1: pod_set_repeat) are independent: Shuffle toggles the flag; Repeat cycles off, all, one whatever the flag is.
+ *   clear     the Clear button (btn_qclear, right of the "Queue" line, shown while songs follow): pod_clear_upnext removes the tracks after the play position, the page reads the queue again.
  *   covers    the Cover Flow cache file of the row's artist and album, one per tick on the page's timer, none while the list moves (the Songs page's loader); else the placeholder.
  * No hook of its own; everything runs from the page's widgets and timers.
  */
@@ -38,7 +39,7 @@
 
 static struct {
     void *win, *view, *sv, *status;
-    void *back, *btn_shuffle, *btn_repeat;
+    void *back, *btn_shuffle, *btn_repeat, *btn_clear;
     void *st_title, *st_sub; /* hidden labels whose styles are the rows' title and artist */
     void *htitle, *hartist, *empty; /* the header's labels, and the line shown when nothing follows */
     void *list; /* the stock play queue the page is of (*PLAY_QUEUE when valid) */
@@ -53,6 +54,7 @@ static struct {
     int down, down_x, down_y; /* the row a press began on, + 1, and where */
     int dir, seen; /* the scroll direction (+1 down), and the offset it was last read at */
     int noscroll; /* the scroll events could not be registered: the loader runs from its own timer only */
+    int clear_on; /* the Clear button is shown */
     int fg; /* 1 from the page's start and EVT_WINDOW_TO_FG, 0 after EVT_WINDOW_TO_BG */
     unsigned more_timer, stale_timer, tick_timer;
     unsigned tick_ms;
@@ -62,6 +64,7 @@ static struct {
 
 static int qp_on_stale(const void *unused);
 static int qp_on_load(const void *unused);
+static int qp_stream(void);
 
 static void qp_show(void *w, int on) {
     if (!w) return;
@@ -299,6 +302,14 @@ static void qp_pills(void) {
 
 static void qp_load(int keep);
 
+/* Clear: shown only while songs follow and the engine can run (no kill switch, libcstl as pinned, no DLNA service). Read again on the page's tick, so it hides when the DLNA service starts under the page. */
+static void qp_clear_sync(void) {
+    int on = qp.n != 0 && !qp_stream() && pod_clear_ready();
+    if (on == qp.clear_on) return;
+    qp.clear_on = on;
+    qp_show(qp.btn_clear, on);
+}
+
 /* The play mode changed (our buttons, the refresh tick finding another page's change): turning Shuffle on or off reorders the queue, so the rows are read again; a repeat change only touches the buttons. */
 static void qp_mode_changed(void) {
     if (((qp.mode ^ qp_mode()) & 0x100) != 0)
@@ -327,6 +338,16 @@ static int qp_on_repeat(void *ctx, void *e) {
     return RET_OK;
 }
 
+/* Clear: every track after the play position goes (patch/shuffle.c pod_clear_upnext); the playing track plays on. The page reads the queue again: the header stays, Up Next is empty. */
+static int qp_on_clear(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    if (!qp.view || !qp.n || !qp_valid() || qp_stream() || !pod_clear_ready()) return RET_OK;
+    pod_clear_upnext();
+    qp_load(0);
+    return RET_OK;
+}
+
 /* ---------------------------------------------------------------------------
  * Reading the stock queue
  */
@@ -349,6 +370,8 @@ static void qp_load(int keep) {
     qp.n = qp.count > (unsigned)qp.base ? qp.count - (unsigned)qp.base : 0;
     qp.hkey = 0;
     qp_show(qp.empty, qp.n == 0);
+    qp.clear_on = -1; /* qp_clear_sync decides */
+    qp_clear_sync();
     qp_size();
     widget_set_prop_int(qp.sv, "yoffset", at < 0 ? 0 : at > qp_max_scroll() ? qp_max_scroll() : at);
     qp.seen = qp_off();
@@ -371,6 +394,7 @@ static int qp_on_stale(const void *unused) {
 static void qp_sync(void) {
     int row;
     if (!qp.view || !qp.g.tiles) return;
+    qp_clear_sync();
     if (!qp_valid()) {
         if (qp.fg && pod_is_top(qp.win)) qp_load(1);
         return;
@@ -512,6 +536,7 @@ int queue_open(void) {
     qp.back = pod_bind(qp.win, "btn_return", qp_on_back, (void *)0);
     qp.btn_shuffle = pod_bind(qp.win, "btn_shuffle", qp_on_shuffle, (void *)0);
     qp.btn_repeat = pod_bind(qp.win, "btn_repeat", qp_on_repeat, (void *)0);
+    qp.btn_clear = pod_bind(qp.win, "btn_qclear", qp_on_clear, (void *)0);
     qp.view = widget_lookup(qp.win, "view_queue", 1);
     qp.sv = widget_lookup(qp.win, "queue_scrollview", 1);
     qp.status = widget_lookup(qp.win, "label_status", 1);
@@ -520,8 +545,8 @@ int queue_open(void) {
     qp.htitle = widget_lookup(qp.win, "qp_title", 1);
     qp.hartist = widget_lookup(qp.win, "qp_artist", 1);
     qp.empty = widget_lookup(qp.win, "qp_empty", 1);
-    if (!qp.back || !qp.btn_shuffle || !qp.btn_repeat || !qp.view || !qp.sv || !qp.status || !qp.st_title ||
-        !qp.st_sub || !qp.htitle || !qp.hartist || !qp.empty) {
+    if (!qp.back || !qp.btn_shuffle || !qp.btn_repeat || !qp.btn_clear || !qp.view || !qp.sv || !qp.status ||
+        !qp.st_title || !qp.st_sub || !qp.htitle || !qp.hartist || !qp.empty) {
         navigator_back(); /* an asset that is not ours */
         return -2;
     }

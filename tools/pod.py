@@ -23,7 +23,7 @@ by value/SHA before anything is written.
 
 Usage: pod.py WORKDIR
 """
-import argparse, concurrent.futures, hashlib, json, os, pathlib, re, stat, struct, subprocess, sys
+import argparse, concurrent.futures, hashlib, io, json, os, pathlib, re, stat, struct, subprocess, sys
 from elftools.elf.elffile import ELFFile
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import autotime, palette, pod_pages, pod_ui, themeoff, timezones
@@ -222,6 +222,8 @@ FUNCTIONS.update({
     'mclGetPlayPos':           ('int', 'void', 0x5d4290),
     # Shuffle (patch/shuffle.c): the play position word mclGetPlayPos reads is stored back after the queue is reordered
     'mclSetPlayPos':           ('void', 'int', 0x5d42d8),
+    # Clear (patch/shuffle.c pod_clear_upnext): the Gapless setter whose 0 closes an open preload
+    'mclSetGaplessMode':       ('int', 'int', 0x5d28ac),
 })
 # Localisation (patch/i18n.h): the stock translation. locale_info() is the app's locale, locale_info_tr(locale, key) the
 # table lookup (the key itself when absent), widget_set_tr_text(widget, key) stores the key on the widget (the window
@@ -626,6 +628,11 @@ SHUFFLE_PINS = (   # (address, stock word, what it proves)
     (SETMODE + 12, 0x27bdffe0, 'mclSetPlayMode: addiu sp, sp, -0x20 (the trampoline resumes here)'), (0x5d27b0, 0xac44abe0, 'mclSetPlayMode: sw a0, mode word 0xa0abe0'),
     (0x5d27b8, 0x8c45abd0, 'mclSetPlayMode: lw a1, gapless state 0xa0abd0'), (0x5d27bc, 0x14a30013, 'mclSetPlayMode: a state other than 1 skips the preload close'),
     (0x5d27c4, 0x10800011, 'mclSetPlayMode: mode 0 skips it'), (0x5d27d4, 0x1082000c, 'mclSetPlayMode: mode 3 skips it'), (0x5d27dc, 0x8c44abec, 'mclSetPlayMode: lw a0, the player socket 0xa0abec'),
+    # mclSetGaplessMode(g) (pod_clear_upnext closes an open preload with it): stores the byte, and for 0 with a preload open (state 1) sends {mcl-closegapless} and stores -1
+    (0x5d28cc, 0x14800012, 'mclSetGaplessMode: bnez a0 (the close is for 0 only)'), (0x5d28d0, 0xa044ab89, 'mclSetGaplessMode: sb a0, 0xa0ab89 (the setting)'),
+    (0x5d28dc, 0x8c44abd0, 'mclSetGaplessMode: lw a0, 0xa0abd0 (the preload state)'), (0x5d28e0, 0x1483000d, 'mclSetGaplessMode: bne a0, 1 (only an open preload is closed)'),
+    (0x5d290c, 0x24a564f8, 'mclSetGaplessMode: a1 = "{mcl-closegapless\\null}"'), (0x5d2914, 0xae02abd0, 'mclSetGaplessMode: sw -1, 0xa0abd0 (the preload state)'),
+    (0x5d28ac, 0x3c1c0043, 'mclSetGaplessMode prologue'),
     (0x5d27f8, 0x0320f809, 'mclSetPlayMode: jalr send("{mcl-closegapless}")'), (0x5d2804, 0xae02abd0, 'mclSetPlayMode: sw -1, gapless state'),
     (LOADPL + 12, 0x27bdffd0, 'mclLoadPlayList: addiu sp, sp, -0x30 (the trampoline resumes here)'), (0x5d1f60, 0x8f90aa5c, 'mclLoadPlayList: lw s0, GOT play queue 0xa0394c'),
     (0x5d1f8c, 0xac52abdc, 'mclLoadPlayList: sw a1, play position 0xa0abdc'), (0x5d1f9c, 0xac51abd8, 'mclLoadPlayList: sw a2, class'),
@@ -635,8 +642,21 @@ SHUFFLE_PINS = (   # (address, stock word, what it proves)
     (0x5d3638, 0x03e00008, 'mclGetPlayMode: jr ra (the raw getter is not hooked)'), (0x5d363c, 0x8c42abe0, 'mclGetPlayMode: lw v0, mode word'),
     (0x5d42d8, 0x3c1c0043, 'mclSetPlayPos prologue'), (0x5d42ec, 0xac44abdc, 'mclSetPlayPos: sw a0, play position 0xa0abdc'),
     (0x5089dc, 0x8f82aa5c, 'dmr_serverstart: lw v0, GOT play queue 0xa0394c'), (0x5089e0, 0x8f99f494, 'dmr_serverstart: lw t9, GOT deque_clear'),
+    # the DLNA renderer service flag (Queue page Clear is off while it is 1): dlna_service_running reads it, dmr_serverstart sets it to 1 right after dmrStartService returns (UI-thread timer), dlna_servicestop clears it after dmrStopService
+    (0x507bf8, 0x8f82bd30, 'dlna_service_running: lw v0, GOT dmr_serverflag 0xa06020'), (0x507bfc, 0x8c420000, 'dlna_service_running: lw v0, (dmr_serverflag)'), (0x507c00, 0x38420001, 'dlna_service_running: xori v0, dmr_serverflag, 1 (== 1)'),
+    (0x5084a0, 0xae220000, 'dmr_serverstart: sw v0 (=1), (s1): the flag is set after dmrStartService'), (0x507a78, 0xae000000, 'dlna_servicestop: sw zero, (s0): the flag is cleared after dmrStopService'),
     (CLEAR_SITE, 0x0320f809, 'dmr_serverstart: jalr deque_clear(*queue)'), (CLEAR_SITE + 4, 0x8c440000, 'dmr_serverstart: delay slot lw a0, (v0)'),
 ) + tuple(p for a, l in MODE_SITES for p in ((a, 0x0320f809, f'jalr mclGetPlayMode {a:#x}'), (l, 0x8f99aab0, f'lw t9, GOT mclGetPlayMode (for {a:#x})')))
+# Queue page Clear (patch/shuffle.c pod_clear_upnext, docs/modules/queue.md "Clear engine"): the tracks after the play position are removed in place with libcstl's deque_pop_back, which demo does
+# not import. libcstl is a fixed shared library of the firmware (a DT_NEEDED of demo): the payload finds it from demo's resolved GOT slot of deque_size (an import it calls anyway), pop_back =
+# slot - CSTL_SIZE + CSTL_POP. The build pins the library file (SHA-256, the symbols' offsets, the words of both functions); at run time the same words are compared at the resolved addresses, and a
+# mismatch or an unresolved slot (still the stub inside demo's image) refuses Clear. deque_pop_back is `lw t9, GOT _deque_shrink_at_end; jr t9; addiu a1, zero, 1` (0x3f3dc): destroy callback of the
+# last element + free of an emptied block, no allocation (the call graph was walked by hand, docs/modules/queue.md).
+LIBCSTL, LIBCSTL_LINK = 'usr/lib/libcstl.so.2.2.0', 'usr/lib/libcstl.so.2'
+LIBCSTL_SHA = '91d6c02ceb93bea8eb1a7e980668223bdb89e8eadfb19ea15fb0b0ad73ae615a'
+CSTL_SIZE, CSTL_SIZE_WORDS = 0x391f4, (0x3c1c0006, 0x279c9fbc, 0x0399e021, 0x27bdffb8, 0x00801025, 0x8f998ff0, 0x8c840114, 0x8c490124)
+CSTL_POP, CSTL_POP_WORDS = 0x3ad64, (0x3c1c0006, 0x279c844c, 0x0399e021, 0x8f999194, 0x03200008, 0x24050001)
+CSTL_SHRINK = 0x3f3dc
 # Official firmware over the mod (docs/modules/version.md): update_firmware (0x4e0f10) refuses a package whose line-2 version strcmp-equals the "V2.1" literal (0x74773c), which an official
 # V2.1 package is. Its compare (the addiu at 0x4e1124, a1 = literal) is pointed at the string "about_version" (0x74772c) instead: no package tag is that. The literal stays "V2.1" for the
 # online check (check_otginfo), the download page and the About row. Not on the boot path (tools/reach.py).
@@ -727,7 +747,10 @@ DATA = {
     # the lock screen refresh (@0x53f73c, "queued" = 0 <= pos < size), the queue drawer (@0x47a8f0)
     'PLAY_QUEUE':         (0xa0394c, None),
     # the player's gapless state word (mclSetPlayMode @0x5d27b8 tests it for 1, a preload is open, and closes the preload with "{mcl-closegapless}"): patch/shuffle.c cancels the preload after a reorder
-    'MCL_GAPLESS':        (0xa0abd0, None),
+    'MCL_PRELOAD':        (0xa0abd0, None),
+    'DMR_SERVERFLAG':     (0xa06020, 'dmr_serverflag'),   # int: 1 while stock's DLNA renderer (UPnP) service runs (dlna_service_running 0x507bec reads it; Clear stays off then, docs/modules/queue.md)
+    'MCL_PRELOAD_NEXT':   (0xa0abcc, None),   # int: the queue index the preload opened (-1 none; the decision 0x5d0ea4 stores -1 first, @0x5d0ecc)
+    'MCL_GAPLESS':        (0xa0ab89, None),   # byte: the Gapless setting (mclSetGaplessMode 0x5d28ac)
     # the menu's list (patch/menu.c mn_plain_paint): g_scroll_view_vtable is a widget's vtable word (+0x70) when it is a scroll_view;
     # 0x60c164 is the paint-children hook list_view_on_add_child (0x60cc08) stores in a scroll_view (@0x60cd04..0x60cd10,
     # `addiu v1, v1, -0x3e9c`; its prologue `lui gp, 0x3f; addiu gp, gp, 0x7d6c`, test/pod/pulldown.py pins both words)
@@ -1030,9 +1053,38 @@ def got_slots(path, names):
     return slot
 
 
+def check_libcstl_bytes(data):
+    """The pins on the bytes of libcstl (the tests hand it a doctored copy): the three symbols' offsets and the words of deque_size and deque_pop_back, in a text that is mapped at its file offsets."""
+    elf = ELFFile(io.BytesIO(data))
+    syms = {s.name: s['st_value'] for s in elf.get_section_by_name('.dynsym').iter_symbols() if s.name}
+    check((syms.get('deque_size'), syms.get('deque_pop_back'), syms.get('_deque_shrink_at_end')) == (CSTL_SIZE, CSTL_POP, CSTL_SHRINK), 'libcstl: deque_size / deque_pop_back / _deque_shrink_at_end moved')
+    load = next(s for s in elf.iter_segments() if s['p_type'] == 'PT_LOAD')
+    check(load['p_vaddr'] == load['p_offset'] == 0 and load['p_filesz'] > CSTL_POP + 24, 'libcstl: the first segment is not the text at its file offsets')
+    check(struct.unpack_from('<8I', data, CSTL_SIZE) == CSTL_SIZE_WORDS, 'libcstl: deque_size words differ from the pin')
+    check(struct.unpack_from('<6I', data, CSTL_POP) == CSTL_POP_WORDS, 'libcstl: deque_pop_back words differ from the pin')
+
+
+def check_libcstl(demo_path):
+    """Clear's library: demo needs libcstl.so.2, which is the pinned file (SHA-256, symbols, words). Returns demo's image end (the first address above its segments, page aligned): a resolved
+    import lies above it, an unresolved one is a stub inside."""
+    root = pathlib.Path(demo_path).parents[2]
+    lib, link = root / LIBCSTL, root / LIBCSTL_LINK
+    data = lib.read_bytes() if lib.is_file() else b''
+    check(sha(data) == LIBCSTL_SHA, f'{LIBCSTL}: not the pinned libcstl (got {sha(data)[:16]})')
+    check(link.is_symlink() and os.path.realpath(link) == os.path.realpath(lib), f'{LIBCSTL_LINK} is not a link to {LIBCSTL}')
+    check_libcstl_bytes(data)
+    with open(demo_path, 'rb') as f:
+        elf = ELFFile(f)
+        needed = [t.needed for t in elf.get_section_by_name('.dynamic').iter_tags() if t.entry.d_tag == 'DT_NEEDED']
+        end = max(s['p_vaddr'] + s['p_memsz'] for s in elf.iter_segments() if s['p_type'] == 'PT_LOAD')
+    check(pathlib.Path(LIBCSTL_LINK).name in needed, 'demo no longer needs libcstl.so.2')
+    return (end + 0xfff) & ~0xfff
+
+
 def gen_stock_h(out, demo_path):
     syms = dynsym(demo_path)
     slots = got_slots(demo_path, LIBC)
+    image_end = check_libcstl(demo_path)
     h = ['/* Generated by tools/pod.py from demo .dynsym; do not edit. */', '#pragma once']
     for name, (ret, args, addr) in FUNCTIONS.items():
         check(syms.get(name) == addr, f'{name}: address {syms.get(name)} != pinned {addr:#x}')
@@ -1044,6 +1096,10 @@ def gen_stock_h(out, demo_path):
         if sym is not None:
             check(syms.get(sym) == addr, f'{sym}: address {syms.get(sym)} != pinned {addr:#x}')
         h.append(f'#define {name} 0x{addr:x}u')
+    h.append(f'#define GOT_DEQUE_SIZE 0x{slots["deque_size"]:x}u')   # demo's GOT slot of deque_size: the resolved address locates libcstl's deque_pop_back (patch/shuffle.c cstl_pop_back)
+    h.append(f'#define STOCK_IMAGE_END 0x{image_end:x}u')   # the first address above demo's segments: a lazily bound slot holds a stub below it until the first call
+    h.append(f'#define CSTL_SIZE_OFF 0x{CSTL_SIZE:x}u'); h.append(f'#define CSTL_POP_OFF 0x{CSTL_POP:x}u')
+    h.append('#define CSTL_SIZE_WORDS {' + ','.join(f'0x{w:08x}u' for w in CSTL_SIZE_WORDS) + '}'); h.append('#define CSTL_POP_WORDS {' + ','.join(f'0x{w:08x}u' for w in CSTL_POP_WORDS) + '}')
     h.append('#define STOCK_DB_PATH ((const char *)0x745a34u)')   # "/mnt/data/database.db" (QUERY_PINS)
     h.append('#define STOCK_SONG_ROW ((void *)0x4e9058u)')       # the song row callback getAllMusic passes to toolsQueryDbTable (QUERY_PINS)
     h.append(f'#define STOCK_HOME_CLICK 0x{HOME_CLICK:x}u')   # the icon click handler stock registers per icon

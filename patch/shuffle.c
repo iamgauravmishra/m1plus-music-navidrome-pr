@@ -244,7 +244,7 @@ static void restore_order(void *q, unsigned n, int pos) {
  * own rule, @0x5d27b8..0x5d2804), then the real mode is put back (past the hook: no flag change). */
 static void cancel_preload(void) {
     int mode;
-    if (*(int *)MCL_GAPLESS != 1) return;
+    if (*(int *)MCL_PRELOAD != 1) return;
     mode = mclGetPlayMode();
     stock_setmode_trampoline(MODE_REPEAT_ONE);
     stock_setmode_trampoline(mode);
@@ -631,3 +631,66 @@ void pod_set_mode(int mode) { set_mode(mode, 0); } /* the current queue is reord
 void pod_set_in_order(void) { set_in_order(0); }
 void pod_set_mode_for_queue(int mode) { set_mode(mode, 1); } /* a queue load follows: the flag only */
 void pod_set_in_order_for_queue(void) { set_in_order(1); }
+
+/* libcstl's deque_pop_back (docs/modules/queue.md "Clear engine"). Demo does not import it, but libcstl is the firmware's fixed shared library: demo's GOT slot of deque_size holds
+ * its address once the first call has bound it (MIPS lazy binding: until then the stub inside demo's image), and pop_back lies CSTL_POP_OFF - CSTL_SIZE_OFF above it. The build pins the
+ * library file (tools/pod.py check_libcstl); here the words of both functions are compared at the resolved addresses, so another library, an unbound slot or a moved function gives 0
+ * (Clear refused) and nothing is called. */
+static void (*cstl_pop_back(void))(void *) {
+    static const unsigned size_words[] = CSTL_SIZE_WORDS, pop_words[] = CSTL_POP_WORDS;
+    unsigned size_fn = *(volatile unsigned *)GOT_DEQUE_SIZE, pop_fn, i;
+    if ((size_fn & 3) || size_fn <= STOCK_IMAGE_END) return (void (*)(void *))0;
+    for (i = 0; i < sizeof size_words / sizeof size_words[0]; ++i)
+        if (((const unsigned *)size_fn)[i] != size_words[i]) return (void (*)(void *))0;
+    pop_fn = size_fn - CSTL_SIZE_OFF + CSTL_POP_OFF;
+    for (i = 0; i < sizeof pop_words / sizeof pop_words[0]; ++i)
+        if (((const unsigned *)pop_fn)[i] != pop_words[i]) return (void (*)(void *))0;
+    return (void (*)(void *))pop_fn;
+}
+
+/* Stock's DLNA renderer (UPnP) service runs (dlna_service_running 0x507bec: dmr_serverflag == 1). Its callbacks on the UPnP threads (dmrActionPLGetPlayInfo, dmrActionPLReadTrack,
+ * dmrActionGetPositionInfo) read the queue without a lock, so Clear is off while it runs (docs/modules/queue.md "Locking, and what it does not cover"). */
+static int dlna_running(void) { return *(volatile int *)DMR_SERVERFLAG == 1; }
+
+/* Clear can run: the kill switch is off, libcstl is the pinned one and no DLNA service runs (the Queue page shows its button only then). The slot is bound once the queue was read (deque_size). */
+int pod_clear_ready(void) { return !home_off() && !dlna_running() && cstl_pop_back() != (void (*)(void *))0; }
+
+/* Clear on the Queue page: every track after the play position is removed, the playing track and the history stay (docs/modules/queue.md). The deque is shortened in place: libcstl's
+ * deque_pop_back runs the stSongInfo destructor @0x5dabfc (free, memset) on the last record and frees a block it empties; it allocates and copies nothing, and the records 0..pos are never
+ * moved, rewritten or freed (so a stock reader of the playing track or of the history never sees a change). The payload lock is held for the whole removal, which re-reads the position
+ * and the size first (what the lock excludes: our reorders, queue loads and clear, docs/modules/shuffle.md Locking). 1 cleared; 0 nothing after the play position; -1 refused (kill switch, or
+ * libcstl is not the pinned one, or the DLNA service runs). The saved shuffle order describes a queue that is gone (the flag itself stays). A preload that is open already opened the old next file: it is closed with
+ * stock's own Gapless setter (one send) before the first pop. */
+int pod_clear_upnext(void) {
+    void *q;
+    void (*pop)(void *);
+    unsigned n, keep;
+    int pos, r = 0;
+    if (home_off()) return -1;
+    sh_enter();
+    if (dlna_running()) { /* the service starts on the UI thread (this one), so it cannot start between this check and the pops */
+        sh_leave();
+        return -1;
+    }
+    q = play_queue();
+    n = q ? deque_size(q) : 0; /* (binds deque_size's GOT slot if nothing did) */
+    pos = mclGetPlayPos();
+    pop = cstl_pop_back();
+    if (pos >= 0 && (unsigned)pos + 1 < n) {
+        r = -1;
+        if (pop) {
+            keep = (unsigned)pos + 1;
+            if (*(int *)MCL_PRELOAD == 1) {
+                unsigned char old = *(unsigned char *)MCL_GAPLESS;
+                mclSetGaplessMode(0); /* sends {mcl-closegapless} and stores -1 */
+                mclSetGaplessMode(old);
+            }
+            if (*(int *)MCL_PRELOAD_NEXT > pos) *(int *)MCL_PRELOAD_NEXT = -1;
+            while (deque_size(q) > keep) pop(q);
+            drop_order();
+            r = 1;
+        }
+    }
+    sh_leave();
+    return r;
+}

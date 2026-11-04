@@ -27,6 +27,7 @@ class HookedMachine(Machine):
     the mocks themselves: after `yield_at` memcpy calls of thread `yield_thread` (mid-permutation) or right after stock's loader trampoline (`pause_load`)."""
     sched = False
     owner, cur, blocked, yield_thread, yield_at, copies, pause_load, pause_clear = None, '', None, '', 0, 0, False, False
+    pop_stop = 0   # pause the running thread right after the pop_back that makes the machine's pop counter this (Clear paused mid-removal)
 
     def _hook(self, u, address, size, _):
         name = self.handlers.get(address, '')
@@ -47,6 +48,7 @@ class HookedMachine(Machine):
         if self.sched and ((name == 'stock_loadplaylist' and self.pause_load) or (name == 'deque_clear' and self.pause_clear) or (name == 'memcpy' and self.cur == self.yield_thread and self.yield_at)):
             if name == 'memcpy': self.copies += 1
             if name in ('stock_loadplaylist', 'deque_clear') or self.copies == self.yield_at: u.emu_stop()
+        if self.sched and name == 'cstl_pop_back' and self.pops == self.pop_stop: u.emu_stop()
 
 
 def shuffle_machine(rows, mode=0, clock=1, present=True, flag=False):
@@ -342,7 +344,7 @@ def load(m, h, pos, cls=0xf001): return m.call(PSYMS['sh_load_playlist'], a0=h, 
 
 def apple_tests(expect):
     SH, OR, RO, RA = O['MODE_SHUFFLE'], O['MODE_ORDER'], O['MODE_REPEAT_ONE'], O['MODE_REPEAT_ALL']
-    GAPLESS = pod.DATA['MCL_GAPLESS'][0]
+    GAPLESS = pod.DATA['MCL_PRELOAD'][0]
 
     # 40. Shuffle on (a request for 2): our flag on, stock List play; the songs after the playing one are permuted in place, the rest stays; every string keeps one owner.
     for clock in (1, 90, 4099):
@@ -675,6 +677,51 @@ def apple_tests(expect):
     expect(m.blocked == 'ui' and not th['done'] and 'deque_clear' not in m.names(), 'clear C: with the kill switch the clear still waits for an in-flight reorder')
     go(m, dl); go(m, th)
     expect(dl['done'] and th['done'] and m.owner is None and m.clears_held == [True], 'clear C: with the kill switch the clear runs under the lock once the reorder releases it')
+
+    # 52. The Queue page's Clear (pod_clear_upnext: libcstl's deque_pop_back under the same lock) against the other threads' reorders and loads: whole-operation exclusion both ways.
+    #     Stock's readers take no lock and are not hooked (docs/modules/queue.md "Clear engine"); this is what the lock does cover.
+    def clear_machine(n=12, pos=3, **kw):
+        m = apple_machine(n=n, pos=pos, **kw); m.install_libcstl(); return m
+    freed_of = lambda m: sorted(c[1] for c in m.calls if c[0] == 'free' and c[1])
+    pops_of = lambda m: [c for c in m.calls if c[0] == 'pop_back']
+    # (a) Clear is paused after 3 of its 8 pops (lock held, the queue partly shortened): a Shuffle request on the DLNA thread waits at the lock, sees the finished queue afterwards.
+    m = clear_machine(); sched(m); q0 = m.word(PLAYQ); before = queue_of(m)[:]; kept, tail = before[:4], before[4:]
+    kept_s = sorted(m.word(r + O[f]) for r in kept for f in STR_FIELDS); tail_s = sorted(m.word(r + O[f]) for r in tail for f in STR_FIELDS)
+    ui = spawn(m, 'ui', 'pod_clear_upnext', STACK - 0x4000); m.yield_thread, m.pop_stop = 'ui', m.pops + 3
+    go(m, ui)
+    expect(not ui['done'] and m.owner == 'ui' and len(pops_of(m)) == 3 and queue_of(m) == before[:9], 'clear A: Clear is paused after 3 of 8 pops with the lock held, the queue is 9 long')
+    m.pop_stop = 0
+    dl = spawn(m, 'dlna', 'sh_set_mode', STACK, a0=SH); go(m, dl)
+    expect(m.blocked == 'dlna' and not dl['done'] and queue_of(m) == before[:9] and not flag_on(m), 'clear A: the Shuffle request waits at the lock; the queue is untouched by it')
+    go(m, ui)
+    expect(ui['done'] and m.owner is None and queue_of(m) == kept and len(pops_of(m)) == 8 and freed_of(m) == tail_s and not set(freed_of(m)) & set(kept_s), 'clear A: Clear finishes whole: records 0..pos in place, the 8 tail records destroyed once each')
+    go(m, dl)
+    ev = m.events; unl = max(i for i, e in enumerate(ev) if e == ('ui', 'pthread_mutex_unlock')); lk = min(i for i, e in enumerate(ev) if e == ('dlna', 'pthread_mutex_lock'))
+    expect(dl['done'] and m.owner is None and unl < lk and queue_of(m) == kept and flag_on(m) and sorted(m.word(r + O[f]) for r in queue_of(m) for f in STR_FIELDS) == kept_s,
+           'clear A: the request runs after Clear released the lock, on the shortened queue (nothing after the position to shuffle), the kept records untouched')
+    # (b) the reverse: a reorder paused mid-permutation holds the lock; Clear waits (no pop), then removes the tail of the permuted queue; the retained records are the reorder's untouched ones.
+    m = clear_machine(); sched(m); q0 = m.word(PLAYQ); before = queue_of(m)[:]
+    dl = spawn(m, 'dlna', 'sh_set_mode', STACK, a0=SH); m.yield_thread, m.yield_at = 'dlna', 2
+    go(m, dl); mid = queue_of(m)[:]
+    ui = spawn(m, 'ui', 'pod_clear_upnext', STACK - 0x4000); go(m, ui)
+    expect(m.blocked == 'ui' and not ui['done'] and not pops_of(m) and queue_of(m) == mid and len(mid) == 12, 'clear B: Clear waits at the lock while the reorder is mid-permutation: no pop, the deque untouched')
+    m.yield_at = 0; go(m, dl); done = queue_of(m)[:]
+    expect(dl['done'] and m.owner is None and done[:4] == before[:4] and sorted(done) == sorted(before) and not pops_of(m), 'clear B: the reorder finishes whole (a permutation; records 0..pos where they were) and releases the lock')
+    tail_s = sorted(m.word(r + O[f]) for r in done[4:] for f in STR_FIELDS)
+    go(m, ui)
+    expect(ui['done'] and m.owner is None and queue_of(m) == done[:4] and [c[2] for c in pops_of(m)] == done[:3:-1] and sorted(c[1] for c in m.calls if c[0] == 'free' and c[1] in tail_s) == tail_s,
+           'clear B: Clear then removes the 8 records that are the tail of the permuted queue, each string freed once')
+    hook(m, OR)
+    expect(not flag_on(m) and queue_of(m) == done[:4] and ('mclSetPlayPos',) not in m.calls, 'clear B: Shuffle off afterwards finds no saved order (dropped by Clear) and leaves the queue as it is')
+    # (c) a queue load waits for a Clear paused mid-removal, then replaces the queue; nothing of the load runs inside the removal
+    m = clear_machine(); sched(m); recs_new = fresh(m); h = m.new_deque(recs_new)
+    ui = spawn(m, 'ui', 'pod_clear_upnext', STACK - 0x4000); m.yield_thread, m.pop_stop = 'ui', m.pops + 5
+    go(m, ui); m.pop_stop = 0
+    ld = spawn(m, 'dlna', 'sh_load_playlist', STACK, a0=h, a1=2, a2=0xf001); go(m, ld)
+    expect(not ui['done'] and m.blocked == 'dlna' and 'stock_loadplaylist' not in m.names() and len(queue_of(m)) == 7, 'clear C: the load waits at the lock while Clear is 5 pops in; stock\'s loader has not run')
+    go(m, ui); go(m, ld)
+    ev = m.events; unl = max(i for i, e in enumerate(ev) if e == ('ui', 'pthread_mutex_unlock')); ldi = ev.index(('dlna', 'stock_loadplaylist'))
+    expect(ui['done'] and ld['done'] and unl < ldi and m.loads_held == [True] and len(pops_of(m)) == 8 and sorted(order(m)) == NEW and m.owner is None, 'clear C: the load runs after Clear released the lock, under the lock, and fills the queue anew')
 
 
 def shuffle_page_tests(expect, menu, spi, page):

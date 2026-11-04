@@ -1014,6 +1014,7 @@ def ab_button(name, x, w, rest, down):
 # glass Back is the window's last child, over the rows.
 QP_HEAD_PX, QP_EMPTY_PX = 20, 16
 QP_EMPTY_RGB = '#9C9C9C'
+QP_CLEAR_PX, QP_CLEAR_RGB, QP_CLEAR_DOWN_RGB = 17, '#9C9C9C', '#7A7A7A'   # the Clear text button: neutral grey, dimmer while pressed
 QP_OFF_RGB, QP_OFF_DOWN_RGB = '#2C2C2E', '#3A3A3C'   # a mode button that is off (the payload sets the lit look: #C8C8C8, pressed #A8A8A8, with the dark glyph); patch/offsets.inc QP_PILL_*
 
 
@@ -1060,7 +1061,16 @@ def build_queue_page(page):
     for prop, v in (('text_color', '#FFFFFF'), ('font_size', str(QP_HEAD_PX)), ('text_align_h', 'left'), ('text_align_v', 'middle')): styled(head, ('normal',), prop, v)
     empty = hidden(Widget('label', o['SG_HDR_X'], o['QP_TOP'] + o['QP_EMPTY_Y'], 310 - o['SG_HDR_X'], o['QP_EMPTY_H'], [('name', 'qp_empty'), pod_i18n.text_prop('No upcoming songs')]))   # shown by the payload when nothing follows
     for prop, v in (('text_color', QP_EMPTY_RGB), ('font_size', str(QP_EMPTY_PX)), ('text_align_h', 'left'), ('text_align_v', 'middle')): styled(empty, ('normal',), prop, v)
-    kids += [head, empty]
+    clear = hidden(Widget('button', o['QP_CLEAR_X'], o['QP_CLEAR_Y'], o['QP_CLEAR_W'], o['QP_CLEAR_H'], [('name', 'btn_qclear'), ('enable', 'true'), pod_i18n.text_prop('Clear')]))   # shown by the payload while songs follow
+    for st in STATES:   # a flat text button, right aligned to x 310
+        styled(clear, (st,), 'bg_color', '#00000000')
+        styled(clear, (st,), 'text_color', QP_CLEAR_DOWN_RGB if st == 'pressed' else QP_CLEAR_RGB)
+        styled(clear, (st,), 'font_size', str(QP_CLEAR_PX))
+        styled(clear, (st,), 'border_width', '0')
+        styled(clear, (st,), 'border_color', '#00000000')
+        styled(clear, (st,), 'text_align_h', 'right')
+        styled(clear, (st,), 'margin_right', '0')
+    kids += [head, empty, clear]
     view.children = kids
     sv.children.append(view)
     root.children.append(lv)

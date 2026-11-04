@@ -354,6 +354,10 @@
 #define QP_PILL_X1 165
 #define QP_HEAD_Y 192
 #define QP_HEAD_H 28
+#define QP_CLEAR_X 210 /* the Clear button right of the "Queue" line: text right-aligned to x 310, 40 px high, centred on the line */
+#define QP_CLEAR_Y 186
+#define QP_CLEAR_W 100
+#define QP_CLEAR_H 40
 #define QP_EMPTY_Y 8
 #define QP_EMPTY_H 28
 #define QP_TOP 226

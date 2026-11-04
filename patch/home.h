@@ -166,6 +166,8 @@ pod_set_shuffle(int on); /* Shuffle on / off, the repeat mode kept; 0 refused (t
 extern void pod_set_mode_for_queue(
     int mode); /* patch/shuffle.c: pod_set_mode right before a queue load: the flag only, the queue being replaced is not reordered */
 extern void pod_set_in_order_for_queue(void); /* patch/shuffle.c: pod_set_in_order right before a queue load: the flag only */
+extern int pod_clear_upnext(void); /* patch/shuffle.c: Clear: 1 done, 0 nothing after the position, -1 refused */
+extern int pod_clear_ready(void); /* patch/shuffle.c: Clear can run (kill switch off, libcstl as pinned) */
 extern void pod_set_repeat(int mode); /* the stock repeat mode (0 off, 3 all, 1 one), the Shuffle flag kept */
 extern void menu_arrange(void *win,
                          int extras); /* patch/menu.c: the rows as the saved list says (the scroll offset is clamped) */
