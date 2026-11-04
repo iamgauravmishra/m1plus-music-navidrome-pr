@@ -286,6 +286,7 @@ def main():
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     raw = os.path.join(work, RAW)
     s = PI.Side(work, True); s.mark = lambda *a: None   # no C/K markers here
+    PI.lineout_bars(s).save(os.path.join(os.path.dirname(os.path.abspath(out)), 'lineout.png'))   # the Line Out pill: bar off / on, then the pull-down's bar copies on
     run('preview_accent.py', work, os.path.dirname(os.path.abspath(out)))   # accent-black.png, accent-graphite.png: the planned Accent + Background picker (a mock-up, not in the firmware)
     with tempfile.TemporaryDirectory() as t:
         p = lambda n: os.path.join(t, n)

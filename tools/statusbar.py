@@ -12,9 +12,12 @@ black. test/pod/assets.py compares the two built files widget by widget.
 Usage: imported by tools/mod_theme.py (system bar) and tools/mod_pulldown.py (pull-down bar).
 """
 
+from awtk_ui import Widget
+
 EDGE, GAP = 10, 4                # left margin of the left group and right margin of the battery; spacing inside both groups
 SMALL_PX, CLOCK_PX = 16, 18      # volume number, clock
 PCT_PX = 13                      # the battery percentage label (patch/battery.c; hidden unless Settings > Home Screen > Battery Percentage is on): white, right-aligned in the right group
+LO_WIDGET, LO_IMAGE, LO_W = 'pod_lo', 'pod_bar_lo', 26   # the Line Out pill (patch/lineout.h LO_PILL; tools/mod_icons.py LO_BAR, 26 x 16): in view_bar_left right after label_volume, in both bar copies; the widget is label_volume's VOLUME_W wide with the image centred, so the icons after it do not move
 VOLUME_W = 30                 # the volume label's box ("100" at 16 px)
 CLOCK_X, CLOCK_W = 104, 90       # centre 149: "12:59 PM" (66 px at 18) spans 116..182
 BAR_BG = '#000000'               # the bar's colour (system_bar's own style; the pull-down panel behind it is #141414)
@@ -37,3 +40,6 @@ def apply(bar):
     clock.set('style:normal:font_size', str(CLOCK_PX))
     right.set('children_layout', f'default(r=1,c=0,a=right,s={GAP})')
     right.x = img.x - GAP - right.w
+    assert left.find(LO_WIDGET) is None, 'the Line Out pill is already in the bar'
+    pill = Widget('image', 0, 0, VOLUME_W, 0, [('name', LO_WIDGET), ('image', LO_IMAGE), ('draw_type', 'center'), ('visible', 'false'), ('sensitive', 'false')])
+    left.children.insert(left.children.index(vol) + 1, pill)   # right after label_volume: hidden and insensitive, the layouter skips it until patch/lineout.c swaps it for the label

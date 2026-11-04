@@ -231,6 +231,10 @@ CHEVRON, CHEVRON_DOWN = (0x8A,) * 3, (0x6E,) * 3     # every list chevron (stock
 # The status bar's Screenshot camera (patch/shot.c shows it while the 5 s countdown runs; tools/pod_ui.py adds the hidden widget): 16 px, white
 SHOT_BAR = ('pod_bar_shot', 'camera')
 SHOT_BAR_PX = 16
+# The status bar's Line Out pill (patch/lineout.c swaps it for stock's white "LO" text while Line Out is on): an amber #FFD60A (not the Accent Orange #FF9F0A) pill, fully rounded
+# ends, black "LO" in Inter. A saturated image: Light Mode's flip (chroma over LIGHT_CHROMA) and the accent tints (named lists) leave it as drawn.
+LO_BAR = 'pod_bar_lo'
+LO_BAR_W, LO_BAR_H, LO_BAR_PX, LO_BAR_RGB = 26, 16, 12, (0xFF, 0xD6, 0x0A)
 
 # ---- round 2 (docs/ui.md "Icon audit"): the stock images the pages and dialogs still showed.
 # Plain glyph images at the stock size: white (pressed `_down`: #777777), no disc. 'name:filled' = the shapes filled
@@ -495,6 +499,18 @@ def badge(text, ss=8, size=(BADGE_W, BADGE_H)):
     d.text(((w * ss - (bb[2] - bb[0])) // 2 - bb[0], (h * ss - (bb[3] - bb[1])) // 2 - bb[1]), text, font=f, fill=255, stroke_width=ss // 8)
     im = Image.new('RGBA', (w, h), WHITE + (0,)); im.putalpha(big.resize((w, h), Image.BOX)); return im
 
+def lo_pill(ss=8):
+    from PIL import Image, ImageDraw, ImageFont
+    w, h = LO_BAR_W, LO_BAR_H
+    mask = Image.new('L', (w * ss, h * ss), 0); ImageDraw.Draw(mask).rounded_rectangle((0, 0, w * ss - 1, h * ss - 1), radius=h * ss / 2, fill=255)
+    txt = Image.new('L', (w * ss, h * ss), 0); f = ImageFont.truetype(TILE_FONT, LO_BAR_PX * ss); sw = ss // 3
+    bb = f.getbbox('LO', stroke_width=sw)
+    ImageDraw.Draw(txt).text(((w * ss - (bb[2] - bb[0])) // 2 - bb[0], (h * ss - (bb[3] - bb[1])) // 2 - bb[1]), 'LO', font=f, fill=255, stroke_width=sw)
+    amber = Image.new('RGBA', (w * ss, h * ss), LO_BAR_RGB + (255,))
+    black = Image.new('RGBA', (w * ss, h * ss), (0, 0, 0, 255)); amber.paste(black, (0, 0), txt)
+    amber.putalpha(mask)
+    return amber.resize((w, h), Image.BOX)
+
 def bare_icon(g, canvas):
     """The bare glyph g (a Lucide / Tabler name, '+custom', 'badge:TEXT' or the Shanling mark) centred in a canvas x canvas
     transparent image."""
@@ -714,6 +730,7 @@ def generate_all(sizes):
         f[n] = capsule_piece(pos, g, False)
         f[n + '_down'] = capsule_piece(pos, g, True)
     f[SHOT_BAR[0]] = fit(lambda p: glyph(SHOT_BAR[1], p, 'small'), SHOT_BAR_PX, SHOT_BAR_PX, SHOT_BAR_PX)
+    f[LO_BAR] = lo_pill()
     # round 2: glyph images at the stock size, discs, recoloured line art, badges, pills
     for n, g, down in GLYPHS:
         grey = (GREY_GLYPHS[n],) * 3 if n in GREY_GLYPHS else WHITE
@@ -1562,7 +1579,7 @@ def replaced_names():
 
 def pod_row_names(): return sorted({n for n, _ in POD_ROWS.values()})
 def nav_names(): return sorted(set(NAV_VIEW) | {n + '_down' for n in NAV_VIEW})
-def pod_names(): return sorted(set(pod_row_names()) | set(FOLDER_ROWS) | set(RADIO_ROWS) | {RADIO_ART[0]} | set(POD_HOME) | set(nav_names()) | set(ALBUM) | set(DAILY) | {SHOT_BAR[0]} | {n for n, _ in PL_MENU_ICONS})
+def pod_names(): return sorted(set(pod_row_names()) | set(FOLDER_ROWS) | set(RADIO_ROWS) | {RADIO_ART[0]} | set(POD_HOME) | set(nav_names()) | set(ALBUM) | set(DAILY) | {SHOT_BAR[0], LO_BAR} | {n for n, _ in PL_MENU_ICONS})
 def np_names(): return sorted(set(NP) | {v[4] for v in NP.values() if v[4]})
 
 def added_rels(stock_rootfs=None, *args):
@@ -1736,7 +1753,7 @@ def add_nav_icons(out):
     the status bar's Screenshot camera (the hidden pod_shot image tools/pod_ui.py adds to ui/system_bar.bin) and the Playlists
     page's menu glyphs (ui/m1plus_playlists.bin)."""
     d = os.path.join(out, IMG)
-    for n in nav_names() + [SHOT_BAR[0]] + [n for n, _ in PL_MENU_ICONS]:
+    for n in nav_names() + [SHOT_BAR[0], LO_BAR] + [n for n, _ in PL_MENU_ICONS]:
         q = os.path.join(d, n + '.png'); assert not os.path.exists(q), f'{n}.png already in the tree'
         shutil.copyfile(os.path.join(PNG, n + '.png'), q); os.chmod(q, IMG_MODE); os.utime(q, (IMG_MTIME, IMG_MTIME))
 

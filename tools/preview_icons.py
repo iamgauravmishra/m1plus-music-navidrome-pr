@@ -63,7 +63,7 @@ def status_bar(s, im, y0=0, bg=(0, 0, 0), vol='50', pct='86%'):
     im.alpha_composite(s.img('bar_btcon'), (173, y0 + 5)); im.alpha_composite(s.img('bar_wifi3'), (224, y0 + 7))
     s.text(im, 292, y0 + BAR / 2, pct, 16, anchor='r'); im.alpha_composite(s.img('bar_power'), (296, y0 + 8))
 
-def asset_bar(s, bar, im, y0=0, vol='100', clock='12:59 PM'):
+def asset_bar(s, bar, im, y0=0, vol='100', clock='12:59 PM', lo=False):
     """A status bar drawn from its asset widgets (the system_bar window or the pull-down's view_sysbar): the left group
     stacked from its children_layout, the clock centred in its box, the right group right-aligned to its view's edge, the
     battery outline over its fill; the bar's own bg_color (black when it has none). Same images, fonts and offsets as the
@@ -73,12 +73,12 @@ def asset_bar(s, bar, im, y0=0, vol='100', clock='12:59 PM'):
     ImageDraw.Draw(im).rectangle((0, y0, W - 1, y0 + BAR - 1), fill=tuple(int(bg[i:i + 2], 16) for i in (0, 2, 4)))
     def group(view, right):
         m = re.search(r'x=(\d+)', view.get('children_layout') or ''); sp = int(re.search(r's=(\d+)', view.get('children_layout')).group(1))
-        kids = [c for c in view.children if c.name not in ('img_synclink', 'pod_shot', 'pod_pct', 'pod_pct_dd')]      # SyncLink is only drawn while connected; the Screenshot camera while it counts down, the Battery Percentage when it is on (preview.shot_bars)
+        kids = [c for c in view.children if c.name not in ('img_synclink', 'pod_shot', 'pod_pct', 'pod_pct_dd', 'pod_lo' if not lo else 'label_volume')]      # SyncLink is only drawn while connected; the Screenshot camera while it counts down, the Battery Percentage when it is on (preview.shot_bars)
         total = sum(c.w for c in kids) + sp * (len(kids) - 1)
         x = view.x + view.w - total if right else view.x + int(m.group(1)) if m else view.x
         for c in kids:
             if c.type == 'image':
-                name = {'img_playstate': 'bar_play', 'img_volume': 'bar_vol3', 'img_digital': 'bar_digital', 'img_btclass': 'bar_btcon', 'img_wifi': 'bar_wifi3'}[c.name]
+                name = {'pod_lo': 'pod_bar_lo', 'img_playstate': 'bar_play', 'img_volume': 'bar_vol3', 'img_digital': 'bar_digital', 'img_btclass': 'bar_btcon', 'img_wifi': 'bar_wifi3'}[c.name]
                 ic = s.img(name); im.alpha_composite(ic, (x + (c.w - ic.width) // 2 if c.get('draw_type') in ('icon', 'center') else x, y0 + (BAR - ic.height) // 2))
             else:   # label_volume
                 s.text(im, x, y0 + BAR / 2, vol, int(c.get('style:normal:font_size')))
@@ -87,6 +87,19 @@ def asset_bar(s, bar, im, y0=0, vol='100', clock='12:59 PM'):
     clk = bar.find('bar_dclock'); s.text(im, clk.x + clk.w / 2, y0 + BAR / 2, clock, int(clk.get('style:normal:font_size')), anchor='m')
     img = bar.find('img_battery'); im.alpha_composite(s.img('bar_power'), (img.x, y0 + img.y))
     pg = bar.find('pgbar_battery'); ImageDraw.Draw(im).rectangle((pg.x, y0 + pg.y, pg.x + pg.w * 86 // 100 - 1, y0 + pg.y + pg.h - 1), fill=WHITE)
+
+def lineout_bars(s):
+    """The Line Out pill (patch/lineout.c) as the device shows it, 3x: the real bar with Line Out off (the volume number) and on (the pill in label_volume's place; the digital-out glyph follows it), then the
+    pull-down's own bar copy with Line Out on, on the pull-down's #141414 panel."""
+    import awtk_ui
+    sysbar = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', 'system_bar.bin'), 'rb').read())
+    dd = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui/dialog/dropdown_dialog.bin'), 'rb').read()).find('view_sysbar')
+    rows = []
+    for b, lo in ((sysbar, False), (sysbar, True), (dd, True)):
+        one = Image.new('RGBA', (W, BAR), (0, 0, 0, 255)); asset_bar(s, b, one, lo=lo, vol='50'); rows.append(one)
+    out = Image.new('RGB', (W, len(rows) * BAR + 6 * (len(rows) - 1)), (0x2A, 0x2A, 0x2A))
+    for i, one in enumerate(rows): out.paste(one.convert('RGB'), (0, i * (BAR + 6)))
+    return out.resize((out.width * 3, out.height * 3), Image.NEAREST)
 
 def bars_compare(s):
     """The real status bar (system_bar.bin) over the pull-down's bar in the dropdown dialog, 1:1 on the pull-down's
