@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Approximate PIL mock-up of the library list pages, stock beside tools/mod_lists.py (not AWTK).
 
-  preview_lists.py STOCK_WORKDIR MOD_WORKDIR OUT.png [--theme default|theme1]
+  preview_lists.py STOCK_WORKDIR MOD_WORKDIR OUT.png
 
 The rows of these pages are built by demo's code, not by their ui/*.bin, so the page models below
 copy the code's geometry (docs/ui.md: folder_create_tablerow, music_create_tablerow, the
@@ -161,9 +161,8 @@ def panels(work, theme):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('stock'); ap.add_argument('mod'); ap.add_argument('out')
-    ap.add_argument('--theme', default='default', choices=['default', 'theme1'])
     a = ap.parse_args()
-    rows = [('stock', panels(a.stock, a.theme)), ('mod', panels(a.mod, a.theme))]
+    rows = [('stock', panels(a.stock, 'default')), ('mod', panels(a.mod, 'default'))]
     names = ['Folders (pressed row 4)', 'Songs + index letter', 'Search tabs']
     pad, top = 10, 34
     out = Image.new('RGB', (3 * (W + pad) + pad, 2 * (H + top) + 22), (40, 40, 40)); d = ImageDraw.Draw(out)
@@ -171,7 +170,7 @@ def main():
         for c, im in enumerate(ims):
             x, y = pad + c * (W + pad), r * (H + top) + top
             out.paste(im.convert('RGB'), (x, y)); d.text((x, y - 16), f'{label}: {names[c]}', fill=(230, 230, 230))
-    d.text((pad, out.height - 16), f'approximate PIL mock-up of code-built rows (not AWTK); theme {a.theme}; '
+    d.text((pad, out.height - 16), 'approximate PIL mock-up of code-built rows (not AWTK); '
            'colours/sizes/icons read from each tree\'s styles', fill=(160, 160, 160))
     out.quantize(colors=128).save(a.out, optimize=True); print('wrote', a.out)   # a palette PNG keeps docs/ small
 

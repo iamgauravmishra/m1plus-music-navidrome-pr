@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The pull-down control centre: its status bar the real one, its text one step smaller (V2.1gB, docs/ui.md).
 
-ui/dialog/dropdown_dialog.bin (default and theme1; the dialog has no page theme, styles/ has no
+ui/dialog/dropdown_dialog.bin (the dialog has no page theme, styles/ has no
 dropdown_dialog.bin) carries its own copy of the status bar (view_sysbar) and the tile captions:
 
   view_sysbar    laid out from the table the real bar (ui/system_bar.bin) uses, tools/statusbar.py: left group
@@ -35,7 +35,7 @@ from modlib import clone_workdir, edit_ui
 from awtk_text import Ttf, awtk_width
 
 RAW = 'rootfs/release/assets/{theme}/raw'
-THEMES = ('default', 'theme1')
+THEMES = ('default',)
 DIALOG = 'ui/dialog/dropdown_dialog.bin'
 FONT = 'rootfs/release/assets/default/raw/fonts/default.ttf'
 STATES = ('normal', 'disable', 'focused')

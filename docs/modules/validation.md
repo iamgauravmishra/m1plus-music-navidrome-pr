@@ -25,8 +25,8 @@ Keep assertion counts and exhaustive inventories out of docs: they go stale.
 ## Required outcomes
 
 Every task must finish; missing inputs/results, process errors, native signals and timeouts
-fail. Logs and failed trees remain. Installation rechecks the dev receipt's source/environment,
-tree, package and full test scope. Golden acceptance needs both packages and the full suite,
+fail. Logs and failed trees remain. Installation rechecks the dev receipt's recorded inputs, tree,
+package and full test scope (not the current source or environment: a built package stays installable after later edits). Golden acceptance needs both packages and the full suite,
 or matching retained evidence.
 
 Emulation proves only the modelled paths. Playback, real frame timing, panel appearance and

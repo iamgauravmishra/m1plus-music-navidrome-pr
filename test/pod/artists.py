@@ -61,8 +61,8 @@ def artists_tests(ctx):
     b, data, w, h = m.bitmap
     frame = bytes(m.u.mem_read(data, w * h * 4))
     host = host_frame(0, ring=[None] * 3 + [True] * 4)
-    if host is not None:   # q2-pod's bounded artist shelf: nothing left of the first album, no repeats
-        expect(frame == host, 'at the first album nothing is drawn to its left (the host frame of that ring)')
+    # q2-pod's bounded artist shelf: nothing left of the first album, no repeats
+    expect(frame == host, 'at the first album nothing is drawn to its left (the host frame of that ring)')
 
     # 32b. Landscape on an artist's Cover Flow (the choice is shared with the main one): the body-sized frame, the card's
     #      caption All albums over the artist, and the shelf still has its ends.
@@ -80,11 +80,10 @@ def artists_tests(ctx):
     b, data, w, h = ml.bitmap
     frame = bytes(ml.u.mem_read(data, w * h * 4))
     host = host_frame(0, ring=[None] * 3 + [True] * 4, land=True)
-    if host is not None:
-        at = lambda x, y: (x * lh + lh - 1 - y) * 4
-        ok = all(frame[at(x, y):at(x, y) + 4] == host[at(x, y):at(x, y) + 4]
-                 for y in range(0, O['CFL_ALBUM_Y'] - 6, 3) for x in range(0, lw, 2))
-        expect(ok, 'at the first album nothing is drawn to its left in landscape (the host frame of that ring)')
+    at = lambda x, y: (x * lh + lh - 1 - y) * 4
+    ok = all(frame[at(x, y):at(x, y) + 4] == host[at(x, y):at(x, y) + 4]
+             for y in range(0, O['CFL_ALBUM_Y'] - 6, 3) for x in range(0, lw, 2))
+    expect(ok, 'at the first album nothing is drawn to its left in landscape (the host frame of that ring)')
 
     # 33. The card: All albums over the artist; it opens our Songs page on all the artist's songs (the Songs button's call: the artist is put into the
     #     browsing record by loadAlbumList(0xf004, artist), loadAlbumdetailList turns it into the All songs class 0xff11), not an album page.

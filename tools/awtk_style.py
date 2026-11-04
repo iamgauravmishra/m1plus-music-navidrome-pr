@@ -2,7 +2,7 @@
 """Parse / serialize AWTK binary theme files (styles/*.bin, magic fd fc fb fa).
 
 Format, as shipped on the Shanling X2000 firmware (AWTK 1.x theme_gen output); every stock
-styles/*.bin under assets/default and assets/theme1 round-trips byte-exact through this module:
+styles/*.bin under assets/default round-trips byte-exact through this module:
 
   header   u32 magic 0xfafbfcfd, u32 version (0), u32 nr
   items    nr x { u32 offset; char state[32]; char style[32]; char widget_type[32] }   (100 bytes)

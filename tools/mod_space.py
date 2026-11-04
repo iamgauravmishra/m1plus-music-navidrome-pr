@@ -9,12 +9,15 @@ Stock rebuilt with fwtool leaves ~12 KB headroom. This step frees room without c
            debuggers (gdb). File size, headers and every other byte stay identical.
   remove   delete files nothing on the rootfs references (debug tools, orphaned old library
            versions whose soname symlinks point at the newer copy). Evidence: docs/firmware.md.
+  theme1   delete the whole stock `release/assets/theme1` tree (2.3 MB). Stock System > Theme is
+           gone and demo reads a stored THEME=1 as 0 (tools/themeoff.py, docs/modules/theme.md);
+           the tree is unreachable only together with that clamp.
 
 The -tailends half of the saving lives in `fwtool.py repack --tailends`.
 
 Usage: mod_space.py WORKDIR   (modifies WORKDIR in place)
 """
-import hashlib, os, struct, sys
+import hashlib, os, shutil, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from modlib import write_keep_mode
 
@@ -37,6 +40,16 @@ REMOVE = {
     'usr/lib/libgobject-2.0.so.0.5400.3': '1473980eb06ce41477346b8a7ef3509a5e03045eeffa7a97707d64f0c80827b9',
     'usr/lib/libgthread-2.0.so.0.5400.3': '4c3628a06f1ee3cf4e36972a40cd7ba42214600b22a3910bd84e1c3a2ae4043a',
 }
+
+THEME1 = 'release/assets/theme1'
+
+def theme1_paths(rootfs):
+    """Every stock entry (the directory, its subdirectories, files and links) of the theme1 tree, relative to rootfs."""
+    top = os.path.join(rootfs, THEME1)
+    out = [THEME1]
+    for d, dirs, files in os.walk(top):
+        out += [os.path.relpath(os.path.join(d, n), rootfs) for n in sorted(dirs + files)]
+    return out
 
 def sha256(b): return hashlib.sha256(b).hexdigest()
 
@@ -89,10 +102,18 @@ def remove_unused(rootfs):
     for rel in REMOVE: os.remove(os.path.join(rootfs, rel))
     return size
 
+def remove_theme1(rootfs):
+    top = os.path.join(rootfs, THEME1)
+    assert os.path.isdir(top), f'missing {THEME1}'
+    size = sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(top) for f in fs)
+    shutil.rmtree(top)
+    return size
+
 def main():
     if len(sys.argv) != 2: sys.exit(__doc__)
     rootfs = os.path.join(sys.argv[1], 'rootfs')
     print(f'remove: {len(REMOVE)} unused files, {remove_unused(rootfs)} bytes')
+    print(f'theme1: removed {THEME1}, {remove_theme1(rootfs)} bytes')
     print(f'pdr: zeroed .pdr in {DEMO}, {zero_pdr(rootfs)} bytes')
 
 if __name__ == '__main__': main()

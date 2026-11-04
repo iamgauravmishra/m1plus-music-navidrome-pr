@@ -131,9 +131,9 @@ hidden (`visible=false` **and** `sensitive=false`: a hidden widget would still t
 scroll_view (310) and scroll bar (10 wide) `widget_resize`d to the page's height, the dialog moved to y 480 minus it, `virtual_h` the height, `yoffset` 0, the dialog invalidated before
 and after.
 
-## Assets (`tools/mod_lists.py` `edit_playmore`, both asset themes)
+## Assets (`tools/mod_lists.py` `edit_playmore`)
 
-`ui/dialog/playmore_dialog.bin` exists in `default` and `theme1` (the A-B label 20 px narrower there); both get the same edit, and `build_ui` asserts that
+`ui/dialog/playmore_dialog.bin` exists in `default`; `build_ui` asserts that
 every stock widget keeps its type, name and rectangle (`ADD_EDITS`: only the `pod_more*` / `pod_back*` / `pod_tape*` / `pod_vinyl*` / `pod_art*` widgets are new, and the six speed row widgets of
 `PM_SPEED` change their rectangle, asserted from the stock values). The dialog gets `highlight`. `pod_more` and `pod_back` are `list_item`s styled as the Add to
 playlist row (`pod_back`: no hairline, it is the first row of its page), appended as the eighth and ninth children: `pod_more_icon` (24 x 24 at 14,13: the

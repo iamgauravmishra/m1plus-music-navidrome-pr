@@ -130,8 +130,7 @@ Sizing follows AWTK's stb font backend: `font_size` equals hhea ascender minus d
 `default.ttf`), digits are tabular (142 units), so `hh:mm` is 2.14 x font_size wide; the tool reads the
 font and picks the largest size that keeps 12 px margins. Rotation (`ROTATEMODE`) is
 `tk_set_lcd_orientation(180)` on the whole LCD, so the page keeps its 320x480 coordinates and nothing in
-the layout is rotation-specific. No other UI file carries this page: `theme1` has no
-`screensaver_page.bin` (it uses default's, like every page it lacks), and `systemset/screensaver_page.bin` /
+the layout is rotation-specific. No other UI file carries this page: `systemset/screensaver_page.bin` /
 `systemset/keylock_page.bin` are the settings lists. 
 
 **Cover size**: `view_img_icon` is filled by a loader at
@@ -156,7 +155,9 @@ A plain fwtool rebuild of stock is 12 KB under the stock size, which fwtool enfo
 | + `.pdr` zeroed in `demo` | 55,635,968 | 61,440 | 102,400 |
 | + 10 unused files removed (**default result**) | 53,141,504 | 2,494,464 | 2,596,864 |
 
-(mksquashfs pads to 4 KiB.)
+(mksquashfs pads to 4 KiB.) The release step also deletes stock's whole `release/assets/theme1` tree
+(271 files, 2.3 MB uncompressed; `remove_theme1`, safe only with the `config_init` clamp of
+[theme](modules/theme.md)), which shrinks the mod's rootfs.squashfs by 458,752 bytes (55,296,000 -> 54,837,248).
 
 - **-tailends** packs the last partial block of every file into fragments. Data layout only; names,
   modes, owners and times are unchanged. Directory sizes in a listing change (squashfs directory-table

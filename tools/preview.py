@@ -344,7 +344,7 @@ def main():
             ('Playlists: the "..." menu (New, Import, Export, Delete)', PI.playlists_grid(s, menu=True).convert('RGB')),
             ('Playlists: list mode (toggle shows the grid; row 2 pressed)', PI.playlists_grid(s, list_mode=True).convert('RGB')),
             ('Pull-down, toggles and sliders', ctl),
-            ('Status bar: real (top), pull-down default, theme1; below, their differences x16 (' + ('identical' if bars_same else 'DIFFER') + ')', bars),
+            ('Status bar: real (top), pull-down; below, their difference x16 (' + ('identical' if bars_same else 'DIFFER') + ')', bars),
             ('Lock screen over the default wallpaper (playing, idle + charging)', lock),
             ('Cover Flow landscape (Settings > Library > Landscape; player held turned counter-clockwise)', land)]
     # rows of panels, packed left to right

@@ -132,10 +132,6 @@ def edit_specfolder(root):
     assert (all_.x, all_.y, all_.w, all_.h) == (229, 0, 38, 50), 'unexpected specfolder_page select-all button'
     np_.x, np_.y, np_.w, np_.h = NAV_NP
     all_.x, all_.w = 214, 46
-    title = one(root, 'label_title', 'label')
-    if title.x == 90:   # theme1 centres the title; the Pod navbar's is at 36, 14, left aligned
-        assert (title.y, title.w, title.h) == (14, 129, 22), 'unexpected specfolder_page title'
-        title.x, title.w = 36, 180
 
 
 NAV_BACK = (7, 0, 44, 50)   # the Pod navbar's Back (tools/pod_ui.py NAV_BACK_X, NAV_BACK_W): the glass disc ah_nav_back at x 8 .. 50, y 4 .. 46
@@ -222,7 +218,7 @@ def build_navbar_ui(work):
                 counted = []
                 old, new, root = edit_ui(path, lambda r: counted.append(glass_navbar(r)))
                 bars += counted[0]
-    assert bars >= 50, f'glass navbar: only {bars} stock navbars found'
+    assert bars >= 45, f'glass navbar: only {bars} stock navbars found'
     report.append(f'glass navbar: {bars} stock navbars (Back, Now Playing, title)')
     return report
 
@@ -242,7 +238,6 @@ def build_ui(work):
     report = []
     for rel, fn in UI_EDITS.items():
         path = os.path.join(work, mod_lists.RAW.format(theme='default'), 'ui', rel)
-        assert not os.path.exists(os.path.join(work, mod_lists.RAW.format(theme='theme1'), 'ui', rel)), f'theme1 has its own {rel}'
         old, new, root = edit_ui(path, fn)
         names = lambda d: [(w.type, w.name) for w in awtk_ui.parse(d).walk()]
         assert sorted(names(new), key=str) == sorted(names(old), key=str), f'{rel}: a widget was added, removed or renamed'

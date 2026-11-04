@@ -21,7 +21,7 @@ def stock_digests(assets):
     """{area: sha256 of the sorted (relative path, file sha256) list} over assets/ (release/assets), without our pages and images (ui/m1plus_*, NEW_IMAGES) and
     OUR_FILES, and 'demo-builders': the bytes of the stock pages' navbar builders in demo."""
     out = {}
-    for area in ('default/raw/ui', 'default/raw/styles', 'default/raw/images', 'default/raw/strings', 'default/raw/fonts', 'theme1'):
+    for area in ('default/raw/ui', 'default/raw/styles', 'default/raw/images', 'default/raw/strings', 'default/raw/fonts'):
         h = hashlib.sha256()
         for f in sorted(glob.glob(os.path.join(assets, area, '**', '*'), recursive=True)):
             if not os.path.isfile(f): continue
@@ -50,8 +50,9 @@ def run(ctx):
     # ------------------------------------------------------------------ stock pages are main's
     want = dict(l.split()[::-1] for l in open(DIGESTS) if l.strip() and not l.startswith('#'))
     got = stock_digests(assets)
+    expect(not os.path.exists(os.path.join(assets, 'theme1')), 'stock theme1 is not in the rootfs (tools/mod_space.py; it is safe only with the config_init clamp, tools/themeoff.py)')
     got['demo-builders'] = builder_digest(open(DEMO, 'rb').read())
-    expect(got == want, f'every stock ui / style / image / string / font file (the whole theme1 tree too) and the stock pages\' navbar builders in demo are byte-identical to main\'s build: {[k for k in got if got[k] != want.get(k)]} differ ({ {k: got[k] for k in got if got[k] != want.get(k)} }: the new digests, for test/navbars-stock.sha256 when the change is intended)')
+    expect(got == want, f'every stock ui / style / image / string / font file and the stock pages\' navbar builders in demo are byte-identical to main\'s build: {[k for k in got if got[k] != want.get(k)]} differ ({ {k: got[k] for k in got if got[k] != want.get(k)} }: the new digests, for test/navbars-stock.sha256 when the change is intended)')
 
     # ------------------------------------------------------------------ our pages
     stock_ui = os.path.join(raw, 'ui')

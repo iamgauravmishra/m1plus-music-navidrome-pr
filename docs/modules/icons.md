@@ -63,8 +63,7 @@ pause, skip, lock); `ellipsis` is always filled.
 | charging | `chargebg` (86x124) | the stock frame (`charge_big`, SHA-256 pinned, read at generation) with a centred white bolt |
 | recoloured | 9 `eq_*` presets white; 15 orange to neutral (toggles, slider fills and thumbs, default covers, `theme.md`); 4 secured Wi-Fi rows (fan + lock) | |
 
-`icons` runs late in the build, so it overrides the theme step's grey discs. theme1 has its own image files and is
-not touched.
+`icons` runs late in the build, so it overrides the theme step's grey discs.
 
 ## Row glyphs
 

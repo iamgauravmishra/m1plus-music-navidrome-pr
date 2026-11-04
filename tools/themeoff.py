@@ -12,10 +12,12 @@ boot hook:
   the end, so entries 0..14 skip it;
 - the row count (15, or 16 when the language is 3) becomes one less.
 
-Nothing else opens `systemset/theme_page`, so the picker has no entry point left.
+Nothing else opens `systemset/theme_page`, so the picker has no entry point left. The clamp is also what makes it safe that tools/mod_space.py removes stock's theme1 asset tree.
 """
 import struct
 
+# Do not drop CLAMP without restoring stock's release/assets/theme1: tools/mod_space.py deletes that tree from the
+# rootfs, so a demo that can load theme1 (THEME=1 in config.ini) would look for assets that are not there.
 CLAMP = 0x4e63d8
 TABLE = 0x97c8c0       # 16 words, row -> page index
 COUNT = 0x4adb1c       # addiu v0, v0, 0xf: the rows (+1 for language 3)

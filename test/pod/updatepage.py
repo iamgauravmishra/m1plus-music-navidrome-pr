@@ -304,7 +304,7 @@ def confirm_tests(ctx):
     m.click()
     expect(m.confirms() == [sub(CONFIRM, '1.0.1')] and m.thread is None and len(site.reqs) == n and m.pop() is None and m.view()[1] == 'Version 1.0.1 available' and m.fs[UP.FILE] == UP.OLD,
            'Cancel in the confirm dialog: no worker, no request, no popup, the page as it was, update.bin untouched')
-    expect(not [c for c in m.hist if c[0] == 'pthread_create' and False] and fn(m, 'pn_up_state') == U['CHECKED'], 'the state is still the offer')
+    expect(fn(m, 'pn_up_state') == U['CHECKED'], 'the state is still the offer')
     m.confirm_answer = 4
     m.click()
     expect(m.thread is None and len(site.reqs) == n, 'the dialog\'s Cancel button (4) is the same')

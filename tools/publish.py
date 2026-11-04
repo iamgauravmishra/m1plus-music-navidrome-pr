@@ -16,20 +16,16 @@ creates it at HEAD when the draft is published; if the tag was already pushed, t
 downloads the assets back and compares hashes. --publish then makes the release public.
 Only the release package is published; the stock restore image stays local.
 """
-import argparse, hashlib, os, shutil, subprocess, sys, tempfile
+import argparse, os, shutil, subprocess, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import build
+import build, workflow
 
 ROOT = build.ROOT
 GOLDEN = os.path.join(ROOT, 'test', 'golden.sha256')
 PACKAGE = os.path.join(ROOT, 'work', 'check', 'release', 'out', f'M1Plus-{build.TAG}-release-update.bin')
 ASSETS = ('update.bin', 'SHA256SUMS')
 
-def sha256(p):
-    h = hashlib.sha256()
-    with open(p, 'rb') as f:
-        for c in iter(lambda: f.read(1 << 20), b''): h.update(c)
-    return h.hexdigest()
+sha256 = workflow.sha
 
 def git(*a): return subprocess.run(['git', '-C', ROOT, *a], capture_output=True, text=True)
 

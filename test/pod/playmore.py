@@ -891,7 +891,7 @@ def run(ctx):
     # -- 9. the assets, both themes ---------------------------------------------------------------------------------------------------
     stock_ui = awtk_ui.parse(open(os.path.join(stock_raw, 'ui/dialog/playmore_dialog.bin'), 'rb').read())
     speed_names = ('scrlabel1', 'label1_msg', 'img_1x', 'img_1_25x', 'img_1_5x', 'img_2x')
-    for theme in ('default', 'theme1'):
+    for theme in ('default',):
         built_ui = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets', theme, 'raw/ui/dialog/playmore_dialog.bin'), 'rb').read())
         stock_t = stock_ui if theme == 'default' else awtk_ui.parse(open(os.path.join(stock_raw, '..', '..', theme, 'raw/ui/dialog/playmore_dialog.bin'), 'rb').read())
         geo = lambda t: [(w.type, w.name, w.x, w.y, w.w, w.h) for w in t.walk() if not w.name.startswith(('pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_goep', 'pod_art', 'pod_glass')) and w.name not in speed_names]

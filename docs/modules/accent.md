@@ -73,7 +73,7 @@ device renders as on main, apart from the one-level role-colour tweaks below.
   the two keyboard keys, and the page style files that copy them: Playlists' row, the Search tabs), `LIST_PRESS` `0xff343333` (every payload list: Songs, Artists, Albums list, Folders, Queue, Search, Podcasts,
   Online Art), `PRESS_RGB` in `tools/pod_search.py`. The Now Playing progress fill is `#FFFFFEEB` (was `#FFFFFFEB`, which the page dots share): `FILL` in `tools/mod_nowplaying.py`. Both are one level off a grey
   or white that stays; `#333333` (hairline in cards, track, the Play/Shuffle pills, tiles) and `#FFFFFF` map to nothing. The pressed card is an image (`pod_cd_*_down`, `#2C2C2E`), found by name, so it needs no
-  unique colour. `roles_tests` scans every built style and page (default and theme1) and the payload/tool sources: the role colours are only where they are defined; a grid of dark cover tones and the neutral tone
+  unique colour. `roles_tests` scans every built style and page (default theme) and the payload/tool sources: the role colours are only where they are defined; a grid of dark cover tones and the neutral tone
   are not role colours (the cover-tinted backgrounds are untouched).
 - **`pal_map`** looks for a role colour first (rgb compared, alpha kept) and, if it is one, returns the accent's: pressed row `mix(black, accent, 22 %)` (Red: `#380F0D`), progress fill = the accent. Otherwise the
   background (Light's flip) as before. Order differs from phase 1's "background, then accent": a role colour is neutral, and Light's flip would change it before the accent could find it. Model `map_colour`/`role`.

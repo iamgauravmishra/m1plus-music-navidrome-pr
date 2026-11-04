@@ -13,7 +13,7 @@ tools/audit_images.py; the output is plain text.
   stock.py images PATTERN              images/xx/*.png whose name contains PATTERN: size, and who refers to it
   stock.py style NAME                  styles/NAME*.bin dumped (awtk_style)
   stock.py paths                       the resolved stock and tree locations
-Options: --tree (use the built release tree, work/mod-release), --theme default|theme1 (default: default).
+Options: --tree (use the built release tree, work/mod-release).
 """
 import argparse, os, subprocess, sys
 
@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import paths
 
 TOOLS = os.path.dirname(os.path.abspath(__file__))
-RAW = 'rootfs/release/assets/{theme}/raw'
+RAW = 'rootfs/release/assets/default/raw'
 
 def root(tree):
     if tree:
@@ -38,11 +38,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('cmd', choices=['strings', 'syms', 'sym', 'addr', 'callers', 'ui', 'images', 'style', 'paths'])
     ap.add_argument('args', nargs='*'); ap.add_argument('--tree', action='store_true'); ap.add_argument('--widget')
-    ap.add_argument('--theme', default='default')
     a = ap.parse_args(); A = a.args
     if a.cmd == 'paths':
         print('stock', root(False)); print('tree ', os.path.join(paths.WORK, 'mod-release')); return
-    r = root(a.tree); demo = os.path.join(r, 'rootfs', 'release', 'bin', 'demo'); raw = os.path.join(r, RAW.format(theme=a.theme))
+    r = root(a.tree); demo = os.path.join(r, 'rootfs', 'release', 'bin', 'demo'); raw = os.path.join(r, RAW)
     if not A: ap.error(f'{a.cmd} needs an argument')
     if a.cmd == 'strings': dis('strings-xref', demo, A[0])
     elif a.cmd == 'syms': dis('syms', demo, A[0])

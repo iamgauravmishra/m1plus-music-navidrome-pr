@@ -65,7 +65,7 @@ def make_tree(stock, mod, cache, tag=TAG):
     if not cached:
         run(os.path.join(TOOLS, 'mod_battery.py'), stock, mod)
         run(os.path.join(TOOLS, 'mod_font.py'), mod, mod)                  # before anything measures text
-        run(os.path.join(TOOLS, 'mod_space.py'), mod)                      # .pdr zero + remove
+        run(os.path.join(TOOLS, 'mod_space.py'), mod)                      # .pdr zero + remove + theme1 tree
         bc.store_base(key, mod)
     stage_report('base: battery, font, space', t, cached)
     before = bc.snap(mod)
@@ -91,7 +91,8 @@ def pack_args(stock):
     for module, args in [(m, []) for m in BASE] + STEPS:
         rels = getattr(importlib.import_module(module), 'added_rels', None)
         added += [x for rel in (rels(os.path.join(stock, 'rootfs'), *args) if rels else []) for x in ('--allow-added', rel)]
-    return [x for p in mod_space.REMOVE for x in ('--allow-removed', p)], added
+    removed = [*mod_space.REMOVE, *mod_space.theme1_paths(os.path.join(stock, 'rootfs'))]
+    return [x for p in removed for x in ('--allow-removed', p)], added
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

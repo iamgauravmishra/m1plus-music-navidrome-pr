@@ -21,7 +21,7 @@
   code point. With the Inter font the quotes are proper and proportional, so `apply_quotes` skips
   ("accepts a non-stock font only if every curly quote is mapped and narrower than half an em"): in the
   release the quotes stay curly.
-- **Slides.** Every settings window in `ui/systemset/` (33 files) and theme1's `specfolder_page` get
+- **Slides.** Every settings window in `ui/systemset/` (33 files) get
   `open_anim_hint` = `close_anim_hint` = `slide_left(duration=200,easing=cubic_out)` (the animator the
   stock lock screen's `close_anim_hint` uses): a page slides in from the right and back out (AWTK plays
   the close reversed). `fwupdate_page` and `fwdownload_page` stay stock (the way back to a known build).

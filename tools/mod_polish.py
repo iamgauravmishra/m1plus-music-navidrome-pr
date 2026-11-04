@@ -9,7 +9,7 @@ x, y, height, style and alignment stay as stock; the title is left-aligned at x 
 the menu (Home with Back hidden, and the Tidal one).
 
 Navbar titles: the theme styles `navbar_label_white` and `navbar_centerlabel_white` (every page's
-`label_title`, stock and ours) go from 22 to 20 px, in all states and both themes; `navbar_leftlabel_white` /
+`label_title`, stock and ours) go from 22 to 20 px, in all states; `navbar_leftlabel_white` /
 `navbar_rightlabel_white` are already 20. Box, alignment (y 14, h 22, middle) and the Now Playing icon are
 untouched, so the smaller text stays vertically centred.
 
@@ -40,7 +40,7 @@ TITLE_OLD, TITLE_NEW = 22, 20
 
 def title_styles(out):
     n = 0
-    for theme in ('default', 'theme1'):
+    for theme in ('default',):
         p = os.path.join(out, STYLE_RAW.format(theme=theme))
         old = open(p, 'rb').read(); th = awtk_style.parse(old)
         assert awtk_style.serialize(th) == old, f'{p}: style round trip is not byte-exact'
@@ -50,8 +50,8 @@ def title_styles(out):
                 it.set('font_size', TITLE_NEW, awtk_style.T_INT32); n += 1
         mode = stat.S_IMODE(os.stat(p).st_mode)
         os.chmod(p, mode | 0o200); open(p, 'wb').write(awtk_style.serialize(th)); os.chmod(p, mode)
-    assert n == 12, n
-    print(f'polish: navbar title styles {TITLE_OLD} -> {TITLE_NEW} px ({n} style states, both themes)')
+    assert n == 6, n
+    print(f'polish: navbar title styles {TITLE_OLD} -> {TITLE_NEW} px ({n} style states)')
 
 
 def apply(out):

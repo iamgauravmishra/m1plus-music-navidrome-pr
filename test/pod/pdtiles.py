@@ -95,7 +95,7 @@ def hook_tests(ctx):
     expect(m.calls[0] == ('stock_pulldown_resume', m.dlg, 0), 'the stock init runs first, with its arguments')
 
     # -- 1. the assets: the eight tiles on the stock grid, the captions at one offset from their tile --------------------
-    for theme in ('default', 'theme1'):
+    for theme in ('default',):
         g = geometry(theme)
         slots = [g[n][:2] for n in IMG]
         expect(slots == [(24, 14), (98, 14), (172, 14), (246, 14), (24, 114), (98, 114), (172, 114), (246, 114)]
@@ -128,7 +128,7 @@ def hook_tests(ctx):
              ('hidden tiles listed in any order', b'6-5740132\n', [6]), ('without the hidden part', b'72\n', [7, 2]), ('one tile', b'3\n', [3]),
              ('the default order with the hidden part empty and tile 7 hidden', b'0123456-7\n', [0, 1, 2, 3, 4, 5, 6]), ('no newline', b'201', [2, 0, 1])]
     for name, fs, order in cases:
-        for theme in ('default', 'theme1'):
+        for theme in ('default',):
             m = PD(theme, fs=fs); ret = m.open()
             err = check_layout(m, order)
             expect(ret == 0 and err is None and P.parse_pulldown(fs) == order, f'{name} ({fs!r}, {theme}): {order} shown in that order at the first places ({err})')

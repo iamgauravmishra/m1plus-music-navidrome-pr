@@ -4,7 +4,6 @@
 Replaces (same file names, same pixel sizes, PNG, same file mode), each pinned by the SHA-256 of the stock file:
   msginfo_bg, confirminfo_bg   260 x 180 glass card (mod_icons.glass_image, r 12), the confirm one with its horizontal divider; the vertical
                                divider is the Cancel button's own right border (the rippercompleted dialog shares the image and has one button)
-                               (default and theme1: the same stock bytes)
   shutdown                     320 x 480 the boot splash (assets/boot-logo.svg, mod_boot.py)
 Styles edited (no widget renamed, moved or removed): ui/dialog/confirminfo_dialog.bin and rippercompleted_dialog.bin (the buttons' black
 fill becomes transparent so the card shows, the pressed corner radius follows the card's).
@@ -23,7 +22,7 @@ from modlib import clone_workdir, edit_ui, write_keep_mode
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSET = os.path.join(ROOT, 'assets', 'overlays')
 PINS = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mod_overlays_pins.txt')
-THEMES = ('default', 'theme1')
+THEMES = ('default',)
 IMG = 'rootfs/release/assets/{theme}/raw/images/xx'
 UI = 'rootfs/release/assets/default/raw/ui'
 
@@ -60,7 +59,6 @@ def images():
     return {'msginfo_bg': dialog(False), 'confirminfo_bg': dialog(True), 'shutdown': splash()}
 
 NAMES = ['msginfo_bg', 'confirminfo_bg', 'shutdown']
-BOTH_THEMES = ('msginfo_bg', 'confirminfo_bg')      # theme1 has its own copies of these two (the same stock bytes); the rest is the default theme's
 
 
 # ---------------------------------------------------------------- the style edits
@@ -140,10 +138,8 @@ def stock_dir(theme='default'):
 
 def cmd_pins():
     with open(PINS, 'w') as o:
-        o.write('# SHA-256 of the stock V2.1 images/xx files tools/mod_overlays.py replaces (tools/mod_overlays.py --pins); theme1 carries the same bytes for its two\n')
+        o.write('# SHA-256 of the stock V2.1 images/xx files tools/mod_overlays.py replaces (tools/mod_overlays.py --pins)\n')
         for n in NAMES: o.write(f'{sha256(open(os.path.join(stock_dir(), n + ".png"), "rb").read())}  {n}\n')
-        for n in BOTH_THEMES:
-            assert sha256(open(os.path.join(stock_dir('theme1'), n + '.png'), 'rb').read()) == sha256(open(os.path.join(stock_dir(), n + '.png'), 'rb').read())
 
 def cmd_generate():
     from PIL import Image
@@ -158,7 +154,7 @@ def apply(src, out):
     clone_workdir(src, out)
     pins = load_pins(); old = new = 0
     for theme in THEMES:
-        for n in (NAMES if theme == 'default' else BOTH_THEMES):
+        for n in NAMES:
             p = os.path.join(out, IMG.format(theme=theme), n + '.png')
             data = open(p, 'rb').read()
             assert sha256(data) == pins[n], f'{p}: not the pinned stock file'
@@ -169,7 +165,7 @@ def apply(src, out):
     for rel, image in CARD_DIALOGS.items():
         edit_ui(os.path.join(out, UI, rel), edit_card(image))
     edit_confirm_label(out)
-    print(f'overlays: {len(NAMES)} images (+{len(BOTH_THEMES)} for theme1), {old} -> {new} bytes ({new - old:+d}); dialog buttons restyled')
+    print(f'overlays: {len(NAMES)} images, {old} -> {new} bytes ({new - old:+d}); dialog buttons restyled')
 
 def main():
     if len(sys.argv) == 2 and sys.argv[1] == '--generate': return cmd_generate()

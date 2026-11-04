@@ -4,7 +4,7 @@ Sources: `tools/mod_pulldown.py`, `tools/mod_icons.py` (look); `patch/pulldown.c
 
 ## Look (`tools/mod_pulldown.py`, `mod_icons.py`)
 
-Runs after the font step on `ui/dialog/dropdown_dialog.bin` (default and theme1; no style file):
+Runs after the font step on `ui/dialog/dropdown_dialog.bin` (no style file):
 its status bar (`view_sysbar`) is laid out from the same table as the real bar (`tools/statusbar.py`, section 4: volume number
 16 px middle, clock 18 px at x 104, left group from x 10, right group 4 px, black), so the two are identical in 12 h and 24 h mode
 and in both themes; the tile captions (`label_wifi`, `label_bt`, `label_lock`,

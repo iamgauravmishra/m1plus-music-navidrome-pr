@@ -89,20 +89,19 @@ def asset_bar(s, bar, im, y0=0, vol='100', clock='12:59 PM'):
     pg = bar.find('pgbar_battery'); ImageDraw.Draw(im).rectangle((pg.x, y0 + pg.y, pg.x + pg.w * 86 // 100 - 1, y0 + pg.y + pg.h - 1), fill=WHITE)
 
 def bars_compare(s):
-    """The real status bar (system_bar.bin) over the pull-down's bar in the default and theme1 dialogs, 1:1 on the pull-down's
-    #141414 panel, then the two differences from the real bar (x 16: all black when they match). Returns (image, they match)."""
+    """The real status bar (system_bar.bin) over the pull-down's bar in the dropdown dialog, 1:1 on the pull-down's
+    #141414 panel, then the difference from the real bar (x 16: all black when they match). Returns (image, they match)."""
     import awtk_ui
     from PIL import ImageChops
     sysbar = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', 'system_bar.bin'), 'rb').read())
     bars = [sysbar]
-    for theme in ('default', 'theme1'):
-        dd = awtk_ui.parse(open(os.path.join(s.tree, 'rootfs/release/assets', theme, 'raw/ui/dialog/dropdown_dialog.bin'), 'rb').read())
-        bars.append(dd.find('view_sysbar'))
+    dd = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui/dialog/dropdown_dialog.bin'), 'rb').read())
+    bars.append(dd.find('view_sysbar'))
     drawn = []
     for b in bars:
         one = Image.new('RGBA', (W, BAR), (0, 0, 0, 255)); asset_bar(s, b, one); drawn.append(one)
     diffs = [ImageChops.difference(drawn[0].convert('RGB'), o.convert('RGB')).point(lambda v: min(255, v * 16)) for o in drawn[1:]]
-    out = Image.new('RGBA', (W, 5 * BAR + 4 * 6), (0x14, 0x14, 0x14, 255))
+    out = Image.new('RGBA', (W, 3 * BAR + 2 * 6), (0x14, 0x14, 0x14, 255))
     for i, one in enumerate(drawn + [d.convert('RGBA') for d in diffs]): out.alpha_composite(one, (0, i * (BAR + 6)))
     return out, all(not d.getbbox() for d in diffs)
 

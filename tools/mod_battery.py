@@ -20,10 +20,10 @@ from modlib import clone_workdir, edit_ui, write_keep_mode
 UI = 'rootfs/release/assets/default/raw/ui/system_bar.bin'
 DROPDOWN = 'rootfs/release/assets/{theme}/raw/ui/dialog/dropdown_dialog.bin'
 IMAGES = 'rootfs/release/assets/{theme}/raw/images/xx/{name}.png'
-ICON_THEMES = ('default', 'theme1')
+ICON_THEMES = ('default',)
 BODY_W, BODY_H, NUB_W = 20, 12, 2                    # the body (the lock screen's is 22 x 12) and the nub
 ICON_W = BODY_W + NUB_W                              # 22 x 12 canvas
-# the state images the app swaps between; the stock 14x20 files, pinned (default and theme1 carry the same bytes)
+# the state images the app swaps between; the stock 14x20 files, pinned
 STATE = {'bar_power': 'normal', 'bar_charge': 'charge', 'bar_lowpower': 'low'}
 STOCK_ICONS = {'bar_power': 'fc28dc349da0', 'bar_charge': 'fceb7082b5cc', 'bar_lowpower': '1b2410d4038f'}
 
@@ -44,7 +44,7 @@ def icon_gauge(root):
     return img.x
 
 def apply_icon_files(out):
-    """The three state images (default and theme1) and the pull-down's own battery (both themes)."""
+    """The three state images and the pull-down's own battery."""
     done = []
     for theme in ICON_THEMES:
         for name, state in STATE.items():

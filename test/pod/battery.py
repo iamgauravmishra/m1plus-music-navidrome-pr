@@ -205,7 +205,7 @@ def run(ctx):
     stock_bar = awtk_ui.parse(open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', 'release/assets/default/raw/ui/system_bar.bin'), 'rb').read())
     bar = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/system_bar.bin'), 'rb').read())
     bars = [('system_bar', bar, LABEL)]
-    for theme in ('default', 'theme1'):
+    for theme in ('default',):
         dd = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets', theme, 'raw/ui/dialog/dropdown_dialog.bin'), 'rb').read())
         bars.append((f'{theme} pull-down', dd.find('view_sysbar'), LABEL_DD))
     for what, root, name in bars:

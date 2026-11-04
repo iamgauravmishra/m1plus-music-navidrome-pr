@@ -1,4 +1,4 @@
-# SHA-256 of the stock V2.1 images/xx files tools/mod_overlays.py replaces (tools/mod_overlays.py --pins); theme1 carries the same bytes for its two
+# SHA-256 of the stock V2.1 images/xx files tools/mod_overlays.py replaces (tools/mod_overlays.py --pins)
 e174aa6c7f3fb714e1a230a6d8b09be77fe8fda82a1c780f09918459b5d4c77f  msginfo_bg
 e75bbb36a67abb59a1726b5cf610686bd21093f02077944c7a52350114ec5402  confirminfo_bg
 b5133684f5f6100415161b5722b63cab1c0123538f3de440e2725e3c5f3dbc6e  shutdown

@@ -435,7 +435,7 @@ def chips_tests(ctx):
     expect = ctx.expect
     m = opened([('Love', 'A', 'B')], ['Love'], [('Love', 'A')], playlists=['Love'])
     typed(m, 'love')
-    widths = [width(m.tr(PS.CHIPS[i]) if False else PS.CHIPS[i], D['SE_CHIP_PX']) for i in range(5)]
+    widths = [width(PS.CHIPS[i], D['SE_CHIP_PX']) for i in range(5)]
     lay = PS.chip_layout(widths)
     xs = [state(m, 'chip_x', i) for i in range(6)]
     expect([x for x, _ in lay] == xs[:5] and xs[5] - D['SE_CHIP_GAP'] == lay[-1][0] + lay[-1][1], f'the chips are placed from the texts\' widths in the chip font ({xs} against {lay})')
@@ -571,7 +571,7 @@ def live_tests(ctx):
     kb.press(m, 'kb_del'); kb.press(m, 'kb_del')
     ticks(m)
     expect(kb.said(m, 'kb_text') == 'M' and titles(m, ARTIST) == ['Miles Davis'], 'delete is live too')
-    kb.press(m, 'kb_clear') if False else m.click('kb_clear')
+    m.click('kb_clear')
     ticks(m)
     expect(rows(m) == [] and kb.said(m, 'kb_text') == '', 'the clear disc empties the field and the results')
     # the same text again (a layer switch repeats the callback with the same text) starts nothing

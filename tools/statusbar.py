@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """The status bar's geometry and text styles, one table for both copies of the bar.
 
-ui/system_bar.bin is the real bar (every page); ui/dialog/dropdown_dialog.bin (default and theme1) carries its own
+ui/system_bar.bin is the real bar (every page); ui/dialog/dropdown_dialog.bin carries its own
 copy, view_sysbar, which stock code fills the same way (dropdown_showface @0x475c3c and its twin @0x545168 set the
 same widgets by name). Both are laid out by `apply` from this table, so they cannot drift apart: the same
 element positions (play / pause, volume glyph and number, digital-out glyph, clock, Bluetooth, SyncLink, Wi-Fi, battery
-outline and fill), font sizes, colours, alignment and spacing, in 12 h and 24 h mode and in both dropdown themes. The
+outline and fill), font sizes, colours, alignment and spacing, in 12 h and 24 h mode. The
 pull-down's bar sits at y 0 of the dialog, which is open at y 0 of the screen, exactly over the real bar, on the same
 black. test/pod/assets.py compares the two built files widget by widget.
 

@@ -214,10 +214,10 @@ def about_tests(ctx):
     m = open_about()
     expect(not any(c[0] == 'getDiskMemoryInfo' for c in m.calls) and text(m, 'Capacity') == '0.00 GB' and text(m, 'Available') == '0.00 GB' and ('networkGetIPAddr', 0) not in m.calls
            and [text(m, k) for k in ('Serial Number', 'Wi-Fi MAC', 'IP Address')] == ['-', '-', '-'], 'no card (no /tmp/mmc_add) reads 0.00 GB without a statfs, as stock; no connection reads no IP; empty values read -')
-    expect(not any(c[0] in ('navigator_to', 'window_open', 'write_int_config', 'open', 'write') for c in m.calls if c != ('window_open', A.key)) and all(('widget_on', m.widgets[f'pod_row{i}'], O['EVT_CLICK']) not in [c[:3] for c in m.calls] for i in range(len(S.rows)) if False)
+    expect(not any(c[0] in ('navigator_to', 'window_open', 'write_int_config', 'open', 'write') for c in m.calls if c != ('window_open', A.key))
            and not [c for c in m.calls if c[0] == 'widget_on' and c[1] in {m.widgets[f'pod_value{i}'] for i in range(len(A.rows))}], 'opening the page only reads')
     # the page's rows are not bound: a tap on one does nothing (the rows are insensitive in the asset too)
-    expect(not [k for k in m.bound if k[0] in {m.widgets.get(f'pod_row{i}') for i in range(len(A.rows))} and False], 'no row of the page is bound')
+    expect(not [k for k in m.bound if k[0] in {m.widgets.get(f'pod_row{i}') for i in range(len(A.rows)) if A.rows[i].action != P.ACT_UPDATE}], 'no information row of the page is bound')
     tree = page_tree(A)
     expect(all((tree.find(f'pod_row{i}').get('sensitive') == 'false') == (A.rows[i].action != P.ACT_UPDATE) for i in range(len(A.rows))), 'every information row is insensitive: not tappable; the Software Update link row takes the tap')
     rows_with_value_fit = [c for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets[f'pod_label{names["Wi-Fi MAC"]}']]

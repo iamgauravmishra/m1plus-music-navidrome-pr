@@ -15,7 +15,7 @@ Disable with M1_NO_CACHE=1 or build.py --no-cache.
 """
 import ast, functools, hashlib, importlib.metadata as md, json, os, shutil, subprocess, sys, tempfile
 
-import paths
+import paths, workflow
 
 TOOLS = os.path.dirname(os.path.abspath(__file__))
 CACHE = os.path.join(paths.ROOT, 'work', 'cache', 'build')
@@ -29,11 +29,7 @@ def H(*parts):
         h.update(len(b).to_bytes(8, 'little')); h.update(b)
     return h.hexdigest()
 
-def file_sha(p):
-    h = hashlib.sha256()
-    with open(p, 'rb') as f:
-        for c in iter(lambda: f.read(1 << 20), b''): h.update(c)
-    return h.hexdigest()
+file_sha = workflow.sha
 
 def dir_sha(root):
     """Content hash of a directory tree (relative paths and bytes)."""

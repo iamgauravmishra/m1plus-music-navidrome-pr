@@ -13,7 +13,7 @@ Then shows the update.bin already on the card (version = firmware_v20.info line 
 with `cp -X` (no AppleDouble), removes ._update.bin, syncs, re-hashes and compares, prints the
 version found on the card, and ejects (--no-eject to keep it mounted). macOS only.
 """
-import argparse, hashlib, os, subprocess, sys, tarfile
+import argparse, os, subprocess, sys, tarfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import workflow
 
@@ -22,11 +22,7 @@ GOLDEN = os.path.join(ROOT, 'test', 'golden.sha256')
 FORBIDDEN = ('sandisk extreme',)          # the USB SSD, never a flash target
 PROTOCOLS = ('secure digital', 'usb')
 
-def sha256(p):
-    h = hashlib.sha256()
-    with open(p, 'rb') as f:
-        for c in iter(lambda: f.read(1 << 20), b''): h.update(c)
-    return h.hexdigest()
+sha256 = workflow.sha
 
 def version(p):
     with tarfile.open(p) as t: return t.extractfile('firmware_v20.info').read().decode().split('\n')[1]

@@ -4,8 +4,8 @@
 
 With no custom wallpaper `get_screensaver_image` (`0x4d7524`) and `config_init` keep the resource name
 `screensaver_default` as `SCREENSAVERPATH`; a chosen picture is `file://` plus its path. Only the
-resource changes: `images/xx/screensaver_default.png` (320x480; `xx` is the only set that has it,
-theme1 uses it; `screensaver_default1.png`, 640x480, is unreferenced and stays) becomes a drawn bokeh field
+resource changes: `images/xx/screensaver_default.png` (320x480; `xx` is the only set that has it;
+`screensaver_default1.png`, 640x480, is unreferenced and stays) becomes a drawn bokeh field
 (`assets/bokeh-320x480.png`, our own design): a vertical gradient from indigo through aqua to deep sea
 green, with soft discs of lavender, blue and mint light, large and faint behind the clock, small and
 brighter along the card's sides and under it (the card covers the middle). `wallpaper_prepare.py OUT.png`

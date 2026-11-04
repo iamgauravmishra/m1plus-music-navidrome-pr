@@ -818,7 +818,7 @@ def roles_tests(ctx):
     row_styles = sorted({(t, f, w, s, st) for t, f, w, s, st, k in rows})
     ok_styles = {('list_item', 'list_item_style'), ('list_item', 'list_itemsort_style'), ('button', 'btn_tablerow_style'), ('button', 'kb_btn1_style'), ('button', 'kb_btn2_style')}
     expect(all(t == 'default' and st == 'pressed' for t, f, w, s, st in row_styles) and all(k == 'bg_color' for *_, k in rows) and ok_styles <= {(w, s) for t, f, w, s, st in row_styles if f == 'default.bin'},
-           f'#333334 is in the built styles only as the pressed background (the list rows, the table rows, the two keyboard keys, the Playlists page\'s row, the Search tabs), theme1 has none ({row_styles})')
+           f'#333334 is in the built styles only as the pressed background (the list rows, the table rows, the two keyboard keys, the Playlists page\'s row, the Search tabs) ({row_styles})')
     prog = found[L.ROLE_PROGRESS]
     expect(prog and all(p[2] == 'slider_play' and p[3].endswith(':fg_color') for p in prog) and {p[:2] for p in prog} == {('default', 'playing_page.bin')},
            f'#FFFFFE is in the built pages only as the Now Playing progress bar\'s fill ({prog})')

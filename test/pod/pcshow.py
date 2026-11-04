@@ -392,7 +392,7 @@ def tap_tests(ctx):
     expect(not [c for c in m.calls if c[0] == 'navigator_to_with_context'] and m.state(h2) == (1, 1500, 3600) and texts_of(m, 'label_ps_head') and not texts_of(m, 'label_ps_ctitle'),
            'a tap on the body of a started episode opens its episode page (docs: "The episode page"), it plays nothing and keeps the place')
     PCP.click(m, 'btn_return')
-    expect(texts_of(m, 'label_ps_ctitle') or True, 'Back returns to the list')
+    expect(not texts_of(m, 'label_ps_head') and texts_of(m, 'label_ps_name'), 'Back returns to the show\'s list (its header is back, the episode page gone)')
     m.calls = []; PCP.act(m, 2)
     expect(len([c for c in m.calls if c[0] == 'navigator_to_with_context']) == 1 and m.state(h2) == (1, 1500, 3600), 'the "35m left" pill resumes it')
     m.calls = []; PCP.act(m, 1)

@@ -79,13 +79,12 @@ NEXT_GLYPH = ('np_next', 'np_next_down')
 GAUGE_W, GAUGE_H = 34, 12
 GAUGE_FILL = (12, 3, 16, 6)                  # pgbar_battery inside the image: x, y, w, h
 GAUGE_STATE = {'screens_battery': 'normal', 'screens_charge': 'charge', 'screens_lowbattery': 'low'}
-SLIDE_IMAGE = 'screens_rightslide'           # also in theme1 (same bytes); only this page uses it
+SLIDE_IMAGE = 'screens_rightslide'           # only this page uses it
 STOCK_IMAGE_SHA = {
     'default/raw/images/xx/screens_battery.png': 'ca8987a66727a419a3be2e61496edf28d94bfd4f1fd59e132a2e268977e214cc',
     'default/raw/images/xx/screens_charge.png': '7374f01d1fb13750085b2cc5f504f984face7a9b7b2b916379c14c5187dd88d9',
     'default/raw/images/xx/screens_lowbattery.png': '6d1a31498d081d8f18072836c1df193a661b2c260caaac67d8218ee6d75c45d4',
-    'default/raw/images/xx/screens_rightslide.png': '7bacd75515db88fa2aab2af04b8440a5da11d75ff57c9bbaf3441338b910c28a',
-    'theme1/raw/images/xx/screens_rightslide.png': '7bacd75515db88fa2aab2af04b8440a5da11d75ff57c9bbaf3441338b910c28a'}
+    'default/raw/images/xx/screens_rightslide.png': '7bacd75515db88fa2aab2af04b8440a5da11d75ff57c9bbaf3441338b910c28a'}
 
 # The cover size demo writes. parseplaycover_thd (0x4ded84) runs once per new track
 # (it polls a start flag every 100 ms and skips a path it already did) and writes
@@ -293,8 +292,7 @@ def main():
     so, sn = edit_page_style(out)
     images = {f'default/raw/images/xx/{n}.png': battery_art.png(battery_art.LOCK, st) for n, st in GAUGE_STATE.items()}
     sl = root.find('img_slide')
-    for th in ('default', 'theme1'):
-        images[f'{th}/raw/images/xx/{SLIDE_IMAGE}.png'] = slide_image(os.path.join(out, ASSETS, th, 'raw/images/xx', SLIDE_IMAGE + '.png'), sl.w, sl.h)
+    images[f'default/raw/images/xx/{SLIDE_IMAGE}.png'] = slide_image(os.path.join(out, ASSETS, 'default', 'raw/images/xx', SLIDE_IMAGE + '.png'), sl.w, sl.h)
     extra = f'; {PAGE_STYLE} {len(so)} -> {len(sn)} bytes'
     for rel, (n0, n1) in replace_stock_images(out, images).items(): extra += f'; {rel} {n0} -> {n1} bytes'
     patch_cover_src(out, COVER_SIZE)

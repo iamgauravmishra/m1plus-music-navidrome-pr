@@ -2164,8 +2164,7 @@ def add_battery_label(rootfs):
         return edit
     from modlib import edit_ui
     edit_ui(os.path.join(rootfs, SYSTEM_BAR), edit_for(PCT_WIDGET))
-    for theme in ('default', 'theme1'):
-        edit_ui(os.path.join(rootfs, 'release/assets', theme, 'raw/ui/dialog/dropdown_dialog.bin'), edit_for(PCT_WIDGET_DD))
+    edit_ui(os.path.join(rootfs, 'release/assets/default/raw/ui/dialog/dropdown_dialog.bin'), edit_for(PCT_WIDGET_DD))
 
 
 def asset_rels(pages):

@@ -3,7 +3,7 @@
 ## Lock screen (`tools/mod_lockscreen.py`)
 
 `ui/screensaver_page.bin` (fullscreen 320x480), page theme `styles/screensaver_page.bin`, the three
-`screens_*` battery images, `screens_rightslide.png` (default + theme1), and four words of `demo`.
+`screens_*` battery images, `screens_rightslide.png`, and four words of `demo`.
 What the app touches by name: `img_screensaver` (wallpaper), `view_timeinfo` (shown/hidden by the "show
 time" setting), `app_gesture` (swipe), `btn_play`, `btn_next`, `img_battery` (image set to
 `screens_battery`/`screens_charge`/`screens_lowbattery`, refresh `0x53f520`, names at
@@ -22,8 +22,7 @@ Layout, top to bottom (window y): date `W, MMM D` 20 px, ink top 12 (box from `t
 228,278 (48x56, off-white `np_*` glyphs via the page theme's `btn_imgplay1/pause1_style`); the swipe hint
 `img_slide` 31x14 (65 %) at 144,452; a small gauge on the date line at 274,12 (34x12 `LOCK` art; fill
 `pgbar_battery` 286,15 16x6). With nothing queued the card is the hidden widget's own background, so
-the page is date, clock and gauge on the wallpaper and the whole screen swipes. theme1 keeps its own
-page theme (orange play/pause); `screens_rightslide` is replaced in both themes (premultiplied Lanczos).
+the page is date, clock and gauge on the wallpaper and the whole screen swipes. `screens_rightslide` is replaced (premultiplied Lanczos).
 The stock battery props are restored on `pgbar_battery` (no text readout).
 
 - **Glass card.** The card (`view_bottomview`) has `bg_image` `lk_card` and a transparent `bg_color` in every state, no radius of its own: the same
@@ -63,7 +62,7 @@ The stock battery props are restored on `pgbar_battery` (no text readout).
   otherwise. AWTK draws a smaller picture at the widget size by nearest neighbour, hence the 1:1 264 (the lock
   card's cover and Now Playing's `img_playcover` are both 264: `mod_nowplaying` asserts the sizes agree).
   Cost: 1.08x output pixels (about 209 KB instead of 194 KB RGB while encoding). Other readers of the
-  files (resampled by nearest neighbour, as before): `bigcover_page` (320), the Home strip (66), theme1's
+  files (resampled by nearest neighbour, as before): `bigcover_page` (320), the Home strip (66), the
   Now Playing (254), the remote-control replies (check
   `stat().st_size < 0x16801` = 92,161 bytes; 264 px files are about 1.08x the 254 ones; a larger file means the phone shows no cover). Unchanged: `.downpic` art
   (`cp -f`), DLNA/AirPlay 270 (`0x10e`), HiFi/Tidal 254 (`0x4df348`, `0x4df424`). Cover source types

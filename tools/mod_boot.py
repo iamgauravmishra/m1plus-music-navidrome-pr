@@ -37,7 +37,7 @@ FONT = 'rootfs/release/assets/default/raw/fonts/default.ttf'
 FONT_SHA = '9a16af0aead992a2ad64f86d0de8d38bea60d6f605d42ffd0501684666161872'
 QUOTES = {0x2018: 0x27, 0x2019: 0x27, 0x201c: 0x22, 0x201d: 0x22}   # as q2-pod tools/build.py
 ANIM = 'slide_left(duration=200,easing=cubic_out)'                   # stock screensaver_page's close_anim_hint
-ANIM_DIRS = ('rootfs/release/assets/default/raw/ui/systemset', 'rootfs/release/assets/theme1/raw/ui/systemset')
+ANIM_DIRS = ('rootfs/release/assets/default/raw/ui/systemset',)
 ANIM_SKIP = ('fwupdate_page.bin', 'fwdownload_page.bin')
 
 def sha256(b): return hashlib.sha256(b).hexdigest()

@@ -196,7 +196,7 @@ def scan_tests(ctx):
     m.call(PSYMS['pg_tick'], a0=0, count=40000000)
     expect(not [c for c in m.calls if c[0] in ('opendir', 'open', '__xstat', 'widget_invalidate_force')], 'dark: the tick does no work for the page either')
     PCS.tick(m)
-    expect(any(c[0] == 'timer_add' for c in m.calls) or True, 'the first lit tick')
+    expect(any(c[0] == 'timer_add' for c in m.calls), 'the first lit tick')
     m.call(PSYMS['pg_on_load'], a0=0, count=400000000)
     expect([c for c in m.calls if c[0] == 'opendir'], 'lit: the scan goes on')
 

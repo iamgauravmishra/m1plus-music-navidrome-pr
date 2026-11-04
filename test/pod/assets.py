@@ -227,7 +227,7 @@ def run(ctx):
     for x, y, want in ((100, 64 + 20, 'btn_table_row'), (120, 396 + 22, 'button'), (235, 200, 'scroll_bar_m'), (50, 30, 'list_item')):
         got = stock_target(m, tree, 80 + x, 30 + y)
         expect(want in got, f'a touch at ({x}, {y}) in the drawer lands on {want} ({got})')
-    for theme in ('default', 'theme1'):
+    for theme in ('default',):
         th = awtk_style.parse(open(os.path.join(WORK, 'rootfs', 'release/assets', theme, 'raw/styles/playqueue_dialog.bin'), 'rb').read())
         white = [i for i in th.items if (i.widget, i.style) == ('hscroll_label', 'srlabel_item_white_style')]
         gold = [i for i in th.items if (i.widget, i.style) == ('hscroll_label', 'srlabel_item_gold20_style')]
@@ -263,7 +263,7 @@ def run(ctx):
     # 51. The on/off switch (sset_on / sset_off): no text, a pill track and a round knob, the stock 57x28 canvas.
     from PIL import Image
     import mod_theme
-    for theme, names in (('default', ('sset_on', 'sset_off')), ('theme1', ('sset_on',))):
+    for theme, names in (('default', ('sset_on', 'sset_off')),):
         for name in names:
             im = Image.open(os.path.join(WORK, 'rootfs', 'release/assets', theme, 'raw/images/xx', name + '.png')).convert('RGBA')
             on = name == 'sset_on'; track, knob = mod_theme.TOGGLE_COLOURS[on]
@@ -284,7 +284,7 @@ def run(ctx):
     lum_ = lambda c: 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
     expect(lum_(on_l) > 200 and lum_(off_l) < 70 and lum_(mod_theme.TOGGLE_COLOURS[True][1]) < 40 and 100 < lum_(mod_theme.TOGGLE_COLOURS[False][1]) < 160,
            'on: an off-white track with a dark knob; off: a dark grey track with a grey knob (read by brightness and side)')
-    for theme in ('default', 'theme1'):    # the two on/off words still left are the Dual / High art (no off counterpart)
+    for theme in ('default',):    # the two on/off words still left are the Dual / High art (no off counterpart)
         for name in ('pset_dual', 'pset_high'):
             expect(os.path.exists(os.path.join(WORK, 'rootfs', 'release/assets', theme, 'raw/images/xx', name + '.png')), f'{theme}/{name}: still there')
 
@@ -304,7 +304,7 @@ def run(ctx):
     def own(bar): return [w for w in bar.walk() if w is not bar and w.name not in ('pod_shot', 'pod_pct', 'pod_pct_dd')]
     ref = [sig(w) for w in own(real)]
     font = Ttf(os.path.join(WORK, 'rootfs/release/assets/default/raw/fonts/default.ttf'))
-    for theme in ('default', 'theme1'):
+    for theme in ('default',):
         dd = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets', theme, 'raw/ui/dialog/dropdown_dialog.bin'), 'rb').read())
         pb = dd.find('view_sysbar')
         # the pull-down's own view_sysbar and the system_bar window: the clock's h differs in the file only (h=100% resolves to 30 under its self_layout)

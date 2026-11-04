@@ -10,7 +10,7 @@ environment; this module only resolves data. Everyday commands: [`../workflow.md
 | 0 | `fwtool.py unpack` (first run only) | `work/stock`: `rootfs/`, `recovery-update/`, `stock.pseudo` (exact inode metadata), `meta.json` |
 | 1 | `mod_battery.py STOCK TREE` | clones stock into the tree; unified battery in the status bar and the pull-down |
 | 2 | `mod_font.py` | Inter + Source Han Sans; runs here so every later step measures the new font |
-| 3 | `mod_space.py` | zero demo's `.pdr`, remove 10 unreferenced files (`docs/firmware.md` section 4) |
+| 3 | `mod_space.py` | zero demo's `.pdr`, remove 10 unreferenced files and the stock theme1 tree (`docs/firmware.md` section 4) |
 | 4 | `pod.py` | compile the payload, append it to `demo`, install the pinned hooks, apply the library-row edits and write the custom page assets |
 | 5 | `mod_theme`, `mod_lists`, `mod_nowplaying`, `mod_boot`, `mod_ipodrows`, `mod_pulldown`, `mod_lockscreen`, `mod_wallpaper`, `mod_icons`, `mod_strings`, `mod_polish` | the asset looks, in this order (`docs/ui.md`); `mod_strings` adds our translation keys to the 16 string tables (section 8b) |
 | 6 | `mod_theme.py --scan TREE STOCK` | contrast scan of the finished tree (a pass is cached with the steps) |

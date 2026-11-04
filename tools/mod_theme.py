@@ -3,8 +3,7 @@
 Asset-only: styles/default.bin, ui/system_bar.bin, ui/home_page.bin and some images/xx PNGs.
 Full description, colours, the style -> page table and the device checklist: docs/ui.md.
 
-What it does (default assets only; assets/theme1, the stock "Theme" setting's alternative, is
-left stock on purpose, so System settings -> Theme -> the second theme is the stock look):
+What it does (default assets only; stock's theme1 tree is removed from the rootfs by tools/mod_space.py):
   1. styles/default.bin (pinned by SHA-256; every edit is pinned by its old value and state count)
      - list rows (list_item_style, list_item_notpress_style, list_itemsort_style and the code-built
        table rows' btn_tablerow_style): stock #131313 cards with 4 px black gaps become black rows
@@ -178,14 +177,13 @@ ACCENT_ART = {
 # The on/off switch (sset_on / sset_off, 57x28, used by the stock settings rows, the pull-down-free pages and our own rows):
 # redrawn without text, a 46x24 pill track right-aligned in the canvas and a round 18 px knob 3 px in, 8x supersampled. on = the slider-fill off-white track
 # with a dark knob (the pull-down's white disc with a dark glyph), off = the edge grey track with the muted grey knob.
-# name -> (stock SHA-256, on); theme1 shares sset_off with the default theme (it has no file of its own).
+# name -> (stock SHA-256, on).
 TOGGLE_W, TOGGLE_H = 57, 28                  # the image canvas
 PILL_W, PILL_H, TOGGLE_KNOB, TOGGLE_INSET = 46, 24, 18, 3     # the pill, right-aligned in the canvas (x 11, y 2), and its knob
 TOGGLE_COLOURS = {True: ((0xEE, 0xEE, 0xEC), (0x14, 0x14, 0x14)), False: ((0x3A, 0x3A, 0x3A), (0x8C, 0x8C, 0x8C))}   # track, knob
 TOGGLES = {
     'assets/default/raw/images/xx/sset_on.png': ('d3b8d22e033c3cac37f2939ef469d4852f32cf845f5293bf5c2ad126cd1cdd56', True),
     'assets/default/raw/images/xx/sset_off.png': ('f0bb8014368a088b6523dc627e43d44f36a444735ba8dff169b086619254fa33', False),
-    'assets/theme1/raw/images/xx/sset_on.png': ('384730f95a849cfc7524431a9e332f2e3ff7c6e7b5393bad4dc8a18fcb9a303f', True),
 }
 
 def toggle_image(on, ss=8):
@@ -344,7 +342,7 @@ def page_audit(ui_dir, th_stock, th_mod, threshold=4.5):
 # resolved the way the app loads it (assets/<theme> first, then default), with its window theme in
 # front of that asset theme's default.bin, plus audit() of the code-built rows under every window
 # theme. Failure = a text/background pair below 4.5:1 that is worse than in the stock tree.
-ASSET_THEMES = ('default', 'theme1')
+ASSET_THEMES = ('default',)
 
 def _load(path): return awtk_style.parse(open(path, 'rb').read()) if path and os.path.exists(path) else None
 

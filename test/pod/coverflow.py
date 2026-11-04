@@ -235,10 +235,7 @@ def run(ctx):
     # p = value - xoffset / h, so a positive xoffset puts the shelf a quarter step *before* the
     # centre album: frac = -(xoffset / h) in 16.16.
     host = host_frame(-((O['CF_VIEW_H'] // 4) * 65536 // O['CF_VIEW_H']))
-    if host is None:
-        print('  (skipped the host comparison: test/coverflow.py could not build)')
-    else:
-        expect(frame == host, 'the payload renders the same frame as the host build')
+    expect(frame == host, 'the payload renders the same frame as the host build')
 
     # 21. No frame bitmap: the flat fallback puts the cached art on the stock images near the
     #     centre and the placeholder elsewhere, and paint draws nothing of its own.
@@ -842,12 +839,9 @@ def landscape_tests(ctx, asset):
            f'whole, at the touch layer\'s origin, the body\'s rectangle in the window ({blit[1:]}, layer {(ix, iy, iw, ih)})')
     host = host_frame(-((O['CF_VIEW_H'] // 4) * 65536 // O['CF_VIEW_H']), land=True)
     hostpx = lambda x, y: struct.unpack_from('<I', host, (x * LH + LH - 1 - y) * 4)[0]
-    if host is None:
-        print('  (skipped the landscape host comparison: test/coverflow.py could not build)')
-    else:
-        under = [(x, y) for y in range(O['CFL_ALBUM_Y'] - 6) for x in range(LW)]
-        expect(all(physical(m, x, y) == hostpx(x, y) for x, y in under[::3]),
-               'the covers are the host build\'s turned shelf, pixel for pixel, above the captions')
+    under = [(x, y) for y in range(O['CFL_ALBUM_Y'] - 6) for x in range(LW)]
+    expect(all(physical(m, x, y) == hostpx(x, y) for x, y in under[::3]),
+           'the covers are the host build\'s turned shelf, pixel for pixel, above the captions')
     expect({s for _, s in m.glyphs} == {22, 18}, f'the captions use the labels\' own sizes ({sorted({s for _, s in m.glyphs})})')
     expect(''.join(chr(c) for c, s in m.glyphs if s == 22).startswith('Album 2'), 'the album line is the centre album')
     # "Album 2": 7 glyphs of 8 + 1 px advance centred; the mock's glyph is 6 wide, at x 1, its top (h - 2) above the baseline

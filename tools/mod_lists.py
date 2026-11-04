@@ -39,8 +39,8 @@ colour (stock olive #2E2A19), and the confirm and sort dialogs follow it too (st
 the stock list pressed colour #362221 there, so they only change if the theme's does).
 Style colours are stored as R, G, B, A bytes.
 
-Page themes are written for both asset themes (default and theme1, the System > Theme option),
-each derived from its own default.bin, so theme1 keeps its accent. Nothing else changes: every
+Page themes are written for the default asset theme (stock's theme1 is removed from the rootfs,
+docs/modules/theme.md). Nothing else changes: every
 widget the app looks up keeps its name, type and geometry; no window gets an open/close animation
 (docs/ui.md: the "play from here" handlers loop on navigator_back until Now Playing is on
 top, which an animated close would turn into a hang).
@@ -54,7 +54,7 @@ from awtk_style import T_INT32, T_UINT32
 from modlib import clone_workdir, edit_ui
 
 RAW = 'rootfs/release/assets/{theme}/raw'
-THEMES = ('default', 'theme1')               # asset themes; theme1 only overrides a few files
+THEMES = ('default',)                       # asset themes
 STYLE_MODE = 0o744                           # stock styles/*.bin mode
 STYLE_MTIME = 1750924035                     # a stock asset mtime: added files build deterministically
 TITLE_PX = 21                                # the M1+ Music menu's row text (srlabel_leftwhite21_style)
@@ -70,7 +70,7 @@ PAGES = {
     'playqueue_dialog':    ('queue',),
     'search_page':         ('tabs',),
 }
-# ui/*.bin edits (relative to raw/ui of the default theme; none of these exists in theme1)
+# ui/*.bin edits (relative to raw/ui of the default theme)
 UI_EDITS = ('allmusic_page.bin', 'dialog/confirminfo_dialog.bin', 'dialog/sortselect_dialog.bin',
             'dialog/batchadd_dialog.bin', 'dialog/playqueue_dialog.bin', 'dialog/playmore_dialog.bin')
 GEOMETRY_EDITS = ('dialog/playqueue_dialog.bin',)   # these change widget sizes on purpose (the row template)
@@ -214,7 +214,7 @@ def read(path):
 
 def build_page_themes(work):
     # Read every source before writing anything: a theme without its own page file falls back to
-    # default's, so theme1's copy starts from default's file as it was before this mod.
+    # default's file as it was before this mod.
     sources = {}
     for theme, page, rel in style_rels():
         own = read(os.path.join(work, 'rootfs', rel))
@@ -374,9 +374,7 @@ def ui_edit(rel, root, pal):
 def build_ui(work):
     pal, report = default_palette(work), []
     for rel in UI_EDITS:
-        themes = THEMES if rel in ADD_EDITS else THEMES[:1]   # theme1 has its own playmore_dialog.bin (the A-B label 20 px narrower)
-        if rel not in ADD_EDITS: assert not os.path.exists(os.path.join(work, RAW.format(theme='theme1'), 'ui', rel)), f'theme1 has its own {rel}'
-        for theme in themes:
+        for theme in THEMES:
             path = os.path.join(work, RAW.format(theme=theme), 'ui', rel)
             old, new, _ = edit_ui(path, lambda root, rel=rel: ui_edit(rel, root, pal))
             shape = lambda d: [(w.type, w.name, w.x, w.y, w.w, w.h) for w in awtk_ui.parse(d).walk()]

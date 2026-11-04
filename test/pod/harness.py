@@ -1830,18 +1830,14 @@ def host_frame(frac, ring=None, land=False):
     """The same shelf from the host build of patch/coverflow.c: every slot the placeholder, which
     is what the payload has when no cover decodes (widget_load_image fails in the harness). land: the
     landscape shelf, turned, in its window-sized bitmap."""
-    try:
-        import ctypes, tempfile
-        sys.path.insert(0, os.path.join(ROOT, 'test'))
-        import coverflow as hostcf
-        with tempfile.TemporaryDirectory() as tmp:
-            lib = hostcf.build(tmp)
-            tex = (ctypes.c_uint * (O['ART_SIZE'] * O['ART_SIZE']))()
-            for i in range(len(tex)): tex[i] = 0xff2b2b2b
-            texs = [tex if r else None for r in ring] if ring else [tex] * 7
-            frame = (hostcf.render(lib, frac, texs, hostcf.land_cfg(lib), O['CFL_H'], O['CFL_W']) if land
-                     else hostcf.render(lib, frac, texs))
-            return bytes(frame)
-    except Exception as e:                                   # noqa: BLE001 - a host build is optional
-        print('  host build failed:', e)
-        return None
+    import ctypes, tempfile
+    sys.path.insert(0, os.path.join(ROOT, 'test'))
+    import coverflow as hostcf
+    with tempfile.TemporaryDirectory() as tmp:
+        lib = hostcf.build(tmp)
+        tex = (ctypes.c_uint * (O['ART_SIZE'] * O['ART_SIZE']))()
+        for i in range(len(tex)): tex[i] = 0xff2b2b2b
+        texs = [tex if r else None for r in ring] if ring else [tex] * 7
+        frame = (hostcf.render(lib, frac, texs, hostcf.land_cfg(lib), O['CFL_H'], O['CFL_W']) if land
+                 else hostcf.render(lib, frac, texs))
+        return bytes(frame)

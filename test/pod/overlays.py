@@ -14,8 +14,6 @@ def run(ctx):
     expect(sorted(pins) == sorted(mo.NAMES) and len(mo.NAMES) == 3, 'every replaced image is pinned')
     for n in mo.NAMES:
         expect(shipped(n) == open(os.path.join(mo.ASSET, n + '.png'), 'rb').read(), f'{n}: the built file is the committed asset')
-    for n in mo.BOTH_THEMES:
-        expect(shipped(n, 'theme1') == shipped(n), f'{n}: theme1 gets the same file')
     expect(sorted(os.listdir(mo.ASSET)) == sorted(n + '.png' for n in mo.NAMES), 'the committed art is exactly the three files')
 
     # the charging and battery art stays the stock bytes (the scan spinner, chargebg and the USB pages are tools/mod_icons.py's, docs/modules/icons.md)

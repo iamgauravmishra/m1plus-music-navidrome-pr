@@ -2,7 +2,7 @@
 """Approximate PIL mock-up of Now Playing's More menu over the Now Playing page: the bottom sheet's two pages, the page above
 dimmed (patch/playmore.c, docs/modules/playmore.md); not pixel-exact AWTK.
 
-  preview_playmore.py WORKDIR OUT.png [--theme default|theme1] [--lang CODE]
+  preview_playmore.py WORKDIR OUT.png [--lang CODE]
 
 WORKDIR is a built tree (work/mod-release). The page behind is tools/preview_nowplaying.py's; the sheet is the built
 ui/dialog/playmore_dialog.bin with the rows in the order and at the heights the payload gives them (PM_ROW_H each, the sheet
@@ -60,14 +60,13 @@ def sheet(p, im, tree, order, pressed=None, offline=False):
             im.paste(Image.blend(before, im.crop(box), ART_DIM / 255), box)   # the row's opacity (the painter has none): the row over what was under it
 
 
-def panel(work, theme, lang, order, pressed=None, offline=False):
+def panel(work, lang, order, pressed=None, offline=False):
     raw = os.path.join(work, 'rootfs/release/assets', 'default', 'raw')
-    rawt = os.path.join(work, 'rootfs/release/assets', theme, 'raw')
     strings = dict(awtk_strings.load(os.path.join(raw, 'strings', lang + '.bin')))
     page = awtk_ui.parse(open(os.path.join(raw, 'ui', 'playing_page.bin'), 'rb').read())
     p = NP.Painter(raw); p.playing = True
     im = p.render(page, 0)
-    tree = awtk_ui.parse(open(os.path.join(rawt, 'ui/dialog/playmore_dialog.bin'), 'rb').read())
+    tree = awtk_ui.parse(open(os.path.join(raw, 'ui/dialog/playmore_dialog.bin'), 'rb').read())
     p.sample = {name: strings.get(key, key) for name, key in KEYS.items()}
     sheet(p, im, tree, order, pressed, offline)
     return im
@@ -75,10 +74,10 @@ def panel(work, theme, lang, order, pressed=None, offline=False):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('work'); ap.add_argument('out'); ap.add_argument('--theme', default='default'); ap.add_argument('--lang', default='en_US')
+    ap.add_argument('work'); ap.add_argument('out'); ap.add_argument('--lang', default='en_US')
     a = ap.parse_args()
-    shots = [('page 1 (when it opens)', panel(a.work, a.theme, a.lang, PAGE1)), ('page 2 (More tapped)', panel(a.work, a.theme, a.lang, PAGE2)),
-             ('page 2, Wi-Fi off (row dimmed)', panel(a.work, a.theme, a.lang, PAGE2, None, True)), ('page 2, Delete pressed', panel(a.work, a.theme, a.lang, PAGE2, 'listitem6'))]
+    shots = [('page 1 (when it opens)', panel(a.work, a.lang, PAGE1)), ('page 2 (More tapped)', panel(a.work, a.lang, PAGE2)),
+             ('page 2, Wi-Fi off (row dimmed)', panel(a.work, a.lang, PAGE2, None, True)), ('page 2, Delete pressed', panel(a.work, a.lang, PAGE2, 'listitem6'))]
     pad, top = 10, 18
     out = Image.new('RGB', (len(shots) * (NP.W + pad) + pad, NP.BAR + NP.H + top + 18), (40, 40, 40)); d = ImageDraw.Draw(out)
     for i, (label, im) in enumerate(shots):

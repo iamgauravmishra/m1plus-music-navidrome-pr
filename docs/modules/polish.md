@@ -29,4 +29,3 @@ widget and C identifiers) are `m1plus`.
   - font size ladder (22/20 titles, 21 rows, 18 second lines, 16 captions, 15/16 meta), row heights (52, 60/64,
     56, 50, 44) and margins 12 vs 16: *rejected*, they are code-built geometry (`docs/architecture.md`) or stock
     dialogs; changing one needs a patch and moves hit targets.
-  - theme1's stock pull-down art: *rejected*, theme1 stays stock on purpose.

@@ -5,14 +5,14 @@
 `styles/*.bin` is AWTK's compiled theme: a 12-byte header (`fd fc fb fa`, version 0, item count), one
 100-byte item per (state, style name, widget type) with the offset of its property block, then blocks
 of `{u8 type, u8 key size, u16 value size, key\0, value}` (types 6 int32, 7 uint32 -- colours r,g,b,a
--- 14 string). All stock theme files (default and theme1) round-trip byte-exact. Only the **default
-theme** is modded: theme1 (accent salmon `#FA7268`, its own image files) keeps its stock look in the asset tree, but is forced off at run time (below).
+-- 14 string). All stock theme files round-trip byte-exact. Only the **default
+theme** is modded: stock's theme1 (accent salmon `#FA7268`) is forced off at run time and its tree is removed from the rootfs (below).
 
 | role | colour | stock |
 |---|---|---|
 | row surface | `#000000` | `#131313` |
 | row hairline | `#222222`, 1 px bottom (M1+ Music rows: from x 56, under the title) | 4 px black gap |
-| pressed row / key | `#333334` (one blue level off `#333333`: the accent maps it, nothing else has it) | `#362221` (default), `#2E2A1A` (theme1) |
+| pressed row / key | `#333334` (one blue level off `#333333`: the accent maps it, nothing else has it) | `#362221` |
 | title text | `#FFFFFF` | same |
 | former accent text | `#FFFFFF` | `#FE7E40` / `#FA7268` |
 | muted partner text | `#8C8C8C` | `#FFFFFF` |
@@ -36,7 +36,7 @@ and a global change of those defaults is how white-on-white happens. Images: the
 against the icon's most saturated pixel blends disc grey to white, alpha kept bit for bit; replaced
 later by the icons step), status icons redrawn at 4x (one weight, round caps, concentric Wi-Fi arcs,
 unlit `#666666`). **Status bar** (`system_bar.bin`, on `mod_battery`'s layout; the table is `tools/statusbar.py`, which also
-lays out the pull-down's own copy of the bar, `view_sysbar` in `dialog/dropdown_dialog.bin`, default and theme1: same widgets,
+lays out the pull-down's own copy of the bar, `view_sysbar` in `dialog/dropdown_dialog.bin`: same widgets,
 positions, images, fonts and colours, at y 0 of the dialog on the real bar's black; `test/pod/assets.py` compares the two files
 and `preview.py` shows both bars stacked with their difference): `view_bar_left` x 10
 s 4, `label_volume` 16 px middle in 30 px, `bar_dclock` 104,0 90 wide 18 px (a 12 h
@@ -52,7 +52,7 @@ stays. Fills (`vol_progress`, `volume_fg`, `drop_fg`, `eq_plan`, `other_progress
 the brightness / balance thumbs (`light_dot`, `balance_dot`) and the "default cover" corner flag
 `screensaver_defaulticon` become `#777777` discs with the white glyph kept (the settings-icon disc); the default
 cover tiles (`defaultcover`, `scover_default`) take the "no cover" tile colour `#333333` with the white logo.
-**Switches** (`sset_on`, `sset_off`; default theme, and theme1's `sset_on`, which shares `sset_off`): redrawn without text
+**Switches** (`sset_on`, `sset_off`): redrawn without text
 by `mod_theme.toggle_image` on the stock 57x28 canvas, a 46x24 pill track right-aligned in it (x 11, y 2) and an 18 px round knob
 inset 3 px, 8x supersampled: on = off-white track `#EEEEEC` with a dark `#141414` knob on the right (the pull-down's white disc with a dark
 glyph), off = `#3A3A3A` track with a `#8C8C8C` knob on the left. They serve the stock settings pages and our Settings, Main
@@ -60,7 +60,7 @@ Menu and Cover Flow rows alike (same size and anchor, so no row moves). `pset_du
 ("Dual", "High": a value, no off twin), recoloured: a white track, dark text, a dark knob (luma-mapped inside the knob
 circle); the pull-down's "on" is a white disc with a dark glyph. The states read by brightness and knob side, not by hue. Left orange on purpose: the CD ripper art (`cdripper_bg*`, `select_right`, `selectde_left`: the page's
 styles hard-code orange text), the Online search button, `chargebg`'s red bolt, the hidden `p_hr`, the salmon bit-depth
-and store badges (brand art, Chinese or account only), and everything in theme1.
+and store badges (brand art, Chinese or account only).
 
 **Contrast gates, every build:** `audit()` checks every state of the row styles against every label
 style a row can hold (no light row surface; worst text >= 4.5:1 at rest and pressed: rest 9.04, pressed
@@ -78,4 +78,4 @@ The palette ([accent](accent.md)) only maps the modded default theme, so stock's
 - the row table of the stock System page (`All System Settings`, `sysset` id 17): `systemset_sysset_page_init` (`0x4ada7c`) lists rows `0 .. count-1` of the table at `0x97c8c0` (identity 0..15) and the click handler (`0x4ad7b0`) maps the tapped row's name (`"%d"`) through the same table to a jump table (`0x748ae0`); index 10 is `sset_theme` -> `systemset/theme_page`. Entry 10 moves to the end of the table;
 - the row count (`addiu v0, v0, 0xf` at `0x4adb1c`; one more for language 3) is one less. The rows built in code, so there is no Theme row in any asset (`ui/systemset/system_page.bin` and `theme_page.bin` have only the empty list and the navbar). The switch rows keep their positions 6 and 7 (`img_carmode%d`, `img_doublewake%d`).
 
-`systemset/theme_page` is named only by the click dispatcher (`0x4ad9fc`, now unreachable) and by the page-init dispatcher `0x4d13d8`; nothing else opens it. `assets/theme1` is still in the tree: the building steps still edit it (`ASSET_THEMES` and the `THEMES` tuples in `mod_theme`, `mod_lists`, `mod_overlays`, `mod_pulldown`, `mod_battery`, `mod_polish`, `mod_lockscreen`, `mod_boot`, `pod_ui`) and `test/pod/navbars.py` / `test/navbars-stock.sha256` keep its stock bytes. Removing it needs those steps and tests trimmed, and demo has two names for it: the `"theme1"` literal (`0x748b84`) in `awtk_configinit` and the theme page, the latter now unreachable, the former reached only with the flag set, which the clamp prevents. A stock-only boot (no clamp: the stock `demo`) would still ask `assets_manager` for `theme1` when `THEME=1` is in `config.ini`, so deleting the assets is safe only together with this clamp.
+`systemset/theme_page` is named only by the click dispatcher (`0x4ad9fc`, now unreachable) and by the page-init dispatcher `0x4d13d8`; nothing else opens it. The stock `release/assets/theme1` tree (271 files, 2.3 MB) is deleted from the rootfs by `tools/mod_space.py` (`remove_theme1`; `build.py` passes every entry as `--allow-removed`), and no build step, preview or test handles theme1 any more (`test/pod/navbars.py` asserts the directory is absent). Demo still has two names for it: the `"theme1"` literal (`0x748b84`) in `awtk_configinit` and the theme page, the latter unreachable, the former reached only with the flag set, which the clamp prevents. **The clamp must stay**: a stock-like `demo` without it would ask `assets_manager` for `theme1` when `THEME=1` is in `config.ini`. A stock restore brings the tree back with the stock rootfs.
