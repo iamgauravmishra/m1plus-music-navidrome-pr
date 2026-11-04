@@ -3,7 +3,7 @@
 - **Keep the approved entry points.** Home icon tap, guarded Home initialization,
   Now Playing initialization, More-dialog initialization, pull-down initialization (opened by the user's swipe only), the podcast tag-copy call site, the
   dot-folder scan, library query functions, status bar's battery-capacity call site
-  (Battery Percentage, off by default), `mclStartPlayer`'s prologue (Radio's hand-over: it stops a running radio, one
+  (Battery Percentage, off by default), `toolsGetFileCreateTime`'s prologue (song dates: one `statx`, stock's date on any failure), `mclStartPlayer`'s prologue (Radio's hand-over: it stops a running radio, one
   comparison otherwise), `on_backtoplayer_onclick`'s prologue (every stock Now Playing button: Radio Now Playing while a station plays, else stock), the previously empty `scroll_view` event slot, and the
   palette's three paint-time hooks: `style_get_color` `0x659fcc`, `style_get_gradient` `0x659f9c` and
   `image_manager_add` `0x655638` ([accent](accent.md), payload hooks 10 - 12). Each is pinned, falls back to

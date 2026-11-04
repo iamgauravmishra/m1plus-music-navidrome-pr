@@ -190,6 +190,14 @@ Screen state: exported byte `backlight_status` at `0x97cae4` is pinned in `tools
 | `widget_t` fields | `+8` w, `+0xc` h, `+0x44` parent | `widget_resize` `lw v0, 8(s0)` @`0x66d194`, `lw v1, 0xc(s0)` @`0x66d1a0`; `widget_set_visible` hands `lw a0, 0x44(s0)` @`0x66c428` to `widget_set_need_relayout_children` `0x66c338` |
 | the gauge | `/sys/class/power_supply/battery/capacity` | AXP2101 (`axp2101_charger`), an integer 0..100 and a newline (read 100 on a charged device); stock never opens it |
 
+## Song dates (patch/filetime.c, `FILETIME_PINS` in tools/pod.py; docs/modules/songs.md "Recently Added dates")
+
+| What | Address | Evidence |
+|---|---|---|
+| `toolsGetFileCreateTime(path)` | `0x5e4ac8` (size `0x9c`) | prologue `(0x3c1c0042, 0x279cf408, 0x0399e021)`; `bnez a0` `0x14800008` @`0x5e4ae4` (null: 0); `access(path, R_OK)` then `stat(path, sp+0x18)`; calls at `0x5e7a8c`, `0x5e8494`, `0x5eae84` (inside the stock directory loader, `toolsLoadDirectory` side; the result is stored as the song record's `time_create`, stSongInfo `+0x50`, per `recent-albums` notes) |
+| st_atime / st_ctime choice | `0x5e4b3c`..`0x5e4b5c` | `lw v1, 0x58(sp)` (stat's `st_atime`, `0x40` into the mips32 stat) @`0x5e4b40`, `lw v0, 0x68(sp)` (`st_ctime`, `0x50`) @`0x5e4b48`, `lbu s0, 0xa0ac7c` (the filesystem format byte) @`0x5e4b44`, `addiu/andi/sltiu s0, s0, 2` (format 1 or 2), `movn v0, v1, s0` `0x0070100b` @`0x5e4b58`: exFAT / NTFS return the access time |
+| `statx` | o32 syscall 4366 | demo imports no `statx`; `struct statx` is 256 bytes, `stx_mask` at 0, `stx_btime.tv_sec` at 80 (`STATX_BTIME` `0x800`) |
+
 ## Podcasts (patch/pcmodel.c, `PODCAST_PINS` in tools/pod.py)
 
 | What | Address | Evidence |

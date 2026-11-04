@@ -143,6 +143,23 @@ The question was whether the stock multi-select's **Add to playlist** and **Dele
 
 Under the last row of every list on the page (the library, Favorites and the other lists, a playlist, a genre), as Apple Music ends a list: **"25 songs"** ("1 song"; the keys `%d song` / `%d songs`, chosen by n == 1 as the album page's track count, the number where the translation has `%d`; pl, ru, uk use the label form "Песен: 25" that needs no plural). A label of the content view (`sg_foot`, insensitive, 15 px `#9C9C9C`: the album page's meta line, `SG_FOOT_PX`, `pod_ui.SG_FOOT_RGB`), x `SG_HDR_X` (10, the covers' edge), its 20 px box `SG_FOOT_GAP` (14) below the last row; the content is `SG_FOOT_H` (52) longer for it (before the select bar's pad). `sg_foot_text` sets the text and moves the label at every read of the list, so a list read again (a delete, a return to the front) shows the new count. No duration: the song table has no duration column (`time` / `time_end` are CUE offsets, `docs/modules/addresses.md`); the durations table ([Album length](album-page.md#album-length)) could supply a total, but this line shows the count only. Not yet seen on the device.
 
+## Recently Added dates (`patch/filetime.c`, payload hook 19)
+
+Recently Added orders by `songtable.time_create` (`order by time_create desc limit 100`), which the library scan takes from stock's `toolsGetFileCreateTime` `0x5e4ac8`.
+Stock returns `st_ctime` (the directory entry's creation time on FAT) but `st_atime` when the filesystem format byte `0xa0ac7c` says exFAT or NTFS (1 or 2), where `stat` has
+no creation time. Every read moves the access time (relatime, once a day), and Update Local Music reads every file's tags, so on an exFAT card the whole library was dated to the
+update's day and a newly added album was lost among it.
+
+- `ft_created` replaces the function's prologue. It calls `statx(AT_FDCWD, path, 0, STATX_BTIME)` through the o32 syscall (4366; demo imports no `statx`) and returns `stx_btime.tv_sec`,
+  the creation stamp exFAT keeps, which reads never move. Windows and Linux stamp a copied file with the time of the copy; a Mac keeps the file's own creation date.
+- Stock's function runs (through `stock_file_created_trampoline`) for a null path, with `/mnt/mmc/m1plus-off`, when the call fails, when the mask lacks `STATX_BTIME` or when the stamp is 0.
+  FAT32 is unchanged in effect: its stock date is already the creation time. The cost is one `access` and one `statx` per file; 256 bytes of stack; no allocation.
+- Existing `songtable` dates change only after a library rescan: Update Local Music drops and rebuilds the table, so the first full update on this build re-dates the library by creation stamp
+  (and repairs dates already flattened).
+- Validation: the hook, its fallbacks and the pins run in Unicorn (`test/pod/filetime.py`). Not verified on the device: that the stock 5.10 kernel's exFAT driver reports `STATX_BTIME`
+  for the card (q2-pod reports it does on the Q2's kernel), and the resulting Recently Added order after a rescan.
+- Source: q2-pod commit 0d00826 (`ringnav_file_created`, `ringnav_statx`).
+
 ## Tests (`test/pod/songs.py`)
 
 Nine sections (`SECTIONS`, each its own task in `check.py`; `--test songs/<section>` runs one; each builds its own machines): `asset_tests`, `open_and_paint_tests`, `touch_tests`, `rail_tests`, `order_search_and_stale_tests`, `collapse_and_select_tests`, `loader_tests`, `big_library_tests`, `lists_tests` (the other lists, below; also a genre's songs: the record put back before every read and play after another page changed it, the Unknown byte, a 420 byte name cut at 0x7f, Search hidden and also after select mode, Select's left-cap icon, the title's 156 px, Delete and Add with class `0xff09`, the fallback to the stock tap's sequence). Covering:
