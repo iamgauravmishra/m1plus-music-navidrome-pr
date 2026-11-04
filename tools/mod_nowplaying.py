@@ -212,6 +212,28 @@ def shadow_image():
         for x in range(SHADOW_SIZE): px[x, y] = (0, 0, 0, shadow_alpha(x, y))
     return im
 
+LIVE_W, LIVE_GAP = 44, 8                                      # the LIVE label's width and the gap either side of it
+LIVE_BAR_W = (W - 2 * M - LIVE_W - 2 * LIVE_GAP) // 2          # each capsule's width
+LIVE_BAR_H, LIVE_BAR_OUT, LIVE_BAR_IN = 4, 0.45, 0.05      # Radio Now Playing's LIVE capsules (rn_live_l / rn_live_r): height, white alpha at the outer end and next to LIVE
+
+def live_bar_image(w, right):
+    """rn_live_l.png / rn_live_r.png: a w x LIVE_BAR_H white capsule (fully rounded ends, 8 x 8 samples a pixel) whose alpha runs from LIVE_BAR_OUT at the
+    outer end to LIVE_BAR_IN at the inner end along a smoothstep; the right bar is the left one mirrored."""
+    from PIL import Image
+    h, r, n = LIVE_BAR_H, LIVE_BAR_H / 2, 8
+    im = Image.new('RGBA', (w, h)); px = im.load()
+    for y in range(h):
+        for x in range(w):
+            cov = 0
+            for sy in range(n):
+                for sx in range(n):
+                    fx, fy = x + (sx + .5) / n, y + (sy + .5) / n
+                    dx = max(r - fx, fx - (w - r), 0); dy = fy - r
+                    cov += dx * dx + dy * dy <= r * r
+            t = (x + .5) / w; t = t * t * (3 - 2 * t)
+            px[x, y] = (255, 255, 255, round(255 * cov / (n * n) * (LIVE_BAR_OUT + (LIVE_BAR_IN - LIVE_BAR_OUT) * t)))
+    return im.transpose(Image.FLIP_LEFT_RIGHT) if right else im
+
 def write_images(rootfs_xx):
     """The glyphs (committed PNGs of mod_icons.py), the corner mask and the gradient, as new files; returns the names."""
     for name in NP_IMAGES:
@@ -222,11 +244,12 @@ def write_images(rootfs_xx):
         elif name == 'np_scrim_lyrics': scrim_image(True).save(p, optimize=True)
         elif name == 'np_dot': dot_image().save(p, optimize=True)
         elif name == 'np_shadow': shadow_image().save(p, optimize=True)
+        elif name in ('rn_live_l', 'rn_live_r'): live_bar_image(LIVE_BAR_W, name.endswith('r')).save(p, optimize=True)
         else: shutil.copyfile(os.path.join(mod_icons.PNG, name + '.png'), p)
         os.chmod(p, IMG_MODE); os.utime(p, (IMG_MTIME, IMG_MTIME))
     return list(NP_IMAGES)
 
-NP_IMAGES = sorted(mod_icons.np_names() + ['np_tint', 'np_scrim', 'np_scrim_lyrics', 'np_dot', 'np_shadow'])
+NP_IMAGES = sorted(mod_icons.np_names() + ['np_tint', 'np_scrim', 'np_scrim_lyrics', 'np_dot', 'np_shadow', 'rn_live_l', 'rn_live_r'])
 
 def added_rels(stock_rootfs=None):
     """Rootfs-relative paths of the added images (for fwtool --allow-added; all new in any tree)."""

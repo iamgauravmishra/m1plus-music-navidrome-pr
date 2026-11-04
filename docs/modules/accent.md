@@ -26,7 +26,7 @@ Roles (Neutral keeps today's colour for every one):
 | slider fill, progress fill, picker check, playing wave marker | the accent |
 | never accent | chevrons, secondary text, the navbar, body text, card backgrounds |
 
-Pages whose background is the album/cover tint (Now Playing, the album page, the Podcasts Show page, the Daily Mix page) keep that background exactly; their controls (the progress fill, ...) may take
+Pages whose background is the album/cover tint (Now Playing, the album page, the Podcasts Show page, the Daily Mix page, Radio Now Playing (`m1plus_radionp_page`, `PAL_COVER_RN`; its window colour goes through `pal_tone`)) keep that background exactly; their controls (the progress fill, ...) may take
 the accent.
 
 ## What phase 1 did

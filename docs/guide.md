@@ -72,6 +72,12 @@ Cancel during the countdown if needed. Pictures are saved in the card's `screens
 
 ## Extras
 
+**Radio** (Settings > Main Menu shows it; it is also on the Pod's main menu) plays internet stations: My Stations (your saved list), Recently Played and,
+with Wi-Fi, Radio Browser: the Top Stations, countries, genres and a name search of radio-browser.info. Tap a station to play it; the `...` on
+Radio Now Playing adds it to or removes it from My Stations. The Radio Now Playing page shows the song, the stream and previous/next along the list; local
+music stops the radio. Stations are `Radio/favourites.m3u` on the card; the `...` on the My Stations page has Import from Card, which adds the stations of
+every other `.m3u`, `.m3u8` or `.pls` in `Radio/` that are not there yet (your files are never changed).
+
 **Cassette Mode** is a landscape Now Playing screen. Tap the cassette to pause/resume and the
 top-left screw to close. Change its theme under Settings.
 

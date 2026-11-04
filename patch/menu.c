@@ -71,10 +71,10 @@ mn_defaults(void) { /* tools/pod_pages.py DEFAULT_MENU: Cover Flow, Albums, Arti
     mn.off = 0;
 }
 
-/* The item id of a saved character ('0'..'8' the menu items, 'a'..'i' the Extras tiles, ids 9..17, 'j' Settings, 'k' the Pod, 'l' Podcasts, 'm' Search), or 255. */
+/* The item id of a saved character ('0'..'8' the menu items, 'a'..'i' the Extras tiles, ids 9..17, 'j' Settings, 'k' the Pod, 'l' Podcasts, 'm' Search, 'n' Radio), or 255. */
 static unsigned mn_id(unsigned c) {
     if (c - '0' < 9) return c - '0';
-    if (c - 'a' < 13) return 9 + c - 'a';
+    if (c - 'a' < 14) return 9 + c - 'a';
     return 255;
 }
 

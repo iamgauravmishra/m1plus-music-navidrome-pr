@@ -3,7 +3,8 @@
 - **Keep the approved entry points.** Home icon tap, guarded Home initialization,
   Now Playing initialization, More-dialog initialization, pull-down initialization (opened by the user's swipe only), the podcast tag-copy call site, the
   dot-folder scan, library query functions, status bar's battery-capacity call site
-  (Battery Percentage, off by default), the previously empty `scroll_view` event slot, and the
+  (Battery Percentage, off by default), `mclStartPlayer`'s prologue (Radio's hand-over: it stops a running radio, one
+  comparison otherwise), `on_backtoplayer_onclick`'s prologue (every stock Now Playing button: Radio Now Playing while a station plays, else stock), the previously empty `scroll_view` event slot, and the
   palette's three paint-time hooks: `style_get_color` `0x659fcc`, `style_get_gradient` `0x659f9c` and
   `image_manager_add` `0x655638` ([accent](accent.md), payload hooks 10 - 12). Each is pinned, falls back to
   stock and is a pass-through while the palette is inactive (Black + Neutral) or `/mnt/mmc/m1plus-off` exists.
@@ -16,7 +17,8 @@
   [payload](payload.md) with its `tools/reach.py` boot reachability and add it to the list above.
 - **Treat startup as critical.** Home initialization needs the crash marker. The tag-reader
   hook is also reachable through Memory Playback at boot: run stock's copy first and restrict
-  podcast processing to its card path. The recovery button combination remains unverified.
+  podcast processing to its card path. The `mclStartPlayer` hook is reached there too: with no radio running it
+  is one comparison before stock's function. The recovery button combination remains unverified.
 - **Preserve hook restrictions.** Tidal-icon recovery applies only while the bad note exists.
   Home's ready path changes the language's CJK cmap field and glyph-cache size, repeated
   by a timer after language/theme changes. Podcast tags apply only under
@@ -37,6 +39,9 @@
   overlays must be insensitive. See [UI rules](ui-rules.md) for hit-test evidence.
 - **Preserve update boundaries.** Only kernel and rootfs are packaged. Never write bootloader
   or recovery kernel. The rebuilt rootfs must not exceed stock size.
+
+The radio engine's 500 ms timer is the one timer that is not a page's: it lives from a station's start (a tap) to its stop, error
+or hand-over, holds standby and the DAC timer, and ends itself ([radio](radio.md)).
 
 Normal windows are 450 px below the status bar; fullscreen windows are 480 px. Feature timers,
 workers and paint events must remain owned by their page and follow its lifetime.

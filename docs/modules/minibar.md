@@ -134,6 +134,24 @@ called when that found no navbar or list). Kill switch (`home_off()`: `/mnt/mmc/
   glyph is read again; next -> `next_quick_click(e, 0)` (the click's own event: stock reads its time and ignores a click within 1 s of the last
   one, the same debounce the lock screen has) then `mb_work`.
 
+## Radio mode
+
+Radio plays through hciplayer and never touches stock's play queue, so `mb_work` asks the engine first (`mb_radio`, `patch/radio.h`). The bar shows the station while `rd_running()` (Connecting, Playing, Paused) and in Error or Stopped after a session unless a local song is really playing or paused (status 3, or 2 with `mclGetHciplayerStatus`). Stopped counts only while the engine owns the bar (`rd_owns_bar`: set when a station starts, cleared when a local track starts through the `mclStartPlayer` hook); Idle, and Stopped after a local track, use the local logic. Look unchanged; content:
+
+| | Connecting | Playing | Paused | Error | Stopped |
+|---|---|---|---|---|---|
+| Title | station name ("Radio" without one) | same | same | same | same |
+| Second line | Connecting… | Live | Paused | Can't play: <error> | Stopped |
+| Glyph | stop (`mb_stop`) | stop | play | play | play |
+| Play / pause button | `rd_stop` | `rd_stop` | `rd_resume` (`mclSetResume`) | `rd_play` of the same station (retry) | `rd_play` of the same station |
+
+A station has no pause here: the pause button shows the Stop square (`mb_stop` / `mb_stop_down`, 18 px ink in the 32 px canvas, set on all three styles by `mb_pause_look`) and stops; after the stop the state is Stopped and the bar keeps the station with a play glyph until a local track starts. Paused is only reached from outside (hardware key, unplugged headphones, an output switch); the play glyph resumes it. A local track gets `mb_pause` / `mb_pause_down` back.
+
+| Next | visible but greyed (`mb_next_off`, `NP_OFF` #6E6E6E, set on the normal / over / pressed styles by `mb_next_look`) and insensitive in every state (no station skipping); white `mb_next` / `mb_next_down` and sensitive again when the bar returns to a track | | | |
+| Card tap | radio Now Playing (`rn_open`) in every state | | | |
+
+Cover: the station's cached logo (`rd_logo_file`; the logo worker is started when it is missing and the cover redone when the file appears), else the radio glyph on Now Playing's card grey, else the stock disc. Key: (station address, state, error text) redoes the labels; the cover only follows the station. After a tap the glyph follows stock's status (3 / 2) at once; the engine's tick moves the state.
+
 ## Pinned stock addresses (`tools/pod.py` FUNCTIONS, checked against `.dynsym`)
 
 | function | address | evidence |

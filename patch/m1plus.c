@@ -63,7 +63,8 @@ enum {
     ACT_BG = 46,
     ACT_BGSET = 47,
     ACT_ACCENT = 48,
-    ACT_ACCENTSET = 49
+    ACT_ACCENTSET = 49,
+    ACT_RADIO = 50
 };
 
 extern void shot_start(void); /* patch/shot.c: the Screenshot row: confirm, 5 s countdown, capture; or cancel */
@@ -74,6 +75,7 @@ extern int playlists_open(void); /* patch/playlists.c: Playlists, a grid of mosa
 extern int ipod_open(void); /* patch/ipod.c: the virtual iPod Classic, a fullscreen page with a touch click wheel */
 extern int podcasts_open(void); /* patch/podcasts.c: the shows on the card and their episodes */
 extern int update_open(void); /* patch/update.c: Software Update, our page; -1 when it did not open */
+extern int radio_open(void); /* patch/radiopage.c: Radio's stations page */
 extern int search_open(void); /* patch/search.c: our keyboard, then the results page; -1 when it did not open */
 extern int songs_open(void); /* patch/songs.c: Songs, the library as one list with sections and a jump rail */
 extern int folders_open(
@@ -114,7 +116,7 @@ enum {
     INFO_CAP,
     INFO_FREE,
     INFO_CC, /* the Cover Cache page's seven values start here: homecover_stat(kind - INFO_CC) */
-    INFO_SF = INFO_CC + 7 /* the Settings Files page's 22 values: setfiles_stat(kind - INFO_SF) */
+    INFO_SF = INFO_CC + 7 /* the Settings Files page's 23 values: setfiles_stat(kind - INFO_SF) */
 };
 
 enum { VK_NONE = 0, VK_WIFI, VK_BLUETOOTH, VK_PLAYMODE, VK_EQ, VK_SORT, VK_THEME, VK_RECORD, VK_VTHEME, VK_BG, VK_ACCENT };
@@ -232,7 +234,7 @@ static int on_row(void *ctx, void *e) {
              row->action == ACT_VREC || row->action == ACT_VTHEME || row->action == ACT_BG || row->action == ACT_ACCENT) /* the value rows open their picker page */
         open_page(row->arg, 0);
     else if (row->action == ACT_PLAYER)
-        on_backtoplayer_onclick((void *)0, (void *)0);
+        pod_open_now_playing();
     else if (row->action == ACT_COVER)
         coverflow_open(); /* patch/coverflow.c; its own page */
     else if (row->action == ACT_ARTISTS)
@@ -249,6 +251,8 @@ static int on_row(void *ctx, void *e) {
         ipod_open();
     else if (row->action == ACT_PODCASTS)
         podcasts_open();
+    else if (row->action == ACT_RADIO)
+        radio_open();
     else if (row->action == ACT_SEARCH) {
         if (search_open() < 0)
             navigator_to_with_context(

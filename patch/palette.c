@@ -297,7 +297,7 @@ extern unsigned *stock_style_color_trampoline(unsigned *, void *, const char *, 
  * Pod and Cassette Mode, which have looks of their own): while one is the window manager's top main window the style hooks pass through. The cover-tinted pages (LIGHT_COVER: Now
  * Playing, the album page, the Podcasts Show page, the Daily Mix page) keep their background in the Tinted mode (pal_cover_page) and nothing else changes there. Both answers are kept
  * for as long as the top window and its name are the same pointers, so a style call costs a call to the window manager and two compares. */
-enum { PAL_COVER_NP = 1, PAL_COVER_AB, PAL_COVER_PG, PAL_COVER_DM }; /* tools/palette.py COVER_PAGES, in order */
+enum { PAL_COVER_NP = 1, PAL_COVER_AB, PAL_COVER_PG, PAL_COVER_DM, PAL_COVER_RN };/* tools/palette.py COVER_PAGES, in order */
 
 static void pal_look(void) {
     void *wm = window_manager(), *top;
@@ -336,7 +336,8 @@ static int pal_cover_page(void) {
     pal_look();
     switch (pal.cover) {
     case PAL_COVER_NP:
-    case PAL_COVER_DM: return 1;
+    case PAL_COVER_DM:
+    case PAL_COVER_RN: return 1;
     case PAL_COVER_AB: return ab_has_tone();
     case PAL_COVER_PG: return pg_has_tone();
     }

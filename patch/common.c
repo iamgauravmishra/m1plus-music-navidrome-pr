@@ -5,6 +5,7 @@
 #include "offsets.inc"
 #include "stock.h"
 #include "common.h"
+#include "radio.h"
 #include "shot.h"
 #include "covercache.h"
 
@@ -56,10 +57,15 @@ int pod_on_back(void *ctx, void *e) {
     return RET_OK;
 }
 
+/* Every Now Playing entry of our pages: Radio's page while a station plays, else stock's player (the trampoline: the hook on stock's handler would decide again). */
+void pod_open_now_playing(void) {
+    if (!rn_open_if_active()) stock_backtoplayer_trampoline((void *)0, (void *)0);
+}
+
 int pod_on_player(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    on_backtoplayer_onclick((void *)0, (void *)0);
+    pod_open_now_playing();
     return RET_OK;
 }
 

@@ -1,7 +1,7 @@
 # Icons
 
 `tools/mod_icons.py` draws every replaced image at its exact stock size and mode. The build only copies the
-committed PNGs (`assets/icons/png/`, 474 files), so there is no rasteriser in the build and it stays deterministic.
+committed PNGs (`assets/icons/png/`, 568 files), so there is no rasteriser in the build and it stays deterministic.
 
 - `--generate` re-renders the PNGs (`rsvg-convert` + Pillow).
 - `--pins` writes the stock SHA-256 pins (`tools/mod_icons_pins.txt`).
@@ -18,6 +18,7 @@ the PNGs you meant to change.
 | Lucide (lucide-static 1.61.0, tarball SHA-256 `62773cd2...ba75f1`) | `assets/icons/lucide/svg/` | ISC, `assets/icons/lucide/LICENSE` |
 | Tabler (`@tabler/icons` 3.49.0), `T:` prefix, only where Lucide lacks one: `brand-tidal`, `circle-check` filled, `a-b` | `assets/icons/tabler/svg/` | MIT, `assets/icons/tabler/LICENSE` |
 | custom, drawn in Lucide's style (24 grid, 2 px stroke, round caps): `badge-hr`, `dac`, `gain-low`/`gain-high`, `volume-3waves`, `turntable` (the More sheet's Vinyl Mode row: a plinth, a record and an arm), `cover-lyrics` (its Find Cover & Lyrics row: a picture over two text lines), `coverflow` (Lucide `gallery-horizontal` with side covers 10 units tall, 3 units out) | `assets/icons/custom/` | ours |
+| `radio-set` (`assets/icons/custom/radio-set.svg`; the logo-less placeholder of Radio, `pod_ic_rd_art`): IconPark `radio` redrawn on the 24 grid and centred | `assets/icons/custom/` | Apache-2.0, Copyright ByteDance (https://github.com/bytedance/IconPark), noted in the file and the README |
 | the Shanling mark (`pod_ci_shanling`, the Settings > Developer > Open Shanling Home row): the swoosh cut from stock `shutdown.png` (SHA-256 pinned), isolated by whiteness, 24 px wide, dilated to about a 2 px stroke | stock art | |
 
 **Rule:** an icon gets a real Lucide glyph (Tabler where Lucide has none), or is drawn in Lucide's style, or keeps
@@ -44,7 +45,7 @@ pause, skip, lock); `ellipsis` is always filled.
 | M1+ Music Home icon | added `m1plus`, `m1plus_down` (66x66) | Lucide `smartphone` on the same disc; style `home_m1plus_style` (a copy of `home_tidal_style`) added to `styles/home_page.bin` in stock sort order; widget built at run time (`home-guard.md`) |
 | M1+ Music rows | added `pod_ic_*` (24x24) | menu, Shuffle, Extras and Main Menu rows: glyph x 16..40, title x 56, a 1 px `#222222` hairline from x 56 (child `pod_hair`, insensitive; the theme's bottom border off, `border_width` 0); image insensitive |
 | Settings cards | added `pod_ci_*` (24x24, a 20 px glyph), `pod_chev`, `pod_check` | the Settings pages' rows (`CARD_GLYPHS`, `settings.md` "Cards"); the grey chevron and the picker's check; with an accent the `pod_ci_*` glyphs are tinted at decode ([accent](accent.md)) |
-| navbar extras | added `pod_nav_coverflow`, `pod_nav_settings`, `pod_nav_grid`, `pod_nav_list` (+ `_down`) | Cover Flow button (`coverflow`); Settings capsule cap (`sliders-horizontal`); Albums view toggle (`layout-grid` / `list`, showing the mode a tap switches to) |
+| navbar extras | added `pod_nav_coverflow`, `pod_nav_settings`, `pod_nav_grid`, `pod_nav_list` (+ `_down`) | Cover Flow button (`coverflow`); Settings capsule cap (`sliders-horizontal`); Albums view toggle (`layout-grid` / `list`, showing the mode a tap switches to; `pod_nav_gridl` / `pod_nav_listl` are the left-cap pieces for the Radio search results) |
 | navbar and dialogs | 110 | add, cancel, delete, multi-select, sort, search, back, chevron, more, settings, `back_to_player` (`audio-lines`, 23x24); selection circles and squares, expanders, queue-dialog modes, dialog actions, Now Playing more-dialog and batch-add icons, Bluetooth/USB page transport |
 | Folders, Playlists, CD | 24 bare glyphs (40x40) | 16 audio formats share `file-music`; SD, USB; New / Import / Export; CD track dialog (`guitar`, microphone, calendar) |
 | list placeholders | 6 glyphs (40x40), 3 "no cover" tiles (60/90/100) | the tile colour with a muted glyph at 0.52 of the tile |

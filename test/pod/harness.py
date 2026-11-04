@@ -233,6 +233,7 @@ class Machine:
                 self.handlers[PSYMS[f'pod_lib_{name}']] = name
         self.handlers.pop(pod.FUNCTIONS['widget_to_local'][2])   # stock's own, run for real: the payload and widget_find_target both call it
         self.handlers[HOME_CLICK_RESUME] = 'stock_resume'
+        self.handlers[PSYMS['stock_backtoplayer_trampoline']] = 'on_backtoplayer_onclick'   # stock's Now Playing handler, reached through its hook's trampoline
         for sym, nm in (('stock_setmode_trampoline', 'stock_setmode'), ('stock_loadplaylist_trampoline', 'stock_loadplaylist')):   # the Shuffle hooks' way back into stock (patch/shuffle.c)
             if sym in PSYMS: self.handlers[PSYMS[sym]] = nm
         if 'album_open' in PSYMS: self.handlers[PSYMS['album_open']] = 'album_open'

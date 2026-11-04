@@ -447,32 +447,38 @@ PS_SHEET_PX = 18   # the labels (Now Playing's More sheet: 18 px)
 
 def podcasts_sheet():
     """(scrim, card) of the Show page's sheets: the card at its tallest (five rows, pc_sheet5), at the bottom of the window."""
+    return sheet_widgets('pg_sh', PS_SHEET_ROWS, 5)
+
+
+def sheet_widgets(prefix, sheet_rows, tallest):
+    """(scrim, card) of a bottom sheet with the fixed rows `sheet_rows` (id, glyph, label, has a value, red), named <prefix>_scrim, <prefix>_card, <prefix>_<id> (+ _ic, _tx, _vl, _hr); the card's
+    height the tallest of its pictures (pc_sheet<tallest>)."""
     from mod_icons import PC_SHEET_PX
     o = OFFSETS
-    rh, rows = o['PM_ROW_H'], len(PS_SHEET_ROWS)
-    scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', 'pg_sh_scrim'), ('enable', 'true')]))
+    rh, rows = o['PM_ROW_H'], len(sheet_rows)
+    scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', f'{prefix}_scrim'), ('enable', 'true')]))
     for st in STATES:
         styled(scrim, (st,), 'bg_color', PL_DIM)
         styled(scrim, (st,), 'text_color', '#FFFFFF')
         styled(scrim, (st,), 'border_width', '0')
         styled(scrim, (st,), 'border_color', '#00000000')
-    card = hidden(Widget('view', 0, CLIENT_H - 5 * rh, SCREEN_W, 5 * rh, [('name', 'pg_sh_card')]))
+    card = hidden(Widget('view', 0, CLIENT_H - tallest * rh, SCREEN_W, tallest * rh, [('name', f'{prefix}_card')]))
     for st in STATES:
         styled(card, (st,), 'bg_color', '#00000000')
-        styled(card, (st,), 'bg_image', 'pc_sheet5')
+        styled(card, (st,), 'bg_image', f'pc_sheet{tallest}')
         styled(card, (st,), 'bg_image_draw_type', 'default')
         styled(card, (st,), 'border_width', '0')
-    for i, (rid, icon, text, value, red) in enumerate(PS_SHEET_ROWS):
-        item = hidden(Widget('button', 0, i * rh, SCREEN_W, rh, [('name', f'pg_sh_{rid}'), ('enable', 'true')]))
+    for i, (rid, icon, text, value, red) in enumerate(sheet_rows):
+        item = hidden(Widget('button', 0, i * rh, SCREEN_W, rh, [('name', f'{prefix}_{rid}'), ('enable', 'true')]))
         for st in STATES:
             styled(item, (st,), 'bg_color', PL_PRESSED if st == 'pressed' else '#00000000')
             styled(item, (st,), 'text_color', '#FFFFFF')
             styled(item, (st,), 'border_width', '0')
             styled(item, (st,), 'border_color', '#00000000')
         item.children.append(Widget('image', PS_SHEET_ICON_X, (rh - PC_SHEET_PX) // 2, PC_SHEET_PX, PC_SHEET_PX, [
-            ('name', f'pg_sh_{rid}_ic'), ('draw_type', 'default'), ('image', icon), ('sensitive', 'false')]))
+            ('name', f'{prefix}_{rid}_ic'), ('draw_type', 'default'), ('image', icon), ('sensitive', 'false')]))
         lab = Widget('hscroll_label', PS_SHEET_TEXT_X, 0, PS_SHEET_VALUE_R - PS_SHEET_TEXT_X, rh, [
-            ('name', f'pg_sh_{rid}_tx'), pod_i18n.text_prop(text), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+            ('name', f'{prefix}_{rid}_tx'), pod_i18n.text_prop(text), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
         for st in ('normal', 'disable', 'focused'):
             styled(lab, (st,), 'font_size', str(PS_SHEET_PX))
             styled(lab, (st,), 'text_color', PS_SHEET_RED if red else '#FFFFFF')
@@ -483,7 +489,7 @@ def podcasts_sheet():
         item.children.append(lab)
         if value:
             val = Widget('hscroll_label', PS_SHEET_VALUE_R - PS_SHEET_VALUE_W, 0, PS_SHEET_VALUE_W, rh, [
-                ('name', f'pg_sh_{rid}_vl'), ('text', ''), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+                ('name', f'{prefix}_{rid}_vl'), ('text', ''), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
             for st in ('normal', 'disable', 'focused'):
                 styled(val, (st,), 'font_size', str(PS_SHEET_PX))
                 styled(val, (st,), 'text_color', '#AAAAAA')
@@ -492,7 +498,7 @@ def podcasts_sheet():
                 styled(val, (st,), 'margin_left', '0')
                 styled(val, (st,), 'margin_right', '0')
             item.children.append(val)
-        hair = Widget('view', 0, 0, SCREEN_W, 1, [('name', f'pg_sh_{rid}_hr'), ('sensitive', 'false')])
+        hair = Widget('view', 0, 0, SCREEN_W, 1, [('name', f'{prefix}_{rid}_hr'), ('sensitive', 'false')])
         for st in STATES: styled(hair, (st,), 'bg_color', PL_HAIR)
         item.children.append(hair)
         card.children.append(item)
@@ -821,6 +827,23 @@ def build_artists_page(page):
     return root
 
 
+def search_field_widget():
+    """The Search page's field (kb_field with the magnifier, hint, text, caret and clear button; patch/keyboard.c keyboard_attach finds them by name); the Radio page has the same."""
+    field = kb_view('kb_field', PS.SE_FIELD_X, PS.SE_FIELD_Y, PS.SE_FIELD_W, PS.SE_FIELD_H, PS.FIELD_RGB, PS.SE_FIELD_R)
+    field.set('sensitive', 'true')   # the clear button inside it needs it, and a tap on the field brings the keyboard back
+    mag = Widget('image', PS.SE_MAG_X, (PS.SE_FIELD_H - PK.FIELD_MAG) // 2, PK.FIELD_MAG, PK.FIELD_MAG, [('name', 'kb_mag'), ('image', 'qk_mag'), ('draw_type', 'center'), ('sensitive', 'false')])
+    hint = label('kb_hint', PS.SE_TEXT_X, 0, PS.SE_TEXT_W, PS.SE_FIELD_H, '', PS.FIELD_PX, PS.FIELD_HINT, 'left')
+    text = label('kb_text', PS.SE_TEXT_X, 0, PS.SE_TEXT_W, PS.SE_FIELD_H, '', PS.FIELD_PX, PS.FIELD_INK, 'left')
+    for lab in (hint, text):
+        lab.set('sensitive', 'false')
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+    caret = kb_view('kb_caret', PS.SE_TEXT_X, PS.SE_CARET_Y, PK.CARET_W, PK.CARET_H, PK.KB_INK)
+    clear = hidden(Widget('button', PS.SE_FIELD_W - PS.SE_CLEAR_W, 0, PS.SE_CLEAR_W, PS.SE_FIELD_H, [('name', 'kb_clear'), ('enable', 'true'), ('style', 'img_btn_style'),
+                   ('style:pressed:icon', 'qk_clear'), ('style:normal:icon', 'qk_clear'), ('style:over:icon', 'qk_clear')]))
+    field.children = [mag, hint, text, caret, clear]
+    return field
+
+
 def build_search_page(page):
     """The Search page (patch/search.c, docs/modules/search.md; the numbers are tools/pod_search.py's, parsed from patch/search.h): the Apple Music search screen. A rounded field with the
     keyboard's own field widgets (kb_field with the magnifier, hint, text, caret and clear button), the round X button (btn_return), a row of chips (se_chips: the payload paints the texts and
@@ -844,18 +867,7 @@ def build_search_page(page):
         styled(chips, (st,), 'border_width', '0')
     chips.children = [kb_view('se_chip_hl', PS.SE_CHIP_X, PS.SE_CHIP_Y, 80, PS.SE_CHIP_H, PS.CHIP_ON_RGB, PS.SE_CHIP_R)]
     root.children.append(chips)
-    field = kb_view('kb_field', PS.SE_FIELD_X, PS.SE_FIELD_Y, PS.SE_FIELD_W, PS.SE_FIELD_H, PS.FIELD_RGB, PS.SE_FIELD_R)
-    field.set('sensitive', 'true')   # the clear button inside it needs it, and a tap on the field brings the keyboard back
-    mag = Widget('image', PS.SE_MAG_X, (PS.SE_FIELD_H - PK.FIELD_MAG) // 2, PK.FIELD_MAG, PK.FIELD_MAG, [('name', 'kb_mag'), ('image', 'qk_mag'), ('draw_type', 'center'), ('sensitive', 'false')])
-    hint = label('kb_hint', PS.SE_TEXT_X, 0, PS.SE_TEXT_W, PS.SE_FIELD_H, '', PS.FIELD_PX, PS.FIELD_HINT, 'left')
-    text = label('kb_text', PS.SE_TEXT_X, 0, PS.SE_TEXT_W, PS.SE_FIELD_H, '', PS.FIELD_PX, PS.FIELD_INK, 'left')
-    for lab in (hint, text):
-        lab.set('sensitive', 'false')
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-    caret = kb_view('kb_caret', PS.SE_TEXT_X, PS.SE_CARET_Y, PK.CARET_W, PK.CARET_H, PK.KB_INK)
-    clear = hidden(Widget('button', PS.SE_FIELD_W - PS.SE_CLEAR_W, 0, PS.SE_CLEAR_W, PS.SE_FIELD_H, [('name', 'kb_clear'), ('enable', 'true'), ('style', 'img_btn_style'),
-                   ('style:pressed:icon', 'qk_clear'), ('style:normal:icon', 'qk_clear'), ('style:over:icon', 'qk_clear')]))
-    field.children = [mag, hint, text, caret, clear]
+    field = search_field_widget()
     root.children.append(field)
     root.children.append(Widget('button', PS.SE_CLOSE_X, PS.SE_CLOSE_Y, PS.SE_CLOSE_W, PS.SE_CLOSE_H, [
         ('name', 'btn_return'), ('enable', 'true'), ('style', 'img_btn_style'),
@@ -1844,7 +1856,180 @@ def build_folders_page(page):
     root.children.append(select_bar('sg_bar', 'sg_bar_line', [('sg_add', o['SG_PILL_X0'], 'Add to Playlist', 'sg_listplus', o['SG_BAR_PILL_W']),
                                                               ('sg_del', o['SG_BAR_PILL_X1'], 'Delete', 'sg_trash', o['SG_BAR_PILL_W'])]))
     return root
+RD_FIELD_W = SCREEN_W - 2 * PS.SE_FIELD_X   # the Radio search field's width (patch/radiopage.c RP_TEXT_W is its text's)
+RD_TEXT_W = RD_FIELD_W - PS.SE_TEXT_X - PS.SE_CLEAR_W
+RD_CREDIT_PX = 14   # the credit line's size (patch/radiopage.c RP_CREDIT_PX)
+RD_SHEET_ROWS = (('add', 'pod_ic_rd_add', 'Add to My Stations', False, False), ('info', 'pod_ic_rd_info', 'Station Info', False, False))   # Radio Now Playing's sheet: two rows, the first's glyph and label swapped for Remove from My Stations by the payload (patch/radionp.c)
+RS_SHEET_ROWS = (('import', 'pod_ic_rd_import', 'Import from Card', False, False), ('clear', 'pc_ic_trash', 'Clear Recently Played', False, False))   # the "..." sheets (patch/radiopage.c): My Stations has Import from Card, Recently Played Clear Recently Played (the payload shows one row)
+
+
+def build_radio_page(page):
+    """The Radio page (patch/radiopage.c, docs/modules/radio.md): the Folders page's structure (the glass navbar with the globe as its left cap, a stock list holding one view the payload
+    paints, the large title in that view) and the station grid's and the countries' text styles."""
+    o = OFFSETS
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    nb = navbar(page.title, show_globe=True, show_more=True)   # btn_more: the Stations level's "...", the capsule's left cap where Search sits (hidden; the payload places and shows it)
+    nb.children[0].set('visible', 'false')   # the small title: the payload shows it once the large title has scrolled away
+    nb.children[0].w = NAV_VIEW_X - NAV_TITLE_X
+    for c in nb.children:
+        if c.name == 'btn_globe':   # the magnifier (Search), shown from the start: the capsule's left cap
+            c.remove('visible'); c.remove('sensitive')
+            c.set('name', 'btn_search')
+            for st, img in (('pressed', 'pod_nav_search_down'), ('normal', 'pod_nav_search'), ('over', 'pod_nav_search')): c.set(f'style:{st}:icon', img)
+        elif c.name == 'btn_backtoplayer':   # the capsule's right cap
+            for st, img in (('pressed', 'ah_nav_play_down'), ('normal', 'ah_nav_play'), ('over', 'ah_nav_play')): c.set(f'style:{st}:icon', img)
+    view_btn = Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [   # the station lists' grid / list toggle (the Albums page's): the middle piece beside Search, shown by the payload on the station lists
+        ('name', 'btn_radioview'), ('enable', 'true'), ('style', 'img_btn_style'),
+        ('style:pressed:icon', 'pod_nav_list_down'), ('style:normal:icon', 'pod_nav_list'), ('style:over:icon', 'pod_nav_list')])
+    view_btn.set('dirty_rect_tolerance', str(NAV_ICON_OVERFLOW))   # (its 60 px glyph paints beyond the 46 px slot, as on the Albums page)
+    nb.children.append(hidden(view_btn))
+    root.children.append(nb)
+    lv = stock_list([], True)
+    lv.set('name', 'radio_listview')
+    sv = lv.children[0]
+    sv.set('name', 'radio_scrollview')
+    grid = Widget('view', 0, 0, SCREEN_W, GRID_VIEW_H, [('name', 'view_grid')])
+    styled(grid, ('normal',), 'bg_color', '#000000')
+    title = Widget('label', o['SG_TITLE_X'], 0, SCREEN_W - 2 * o['SG_TITLE_X'], o['SG_TITLE_H'], [('name', 'sg_title'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])
+    styled(title, ('normal',), 'text_color', '#FFFFFF')
+    styled(title, ('normal',), 'font_size', str(SG_TITLE_PX))
+    styled(title, ('normal',), 'text_align_h', 'left')
+    styled(title, ('normal',), 'text_align_v', 'middle')
+    credit = hidden(label('rd_credit', 0, 0, SCREEN_W - 2 * 12, 20, '', RD_CREDIT_PX, '#8E8E93', 'left'))   # the directory's credit under its rows (patch/radiopage.c moves it and shows it)
+    credit.set(*pod_i18n.text_prop('Stations from radio-browser.info'))
+    styled(credit, ('normal',), 'text_align_v', 'middle')
+    grid.children = [title, credit]
+    sv.children.append(grid)
+    root.children.append(lv)
+    root.children.append(nav_fade(shown=False))   # patch/radiopage.c shows it while yoffset > 0 (at rest it would darken the large title)
+    status = hidden(label('label_status', 20, 165, SCREEN_W - 40, 120, '', 18, '#8E8E93'))   # the captions are grey, centred on y 225; up to four lines of 280 px (the payload sets line_wrap and word_wrap)
+    styled(status, ('normal',), 'text_align_v', 'middle')
+    root.children.append(status)
+    for name, px, colour in (('label_row_title', LIST_TITLE_PX, '#FFFFFF'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA'),
+                             ('label_grid_title', GRID_ALBUM_PX, '#FFFFFF'), ('label_grid_sub', GRID_ARTIST_PX, '#AAAAAA')):   # the row and the Albums grid's text styles (never shown)
+        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+        root.children.append(lab)
+    root.children.extend(azlist_labels())   # the countries' A-Z list (patch/azlist.c): the header letter, the rail letters
+    root.children.extend(azlist_rail())
+    field = search_field_widget()   # the search page's field and pad (keyboard_attach): hidden until the magnifier is tapped
+    field.y = 56
+    field.w = RD_FIELD_W   # no round X beside it here (the Search page's 250 leaves room for one): it runs the page's width, the Search page's margin each side
+    for c in field.children:
+        if c.name == 'kb_clear': c.x = RD_FIELD_W - PS.SE_CLEAR_W
+        elif c.name in ('kb_hint', 'kb_text'): c.w = RD_TEXT_W
+    hidden(field); field.set('sensitive', 'false')
+    root.children.append(field)
+    root.children += keyboard_pad_widgets()
+    root.children.extend(sheet_widgets(RN_SHEET, RS_SHEET_ROWS, 1))   # the Stations "..." sheet, last: above everything
+    return root
+
+
+RN_SHEET = 'rd_sh'   # the stations page's station sheet, the same widget set
+RN_CARD_GLYPH = '#2C2C2E'   # the art card without a logo (patch/radionp.c RN_CARD_GLYPH); with one it is white and the window takes the logo's tone
+RN_ART_R = 10   # the art card's corners (the album page's)
+RDN_TITLE_PX, RDN_LINE_PX, RDN_LIVE_PX, RDN_LIVE_Y, RN_PLAY = 22, 17, 13, 366, 64
+
+
+def build_radionp_page(page):
+    """Radio's Now Playing (patch/radionp.c): Apple Music's radio page on this player's Now Playing numbers (tools/mod_nowplaying.py): the grabber, a square art card with the station's logo (or the
+    radio glyph) over a tinted window, the station's name and a line under it, the round "..." (the sheet holds Add to / Remove from My Stations), a LIVE divider and one large play / stop button.
+    Widgets the payload looks up that the design no longer shows are kept hidden and insensitive (btn_fav, btn_prev, btn_next, rn_station, rn_info, rn_elapsed)."""
+    import mod_nowplaying as NP
+    W, H = SCREEN_W, CLIENT_H
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', NP.BG)
+    root.children.append(Widget('image', 0, 0, W, H, [('name', 'img_np_tint'), ('image', 'np_tint'), ('draw_type', 'default'), ('clickable', 'false'), ('sensitive', 'false')]))
+    art = Widget('view', NP.ART_X, NP.ART_Y, NP.ART, NP.ART, [('name', 'rn_art'), ('sensitive', 'false')])
+    for st in ('normal', 'disable', 'focused'):
+        styled(art, (st,), 'bg_color', RN_CARD_GLYPH)
+        styled(art, (st,), 'round_radius', str(RN_ART_R))
+        styled(art, (st,), 'border_width', '0')
+    glyph_px = 96
+    art.children.append(Widget('image', (NP.ART - glyph_px) // 2, (NP.ART - glyph_px) // 2, glyph_px, glyph_px, [('name', 'rn_art_ic'), ('image', 'pod_ic_rd_art'), ('draw_type', 'default'),
+                                                                                                              ('clickable', 'false'), ('sensitive', 'false')]))
+    root.children.append(art)
+    root.children.append(Widget('image', NP.ART_X - NP.SHADOW_PAD, NP.ART_Y - NP.SHADOW_PAD, NP.SHADOW_SIZE, NP.SHADOW_SIZE, [('name', 'img_np_shadow'), ('image', 'np_shadow'), ('draw_type', 'default'),
+                                                                                                                       ('clickable', 'false'), ('sensitive', 'false')]))
+    def text(name, x, y, w, h, px, rgb, align):
+        t = Widget('hscroll_label', x, y, w, h, [('name', name), ('text', ''), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+        NP.text_style(t, px, rgb, align)
+        for st in NP.STATES: styled(t, (st,), 'text_align_v', 'middle')
+        return t
+    tw = NP.MORE_X - NP.M - 8   # the block runs to the "..." disc
+    root.children.append(text('rn_title', NP.M, NP.TITLE_Y - 4, tw, 30, RDN_TITLE_PX, NP.TITLE_RGB, 'left'))
+    root.children.append(text('rn_artist', NP.M, NP.ARTIST_Y + 2, tw, 22, RDN_LINE_PX, NP.GREY, 'left'))
+    more = Widget('button', NP.MORE_X, NP.BTN_Y, NP.BTN, NP.BTN, [('name', 'rn_more'), ('enable', 'true')])
+    NP.img_button(more, 'np_more', 'np_more_down')
+    root.children.append(more)
+    # the LIVE divider: a 4 px capsule each side (rn_live_l / rn_live_r, alpha fading towards LIVE) around a small white LIVE
+    lw, live_w, side = NP.W - 2 * NP.M, NP.LIVE_W, NP.LIVE_BAR_W
+    live = Widget('view', NP.M, RDN_LIVE_Y, lw, 16, [('name', 'rn_live'), ('sensitive', 'false'), ('visible', 'false')])
+    for st in NP.STATES:
+        styled(live, (st,), 'bg_color', '#00000000')
+        styled(live, (st,), 'border_width', '0')
+    for name, x in (('rn_live_l', 0), ('rn_live_r', lw - side)):
+        live.children.append(Widget('image', x, (16 - NP.LIVE_BAR_H) // 2, side, NP.LIVE_BAR_H, [('name', name), ('image', name), ('draw_type', 'default'), ('clickable', 'false'), ('sensitive', 'false')]))
+    tx = Widget('label', (lw - live_w) // 2, 0, live_w, 16, [('name', 'rn_live_tx'), pod_i18n.text_prop('LIVE'), ('sensitive', 'false')])
+    NP.text_style(tx, RDN_LIVE_PX, '#FFFFFF', 'center')
+    for st in NP.STATES: styled(tx, (st,), 'text_align_v', 'middle')
+    live.children.append(tx)
+    root.children.append(live)
+    play = Widget('button', (W - RN_PLAY) // 2, RDN_LIVE_Y + 18, RN_PLAY, RN_PLAY, [('name', 'btn_play'), ('enable', 'true')])
+    NP.img_button(play, 'rn_play', 'rn_play_down')
+    root.children.append(play)
+    # kept for the payload, hidden and insensitive
+    fav = Widget('button', NP.FAV_X, NP.BTN_Y, NP.BTN, NP.BTN, [('name', 'btn_fav'), ('enable', 'true')])
+    NP.img_button(fav, 'np_unfav', 'np_unfav_down')
+    root.children.append(hidden(fav))
+    for n, (x, w), normal, pressed in (('btn_prev', NP.SLOTS['btn_prev'], 'np_prev', 'np_prev_down'), ('btn_next', NP.SLOTS['btn_next'], 'np_next', 'np_next_down')):
+        b = Widget('button', x, NP.ROW_Y, w, NP.ROW_H, [('name', n), ('enable', 'true')])
+        NP.img_button(b, normal, pressed)
+        root.children.append(hidden(b))
+    root.children.append(hidden(text('rn_station', NP.M, NP.TIMES_Y, 190, NP.TIMES_H, NP.TIMES_PX, NP.GREY, 'left')))
+    root.children.append(hidden(text('rn_info', W - NP.M - 130, NP.TIMES_Y, 130, NP.TIMES_H, NP.TIMES_PX, NP.GREY, 'right')))
+    root.children.append(hidden(text('rn_elapsed', W - NP.M - NP.TIMES_W, NP.TIMES_Y, NP.TIMES_W, NP.TIMES_H, NP.TIMES_PX, NP.GREY, 'right')))
+    ret = Widget('button', *NP.RETURN, [('name', 'btn_return'), ('enable', 'true')])
+    NP.img_button(ret, 'np_grabber', 'np_grabber_down')
+    root.children.append(ret)
+    root.children.append(hidden(Widget('label', 36, 14, 200, 22, [('name', 'label_title'), ('style', 'navbar_label_white'), pod_i18n.text_prop(page.title)])))   # (the page's name for the i18n and asset tests)
+    root.children.extend(sheet_widgets(RN_SHEET, RD_SHEET_ROWS, 2))   # the station's sheet (two rows), last: above everything
+    return root
+
+
+# Station Info (patch/radioinfo.c, docs/modules/radio.md "Station Info"): the Release Notes page's structure (the stock navbar over a stock list holding one content view the payload paints the heading and the
+# label / value pairs on, wrapped by the Podcasts episode page's wrapper). Three hidden labels only carry the text styles: the station's name (28 px white), a pair's label (14 px grey), its value (18 px white).
+SI_HEAD_PX, SI_KEY_PX, SI_VAL_PX = 28, 14, 18
+
+
+def build_radioinfo_page(page):
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    root.children.append(navbar(page.title))
+    lv = stock_list([], True)
+    lv.set('name', 'ri_listview')
+    sv = lv.children[0]
+    sv.set('name', 'ri_scrollview')
+    view = Widget('view', 0, 0, SCREEN_W, CLIENT_H - NAVBAR_H, [('name', 'ri_view')])
+    styled(view, ('normal',), 'bg_color', '#000000')
+    sv.children.append(view)
+    root.children.append(lv)
+    root.children.append(nav_fade(shown=False))   # the payload shows it while the content is scrolled (at rest it would darken the heading)
+    for name, px, colour in (('label_head', SI_HEAD_PX, '#FFFFFF'), ('label_key', SI_KEY_PX, '#8E8E93'), ('label_val', SI_VAL_PX, '#FFFFFF')):
+        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+        root.children.append(lab)
+    return root
+
+
 def build_page(page):
+    if page.kind == 'radio':
+        return build_radio_page(page)
+    if page.kind == 'radioinfo':
+        return build_radioinfo_page(page)
+    if page.kind == 'radionp':
+        return build_radionp_page(page)
     if page.kind == 'folders':
         return build_folders_page(page)
     if page.kind == 'cards':

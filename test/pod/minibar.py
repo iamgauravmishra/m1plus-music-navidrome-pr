@@ -25,7 +25,9 @@ class BM(Machine):
         self.blobs, self.pos = {}, {}
         self.next_ret = 1
         self.on_fail = set()      # event types whose widget_on returns 0
-        self.cmds = []            # ('playpause',) / ('next', time word)
+        self.cmds = []            # ('playpause',) / ('next', time word) / the radio's ('mclSetPause',), ('mclSetResume',), ('mclStop',), ('start', url)
+        self.hs = 0               # mclGetHciplayerStatus
+        self.logo_busy = 0        # rd_logo_running, when a test hooks the logo worker's entry points
         names = list(pod_ui.MB_NAMES if bar else ()) + ['pod_listview', 'pod_scrollview', 'pod_pad'] + (['scroll_bar_m'] if sb else [])
         for n in names: self.widget(n)
         for n in ('pod_minibar', 'pod_mb_card') if bar else (): self.types[self.widgets[n]] = 'view' if n == 'pod_minibar' else 'button'
@@ -51,6 +53,24 @@ class BM(Machine):
             self.calls.append(('playpause_quick_click', a0)); self.cmds.append(('playpause',))
             self.status = 2 if self.status != 2 else 3   # mclSetResume / mclSetPause store the status at once
             ret = 1
+        elif name in ('mclSetPause', 'mclSetResume'):
+            self.calls.append((name,)); self.cmds.append((name,)); self.status = 3 if name == 'mclSetPause' else 2; ret = 1
+        elif name == 'mclGetHciplayerStatus': ret = self.hs
+        elif name == 'mclGetOutputWay': ret = 0
+        elif name in ('stop_player', 'set_outputchannel', 'mclSetPcmMode', 'mclSetMute', 'set_devicevolume', 'mclSetDacPwr'): ret = 1   # rd_play's calls
+        elif name == 'strlen': ret = len(self.read_cstr(a0).encode('latin-1'))   # the radio engine's list parser
+        elif name == 'strstr':
+            h, n = self.read_cstr(a0), self.read_cstr(a1); i = h.find(n); ret = a0 + i if i >= 0 else 0
+        elif name == 'strchr':
+            h = self.read_cstr(a0); i = h.find(chr(a1 & 0xff)) if a1 & 0xff else len(h); ret = a0 + i if i >= 0 else 0
+        elif name == 'strrchr':
+            h = self.read_cstr(a0); i = h.rfind(chr(a1 & 0xff)) if a1 & 0xff else len(h); ret = a0 + i if i >= 0 else 0
+        elif name == 'strncasecmp':
+            x, y = self.read_cstr(a0)[:a2].lower(), self.read_cstr(a1)[:a2].lower(); ret = (x > y) - (x < y)
+        elif name == 'rd_logo_running': ret = self.logo_busy   # (hooked only by the test that watches the logo worker)
+        elif name == 'rd_logo_start': self.calls.append(('rd_logo_start', self.read_cstr(a0))); ret = 1
+        elif name == 'mclStop': self.calls.append(('mclStop',)); self.cmds.append(('mclStop',)); ret = 0
+        elif name == 'mcl_tidalStartPlayer': self.cmds.append(('start', self.read_cstr(a0))); self.calls.append(('mcl_tidalStartPlayer',)); ret = 1
         elif name == 'next_quick_click':
             self.calls.append(('next_quick_click', a1)); self.cmds.append(('next', self.word(a0 + 8), self.word(a0 + 12), a1)); ret = self.next_ret
         elif name == 'widget_on' and a1 in self.on_fail:
@@ -262,7 +282,7 @@ def run(ctx):
     expect(set(c[0] for c in calls) <= {'access', 'widget_lookup', 'widget_on', 'timer_add', 'calloc'}, f'start only looks up, registers and arms ({sorted(set(c[0] for c in calls))})')
     ons = [(c[1], c[2], c[3]) for c in calls if c[0] == 'widget_on']
     want = [(WIN, EVT_DESTROY, PSYMS['mb_on_destroy']), (WIN, EVT_BG, PSYMS['mb_on_background']), (WIN, EVT_FG, PSYMS['mb_on_foreground']),
-            (m.widgets['pod_mb_card'], EVT_AFTER_PAINT, PSYMS['mb_on_paint']), (m.widgets['pod_mb_card'], EVT_CLICK, PSYMS['pod_on_player']),
+            (m.widgets['pod_mb_card'], EVT_AFTER_PAINT, PSYMS['mb_on_paint']), (m.widgets['pod_mb_card'], EVT_CLICK, PSYMS['mb_on_card']),
             (m.widgets['pod_mb_play'], EVT_CLICK, PSYMS['mb_on_play']), (m.widgets['pod_mb_pause'], EVT_CLICK, PSYMS['mb_on_play']),
             (m.widgets['pod_mb_next'], EVT_CLICK, PSYMS['mb_on_next'])]
     blur_ons = [(m.widgets['pod_mb_card'], O['EVT_BEFORE_PAINT'], PSYMS['mb_on_before_paint']), (m.widgets['pod_scrollview'], O['EVT_SCROLL'], PSYMS['mb_on_scroll'])] + [(m.widgets[n], O[e], PSYMS['mb_on_touch']) for n in ('pod_mb_play', 'pod_mb_pause', 'pod_mb_next', 'pod_scrollview') for e in ('EVT_POINTER_DOWN', 'EVT_POINTER_UP', 'EVT_POINTER_ABORT')]
@@ -483,6 +503,107 @@ def run(ctx):
     m.calls = []; m.click('pod_mb_card')
     expect(m.names() == ['on_backtoplayer_onclick'] and not m.cmds[1:], 'a tap on the card opens Now Playing as the menu row does')
     expect(O['COVER_SRC_BUSY'] == 1, 'sanity')
+
+    # ------------------------------------------------------------------ the radio owns the output: the bar shows the station (patch/minibar.c mb_radio)
+    ST_ = dict(IDLE=0, CONNECTING=1, PLAYING=2, ERROR=3, STOPPED=4, PAUSED=5)
+    STAT = '#EXTM3U\n#M1+:Germany\tMP3\t128\thttp://logo.example/a.png\n#EXTINF:-1,Alpha FM\nhttp://one.example/a\n#EXTINF:-1,Beta\nhttp://two.example/b\n'
+    def radio(m, st, at=0, err='', text=STAT, own=1):
+        """The engine's state poked in (patch/radio.c rd: state, at, tries, fd, 5 words, rd_list_t (3628 bytes), error) and its list parsed from text."""
+        l = m.call(PSYMS['rd_list'])
+        b = m.malloc(len(text) + 8); m.u.mem_write(b, text.encode() + b'\0' * 8)
+        if not m.word(l + 8): m.call(PSYMS['rd_list_set'], a0=l, a1=b, a2=len(text), a3=0, count=40000000)
+        m.setword(l - 36, st); m.setword(l - 32, at); m.u.mem_write(l + 3628, err.encode() + b'\0'); m.setword(l + 3700, own)   # own: rd.owns, after the 72-byte error text
+        expect(m.call(PSYMS['rd_state']) == st and m.call(PSYMS['rd_at']) == at and m.read_cstr(m.call(PSYMS['rd_error'])) == err, f'(the engine state {st} at {at} is in place)')
+    def texts(m):
+        t = dict(m.texts_set())
+        def u(x):   # the payload's own strings come back twice over from the mocked translation (radio.py u8)
+            for _ in range(2):
+                try: x = x.encode('latin-1').decode('utf-8')
+                except (UnicodeError, AttributeError): break
+            return x
+        return u(t.get(m.widgets['pod_mb_title'])), u(t.get(m.widgets['pod_mb_artist']))
+    def nxt(m):   # 'live': visible, sensitive, the white glyphs (the asset's own until the radio changes them); 'grey': visible, insensitive, mb_next_off in all three styles
+        w = m.widgets['pod_mb_next']; vis, sens = bool(m.props.get((w, 'visible'), 1)), bool(m.props.get((w, 'sensitive'), 1))
+        ic = tuple(m.props.get((w, f'style:{s}:icon')) for s in ('normal', 'over', 'pressed'))
+        if vis and sens and ic in ((None,) * 3, ('mb_next', 'mb_next', 'mb_next_down')): return 'live'
+        if vis and not sens and ic == ('mb_next_off',) * 3: return 'grey'
+        return f'wrong ({vis}, {sens}, {ic})'
+    def pic(m): return tuple(m.props.get((m.widgets['pod_mb_pause'], f'style:{s}:icon')) for s in ('normal', 'over', 'pressed'))   # the pause button's icons: None = the asset's own (mb_pause)
+    def started(): m = BM(); m.placeholder(); m.status = 2; m.hs = 1; m.track(title='Stale Song'); m.cover(); m.start(); m.first(); return m
+    m = started()
+    expect(texts(m) == ('Stale Song', 'Artist') and nxt(m) == 'live', 'the local track first')
+    for st, line in ((ST_['CONNECTING'], 'Connecting…'), (ST_['PLAYING'], 'Live'), (ST_['PAUSED'], 'Paused')):
+        m = started(); radio(m, st); m.status = 3 if st == ST_['PAUSED'] else 2; m.calls = []; m.tick()
+        t = texts(m)
+        expect(t == ('Alpha FM', line) and m.shown('pod_minibar'), f'state {st}: the station and "{line}" instead of the stale song ({t})')
+        expect(nxt(m) == 'grey' and (m.shown('pod_mb_pause') if st != ST_['PAUSED'] else m.shown('pod_mb_play')), f'state {st}: the next button stays, greyed and insensitive ({nxt(m)}); Stop glyph (mb_stop) while connecting or playing, play when paused')
+        if st != ST_['PAUSED']: expect(pic(m) == ('mb_stop', 'mb_stop', 'mb_stop_down'), f'state {st}: the button\'s icons are the stop square ({pic(m)})')
+    m = started(); radio(m, ST_['ERROR'], err='No response'); m.status = 1; m.hs = 0; m.tick()
+    expect(texts(m) == ('Alpha FM', "Can't play: No response") and m.shown('pod_mb_play') and nxt(m) == 'grey', f'Error after a session: the error text, play glyph (retry) ({texts(m)})')
+    m = started(); radio(m, ST_['ERROR'], err='No response'); m.status = 2; m.hs = 1; m.tick()
+    expect(texts(m) == (None, None) and nxt(m) == 'live', 'an Error left standing while a local song really plays: the song stays, nothing is relabelled')
+    for st in (ST_['IDLE'], ST_['STOPPED']):   # Idle: nothing played this session; Stopped with a local track started since (the hook cleared the flag)
+        m = started(); radio(m, st, own=0); m.tick()
+        expect(texts(m) == (None, None) and nxt(m) == 'live' and m.shown('pod_minibar'), f'state {st}: the local logic is unchanged (the song stays, nothing relabelled)')
+    m = started(); radio(m, ST_['STOPPED']); m.status = 1; m.hs = 0; m.tick()
+    expect(texts(m) == ('Alpha FM', 'Stopped') and m.shown('pod_mb_play') and nxt(m) == 'grey', f'Stopped by the radio: the station stays, "Stopped", play glyph, grey next ({texts(m)})')
+    m = started(); radio(m, ST_['STOPPED']); m.status = 2; m.hs = 1; m.tick()
+    expect(texts(m) == (None, None) and nxt(m) == 'live', 'Stopped, but a local song really plays (a key resumed stock): the song shows')
+    # no change, no redo; a change of state redoes the labels; another station the cover too
+    m = started(); radio(m, ST_['PLAYING']); m.tick(); m.calls = []; m.tick()
+    expect(not [c for c in m.calls if c[0] in ('widget_set_text_utf8', 'bitmap_create_ex', 'widget_load_image')], 'a second tick in the same state redoes nothing')
+    radio(m, ST_['PAUSED']); m.calls = []; m.tick()
+    expect(texts(m)[1] == 'Paused' and not [c for c in m.calls if c[0] in ('bitmap_create_ex', 'widget_load_image')], 'Playing to Paused: the labels, not the cover')
+    radio(m, ST_['PAUSED'], at=1); m.calls = []; m.tick()
+    expect(texts(m) == ('Beta', 'Paused') and [c for c in m.calls if c[0] == 'widget_load_image'], 'another station: its name and a new cover')
+    # back to local: the track, next visible again
+    radio(m, ST_['STOPPED'], at=1); m.status = 1; m.hs = 0; m.calls = []; m.tick()
+    expect(texts(m) == ('Beta', 'Stopped') and nxt(m) == 'grey', f'the radio stopped by its Stop: the station stays, grey next ({texts(m)})')
+    radio(m, ST_['STOPPED'], at=1, own=0); m.tick()   # a local track started: the mclStartPlayer hook cleared rd.owns
+    expect(texts(m) == ('Stale Song', 'Artist') and nxt(m) == 'live' and pic(m) == ('mb_pause', 'mb_pause', 'mb_pause_down'), f'a local track started: the track and the next button come back, white and sensitive ({nxt(m)}), the pause button its bars again ({pic(m)})')
+    # the cover: the glyph without a logo (card grey), the logo when cached
+    m = started(); radio(m, ST_['PLAYING'], text='#EXTM3U\n#EXTINF:-1,Plain\nhttp://p.example/a\n'); m.images['pod_ic_rd_art'] = (16, 16, bytes((255, 255, 255, 255)) * 256); m.tick()
+    _, w_, h_, px_ = m.pixels(); corner = struct.unpack_from('<I', px_, 0)[0]; mid = rgb_of(struct.unpack_from('<I', px_, 4 * (h_ // 2 * w_ + w_ // 2))[0]); edge = rgb_of(struct.unpack_from('<I', px_, 4 * (h_ // 2 * w_ + 3))[0])
+    expect(edge == (0x2c, 0x2c, 0x2e) and mid == (255, 255, 255) and corner >> 24 < 255, f'no logo: the radio glyph on the card grey with rounded corners (edge {edge}, middle {mid})')
+    m = started(); radio(m, ST_['PLAYING'], text=STAT)
+    ua = m.malloc(32); m.u.mem_write(ua, b'http://logo.example/a.png\0')
+    h = m.call(PSYMS['rd_logo_hash'], a0=ua, count=100000); lp = f'/mnt/mmc/Radio/.logos/{h:08x}.jpg'
+    m.present.add(lp); m.blobs[lp] = b'\x89PNG\r\n\x1a\n\0\0\0\rIHDR' + struct.pack('>II', 192, 192)
+    m.images['file://' + lp] = (8, 8, bytes((200, 30, 30, 255)) * 64); m.load_image = 0; m.tick()
+    expect(centre_rgb(m) == (200, 30, 30), f'a cached logo: it is the cover ({centre_rgb(m)})')
+    # a logo that is not cached: nothing is started while the worker is busy, the first tick after it is idle asks for it
+    m = started(); radio(m, ST_['PLAYING'], text=STAT)
+    for sym in ('rd_logo_running', 'rd_logo_start'): m.handlers[PSYMS[sym]] = sym
+    m.logo_busy = 1; m.calls = []; m.tick(); m.tick()
+    expect(not [c for c in m.calls if c[0] == 'rd_logo_start'], 'the logo worker busy: the mini bar starts no download')
+    m.logo_busy = 0; m.calls = []; m.tick()
+    expect([c for c in m.calls if c[0] == 'rd_logo_start'] == [('rd_logo_start', 'http://logo.example/a.png')], f'the worker idle: the next tick asks for the pending logo ({[c for c in m.calls if c[0] == "rd_logo_start"]})')
+    # the controls
+    m = started(); radio(m, ST_['PLAYING']); m.tick(); m.cmds = []; m.calls = []; m.click('pod_mb_pause')
+    expect(m.cmds == [('mclStop',)] and m.call(PSYMS['rd_state']) == ST_['STOPPED'] and not [c for c in m.cmds if c[0] == 'mclSetPause'], f'Playing: the button stops the station, no pause ({m.cmds})')
+    m = started(); radio(m, ST_['PAUSED']); m.status = 3; m.tick(); m.cmds = []; m.click('pod_mb_play')
+    expect(m.cmds == [('mclSetResume',)] and m.shown('pod_mb_pause') and pic(m) == ('mb_stop', 'mb_stop', 'mb_stop_down'), f'Paused: play is mclSetResume, then the stop glyph ({m.cmds})')
+    m = started(); radio(m, ST_['PAUSED']); m.tick(); m.cmds = []; m.wifi = -1; m.click('pod_mb_play')
+    expect(m.cmds == [('mclStop',)] and m.call(PSYMS['rd_state']) == ST_['ERROR'] and m.call(PSYMS['rd_error']) != 0, f'Paused without Wi-Fi: play stops the dead stream and says No Wi-Fi, no resume ({m.cmds})')
+    m = started(); radio(m, ST_['CONNECTING']); m.tick(); m.cmds = []; m.click('pod_mb_pause')
+    expect(m.cmds == [('mclStop',)] and m.call(PSYMS['rd_state']) == ST_['STOPPED'], f'Connecting: the button stops too ({m.cmds})')
+    m = started(); radio(m, ST_['ERROR'], err='No response'); m.status = 1; m.hs = 0; m.tick(); m.cmds = []; m.click('pod_mb_play'); tx = texts(m)
+    expect(m.cmds[-1:] == [('start', 'http://one.example/a')] and m.call(PSYMS['rd_state']) == ST_['CONNECTING'] and tx == ('Alpha FM', 'Connecting…'),
+           f'Error: play retries the same station ({m.cmds}, {tx})')
+    m = started(); radio(m, ST_['PLAYING']); m.tick(); m.cmds = []; m.click('pod_mb_pause'); m.status = 1; m.hs = 0; m.calls = []; m.tick(); tx = texts(m)
+    expect(m.call(PSYMS['rd_state']) == ST_['STOPPED'] and tx == ('Alpha FM', 'Stopped') and m.shown('pod_mb_play') and nxt(m) == 'grey', f'Stop from the bar: the bar keeps the station, Stopped, play glyph, grey next ({tx})')
+    m.cmds = []; m.click('pod_mb_play'); tx = texts(m)
+    expect(m.cmds[-1:] == [('start', 'http://one.example/a')] and m.call(PSYMS['rd_state']) == ST_['CONNECTING'] and tx == ('Alpha FM', 'Connecting…'), f'Stopped: play starts the same station again ({m.cmds}, {tx})')
+    m.click('pod_mb_pause'); m.status = 1; m.hs = 0; m.tick(); m.calls = []; m.click('pod_mb_card')
+    expect(any(c[0] == 'window_open' and 'm1plus_radionp' in str(c) for c in m.calls), 'the card opens radio Now Playing while Stopped')
+    m = started(); radio(m, ST_['STOPPED']); m.status = 1; m.hs = 0; m.tick(); m.cmds = []; m.wifi = -1; m.click('pod_mb_play')
+    expect(m.call(PSYMS['rd_state']) == ST_['ERROR'] and not [c for c in m.cmds if c[0] == 'start'], 'Stopped without Wi-Fi: play says No Wi-Fi, no start')
+    m = started(); radio(m, ST_['PLAYING']); m.tick(); m.cmds = []; m.click('pod_mb_next')
+    expect(m.cmds == [] and nxt(m) == 'grey', 'next does nothing for a station (and stays grey)')
+    m = started(); radio(m, ST_['PLAYING']); m.tick(); m.calls = []; m.click('pod_mb_card')
+    expect(any(c[0] == 'window_open' and 'm1plus_radionp' in str(c) for c in m.calls), f'the card opens radio Now Playing ({[c for c in m.calls if c[0] == "window_open"]})')
+    m = started(); radio(m, ST_['ERROR'], err='x'); m.status = 1; m.hs = 0; m.tick(); m.calls = []; m.click('pod_mb_card')
+    expect(any(c[0] == 'window_open' and 'm1plus_radionp' in str(c) for c in m.calls), 'also in Error (stock\'s entry hook only takes a running station)')
 
     # ------------------------------------------------------------------ hit tests with demo's own widget_find_target
     m = BM(); m.placeholder(); m.status = 3; m.track(); m.cover(); m.start(); m.first()

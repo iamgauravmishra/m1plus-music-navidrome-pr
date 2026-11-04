@@ -22,6 +22,10 @@ HOME_INIT = (0x534cd4, 8)   # home_page_init: the boot guard's hook (docs/archit
 PLAYING = (0x53d1e4, 8)     # playing_page_init: the Now Playing hook (patch/nowplaying.c)
 PLAYMORE = (0x479cc4, 8)    # dialog_playmore_dialog_init: the More menu hook (patch/playmore.c)
 PULLDOWN = (0x475f04, 8)    # dialog_dropdown_dialog_init: the pull-down tile hook (patch/pulldown.c)
+BACKTOPLAYER = (0x4cd58c, 8)   # on_backtoplayer_onclick: Radio Now Playing from stock pages (patch/radionp.c rn_backtoplayer)
+START_PLAYER = (0x5d5300, 8)   # mclStartPlayer: the hand-over hook (patch/radio.c rd_start_player, docs/modules/radio.md)
+SAVE_STOP = (0x4e2304, 8)   # save_stop_player: the output-change hooks (patch/radio.c rd_save_stop / rd_save_start, docs/modules/radio.md "Output changes")
+SAVE_START = (0x4e23e8, 8)
 ID3_SITE = (0x4dff4c, 4)    # get_id3info: the jalr strcpy of the parsed path, now jal pc_id3_path (patch/pcmodel.c, docs/modules/podcasts.md "Tags")
 QUERY = (0x5ee77c, 0x5ee9ac)   # toolsQueryDbTable, toolsQueryDbTableAndSort: the PIC prologue's first two words, now `j` into the payload and a nop (patch/pcmodel.c, docs/modules/payload.md hook 6)
 SCAN_SITE = (0x5ea6a8, 4)  # the library scan's folder test: the jalr strcmp(name, "."), now jal pod_scan_dir (patch/common.c, docs/modules/payload.md hook 5)
@@ -81,6 +85,10 @@ def main():
     allow(va_to_off(s, PLAYING[0]), PLAYING[1], 'playing init hook')
     allow(va_to_off(s, PLAYMORE[0]), PLAYMORE[1], 'more dialog init hook')
     allow(va_to_off(s, PULLDOWN[0]), PULLDOWN[1], 'pull-down init hook')
+    allow(va_to_off(s, START_PLAYER[0]), START_PLAYER[1], 'start player hook')
+    allow(va_to_off(s, SAVE_STOP[0]), SAVE_STOP[1], 'save stop hook')
+    allow(va_to_off(s, SAVE_START[0]), SAVE_START[1], 'save start hook')
+    allow(va_to_off(s, BACKTOPLAYER[0]), BACKTOPLAYER[1], 'back to player hook')
     allow(va_to_off(s, ID3_SITE[0]), ID3_SITE[1], 'tag reader hook')
     allow(va_to_off(s, SCAN_SITE[0]), SCAN_SITE[1], 'library scan hook')
     allow(va_to_off(s, BATTERY_SITE[0]), BATTERY_SITE[1], 'battery percentage hook')
@@ -132,6 +140,16 @@ def main():
     ok = ok and s[o:o + 8] != m[o:o + 8] and s[o + 8:o + 16] == m[va_to_off(m, h) + 8:va_to_off(m, h) + 16]
     h = PLAYMORE[0]; o = va_to_off(s, h)
     print(f'More dialog hook {h:#x}: {s[o:o + 8].hex()} -> {m[o:o + 8].hex()}', 'changed' if s[o:o + 8] != m[o:o + 8] else 'UNCHANGED')
+    ok = ok and s[o:o + 8] != m[o:o + 8] and s[o + 8:o + 16] == m[va_to_off(m, h) + 8:va_to_off(m, h) + 16]
+    h = START_PLAYER[0]; o = va_to_off(s, h)
+    print(f'start player hook {h:#x}: {s[o:o + 8].hex()} -> {m[o:o + 8].hex()}', 'changed' if s[o:o + 8] != m[o:o + 8] else 'UNCHANGED')
+    ok = ok and s[o:o + 8] != m[o:o + 8] and s[o + 8:o + 16] == m[va_to_off(m, h) + 8:va_to_off(m, h) + 16]
+    for nm, (h, _) in (('save stop', SAVE_STOP), ('save start', SAVE_START)):
+        o = va_to_off(s, h)
+        print(f'{nm} hook {h:#x}: {s[o:o + 8].hex()} -> {m[o:o + 8].hex()}', 'changed' if s[o:o + 8] != m[o:o + 8] else 'UNCHANGED')
+        ok = ok and s[o:o + 8] != m[o:o + 8] and s[o + 8:o + 16] == m[va_to_off(m, h) + 8:va_to_off(m, h) + 16]
+    h = BACKTOPLAYER[0]; o = va_to_off(s, h)
+    print(f'back to player hook {h:#x}: {s[o:o + 8].hex()} -> {m[o:o + 8].hex()}', 'changed' if s[o:o + 8] != m[o:o + 8] else 'UNCHANGED')
     ok = ok and s[o:o + 8] != m[o:o + 8] and s[o + 8:o + 16] == m[va_to_off(m, h) + 8:va_to_off(m, h) + 16]
     o = va_to_off(s, ID3_SITE[0]); sw = struct.unpack_from('<I', s, o)[0]; mw = struct.unpack_from('<I', m, o)[0]
     good = sw == 0x0320f809 and mw >> 26 == 3 and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s))   # jalr t9 -> jal into the payload

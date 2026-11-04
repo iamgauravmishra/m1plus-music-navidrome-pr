@@ -14,6 +14,8 @@ resumes and call boundaries.
 | `dialog_playmore_dialog_init` | `0x479cc4` |
 | `dialog_dropdown_dialog_init` | `0x475f04` |
 | `get_id3info` tag-copy call | `0x4dff4c` |
+| `mclStartPlayer` (Radio hand-over) | `0x5d5300` |
+| `on_backtoplayer_onclick` (Radio Now Playing hook) | `0x4cd58c` |
 | Empty `scroll_view` event slot | `0x97a330` |
 
 Only `demo`'s unloaded `.pdr` is zeroed. Stock About stays `V2.1`; our own About page (docs/modules/settings.md) shows

@@ -42,7 +42,7 @@ LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
 SOURCES = ['m1plus.c', 'common.c', 'menu.c', 'covercache.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c',
-           'scroll.c', 'playmore.c', 'pulldown.c', 'playlists.c', 'azlist.c', 'songops.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'upver.c', 'pcnet.c', 'podcasts.c', 'tape.c', 'palette.c', 'vinyl.c', 'onlineart.c', 'update.c', 'relnotes.c', 'keyboard.c', 'search.c', 'battery.c', 'lyrics.c', 'picker.c', 'folders.c', 'timezones.c']
+           'scroll.c', 'playmore.c', 'pulldown.c', 'playlists.c', 'azlist.c', 'songops.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'upver.c', 'pcnet.c', 'podcasts.c', 'radio.c', 'radiopage.c', 'radionp.c', 'radioinfo.c', 'tape.c', 'palette.c', 'vinyl.c', 'onlineart.c', 'update.c', 'relnotes.c', 'keyboard.c', 'search.c', 'battery.c', 'lyrics.c', 'picker.c', 'folders.c', 'timezones.c']
 
 FLAGS = ['--target=mipsel-linux-gnu', '-march=mips32r2', '-mabi=32', '-mfp64',
          '-mno-abicalls', '-fno-pic', '-G0', '-ffreestanding', '-fno-builtin',
@@ -733,6 +733,11 @@ DATA = {
     # the stock Artists page's artist / album artist switch (handler @0x535770): toggles the word, saves
     # [PLAYSET] ARTISTTYPE and sets the byte (the stock page's list-reload flag, read @0x535fe8)
     'ARTIST_TYPE':        (0xa05a14, None),
+    # hciplayer state (patch/radio.c, docs/modules/radio.md; gp page 0xa10000): mcl_tidalStartPlayer's resume position (-0x543c; < 0 makes it ask the queue; the wrapper resets it to -1),
+    # the "player running" byte (-0x5476; nonzero makes mclStartPlayer send set-nexturl; cleared by an "exit" or "error" reply) and the socket fd (-0x5414; -1 = nothing is sent)
+    'RESUME_POS':         (0xa0abc4, None),
+    'HCI_RUNNING':        (0xa0ab8a, None),
+    'HCI_SOCK_FD':        (0xa0abec, None),
     'ARTIST_RELOAD':      (0xa06d20, None),
     # set to 1 by the stock Play all handler (@0x525e64) after start_player; the Shuffle button does the same
     'FORCE_REFRESH':      (0xa05a63, 'force_refreshflag'),
@@ -796,6 +801,11 @@ DATA = {
     'WIFI_MAC':           (0xa061a8, 'wifi_mac'),
     'ABOUT_MODEL':        (0x747718, None),
     'ABOUT_FW':           (0x74773c, None),
+    # Internet Radio (patch/radio.c, RADIO_PINS): the output selector stock's start_player passes to set_outputchannel (0, 1 the jacks, 2 Bluetooth, 3 USB), the idle counter of the DAC's power-off
+    # (on_wm_idle_status: counting 1..30 while nothing plays, then mclSetDacPwr(0) and -1; a playing track zeroes it) and the volume the volume dialog and set_hs_po_output set
+    'G_HEADSET_OUTPUT':   (0xa05a10, None),
+    'DACOFF_TIME':        (0x97cae0, 'dacoff_time'),
+    'G_VOLUME':           (0x97cb10, 'volume'),
 }
 LIBC = {
     'atoi': ('int', 'const char *'), 'access': ('int', 'const char *, int'),
@@ -843,6 +853,9 @@ LIBC = {
     'jpeg_write_scanlines': ('unsigned', 'void *, unsigned char **, unsigned'), 'jpeg_finish_compress': ('void', 'void *'), 'jpeg_destroy_compress': ('void', 'void *'),
     '_setjmp': ('int', 'void *'),
     'rmdir': ('int', 'const char *'),   # Podcasts unsubscribe (patch/podcasts.c): the show folder left empty
+    # Internet Radio (patch/radio.c, docs/modules/radio.md): the parsers' string calls; demo imports all of them
+    'strlen': ('unsigned', 'const char *'), 'strstr': ('char *', 'const char *, const char *'), 'strchr': ('char *', 'const char *, int'), 'strrchr': ('char *', 'const char *, int'),
+    'strncasecmp': ('int', 'const char *, const char *, unsigned'),
     # Album cover extraction (patch/covercache.c art_embedded): libtag_c's taglib_album_picture(track, out, 0x100000, 0x600000), exactly as toolsGetAlbumCover calls it (the picture goes to /tmp/.tmp_picture; out is not used); 2 = JPEG, 1 = PNG, 0 = none
     'taglib_album_picture': ('int', 'const char *, char *, int, int'),
     # Track durations (patch/durations.c dur_probe): libtag_c's taglib_file_new(path, readAudioProperties) / taglib_file_audioproperties / taglib_file_free, as toolsGetMusicInfo (0x5ec6a8) calls them (demo imports all three)
@@ -933,6 +946,70 @@ FOLDER_PINS = (   # (address, stock word, what it proves)
     (0x4db00c, 0x1262002a, 'batch_add_file class 1: a type 4 record (a folder) is expanded ...'), (0x4db0cc, 0x8f99b804, '... with toolsLoadDirectory(url)'),
     (0x4db114, 0x8c430034, '... and each type 8 record of it'), (0x4db11c, 0x14620080, '(bne type, 8: skipped) is added'),
 )
+
+
+# ---- Internet Radio (patch/radio.c, docs/modules/radio.md) --------------------------------------------------------------------
+# The stock calls the radio makes, from the UI thread on a tap (the same sequence stock's start_player and stop_player run) and its one hook: mclStartPlayer, which every local track's start
+# runs before hciplayer opens the PCM (q2-pod's ringnav_start_player hooks it too). rd_start_player stops the radio, then runs stock. Reachable at boot (Memory Playback's start_player), where
+# the radio is never running: it does one comparison there.
+START_PLAYER, START_PLAYER_PROLOGUE = 0x5d5300, (0x3c1c0043, 0x279cebd0, 0x0399e021)
+# Hook 18: save_stop_player / save_start_player, the pair every output change runs around set_outputchannel (check_otg_status, set_hs_po_output, set_hs_bal_output, switchBluetooth, the BT
+# link handlers, the DSD mode, into_standby): the stop is mclSetMute(1), 150 ms, mclStop (only when mclGetPlayStatus is not 1; it saves that status), the start calls mclStartPlayer when the saved
+# status is not 1 and below the queue size. While a station runs, rd_save_stop stops the stream and rd_save_start restarts it on the new output (patch/radio.c). Both are UI-thread handlers' calls.
+SAVE_STOP, SAVE_STOP_PROLOGUE = 0x4e2304, (0x3c1c0052, 0x279c1bcc, 0x0399e021)
+SAVE_START, SAVE_START_PROLOGUE = 0x4e23e8, (0x3c1c0052, 0x279c1ae8, 0x0399e021)
+# Hook 17: stock's on_backtoplayer_onclick (every stock page's Now Playing button): rn_backtoplayer opens Radio Now Playing while a station connects or plays, else resumes stock. Not reachable at boot.
+BACKTOPLAYER, BACKTOPLAYER_PROLOGUE = 0x4cd58c, (0x3c1c0053, 0x279c6944, 0x0399e021)
+FUNCTIONS.update({
+    'stop_player':          ('void', 'void', 0x4e08c4),             # stops hciplayer unless stopped: mclSetMute(1), 150 ms, mclStop, the notifications (UI thread, stock's own key paths)
+    'set_outputchannel':    ('int', 'int, int, int', 0x4d6f68),      # (output, mode, power): the jacks: mclSetHeadsetMode(0) and mclSetDacPwr(1) (a2 0) / (100)
+    'set_devicevolume':     ('int', 'int', 0x4d6cf8),
+    # Playing through hciplayer: mcl_tidalStartPlayer(url) is mclStartPlayer minus the queue lookup (it sends {set-songurl\\URL|...}); mclStop sends {mcl-stop} and waits for hciplayer's "exit"
+    # (returns -1 at once when the running byte is 0); mclGetHciplayerStatus is the byte mclSyncPlayerStatus's thread refreshes every 200 ms from {player-status\request} (1 = "playing")
+    'mcl_tidalStartPlayer': ('int', 'const char *', 0x5d5184), 'mclStop': ('int', 'void', 0x5d244c), 'mclGetHciplayerStatus': ('int', 'void', 0x5d436c),
+    'mclSetPause': ('int', 'void', 0x5d2604), 'mclSetResume': ('int', 'void', 0x5d2668),   # the mini bar's pause / resume of a station (patch/minibar.c): {mcl-pause} / {mcl-resume} to hciplayer, then the status 3 / 2
+    'mclSetPcmMode':        ('int', 'void', 0x5d6080), 'mclSetMute': ('int', 'int', 0x5d4dac), 'mclGetOutputWay': ('int', 'void', 0x5d45a4), 'mclSetDacPwr': ('int', 'int', 0x5d5c1c),
+})
+RADIO_PINS = (   # (address, stock word, what it proves)
+    (0x4e08c4, 0x3c1c0052, 'stop_player prologue'), (0x4e08c8, 0x279c360c, 'stop_player prologue'), (0x4e08cc, 0x0399e021, 'stop_player prologue'),
+    (0x4e08e0, 0x0320f809, 'stop_player: jalr mclGetPlayStatus (1 = stopped: nothing to stop)'), (0x4e08f8, 0x0320f809, 'stop_player: jalr mclSetMute(1)'),
+    (0x4e091c, 0x0320f809, 'stop_player: jalr mclStop'),
+    (0x4d6f68, 0x3c1c0053, 'set_outputchannel prologue'), (0x4d6f6c, 0x279ccf68, 'set_outputchannel prologue'), (0x4d6f70, 0x0399e021, 'set_outputchannel prologue'),
+    (0x4e4688, 0x00003025, 'start_player: move a2, zero (set_outputchannel(output, mode, 0))'), (0x4e4690, 0x02002825, 'start_player: move a1, s0 (the mode)'),
+    (0x4e4694, 0x8f82a984, 'start_player: lw v0, GOT g_headset_output (0xa05a10)'), (0x4e469c, 0x0411ca32, 'start_player: bal set_outputchannel'),
+    (0x4e46a0, 0x8c440000, 'start_player: lw a0, (v0): the output is its first argument'),
+    (0x4d6cf8, 0x3c1c0053, 'set_devicevolume prologue'), (0x4d6cfc, 0x279cd1d8, 'set_devicevolume prologue'), (0x4d6d00, 0x0399e021, 'set_devicevolume prologue'),
+    (0x5d6080, 0x3c1c0043, 'mclSetPcmMode prologue'), (0x5d6084, 0x279cde50, 'mclSetPcmMode prologue'), (0x5d6088, 0x0399e021, 'mclSetPcmMode prologue'),
+    (0x5d4dac, 0x3c1c0043, 'mclSetMute prologue'), (0x5d4db0, 0x279cf124, 'mclSetMute prologue'), (0x5d4db4, 0x0399e021, 'mclSetMute prologue'),
+    (0x5d45a4, 0x3c1c0043, 'mclGetOutputWay prologue'), (0x5d45a8, 0x279cf92c, 'mclGetOutputWay prologue'), (0x5d45ac, 0x0399e021, 'mclGetOutputWay prologue'),
+    (0x5d5c1c, 0x3c1c0043, 'mclSetDacPwr prologue'), (0x5d5c20, 0x279ce2b4, 'mclSetDacPwr prologue'), (0x5d5c24, 0x0399e021, 'mclSetDacPwr prologue'),
+    (0x5d5184, 0x3c1c0043, 'mcl_tidalStartPlayer prologue'), (0x5d5188, 0x279ced4c, 'mcl_tidalStartPlayer prologue'), (0x5d518c, 0x0399e021, 'mcl_tidalStartPlayer prologue'),
+    (0x5d244c, 0x3c1c0043, 'mclStop prologue'), (0x5d2450, 0x279c1a84, 'mclStop prologue'), (0x5d2454, 0x0399e021, 'mclStop prologue'),
+    (0x5d436c, 0x3c1c0043, 'mclGetHciplayerStatus prologue'), (0x5d4370, 0x279cfb64, 'mclGetHciplayerStatus prologue'), (0x5d4374, 0x0399e021, 'mclGetHciplayerStatus prologue'),
+    (0x5d4380, 0x9042ab8b, 'mclGetHciplayerStatus: lbu v0, 0xa0ab8b (hciplayer says "playing")'), (0x5d3654, 0x8c42abe4, 'mclGetPlayStatus: lw v0, 0xa0abe4 (1 stopped, 2 playing, 3 paused)'),
+    (0x5d2604, 0x3c1c0043, 'mclSetPause prologue'), (0x5d2608, 0x279c18cc, 'mclSetPause prologue'), (0x5d260c, 0x0399e021, 'mclSetPause prologue'),
+    (0x5d2668, 0x3c1c0043, 'mclSetResume prologue'), (0x5d266c, 0x279c1868, 'mclSetResume prologue'), (0x5d2670, 0x0399e021, 'mclSetResume prologue'),
+    (0x4e2310, 0x27bdffd8, 'save_stop_player: addiu sp, sp, -0x28 (the trampoline resumes here)'), (0x4e23a0, 0x0320f809, 'save_stop_player: jalr mclStop (after mclSetMute(1), usleep)'),
+    (0x4e23f4, 0x27bdffd8, 'save_start_player: addiu sp, sp, -0x28 (the trampoline resumes here)'), (0x4e2458, 0x0320f809, 'save_start_player: jalr mclStartPlayer (the saved status is not 1)'),
+    (0x5d530c, 0x27bdf9d0, 'mclStartPlayer: addiu sp, sp, -0x630 (the trampoline resumes here)'),
+    (0x4cd598, 0x27bdffd0, 'on_backtoplayer_onclick: addiu sp, sp, -0x30 (the trampoline resumes here)'),
+    (0x4cf04c, 0x8e020000, 'on_wm_idle_status: lw v0, (dacoff_time) while nothing plays'), (0x4cf054, 0x24420001, 'on_wm_idle_status: addiu v0, v0, 1'),
+    (0x4cf058, 0xae020000, 'on_wm_idle_status: sw v0, (dacoff_time)'), (0x4cf05c, 0x2842001f, 'on_wm_idle_status: slti v0, v0, 31'),
+    (0x4cf068, 0x0320f809, 'on_wm_idle_status: jalr mclSetDacPwr(0) past 30 (a playing track zeroes the counter @0x4cee3c)'), (0x4cee3c, 0xae000000, 'on_wm_idle_status: sw zero, (dacoff_time) while playing'),
+)
+
+
+def patch_radio(image, ps, payload_len):
+    target = ps['rd_start_player']
+    check(BASE <= target < BASE + payload_len, 'radio entry symbol outside payload')
+    hook(image, START_PLAYER, START_PLAYER_PROLOGUE, target, 'mclStartPlayer')
+    for at, prologue, sym, what in ((SAVE_STOP, SAVE_STOP_PROLOGUE, 'rd_save_stop', 'save_stop_player'), (SAVE_START, SAVE_START_PROLOGUE, 'rd_save_start', 'save_start_player')):
+        target = ps[sym]
+        check(BASE <= target < BASE + payload_len, f'{sym} symbol outside payload')
+        hook(image, at, prologue, target, what)
+    target = ps['rn_backtoplayer']
+    check(BASE <= target < BASE + payload_len, 'back-to-player entry symbol outside payload')
+    hook(image, BACKTOPLAYER, BACKTOPLAYER_PROLOGUE, target, 'on_backtoplayer_onclick')
 
 
 # ---- Now Playing's More dialog (patch/playmore.c, docs/modules/playmore.md) -------------------------------------------
@@ -1119,6 +1196,10 @@ def gen_stock_h(out, demo_path):
     h.append('extern int stock_playing_init_trampoline(void *, void *);')
     h.append('extern int stock_playmore_init_trampoline(void *, void *);')
     h.append('extern int stock_pulldown_init_trampoline(void *, void *);')
+    h.append('extern int stock_start_player_trampoline(void);')
+    h.append('extern void stock_save_stop_trampoline(void);')
+    h.append('extern void stock_save_start_trampoline(int);')
+    h.append('extern int stock_backtoplayer_trampoline(void *, void *);')
     h.append('extern int stock_dbquery_trampoline(const char *, const char *, void *, int);')
     h.append('extern int stock_sorted_query_trampoline(const char *, const char *, void *, int);')
     for macro, names in (('LIGHT_KEEP', palette.KEEP), ('LIGHT_WHOLE', palette.WHOLE), ('TINT_SURFACE', palette.TINT_SURFACE), ('LIGHT_EXEMPT', palette.EXEMPT), ('LIGHT_COVER', palette.COVER_PAGES), ('ACCENT_FILL', palette.ACCENT_FILL), ('ACCENT_SWITCH', palette.ACCENT_SWITCH), ('ACCENT_PRESS', palette.ACCENT_PRESS), ('ACCENT_DISC', palette.ACCENT_DISC), ('ACCENT_GLYPH', palette.ACCENT_GLYPH), ('ACCENT_GLYPH_NOT', palette.ACCENT_GLYPH_NOT)):   # Light Mode's image name prefixes (tools/palette.py): a string literal of NUL-ended names
@@ -1206,6 +1287,16 @@ def gen_asm(out, slots):
     # and for the pull-down's init
     asm += ['.globl stock_pulldown_init_trampoline', 'stock_pulldown_init_trampoline:',
             f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{PULLDOWN_INIT + 12:x}', 'nop']
+    # and for mclStartPlayer (Internet Radio's hand-over)
+    asm += ['.globl stock_start_player_trampoline', 'stock_start_player_trampoline:',
+            f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{START_PLAYER + 12:x}', 'nop']
+    # and for save_stop_player / save_start_player (Internet Radio's output changes)
+    for nm, at in (('stop', SAVE_STOP), ('start', SAVE_START)):
+        asm += [f'.globl stock_save_{nm}_trampoline', f'stock_save_{nm}_trampoline:',
+                f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{at + 12:x}', 'nop']
+    # and for on_backtoplayer_onclick (Radio Now Playing from stock pages)
+    asm += ['.globl stock_backtoplayer_trampoline', 'stock_backtoplayer_trampoline:',
+            f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{BACKTOPLAYER + 12:x}', 'nop']
     # and for the two Library query functions
     for nm, at in (('dbquery', QUERY_DB), ('sorted_query', QUERY_SORT), ('setmode', SETMODE), ('loadplaylist', LOADPL)):
         asm += [f'.globl stock_{nm}_trampoline', f'stock_{nm}_trampoline:',
@@ -1259,7 +1350,7 @@ def compile_payload(out, demo_path, tag=TAG):
     keep = ['--undefined=compact_set_row_layout', '--undefined=m1plus_home_init',
             '--undefined=stock_home_init_trampoline', '--undefined=m1plus_playing_init',
             '--undefined=stock_playing_init_trampoline', '--undefined=m1plus_scroll_event',
-            '--undefined=m1plus_playmore_init', '--undefined=stock_playmore_init_trampoline', '--undefined=m1plus_pulldown_init', '--undefined=stock_pulldown_init_trampoline', '--undefined=pc_id3_path', '--undefined=pc_library_query', '--undefined=pc_sorted_query', '--undefined=stock_dbquery_trampoline', '--undefined=stock_sorted_query_trampoline',
+            '--undefined=m1plus_playmore_init', '--undefined=stock_playmore_init_trampoline', '--undefined=m1plus_pulldown_init', '--undefined=stock_pulldown_init_trampoline', '--undefined=rd_start_player', '--undefined=rd_step', '--undefined=stock_start_player_trampoline', '--undefined=rd_save_stop', '--undefined=rd_save_start', '--undefined=stock_save_stop_trampoline', '--undefined=stock_save_start_trampoline', '--undefined=rn_backtoplayer', '--undefined=stock_backtoplayer_trampoline', '--undefined=pc_id3_path', '--undefined=pc_library_query', '--undefined=pc_sorted_query', '--undefined=stock_dbquery_trampoline', '--undefined=stock_sorted_query_trampoline',
             '--undefined=m1plus_style_color', '--undefined=m1plus_style_gradient', '--undefined=m1plus_image_add', '--undefined=stock_style_color_trampoline', '--undefined=stock_image_add_trampoline', '--undefined=pal_map', '--undefined=pal_active', '--undefined=pal_background', '--undefined=pal_accent', '--undefined=pal_accent_saved', '--undefined=pal_accent_set', '--undefined=pal_accent_color', '--undefined=pal_fill',
             '--undefined=pod_scan_dir', '--undefined=sh_set_mode', '--undefined=sh_load_playlist', '--undefined=sh_display_mode', '--undefined=sh_clear_queue', '--undefined=stock_setmode_trampoline', '--undefined=stock_loadplaylist_trampoline', '--undefined=tz_select', '--undefined=tz_row', '--undefined=tz_label', '--undefined=stock_timezone_trampoline', '--undefined=bp_capacity', '--undefined=pf_items', '--undefined=pf_seen']   # (the last two: accessors of the parser the tests read; nothing in the payload calls them)
     run(LD, '-m', 'elf32ltsmip', '--gc-sections', '-T', os.path.join(PATCH, 'link.ld'),
@@ -1412,6 +1503,10 @@ def patch_demo(raw, payload, ps, demo_path):
     patch_playmore(patched, ps, len(payload))
     patch_timezones(patched, ps, len(payload))
     patch_pulldown(patched, ps, len(payload))
+    for a, old, what in RADIO_PINS:
+        got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
+        check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
+    patch_radio(patched, ps, len(payload))
     for a, old, what in PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + BATTERY_PINS + SHUFFLE_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS:   # stock code the Playlists and Songs pages call: checked, not written
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
@@ -1452,7 +1547,7 @@ def patch_demo(raw, payload, ps, demo_path):
     check(dynsym(demo_path).get('playsong_id3info') == 0xa0d88c, 'playsong_id3info moved')
     edits = patch_rows(patched, ps)
     # no row edit may touch a PIC prologue (the hooks are the only ones) or a hook site
-    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, PLAYING_INIT, PLAYMORE_INIT, PULLDOWN_INIT, QUERY_DB, QUERY_SORT, STYLE_COLOR, IMAGE_ADD, SETMODE, LOADPL, timezones.SELECT)) and not STYLE_GRADIENT <= int(a, 16) < STYLE_GRADIENT + 8 and not any(int(a, 16) == s for s, _ in MODE_SITES) and int(a, 16) != CLEAR_SITE and not ID3_SITE <= int(a, 16) < ID3_SITE + 4 and not SCAN_SITE <= int(a, 16) < SCAN_SITE + 4 and not BATTERY_SITE <= int(a, 16) < BATTERY_SITE + 4
+    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, PLAYING_INIT, PLAYMORE_INIT, PULLDOWN_INIT, START_PLAYER, SAVE_STOP, SAVE_START, BACKTOPLAYER, QUERY_DB, QUERY_SORT, STYLE_COLOR, IMAGE_ADD, SETMODE, LOADPL, timezones.SELECT)) and not STYLE_GRADIENT <= int(a, 16) < STYLE_GRADIENT + 8 and not any(int(a, 16) == s for s, _ in MODE_SITES) and int(a, 16) != CLEAR_SITE and not ID3_SITE <= int(a, 16) < ID3_SITE + 4 and not SCAN_SITE <= int(a, 16) < SCAN_SITE + 4 and not BATTERY_SITE <= int(a, 16) < BATTERY_SITE + 4
               for a, *_ in edits), 'row edit on a hook')
     check(all(not (SCROLL_SLOT <= int(a, 16) < SCROLL_SLOT + 4 or a in {hex(p[0]) for p in SCROLL_PINS}) for a, *_ in edits),
           'row edit on a list gesture word')
@@ -1488,6 +1583,9 @@ def main():
         'hook_playing': {'addr': PLAYING_INIT, 'target': ps['m1plus_playing_init']},
         'hook_playmore': {'addr': PLAYMORE_INIT, 'target': ps['m1plus_playmore_init']},
         'hook_pulldown': {'addr': PULLDOWN_INIT, 'target': ps['m1plus_pulldown_init']},
+        'hook_start_player': {'addr': START_PLAYER, 'target': ps['rd_start_player']},
+        'hook_save_stop': {'addr': SAVE_STOP, 'target': ps['rd_save_stop']}, 'hook_save_start': {'addr': SAVE_START, 'target': ps['rd_save_start']},
+        'hook_backtoplayer': {'addr': BACKTOPLAYER, 'target': ps['rn_backtoplayer']},
         'hook_id3': {'addr': ID3_SITE, 'target': ps['pc_id3_path']},
         'hook_query': {'addr': QUERY_DB, 'target': ps['pc_library_query']}, 'hook_sorted_query': {'addr': QUERY_SORT, 'target': ps['pc_sorted_query']},
         'hook_scan': {'addr': SCAN_SITE, 'target': ps['pod_scan_dir']},

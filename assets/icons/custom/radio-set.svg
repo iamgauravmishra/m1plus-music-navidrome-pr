@@ -1,0 +1,4 @@
+<!-- Derived from IconPark "radio" (https://github.com/bytedance/IconPark, Apache-2.0, Copyright ByteDance): Lucide-style redraw on the 24 grid with a 2 px stroke, centred (content y 3 to 21). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="2" y="8" width="20" height="13" rx="2"/><circle cx="8.5" cy="14.5" r="2.5"/><path d="M14.5 12.5h4M14.5 16.5h4M4 8l9-5"/>
+</svg>

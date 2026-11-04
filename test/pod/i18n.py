@@ -12,7 +12,9 @@ SAME_AS_ENGLISH |= {'Podcasts', ', %d', 'Normal', 'Chrome', 'Metal', 'Graphite',
 SAME_AS_ENGLISH |= {'Downloads', '%d MB', '%d.%d GB', '%d GB'}    # German writes Downloads as English does
 SAME_AS_ENGLISH |= {'Genre', 'Screenshot', 'Collections', 'Cover'}    # French and German write Genre the same; German and Italian say Screenshot; French writes Collections the same; German says Cover
 SAME_AS_ENGLISH |= {'Orange', 'Champagne', 'Neutral'}    # colour names: Orange in French and German, Champagne in French and Italian, Neutral in German
+SAME_AS_ENGLISH |= {'Radio', 'LIVE', 'Live', '%d stations'}    # Radio in French, German, Spanish, Italian and Polish; LIVE and Live in German and Italian; "stations" in French
 SAME_AS_ENGLISH |= {'Version %s', 'Apple Podcasts', 'Wi-Fi', 'Wi-Fi MAC', 'Bluetooth', 'EQ', 'System', 'Display', 'Firmware', 'Model', 'Device', 'Status', 'Auto'}    # brand and technical words (Wi-Fi, Bluetooth, EQ); System in German and Polish, Display in Italian
+SAME_AS_ENGLISH |= {'Codec', 'Bitrate', 'Source'}    # Station Info: Codec in French, German and Italian, Bitrate in German and Italian, Source in French
 
 
 
@@ -69,7 +71,7 @@ def run(ctx):
         expect(all(dict(built[stub])[k] == dict(built[twin])[k] for k in pod_i18n.TEXT), f'{stub} holds {twin}\'s language')
     for k, by in pod_i18n.TEXT.items():
         counts = {loc: by[loc].count('%d') for loc in LOC}
-        expect(set(counts.values()) == ({k.count('%d')} if k.startswith('%d') or k.startswith('Cancelled, ') or k in pod_i18n.DATE_KEYS else {0}) and all('%' not in by[l].replace('%d', '').replace('%s', '') for l in LOC)
+        expect(set(counts.values()) == ({k.count('%d')} if k.startswith(('%d', 'Added %d')) or k.startswith('Cancelled, ') or k in pod_i18n.DATE_KEYS else {0}) and all('%' not in by[l].replace('%d', '').replace('%s', '') for l in LOC)
                and all(by[l].count('%s') == k.count('%s') for l in LOC),
                f'{k!r}: %d only in the track counts, once each; %s only in the Daily Mix templates, as often as the key has it')
     expect(sorted(pod_i18n.TEXT) == pod_i18n.KEYS and all(set(by) == set(LOC) for by in pod_i18n.TEXT.values()), 'every key has all 13 languages')

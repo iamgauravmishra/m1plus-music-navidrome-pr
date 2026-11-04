@@ -10,7 +10,7 @@ import awtk_strings, awtk_ui, mod_icons, mod_overlays, pod_i18n, pod_ui
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DIGESTS = os.path.join(os.path.dirname(HERE), 'navbars-stock.sha256')
-NEW_IMAGES = ('pod_nav_', 'nb_fade', 'ah_', 'pl_glass', 'pl_ic_', 'sg_', 'np_', 'dm_', 'dp_', 'pod_ic_', 'ipod_', 'tape_', 'vinyl_', 'pm_sheet', 'qk_', 'pod_ci_', 'pod_cd_', 'pod_chev', 'pod_check', 'se_', 'fo_ic_', 'pod_es_')      # the images this work adds or changes (all ours; ah_*: the album page's buttons, tint and navbar; np_*: Now Playing's glyphs and discs; pl_*: the Playlists page's menu, docs/modules/playlists.md; sg_*: the Songs page's); dm_ / dp_: the Daily Mix card and page; pod_ic_*: the menu and settings row glyphs (tools/mod_icons.py POD_ROWS); ipod_*: the Pod page's click wheel; tape_*: the Tape page's pictures
+NEW_IMAGES = ('pod_nav_', 'nb_fade', 'ah_', 'pl_glass', 'pl_ic_', 'sg_', 'np_', 'dm_', 'dp_', 'pod_ic_', 'ipod_', 'tape_', 'vinyl_', 'pm_sheet', 'qk_', 'pod_ci_', 'pod_cd_', 'pod_chev', 'pod_check', 'se_', 'fo_ic_', 'pod_es_', 'rn_')      # the images this work adds or changes (all ours; ah_*: the album page's buttons, tint and navbar; np_*: Now Playing's glyphs and discs; pl_*: the Playlists page's menu, docs/modules/playlists.md; sg_*: the Songs page's); dm_ / dp_: the Daily Mix card and page; pod_ic_*: the menu and settings row glyphs (tools/mod_icons.py POD_ROWS); ipod_*: the Pod page's click wheel; tape_*: the Tape page's pictures
 OVERLAY_UI = ('confirminfo_dialog.bin', 'rippercompleted_dialog.bin', 'cardupdate_dialog.bin', 'formatcard_dialog.bin', 'dialog_autoshutdown.bin')   # the ui files tools/mod_overlays.py restyles (docs/modules/overlays.md; their window themes in styles/ stay stock)
 OUR_FILES = ('about_page.bin', 'albuminfo_page.bin', 'lyrics.ttf')  # lyrics.ttf: the lyrics' bold face (docs/modules/lyrics.md, a second font file next to default.ttf); the About page (the digest was taken when it carried the release tag; it is stock again, our own About page is m1plus_about) and the plain stock album page (its ui file: the navbar's y, as allmusic_page's)
 # the code-built stock navbars: (first, last + 1) of the builders' bytes in demo (the album pages' two, Folders, Artists/Genres/Composers, stock Playlists)
@@ -66,7 +66,7 @@ def run(ctx):
         if nav is None: continue
         k = {c.name: c for c in nav.children}
         back, play, lbl = k['btn_return'], k['btn_backtoplayer'], k['label_title']
-        group = sorted([k[n] for n in ('btn_coverflow', 'btn_more', 'btn_albumview', 'btn_artisttype', 'btn_settings', 'btn_search', 'btn_sort', 'btn_select') if n in k and not (n == 'btn_coverflow' and name == 'm1plus_songs') and k[n].get('visible') != 'false'], key=lambda c: c.x) + [play]   # (a hidden button shares a slot with one that shows)
+        group = sorted([k[n] for n in ('btn_coverflow', 'btn_more', 'btn_albumview', 'btn_artisttype', 'btn_settings', 'btn_search', 'btn_sort', 'btn_select', 'btn_globe') if n in k and not (n == 'btn_coverflow' and name == 'm1plus_songs') and k[n].get('visible') != 'false'], key=lambda c: c.x) + [play]   # (a hidden button shares a slot with one that shows)
         capsule = len(group) > 1
         ok = (back.x, back.y, back.w, back.h) == (7, 0, 44, 50) and back.get('style:normal:icon') == 'ah_nav_back' and back.get('style:pressed:icon') == 'ah_nav_back_down'
         if capsule:

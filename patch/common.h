@@ -11,6 +11,7 @@
 int pod_screen_lit(void); /* stock backlight state */
 
 int pod_on_back(void *ctx, void *e); /* click handler: navigator_back() */
+void pod_open_now_playing(void); /* Radio Now Playing while a station plays, else the stock player */
 int pod_on_player(void *ctx, void *e); /* click handler: the stock "back to the player" button */
 int pod_scan_dir(
     const char *name,

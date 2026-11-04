@@ -93,7 +93,7 @@ speed changes can depend on the stock player's next track open.
 
 ## Network and feeds
 
-One worker handles refresh, search/subscription or downloads; it never touches widgets.
+One worker handles refresh, search/subscription or downloads; it never touches widgets. The Radio directory fetch (`rd_fetch`, [radio](radio.md)) is refused while one of these runs; the reverse is not checked.
 The UI reads generation/status records. Downloads pause for other network jobs and resume
 afterward. The queue holds 32 entries in RAM; reboot leaves partial files paused.
 

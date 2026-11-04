@@ -69,3 +69,4 @@ The [documentation index](docs/README.md) lists technical references.
 ## Acknowledgements
 
 Inspired by Diamond Bond's [q2-pod](https://github.com/DiamondBond/q2-pod) for the Shanling Q2.
+The radio placeholder glyph derives from [IconPark](https://github.com/bytedance/IconPark) `radio` (Apache-2.0).

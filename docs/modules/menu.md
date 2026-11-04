@@ -17,7 +17,7 @@ row count: Pod, Podcasts and Search are items too. Item ids are frozen (`ITEM_ID
 
 Default shown IDs are `12345`: Cover Flow, Albums, Artists, Songs and Playlists. Extras is
 always visible and last. Settings (ID 18, `j`) is hidden by default and stays reachable from
-the Extras navbar. Pod is ID 19 (`k`), Podcasts ID 20 (`l`), Search ID 21 (`m`: opens the library search page, `search_open()`, else the stock `search_page`; hidden from the menu by default, in the Library group of Extras). Their actions/pages are defined
+the Extras navbar. Pod is ID 19 (`k`), Podcasts ID 20 (`l`), Search ID 21 (`m`: opens the library search page, `search_open()`, else the stock `search_page`; hidden from the menu by default, in the Library group of Extras) and Radio ID 22 (`n`: the Radio page, `radio_open()`; hidden by default, in the Library group after Podcasts; [radio](radio.md)). Their actions/pages are defined
 once in `pod_pages.py`.
 
 Hidden rows are invisible, insensitive, parked at y 0 and restacked after shown children.

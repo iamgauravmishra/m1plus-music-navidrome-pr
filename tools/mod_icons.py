@@ -179,13 +179,17 @@ POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'audio-lines'), 'Cover Flow': (
             'Recently Played': ('pod_ic_recent', 'history'), 'Most Played': ('pod_ic_most', 'flame'),
             'Composers': ('pod_ic_composers', 'feather'), 'Hi-Res': ('pod_ic_hires', '+badge-hr'),
             'Update Library': ('pod_ic_update', 'refresh-cw'), 'Tidal': ('pod_ic_tidal', 'T:brand-tidal'),
-            'CD Ripper': ('pod_ic_cdripper', 'disc'), 'Pod': ('pod_ic_ipod', '+ipod'), 'Podcasts': ('pod_ic_podcasts', 'podcast'), 'Search': ('pod_ic_search', 'search'),
+            'CD Ripper': ('pod_ic_cdripper', 'disc'), 'Pod': ('pod_ic_ipod', '+ipod'), 'Podcasts': ('pod_ic_podcasts', 'podcast'), 'Search': ('pod_ic_search', 'search'), 'Radio': ('pod_ic_radio', 'radio'),
             'Cassette Mode': ('pod_ic_tape', '+cassette-tape'), 'Vinyl Mode': ('pod_ic_vinyl', '+turntable'), 'Cover & Lyrics': ('pod_ic_art', '+cover-lyrics'),   # Now Playing's More sheet rows (tools/mod_lists.py)
             # the Control Center page (pod_pages.PULLDOWN_TILES): each tile's own glyph (PULLDOWN below); Output's tile shows the text PO / LO, so its row has stock's Output glyph (sset_outputway)
             'Wi-Fi': ('pod_ic_wifi', 'wifi'), 'Bluetooth': ('pod_ic_bt', 'bluetooth'), 'Button Lock': ('pod_ic_lock', 'lock'), 'Gain': ('pod_ic_gain', '+gain-high'),
             'USB Mode': ('pod_ic_usbmode', 'usb'), 'Output': ('pod_ic_output', 'headphones'), 'Playback': ('pod_ic_playset', 'sliders-horizontal'), 'System': ('pod_ic_sysset', 'settings')}
 # The Folders page's row glyphs (patch/folders.c): the menu rows' bare white 24 px glyph for what POD_ROWS has no row for: an audio file, the SD card, a USB drive (folders, playlist files, the CD Library and the wave are pod_ic_folders, pod_ic_playlists, pod_ic_cdripper, pod_ic_nowplaying)
 FOLDER_ROWS = {'fo_ic_file': 'file-music', 'fo_ic_sd': 'memory-stick', 'fo_ic_usb': 'usb'}
+# The Radio page's row glyphs (patch/radiopage.c): bare white 24 px glyphs for Top Stations, By Country (flag), By Genre, Stations (radio) and Radio Browser (globe; Now Playing and Recently Played are the menu rows' pod_ic_nowplaying and pod_ic_recent);
+# RADIO_ART is the radio-set glyph of the placeholders (the stations' tiles, the Now Playing page's art box, the mini bar): muted grey (ES_RGB), RADIO_ART_PX px.
+RADIO_ROWS = {'pod_ic_rd_stations': 'radio-tower', 'pod_ic_rd_top': 'trending-up', 'pod_ic_rd_country': 'earth', 'pod_ic_rd_genre': 'tag', 'pod_ic_rd_browser': 'globe'}
+RADIO_ART, RADIO_ART_PX = ('pod_ic_rd_art', '+radio-set'), 96   # custom radio-set (IconPark radio, Apache-2.0): every logo-less placeholder; the Pod menu's Radio row keeps Lucide radio
 # The "M1+ Music" icon patch/home.c adds to the stock Home grid (id 99): 66x66 like the stock Home icons
 # (white Lucide smartphone glyph on the #777777 disc, #555555 pressed), style home_m1plus_style in home_page.bin.
 POD_HOME = ('m1plus', 'm1plus_down')
@@ -194,6 +198,7 @@ POD_UI = ['m1plus_menu', 'm1plus_shuffle', 'm1plus_extras', 'm1plus_mainmenu', '
 # The navbar toggles (tools/pod_ui.py NAV_VIEW_ICON, patch/albums.c, patch/artists.c): the glyph of the view a tap switches to, a plain
 # 24 px white glyph like the navbar's others (pressed #777777), added to the images.
 NAV_VIEW = {'pod_nav_grid': 'layout-grid', 'pod_nav_list': 'list',
+            'pod_nav_gridl': 'layout-grid', 'pod_nav_listl': 'list',   # the same toggle as the left cap of [toggle | Now Playing] (the Radio search results, which have no Search button)
             'pod_nav_artist': 'mic-vocal', 'pod_nav_albumartist': 'user-star',   # the Artists page's Artist / Album Artist switch
             'pod_nav_coverflow': '+coverflow',   # Lucide gallery-horizontal with shorter side covers
             'pod_nav_more': 'ellipsis',   # the Playlists page's "..." menu button
@@ -205,7 +210,7 @@ NAV_VIEW = {'pod_nav_grid': 'layout-grid', 'pod_nav_list': 'list',
             'pod_nav_settings': 'sliders-horizontal'}   # the Extras page's Settings button: the left cap of [Settings | Now Playing]
 # the glass piece each Pod page button is (docs/modules/navbar.md): the Albums and Playlists pages' capsule is Cover Flow / "..." (left cap), the grid / list
 # toggle (middle), Now Playing (right cap); the Artists page's is the switch (left cap) and Now Playing; the Cover Flow artist page's is Songs (left cap) and Now Playing
-NAV_VIEW_POS = {'pod_nav_grid': 'middle', 'pod_nav_list': 'middle', 'pod_nav_artist': 'left', 'pod_nav_albumartist': 'left', 'pod_nav_coverflow': 'left',
+NAV_VIEW_POS = {'pod_nav_grid': 'middle', 'pod_nav_list': 'middle', 'pod_nav_gridl': 'left', 'pod_nav_listl': 'left', 'pod_nav_artist': 'left', 'pod_nav_albumartist': 'left', 'pod_nav_coverflow': 'left',
                 'pod_nav_more': 'left', 'pod_nav_moremid': 'middle', 'pod_nav_globe': 'left', 'pod_nav_songs': 'left', 'pod_nav_search': 'left', 'pod_nav_songsort': 'middle', 'pod_nav_select': 'middle', 'pod_nav_selectl': 'left', 'pod_nav_settings': 'left'}
 NAV_PX = 24
 # The Playlists page's "..." menu rows (tools/pod_ui.py playlist_menu, in row order): a bare white glyph left of the label, as on Now
@@ -288,7 +293,9 @@ WIFI_LOCK = {f'wifi_{i}': i for i in range(1, 5)}                               
 NP = {'np_play': ('pil:play', 44, 0, 'fg', 'np_play_down'), 'np_pause': ('pil:pause', 44, 0, 'fg', 'np_pause_down'),
       'np_next': ('pil:next', 44, 0, 'fg', 'np_next_down'), 'np_prev': ('pil:prev', 44, 0, 'fg', 'np_prev_down'),
       'mb_play': ('pil:mb_play', 32, 0, 'white', 'mb_play_down'), 'mb_pause': ('pil:mb_pause', 32, 0, 'white', 'mb_pause_down'),
+      'mb_stop': ('pil:mb_stop', 32, 0, 'white', 'mb_stop_down'),   # the play/pause slot while a station connects or plays (patch/minibar.c mb_glyph): a tap stops
       'mb_next': ('pil:mb_next', (34, 24), 0, 'white', 'mb_next_down'),
+      'mb_next_off': ('pil:mb_next', (34, 24), 0, 'off', None),   # the next button while a station owns the bar (patch/minibar.c mb_next_look): NP_OFF grey, inert
       'mb_glass': ('pil:glass', (304, 56), 0, 'fg', 'mb_glass_down'),
       'lk_card': ('pil:glass_card', (288, 334), 0, 'fg', None),
       'pm_sheet': ('pil:glass_sheet', (320, 250), 0, 'fg', None), 'pm_sheet6': ('pil:glass_sheet6', (320, 300), 0, 'fg', None),
@@ -296,6 +303,7 @@ NP = {'np_play': ('pil:play', 44, 0, 'fg', 'np_play_down'), 'np_pause': ('pil:pa
       'sg_glass': ('pil:glass_sort', (72, 250), 0, 'fg', None),
       'np_grabber': ('pil:grabber', (120, 44), 0, 'ghost', 'np_grabber_down'),
       'np_row_playing': ('pil:wave', (40, 20), 0, 'fg', None),
+      'rn_play': ('pil:play', 64, 0, 'white', 'rn_play_down'), 'rn_stop': ('pil:stop', 64, 0, 'white', 'rn_stop_down'),   # Radio Now Playing's one large button (patch/radionp.c)
       'np_random': ('shuffle', 30, 18, 'mid', None), 'np_cycle': ('repeat', 30, 18, 'mid', None),
       'np_cycle1': ('repeat-1', 30, 18, 'mid', None), 'np_order': ('repeat-off', 30, 18, 'off', None),
       'np_fav': ('star:filled', 44, 18, 'fg', None, 32), 'np_unfav': ('star', 44, 18, 'fg', 'np_unfav_down', 32),
@@ -318,7 +326,7 @@ def is_badge(g): return g.startswith('badge:')
 def used_glyphs():
     """(Lucide names, Tabler names) of every glyph the tables use; custom ones excluded."""
     gl = [e[2] for e in HOME + SETTINGS + LISTS] + list(PULLDOWN.values()) + list(STATUS.values()) + \
-        [g for g in WIFI_LEVELS if g] + [COVER_GLYPH, POD_HOME_GLYPH, SHOT_BAR[1]] + list(NAV_VIEW.values()) + [g for _, g in PL_MENU_ICONS] + list(ES_ICONS.values()) + [v[1] for v in POD_ROWS.values() if v[1] != SHANLING] + list(FOLDER_ROWS.values()) + [g for g in CARD_GLYPHS.values() if g != SHANLING] + \
+        [g for g in WIFI_LEVELS if g] + [COVER_GLYPH, POD_HOME_GLYPH, SHOT_BAR[1]] + list(NAV_VIEW.values()) + [g for _, g in PL_MENU_ICONS] + list(ES_ICONS.values()) + [v[1] for v in POD_ROWS.values() if v[1] != SHANLING] + list(FOLDER_ROWS.values()) + list(RADIO_ROWS.values()) + [RADIO_ART[1]] + [g for g in CARD_GLYPHS.values() if g != SHANLING] + \
         [g for _, g, _ in GLYPHS] + [v[0] for v in SONGS_IMAGES.values()] + [v[0] for v in KEYBOARD_IMAGES.values()] + [KB_CLEAR[1], DP_ADD_GLYPH] + list(PC_GLYPHS) + [g for _, g in DISCS] + [v[0] for v in NP.values() if not v[0].startswith('pil:')] + ['lock:filled'] + R3_GLYPHS
     names = {gname(g) for g in gl if g and not is_custom(g) and not is_badge(g)}
     return sorted(n for n in names if not n.startswith('T:')), sorted(n[2:] for n in names if n.startswith('T:'))
@@ -690,6 +698,8 @@ def generate_all(sizes):
         f[n] = t if sizes[n + ':mode'] == 'RGBA' else t.convert('RGB')
     for n, g in POD_ROWS.values(): f[n] = bare_icon(g, POD_ICON)
     for n, g in FOLDER_ROWS.items(): f[n] = bare_icon(g, POD_ICON)
+    for n, g in RADIO_ROWS.items(): f[n] = bare_icon(g, POD_ICON)
+    f[RADIO_ART[0]] = glyph_fit(RADIO_ART[1], RADIO_ART_PX, RADIO_ART_PX, ES_RGB, 4, 4.0)
     for g in set(CARD_GLYPHS.values()): f[card_name(g)] = card_icon(g)
     name, w, h, rgb = CARD_CHEVRON
     f[name] = pod_chevron(rgb)
@@ -799,10 +809,11 @@ PA_PLAYB_X, PA_PLAYB_Y, PA_PLAYB_PX, PA_PLAYB_RIM_A, PA_PLAYB_GLYPH = 48, 112, 2
 PC_ATLAS = 'pc_atlas'
 PC_SHEET_ICONS = (('pc_ic_import', 'file-input', WHITE), ('pc_ic_speed', 'gauge', WHITE), ('pc_ic_refresh', 'refresh-cw', WHITE), ('pc_ic_select', 'list-checks', WHITE), ('pc_ic_check', '+check', WHITE),
                   ('pc_ic_unsub', 'x', PA_RED), ('pc_ic_down', 'arrow-down', WHITE), ('pc_ic_trash', 'trash', WHITE), ('pc_ic_undo', 'rotate-ccw', WHITE),
-                  ('pod_ic_export', 'file-output', WHITE), ('pod_ic_save', 'bookmark', WHITE))   # (pod_ic_ names: the images the stock pages' digest test ignores, test/pod/navbars.py NEW_IMAGES; a new pc_ image would change test/navbars-stock.sha256 in every branch)
+                  ('pod_ic_export', 'file-output', WHITE), ('pod_ic_save', 'bookmark', WHITE),
+                  ('pod_ic_rd_add', 'plus', WHITE), ('pod_ic_rd_remove', 'minus', WHITE), ('pod_ic_rd_import', 'import', WHITE), ('pod_ic_rd_info', 'info', WHITE))   # the Radio sheets: Add to / Remove from Stations and Station Info (Now Playing), Import from Card (Stations; its Recently Played sheet's Clear row uses pc_ic_trash)   # (pod_ic_ names: the images the stock pages' digest test ignores, test/pod/navbars.py NEW_IMAGES; a new pc_ image would change test/navbars-stock.sha256 in every branch)
 PC_SHEET_PX = 20
 PC_SHEETS = (('pc_sheet1', 50), ('pc_sheet2', 100), ('pc_sheet3', 150), ('pc_sheet4', 200), ('pc_sheet5', 250))   # the sheets' glass for 1..5 rows (Now Playing's pm_sheet / pm_sheet5 for 4 and 5, but a name of ours: the Show page's rows need no other page's image)
-PC_GLYPHS = ('arrow-down', 'download', 'chevron-right', 'file-input', 'podcast', 'file-output')                                 # the Lucide glyph the set adds to the sources (the download symbol of the pill, the badge and the sheet)
+PC_GLYPHS = ('arrow-down', 'download', 'chevron-right', 'file-input', 'podcast', 'file-output', 'plus', 'minus', 'import')                                 # the Lucide glyph the set adds to the sources (the download symbol of the pill, the badge and the sheet)
 PODCASTS = [PC_ATLAS, PC_LIB_TILE, PC_SAVE_TILE] + [n for n, _, _ in PC_SHEET_ICONS] + [n for n, _ in PC_SHEETS]
 ALBUM += PODCASTS
 
@@ -1234,7 +1245,12 @@ def pil_glyph(kind, size, rgb, alpha=255):
     from PIL import Image
     w, h = size if isinstance(size, tuple) else (size, size)
     shape = {'grabber': g_grabber, 'wave': g_wave}.get(kind)
-    mask = _aa((w, h), lambda d, s: shape(d, s, w, h), 16 if kind == 'wave' else 8, kind == 'wave') if shape else transport_mask(kind, (w, h))
+    if kind in ('stop', 'mb_stop'):   # Radio Now Playing's stop: a filled rounded square (the mini bar's, 18 of 32 px, sits lighter than the pause bars' 22 px)
+        from PIL import ImageDraw
+        ss, a = 8, round(min(w, h) * (0.5 if kind == 'stop' else 0.5625)); big = Image.new('L', (w * ss, h * ss), 0)
+        ImageDraw.Draw(big).rounded_rectangle([(w * ss - a * ss) // 2, (h * ss - a * ss) // 2, (w * ss + a * ss) // 2 - 1, (h * ss + a * ss) // 2 - 1], radius=a * ss // 5, fill=255)
+        mask = big.resize((w, h), Image.LANCZOS)
+    else: mask = _aa((w, h), lambda d, s: shape(d, s, w, h), 16 if kind == 'wave' else 8, kind == 'wave') if shape else transport_mask(kind, (w, h))
     if alpha != 255: mask = mask.point(lambda v: v * alpha // 255)
     im = Image.new('RGBA', mask.size, rgb); im.putalpha(mask); return im
 
@@ -1546,7 +1562,7 @@ def replaced_names():
 
 def pod_row_names(): return sorted({n for n, _ in POD_ROWS.values()})
 def nav_names(): return sorted(set(NAV_VIEW) | {n + '_down' for n in NAV_VIEW})
-def pod_names(): return sorted(set(pod_row_names()) | set(FOLDER_ROWS) | set(POD_HOME) | set(nav_names()) | set(ALBUM) | set(DAILY) | {SHOT_BAR[0]} | {n for n, _ in PL_MENU_ICONS})
+def pod_names(): return sorted(set(pod_row_names()) | set(FOLDER_ROWS) | set(RADIO_ROWS) | {RADIO_ART[0]} | set(POD_HOME) | set(nav_names()) | set(ALBUM) | set(DAILY) | {SHOT_BAR[0]} | {n for n, _ in PL_MENU_ICONS})
 def np_names(): return sorted(set(NP) | {v[4] for v in NP.values() if v[4]})
 
 def added_rels(stock_rootfs=None, *args):
@@ -1728,7 +1744,7 @@ def add_album_icons(out):
     """The album page's images (ALBUM): the tint, Shuffle's disc and glyph, the pill and the play glyph; patch/albumpage.c
     and tools/pod_ui.py build_album_page refer to them by name."""
     d = os.path.join(out, IMG)
-    for n in ALBUM + DAILY + list(FOLDER_ROWS):   # (the Folders page's three row glyphs too)
+    for n in ALBUM + DAILY + list(FOLDER_ROWS) + list(RADIO_ROWS) + [RADIO_ART[0]]:   # (the Folders page's three row glyphs, the Radio page's too)
         q = os.path.join(d, n + '.png'); assert not os.path.exists(q), f'{n}.png already in the tree'
         shutil.copyfile(os.path.join(PNG, n + '.png'), q); os.chmod(q, IMG_MODE); os.utime(q, (IMG_MTIME, IMG_MTIME))
 

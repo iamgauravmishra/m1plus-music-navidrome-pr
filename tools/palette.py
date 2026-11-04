@@ -49,7 +49,7 @@ TINT_SURFACE = tuple(n for n in WHOLE if n not in COVER_FADES)
 EXEMPT = ('screensaver_page', 'bigcover_page', 'poweroff_page', 'm1plus_ipod_page', 'm1plus_tape_page')
 # The cover-tinted pages (patch/palette.c pal_cover_page; the order is its PAL_COVER_* codes): Now Playing, the album page, the Podcasts Show page and the Daily Mix page. While one is the top main
 # window and shows a cover's tone (the album page once tinted, the Show page but not the shows list or an episode) the Tinted wash leaves every colour alone; the accent's roles still apply.
-COVER_PAGES = ('playing_page', 'm1plus_album_page', 'm1plus_podcasts_page', 'm1plus_dailymix_page')
+COVER_PAGES = ('playing_page', 'm1plus_album_page', 'm1plus_podcasts_page', 'm1plus_dailymix_page', 'm1plus_radionp_page')
 
 
 def flip_v(v):

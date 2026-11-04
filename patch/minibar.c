@@ -20,6 +20,19 @@
  *                                                labels and the cover. The play / pause button follows
  *                                                mclGetPlayStatus (2 = playing, as the lock screen's refresh reads it), swapped
  *                                                only when it changes.
+ *   radio    mb_radio decides first (patch/radio.h; docs/modules/radio.md): while a station connects, plays or is paused, and in Error or Stopped after a
+ *            session unless a local song is really playing or paused (mb_local_alive: status 3, or 2 with hciplayer playing), the bar
+ *            shows the station and never the stale local queue's track (Stopped only while rd_owns_bar: a local track start clears it);
+ *            in Idle and in Stopped after a local track the local logic above applies unchanged. "Stopped" line, play glyph, play = rd_play again.
+ *            Title: the station's name ("Radio" without one). Second line, radio Now Playing's words: "Connecting…", "Live" (playing),
+ *            "Paused", "Can't play: <error>". Cover: the station's cached logo (rd_logo_file as radionp.c; the logo worker is started when
+ *            it is not cached and the cover redone when the file appears), else the radio glyph on Now Playing's card grey, else the
+ *            stock disc. The look is unchanged; the next button stays, greyed (mb_next_off) and insensitive (a live station has none), white again when
+ *            the bar goes back to a track. The key is (station address, state, error text), so labels are redone only when one changes;
+ *            the cover only for another station.
+ *            Card: radio Now Playing (rn_open, also in Error). A station has no pause here: Connecting or Playing -> rd_stop (the glyph is Stop, mb_stop on the pause button),
+ *            Paused (made by a key, unplugged headphones, an output switch) -> rd_resume (mclSetResume, or Error No Wi-Fi without a connection; the engine's
+ *            tick turns stock's status 3 into Paused), Error -> rd_play of the same station (a retry); the glyph is play while Paused or in Error.
  *   cover    MB_ART (36) px, decoded on the timer, never in paint (paint draws the resident bitmap with canvas_draw_image): the album's
  *            Cover Flow cache file when it exists (cc_url), else the /tmp file demo wrote for the playing track (COVER_SRC as
  *            Now Playing reads it; demo writes it a little after the track changes, so for MB_SETTLE ticks the file's hash is
@@ -37,6 +50,9 @@
 #include "home.h"
 #include "covercache.h"
 #include "common.h"
+#include "i18n.h"
+#include "podcasts.h"
+#include "radio.h"
 
 extern unsigned np_file_key(const char *path); /* patch/nowplaying.c: a hash of the picture file, 0 if unreadable */
 extern const char *
@@ -61,6 +77,9 @@ static struct {
     int blur; /* the blur is registered and still allowed (a structural mismatch clears it) */
     int fix; /* a frame was partial: invalidate the whole pill at the next chance */
     int recent_pending; /* dark album changes need publishing when the screen is lit */
+    int radio; /* the bar shows the radio (see mb_radio); next is greyed then */
+    unsigned rkey; /* the station the cover was made for (a hash of its address), 0 none */
+    int rlogo; /* the station's logo is not cached yet: look again on the next ticks */
     unsigned char x0[MB_HH]; /* per half row: the first block inside the pill */
 } mb __attribute__((section(".scratch")));
 
@@ -89,11 +108,32 @@ static void mb_pad(int on) {
     widget_invalidate_force(mb.sv, (void *)0);
 }
 
+/* The next button: white and live for a local track, NP_OFF grey, insensitive (no press feedback, no click) while a station owns the bar. */
+static void mb_next_look(int live) {
+    const char *n = live ? "mb_next" : "mb_next_off";
+    widget_set_prop_str(mb.next, "style:normal:icon", n);
+    widget_set_prop_str(mb.next, "style:over:icon", n);
+    widget_set_prop_str(mb.next, "style:pressed:icon", live ? "mb_next_down" : n);
+    widget_set_sensitive(mb.next, live);
+    widget_invalidate_force(mb.bar, (void *)0); /* the whole pill, as every change inside it */
+}
+
+/* The pause button's glyph: Stop (a square, radio Now Playing's) while a station owns the bar, the pause bars for a local track. It shows only while a station connects or plays. */
+static void mb_pause_look(int stop) {
+    const char *n = stop ? "mb_stop" : "mb_pause";
+    widget_set_prop_str(mb.pause, "style:normal:icon", n);
+    widget_set_prop_str(mb.pause, "style:over:icon", n);
+    widget_set_prop_str(mb.pause, "style:pressed:icon", stop ? "mb_stop_down" : "mb_pause_down");
+    widget_invalidate_force(mb.bar, (void *)0);
+}
+
 static void mb_hide(void) {
     if (!mb.shown) return;
     mb.shown = 0;
     mb.key = 0;
     mb.fkey = 0;
+    mb.rkey = 0;
+    mb.rlogo = 0;
     mb.settle = 0;
     mb_vis(mb.bar, 0);
     mb_pad(0);
@@ -313,8 +353,108 @@ static int mb_on_touch(void *ctx, void *e) {
     return RET_OK;
 }
 
+/* ---------------------------------------------------------------------------
+ * The radio: while a station owns the output the bar shows it (hciplayer plays it; stock's play queue still holds the last local song)
+ */
+
+#define MB_RADIO_CARD 0xff2e2c2cu /* radionp.c RN_CARD_GLYPH, #2C2C2E: the card of the radio glyph */
+#define MB_GLYPH 16 /* the glyph's size on the cover: radionp's 96 of 264 px, scaled to MB_ART */
+
+/* A local song is really playing or paused (an Error left standing after a session must not hide it): playing needs hciplayer's own word, paused is stock's status 3. */
+static int mb_local_alive(void) {
+    int ps = mclGetPlayStatus();
+    return ps == 3 || (ps == MB_PLAYING && mclGetHciplayerStatus());
+}
+
+/* The bar shows the radio while a station connects, plays or is paused, and in Error or Stopped after a session (so a tap plays it again) unless local music took over. */
+static int mb_radio(void) {
+    if (rd_running()) return 1;
+    if (!rd_list()->n || rd_at() >= rd_list()->n || mb_local_alive()) return 0;
+    return rd_state() == RD_ERROR || (rd_state() == RD_STOPPED && rd_owns_bar()); /* a Stopped station stays on the bar (a tap plays it again) until a local track starts */
+}
+
+/* The station's favicon address ("" for none). */
+static void mb_fav(const rd_list_t *l, int at, char *fav, unsigned n) {
+    fav[0] = 0;
+    if (l->n && at < l->n) rd_favicon(rd_info(l, at), fav, n);
+}
+
+/* The line under the station's name, with radio Now Playing's words (radionp.c rn_line); a playing stream is "Live" (the bar is narrow: the codec caption is Now Playing's). */
+static void mb_radio_line(char *out, unsigned n) {
+    int st = rd_state();
+    if (st == RD_ERROR)
+        snprintf(out, n, rd_error()[0] ? "%s: %s" : "%s", TR("Can't play"), rd_error());
+    else if (st == RD_CONNECTING)
+        snprintf(out, n, "%s", TR("Connecting…"));
+    else if (st == RD_PAUSED)
+        snprintf(out, n, "%s", TR("Paused"));
+    else if (st == RD_STOPPED)
+        snprintf(out, n, "%s", TR("Stopped"));
+    else
+        snprintf(out, n, "%s", TR("Live"));
+}
+
+static void mb_radio_labels(const rd_list_t *l, int at) {
+    char line[200];
+    const char *name = l->n && at < l->n ? rd_name(l, at) : "";
+    mb_radio_line(line, sizeof line);
+    widget_set_text_utf8(mb.title, name[0] ? name : TR("Radio"));
+    widget_set_text_utf8(mb.artist, line);
+    widget_invalidate_force(mb.card, (void *)0);
+}
+
+/* The station's cover into mb.bmp: its cached logo (the engine's logo worker makes the file; radionp.c rn_logo reads it the same way), else the radio glyph on radio Now Playing's card
+ * grey, else the stock disc. A logo not cached yet starts the worker and asks for another look on the next ticks (mb.rlogo). */
+static void mb_radio_cover(const rd_list_t *l, int at) {
+    char fav[RD_FAV_MAX + 1], path[48], url[64];
+    unsigned *px, g[MB_GLYPH * MB_GLYPH], i, x, y, o;
+    int ok = 0, st;
+    if (!mb.bmp) {
+        mb.bmp = bitmap_create_ex(MB_ART, MB_ART, MB_ART * 4, BITMAP_RGBA8888);
+        if (mb.bmp) pod_corner_fill(mb.corner, MB_ART_R);
+    }
+    if (!mb.bmp) return;
+    px = (unsigned *)bitmap_lock_buffer_for_write(mb.bmp);
+    if (!px) return;
+    mb.fkey = 0, mb.settle = 0, mb.rlogo = 0;
+    mb_fav(l, at, fav, sizeof fav);
+    if (fav[0]) {
+        st = rd_logo_file(rd_logo_hash(fav), path, sizeof path);
+        if (st == 1 && pc_cover_ok(path)) {
+            snprintf(url, sizeof url, "file://%s", path);
+            ok = cc_decode(mb.win, url, 1, MB_ART, 1, px);
+        } else if (st == 0) {
+            mb.rlogo = 1;
+            if (!rd_logo_running()) rd_logo_start(fav);
+        }
+    }
+    if (!ok) {
+        for (i = 0; i < MB_ART * MB_ART; ++i) px[i] = MB_RADIO_CARD;
+        memset(g, 0, sizeof g);
+        if (cc_decode(mb.win, "pod_ic_rd_art", 0, MB_GLYPH, 1, g)) { /* decoded over black: per channel the lighter of the glyph and the card */
+            o = (MB_ART - MB_GLYPH) / 2;
+            for (y = 0; y < MB_GLYPH; ++y)
+                for (x = 0; x < MB_GLYPH; ++x) {
+                    unsigned a = g[y * MB_GLYPH + x], b = px[(o + y) * MB_ART + o + x], c = 0xff000000u, k;
+                    for (k = 0; k < 24; k += 8) c |= ((a >> k & 255) > (b >> k & 255) ? a : b) & (255u << k);
+                    px[(o + y) * MB_ART + o + x] = c;
+                }
+        } else {
+            for (i = 0; i < MB_ART * MB_ART; ++i) px[i] = MB_GREY;
+            cc_decode(mb.win, "p_default", 0, MB_ART, 1, px);
+        }
+    }
+    mb_round(px);
+    bitmap_unlock_buffer(mb.bmp);
+    widget_invalidate_force(mb.card, (void *)0);
+}
+
 static void mb_glyph(void) {
     int playing = mclGetPlayStatus() == MB_PLAYING;
+    if (mb.radio) { /* the stop glyph (in the pause button) while connecting or playing; play when paused and in Error. Stock's status 3 / 2 leads the engine's tick, so a tap shows at once */
+        int st = rd_state();
+        playing = st == RD_CONNECTING || ((st == RD_PLAYING || st == RD_PAUSED) && mclGetPlayStatus() != 3);
+    }
     if (playing == mb.playing) return;
     mb.playing = playing;
     mb_vis(mb.play, !playing);
@@ -322,10 +462,64 @@ static void mb_glyph(void) {
     widget_invalidate_force(mb.card, (void *)0); /* the whole pill, not the glyph's rectangle (see the blur) */
 }
 
+/* The radio's turn of mb_work: the station's name and state, its logo, no next button. The key is the station, the state and the error's words, so the labels are made again when one of
+ * them changes and not every tick; the cover only for another station (or when a logo that was missing has arrived). */
+static void mb_work_radio(void) {
+    const rd_list_t *l = rd_list();
+    int at = rd_at(), pending = 0;
+    unsigned skey = l->n && at < l->n ? cc_fnv(FNV_SEED, rd_url(l, at)) : 0, key;
+    char fav[RD_FAV_MAX + 1], path[48];
+    skey |= !skey;
+    key = cc_fnv((skey ^ (unsigned)rd_state()) * MB_HASH_PRIME, rd_error());
+    key |= !key;
+    if (!mb.radio) { /* from local to radio: nothing of the track stays */
+        mb.radio = 1;
+        mb.key = mb.rkey = 0;
+        mb.settle = 0;
+        mb_next_look(0); /* a live station has no next: the button stays, greyed and inert */
+        mb_pause_look(1); /* and no pause: its slot stops the station */
+    }
+    if (!mb.shown || key != mb.key) {
+        mb.key = key;
+        mb_radio_labels(l, at);
+    }
+    mb_fav(l, at, fav, sizeof fav);
+    if (mb.rlogo && fav[0]) {
+        pending = rd_logo_file(rd_logo_hash(fav), path, sizeof path);
+        if (pending == 0 && !rd_logo_running()) rd_logo_start(fav); /* (the worker was busy when the cover was made) */
+    }
+    if (!mb.shown || skey != mb.rkey || (mb.rlogo && fav[0] && pending != 0)) {
+        mb.rkey = skey;
+        mb_radio_cover(l, at);
+    }
+    if (!mb.shown) {
+        mb.playing = -1;
+        mb_show();
+    }
+    mb_glyph();
+    if (mb.fix) {
+        mb.fix = 0;
+        widget_invalidate_force(mb.card, (void *)0);
+    }
+}
+
 /* The one thing the timer does. */
 static void mb_work(void) {
-    void *t = cc_playing();
+    void *t;
     unsigned key;
+    if (mb_radio()) {
+        mb_work_radio();
+        return;
+    }
+    if (mb.radio) { /* the radio let go: the local track's bar again */
+        mb.radio = 0;
+        mb.key = mb.rkey = 0;
+        mb.rlogo = 0;
+        mb.playing = -1;
+        mb_next_look(1);
+        mb_pause_look(0);
+    }
+    t = cc_playing();
     if ((t && recent_note(t)) || mb.recent_pending) {
         mb.recent_pending = 0;
         recent_refresh();
@@ -429,9 +623,34 @@ static int mb_on_play(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     if (!mb.win) return RET_OK;
+    if (mb.radio) { /* a station has no pause here: Stop while it connects or plays, Play resumes a pause made elsewhere (the engine's tick reconciles Paused with stock's status 3) */
+        switch (rd_state()) {
+        case RD_PAUSED:
+            rd_resume();
+            break;
+        case RD_PLAYING:
+        case RD_CONNECTING:
+            rd_stop();
+            break;
+        case RD_ERROR:
+        case RD_STOPPED:
+            if (rd_list()->n) rd_play(rd_list(), rd_at()); /* a retry of the same station */
+            break;
+        default:
+            break;
+        }
+        mb_work();
+        return RET_OK;
+    }
     playpause_quick_click();
     mb_glyph();
     return RET_OK;
+}
+
+/* The card: radio Now Playing while the bar shows the radio (also in Error, which stock's entry hook does not take), else Now Playing as the menu's row opens it. */
+static int mb_on_card(void *ctx, void *e) {
+    if (mb.radio && rn_open() == 0) return RET_OK;
+    return pod_on_player(ctx, e);
 }
 
 /* next_quick_click reads the event's time (it ignores a click within a second of the last); the click's own event is
@@ -439,7 +658,7 @@ static int mb_on_play(void *ctx, void *e) {
 static int mb_on_next(void *ctx, void *e) {
     unsigned ev[4];
     (void)ctx;
-    if (!mb.win) return RET_OK;
+    if (!mb.win || mb.radio) return RET_OK; /* (greyed and insensitive for a station: nothing to skip to) */
     if (!e) {
         memset(ev, 0, sizeof ev);
         ev[2] = time_now_ms();
@@ -501,7 +720,7 @@ void minibar_start(void *win) {
         !widget_on(win, EVT_DESTROY, mb_on_destroy, win) || !widget_on(win, EVT_WINDOW_TO_BG, mb_on_background, win) ||
         !widget_on(win, EVT_WINDOW_TO_FG, mb_on_foreground, win) ||
         !widget_on(mb.card, EVT_AFTER_PAINT, mb_on_paint, (void *)0) ||
-        !widget_on(mb.card, EVT_CLICK, pod_on_player, (void *)0) ||
+        !widget_on(mb.card, EVT_CLICK, mb_on_card, (void *)0) ||
         !widget_on(mb.play, EVT_CLICK, mb_on_play, (void *)0) ||
         !widget_on(mb.pause, EVT_CLICK, mb_on_play, (void *)0) ||
         !widget_on(mb.next, EVT_CLICK, mb_on_next, (void *)0)) {
