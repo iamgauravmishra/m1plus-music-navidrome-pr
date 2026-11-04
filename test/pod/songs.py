@@ -331,9 +331,9 @@ def asset_tests(ctx):
            'the song count: an insensitive label, 15 px #9C9C9C (the album page\'s meta line), left at x 10 (the covers\' edge), 20 px high')
     for nm, x, icon in (('btn_play', 10, 'sg_play'), ('btn_shuffle', 149, 'sg_shuffle')):
         b = kids[nm]
-        expect((b.x, b.y, b.w, b.h) == (x, 52, 129, 40) and b.type == 'button' and b.get('style:normal:bg_color') == '#1E1E1E' and b.get('style:pressed:bg_color') == '#333333'
+        expect((b.x, b.y, b.w, b.h) == (x, 52, 129, 40) and b.type == 'button' and b.get('style:normal:bg_color') == '#1E1E1E' and b.get('style:pressed:bg_color') == '#333335'
                and b.get('style:normal:round_radius') == '20' and b.get('style:normal:icon') == icon and b.get('style:normal:font_size') == '18' and b.get('style:normal:text_color') == '#FFFFFF'
-               and all(b.get(f'style:{st}:bg_color') not in (None, '#00000000') for st in pod_ui.STATES), f'{nm}: a flat 129 x 40 pill (#1E1E1E, #333333 pressed, radius 20) with its glyph and an 18 px white label')
+               and all(b.get(f'style:{st}:bg_color') not in (None, '#00000000') for st in pod_ui.STATES), f'{nm}: a flat 129 x 40 pill (#1E1E1E, #333335 pressed, radius 20) with its glyph and an 18 px white label')
     pills = [kids['btn_play'], kids['btn_shuffle']]
     expect(kids['btn_play'].x == 10 and kids['btn_shuffle'].x - (kids['btn_play'].x + kids['btn_play'].w) == 10 and max(p.x + p.w for p in pills) == 278,
            'the content pills are 129 wide at x 10 and 149 with a 10 px gap and end at x 278')

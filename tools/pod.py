@@ -1211,7 +1211,7 @@ def gen_stock_h(out, demo_path):
     h.append('extern int stock_backtoplayer_trampoline(void *, void *);')
     h.append('extern int stock_dbquery_trampoline(const char *, const char *, void *, int);')
     h.append('extern int stock_sorted_query_trampoline(const char *, const char *, void *, int);')
-    for macro, names in (('LIGHT_KEEP', palette.KEEP), ('LIGHT_WHOLE', palette.WHOLE), ('TINT_SURFACE', palette.TINT_SURFACE), ('LIGHT_EXEMPT', palette.EXEMPT), ('LIGHT_COVER', palette.COVER_PAGES), ('ACCENT_FILL', palette.ACCENT_FILL), ('ACCENT_SWITCH', palette.ACCENT_SWITCH), ('ACCENT_PRESS', palette.ACCENT_PRESS), ('ACCENT_DISC', palette.ACCENT_DISC), ('ACCENT_GLYPH', palette.ACCENT_GLYPH), ('ACCENT_GLYPH_NOT', palette.ACCENT_GLYPH_NOT)):   # Light Mode's image name prefixes (tools/palette.py): a string literal of NUL-ended names
+    for macro, names in (('LIGHT_KEEP', palette.KEEP), ('LIGHT_WHOLE', palette.WHOLE), ('TINT_SURFACE', palette.TINT_SURFACE), ('LIGHT_EXEMPT', palette.EXEMPT), ('LIGHT_COVER', palette.COVER_PAGES), ('ACCENT_FILL', palette.ACCENT_FILL), ('ACCENT_SWITCH', palette.ACCENT_SWITCH), ('ACCENT_PRESS', palette.ACCENT_PRESS), ('ACCENT_DISC', palette.ACCENT_DISC), ('ACCENT_GLYPH', palette.ACCENT_GLYPH), ('ACCENT_GLYPH_NOT', palette.ACCENT_GLYPH_NOT), ('ACCENT_TILE', palette.ACCENT_TILE), ('ACCENT_SHUFDOWN', palette.ACCENT_SHUFDOWN), ('ACCENT_GLYPH_STOCK', palette.ACCENT_GLYPH_STOCK)):   # Light Mode's image name prefixes (tools/palette.py): a string literal of NUL-ended names
         h.append(f'#define {macro} "' + ''.join(n + '\\0' for n in names) + '"')
     h.append('extern int coverflow_open(void);')
     h.append('extern int coverflow_landscape(void);')

@@ -636,6 +636,7 @@ def build_playlists_page(page):
 # bar with the Add to playlist and Delete pills and the navbar's Select All text. Everything that is shown later starts hidden AND insensitive.
 SG_TITLE_PX, SG_HDR_PX, SG_RAIL_PX, SG_BUBBLE_PX, SG_PILL_PX = 32, 20, 12, 56, 18
 SG_PILL_RGB, SG_PILL_DOWN_RGB, SG_PILL_OFF_RGB = '#1E1E1E', '#333333', '#141414'   # flat: no glass
+SG_PILL_PRESS_RGB = '#333335'   # the Play / Shuffle pills pressed: palette.ROLE_PRESS_PILL, one blue level off #333333 so the accent can find it (the select bars' pills keep #333333)
 SG_FOOT_RGB = '#9C9C9C'   # the song count under the last row: the album page's meta line colour (mod_ipodrows.META_COLOR)
 SG_CARD_ROWS = len(pod_pages.SORT_MENU)
 
@@ -683,12 +684,12 @@ SG_GLASS = 'sg_glass'    # the card's glass: the Playlists card's pane, 250 px h
 SG_SELALL_X, SG_SELALL_W = 208, 104     # the select mode's "Select All" text, right aligned to a 8 px margin
 
 
-def sg_pill(name, x, y, text, icon, ink='#FFFFFF', w=None):
+def sg_pill(name, x, y, text, icon, ink='#FFFFFF', w=None, down=SG_PILL_DOWN_RGB):
     """A flat pill: the button's fill with round_radius (the stock dialogs' buttons do the same), the glyph and the 18 px label, which the payload centres as a pair."""
     o = OFFSETS
     b = Widget('button', x, y, w or o['SG_PILL_W'], o['SG_PILL_H'], [('name', name), ('enable', 'true'), pod_i18n.text_prop(text)])
     for st in STATES:
-        styled(b, (st,), 'bg_color', SG_PILL_DOWN_RGB if st == 'pressed' else SG_PILL_OFF_RGB if st == 'disable' else SG_PILL_RGB)
+        styled(b, (st,), 'bg_color', down if st == 'pressed' else SG_PILL_OFF_RGB if st == 'disable' else SG_PILL_RGB)
         styled(b, (st,), 'text_color', '#666666' if st == 'disable' else ink)
         styled(b, (st,), 'font_size', str(SG_PILL_PX))
         styled(b, (st,), 'border_width', '0')
@@ -910,8 +911,8 @@ def build_songs_page(page):
     # shows these two (hidden and insensitive here, like every decoration it shows later)
     hname = hidden(label('sg_hname', o['PH_NAME_X'], o['PH_NAME_Y'], o['PH_NAME_W'], o['PH_NAME_H'], '', 22, '#FFFFFF', 'center'))
     styled(hname, ('normal',), 'text_align_v', 'middle')
-    grid.children = [title, hname, sg_pill('btn_play', o['SG_PILL_X0'], o['SG_PILL_Y'], 'Play', 'sg_play'),
-                     sg_pill('btn_shuffle', o['SG_PILL_X1'], o['SG_PILL_Y'], 'Shuffle', 'sg_shuffle'), foot]
+    grid.children = [title, hname, sg_pill('btn_play', o['SG_PILL_X0'], o['SG_PILL_Y'], 'Play', 'sg_play', down=SG_PILL_PRESS_RGB),
+                     sg_pill('btn_shuffle', o['SG_PILL_X1'], o['SG_PILL_Y'], 'Shuffle', 'sg_shuffle', down=SG_PILL_PRESS_RGB), foot]
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/songs.c shows it while yoffset > 0 (at rest it would darken the large title)
@@ -1027,7 +1028,7 @@ def ab_button(name, x, w, rest, down):
 QP_HEAD_PX, QP_EMPTY_PX = 20, 16
 QP_EMPTY_RGB = '#9C9C9C'
 QP_CLEAR_PX, QP_CLEAR_RGB, QP_CLEAR_DOWN_RGB = 17, '#9C9C9C', '#7A7A7A'   # the Clear text button: neutral grey, dimmer while pressed
-QP_OFF_RGB, QP_OFF_DOWN_RGB = '#2C2C2E', '#3A3A3C'   # a mode button that is off (the payload sets the lit look: #C8C8C8, pressed #A8A8A8, with the dark glyph); patch/offsets.inc QP_PILL_*
+QP_OFF_RGB, QP_OFF_DOWN_RGB = '#2C2C2E', '#3A3A3D'   # a mode button that is off (the payload sets the lit look: #C8C8C8, pressed #A8A8A8, with the dark glyph); patch/offsets.inc QP_PILL_*; pressed #3A3A3D is palette.ROLE_PRESS_QPILL (one blue level off #3A3A3C)
 
 
 def qp_button(name, x, icon):
@@ -1844,8 +1845,8 @@ def build_folders_page(page):
     styled(title, ('normal',), 'font_size', str(SG_TITLE_PX))
     styled(title, ('normal',), 'text_align_h', 'left')
     styled(title, ('normal',), 'text_align_v', 'middle')
-    grid.children = [title, hidden(sg_pill('btn_play', o['SG_PILL_X0'], o['SG_PILL_Y'], 'Play', 'sg_play')),
-                     hidden(sg_pill('btn_shuffle', o['SG_PILL_X1'], o['SG_PILL_Y'], 'Shuffle', 'sg_shuffle'))]
+    grid.children = [title, hidden(sg_pill('btn_play', o['SG_PILL_X0'], o['SG_PILL_Y'], 'Play', 'sg_play', down=SG_PILL_PRESS_RGB)),
+                     hidden(sg_pill('btn_shuffle', o['SG_PILL_X1'], o['SG_PILL_Y'], 'Shuffle', 'sg_shuffle', down=SG_PILL_PRESS_RGB))]
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/folders.c shows it while yoffset > 0 (at rest it would darken the large title)

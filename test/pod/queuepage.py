@@ -175,8 +175,8 @@ def asset_tests(ctx):
     for name, x, icon in (('btn_shuffle', O['QP_PILL_X0'], 'sg_shuffle'), ('btn_repeat', O['QP_PILL_X1'], 'sg_repeat')):
         b = f(name)
         expect(b.type == 'button' and (b.x, b.y, b.w, b.h) == (x, O['QP_PILL_Y'], O['QP_PILL_W'], O['SG_PILL_H']) and b.get('style:normal:round_radius') == str(O['SG_PILL_R'])
-               and b.get('style:normal:bg_color') == '#2C2C2E' and b.get('style:pressed:bg_color') == '#3A3A3C' and b.get('style:normal:icon') == icon and b.get('tr_text') is None and not b.get('text'),
-               f'{name}: an icon-only flat button ({O["QP_PILL_W"]} x {O["SG_PILL_H"]}, the 20 px radius, off: #2C2C2E, pressed #3A3A3C, no label) with the {icon} glyph at x {x}')
+               and b.get('style:normal:bg_color') == '#2C2C2E' and b.get('style:pressed:bg_color') == '#3A3A3D' and b.get('style:normal:icon') == icon and b.get('tr_text') is None and not b.get('text'),
+               f'{name}: an icon-only flat button ({O["QP_PILL_W"]} x {O["SG_PILL_H"]}, the 20 px radius, off: #2C2C2E, pressed #3A3A3D, no label) with the {icon} glyph at x {x}')
     expect(O['QP_PILL_X0'] + O['QP_PILL_W'] + 10 == O['QP_PILL_X1'] and O['QP_PILL_X1'] + O['QP_PILL_W'] == 310 and O['QP_PILL_X0'] == 10 and O['QP_PILL_Y'] == O['QP_COVER_Y'] + O['QP_COVER'] + 16,
            'the two buttons are equal, 10 px apart, spanning the 10 px margins, 16 px under the cover')
     head, empty = f('qp_head'), f('qp_empty')
@@ -441,7 +441,7 @@ def mode_tests(ctx):
     m = queue_machine(); m.top_main = m.window; m.mode = OR; open_queue(m)
     lk = look(m)
     expect(lk['btn_shuffle'] == (off_n, off_d, 'sg_shuffle', 'sg_shuffle') and lk['btn_repeat'] == (off_n, off_d, 'sg_repeat', 'sg_repeat'), f'List play: both buttons dark with the white glyph ({lk})')
-    expect(O['QP_PILL_OFF'] == 0xff2e2c2c and O['QP_PILL_OFF_DOWN'] == 0xff3c3a3a and O['QP_PILL_ON_DOWN'] < O['QP_PILL_ON'], 'the off look is the asset\'s own colours (#2C2C2E, pressed #3A3A3C); the lit one is lighter, pressed a little darker')
+    expect(O['QP_PILL_OFF'] == 0xff2e2c2c and O['QP_PILL_OFF_DOWN'] == 0xff3d3a3a and O['QP_PILL_ON_DOWN'] < O['QP_PILL_ON'], 'the off look is the asset\'s own colours (#2C2C2E, pressed #3A3A3D); the lit one is lighter, pressed a little darker')
     destroy(m)
     for start in (OR, RA, RO):   # Shuffle is the payload's flag: stock's repeat mode is not touched, whatever it is
         m = queue_machine(); m.top_main = m.window; m.mode = start; open_queue(m)

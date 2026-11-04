@@ -53,7 +53,7 @@ Preview, both pages over Now Playing with the dim (each page with its own glass;
   (our key, 13 translations) in a 262 px box: it fits in all 13 languages (test), so it stays visible.
 - The stock layouter keeps a row's own height: the asset has Look up artist (5) and Delete (6) at 60 px (stock: 370 px of rows in the 350 px sheet, so
   the stock list scrolled by 20 px). The payload resizes every row to `PM_ROW_H` 50, so both pages are exact and nothing scrolls.
-- The red: `#FF5A4F` (a label in a pressed row keeps its normal state). Its ratios are in "Glass" below. The Delete glyph (`p_delete`) stays white.
+- The red: `#FF5A4F` (a label in a pressed row keeps its normal state). Its ratios are in "Glass" below. The Delete label stays red. With an accent, the rows' stock glyphs (`player_albuminfo`, `player_songerinfo`, `p_add`, `p_multiple`, `p_abrepeat`, and the Delete glyph `p_delete`) are tinted at decode by exact name (`ACCENT_GLYPH_STOCK`, `docs/modules/accent.md`), like our rows' `pod_ic_*`.
 
 ## Glass
 

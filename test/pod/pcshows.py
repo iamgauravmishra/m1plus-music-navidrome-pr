@@ -167,11 +167,11 @@ def layout_tests(ctx):
     # the Library rows: the atlas' tiles, the chevrons, the titles and grey lines, the hairlines
     LO = max(0, L['h'] - 400)   # (the Library rows close the page: the frame scrolled to the bottom)
     bl, texts, styles, fills = PCP.paint(m, LO)
-    tiles = sorted(tuple(b[2]) + (tuple(b[1][:2]),) for b in bl if tuple(b[1]) in ((o['PA_TILE_X'], o['PA_TILE_Y'], o['PA_TILE_PX'], o['PA_TILE_PX']), (0, 0, o['PA_TILE_PX'], o['PA_TILE_PX'])))
+    tiles = sorted(tuple(b[2]) + (tuple(b[1][:2]),) for b in bl if tuple(b[1]) == (0, 0, o['PA_TILE_PX'], o['PA_TILE_PX']))
     chev = sorted(tuple(b[2]) for b in bl if tuple(b[1]) == (0, 0, 10, 16))   # the shared chevron bitmap
-    expect(tiles == [(o['PP_DL_TILE_X'], L['y_dl'] - LO + o['PP_DL_TILE_Y'], 44, 44, (o['PA_TILE_X'], o['PA_TILE_Y'])), (o['PP_DL_TILE_X'], L['y_sub'] - LO + o['PP_DL_TILE_Y'], 44, 44, (0, 0)), (o['PP_DL_TILE_X'], L['y_sav'] - LO + o['PP_DL_TILE_Y'], 44, 44, (0, 0))]
+    expect(tiles == [(o['PP_DL_TILE_X'], L['y_dl'] - LO + o['PP_DL_TILE_Y'], 44, 44, (0, 0)), (o['PP_DL_TILE_X'], L['y_sub'] - LO + o['PP_DL_TILE_Y'], 44, 44, (0, 0)), (o['PP_DL_TILE_X'], L['y_sav'] - LO + o['PP_DL_TILE_Y'], 44, 44, (0, 0))]
            and chev == [(o['PP_DL_CHEV_X'], L[k] - LO + (o['PC_ROW_H'] - 1 - 16) // 2, 10, 16) for k in ('y_dl', 'y_sub', 'y_sav')] and o['PP_DL_CHEV_X'] == o['LIST_CHEV_X'] and o['PP_DL_TEXT_X'] + o['PP_DL_TEXT_W'] == o['LIST_CHEV_X'] - 10,
-           f'three Library rows: the atlas\' download tile and the podcast and bookmark tiles (images of their own) at x 16, a chevron each ({tiles}, {chev})')
+           f'three Library rows: the download, podcast and bookmark tiles (images of their own) at x 16, a chevron each ({tiles}, {chev})')
     rows = [(t, s, r) for (t, r), s in zip(texts, styles) if s in ('label_row_title', 'label_row_sub')]
     want = [('Downloads', 'label_row_title', (o['PP_DL_TEXT_X'], L['y_dl'] - LO + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H'])), ('5 episodes', 'label_row_sub', (o['PP_DL_TEXT_X'], L['y_dl'] - LO + o['LIST_SUB_Y'], o['PP_DL_TEXT_W'], o['LIST_SUB_H'])),
             ('Subscriptions', 'label_row_title', (o['PP_DL_TEXT_X'], L['y_sub'] - LO + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H'])), ('3 shows', 'label_row_sub', (o['PP_DL_TEXT_X'], L['y_sub'] - LO + o['LIST_SUB_Y'], o['PP_DL_TEXT_W'], o['LIST_SUB_H'])),
@@ -221,15 +221,14 @@ def layout_tests(ctx):
     dt = {s: (t, r) for (t, r), s in zip(*PCP.paint(m, LO3)[1:3]) if s in ('label_row_title', 'label_row_sub') and r[1] < L3['y_sub'] - LO3}
     expect(dt['label_row_title'] == ('Downloads', (o['PP_DL_TEXT_X'], L3['y_dl'] - LO3 + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H']))
            and dt['label_row_sub'] == ('Downloading 42%', (o['PP_DL_TEXT_X'], L3['y_dl'] - LO3 + o['LIST_SUB_Y'], o['PP_DL_TEXT_W'], o['LIST_SUB_H'])), f'the Downloads row: its title and the running download\'s line ({dt})')
-    # the atlas holds the download tile and the chevron where the offsets say, pod_ic_subtile the other tile
+    # the three tiles are images of their own, the atlas holds the chevron where the offsets say
     from PIL import Image
     a = Image.open(os.path.join(mod_icons.PNG, 'pc_atlas.png')).convert('RGBA')
-    t2 = Image.open(os.path.join(mod_icons.PNG, 'pod_ic_subtile.png')).convert('RGBA')
-    t1 = a.crop((o['PA_TILE_X'], o['PA_TILE_Y'], o['PA_TILE_X'] + o['PA_TILE_PX'], o['PA_TILE_Y'] + o['PA_TILE_PX']))
-    expect((mod_icons.PA_TILE_X, mod_icons.PA_TILE_Y, mod_icons.PA_TILE_PX, mod_icons.PA_CHEV) == (o['PA_TILE_X'], o['PA_TILE_Y'], o['PA_TILE_PX'], o['PA_CHEV']) and t2.size == (44, 44)
-           and a.getpixel((o['PA_TILE_X'] + 22, o['PA_TILE_Y'] + 4)) == (0x1e, 0x1e, 0x1e, 255) and a.getpixel((o['PA_TILE_X'], o['PA_TILE_Y']))[3] == 0
-           and t2.getpixel((22, 4)) == (0x1e, 0x1e, 0x1e, 255) and t2.getpixel((0, 0))[3] == 0 and t2.tobytes() != t1.tobytes() and any(p[:3] != (0x1e, 0x1e, 0x1e) and p[3] == 255 for p in t2.crop((8, 8, 36, 36)).getdata())
-           and a.crop((o['PA_CHEV'] * 16, o['PA_G_Y'], o['PA_CHEV'] * 16 + 16, o['PA_G_Y'] + 16)).getbbox() is not None, 'the atlas has the download tile (the #1E1E1E rounded square, clear corners) and the grey chevron at the numbers of offsets.inc; pod_ic_subtile is the same square with the podcast glyph on it')
+    tl = {n: Image.open(os.path.join(mod_icons.PNG, n + '.png')).convert('RGBA') for n in ('pod_ic_dltile', 'pod_ic_subtile', 'pod_ic_savetile')}
+    expect((mod_icons.PA_TILE_PX, mod_icons.PA_CHEV) == (o['PA_TILE_PX'], o['PA_CHEV']) and 'PA_TILE_X' not in o and all(t.size == (44, 44) for t in tl.values())
+           and all(t.getpixel((22, 4)) == (0x1e, 0x1e, 0x1e, 255) and t.getpixel((0, 0))[3] == 0 and any(p[:3] != (0x1e, 0x1e, 0x1e) and p[3] == 255 for p in t.crop((8, 8, 36, 36)).getdata()) for t in tl.values())
+           and len({t.tobytes() for t in tl.values()}) == 3 and a.getpixel((22, 112 + 22))[3] == 0
+           and a.crop((o['PA_CHEV'] * 16, o['PA_G_Y'], o['PA_CHEV'] * 16 + 16, o['PA_G_Y'] + 16)).getbbox() is not None, 'pod_ic_dltile, pod_ic_subtile and pod_ic_savetile are the #1E1E1E rounded square (clear corners) with a glyph each; the atlas no longer holds a tile and has the grey chevron at the number of offsets.inc')
     expect(not os.path.exists(os.path.join(mod_icons.PNG, 'pod_nav_feeds.png')) and os.path.isfile(os.path.join(mod_icons.PNG, 'pc_ic_import.png')) and not os.path.exists(os.path.join(mod_icons.PNG, 'pod_ic_subs.png')), 'the sheet\'s Import glyph is committed; the Feeds button\'s and the old Subscriptions row\'s are gone')
     # n shows
     for n in (1, 2, 3, 5, 9):

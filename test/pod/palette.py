@@ -574,8 +574,9 @@ def rgba(rgb, a=255):
     return (rgb >> 16, rgb >> 8 & 255, rgb & 255, a)
 
 
-ROLE_WORDS = [word(rgba(L.ROLE_PRESS_ROW)), word(rgba(L.ROLE_PRESS_ROW, 0x80)), word(rgba(L.ROLE_PROGRESS, 0xeb)), word(rgba(L.ROLE_PROGRESS)), word(rgba(L.ROLE_PROGRESS, 0))]
-NEAR_WORDS = [word((0x33, 0x33, 0x33, 255)), word((0x33, 0x33, 0x35, 255)), word((0x34, 0x33, 0x34, 255)), word((255, 255, 255, 0xeb)), word((0xff, 0xff, 0xfd, 0xeb)), word((0xee, 0xee, 0xec, 255)),
+ROLE_WORDS = [word(rgba(L.ROLE_PRESS_ROW)), word(rgba(L.ROLE_PRESS_ROW, 0x80)), word(rgba(L.ROLE_PROGRESS, 0xeb)), word(rgba(L.ROLE_PROGRESS)), word(rgba(L.ROLE_PROGRESS, 0)),
+              word(rgba(L.ROLE_PRESS_PILL)), word(rgba(L.ROLE_PRESS_QPILL, 0x80))]
+NEAR_WORDS = [word((0x33, 0x33, 0x33, 255)), word((0x33, 0x33, 0x36, 255)), word((0x3a, 0x3a, 0x3c, 255)), word((0x34, 0x33, 0x34, 255)), word((255, 255, 255, 0xeb)), word((0xff, 0xff, 0xfd, 0xeb)), word((0xee, 0xee, 0xec, 255)),
               BLACK, WHITE, 0xff1c1c1c, 0xff2060ff, 0x00000000]
 
 
@@ -628,7 +629,7 @@ def accent_map_tests(ctx):
         expect(m.color(s) != ROLE_WORDS[0], f'{name}: takes the accent')
     # a cover tone: the page background (a chromatic dark tone of the cover, or the neutral grey) is never a role colour
     tones = [O['NP_NEUTRAL']] + [0xff000000 | (b << 16 | g << 8 | r) for r in range(0, 0x60, 0x10) for g in range(0, 0x60, 0x10) for b in range(0, 0x60, 0x10)]
-    expect(not [t for t in tones if t & 0xffffff in (word(rgba(L.ROLE_PRESS_ROW)) & 0xffffff, word(rgba(L.ROLE_PROGRESS)) & 0xffffff)], 'no cover-tone background (the neutral grey and a grid of dark tones) is a role colour: the pages stay as they are')
+    expect(not [t for t in tones if t & 0xffffff in (word(rgba(L.ROLE_PRESS_ROW)) & 0xffffff, word(rgba(L.ROLE_PROGRESS)) & 0xffffff, word(rgba(L.ROLE_PRESS_PILL)) & 0xffffff, word(rgba(L.ROLE_PRESS_QPILL)) & 0xffffff)], 'no cover-tone background (the neutral grey and a grid of dark tones) is a role colour: the pages stay as they are')
     # cost of a style call with an accent on
     m = LM(acc=b'1\n', hook=True)
     s = m.style(color=ROLE_WORDS[0]); m.color(s); m.color(s); c_role = m.icount   # (icount is the last call's)
@@ -643,10 +644,12 @@ def accent_image_tests(ctx):
     from PIL import Image
     d = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw', 'images', 'xx')
     bad, n, costs = [], 0, {}
-    GLYPHS = tuple(sorted(f[:-4] for f in os.listdir(d) if f.startswith(L.ACCENT_GLYPH) and f.endswith('.png') and f[:-4] not in L.ACCENT_GLYPH_NOT))   # (the row glyphs, tinted by prefix)
+    GLYPHS = tuple(sorted(f[:-4] for f in os.listdir(d) if f.startswith(L.ACCENT_GLYPH) and f.endswith('.png') and f[:-4] not in L.ACCENT_GLYPH_NOT)) + L.ACCENT_GLYPH_STOCK   # (the row glyphs, tinted by prefix, and the More sheet's stock ones by name)
     expect(len(GLYPHS) >= 60 and sum(g.startswith('pod_ci_') for g in GLYPHS) >= 30, f'{len(GLYPHS)} pod_ic_/fo_ic_/pod_ci_ glyph images in the tree ({sum(g.startswith("pod_ci_") for g in GLYPHS)} Settings card glyphs)')
     expect(not [g for g in GLYPHS if g.startswith('pod_sw')] and all(L.accent_kind(f'pod_sw{k}') is None for k in range(7)), 'the accent swatches pod_sw* are not glyphs (never tinted)')
     expect({'fo_ic_sd', 'fo_ic_usb', 'fo_ic_file'} <= set(GLYPHS), 'the Folders list\'s own glyphs are in the tinted set')
+    expect(all(g in GLYPHS and os.path.exists(os.path.join(d, g + '.png')) for g in L.ACCENT_GLYPH_STOCK) and not {'pc_ic_unsub', 'selected'} & set(GLYPHS) and {'pc_ic_trash', 'pl_ic_delete', 'p_delete'} <= set(GLYPHS),
+           'every stock glyph named for the accent is an image of the tree and in the tinted set, the delete rows\' glyphs too; the red unsubscribe glyph and the stock selected check are not')
     for i, ac in enumerate(L.ACCENTS[1:], 1):
         m = LM(acc=b'%d\n' % i)
         for nm in L.ACCENT_ALL + GLYPHS:
@@ -720,7 +723,7 @@ def accent_image_tests(ctx):
     # the cost of the hook on a name it does not tint
     m = LM(acc=b'1\n')
     n0 = m.icount; m.image('np_play', 2, 2, [(0, 0, 0, 0)] * 4); c = m.icount - n0
-    expect(c < 3000, f'an image the accent does not tint costs {c} instructions through the hook (the name lists)')
+    expect(c < 3200, f'an image the accent does not tint costs {c} instructions through the hook (the name lists)')
     print(f'  hook on an untinted image: {c} instructions')
 
 
@@ -831,13 +834,16 @@ def roles_tests(ctx):
     hits = {k: [(f, m.group(0)) for f, s in srcs.items() for p in v for m in re.finditer(p, s, re.I)] for k, v in pats.items()}
     allowed_row = {'patch/offsets.inc', 'tools/mod_theme.py', 'tools/pod_search.py', 'tools/palette.py', 'patch/palette.c'}
     allowed_prog = {'tools/mod_nowplaying.py', 'tools/palette.py', 'patch/palette.c'}
+    for k, p, allowed in (('pill', r'0x[0-9a-fA-F]{2}353333u?\b|#333335', {'patch/offsets.inc', 'tools/pod_ui.py', 'tools/palette.py'}), ('qpill', r'0x[0-9a-fA-F]{2}3d3a3au?\b|#3A3A3D', {'patch/offsets.inc', 'tools/pod_ui.py', 'tools/palette.py'})):
+        h = sorted({f for f, s in srcs.items() for _ in re.finditer(p, s, re.I)})
+        expect(set(h) <= allowed, f'in the sources the {k} role colour is only where it is defined ({h})')
     expect({f for f, _ in hits['row']} <= allowed_row and {f for f, _ in hits['progress']} <= allowed_prog, f'in the sources the role colours are only where they are defined ({hits})')
     expect(O['LIST_PRESS'] == 0xff343333 and not [f for f, s in srcs.items() if re.search(r'LIST_PRESS\s*=|0xff333333u?', s) and f.endswith(('.c', '.h'))], 'the payload\'s own pressed rows use LIST_PRESS and no other grey spelling of it')
     # the other greys that are not roles: #333333 is the hairline, the track, the pill and the tile; nothing maps it
     expect(L.map_colour((0x33, 0x33, 0x33, 255), 'black', 'red') == (0x33, 0x33, 0x33, 255) and L.map_colour((0x2c, 0x2c, 0x2e, 255), 'black', 'red') == (0x2c, 0x2c, 0x2e, 255), 'hairlines, tracks, pills and tiles (#333333) and the old pressed card colour stay')
     # the generated header
     stock_h = open(os.path.join(BUILD, 'stock.h')).read()
-    for macro, lst in (('ACCENT_FILL', L.ACCENT_FILL), ('ACCENT_SWITCH', L.ACCENT_SWITCH), ('ACCENT_PRESS', L.ACCENT_PRESS), ('ACCENT_DISC', L.ACCENT_DISC), ('ACCENT_GLYPH', L.ACCENT_GLYPH), ('ACCENT_GLYPH_NOT', L.ACCENT_GLYPH_NOT)):
+    for macro, lst in (('ACCENT_FILL', L.ACCENT_FILL), ('ACCENT_SWITCH', L.ACCENT_SWITCH), ('ACCENT_PRESS', L.ACCENT_PRESS), ('ACCENT_DISC', L.ACCENT_DISC), ('ACCENT_GLYPH', L.ACCENT_GLYPH), ('ACCENT_GLYPH_NOT', L.ACCENT_GLYPH_NOT), ('ACCENT_TILE', L.ACCENT_TILE), ('ACCENT_GLYPH_STOCK', L.ACCENT_GLYPH_STOCK)):
         line = next((l for l in stock_h.splitlines() if l.startswith(f'#define {macro} ')), '')
         expect(line == f'#define {macro} "' + ''.join(n + '\\0' for n in lst) + '"', f'{macro} in the generated header is tools/palette.py\'s list')
 
@@ -1061,7 +1067,7 @@ def rest_glyph_tests(ctx):
                 got = m.image('pod_ic_songs', 8, 8, glyph, fmt)
                 want = [L.accent_pixel('glyph', p, ac) for p in glyph]
                 if got != want: expect(False, f'{ac}, background {bg}, format {fmt}: pod_ic_songs is the accent, alpha kept ({got[:3]} vs {want[:3]})')
-    expect(L.accent_kind('pod_ic_songs') == 'glyph' and L.accent_kind('pod_ic_subtile') is None and L.accent_kind('pod_ic_savetile') is None and L.accent_kind('pod_ci_wifi') == 'glyph' and L.accent_kind('fo_ic_usb') == 'glyph' and L.accent_kind('pod_sw3') is None and L.accent_kind('pod_chev') is None and L.accent_kind('pod_check') == 'fill', 'the model: pod_ic_*, fo_ic_* and pod_ci_* are glyphs, the two tiles, the swatches and the chevron are not')
+    expect(L.accent_kind('pod_ic_songs') == 'glyph' and all(L.accent_kind(t) == 'tile' for t in L.ACCENT_TILE) and L.accent_kind('pod_ci_wifi') == 'glyph' and L.accent_kind('fo_ic_usb') == 'glyph' and L.accent_kind('pod_sw3') is None and L.accent_kind('pod_chev') is None and L.accent_kind('pod_check') == 'fill', 'the model: pod_ic_*, fo_ic_* and pod_ci_* are glyphs, the two tiles, the swatches and the chevron are not')
     m = LM(acc=b'2\n')
     got = m.image('pod_ic_shuffle', 8, 8, [(p[3], p[3], p[3], p[3]) for p in glyph], premul=True)
     want = [L.glyph_image_px(p, 'orange', True) for p in glyph]
@@ -1079,7 +1085,16 @@ def rest_glyph_tests(ctx):
     expect(all(LM().image(nm, 8, 8, glyph) == glyph for nm in ('fo_ic_sd', 'fo_ic_usb', 'fo_ic_file')), 'Neutral: the Folders glyphs are untouched')
     expect(all(LM(acc=b'%d\n' % i).image(nm, 8, 8, glyph) == [L.accent_pixel('glyph', p, ac) for p in glyph] for i, ac in enumerate(L.ACCENTS[1:], 1) for nm in ('fo_ic_sd', 'fo_ic_usb', 'fo_ic_file')), 'each accent: the Folders glyphs are the accent')
     m = LM(acc=b'1\n')
-    expect(all(m.image(nm, 8, 8, glyph) == glyph for nm in ('pod_ic_subtile', 'pod_ic_savetile', 'pod_sw0', 'pod_sw3', 'pod_chev')), 'the tiles, the swatches and the chevron stay as they are at rest')
+    expect(L.accent_kind('pod_ic_rd_art') is None and all(LM(acc=b'%d\n' % i).image('pod_ic_rd_art', 8, 8, glyph) == glyph for i in range(1, 7)), 'the Radio placeholder art pod_ic_rd_art stays neutral under every accent')
+    expect(all(m.image(nm, 8, 8, glyph) == glyph for nm in ('pod_sw0', 'pod_sw3', 'pod_chev')), 'the swatches and the chevron stay as they are at rest')
+    # the Library tiles: the #1E1E1E square stays exactly, white is the accent, the antialiased glyph edge and the square's alpha edge blend
+    tp = [(30, 30, 30, 255), (255, 255, 255, 255), (142, 142, 142, 255), (30, 30, 30, 90), (30, 30, 30, 0), (255, 255, 255, 128), (31, 31, 31, 255), (200, 200, 200, 255)]
+    for i, ac in enumerate(L.ACCENTS[1:], 1):
+        for nm in L.ACCENT_TILE:
+            got = LM(acc=b'%d\n' % i).image(nm, 8, 1, tp)
+            expect(got == [L.accent_pixel('tile', p, ac) for p in tp] and got[0] == (30, 30, 30, 255) and got[3] == (30, 30, 30, 90) and got[1] == L.ACCENT_RGB[ac] + (255,) and got[5][:3] == L.ACCENT_RGB[ac], f'{nm} under {ac}: the square stays #1E1E1E, white is the accent, alpha kept ({got[:3]})')
+    expect(all(LM().image(nm, 8, 1, tp) == tp for nm in L.ACCENT_TILE), 'Neutral: the Library tiles render exactly as before')
+    expect(LM(acc=b'1\n').image('pod_ic_dltile', 8, 1, tp, premul=True) is not None and LM(b'2\n', acc=b'1\n').image('pod_ic_dltile', 8, 1, tp) == [L.accent_pixel('tile', p, 'red') for p in tp], 'a tile is tinted instead of flipped (accent over Light)')
     expect(all(LM(acc=b'%d\n' % i).image('pod_ci_wifi', 8, 8, glyph) == [L.accent_pixel('glyph', p, ac) for p in glyph] for i, ac in enumerate(L.ACCENTS[1:], 1)), 'each accent: a Settings card glyph (pod_ci_*) is the accent at rest')
     expect(LM().image('pod_ci_wifi', 8, 8, glyph) == glyph, 'Neutral: the Settings card glyphs are untouched')
     m = LM(b'2\n')
@@ -1141,4 +1156,68 @@ def findings_tests(ctx):
     expect(corners('playing_page', b'4\n', b'0\n') == [raw] * 16 and corners('playing_page', b'0\n', b'1\n') == [raw] * 16, 'Black + Teal and Tinted + Neutral: raw')
 
 
-SECTIONS = [hooks_tests, flip_tests, style_tests, image_tests, model_tests, setting_tests, settings_tests, accent_map_tests, accent_image_tests, accent_setting_tests, accent_picker_tests, roles_tests, tinted_tests, findings_tests, rest_glyph_tests]
+def press_tests(ctx):
+    """The pressed Play / Shuffle buttons: the dark pills (a role colour, the rest colour tinted), the Queue's off buttons, the album page's Shuffle disc and the white Play pills (images), against the numbers."""
+    expect = ctx.expect
+    from PIL import Image
+    d = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw', 'images', 'xx')
+    expect(L.ROLE_PRESS_PILL == 0x333335 == O['ROLE_PRESS_PILL'] and L.ROLE_PRESS_QPILL == 0x3a3a3d == O['ROLE_PRESS_QPILL'] and O['QP_PILL_OFF_DOWN'] == word(rgba(L.ROLE_PRESS_QPILL)),
+           'the roles: the pressed Play / Shuffle pill #333335, the Queue off button pressed #3A3A3D (QP_PILL_OFF_DOWN)')
+    # the dark pills and the Queue's off buttons: mix(rest colour, accent, 22 %), alpha kept; Tinted: the tinted rest colour first
+    pill, qp = word(rgba(L.ROLE_PRESS_PILL)), word(rgba(L.ROLE_PRESS_QPILL, 0x80))
+    mix = lambda base, a: tuple((b * 78 + c * 22 + 50) // 100 for b, c in zip(base, a))
+    for i, ac in enumerate(L.ACCENTS[1:], 1):
+        a = L.ACCENT_RGB[ac]
+        for bg, mode, wsh in (('black', b'0\n', lambda c: c), ('tinted', b'1\n', lambda c: L.wash(c, ac))):
+            m = LM(mode, acc=b'%d\n' % i, hook=True)
+            want = (word(mix(wsh((0x1e, 0x1e, 0x1e)), a) + (255,)), word(mix(wsh((0x2c, 0x2c, 0x2e)), a) + (0x80,)))
+            got = (m.call(PSYMS['pal_map'], a0=pill, count=20000), m.call(PSYMS['pal_map'], a0=qp, count=20000))
+            expect(got == want and got == (word(L.map_colour(px(pill), bg, ac)), word(L.map_colour(px(qp), bg, ac))), f'{ac} {bg}: the pressed pill is mix(#1E1E1E, accent, 22 %), the Queue off button mix(#2C2C2E, accent, 22 %) ({got[0]:#x} {got[1]:#x})')
+    expect(all(L.map_colour(px(c), 'black', 'neutral') == px(c) for c in (pill, qp)) and LM(hook=True).call(PSYMS['pal_map'], a0=pill, count=20000) == pill, 'Neutral: the pressed pill colours pass through (#333335 and #3A3A3D are one blue level off today\'s greys)')
+    expect(L.not_role((0x33, 0x33, 0x35, 255)) == (0x33, 0x33, 0x36, 255) and L.not_role((0x3a, 0x3a, 0x3d, 255)) == (0x3a, 0x3a, 0x3e, 255), 'a cover colour equal to a pill role moves one blue level off it')
+    m = LM(acc=b'1\n', hook=True); m.on_top('playing_page')
+    expect(m.call(PSYMS['pal_tone'], a0=pill, count=20000) == 0xff363333 and m.call(PSYMS['pal_tone'], a0=word(rgba(L.ROLE_PRESS_QPILL)), count=20000) == 0xff3e3a3a, 'pal_tone never answers a pill role either')
+    # the Shuffle disc pressed: the #444444 disc becomes mix(#2A2A2A, accent, 22 %), the white glyph stays white, the edge blends; alpha kept
+    im = Image.open(os.path.join(d, 'ah_shuffle_down.png')).convert('RGBA')
+    px_ = {p[:3] for p in im.getdata() if p[3] == 255}
+    expect((0x44, 0x44, 0x44) in px_ and (255, 255, 255) in px_ and L.accent_kind('ah_shuffle_down') == 'shufdown' and L.accent_kind('ah_shuffle') is None, 'ah_shuffle_down is a #444444 disc with a white glyph; only the pressed disc is tinted')
+    for ac in L.ACCENTS[1:]:
+        for bg in ('black', 'tinted'):
+            out = L.render_image('ah_shuffle_down', im, bg, ac)
+            cols = {p[:3] for p in out.getdata() if p[3] == 255}
+            disc = L.press_of(L.SHUF, ac, bg)
+            expect(disc in cols and (255, 255, 255) in cols and (0x44, 0x44, 0x44) not in cols and [p[3] for p in out.getdata()] == [p[3] for p in im.getdata()], f'{ac} {bg}: the pressed Shuffle disc is {disc}, the glyph white, alpha kept')
+    # the white Play pills pressed: solid accent (one colour in, one colour out)
+    for nm, rgb in (('ah_pill_down', (0xbe,) * 3), ('dp_pill_down', (0xd6, 0xd6, 0xd8))):
+        im = Image.open(os.path.join(d, nm + '.png')).convert('RGBA')
+        expect({p[:3] for p in im.getdata() if p[3] == 255} == {rgb} and L.accent_kind(nm) == 'glyph', f'{nm} is one solid grey ({rgb}), tinted as a glyph: the accent')
+        for ac in L.ACCENTS[1:]:
+            out = L.render_image(nm, im, 'black', ac)
+            expect({p[:3] for p in out.getdata() if p[3] == 255} == {L.ACCENT_RGB[ac]}, f'{nm} under {ac} is the solid accent')
+    expect(L.accent_kind('ah_pill') is None and L.accent_kind('dp_pill') is None and L.accent_kind('dp_add_down') is None, 'the pills at rest and the Add disc are not tinted')
+    # the C against the model, on the images and on every background; Neutral untouched
+    for i, ac in enumerate(L.ACCENTS[1:], 1):
+        for mode, bg in ((b'0\n', 'black'), (b'1\n', 'tinted')):
+            for nm in ('ah_shuffle_down', 'ah_pill_down', 'dp_pill_down'):
+                im = Image.open(os.path.join(d, nm + '.png')).convert('RGBA')
+                pixels = list(im.getdata())
+                got = LM(mode, acc=b'%d\n' % i).image(nm, im.width, im.height, pixels)
+                expect(got == list(L.render_image(nm, im, bg, ac).getdata()), f'{nm}: the C matches the model under {ac}, {bg}')
+    for nm in ('ah_shuffle_down', 'ah_pill_down', 'dp_pill_down'):
+        im = Image.open(os.path.join(d, nm + '.png')).convert('RGBA')
+        pixels = list(im.getdata())
+        expect(LM().image(nm, im.width, im.height, pixels) == pixels, f'Neutral: {nm} is as before')
+    # the built assets carry the roles where the buttons are
+    import awtk_ui
+    raw = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw', 'ui')
+    hits = {}
+    for f in sorted(os.listdir(raw)):
+        if not f.endswith('.bin'): continue
+        for w in awtk_ui.parse(open(os.path.join(raw, f), 'rb').read()).walk():
+            for k, v in w.props:
+                if isinstance(v, str) and v.upper().startswith(('#333335', '#3A3A3D')) and 'color' in k: hits.setdefault(v[:7].upper(), set()).add((f, w.name))
+    plays = {w for _, w in hits.get('#333335', ())}
+    expect(plays == {'btn_play', 'btn_shuffle'} and {w for _, w in hits.get('#3A3A3D', ())} == {'btn_shuffle', 'btn_repeat'}, f'#333335 only on the Play / Shuffle pills, #3A3A3D only on the Queue buttons ({hits})')
+
+
+SECTIONS = [hooks_tests, flip_tests, style_tests, image_tests, model_tests, setting_tests, settings_tests, accent_map_tests, accent_image_tests, accent_setting_tests, accent_picker_tests, roles_tests, press_tests, tinted_tests, findings_tests, rest_glyph_tests]

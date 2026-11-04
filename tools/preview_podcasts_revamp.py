@@ -495,7 +495,7 @@ def build_shows(s, shows, shelf_n, dl, refreshing):
             s.text(im, x, ty + o['PP_SHELF_TITLE_H'] / 2, PS.fit(s, t, 14, o['PP_SHELF_W']), 14, WHITE)
             s.text(im, x, ly + o['PP_SHELF_LEFT_H'] / 2, left, 13, GREY)
     n_subs = sum(1 for sh in shows if sh.key != 'local')
-    for y, name, sub, tile in ((L['y_dl'], 'Downloads', dl, IMGS[M.PC_ATLAS].crop((o['PA_TILE_X'], o['PA_TILE_Y'], o['PA_TILE_X'] + o['PA_TILE_PX'], o['PA_TILE_Y'] + o['PA_TILE_PX']))),
+    for y, name, sub, tile in ((L['y_dl'], 'Downloads', dl, IMGS[M.PC_DL_TILE]),
                                (L['y_sub'], 'Subscriptions', '%d shows' % n_subs, IMGS[M.PC_LIB_TILE])):
         if not y: continue
         _paste(im, tile, o['PP_DL_TILE_X'], y + o['PP_DL_TILE_Y'])

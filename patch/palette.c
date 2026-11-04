@@ -53,6 +53,9 @@ static const char press_names[] = ACCENT_PRESS;
 static const char disc_names[] = ACCENT_DISC;
 static const char glyph_names[] = ACCENT_GLYPH; /* the M1+ Music rows' glyphs, tinted at decode (all but the two tiles) */
 static const char glyph_not[] = ACCENT_GLYPH_NOT;
+static const char shuf_names[] = ACCENT_SHUFDOWN; /* the pressed Shuffle disc */
+static const char tile_names[] = ACCENT_TILE; /* the Podcasts Library tiles (a grey square, a white glyph) */
+static const char glyph_stock[] = ACCENT_GLYPH_STOCK; /* the stock sheets' row glyphs and selection checks, by exact name */
 
 /* ---------------------------------------------------------------------------
  * The flip (tools/palette.py is its model).
@@ -119,13 +122,20 @@ static unsigned pal_wash(unsigned c, unsigned acc) {
 
 /* A role colour (ROLE_*, compared without its alpha, which is kept) becomes the accent's: a pressed row the black page tinted, the progress fill the accent. 1 when c was one. */
 static int pal_role(unsigned *c, unsigned acc) {
-    unsigned rgb = (*c & 255) << 16 | (*c & 0xff00) | (*c >> 16 & 255);
-    if (rgb == ROLE_PRESS_ROW)
-        *c = (*c & 0xff000000u) | (pal_tint(pal.tint_on ? pal_mix(0, acc, ACC_WASH) : 0, acc) & 0xffffffu); /* Tinted: the tinted page black, tinted again */
-    else if (rgb == ROLE_PROGRESS)
+    unsigned rgb = (*c & 255) << 16 | (*c & 0xff00) | (*c >> 16 & 255), surface;
+    if (rgb == ROLE_PROGRESS) {
         *c = (*c & 0xff000000u) | (acc & 0xffffffu);
+        return 1;
+    }
+    if (rgb == ROLE_PRESS_ROW)
+        surface = 0;
+    else if (rgb == ROLE_PRESS_PILL)
+        surface = RGBW(ACC_PILL);
+    else if (rgb == ROLE_PRESS_QPILL)
+        surface = RGBW(ACC_QPILL);
     else
         return 0;
+    *c = (*c & 0xff000000u) | (pal_tint(pal.tint_on ? pal_mix(surface, acc, ACC_WASH) : surface, acc) & 0xffffffu); /* the pressed surface: the rest colour tinted (Tinted: the tinted rest colour, tinted again) */
     return 1;
 }
 
@@ -282,7 +292,7 @@ unsigned ui_ink(unsigned c) { return pal_active() && c >> 24 ? pal_map(c) : c; }
 unsigned pal_not_role(unsigned c) {
     unsigned rgb = (c & 255) << 16 | (c & 0xff00) | (c >> 16 & 255);
     if (rgb == ROLE_PRESS_ROW) return c - 0x10000u;
-    if (rgb == ROLE_PROGRESS) return c + 0x10000u;
+    if (rgb == ROLE_PROGRESS || rgb == ROLE_PRESS_PILL || rgb == ROLE_PRESS_QPILL) return c + 0x10000u;
     return c;
 }
 
@@ -464,14 +474,14 @@ static void light_image(const char *name, void *bitmap) {
 /* An exact name from a NUL-ended list. */
 static int in_names(const char *s, const char *list) {
     for (; *list; ++list) {
-        if (!strcmp(s, list)) return 1;
+        if (*s == *list && !strcmp(s, list)) return 1; /* (the first letter alone rejects nearly every name) */
         while (*list) ++list; /* the next name */
     }
     return 0;
 }
 
 /* The accent's tint of a decoded image (tools/palette.py accent_pixel is the model): kind 0 FILL (slider and progress fills, the check, the playing wave: a pixel as light as the fill or
- * lighter becomes the accent, one at the track grey or darker stays, and one between (an antialiased edge over the track) moves by the same share of the way from the fill to the accent), 1 SWITCH (the track #EEEEEC to the accent, the knob #141414 to white), 2 PRESS (the pressed card piece: mix(card, accent)), 4 GLYPH (a row glyph: every colour the accent), 3 DISC (a pull-down ON tile: white to the accent, the #141414 glyph stays, between by lightness).
+ * lighter becomes the accent, one at the track grey or darker stays, and one between (an antialiased edge over the track) moves by the same share of the way from the fill to the accent), 1 SWITCH (the track #EEEEEC to the accent, the knob #141414 to white), 2 PRESS (the pressed card piece: mix(card, accent)), 4 GLYPH (a row glyph: every colour the accent), 6 SHUFDOWN (the album page's pressed Shuffle disc: the grey disc becomes the tinted disc, the white glyph stays), 5 TILE (a Podcasts Library tile: the #1E1E1E square stays, white goes to the accent, between by lightness), 3 DISC (a pull-down ON tile: white to the accent, the #141414 glyph stays, between by lightness).
  * Alpha stays; a clear pixel is left. Premultiplied pixels are converted to straight and back. */
 static void accent_image(int kind, void *bitmap, unsigned acc) {
     static const unsigned char at[4][4] = BITMAP_RGBA_AT;
@@ -488,7 +498,8 @@ static void accent_image(int kind, void *bitmap, unsigned acc) {
     px = bitmap_lock_buffer_for_write(bitmap);
     if (!px) return;
     o = at[format];
-    card = pal_tint(pal.tint_on ? pal_mix(ACC_CARD_WORD, acc, ACC_WASH) : ACC_CARD_WORD, acc); /* (Tinted: the tinted card, tinted again) */
+    card = kind == 6 ? RGBW(ACC_SHUF) : ACC_CARD_WORD; /* the surface that is pressed: the card, or the Shuffle disc */
+    card = pal_tint(pal.tint_on ? pal_mix(card, acc, ACC_WASH) : card, acc); /* (Tinted: the tinted surface, tinted again) */
     for (y = 0; y < h4; ++y)
         for (p = px + y * stride, x = 0; x < w4; ++x, p += 4) {
             a = p[o[3]];
@@ -501,6 +512,13 @@ static void accent_image(int kind, void *bitmap, unsigned acc) {
                 for (i = 0; i < 3; ++i) v[i] = acc >> (8 * i) & 255;
             } else if (kind == 2) {
                 for (i = 0; i < 3; ++i) v[i] = card >> (8 * i) & 255;
+            } else if (kind == 6) { /* the pressed Shuffle disc: the grey disc becomes the tinted disc, the white glyph stays white, between by lightness */
+                t = v[0] <= ACC_SHUF_DOWN_R ? 0 : (v[0] - ACC_SHUF_DOWN_R) * 255 / (255 - ACC_SHUF_DOWN_R);
+                if (t > 255) t = 255;
+                for (i = 0; i < 3; ++i) {
+                    unsigned b = card >> (8 * i) & 255;
+                    v[i] = b + (255 - b) * t / 255;
+                }
             } else if (kind == 0) {
                 if (v[0] >= ACC_FILL_R) {
                     for (i = 0; i < 3; ++i) v[i] = acc >> (8 * i) & 255; /* the fill itself (or white: the check) */
@@ -513,13 +531,14 @@ static void accent_image(int kind, void *bitmap, unsigned acc) {
                         v[i] = dv < 0 ? 0 : dv > 255 ? 255 : (unsigned)dv;
                     }
                 }
-            } else if (kind == 3) {
-                t = v[0] <= ACC_KNOB_R ? 0 : (v[0] - ACC_KNOB_R) * 255 / (255 - ACC_KNOB_R);
+            } else if (kind == 3 || kind == 5) { /* the fixed end: the disc's #141414 glyph, or the tile's #1E1E1E square */
+                unsigned lo = kind == 3 ? ACC_KNOB_R : ACC_TILE_R;
+                t = v[0] <= lo ? 0 : (v[0] - lo) * 255 / (255 - lo);
                 if (t > 255) t = 255;
                 for (i = 0; i < 3; ++i) {
-                    int c = (int)(acc >> (8 * i) & 255), dv = (c - ACC_KNOB_R) * (int)t;
+                    int c = (int)(acc >> (8 * i) & 255), dv = (c - (int)lo) * (int)t;
                     dv = dv >= 0 ? dv / 255 : -(-dv / 255);
-                    v[i] = (unsigned)(ACC_KNOB_R + dv);
+                    v[i] = (unsigned)((int)lo + dv);
                 }
             } else {
                 t = v[0] >= ACC_FILL_R ? 0 : (ACC_FILL_R - v[0]) * 255 / (ACC_FILL_R - ACC_KNOB_R);
@@ -585,7 +604,11 @@ static void pal_image(const char *name, void *bitmap) {
             kind = 2;
         else if (in_names(name, disc_names))
             kind = 3;
-        else if (has_prefix(name, glyph_names) && !in_names(name, glyph_not))
+        else if (in_names(name, tile_names))
+            kind = 5;
+        else if (in_names(name, shuf_names))
+            kind = 6;
+        else if ((has_prefix(name, glyph_names) && !in_names(name, glyph_not)) || in_names(name, glyph_stock))
             kind = 4;
     }
     if (kind >= 0)

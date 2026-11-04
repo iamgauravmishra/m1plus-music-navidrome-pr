@@ -370,7 +370,7 @@
 #define QP_PILL_ON 0xffc8c8c8u /* #C8C8C8 with the dark glyph (Apple's lit button) */
 #define QP_PILL_ON_DOWN 0xffa8a8a8u
 #define QP_PILL_OFF 0xff2e2c2cu /* #2C2C2E with the white glyph */
-#define QP_PILL_OFF_DOWN 0xff3c3a3au /* #3A3A3C */
+#define QP_PILL_OFF_DOWN 0xff3d3a3au /* #3A3A3D: ROLE_PRESS_QPILL (one blue level off #3A3A3C), so the accent can find it */
 #define QP_STREAM_A 2 /* mclGetPlayType values of a stream: the stock queue drawer refuses a row while offline (@0x47a014), our page is for local playback only */
 #define QP_STREAM_B 3
 #define QP_STREAM_C 0xf0
@@ -1167,8 +1167,6 @@
 #define PA_FILL_A 56
 #define PA_RING_A 110
 #define PA_CHEV 6
-#define PA_TILE_X 0
-#define PA_TILE_Y 112
 #define PA_TILE_PX 44
 #define PA_PLAYB_X 48
 #define PA_PLAYB_Y 112
@@ -1177,7 +1175,7 @@
  * (window row PG_LIST_Y), x the window's. In order: the large title (a label, PP_TITLE_H high at x PP_TITLE_X, PP_TITLE_PX px, shared by the Downloads and Subscriptions pages; it scrolls away with the content and the navbar shows no title), the refresh line (PP_LINE_H high at PP_LINE_Y, 15 px: "Updated
  * 1h ago · Refresh", only when a show has a feed; PP_LINE_PITCH to the next block, PP_NOLINE_PITCH when there is no line; its touch is PP_LINE_HIT high around the text's middle), Continue Listening (PP_HEAD_H header at x PP_HEAD_X, 20 px, then PP_HEAD_PITCH to the
  * covers: at most PP_SHELF_MAX PP_SHELF_ART px covers at x PP_SHELF_X + i * PP_SHELF_PITCH, the title (14 px, one line, PP_SHELF_W wide) PP_SHELF_TITLE_Y under the cover's top and the "35m left" (13 px) at PP_SHELF_LEFT_Y; PP_SHELF_PITCH_Y the block's height; each cover has the atlas' PA_PLAYB_PX play disc PP_SHELF_PLAY_INSET from its right and bottom edges),
- * the Library rows, last, PP_LIB_GAP under the grid (the Downloads row: PC_ROW_H high: the PA_TILE_PX tile (the atlas') at x PP_DL_TILE_X, PP_DL_TILE_Y down, the texts from PP_DL_TEXT_X, PP_DL_TEXT_W wide at LIST_TITLE_Y / LIST_SUB_Y, the shared chevron at PP_DL_CHEV_X, hairline from the text),
+ * the Library rows, last, PP_LIB_GAP under the grid (the Downloads row: PC_ROW_H high: the PA_TILE_PX tile (an image of its own) at x PP_DL_TILE_X, PP_DL_TILE_Y down, the texts from PP_DL_TEXT_X, PP_DL_TEXT_W wide at LIST_TITLE_Y / LIST_SUB_Y, the shared chevron at PP_DL_CHEV_X, hairline from the text),
  * after the shelf PP_SEC_GAP of air and the "Shows" header (at x PP_SHOWS_X), then the Albums grid (GRID_*: GRID_COVER covers, the title and the grey line under each) from the grid's top; PP_BOTTOM under the last row. */
 #define PP_TITLE_X 16
 #define PP_TITLE_H 52
@@ -1391,7 +1389,14 @@
 #define ACC_TRACK_R 51
 #define ACC_FILL_R 238
 #define ACC_KNOB_R 20
+#define ACC_TILE_R 30 /* the Podcasts Library tiles' square, #1E1E1E: stays exactly, the white glyph on it goes to the accent */
 #define ROLE_PRESS_ROW 0x333334
 #define ROLE_PROGRESS 0xfffffe
+#define ROLE_PRESS_PILL 0x333335 /* the pressed Play / Shuffle pill (tools/pod_ui.py SG_PILL_PRESS_RGB; one blue level off #333333): mix(ACC_PILL, accent, ACC_TINT %) */
+#define ROLE_PRESS_QPILL 0x3a3a3d /* the Queue's Shuffle / Repeat buttons pressed while off (QP_PILL_OFF_DOWN): mix(ACC_QPILL, accent, ACC_TINT %) */
+#define ACC_PILL 0x1e1e1e /* the flat pills' rest colour (SG_PILL_RGB) */
+#define ACC_QPILL 0x2c2c2e /* the Queue's off buttons' rest colour (QP_PILL_OFF) */
+#define ACC_SHUF 0x2a2a2a /* the album page's Shuffle disc at rest (ah_shuffle); pressed ah_shuffle_down is ACC_SHUF_DOWN_R grey with the white glyph */
+#define ACC_SHUF_DOWN_R 68
 #define STYLE_COLOR_GRADIENT_RET 0x65a050
 #define BITMAP_PREMULTI 16 /* AWTK's BITMAP_FLAG_PREMULTI_ALPHA in bitmap_t's u16 flags @0xc */

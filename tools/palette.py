@@ -30,10 +30,14 @@ def _consts():
 C = _consts()
 PAPER, INK, SPREAD, CHROMA, GLYPH, SURFACE = (C[k] for k in ('LIGHT_PAPER', 'LIGHT_INK', 'LIGHT_SPREAD', 'LIGHT_CHROMA', 'LIGHT_GLYPH', 'LIGHT_SURFACE'))
 DAY_FROM, DAY_UNTIL = C["LIGHT_FROM"], C["LIGHT_UNTIL"]
-TINT, TRACK_R, FILL_R, KNOB_R = (C[k] for k in ('ACC_TINT', 'ACC_TRACK_R', 'ACC_FILL_R', 'ACC_KNOB_R'))
+TINT, TRACK_R, FILL_R, KNOB_R, TILE_R = (C[k] for k in ('ACC_TINT', 'ACC_TRACK_R', 'ACC_FILL_R', 'ACC_KNOB_R', 'ACC_TILE_R'))
 WASH, DARK = C['ACC_WASH'], C['ACC_DARK']   # the Tinted background: percent of the accent in a dark neutral colour, and the brightest channel that still counts as dark
 CARD = tuple(C['ACC_CARD'].to_bytes(3, 'big'))   # the settings card colour
-ROLE_PRESS_ROW, ROLE_PROGRESS = C['ROLE_PRESS_ROW'], C['ROLE_PROGRESS']
+ROLE_PRESS_ROW, ROLE_PROGRESS, ROLE_PRESS_PILL, ROLE_PRESS_QPILL = (C[k] for k in ('ROLE_PRESS_ROW', 'ROLE_PROGRESS', 'ROLE_PRESS_PILL', 'ROLE_PRESS_QPILL'))
+PILL, QPILL, SHUF = (tuple(C[k].to_bytes(3, 'big')) for k in ('ACC_PILL', 'ACC_QPILL', 'ACC_SHUF'))   # rest colours of the surfaces a pressed role tints: the flat pill, the Queue's off buttons, the Shuffle disc
+SHUF_DOWN_R = C['ACC_SHUF_DOWN_R']
+# The pressed-surface roles (colour -> the rest surface it is tinted from); patch/palette.c pal_role. Row: the page black.
+PRESS_SURFACES = {ROLE_PRESS_ROW: (0, 0, 0), ROLE_PRESS_PILL: PILL, ROLE_PRESS_QPILL: QPILL}
 
 # Images that are never flipped, by name prefix: objects with materials of their own (the cassette, the Pod's wheel and marks), the soft shadow under the Now Playing cover, and the glass
 # the lock screen's card and the Daily Mix's Add disc put over a photo or art (their text stays white there). Every other image follows the rule below.
@@ -88,10 +92,25 @@ ACCENT_PRESS = tuple(f'pod_cd_{p}_down' for p in ('single', 'top', 'mid', 'bot')
 ACCENT_DISC = ('drop_wifiopen', 'drop_btopen', 'drop_keylockopen', 'drop_eqopen', 'drop_usbaudio', 'drop_usbdac', 'drop_usbstorage', 'drop_playsetdown', 'drop_syssetdown', 'drop_highgain', 'drop_lo')
 # GLYPH, by name prefix: every row glyph is white art, tinted at decode: every colour becomes the accent, alpha kept. The M1+ Music rows' (the main menu, Shuffle, Extras and Main Menu pages), the Folders list's own
 # (fo_ic_sd, fo_ic_usb, fo_ic_file) and the Settings cards' (pod_ci_*, tools/mod_icons.py CARD_GLYPHS; the accent swatches pod_sw* are not). The two tiles (a rounded square with its own colour behind the glyph,
-# patch/podcasts.c) are not glyphs.
+# patch/podcasts.c) are not glyphs. GLYPH_STOCK, by exact name (plain white art, alpha kept): the More sheet's stock row glyphs (Look up album, Look up artist, Add to playlist, Speed, A-B repeat; patch/playmore.c),
+# the Podcasts sheets' (pc_ic_*: all but pc_ic_unsub, already red; pc_ic_trash is Radio's Clear row's too), the Playlists "..." menu's (pl_ic_new, pl_ic_import, pl_ic_export, pl_ic_delete),
+# the multi-select Add dialog's (batchadd_fav, batchadd_playlist) and the selection checks: the Songs sort card's tick (sg_tick) and the stock Select All navbar button's checked state (mulselected). So every
+# row of those sheets is the accent, the destructive rows' glyphs too (their labels do not change: Delete Song's stays red). Not p_onlinesearch (never shown) and not selected (also the Delete dialog's "also delete the file" checkbox).
 ACCENT_GLYPH = ('pod_ic_', 'fo_ic_', 'pod_ci_')
-ACCENT_GLYPH_NOT = ('pod_ic_subtile', 'pod_ic_savetile')
-ACCENT_ALL = ACCENT_FILL + ACCENT_SWITCH + ACCENT_PRESS + ACCENT_DISC
+ACCENT_GLYPH_STOCK = ('player_albuminfo', 'player_songerinfo', 'p_add', 'p_multiple', 'p_abrepeat', 'p_delete',
+                      'pc_ic_import', 'pc_ic_speed', 'pc_ic_refresh', 'pc_ic_select', 'pc_ic_check', 'pc_ic_down', 'pc_ic_undo', 'pc_ic_trash',
+                      'pl_ic_new', 'pl_ic_import', 'pl_ic_export', 'pl_ic_delete', 'batchadd_fav', 'batchadd_playlist', 'sg_tick', 'mulselected',
+                      'ah_pill_down', 'dp_pill_down')
+# TILE: the Podcasts Library rows' tiles (patch/podcasts.c; a #1E1E1E rounded square, ACC_TILE_R, with a white glyph on it): white goes to the accent, the square stays exactly #1E1E1E, the antialiased glyph edge
+# between blends by lightness (the disc rule with the tile's grey as the fixed end). Their pod_ic_ prefix is why they are in GLYPH_NOT (the glyph rule would paint the whole square).
+ACCENT_TILE = ('pod_ic_dltile', 'pod_ic_subtile', 'pod_ic_savetile')
+# SHUFDOWN: the album page's (and the Daily Mix page's) pressed Shuffle disc ah_shuffle_down (a #444444 disc, a white glyph): the disc becomes the pressed tint of the rest disc #2A2A2A,
+# mix(#2A2A2A, accent, ACC_TINT %), the glyph stays white. The white Play pills' pressed images (ah_pill_down, dp_pill_down: one solid colour each, the dark glyph and the label are drawn apart) are
+# GLYPH_STOCK names below: the solid accent. Dark flat pills (Songs / Folders Play and Shuffle) and the Queue's off buttons press through the roles ROLE_PRESS_PILL / ROLE_PRESS_QPILL (colours, not images).
+ACCENT_SHUFDOWN = ('ah_shuffle_down',)
+# pod_ic_rd_art (a muted grey #8E8E93 radio set: secondary art, the logo-less station tile, Radio Now Playing's art box and the mini bar) also keeps the prefix out of the glyph rule: placeholders stay neutral.
+ACCENT_GLYPH_NOT = ACCENT_TILE + ('pod_ic_rd_art',)
+ACCENT_ALL = ACCENT_FILL + ACCENT_SWITCH + ACCENT_PRESS + ACCENT_DISC + ACCENT_TILE + ACCENT_SHUFDOWN
 
 
 def mix_tint(base, acc):
@@ -120,6 +139,11 @@ def row_press(ac, bg='black'):
     return mix_tint(wash((0, 0, 0), ac) if bg == 'tinted' else (0, 0, 0), ACCENT_RGB[ac])
 
 
+def press_of(surface, ac, bg='black'):
+    """A pressed surface under an accent: its rest colour (on Tinted, the tinted rest colour) with ACC_TINT percent of the accent."""
+    return mix_tint(wash(surface, ac) if bg == 'tinted' else surface, ACCENT_RGB[ac])
+
+
 def card_press(ac, bg='black'):
     """The pressed settings card under an accent: the card colour (on Tinted, the tinted card) tinted."""
     return mix_tint(wash(CARD, ac) if bg == 'tinted' else CARD, ACCENT_RGB[ac])
@@ -129,7 +153,7 @@ def role(c, ac, bg='black'):
     """The accent step of patch/palette.c pal_map: a colour that is one of the unique role colours (compared without alpha, alpha kept) becomes the accent's; None when it is not."""
     if ac == 'neutral': return None
     rgb = (c[0] << 16) | (c[1] << 8) | c[2]
-    if rgb == ROLE_PRESS_ROW: new = row_press(ac, bg)
+    if rgb in PRESS_SURFACES: new = press_of(PRESS_SURFACES[rgb], ac, bg)
     elif rgb == ROLE_PROGRESS: new = ACCENT_RGB[ac]
     else: return None
     return new + tuple(c[3:])
@@ -139,7 +163,7 @@ def not_role(c):
     """patch/palette.c pal_not_role: a colour derived from a cover (3 or 4 channels) that equals a role colour moves one LSB of blue off it (#333334 to #333333, #FFFFFE to #FFFFFF)."""
     rgb = (c[0] << 16) | (c[1] << 8) | c[2]
     if rgb == ROLE_PRESS_ROW: return (c[0], c[1], c[2] - 1) + tuple(c[3:])
-    if rgb == ROLE_PROGRESS: return (c[0], c[1], c[2] + 1) + tuple(c[3:])
+    if rgb in (ROLE_PROGRESS, ROLE_PRESS_PILL, ROLE_PRESS_QPILL): return (c[0], c[1], c[2] + 1) + tuple(c[3:])
     return tuple(c)
 
 
@@ -195,12 +219,19 @@ def _clamp255(v):
     return max(0, min(255, v))
 
 
-def accent_pixel(kind, p, ac):
+def accent_pixel(kind, p, ac, bg='black'):
     """One straight pixel (r, g, b, a) of an accent-tinted image (kind 'fill', 'switch', 'press' or 'disc'); a clear pixel and the alpha stay. patch/palette.c pal_accent_image is the C twin."""
     if not p[3]: return p
     acc = ACCENT_RGB[ac]
-    if kind == 'press': return card_press(ac) + (p[3],)
+    if kind == 'press': return card_press(ac, bg) + (p[3],)
     if kind == 'glyph': return acc + (p[3],)
+    if kind == 'shufdown':   # the pressed Shuffle disc: the disc (#44) becomes the tinted rest disc, the white glyph stays, between by lightness
+        base = press_of(SHUF, ac, bg)
+        u = _clamp255((p[0] - SHUF_DOWN_R) * 255 // (255 - SHUF_DOWN_R))
+        return tuple(b + (255 - b) * u // 255 for b in base) + (p[3],)
+    if kind == 'tile':   # the square (#1E1E1E) stays, white goes to the accent, the glyph's antialiased edge blends by lightness
+        u = _clamp255((p[0] - TILE_R) * 255 // (255 - TILE_R))
+        return tuple(TILE_R + _trunc((a - TILE_R) * u, 255) for a in acc) + (p[3],)
     if kind == 'fill':   # the fill (or lighter: white) becomes the accent, the track (or darker) stays, a pixel between them (an antialiased edge over a track) moves by its share t of the way fill -> accent
         if p[0] >= FILL_R: return acc + (p[3],)
         if p[0] <= TRACK_R: return p
@@ -214,9 +245,11 @@ def accent_pixel(kind, p, ac):
 
 
 def accent_kind(name):
-    """'fill', 'switch', 'press', 'disc' or 'glyph' for a theme image the accent tints, else None (a path or URL is a cover)."""
+    """'fill', 'switch', 'press', 'disc', 'tile' or 'glyph' for a theme image the accent tints, else None (a path or URL is a cover)."""
     if not plain(name): return None
-    if name.startswith(ACCENT_GLYPH) and name not in ACCENT_GLYPH_NOT: return 'glyph'
+    if name in ACCENT_TILE: return 'tile'
+    if name in ACCENT_SHUFDOWN: return 'shufdown'
+    if (name.startswith(ACCENT_GLYPH) and name not in ACCENT_GLYPH_NOT) or name in ACCENT_GLYPH_STOCK: return 'glyph'
     return 'fill' if name in ACCENT_FILL else 'switch' if name in ACCENT_SWITCH else 'press' if name in ACCENT_PRESS else 'disc' if name in ACCENT_DISC else None
 
 
@@ -240,7 +273,7 @@ def render_image(name, im, bg='black', ac='neutral'):
     from PIL import Image
     im = im.convert('RGBA')
     out = Image.new('RGBA', im.size)
-    out.putdata([(card_press(ac, bg) + (p[3],) if kind == 'press' and p[3] else accent_pixel(kind, p, ac)) for p in im.getdata()])
+    out.putdata([accent_pixel(kind, p, ac, bg) for p in im.getdata()])
     return out
 
 

@@ -652,6 +652,7 @@ def page_machine(card=page_card, cls=None):
     m.setword(m.widgets['label_title'] + 8, 156)
     m.clock = 5000
     m.images['pc_atlas'] = atlas_image()
+    m.images['pod_ic_dltile'] = atlas_image('pod_ic_dltile')
     m.images['pod_ic_subtile'] = atlas_image('pod_ic_subtile')
     m.images['pod_ic_savetile'] = atlas_image('pod_ic_savetile')
     return m

@@ -244,6 +244,7 @@ static struct {
         tint_key; /* the Show page's colour (0x00BBGGRR, 0: black) and the tone cache key of the show (0: none) */
     int tint_on, bar_ours,
         collapsed; /* the page is tinted (window colour, gradient shown); the status bar is ours; the small title shows */
+    void *dltile; /* pod_ic_dltile (the Downloads row's tile) */
     void *atlas; /* pc_atlas decoded with its alpha (PA_SIZE square), once the Show level first paints */
     void *
         subtile; /* pod_ic_subtile (the Subscriptions row's tile), decoded the same way once the Shows level first paints */
@@ -961,7 +962,12 @@ static void *pg_atlas(void) {
     return pg.atlas;
 }
 
-/* The Subscriptions row's tile (pod_ic_subtile, PA_TILE_PX square: an image of its own so that the atlas stays as it was) decoded the same way, once. */
+/* The Downloads row's tile (pod_ic_dltile, PA_TILE_PX square: an image of its own, like the other two, so the accent can tint its glyph by name) decoded the same way, once. */
+static void *pg_dltile(void) {
+    if (!pg.dltile) pg.dltile = pg_rgba("pod_ic_dltile", PA_TILE_PX, PA_TILE_PX);
+    return pg.dltile;
+}
+/* The Subscriptions row's tile (pod_ic_subtile), the same. */
 static void *pg_subtile(void) {
     if (!pg.subtile) pg.subtile = pg_rgba("pod_ic_subtile", PA_TILE_PX, PA_TILE_PX);
     return pg.subtile;
@@ -1380,11 +1386,8 @@ static void pg_paint_home(void *canvas) {
         if (!pg_ylib(i)) continue;
         y = pg_ylib(i) - off;
         if (pg.press == i + 1 && !pg.select) az_fill(canvas, 0, y, y + PC_ROW_H - 1, PG_W, LIST_PRESS);
-        if (i)
-            pg_blit_from(canvas, i == 2 ? pg_savetile() : pg_subtile(), 0, 0, PA_TILE_PX, PA_TILE_PX, PP_DL_TILE_X,
-                         y + PP_DL_TILE_Y);
-        else
-            pg_sprite(canvas, PA_TILE_X, PA_TILE_Y, PA_TILE_PX, PA_TILE_PX, PP_DL_TILE_X, y + PP_DL_TILE_Y);
+        pg_blit_from(canvas, i == 2 ? pg_savetile() : i ? pg_subtile() : pg_dltile(), 0, 0, PA_TILE_PX, PA_TILE_PX,
+                     PP_DL_TILE_X, y + PP_DL_TILE_Y);
         pg_chev(canvas, PP_DL_CHEV_X, y + (PC_ROW_H - 1 - POD_CHEV_H) / 2);
         az_fill(canvas, PP_DL_TEXT_X, y + PC_ROW_H - 1, y + PC_ROW_H, PG_W - PP_DL_TEXT_X, LIST_HAIR);
     }
@@ -4330,6 +4333,7 @@ static int pg_on_destroy(void *ctx, void *e) {
     grid_free(&pg.gg);
     grid_free(&pg.sg);
     if (pg.atlas) bitmap_destroy(pg.atlas);
+    if (pg.dltile) bitmap_destroy(pg.dltile);
     if (pg.subtile) bitmap_destroy(pg.subtile);
     if (pg.savetile) bitmap_destroy(pg.savetile);
     if (pg.chev) bitmap_destroy(pg.chev);
