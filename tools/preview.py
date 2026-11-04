@@ -243,6 +243,14 @@ def mainmenu_page(s, data, first=0):
                        switches={f'pod_switch{i}': i in ids for i in range(len(P.ITEMS))},
                        arrows={f'pod_up{i}' for i in ids[1:]}).convert('RGB')
 
+def pulldown_page(s, data):
+    """Settings > Appearance > Control Center: the shown tiles in order (an arrow on each but the first), then the hidden ones, switches as saved."""
+    ids = P.parse_pulldown(data)
+    order = ids + [i for i in range(len(P.PULLDOWN_TILES)) if i not in ids]
+    return PI.pod_page(s, 'm1plus_pulldown', 8, order=[f'pod_row{i}' for i in order],
+                       switches={f'pod_switch{i}': i in ids for i in range(len(P.PULLDOWN_TILES))},
+                       arrows={f'pod_up{i}' for i in ids[1:]}).convert('RGB')
+
 def shot_bars(work):
     """The status bar while a Screenshot is pending (the camera shown, Wi-Fi and a connected Bluetooth lit), with the 12 h and the 24 h
     clock, then the same bar as it is for the capture (the camera hidden), then with Battery Percentage on (100%, 87%, 5%, and 87% with the
@@ -308,6 +316,7 @@ def main():
     bars, bars_same = PI.bars_compare(s); bars = bars.convert('RGB')
     custom = b'2301458j-6a\n'   # Albums, Artists, Now Playing, Cover Flow, Songs, Playlists, Folders, Settings: Shuffle and Genres are hidden; Shuffle and Favorites are turned off Extras
     mm_def, mm_cust = mainmenu_page(s, None), mainmenu_page(s, custom)
+    pd_def, pd_cust = pulldown_page(s, None), pulldown_page(s, b'2063-1457\n')
     xc_def, xc_cust = extrascfg_page(s, None), extrascfg_page(s, custom)
     menu_cust = menu_page(s, custom)
     extras = extras_page(s, None)
@@ -324,6 +333,7 @@ def main():
             ('Scrolled to the end: 1 album', sh1),
             ('Settings page', sett), ('Settings > Library (Album Order: Artist)', cfset), ('Settings > Home Screen', homeset),('Shuffle page', shuf),
             ('Settings > Main Menu (default: Cover Flow ... Playlists shown, the rest hidden)', mm_def), ('Main Menu after customising (Shuffle, Genres hidden)', mm_cust),
+            ('Settings > Appearance > Control Center (default: all eight tiles)', pd_def), ('Control Center: Button Lock, Wi-Fi, Playback, Gain shown; the rest hidden', pd_cust),
             ('Settings > Extras (default: every hidden item listed, under the headers)', xc_def), ('Settings > Extras: Shuffle and Favorites turned off', xc_cust),
             ('The menu with that list', menu_cust), ('Extras (default menu: Play, Library, Collections, Tools under their headers)', extras),
             ('Extras with Shuffle, Genres hidden, Shuffle and Favorites off', extras_cust), ('Artists: Artist mode (toggle shows Album Artist)', art0), ('Artists: the rail jumps to K (bubble, pinned header, the small title)', art2), ('Artists: Album Artist mode (toggle shows Artist)', art1), ('Genres (the Artists page on class 0xf006: no toggle)', gen), ('Composers (class 0xf005)', comp),

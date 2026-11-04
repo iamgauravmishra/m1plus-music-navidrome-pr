@@ -43,6 +43,8 @@ Grey values show the current setting.
 To show, hide or reorder menu items, open **Settings → Home Screen → Main Menu**.
 Use **Home Screen → Extras** to hide items from Extras. Settings stays accessible.
 
+To show, hide or reorder the tiles of the pull-down, open **Settings → System → Appearance → Control Center**.
+
 | Page | Options |
 |---|---|
 | Wi-Fi / Bluetooth | Stock connection pages; values show On/Off |
@@ -50,7 +52,7 @@ Use **Home Screen → Extras** to hide items from Extras. Settings stays accessi
 | Library | Update Library, Album Order (Artist/Album, for Albums and Cover Flow), Rebuild Covers and landscape Cover Flow |
 | Now Playing | Cassette Theme: Normal, Chrome or Metal; applies next time Cassette Mode opens |
 | Playback | Stock Play Mode and EQ pages; All Playback Settings includes Gapless |
-| System | Display, **Appearance** > **Background** (Black, or Tinted: with an accent chosen, the dark greys of every page, card and sheet take a 12 % wash of it; covers and cover-coloured pages keep their look) and **Accent** (the main menu's icons show in the accent; Neutral, Red, Orange, Green, Teal, Purple or Champagne: tints pressed rows and their icons, switches that are on, the lit pull-down tiles, sliders, progress bars and the picker check; applies at once), Language (under All System Settings), Keyboards and About (firmware, device, network and storage details; **Software Update** is the row under the version) |
+| System | Display, **Appearance** > **Background** (Black, or Tinted: with an accent chosen, the dark greys of every page, card and sheet take a 12 % wash of it; covers and cover-coloured pages keep their look) and **Accent** (the main menu's icons show in the accent; Neutral, Red, Orange, Green, Teal, Purple or Champagne: tints pressed rows and their icons, switches that are on, the lit pull-down tiles, sliders, progress bars and the picker check; applies at once) and **Control Center** (show, hide and reorder the eight tiles of the status bar swipe-down panel), Language (under All System Settings), Keyboards and About (firmware, device, network and storage details; **Software Update** is the row under the version) |
 | Keyboards | English always enabled; Chinese (Pinyin) adds a language key and candidates above the keys. Swipe candidates sideways; space selects the first |
 | Developer → Startup | Boot to M1+ Music; Open Shanling Home |
 | Developer → Tools | Screenshot, Cover Cache, Clear Track Durations and stock System Update |

@@ -82,6 +82,7 @@ extern int songs_open_list(
     int home); /* patch/songs.c: another stock song list (Favourites ...) on the same page; arg = its Home tile */
 extern void menu_arrange(void *win, int extras); /* patch/menu.c: the menu / Extras rows as the saved list says */
 extern void menu_custom_opened(void *win); /* patch/menu.c: the Main Menu page's switches and arrows */
+extern void pulldown_page_opened(void *win); /* patch/pulldown.c: the Pull-down page's switches and arrows */
 extern void menu_extras_opened(void *win); /* patch/menu.c: the Settings > Extras page's switches */
 
 struct pod_row {
@@ -613,6 +614,8 @@ static int open_page(int index, int as_home) {
                  (void *)0); /* the navbar's Settings button (a missing one: stock-safe, nothing happens) */
     } else if (index == POD_MENUCFG_PAGE)
         menu_custom_opened(win);
+    else if (index == POD_PULLDOWN_PAGE)
+        pulldown_page_opened(win);
     else if (index == POD_EXTRASCFG_PAGE)
         menu_extras_opened(win);
     { /* the Settings page is the way out to the grid; the menu may be the Home instance (no navbar) */

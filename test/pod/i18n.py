@@ -6,7 +6,7 @@ import build, awtk_strings, awtk_style, pod_i18n, pod_keyboard
 from awtk_text import Ttf, StbText
 
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
-SAME_AS_ENGLISH = {'Cover Flow', 'Playlists', 'Playlist', 'Genres', 'Extras', 'Albums', 'Artists', 'Local', '%s, %s'}   # translations that are the English word by design
+SAME_AS_ENGLISH = {'Cover Flow', 'Playlists', 'Playlist', 'Genres', 'Gain', 'Extras', 'Albums', 'Artists', 'Local', '%s, %s'}   # translations that are the English word by design
 SAME_AS_ENGLISH |= {'%d minute', '%d minutes'}    # French writes minute(s) as English does
 SAME_AS_ENGLISH |= {'Podcasts', ', %d', 'Normal', 'Chrome', 'Metal', 'Graphite', '5 s', '10 s'}    # Podcasts in French and German
 SAME_AS_ENGLISH |= {'Downloads', '%d MB', '%d.%d GB', '%d GB'}    # German writes Downloads as English does
@@ -201,7 +201,9 @@ def run(ctx):
     for page in pod_pages.PAGES:
         tree = awtk_ui.parse(open(os.path.join(WORK, RAW, 'ui', page.key + '.bin'), 'rb').read())
         lt = tree.find('label_title')
-        keys = [(r.label, [c for c in tree.find(f'pod_row{i}').children if c.type == 'hscroll_label'][0].w) for i, r in enumerate(page.rows) if pod_pages.row_kind(r) not in ('value', 'info')]   # a value row's label shares its room with the value: checked below
+        labels = [(i, r.label) for i, r in enumerate(page.rows) if pod_pages.row_kind(r) not in ('value', 'info')]   # a value row's label shares its room with the value: checked below
+        if page.kind == 'pdcfg': labels = list(enumerate(pod_pages.PULLDOWN_TILES))   # the Control Center page's rows are the tiles, beside the up arrow
+        keys = [(english, [c for c in tree.find(f'pod_row{i}').children if c.type == 'hscroll_label'][0].w) for i, english in labels]
         for loc in LOC:
             if pod_i18n.key_for(page.title) and page.kind != 'songs':   # the Songs page's small title is hidden by the payload where it does not fit (test/pod/songs.py)
                 w = width(tr_text(loc, pod_i18n.key_for(page.title)), title_px)
@@ -209,6 +211,10 @@ def run(ctx):
             for english, room in keys:
                 k = pod_i18n.key_for(english)
                 if k and width(tr_text(loc, k), row_px) > room: over.append((page.key, english, loc, width(tr_text(loc, k), row_px), room))
+    # the one accepted overflow (the user's choice): the Control Center page's Playback row in Russian (Воспроизведение, the Settings header's word) ends in an ellipsis and scrolls when focused
+    cut = [o for o in over if o[:3] == (pod_pages.PULLDOWN_PAGE.key, 'Playback', 'ru_RU')]
+    over = [o for o in over if o not in cut]
+    expect(len(cut) == 1, f'the Russian Playback row of Control Center is the one label cut with an ellipsis ({cut})')
     expect(not over, f'every menu, Extras, Shuffle, Settings and Main Menu row and every page title fits its label in all 13 languages ({over[:40]})')
     hdr_over = []   # the section headers of the Extras and Settings > Extras pages: 16 px grey captions in labels of 274 px
     for page in (pod_pages.EXTRAS_PAGE, pod_pages.EXTRASCFG_PAGE):

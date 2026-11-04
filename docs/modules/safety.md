@@ -1,7 +1,7 @@
 # Payload safety
 
 - **Keep the approved entry points.** Home icon tap, guarded Home initialization,
-  Now Playing initialization, More-dialog initialization, the podcast tag-copy call site, the
+  Now Playing initialization, More-dialog initialization, pull-down initialization (opened by the user's swipe only), the podcast tag-copy call site, the
   dot-folder scan, library query functions, status bar's battery-capacity call site
   (Battery Percentage, off by default), the previously empty `scroll_view` event slot, and the
   palette's three paint-time hooks: `style_get_color` `0x659fcc`, `style_get_gradient` `0x659f9c` and
@@ -26,7 +26,8 @@
   The scan hook skips dot-folders outside the boot path. The battery hook runs stock first
   from the first status refresh; only an enabled percentage setting changes capacity/label.
   Disabled it adds only an access and cached flag. Now Playing's paint work stays on the
-  cover widget; More work stays on init, More/back taps and covering-dialog handling.
+  cover widget; More work stays on init, More/back taps and covering-dialog handling. The pull-down hook runs stock's init first,
+  then moves and hides the eight tiles and their captions once, and only without the kill switch.
 - **Pin every edit.** Check stock SHA-256, words, symbols, `$gp` and offsets before writing.
   A mismatch fails the build; hook errors fall back to stock.
 - **Honor the kill switch.** `/mnt/mmc/m1plus-off` disables the payload. The list-gesture hook

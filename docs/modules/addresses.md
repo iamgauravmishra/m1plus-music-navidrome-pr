@@ -12,6 +12,7 @@ resumes and call boundaries.
 | `home_page_init` | `0x534cd4` |
 | `playing_page_init` | `0x53d1e4` |
 | `dialog_playmore_dialog_init` | `0x479cc4` |
+| `dialog_dropdown_dialog_init` | `0x475f04` |
 | `get_id3info` tag-copy call | `0x4dff4c` |
 | Empty `scroll_view` event slot | `0x97a330` |
 

@@ -48,6 +48,9 @@
 #define MENU_FILE \
     "/mnt/data/m1plus/home-menu" /* the menu's visible items in order, one digit (item id) each (patch/menu.c); missing or invalid = the defaults */
 #define MENU_TMP "/mnt/data/m1plus/home-menu.tmp"
+#define PULLDOWN_FILE \
+    "/mnt/data/m1plus/pulldown-tiles" /* the pull-down's tiles: the shown ones' ids in order, optionally '-' and the hidden ones (patch/pulldown.c); missing or invalid = all eight in stock order */
+#define PULLDOWN_TMP "/mnt/data/m1plus/pulldown-tiles.tmp"
 #define RECENT_FILE \
     CARD_DIR \
     "/recently-played" /* the albums played last, most recent first (patch/recent.c): on the card, like the keys and paths it holds; missing, malformed or no card = none */

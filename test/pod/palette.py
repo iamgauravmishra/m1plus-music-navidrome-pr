@@ -522,8 +522,8 @@ def settings_tests(ctx):
     expect([(r.label, r.action, r.arg) for r in B.rows] == [('Black', P.ACT_BGSET, 0), ('Tinted', P.ACT_BGSET, 1)] and B.title == 'Background' and B.key == 'm1plus_background'
            and P.BG_VALUES == ('Black', 'Tinted') and all(P.row_kind(r) == 'check' for r in B.rows) and not [x for x in B.layout if isinstance(x, P.Note)],
            'the picker: Black and Tinted in the saved order, titled Background, a check each, no Light')
-    expect([(r.label, r.action, r.arg) for r in W.rows] == [('Background', P.ACT_BG, P.BG_PAGE_INDEX), ('Accent', P.ACT_ACCENT, P.ACCENT_PAGE_INDEX)] and P.row_kind(W.rows[0]) == 'value',
-           'the Appearance page: the Background value row above the Accent one')
+    expect([(r.label, r.action, r.arg) for r in W.rows][:2] == [('Background', P.ACT_BG, P.BG_PAGE_INDEX), ('Accent', P.ACT_ACCENT, P.ACCENT_PAGE_INDEX)] and P.row_kind(W.rows[0]) == 'value',
+           'the Appearance page: the Background value row above the Accent one (the Control Center link follows in its own card, test/pod/pdtiles.py)')
 
     def open_pick(data=None, acc=None):
         m = LM(acc=acc)
@@ -853,8 +853,8 @@ def accent_picker_tests(ctx):
            'the picker: Neutral and the six accents in the saved order, titled Accent, a check each')
     expect(V.rows[row_i].arg == P.APPEARANCE_PAGE_INDEX and V.rows[row_i].action == P.ACT_PAGE and P.row_kind(V.rows[row_i]) == 'link' and [r.label for r in V.rows[row_i - 1:row_i + 2]] == ['Display', 'Appearance', 'Keyboards']
            and 'Light Mode' not in [r.label for r in V.rows] and 'Accent' not in [r.label for r in V.rows], 'Settings > System: an Appearance link (a chevron, no value) between Display and Keyboards; the Light row still hidden')
-    expect([(r.label, r.action, r.arg) for r in W.rows][1:] == [('Accent', P.ACT_ACCENT, P.ACCENT_PAGE_INDEX)] and P.row_kind(W.rows[1]) == 'value' and W.title == 'Appearance' and W.key == 'm1plus_appearance'
-           and P.PAGES[P.APPEARANCE_PAGE_INDEX] is W and P.APPEARANCE_PAGE_INDEX == len(P.PAGES) - 1 == 40, 'the Appearance page: an Accent value row opening the picker, the last of PAGES')
+    expect([(r.label, r.action, r.arg) for r in W.rows][1:2] == [('Accent', P.ACT_ACCENT, P.ACCENT_PAGE_INDEX)] and P.row_kind(W.rows[1]) == 'value' and W.title == 'Appearance' and W.key == 'm1plus_appearance'
+           and P.PAGES[P.APPEARANCE_PAGE_INDEX] is W and P.APPEARANCE_PAGE_INDEX == 40, 'the Appearance page (PAGES[40]): an Accent value row opening the picker')
 
     def open_pick(data=None):
         m = LM(acc=data)

@@ -164,7 +164,8 @@ VINYL_WHITE_INDEX = 30
 VTHEME_PAGE_INDEX = 31
 BG_PAGE_INDEX = 38   # after UPDATE
 ACCENT_PAGE_INDEX = 39  # after BG_PAGE
-APPEARANCE_PAGE_INDEX = 40  # the last of PAGES
+APPEARANCE_PAGE_INDEX = 40  # after ACCENT_PAGE
+PULLDOWN_PAGE_INDEX = 41   # the last of PAGES
 ITEMS = [   # item id = index; the default order, essentials first (iPod classic style)
     Row('Now Playing', ACT_PLAYER),
     Row('Cover Flow', ACT_COVER),
@@ -335,7 +336,7 @@ COVLIST = Page('m1plus_covlist', 'm1plus_covlist_page', 'Missing Covers', kind='
 
 # Settings > Developer > Tools > Settings Files (patch/setfiles.c, docs/modules/settings.md "Settings Files"): the payload's own files as read when the page opens. The labels are the file names (identifiers, not translated).
 SETTING_FILES = ('albums-view', 'playlists-view', 'album-order', 'coverflow-landscape', 'cassette-theme', 'vinyl-record', 'vinyl-base', 'pod-appearance', 'home-recent-albums',
-                 'home-daily-mix', 'home-menu', 'keyboard-pinyin', 'podcast-online-search', 'battery-percentage', 'playback-shuffle', 'search-history', 'covers-rebuild')
+                 'home-daily-mix', 'home-menu', 'pulldown-tiles', 'keyboard-pinyin', 'podcast-online-search', 'battery-percentage', 'playback-shuffle', 'search-history', 'covers-rebuild')
 GUARD_FILES = ('m1plus-start', 'm1plus-run', 'm1plus-bad', 'm1plus-off')
 FOLDER_LABEL = 'm1plus/'
 INFO_SF = INFO_CC_STATUS + 1   # patch/m1plus.c INFO_SF = INFO_CC + 7; row k reads setfiles_stat(k): 4 guard files, the folder, the settings
@@ -380,6 +381,36 @@ HOMESET_PAGE = Page('m1plus_homeset', 'm1plus_homeset_page', 'Home Screen', layo
 # Main Menu: the customise page (patch/menu.c builds its behaviour at run time): one row per item with a
 # show / hide switch (the row's own tap too) and, on the shown ones, an up arrow that moves it one place up.
 MENUCFG_PAGE = Page('m1plus_mainmenu', 'm1plus_mainmenu_page', 'Main Menu', kind='menucfg')
+
+# Pull-down (patch/pulldown.c, docs/modules/pulldown.md): the eight tiles of the stock pull-down (ui/dialog/dropdown_dialog.bin, view_switchs) in the stock slot order, which is the
+# id of a tile ('0'..'7'). The page is the Main Menu page's twin (a row per tile with a switch and, on the shown rows but the first, an up arrow). The row labels are short texts of
+# ours, not the tiles' stock captions: those ("Playback Setting", "Output Options"; far longer in Russian or Italian) do not fit the row's label beside the arrow.
+PULLDOWN_TILES = ('Wi-Fi', 'Bluetooth', 'Button Lock', 'Gain', 'USB Mode', 'Output', 'Playback', 'System')
+PULLDOWN_CHARS = '01234567'
+PULLDOWN_FILE_MAX = 12   # patch/pulldown.c reads at most this many bytes (8 ids, the '-' and a newline are 10); longer is invalid
+PULLDOWN_PAGE = Page('m1plus_pulldown', 'm1plus_pulldown_page', 'Control Center', kind='pdcfg')
+
+
+def parse_pulldown(data):
+    """The shown tile ids in order from the saved file (patch/pulldown.c pd_load's model), or the default (all eight, stock order).
+    `<shown ids>[-<hidden ids>]` and an optional newline, 1 .. PULLDOWN_FILE_MAX - 1 bytes; every other tile is hidden (the part after
+    the '-' only says in what order the editor lists them). Invalid, giving the default: an unknown character, an id twice (in either
+    part or across them), a second '-'. A bare newline or '-' hides all eight."""
+    if isinstance(data, str): data = data.encode('latin-1')
+    default = list(range(len(PULLDOWN_TILES)))
+    if data is None or not 0 < len(data) < PULLDOWN_FILE_MAX: return default
+    body = (data[:-1] if data.endswith(b'\n') else data).decode('latin-1')
+    shown, sep, hidden = body.partition('-')
+    if '-' in hidden or any(c not in PULLDOWN_CHARS for c in shown + hidden): return default
+    ids = [PULLDOWN_CHARS.index(c) for c in shown + hidden]
+    if len(set(ids)) != len(ids): return default
+    return ids[:len(shown)]
+
+
+def format_pulldown(shown):
+    """The saved file for the shown tiles (patch/pulldown.c pd_save): the ids, then '-' and the hidden ones in stock order, if any, and a newline."""
+    hidden = [i for i in range(len(PULLDOWN_TILES)) if i not in shown]
+    return ''.join(PULLDOWN_CHARS[i] for i in shown) + ('-' + ''.join(PULLDOWN_CHARS[i] for i in hidden) if hidden else '') + '\n'
 
 # Extras (iPod style): every item the menu does not show and the user did not turn off (the asset has a row for each item, in id
 # order, same index as the menu's; patch/menu.c hides the ones the menu shows or that are off and stacks the rest in EXTRAS_ORDER,
@@ -533,8 +564,10 @@ BG_VALUES = ('Black', 'Tinted')   # the value the Background row shows for the s
 ACCENT_VALUES = ('Neutral', 'Red', 'Orange', 'Green', 'Teal', 'Purple', 'Champagne')
 ACCENT_PAGE = Page('m1plus_accent', 'm1plus_accent_page', 'Accent', layout=[Row(n, ACT_ACCENTSET, i) for i, n in enumerate(ACCENT_VALUES)])
 
-# Settings > System > Appearance: one card with the Background value row (Black or Tinted) and the Accent value row (the accent's name); each opens its picker.
-APPEARANCE_PAGE = Page('m1plus_appearance', 'm1plus_appearance_page', 'Appearance', layout=[Row('Background', ACT_BG, BG_PAGE_INDEX), Row('Accent', ACT_ACCENT, ACCENT_PAGE_INDEX)])
+# Settings > System > Appearance: one card with the Background value row (Black or Tinted) and the Accent value row (the accent's name), each opening its picker; then a card
+# with the Control Center link row (the pull-down's tiles, PULLDOWN_PAGE).
+APPEARANCE_PAGE = Page('m1plus_appearance', 'm1plus_appearance_page', 'Appearance', layout=[Row('Background', ACT_BG, BG_PAGE_INDEX), Row('Accent', ACT_ACCENT, ACCENT_PAGE_INDEX),
+                                                                                         GAP, Row('Control Center', ACT_PAGE, PULLDOWN_PAGE_INDEX)])
 
 # The keyboard page (patch/keyboard.c, docs/modules/keyboard.md): the navbar, a search field and our own QWERTY pad; opened by keyboard_open (the Developer row, later podcast search), no menu row.
 KEYBOARD = Page('m1plus_keyboard', 'm1plus_keyboard_page', 'Keyboard', kind='keyboard')
@@ -559,7 +592,7 @@ QUEUE_PAGE = Page('m1plus_queue', 'm1plus_queue_page', 'Queue', kind='queue')
 # PAGES[0] is the entry page.
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
          EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, SORT_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL, FOLDERS, QUEUE_PAGE,
-         RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST, FILES_PAGE, UPDATE, RELNOTES, BG_PAGE, ACCENT_PAGE, APPEARANCE_PAGE]
+         RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST, FILES_PAGE, UPDATE, RELNOTES, BG_PAGE, ACCENT_PAGE, APPEARANCE_PAGE, PULLDOWN_PAGE]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE
@@ -568,4 +601,5 @@ assert PAGES[EXTRAS_PAGE_INDEX] is EXTRAS_PAGE and PAGES[MENUCFG_PAGE_INDEX] is 
 assert PAGES[LIBRARY_PAGE_INDEX] is LIBRARY_PAGE and PAGES[HOMESET_PAGE_INDEX] is HOMESET_PAGE
 assert PAGES[ABOUT_PAGE_INDEX] is ABOUT_PAGE and PAGES[RECORD_PAGE_INDEX] is RECORD_PAGE and PAGES[BG_PAGE_INDEX] is BG_PAGE and PAGES[ACCENT_PAGE_INDEX] is ACCENT_PAGE and PAGES[APPEARANCE_PAGE_INDEX] is APPEARANCE_PAGE
 assert PAGES[VINYL_WHITE_INDEX] is VINYL_WHITE and PAGES[VTHEME_PAGE_INDEX] is VTHEME_PAGE and PAGES[CACHE_PAGE_INDEX] is CACHE_PAGE and PAGES[FILES_PAGE_INDEX] is FILES_PAGE
+assert PAGES[PULLDOWN_PAGE_INDEX] is PULLDOWN_PAGE
 assert PAGES[SORT_PAGE_INDEX] is SORT_PAGE and PAGES[THEME_PAGE_INDEX] is THEME_PAGE

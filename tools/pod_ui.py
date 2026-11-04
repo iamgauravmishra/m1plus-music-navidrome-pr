@@ -1380,7 +1380,7 @@ def build_relnotes_page(page):
 
 
 def build_menucfg_page(page):
-    """The Main Menu page (patch/menu.c): a row per menu item in the default order, each with an up arrow (a stock
+    """The Main Menu page (patch/menu.c) and the Pull-down page (patch/pulldown.c, kind pdcfg: a row per tile): a row per menu item in the default order, each with an up arrow (a stock
     button with the stock chevron-up art, expansion_2, insensitive: a picture, the row decides by the tap position)
     and a switch. The payload orders the rows, sets the switches and hides the arrows of the hidden items and of the
     first shown one."""
@@ -1389,16 +1389,26 @@ def build_menucfg_page(page):
     root.children.append(navbar(page.title))
     lv = stock_list([], True)
     sv = lv.children[0]
-    for i, r in enumerate(pod_pages.ITEMS):
-        row = row_item(f'pod_row{i}', i * ROW_H, r.label, False, ROW_H, sv.w, (f'pod_switch{i}', i in pod_pages.DEFAULT_MENU))
-        row.children[0].w = switch_x(sv.w) - UP_W - row.children[0].x
-        row.children.append(Widget('button', switch_x(sv.w) - UP_W, 0, UP_W, ROW_H, [
-            ('name', f'pod_up{i}'), ('enable', 'true'), ('sensitive', 'false'), ('style', 'img_btn_style'),
-            ('style:pressed:icon', 'expansion_2_down'), ('style:normal:icon', 'expansion_2'), ('style:over:icon', 'expansion_2')]))
-        sv.children.append(row)
+    if page.kind == 'pdcfg':   # the Pull-down page (patch/pulldown.c): the same rows for the eight tiles, all shown by default
+        sv.children += cfg_rows(sv.w, pod_pages.PULLDOWN_TILES, range(len(pod_pages.PULLDOWN_TILES)))
+    else:
+        sv.children += cfg_rows(sv.w, [r.label for r in pod_pages.ITEMS], pod_pages.DEFAULT_MENU)
     root.children.append(lv)
     root.children.append(nav_fade())
     return root
+
+
+def cfg_rows(w, labels, on):
+    """The rows of a Main Menu style page (the menu items, the pull-down tiles): a switch (on for the ids in `on`) and an up arrow each."""
+    rows = []
+    for i, label_ in enumerate(labels):
+        row = row_item(f'pod_row{i}', i * ROW_H, label_, False, ROW_H, w, (f'pod_switch{i}', i in on))
+        row.children[0].w = switch_x(w) - UP_W - row.children[0].x
+        row.children.append(Widget('button', switch_x(w) - UP_W, 0, UP_W, ROW_H, [
+            ('name', f'pod_up{i}'), ('enable', 'true'), ('sensitive', 'false'), ('style', 'img_btn_style'),
+            ('style:pressed:icon', 'expansion_2_down'), ('style:normal:icon', 'expansion_2'), ('style:over:icon', 'expansion_2')]))
+        rows.append(row)
+    return rows
 
 
 # The Extras page's section headers (patch/menu.c mn_extras; iOS grouped-list captions): one per group of pod_pages.EXTRAS_GROUPS, pod_hdr0 ..,
@@ -1831,7 +1841,7 @@ def build_page(page):
         return build_cards_page(page)
     if page.kind == 'keyboard':
         return build_keyboard_page(page)
-    if page.kind == 'menucfg':
+    if page.kind in ('menucfg', 'pdcfg'):
         return build_menucfg_page(page)
     if page.kind == 'extrascfg':
         return build_extrascfg_page(page)

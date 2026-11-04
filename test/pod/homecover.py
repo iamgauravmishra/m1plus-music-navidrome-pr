@@ -600,7 +600,7 @@ def files_tests(ctx):
     expect(P.DEVELOPER_PAGE.rows[d_i].label == 'Settings Files' and FP.title == 'Settings Files', 'Developer > Tools has a Settings Files link row that opens the page of that title')
     labels = [r.label for r in FP.rows]
     expect(labels == list(P.GUARD_FILES) + [P.FOLDER_LABEL] + list(P.SETTING_FILES) and all(r.action == P.ACT_INFO for r in FP.rows),
-           'the rows: the four guard files, the folder, the 16 setting files; all information rows')
+           'the rows: the four guard files, the folder, the 17 setting files; all information rows')
     expect(sorted(r.arg for r in FP.rows) == list(range(P.INFO_SF, P.INFO_SF + len(FP.rows))), 'their kinds are unique and consecutive')
     D = '/mnt/data/'
     S = D + 'm1plus/'
@@ -609,12 +609,12 @@ def files_tests(ctx):
         m.widget(n)
     m.fs[D + 'm1plus-start'], m.fs[D + 'm1plus-bad'] = b'1\n', b''
     m.present.add(S.rstrip('/'))
-    m.fs.update({S + 'albums-view': b'1', S + 'playlists-view': b'0\n', S + 'home-menu': b'6502\n', S + 'cassette-theme': b'12', S + 'search-history': b'a\nb\nc\n',
+    m.fs.update({S + 'albums-view': b'1', S + 'playlists-view': b'0\n', S + 'home-menu': b'6502\n', S + 'pulldown-tiles': b'2013-4567\n', S + 'cassette-theme': b'12', S + 'search-history': b'a\nb\nc\n',
                  S + 'covers-rebuild': b'1\n', S + 'battery-percentage': b'1'})
     m.call(PSYMS['on_row'], a0=PSYMS[f'pod_rows_{P.DEVELOPER_PAGE_INDEX}'] + 12 * d_i, count=6000000)
     expect(('window_open', FP.key) in m.calls, 'the link row opens m1plus_files')
     want = {'m1plus-start': '1', 'm1plus-run': 'missing', 'm1plus-bad': 'present', 'm1plus-off': 'missing', P.FOLDER_LABEL: 'present', 'albums-view': '1', 'playlists-view': '0',
-            'album-order': 'missing', 'cassette-theme': 'other', 'home-menu': '6502', 'battery-percentage': '1', 'search-history': '3', 'covers-rebuild': 'present',
+            'album-order': 'missing', 'cassette-theme': 'other', 'home-menu': '6502', 'pulldown-tiles': '2013-4567', 'battery-percentage': '1', 'search-history': '3', 'covers-rebuild': 'present',
             'keyboard-pinyin': 'missing'}
     got = {r.label: next((c[2] for c in reversed(m.calls) if c[0] == 'widget_set_text_utf8' and c[1] == m.widgets[f'pod_value{i}']), None) for i, r in enumerate(FP.rows)}
     expect(all(got[k] == v for k, v in want.items()), f'the seeded values: {[(k, got[k], v) for k, v in want.items() if got[k] != v]}')

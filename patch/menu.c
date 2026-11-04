@@ -217,6 +217,8 @@ static void mn_plain_paint(void *sv) {
         *(unsigned *)((char *)sv + SV_PAINT_CHILDREN) = 0;
 }
 
+void menu_plain_paint(void *sv) { mn_plain_paint(sv); } /* patch/pulldown.c: its page lays its rows out by hand too */
+
 /* The menu (extras 0) or the Extras page (extras 1) as the saved list says. The stock list_view lays its visible rows
  * out again, in child order (children_layouter_list_view @0x60abbc, set_virtual_h @0x60b20c), whenever the window is
  * marked for relayout (widget_set_visible does that, and the main loop lays out before every paint, @0x6939f4): the

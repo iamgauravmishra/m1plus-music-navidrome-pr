@@ -132,6 +132,18 @@ TEXT = dict([
        'Ajustes de reproducción', 'Impostazioni riproduzione', 'การตั้งค่าการเล่นทั้งหมด', 'Ustawienia odtwarzania', 'Параметры плеера', 'Параметри плеєра'),
     _t('System', '系统', '系統', 'システム', '시스템', 'Système', 'System',
        'Sistema', 'Sistema', 'ระบบ', 'System', 'Система', 'Система'),
+    # Settings > System > Appearance > Control Center (patch/pulldown.c; iOS's names for its Control Center): the page, and the two tile captions whose stock text shows the
+    # state (High / Low, USB AUDIO / DAC / Storage)
+    _t('Control Center', '控制中心', '控制中心', 'コントロールセンター', '제어 센터', 'Centre de contrôle', 'Kontrollzentrum',
+       'Centro de control', 'Centro di Controllo', 'ศูนย์ควบคุม', 'Centrum sterowania', 'Пункт управления', 'Пункт керування'),
+    _t('Gain', '增益', '增益', 'ゲイン', '게인', 'Gain', 'Verstärkung',
+       'Ganancia', 'Guadagno', 'เกน', 'Wzmocnienie', 'Усиление', 'Підсилення'),
+    _t('USB Mode', 'USB 模式', 'USB 模式', 'USBモード', 'USB 모드', 'Mode USB', 'USB-Modus',
+       'Modo USB', 'Modalità USB', 'โหมด USB', 'Tryb USB', 'Режим USB', 'Режим USB'),
+    _t('Button Lock', '按键锁', '按鍵鎖', 'ボタンロック', '버튼 잠금', 'Verrou touches', 'Tastensperre',
+       'Bloqueo', 'Blocco tasti', 'ล็อกปุ่ม', 'Blokada', 'Блокировка', 'Блокування'),
+    _t('Output', '输出', '輸出', '出力', '출력', 'Sortie', 'Ausgang',
+       'Salida', 'Uscita', 'เอาต์พุต', 'Wyjście', 'Выход', 'Вихід'),
     _t('Display', '显示', '顯示', 'ディスプレイ', '디스플레이', 'Affichage', 'Anzeige',
        'Pantalla', 'Display', 'การแสดงผล', 'Wyświetlacz', 'Дисплей', 'Дисплей'),
     _t('About', '关于', '關於', '概要', '정보', 'À propos', 'Info',

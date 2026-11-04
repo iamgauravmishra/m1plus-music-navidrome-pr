@@ -138,6 +138,7 @@ DAILY = DAILY + VINYL
 CARD_GLYPH_PX, CARD_CHEVRON, CARD_CHECK = 20, ('pod_chev', 10, 16, (0x8A,) * 3), ('pod_check', 20)
 CARD_GLYPHS = {'Wi-Fi': 'wifi', 'Bluetooth': 'bluetooth', 'Home Screen': 'house', 'Library': 'disc-3', 'Now Playing': 'audio-lines',
                'Play Mode': 'repeat', 'EQ': 'sliders-vertical', 'All Playback Settings': 'headphones', 'Display': 'sun', 'Appearance': 'palette', 'Accent': 'palette', 'Background': '+contrast',
+               'Control Center': 'layout-grid',
                'Keyboards': '+keyboard', 'About': 'info', 'All System Settings': 'settings', 'Developer': 'code', 'Main Menu': 'list-checks', 'Extras': 'ellipsis',
                'Recent Albums': 'history', 'Daily Mix': 'shuffle', 'Regenerate Daily Mix': 'refresh-cw', 'Update Library': 'refresh-cw', 'Album Order': 'arrow-down-wide-narrow',
                'Landscape': 'rotate-cw-square', 'Rebuild Covers': 'image-up', 'Theme': '+cassette-tape', 'Record': '+turntable', 'Base': 'palette', 'Boot to M1+ Music': 'power', 'Open Shanling Home': '@shanling',
@@ -179,14 +180,17 @@ POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'audio-lines'), 'Cover Flow': (
             'Composers': ('pod_ic_composers', 'feather'), 'Hi-Res': ('pod_ic_hires', '+badge-hr'),
             'Update Library': ('pod_ic_update', 'refresh-cw'), 'Tidal': ('pod_ic_tidal', 'T:brand-tidal'),
             'CD Ripper': ('pod_ic_cdripper', 'disc'), 'Pod': ('pod_ic_ipod', '+ipod'), 'Podcasts': ('pod_ic_podcasts', 'podcast'), 'Search': ('pod_ic_search', 'search'),
-            'Cassette Mode': ('pod_ic_tape', '+cassette-tape'), 'Vinyl Mode': ('pod_ic_vinyl', '+turntable'), 'Cover & Lyrics': ('pod_ic_art', '+cover-lyrics')}   # Now Playing's More sheet rows (tools/mod_lists.py)
+            'Cassette Mode': ('pod_ic_tape', '+cassette-tape'), 'Vinyl Mode': ('pod_ic_vinyl', '+turntable'), 'Cover & Lyrics': ('pod_ic_art', '+cover-lyrics'),   # Now Playing's More sheet rows (tools/mod_lists.py)
+            # the Control Center page (pod_pages.PULLDOWN_TILES): each tile's own glyph (PULLDOWN below); Output's tile shows the text PO / LO, so its row has stock's Output glyph (sset_outputway)
+            'Wi-Fi': ('pod_ic_wifi', 'wifi'), 'Bluetooth': ('pod_ic_bt', 'bluetooth'), 'Button Lock': ('pod_ic_lock', 'lock'), 'Gain': ('pod_ic_gain', '+gain-high'),
+            'USB Mode': ('pod_ic_usbmode', 'usb'), 'Output': ('pod_ic_output', 'headphones'), 'Playback': ('pod_ic_playset', 'sliders-horizontal'), 'System': ('pod_ic_sysset', 'settings')}
 # The Folders page's row glyphs (patch/folders.c): the menu rows' bare white 24 px glyph for what POD_ROWS has no row for: an audio file, the SD card, a USB drive (folders, playlist files, the CD Library and the wave are pod_ic_folders, pod_ic_playlists, pod_ic_cdripper, pod_ic_nowplaying)
 FOLDER_ROWS = {'fo_ic_file': 'file-music', 'fo_ic_sd': 'memory-stick', 'fo_ic_usb': 'usb'}
 # The "M1+ Music" icon patch/home.c adds to the stock Home grid (id 99): 66x66 like the stock Home icons
 # (white Lucide smartphone glyph on the #777777 disc, #555555 pressed), style home_m1plus_style in home_page.bin.
 POD_HOME = ('m1plus', 'm1plus_down')
 POD_HOME_GLYPH, POD_HOME_STYLE = 'smartphone', 'home_m1plus_style'
-POD_UI = ['m1plus_menu', 'm1plus_shuffle', 'm1plus_extras', 'm1plus_mainmenu', 'm1plus_extrascfg']   # the pages whose rows get the 24 px row glyphs of POD_ROWS (the Settings pages' cards have their own, CARD_GLYPHS)
+POD_UI = ['m1plus_menu', 'm1plus_shuffle', 'm1plus_extras', 'm1plus_mainmenu', 'm1plus_extrascfg', 'm1plus_pulldown']   # the pages whose rows get the 24 px row glyphs of POD_ROWS (the Settings pages' cards have their own, CARD_GLYPHS)
 # The navbar toggles (tools/pod_ui.py NAV_VIEW_ICON, patch/albums.c, patch/artists.c): the glyph of the view a tap switches to, a plain
 # 24 px white glyph like the navbar's others (pressed #777777), added to the images.
 NAV_VIEW = {'pod_nav_grid': 'layout-grid', 'pod_nav_list': 'list',
