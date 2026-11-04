@@ -12,13 +12,14 @@
  * cx, the centre cover's top and size on screen (art; its texture is always ART_SIZE), the eye
  * distance, the first side cover's offset x1 and depth z1, the spacing xs and zs of the rest, the
  * reflection's length in px at the cover's own size. rot: the frame is the logical one turned a
- * quarter clockwise (logical (x, y) is physical (h - 1 - y, x)), see coverflow_render.
- * tail: 0 = the stock fade (CF_BRIGHT2 at two out, gone at three out); else the brightness (of 256) of the
- * cover three out, which then fades out by 3.5 out (the iPod page's seven visible covers).
- * bg: 0 = the frame is over black (the distance fade darkens the covers); else the colour (r | g << 8 | b << 16) it is over (the fade turns
- * the covers transparent, and the frame ends composited on bg: the iPod page's white Cover Flow). Always the last field. */
+ * quarter clockwise (logical (x, y) is physical (h - 1 - y, x)), see coverflow_render. turn: how far a side cover turns,
+ * in 3.75 degree steps (CF_TURN 16 = 60 degrees; at most 24).
+ * tail: 0 = the stock fade (CF_BRIGHT2 at two out, gone at three out); else a light dim from 256 at the centre to tail
+ * three out, then gone by 3.5 out (the iPod page's seven visible covers, nearly as bright as the centre).
+ * bg: 0 = the frame is over black (the distance fade darkens the covers); else the colour (r | g << 8 | b << 16) it is over (the covers fade
+ * towards it and stay opaque, the reflections fade into it, and the frame ends composited on bg: the iPod page's white Cover Flow). Always the last field. */
 typedef struct {
-    int w, h, cx, top, art, eye, x1, xs, z1, zs, reflect, rot, tail;
+    int w, h, cx, top, art, eye, x1, xs, z1, zs, reflect, rot, turn, tail;
     unsigned bg;
 } cfg_t;
 

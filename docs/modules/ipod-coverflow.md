@@ -3,7 +3,7 @@
 The iPod Classic's Cover Flow inside the virtual iPod (`docs/modules/ipod.md`): the iPod main menu's **Cover Flow** row opens a screen of the iPod page, not the full-screen
 Cover Flow page (`docs/modules/coverflow.md`, which stays what the Home menu and the Artists page open). Source: `patch/ipod_cf.c` (the screen), the level `K_CF` and a few
 call-ins in `patch/ipod.c`, the shared renderer `patch/coverflow.c` with its header `patch/coverflow.h`, the numbers `IPCF_*` in `patch/offsets.inc` (next to the Cover Flow
-`CF_*`), tests `test/pod/ipod_cf.py`. **Not seen on a device**: every number below is a guess made from memory of the real iPod's screen (no device numbers exist), to tune.
+`CF_*`), tests `test/pod/ipod_cf.py`. **Not seen on a device**: the shelf's numbers are tuned against a photo of an iPod classic's Cover Flow (no device numbers exist).
 
 No new hook, widget, timer or event: the screen is a level of the iPod page, painted in the page's one `EVT_AFTER_PAINT`, steered by the page's wheel, run by the page's ONE timer.
 
@@ -11,9 +11,9 @@ No new hook, widget, timer or event: the screen is a level of the iPod page, pai
 
 The 320 x 240 screen follows Pod's Light/Dark appearance under its own title bar (`ip_paint_bar`: **Cover Flow** on the left, the play glyph and battery on the right; `ip_title` K_CF). The light appearance keeps the classic white page with the bar; Dark uses the Pod dark background, including the distance fade and reflections:
 
-- **The covers**, a 320 x 168 frame (`IPCF_FRAME_H`) drawn at y 24 under the bar (`IPCF_FRAME_Y`) on white (`IPCF_BG`). The centre cover faces you at 128 px (`IPCF_ART`, 14 % larger than before) with its top at frame y 18 (screen y 42 .. 170, its middle at 106, so there are 18 px of air under the title bar: the shelf with its reflection is centred near the middle of the 216 px under the bar, a 12 px move down from before; the web iPod Classic, ipod-classic-js's CoverFlowView, is the proportions reference: covers near the top and the text at the bottom, an 8 em cover, side covers turned about 70 degrees; numbers only, no code taken); the covers on either side turn 60 degrees
-  inward, overlap, step back and fade towards white; each has a reflection (20 px at the centre, `IPCF_REFLECT`, ending at screen y 190, above the captions) fading into the white. **Seven covers show**: the centre and three either side
-  (the one three out at `IPCF_TAIL` 72 of 256 brightness, fading out by 3.5 out; the full-screen page shows five and a half).
+- **The covers**, a 320 x 192 frame (`IPCF_FRAME_H`) drawn at y 24 under the bar (`IPCF_FRAME_Y`) on white (`IPCF_BG`). The centre cover faces you at 128 px (`IPCF_ART`) with its top at frame y 18 (screen y 42 .. 170, its middle at 106), the largest thing on the screen as in the iPod photo; the covers on either side turn 75 degrees (`IPCF_TURN`)
+  inward and stand 62 px back (`IPCF_Z1`), so their outer (nearer) edges are as tall as the centre cover (the iPod's look), their inner edges tucked behind it, and three either side, 34 px apart, run to the screen edges; each has a reflection (40 px at the centre, `IPCF_REFLECT`, ending at screen y 204) fading into the white, behind the captions. **Seven covers show**: the centre and three either side
+  (as on the iPod they barely dim: a light linear dim from the centre to `IPCF_TAIL` 208 of 256 three out, then the cover three out fades out by 3.5 out; the full-screen page shows five and a half and keeps the stock fade).
 - **Under the covers** the album title (y 192, 18 px black) over the artist (y 214, the same style), both centred and cut with an ellipsis (`label_ip_row`'s style: the iPod page's list text; the last line ends at y 236 of 240).
   They follow the covers: the album under the centre cover, which changes as the slide passes the half-way point. No scrolling text.
 - The title bar is the page's (the title, the play state, the battery); the wheel below has MENU, `|<<`, `>>|`, `>||`.
@@ -21,14 +21,14 @@ The 320 x 240 screen follows Pod's Light/Dark appearance under its own title bar
 ## The renderer is Cover Flow's
 
 `coverflow_render` (q2-pod's depth renderer after Rockbox PictureFlow, `docs/modules/coverflow.md`) draws the frame: nothing is written again. Its shelf geometry `cfg_t` moved to
-`patch/coverflow.h` and got two fields, `tail` and `bg` (last) (0 = the stock fade, CF_BRIGHT2 at two out and gone at three; the iPod's `IPCF_TAIL` keeps the cover three out dim and fades it
+`patch/coverflow.h` and got two fields, `tail` and `bg` (last) (0 = the stock fade, CF_BRIGHT2 at two out and gone at three; the iPod's `IPCF_TAIL` replaces it with a light dim to the cover three out and fades it
 out by 3.5 out, so seven covers show with no pop at the ring's edge). The two stock shelves leave `tail` and `bg` 0, so their frames are unchanged (`test/coverflow.py`). `bg` 0 is over black; the iPod shelf's `IPCF_BG` 0xffffff makes the distance fade
-transparency (coverage x brightness; a faded cover is not opaque, so it hides nothing behind it) and composites the frame over white at the end (`docs/modules/coverflow.md`). The iPod shelf is Cover
-Flow's scaled by 128 / 168: eye 238, first side cover 84 out and 73 back, the rest 37 / 17 apart, centre top 18. The textures are the **168 px cache files** the Cover Flow page and the
+blend the cover towards white (still opaque, so a nearer cover hides the ones behind it; only the reflections fade by transparency) and composites the frame over white at the end (`docs/modules/coverflow.md`). The iPod shelf is Cover
+Flow's with the iPod photo's numbers: eye 272, first side cover 84 out and 62 back, the rest 34 / 6 apart, centre top 18, turned 75 degrees. The textures are the **168 px cache files** the Cover Flow page and the
 Albums grid share (`/mnt/mmc/.m1plus/covers/<key>-168.jpg`, `patch/covercache.c`): drawn smaller than their size, nearest neighbour as there; an album with no cached cover (or a
 cache not built yet) shows the Pod placeholder (`ipod_placeholder`, docs/modules/ipod.md "The placeholder cover"). Cover Flow here never builds the cache (open the Cover Flow page or the Albums page once).
 
-**Memory**: the frame 215 KB and 9 textures of 168^2 x 4 (1.0 MB: 8 slots and the placeholder), one `calloc` at entry, freed when Cover Flow is left (MENU) and at destroy. If a
+**Memory**: the frame 240 KB and 9 textures of 168^2 x 4 (1.0 MB: 8 slots and the placeholder), one `calloc` at entry, freed when Cover Flow is left (MENU) and at destroy. If a
 bitmap or the block does not come, the row opens the existing full-screen Cover Flow page instead (`coverflow_open`: the old behaviour is the fallback).
 
 ## The albums, the wheel

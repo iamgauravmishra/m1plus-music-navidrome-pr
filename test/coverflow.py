@@ -91,7 +91,7 @@ def render(lib, frac, texs, cfg=None, pw=W, ph=H):
 
 class CFG(ctypes.Structure):
     """patch/coverflow.c cfg_t."""
-    _fields_ = [(n, ctypes.c_int) for n in ('w', 'h', 'cx', 'top', 'art', 'eye', 'x1', 'xs', 'z1', 'zs', 'reflect', 'rot', 'tail', 'bg')]
+    _fields_ = [(n, ctypes.c_int) for n in ('w', 'h', 'cx', 'top', 'art', 'eye', 'x1', 'xs', 'z1', 'zs', 'reflect', 'rot', 'turn', 'tail', 'bg')]
 
 
 def land_cfg(lib, rot=1):
@@ -316,8 +316,8 @@ def main():
                 expect(wrong == 0, f'{"portrait" if cfg is lib.portrait else "landscape"} frac {frac}: '
                        f'{wrong} body pixels show a farther cover or a mixture where a nearer cover is not')
 
-        # 8d. cfg.bg: the frame over a colour. 0 is over black (the same bytes as the shelf itself); white turns the fade into transparency
-        #     towards white and ends on white where no cover is, never grey covers or black gaps.
+        # 8d. cfg.bg: the frame over a colour. 0 is over black (the same bytes as the shelf itself); white turns the fade into a blend
+        #     towards white (the covers stay opaque) and ends on white where no cover is, never grey covers or black gaps.
         def with_bg(base, bg):
             c = CFG.from_address(base)
             out = CFG(*[getattr(c, n) for n, _ in CFG._fields_])
@@ -344,6 +344,16 @@ def main():
         hit = [i for i in range(mid, mid + W) if bs[i] & 0xffffff]
         wp, bp = chan(ws[hit[len(hit) // 2]]), chan(bs[hit[len(hit) // 2]])
         expect(hit and wp[0] > 150 and wp[1] > bp[1] + 100 and wp[1] > 100 and wp[1] < 255, f'a cover two out over white is its colour thinned towards white ({wp}), over black dimmed ({bp})')
+        near = [None] * RING; near[REACH + 1] = texture((200, 60, 60))
+        both = list(near); both[REACH + 2] = texture((60, 60, 200))
+        wn, wb = render(lib, 0, near, with_bg(lib.portrait, 0xffffff)), render(lib, 0, both, with_bg(lib.portrait, 0xffffff))
+        under = [i for i in range(mid, mid + W) if wn[i] != 0xffffffff]
+        expect(under and all(wb[i] == wn[i] for i in under), 'over white a faded side cover is still opaque: the cover behind it does not show through')
+        lite = with_bg(lib.portrait, 0); lite.tail = 208
+        for k, lo in ((2, 170), (3, 158)):
+            one = [None] * RING; one[REACH + k] = texture((200, 60, 60))
+            reds = [chan(v)[0] for v in render(lib, 0, one, lite) if v & 255]
+            expect(reds and max(reds) >= lo, f'tail: a cover {k} out barely dims, as on the iPod (red {max(reds) if reds else 0} of 200, want >= {lo})')
         flatw = texture((255, 255, 255))
         for i in range(TEXELS): flatw[i] = 0xffffffff
         wf = render(lib, ONE // 3, [flatw] * RING, with_bg(lib.portrait, 0xffffff))

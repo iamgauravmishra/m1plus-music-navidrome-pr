@@ -85,7 +85,7 @@
 
 /* Cover Flow geometry, 320x480 portrait: a CF_VIEW_W x CF_VIEW_H frame under the 50 px navbar.
  * The centre cover is ART_SIZE square with its top CF_TOP below the frame's; side covers turn
- * 60 degrees inward (the sine table in coverflow.c), sit CF_X1 px from the centre and then CF_XS
+ * CF_TURN (60 degrees) inward (the sine table in coverflow.c), sit CF_X1 px from the centre and then CF_XS
  * apart, CF_Z1 and then CF_ZS px further back, seen from CF_EYE px. Brightness (of 256) is 256 at
  * the centre, CF_BRIGHT1 one out, CF_BRIGHT2 two out, 0 three out. Each cover reflects CF_REFLECT
  * px at native size from CF_REFLECT_TOP (of 256) of its brightness down to black. */
@@ -101,25 +101,27 @@
 #define CF_ZS 22
 #define CF_BRIGHT1 192
 #define CF_BRIGHT2 128
+#define CF_TURN 16 /* side covers turn 16 x 3.75 = 60 degrees (cfg_t.turn) */
 #define CF_REFLECT 26
 #define CF_REFLECT_TOP 64
-/* The iPod page's Cover Flow screen (patch/ipod_cf.c, docs/modules/ipod-coverflow.md): the same depth renderer, scaled by 128 / 168 (0.762) for the 320 x 240 screen under the title bar:
+/* The iPod page's Cover Flow screen (patch/ipod_cf.c, docs/modules/ipod-coverflow.md): the same depth renderer with numbers tuned to a photo of an iPod classic, for the 320 x 240 screen under the title bar:
  * a 320 x IPCF_FRAME_H frame on white (IPCF_BG; r | g << 8 | b << 16) drawn at y IPCF_FRAME_Y (= IP_BAR_H), the centre cover IPCF_ART px at IPCF_TOP, seen from IPCF_EYE, the first side cover IPCF_X1 out and IPCF_Z1 back, the rest IPCF_XS / IPCF_ZS
- * apart; IPCF_REFLECT px of reflection; the cover three out keeps IPCF_TAIL of 256 (seven covers show). The two caption lines start at IPCF_CAP_Y, IPCF_CAP_H high each. The
+ * apart; IPCF_REFLECT px of reflection; the covers dim lightly to IPCF_TAIL of 256 three out, then fade out by 3.5 (seven covers show). The two caption lines start at IPCF_CAP_Y, IPCF_CAP_H high each. The
  * slide eases to the target album: each IPCF_FRAME_MS tick covers dt / (dt + IPCF_TAU_MS) of what is left, ends within IPCF_DONE (1/64 album), and never starts more than
  * IPCF_NEAR albums away (a long jump lands near the target at once, so the covers that show are the ones being decoded). */
 #define IPCF_FRAME_Y 24
-#define IPCF_FRAME_H 168
+#define IPCF_FRAME_H 192
 #define IPCF_BG 0xffffff
 #define IPCF_ART 128
 #define IPCF_TOP 18
-#define IPCF_EYE 238
+#define IPCF_EYE 272
 #define IPCF_X1 84
-#define IPCF_XS 37
-#define IPCF_Z1 73
-#define IPCF_ZS 17
-#define IPCF_REFLECT 20
-#define IPCF_TAIL 72
+#define IPCF_XS 34
+#define IPCF_Z1 62
+#define IPCF_ZS 6
+#define IPCF_REFLECT 40
+#define IPCF_TAIL 208
+#define IPCF_TURN 20 /* 75 degrees: the iPod's side covers turn further than the page's */
 #define IPCF_CAP_Y 192
 #define IPCF_CAP_H 22
 #define IPCF_FRAME_MS 33

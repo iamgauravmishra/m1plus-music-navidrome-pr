@@ -48,17 +48,17 @@ songs_open_artist(void *artist); /* patch/songs.c: our Songs page on all the art
  * rotations, geometry in 1/16 px, row spans in 1/256 px. Built on the host too (test/coverflow.py).
  */
 
-/* cos and sin of 0 to 60 degrees in 16 steps, 16.16 */
-static const int cf_cos[17] = {65536, 65396, 64975, 64277, 63303, 62058, 60547, 58777, 56756,
-                               54491, 51993, 49273, 46341, 43211, 39896, 36410, 32768};
-static const int cf_sin[17] = {0,     4286,  8554,  12785, 16962, 21066, 25080, 28986, 32768,
-                               36410, 39896, 43211, 46341, 49273, 51993, 54491, 56756};
+/* cos and sin of 0 to 90 degrees in 3.75 degree steps, 16.16 (a shelf turns its side covers cfg_t.turn steps) */
+static const int cf_cos[25] = {65536, 65396, 64975, 64277, 63303, 62058, 60547, 58777, 56756, 54491, 51993, 49273, 46341,
+                               43211, 39896, 36410, 32768, 28986, 25080, 21066, 16962, 12785, 8554,  4286,  0};
+static const int cf_sin[25] = {0,     4286,  8554,  12785, 16962, 21066, 25080, 28986, 32768, 36410, 39896, 43211, 46341,
+                               49273, 51993, 54491, 56756, 58777, 60547, 62058, 63303, 64277, 64975, 65396, 65536};
 
 /* cfg_t (a shelf's geometry) is in coverflow.h. */
 const cfg_t cf_portrait = {CF_VIEW_W, CF_VIEW_H, CF_CX, CF_TOP,     ART_SIZE, CF_EYE, CF_X1,
-                           CF_XS,     CF_Z1,     CF_ZS, CF_REFLECT, 0,        0,      0};
+                           CF_XS,     CF_Z1,     CF_ZS, CF_REFLECT, 0,        CF_TURN, 0,     0};
 const cfg_t cf_land = {CFL_W,  CFL_H, CFL_CX, CFL_TOP,    ART_SIZE, CF_EYE, CFL_X1,
-                       CFL_XS, CF_Z1, CF_ZS,  CF_REFLECT, 1,        0,      0};
+                       CFL_XS, CF_Z1, CF_ZS,  CF_REFLECT, 1,        CF_TURN, 0,     0};
 
 /* A right-hand cover t (16.16, >= 0) from the visual position: centre xc and depth zc (1/16 px),
  * rotation c, s (16.16) and brightness (of 256). Left covers mirror it. */
@@ -67,9 +67,9 @@ typedef struct {
 } pose_t;
 
 static void pose(const cfg_t *g, int t, pose_t *p) {
-    int a = t < CF_ONE ? t : CF_ONE, i = a >> 12, f = a & 4095;
-    p->c = cf_cos[i] + (i < 16 ? (cf_cos[i + 1] - cf_cos[i]) * f >> 12 : 0);
-    p->s = cf_sin[i] + (i < 16 ? (cf_sin[i + 1] - cf_sin[i]) * f >> 12 : 0);
+    int a = (t < CF_ONE ? t : CF_ONE) * g->turn, i = a >> 16, f = a >> 4 & 4095;
+    p->c = cf_cos[i] + (i < g->turn ? (cf_cos[i + 1] - cf_cos[i]) * f >> 12 : 0);
+    p->s = cf_sin[i] + (i < g->turn ? (cf_sin[i + 1] - cf_sin[i]) * f >> 12 : 0);
     if (t < CF_ONE) {
         /* xc = A t + B t^2: x1 at t = 1, arriving at the stack's xs slope, and quick at
          * first, so the covers turning in and out mid-step keep clear of each other. */
@@ -82,15 +82,13 @@ static void pose(const cfg_t *g, int t, pose_t *p) {
         p->xc = 16 * g->x1 + (16 * g->xs * e >> 16);
         p->zc = 16 * g->z1 + (16 * g->zs * e >> 16);
         p->bright = e < CF_ONE ? CF_BRIGHT1 - ((CF_BRIGHT1 - CF_BRIGHT2) * e >> 16)
-                    : g->tail
-                        ? (e < 2 * CF_ONE
-                               ? CF_BRIGHT2 - ((CF_BRIGHT2 - g->tail) * (e - CF_ONE) >>
-                                               16) /* the iPod page's longer shelf: g->tail at three out, gone by 3.5 */
-                           : e < 5 * CF_ONE / 2 ? g->tail * (5 * CF_ONE - 2 * e) >> 16
-                                                : 0)
                     : e < 2 * CF_ONE ? CF_BRIGHT2 * (2 * CF_ONE - e) >> 16
                                      : 0;
     }
+    if (g->tail) /* the iPod page's longer shelf: a light dim to g->tail at three out, gone by 3.5 */
+        p->bright = t < 3 * CF_ONE ? 256 - (int)((256 - g->tail) * (unsigned)t / (3 * CF_ONE))
+                    : t < 7 * CF_ONE / 2 ? g->tail * (7 * CF_ONE - 2 * t) >> 16
+                                         : 0;
 }
 
 /* Screen x (1/16 px right of the centre line) of the cover point u (1/16 px from its middle). */
@@ -150,7 +148,7 @@ static void column(shelf_t *f, int col, const unsigned *tex, int h, int bright) 
     int y = top >> 8, end = (bottom + 255) >> 8, last = end < g->h ? end : g->h;
     int first = y, final = end - 1; /* the rows the edges cross */
     int v = (((y << 8) + 128 - top) >> 4) * step >> 4, pitch = f->rs; /* v: 16.16 texel row */
-    unsigned *px;
+    unsigned *px, haze = shade(g->bg, 256 - (unsigned)bright); /* the fade: towards black, or towards bg (still opaque) */
     if (y < 0) v -= y * step, y = 0;
     px = d + y * pitch;
     while (y < last) {
@@ -168,10 +166,7 @@ static void column(shelf_t *f, int col, const unsigned *tex, int h, int bright) 
                 int from = y << 8 > top ? y << 8 : top, to = (y + 1) << 8 < bottom ? (y + 1) << 8 : bottom;
                 cov = (unsigned)(to - from);
             }
-            if (g->bg)
-                put(px, tex[row * ART_SIZE], cov * (unsigned)bright >> 8); /* over a colour: the fade is transparency */
-            else
-                put(px, shade(tex[row * ART_SIZE], (unsigned)bright), cov);
+            put(px, shade(tex[row * ART_SIZE], (unsigned)bright) + haze, cov);
         }
     }
     /* The reflection starts where the body ends, sharing the row the body only partly covers. */
@@ -194,7 +189,6 @@ static void column(shelf_t *f, int col, const unsigned *tex, int h, int bright) 
             else
                 put(px, shade(tex[row * ART_SIZE], dim), cov);
         }
-        if (g->bg && bright < 256) return; /* a faded cover is not opaque: it hides nothing behind it */
         /* The rows this body covers whole are opaque now: join them to the known span, or keep
          * the longer of the two. */
         s0 = (top + 255) >> 8, s1 = bottom >> 8;
@@ -401,7 +395,7 @@ static void fx_close(void) {
     memset(&fx, 0, sizeof fx);
 }
 
-/* The page's shelf now: the portrait one, or the landscape one turned a quarter; in Light Mode the same over paper (bg: the fade turns the covers transparent, as on the Pod's white
+/* The page's shelf now: the portrait one, or the landscape one turned a quarter; in Light Mode the same over paper (bg: the covers fade towards it, as on the Pod's white
  * Cover Flow). */
 static const cfg_t *shelf(void) {
     static cfg_t lit __attribute__((section(".scratch")));

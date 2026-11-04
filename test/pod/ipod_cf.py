@@ -169,7 +169,8 @@ def enter_tests(ctx):
     below = O['IPCF_TOP'] + O['IPCF_ART']
     expect(0 < far(px(m, 160, below + 4)) < far(colour(3)) and far(px(m, 160, below + O['IPCF_REFLECT'] - 8)) < far(px(m, 160, below + 4)) and below + O['IPCF_REFLECT'] <= FH,
            'a reflection under the centre cover, fading out into the white')
-    expect(px(m, 160, 0) == px(m, 2, 0) == px(m, 160, FH - 1) == (255, 255, 255) and px(m, 0, MID) == (255, 255, 255), 'white above the covers, below the reflection and past the last cover')
+    expect(px(m, 160, 0) == px(m, 2, 0) == px(m, 160, FH - 1) == (255, 255, 255), 'white above the covers and below the reflection')
+    expect(px(m, 0, MID) != (255, 255, 255) and px(m, 319, MID) != (255, 255, 255), 'as on the iPod, the side covers run to the screen edges')
     # empty library
     m = machine(0); enter(m)
     texts = [t for t, r in paint(m)[0] if r[1] >= BARH]
@@ -373,9 +374,10 @@ def i18n_tests(ctx):
     missing = [k for k in keys if k not in pod_i18n.TEXT and k not in pod_i18n.STOCK]
     expect(keys == {'No songs'} and not missing, f'the screen\'s texts are keys that exist ({keys}, missing {missing})')
     # the geometry in offsets.inc is one shelf: the three caption lines and the reflection fit the 240 px screen, the frame the covers and their reflection
-    expect(abs((O['IPCF_FRAME_Y'] + O['IPCF_TOP'] + O['IPCF_ART'] // 2) - 106) <= 2 and O['IP_SCREEN_H'] - (O['IPCF_CAP_Y'] + 2 * O['IPCF_CAP_H']) >= 4, 'the centre cover sits 106 px down (18 px of air under the title bar) the 240 px screen, the captions end at least 4 px above its bottom edge')
+    expect(abs((O['IPCF_FRAME_Y'] + O['IPCF_TOP'] + O['IPCF_ART'] // 2) - 106) <= 2 and O['IP_SCREEN_H'] - (O['IPCF_CAP_Y'] + 2 * O['IPCF_CAP_H']) >= 4, 'the centre cover is centred about 106 px down the 240 px screen (18 px of air under the title bar), the captions end at least 4 px above its bottom edge')
     top, art, refl, cap, caph = O['IPCF_TOP'], O['IPCF_ART'], O['IPCF_REFLECT'], O['IPCF_CAP_Y'], O['IPCF_CAP_H']
-    expect(top + art + refl <= O['IPCF_FRAME_H'] and O['IPCF_FRAME_Y'] + O['IPCF_FRAME_H'] <= cap and cap + 2 * caph <= O['IP_SCREEN_H'], 'the covers and their reflection end inside the frame, the frame under the title bar, the two caption lines inside the 240 px screen')
+    expect(top + art + refl <= O['IPCF_FRAME_H'] and O['IPCF_FRAME_Y'] + O['IPCF_FRAME_H'] <= O['IP_SCREEN_H'] and top + art <= cap - O['IPCF_FRAME_Y'] and cap + 2 * caph <= O['IP_SCREEN_H'],
+           'the covers and their reflection end inside the frame, the frame inside the screen, the covers above the captions (drawn over the reflection, as on the iPod), the two caption lines inside the 240 px screen')
     expect(O['IPCF_FRAME_MS'] < O['IP_TICK_MS'] and O['IPCF_NEAR'] < 7, 'the slide runs at 33 ms against the 500 ms rest; a far jump lands inside the ring of seven')
 
 

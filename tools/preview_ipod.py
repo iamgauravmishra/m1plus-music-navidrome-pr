@@ -251,7 +251,7 @@ def screen_now(s, th, sh, shuffle=False, cjk=False):
     return im
 
 def screen_cf(s, th, sh):
-    """An approximation of the Cover Flow screen (patch/ipod_cf.c; the real renderer is the host-built one of test/coverflow.py): the IPCF_* numbers place a 128 px centre cover at
+    """An approximation of the Cover Flow screen (patch/ipod_cf.c; the real renderer is the host-built one of test/coverflow.py): the IPCF_* numbers place an IPCF_ART px centre cover at
     IPCF_TOP under the bar, trapezoid side covers at IPCF_X1 / IPCF_XS, the reflection IPCF_REFLECT rows, the two caption lines at IPCF_CAP_Y."""
     o = pod_ui.OFFSETS
     im = Image.new('RGBA', (W, sh), th.bg + (255,)); art, top, y0 = o['IPCF_ART'], o['IPCF_TOP'], o['IPCF_FRAME_Y']
