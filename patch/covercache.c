@@ -263,11 +263,15 @@ void *cc_copy_list(void *list) {
     return d;
 }
 
-/* The albums, exactly as the stock Albums page lists them (loadLocalClassList 0xf003 = getAllAlbum into
- * *pdeq_showlist), copied. NULL when the library has none. */
-void *cc_albums(void) {
+static int cc_lfail __attribute__((section(
+    ".scratch"))); /* the last cc_albums / cc_songs failed to copy a non-empty list, as opposed to an empty one: cc_list_failed */
+
+/* A stock list class read into *pdeq_showlist and copied. NULL when empty (cc_lfail 0: stock's loadLocalClassList returns the deque's size, so a query that failed before any row reads as empty too) or when
+ * the copy failed (cc_lfail 1: rows but no memory for the copy). */
+static void *cc_class_copy(int cls) {
     void *list, *copy;
-    if (loadLocalClassList(CLASS_ALBUMS) <= 0) return (void *)0;
+    cc_lfail = 0;
+    if (loadLocalClassList(cls) <= 0) return (void *)0;
     list = *(void **)PDEQ_SHOWLIST;
     if (!list || !deque_size(list)) return (void *)0;
     copy = cc_copy_list(list);
@@ -275,22 +279,18 @@ void *cc_albums(void) {
         deque_destroy(copy);
         copy = (void *)0;
     }
+    if (!copy) cc_lfail = 1; /* (the source had rows) */
     return copy;
 }
 
-/* The library's songs as the Songs page lists them (loadLocalClassList 0xf001 = getAllMusic into *pdeq_showlist), copied; NULL when there are none. */
-void *cc_songs(void) {
-    void *list, *copy;
-    if (loadLocalClassList(CLASS_ALL_SONGS) <= 0) return (void *)0;
-    list = *(void **)PDEQ_SHOWLIST;
-    if (!list || !deque_size(list)) return (void *)0;
-    copy = cc_copy_list(list);
-    if (copy && !deque_size(copy)) {
-        deque_destroy(copy);
-        copy = (void *)0;
-    }
-    return copy;
-}
+/* The albums, exactly as the stock Albums page lists them (loadLocalClassList 0xf003 = getAllAlbum into
+ * *pdeq_showlist), copied. NULL when the library has none (or the read failed: cc_list_failed). */
+void *cc_albums(void) { return cc_class_copy(CLASS_ALBUMS); }
+
+/* The library's songs as the Songs page lists them (loadLocalClassList 0xf001 = getAllMusic into *pdeq_showlist), copied; NULL when there are none (or the read failed: cc_list_failed). */
+void *cc_songs(void) { return cc_class_copy(CLASS_ALL_SONGS); }
+
+int cc_list_failed(void) { return cc_lfail; }
 
 extern int album_open(
     unsigned cls,
@@ -608,7 +608,18 @@ void *cc_playing(void) {
  * ART_DIR, and the art calls (art_make: taglib_album_picture and our resize, with the two stock art functions as the fallback) under parse_cover_mutex, which is the lock every stock caller holds
  * (parse_albumcovertask_thd 0x4dd68c, parseplaycover_thd 0x4df1c4). It never touches a widget, a deque or the image manager.
  */
+#define CC_STALL_MS 10000 /* a job that takes longer is taken to be hung */
 #define MIN_FREE_MB 16 /* no new cache files below this much free space on the card */
+
+#define CR_PATH 256 /* a path kept in a record: cut (on a character boundary) to this many bytes with the NUL */
+#define CR_MAX 2400 /* a record: its fields stop at CR_SOFT, only the line ends and `end` use the rest */
+#define CR_SOFT 2048
+
+/* The image a job is working on (set under cb_mutex before pv_cover; path "" none). kind: 1 JPEG, 2 PNG; sof: the JPEG frame marker (0xc2 progressive). w = 0: size unknown (an embedded picture is not opened for diagnostics). */
+typedef struct {
+    unsigned w, h, kind, sof;
+    char path[CR_PATH];
+} img_t;
 
 typedef struct {
     char *track; /* the album's first track, copied so the thread never reads stock deques */
@@ -630,7 +641,126 @@ static struct {
     unsigned long thread;
     int mode, running;
     volatile int done, total, cancelled;
+    volatile int exited; /* the worker's last act: join it now and it returns at once */
+    int orphan; /* stopped while the worker was still inside a job: it keeps the set (jobs, tracks, xf) until it has exited */
+    int seen; /* done when last looked at, and the time_now_ms it last moved (build_watch) */
+    unsigned at;
+    volatile int
+        stalled; /* build_watch gave up on the set (kept after it is freed, until the next open: cc_build_stalled) */
+    unsigned cur,
+        orphan_at; /* the card job's key, and whether art_lock has written its .inflight (began); when the worker was orphaned */
+    volatile int began;
+    volatile unsigned seq,
+        claimed; /* the job sequence (started under cb_mutex); the key build_watch gave up on (read by the worker to undo its .bad on a late success) */
+    unsigned seen_seq; /* seq when build_watch last looked */
+    int phase; /* where the current card job's progress is (PH_*, the "phase:" of a .bad); set and read under cb_mutex, reset when a job starts */
+    img_t img; /* its image (same rules) */
+    volatile int
+        truncated; /* cc_build_near_step could not queue an album (the set was full, or no memory): cc_build_truncated, kept like stalled */
 } cb __attribute__((section(".scratch")));
+
+/* Ours, zero-filled like stock's parse_cover_mutex (a default mutex): serialises a job's start (cur, began, seq) with build_watch's claim of a stalled job. Never held over extraction or file I/O. */
+static unsigned cb_mutex[8] __attribute__((section(".scratch"), aligned(8)));
+
+/* ---- The text records of ART_DIR: .inflight (header, key, build, track, end) and the .bad of a job that hung or died twice (header, key, build, result, phase, track, image if known, end). One line per field: `\` and
+ * newline in a path are written as `\\` and `\n`, any other control byte as `\xNN`. A record without its `end` line was cut short. The phase says where progress stopped, not that a file is corrupt. docs/modules/coverflow.md. */
+enum { PH_NONE, PH_EMB_TAGS, PH_EMB_SHRINK, PH_EMB_STOCK, PH_FOLDER_SCAN, PH_FOLDER_SHRINK, PH_FOLDER_STOCK };
+static const char *const ph_name[] = {
+    "unknown",          "embedded art, reading tags", "embedded art, shrinking", "embedded art, stock fallback",
+    "folder, scanning", "folder image, shrinking",    "folder, stock fallback"};
+
+typedef struct {
+    char b[CR_MAX];
+    unsigned n;
+} rec_t;
+
+/* What a .bad says about a job. pre: track is already escaped (read back from an .inflight). */
+typedef struct {
+    unsigned key, phase, pre;
+    img_t img;
+    char track[CR_MAX / 2];
+} snap_t;
+
+static void r_put(rec_t *r, const char *s) {
+    for (; *s && r->n < CR_SOFT; ++s) r->b[r->n++] = *s;
+}
+
+static void r_nl(rec_t *r) { r->b[r->n++] = '\n'; } /* (at most 10 lines: CR_MAX - CR_SOFT is room enough) */
+
+/* s as one line: `\`, newline and the other control bytes escaped; bytes from 0x80 as they are (UTF-8). */
+static void r_esc(rec_t *r, const char *s) {
+    static const char hex[] = "0123456789abcdef";
+    for (; *s && r->n + 4 < CR_SOFT; ++s) {
+        unsigned c = (unsigned char)*s;
+        if (c == '\\' || c == '\n') {
+            r->b[r->n++] = '\\', r->b[r->n++] = c == '\n' ? 'n' : '\\';
+        } else if (c < 32 || c == 127) {
+            r->b[r->n++] = '\\', r->b[r->n++] = 'x', r->b[r->n++] = hex[c >> 4], r->b[r->n++] = hex[c & 15];
+        } else
+            r->b[r->n++] = (char)c;
+    }
+}
+
+/* s, already escaped (an .inflight's track line), to its end of line: a control byte, which no record of ours holds, becomes '?'. */
+static void r_pre(rec_t *r, const char *s) {
+    for (; *s && *s != '\n' && r->n < CR_SOFT; ++s) r->b[r->n++] = (unsigned char)*s < 32 || *s == 127 ? '?' : *s;
+}
+
+static void r_num(rec_t *r, unsigned v, unsigned base, unsigned width) {
+    char t[10];
+    unsigned i = 0;
+    do t[i++] = "0123456789abcdef"[v % base], v /= base;
+    while (i < width || v);
+    while (i && r->n < CR_SOFT) r->b[r->n++] = t[--i];
+}
+
+static void r_head(rec_t *r, unsigned key) {
+    r_put(r, "m1plus cover 1\nkey: "), r_num(r, key, 16, 8);
+    r_put(r, "\nbuild: "), r_esc(r, M1PLUS_TAG), r_nl(r);
+}
+
+static void r_end(rec_t *r) { /* (the room above CR_SOFT) */ memcpy(r->b + r->n, "end\n", 4), r->n += 4; }
+
+/* Up to n - 1 bytes of s, cut before a UTF-8 sequence the limit would split. */
+static void cp_str(char *d, unsigned n, const char *s) {
+    unsigned i = 0;
+    while (s[i] && i < n - 1) d[i] = s[i], ++i;
+    if (s[i])
+        while (i && ((unsigned char)s[i] & 0xc0) == 0x80) --i;
+    d[i] = 0;
+}
+
+static int r_write(const char *path, const rec_t *r) {
+    void *f = fopen(path, "w");
+    int ok;
+    if (!f) return 0;
+    ok = fwrite(r->b, r->n, 1, f) == 1;
+    fclose(f);
+    return ok;
+}
+
+static void r_bad(rec_t *r, const snap_t *s, const char *result) {
+    r->n = 0, r_head(r, s->key);
+    r_put(r, "result: "), r_put(r, result), r_put(r, "\nphase: "), r_put(r, ph_name[s->phase]);
+    r_put(r, "\ntrack: "), s->pre ? r_pre(r, s->track) : r_esc(r, s->track), r_nl(r);
+    if (s->img.path[0]) {
+        r_put(r, "image: "), r_esc(r, s->img.path);
+        if (s->img.w) r_put(r, " "), r_num(r, s->img.w, 10, 1), r_put(r, "x"), r_num(r, s->img.h, 10, 1);
+        if (s->img.kind) r_put(r, s->img.kind == 1 ? " jpeg" : " png");
+        if (s->img.kind == 1 && s->img.sof) r_put(r, s->img.sof == 0xc2 ? " progressive" : " baseline");
+        r_nl(r);
+    }
+    r_end(r);
+}
+
+/* The phase (and, when img is not NULL, the image: "" clears it) of the card job in flight, for the watchdog. */
+static void at(int phase, const char *img, unsigned w, unsigned h, unsigned kind, unsigned sof) {
+    pthread_mutex_lock(cb_mutex);
+    cb.phase = phase;
+    if (img)
+        cb.img.w = w, cb.img.h = h, cb.img.kind = kind, cb.img.sof = sof, cp_str(cb.img.path, sizeof cb.img.path, img);
+    pthread_mutex_unlock(cb_mutex);
+}
 
 /* Whether dir's file system has MIN_FREE_MB free (statfs, MIPS o32 layout: f_bsize is word 1,
  * f_bavail word 7), as q2-pod's card_space. */
@@ -673,23 +803,65 @@ static unsigned jpeg_long_side(const char *path) {
     return 0;
 }
 
-/* ---- The extraction: stock's two art calls, with the resize replaced. Both run under parse_cover_mutex (the whole call, as stock's do: /tmp/.tmp_picture is shared with the
- * stock threads). Any failure of ours hands the same album to the stock call, so a cover is never lost; a picture smaller than the size (stock copies it, or encodes it again as it is)
+/* ---- The extraction: stock's two art calls, with the resize replaced. Stock's calls run under parse_cover_mutex (the whole call, as stock's do: /tmp/.tmp_picture is shared with the
+ * stock threads); of ours only taglib_album_picture does, and our resize runs outside it on a private copy. Any failure of ours hands the same album to the stock call, so a cover is never lost; a picture smaller than the size (stock copies it, or encodes it again as it is)
  * and an interlaced PNG are stock's too. docs/modules/coverflow.md "Cover resampling". */
 #define TAG_TMP \
     "/tmp/.tmp_picture" /* where libtag_c's save_picturefile writes the embedded picture; toolsGetAlbumCover reads and removes it (the string at 0x757838, pinned) */
 #define TAG_LIMIT_A \
     0x100000 /* taglib_album_picture's last two arguments, as toolsGetAlbumCover passes them (0x5eaf00, 0x5eaf0c) */
 #define TAG_LIMIT_B 0x600000
+#define TAG_COPY \
+    "/tmp/.m1plus_art" /* the embedded picture moved out of TAG_TMP while the lock is held, shrunk after it is released */
 
-/* The embedded picture, as toolsGetAlbumCover finds it (taglib_album_picture: 2 a JPEG, 1 a PNG, saved to TAG_TMP), shrunk by pv_cover. No picture: 0, and stock's call is not made (it would
- * ask taglib the same). */
+#define INFLIGHT \
+    ART_DIR \
+    "/.inflight" /* the text record (r_head, track, end) of the album being extracted: left behind, the run died or hung on it */
+
+/* parse_cover_mutex, taken unless the set was cancelled while waiting for it (0: not held, nothing to extract). The first time for a card job the extraction begins: .inflight is written
+ * (an album that only waited for the lock is not to blame), and only then `began` is set under cb_mutex, so a claim (which needs `began`) always finds the journal and unlinks it. */
+static int art_lock(int phase, const char *track) {
+    int first;
+    pthread_mutex_lock((void *)PARSE_COVER_MUTEX);
+    first = cb.cur && !cb.began && !cb.cancelled;
+    if (first) {
+        unsigned key = cb.cur;
+        rec_t r;
+        r.n = 0, r_head(&r, key);
+        r_put(&r, "track: "), r_esc(&r, track), r_nl(&r), r_end(&r);
+        r_write(INFLIGHT, &r);
+    }
+    pthread_mutex_lock(cb_mutex);
+    if (cb.cancelled) { /* claimed while this job waited */
+        pthread_mutex_unlock(cb_mutex);
+        if (first) unlink(INFLIGHT);
+        pthread_mutex_unlock((void *)PARSE_COVER_MUTEX);
+        return 0;
+    }
+    if (first) cb.began = 1;
+    cb.phase = phase;
+    pthread_mutex_unlock(cb_mutex);
+    return 1;
+}
+
+/* The embedded picture, as toolsGetAlbumCover finds it (taglib_album_picture: 2 a JPEG, 1 a PNG, saved to TAG_TMP, moved to TAG_COPY under the lock), shrunk by pv_cover. No picture, or
+ * one pv_cover refuses (PV_REFUSED): 0, and stock's call is not made (it would ask taglib the same, or decode it). */
 static int art_embedded(const char *track, const char *dst, unsigned px) {
-    int kind = taglib_album_picture(track, (char *)dst, TAG_LIMIT_A, TAG_LIMIT_B), r = 0;
+    int kind, r = 0;
+    if (!art_lock(PH_EMB_TAGS, track)) return 0;
+    kind = taglib_album_picture(track, (char *)dst, TAG_LIMIT_A, TAG_LIMIT_B);
+    if ((kind == 1 || kind == 2) && rename(TAG_TMP, TAG_COPY))
+        unlink(TAG_TMP), unlink(TAG_COPY); /* (a stale copy is never shrunk instead: stock is asked) */
+    pthread_mutex_unlock((void *)PARSE_COVER_MUTEX);
     if (kind != 1 && kind != 2) return 0;
-    if (!access(TAG_TMP, 4)) r = pv_cover(TAG_TMP, dst, px);
-    unlink(TAG_TMP);
-    return r == 1 || toolsGetAlbumCover(track, dst, px, px) == 1;
+    at(PH_EMB_SHRINK, "embedded", 0, 0, kind == 2 ? 1 : 2, 0); /* (the picture is not opened again to say more) */
+    if (!access(TAG_COPY, 4)) r = pv_cover(TAG_COPY, dst, px);
+    unlink(TAG_COPY);
+    if (r != 0 && r != -1) return r == 1; /* done, or refused */
+    if (!art_lock(PH_EMB_STOCK, track)) return 0;
+    r = toolsGetAlbumCover(track, dst, px, px) == 1;
+    pthread_mutex_unlock((void *)PARSE_COVER_MUTEX);
+    return r;
 }
 
 #define FL_MAX 48 /* the folder's pictures looked at (a folder of more has its first ones) */
@@ -732,6 +904,7 @@ static int art_folder(const char *track, const char *dst, unsigned px) {
     }
     if (dot) base[dot - 1] = 0; /* the name without its last extension */
     names = calloc(FL_MAX, FL_NAME);
+    at(PH_FOLDER_SCAN, "", 0, 0, 0, 0);
     d = names ? opendir(dir) : (void *)0;
     if (!d) {
         free(names);
@@ -764,17 +937,22 @@ static int art_folder(const char *track, const char *dst, unsigned px) {
             if (!(kind == 1 && (sof == 0xc0 || sof == 0xc1 || sof == 0xc2) && size > 0 && size <= FL_STOCK_JPEG) &&
                 !(kind == 2 && size > 0 && size <= FL_STOCK_PNG))
                 continue;
+            at(PH_FOLDER_SHRINK, path, w, h, (unsigned)kind, sof);
             r = pv_cover(path, dst, px), done = 1;
         }
     free(names);
     if (r == 1) return 1;
+    if (r == PV_REFUSED) return 0; /* no art, as for an embedded one */
 stock:
-    return toolsGetExternCover(track, dst, px, px) == 1;
+    if (!art_lock(PH_FOLDER_STOCK, track)) return 0;
+    r = toolsGetExternCover(track, dst, px, px) == 1;
+    pthread_mutex_unlock((void *)PARSE_COVER_MUTEX);
+    return r;
 }
 
-/* The album's art at px x px into dst: the embedded picture, else the folder's. */
+/* The album's art at px x px into dst: the embedded picture, else the folder's. Takes the lock itself, around the stock calls only. */
 static int art_make(const char *track, const char *dst, unsigned px) {
-    return art_embedded(track, dst, px) || art_folder(track, dst, px);
+    return art_embedded(track, dst, px) || (!cb.cancelled && art_folder(track, dst, px));
 }
 
 /* A transient extraction (the Pod's cover pane, docs/modules/ipod.md): the album's art, fitted inside px x px by art_make (never upscaled), into xf.dst through
@@ -784,13 +962,11 @@ static void build_file(const job_t *j) {
     int ok;
     snprintf(tmp, sizeof tmp, "%s.tmp", xf.dst);
     if (access(j->track, F_OK)) return;
-    pthread_mutex_lock((void *)PARSE_COVER_MUTEX);
-    if (cb.cancelled) {
-        pthread_mutex_unlock((void *)PARSE_COVER_MUTEX);
+    ok = art_make(j->track, tmp, xf.px);
+    if (cb.cancelled) { /* the pane has gone (and removed xf.dst): publish nothing */
+        unlink(tmp);
         return;
     }
-    ok = art_make(j->track, tmp, xf.px);
-    pthread_mutex_unlock((void *)PARSE_COVER_MUTEX);
     if (ok && jpeg_long_side(tmp) >= xf.px) {
         if (rename(tmp, xf.dst)) unlink(tmp);
         return;
@@ -798,8 +974,92 @@ static void build_file(const job_t *j) {
     unlink(tmp);
 }
 
+/* r<key>-168.jpg.bad, a text record of the job (r_bad): the album is not tried again (until the next Rebuild Covers request, cc_clear_bad; the skip looks only at the file's existence). 1 if it was written. */
+static int mark_bad(const snap_t *s, const char *result) {
+    char path[72];
+    rec_t r;
+    r_bad(&r, s, result);
+    return r_write(cc_path(path, sizeof path, s->key, ".bad"), &r);
+}
+
+/* Rebuild Covers is requested: every .bad goes, so each album gets one more try (a resumed rebuild skips the ones that hang again). */
+void cc_clear_bad(void) {
+    void *d = opendir(ART_DIR);
+    char *ent;
+    if (!d) return;
+    while ((ent = readdir(d)) != (char *)0) {
+        const char *name = ent + 11; /* struct dirent: d_type at 10, d_name at 11 */
+        const char *e = name;
+        char path[300];
+        while (*e) ++e;
+        if (ent[10] != 8 || e - name < 5 || e[-4] != '.' || e[-3] != 'b' || e[-2] != 'a' || e[-1] != 'd') continue;
+        snprintf(path, sizeof path, ART_DIR "/%s", name);
+        unlink(path);
+    }
+    closedir(d);
+}
+
+/* The line `name` (with its colon and space) of the record in b, as a pointer to the value, or NULL. */
+static const char *r_field(const char *b, const char *name) {
+    unsigned n = fl_len(name);
+    for (; *b; ++b) {
+        unsigned i = 0;
+        while (i < n && b[i] == name[i]) ++i;
+        if (i == n) return b + n;
+        while (*b && *b != '\n') ++b;
+        if (!*b) break;
+    }
+    return (const char *)0;
+}
+
+/* A new set begins: an .inflight left by the last run names the album it died or hung on. Two strikes, so a power-off does not blame a healthy album: the first leaves an empty
+ * r<key>-168.jpg.try; the second (a .try still there: a finished job for the key removes it) marks it bad ("interrupted twice", the track from the .inflight). A strike that failed to be written leaves .inflight for the next open.
+ * The .inflight is read defensively: at most 1 KB, the header and a valid key line required (else it is removed and no one is blamed); a cut one (no track or no end) still strikes its key, with the track unknown. */
+static void build_recover(void) {
+    char path[72], b[1024];
+    snap_t s;
+    unsigned n, i;
+    const char *k, *t;
+    int ok = 1;
+    void *f = fopen(INFLIGHT, "rb");
+    if (!f) return;
+    n = (unsigned)fread(b, 1, sizeof b - 1, f);
+    fclose(f);
+    b[n] = 0;
+    memset(&s, 0, sizeof s);
+    k = r_field(b, "key: ");
+    if (k && r_field(b, "m1plus cover 1\n") == b + 15) {
+        unsigned v = 0;
+        for (i = 0; i < 8; ++i) { /* exactly eight hex digits, then the end of the line */
+            unsigned c = (unsigned char)k[i], d = c - '0', l = (c | 32) - 'a';
+            if (d > 9 && l > 5) break;
+            v = v << 4 | (d <= 9 ? d : l + 10);
+        }
+        if (i == 8 && k[8] == '\n') s.key = v;
+    }
+    if (s.key) {
+        t = r_field(b, "track: ");
+        s.pre = 1;
+        cp_str(s.track, sizeof s.track, "unknown");
+        if (t && r_field(b, "end\n")) {
+            for (i = 0; t[i] && t[i] != '\n' && i < sizeof s.track - 1; ++i) s.track[i] = t[i];
+            s.track[i] = 0;
+        }
+        cc_path(path, sizeof path, s.key, ".try");
+        if (!access(path, F_OK)) {
+            ok = mark_bad(&s, "interrupted twice");
+            if (ok) unlink(path);
+        } else {
+            void *e = fopen(path, "w");
+            ok = e != (void *)0;
+            if (e) fclose(e);
+        }
+    }
+    if (ok) unlink(INFLIGHT);
+}
+
 static void build_art(const job_t *j) {
-    char dst[64], tmp[64], pick[72];
+    char dst[64], tmp[64], pick[72], path[72];
     int ok;
     void *f;
     if (!j->key) {
@@ -812,16 +1072,38 @@ static void build_art(const job_t *j) {
     cc_path(pick, sizeof pick, j->key, ".pick");
     if (!access(pick, F_OK) && !access(dst, F_OK))
         return; /* a cover picked in Find Cover & Lyrics (docs/modules/onlineart.md): Rebuild Covers keeps it */
-    pthread_mutex_lock((void *)PARSE_COVER_MUTEX);
-    if (cb.cancelled) { /* cancelled while waiting for the parser: no extraction, no marker */
-        pthread_mutex_unlock((void *)PARSE_COVER_MUTEX);
+    pthread_mutex_lock(cb_mutex);
+    if (cb.cancelled) { /* build_watch claimed the previous job (or the set was stopped): no new job starts */
+        pthread_mutex_unlock(cb_mutex);
         return;
     }
+    cb.cur = j->key, cb.began = 0, ++cb.seq;
+    cb.phase = PH_NONE, cb.img.path[0] = 0, cb.img.w = cb.img.h = cb.img.kind = cb.img.sof = 0;
+    pthread_mutex_unlock(cb_mutex);
     ok = art_make(j->track, tmp, ART_SIZE);
-    pthread_mutex_unlock((void *)PARSE_COVER_MUTEX);
+    pthread_mutex_lock(cb_mutex);
+    cb.cur = 0;
+    pthread_mutex_unlock(cb_mutex);
+    if (cb.began) unlink(INFLIGHT);
+    if (!ok && cb.cancelled) { /* cancelled: no marker (a stalled extraction was marked bad by build_watch) */
+        unlink(tmp);
+        return;
+    }
+    unlink(cc_path(path, sizeof path, j->key, ".try")); /* finished: no strike against it */
     if (ok && cc_file_size(tmp) > 0) {
-        if (rename(tmp, dst)) unlink(tmp); /* extracted but not published: no marker, the next open retries */
-        return; /* (a rebuild's rename replaces the old picture or marker) */
+        if (rename(tmp, dst))
+            unlink(tmp); /* extracted but not published: no marker, the next open retries */
+        else { /* (a rebuild's rename replaces the old picture or marker) */
+            unsigned late;
+            pthread_mutex_lock(cb_mutex);
+            late = cb.claimed == j->key;
+            if (late) cb.claimed = 0; /* acknowledged: build_watch sees it and removes a .bad it writes after this */
+            pthread_mutex_unlock(cb_mutex);
+            if (late)
+                unlink(cc_path(path, sizeof path, j->key,
+                               ".bad")); /* claimed as hung, yet it came back and published: not bad */
+        }
+        return;
     }
     unlink(tmp);
     if (access(j->track, F_OK)) return;
@@ -830,8 +1112,15 @@ static void build_art(const job_t *j) {
     if (f) fclose(f);
 }
 
+/* The worker thread's niceness (docs/modules/coverflow.md "Worker priority"): setpriority(PRIO_PROCESS, 0, CC_NICE), o32 syscall 4097 (no import; as patch/filetime.c's statx). On Linux "who 0" is the calling thread
+ * alone, so the UI and the player keep the CPU while covers are built; raising the value needs no privilege, a refused call changes nothing. */
+extern int cc_setprio(int which, int who, int prio);
+__asm__(".text\n.globl cc_setprio\ncc_setprio:\nli $v0, 4097\nsyscall\njr $ra\nnop\n");
+#define CC_NICE 10
+
 static void *cc_worker(void *unused) {
     (void)unused;
+    cc_setprio(0, 0, CC_NICE);
     while (cb.done < cb.total && !cb.cancelled) {
         if (cb.mode == CC_DURATIONS)
             cb.jobs[cb.done].sec = (unsigned)dur_probe(cb.jobs[cb.done].track);
@@ -839,18 +1128,39 @@ static void *cc_worker(void *unused) {
             build_art(&cb.jobs[cb.done]);
         ++cb.done;
     }
+    cb.exited = 1;
     return (void *)0;
 }
 
+static void build_free(void) {
+    int i;
+    for (i = 0; i < cb.total; ++i)
+        if (cb.jobs) free(cb.jobs[i].track);
+    free(cb.jobs);
+    cb.jobs = (job_t *)0;
+    cb.cap = 0;
+    cb.total = cb.done = cb.cancelled = 0;
+}
+
+/* An orphaned worker (cc_build_stop found it inside a job) is joined and its set freed once it has exited; never waits. */
+static void build_reap(void) {
+    if (!cb.orphan || !cb.exited) return;
+    pthread_join(cb.thread, (void **)0);
+    cb.orphan = 0;
+    build_free();
+}
+
 int cc_build_open(unsigned capacity, int mode) {
+    build_reap();
     if (cb.jobs) return 0;
+    build_recover();
     if (capacity > (mode == CC_DURATIONS ? CC_MAX_LEN_JOBS : CC_MAX_JOBS))
         capacity = mode == CC_DURATIONS ? CC_MAX_LEN_JOBS : CC_MAX_JOBS;
     cb.jobs = calloc(capacity ? capacity : 1, sizeof(job_t));
     if (!cb.jobs) return 0;
     cb.cap = capacity;
     cb.mode = mode;
-    cb.done = cb.total = cb.cancelled = 0;
+    cb.done = cb.total = cb.cancelled = cb.stalled = cb.truncated = cb.claimed = 0;
     return 1;
 }
 
@@ -858,7 +1168,9 @@ int cc_build_add(const char *track, unsigned key) {
     char path[64];
     job_t *j;
     if (!cb.jobs || cb.running || cb.mode == CC_DURATIONS || !key || !track || !*track) return 0;
-    if (cb.mode == CC_MISSING && !access(cc_path(path, sizeof path, key, ""), F_OK)) return 0;
+    if ((cb.mode == CC_MISSING && !access(cc_path(path, sizeof path, key, ""), F_OK)) ||
+        !access(cc_path(path, sizeof path, key, ".bad"), F_OK))
+        return 0;
     if ((unsigned)cb.total >= cb.cap) return -1;
     j = &cb.jobs[cb.total];
     j->track = strdup(track);
@@ -906,22 +1218,26 @@ int cc_build_add_file(const char *track, const char *dst, unsigned px) {
 }
 
 void cc_build_stop(void) {
-    int i;
+    if (cb.orphan) { /* not the caller's set: the orphan's */
+        build_reap();
+        return;
+    }
     if (cb.running) {
         cb.cancelled = 1;
-        pthread_join(cb.thread, (void **)0);
         cb.running = 0;
+        if (!cb.exited &&
+            cb.done <
+                cb.total) { /* inside a job (stock's parser can take long): the UI thread never waits, the worker keeps the set */
+            cb.orphan = 1, cb.orphan_at = (unsigned)time_now_ms();
+            return;
+        }
+        pthread_join(cb.thread, (void **)0);
     }
-    for (i = 0; i < cb.total; ++i)
-        if (cb.jobs) free(cb.jobs[i].track);
-    free(cb.jobs);
-    cb.jobs = (job_t *)0;
-    cb.cap = 0;
-    cb.total = cb.done = cb.cancelled = 0;
+    build_free();
 }
 
 int cc_build_start(void) {
-    if (!cb.jobs || cb.running) return 0;
+    if (!cb.jobs || cb.running || cb.orphan) return 0;
     if (!cb.total) {
         cc_build_stop(); /* nothing to build: free the job array */
         return 0;
@@ -930,23 +1246,88 @@ int cc_build_start(void) {
         mkdir(CARD_DIR, 0755); /* the folder, then the cache in it (EEXIST is fine) */
         mkdir(ART_DIR, 0755);
     }
+    cb.exited = 0;
     if ((cb.mode != CC_DURATIONS && !card_space(ART_DIR)) ||
         pthread_create(&cb.thread, (void *)0, cc_worker, (void *)0)) {
         cc_build_stop(); /* no card, no space, or no thread: the caller shows what is cached already */
         return 0;
     }
     cb.running = 1;
+    cb.seen = 0, cb.seen_seq = cb.seq, cb.at = (unsigned)time_now_ms();
     return 1;
 }
 
-int cc_build_done(void) { return cb.done; }
+/* Polled with cc_build_done: a card job that has made no progress for CC_STALL_MS (time_now_ms, a steady clock) is taken to be hung: the set is stopped (the worker orphaned) and the job, if its extraction had
+ * begun, is marked .bad here, as only a worker that came back could write it. A text record (the phase and image the worker last reported, copied with the track under the same mutex hold; nothing live is read after the unlock); its .inflight goes, so the next open takes no strike. The claim (progress re-checked, cancelled set, the key
+ * captured) is made under cb_mutex, so the worker cannot start the next job after it, and the .bad can only name the claimed job; a worker that published meanwhile clears `claimed` (its acknowledgement),
+ * whichever of the two removes the .bad last: the watchdog re-checks after writing it. The .bad write and the .inflight unlink run on the UI thread: a card that
+ * stalls can still block the UI there, for an unbounded time. An orphan need not hold stock's lock (our resize runs outside it); builds stay refused until it exits, as it still owns the set's resources. */
+static void build_watch(void) {
+    unsigned now = (unsigned)time_now_ms(), key = 0;
+    int i = cb.done;
+    snap_t
+        s; /* the claimed job, copied under cb_mutex: after the unlock only this is read (the worker moves on, and rewrites cb.img) */
+    if (!cb.running || cb.mode == CC_DURATIONS || i >= cb.total) return;
+    if (i != cb.seen || cb.seq != cb.seen_seq) {
+        cb.seen = i, cb.seen_seq = cb.seq, cb.at = now;
+        return;
+    }
+    if (now - cb.at < CC_STALL_MS) return;
+    pthread_mutex_lock(cb_mutex);
+    if (cb.done != i || cb.seq != cb.seen_seq) { /* progress since the look above */
+        pthread_mutex_unlock(cb_mutex);
+        return;
+    }
+    cb.stalled = cb.cancelled = 1;
+    if (cb.cur && cb.began) {
+        key = s.key = cb.claimed = cb.cur, s.phase = (unsigned)cb.phase, s.pre = 0;
+        cp_str(s.track, CR_PATH, cb.jobs[i].track); /* (owned by the set, which the orphaned worker keeps) */
+        memcpy(&s.img, &cb.img, sizeof s.img);
+    }
+    pthread_mutex_unlock(cb_mutex);
+    if (key && mark_bad(&s, "timed out")) {
+        char path[72];
+        int acked;
+        unlink(INFLIGHT);
+        pthread_mutex_lock(cb_mutex);
+        acked = cb.claimed != key;
+        pthread_mutex_unlock(cb_mutex);
+        if (acked)
+            unlink(
+                cc_path(path, sizeof path, key,
+                        ".bad")); /* the worker published and acknowledged meanwhile: its cover stands, not this .bad */
+    }
+    cc_build_stop();
+}
+
+/* A stalled set reads as finished, so the pages that poll it end; once its worker has exited the set is freed (done = total = 0). */
+int cc_build_done(void) {
+    build_watch();
+    build_reap();
+    return cb.orphan && cb.stalled ? cb.total : cb.done;
+}
 int cc_build_total(void) { return cb.total; }
 int cc_build_running(void) { return cb.running; }
-int cc_build_busy(void) { return cb.jobs != (job_t *)0; }
+int cc_build_active(void) {
+    return cb.running && !cb.cancelled && cb.done < cb.total && cb.jobs &&
+           cb.jobs[0].key; /* (a transient file job, key 0, is the Pod cover pane's: not a build) */
+}
+int cc_build_busy(void) {
+    build_reap();
+    return cb.jobs != (job_t *)0;
+}
+int cc_build_stalled(void) { return cb.stalled; }
+int cc_build_truncated(void) { return cb.truncated; }
+int cc_build_orphan(void) {
+    build_reap();
+    return cb.orphan && (unsigned)time_now_ms() - cb.orphan_at <
+                            CC_STALL_MS; /* a worker that stays inside its job is not waited for longer */
+}
 
 int cc_build_near_step(void *albums, const unsigned *order, const unsigned *keys, unsigned centre, unsigned *cursor,
                        unsigned batch) {
     unsigned n = albums ? deque_size(albums) : 0, c = *cursor, left = batch;
+    int full = 0;
     if (centre >= n) centre = n ? n - 1 : 0;
     while ((c >> 1) < n && left) { /* the cursor is 2 x distance + (0 after the centre, 1 before it) */
         unsigned d = c >> 1, k = c & 1, i;
@@ -958,10 +1339,15 @@ int cc_build_near_step(void *albums, const unsigned *order, const unsigned *keys
         --left;
         if (I(r, REC_ID) == ID_ALL_SONGS || (keys && !keys[i]))
             continue; /* a scoped list's All songs row has no cover */
-        if (cc_build_add(cc_str(r, REC_PATH), keys ? keys[i] : cc_album_key(r)) < 0) c = n << 1; /* full: done */
+        if (cc_build_add(cc_str(r, REC_PATH), keys ? keys[i] : cc_album_key(r)) < 0) {
+            cb.truncated = 1;
+            --c; /* full (or out of memory): done, the caller told, and the cursor left on the album that did not fit (a later walk can resume there) */
+            full = 1;
+            break;
+        }
     }
     *cursor = c;
-    return (c >> 1) >= n;
+    return full || (c >> 1) >= n;
 }
 
 int cc_build_near(void *albums, const unsigned *order, unsigned centre) {

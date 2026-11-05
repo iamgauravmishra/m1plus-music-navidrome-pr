@@ -38,12 +38,23 @@
 #define SCREEN_W 320
 #define WIN_H 450
 #define HOME_PAD 10        /* the Home instance of the pod menu keeps this much air above its first row and below its last (patch/home.c hm_fill_window) */
-/* the cover build's progress line of the Home instance (patch/homecover.c, tools/pod_ui.py cover_progress): a label HC_W x HC_H at (HC_X, HC_Y) above the list while covers are built; the list then starts HC_H lower */
-#define HC_X 10
-#define HC_Y 8
-#define HC_W 300
-#define HC_H 20
+/* the cache pill of the Home instance (patch/homecover.c, tools/pod_ui.py cache_pill): a capsule HC_W x HC_PH at (HC_X, HC_Y) above the list while covers are built or tracks measured; the list then starts HC_H lower (the pill and 8 px of air).
+ * Inside it (pill coordinates): the 15 px text, a HC_BH px progress bar HC_BW wide under it (the fill is resized to done/total, at least HC_BH), and the stop button (a HC_XW px square touch box at HC_XX, HC_XY, drawing the 28 px disc pod_cache_x centred) */
+#define HC_X 12
+#define HC_Y 10
+#define HC_W 296
+#define HC_PH 40
+#define HC_H 48
 #define HC_PX 15
+#define HC_TX 18
+#define HC_TY 5
+#define HC_TH 18
+#define HC_BW 230
+#define HC_BY 26
+#define HC_BH 4
+#define HC_XX 256
+#define HC_XY 0
+#define HC_XW 40
 
 /* ---------------------------------------------------------------------------
  * Cover Flow (patch/coverflow.c). Event ids, record layout and widget fields

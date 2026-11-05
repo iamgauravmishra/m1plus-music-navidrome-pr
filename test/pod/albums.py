@@ -1368,12 +1368,33 @@ def background_build_tests(ctx):
     m = albums_machine(12, missing={0, 7, 11}, sort='artist'); open_grid(m); fired(m, 'al_on_build_start')
     expect(sorted(int(t.split('/')[4]) for t, _ in build_jobs(m)) == [0, 7, 11], 'in the Artist order the same albums are the jobs (keys are the albums\')')
 
-    # 17e. Cancel and join on destroy (also with the one-shot still pending); a late poll does nothing.
+    # 17e. Cancel on destroy (the UI thread never joins a worker inside a job; the orphan is reaped after it exits) (also with the one-shot still pending); a late poll does nothing.
     m = albums_machine(8, missing={2, 5}); open_grid(m); fired(m, 'al_on_build_start')
     new = fired(m, 'al_on_destroy', 3000000)
-    expect([c for c in new if c[0] == 'pthread_join'] and build_state(m)['jobs'] == 0 and ('timer_remove', 0x777) in new,
-           'destroy cancels and joins the worker, frees the jobs and drops the timer')
-    expect(build_state(m)['cancelled'] == 0 and build_state(m)['running'] == 0, 'and the shared worker is idle again')
+    s = build_state(m)
+    expect(not [c for c in new if c[0] == 'pthread_join'] and s['jobs'] != 0 and s['orphan'] == 1 and s['cancelled'] == 1 and s['running'] == 0 and ('timer_remove', 0x777) in new,
+           f'destroy with a job in flight cancels without joining: the worker keeps the set, the timer is dropped ({s})')
+    jobs_ptr = s['jobs']
+    expect(m.call(PSYMS['cc_build_busy']) == 1 and m.call(PSYMS['cc_build_open'], a0=1, a1=0) == 0 and count_of(m, 'pthread_join') == 0 and build_state(m)['jobs'] == jobs_ptr,
+           'while the orphan lives cc_build_busy is true and cc_build_open refuses, nothing is joined or freed')
+    expect(m.call(PSYMS['cc_build_orphan']) == 1, 'cc_build_orphan says so')
+    m.call(PSYMS['cc_build_stop'])
+    expect(build_state(m)['jobs'] == jobs_ptr and count_of(m, 'free') == 0, 'a stop by a page that owns nothing leaves the orphan\'s set alone')
+    m.present |= {f'/mnt/mmc/m/{i}/1.flac' for i in range(8)}
+    m.call(PSYMS['cc_worker'], count=5000000)           # the orphan stops at its cancel flag and exits
+    expect(build_state(m)['exited'] == 1 and build_state(m)['jobs'] == jobs_ptr, 'the exited worker has not freed the set itself')
+    expect(m.call(PSYMS['cc_build_busy']) == 0, 'the next cc_build_busy reaps it: not busy')
+    names = [c[0] for c in m.calls]
+    s = build_state(m)
+    expect(names.count('pthread_join') == 1 and names.count('free') >= 2 and s['jobs'] == 0 and s['orphan'] == 0 and s['cancelled'] == 0 and s['total'] == 0,
+           f'joined once, the tracks and the array freed ({s})')
+    expect(m.call(PSYMS['cc_build_open'], a0=1, a1=0) == 1 and build_state(m)['jobs'] != 0 and count_of(m, 'pthread_join') == 0, 'and cc_build_open succeeds again')
+    m.call(PSYMS['cc_build_stop'])
+    expect(build_state(m)['jobs'] == 0 and count_of(m, 'pthread_join') == 0, 'a set never started is freed without a join')
+    m2 = albums_machine(8, missing={2, 5}); open_grid(m2); fired(m2, 'al_on_build_start')
+    m2.setword(PSYMS['cb'] + 4 * 5, build_state(m2)['total'])   # every job is done, the thread is only returning
+    fired(m2, 'al_on_destroy', 3000000)
+    expect(count_of(m2, 'pthread_join') == 1 and build_state(m2)['jobs'] == 0 and build_state(m2)['orphan'] == 0, 'a worker with no job left is joined at once (it cannot be inside one)')
     new = fired(m, 'al_on_build', 1000000)
     expect(not [c for c in new if c[0] in ('timer_add', 'pthread_create', 'widget_invalidate_force')], 'a late poll after close does nothing')
     new = fired(m, 'al_on_build_start', 1000000)
@@ -1392,8 +1413,23 @@ def background_build_tests(ctx):
     expect(count_of(m, 'pthread_create') == 1 and build_state(m)['running'] == 1, 'Albums runs the worker')
     new = fired(m, 'al_on_cover', 6000000)
     names = [c[0] for c in new]
-    expect('pthread_join' in names and 'pthread_create' in names and names.index('pthread_join') < names.index('pthread_create') and ('window_open', 'm1plus_cover') in new,
-           'the Cover Flow button joins Albums\' worker before Cover Flow starts its own (one at a time)')
+    expect('pthread_join' not in names and 'pthread_create' not in names and ('window_open', 'm1plus_cover') in new and build_state(m)['orphan'] == 1
+           and [c for c in new if c[0] == 'timer_add' and c[1] == PSYMS['on_retry']],
+           'the Cover Flow button orphans Albums\' worker without joining; Cover Flow shows Preparing and asks again')
+    m.call(PSYMS['cc_worker'], count=5000000)           # the orphan exits
+    new = fired(m, 'on_retry', 6000000)
+    names = [c[0] for c in new]
+    expect(names.count('pthread_join') == 1 and names.count('pthread_create') == 1 and build_state(m)['running'] == 1 and build_state(m)['orphan'] == 0,
+           'the retry reaps the orphan (one join) and Cover Flow starts its own worker (one at a time)')
+    m = albums_machine(6, missing={1, 4})
+    for w in COVER_WIDGETS:
+        if w not in m.widgets: m.widget(w)
+    open_grid(m); fired(m, 'al_on_build_start'); fired(m, 'al_on_cover', 6000000)
+    m.clock += 10000                                     # the worker never comes back out of its job
+    new = fired(m, 'on_retry', 6000000)
+    expect(m.call(PSYMS['cc_build_orphan']) == 0 and build_state(m)['orphan'] == 1 and not [c for c in new if c[0] == 'timer_add' and c[1] == PSYMS['on_retry']]
+           and 'view' in [c[0] for c in new],
+           'a worker that stays in its job for 10 s: Cover Flow stops asking and shows the covers')
     m = albums_machine(6, missing={1, 4})
     for w in COVER_WIDGETS:
         if w not in m.widgets: m.widget(w)
@@ -1416,10 +1452,13 @@ def background_build_tests(ctx):
     expect(count_of(m, 'pthread_create') == 0 and ('mkdir', '/mnt/mmc/.m1plus/covers') not in m.calls and build_state(m)['jobs'] == 0, 'a complete cache: nothing to do, no thread, no mkdir')
     m = albums_machine(8, missing={2}); open_grid(m)
     m.timer_fail = True; fired(m, 'al_on_build_start')
-    expect(count_of(m, 'pthread_create') == 1 and count_of(m, 'pthread_join') == 1 and build_state(m)['jobs'] == 0, 'a poll timer that cannot be made: the worker is joined and freed')
+    expect(count_of(m, 'pthread_create') == 1 and count_of(m, 'pthread_join') == 0 and build_state(m)['orphan'] == 1 and build_state(m)['jobs'] != 0,
+           'a poll timer that cannot be made: the worker is cancelled and orphaned, not joined')
     m = albums_machine(8, missing={2}); open_grid(m); fired(m, 'al_on_build_start')
     m.timer_fail = True; fired(m, 'al_on_build')
-    expect(count_of(m, 'pthread_join') == 1 and build_state(m)['jobs'] == 0, 'a refused re-arm: joined and freed')
+    expect(count_of(m, 'pthread_join') == 0 and build_state(m)['orphan'] == 1, 'a refused re-arm: cancelled and orphaned, not joined')
+    m.call(PSYMS['cc_worker'], count=5000000); m.call(PSYMS['cc_build_busy'])
+    expect(count_of(m, 'pthread_join') == 1 and build_state(m)['jobs'] == 0, 'once it has exited: joined and freed')
 
     # 17h. Back in front (Cover Flow, an album page closed): the build is offered again, once; not while one runs.
     m = albums_machine(8, missing={2}); open_grid(m)
@@ -1494,7 +1533,7 @@ def background_build_tests(ctx):
     m.on_lock = lambda: m.setword(PSYMS['cb'] + 4 * 7, 1)   # cancelled while the worker waits for the parser mutex
     m.call(PSYMS['cc_worker'], count=5000000)
     names = [c[0] for c in m.calls]
-    expect('lock' in names and 'unlock' in names and not [c for c in m.calls if c[0] in ('toolsGetAlbumCover', 'toolsGetExternCover', 'fopen')],
+    expect('lock' in names and 'unlock' in names and not [c for c in m.calls if c[0] in ('toolsGetAlbumCover', 'toolsGetExternCover') or c[0] == 'fopen' and not c[1].endswith('.inflight')],
            'cancelled while waiting for the parser: unlocked, nothing extracted, no marker written')
 
 

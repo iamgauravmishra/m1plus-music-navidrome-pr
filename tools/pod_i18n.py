@@ -279,6 +279,10 @@ TEXT = dict([
     # A native-speaker pass is wanted.
     _t('Measuring tracks', '正在测量曲目', '正在測量曲目', '曲の長さを測定中', '곡 길이 측정 중', 'Mesure des titres', 'Titeldauern werden gemessen', 'Midiendo pistas', 'Misura delle tracce',
        'กำลังวัดความยาวเพลง', 'Mierzenie utworów', 'Измерение треков', 'Вимірювання треків'),
+    _t('Checking library…', '正在检查曲库…', '正在檢查曲庫…', 'ライブラリを確認中…', '라이브러리 확인 중…', 'Vérification de la bibliothèque…', 'Datenbank wird geprüft…',
+       'Comprobando biblioteca…', 'Controllo libreria…', 'กำลังตรวจสอบคลัง…', 'Sprawdzanie biblioteki…', 'Проверка медиатеки…', 'Перевірка медіатеки…'),
+    _t('Rebuilding covers…', '正在重建封面…', '正在重建封面…', 'カバーを再構築中…', '커버 다시 만드는 중…', 'Reconstruction des pochettes…', 'Cover werden neu erstellt…',
+       'Reconstruyendo carátulas…', 'Ricostruzione copertine…', 'กำลังสร้างปกใหม่…', 'Odbudowa okładek…', 'Пересоздание обложек…', 'Перестворення обкладинок…'),
     _t('%d track, %s', '%d 首歌，%s', '%d 首歌，%s', '%d曲、%s', '%d곡, %s', '%d titre, %s', '%d Titel, %s', '%d canción, %s', '%d brano, %s', '%d เพลง, %s', 'Utwory: %d, %s', 'Песен: %d, %s', 'Пісень: %d, %s'),
     _t('%d tracks, %s', '%d 首歌，%s', '%d 首歌，%s', '%d曲、%s', '%d곡, %s', '%d titres, %s', '%d Titel, %s', '%d canciones, %s', '%d brani, %s', '%d เพลง, %s', 'Utwory: %d, %s', 'Песен: %d, %s', 'Пісень: %d, %s'),
     _t('%d minute', '%d 分钟', '%d 分鐘', '%d分', '%d분', '%d minute', '%d Minute', '%d minuto', '%d minuto', '%d นาที', '%d min', '%d мин', '%d хв'),

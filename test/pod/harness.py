@@ -7,7 +7,7 @@ Requires unicorn (venv) and a workdir patched by tools/pod.py (its podbuild/mani
 test/patch.py calls init(WORKDIR) first, then loads the feature modules, which star-import this one.
 """
 import importlib.util, json, os, re, struct, sys
-from unicorn import Uc, UC_ARCH_MIPS, UC_MODE_MIPS32, UC_MODE_LITTLE_ENDIAN, UC_HOOK_CODE, UC_HOOK_BLOCK
+from unicorn import Uc, UC_ARCH_MIPS, UC_MODE_MIPS32, UC_MODE_LITTLE_ENDIAN, UC_HOOK_CODE, UC_HOOK_BLOCK, UC_HOOK_INTR
 from unicorn.mips_const import (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3,
                                 UC_MIPS_REG_V0, UC_MIPS_REG_SP, UC_MIPS_REG_RA, UC_MIPS_REG_T9, UC_MIPS_REG_PC, UC_MIPS_REG_GP, UC_MIPS_REG_F0,
                                 UC_MIPS_REG_CP0_STATUS as _STATUS, UC_MIPS_REG_0 as UC_MIPS_REG_0)
@@ -269,6 +269,7 @@ class Machine:
         self.timers = []            # (callback, ms) of every timer_add
         self.timer_fail = False
         self.create_fail = set()    # widget constructors (view_create, ..) that return 0
+        self.deque_fail = False     # _create_deque returns 0 (no memory for a list copy)
         self.wm, self.top_main, self.home_opened, self.init_ret = 0x22000000, 0, 1, 0
         self.handlers.building = self.watch.building = False   # (no code has run yet, so the hooks added so far need no translation flush)
         self._icount, self.limit, self.counting = 0, 0, False
@@ -279,7 +280,14 @@ class Machine:
         self.destroyed, self.loads = 0, []   # bitmaps destroyed / images loaded, over the machine's life
         self.locked, self.load_into = 0, []  # the bitmap last locked for writing / (url, that bitmap) per image load: which bitmap a decode was for
         self.tm_buf = 0                     # the struct tm localtime answers with (patch/dailymix.c)
+        self.sys = []               # syscalls the payload made itself (the cover worker's setpriority 4097, patch/covercache.c): (number, a0, a1, a2); answered 0
+        self.u.hook_add(UC_HOOK_INTR, self._sys)
         if self.COUNT: self.count()
+
+    def _sys(self, u, intno, _):
+        if u.reg_read(UC_MIPS_REG_V0) != 4097: return   # (only setpriority: a test with its own syscall, test/pod/filetime.py, answers the rest)
+        self.sys.append((4097,) + tuple(u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2)))
+        u.reg_write(UC_MIPS_REG_A3, 0); u.reg_write(UC_MIPS_REG_V0, 0)
 
     def count(self):
         """Count instructions from now on (icount, and call()'s step limit): a block hook, which is most of the emulation time."""
@@ -420,6 +428,11 @@ class Machine:
         elif name == 'access':
             p = self.read_cstr(a0); ret = 0 if p in self.present or p in self.fs else -1
             self.calls.append(('access', p))
+        elif name == '__xstat':   # a file's state, for the callers that keep a signature (the Home cache check: patch/homecover.c hc_dbsig): path -> [mtime, nsec, size] in self.db; anything else is missing
+            p = self.read_cstr(a1); self.calls.append(('__xstat', p)); ret = 0xffffffff
+            if p in self.db:
+                self.u.mem_write(a2, bytes(144)); mt, ns, sz = self.db[p]
+                self.setword(a2 + 0x40, mt); self.setword(a2 + 0x44, ns); self.setword(a2 + 0x30, sz); ret = 0
         elif name == 'album_open':   # patch/albumpage.c, trapped: the callers' tests (the Albums grid, Cover Flow, Artists, Recently Played) see the stock album page open; test/pod/albumpage.py runs it for real (real_album)
             if self.real_album: return
             self.calls.append(('album_open', a0, self.word(a1 + O['REC_ID']))); ret = -1
@@ -446,7 +459,7 @@ class Machine:
         elif name == 'font_manager_shrink_cache':
             self.calls.append(('font_manager_shrink_cache', a0, a1))
         elif name == 'locale_info_tr':   # the stock table lookup: the key itself when the table lacks it
-            raw = self.strings.get(self.read_cstr(a1), self.read_cstr(a1)).encode('utf-8')
+            raw = self.tr(self.read_cstr(a1)).encode('latin-1')   # (the text as UTF-8 bytes; the key itself when the table lacks it)
             ret = self.alloc(len(raw) + 1); self.u.mem_write(ret, raw + b'\0')
         elif name == 'widget_set_tr_text':
             key = self.read_cstr(a1)
@@ -978,7 +991,7 @@ class Machine:
         elif name == 'fopen':
             path, mode = self.read_cstr(a0), self.read_cstr(a1)
             self.calls.append(('fopen', path, mode))
-            if 'w' in mode: self.files[path] = 0; self.present.add(path)
+            if 'w' in mode and ('fopen', path) not in self.fail: self.files[path] = 0; self.present.add(path)
             ret = (self.alloc(4) if path in self.files or path in self.fs else 0)
             self.fh = (ret, path)
         elif name == 'fclose':
@@ -1044,13 +1057,20 @@ class Machine:
             if self.thread_ok: self.setword(a0, 0x1234); self.thread = (a2, a3)
         elif name == 'pthread_join':
             self.calls.append(('pthread_join',))
+        elif name == 'pthread_mutex_lock' and a0 == PSYMS.get('cb_mutex'):   # the cover worker's own job-state mutex (patch/covercache.c): not the stock lock
+            self.calls.append(('cb_lock',))
+            if getattr(self, 'on_cb_lock', None): self.on_cb_lock()   # a test's way to interleave the UI thread with the worker's job transitions
+        elif name == 'pthread_mutex_unlock' and a0 == PSYMS.get('cb_mutex'):
+            self.calls.append(('cb_unlock',))
+            if getattr(self, 'on_cb_unlock', None): self.on_cb_unlock()
         elif name == 'pthread_mutex_lock':
             self.calls.append(('lock', a0))
             if getattr(self, 'on_lock', None): self.on_lock()   # a test's way to act while the lock is "waited for"
         elif name == 'pthread_mutex_unlock':
             self.calls.append(('unlock', a0))
+            if getattr(self, 'on_unlock', None): self.on_unlock()
         elif name == '_create_deque':
-            ret = self.new_deque(); self.calls.append(('_create_deque', self.read_cstr(a0)))
+            ret = 0 if self.deque_fail else self.new_deque(); self.calls.append(('_create_deque', self.read_cstr(a0)))
         elif name == 'deque_init':
             self.deques.setdefault(a0, [])
         elif name == 'deque_assign':
@@ -1226,12 +1246,15 @@ class Machine:
 
     def tr(self, key):
         """The translation as the payload gets it back, UTF-8 bytes read as latin-1 chars like read_cstr's results."""
-        return self.strings.get(key, key).encode('utf-8').decode('latin-1')
+        try: text = key.encode('latin-1').decode('utf-8')   # (a key with non-ASCII characters, such as an ellipsis, arrives as its UTF-8 bytes read as latin-1)
+        except UnicodeError: text = key
+        return self.strings.get(text, text).encode('utf-8').decode('latin-1')
 
     def rect(self, w, x, y, cw, ch):
         for k, v in (('x', x), ('y', y), ('w', cw), ('h', ch)): self.props[(w, k)] = v
 
     fb = None                 # Screenshot: the frame buffer /dev/fb0 answers with (see the ioctl / mmap mocks)
+    db = {}                   # __xstat: path -> [mtime, nsec, size]
     card_mounted = True       # statfs tells the card's mount point from its parent
     blits = ()              # the Albums grid's canvas_draw_image calls (bitmap, src rect, dst rect), texts, text measures
     texts = ()
@@ -1723,9 +1746,9 @@ def cache_paths(m, albums):
 
 
 def build_state(m):
-    """The shared cache worker's state struct `cb` (patch/covercache.c): jobs, cap, thread, mode, running, done, total, cancelled (words)."""
+    """The shared cache worker's state struct `cb` (patch/covercache.c): jobs, cap, thread, mode, running, done, total, cancelled, exited, orphan (words); the image path (a string) follows isof."""
     b = PSYMS['cb']
-    keys = ('jobs', 'cap', 'thread', 'mode', 'running', 'done', 'total', 'cancelled')
+    keys = ('jobs', 'cap', 'thread', 'mode', 'running', 'done', 'total', 'cancelled', 'exited', 'orphan', 'seen', 'at', 'stalled', 'cur', 'orphan_at', 'began', 'seq', 'claimed', 'seen_seq', 'phase', 'iw', 'ih', 'ikind', 'isof')
     return {k: m.word(b + 4 * i) for i, k in enumerate(keys)}
 
 

@@ -385,7 +385,7 @@ static void stop_timer(void) {
     cf.timer = 0;
 }
 
-/* This page's job set released: a running worker is cancelled and joined (bounded by one album's art). */
+/* This page's job set released: a running worker is cancelled (joined if it has finished, else left to exit on its own, cc_build_stop). */
 static void build_end(void) {
     if (cf.owns) cc_build_stop();
     cf.owns = 0;
@@ -1136,7 +1136,7 @@ static int on_poll(const void *unused) {
     (void)unused;
     cf.timer = 0;
     if (cc_build_done() >= cc_build_total()) {
-        build_end(); /* joins the thread's last steps */
+        build_end(); /* the thread has finished: joined and freed */
         to_covers();
         return RET_OK;
     }
@@ -1155,7 +1155,7 @@ static int on_cancel(void *ctx, void *e) {
     (void)e;
     if (cf.screen != CF_PREPARING) return RET_OK;
     stop_timer();
-    build_end(); /* cancels and joins: what was written stays, the rest is left as it was */
+    build_end(); /* what was written stays, the rest is left as it was */
     to_covers();
     return RET_OK;
 }
@@ -1281,12 +1281,36 @@ static int load_artist(void) {
     return (int)cf.count;
 }
 
+static int start_build(void);
+
+static void show_preparing(void) {
+    cf.screen = CF_PREPARING;
+    show(cf.covers, 0);
+    show(cf.status, 1);
+    show(cf.cancel, 1);
+    widget_set_tr_text(cf.status, "Preparing covers...");
+}
+
+/* The worker of a page left a moment ago is still inside its last album (cc_build_stop orphans it): ask again. */
+static int on_retry(const void *unused) {
+    (void)unused;
+    cf.timer = 0;
+    if (cf.screen == CF_PREPARING && !start_build()) to_covers();
+    return RET_OK;
+}
+
 /* Jobs for the albums with no cache file yet. 1 when a
- * build is running and the preparing screen is up, 0 when there is nothing to build (or no card, no space, no thread,
+ * build is running (or about to start, behind a stopped worker's last album) and the preparing screen is up, 0 when there is nothing to build (or no card, no space, no thread,
  * or the shared worker is busy with another page's set). */
 static int start_build(void) {
     unsigned n = album_count(), i;
-    if (!cc_build_open(n, CC_MISSING)) return 0;
+    if (!cc_build_open(n, CC_MISSING)) {
+        if (!cc_build_orphan()) return 0;
+        cf.timer = timer_add(on_retry, (void *)0, POLL_MS);
+        if (!cf.timer) return 0;
+        show_preparing();
+        return 1;
+    }
     cf.owns = 1;
     for (i = 0; i < n; ++i) {
         unsigned key = key_at(i);
@@ -1301,11 +1325,7 @@ static int start_build(void) {
         build_end(); /* no completion callback possible: stop the worker, show what is cached */
         return 0;
     }
-    cf.screen = CF_PREPARING;
-    show(cf.covers, 0);
-    show(cf.status, 1);
-    show(cf.cancel, 1);
-    widget_set_tr_text(cf.status, "Preparing covers...");
+    show_preparing();
     return 1;
 }
 

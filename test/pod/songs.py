@@ -991,7 +991,7 @@ def loader_tests(ctx):
     m.top_main = m.window
     fired(m, 'sg_on_build_start')
     m.call(PSYMS['sg_on_destroy'], count=4000000)
-    expect(build_state(m)['jobs'] == 0 and ('pthread_join',) in m.calls and len(m.bitmaps) == 0, 'closing the page cancels and joins the worker it holds and frees every bitmap')
+    expect(build_state(m)['orphan'] == 1 and ('pthread_join',) not in m.calls and len(m.bitmaps) == 0, 'closing the page cancels the worker it holds without joining it and frees every bitmap')
 
 def big_library_tests(ctx):
     """17. A library of 20,000 songs: the index, the content height, the clamp, the rail jump, the ring, the cost of opening."""

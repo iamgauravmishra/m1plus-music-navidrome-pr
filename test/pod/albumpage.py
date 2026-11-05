@@ -437,10 +437,10 @@ def cover_tests(ctx):
     open_album(m)
     expect(count_of(m, 'pthread_create') == 0 and not any(c[0] == 'timer_add' and c[1] == POLL for c in m.calls), 'the worker is held by another page: no job, no poll')
     m.call(PSYMS['ab_on_destroy'], count=4000000)
-    # closing the page cancels and joins the worker it holds
+    # closing the page cancels the worker it holds (orphaned until it exits)
     m = album_machine(cover=None); open_album(m)
     m.call(PSYMS['ab_on_destroy'], count=4000000)
-    expect(build_state(m)['jobs'] == 0 and ('pthread_join',) in m.calls and len(m.bitmaps) == 0, 'closing the page joins the worker it holds and frees every bitmap')
+    expect(build_state(m)['orphan'] == 1 and ('pthread_join',) not in m.calls and len(m.bitmaps) == 0, 'closing the page cancels the worker it holds without joining it and frees every bitmap')
 
     # ---- the tint of a page with a cover file
     BG, FG = O['EVT_WINDOW_TO_BG'], O['EVT_WINDOW_TO_FG']

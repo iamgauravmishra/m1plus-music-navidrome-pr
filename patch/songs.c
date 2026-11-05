@@ -610,7 +610,12 @@ static int sg_on_build_start(const void *unused) {
     unsigned seen[2 * SG_BUILD_N + 1];
     (void)unused;
     sg.build_timer = 0;
-    if (!sg.view || !sg.count || sg.own || !sg_valid() || !cc_build_open(2 * SG_BUILD_N + 1, CC_MISSING)) return RET_OK;
+    if (!sg.view || !sg.count || sg.own || !sg_valid()) return RET_OK;
+    if (!cc_build_open(2 * SG_BUILD_N + 1, CC_MISSING)) {
+        if (cc_build_orphan()) /* a worker stopped by the page before is still inside a job: ask again shortly */
+            sg.build_timer = timer_add(sg_on_build_start, (void *)0, SG_BUILD_MS);
+        return RET_OK;
+    }
     sg.own = 1;
     c = sg_first();
     sg.build_at = c;

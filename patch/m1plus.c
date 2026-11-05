@@ -205,9 +205,11 @@ int pod_confirm(const char *s) { return pod_confirm_code(s) == CONFIRM_YES; }
 
 static void rebuild_ask(void) {
     if (!pod_confirm(TR("Rebuild all covers? This may take a few minutes."))) return;
-    if (home_write_atomic(REBUILD_FILE, REBUILD_TMP, "1\n") == 0)
+    if (home_write_atomic(REBUILD_FILE, REBUILD_TMP, "1\n") == 0) {
+        cc_clear_bad();
+        homecover_rebuild_asked();
         pod_toast(TR("Covers will rebuild on Home"));
-    else
+    } else
         pod_toast(TR("Storage unavailable"));
 }
 
@@ -225,6 +227,7 @@ __attribute__((noinline)) static void clear_ask(void) {
 __attribute__((noinline)) static void durations_clear_ask(void) {
     if (!pod_confirm(TR("Delete all measured track durations? They will be measured again on Home."))) return;
     dur_clear();
+    homecover_stamp_drop(2); /* Home measures them again */
     pod_toast(TR("Track durations cleared"));
 }
 
