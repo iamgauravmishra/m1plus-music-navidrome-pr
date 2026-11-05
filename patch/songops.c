@@ -5,6 +5,7 @@
 #include "offsets.inc"
 #include "stock.h"
 #include "common.h"
+#include "home.h"
 #include "covercache.h"
 #include "i18n.h"
 #include "podcasts.h"
@@ -41,7 +42,7 @@ static void so_ask(const char *text, int kind, int *answer) {
     memset(&info, 0, sizeof info);
     info.kind = kind;
     for (i = 0; text[i] && i < sizeof info.text - 1; ++i) info.text[i] = text[i];
-    *answer = navigator_to_with_context("dialog/confirminfo_dialog", &info);
+    *answer = pod_confirm_dialog(&info);
 }
 
 /* Delete: the stock handler's sequence (@0x527f48): nothing selected is a message; the confirm dialog (0xa: the library only, 0x14: the files too); then

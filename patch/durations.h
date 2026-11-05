@@ -46,4 +46,9 @@ void dur_subst2(char *out, unsigned size, const char *f, int n1, int n2);
 void dur_text(char *out, unsigned size, unsigned sec);
 /* Settings > Developer > Clear Track Durations: the file is deleted and the table held in memory (if any) emptied. */
 void dur_clear(void);
+/* Settings > Developer > Cache, Measured Tracks: the table's header (magic, count) and file size are read here, once as the page opens and
+ * again after a clear (open, read 12 bytes, lseek, close); nothing is read at paint. dur_stat writes "count · size" from that, or "0"
+ * (no card, no file, a bad magic). */
+void dur_stat_open(void);
+void dur_stat(char *buf, unsigned n);
 unsigned dur_epoch(void); /* counts the clears: a pass that found the table complete is stale after one */

@@ -841,7 +841,7 @@ static int pl_ask(const char *text) {
     memset(&info, 0, sizeof info);
     info.kind = 1;
     for (i = 0; text[i] && i < sizeof info.text - 1; ++i) info.text[i] = text[i];
-    return navigator_to_with_context("dialog/confirminfo_dialog", &info) == CONFIRM_YES;
+    return pod_confirm_dialog(&info) == CONFIRM_YES;
 }
 
 /* The page's marks into the stock selection: a vector of ints as long as *pdeq_playlist, 1 for each selected row. The stock list is read first (another page's

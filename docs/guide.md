@@ -62,14 +62,15 @@ To show, hide or reorder the tiles of the pull-down, open **Settings → System 
 | System | Display, **Appearance** > **Background** (Black, or Tinted: with an accent chosen, the dark greys of every page, card and sheet take a 12 % wash of it; covers and cover-coloured pages keep their look) and **Accent** (the main menu's icons show in the accent; Neutral, Red, Orange, Green, Teal, Purple or Champagne: tints pressed rows and their icons, switches that are on, the lit pull-down tiles, sliders, progress bars and the picker check; applies at once) and **Control Center** (show, hide and reorder the eight tiles of the status bar swipe-down panel), Language (under All System Settings), Keyboards and About (firmware, device, network and storage details; **Software Update** is the row under the version) |
 | Keyboards | English always enabled; Chinese (Pinyin) adds a language key and candidates above the keys. Swipe candidates sideways; space selects the first |
 | Developer → Startup | Boot to M1+ Music; Open Shanling Home |
-| Developer → Tools | Screenshot, Cover Cache, Clear Track Durations and stock System Update |
+| Developer → Tools | Screenshot, Cache (Covers, then Track Durations: its last row is Clear Track Durations), Settings Files |
+| Developer → Reset | Reset All Settings |
 
 Home builds missing album covers (and measures track lengths) in the background. A pill at the top
 of Home shows the progress, and a sync icon in the status bar shows while it runs; the pill's **×**
 stops it until the next restart. Nothing is scanned when the library has not changed, and an
 album whose cover hangs the build is skipped. **Rebuild Covers** asks for confirmation, then
-Home rebuilds every cover the same way. **Cover Cache**
-shows cached/missing/stale counts and current work; **Clear Cover Cache** asks before deleting,
+Home rebuilds every cover the same way. **Cache**
+shows cached/missing/stale counts, current work and the measured tracks; **Clear Cover Cache** asks before deleting,
 then Home regenerates covers.
 
 **Software Update** (Settings → System → About, the row under the version; needs Wi-Fi) checks GitHub for a newer release: **Check for Update**, then **Download and Install**; **Release Notes** shows what changed.

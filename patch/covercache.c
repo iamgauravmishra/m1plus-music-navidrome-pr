@@ -206,6 +206,14 @@ long cc_file_size(const char *path) {
     return size;
 }
 
+void cc_size_text(char *buf, unsigned n, unsigned bytes) {
+    unsigned v = (bytes / 1024 * 10 + 512) / 1024; /* tenths of a MB */
+    if (v < 100)
+        snprintf(buf, n, "%u.%u MB", v / 10, v % 10);
+    else
+        snprintf(buf, n, "%u MB", v / 10);
+}
+
 /* The url of key's cache file when it exists and holds a picture (an empty file is the "no art"
  * marker), else NULL. */
 const char *cc_url(char *out, unsigned key) {

@@ -49,6 +49,8 @@ unsigned cc_album_key(void *rec); /* FNV-1a of artist then album, never 0 */
 unsigned cc_key_of(const char *artist, const char *album); /* the same key from the two names */
 char *cc_path(char *out, unsigned size, unsigned key, const char *suffix);
 long cc_file_size(const char *path);
+void cc_size_text(char *buf, unsigned n,
+                  unsigned bytes); /* "14.2 MB" (tenths below 10 MB, then whole MB): the Cache page's Size row */
 const char *cc_url(char *out, unsigned key); /* "file://<cache file>" (out holds 80), NULL: no art cached */
 unsigned cc_cover_key(
     void *albums, unsigned key, const char *album,

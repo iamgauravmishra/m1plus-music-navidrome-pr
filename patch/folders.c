@@ -542,7 +542,7 @@ static int fo_ask(const char *text) {
     memset(&info, 0, sizeof info);
     info.kind = 1;
     for (i = 0; text[i] && i < sizeof info.text - 1; ++i) info.text[i] = text[i];
-    return navigator_to_with_context("dialog/confirminfo_dialog", &info) == CONFIRM_YES;
+    return pod_confirm_dialog(&info) == CONFIRM_YES;
 }
 
 /* Whether a marked record is a folder: stock removes it with rm -rf, so the confirm says so. */

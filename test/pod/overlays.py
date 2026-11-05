@@ -60,3 +60,58 @@ def run(ctx):
     p = open(os.path.join(ui, 'poweroff_page.bin'), 'rb').read()
     q = open(os.path.join(stock, '..', '..', 'ui', 'poweroff_page.bin'), 'rb').read()
     expect(p == q, 'poweroff_page.bin is stock (only shutdown.png changed)')
+    scrim_tests(ctx)
+
+
+def scrim_tests(ctx):
+    """The confirm dialog over the page (docs/modules/overlays.md): while the modal dialog is up, a full-window view of #00000082 is the top main window's last child,
+    insensitive; it is hidden, made insensitive and destroyed when the call returns, Yes or No. Nothing is touched when the page closed meanwhile or the view failed."""
+    expect = ctx.expect
+    DIM = 0x82000000   # #00000082 as the uint32 value_t holds
+    CONFIRM = 'Delete all measured track durations? They will be measured again on Home.'
+
+    def page(m, w=320, h=450):
+        win = m.alloc(0x80); m.u.mem_write(win, bytes(0x80))
+        m.setword(win + O['W_W'], w); m.setword(win + O['W_H'], h)
+        m.top_main = win; m.children[m.wm] = [win]
+        return win
+
+    def at(m, pred): return [i for i, c in enumerate(m.calls) if pred(c)]
+
+    m = Machine(); win = page(m); snap = []
+    m.on_confirm = lambda mm: snap.append(list(mm.children.get(win, [])))
+    for yes in (False, True):
+        m.confirm_yes = yes; snap.clear(); n0 = len(getattr(m, 'styled', []))
+        m.call(PSYMS['durations_clear_ask'], count=3000000)
+        made = [c[1] for c in m.calls if c[0] == 'view_create']
+        scrim = made[0] if len(made) == 1 else 0
+        dim = [s for s in getattr(m, 'styled', [])[n0:] if s[0] == scrim and s[1] == 'normal:bg_color']
+        ask, shown = at(m, lambda c: c[0] == 'confirm'), at(m, lambda c: c[0] == 'widget_destroy' and c[1] == scrim)
+        expect(scrim and [c[1] for c in m.calls if c[0] == 'confirm'] == [CONFIRM], f'Yes={yes}: one scrim view is made for the confirm ({made})')
+        expect(snap and snap[0][-1] == scrim and m.props.get((scrim, 'w')) == 320 and m.props.get((scrim, 'h')) == 450 and m.props.get((scrim, 'x')) == 0,
+               f'Yes={yes}: while the dialog is up the scrim is the window\'s last child, the window\'s size ({snap})')
+        expect(dim and dim[-1][2] == DIM, f'Yes={yes}: the scrim is #00000082 ({dim})')
+        expect(at(m, lambda c: c == ('widget_set_sensitive', scrim, 0)) and at(m, lambda c: c == ('widget_set_sensitive', scrim, 0))[0] < ask[0],
+               f'Yes={yes}: the scrim takes no input, from before the dialog')
+        hid = at(m, lambda c: c == ('widget_set_visible', scrim, 0))
+        expect(hid and shown and hid[0] < shown[0] and shown[0] > ask[0],
+               f'Yes={yes}: hidden, insensitive and destroyed after the dialog returned')
+        expect(scrim not in m.children.get(win, []), f'Yes={yes}: no scrim is left on the page')
+    expect(sum(1 for c in m.calls if c[0] == 'widget_destroy') == 1, 'the last call destroys the scrim and nothing else')
+
+    # the page closed while the dialog is up: the window manager no longer holds it, so the scrim (freed with it) is never touched
+    m = Machine(); win = page(m)
+    m.on_confirm = lambda mm: mm.children.__setitem__(mm.wm, [])
+    m.confirm_yes = True
+    m.call(PSYMS['durations_clear_ask'], count=3000000)
+    scrim = [c[1] for c in m.calls if c[0] == 'view_create']
+    expect(scrim and not [c for c in m.calls if c[0] in ('widget_destroy', 'widget_set_visible') and c[1] == scrim[0]] and [c for c in m.calls if c[0] == 'confirm'],
+           'the page closed under the dialog: nothing is done to the scrim after the call')
+
+    # no top main window: no scrim, the dialog still opens; a view that cannot be made: the dialog opens without one
+    m = Machine(); m.top_main = 0; m.confirm_yes = True
+    m.call(PSYMS['durations_clear_ask'], count=3000000)
+    expect(not [c for c in m.calls if c[0] == 'view_create'] and [c for c in m.calls if c[0] == 'confirm'], 'no page to dim: the confirm still opens, no view is made')
+    m = Machine(); page(m); m.create_fail.add('view_create'); m.confirm_yes = True
+    m.call(PSYMS['durations_clear_ask'], count=3000000)
+    expect([c for c in m.calls if c[0] == 'confirm'] and not [c for c in m.calls if c[0] == 'widget_destroy'], 'a view that cannot be made: the confirm still opens, nothing is destroyed')

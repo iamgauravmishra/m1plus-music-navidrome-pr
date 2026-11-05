@@ -301,9 +301,37 @@ TEXT = dict([
        'ลบความยาวเพลงที่วัดแล้วทั้งหมด? จะวัดใหม่ที่หน้าหลัก', 'Usunąć zmierzone czasy utworów? Zostaną zmierzone ponownie w Home.', 'Удалить все измеренные длительности? Они будут измерены заново в Home.',
        'Видалити всі виміряні тривалості? Їх буде виміряно знову в Home.'),
     _t('Track durations cleared', '曲目时长已清除', '曲目時長已清除', '再生時間を消去しました', '트랙 길이를 지웠습니다', 'Durées effacées', 'Titeldauern gelöscht', 'Duraciones borradas', 'Durate eliminate', 'ล้างความยาวเพลงแล้ว', 'Czasy wyczyszczone', 'Длительности сброшены', 'Тривалості скинуто'),
-    # Settings > Developer > Cover Cache (patch/homecover.c): the row and page title, the seven labels, the Status values (a count "n/m" follows Preparing, Rebuilding and Building)
+    _t('Delete this settings file?', '删除此设置文件？', '刪除此設定檔？',
+       'この設定ファイルを削除しますか？', '이 설정 파일을 삭제할까요?', 'Supprimer ce fichier de réglage ?',
+       'Diese Einstellungsdatei löschen?', '¿Borrar este archivo de ajustes?', 'Eliminare questo file di impostazioni?',
+       'ลบไฟล์การตั้งค่านี้?', 'Usunąć ten plik ustawień?', 'Удалить этот файл настроек?',
+       'Видалити цей файл налаштувань?'),
+    _t('Settings file deleted', '设置文件已删除', '設定檔已刪除', '設定ファイルを削除しました', '설정 파일을 삭제했습니다', 'Fichier de réglage supprimé', 'Einstellungsdatei gelöscht', 'Archivo de ajustes borrado', 'File di impostazioni eliminato', 'ลบไฟล์การตั้งค่าแล้ว', 'Usunięto plik ustawień', 'Файл настроек удалён', 'Файл налаштувань видалено'),
+    # Settings > Developer > Tools > Settings Files: Unsupported Files (the files older builds left behind; patch/setfiles.c, patch/covlist.c, patch/m1plus.c): the page's row and the list's title, the delete row, its confirm and toasts, the list's confirm and the empty list
+    _t('Unsupported Files', '不受支持的文件', '不支援的檔案', '未対応のファイル', '지원되지 않는 파일', 'Fichiers obsolètes', 'Veraltete Dateien', 'Archivos antiguos', 'File non supportati', 'ไฟล์ที่ไม่รองรับ', 'Nieobsługiwane pliki', 'Старые файлы', 'Старі файли'),
+    _t('Delete Unsupported Files', '删除不受支持的文件', '刪除不支援的檔案', '未対応のファイルを削除', '지원되지 않는 파일 삭제', 'Supprimer anciens fichiers', 'Veraltete Dateien löschen', 'Borrar archivos antiguos', 'Elimina file non supportati', 'ลบไฟล์ที่ไม่รองรับ', 'Usuń nieobsługiwane pliki', 'Удалить старые файлы', 'Видалити старі файли'),
+    _t('Delete all unsupported files?', '删除所有不受支持的文件？', '刪除所有不支援的檔案？', 'サポートされていないファイルをすべて削除しますか？', '지원되지 않는 파일을 모두 삭제할까요?', 'Supprimer tous les fichiers non pris en charge ?', 'Alle nicht unterstützten Dateien löschen?', '¿Borrar todos los archivos no compatibles?', 'Eliminare tutti i file non supportati?', 'ลบไฟล์ที่ไม่รองรับทั้งหมด?', 'Usunąć wszystkie nieobsługiwane pliki?', 'Удалить все неподдерживаемые файлы?', 'Видалити всі непідтримувані файли?'),
+    _t('Delete this unsupported file?', '删除此不受支持的文件？', '刪除此不支援的檔案？', 'このサポートされていないファイルを削除しますか？', '이 지원되지 않는 파일을 삭제할까요?', 'Supprimer ce fichier non pris en charge ?', 'Diese nicht unterstützte Datei löschen?', '¿Borrar este archivo no compatible?', 'Eliminare questo file non supportato?', 'ลบไฟล์ที่ไม่รองรับนี้?', 'Usunąć ten nieobsługiwany plik?', 'Удалить этот неподдерживаемый файл?', 'Видалити цей непідтримуваний файл?'),
+    _t('Unsupported files deleted', '已删除不受支持的文件', '已刪除不支援的檔案', '未対応のファイルを削除しました', '지원되지 않는 파일을 삭제했습니다', 'Fichiers non pris en charge supprimés', 'Nicht unterstützte Dateien gelöscht', 'Archivos no compatibles borrados', 'File non supportati eliminati', 'ลบไฟล์ที่ไม่รองรับแล้ว', 'Usunięto nieobsługiwane pliki', 'Неподдерживаемые файлы удалены', 'Непідтримувані файли видалено'),
+    _t('No unsupported files', '没有不受支持的文件', '沒有不支援的檔案', '未対応のファイルはありません', '지원되지 않는 파일이 없습니다', 'Aucun fichier non pris en charge', 'Keine nicht unterstützten Dateien', 'No hay archivos no compatibles', 'Nessun file non supportato', 'ไม่มีไฟล์ที่ไม่รองรับ', 'Brak nieobsługiwanych plików', 'Нет неподдерживаемых файлов', 'Немає непідтримуваних файлів'),
+    # Settings > Developer > Tools > Reset All Settings (patch/m1plus.c reset_all_ask, patch/setfiles.c): the row, its confirm and the two toasts
+    _t('Reset All Settings', '恢复所有设置', '重設所有設定', 'すべての設定をリセット', '모든 설정 초기화', 'Réinitialiser les réglages', 'Alles zurücksetzen',
+       'Restablecer ajustes', 'Ripristina impostazioni', 'รีเซ็ตการตั้งค่าทั้งหมด', 'Zresetuj ustawienia', 'Сбросить все настройки', 'Скинути всі налаштування'),
+    _t('Reset all settings to their defaults?', '将所有设置恢复为默认值？', '將所有設定恢復為預設值？',
+       'すべての設定を初期値に戻しますか？', '모든 설정을 기본값으로 초기화할까요?',
+       'Rétablir tous les réglages par défaut ?', 'Alle Einstellungen auf Standard zurücksetzen?',
+       '¿Restablecer todos los ajustes predeterminados?', 'Ripristinare tutte le impostazioni predefinite?',
+       'รีเซ็ตการตั้งค่าทั้งหมดเป็นค่าเริ่มต้นใช่ไหม?', 'Zresetować wszystkie ustawienia do domyślnych?',
+       'Сбросить все настройки до значений по умолчанию?', 'Скинути всі налаштування до типових значень?'),
+    _t('Settings reset. Restart to apply.', '设置已重置，重启后生效。', '設定已重設，重新啟動後生效。', '設定をリセットしました。再起動すると反映されます。', '설정을 초기화했습니다. 다시 시작하면 적용됩니다.',
+       'Réglages réinitialisés. Redémarrez pour appliquer.', 'Einstellungen zurückgesetzt. Zum Übernehmen neu starten.', 'Ajustes restablecidos. Reinicia para aplicarlos.', 'Impostazioni ripristinate. Riavvia per applicarle.',
+       'รีเซ็ตการตั้งค่าแล้ว รีสตาร์ทเพื่อใช้งาน', 'Ustawienia zresetowane. Uruchom ponownie, aby zastosować.', 'Настройки сброшены. Перезапустите, чтобы применить.', 'Налаштування скинуто. Перезапустіть, щоб застосувати.'),
+    # Settings > Developer > Cache (patch/homecover.c): the row and page title, the seven labels, the Status values (a count "n/m" follows Preparing, Rebuilding and Building)
     _t('Settings Files', '设置文件', '設定檔案', '設定ファイル', '설정 파일', 'Fichiers de réglages', 'Einstellungsdateien', 'Archivos de ajustes', 'File delle impostazioni', 'ไฟล์การตั้งค่า', 'Pliki ustawień', 'Файлы настроек', 'Файли налаштувань'),
-    _t('Cover Cache', '封面缓存', '封面快取', 'カバーキャッシュ', '커버 캐시', 'Cache des pochettes', 'Cover-Cache', 'Caché de carátulas', 'Cache copertine', 'แคชปก', 'Pamięć okładek', 'Кэш обложек', 'Кеш обкладинок'),
+    _t('Cache', '缓存', '快取', 'キャッシュ', '캐시', 'Mémoire', 'Zwischenspeicher', 'Caché', 'Memoria', 'แคช', 'Pamięć podręczna', 'Кэш', 'Кеш'),
+    # Settings > Developer > Cache > Track Durations (patch/durations.c): the section header and the table's count and size row
+    _t('Track Durations', '曲目时长', '曲目時長', '再生時間', '트랙 길이', 'Durées des pistes', 'Titeldauern', 'Duraciones de pistas', 'Durate dei brani', 'ความยาวเพลง', 'Czasy utworów', 'Длительность треков', 'Тривалість треків'),
+    _t('Measured Tracks', '已测量曲目', '已測量曲目', '計測済みの曲', '측정된 트랙', 'Pistes mesurées', 'Gemessene Titel', 'Pistas medidas', 'Brani misurati', 'เพลงที่วัดแล้ว', 'Zmierzone', 'Измерено', 'Виміряно треків'),
     _t('Covers', '封面', '封面', 'カバー', '커버', 'Pochettes', 'Cover', 'Carátulas', 'Copertine', 'ปก', 'Okładki', 'Обложки', 'Обкладинки'),
     _t('No art', '无封面', '無封面', 'カバーなし', '커버 없음', 'Sans pochette', 'Ohne Cover', 'Sin carátula', 'Senza copertina', 'ไม่มีปก', 'Brak okładki', 'Без обложки', 'Без обкладинки'),
     _t('No Art', '无封面', '無封面', 'カバーなし', '커버 없음', 'Sans pochette', 'Ohne Cover', 'Sin carátula', 'Senza copertina', 'ไม่มีปก', 'Brak okładki', 'Без обложки', 'Без обкладинки'),
@@ -589,9 +617,9 @@ TEXT = dict([
        'ยกเลิกการถ่ายภาพหน้าจอไหม', 'Anulować zrzut ekranu?', 'Отменить скриншот?', 'Скасувати знімок?'),
     _t('Screenshot saved', '截图已保存', '截圖已儲存', 'スクリーンショットを保存', '스크린샷 저장됨', 'Capture enregistrée', 'Screenshot gespeichert',
        'Captura guardada', 'Screenshot salvato', 'บันทึกภาพหน้าจอแล้ว', 'Zrzut zapisany', 'Скриншот сохранён', 'Знімок збережено'),
-    # Settings > Developer > System Update (opens the stock firmware update page; shorter than stock's own title, which does not fit every language)
-    _t('System Update', '系统更新', '系統更新', 'システム更新', '시스템 업데이트', 'Mise à jour système', 'Systemupdate',
-       'Actualizar sistema', 'Aggiorna sistema', 'อัปเดตระบบ', 'Aktualizacja systemu', 'Обновление системы', 'Оновлення системи'),
+    # Settings > Developer > Reset (the card holding Reset All Settings)
+    _t('Reset', '重置', '重設', 'リセット', '초기화', 'Réinitialiser', 'Zurücksetzen',
+       'Restablecer', 'Ripristina', 'รีเซ็ต', 'Resetuj', 'Сброс', 'Скидання'),
     _t('Screenshot failed','截图失败', '截圖失敗', 'スクリーンショット失敗', '스크린샷 실패', 'Échec de la capture', 'Screenshot fehlgeschlagen',
        'Error en la captura', 'Screenshot non riuscito', 'ถ่ายภาพหน้าจอไม่สำเร็จ', 'Zrzut nieudany', 'Не удалось снять экран', 'Не вдалося зробити знімок'),
     # Settings > Keyboards (iOS style: English always on, Chinese (Pinyin) a switch; patch/keyboard.c)

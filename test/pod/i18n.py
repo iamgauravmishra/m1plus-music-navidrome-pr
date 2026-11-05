@@ -276,7 +276,7 @@ def run(ctx):
             while width(cur.rstrip(), px) > maxw: lines, cur = lines + 1, cur[len(cur) // 2:]     # a unit wider than a line
         return lines
     for key, what in (('Rebuild all covers? This may take a few minutes.', 'Rebuild Covers'), ('Take a screenshot?', 'Screenshot'), ('Take a screenshot in:', 'Screenshot delay'),
-                      ('Cancel the screenshot?', 'Cancel Screenshot'), ('Delete all cached covers? They will be made again on Home.', 'Clear Cover Cache'), ('Delete all measured track durations? They will be measured again on Home.', 'Clear Track Durations'), ('Delete folder and everything in it?', 'Delete folder'), ('Download %s (55 MB)? It replaces update.bin on the card.', 'Software Update'),
+                      ('Cancel the screenshot?', 'Cancel Screenshot'), ('Delete all cached covers? They will be made again on Home.', 'Clear Cover Cache'), ('Delete all measured track durations? They will be measured again on Home.', 'Clear Track Durations'), ('Reset all settings to their defaults?', 'Reset All Settings'), ('Delete this settings file?', 'Delete Settings File'), ('Delete all unsupported files?', 'Delete Unsupported Files'), ('Delete this unsupported file?', 'Delete Unsupported File'),('Delete folder and everything in it?', 'Delete folder'), ('Download %s (55 MB)? It replaces update.bin on the card.', 'Software Update'),
                       ('msg_bt_open', 'stock: Bluetooth is off'), ('msg_wifi_open', 'stock: Wi-Fi is off')):
         lines = {loc: wrapped((dict(built[loc]).get(key, dict(built['en_US'])[key]) if key.startswith('msg_') else tr_text(loc, key)).replace('%s', '10.0.1'), wrap_px, wrap_w) for loc in LOC}
         expect(wrap_px == 20 and max(lines.values()) <= 3, f'the {what} confirm wraps to at most 3 lines of {wrap_w} px at {wrap_px} px in all languages ({lines})')
@@ -293,7 +293,7 @@ def run(ctx):
             for i, r in enumerate(page.rows):
                 if pod_pages.row_kind(r) == 'info':   # an About row: the label and a realistic value (the longest each can be) share the room from the label to the right ink edge
                     sample = {pod_pages.INFO_TAG: build.about(build.TAG), pod_pages.INFO_FW: 'V2.1', pod_pages.INFO_MODEL: 'Shanling M1 Plus', pod_pages.INFO_SN: '888888888888', pod_pages.INFO_MAC: '88:88:88:88:88:88',
-                              pod_pages.INFO_IP: '192.168.188.188', pod_pages.INFO_CAP: '188.88 GB', pod_pages.INFO_FREE: '188.88 GB'}.get(r.arg, '99999')   # (the Cover Cache counts: five digits)
+                              pod_pages.INFO_IP: '192.168.188.188', pod_pages.INFO_CAP: '188.88 GB', pod_pages.INFO_FREE: '188.88 GB', pod_pages.INFO_DUR: '200000 · 2.3 MB'}.get(r.arg, '99999')   # (the Cache counts: five digits; Measured Tracks: the table's largest count and size)
                     samples = [sample]
                     if r.arg == pod_pages.INFO_CC_STATUS:   # every Status word, with a count after the three that have one
                         samples = [tr_text(loc, k) + (' 4000/4000' if k in ('Preparing', 'Rebuilding', 'Building', 'Measuring tracks') else '') for k in ('Idle', 'Preparing', 'Rebuilding', 'Rebuild requested', 'Clearing', 'Building', 'Measuring tracks')]
@@ -302,7 +302,7 @@ def run(ctx):
                         need = width(tr_text(loc, lk) if lk else r.label, row_px) + ST.VALUE_LABEL_GAP + min(width(sample, ST.INFO_PX) + 6, ST.INFO_MAX)
                         if need > ST.RIGHT - ST.CM - ST.PAD: cards_over.append((page.key, r.label, sample, loc, need, ST.RIGHT - ST.CM - ST.PAD))
                     continue
-                if r.action == pod_pages.ACT_CCLIST:   # the Cover Cache's No art / Missing: no glyph, a five digit count and the chevron
+                if r.action in (pod_pages.ACT_CCLIST, pod_pages.ACT_SFOLD):   # the Cache's No art / Missing and Unsupported Files: no glyph, a five digit count and the chevron
                     need = width(tr_text(loc, pod_i18n.key_for(r.label)), row_px) + ST.VALUE_LABEL_GAP + min(width('99999', ST.VALUE_PX) + 6, ST.VALUE_MAX)
                     if need > room + ST.TEXT_X - ST.CM - ST.PAD: cards_over.append((page.key, r.label, '99999', loc, need, room))
                     continue

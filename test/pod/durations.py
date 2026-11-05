@@ -707,11 +707,12 @@ def home_tests(ctx):
 
 
 def clear_tests(ctx):
-    """8. Settings > Developer > Clear Track Durations, and the Settings Files row."""
+    """8. Settings > Developer > Cache > Clear Track Durations, and the Settings Files row."""
     expect, P = ctx.expect, pod_pages
-    d = P.DEVELOPER_PAGE
+    d = P.CACHE_PAGE
     labels = [r.label for r in d.rows]
-    expect(labels.index('Clear Track Durations') == labels.index('Cover Cache') + 1 and d.rows[labels.index('Clear Track Durations')].action == P.ACT_CLEARDUR == 44, 'Developer > Tools has Clear Track Durations right after Cover Cache (action 44; the ids of the others unchanged)')
+    expect(labels.index('Clear Track Durations') == labels.index('Clear Cover Cache') + 2 and d.rows[labels.index('Clear Track Durations')].action == P.ACT_CLEARDUR == 44 and labels[-1] == 'Clear Track Durations', 'Cache has Clear Track Durations as its last row, in the Track Durations section after Measured Tracks (action 44; the ids of the others unchanged)')
+    expect('Clear Track Durations' not in [r.label for r in P.DEVELOPER_PAGE.rows], 'Developer has no Clear Track Durations row')
     expect(P.ACT_CLEARCACHE == 42 and P.ACT_CCLIST == 43 and not [s for s in P.SETTING_FILES if 'durations' in s or 'lengths' in s], 'the earlier action ids are as they were; the Settings Files page lists no durations row (the table is on the card)')
     CONFIRM = 'Delete all measured track durations? They will be measured again on Home.'
     toasts = lambda m: [c[1] for c in m.calls if c[0] == 'toast']
@@ -734,7 +735,43 @@ def clear_tests(ctx):
     expect(fn(m, 'dur_epoch') == 1, 'the clear is counted (Home reads the library again)')
 
 
-SECTIONS = [table_tests, card_tests, cue_tests, probe_tests, text_tests, album_tests, footer_tests, home_tests, clear_tests]   # tools/check.py runs each as its own task
+def measured_tests(ctx):
+    """8b. Settings > Developer > Cache: the Covers and Track Durations sections; Measured Tracks (dur_stat) is the table header's count and the file's size, read once as the page opens (dur_stat_open) and again after a clear, never by a refresh."""
+    expect, P = ctx.expect, pod_pages
+    lay = P.CACHE_PAGE.layout
+    shape = [x.text if isinstance(x, P.Hdr) else 'gap' if x == P.GAP else x.label for x in lay]
+    expect(shape == ['Covers', 'Albums', 'Covers', 'No art', 'Missing', 'Old files', 'Size', 'gap', 'Status', 'gap', 'Clear Cover Cache', 'Track Durations', 'Measured Tracks', 'Clear Track Durations'], f'the Cache page: a Covers section (the counts, Status and Clear Cover Cache, the gaps kept), then a Track Durations section ({shape})')
+    expect(P.CACHE_PAGE.key == 'm1plus_cache' and P.CACHE_PAGE.title == 'Cache' and P.CACHE_PAGE_INDEX == 33, 'the page keeps its key and index; its title is Cache')
+    expect([r.label for r in P.DEVELOPER_PAGE.rows if r.action == P.ACT_PAGE and r.arg == P.CACHE_PAGE_INDEX] == ['Cache'], 'the Developer row reads Cache')
+    mt = next(r for r in P.CACHE_PAGE.rows if r.label == 'Measured Tracks')
+    expect(mt.action == P.ACT_INFO and mt.arg == P.INFO_DUR == P.INFO_SFOLD + 1 and P.INFO_DUR > P.INFO_CC_STATUS, 'Measured Tracks is an info row with its own kind, after the Settings Files kinds')
+
+    def stat(m):
+        buf = m.alloc(64)
+        fn(m, 'dur_stat', buf, 64)
+        return m.read_cstr(buf)
+    expect(stat(Machine()) == '0', 'no table on the card: Measured Tracks reads 0')
+    m = seeded([(i + 1, 10, 5) for i in range(1234)])
+    fn(m, 'dur_stat_open')
+    expect(stat(m) == '1234 \xc2\xb7 14 KB', f'a valid table: its header count and size ({stat(m)!r})')   # (read_cstr is latin-1: the middle dot is its two UTF-8 bytes)
+    m = seeded([(i + 1, 10, 5) for i in range(1234)], magic=0x1234)
+    fn(m, 'dur_stat_open')
+    expect(stat(m) == '0', 'a file with a bad magic reads 0')
+    m = seeded([(i + 1, 10, 5) for i in range(1234)]); m.card_mounted = False
+    fn(m, 'dur_stat_open')
+    expect(stat(m) == '0', 'no card mounted: nothing is read, 0')
+    m = seeded([(i + 1, 10, 5) for i in range(1234)])
+    fn(m, 'dur_stat_open')
+    opens = len([c for c in m.calls if c[0] == 'open' and c[1] == DUR])
+    n = len(m.calls)
+    stat(m); stat(m)
+    expect(opens == 1 and not [c for c in m.calls[n:] if c[0] == 'open' and c[1] == DUR], 'the header is read once as the page opens; a refresh (dur_stat) reads no file')
+    m.confirm_yes = True
+    m.call(PSYMS['durations_clear_ask'], count=3000000)
+    expect(stat(m) == '0' and DUR not in m.fs, 'Clear Track Durations, Yes: the file is gone and Measured Tracks reads 0')
+
+
+SECTIONS = [table_tests, card_tests, cue_tests, probe_tests, text_tests, album_tests, footer_tests, home_tests, clear_tests, measured_tests]   # tools/check.py runs each as its own task
 
 
 def run(ctx):

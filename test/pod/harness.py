@@ -234,6 +234,7 @@ class Machine:
         self.confirm_yes = False    # the answer of the stock confirm dialog (dialog/confirminfo_dialog)
         self.album_cover = 0        # toolsGetAlbumCover's result
         self.listing, self.open_dirs = {}, {}   # opendir / readdir (patch/covercache.c art_folder): directory path -> [(name, d_type)], open handle -> entries left
+        self.dir_stop = {}          # directory path -> entries readdir serves before it returns NULL (the rest stay listed); opendir fails for ('opendir', path) in fail
         self.taglib_kind, self.taglib_data = None, None   # taglib_album_picture's result (2 JPEG, 1 PNG, 0 none; None: 2 when album_cover is set) and the picture it saves to /tmp/.tmp_picture (None: no file)
         self.extern_cover = 0
         self.durations = {}           # path -> seconds TagLib reads (patch/durations.c dur_probe); 0: the file opens but has no audio properties; a path not here: taglib_file_new fails
@@ -564,6 +565,11 @@ class Machine:
             self.calls.append(('label_set_line_wrap', a0, a1))
         elif name == 'slide_indicator_set_max':
             self.calls.append(('slide_indicator_set_max', a0, a1))
+        elif name == 'widget_set_style':   # (widget, name, value_t): kept in styled, the list SelectMachine keeps too; the colour is the uint32 at 8
+            if not hasattr(self, 'styled'): self.styled = []
+            self.styled.append((a0, self.read_cstr(a1), self.word(a2 + 8)))
+        elif name == 'value_set_uint32':   # value_t's uint32 at 8, as the setters read it
+            self.setword(a0 + 8, a1); ret = a0
         elif name == 'widget_destroy':
             self.calls.append(('widget_destroy', a0))
             for kids in self.children.values():
@@ -813,6 +819,7 @@ class Machine:
             elif ctx == 'dialog/confirminfo_dialog':   # modal: the button pressed is the result (0xa Yes, else No; confirm_answer: any other value)
                 self.calls.append(('confirm', self.read_cstr(a1 + 8), self.word(a1)))
                 text = self.read_cstr(a1 + 8)
+                if getattr(self, 'on_confirm', None): self.on_confirm(self)   # a test runs code while the modal dialog is up (what the page's windows hold then)
                 ret = self.confirm_answers[text] if text in self.confirm_answers else self.confirm_answer if self.confirm_answer is not None else O['CONFIRM_YES'] if self.confirm_yes else 0
         elif name == 'createPlayListItem':   # (the stock list, the name): the new id, -1 full, -2 exists
             self.calls.append(('createPlayListItem', self.read_cstr(a1), len(self.deques.get(a0, [])))); ret = -2 if self.read_cstr(a1) in self.pl_names else self.create_ret
@@ -923,7 +930,8 @@ class Machine:
             self.calls.append(('taglib_file_free',)); self.tag_objs.pop(a0, None)
         elif name == 'opendir':
             p = self.read_cstr(a0); self.calls.append(('opendir', p)); ret = 0
-            if p in self.listing: ret = self.alloc(4); self.open_dirs[ret] = list(self.listing[p])
+            if p in self.listing and ('opendir', p) not in self.fail:
+                ret = self.alloc(4); self.open_dirs[ret] = list(self.listing[p])[:self.dir_stop.get(p)]
         elif name == 'readdir':   # struct dirent (32-bit): d_type at 10, d_name at 11
             ret = 0
             if self.open_dirs.get(a0):
@@ -1023,6 +1031,9 @@ class Machine:
         elif name == 'unlink':
             p = self.read_cstr(a0); self.files.pop(p, None); self.present.discard(p)
             ret = 0 if self.fs.pop(p, None) is not None else ret
+            parent = p.rsplit('/', 1)[0]
+            if parent in self.listing:   # the directory forgets what was unlinked
+                self.listing[parent] = [e for e in self.listing[parent] if f'{parent}/{e[0]}' != p]
             self.calls.append(('unlink', p))
         elif name == 'mkdir':
             p = self.read_cstr(a0); self.calls.append(('mkdir', p))

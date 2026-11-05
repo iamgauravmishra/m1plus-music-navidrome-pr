@@ -55,7 +55,7 @@ def layout_tests(ctx):
     expect, P = ctx.expect, pod_pages
     pages = [p for p in P.PAGES if p.kind == 'cards']
     expect([p.key for p in pages] == ['m1plus_settings', 'm1plus_library', 'm1plus_homeset', 'm1plus_developer', 'm1plus_npset', 'm1plus_keyboards', 'm1plus_albumorder', 'm1plus_tapetheme', 'm1plus_about', 'm1plus_vinylrec', 'm1plus_vinyltheme', 'm1plus_cache', 'm1plus_files', 'm1plus_background', 'm1plus_accent', 'm1plus_appearance'],
-           'the cards pages: Settings, Library, Home Screen, Developer, Now Playing, Keyboards, the four pickers, About, Cover Cache, Settings Files, the Background picker, the Accent picker and Appearance')
+           'the cards pages: Settings, Library, Home Screen, Developer, Now Playing, Keyboards, the four pickers, About, Cache, Settings Files, the Background picker, the Accent picker and Appearance')
     expect(mod_icons.CARD_PIECE == {'ROW_W': ST.ROW_W, 'ROW_H': ST.ROW_H, 'CARD_X': ST.CM, 'CARD_W': ST.CARD_W, 'CARD_R': ST.CARD_R, 'FILL': (0x1C,) * 3, 'LIT': (0x2C, 0x2C, 0x2E)}
            and ST.CARD_RGB == '#1C1C1C' and ST.PRESSED_RGB == '#2C2C2E', 'the pieces\' geometry in tools/mod_icons.py is the layout model\'s')
     for page in pages:
@@ -92,7 +92,7 @@ def layout_tests(ctx):
             r, kind = rows[n], P.row_kind(it)
             last = kinds[n] in ('single', 'bot')
             swatch = it.action == P.ACT_ACCENTSET   # the Accent picker's rows: a round swatch where a glyph goes (pod_swatch)
-            has_icon = swatch or (kind not in ('check', 'info') and it.action not in (P.ACT_CCLIST, P.ACT_UPDATE))
+            has_icon = swatch or (kind not in ('check', 'info') and it.action not in (P.ACT_CCLIST, P.ACT_SFOLD, P.ACT_UPDATE))
             lab = next(c for c in r.children if c.name == f'pod_label{n}')
             lx, lw = ST.label_box(kind, has_icon)
             normal, down = ST.piece_images(kinds[n])
@@ -116,7 +116,7 @@ def layout_tests(ctx):
             vl = [c for c in r.children if c.name == f'pod_value{n}']
             expect(bool(vl) == (kind in ('value', 'info')) and (not vl or ((vl[0].x, vl[0].w) == (ST.info_box() if kind == 'info' else ST.value_box()) and vl[0].get('sensitive') == 'false' and vl[0].get('style:normal:text_color') == ST.GREY
                                                                  and vl[0].get('style:normal:text_align_h') == 'right')), f'{page.key}:{it.label}: a grey right aligned insensitive value on value and info rows')
-            expect(kind != 'info' or (r.get('sensitive') == 'false' and not chev), f'{page.key}:{it.label}: an info row takes no touch and has no chevron')
+            expect(kind != 'info' or ((r.get('sensitive') == 'false') == (it.action != P.ACT_SFDEL) and not chev), f'{page.key}:{it.label}: an info row takes no touch (a Settings Files row is sensitive at build, the payload sets it per file) and has no chevron')
         # a card's pieces: a run of rows is top, mid.., bot; a lone row is single
         expect(all(k in ('single', 'top', 'mid', 'bot') for k in kinds) and all((kinds[i] in ('top', 'mid')) == (kinds[i + 1] in ('mid', 'bot')) for i in range(len(kinds) - 1)),
                f'{page.key}: the pieces make whole cards ({kinds})')
@@ -143,7 +143,7 @@ def layout_tests(ctx):
             if y + h > 400: continue   # (below the list's window)
             for x in (30, 160, 290):
                 got_path = stock_target(mm, node_tree, x, 50 + y + h // 2)
-                if n.startswith('pod_row') and P.row_kind(page.rows[int(n[7:])]) != 'info':
+                if n.startswith('pod_row') and (P.row_kind(page.rows[int(n[7:])]) != 'info' or page.rows[int(n[7:])].action == P.ACT_SFDEL):
                     expect(n in got_path and not any(c.startswith(('pod_value', 'pod_switch', 'pod_chevron', 'pod_icon', 'pod_check', 'pod_hair')) for c in got_path), f'{page.key}: a tap at x {x} on {n} reaches its list_item ({got_path})')
                 else:
                     expect(not any(c.startswith('pod_row') for c in got_path) and got_path[-1] in ('pod_scrollview', 'pod_listview', page.name), f'{page.key}: a tap at x {x} on {n} reaches nothing actionable ({got_path})')
@@ -263,9 +263,8 @@ def stock_tests(ctx):
     m = settings_machine()
     m.click(f'pod_row{rows["All Playback Settings"]}'); m.click(f'pod_row{rows["All System Settings"]}')
     # (the Home dispatcher's ids 16 and 17 are bound to the two rows: tests/pod/menu.py checks the table)
-    expect(len(P.STOCK_PAGES) == 6 and all(r.action == P.ACT_STOCK for r in S.rows if r.label in want), 'six stock pages, each opened by an ACT_STOCK row')
-    upd = next(r for r in P.DEVELOPER_PAGE.rows if r.label == 'System Update')
-    expect(upd.action == P.ACT_STOCK and P.STOCK_PAGES[upd.arg] == ('systemset/fwupdate_page', None), 'Developer > System Update is a plain navigator_to of the stock firmware update page, no value')
+    expect(len(P.STOCK_PAGES) == 5 and all(r.action == P.ACT_STOCK for r in S.rows if r.label in want), 'five stock pages, each opened by an ACT_STOCK row')
+    expect(not [r for r in P.DEVELOPER_PAGE.rows if r.action == P.ACT_STOCK] and 'systemset/fwupdate_page' not in [n for n, _ in P.STOCK_PAGES], 'no Developer row is a stock page: the firmware update page is not in STOCK_PAGES (About > Software Update is ours)')
     # the values: the stock state, by the stock keys
     def value(m, label):
         keys = [c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets[f'pod_value{rows[label]}']]

@@ -228,7 +228,7 @@ def asset_tests(ctx):
     labels = [r.label for r in rows]
     i = labels.index('Software Update')
     expect(labels[i - 1] == 'M1+ Music' and 'Software Update' not in [r.label for r in pod_pages.SETTINGS_PAGE.rows] and rows[i].action == pod_pages.ACT_UPDATE and pod_pages.row_kind(rows[i]) == 'link'
-           and 'System Update' in [r.label for r in pod_pages.DEVELOPER_PAGE.rows], 'Settings > System > About: Software Update right below the version row, a link row, none in the System card; Developer > Tools > System Update stays')
+           and 'System Update' not in [r.label for r in pod_pages.DEVELOPER_PAGE.rows], 'Settings > System > About: Software Update right below the version row, a link row, none in the System card; the Developer page has no System Update row any more')
 
 
 def flow_tests(ctx):

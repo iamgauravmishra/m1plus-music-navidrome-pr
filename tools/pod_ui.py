@@ -1546,8 +1546,8 @@ def cards_row(i, row, piece, last):
     from mod_icons import CARD_GLYPHS, card_name, CARD_CHEVRON, CARD_CHECK
     kind = pod_pages.row_kind(row)
     swatch = row.action == pod_pages.ACT_ACCENTSET   # the Accent picker's rows show the accent's round swatch where a glyph goes (never tinted: docs/modules/accent.md)
-    has_icon = swatch or (kind not in ('check', 'info') and row.action not in (pod_pages.ACT_CCLIST, pod_pages.ACT_UPDATE))   # (the Cover Cache counts and About's Software Update link have no glyph, like the rows around them)
-    item = Widget('list_item', 0, 0, ST.LIST_W, ST.ROW_H, [('name', f'pod_row{i}'), ('style', 'list_item_style')] + ([('sensitive', 'false')] if kind == 'info' else []))
+    has_icon = swatch or (kind not in ('check', 'info') and row.action not in (pod_pages.ACT_CCLIST, pod_pages.ACT_SFOLD, pod_pages.ACT_UPDATE))   # (the Cache counts, Unsupported Files and About's Software Update link have no glyph, like the rows around them)
+    item = Widget('list_item', 0, 0, ST.LIST_W, ST.ROW_H, [('name', f'pod_row{i}'), ('style', 'list_item_style')] + ([('sensitive', 'false')] if kind == 'info' and row.action != pod_pages.ACT_SFDEL else []))
     normal, down = ST.piece_images(piece)
     for st in ('normal', 'over', 'pressed', 'focused', 'disable'):
         styled(item, (st,), 'bg_color', '#00000000')
@@ -1580,7 +1580,7 @@ def cards_row(i, row, piece, last):
         val = Widget('hscroll_label', vx, 0, vw, ST.ROW_H, [('name', f'pod_value{i}'), ('text', ''), ('only_parent_focus', 'true'),
                                                               ('ellipses', 'true'), ('sensitive', 'false')])
         for st in ('normal', 'disable', 'focused'):
-            styled(val, (st,), 'font_size', str(ST.VALUE_PX if row.arg >= pod_pages.INFO_CC_ALBUMS else ST.INFO_PX))   # (the Cover Cache page's values are the standard 18 px value size, About's the stock About's 16)
+            styled(val, (st,), 'font_size', str(ST.VALUE_PX if row.arg >= pod_pages.INFO_CC_ALBUMS else ST.INFO_PX))   # (the Cache page's values are the standard 18 px value size, About's the stock About's 16)
             styled(val, (st,), 'text_color', ST.GREY)
             styled(val, (st,), 'text_align_h', 'right')
             styled(val, (st,), 'text_align_v', 'middle')

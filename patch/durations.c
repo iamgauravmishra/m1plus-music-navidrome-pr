@@ -104,6 +104,42 @@ void dur_clear(void) {
     ln.n = 0;
 }
 
+/* Measured Tracks: the header's count and the file's size, as the Cache page opened (dur_stat_open). */
+static struct {
+    unsigned count, bytes;
+    int ok;
+} ds __attribute__((section(".scratch")));
+
+void dur_stat_open(void) {
+    unsigned h[3];
+    long size;
+    int fd;
+    memset(&ds, 0, sizeof ds);
+    if (!pod_card_mounted()) return; /* no card, or the computer holds it (USB mode) */
+    fd = open(DUR_FILE, O_RDONLY, 0);
+    if (fd < 0) return;
+    if (read(fd, h, DUR_HDR) == DUR_HDR && h[0] == DUR_MAGIC) {
+        size = lseek(fd, 0, 2); /* SEEK_END */
+        ds.ok = 1;
+        ds.count = h[1];
+        ds.bytes = size > 0 ? (unsigned)size : 0;
+    }
+    close(fd);
+}
+
+void dur_stat(char *buf, unsigned n) {
+    char size[24];
+    if (!ds.ok) {
+        snprintf(buf, n, "0");
+        return;
+    }
+    if (ds.bytes < 1024 * 1024)
+        snprintf(size, sizeof size, "%u KB", (ds.bytes + 512) / 1024);
+    else
+        cc_size_text(size, sizeof size, ds.bytes);
+    snprintf(buf, n, "%u \xc2\xb7 %s", ds.count, size);
+}
+
 /* The index of key in the table, or -1. */
 static int dur_find(unsigned key) {
     unsigned lo = 0, hi = ln.n;

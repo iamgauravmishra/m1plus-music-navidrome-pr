@@ -417,7 +417,12 @@ def select_tests(ctx):
     expect(m.wtext[m.widgets['label_title']] == '0 Selected', 'Select All again marks none')
     click(m, 'btn_selall'); tap_row(m, 2)
     m.confirm_yes = True; m.calls.clear()
+    top = m.alloc(0x80); m.u.mem_write(top, bytes(0x80)); m.top_main = top; m.children[m.wm] = [top]   # the page under the confirm (fo_ask's dim scrim goes on it)
+    seen = []; m.on_confirm = lambda mm: seen.append(list(mm.children.get(top, [])))
     calls = click(m, 'sg_del')
+    made = [c[1] for c in calls if c[0] == 'view_create']
+    expect(len(made) == 1 and seen and seen[0][-1] == made[0] and ('widget_set_sensitive', made[0], 0) in calls and ('widget_destroy', made[0]) in calls and made[0] not in m.children.get(top, []),
+           'the folder confirm: the dim scrim is the page\'s last child while the dialog is up, insensitive, destroyed after it')
     bd = [c for c in calls if c[0] == 'batch_delete_file']
     expect(bd and bd[0][1] == 1 and bd[0][5] == 1 and bd[0][6] == [0, 1, 3] and any(c[0] == 'toast' and c[1] == 'msg_delfilesuccess' for c in calls)
            and any(c[0] == 'confirm' and c[1] == 'Delete folder and everything in it?' and c[2] == 1 for c in calls), f'Delete (a folder and files marked): the confirm (kind 1) warns about the folder, then the stock sequence, batch_delete_file(1, list, vector, 0, 1) on the marked records, the message ({bd})')

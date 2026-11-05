@@ -135,7 +135,7 @@ no card or space, no thread) leaves the file, and the next foreground (5 s later
 restart only repeats work. Files already replaced stay new. The worker is the one at a time, so a
 rebuild never runs beside Cover Flow's or Albums' own build.
 
-Settings > Developer > Cover Cache shows the cache's counts and this build's status, and its Clear Cover Cache row is the opposite request: it deletes the cache (and this request file) in steps, see [settings](settings.md) "Clear Cover Cache"; the next Home open then shows the waiting pill (the covers line is dropped) and the scan queues every album as missing.
+Settings > Developer > Cache shows the cache's counts and this build's status, and its Clear Cover Cache row is the opposite request: it deletes the cache (and this request file) in steps, see [settings](settings.md) "Clear Cover Cache"; the next Home open then shows the waiting pill (the covers line is dropped) and the scan queues every album as missing.
 
 ## Worker priority
 

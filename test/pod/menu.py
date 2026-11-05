@@ -1060,7 +1060,7 @@ def library_tests(ctx, on_row):
         T = tr_of(loc)
         m = rebuild_machine(language=loc)
         expect([c[1] for c in m.calls if c[0] == 'confirm'] == [T(KEY)], f'{loc}: the confirm message reads {T(KEY)!r}')
-    # Developer > Cover Cache: the No art / Missing rows are value rows whose chevron and tap exist only for a counted, non-zero count
+    # Developer > Cache: the No art / Missing rows are value rows whose chevron and tap exist only for a counted, non-zero count
     D, CP = P.DEVELOPER_PAGE, P.CACHE_PAGE
     cc_i = next(i for i, r in enumerate(D.rows) if r.action == P.ACT_PAGE and r.arg == P.CACHE_PAGE_INDEX)
     na_i, ms_i = (next(i for i, r in enumerate(CP.rows) if r.action == P.ACT_CCLIST and r.arg == a) for a in (P.INFO_CC_NOART, P.INFO_CC_MISSING))
@@ -1081,7 +1081,7 @@ def library_tests(ctx, on_row):
     expect(('widget_set_text_utf8', m.widgets[f'pod_value{ms_i}'], '4') in seen and ('widget_set_text_utf8', m.widgets[f'pod_value{na_i}'], '0') in seen, 'and the values are the counts')
     cache_tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui', CP.key + '.bin'), 'rb').read())
     sizes = {int(cache_tree.find(f'pod_value{i}').get('style:normal:font_size')) for i in range(len(CP.rows)) if cache_tree.find(f'pod_value{i}') is not None}
-    expect(sizes == {18}, f'the Cover Cache values are the standard 18 px value size, as Library\'s Album Order value ({sizes})')
+    expect(sizes == {18}, f'the Cache values are the standard 18 px value size, as Library\'s Album Order value ({sizes})')
     expect(not [c for c in cache_tree.find(f'pod_row{na_i}').children if c.name.startswith('pod_icon')] and [c for c in cache_tree.find(f'pod_row{na_i}').children if c.name == 'pod_chevron'], 'No art: no glyph, a chevron the payload shows when there is a list')
     # the built asset: a value label that takes no touch, a chevron, the row takes the tap
     path = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui', C.key + '.bin')

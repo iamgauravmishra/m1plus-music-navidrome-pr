@@ -3,6 +3,7 @@ albums that have no cache file. Hidden when nothing is missing and after the bui
 and on destroy and is offered again at the next foreground; it never starts while another set (Cover Flow, Albums) holds the worker."""
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
+import os, re
 import pod_recent
 import pod_i18n
 
@@ -453,7 +454,7 @@ def clear_tests(ctx):
 
 
 def cache_tests(ctx):
-    """Settings > Developer > Cover Cache (homecover_cache_open / homecover_stat): the counts in bounded steps, the Status line, the timers, the refresh after a clear."""
+    """Settings > Developer > Cache (homecover_cache_open / homecover_stat): the counts in bounded steps, the Status line, the timers, the refresh after a clear."""
     expect = ctx.expect
     ART = '/mnt/mmc/.m1plus/covers'
     PAGE = 29
@@ -597,11 +598,11 @@ def cache_tests(ctx):
     m, _ = machine(); m.confirm_yes = True
     m.call(PSYMS['clear_ask'], count=3000000)
     fired(m, 'cl_tick', 4000000)
-    expect(not [c for c in m.calls if c[0] == 'timer_add' and c[1] in (TICK, POLL)], 'no Cover Cache page open: a clear arms no count')
+    expect(not [c for c in m.calls if c[0] == 'timer_add' and c[1] in (TICK, POLL)], 'no Cache page open: a clear arms no count')
 
 
 def covlist_tests(ctx):
-    """The No art / Missing rows of the Cover Cache page open a plain list (patch/covlist.c): tappable only when counted and not zero, the rows are the albums with an empty marker /
+    """The No art / Missing rows of the Cache page open a plain list (patch/covlist.c): tappable only when counted and not zero, the rows are the albums with an empty marker /
     with no file in the album list's order, a tap opens that album, the empty state, everything freed with the window."""
     expect = ctx.expect
     ART = '/mnt/mmc/.m1plus/covers'
@@ -723,9 +724,11 @@ def files_tests(ctx):
     d_i = next(i for i, r in enumerate(P.DEVELOPER_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.FILES_PAGE_INDEX)
     expect(P.DEVELOPER_PAGE.rows[d_i].label == 'Settings Files' and FP.title == 'Settings Files', 'Developer > Tools has a Settings Files link row that opens the page of that title')
     labels = [r.label for r in FP.rows]
-    expect(labels == list(P.GUARD_FILES) + [P.FOLDER_LABEL] + list(P.SETTING_FILES) and all(r.action == P.ACT_INFO for r in FP.rows),
-           'the rows: the four guard files, the folder, the setting files; all information rows')
-    expect(sorted(r.arg for r in FP.rows) == list(range(P.INFO_SF, P.INFO_SF + len(FP.rows))), 'their kinds are unique and consecutive')
+    n_set = len(P.SETTING_FILES)
+    expect(labels == list(P.GUARD_FILES) + [P.FOLDER_LABEL] + list(P.SETTING_FILES) + ['Unsupported Files', 'Delete Unsupported Files']
+           and all(r.action == (P.ACT_INFO if i < 5 else P.ACT_SFDEL if i < 5 + n_set else P.ACT_SFOLD if i == 5 + n_set else P.ACT_SFDELALL) for i, r in enumerate(FP.rows)),
+           'the rows: the four guard files, the folder, the setting files, then the Unsupported Files card; the guard files and the folder are information rows, the setting files ACT_SFDEL (tappable)')
+    expect(sorted(r.arg for r in FP.rows if r.action in (P.ACT_INFO, P.ACT_SFDEL)) == list(range(P.INFO_SF, P.INFO_SF + 5 + n_set)), 'their kinds are unique and consecutive')
     D = '/mnt/data/'
     S = D + 'm1plus/'
     m = Machine()
@@ -746,6 +749,47 @@ def files_tests(ctx):
     m.call(PSYMS['on_page_fg'], a0=P.FILES_PAGE_INDEX, a1=0, count=3000000)
     expect(not [c for c in m.calls if c[0] in ('open', 'read', 'access', 'timer_add')] and any(c[0] == 'widget_set_text_utf8' for c in m.calls),
            'a refresh of the page (foreground) shows the values it read at open and reads no file, adds no timer')
+
+    # a setting row deletes its file after a confirm; a missing one takes no tap; the guard files and the folder never go
+    CONFIRM = 'Delete this settings file?'
+    ix = {r.label: i for i, r in enumerate(FP.rows)}
+    toasts = lambda m: [c[1] for c in m.calls if c[0] == 'toast']
+    sens = lambda m, label: m.props.get((m.widgets[f'pod_row{ix[label]}'], 'sensitive'))
+    shown = lambda m, label: [c[2] for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] == m.widgets[f'pod_value{ix[label]}']][-1]
+
+    def open_files():
+        m = Machine()
+        for n in ['btn_return', 'btn_backtoplayer'] + [f'{p}{i}' for p in ('pod_row', 'pod_value', 'pod_label') for i in range(len(FP.rows))]:
+            m.widget(n)
+        m.fs[D + 'm1plus-start'] = b'1\n'
+        m.present.add(S.rstrip('/'))
+        m.fs.update({S + 'albums-view': b'1', S + 'home-menu': b'6502\n'})
+        m.call(PSYMS['on_row'], a0=PSYMS[f'pod_rows_{P.DEVELOPER_PAGE_INDEX}'] + 12 * d_i, count=6000000)
+        return m
+
+    def tap(m, label):
+        m.calls.clear()
+        m.call(PSYMS['on_row'], a0=PSYMS[f'pod_rows_{P.FILES_PAGE_INDEX}'] + 12 * ix[label], count=3000000)
+
+    m = open_files()
+    expect(sens(m, 'playlists-view') == 0 and sens(m, 'albums-view') == 1 and sens(m, 'home-menu') == 1,
+           'a missing setting row is insensitive, a present one takes the tap')
+    m.confirm_yes = False
+    tap(m, 'home-menu')
+    expect([c[1] for c in m.calls if c[0] == 'confirm'] == [CONFIRM] and S + 'home-menu' in m.fs and not [c for c in m.calls if c[0] == 'unlink'] and not toasts(m),
+           'No: the confirm is asked, nothing is unlinked, no toast, the file stays')
+    m.confirm_yes = True
+    tap(m, 'albums-view')
+    expect([c[1] for c in m.calls if c[0] == 'unlink'] == [S + 'albums-view'] and S + 'albums-view' not in m.fs and S + 'home-menu' in m.fs,
+           f'Yes: exactly that path is unlinked ({[c for c in m.calls if c[0] == "unlink"]})')
+    expect(shown(m, 'albums-view') == 'missing' and sens(m, 'albums-view') == 0 and toasts(m) == ['Settings file deleted'],
+           f'its row reads missing, insensitive, and the toast says the file is deleted ({shown(m, "albums-view")}, {toasts(m)})')
+    expect(shown(m, 'home-menu') == '6502', f'the other rows keep their values ({shown(m, "home-menu")})')
+    for guard in (0, 4):   # the m1plus-start file and the settings folder: refused by setfiles_delete itself (-1 in the emulator's register)
+        expect(m.call(PSYMS['setfiles_delete'], a0=guard) == 0xffffffff and not [c for c in m.calls if c[0] == 'unlink'], f'setfiles_delete({guard}) refuses a guard file or the folder')
+    expect(m.call(PSYMS['setfiles_delete'], a0=99) == 0xffffffff and D + 'm1plus-start' in m.fs, 'an index out of range is refused')
+    m.set_language('zh_CN')
+    expect(m.tr('Settings file deleted') != 'Settings file deleted' and m.tr(CONFIRM) != CONFIRM, 'the two new texts are translated')
 
 
 def dots_tests(ctx):
@@ -1109,7 +1153,237 @@ def check_tests(ctx):
     expect(m.fs[STAMP].decode() == stamp_text(2, tracks=False), 'Clear Track Durations drops the tracks line')
 
 
-SECTIONS = [tests, dots_tests, pill_tests, rebuild_tests, check_tests, resume_tests, clear_tests, cache_tests, covlist_tests, files_tests]
+def unsupported_tests(ctx):
+    """Settings Files' Unsupported Files (patch/setfiles.c, patch/covlist.c kind 2, patch/m1plus.c; docs/modules/settings.md "Settings Files"): the fixed table of retired
+    files is the list of tools/pod_pages.py RETIRED_FILES, named nowhere else in patch/, never a guard file or a setting file; the count row and its chevron; the list of the
+    present files, a tap deletes one after a confirm; Delete Unsupported Files deletes them all after a confirm, and says so when there are none."""
+    expect, P = ctx.expect, pod_pages
+    FP = P.FILES_PAGE
+    D, S = '/mnt/data/', '/mnt/data/m1plus/'
+    d_i = next(i for i, r in enumerate(P.DEVELOPER_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.FILES_PAGE_INDEX)
+    ix = {r.label: i for i, r in enumerate(FP.rows)}
+    toasts = lambda m: [c[1] for c in m.calls if c[0] == 'toast']
+    confirms = lambda m: [c[1] for c in m.calls if c[0] == 'confirm']
+    unlinks = lambda m: [c[1] for c in m.calls if c[0] == 'unlink']
+    shown = lambda m, label: [c[2] for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] == m.widgets[f'pod_value{ix[label]}']][-1]
+    sens = lambda m, label: m.props.get((m.widgets[f'pod_row{ix[label]}'], 'sensitive'))
+    chevron = lambda m: [c[2] for c in m.calls if c[0] == 'widget_set_visible' and c[1] == m.widgets['pod_chevron']][-1]
+    COUNT, DELETE = 'Unsupported Files', 'Delete Unsupported Files'
+    ASK_ONE = 'Delete this unsupported file?'
+    ASK_ALL = 'Delete all unsupported files?'
+
+    # 1. The table: the C list and the Python list are the same; no other source names one of them; none is a guard file, a setting file or the folder.
+    src = open(os.path.join(ROOT, 'patch', 'setfiles.c'), encoding='utf-8').read()
+    block = re.search(r'sf_retired\[\] = \{(.*?)\};', src, re.S).group(1)
+    expect(re.findall(r'"([^"]+)"', block) == list(P.RETIRED_FILES), 'the C table (patch/setfiles.c sf_retired) is tools/pod_pages.py RETIRED_FILES, in order')
+    named = []
+    for f in sorted(os.listdir(os.path.join(ROOT, 'patch'))):
+        if not f.endswith(('.c', '.h')) or f == 'setfiles.c': continue
+        text = open(os.path.join(ROOT, 'patch', f), encoding='utf-8').read()
+        named += [(f, p) for p in P.RETIRED_FILES if f'"{p}"' in text or f'"{p}.tmp"' in text]
+    expect(not named and all(block.count(f'"{p}"') == 1 for p in P.RETIRED_FILES), f'no other patch source names a retired file, and each is in the table once ({named})')
+    current = {D + g for g in P.GUARD_FILES} | {S.rstrip('/')} | {S + f for f in P.SETTING_FILES}
+    expect(not set(P.RETIRED_FILES) & current, 'no retired file is a guard file, the folder or a current setting file')
+    expect(FP.rows[-2].label == COUNT and FP.rows[-1].label == DELETE, 'the page ends with the Unsupported Files card')
+
+    RET =[D + 'm1plus-albums', D + 'm1plus-albums.tmp', D + 'm1plus-kbzh', S + 'recently-played']   # table order: albums, its .tmp, kbzh, recently-played
+    CUR = {S + 'albums-view': b'1', S + 'home-menu': b'6502\n', S + 'radio-view': b'0', S + 'appearance-accent': b'3\n', D + 'm1plus-start': b'1\n'}
+
+    def files_machine(retired=(), extra_fs=None):
+        m = Machine()
+        for n in ['btn_return', 'btn_backtoplayer', 'pod_chevron'] + [f'{p}{i}' for p in ('pod_row', 'pod_value', 'pod_label') for i in range(len(FP.rows))]:
+            m.widget(n)
+        m.present.add(S.rstrip('/'))
+        m.fs.update(CUR)
+        for p in retired: m.fs[p] = b'x'
+        m.call(PSYMS['on_row'], a0=PSYMS[f'pod_rows_{P.DEVELOPER_PAGE_INDEX}'] + 12 * d_i, count=6000000)
+        return m
+
+    def tap(m, label, yes):
+        m.confirm_yes = yes
+        m.calls.clear()
+        m.call(PSYMS['on_row'], a0=PSYMS[f'pod_rows_{P.FILES_PAGE_INDEX}'] + 12 * ix[label], count=3000000)
+
+    def list_geometry(m):
+        """The list page's widgets as covlist_tests builds them (window > list_view > scroll_view > view_grid), so rows can be painted and tapped."""
+        for n in ['label_title', 'label_status', 'label_row_title', 'label_row_sub', 'view_grid', 'covlist_scrollview']: m.widget(n)
+        win, lv, sv = m.alloc(0x80), m.alloc(0x80), m.alloc(0x180)
+        m.u.mem_write(sv, bytes(0x180))
+        for w, y, h, parent in ((win, 30, 450, 0), (lv, 50, 400, win), (sv, 0, 400, lv)):
+            for off, v in ((4, y), (8, 320), (0xc, h), (0x44, parent)): m.setword(w + off, v)
+        m.setword(sv + 0x70, SV_VT); m.setword(sv + 8, 310); m.props[(sv, 'h')] = 400   # the view's height, read by widget_get_prop_int "h"
+        m.windows = {'m1plus_covlist': win}
+        m.widgets['covlist_scrollview'] = sv
+        view = m.widgets['view_grid']
+        for off, v in ((4, 0), (8, 320), (0xc, 400), (0x44, sv)): m.setword(view + off, v)
+        m.mem_geometry, m.live_scroll = True, frozenset({sv})
+        m.cl_win = win
+
+    def paint(m):
+        e = m.alloc(0x40); m.u.mem_write(e, bytes(0x40)); m.setword(e + O['EVENT_PAINT_CANVAS'], m.alloc(0x80))
+        m.texts.clear()
+        m.call(PSYMS['cv_on_paint'], a0=0, a1=e, count=40000000)
+        return [t for t, _ in m.texts]
+
+    SCREEN_Y0 = 30 + 50
+
+    def tap_row(m, r, t0):
+        m.touch('down', 100, SCREEN_Y0 + 64 * r + 20, t0, fn='cv_on_down'); m.touch('up', 100, SCREEN_Y0 + 64 * r + 20, t0 + 80, fn='cv_on_up')
+
+    # 2. The count row: its value is the number of retired files there at the open; a chevron and the tap only while it is not zero.
+    m = files_machine(RET)
+    expect(shown(m, COUNT) == '4' and sens(m, COUNT) == 1 and chevron(m) == 1, f'four retired files: the count is 4, tappable, with a chevron ({shown(m, COUNT)})')
+    m = files_machine(())
+    expect(shown(m, COUNT) == '0' and sens(m, COUNT) == 0 and chevron(m) == 0, 'none: the count is 0, the row takes no tap, no chevron')
+    m = files_machine([D + 'm1plus-albums', D + 'm1plus-mix.art'])
+    expect(shown(m, COUNT) == '2', 'the count is of the files that are there')
+
+    # 3. The list: the present files in table order, the name and under it the folder; a tap asks, No deletes nothing, Yes deletes that file and its row.
+    m = files_machine(RET)
+    list_geometry(m)
+    tap(m, COUNT, True)
+    expect(('widget_set_tr_text', m.widgets['label_title'], 'Unsupported Files') in m.calls and ('window_open', 'm1plus_covlist') in m.calls, 'a tap on the count opens the list, titled Unsupported Files')
+    titles = ['m1plus-albums', 'm1plus-albums.tmp', 'm1plus-kbzh', 'recently-played']
+    folders = ['/mnt/data', '/mnt/data', '/mnt/data', '/mnt/data/m1plus']
+    expect(paint(m) == titles + folders, f'the rows are the present files in table order: name, then folder ({paint(m)})')
+    m.call(PSYMS['cv_on_destroy'], a0=0, a1=0, count=3000000)
+    m = files_machine(RET)
+    list_geometry(m)
+    tap(m, COUNT, True)
+    m.confirm_yes = False
+    m.calls.clear()
+    tap_row(m, 1, 1000)
+    expect(confirms(m) == [ASK_ONE] and not unlinks(m) and D + 'm1plus-albums.tmp' in m.fs, 'a tap on a row asks; No unlinks nothing')
+    m.confirm_yes = True
+    m.calls.clear()
+    tap_row(m, 1, 2000)
+    expect(unlinks(m) == [D + 'm1plus-albums.tmp'] and D + 'm1plus-albums.tmp' not in m.fs and D + 'm1plus-albums' in m.fs, 'Yes: exactly that file is unlinked')
+    expect(paint(m) == ['m1plus-albums', 'm1plus-kbzh', 'recently-played'] + ['/mnt/data', '/mnt/data', '/mnt/data/m1plus'], 'its row is gone, the others are redrawn in order')
+    m.calls.clear()
+    m.call(PSYMS['on_page_fg'], a0=P.FILES_PAGE_INDEX, a1=0, count=3000000)
+    expect(shown(m, COUNT) == '3' and chevron(m) == 1, 'back on Settings Files the count reads 3 (no file is read again)')
+    m.call(PSYMS['cv_on_destroy'], a0=0, a1=0, count=3000000)
+
+    # 4. Emptying the list: the last file goes, the status says No unsupported files and the view hides.
+    m = files_machine([D + 'm1plus-kbzh'])
+    list_geometry(m)
+    tap(m, COUNT, True)
+    m.confirm_yes = True
+    m.calls.clear()
+    tap_row(m, 0, 3000)
+    expect(unlinks(m) == [D + 'm1plus-kbzh'] and ('widget_set_tr_text', m.widgets['label_status'], 'No unsupported files') in m.calls and ('widget_set_visible', m.widgets['view_grid'], 0) in m.calls,
+           'the last file: deleted, the status says No unsupported files, the list view hides')
+    m.call(PSYMS['cv_on_destroy'], a0=0, a1=0, count=3000000)
+
+    # 5. Delete Unsupported Files: a confirm; Yes unlinks every retired file that is there and none else, then the count reads 0 and a toast says so.
+    m = files_machine(RET + [D + 'm1plus-cfsort'])
+    tap(m, DELETE, False)
+    expect(confirms(m) == [ASK_ALL] and not unlinks(m) and all(p in m.fs for p in RET), 'No: the confirm is asked, nothing is unlinked')
+    tap(m, DELETE, True)
+    table = set(P.RETIRED_FILES) | {p + '.tmp' for p in P.RETIRED_FILES}
+    expect(set(RET + [D + 'm1plus-cfsort']) <= set(unlinks(m)) <= table, f'Yes: every retired file that is there is unlinked, and only retired paths ({sorted(unlinks(m))})')
+    expect(not any(p in m.fs for p in RET) and all(p in m.fs for p in CUR), 'the files are gone, the settings and the guard file stay')
+    expect(toasts(m) == ['Unsupported files deleted'] and shown(m, COUNT) == '0' and sens(m, COUNT) == 0 and chevron(m) == 0,
+           f'the toast, and the count reads 0 with no tap or chevron ({toasts(m)}, {shown(m, COUNT)})')
+    m = files_machine(())
+    tap(m, DELETE, True)
+    expect(not confirms(m) and toasts(m) == ['No unsupported files'] and not unlinks(m), 'none there: the toast No unsupported files, no confirm, nothing deleted')
+
+    # 6. A delete while scrolled to the bottom: the offset moves back to the new bottom (rows x 64 less the 400 px view), and to 0 once the rows fit.
+    m = files_machine(P.RETIRED_FILES[:9])
+    list_geometry(m)
+    tap(m, COUNT, True)
+    sv = m.widgets['covlist_scrollview']
+    def tap_at(r, off, t0):   # row r as it is drawn at scroll offset off (the press lands on it through widget_to_local)
+        y = SCREEN_Y0 + 64 * r + 20 - off
+        m.touch('down', 100, y, t0, fn='cv_on_down'); m.touch('up', 100, y, t0 + 80, fn='cv_on_up')
+    m.setword(sv + O['SC_YOFF'], 9 * 64 - 400)
+    for r, off, want_off in ((8, 176, 112), (7, 112, 48), (6, 48, 0)):
+        m.calls.clear()
+        tap_at(r, off, 1000 * (r + 1))
+        expect(unlinks(m) and m.word(sv + O['SC_YOFF']) == want_off and ('widget_set_prop_int', sv, 'yoffset', want_off) in m.calls,
+               f'delete at offset {off}: the offset is {want_off} (rows {r}) ({m.word(sv + O["SC_YOFF"])})')
+    m.call(PSYMS['cv_on_destroy'], a0=0, a1=0, count=3000000)
+
+    m.set_language('zh_CN')
+    expect(all(m.tr(k) != k for k in ('Unsupported Files', 'Delete Unsupported Files', ASK_ONE, ASK_ALL, 'Unsupported files deleted', 'No unsupported files')), 'the new texts are translated')
+
+
+def reset_tests(ctx):
+    """Settings > Developer > Reset > Reset All Settings (patch/setfiles.c setfiles_reset_all, patch/m1plus.c reset_all_ask; docs/modules/settings.md "Reset All Settings"):
+    the row after Settings Files; Yes unlinks every entry of the settings folder (unknown names and .tmp leftovers too, '.' and '..' skipped, no recursion, the folder kept)
+    and the retired entries, and nothing else: the guard files in /mnt/data and the card's files stay; No does nothing; a missing folder is success;
+    a folder that cannot be opened, or that a re-read still lists, is Storage unavailable."""
+    expect, P = ctx.expect, pod_pages
+    DEV = P.DEVELOPER_PAGE
+    labels = [r.label for r in DEV.rows]
+    i = labels.index('Settings Files')
+    expect(labels[i + 1] == 'Reset All Settings' and labels[i + 1:] == ['Reset All Settings'] and DEV.rows[i + 1].action == P.ACT_RESETALL == 54 and P.ACT_SFDELALL == 53,
+           'Developer > Reset holds Reset All Settings alone, after Settings Files (action 54, the earlier ids unchanged)')
+    D, S, MMC = '/mnt/data/', '/mnt/data/m1plus/', '/mnt/mmc/.m1plus/durations'
+    CONFIRM = 'Reset all settings to their defaults?'
+    GUARDS = [D + 'm1plus-start', D + 'm1plus-run', D + 'm1plus-bad', D + 'm1plus-off']
+    ENTRIES = [('home-menu', 8), ('playback-eq', 8), ('album-order.tmp', 8), ('.', 4), ('..', 4)]
+    RETIRED = [D + 'm1plus-albums']
+    toasts = lambda m: [c[1] for c in m.calls if c[0] == 'toast']
+    confirms = lambda m: [c[1] for c in m.calls if c[0] == 'confirm']
+    unlinks = lambda m: [c[1] for c in m.calls if c[0] == 'unlink']
+
+    def machine(listing=True):
+        m = Machine()
+        for n in ['btn_return', 'btn_backtoplayer'] + [f'{p}{i}' for p in ('pod_row', 'pod_value', 'pod_label') for i in range(len(DEV.rows))]:
+            m.widget(n)
+        for g in GUARDS: m.fs[g] = b'1\n'
+        m.fs[MMC] = b'track\n'
+        m.fs.update({S + 'home-menu': b'6502\n', S + 'playback-eq': b'x', S + 'album-order.tmp': b'0'})
+        for p in RETIRED: m.fs[p] = b'x'
+        if listing: m.listing[S.rstrip('/')] = list(ENTRIES)
+        m.present.add(S.rstrip('/'))
+        return m
+
+    def tap(m, yes):
+        m.confirm_yes = yes
+        m.calls.clear()
+        m.call(PSYMS['on_row'], a0=PSYMS[f'pod_rows_{P.DEVELOPER_PAGE_INDEX}'] + 12 * (i + 1), count=3000000)
+
+    m = machine()
+    tap(m, False)
+    expect(confirms(m) == [CONFIRM] and not unlinks(m) and not toasts(m) and all(g in m.fs for g in GUARDS) and S + 'home-menu' in m.fs,
+           f'No: the confirm is asked, nothing is unlinked, no toast ({confirms(m)}, {unlinks(m)}, {toasts(m)})')
+
+    m = machine()
+    tap(m, True)
+    want = {S + 'home-menu', S + 'playback-eq', S + 'album-order.tmp'}
+    retired_all = {p + s for p in P.RETIRED_FILES for s in ('', '.tmp')}   # the whole retired table, each name and its .tmp (Unsupported Files' entries)
+    expect(set(unlinks(m)) == want | retired_all and not any(p in unlinks(m) for p in GUARDS + [MMC]) and not set(unlinks(m)) & {S.rstrip('/'), S + '.', S + '..'},
+           f'Yes: every settings file and the retired entries are unlinked, no other path ({sorted(set(unlinks(m)) - want - retired_all)})')
+    expect(not any(p in m.fs for p in want | retired_all) and all(g in m.fs for g in GUARDS) and MMC in m.fs and S.rstrip('/') in m.present and not m.open_dirs,
+           'the files are gone, the guard files and the card file stay, the folder stays, the handle is closed')
+    expect(toasts(m) == ['Settings reset. Restart to apply.'], f'the success toast ({toasts(m)})')
+
+    m = machine()
+    m.fail.add(('opendir', S.rstrip('/')))   # the folder is there, but cannot be opened
+    tap(m, True)
+    expect(toasts(m) == ['Storage unavailable'] and not [p for p in unlinks(m) if p.startswith(S) and p not in retired_all] and all(p in m.fs for p in want),
+           f'opendir fails while the folder exists: Storage unavailable, no settings file is unlinked ({toasts(m)})')
+
+    m = machine()
+    m.dir_stop[S.rstrip('/')] = 1   # readdir returns NULL after the first entry; the rest are still listed
+    tap(m, True)
+    expect(toasts(m) == ['Storage unavailable'] and S + 'home-menu' not in m.fs and S + 'playback-eq' in m.fs,
+           f'readdir stops early: the folder is read again with entries left, so a failure ({toasts(m)})')
+
+    m = machine(listing=False)
+    m.present.discard(S.rstrip('/'))   # no folder at all
+    tap(m, True)
+    expect(not [p for p in unlinks(m) if p.startswith(S) and p not in retired_all] and toasts(m) == ['Settings reset. Restart to apply.'] and all(g in m.fs for g in GUARDS),
+           'a missing folder is nothing to do: no crash, only the retired entries go, the success toast')
+
+    m.set_language('zh_CN')
+    expect(m.tr('Reset All Settings') != 'Reset All Settings' and m.tr(CONFIRM) != CONFIRM and m.tr('Settings reset. Restart to apply.') != 'Settings reset. Restart to apply.', 'the three texts are translated')
+
+
+SECTIONS = [tests, dots_tests, pill_tests, rebuild_tests, check_tests, resume_tests, clear_tests, cache_tests, covlist_tests, files_tests, unsupported_tests, reset_tests]
 
 
 def run(ctx):

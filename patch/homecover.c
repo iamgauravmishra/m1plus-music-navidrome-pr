@@ -744,7 +744,7 @@ static void cl_end(int done) {
     cl.timer = 0;
     if (done) {
         pod_toast(TR("Cover cache cleared"));
-        cp_recount(); /* a Cover Cache page in front counts again (nothing happens when it is not open) */
+        cp_recount(); /* a Cache page in front counts again (nothing happens when it is not open) */
     }
 }
 
@@ -791,7 +791,7 @@ int homecover_clear(void) {
 }
 
 /* ---------------------------------------------------------------------------
- * Settings > Developer > Cover Cache (docs/modules/settings.md "Cover Cache"): a status page over the cache folder. Nothing runs unless the page
+ * Settings > Developer > Cache (docs/modules/settings.md "Cache"): a status page over the cache folder. Nothing runs unless the page
  * is open. At open (and after a clear, and on coming back to the front) the folder is counted in bounded steps of CP_N entries on a one-shot
  * that re-arms itself: the pictures, the empty no-art markers and the old files, then the library's albums (cc_albums, once) are checked
  * against the CC_MISSING rule, CP_N a tick. Until a count is known the page shows an ellipsis. A 500 ms poll refreshes the page when the Status
@@ -806,7 +806,7 @@ enum { CP_DIR = 1, CP_ALBUMS, CP_DONE };
 static struct {
     void *win, *dir, *albums;
     unsigned timer, poll;
-    int fg, phase, page; /* page: the Cover Cache page's index (patch/m1plus.c) */
+    int fg, phase, page; /* page: the Cache page's index (patch/m1plus.c) */
     unsigned cur, n_albums, covers, noart, missing, old, size;
     unsigned *order; /* cc_album_order of the held album list: the scan walks display positions */
     unsigned short *im,
@@ -982,7 +982,7 @@ static int cp_on_foreground(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* The Cover Cache page's window is up (patch/m1plus.c open_page): bind its events and start counting. */
+/* The Cache page's window is up (patch/m1plus.c open_page): bind its events and start counting. */
 void homecover_cache_open(void *win, int page) {
     if (cp.win) cp_on_destroy(cp.win, (void *)0);
     memset(&cp, 0, sizeof cp);
@@ -1009,11 +1009,7 @@ void homecover_stat(int idx, char *buf, unsigned n) {
         return;
     }
     if (idx == 5) {
-        v = (cp.size / 1024 * 10 + 512) / 1024; /* tenths of a MB */
-        if (v < 100)
-            snprintf(buf, n, "%u.%u MB", v / 10, v % 10);
-        else
-            snprintf(buf, n, "%u MB", v / 10);
+        cc_size_text(buf, n, cp.size);
         return;
     }
     v = idx == 0 ? cp.n_albums : idx == 1 ? cp.covers : idx == 2 ? cp.noart : idx == 3 ? cp.missing : cp.old;

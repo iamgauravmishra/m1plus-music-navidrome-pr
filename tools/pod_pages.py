@@ -67,8 +67,8 @@ ACT_INFO = 33     # an information row of the About page: a label and a grey val
 ACT_PCSEARCH = 34  # switch row (Settings > Library > Podcasts): Podcast Search, off by default; on shows a Search button on the Podcasts page (patch/podcasts.c pcsearch_toggle, /mnt/data/m1plus/podcast-online-search)
 ACT_FOLDERS = 37  # open the Folders page: the card's folders and audio files in our list (patch/folders.c; arg = HOME_FOLDER, where a window that will not open falls back to the stock folder_page)
 ACT_CLEARCACHE = 42  # action row (Settings > Developer > Tools): a confirm dialog, then every cached cover but Cover Flow's position is deleted in steps (patch/homecover.c homecover_clear)
-ACT_CLEARDUR = 44  # action row (Settings > Developer > Tools): a confirm dialog, then the track durations table is deleted (patch/durations.c dur_clear); Home measures the songs again
-ACT_CCLIST = 43    # value row (Settings > Developer > Cover Cache: No art, Missing): a count, and when it is not zero a chevron and a tap that opens the plain list of those albums (arg = the INFO_CC_* of its count; patch/covlist.c)
+ACT_CLEARDUR = 44  # action row (Settings > Developer > Cache): a confirm dialog, then the track durations table is deleted (patch/durations.c dur_clear); Home measures the songs again
+ACT_CCLIST = 43    # value row (Settings > Developer > Cache: No art, Missing): a count, and when it is not zero a chevron and a tap that opens the plain list of those albums (arg = the INFO_CC_* of its count; patch/covlist.c)
 ACT_BATTPCT = 36  # switch row (Settings > Home Screen > Status Bar): Battery Percentage, off by default; on shows the gauge's exact charge beside the battery outline (patch/battery.c battpct_toggle, /mnt/data/m1plus/battery-percentage)
 ACT_VREC = 38     # value row (Settings > Now Playing > Vinyl Mode): the record colour, Black or Cover (tinted from the cover); opens its picker page (arg = the page index; patch/vinyl.c vinyl_record)
 ACT_RECSET = 39   # picker row (Record): choose the colour (arg = its index in vinyl_art.RECORD_NAMES); a check shows on the chosen row (patch/vinyl.c vinyl_record_set)
@@ -79,19 +79,23 @@ ACT_BG = 46       # value row (Settings > System > Appearance > Background): Bla
 ACT_BGSET = 47    # picker row (Background): choose the background (arg 0 Black, 1 Tinted); a check shows on the chosen row, and the choice applies at once (patch/palette.c pal_bg_set)
 ACT_ACCENT = 48    # value row (Settings > System > Accent): the accent's name; opens its picker page (arg = the page index); the payload shows the saved accent (patch/palette.c pal_accent_saved)
 ACT_ACCENTSET = 49 # picker row (Accent): choose the accent (arg = its index in ACCENT_VALUES); a check shows on the chosen row and the choice applies at once (patch/palette.c pal_accent_set)
+ACT_SFDEL = 51    # information row of Settings Files (Settings > Developer > Tools): a setting file's label and its value, like ACT_INFO, but tappable while the file is there: a confirm, then the file is deleted (arg = INFO_SF + k; patch/setfiles.c setfiles_delete)
+ACT_SFOLD = 52    # value row of Settings Files: Unsupported Files, the count of retired files (arg = INFO_SFOLD); a chevron and a tap that opens their list (patch/covlist.c kind 2) only while the count is not zero
+ACT_SFDELALL = 53 # action row of Settings Files: Delete Unsupported Files, a confirm, then every retired file is deleted (patch/m1plus.c unsupported_delete_ask)
+ACT_RESETALL = 54 # action row of Developer > Tools: Reset All Settings, a confirm, then every settings file is deleted (patch/m1plus.c reset_all_ask, patch/setfiles.c setfiles_reset_all)
 _ACTS = [v for k, v in globals().items() if k.startswith('ACT_')]
 assert len(set(_ACTS)) == len(_ACTS), 'two ACT_* share an id (patch/m1plus.c mirrors them)'
 SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
-VALUE_ACTIONS = (ACT_SORT, ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_BG, ACT_ACCENT)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
+VALUE_ACTIONS = (ACT_SORT, ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
 CHECK_ACTIONS = (ACT_SORTSET, ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
-ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_CLEARCACHE, ACT_CLEARDUR, ACT_GRID)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
+ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_CLEARCACHE, ACT_CLEARDUR, ACT_SFDELALL, ACT_RESETALL, ACT_GRID)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
 VALUE_INIT = {ACT_SORT: 'Artist', ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral'}   # what the asset's value label says before the payload sets it
 # The stock pages ACT_STOCK opens: (the name navigator_to takes = ui/<name>.bin, the value the row shows at the right: the payload reads the stock state, patch/m1plus.c VK_*, or None).
 # Each is a plain navigator_to(name) with no context in stock (docs/modules/settings.md "Stock pages"): the Settings and Play Settings lists' rows, the Wi-Fi hub's two; Back returns to our page.
-STOCK_WIFI, STOCK_BLUETOOTH, STOCK_PLAYMODE, STOCK_EQ, STOCK_DISPLAY, STOCK_FWUPDATE = range(6)
+STOCK_WIFI, STOCK_BLUETOOTH, STOCK_PLAYMODE, STOCK_EQ, STOCK_DISPLAY = range(5)
 STOCK_PAGES = (('systemset/wifi_page', 'wifi'), ('systemset/bluetooth_page', 'bluetooth'), ('playset/playmode_page', 'playmode'), ('playset/equalizer_page', 'eq'),
-               ('systemset/display_page', None), ('systemset/fwupdate_page', None))
+               ('systemset/display_page', None))
 STOCK_VALUES = ('wifi', 'bluetooth', 'playmode', 'eq')   # the VK_* of patch/m1plus.c, in this order
 
 # ACT_SHUFFLE arguments (mirror the enum in patch/shuffle.c)
@@ -110,7 +114,7 @@ def row_kind(row):
     if row.action in SWITCH_ACTIONS: return 'switch'
     if row.action in VALUE_ACTIONS or (row.action == ACT_STOCK and STOCK_PAGES[row.arg][1]): return 'value'
     if row.action in CHECK_ACTIONS: return 'check'
-    if row.action == ACT_INFO: return 'info'
+    if row.action in (ACT_INFO, ACT_SFDEL): return 'info'
     if row.action in ACTION_ACTIONS or (row.action == ACT_HOME and row.arg == HOME_UPDATE): return 'action'
     return 'link'
 
@@ -317,11 +321,13 @@ ABOUT_PAGE = Page('m1plus_about', 'm1plus_about_page', 'About', layout=[
     Row('Available', ACT_INFO, INFO_FREE),
 ])
 
-# Settings > Developer > Cover Cache (patch/homecover.c, docs/modules/settings.md "Cover Cache"): the cache folder's counts (INFO_CC_*: homecover_stat reads each, an ellipsis until counted), the build's Status
-# and the Clear Cover Cache action.
+# Settings > Developer > Cache (patch/homecover.c, docs/modules/settings.md "Cache"): the Covers card holds the cache folder's counts (INFO_CC_*: homecover_stat reads each, an ellipsis until counted), the build's Status and Clear Cover Cache;
+# the Track Durations card holds Measured Tracks (INFO_DUR: dur_stat, patch/durations.c) and Clear Track Durations.
 INFO_CC_ALBUMS, INFO_CC_COVERS, INFO_CC_NOART, INFO_CC_MISSING, INFO_CC_OLD, INFO_CC_SIZE, INFO_CC_STATUS = range(8, 15)   # (patch/m1plus.c INFO_CC = 8 + the index homecover_stat takes)
+INFO_DUR = INFO_CC_STATUS + 34   # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asserted below the Settings Files kinds)
 CACHE_PAGE_INDEX = 33   # after ONLINEART (32)
-CACHE_PAGE = Page('m1plus_cache', 'm1plus_cache_page', 'Cover Cache', layout=[
+CACHE_PAGE = Page('m1plus_cache', 'm1plus_cache_page', 'Cache', layout=[
+    Hdr('Covers'),
     Row('Albums', ACT_INFO, INFO_CC_ALBUMS),
     Row('Covers', ACT_INFO, INFO_CC_COVERS),
     Row('No art', ACT_CCLIST, INFO_CC_NOART),
@@ -332,24 +338,40 @@ CACHE_PAGE = Page('m1plus_cache', 'm1plus_cache_page', 'Cover Cache', layout=[
     Row('Status', ACT_INFO, INFO_CC_STATUS),
     GAP,
     Row('Clear Cover Cache', ACT_CLEARCACHE),
+    Hdr('Track Durations'),
+    Row('Measured Tracks', ACT_INFO, INFO_DUR),
+    Row('Clear Track Durations', ACT_CLEARDUR),
 ])
 
-# The plain list behind the Cover Cache page's No art / Missing rows (patch/covlist.c, docs/modules/settings.md "Cover Cache"): the Albums page's asset without its toggle and Cover Flow button, the title set by the payload.
+# The plain list behind the Cache page's No art / Missing rows (patch/covlist.c, docs/modules/settings.md "Cache"): the Albums page's asset without its toggle and Cover Flow button, the title set by the payload.
 COVLIST = Page('m1plus_covlist', 'm1plus_covlist_page', 'Missing Covers', kind='covlist')
 
 # Settings > Developer > Tools > Settings Files (patch/setfiles.c, docs/modules/settings.md "Settings Files"): the payload's own files as read when the page opens. The labels are the file names (identifiers, not translated).
-SETTING_FILES = ('albums-view', 'playlists-view', 'recently-added-view', 'album-order', 'coverflow-landscape', 'cassette-theme', 'vinyl-record', 'vinyl-base', 'pod-appearance', 'home-recent-albums',
-                 'home-daily-mix', 'home-menu', 'pulldown-tiles', 'keyboard-pinyin', 'podcast-online-search', 'battery-percentage', 'playback-shuffle', 'search-history', 'radio-recent', 'covers-rebuild')
+# Only the setting files (ACT_SFDEL) are tappable, while present: a tap deletes the file after a confirm. The guard files and the folder stay ACT_INFO (never deleted).
+SETTING_FILES = ('albums-view', 'playlists-view', 'recently-added-view', 'album-order', 'coverflow-landscape', 'cassette-theme', 'vinyl-record', 'vinyl-base', 'pod-appearance',
+                 'appearance-accent', 'appearance-background', 'home-recent-albums', 'home-daily-mix', 'home-menu', 'pulldown-tiles', 'keyboard-pinyin', 'podcast-online-search',
+                 'battery-percentage', 'playback-shuffle', 'search-history', 'radio-view', 'radio-recent', 'covers-rebuild')
 GUARD_FILES = ('m1plus-start', 'm1plus-run', 'm1plus-bad', 'm1plus-off')
+# The files older builds left behind (patch/setfiles.c sf_retired, the same order; each with its .tmp sibling). Unsupported Files counts and lists them and
+# Delete Unsupported Files removes them. A renamed setting's old name goes here, never a guard file or a setting above (tests: unsupported_tests).
+RETIRED_FILES = ('/mnt/data/m1plus-albums', '/mnt/data/m1plus-playlists', '/mnt/data/m1plus-cfsort', '/mnt/data/m1plus-landscape', '/mnt/data/m1plus-tapetheme',
+                 '/mnt/data/m1plus-vinylrec', '/mnt/data/m1plus-vinyltheme', '/mnt/data/m1plus-menu', '/mnt/data/m1plus-recent', '/mnt/data/m1plus-search-recent',
+                 '/mnt/data/m1plus-shelf', '/mnt/data/m1plus-daily', '/mnt/data/m1plus-covers-rebuild', '/mnt/data/m1plus-kbzh', '/mnt/data/m1plus-pcsearch',
+                 '/mnt/data/m1plus-battpct', '/mnt/data/m1plus-pod-theme', '/mnt/data/m1plus-mix', '/mnt/data/m1plus-mix.art', '/mnt/data/m1plus/recently-played')
 FOLDER_LABEL = 'm1plus/'
 INFO_SF = INFO_CC_STATUS + 1   # patch/m1plus.c INFO_SF = INFO_CC + 7; row k reads setfiles_stat(k): 4 guard files, the folder, the settings
+INFO_SFOLD = INFO_SF + 32      # patch/m1plus.c: the Unsupported Files count (setfiles_old_count), above the setting rows
+assert len(GUARD_FILES) + 1 + len(SETTING_FILES) <= INFO_SFOLD - INFO_SF, 'the Settings Files rows reach INFO_SFOLD: raise it here and in patch/m1plus.c'
+assert INFO_DUR == INFO_SFOLD + 1, 'INFO_DUR must follow INFO_SFOLD (patch/m1plus.c)'
 FILES_PAGE_INDEX = 35   # after COVLIST (34)
 FILES_PAGE = Page('m1plus_files', 'm1plus_files_page', 'Settings Files', layout=(
     [Row(f, ACT_INFO, INFO_SF + k) for k, f in enumerate(GUARD_FILES)] + [GAP, Row(FOLDER_LABEL, ACT_INFO, INFO_SF + 4)]
-    + [Row(f, ACT_INFO, INFO_SF + 5 + k) for k, f in enumerate(SETTING_FILES)]))
+    + [Row(f, ACT_SFDEL, INFO_SF + 5 + k) for k, f in enumerate(SETTING_FILES)]
+    + [GAP, Row('Unsupported Files', ACT_SFOLD, INFO_SFOLD), Row('Delete Unsupported Files', ACT_SFDELALL)]))
 
 # Settings > Developer: Startup (the Boot to M1+ Music switch, patch/home.c, and the way out to the stock grid) and the developer's tools. Screenshot: a confirm dialog, then a 5 s
-# countdown (cancellable), then the screen is written to the card (patch/shot.c). System Update opens the stock firmware update page.
+# countdown (cancellable), then the screen is written to the card (patch/shot.c). Reset All Settings (under Reset): a confirm, then every settings file is deleted (restart to apply).
+# The stock firmware update page is not linked here (About > Software Update is ours; it stays under All System Settings).
 DEVELOPER_PAGE = Page('m1plus_developer', 'm1plus_developer_page', 'Developer', layout=[
     Hdr('Startup'),
     Row('Boot to M1+ Music', ACT_STARTUP),
@@ -357,10 +379,10 @@ DEVELOPER_PAGE = Page('m1plus_developer', 'm1plus_developer_page', 'Developer', 
     Note('Off: the device starts on Shanling Home'),
     Hdr('Tools'),
     Row('Screenshot', ACT_SHOT),
-    Row('Cover Cache', ACT_PAGE, CACHE_PAGE_INDEX),
-    Row('Clear Track Durations', ACT_CLEARDUR),
+    Row('Cache', ACT_PAGE, CACHE_PAGE_INDEX),
     Row('Settings Files', ACT_PAGE, FILES_PAGE_INDEX),
-    Row('System Update', ACT_STOCK, STOCK_FWUPDATE),
+    Hdr('Reset'),
+    Row('Reset All Settings', ACT_RESETALL),
 ])
 
 # Settings > Home Screen: the Recent Albums and Daily Mix switches (the shelf and the card of the Home menu), . Then the two pages that arrange the menu (patch/menu.c), under a

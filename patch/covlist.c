@@ -1,4 +1,4 @@
-/* M1+ Music cover lists: the plain list of the albums that have no art, or no cache file at all (Settings > Developer > Cover Cache, docs/modules/settings.md "Cover Cache").
+/* M1+ Music cover lists: the plain list of the albums that have no art, or no cache file at all (Settings > Developer > Cache, docs/modules/settings.md "Cache").
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
@@ -9,8 +9,12 @@
  * placeholder is drawn. A row is its album's title and, under it, the artist. The stock scroll_view does the scrolling (patch/scroll.c's gesture hook included). A tap (a release
  * within SC_DRAG_PX of the press on the same row) opens the album through cc_open_album, the Albums page's own call, so Back returns here.
  *
- * The rows are display positions of the album list (the order Albums shows, cc_album_order), made by the Cover Cache page's count (patch/homecover.c) and copied here; the
+ * The rows are display positions of the album list (the order Albums shows, cc_album_order), made by the Cache page's count (patch/homecover.c) and copied here; the
  * album list is loaded again once at open (cc_albums), held while the page is up and freed with the window. No timer, no hook.
+ *
+ * Kind 2 is Settings Files' Unsupported Files: the same page with file rows. The rows are the retired files still there at the last check (setfiles.c, in
+ * its table order): the title is the file name, the grey line under it the folder. A tap asks, then deletes that file (setfiles_old_delete) and takes its row
+ * away; the last row going shows "No unsupported files" in the status label. The album list is not loaded for it.
  */
 #include "offsets.inc"
 #include "stock.h"
@@ -18,6 +22,7 @@
 #include "covercache.h"
 #include "common.h"
 #include "grid.h"
+#include "i18n.h"
 
 #define I(w, off) (*(int *)((char *)(w) + (off)))
 #define CV_W 320 /* the content's width: the list_view's */
@@ -31,6 +36,7 @@ static struct {
     unsigned *order; /* cc_album_order: display position -> stock row (NULL: stock order) */
     unsigned short *idx; /* the rows: display positions, in order */
     unsigned n;
+    int files; /* kind 2: the rows are retired entries (setfiles.c) and a tap deletes one */
     int press, down, down_x, down_y; /* the pressed row + 1 (fill), the row a press began on + 1 and where */
     grid_t
         g; /* all zero: no bitmaps, no placeholder (grid_blit draws nothing); the painter only wants it for the cover */
@@ -45,9 +51,20 @@ static grid_tile_t *cv_tile(void *ctx, int r) {
     grid_tile_t *t = &cv.ring[r % CV_RING];
     (void)ctx;
     if (t->album != r + 1) {
-        void *rec = cc_row(cv.albums, cv.order, cv.idx[r]);
-        memset(t, 0, sizeof *t);
-        grid_set(t, cc_str(rec, REC_ALBUM), cc_str(rec, REC_ARTIST), 0);
+        if (cv.files) { /* a retired file: its name, and under it the folder */
+            char path[96], dir[96], *base = path, *p;
+            setfiles_old_name(cv.idx[r], path, sizeof path);
+            for (p = path; *p; p++)
+                if (*p == '/') base = p; /* the last slash: the name starts after it */
+            memset(t, 0, sizeof *t);
+            memcpy(dir, path, (unsigned)(base - path));
+            dir[base - path] = 0;
+            grid_set(t, base + 1, dir, 0);
+        } else {
+            void *rec = cc_row(cv.albums, cv.order, cv.idx[r]);
+            memset(t, 0, sizeof *t);
+            grid_set(t, cc_str(rec, REC_ALBUM), cc_str(rec, REC_ARTIST), 0);
+        }
         t->album = r + 1;
     }
     return t;
@@ -106,6 +123,40 @@ static int cv_on_down(void *ctx, void *e) {
 
 static int cv_abs(int v) { return v < 0 ? -v : v; }
 
+/* The scroll_view's virtual_h setter keeps the offset as it was: after the rows shrink, the offset moves back into [0, rows - the view's height]
+ * (the same clamp folders.c and albums.c make; 0 when everything fits). */
+static void cv_clamp_off(void) {
+    int max = (int)cv.n * LIST_ROW_H - widget_get_prop_int(cv.sv, "h", 0), off = cv_off(), at;
+    if (max < 0) max = 0;
+    at = off < 0 ? 0 : off > max ? max : off;
+    if (at != off) widget_set_prop_int(cv.sv, "yoffset", at);
+}
+
+/* Unsupported Files: a tap on row r asks, then deletes that file and takes its row away (the view is resized; the last one shows the empty state). */
+static void cv_file_ask(int r) {
+    unsigned i;
+    if (!pod_confirm(TR("Delete this unsupported file?"))) return;
+    if (setfiles_old_delete(cv.idx[r]) != 0) {
+        pod_toast(TR("Storage unavailable"));
+        return;
+    }
+    for (i = (unsigned)r; i + 1 < cv.n; i++) cv.idx[i] = cv.idx[i + 1];
+    cv.n--;
+    memset(cv.ring, 0, sizeof cv.ring); /* the tiles are keyed by row: the rows below moved up */
+    if (cv.n) {
+        widget_resize(cv.view, CV_W, (int)cv.n * LIST_ROW_H);
+        widget_set_prop_int(cv.sv, "virtual_h", (int)cv.n * LIST_ROW_H);
+    } else {
+        widget_set_visible(cv.view, 0, 0);
+        widget_set_sensitive(cv.view, 0);
+        widget_set_visible(cv.status, 1, 0);
+        widget_set_sensitive(cv.status, 1);
+        widget_set_tr_text(cv.status, "No unsupported files");
+    }
+    cv_clamp_off();
+    cv_redraw();
+}
+
 static int cv_on_up(void *ctx, void *e) {
     int r = cv.down - 1;
     (void)ctx;
@@ -114,7 +165,10 @@ static int cv_on_up(void *ctx, void *e) {
     if (r < 0 || !e || !cv.view) return RET_OK;
     if (cv_abs(I(e, PE_X) - cv.down_x) < CV_TAP_PX && cv_abs(I(e, PE_Y) - cv.down_y) < CV_TAP_PX && cv_row_of(e) == r) {
         unsigned d = cv.idx[r];
-        cc_open_album((void *)0, 0, (int)(cv.order ? cv.order[d] : d)); /* the stock row, as the Albums page opens it */
+        if (cv.files)
+            cv_file_ask(r);
+        else
+            cc_open_album((void *)0, 0, (int)(cv.order ? cv.order[d] : d)); /* the stock row, as Albums opens it */
     }
     return RET_OK;
 }
@@ -138,7 +192,8 @@ static int cv_on_destroy(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* The list page: kind 0 No Art, 1 Missing Covers; idx[0..n) are display positions of the album list (copied). 0 once it is up, -1 when it could not open. */
+/* The list page: kind 0 No Art, 1 Missing Covers; idx[0..n) are display positions of the album list (copied). Kind 2 Unsupported Files (idx unused,
+ * the retired entries that were there at the last check). 0 once it is up, -1 when it could not open. */
 int covlist_open(int kind, const unsigned short *idx, unsigned n) {
     unsigned m, i;
     void *title;
@@ -160,22 +215,31 @@ int covlist_open(int kind, const unsigned short *idx, unsigned n) {
         return -1;
     }
     title = widget_lookup(cv.win, "label_title", 1);
-    if (kind)
+    if (kind == 2)
+        widget_set_tr_text(title, "Unsupported Files");
+    else if (kind)
         widget_set_tr_text(title, "Missing Covers");
     else
         widget_set_tr_text(title, "No Art");
-    cv.albums = cc_albums();
-    cv.order = cc_album_order(cv.albums);
-    m = cv.albums ? deque_size(cv.albums) : 0;
-    cv.idx = n ? calloc(n, sizeof *cv.idx) : (unsigned short *)0;
-    for (i = 0; cv.idx && i < n; ++i)
-        if (idx[i] < m) cv.idx[cv.n++] = idx[i]; /* (a position the library no longer has is dropped) */
+    cv.files = kind == 2;
+    if (cv.files) {
+        cv.idx = calloc(setfiles_old_n(), sizeof *cv.idx);
+        for (i = 0; cv.idx && i < setfiles_old_n(); ++i)
+            if (setfiles_old_present(i)) cv.idx[cv.n++] = (unsigned short)i;
+    } else {
+        cv.albums = cc_albums();
+        cv.order = cc_album_order(cv.albums);
+        m = cv.albums ? deque_size(cv.albums) : 0;
+        cv.idx = n ? calloc(n, sizeof *cv.idx) : (unsigned short *)0;
+        for (i = 0; cv.idx && i < n; ++i)
+            if (idx[i] < m) cv.idx[cv.n++] = idx[i]; /* (a position the library no longer has is dropped) */
+    }
     if (!cv.n) {
         widget_set_visible(cv.view, 0, 0);
         widget_set_sensitive(cv.view, 0);
         widget_set_visible(cv.status, 1, 0);
         widget_set_sensitive(cv.status, 1);
-        widget_set_tr_text(cv.status, "No albums");
+        widget_set_tr_text(cv.status, cv.files ? "No unsupported files" : "No albums");
         return 0;
     }
     widget_set_visible(cv.status, 0, 0);

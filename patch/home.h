@@ -154,9 +154,9 @@ extern void
 homecover_rebuild_asked(void); /* Rebuild Covers was confirmed: the pill's stop no longer holds Home's build back */
 extern void
 homecover_cache_open(void *win,
-                     int page); /* the Cover Cache page is up: count the cache folder in steps (patch/homecover.c) */
-extern int homecover_tappable(
-    int idx); /* the Cover Cache page's No art (2) / Missing (3) row opens a list: counted and not zero */
+                     int page); /* the Cache page is up: count the cache folder in steps (patch/homecover.c) */
+extern int
+homecover_tappable(int idx); /* the Cache page's No art (2) / Missing (3) row opens a list: counted and not zero */
 extern int homecover_list_open(int idx); /* that list (patch/covlist.c); -1 when the row is not tappable */
 extern int covlist_open(
     int kind, const unsigned short *idx,
@@ -165,7 +165,21 @@ extern void homecover_stat(
     int idx, char *buf,
     unsigned n); /* a value of that page: 0 Albums, 1 Covers, 2 No art, 3 Missing, 4 Old files, 5 Size, 6 Status */
 extern void setfiles_open(void); /* the Settings Files page is opening: read the files once (patch/setfiles.c) */
-extern void setfiles_stat(int idx, char *buf, unsigned n); /* a row's text as read: 0..24 the files */
+extern void setfiles_stat(int idx, char *buf, unsigned n); /* a row's text as read: 0..24 the rows (patch/setfiles.c) */
+extern int setfiles_present(int idx); /* the row's file was there at its last read: tappable (patch/setfiles.c) */
+extern int setfiles_delete(int idx); /* unlinks a setting file, reads its row again; 0 when gone (patch/setfiles.c) */
+extern int
+setfiles_old_count(void); /* Unsupported Files: the retired files there at the last check (patch/setfiles.c) */
+extern unsigned setfiles_old_n(void); /* the retired entries: name, then .tmp sibling, in order */
+extern int setfiles_old_present(unsigned k); /* the retired entry k was there at the last check */
+extern int setfiles_old_name(unsigned k, char *out, unsigned n); /* entry k's path into out; 0 when out of range */
+extern int setfiles_old_delete(unsigned k); /* unlinks entry k and checks it again; 0 when gone */
+extern int setfiles_old_delete_all(void); /* every retired entry unlinked; 0 when none is left */
+extern int setfiles_reset_all(
+    void); /* Reset All Settings: every entry of the settings folder and the retired ones unlinked; 0 when none is left (patch/setfiles.c) */
+extern int pod_confirm(const char *s); /* the confirm dialog's Yes (patch/m1plus.c) */
+extern int pod_confirm_dialog(
+    void *info); /* the confirm dialog over the page with the dim scrim: its raw result (patch/m1plus.c) */
 extern int homecover_clear(
     void); /* Settings > Developer > Clear Cover Cache, after its confirm: 1 under way, 0 the cover worker is busy */
 extern void pod_toast(const char *text); /* patch/shuffle.c */

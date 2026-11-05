@@ -64,7 +64,11 @@ enum {
     ACT_BGSET = 47,
     ACT_ACCENT = 48,
     ACT_ACCENTSET = 49,
-    ACT_RADIO = 50
+    ACT_RADIO = 50,
+    ACT_SFDEL = 51,
+    ACT_SFOLD = 52, /* Settings Files: Unsupported Files, a count (a chevron and the list only when it is not zero) */
+    ACT_SFDELALL = 53, /* Settings Files: Delete Unsupported Files, an action row */
+    ACT_RESETALL = 54 /* Developer > Tools: Reset All Settings, an action row (a confirm, then setfiles_reset_all) */
 };
 
 extern void shot_start(void); /* patch/shot.c: the Screenshot row: confirm, 5 s countdown, capture; or cancel */
@@ -115,8 +119,10 @@ enum {
     INFO_IP,
     INFO_CAP,
     INFO_FREE,
-    INFO_CC, /* the Cover Cache page's seven values start here: homecover_stat(kind - INFO_CC) */
-    INFO_SF = INFO_CC + 7 /* the Settings Files page's 25 values: setfiles_stat(kind - INFO_SF) */
+    INFO_CC, /* the Cache page's seven Covers values start here: homecover_stat(kind - INFO_CC) */
+    INFO_SF = INFO_CC + 7, /* the Settings Files page's 28 values: setfiles_stat(kind - INFO_SF) */
+    INFO_SFOLD = INFO_SF + 32, /* the Unsupported Files count (setfiles_old_count), above those rows */
+    INFO_DUR = INFO_SFOLD + 1 /* the Cache page's Measured Tracks: dur_stat (patch/durations.c) */
 };
 
 enum {
@@ -185,6 +191,45 @@ static int on_menu_fg(void *ctx, void *e) {
     return RET_OK;
 }
 
+#define POD_SCRIM_COLOR 0x82000000u /* #00000082 (PL_DIM) as value_t's uint32: AWTK's colour, alpha in the top byte */
+
+/* Whether win is still a window of the window manager. Only pointers are compared: a window that closed is never read. */
+static int pod_window_open(void *wm, void *win) {
+    unsigned i, n;
+    for (n = widget_count_children(wm), i = 0; i < n; ++i)
+        if (widget_get_child(wm, i) == win) return 1;
+    return 0;
+}
+
+/* The confirm dialog over the page. The stock dialog's highlighter does not dim the window below on the device, so while the modal
+ * dialog is up a full-window scrim (#00000082, our popups' colour) is a view on the top main window: its last child, insensitive, and
+ * removed when the call returns (or never touched when that window has closed meanwhile). Pinned stock functions only. The result is
+ * the dialog's raw result (CONFIRM_YES for Yes). */
+int pod_confirm_dialog(void *info) {
+    void *wm = window_manager(), *win = wm ? window_manager_get_top_main_window(wm) : (void *)0, *scrim = (void *)0;
+    unsigned v[4], i, n;
+    int r;
+    if (win) {
+        scrim = view_create(win, 0, 0, *(int *)((char *)win + W_W), *(int *)((char *)win + W_H));
+        if (scrim) {
+            memset(v, 0, sizeof v);
+            value_set_uint32(v, POD_SCRIM_COLOR);
+            widget_set_style(scrim, "normal:bg_color", v);
+            widget_set_sensitive(scrim, 0);
+        }
+    }
+    r = navigator_to_with_context("dialog/confirminfo_dialog", info);
+    if (scrim && pod_window_open(wm, win))
+        for (n = widget_count_children(win), i = 0; i < n; ++i)
+            if (widget_get_child(win, i) == scrim) {
+                widget_set_visible(scrim, 0, 0);
+                widget_set_sensitive(scrim, 0);
+                widget_destroy(scrim);
+                break;
+            }
+    return r;
+}
+
 /* Settings > Library > Rebuild Covers: the stock yes/no dialog (dialog/confirminfo_dialog, the one the equaliser
  * reset and the Bluetooth reconnect use) with a wrapped message; the call is modal and returns CONFIRM_YES for Yes.
  * No (or the dialog failing to open) does nothing at all; Yes stays on Settings, writes the request file (REBUILD_FILE) that
@@ -198,7 +243,7 @@ int pod_confirm_code(const char *s) { /* the dialog's raw result; also patch/sho
     memset(&info, 0, sizeof info);
     info.kind = CONFIRM_KIND_WRAP;
     for (i = 0; s[i] && i < sizeof info.text - 1; ++i) info.text[i] = s[i];
-    return navigator_to_with_context("dialog/confirminfo_dialog", &info);
+    return pod_confirm_dialog(&info);
 }
 
 int pod_confirm(const char *s) { return pod_confirm_code(s) == CONFIRM_YES; }
@@ -213,6 +258,8 @@ static void rebuild_ask(void) {
         pod_toast(TR("Storage unavailable"));
 }
 
+void pod_page_refresh(int index);
+
 /* Settings > Developer > Clear Cover Cache: the same confirm dialog; refused (a toast) while the cover worker is busy. */
 __attribute__((noinline)) static void clear_ask(void) {
     if (cc_build_busy()) {
@@ -223,12 +270,51 @@ __attribute__((noinline)) static void clear_ask(void) {
         pod_toast(TR("Covers are being made, try later"));
 }
 
-/* Settings > Developer > Clear Track Durations: the confirm dialog, then the table is deleted (Home measures the songs again). */
+/* Settings > Developer > Clear Track Durations: the confirm dialog, then the table is deleted (Home measures the songs again) and the
+ * Cache page's Measured Tracks reads the file again (0 now). */
 __attribute__((noinline)) static void durations_clear_ask(void) {
     if (!pod_confirm(TR("Delete all measured track durations? They will be measured again on Home."))) return;
     dur_clear();
+    dur_stat_open();
+    pod_page_refresh(POD_CACHE_PAGE);
     homecover_stamp_drop(2); /* Home measures them again */
     pod_toast(TR("Track durations cleared"));
+}
+
+/* Settings > Developer > Tools > Settings Files: a setting file's row (tappable only while its file is there): the confirm dialog, then the file
+ * is deleted and its row reads again (the page is refreshed). Storage that refuses the delete: a toast. */
+__attribute__((noinline)) static void setfiles_delete_ask(int idx) {
+    if (!pod_confirm(TR("Delete this settings file?"))) return;
+    if (setfiles_delete(idx) == 0) {
+        pod_page_refresh(POD_FILES_PAGE);
+        pod_toast(TR("Settings file deleted"));
+    } else
+        pod_toast(TR("Storage unavailable"));
+}
+
+/* Settings > Developer > Tools > Settings Files > Delete Unsupported Files: nothing to delete is a toast; else a confirm, then every retired file
+ * (the old builds' leftovers, setfiles.c) is deleted and the page's count reads again. Storage that keeps one: a toast. */
+__attribute__((noinline)) static void unsupported_delete_ask(void) {
+    if (setfiles_old_count() == 0) {
+        pod_toast(TR("No unsupported files"));
+        return;
+    }
+    if (!pod_confirm(TR("Delete all unsupported files?"))) return;
+    if (setfiles_old_delete_all() == 0)
+        pod_toast(TR("Unsupported files deleted"));
+    else
+        pod_toast(TR("Storage unavailable"));
+    pod_page_refresh(POD_FILES_PAGE);
+}
+
+/* Settings > Developer > Tools > Reset All Settings: the confirm dialog, then every settings file is deleted (patch/setfiles.c). No reboot:
+ * the values in memory keep until the device restarts. */
+__attribute__((noinline)) static void reset_all_ask(void) {
+    if (!pod_confirm(TR("Reset all settings to their defaults?"))) return;
+    if (setfiles_reset_all() == 0)
+        pod_toast(TR("Settings reset. Restart to apply."));
+    else
+        pod_toast(TR("Storage unavailable"));
 }
 
 static void pick_choose(const struct pod_row *row);
@@ -294,6 +380,14 @@ static int on_row(void *ctx, void *e) {
         clear_ask(); /* a confirm dialog, then the cache files are removed in steps */
     else if (row->action == ACT_CLEARDUR)
         durations_clear_ask(); /* a confirm dialog, then the track durations table is deleted */
+    else if (row->action == ACT_SFDEL)
+        setfiles_delete_ask(row->arg - INFO_SF); /* Settings Files: a confirm, then that file is deleted */
+    else if (row->action == ACT_SFOLD)
+        covlist_open(2, (const unsigned short *)0, 0); /* Settings Files: the Unsupported Files list */
+    else if (row->action == ACT_SFDELALL)
+        unsupported_delete_ask(); /* Settings Files: a confirm, then every retired file is deleted */
+    else if (row->action == ACT_RESETALL)
+        reset_all_ask(); /* Developer > Tools: a confirm, then every settings file is deleted */
     else if (row->action == ACT_REGEN)
         dailymix_regen(); /* patch/dailymix.c: no page, a toast when asked; the card is made again when the Home menu is back in front */
     else if (row->action == ACT_STOCK)
@@ -454,7 +548,11 @@ static void info_text(void *label, int kind) {
     const char *s = buf;
     float cap, rem;
     buf[0] = 0;
-    if (kind >= INFO_SF)
+    if (kind == INFO_DUR)
+        dur_stat(buf, sizeof buf);
+    else if (kind == INFO_SFOLD)
+        snprintf(buf, sizeof buf, "%d", setfiles_old_count());
+    else if (kind >= INFO_SF)
         setfiles_stat(kind - INFO_SF, buf, sizeof buf);
     else if (kind >= INFO_CC)
         homecover_stat(kind - INFO_CC, buf, sizeof buf);
@@ -513,10 +611,9 @@ static void page_refresh(void *win, const struct pod_page *page) {
             row->action == ACT_PCSEARCH || row->action == ACT_BATTPCT) {
             snprintf(name, sizeof name, "pod_switch%d", i);
             switch_show(widget_lookup(win, name, 1), switch_state(row->action));
-        } else if (
-            row->action ==
-            ACT_CCLIST) { /* Cover Cache's No art / Missing: a value; the chevron and the tap only while there is a list to open */
-            int on = homecover_tappable(row->arg - INFO_CC);
+        } else if (row->action == ACT_CCLIST || row->action == ACT_SFOLD) {
+            /* Cache's No art / Missing, and Unsupported Files: a value; the chevron and the tap only while there is a list to open */
+            int on = row->action == ACT_SFOLD ? setfiles_old_count() > 0 : homecover_tappable(row->arg - INFO_CC);
             void *item = widget_lookup(win, row->name, 1),
                  *chev = item ? widget_lookup(item, "pod_chevron", 1) : (void *)0;
             snprintf(name, sizeof name, "pod_value%d", i);
@@ -530,11 +627,15 @@ static void page_refresh(void *win, const struct pod_page *page) {
                 else
                     value_fit(win, (unsigned)i, w, POD_INFO_RIGHT, POD_INFO_MAX, POD_INFO_LABEL_X);
             }
-        } else if (row->action == ACT_INFO) {
+        } else if (row->action == ACT_INFO || row->action == ACT_SFDEL) {
             snprintf(name, sizeof name, "pod_value%d", i);
             w = widget_lookup(win, name, 1);
             if (w)
                 info_text(w, row->arg), value_fit(win, (unsigned)i, w, POD_INFO_RIGHT, POD_INFO_MAX, POD_INFO_LABEL_X);
+            if (row->action == ACT_SFDEL) { /* a setting file's row takes the tap only while its file is there */
+                void *item = widget_lookup(win, row->name, 1);
+                if (item) widget_set_sensitive(item, setfiles_present(row->arg - INFO_SF));
+            }
         } else if (kind) {
             snprintf(name, sizeof name, "pod_value%d", i);
             w = widget_lookup(win, name, 1);
@@ -547,7 +648,7 @@ static void page_refresh(void *win, const struct pod_page *page) {
     }
 }
 
-/* A page whose values changed on their own (the Cover Cache page's counts and status): read them again. */
+/* A page whose values changed on their own (the Cache page's counts and status): read them again. */
 void pod_page_refresh(int index) {
     if (index >= 0 && index < POD_PAGE_COUNT && pod_fg[index]) page_refresh(pod_fg[index], &POD_PAGES[index]);
 }
@@ -598,6 +699,7 @@ static int open_page(int index, int as_home) {
     win = window_open(page->asset);
     if (!win) return -1;
     if (index == POD_FILES_PAGE) setfiles_open(); /* the files, read once as the page opens */
+    if (index == POD_CACHE_PAGE) dur_stat_open(); /* the track table's header, read once as the page opens */
     pod_bind(win, "btn_return", pod_on_back, (void *)0);
     pod_bind(win, "btn_backtoplayer", pod_on_player, (void *)0);
     for (i = 0; i < page->count; i++) {
@@ -608,7 +710,9 @@ static int open_page(int index, int as_home) {
             bind_switch(win, i, row), refresh = 1;
         else {
             if (row->action != ACT_INFO) pod_bind(win, row->name, on_row, row); /* an information row takes no tap */
-            if (row->action == ACT_INFO || row->action == ACT_CCLIST || row_value(row) || is_pick(row)) refresh = 1;
+            if (row->action == ACT_INFO || row->action == ACT_SFDEL || row->action == ACT_CCLIST ||
+                row->action == ACT_SFOLD || row_value(row) || is_pick(row))
+                refresh = 1;
         }
         if (row->action == ACT_REGEN) {
             regen_row = widget_lookup(win, row->name, 1);
