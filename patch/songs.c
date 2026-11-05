@@ -147,6 +147,7 @@ static struct {
 } sg __attribute__((section(".scratch")));
 
 static int sg_on_stale(const void *unused);
+static void *sg_under __attribute__((section(".scratch"))); /* a Songs page below the one open (Search was opened from it and a playlist result opened ours): its state, put back when this page is destroyed */
 
 static void sg_show(void *w, int on) {
     if (!w) return;
@@ -1318,7 +1319,22 @@ static int sg_on_destroy(void *ctx, void *e) {
     free(sg.idx);
     free(sg.sel);
     memset(&sg, 0, sizeof sg);
+    if (sg_under) memcpy(&sg, sg_under, sizeof sg), free(sg_under), sg_under = (void *)0;
     return RET_OK;
+}
+
+/* A playlist's page over a Songs page (Search opened from it): the page below keeps its widgets, its state is set aside (its timers and the cover build ended; the
+ * fg handler starts them again) and sg starts empty. 0 on success or with no page below, -1 when the page below stays (a second level, or no memory). */
+static int sg_stack(void) {
+    if (!sg.win) return 0;
+    if (sg_under || !(sg_under = calloc(1, sizeof sg))) return -1;
+    sg_build_end();
+    if (sg.more_timer) timer_remove(sg.more_timer);
+    if (sg.stale_timer) timer_remove(sg.stale_timer);
+    sg.more_timer = sg.stale_timer = 0;
+    memcpy(sg_under, &sg, sizeof sg);
+    memset(&sg, 0, sizeof sg);
+    return 0;
 }
 
 /* The page listing class cls (pl_id: a playlist's id; key: the title's key, or 0 for name). 0 once the page is up, -1 if the window could not open, -2 if the
@@ -1327,7 +1343,7 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
     static const char *const ITEMS[SG_SORT_ROWS] = {"sg_item0", "sg_item1", "sg_item2", "sg_item3", "sg_item4"};
     static const char *const TICKS[SG_SORT_ROWS] = {"sg_tick0", "sg_tick1", "sg_tick2", "sg_tick3", "sg_tick4"};
     int i;
-    if (sg.win) return -1;
+    if (sg.win && (cls != CLASS_PLAYLIST_SONGS || sg_stack() == -1)) return -1;
     memset(&sg, 0, sizeof sg);
     sg.cls = cls, sg.pl_id = pl_id, sg.key = key;
     if (cls == CLASS_ARTIST_SONGS)
@@ -1337,7 +1353,10 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
         while (i > 0 && ((unsigned char)name[i] & 0xc0) == 0x80) --i;
     sg.name[i] = 0;
     sg.win = window_open("m1plus_songs");
-    if (!sg.win) return -1;
+    if (!sg.win) {
+        if (sg_under) memcpy(&sg, sg_under, sizeof sg), free(sg_under), sg_under = (void *)0; /* the page below is the open one again */
+        return -1;
+    }
     widget_on(sg.win, EVT_DESTROY, sg_on_destroy, (void *)0);
     sg.back = pod_bind(sg.win, "btn_return", sg_on_back, (void *)0);
     sg.np = pod_bind(sg.win, "btn_backtoplayer", pod_on_player, (void *)0);

@@ -42,6 +42,8 @@ Entries (no hook, as Songs):
 | Genres page, a tap (`patch/artists.c` `ar_open`) | `songs_open_genre(name, unknown)` | `0xff09`, the name in `classinfo + 0x30d` and the Unknown byte `classinfo + 0xc` | the genre's name; no Search (below) | the stock row tap's own sequence (the record, `allmusic_page` with `0xff09`) |
 | Cover Flow's artist page, the Songs button (`patch/coverflow.c` `on_songs`) | `songs_open_artist(artist_row)` | `0xff11`, the artist's whole browsing record (below) | the artist's name | the stock album page on the All songs row (the All albums card's call); no Home fallback |
 
+Only one Songs page lives in `sg`. A playlist opened from Search over a Songs page (Search was opened from it) is the one exception: `sg_stack` ends the page below's timers and cover build, moves its state to the heap (`sg_under`) and starts `sg` empty; `sg_on_destroy` puts it back (its fg handler reloads and restarts the loaders). One level only; a second refusal opens the stock page.
+
 What a list is (the stock page's buttons for these classes are Back, Search, multi-select and Now Playing: its navbar builder 0x526a3c adds Sort only for `0xf001` and leaves
 Search out only for a genre's songs, `0xff09`):
 

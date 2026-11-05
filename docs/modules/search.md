@@ -124,7 +124,7 @@ prefix of initials is quality 1: a Latin title that is the query ranks above 周
 |---|---|
 | artist | `albums_open_artist(copy, row, CLASS_ARTISTS)`: the Albums page scoped to that artist, as the Artists page's tap (Cover Flow on the artist if the window will not open). Back returns to Search |
 | album | `cc_open_album(NULL, 0, stock row)`: our album page, as the Albums page's tap |
-| playlist | `songs_open_playlist(id, name)` (the id is `REC_DISC`), else the stock Songs page with the playlist class, as the Playlists page's tap |
+| playlist | `songs_open_playlist(id, name)` (the id is `REC_DISC`), else the stock Songs page with the playlist class, as the Playlists page's tap. Search opened from a Songs page has that page under it: `sg_stack` (patch/songs.c) sets its state aside so ours opens over it (the stock page only if the window will not open); Back returns to Search, and the Songs page below is restored when ours is destroyed |
 | song | the library in its stock order as the queue (`loadSongList`, class `0xf001`, the row's own index wins for duplicate file names), Now Playing at the song (`se_play`, the Songs page's `sg_play_at`); a missing file toasts `Storage unavailable` |
 
 A tap is a press and a lift within `SC_DRAG_PX` on the same row (a drag, an abort or a background take it back).

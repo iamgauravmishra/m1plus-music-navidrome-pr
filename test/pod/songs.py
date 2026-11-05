@@ -1194,6 +1194,24 @@ def lists_tests(ctx):
         expect(m.wtext[m.widgets['sg_title']] == fitted(kept, 250), f'a {len(nm.encode())} byte name is cut on characters ({len(kept)} kept)')
         m.call(PSYMS['sg_on_destroy'], count=4000000)
 
+    # A playlist over a Songs page (Search was opened from it and a playlist result tapped): ours opens over it, and the page below is itself again when ours is destroyed
+    fav = O['CLASS_FAV']
+    m = list_machine(titles, fav); m.playlist_songs = {7: list(m.songs[:5])}
+    m.call(PSYMS['songs_open_list'], a0=O['HOME_FAV'], count=900000000); settle(m)
+    m.calls = []
+    r = m.call(PSYMS['songs_open_playlist'], a0=7, a1=m.cstr('Road Trip'), count=900000000)
+    expect(r == 0 and ('window_open', 'm1plus_songs') in m.calls and m.word(G_CLASS) == pls and m.word(ci) == 7, 'a playlist opens our Songs page over a Songs page below')
+    r = m.call(PSYMS['songs_open_playlist'], a0=3, a1=m.cstr('Third'), count=900000000)
+    expect(r == 0xffffffff, 'a second level is refused (the caller opens the stock page)')
+    m.call(PSYMS['sg_on_destroy'], count=4000000)
+    m.calls = []; m.setword(SHOWLIST, m.new_deque([]))
+    m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
+    expect([c[1] for c in m.calls if c[0] == 'loadLocalClassList'][-1:] == [fav], 'the page below is its own again (Favourites) when the playlist page is destroyed')
+    m.call(PSYMS['sg_on_destroy'], count=4000000)
+    m.calls = []
+    expect(m.call(PSYMS['songs_open_playlist'], a0=7, a1=m.cstr('Road Trip'), count=900000000) == 0 and ('window_open', 'm1plus_songs') in m.calls, 'nothing is left set aside once both are gone')
+    m.call(PSYMS['sg_on_destroy'], count=4000000)
+
     # A playlist's header (docs/modules/songs.md "A playlist's header"): the Playlists page's 2 x 2 mosaic (patch/grid.c, one source a tick), the name and the count under
     # it, the pills and the rows lower, the large title gone, the small title once the name has scrolled away; other lists keep the large title
     PHC = O['PH_COVER']
