@@ -649,13 +649,8 @@ static void rp_recent(void) {
 static void rp_root_action(int row) {
     switch (row) {
     case RR_NOW:
-        if (!rd_list()->n) {
-            rd_list_t last;
-            memset(&last, 0, sizeof last);
-            if (rd_last_read(&last)) rd_play(&last, 0);
-            rd_list_free(&last);
-        }
-        rn_open();
+        if (rd_running()) rn_open();
+        else pod_toast(TR("No radio is playing")); /* never starts a station */
         break;
     case RR_BROWSER:
         rp_show_level(L_DIR, 0);

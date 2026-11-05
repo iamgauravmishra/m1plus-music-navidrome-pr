@@ -913,6 +913,8 @@ TEXT = dict([
        'Reproducidas recientemente borradas', 'Riprodotte di recente cancellate', 'ล้างรายการที่เล่นล่าสุดแล้ว', 'Wyczyszczono ostatnio odtwarzane', 'Недавно воспроизведённые очищены', 'Нещодавно відтворені очищено'),
     _t('Could not clear Recently Played', '无法清除最近播放', '無法清除最近播放', '最近再生した局を消去できません', '최근 재생을 지울 수 없음', 'Impossible d’effacer les lus récemment', 'Zuletzt gespielte nicht gelöscht',
        'No se pudo borrar lo reproducido recientemente', 'Impossibile cancellare le riprodotte di recente', 'ล้างรายการที่เล่นล่าสุดไม่ได้', 'Nie można wyczyścić ostatnio odtwarzanych', 'Не удалось очистить недавно воспроизведённые', 'Не вдалося очистити нещодавно відтворені'),
+    _t('No radio is playing', '没有正在播放的电台', '沒有正在播放的電台', 'ラジオを再生していません', '재생 중인 라디오 없음', 'Aucune radio en cours de lecture', 'Kein Radio läuft',
+       'No hay radio en reproducción', 'Nessuna radio in riproduzione', 'ไม่มีวิทยุที่กำลังเล่น', 'Radio nie jest odtwarzane', 'Радио не воспроизводится', 'Радіо не відтворюється'),
     _t('Station Info', '电台信息', '電台資訊', '局の情報', '방송국 정보', 'Infos sur la station', 'Senderinfo',
        'Info de la emisora', 'Info stazione', 'ข้อมูลสถานี', 'Informacje o stacji', 'О станции', 'Про станцію'),
     _t('Stream URL', '流媒体地址', '串流網址', 'ストリームURL', '스트림 URL', 'URL du flux', 'Stream-URL',

@@ -1245,6 +1245,23 @@ def levels_tests(ctx):
     m = page_machine(); m.put_text(FAVS, FAV_TEXT); open_radio(m); np_widgets(m); m.out_way = 1
     tap_row(m, 0, root=True); calls = tap_cell(m, 0)
     expect(('window_open', 'm1plus_radionp') in calls and m.call(PSYMS['rd_state']) == ST['ERROR'], 'a station that cannot start leaves its reason to Now Playing')
+    # the Now Playing row never starts a station: nothing active, a toast and nothing else
+    def idle_row(m):
+        calls = tap_row(m, 0, root=True)
+        return [c[1] for c in calls if c[0] == 'toast'], ('window_open', 'm1plus_radionp') in calls, bool(m.proc)
+    m = page_machine(); m.put_text(RECENT, '#EXTM3U\n#EXTINF:-1,Rec One\nhttp://rec.example/1\n'); open_radio(m); np_widgets(m)
+    expect(rows_text(m)[0] == 'Now Playing' and idle_row(m) == (['No radio is playing'], False, False) and m.call(PSYMS['rd_state']) == ST['IDLE'], 'idle with a recent station: the Now Playing row toasts "No radio is playing", opens no page and starts nothing')
+    m = opened(); l, r = play(m); poll(m); m.call(PSYMS['rd_stop'], count=40000000); m.proc = []
+    m.call(PSYMS['rp_on_fg'], a0=0, count=40000000)
+    expect(rows_text(m)[0] == 'Now Playing' and idle_row(m) == (['No radio is playing'], False, False) and m.call(PSYMS['rd_state']) == ST['STOPPED'], 'stopped: the same toast, no page, the station is not started again')
+    m = page_machine(); m.put_text(FAVS, FAV_TEXT); open_radio(m); np_widgets(m); m.out_way = 1
+    tap_row(m, 0, root=True)
+    back = m.bound[(m.widgets['btn_return'], O['EVT_CLICK'])]
+    tap_cell(m, 0)
+    m.bound[(m.widgets['btn_return'], O['EVT_CLICK'])] = back
+    click(m, 'btn_return'); destroy_np(m); m.proc = []
+    st_, got_ = m.call(PSYMS['rd_state']), (rows_text(m), idle_row(m))
+    expect(st_ == ST['ERROR'] and got_[1] == (['No radio is playing'], False, False), f'error: the same toast, no page, no new start ({st_}, {got_})')
     # the scroll offset a level was left at comes back
     big = '#EXTM3U\n' + ''.join(f'#EXTINF:-1,S{i}\nhttp://s.example/{i}\n' for i in range(30))
     m = page_machine(); m.put_text(FAVS, big); open_radio(m)
