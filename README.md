@@ -22,9 +22,9 @@
 - **Home:** Daily Mix, Recently Played and a floating mini player.
 - **Now Playing:** cover-colour backgrounds, rounded artwork and remaining time.
 - **Podcasts:** local episodes, Apple Podcasts directory search, feed subscriptions and episode downloads.
-- **Extras:** album/folder shuffle, a virtual iPod, Cassette Mode, Vinyl Mode and an online cover and lyrics lookup.
-- **Appearance:** a translucent lock screen, minimal theme, Lucide icons and Inter + Source Han Sans fonts.
-- **Settings:** choose menu items, startup behaviour, Cover Flow orientation and album order.
+- **Extras:** album/folder shuffle, internet radio, a virtual iPod, Cassette Mode, Vinyl Mode and an online cover and lyrics lookup.
+- **Appearance:** an accent colour, a translucent lock screen, minimal theme, Lucide icons and Inter + Source Han Sans fonts.
+- **Settings:** choose menu items, pull-down tiles, startup behaviour, Cover Flow orientation and album order.
 - **Languages:** the added UI follows the player's language setting, with 13 translations.
 
 Stock settings and Tidal remain accessible. See the [user guide](docs/guide.md) for controls and options.

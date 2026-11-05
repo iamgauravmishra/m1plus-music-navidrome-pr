@@ -27,12 +27,19 @@ Open **Extras → Settings** to customize the player. To return to the stock gri
 | Albums | Switch grid/list mode with the navbar button; the choice is remembered |
 | Artists | Switch Artist/Album Artist in the navbar, then open an artist's albums |
 | Songs | Jump with the A–Z rail; use Search, Sort or Select from the navbar |
+| Recently Added | The newest songs; the navbar's grid button switches to the newest albums |
 | Album | Play all, shuffle the album, or tap a track; the footer shows the track count and length once measured |
 | Playlists | Open a playlist or use its menu to create, import, export or delete |
 | Shuffle | Shuffle songs, albums or folders from Extras |
 
 In Now Playing, tap **…** for playback options, Look up album, Cassette Mode and Vinyl Mode.
 Open its **More** page for the online cover and lyrics lookup (Wi-Fi required).
+
+A track row's **…** on the album page and the Songs lists offers **Play Next**, **Play After** and
+**Add to Playlist**. Shuffle reorders the queue itself, so the Queue page's Up Next shows what
+plays next; **Clear** in its header removes the songs after the playing one.
+
+While Line Out is on, the status bar shows an amber **LO** pill.
 
 Drag a list to scroll; tap a row to open or play it.
 
