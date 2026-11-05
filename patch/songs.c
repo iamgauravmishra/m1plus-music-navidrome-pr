@@ -151,7 +151,8 @@ static struct {
 } sg __attribute__((section(".scratch")));
 
 static int sg_on_stale(const void *unused);
-static void *sg_under __attribute__((section(".scratch"))); /* a Songs page below the one open (Search was opened from it and a playlist result opened ours): its state, put back when this page is destroyed */
+static void *sg_under __attribute__((section(
+    ".scratch"))); /* a Songs page below the one open (Search was opened from it and a playlist result opened ours): its state, put back when this page is destroyed */
 
 static void sg_show(void *w, int on) {
     if (!w) return;
@@ -1401,7 +1402,9 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
     sg.name[i] = 0;
     sg.win = window_open("m1plus_songs");
     if (!sg.win) {
-        if (sg_under) memcpy(&sg, sg_under, sizeof sg), free(sg_under), sg_under = (void *)0; /* the page below is the open one again */
+        if (sg_under)
+            memcpy(&sg, sg_under, sizeof sg), free(sg_under),
+                sg_under = (void *)0; /* the page below is the open one again */
         return -1;
     }
     widget_on(sg.win, EVT_DESTROY, sg_on_destroy, (void *)0);

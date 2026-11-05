@@ -1869,8 +1869,7 @@ static void ip_select(void) {
             ip_shuffle_all();
         else if (row == ROOT_NOW) {
             if (!rn_open_if_active()) ip_push(K_NOW); /* Radio's page while a station plays (patch/radionp.c) */
-        }
-        else if (row == ROOT_SETTINGS)
+        } else if (row == ROOT_SETTINGS)
             ip_push(K_SETTINGS);
         return;
     }

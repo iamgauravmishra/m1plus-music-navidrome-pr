@@ -1386,8 +1386,11 @@ static void pg_paint_home(void *canvas) {
         if (!pg_ylib(i)) continue;
         y = pg_ylib(i) - off;
         if (pg.press == i + 1 && !pg.select) az_fill(canvas, 0, y, y + PC_ROW_H - 1, PG_W, LIST_PRESS);
-        pg_blit_from(canvas, i == 2 ? pg_savetile() : i ? pg_subtile() : pg_dltile(), 0, 0, PA_TILE_PX, PA_TILE_PX,
-                     PP_DL_TILE_X, y + PP_DL_TILE_Y);
+        pg_blit_from(canvas,
+                     i == 2 ? pg_savetile()
+                     : i    ? pg_subtile()
+                            : pg_dltile(),
+                     0, 0, PA_TILE_PX, PA_TILE_PX, PP_DL_TILE_X, y + PP_DL_TILE_Y);
         pg_chev(canvas, PP_DL_CHEV_X, y + (PC_ROW_H - 1 - POD_CHEV_H) / 2);
         az_fill(canvas, PP_DL_TEXT_X, y + PC_ROW_H - 1, y + PC_ROW_H, PG_W - PP_DL_TEXT_X, LIST_HAIR);
     }

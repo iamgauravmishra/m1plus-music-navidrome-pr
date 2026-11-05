@@ -196,7 +196,8 @@ static void *ab_make_wave(void *win) {
         return (void *)0;
     }
     ok = cc_decode(win, "ah_wave", 1, AB_WAVE, 1, px);
-    col = pal_fill() & 0xffffffu; /* the accent's, or Neutral's AB_WAVE_COLOR (#EEEEEC): the wave is made when the page opens */
+    col = pal_fill() &
+          0xffffffu; /* the accent's, or Neutral's AB_WAVE_COLOR (#EEEEEC): the wave is made when the page opens */
     for (i = 0; ok && i < AB_WAVE * AB_WAVE; ++i) px[i] = (px[i] & 0xff) * 255 / 0xee << 24 | col;
     bitmap_unlock_buffer(b);
     if (!ok) {
@@ -243,7 +244,8 @@ static void ab_paint(void *canvas) {
         az_fill_h(canvas, 0, y + ROW - 1, y + ROW, AB_ROW_W, AB_HAIR, AH_WIN_H);
         if (ab_more()) rowmenu_paint(canvas, &ab.rm, RM_MORE_RIGHT, 0, y, ROW, AH_WIN_H);
     }
-    for (pass = 0; pass < 2; ++pass) { /* numbers (the wave marker for the playing track), then titles: one text style at a time */
+    for (pass = 0; pass < 2;
+         ++pass) { /* numbers (the wave marker for the playing track), then titles: one text style at a time */
         widget_prepare_text_style(pass == 0 ? ab.st_num : ab.st_title, canvas);
         for (r = r0; r <= r1; ++r) {
             int y = ab_row_y(r) - off;

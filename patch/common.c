@@ -204,7 +204,8 @@ __attribute__((noinline)) unsigned pod_alpha(unsigned y, unsigned a_top, unsigne
 __attribute__((noinline)) unsigned pod_shade(unsigned color, unsigned y, unsigned a_top, unsigned a_bot,
                                              unsigned rows) {
     unsigned keep = 255 - pod_alpha(y, a_top, a_bot, rows);
-    return pal_not_role((color & 255) * keep / 255 | (color >> 8 & 255) * keep / 255 << 8 | (color >> 16 & 255) * keep / 255 << 16);
+    return pal_not_role((color & 255) * keep / 255 | (color >> 8 & 255) * keep / 255 << 8 |
+                        (color >> 16 & 255) * keep / 255 << 16);
 }
 
 /* The coverage of the area outside a quarter circle of radius r in the corner square of r pixels (the circle's centre at
