@@ -48,6 +48,7 @@ extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one b
 #define PG_LOAD_MS 16
 #define PG_TICK_MS 1000
 #define PG_TAP_PX SC_DRAG_PX
+#define PG_HINT_H (8 + 4 * PS_TITLE_PITCH) /* the empty page's hint: room for four lines under the header */
 #define PG_BOTTOM 20 /* the Show level's last cell has this much under it */
 #define PG_REC_SIZE 0x58
 #define PG_CELLS \
@@ -344,10 +345,22 @@ static int pg_top(void) {
 /* The Show level's cell height: PS_CELL_H, or PS_PCELL_H for the preview (no pill row under the description). */
 static int pg_cell_h(void) { return pg.preview ? PS_PCELL_H : PS_CELL_H; }
 static int pg_row_h(void) { return pg.level == L_EPS ? pg_cell_h() : PC_ROW_H; }
+static const char *pg_no_eps_key(void);
+/* The empty page's hint ("No downloads", the Show page's "No episodes yet..."), painted in the content under the header so it scrolls with it (NULL: none); pg_hint_y is its top (content y). While a Downloads scan runs nothing is
+ * said yet. */
+static const char *pg_hint(void) {
+    if (pg.det) return (const char *)0;
+    if (pg.level == L_DLS && !pg.nrows && (pg.subs || !pg.dscan_on))
+        return pg.subs ? "No subscriptions" : pg.saved ? "No saved episodes" : "No downloads";
+    if (pg.level == L_EPS && !pg.neps && !pg.preview) return pg_no_eps_key();
+    return (const char *)0;
+}
+static int pg_hint_y(void) { return pg.level == L_EPS ? pg_top() : pg_dh(); }
 static int pg_content(void) {
     if (pg.det && pg.pd) return pg.pd->h; /* (the episode page) */
     if (pg.level == L_SHOWS) return pg.home_h;
     if (pg.level == L_SRCH) return PQ_TOP + pg.srn * PC_ROW_H + (pg.srn ? PQ_BOTTOM : 0);
+    if (pg_hint()) return pg_hint_y() + PG_HINT_H; /* (an empty page: its header and the hint, no taller, so it only scrolls when they don't fit) */
     if (pg.level == L_DLS) return pg_dh() + (pg.select && pg.nrows ? SG_BAR_H : 0);
     return (pg_count()          ? pg_top() + pg_count() * pg_row_h() + (pg.level == L_EPS ? PG_BOTTOM : 0)
             : pg.level == L_EPS ? pg_top()
@@ -1528,13 +1541,27 @@ static void pg_paint_dls(void *canvas) {
     }
 }
 
+/* The empty page's hint: grey, wrapped to the margins (pg_hint), under the header. */
+static void pg_paint_hint(void *canvas, int off) {
+    const char *key = pg_hint();
+    unsigned t[160];
+    pw_line_t ln[4];
+    int n, k, nl;
+    if (!key) return;
+    n = pg_wide(t, 160, TR(key));
+    nl = pg_lines(pg.st[ST_CDIM], t, n, PG_W - 2 * PP_LINE_X, 4, ln); /* (the episode cells' dim 20 px grey) */
+    for (k = 0; k < nl; ++k)
+        pg_paint_text_at(canvas, pg.st[ST_CDIM], t + ln[k].start, ln[k].len, PP_LINE_X,
+                         pg_hint_y() + 8 + k * PS_TITLE_PITCH - off, PG_W - 2 * PP_LINE_X, PS_TITLE_PITCH);
+}
+
 static int pg_on_paint(void *ctx, void *e) {
     void *canvas = e ? *(void **)((char *)e + EVENT_PAINT_CANVAS) : (void *)0;
     int off = pg_off();
     (void)ctx;
     if (!canvas || !pg.view || !pg.g.tiles) return RET_OK;
     I(canvas, CANVAS_OY) += off;
-    if (pg.level == L_DLS && (pg.nrows || !pg.subs))
+    if (pg.level == L_DLS)
         pg_paint_dls(canvas);
     else if (pg.level == L_SHOWS && pg.nshows)
         pg_paint_home(canvas);
@@ -1545,6 +1572,7 @@ static int pg_on_paint(void *ctx, void *e) {
             pg_paint_eps(canvas);
     } else if (pg.level == L_SRCH && pg.srn)
         pg_paint_srch(canvas);
+    pg_paint_hint(canvas, off);
     I(canvas, CANVAS_OY) -= off;
     return RET_OK;
 }
@@ -1814,14 +1842,6 @@ static void pg_empty(const char *key) {
     pg_show(pg.view, 0);
     pg_show(pg.status, 1);
     widget_set_tr_text(pg.status, key);
-}
-
-/* A Show level with no episode: its header stays (the sheet holds Refresh Feed and Unsubscribe), the hint sits under it. */
-static void pg_eps_hint(const char *key) {
-    pg_show(pg.view, 1);
-    pg_show(pg.status, 1);
-    widget_set_tr_text(pg.status, key);
-    widget_move(pg.status, 20, PG_LIST_Y + pg_top() + 8);
 }
 
 static void pg_fade(void) {
@@ -2330,7 +2350,8 @@ static void pg_dls_apply(void) {
     int max;
     pg_ord_build();
     if (!pg.nrows && (pg.subs || !pg.dscan_on)) {
-        pg_empty(pg.subs ? "No subscriptions" : pg.saved ? "No saved episodes" : "No downloads");
+        pg_show(pg.view, 1); /* (the large title and the storage line stay, the hint is painted under them: the first frame is the last) */
+        pg_show(pg.status, 0);
     } else {
         pg_show(pg.view, 1);
         pg_show(pg.status, 0);
@@ -2454,7 +2475,6 @@ static void pg_open_show_with(int si, int off, pc_ep_t *all, int m) {
     pg_nav();
     pg_show(pg.view, 1);
     pg_show(pg.status, 0);
-    if (!m && !pg.preview) pg_eps_hint(pg_no_eps_key());
     grid_shape(&pg.g, LIST_ART, LIST_R, 1);
     grid_shape(&pg.hg, PS_ART, PS_ART_R,
                1); /* (the corners are cut in the alpha: the page's tint shows through them) */
@@ -2493,10 +2513,7 @@ static void pg_reload_eps(void) {
     pg_det_refind(); /* (the episode page stays on its episode, wherever the list put it) */
     pg_cells_drop();
     pg_hdr_make();
-    if (!m)
-        pg_eps_hint(pg_no_eps_key());
-    else
-        pg_show(pg.status, 0);
+    pg_show(pg.status, 0);
     pg_size();
     max = pg_content() - GRID_VIEW_H;
     if (max < 0) max = 0;

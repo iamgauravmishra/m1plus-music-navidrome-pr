@@ -675,6 +675,11 @@ def paint(m, off=0):
     return list(m.blits), list(m.texts), list(m.text_styles), list(m.fills)
 
 
+def hint(m, off=0):
+    """The empty page's hint as painted in the content (its wrapped lines in the dim 20 px grey style, joined), '' for none."""
+    return ' '.join(' '.join(t.split()) for t, _ in drawn(m, off, 'label_ps_cdim'))
+
+
 def paint_bottom(m):
     """A frame scrolled to the bottom of the Shows level, where the Library rows are (the page's 400 px view)."""
     return paint(m, max(0, m.props.get((m.sv, 'virtual_h'), 0) - 400))

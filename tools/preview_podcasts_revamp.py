@@ -772,10 +772,9 @@ def downloads_page(s, ip, dl, scroll=0, marked=None, line='7 episodes · 217 MB 
     shift = o['SG_SEL_COL'] if marked is not None else 0
     im = Image.new('RGBA', (W, max(L['h'], WIN - NAV)), (0, 0, 0, 255))
     s.text(im, o['PP_TITLE_X'], o['PP_TITLE_H'] / 2, 'Downloads', o['PP_TITLE_PX'], WHITE)   # (the large heading scrolls with the content; the navbar has no title)
-    if not empty:
-        if line: s.text(im, o['PP_LINE_X'], L['y_line'] + o['PP_LINE_H'] / 2, PS.fit(s, line, 15, W - 2 * o['PP_LINE_X']), 15, GREY)
-        if ip: s.text(im, o['PP_SHOWS_X'], L['y_ip'] + o['PP_HEAD_H'] / 2, 'In Progress', 20, WHITE)
-        if dl: s.text(im, o['PP_SHOWS_X'], L['y_dh'] + o['PP_HEAD_H'] / 2, 'Downloaded', 20, WHITE)
+    if line: s.text(im, o['PP_LINE_X'], L['y_line'] + o['PP_LINE_H'] / 2, PS.fit(s, line, 15, W - 2 * o['PP_LINE_X']), 15, GREY)
+    if ip: s.text(im, o['PP_SHOWS_X'], L['y_ip'] + o['PP_HEAD_H'] / 2, 'In Progress', 20, WHITE)
+    if dl: s.text(im, o['PP_SHOWS_X'], L['y_dh'] + o['PP_HEAD_H'] / 2, 'Downloaded', 20, WHITE)
     for i, y in enumerate(L['rows'] if not empty else []):
         if i < len(ip): sh, title, sub = ip[i]; played = False
         else:
@@ -803,7 +802,7 @@ def downloads_page(s, ip, dl, scroll=0, marked=None, line='7 episodes · 217 MB 
     else:
         PS.glass(s, win, 'ah_nav_back', 7, 44)
         capsule(s, win, 'none' if empty else 'more')
-    if empty: s.text(win, W // 2, 180 + 45, 'No downloads', 18, WHITE, 'm')
+    if empty: s.text(win, o['PP_LINE_X'], NAV + o['PDL_LINE_PITCH'] + 8 + o['PS_TITLE_PITCH'] / 2, 'No downloads', 20, DIMT)   # (painted in the content under the storage line: pg_paint_hint)
     return frame(s, win, None)
 
 
@@ -840,7 +839,7 @@ def downloads2_sheet(s, shows, workdir, path):
               ('Downloads: storage line, In Progress,\nDownloaded (newest download first)', page()), ('scrolled: a partly played row ("35m left"),\nplayed rows with the check', page(scroll=played_scroll)),
               ('the "..." sheet: Select, Delete Played Episodes', bottom_sheet(s, page(), sheet_rows)), ('select mode across both sections\n(the running one cannot be marked)', page(marked={1, 4, 6})),
               ('Delete Played Episodes: the confirm', confirm_frame(page(), workdir, 'Delete all played episodes?')), ('the toast after it (stock message box)', toast_frame(page(scroll=0), workdir, '2 deleted, 105 MB freed')),
-              ('nothing downloaded: No downloads', downloads_page(s, [], [], empty=True))]
+              ('nothing downloaded: No downloads', downloads_page(s, [], [], line='18 GB free', empty=True))]
     assemble(frames, 3, path)
 
 

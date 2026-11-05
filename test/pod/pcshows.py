@@ -736,7 +736,7 @@ def empty_tests(ctx):
     # a subscription with no episode: its page's hint
     m = opened(lambda mm: mm.put(f'{RP}/Fresh/.show', f'M1PLUS-SHOW 1\ntitle=Fresh\nfeed={F["three"]}\nimage=\nchecked=0\n'.encode()), lambda mm: None)
     PCP.tap_show(m, 'Fresh')
-    expect(('widget_set_tr_text', m.widgets['label_status'], 'No episodes yet. Choose Refresh Feed in the menu at the top right.') in m.calls, 'a subscription not refreshed yet opens a page that says how to fill it')
+    expect('No episodes yet. Choose Refresh Feed in the menu at the top right.' in PCP.hint(m), 'a subscription not refreshed yet opens a page that says how to fill it')
     # no memory
     m = machine(); m.calloc_fail = True
     m.call(PSYMS['podcasts_open'], count=40000000)
