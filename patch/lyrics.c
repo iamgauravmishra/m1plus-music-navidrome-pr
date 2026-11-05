@@ -75,6 +75,7 @@ static struct {
     unsigned ck_t, dtimer;
     unsigned char ht[LY_MAX]; /* rows of each line, 0 not measured yet */
     unsigned char fc[LY_MAX]; /* face of each measured line */
+    unsigned char miss, redo, skip; /* page ticks whose layout could not measure a line (since the lyrics loaded); whether the layout must run again for that; a measure failed in this layout */
 } ly __attribute__((section(".scratch")));
 
 /* The damped spring, 1024 x g(t) every 10 ms, g = e^(-zeta wn t) (cos wd t + zeta / sqrt(1 - zeta^2) sin wd t), zeta 0.72, wn 12 /s, wd = wn sqrt(1 - zeta^2):
@@ -181,16 +182,20 @@ static void ly_probe_face(int face) {
 }
 
 /* The rows line i takes: 1 + the width it measures at in the label's font over the width of a row (a word wrap wastes a little, so a line
- * over one row gets LY_WRAP_SLACK px more, LY_WRAP_SLACK_CJK in the default font), at most LY_LINES_MAX. Its face is chosen here (ly_latin). Cached. */
+ * over one row gets LY_WRAP_SLACK px more, LY_WRAP_SLACK_CJK in the default font), at most LY_LINES_MAX. Its face is chosen here (ly_latin). Cached, except a
+ * measure of non-empty text that came back 0 (the probe not ready): that line is 1 row for now and measured again by the layout ly.redo asks for. Once a measure
+ * failed, the rest of that layout (ly.skip, cleared as a layout starts) measures nothing; the page tick counts a layout that saw a failure in ly.miss, and after
+ * LY_MISS_MAX of them (10 s at the 500 ms tick) a line is kept at 1 row, so a probe that never measures costs a bounded number of calls. */
 __attribute__((noinline)) int ly_rows(int i) {
     char buf[LY_BUF];
-    int rows = 1, w = 0, face = 0;
+    int rows = 1, w = 0, face = 0, text = 0;
     if (i < 0 || i >= ly.n) return 1;
     if (ly.ht[i]) return ly.ht[i];
     if (ly.probe && ly_text(i, buf) && buf[0]) {
+        text = 1;
         face = !ly_latin(buf);
         ly_probe_face(face);
-        if (widget_set_text_utf8(ly.probe, buf) == RET_OK) {
+        if (!(ly.skip && ly.miss < LY_MISS_MAX) && widget_set_text_utf8(ly.probe, buf) == RET_OK) {
             const unsigned *t = widget_get_text(ly.probe);
             if (t && *t) w = (int)(widget_measure_text(ly.probe, t) + 0.999f);
         }
@@ -201,6 +206,11 @@ __attribute__((noinline)) int ly_rows(int i) {
     if (w > 0 && w % LY_W == 0) rows -= 1;
     if (rows < 1) rows = 1;
     if (rows > LY_LINES_MAX) rows = LY_LINES_MAX;
+    if (text && w <= 0 && ly.miss < LY_MISS_MAX) { /* not measured: not kept */
+        ly.skip = ly.redo = 1;
+        return rows;
+    }
+    if (ly.miss) ly.redo = 1; /* a line measured after a miss: the layout above may have used its 1 row */
     ly.ht[i] = (unsigned char)rows;
     return rows;
 }
@@ -361,6 +371,7 @@ static void ly_layout(void) {
     int np[LY_POOL], lo0, lo, hi, i, y, slot, have0 = 0, d0 = 0;
     unsigned now = time_now_ms();
     memset(used, 0, sizeof used);
+    ly.skip = 0;
     if (ly.n > 0) {
         lo0 = ly.base - LY_POOL / 2 + 1;
         if (lo0 < 0) lo0 = 0;
@@ -404,7 +415,7 @@ static void ly_layout(void) {
     for (slot = 0; slot < LY_POOL; ++slot)
         if (!used[slot]) ly_hide(slot);
     ly_dots(have0, d0);
-    ly.dirty = 0;
+    ly.dirty = ly.redo, ly.redo = 0; /* a line that was not measured is tried again by the next layout (the page tick) */
 }
 
 static int ly_frame(const void *timer) {
@@ -545,7 +556,7 @@ void ly_tick(void) {
     if (n > LY_MAX) n = LY_MAX;
     if (n <= 0) {
         if (ly.n) { /* the lyrics are gone: the stock message shows */
-            memset(ly.ht, 0, sizeof ly.ht);
+            memset(ly.ht, 0, sizeof ly.ht), ly.miss = ly.redo = ly.skip = 0;
             ly.n = 0, ly.cur = -1, ly.base = 0, ly.man = 0, ly.browse = ly.hold = 0, ly.sig = 0, ly.dirty = 1;
             ly.pad = ly.fresh = ly.ck_ok = 0, memset(ly.dop, 0, sizeof ly.dop);
             memset(ly.line, 0xff, sizeof ly.line);
@@ -553,7 +564,7 @@ void ly_tick(void) {
         }
     } else if (ly_sig(n) != ly.sig || n != ly.n) { /* new lyrics: nothing of the old ones is kept */
         int i;
-        memset(ly.ht, 0, sizeof ly.ht);
+        memset(ly.ht, 0, sizeof ly.ht), ly.miss = ly.redo = ly.skip = 0;
         for (i = 0; i < LY_POOL; ++i) ly.line[i] = ly.mv[i] = -1, ly.sel[i] = 0xff, ly.o0[i] = 0;
         ly.n = n, ly.cur = -1, ly.base = 0, ly.man = 0, ly.gd = 0, ly.browse = ly.hold = 0, ly.sig = ly_sig(n),
         ly.dirty = 1;
@@ -567,7 +578,10 @@ void ly_tick(void) {
             ly_follow();
         }
     }
-    if (ly.dirty) ly_layout();
+    if (ly.dirty) {
+        ly_layout();
+        if (ly.skip && ly.miss < LY_MISS_MAX) ly.miss++; /* a tick whose layout could not measure */
+    }
     ly_dkick();
 }
 

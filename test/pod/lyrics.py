@@ -708,6 +708,33 @@ def wrap_tests(ctx):
     m = LyMachine(SONG); m.init()
     m.at(5); m.frame(10000); m.at(0); m.frame(10000)
     expect(m.names().count('widget_measure_text') == 0, 'a line is measured once, not on every layout')
+    # a measure that comes back 0 for text is not kept: the line is one row for now and measured again by the next ticks, the layout redone when it changes
+    text, fails = 'x' * 40, [True]
+    def flaky(s): return 0 if fails[0] and len(s) == 40 else 10 * len(s)
+    lines = [(0, 'a'), (1, text), (2, 'b')]
+    m = LyMachine(lines, measure=flaky); m.init(); m.at(1)
+    expect(m.shown()[text][3] == LINE_H, 'a failed measure leaves the line one row for now')
+    fails[0] = False
+    for _ in range(3): m.at(1)
+    m.frame(10000)
+    expect(m.shown() == expect_layout(lines, 1, 0, lambda s: 10 * len(s)), f'the next ticks measure it again and the layout takes its two rows ({m.shown()} vs {expect_layout(lines, 1, 0, lambda s: 10 * len(s))})')
+    m.at(1); m.at(1)
+    expect(m.names().count('widget_measure_text') == 0, 'once measured the line is kept: no more measures')
+    # a long song whose first layouts measure nothing: the budget counts ticks, not calls, so every line (line 10 too) ends up with its modelled rows
+    long_song = [(5 * k, f'{k:02d}' + 'x' * 38) for k in range(32)]
+    fails = [True]
+    m = LyMachine(long_song, measure=lambda s: 0 if fails[0] else 10 * len(s)); m.init(); m.at(50); m.at(50)
+    fails[0] = False
+    for _ in range(3): m.at(50)
+    m.frame(10000)
+    model = expect_layout(long_song, 10, 0, lambda s: 10 * len(s))
+    expect(m.shown() == model and model[long_song[10][1]][3] == 2 * LINE_H, 'a song of 32 lines that could not be measured at first: the next ticks give every line its modelled rows')
+    m.at(55); m.frame(10000); m.at(50); m.frame(10000)
+    expect(m.shown() == model and m.names().count('widget_measure_text') == 0, 'and they stay (line 10 current again), measured once')
+    m = LyMachine(lines, measure=lambda s: 0); m.init()
+    for _ in range(40): m.at(1)
+    m.at(1)
+    expect(m.names().count('widget_measure_text') == 0 and m.shown()[text][3] == LINE_H, f'a probe that never measures is tried for at most {O["LY_MISS_MAX"]} tick layouts, then the lines stay one row')
     # real text in the real font
     latin = (0, 'I got a feeling that tonight is going to be the night that I will remember all my life, oh yeah')
     cjk = (1, '我想要有一天能够和你一起走遍这个世界上所有美丽的地方看遍所有的风景再回到这里')

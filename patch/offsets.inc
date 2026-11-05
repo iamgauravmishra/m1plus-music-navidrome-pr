@@ -509,6 +509,7 @@
 #define LY_HOLD_MS 1000
 #define LY_WRAP_SLACK 56
 #define LY_WRAP_SLACK_CJK 8
+#define LY_MISS_MAX 20
 /* The interlude dots (docs/modules/lyrics.md, stage 4): LY_DOT px white circles (the image np_dot), LY_DOT_PITCH apart from x LY_DOT_X, centred on the anchor row (LY_DOT_PAD = LY_LINE_H + LY_GAP: the lines sit
  * that far below while they show) for a gap before the first line of at least LY_DOT_MIN_S seconds. Dot k fills from LY_DOT_DIM (0.25) to 255 as the k-th third of the gap (less its last fade) passes, the group breathes
  * between 255 and LY_DOT_BREATH_MIN every LY_DOT_BREATH_MS, and fades out over the last LY_DOT_FADE_MS. One LY_DOT_MS timer exists while they show and the player plays. */

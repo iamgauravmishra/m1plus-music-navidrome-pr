@@ -36,6 +36,10 @@ first and last handles and times) detects replacement lyrics; at most 400 rows a
 - Row height follows AWTK's font size plus `spacer`: 30 + 4 px. Width is measured
   in the line's own face; wrap estimates allow 56 px slack for Latin and 8 px for CJK.
   Actual wrapping remains AWTK's; an underestimated row count can clip text.
+  Each line is measured once and kept, except a measure of 0 for non-empty text: that line
+  stays one row, is not cached, and later page ticks measure it again and redo the layout
+  (after the first failed measure a layout measures nothing more; at most 20 ticks' layouts,
+  10 s, per lyrics load can fail, then one row is kept).
 - `np_lyric_style` selects `lyrics.ttf` (the Inter Bold subset).
   `np_lyric_cjk_style` uses the default font for mixed scripts, unsupported characters
   or malformed UTF-8. AWTK has no per-glyph font fallback.
