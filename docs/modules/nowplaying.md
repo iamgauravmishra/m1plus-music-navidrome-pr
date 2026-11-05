@@ -12,7 +12,7 @@ stock services. [Lyrics](lyrics.md), [Queue](queue.md), [More](playmore.md) and
 ## Hook and lifecycle
 
 The init hook calls `playing_page_init` (`0x53d1e4`) through its trampoline and returns
-the stock result. After successful initialization, with a window and no kill switch,
+the stock result. After successful initialization, with a window,
 `np_start` attaches page listeners and a repeating timer: 500 ms lit, 1000 ms dark.
 A refused timer or listener leaves stock behavior.
 

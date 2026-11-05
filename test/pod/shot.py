@@ -1,5 +1,5 @@
 """Screenshot (patch/shot.c): the Settings row, the 5 s countdown with the status bar camera, the frame buffer read in every
-format the driver can report, the BMP bytes, numbering, the card checks, every failure path, double taps, the kill switch."""
+format the driver can report, the BMP bytes, numbering, the card checks, every failure path, double taps."""
 import os, re, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
@@ -8,7 +8,7 @@ for _line in open(os.path.join(ROOT, 'patch', 'shot.h')).read().replace('\\\n', 
     _m = re.match(r'#define\s+(\w+)\s+("[^"]*"|\w+)\s*(?:/\*.*)?$', _line.strip())
     if _m: DEFS[_m.group(1)] = _m.group(2).strip('"') if _m.group(2).startswith('"') else int(_m.group(2), 0)
 DIR, TMP, FB = DEFS['SHOT_DIR'], DEFS['SHOT_TMP'], DEFS['SHOT_FB']
-RET_REPEAT, KILL = 8, '/mnt/mmc/m1plus-off'
+RET_REPEAT = 8
 
 # format name -> (bytes per pixel, (red offset, length), (green), (blue)): what the driver reports in fb_var_screeninfo
 FORMATS = {
@@ -331,20 +331,6 @@ def run(ctx):
     r = Run(m); r.full()
     expect(not r.has('widget_set_visible') and len(files(m)) == 1, 'no pod_shot in the window tree: the capture still works, without the camera')
 
-    # 9. The kill switch: nothing starts; one that appears mid-way stops the sequence, camera hidden, nothing read or written.
-    m = shot_machine(w=8, h=4); m.present.add(KILL)
-    r = Run(m); r.step('tap', 'shot_start')
-    expect(not m.calls or m.names() == ['access'] * len(m.names()), f'kill switch present: the tap does nothing but look for it ({m.names()})')
-    m = shot_machine(w=8, h=4); r = Run(m); r.step('tap', 'shot_start'); m.present.add(KILL)
-    for _ in range(2): r.step('tick', 'shot_tick')
-    expect(r.steps[-1] == ('tick', 0) and m.props[(m.ind, 'visible')] == 0 and not r.has('timer_add', GRAB), 'the kill switch during the countdown: the tick ends, the camera is hidden, no grab is armed')
-    r.step('tap', 'shot_start'); expect(r.toasts() == [] and not any(c[1] == 'timer_add' for c in r.log[-4:]), 'and with it still there no new countdown starts')
-    m = shot_machine(w=8, h=4); r = Run(m); r.step('tap', 'shot_start')
-    for _ in range(5): r.step('tick', 'shot_tick')
-    m.present.add(KILL); r.step('grab', 'shot_grab')
-    expect(not r.has('grab', 'open', FB) and not files(m) and m.props[(m.ind, 'visible')] == 0 and r.toasts() == [], 'the kill switch just before the grab: nothing is read, written or shown')
-    m.present.discard(KILL); r.step('tap', 'shot_start'); expect(m.props[(m.ind, 'visible')] == 1, 'removed again, the next tap starts normally')
-
     # 10. Every text goes through the stock translation: the row, the countdown and both outcomes, in all 16 tables.
     for loc in pod_i18n.ALL_TABLES:
         T = tr_of(loc)
@@ -386,9 +372,6 @@ def run(ctx):
     n = len(asked(r)); r.step('tap2', 'shot_start')
     expect(len(asked(r)) == n and not r.has('tap2', 'timer_remove') and set(m.names()) <= {'access'}, 'a tap during the settle phase (capture committed) shows no dialog and removes nothing')
     r.step('grab', 'shot_grab'); expect(len(files(m)) == 1, 'the capture completes')
-    # kill switch at the tap (each tick and the grab are in section 9)
-    m = shot_machine(w=8, h=4); m.present.add(KILL); r = Run(m); r.step('tap', 'shot_start')
-    expect(not asked(r), 'kill switch present: the tap shows no dialog')
 
     # 12. The choice is on the confirm dialog: its left button (btn_cancel, quits with 4) is 5 s, its right (btn_enter, 0xa) is 10 s.
     #     Stock: btn_cancel's click handler 0x473230 is `addiu $a1, $zero, 4` into dialog_quit, btn_enter returns CONFIRM_YES.
@@ -445,5 +428,3 @@ def run(ctx):
     expect(raw_asked(r) == [ASK1, ASK1, ASK] and r.has('timer_add', TICK, tick_ms), 'after a No the next tap asks from step 1 again')
     m = shot_machine(w=8, h=4); m.confirm_answers[ASK] = 0; r = Run(m); r.step('tap', 'shot_start')
     expect(raw_asked(r) == [ASK1, ASK] and not r.has('timer_add', TICK, tick_ms) and not r.toasts(), 'step 2 answered with any other code: no shot')
-    m = shot_machine(w=8, h=4); m.present.add(KILL); r = Run(m); r.step('tap', 'shot_start')
-    expect(not raw_asked(r), 'kill switch present: neither dialog opens')

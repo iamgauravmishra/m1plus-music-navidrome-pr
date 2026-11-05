@@ -701,7 +701,7 @@ void homecover_rebuild_asked(void) { hc_off = 0, rs.valid = 0; }
 
 /* The Home instance of the menu is up (patch/home.c, after the list took the whole window). */
 void homecover_start(void *win) {
-    if (!win || home_off()) return;
+    if (!win) return;
     if (hc.win) hc_on_destroy(hc.win, (void *)0); /* an earlier window that never said it was gone */
     memset(&hc, 0, sizeof hc);
     hc.win = win;

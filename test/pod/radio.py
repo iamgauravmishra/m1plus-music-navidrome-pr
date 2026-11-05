@@ -10,7 +10,7 @@ import awtk_ui
 PCP = sibling('podcasts')
 PCN = sibling('pcnet')   # the podcast network machine: the card, libcurl and libjpeg mocks the logo worker runs on
 KB = sibling('keyboard')
-CA, RADIO_DIR, KILL = '/etc/m1plus-cacert.pem', '/mnt/mmc/Radio', '/mnt/mmc/m1plus-off'
+CA, RADIO_DIR = '/etc/m1plus-cacert.pem', '/mnt/mmc/Radio'
 FAVS, RECENT = RADIO_DIR + '/favourites.m3u', '/mnt/data/m1plus/radio-recent'
 PLAYSPEED = pod.DATA['PLAYSPEED_MODE'][0]
 DACOFF, G_OUT, G_VOL = pod.DATA['DACOFF_TIME'][0], pod.DATA['G_HEADSET_OUTPUT'][0], pod.DATA['G_VOLUME'][0]
@@ -314,9 +314,6 @@ def play_tests(ctx):
     expect(r == 1 and starts(m) == ['http://one.example/a'] and 'set_outputchannel' in names
            and not [n for n in names if n in ('mclSetPcmMode', 'mclSetDacPwr', 'set_devicevolume')],
            "a USB DAC: it starts after set_outputchannel (as stock's start_player), the built-in DAC's readying is skipped")
-    m = machine(); m.present.add(KILL)
-    l, r = play(m)
-    expect(r == 0 and not m.proc and not [c for c in m.after if c[0] in ('stop_player', 'set_outputchannel', 'timer_add')], 'the kill switch: nothing happens')
     m = machine()
     l, r = play(m, '')
     expect(r == 0 and not m.proc, 'an empty list plays nothing')
@@ -851,10 +848,6 @@ def card_tests(ctx):
     m.call(PSYMS['rd_recent_read'], a0=out, count=40000000)
     buf = m.word(out); got = [m.read_cstr(buf + m.word(out + 16 + 4 * i)) for i in range(m.s32(out + 8))]
     expect(got == ['R5', 'R11', 'R10', 'R9', 'R8', 'R7', 'R6', 'R4', 'R3', 'R2'], f'a station played again moves to the front, once ({got})')
-    m = machine(); m.present.add(KILL)
-    L = new_list(m, big)
-    m.call(PSYMS['rd_recent_push'], a0=L, a1=0, count=40000000)
-    expect(RECENT not in m.fs, 'the kill switch: no recent file written')
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1111,7 +1104,7 @@ def asset_tests(ctx):
 
 
 def open_tests(ctx):
-    """7. The entry, the kill switch, the fallbacks and the root list."""
+    """7. The entry, the fallbacks and the root list."""
     expect = ctx.expect
     page = pod_pages.MENU
     row = next(i for i, r in enumerate(page.rows) if r.label == 'Radio')
@@ -1120,8 +1113,6 @@ def open_tests(ctx):
     expect(('window_open', 'm1plus_radio') in m.calls, 'the Radio row of the menu opens the page')
     m = page_machine(window=0)
     expect(m.call(PSYMS['radio_open'], count=900000000) == 0xffffffff and 'timer_add' not in m.names(), 'a window that will not open: nothing runs')
-    m = page_machine(); m.present.add(KILL)
-    expect(m.call(PSYMS['radio_open'], count=900000000) == 0xffffffff and 'window_open' not in m.names(), 'the kill switch: the page does not open')
     m = page_machine(); m.widgets.pop('sg_rail')
     open_radio(m)
     expect(('navigator_back',) in m.calls, 'an asset that is not ours: the page leaves again')
@@ -1759,7 +1750,7 @@ def recent_tests(ctx):
     expect(rows_text(m) == ['My Stations', 'Recently Played', 'Radio Browser'], f'Clear Recently Played with nothing running: the Now Playing row is gone ({rows_text(m)})')
     # a card/settings write that fails: the list stays and says so
     m = page_machine(view=None); m.put_text(RECENT, rec); open_radio(m); tap_row(m, 2, root=True, gap=24)
-    m.present.add(KILL); click(m, 'btn_more'); m.calls.clear()
+    m.fail.add(('rename', RECENT)); click(m, 'btn_more'); m.calls.clear()
     calls = click(m, 'rd_sh_clear')
     expect(toasts(calls) == ['Could not clear Recently Played'] and rows_text(m) == ['Rec One', 'Rec Two'] and b'Rec One' in m.fs[RECENT], f'a write that cannot be made: "Could not clear Recently Played", the list as it was ({toasts(calls)})')
     # the toggle still works on this level and the mode is shared
@@ -1900,7 +1891,7 @@ def np_tests(ctx):
     expect([v for w, n, v in st if w == m.window][-1] == 0xff202020 and [v for w, n, v in st if w == m.widgets['rn_art']][-1] == 0xff2e2c2c, 'with the neutral grey window and the grey card')
     destroy_np(m)
     expect(m.destroyed >= 1, 'destroy frees the logo bitmap')
-    # opening twice, a window that will not open, the kill switch, an asset that is not ours
+    # opening twice, a window that will not open, an asset that is not ours
     m = np_machine(); l, r = play(m)
     expect(m.call(PSYMS['rn_open'], count=900000000) == 0 and m.call(PSYMS['rn_open'], count=900000000) == 0 and m.names().count('window_open') == 0, 'a second open while the page is up opens nothing')
     # the bug: a page that is closing (destroyed later) or under another window did not reopen
@@ -1926,8 +1917,6 @@ def np_tests(ctx):
            'under another window: the old page is closed and a fresh one opens')
     m = np_machine(window=0)
     expect(m.call(PSYMS['rn_open'], count=900000000) == 0xffffffff, 'a window that will not open: -1')
-    m = np_machine(); m.present.add(KILL)
-    expect(m.call(PSYMS['rn_open'], count=900000000) == 0xffffffff, 'the kill switch: -1')
     m = np_machine(); m.widgets.pop('rn_live')
     m.call(PSYMS['rn_open'], count=900000000)
     expect(('navigator_back',) in m.calls, 'an asset that is not ours: the page leaves again')
@@ -2097,11 +2086,9 @@ def info_tests(ctx):
     fn, c = m.bound[(old, O['EVT_DESTROY'])]
     m.call(fn, a0=c, count=4000000)
     expect(m.call(PSYMS['sinfo_tick'], a0=0, count=4000000) != 0, "the old window's late destroy leaves the new page alone")
-    # no station, the kill switch, a window that will not open, an asset that is not ours
+    # no station, a window that will not open, an asset that is not ours
     m = np_machine(); m.windows['m1plus_radioinfo'] = SI_WIN
     expect(m.call(PSYMS['sinfo_open'], count=900000000) == 0xffffffff and ('window_open', 'm1plus_radioinfo') not in m.calls, 'no station: -1, no window')
-    m = info_machine(); m.present.add(KILL)
-    expect(m.call(PSYMS['sinfo_open'], count=900000000) == 0xffffffff and ('window_open', 'm1plus_radioinfo') not in m.calls, 'the kill switch: -1')
     m = info_machine(); m.windows['m1plus_radioinfo'] = 0; m.calls.clear()
     expect(m.call(PSYMS['sinfo_open'], count=900000000) == 0xffffffff, 'a window that will not open: -1')
     m = info_machine(); m.widgets.pop('label_val'); m.calls.clear()
@@ -2126,8 +2113,6 @@ def entry_tests(ctx):
         expect(len(stock_calls(m)) == 1 and not opens(m), f'{fn}: stopped after playing: stock')
         m = np_machine(window=0); l, r = play(m); m.call(PSYMS[fn], count=900000000, **kw)
         expect(len(stock_calls(m)) == 1, f'{fn}: Radio Now Playing will not open: stock Now Playing')
-        m = np_machine(); l, r = play(m); m.present.add(KILL); m.call(PSYMS[fn], count=900000000, **kw)
-        expect(len(stock_calls(m)) == 1 and not opens(m), f'{fn}: the kill switch: stock Now Playing')
     m = np_machine(); l, r = play(m)
     expect(m.call(PSYMS['rn_backtoplayer'], a0=0, a1=0, count=900000000) == 0 and m.call(PSYMS['pod_on_player'], a0=0, a1=0, count=900000000) == 0, 'the handlers answer RET_OK')
     # the Home menu's Now Playing row (patch/m1plus.c)

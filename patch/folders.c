@@ -739,11 +739,11 @@ static void *fo_bitmap(void *win, const char *name) {
     return b;
 }
 
-/* The Folders page. 0 once it is up, -1 if it could not open (the kill switch, a page already open, a window that will not open: the caller leaves it to the stock page), -2 if the
+/* The Folders page. 0 once it is up, -1 if it could not open (a page already open, a window that will not open: the caller leaves it to the stock page), -2 if the
  * asset is not ours (the page is left again). */
 static int fo_open_page(void) {
     int i;
-    if (fo.win || home_off()) return -1;
+    if (fo.win) return -1;
     memset(&fo, 0, sizeof fo);
     fo.first_file = -1;
     fo.win = window_open(FO_ASSET);

@@ -28,7 +28,6 @@ LIB, ALBUMS, ART, COMP = O['CLASS_ALBUM_TRACKS'], O['CLASS_ALBUMS'], O['CLASS_AR
 CI = pod.DATA['CLASSINFO'][0]
 SHOWLIST, G_CLASS, NAV_TITLE, SEL_VEC, SONGER = (pod.DATA[k][0] for k in ('PDEQ_SHOWLIST', 'G_CLASS_TYPE', 'NAV_TITLE', 'SEL_VEC', 'SONGER_FLAG'))
 UI = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_album.bin') if WORK else None
-KILL = '/mnt/mmc/m1plus-off'
 ALBUM, ARTIST = 'Kind of Blue', 'Miles Davis'
 RED = (190, 50, 55)
 NAMES = ['So What', 'Freddie Freeloader', 'Blue in Green', 'All Blues', 'Flamenco Sketches', 'Flamenco Sketches (Alt)', 'So What (Alt)', 'Blue in Green (Alt)']
@@ -298,10 +297,6 @@ def open_tests(ctx):
         nav = [c for c in m.calls if c[0] == 'navigator_to_with_context' and c[1] == 'albuminfo_page']
         expect(nav and nav[0][2:] == (ALBUMS, 0) and 'albumcoverinfo_init' in names and 'batchadd_albumcover_task' in names and names.count('loadAlbumList') == (2 if queried else 1),
                f'{why}: the stock albuminfo_page opens, the cover thread released, the album list loaded {"again" if queried else "once"} ({names.count("loadAlbumList")} loads)')
-    m = album_machine(); m.present.add(KILL)
-    r, calls = open_album(m)
-    stock_ok(m, 'the kill switch', queried=False)
-    expect(r == 0 and not any(c[0] in ('window_open', 'loadAlbumdetailList') for c in m.calls), 'and nothing of ours is tried')
     m = album_machine(); m.windows['m1plus_album'] = 0
     open_album(m)
     stock_ok(m, 'a window that will not open')

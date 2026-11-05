@@ -1055,7 +1055,6 @@ static int vn_retint(void) {
  */
 int vinyl_open(void) {
     if (vn.win) return 0;
-    if (access(KILL_SD, F_OK) == 0) return -1;
     memset(&vn, 0, sizeof vn);
     vn.theme = vinyl_theme(); /* read once: a change in Settings shows the next time the page opens */
     vn.win = window_open(vn_pages[vn.theme]);

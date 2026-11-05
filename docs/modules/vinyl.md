@@ -152,7 +152,6 @@ carry on from where they were.
 
 - No hook, no patched word, no new pin: every stock call is already pinned (the Tape page's invalidate and label read, the Pod's timer and quick clicks,
   Now Playing's cover file, the cover cache's decode).
-- `/mnt/mmc/m1plus-off`: the More dialog binds nothing (the Vinyl Mode row stays hidden and insensitive) and `vinyl_open` refuses.
 - A page that fails to open (no window, a widget missing, a picture missing or of another size, no memory) frees what it made, goes back with
   `navigator_back` and returns -1; the More sheet closes only after the page is up (`pm_on_vinyl`), so it stays as it was.
 - The labels are insensitive; the only visible, sensitive widget is `vinyl_view`.
@@ -177,5 +176,4 @@ clean rounded top. Tap Vinyl Mode: the sheet closes and the turntable appears, t
 - Record colour Cover (Settings > Now Playing > Vinyl Mode > Record, then open Vinyl Mode): with a colourful cover the record takes its colour (mock: `out/preview/vinyl-emu-rec-cover.png`),
   with no white line at the edge and only a faint highlight; the fine groove rings show. A new track of another cover changes it (watch for a hitch of a few tens of ms on the
   change: 15 M instructions); a grey or missing cover leaves it black, and back to black is exactly the installed look. Turning, the arm and the tick are as smooth as with Black.
-  Kill switch and `m1plus-off` still refuse the page.
-- The screen still sleeps with the page open, wakes and catches up; back to Now Playing, Vinyl again: opens every time. Kill switch: no Vinyl Mode row.
+- The screen still sleeps with the page open, wakes and catches up; back to Now Playing, Vinyl again: opens every time.

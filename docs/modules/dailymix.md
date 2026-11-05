@@ -156,7 +156,7 @@ of 204 in all 13 languages (`test/pod/dailymix.py`).
 ## Safety
 
 No new hook, no boot-path or main-loop code, nothing at paint but the card's own after-paint (a blit of the resident bitmap and canvas text; it allocates, decodes and reads nothing): the section's widgets, their events and the Home
-page's timer only. Kill switch (`/mnt/mmc/m1plus-off` or `/mnt/data/m1plus-off`): `dailymix_start` looks nothing up. Every failure leaves the plain menu or yesterday's mix: a missing widget, a refused `widget_on`
+page's timer only. Every failure leaves the plain menu or yesterday's mix: a missing widget, a refused `widget_on`
 (any of the eight), no timer, an unreadable or malformed file, an unreadable art file (made again), no memory, no songs, a list changed under the job, a library under 10 songs, the card not mounted (nothing is read, made or written: no card section),
 an unwritable file. A hidden section is hidden **and** insensitive (`visible=false` does not stop hit testing). **The job and the card call no stock playlist function; only the page's Add disc does (`dp_look` reads the list, `dp_save` writes)** (`createPlayListItem`, `checkPlayListExist`, `getPlayListMaxId`, `addPlayList`, pinned in `tools/pod.py` with
 their prologues and the words of `batch_add_file` they mirror; `test/pod/dailymix.py` asserts that these names and `PDEQ_PLAYLIST` / `NAV_TITLE` / `CLASSINFO` occur in no other function; `docs/modules/playlists.md` for the Playlists page). `tools/reach.py` has no stock edit to check here (no hook, no patched word); the stock helper the mix uses, `loadLocalClassList`, is reachable from `main` only through `onlineDownloadThd`

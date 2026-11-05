@@ -8,7 +8,7 @@
  * hairline).
  *
  *   entry     queue_open(), called by Now Playing's queue button (a click handler bound after the stock init, patch/nowplaying.c: RET_STOP when this page opened, else the stock drawer
- *             opens as before). The kill switch, an empty queue, a stream (mclGetPlayType 2, 3, 0xf0, 0xf1: the stock drawer's own offline test) and a window that will not open leave
+ *             opens as before). An empty queue, a stream (mclGetPlayType 2, 3, 0xf0, 0xf1: the stock drawer's own offline test) and a window that will not open leave
  *             the stock drawer.
  *   queue     the stock play queue, the deque at PLAY_QUEUE (stSongInfo rows start_player copied) and the play position mclGetPlayPos, exactly what the stock drawer reads
  *             (@0x47a8f0, row bind @0x47a19c). Rows are read from it while painting; the page notices a queue that was replaced (another pointer, size or first record).
@@ -304,7 +304,7 @@ static void qp_pills(void) {
 
 static void qp_load(int keep);
 
-/* Clear: shown only while songs follow and the engine can run (no kill switch, libcstl as pinned, no DLNA service). Read again on the page's tick, so it hides when the DLNA service starts under the page. */
+/* Clear: shown only while songs follow and the engine can run (libcstl as pinned, no DLNA service). Read again on the page's tick, so it hides when the DLNA service starts under the page. */
 static void qp_clear_sync(void) {
     int on = qp.n != 0 && !qp_stream() && pod_clear_ready();
     if (on == qp.clear_on) return;
@@ -527,7 +527,7 @@ static int qp_stream(void) {
 int queue_open(void) {
     void *list = *(void **)PLAY_QUEUE;
     int fresh;
-    if (qp.win || home_off() || !list || !deque_size(list) || !cc_playing() || qp_stream()) return -1;
+    if (qp.win || !list || !deque_size(list) || !cc_playing() || qp_stream()) return -1;
     memset(&qp, 0, sizeof qp);
     qp.win = window_open(QP_ASSET);
     if (!qp.win) {

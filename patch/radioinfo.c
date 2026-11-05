@@ -229,7 +229,7 @@ int sinfo_open(void) {
     int at = rd_at();
     char name[RD_NAME_MAX + 1], url[1100], info[300];
     if (sinfo.win && pod_is_top(sinfo.win) && widget_is_window_opened(sinfo.win)) return 0;
-    if (home_off() || !l->n || at >= l->n) return -1;
+    if (!l->n || at >= l->n) return -1;
     snprintf(name, sizeof name, "%s", rd_name(l, at));
     snprintf(url, sizeof url, "%s", rd_url(l, at));
     snprintf(info, sizeof info, "%s", rd_info(l, at));

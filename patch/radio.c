@@ -613,7 +613,7 @@ void rd_recent_push(const rd_list_t *l, int i) {
     int k, same = -1;
     char *text;
     memset(&old, 0, sizeof old);
-    if (i < 0 || i >= l->n || home_off()) return;
+    if (i < 0 || i >= l->n) return;
     rd_recent_read(&old);
     for (k = 0; k < old.n; ++k)
         if (!strcmp(rd_url(&old, k), rd_url(l, i))) same = k; /* the station moves to the front */
@@ -624,7 +624,7 @@ void rd_recent_push(const rd_list_t *l, int i) {
 }
 
 /* Clear Recently Played: radio-recent as it is written when no station is in it (the header alone), the way rd_recent_push writes it. */
-int rd_recent_clear(void) { return !home_off() && home_write_atomic(RD_RECENT_FILE, RD_RECENT_TMP, "#EXTM3U\n") == 0; }
+int rd_recent_clear(void) { return home_write_atomic(RD_RECENT_FILE, RD_RECENT_TMP, "#EXTM3U\n") == 0; }
 
 int rd_last_read(rd_list_t *l) {
     int ok = rd_recent_read(l);
@@ -896,7 +896,7 @@ void rd_resume(void) {
 }
 
 int rd_play(const rd_list_t *l, int i) {
-    if (!l || !l->n || i < 0 || i >= l->n || home_off()) return 0;
+    if (!l || !l->n || i < 0 || i >= l->n) return 0;
     rd_timer_off();
     rd.error[0] = 0;
     rd.retry_at = 0;
@@ -1265,7 +1265,7 @@ int rd_logo_start(const char *url) {
     char path[48];
     unsigned hash;
     rd_logo_poll();
-    if (lg.running || fx.state == RD_F_RUNNING || home_off() || strlen(url) > RD_FAV_MAX ||
+    if (lg.running || fx.state == RD_F_RUNNING || strlen(url) > RD_FAV_MAX ||
         (strncasecmp(url, "http://", 7) && strncasecmp(url, "https://", 8)))
         return 0;
     hash = rd_logo_hash(url);

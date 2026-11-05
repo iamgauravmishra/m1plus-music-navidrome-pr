@@ -319,7 +319,6 @@ static int rn_on_destroy(void *ctx, void *e) {
 int rn_open(void) {
     void *back;
     if (rn.win && pod_is_top(rn.win) && widget_is_window_opened(rn.win)) return 0;
-    if (home_off()) return -1;
     if (rn.win) { /* closing (destroyed later) or under another window: let it go, its late EVT_DESTROY finds rn.win changed */
         if (widget_is_window_opened(rn.win)) window_close(rn.win);
         if (rn.timer) timer_remove(rn.timer);

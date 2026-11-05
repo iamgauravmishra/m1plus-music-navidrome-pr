@@ -122,7 +122,6 @@ Following the other page timers (`pod_screen_lit()` in `patch/common.c`, the sto
 
 - No hook, no patched word. `TAPE_PINS` (`tools/pod.py`) pins the stock words the page newly relies on (`widget_invalidate_force` passing its rectangle on, the rectangle's 16 bytes in widget
   coordinates, `widget_get_text_utf8`); every other stock call is one the payload already pins (Cover Flow's glyph path, the Pod's timer, battery and quick clicks).
-- `/mnt/mmc/m1plus-off` disables the page's only entry: with the kill switch the More dialog binds nothing (`pm_start` returns first) and the Cassette Mode row stays hidden; `tape_open` also refuses.
 - A page that fails to open (no window, no view or label, a picture missing or of another size, no memory for the frame) frees what it made, goes back with `navigator_back` and returns -1; the
   More sheet, which closes only after the page is up (`pm_on_tape`), stays as it was.
 - Hidden stays `visible=false` + `sensitive=false`; the only visible, sensitive widget is `tape_view`; the picture is painted, not widgets.
@@ -191,5 +190,4 @@ Open Now Playing on a playing track, More (page 1), tap **Cassette Mode**: the s
 - Battery number, `+` while charging, volume (change it with the keys: the line follows within half a second while paused), the format (file extension), the clock?
 - Does the screen still sleep after the usual idle time with the page open (playing and paused)? Does it wake and keep going, the reels on the right turn and the text current at once (no jump)? Battery: leave it playing with the screen off for an hour (screen-off ticks are 1 s and draw nothing) and compare the drain with Now Playing; is the lit 70 ms tick warm?
 - Back to Now Playing, More again, Tape again: opens every time, no leaked state. Does the page keep playing through a track change and a phone-style lock / unlock?
-- Kill switch `/mnt/mmc/m1plus-off`: no Cassette Mode row on the More sheet.
 Open questions: the cost of the 70 ms tick on battery (relax `TP_PLAY_MS` to 100 if warm); whether to drop 5 degree frames for fewer redraws; whether 24 h time is wanted.

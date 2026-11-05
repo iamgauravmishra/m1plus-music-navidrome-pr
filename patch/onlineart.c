@@ -1108,7 +1108,6 @@ static void oa_badge_width(void) {
 /* Open: the More sheet's Find Cover & Lyrics row. 0 once the page is up (or already open); -1 when it could not open (nothing is left of it). */
 int onlineart_open(void) {
     if (oa.win) return 0;
-    if (access(KILL_SD, F_OK) == 0) return -1;
     memset(&oa, 0, sizeof oa);
     if (!oa_track()) {
         memset(&oa, 0, sizeof oa);

@@ -4,7 +4,7 @@
 `ACT_FOLDERS`), `tools/pod.py` (the pinned stock functions, `FOLDER_PINS`), tests `test/pod/folders.py`, preview `tools/preview_folders.py` (`out/preview/folders.png`).
 
 The Extras menu's Folders row (`ACT_FOLDERS`, arg `HOME_FOLDER`) opens `ui/m1plus_folders.bin` in place of the stock `folder_page`. The stock page, with its restyled navbar
-(`navbar.md`, `rows.md`), is only the fallback: the kill switch `/mnt/mmc/m1plus-off`, a window or asset that will not open (`folders_open` returns through `pod_home_open(HOME_FOLDER)`).
+(`navbar.md`, `rows.md`), is only the fallback: a window or asset that will not open (`folders_open` returns through `pod_home_open(HOME_FOLDER)`).
 No hook; everything runs from the page's widgets and timers.
 
 ## How the stock page lists, enters and plays (read from the binary)

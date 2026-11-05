@@ -36,7 +36,6 @@ CARD_DIR = '/mnt/mmc/.m1plus'
 MIX_DIR = CARD_DIR + '/daily-mix'
 MIX, MIX_TMP, ART, ART_TMP = MIX_DIR + '/tracks', MIX_DIR + '/tracks.tmp', MIX_DIR + '/art', MIX_DIR + '/art.tmp'
 SET, SET_TMP = '/mnt/data/m1plus/home-daily-mix', '/mnt/data/m1plus/home-daily-mix.tmp'
-KILL_SD = '/mnt/mmc/m1plus-off'
 EVT_DOWN, EVT_UP, EVT_ABORT = O['EVT_POINTER_DOWN'], O['EVT_POINTER_UP'], O['EVT_POINTER_ABORT']
 EVT_BG, EVT_FG, EVT_DESTROY, EVT_AFTER_PAINT, EVT_CLICK = O['EVT_WINDOW_TO_BG'], O['EVT_WINDOW_TO_FG'], O['EVT_DESTROY'], O['EVT_AFTER_PAINT'], O['EVT_CLICK']
 CLS_LIB, CLS_REC, CLS_OFT, CLS_FAV, CLS_ALB = 0xf001, 0xf007, 0xf008, 0xf00a, 0xf003
@@ -789,8 +788,6 @@ def run(ctx):
         m_ = DM(); m_.fs[MIX] = good; m_.fs[ART] = art_ok
         for k_, v_ in kw.items(): setattr(m_, k_, v_)
         return m_
-    m_ = plain(); m_.fs[KILL_SD] = b''; m_.start_dm()
-    expect(not m_.up() and not m_.timers, 'the kill switch file: nothing is looked up, nothing shown, no timer')
     m_ = plain(); m_.widgets.pop('pod_dm_card'); m_.start_dm()
     expect(not m_.up() and not m_.timers, 'a missing widget: the card is never shown')
     for ev in (EVT_DESTROY, EVT_BG, EVT_FG, EVT_AFTER_PAINT, EVT_DOWN, EVT_UP, EVT_ABORT, EVT_CLICK):

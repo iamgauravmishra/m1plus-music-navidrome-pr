@@ -698,7 +698,7 @@ static void mb_blur_setup(void) {
 /* The Home instance of the menu is up (patch/home.c, after the list took the whole window). */
 void minibar_start(void *win) {
     void *fade;
-    if (!win || home_off()) return;
+    if (!win) return;
     /* the Home instance has no navbar (home.c hid it): the fade under the bar (img_nb_fade, a sibling of the list at y 50) goes with it, or it would
      * float over the list as a dark band with a sharp top edge (V2.1oAB device). Hidden and insensitive, as the bar. */
     fade = widget_lookup(win, "img_nb_fade", 1);

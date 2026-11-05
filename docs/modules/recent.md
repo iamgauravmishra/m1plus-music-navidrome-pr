@@ -71,8 +71,7 @@ Recording runs whether or not the shelf is switched on (the switch only shows or
 
 ## The shelf (`recent_start`, `rc_*`)
 
-`home_menu_opened` (patch/home.c) calls `recent_start(win)` after `minibar_start` for the Home instance only (when `hm_fill_window` found the navbar and the list). Kill switch
-(`home_off()`): nothing is looked up.
+`home_menu_opened` (patch/home.c) calls `recent_start(win)` after `minibar_start` for the Home instance only (when `hm_fill_window` found the navbar and the list).
 
 - **Start** looks up `pod_shelf`, `pod_scrollview` and the two style labels `pod_sh_title` / `pod_sh_sub`, registers `EVT_DESTROY`, `EVT_WINDOW_TO_BG`, `EVT_WINDOW_TO_FG` on the window and
   `EVT_AFTER_PAINT`, `EVT_POINTER_DOWN`, `EVT_POINTER_UP`, `EVT_POINTER_ABORT` on the shelf, arms a **one-shot `RC_FIRST_MS` (150 ms)**, registers `EVT_SCROLL` on the list (refused: the covers are then made
@@ -162,7 +161,7 @@ switch row in Spanish (202 px of 195) and Ukrainian (197 of 195); the row uses t
 
 ## Failure behaviour (every one is the plain menu)
 
-The kill switch, a missing widget (shelf, list, either style label), a refused `widget_on` (any of the seven), no timer, a menu asset that is not ours (a row missing: `menu_shelf` puts the visibility back),
+A missing widget (shelf, list, either style label), a refused `widget_on` (any of the seven), no timer, a menu asset that is not ours (a row missing: `menu_shelf` puts the visibility back),
 an unreadable or malformed file, the switch off: the shelf is never shown and nothing moves. No bitmap or a cover that does not decode: the shelf shows with its texts, or the placeholder / grey. An album that
 is gone from the library: a tap does nothing. Nothing runs in the main loop; nothing but this runs at paint but `rc_on_paint` (resident bitmaps and text draws).
 

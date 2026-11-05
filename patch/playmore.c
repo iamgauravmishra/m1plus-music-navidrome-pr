@@ -15,7 +15,7 @@
  * One hook, dialog_playmore_dialog_init (0x479cc4): run when the dialog is built (a tap on Now Playing's More button, never
  * at boot or in the main loop). m1plus_playmore_init runs the stock init to completion (it binds every row's handler and the
  * speed / A-B widgets, which keep their stock handlers: we move rows, we do not replace behaviour; it also pins the sheet at
- * y 130) and then, unless the kill switch /mnt/mmc/m1plus-off exists and every widget of the asset is there, arranges page 1
+ * y 130) and then, if every widget of the asset is there, arranges page 1
  * and anchors the sheet. Everything fallible (the widget lookups, the handlers, the labels' texts) is done before the first
  * row moves, so any failure leaves the stock seven rows (pod_more, pod_back, pod_tape and pod_vinyl stay hidden and insensitive in the asset).
  *
@@ -337,7 +337,6 @@ static void pm_start(void *dlg) {
     void *more_label, *back_label, *speed_label, *note_label, *tape_label, *vinyl_label, *goep_label, *art_label,
         *track;
     unsigned i;
-    if (access(KILL_SD, F_OK) == 0) return;
     if (pm.dlg) memset(&pm, 0, sizeof pm); /* an earlier dialog that never said it was gone */
     pm.dlg = dlg;
     pm.lv = widget_lookup(dlg, "playmore_listview", 1);

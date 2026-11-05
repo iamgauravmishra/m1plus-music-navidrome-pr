@@ -22,8 +22,7 @@ Evidence tags: **[S]** static (read from the stock code), **[E]** emulated (Unic
   | Songs, no rail (a list, or an order with no sections) | x 266..310 | 262 (was 296) |
   | Songs, A-Z rail shown | x 240..284 (`RM_MORE_RIGHT_RAIL`: flush with the rail's touch column, which starts at 284); the "..." right-aligned in it | 236 (26 px narrower) |
 
-  Select mode has no "...": the text ends where it used to and a tap marks the row. The kill switch (`/mnt/mmc/m1plus-off`) and an asset without the menu's widgets also leave the old rows.
-  (With the kill switch on the album page does not open at all: `album_open` refuses.) The state is read once, when the page opens (`rowmenu_bind`), and again at every open of the menu.
+  Select mode has no "...": the text ends where it used to and a tap marks the row. An asset without the menu's widgets also leaves the old rows. The state is read once, when the page opens (`rowmenu_bind`), and again at every open of the menu.
 - **Tap**: the page's own press rules. DOWN in the zone remembers it (no press fill: only a tap elsewhere in the row highlights), ABORT (the scroll_view took a drag) forgets it, UP within
   `SC_DRAG_PX` 10 px of the press, on the same row and still in the zone opens the menu. A drag, a scroll, a press that moves 10 px or more, a press that began in the zone and ended off it
   and a release on the title block, a section header or the air below the last row open nothing. A press that began elsewhere in the row and moved a few pixels into the zone is a row tap
@@ -72,7 +71,7 @@ The menu also closes when the page reads its list again (`sg_load` / `ab_load`: 
 
 `asset_tests` (both assets: the menu last; the sheet's place, rows, glyphs, labels, hairlines; `rm_glass` and the glyph PNGs are the generator's; white labels >= 7:1 on the glass over black and over
 white under the dim, at rest and pressed; the "..." 6.2:1 on black; the Developer rows, their ids, texts and `upnext_test` gone; every text in 13 languages),
-`paint_tests` (the "..." at the right place (right-aligned beside the rail, centred without it and on the album page); the text widths 162 / 188 / 220; none in select mode, with the kill switch or without the widgets;
+`paint_tests` (the "..." at the right place (right-aligned beside the rail, centred without it and on the album page); the text widths 162 / 188 / 220; none in select mode, without the widgets;
 the bitmap's pixels), `touch_tests` (tap in the zone, one pixel left of it, first pixel of it, a drag, an abort, a press that leaves the zone, the title block, a section header, select mode, both pages),
 `menu_tests` (the sheet shown in the asset's place for rows on both pages, nothing moved or resized; every label of the 13 locales fits 250 px with the real font; Play Next / Play After with every status:
 the call, the one-row deque, destroy, close, toast and nothing else opened; Add to Playlist with our picker and with the stock fallback: class, count and exactly one mark, a second Add carries only its own row; the
@@ -92,5 +91,4 @@ Use Songs (a library with sections and the rail), a playlist, Favourites and an 
 7. **Refusals**: while a stream, a folder play, a podcast or with the DLNA switch on and Wi-Fi connected: the toast of each; nothing changes in the queue.
 8. **Add to Playlist**: the picker opens for that song alone (the playlist gets only it; a duplicate is skipped), returns to the page, the list is the same.
 9. **Select mode**: no "..." and the text wide again; tapping rows still marks them. Leaving it brings the "..." back.
-10. **Kill switch**: with `/mnt/mmc/m1plus-off`, the stock pages show (nothing of this).
-11. A long list: the menu on the 1st and the 500th row; scroll with the menu closed after use (no stuck press fill).
+10. A long list: the menu on the 1st and the 500th row; scroll with the menu closed after use (no stuck press fill).

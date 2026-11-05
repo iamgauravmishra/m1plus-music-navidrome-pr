@@ -43,7 +43,7 @@ layouter's vtable slot (`0x904924`, layout fn `0x63a444`).
 
 **The row fit.** `compact_set_row_layout(row, params)` calls the stock `widget_set_children_layout`,
 then, if it succeeded, the layouter is the stock default one (checked at run time and build time) and
-the kill switch is absent, points it at a copy of the default vtable in `.scratch` whose layout slot
+its vtable is the pinned one, points it at a copy of the default vtable in `.scratch` whose layout slot
 is `compact_row_layout`, which on each layout: finds the text (first `hscroll_label`, or the first
 child holding one), gives it the row width minus left margin, right margin (at least 12) and every
 other visible child's width + spacing; lays `list_item` rows out 4 px short so children sit on the
@@ -58,7 +58,7 @@ Most played, Recently added, a playlist's songs) and the queue show, left of the
 (`list_get_left_icon` `0x4d972c`: `icon_flac`, `icon_mp3` ... one picture for a library in one format) or, on the playing row,
 `icon_playing`. Both rebinds (`0x5283a0`, `0x539244`) end both paths in `image_base_set_image(img_icon, name)` (`0x5284e0`,
 `0x53935c`); that `jalr` becomes `jal rows_track_icon` (its `lw $t9` and the two argument moves pinned). It makes the stock call,
-then, unless the kill switch exists, hides `img_icon` (visible and sensitive off) for any name but `icon_playing` and the place
+then hides `img_icon` (visible and sensitive off) for any name but `icon_playing` and the place
 icons (`icon_folder`, `icon_playlist`, `icon_tf`, `icon_otg`). `widget_set_visible` relayouts the row, whose fit skips
 the hidden child, so the text container starts at the 12 px margin and runs to 298. The playing row (`icon_playing`) keeps the
 widget as its marker: the image becomes `np_row_playing` (40x20, a 20 px wave at its right end, added with the `np_*` images), drawn
@@ -66,7 +66,7 @@ widget as its marker: the image becomes `np_row_playing` (40x20, a 20 px wave at
 `0x66c338` when only the order changed; both pinned in `tools/pod.py`, parent at widget offset `0x44`): the flow (the row fit, or the
 queue's stock `default(r=1,c=0,x=12,s=8)`) then puts the title at x 12 (238 px: the row fit subtracts the 40 px widget and its spacing;
 the queue's title is 238 by its immediate) and the 40 px marker widget at 258..298, wave at 278..298. A recycled row rebound to another
-track hides the widget and restacks it back before the text. Rows with a check box keep it first. The kill switch leaves the stock call.
+track hides the widget and restacks it back before the text. Rows with a check box keep it first.
 The same function serves a third call site, the Artists / Genres / Composers rebind (`0x536634`): its four paths (`icon_playing`,
 `icon_artist`, `icon_composer`, `icon_genre`: one placeholder per page, no per-item art) join at `0x5367ac`, and the `jalr` at
 `0x5367b0` becomes `jal rows_track_icon` (`0x5367ac` and the delay slot `0x5367b4` pinned). Those rows end in the chevron button
@@ -82,8 +82,7 @@ the cover task list and loops when empty; its producers are not reachable at boo
 is the thumbnail size constant (tmpfs files, read only by the Albums and Search album rows, both now 52
 px). No prologue is rewritten, the payload runs only where the patched instruction ran, `$gp` is
 reloaded by every patched caller from its stack slot (checked at all ten sites), and nothing is hidden
-or shown (hit testing unchanged). The kill switch `/mnt/mmc/m1plus-off` turns the fit off (stock layouter);
-the 46 immediates and 3 nops are static, so the way back from them is a stock re-flash.
+or shown (hit testing unchanged). The 46 immediates and 3 nops are static, so the way back from them is a stock re-flash.
 
 ## Row assets
 

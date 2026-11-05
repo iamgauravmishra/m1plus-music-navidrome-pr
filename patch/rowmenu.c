@@ -116,7 +116,7 @@ int rowmenu_bind(rowmenu_t *rm, void *win) {
     }
     rm_show(rm->scrim, 0);
     rm_show(rm->card, 0);
-    if (!ok || home_off()) return 0;
+    if (!ok) return 0;
     rm->dots = rm_make_dots(win);
     rm->on = rm->dots != (void *)0;
     return rm->on;
@@ -140,7 +140,7 @@ void rowmenu_paint(void *canvas, const rowmenu_t *rm, int right, int flush, int 
 
 int rowmenu_open(rowmenu_t *rm, int row, void *rec, rowmenu_add_fn add) {
     void *d;
-    if (!rm->on || rm->open || !rec || home_off()) return 0;
+    if (!rm->on || rm->open || !rec) return 0;
     d = _create_deque("stSongInfo");
     if (!d) return 0;
     deque_init(d);

@@ -637,7 +637,7 @@ static int rc_on_foreground(void *ctx, void *e) {
 
 /* The Home instance of the menu is up (patch/home.c, after the list took the whole window). */
 void recent_start(void *win) {
-    if (!win || home_off()) return;
+    if (!win) return;
     if (rc.win) rc_stop(); /* an earlier window that never said it was gone */
     rc.win = win;
     rc.shelf = widget_lookup(win, "pod_shelf", 1);

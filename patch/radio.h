@@ -153,9 +153,9 @@ void rd_fetch_cancel(void); /* Return while loading: the transfer ends within a 
 int rd_fetch_take(rd_list_t *l, int *err);
 void rd_fetch_drop(void); /* the page is closing: cancel, wait for the worker and free */
 
-/* Radio Now Playing (patch/radionp.c). rn_open: 0 opened or already up, -1 not (kill switch, no memory). */
+/* Radio Now Playing (patch/radionp.c). rn_open: 0 opened or already up, -1 not (no memory). */
 int rn_open(void);
-/* Station Info (patch/radioinfo.c), opened from Radio Now Playing's sheet for the station the engine has: 0 opened or already up, -1 not (kill switch, no station, no memory). */
+/* Station Info (patch/radioinfo.c), opened from Radio Now Playing's sheet for the station the engine has: 0 opened or already up, -1 not (no station, no memory). */
 int sinfo_open(void);
 /* A Now Playing entry while a station connects or plays: opens Radio Now Playing, 1; else 0 (stock's player is for the caller). */
 int rn_open_if_active(void);

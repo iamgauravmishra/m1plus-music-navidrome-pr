@@ -6,7 +6,6 @@ import awtk_style, awtk_ui, mod_font, mod_nowplaying as mn
 
 nowplaying = sibling('nowplaying')
 WIN = nowplaying.WIN
-KILL = nowplaying.KILL
 POOL, ANCHOR, LINE_H, GAP, VIEW_H, W = (O[k] for k in ('LY_POOL', 'LY_ANCHOR', 'LY_LINE_H', 'LY_GAP', 'LY_VIEW_H', 'LY_W'))
 PITCH = LINE_H + GAP
 SLACK, SLACK_CJK, SNAP, FRAME, SPRING, OFF_MAX = O['LY_WRAP_SLACK'], O['LY_WRAP_SLACK_CJK'], O['LY_SNAP_LINES'], O['LY_FRAME_MS'], O['LY_SPRING_MS'], O['LY_OFF_MAX']
@@ -427,8 +426,6 @@ def start_tests(ctx):
     m.call(PSYMS['np_on_destroy'], a0=WIN, a1=0); m.calls = []; m.tick(); expect(('get_playtime',) in m.calls, 'the earlier page\'s destroy leaves the new one running')
 
     # fall backs
-    m = LyMachine(SONG); m.present.add(KILL); m.init()
-    expect('label_create' not in m.names() and 'image_create' not in m.names() and m.props.get((m.view, 'visible')) is None, 'the kill switch: nothing is made, the stock list is untouched')
     m = LyMachine(SONG); del m.widgets['np_lyrics']; m.init(); m.tick()
     expect('label_create' not in m.names() and m.props.get((m.view, 'visible')) is None and ('get_playtime',) not in m.calls, 'no np_lyrics in the asset: stock only, and no lyric work')
     m = LyMachine(SONG); del m.widgets['view_lrc']; m.init()

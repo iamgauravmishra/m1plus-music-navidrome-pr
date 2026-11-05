@@ -16,7 +16,6 @@ SC_YOFF = O['SC_YOFF']
 LAYER, TITLE, M3U = (pod.DATA[k][0] for k in ('FOLDER_LAYER', 'FOLDER_TITLE', 'FOLDER_M3U'))
 SHOWLIST, G_CLASS, SEL_VEC, NAV_TITLE = (pod.DATA[k][0] for k in ('PDEQ_SHOWLIST', 'G_CLASS_TYPE', 'SEL_VEC', 'NAV_TITLE'))
 UI = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_folders.bin') if WORK else None
-KILL = '/mnt/mmc/m1plus-off'
 T_LIST, T_SD, T_OTG, T_DIR, T_FILE = 1, 2, 3, 4, 8
 WIDGETS = ('view_grid', 'btn_return', 'btn_backtoplayer', 'btn_select', 'btn_selall', 'btn_play', 'btn_shuffle', 'sg_add', 'sg_del', 'label_title', 'sg_title', 'label_status',
            'label_row_title', 'sg_bar', 'img_nb_fade')
@@ -243,9 +242,6 @@ def open_tests(ctx):
     m = folder_machine(window=0)
     open_page(m)
     expect(('stock_resume', str(pod_pages.HOME_FOLDER)) in m.calls and 'folder_enter' not in m.names(), 'a window that will not open leaves the stock folder page')
-    m = folder_machine(); m.present.add(KILL)
-    open_page(m)
-    expect(('stock_resume', str(pod_pages.HOME_FOLDER)) in m.calls and 'window_open' not in m.names(), 'the kill switch file leaves the stock folder page')
     m = folder_machine(); m.widgets.pop('sg_bar')
     open_page(m)
     expect(('navigator_back',) in m.calls and 'folder_enter' not in m.names(), 'an asset that is not ours: the page leaves again, the stock state untouched')

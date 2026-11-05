@@ -1,6 +1,6 @@
 """The Queue page (patch/queuepage.c, docs/modules/queue.md): our own page in place of the stock queue drawer. The built asset (the list that is the whole window, the header's
 widgets and the icon-only mode buttons at the numbers of patch/offsets.inc, the glass Back last, touches by demo's own hit test), Now Playing's queue button (the click handler bound
-after the stock init and what each of its answers does), the open and its fallbacks to the stock drawer (kill switch, empty queue, streams, a window that will not open, a foreign
+after the stock init and what each of its answers does), the open and its fallbacks to the stock drawer (empty queue, streams, a window that will not open, a foreign
 asset), the header (the playing track, the cover from the cache), Up Next (the tracks after the playing one, texts, covers, the press fill, the hairline, the grey line when nothing
 follows), the loader, the taps (start_playqueue with the queue index as the stock drawer's row handler calls it; drags and the header play nothing), the mode buttons (Shuffle
 toggles, Repeat cycles off / all / one, the buttons' look), the refresh timer (the player moves on, the mode changes elsewhere, the queue is replaced, a dark screen) and the destroy.
@@ -27,7 +27,6 @@ WIN_H, TOP, ROW, SY0 = O['QP_WIN_H'], O['QP_TOP'], O['LIST_ROW_H'], 30   # SY0: 
 SC_YOFF = O['SC_YOFF']
 PLAY_QUEUE, FORCE = pod.DATA['PLAY_QUEUE'][0], pod.DATA['FORCE_REFRESH'][0]
 UI = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_queue.bin') if WORK else None
-KILL = '/mnt/mmc/m1plus-off'
 FLAG_FILE = '/mnt/data/m1plus/playback-shuffle'
 flag_on = lambda m: m.fs.get(FLAG_FILE) == b'1\n'   # the Shuffle flag as saved
 WIDGETS = ('view_queue', 'btn_return', 'btn_shuffle', 'btn_repeat', 'label_status', 'label_row_title', 'label_row_sub', 'qp_title', 'qp_artist', 'qp_empty', 'qp_head', 'btn_qclear', 'label_title')
@@ -233,7 +232,7 @@ def open_tests(ctx):
     r = m.call(PSYMS['np_on_queue'], count=900000000)
     expect(r == O['RET_STOP'] and ('window_open', 'm1plus_queue') in m.calls, f'the queue button opens our page and stops the stock handler (RET_STOP, {r})')
     destroy(m)
-    for why, setup in (('the kill switch', lambda m: m.present.add(KILL)), ('an empty queue', lambda m: m.setword(PLAY_QUEUE, m.new_deque([]))), ('no queue at all', lambda m: m.setword(PLAY_QUEUE, 0)),
+    for why, setup in (('an empty queue', lambda m: m.setword(PLAY_QUEUE, m.new_deque([]))), ('no queue at all', lambda m: m.setword(PLAY_QUEUE, 0)),
                        ('no track at the position', lambda m: setattr(m, 'play_pos', -1)), ('a position past the queue', lambda m: setattr(m, 'play_pos', 99)),
                        ('a stream (play type 2)', lambda m: setattr(m, 'ptype', 2)), ('play type 3', lambda m: setattr(m, 'ptype', 3)),
                        ('play type 0xf0', lambda m: setattr(m, 'ptype', 0xf0)), ('play type 0xf1', lambda m: setattr(m, 'ptype', 0xf1)),
@@ -666,12 +665,7 @@ def clear_tests(ctx):
     expect(not flag_on(m) and recs(m) == kept and titles(m) == NAMES[:2] and not [c for c in m.calls if c[0] == 'mclSetPlayPos'], 'Shuffle off afterwards restores nothing (the order is dropped) and does not touch the queue')
     destroy(m)
 
-    # refusals: kill switch (engine and button), a stream
-    m = opened(n=6, pos=2); m.present.add(KILL); before = recs(m)
-    r = m.call(PSYMS['pod_clear_upnext'], count=900000000); click(m, 'btn_qclear')
-    expect(r == 0xffffffff and recs(m) == before and not [c for c in m.calls if c[0] == 'pop_back'], 'the kill switch: the engine answers -1, the queue is untouched')
-    destroy(m)
-    m = opened(n=6, pos=2); m.ptype = 2; before = recs(m)
+    m = opened(n=6, pos=2); m.ptype = 2; before = recs(m)  # refusals: a stream
     click(m, 'btn_qclear')
     expect(recs(m) == before, 'a stream play type: the tap does nothing')
     m.setword(PLAY_QUEUE, m.new_deque(before)); tick(m)

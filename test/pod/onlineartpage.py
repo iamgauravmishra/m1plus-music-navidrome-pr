@@ -6,7 +6,7 @@ scroll position kept); the Covers tab (the state line, one thumbnail decoded per
 picture only), Back changes nothing, the pill (Use This Cover / Replace Cover) saves into the cache keys and the folder, then the grid with that cover marked current; failures of the fetch and the pick;
 the Lyrics tab (rows with the title, the grey line and the Synced badge, the state line); a tap on a row opens the full text without its tags, wrapped and scrolling, the pill writes <track>.lrc (Save /
 Replace, the extension rule, an existing file never touched before the tap, a failed write), then the rows with that one marked Saved; the downloads pausing and resuming; the page's life (one timer,
-Back and Now Playing bound, the worker cancelled on destroy, a second open, the kill switch, no track, a wrong asset)."""
+Back and Now Playing bound, the worker cancelled on destroy, a second open, no track, a wrong asset)."""
 import os
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 import awtk_ui
@@ -18,7 +18,6 @@ PCS = sibling('pcsearch'); OA = sibling('onlineart')   # noqa: F821  (sibling: t
 PCN, fn = PCS.PCN, PCS.fn
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
 UI = os.path.join(RAW, 'ui', 'm1plus_onlineart.bin')
-KILL = '/mnt/mmc/m1plus-off'
 WIN = 0x24200000
 EVT_DOWN, EVT_UP, EVT_ABORT, EVT_PAINT, EVT_DESTROY, EVT_CLICK = O['EVT_POINTER_DOWN'], O['EVT_POINTER_UP'], O['EVT_POINTER_ABORT'], O['EVT_AFTER_PAINT'], O['EVT_DESTROY'], O['EVT_CLICK']
 NAMES = ('oa_chips', 'oa_chip_hl', 'oa_sep', 'oa_listview', 'oa_view', 'oa_status', 'oa_es_icon', 'oa_es_text', 'oa_es_retry', 'oa_hint', 'oa_dh_title', 'oa_dh_sub', 'oa_lsave', 'oa_dc', 'oa_dc_art', 'oa_dc_name', 'oa_dc_artist', 'oa_dc_source', 'oa_save',
@@ -384,11 +383,9 @@ def status_tests(ctx):
 
 def failure_tests(ctx):
     expect = ctx.expect
-    # no track, a track without a path, kill switch, an asset that is not ours, a window that will not open
+    # no track, a track without a path, an asset that is not ours, a window that will not open
     m = AM(OA.Site()); m.setword(pod.DATA['PLAY_QUEUE'][0], 0)
     expect(m.open() == 0xffffffff and ('window_open', 'm1plus_onlineart') not in m.calls and 'timer_add' not in [c[0] for c in m.calls], 'nothing playing: -1, no window')
-    m = AM(OA.Site(), present=set()); m.present.add(KILL); m.present.add(PCN.CA)
-    expect(m.open() == 0xffffffff and ('window_open', 'm1plus_onlineart') not in m.calls, 'kill switch: -1, no window')
     m = AM(OA.Site()); m.playing(path='')
     expect(m.open() == 0xffffffff and ('window_open', 'm1plus_onlineart') not in m.calls, 'a track without a path: -1')
     m = AM(OA.Site()); m.windows['m1plus_onlineart'] = 0

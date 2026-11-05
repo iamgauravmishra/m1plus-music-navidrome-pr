@@ -10,7 +10,7 @@
  *
  *   entry     album_open(class, row), called by cc_open_album (patch/covercache.c) with the album row of the list the caller loaded: loadAlbumdetailList(class, row) leaves
  *             the album's tracks in *pdeq_showlist and the browsing record in classinfo (class 0xff10 an album of the library, 0xff11 an album of an artist, 0xff14 a composer's),
- *             which the page snapshots and puts back before every query and play (another page's query overwrites it). Anything the page cannot show (the kill switch, the
+ *             which the page snapshots and puts back before every query and play (another page's query overwrites it). Anything the page cannot show (the
  *             "All albums" card, a window that will not open) returns -1 and the caller opens the stock albuminfo_page.
  *   cover     the Cover Flow cache file of the album (/mnt/mmc/.m1plus/covers/<key>-168.jpg, the key of the album row), box-reduced to 160 px with its corners cut in the alpha;
  *             a file that is not there is made by the cache worker (one job, polled), an empty "no art" marker leaves the placeholder disc and a black page.
@@ -437,7 +437,7 @@ static void ab_foot(void) {
 static void ab_durations(void) {
     unsigned i, size, total = 0, miss = 0, bad = 0;
     int v;
-    if (!ab.count || !ab.list || ab.own || ab.lown || ab.dur_timer || ab.dur || home_off() || !pod_card_mounted())
+    if (!ab.count || !ab.list || ab.own || ab.lown || ab.dur_timer || ab.dur || !pod_card_mounted())
         return; /* (no card, or USB mode: no table, nothing measured) */
     if (!ab.lheld) {
         dur_acquire();
@@ -859,7 +859,7 @@ static int ab_on_destroy(void *ctx, void *e) {
 int album_open(unsigned cls, void *row) {
     unsigned key;
     int fresh;
-    if (ab.win || !row || home_off() || I(row, REC_ID) == ID_ALL_SONGS) return -1;
+    if (ab.win || !row || I(row, REC_ID) == ID_ALL_SONGS) return -1;
     key = cc_album_key(row);
     loadAlbumdetailList((int)cls, row);
     memset(&ab, 0, sizeof ab);
@@ -907,7 +907,7 @@ int album_open(unsigned cls, void *row) {
         ab.mark[0] = ab.mark[1] =
             (void *)0; /* (one that did not decode is freed with the other at destroy: the pair is all or none) */
     ab.wave = ab_make_wave(ab.win);
-    rowmenu_bind(&ab.rm, ab.win); /* the rows' "..." menu (optional: no widgets or the kill switch means no "...") */
+    rowmenu_bind(&ab.rm, ab.win); /* the rows' "..." menu (optional: no widgets means no "...") */
     widget_on(ab.view, EVT_POINTER_DOWN, ab_on_down, (void *)0);
     widget_on(ab.view, EVT_POINTER_UP, ab_on_up, (void *)0);
     widget_on(ab.view, EVT_POINTER_ABORT, ab_on_abort, (void *)0);

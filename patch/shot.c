@@ -196,10 +196,6 @@ static int shot_grab(const void *timer) {
     const char *msg;
     int rc;
     (void)timer;
-    if (home_off()) {
-        finish();
-        return RET_OK;
-    }
     rc = capture();
     finish();
     if (rc == R_OK)
@@ -214,10 +210,6 @@ static int shot_grab(const void *timer) {
 
 static int shot_tick(const void *timer) {
     (void)timer;
-    if (home_off()) {
-        finish();
-        return RET_OK;
-    }
     if (--sh.left > 0) return RET_REPEAT;
     indicator(0); /* out of the frame before it is read */
     sh.timer = 0; /* this timer ends below */
@@ -248,7 +240,6 @@ static int shot_relabel(const void *timer) {
  * tap does nothing. */
 void shot_start(void) {
     int secs, code;
-    if (home_off()) return;
     if (sh.phase == SH_COUNT) {
         sh.phase = SH_ASK_CANCEL;
         if (pod_confirm(TR("Cancel the screenshot?")) && sh.phase == SH_ASK_CANCEL) {
@@ -261,8 +252,7 @@ void shot_start(void) {
     }
     if (sh.phase != SH_IDLE) return;
     sh.phase = SH_ASK;
-    if (!pod_confirm(TR("Take a screenshot?")) ||
-        home_off()) { /* step 1: plain Yes / No (the back key does not close it) */
+    if (!pod_confirm(TR("Take a screenshot?"))) { /* step 1: plain Yes / No (the back key does not close it) */
         sh.phase = SH_IDLE;
         return;
     }
@@ -270,7 +260,7 @@ void shot_start(void) {
     timer_add(shot_relabel, (void *)0, SHOT_RELABEL_MS); /* a refused timer only leaves the buttons Yes / No */
     code = pod_confirm_code(TR("Take a screenshot in:"));
     secs = code == SHOT_QUIT_LONG ? SHOT_SECONDS_LONG : code == SHOT_QUIT_SHORT ? SHOT_SECONDS : 0;
-    if (!secs || home_off()) {
+    if (!secs) {
         sh.phase = SH_IDLE;
         return;
     }

@@ -4,7 +4,6 @@ make, hit tests with demo's own widget_find_target, the contrast of the text on 
 import os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
-KILL_SD, KILL_DATA = '/mnt/mmc/m1plus-off', '/mnt/data/m1plus-off'
 WIN = 0x24000000
 S = O['MB_ART']
 EVT_DESTROY, EVT_AFTER_PAINT, EVT_CLICK = O['EVT_DESTROY'], O['EVT_AFTER_PAINT'], O['EVT_CLICK']
@@ -672,9 +671,6 @@ def run(ctx):
     expect(p[-1] == 'pod_mb_play', f'paused: the play button is ({p})')
 
     # ------------------------------------------------------------------ every failure falls back to the plain menu
-    for path in (KILL_SD, KILL_DATA):
-        m = BM(); m.track(); m.present.add(path); calls = m.start()
-        expect(not m.timers and not [c for c in calls if c[0] in ('widget_on', 'timer_add', 'widget_lookup')], f'{path}: no lookup, no handler, no timer')
     for gone in list(pod_ui.MB_NAMES) + ['pod_scrollview', 'pod_pad']:
         m = BM(); m.track()
         m.widgets.pop(gone)

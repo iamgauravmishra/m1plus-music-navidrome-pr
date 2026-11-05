@@ -7,7 +7,7 @@ its words and pill) in all 13 languages and at their fixed places (tools/pod_ui.
 Download); the popup (title, percentage, bar, Cancel; Cancelling... until the worker has stopped; Back is Cancel; errors close it and show on the page); the hand-over to the stock TF card update (a pinned
 call, never a page) when a download completes with the page in front and not otherwise; Check Again and a second download over an existing update.bin (the old file stays until the new one is verified, and
 stays on a failure or a cancel); waiting for the job slot; the power timers kept from firing during a job; the page's life (one timer, Back and Now Playing bound, the worker cancelled on destroy, a second
-open, the kill switch, a wrong asset, the state kept for a downloaded update and dropped for an old answer)."""
+open, a wrong asset, the state kept for a downloaded update and dropped for an old answer)."""
 import os
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 import awtk_ui
@@ -18,7 +18,6 @@ PCS = sibling('pcsearch'); UP = sibling('update')   # noqa: F821  (sibling: the 
 PCN, fn = PCS.PCN, PCS.fn
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
 UI = os.path.join(RAW, 'ui', 'm1plus_update.bin')
-KILL = '/mnt/mmc/m1plus-off'
 WIN = 0x24300000
 EVT_DESTROY, EVT_CLICK, EVT_FG, EVT_BG = O['EVT_DESTROY'], O['EVT_CLICK'], O['EVT_WINDOW_TO_FG'], O['EVT_WINDOW_TO_BG']
 POPUP = ('up_pd_scrim', 'up_pd_card', 'up_pd_title', 'up_pd_name', 'up_pd_count', 'up_pd_fill', 'up_pd_cancel')
@@ -612,12 +611,10 @@ def life_tests(ctx):
     expect(fn(m, 'pn_job_busy') == 1 and gone, 'destroy: the timer goes, the running worker is asked to stop')
     m.work()
     expect(fn(m, 'pn_up_state') == U['IDLE'] and fn(m, 'pn_job_busy') == 0, 'and it ends without a trace (a cancelled check is idle)')
-    # a second open, the kill switch, no timer, a wrong asset
+    # a second open, no timer, a wrong asset
     m = UM(UP.Site()); m.open()
     m.calls = []
     expect(m.call(PSYMS['update_open'], count=1000000) == 0 and not [c for c in m.calls if c[0] == 'window_open'], 'a second open while the page is up does nothing (0)')
-    m = UM(UP.Site()); m.present.add(KILL)
-    expect(m.open() == 0xffffffff and not [c for c in m.hist if c[0] == 'window_open'], 'the kill switch: -1, no window')
     m = UM(UP.Site(), window=0)
     expect(m.open() == 0xffffffff, 'a window that will not open: -1')
     m = UM(UP.Site(), timer_fail=True)

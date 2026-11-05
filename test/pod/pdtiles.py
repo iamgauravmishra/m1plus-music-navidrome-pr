@@ -7,7 +7,6 @@ import os, random, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 FILE, TMP = '/mnt/data/m1plus/pulldown-tiles', '/mnt/data/m1plus/pulldown-tiles.tmp'
-KILL = '/mnt/mmc/m1plus-off'
 IMG = ('img_wifiswitch', 'img_btswitch', 'img_keylockswitch', 'img_gainswitch', 'img_usbmode', 'img_outputswitch', 'img_playset', 'img_sysset')
 LAB = ('label_wifi', 'label_bt', 'label_lock', 'label_gain', 'label_usbmode', 'label_outputway', 'label_playset', 'label_sysset')
 UI = os.path.join('rootfs', 'release/assets/default/raw/ui/dialog/dropdown_dialog.bin')
@@ -102,7 +101,7 @@ def hook_tests(ctx):
     offs = {(g[LAB[t]][0] - g[IMG[t]][0], g[LAB[t]][1] - g[IMG[t]][1]) for t in range(N)}
     expect(offs == {(-10, 54)} and all(g[n][2:] == (71, 40) for n in LAB), f'every caption is 71 x 40 at the same offset from its tile ({offs})')
 
-    # -- 2. the stock layout: no file, a bad file, the default, the kill switch, a missing widget, a failed stock init ------
+    # -- 2. the stock layout: no file, a bad file, the default, a missing widget, a failed stock init ------
     default = list(range(N))
     for name, fs in (('no file', None), ('the default file', b'01234567\n'), ('without the newline', b'01234567'), ('the default with an empty hidden part', b'01234567-\n')):
         m = PD(fs=fs); ret = m.open()
@@ -111,8 +110,6 @@ def hook_tests(ctx):
                      ('an empty file', b''), ('too long', b'01234567-0123\n'), ('lower case', b'abc\n'), ('a digit out of range', b'8\n'), ('a space', b'01 2\n'), ('a second line', b'01\n23\n')):
         m = PD(fs=fs); m.open()
         expect(m.touched() == [] and check_layout(m, default) is None, f'{name} ({fs!r}): the stock layout')
-    m = PD(fs=b'3210\n'); m.present.add(KILL); m.open()
-    expect(m.touched() == [] and check_layout(m, default) is None and m.calls[0][0] == 'stock_pulldown_resume', 'the kill switch: stock runs, nothing is arranged')
     m = PD(fs=b'3210\n'); m.init_ret = 0x10; ret = m.open()
     expect(ret == 0x10 and m.touched() == [] and ('widget_lookup', IMG[0]) not in m.calls, 'a stock init that fails: its result is returned and nothing is arranged')
     m = PD(fs=b'3210\n'); ret = m.open(dlg=0)

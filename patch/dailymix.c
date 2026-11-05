@@ -1744,7 +1744,7 @@ static int dm_on_foreground(void *ctx, void *e) {
 
 /* The Home instance of the menu is up (patch/home.c, after the list took the whole window). */
 void dailymix_start(void *win) {
-    if (!win || home_off()) return;
+    if (!win) return;
     if (dm.win) dm_stop(); /* an earlier window that never said it was gone */
     dm.win = win;
     dm.sec = widget_lookup(win, "pod_daily", 1);

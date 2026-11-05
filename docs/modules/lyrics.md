@@ -90,7 +90,7 @@ Called functions are also checked against `FUNCTIONS`; consult `tools/pod.py` fo
 
 All work runs on the UI thread from page timers and listeners. No stock words are written,
 no stock widget is renamed or removed, and no thread or lock is added.
-The kill switch and startup failures preserve the stock list; animation failures snap.
+Startup failures preserve the stock list; animation failures snap.
 Destroy removes timers and ignores stray events.
 
 ## Validation

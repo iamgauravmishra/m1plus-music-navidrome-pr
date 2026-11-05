@@ -14,7 +14,6 @@ import awtk_strings, awtk_style
 from awtk_text import Ttf, StbText
 
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
-KILL = '/mnt/mmc/m1plus-off'
 DIALOG_Y, ROW_H, SCREEN_H, SHEET_H = 130, O['PM_ROW_H'], O['PM_SCREEN_H'], O['PM_PAGE_N'] * O['PM_ROW_H']
 SHEET_Y = SCREEN_H - SHEET_H                     # 180: page 1's sheet sits on the bottom of the screen
 SHEET2_H = O['PM_PAGE2_N'] * ROW_H               # page 2 has five rows (the back header, Speed, A-B repeat, Find Cover & Lyrics, Delete): its sheet is 250 px; page 1 has six (the Cassette Mode and Vinyl Mode rows): 300 px
@@ -285,7 +284,7 @@ def glass_checks(expect, built_ui, stock_ui, lum):
     glass = built_ui.find('pod_glass')
     expect(glass is not None and glass.type == 'image' and built_ui.children[0] is glass and glass.get('sensitive') == 'false' and glass.get('image') == 'pm_sheet'
            and (glass.x, glass.y, glass.w, glass.h) == (0, 0, 320, 250) and glass.get('draw_type') == 'default',
-           'pod_glass is the dialog\'s first child (under the list), an insensitive image of pm_sheet 320 x 250 (page 2\'s glass; the kill switch\'s look)')
+           'pod_glass is the dialog\'s first child (under the list), an insensitive image of pm_sheet 320 x 250 (page 2\'s glass; a failed start\'s look)')
     lv, sv = built_ui.find('playmore_listview'), built_ui.find('playmore_scrollview')
     expect(all(x.get(f'style:{s}:bg_color') == '#00000000' for x in (lv, sv) for s in ('normal', 'disable', 'focused')), 'the list_view and its scroll_view are transparent')
     states = ('normal', 'pressed', 'over', 'disable', 'focused')
@@ -552,7 +551,7 @@ def run(ctx):
     stale.click_back()
     expect(stale.shown() == PAGE1, 'the destroy of another dialog leaves the state alone')
 
-    # -- 7. kill switch and failures: the stock menu ------------------------------------------------------------------------------
+    # -- 7. failures: the stock menu ------------------------------------------------------------------------------
     def untouched(m, what, inert=True):
         moves = [c for c in m.calls if c[0] in ('widget_move', 'widget_resize', 'widget_restack', 'widget_set_visible', 'widget_set_sensitive', 'image_base_set_image')]
         expect(m.shown() == list(range(7)) and m.stacked()[:7] == list(range(7)) and all(m.dead(i) for i in (MORE, BACK, TAPE, VINYL, GOEP, ART)) and m.size(m.dialog) == (320, 350) and m.top() == DIALOG_Y and not moves,
@@ -562,8 +561,6 @@ def run(ctx):
             for w, e, fn, c in m.reg[len(m.stock_reg):]:
                 m.call(fn, a0=c, a1=0, count=400000)
                 expect(not any(x[0] in ('widget_move', 'widget_resize', 'widget_set_visible') for x in m.calls) and m.top() == DIALOG_Y, f'{what}: its leftover {m.name(w)} handler {e:#x} calls nothing')
-    m = PM(); m.present.add(KILL); ret = m.open()
-    untouched(m, 'kill switch'); expect(ret == 0 and ('access', KILL) in m.calls and not any(c[0] == 'widget_lookup' for c in m.calls) and m.reg == m.stock_reg, 'kill switch: nothing but the file check after the stock init')
     m = PM(); m.init_ret = 0x10; ret = m.open()
     untouched(m, 'stock init failed'); expect(ret == 0x10 and m.names() == ['stock_playmore_resume'], 'a failed stock init: its result, nothing else')
     m = PM(); m.call(PSYMS['m1plus_playmore_init'], a0=0, a1=0, count=200000)
@@ -598,8 +595,6 @@ def run(ctx):
     m = PM(); m.open(); m.calls = []
     stale = m.alloc(0x80); m.call(PSYMS['pm_on_tape'], a0=stale, a1=0, count=100000)
     expect('tape_open' not in [c[0] for c in m.calls], 'a click handler left behind for another dialog does nothing')
-    m = PM(); m.present.add(KILL); m.open()
-    expect(m.handlers_of(m.rows[TAPE], O['EVT_CLICK']) == [] and m.dead(TAPE), 'kill switch: no Cassette Mode handler, the row stays hidden and insensitive')
     # the Vinyl row (pm_on_vinyl): the same order, the page first
     m = PM(); m.open()
     expect(m.handlers_of(m.rows[VINYL], O['EVT_CLICK']) == [(PSYMS['pm_on_vinyl'], m.dialog)], 'the Vinyl Mode row has our click handler alone (it has no stock one)')
@@ -612,8 +607,6 @@ def run(ctx):
     m = PM(); m.open(); m.calls = []
     stale = m.alloc(0x80); m.call(PSYMS['pm_on_vinyl'], a0=stale, a1=0, count=100000)
     expect('vinyl_open' not in [c[0] for c in m.calls], 'a Vinyl click handler left behind for another dialog does nothing')
-    m = PM(); m.present.add(KILL); m.open()
-    expect(m.handlers_of(m.rows[VINYL], O['EVT_CLICK']) == [] and m.dead(VINYL), 'kill switch: no Vinyl Mode handler, the row stays hidden and insensitive')
     # Find Cover & Lyrics (pm_on_art, page 2, between A-B repeat and Delete): the page first, the sheet closed once it is up; dimmed and insensitive while the Wi-Fi is off
     m = PM(); m.open()
     expect(m.handlers_of(m.rows[ART], O['EVT_CLICK']) == [(PSYMS['pm_on_art'], m.dialog)] and m.dead(ART), 'the Find Cover & Lyrics row has our click handler alone; on page 1 it is hidden and insensitive')
@@ -640,8 +633,6 @@ def run(ctx):
     m = PM(); m.open(); m.calls = []
     stale = m.alloc(0x80); m.call(PSYMS['pm_on_art'], a0=stale, a1=0, count=100000)
     expect('onlineart_open' not in [c[0] for c in m.calls], 'a Find Cover & Lyrics click handler left behind for another dialog does nothing')
-    m = PM(); m.present.add(KILL); m.open()
-    expect(m.handlers_of(m.rows[ART], O['EVT_CLICK']) == [] and m.dead(ART), 'kill switch: no Find Cover & Lyrics handler, the row stays hidden and insensitive')
 
     # -- 7c. an episode is playing: page 1 is Go to Podcasts and More (patch/playmore.c pm_set, pm_on_goep) ------------------------------
     EP = '/mnt/mmc/Podcasts/Show One/ep1.mp3'
@@ -687,8 +678,6 @@ def run(ctx):
         expect(m.shown() == PAGE1 and all(m.dead(i) for i in HIDDEN1) and m.size(m.dialog) == (320, 300) and m.size(m.glass) == (320, 300), f'{what}: the sheet is the music sheet, six rows, Go to Podcasts hidden')
     m = PM(); m.open()
     expect(m.shown() == PAGE1 and m.dead(GOEP), 'nothing playing: the music sheet')
-    m = PM(); m.play([m.record(path=EP)], 0); m.present.add(KILL); m.open()
-    expect(m.handlers_of(m.rows[GOEP], O['EVT_CLICK']) == [] and m.dead(GOEP), 'kill switch: no Go to Podcasts handler, the row stays hidden and insensitive')
 
     # -- 7b. Look up album opens our album page (patch/playmore.c pm_on_lookup_album) -----------------------------------------------
     FLAG, CLICK, DESTROY = pod.DATA['SONGER_FLAG'][0], O['EVT_CLICK'], O['EVT_DESTROY']
@@ -762,8 +751,6 @@ def run(ctx):
     expect(flag(m) == 0 and opened(m) == [(O['CLASS_ALBUMS'], 1)], f'no album page window to watch after the open: the flag is not left set ({flag(m)})')
     m = PM(); lib(m); m.widget_on_fail = frozenset({DESTROY}); ret = lookup(m)
     expect(ret == RET_STOP and flag(m) == 0, f'the destroy watch refused: the page is open and the flag is not left set ({ret}, {flag(m)})')
-    m = PM(); m.present.add(KILL); m.open()
-    expect(m.handlers_of(m.rows[GO_ALBUM], CLICK) == [(STOCK_CLICK['listitem4'], m.dialog)], 'kill switch: Look up album is the stock handler alone')
 
     # -- 7c. Look up artist opens our Cover Flow artist page (patch/playmore.c pm_on_lookup_artist) ------------------------------------
     CLS_ART = O['CLASS_ARTISTS']
@@ -821,8 +808,6 @@ def run(ctx):
     expect(flag(m) == 0 and ret == RET_STOP, f'artist: no window to watch after the open: the flag is not left set ({flag(m)}, {ret})')
     m = PM(); alib(m); m.widget_on_fail = frozenset({DESTROY}); ret = artist_tap(m)
     expect(ret == RET_STOP and flag(m) == 0, f'artist: the destroy watch refused: the page is open and the flag is not left set ({ret}, {flag(m)})')
-    m = PM(); m.present.add(KILL); m.open()
-    expect(m.handlers_of(m.rows[GO_ARTIST], CLICK) == [(STOCK_CLICK['listitem5'], m.dialog)], 'kill switch: Look up artist is the stock handler alone')
 
     # -- 7d. Delete closes the sheet before the stock handler's modal confirm (patch/playmore.c pm_on_delete) -----------------------------
     m = PM(); alib(m)
@@ -834,8 +819,6 @@ def run(ctx):
            f'Delete: ours closes the sheet and returns RET_OK, so the stock handler (the modal confirm, delete only on Yes) still runs and nothing else opens ({ret})')
     m.calls.clear(); m.call(fn, a0=0x1234, a1=0, count=200000)
     expect(('window_close', m.dialog) not in m.calls, 'Delete: a click handler left behind for another dialog does nothing')
-    m = PM(); m.present.add(KILL); m.open()
-    expect(m.handlers_of(m.rows[DELETE], CLICK) == [(STOCK_CLICK['listitem6'], m.dialog)], 'kill switch: Delete is the stock handler alone')
     # the other rows: Add to playlist closes the sheet itself in stock (window_close at 0x47994c, then playlist_page); Speed / A-B open no dialog; none of them gets a handler of ours
     m = PM(); alib(m)
     expect(all(m.handlers_of(m.rows[i], CLICK) == [(STOCK_CLICK[ROWS[i]], m.dialog)] for i in (ADD, AB)), 'Add to playlist and A-B repeat keep the stock handler alone (stock closes the sheet for Add to playlist itself)')
@@ -920,4 +903,4 @@ def run(ctx):
            and all(built_ui.find(n).get('style:normal:border') == 'top' for n in ('listitem1', 'listitem2', 'listitem3', 'listitem5', 'listitem6', 'pod_more', 'pod_tape', 'pod_vinyl')),
            'the hairlines follow the new order (the first row of each page has none, A-B repeat has one)')
     expect(built_ui.type == 'dialog' and (built_ui.x, built_ui.y, built_ui.w, built_ui.h) == (0, 130, 320, 350),
-           'the dialog is the stock 320 x 350 sheet at y 130 (the kill switch shows the stock menu)')
+           'the dialog is the stock 320 x 350 sheet at y 130 (a failed start shows the stock menu)')

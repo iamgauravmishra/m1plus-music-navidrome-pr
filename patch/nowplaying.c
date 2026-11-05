@@ -4,7 +4,7 @@
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
  * One hook, playing_page_init (0x53d1e4): the page's init, run when Now Playing is built, never at boot or in the
- * main loop. It runs the stock function to completion and then, unless the kill switch /mnt/mmc/m1plus-off exists,
+ * main loop. It runs the stock function to completion and then
  * starts a page-scoped 500 ms timer (np_tick) and registers EVT_DESTROY on the window, which removes the timer. It also binds a click handler on the queue
  * button (np_on_queue: our Queue page, patch/queuepage.c; the stock drawer opens when it answers RET_OK).
  * The timer does three things and nothing else:
@@ -24,7 +24,7 @@
  * The cover is square (AWTK cannot clip an image); its four corners are painted over in the colour the window has
  * there (the tone under the gradient), anti-aliased, from the cover widget's own EVT_AFTER_PAINT: 4 x 12 x 12 pixels
  * of a table np_corner_init computes once, a few dozen canvas_fill_rect calls, and only when the cover repaints.
- * Every failure (kill switch, a widget of the asset missing, no timer, an unreadable file, an undecodable picture)
+ * Every failure (a widget of the asset missing, no timer, an unreadable file, an undecodable picture)
  * leaves the stock page as it is, square corners included. docs/architecture.md section 8a.
  */
 #include "offsets.inc"
@@ -39,7 +39,7 @@ extern int
 queue_open(void); /* patch/queuepage.c: our Queue page; 0 once it is open, else the stock drawer should open */
 
 /* The queue button (btn_queue, stock handler 0x53b14c: navigator_to("dialog/playqueue_dialog")) opens our Queue page instead. Bound after the stock init, so it runs before the stock
- * handler: RET_STOP keeps the drawer from opening once our page is up, RET_OK lets it open (kill switch, a stream, a window that will not open). docs/modules/queue.md. */
+ * handler: RET_STOP keeps the drawer from opening once our page is up, RET_OK lets it open (a stream, a window that will not open). docs/modules/queue.md. */
 static int np_on_queue(void *ctx, void *e) {
     (void)ctx;
     (void)e;
@@ -499,7 +499,6 @@ static int np_on_foreground(void *ctx, void *e) {
 static void np_start(void *win) {
     void *art;
     unsigned n;
-    if (access(KILL_SD, F_OK) == 0) return;
     if (np.win) np_stop(); /* an earlier page that never said it was gone */
     np.win = win;
     np.rem = widget_lookup(win, "np_remaining", 1);

@@ -24,7 +24,7 @@ struct rowmenu {
         dots; /* the "..." as a RGBA bitmap (RM_DOTS_PX square, RM_DOTS_RGB with the image's coverage as alpha); NULL: the page has no "..." */
     void *
         rows; /* a deque of one stSongInfo, the row the open menu is for (a copy: the page's list may be replaced under the menu) */
-    int on; /* the "..." is shown: the assets are there, the kill switch is off */
+    int on; /* the "..." is shown: the assets are there */
     int open;
     int row; /* the page's index of the row */
     rowmenu_add_fn add;
@@ -48,7 +48,7 @@ int rowmenu_zone_x(int right);
  * zone; `flush` 1: its bitmap's right edge on `right` (the Songs page beside the A-Z rail). */
 void rowmenu_paint(void *canvas, const rowmenu_t *rm, int right, int flush, int y, int row_h, int view_h);
 
-/* Opens the sheet for the row `row` whose record is `rec`; `add` is the page's Add to Playlist. 1 when the menu is open, 0 when it cannot be (no "...", the kill switch, no memory). */
+/* Opens the sheet for the row `row` whose record is `rec`; `add` is the page's Add to Playlist. 1 when the menu is open, 0 when it cannot be (no "...", no memory). */
 int rowmenu_open(rowmenu_t *rm, int row, void *rec, rowmenu_add_fn add);
 
 /* Closes the menu and drops the row copy. */

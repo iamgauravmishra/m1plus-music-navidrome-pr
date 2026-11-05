@@ -4,8 +4,7 @@
 
 A developer's screen grab, the Screenshot row of Settings > Developer (`ACT_SHOT`, page `m1plus_developer`). No stock function is hooked, nothing
 runs on the boot path, in the main loop or at paint, and there is no thread: a tap starts a payload-owned countdown, and the only
-code that runs afterwards is two timer callbacks. The kill switch `/mnt/mmc/m1plus-off` is checked at the tap, at every tick and
-before the grab (the camera is hidden and nothing is read or written when it appears mid-way).
+code that runs afterwards is two timer callbacks. It has no kill-switch check of its own: the menu entry gates the row.
 
 Import with `uv run python -I tools/pull_shots.py [CARD_DIR] [--build latest|DIR]`.
 PNG names include the source content hash, so another card reusing `shot-0001.bmp` does not lose
@@ -14,11 +13,11 @@ hash. `--build` stores captures in that artifact's `device/` directory; otherwis
 
 - **Confirm and cancel.** A tap on the idle row opens the stock confirm dialog (`pod_confirm` in `patch/m1plus.c`, shared with Rebuild
   Covers: `dialog/confirminfo_dialog`, kind 5 wrapped text, modal, `CONFIRM_YES` for Yes) asking "Take a screenshot?" (step 1, plain Yes / No); only Yes goes on, anything else (No, the dialog failing to open) does nothing. Yes opens
-  the same dialog again, "Take a screenshot in:", with the delay as its two buttons (step 2, below); only those start, any other result does nothing. The kill switch is checked before each dialog. A tap while the countdown runs asks "Cancel the screenshot?"; Yes
+  the same dialog again, "Take a screenshot in:", with the delay as its two buttons (step 2, below); only those start, any other result does nothing. A tap while the countdown runs asks "Cancel the screenshot?"; Yes
   removes the tick timer by its id (`timer_remove` `0x66360c`, already pinned, called from the tap, never from inside the timer's own
   callback), hides the camera and returns to idle; No leaves the countdown running. The dialog is modal, so ticks may run under it:
   the phase is looked at again when it returns, and a countdown that ended meanwhile is not cancelled (its timer is gone). A tap in the settle phase (capture
-  committed) shows nothing. The kill switch is checked at the tap, so no dialog opens with it present.
+  committed) shows nothing.
 - **Delay: 5 s or 10 s, on the dialog's buttons.** `confirminfo_dialog` has only `btn_cancel` (left, `tr_text msg_no`) and `btn_enter` (right, `msg_yes`);
   the check-box kinds (3, 6, 7) carry fixed texts, so no stock dialog offers three free choices and none is hooked. **Device finding (V2.1zGVNSAAAG): the back key does not close `confirminfo_dialog`**, so a single dialog with the delay on both buttons had no way out; hence the two steps. At step 2 `shot_start` adds a 10 ms
   stock timer (`shot_relabel`, `timer_add`) just before `pod_confirm_code` (the raw result of `pod_confirm`) opens the modal dialog; the main loop runs under
@@ -68,4 +67,4 @@ hash. `--build` stores captures in that artifact's `device/` directory; otherwis
   RGBA8888, RGB888), row padding and a visible buffer at `yoffset` > 0 against exact BMP bytes, and the 320 x 480 file opened by Pillow;
   the order of calls (camera shown, hidden, grab armed, frame buffer opened, file renamed, toast); numbering; no card, low space,
   mkdir / statfs / open / write / fsync / rename failures and unreadable frame buffers (no file, no temp, descriptor and mapping released);
-  double taps; refused timers; a missing camera widget; the kill switch at the tap, mid-countdown and before the grab; every text in all 16 tables.
+  double taps; refused timers; a missing camera widget; every text in all 16 tables.

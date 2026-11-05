@@ -742,13 +742,13 @@ static void (*cstl_pop_back(void))(void *) {
     return (void (*)(void *))pop_fn;
 }
 
-/* Clear can run: the kill switch is off, libcstl is the pinned one and no DLNA service runs (the Queue page shows its button only then). The slot is bound once the queue was read (deque_size). */
-int pod_clear_ready(void) { return !home_off() && !dlna_running() && cstl_pop_back() != (void (*)(void *))0; }
+/* Clear can run: libcstl is the pinned one and no DLNA service runs (the Queue page shows its button only then). The slot is bound once the queue was read (deque_size). */
+int pod_clear_ready(void) { return !dlna_running() && cstl_pop_back() != (void (*)(void *))0; }
 
 /* Clear on the Queue page: every track after the play position is removed, the playing track and the history stay (docs/modules/queue.md). The deque is shortened in place: libcstl's
  * deque_pop_back runs the stSongInfo destructor @0x5dabfc (free, memset) on the last record and frees a block it empties; it allocates and copies nothing, and the records 0..pos are never
  * moved, rewritten or freed (so a stock reader of the playing track or of the history never sees a change). The payload lock is held for the whole removal, which re-reads the position
- * and the size first (what the lock excludes: our reorders, queue loads and clear, docs/modules/shuffle.md Locking). 1 cleared; 0 nothing after the play position; -1 refused (kill switch, or
+ * and the size first (what the lock excludes: our reorders, queue loads and clear, docs/modules/shuffle.md Locking). 1 cleared; 0 nothing after the play position; -1 refused (
  * libcstl is not the pinned one, or the DLNA service runs). The saved shuffle order describes a queue that is gone (the flag itself stays). A preload that is open already opened the old next file: it is closed with
  * stock's own Gapless setter (one send) before the first pop. */
 int pod_clear_upnext(void) {
@@ -756,7 +756,6 @@ int pod_clear_upnext(void) {
     void (*pop)(void *);
     unsigned n, keep;
     int pos, r = 0;
-    if (home_off()) return -1;
     sh_enter();
     if (dlna_running()) { /* the service starts on the UI thread (this one), so it cannot start between this check and the pops */
         sh_leave();

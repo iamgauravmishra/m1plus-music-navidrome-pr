@@ -4,7 +4,6 @@ import os, random, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 import awtk_style, mod_icons, mod_lockscreen, mod_nowplaying as mn
 
-KILL = '/mnt/mmc/m1plus-off'
 INIT = pod.PLAYING_INIT                   # playing_page_init
 COVER_SRC = pod.DATA['COVER_SRC'][0]
 WIN = 0x24000000
@@ -207,9 +206,6 @@ def run(ctx):
     expect(('timer_remove', 0x777) in m.calls, 'the new page\'s destroy removes its timer')
 
     # ------------------------------------------------------------------ fall back to stock
-    m = NowMachine(); m.page(); m.present.add(KILL)
-    ret = m.init()
-    expect(ret == 0 and m.names() == ['stock_playing_init', 'access'] and not m.timers and not m.styles, f'the kill switch: stock only ({m.names()})')
     m = NowMachine(); m.page(); m.stock_ret = 0x10
     ret = m.init()
     expect(ret == 0x10 and not m.timers and 'access' not in m.names(), 'a failed stock init is returned and nothing starts')
@@ -280,8 +276,6 @@ def run(ctx):
     expect(not eset(m) and m.visible('np_elapsed') is None, 'a page without label_playtime: np_elapsed stays hidden')
     m, h = elapsed(); m.call(PSYMS['np_on_destroy'], a0=WIN, a1=0); m.pt = (40, 200, 1); m.calls = []; m.tick()
     expect(not eset(m), 'after the page is gone a stray tick writes nothing')
-    m = NowMachine(); m.page(); m.src(0); m.pt = (30, 200, 1); m.widget('np_elapsed'); h = m.widget('label_playtime'); m.present.add(KILL); m.init()
-    expect(not eset(m) and m.props.get((h, 'visible')) is None, 'the kill switch: stock\'s elapsed')
 
     # ------------------------------------------------------------------ the info page's lines (np_info)
     from awtk_text import Ttf, StbText
@@ -352,8 +346,6 @@ def run(ctx):
     expect(all(m.label(n) == stock_en[n] for n in stock_en) and not sets(m), 'a failed read of the text: untouched')
     m = NowMachine(); m.page(); m.src(0); m.info_page({'label_album': 'Album:X'}); m.init()
     expect(m.label('label_album') == 'Album: X', 'an info page with only some of its labels works for those')
-    m = NowMachine(); m.page(); m.src(0); m.info_page(stock_en); m.present.add(KILL); m.init()
-    expect(all(m.label(n) == stock_en[n] for n in stock_en), 'the kill switch: stock text')
     m = info(stock_en); m.calls = []; m.call(PSYMS['np_on_destroy'], a0=WIN, a1=0); m.texts[m.widgets['label_album']] = 'Album:Z'; m.tick()
     expect(m.label('label_album') == 'Album:Z' and not sets(m), 'after the page is gone a stray tick touches nothing')
 
@@ -641,8 +633,6 @@ def run(ctx):
     expect(m.styles[-1][2] == word_of(mn.tone(20, 200, 20)), 'foreground: the new cover is applied in the event itself')
 
     # the kill switch, a refused timer, refused events, a failing style call, the cover widget missing
-    m = NowMachine().with_bar(); m.page(); m.present.add(KILL); m.init()
-    expect(not m.bar_styles and m.names() == ['stock_playing_init', 'access'], f'kill switch: the bar is never touched, not even looked up ({m.names()})')
     m = NowMachine().with_bar(); m.page(); m.timer_fail = True; m.init()
     expect(not m.bar_styles and not m.styles and (WIN, O['EVT_WINDOW_TO_BG']) not in m.bound, 'a refused timer: the bar is never touched and no window event is registered')
     m.call(PSYMS['np_on_destroy'], a0=WIN, a1=0)

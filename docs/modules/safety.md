@@ -29,11 +29,14 @@
   from the first status refresh; only an enabled percentage setting changes capacity/label.
   Disabled it adds only an access and cached flag. Now Playing's paint work stays on the
   cover widget; More work stays on init, More/back taps and covering-dialog handling. The pull-down hook runs stock's init first,
-  then moves and hides the eight tiles and their captions once, and only without the kill switch.
+  then moves and hides the eight tiles and their captions once.
 - **Pin every edit.** Check stock SHA-256, words, symbols, `$gp` and offsets before writing.
   A mismatch fails the build; hook errors fall back to stock.
-- **Honor the kill switch.** `/mnt/mmc/m1plus-off` disables the payload. The list-gesture hook
-  reads it once per session; other entry points check it at their documented boundaries.
+- **Honor the kill switch.** `/mnt/mmc/m1plus-off` disables the payload on the path rollback needs: the
+  menu entry and boot guard (`m1plus.c`, `home.c`), boot-reachable hooks and hooks that run on every
+  screen (paint, status bar, list gesture) check it. The list-gesture hook reads it once per session.
+  Hooks on tap-only stock screens (Now Playing, More dialog, pull-down, library rows, Radio Now Playing)
+  and everything reached from the menu do not, and rely on their stock fallback.
 - **Preserve widget names.** Restyle, move or hide widgets the application looks up; never
   rename or delete them. Hide with both `visible=false` and `sensitive=false`; decorative
   overlays must be insensitive. See [UI rules](ui-rules.md) for hit-test evidence.

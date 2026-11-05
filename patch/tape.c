@@ -737,7 +737,6 @@ int tape_theme_set(int theme) {
  */
 int tape_open(void) {
     if (tp.win) return 0;
-    if (access(KILL_SD, F_OK) == 0) return -1;
     memset(&tp, 0, sizeof tp);
     tp.win = window_open("m1plus_tape");
     if (!tp.win) {

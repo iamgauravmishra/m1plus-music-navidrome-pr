@@ -9,7 +9,7 @@ Preview: `uv run python -I tools/preview_onlineart.py work/mod-release out/previ
 ## What the user sees
 
 - **The row** (More sheet, page 2, between A-B repeat and Delete): the glyph `pod_ic_art` (`assets/icons/custom/cover-lyrics.svg`, a picture over two text lines) and **Cover & Lyrics** (13 languages). With the **Wi-Fi off** (stock `get_wifisignal() <= 0`,
-  looked at each time page 2 is shown) the row is dimmed (opacity 100 of 255) and insensitive. With the kill switch `/mnt/mmc/m1plus-off` the row is hidden and unbound and `onlineart_open` refuses.
+  looked at each time page 2 is shown) the row is dimmed (opacity 100 of 255) and insensitive.
 - **The page** (black, the stock navbar with Back and Now Playing, neutral white and grey, no accent): the **Search page's frame**: its chip row (**Covers**, **Lyrics**: the same place, font and look, the selected chip a light grey pill with dark text; opens on Covers), its line, and its list (stock
   `list_view` > `scroll_view` holding one content view the payload paints; it scrolls with a drag, the chips stay). Both lookups start when the page opens, so a switch of tab costs no wait; each tab keeps its scroll position. The state line (17 px grey, centred, y 146) is the selected tab's.
   - **Covers**: `Searching…`, then the thumbnails (88 px, three a row, 8 px corners; the store's first six albums that have a picture, then Deezer's until twelve): the list scrolls when more than three rows. Nothing found: `No Covers Found`; a failure in the words of the Podcasts page (`No Wi-Fi`,
@@ -104,9 +104,9 @@ Saving…, Synced, Use This Cover, Replace Cover, No Lyrics Found, No Covers Fou
   the 600 / 500 px address, cache file(s), `.pick`, folder picture naming, failures), `pn_lyr_save` of a candidate, and `build_art` honouring `.pick`.
 - `test/pod/onlineartpage.py` (the page under Unicorn): the asset (the Search page's frame and numbers, hidden widgets, the confirmation's and the lyrics header's boxes, contrast, every text in 13 languages), the tabs and chips, the thumbnails one per tick, painting and scrolling, the state lines of both
   tabs, the confirmation (nothing written until the pill, Use / Replace, the current frame, compilation keys, no folder picture for the card's root, failures, the Wi-Fi lost, Back while it downloads, a busy slot), the lyrics rows (title, grey line, badges, scrolled taps) and detail (tags stripped, wrapped, gaps, scrolling,
-  Save / Replace, the `.lrc` name rule, a failed write, Saved badge), the downloads pausing and resuming, destroy, the kill switch, no track, a wrong asset.
+  Save / Replace, the `.lrc` name rule, a failed write, Saved badge), the downloads pausing and resuming, destroy, no track, a wrong asset.
 - Added with the states: `test/pod/onlineart.py` `busy_tests` (one 503 / 429 -> PN_OVERLOAD from exactly one request and no waiting, a busy get skips search, 404 / 500 get still searches, Cancel with a busy get, iTunes busy + Deezer OK, both busy, `pn_art_again` of each part), `test/pod/onlineartpage.py` `state_tests` (every state in 13 languages with its glyph, title, text and pill, the stacking, insensitive decorations) and `again_tests` (Try Again restarts only its tab, waits for a busy slot, a failing guard), and the wrapping of an English, a CJK and a space-less line without an ellipsis.
-- `test/pod/playmore.py`: the row on page 2 (five rows, 250 px, the glass `pm_sheet`), the Wi-Fi dimming looked at on each visit, the tap, a refusing page, a stale handler, the kill switch, the text fit.
+- `test/pod/playmore.py`: the row on page 2 (five rows, 250 px, the glass `pm_sheet`), the Wi-Fi dimming looked at on each visit, the tap, a refusing page, a stale handler, the text fit.
 
 ## Device checks (not run)
 
@@ -114,4 +114,4 @@ Open More > More > Cover & Lyrics on a playing track with Wi-Fi on: the page ope
 a root is missing), the quality of the matches for an album with a plain name, a CJK album, a compilation; tap a cover: the confirmation with the large picture, Use This Cover, then Back to Albums / Cover Flow / the album page / the mini player / Vinyl (the new cover after reopening), the cover folder
 (`cover.jpg` next to the tracks; a track without embedded art shows it on stock Now Playing after the next track change), Settings > Library > Rebuild Covers leaves it; Save Lyrics writes `<song>.lrc` and the lyrics page shows it from the next play
 (also: plain lyrics and an existing `.lrc`: Replace Lyrics); Wi-Fi off in Settings: the row is dim and a tap does nothing; the Wi-Fi lost while the page is open (`Can't connect`, no hang); Back while searching, then reopen; a Podcasts download running while the page opens
-(it pauses and resumes); standby while a lookup runs; the kill switch hides the row.
+(it pauses and resumes); standby while a lookup runs.

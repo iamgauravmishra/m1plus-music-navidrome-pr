@@ -1077,7 +1077,7 @@ static void rp_placeholder(void) {
 /* The Radio page (the Radio items of Home's menu, Extras and the Pod). 0 once it is up, -1 when it could not open. */
 int radio_open(void) {
     int i;
-    if (rp.win || home_off()) return -1;
+    if (rp.win) return -1;
     memset(&rp, 0, sizeof rp);
     rp.win = window_open(RP_ASSET);
     if (!rp.win) return -1;

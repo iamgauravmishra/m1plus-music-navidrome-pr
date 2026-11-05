@@ -1448,7 +1448,7 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
         }
     }
     sg_menu(0);
-    rowmenu_bind(&sg.rm, sg.win); /* the rows' "..." menu (optional: no widgets or the kill switch means no "...") */
+    rowmenu_bind(&sg.rm, sg.win); /* the rows' "..." menu (optional: no widgets means no "...") */
     if (!sg_lib()) { /* a list: no Sort; Search (the capsule's left cap) moves to Sort's slot, beside Select, and the titles are the list's */
         sg_show(sg.btn_sort, 0);
         if (sg_genre()) { /* a genre's songs: no Search either; Select is the capsule's left cap (its own glass piece) */

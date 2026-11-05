@@ -12,8 +12,7 @@
  * boot path; this is a call-site patch, not a hook: no stock prologue changes and the stock
  * function is still what runs first.
  *
- * compact_set_row_layout calls the stock widget_set_children_layout, then (unless the kill switch
- * is present, the layouter is not the stock default one, or its vtable is not the one pinned)
+ * compact_set_row_layout calls the stock widget_set_children_layout, then (unless the layouter is not the stock default one or its vtable is not the one pinned)
  * points the row's layouter at a copy of the default vtable whose layout slot is
  * compact_row_layout. That runs whenever AWTK lays the row out; before and after the stock
  * default layout it:
@@ -146,7 +145,6 @@ int compact_set_row_layout(void *row, const char *params) {
     layout = P(row, W_CHILDREN_LAYOUT);
     if (!layout || P(layout, LAYOUT_VTABLE) != (void *)DEFAULT_LAYOUT_VTABLE) return ret;
     if (((const unsigned *)DEFAULT_LAYOUT_VTABLE)[LAYOUT_SLOT] != DEFAULT_LAYOUT_FN) return ret;
-    if (access(KILL_SD, F_OK) == 0) return ret; /* kill switch: the stock layout */
     if (!row_vtable[0]) {
         memcpy(row_vtable, (const void *)DEFAULT_LAYOUT_VTABLE, sizeof row_vtable);
         row_vtable[LAYOUT_SLOT] = (unsigned)compact_row_layout;
@@ -167,7 +165,7 @@ int compact_set_row_layout(void *row, const char *params) {
  * margin. The playing row's placeholder instead becomes its marker (np_row_playing, a small wave)
  * moved last in the row's flow: the layout narrows the title by its width, the wave sits at the
  * right end. Rebinding a recycled row sets either state again. Rows that name a place, not a
- * track (folder, playlist, card, USB), keep their icon. Kill switch: stock behaviour. */
+ * track (folder, playlist, card, USB), keep their icon. */
 static int is_place_icon(const char *name) {
     return strcmp(name, "icon_folder") == 0 || strcmp(name, "icon_playlist") == 0 || strcmp(name, "icon_tf") == 0 ||
            strcmp(name, "icon_otg") == 0;
@@ -178,7 +176,7 @@ __attribute__((used, retain)) void rows_track_icon(void *img, const char *name) 
     void *row;
     unsigned n, end;
     image_base_set_image(img, name);
-    if (!img || !name || access(KILL_SD, F_OK) == 0) return;
+    if (!img || !name) return;
     playing = strcmp(name, "icon_playing") == 0;
     show = playing || is_place_icon(name);
     row = P(img, W_PARENT);

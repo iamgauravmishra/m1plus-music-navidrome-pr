@@ -11,7 +11,7 @@ What is proved, on the real compiled payload under Unicorn (the stock calls it m
   * the text (title and its twin, artist, times, status line) set on the page's labels; the cover as the label, vinyl_label without one;
   * taps only: the chevron closes, the keys play / pause, skip back and forward through the stock quick-click functions (drawn pressed while held), a tap on
     the record plays / pauses; no swipe, no grab, no move handler;
-  * the page's life: one timer retimed with timer_modify, removed on to-background and destroy, the idle power rules, the kill switch.
+  * the page's life: one timer retimed with timer_modify, removed on to-background and destroy, the idle power rules.
 The emulated frames are written to out/preview/vinyl-emu-*.png (with the text as the labels draw it), next to the design's (vinyl-emu-*-design.png)."""
 import math, os, re, struct
 from pathlib import Path
@@ -25,7 +25,6 @@ EVT_DOWN, EVT_MOVE, EVT_UP, EVT_ABORT = O['EVT_POINTER_DOWN'], O['EVT_POINTER_MO
 EVT_BG, EVT_FG, EVT_DESTROY, EVT_PAINT = O['EVT_WINDOW_TO_BG'], O['EVT_WINDOW_TO_FG'], O['EVT_DESTROY'], O['EVT_AFTER_PAINT']
 WIN = 0x24200000
 SYSBAR = pod.DATA['SYSTEM_BAR'][0]
-KILL = '/mnt/mmc/m1plus-off'
 REC_FILE = '/mnt/data/m1plus/vinyl-record'
 THEME_FILE = '/mnt/data/m1plus/vinyl-base'
 COMPOSE_MAX = 6000000   # instructions: the Cover record composed once into the base, the same on a track change (3.1 M measured, to be re-measured); not a tick's cost
@@ -522,8 +521,6 @@ def record_tests(ctx):
         m = Machine()
         if data is not None: m.fs[REC_FILE] = data
         expect(m.call(PSYMS['vinyl_record']) == want, f'the saved record {data!r}: {want}')
-    km = machine(rec=1); km.present.add(KILL)
-    expect(km.open() == 0xffffffff and 'vinyl_rec' not in km.loads, 'the kill switch refuses the page whatever the colour')
 
 
 def cover_record_tests(ctx):
@@ -921,8 +918,6 @@ def life_tests(ctx):
     expect = ctx.expect
     m = machine(); m.windows['m1plus_vinyl'] = 0
     expect(m.open() == 0xffffffff and 'timer_add' not in m.names() and 'widget_on' not in m.names(), 'a window that will not open: -1, nothing registered')
-    m = machine(); m.present.add(KILL)
-    expect(m.open() == 0xffffffff and ('window_open', 'm1plus_vinyl') not in m.calls, 'the kill switch: the page does not open')
     for missing in ('vinyl_view',) + LABELS:
         m = machine(); del m.widgets[missing]
         expect(m.open() == 0xffffffff and 'navigator_back' in m.names() and 'timer_add' not in m.names(), f'no {missing}: the window goes again, no timer')

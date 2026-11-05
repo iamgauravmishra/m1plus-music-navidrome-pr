@@ -14,7 +14,7 @@
  * One hook, dialog_dropdown_dialog_init (0x475f04, tools/pod.py PULLDOWN_INIT): run when the dialog is built (never at boot or in the
  * main loop; the navigator's dialog-init dispatcher is its only caller). m1plus_pulldown_init runs the stock init to completion (it
  * binds the dialog's pointer handlers and, through its widget_foreach visitor, every tile's click: we move tiles, we do not replace
- * behaviour) and returns its result; then, unless the kill switch /mnt/mmc/m1plus-off exists and every tile and caption is found,
+ * behaviour) and returns its result; then, if every tile and caption is found,
  * shown tile k takes the place the stock tile k has (read from the widgets, not hard-coded) with its caption at the same offset,
  * and the other tiles and captions are hidden: visible=false and sensitive=false (a hidden widget would still take touches).
  * Nothing is renamed or deleted, the dialog's size and the brightness slider stay. Everything fallible (the lookups) happens before
@@ -81,7 +81,6 @@ static void pd_start(void *dlg) {
     int px[PD_N], py[PD_N], dx[PD_N], dy[PD_N];
     unsigned char ord[PD_N];
     unsigned i, n, shown = 0;
-    if (access(KILL_SD, F_OK) == 0) return;
     for (i = 0; i < PD_N; i++) {
         img[i] = widget_lookup(dlg, PD_IMG[i], 1);
         lab[i] = widget_lookup(dlg, PD_LAB[i], 1);

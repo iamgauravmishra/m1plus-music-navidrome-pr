@@ -671,14 +671,6 @@ def apple_tests(expect):
     expect(m.blocked == 'dlna' and not dl['done'] and order(m) == N12 and flag_on(m) and ('mclSetPlayPos',) not in m.calls, 'clear B: the restore request waits at the lock, the queue is untouched')
     go(m, ui); go(m, dl)
     expect(ui['done'] and dl['done'] and m.owner is None and order(m) == N12 and not flag_on(m) and ('mclSetPlayPos',) not in m.calls, 'clear B: after the clear the restore finds no saved order and leaves the queue as it is')
-    # (c) the kill switch keeps the exclusion: switched on while a reorder holds the lock, the clear still waits for it.
-    m = apple_machine(n=12, pos=3); sched(m); q0 = m.word(PLAYQ)
-    dl = spawn(m, 'dlna', 'sh_set_mode', STACK, a0=SH); m.yield_thread, m.yield_at = 'dlna', 2
-    go(m, dl); m.yield_at = 0; m.present.add('/mnt/mmc/m1plus-off')
-    th = spawn(m, 'ui', 'sh_clear_queue', STACK - 0x4000, a0=q0); go(m, th)
-    expect(m.blocked == 'ui' and not th['done'] and 'deque_clear' not in m.names(), 'clear C: with the kill switch the clear still waits for an in-flight reorder')
-    go(m, dl); go(m, th)
-    expect(dl['done'] and th['done'] and m.owner is None and m.clears_held == [True], 'clear C: with the kill switch the clear runs under the lock once the reorder releases it')
 
     # 52. The Queue page's Clear (pod_clear_upnext: libcstl's deque_pop_back under the same lock) against the other threads' reorders and loads: whole-operation exclusion both ways.
     #     Stock's readers take no lock and are not hooked (docs/modules/queue.md "Clear engine"); this is what the lock does cover.

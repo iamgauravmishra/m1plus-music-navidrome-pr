@@ -109,7 +109,7 @@ height: 234, 434 or 634), the default menu with both is 416 + 634 + 64 = 1114 px
 ## Data and timer
 
 `minibar_start(win)` is called by `home_menu_opened` (patch/home.c) for the Home instance, after `hm_fill_window` laid the list out (it is not
-called when that found no navbar or list). Kill switch (`home_off()`: `/mnt/mmc/m1plus-off`, `/mnt/data/m1plus-off`): nothing is looked up.
+called when that found no navbar or list).
 - **Fade.** First it hides and desensitises `img_nb_fade` (the fade under the glass navbar, `navbar.md`; at y 50 it would float over the Recently Played shelf as a dark band with a sharp top edge, since `hm_fill_window` hides the navbar but not it). Test: `test/pod/minibar.py`.
 
 - **Start** looks up the seven bar widgets and the list (the scroll bar is optional: a short custom menu has none), registers `EVT_DESTROY`,
@@ -167,7 +167,7 @@ the bar does after it): that `mclGetPlayStatus` 2 means playing in every source 
 
 ## Failure behaviour (every one is the plain menu)
 
-The kill switch, a missing widget (any of the seven, the list or its scroll view), a refused `widget_on`, no timer, a refused later timer:
+A missing widget (any of the seven, the list or its scroll view), a refused `widget_on`, no timer, a refused later timer:
 the bar is never shown and the list is not moved (`mb_stop` clears the state; a handler that was registered finds no window of ours). No
 bitmap: the bar still shows (title, artist, buttons) without a cover, paint draws nothing. A cover that
 does not decode: the placeholder, else grey. Nothing is shown at boot unless a track is queued, and then only after the one-shot.

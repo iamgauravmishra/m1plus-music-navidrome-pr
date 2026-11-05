@@ -16,7 +16,6 @@ pulldown, minibar, nowplaying = sibling('pulldown'), sibling('minibar'), sibling
 CARD = '/mnt/mmc/.m1plus'
 RECENT, RECENT_TMP = '/mnt/mmc/.m1plus/recently-played', '/mnt/mmc/.m1plus/recently-played.tmp'
 SHELF_SET, SHELF_TMP = '/mnt/data/m1plus/home-recent-albums', '/mnt/data/m1plus/home-recent-albums.tmp'
-KILL_SD, KILL_DATA = '/mnt/mmc/m1plus-off', '/mnt/data/m1plus-off'
 WIN = 0x24000000
 EVT_DESTROY, EVT_AFTER_PAINT, EVT_CLICK = O['EVT_DESTROY'], O['EVT_AFTER_PAINT'], O['EVT_CLICK']
 EVT_BG, EVT_FG = O['EVT_WINDOW_TO_BG'], O['EVT_WINDOW_TO_FG']
@@ -1102,10 +1101,6 @@ def refresh_and_fallback_tests(ctx):
         bad = [c for c in calls if c[0] in ('widget_set_visible', 'widget_set_sensitive', 'widget_move', 'widget_resize', 'bitmap_create_ex', 'timer_add') and not (c[0] == 'timer_add' and m.timer_fail)]
         return [] if not bad and not m.shelf_up() and m.row_ys() == plain_ys and m.vh() == 8 * ROW_H else [f'shown {m.shelf_up()}, {bad[:3]}']
     WHAT = 'the shelf never shown, nothing moved, also in the later callbacks'
-    for path in (KILL_SD, KILL_DATA):
-        m = ST(ents(3), start=False); m.present.add(path); calls = m.start()
-        hooked = m.timers or [c for c in calls if c[0] in ('widget_on', 'timer_add', 'widget_lookup')]
-        expect(not hooked and not touched(m, calls), f'{path}: no lookup, no handler, no timer, {WHAT} ({hooked}, {touched(m, calls)})')
     m = ST(ents(3), start=False); m.widgets.pop('pod_sh_head'); m.start()
     expect(m.shelf_up() and m.timers == [(PSYMS['rc_first'], O['RC_FIRST_MS'])], 'the header is the asset\'s own label: the payload never looks it up, a tree without it still shows the tiles')
     for gone in [n for n in pod_ui.SH_NAMES if n != 'pod_sh_head'] + ['pod_scrollview']:

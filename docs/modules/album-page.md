@@ -15,7 +15,7 @@ Stock Shanling library pages retain their stock album-details page.
 (`0xff11`) or composer albums (`0xff14`). The browsing record is snapshotted and
 restored before each query/play operation.
 
-Kill switch, an already-open page or missing window/assets falls back to
+An already-open page or missing window/assets falls back to
 `albuminfo_page`. Cover Flow's All albums card opens the artist's Songs page;
 unsupported composer/all-songs cases use the stock fallback.
 

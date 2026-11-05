@@ -1,6 +1,6 @@
 """The track rows' "..." menu (patch/rowmenu.c, patch/songs.c, patch/albumpage.c, docs/modules/rowmenu.md): the asset (the scrim and the three-row glass card, last in both pages), the
 grey "..." painted at the right end of the rows (the rail's side of the Songs page, the text width it takes), the taps (a tap on it opens the menu; a drag, a press that leaves it, a row
-tap elsewhere, select mode, the kill switch and a page without the widgets do not), the bottom sheet (the asset's place for every row, every language fits, closed by the scrim), the three rows
+tap elsewhere, select mode and a page without the widgets do not), the bottom sheet (the asset's place for every row, every language fits, closed by the scrim), the three rows
 (Play Next / Play After through upnext_add with a one-row deque holding the tapped row, Add to Playlist through the page's one-row selection and picker) and the toast of every status.
 The compiled payload runs under Unicorn; upnext_add and picker_open are trapped (their own tests are test/pod/upnext.py and test/pod/picker.py)."""
 import importlib.util, io, os, struct, sys
@@ -27,7 +27,6 @@ PLROW = O['PM_ROW_H']
 CARD_H = 3 * PLROW
 CARD_Y = 450 - CARD_H                                   # the sheet sits on the window's foot (window y 300..450)
 LABEL_W = 320 - pod_ui.RM_TEXT_X - pod_ui.RM_TEXT_R    # 250: Now Playing's More sheet's label box (48..298)
-KILL = '/mnt/mmc/m1plus-off'
 EN = ('Play Next', 'Play After', 'Add to Playlist')
 WIDGETS = ('rm_scrim', 'rm_card', 'rm_item0', 'rm_item1', 'rm_item2', 'rm_label0', 'rm_label1', 'rm_label2')
 SEL_VEC = pod.DATA['SEL_VEC'][0]
@@ -81,11 +80,10 @@ def with_menu(m, cls, texts=EN):
 LETTERS = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel', 'India', 'Juliet']
 
 
-def songs(kill=False, menu=True, plain=False, titles=LETTERS):
+def songs(menu=True, plain=False, titles=LETTERS):
     """The Songs page (the library in title order: sections, the A-Z rail) or, plain, the Favourites list (no sections, no rail), with the menu's widgets."""
     m = SG.list_machine(titles, O['CLASS_FAV']) if plain else SG.songs_machine(titles)
     if menu: with_menu(m, 0)
-    if kill: m.present.add(KILL)
     if plain: m.call(PSYMS['songs_open_list'], a0=O['HOME_FAV'], count=900000000)
     else: SG.open_page(m)
     SG.settle(m)
@@ -178,7 +176,7 @@ def asset_tests(ctx):
 
 
 def paint_tests(ctx):
-    """2. The "..." on the rows: where it is painted (the Songs page with and without the rail, the album page), the text width it takes, none in select mode, with the kill switch or
+    """2. The "..." on the rows: where it is painted (the Songs page with and without the rail, the album page), the text width it takes, none in select mode, with a page
     without the widgets."""
     expect = ctx.expect
     tx = O['LIST_TEXT_X']
@@ -220,8 +218,8 @@ def paint_tests(ctx):
     t = titles_of(texts)
     expect(dot_blits(blits) and all(b[2][0] == RIGHT - MORE_W + (MORE_W - DOTS) // 2 for b in dot_blits(blits)) and all(r[2] == 188 for r in t.values()),
            f'another sort order (a plain list, no rail): the "..." at the right edge, titles 188 px ({sorted({r[2] for r in t.values()})})')
-    # kill switch and missing widgets: no "...", the old widths, and a tap there plays
-    for what, kw in (('the kill switch is on', dict(kill=True)), ('the asset has no menu', dict(menu=False))):
+    # missing widgets: no "...", the old widths, and a tap there plays
+    for what, kw in (('the asset has no menu', dict(menu=False)),):
         m = songs(**kw)
         lay = lay_of(m, False)
         blits, texts, styles, fills = SG.paint(m)
@@ -230,10 +228,9 @@ def paint_tests(ctx):
         calls = SG.tap(m, 252, lay.row_y(2) + 30)
         expect(any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls) and SG.vis(m, 'sg_card') == (0, 0), f'{what}: a tap where the "..." would be plays the song')
     # the album page
-    for kw, what in ((dict(), 'the album page'),):   # (with the kill switch on the album page does not open at all: album_open refuses, the stock page is used)
+    for kw, what in ((dict(), 'the album page'),):
         m = AB.album_machine()
         with_menu(m, 0)
-        if kw.get('kill'): m.present.add(KILL)
         r, calls = AB.open_album(m)
         AB.scroll_to(m, 300)
         blits, texts, fills = AB.paint(m)
@@ -241,19 +238,15 @@ def paint_tests(ctx):
         names = [t for t in ty if t in AB.NAMES]
         nr = len(names)
         dots = dot_blits(blits)
-        if kw.get('kill'):
-            expect(not dots and names and all(ty[t][2] == 298 - (12 + O['ROW_NUM_W'] + O['AB_NUM_GAP']) for t in names), f'{what}: no "...", the titles end at 298 as before')
-        else:
-            ys = sorted(b[2][1] for b in dots)
-            want = [AB.row_y(i) - 300 + (ROW - 1 - DOTS) // 2 for i in range(6)]
-            expect(nr >= 3 and ys == want and all(b[2][0] == RIGHT - MORE_W + (MORE_W - DOTS) // 2 for b in dots),
-                   f'{what}: a "..." at x {RIGHT - MORE_W + (MORE_W - DOTS) // 2} on every track ({ys})')
-            expect(all(ty[t][2] == RIGHT - MORE_W - GAP - (12 + O['ROW_NUM_W'] + O['AB_NUM_GAP']) for t in names), f'{what}: the titles end {GAP} px before the zone (x 262): {sorted({ty[t][2] for t in names})}')
-        if not kw.get('kill'):
-            AB.click(m, 'btn_select')
-            blits, texts, fills = AB.paint(m)
-            ty = {t: rect for (t, rect), st in texts if st == 'label_row_title' and t in AB.NAMES}
-            expect(not dot_blits(blits) and ty and all(rect[2] == 298 - (12 + O['ROW_NUM_W'] + O['AB_NUM_GAP'] + O['SG_SEL_COL']) for rect in ty.values()), 'album select mode: no "...", the titles end at 298')
+        ys = sorted(b[2][1] for b in dots)
+        want = [AB.row_y(i) - 300 + (ROW - 1 - DOTS) // 2 for i in range(6)]
+        expect(nr >= 3 and ys == want and all(b[2][0] == RIGHT - MORE_W + (MORE_W - DOTS) // 2 for b in dots),
+               f'{what}: a "..." at x {RIGHT - MORE_W + (MORE_W - DOTS) // 2} on every track ({ys})')
+        expect(all(ty[t][2] == RIGHT - MORE_W - GAP - (12 + O['ROW_NUM_W'] + O['AB_NUM_GAP']) for t in names), f'{what}: the titles end {GAP} px before the zone (x 262): {sorted({ty[t][2] for t in names})}')
+        AB.click(m, 'btn_select')
+        blits, texts, fills = AB.paint(m)
+        ty = {t: rect for (t, rect), st in texts if st == 'label_row_title' and t in AB.NAMES}
+        expect(not dot_blits(blits) and ty and all(rect[2] == 298 - (12 + O['ROW_NUM_W'] + O['AB_NUM_GAP'] + O['SG_SEL_COL']) for rect in ty.values()), 'album select mode: no "...", the titles end at 298')
 
 
 def touch_tests(ctx):

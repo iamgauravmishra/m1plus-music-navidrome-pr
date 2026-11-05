@@ -375,13 +375,6 @@ def rows_tests(expect):
            f'Search albums: cover at 4, text x 60 w 238 (no chevron), title 7 / artist 33 ({m.geo(cover)}, {m.geo(text)})')
 
     # 43. Fallbacks: the stock layout always runs; anything unexpected is left to it alone.
-    m = row_machine()
-    table = m.new_widget('table_client', 0, 0, 0, 310, 400)
-    m.present.add('/mnt/mmc/m1plus-off')
-    m.call(ROW_BUILDERS['music_create_tablerow'], a0=table, count=400000)
-    btn = m.kids(m.kids(table)[0])[0]
-    expect(m.word(m.word(btn + O['W_CHILDREN_LAYOUT']) + O['LAYOUT_VTABLE']) == O['DEFAULT_LAYOUT_VTABLE'],
-           'kill switch: the row keeps the stock layouter (stock widths)')
     m = row_machine(); m.layout_ret = 0x10
     table = m.new_widget('table_client', 0, 0, 0, 310, 400)
     m.call(ROW_BUILDERS['music_create_tablerow'], a0=table, count=400000)
@@ -493,11 +486,9 @@ def rows_tests(expect):
     m.set_visible(m.find(row, 'img_choice'), 1); seticon('icon_flac'); m.layout(btn)
     expect(m.geo(info)[0] == 46 and m.geo(info)[2] == 252, f'multi-select with the disc hidden: the check box takes its 34 px, the text 46 .. 298 ({m.geo(info)})')
     m.set_visible(m.find(row, 'img_choice'), 0)
-    seticon('icon_playing'); m.present.add('/mnt/mmc/m1plus-off'); seticon('icon_flac')
-    expect(m.images_set[img] == 'icon_flac' and shown() == (True, True), 'kill switch: the stock call only, the disc stays')
-    m.present.discard('/mnt/mmc/m1plus-off')
     m.calls = []; m.call(PSYMS['rows_track_icon'], a0=0, a1=m.cstr('icon_flac'), count=100000)
     expect(m.calls == [('image_base_set_image', 0, 'icon_flac')], 'a null widget: only the stock call (its own null check)')
+    m.set_visible(img, 1); m.setword(img + 0x24, m.word(img + 0x24) | F_SENSITIVE)
     m.call(PSYMS['rows_track_icon'], a0=img, a1=0, count=100000)
     expect(shown() == (True, True), 'a null name: nothing hidden')
 
@@ -552,10 +543,6 @@ def class_icon_tests(expect):
     expect(not m.resizes and [m.geo(c) for c in m.kids(btn)] == before, 'a second layout pass changes nothing (no relayout loop)')
     # pressed band: the row layout still draws children on the 60 px body (row 64 minus the 4 px separator) and the chevron height is 60
     expect(all(m.geo(c)[3] == 60 for c in m.kids(btn) if m.visible(c)) and m.geo(row)[3] == 64, 'every visible child is on the 60 px body, the row stays 64 px')
-    # kill switch: the stock call alone, the placeholder stays
-    m.present.add('/mnt/mmc/m1plus-off'); m.set_visible(img, 1); m.setword(img + 0x24, m.word(img + 0x24) | F_SENSITIVE); seticon('icon_genre')
-    expect(m.images_set[img] == 'icon_genre' and shown() == (True, True), 'kill switch: the placeholder stays')
-    m.present.discard('/mnt/mmc/m1plus-off')
 
 
 def run(ctx):

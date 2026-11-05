@@ -441,7 +441,6 @@ static int up_tick(const void *timer) {
 int update_open(void) {
     int st;
     if (up.win) return 0;
-    if (access(KILL_SD, F_OK) == 0) return -1;
     memset(&up, 0, sizeof up);
     up.win = window_open("m1plus_update");
     if (!up.win) {

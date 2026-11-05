@@ -444,11 +444,6 @@ def album_tests(ctx):
     expect(build_state(m)['orphan'] == 1 and 'pthread_join' not in m.names(), 'destroyed mid-measurement: cancelled, orphaned, not joined')
     expect(not [c for c in fired(m, 'ab_on_dur') if c[0] in ('timer_add', 'widget_set_text_utf8')], 'a late poll does nothing')
 
-    # the kill switch: the page never opens (stock page), so nothing is measured
-    m = album_with_files(); m.present.add(AP.KILL)
-    AP.open_album(m)
-    expect('pthread_create' not in m.names() and not m.fs.get(DUR), 'with /mnt/mmc/m1plus-off nothing is measured')
-
 
 def footer_tests(ctx):
     """6. The footer under the last row: asset, geometry, scroll height, hidden while unknown, appearing without moving the list, inert in select mode, the same grey as the header, fit and wording in every language."""
@@ -709,13 +704,6 @@ def home_tests(ctx):
     new = HC.scan(m)
     expect(not [c for c in new if c[0] == 'timer_add' and c[1] == LSCAN] and 'pthread_create' not in m.names(), 'no card: the song pass does not start (the table is on the card)')
     HC.hook(m, 'hc_on_background')
-
-    # 11. Kill switch: Home starts nothing
-    m = Machine(); m.present.add(AP.KILL)
-    m.window = m.widget('home_window')
-    for w in ('pod_cache_pill', 'pod_cover_prog', 'pod_cache_fill', 'pod_cache_x', 'pod_listview', 'pod_scrollview', 'scroll_bar_m'): m.widget(w)
-    m.call(PSYMS['homecover_start'], a0=m.window, count=2000000)
-    expect(not m.timers and not [c for c in m.calls if c[0] == 'timer_add'], 'with /mnt/mmc/m1plus-off Home arms nothing')
 
 
 def clear_tests(ctx):

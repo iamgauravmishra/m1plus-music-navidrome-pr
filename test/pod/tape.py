@@ -10,7 +10,7 @@ What is proved, on the real compiled payload under Unicorn (the stock calls it m
   * the tape: pack radii (r_supply^2 + r_takeup^2 constant, 16 .. 66 px), the packs seen only through the holes and the clear window, the hubs turning only while playing and
     repeating every 120 degrees, the marks, an invalidate that covers only what changed;
   * the status line (VOL | format | clock | battery, 12 or 11 px, the clock dropped first, then the format) with the shipped font's real advances against tools/tape_art.py;
-  * the page's life: one timer retimed with timer_modify, removed on to-background and destroy, no sound, the kill switch.
+  * the page's life: one timer retimed with timer_modify, removed on to-background and destroy, no sound.
 The emulated frames are written to out/preview/tape-emu-*.png (what the panel would show, turned back to landscape)."""
 import math, os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
@@ -22,7 +22,6 @@ EVT_DOWN, EVT_MOVE, EVT_UP, EVT_ABORT = O['EVT_POINTER_DOWN'], O['EVT_POINTER_MO
 EVT_BG, EVT_FG, EVT_DESTROY, EVT_PAINT = O['EVT_WINDOW_TO_BG'], O['EVT_WINDOW_TO_FG'], O['EVT_DESTROY'], O['EVT_AFTER_PAINT']
 WIN = 0x24200000
 SYSBAR = pod.DATA['SYSTEM_BAR'][0]
-KILL = '/mnt/mmc/m1plus-off'
 THEME_FILE = '/mnt/data/m1plus/cassette-theme'
 THEMES = tape_art.THEME_NAMES
 W, H = O['TP_W'], O['TP_H']                       # landscape 480 x 320
@@ -793,8 +792,6 @@ def life_tests(ctx):
     m = machine(font=font)
     m.windows['m1plus_tape'] = 0
     expect(m.open() == 0xffffffff and 'timer_add' not in m.names() and 'widget_on' not in m.names(), 'a window that will not open: -1, nothing registered, no timer, no bitmap')
-    m = machine(font=font); m.present.add(KILL)
-    expect(m.open() == 0xffffffff and ('window_open', 'm1plus_tape') not in m.calls, 'the kill switch: the page does not open (no window asked for)')
     m = machine(font=font); del m.widgets['tape_view']
     expect(m.open() == 0xffffffff and 'navigator_back' in m.names() and 'timer_add' not in m.names(), 'an asset that is not ours (no view): the window goes again, no timer')
     m = machine(font=font); m.load_image = 1

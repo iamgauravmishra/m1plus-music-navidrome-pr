@@ -47,8 +47,7 @@ order: an unknown character, an id twice (also across the parts), a second `-`, 
 the trampoline resumes at `0x475f10` (`beqz $a0`). Its only caller is the navigator's dialog-init dispatcher (`0x4d1c7c` / `0x4d1c84`, behind the `strcmp` with
 `"dialog/dropdown_dialog"`; the other reference to the name, `on_wm_tsmove_fun` `0x4cd868`, opens the dialog by name), so it runs only when the pull-down is built;
 `tools/reach.py` finds it only behind the navigator cut, never from `main` / `platform_init`. `tools/pod.py` `PULLDOWN_PINS` pins the resume word, the dispatcher, the
-four pointer binds of the init and the tile visitor's `EVT_CLICK` bind. The stock init runs first and its result is returned; then, unless `/mnt/mmc/m1plus-off`
-exists, the eight tile images (`img_wifiswitch`, `img_btswitch`, `img_keylockswitch`, `img_gainswitch`, `img_usbmode`, `img_outputswitch`, `img_playset`,
+four pointer binds of the init and the tile visitor's `EVT_CLICK` bind. The stock init runs first and its result is returned; then the eight tile images (`img_wifiswitch`, `img_btswitch`, `img_keylockswitch`, `img_gainswitch`, `img_usbmode`, `img_outputswitch`, `img_playset`,
 `img_sysset`) and captions (`label_wifi`, `label_bt`, `label_lock`, `label_gain`, `label_usbmode`, `label_outputway`, `label_playset`, `label_sysset`) are looked up and
 their places read; **if any lookup fails nothing changes**. The file is read; shown tile k takes the place of stock tile k (images x 24 / 98 / 172 / 246, y 14 and 114,
 read from the widgets) and its caption keeps its own offset from its tile (stock: -10, +54, boxes 71 x 40); the other tiles and captions get `visible=false` **and**
@@ -63,7 +62,7 @@ only have been hit by a touch, which `sensitive=false` stops (this AWTK hit-test
 tiles leaves empty room; resizing it and the slider is out of scope here. Replacement actions for the freed slots are not part of this.
 
 **Tests** (`test/pod/pdtiles.py`): the hook words, the manifest and the pins; the built assets' grid; the stock layout for no file, the default, ten
-kinds of invalid file, the kill switch, a failed stock init, a null dialog and each of the sixteen widgets missing (nothing moved, hidden or re-stacked); a custom
+kinds of invalid file, a failed stock init, a null dialog and each of the sixteen widgets missing (nothing moved, hidden or re-stacked); a custom
 order, some hidden, hidden-part variants, all hidden (positions at the stock places, captions at their offset, hidden = invisible and insensitive, nothing renamed);
 300 random files against the Python parser; the Settings page (layout from a saved file, taps, arrows, atomic saves, failed save or rename undone, scroll, a page
 that is not ours, the row in the Settings page, the asset's rows) and the Settings Files row. Device: [UI-04](device-checks.md).

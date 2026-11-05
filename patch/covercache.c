@@ -306,7 +306,7 @@ static void cc_album_list(void *artist_row, unsigned scope) {
 }
 
 /* Open the album page on row `index` of the album list the page was built from, the way a stock Albums row does. Ours first (patch/albumpage.c: album_open takes the album row,
- * runs loadAlbumdetailList on it and opens ui/m1plus_album.bin); when it cannot (the kill switch, the All albums card, a window that will not open) the plain stock albuminfo_page, below:
+ * runs loadAlbumdetailList on it and opens ui/m1plus_album.bin); when it cannot (the All albums card, a window that will not open) the plain stock albuminfo_page, below:
  * the stock list the page's own copy was made from goes back into
  * *pdeq_showlist (albuminfo_page_init reads the album row from it), the cover-task list is rebuilt
  * from it (album_page_init's albumcoverinfo_init, which add_albumcover_task indexes) and released, and
