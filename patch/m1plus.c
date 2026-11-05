@@ -116,7 +116,7 @@ enum {
     INFO_CAP,
     INFO_FREE,
     INFO_CC, /* the Cover Cache page's seven values start here: homecover_stat(kind - INFO_CC) */
-    INFO_SF = INFO_CC + 7 /* the Settings Files page's 23 values: setfiles_stat(kind - INFO_SF) */
+    INFO_SF = INFO_CC + 7 /* the Settings Files page's 25 values: setfiles_stat(kind - INFO_SF) */
 };
 
 enum { VK_NONE = 0, VK_WIFI, VK_BLUETOOTH, VK_PLAYMODE, VK_EQ, VK_SORT, VK_THEME, VK_RECORD, VK_VTHEME, VK_BG, VK_ACCENT };

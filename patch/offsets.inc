@@ -748,6 +748,7 @@
 #define CLASS_HIRES 0xf002
 #define CLASS_RECENTADD 0xf009
 #define SG_NAME_MAX 128
+#define REC_TIME_CREATE 0x50  /* stSongInfo: songtable.time_create (column 14), seconds since the epoch: atoi(argv[14]) @0x4e9344 stored at @0x4e9358; the order of Recently Added (docs/modules/recent-albums.md); the album view reads the query in this order and never the field */
 #define REC_INITIAL 0x54      /* stSongInfo: the songtable's Initial column (15), a byte: the ASCII code of '*' (a title that starts with a digit), 'A'..'Z' (the first letter, a CJK character as its pinyin initial) or '#' (anything else); written by the scan (@0x5edcb8), read by the row callback (@0x4e936c) and copied by 0x5db54c (@0x5db9ac); 0 = never written */
 #define NAV_TITLE_X 58           /* the glass navbars' title (tools/pod_ui.py NAV_TITLE_X) */
 #define NAV_SEARCH_X 122        /* the Songs page's capsule starts here: Search 122, Sort 168, Select 214, Now Playing 260 */

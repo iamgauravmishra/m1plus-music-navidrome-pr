@@ -47,6 +47,8 @@ Search out only for a genre's songs, `0xff09`):
 
 - **Navbar**: no Sort. Search moves to Sort's slot (`widget_move` to `NAV_CF_X` 168; its image is the capsule's left cap, which does not depend on where the capsule starts), so the
   capsule is **Search 168 | Select 214 | Now Playing 260**, the Albums page's three-piece capsule. The small title runs from x 58 to 168 (110 px).
+  **Recently Added** (`0xf009`) differs: **Search 122 | Select 168 | view toggle 214 | Now Playing 260** (Select in Sort's slot; no small title) and the toggle switches to a
+  newest-first Albums grid ([recent-albums](recent-albums.md)).
 - **Titles**: the large title (`sg_title`, 250 px; a playlist has its header instead, below) and the small one carry the list's title, **cut with an ellipsis** to their width (`sg_fit`: `grid_fit`'s binary search on the
   wide text in the label's own style, no space before the `…`, at most `SG_NAME_MAX` 128 characters looked at; the playlist's name is copied into the page, at most 255 bytes, cut
   before a character). The Songs title keeps its own rule (never cut; no small title where it does not fit). A list's title is set as text, not as a key: a language changed while

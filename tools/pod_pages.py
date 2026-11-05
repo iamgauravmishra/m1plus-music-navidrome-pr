@@ -338,7 +338,7 @@ CACHE_PAGE = Page('m1plus_cache', 'm1plus_cache_page', 'Cover Cache', layout=[
 COVLIST = Page('m1plus_covlist', 'm1plus_covlist_page', 'Missing Covers', kind='covlist')
 
 # Settings > Developer > Tools > Settings Files (patch/setfiles.c, docs/modules/settings.md "Settings Files"): the payload's own files as read when the page opens. The labels are the file names (identifiers, not translated).
-SETTING_FILES = ('albums-view', 'playlists-view', 'album-order', 'coverflow-landscape', 'cassette-theme', 'vinyl-record', 'vinyl-base', 'pod-appearance', 'home-recent-albums',
+SETTING_FILES = ('albums-view', 'playlists-view', 'recently-added-view', 'album-order', 'coverflow-landscape', 'cassette-theme', 'vinyl-record', 'vinyl-base', 'pod-appearance', 'home-recent-albums',
                  'home-daily-mix', 'home-menu', 'pulldown-tiles', 'keyboard-pinyin', 'podcast-online-search', 'battery-percentage', 'playback-shuffle', 'search-history', 'radio-recent', 'covers-rebuild')
 GUARD_FILES = ('m1plus-start', 'm1plus-run', 'm1plus-bad', 'm1plus-off')
 FOLDER_LABEL = 'm1plus/'

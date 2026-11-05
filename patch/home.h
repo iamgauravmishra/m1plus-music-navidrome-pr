@@ -24,6 +24,9 @@
 #define PLAYLISTS_FILE \
     "/mnt/data/m1plus/playlists-view" /* the Playlists page's mode, as ALBUMS_FILE: "1" the grid (default), "0" the list */
 #define PLAYLISTS_TMP "/mnt/data/m1plus/playlists-view.tmp"
+#define RECENTADD_VIEW_FILE \
+    "/mnt/data/m1plus/recently-added-view" /* Recently Added on the Songs page: "1" the albums grid, anything else (missing too) the songs (docs/modules/recent-albums.md) */
+#define RECENTADD_VIEW_TMP "/mnt/data/m1plus/recently-added-view.tmp"
 #define LANDSCAPE_FILE \
     "/mnt/data/m1plus/coverflow-landscape" /* "1" = Cover Flow opens in landscape, anything else portrait (the default) */
 #define LANDSCAPE_TMP "/mnt/data/m1plus/coverflow-landscape.tmp"
@@ -154,7 +157,7 @@ extern void homecover_stat(
     int idx, char *buf,
     unsigned n); /* a value of that page: 0 Albums, 1 Covers, 2 No art, 3 Missing, 4 Old files, 5 Size, 6 Status */
 extern void setfiles_open(void); /* the Settings Files page is opening: read the files once (patch/setfiles.c) */
-extern void setfiles_stat(int idx, char *buf, unsigned n); /* a row's text as read: 0..20 the files */
+extern void setfiles_stat(int idx, char *buf, unsigned n); /* a row's text as read: 0..24 the files */
 extern int homecover_clear(
     void); /* Settings > Developer > Clear Cover Cache, after its confirm: 1 under way, 0 the cover worker is busy */
 extern void pod_toast(const char *text); /* patch/shuffle.c */

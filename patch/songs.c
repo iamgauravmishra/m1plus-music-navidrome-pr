@@ -40,6 +40,11 @@
  *             An artist's songs (Cover Flow's artist page, songs_open_artist) is the same page on class 0xff11: its whole state is the 0x390 byte browsing
  *             record loadAlbumList(0xf004) and loadAlbumdetailList(0xff01, the All songs row) build, which the page snapshots and puts back before every query
  *             and play; the artist is the title and the grey line of a row is its album.
+ *   albums    Recently Added (class 0xf009) has a navbar toggle (btn_albumview, docs/modules/recent-albums.md): the same page shows the newest-first Albums grid
+ *             (patch/grid.c, a second tile ring sg.rg). The grid is read from the full `time_create desc` query (sort_flag 3 through loadLocalClassList(0xf001), the flag put back
+ *             at once), copied into at most RV_MAX library album rows (sg.rrow) at the moment of the toggle; the album view reads only that copy and the library's albums, never
+ *             *pdeq_showlist, so the stock list the query replaced matters to the songs view only: leaving the album view reads class 0xf009 again (sg_load). The choice is
+ *             kept in RECENTADD_VIEW_FILE.
  *   count     the content view's label sg_foot under the last row: "25 songs", on every list.
  * No hook; everything runs from the page's widgets and timers.
  */
@@ -91,6 +96,7 @@ static int sg_same_sig(const song_t *a, const song_t *b) {
 static struct {
     void *win, *view, *sv, *status, *title, *back, *np;
     void *fade; /* the navbar's fade (img_nb_fade, optional): shown only while the list is scrolled */
+    void *btn_view; /* Recently Added only (optional widget): the songs / albums toggle */
     void *btn_cf; /* the artist's songs list only: the Cover Flow button (back to the covers) */
     void *btn_search, *btn_sort, *btn_select, *btn_selall, *btn_play, *btn_shuffle, *btn_add, *btn_del;
     void *st_title, *st_sub; /* hidden labels whose styles are the text styles (the rail's and the header's are az's) */
@@ -132,6 +138,11 @@ static struct {
     unsigned *htmp; /* one quadrant of the header's mosaic (PH_COVER / 2 squared words) for grid_mosaic */
     int head; /* the page has a playlist's header (class 0xff13, its labels, its tile and quadrant buffer): the pills and the rows start lower, the large title is not shown */
     grid_t hg; /* the header's one tile, PH_COVER px (patch/grid.c, as the Playlists page's mosaics) */
+    void *st_gtitle, *st_gsub; /* the album view's two grid text styles (optional hidden labels) */
+    int rv; /* Recently Added shows its albums (the grid) */
+    unsigned rn; /* the albums of the grid */
+    unsigned *rrow; /* rn library album rows, newest first (the stock row numbers) */
+    grid_t rg; /* the album view's tile ring (GRID_COVER px covers), made when the view is entered */
     grid_t g; /* the tile ring (LAST: test/pod/songs.py reads the fields above by index) */
 } sg __attribute__((section(".scratch")));
 
@@ -181,8 +192,11 @@ static int sg_genre(void) {
 static int sg_artist(void) {
     return sg.cls == CLASS_ARTIST_SONGS;
 } /* an artist's songs: Cover Flow's artist page is its other view (a toggle, not a stack) */
+static int sg_recent(void) {
+    return sg.cls == CLASS_RECENTADD && sg.btn_view;
+} /* Recently Added with the view toggle: Search 122 | Select 168 | toggle 214 | Now Playing, no small title (it does not fit before x 122) */
 static int sg_search_x(void) {
-    return sg_lib() ? NAV_SEARCH_X : sg_genre() ? NAV_VIEW_X : NAV_CF_X;
+    return sg_lib() || sg_recent() ? NAV_SEARCH_X : sg_genre() ? NAV_VIEW_X : NAV_CF_X;
 } /* the capsule's first piece: a list's Search takes Sort's slot; a genre's has none (Select, the left cap, is first) */
 
 /* What a genre's stock row tap leaves in the browsing record (@0x535c4c): classinfo[0] = 0xff09, the name (0x80 bytes, cut as snprintf cuts it) at + 0x30d, the byte + 0xc. */
@@ -284,6 +298,94 @@ static void sg_retext(void) {
 }
 
 /* ---------------------------------------------------------------------------
+ * Recently Added's album view: the Albums grid (patch/grid.c) under the large title, from RV_TOP (where the pills begin on the songs view; there are none here)
+ */
+#define RV_TOP SG_PILL_Y
+#define RV_MAX 60 /* albums kept */
+#define RV_AHEAD 1 /* grid rows loaded beyond the view in the scroll direction */
+/* sort_flag of "Time added (descending)": getAllMusic runs sort_time_desc, `select * from songtable ORDER BY time_create desc` */
+#define RV_SORT_TIME_DESC 3
+#if GRID_TILES < GRID_COLS * ((GRID_VIEW_H + GRID_CELL_H) / GRID_PITCH + 2 + 1) + 2
+#error GRID_TILES cannot hold the visible cells, the next row and the history
+#endif
+
+static int rv_rows(void) { return ((int)sg.rn + GRID_COLS - 1) / GRID_COLS; }
+static int rv_content(void) { return RV_TOP + rv_rows() * GRID_PITCH; }
+static void *rv_rec(int a) { return deque_at(sg.albums, sg.rrow[a]); } /* the library album row of album a */
+
+/* The grid rows that touch the view: [*r0, *r1], none when r1 < r0 (kept inside [0, rows - 1] also while a drag pulls the list past an end). */
+static void rv_span(int *r0, int *r1) {
+    int s = sg_off(), n = rv_rows();
+    *r0 = s > RV_TOP + GRID_CELL_H ? (s - RV_TOP - GRID_CELL_H) / GRID_PITCH + 1 : 0;
+    *r1 = (s + GRID_VIEW_H - RV_TOP + GRID_PITCH - 1) / GRID_PITCH - 1;
+    if (*r0 < 0) *r0 = 0;
+    if (*r1 > n - 1) *r1 = n - 1;
+}
+
+/* The albums [*lo, *hi] the tiles are kept for: those in view and RV_AHEAD rows beyond them in the scroll direction. */
+static void rv_window(int *lo, int *hi) {
+    int r0, r1;
+    rv_span(&r0, &r1);
+    if (sg.dir < 0)
+        r0 -= RV_AHEAD;
+    else
+        r1 += RV_AHEAD;
+    if (r0 < 0) r0 = 0;
+    if (r1 > rv_rows() - 1) r1 = rv_rows() - 1;
+    *lo = r0 * GRID_COLS;
+    *hi = (r1 + 1) * GRID_COLS - 1;
+    if (*hi > (int)sg.rn - 1) *hi = (int)sg.rn - 1;
+}
+
+static tile_t *rv_tile(int a) {
+    int lo, hi, fresh;
+    tile_t *t;
+    rv_window(&lo, &hi);
+    t = grid_tile(&sg.rg, a, lo, hi, &fresh);
+    if (fresh) {
+        void *rec = rv_rec(a);
+        grid_set(t, cc_str(rec, REC_ALBUM), cc_str(rec, REC_ARTIST), cc_album_key(rec));
+    }
+    return t;
+}
+
+static tile_t *rv_tile_of(void *ctx, int a) {
+    (void)ctx;
+    return rv_tile(a);
+}
+
+static void rv_paint(void *canvas) {
+    int r0, r1, last;
+    rv_span(&r0, &r1);
+    if (r1 < r0) return;
+    last = (r1 + 1) * GRID_COLS;
+    if (last > (int)sg.rn) last = (int)sg.rn;
+    grid_paint(canvas, &sg.rg, r0 * GRID_COLS, last, RV_TOP - sg_off(), GRID_VIEW_H, rv_tile_of, (void *)0);
+}
+
+/* The album to decode next, or -1: of the window's albums without a tile that was tried, the cell nearest the middle of the view, the cells in view first. */
+static int rv_next_load(void) {
+    int lo, hi, a, best = -1, bd = 0x7fffffff, s = sg_off();
+    if (!sg.rg.tiles || !sg.rn) return -1;
+    rv_window(&lo, &hi);
+    for (a = lo; a <= hi; ++a) {
+        tile_t *t = grid_find(&sg.rg, a);
+        int top = RV_TOP + a / GRID_COLS * GRID_PITCH - s, d;
+        if (t && t->art) continue;
+        d = sg_abs(top + GRID_CELL_H / 2 - GRID_VIEW_H / 2);
+        if (top >= GRID_VIEW_H || top + GRID_CELL_H <= 0) d += 100000; /* ahead of the view */
+        if (d < bd) bd = d, best = a;
+    }
+    return best;
+}
+
+/* The album under content point (x, y), or -1 for the title block, a gap, the margins and the empty tail of the last row. */
+static int rv_cell_at(int x, int y) {
+    if (y < RV_TOP || y >= rv_content()) return -1;
+    return grid_cell_at(x, y, RV_TOP, (int)sg.rn);
+}
+
+/* ---------------------------------------------------------------------------
  * Paint: the rows, the headers and the pinned header, in one EVT_AFTER_PAINT of the content view. Coordinates are the window's (its top is 0): the scroll_view has
  * moved the canvas up by yoffset, which the paint adds back (CANVAS_OY) for its duration, as the Albums page does.
  */
@@ -323,6 +425,14 @@ static int sg_on_paint(void *ctx, void *e) {
     void *canvas = e ? *(void **)((char *)e + EVENT_PAINT_CANVAS) : (void *)0;
     int off = sg_off();
     (void)ctx;
+    if (sg.rv) {
+        if (canvas && sg.view && sg.rg.tiles && sg.rn) {
+            I(canvas, CANVAS_OY) += off;
+            rv_paint(canvas);
+            I(canvas, CANVAS_OY) -= off;
+        }
+        return RET_OK;
+    }
     if (!canvas || !sg.view || !sg.g.tiles || !sg.count) return RET_OK;
     if (!sg_valid()) { /* another query replaced the stock list: nothing of it is read; the page reads it again when it is on top */
         if (!sg.stale_timer) sg.stale_timer = timer_add(sg_on_stale, (void *)0, 100);
@@ -363,7 +473,8 @@ static int sg_head_pending(void) {
 }
 
 static void sg_kick(void) {
-    if (!sg.more_timer && sg.view && (sg.noscroll || sg_next_load() >= 0 || sg_head_pending()))
+    if (!sg.more_timer && sg.view &&
+        (sg.noscroll || (sg.rv ? rv_next_load() : sg_next_load()) >= 0 || sg_head_pending()))
         sg.more_timer = timer_add(sg_on_load, (void *)0, SG_MORE_MS);
 }
 
@@ -394,6 +505,17 @@ static int sg_on_load(const void *unused) {
         sg_kick();
         return RET_OK;
     }
+    if (sg.rv) { /* the album view: one cover of the grid */
+        a = rv_next_load();
+        if (a >= 0) {
+            tile_t *t = rv_tile(a);
+            int top = RV_TOP + a / GRID_COLS * GRID_PITCH - sg_off();
+            grid_art(&sg.rg, t);
+            if (top < GRID_VIEW_H && top + GRID_CELL_H > 0) sg_redraw();
+        }
+        sg_kick();
+        return RET_OK;
+    }
     if (sg_head_pending()) { /* the header's mosaic first: it is what the page opens on */
         grid_mosaic(&sg.hg, grid_find(&sg.hg, 0), sg.htmp);
         sg_redraw();
@@ -415,7 +537,8 @@ static int sg_on_load(const void *unused) {
  * The navbar's title: the large title is in the content; once it has scrolled away the navbar shows the small one
  */
 static void sg_title_update(void) {
-    int on = sg.noscroll || sg.select || (sg_off() > (sg.head ? PH_COLLAPSE : SG_COLLAPSE) && sg.title_fits);
+    int on = (sg.noscroll && !sg_recent()) || sg.select ||
+             (sg_off() > (sg.head ? PH_COLLAPSE : SG_COLLAPSE) && sg.title_fits);
     if (on != sg.title_on) {
         sg.title_on = on;
         widget_set_visible(sg.title, on, 0);
@@ -434,9 +557,9 @@ static void sg_title_update(void) {
 
 static void sg_retry(void) { /* every tile that showed the placeholder for want of a file tries again */
     int i, any = 0;
-    for (i = 0; sg.g.tiles && i < GRID_TILES; ++i) {
-        tile_t *t = &sg.g.tiles[i];
-        if (t->album && t->art == 2) t->art = 0, any = 1;
+    for (i = 0; i < GRID_TILES; ++i) {
+        tile_t *t = sg.rv ? (sg.rg.tiles ? &sg.rg.tiles[i] : (tile_t *)0) : sg.g.tiles ? &sg.g.tiles[i] : (tile_t *)0;
+        if (t && t->album && t->art == 2) t->art = 0, any = 1;
     }
     if (any) sg_kick();
 }
@@ -506,9 +629,30 @@ go:
     return RET_OK;
 }
 
+/* The album view's build: the (at most RV_MAX) albums, in order, those with no cache file. */
+static int rv_on_build_start(const void *unused) {
+    unsigned i;
+    (void)unused;
+    sg.build_timer = 0;
+    if (!sg.view || !sg.rv || !sg.rn || sg.own || !cc_build_open(sg.rn, CC_MISSING)) return RET_OK;
+    sg.own = 1;
+    for (i = 0; i < sg.rn; ++i) {
+        void *rec = rv_rec((int)i);
+        if (cc_build_add(cc_str(rec, REC_PATH), cc_album_key(rec)) < 0) break;
+    }
+    if (!cc_build_start()) { /* nothing missing, no card, no space, no thread: the set is already freed */
+        sg.own = 0;
+        return RET_OK;
+    }
+    sg.done = 0;
+    sg.build_timer = timer_add(sg_on_build, (void *)0, SG_BUILD_MS);
+    if (!sg.build_timer) sg_build_end();
+    return RET_OK;
+}
+
 static void sg_build_later(void) {
-    if (sg.view && sg.g.tiles && !sg.own && !sg.build_timer)
-        sg.build_timer = timer_add(sg_on_build_start, (void *)0, SG_BUILD_START_MS);
+    if (sg.view && (sg.rv ? sg.rg.tiles : sg.g.tiles) && !sg.own && !sg.build_timer)
+        sg.build_timer = timer_add(sg.rv ? rv_on_build_start : sg_on_build_start, (void *)0, SG_BUILD_START_MS);
 }
 
 /* The scroll_view's EVT_SCROLL (every change of its offset) and scroll end: the title, the direction, the loader and, when the page has gone far from where
@@ -520,7 +664,7 @@ static int sg_on_scroll(void *ctx, void *e) {
     sg_dir();
     sg_title_update();
     sg_kick();
-    if (sg_abs(sg_first() - sg.build_at) > SG_BUILD_MOVE && !sg_moving()) sg_build_later();
+    if (!sg.rv && sg_abs(sg_first() - sg.build_at) > SG_BUILD_MOVE && !sg_moving()) sg_build_later();
     return RET_OK;
 }
 
@@ -528,7 +672,7 @@ static int sg_on_scroll(void *ctx, void *e) {
  * Reading the stock list
  */
 static void sg_size(void) {
-    int h = sg.count ? sg_content() : GRID_VIEW_H;
+    int h = sg.rv ? (sg.rn ? rv_content() : GRID_VIEW_H) : sg.count ? sg_content() : GRID_VIEW_H;
     sg.al.content = sg_content();
     widget_resize(sg.view, SG_W, h);
     widget_set_prop_int(sg.sv, "virtual_h", h);
@@ -575,7 +719,7 @@ static void sg_head(
         const unsigned *t;
         if (!sg_lib()) {
             az_fit(sg.title, sg_name_text());
-            sg.title_fits = 1;
+            sg.title_fits = !sg_recent(); /* (Recently Added: it never fits before x 122) */
             return;
         }
         widget_set_tr_text(sg.title, "Songs");
@@ -700,7 +844,132 @@ static void sg_load(int keep) {
 static int sg_on_stale(const void *unused) {
     (void)unused;
     sg.stale_timer = 0;
-    if (sg.view && sg.g.tiles && !sg_valid() && pod_is_top(sg.win)) sg_load(1);
+    if (sg.view && !sg.rv && sg.g.tiles && !sg_valid() && pod_is_top(sg.win)) sg_load(1);
+    return RET_OK;
+}
+
+/* ---------------------------------------------------------------------------
+ * Recently Added's toggle between the songs and the albums (docs/modules/recent-albums.md)
+ */
+
+/* The toggle shows the glyph of the view a tap switches to. */
+static void rv_glyph(void) {
+    const char *icon = sg.rv ? "pod_nav_list" : "pod_nav_grid";
+    if (!sg.btn_view) return;
+    widget_set_prop_str(sg.btn_view, "style:normal:icon", icon);
+    widget_set_prop_str(sg.btn_view, "style:over:icon", icon);
+    widget_set_prop_str(sg.btn_view, "style:pressed:icon", sg.rv ? "pod_nav_list_down" : "pod_nav_grid_down");
+}
+
+/* The widgets of the view: the albums have no Play / Shuffle pills, no song count and no Select; Search takes Select's slot (Search 168 | toggle 214 | Now Playing). */
+static void rv_ui(void) {
+    sg_show(sg.btn_play, !sg.rv);
+    sg_show(sg.btn_shuffle, !sg.rv);
+    if (sg.foot) widget_set_visible(sg.foot, !sg.rv, 0); /* (an insensitive label: shown, never a touch target) */
+    sg_show(sg.btn_select, !sg.rv);
+    widget_move(sg.btn_search, sg.rv ? NAV_CF_X : NAV_SEARCH_X, 0);
+    rv_glyph();
+}
+
+/* The albums of the newest songs: the full `time_create desc` query (stock's "Time added (descending)" order, sort_flag 3 of getAllMusic, the flag put back at once),
+ * each song resolved to the library album row of its album name (getAllAlbum groups by album COLLATE NOCASE, so a compilation's tracks all find the row of the album, and
+ * so does its cover key), the first RV_MAX distinct rows in order; a song with no album is skipped. The query replaces *pdeq_showlist: the songs view reads its list again
+ * when it comes back. 1 when done (rn may be 0), 0 when there was no memory (nothing was queried). */
+static int rv_load(void) {
+    void *list;
+    unsigned i, j, n, nlib = sg.albums ? deque_size(sg.albums) : 0;
+    int flag = *(int *)SORT_FLAG;
+    free(sg.rrow);
+    sg.rrow = (unsigned *)calloc(RV_MAX, sizeof(unsigned));
+    sg.rn = 0;
+    if (!sg.rrow) return 0;
+    *(int *)SORT_FLAG = RV_SORT_TIME_DESC;
+    list = loadLocalClassList(CLASS_ALL_SONGS) > 0 ? *(void **)PDEQ_SHOWLIST : (void *)0;
+    *(int *)SORT_FLAG = flag;
+    *(int *)G_CLASS_TYPE = sg.cls;
+    n = list && nlib ? deque_size(list) : 0;
+    for (i = 0; i < n && sg.rn < RV_MAX; ++i) {
+        const char *album = cc_str(deque_at(list, i), REC_ALBUM);
+        if (!*album) continue;
+        for (j = 0; j < sg.rn && cc_nocase(cc_str(rv_rec((int)j), REC_ALBUM), album); ++j) {
+        }
+        if (j < sg.rn) continue; /* an album already in */
+        for (j = 0; j < nlib; ++j) {
+            void *r = deque_at(sg.albums, j);
+            if (I(r, REC_ID) != -1 && !cc_nocase(cc_str(r, REC_ALBUM), album)) {
+                sg.rrow[sg.rn++] = j;
+                break;
+            }
+        }
+    }
+    sg.list = sg.first = (void *)0; /* the songs view's list is not the stock list any more */
+    return 1;
+}
+
+/* A coasting list stops (patch/scroll.c sc_down), as the Albums page's mode switch does. */
+static void sg_stop_scroll(void) {
+    void *wa = P(sg.sv, SC_WA);
+    if (wa && I(wa, SC_AN_STATE) == SC_AN_RUNNING && P(wa, SC_AN_WIDGET) == sg.sv) {
+        widget_animator_destroy(wa);
+        stock_scroll_done(sg.sv, (void *)0);
+    }
+}
+
+static int rv_enter(void) {
+    if (!sg_recent() || sg.rv || sg.select || !sg.st_gtitle || !sg.st_gsub) return 0;
+    if (!grid_init(&sg.rg, sg.win, GRID_TILES, GRID_COVER, 0)) {
+        grid_free(&sg.rg);
+        return 0;
+    }
+    grid_shape(&sg.rg, GRID_COVER, GRID_R, 0);
+    sg.rg.st_title = sg.st_gtitle, sg.rg.st_sub = sg.st_gsub;
+    grid_placeholder(&sg.rg);
+    sg_stop_scroll();
+    if (sg.more_timer) timer_remove(sg.more_timer);
+    sg.more_timer = 0;
+    sg_build_end();
+    if (!rv_load()) {
+        grid_free(&sg.rg);
+        return 0;
+    }
+    sg.rv = 1, sg.press = sg.down = 0, sg.dir = 1;
+    rv_ui();
+    sg_show(sg.view, sg.rn != 0);
+    sg_show(sg.status, sg.rn == 0);
+    if (!sg.rn) widget_set_tr_text(sg.status, "No albums");
+    sg_size();
+    widget_set_prop_int(sg.sv, "yoffset", 0);
+    sg.seen = sg_off();
+    sg_title_update();
+    sg_redraw();
+    sg_kick();
+    sg_build_later();
+    return 1;
+}
+
+static void rv_leave(void) {
+    sg_stop_scroll();
+    if (sg.more_timer) timer_remove(sg.more_timer);
+    sg.more_timer = 0;
+    sg_build_end();
+    sg.rv = 0, sg.rn = 0;
+    free(sg.rrow);
+    sg.rrow = (unsigned *)0;
+    grid_free(&sg.rg);
+    rv_ui();
+    sg_load(0); /* the songs view reads its own list again (the album view's query replaced it) */
+}
+
+/* The navbar toggle: the other view, in place, and the choice saved. */
+static int sg_on_view(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    if (!sg_recent() || sg.select || sg.menu) return RET_OK;
+    if (sg.rv)
+        rv_leave();
+    else if (!rv_enter())
+        return RET_OK;
+    home_write_atomic(RECENTADD_VIEW_FILE, RECENTADD_VIEW_TMP, sg.rv ? "1\n" : "0\n");
     return RET_OK;
 }
 
@@ -765,6 +1034,7 @@ static void sg_select(int on) {
                     (i != 0 || (!sg_genre() &&
                                 !sg_artist()))); /* (a list has no Sort, a genre's songs and an artist's no Search) */
     if (sg.btn_cf) sg_show(sg.btn_cf, !on && sg_artist());
+    if (sg_recent()) sg_show(sg.btn_view, !on);
     sg_show(sg.btn_selall, on);
     sg_show(sg.bar, on);
     widget_set_sensitive(sg.btn_play, !on); /* the pills stay in the content, dim and dead (their disabled style) */
@@ -867,7 +1137,7 @@ static int sg_on_cf(void *ctx, void *e) {
 static int sg_on_select(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    if (sg.view && sg.count && !sg.menu) sg_select(1);
+    if (sg.view && sg.count && !sg.menu && !sg.rv) sg_select(1);
     return RET_OK;
 }
 
@@ -891,6 +1161,14 @@ static int sg_on_down(void *ctx, void *e) {
     int a;
     (void)ctx;
     sg.down = 0;
+    if (sg.rv) { /* the album grid: no press fill */
+        int pt[2];
+        if (!e || !sg.view) return RET_OK;
+        pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
+        widget_to_local(sg.view, pt);
+        sg.down = rv_cell_at(pt[0], pt[1]) + 1, sg.down_x = I(e, PE_X), sg.down_y = I(e, PE_Y);
+        return RET_OK;
+    }
     if (!e || !sg.view || !sg.count || !sg_valid()) return RET_OK;
     a = sg_item_of(e);
     sg.down = a + 1, sg.down_x = I(e, PE_X), sg.down_y = I(e, PE_Y);
@@ -904,6 +1182,15 @@ static int sg_on_up(void *ctx, void *e) {
     sg.down = 0;
     sg_set_press(0);
     if (a < 0 || !e || !sg.view) return RET_OK;
+    if (sg.rv) { /* an album: our album page, as the Albums page's tap opens it (cc_open_album takes the stock row) */
+        int pt[2];
+        pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
+        widget_to_local(sg.view, pt);
+        if (sg_abs(I(e, PE_X) - sg.down_x) < SG_TAP_PX && sg_abs(I(e, PE_Y) - sg.down_y) < SG_TAP_PX &&
+            rv_cell_at(pt[0], pt[1]) == a && (unsigned)a < sg.rn)
+            cc_open_album((void *)0, 0, (int)sg.rrow[a]);
+        return RET_OK;
+    }
     if (sg_abs(I(e, PE_X) - sg.down_x) < SG_TAP_PX && sg_abs(I(e, PE_Y) - sg.down_y) < SG_TAP_PX &&
         sg_item_of(e) == a) {
         if (sg.select)
@@ -1000,7 +1287,7 @@ static int sg_on_fg(void *ctx, void *e) {
         memcpy((void *)NAV_TITLE, sg.title_save, sizeof sg.title_save);
         sg_select(0);
         sg_load(1);
-    } else if (!sg_valid() || sg_changes())
+    } else if (!sg.rv && (!sg_valid() || sg_changes())) /* (the album view reads no stock list: nothing is stale) */
         sg_load(1); /* (a list read again whose rows are the same keeps its tiles: sg_load) */
     sg_build_later();
     sg_kick(); /* the loader stops on a list another page replaced (Search's queries), and the list can be valid again by now: covers still to load start it here */
@@ -1021,6 +1308,8 @@ static int sg_on_destroy(void *ctx, void *e) {
     sg_build_end();
     grid_free(&sg.g);
     grid_free(&sg.hg);
+    grid_free(&sg.rg);
+    free(sg.rrow);
     free(sg.htmp);
     if (sg.albums) deque_destroy(sg.albums);
     az_free(&sg.al);
@@ -1056,6 +1345,9 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
     sg.btn_sort = pod_bind(sg.win, "btn_sort", sg_on_sort, (void *)0);
     sg.btn_cf = pod_bind(sg.win, "btn_coverflow", sg_on_cf, (void *)0); /* optional */
     sg.btn_select = pod_bind(sg.win, "btn_select", sg_on_select, (void *)0);
+    sg.btn_view = pod_bind(sg.win, "btn_albumview", sg_on_view, (void *)0); /* optional: Recently Added's toggle */
+    sg.st_gtitle = widget_lookup(sg.win, "label_grid_title", 1); /* optional: the album view's text styles */
+    sg.st_gsub = widget_lookup(sg.win, "label_grid_sub", 1);
     sg.btn_selall = pod_bind(sg.win, "btn_selall", sg_on_selall, (void *)0);
     sg.btn_play = pod_bind(sg.win, "btn_play", sg_on_play, (void *)0);
     sg.btn_shuffle = pod_bind(sg.win, "btn_shuffle", sg_on_shuffle, (void *)0);
@@ -1108,6 +1400,9 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
             sg.btn_cf) { /* an artist's songs: the Cover Flow button is the capsule's left cap (Albums' place), no Search */
             sg_show(sg.btn_search, 0);
             sg_show(sg.btn_cf, 1);
+        } else if (sg_recent()) { /* Recently Added: Search 122 | Select 168 | toggle 214 | Now Playing */
+            widget_move(sg.btn_select, NAV_CF_X, 0);
+            sg_show(sg.btn_view, 1);
         } else
             widget_move(sg.btn_search, NAV_CF_X, 0);
         widget_resize(sg.title, sg_search_x() - NAV_TITLE_X, 22);
@@ -1141,11 +1436,11 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
             (void *)0; /* (one that did not decode is freed with the other at destroy: the pair is all or none) */
     sg.noscroll = !widget_on(sg.sv, EVT_SCROLL, sg_on_scroll, (void *)0) ||
                   !widget_on(sg.sv, EVT_SCROLL_END, sg_on_scroll, (void *)0);
-    if (sg.noscroll)
+    if (sg.noscroll && !sg_recent())
         widget_set_visible(
             sg.title, 1,
             0); /* the large title's collapse needs the scroll events: without them the navbar keeps its title */
-    sg.title_on = sg.noscroll;
+    sg.title_on = sg.noscroll && !sg_recent();
     widget_on(sg.win, EVT_WINDOW_TO_FG, sg_on_fg, (void *)0);
     widget_on(sg.win, EVT_WINDOW_TO_BG, sg_on_bg, (void *)0);
     widget_on(sg.view, EVT_POINTER_DOWN, sg_on_down, (void *)0);
@@ -1168,6 +1463,8 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
     grid_shape(&sg.g, LIST_ART, LIST_R, 1); /* the Albums list's covers: LIST_ART px, LIST_R corners cut in the alpha */
     *(int *)G_CLASS_TYPE = sg.cls; /* as allmusic_page_init leaves it (@0x5289e8) */
     sg_load(0);
+    /* the view used last (a failure leaves the songs) */
+    if (sg_recent() && set_read(RECENTADD_VIEW_FILE, '0') == '1') rv_enter();
     return 0;
 }
 

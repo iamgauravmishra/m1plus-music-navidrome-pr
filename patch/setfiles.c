@@ -20,10 +20,10 @@ struct sf_file {
     char kind;
 };
 
-/* The order of the page's rows (INFO_SF + index): 4 guard files, the folder, 18 settings. */
+/* The order of the page's rows (INFO_SF + index): 4 guard files, the folder, 20 settings. */
 static const struct sf_file sf_files[] = {
     {START_FILE, K_CHAR},          {MARKER, K_PRESENT},       {BAD_NOTE, K_PRESENT},    {KILL_DATA, K_PRESENT},
-    {SET_DIR, K_PRESENT},          {ALBUMS_FILE, K_CHAR},     {PLAYLISTS_FILE, K_CHAR}, {CFSORT_FILE, K_CHAR},
+    {SET_DIR, K_PRESENT},          {ALBUMS_FILE, K_CHAR},     {PLAYLISTS_FILE, K_CHAR}, {RECENTADD_VIEW_FILE, K_CHAR}, {CFSORT_FILE, K_CHAR},
     {LANDSCAPE_FILE, K_CHAR},      {TAPETHEME_FILE, K_CHAR},  {VINYLREC_FILE, K_CHAR},  {VINYLTHEME_FILE, K_CHAR},
     {IP_THEME_FILE, K_CHAR},       {SHELF_FILE, K_CHAR},      {DAILY_SET_FILE, K_CHAR}, {MENU_FILE, K_MENU},
     {PULLDOWN_FILE, K_MENU},       {KBZH_FILE, K_CHAR},       {PCSEARCH_FILE, K_CHAR},  {BP_FILE, K_CHAR},

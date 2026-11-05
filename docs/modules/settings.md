@@ -27,6 +27,7 @@ Feature settings live in their own folder, `/mnt/data/m1plus/` (`SET_DIR`, patch
 | Recent Albums | `home-recent-albums` | `0` off; missing/other on |
 | Daily Mix | `home-daily-mix` | `0` off; missing/other on |
 | Albums / Playlists view | `albums-view`, `playlists-view` | `0` list; missing/other grid |
+| Recently Added view | `recently-added-view` | `1` albums grid; missing/other songs ([recent-albums](recent-albums.md)) |
 | Cover Flow Landscape | `coverflow-landscape` | `1` landscape; missing/other portrait |
 | Album Order | `album-order` | `0` Album; missing/other Artist |
 | Cassette Theme | `cassette-theme` | `1` Chrome, `2` Metal; missing/other Normal |
@@ -129,7 +130,7 @@ at its next foreground), then toasts "Track durations cleared". It does not wait
 
 ## Settings Files
 
-Settings > Developer > Tools > **Settings Files** (a link row, glyph Lucide `file-cog`) opens `m1plus_files`, a cards page of the Cover Cache kind (`ACT_INFO` rows, `INFO_SF + k`, values from `setfiles_stat`, `patch/setfiles.c`). It shows the payload's own files as raw values: the labels are the file names themselves (identifiers, untranslated; only the title is translated). Card 1: the guard files in `/mnt/data` (`m1plus-start` the character, `m1plus-run`, `m1plus-bad`, `m1plus-off` present or missing). Card 2: `m1plus/` (the settings folder: present or missing), then one row per file in it: a single-character setting shows its character (`other` for anything longer, `empty`), `home-menu` and `pulldown-tiles` their first 12 characters (an ellipsis after), `search-history` its number of lines, `covers-rebuild` present or missing; a file that is not there reads `missing`. Everything is read once by `setfiles_open` as the page opens (open, read, close, access); a refresh on coming back to the page shows those values again and reads nothing, no timer. No hook or pin. Tests: `files_tests` in `test/pod/homecover.py`.
+Settings > Developer > Tools > **Settings Files** (a link row, glyph Lucide `file-cog`) opens `m1plus_files`, a cards page of the Cover Cache kind (`ACT_INFO` rows, `INFO_SF + k`, values from `setfiles_stat`, `patch/setfiles.c`). It shows the payload's own files as raw values: the labels are the file names themselves (identifiers, untranslated; only the title is translated). Card 1: the guard files in `/mnt/data` (`m1plus-start` the character, `m1plus-run`, `m1plus-bad`, `m1plus-off` present or missing). Card 2: `m1plus/` (the settings folder: present or missing), then one row per file in it (the Albums, Playlists and Recently Added views among them): a single-character setting shows its character (`other` for anything longer, `empty`), `home-menu` and `pulldown-tiles` their first 12 characters (an ellipsis after), `search-history` its number of lines, `covers-rebuild` present or missing; a file that is not there reads `missing`. Everything is read once by `setfiles_open` as the page opens (open, read, close, access); a refresh on coming back to the page shows those values again and reads nothing, no timer. No hook or pin. Tests: `files_tests` in `test/pod/homecover.py`.
 
 ## Album ordering and initial selection
 
