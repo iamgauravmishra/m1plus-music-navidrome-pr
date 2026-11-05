@@ -30,7 +30,6 @@ def word(t):
 
 class LM(Machine):
     """The payload with Light Mode's state: mode is the saved file's text (None: no file)."""
-    COUNT = True
     keep_cache = False
 
     def __init__(self, mode=None, kill=False, bad=False, hook=False, acc=None):
@@ -322,13 +321,13 @@ def style_tests(ctx):
     m.setword(w + 0x10, m.cstr('home_page'))
     expect(m.color(s) == INK, 'the same window with another name pointer is looked at again')
     # costs: a style call in the default state
-    m = LM(b'2\n', hook=True)
+    m = LM(b'2\n', hook=True).count()
     s = m.style(color=WHITE)
     m.color(s)
     c1 = m.icount
     m.color(s)
     expect(c1 < 950, f'a style call costs {c1} instructions with Light Mode on (stock\'s own part included)')
-    m = LM(hook=True)
+    m = LM(hook=True).count()
     s = m.style(color=WHITE); m.color(s); c0 = m.icount
     expect(c0 < 650, f'and {c0} with it off')
 
@@ -407,7 +406,7 @@ def image_tests(ctx):
     expect(how['glyph'] > 100 and how['whole'] >= 10 and how[None] > 100, f'the tree has glyphs that flip, plates that flip whole and images that stay ({how}); {len(big)} larger ones are checked by the model only')
     # one image at 300 x 52 (a card piece) really through the C, to see its cost
     cp = Image.open(os.path.join(d, 'pod_cd_single.png')).convert('RGBA')
-    m = LM(b'2\n')
+    m = LM(b'2\n').count()
     m.image('pod_cd_single', cp.width, cp.height, list(cp.getdata()))
     expect(m.icount < 2500000, f'a 320 x 52 card piece costs {m.icount} instructions once, when it is decoded')
 
@@ -631,11 +630,34 @@ def accent_map_tests(ctx):
     tones = [O['NP_NEUTRAL']] + [0xff000000 | (b << 16 | g << 8 | r) for r in range(0, 0x60, 0x10) for g in range(0, 0x60, 0x10) for b in range(0, 0x60, 0x10)]
     expect(not [t for t in tones if t & 0xffffff in (word(rgba(L.ROLE_PRESS_ROW)) & 0xffffff, word(rgba(L.ROLE_PROGRESS)) & 0xffffff, word(rgba(L.ROLE_PRESS_PILL)) & 0xffffff, word(rgba(L.ROLE_PRESS_QPILL)) & 0xffffff)], 'no cover-tone background (the neutral grey and a grid of dark tones) is a role colour: the pages stay as they are')
     # cost of a style call with an accent on
-    m = LM(acc=b'1\n', hook=True)
+    m = LM(acc=b'1\n', hook=True).count()
     s = m.style(color=ROLE_WORDS[0]); m.color(s); m.color(s); c_role = m.icount   # (icount is the last call's)
     m.color(m.style(color=WHITE)); c_plain = m.icount
     expect(c_role < 900 and c_plain < 900, f'a style call costs {c_role} instructions on a role colour and {c_plain} on any other with an accent on (stock\'s own part included)')
     print(f'  style call with an accent: {c_role} (role colour), {c_plain} (other)')
+
+
+def tint_check(d, names, mode, background, big=None):
+    """The named tree images under every accent through the C against tools/palette.py's model:
+    (mismatches, images checked, each image's instruction cost under the first accent).
+    Images over big pixels are checked under the first two accents only."""
+    from PIL import Image
+    bad, n, costs = [], 0, {}
+    for i, ac in enumerate(L.ACCENTS[1:], 1):
+        m = LM(mode, acc=b'%d\n' % i)
+        for nm in names:
+            im = Image.open(os.path.join(d, nm + '.png')).convert('RGBA')
+            if big and im.width * im.height > big and i > 2: continue
+            pixels = list(im.getdata())
+            heap0 = m.heap
+            got = m.image(nm, im.width, im.height, pixels)
+            m.heap = heap0
+            if i == 1:   # (the instruction count is per machine: a fresh one per image, once)
+                c = LM(mode, acc=b'1\n').count(); c.image(nm, im.width, im.height, pixels); costs[nm] = c.icount
+            want = list(L.render_image(nm, im, background, ac).getdata())
+            n += 1
+            if got != want: bad.append((ac, nm, next((k, pixels[k], got[k], want[k]) for k in range(len(got)) if got[k] != want[k])))
+    return bad, n, costs
 
 
 def accent_image_tests(ctx):
@@ -643,26 +665,13 @@ def accent_image_tests(ctx):
     expect = ctx.expect
     from PIL import Image
     d = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw', 'images', 'xx')
-    bad, n, costs = [], 0, {}
     GLYPHS = tuple(sorted(f[:-4] for f in os.listdir(d) if f.startswith(L.ACCENT_GLYPH) and f.endswith('.png') and f[:-4] not in L.ACCENT_GLYPH_NOT)) + L.ACCENT_GLYPH_STOCK   # (the row glyphs, tinted by prefix, and the More sheet's stock ones by name)
     expect(len(GLYPHS) >= 60 and sum(g.startswith('pod_ci_') for g in GLYPHS) >= 30, f'{len(GLYPHS)} pod_ic_/fo_ic_/pod_ci_ glyph images in the tree ({sum(g.startswith("pod_ci_") for g in GLYPHS)} Settings card glyphs)')
     expect(not [g for g in GLYPHS if g.startswith('pod_sw')] and all(L.accent_kind(f'pod_sw{k}') is None for k in range(7)), 'the accent swatches pod_sw* are not glyphs (never tinted)')
     expect({'fo_ic_sd', 'fo_ic_usb', 'fo_ic_file'} <= set(GLYPHS), 'the Folders list\'s own glyphs are in the tinted set')
     expect(all(g in GLYPHS and os.path.exists(os.path.join(d, g + '.png')) for g in L.ACCENT_GLYPH_STOCK) and not {'pc_ic_unsub', 'selected'} & set(GLYPHS) and {'pc_ic_trash', 'pl_ic_delete', 'p_delete'} <= set(GLYPHS),
            'every stock glyph named for the accent is an image of the tree and in the tinted set, the delete rows\' glyphs too; the red unsubscribe glyph and the stock selected check are not')
-    for i, ac in enumerate(L.ACCENTS[1:], 1):
-        m = LM(acc=b'%d\n' % i)
-        for nm in L.ACCENT_ALL + GLYPHS:
-            im = Image.open(os.path.join(d, nm + '.png')).convert('RGBA')
-            pixels = list(im.getdata())
-            heap0 = m.heap
-            got = m.image(nm, im.width, im.height, pixels)
-            m.heap = heap0
-            if i == 1:   # (the instruction count is per machine: a fresh one per image, once)
-                c = LM(acc=b'1\n'); c.image(nm, im.width, im.height, pixels); costs[nm] = c.icount
-            want = list(L.render_image(nm, im, 'black', ac).getdata())
-            n += 1
-            if got != want: bad.append((ac, nm, next((k, pixels[k], got[k], want[k]) for k in range(len(got)) if got[k] != want[k])))
+    bad, n, costs = tint_check(d, L.ACCENT_ALL + GLYPHS, None, 'black')
     expect(not bad, f'{n} tinted images (every accent) through the C match tools/palette.py pixel for pixel ({bad[:4]})')
     worst = max(costs, key=costs.get)
     expect(costs[worst] < 12000000, f'the dearest tint ({worst}, {Image.open(os.path.join(d, worst + ".png")).size}) costs {costs[worst]:,} instructions once, when it is decoded')
@@ -721,7 +730,7 @@ def accent_image_tests(ctx):
     m.call(PSYMS['m1plus_image_add'], a0=1, a1=m.cstr('pod_check'), a2=0, count=40000)
     expect('bitmap_lock_buffer_for_write' not in [c[0] for c in m.calls], 'a bitmap that is not 32 bit, a null name and a null bitmap are left alone')
     # the cost of the hook on a name it does not tint
-    m = LM(acc=b'1\n')
+    m = LM(acc=b'1\n').count()
     n0 = m.icount; m.image('np_play', 2, 2, [(0, 0, 0, 0)] * 4); c = m.icount - n0
     expect(c < 3400, f'an image the accent does not tint costs {c} instructions through the hook (the name lists)')
     print(f'  hook on an untinted image: {c} instructions')
@@ -987,21 +996,7 @@ def tinted_tests(ctx):
     stock_h = open(os.path.join(BUILD, 'stock.h')).read()
     line = next((l for l in stock_h.splitlines() if l.startswith('#define TINT_SURFACE ')), '')
     expect(line == '#define TINT_SURFACE "' + ''.join(n + '\\0' for n in L.TINT_SURFACE) + '"', 'TINT_SURFACE in the generated header is the model\'s list')
-    bad, n_img, costs = [], 0, {}
-    for i, ac in enumerate(L.ACCENTS[1:], 1):
-        m = LM(b'1\n', acc=b'%d\n' % i)
-        for nm in surf:
-            im = Image.open(os.path.join(d, nm + '.png')).convert('RGBA')
-            if im.width * im.height > 20000 and i > 2: continue
-            pixels = list(im.getdata())
-            heap0 = m.heap
-            got = m.image(nm, im.width, im.height, pixels)
-            m.heap = heap0
-            if i == 1:
-                c = LM(b'1\n', acc=b'1\n'); c.image(nm, im.width, im.height, pixels); costs[nm] = c.icount
-            want = list(L.render_image(nm, im, 'tinted', ac).getdata())
-            n_img += 1
-            if got != want: bad.append((ac, nm, next((k, pixels[k], got[k], want[k]) for k in range(len(got)) if got[k] != want[k])))
+    bad, n_img, costs = tint_check(d, surf, b'1\n', 'tinted', big=20000)
     expect(not bad, f'{n_img} surface images (cards, sheets, glass, the navbar fade) through the C match the model pixel for pixel ({bad[:3]})')
     changed = [nm for nm in surf if L.render_image(nm, Image.open(os.path.join(d, nm + '.png')), 'tinted', 'teal').getdata() != Image.open(os.path.join(d, nm + '.png')).convert('RGBA').getdata()]
     expect('nb_fade' in changed and 'pod_cd_mid' in changed, 'the model really changes the card pieces and the fade')
@@ -1028,12 +1023,12 @@ def tinted_tests(ctx):
     off = LM(acc=b'4\n')
     expect(off.image('nb_fade', 4, 4, dark) == dark and 'bitmap_lock_buffer_for_write' not in [c[0] for c in off.calls], 'Black + an accent: a surface is not even locked')
     # cost of the hook calls
-    m = LM(b'1\n', acc=b'4\n', hook=True)
+    m = LM(b'1\n', acc=b'4\n', hook=True).count()
     s = m.style(color=BLACK); m.color(s); m.color(s); c_dark = m.icount
     m.color(m.style(color=WHITE)); c_other = m.icount
     expect(c_dark < 1200 and c_other < 1000, f'a style call costs {c_dark} instructions on a dark colour and {c_other} on any other with Tinted on (stock\'s own part included)')
     print(f'  style call, Tinted: {c_dark} (dark neutral), {c_other} (other)')
-    c = LM(b'1\n', acc=b'4\n'); c.image('np_play', 4, 4, dark); c_miss = c.icount
+    c = LM(b'1\n', acc=b'4\n').count(); c.image('np_play', 4, 4, dark); c_miss = c.icount
     expect(c_miss < 4000, f'an image that is not a surface costs {c_miss} instructions through the hook with Tinted on')
     print(f'  image hook, Tinted: {c_miss} on a non-surface name, {costs.get("pod_cd_mid", 0):,} to tint pod_cd_mid')
     # the setting: applies at once, persists, the kill switch
@@ -1110,7 +1105,7 @@ def rest_glyph_tests(ctx):
     for ac in L.ACCENTS[1:]:
         expect(L.card_press(ac) != L.ACCENT_RGB[ac] and L.accent_pixel('glyph', (255, 255, 255, 255), ac)[:3] == L.ACCENT_RGB[ac], f'{ac}: a pressed Settings row is the tinted card with the accent glyph on it')
     # cost of the tint per decode
-    m = LM(acc=b'1\n'); n0 = m.icount; m.image('pod_ic_songs', 24, 24, [(255, 255, 255, 255)] * 576); c = m.icount - n0
+    m = LM(acc=b'1\n').count(); n0 = m.icount; m.image('pod_ic_songs', 24, 24, [(255, 255, 255, 255)] * 576); c = m.icount - n0
     expect(c < 400000, f'the glyph tint costs {c:,} instructions per 24 x 24 decode')
     print(f'  glyph tint (24 x 24, once per decode): {c:,} instructions')
 

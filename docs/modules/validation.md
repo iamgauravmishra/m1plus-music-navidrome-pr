@@ -32,3 +32,7 @@ or matching retained evidence.
 Emulation proves only the modelled paths. Playback, real frame timing, panel appearance and
 hardware behaviour still need [device checks](device-checks.md). A preview is approximate;
 a successful golden comparison proves byte identity, not hardware correctness.
+
+## Harness performance
+
+`test/pod/palette.py` counts instructions only on the machines of its cost checks.

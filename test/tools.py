@@ -77,6 +77,12 @@ def workflow_tests():
     ns = lambda **k: type('A', (), {'perf': False, 'tests_only': False, **k})
     expect('cost/stress checks run unless a tests-only run omits --perf',
            check.perf_enabled(ns()) and check.perf_enabled(ns(tests_only=True, perf=True)) and not check.perf_enabled(ns(tests_only=True)))
+    with tempfile.TemporaryDirectory() as td, patch.object(check, 'CACHE', Path(td)):
+        workflow.write(check.timing_file(True), {'patch:pcpng': 60})
+        workflow.write(check.timing_file(False), {'patch:pcpng': 2})
+        expect('quick timings cannot overwrite stress scheduling history',
+               workflow.read(check.timing_file(True)) == {'patch:pcpng': 60}
+               and workflow.read(check.timing_file(False)) == {'patch:pcpng': 2})
     expect('empty test selection refused', refused(lambda: check.parse_tests([','])))
     expect('SIGILL named in diagnostics', workflow.exit_description(-signal.SIGILL) == 'SIGILL')
 

@@ -19,7 +19,7 @@ import build, paths, workflow
 
 GOLDEN = os.path.join(TEST, 'golden.sha256')
 CACHE = Path(ROOT) / 'work/cache'
-LAST = CACHE / 'check-last.json'; TIMES = CACHE / 'test-times.json'
+LAST = CACHE / 'check-last.json'
 TARGETS = {'release': (build.TAG, []), 'restore': (build.RESTORE_TAG, ['--restore'])}
 MODULES = sorted(Path(f).stem for f in glob.glob(os.path.join(TEST, 'pod', '*.py')) if not f.endswith('harness.py'))
 
@@ -44,6 +44,7 @@ def counts(text):
 def test_ok(t): return t['rc'] == 0 and (t['counts'] is None or t['counts'][1] == 0)
 def outcome(bad, changed, update): return bad or (changed and not update), update and not bad
 def perf_enabled(a): return a.perf or not a.tests_only   # receipts and goldens need the full suite, cost checks included
+def timing_file(perf): return CACHE / ('test-times.json' if perf else 'test-times-quick.json')
 def tree_key(): return workflow.input_key()
 
 
@@ -199,7 +200,10 @@ def main():
             run_build([*flags, '--tree-only'], logs / 'tree.log', env)
             tree = base / 'tree' if a.dev else base / 'release/work/mod-release'
             workflow.validate_tree(tree)
-        times = workflow.read(TIMES)
+        # Stress inputs have very different costs. Quick runs must not schedule a
+        # later dev run's long stress tasks last by overwriting their durations.
+        times_path = timing_file(a.perf)
+        times = workflow.read(times_path)
         test_start = progress = time.monotonic()
         timings = {'setup': test_start - start}
         with cf.ThreadPoolExecutor(max_workers=a.jobs) as ex:
@@ -218,7 +222,7 @@ def main():
             slowest = sorted(tests, key=lambda t: t['secs'], reverse=True)[:3]
             print(f'tests ready ({timings["tests"]:.1f}s); slowest: ' +
                   ', '.join(f'{t["test"].removeprefix("patch:")} {t["secs"]:.1f}s' for t in slowest), flush=True)
-        workflow.write(TIMES, {n: s for n, s in {**times, **{t['test']: t['secs'] for t in tests}}.items() if n in ALL_TESTS})   # names no longer run are dropped
+        workflow.write(times_path, {n: s for n, s in {**times, **{t['test']: t['secs'] for t in tests}}.items() if n in ALL_TESTS})   # names no longer run are dropped
         tests_passed = len(tests) == len(names) and all(test_ok(t) for t in tests)
         if workflow.input_key() != key: tests_passed = False
         if tests_passed and (a.dev or 'release' in sel):

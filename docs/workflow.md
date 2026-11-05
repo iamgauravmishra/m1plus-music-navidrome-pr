@@ -79,6 +79,8 @@ keeping dev artifacts, counters and caches. Locks prevent overlapping writes.
 The runner reports build durations, test progress about every ten seconds as tasks finish,
 and the three slowest tasks. Dev `results.json` also records `timings.setup`, `timings.tests`
 and `timings.package` in wall seconds; setup includes input checks, tree construction and validation.
+Quick and full cost/stress runs keep separate scheduling timings in `work/cache/`, so a quick
+test run cannot move a long stress task to the end of the next dev build.
 
 ## CI
 
