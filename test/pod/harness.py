@@ -264,6 +264,8 @@ class Machine:
         self.handlers[pod.TF_UPDATE] = 'tf_update_click'
         self.handlers[pod.PLAYLIST_IMPORT] = 'stock_playlist_import'   # the stock Playlists page's Import / Export click handlers
         self.handlers[pod.PLAYLIST_EXPORT] = 'stock_playlist_export'
+        self.handlers[pod.GLYPH_CACHE_LOOKUP] = 'glyph_cache_lookup'   # the stb font's glyph path (patch/textgamma.c wraps it): mocked, test/pod/textgamma.py
+        self.handlers[O['STB_GET_GLYPH']] = 'font_stb_get_glyph'
         # the Home guard's world (patch/home.c): flash/SD files, file descriptors, the window stack
         self.fs, self.fds, self.next_fd, self.fail = {}, {}, 3, set()
         self.dirs = {'/mnt/data', '/mnt/data/m1plus'}
@@ -661,6 +663,20 @@ class Machine:
                 self.u.mem_write(a1 + O['CANVAS_FONT_SIZE'], struct.pack('<H', size))
         elif name == 'font_get_vmetrics':   # the 8 byte struct through the hidden pointer in $a0: ascent, descent, line gap
             self.u.mem_write(a0, struct.pack('<hhi', a2 - 4, -4, 2)); ret = a0
+        elif name == 'glyph_cache_lookup':   # stock's cache of the stb font (test/pod/textgamma.py fills self.glyph_cache): 0 with the glyph_t copied to a3 on a hit, else a miss
+            self.calls.append(('glyph_cache_lookup', a1, a2))
+            hdr = self.glyph_cache.get((a1, a2))
+            if hdr is None: ret = 9
+            else: self.u.mem_write(a3, hdr); ret = 0
+        elif name == 'font_stb_get_glyph':   # stock's rasterizer: a 4 x 3 mask of raw coverage, cached as glyph_cache_add does; 0 on success (a space: no bitmap)
+            self.calls.append(('font_stb_get_glyph', a1, a2))
+            if a1 == 0x20:
+                hdr = struct.pack('<hhHHHBBI', 0, 0, 0, 0, 4, 0, 0, 0)
+            else:
+                w, h = 4, 3; raw = bytes((37 * i + 5 * a1 + a2) & 0xff for i in range(w * h))
+                data = self.malloc(w * h); self.u.mem_write(data, raw); self.glyph_raw[(a1, a2)] = raw
+                hdr = struct.pack('<hhHHHBBI', 0, -2, w, h, 5, 0, 0, data)
+            self.glyph_cache[(a1, a2)] = hdr; self.u.mem_write(a3, hdr); ret = 0
         elif name == 'font_get_glyph':
             # a block of full alpha per char: 8 px advance (16 for CJK and the ellipsis), 6 (12) wide, 3/4 of the size high
             wide = a1 >= 0x2e80 or a1 == 0x2026

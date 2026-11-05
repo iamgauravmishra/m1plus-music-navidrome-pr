@@ -1314,6 +1314,12 @@
                                   /* stbtt_FindGlyphIndex reads data and it on every call (lw 4(a0), 0x2c(a0) @0x67c3c0) */
 #define STB_MATCH 0x67d2d4u
 #define STB_GET_GLYPH 0x680228u
+#define FONT_CACHE 0xb4           /* font_t glyph cache (the argument of glyph_cache_lookup; sw/addiu @0x6802d8) */
+#define FONT_MONO 0xd0            /* font_t mono flag: 1-bit glyphs (lbu @0x680458); patch/textgamma.c leaves those fonts alone */
+#define GLYPH_W 4                 /* glyph_t (16 bytes, stock's layout; tools/pod.py TEXTGAMMA_PINS): x int16 @0, y int16 @2, w @4, h @6, advance @8, format @0xa (0 = 8-bit alpha), flags @0xb, bitmap pointer @0xc (w * h bytes, stride w) */
+#define GLYPH_H 6
+#define GLYPH_FORMAT 0xa
+#define GLYPH_DATA 0xc
 #define LOCALE_COUNTRY 0          /* locale_info_t: country[3] then language[3]: locale_info_reload builds "%s_%s" from +3, +0 (@0x658970) */
 #define LOCALE_LANGUAGE 3
 #define EVT_LOCALE_CHANGED 0x122  /* locale_info_change dispatches it when the language changes (@0x658a7c) */

@@ -26,7 +26,7 @@ Usage: pod.py WORKDIR
 import argparse, concurrent.futures, hashlib, io, json, os, pathlib, re, stat, struct, subprocess, sys
 from elftools.elf.elffile import ELFFile
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import autotime, palette, pod_pages, pod_ui, themeoff, timezones
+import autotime, palette, pod_pages, pod_ui, textgamma, themeoff, timezones
 from build import TAG, VERSION, REPO, about   # the About row of the iPod page shows about(tag) (patch/m1plus.c M1PLUS_TAG)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -41,7 +41,7 @@ OBJCOPY = os.path.join(LLVM, 'llvm-objcopy')
 LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
-SOURCES = ['m1plus.c', 'common.c', 'filetime.c', 'menu.c', 'covercache.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c',
+SOURCES = ['m1plus.c', 'common.c', 'filetime.c', 'menu.c', 'covercache.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c', 'textgamma.c',
            'scroll.c', 'playmore.c', 'pulldown.c', 'playlists.c', 'azlist.c', 'songops.c', 'rowmenu.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'upnext.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'upver.c', 'pcnet.c', 'podcasts.c', 'radio.c', 'radiopage.c', 'radionp.c', 'radioinfo.c', 'tape.c', 'palette.c', 'vinyl.c', 'onlineart.c', 'update.c', 'relnotes.c', 'keyboard.c', 'search.c', 'battery.c', 'lineout.c', 'lyrics.c', 'picker.c', 'folders.c', 'timezones.c']
 
 FLAGS = ['--target=mipsel-linux-gnu', '-march=mips32r2', '-mabi=32', '-mfp64',
@@ -437,6 +437,20 @@ FONT_PINS = (   # (address, stock word, what it proves): the stb font layout pat
     (0x658a7c, 0x24050122, 'locale_info_change: EVT_LOCALE_CHANGED 0x122'), (0x658bc8, 0x24050122, 'locale_info_on: emitter_on with 0x122'),
     (0x66d4bc, 0x2405014a, 'widget_set_theme: EVT_THEME_CHANGED 0x14a, dispatched on the window manager after font_manager_unload_all'),
     (0x74a988, 0x61666564, 'the stock font name "default" (main: system_info_set_default_font)'), (0x74a98c, 0x00746c75, '"default" (cont.)'),
+)
+GLYPH_CACHE_LOOKUP = 0x6a4204   # static in demo (no .dynsym entry, so not in FUNCTIONS): called by font_stb_get_glyph before it rasterizes
+TEXTGAMMA_PINS = (   # (address, stock word, what it proves): the glyph path patch/textgamma.c wraps (docs/modules/fonts.md "Coverage gamma")
+    (GLYPH_CACHE_LOOKUP, 0x3c1c0036, 'glyph_cache_lookup: lui gp, 0x36 (its first word; 0 on a hit)'),
+    (0x6a4214, 0x1080000e, 'glyph_cache_lookup: beqz a0 (the cache)'),
+    (0x6a4224, 0x8c670000, 'glyph_cache_lookup: lw a3, 0(v1): the cache\'s entry count, first word of the scan'),
+    (0x6a41e8, 0xae12000c, 'glyph_cache_add: sw s2, 0xc(s0): the entry keeps the glyph\'s character (a miss is cached here)'),
+    (0x6802d8, 0x264200b4, 'font_stb_get_glyph: addiu v0, s2, 0xb4: the glyph cache at font +0xb4 (FONT_CACHE)'),
+    (0x680458, 0x924200d0, 'font_stb_get_glyph: lbu v0, 0xd0(s2): the mono flag at font +0xd0 (FONT_MONO)'),
+    (0x6803cc, 0xa200000a, 'font_stb_get_glyph: sb zero, 0xa(s0): the glyph format 0 = 8-bit alpha (GLYPH_FORMAT)'),
+    (0x68040c, 0xa2030004, 'font_stb_get_glyph: sb v1, 4(s0): the glyph w (GLYPH_W), from 0x8c(sp)'),
+    (0x680424, 0xa2030006, 'font_stb_get_glyph: sb v1, 6(s0): the glyph h (GLYPH_H), from 0x90(sp)'),
+    (0x680864, 0x70432002, 'font_stb_get_glyph: mul a0, v0, v1: the bitmap is w * h bytes, stride w (tk_alloc at 0x680868)'),
+    (0x6805e0, 0x10400253, 'font_stb_get_glyph: beqz v0 after glyph_cache_add: 0 is success; the out copy keeps the bitmap pointer (GLYPH_DATA)'),
 )
 ID3_SITE = 0x4dff4c   # get_id3info's jalr strcpy of the parsed path, replaced by jal pc_id3_path (docs/modules/podcasts.md "Tags"); q2-pod's ID3_PATH is the same site in its demo
 PODCAST_PINS = (   # (address, stock word, what it proves)
@@ -1224,6 +1238,9 @@ def gen_stock_h(out, demo_path):
     h.append('#define TIMEZONE_NAMES {' + ','.join(json.dumps(tz) for _, tz in timezones.TIMEZONES) + '}')   # patch/timezones.c
     h.append('#define TIMEZONE_LABELS {' + ','.join(json.dumps(label) for label, _ in timezones.TIMEZONES) + '}')
     h.append('#define TIMEZONE_ORDER {' + ','.join(map(str, timezones.ORDER)) + '}')
+    h.append(f'#define glyph_cache_lookup ((int (*)(void *, unsigned, unsigned, void *))0x{GLYPH_CACHE_LOOKUP:x}u)')   # static in demo (TEXTGAMMA_PINS): 0 on a hit, the glyph_t copied to a3
+    h.append(f'/* text coverage gamma G = {textgamma.GAMMA} (tools/textgamma.py) */')
+    h.append('#define TEXT_GAMMA_LUT {' + ', '.join(str(v) for v in textgamma.lut()) + '}')   # patch/textgamma.c
     h.append('extern int stock_home_click_trampoline(void *, void *);')
     h.append('extern int stock_playing_init_trampoline(void *, void *);')
     h.append('extern int stock_playmore_init_trampoline(void *, void *);')
@@ -1539,7 +1556,7 @@ def patch_demo(raw, payload, ps, demo_path):
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     patch_radio(patched, ps, len(payload))
-    for a, old, what in PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + BATTERY_PINS + LINEOUT_PINS + SHUFFLE_PINS + FILETIME_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS:   # stock code the Playlists and Songs pages call: checked, not written
+    for a, old, what in PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + TEXTGAMMA_PINS + BATTERY_PINS + LINEOUT_PINS + SHUFFLE_PINS + FILETIME_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS:   # stock code the Playlists and Songs pages call: checked, not written
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     target5 = ps['pc_id3_path']

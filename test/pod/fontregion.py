@@ -46,9 +46,13 @@ def run(ctx):
         want = sub[enc] if enc else default
         got = m.word(m.font + O['FONT_INDEX_MAP'])
         expect(got == want, f'{lang}_{country}: index_map {got:#x} is the {enc or "default"} subtable {want:#x}')
+        # (the machine starts with stock's glyph slot: the coverage gamma's install (patch/textgamma.c) empties the cache and repaints once)
         shrunk = ('font_manager_shrink_cache', FM, 0) in m.calls
-        expect(shrunk == bool(enc) and (('widget_invalidate_force', m.wm) in m.calls) == bool(enc),
-               f'{lang}_{country}: the glyph cache is emptied (keep 0) and the window manager repainted only on a change')
+        expect(shrunk and ('widget_invalidate_force', m.wm) in m.calls,
+               f'{lang}_{country}: the glyph cache is emptied (keep 0) and the window manager repainted by the first apply')
+        m.call(BOOT, count=200000)
+        expect(not any(c[0] in ('font_manager_shrink_cache', 'widget_invalidate_force') for c in m.calls),
+               f'{lang}_{country}: a second apply on the same language changes nothing (no cache clear, no repaint)')
         expect(('font_manager_get_font', FM, 'default', 0) in m.calls, f'{lang}_{country}: the font is the stock "default", any size')
 
     # 3. Back to the default map: a regional font and an English UI, or the kill switch.
@@ -69,8 +73,8 @@ def run(ctx):
     for k in range(struct.unpack_from('>H', font, cm + 2)[0]):   # the regional records moved to platform 2 (ISO): no (1, enc) left
         if struct.unpack_from('>H', font, cm + 4 + 8 * k)[0] == 1: struct.pack_into('>H', plain, cm + 4 + 8 * k, 2)
     m = font_machine(bytes(plain), 'ja', 'JP'); m.call(BOOT, count=200000)
-    expect(m.word(m.font + O['FONT_INDEX_MAP']) == default and not any(c[0] == 'font_manager_shrink_cache' for c in m.calls),
-           'a font without the regional record: untouched')
+    expect(m.word(m.font + O['FONT_INDEX_MAP']) == default and m.word(m.font + O['FONT_GET_GLYPH']) == PSYMS['tg_get_glyph'],
+           'a font without the regional record: the index map is untouched (the coverage gamma still applies)')
 
     # 5. A language or theme change: one timer (not two for two events), which applies the new language.
     m = font_machine(font, 'zh', 'CN'); m.call(BOOT, count=200000)

@@ -12,6 +12,7 @@
 #include "offsets.inc"
 #include "stock.h"
 #include "home.h"
+#include "textgamma.h"
 
 #define FR_DELAY_MS 10
 enum { FR_DEFAULT = 0, FR_JP = 1, FR_TC = 2, FR_SC = 25 }; /* the subtables' Mac encoding IDs (mod_font.REGIONS) */
@@ -60,7 +61,8 @@ static void fr_apply(void) {
     unsigned off;
     if (!fm) return;
     f = font_manager_get_font(fm, "default", 0); /* creates it if no text was drawn yet */
-    if (!f || *(unsigned *)(f + FONT_MATCH) != STB_MATCH || *(unsigned *)(f + FONT_GET_GLYPH) != STB_GET_GLYPH) return;
+    if (!f || *(unsigned *)(f + FONT_MATCH) != STB_MATCH || !tg_stb_slot(f)) return;
+    tg_apply(fm, f); /* the coverage gamma's glyph slot (patch/textgamma.c), applied on the same two occasions */
     data = *(unsigned char **)(f + FONT_DATA);
     if (!data) return;
     off = fr_subtable(data, *(unsigned *)(f + FONT_START), fr_region());

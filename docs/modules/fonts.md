@@ -90,6 +90,20 @@ sized from them still adds up. The step runs first so every later step measures 
   per line: a line whose code points are all in lyrics.ttf (34 ranges, checked against its cmap by the test) takes the bold style,
   any other line (CJK, kana, Hangul, symbols) the default font's. Cost: the rootfs went from 983,040 to 872,448 bytes under the stock size
   (110,592 more for the file; `fwtool` enforces the size, and `mod_font.added_rels` lets the repack add the file).
+- **Coverage gamma (`patch/textgamma.c`, `tools/textgamma.py`).** stb_truetype blends each glyph's 8-bit coverage straight
+  into sRGB, so light text on black reads thin. Every freshly rasterized mask of the default font is mapped once through
+  a' = round(255 (a/255)^(1/G)), G = 1.45 (`GAMMA` in `tools/textgamma.py`; 1.25 is the other candidate in
+  `tools/preview_aa.py`, which uses the same formula): 16 -> 38, 64 -> 98, 128 -> 159. The table is the 256-byte
+  `TEXT_GAMMA_LUT` that `tools/pod.py` writes into `stock.h`. `tg_apply`, called from `fr_apply` (the regional forms'
+  two occasions), swaps the font object's get_glyph slot (+0x24, read on every `font_get_glyph`) for `tg_get_glyph`.
+  The wrapper calls `glyph_cache_lookup` (`0x6a4204`) on the glyph cache at font +0xb4 first: a hit returns stock's
+  copy untouched, because its mask was mapped when it was rasterized. A miss calls `font_stb_get_glyph` (`0x680228`),
+  which rasterizes and caches the glyph (`glyph_cache_add`, `0x6a40bc`, returns 0), then maps the bitmap in place
+  (`glyph_t` `w` @+4, `h` @+6, `format` 0 = alpha, bitmap pointer @+0xc, w * h bytes, stride w); the cache entry shares
+  that bitmap, so no glyph is mapped twice. Installing empties the glyph cache (keep 0) and repaints. Mono fonts (+0xd0),
+  fonts that are not stb fonts, a foreign get_glyph slot and the kill switch (read at each apply, so a file made
+  during a session applies at the next apply) leave stock. No hook and no per-paint work. Not covered: `lyrics.ttf`,
+  which is loaded lazily on the lyrics page (`font_manager_get_font`) and never gets the slot.
 - **Pull-down volume.** The pull-down's status bar is laid out like the real one (`tools/statusbar.py`, section 4), where
   `100` at 16 px fits the stock 30 px label; the font step does nothing for it.
 - Not fixed on purpose: Latin UIs draw CJK ellipsis/dashes with Inter's, the colon is not raised between digits
