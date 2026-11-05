@@ -1697,13 +1697,15 @@ static void pg_tint_cover(void) {
     }
 }
 
-/* The navbar's title: on the Downloads level always; on the Shows and Show levels only once the large title / the header's name has scrolled away (the Shows level with no show has no large title); in select mode it has its own: "N Selected". */
+/* The navbar's small title: shown once the large title (the Shows, Downloads, Subscriptions and Saved levels: SG_COLLAPSE, as every large-title page) or the Show level's header name has scrolled
+ * away (pod_title_gone); in select mode it has its own: "N Selected". The search level's title is Apple Podcasts, always (empty and with results): it has no large title to scroll away. */
 static void pg_title_show(void) {
-    if (pg.title) widget_set_visible(pg.title, pg.collapsed || pg.select, 0);
+    if (pg.title) widget_set_visible(pg.title, pg.collapsed || pg.select || pg.level == L_SRCH, 0);
 }
 
 static void pg_collapse(void) {
-    int c = pg.level == L_EPS && !pg.det && pg.hdr && pg_off() >= pg.hdr->collapse;
+    int c = pg.level == L_EPS ? !pg.det && pg.hdr && pod_title_gone(pg_off(), pg.hdr->collapse)
+                              : (pg.level == L_SHOWS || pg.level == L_DLS) && pod_title_gone(pg_off(), 0);
     if (c != pg.collapsed) {
         pg.collapsed = c;
         pg_title_show();
@@ -1830,9 +1832,9 @@ static int pg_on_load(const void *unused) {
  * Levels
  */
 static void pg_title(const char *key, const char *text) {
-    if (key) { /* the Shows, Downloads and Subscriptions levels: the large heading at the top of the content (it scrolls away; the navbar shows no title) */
-        widget_set_text_utf8(pg.big, TR(key));
-        return;
+    if (key) { /* the Shows, Downloads, Subscriptions and Saved levels: the large heading at the top of the content, and the same words for the navbar's small title (shown once it has scrolled away) */
+        az_fit(pg.big, TR(key));
+        text = TR(key);
     }
     if (pg.title) az_fit(pg.title, text);
 }
@@ -1914,6 +1916,7 @@ static void pg_leave_show(void) {
 /* The navbar's right end. Shows level: the "..." (the sheet's button) only while the card has something to import (Import from Card). Show level: the "..." (its sheet). Downloads page and Subscriptions page: the "..."
  * (Select and Delete Played Episodes / Select Shows and Export OPML) while there are rows. Elsewhere all are hidden (and out of the hit test) and Now Playing is the glass disc; with a cap beside it Now Playing is the capsule's right cap.
  * The large title is the Shows level's (a child of the content view); the navbar's small one: see pg_title_show. */
+static void pg_head(void);
 static void pg_nav(void) {
     int more = !pg.select && pg.btn_more &&
                ((pg.level == L_EPS && !pg.preview && !pg.det) || (pg.level == L_SHOWS && pg.has_import) ||
@@ -1936,6 +1939,10 @@ static void pg_nav(void) {
         widget_set_visible(pg.sf, pg.level == L_SRCH,
                            0); /* (insensitive for life: a touch on the field goes to the content view) */
     pg_show(pg.big, pg.level == L_SHOWS || pg.level == L_DLS);
+    if (pg.title && !pg.select) { /* the small title ends before the leftmost button, cut with an ellipsis (pg_head sets the text again at the new width) */
+        widget_resize(pg.title, (globe ? gx : more ? NAV_VIEW_X : NAV_VIEW_X + NAV_VIEW_W) - NAV_TITLE_X, 22);
+        pg_head();
+    }
     pg_title_show();
     if (pg.np) {
         widget_set_prop_str(pg.np, "style:normal:icon", img);
@@ -2424,6 +2431,7 @@ static void pg_load_downloads(int keep) {
     pg_dls_apply();
     widget_set_prop_int(pg.sv, "yoffset", off);
     if (pg.saved) pg.want_off = off; /* (the rows come a show a tick: the offset is put back as they reach it) */
+    pg_collapse();
     pg_fade();
     pg_kick();
 }
@@ -2614,6 +2622,8 @@ static void pg_load_search(int fresh) {
     } else
         pg_srch_apply();
     widget_set_prop_int(pg.sv, "yoffset", 0);
+    pg_title((const char *)0, TR("Apple Podcasts")); /* after pg_nav has sized the title (az_fit cuts to the width) */
+    pg_collapse();
     pg_title_show();
     pg_fade();
     if (fresh && !pg.sq[0]) pg_srch_edit();
@@ -3000,6 +3010,8 @@ static void pg_head(void) { /* the navbar's title: "N Selected" in select mode, 
     if (!pg.select) {
         if (pg.level == L_EPS)
             pg_title((const char *)0, pg.shows[pg.sel].title);
+        else if (pg.level == L_SHOWS)
+            pg_title("Podcasts", (const char *)0);
         else if (pg.level == L_DLS)
             pg_title(pg.subs ? "Subscriptions" : pg.saved ? "Saved" : "Downloads", (const char *)0);
         return;
@@ -3024,7 +3036,7 @@ static void pg_select(int on) {
     pg_show(pg.del, on && !(pg.level == L_DLS &&
                             pg.subs)); /* the bar's one pill: Delete, or on the Subscriptions page Unsubscribe */
     pg_show(pg.unsubp, on && pg.level == L_DLS && pg.subs);
-    if (pg.title) widget_resize(pg.title, (on ? SG_SELALL_X : NAV_VIEW_X) - NAV_TITLE_X, 22);
+    if (pg.title && on) widget_resize(pg.title, SG_SELALL_X - NAV_TITLE_X, 22); /* (leaving select mode, pg_nav sets the width of the level) */
     if (pg.back) {
         widget_set_prop_str(pg.back, "style:normal:icon", on ? "ah_nav_close" : "ah_nav_back");
         widget_set_prop_str(pg.back, "style:over:icon", on ? "ah_nav_close" : "ah_nav_back");
@@ -3577,6 +3589,7 @@ static void pg_dls_back(void) {
         pg_load_downloads(0);
         pg.want_off = off;
         pg_dls_apply();
+        pg_collapse();
         pg_fade();
         return;
     }
@@ -3584,6 +3597,7 @@ static void pg_dls_back(void) {
     max = pg_content() - GRID_VIEW_H;
     if (max < 0) max = 0;
     widget_set_prop_int(pg.sv, "yoffset", off > max ? max : off);
+    pg_collapse();
     pg_fade();
     pg_redraw();
     pg_kick();

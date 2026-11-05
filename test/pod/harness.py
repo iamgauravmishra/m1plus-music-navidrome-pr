@@ -1835,7 +1835,7 @@ def artists_machine(artists=('Miles Davis', 'Nina Simone', 'Unknown Artist'), co
     m.sv, m.rail, m.view, m.lv = sv, rail, view, lv
     m.canvas = m.alloc(0x80); m.oy_canvas = m.canvas
     m.measure = lambda t: 0   # no title is cut (test/pod/artists.py measures in the real font)
-    for n, w in (('label_title', O['NAV_VIEW_X'] - O['NAV_TITLE_X']), ('ar_title', 250)): m.setword(m.widgets[n] + 8, w)
+    for n, w in (('label_title', O['NAV_VIEW_X'] - O['NAV_TITLE_X']), ('ar_title', O['SG_TITLE_W'])): m.setword(m.widgets[n] + 8, w)
     m.album_artists = [artist_rec(m, a, i + 1) for i, a in enumerate(('Various Artists', 'Miles Davis'))]
     m.class_lists[O['CLASS_ARTISTS']] = [artist_rec(m, a, -1 if a == 'Unknown Artist' else i + 1)
                                          for i, a in enumerate(artists)]

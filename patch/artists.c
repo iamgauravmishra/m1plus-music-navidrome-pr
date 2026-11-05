@@ -186,11 +186,7 @@ static void ar_title_text(const char *key) {
 
 /* The small title is the navbar's once the large one has scrolled away; the fade is for rows passing under the bar (patch/songs.c sg_title_update). */
 static void ar_title_update(void) {
-    int on = ar.noscroll || az_off(&ar.al) > SG_COLLAPSE;
-    if (on != ar.title_on) {
-        ar.title_on = on;
-        if (ar.title) widget_set_visible(ar.title, on, 0);
-    }
+    pod_title_set(ar.title, &ar.title_on, ar.noscroll || pod_title_gone(az_off(&ar.al), 0));
     if (ar.fade) {
         widget_set_visible(ar.fade, az_off(&ar.al) > 0, 0);
         widget_set_sensitive(ar.fade, 0);

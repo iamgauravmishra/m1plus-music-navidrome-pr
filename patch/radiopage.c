@@ -354,11 +354,7 @@ static void rp_credit_place(void) {
 }
 
 static void rp_title_update(void) {
-    int on = rp.noscroll || rp.note || rp.search || !rp.nrows || rp_off() > SG_COLLAPSE;
-    if (on != rp.title_on) {
-        rp.title_on = on;
-        widget_set_visible(rp.title, on, 0);
-    }
+    pod_title_set(rp.title, &rp.title_on, rp.noscroll || rp.note || rp.search || !rp.nrows || pod_title_gone(rp_off(), 0));
     if (rp.fade) {
         widget_set_visible(rp.fade, rp_off() > 0, 0);
         widget_set_sensitive(rp.fade, 0);

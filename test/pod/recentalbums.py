@@ -99,7 +99,7 @@ def songs_view_tests(ctx):
     expect(shown_titles(texts, titles)[:3] == ['n2', 'n1', 'n0'] and vis(m, 'btn_play') == (1, 1), f'the rows are the 0xf009 list in its order ({shown_titles(texts, titles)[:3]})')
     m.setword(m.sv + SC_YOFF, 300)
     m.call(PSYMS['sg_on_scroll'], count=4000000)
-    expect(not [c for c in m.calls if c[0] == 'widget_set_visible' and c[1] == m.widgets['label_title'] and c[2]], 'the small title never shows on this page, also scrolled (it does not fit before x 122)')
+    expect([c for c in m.calls if c[0] == 'widget_set_visible' and c[1] == m.widgets['label_title'] and c[2]], 'the small title shows once scrolled, as on the other lists (cut to its room before x 122)')
     m.call(PSYMS['sg_on_destroy'], count=4000000)
 
     for label, home, cls in (('Favorites', 'HOME_FAV', 'CLASS_FAV'), ('Hi-Res', 'HOME_HIRES', 'CLASS_HIRES')):

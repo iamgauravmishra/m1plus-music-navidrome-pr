@@ -423,7 +423,7 @@ def page_tests(expect, cover_asset):
     mm = artists_machine(); mm.widget_on_fail = frozenset({O['EVT_SCROLL']}); mm.call(open_, count=5000000)
     expect(('widget_set_visible', mm.widgets['label_title'], 1) in mm.calls, 'without the scroll events the navbar keeps its title')
 
-    # 29e. The titles in every language, cut with an ellipsis to the large label (250 px, 32 px) and the navbar's room (156 px): measured in the real font
+    # 29e. The titles in every language, cut with an ellipsis to the large label (296 px, 32 px) and the navbar's room (156 px): measured in the real font
     from awtk_text import Ttf, StbText
     raw = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw')
     font = Ttf(os.path.join(raw, 'fonts', 'default.ttf'))
@@ -435,7 +435,7 @@ def page_tests(expect, cover_asset):
     for loc in pod_i18n.LOCALES:
         for key, home, kw, album in (('Artists', 0, {}, 0), ('Album Artists', 0, {}, 1), ('Genres', pod_pages.HOME_GENRE, {'genres': ('Rock',)}, 0),
                                      ('Composers', pod_pages.HOME_COMPOSER, {'composers': ('Bach',)}, 0)):
-            for name, room, px in (('ar_title', 250, 32), ('label_title', O['NAV_VIEW_X'] - O['NAV_TITLE_X'], npx)):
+            for name, room, px in (('ar_title', O['SG_TITLE_W'], 32), ('label_title', O['NAV_VIEW_X'] - O['NAV_TITLE_X'], npx)):
                 mm = artists_machine(**kw); mm.set_language(loc); mm.setword(AT, album)
                 st = StbText(font, px); mm.measure = lambda s, st=st: st.layout(s)[1]
                 mm.call(open_, a0=home, count=5000000)
@@ -454,7 +454,7 @@ def page_tests(expect, cover_asset):
     sv = lv.children[0]
     expect(sv.name == 'artists_scrollview' and [c.name for c in sv.children] == ['view_grid'] and sv.w == 310, 'the scroll_view holds the one content view')
     vg = sv.children[0]
-    expect([c.name for c in vg.children] == ['ar_title'] and vg.children[0].get('sensitive') == 'false' and (vg.children[0].x, vg.children[0].w, vg.children[0].h) == (O['SG_TITLE_X'], 250, O['SG_TITLE_H']),
+    expect([c.name for c in vg.children] == ['ar_title'] and vg.children[0].get('sensitive') == 'false' and (vg.children[0].x, vg.children[0].w, vg.children[0].h) == (O['SG_TITLE_X'], O['SG_TITLE_W'], O['SG_TITLE_H']),
            'the content view holds the large title only (insensitive, as the Songs page\'s)')
     for name in ('label_status', 'img_nb_fade', 'label_row_title', 'label_hdr', 'label_rail', 'label_rail_on', 'sg_bubble', 'label_title'):
         w = tree.find(name)

@@ -276,11 +276,7 @@ static const char *fo_text(void) {
 } /* the root list says "Folders" (the stock title is the singular), a folder its name */
 
 static void fo_title_update(void) {
-    int on = fo.noscroll || fo.select || !fo.nvis || fo_off() > SG_COLLAPSE;
-    if (on != fo.title_on) {
-        fo.title_on = on;
-        widget_set_visible(fo.title, on, 0);
-    }
+    pod_title_set(fo.title, &fo.title_on, fo.noscroll || fo.select || !fo.nvis || pod_title_gone(fo_off(), 0));
     /* The navbar's fade (an insensitive image, built hidden) is for rows passing under the bar: shown while the list is scrolled, hidden at rest, where it would darken
      * the large title. Never a touch target. */
     if (fo.fade) {

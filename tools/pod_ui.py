@@ -399,7 +399,7 @@ def build_podcasts_page(page):
     for w in (lv, sv):
         for st in ('normal', 'disable', 'focused'): w.set(f'style:{st}:bg_color', '#00000000')
     grid = Widget('view', 0, 0, SCREEN_W, GRID_VIEW_H, [('name', 'view_grid')])   # the content: the payload sizes it to the level's rows
-    big = Widget('label', OFFSETS['PP_TITLE_X'], 0, SCREEN_W - 2 * OFFSETS['PP_TITLE_X'], OFFSETS['PP_TITLE_H'], [('name', 'pg_big'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])   # the large heading of the Shows, Downloads and Subscriptions levels (the Songs page's): a child of the content, so it scrolls and is clipped with it
+    big = Widget('label', OFFSETS['SG_TITLE_X'], 0, OFFSETS['SG_TITLE_W'], OFFSETS['PP_TITLE_H'], [('name', 'pg_big'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])   # the large heading of the Shows, Downloads and Subscriptions levels (the Songs page's): a child of the content, so it scrolls and is clipped with it
     styled(big, ('normal',), 'text_color', '#FFFFFF')
     styled(big, ('normal',), 'font_size', str(OFFSETS['PP_TITLE_PX']))
     styled(big, ('normal',), 'text_align_h', 'left')
@@ -862,7 +862,7 @@ def build_artists_page(page):
     sv.set('name', 'artists_scrollview')
     grid = Widget('view', 0, 0, SCREEN_W, GRID_VIEW_H, [('name', 'view_grid')])
     styled(grid, ('normal',), 'bg_color', '#000000')
-    title = Widget('label', o['SG_TITLE_X'], 0, 250, o['SG_TITLE_H'], [('name', 'ar_title'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])
+    title = Widget('label', o['SG_TITLE_X'], 0, o['SG_TITLE_W'], o['SG_TITLE_H'], [('name', 'ar_title'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])
     styled(title, ('normal',), 'text_color', '#FFFFFF')
     styled(title, ('normal',), 'font_size', str(SG_TITLE_PX))
     styled(title, ('normal',), 'text_align_h', 'left')
@@ -951,7 +951,7 @@ def build_songs_page(page):
     sv.set('name', 'songs_scrollview')
     grid = Widget('view', 0, 0, SCREEN_W, GRID_VIEW_H, [('name', 'view_grid')])
     styled(grid, ('normal',), 'bg_color', '#000000')
-    title = Widget('label', o['SG_TITLE_X'], 0, 250, o['SG_TITLE_H'], [('name', 'sg_title'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])
+    title = Widget('label', o['SG_TITLE_X'], 0, o['SG_TITLE_W'], o['SG_TITLE_H'], [('name', 'sg_title'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])
     styled(title, ('normal',), 'text_color', '#FFFFFF')
     styled(title, ('normal',), 'font_size', str(SG_TITLE_PX))
     styled(title, ('normal',), 'text_align_h', 'left')
@@ -1914,7 +1914,7 @@ def build_folders_page(page):
     sv.set('name', 'folders_scrollview')
     grid = Widget('view', 0, 0, SCREEN_W, GRID_VIEW_H, [('name', 'view_grid')])
     styled(grid, ('normal',), 'bg_color', '#000000')
-    title = Widget('label', o['SG_TITLE_X'], 0, 250, o['SG_TITLE_H'], [('name', 'sg_title'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])
+    title = Widget('label', o['SG_TITLE_X'], 0, o['SG_TITLE_W'], o['SG_TITLE_H'], [('name', 'sg_title'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])
     styled(title, ('normal',), 'text_color', '#FFFFFF')
     styled(title, ('normal',), 'font_size', str(SG_TITLE_PX))
     styled(title, ('normal',), 'text_align_h', 'left')
@@ -1966,7 +1966,7 @@ def build_radio_page(page):
     sv.set('name', 'radio_scrollview')
     grid = Widget('view', 0, 0, SCREEN_W, GRID_VIEW_H, [('name', 'view_grid')])
     styled(grid, ('normal',), 'bg_color', '#000000')
-    title = Widget('label', o['SG_TITLE_X'], 0, SCREEN_W - 2 * o['SG_TITLE_X'], o['SG_TITLE_H'], [('name', 'sg_title'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])
+    title = Widget('label', o['SG_TITLE_X'], 0, o['SG_TITLE_W'], o['SG_TITLE_H'], [('name', 'sg_title'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])
     styled(title, ('normal',), 'text_color', '#FFFFFF')
     styled(title, ('normal',), 'font_size', str(SG_TITLE_PX))
     styled(title, ('normal',), 'text_align_h', 'left')
