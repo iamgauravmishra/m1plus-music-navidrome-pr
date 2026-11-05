@@ -887,6 +887,8 @@
 #define DM_DISC_X 234
 #define DM_DISC_Y 158
 #define DM_MAX_NAMES 3
+#define DM_BUSY_X 285   /* pod_dm_busy: the 16 px sync glyph (dm_sync, #AAAAAA) in the daily section, centred under the list chevron (x 288..298) and on the header line */
+#define DM_BUSY_Y 20
 #define DM_ZONE_Y 84
 #define DM_RAMP 110
 #define DM_FIRST_MS 150

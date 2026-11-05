@@ -22,7 +22,8 @@ insensitive in the asset, shown by the payload when a mix exists and the switch 
 
 | part | geometry | |
 |---|---|---|
-| header `pod_dm_head` | label at (10, 17), 300 x 22, **20 px** white `hscroll_label`, exactly the shelf's (`SH_HEAD_*`), key `Made for You` | ink 20..33 below the Settings hairline: the same 20 px of air as "Recently Played", text at x 12 |
+| header `pod_dm_head` | label at (10, 17), **269** x 22 (the shelf's is 300; it stops 6 px before the busy mark), **20 px** white `hscroll_label`, otherwise the shelf's (`SH_HEAD_*`), key `Made for You` | ink 20..33 below the Settings hairline: the same 20 px of air as "Recently Played", text at x 12 |
+| busy mark `pod_dm_busy` | an `image` 16 x 16 at (285, 20) (`DM_BUSY_X`, `DM_BUSY_Y`), `draw_type center`, image `dm_sync` (`SYNC_DM`: the status bar's sync glyph, Lucide refresh-cw, in #AAAAAA), hidden and insensitive in the asset | about 14 px of ink centred under the list rows' chevron (x 288..298), and centred on the header's text line. Static; a diagnostic for correlating UI stalls with the job |
 | card `pod_dm_card` | a `view` **296 x 220 at (12, 44)** (`DM_X`, `DM_W`, `DM_H`; top = `SH_TOP`) | x 12..308 is the extent of the shelf's two covers (`GRID_MARGIN` + 2 x `GRID_COVER` + `GRID_GAP`): the card's edges line up with the covers below it. It paints the art and the text itself (its own `EVT_AFTER_PAINT`) and takes the taps |
 | corners | **12 px** (`DM_R`) blended into black **in the bitmap** once (`grid_round`'s blend, `pod_corner_fill`'s table) | 4.1 % of the card's width, the same ratio as Now Playing's 12 on 264 and the shelf's 8 on 144 |
 | art | the 296 x 220 RGBA bitmap, opaque, 260 KB (`bitmap_create_ex`, like the covers', freed with the window) | made by the generator below, read from or written to the art file as RGB565 |
@@ -91,6 +92,8 @@ Fewer than `MIX_MIN_SONGS` (10) left after the files are checked on the card: **
 `patch/offsets.inc`, in one place; the model and the compiled code agree on random libraries of 556 songs (`test/pod/dailymix.py`).
 
 ## The job (`dm_*` phases; one slice per tick of the Home page's timer, `DM_TICK_MS` 30 ms; never in paint, never at boot)
+
+While `dm.job` is set (the daily job, Regenerate and the art-only job alike) `pod_dm_busy` is shown; `dm_busy` toggles it (visible only, on a change; it stays insensitive as decorative widgets do) where the job is created, ends (commit or failure) or is cancelled (menu to the background); the window's destroy drops the pointer without touching the widget. A menu without the widget ignores it. **Not seen for a card's first mix**: the mark is a child of `pod_daily`, which stays hidden until a mix exists, so only jobs that replace a mix (the next days, Regenerate, art-only) show it; chosen over showing an empty section, which would move the menu.
 
 A job starts when the Home menu is in front, the switch is on, `DM_START_MS` (**8 s, past the boot guard's 5 s window**) have passed since the menu opened, and the local day has no mix yet (a different day in the mix file, or no
 file) **or Regenerate asked for one**; the previous mix stays on the card until the new one is committed. A day that failed (below) is not tried again until tomorrow, a restart or Regenerate; a clock before 2020 makes no mix.

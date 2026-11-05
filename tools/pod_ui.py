@@ -1769,12 +1769,13 @@ def cache_pill():
 # pod_dm_head is the shelf's (a stock hscroll_label, the key "Made for You"); the card pod_dm_card (DM_W x DM_H at DM_X, DM_TOP) paints the art and the text itself
 # (its own EVT_AFTER_PAINT) and takes the taps that open the playlist; the play disc pod_dm_play is a stock button over its corner (a later sibling, so it takes its own
 # touches) whose look is the glass images dm_disc / dm_disc_down; the two hidden labels only carry the title (36 px white) and artists (16 px #EBEBEB) text styles.
-DM_NAMES = ('pod_daily', 'pod_dm_head', 'pod_dm_card', 'pod_dm_play', 'pod_dm_title', 'pod_dm_sub')
+DM_NAMES = ('pod_daily', 'pod_dm_head', 'pod_dm_busy', 'pod_dm_card', 'pod_dm_play', 'pod_dm_title', 'pod_dm_sub')
 DM_DISC_IMAGE = 'dm_disc'
 
 
 def daily():
     import pod_dailymix as D
+    from mod_icons import SYNC_DM
     sec = hidden(Widget('view', 0, 0, D.DM_W_VIEW, D.DM_SEC_H, [('name', 'pod_daily')]))
     styled(sec, ('normal', 'disable', 'focused', 'pressed', 'over', 'selected'), 'bg_color', '#000000')
     head = Widget('hscroll_label', D.DM_HEAD_X, D.DM_HEAD_TOP, D.DM_HEAD_W, D.DM_HEAD_H, [
@@ -1789,7 +1790,8 @@ def daily():
     play = Widget('button', D.DM_X + D.DM_DISC_X, D.DM_TOP + D.DM_DISC_Y, D.DM_DISC, D.DM_DISC, [
         ('name', 'pod_dm_play'), ('enable', 'true'), ('style', 'img_btn_style'),
         ('style:pressed:icon', DM_DISC_IMAGE + '_down'), ('style:normal:icon', DM_DISC_IMAGE), ('style:over:icon', DM_DISC_IMAGE)])
-    sec.children = [head, card, play]
+    busy = hidden(Widget('image', D.DM_BUSY_X, D.DM_BUSY_Y, D.DM_BUSY_PX, D.DM_BUSY_PX, [('name', 'pod_dm_busy'), ('image', SYNC_DM), ('draw_type', 'center')]))
+    sec.children = [head, busy, card, play]
     for name, px, colour in (('pod_dm_title', D.DM_TITLE_PX, '#FFFFFF'), ('pod_dm_sub', D.DM_SUB_PX, '#%02X%02X%02X' % D.SUB_RGB)):
         lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
         styled(lab, ('normal',), 'text_align_v', 'middle')

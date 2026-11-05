@@ -60,11 +60,15 @@ def card_image(s, tones, seed=SEED, loc='en_US', names=ARTISTS, pressed=False):
     return out
 
 
-def section_image(s, tones, seed=SEED, loc='en_US', names=ARTISTS):
-    """The Home list's new section (310 x DM_SEC_H): the header exactly as the Recently Played one, the card at (12, 44), DM_BOTTOM of air."""
+def work_images(s): return M.PNG
+
+
+def section_image(s, tones, seed=SEED, loc='en_US', names=ARTISTS, busy=False):
+    """The Home list's new section (310 x DM_SEC_H): the header exactly as the Recently Played one, the card at (12, 44), DM_BOTTOM of air; `busy`: the job-running mark (pod_dm_busy) at the header's right end."""
     im = Image.new('RGBA', (D.DM_W_VIEW, D.DM_SEC_H), (0, 0, 0, 255))
     s.text(im, D.DM_HEAD_X + 2, D.DM_HEAD_TOP + D.DM_HEAD_H / 2, s.clip(D.tr(loc, 'Made for You'), D.DM_HEAD_PX, D.DM_HEAD_W - 4), D.DM_HEAD_PX)
     im.alpha_composite(card_image(s, tones, seed, loc, names), (D.DM_X, D.DM_TOP))
+    if busy: im.alpha_composite(Image.open(os.path.join(work_images(s), M.SYNC_DM + '.png')).convert('RGBA'), (D.DM_BUSY_X, D.DM_BUSY_Y))
     return im
 
 
@@ -118,6 +122,9 @@ def main():
     save('card-1x.png', card.convert('RGB'))
     save('card-2x.png', card.convert('RGB').resize((card.width * 2, card.height * 2), Image.NEAREST))
     save('section-1x.png', sec.convert('RGB'))
+    busy = section_image(s, tones, busy=True)
+    save('section-busy-1x.png', busy.convert('RGB'))
+    save('home-top-busy.png', preview.minibar_page(s, *bar_args, shelf=shelf, daily=busy, scroll=0))
     # (c) palettes
     save('palettes.png', labelled([(n, card_image(s, t)) for n, t in PALETTES], 3))
     save('card-pressed.png', labelled([('normal', card), ('disc pressed', card_image(s, tones, pressed=True))], 2))
@@ -127,7 +134,7 @@ def main():
     sides = {loc: side(work, loc) for loc in D.LOCALES}
     save('card-languages.png', labelled([(loc, section_image(sides[loc], tones, loc=loc)) for loc in D.LOCALES], 3))
     tab = widths_table(s)
-    for name, col, room in (('header 20 px (label 296)', 1, 296), ('title line 36 px (260)', 2, D.DM_TITLE_W), ('switch row 21 px (195)', 3, 195), ('action row 21 px (220)', 4, 220)):
+    for name, col, room in (('header 20 px (label %d)' % (D.DM_HEAD_W - 4), 1, D.DM_HEAD_W - 4), ('title line 36 px (260)', 2, D.DM_TITLE_W), ('switch row 21 px (195)', 3, 195), ('action row 21 px (220)', 4, 220)):
         loc, w = max(((r[0], r[col]) for r in tab), key=lambda r: r[1])
         print(f'longest {name}: {loc} {w} px of {room}')
     longest = {max(tab, key=lambda r: r[c])[0] for c in (1, 2, 3, 4)}

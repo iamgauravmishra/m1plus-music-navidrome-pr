@@ -229,7 +229,7 @@ typedef struct {
 } job_t;
 
 static struct {
-    void *win, *card, *disc, *sec, *sv, *st_title, *st_sub;
+    void *win, *card, *disc, *busy, *sec, *sv, *st_title, *st_sub;
     unsigned timer;
     int fg, on, shown, have, load, laid;
     unsigned t0;
@@ -603,6 +603,15 @@ static void dm_free_picks(job_t *j) {
     j->pk = (pick_t *)0;
 }
 
+/* The busy mark in the section's header line shows while dm.job is set; set only when that changes (no relayout per tick). Decorative: it stays insensitive (the asset's),
+ * so hit testing never picks it. An asset without the widget is left alone. */
+static void dm_busy(int on) {
+    void *w = dm.busy;
+    if (!w || !widget_get_visible(w) == !on) return;
+    widget_set_visible(w, on, 0);
+    widget_invalidate_force(w, (void *)0);
+}
+
 static void dm_job_free(job_t *j) {
     if (!j) return;
     ht_free(&j->oft);
@@ -619,6 +628,7 @@ static void dm_job_end(int failed) {
     job_t *j = dm.job;
     if (!j) return;
     dm.job = (job_t *)0;
+    dm_busy(0);
     if (failed) dm.fail_day = j->day;
     dm_job_free(j);
 }
@@ -630,6 +640,7 @@ static void dm_job_cancel(void) {
     if (!j) return;
     if (j->manual && !dm_regen_req) dm_regen_req = 1;
     dm.job = (job_t *)0;
+    dm_busy(0);
     dm_job_free(j);
 }
 
@@ -1195,6 +1206,7 @@ static void dm_job_start(int art_only) {
         j->phase = PH_OFT;
     }
     dm.job = j;
+    dm_busy(1);
 }
 
 static void dm_step(void) {
@@ -1704,6 +1716,7 @@ static int dm_tick(const void *timer) {
 
 static void dm_stop(void) {
     dm_unarm();
+    dm.busy = (void *)0; /* (the window is going away: nothing to hide) */
     dm_job_cancel();
     if (dm.bmp) bitmap_destroy(dm.bmp);
     free(dm.paths);
@@ -1748,6 +1761,7 @@ void dailymix_start(void *win) {
     if (dm.win) dm_stop(); /* an earlier window that never said it was gone */
     dm.win = win;
     dm.sec = widget_lookup(win, "pod_daily", 1);
+    dm.busy = widget_lookup(win, "pod_dm_busy", 1);
     dm.card = widget_lookup(win, "pod_dm_card", 1);
     dm.disc = widget_lookup(win, "pod_dm_play", 1);
     dm.sv = widget_lookup(win, "pod_scrollview", 1);

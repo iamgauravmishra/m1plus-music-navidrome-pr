@@ -61,13 +61,15 @@ class DM(recent.ST):
         self.u.mem_write(self.daily + 0x24, struct.pack('<H', 0x1))          # enabled, not visible, not sensitive: the asset's
         self.dhead = self.widget(self.zv, D.DM_HEAD_X, D.DM_HEAD_TOP, D.DM_HEAD_W, D.DM_HEAD_H, self.daily)
         self.u.mem_write(self.dhead + 0x24, struct.pack('<H', 0x5))
+        self.busy = self.widget(self.zv, D.DM_BUSY_X, D.DM_BUSY_Y, D.DM_BUSY_PX, D.DM_BUSY_PX, self.daily)
+        self.u.mem_write(self.busy + 0x24, struct.pack('<H', 0x1))           # hidden and insensitive: the asset's
         self.card = self.widget(self.zv, D.DM_X, D.DM_TOP, D.DM_W, D.DM_H, self.daily, emitter=True)
         self.disc = self.widget(self.zv, D.DM_X + D.DM_DISC_X, D.DM_TOP + D.DM_DISC_Y, D.DM_DISC, D.DM_DISC, self.daily, emitter=True)
         self.dlab = [self.widget(self.zv, 0, 0, 10, 10, self.daily) for _ in range(2)]
         for lab in self.dlab: self.u.mem_write(lab + 0x24, struct.pack('<H', 0x1))
-        self.kids(self.daily, [self.dhead, self.card, self.disc] + self.dlab)
+        self.kids(self.daily, [self.dhead, self.busy, self.card, self.disc] + self.dlab)
         self.kids(sv, self.rows + [self.daily, self.shelf, self.pad])
-        self.widgets.update({'pod_daily': self.daily, 'pod_dm_head': self.dhead, 'pod_dm_card': self.card, 'pod_dm_play': self.disc,
+        self.widgets.update({'pod_daily': self.daily, 'pod_dm_head': self.dhead, 'pod_dm_busy': self.busy, 'pod_dm_card': self.card, 'pod_dm_play': self.disc,
                              'pod_dm_title': self.dlab[0], 'pod_dm_sub': self.dlab[1]})
         self.arrange(); self.relayout()
         self.stock_songlist = True
@@ -78,6 +80,8 @@ class DM(recent.ST):
         return [names.get(c, self.rows.index(c) if c in self.rows else hex(c)) for c in (self.word(elms + 4 * i) for i in range(self.word(arr)))]
 
     def up(self): return self.is_shown(self.daily)
+    def busy_state(self): return self.is_visible(self.busy), bool(self.flags(self.busy) & 8)     # (visible, sensitive)
+    def busy_seen(self): return all(self.is_visible(w) for w in (self.busy, self.daily))     # visible through its ancestors (the section; the menu is always shown)
     def hide_all(self):
         self.u.mem_write(self.daily + 0x24, struct.pack('<H', 0x1)); self.arrange(); self.relayout()
 
@@ -210,7 +214,7 @@ def run(ctx):
     # ===== 1. geometry (the design) and constants
     expect(D.DM_X == U.GRID_MARGIN and D.DM_W == U.GRID_COLS * U.GRID_COVER + (U.GRID_COLS - 1) * U.GRID_GAP and D.DM_X + D.DM_W == 308,
            'the card spans the two covers of the shelf (x 12..308) inside the 310 px scroll view')
-    expect((D.DM_HEAD_TOP, D.DM_HEAD_H, D.DM_HEAD_PX, D.DM_HEAD_X, D.DM_HEAD_W) == (U.SH_HEAD_TOP, U.SH_HEAD_H, U.SH_HEAD_PX, U.SH_HEAD_X, U.SH_HEAD_W)
+    expect((D.DM_HEAD_TOP, D.DM_HEAD_H, D.DM_HEAD_PX, D.DM_HEAD_X) == (U.SH_HEAD_TOP, U.SH_HEAD_H, U.SH_HEAD_PX, U.SH_HEAD_X) and D.DM_HEAD_W < U.SH_HEAD_W
            and D.DM_TOP == U.SH_TOP and D.DM_W_VIEW == U.SH_W, 'the section header and the card top are the Recently Played shelf\'s')
     expect(D.DM_DISC >= 44 and D.DM_DISC_X + D.DM_DISC <= D.DM_W - 10 and D.DM_DISC_Y + D.DM_DISC <= D.DM_H - 10, 'the play disc is a 44 px touch target at least, 10 px inside the card')
     expect(D.DM_PAD + D.DM_SUB_W + 12 <= D.DM_DISC_X, 'the artist lines stop 12 px before the disc')
@@ -218,7 +222,7 @@ def run(ctx):
            and D.DM_SUB_Y + D.DM_SUB_LINES * D.DM_SUB_PITCH + D.DM_BOT_PAD == D.DM_H and D.DM_TITLE_Y1 >= 60, 'the title and artist boxes stack from the card bottom and leave 60 px of free art above')
     expect(D.DM_SEC_H == D.DM_TOP + D.DM_H + D.DM_BOTTOM and D.DM_R * 2 < D.DM_H, 'section height')
     names = ('DM_X', 'DM_W', 'DM_H', 'DM_R', 'DM_TOP', 'DM_BOTTOM', 'DM_SEC_H', 'DM_PAD', 'DM_TITLE_PX', 'DM_TITLE_PITCH', 'DM_TITLE_W', 'DM_TITLE_Y1', 'DM_TITLE_Y2',
-             'DM_SUB_PX', 'DM_SUB_PITCH', 'DM_SUB_LINES', 'DM_SUB_Y', 'DM_SUB_W', 'DM_DISC', 'DM_DISC_X', 'DM_DISC_Y', 'DM_MAX_NAMES')
+             'DM_SUB_PX', 'DM_SUB_PITCH', 'DM_SUB_LINES', 'DM_SUB_Y', 'DM_SUB_W', 'DM_DISC', 'DM_DISC_X', 'DM_DISC_Y', 'DM_MAX_NAMES', 'DM_BUSY_X', 'DM_BUSY_Y')
     expect(all(O[k] == getattr(D, k) for k in names) and O['DM_ZONE_Y'] == D.ZONE_Y and O['DM_RAMP'] == D.RAMP,
            f'patch/offsets.inc DM_* equal tools/pod_dailymix.py ({[k for k in names if O[k] != getattr(D, k)]})')
     expect(O['DM_X'] == O['GRID_MARGIN'] and O['DM_TOP'] == O['SH_TOP'] and O['DM_W'] == 2 * O['GRID_COVER'] + O['GRID_GAP'] and O['DM_SEC_H'] == O['DM_TOP'] + O['DM_H'] + O['DM_BOTTOM'],
@@ -305,10 +309,13 @@ def run(ctx):
     expect(kids[-3:] == ['pod_daily', 'pod_shelf', 'pod_pad'], f'the section sits after the rows and before the shelf ({kids[-4:]})')
     expect(sec.type == 'view' and (sec.x, sec.y, sec.w, sec.h) == (0, 0, U.SH_W, D.DM_SEC_H) and sec.get('visible') == 'false' and sec.get('sensitive') == 'false',
            'pod_daily is a 310 x 272 view, hidden and insensitive in the asset')
-    expect([c.name for c in sec.children] == ['pod_dm_head', 'pod_dm_card', 'pod_dm_play', 'pod_dm_title', 'pod_dm_sub'], 'its children: the header, the card, the disc, the two style labels')
+    expect([c.name for c in sec.children] == ['pod_dm_head', 'pod_dm_busy', 'pod_dm_card', 'pod_dm_play', 'pod_dm_title', 'pod_dm_sub'], 'its children: the header, the busy mark, the card, the disc, the two style labels')
     head, card, play = sec.find('pod_dm_head'), sec.find('pod_dm_card'), sec.find('pod_dm_play')
-    expect(head.type == 'hscroll_label' and head.get('tr_text') == 'Made for You' and head.get('sensitive') == 'false' and (head.x, head.y, head.w, head.h) == (10, 17, 300, 22),
-           'the header is the shelf\'s: a 300 x 22 insensitive label with the key "Made for You"')
+    busy = sec.find('pod_dm_busy')
+    expect(busy.type == 'image' and busy.get('image') == 'dm_sync' and busy.get('visible') == 'false' and busy.get('sensitive') == 'false' and (busy.x, busy.y, busy.w, busy.h) == (285, 20, 16, 16)
+           and head.x + head.w + D.DM_BUSY_GAP == busy.x and busy.x + busy.w // 2 == U.CHEV_X + 5, 'pod_dm_busy is a 16 px image, hidden and insensitive, centred under the list chevron (x 288..298), the header label ends 6 px before it')
+    expect(head.type == 'hscroll_label' and head.get('tr_text') == 'Made for You' and head.get('sensitive') == 'false' and (head.x, head.y, head.w, head.h) == (10, 17, 269, 22),
+           'the header is the shelf\'s, 31 px narrower for the busy mark: a 269 x 22 insensitive label with the key "Made for You"')
     expect((card.x, card.y, card.w, card.h) == (12, 44, 296, 220) and card.type == 'view' and card.get('sensitive') != 'false' and card.get('visible') != 'false',
            'the card is 296 x 220 at (12, 44), sensitive')
     expect(play.type == 'button' and (play.x, play.y, play.w, play.h) == (12 + 234, 44 + 158, 48, 48) and play.get('style:normal:icon') == 'dm_disc' and play.get('style:pressed:icon') == 'dm_disc_down',
@@ -586,11 +593,26 @@ def run(ctx):
     m = fresh(songs_=[], plays_={}, rec__=(), fav_=(), mixfile=ymix); run_job(m); stays(m, 'an empty library', ymix)
     expect(m.call(PSYMS['dailymix_can_regen'], count=100000) == 0, '... Regenerate is off')
     m = fresh(mixfile=ymix); m.calloc_fail = True; run_job(m); stays(m, 'no memory', ymix)
+    expect(m.busy_state() == (False, False), 'no job started: the busy mark stays hidden')
     expect(m.call(PSYMS['dailymix_can_regen'], count=100000) == 1, '... Regenerate stays on (the library was not too small)')
     m.clock += 5000; m.fire(EVT_FG)
     expect('timer_add' not in m.names(), 'a day that failed is not tried again on the next visit (until tomorrow or a restart)')
     m.call(PSYMS['dailymix_regen'], count=100000); m.fire(EVT_FG)
     expect('timer_add' in m.names(), '... but Regenerate asks again')
+    m = fresh(mixfile=ymix); m.fail.add(('write', MIX_TMP)); put_tones(m, songs, picks, mdl); m.clock = START_MS + 1000
+    for _ in range(40): m.call(PSYMS['dm_tick'], a0=0, count=60000000)
+    expect(m.busy_state() == (True, False), 'a job that will fail is showing the busy mark')
+    m.ticks(limit=600)
+    expect(m.busy_state() == (False, False), 'the busy mark is hidden after the job failed')
+    m = fresh(mixfile=ymix); m.clock = START_MS + 1000
+    for _ in range(5): m.call(PSYMS['dm_tick'], a0=0, count=60000000)
+    expect(m.busy_state() == (True, False), 'the job started')
+    expect(m.busy_seen(), '... and the mark is seen: yesterday\'s mix keeps its section shown')
+    m.fire(EVT_DESTROY)
+    expect('timer_add' not in m.names(), 'the window goes away with a job running: its timer is removed')
+    m = fresh(); m.clock = START_MS + 1000
+    for _ in range(5): m.call(PSYMS['dm_tick'], a0=0, count=60000000)
+    expect(m.busy_state() == (True, False) and not m.busy_seen(), 'the first mix (no mix file yet): the mark is set but not seen, its section stays hidden until the mix exists')
     m = fresh(setting=b'0\n')
     expect(m.call(PSYMS['dailymix_can_regen'], count=100000) == 0, 'the Daily Mix switch off: Regenerate is off')
 
@@ -639,11 +661,14 @@ def run(ctx):
     m = fresh(mixfile=ymix); put_tones(m, songs, picks, mdl); m.clock = START_MS + 1000
     for _ in range(40): m.call(PSYMS['dm_tick'], a0=0, count=60000000)
     expect('timer_add' in m.names() and m.fs.get(MIX) == ymix, 'the job is in the middle of the songs')
+    expect(m.busy_state() == (True, False), 'the busy mark is shown while the job runs, and stays insensitive (decorative)')
     m.fire(EVT_BG)
     expect(m.fs.get(MIX) == ymix and not written(m, [m.calls]), 'the menu goes away in the middle: nothing was written, the files are as they were')
+    expect(m.busy_state() == (False, False), 'the busy mark is hidden and insensitive after the menu goes to the background')
     m.fire(EVT_FG); m.clock += 100
     cs = m.ticks(limit=600)
     expect(X.parse_mix(m.fs[MIX])[0] == day and mpaths(m) == [mdl[i]['path'] for i in picks], 'and back in front the job starts again from the top and finishes')
+    expect(m.busy_state() == (False, False), 'the busy mark is hidden after the commit')
 
     # A manual job must keep its request when Home is covered or destroyed before commit.
     # Unlike an automatic job, today's existing mix will not make dm_need retry it.

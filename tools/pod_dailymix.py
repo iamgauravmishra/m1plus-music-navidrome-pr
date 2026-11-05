@@ -13,7 +13,11 @@ import argparse
 # ---- geometry (section-local px; the section is a child of the Home list's 310 px scroll view, above the Recently Played shelf) -------------
 DM_W_VIEW = 310                       # the scroll view's width (SH_W)
 DM_X, DM_W, DM_H, DM_R = 12, 296, 220, 12     # the card: the shelf's two covers span x 12..308 (GRID_MARGIN, 2 x 144 + GRID_GAP 8)
-DM_HEAD_TOP, DM_HEAD_H, DM_HEAD_PX, DM_HEAD_X, DM_HEAD_W = 17, 22, 20, 10, 300     # the shelf's header, exactly (SH_HEAD_*)
+DM_BUSY_PX, DM_BUSY_GAP = 16, 6                                  # the busy mark pod_dm_busy: the sync glyph's 16 px canvas (about 14 px of ink, near the list chevron's 16 px height), 6 px clear of the header text
+DM_BUSY_X = 293 - DM_BUSY_PX // 2                                  # 285: centred on the list chevron's ink (pod_ui CHEV_X 288, 10 px glyph: x 288..298) above it
+DM_HEAD_TOP, DM_HEAD_H, DM_HEAD_PX, DM_HEAD_X = 17, 22, 20, 10     # the shelf's header (SH_HEAD_*), but narrower: it stops before the busy mark
+DM_HEAD_W = DM_BUSY_X - DM_BUSY_GAP - DM_HEAD_X                    # 269 (the shelf's is 300)
+DM_BUSY_Y = DM_HEAD_TOP + (DM_HEAD_H - DM_BUSY_PX) // 2              # 20: the canvas centred on the header's text line
 DM_TOP = DM_HEAD_TOP + DM_HEAD_H + 5          # 44: the card's top (SH_TOP)
 DM_BOTTOM = 8                                 # air under the card; the Recently Played header's ink is 20 px into its section, so 28 px between card and header ink
 DM_SEC_H = DM_TOP + DM_H + DM_BOTTOM          # 272

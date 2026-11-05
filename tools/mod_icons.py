@@ -239,6 +239,9 @@ SHOT_BAR_PX = 16
 # The status bar's sync icon (patch/lineout.c shows it on every page while a cover or duration build runs; tools/statusbar.py adds the hidden widget pod_sync to both bar copies): Lucide refresh-cw, white, 18 x 18, 1.5 px stroke, static
 SYNC_BAR = ('pod_bar_sync', 'refresh-cw')
 SYNC_BAR_PX = 18
+# The Home Made for You header's busy mark (patch/dailymix.c shows pod_dm_busy while a Daily Mix job runs): the same glyph in the secondary grey #AAAAAA, static, 16 px (about 14 px of ink, near the list chevron's 16 px height)
+SYNC_DM = 'dm_sync'
+SYNC_DM_PX = 16
 # The status bar's Line Out pill (patch/lineout.c swaps it for stock's white "LO" text while Line Out is on): an amber #FFD60A (not the Accent Orange #FF9F0A) pill, fully rounded
 # ends, black "LO" in Inter. A saturated image: Light Mode's flip (chroma over LIGHT_CHROMA) and the accent tints (named lists) leave it as drawn.
 LO_BAR = 'pod_bar_lo'
@@ -743,6 +746,7 @@ def generate_all(sizes):
     f[SHOT_BAR[0]] = fit(lambda p: glyph(SHOT_BAR[1], p, 'small'), SHOT_BAR_PX, SHOT_BAR_PX, SHOT_BAR_PX)
     f[LO_BAR] = lo_pill()
     f[SYNC_BAR[0]] = glyph_fit(SYNC_BAR[1], SYNC_BAR_PX, SYNC_BAR_PX, WHITE, 1, 1.5)
+    f[SYNC_DM] = glyph_fit(SYNC_BAR[1], SYNC_DM_PX, SYNC_DM_PX, (0xAA,) * 3, 1, 1.5)
     # round 2: glyph images at the stock size, discs, recoloured line art, badges, pills
     for n, g, down in GLYPHS:
         grey = (GREY_GLYPHS[n],) * 3 if n in GREY_GLYPHS else WHITE
@@ -1598,7 +1602,7 @@ def replaced_names():
 
 def pod_row_names(): return sorted({n for n, _ in POD_ROWS.values()})
 def nav_names(): return sorted(set(NAV_VIEW) | {n + '_down' for n in NAV_VIEW})
-def pod_names(): return sorted(set(pod_row_names()) | set(FOLDER_ROWS) | set(RADIO_ROWS) | {RADIO_ART[0]} | set(POD_HOME) | set(nav_names()) | set(ALBUM) | set(DAILY) | {SHOT_BAR[0], LO_BAR, SYNC_BAR[0]} | {n for n, _ in PL_MENU_ICONS} | {n for n, _ in RM_MENU_ICONS} | {RM_DOTS[0]})
+def pod_names(): return sorted(set(pod_row_names()) | set(FOLDER_ROWS) | set(RADIO_ROWS) | {RADIO_ART[0]} | set(POD_HOME) | set(nav_names()) | set(ALBUM) | set(DAILY) | {SHOT_BAR[0], LO_BAR, SYNC_BAR[0], SYNC_DM} | {n for n, _ in PL_MENU_ICONS} | {n for n, _ in RM_MENU_ICONS} | {RM_DOTS[0]})
 def np_names(): return sorted(set(NP) | {v[4] for v in NP.values() if v[4]})
 
 def added_rels(stock_rootfs=None, *args):
@@ -1772,7 +1776,7 @@ def add_nav_icons(out):
     the status bar's Screenshot camera (the hidden pod_shot image tools/pod_ui.py adds to ui/system_bar.bin) and the Playlists
     page's menu glyphs (ui/m1plus_playlists.bin)."""
     d = os.path.join(out, IMG)
-    for n in nav_names() + [SHOT_BAR[0], LO_BAR, SYNC_BAR[0]] + [n for n, _ in PL_MENU_ICONS] + [n for n, _ in RM_MENU_ICONS] + [RM_DOTS[0]]:
+    for n in nav_names() + [SHOT_BAR[0], LO_BAR, SYNC_BAR[0], SYNC_DM] + [n for n, _ in PL_MENU_ICONS] + [n for n, _ in RM_MENU_ICONS] + [RM_DOTS[0]]:
         q = os.path.join(d, n + '.png'); assert not os.path.exists(q), f'{n}.png already in the tree'
         shutil.copyfile(os.path.join(PNG, n + '.png'), q); os.chmod(q, IMG_MODE); os.utime(q, (IMG_MTIME, IMG_MTIME))
 
