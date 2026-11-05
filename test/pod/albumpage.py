@@ -522,7 +522,7 @@ def rows_tests(ctx):
     scroll_to(m, 300)
     blits, texts, fills = paint(m)
     seen = [t for (t, r), s in texts if s == 'label_row_title']
-    last = (300 + WIN_H - O['AB_TEXT_Y'] - 22 - HDR) // ROW   # the last row whose 22 px line (AB_TEXT_Y down the row) is wholly inside the window
+    last = (300 + WIN_H - 1 - HDR) // ROW   # the last row in the window: a line it cuts is drawn, the clip cuts it
     expect(seen == NAMES[:last + 1] and all(r[1] == row_y(i) + O['AB_TEXT_Y'] - 300 for i, ((t, r), s) in enumerate(x for x in texts if x[1] == 'label_row_title')),
            f'scrolled 300 px: rows 0 to {last} (the header is above the window), at their y less the offset ({seen})')
     # long titles are cut with an ellipsis at the room's end

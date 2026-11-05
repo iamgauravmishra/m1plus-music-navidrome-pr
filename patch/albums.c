@@ -18,8 +18,8 @@
  *              virtual_h is set to match (the list_view layouter sums its children's heights into it too); the scroll_view shows it through its
  *              GRID_VIEW_H window at yoffset. The paint moves the canvas origin down by yoffset, so what it draws is in window coordinates (the
  *              top of the window is 0) and only what intersects [0, GRID_VIEW_H) is drawn: a cover with canvas_draw_image (clipped by hand to
- *              the window; the scroll_view also sets the canvas clip to its rectangle), text with canvas_draw_text_in_rect, only when it lies
- *              wholly inside the window.
+ *              the window; the scroll_view also sets the canvas clip to its rectangle), text with canvas_draw_text_in_rect, cut at the window's
+ *              edges by that clip.
  *   tiles      GRID_TILES (12) entries. A tile is the album's cover reduced from the Cover Flow cache file (168 px,
  *              box filter) to the mode's cover size (the finished bitmap is kept, not the JPEG). PAINT NEVER DECODES:
  *              it draws the resident tiles and the placeholder for the rest. A page-owned timer (al_on_load, armed

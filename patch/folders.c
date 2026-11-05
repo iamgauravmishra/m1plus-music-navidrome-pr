@@ -250,7 +250,7 @@ static void fo_paint_rows(void *canvas) {
     }
     widget_prepare_text_style(fo.st_title, canvas);
     for (r = r0; r <= r1; ++r)
-        grid_text(canvas, fo_tile(r), 0, tx, fo_row_y(r) - off + FO_TEXT_Y, room, LIST_TITLE_H, GRID_VIEW_H);
+        grid_text(canvas, fo_tile(r), 0, tx, fo_row_y(r) - off + FO_TEXT_Y, room, LIST_TITLE_H, 0);
 }
 
 static int fo_on_paint(void *ctx, void *e) {

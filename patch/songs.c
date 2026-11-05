@@ -429,7 +429,7 @@ static void sg_paint_rows(void *canvas) {
         widget_prepare_text_style(pass ? sg.st_sub : sg.st_title, canvas);
         for (r = r0; r <= r1; ++r)
             grid_text(canvas, sg_tile(r), pass, tx, sg_row_y(r) - off + (pass ? LIST_SUB_Y : LIST_TITLE_Y), room,
-                      pass ? LIST_SUB_H : LIST_TITLE_H, GRID_VIEW_H);
+                      pass ? LIST_SUB_H : LIST_TITLE_H, 0);
     }
     az_paint_heads(&sg.al, canvas); /* the section letters, then over everything the pinned band and its letter */
 }

@@ -1203,14 +1203,14 @@ def levels_tests(ctx):
     expect(vis(m, 'btn_more') == (0, 0) and vis(m, 'btn_search') == (0, 0), 'the root has neither "..." nor Search')
     m = page_machine(); m.put_text(FAVS, FAV_TEXT); open_radio(m)
     tap_row(m, 0, root=True)
-    expect(grid_titles(m) == ['Fav One', 'Fav Two'] and grid_subs(m) == ['Germany · MP3 128k'] and text_of(m, 'sg_title') == 'My Stations',
-           f'Stations: the stations as a grid, the name and the caption of each (a text is drawn only whole inside the window: the third cell\'s are below it) ({grid_titles(m)}, {grid_subs(m)})')
+    expect(grid_titles(m) == ['Fav One', 'Fav Two', 'Fav Three'] and grid_subs(m) == ['Germany · MP3 128k', 'France · AAC 64k'] and text_of(m, 'sg_title') == 'My Stations',
+           f'Stations: the stations as a grid, the name and the caption of each (the third cell\'s too, cut by the window: the clip cuts them) ({grid_titles(m)}, {grid_subs(m)})')
     blits, texts, fills = paint(m)
     covers = [(b[2][0], b[2][1], b[2][2]) for b in blits if b[2][2] == 144]
     expect(covers == [(12, TOP, 144), (164, TOP, 144), (12, TOP + 200, 144)] and not [b for b in blits if b[2][2] == 10], f'two columns of 144 px covers (x 12 and 164, rows 200 apart), no chevron, no "..." ({covers})')
     ts = [r for (t, r), st in texts if st == 'label_grid_title']
     ss = [r for (t, r), st in texts if st == 'label_grid_sub']
-    expect(ts == [(12, TOP + 148, 144, 22), (164, TOP + 148, 144, 22)] and ss[0] == (12, TOP + 170, 144, 20), f"the Albums grid's text: the name 4 px under the cover (22 px), the caption under it (20 px) ({ts}, {ss})")
+    expect(ts == [(12, TOP + 148, 144, 22), (164, TOP + 148, 144, 22), (12, TOP + 348, 144, 22)] and ss[0] == (12, TOP + 170, 144, 20), f"the Albums grid's text: the name 4 px under the cover (22 px), the caption under it (20 px) ({ts}, {ss})")
     ph = m.bitmaps[next(b[0] for b in blits if b[2][2] == 144)]
     px = lambda x, y: struct.unpack('<I', bytes(m.u.mem_read(ph[0] + 4 * (y * ph[1] + x), 4)))[0]
     expect((px(0, 0), px(20, 20), px(72, 72)) == (0xff000000, 0xff2e2c2c, 0xff938e8e), f'a station without a logo: a #2C2C2E card, the radio glyph in the middle, the corners blended into black ({px(0, 0):#x} {px(20, 20):#x} {px(72, 72):#x})')
@@ -1603,7 +1603,7 @@ def favs_tests(ctx):
     expect = ctx.expect
     m = page_machine(); m.put_text(FAVS, FAV_TEXT); open_radio(m); np_widgets(m)
     tap_row(m, 0, root=True)
-    expect(grid_titles(m) == ['Fav One', 'Fav Two'], 'Stations: the stations')
+    expect(grid_titles(m) == ['Fav One', 'Fav Two', 'Fav Three'], 'Stations: the stations')
     m.proc = []
     calls = tap_cell(m, 1)
     expect(('window_open', 'm1plus_radionp') in calls and m.call(PSYMS['rd_at']) == 1, 'a tap anywhere on a tile plays it (the right edge too: there is no "...")')

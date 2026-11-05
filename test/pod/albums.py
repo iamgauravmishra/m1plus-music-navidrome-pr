@@ -158,8 +158,7 @@ def reference(scroll, n):
         cut_top, cut_bottom = max(0, -top), min(COVER, VIEW_H - top)
         cover = ((0, cut_top, COVER, cut_bottom - cut_top), (x, top + cut_top, COVER, cut_bottom - cut_top)) if cut_bottom > cut_top else None
         ty = top + COVER + TGAP
-        title = (x, ty, COVER, THEIGHT) if 0 <= ty and ty + THEIGHT <= VIEW_H else None
-        sub = (x, ty + THEIGHT, COVER, SUBH) if 0 <= ty + THEIGHT and ty + THEIGHT + SUBH <= VIEW_H else None
+        title, sub = (x, ty, COVER, THEIGHT), (x, ty + THEIGHT, COVER, SUBH)   # every cell's texts: the scroll_view's clip cuts them
         out.append((a, cover, title, sub))
     return out
 
@@ -172,7 +171,7 @@ def list_ref(scroll, n):
         if top >= VIEW_H or top + ROW <= 0: continue
         ct, cb = max(0, -(top + LAY)), min(LART, VIEW_H - (top + LAY))
         cover = ((0, ct, LART, cb - ct), (LAX, top + LAY + ct, LART, cb - ct)) if cb > ct else None
-        ok = lambda y, h: (TX, y, TW, h) if 0 <= y and y + h <= VIEW_H else None
+        ok = lambda y, h: (TX, y, TW, h)   # every row's texts: the scroll_view's clip cuts them
         out.append((a, cover, ok(top + TY, TH), ok(top + SY, SH), top + ROW - 1 if 0 <= top + ROW - 1 < VIEW_H else None))
     return out
 
@@ -521,15 +520,15 @@ def layout_tests(ctx):
     expect(dsts(blits) == want_dsts(ref), 'after scrolling 100 px: the cells and the cut first row')
     ts, ss = grid_texts(m, texts)
     expect(ts == {f'Album {c[0]}': c[2] for c in ref if c[2]} and ss == {f'Artist {c[0]}': c[3] for c in ref if c[3]},
-           'after scrolling 100 px: the albums and artists that lie wholly in the view')
+           'after scrolling 100 px: the albums and artists of every cell in view, cut ones too')
     top_row = [b for b in blits if b[2][1] == 0][0]
     expect(top_row[1] == (0, 90, COVER, 54) and top_row[2] == (MARGIN, 0, COVER, 54), f'the first row is cut to its last 54 px ({top_row[1]} -> {top_row[2]})')
     scroll_to(m, 165)
     ref = reference(165, n)
     ts, ss = grid_texts(m, paint(m)[1])
     expect(ts == {f'Album {c[0]}': c[2] for c in ref if c[2]} and ss == {f'Artist {c[0]}': c[3] for c in ref if c[3]}
-           and 'Album 0' not in ts and 'Artist 0' in ss and ref[0][1] is None,
-           'at 165 px the first row\'s cover is gone and its album (7 px cut by the top) is not drawn, its artist (wholly in view) is')
+           and 'Album 0' in ts and 'Artist 0' in ss and ref[0][1] is None,
+           'at 165 px the first row\'s cover is gone and its album (7 px cut by the top) and its artist are drawn, the clip cuts the album')
     mx = RGAP + ((n + COLS - 1) // COLS) * PITCH - VIEW_H
     expect(mx == 1210, f'fifteen albums are eight rows: 10 + 8 x 200 = 1610 px of content, {mx} px of scroll')
     scroll_to(m, 100000)
@@ -841,7 +840,7 @@ def taps_list_tests(ctx):
     got_t = sorted((t[0], t[1]) for t, sty in zip(texts, m.text_styles) if sty == 'label_row_title')
     got_a = sorted((t[0], t[1]) for t, sty in zip(texts, m.text_styles) if sty == 'label_row_sub')
     expect(got_t == want_t and got_a == want_a and len(texts) == len(want_t) + len(want_a),
-           f'the album names in the title style and the artists in the sub style, each in its {TW} px rect; texts cut by the view are not drawn ({len(want_t)} + {len(want_a)})')
+           f'the album names in the title style and the artists in the sub style, each in its {TW} px rect; texts cut by the view drawn too ({len(want_t)} + {len(want_a)})')
     prep = [c[1] for c in m.calls if c[0] == 'widget_prepare_text_style']
     expect(prep == [m.widgets['label_row_title'], m.widgets['label_row_sub']] and m.text_styles == ['label_row_title'] * len(want_t) + ['label_row_sub'] * len(want_a),
            'two text-style switches a frame: all titles, then all artists')
@@ -875,7 +874,7 @@ def taps_list_tests(ctx):
     expect((top_row[1], top_row[2]) == want_top and top_row[1][1] + top_row[1][3] == LART,
            f'the first cover is cut to its last pixels ({top_row[1]} -> {top_row[2]})')
     expect(sorted(t[0] for t in texts) == sorted([f'Album {a}' for a, _, t, _, _ in ref if t] + [f'Artist {a}' for a, _, _, s_, _ in ref if s_]),
-           'texts that do not lie wholly in the view are not drawn')
+           'texts cut by the view are drawn too (the clip cuts them)')
     scroll_to(m, 100000)
     blits, texts = paint(m)
     ref = list_ref(mx, n)

@@ -54,7 +54,7 @@ extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination th
 #define AR_TEXT_X 24
 #define AR_TEXT_Y \
     ((AR_ROW - LIST_TITLE_H) / \
-     2) /* the name's 24 px box (LIST_TITLE_H), centred in the row: a text is drawn only when its box is wholly inside the window, as every text of the Songs page */
+     2) /* the name's 24 px box (LIST_TITLE_H), centred in the row: a row cut by the window's edge has its name cut by the scroll_view's clip, as the Songs page's texts */
 #define AR_TEXT_H LIST_TITLE_H
 #define AR_TEXT_END \
     252 /* the names are cut here: the chevron stands between this and the rail's touch column (x 284) */
@@ -250,7 +250,7 @@ static void ar_paint_rows(void *canvas) {
     widget_prepare_text_style(ar.st_title, canvas);
     for (r = r0; r <= r1; ++r)
         grid_text(canvas, ar_tile(r), 0, AR_TEXT_X, az_row_y(&ar.al, r) - off + AR_TEXT_Y, AR_TEXT_END - AR_TEXT_X,
-                  AR_TEXT_H, GRID_VIEW_H);
+                  AR_TEXT_H, 0);
     az_paint_heads(&ar.al, canvas); /* the section letters, then over everything the pinned band and its letter */
 }
 

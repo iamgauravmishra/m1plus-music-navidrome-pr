@@ -180,7 +180,7 @@ static void ab_number(void *canvas, int i, int y) {
     }
     for (; d; d /= 10) w[n++] = '0' + ((unsigned)(i + 1) / d) % 10;
     rect[0] = AB_NUM_X + ab_shift(), rect[1] = y + AB_TEXT_Y, rect[2] = ab_numw(i), rect[3] = AB_TEXT_H;
-    if (rect[1] >= 0 && rect[1] + AB_TEXT_H <= AH_WIN_H) canvas_draw_text_in_rect(canvas, w, n, rect);
+    canvas_draw_text_in_rect(canvas, w, n, rect); /* the scroll_view's clip cuts it at the window's edges */
 }
 
 /* The playing track's marker: the image ah_wave (white-ish bars on black, as cc_decode flattens it) as a bitmap whose alpha is the bars' coverage and whose colour is AB_WAVE_RGB. */
@@ -255,8 +255,7 @@ static void ab_paint(void *canvas) {
                 else
                     ab_number(canvas, r, y);
             } else
-                grid_text(canvas, ab_tile(r), 0, ab_tx(r), y + AB_TEXT_Y, ab_text_end() - ab_tx(r), AB_TEXT_H,
-                          AH_WIN_H);
+                grid_text(canvas, ab_tile(r), 0, ab_tx(r), y + AB_TEXT_Y, ab_text_end() - ab_tx(r), AB_TEXT_H, 0);
         }
     }
 }
@@ -540,7 +539,7 @@ static void ab_pill(void) {
     ab.ptx = x + AH_PILL_GLYPH + AH_PILL_GAP, ab.ptw = tw + AB_TEXT_SLACK;
 }
 
-/* The pill's text over its picture (inside the window only, as every text of the payload's pages). */
+/* The pill's text over its picture (cut at the window's edges by the scroll_view's clip, as the picture). */
 static void ab_paint_pill(void *canvas, int off) {
     const unsigned *text = widget_get_text(ab.ptext);
     unsigned n = 0;
@@ -548,7 +547,7 @@ static void ab_paint_pill(void *canvas, int off) {
     while (text && text[n]) ++n;
     rect[0] = ab.ptx, rect[1] = AH_BTN_Y + (AH_BTN_H - AB_TEXT_H) / 2 - off, rect[2] = ab.ptw, rect[3] = AB_TEXT_H;
     widget_prepare_text_style(ab.ptext, canvas);
-    if (n && rect[1] >= 0 && rect[1] + AB_TEXT_H <= AH_WIN_H) canvas_draw_text_in_rect(canvas, text, n, rect);
+    if (n) canvas_draw_text_in_rect(canvas, text, n, rect);
 }
 
 /* ---------------------------------------------------------------------------
