@@ -360,7 +360,9 @@ static int pg_content(void) {
     if (pg.det && pg.pd) return pg.pd->h; /* (the episode page) */
     if (pg.level == L_SHOWS) return pg.home_h;
     if (pg.level == L_SRCH) return PQ_TOP + pg.srn * PC_ROW_H + (pg.srn ? PQ_BOTTOM : 0);
-    if (pg_hint()) return pg_hint_y() + PG_HINT_H; /* (an empty page: its header and the hint, no taller, so it only scrolls when they don't fit) */
+    if (pg_hint())
+        return pg_hint_y() +
+               PG_HINT_H; /* (an empty page: its header and the hint, no taller, so it only scrolls when they don't fit) */
     if (pg.level == L_DLS) return pg_dh() + (pg.select && pg.nrows ? SG_BAR_H : 0);
     return (pg_count()          ? pg_top() + pg_count() * pg_row_h() + (pg.level == L_EPS ? PG_BOTTOM : 0)
             : pg.level == L_EPS ? pg_top()
@@ -1939,7 +1941,8 @@ static void pg_nav(void) {
         widget_set_visible(pg.sf, pg.level == L_SRCH,
                            0); /* (insensitive for life: a touch on the field goes to the content view) */
     pg_show(pg.big, pg.level == L_SHOWS || pg.level == L_DLS);
-    if (pg.title && !pg.select) { /* the small title ends before the leftmost button, cut with an ellipsis (pg_head sets the text again at the new width) */
+    if (pg.title &&
+        !pg.select) { /* the small title ends before the leftmost button, cut with an ellipsis (pg_head sets the text again at the new width) */
         widget_resize(pg.title, (globe ? gx : more ? NAV_VIEW_X : NAV_VIEW_X + NAV_VIEW_W) - NAV_TITLE_X, 22);
         pg_head();
     }
@@ -2357,7 +2360,9 @@ static void pg_dls_apply(void) {
     int max;
     pg_ord_build();
     if (!pg.nrows && (pg.subs || !pg.dscan_on)) {
-        pg_show(pg.view, 1); /* (the large title and the storage line stay, the hint is painted under them: the first frame is the last) */
+        pg_show(
+            pg.view,
+            1); /* (the large title and the storage line stay, the hint is painted under them: the first frame is the last) */
         pg_show(pg.status, 0);
     } else {
         pg_show(pg.view, 1);
@@ -3036,7 +3041,9 @@ static void pg_select(int on) {
     pg_show(pg.del, on && !(pg.level == L_DLS &&
                             pg.subs)); /* the bar's one pill: Delete, or on the Subscriptions page Unsubscribe */
     pg_show(pg.unsubp, on && pg.level == L_DLS && pg.subs);
-    if (pg.title && on) widget_resize(pg.title, SG_SELALL_X - NAV_TITLE_X, 22); /* (leaving select mode, pg_nav sets the width of the level) */
+    if (pg.title && on)
+        widget_resize(pg.title, SG_SELALL_X - NAV_TITLE_X,
+                      22); /* (leaving select mode, pg_nav sets the width of the level) */
     if (pg.back) {
         widget_set_prop_str(pg.back, "style:normal:icon", on ? "ah_nav_close" : "ah_nav_back");
         widget_set_prop_str(pg.back, "style:over:icon", on ? "ah_nav_close" : "ah_nav_back");

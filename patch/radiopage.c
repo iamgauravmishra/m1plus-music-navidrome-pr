@@ -354,7 +354,8 @@ static void rp_credit_place(void) {
 }
 
 static void rp_title_update(void) {
-    pod_title_set(rp.title, &rp.title_on, rp.noscroll || rp.note || rp.search || !rp.nrows || pod_title_gone(rp_off(), 0));
+    pod_title_set(rp.title, &rp.title_on,
+                  rp.noscroll || rp.note || rp.search || !rp.nrows || pod_title_gone(rp_off(), 0));
     if (rp.fade) {
         widget_set_visible(rp.fade, rp_off() > 0, 0);
         widget_set_sensitive(rp.fade, 0);
@@ -649,8 +650,10 @@ static void rp_recent(void) {
 static void rp_root_action(int row) {
     switch (row) {
     case RR_NOW:
-        if (rd_running()) rn_open();
-        else pod_toast(TR("No radio is playing")); /* never starts a station */
+        if (rd_running())
+            rn_open();
+        else
+            pod_toast(TR("No radio is playing")); /* never starts a station */
         break;
     case RR_BROWSER:
         rp_show_level(L_DIR, 0);
