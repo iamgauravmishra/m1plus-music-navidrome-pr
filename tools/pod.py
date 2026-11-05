@@ -42,7 +42,7 @@ LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
 SOURCES = ['m1plus.c', 'common.c', 'filetime.c', 'menu.c', 'covercache.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c',
-           'scroll.c', 'playmore.c', 'pulldown.c', 'playlists.c', 'azlist.c', 'songops.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'upver.c', 'pcnet.c', 'podcasts.c', 'radio.c', 'radiopage.c', 'radionp.c', 'radioinfo.c', 'tape.c', 'palette.c', 'vinyl.c', 'onlineart.c', 'update.c', 'relnotes.c', 'keyboard.c', 'search.c', 'battery.c', 'lineout.c', 'lyrics.c', 'picker.c', 'folders.c', 'timezones.c']
+           'scroll.c', 'playmore.c', 'pulldown.c', 'playlists.c', 'azlist.c', 'songops.c', 'rowmenu.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'upnext.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'upver.c', 'pcnet.c', 'podcasts.c', 'radio.c', 'radiopage.c', 'radionp.c', 'radioinfo.c', 'tape.c', 'palette.c', 'vinyl.c', 'onlineart.c', 'update.c', 'relnotes.c', 'keyboard.c', 'search.c', 'battery.c', 'lineout.c', 'lyrics.c', 'picker.c', 'folders.c', 'timezones.c']
 
 FLAGS = ['--target=mipsel-linux-gnu', '-march=mips32r2', '-mabi=32', '-mfp64',
          '-mno-abicalls', '-fno-pic', '-G0', '-ffreestanding', '-fno-builtin',
@@ -222,7 +222,7 @@ FUNCTIONS.update({
     'mclGetPlayPos':           ('int', 'void', 0x5d4290),
     # Shuffle (patch/shuffle.c): the play position word mclGetPlayPos reads is stored back after the queue is reordered
     'mclSetPlayPos':           ('void', 'int', 0x5d42d8),
-    # Clear (patch/shuffle.c pod_clear_upnext): the Gapless setter whose 0 closes an open preload
+    # the Gapless setter: stores the setting byte, and for 0 with a preload open sends {mcl-closegapless} and stores -1 in the preload state (the one cancel helper of patch/shuffle.c cancel_preload: reorders, insert, Clear)
     'mclSetGaplessMode':       ('int', 'int', 0x5d28ac),
 })
 # Localisation (patch/i18n.h): the stock translation. locale_info() is the app's locale, locale_info_tr(locale, key) the
@@ -669,9 +669,12 @@ SHUFFLE_PINS = (   # (address, stock word, what it proves)
     (0x5d3638, 0x03e00008, 'mclGetPlayMode: jr ra (the raw getter is not hooked)'), (0x5d363c, 0x8c42abe0, 'mclGetPlayMode: lw v0, mode word'),
     (0x5d42d8, 0x3c1c0043, 'mclSetPlayPos prologue'), (0x5d42ec, 0xac44abdc, 'mclSetPlayPos: sw a0, play position 0xa0abdc'),
     (0x5089dc, 0x8f82aa5c, 'dmr_serverstart: lw v0, GOT play queue 0xa0394c'), (0x5089e0, 0x8f99f494, 'dmr_serverstart: lw t9, GOT deque_clear'),
-    # the DLNA renderer service flag (Queue page Clear is off while it is 1): dlna_service_running reads it, dmr_serverstart sets it to 1 right after dmrStartService returns (UI-thread timer), dlna_servicestop clears it after dmrStopService
+    # the DLNA renderer service flag (Queue page Clear and the queue insert of Play Next / Play After are off while it is 1): dlna_service_running reads it, dmr_serverstart sets it to 1 right after dmrStartService returns (UI-thread timer), dlna_servicestop clears it after dmrStopService
     (0x507bf8, 0x8f82bd30, 'dlna_service_running: lw v0, GOT dmr_serverflag 0xa06020'), (0x507bfc, 0x8c420000, 'dlna_service_running: lw v0, (dmr_serverflag)'), (0x507c00, 0x38420001, 'dlna_service_running: xori v0, dmr_serverflag, 1 (== 1)'),
     (0x5084a0, 0xae220000, 'dmr_serverstart: sw v0 (=1), (s1): the flag is set after dmrStartService'), (0x507a78, 0xae000000, 'dlna_servicestop: sw zero, (s0): the flag is cleared after dmrStopService'),
+    # the readers of the Gapless byte / preload state the one cancel helper (patch/shuffle.c cancel_preload) relies on, and the setter's send
+    (0x5d2908, 0x0320f809, 'mclSetGaplessMode: jalr send("{mcl-closegapless}")'),
+    (0x5d583c, 0x9042ab89, 'mclNextSong: lbu v0, Gapless byte (0 takes the queue path)'), (0x5d6338, 0x8c63abd0, 'mclAutoChange: lw v1, preload state (a preload is started only at 0)'),
     (CLEAR_SITE, 0x0320f809, 'dmr_serverstart: jalr deque_clear(*queue)'), (CLEAR_SITE + 4, 0x8c440000, 'dmr_serverstart: delay slot lw a0, (v0)'),
 ) + tuple(p for a, l in MODE_SITES for p in ((a, 0x0320f809, f'jalr mclGetPlayMode {a:#x}'), (l, 0x8f99aab0, f'lw t9, GOT mclGetPlayMode (for {a:#x})')))
 # Queue page Clear (patch/shuffle.c pod_clear_upnext, docs/modules/queue.md "Clear engine"): the tracks after the play position are removed in place with libcstl's deque_pop_back, which demo does
@@ -778,11 +781,11 @@ DATA = {
     # mclGetPlayPos: get_playtimeandlength `lw s1, 0xa0394c; deque_size(*s1)` then `deque_at(*s1, pos)` (@0x4e01cc..0x4e0268),
     # the lock screen refresh (@0x53f73c, "queued" = 0 <= pos < size), the queue drawer (@0x47a8f0)
     'PLAY_QUEUE':         (0xa0394c, None),
-    # the player's gapless state word (mclSetPlayMode @0x5d27b8 tests it for 1, a preload is open, and closes the preload with "{mcl-closegapless}"): patch/shuffle.c cancels the preload after a reorder
+    # the player's gapless state word (1 = a preload is open; mclSetGaplessMode(0) @0x5d28ac closes it with "{mcl-closegapless}" and stores -1): patch/shuffle.c cancel_preload closes it after a reorder, an insert or Clear
     'MCL_PRELOAD':        (0xa0abd0, None),
-    'DMR_SERVERFLAG':     (0xa06020, 'dmr_serverflag'),   # int: 1 while stock's DLNA renderer (UPnP) service runs (dlna_service_running 0x507bec reads it; Clear stays off then, docs/modules/queue.md)
+    'DMR_SERVERFLAG':     (0xa06020, 'dmr_serverflag'),   # int: 1 while stock's DLNA renderer (UPnP) service runs (dlna_service_running 0x507bec reads it; Clear and the queue insert stay off then, docs/modules/queue.md)
     'MCL_PRELOAD_NEXT':   (0xa0abcc, None),   # int: the queue index the preload opened (-1 none; the decision 0x5d0ea4 stores -1 first, @0x5d0ecc)
-    'MCL_GAPLESS':        (0xa0ab89, None),   # byte: the Gapless setting (mclSetGaplessMode 0x5d28ac)
+    'MCL_GAPLESS':        (0xa0ab89, None),   # byte: the Gapless setting (mclSetGaplessMode 0x5d28ac stores it; mclNextSong 0x5d583c and mclAutoChange 0x5d632c read it)
     # the menu's list (patch/menu.c mn_plain_paint): g_scroll_view_vtable is a widget's vtable word (+0x70) when it is a scroll_view;
     # 0x60c164 is the paint-children hook list_view_on_add_child (0x60cc08) stores in a scroll_view (@0x60cd04..0x60cd10,
     # `addiu v1, v1, -0x3e9c`; its prologue `lui gp, 0x3f; addiu gp, gp, 0x7d6c`, test/pod/pulldown.py pins both words)

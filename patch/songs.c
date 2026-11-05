@@ -58,6 +58,7 @@
 #include "azlist.h"
 #include "i18n.h"
 #include "songops.h"
+#include "rowmenu.h"
 
 extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
 extern int search_open(void); /* patch/search.c: our keyboard, then the results page; -1 when it did not open */
@@ -143,6 +144,9 @@ static struct {
     unsigned rn; /* the albums of the grid */
     unsigned *rrow; /* rn library album rows, newest first (the stock row numbers) */
     grid_t rg; /* the album view's tile ring (GRID_COVER px covers), made when the view is entered */
+    rowmenu_t rm; /* the rows' "..." menu (patch/rowmenu.c) */
+    int tend; /* the text end the tiles were last fitted for (without select mode): a list read again with another one drops them */
+    int down_more; /* the press began in a row's "..." zone */
     grid_t g; /* the tile ring (LAST: test/pod/songs.py reads the fields above by index) */
 } sg __attribute__((section(".scratch")));
 
@@ -258,6 +262,12 @@ static void sg_window(int *lo, int *hi) {
 /* The select mode moves the row's content right by one column. */
 static int sg_tx(void) { return LIST_TEXT_X + (sg.select ? SG_SEL_COL : 0); }
 static int sg_art_x(void) { return LIST_ART_X + (sg.select ? SG_SEL_COL : 0); }
+
+/* The row's "..." (patch/rowmenu.c): shown outside select mode, its zone ends at the list's edge, or left of the A-Z rail while that is shown; the title and the artist end before it. */
+static int sg_more_right(void) { return sg.al.nsec > 0 ? RM_MORE_RIGHT_RAIL : RM_MORE_RIGHT; }
+static int sg_edge(void) { return rowmenu_on(&sg.rm) ? rowmenu_zone_x(sg_more_right()) - RM_TEXT_GAP : SG_TEXT_END; }
+static int sg_more(void) { return !sg.select && rowmenu_on(&sg.rm); }
+static int sg_text_end(void) { return sg.select ? SG_TEXT_END : sg_edge(); }
 
 static int sg_is_sel(int i) { return sg.sel && (sg.sel[i >> 3] >> (i & 7) & 1); }
 
@@ -391,7 +401,7 @@ static int rv_cell_at(int x, int y) {
  * moved the canvas up by yoffset, which the paint adds back (CANVAS_OY) for its duration, as the Albums page does.
  */
 static void sg_paint_rows(void *canvas) {
-    int r0, r1, r, off = sg_off(), tx = sg_tx(), room = SG_TEXT_END - tx, pass;
+    int r0, r1, r, off = sg_off(), tx = sg_tx(), hair = SG_TEXT_END - tx, room = sg_text_end() - tx, pass;
     if (sg.head) { /* a playlist's mosaic (the cover, or the placeholder disc until it is made) */
         grid_tile_t *h = grid_find(&sg.hg, 0);
         if (h) grid_blit(canvas, &sg.hg, h, PH_COVER_X, PH_COVER_Y - off, GRID_VIEW_H);
@@ -411,7 +421,8 @@ static void sg_paint_rows(void *canvas) {
             }
         }
         grid_blit(canvas, &sg.g, t, sg_art_x(), y + LIST_ART_Y, GRID_VIEW_H);
-        az_fill(canvas, tx, y + ROW - 1, y + ROW, room, LIST_HAIR);
+        az_fill(canvas, tx, y + ROW - 1, y + ROW, hair, LIST_HAIR);
+        if (sg_more()) rowmenu_paint(canvas, &sg.rm, sg_more_right(), sg.al.nsec > 0, y, ROW, GRID_VIEW_H);
     }
     for (pass = 0; pass < 2; ++pass) { /* titles, then artists: one text style at a time */
         widget_prepare_text_style(pass ? sg.st_sub : sg.st_title, canvas);
@@ -770,6 +781,7 @@ static void sg_load(int keep) {
     if (sg.more_timer) timer_remove(sg.more_timer);
     sg.more_timer = 0;
     sg_build_end();
+    rowmenu_close(&sg.rm); /* (a menu's row is an index of the list that is read again) */
     free(sg.sel);
     sg.idx = (song_t *)0, sg.sel = (unsigned char *)0, sg.list = sg.first = (void *)0, sg.count = sg.nsel = 0,
     sg.al.count = 0, sg.al.nsec = 0, sg.press = sg.down = 0;
@@ -811,6 +823,8 @@ static void sg_load(int keep) {
             same = old[i].key == sg.idx[i].key && old[i].letter == sg.idx[i].letter && sg_same_sig(&old[i], &sg.idx[i]);
     }
     free(old);
+    if (same && sg.tend != sg_edge()) same = 0; /* the rail came or went: the texts end elsewhere */
+    sg.tend = sg_edge();
     if (same) {
         for (i = 0; i < (unsigned)sg.g.n; ++i)
             if (sg.g.tiles[i].art == 2) sg.g.tiles[i].art = 0;
@@ -1158,10 +1172,38 @@ static void sg_set_press(int p) {
     sg_redraw();
 }
 
+/* The press or release is in a row's "..." zone. */
+static int sg_in_zone(void *e) {
+    int pt[2], x0;
+    if (!sg_more()) return 0;
+    pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
+    widget_to_local(sg.view, pt);
+    x0 = rowmenu_zone_x(sg_more_right());
+    return pt[0] >= x0 && pt[0] < x0 + RM_MORE_W;
+}
+
+/* Add to Playlist for one row (the menu's third row): the page's picker with a selection of that row alone. */
+static void sg_add_one(int row) {
+    int r;
+    if (!sg.sel || row < 0 || row >= (int)sg.count) return;
+    sg.sel[row >> 3] |= (unsigned char)(1 << (row & 7));
+    r = so_add(sg.cls, sg.count, sg.sel, 1, sg_valid(), sg.title_save, &sg.picker);
+    memset(sg.sel, 0, (sg.count + 7) / 8); /* (the picker and the stock vector have their own copies) */
+    if (r < 0) sg_load(1);
+}
+
+static void sg_open_menu(int a) {
+    if (!sg_valid()) {
+        sg_load(1);
+        return;
+    }
+    rowmenu_open(&sg.rm, a, deque_at(sg.list, (unsigned)a), sg_add_one);
+}
+
 static int sg_on_down(void *ctx, void *e) {
     int a;
     (void)ctx;
-    sg.down = 0;
+    sg.down = sg.down_more = 0;
     if (sg.rv) { /* the album grid: no press fill */
         int pt[2];
         if (!e || !sg.view) return RET_OK;
@@ -1173,14 +1215,15 @@ static int sg_on_down(void *ctx, void *e) {
     if (!e || !sg.view || !sg.count || !sg_valid()) return RET_OK;
     a = sg_item_of(e);
     sg.down = a + 1, sg.down_x = I(e, PE_X), sg.down_y = I(e, PE_Y);
-    if (!sg.select) sg_set_press(a + 1);
+    sg.down_more = a >= 0 && sg_in_zone(e);
+    if (!sg.select && !sg.down_more) sg_set_press(a + 1);
     return RET_OK;
 }
 
 static int sg_on_up(void *ctx, void *e) {
-    int a = sg.down - 1;
+    int a = sg.down - 1, more = sg.down_more;
     (void)ctx;
-    sg.down = 0;
+    sg.down = sg.down_more = 0;
     sg_set_press(0);
     if (a < 0 || !e || !sg.view) return RET_OK;
     if (sg.rv) { /* an album: our album page, as the Albums page's tap opens it (cc_open_album takes the stock row) */
@@ -1196,7 +1239,9 @@ static int sg_on_up(void *ctx, void *e) {
         sg_item_of(e) == a) {
         if (sg.select)
             sg_toggle(a);
-        else
+        else if (more) {
+            if (sg_in_zone(e)) sg_open_menu(a); /* (a press that began on the "..." and ended off it does nothing) */
+        } else
             sg_play_at(a, SO_KEEP);
     }
     return RET_OK;
@@ -1205,7 +1250,7 @@ static int sg_on_up(void *ctx, void *e) {
 static int sg_on_abort(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    sg.down = 0;
+    sg.down = sg.down_more = 0;
     sg_set_press(0);
     return RET_OK;
 }
@@ -1297,6 +1342,7 @@ static int sg_on_fg(void *ctx, void *e) {
 
 static int sg_on_bg(void *ctx, void *e) {
     az_rail_end(&sg.al);
+    rowmenu_close(&sg.rm);
     return sg_on_abort(ctx, e);
 }
 
@@ -1318,6 +1364,7 @@ static int sg_on_destroy(void *ctx, void *e) {
         if (sg.mark[i]) bitmap_destroy(sg.mark[i]);
     free(sg.idx);
     free(sg.sel);
+    rowmenu_free(&sg.rm);
     memset(&sg, 0, sizeof sg);
     if (sg_under) memcpy(&sg, sg_under, sizeof sg), free(sg_under), sg_under = (void *)0;
     return RET_OK;
@@ -1407,6 +1454,7 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
         }
     }
     sg_menu(0);
+    rowmenu_bind(&sg.rm, sg.win); /* the rows' "..." menu (optional: no widgets or the kill switch means no "...") */
     if (!sg_lib()) { /* a list: no Sort; Search (the capsule's left cap) moves to Sort's slot, beside Select, and the titles are the list's */
         sg_show(sg.btn_sort, 0);
         if (sg_genre()) { /* a genre's songs: no Search either; Select is the capsule's left cap (its own glass piece) */

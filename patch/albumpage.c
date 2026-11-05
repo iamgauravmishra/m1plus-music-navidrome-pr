@@ -32,6 +32,7 @@
 #include "azlist.h"
 #include "i18n.h"
 #include "songops.h"
+#include "rowmenu.h"
 
 #define ROW LIST_ROW_H
 
@@ -74,6 +75,8 @@ static struct {
     int bar; /* the status bar's bg_color is ours and must go back to black */
     void *mark[2]; /* the select marks: unselect, selected */
     void *wave; /* the playing track's marker (ah_wave, AB_WAVE px), NULL when it did not decode: the number stays */
+    rowmenu_t rm; /* the rows' "..." menu (patch/rowmenu.c) */
+    int down_more; /* the press began in a row's "..." zone */
     grid_t hg; /* the cover: one tile, AH_ART px with AH_CORNER px corners cut in the alpha */
     grid_t g; /* the tracks' texts: the ring (a tile holds a title cut to its width; no cover) */
 } ab __attribute__((section(".scratch")));
@@ -131,6 +134,10 @@ static int ab_numw(int i) {
     return i + 1 >= 100 ? ROW_NUM_W3 : ROW_NUM_W;
 } /* the number's column: 22 px, 32 for three digits */
 static int ab_tx(int i) { return AB_NUM_X + ab_shift() + ab_numw(i) + AB_NUM_GAP; } /* the title's x */
+
+/* The row's "..." (patch/rowmenu.c): shown outside select mode, at the list's right edge; the title ends before it. */
+static int ab_more(void) { return !ab.select && rowmenu_on(&ab.rm); }
+static int ab_text_end(void) { return ab_more() ? rowmenu_zone_x(RM_MORE_RIGHT) - RM_TEXT_GAP : AB_TEXT_END; }
 
 static int ab_is_sel(int i) { return ab.sel && (ab.sel[i >> 3] >> (i & 7) & 1); }
 
@@ -234,6 +241,7 @@ static void ab_paint(void *canvas) {
             }
         }
         az_fill_h(canvas, 0, y + ROW - 1, y + ROW, AB_ROW_W, AB_HAIR, AH_WIN_H);
+        if (ab_more()) rowmenu_paint(canvas, &ab.rm, RM_MORE_RIGHT, 0, y, ROW, AH_WIN_H);
     }
     for (pass = 0; pass < 2; ++pass) { /* numbers (the wave marker for the playing track), then titles: one text style at a time */
         widget_prepare_text_style(pass == 0 ? ab.st_num : ab.st_title, canvas);
@@ -245,7 +253,8 @@ static void ab_paint(void *canvas) {
                 else
                     ab_number(canvas, r, y);
             } else
-                grid_text(canvas, ab_tile(r), 0, ab_tx(r), y + AB_TEXT_Y, AB_TEXT_END - ab_tx(r), AB_TEXT_H, AH_WIN_H);
+                grid_text(canvas, ab_tile(r), 0, ab_tx(r), y + AB_TEXT_Y, ab_text_end() - ab_tx(r), AB_TEXT_H,
+                          AH_WIN_H);
         }
     }
 }
@@ -556,6 +565,7 @@ static void ab_load(int keep) {
     grid_drop(&ab.g);
     free(ab.sel);
     ab_build_end(); /* a set of an earlier read: the tracks may have changed */
+    rowmenu_close(&ab.rm); /* (a menu's row is an index of the list that is read again) */
     ab.sel = (unsigned char *)0, ab.list = ab.first = (void *)0, ab.count = ab.nsel = 0, ab.press = ab.down = 0;
     ab.dur = 0, ab.ltried = 0;
     ab_classinfo();
@@ -724,28 +734,59 @@ static void ab_set_press(int p) {
     ab_redraw();
 }
 
+/* The press or release is in a row's "..." zone. */
+static int ab_in_zone(void *e) {
+    int pt[2], x0;
+    if (!ab_more()) return 0;
+    pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
+    widget_to_local(ab.view, pt);
+    x0 = rowmenu_zone_x(RM_MORE_RIGHT);
+    return pt[0] >= x0 && pt[0] < x0 + RM_MORE_W;
+}
+
+/* Add to Playlist for one track (the menu's third row): the page's picker with a selection of that track alone. */
+static void ab_add_one(int row) {
+    int r;
+    if (!ab.sel || row < 0 || row >= (int)ab.count) return;
+    ab.sel[row >> 3] |= (unsigned char)(1 << (row & 7));
+    r = so_add(ab.cls, ab.count, ab.sel, 1, ab_valid(), ab.title_save, &ab.picker);
+    memset(ab.sel, 0, (ab.count + 7) / 8); /* (the picker and the stock vector have their own copies) */
+    if (r < 0) ab_load(1);
+}
+
+static void ab_open_menu(int a) {
+    if (!ab_valid()) {
+        ab_load(1);
+        return;
+    }
+    rowmenu_open(&ab.rm, a, deque_at(ab.list, (unsigned)a), ab_add_one);
+}
+
 static int ab_on_down(void *ctx, void *e) {
     int a;
     (void)ctx;
-    ab.down = 0;
+    ab.down = ab.down_more = 0;
     if (!e || !ab.view || !ab.count || !ab_valid()) return RET_OK;
     a = ab_item_of(e);
     ab.down = a + 1, ab.down_x = I(e, PE_X), ab.down_y = I(e, PE_Y);
-    if (!ab.select) ab_set_press(a + 1);
+    ab.down_more = a >= 0 && ab_in_zone(e);
+    if (!ab.select && !ab.down_more) ab_set_press(a + 1);
     return RET_OK;
 }
 
 static int ab_on_up(void *ctx, void *e) {
-    int a = ab.down - 1;
+    int a = ab.down - 1, more = ab.down_more;
     (void)ctx;
-    ab.down = 0;
+    ab.down = ab.down_more = 0;
     ab_set_press(0);
     if (a < 0 || !e || !ab.view) return RET_OK;
     if (ab_abs(I(e, PE_X) - ab.down_x) < SC_DRAG_PX && ab_abs(I(e, PE_Y) - ab.down_y) < SC_DRAG_PX &&
         ab_item_of(e) == a) {
         if (ab.select)
             ab_toggle(a);
-        else
+        else if (more) {
+            if (ab_in_zone(e)) ab_open_menu(a); /* (a press that began on the "..." and ended off it does nothing) */
+        } else
             ab_play_at(a, SO_KEEP);
     }
     return RET_OK;
@@ -754,7 +795,7 @@ static int ab_on_up(void *ctx, void *e) {
 static int ab_on_abort(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    ab.down = 0;
+    ab.down = ab.down_more = 0;
     ab_set_press(0);
     return RET_OK;
 }
@@ -789,6 +830,7 @@ static int ab_on_fg(void *ctx, void *e) {
 static int ab_on_bg(void *ctx, void *e) {
     ab.fg = 0;
     ab_bar_black();
+    rowmenu_close(&ab.rm);
     return ab_on_abort(ctx, e);
 }
 
@@ -806,6 +848,7 @@ static int ab_on_destroy(void *ctx, void *e) {
         if (ab.mark[i]) bitmap_destroy(ab.mark[i]);
     if (ab.wave) bitmap_destroy(ab.wave);
     free(ab.sel);
+    rowmenu_free(&ab.rm);
     memset(&ab, 0, sizeof ab);
     return RET_OK;
 }
@@ -863,6 +906,7 @@ int album_open(unsigned cls, void *row) {
         ab.mark[0] = ab.mark[1] =
             (void *)0; /* (one that did not decode is freed with the other at destroy: the pair is all or none) */
     ab.wave = ab_make_wave(ab.win);
+    rowmenu_bind(&ab.rm, ab.win); /* the rows' "..." menu (optional: no widgets or the kill switch means no "...") */
     widget_on(ab.view, EVT_POINTER_DOWN, ab_on_down, (void *)0);
     widget_on(ab.view, EVT_POINTER_UP, ab_on_up, (void *)0);
     widget_on(ab.view, EVT_POINTER_ABORT, ab_on_abort, (void *)0);

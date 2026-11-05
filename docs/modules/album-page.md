@@ -42,6 +42,8 @@ list so an enclosing view cannot intercept the whole navigation band.
 | Tracks | Number column, 19 px white title in a 22 px line 20 px down the 64 px row (`AB_TEXT_Y`, centred over the hairline), 20% white press fill, 13% white hairline. The playing track keeps its white title; a 12 px wave (`ah_wave`, `#EEEEEC`, four round bars, the rows' `np_row_playing` scaled; static) replaces its number, right-aligned in the number column and centred on the title's line (`AB_WAVE`) |
 | Footer | `ab_foot` (`13 tracks, 49 minutes`): 15 px `#AAAAAA` left-aligned label at x 12 (`AB_NUM_X`, the number column's left edge), `AB_FOOT_GAP` 14 px under the last row, 20 px high; only when the duration is known (52 px of content), else none |
 
+Each track ends with a grey "..." (24 px `#8C8C8C`, a 44 px tap zone at x 266..310) that opens the Play Next / Play After / Add to Playlist menu ([rowmenu](rowmenu.md)); the title ends at **x 262** (was 298) so it never runs under it. Select mode has neither. The window's last two children are the menu's `rm_scrim` and `rm_card`, above the glass navbar.
+
 Year is the first track year in 1000..2999.
 Track numbers use a wider column from 100 onward. CUE titles use the file name.
 

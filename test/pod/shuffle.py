@@ -344,7 +344,7 @@ def load(m, h, pos, cls=0xf001): return m.call(PSYMS['sh_load_playlist'], a0=h, 
 
 def apple_tests(expect):
     SH, OR, RO, RA = O['MODE_SHUFFLE'], O['MODE_ORDER'], O['MODE_REPEAT_ONE'], O['MODE_REPEAT_ALL']
-    GAPLESS = pod.DATA['MCL_PRELOAD'][0]
+    GAPLESS, GSET = pod.DATA['MCL_PRELOAD'][0], pod.DATA['MCL_GAPLESS'][0]   # the preload state word, the Gapless setting byte
 
     # 40. Shuffle on (a request for 2): our flag on, stock List play; the songs after the playing one are permuted in place, the rest stays; every string keeps one owner.
     for clock in (1, 90, 4099):
@@ -451,10 +451,12 @@ def apple_tests(expect):
         m = apple_machine(mode=raw, flag=flag)
         expect(m.call(PSYMS['sh_display_mode'], count=100000) == want, f'display mode with the flag {"on" if flag else "off"} and stock mode {raw}: {want}')
     # the gapless preload of the old next song is closed after a reorder (and only then)
-    m = apple_machine(); m.setword(GAPLESS, 1); hook(m, SH)
-    expect(m.names().count('closegapless') == 1 and m.s32(GAPLESS) == -1 and m.mode == OR, 'a preload is closed after the reorder (stock\'s own mode-1 rule, then the mode put back)')
-    m = apple_machine(); hook(m, SH); m.setword(GAPLESS, 1); m.calls = []; hook(m, OR)
-    expect(m.names().count('closegapless') == 1 and m.mode == OR, 'and after the order is restored')
+    m = apple_machine(); m.u.mem_write(GSET, b'\1'); m.setword(GAPLESS, 1); hook(m, SH)
+    seq = [c for c in m.calls if c[0] in ('mclSetGaplessMode', 'closegapless', 'stock_setmode')]
+    expect(m.names().count('closegapless') == 1 and m.s32(GAPLESS) == -1 and m.mode == OR and m.u.mem_read(GSET, 1)[0] == 1, 'a preload is closed after the reorder and the Gapless setting is back')
+    expect(seq == [('stock_setmode', OR), ('mclSetGaplessMode', 0), ('closegapless',), ('mclSetGaplessMode', 1)], f'the one cancel helper: the Gapless setter with 0, then the old value; the stock mode word is never Repeat one ({seq})')
+    m = apple_machine(); m.u.mem_write(GSET, b'\1'); hook(m, SH); m.setword(GAPLESS, 1); m.calls = []; hook(m, OR)
+    expect(m.names().count('closegapless') == 1 and m.mode == OR and ('mclSetGaplessMode', 1) in m.calls and ('stock_setmode', RO) not in m.calls, 'and after the order is restored')
     m = apple_machine(); hook(m, SH)
     expect('closegapless' not in m.names(), 'no preload open: nothing to close')
 

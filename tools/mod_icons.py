@@ -218,6 +218,11 @@ NAV_PX = 24
 # New, Import, Export, Delete.
 PL_MENU_PX = 20
 PL_MENU_ICONS = (('pl_ic_new', 'list-plus'), ('pl_ic_import', 'file-input'), ('pl_ic_export', 'file-output'), ('pl_ic_delete', 'trash'))
+# The track rows' "..." menu (patch/rowmenu.c, docs/modules/rowmenu.md; tools/pod_ui.py row_menu): bare BARE_PX glyphs as on Now Playing's More sheet's own rows (pod_ic_tape), Play Next, Play After, Add to Playlist; and
+# the row's own "..." (RM_DOTS: the Lucide ellipsis, 24 px white on transparent; the payload makes it a RM_DOTS_RGB bitmap from the image's coverage and paints it at the right end of a track row)
+RM_MENU_ICONS = (('rm_ic_next', 'list-start'), ('rm_ic_after', 'list-end'), ('rm_ic_add', 'list-plus'))
+RM_DOTS = ('rm_dots', 'ellipsis')
+RM_DOTS_PX = 24
 # Bare glyphs (no disc) on every list page: a BARE_PX canvas, stroke BARE_SW px absolute. The Pod rows' image is that
 # canvas, x 16..40 in the 52 px row, vertically centred; the title starts at POD_TEXT_X and the 1 px #222222 hairline
 # under each row starts there too (the pressed band stays full width). The stock settings pages keep their 40 x 40 images
@@ -305,6 +310,7 @@ NP = {'np_play': ('pil:play', 44, 0, 'fg', 'np_play_down'), 'np_pause': ('pil:pa
       'pm_sheet': ('pil:glass_sheet', (320, 250), 0, 'fg', None), 'pm_sheet6': ('pil:glass_sheet6', (320, 300), 0, 'fg', None),
       'pl_glass': ('pil:glass_menu', (72, 200), 0, 'fg', None),
       'sg_glass': ('pil:glass_sort', (72, 250), 0, 'fg', None),
+      'rm_glass': ('pil:glass_rowmenu', (320, 150), 0, 'fg', None),
       'np_grabber': ('pil:grabber', (120, 44), 0, 'ghost', 'np_grabber_down'),
       'np_row_playing': ('pil:wave', (40, 20), 0, 'fg', None),
       'rn_play': ('pil:play', 64, 0, 'white', 'rn_play_down'), 'rn_stop': ('pil:stop', 64, 0, 'white', 'rn_stop_down'),   # Radio Now Playing's one large button (patch/radionp.c)
@@ -330,7 +336,7 @@ def is_badge(g): return g.startswith('badge:')
 def used_glyphs():
     """(Lucide names, Tabler names) of every glyph the tables use; custom ones excluded."""
     gl = [e[2] for e in HOME + SETTINGS + LISTS] + list(PULLDOWN.values()) + list(STATUS.values()) + \
-        [g for g in WIFI_LEVELS if g] + [COVER_GLYPH, POD_HOME_GLYPH, SHOT_BAR[1]] + list(NAV_VIEW.values()) + [g for _, g in PL_MENU_ICONS] + list(ES_ICONS.values()) + [v[1] for v in POD_ROWS.values() if v[1] != SHANLING] + list(FOLDER_ROWS.values()) + list(RADIO_ROWS.values()) + [RADIO_ART[1]] + [g for g in CARD_GLYPHS.values() if g != SHANLING] + \
+        [g for g in WIFI_LEVELS if g] + [COVER_GLYPH, POD_HOME_GLYPH, SHOT_BAR[1]] + list(NAV_VIEW.values()) + [g for _, g in PL_MENU_ICONS] + [g for _, g in RM_MENU_ICONS] + [RM_DOTS[1]] + list(ES_ICONS.values()) + [v[1] for v in POD_ROWS.values() if v[1] != SHANLING] + list(FOLDER_ROWS.values()) + list(RADIO_ROWS.values()) + [RADIO_ART[1]] + [g for g in CARD_GLYPHS.values() if g != SHANLING] + \
         [g for _, g, _ in GLYPHS] + [v[0] for v in SONGS_IMAGES.values()] + [v[0] for v in KEYBOARD_IMAGES.values()] + [KB_CLEAR[1], DP_ADD_GLYPH] + list(PC_GLYPHS) + [g for _, g in DISCS] + [v[0] for v in NP.values() if not v[0].startswith('pil:')] + ['lock:filled'] + R3_GLYPHS
     names = {gname(g) for g in gl if g and not is_custom(g) and not is_badge(g)}
     return sorted(n for n in names if not n.startswith('T:')), sorted(n[2:] for n in names if n.startswith('T:'))
@@ -724,6 +730,8 @@ def generate_all(sizes):
     for p in CARD_PIECES:
         f[f'pod_cd_{p}'] = card_piece(p); f[f'pod_cd_{p}_down'] = card_piece(p, True)
     for n, g in PL_MENU_ICONS: f[n] = glyph(g, PL_MENU_PX, 'bare')
+    for n, g in RM_MENU_ICONS: f[n] = glyph(g, BARE_PX, 'bare')
+    f[RM_DOTS[0]] = glyph(RM_DOTS[1], RM_DOTS_PX, 'bare')
     for n, g in ES_ICONS.items(): f[n] = glyph_fit(g, ES_PX, ES_PX, ES_RGB, 2, 2.0)
     for n, g in NAV_VIEW.items():
         pos = NAV_VIEW_POS[n]
@@ -1320,6 +1328,7 @@ GLASS_SHEET6 = (320, 300, 18)                               # the same sheet wit
 GLASS_SHEET = (320, 250, 18)                                  # Now Playing's More sheet, page 2 (five rows: the back header, Speed, A-B repeat, Find Cover & Lyrics, Delete; patch/playmore.c, docs/modules/playmore.md): top corners only
 GLASS_SHEET_FILL = ((0x2A, 0x2A, 0x2C), (0x1E, 0x1E, 0x20), 0.88)   # denser than the card (0.76): rows, labels and grey badges sit straight on it (docs/modules/playmore.md)
 GLASS_SORT = (72, 250, 14)    # the Songs page's sort card (docs/modules/songs.md): the same pane, five rows high (the gradient is vertical, so each height has its own picture)
+GLASS_ROWMENU = (320, 150, 18)   # the track rows' menu (patch/rowmenu.c, docs/modules/rowmenu.md): Now Playing's More sheet's pane, three rows high, top corners only
 GLASS_MENU = (72, 200, 14)    # the Playlists page's "..." menu card (patch/playlists.c, docs/modules/playlists.md): the sheet's glass, all four corners; drawn patch3_x
                               # (the middle 24 px stretched to the card's width), as tall as the card (tools/pod_ui.py PL_CARD_H)
 GLASS_FILL = {False: ((0x2D, 0x2D, 0x2F), (0x23, 0x23, 0x25), 0.82), True: ((0x3A, 0x3A, 0x3C), (0x30, 0x30, 0x32), 0.86)}   # top rgb, bottom rgb, alpha
@@ -1378,6 +1387,7 @@ def np_images():
             elif g == 'pil:glass_sheet6': out[name] = glass_image(*GLASS_SHEET6, fill=GLASS_SHEET_FILL, top_only=True)
             elif g == 'pil:glass_menu': out[name] = glass_image(*GLASS_MENU, fill=GLASS_SHEET_FILL)
             elif g == 'pil:glass_sort': out[name] = glass_image(*GLASS_SORT, fill=GLASS_SHEET_FILL)
+            elif g == 'pil:glass_rowmenu': out[name] = glass_image(*GLASS_ROWMENU, fill=GLASS_SHEET_FILL, top_only=True)
             elif g.startswith('pil:'): out[name] = pil_glyph(g[4:], px, rgb, alpha)
             elif rest: out[name] = np_disc(px, rest[0], NP_DISC_ALPHA_DOWN if pressed else NP_DISC_ALPHA, g, ink, rgb)
             else: out[name] = glyph_fit(g, px, px, rgb, (px - ink) // 2, 1.5 if ink < 22 else None)   # the small mode / queue glyphs keep a 1.5 px stroke
@@ -1579,7 +1589,7 @@ def replaced_names():
 
 def pod_row_names(): return sorted({n for n, _ in POD_ROWS.values()})
 def nav_names(): return sorted(set(NAV_VIEW) | {n + '_down' for n in NAV_VIEW})
-def pod_names(): return sorted(set(pod_row_names()) | set(FOLDER_ROWS) | set(RADIO_ROWS) | {RADIO_ART[0]} | set(POD_HOME) | set(nav_names()) | set(ALBUM) | set(DAILY) | {SHOT_BAR[0], LO_BAR} | {n for n, _ in PL_MENU_ICONS})
+def pod_names(): return sorted(set(pod_row_names()) | set(FOLDER_ROWS) | set(RADIO_ROWS) | {RADIO_ART[0]} | set(POD_HOME) | set(nav_names()) | set(ALBUM) | set(DAILY) | {SHOT_BAR[0], LO_BAR} | {n for n, _ in PL_MENU_ICONS} | {n for n, _ in RM_MENU_ICONS} | {RM_DOTS[0]})
 def np_names(): return sorted(set(NP) | {v[4] for v in NP.values() if v[4]})
 
 def added_rels(stock_rootfs=None, *args):
@@ -1753,7 +1763,7 @@ def add_nav_icons(out):
     the status bar's Screenshot camera (the hidden pod_shot image tools/pod_ui.py adds to ui/system_bar.bin) and the Playlists
     page's menu glyphs (ui/m1plus_playlists.bin)."""
     d = os.path.join(out, IMG)
-    for n in nav_names() + [SHOT_BAR[0], LO_BAR] + [n for n, _ in PL_MENU_ICONS]:
+    for n in nav_names() + [SHOT_BAR[0], LO_BAR] + [n for n, _ in PL_MENU_ICONS] + [n for n, _ in RM_MENU_ICONS] + [RM_DOTS[0]]:
         q = os.path.join(d, n + '.png'); assert not os.path.exists(q), f'{n}.png already in the tree'
         shutil.copyfile(os.path.join(PNG, n + '.png'), q); os.chmod(q, IMG_MODE); os.utime(q, (IMG_MTIME, IMG_MTIME))
 

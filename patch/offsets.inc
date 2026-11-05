@@ -710,6 +710,17 @@
 #define PL_TEXT_R 16
 #define PL_CARD_MIN 180
 #define PL_CARD_MAX 292
+/* The track rows' "..." menu (patch/rowmenu.c, tools/pod_ui.py row_menu, docs/modules/rowmenu.md): each row of the album page and of the Songs page's lists ends with a grey "..." (RM_DOTS_PX px,
+ * RM_DOTS_RGB) centred in a RM_MORE_W wide tap zone (flush with its right edge beside the rail) whose right edge is RM_MORE_RIGHT (the list's width); on the Songs page, while the A-Z rail is shown, RM_MORE_RIGHT_RAIL (flush with the rail's
+ * touch column, which starts at SG_RAIL_X 284). The row's text ends RM_TEXT_GAP before the zone. A tap on it opens the sheet: RM_ROWS rows of PM_ROW_H at the window's foot in
+ * Now Playing's More sheet's glass (rm_glass, 320 x 150, top corners only), laid out by the asset (the payload only shows and hides it). */
+#define RM_ROWS 3
+#define RM_MORE_W 44
+#define RM_MORE_RIGHT 310
+#define RM_MORE_RIGHT_RAIL 284
+#define RM_TEXT_GAP 4
+#define RM_DOTS_PX 24
+#define RM_DOTS_RGB 0x008c8c8cu
 /* The Podcasts refresh dialog (tools/pod_ui.py podcasts_dialog, patch/podcasts.c pg_dlg_*): the Playlists card's glass, PD_CARD_W wide and exactly as high as that image (4 rows of 50),
  * centred in the 450 px client area; the progress bar is PD_BAR_W wide (the fill's width is the payload's) and PD_BAR_H high; the Cancel row fills the card's last PL_ROW_H. */
 #define PD_CARD_W 280

@@ -240,14 +240,20 @@ static void restore_order(void *q, unsigned n, int pos) {
     drop_order();
 }
 
-/* The reorder changed which song comes next, so a gapless preload of the old next one is stale: mclSetPlayMode closes it for mode 1 (stock's
- * own rule, @0x5d27b8..0x5d2804), then the real mode is put back (past the hook: no flag change). */
+/* The one gapless cancel (the shuffle reorders and the insert below). A change of which song comes next makes a gapless preload of the old next one stale. It is
+ * closed with stock's Gapless setter: mclSetGaplessMode(0) @0x5d28ac stores the setting byte 0xa0ab89, and with the preload state 0xa0abd0 at 1 sends
+ * {mcl-closegapless} and stores -1 in the state; mclSetGaplessMode(old) puts the byte back. The other way to reach the same close, mclSetPlayMode(1) twice
+ * (@0x5d27b8..0x5d2804), stores the mode word 0xa0abe0 = 1 (Repeat one) for a few instructions, and a track that ends in that window repeats once (mclNextSong
+ * reads the mode raw). In the setter's window the byte is 0 and the state is 1 or -1, and every reader of the byte goes the way the closed state goes anyway:
+ * mclNextSong @0x5d583c (byte 0: the queue path), mclAutoChange @0x5d632c (byte 0: no preload), the set-gapless send @0x5d0dd0 (only on the tick's preload,
+ * the same thread as the UI). No stock mode word is touched and the setter reaches only `send`, no hooked address, so it is safe under the payload lock.
+ * After the cancel stock does not preload again in the same song (the tick calls the preload only while the state is 0): the join into the new next song is
+ * not gapless, accepted. */
 static void cancel_preload(void) {
-    int mode;
+    unsigned char old = *(unsigned char *)MCL_GAPLESS;
     if (*(int *)MCL_PRELOAD != 1) return;
-    mode = mclGetPlayMode();
-    stock_setmode_trampoline(MODE_REPEAT_ONE);
-    stock_setmode_trampoline(mode);
+    mclSetGaplessMode(0);
+    mclSetGaplessMode(old);
 }
 
 /* The flag on or off, with the reorder: 1 done, 0 more songs than SHUFFLE_MAX (the flag stays off), -1 out of memory (the same). Off always succeeds. */
@@ -270,6 +276,89 @@ static int flag_set(int on) {
     if (r > 0) flag_save(on);
     sh_leave();
     if (r > 0 && q && n > 1) cancel_preload();
+    return r;
+}
+
+/* ---------------------------------------------------------------------------
+ * Play Next / Play After: rows inserted into the playing queue in place (docs/modules/queue.md "Up Next"), through here so that Shuffle's saved order stays valid.
+ */
+static void row_swap(void *q, unsigned i, unsigned j) {
+    char tmp[REC_SIZE];
+    void *a = deque_at(q, i), *b = deque_at(q, j);
+    memcpy(tmp, a, REC_SIZE);
+    memcpy(a, b, REC_SIZE);
+    memcpy(b, tmp, REC_SIZE);
+}
+
+/* Stock's DLNA renderer (UPnP) service runs (dlna_service_running 0x507bec: dmr_serverflag == 1). Its callbacks on the UPnP threads (dmrActionPLGetPlayInfo, dmrActionPLReadTrack,
+ * dmrActionGetPositionInfo) read the queue without a lock, so Clear and the queue insert (Play Next / Play After: it grows the deque and moves rows) are off while it runs
+ * (docs/modules/queue.md "Locking, and what it does not cover"). */
+static int dlna_running(void) { return *(volatile int *)DMR_SERVERFLAG == 1; }
+
+static void rows_reverse(void *q, unsigned lo, unsigned hi) { /* [lo, hi] */
+    while (lo < hi) row_swap(q, lo++, hi--);
+}
+
+/* The n rows at [size, size + n) move to [at, at + n), the rows from at to size - 1 after them: the three reversals of a rotation. Every string stays owned by one slot. */
+static void rows_rotate(void *q, unsigned at, unsigned size, unsigned n) {
+    if (at >= size || !n) return;
+    rows_reverse(q, at, size + n - 1);
+    rows_reverse(q, at, at + n - 1);
+    rows_reverse(q, at + n, size + n - 1);
+}
+
+/* Insert the n rows of `rows` (a deque of stSongInfo that stays the caller's; they are copied) into the playing queue: right after the playing song (after == 0, the
+ * rows of one call keep their order, an earlier Play Next ends up behind them) or at the end (after != 0). Under the payload lock, so a queue load or clear on
+ * DLNA's thread excludes it, and nothing hooked is called inside (_deque_push_back's copy callback is stock's stSongInfo copy, as in mclLoadPlayList's walk).
+ * When Shuffle keeps an order (sh.orig) it grows with the queue and stays a permutation of 0..size-1: the new slots take the original positions right after the
+ * playing song's own (Play Next) or at the end (Play After), in the rows' order, and every original position at or above that moves up by n, so Shuffle off puts
+ * the original order back with the added songs right after the playing song. An order whose size is not the queue's is stale and dropped. An open gapless
+ * preload is cancelled (cancel_preload) when the next song changes (at == pos + 1), also under the lock.
+ * POD_INSERT_OK, or nothing changed: POD_INSERT_IDLE (no rows, no queue or no playing position: the caller starts the rows as a queue), POD_INSERT_DLNA (the DLNA renderer service runs), POD_INSERT_FULL (more than
+ * SHUFFLE_MAX songs), POD_INSERT_MEMORY (the new order could not be allocated). */
+int pod_queue_insert(void *rows, int after) {
+    void *q;
+    unsigned n = rows ? deque_size(rows) : 0, size, at, base = 0, s, v, i;
+    unsigned *no = (unsigned *)0, *o;
+    int pos, cls, r = POD_INSERT_OK;
+    sh_enter();
+    q = play_queue();
+    size = q ? deque_size(q) : 0;
+    pos = mclGetPlayPos();
+    if (!n || !size || pos < 0 || (unsigned)pos >= size) {
+        r = POD_INSERT_IDLE;
+    } else if (dlna_running()) { /* the service starts on the UI thread (this one), so it cannot start before the insert ends */
+        r = POD_INSERT_DLNA;
+    } else if (size + n > SHUFFLE_MAX) {
+        r = POD_INSERT_FULL;
+    } else {
+        at = after ? size : (unsigned)pos + 1;
+        o = sh.orig;
+        if (o && sh.n == size) { /* the new order first: a failed allocation refuses the insert with nothing changed */
+            no = calloc(size + n, sizeof *no);
+            if (!no) r = POD_INSERT_MEMORY;
+        }
+        if (r == POD_INSERT_OK) {
+            if (no) {
+                base = after ? size : o[pos] + 1;
+                for (s = 0; s < size; ++s) {
+                    v = o[s];
+                    no[s < at ? s : s + n] = v >= base ? v + n : v;
+                }
+                for (i = 0; i < n; ++i) no[at + i] = base + i;
+            }
+            cls = I(deque_at(q, (unsigned)pos), REC_CLASS);
+            for (i = 0; i < n; ++i) {
+                _deque_push_back(q, deque_at(rows, i));
+                I(deque_at(q, size + i), REC_CLASS) = cls; /* what loadSongList stamps in every row of a queue */
+            }
+            rows_rotate(q, at, size, n);
+            drop_order(); /* the old order, or a stale one */
+            if (no) sh.orig = no, sh.n = size + n;
+            if (at == (unsigned)pos + 1) cancel_preload();
+        }
+    }
+    sh_leave();
     return r;
 }
 
@@ -648,10 +737,6 @@ static void (*cstl_pop_back(void))(void *) {
     return (void (*)(void *))pop_fn;
 }
 
-/* Stock's DLNA renderer (UPnP) service runs (dlna_service_running 0x507bec: dmr_serverflag == 1). Its callbacks on the UPnP threads (dmrActionPLGetPlayInfo, dmrActionPLReadTrack,
- * dmrActionGetPositionInfo) read the queue without a lock, so Clear is off while it runs (docs/modules/queue.md "Locking, and what it does not cover"). */
-static int dlna_running(void) { return *(volatile int *)DMR_SERVERFLAG == 1; }
-
 /* Clear can run: the kill switch is off, libcstl is the pinned one and no DLNA service runs (the Queue page shows its button only then). The slot is bound once the queue was read (deque_size). */
 int pod_clear_ready(void) { return !home_off() && !dlna_running() && cstl_pop_back() != (void (*)(void *))0; }
 
@@ -680,11 +765,7 @@ int pod_clear_upnext(void) {
         r = -1;
         if (pop) {
             keep = (unsigned)pos + 1;
-            if (*(int *)MCL_PRELOAD == 1) {
-                unsigned char old = *(unsigned char *)MCL_GAPLESS;
-                mclSetGaplessMode(0); /* sends {mcl-closegapless} and stores -1 */
-                mclSetGaplessMode(old);
-            }
+            cancel_preload(); /* an open preload opened the old next file: closed, the Gapless setting put back */
             if (*(int *)MCL_PRELOAD_NEXT > pos) *(int *)MCL_PRELOAD_NEXT = -1;
             while (deque_size(q) > keep) pop(q);
             drop_order();

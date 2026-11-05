@@ -625,6 +625,54 @@ def playlist_menu():
     return scrim, card
 
 
+RM_KEYS = ('Play Next', 'Play After', 'Add to Playlist')   # the track rows' "..." menu (patch/rowmenu.c): the rows in order, each with its glyph (tools/mod_icons.py RM_MENU_ICONS)
+RM_GLASS = 'rm_glass'                                       # the sheet's glass: Now Playing's More sheet's pane, three rows high, top corners only (tools/mod_icons.py GLASS_ROWMENU)
+RM_ICON_X, RM_TEXT_X, RM_TEXT_R = 14, 48, 22                  # Now Playing's More sheet's rows (pod_tape: the 24 px glyph at x 14, the label from x 48, ending at 298)
+RM_LABEL_PX = 18
+
+
+def row_menu():
+    """(scrim, card): the track rows' "..." menu, shared by the album page and the Songs page (patch/rowmenu.c, docs/modules/rowmenu.md): a bottom sheet as Now Playing's More sheet
+    (tools/mod_lists.py edit_playmore): the window's dim scrim, a full-width card at the window's foot in that sheet's glass, three PM_ROW_H rows filling it, each a transparent button
+    (6 % white pressed) with a bare 24 px glyph and the 18 px white label, the sheet's 13 % white hairline above every row but the first. Rows: Play Next, Play After, Add to Playlist.
+    Hidden AND insensitive until the payload shows them; nothing is placed or sized at open. Put it last in the window, above the list, the bars and the navbar."""
+    from mod_icons import RM_MENU_ICONS, BARE_PX
+    rows, rh = OFFSETS['RM_ROWS'], OFFSETS['PM_ROW_H']
+    assert len(RM_KEYS) == rows
+    scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', 'rm_scrim'), ('enable', 'true')]))
+    for st in STATES:
+        styled(scrim, (st,), 'bg_color', PL_DIM)
+        styled(scrim, (st,), 'text_color', '#FFFFFF')
+        styled(scrim, (st,), 'border_width', '0')
+        styled(scrim, (st,), 'border_color', '#00000000')
+    card = hidden(Widget('view', 0, CLIENT_H - rows * rh, SCREEN_W, rows * rh, [('name', 'rm_card')]))
+    for st in STATES:
+        styled(card, (st,), 'bg_color', '#00000000')
+        styled(card, (st,), 'bg_image', RM_GLASS)
+        styled(card, (st,), 'bg_image_draw_type', 'default')
+        styled(card, (st,), 'border_width', '0')
+    for i, (text, (icon, _)) in enumerate(zip(RM_KEYS, RM_MENU_ICONS)):
+        item = Widget('button', 0, i * rh, SCREEN_W, rh, [('name', f'rm_item{i}'), ('enable', 'true')])
+        for st in STATES:
+            styled(item, (st,), 'bg_color', PL_PRESSED if st == 'pressed' else '#00000000')
+            styled(item, (st,), 'text_color', '#FFFFFF')
+            styled(item, (st,), 'border', 'top' if i else 'none')
+            styled(item, (st,), 'border_width', '1' if i else '0')
+            styled(item, (st,), 'border_color', PL_HAIR if i else '#00000000')
+        item.children.append(Widget('image', RM_ICON_X, (rh - BARE_PX) // 2, BARE_PX, BARE_PX, [
+            ('name', f'rm_icon{i}'), ('draw_type', 'default'), ('image', icon), ('sensitive', 'false')]))
+        lab = Widget('hscroll_label', RM_TEXT_X, 0, SCREEN_W - RM_TEXT_X - RM_TEXT_R, rh, [
+            ('name', f'rm_label{i}'), pod_i18n.text_prop(text), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+        for st in ('normal', 'disable', 'focused'):
+            styled(lab, (st,), 'font_size', str(RM_LABEL_PX))
+            styled(lab, (st,), 'text_color', '#FFFFFF')
+            styled(lab, (st,), 'text_align_h', 'left')
+            styled(lab, (st,), 'text_align_v', 'middle')
+        item.children.append(lab)
+        card.children.append(item)
+    return scrim, card
+
+
 def build_playlists_page(page):
     root = build_grid_page(page, toggle='list', coverflow=False, more=True, names=('playlists_listview', 'playlists_scrollview'))
     root.children[0].children.append(selall_button())   # the navbar's select mode text (the menu's Delete Playlists starts select mode: patch/playlists.c)
@@ -930,7 +978,8 @@ def build_songs_page(page):
     root.children.extend(azlist_rail())
     root.children.append(select_bar('sg_bar', 'sg_bar_line', [('sg_add', o['SG_PILL_X0'], 'Add to Playlist', 'sg_listplus', o['SG_BAR_PILL_W']),
                                                               ('sg_del', o['SG_BAR_PILL_X1'], 'Delete', 'sg_trash', o['SG_BAR_PILL_W'])]))
-    root.children.extend(sort_card())   # last: above everything
+    root.children.extend(sort_card())   # above the list, the rail and the select bar
+    root.children.extend(row_menu())   # last: above everything (the track rows' "..." menu, patch/rowmenu.c)
     return root
 
 
@@ -1016,7 +1065,8 @@ def build_album_page(page):
         lab = hidden(label(name, 0, 0, 10, 10, '', AB_ROW_PX, colour, align))   # text styles only (widget_prepare_text_style); never shown
         styled(lab, ('normal',), 'text_align_v', 'middle')
         root.children.append(lab)
-    root.children.extend(album_navbar(page))   # last: the glass controls paint and take touches over the list
+    root.children.extend(album_navbar(page))   # the glass controls paint and take touches over the list
+    root.children.extend(row_menu())   # last: the track rows' "..." menu (patch/rowmenu.c) covers the navbar too
     return root
 
 

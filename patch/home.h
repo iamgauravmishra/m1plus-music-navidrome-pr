@@ -172,6 +172,14 @@ extern void pod_set_in_order_for_queue(void); /* patch/shuffle.c: pod_set_in_ord
 extern int pod_clear_upnext(void); /* patch/shuffle.c: Clear: 1 done, 0 nothing after the position, -1 refused */
 extern int pod_clear_ready(void); /* patch/shuffle.c: Clear can run (kill switch off, libcstl as pinned) */
 extern void pod_set_repeat(int mode); /* the stock repeat mode (0 off, 3 all, 1 one), the Shuffle flag kept */
+/* patch/shuffle.c: rows (a deque of stSongInfo, copied) into the playing queue right after the playing song (after == 0) or at its end, under the payload lock, with Shuffle's
+ * saved order kept valid. POD_INSERT_OK, or nothing changed: _IDLE (no rows, nothing playing), _FULL (past SHUFFLE_MAX songs), _MEMORY (no memory for the order), _DLNA (the DLNA renderer service runs). */
+#define POD_INSERT_OK 1
+#define POD_INSERT_IDLE 0
+#define POD_INSERT_FULL (-1)
+#define POD_INSERT_MEMORY (-2)
+#define POD_INSERT_DLNA (-3)
+extern int pod_queue_insert(void *rows, int after);
 extern void menu_arrange(void *win,
                          int extras); /* patch/menu.c: the rows as the saved list says (the scroll offset is clamped) */
 extern int dailymix_setting(void); /* the Settings > Home Screen switch: 1 on (the default) */

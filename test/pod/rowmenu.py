@@ -1,0 +1,442 @@
+"""The track rows' "..." menu (patch/rowmenu.c, patch/songs.c, patch/albumpage.c, docs/modules/rowmenu.md): the asset (the scrim and the three-row glass card, last in both pages), the
+grey "..." painted at the right end of the rows (the rail's side of the Songs page, the text width it takes), the taps (a tap on it opens the menu; a drag, a press that leaves it, a row
+tap elsewhere, select mode, the kill switch and a page without the widgets do not), the bottom sheet (the asset's place for every row, every language fits, closed by the scrim), the three rows
+(Play Next / Play After through upnext_add with a one-row deque holding the tapped row, Add to Playlist through the page's one-row selection and picker) and the toast of every status.
+The compiled payload runs under Unicorn; upnext_add and picker_open are trapped (their own tests are test/pod/upnext.py and test/pod/picker.py)."""
+import importlib.util, io, os, struct, sys
+from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def sibling(name):
+    mod = sys.modules.get(f'podtest_{name}')
+    if mod is None:
+        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[f'podtest_{name}'] = mod
+        spec.loader.exec_module(mod)
+    return mod
+
+
+SG, AB = sibling('songs'), sibling('albumpage')
+
+ROW, MORE_W, DOTS = O['LIST_ROW_H'], O['RM_MORE_W'], O['RM_DOTS_PX']
+RIGHT, RIGHT_RAIL, GAP = O['RM_MORE_RIGHT'], O['RM_MORE_RIGHT_RAIL'], O['RM_TEXT_GAP']
+PLROW = O['PM_ROW_H']
+CARD_H = 3 * PLROW
+CARD_Y = 450 - CARD_H                                   # the sheet sits on the window's foot (window y 300..450)
+LABEL_W = 320 - pod_ui.RM_TEXT_X - pod_ui.RM_TEXT_R    # 250: Now Playing's More sheet's label box (48..298)
+KILL = '/mnt/mmc/m1plus-off'
+EN = ('Play Next', 'Play After', 'Add to Playlist')
+WIDGETS = ('rm_scrim', 'rm_card', 'rm_item0', 'rm_item1', 'rm_item2', 'rm_label0', 'rm_label1', 'rm_label2')
+SEL_VEC = pod.DATA['SEL_VEC'][0]
+UI_SONGS = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_songs.bin') if WORK else None
+UI_ALBUM = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_album.bin') if WORK else None
+ADDED, STARTED, EMPTY, STREAM, FOLDER, PODCAST, MISSING, FULL, MEMORY, DLNA = 1, 2, -1, -2, -3, -4, -5, -6, -7, -8
+TOASTS = {STREAM: 'Not available while streaming', FOLDER: 'Not available for folder playback', PODCAST: 'Not available for podcasts', MISSING: 'Storage unavailable', FULL: 'Queue is full',
+          MEMORY: 'Not enough memory', DLNA: 'Not available while DLNA is on', EMPTY: 'Adding Failed'}
+
+
+class Trap:
+    """upnext_add (the rows deque as it is at the call, `after`, the status the test wants) and picker_open (class, count, the marks) answered by the test; each recorded in calls and
+    in up_calls / pk_calls."""
+    up_ret, pk_ret = ADDED, -1
+
+    def trap_setup(self):
+        self.up_calls, self.pk_calls = [], []
+        self.up_ret, self.pk_ret = ADDED, -1
+        self.handlers[PSYMS['upnext_add']] = 'upnext_add'
+        self.handlers[PSYMS['picker_open']] = 'picker_open'
+        self.strings['msg_addfailed'] = 'Adding Failed'
+
+    def _hook(self, u, address, size, _):
+        name = self.handlers.get(address)
+        if name not in ('upnext_add', 'picker_open'): return super()._hook(u, address, size, _)
+        a0, a1, a2 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2))
+        if name == 'upnext_add':
+            rows = list(self.deques.get(a0, []))
+            self.up_calls.append((rows, a1)); self.calls.append(('upnext_add', a1, len(rows))); ret = self.up_ret
+        else:
+            self.pk_calls.append((a0, a1, bytes(self.u.mem_read(a2, (a1 + 7) // 8)))); self.calls.append(('picker_open', a0, a1)); ret = self.pk_ret
+        u.reg_write(UC_MIPS_REG_V0, ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+
+
+def dots_pixels():
+    """The asset's rm_dots as the harness' decoder gives it: opaque pixels, the red channel the coverage (cc_decode flattens the image over black)."""
+    return b''.join(struct.pack('<4B', c, c, c, 255) for y in range(DOTS) for x in range(DOTS) for c in [(x * 11 + y * 7) % 250 + 3])
+
+
+def with_menu(m, cls, texts=EN):
+    """The machine gets the asset's widgets of the menu and the "..." image; cls is Trap's class on top of the machine's own."""
+    m.__class__ = type('RM' + type(m).__name__, (Trap, type(m)), {})
+    m.trap_setup()
+    for n in WIDGETS: Machine.widget(m, n)
+    m.images['rm_dots'] = (DOTS, DOTS, dots_pixels())
+    for i, t in enumerate(texts): m.wtext[m.widgets[f'rm_label{i}']] = t.encode('utf-8').decode('latin-1')
+    return m
+
+
+# ---- the Songs page
+LETTERS = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel', 'India', 'Juliet']
+
+
+def songs(kill=False, menu=True, plain=False, titles=LETTERS):
+    """The Songs page (the library in title order: sections, the A-Z rail) or, plain, the Favourites list (no sections, no rail), with the menu's widgets."""
+    m = SG.list_machine(titles, O['CLASS_FAV']) if plain else SG.songs_machine(titles)
+    if menu: with_menu(m, 0)
+    if kill: m.present.add(KILL)
+    if plain: m.call(PSYMS['songs_open_list'], a0=O['HOME_FAV'], count=900000000)
+    else: SG.open_page(m)
+    SG.settle(m)
+    m.calls = []
+    return m
+
+
+def lay_of(m, plain, n=len(LETTERS)):
+    return SG.Layout(SG.letters_of(LETTERS[:n]) if not plain else ['A'] * n, sections=not plain)
+
+
+def dot_blits(blits): return [b for b in blits if b[2][2:] == (DOTS, DOTS) and b[1] == (0, b[1][1], DOTS, b[1][3])]
+def titles_of(texts, names=LETTERS): return {t: r for t, r in texts if t in names}
+def toasts(calls): return [c[1] for c in calls if c[0] == 'toast']
+
+
+def card_of(m):
+    """The menu's widgets the payload moved or resized (none: the asset places the sheet), and whether the card is shown."""
+    ours = {m.widgets[n] for n in m.widgets if n.startswith('rm_')}
+    return [c for c in m.calls if c[0] in ('widget_move', 'widget_resize') and c[1] in ours], SG.vis(m, 'rm_card')
+
+
+def asset_tests(ctx):
+    """1. The asset of both pages: the scrim and the card last, the card a bottom sheet in Now Playing's More sheet's glass, the three rows (24 px glyph at x 14, label from x 48, a hairline
+    above every row but the first), hidden and insensitive; the images; white labels keep 7:1 on the glass and the grey "..." 3:1 on black; the Developer test rows are gone."""
+    expect = ctx.expect
+    import mod_icons
+    for ui_path, name in ((UI_SONGS, 'Songs'), (UI_ALBUM, 'album')):
+        tree = awtk_ui.parse(open(ui_path, 'rb').read())
+        kids = [c.name for c in tree.children]
+        scrim, card = tree.find('rm_scrim'), tree.find('rm_card')
+        items = [tree.find(f'rm_item{i}') for i in range(3)]
+        labels = [tree.find(f'rm_label{i}') for i in range(3)]
+        icons = [tree.find(f'rm_icon{i}') for i in range(3)]
+        expect(kids[-2:] == ['rm_scrim', 'rm_card'] and tree.children[-2] is scrim and tree.children[-1] is card, f'{name}: the menu\'s scrim and card are the window\'s last children (above the list, the bars and the navbar)')
+        expect(scrim.type == 'button' and (scrim.x, scrim.y, scrim.w, scrim.h) == (0, 0, 320, 450) and all(scrim.get(f'style:{st}:bg_color') == pod_ui.PL_DIM == '#00000082' for st in pod_ui.STATES),
+               f'{name}: the scrim is the full window\'s #00000082 dim, a button (a tap closes the menu)')
+        expect((card.x, card.y, card.w, card.h) == (0, CARD_Y, 320, CARD_H) == (0, 300, 320, 150)
+               and all(card.get(f'style:{st}:bg_image') == 'rm_glass' and card.get(f'style:{st}:bg_image_draw_type') == 'default' and card.get(f'style:{st}:bg_color') == '#00000000'
+                       and card.get(f'style:{st}:round_radius') is None for st in pod_ui.STATES),
+               f'{name}: the card is a 320 x 150 bottom sheet (three 50 px rows) on the window\'s foot, the glass drawn 1:1 over no fill')
+        expect(all(w.get('visible') == 'false' and w.get('sensitive') == 'false' for w in (scrim, card)), f'{name}: the scrim and the card start hidden and insensitive')
+        expect([(i.type, i.x, i.y, i.h, i.w) for i in items] == [('button', 0, k * PLROW, PLROW, 320) for k in range(3)]
+               and all(i.get(f'style:{st}:bg_color') == ('#FFFFFF10' if st == 'pressed' else '#00000000') and i.get(f'style:{st}:text_color') == '#FFFFFF' for i in items for st in pod_ui.STATES)
+               and all(i.get(f'style:{st}:border') == ('top' if k else 'none') and i.get(f'style:{st}:border_width') == ('1' if k else '0')
+                       and i.get(f'style:{st}:border_color') == ('#FFFFFF22' if k else '#00000000') for k, i in enumerate(items) for st in pod_ui.STATES),
+               f'{name}: three transparent full-width 50 px rows, pressed 6 % white, the sheet\'s 13 % white hairline above every row but the first')
+        expect([ic.get('image') for ic in icons] == ['rm_ic_next', 'rm_ic_after', 'rm_ic_add'] == [n for n, _ in mod_icons.RM_MENU_ICONS]
+               and [g for _, g in mod_icons.RM_MENU_ICONS] == ['list-start', 'list-end', 'list-plus']
+               and all((ic.x, ic.y, ic.w, ic.h) == (14, 13, 24, 24) and ic.get('sensitive') == 'false' for ic in icons),
+               f'{name}: Lucide list-start, list-end and list-plus, 24 px at x 14 (the More sheet\'s own rows, pod_tape_icon)')
+        expect(all(lb.x == 48 and lb.w == LABEL_W == 250 and lb.get('sensitive') == 'false' and lb.get('style:normal:font_size') == '18' and lb.get('style:normal:text_color') == '#FFFFFF'
+                   for lb in labels) and [pod_i18n.shown_english(lb) for lb in labels] == list(EN),
+               f'{name}: the labels start at x 48, 18 px white: Play Next, Play After, Add to Playlist')
+    # the images: the glass is the generator's, three rows high; the glyphs and the dots are in the tree
+    xx = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx')
+    w, h, r = mod_icons.GLASS_ROWMENU
+    raw_ = open(os.path.join(xx, 'rm_glass.png'), 'rb').read()
+    gen = mod_icons.glass_image(w, h, r, fill=mod_icons.GLASS_SHEET_FILL, top_only=True)
+    expect(raw_ == open(os.path.join(mod_icons.PNG, 'rm_glass.png'), 'rb').read() and same_pixels(raw_, gen) and (w, h, r) == (320, CARD_H, 18) and r == mod_icons.GLASS_SHEET[2],
+           'rm_glass.png is the generator\'s: 320 x 150 (the sheet\'s height), Now Playing\'s sheet: 18 px top corners only, the sheet\'s fill')
+    expect(all(open(os.path.join(xx, n + '.png'), 'rb').read() == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read() for n, _ in mod_icons.RM_MENU_ICONS + (mod_icons.RM_DOTS,)),
+           'the three glyphs and rm_dots are the committed PNGs')
+    expect(mod_icons.RM_DOTS == ('rm_dots', 'ellipsis') and mod_icons.RM_DOTS_PX == DOTS == 24 and O['RM_DOTS_RGB'] == 0x8c8c8c,
+           'the "..." is the Lucide ellipsis at 24 px in #8C8C8C')
+    from PIL import Image
+    g = Image.open(io.BytesIO(raw_)).convert('RGBA')
+    press, worst = 0x10 / 255, 99
+    for level in (0, 125):   # over black, and over white under the 130/255 dim
+        for pressed in (False, True):
+            for k in range(3):
+                for y in range(k * PLROW + (PLROW - 22) // 2, k * PLROW + (PLROW + 22) // 2):
+                    p = g.getpixel((w // 2, y)); al = p[3] / 255
+                    c = [al * p[i] + (1 - al) * level for i in range(3)]
+                    if pressed: c = [press * 255 + (1 - press) * v for v in c]
+                    worst = min(worst, contrast((255, 255, 255), c))
+    expect(worst >= 7, f'white labels on the glass: worst {worst:.1f}:1 over black and over white under the dim, at rest and pressed (floor 7:1)')
+    grey = contrast((0x8c, 0x8c, 0x8c), (0, 0, 0))
+    expect(grey >= 3, f'the grey "..." on the black page: {grey:.1f}:1 (floor 3:1), no accent colour')
+    # the two temporary Developer rows (Settings > Developer > Test: Play Next / Play After) and their log are gone
+    expect(not hasattr(pod_pages, 'ACT_UPNEXT_NEXT') and not hasattr(pod_pages, 'ACT_UPNEXT_AFTER') and 'upnext_test' not in PSYMS
+           and not any(r.label.startswith('Test:') for r in pod_pages.HOMESET_PAGE.rows + pod_pages.DEVELOPER_PAGE.rows if hasattr(r, 'label'))
+           and not any(k.startswith('Test: Play') or k == 'Up Next Test' for k in pod_i18n.TEXT) and 'ACT_UPNEXT_NEXT' not in O,
+           'the Developer test rows, their action ids, their text and upnext_test are gone')
+    src = '\n'.join(open(os.path.join(ROOT, 'patch', f), encoding='utf-8').read() for f in os.listdir(os.path.join(ROOT, 'patch')) if f.endswith(('.c', '.h', '.inc')))
+    expect('queue-probe' not in src and 'upnext_test' not in src, 'no source mentions the probe log or the test entry')
+    # every text of the menu exists in the 13 languages (the build adds them to the tables; the i18n tests check the rest)
+    keys = list(EN) + ['Playing Next', 'Added to Queue'] + [TOASTS[k] for k in (STREAM, FOLDER, PODCAST, MISSING, FULL, MEMORY, DLNA)]
+    expect(all(k in pod_i18n.TEXT and set(pod_i18n.TEXT[k]) == set(pod_i18n.LOCALES) for k in keys) and 'msg_addfailed' in pod_i18n.STOCK, 'the menu\'s labels, confirmations and refusals have a translation in all 13 languages')
+
+
+def paint_tests(ctx):
+    """2. The "..." on the rows: where it is painted (the Songs page with and without the rail, the album page), the text width it takes, none in select mode, with the kill switch or
+    without the widgets."""
+    expect = ctx.expect
+    tx = O['LIST_TEXT_X']
+    for plain, right, what in ((False, RIGHT_RAIL, 'beside the A-Z rail'), (True, RIGHT, 'at the right edge (no rail)')):
+        dx = right - DOTS if not plain else right - MORE_W + (MORE_W - DOTS) // 2   # flush right beside the rail, centred in the zone otherwise
+        m = songs(plain=plain)
+        lay = lay_of(m, plain)
+        blits, texts, styles, fills = SG.paint(m)
+        dots = dot_blits(blits)
+        zone = right - MORE_W
+        shown = sorted(b[2][1] for b in dots)
+        want = sorted(lay.row_y(i) + (ROW - 1 - DOTS) // 2 for i in range(len(LETTERS)) if lay.row_y(i) + ROW <= SG.VIEW_H)
+        expect(shown == want and all(b[2][0] == dx for b in dots) and all(b[0] == dots[0][0] for b in dots) and len(want) >= 3,
+               f'{what}: every row in view has its "..." at x {dx} (a {MORE_W} px zone ending at {right}; {"flush with its right edge" if not plain else "centred"}), centred above the hairline ({shown} vs {want})')
+        t = titles_of(texts)
+        room = right - MORE_W - GAP - tx
+        expect(t and all(r[2] == room for r in t.values()) and room == (188 if plain else 162),
+               f'{what}: the titles are {room} px wide ({sorted({r[2] for r in t.values()})}), cut where the "..." begins')
+        dst = dots[0][2]
+        expect(dst[0] == dx and dst[0] >= zone and dst[0] + DOTS <= right and zone - tx - room == GAP, f'{what}: the text ends {GAP} px before the zone, the dots are inside it')
+        # the bitmap: the image's coverage as the alpha, #8C8C8C
+        data, bw, bh = m.bitmaps[dots[0][0]]
+        px = struct.unpack(f'<{DOTS * DOTS}I', bytes(m.u.mem_read(data, DOTS * DOTS * 4)))
+        cov = [c for y in range(DOTS) for x in range(DOTS) for c in [(x * 11 + y * 7) % 250 + 3]]
+        expect((bw, bh) == (DOTS, DOTS) and all(p == c << 24 | 0x8c8c8c for p, c in zip(px, cov)), 'the "..." bitmap: #8C8C8C with the image\'s coverage as its alpha')
+        # select mode: no "...", the text back to x 296
+        SG.click(m, 'btn_select')
+        blits, texts, styles, fills = SG.paint(m)
+        t = titles_of(texts)
+        expect(not dot_blits(blits) and t and all(r[2] == 296 - tx - O['SG_SEL_COL'] for r in t.values()), f'select mode: no "..." and the text ends at 296 as before ({sorted({r[2] for r in t.values()})})')
+        SG.click(m, 'btn_return')
+        blits, texts, styles, fills = SG.paint(m)
+        t = titles_of(texts)
+        expect(dot_blits(blits) and all(r[2] == room for r in t.values()), f'{what}: leaving select mode brings the "..." and the narrower text back')
+    # the order of the library changes the rail: a sort that has no sections takes the "..." to the edge and the text wider
+    m = songs()
+    m.call(PSYMS['sg_on_item'], a0=1, a1=0, count=900000000)
+    blits, texts, styles, fills = SG.settle(m)
+    t = titles_of(texts)
+    expect(dot_blits(blits) and all(b[2][0] == RIGHT - MORE_W + (MORE_W - DOTS) // 2 for b in dot_blits(blits)) and all(r[2] == 188 for r in t.values()),
+           f'another sort order (a plain list, no rail): the "..." at the right edge, titles 188 px ({sorted({r[2] for r in t.values()})})')
+    # kill switch and missing widgets: no "...", the old widths, and a tap there plays
+    for what, kw in (('the kill switch is on', dict(kill=True)), ('the asset has no menu', dict(menu=False))):
+        m = songs(**kw)
+        lay = lay_of(m, False)
+        blits, texts, styles, fills = SG.paint(m)
+        t = titles_of(texts)
+        expect(not dot_blits(blits) and t and all(r[2] == 296 - tx for r in t.values()), f'{what}: no "...", the text ends at 296 as before')
+        calls = SG.tap(m, 252, lay.row_y(2) + 30)
+        expect(any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls) and SG.vis(m, 'sg_card') == (0, 0), f'{what}: a tap where the "..." would be plays the song')
+    # the album page
+    for kw, what in ((dict(), 'the album page'),):   # (with the kill switch on the album page does not open at all: album_open refuses, the stock page is used)
+        m = AB.album_machine()
+        with_menu(m, 0)
+        if kw.get('kill'): m.present.add(KILL)
+        r, calls = AB.open_album(m)
+        AB.scroll_to(m, 300)
+        blits, texts, fills = AB.paint(m)
+        ty = {t: rect for (t, rect), st in texts if st == 'label_row_title'}
+        names = [t for t in ty if t in AB.NAMES]
+        nr = len(names)
+        dots = dot_blits(blits)
+        if kw.get('kill'):
+            expect(not dots and names and all(ty[t][2] == 298 - (12 + O['ROW_NUM_W'] + O['AB_NUM_GAP']) for t in names), f'{what}: no "...", the titles end at 298 as before')
+        else:
+            ys = sorted(b[2][1] for b in dots)
+            want = [AB.row_y(i) - 300 + (ROW - 1 - DOTS) // 2 for i in range(6)]
+            expect(nr >= 3 and ys == want and all(b[2][0] == RIGHT - MORE_W + (MORE_W - DOTS) // 2 for b in dots),
+                   f'{what}: a "..." at x {RIGHT - MORE_W + (MORE_W - DOTS) // 2} on every track ({ys})')
+            expect(all(ty[t][2] == RIGHT - MORE_W - GAP - (12 + O['ROW_NUM_W'] + O['AB_NUM_GAP']) for t in names), f'{what}: the titles end {GAP} px before the zone (x 262): {sorted({ty[t][2] for t in names})}')
+        if not kw.get('kill'):
+            AB.click(m, 'btn_select')
+            blits, texts, fills = AB.paint(m)
+            ty = {t: rect for (t, rect), st in texts if st == 'label_row_title' and t in AB.NAMES}
+            expect(not dot_blits(blits) and ty and all(rect[2] == 298 - (12 + O['ROW_NUM_W'] + O['AB_NUM_GAP'] + O['SG_SEL_COL']) for rect in ty.values()), 'album select mode: no "...", the titles end at 298')
+
+
+def touch_tests(ctx):
+    """3. Taps: the "..." opens the menu on the right row; a tap elsewhere in the row plays; a drag, a press that leaves the zone or that moves, and select mode do not open it."""
+    expect = ctx.expect
+    for plain, zx, other, what in ((False, 252, 120, 'Songs (rail)'), (True, 288, 120, 'a list (no rail)')):
+        m = songs(plain=plain)
+        lay = lay_of(m, plain)
+        i = 2
+        y = lay.row_y(i) + 30
+        calls = SG.tap(m, zx, y)
+        mv, shown = card_of(m)
+        expect(shown == (1, 1) and SG.vis(m, 'rm_scrim') == (1, 1) and mv is not None and not any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls)
+               and not any(c[0] == 'loadSongList' for c in calls), f'{what}: a tap on the "..." opens the menu (scrim and card shown) and plays nothing ({mv})')
+        SG.click(m, 'rm_scrim')
+        expect(SG.vis(m, 'rm_card') == (0, 0) and SG.vis(m, 'rm_scrim') == (0, 0), f'{what}: the scrim closes the menu')
+        calls = SG.tap(m, other, y)
+        expect(any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls) and SG.vis(m, 'rm_card') == (0, 0), f'{what}: a tap elsewhere on the row still plays the song')
+        z0 = (RIGHT_RAIL if not plain else RIGHT) - MORE_W
+        calls = SG.tap(m, z0 - 1, y)
+        expect(any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls) and SG.vis(m, 'rm_card') == (0, 0), f'{what}: one pixel left of the zone (x {z0 - 1}) plays')
+        calls = SG.tap(m, z0, y)
+        expect(SG.vis(m, 'rm_card') == (1, 1), f'{what}: the zone\'s first pixel (x {z0}) opens the menu')
+        SG.click(m, 'rm_scrim')
+        # a drag: moved past the threshold, then released in the zone; an abort (the scroll_view took the drag) then a release
+        SG.touch(m, 'down', zx, SG.SCREEN_Y0 + y, 'sg_on_down')
+        SG.touch(m, 'up', zx, SG.SCREEN_Y0 + y + 14, 'sg_on_up', 1080)
+        expect(SG.vis(m, 'rm_card') == (0, 0) and not any(c[0] == 'navigator_to_with_context' for c in m.calls), f'{what}: a press that moves (14 px) opens nothing and plays nothing')
+        SG.touch(m, 'down', zx, SG.SCREEN_Y0 + y, 'sg_on_down')
+        SG.touch(m, 'abort', zx, SG.SCREEN_Y0 + y, 'sg_on_abort')
+        SG.touch(m, 'up', zx, SG.SCREEN_Y0 + y, 'sg_on_up', 1080)
+        expect(SG.vis(m, 'rm_card') == (0, 0) and not any(c[0] == 'navigator_to_with_context' for c in m.calls), f'{what}: a drag the scroll_view took (abort) then a release opens nothing')
+        SG.touch(m, 'down', z0 + 3, SG.SCREEN_Y0 + y, 'sg_on_down')
+        SG.touch(m, 'up', z0 - 2, SG.SCREEN_Y0 + y, 'sg_on_up', 1080)
+        expect(SG.vis(m, 'rm_card') == (0, 0) and not any(c[0] == 'navigator_to_with_context' for c in m.calls), f'{what}: a press that began on the "..." and ended off it (5 px) does nothing')
+        SG.touch(m, 'down', z0 - 2, SG.SCREEN_Y0 + y, 'sg_on_down')
+        SG.touch(m, 'up', z0 + 3, SG.SCREEN_Y0 + y, 'sg_on_up', 1080)
+        expect(SG.vis(m, 'rm_card') == (0, 0), f'{what}: one that began off the zone is a row tap (it plays; it never opens the menu)')
+        # the header and the air below the last row are not rows
+        calls = SG.tap(m, zx, 60)
+        expect(SG.vis(m, 'rm_card') == (0, 0), f'{what}: the title block has no "..."')
+        # select mode: the tap marks the row
+        SG.click(m, 'btn_select')
+        calls = SG.tap(m, zx, y)
+        expect(SG.vis(m, 'rm_card') == (0, 0) and ('widget_set_text_utf8', m.widgets['label_title'], '1 Selected') in calls, f'{what}: in select mode a tap in that place marks the row (1 Selected), no menu')
+    # an A-Z section header or the pinned header never opens it
+    m = songs()
+    lay = lay_of(m, False)
+    SG.tap(m, 252, lay.hdr_y(1) + 14)
+    expect(SG.vis(m, 'rm_card') == (0, 0), 'a section header opens nothing')
+    # the album page
+    m = AB.album_machine()
+    with_menu(m, 0)
+    AB.open_album(m)
+    AB.scroll_to(m, 300)
+    AB.paint(m)
+    y = AB.row_y(2) - 300 + 30
+    calls = AB.tap(m, 288, y)
+    expect(SG.vis(m, 'rm_card') == (1, 1) and not any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls), 'album page: a tap on the "..." opens the menu and plays nothing')
+    SG.click(m, 'rm_scrim')
+    calls = AB.tap(m, 150, y)
+    expect(any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls) and SG.vis(m, 'rm_card') == (0, 0), 'album page: a tap elsewhere plays the track')
+    AB.touch(m, 'down', 288, y, 'ab_on_down'); AB.touch(m, 'up', 288, y + 14, 'ab_on_up', 1080)
+    expect(SG.vis(m, 'rm_card') == (0, 0), 'album page: a drag opens nothing')
+    AB.touch(m, 'down', 288, y, 'ab_on_down'); AB.touch(m, 'abort', 288, y, 'ab_on_abort'); AB.touch(m, 'up', 288, y, 'ab_on_up', 1080)
+    expect(SG.vis(m, 'rm_card') == (0, 0), 'album page: an abort then a release opens nothing')
+    AB.click(m, 'btn_select')
+    AB.tap(m, 288, y)
+    expect(SG.vis(m, 'rm_card') == (0, 0), 'album page: select mode, no menu')
+
+
+def menu_tests(ctx):
+    """4. The sheet: shown in the asset's place for any row, every language fits, the scrim; the three rows and every status."""
+    expect = ctx.expect
+    # the sheet: the asset's place for every row, on both pages (the payload moves and resizes nothing)
+    m = songs(plain=True)
+    lay = lay_of(m, True)
+    for i in range(6):
+        SG.tap(m, 288, lay.row_y(i) + 30)
+        moved, shown = card_of(m)
+        expect(not moved and shown == (1, 1) and SG.vis(m, 'rm_scrim') == (1, 1), f'Songs row {i}: the sheet and the scrim show, nothing moved or resized ({moved})')
+        SG.click(m, 'rm_scrim')
+        m.calls = []
+    for off, row in ((300, 1), (0, 0), (384, 0)):
+        m = AB.album_machine()
+        with_menu(m, 0)
+        AB.open_album(m)
+        AB.scroll_to(m, off)
+        AB.paint(m)
+        ry = AB.row_y(row) - off
+        AB.tap(m, 288, max(ry + 30, 10))   # (a row half under the navbar is tapped where it shows)
+        moved, shown = card_of(m)
+        expect(not moved and shown == (1, 1), f'album page, row {row} at window y {ry}: the sheet shows, nothing moved or resized ({moved})')
+        m.calls = []
+    # every language's labels fit the 250 px box (the row's label is cut with an ellipsis otherwise)
+    import awtk_strings
+    from awtk_text import Ttf, StbText
+    raw = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw')
+    font = Ttf(os.path.join(raw, 'fonts', 'default.ttf'))
+    widest = max((StbText(font, pod_ui.RM_LABEL_PX).layout(dict(awtk_strings.load(os.path.join(raw, 'strings', loc + '.bin')))[k])[1], loc, k)
+                 for loc in pod_i18n.LOCALES for k in EN)
+    expect(widest[0] <= LABEL_W, f'the longest label ({widest[1]} {widest[2]!r}, {widest[0]:.0f} px) fits the {LABEL_W} px box')
+
+    # the rows
+    for page in ('songs', 'album'):
+        for after, row_item in ((0, 'rm_item0'), (1, 'rm_item1')):
+            for status in (ADDED, STARTED, EMPTY, STREAM, FOLDER, PODCAST, MISSING, FULL, MEMORY, DLNA):
+                if page == 'songs':
+                    m = songs(plain=True); rows_ = m.songs; y = SG.TOP + 3 * ROW + 30; x = 288
+                    row = 3
+                else:
+                    m = AB.album_machine(); with_menu(m, 0); AB.open_album(m); AB.scroll_to(m, 300); AB.paint(m); rows_ = m.songs; row = 2
+                    y = AB.row_y(row) - 300 + 30; x = 288
+                m.up_ret = status; m.calls = []
+                (SG if page == 'songs' else AB).tap(m, x, y)
+                m.calls = []
+                m.click(row_item)
+                calls = list(m.calls)
+                names = [c[0] for c in calls]
+                what = f'{page}, {"Play After" if after else "Play Next"}, status {status}'
+                ok_rows = m.up_calls and m.up_calls[-1][1] == after and m.up_calls[-1][0] == [rows_[row]]
+                expect(len(m.up_calls) == 1 and ok_rows, f'{what}: upnext_add({after}) with a one-row deque holding the tapped row ({m.up_calls})')
+                ti = [i for i, n in enumerate(names) if n == 'toast']
+                order = names.index('upnext_add') < names.index('deque_destroy') < max(i for i, c in enumerate(calls) if c[0] == 'widget_set_visible' and c[1] == m.widgets['rm_card'] and c[2] == 0)
+                want = ('Added to Queue' if after else 'Playing Next') if status == ADDED else None if status == STARTED else TOASTS[status]
+                expect(order and names.count('deque_destroy') == 1 and SG.vis(m, 'rm_card') == (0, 0) and SG.vis(m, 'rm_scrim') == (0, 0)
+                       and bool(ti and ti[0] > names.index('deque_destroy')) == (want is not None), f'{what}: the deque is destroyed and the menu closed, then the toast')
+                expect(toasts(calls) == ([want] if want else []), f'{what}: the toast is {want!r} ({toasts(calls)})')
+                expect(not any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls) and not any(c[0] in ('loadSongList', 'window_open') for c in calls),
+                       f'{what}: nothing else opens (a started queue plays, the page stays)')
+        # Add to Playlist: the page's one-row selection and picker
+        for pk in (1, -1):
+            if page == 'songs':
+                m = songs(plain=True); row = 3; y = SG.TOP + row * ROW + 30; cls, count = O['CLASS_FAV'], len(LETTERS); T = SG
+            else:
+                m = AB.album_machine(); with_menu(m, 0); AB.open_album(m); AB.scroll_to(m, 300); AB.paint(m); row = 2; y = AB.row_y(row) - 300 + 30; T = AB
+                cls, count = m.word(pod.DATA['G_CLASS_TYPE'][0]), 8
+            m.pk_ret = pk
+            T.tap(m, 288, y)
+            m.calls = []
+            m.click('rm_item2')
+            calls = list(m.calls)
+            marks = bytes(1 << (row & 7) if i == row >> 3 else 0 for i in range((count + 7) // 8))
+            what = f'{page}, Add to Playlist (the picker {"opens" if pk > 0 else "cannot open"})'
+            expect(m.pk_calls and m.pk_calls[-1] == (cls, count, marks) and SG.vis(m, 'rm_card') == (0, 0) and SG.vis(m, 'rm_scrim') == (0, 0) and not toasts(calls),
+                   f'{what}: the picker gets the list\'s class {cls:#x}, {count} songs and the one mark ({m.pk_calls[-1] if m.pk_calls else None}); the menu is closed')
+            expect(not m.up_calls and not any(c[0] == 'upnext_add' for c in calls), f'{what}: upnext_add is not called')
+            if pk > 0:
+                expect(not any(c[0] in ('select_recordinit', 'set_selectindex') for c in calls) and not any(c[0] == 'navigator_to_with_context' and c[1] == 'playlist_page' for c in calls),
+                       f'{what}: our picker, not the stock one')
+            else:
+                expect([c[1] for c in calls if c[0] == 'set_selectindex'] == [row] and ('select_recordinit', count) in calls
+                       and ('navigator_to_with_context', 'playlist_page', O['PICKER_ADD'] | cls) in calls,
+                       f'{what}: the stock picker gets the stock selection vector with that row alone ({[c for c in calls if c[0] in ("set_selectindex", "select_recordinit")]})')
+            # the next Add carries only its own row (the page keeps no mark behind)
+            if page == 'songs':
+                m.pk_ret = 1; SG.click(m, 'rm_scrim') if SG.vis(m, 'rm_scrim')[0] else None
+                SG.tap(m, 288, SG.TOP + 5 * ROW + 30); m.click('rm_item2')
+                want_marks = bytes(1 << (5 & 7) if i == 5 >> 3 else 0 for i in range((count + 7) // 8))
+                expect(m.pk_calls[-1][2] == want_marks, f'{what}: a second Add carries only its own row ({m.pk_calls[-1][2].hex()})')
+    # the menu closes when the list is read again (its row is an index of the old one) and with the window; a second tap on the scrim does nothing
+    m = songs(plain=True)
+    SG.tap(m, 288, SG.TOP + 30)
+    m.calls = []
+    m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
+    SG.click(m, 'rm_scrim')
+    expect(SG.vis(m, 'rm_card') == (0, 0) and names_count(m, 'deque_destroy') <= 1, 'the scrim closes the menu once')
+    SG.tap(m, 288, SG.TOP + 30)
+    m.calls = []
+    m.call(PSYMS['sg_on_bg'], a0=0, a1=0, count=900000000)
+    expect(SG.vis(m, 'rm_card') == (0, 0) and ('deque_destroy',) in m.calls, 'the window going behind another closes the menu and drops the row\'s copy')
+    SG.tap(m, 288, SG.TOP + 30)
+    m.calls = []
+    m.call(PSYMS['sg_on_destroy'], count=4000000)
+    expect(('deque_destroy',) in m.calls, 'closing the page with the menu open frees the row\'s copy')
+    expect(len(m.bitmaps) == 0, f'and every bitmap, the "..." included ({len(m.bitmaps)} left)')
+
+
+def names_count(m, name): return sum(1 for c in m.calls if c[0] == name)
+
+
+SECTIONS = [asset_tests, paint_tests, touch_tests, menu_tests]
+
+
+def run(ctx):
+    for f in SECTIONS: f(ctx)

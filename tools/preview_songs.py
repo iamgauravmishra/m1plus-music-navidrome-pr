@@ -33,6 +33,8 @@ DOT_RGB = tuple((O['SG_RAIL_DOT_RGB'] >> s) & 255 for s in (16, 8, 0))
 ALL_LETTERS = ['#'] + [chr(65 + i) for i in range(26)]     # a library with a song under every letter: 27 sections, the collapsed index
 CARD_W, CARD_ROW, CARD_PAD = 268, 50, 0
 CARD_X, CARD_Y = O['PL_CARD_RIGHT'] - CARD_W, O['PL_CARD_Y']      # the sort card (tools/pod_ui.py SG_CARD_*: the Playlists menu's rhythm and glass)
+MORE_W, MORE_GAP, DOTS_PX = O['RM_MORE_W'], O['RM_TEXT_GAP'], O['RM_DOTS_PX']   # the rows' "..." (patch/rowmenu.c): its tap zone, the gap before it, the glyph
+DOTS_RGB = tuple((O['RM_DOTS_RGB'] >> sh) & 255 for sh in (16, 8, 0))
 
 # title, artist, cover colour (index into PI.ALBUMS), the Initial a CJK title files under (the stock scan: its pinyin initial)
 SONGS = [("(Sittin' On) The Dock of the Bay", 'Otis Redding', 9), ('1979', 'The Smashing Pumpkins', 11), ('99 Luftballons', 'Nena', 5),
@@ -54,6 +56,24 @@ def section(t):
     if len(t) > 3: return t[3]
     c = t[0][0].upper()
     return c if c.isalpha() and c.isascii() else '#'
+
+
+def dots(s):
+    """The row's "..." as the payload makes it (patch/rowmenu.c rm_make_dots): #8C8C8C with the image's coverage (cc_decode flattens it over black: the red channel) as the alpha."""
+    g = s.img('rm_dots').convert('RGBA')
+    flat = Image.new('RGBA', g.size, (0, 0, 0, 255)); flat.alpha_composite(g)
+    out = Image.new('RGBA', g.size, DOTS_RGB + (255,)); out.putalpha(flat.getchannel('R'))
+    return out
+
+
+def more_right(rail):
+    """The right edge of the "..." zone: the list's edge, or left of the rail's touch column while the A-Z rail is shown (patch/songs.c sg_more_right)."""
+    return O['RM_MORE_RIGHT_RAIL'] if rail else O['RM_MORE_RIGHT']
+
+
+def dots_x(right, rail):
+    """The "..." bitmap's x: centred in the zone ending at `right`, or with its right edge on `right` beside the rail (patch/rowmenu.c rowmenu_paint `flush`)."""
+    return right - DOTS_PX if rail else right - MORE_W + (MORE_W - DOTS_PX) // 2
 
 
 def build_items(sections=True, top=TOP):
@@ -110,13 +130,16 @@ def content(s, covers_on=True, select=None, title=None, head=False):
         pill(s, im, (O['SG_PILL_X0'], O['SG_PILL_X1'])[i], O['PH_PILL_Y'] if head else PILL_Y, tr(s, label), s.img(g), PILL_RGB if select is None else BAND)
     shift = SEL_COL if select is not None else 0
     tx = TEXT_X + shift
+    more, title_none = dots(s), title is None   # (the library has the rail: the "..." sits left of it)
     on, off = s.img('selected'), s.img('unselect')
     for kind, v, y in items:
         if kind == 'h':
             header(s, im, v, y); continue
         title, artist, ci = v[:3]
-        room = TEXT_END - tx
+        right = more_right(title_none)
+        room = TEXT_END - tx if select is not None else right - MORE_W - MORE_GAP - tx   # (select mode has no "...": the text ends at TEXT_END again)
         d.rectangle((tx, y + ROW_H - 1, TEXT_END - 1, y + ROW_H - 1), fill=HAIR)
+        if select is None: im.alpha_composite(more, (dots_x(right, title_none), y + (ROW_H - 1 - DOTS_PX) // 2))
         if select is not None:
             mk = on if title in select else off
             im.alpha_composite(mk, (ART_X + (SEL_COL - 6 - mk.width) // 2, y + (ROW_H - mk.height) // 2))
@@ -210,7 +233,22 @@ def sort_card(s, im, current=0):
         if i == current: tick(im, CARD_X + CARD_W - 16 - 18, y + (CARD_ROW - 18) // 2, 18, PI.WHITE)
 
 
-def page(s, covers=True, scroll=0, touched=None, select=None, menu=False, letters=None, title=None, genre=False, head=False):
+def row_menu(s, im, keys=('Play Next', 'Play After', 'Add to Playlist')):
+    """The rows' menu (patch/rowmenu.c, tools/pod_ui.py row_menu): the scrim's dim, then Now Playing's More sheet at the window's foot: the rm_glass pane (320 x 150, top corners only),
+    three 50 px rows, a 24 px glyph at x 14, the 18 px label from x 48, the 13 % white hairline above every row but the first."""
+    import pod_ui
+    im.alpha_composite(Image.new('RGBA', im.size, (0, 0, 0, 0x82)))
+    rh = O['PM_ROW_H']; h = len(keys) * rh; y = im.height - h
+    im.alpha_composite(s.img('rm_glass'), (0, y))
+    for i, (key, name) in enumerate(zip(keys, ('rm_ic_next', 'rm_ic_after', 'rm_ic_add'))):
+        ry = y + i * rh
+        if i: im.alpha_composite(Image.new('RGBA', (W, 1), (255, 255, 255, 0x22)), (0, ry))
+        g = s.img(name); im.alpha_composite(g, (pod_ui.RM_ICON_X, ry + (rh - g.height) // 2))
+        s.text(im, pod_ui.RM_TEXT_X, ry + rh / 2, s.clip(tr(s, key), pod_ui.RM_LABEL_PX, W - pod_ui.RM_TEXT_X - pod_ui.RM_TEXT_R), pod_ui.RM_LABEL_PX)
+    return 0, y, W, h
+
+
+def page(s, covers=True, scroll=0, touched=None, select=None, menu=False, letters=None, title=None, genre=False, head=False, row_menu_at=False):
     items, heads, end = build_items(title is None, O['PH_TOP'] if head else TOP)
     tall, _ = content(s, covers, select, title, head)
     im = Image.new('RGBA', (W, WIN), (0, 0, 0, 255))
@@ -234,6 +272,7 @@ def page(s, covers=True, scroll=0, touched=None, select=None, menu=False, letter
         pill(s, im, O['SG_PILL_X0'], py, tr(s, 'Add to Playlist'), s.img('sg_listplus'), w=O['SG_BAR_PILL_W'])
         pill(s, im, O['SG_BAR_PILL_X1'], py, tr(s, 'Delete'), s.img('sg_trash'), w=O['SG_BAR_PILL_W'])
     if menu: sort_card(s, im)
+    if row_menu_at: row_menu(s, im)
     if touched:
         x, y = (W - BUBBLE) // 2, NAV + (WIN - NAV - BUBBLE) // 2
         r = 4

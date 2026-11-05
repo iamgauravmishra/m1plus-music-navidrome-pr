@@ -369,8 +369,8 @@ def asset_tests(ctx):
            and card.x + card.w == O['PL_CARD_RIGHT']
            and all(i.get(f'style:{st}:bg_color') == ('#FFFFFF10' if st == 'pressed' else '#00000000') and i.get(f'style:{st}:border_width') == ('1' if k else '0')
                    and i.get(f'style:{st}:border_color') == ('#FFFFFF22' if k else '#00000000') for k, i in enumerate(items) for st in pod_ui.STATES)
-           and tree.children.index(scrim) > tree.children.index(barw) and tree.children.index(card) == tree.children.index(scrim) + 1 == len(tree.children) - 1,
-           'the sort card: the Playlists menu\'s glass (x 43, y 52, 268 wide, sg_glass drawn patch3_x over no fill, rows transparent, 6 % white pressed, 13 % white hairline above every row but the first, right edge PL_CARD_RIGHT), last in the window under the 130/255 dim scrim')
+           and tree.children.index(scrim) > tree.children.index(barw) and tree.children.index(card) == tree.children.index(scrim) + 1 == len(tree.children) - 3,
+           'the sort card: the Playlists menu\'s glass (x 43, y 52, 268 wide, sg_glass drawn patch3_x over no fill, rows transparent, 6 % white pressed, 13 % white hairline above every row but the first, right edge PL_CARD_RIGHT), under the 130/255 dim scrim, then only the rows menu (rm_scrim, rm_card)')
     import io, mod_icons
     from PIL import Image
     gw, gh, gr = mod_icons.GLASS_SORT

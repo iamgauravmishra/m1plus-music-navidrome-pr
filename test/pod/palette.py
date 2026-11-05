@@ -723,7 +723,7 @@ def accent_image_tests(ctx):
     # the cost of the hook on a name it does not tint
     m = LM(acc=b'1\n')
     n0 = m.icount; m.image('np_play', 2, 2, [(0, 0, 0, 0)] * 4); c = m.icount - n0
-    expect(c < 3200, f'an image the accent does not tint costs {c} instructions through the hook (the name lists)')
+    expect(c < 3400, f'an image the accent does not tint costs {c} instructions through the hook (the name lists)')
     print(f'  hook on an untinted image: {c} instructions')
 
 

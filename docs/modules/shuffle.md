@@ -59,22 +59,38 @@ allowed (set from the Queue page; Now Playing's single button shows Shuffle then
   Shuffle button (`pod_set_shuffle`) and from Albums/Folders; from the two hooks (a request that stock makes: Play settings, Now Playing's button,
   DLNA, the boot restore; a queue load) the flag goes off silently, because the load also runs for the boot resume and the DLNA thread must not
   open a dialog. The Albums/Folders limits are as before.
-- **Gapless.** Stock plays the reordered queue in order, so the next song is known. A preload that is already open names the old next song:
-  `cancel_preload` closes it after every reorder by calling stock's `mclSetPlayMode` twice past the hook (mode 1, whose rule closes an open preload
-  at `0x5d27b8..0x5d2804` when the gapless state word `0xa0abd0` is 1; then the real mode). Between the two calls stock's mode word is 1 for a few
-  instructions: a track that ends in exactly that window repeats once. A queue load needs nothing: `mclStartPlayer` restarts the player.
+- **Gapless.** Stock plays the reordered queue in order, so the next song is known. A preload that is already open (the state word `0xa0abd0` is 1) names the old next
+  song: `cancel_preload`, the **one** cancel helper (the reorders here, `pod_queue_insert` below and Queue Clear, [queue](queue.md)), closes it with stock's Gapless setter: `mclSetGaplessMode(0)`
+  (`0x5d28ac`: stores the setting byte `0xa0ab89`, and with the state at 1 sends `{mcl-closegapless}` and stores -1 in the state), then `mclSetGaplessMode(old)`. It replaces
+  the earlier pair of `mclSetPlayMode` calls (mode 1 closes the preload by the same rule at `0x5d27b8..0x5d2804`), which left the mode word `0xa0abe0` at 1 (Repeat one) for a few
+  instructions: `mclNextSong` reads the mode raw, so a track that ended in that window repeated once. In the setter's window only the Gapless byte is 0, and each reader of it goes the
+  way the closed state goes anyway [S]: `mclNextSong` `0x5d583c` (byte 0: the queue path), `mclAutoChange` `0x5d632c` (byte 0: no new preload), the `set-gapless` send `0x5d0dd0`
+  (inside the preload decision the tick calls, the UI thread). The setter reaches only `send`, no hooked address. After the cancel stock does not preload again in the same song
+  (the tick calls `0x5d0ea4` only while the state is 0), so the join into the new next song has a gap. A queue load needs nothing: `mclStartPlayer` restarts the player.
+
+- **Rows inserted into the queue** (Play Next / Play After, `pod_queue_insert(rows, after)` in `patch/shuffle.c`, declared in `home.h`, called by `upnext_add`, [queue](queue.md)):
+  under the payload lock it copies the rows into the playing queue with `_deque_push_back` (class stamped from the playing row), rotates them to pos + 1 (or leaves them at the end) with
+  row swaps, and, when an order is kept (`sh.orig` with `sh.n` equal to the queue's size), grows it so it stays a permutation of 0..size-1: the new slots take the original positions
+  right after the playing song's own (Play Next) or at the end (Play After), in the rows' order, and every original position at or above that moves up by n. Shuffle off then
+  restores the original order with the added songs right after the playing song. The new array is allocated first (`calloc` + fill; a failure refuses the insert with nothing changed),
+  so the queue, `sh.orig` and the preload are untouched on every refusal; over `SHUFFLE_MAX` songs after the insert is refused too. An order of another size is stale and dropped by
+  the insert (a song deleted, then one added, must not look like the saved size). The 0x80000000 done mark of `restore_order` stays free: the entries are below 65536.
+  Cancelling an open preload (`at == pos + 1` only) happens under the lock; `mclSetGaplessMode` reaches only `send`. The insert is refused (`POD_INSERT_DLNA`, nothing changed) while
+  stock's DLNA renderer service runs (`dmr_serverflag` == 1, checked under the lock): `_deque_push_back` can reallocate the deque's map and the rotation moves rows while the
+  UPnP threads read the queue without a lock, the same reason as Clear. Shuffle's own reorders (swaps in place) stay allowed. Insert then Clear, or Clear then insert, then Shuffle off: both
+  take this lock; Clear drops the order (the insert grew it first, or there is none to grow), so Shuffle off restores nothing and the queue keeps its songs.
 
 ### Locking
 
 DLNA calls `mclSetPlayMode` / `mclLoadPlayList` on its own thread, so every queue reorder and every change of `sh.orig` / `sh.n` runs under one
 payload mutex: stock libc's `pthread_mutex_lock` / `pthread_mutex_unlock`, imported through demo's GOT like the cover code's (`tools/pod.py`
 `LIBC`; slots `0xa03784` and `0xa03238`), on a zero-filled 32-byte `.scratch` block (PTHREAD_MUTEX_INITIALIZER; `sh_enter` / `sh_leave`). It is
-not recursive: it is taken only in `flag_set` (queue size, reorder or restore, `drop_order`, flag file), `flag_only`, `sh_load_playlist` (the whole
-function: **stock's `mclLoadPlayList` trampoline, then** `drop_order`, flag, `shuffle_load`) the kill-switch branch of `sh_set_mode`, `sh_clear_queue` (the patched `deque_clear` call in `dmr_serverstart`, `0x5089e4`) and `pod_clear_upnext` (the Queue page's Clear: libcstl's `deque_pop_back` per tail record, [queue](queue.md)), each with a
+not recursive: it is taken only in `flag_set` (queue size, reorder or restore, `drop_order`, flag file), `pod_queue_insert` (the whole insert, its order growth and the preload cancel; it calls only stock's `mclGetPlayPos`, `deque_*`, `_deque_push_back` whose copy callback is the same stSongInfo copy as `mclLoadPlayList`'s, `calloc` / `free` and the Gapless setter), `flag_only`, `sh_load_playlist` (the whole
+function: **stock's `mclLoadPlayList` trampoline, then** `drop_order`, flag, `shuffle_load`) the kill-switch branch of `sh_set_mode`, `sh_clear_queue` (the patched `deque_clear` call in `dmr_serverstart`, `0x5089e4`) and `pod_clear_upnext` (the Queue page's Clear: the preload cancel, then libcstl's `deque_pop_back` per tail record, [queue](queue.md)), each with a
 single exit. Queue replacement and reordering exclude each other for the whole operation: stock's loader clears the play-queue deque (`deque_clear`, which
 frees its blocks) and refills it, so it must never run while DLNA's thread is in `restore_order` / `shuffle_tail` copying records by the size and indices it
 captured. Under the lock run `shuffle_tail` / `shuffle_load` / `restore_order`, `mclSetPlayPos`, the flag file write and stock's loader; the
-`mclSetPlayMode` trampoline, `cancel_preload`, the toast and `announce` stay outside it.
+`mclSetPlayMode` trampoline, the toast and `announce` stay outside it; `cancel_preload` runs inside it for `pod_queue_insert` and `pod_clear_upnext` (the setter reaches only `send`) and after the lock for the reorders.
 
 **Why a plain mutex is enough (static walk, `tools/stock.py sym/callers`):** `mclLoadPlayList` `0x5d1f28` (0xd4 bytes) calls only `deque_clear` (twice),
 `deque_assign`, `deque_size` and `_deque_push_back`: 0x10-byte stubs into the shared library, whose element copy/free callbacks are stock's own record
@@ -98,7 +114,7 @@ are serialized.
 | `init_usersetting` `0x4e0d38` (`deque_clear` at boot, before the DLNA / payload threads run) | no, harmless: single-threaded boot, and `sh.orig` is empty then |
 | `autochange_updateplayqueue` `0x4dfa08`, `change_music`, `mclNextSong` / `mclPrevSong` | not writers: they only move the position (`mclSetPlayPos`) |
 | `dlnaRenderAddTrackList` / `FetchTrackList`, `loadSongList`, `toolsCopyDeque` | write DLNA's / the page's own deques; the playing queue is only read through `mcl_pdeqplaylist` |
-| Queue page Clear (`pod_clear_upnext`, ours; [queue](queue.md)) | yes, covered: under the payload lock it re-reads the position and size, closes an open gapless preload (`mclSetGaplessMode`, pinned in `SHUFFLE_PINS`), pops the tail records in place with libcstl's `deque_pop_back` (destructor `0x5dabfc`: `free`, `memset`; records `0..pos` untouched, nothing allocated or copied) and calls `drop_order`; stock's unlocked readers on other threads are the open risk below |
+| Queue page Clear (`pod_clear_upnext`, ours; [queue](queue.md)) | yes, covered: under the payload lock it re-reads the position and size, closes an open gapless preload (`cancel_preload`, the setter pinned in `SHUFFLE_PINS`), pops the tail records in place with libcstl's `deque_pop_back` (destructor `0x5dabfc`: `free`, `memset`; records `0..pos` untouched, nothing allocated or copied) and calls `drop_order`; stock's unlocked readers on other threads are the open risk below |
 | `player_addplayList` `0x4efdcc` | edits the string fields of the record at the playing position in place (the DLNA add-to-queue action); not a reorder |
 
 **`dmr_serverstart`'s clear (covered).** Pinned call site `CLEAR_SITE` `0x5089e4` (`tools/pod.py`): stock's `lw v0, GOT 0xa0394c` (`0x5089dc`, word `0x8f82aa5c`), `lw t9, GOT deque_clear` (`0x5089e0`, `0x8f99f494`), `jalr t9` (`0x5089e4`, `0x0320f809`) and its delay slot `lw a0, (v0)` (`0x5089e8`, `0x8c440000`) are pinned; the build replaces only the `jalr` with `jal sh_clear_queue` (the delay slot still loads `a0` = the queue; `$t9` is simply unused; stock continues with `b 0x5086fc` and reloads what it needs, as at the `MODE_SITES`). `sh_clear_queue(void *deque)` takes the payload lock, calls stock's `deque_clear(deque)`, calls `drop_order` (the saved order describes a queue that is gone, so the `sh.n` size check is not the only guard) and releases the lock; the kill switch keeps the lock (switched on mid-reorder, the clear still waits). The call cannot re-enter our lock: `deque_clear` runs the deque's element free callback, the deque was created as `stSongInfo`, whose registered destructor `0x5dabfc` calls only `free` and `memset`. Tests: test 46 (words), test 51 (a clear against a reorder paused mid-permutation, the reverse, the kill switch switched on mid-reorder).
@@ -199,6 +215,6 @@ Nothing here has been run on the device. Open gaps, in the order worth checking:
    `memcpy` or right after stock's loader) and every load path asserts the loader runs with the lock held. `dmr_serverstart`'s own `deque_clear` (`0x5089e4`) is covered too (`sh_clear_queue`, test 51). Only the unlocked stock readers remain (Locking: no free, but a track start during a reorder can mix two songs' path and CUE offset or start the wrong track). `sh.fresh` / `sh.keep` are plain bytes set by the UI thread around a call.
 4. **`refresh_playqueue`** (the stock rebuild after the library changed under a playing queue, loaded at position 0 or the last) is treated as a new
    queue: it reshuffles with that position first.
-5. The order is not saved; Shuffle off after a size change of the queue (a song deleted from it) cannot restore it. A future "Play next" that inserts
-   into the queue changes its size the same way: it must call `drop_order`'s equivalent (or keep `orig` in step).
-6. `cancel_preload`'s two calls leave stock's mode word at 1 for a few instructions (see Gapless).
+5. The order is not saved; Shuffle off after a size change of the queue (a song deleted from it) cannot restore it. Play Next / Play After keep `orig` in step
+   (`pod_queue_insert`, above); no other writer may change the queue's size without `drop_order`.
+6. The gapless cancel is one helper (Gapless above); a late Play Next / reorder joins without gapless in that song (device check in [queue](queue.md)).

@@ -844,6 +844,9 @@ class Machine:
         elif name == 'stock_setmode':   # stock's mclSetPlayMode behind the hook's trampoline (patch/shuffle.c sh_set_mode): the mode word, and the gapless preload closed for a mode other than 0 and 3
             self.mode = a0; self.calls.append(('stock_setmode', a0))
             if self.word(pod.DATA['MCL_PRELOAD'][0]) == 1 and a0 not in (0, 3): self.setword(pod.DATA['MCL_PRELOAD'][0], -1); self.calls.append(('closegapless',))
+        elif name == 'mclSetGaplessMode':   # @0x5d28ac: stores the Gapless byte; 0 with a preload open (state 1) sends {mcl-closegapless} and stores -1 in the state
+            self.calls.append(('mclSetGaplessMode', a0)); self.u.mem_write(pod.DATA['MCL_GAPLESS'][0], bytes([a0 & 0xff])); ret = 1
+            if a0 == 0 and self.word(pod.DATA['MCL_PRELOAD'][0]) == 1: self.setword(pod.DATA['MCL_PRELOAD'][0], -1); self.calls.append(('closegapless',))
             ret = 1
         elif name == 'stock_loadplaylist':   # stock's mclLoadPlayList behind its trampoline: the play queue becomes a copy of the deque, the position the index
             recs = []   # deque_assign copies the records (their strings are shared)

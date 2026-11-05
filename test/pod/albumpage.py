@@ -200,7 +200,7 @@ def asset_tests(ctx):
     kids = [c.name for c in root.children]
     expect(root.name == 'm1plus_album_page' == pod_pages.ALBUM_PAGE.name and pod_pages.ALBUM_PAGE in pod_pages.PAGES and pod_pages.ALBUM_PAGE.key == 'm1plus_album' == O.get('AB_ASSET', 'm1plus_album'),
            'the page is m1plus_album (window m1plus_album_page)')
-    expect(kids[0] == 'img_ah_tint' and kids[-1] == 'btn_cancel' and kids[-8] == 'label_title' and 'songs_listview' in kids, f'the gradient is the window\'s first child, the glass controls its last: {kids}')
+    expect(kids[0] == 'img_ah_tint' and kids[-3] == 'btn_cancel' and kids[-10] == 'label_title' and kids[-2:] == ['rm_scrim', 'rm_card'] and 'songs_listview' in kids, f'the gradient is the window\'s first child, the glass controls and the rows menu its last: {kids}')
     tint = f('img_ah_tint')
     expect((tint.x, tint.y, tint.w, tint.h) == (0, 0, 320, 450) and tint.get('image') == 'ah_tint' and tint.get('clickable') == 'false' and tint.get('sensitive') == 'false'
            and tint.get('visible') != 'false', 'img_ah_tint: ah_tint over the whole 320 x 450 window, insensitive (over a black page it changes nothing)')
