@@ -24,3 +24,4 @@
 - **No close animation on windows a "play from here" loop can pop:** library pages, album detail,
   jump list, Now Playing and M1+ Music pages. See [slides audit](boot.md#settings-slide-safety-audit-static-on-stock-demo).
 - The rebuilt rootfs must not exceed stock (fwtool enforces it); one change per package where possible.
+- **The Pod is its own view:** every Pod row opens a Pod level, never one of our full pages; a function without a Pod-designed level is left out of the Pod (`docs/modules/ipod.md`).

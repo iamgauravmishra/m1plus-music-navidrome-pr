@@ -16,14 +16,13 @@ auto-advance to a local track); the state machine is not yet: see [Validation li
 | Now Playing | `patch/radionp.c`, `tools/pod_ui.py` `build_radionp_page` (`ui/m1plus_radionp.bin`) |
 | Station Info | `patch/radioinfo.c`, `tools/pod_ui.py` `build_radioinfo_page` (`ui/m1plus_radioinfo.bin`), `tools/pod_pages.py` `RADIOINFO` |
 | Hooks, pins, imports | `tools/pod.py` `START_PLAYER`, `SAVE_STOP`, `SAVE_START`, `BACKTOPLAYER`, `RADIO_PINS`, `LIBC`, `DATA` (`RESUME_POS`, `HCI_RUNNING`, `HCI_SOCK_FD`) |
-| Entries | `tools/pod_pages.py` item 22 `Radio` (`ACT_RADIO`), `patch/ipod.c` `ROOT_RADIO` |
+| Entries | `tools/pod_pages.py` item 22 `Radio` (`ACT_RADIO`) |
 | Tests | `test/pod/radio.py` (`check.py --list`: `radio/*`) |
 
 ## Entries
 
 Radio is menu item 22 (saved as `n`), hidden by default; Extras lists it in Library, between
-Podcasts and Search. The Pod's main menu has a Radio row after Podcasts that opens the same page
-over the fullscreen Pod (the covers pane stays). The kill switch `/mnt/mmc/m1plus-off` leaves the menu itself closed (the only radio entry that reads it). Settings > Developer > Tools > Settings Files shows `radio-recent`.
+Podcasts and Search. The Pod has no Radio row: its main menu never opens a page of ours. The kill switch `/mnt/mmc/m1plus-off` leaves the menu itself closed (the only radio entry that reads it). Settings > Developer > Tools > Settings Files shows `radio-recent`.
 
 ## Stations page
 
@@ -192,7 +191,7 @@ Hook 16, `mclStartPlayer` `0x5d5300` (every local track's start; q2-pod's `ringn
 ## Now Playing entries
 
 While a station connects or plays (`rd_running`; a stopped radio is not active, whatever Recently Played holds), every Now Playing entry opens Radio Now Playing (`rn_open`; if the page is up, on top and not closing nothing opens, Back returns to the page it was opened from; a page that is closing or under another window is replaced by a fresh one: AWTK destroys a closed window later, so `rn_on_destroy` is bound with its window and ignores a window that is no longer `rn.win`) and a failed open (no memory) opens stock's player:
-`pod_open_now_playing` (`patch/common.c`) for our pages (`pod_on_player`: the navbar buttons and the mini bar card; the Home menu's Now Playing row, `patch/m1plus.c`); the Pod's Now Playing row (`ip_now_shown` also holds while a station plays; `patch/ipod.c`); and hook 10, `on_backtoplayer_onclick` `0x4cd58c`, for stock pages (`rn_backtoplayer`, `docs/modules/payload.md`). The Home mini bar keeps a stopped station (`rd_owns_bar`: set when `rd_play` starts a station, kept through Stop and Error, cleared by `rd_start_player` when a local track starts; the Stopped bar shows "Stopped" with the play glyph, a tap plays the same station again with the usual Wi-Fi check, and the card opens Radio Now Playing). Stock's Now Playing button for a stopped station is unchanged (`rd_running`). The stations page's Now Playing row (`RR_NOW`, `rp_root_action`) opens Radio Now Playing only while `rd_running`; Idle, Stopped and Error (a local song playing or not) toast "No radio is playing" (`pod_toast`) and do nothing else: the row never starts a station, not even the last played one. Idle (nothing played this session, so the flag is 0) and Clear Recently Played (the flag is not touched) leave the bar as before. Tracks the Pod starts itself still open its own screen (local music stops the radio first). Test: `entry_tests`.
+`pod_open_now_playing` (`patch/common.c`) for our pages (`pod_on_player`: the navbar buttons and the mini bar card; the Home menu's Now Playing row, `patch/m1plus.c`); and hook 10, `on_backtoplayer_onclick` `0x4cd58c`, for stock pages (`rn_backtoplayer`, `docs/modules/payload.md`). The Home mini bar keeps a stopped station (`rd_owns_bar`: set when `rd_play` starts a station, kept through Stop and Error, cleared by `rd_start_player` when a local track starts; the Stopped bar shows "Stopped" with the play glyph, a tap plays the same station again with the usual Wi-Fi check, and the card opens Radio Now Playing). Stock's Now Playing button for a stopped station is unchanged (`rd_running`). The stations page's Now Playing row (`RR_NOW`, `rp_root_action`) opens Radio Now Playing only while `rd_running`; Idle, Stopped and Error (a local song playing or not) toast "No radio is playing" (`pod_toast`) and do nothing else: the row never starts a station, not even the last played one. Idle (nothing played this session, so the flag is 0) and Clear Recently Played (the flag is not touched) leave the bar as before. Tracks the Pod starts itself still open its own screen (local music stops the radio first). Test: `entry_tests`.
 
 ## Radio Now Playing
 

@@ -12,6 +12,8 @@ contact sheet and GIF, the cross-fading cover pane and the reference palette).
 The Pod row's glyph (`pod_ic_ipod`) is `assets/icons/custom/ipod.svg`: Lucide's `smartphone` body
 with a screen bar and a click wheel, the pick from `tools/preview_pod_icon.py` (candidate B).
 
+The Pod is its own view of the player's functions: every row opens a Pod level, never one of our full pages. A function without a Pod-designed level is left out of the Pod.
+
 The page adds no stock hook or boot work. It owns its `EVT_AFTER_PAINT`, pointer grab,
 foreground/background/destroy events and one page timer, using stock calls already shared
 with Albums, Songs, the mini player and Cover Flow.

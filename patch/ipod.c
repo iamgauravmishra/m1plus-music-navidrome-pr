@@ -34,7 +34,6 @@
 #include "common.h"
 #include "i18n.h"
 #include "podcasts.h"
-#include "radio.h"
 
 extern unsigned np_file_key(const char *path); /* patch/nowplaying.c: a hash of the picture file, 0 if unreadable */
 extern const char *
@@ -72,10 +71,10 @@ enum {
 };
 enum { S_SHUFFLE, S_REPEAT, S_APPEARANCE, S_COUNT };
 enum { M_COVER, M_ALBUMS, M_ARTISTS, M_SONGS, M_PLAYLISTS, M_SHUFFLE, M_COUNT };
-enum { ROOT_MUSIC, ROOT_COVER, ROOT_PODCASTS, ROOT_RADIO, ROOT_SHUFFLE, ROOT_NOW, ROOT_SETTINGS, ROOT_COUNT };
+enum { ROOT_MUSIC, ROOT_COVER, ROOT_PODCASTS, ROOT_SHUFFLE, ROOT_NOW, ROOT_SETTINGS, ROOT_COUNT };
 enum { R_NONE, R_CENTRE, R_RING };
 
-static const char *const MAIN_KEYS[ROOT_COUNT] = {"Music",         "Cover Flow",  "Podcasts",        "Radio",
+static const char *const MAIN_KEYS[ROOT_COUNT] = {"Music",         "Cover Flow",  "Podcasts",
                                                   "Shuffle Songs", "Now Playing", "cdrippersettings"};
 static const char *const MUSIC_KEYS[M_COUNT] = {"Cover Flow", "Albums",    "Artists",
                                                 "Songs",      "Playlists", "Shuffle Songs"};
@@ -84,7 +83,6 @@ static const char *const MODE_ICONS[4] = {"ipod_mode_shuffle", "ipod_mode_repeat
                                           "ipod_playing"}; /* the play mode marks, then the playing track's speaker */
 static void *ip_mode_bitmap(int i);
 static void ip_pc_play(int at);
-extern int radio_open(void); /* patch/radiopage.c */
 #define IP_NP_GONE 3 /* looks without a current track before Now Playing says Not Playing */
 
 struct lvl {
@@ -244,7 +242,7 @@ static void ip_redraw_pane(void) {
 /* The main menu's Now Playing row is there only while something plays or is paused (the reference's). Rows after it move up when it is hidden. */
 static int ip_now_shown(void) {
     int s = mclGetPlayStatus();
-    return s == 2 || s == 3 || rd_running(); /* a station playing counts: the row opens Radio Now Playing */
+    return s == 2 || s == 3;
 }
 static int ip_root_id(int row) { return row >= ROOT_NOW && !ip_now_shown() ? row + 1 : row; }
 
@@ -1863,13 +1861,11 @@ static void ip_select(void) {
                 coverflow_open();
         } else if (row == ROOT_PODCASTS)
             ip_push(K_PODCASTS);
-        else if (row == ROOT_RADIO)
-            radio_open(); /* Radio's stations page over the Pod (patch/radiopage.c), as Cover Flow's page when the Pod's has no memory */
         else if (row == ROOT_SHUFFLE)
             ip_shuffle_all();
-        else if (row == ROOT_NOW) {
-            if (!rn_open_if_active()) ip_push(K_NOW); /* Radio's page while a station plays (patch/radionp.c) */
-        } else if (row == ROOT_SETTINGS)
+        else if (row == ROOT_NOW)
+            ip_push(K_NOW);
+        else if (row == ROOT_SETTINGS)
             ip_push(K_SETTINGS);
         return;
     }
