@@ -66,13 +66,25 @@ int cc_find_album(
         album); /* the library Albums row with that album name (NOCASE), -1: none; cc_open_album(NULL, 0, row) opens it */
 /* The album order shared by Cover Flow and Albums (Settings > Library > Album Order). The stock list is never reordered: the
  * sorted view is a permutation of its row numbers, and anything that goes back to stock (cc_open_album) takes the stock row. */
-int cc_nocase(const char *a,
-              const char *b); /* ASCII case-insensitive compare (SQLite NOCASE, as the stock list groups) */
-int cc_name_cmp(const char *a,
-                const char *b); /* cc_nocase with a leading "The " dropped from both (the Artist order's name key) */
+int cc_nocase(const char *a, const char *b); /* ASCII case-insensitive compare (SQLite NOCASE) */
+int cc_key_cmp(
+    const char *a,
+    const char *
+        b); /* the name order of the lists on prepared keys: digit runs by value, ASCII case folded, digits and symbols before letters, non-ASCII after */
+int cc_name_cmp(
+    const char *a,
+    const char *
+        b); /* cc_key_cmp of the names without leading white space and a leading "The " (no pinyin: see cc_name_keys) */
 const char *cc_name_key(
     const char *
-        s); /* s without a leading "The " (when something follows it): the text the Artist order compares, and the Artists page's section letter comes from */
+        s); /* s without leading white space and a leading "The " (when something follows it): the text the Artist order compares */
+int cc_name_initial(
+    const char *
+        name); /* the first byte of that text, a CJK character as its pinyin initial (stock's utf8_to_pinyin): the section letter of a name */
+const char **cc_name_keys(
+    unsigned n, const char *(*name)(const void *ctx, unsigned i),
+    const void *
+        ctx); /* the keys of n names for cc_key_cmp, CJK characters as pinyin initials; one block to free(); NULL: no names or no memory (keep the stock order) */
 void cc_heapsort(unsigned *v, unsigned n,
                  int (*cmp)(unsigned,
                             unsigned)); /* in place, no memory; cmp must be total (break ties by the row number) */

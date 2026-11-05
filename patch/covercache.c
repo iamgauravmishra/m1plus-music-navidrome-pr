@@ -365,15 +365,15 @@ int cc_find_album(const char *album) {
 /* ---------------------------------------------------------------------------
  * The album order (Settings > Library > Album Order), shared by Cover Flow and the Albums page.
  *
- * Album: the stock list as it is (getAllAlbum: group by album COLLATE NOCASE, so by album title). Artist (the
- * default, iPod style): by the album row's artist, then by album title, each compared ASCII case-insensitively
- * (SQLite's NOCASE, which the stock list groups by) with a leading "The " ignored ("The Beatles" files under B);
- * ties (the same artist and title) keep the stock order, so the order is total and the same on every open. The
- * stock album row carries only the artist of the album's representative track (`select id,album,songer,fileurl`;
- * the album artist is a separate column the Albums query does not fetch), so that is the artist sorted by.
- * The "Unknown Album" row (id -1) stays last. The stock deque is never touched: the sorted view is an array of
- * the rows' stock numbers (a heapsort, no libc callback into the payload), and cc_open_album gets the stock number.
- * The Artist Cover Flow keeps the stock order of an artist's albums (album title, NOCASE: the same query's group by).
+ * Album: the stock list as it is (getAllAlbum: group by album COLLATE NOCASE, then toolsQueryDbTable's in-memory title sort, comparator
+ * 0x5e0dac). Artist (the default, iPod style): by the album row's artist, then by album title, each compared as the stock title sort
+ * does in the points that matter here (digit runs by value, ASCII case folded, digits and symbols before letters, a CJK name placed by
+ * its pinyin initials among the Latin names) with a leading "The " ignored ("The Beatles" files under B) and leading white space
+ * skipped; ties (the same artist and title) keep the stock order, so the order is total and the same on every open. The stock album
+ * row carries only the artist of the album's representative track (`select id,album,songer,fileurl`; the album artist is a separate
+ * column the Albums query does not fetch), so that is the artist sorted by. The "Unknown Album" row (id -1) stays last. The stock
+ * deque is never touched: the sorted view is an array of the rows' stock numbers (a heapsort, no libc callback into the payload), and
+ * cc_open_album gets the stock number. The Artist Cover Flow keeps the stock order of an artist's albums.
  */
 static int fold(int c) { return c >= 'A' && c <= 'Z' ? c + 32 : c; }
 
@@ -382,17 +382,143 @@ int cc_nocase(const char *a, const char *b) {
     return fold((unsigned char)*a) - fold((unsigned char)*b);
 }
 
-/* s without a leading "The " (when something follows it). */
+/* s without leading white space (toolsTrimLeft) and without a following "The " (when something follows it). */
 static const char *so_name(const char *s) {
+    while (*s == ' ' || (*s >= '\t' && *s <= '\r')) ++s;
     if (fold((unsigned char)s[0]) == 't' && fold((unsigned char)s[1]) == 'h' && fold((unsigned char)s[2]) == 'e' &&
         s[3] == ' ' && s[4])
         return s + 4;
     return s;
 }
 
-/* The name order of both lists (albums by artist and title, the Artists page): ASCII case aside, "The " dropped. */
-int cc_name_cmp(const char *a, const char *b) { return cc_nocase(so_name(a), so_name(b)); }
+static int kc_digit(unsigned c) { return c >= '0' && c <= '9'; }
+
+/* The class of a (folded) byte: digits, then symbols, then letters, then anything non-ASCII (stock: "digits and symbols before letters"). */
+static int kc_class(unsigned c) { return kc_digit(c) ? 0 : c >= 0x80 ? 3 : c >= 'a' && c <= 'z' ? 2 : 1; }
+
+/* Two keys (see cc_name_cmp): runs of digits by value, other bytes by class and then folded value; a key that is a prefix is first.
+ * The common prefix is skipped byte by byte (folding only bytes that differ); a difference inside a run of digits goes back to the
+ * run's start (the same offset in both, the prefix being common) and compares the two runs by value. */
+/* The digit runs around a and b (the first difference, after a common part since a0) by value: -1, 0 (equal values) or 1. The
+ * common digits before a are the same in both; when one of them is not '0', the leading zeros are common too, so the longer rest
+ * is the larger value and, at equal lengths, the differing digit decides. Otherwise the zeros after a and b are skipped and the
+ * significant digits compared. */
+static int __attribute__((noinline)) kc_runs(const char *a, const char *b, const char *a0) {
+    unsigned ra = 0, rb = 0, za = 0, zb = 0, i;
+    int nz = 0;
+    const char *p;
+    for (p = a; p > a0 && kc_digit((unsigned char)p[-1]); --p) nz |= p[-1] != '0';
+    while (kc_digit((unsigned char)a[ra])) ++ra;
+    while (kc_digit((unsigned char)b[rb])) ++rb;
+    if (!nz) {
+        while (za < ra && a[za] == '0') ++za;
+        while (zb < rb && b[zb] == '0') ++zb;
+        a += za, b += zb, ra -= za, rb -= zb;
+    }
+    if (ra != rb) return ra < rb ? -1 : 1;
+    for (i = 0; i < ra; ++i)
+        if (a[i] != b[i]) return a[i] < b[i] ? -1 : 1;
+    return 0;
+}
+
+int cc_key_cmp(const char *a, const char *b) {
+    const char *a0 = a;
+    for (;;) {
+        unsigned ca, cb;
+        while ((ca = (unsigned char)*a) == (cb = (unsigned char)*b)) {
+            if (!ca) return 0;
+            ++a, ++b;
+        }
+        if ((kc_digit(ca) || kc_digit(cb)) &&
+            ((kc_digit(ca) && kc_digit(cb)) || (a > a0 && kc_digit((unsigned char)a[-1])))) {
+            int d = kc_runs(a, b, a0);
+            if (d) return d;
+            /* equal values ("007", "7"): go on after each run */
+            while (a > a0 && kc_digit((unsigned char)a[-1])) --a, --b;
+            while (kc_digit((unsigned char)*a)) ++a;
+            while (kc_digit((unsigned char)*b)) ++b;
+            a0 = a;
+            continue;
+        }
+        if (!ca || !cb) return (ca != 0) - (cb != 0);
+        ca = (unsigned)fold((int)ca), cb = (unsigned)fold((int)cb);
+        if (ca == cb) {
+            ++a, ++b;
+            continue;
+        }
+        if (ca - 'a' < 26 && cb - 'a' < 26) return ca < cb ? -1 : 1;
+        {
+            int ra = kc_class(ca), rb = kc_class(cb);
+            if (ra != rb) return ra < rb ? -1 : 1;
+            return ca < cb ? -1 : 1;
+        }
+    }
+}
+
+/* The order of both lists on raw names (the Artist order's name, the podcast and country lists): no pinyin (see cc_name_keys). */
+int cc_name_cmp(const char *a, const char *b) { return cc_key_cmp(so_name(a), so_name(b)); }
 const char *cc_name_key(const char *s) { return so_name(s); }
+
+/* A CJK character (UTF-8 U+4E00..U+9FFF: E4..E9 and two continuation bytes) at s. */
+static int kc_cjk(const unsigned char *s) {
+    return s[0] >= 0xe4 && s[0] <= 0xe9 && (s[1] & 0xc0) == 0x80 && (s[2] & 0xc0) == 0x80;
+}
+
+/* The pinyin initial of the CJK character at s, as stock's utf8_to_pinyin gives it (it appends to a zeroed buffer: nothing for a character
+ * outside U+4E00..U+9FA5), else 0. */
+static int kc_initial(const unsigned char *s) {
+    char in[4], out[4] = {0, 0, 0, 0};
+    in[0] = (char)s[0], in[1] = (char)s[1], in[2] = (char)s[2], in[3] = 0;
+    utf8_to_pinyin(in, out);
+    return (unsigned char)out[0];
+}
+
+int cc_name_initial(const char *name) {
+    const unsigned char *s = (const unsigned char *)so_name(name);
+    int c;
+    return kc_cjk(s) && (c = kc_initial(s)) ? c : *s;
+}
+
+/* The keys of n names: key[i] is name(ctx, i) without white space and "The ", the text cc_key_cmp compares. A name with a CJK character
+ * has its own copy in which each such character is its pinyin initial (stock's utf8_to_pinyin; other bytes as they are, so a name in
+ * another script follows the Latin ones); every other key points into the name. One block (the pointers, then the copies), free()d by
+ * the caller; NULL when n is 0 or there is no memory (the caller keeps the stock order). */
+const char **cc_name_keys(unsigned n, const char *(*name)(const void *, unsigned), const void *ctx) {
+    unsigned i, pool = 0;
+    const char **key;
+    char *p;
+    if (!n) return (const char **)0;
+    for (i = 0; i < n; ++i) {
+        const unsigned char *s = (const unsigned char *)so_name(name(ctx, i)), *e = s;
+        while (*e && !(*e >= 0xe4 && *e <= 0xe9)) ++e;
+        if (!*e) continue;
+        while (*e) ++e;
+        pool += (unsigned)(e - s) + 1;
+    }
+    key = calloc(1, n * sizeof *key + pool);
+    if (!key) return (const char **)0;
+    p = (char *)(key + n);
+    for (i = 0; i < n; ++i) {
+        const char *s = so_name(name(ctx, i)), *t = "";
+        if (pool) /* else no name has a CJK lead byte: no second scan */
+            for (t = s; *t && !((unsigned char)*t >= 0xe4 && (unsigned char)*t <= 0xe9); ++t) {
+            }
+        key[i] = s;
+        if (*t) {
+            char *o = p;
+            for (; *s;) {
+                int c;
+                if (kc_cjk((const unsigned char *)s) && (c = kc_initial((const unsigned char *)s)))
+                    *o++ = (char)c, s += 3;
+                else
+                    *o++ = *s++;
+            }
+            *o++ = 0;
+            key[i] = p, p = o;
+        }
+    }
+    return key;
+}
 
 /* Heapsort of v[0..n) by cmp, which must be total (ties broken by the row numbers in v, so equal names keep the stock
  * order). No libc callback into the payload; no memory. */
@@ -420,14 +546,20 @@ void cc_heapsort(unsigned *v, unsigned n, int (*cmp)(unsigned, unsigned)) {
 }
 
 static void **so_rec __attribute__((section(".scratch"))); /* the rows being sorted, by stock number */
+static const char **so_key __attribute__((section(".scratch"))); /* their keys: artist 2 * i, album title 2 * i + 1 */
 
 static int so_cmp(unsigned a, unsigned b) {
-    void *ra = so_rec[a], *rb = so_rec[b];
-    int ua = I(ra, REC_ID) == -1, ub = I(rb, REC_ID) == -1, d;
+    int ua = I(so_rec[a], REC_ID) == -1, ub = I(so_rec[b], REC_ID) == -1, d;
     if (ua != ub) return ua - ub;
-    d = cc_name_cmp(cc_str(ra, REC_ARTIST), cc_str(rb, REC_ARTIST));
-    if (!d) d = cc_name_cmp(cc_str(ra, REC_ALBUM), cc_str(rb, REC_ALBUM));
+    d = cc_key_cmp(so_key[2 * a], so_key[2 * b]);
+    if (!d) d = cc_key_cmp(so_key[2 * a + 1], so_key[2 * b + 1]);
     return d ? d : a < b ? -1 : a > b;
+}
+
+/* The key texts of the albums being sorted: even i the artist of row i / 2, odd i its title. */
+static const char *so_text(const void *ctx, unsigned i) {
+    void *r = ((void *const *)ctx)[i / 2];
+    return cc_str(r, i & 1 ? REC_ALBUM : REC_ARTIST);
 }
 
 int cc_sort_artist(void) { return set_read(CFSORT_FILE, '1') != '0'; /* only "0" / "0\n" is Album */ }
@@ -443,16 +575,19 @@ unsigned *cc_album_order(void *albums) {
     if (!n || !cc_sort_artist()) return (unsigned *)0;
     v = calloc(n, sizeof *v);
     so_rec = calloc(n, sizeof *so_rec);
-    if (!v || !so_rec) {
-        free(v);
-        free(so_rec);
-        so_rec = (void **)0;
-        return (unsigned *)0;
+    so_key = (const char **)0;
+    if (v && so_rec) {
+        for (i = 0; i < n; ++i) v[i] = i, so_rec[i] = deque_at(albums, i);
+        so_key = cc_name_keys(2 * n, so_text, so_rec);
     }
-    for (i = 0; i < n; ++i) v[i] = i, so_rec[i] = deque_at(albums, i);
-    cc_heapsort(v, n, so_cmp);
+    if (!v || !so_rec || !so_key) {
+        free(v);
+        v = (unsigned *)0;
+    } else
+        cc_heapsort(v, n, so_cmp);
     free(so_rec);
-    so_rec = (void **)0;
+    free((void *)so_key);
+    so_rec = (void **)0, so_key = (const char **)0;
     return v;
 }
 

@@ -114,47 +114,51 @@ ar_open(unsigned i) { /* (a symbol of its own: the tests call it with a display 
     return RET_OK;
 }
 
-/* The display order. Names are compared as the album Artist order does (cc_name_cmp: ASCII case aside, a leading
- * "The " dropped; ties keep the stock order). Only a row whose name starts with an ASCII byte takes part: a name
- * in another script (CJK, Cyrillic, ...) and the "Unknown Artist" row (id -1) stay exactly where stock put them, so
- * stock's own placement of those groups (and of their order among themselves) is untouched, wherever it puts them.
- * The runs of consecutive sortable rows between those fixed ones are sorted, each on its own. The stock rows are
- * never reordered: order[] is the stock row number at each position, NULL (stock order) when there is no memory. */
+/* The display order: all rows but the "Unknown Artist" row (id -1) are sorted as the album Artist order sorts names (cc_name_keys / cc_key_cmp: digit runs by
+ * value, ASCII case aside, a leading "The " and white space dropped, a CJK name placed by its pinyin initials among the Latin ones; ties keep the stock order).
+ * The Unknown rows keep their stock positions (stock puts them last) and the sorted rows fill the other positions in order, so "The Beatles" reaches B wherever
+ * a fixed row sits. The stock rows are never reordered: order[] is the stock row number at each position; NULL (stock order) when there is no memory. */
 static void **ar_rec __attribute__((section(".scratch")));
+static const char **ar_key __attribute__((section(".scratch")));
 
-static int ar_sortable(void *r) { return *(int *)((char *)r + REC_ID) != -1 && (unsigned char)ar_name(r)[0] < 0x80; }
+static int ar_fixed(void *r) { return *(int *)((char *)r + REC_ID) == -1; }
 
 static int ar_cmp(unsigned a, unsigned b) {
-    int d = cc_name_cmp(ar_name(ar_rec[a]), ar_name(ar_rec[b]));
+    int d = cc_key_cmp(ar_key[a], ar_key[b]);
     return d ? d : a < b ? -1 : a > b;
 }
 
+static const char *ar_text(const void *ctx, unsigned i) { return ar_name(((void *const *)ctx)[i]); }
+
 static void ar_sort(void) {
-    unsigned i, s;
+    unsigned i, n = 0, *v;
     ar.order = (unsigned *)0;
+    ar_key = (const char **)0;
     if (ar.count < 2) return;
     ar.order = calloc(ar.count, sizeof *ar.order);
     ar_rec = calloc(ar.count, sizeof *ar_rec);
-    if (!ar.order || !ar_rec) {
-        free(ar.order);
-        free(ar_rec);
-        ar.order = (unsigned *)0;
-        ar_rec = (void **)0;
-        return;
+    if (ar.order && ar_rec) {
+        for (i = 0; i < ar.count; ++i) ar_rec[i] = deque_at(ar.artists, i);
+        ar_key = cc_name_keys(ar.count, ar_text, ar_rec);
     }
-    for (i = 0; i < ar.count; ++i) ar.order[i] = i, ar_rec[i] = deque_at(ar.artists, i);
-    for (i = 0; i < ar.count;) {
-        for (s = i; i < ar.count && ar_sortable(ar_rec[i]); ++i) {
-        }
-        if (i - s > 1) cc_heapsort(ar.order + s, i - s, ar_cmp);
-        if (i == s) ++i; /* a fixed row */
+    if (!ar.order || !ar_rec || !ar_key) {
+        free(ar.order);
+        ar.order = (unsigned *)0;
+    } else {
+        v = ar.order; /* the sorted rows first (their stock numbers), then spread over the positions the fixed rows leave */
+        for (i = 0; i < ar.count; ++i)
+            if (!ar_fixed(ar_rec[i])) v[n++] = i;
+        cc_heapsort(v, n, ar_cmp);
+        /* from the end: the next sorted row sits at or before i, so nothing still to read is overwritten */
+        for (i = ar.count; i-- > 0;) v[i] = ar_fixed(ar_rec[i]) ? i : v[--n];
     }
     free(ar_rec);
-    ar_rec = (void **)0;
+    free((void *)ar_key);
+    ar_rec = (void **)0, ar_key = (const char **)0;
 }
 
-/* The section ranks of the display order: the rank of the first character of the name the order compares (a leading "The " dropped; a digit, a symbol and a name in
- * another script are "#"), as the Songs page's Initial. The "Unknown ..." row (id -1; stock puts it last) takes the rank of the row before it: it is a stray by
+/* The section ranks of the display order: the rank of the first character of the name the order compares (a leading "The " dropped, a CJK character as its pinyin
+ * initial; a digit, a symbol and a name in another script are "#"), as the Songs page's Initial. The "Unknown ..." row (id -1; stock puts it last) takes the rank of the row before it: it is a stray by
  * nature and, as the last row of a run of single rows, could else tie with the row before it and swallow that row's section. The sections are then az_sections' (the
  * non-decreasing labelling: the list keeps its order, a row out of place stays in the section around it). No memory = a plain list. */
 static void ar_sections(void) {
@@ -164,9 +168,8 @@ static void ar_sections(void) {
     if (!ar.rank) return;
     for (i = 0; i < ar.count; ++i) {
         void *r = deque_at(ar.artists, ar_stock(i));
-        ar.rank[i] = *(int *)((char *)r + REC_ID) == -1 && i
-                         ? (unsigned char)prev
-                         : (unsigned char)az_rank_of((unsigned char)*cc_name_key(ar_name(r)));
+        ar.rank[i] = *(int *)((char *)r + REC_ID) == -1 && i ? (unsigned char)prev
+                                                             : (unsigned char)az_rank_of(cc_name_initial(ar_name(r)));
         prev = ar.rank[i];
     }
     az_sections(&ar.al, ar.rank, 1);
@@ -370,7 +373,7 @@ static void ar_load(void) {
         ar.count = deque_size(ar.artists);
         if (ar.count > MAX_ARTISTS) ar.count = MAX_ARTISTS;
         if (ar.cls == CLASS_ARTISTS)
-            ar_sort(); /* Genres and Composers stay in the stock query's order (group by ... COLLATE NOCASE) */
+            ar_sort(); /* Genres and Composers stay in stock's order (toolsQueryDbTable's in-memory title sort) */
     }
     ar.al.count = (int)ar.count;
     if (ar.count) ar_sections();

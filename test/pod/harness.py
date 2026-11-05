@@ -101,6 +101,25 @@ def contrast(a, b):
     return (hi + 0.05) / (lo + 0.05)
 
 
+
+PINYIN_INITIAL = {'周': 'z', '杰': 'j', '伦': 'l', '孙': 's', '燕': 'y', '姿': 'z', '陈': 'c', '奕': 'y', '迅': 'x', '王': 'w', '菲': 'f'}   # (the stock table's, for the characters the tests use)
+
+
+def name_sort_key(name):
+    """The library name order, independently written: leading white space and a leading "The " dropped, a CJK character
+    as its pinyin initial, then per position a digit run (by value) before a symbol before a letter (ASCII case folded)
+    before any other byte; a shorter key that is a prefix comes first."""
+    s = name.lstrip(' \t\n\r\v\f')
+    if len(s) > 4 and s[:4].lower() == 'the ': s = s[4:]
+    s = ''.join(PINYIN_INITIAL.get(c, c) for c in s)
+    key = []
+    for tok in re.findall(r'\d+|.', s, re.S):
+        if tok.isascii() and tok.isdigit(): key.append((0, int(tok)))
+        else:
+            c = tok.lower() if tok.isascii() else tok
+            key.append((3, tok) if not tok.isascii() else (2 if 'a' <= c <= 'z' else 1, c))
+    return key
+
 class Ctx:
     """What a feature module's run(ctx) gets: the entry page, the built cover asset, and expect()."""
     def __init__(self, work):
@@ -910,6 +929,17 @@ class Machine:
             self.u.mem_write(a0, bytes(self.u.mem_read(a1, a2))); ret = a0
         elif name == 'strcmp':
             x, y = self.read_cstr(a0), self.read_cstr(a1); ret = (x > y) - (x < y)
+        elif name == 'utf8_to_pinyin':   # stock's own algorithm (0x73a5f0), its table read from the mapped image: appends to the buffer at out
+            src, o = bytes(self.read_cstr(a0).encode('latin-1')), bytes(self.read_cstr(a1).encode('latin-1')); i = 0
+            self.calls.append(('utf8_to_pinyin', src))
+            while i < len(src):
+                c = src[i]
+                if c < 0x80: o += bytes([c]); i += 1; continue
+                if i + 2 >= len(src): break
+                cp = (c << 12 & 0xffff) | (src[i + 1] << 6 & 0xfc0) | (src[i + 2] & 0x3f)
+                if 0x4e00 <= cp < 0x9fa6: o += bytes(self.u.mem_read(0x9e2310 + cp - 0x4e00, 1))
+                i += 3
+            self.u.mem_write(a1, o + b'\0')
         elif name == 'strcasecmp':
             x, y = self.read_cstr(a0).lower(), self.read_cstr(a1).lower(); ret = (x > y) - (x < y)
         elif name == '_deque_push_back':
