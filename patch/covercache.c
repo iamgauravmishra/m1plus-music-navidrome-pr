@@ -376,7 +376,7 @@ int cc_find_album(const char *album) {
  * Album: the stock list as it is (getAllAlbum: group by album COLLATE NOCASE, then toolsQueryDbTable's in-memory title sort, comparator
  * 0x5e0dac). Artist (the default, iPod style): by the album row's artist, then by album title, each compared as the stock title sort
  * does in the points that matter here (digit runs by value, ASCII case folded, digits and symbols before letters, a CJK name placed by
- * its pinyin initials among the Latin names) with a leading "The " ignored ("The Beatles" files under B) and leading white space
+ * its pinyin initials and a kana name by its romaji initials among the Latin names, any other non-ASCII character a symbol) with a leading "The " ignored ("The Beatles" files under B) and leading white space
  * skipped; ties (the same artist and title) keep the stock order, so the order is total and the same on every open. The stock album
  * row carries only the artist of the album's representative track (`select id,album,songer,fileurl`; the album artist is a separate
  * column the Albums query does not fetch), so that is the artist sorted by. The "Unknown Album" row (id -1) stays last. The stock
@@ -401,8 +401,10 @@ static const char *so_name(const char *s) {
 
 static int kc_digit(unsigned c) { return c >= '0' && c <= '9'; }
 
-/* The class of a (folded) byte: digits, then symbols, then letters, then anything non-ASCII (stock: "digits and symbols before letters"). */
-static int kc_class(unsigned c) { return kc_digit(c) ? 0 : c >= 0x80 ? 3 : c >= 'a' && c <= 'z' ? 2 : 1; }
+/* The class of a (folded) byte: digits, then symbols, then letters (stock: "digits and symbols before letters"). A non-ASCII byte is a symbol:
+ * a character with no initial (Hangul, Cyrillic, Greek, × ÷, a CJK character outside stock's table) files with the symbols
+ * under "#" (az_rank_of 0), by its UTF-8 bytes (code point order); one with an initial is replaced by it in cc_name_keys. */
+static int kc_class(unsigned c) { return kc_digit(c) ? 0 : c >= 'a' && c <= 'z' ? 2 : 1; }
 
 /* Two keys (see cc_name_cmp): runs of digits by value, other bytes by class and then folded value; a key that is a prefix is first.
  * The common prefix is skipped byte by byte (folding only bytes that differ); a difference inside a run of digits goes back to the
@@ -463,19 +465,63 @@ int cc_key_cmp(const char *a, const char *b) {
     }
 }
 
-/* The order of both lists on raw names (the Artist order's name, the podcast and country lists): no pinyin (see cc_name_keys). */
+/* The order of both lists on raw names (the Artist order's name, the podcast and country lists): no pinyin, kana or
+ * base-letter initials (see cc_name_keys, whose copies these small lists would not repay); every non-ASCII character is a symbol (see kc_class), so those names lead the list, under "#". */
 int cc_name_cmp(const char *a, const char *b) { return cc_key_cmp(so_name(a), so_name(b)); }
 const char *cc_name_key(const char *s) { return so_name(s); }
 
-/* A CJK character (UTF-8 U+4E00..U+9FFF: E4..E9 and two continuation bytes) at s. */
-static int kc_cjk(const unsigned char *s) {
-    return s[0] >= 0xe4 && s[0] <= 0xe9 && (s[1] & 0xc0) == 0x80 && (s[2] & 0xc0) == 0x80;
-}
+/* The Hepburn initial of each kana: hiragana U+3041..U+3096 (a small kana with its row: ぁ A, っ T, ゃ Y, ゎ W; ゔ V); katakana U+30A1..U+30F6 is
+ * the same table (hiragana + 0x60) and U+30F7..U+30FA (ヷ..ヺ) are V. The prolonged mark ー, the iteration marks and the voicing marks have
+ * none. Hepburn: し S, ち C, つ T, ふ F, じ ぢ J, づ Z, を O, ゐ I, ゑ E. */
+static const char kc_kana[] = "AAIIUUEEOO"
+                              "KGKGKGKGKG"
+                              "SZSJSZSZSZ"
+                              "TDCJTTZTDTD"
+                              "NNNNN"
+                              "HBPHBPFBPHBPHBP"
+                              "MMMMM"
+                              "YYYYYY"
+                              "RRRRR"
+                              "WWIEON"
+                              "VKK";
 
-/* The pinyin initial of the CJK character at s, as stock's utf8_to_pinyin gives it (it appends to a zeroed buffer: nothing for a character
- * outside U+4E00..U+9FA5), else 0. */
-static int kc_initial(const unsigned char *s) {
+/* The base letter (lower case) of each Latin-1 Supplement and Latin Extended-A letter, U+00C0..U+017F, one byte per code point, ' ' = none
+ * (the symbols x and / at U+00D7 and U+00F7): from the Unicode decomposition (Ó O, ç c), and by hand for a letter with none: ß s, æ Æ a,
+ * œ Œ o, ø Ø o, ð Ð d, þ Þ t, ł Ł l, đ Đ d, ı i, ħ h, ŧ t, ŋ n, ĸ k, ĳ Ĳ i, ŀ Ŀ l, ŉ n, ſ s. */
+static const char kc_latin[] = "aaaaaaaceeeeiiii"
+                               "dnooooo ouuuuyts"
+                               "aaaaaaaceeeeiiii"
+                               "dnooooo ouuuuyty"
+                               "aaaaaaccccccccdd"
+                               "ddeeeeeeeeeegggg"
+                               "gggghhhhiiiiiiii"
+                               "iiiijjkkklllllll"
+                               "lllnnnnnnnnnoooo"
+                               "oooorrrrrrssssss"
+                               "ssttttttuuuuuuuu"
+                               "uuuuwwyyyzzzzzzs";
+
+/* The initial of the character at s: a kana's romaji letter (3 bytes, U+3041..U+30FA), a CJK character's (3 bytes, U+4E00..U+9FFF: E4..E9)
+ * pinyin initial as stock's utf8_to_pinyin gives it (it appends to a zeroed buffer: nothing for a character outside U+4E00..U+9FA5), or
+ * a Latin letter with a mark's base letter (2 bytes, C3..C5, kc_latin); else 0. *len is the bytes the character takes. */
+static int kc_initial(const unsigned char *s, unsigned *len) {
     char in[4], out[4] = {0, 0, 0, 0};
+    if (s[0] >= 0xc3 && s[0] <= 0xc5) {
+        unsigned cp;
+        int c;
+        if ((s[1] & 0xc0) != 0x80) return 0;
+        cp = (unsigned)(s[0] & 0x1f) << 6 | (s[1] & 0x3f); /* the code point */
+        c = cp >= 0xc0 && cp <= 0x17f ? kc_latin[cp - 0xc0] : ' ';
+        return c == ' ' ? 0 : (*len = 2, c);
+    }
+    if (s[0] < 0xe3 || s[0] > 0xe9 || (s[1] & 0xc0) != 0x80 || (s[2] & 0xc0) != 0x80) return 0;
+    *len = 3;
+    if (s[0] == 0xe3) {
+        unsigned cp = (unsigned)(s[1] & 0x3f) << 6 | (s[2] & 0x3f); /* the code point - 0x3000 */
+        if (cp >= 0x41 && cp <= 0x96) return kc_kana[cp - 0x41];
+        if (cp >= 0xa1 && cp <= 0xf6) return kc_kana[cp - 0xa1];
+        return cp >= 0xf7 && cp <= 0xfa ? 'V' : 0;
+    }
     in[0] = (char)s[0], in[1] = (char)s[1], in[2] = (char)s[2], in[3] = 0;
     utf8_to_pinyin(in, out);
     return (unsigned char)out[0];
@@ -483,13 +529,16 @@ static int kc_initial(const unsigned char *s) {
 
 int cc_name_initial(const char *name) {
     const unsigned char *s = (const unsigned char *)so_name(name);
-    int c;
-    return kc_cjk(s) && (c = kc_initial(s)) ? c : *s;
+    unsigned len;
+    int c = kc_initial(s, &len);
+    return c ? c : *s;
 }
 
-/* The keys of n names: key[i] is name(ctx, i) without white space and "The ", the text cc_key_cmp compares. A name with a CJK character
- * has its own copy in which each such character is its pinyin initial (stock's utf8_to_pinyin; other bytes as they are, so a name in
- * another script follows the Latin ones); every other key points into the name. One block (the pointers, then the copies), free()d by
+/* The keys of n names: key[i] is name(ctx, i) without white space and "The ", the text cc_key_cmp compares. A name with a kana, CJK or
+ * accented Latin character has its own copy in which each such character is its initial (kc_initial: romaji for kana, pinyin for CJK, the base letter
+ * for an accented one, 2 bytes to 1, so a copy never grows; other bytes as they
+ * are, a character with no initial being a symbol to cc_key_cmp, so a name in another script leads the list under "#"); every other key
+ * points into the name. One block (the pointers, then the copies), free()d by
  * the caller; NULL when n is 0 or there is no memory (the caller keeps the stock order). */
 const char **cc_name_keys(unsigned n, const char *(*name)(const void *, unsigned), const void *ctx) {
     unsigned i, pool = 0;
@@ -498,7 +547,7 @@ const char **cc_name_keys(unsigned n, const char *(*name)(const void *, unsigned
     if (!n) return (const char **)0;
     for (i = 0; i < n; ++i) {
         const unsigned char *s = (const unsigned char *)so_name(name(ctx, i)), *e = s;
-        while (*e && !(*e >= 0xe4 && *e <= 0xe9)) ++e;
+        while (*e && !(*e >= 0xc3 && *e <= 0xc5) && !(*e >= 0xe3 && *e <= 0xe9)) ++e;
         if (!*e) continue;
         while (*e) ++e;
         pool += (unsigned)(e - s) + 1;
@@ -509,15 +558,18 @@ const char **cc_name_keys(unsigned n, const char *(*name)(const void *, unsigned
     for (i = 0; i < n; ++i) {
         const char *s = so_name(name(ctx, i)), *t = "";
         if (pool) /* else no name has a CJK lead byte: no second scan */
-            for (t = s; *t && !((unsigned char)*t >= 0xe4 && (unsigned char)*t <= 0xe9); ++t) {
+            for (t = s; *t && !((unsigned char)*t >= 0xc3 && (unsigned char)*t <= 0xc5) &&
+                        !((unsigned char)*t >= 0xe3 && (unsigned char)*t <= 0xe9);
+                 ++t) {
             }
         key[i] = s;
         if (*t) {
             char *o = p;
             for (; *s;) {
                 int c;
-                if (kc_cjk((const unsigned char *)s) && (c = kc_initial((const unsigned char *)s)))
-                    *o++ = (char)c, s += 3;
+                unsigned len = 0;
+                if ((c = kc_initial((const unsigned char *)s, &len)))
+                    *o++ = (char)c, s += len;
                 else
                     *o++ = *s++;
             }

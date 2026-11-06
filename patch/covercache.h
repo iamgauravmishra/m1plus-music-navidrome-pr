@@ -75,21 +75,21 @@ int cc_nocase(const char *a, const char *b); /* ASCII case-insensitive compare (
 int cc_key_cmp(
     const char *a,
     const char *
-        b); /* the name order of the lists on prepared keys: digit runs by value, ASCII case folded, digits and symbols before letters, non-ASCII after */
+        b); /* the name order of the lists on prepared keys: digit runs by value, ASCII case folded, digits and symbols (any non-ASCII byte too) before letters */
 int cc_name_cmp(
     const char *a,
     const char *
-        b); /* cc_key_cmp of the names without leading white space and a leading "The " (no pinyin: see cc_name_keys) */
+        b); /* cc_key_cmp of the names without leading white space and a leading "The " (no pinyin or kana initials: see cc_name_keys) */
 const char *cc_name_key(
     const char *
         s); /* s without leading white space and a leading "The " (when something follows it): the text the Artist order compares */
 int cc_name_initial(
     const char *
-        name); /* the first byte of that text, a CJK character as its pinyin initial (stock's utf8_to_pinyin): the section letter of a name */
+        name); /* the first byte of that text, a CJK character as its pinyin initial (stock's utf8_to_pinyin), a kana as its romaji initial: the section letter of a name */
 const char **cc_name_keys(
     unsigned n, const char *(*name)(const void *ctx, unsigned i),
     const void *
-        ctx); /* the keys of n names for cc_key_cmp, CJK characters as pinyin initials; one block to free(); NULL: no names or no memory (keep the stock order) */
+        ctx); /* the keys of n names for cc_key_cmp, CJK characters as pinyin and kana as romaji initials; one block to free(); NULL: no names or no memory (keep the stock order) */
 void cc_heapsort(unsigned *v, unsigned n,
                  int (*cmp)(unsigned,
                             unsigned)); /* in place, no memory; cmp must be total (break ties by the row number) */

@@ -6,7 +6,7 @@ Modelled on q2-pod's test/patch.py.
 Requires unicorn (venv) and a workdir patched by tools/pod.py (its podbuild/manifest.json).
 test/patch.py calls init(WORKDIR) first, then loads the feature modules, which star-import this one.
 """
-import importlib.util, json, os, re, struct, sys
+import importlib.util, json, os, re, struct, sys, unicodedata
 from unicorn import Uc, UC_ARCH_MIPS, UC_MODE_MIPS32, UC_MODE_LITTLE_ENDIAN, UC_HOOK_CODE, UC_HOOK_BLOCK, UC_HOOK_INTR
 from unicorn.mips_const import (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3,
                                 UC_MIPS_REG_V0, UC_MIPS_REG_SP, UC_MIPS_REG_RA, UC_MIPS_REG_T9, UC_MIPS_REG_PC, UC_MIPS_REG_GP, UC_MIPS_REG_F0,
@@ -102,22 +102,45 @@ def contrast(a, b):
 
 
 
-PINYIN_INITIAL = {'周': 'z', '杰': 'j', '伦': 'l', '孙': 's', '燕': 'y', '姿': 'z', '陈': 'c', '奕': 'y', '迅': 'x', '王': 'w', '菲': 'f'}   # (the stock table's, for the characters the tests use)
+PINYIN_INITIAL = {'周': 'z', '杰': 'j', '伦': 'l', '孙': 's', '燕': 'y', '姿': 'z', '陈': 'c', '奕': 'y', '迅': 'x', '王': 'w', '菲': 'f', '米': 'm', '津': 'j', '玄': 'x', '師': 's'}   # (the stock table's, for the characters the tests use)
+
+
+def kana_initial(c):
+    """The Hepburn initial of a hiragana / katakana character (independently of the payload's table: from the Unicode name), else None."""
+    try: nm = unicodedata.name(c)
+    except ValueError: return None
+    m = re.match(r'(?:HIRAGANA|KATAKANA) LETTER (?:SMALL )?([A-Z]+)$', nm)
+    if not m or not ('\u3041' <= c <= '\u3096' or '\u30a1' <= c <= '\u30fa'): return None
+    syl = m.group(1)
+    return {'TI': 'C', 'DI': 'J', 'ZI': 'J', 'HU': 'F', 'DU': 'Z', 'TU': 'T', 'WI': 'I', 'WE': 'E', 'WO': 'O', 'VA': 'V', 'VI': 'V', 'VE': 'V', 'VO': 'V'}.get(syl, syl[0])
+
+
+LATIN_NO_DECOMPOSITION = dict(zip('ßæÆœŒøØðÐþÞłŁđĐıħĦŧŦŋŊĸĳĲŀĿŉſ', 'saaooooddttllddihhttnnkiilln' + 's'))   # (letters with no Unicode decomposition: ß ae oe o d th l d dotless-i h t eng kra ij l n long-s)
+
+
+def latin_initial(c):
+    """The base letter of a Latin-1 Supplement / Latin Extended-A letter (U+00C0..U+017F), from its Unicode decomposition, else None (× and ÷ are symbols)."""
+    if not '\u00c0' <= c <= '\u017f': return None
+    if c in LATIN_NO_DECOMPOSITION: return LATIN_NO_DECOMPOSITION[c]
+    d = unicodedata.normalize('NFD', c)
+    return d[0].lower() if len(d) > 1 and d[0].isascii() and d[0].isalpha() else None
 
 
 def name_sort_key(name):
     """The library name order, independently written: leading white space and a leading "The " dropped, a CJK character
-    as its pinyin initial, then per position a digit run (by value) before a symbol before a letter (ASCII case folded)
-    before any other byte; a shorter key that is a prefix comes first."""
+    as its pinyin initial and a kana as its Hepburn initial, then per position a digit run (by value) before a symbol
+    (any non-ASCII character left, such as Hangul, Cyrillic, × or a letter outside Latin-1 / Latin Extended-A, is one); an accented
+    Latin letter is its base letter (ß s, æ a, ø o ...) before a letter (ASCII case
+    folded); a shorter key that is a prefix comes first."""
     s = name.lstrip(' \t\n\r\v\f')
     if len(s) > 4 and s[:4].lower() == 'the ': s = s[4:]
-    s = ''.join(PINYIN_INITIAL.get(c, c) for c in s)
+    s = ''.join(PINYIN_INITIAL.get(c) or kana_initial(c) or latin_initial(c) or c for c in s)
     key = []
     for tok in re.findall(r'\d+|.', s, re.S):
         if tok.isascii() and tok.isdigit(): key.append((0, int(tok)))
         else:
             c = tok.lower() if tok.isascii() else tok
-            key.append((3, tok) if not tok.isascii() else (2 if 'a' <= c <= 'z' else 1, c))
+            key.append((2 if 'a' <= c <= 'z' else 1, c))
     return key
 
 class Ctx:

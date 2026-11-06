@@ -580,18 +580,33 @@ def sort_tests(ctx):
         la = [c for c in m2.calls if c[0] == 'loadAlbumList']
         expect(la and la[0][3] == got[k], f'a tap on row {k} opens {got[k]!r} ({la[:1]})')
 
-    # 41. Non-Latin names: a CJK name is placed by its pinyin initials among the Latin names, any other script follows the Latin ones; only Unknown Artist is fixed.
+    # 41. Non-Latin names: a CJK name is placed by its pinyin initials and a kana name by its romaji initials among the Latin names, an accented Latin letter its base letter, any other script leads with the symbols; only Unknown Artist is fixed.
     stock = ['Zed', '周杰伦', 'The Beatles', 'Abba', 'Мумий Тролль', 'Bob', 'Éric', 'Aaa', 'あいみょん', 'Unknown Artist']
     want, _ = sort_model(stock)
     m = artists_machine(stock); m.call(open_, count=20000000)
     got = shown(m)
     expect(got == want, f'mixed scripts: {got}')
-    expect(got == ['Aaa', 'Abba', 'The Beatles', 'Bob', 'Zed', '周杰伦', 'Éric', 'Мумий Тролль', 'あいみょん', 'Unknown Artist'],
-           'Latin names first (Zed before 周杰伦 = "zjl"), then the other scripts by byte; Unknown Artist last')
+    expect(got == ['Мумий Тролль', 'Aaa', 'Abba', 'あいみょん', 'The Beatles', 'Bob', 'Éric', 'Zed', '周杰伦', 'Unknown Artist'],
+           'other scripts first by byte (symbols), then the Latin names (あいみょん = "aimyon" after Abba; Éric = "eric" after Bob; Zed before 周杰伦 = "zjl"); Unknown Artist last')
+    # 41b. Kana by romaji initial (the Album Artists page listed ヨルシカ under Z), the rest of the non-ASCII names with the symbols under "#".
+    stock = ['Zedd', 'ヨルシカ', '米津玄師', 'Ólafur Arnalds', '아이유', '123', 'Yorushika', 'ガール', 'ひかる', 'ーx', 'ヴァ', 'ヲ', 'Éric', 'Eric', 'Beyoncé', 'Mумий Тролль', 'Ångström', '×÷', 'Þór', 'Łódź', 'Æon', 'Straße']
+    m = artists_machine(stock); m.call(open_, count=20000000)
+    got = shown(m)
+    expect(got == sort_model(stock)[0], f'kana model: {got}')
+    pos = got.index
+    expect(pos('123') < pos('×÷') < pos('아이유') < pos('Ångström') and pos('ガール') < pos('Zedd') and pos('Yorushika') < pos('ヨルシカ') < pos('Zedd'),
+           f'digits, then non-ASCII with no initial (米津玄師 "mjxs" is a letter), then letters; ヨルシカ "yrsk" files under Y, ガール "gr" under G: {got}')
+    expect(pos('Ångström') < pos('Æon') < pos('Beyoncé') < pos('Éric') < pos('Eric') < pos('ガール') < pos('Łódź') < pos('Mумий Тролль') < pos('Ólafur Arnalds') < pos('Straße') < pos('Þór') < pos('Yorushika'),
+           f'accented Latin letters file under their base letter (Æ a, Ł l, ß s, Þ t); Éric and Eric tie on "eric": stock order; × ÷ are symbols: {got}')
+    mod = Model(got)
+    hd = headers(m)
+    expect(hd == {mod.hdr_y(s): l for s, (_, l) in enumerate(mod.secs)} and [l for _, l in mod.secs][-1] == 'Z' and 'Y' in [l for _, l in mod.secs],
+           f'sections: ヨルシカ files under Y, not Z ({sorted(hd.values())})')
+    expect('#' in hd.values() and all(l in hd.values() for l in 'AEOSTL'), f'sections: an accented name has its base letter header ({sorted(hd.values())})')
     m2 = artists_machine(stock); m2.call(open_, count=20000000)
-    m2.call(PSYMS['ar_open'], a0=2, count=8000000)   # display 2 is stock row 2
+    m2.call(PSYMS['ar_open'], a0=got.index('ヨルシカ'), count=8000000)
     la = [c for c in m2.calls if c[0] == 'loadAlbumList']
-    expect(la and la[0][3] == 'The Beatles', 'a tap opens the right artist')
+    expect(la and la[0][3].encode('latin-1').decode() == 'ヨルシカ', 'a tap opens the right artist')
     stock = ['Zed', 'Zebra', '周杰伦', 'Abc', '孙燕姿', 'Sam', 'Bob', '陈奕迅', 'Yo', 'The Chef']
     m = artists_machine(stock); m.call(open_, count=20000000)
     got = shown(m)
