@@ -11,25 +11,16 @@ a device. Modelled on q2-pod's test/coverflow.py.
 --captures writes the raw CF_VIEW_W x CF_VIEW_H frames at rest and part-way through a turn;
 --preview composes the 320x480 page around one of them (approximate: PIL, not AWTK).
 """
-import argparse, collections, ctypes, os, re, struct, subprocess, sys, tempfile
+import argparse, collections, ctypes, os, struct, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
+import cdefs  # noqa: E402
 import pod_ui  # noqa: E402  (the page layout: COVER_Y, ALBUM_Y, ARTIST_Y)
 SRC = [os.path.join(ROOT, 'patch', f) for f in ('coverflow.c', 'covercache.c')]
 INC = os.path.join(ROOT, 'patch', 'offsets.inc')
 
-
-def constants():
-    """The CF_* geometry the payload is built with, read from patch/offsets.inc."""
-    out = {}
-    for line in open(INC):
-        m = re.match(r'#define (\w+) (-?(?:0x[0-9a-fA-F]+|\d+))u?\s*(?:/\*.*)?$', line.strip())
-        if m: out[m.group(1)] = int(m.group(2), 0)
-    return out
-
-
-C = constants()
+C = cdefs.defines(INC)   # the CF_* geometry the payload is built with
 W, H, ART, CX = C['CF_VIEW_W'], C['CF_VIEW_H'], C['ART_SIZE'], C['CF_CX']
 TOP, REFLECT = C['CF_TOP'], C['CF_REFLECT']
 ONE, REACH, RING = 65536, 3, 7

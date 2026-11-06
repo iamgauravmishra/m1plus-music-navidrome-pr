@@ -3,9 +3,9 @@ design (180 px pad, 44 px pitch, 29 x 36 keys, 3 px gaps, rows centred, no accen
 the 123 and #+= pages, delete and its repeat, the clear button, the caret by the measured width, a long text, the key pop-up (insensitive), Search and Back, the log of the touches,
 and the strings in every language. The compiled payload runs under Unicorn; the callbacks are stock functions the harness traps (atoi records its string, on_backtoplayer_onclick is
 recorded), the field's width is the stb model's (tools/awtk_text.py)."""
-import functools, importlib.util, os, re, sys
+import functools, importlib.util, os, sys
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
-import awtk_strings, pod_keyboard as PK
+import awtk_strings, cdefs, pod_keyboard as PK
 from awtk_text import Ttf, StbText
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -24,10 +24,7 @@ def load_pinyin():
 PY = load_pinyin()
 RAW = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw')
 FONT = Ttf(os.path.join(RAW, 'fonts', 'default.ttf'))
-DEFS = {}
-for _line in open(os.path.join(ROOT, 'patch', 'keyboard.h')):
-    _m = re.match(r'#define (\w+) (\d+)\s*(?:/\*.*)?$', _line.strip())
-    if _m: DEFS[_m.group(1)] = int(_m.group(2))
+DEFS = cdefs.defines(os.path.join(ROOT, 'patch', 'keyboard.h'))
 PAD_Y = 270            # the pad's top in the window; the window is 30 px down the screen
 WIN_Y = 30
 DESTROY, TO_BG = O['EVT_DESTROY'], O['EVT_WINDOW_TO_BG']

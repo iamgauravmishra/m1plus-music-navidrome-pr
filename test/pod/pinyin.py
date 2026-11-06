@@ -11,12 +11,10 @@ import functools, math, os, struct
 from unicorn import UcError
 from unicorn.mips_const import UC_MIPS_REG_F12, UC_MIPS_REG_F0, UC_MIPS_REG_CP0_STATUS as STATUS
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
+import cdefs
 
 DICT = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw', 'data', 'gpinyin.dat')
-DEFS = {}
-for _line in open(os.path.join(ROOT, 'patch', 'keyboard.h')):
-    _m = re.match(r'#define (\w+) ("[^"]*"|\w+)\s*(?:/\*.*)?$', _line.strip())
-    if _m: DEFS[_m.group(1)] = _m.group(2).strip('"') if _m.group(2).startswith('"') else int(_m.group(2), 0)
+DEFS = cdefs.defines(os.path.join(ROOT, 'patch', 'keyboard.h'), strings=True)
 SYS_PATH, USER_PATH, CAND_LEN = (DEFS[k] for k in ('PINYIN_DICT', 'PINYIN_USER', 'KB_CAND_U16'))
 CANDS = 8   # candidates read per input by the research tests
 ENGINE_PTR = pod.DATA['PY_ENGINE'][0]          # the global MatrixSearch*

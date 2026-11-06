@@ -9,10 +9,11 @@ their rectangles are the builder's (stock immediates, or the pinned ones in patc
 
 Usage: uv run python -I tools/preview_navbars.py OLD_WORKDIR NEW_WORKDIR OUT.png      (workdirs: a stock tree or a built one: WORK/rootfs/release/assets/default/raw)
 """
-import os, re, sys
+import os, sys
 from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_ui
+import cdefs
 from awtk_ui import Widget
 import preview_font   # noqa: F401  (redirects the painters' text to stb_raster, the tree's font)
 import preview_layout
@@ -22,15 +23,7 @@ RAWREL = 'rootfs/release/assets/default/raw'
 W, BAR, H = 320, 30, 450
 
 
-def constants():
-    out = {}
-    for line in open(os.path.join(ROOT, 'patch', 'offsets.inc')):
-        m = re.match(r'#define (\w+) (-?(?:0x[0-9a-fA-F]+|\d+))u?\s*(?:/\*.*)?$', line.strip())
-        if m: out[m.group(1)] = int(m.group(2), 0)
-    return out
-
-
-C = constants()
+C = cdefs.defines(os.path.join(ROOT, 'patch', 'offsets.inc'))
 SONGS = [('All Blues', 'Miles Davis'), ('Blue in Green', 'Miles Davis'), ('Freddie Freeloader', 'Miles Davis'), ("Moanin'", 'Art Blakey'),
          ('My Favorite Things', 'John Coltrane'), ('Naima', 'John Coltrane'), ('Take Five', 'The Dave Brubeck Quartet'), ('So What', 'Miles Davis'),
          ('Giant Steps', 'John Coltrane'), ('Round Midnight', 'Thelonious Monk')]

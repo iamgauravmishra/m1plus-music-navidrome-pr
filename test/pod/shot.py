@@ -1,12 +1,10 @@
 """Screenshot (patch/shot.c): the Settings row, the 5 s countdown with the status bar camera, the frame buffer read in every
 format the driver can report, the BMP bytes, numbering, the card checks, every failure path, double taps."""
-import os, re, struct
+import os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
+import cdefs
 
-DEFS = {}
-for _line in open(os.path.join(ROOT, 'patch', 'shot.h')).read().replace('\\\n', ' ').splitlines():
-    _m = re.match(r'#define\s+(\w+)\s+("[^"]*"|\w+)\s*(?:/\*.*)?$', _line.strip())
-    if _m: DEFS[_m.group(1)] = _m.group(2).strip('"') if _m.group(2).startswith('"') else int(_m.group(2), 0)
+DEFS = cdefs.defines(os.path.join(ROOT, 'patch', 'shot.h'), strings=True)
 DIR, TMP, FB = DEFS['SHOT_DIR'], DEFS['SHOT_TMP'], DEFS['SHOT_FB']
 RET_REPEAT = 8
 

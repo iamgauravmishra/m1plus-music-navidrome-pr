@@ -1,13 +1,11 @@
 """Line Out pill (patch/lineout.c, docs/modules/lineout.md): the two hooks at show_sysbar_face's and dropdown_showface's `jalr widget_set_text_utf8` of label_volume, run against the
 mocked stock function; the hidden pill in the system bar and the pull-down's bar, its image, and that neither the accent nor Light Mode touches it."""
-import os, re, struct
+import os, struct
 import paths
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
+import cdefs
 
-DEFS = {}
-for _line in open(os.path.join(ROOT, 'patch', 'lineout.h')).read().replace('\\\n', ' ').splitlines():
-    _m = re.match(r'#define\s+(\w+)\s+("[^"]*"|\w+)\s*(?:/\*.*)?$', _line.strip())
-    if _m: DEFS[_m.group(1)] = _m.group(2).strip('"') if _m.group(2).startswith('"') else int(_m.group(2), 0)
+DEFS = cdefs.defines(os.path.join(ROOT, 'patch', 'lineout.h'), strings=True)
 PILL, KILL = DEFS['LO_PILL'], '/mnt/mmc/m1plus-off'
 
 

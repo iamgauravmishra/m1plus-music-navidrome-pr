@@ -132,7 +132,7 @@ def run(ctx):
     play = PSYMS['shuffle_play']
     cover_open = PSYMS['coverflow_open']
     open_artists = PSYMS['artists_open']
-    A = offsets()
+    A = O
     for loc in ALL:
         T = tr_of(loc)
         text_of = lambda m, w: [c[2] for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] == w][-1:]

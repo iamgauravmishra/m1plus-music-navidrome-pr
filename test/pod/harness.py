@@ -16,6 +16,7 @@ PERF = os.environ.get('M1_PERF') == '1'   # cost measurement and stress-scale ch
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TOOLS = os.path.join(ROOT, 'tools')
 sys.path.insert(0, TOOLS)
+import cdefs  # noqa: E402
 import paths  # noqa: E402
 import pod  # noqa: E402
 import pod_i18n  # noqa: E402
@@ -155,16 +156,7 @@ class Ctx:
         else: self.failed += 1; print('  FAIL:', msg)
 
 
-def offsets():
-    """The constants patch/offsets.inc gives the payload, so the mocks cannot drift from it."""
-    out = {}
-    for line in open(os.path.join(ROOT, 'patch', 'offsets.inc')):
-        m = re.match(r'#define (\w+) (-?(?:0x[0-9a-fA-F]+|\d+))u?\s*(?:/\*.*)?$', line.strip())
-        if m: out[m.group(1)] = int(m.group(2), 0)
-    return out
-
-
-O = offsets()
+O = cdefs.defines(os.path.join(ROOT, 'patch', 'offsets.inc'))   # the constants the payload is built with, so the mocks cannot drift from it
 # Cover Flow's page layout as tools/pod_ui.py builds ui/m1plus_cover.bin
 CF_FRAME_Y, CF_ALBUM_Y, CF_ALBUM_H, CF_ARTIST_Y, CF_ARTIST_H = pod_ui.cover_layout()
 
@@ -410,7 +402,7 @@ class Machine:
     def install_libcstl(self, bound=True):
         """libcstl as the payload finds it (patch/shuffle.c cstl_pop_back): the real bytes of the stock library's text (the first 0x3c000 bytes: deque_size at CSTL_SIZE, deque_pop_back at CSTL_POP) mapped at
         CSTL_BASE, demo's GOT slot of deque_size bound to it (bound False: still the stub inside demo, as before the first call), and deque_pop_back trapped (cstl_pop_back models what the code does)."""
-        slot = int(re.search(r'GOT_DEQUE_SIZE 0x([0-9a-f]+)u', open(os.path.join(BUILD, 'stock.h')).read()).group(1), 16)
+        slot = cdefs.defines(os.path.join(BUILD, 'stock.h'), ['GOT_DEQUE_SIZE'])['GOT_DEQUE_SIZE']
         lib = open(os.path.join(WORK, 'rootfs', pod.LIBCSTL), 'rb').read()
         if not hasattr(self, 'got_deque_size'):
             self.u.mem_map(self.CSTL_BASE, 0x3c000)

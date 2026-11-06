@@ -16,6 +16,7 @@ Usage: pod_ui.py WORKDIR   (writes ui/*.bin into WORKDIR/rootfs; prints the file
 import argparse, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_ui
+import cdefs
 from awtk_ui import Widget
 import pod_i18n, pod_pages
 import pod_keyboard as PK
@@ -37,16 +38,7 @@ def styled(w, states, prop, value):
     for st in states: w.set(f'style:{st}:{prop}', value)
 
 
-def _offsets():
-    import re
-    out = {}
-    for line in open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'patch', 'offsets.inc')):
-        m = re.match(r'#define (\w+) (-?(?:0x[0-9a-fA-F]+|\d+))u?\s*(?:/\*.*)?$', line.strip())
-        if m: out[m.group(1)] = int(m.group(2), 0)
-    return out
-
-
-OFFSETS = _offsets()
+OFFSETS = cdefs.defines(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'patch', 'offsets.inc'))
 
 
 # The navbar toggle of the Pod pages (Albums grid, Artists), flush left of Now Playing (x 260): a plain white glyph

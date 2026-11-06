@@ -4,13 +4,11 @@
 The numbers are the #defines of patch/search.h (parsed here, so there is one copy): tools/pod_ui.py builds ui/m1plus_search.bin from them, tools/preview_search.py draws the design from them
 and test/pod/search.py checks the built tree and the payload against them. Colours are neutral: white and grey, no accent; the selected chip is a light grey pill with dark text.
 """
-import os, re
+import os
+import cdefs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-D = {}
-for _line in open(os.path.join(os.path.dirname(HERE), 'patch', 'search.h')):
-    _m = re.match(r'#define (\w+) (-?\d+)\s*(?:/\*.*)?$', _line.strip())
-    if _m: D[_m.group(1)] = int(_m.group(2))
+D = cdefs.defines(os.path.join(os.path.dirname(HERE), 'patch', 'search.h'))
 
 globals().update(D)   # the layout numbers as module attributes (PS.SE_ROW_H ...)
 

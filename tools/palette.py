@@ -13,21 +13,13 @@ patch/offsets.inc (LIGHT_*), the name lists are below and pod.py writes them int
 
 An image is the theme's only when its name is a plain asset name (no '/' and no ':'): covers by path or URL never are. Album art, covers, wallpapers, photos and videos are never changed.
 """
-import os, re, sys
+import os, sys
+import cdefs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
-
-def _consts():
-    out = {}
-    for line in open(os.path.join(ROOT, 'patch', 'offsets.inc')):
-        m = re.match(r'#define ((?:LIGHT|ACC|ROLE)_\w+) (0x[0-9a-fA-F]+|\d+)\b', line)
-        if m: out[m.group(1)] = int(m.group(2), 0)
-    return out
-
-
-C = _consts()
+C = cdefs.defines(os.path.join(ROOT, 'patch', 'offsets.inc'))
 PAPER, INK, SPREAD, CHROMA, GLYPH, SURFACE = (C[k] for k in ('LIGHT_PAPER', 'LIGHT_INK', 'LIGHT_SPREAD', 'LIGHT_CHROMA', 'LIGHT_GLYPH', 'LIGHT_SURFACE'))
 DAY_FROM, DAY_UNTIL = C["LIGHT_FROM"], C["LIGHT_UNTIL"]
 TINT, TRACK_R, FILL_R, KNOB_R, TILE_R = (C[k] for k in ('ACC_TINT', 'ACC_TRACK_R', 'ACC_FILL_R', 'ACC_KNOB_R', 'ACC_TILE_R'))

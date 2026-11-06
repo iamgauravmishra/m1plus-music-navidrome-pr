@@ -938,7 +938,7 @@ def asset_tests(ctx):
            'the page is registered, its Search row is only the menu item (and Extras)')
     # the model and the header agree with the payload's own text for the geometry the builder does not hold
     src = open(os.path.join(ROOT, 'patch', 'search.h')).read()
-    expect(all(f'#define {k} {v}' in src for k, v in D.items()), 'tools/pod_search.py reads patch/search.h: one set of numbers')
+    expect(all(re.search(rf'#define {k}(?: \\\n\s*|\s+){re.escape(str(v))}\b', src) for k, v in D.items()), 'tools/pod_search.py reads patch/search.h: one set of numbers (a define may continue on the next line)')
     expect(D['SE_FIELD_Y'] + D['SE_FIELD_H'] <= D['SE_CHIPS_Y'] and D['SE_CHIPS_Y'] + D['SE_CHIPS_H'] <= D['SE_SEP_Y'] < D['SE_LIST_Y'] and D['SE_ART'] + 2 * D['SE_ART_Y'] == D['SE_ROW_H'] - 8 + 8 - 0 or D['SE_ART_Y'] * 2 + D['SE_ART'] <= D['SE_ROW_H'],
            'the field, the chips, the line and the list stack without overlap; the thumbnail fits its row')
     expect(D['SE_TEXT_LEFT'] == D['SE_ART_X'] + D['SE_ART'] + 12 and D['SE_END_CHEV'] < D['SE_CHEV_X'] and D['SE_CHEV_X'] + 10 <= D['SE_SEP_END'] <= 310, 'the text starts 12 px after the thumbnail and ends before the chevron')

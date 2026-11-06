@@ -9,10 +9,11 @@ Not pixel-exact AWTK (the text is the project's own text model).
 
 WORKDIR is a built tree (work/mod-release).
 """
-import argparse, os, re, sys
+import argparse, os, sys
 from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_ui
+import cdefs
 import preview_icons as PI
 import preview_songs as PS
 import pod_pages
@@ -25,14 +26,8 @@ GREY, HAIR = PS.GREY, PS.HAIR
 
 
 def fo_consts():
-    """The #define numbers of patch/folders.c (plain integers and the two expressions made of them)."""
-    c = dict(O, ROW=pod_ui.ROW_H, POD_ROW_H=pod_ui.ROW_H)
-    for line in open(os.path.join(ROOT, 'patch', 'folders.c')):
-        m = re.match(r'#define (FO_\w+) (\(?[-\w+*/() ]+?\)?)\s*(?:/\*.*)?$', line.strip())
-        if m:
-            try: c[m.group(1)] = int(eval(m.group(2).replace('/', '//'), {}, c))
-            except Exception: pass
-    return c
+    """The #define numbers of patch/folders.c. Its expressions use offsets.inc names and the menu row pitch (POD_ROW_H, from tools/pod_ui.py)."""
+    return cdefs.defines(os.path.join(ROOT, 'patch', 'folders.c'), known=dict(O, POD_ROW_H=pod_ui.ROW_H))
 
 
 F = fo_consts()

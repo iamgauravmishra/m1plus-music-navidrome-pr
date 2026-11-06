@@ -12,21 +12,14 @@ when it is not among the last 100), fav (a favourite).
            seeded shuffle and a pass that pulls apart two songs of one artist side by side
 """
 import os, re, struct
+import cdefs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 M = 0xFFFFFFFF
 FNV_SEED = 2166136261
 
 
-def _offsets():
-    out = {}
-    for line in open(os.path.join(ROOT, 'patch', 'offsets.inc')):
-        m = re.match(r'#define (\w+) (-?(?:0x[0-9a-fA-F]+|\d+))u?\s*(?:/\*.*)?$', line.strip())
-        if m: out[m.group(1)] = int(m.group(2), 0)
-    return out
-
-
-O = _offsets()
+O = cdefs.defines(os.path.join(ROOT, 'patch', 'offsets.inc'))
 SONGS, MIN_SONGS, PER_ARTIST, PER_ALBUM = O['MIX_SONGS'], O['MIX_MIN_SONGS'], O['MIX_PER_ARTIST'], O['MIX_PER_ALBUM']
 MIN_LIB = O['MIX_MIN_LIB']
 CAPS = ((PER_ARTIST, PER_ALBUM), (O['MIX_PER_ARTIST2'], O['MIX_PER_ALBUM2']), (255, 255))   # the limits, loosened a step while the mix is short

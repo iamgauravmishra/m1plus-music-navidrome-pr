@@ -950,8 +950,8 @@ def taps_list_tests(ctx):
     m.touch('down', 100, SCREEN_Y0 + TOP + 3 * ROW + 20, 5000, fn='al_on_down')
     expect(('widget_invalidate_force', m.widgets['albums_scrollview']) in m.calls, 'touching a row redraws the window')
     paint(m)
-    pf = [f for f in m.fills if f[0] == O['LIST_PRESS']]
-    expect(pf == [(O['LIST_PRESS'], 0, TOP + 3 * ROW, CW, ROW - 1)], f'the pressed row is filled #333333 over its body, above the hairline ({pf})')
+    pf = [f for f in m.fills if f[0] == 0xff343333]
+    expect(pf == [(0xff343333, 0, TOP + 3 * ROW, CW, ROW - 1)], f'the pressed row is filled #333334 over its body, above the hairline ({pf})')
     m.touch('up', 100, SCREEN_Y0 + TOP + 3 * ROW + 20, 5080, fn='al_on_up')
     paint(m)
     expect(not [f for f in m.fills if f[0] == O['LIST_PRESS']], 'and the fill is gone after the release')
@@ -1222,7 +1222,7 @@ def stock_widget_tests(ctx):
             m = fresh()
             x, y = pos(3, 0)
             m.play([('d', x, y, 0)])
-            expect(pressed_fill(m) == [(O['LIST_PRESS'], 0, TOP + 3 * ROW, CW, ROW - 1)], f'{mode}: a finger down on a row fills it #333333')
+            expect(pressed_fill(m) == [(0xff343333, 0, TOP + 3 * ROW, CW, ROW - 1)], f'{mode}: a finger down on a row fills it #333334')
             m.play([('u', x, y, 60)])
             expect(not pressed_fill(m) and m.opened() == [3], f'{mode}: the release clears the fill and opens the album')
             m.play([('d', x, y, 0), ('m', x, y - 4), ('m', x, y - 8)])

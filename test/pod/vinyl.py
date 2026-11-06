@@ -13,9 +13,10 @@ What is proved, on the real compiled payload under Unicorn (the stock calls it m
     the record plays / pauses; no swipe, no grab, no move handler;
   * the page's life: one timer retimed with timer_modify, removed on to-background and destroy, the idle power rules.
 The emulated frames are written to out/preview/vinyl-emu-*.png (with the text as the labels draw it), next to the design's (vinyl-emu-*-design.png)."""
-import math, os, re, struct
+import math, os, struct
 from pathlib import Path
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
+import cdefs
 import mod_icons, vinyl_art
 from PIL import Image, ImageChops
 
@@ -591,7 +592,7 @@ def cover_change_tests(ctx):
     x0, y0, x1, y1 = A.REC_BOX
     rim = sum(1 for i, (mv, _, _, _) in enumerate(asset_image('vinyl_rec').convert('RGBA').getdata())
               if mv and (2 * (x0 + i % (x1 - x0) - O['VN_REC_X']) + 1) ** 2 + (2 * (y0 + i // (x1 - x0) - O['VN_REC_Y']) + 1) ** 2 > (2 * O['VN_REC_R'] - 2) ** 2)
-    cap = int(re.search(r'#define VN_RIM_MAX (\d+)', (Path(__file__).resolve().parents[2] / 'patch' / 'vinyl.c').read_text()).group(1))
+    cap = cdefs.defines(str(Path(__file__).resolve().parents[2] / 'patch' / 'vinyl.c'), ['VN_RIM_MAX'])['VN_RIM_MAX']
     expect(rim <= cap, f'the rim pixels the payload keeps ({rim}) fit its buffer (VN_RIM_MAX {cap})')
     solid = lambda c: Image.new('RGB', (168, 168), c)
     covers = {'sunset': A.cover('sunset', 168), 'blue': A.cover('blue', 168), 'grey': solid((120, 120, 124)), 'green': solid((40, 170, 60)), 'red': solid((200, 40, 50))}

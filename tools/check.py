@@ -32,7 +32,7 @@ def sections(module):
 
 
 PATCH = {m: [f'patch:{m}/{s}' for s in sections(m)] or [f'patch:{m}'] for m in MODULES}
-LIGHT = ['tools', 'coverflow', 'awtk_fill']
+LIGHT = ['tools', 'cdefs', 'consts', 'coverflow', 'awtk_fill']
 TREE_TESTS = ('demo_diff', 'webapi')   # tests that read the built tree
 ALL_TESTS = LIGHT + list(TREE_TESTS) + [t for m in MODULES for t in PATCH[m]]
 
@@ -71,7 +71,7 @@ def parse_tests(spec):
 
 def test_cmd(name, stock, tree=None):
     py = [sys.executable, '-I']
-    if name in ('tools', 'coverflow'): return py + [os.path.join(TEST, name + '.py')]
+    if name in ('tools', 'cdefs', 'consts', 'coverflow'): return py + [os.path.join(TEST, name + '.py')]
     if name == 'awtk_fill': return py + [os.path.join(TEST, 'awtk_fill.py'), stock]
     if name == 'webapi': return py + [os.path.join(TEST, 'webapi.py'), str(tree), stock]
     if name == 'demo_diff':

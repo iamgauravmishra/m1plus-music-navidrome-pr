@@ -11,7 +11,10 @@ import preview_folders as PF   # the FO_* numbers of patch/folders.c
 SG = sibling('songs')
 F = PF.F
 SCREEN_Y0 = 30 + 50
-ROW, VIEW_H, TOP, TOP_PLAIN = pod_ui.ROW_H, O['GRID_VIEW_H'], O['SG_TOP'], F['FO_TOP_PLAIN']
+ROW, VIEW_H, TOP = pod_ui.ROW_H, O['GRID_VIEW_H'], O['SG_TOP']
+# expected draw output, written out (patch/folders.c FO_*): the tests check the drawing, so they must not read the constants back
+TOP_PLAIN = 60                       # the first row with no pills: under the large title (SG_PILL_Y 52 + 8)
+TEXT_X, TEXT_END, ICON, ICON_X, ICON_Y, TEXT_Y, MARK_X, CHEV_X = 56, 256, 24, 16, 14, 14, 262, 288
 SC_YOFF = O['SC_YOFF']
 LAYER, TITLE, M3U = (pod.DATA[k][0] for k in ('FOLDER_LAYER', 'FOLDER_TITLE', 'FOLDER_M3U'))
 SHOWLIST, G_CLASS, SEL_VEC, NAV_TITLE = (pod.DATA[k][0] for k in ('PDEQ_SHOWLIST', 'G_CLASS_TYPE', 'SEL_VEC', 'NAV_TITLE'))
@@ -246,7 +249,7 @@ def asset_tests(ctx):
     expect(bar.get('visible') == 'false' and {c.name for c in bar.children} >= {'sg_add', 'sg_del'} and f('img_nb_fade').get('visible') == 'false', 'the select bar (Add to Playlist, Delete) and the navbar fade are hidden at rest')
     xx = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw', 'images', 'xx')
     from PIL import Image
-    expect(all(os.path.exists(os.path.join(xx, n + '.png')) and Image.open(os.path.join(xx, n + '.png')).size == (F['FO_ICON'],) * 2 for n in ICONS), 'the seven glyphs the rows draw are in the tree, 24 x 24 (FO_ICON)')
+    expect(all(os.path.exists(os.path.join(xx, n + '.png')) and Image.open(os.path.join(xx, n + '.png')).size == (ICON, ICON) for n in ICONS), 'the seven glyphs the rows draw are in the tree, 24 x 24')
     import mod_icons
     expect((F['FO_ICON'], F['FO_ICON_X'], F['FO_TEXT_X'], ROW) == (mod_icons.POD_ICON, mod_icons.POD_ICON_X, mod_icons.POD_TEXT_X, pod_ui.ROW_H) == (24, 16, 56, 52)
            and F['FO_CHEV_X'] == O['LIST_CHEV_X'] == 288 and F['FO_ICON_Y'] == (ROW - 24) // 2 and set(mod_icons.FOLDER_ROWS) <= set(ICONS)
@@ -286,13 +289,13 @@ def rows_tests(ctx):
     expect = ctx.expect
     m = opened()
     blits, texts, fills = paint(m)
-    tx = F['FO_TEXT_X']
+    tx = TEXT_X
     ttl = [(t, r) for (t, r), s in texts if s == 'label_row_title']
-    expect(ttl == [(n, (tx, TOP_PLAIN + i * ROW + F['FO_TEXT_Y'], F['FO_TEXT_END'] - tx, O['LIST_TITLE_H'])) for i, (_, n, _) in enumerate(ROOT)],
+    expect(ttl == [(n, (tx, TOP_PLAIN + i * ROW + TEXT_Y, TEXT_END - tx, O['LIST_TITLE_H'])) for i, (_, n, _) in enumerate(ROOT)],
            f'the root list: SD, OTG, CD Library, one line each centred in the row, from x 56 to the wave\'s room: {ttl}')
-    expect([(b[2][0], b[2][1]) for b in blits if b[2][2] == F['FO_ICON']] == [(F['FO_ICON_X'], TOP_PLAIN + i * ROW + F['FO_ICON_Y']) for i in range(3)], 'a 24 px glyph at x 16, centred in each row')
+    expect([(b[2][0], b[2][1]) for b in blits if b[2][2] == ICON] == [(ICON_X, TOP_PLAIN + i * ROW + ICON_Y) for i in range(3)], 'a 24 px glyph at x 16, centred in each row')
     chev = [b for b in blits if b[2][2] == PF.O.get('POD_CHEV_W', 10) and b[2][3] == 16]
-    expect(len(chev) == 3 and all(b[2][0] == F['FO_CHEV_X'] for b in chev), 'a chevron ends each storage row')
+    expect(len(chev) == 3 and all(b[2][0] == CHEV_X for b in chev), 'a chevron ends each storage row (x 288)')
     hair = [f_ for f_ in fills if f_[0] == O['LIST_HAIR']]
     expect(len(hair) == 3 and hair[0][1:] == (tx, TOP_PLAIN + ROW - 1, 320 - 10 - tx, 1), f'a hairline at each row\'s foot: {hair[:1]}')
     expect(vis(m, 'btn_play') == (0, 0) and vis(m, 'btn_shuffle') == (0, 0), 'no pills at the root')
@@ -309,14 +312,14 @@ def rows_tests(ctx):
     m = opened(); enter(m, 'SD'); enter(m, 'Music')
     m.playing = ('03 Blue in Green.flac', '/mnt/mmc/Music/03 Blue in Green.flac')
     blits, texts, fills = paint(m)
-    wave = [b for b in blits if b[2][0] == F['FO_MARK_X']]
-    expect(len(wave) == 1 and wave[0][2][1] == TOP + 3 * ROW + F['FO_ICON_Y'], f'the wave marks the playing file ({wave})')
+    wave = [b for b in blits if b[2][0] == MARK_X]
+    expect(len(wave) == 1 and wave[0][2][1] == TOP + 3 * ROW + ICON_Y, f'the wave marks the playing file ({wave})')
     expect(('is_playing', 1, 0) in m.calls, 'is_playing is asked as the stock row asks it: class 1, the cue start')
     m = opened(); m.playing_dir = '/mnt/mmc/Music/x.flac'
     enter(m, 'SD')
     blits, texts, fills = paint(m)
-    wave = [b for b in blits if b[2][0] == F['FO_MARK_X']]
-    expect(len(wave) == 1 and wave[0][2][1] == TOP + ROW + F['FO_ICON_Y'], 'the folder that holds the playing file carries the wave')
+    wave = [b for b in blits if b[2][0] == MARK_X]
+    expect(len(wave) == 1 and wave[0][2][1] == TOP + ROW + ICON_Y, 'the folder that holds the playing file carries the wave')
     # press fill
     m = opened()
     touch(m, 'down', 100, SCREEN_Y0 + TOP_PLAIN + 20, 'fo_on_down')
@@ -618,7 +621,7 @@ def order_tests(ctx):
     calls = click(m, 'sg_del')
     expect(sorted(c[1] for c in calls if c[0] == 'set_selectindex') == sorted(shown_recs.index(n) for n in ('zeta', 'c.FLAC')), 'rows 0 and 4 shown (zeta, c.FLAC; row 3 is the playlist file) are the records marked')
     # Date Modified is not offered where a level is too big to stat; the level shows by Name
-    big = F['FO_STAT_MAX'] + 1
+    big = 2001   # one past FO_STAT_MAX (2000): the level is too big to stat
     TREE['/mnt/mmc/Big'] = [(T_FILE, f'f{i:04d}.mp3') for i in range(big - 1, -1, -1)] + [(T_DIR, 'Dir')]
     TREE['/mnt/mmc'].insert(0, (T_DIR, 'Big'))
     try:

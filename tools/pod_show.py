@@ -5,6 +5,7 @@ from it, so the preview, the tests and the device share one set of numbers.
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import cdefs
 import pod_ui, pod_wrap
 from awtk_text import Ttf, StbText
 
@@ -231,13 +232,7 @@ def subscribe_pill(font, text):
 # ---------------------------------------------------------------------------
 # The episode page (patch/pcdetail.c, docs/modules/podcasts.md "The episode page"): the PD_* numbers of patch/pcdetail.h and the layout of pd_make in Python.
 
-def _pd_numbers():
-    import re
-    text = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'patch', 'pcdetail.h')).read()
-    return {k: int(v) for k, v in re.findall(r'#define (PD_\w+) (\d+)', text)}
-
-
-PD = _pd_numbers()
+PD = cdefs.defines(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'patch', 'pcdetail.h'))
 
 
 def detail_date(when, length, mb='%d MB'):

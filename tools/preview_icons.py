@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PIL import Image, ImageDraw, ImageFont
 import mod_icons as M
 import awtk_strings
+import cdefs
 from stb_raster import StbFont
 
 from awtk_ui import RAW
@@ -170,9 +171,7 @@ def title_px(tree):
 
 def home_pad():
     """HOME_PAD of patch/offsets.inc: the Home instance's air above the first and below the last row."""
-    import re
-    m = re.search(r'#define HOME_PAD (\d+)', open(os.path.join(M.ROOT, 'patch', 'offsets.inc')).read())
-    return int(m.group(1))
+    return cdefs.defines(os.path.join(M.ROOT, 'patch', 'offsets.inc'), ['HOME_PAD'])['HOME_PAD']
 
 def pod_page(s, key, tree_rows=8, home=False, first=0, title=None, icon=None, order=None, switches=None, arrows=None, values=None, root=None):
     """A mock of an M1+ Music rows page from the tree's ui asset: navbar title, then each list_item row
@@ -237,8 +236,7 @@ def pod_page(s, key, tree_rows=8, home=False, first=0, title=None, icon=None, or
 
 def offsets():
     """The numeric #defines of patch/offsets.inc (the Albums grid's geometry)."""
-    import re
-    return {m.group(1): int(m.group(2), 0) for m in re.finditer(r'^#define (\w+) (-?(?:0x[0-9a-fA-F]+|\d+))u?\b', open(os.path.join(M.ROOT, 'patch', 'offsets.inc')).read(), re.M)}
+    return cdefs.defines(os.path.join(M.ROOT, 'patch', 'offsets.inc'))
 
 ALBUMS = [('Kind of Blue', 'Miles Davis', (70, 110, 190)), ('A Love Supreme', 'John Coltrane', (190, 140, 60)),
           ('Abbey Road', 'The Beatles', (90, 160, 110)), ('The Dark Side of the Moon', 'Pink Floyd', (60, 40, 110)),

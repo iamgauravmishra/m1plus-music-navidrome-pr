@@ -10,7 +10,7 @@ import os, re, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from PIL import Image, ImageDraw
-import build, preview_icons as PI, pod_ui
+import build, cdefs, preview_icons as PI, pod_ui
 
 W, BAR, H = 320, 30, 480
 MENU = ['Music', 'Cover Flow', 'Shuffle Songs', 'Now Playing', 'Settings']
@@ -333,8 +333,7 @@ def main():
         d.text((x, y - 2), t, fill=(0xAA,) * 3, font=PI.ANN); sheet.paste(im.convert('RGB'), (x, y + lab))
     save_true(sheet, out); print('wrote', out, sheet.size)
     # The same smoothstep slide and half-width clipping / split as ipod_render.c and ipod.c ip_paint_split.
-    source = open(os.path.join(build.ROOT, 'patch', 'ipod_render.c')).read()
-    duration = int(re.search(r'#define SLIDE_MS (\d+)', source)[1])
+    duration = cdefs.defines(os.path.join(build.ROOT, 'patch', 'ipod_render.c'), ['SLIDE_MS'])['SLIDE_MS']
     th = Theme(False)
     stem = os.path.splitext(out)[0]
     music, main_, now = screen_music(s, th, 240), screen_main(s, th, 240), screen_now(s, th, 240, "shuffle")

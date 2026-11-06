@@ -1,13 +1,11 @@
 """Battery Percentage (patch/battery.c, docs/modules/battery.md "The percentage"): the one hook at show_sysbar_face's call of get_battery_capacity (0x5450f8), run against the
 mocked stock function; the Settings switch; the hidden label in the status bar and both pull-down bars and the layout it makes."""
-import os, re, struct
+import os, struct
 import paths
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
+import cdefs
 
-DEFS = {}
-for _line in open(os.path.join(ROOT, 'patch', 'battery.h')).read().replace('\\\n', ' ').splitlines():
-    _m = re.match(r'#define\s+(\w+)\s+("[^"]*"|\w+)\s*(?:/\*.*)?$', _line.strip())
-    if _m: DEFS[_m.group(1)] = _m.group(2).strip('"') if _m.group(2).startswith('"') else int(_m.group(2), 0)
+DEFS = cdefs.defines(os.path.join(ROOT, 'patch', 'battery.h'), strings=True)
 FILE, GAUGE, KILL = DEFS['BP_FILE'], DEFS['BP_GAUGE'], '/mnt/mmc/m1plus-off'
 LABEL, LABEL_DD = DEFS['BP_LABEL'], DEFS['BP_LABEL_DD']
 STOCK_CAP = 40
@@ -88,8 +86,8 @@ def run(ctx):
     # the label fits its text: the widths the build measured, the group asked to lay out again when the width changed
     import pod_ui
     w2, w3, w4 = pod_ui.pct_widths(os.path.join(WORK, 'rootfs', pod_ui.PCT_FONT))
-    stockh = open(os.path.join(BUILD, 'stock.h')).read()
-    expect([int(re.search(rf'#define BP_W{n} (\d+)', stockh).group(1)) for n in (2, 3, 4)] == [w2, w3, w4], f'the payload\'s widths are the build\'s measure ({w2}, {w3}, {w4})')
+    built = cdefs.defines(os.path.join(BUILD, 'stock.h'), ['BP_W2', 'BP_W3', 'BP_W4'])   # written by the build (pod.py)
+    expect([built['BP_W2'], built['BP_W3'], built['BP_W4']] == [w2, w3, w4], f'the payload\'s widths are the build\'s measure ({w2}, {w3}, {w4})')
     for text, want in ((b'5\n', w2), (b'87\n', w3), (b'100\n', w4)):
         m = machine(gauge=text, w=0)
         tick(m)

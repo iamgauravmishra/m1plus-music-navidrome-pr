@@ -10,8 +10,9 @@ coverage INK_MIN (half).
 
 Usage: uv run python -I tools/ah_ink.py WORKDIR     (prints the measured numbers of each line size, and the header's gaps)
 """
-import os, re, sys
+import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import cdefs
 from stb_raster import StbFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -20,11 +21,7 @@ INK_MIN = 128
 
 
 def constants():
-    out = {}
-    for line in open(os.path.join(ROOT, 'patch', 'offsets.inc')):
-        m = re.match(r'#define (\w+) (-?(?:0x[0-9a-fA-F]+|\d+))u?\s*(?:/\*.*)?$', line.strip())
-        if m: out[m.group(1)] = int(m.group(2), 0)
-    return out
+    return cdefs.defines(os.path.join(ROOT, 'patch', 'offsets.inc'))
 
 
 def font(work):

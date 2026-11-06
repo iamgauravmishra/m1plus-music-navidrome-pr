@@ -511,9 +511,9 @@ def rows_tests(ctx):
     expect(ttl == [(NAMES[i], (42, row_y(i) + O['AB_TEXT_Y'], 256, 22)) for i in range(2)], f'the title from x 42 (8 px after the number) to 298: {ttl}')
     order = [s for _, s in texts if s in ('label_row_num', 'label_row_title')]
     expect(order == ['label_row_num'] * 2 + ['label_row_title'] * 2, 'the numbers, then the titles: one text style at a time')
-    hair = [f_ for f_ in fills if f_[0] == O['AB_HAIR']]
-    expect(hair == [(O['AB_HAIR'], 0, row_y(0) + 63, 310, 1)] and O['AB_HAIR'] == 0x22ffffff and O['AB_PRESS'] == 0x33ffffff, f'a 1 px hairline of 13 % white across the row\'s foot (row 1\'s lies below the window): {hair}')
-    expect(len([1 for _, s in texts if s.startswith('label_row')]) == 4 and not [f_ for f_ in fills if f_[0] == O['AB_PRESS']], 'rows 0 and 1 are in view; nothing is pressed at rest')
+    hair = [f_ for f_ in fills if f_[0] == 0x22ffffff]   # AB_HAIR: 13 % white
+    expect(hair == [(0x22ffffff, 0, row_y(0) + 63, 310, 1)], f'a 1 px hairline of 13 % white across the row\'s foot (row 1\'s lies below the window): {hair}')
+    expect(len([1 for _, s in texts if s.startswith('label_row')]) == 4 and not [f_ for f_ in fills if f_[0] == 0x33ffffff], 'rows 0 and 1 are in view; nothing is pressed at rest')
     scroll_to(m, 300)
     blits, texts, fills = paint(m)
     seen = [t for (t, r), s in texts if s == 'label_row_title']
@@ -588,7 +588,7 @@ def play_tests(ctx):
     expect(not [c for c in tap(m, 150, 100) if c[0] == 'navigator_to_with_context'] and not [c for c in tap(m, 150, 330) if c[0] == 'navigator_to_with_context'], 'a tap on the header (the cover, the lines, the gap above the first row) plays nothing')
     touch(m, 'down', 150, row_y(0) + 20, 'ab_on_down')
     _, _, fills = paint(m)
-    expect((O['AB_PRESS'], 0, row_y(0), 310, ROW) in fills, f'the row under the finger is filled 20 % white over its whole 64 px: {[f_ for f_ in fills if f_[0] == O["AB_PRESS"]]}')
+    expect((0x33ffffff, 0, row_y(0), 310, ROW) in fills, f'the row under the finger is filled 20 % white over its whole 64 px: {[f_ for f_ in fills if f_[0] == 0x33ffffff]}')
     touch(m, 'abort', 150, row_y(0) + 20, 'ab_on_abort')
     _, _, fills = paint(m)
     expect(not any(f_[0] == O['AB_PRESS'] for f_ in fills), 'an abort (the scroll_view took a drag) clears it')
