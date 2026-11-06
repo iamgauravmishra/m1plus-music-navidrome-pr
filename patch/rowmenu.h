@@ -1,8 +1,8 @@
-/* The track rows' "..." menu: Play Next, Play After, Add to Playlist (patch/rowmenu.c, docs/modules/rowmenu.md).
+/* The track rows' "..." menu: Play Next, Play After, Add to Playlist, Favorite, Get Info (patch/rowmenu.c, docs/modules/rowmenu.md).
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  * Shared by the album page (patch/albumpage.c) and the Songs page (patch/songs.c). A page paints the "..." in its own row painter (rowmenu_paint), hit-tests the zone itself
- * with its own press and drag rules (rowmenu_zone_x) and calls rowmenu_open for the row; the scrim, the bottom sheet and its three rows are widgets of the page's asset
+ * with its own press and drag rules (rowmenu_zone_x) and calls rowmenu_open for the row; the scrim, the bottom sheet and its five rows are widgets of the page's asset
  * (tools/pod_ui.py row_menu, last in z-order); nothing here adds a widget per row.
  */
 #pragma once
@@ -14,21 +14,24 @@ typedef void (*rowmenu_add_fn)(int row);
 
 struct rowmenu_slot {
     rowmenu_t *rm;
-    int k; /* 0 Play Next, 1 Play After, 2 Add to Playlist */
+    int k; /* 0 Play Next, 1 Play After, 2 Add to Playlist, 3 Favorite, 4 Get Info */
 };
 
 struct rowmenu {
     void *win, *scrim, *card;
-    void *item[3];
+    void *item[5];
+    void *fav_label,
+        *fav_icon; /* the Favorite row's label and glyph: "Favorite" / "Undo Favorite" and the outline / filled star, set at every open */
     void *
         dots; /* the "..." as a RGBA bitmap (RM_DOTS_PX square, RM_DOTS_RGB with the image's coverage as alpha); NULL: the page has no "..." */
     void *
         rows; /* a deque of one stSongInfo, the row the open menu is for (a copy: the page's list may be replaced under the menu) */
+    int fav; /* the open menu's row is a favourite (stock myfav) */
     int on; /* the "..." is shown: the assets are there */
     int open;
     int row; /* the page's index of the row */
     rowmenu_add_fn add;
-    struct rowmenu_slot slot[3];
+    struct rowmenu_slot slot[5];
 };
 
 /* Looks up and binds the widgets of the page's window and makes the "..." bitmap. 1 when the "..." can be shown (assets found, M1+ Music not switched off), else 0

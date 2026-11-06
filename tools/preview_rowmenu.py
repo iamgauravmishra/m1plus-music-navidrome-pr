@@ -3,7 +3,7 @@
 
   - the Songs page with the A-Z rail: the grey "..." left of the rail, the titles 36 px narrower than before;
   - the same page with the menu open: Now Playing's More sheet at the window's foot;
-  - a list (no rail) with the menu open;
+  - a list (no rail) with the menu open, and again for a track that is a favourite (Undo Favorite, the filled star);
   - the album page scrolled to its tracks, the "..." on every track, and the menu open.
 
 Not pixel-exact AWTK (the text is the project's own text model, the covers are stand-in gradients).
@@ -56,6 +56,7 @@ def main():
     panels = [('Songs: the "..." left of the A-Z rail', PS.page(s, scroll=scroll)),
               ('Songs: the menu (a bottom sheet)', PS.page(s, scroll=scroll, row_menu_at=True)),
               ('A list: no rail, the menu', PS.page(s, title=fav, row_menu_at=True)),
+              ('A favourite: Undo Favorite', PS.page(s, title=fav, row_menu_at='fav')),
               ('Album page: the "..." on every track', album(s)),
               ('Album page: the menu', album(s, menu=True))]
     pad, lab = 12, 20

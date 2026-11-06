@@ -1,4 +1,4 @@
-"""The track rows' "..." menu (patch/rowmenu.c, patch/songs.c, patch/albumpage.c, docs/modules/rowmenu.md): the asset (the scrim and the three-row glass card, last in both pages), the
+"""The track rows' "..." menu (patch/rowmenu.c, patch/songs.c, patch/albumpage.c, docs/modules/rowmenu.md): the asset (the scrim and the five-row glass card, last in both pages), the
 grey "..." painted at the right end of the rows (the rail's side of the Songs page, the text width it takes), the taps (a tap on it opens the menu; a drag, a press that leaves it, a row
 tap elsewhere, select mode and a page without the widgets do not), the bottom sheet (the asset's place for every row, every language fits, closed by the scrim), the three rows
 (Play Next / Play After through upnext_add with a one-row deque holding the tapped row, Add to Playlist through the page's one-row selection and picker) and the toast of every status.
@@ -24,11 +24,11 @@ SG, AB = sibling('songs'), sibling('albumpage')
 ROW, MORE_W, DOTS = O['LIST_ROW_H'], O['RM_MORE_W'], O['RM_DOTS_PX']
 RIGHT, RIGHT_RAIL, GAP = O['RM_MORE_RIGHT'], O['RM_MORE_RIGHT_RAIL'], O['RM_TEXT_GAP']
 PLROW = O['PM_ROW_H']
-CARD_H = 3 * PLROW
-CARD_Y = 450 - CARD_H                                   # the sheet sits on the window's foot (window y 300..450)
+CARD_H = 5 * PLROW
+CARD_Y = 450 - CARD_H                                   # the sheet sits on the window's foot (window y 200..450)
 LABEL_W = 320 - pod_ui.RM_TEXT_X - pod_ui.RM_TEXT_R    # 250: Now Playing's More sheet's label box (48..298)
-EN = ('Play Next', 'Play After', 'Add to Playlist')
-WIDGETS = ('rm_scrim', 'rm_card', 'rm_item0', 'rm_item1', 'rm_item2', 'rm_label0', 'rm_label1', 'rm_label2')
+EN = ('Play Next', 'Play After', 'Add to Playlist', 'Favorite', 'Get Info')
+WIDGETS = ('rm_scrim', 'rm_card', 'rm_item0', 'rm_item1', 'rm_item2', 'rm_item3', 'rm_item4', 'rm_label0', 'rm_label1', 'rm_label2', 'rm_label3', 'rm_label4', 'rm_icon3')
 SEL_VEC = pod.DATA['SEL_VEC'][0]
 UI_SONGS = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_songs.bin') if WORK else None
 UI_ALBUM = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_album.bin') if WORK else None
@@ -43,7 +43,8 @@ class Trap:
     up_ret, pk_ret = ADDED, -1
 
     def trap_setup(self):
-        self.up_calls, self.pk_calls = [], []
+        self.up_calls, self.pk_calls, self.si_calls = [], [], []
+        self.handlers[PSYMS['songinfo_open']] = 'songinfo_open'
         self.up_ret, self.pk_ret = ADDED, -1
         self.handlers[PSYMS['upnext_add']] = 'upnext_add'
         self.handlers[PSYMS['picker_open']] = 'picker_open'
@@ -51,9 +52,11 @@ class Trap:
 
     def _hook(self, u, address, size, _):
         name = self.handlers.get(address)
-        if name not in ('upnext_add', 'picker_open'): return super()._hook(u, address, size, _)
+        if name not in ('upnext_add', 'picker_open', 'songinfo_open'): return super()._hook(u, address, size, _)
         a0, a1, a2 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2))
-        if name == 'upnext_add':
+        if name == 'songinfo_open':
+            self.si_calls.append(a0); self.calls.append(('songinfo_open', a0)); ret = 0
+        elif name == 'upnext_add':
             rows = list(self.deques.get(a0, []))
             self.up_calls.append((rows, a1)); self.calls.append(('upnext_add', a1, len(rows))); ret = self.up_ret
         else:
@@ -115,38 +118,38 @@ def asset_tests(ctx):
         tree = awtk_ui.parse(open(ui_path, 'rb').read())
         kids = [c.name for c in tree.children]
         scrim, card = tree.find('rm_scrim'), tree.find('rm_card')
-        items = [tree.find(f'rm_item{i}') for i in range(3)]
-        labels = [tree.find(f'rm_label{i}') for i in range(3)]
-        icons = [tree.find(f'rm_icon{i}') for i in range(3)]
+        items = [tree.find(f'rm_item{i}') for i in range(5)]
+        labels = [tree.find(f'rm_label{i}') for i in range(5)]
+        icons = [tree.find(f'rm_icon{i}') for i in range(5)]
         expect(kids[-2:] == ['rm_scrim', 'rm_card'] and tree.children[-2] is scrim and tree.children[-1] is card, f'{name}: the menu\'s scrim and card are the window\'s last children (above the list, the bars and the navbar)')
         expect(scrim.type == 'button' and (scrim.x, scrim.y, scrim.w, scrim.h) == (0, 0, 320, 450) and all(scrim.get(f'style:{st}:bg_color') == pod_ui.PL_DIM == '#00000082' for st in pod_ui.STATES),
                f'{name}: the scrim is the full window\'s #00000082 dim, a button (a tap closes the menu)')
-        expect((card.x, card.y, card.w, card.h) == (0, CARD_Y, 320, CARD_H) == (0, 300, 320, 150)
+        expect((card.x, card.y, card.w, card.h) == (0, CARD_Y, 320, CARD_H) == (0, 200, 320, 250)
                and all(card.get(f'style:{st}:bg_image') == 'rm_glass' and card.get(f'style:{st}:bg_image_draw_type') == 'default' and card.get(f'style:{st}:bg_color') == '#00000000'
                        and card.get(f'style:{st}:round_radius') is None for st in pod_ui.STATES),
-               f'{name}: the card is a 320 x 150 bottom sheet (three 50 px rows) on the window\'s foot, the glass drawn 1:1 over no fill')
+               f'{name}: the card is a 320 x 250 bottom sheet (five 50 px rows) on the window\'s foot, the glass drawn 1:1 over no fill')
         expect(all(w.get('visible') == 'false' and w.get('sensitive') == 'false' for w in (scrim, card)), f'{name}: the scrim and the card start hidden and insensitive')
-        expect([(i.type, i.x, i.y, i.h, i.w) for i in items] == [('button', 0, k * PLROW, PLROW, 320) for k in range(3)]
+        expect([(i.type, i.x, i.y, i.h, i.w) for i in items] == [('button', 0, k * PLROW, PLROW, 320) for k in range(5)]
                and all(i.get(f'style:{st}:bg_color') == ('#FFFFFF10' if st == 'pressed' else '#00000000') and i.get(f'style:{st}:text_color') == '#FFFFFF' for i in items for st in pod_ui.STATES)
                and all(i.get(f'style:{st}:border') == ('top' if k else 'none') and i.get(f'style:{st}:border_width') == ('1' if k else '0')
                        and i.get(f'style:{st}:border_color') == ('#FFFFFF22' if k else '#00000000') for k, i in enumerate(items) for st in pod_ui.STATES),
-               f'{name}: three transparent full-width 50 px rows, pressed 6 % white, the sheet\'s 13 % white hairline above every row but the first')
-        expect([ic.get('image') for ic in icons] == ['rm_ic_next', 'rm_ic_after', 'rm_ic_add'] == [n for n, _ in mod_icons.RM_MENU_ICONS]
-               and [g for _, g in mod_icons.RM_MENU_ICONS] == ['list-start', 'list-end', 'list-plus']
+               f'{name}: five transparent full-width 50 px rows, pressed 6 % white, the sheet\'s 13 % white hairline above every row but the first')
+        expect([ic.get('image') for ic in icons] == ['rm_ic_next', 'rm_ic_after', 'rm_ic_add', 'rm_ic_fav', 'rm_ic_info'] == [n for n, _ in mod_icons.RM_MENU_ICONS] and mod_icons.RM_FAV_ON == ('rm_ic_unfav', 'star')
+               and [g for _, g in mod_icons.RM_MENU_ICONS] == ['list-start', 'list-end', 'list-plus', 'star', 'info']
                and all((ic.x, ic.y, ic.w, ic.h) == (14, 13, 24, 24) and ic.get('sensitive') == 'false' for ic in icons),
-               f'{name}: Lucide list-start, list-end and list-plus, 24 px at x 14 (the More sheet\'s own rows, pod_tape_icon)')
+               f'{name}: Lucide list-start, list-end, list-plus, star and info, 24 px at x 14 (the More sheet\'s own rows, pod_tape_icon)')
         expect(all(lb.x == 48 and lb.w == LABEL_W == 250 and lb.get('sensitive') == 'false' and lb.get('style:normal:font_size') == '18' and lb.get('style:normal:text_color') == '#FFFFFF'
                    for lb in labels) and [pod_i18n.shown_english(lb) for lb in labels] == list(EN),
                f'{name}: the labels start at x 48, 18 px white: Play Next, Play After, Add to Playlist')
-    # the images: the glass is the generator's, three rows high; the glyphs and the dots are in the tree
+    # the images: the glass is the generator's, five rows high; the glyphs and the dots are in the tree
     xx = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx')
     w, h, r = mod_icons.GLASS_ROWMENU
     raw_ = open(os.path.join(xx, 'rm_glass.png'), 'rb').read()
     gen = mod_icons.glass_image(w, h, r, fill=mod_icons.GLASS_SHEET_FILL, top_only=True)
     expect(raw_ == open(os.path.join(mod_icons.PNG, 'rm_glass.png'), 'rb').read() and same_pixels(raw_, gen) and (w, h, r) == (320, CARD_H, 18) and r == mod_icons.GLASS_SHEET[2],
-           'rm_glass.png is the generator\'s: 320 x 150 (the sheet\'s height), Now Playing\'s sheet: 18 px top corners only, the sheet\'s fill')
-    expect(all(open(os.path.join(xx, n + '.png'), 'rb').read() == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read() for n, _ in mod_icons.RM_MENU_ICONS + (mod_icons.RM_DOTS,)),
-           'the three glyphs and rm_dots are the committed PNGs')
+           'rm_glass.png is the generator\'s: 320 x 250 (the sheet\'s height), Now Playing\'s sheet: 18 px top corners only, the sheet\'s fill')
+    expect(all(open(os.path.join(xx, n + '.png'), 'rb').read() == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read() for n, _ in mod_icons.RM_MENU_ICONS + (mod_icons.RM_FAV_ON, mod_icons.RM_DOTS)),
+           'the five glyphs, the filled star and rm_dots are the committed PNGs')
     expect(mod_icons.RM_DOTS == ('rm_dots', 'ellipsis') and mod_icons.RM_DOTS_PX == DOTS == 24 and O['RM_DOTS_RGB'] == 0x8c8c8c,
            'the "..." is the Lucide ellipsis at 24 px in #8C8C8C')
     from PIL import Image
@@ -154,7 +157,7 @@ def asset_tests(ctx):
     press, worst = 0x10 / 255, 99
     for level in (0, 125):   # over black, and over white under the 130/255 dim
         for pressed in (False, True):
-            for k in range(3):
+            for k in range(5):
                 for y in range(k * PLROW + (PLROW - 22) // 2, k * PLROW + (PLROW + 22) // 2):
                     p = g.getpixel((w // 2, y)); al = p[3] / 255
                     c = [al * p[i] + (1 - al) * level for i in range(3)]
@@ -171,7 +174,7 @@ def asset_tests(ctx):
     src = '\n'.join(open(os.path.join(ROOT, 'patch', f), encoding='utf-8').read() for f in os.listdir(os.path.join(ROOT, 'patch')) if f.endswith(('.c', '.h', '.inc')))
     expect('queue-probe' not in src and 'upnext_test' not in src, 'no source mentions the probe log or the test entry')
     # every text of the menu exists in the 13 languages (the build adds them to the tables; the i18n tests check the rest)
-    keys = list(EN) + ['Playing Next', 'Added to Queue'] + [TOASTS[k] for k in (STREAM, FOLDER, PODCAST, MISSING, FULL, MEMORY, DLNA)]
+    keys = list(EN) + ['Undo Favorite', 'Added to Favorites', 'Removed from Favorites', 'Playing Next', 'Added to Queue'] + [TOASTS[k] for k in (STREAM, FOLDER, PODCAST, MISSING, FULL, MEMORY, DLNA)]
     expect(all(k in pod_i18n.TEXT and set(pod_i18n.TEXT[k]) == set(pod_i18n.LOCALES) for k in keys) and 'msg_addfailed' in pod_i18n.STOCK, 'the menu\'s labels, confirmations and refusals have a translation in all 13 languages')
 
 
@@ -319,7 +322,7 @@ def touch_tests(ctx):
 
 
 def menu_tests(ctx):
-    """4. The sheet: shown in the asset's place for any row, every language fits, the scrim; the three rows and every status."""
+    """4. The sheet: shown in the asset's place for any row, every language fits, the scrim; the five rows and every status."""
     expect = ctx.expect
     # the sheet: the asset's place for every row, on both pages (the payload moves and resizes nothing)
     m = songs(plain=True)
@@ -347,7 +350,7 @@ def menu_tests(ctx):
     raw = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw')
     font = Ttf(os.path.join(raw, 'fonts', 'default.ttf'))
     widest = max((StbText(font, pod_ui.RM_LABEL_PX).layout(dict(awtk_strings.load(os.path.join(raw, 'strings', loc + '.bin')))[k])[1], loc, k)
-                 for loc in pod_i18n.LOCALES for k in EN)
+                 for loc in pod_i18n.LOCALES for k in EN + ('Undo Favorite',))
     expect(widest[0] <= LABEL_W, f'the longest label ({widest[1]} {widest[2]!r}, {widest[0]:.0f} px) fits the {LABEL_W} px box')
 
     # the rows
@@ -428,7 +431,76 @@ def menu_tests(ctx):
 def names_count(m, name): return sum(1 for c in m.calls if c[0] == name)
 
 
-SECTIONS = [asset_tests, paint_tests, touch_tests, menu_tests]
+def row_machine(page):
+    """(machine, page module, row, y): a page with the menu's widgets and a row in view (the Favourites-class list, or the album page scrolled)."""
+    if page == 'songs':
+        m = songs(plain=True); row = 3; y = SG.TOP + row * ROW + 30; T = SG
+    else:
+        m = AB.album_machine(); with_menu(m, 0); AB.open_album(m); AB.scroll_to(m, 300); AB.paint(m); row = 2; y = AB.row_y(row) - 300 + 30; T = AB
+    return m, T, row, y
+
+
+def fav_info_tests(ctx):
+    """5. Favorite (a toggle on stock's myfav: the label and the star follow the row's state at every open, the call is checkFavExist then addMyFav / deleteMusicFromFav on the row's copy, the toast
+    confirms) and Get Info (songinfo_open on the row's record, then the copy goes), on both pages."""
+    expect = ctx.expect
+    for page in ('songs', 'album'):
+        m, T, row, y = row_machine(page)
+        lab, ic = m.widgets['rm_label3'], m.widgets['rm_icon3']
+        rec = m.songs[row]
+        key = (m.read_cstr(m.word(rec + O['REC_NAME'])), m.read_cstr(m.word(rec + O['REC_PATH'])))
+        other = m.songs[row + 1]
+        okey = (m.read_cstr(m.word(other + O['REC_NAME'])), m.read_cstr(m.word(other + O['REC_PATH'])))
+        expect(key != okey and key[1], f'{page}: the test rows differ ({key}, {okey})')
+        T.tap(m, 288, y)
+        expect(m.wtext[lab] == 'Favorite' and m.props.get((ic, 'image')) == 'rm_ic_fav' and ('checkFavExist',) + key in m.calls and SG.vis(m, 'rm_card') == (1, 1),
+               f'{page}: a track that is not a favourite: the row reads "Favorite" with the outline star (one checkFavExist on the row)')
+        m.calls = []
+        m.click('rm_item3')
+        calls = list(m.calls)
+        names = [c[0] for c in calls]
+        expect(m.fav_rows == [key + (m.read_cstr(m.word(rec + O['REC_TITLE'])),)] and names.count('addMyFav') == 1 and 'deleteMusicFromFav' not in names and toasts(calls) == ['Added to Favorites'],
+               f'{page}: Favorite adds the row to myfav (addMyFav) and toasts "Added to Favorites" ({m.fav_rows}, {toasts(calls)})')
+        expect(SG.vis(m, 'rm_card') == (0, 0) and SG.vis(m, 'rm_scrim') == (0, 0) and names.count('deque_destroy') == 1 and not m.up_calls and not m.pk_calls and not m.si_calls
+               and not any(c[0] == 'window_open' or c[:2] == ('navigator_to_with_context', 'playing_page') for c in calls), f'{page}: the menu is closed and its copy freed; nothing else opens')
+        T.tap(m, 288, y)
+        expect(m.wtext[lab] == 'Undo Favorite' and m.props.get((ic, 'image')) == 'rm_ic_unfav', f'{page}: the same row now reads "Undo Favorite" with the filled star')
+        m.calls = []
+        m.click('rm_item3')
+        calls = list(m.calls)
+        expect(m.fav_rows == [] and [c[0] for c in calls].count('deleteMusicFromFav') == 1 and 'addMyFav' not in [c[0] for c in calls] and toasts(calls) == ['Removed from Favorites'],
+               f'{page}: Undo Favorite removes it (deleteMusicFromFav) and toasts "Removed from Favorites" ({m.fav_rows}, {toasts(calls)})')
+        m.fav_rows.append(okey + ('x',))
+        T.tap(m, 288, y)
+        expect(m.wtext[lab] == 'Favorite' and m.props.get((ic, 'image')) == 'rm_ic_fav', f'{page}: another track being a favourite does not change this row (the key is the row\'s own)')
+        SG.click(m, 'rm_scrim')
+        # a tap that changes nothing (the call failed) says so
+        m2, T2, row2, y2 = row_machine(page)
+        T2.tap(m2, 288, y2)
+        orig = m2.__class__
+        class Stuck(orig):
+            def _hook(self, u, address, size, _):
+                if self.handlers.get(address) == 'addMyFav':
+                    self.calls.append(('addMyFav',)); u.reg_write(UC_MIPS_REG_V0, 0); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
+                return super()._hook(u, address, size, _)
+        m2.__class__ = Stuck
+        m2.calls = []
+        m2.click('rm_item3')
+        expect(toasts(m2.calls) == ['Adding Failed'] and m2.fav_rows == [] and SG.vis(m2, 'rm_card') == (0, 0), f'{page}: an add that stores nothing toasts "Adding Failed" ({toasts(m2.calls)})')
+        # Get Info
+        m, T, row, y = row_machine(page)
+        rec = m.songs[row]
+        T.tap(m, 288, y)
+        m.calls = []
+        m.click('rm_item4')
+        calls = list(m.calls)
+        names = [c[0] for c in calls]
+        expect(m.si_calls == [rec], f'{page}: Get Info calls songinfo_open once, on the row\'s record ({m.si_calls})')
+        expect(names.index('songinfo_open') < names.index('deque_destroy') and names.count('deque_destroy') == 1 and SG.vis(m, 'rm_card') == (0, 0) and SG.vis(m, 'rm_scrim') == (0, 0)
+               and not toasts(calls) and not m.up_calls and not m.pk_calls and 'addMyFav' not in names, f'{page}: the menu closes, the page opens on the row\'s copy, then the copy is freed; no toast')
+
+
+SECTIONS = [asset_tests, paint_tests, touch_tests, menu_tests, fav_info_tests]
 
 
 def run(ctx):

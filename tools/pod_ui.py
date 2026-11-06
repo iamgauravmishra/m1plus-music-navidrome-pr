@@ -625,16 +625,16 @@ def playlist_menu():
     return scrim, card
 
 
-RM_KEYS = ('Play Next', 'Play After', 'Add to Playlist')   # the track rows' "..." menu (patch/rowmenu.c): the rows in order, each with its glyph (tools/mod_icons.py RM_MENU_ICONS)
-RM_GLASS = 'rm_glass'                                       # the sheet's glass: Now Playing's More sheet's pane, three rows high, top corners only (tools/mod_icons.py GLASS_ROWMENU)
+RM_KEYS = ('Play Next', 'Play After', 'Add to Playlist', 'Favorite', 'Get Info')   # the track rows' "..." menu (patch/rowmenu.c): the rows in order, each with its glyph (tools/mod_icons.py RM_MENU_ICONS)
+RM_GLASS = 'rm_glass'                                       # the sheet's glass: Now Playing's More sheet's pane, five rows high, top corners only (tools/mod_icons.py GLASS_ROWMENU)
 RM_ICON_X, RM_TEXT_X, RM_TEXT_R = 14, 48, 22                  # Now Playing's More sheet's rows (pod_tape: the 24 px glyph at x 14, the label from x 48, ending at 298)
 RM_LABEL_PX = 18
 
 
 def row_menu():
     """(scrim, card): the track rows' "..." menu, shared by the album page and the Songs page (patch/rowmenu.c, docs/modules/rowmenu.md): a bottom sheet as Now Playing's More sheet
-    (tools/mod_lists.py edit_playmore): the window's dim scrim, a full-width card at the window's foot in that sheet's glass, three PM_ROW_H rows filling it, each a transparent button
-    (6 % white pressed) with a bare 24 px glyph and the 18 px white label, the sheet's 13 % white hairline above every row but the first. Rows: Play Next, Play After, Add to Playlist.
+    (tools/mod_lists.py edit_playmore): the window's dim scrim, a full-width card at the window's foot in that sheet's glass, five PM_ROW_H rows filling it, each a transparent button
+    (6 % white pressed) with a bare 24 px glyph and the 18 px white label, the sheet's 13 % white hairline above every row but the first. Rows: Play Next, Play After, Add to Playlist, Favorite (the payload swaps its label and star), Get Info.
     Hidden AND insensitive until the payload shows them; nothing is placed or sized at open. Put it last in the window, above the list, the bars and the navbar."""
     from mod_icons import RM_MENU_ICONS, BARE_PX
     rows, rh = OFFSETS['RM_ROWS'], OFFSETS['PM_ROW_H']
@@ -2100,7 +2100,34 @@ def build_radioinfo_page(page):
     return root
 
 
+# Get Info (patch/songinfo.c, docs/modules/songinfo.md): Station Info's structure (the stock navbar over a stock list holding one content view the payload paints on): the cover, the title, artist and
+# album beside it, then label / value pairs. Four hidden labels only carry the text styles: the title (22 px white), the artist and the album (16 px grey), a pair's label (14 px grey), its value (18 px white).
+GI_HEAD_PX, GI_SUB_PX, GI_KEY_PX, GI_VAL_PX = 22, 16, 14, 18
+
+
+def build_songinfo_page(page):
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    root.children.append(navbar(page.title))
+    lv = stock_list([], True)
+    lv.set('name', 'gi_listview')
+    sv = lv.children[0]
+    sv.set('name', 'gi_scrollview')
+    view = Widget('view', 0, 0, SCREEN_W, CLIENT_H - NAVBAR_H, [('name', 'gi_view')])
+    styled(view, ('normal',), 'bg_color', '#000000')
+    sv.children.append(view)
+    root.children.append(lv)
+    root.children.append(nav_fade(shown=False))
+    for name, px, colour in (('label_head', GI_HEAD_PX, '#FFFFFF'), ('label_sub', GI_SUB_PX, '#8E8E93'), ('label_key', GI_KEY_PX, '#8E8E93'), ('label_val', GI_VAL_PX, '#FFFFFF')):
+        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+        root.children.append(lab)
+    return root
+
+
 def build_page(page):
+    if page.kind == 'songinfo':
+        return build_songinfo_page(page)
     if page.kind == 'radio':
         return build_radio_page(page)
     if page.kind == 'radioinfo':

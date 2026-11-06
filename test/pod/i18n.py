@@ -10,6 +10,7 @@ SAME_AS_ENGLISH = {'Cover Flow', 'Playlists', 'Playlist', 'Genres', 'Gain', 'Ext
 SAME_AS_ENGLISH |= {'%d minute', '%d minutes'}    # French writes minute(s) as English does
 SAME_AS_ENGLISH |= {'Podcasts', ', %d', 'Normal', 'Chrome', 'Metal', 'Graphite', '5 s', '10 s'}    # Podcasts in French and German
 SAME_AS_ENGLISH |= {'Downloads', '%d MB', '%d.%d GB', '%d GB'}    # German writes Downloads as English does
+SAME_AS_ENGLISH |= {'Format'}    # French, German and Polish write Format as English does
 SAME_AS_ENGLISH |= {'Genre', 'Screenshot', 'Collections', 'Cover'}    # French and German write Genre the same; German and Italian say Screenshot; French writes Collections the same; German says Cover
 SAME_AS_ENGLISH |= {'Orange', 'Champagne', 'Neutral'}    # colour names: Orange in French and German, Champagne in French and Italian, Neutral in German
 SAME_AS_ENGLISH |= {'Radio', 'LIVE', 'Live', '%d stations'}    # Radio in French, German, Spanish, Italian and Polish; LIVE and Live in German and Italian; "stations" in French

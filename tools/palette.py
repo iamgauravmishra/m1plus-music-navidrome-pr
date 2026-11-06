@@ -99,7 +99,7 @@ ACCENT_DISC = ('drop_wifiopen', 'drop_btopen', 'drop_keylockopen', 'drop_eqopen'
 ACCENT_GLYPH = ('pod_ic_', 'fo_ic_', 'pod_ci_')
 ACCENT_GLYPH_STOCK = ('player_albuminfo', 'player_songerinfo', 'p_add', 'p_multiple', 'p_abrepeat', 'p_delete',
                       'pc_ic_import', 'pc_ic_speed', 'pc_ic_refresh', 'pc_ic_select', 'pc_ic_check', 'pc_ic_down', 'pc_ic_undo', 'pc_ic_trash',
-                      'pl_ic_new', 'pl_ic_import', 'pl_ic_export', 'pl_ic_delete', 'rm_ic_next', 'rm_ic_after', 'rm_ic_add', 'batchadd_fav', 'batchadd_playlist', 'sg_tick', 'mulselected',
+                      'pl_ic_new', 'pl_ic_import', 'pl_ic_export', 'pl_ic_delete', 'rm_ic_next', 'rm_ic_after', 'rm_ic_add', 'rm_ic_fav', 'rm_ic_unfav', 'rm_ic_info', 'batchadd_fav', 'batchadd_playlist', 'sg_tick', 'mulselected',
                       'ah_pill_down', 'dp_pill_down')
 # TILE: the Podcasts Library rows' tiles (patch/podcasts.c; a #1E1E1E rounded square, ACC_TILE_R, with a white glyph on it): white goes to the accent, the square stays exactly #1E1E1E, the antialiased glyph edge
 # between blends by lightness (the disc rule with the tile's grey as the fixed end). Their pod_ic_ prefix is why they are in GLYPH_NOT (the glyph rule would paint the whole square).

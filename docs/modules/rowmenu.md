@@ -1,13 +1,13 @@
-# Track rows' "..." menu (Play Next, Play After, Add to Playlist)
+# Track rows' "..." menu (Play Next, Play After, Add to Playlist, Favorite, Get Info)
 
 A grey "..." at the right end of every track row opens a bottom sheet in the look of Now Playing's More sheet ([playmore](playmore.md)).
 Pages: the album page (`patch/albumpage.c`) and the Songs page (`patch/songs.c`) with every list it hosts (the library, a playlist, genre, artist, Most Played,
 Recently Played / Added, Hi-Res, Favourites; whatever `sg.cls` covers). Not in this phase: Search, Daily Mix, the Albums grid, Folders, Podcasts.
 
-**Sources:** `patch/rowmenu.c` / `rowmenu.h` (open, close, the "..." bitmap and its painter, the actions), the pages' row painters, hit tests and one-row
+**Sources:** `patch/rowmenu.c` / `rowmenu.h` (open, close, the "..." bitmap and its painter, the actions), `patch/songinfo.c` (Get Info, [songinfo](songinfo.md)), the pages' row painters, hit tests and one-row
 `Add to Playlist`, `patch/upnext.c` (`upnext_add`, [queue](queue.md)), `patch/songops.c` (`so_add`), `patch/picker.c`, `tools/pod_ui.py` (`row_menu`),
 `tools/mod_icons.py` (`RM_MENU_ICONS`, `RM_DOTS`, `GLASS_ROWMENU`), `patch/offsets.inc` (`RM_*`), `tools/pod_i18n.py`.
-**Tests:** `test/pod/rowmenu.py` (four sections); the pages' own tests keep their old numbers with no menu assets (`test/pod/songs.py`, `albumpage.py`).
+**Tests:** `test/pod/rowmenu.py` (five sections; `fav_info_tests`: the toggle, its label and glyph, the toasts, a failed add, Get Info); the pages' own tests keep their old numbers with no menu assets (`test/pod/songs.py`, `albumpage.py`).
 **Preview:** `uv run python -I tools/preview_rowmenu.py work/mod-release out/preview/rowmenu.png` (also `tools/preview_songs.py`).
 Evidence tags: **[S]** static (read from the stock code), **[E]** emulated (Unicorn), **[U]** untested on the device. Nothing here has been on the device: **[E]** or **[U]** throughout.
 
@@ -27,11 +27,11 @@ Evidence tags: **[S]** static (read from the stock code), **[E]** emulated (Unic
   `SC_DRAG_PX` 10 px of the press, on the same row and still in the zone opens the menu. A drag, a scroll, a press that moves 10 px or more, a press that began in the zone and ended off it
   and a release on the title block, a section header or the air below the last row open nothing. A press that began elsewhere in the row and moved a few pixels into the zone is a row tap
   (it plays, as it always did). The rest of the row plays the song as before.
-- **The sheet** copies Now Playing's More sheet ([playmore](playmore.md) "Glass"): a full-window `#00000082` scrim (the sheet's dim) whose tap closes the menu, then `rm_card`, 320 x 150 on the
-  window's foot (window y 300..450, screen 330..480) with `rm_glass` (`mod_icons.glass_image(320, 150, 18, GLASS_SHEET_FILL, top_only=True)`: top corners only) as its `bg_image`, drawn 1:1.
-  Three full-width 50 px rows: a bare 24 px Lucide glyph at x 14 (the accent with one picked, as every sheet's glyphs: `ACCENT_GLYPH_STOCK`, [accent](accent.md)) and the 18 px white label from x 48 to 298 (the sheet's own rows, `pod_tape`), rows transparent and `#FFFFFF10` pressed,
-  the sheet's `#FFFFFF22` hairline above every row but the first. Rows, top to bottom: **Play Next** (`list-start`), **Play After** (`list-end`), **Add to Playlist** (`list-plus`).
-  The label is "Play After", not "Play Last". No Go to Album / Go to Artist.
+- **The sheet** copies Now Playing's More sheet ([playmore](playmore.md) "Glass"): a full-window `#00000082` scrim (the sheet's dim) whose tap closes the menu, then `rm_card`, 320 x 250 on the
+  window's foot (window y 200..450, screen 230..480) with `rm_glass` (`mod_icons.glass_image(320, 250, 18, GLASS_SHEET_FILL, top_only=True)`: top corners only) as its `bg_image`, drawn 1:1.
+  Five full-width 50 px rows: a bare 24 px Lucide glyph at x 14 (the accent with one picked, as every sheet's glyphs: `ACCENT_GLYPH_STOCK`, [accent](accent.md)) and the 18 px white label from x 48 to 298 (the sheet's own rows, `pod_tape`), rows transparent and `#FFFFFF10` pressed,
+  the sheet's `#FFFFFF22` hairline above every row but the first. Rows, top to bottom: **Play Next** (`list-start`), **Play After** (`list-end`), **Add to Playlist** (`list-plus`), **Favorite** (`star`; "Undo Favorite" with the filled star `rm_ic_unfav` when the track is a favourite), **Get Info** (`info`).
+  The label is "Play After", not "Play Last". The hairline sits above every row (not only between the groups). No Go to Album / Go to Artist.
 - **Place and width** are the asset's for every row and language: the payload only shows and hides the scrim and the sheet. The longest label of the 13 languages (Russian, 212 px) fits the 250 px box.
 
 ## Actions
@@ -40,6 +40,8 @@ Evidence tags: **[S]** static (read from the stock code), **[E]** emulated (Unic
 |---|---|
 | Play Next / Play After | `rowmenu_open` copies the row's `stSongInfo` into a one-row deque (`_create_deque("stSongInfo")`, `_deque_push_back`, as `albums_open_artist` builds its carrier), so a list read again under the open menu cannot pull the row away. The row calls `upnext_add(rows, after)` (0 Play Next, 1 Play After), destroys the deque, closes the menu, then toasts with `pod_toast`. |
 | Add to Playlist | closes the menu, then the page's `*_add_one(row)`: a bit for that row in the page's own select bitset (`sg.sel` / `ab.sel`), `so_add(cls, count, sel, 1, valid, ...)` (our picker, `patch/picker.c`, or where it cannot open the stock one with the stock selection vector filled with that row), the bitset cleared again. The picker's return is the page's existing `EVT_WINDOW_TO_FG` handling. |
+| Favorite | stock's own star calls on the row's copy (`manage_myfav` 0x4ef884: `checkFavExist`, then `deleteMusicFromFav` or `addMyFav`; the table Now Playing's star and the Playlists page's Favorites read). The state is read at every open (`rowmenu_open` sets the label and the glyph's image) and again after the call: a call that changed nothing toasts "Adding Failed", else "Added to Favorites" / "Removed from Favorites". An open Favourites list is not read again until its page returns to the front. |
+| Get Info | closes the menu, `songinfo_open(rec)` on the row's copy, frees the copy ([songinfo](songinfo.md)). |
 | scrim | closes the menu (and drops the copy). |
 
 The menu also closes when the page reads its list again (`sg_load` / `ab_load`: the row is an index into the old list), when the window goes behind another and when the page is destroyed.
@@ -61,7 +63,7 @@ The menu also closes when the page reads its list again (`sg_load` / `ab_load`: 
 
 - No widget per row: the "..." is a bitmap (`rm_make_dots`: the image `rm_dots` decoded by `cc_decode`, its red channel the coverage, `#8C8C8C`) drawn by `rowmenu_paint` from the page's row painter with
   the chevrons' crop to the list's view, and the zone is hit-tested in the page's `EVT_POINTER_DOWN/UP` handlers (`sg_in_zone`, `ab_in_zone`). The asset holds only the hidden, insensitive `rm_scrim`
-  and `rm_card` (with `rm_item0..2`, `rm_icon0..2`, `rm_label0..2`) as the window's last two children (`pod_ui.row_menu`, after the sort card on the Songs page and the navbar on the album page).
+  and `rm_card` (with `rm_item0..4`, `rm_icon0..4`, `rm_label0..4`) as the window's last two children (`pod_ui.row_menu`, after the sort card on the Songs page and the navbar on the album page).
 - `rowmenu_t` lives in each page's state (`sg.rm`, `ab.rm`); the page text edge follows `rowmenu_on` and, on Songs, the rail (`sg_edge`). A list read again with the rail's presence changed drops its text tiles
   (`sg.tend`): their ellipses were cut for the other width.
 - The temporary Developer rows "Test: Play Next / Test: Play After" (`ACT_UPNEXT_NEXT` 50, `ACT_UPNEXT_AFTER` 51), their log `/mnt/mmc/queue-probe.log` and their texts are gone; the ids 50 and 51 are unused.
@@ -92,3 +94,4 @@ Use Songs (a library with sections and the rail), a playlist, Favourites and an 
 8. **Add to Playlist**: the picker opens for that song alone (the playlist gets only it; a duplicate is skipped), returns to the page, the list is the same.
 9. **Select mode**: no "..." and the text wide again; tapping rows still marks them. Leaving it brings the "..." back.
 10. A long list: the menu on the 1st and the 500th row; scroll with the menu closed after use (no stuck press fill).
+11. **Favorite**: the star fills and the row reads "Undo Favorite" the next time; the song shows under Playlists > Favorites and Now Playing's star is on for it; Undo removes it. **Get Info**: the page shows the right format, rate, depth, duration and size for a FLAC, an MP3 and an M4A (rate and depth rows absent), a long path wraps, Back returns to the list.

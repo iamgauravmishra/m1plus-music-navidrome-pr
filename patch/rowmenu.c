@@ -1,4 +1,4 @@
-/* M1+ Music track rows' "..." menu: Play Next, Play After, Add to Playlist (docs/modules/rowmenu.md has the design, the geometry and the device checklist).
+/* M1+ Music track rows' "..." menu: Play Next, Play After, Add to Playlist, Favorite, Get Info (docs/modules/rowmenu.md has the design, the geometry and the device checklist).
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
@@ -14,6 +14,7 @@
 #include "covercache.h"
 #include "i18n.h"
 #include "upnext.h"
+#include "songinfo.h"
 #include "rowmenu.h"
 
 extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
@@ -76,12 +77,44 @@ static int rm_on_scrim(void *ctx, void *e) {
     return RET_OK;
 }
 
+/* Favorite / Undo Favorite: stock's own star calls (manage_myfav 0x4ef884: checkFavExist, then deleteMusicFromFav or addMyFav, on the record; Now Playing's star and the Playlists page's Favorites
+ * list read the same myfav table) on the row's copy. The answer is read again: a call that changed nothing is "Adding Failed". */
+static void rm_favorite(rowmenu_t *rm) {
+    void *rec = rm->rows ? deque_at(rm->rows, 0) : (void *)0;
+    int was, now;
+    if (!rec) {
+        rowmenu_close(rm);
+        return;
+    }
+    was = checkFavExist(rec) != 0;
+    if (was)
+        deleteMusicFromFav(rec);
+    else
+        addMyFav(rec);
+    now = checkFavExist(rec) != 0;
+    rowmenu_close(rm);
+    pod_toast(TR(now == was ? "msg_addfailed" : now ? "Added to Favorites" : "Removed from Favorites"));
+}
+
+/* Get Info: the page opens on the row's copy (it copies what it shows), then the copy goes. */
+static void rm_info(rowmenu_t *rm) {
+    void *rows = rm->rows, *rec = rows ? deque_at(rows, 0) : (void *)0;
+    rm->rows = (void *)0;
+    rowmenu_close(rm);
+    if (rec) songinfo_open(rec);
+    if (rows) deque_destroy(rows);
+}
+
 static int rm_on_item(void *ctx, void *e) {
     struct rowmenu_slot *s = (struct rowmenu_slot *)ctx;
     rowmenu_t *rm = s->rm;
     (void)e;
     if (!rm->open) return RET_OK;
-    if (s->k == 2) { /* Add to Playlist: the page's one-row selection and picker, once the menu is gone */
+    if (s->k == 3) {
+        rm_favorite(rm);
+    } else if (s->k == 4) {
+        rm_info(rm);
+    } else if (s->k == 2) { /* Add to Playlist: the page's one-row selection and picker, once the menu is gone */
         rowmenu_add_fn add = rm->add;
         int row = rm->row;
         rowmenu_close(rm);
@@ -102,7 +135,7 @@ static int rm_on_item(void *ctx, void *e) {
 }
 
 int rowmenu_bind(rowmenu_t *rm, void *win) {
-    static const char *const ITEMS[RM_ROWS] = {"rm_item0", "rm_item1", "rm_item2"};
+    static const char *const ITEMS[RM_ROWS] = {"rm_item0", "rm_item1", "rm_item2", "rm_item3", "rm_item4"};
     int i, ok;
     memset(rm, 0, sizeof *rm);
     rm->win = win;
@@ -114,6 +147,8 @@ int rowmenu_bind(rowmenu_t *rm, void *win) {
         rm->item[i] = pod_bind(win, ITEMS[i], rm_on_item, &rm->slot[i]);
         ok = ok && rm->item[i];
     }
+    rm->fav_label = widget_lookup(win, "rm_label3", 1);
+    rm->fav_icon = widget_lookup(win, "rm_icon3", 1);
     rm_show(rm->scrim, 0);
     rm_show(rm->card, 0);
     if (!ok) return 0;
@@ -150,6 +185,9 @@ int rowmenu_open(rowmenu_t *rm, int row, void *rec, rowmenu_add_fn add) {
         deque_destroy(d);
         return 0;
     }
+    rm->fav = checkFavExist(rec) != 0; /* (the sheet shows the state of this row now) */
+    if (rm->fav_label) widget_set_tr_text(rm->fav_label, rm->fav ? "Undo Favorite" : "Favorite");
+    if (rm->fav_icon) widget_set_prop_str(rm->fav_icon, "image", rm->fav ? "rm_ic_unfav" : "rm_ic_fav");
     rm->rows = d, rm->row = row, rm->add = add, rm->open = 1;
     rm_show(rm->scrim, 1);
     rm_show(rm->card, 1);

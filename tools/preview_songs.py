@@ -232,16 +232,17 @@ def sort_card(s, im, current=0):
         if i == current: tick(im, CARD_X + CARD_W - 16 - 18, y + (CARD_ROW - 18) // 2, 18, PI.WHITE)
 
 
-def row_menu(s, im, keys=('Play Next', 'Play After', 'Add to Playlist')):
-    """The rows' menu (patch/rowmenu.c, tools/pod_ui.py row_menu): the scrim's dim, then Now Playing's More sheet at the window's foot: the rm_glass pane (320 x 150, top corners only),
-    three 50 px rows, a 24 px glyph at x 14, the 18 px label from x 48, the 13 % white hairline above every row but the first."""
+def row_menu(s, im, keys=('Play Next', 'Play After', 'Add to Playlist', 'Favorite', 'Get Info'), fav_on=False):
+    """The rows' menu (patch/rowmenu.c, tools/pod_ui.py row_menu): the scrim's dim, then Now Playing's More sheet at the window's foot: the rm_glass pane (320 x 250, top corners only),
+    five 50 px rows, a 24 px glyph at x 14, the 18 px label from x 48, the 13 % white hairline above every row but the first."""
     import pod_ui
     im.alpha_composite(Image.new('RGBA', im.size, (0, 0, 0, 0x82)))
     rh = O['PM_ROW_H']; h = len(keys) * rh; y = im.height - h
     im.alpha_composite(s.img('rm_glass'), (0, y))
-    for i, (key, name) in enumerate(zip(keys, ('rm_ic_next', 'rm_ic_after', 'rm_ic_add'))):
+    for i, (key, name) in enumerate(zip(keys, ('rm_ic_next', 'rm_ic_after', 'rm_ic_add', 'rm_ic_fav', 'rm_ic_info'))):
         ry = y + i * rh
         if i: im.alpha_composite(Image.new('RGBA', (W, 1), (255, 255, 255, 0x22)), (0, ry))
+        if fav_on and key == 'Favorite': name, key = 'rm_ic_unfav', 'Undo Favorite'
         g = s.img(name); im.alpha_composite(g, (pod_ui.RM_ICON_X, ry + (rh - g.height) // 2))
         s.text(im, pod_ui.RM_TEXT_X, ry + rh / 2, s.clip(tr(s, key), pod_ui.RM_LABEL_PX, W - pod_ui.RM_TEXT_X - pod_ui.RM_TEXT_R), pod_ui.RM_LABEL_PX)
     return 0, y, W, h
@@ -271,7 +272,7 @@ def page(s, covers=True, scroll=0, touched=None, select=None, menu=False, letter
         pill(s, im, O['SG_PILL_X0'], py, tr(s, 'Add to Playlist'), s.img('sg_listplus'), w=O['SG_BAR_PILL_W'])
         pill(s, im, O['SG_BAR_PILL_X1'], py, tr(s, 'Delete'), s.img('sg_trash'), w=O['SG_BAR_PILL_W'])
     if menu: sort_card(s, im)
-    if row_menu_at: row_menu(s, im)
+    if row_menu_at: row_menu(s, im, fav_on=row_menu_at == 'fav')
     if touched:
         x, y = (W - BUBBLE) // 2, NAV + (WIN - NAV - BUBBLE) // 2
         r = 4

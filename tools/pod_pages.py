@@ -529,6 +529,9 @@ RADIO = Page('m1plus_radio', 'm1plus_radio_page', 'Radio', kind='radio')
 RADIONP = Page('m1plus_radionp', 'm1plus_radionp_page', 'Radio', kind='radionp')
 RADIOINFO = Page('m1plus_radioinfo', 'm1plus_radioinfo_page', 'Station Info', kind='radioinfo')   # patch/radioinfo.c: Radio Now Playing's Station Info
 
+# Get Info (patch/songinfo.c, docs/modules/songinfo.md): a track's details, opened from the track rows' "..." sheet.
+SONGINFO = Page('m1plus_songinfo', 'm1plus_songinfo_page', 'Get Info', kind='songinfo')
+
 # The Tape page (patch/tape.c): a fullscreen window drawn landscape; the payload paints the cassette and takes the touches (opened from Now Playing's More dialog, not from a menu row).
 TAPE = Page('m1plus_tape', 'm1plus_tape_page', 'Cassette Mode', kind='tape')
 
@@ -622,7 +625,7 @@ QUEUE_PAGE = Page('m1plus_queue', 'm1plus_queue_page', 'Queue', kind='queue')
 # PAGES[0] is the entry page.
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
          EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, SORT_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL, FOLDERS, QUEUE_PAGE,
-         RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST, FILES_PAGE, UPDATE, RELNOTES, BG_PAGE, ACCENT_PAGE, APPEARANCE_PAGE, PULLDOWN_PAGE, RADIO, RADIONP, RADIOINFO]
+         RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST, FILES_PAGE, UPDATE, RELNOTES, BG_PAGE, ACCENT_PAGE, APPEARANCE_PAGE, PULLDOWN_PAGE, RADIO, RADIONP, RADIOINFO, SONGINFO]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE

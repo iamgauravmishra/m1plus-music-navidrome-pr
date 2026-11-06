@@ -724,8 +724,8 @@
 /* The track rows' "..." menu (patch/rowmenu.c, tools/pod_ui.py row_menu, docs/modules/rowmenu.md): each row of the album page and of the Songs page's lists ends with a grey "..." (RM_DOTS_PX px,
  * RM_DOTS_RGB) centred in a RM_MORE_W wide tap zone (flush with its right edge beside the rail) whose right edge is RM_MORE_RIGHT (the list's width); on the Songs page, while the A-Z rail is shown, RM_MORE_RIGHT_RAIL (flush with the rail's
  * touch column, which starts at SG_RAIL_X 284). The row's text ends RM_TEXT_GAP before the zone. A tap on it opens the sheet: RM_ROWS rows of PM_ROW_H at the window's foot in
- * Now Playing's More sheet's glass (rm_glass, 320 x 150, top corners only), laid out by the asset (the payload only shows and hides it). */
-#define RM_ROWS 3
+ * Now Playing's More sheet's glass (rm_glass, 320 x 250, top corners only), laid out by the asset (the payload only shows and hides it). */
+#define RM_ROWS 5
 #define RM_MORE_W 44
 #define RM_MORE_RIGHT 310
 #define RM_MORE_RIGHT_RAIL 284
