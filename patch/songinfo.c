@@ -146,7 +146,8 @@ static int gi_mpeg(const unsigned char *b, unsigned n, gi_head_t *h) {
     unsigned i, j, ver, lay, br, sr, rate, kbps, len, pad;
     for (i = 0; i + 4 <= n; ++i) {
         if (b[i] != 0xff || (b[i + 1] & 0xe0) != 0xe0) continue;
-        ver = b[i + 1] >> 3 & 3, lay = b[i + 1] >> 1 & 3, br = b[i + 2] >> 4, sr = b[i + 2] >> 2 & 3, pad = b[i + 2] >> 1 & 1;
+        ver = b[i + 1] >> 3 & 3, lay = b[i + 1] >> 1 & 3, br = b[i + 2] >> 4, sr = b[i + 2] >> 2 & 3,
+        pad = b[i + 2] >> 1 & 1;
         if (ver == 1 || !lay || !br || br == 15 || sr == 3) continue;
         rate = T[ver == 3 ? 0 : ver == 2 ? 1 : 2][sr];
         kbps = K[ver == 3 ? 3 - lay : lay == 3 ? 3 : 4][br - 1];
@@ -155,7 +156,8 @@ static int gi_mpeg(const unsigned char *b, unsigned n, gi_head_t *h) {
         else
             len = (lay == 1 && ver != 3 ? 72000 : 144000) * kbps / rate + pad;
         j = i + len;
-        if (j + 4 <= n && (b[j] != 0xff || (b[j + 1] & 0xfe) != (b[i + 1] & 0xfe) || (b[j + 2] & 0x0c) != (b[i + 2] & 0x0c)))
+        if (j + 4 <= n &&
+            (b[j] != 0xff || (b[j + 1] & 0xfe) != (b[i + 1] & 0xfe) || (b[j + 2] & 0x0c) != (b[i + 2] & 0x0c)))
             continue;
         h->rate = rate;
         return 1;
@@ -332,7 +334,10 @@ static void gi_build(const gi_rec_t *r) {
     y = GI_TOP + GI_COVER + GI_HEAD_GAP;
 
     gi_format_text(fmt, r->path);
-    gi_read_head(r->path, !strcmp(fmt, "MP3") || !strcmp(fmt, "MP2") || !strcmp(fmt, "MP1") || !strcmp(fmt, "MPA") || !strcmp(fmt, "MPGA"), &h);
+    gi_read_head(r->path,
+                 !strcmp(fmt, "MP3") || !strcmp(fmt, "MP2") || !strcmp(fmt, "MP1") || !strcmp(fmt, "MPA") ||
+                     !strcmp(fmt, "MPGA"),
+                 &h);
     sz = cc_file_size(r->path);
     if (sz < 0 || sz > 0x7fffffff) sz = 0;
     if (cue_dur) { /* a CUE track with both ends: nothing to measure */
