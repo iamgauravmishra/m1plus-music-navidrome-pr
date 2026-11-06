@@ -58,6 +58,7 @@ for commands, [UI](ui.md) for layout/assets, and [history](history.md) for recor
 | [Vinyl Mode](modules/vinyl.md) | Portrait turntable page: turning cover label, tonearm, keys |
 | [Menu](modules/menu.md) | Home/normal instances, Extras and customization |
 | [Languages](modules/i18n.md) | Translation tables, keys and width checks |
+| [Wi-Fi Transfer](modules/wifi-transfer.md) | Stock web app replaced: `api.cgi` (static MIPS CGI behind thttpd: list, download, tar, folders, move, delete, upload), API contract, thttpd limits |
 | [Screenshot](modules/screenshot.md) | Countdown, framebuffer capture and import |
 | [Keyboard](modules/keyboard.md) | Own QWERTY keyboard page, API, tap log; gap rule; Chinese (Pinyin) layer and candidate strip |
 | [List gestures](modules/gestures.md) | Drag cancellation and stopping coasting lists |

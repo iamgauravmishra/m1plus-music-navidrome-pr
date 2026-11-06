@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>M1 Plus</title>
+<script>try { const m = localStorage.getItem("wt-theme"); if (m === "light" || m === "dark") document.documentElement.dataset.theme = m; } catch { /* private mode: follow the system */ }</script>
+<style>
+:root {
+  --bg: #f5f5f7; --panel: #fff; --text: #1d1d1f; --sub: #6e6e73; --line: #e3e3e6; --hover: #f0f0f2;
+  --sel: #e6e6ea; --btn: #1d1d1f; --btn-text: #fff; --soft: #ececef; --danger: #d70015; --meter: #1d1d1f;
+  --shadow: 0 8px 32px rgba(0,0,0,.14); --r: 12px;
+  color-scheme: light dark;
+}
+/* dark: the system's when no theme is chosen (no data-theme), else the chosen one; the head script sets data-theme */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #000; --panel: #1c1c1e; --text: #f5f5f7; --sub: #98989d; --line: #2c2c2e; --hover: #242426;
+    --sel: #303033; --btn: #f5f5f7; --btn-text: #000; --soft: #2c2c2e; --danger: #ff453a; --meter: #f5f5f7;
+    --shadow: 0 8px 32px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme=light] { color-scheme: light; }
+:root[data-theme=dark] {
+  color-scheme: dark;
+  --bg: #000; --panel: #1c1c1e; --text: #f5f5f7; --sub: #98989d; --line: #2c2c2e; --hover: #242426;
+  --sel: #303033; --btn: #f5f5f7; --btn-text: #000; --soft: #2c2c2e; --danger: #ff453a; --meter: #f5f5f7;
+  --shadow: 0 8px 32px rgba(0,0,0,.6);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans", "Noto Sans CJK SC", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px 120px; }
+
+/* header */
+header { position: relative; display: flex; align-items: flex-end; gap: 16px; padding: 28px 0 18px; flex-wrap: wrap; }
+.title h1 { margin: 0; font-size: 28px; letter-spacing: -.02em; }
+.title p { margin: 2px 0 0; color: var(--sub); font-size: 13px; }
+.hdctl { position: absolute; top: 12px; right: 0; display: flex; gap: 8px; }
+.hdctl .btn, .hdctl select { height: 32px; }
+.hdctl .btn.icon { width: 32px; }
+.lang { position: relative; display: inline-flex; }
+.lang svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; pointer-events: none; }
+.lang select { border: 0; background: var(--soft); border-radius: 999px; padding: 0 12px 0 32px; outline: none; appearance: none; cursor: pointer; max-width: 150px; }
+.lang option { color: var(--text); background: var(--panel); }
+.storage { margin-left: auto; min-width: 220px; font-size: 12px; color: var(--sub); }
+.meter { height: 6px; background: var(--soft); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+.meter > i { display: block; height: 100%; background: var(--meter); border-radius: 3px; }
+
+/* toolbar */
+.bar { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 10px 0; display: flex; gap: 8px;
+  align-items: center; flex-wrap: wrap; }
+.crumbs { display: flex; align-items: center; gap: 2px; font-size: 17px; font-weight: 600; min-width: 0; flex: 1 1 280px;
+  overflow: hidden; white-space: nowrap; }
+.crumbs a { color: var(--sub); text-decoration: none; padding: 4px 6px; border-radius: 8px; overflow: hidden; text-overflow: ellipsis; }
+.crumbs a:hover { background: var(--hover); color: var(--text); }
+.crumbs a.here { color: var(--text); }
+.crumbs a.drop { background: var(--sel); color: var(--text); }
+.crumbs .sep { color: var(--sub); opacity: .5; }
+.btn { border: 0; border-radius: 999px; padding: 7px 14px; background: var(--soft); display: inline-flex; align-items: center; gap: 6px;
+  white-space: nowrap; }
+.btn:hover { filter: brightness(.96); }
+.btn.primary { background: var(--btn); color: var(--btn-text); }
+.btn.icon { padding: 0; justify-content: center; }
+.btn.danger { color: var(--danger); }
+.btn:disabled { opacity: .4; cursor: default; filter: none; }
+.btn svg { width: 16px; height: 16px; }
+.tools .btn, .selbar .btn, .search input { height: 32px; }
+.tools .btn.icon, .selbar .btn.icon { width: 32px; }
+.search { position: relative; }
+.search input { border: 0; background: var(--soft); border-radius: 999px; padding: 7px 12px 7px 32px; width: 180px; outline: none; }
+.search input:focus { box-shadow: 0 0 0 2px var(--line); }
+.search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--sub); }
+select.sort { border: 0; background: var(--soft); border-radius: 999px; padding: 7px 12px; outline: none; appearance: none; }
+
+/* selection bar */
+.bar { height: 56px; flex-wrap: nowrap; }
+.selbar { display: none; flex: 1 1 280px; align-items: center; gap: 8px; height: 36px; }
+.selbar b { margin-right: auto; font-size: 17px; font-weight: 600; padding: 4px 6px; }
+.selecting .selbar { display: flex; }
+.selecting .tools, .selecting .crumbs { display: none; }
+.tools { display: flex; gap: 8px; align-items: center; justify-content: flex-end; height: 36px; }
+
+/* list */
+.card { background: var(--panel); border-radius: var(--r); overflow: hidden; }
+.row { display: grid; grid-template-columns: 36px 40px minmax(0,1fr) 190px 90px 40px; align-items: center; min-height: 52px;
+  padding: 0 6px; border-top: 1px solid var(--line); cursor: default; user-select: none; }
+.row:first-child { border-top: 0; }
+.row:hover { background: var(--hover); }
+.row.sel { background: var(--sel); }
+.row.drop { box-shadow: inset 0 0 0 2px var(--text); }
+.row .name { min-width: 0; padding-right: 12px; }
+.row .name span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .name small { display: none; color: var(--sub); font-size: 12px; }
+.row .date, .row .size { color: var(--sub); font-size: 13px; text-align: right; padding-right: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.row.head { min-height: 34px; font-size: 12px; color: var(--sub); cursor: default; }
+.row.head:hover { background: none; }
+.row.head .name, .row.head .date, .row.head .size { cursor: pointer; }
+.row.head .on { color: var(--text); }
+.check { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--sub); display: grid; place-items: center;
+  margin: 0 auto; opacity: .35; }
+.row:hover .check, .selecting .check { opacity: 1; }
+.row.sel .check { background: var(--text); border-color: var(--text); opacity: 1; }
+.row.sel .check::after { content: ""; width: 9px; height: 5px; border: 2px solid var(--panel); border-top: 0; border-right: 0;
+  transform: rotate(-45deg) translate(1px, -1px); }
+.ico { width: 30px; height: 30px; border-radius: 6px; display: grid; place-items: center; color: var(--sub); overflow: hidden; }
+.ico svg { width: 24px; height: 24px; }
+.more { border: 0; background: none; width: 32px; height: 32px; border-radius: 50%; color: var(--sub); display: grid; place-items: center; }
+.more:hover { background: var(--soft); color: var(--text); }
+.chev { color: var(--sub); opacity: .6; }
+.empty { padding: 60px 20px; text-align: center; color: var(--sub); }
+
+
+/* menu */
+.menu { position: fixed; z-index: 30; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); padding: 6px;
+  min-width: 190px; border: 1px solid var(--line); }
+.menu button { display: flex; width: 100%; border: 0; background: none; padding: 8px 10px; border-radius: 8px; gap: 10px; align-items: center; text-align: left; }
+.menu button:hover { background: var(--hover); }
+.menu button.danger { color: var(--danger); }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: 5px 4px; }
+.menu svg { width: 16px; height: 16px; color: var(--sub); }
+.menu .danger svg { color: var(--danger); }
+
+/* dialog */
+.scrim { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.35); display: grid; place-items: center; padding: 20px;
+  animation: fade .15s; }
+.dialog { background: var(--panel); border-radius: 16px; box-shadow: var(--shadow); width: min(400px, 100%); padding: 22px; }
+.dialog h3 { margin: 0 0 6px; font-size: 17px; }
+.dialog p { margin: 0 0 16px; color: var(--sub); font-size: 14px; word-break: break-word; }
+.dialog input[type=text] { width: 100%; border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 9px 12px; outline: none; margin-bottom: 16px; }
+.dialog .acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.dialog label { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--sub); margin: -4px 0 16px; }
+.picker { max-height: 260px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 16px; }
+.picker div { padding: 8px 12px; display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.picker div:hover { background: var(--hover); }
+.picker div.on { background: var(--sel); font-weight: 600; }
+.picker svg { width: 18px; height: 18px; color: var(--sub); flex: none; }
+.picker .tog { width: 18px; height: 18px; display: grid; place-items: center; flex: none; border-radius: 4px; }
+.picker .tog:hover { background: var(--soft); }
+.picker .tog svg { width: 14px; height: 14px; transition: transform .1s; }
+.picker .open svg { transform: rotate(90deg); }
+.uploads li .btns { grid-row: 1 / 3; grid-column: 2; align-self: center; display: flex; }
+
+/* uploads */
+.uploads { position: fixed; right: 20px; bottom: 20px; z-index: 20; width: min(380px, calc(100% - 40px)); background: var(--panel);
+  border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; border: 1px solid var(--line); }
+.uploads .hd { display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer; }
+.uploads .hd b { font-size: 14px; }
+.uploads .hd small { color: var(--sub); font-size: 12px; display: block; }
+.uploads .hd .grow { flex: 1; min-width: 0; }
+.uploads .total { height: 3px; background: var(--soft); }
+.uploads .total i { display: block; height: 100%; background: var(--meter); transition: width .2s; }
+.uploads ul { list-style: none; margin: 0; padding: 4px 0; max-height: 260px; overflow: auto; border-top: 1px solid var(--line); }
+.uploads.min ul { display: none; }
+.uploads li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 7px 14px; font-size: 13px; }
+.uploads li .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uploads li .st { color: var(--sub); font-size: 12px; grid-column: 1; }
+.uploads li .x { border: 0; background: none; color: var(--sub); padding: 4px; border-radius: 50%; display: flex; }
+.uploads li .x:hover { background: var(--soft); color: var(--text); }
+.uploads li .x svg { width: 16px; height: 16px; }
+.uploads li .p { grid-column: 1; height: 3px; background: var(--soft); border-radius: 2px; overflow: hidden; }
+.uploads li .p i { display: block; height: 100%; background: var(--meter); }
+.uploads li.done .st, .uploads li.done .n { color: var(--sub); }
+.uploads li.err .st { color: var(--danger); }
+
+/* drop overlay */
+.dropzone { position: fixed; inset: 0; z-index: 35; display: none; place-items: center; background: rgba(0,0,0,.4); pointer-events: none; }
+.dropzone div { border: 2px dashed #fff; border-radius: 20px; padding: 40px 56px; color: #fff; font-size: 20px; font-weight: 600; text-align: center; }
+.dropzone small { display: block; font-size: 14px; font-weight: 400; opacity: .8; margin-top: 6px; }
+body.dragging .dropzone { display: grid; }
+
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50; background: var(--btn); color: var(--btn-text);
+  padding: 10px 16px; border-radius: 999px; font-size: 14px; box-shadow: var(--shadow); display: flex; gap: 12px; align-items: center; animation: fade .2s; }
+.toast button { border: 0; background: none; color: inherit; font-weight: 600; padding: 0; }
+@keyframes fade { from { opacity: 0; } }
+
+@media (max-width: 680px) {
+  .wrap { padding: 0 12px 120px; }
+  header { padding-top: 18px; }
+  .storage { margin-left: 0; width: 100%; }
+  .hdctl { top: 8px; }
+  .lang select { width: 32px; padding: 0; color: transparent; }
+  .row { grid-template-columns: 34px 40px minmax(0,1fr) 36px; }
+  .row .date, .row .size { display: none; }
+  .row .name small { display: block; }
+  .search input { width: 120px; }
+  .bar { height: auto; flex-wrap: wrap; }
+  .tools, .selbar { flex: 1 1 100%; height: 36px; }
+  .selecting .crumbs { display: flex; }  /* phone: only the tools row swaps */
+  .tools .label, .selbar .label { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <header>
+    <div class="title"><h1>M1 Plus</h1><p id="sub"></p></div>
+    <div class="hdctl">
+      <label class="lang"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.500 5.600 12 3z"/></svg><select id="langsel"></select></label>
+      <button class="btn icon" id="theme"></button>
+    </div>
+    <div class="storage"><span id="space"></span><div class="meter"><i id="meter"></i></div></div>
+  </header>
+  <div class="bar" id="bar">
+    <nav class="crumbs" id="crumbs"></nav>
+    <div class="tools">
+      <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="filter" type="search"></label>
+      <button class="btn" id="newfolder"></button>
+      <button class="btn primary" id="upload"></button>
+    </div>
+    <div class="selbar"><b id="selcount"></b>
+      <button class="btn" data-act="download"></button>
+      <button class="btn" data-act="move"></button>
+      <button class="btn danger" data-act="delete"></button>
+      <button class="btn icon" data-act="clear" title="Esc"></button>
+    </div>
+  </div>
+  <main id="list"></main>
+</div>
+<input type="file" id="pickfiles" multiple hidden>
+<input type="file" id="pickfolder" multiple webkitdirectory hidden>
+<div class="dropzone"><div id="droptext"></div></div>
+<div id="uploads"></div>
+
+<script>
+"use strict";
+const STR = {
+"en":{"sub":"Wi-Fi Transfer","free":"{free} free of {total}","home":"Card","search":"Search","newFolder":"New Folder","upload":"Upload","uploadFiles":"Upload Files…","uploadFolder":"Upload Folder…","name":"Name","modified":"Date Modified","size":"Size","items":"{n} items","item":"1 item","selected":"{n} selected","download":"Download","downloadTar":"Download as .tar","move":"Move","moveTo":"Move to…","rename":"Rename","del":"Delete","open":"Open","info":"Get Info","cancel":"Cancel","create":"Create","delTitle":"Delete {what}?","delBody":"This can't be undone.","folderName":"Folder name","moveTitle":"Move {what} to","moveHere":"Move Here","exists":"“{name}” already exists","existsBody":"There's already an item with this name in {dir}.","replace":"Replace","skip":"Skip","keepBoth":"Keep Both","applyAll":"Apply to all remaining","uploading":"Uploading {n} items","uploaded":"{n} uploaded","left":"{size} left · about {t}","waiting":"Waiting","done":"Done","failed":"Failed — tap to retry","cancelled":"Cancelled","rescan":"Update the library on the player to see new music.","drop":"Drop to upload to {dir}","dropSub":"Files and folders","empty":"This folder is empty","noMatch":"No matches","deleted":"Deleted {what}","moved":"Moved {what}","sec":"{n} s","min":"{n} min","noSpace":"Not enough space on the card.","badName":"Names can't contain \" * : < > ? \\ | or end with a dot or a space.","offline":"Can't reach the player.","auto":"Auto","language":"Language","themeAuto":"Appearance: Auto","themeLight":"Appearance: Light","themeDark":"Appearance: Dark"},
+"zh":{"sub":"Wi-Fi 传输","free":"可用 {free}，共 {total}","home":"存储卡","search":"搜索","newFolder":"新建文件夹","upload":"上传","uploadFiles":"上传文件…","uploadFolder":"上传文件夹…","name":"名称","modified":"修改日期","size":"大小","items":"{n} 项","item":"1 项","selected":"已选 {n} 项","download":"下载","downloadTar":"下载为 .tar","move":"移动","moveTo":"移动到…","rename":"重命名","del":"删除","open":"打开","info":"获取信息","cancel":"取消","create":"创建","delTitle":"删除{what}？","delBody":"此操作无法撤销。","folderName":"文件夹名称","moveTitle":"将{what}移动到","moveHere":"移到这里","exists":"“{name}”已存在","existsBody":"{dir} 中已有同名项目。","replace":"替换","skip":"跳过","keepBoth":"保留两者","applyAll":"应用到其余项目","uploading":"正在上传 {n} 项","uploaded":"已上传 {n} 项","left":"剩余 {size} · 约 {t}","waiting":"等待中","done":"完成","failed":"失败 — 点按重试","cancelled":"已取消","rescan":"在播放器上更新曲库即可看到新音乐。","drop":"松开以上传到 {dir}","dropSub":"支持文件和文件夹","empty":"此文件夹为空","noMatch":"无匹配项","deleted":"已删除{what}","moved":"已移动{what}","sec":"{n} 秒","min":"{n} 分钟","noSpace":"存储卡空间不足。","badName":"名称不能包含 \" * : < > ? \\ |，也不能以点或空格结尾。","offline":"无法连接播放器。","auto":"自动","language":"语言","themeAuto":"外观：自动","themeLight":"外观：浅色","themeDark":"外观：深色"},
+"zh-HK":{"sub":"Wi-Fi 傳輸","free":"可用 {free}，共 {total}","home":"記憶卡","search":"搜尋","newFolder":"新增資料夾","upload":"上載","uploadFiles":"上載檔案…","uploadFolder":"上載資料夾…","name":"名稱","modified":"修改日期","size":"大小","items":"{n} 項","item":"1 項","selected":"已選 {n} 項","download":"下載","downloadTar":"下載為 .tar","move":"移動","moveTo":"移動到…","rename":"重新命名","del":"刪除","open":"打開","info":"取得資訊","cancel":"取消","create":"建立","delTitle":"刪除{what}？","delBody":"此操作無法還原。","folderName":"資料夾名稱","moveTitle":"將{what}移動到","moveHere":"移到此處","exists":"「{name}」已存在","existsBody":"{dir} 中已有同名項目。","replace":"取代","skip":"略過","keepBoth":"保留兩者","applyAll":"套用至其餘項目","uploading":"正在上載 {n} 項","uploaded":"已上載 {n} 項","left":"剩餘 {size} · 約 {t}","waiting":"等待中","done":"完成","failed":"失敗 — 點按以重試","cancelled":"已取消","rescan":"在播放器上更新曲庫即可看到新音樂。","drop":"放開以上載到 {dir}","dropSub":"支援檔案和資料夾","empty":"此資料夾是空的","noMatch":"沒有符合的項目","deleted":"已刪除{what}","moved":"已移動{what}","sec":"{n} 秒","min":"{n} 分鐘","noSpace":"記憶卡空間不足。","badName":"名稱不能包含 \" * : < > ? \\ |，也不能以點或空格結尾。","offline":"無法連線至播放器。","auto":"自動","language":"語言","themeAuto":"外觀：自動","themeLight":"外觀：淺色","themeDark":"外觀：深色"},
+"ja":{"sub":"Wi-Fi 転送","free":"{total} 中 {free} 空き","home":"カード","search":"検索","newFolder":"新規フォルダ","upload":"アップロード","uploadFiles":"ファイルをアップロード…","uploadFolder":"フォルダをアップロード…","name":"名前","modified":"更新日","size":"サイズ","items":"{n} 項目","item":"1 項目","selected":"{n} 項目を選択","download":"ダウンロード","downloadTar":".tar としてダウンロード","move":"移動","moveTo":"移動先…","rename":"名前を変更","del":"削除","open":"開く","info":"情報を見る","cancel":"キャンセル","create":"作成","delTitle":"{what}を削除しますか？","delBody":"この操作は取り消せません。","folderName":"フォルダ名","moveTitle":"{what}の移動先","moveHere":"ここに移動","exists":"「{name}」は既に存在します","existsBody":"{dir} に同じ名前の項目があります。","replace":"置き換える","skip":"スキップ","keepBoth":"両方を残す","applyAll":"残りすべてに適用","uploading":"{n} 項目をアップロード中","uploaded":"{n} 項目をアップロードしました","left":"残り {size} · 約 {t}","waiting":"待機中","done":"完了","failed":"失敗 — タップして再試行","cancelled":"キャンセルしました","rescan":"新しい曲を表示するには、プレーヤーでライブラリを更新してください。","drop":"ここにドロップして {dir} にアップロード","dropSub":"ファイルとフォルダ","empty":"このフォルダは空です","noMatch":"一致する項目はありません","deleted":"{what}を削除しました","moved":"{what}を移動しました","sec":"{n} 秒","min":"{n} 分","noSpace":"カードの空き容量が足りません。","badName":"名前に \" * : < > ? \\ | は使えません。末尾にピリオドやスペースも使えません。","offline":"プレーヤーに接続できません。","auto":"自動","language":"言語","themeAuto":"外観モード：自動","themeLight":"外観モード：ライト","themeDark":"外観モード：ダーク"},
+"ko":{"sub":"Wi-Fi 전송","free":"{total} 중 {free} 사용 가능","home":"카드","search":"검색","newFolder":"새 폴더","upload":"업로드","uploadFiles":"파일 업로드…","uploadFolder":"폴더 업로드…","name":"이름","modified":"수정한 날짜","size":"크기","items":"{n}개 항목","item":"1개 항목","selected":"{n}개 선택됨","download":"다운로드","downloadTar":".tar로 다운로드","move":"이동","moveTo":"이동할 위치…","rename":"이름 변경","del":"삭제","open":"열기","info":"정보 가져오기","cancel":"취소","create":"만들기","delTitle":"{what}을(를) 삭제할까요?","delBody":"이 작업은 되돌릴 수 없습니다.","folderName":"폴더 이름","moveTitle":"{what} 이동할 위치","moveHere":"여기로 이동","exists":"“{name}” 항목이 이미 있습니다","existsBody":"{dir}에 같은 이름의 항목이 있습니다.","replace":"대체","skip":"건너뛰기","keepBoth":"모두 유지","applyAll":"나머지 모두에 적용","uploading":"{n}개 항목 업로드 중","uploaded":"{n}개 항목 업로드됨","left":"{size} 남음 · 약 {t}","waiting":"대기 중","done":"완료","failed":"실패 — 눌러서 다시 시도","cancelled":"취소됨","rescan":"새 음악을 보려면 플레이어에서 라이브러리를 업데이트하세요.","drop":"여기에 놓아 {dir}에 업로드","dropSub":"파일 및 폴더","empty":"이 폴더는 비어 있습니다","noMatch":"일치하는 항목 없음","deleted":"{what} 삭제됨","moved":"{what} 이동됨","sec":"{n}초","min":"{n}분","noSpace":"카드 공간이 부족합니다.","badName":"이름에 \" * : < > ? \\ | 는 사용할 수 없으며 마침표나 공백으로 끝날 수 없습니다.","offline":"플레이어에 연결할 수 없습니다.","auto":"자동","language":"언어","themeAuto":"화면 모드: 자동","themeLight":"화면 모드: 라이트","themeDark":"화면 모드: 다크"},
+"fr":{"sub":"Transfert Wi-Fi","free":"{free} disponibles sur {total}","home":"Carte","search":"Chercher","newFolder":"Nouveau dossier","upload":"Envoyer","uploadFiles":"Envoyer des fichiers…","uploadFolder":"Envoyer un dossier…","name":"Nom","modified":"Date de modification","size":"Taille","items":"{n} éléments","item":"1 élément","selected":"{n} sélectionnés","download":"Télécharger","downloadTar":"Télécharger en .tar","move":"Déplacer","moveTo":"Déplacer vers…","rename":"Renommer","del":"Supprimer","open":"Ouvrir","info":"Informations","cancel":"Annuler","create":"Créer","delTitle":"Supprimer {what} ?","delBody":"Cette action est irréversible.","folderName":"Nom du dossier","moveTitle":"Déplacer {what} vers","moveHere":"Déplacer ici","exists":"« {name} » existe déjà","existsBody":"Un élément portant ce nom existe déjà dans {dir}.","replace":"Remplacer","skip":"Ignorer","keepBoth":"Garder les deux","applyAll":"Appliquer à tous les suivants","uploading":"Envoi de {n} éléments","uploaded":"{n} envoyés","left":"{size} restants · environ {t}","waiting":"En attente","done":"OK","failed":"Échec — touchez pour réessayer","cancelled":"Annulé","rescan":"Mettez à jour la bibliothèque sur le lecteur pour voir la nouvelle musique.","drop":"Déposez pour envoyer dans {dir}","dropSub":"Fichiers et dossiers","empty":"Ce dossier est vide","noMatch":"Aucun résultat","deleted":"{what} supprimé","moved":"{what} déplacé","sec":"{n} s","min":"{n} min","noSpace":"Pas assez d’espace sur la carte.","badName":"Un nom ne peut pas contenir \" * : < > ? \\ | ni finir par un point ou une espace.","offline":"Impossible de joindre le lecteur.","auto":"Auto","language":"Langue","themeAuto":"Apparence : auto","themeLight":"Apparence : clair","themeDark":"Apparence : sombre"},
+"de":{"sub":"Wi-Fi-Übertragung","free":"{free} frei von {total}","home":"Karte","search":"Suchen","newFolder":"Neuer Ordner","upload":"Hochladen","uploadFiles":"Dateien hochladen…","uploadFolder":"Ordner hochladen…","name":"Name","modified":"Änderungsdatum","size":"Größe","items":"{n} Objekte","item":"1 Objekt","selected":"{n} ausgewählt","download":"Laden","downloadTar":"Als .tar laden","move":"Verschieben","moveTo":"Verschieben nach…","rename":"Umbenennen","del":"Löschen","open":"Öffnen","info":"Informationen","cancel":"Abbrechen","create":"Anlegen","delTitle":"{what} löschen?","delBody":"Das lässt sich nicht rückgängig machen.","folderName":"Ordnername","moveTitle":"{what} verschieben nach","moveHere":"Hierher verschieben","exists":"„{name}“ existiert bereits","existsBody":"In {dir} gibt es bereits ein Objekt mit diesem Namen.","replace":"Ersetzen","skip":"Überspringen","keepBoth":"Beide behalten","applyAll":"Auf alle weiteren anwenden","uploading":"{n} Objekte werden hochgeladen","uploaded":"{n} hochgeladen","left":"{size} übrig · etwa {t}","waiting":"Wartet","done":"Fertig","failed":"Fehlgeschlagen – zum Wiederholen tippen","cancelled":"Abgebrochen","rescan":"Aktualisiere die Mediathek am Player, um neue Musik zu sehen.","drop":"Ablegen zum Hochladen in {dir}","dropSub":"Dateien und Ordner","empty":"Dieser Ordner ist leer","noMatch":"Keine Treffer","deleted":"{what} gelöscht","moved":"{what} verschoben","sec":"{n} s","min":"{n} Min.","noSpace":"Nicht genug Platz auf der Karte.","badName":"Namen dürfen weder \" * : < > ? \\ | enthalten noch auf Punkt oder Leerzeichen enden.","offline":"Der Player ist nicht erreichbar.","auto":"Automatisch","language":"Sprache","themeAuto":"Darstellung: Automatisch","themeLight":"Darstellung: Hell","themeDark":"Darstellung: Dunkel"},
+"es":{"sub":"Transferencia Wi-Fi","free":"{free} libres de {total}","home":"Tarjeta","search":"Buscar","newFolder":"Nueva carpeta","upload":"Subir","uploadFiles":"Subir archivos…","uploadFolder":"Subir carpeta…","name":"Nombre","modified":"Fecha de modificación","size":"Tamaño","items":"{n} elementos","item":"1 elemento","selected":"{n} seleccionados","download":"Descargar","downloadTar":"Descargar como .tar","move":"Mover","moveTo":"Mover a…","rename":"Renombrar","del":"Eliminar","open":"Abrir","info":"Obtener información","cancel":"Cancelar","create":"Crear","delTitle":"¿Eliminar {what}?","delBody":"Esta acción no se puede deshacer.","folderName":"Nombre de la carpeta","moveTitle":"Mover {what} a","moveHere":"Mover aquí","exists":"«{name}» ya existe","existsBody":"Ya hay un elemento con este nombre en {dir}.","replace":"Reemplazar","skip":"Omitir","keepBoth":"Conservar ambos","applyAll":"Aplicar a todos los restantes","uploading":"Subiendo {n} elementos","uploaded":"{n} subidos","left":"{size} restantes · unos {t}","waiting":"En espera","done":"Hecho","failed":"Error: toca para reintentar","cancelled":"Cancelado","rescan":"Actualiza la biblioteca en el reproductor para ver la música nueva.","drop":"Suelta para subir a {dir}","dropSub":"Archivos y carpetas","empty":"Esta carpeta está vacía","noMatch":"Sin coincidencias","deleted":"{what} eliminado","moved":"{what} movido","sec":"{n} s","min":"{n} min","noSpace":"No hay espacio suficiente en la tarjeta.","badName":"Los nombres no pueden contener \" * : < > ? \\ | ni terminar en punto o espacio.","offline":"No se puede conectar con el reproductor.","auto":"Automático","language":"Idioma","themeAuto":"Apariencia: automática","themeLight":"Apariencia: clara","themeDark":"Apariencia: oscura"},
+"it":{"sub":"Trasferimento Wi-Fi","free":"{free} liberi su {total}","home":"Scheda","search":"Cerca","newFolder":"Nuova cartella","upload":"Carica","uploadFiles":"Carica file…","uploadFolder":"Carica cartella…","name":"Nome","modified":"Data modifica","size":"Dimensione","items":"{n} elementi","item":"1 elemento","selected":"{n} selezionati","download":"Scarica","downloadTar":"Scarica come .tar","move":"Sposta","moveTo":"Sposta in…","rename":"Rinomina","del":"Elimina","open":"Apri","info":"Ottieni informazioni","cancel":"Annulla","create":"Crea","delTitle":"Eliminare {what}?","delBody":"L'operazione non può essere annullata.","folderName":"Nome cartella","moveTitle":"Sposta {what} in","moveHere":"Sposta qui","exists":"«{name}» esiste già","existsBody":"In {dir} esiste già un elemento con questo nome.","replace":"Sostituisci","skip":"Salta","keepBoth":"Mantieni entrambi","applyAll":"Applica a tutti i restanti","uploading":"Caricamento di {n} elementi","uploaded":"{n} caricati","left":"{size} rimanenti · circa {t}","waiting":"In attesa","done":"Fine","failed":"Non riuscito — tocca per riprovare","cancelled":"Annullato","rescan":"Aggiorna la libreria sul lettore per vedere la nuova musica.","drop":"Rilascia per caricare in {dir}","dropSub":"File e cartelle","empty":"Questa cartella è vuota","noMatch":"Nessuna corrispondenza","deleted":"{what} eliminato","moved":"{what} spostato","sec":"{n} s","min":"{n} min","noSpace":"Spazio insufficiente sulla scheda.","badName":"I nomi non possono contenere \" * : < > ? \\ | né terminare con un punto o uno spazio.","offline":"Impossibile raggiungere il lettore.","auto":"Automatico","language":"Lingua","themeAuto":"Aspetto: automatico","themeLight":"Aspetto: chiaro","themeDark":"Aspetto: scuro"},
+"th":{"sub":"ถ่ายโอนผ่าน Wi-Fi","free":"ว่าง {free} จาก {total}","home":"การ์ด","search":"ค้นหา","newFolder":"โฟลเดอร์ใหม่","upload":"อัปโหลด","uploadFiles":"อัปโหลดไฟล์…","uploadFolder":"อัปโหลดโฟลเดอร์…","name":"ชื่อ","modified":"วันที่แก้ไข","size":"ขนาด","items":"{n} รายการ","item":"1 รายการ","selected":"เลือกแล้ว {n}","download":"ดาวน์โหลด","downloadTar":"ดาวน์โหลดเป็น .tar","move":"ย้าย","moveTo":"ย้ายไปที่…","rename":"เปลี่ยนชื่อ","del":"ลบ","open":"เปิด","info":"รับข้อมูล","cancel":"ยกเลิก","create":"สร้าง","delTitle":"ลบ {what} หรือไม่","delBody":"ไม่สามารถยกเลิกการกระทำนี้ได้","folderName":"ชื่อโฟลเดอร์","moveTitle":"ย้าย {what} ไปที่","moveHere":"ย้ายมาที่นี่","exists":"มี “{name}” อยู่แล้ว","existsBody":"มีรายการชื่อนี้ใน {dir} อยู่แล้ว","replace":"แทนที่","skip":"ข้าม","keepBoth":"เก็บไว้ทั้งสอง","applyAll":"ใช้กับรายการที่เหลือทั้งหมด","uploading":"กำลังอัปโหลด {n} รายการ","uploaded":"อัปโหลดแล้ว {n} รายการ","left":"เหลือ {size} · ประมาณ {t}","waiting":"รอคิว","done":"เสร็จ","failed":"ล้มเหลว — แตะเพื่อลองใหม่","cancelled":"ยกเลิกแล้ว","rescan":"อัปเดตคลังเพลงบนเครื่องเล่นเพื่อดูเพลงใหม่","drop":"วางเพื่ออัปโหลดไปยัง {dir}","dropSub":"ไฟล์และโฟลเดอร์","empty":"โฟลเดอร์นี้ว่างเปล่า","noMatch":"ไม่พบรายการที่ตรงกัน","deleted":"ลบ {what} แล้ว","moved":"ย้าย {what} แล้ว","sec":"{n} วินาที","min":"{n} นาที","noSpace":"พื้นที่ในการ์ดไม่เพียงพอ","badName":"ชื่อห้ามมี \" * : < > ? \\ | และห้ามลงท้ายด้วยจุดหรือช่องว่าง","offline":"ไม่สามารถเชื่อมต่อกับเครื่องเล่นได้","auto":"อัตโนมัติ","language":"ภาษา","themeAuto":"รูปลักษณ์: อัตโนมัติ","themeLight":"รูปลักษณ์: สว่าง","themeDark":"รูปลักษณ์: มืด"},
+"pl":{"sub":"Transfer Wi-Fi","free":"Wolne: {free} z {total}","home":"Karta","search":"Szukaj","newFolder":"Nowy folder","upload":"Wyślij","uploadFiles":"Wyślij pliki…","uploadFolder":"Wyślij folder…","name":"Nazwa","modified":"Data modyfikacji","size":"Rozmiar","items":"Elementy: {n}","item":"1 element","selected":"Zaznaczono: {n}","download":"Pobierz","downloadTar":"Pobierz jako .tar","move":"Przenieś","moveTo":"Przenieś do…","rename":"Zmień nazwę","del":"Usuń","open":"Otwórz","info":"Pobierz informacje","cancel":"Anuluj","create":"Utwórz","delTitle":"Usunąć {what}?","delBody":"Tej operacji nie można cofnąć.","folderName":"Nazwa folderu","moveTitle":"Przenieś {what} do","moveHere":"Przenieś tutaj","exists":"„{name}” już istnieje","existsBody":"W {dir} jest już element o tej nazwie.","replace":"Zamień","skip":"Pomiń","keepBoth":"Zachowaj oba","applyAll":"Zastosuj do pozostałych","uploading":"Wysyłanie elementów: {n}","uploaded":"Wysłano: {n}","left":"Pozostało {size} · ok. {t}","waiting":"Oczekuje","done":"Gotowe","failed":"Błąd — dotknij, aby ponowić","cancelled":"Anulowano","rescan":"Zaktualizuj bibliotekę w odtwarzaczu, aby zobaczyć nową muzykę.","drop":"Upuść, aby wysłać do {dir}","dropSub":"Pliki i foldery","empty":"Ten folder jest pusty","noMatch":"Brak wyników","deleted":"Usunięto: {what}","moved":"Przeniesiono: {what}","sec":"{n} s","min":"{n} min","noSpace":"Za mało miejsca na karcie.","badName":"Nazwa nie może zawierać \" * : < > ? \\ | ani kończyć się kropką lub spacją.","offline":"Nie można połączyć się z odtwarzaczem.","auto":"Auto","language":"Język","themeAuto":"Wygląd: automatyczny","themeLight":"Wygląd: jasny","themeDark":"Wygląd: ciemny"},
+"ru":{"sub":"Передача по Wi-Fi","free":"Свободно {free} из {total}","home":"Карта","search":"Поиск","newFolder":"Новая папка","upload":"Отправить","uploadFiles":"Отправить файлы…","uploadFolder":"Отправить папку…","name":"Имя","modified":"Дата изменения","size":"Размер","items":"Элементов: {n}","item":"1 элемент","selected":"Выбрано: {n}","download":"Загрузить","downloadTar":"Загрузить как .tar","move":"Переместить","moveTo":"Переместить в…","rename":"Переименовать","del":"Удалить","open":"Открыть","info":"Сведения","cancel":"Отмена","create":"Создать","delTitle":"Удалить {what}?","delBody":"Это действие нельзя отменить.","folderName":"Имя папки","moveTitle":"Переместить {what} в","moveHere":"Переместить сюда","exists":"«{name}» уже существует","existsBody":"В {dir} уже есть элемент с таким именем.","replace":"Заменить","skip":"Пропустить","keepBoth":"Оставить оба","applyAll":"Применить ко всем остальным","uploading":"Отправка элементов: {n}","uploaded":"Отправлено: {n}","left":"Осталось {size} · около {t}","waiting":"Ожидание","done":"Готово","failed":"Сбой — нажмите, чтобы повторить","cancelled":"Отменено","rescan":"Обновите медиатеку на плеере, чтобы увидеть новую музыку.","drop":"Отпустите, чтобы отправить в {dir}","dropSub":"Файлы и папки","empty":"Эта папка пуста","noMatch":"Ничего не найдено","deleted":"Удалено: {what}","moved":"Перемещено: {what}","sec":"{n} с","min":"{n} мин","noSpace":"На карте недостаточно места.","badName":"Имя не может содержать \" * : < > ? \\ | и не может оканчиваться точкой или пробелом.","offline":"Не удаётся связаться с плеером.","auto":"Авто","language":"Язык","themeAuto":"Оформление: авто","themeLight":"Оформление: светлое","themeDark":"Оформление: тёмное"},
+"uk":{"sub":"Передавання через Wi-Fi","free":"Вільно {free} з {total}","home":"Картка","search":"Пошук","newFolder":"Нова папка","upload":"Надіслати","uploadFiles":"Надіслати файли…","uploadFolder":"Надіслати папку…","name":"Назва","modified":"Дата зміни","size":"Розмір","items":"Елементів: {n}","item":"1 елемент","selected":"Вибрано: {n}","download":"Завантажити","downloadTar":"Завантажити як .tar","move":"Перемістити","moveTo":"Перемістити до…","rename":"Перейменувати","del":"Видалити","open":"Відкрити","info":"Відомості","cancel":"Скасувати","create":"Створити","delTitle":"Видалити {what}?","delBody":"Цю дію не можна скасувати.","folderName":"Назва папки","moveTitle":"Перемістити {what} до","moveHere":"Перемістити сюди","exists":"«{name}» уже існує","existsBody":"У {dir} уже є елемент із такою назвою.","replace":"Замінити","skip":"Пропустити","keepBoth":"Залишити обидва","applyAll":"Застосувати до решти","uploading":"Надсилання елементів: {n}","uploaded":"Надіслано: {n}","left":"Залишилось {size} · близько {t}","waiting":"Очікування","done":"Готово","failed":"Збій — торкніться, щоб повторити","cancelled":"Скасовано","rescan":"Оновіть медіатеку на плеєрі, щоб побачити нову музику.","drop":"Відпустіть, щоб надіслати до {dir}","dropSub":"Файли й папки","empty":"Ця папка порожня","noMatch":"Нічого не знайдено","deleted":"Видалено: {what}","moved":"Переміщено: {what}","sec":"{n} с","min":"{n} хв","noSpace":"На картці недостатньо місця.","badName":"Назва не може містити \" * : < > ? \\ | і не може закінчуватися крапкою чи пробілом.","offline":"Не вдається зв’язатися з плеєром.","auto":"Авто","language":"Мова","themeAuto":"Оформлення: авто","themeLight":"Оформлення: світле","themeDark":"Оформлення: темне"}
+};
+
+const TAGS = { en: "en", zh: "zh-CN", "zh-HK": "zh-HK" };
+const LANGS = [["en", "English"], ["zh", "简体中文"], ["zh-HK", "繁體中文"], ["ja", "日本語"], ["ko", "한국어"], ["fr", "Français"], ["de", "Deutsch"],
+  ["es", "Español"], ["it", "Italiano"], ["th", "ไทย"], ["pl", "Polski"], ["ru", "Русский"], ["uk", "Українська"]];
+// private mode may refuse storage: the choice then lasts until the page closes
+const store = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* not saved */ } };
+const stored = k => { try { return localStorage.getItem(k); } catch { return null; } };
+const detect = () => {
+  const own = stored("wt-lang");
+  if (own && STR[own]) return own;
+  for (const raw of navigator.languages || [navigator.language || "en"]) {
+    const l = String(raw).toLowerCase();
+    if (/^zh-(hk|tw|mo|hant)/.test(l)) return "zh-HK";
+    const b = l.split("-")[0];
+    if (b === "zh" || STR[b]) return b;
+  }
+  return "en";
+};
+let lang = detect(), tag = TAGS[lang] || lang;
+const t = (k, a = {}) => (STR[lang][k] ?? STR.en[k]).replace(/\{(\w+)\}/g, (_, x) => a[x]);
+
+// ---------- icons ----------
+const I = {
+  folder: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h3.6c.6 0 1.2.3 1.6.7L12 6h6.5A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z" opacity=".85"/></svg>',
+  audio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg>',
+  image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="m21 16-5-5-9 9"/></svg>',
+  text: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>',
+  list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 12h6M9 15h6M9 18h6"/></svg>',
+  file: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>',
+  more: '<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
+  chev: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="16" height="16"><path d="m9 6 6 6-6 6"/></svg>',
+  chevDown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="16" height="16"><path d="m6 9 6 6 6-6"/></svg>',
+  up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+  dl: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg>',
+  mv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/><path d="M10 13.5h6M13.5 11l2.5 2.5-2.5 2.5"/></svg>',
+  ren: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+  del: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>',
+  info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/></svg>',
+  opn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg>',
+};
+const AUDIO = /\.(flac|mp3|wav|aiff?|ape|dsf|dff|m4a|m4b|aac|ogg|opus|wma|tak|iso|dts|ac3|mp2)$/i;
+const kind = e => e.dir ? "folder" : AUDIO.test(e.name) ? "audio" : /\.(jpe?g|png)$/i.test(e.name) ? "image"
+  : /\.(lrc|txt|cue)$/i.test(e.name) ? "text" : /\.m3u8?$/i.test(e.name) ? "list" : "file";
+
+// ---------- API ----------
+const API = "/cgi-bin/api.cgi", enc = encodeURIComponent;
+const qs = p => Object.entries(p).flatMap(([k, v]) => (Array.isArray(v) ? v : [v]).map(x => k + "=" + enc(x))).join("&");
+const vpath = parts => "/" + parts.join("/");
+// Reads are GETs. Mutations are POSTs with the parameters in the body (thttpd limits the request line to 5000 bytes)
+// and Content-Type: application/octet-stream, which the server requires.
+async function api(op, params = {}, post = false) {
+  let r;
+  try {
+    r = post ? await fetch(`${API}?op=${op}`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: qs(params) })
+      : await fetch(`${API}?op=${op}&${qs(params)}`);
+  } catch { throw new Error(t("offline")); }
+  let j = null;
+  try { j = await r.json(); } catch { /* not JSON */ }
+  if (!r.ok) throw Object.assign(new Error((j && j.error) || r.status + " " + r.statusText), { status: r.status });
+  return j;
+}
+
+// ---------- state ----------
+let path = [], entries = null, space = null, sortKey = "name", sortDir = 1, sel = new Set(), anchor = null, filter = "";
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const full = name => vpath([...path, name]);
+const fmtSize = b => b < 1024 ? b + " B" : b < 1048576 ? (b / 1024).toFixed(0) + " KB" : b < 2 ** 30 ? (b / 1048576).toFixed(1) + " MB" : (b / 2 ** 30).toFixed(2) + " GB";
+const fmtDate = s => { const d = new Date(s * 1000); return d.toLocaleDateString(tag, { year: "numeric", month: "short", day: "numeric" })
+  + " " + d.toLocaleTimeString(tag, { hour: "2-digit", minute: "2-digit" }); };
+const sub = e => e.dir ? (e.items == null ? "" : e.items === 1 ? t("item") : t("items", { n: e.items })) : fmtSize(e.size);
+const what = items => items.length === 1 ? `“${items[0].name}”` : t("items", { n: items.length });
+const fail = e => toast(e.message);
+// exFAT refuses these (the server answers 400 too); checked before anything is sent
+const badName = n => /["*:<>?\\|\x00-\x1f\x7f]|[. ]$|^\./.test(n);
+
+function sorted() {
+  const k = (entries || []).filter(e => !filter || e.name.toLowerCase().includes(filter.toLowerCase()));
+  const c = new Intl.Collator(tag, { numeric: true, sensitivity: "base" });
+  return k.sort((a, b) => (b.dir - a.dir) || sortDir * (sortKey === "name" ? c.compare(a.name, b.name)
+    : sortKey === "size" ? (a.dir ? (a.items || 0) - (b.items || 0) : a.size - b.size) : a.mtime - b.mtime));
+}
+const picked = () => (entries || []).filter(k => sel.has(k.name));
+
+// ---------- render ----------
+const THEMES = [null, "light", "dark"];
+const THEME_ICON = {
+  auto: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.500a8.500 8.500 0 0 1 0 17z" fill="currentColor"/></svg>',
+  light: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.500v2.500M12 19v2.500M2.500 12H5M19 12h2.500M5.300 5.300l1.800 1.800M16.900 16.900l1.800 1.800M5.300 18.700l1.800-1.800M16.900 7.100l1.800-1.800"/></svg>',
+  dark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20 14.500A8 8 0 0 1 9.500 4 8 8 0 1 0 20 14.500z"/></svg>',
+};
+let theme = document.documentElement.dataset.theme || null;
+function drawTheme() {
+  const k = theme || "auto", b = $("#theme");
+  b.innerHTML = THEME_ICON[k];
+  b.title = b.ariaLabel = k === "light" ? t("themeLight") : k === "dark" ? t("themeDark") : t("themeAuto");
+}
+$("#theme").onclick = () => {
+  theme = THEMES[(THEMES.indexOf(theme) + 1) % 3];
+  if (theme) document.documentElement.dataset.theme = theme; else delete document.documentElement.dataset.theme;
+  store("wt-theme", theme);
+  drawTheme();
+};
+$("#langsel").onchange = ev => {
+  const v = ev.target.value;
+  store("wt-lang", v === "auto" ? null : v);
+  lang = detect(); tag = TAGS[lang] || lang;
+  labels(); drawSpace(); render(); paintQueue();
+};
+function labels() {
+  document.documentElement.lang = tag;
+  $("#langsel").innerHTML = `<option value="auto">${esc(t("auto"))}</option>` + LANGS.map(([c, n]) => `<option value="${c}">${esc(n)}</option>`).join("");
+  $("#langsel").value = stored("wt-lang") && STR[stored("wt-lang")] ? stored("wt-lang") : "auto";
+  $("#langsel").title = $("#langsel").ariaLabel = t("language");
+  drawTheme();
+  $("#sub").textContent = t("sub");
+  $("#filter").placeholder = t("search");
+  $("#newfolder").innerHTML = I.plus + `<span class="label">${t("newFolder")}</span>`;
+  $("#upload").innerHTML = I.up + `<span>${t("upload")}</span>`;
+  $("[data-act=download]").innerHTML = I.dl + `<span class="label">${t("download")}</span>`;
+  $("[data-act=move]").innerHTML = I.mv + `<span class="label">${t("move")}</span>`;
+  $("[data-act=delete]").innerHTML = I.del + `<span class="label">${t("del")}</span>`;
+  $("[data-act=clear]").innerHTML = I.x;
+}
+function drawSpace() {
+  if (!space) return;
+  const used = space.total - space.free;
+  $("#space").textContent = t("free", { free: fmtSize(space.free), total: fmtSize(space.total) });
+  $("#meter").style.width = (space.total ? used / space.total * 100 : 0).toFixed(1) + "%";
+}
+async function refreshSpace() { try { space = await api("df"); drawSpace(); } catch { /* the bar just stays */ } }
+
+function render() {
+  const parts = [t("home"), ...path];
+  $("#crumbs").innerHTML = parts.map((p, i) => `<a href="#/${path.slice(0, i).map(enc).join("/")}" data-depth="${i}" class="${i === parts.length - 1 ? "here" : ""}">${esc(p)}</a>`)
+    .join(`<span class="sep">${I.chev}</span>`);
+  $("#app").classList.toggle("selecting", sel.size > 0);
+  $("#selcount").textContent = t("selected", { n: sel.size });
+  const L = $("#list");
+  if (!entries) { L.innerHTML = ""; return; }
+  const items = sorted();
+  if (!items.length) { L.innerHTML = `<div class="card"><div class="empty">${filter ? t("noMatch") : t("empty")}</div></div>`; return; }
+  const h = k => `class="${k} ${sortKey === k ? "on" : ""}" data-sort="${k}"`;
+  const arrow = k => sortKey === k ? (sortDir > 0 ? " ↑" : " ↓") : "";
+  L.innerHTML = `<div class="card"><div class="row head"><span></span><span></span><span ${h("name")}>${t("name")}${arrow("name")}</span><span ${h("date")}>${t("modified")}${arrow("date")}</span><span ${h("size")}>${t("size")}${arrow("size")}</span><span></span></div>`
+    + items.map(e => `<div class="row ${sel.has(e.name) ? "sel" : ""}" data-name="${esc(e.name)}" draggable="true">
+        <span class="check" data-check></span>
+        <span class="ico">${I[kind(e)]}</span>
+        <span class="name"><span>${esc(e.name)}</span><small>${sub(e)} · ${fmtDate(e.mtime)}</small></span>
+        <span class="date">${fmtDate(e.mtime)}</span>
+        <span class="size">${sub(e)}</span>
+        <button class="more" data-more>${e.dir ? `<span class="chev">${I.chev}</span>` : I.more}</button></div>`).join("") + `</div>`;
+}
+
+// ---------- navigation ----------
+let seq = 0;
+async function load() {
+  const my = ++seq;
+  let list;
+  try { list = (await api("list", { path: vpath(path) })).entries; } catch (e) {
+    if (my !== seq) return;
+    entries = [];
+    render();
+    fail(e);
+    if (path.length) location.hash = "#/";
+    return;
+  }
+  if (my !== seq) return;
+  entries = list;
+  sel = new Set([...sel].filter(n => entries.some(e => e.name === n)));
+  render();
+}
+function go(p) { path = p; sel.clear(); filter = ""; $("#filter").value = ""; entries = null; render(); load(); }
+window.addEventListener("hashchange", () => {
+  let p = [];
+  try { p = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean).map(decodeURIComponent); } catch { p = []; }
+  go(p);
+});
+const openDir = name => { location.hash = "#/" + [...path, name].map(enc).join("/"); };
+
+// ---------- interactions ----------
+const itemOf = el => el.closest("[data-name]");
+const entryOf = el => { const it = itemOf(el); return it && (entries || []).find(k => k.name === it.dataset.name); };
+$("#list").addEventListener("click", ev => {
+  const h = ev.target.closest("[data-sort]");
+  if (h) { const k = h.dataset.sort; sortDir = sortKey === k ? -sortDir : 1; sortKey = k; return render(); }
+  const e = entryOf(ev.target); if (!e) return;
+  const name = e.name;
+  if (ev.target.closest("[data-more]") && !e.dir) return menu(ev.target.closest("[data-more]"), [e]);
+  if (ev.target.closest("[data-check]") || ev.metaKey || ev.ctrlKey || (sel.size && !ev.shiftKey)) {
+    sel.has(name) ? sel.delete(name) : sel.add(name); anchor = name; return render();
+  }
+  if (ev.shiftKey && anchor) {
+    const names = sorted().map(k => k.name), a = names.indexOf(anchor), b = names.indexOf(name);
+    names.slice(Math.min(a, b), Math.max(a, b) + 1).forEach(n => sel.add(n)); return render();
+  }
+  if (e.dir) return openDir(name);
+  sel.add(name); anchor = name; render();  // a tap only selects a file; Download is in the bar, double-click downloads
+});
+$("#list").addEventListener("dblclick", ev => {
+  const e = entryOf(ev.target);
+  if (!e || e.dir || ev.target.closest("[data-check],[data-more]")) return;
+  sel.clear(); sel.add(e.name); render(); download([e]);
+});
+$("#list").addEventListener("contextmenu", ev => {
+  const e = entryOf(ev.target); if (!e) return;
+  ev.preventDefault();
+  if (!sel.has(e.name)) { sel.clear(); sel.add(e.name); render(); }
+  menu({ getBoundingClientRect: () => ({ left: ev.clientX, right: ev.clientX, bottom: ev.clientY, top: ev.clientY }) }, picked());
+});
+$("#crumbs").addEventListener("click", ev => { const a = ev.target.closest("a"); if (a && a.classList.contains("here")) ev.preventDefault(); });
+$("#filter").addEventListener("input", ev => { filter = ev.target.value; render(); });
+$("#newfolder").addEventListener("click", () => ask(t("newFolder"), "", t("folderName"), t("create"), async v => {
+  try { await api("mkdir", { path: vpath(path), name: v }, true); } catch (e) { fail(e); }
+  load();
+}));
+$("#upload").addEventListener("click", ev => menu(ev.currentTarget, null, [
+  [I.audio, t("uploadFiles"), () => $("#pickfiles").click()],
+  [I.folder, t("uploadFolder"), () => $("#pickfolder").click()],
+]));
+$(".selbar").addEventListener("click", ev => {
+  const a = ev.target.closest("[data-act]")?.dataset.act; if (!a) return;
+  if (a === "clear") { sel.clear(); render(); }
+  if (a === "delete") confirmDelete(picked());
+  if (a === "move") moveDialog(picked());
+  if (a === "download") download(picked());
+});
+document.addEventListener("keydown", ev => {
+  if (ev.target.matches("input") || $(".scrim")) return;
+  if (ev.key === "Escape") { closeMenu(); if (sel.size) { sel.clear(); render(); } }
+  if ((ev.metaKey || ev.ctrlKey) && ev.key === "a") { ev.preventDefault(); sorted().forEach(k => sel.add(k.name)); render(); }
+  if ((ev.key === "Delete" || ev.key === "Backspace") && sel.size) confirmDelete(picked());
+  if (ev.key === "/") { ev.preventDefault(); $("#filter").focus(); }
+});
+
+// ---------- download ----------
+// One file: a plain link (the answer carries Content-Disposition: attachment). Anything else: a tar of the selection,
+// POSTed from a hidden form so the paths travel in the body.
+function download(items) {
+  if (!items.length) return;
+  if (items.length === 1 && !items[0].dir) {
+    const a = document.createElement("a");
+    a.href = `${API}?op=download&path=${enc(full(items[0].name))}`; a.download = "";
+    document.body.append(a); a.click(); a.remove();
+    return;
+  }
+  let fr = $("#dlframe");
+  if (!fr) {
+    fr = document.createElement("iframe"); fr.id = fr.name = "dlframe"; fr.hidden = true;
+    // a refusal arrives as a JSON page in the frame; a download does not load it
+    fr.onload = () => { try { const j = JSON.parse(fr.contentDocument.body.textContent); if (j.error) toast(j.error); } catch { /* blank */ } };
+    document.body.append(fr);
+  }
+  const f = document.createElement("form");
+  f.method = "POST"; f.action = API + "?op=tar"; f.target = "dlframe"; f.hidden = true;
+  const add = (k, v) => { const i = document.createElement("input"); i.type = "hidden"; i.name = k; i.value = v; f.append(i); };
+  items.forEach(e => add("path", full(e.name)));
+  if (items.length > 1 && path.length) add("name", path[path.length - 1]);
+  document.body.append(f); f.submit(); f.remove();
+}
+
+// ---------- menus & dialogs ----------
+let openMenu = null;
+function closeMenu() { openMenu?.remove(); openMenu = null; }
+document.addEventListener("click", ev => { if (openMenu && !openMenu.contains(ev.target) && !ev.target.closest("[data-more],#upload")) closeMenu(); });
+function menu(anchorEl, items, custom) {
+  closeMenu();
+  const one = items && items.length === 1 ? items[0] : null;
+  const rows = custom || [
+    ...(one && one.dir ? [[I.opn, t("open"), () => openDir(one.name)]] : []),
+    [I.dl, one && !one.dir ? t("download") : t("downloadTar"), () => download(items)],
+    ...(one ? [[I.ren, t("rename"), () => ask(t("rename"), one.name, t("name"), t("rename"), async v => {
+      if (v !== one.name) try { await api("rename", { path: full(one.name), name: v }, true); } catch (e) { fail(e); }
+      sel.clear(); load();
+    })]] : []),
+    [I.mv, t("moveTo"), () => moveDialog(items)],
+    ...(one && !one.dir ? [[I.info, t("info"), () => toast(`${one.name} · ${fmtSize(one.size)} · ${fmtDate(one.mtime)}`)]] : []),
+    "-",
+    [I.del, t("del"), () => confirmDelete(items), "danger"],
+  ];
+  const m = document.createElement("div"); m.className = "menu";
+  m.innerHTML = rows.map((r, i) => r === "-" ? "<hr>" : `<button data-i="${i}" class="${r[3] || ""}">${r[0]}${esc(r[1])}</button>`).join("");
+  m.addEventListener("click", ev => { const b = ev.target.closest("button"); if (!b) return; closeMenu(); rows[b.dataset.i][2](); });
+  document.body.appendChild(m); openMenu = m;
+  const r = anchorEl.getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = Math.max(8, Math.min(r.right - w, innerWidth - w - 8)) + "px";
+  m.style.top = (r.bottom + 6 + h > innerHeight ? Math.max(8, r.top - h - 6) : r.bottom + 6) + "px";
+}
+// onDismiss runs when the dialog is dismissed (Escape, a click outside, a [data-close] button) rather than answered.
+function dialog(html, wire, onDismiss) {
+  const s = document.createElement("div"); s.className = "scrim";
+  s.innerHTML = `<div class="dialog">${html}</div>`;
+  // Escape is heard on the document, since focus may still be on the page; only the topmost dialog takes it.
+  const onKey = ev => { if (ev.key === "Escape" && s === [...document.querySelectorAll(".scrim")].pop()) dismiss(); };
+  const close = () => { s.remove(); document.removeEventListener("keydown", onKey); };
+  const dismiss = () => { if (!s.isConnected) return; close(); if (onDismiss) onDismiss(); };
+  s.addEventListener("click", ev => { if (ev.target === s || ev.target.closest("[data-close]")) dismiss(); });
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(s); wire(s, close);
+  if (!s.contains(document.activeElement)) s.querySelector(".dialog button")?.focus();
+}
+function ask(title, value, ph, ok, done) {
+  dialog(`<h3>${esc(title)}</h3><input type="text" value="${esc(value)}" placeholder="${esc(ph)}"><div class="acts"><button class="btn" data-close>${t("cancel")}</button><button class="btn primary" data-ok>${esc(ok)}</button></div>`,
+    (s, close) => {
+      const inp = s.querySelector("input"); inp.focus();
+      const dot = value.lastIndexOf("."); inp.setSelectionRange(0, dot > 0 ? dot : value.length);
+      const go = () => {
+        const v = inp.value.trim();
+        if (!v || v.includes("/")) return;
+        if (badName(v)) return toast(t("badName"));
+        close(); done(v);
+      };
+      s.querySelector("[data-ok]").onclick = go; inp.onkeydown = ev => { if (ev.key === "Enter") go(); };
+    });
+}
+function confirmDelete(items) {
+  if (!items.length) return;
+  dialog(`<h3>${esc(t("delTitle", { what: what(items) }))}</h3><p>${t("delBody")}</p><div class="acts"><button class="btn" data-close>${t("cancel")}</button><button class="btn primary" data-ok style="background:var(--danger);color:#fff">${t("del")}</button></div>`,
+    (s, close) => s.querySelector("[data-ok]").onclick = async () => {
+      close();
+      try { await api("delete", { path: items.map(e => full(e.name)) }, true); toast(t("deleted", { what: what(items) })); } catch (e) { fail(e); }
+      sel.clear(); load(); refreshSpace();
+    });
+}
+// The folder tree is loaded level by level: the root and the chain down to the current folder first, the rest on expanding.
+function moveDialog(items) {
+  if (!items.length) return;
+  const moving = new Set(items.map(e => full(e.name)));
+  const cwd = vpath(path), byKey = new Map();
+  const mk = p => { const n = { p, kids: null, open: false, loading: false }; byKey.set(vpath(p), n); return n; };
+  const top = mk([]); top.open = true;
+  let target = path.slice();
+  const collator = new Intl.Collator(tag, { numeric: true, sensitivity: "base" });
+  let sc = null;
+  async function fetchKids(n) {
+    if (n.kids || n.loading) return;
+    n.loading = true;
+    try {
+      const l = (await api("list", { path: vpath(n.p) })).entries.filter(e => e.dir && !moving.has(vpath([...n.p, e.name])));
+      n.kids = l.sort((a, b) => collator.compare(a.name, b.name)).map(e => mk([...n.p, e.name]));
+    } catch (e) { n.kids = []; fail(e); }
+    n.loading = false;
+    draw();
+  }
+  function flat(n, depth, out) {
+    out.push([n, depth]);
+    if (n.open && n.kids) n.kids.forEach(k => flat(k, depth + 1, out));
+    return out;
+  }
+  function draw() {
+    if (!sc || !sc.isConnected) return;
+    const here = vpath(target);
+    sc.querySelector(".picker").innerHTML = flat(top, 0, []).map(([n, d]) =>
+      `<div data-k="${esc(vpath(n.p))}" class="${vpath(n.p) === here ? "on" : ""}" style="padding-left:${12 + d * 18}px">`
+      + `<span class="tog ${n.open ? "open" : ""}" data-tog>${n.kids && !n.kids.length ? "" : I.chev}</span>${I.folder}${esc(n.p.length ? n.p[n.p.length - 1] : t("home"))}</div>`).join("");
+    sc.querySelector("[data-ok]").disabled = here === cwd;
+  }
+  dialog(`<h3>${esc(t("moveTitle", { what: what(items) }))}</h3><div class="picker"></div><div class="acts"><button class="btn" data-close>${t("cancel")}</button><button class="btn primary" data-ok>${t("moveHere")}</button></div>`,
+    (s, close) => {
+      sc = s; draw();
+      s.querySelector(".picker").onclick = ev => {
+        const row = ev.target.closest("[data-k]"); if (!row) return;
+        const n = byKey.get(row.dataset.k);
+        if (ev.target.closest("[data-tog]")) { n.open = !n.open; draw(); if (n.open) fetchKids(n); }
+        else { target = n.p; draw(); }
+      };
+      s.querySelector("[data-ok]").onclick = () => { close(); moveTo(items, target); };
+      (async () => {
+        let n = top;
+        await fetchKids(n);
+        for (const name of path) {
+          const k = n.kids && n.kids.find(x => x.p[x.p.length - 1] === name);
+          if (!k) break;
+          k.open = true; n = k; await fetchKids(n);
+        }
+        draw();
+      })();
+    });
+}
+async function moveTo(items, target) {
+  if (vpath(target) === vpath(path)) return;
+  try {
+    await api("move", { to: vpath(target), conflict: "fail", path: items.map(e => full(e.name)) }, true);
+    toast(t("moved", { what: what(items) }));
+  } catch (e) { fail(e); }
+  sel.clear(); load();
+}
+let toastTimer;
+function toast(msg) {
+  document.querySelector(".toast")?.remove(); clearTimeout(toastTimer);
+  const d = document.createElement("div"); d.className = "toast"; d.textContent = msg; document.body.appendChild(d);
+  toastTimer = setTimeout(() => d.remove(), 4000);
+}
+
+// ---------- drag rows onto folders / crumbs ----------
+let dragNames = null;
+$("#list").addEventListener("dragstart", ev => {
+  const it = itemOf(ev.target); if (!it) return;
+  if (!sel.has(it.dataset.name)) { sel.clear(); sel.add(it.dataset.name); }
+  dragNames = [...sel]; ev.dataTransfer.setData("text/x-move", "1"); ev.dataTransfer.effectAllowed = "move";
+});
+$("#list").addEventListener("dragend", () => { dragNames = null; render(); });
+function moveTarget(ev) {
+  const e = entryOf(ev.target), cr = ev.target.closest("#crumbs a");
+  if (e) return e.dir && !dragNames.includes(e.name) ? { el: itemOf(ev.target), p: [...path, e.name] } : null;
+  if (cr && !cr.classList.contains("here")) return { el: cr, p: path.slice(0, +cr.dataset.depth) };
+  return null;
+}
+document.addEventListener("dragover", ev => {
+  document.querySelectorAll(".drop").forEach(x => x.classList.remove("drop"));
+  if (dragNames) { const m = moveTarget(ev); if (m) { ev.preventDefault(); m.el.classList.add("drop"); } return; }
+  if ([...ev.dataTransfer.types].includes("Files")) { ev.preventDefault(); document.body.classList.add("dragging"); }
+});
+document.addEventListener("dragleave", ev => { if (!ev.relatedTarget) document.body.classList.remove("dragging"); });
+document.addEventListener("drop", async ev => {
+  ev.preventDefault(); document.body.classList.remove("dragging");
+  if (dragNames) { const m = moveTarget(ev); if (m) moveTo(entries.filter(k => dragNames.includes(k.name)), m.p); dragNames = null; return; }
+  const files = [];
+  const walk = (entry, rel) => new Promise(res => {
+    if (entry.isFile) entry.file(f => { files.push({ f, rel }); res(); }, res);
+    else { const r = entry.createReader(), all = [];
+      const read = () => r.readEntries(async es => { if (es.length) { all.push(...es); read(); }
+        else { for (const e of all) await walk(e, rel + entry.name + "/"); res(); } }, res); read(); }
+  });
+  const ents = [...ev.dataTransfer.items].map(i => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+  const plain = [...ev.dataTransfer.files];
+  if (ents.length) for (const e of ents) await walk(e, ""); else plain.forEach(f => files.push({ f, rel: "" }));
+  enqueue(files);
+});
+document.addEventListener("dragenter", () => { $("#droptext").innerHTML = `${esc(t("drop", { dir: "“" + [t("home"), ...path].pop() + "”" }))}<small>${t("dropSub")}</small>`; });
+$("#pickfiles").onchange = ev => { enqueue([...ev.target.files].map(f => ({ f, rel: "" }))); ev.target.value = ""; };
+$("#pickfolder").onchange = ev => { enqueue([...ev.target.files].map(f => ({ f, rel: f.webkitRelativePath.replace(/[^/]*$/, "") }))); ev.target.value = ""; };
+
+// ---------- upload queue (one file at a time) ----------
+// A file below 2 GiB is one request; from 2 GiB (thttpd's body limit is 2 GiB - 1) it goes in 1 GiB chunks
+// (offset=, last=1). Cancel aborts the request; the server deletes the half-written .part.
+const LIMIT = 2 ** 31, CHUNK = 2 ** 30;
+const Q = []; let running = false, minimized = false, applyAll = null, made = new Set(), meas = { bytes: 0, ms: 0 }, lastRefresh = 0, refT = 0, drawT = 0;
+const active = q => q.state === "wait" || q.state === "up";
+
+async function enqueue(list) {
+  // dot files (.DS_Store, ._x) and anything below a dot folder: the server refuses hidden names
+  list = list.filter(x => !x.f.name.startsWith(".") && !x.rel.split("/").some(s => s.startsWith(".")));
+  if (!list.length) return;
+  let free;
+  try { free = (await api("df")).free; } catch (e) { return fail(e); }
+  if (list.reduce((s, x) => s + x.f.size, 0) > free) return toast(t("noSpace"));
+  if (!Q.some(active)) { Q.length = 0; meas = { bytes: 0, ms: 0 }; }
+  for (const x of list) {
+    const q = { f: x.f, name: x.f.name, size: x.f.size, rel: x.rel, dir: path.slice(), sent: 0, state: "wait", msg: "" };
+    if ([q.name, ...x.rel.split("/").filter(Boolean)].some(badName)) { q.state = "err"; q.msg = t("badName"); q.bad = true; }
+    Q.push(q);
+  }
+  paintQueue(); pump();
+}
+const ensureDirs = async (parts, base) => {
+  for (let i = base; i < parts.length; i++) {
+    const key = vpath(parts.slice(0, i + 1));
+    if (made.has(key)) continue;
+    try { await api("mkdir", { path: vpath(parts.slice(0, i)), name: parts[i] }, true); } catch (e) { if (e.status !== 409) throw e; }
+    made.add(key);
+  }
+};
+function conflict(q, parts) {
+  if (applyAll) return Promise.resolve(applyAll);
+  return new Promise(res => dialog(`<h3>${esc(t("exists", { name: q.name }))}</h3><p>${esc(t("existsBody", { dir: vpath(parts) }))}</p>
+    <label><input type="checkbox"> ${t("applyAll")}</label>
+    <div class="acts"><button class="btn" data-c="skip">${t("skip")}</button><button class="btn" data-c="keep">${t("keepBoth")}</button><button class="btn primary" data-c="replace">${t("replace")}</button></div>`,
+    (s, close) => s.querySelectorAll("[data-c]").forEach(b => b.onclick = () => { close(); if (s.querySelector("input").checked) applyAll = b.dataset.c; res(b.dataset.c); }),
+    () => res("skip")));
+}
+function send(q, p, blob, base) {
+  return new Promise(res => {
+    const x = new XMLHttpRequest(); q.xhr = x;
+    x.open("POST", `${API}?op=upload&${qs(p)}`);
+    x.setRequestHeader("Content-Type", "application/octet-stream");
+    let lt = performance.now(), ll = 0;
+    x.upload.onprogress = ev => {
+      const now = performance.now(); meas.ms += now - lt; meas.bytes += ev.loaded - ll; lt = now; ll = ev.loaded;
+      q.sent = base + ev.loaded; paintQueue(true);
+    };
+    x.onload = () => {
+      let j = {}; try { j = JSON.parse(x.responseText); } catch { /* no JSON */ }
+      res({ status: x.status, error: j.error || x.status + " " + x.statusText });
+    };
+    x.onerror = () => res({ status: 0, error: t("offline") });
+    x.onabort = () => res({ status: 0, error: "" });
+    x.send(blob);
+  });
+}
+async function transfer(q, parts, mode) {
+  const chunked = q.size >= LIMIT;
+  let off = 0, r;
+  q.sent = 0;
+  do {
+    if (q.state !== "up") return { status: 0, error: "" };  // cancelled while waiting for a folder or between chunks
+    const end = chunked ? Math.min(off + CHUNK, q.size) : q.size;
+    const p = { path: vpath(parts), name: q.name, conflict: mode };
+    if (chunked) { p.offset = off; if (end >= q.size) p.last = 1; }
+    r = await send(q, p, chunked ? q.f.slice(off, end) : q.f, off);
+    r.first = off === 0;
+    if (r.status !== 200) return r;
+    off = end;
+  } while (off < q.size);
+  return r;
+}
+async function upload(q) {
+  const parts = [...q.dir, ...q.rel.split("/").filter(Boolean)];
+  await ensureDirs(parts, q.dir.length);
+  let mode = "fail";
+  for (;;) {
+    const r = await transfer(q, parts, mode);
+    if (q.state !== "up") return;  // cancelled
+    if (r.status === 200) { q.state = "done"; q.sent = q.size; return; }
+    if (r.status === 409 && mode === "fail" && r.first) {
+      const c = await conflict(q, parts);
+      if (c === "skip") { q.state = "cancel"; return; }
+      mode = c; continue;
+    }
+    throw new Error(r.error);
+  }
+}
+async function pump() {
+  if (running) return; running = true;
+  let q;
+  while ((q = Q.find(x => x.state === "wait"))) {
+    q.state = "up"; q.sent = 0; q.msg = ""; paintQueue();
+    try { await upload(q); } catch (e) { if (q.state === "up") { q.state = "err"; q.msg = e.message; } }
+    paintQueue();
+    if (q.state === "done") scheduleRefresh();
+  }
+  running = false; applyAll = null; made.clear(); paintQueue(); scheduleRefresh(true);
+}
+function scheduleRefresh(last) {
+  clearTimeout(refT);
+  refT = setTimeout(() => { lastRefresh = performance.now(); load(); refreshSpace(); }, last ? 0 : Math.max(0, 5000 - (performance.now() - lastRefresh)));
+}
+window.addEventListener("beforeunload", ev => { if (Q.some(active)) { ev.preventDefault(); ev.returnValue = ""; } });
+
+function paintQueue(soft) {
+  if (soft) { if (!drawT) drawT = setTimeout(() => { drawT = 0; paintQueue(); }, 250); return; }
+  clearTimeout(drawT); drawT = 0;
+  const box = $("#uploads");
+  if (!Q.length) { box.innerHTML = ""; return; }
+  const live = Q.filter(q => q.state !== "cancel"), total = live.reduce((s, q) => s + q.size, 0), sent = live.reduce((s, q) => s + q.sent, 0);
+  const left = Q.filter(active).length, done = Q.filter(q => q.state === "done").length;
+  const rate = meas.ms > 500 ? meas.bytes / meas.ms * 1000 : 0, secs = rate ? Math.ceil((total - sent) / rate) : 0;
+  const eta = !rate ? "…" : secs < 60 ? t("sec", { n: secs }) : t("min", { n: Math.ceil(secs / 60) });
+  const head = left ? t("uploading", { n: left }) : t("uploaded", { n: done });
+  const subl = left ? t("left", { size: fmtSize(total - sent), t: eta }) : t("rescan");
+  const idx = Q.map((q, i) => i);
+  const shown = Q.length <= 60 ? idx : [...idx.filter(i => Q[i].state === "up" || Q[i].state === "err"), ...idx.filter(i => Q[i].state === "wait")].slice(0, 60);
+  box.innerHTML = `<div class="uploads ${minimized ? "min" : ""}"><div class="hd" data-min><div class="grow"><b>${esc(head)}</b><small>${esc(subl)}</small></div>
+    <button class="more" data-closeq title="${t("cancel")}">${left ? I.chevDown : I.x}</button></div>
+    <div class="total"><i style="width:${total ? (sent / total * 100).toFixed(1) : 0}%"></i></div>
+    <ul>${shown.map(i => { const q = Q[i]; return `<li class="${q.state}"><span class="n">${esc(q.rel + q.name)}</span>
+      <span class="btns">${q.state === "err" && !q.bad ? `<button class="x" data-r="${i}">${I.up}</button>` : ""}${q.state === "done" ? "" : `<button class="x" data-x="${i}">${I.x}</button>`}</span>
+      ${q.state === "up" ? `<span class="p"><i style="width:${q.size ? (q.sent / q.size * 100).toFixed(1) : 0}%"></i></span>` : `<span class="st">${esc(
+        { wait: t("waiting"), done: fmtSize(q.size) + " · " + t("done"), err: q.msg || t("failed"), cancel: t("cancelled") }[q.state])}</span>`}</li>`; }).join("")}</ul></div>`;
+}
+$("#uploads").addEventListener("click", ev => {
+  const x = ev.target.closest("[data-x]"), r = ev.target.closest("[data-r]");
+  if (r) { const q = Q[r.dataset.r]; q.state = "wait"; q.sent = 0; q.msg = ""; paintQueue(); pump(); return; }
+  if (x) {
+    const q = Q[x.dataset.x];
+    if (q.state === "up") { q.state = "cancel"; q.xhr?.abort(); } else q.state = "cancel";
+    return paintQueue();
+  }
+  if (ev.target.closest("[data-closeq]")) { if (!Q.some(active)) { Q.length = 0; minimized = false; } else minimized = !minimized; return paintQueue(); }
+  if (ev.target.closest("[data-min]")) { minimized = !minimized; paintQueue(); }
+});
+
+labels();
+refreshSpace();
+window.dispatchEvent(new HashChangeEvent("hashchange"));
+</script>
+</body>
+</html>

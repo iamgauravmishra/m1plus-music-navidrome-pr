@@ -60,7 +60,7 @@ def code_sha(*modules):
     for m in modules: files.update(closure(m))
     return H(*[x for m in sorted(files) for x in (m, file_sha(files[m]))])
 
-FORMAT = 3
+FORMAT = 4
 
 def versions():
     out = [f'format {FORMAT}', sys.version]
@@ -86,9 +86,12 @@ def step_key(prev, module, args):
 
 # ---------------------------------------------------------------- trees and deltas
 def snap(root):
-    """rel path -> (kind, size/target, ctime_ns, mode, inode) of every non-directory under root."""
+    """rel path -> (kind, size/target, ctime_ns, mode, inode) of every file and symlink under root, and
+    ('d', ...) for every real directory (so a step that removes one is seen)."""
     out = {}
     for d, dirs, files in os.walk(root):
+        for x in dirs:
+            if not os.path.islink(os.path.join(d, x)): out[os.path.relpath(os.path.join(d, x), root)] = ('d', 0, 0, 0, 0)
         for f in files + [x for x in dirs if os.path.islink(os.path.join(d, x))]:
             p = os.path.join(d, f); st = os.lstat(p); rel = os.path.relpath(p, root)
             # ctime, not mtime: the steps set mtimes on purpose (os.utime), but ctime moves on every write
@@ -102,7 +105,7 @@ def clone(src, dst):
 
 def delta_since(before, root):
     after = snap(root)
-    return [r for r in after if before.get(r) != after[r]], [r for r in before if r not in after], after
+    return [r for r in after if after[r][0] != 'd' and before.get(r) != after[r]], [r for r in before if r not in after], after
 
 def delta_sha(root, changed, removed):
     return H(*[x for r in sorted(changed) for x in (r, file_sha(os.path.join(root, r)) if not os.path.islink(os.path.join(root, r)) else os.readlink(os.path.join(root, r)))],
@@ -134,9 +137,12 @@ def store_delta(key, root, changed, removed):
 def apply_delta(key, root):
     entry = os.path.join(CACHE, 'steps', key)
     meta = json.load(open(os.path.join(entry, 'meta.json')))
-    for r in meta['removed']:
-        try: os.remove(os.path.join(root, r))
-        except FileNotFoundError: pass
+    for r in meta['removed']:      # files, links and directories (a removed directory's contents are listed too)
+        p = os.path.join(root, r)
+        if os.path.isdir(p) and not os.path.islink(p): shutil.rmtree(p, ignore_errors=True)
+        else:
+            try: os.remove(p)
+            except FileNotFoundError: pass
     for r, t in meta['links'].items():
         p = os.path.join(root, r); os.makedirs(os.path.dirname(p), exist_ok=True)
         if os.path.lexists(p): os.remove(p)

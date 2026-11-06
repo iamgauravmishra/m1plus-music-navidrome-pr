@@ -17,7 +17,7 @@ import argparse, hashlib, importlib, os, re, subprocess, sys, time, zipfile, shu
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS = os.path.join(ROOT, 'tools')
 sys.path.insert(0, TOOLS)
-import mod_space, paths, workflow
+import mod_space, mod_webapp, paths, workflow
 from pathlib import Path
 
 ZIP = paths.ZIP     # this checkout's firmware/, else the main checkout's (tools/paths.py)
@@ -40,7 +40,7 @@ def about(tag):
 STEPS = [('mod_theme', []), ('mod_lists', []), ('mod_nowplaying', []), ('mod_boot', []),
          ('mod_ipodrows', []), ('mod_pulldown', []), ('mod_lockscreen', []), ('mod_wallpaper', []),
          ('mod_icons', []), ('mod_strings', []), ('mod_polish', []), ('mod_overlays', []),
-         ('mod_cacerts', [])]
+         ('mod_cacerts', []), ('mod_webapp', [])]
 BASE = ('mod_battery', 'mod_font', 'mod_space')     # stock tree -> battery art, font, space (cached as one stage)
 
 def sha256(p):
@@ -91,7 +91,7 @@ def pack_args(stock):
     for module, args in [(m, []) for m in BASE] + STEPS:
         rels = getattr(importlib.import_module(module), 'added_rels', None)
         added += [x for rel in (rels(os.path.join(stock, 'rootfs'), *args) if rels else []) for x in ('--allow-added', rel)]
-    removed = [*mod_space.REMOVE, *mod_space.theme1_paths(os.path.join(stock, 'rootfs'))]
+    removed = [*mod_space.REMOVE, *mod_space.theme1_paths(os.path.join(stock, 'rootfs')), *mod_webapp.removed_rels()]
     return [x for p in removed for x in ('--allow-removed', p)], added
 
 def main():

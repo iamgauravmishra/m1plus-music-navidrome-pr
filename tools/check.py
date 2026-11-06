@@ -33,7 +33,8 @@ def sections(module):
 
 PATCH = {m: [f'patch:{m}/{s}' for s in sections(m)] or [f'patch:{m}'] for m in MODULES}
 LIGHT = ['tools', 'coverflow', 'awtk_fill']
-ALL_TESTS = LIGHT + ['demo_diff'] + [t for m in MODULES for t in PATCH[m]]
+TREE_TESTS = ('demo_diff', 'webapi')   # tests that read the built tree
+ALL_TESTS = LIGHT + list(TREE_TESTS) + [t for m in MODULES for t in PATCH[m]]
 
 
 def counts(text):
@@ -72,6 +73,7 @@ def test_cmd(name, stock, tree=None):
     py = [sys.executable, '-I']
     if name in ('tools', 'coverflow'): return py + [os.path.join(TEST, name + '.py')]
     if name == 'awtk_fill': return py + [os.path.join(TEST, 'awtk_fill.py'), stock]
+    if name == 'webapi': return py + [os.path.join(TEST, 'webapi.py'), str(tree), stock]
     if name == 'demo_diff':
         return py + [os.path.join(TEST, 'demo_diff.py'), os.path.join(stock, 'rootfs/release/bin/demo'),
                      str(Path(tree) / 'rootfs/release/bin/demo')]
@@ -188,11 +190,11 @@ def main():
             print('reusing complete validated integration artifacts')
             return finish(a, sel, {}, golden, last['builds'], last['tests'], start, reused=True, key=key)
         stock = paths.find_stock()
-        if not stock and ('awtk_fill' in names or sel or a.dev or any(n.startswith('patch:') or n == 'demo_diff' for n in names)):
+        if not stock and ('awtk_fill' in names or sel or a.dev or any(n.startswith('patch:') or n in TREE_TESTS for n in names)):
             run_build(['--restore', '--tree-only'], logs / 'stock.log')
             stock = paths.find_stock()
         stock = stock or os.path.join(paths.WORK, 'stock')
-        needs_tree = a.dev or 'release' in sel or any(n.startswith('patch:') or n == 'demo_diff' for n in names)
+        needs_tree = a.dev or 'release' in sel or any(n.startswith('patch:') or n in TREE_TESTS for n in names)
         tree = None
         env = dict(os.environ, M1_WORK=str(base / 'release/work'), M1_OUT=str(base / 'release/out'))
         flags = ['--dev', '--out', base] if a.dev else []
