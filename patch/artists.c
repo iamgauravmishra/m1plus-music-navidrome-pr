@@ -134,7 +134,8 @@ static const char *ar_text(const void *ctx, unsigned i) { return ar_name(((void 
 
 static void ar_sort(void) {
     unsigned i, n = 0, *v;
-    int keyed = ar.cls == CLASS_ARTISTS; /* Genres and Composers keep stock's order (the in-memory title sort) unless reversed */
+    int keyed = ar.cls ==
+                CLASS_ARTISTS; /* Genres and Composers keep stock's order (the in-memory title sort) unless reversed */
     ar.order = (unsigned *)0;
     ar_key = (const char **)0;
     if (ar.count < 2 || (!keyed && !ar.rev)) return;
@@ -177,14 +178,18 @@ static void ar_sections(void) {
     for (i = 0; i < ar.count; ++i) {
         void *r = deque_at(ar.artists, ar_stock(i));
         int k = az_rank_of(cc_name_initial(ar_name(r)));
-        if (ar.rev) k = k ? 26 - k : 26; /* Z-A: Z is rank 0 .. A rank 25 and "#" (symbols, digits) last, so the ranks still rise down the list */
+        if (ar.rev)
+            k = k ? 26 - k
+                  : 26; /* Z-A: Z is rank 0 .. A rank 25 and "#" (symbols, digits) last, so the ranks still rise down the list */
         ar.rank[i] = *(int *)((char *)r + REC_ID) == -1 && i ? (unsigned char)prev : (unsigned char)k;
         prev = ar.rank[i];
     }
     az_sections(&ar.al, ar.rank, 1);
     if (ar.rev) /* the headers and the rail show the letters of those ranks: rank 0 is Z, 25 is A, 26 is "#" */
         for (i = 0; i < (unsigned)ar.al.nsec; ++i) {
-            int t = ar.al.sec_letter[i] == '#' ? 0 : ar.al.sec_letter[i] - 'A' + 1; /* (the rank az_sections labelled it with) */
+            int t = ar.al.sec_letter[i] == '#'
+                        ? 0
+                        : ar.al.sec_letter[i] - 'A' + 1; /* (the rank az_sections labelled it with) */
             ar.al.sec_letter[i] = (unsigned char)(t == 26 ? '#' : 'Z' - t);
         }
 }
@@ -384,7 +389,7 @@ static void ar_load(void) {
 
 /* The page's saved order: artists-sort, genres-sort or composers-sort, one character: '0' Name A-Z (the default and any other content), 'a' Name Z-A. */
 static const char *ar_sort_file(int tmp) {
-    return ar.cls == CLASS_GENRES ? (tmp ? GENRES_SORT_TMP : GENRES_SORT_FILE)
+    return ar.cls == CLASS_GENRES      ? (tmp ? GENRES_SORT_TMP : GENRES_SORT_FILE)
            : ar.cls == CLASS_COMPOSERS ? (tmp ? COMPOSERS_SORT_TMP : COMPOSERS_SORT_FILE)
                                        : (tmp ? ARTISTS_SORT_TMP : ARTISTS_SORT_FILE);
 }
@@ -481,7 +486,9 @@ int artists_open(int home) {
         return h ? pod_home_open(h) : -1;
     }
     if (vs_bind(&ar.vs, ar.win, ar_on_item, ar_on_scrim,
-                ar.cls == CLASS_ARTISTS ? (1u << 0) | VS_WITH_VIEWS | VS_WITH_SEARCH : (1u << 0))) { /* (Name alone on Genres and Composers; they have no Search scope or Show group) */
+                ar.cls == CLASS_ARTISTS
+                    ? (1u << 0) | VS_WITH_VIEWS | VS_WITH_SEARCH
+                    : (1u << 0))) { /* (Name alone on Genres and Composers; they have no Search scope or Show group) */
         int h = ar.home;
         grid_free(&ar.g);
         navigator_back(); /* an asset that is not ours */

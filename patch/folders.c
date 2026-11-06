@@ -38,7 +38,8 @@
 extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
 extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
 extern unsigned pod_rand(unsigned n); /* patch/shuffle.c: 0 .. n - 1 */
-extern int ft_statx(int dirfd, const char *path, int flags, unsigned mask, void *buf); /* patch/filetime.c: the statx syscall (demo imports none) */
+extern int ft_statx(int dirfd, const char *path, int flags, unsigned mask,
+                    void *buf); /* patch/filetime.c: the statx syscall (demo imports none) */
 
 #define ROW POD_ROW_H /* the menu rows' pitch (52): one line a row */
 #define FO_ASSET "m1plus_folders"
@@ -56,7 +57,9 @@ extern int ft_statx(int dirfd, const char *path, int flags, unsigned mask, void 
 #define FO_MARK_X 262
 #define FO_CHEV_X LIST_CHEV_X /* 288: the shared list chevron */
 #define FO_TEXT_Y ((ROW - LIST_TITLE_H) / 2) /* the name centred in the row */
-#define FO_STAT_MAX 2000 /* the most entries a level may have for Date Modified: one statx each, run when the level is read (more: the row is not offered there and the level shows by Name) */
+/* the most entries a level may have for Date Modified: one statx each, run when the level is read (more: the row is not
+   offered there and the level shows by Name) */
+#define FO_STAT_MAX 2000
 #define FO_AT_FDCWD (-100)
 #define FO_STATX_MTIME 0x40u /* STATX_MTIME; stx_mtime.tv_sec is the word at byte 112 of the 256-byte struct statx */
 #define FO_TITLE_END_NP 260 /* the small title's end when Now Playing is the disc alone (NAV_PLAY_X) */
@@ -91,7 +94,8 @@ static struct {
     vs_t vs; /* the "..." card (patch/viewsort.c): Select, Name, Date Modified, Type */
     int menu; /* the card is open */
     int sort, rev; /* the saved order (FOLDERS_SORT_FILE): 0 Name, 1 Date Modified, 2 Type; rev = Z-A / Oldest First */
-    int eff, eff_rev; /* the order this level is shown in: the saved one, or Name when the level is too big for Date Modified */
+    int eff,
+        eff_rev; /* the order this level is shown in: the saved one, or Name when the level is too big for Date Modified */
     int *mt; /* the modification times by record while Date Modified shows (count ints), else NULL */
     unsigned *rk; /* the queue's play ranks while fo_reorder runs */
     unsigned char *sel; /* the select mode's bitset, by record: (count + 7) / 8 bytes */
@@ -218,7 +222,9 @@ static void fo_order(void) {
     fo.eff = fo.sort, fo.eff_rev = fo.rev;
     free(fo.mt);
     fo.mt = (int *)0;
-    if (fo_root() || fo_m3u()) fo.eff = 0, fo.eff_rev = 0; /* (the storages are three fixed rows; a playlist file's tracks play in the file's order) */
+    if (fo_root() || fo_m3u())
+        fo.eff = 0,
+        fo.eff_rev = 0; /* (the storages are three fixed rows; a playlist file's tracks play in the file's order) */
     else {
         if (fo.eff == 1 && (!fo_date_ok() || !(fo.mt = calloc(fo.count, sizeof(int))))) fo.eff = 0, fo.eff_rev = 0;
         for (i = 0; fo.mt && i < fo.nvis; ++i) fo.mt[fo.vis[i]] = fo_mtime(fo_url(fo.vis[i]));
@@ -245,13 +251,17 @@ static int fo_path_cmp(unsigned a, unsigned b) {
     return c ? c : a < b ? -1 : a > b;
 }
 
-static int fo_rank_cmp(unsigned a, unsigned b) { return fo.rk[a] != fo.rk[b] ? (fo.rk[a] < fo.rk[b] ? -1 : 1) : a < b ? -1 : a > b; }
+static int fo_rank_cmp(unsigned a, unsigned b) {
+    return fo.rk[a] != fo.rk[b] ? (fo.rk[a] < fo.rk[b] ? -1 : 1) : a < b ? -1 : a > b;
+}
 
 static int fo_reorder(void *queue, void *pick) {
     unsigned n = deque_size(queue), i, lo, hi;
-    unsigned *byp = (unsigned *)calloc(fo.nvis + 1, sizeof(unsigned)), *ord = (unsigned *)calloc(n + 1, sizeof(unsigned));
+    unsigned *byp = (unsigned *)calloc(fo.nvis + 1, sizeof(unsigned)),
+             *ord = (unsigned *)calloc(n + 1, sizeof(unsigned));
     unsigned char *done = (unsigned char *)calloc(n + 1, 1);
-    const char *want = cc_str(pick, REC_PATH); /* (the record may be one of the queue's: kept before the records move) */
+    const char *want =
+        cc_str(pick, REC_PATH); /* (the record may be one of the queue's: kept before the records move) */
     int ret = -1;
     fo.rk = (unsigned *)calloc(n + 1, sizeof(unsigned));
     if (!byp || !ord || !done || !fo.rk) goto out;
@@ -267,8 +277,10 @@ static int fo_reorder(void *queue, void *pick) {
                 fo.rk[i] = byp[mid];
                 break;
             }
-            if (c < 0) lo = mid + 1;
-            else hi = mid;
+            if (c < 0)
+                lo = mid + 1;
+            else
+                hi = mid;
         }
         ord[i] = i;
     }
@@ -550,7 +562,8 @@ static void fo_play(int rec, int how) {
         fo_load(1);
         return;
     }
-    so_play_with(FO_CLASS, fo.list, rec, how, fo_open_player, 0, fo_m3u() ? (so_reorder_fn)0 : fo_reorder); /* the queue plays in the order shown */
+    so_play_with(FO_CLASS, fo.list, rec, how, fo_open_player, 0,
+                 fo_m3u() ? (so_reorder_fn)0 : fo_reorder); /* the queue plays in the order shown */
 }
 
 static int fo_on_play(void *ctx, void *e) {

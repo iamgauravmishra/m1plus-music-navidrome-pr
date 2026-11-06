@@ -117,7 +117,10 @@ static int vs_text_w(void *w) {
  * edge stays. A text that cannot be measured leaves the asset's width (PL_CARD_MAX, the widest language's). Rows are packed from the top in display order. */
 static void vs_fit(vs_t *v) {
     int i, y, w = 0, ok = 1;
-    int gx = v->rows > vs_actions(v) ? VS_GLYPH_X : VS_TICK_X; /* a card of action rows only has nothing to tick: its glyphs start at the tick column's edge and the labels follow with the same gap */
+    int gx =
+        v->rows > vs_actions(v)
+            ? VS_GLYPH_X
+            : VS_TICK_X; /* a card of action rows only has nothing to tick: its glyphs start at the tick column's edge and the labels follow with the same gap */
     int lx = gx + VS_LABEL_X_GLYPH - VS_GLYPH_X;
     for (i = 0; i < VS_ROWS && ok; ++i) {
         int tw, x0 = i >= VS_SORTS ? lx : VS_LABEL_X;

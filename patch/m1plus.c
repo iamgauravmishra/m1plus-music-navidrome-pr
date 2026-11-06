@@ -321,7 +321,8 @@ __attribute__((noinline)) static void reset_all_ask(void) {
 static void pick_choose(const struct pod_row *row);
 
 static int is_pick(const struct pod_row *row) { /* the pickers' check rows */
-    return row->action == ACT_THEMESET || row->action == ACT_RECSET || row->action == ACT_VTHSET || row->action == ACT_BGSET || row->action == ACT_ACCENTSET || row->action == ACT_REGIONSET;
+    return row->action == ACT_THEMESET || row->action == ACT_RECSET || row->action == ACT_VTHSET ||
+           row->action == ACT_BGSET || row->action == ACT_ACCENTSET || row->action == ACT_REGIONSET;
 }
 
 static int on_row(void *ctx, void *e) {
@@ -330,8 +331,9 @@ static int on_row(void *ctx, void *e) {
     if (!row) return RET_OK;
     if (row->action == ACT_HOME)
         home_open(row->arg);
-    else if (row->action == ACT_PAGE || row->action == ACT_CTHEME || row->action == ACT_VREC || row->action == ACT_VTHEME || row->action == ACT_BG ||
-             row->action == ACT_ACCENT || row->action == ACT_REGION) /* the value rows open their picker page */
+    else if (row->action == ACT_PAGE || row->action == ACT_CTHEME || row->action == ACT_VREC ||
+             row->action == ACT_VTHEME || row->action == ACT_BG || row->action == ACT_ACCENT ||
+             row->action == ACT_REGION) /* the value rows open their picker page */
         open_page(row->arg, 0);
     else if (row->action == ACT_PLAYER)
         pod_open_now_playing();

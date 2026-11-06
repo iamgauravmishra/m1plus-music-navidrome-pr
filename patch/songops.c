@@ -134,7 +134,8 @@ void so_play_with(int cls, void *list, int at, int how, so_open_fn open, int rev
     deque_init(queue);
     found = loadSongList(queue, cc_str(pick, REC_NAME), I(pick, REC_CUE_START), cls);
     n = deque_size(queue);
-    if (rev && n > 1) { /* the page shows the stock order the other way round (the Songs page's Z-A): the queue too, so the row tapped is where the page shows it */
+    if (rev &&
+        n > 1) { /* the page shows the stock order the other way round (the Songs page's Z-A): the queue too, so the row tapped is where the page shows it */
         unsigned i;
         char tmp[REC_SIZE];
         for (i = 0; i < n / 2; ++i) {
@@ -143,7 +144,8 @@ void so_play_with(int cls, void *list, int at, int how, so_open_fn open, int rev
         }
         if (found >= 0 && (unsigned)found < n) found = (int)(n - 1 - (unsigned)found);
     }
-    if (reorder && n > 1) { /* the page shows another order (the Folders page's sorts): the queue follows it, and the row's own place in it comes back (-1: left as it was) */
+    if (reorder &&
+        n > 1) { /* the page shows another order (the Folders page's sorts): the queue follows it, and the row's own place in it comes back (-1: left as it was) */
         int f = reorder(queue, pick);
         if (f >= 0) found = f;
     }
@@ -179,5 +181,9 @@ void so_play_with(int cls, void *list, int at, int how, so_open_fn open, int rev
     deque_destroy(queue);
 }
 
-void so_play_dir(int cls, void *list, int at, int how, so_open_fn open, int rev) { so_play_with(cls, list, at, how, open, rev, (so_reorder_fn)0); }
-void so_play(int cls, void *list, int at, int how, so_open_fn open) { so_play_with(cls, list, at, how, open, 0, (so_reorder_fn)0); }
+void so_play_dir(int cls, void *list, int at, int how, so_open_fn open, int rev) {
+    so_play_with(cls, list, at, how, open, rev, (so_reorder_fn)0);
+}
+void so_play(int cls, void *list, int at, int how, so_open_fn open) {
+    so_play_with(cls, list, at, how, open, 0, (so_reorder_fn)0);
+}

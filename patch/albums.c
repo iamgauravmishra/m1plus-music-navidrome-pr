@@ -70,9 +70,12 @@ extern int coverflow_artist(void *artists, unsigned index,
                             unsigned scope); /* patch/coverflow.c: Cover Flow scoped to an artist */
 extern int
 songs_open_artist(void *artist); /* patch/songs.c: our Songs page on all the artist's songs; -1 when it did not open */
-extern void *
-songs_artist_list(void *artist); /* patch/songs.c: the artist's songs through the stock queries (no page); NULL when the artist has no All songs row */
-extern int songs_play_artist(void *artist, int how); /* patch/songs.c: Play (SO_IN_ORDER) / Shuffle (SO_SHUFFLE) on the artist's songs; -1 when nothing plays */
+extern void *songs_artist_list(
+    void *
+        artist); /* patch/songs.c: the artist's songs through the stock queries (no page); NULL when the artist has no All songs row */
+extern int songs_play_artist(
+    void *artist,
+    int how); /* patch/songs.c: Play (SO_IN_ORDER) / Shuffle (SO_SHUFFLE) on the artist's songs; -1 when nothing plays */
 extern int
 coverflow_artist_albums(void *artist_row, unsigned scope, int keep_card, void **albums,
                         unsigned **keys); /* patch/coverflow.c: one artist's album rows and their cache keys */
@@ -124,7 +127,8 @@ static struct {
     unsigned build_timer;
     int own, done;
     void *fade; /* the navbar's fade (img_nb_fade, optional): shown only while the list is scrolled */
-    void *small, *big; /* label_title (the navbar's small title) and al_title (the large one, the first thing in the content); either may be missing */
+    void *small,
+        *big; /* label_title (the navbar's small title) and al_title (the large one, the first thing in the content); either may be missing */
     int title_on; /* the small title is shown (the large one has scrolled away, or the scroll events are missing) */
     /* the scan that queues the missing albums runs in AL_SCAN_BATCH steps on build_timer: scanning = a scan is under
      * way (own set held, worker not started); scan_cur / scan_centre = the cc_build_near_step cursor and the album it
@@ -132,7 +136,8 @@ static struct {
     int scanning, scanned;
     unsigned scan_cur, scan_centre;
     int fg;
-    int sort, rev; /* the order shown (cc_sort_mode: CC_SORT_*) and its direction (cc_sort_rev: 1 = Z-A, Oldest First) */
+    int sort,
+        rev; /* the order shown (cc_sort_mode: CC_SORT_*) and its direction (cc_sort_rev: 1 = Z-A, Oldest First) */
     vs_t vs; /* the "..." card */
     /* an artist's page (scope CLASS_ARTISTS) under the large title: the Play and Shuffle pills (pills: both widgets exist) and each album's year
      * (cc_album_years of the artist's songs, one entry per stock row, 0 = none; NULL: no years); the library's page and a composer's have neither */
@@ -238,12 +243,16 @@ static tile_t *al_tile(int a) {
     if (fresh) {
         void *rec = cc_row(al.albums, al.order, (unsigned)a);
         unsigned row = al.order ? al.order[a] : (unsigned)a; /* (keys and years are by stock row) */
-        if (al_is_card(rec)) /* All Songs over the artist: no cover file (key 0), the placeholder; an artist's page has no line under it */
-            grid_set(t, TR("local_allsong"), al.scope == CLASS_ARTISTS ? "" : cc_str(deque_at(al.artist_row, 0), REC_TITLE), 0);
-        else if (al.scope == CLASS_ARTISTS) { /* an artist's album: its year as the grey line, none when no song of it has one */
+        if (al_is_card(
+                rec)) /* All Songs over the artist: no cover file (key 0), the placeholder; an artist's page has no line under it */
+            grid_set(t, TR("local_allsong"),
+                     al.scope == CLASS_ARTISTS ? "" : cc_str(deque_at(al.artist_row, 0), REC_TITLE), 0);
+        else if (al.scope ==
+                 CLASS_ARTISTS) { /* an artist's album: its year as the grey line, none when no song of it has one */
             char year[5];
             unsigned y = al.years ? al.years[row] : 0;
-            year[0] = y ? (char)('0' + y / 1000) : 0, year[1] = (char)('0' + y / 100 % 10), year[2] = (char)('0' + y / 10 % 10), year[3] = (char)('0' + y % 10), year[4] = 0;
+            year[0] = y ? (char)('0' + y / 1000) : 0, year[1] = (char)('0' + y / 100 % 10),
+            year[2] = (char)('0' + y / 10 % 10), year[3] = (char)('0' + y % 10), year[4] = 0;
             grid_set(t, cc_str(rec, REC_ALBUM), year, al.keys ? al.keys[row] : cc_album_key(rec));
         } else
             grid_set(t, cc_str(rec, REC_ALBUM), cc_str(rec, REC_ARTIST), al.keys ? al.keys[row] : cc_album_key(rec));
@@ -645,7 +654,10 @@ static void al_set_mode(int list) {
     if (al.g.tiles) grid_placeholder(&al.g);
     al_size();
     max = al_max_scroll();
-    first = !first ? 0 : al_top() + (list ? first * LIST_ROW_H : first / GRID_COLS * PITCH); /* (the first album is at the top: the title block with it) */
+    first = !first ? 0
+                   : al_top() + (list ? first * LIST_ROW_H
+                                      : first / GRID_COLS *
+                                            PITCH); /* (the first album is at the top: the title block with it) */
     widget_set_prop_int(al.sv, "yoffset", first > max ? max : first);
     al.seen = al_off();
     al_fade();
@@ -745,7 +757,8 @@ static int al_open(int list, void *artist_row, unsigned scope) {
         return -2;
     }
     if (vs_bind(&al.vs, al.win, al_on_item, al_on_scrim,
-                (artist_row ? VS_ALL_SORTS & ~(1u << CC_SORT_ARTIST) : VS_ALL_SORTS) | VS_WITH_VIEWS | VS_WITH_SEARCH)) { /* (one artist's albums: no Artist row) */
+                (artist_row ? VS_ALL_SORTS & ~(1u << CC_SORT_ARTIST) : VS_ALL_SORTS) | VS_WITH_VIEWS |
+                    VS_WITH_SEARCH)) { /* (one artist's albums: no Artist row) */
         navigator_back(); /* an asset that is not ours */
         return -2;
     }
@@ -758,12 +771,15 @@ static int al_open(int list, void *artist_row, unsigned scope) {
     if (artist_row) { /* the artist's albums and, with two or more, the All Songs row last, titled with the artist (Cover Flow's scoped list) */
         const char *name = cc_str(deque_at(artist_row, 0), REC_TITLE);
         al.count = (unsigned)coverflow_artist_albums(artist_row, scope, 1, &al.albums, &al.keys);
-        if (scope == CLASS_ARTISTS && al.count) { /* the years: one read of the artist's songs (the stock queries of the Songs page's artist list) */
+        if (scope == CLASS_ARTISTS &&
+            al.count) { /* the years: one read of the artist's songs (the stock queries of the Songs page's artist list) */
             void *songs = songs_artist_list(deque_at(artist_row, 0));
             if (songs) al.years = cc_album_years(al.albums, songs);
         }
-        al.order = cc_album_order_mode(al.albums, al.sort, al.rev); /* the chosen order (Artist as Title); the keys and years stay by stock row */
-        az_fit(al.big, name); /* both titles cut with an ellipsis to their room (296 px; the 110 px before Cover Flow) */
+        al.order = cc_album_order_mode(
+            al.albums, al.sort, al.rev); /* the chosen order (Artist as Title); the keys and years stay by stock row */
+        az_fit(al.big,
+               name); /* both titles cut with an ellipsis to their room (296 px; the 110 px before Cover Flow) */
         az_fit(al.small, name);
     } else {
         az_fit(al.big, TR("Albums")); /* (the language's word) */
@@ -798,7 +814,10 @@ static int al_open(int list, void *artist_row, unsigned scope) {
     al.fg = 1;
     al.noscroll = !widget_on(al.sv, EVT_SCROLL, al_on_scroll, (void *)0) ||
                   !widget_on(al.sv, EVT_SCROLL_END, al_on_scroll, (void *)0);
-    if (al.noscroll && al.small) widget_set_visible(al.small, 1, 0); /* the large title's collapse needs the scroll events: without them the navbar keeps its title */
+    if (al.noscroll && al.small)
+        widget_set_visible(
+            al.small, 1,
+            0); /* the large title's collapse needs the scroll events: without them the navbar keeps its title */
     al.title_on = al.noscroll;
     al_kick();
     al_build_later();

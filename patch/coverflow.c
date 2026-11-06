@@ -1278,7 +1278,9 @@ int coverflow_artist_albums(void *artist_row, unsigned scope, int keep_card, voi
 
 static int load_artist(void) {
     cf.count = (unsigned)coverflow_artist_albums(cf.artist_row, cf.scope, 1, &cf.albums, &cf.keys);
-    if (cf.count && cf.count <= MAX_ALBUMS) cf.order = cc_album_order_mode(cf.albums, cc_scoped_sort(), cc_sort_rev()); /* the Albums page's order for one artist */
+    if (cf.count && cf.count <= MAX_ALBUMS)
+        cf.order = cc_album_order_mode(cf.albums, cc_scoped_sort(),
+                                       cc_sort_rev()); /* the Albums page's order for one artist */
     return (int)cf.count;
 }
 

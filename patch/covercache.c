@@ -607,10 +607,12 @@ void cc_heapsort(unsigned *v, unsigned n, int (*cmp)(unsigned, unsigned)) {
 
 static void **so_rec __attribute__((section(".scratch"))); /* the rows being sorted, by stock number */
 static const char **so_key __attribute__((section(".scratch"))); /* their keys: artist 2 * i, album title 2 * i + 1 */
-static int so_rev __attribute__((section(".scratch"))); /* 1: the order's other direction (Z-A, oldest first); the special rows stay last either way */
+static int so_rev __attribute__((section(
+    ".scratch"))); /* 1: the order's other direction (Z-A, oldest first); the special rows stay last either way */
 
 static int so_cmp(unsigned a, unsigned b) {
-    int ua = I(so_rec[a], REC_ID) < 0, ub = I(so_rec[b], REC_ID) < 0, d; /* "Unknown Album" (-1) and a scoped page's All songs row (-2) last */
+    int ua = I(so_rec[a], REC_ID) < 0, ub = I(so_rec[b], REC_ID) < 0,
+        d; /* "Unknown Album" (-1) and a scoped page's All songs row (-2) last */
     if (ua != ub) return ua - ub;
     d = cc_key_cmp(so_key[2 * a], so_key[2 * b]);
     if (!d) d = cc_key_cmp(so_key[2 * a + 1], so_key[2 * b + 1]);
@@ -634,7 +636,8 @@ static const char *so_text(const void *ctx, unsigned i) {
  * the old file (and its .tmp) is deleted, whether or not that write worked (a failed write leaves the default, Artist). Nothing else reads it. */
 static void sort_migrate(void) {
     if (access(OLD_ORDER_FILE, F_OK)) return;
-    if (access(ALBUMS_SORT_FILE, F_OK)) home_write_atomic(ALBUMS_SORT_FILE, ALBUMS_SORT_TMP, set_read(OLD_ORDER_FILE, '1') == '0' ? "0\n" : "1\n");
+    if (access(ALBUMS_SORT_FILE, F_OK))
+        home_write_atomic(ALBUMS_SORT_FILE, ALBUMS_SORT_TMP, set_read(OLD_ORDER_FILE, '1') == '0' ? "0\n" : "1\n");
     unlink(OLD_ORDER_FILE), unlink(OLD_ORDER_TMP);
 }
 
@@ -688,7 +691,8 @@ static int so_recent_cmp(unsigned a, unsigned b) {
     if (ua != ub) return ua - ub;
     if (so_rank[a] != so_rank[b]) {
         int d = so_rank[a] < so_rank[b] ? -1 : 1;
-        return so_rev && so_rank[a] != SO_NONE && so_rank[b] != SO_NONE ? -d : d; /* (an album with no song stays last) */
+        return so_rev && so_rank[a] != SO_NONE && so_rank[b] != SO_NONE ? -d
+                                                                        : d; /* (an album with no song stays last) */
     }
     return a < b ? -1 : a > b;
 }
@@ -814,7 +818,11 @@ unsigned *cc_album_order_mode(void *albums, int mode, int rev) {
         free(v);
         v = (unsigned *)0;
     } else
-        cc_heapsort(v, n, mode == CC_SORT_ARTIST ? so_cmp : mode == CC_SORT_TITLE ? so_title_cmp : mode == CC_SORT_RECENT ? so_recent_cmp : so_year_cmp);
+        cc_heapsort(v, n,
+                    mode == CC_SORT_ARTIST   ? so_cmp
+                    : mode == CC_SORT_TITLE  ? so_title_cmp
+                    : mode == CC_SORT_RECENT ? so_recent_cmp
+                                             : so_year_cmp);
     free(so_rec);
     if (mode == CC_SORT_ARTIST) free((void *)so_key);
     free(so_rank);
