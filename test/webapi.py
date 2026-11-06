@@ -379,6 +379,69 @@ def host_tests(td):
     expect('chunk interrupted removes the part', r['status'] == 400 and not os.path.exists(R('Music', '.cs.bin.part')) and not os.path.exists(R('Music', 'cs.bin')))
     expect('chunk bad offset 400', up('x', b'x', extra=[('offset', 'zz')])['status'] == 400)
 
+    # ---- hidden=1: dot names are reachable; /.m1plus is read-only; the API still never creates a dot name
+    H = [('hidden', '1')]
+    os.makedirs(R('Hid', '.sub'))
+    for n, d in (('Hid/vis.txt', b'v'), ('Hid/.dot.txt', b'dot'), ('Hid/._vis.txt', b'ad'), ('Hid/.x.bin.part', b'p'),
+                 ('Hid/.sub/in.txt', b'in'), ('Hid/.sub/.deep', b'dp')):
+        Path(R(n)).write_bytes(d)
+    hl = listing(c, '/Hid')
+    expect('hidden off: list skips dot names', sorted(hl) == ['vis.txt'], sorted(hl))
+    r = c.call('list', [('path', '/Hid'), *H])
+    hl = {e['name']: e for e in js(r)['entries']}
+    expect('hidden on: list has dot names', sorted(hl) == ['._vis.txt', '.dot.txt', '.sub', '.x.bin.part', 'vis.txt'], sorted(hl))
+    expect('hidden on: folder count includes dot names', hl['.sub']['items'] == 2 and hl['.sub']['dir'], hl['.sub'])
+    expect('hidden off: folder count skips dot names', listing(c, '/Hid')['vis.txt']['size'] == 1 and
+           next(e for e in js(c.call('list', [('path', '/')]))['entries'] if e['name'] == 'Hid')['items'] == 1)
+    expect('hidden on: root lists .m1plus', '.m1plus' in {e['name'] for e in js(c.call('list', [('path', '/'), *H]))['entries']})
+    expect('hidden on: list a dot folder', sorted(e['name'] for e in js(c.call('list', [('path', '/Hid/.sub'), *H]))['entries']) == ['.deep', 'in.txt'])
+    expect('hidden=0 is off', c.call('list', [('path', '/Hid/.sub'), ('hidden', '0')])['status'] == 403)
+    expect('hidden off: dot path 403', c.call('download', [('path', '/Hid/.dot.txt')])['status'] == 403)
+    for bad in ('/Hid/.', '/Hid/..', '/Hid/.sub/..'):
+        expect(f'hidden on: {bad!r} 400', c.call('list', [('path', bad), *H])['status'] == 400)
+    r = c.call('download', [('path', '/Hid/.dot.txt'), *H])
+    expect('hidden on: download a dot file', r['status'] == 200 and r['body'] == b'dot' and b'filename="' + b'.dot.txt' in r['headers']['Content-Disposition'].encode(), r['status'])
+    r = c.call('tar', [('path', '/Hid'), *H])
+    tf = tarfile.open(fileobj=io.BytesIO(r['body']))
+    expect('hidden on: tar includes dot names', sorted(tf.getnames()) == sorted(['Hid', 'Hid/vis.txt', 'Hid/.dot.txt', 'Hid/._vis.txt',
+           'Hid/.x.bin.part', 'Hid/.sub', 'Hid/.sub/in.txt', 'Hid/.sub/.deep']), tf.getnames())
+    tf = tarfile.open(fileobj=io.BytesIO(c.call('tar', [('path', '/Hid')])['body']))
+    expect('hidden off: tar skips dot names', sorted(tf.getnames()) == ['Hid', 'Hid/vis.txt'], tf.getnames())
+    expect('hidden on: tar of a dot folder', '.sub/.deep' in tarfile.open(fileobj=io.BytesIO(c.call('tar', [('path', '/Hid/.sub'), *H])['body'])).getnames())
+    # delete
+    expect('hidden off: delete dot file 403', c.post('delete', form=[('path', '/Hid/._vis.txt')])['status'] == 403 and os.path.exists(R('Hid', '._vis.txt')))
+    r = c.post('delete', form=[('path', '/Hid/._vis.txt'), ('path', '/Hid/.x.bin.part'), *H])
+    expect('hidden on: delete ._ and .part files', r['status'] == 200 and js(r) == {'deleted': 2} and
+           not os.path.exists(R('Hid', '._vis.txt')) and not os.path.exists(R('Hid', '.x.bin.part')), r['body'])
+    r = c.post('delete', form=[('path', '/Hid/.sub'), *H])
+    expect('hidden on: delete a dot folder', r['status'] == 200 and not os.path.exists(R('Hid', '.sub')), r['body'])
+    # rename: a dot source is fine, a dot target never
+    expect('hidden off: rename dot source 403', c.post('rename', form=[('path', '/Hid/.dot.txt'), ('name', 'plain.txt')])['status'] == 403)
+    r = c.post('rename', form=[('path', '/Hid/.dot.txt'), ('name', 'plain.txt'), *H])
+    expect('hidden on: rename a dot source', r['status'] == 200 and Path(R('Hid', 'plain.txt')).read_bytes() == b'dot' and not os.path.exists(R('Hid', '.dot.txt')), r['body'])
+    for q in (c.post('rename', form=[('path', '/Hid/plain.txt'), ('name', '.dot.txt'), *H]),
+              c.post('mkdir', form=[('path', '/Hid'), ('name', '.newdir'), *H]),
+              up('.up.bin', b'x', path='/Hid', extra=H)):
+        expect('hidden on: dot target 400', q['status'] == 400 and 'dot' in js(q)['error'], q['body'])
+    expect('hidden on: dot target left nothing', sorted(os.listdir(R('Hid'))) == ['plain.txt', 'vis.txt'], os.listdir(R('Hid')))
+    # .m1plus: readable, never writable
+    r = c.call('download', [('path', '/.m1plus/db'), *H])
+    expect('.m1plus download', r['status'] == 200 and r['body'] == b'secret')
+    expect('.m1plus tar', b'secret' in c.call('tar', [('path', '/.m1plus'), *H])['body'])
+    expect('.m1plus list', [e['name'] for e in js(c.call('list', [('path', '/.m1plus'), *H]))['entries']] == ['db'])
+    ro = []
+    for op, form in (('delete', [('path', '/.m1plus/db')]), ('delete', [('path', '/.m1plus')]), ('delete', [('path', '/.M1PLUS/db')]),
+                     ('rename', [('path', '/.m1plus/db'), ('name', 'db2')]), ('rename', [('path', '/.m1plus'), ('name', 'other')]),
+                     ('mkdir', [('path', '/.m1plus'), ('name', 'sub')]), ('move', [('path', '/Hid/vis.txt'), ('to', '/.m1plus')]),
+                     ('move', [('path', '/.m1plus/db'), ('to', '/Hid')])):
+        r = c.post(op, form=[*form, *H])
+        ro.append(r['status'] == 403 and 'read-only' in js(r)['error'])
+    expect('.m1plus refuses delete, rename, mkdir, move', all(ro), ro)
+    body = b'data'
+    r = c.call('upload', [('path', '/.m1plus'), ('name', 'u.bin'), *H], method='POST', body=body, ctype='application/octet-stream')
+    expect('.m1plus refuses upload', r['status'] == 403 and 'read-only' in js(r)['error'] and not os.path.exists(R('.m1plus', 'u.bin')), r['body'])
+    expect('.m1plus untouched', os.listdir(R('.m1plus')) == ['db'] and Path(R('.m1plus', 'db')).read_bytes() == b'secret')
+
     # ---- the card is never left with a stray part file after all of the above
     stray = [os.path.join(d, n) for d, _, fs in os.walk(c.root) for n in fs if n.endswith('.part')]
     expect('no stray parts', not stray, stray)

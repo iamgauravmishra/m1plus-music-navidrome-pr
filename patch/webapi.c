@@ -7,7 +7,8 @@
  * (test/webapi.py), WEBAPI_ROOT then pointing at a temporary directory.
  *
  * Every request path is checked component by component below the root: no "." or "..", no name starting with
- * a dot (hidden: macOS ._ files, the player's own .m1plus data), no symbolic link, nothing outside the root.
+ * a dot (hidden: macOS ._ files, the player's own .m1plus data) unless the request says hidden=1, no symbolic
+ * link, nothing outside the root. /.m1plus stays read-only; the API never creates a dot name.
  */
 typedef unsigned char u8;
 typedef unsigned short u16;
@@ -683,6 +684,20 @@ static void drain(u64 n) {
 /* ---- paths ---- */
 
 static int rootlen;
+static int show_hidden; /* hidden=1: dot names are listed, counted, archived, downloaded, deleted, renamed */
+
+/* /.m1plus (the player's own data) and everything below it is read-only: only list, download and tar reach it. */
+static int in_m1plus(const char *abs) {
+    const char *p = abs + rootlen, *n = "/.m1plus";
+    for (; *n; p++, n++) {
+        char x = *p >= 'A' && *p <= 'Z' ? *p + 32 : *p;
+        if (x != *n) return 0;
+    }
+    return !*p || *p == '/';
+}
+static void need_writable(const char *abs) {
+    if (in_m1plus(abs)) die(403, ".m1plus is read-only");
+}
 
 static int pjoin(char *dst, int n, const char *name) {
     int l = (int)strlen(name);
@@ -708,7 +723,7 @@ static int resolve(const char *v, char *out, int allow_missing, struct fst *st) 
         while (*p && *p != '/') p++;
         long cl = p - c;
         if ((cl == 1 && c[0] == '.') || (cl == 2 && c[0] == '.' && c[1] == '.')) die(400, "bad path");
-        if (c[0] == '.') die(403, "hidden name");
+        if (c[0] == '.' && !show_hidden) die(403, "hidden name");
         if (cl > 255) die(400, "name too long");
         if (st->type != T_DIR) die(404, "not found");
         if (n + 1 + cl >= PMAX) die(400, "path too long");
@@ -820,7 +835,7 @@ static int count_items(const char *path) {
     if (dir_open(&d, path) < 0) return -1;
     const char *nm;
     while ((nm = dir_next(&d)) && n < COUNTCAP)
-        if (nm[0] != '.') n++;
+        if (nm[0] != '.' || show_hidden) n++;
     dir_close(&d);
     return n;
 }
@@ -839,7 +854,7 @@ static void op_list(void) {
     const char *nm;
     memcpy(ep, dp, (unsigned long)dl + 1);
     while ((nm = dir_next(&d))) {
-        if (nm[0] == '.') continue;
+        if (nm[0] == '.' && !show_hidden) continue;
         int el = pjoin(ep, dl, nm);
         struct fst st;
         int bad = el < 0 || os_lstat(ep, &st) < 0 || (st.type != T_FILE && st.type != T_DIR);
@@ -1000,7 +1015,7 @@ static void tar_check(int tl, int al, int depth) {
         if (dir_open(&d, tp) < 0) die(500, "cannot read the selection");
         const char *nm;
         while ((nm = dir_next(&d))) {
-            if (nm[0] == '.') continue;
+            if (nm[0] == '.' && !show_hidden) continue;
             int t2 = pjoin(tp, tl, nm), a2 = pjoin(ap, al, nm);
             if (t2 < 0 || a2 < 0) die(400, "a path in the selection is too long");
             if (depth >= DEPTH) {
@@ -1030,7 +1045,7 @@ static void tar_walk(int tl, int al, int depth) {
         if (dir_open(&d, tp) < 0) tar_abort();
         const char *nm;
         while ((nm = dir_next(&d))) {
-            if (nm[0] == '.') continue;
+            if (nm[0] == '.' && !show_hidden) continue;
             int t2 = pjoin(tp, tl, nm), a2 = pjoin(ap, al, nm);
             if (t2 >= 0 && a2 >= 0) tar_walk(t2, a2, depth + 1);
             tp[tl] = 0;
@@ -1120,6 +1135,7 @@ static void need_octet_stream(void) {
 static void op_mkdir(void) {
     static char dp[PMAX];
     int dl = resolve_dir(param("path"), dp);
+    need_writable(dp);
     const char *name = param("name");
     if (!name) die(400, "no name");
     check_card_name(name);
@@ -1139,6 +1155,7 @@ static void op_rename(void) {
     struct fst st;
     int fl = resolve(param("path"), fp, 0, &st);
     if (fl == rootlen) die(403, "the card itself");
+    need_writable(fp);
     const char *name = param("name");
     if (!name) die(400, "no name");
     check_card_name(name);
@@ -1195,6 +1212,7 @@ static void op_move(void) {
     static char *src[MAXP];
     int k = 0, used = 0;
     int dl = resolve_dir(param("to"), dp);
+    need_writable(dp);
     const char *mode = param("conflict");
     int keep = mode && !strcmp(mode, "keep");
     if (mode && !keep && strcmp(mode, "fail")) die(400, "bad conflict mode");
@@ -1204,6 +1222,7 @@ static void op_move(void) {
         struct fst st;
         int l = resolve(pv[i], path, 0, &st);
         if (l == rootlen) die(403, "the card itself");
+        need_writable(path);
         if (st.type == T_DIR && is_inside(dp, path)) die(400, "a folder cannot go into itself");
         if (used + l + 1 > (int)sizeof store) die(400, "too many paths");
         memcpy(store + used, path, (unsigned long)l + 1);
@@ -1313,6 +1332,7 @@ static void op_delete(void) {
         struct fst st;
         int l = resolve(pv[i], path, 0, &st);
         if (l == rootlen) die(403, "the card itself");
+        need_writable(path);
         if (used + l + 1 > (int)sizeof store) die(400, "too many paths");
         memcpy(store + used, path, (unsigned long)l + 1);
         src[k++] = store + used;
@@ -1356,6 +1376,7 @@ static void op_upload(void) {
     }
     check_card_name(name);
     int dl = resolve_dir(param("path"), dp);
+    need_writable(dp);
     memcpy(fin, dp, (unsigned long)dl + 1);
     memcpy(part, dp, (unsigned long)dl + 1);
     kn[0] = '.';
@@ -1472,6 +1493,8 @@ static int app(char **env) {
         body[n] = 0;
         parse(body);
     }
+    const char *hv = param("hidden"); /* query or form body */
+    show_hidden = hv && !strcmp(hv, "1");
     if (!strcmp(op, "list"))
         op_list();
     else if (!strcmp(op, "df"))
