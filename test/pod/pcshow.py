@@ -525,8 +525,8 @@ def nav_tests(ctx):
     expect(m.props.get((t, 'visible')) == 0 and flags(m, 'btn_more') == (1, 1), 'leaving select mode: the "..." is back, the title hidden at the top')
     # the Shows level: the large title is the page's, the navbar's is hidden at rest and there is no "..." without Import
     PCP.click(m, 'btn_return')
-    expect(m.props.get((t, 'visible')) == int(m.props.get((m.sv, 'yoffset'), 0) > O['SG_COLLAPSE']) and flags(m, 'btn_more') == (0, 0) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_np' and flags(m, 'btn_globe') == (0, 0),
-           'the Shows level: the large title (the navbar\'s shows only once it has scrolled away, where the page comes back to), no "..." (nothing to import), no globe (Podcast Search is off): Now Playing is the plain disc')
+    expect(m.props.get((t, 'visible')) == int(m.props.get((m.sv, 'yoffset'), 0) > O['SG_COLLAPSE']) and flags(m, 'btn_more') == (0, 0) and flags(m, 'btn_globe') == (1, 1) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_play',
+           'the Shows level: the large title (the navbar\'s shows only once it has scrolled away, where the page comes back to), no "..." (nothing to import): [Globe | Now Playing]')
     # the Downloads page has the "..." (its sheet) once it has a row
     m = shown()
     PCP.click(m, 'btn_return')

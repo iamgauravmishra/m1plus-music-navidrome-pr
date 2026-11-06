@@ -80,8 +80,8 @@ def entry_tests(ctx):
     expect = ctx.expect
     m = page()
     PCP.click(m, 'btn_more')
-    expect(flags(m, 'btn_more') == (0, 0) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_np',
-           'with subscriptions and nothing to import there is no "..." (Now Playing is the plain disc) and a stray click opens no sheet')
+    expect(flags(m, 'btn_more') == (0, 0) and flags(m, 'btn_globe') == (1, 1) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_play',
+           'with subscriptions and nothing to import there is no "..." ([Globe | Now Playing]) and a stray click opens no sheet')
     expect(m.props.get((m.widgets['pg_sh_card'], 'visible'), 0) == 0 and 'subs' not in PCP.SHEET_ROWS, 'the sheet has no Subscriptions row any more')
     # a card with an OPML file in its root: Import from Card in the "..."
     m = page(lambda mm: mm.put('/mnt/mmc/podcasts.opml', b'<opml><body><outline xmlUrl="https://n.example/rss" text="N"/></body></opml>'))

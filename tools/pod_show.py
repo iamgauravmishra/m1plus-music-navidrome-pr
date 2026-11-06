@@ -95,11 +95,11 @@ def font_path(work):
 # ---------------------------------------------------------------------------
 # The Shows page (round 2; patch/podcasts.c pg_home_layout, pg_paint_home): the blocks' tops and the cells' boxes, content y from the list's top.
 
-def shows_layout(n_shows, has_line, n_cont):
-    """The Shows level's layout: where each block starts (0 when it is not there), the grid's top and the content's height. The Library rows close the page, PP_LIB_GAP under the grid: Downloads always, Subscriptions while a show has a feed
-    (has_line: the refresh line shows under the same condition), then Saved always."""
+def shows_layout(n_shows, has_line, n_cont, discover=True):
+    """The Shows level's layout: where each block starts (0 when it is not there), the grid's top and the content's height. The Library rows close the page, PP_LIB_GAP under the grid: Discover (while Podcast Discover is on, `discover`), Downloads, Subscriptions while a show has a feed
+    (has_line: the refresh line shows under the same condition), then Saved."""
     o = O
-    L = dict(y_line=o['PP_LINE_Y'] if has_line else 0, y_shelf=0, y_sub=0)
+    L = dict(y_line=o['PP_LINE_Y'] if has_line else 0, y_shelf=0, y_srch=0, y_sub=0)
     y = o['PP_LINE_Y'] + (o['PP_LINE_PITCH'] if has_line else o['PP_NOLINE_PITCH'])
     if n_cont:
         L['y_shelf'] = y
@@ -108,8 +108,12 @@ def shows_layout(n_shows, has_line, n_cont):
     y += o['PP_HEAD_PITCH']
     L['y_grid'] = y
     y += (n_shows + o['GRID_COLS'] - 1) // o['GRID_COLS'] * grid_pitch()
-    L['y_dl'] = y + (o['PP_LIB_GAP'] if n_shows else 0)
-    y = L['y_dl'] + o['PC_ROW_H']
+    y += o['PP_LIB_GAP'] if n_shows else 0
+    if discover:
+        L['y_srch'] = y
+        y += o['PC_ROW_H']
+    L['y_dl'] = y
+    y += o['PC_ROW_H']
     if has_line:
         L['y_sub'] = y
         y += o['PC_ROW_H']
@@ -171,7 +175,49 @@ def search_layout(n):
     o = O
     top = o['PQ_TOP']
     return dict(field=(o['PQ_FIELD_X'], o['PQ_FIELD_Y'], o['PQ_FIELD_W'], o['PQ_FIELD_H']), top=top,
-                rows=[top + i * o['PC_ROW_H'] for i in range(n)], h=top + n * o['PC_ROW_H'] + (o['PQ_BOTTOM'] if n else 0), hint_y=top + o['PQ_HINT_Y'])
+                rows=[top + i * o['PC_ROW_H'] for i in range(n)], h=top + n * o['PC_ROW_H'] + o['PQ_BOTTOM'] if n else top + 8 + 4 * o['PS_TITLE_PITCH'], hint_y=top + 8)
+
+
+def capsule(x, y, w, h, r, c):
+    """The rectangles patch/common.c pod_capsule fills for a capsule w x h at (x, y), corner radius r (at most half the height), colour c (a color_t word): [(colour, x, y, w, h)]. Each corner row is inset by the circle's chord on the
+    row's middle, in 1/256 px; the pixel at the end is lit by what the circle leaves of it (the colour's alpha scaled by 255 - the fraction), the rows between the corners are one fill."""
+    import math
+    r = max(0, min(r, h // 2, w // 2))
+    out = []
+    for i in range(r):
+        dy = 2 * (r - i) - 1
+        u = math.isqrt((4 * r * r - dy * dy) << 16)
+        inset = r * 256 - u // 2
+        x0, f = inset >> 8, inset & 255
+        rows = (y + i, y + h - 1 - i)
+        if f:
+            edge = (c & 0x00ffffff) | (((c >> 24) * (255 - f) // 255) << 24)
+            for yy in rows: out += [(edge, x + x0, yy, 1, 1), (edge, x + w - 1 - x0, yy, 1, 1)]
+            x0 += 1
+        for yy in rows: out.append((c, x + x0, yy, w - 2 * x0, 1))
+    if h - 2 * r > 0: out.append((c, x, y + r, w, h - 2 * r))
+    return out
+
+
+def segmented(x, y, w, h, n, sel):
+    """The segmented control patch/common.c pod_segmented paints (docs/modules/ui-rules.md "Segmented control"): the track and the thumb as (x, y, w, h, radius), the hairlines between unselected segments (x, y, w, h), and each
+    segment's box (x, w). Colours are SEG_TRACK, SEG_THUMB and SEG_SEP of patch/offsets.inc."""
+    o, pad = O, O['SEG_PAD']
+    seg = (w - 2 * pad) // n
+    thumb = (x + pad + sel * seg, y + pad, (w - 2 * pad - sel * seg) if sel == n - 1 else seg, h - 2 * pad, (h - 2 * pad) // 2)
+    seps = [(x + pad + k * seg, y + h // 4, 1, h // 2) for k in range(1, n) if k - 1 != sel and k != sel]
+    return dict(track=(x, y, w, h, h // 2), thumb=thumb, seps=seps, segs=[(x + pad + k * seg, seg) for k in range(n)], label_h=o['SEG_LABEL_H'])
+
+
+def discover_layout(n):
+    """The Discover level of the Podcasts page (docs/modules/podcasts.md "Discover") with n chart rows: the grey line's top, the Shows | Episodes control's rectangle (segmented(): the track and the thumb of each selection), where the rows
+    start, each row's top, the content's height (with no rows: the status text's room, top + 8 + four lines), and the rank / cover / text columns (the list painter shifted DC_SHIFT right)."""
+    o = O
+    seg = (o['DC_SEG_X'], o['DC_SEG_Y'], o['DC_SEG_W'], o['DC_SEG_H'])
+    top = o['DC_TOP']
+    return dict(line_y=o['PDL_LINE_Y'], seg=seg, sel=[segmented(*seg, 2, k) for k in range(2)], top=top, rows=[top + i * o['PC_ROW_H'] for i in range(n)],
+                h=top + n * o['PC_ROW_H'] + o['DC_BOTTOM'] if n else top + 8 + 4 * o['PS_TITLE_PITCH'], hint_y=top + 8, rank_end=o['DC_RANK_END'],
+                art_x=o['LIST_ART_X'] + o['DC_SHIFT'], text_x=o['LIST_TEXT_X'] + o['DC_SHIFT'], text_end=o['LIST_TEXT_X'] + o['LIST_TEXT_W_CHEV'], chev_x=o['LIST_CHEV_X'])
 
 
 def subscribe_pill(font, text):

@@ -151,33 +151,34 @@ def layout_tests(ctx):
     L = lay(m)
     expect(m.props.get((m.sv, 'virtual_h')) == L['h'] and ('widget_resize', m.view, 320, L['h']) in m.calls and L['y_shelf'] == 0, f'four shows, a feed, nothing partly played: no Continue Listening, the content is {L["h"]} px')
     gridend = L['y_grid'] + 2 * pod_show.grid_pitch()
-    expect(L['y_shows'] == o['PP_LINE_Y'] + o['PP_LINE_PITCH'] and L['y_grid'] == L['y_shows'] + o['PP_HEAD_PITCH'] and L['y_dl'] == gridend + o['PP_LIB_GAP'] and L['y_sub'] == L['y_dl'] + o['PC_ROW_H'] and L['y_sav'] == L['y_sub'] + o['PC_ROW_H'] and L['h'] == L['y_sav'] + o['PC_ROW_H'] + o['PP_BOTTOM'],
-           'the Shows header PP_LINE_PITCH under the line, the grid, then PP_LIB_GAP (24) of air and the Library rows (Downloads, Subscriptions, Saved) as the last section')
+    expect(L['y_shows'] == o['PP_LINE_Y'] + o['PP_LINE_PITCH'] and L['y_grid'] == L['y_shows'] + o['PP_HEAD_PITCH'] and L['y_srch'] == gridend + o['PP_LIB_GAP'] and L['y_dl'] == L['y_srch'] + o['PC_ROW_H'] and L['y_sub'] == L['y_dl'] + o['PC_ROW_H'] and L['y_sav'] == L['y_sub'] + o['PC_ROW_H'] and L['h'] == L['y_sav'] + o['PC_ROW_H'] + o['PP_BOTTOM'],
+           'the Shows header PP_LINE_PITCH under the line, the grid, then PP_LIB_GAP (24) of air and the Library rows (Discover, Downloads, Subscriptions, Saved) as the last section')
     L0 = lay(m, line=False)
-    expect(L0['y_shows'] == o['PP_LINE_Y'] + o['PP_NOLINE_PITCH'] and L0['y_sub'] == 0 and L0['y_dl'] == L0['y_grid'] + 2 * pod_show.grid_pitch() + o['PP_LIB_GAP'] and L0['y_sav'] == L0['y_dl'] + o['PC_ROW_H'] and L0['h'] == L0['y_sav'] + o['PC_ROW_H'] + o['PP_BOTTOM'],
-           'with no feed there is no refresh line and no Subscriptions row: the Shows header PP_NOLINE_PITCH under the title, the Downloads row and Saved at the end')
+    expect(L0['y_shows'] == o['PP_LINE_Y'] + o['PP_NOLINE_PITCH'] and L0['y_sub'] == 0 and L0['y_srch'] == L0['y_grid'] + 2 * pod_show.grid_pitch() + o['PP_LIB_GAP'] and L0['y_dl'] == L0['y_srch'] + o['PC_ROW_H'] and L0['y_sav'] == L0['y_dl'] + o['PC_ROW_H'] and L0['h'] == L0['y_sav'] + o['PC_ROW_H'] + o['PP_BOTTOM'],
+           'with no feed there is no refresh line and no Subscriptions row: the Shows header PP_NOLINE_PITCH under the title, the Discover and Downloads rows and Saved at the end')
     Le = lay(m, n=0)
-    expect(Le['y_dl'] == Le['y_grid'] and Le['y_sub'] == Le['y_dl'] + o['PC_ROW_H'], 'no show: no gap, the rows follow the top block')
+    expect(Le['y_srch'] == Le['y_grid'] and Le['y_dl'] == Le['y_srch'] + o['PC_ROW_H'] and Le['y_sub'] == Le['y_dl'] + o['PC_ROW_H'], 'no show: no gap, the rows follow the top block')
     # the refresh line: "Updated 1h ago · " in the grey 15 px style, the white word right after it
     grey = texts_of(m, 'label_ps_meta')
     white = texts_of(m, 'label_ps_line')
     gw = sw().font().width('Updated 1h ago · ', 15)
     expect(len(grey) == 1 and grey[0][0] == 'Updated 1h ago · ' and grey[0][1][:2] == (o['PP_LINE_X'], o['PP_LINE_Y']) and grey[0][1][3] == o['PP_LINE_H']
-           and white[0][0] == 'Refresh' and white[0][1][0] == o['PP_LINE_X'] + gw and white[0][1][1] == o['PP_LINE_Y'], f'the refresh line: grey "Updated 1h ago · " at (16, 52), the white "Refresh" after it ({grey}, {white})')
+           and white[0][0] == 'Refresh' and white[0][1][0] == o['PP_LINE_X'] + gw and white[0][1][1] == o['PP_LINE_Y'], f'the refresh line: grey "Updated 1h ago · " at (12, 52), the white "Refresh" after it ({grey}, {white})')
     # the Library rows: the atlas' tiles, the chevrons, the titles and grey lines, the hairlines
     LO = max(0, L['h'] - 400)   # (the Library rows close the page: the frame scrolled to the bottom)
     bl, texts, styles, fills = PCP.paint(m, LO)
     tiles = sorted(tuple(b[2]) + (tuple(b[1][:2]),) for b in bl if tuple(b[1]) == (0, 0, o['PA_TILE_PX'], o['PA_TILE_PX']))
     chev = sorted(tuple(b[2]) for b in bl if tuple(b[1]) == (0, 0, 10, 16))   # the shared chevron bitmap
-    expect(tiles == [(o['PP_DL_TILE_X'], L['y_dl'] - LO + o['PP_DL_TILE_Y'], 44, 44, (0, 0)), (o['PP_DL_TILE_X'], L['y_sub'] - LO + o['PP_DL_TILE_Y'], 44, 44, (0, 0)), (o['PP_DL_TILE_X'], L['y_sav'] - LO + o['PP_DL_TILE_Y'], 44, 44, (0, 0))]
-           and chev == [(o['PP_DL_CHEV_X'], L[k] - LO + (o['PC_ROW_H'] - 1 - 16) // 2, 10, 16) for k in ('y_dl', 'y_sub', 'y_sav')] and o['PP_DL_CHEV_X'] == o['LIST_CHEV_X'] and o['PP_DL_TEXT_X'] + o['PP_DL_TEXT_W'] == o['LIST_CHEV_X'] - 10,
-           f'three Library rows: the download, podcast and bookmark tiles (images of their own) at x 16, a chevron each ({tiles}, {chev})')
+    expect(tiles == [(o['PP_DL_TILE_X'], L['y_srch'] - LO + o['PP_DL_TILE_Y'], 44, 44, (0, 0)), (o['PP_DL_TILE_X'], L['y_dl'] - LO + o['PP_DL_TILE_Y'], 44, 44, (0, 0)), (o['PP_DL_TILE_X'], L['y_sub'] - LO + o['PP_DL_TILE_Y'], 44, 44, (0, 0)), (o['PP_DL_TILE_X'], L['y_sav'] - LO + o['PP_DL_TILE_Y'], 44, 44, (0, 0))]
+           and chev == [(o['PP_DL_CHEV_X'], L[k] - LO + (o['PC_ROW_H'] - 1 - 16) // 2, 10, 16) for k in ('y_srch', 'y_dl', 'y_sub', 'y_sav')] and o['PP_DL_CHEV_X'] == o['LIST_CHEV_X'] and o['PP_DL_TEXT_X'] + o['PP_DL_TEXT_W'] == o['LIST_CHEV_X'] - 10,
+           f'four Library rows: the discover, download, podcast and bookmark tiles (images of their own) at x 16, a chevron each ({tiles}, {chev})')
     rows = [(t, s, r) for (t, r), s in zip(texts, styles) if s in ('label_row_title', 'label_row_sub')]
-    want = [('Downloads', 'label_row_title', (o['PP_DL_TEXT_X'], L['y_dl'] - LO + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H'])), ('5 episodes', 'label_row_sub', (o['PP_DL_TEXT_X'], L['y_dl'] - LO + o['LIST_SUB_Y'], o['PP_DL_TEXT_W'], o['LIST_SUB_H'])),
+    want = [('Discover', 'label_row_title', (o['PP_DL_TEXT_X'], L['y_srch'] - LO + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H'])), ('Apple Podcasts', 'label_row_sub', (o['PP_DL_TEXT_X'], L['y_srch'] - LO + o['LIST_SUB_Y'], o['PP_DL_TEXT_W'], o['LIST_SUB_H'])),
+            ('Downloads', 'label_row_title', (o['PP_DL_TEXT_X'], L['y_dl'] - LO + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H'])), ('5 episodes', 'label_row_sub', (o['PP_DL_TEXT_X'], L['y_dl'] - LO + o['LIST_SUB_Y'], o['PP_DL_TEXT_W'], o['LIST_SUB_H'])),
             ('Subscriptions', 'label_row_title', (o['PP_DL_TEXT_X'], L['y_sub'] - LO + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H'])), ('3 shows', 'label_row_sub', (o['PP_DL_TEXT_X'], L['y_sub'] - LO + o['LIST_SUB_Y'], o['PP_DL_TEXT_W'], o['LIST_SUB_H'])),
             ('Saved', 'label_row_title', (o['PP_DL_TEXT_X'], L['y_sav'] - LO + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H'])), ('No saved episodes', 'label_row_sub', (o['PP_DL_TEXT_X'], L['y_sav'] - LO + o['LIST_SUB_Y'], o['PP_DL_TEXT_W'], o['LIST_SUB_H']))]
     expect(sorted(rows) == sorted(want), f'their titles (21 px) and grey lines (18 px) from x 72 ({rows})')
-    expect(all((o['LIST_HAIR'], o['PP_DL_TEXT_X'], L[k] - LO + o['PC_ROW_H'] - 1, 320 - o['PP_DL_TEXT_X'], 1) in fills for k in ('y_dl', 'y_sub', 'y_sav')), 'a hairline under each from its text')
+    expect(all((o['LIST_HAIR'], o['PP_DL_TEXT_X'], L[k] - LO + o['PC_ROW_H'] - 1, 320 - o['PP_DL_TEXT_X'], 1) in fills for k in ('y_srch', 'y_dl', 'y_sub', 'y_sav')), 'a hairline under each from its text')
     # the grid: cover, title and grey line of each cell where the model puts them
     got = grid(m)
     expect([t for t, _ in got] == ORDER, f'the grid lists every show, most recently updated first ({got})')
@@ -218,17 +219,17 @@ def layout_tests(ctx):
     expect([r for _, r in st] == [(pod_show.shelf_item(i, L3['y_shelf'])[0], pod_show.shelf_item(i, L3['y_shelf'])[2], o['PP_SHELF_W'], o['PP_SHELF_TITLE_H']) for i in range(3)]
            and [r for _, r in sl] == [(pod_show.shelf_item(i, L3['y_shelf'])[0], pod_show.shelf_item(i, L3['y_shelf'])[3], o['PP_SHELF_W'], o['PP_SHELF_LEFT_H']) for i in range(3)], 'each item\'s title (14 px) and what is left (13 px grey) under its cover')
     LO3 = L3['h'] - 400
-    dt = {s: (t, r) for (t, r), s in zip(*PCP.paint(m, LO3)[1:3]) if s in ('label_row_title', 'label_row_sub') and r[1] < L3['y_sub'] - LO3}
+    dt = {s: (t, r) for (t, r), s in zip(*PCP.paint(m, LO3)[1:3]) if s in ('label_row_title', 'label_row_sub') and L3['y_dl'] - LO3 <= r[1] < L3['y_sub'] - LO3}
     expect(dt['label_row_title'] == ('Downloads', (o['PP_DL_TEXT_X'], L3['y_dl'] - LO3 + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H']))
            and dt['label_row_sub'] == ('Downloading 42%', (o['PP_DL_TEXT_X'], L3['y_dl'] - LO3 + o['LIST_SUB_Y'], o['PP_DL_TEXT_W'], o['LIST_SUB_H'])), f'the Downloads row: its title and the running download\'s line ({dt})')
     # the three tiles are images of their own, the atlas holds the chevron where the offsets say
     from PIL import Image
     a = Image.open(os.path.join(mod_icons.PNG, 'pc_atlas.png')).convert('RGBA')
-    tl = {n: Image.open(os.path.join(mod_icons.PNG, n + '.png')).convert('RGBA') for n in ('pod_ic_dltile', 'pod_ic_subtile', 'pod_ic_savetile')}
+    tl = {n: Image.open(os.path.join(mod_icons.PNG, n + '.png')).convert('RGBA') for n in ('pod_ic_dltile', 'pod_ic_subtile', 'pod_ic_savetile', 'pod_ic_discovertile')}
     expect((mod_icons.PA_TILE_PX, mod_icons.PA_CHEV) == (o['PA_TILE_PX'], o['PA_CHEV']) and 'PA_TILE_X' not in o and all(t.size == (44, 44) for t in tl.values())
            and all(t.getpixel((22, 4)) == (0x1e, 0x1e, 0x1e, 255) and t.getpixel((0, 0))[3] == 0 and any(p[:3] != (0x1e, 0x1e, 0x1e) and p[3] == 255 for p in t.crop((8, 8, 36, 36)).getdata()) for t in tl.values())
-           and len({t.tobytes() for t in tl.values()}) == 3 and a.getpixel((22, 112 + 22))[3] == 0
-           and a.crop((o['PA_CHEV'] * 16, o['PA_G_Y'], o['PA_CHEV'] * 16 + 16, o['PA_G_Y'] + 16)).getbbox() is not None, 'pod_ic_dltile, pod_ic_subtile and pod_ic_savetile are the #1E1E1E rounded square (clear corners) with a glyph each; the atlas no longer holds a tile and has the grey chevron at the number of offsets.inc')
+           and len({t.tobytes() for t in tl.values()}) == 4 and a.getpixel((22, 112 + 22))[3] == 0
+           and a.crop((o['PA_CHEV'] * 16, o['PA_G_Y'], o['PA_CHEV'] * 16 + 16, o['PA_G_Y'] + 16)).getbbox() is not None, 'pod_ic_dltile, pod_ic_subtile, pod_ic_savetile and pod_ic_discovertile are the #1E1E1E rounded square (clear corners) with a glyph each; the atlas no longer holds a tile and has the grey chevron at the number of offsets.inc')
     expect(not os.path.exists(os.path.join(mod_icons.PNG, 'pod_nav_feeds.png')) and os.path.isfile(os.path.join(mod_icons.PNG, 'pc_ic_import.png')) and not os.path.exists(os.path.join(mod_icons.PNG, 'pod_ic_subs.png')), 'the sheet\'s Import glyph is committed; the Feeds button\'s and the old Subscriptions row\'s are gone')
     # n shows
     for n in (1, 2, 3, 5, 9):
@@ -242,8 +243,8 @@ def title_tests(ctx):
     m = opened()
     t, big, fade = m.widgets['label_title'], m.widgets['pg_big'], m.widgets['img_nb_fade']
     resized = lambda mm: [c[2] for c in mm.calls if c[0] == 'widget_resize' and c[1] == mm.widgets['label_title']]
-    expect(m.props.get((t, 'visible')) == 0 and m.props.get((big, 'visible'), 1) == 1 and m.props.get((fade, 'visible'), 0) == 0 and PCP.title_text(m) == 'Podcasts' and m.wtext.get(t) == 'Podcasts' and resized(m)[-1:] == [O['NAV_VIEW_X'] + O['NAV_VIEW_W'] - O['NAV_TITLE_X']],
-           f'at rest: the large Podcasts heading is there, the navbar\'s title (the same words) is hidden and ends at Now Playing (no "..." here), no fade ({PCP.title_text(m)} {resized(m)} {m.props.get((t, "visible"))})')
+    expect(m.props.get((t, 'visible')) == 0 and m.props.get((big, 'visible'), 1) == 1 and m.props.get((fade, 'visible'), 0) == 0 and PCP.title_text(m) == 'Podcasts' and m.wtext.get(t) == 'Podcasts' and resized(m)[-1:] == [O['NAV_VIEW_X'] - O['NAV_TITLE_X']],
+           f'at rest: the large Podcasts heading is there, the navbar\'s title (the same words) is hidden and ends at the globe (the leftmost piece; no "..." here), no fade ({PCP.title_text(m)} {resized(m)} {m.props.get((t, "visible"))})')
     fn_, ctx_ = m.bound[(m.sv, O['EVT_SCROLL'])]
     def scroll(off):
         m.props[(m.sv, 'yoffset')] = off; m.setword(m.sv + PCP.SC_YOFF, off)
@@ -278,7 +279,7 @@ def title_tests(ctx):
         expect(not [c for c in m.calls if c[0] in ('widget_move', 'widget_resize') and c[1] == big] and shown == (heading is not None) and (heading is None or PCP.title_text(m) == heading),
                f'{name}: heading {heading!r} in the large label, the navbar title hidden at rest ({PCP.title_text(m)})')
     level('Shows', 'Podcasts')
-    expect(flags(m, 'btn_more') == (1, 1) and flags(m, 'btn_globe') == (0, 0), 'the Shows level has the "..." capsule piece (and no globe: Podcast Search is off)')
+    expect(flags(m, 'btn_more') == (1, 1), 'the Shows level has the "..." capsule piece')
     PCP.tap_downloads(m); level('Downloads', 'Downloads')
     PCP.click(m, 'btn_return')
     tap_row(m, "Subscriptions"); level('Subscriptions', 'Subscriptions')
@@ -475,7 +476,7 @@ def lib(m, off=None):
     if off is None: off = max(0, m.props.get((m.sv, 'virtual_h'), 0) - 400)
     t = sorted((r[1], x) for x, r in texts_of(m, 'label_row_title', off))
     s = sorted((r[1], x) for x, r in texts_of(m, 'label_row_sub', off))
-    return [(a, b) for (_, a), (_, b) in zip(t, s)]
+    return [(a, b) for (_, a), (_, b) in zip(t, s) if a != 'Discover']   # (the Discover row is always the first of them: entry_tests in test/pod/pcsearchui.py)
 
 
 def tap_row(m, name, **kw):
@@ -559,7 +560,7 @@ def library_tests(ctx):
     expect(PCP.title_text(m) == 'Subscriptions', 'a tap on the Subscriptions row opens the Subscriptions page')
     PCP.click(m, 'btn_return')
     expect(PCP.title_text(m) == 'Podcasts' and m.props.get((m.sv, 'yoffset')) == LO, 'Back returns to the Shows level where it was')
-    PCP.tap(m, 150, L['y_dl'] - 2, off=LO); PCP.tap(m, 150, L['y_sav'] + o['PC_ROW_H'] + 2, off=LO)
+    PCP.tap(m, 150, L['y_srch'] - 2, off=LO); PCP.tap(m, 150, L['y_sav'] + o['PC_ROW_H'] + 2, off=LO)
     expect(PCP.title_text(m) == 'Podcasts', 'a touch just above the rows or just under them opens nothing')
     m = opened()
     for key, label in (('y_dl', 'Downloads'), ('y_sub', 'Subscriptions')):
@@ -654,16 +655,16 @@ def sheet_tests(ctx):
     expect = ctx.expect
     WSJ = open(os.path.join(FEEDS, 'wsj-3items.xml'), 'rb').read()
     m = opened(None, PCP.page_card)
-    expect(flags(m, 'btn_more') == (0, 0) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_np' and m.props[(m.widgets['btn_backtoplayer'], 'style:pressed:icon')] == 'ah_nav_np_down',
-           'without an import source the sheet would be empty: the "..." is hidden and out of the hit test, Now Playing is the plain disc')
+    expect(flags(m, 'btn_more') == (0, 0) and flags(m, 'btn_globe') == (1, 1) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_play' and m.props[(m.widgets['btn_backtoplayer'], 'style:pressed:icon')] == 'ah_nav_play_down',
+           'without an import source the sheet would be empty: the "..." is hidden and out of the hit test, [Globe | Now Playing]')
     m = opened()
     PCP.click(m, 'btn_more')
-    expect(flags(m, 'btn_more') == (0, 0) and m.props.get((m.widgets['pg_sh_card'], 'visible'), 0) == 0 and flags(m, 'btn_globe') == (0, 0) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_np',
-           'with subscriptions and nothing to import the "..." is hidden too (Subscriptions is a Library row): Now Playing is the plain disc, and a stray click opens no sheet')
+    expect(flags(m, 'btn_more') == (0, 0) and m.props.get((m.widgets['pg_sh_card'], 'visible'), 0) == 0 and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_play',
+           'with subscriptions and nothing to import the "..." is hidden too (Subscriptions is a Library row): [Globe | Now Playing], and a stray click opens no sheet')
     sub_txt = f'{RP}/subscriptions.txt'
     m = opened(lambda mm: mm.put(sub_txt, f'{F["three"]}\n'.encode()))
     expect(flags(m, 'btn_more') == (1, 1) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_play' and m.props[(m.widgets['btn_backtoplayer'], 'style:pressed:icon')] == 'ah_nav_play_down',
-           'with subscriptions.txt: [... | Now Playing], one capsule (the "..." is a middle piece only beside the globe)')
+           'with subscriptions.txt: [Globe | ... | Now Playing], one capsule')
     PCP.click(m, 'btn_more')
     shown = [r for r in PCP.SHEET_ROWS if flags(m, f'pg_sh_{r}') == (1, 1)]
     expect(shown == ['import'] and flags(m, 'pg_sh_card') == (1, 1) and flags(m, 'pg_sh_scrim') == (1, 1) and m.props.get((m.widgets['pg_sh_card'], 'style:normal:bg_image')) == 'pc_sheet1'

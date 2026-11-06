@@ -19,23 +19,25 @@
 #include "battery.h"
 #include "ipod_theme.h"
 #include "radio.h"
+#include "pcregion.h"
 
-enum { K_CHAR, K_PRESENT, K_MENU, K_LINES };
+enum { K_CHAR, K_PRESENT, K_MENU, K_LINES, K_TEXT };
 
 struct sf_file {
     const char *path;
     char kind;
 };
 
-/* The order of the page's rows (INFO_SF + index): 4 guard files, the folder, then the 23 setting files from SF_SETTING on. */
+/* The order of the page's rows (INFO_SF + index): 4 guard files, the folder, then the 24 setting files from SF_SETTING on. */
 static const struct sf_file sf_files[] = {
-    {START_FILE, K_CHAR},          {MARKER, K_PRESENT},      {BAD_NOTE, K_PRESENT},       {KILL_DATA, K_PRESENT},
-    {SET_DIR, K_PRESENT},          {ALBUMS_FILE, K_CHAR},    {PLAYLISTS_FILE, K_CHAR},    {RECENTADD_VIEW_FILE, K_CHAR},
-    {CFSORT_FILE, K_CHAR},         {LANDSCAPE_FILE, K_CHAR}, {TAPETHEME_FILE, K_CHAR},    {VINYLREC_FILE, K_CHAR},
-    {VINYLTHEME_FILE, K_CHAR},     {IP_THEME_FILE, K_CHAR},  {ACCENT_FILE, K_CHAR},       {BG_FILE, K_CHAR},
-    {SHELF_FILE, K_CHAR},          {DAILY_SET_FILE, K_CHAR}, {MENU_FILE, K_MENU},         {PULLDOWN_FILE, K_MENU},
-    {KBZH_FILE, K_CHAR},           {PCSEARCH_FILE, K_CHAR},  {BP_FILE, K_CHAR},           {SHUFFLE_FILE, K_CHAR},
-    {SEARCH_RECENT_FILE, K_LINES}, {RD_VIEW_FILE, K_CHAR},   {RD_RECENT_FILE, K_PRESENT}, {REBUILD_FILE, K_PRESENT},
+    {START_FILE, K_CHAR},      {MARKER, K_PRESENT},           {BAD_NOTE, K_PRESENT},    {KILL_DATA, K_PRESENT},
+    {SET_DIR, K_PRESENT},      {ALBUMS_FILE, K_CHAR},         {PLAYLISTS_FILE, K_CHAR}, {RECENTADD_VIEW_FILE, K_CHAR},
+    {CFSORT_FILE, K_CHAR},     {LANDSCAPE_FILE, K_CHAR},      {TAPETHEME_FILE, K_CHAR}, {VINYLREC_FILE, K_CHAR},
+    {VINYLTHEME_FILE, K_CHAR}, {IP_THEME_FILE, K_CHAR},       {ACCENT_FILE, K_CHAR},    {BG_FILE, K_CHAR},
+    {SHELF_FILE, K_CHAR},      {DAILY_SET_FILE, K_CHAR},      {MENU_FILE, K_MENU},      {PULLDOWN_FILE, K_MENU},
+    {KBZH_FILE, K_CHAR},       {PCSEARCH_FILE, K_CHAR},       {PCREGION_FILE, K_TEXT},  {BP_FILE, K_CHAR},
+    {SHUFFLE_FILE, K_CHAR},    {SEARCH_RECENT_FILE, K_LINES}, {RD_VIEW_FILE, K_CHAR},   {RD_RECENT_FILE, K_PRESENT},
+    {REBUILD_FILE, K_PRESENT},
 };
 #define SF_FILES (sizeof sf_files / sizeof sf_files[0])
 #define SF_SETTING 5 /* the first setting file's row: the rows before it (guard files, folder) are never deleted */
@@ -72,6 +74,15 @@ static int sf_read(const struct sf_file *f, char *out) {
             for (i = 0; i < n && i < 12; i++) out[i] = b[i] >= ' ' && b[i] < 127 ? b[i] : '?';
             out[i] = 0;
             if (n > 12) snprintf(out + 12, 12, "\xe2\x80\xa6");
+        }
+    } else if (f->kind == K_TEXT) { /* a short word (the Podcast Region's two letters) */
+        n = read(fd, b, 8);
+        if (n > 0 && b[n - 1] == '\n') n--;
+        if (n <= 0 || n > 4)
+            snprintf(out, 24, n <= 0 ? "empty" : "other");
+        else {
+            for (i = 0; i < n; i++) out[i] = b[i] >= ' ' && b[i] < 127 ? b[i] : '?';
+            out[i] = 0;
         }
     } else {
         n = read(fd, b, 3);

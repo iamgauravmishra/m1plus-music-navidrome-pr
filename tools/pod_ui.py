@@ -117,7 +117,7 @@ def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, 
         nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
             ('name', 'btn_more'), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', 'pod_nav_more_down'), ('style:normal:icon', 'pod_nav_more'), ('style:over:icon', 'pod_nav_more')])))
-    if show_globe:   # the Podcasts page's globe (Apple Podcasts search, only while Podcast Search is on in Settings): the capsule's left cap, on the 168 slot with the "..." as its middle piece, or on the 214 slot beside Now Playing alone (patch/podcasts.c pg_nav moves it)
+    if show_globe:   # the Podcasts page's globe (Apple Podcasts search, only while Podcast Discover is on in Settings) and the Radio page's left cap (renamed btn_search by its builder: the magnifier): the capsule's left cap, on the 214 slot beside Now Playing (patch/podcasts.c pg_nav moves the globe left of the "...")
         nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
             ('name', 'btn_globe'), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', 'pod_nav_globe_down'), ('style:normal:icon', 'pod_nav_globe'), ('style:over:icon', 'pod_nav_globe')])))
@@ -390,7 +390,14 @@ def build_podcasts_page(page):
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
     root.children.append(hidden(Widget('image', 0, 0, SCREEN_W, CLIENT_H, [('name', PS_TINT_NAME), ('image', 'ah_tint'), ('draw_type', 'default'), ('clickable', 'false')])))   # first: under everything
-    root.children.append(navbar(page.title, show_more=True, show_globe=True))
+    nb = navbar(page.title, show_more=True, show_globe=True)   # btn_globe: the Shows level's Apple Podcasts search (the left cap; patch/podcasts.c pg_nav places it)
+    srch = [c for c in nb.children if c.name == 'btn_globe'][0]
+    find = hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [   # the Discover level's magnifier (pg_nav shows it there only, as the left cap on the 214 slot beside Now Playing): the Radio page's Search button
+        ('name', 'btn_search'), ('enable', 'true'), ('style', 'img_btn_style'),
+        ('style:pressed:icon', 'pod_nav_search_down'), ('style:normal:icon', 'pod_nav_search'), ('style:over:icon', 'pod_nav_search')]))
+    find.set('dirty_rect_tolerance', str(NAV_ICON_OVERFLOW))
+    nb.children.insert(nb.children.index(srch) + 1, find)
+    root.children.append(nb)
     root.children[1].children.append(selall_button())   # the select mode's navbar text (the Playlists page's)
     lv = stock_list([], True)
     lv.set('name', 'podcasts_listview')
@@ -1546,7 +1553,7 @@ def cards_row(i, row, piece, last):
     from mod_icons import CARD_GLYPHS, card_name, CARD_CHEVRON, CARD_CHECK
     kind = pod_pages.row_kind(row)
     swatch = row.action == pod_pages.ACT_ACCENTSET   # the Accent picker's rows show the accent's round swatch where a glyph goes (never tinted: docs/modules/accent.md)
-    has_icon = swatch or (kind not in ('check', 'info') and row.action not in (pod_pages.ACT_CCLIST, pod_pages.ACT_SFOLD, pod_pages.ACT_UPDATE))   # (the Cache counts, Unsupported Files and About's Software Update link have no glyph, like the rows around them)
+    has_icon = swatch or (kind not in ('check', 'info') and row.action not in (pod_pages.ACT_CCLIST, pod_pages.ACT_SFOLD, pod_pages.ACT_UPDATE, pod_pages.ACT_REGION))   # (the Cache counts, Unsupported Files, About's Software Update link and the Podcast Region row, whose value needs the room, have no glyph)
     item = Widget('list_item', 0, 0, ST.LIST_W, ST.ROW_H, [('name', f'pod_row{i}'), ('style', 'list_item_style')] + ([('sensitive', 'false')] if kind == 'info' and row.action != pod_pages.ACT_SFDEL else []))
     normal, down = ST.piece_images(piece)
     for st in ('normal', 'over', 'pressed', 'focused', 'disable'):

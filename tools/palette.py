@@ -91,19 +91,19 @@ ACCENT_PRESS = tuple(f'pod_cd_{p}_down' for p in ('single', 'top', 'mid', 'bot')
 # DISC: the pull-down's ON tiles, a filled white disc with a #141414 glyph (or a glyph cut out of the disc): white to the accent, the dark glyph stays dark (ACC_KNOB_R), a pixel between moves by its lightness.
 ACCENT_DISC = ('drop_wifiopen', 'drop_btopen', 'drop_keylockopen', 'drop_eqopen', 'drop_usbaudio', 'drop_usbdac', 'drop_usbstorage', 'drop_playsetdown', 'drop_syssetdown', 'drop_highgain', 'drop_lo')
 # GLYPH, by name prefix: every row glyph is white art, tinted at decode: every colour becomes the accent, alpha kept. The M1+ Music rows' (the main menu, Shuffle, Extras and Main Menu pages), the Folders list's own
-# (fo_ic_sd, fo_ic_usb, fo_ic_file) and the Settings cards' (pod_ci_*, tools/mod_icons.py CARD_GLYPHS; the accent swatches pod_sw* are not). The two tiles (a rounded square with its own colour behind the glyph,
+# (fo_ic_sd, fo_ic_usb, fo_ic_file), the track rows' "..." sheet's (rm_ic_*: Play Next, Play After, Add to Playlist, Favorite, Undo Favorite, Get Info; patch/rowmenu.c: a prefix, cheaper through the hook than six exact names) and the Settings cards' (pod_ci_*, tools/mod_icons.py CARD_GLYPHS; the accent swatches pod_sw* are not). The two tiles (a rounded square with its own colour behind the glyph,
 # patch/podcasts.c) are not glyphs. GLYPH_STOCK, by exact name (plain white art, alpha kept): the More sheet's stock row glyphs (Look up album, Look up artist, Add to playlist, Speed, A-B repeat; patch/playmore.c),
 # the Podcasts sheets' (pc_ic_*: all but pc_ic_unsub, already red; pc_ic_trash is Radio's Clear row's too), the Playlists "..." menu's (pl_ic_new, pl_ic_import, pl_ic_export, pl_ic_delete),
-# the track rows' "..." sheet's (rm_ic_next, rm_ic_after, rm_ic_add; patch/rowmenu.c), the multi-select Add dialog's (batchadd_fav, batchadd_playlist) and the selection checks: the Songs sort card's tick (sg_tick) and the stock Select All navbar button's checked state (mulselected). So every
+# the multi-select Add dialog's (batchadd_fav, batchadd_playlist) and the selection checks: the Songs sort card's tick (sg_tick) and the stock Select All navbar button's checked state (mulselected). So every
 # row of those sheets is the accent, the destructive rows' glyphs too (their labels do not change: Delete Song's stays red). Not p_onlinesearch (never shown) and not selected (also the Delete dialog's "also delete the file" checkbox).
-ACCENT_GLYPH = ('pod_ic_', 'fo_ic_', 'pod_ci_')
+ACCENT_GLYPH = ('pod_ic_', 'fo_ic_', 'pod_ci_', 'rm_ic_')
 ACCENT_GLYPH_STOCK = ('player_albuminfo', 'player_songerinfo', 'p_add', 'p_multiple', 'p_abrepeat', 'p_delete',
                       'pc_ic_import', 'pc_ic_speed', 'pc_ic_refresh', 'pc_ic_select', 'pc_ic_check', 'pc_ic_down', 'pc_ic_undo', 'pc_ic_trash',
-                      'pl_ic_new', 'pl_ic_import', 'pl_ic_export', 'pl_ic_delete', 'rm_ic_next', 'rm_ic_after', 'rm_ic_add', 'rm_ic_fav', 'rm_ic_unfav', 'rm_ic_info', 'batchadd_fav', 'batchadd_playlist', 'sg_tick', 'mulselected',
+                      'pl_ic_new', 'pl_ic_import', 'pl_ic_export', 'pl_ic_delete', 'batchadd_fav', 'batchadd_playlist', 'sg_tick', 'mulselected',
                       'ah_pill_down', 'dp_pill_down')
 # TILE: the Podcasts Library rows' tiles (patch/podcasts.c; a #1E1E1E rounded square, ACC_TILE_R, with a white glyph on it): white goes to the accent, the square stays exactly #1E1E1E, the antialiased glyph edge
 # between blends by lightness (the disc rule with the tile's grey as the fixed end). Their pod_ic_ prefix is why they are in GLYPH_NOT (the glyph rule would paint the whole square).
-ACCENT_TILE = ('pod_ic_dltile', 'pod_ic_subtile', 'pod_ic_savetile')
+ACCENT_TILE = ('pod_ic_dltile', 'pod_ic_subtile', 'pod_ic_savetile', 'pod_ic_discovertile')
 # SHUFDOWN: the album page's (and the Daily Mix page's) pressed Shuffle disc ah_shuffle_down (a #444444 disc, a white glyph): the disc becomes the pressed tint of the rest disc #2A2A2A,
 # mix(#2A2A2A, accent, ACC_TINT %), the glyph stays white. The white Play pills' pressed images (ah_pill_down, dp_pill_down: one solid colour each, the dark glyph and the label are drawn apart) are
 # GLYPH_STOCK names below: the solid accent. Dark flat pills (Songs / Folders Play and Shuffle) and the Queue's off buttons press through the roles ROLE_PRESS_PILL / ROLE_PRESS_QPILL (colours, not images).

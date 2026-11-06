@@ -474,8 +474,10 @@ class Machine:
             if ret: self.bound[(a0, a1)] = (a2, a3)
         elif name == 'widget_set_text_utf8':
             self.calls.append(('widget_set_text_utf8', a0, self.read_cstr(a1))); ret = 0
-        elif name == 'locale_info':   # a test's locale_info_t (country[3], language[3]), else a handle locale_info_tr ignores
-            ret = getattr(self, 'locale', 0x23000000)
+        elif name == 'locale_info':   # a test's locale_info_t (country[3], language[3]), else en_US (patch/pcregion.c reads it)
+            if not getattr(self, 'locale', 0):
+                self.locale = self.alloc(8); self.u.mem_write(self.locale, b'US\0en\0\0\0')
+            ret = self.locale
         elif name == 'locale_info_on':
             self.calls.append(('locale_info_on', a0, a1, a2, a3)); ret = 1
         elif name == 'font_manager':   # none unless a test gives one (patch/fontregion.c then does nothing)

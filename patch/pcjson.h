@@ -3,7 +3,7 @@
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
  * demo has no JSON library and the answer is untrusted, so this is no parser: it walks the text once, without recursion and without allocating, finds the top-level "results" array and takes
- * five members of each object in it (collectionId, collectionName, artistName, feedUrl, artworkUrl100); everything else is skipped by its brackets and quotes. Every read is bounded by the
+ * six members of each object in it (collectionId, collectionName, artistName, feedUrl, artworkUrl100, artworkUrl600); everything else is skipped by its brackets and quotes. Every read is bounded by the
  * length given; every write by the field's size. Strings are decoded to UTF-8 (escapes, \uXXXX with surrogate pairs) and cut on a character boundary.
  */
 #pragma once
@@ -20,11 +20,45 @@ typedef struct {
     char author[PJ_AUTHOR]; /* artistName */
     char feed[PC_URL]; /* feedUrl: "" = none, also for one longer than the field (a cut address is no address) */
     char art[PJ_ART]; /* artworkUrl100, "" likewise */
+    char art6
+        [PJ_ART]; /* artworkUrl600 (a baseline 600 x 600 JPEG): the preview's picture when the feed's cannot be decoded; "" likewise (Deezer's: none) */
 } pj_result_t;
 
 /* The objects of the top-level "results" array of the n bytes at json that have a collectionName or a feedUrl, at most max, in order, into out. An object cut short by the end of the text is
  * not kept. Returns how many (0 for an empty array), or -1 when there is no "results" array (not an answer of the store). Never reads outside json[0, n) or writes outside out[0, max). */
 int pj_results(const char *json, unsigned n, pj_result_t *out, int max);
+
+#define PJ_CHART 25 /* chart rows kept (the requests ask for the top 25) */
+
+typedef struct {
+    char id
+        [16]; /* the show's Apple id as digits (they pass 32 bits): a show chart's "id", an episode chart's "/id<digits>" of its "url" (the episode's own id is another number); "" = none */
+    char name[PJ_NAME]; /* name: the show's, or the episode's title */
+    char author[PJ_AUTHOR]; /* artistName: the show's author, or for an episode its show */
+    char art[PJ_ART]; /* artworkUrl100 */
+    char eid
+        [16]; /* an episode row's own id (its "id", digits; the episode's trackId in the lookup): "" for a show row */
+} pj_chart_t;
+
+/* Apple's top charts (https://rss.marketingtools.apple.com/api/v2/<cc>/podcasts/top/25/podcasts.json, .../podcast-episodes.json): the objects of "results" inside the top-level "feed" object, in order (rank = position),
+ * at most max, into out; episodes 1 takes the id from the "url". Returns how many (0 for an empty array), or -1 when there is no feed.results array. Never reads outside json[0, n) or writes outside out[0, max). */
+int pj_chart(const char *json, unsigned n, int episodes, pj_chart_t *out, int max);
+
+#define PJ_EPS 20 /* episode records kept from a lookup (the request asks for 20) */
+#define PJ_DATE 32 /* a releaseDate (ISO 8601 text) */
+
+typedef struct {
+    char id[16]; /* trackId as digits ("" = none) */
+    char url
+        [PC_URL]; /* episodeUrl, the enclosure address the store has: "" = none, also for one longer than the field */
+    char name[PJ_NAME]; /* trackName: the episode's title */
+    char date[PJ_DATE]; /* releaseDate, e.g. 2026-11-04T13:17:00Z: "" = none */
+} pj_ep_t;
+
+/* The episode records of the top-level "results" array of an episode lookup (https://itunes.apple.com/lookup?id=<show>&entity=podcastEpisode&limit=20&country=<cc>): the objects that have a
+ * trackId, at most max, in order, into out. The show's own record has the show's id, which no episode has. Returns how many (0 for an empty array), or -1 when there is no "results" array.
+ * Never reads outside json[0, n) or writes outside out[0, max). */
+int pj_episodes(const char *json, unsigned n, pj_ep_t *out, int max);
 
 /* The same for Deezer's album search (https://api.deezer.com/search/album): the objects of the top-level "data" array, with title as name, artist.name as author, cover_medium (250 px) as art and id. -1: no "data" array. */
 int pj_deezer(const char *json, unsigned n, pj_result_t *out, int max);

@@ -125,10 +125,8 @@ unsigned pn_dl_listed(int n, char *dir, char *file, int *code);
 int pn_free_kb(const char *path, unsigned *kb);
 
 /* ---- Search (docs/modules/podcasts.md "Search"). One worker at a time, never beside a refresh or a download (the page pauses the downloads first, as for a refresh). All of these run on the UI thread; the worker only
- * writes the record they read. The country of the store is a constant: a region switch comes later. */
-#define PN_COUNTRY "US"
-#define PN_SEARCH_URL \
-    "https://itunes.apple.com/search?media=podcast&entity=podcast&limit=25&country=" PN_COUNTRY "&term="
+ * writes the record they read. The store's country is the Podcast Region (patch/pcregion.h): the search puts pcregion_code() after PN_SEARCH_URL's "country=", then "&term=". */
+#define PN_SEARCH_URL "https://itunes.apple.com/search?media=podcast&entity=podcast&limit=25&country="
 #define PN_LOOKUP_URL "https://itunes.apple.com/lookup?id="
 #define PN_JSON_CAP 98304u /* a search or lookup answer over 96 KB is cut there (25 results are about 44 KB) */
 #define PN_THUMB_CAP 262144u /* a result's artwork (about 5 KB) over this is refused */
@@ -153,17 +151,43 @@ const pj_result_t *pn_search_result(int i);
 int pn_search_thumb(int i, char *path,
                     unsigned size); /* 1 and the path of result i's picture file when it has arrived */
 void pn_search_clean(void); /* remove the thumbnails and forget the results */
-/* Preview a show: the feed at url (an address), or the feed the store's lookup gives for the Apple id digits (id not empty), fetched and parsed as a refresh does, held in memory (not a show folder), with its picture shrunk to PN_PREVIEW_COVER. 0 when it runs. */
-int pn_preview(const char *url, const char *id);
+/* Preview a show: the feed at url (an address), or the feed the store's lookup gives for the Apple id digits (id not empty), fetched and parsed as a refresh does, held in memory (not a show folder), with its picture shrunk to PN_PREVIEW_COVER. art: the store's artworkUrl600 of a search result ("" for none), used when the feed's picture fails; a lookup (id) brings its own. 0 when it runs. */
+int pn_preview(const char *url, const char *id, const char *art);
+/* The same for a chart row: the lookup of the Apple id is made in the store cc (the chart's), so a show of another store than the Podcast Region's still has its record. eid: an episode row's own
+ * id ("" for a show row): then the store's episode lookup of the show is made too, after the feed, and the feed item that episode is is held (preview_match); its failure is no failure of the preview. */
+int pn_preview_chart(const char *id, const char *cc, const char *eid);
 int pn_preview_state(void); /* 0 none, 1 running, 2 done */
 int pn_preview_code(void); /* PN_OK, or why not (PN_NOFEED: the lookup found no feed address) */
 void *pn_preview_parser(void); /* the held pf_parser_t, NULL when none */
+int pn_preview_match(
+    void); /* the held feed's item index the chart's episode is (its index in pn_preview_parser), -1 when none or no episode */
 const char *pn_preview_feed(void); /* the feed address of the held preview */
 int pn_preview_cover(void); /* the preview's picture file is there */
 void pn_preview_drop(void); /* free the held preview and its picture */
 /* Subscribe to the held preview exactly as an import and its first refresh would: a folder named from the feed's title, .episodes, .show (feed, title, image, author, category, description), cover.jpg. root: the Podcasts folder; shows[0..nshows): the folders now there.
  * Returns PN_OK (*dir the folder's name, the preview dropped), PN_STORAGE when nothing could be written (nothing is left behind), PN_NOTFEED when no preview is held. UI thread, no network. */
 int pn_subscribe(const char *root, const pc_show_t *shows, int nshows, char *dir, unsigned dsize);
+
+/* ---- Discover (docs/modules/podcasts.md "Discover"): Apple's top 25 shows (kind 0) and top 25 episodes (kind 1) of the Podcast Region. The job (the one worker slot, never beside another) fetches a chart that is not held, then the artwork
+ * of its rows one by one. The answers stay in memory for the session; a changed region asks again. All of these run on the UI thread; the worker only writes the record they read. */
+#define PN_CHART_URL "https://rss.marketingtools.apple.com/api/v2/"
+#define PN_CHART_SHOWS "/podcasts/top/25/podcasts.json"
+#define PN_CHART_EPISODES "/podcasts/top/25/podcast-episodes.json"
+/* Start the job for chart kind: the guards, then one worker. A request that fails with a network or server error is made up to three times; a storefront with no such chart (a 404, or no rows) answers with the United States' chart.
+ * 0 when it runs; PN_BUSY when a worker runs (the page waits and asks again); else the guard's PN_*. A held chart is not fetched again, its artwork that was not tried is. */
+int pn_chart(int kind);
+int pn_chart_state(
+    int kind); /* 0 none (or cancelled while asking), 1 the answer is being fetched, 2 answered: pn_chart_code says how */
+int pn_chart_code(int kind); /* PN_OK, or why not (PN_NET, PN_HTTP, PN_GONE, ...) */
+int pn_chart_count(int kind); /* rows of an answered chart (0 until then, and after a failure) */
+int pn_chart_held(int kind); /* answered with rows for the storefront in use now (no request is needed) */
+unsigned pn_chart_gen(void); /* moves with every answer, thumbnail and the end of a job */
+const char *pn_chart_country(int kind); /* the storefront the answer is of: the region's, or "US" after a fall back */
+const pj_chart_t *pn_chart_item(int kind, int i); /* row i (rank i + 1) of an answered chart, NULL out of range */
+int pn_chart_thumb(int kind, int i, char *path,
+                   unsigned size); /* 1 and the path of row i's picture file when it has arrived */
+int pn_chart_pending(int kind); /* rows of a held chart whose artwork has not been tried */
+void pn_chart_clean(void); /* remove the artwork files and forget that any was tried (the answers stay) */
 
 /* ---- Find Cover & Lyrics (docs/modules/onlineart.md): album covers from the iTunes Search API then Deezer, lyrics from LRCLIB. One worker at a time, never beside a refresh or a download (the page pauses the downloads first);
  * the same guards, libcurl options and thread rules as the search. All of these run on the UI thread; the worker only writes the record they read. */

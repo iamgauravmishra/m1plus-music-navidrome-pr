@@ -142,7 +142,7 @@ CARD_GLYPHS = {'Wi-Fi': 'wifi', 'Bluetooth': 'bluetooth', 'Home Screen': 'house'
                'Keyboards': '+keyboard', 'About': 'info', 'All System Settings': 'settings', 'Developer': 'code', 'Main Menu': 'list-checks', 'Extras': 'ellipsis',
                'Recent Albums': 'history', 'Daily Mix': 'shuffle', 'Regenerate Daily Mix': 'refresh-cw', 'Update Library': 'refresh-cw', 'Album Order': 'arrow-down-wide-narrow',
                'Landscape': 'rotate-cw-square', 'Rebuild Covers': 'image-up', 'Theme': '+cassette-tape', 'Record': '+turntable', 'Base': 'palette', 'Boot to M1+ Music': 'power', 'Open Shanling Home': '@shanling',
-               'Screenshot': 'camera', 'Clear Cover Cache': 'trash', 'Clear Track Durations': 'trash', 'Delete Unsupported Files': 'trash', 'Reset All Settings': 'rotate-ccw', 'Cache': 'hard-drive','Settings Files': 'file-cog', 'Podcast Search': 'search', 'English': 'languages', 'Chinese (Pinyin)': 'languages', 'Battery Percentage': 'battery-charging'}
+               'Screenshot': 'camera', 'Clear Cover Cache': 'trash', 'Clear Track Durations': 'trash', 'Delete Unsupported Files': 'trash', 'Reset All Settings': 'rotate-ccw', 'Cache': 'hard-drive','Settings Files': 'file-cog', 'Podcast Discover': 'compass', 'English': 'languages', 'Chinese (Pinyin)': 'languages', 'Battery Percentage': 'battery-charging'}
 
 
 def card_name(g):
@@ -845,6 +845,7 @@ PA_CHEV = 6                                              # glyph 6 of the strip:
 PA_TILE_PX, PA_TILE_R, PA_TILE_RGB, PA_TILE_GLYPH = 44, 8, (0x1E,) * 3, 22   # the Library rows' tile: a 44 px rounded square, the Lucide glyph (22 px, white) on it
 PC_DL_TILE = 'pod_ic_dltile'                           # the Downloads row's tile: the same square with the Lucide download glyph (an image of its own, like the other two, so the accent can tint its glyph by name)
 PC_SAVE_TILE = 'pod_ic_savetile'                         # the Saved row's tile: the same square with the Lucide bookmark glyph
+PC_SRCH_TILE = 'pod_ic_discovertile'                       # the Search row's tile: the same square with the Lucide compass glyph
 PC_LIB_TILE = 'pod_ic_subtile'                           # the Subscriptions row's tile: the same square (an image of its own, so the atlas stays as it is: test/pod/navbars.py ignores pod_ic_) with the Lucide podcast glyph
 PA_PLAYB_X, PA_PLAYB_Y, PA_PLAYB_PX, PA_PLAYB_RIM_A, PA_PLAYB_GLYPH = 48, 112, 28, 90, 12   # Continue Listening's play disc: 28 px, a white 26 px disc inside a 1 px black rim (35 %, so it reads on a white cover too), the dark play triangle (12 px) nudged 1 px right to look centred
 PC_ATLAS = 'pc_atlas'
@@ -854,8 +855,8 @@ PC_SHEET_ICONS = (('pc_ic_import', 'file-input', WHITE), ('pc_ic_speed', 'gauge'
                   ('pod_ic_rd_add', 'plus', WHITE), ('pod_ic_rd_remove', 'minus', WHITE), ('pod_ic_rd_import', 'import', WHITE), ('pod_ic_rd_info', 'info', WHITE))   # the Radio sheets: Add to / Remove from Stations and Station Info (Now Playing), Import from Card (Stations; its Recently Played sheet's Clear row uses pc_ic_trash)   # (pod_ic_ names: the images the stock pages' digest test ignores, test/pod/navbars.py NEW_IMAGES; a new pc_ image would change test/navbars-stock.sha256 in every branch)
 PC_SHEET_PX = 20
 PC_SHEETS = (('pc_sheet1', 50), ('pc_sheet2', 100), ('pc_sheet3', 150), ('pc_sheet4', 200), ('pc_sheet5', 250))   # the sheets' glass for 1..5 rows (Now Playing's pm_sheet / pm_sheet5 for 4 and 5, but a name of ours: the Show page's rows need no other page's image)
-PC_GLYPHS = ('arrow-down', 'download', 'chevron-right', 'file-input', 'podcast', 'file-output', 'plus', 'minus', 'import')                                 # the Lucide glyph the set adds to the sources (the download symbol of the pill, the badge and the sheet)
-PODCASTS = [PC_ATLAS, PC_DL_TILE, PC_LIB_TILE, PC_SAVE_TILE] + [n for n, _, _ in PC_SHEET_ICONS] + [n for n, _ in PC_SHEETS]
+PC_GLYPHS = ('arrow-down', 'download', 'chevron-right', 'file-input', 'podcast', 'compass', 'file-output', 'plus', 'minus', 'import')                                 # the Lucide glyph the set adds to the sources (the download symbol of the pill, the badge and the sheet)
+PODCASTS = [PC_ATLAS, PC_DL_TILE, PC_LIB_TILE, PC_SAVE_TILE, PC_SRCH_TILE] + [n for n, _, _ in PC_SHEET_ICONS] + [n for n, _ in PC_SHEETS]
 ALBUM += PODCASTS
 
 def _pc_ring(k):
@@ -941,7 +942,7 @@ def pc_atlas():
     return a
 
 def podcast_images():
-    f = {PC_ATLAS: pc_atlas(), PC_DL_TILE: _pc_tile(), PC_LIB_TILE: _pc_tile('podcast'), PC_SAVE_TILE: _pc_tile('bookmark')}
+    f = {PC_ATLAS: pc_atlas(), PC_DL_TILE: _pc_tile(), PC_LIB_TILE: _pc_tile('podcast'), PC_SAVE_TILE: _pc_tile('bookmark'), PC_SRCH_TILE: _pc_tile('compass')}
     for n, g, rgb in PC_SHEET_ICONS: f[n] = tint(glyph(g, PC_SHEET_PX, 'small'), rgb) if rgb != WHITE else glyph(g, PC_SHEET_PX, 'small')
     for n, h in PC_SHEETS: f[n] = glass_image(320, h, 18, fill=GLASS_SHEET_FILL, top_only=True)
     assert sorted(f) == sorted(PODCASTS)

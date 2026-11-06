@@ -1,0 +1,62 @@
+{
+ "feed": {
+  "title": "Trending Episodes",
+  "id": "https://rss.marketingtools.apple.com/api/v2/gb/podcasts/top/25/podcast-episodes.json",
+  "author": {
+   "name": "Apple",
+   "url": "https://www.apple.com/"
+  },
+  "links": [
+   {
+    "self": "https://rss.marketingtools.apple.com/api/v2/gb/podcasts/top/25/podcast-episodes.json"
+   }
+  ],
+  "copyright": "Copyright © 2026 Apple Inc. All rights reserved.",
+  "country": "gb",
+  "icon": "https://www.apple.com/favicon.ico",
+  "updated": "Fri, 6 Nov 2026 01:05:26 +0000",
+  "results": [
+   {
+    "artistName": "Goalhanger",
+    "id": "1000799787173",
+    "name": "Can the Democrats Capitalise on Trump's Midterm Disaster?",
+    "kind": "podcast-episodes",
+    "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/51/b8/92/51b8922e-2bae-0add-47ac-f370e5e14d6d/mza_6262680451586308685.jpg/100x100bb.png",
+    "genres": [
+     {
+      "name": "Politics"
+     }
+    ],
+    "url": "https://podcasts.apple.com/gb/podcast/can-the-democrats-capitalise-on-trumps-midterm-disaster/id1611374685?i=1000799787173"
+   },
+   {
+    "artistName": "The Overlap",
+    "id": "1000799962249",
+    "name": "Roy’s Return to Management In Our Most Personal Episode Yet! | Stick to Football EP 156",
+    "kind": "podcast-episodes",
+    "contentAdvisoryRating": "Explict",
+    "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/af/ad/8e/afad8eae-8ffc-d6cc-4c72-57d6f903e962/mza_2603006646942982791.jpeg/100x100bb.png",
+    "genres": [
+     {
+      "name": "Football"
+     }
+    ],
+    "url": "https://podcasts.apple.com/gb/podcast/roys-return-to-management-in-our-most-personal-episode/id1709142395?i=1000799962249"
+   },
+   {
+    "artistName": "Goalhanger",
+    "id": "1000799801125",
+    "name": "DEMOCRATS SWEEP CONGRESS: WHAT'S NEXT FOR TRUMP?",
+    "kind": "podcast-episodes",
+    "contentAdvisoryRating": "Explict",
+    "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/9d/85/db/9d85db44-9306-6f5b-38b1-04a0c58a1b6c/mza_7487309417513137934.jpg/100x100bb.png",
+    "genres": [
+     {
+      "name": "Politics"
+     }
+    ],
+    "url": "https://podcasts.apple.com/gb/podcast/democrats-sweep-congress-whats-next-for-trump/id1743030473?i=1000799801125"
+   }
+  ]
+ }
+}

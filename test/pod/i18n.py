@@ -2,7 +2,7 @@
 the stock translation, every language's payload output, widths per language, glyphs in the shipped font."""
 import os, re, stat
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
-import build, awtk_strings, awtk_style, pod_i18n, pod_keyboard
+import build, awtk_strings, awtk_style, pcregion, pod_i18n, pod_keyboard
 from awtk_text import Ttf, StbText
 
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
@@ -308,10 +308,11 @@ def run(ctx):
                     if need > room + ST.TEXT_X - ST.CM - ST.PAD: cards_over.append((page.key, r.label, '99999', loc, need, room))
                     continue
                 if pod_pages.row_kind(r) != 'value': continue
-                vkeys = stock_values[pod_pages.STOCK_PAGES[r.arg][1]] if r.action == pod_pages.ACT_STOCK else ('Artist', 'album') if r.action == pod_pages.ACT_SORT else pod_pages.BG_VALUES if r.action == pod_pages.ACT_BG else pod_pages.ACCENT_VALUES if r.action == pod_pages.ACT_ACCENT else ('Normal', 'Chrome', 'Metal')
-                for vk in vkeys:
-                    need = width(tr_text(loc, pod_i18n.key_for(r.label)), row_px) + ST.VALUE_LABEL_GAP + min(width(tr_text(loc, vk), ST.VALUE_PX) + 6, ST.VALUE_MAX)
-                    if need > room: cards_over.append((page.key, r.label, vk, loc, need, room))
+                vkeys = stock_values[pod_pages.STOCK_PAGES[r.arg][1]] if r.action == pod_pages.ACT_STOCK else ('Artist', 'album') if r.action == pod_pages.ACT_SORT else pod_pages.BG_VALUES if r.action == pod_pages.ACT_BG else pod_pages.ACCENT_VALUES if r.action == pod_pages.ACT_ACCENT else () if r.action == pod_pages.ACT_REGION else ('Normal', 'Chrome', 'Metal')
+                vals = [(vk, tr_text(loc, vk)) for vk in vkeys] if r.action != pod_pages.ACT_REGION else [('Automatic', tr_text(loc, 'Automatic'))] + [(n, n) for n in pcregion.NAMES]   # (the Podcast Region's value: Automatic, or a storefront's English name)
+                for vk, vt in vals:
+                    need = width(tr_text(loc, pod_i18n.key_for(r.label)), row_px) + ST.VALUE_LABEL_GAP + min(width(vt, ST.VALUE_PX) + 6, ST.VALUE_MAX)
+                    if need > room + (ST.TEXT_X - ST.CM - ST.PAD if r.action == pod_pages.ACT_REGION else 0): cards_over.append((page.key, r.label, vk, loc, need, room))
             for node in tree.walk():
                 if node.name.startswith(('pod_sec', 'pod_note')) and node.name.endswith('_t'):
                     px = int(node.get('style:normal:font_size'))

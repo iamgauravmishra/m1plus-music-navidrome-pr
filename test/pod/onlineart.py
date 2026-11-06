@@ -52,7 +52,7 @@ def enc(s):
 class Rec:
     """pj_result_t as the payload lays it out."""
     NAME, AUTHOR, URL, ART = 80, 56, 320, 160
-    SIZE = 4 + NAME + AUTHOR + URL + ART
+    SIZE = 4 + NAME + AUTHOR + URL + 2 * ART
 
     @classmethod
     def parse(cls, raw, n):
@@ -60,7 +60,7 @@ class Rec:
         out = []
         for i in range(n):
             r = raw[i * cls.SIZE:(i + 1) * cls.SIZE]
-            out.append((int.from_bytes(r[:4], 'little'), cs(r[4:84]), cs(r[84:140]), cs(r[140:460]), cs(r[460:])))
+            out.append((int.from_bytes(r[:4], 'little'), cs(r[4:84]), cs(r[84:140]), cs(r[140:460]), cs(r[460:620])))
         return out
 
 

@@ -103,7 +103,7 @@ def request_tests(ctx):
     r, th = start_search(m, '播客 a&b/c~d_e-f.g')
     expect(r == 0 and th and th[0] == PSYMS['pn_smain'] and ('curl_global_init', 3) in m.calls and [c[0] for c in m.calls].count('pthread_create') == 1, 'a search starts one detached worker, curl initialised on the UI thread first')
     expect(state(m)['state'] == 1 and state(m)['busy'] == 1 and fn(m, 'pn_busy') == 0, 'the query runs: state 1, a job is busy, a refresh is not')
-    expect(fn(m, 'pn_search', m.cstr('again')) == PN['BUSY'] and fn(m, 'pn_preview', m.cstr('https://x.example/'), m.cstr('')) == PN['BUSY'], 'a second job while one runs: PN_BUSY')
+    expect(fn(m, 'pn_search', m.cstr('again')) == PN['BUSY'] and fn(m, 'pn_preview', m.cstr('https://x.example/'), m.cstr(''), m.cstr('')) == PN['BUSY'], 'a second job while one runs: PN_BUSY')
     expect(fn(m, 'pn_refresh', m.cstr(ROOT_DIR), m.shows()[1], m.alloc(4), 1) == PN['BUSY'] and fn(m, 'pn_dl_start') == 0 and fn(m, 'pn_dl_running') == 0, 'a refresh is refused and the downloads do not start while the search runs')
     gen0 = state(m)['gen']
     PCN.work(m, th)
@@ -236,15 +236,15 @@ def preview_tests(ctx):
         if u.startswith('https://image.simplecastcdn.com/'): return {'body': JPG}
         return {'rc': 22, 'code': 404}
 
-    def go(m, url, id=''):
+    def go(m, url, id='', art=''):
         m.thread = None
-        r = fn(m, 'pn_preview', m.cstr(url), m.cstr(id))
+        r = fn(m, 'pn_preview', m.cstr(url), m.cstr(id), m.cstr(''))
         if m.thread: PCN.work(m, m.thread)
         return r
 
     m = machine(site=site)
     m.thread = None
-    r = fn(m, 'pn_preview', m.cstr(F_WSJ), m.cstr(''))
+    r = fn(m, 'pn_preview', m.cstr(F_WSJ), m.cstr(''), m.cstr(''))
     expect(r == 0 and m.thread and m.thread[0] == PSYMS['pn_pmain'] and fn(m, 'pn_preview_state') == 1 and fn(m, 'pn_job_busy') == 1 and fn(m, 'pn_busy') == 0, 'a preview starts the worker')
     PCN.work(m, m.thread)
     expect(fn(m, 'pn_preview_state') == 2 and fn(m, 'pn_preview_code') == 0 and fn(m, 'pn_job_busy') == 0, 'it ends: done, OK')
@@ -273,7 +273,7 @@ def preview_tests(ctx):
         expect(fn(m, 'pn_preview_code') == code and fn(m, 'pn_preview_parser') == 0 and not [p_ for p_ in m.fs if p_.startswith(ROOT_DIR)] and not [p_ for p_ in m.dirs if p_.startswith(ROOT_DIR + '/')],
                f'{label}: code {code}, no parser held, no folder or file made')
     m = machine(site=site); m.wifi = -1
-    expect(fn(m, 'pn_preview', m.cstr(F_WSJ), m.cstr('')) == PN['NOWIFI'] and fn(m, 'pn_preview_state') == 0, 'the guards first')
+    expect(fn(m, 'pn_preview', m.cstr(F_WSJ), m.cstr(''), m.cstr('')) == PN['NOWIFI'] and fn(m, 'pn_preview_state') == 0, 'the guards first')
     # a feed with no picture: the preview holds, with no picture file
     m = machine(site=lambda u, o: {'body': WSJ} if u == F_WSJ else {'rc': 22, 'code': 404}); go(m, F_WSJ)
     expect(fn(m, 'pn_preview_code') == 0 and fn(m, 'pn_preview_cover') == 0 and fn(m, 'pn_preview_parser') != 0, 'a picture that cannot be fetched leaves a preview without it')
@@ -311,7 +311,7 @@ def subscribe_tests(ctx):
     # the preview and Subscribe
     m = machine(site=site)
     m.thread = None
-    fn(m, 'pn_preview', m.cstr(F_WSJ), m.cstr('')); PCN.work(m, m.thread)
+    fn(m, 'pn_preview', m.cstr(F_WSJ), m.cstr(''), m.cstr('')); PCN.work(m, m.thread)
     shows, arr = m.shows()
     out = m.alloc(PCN.PCP.PM_DIR if hasattr(PCN.PCP, 'PM_DIR') else 160)
     m.calls = []
@@ -330,7 +330,7 @@ def subscribe_tests(ctx):
     # a name that is taken: the import\'s name
     m = machine(site=site)
     m.put(f'{ROOT_DIR}/WSJ Minute Briefing/mine.mp3', b'x')
-    m.thread = None; fn(m, 'pn_preview', m.cstr(F_WSJ), m.cstr('')); PCN.work(m, m.thread)
+    m.thread = None; fn(m, 'pn_preview', m.cstr(F_WSJ), m.cstr(''), m.cstr('')); PCN.work(m, m.thread)
     shows, arr = m.shows()
     r = fn(m, 'pn_subscribe', m.cstr(ROOT_DIR), arr, len(shows), out, 128)
     expect(r == 0 and m.read_cstr(out) == f'feeds.example-{PCN.pc_hash(F_WSJ):08x}' and f'{ROOT_DIR}/WSJ Minute Briefing/mine.mp3' in m.fs and f'{ROOT_DIR}/WSJ Minute Briefing/.show' not in m.fs,
@@ -338,7 +338,7 @@ def subscribe_tests(ctx):
     # a write that fails leaves nothing behind
     for what in ('.episodes.tmp', '.show.tmp'):
         m = machine(site=site)
-        m.thread = None; fn(m, 'pn_preview', m.cstr(F_WSJ), m.cstr('')); PCN.work(m, m.thread)
+        m.thread = None; fn(m, 'pn_preview', m.cstr(F_WSJ), m.cstr(''), m.cstr('')); PCN.work(m, m.thread)
         m.fail.add(('open', f'{ROOT_DIR}/WSJ Minute Briefing/{what}'))
         shows, arr = m.shows()
         r = fn(m, 'pn_subscribe', m.cstr(ROOT_DIR), arr, len(shows), out, 128)
@@ -346,14 +346,72 @@ def subscribe_tests(ctx):
         expect(r == PN['STORAGE'] and not [p for p in left if p.startswith(f'{ROOT_DIR}/WSJ Minute Briefing/')] and fn(m, 'pn_preview_parser') != 0, f'{what} cannot be written: PN_STORAGE, no file left, the preview still held ({left})')
     m = machine(site=site); m.card_mounted = False
     m.thread = None
-    expect(fn(m, 'pn_preview', m.cstr(F_WSJ), m.cstr('')) == PN['STORAGE'] and m.thread is None, 'no card: PN_STORAGE, nothing starts')
+    expect(fn(m, 'pn_preview', m.cstr(F_WSJ), m.cstr(''), m.cstr('')) == PN['STORAGE'] and m.thread is None, 'no card: PN_STORAGE, nothing starts')
     # a full list of shows
     m = machine(site=site)
-    m.thread = None; fn(m, 'pn_preview', m.cstr(F_WSJ), m.cstr('')); PCN.work(m, m.thread)
+    m.thread = None; fn(m, 'pn_preview', m.cstr(F_WSJ), m.cstr(''), m.cstr('')); PCN.work(m, m.thread)
     expect(fn(m, 'pn_subscribe', m.cstr(ROOT_DIR), m.shows()[1], 40, out, 128) == PN['STORAGE'] and fn(m, 'pn_preview_parser') != 0, '40 shows already: PN_STORAGE, nothing written')
 
 
-SECTIONS = [classify_tests, request_tests, failure_tests, cancel_tests, preview_tests, subscribe_tests]
+def fallback_tests(ctx):
+    """Apple's 600 x 600 picture (artworkUrl600) stands in when the feed's own cannot be decoded: a progressive JPEG of 2.38 MP is refused (PC_COVER_MAX_PX, 2.1 MP). It comes with a search result, or from
+    the lookup of an Apple id; a typed address has none. Subscribe keeps the preview's picture as cover.jpg, and a later refresh never replaces a cover."""
+    expect = ctx.expect
+    from PIL import Image
+    WSJ = PCN.feed_bytes('wsj-3items.xml')
+    b = io.BytesIO(); Image.new('RGB', (1700, 1400), (200, 30, 30)).save(b, 'JPEG', progressive=True); BIG = b.getvalue()
+    b = io.BytesIO(); Image.new('RGB', (600, 600), (30, 200, 30)).save(b, 'JPEG'); SMALL = b.getvalue()
+    lookup = json.loads(data('lookup_1611374685.json'))
+    ART6 = lookup['results'][0]['artworkUrl600']
+    reqs = []
+
+    def site(feed_img):
+        def f(u, o):
+            reqs.append(u)
+            if u == F_WSJ or u == lookup['results'][0]['feedUrl']: return {'body': WSJ}
+            if u.startswith(LOOKUP): return {'body': data('lookup_1611374685.json')}
+            if u == ART6: return {'body': SMALL}
+            if u.startswith('https://image.simplecastcdn.com/') and feed_img is not None: return {'body': feed_img}
+            return {'rc': 22, 'code': 404}
+        return f
+
+    def go(m, url, id='', art=''):
+        m.thread = None
+        reqs.clear()
+        r = fn(m, 'pn_preview', m.cstr(url), m.cstr(id), m.cstr(art))
+        PCN.work(m, m.thread)
+        return r
+
+    def cover(m):
+        f = m.fs.get(f'{SDIR}/preview.jpg')
+        return f and Image_size(f)
+
+    m = machine(site=site(BIG)); go(m, F_WSJ, '', ART6)
+    expect(fn(m, 'pn_preview_code') == 0 and cover(m) == (192, 192) and m.fs[f'{SDIR}/preview.jpg'] != b'' and ART6 in reqs and not [p for p in m.fs if p.endswith(('.src', '.tmp'))],
+           'a search result whose feed picture is progressive and over 2.1 MP: the preview takes artworkUrl600, shrunk to 192 px, no download file left')
+    m = machine(site=site(BIG)); go(m, F_WSJ)
+    expect(fn(m, 'pn_preview_code') == 0 and cover(m) is None and fn(m, 'pn_preview_parser') != 0, 'a typed address has no artworkUrl600: the same feed has no picture, as before')
+    m = machine(site=site(None)); go(m, F_WSJ, '', ART6)
+    expect(cover(m) == (192, 192), 'a feed picture that cannot be fetched at all falls back too')
+    m = machine(site=site(SMALL)); go(m, F_WSJ, '', ART6)
+    expect(cover(m) == (192, 192) and ART6 not in reqs, 'a feed picture that decodes is used: the fallback is not even fetched')
+    m = machine(site=site(BIG)); go(m, '', '1611374685')
+    expect(reqs[:2] == [LOOKUP + '1611374685', lookup['results'][0]['feedUrl']] and ART6 in reqs and cover(m) == (192, 192), 'an Apple id (link or chart row): the lookup brings artworkUrl600')
+    m = machine(site=lambda u, o: {'body': SMALL} if u == ART6 else site(BIG)(u, o)); go(m, '', '1611374685'); go(m, F_WSJ, '', 'https://art.example/' + 'x' * 200)
+    expect(fn(m, 'pn_preview_code') == 0 and cover(m) is None, 'an artworkUrl600 that does not fit its field is none')
+    # Subscribe keeps the fallback as the first cover.jpg; a refresh whose feed picture fails does not delete or replace it
+    m = machine(site=site(BIG)); go(m, F_WSJ, '', ART6)
+    shows, arr = m.shows()
+    out = m.alloc(160)
+    expect(fn(m, 'pn_subscribe', m.cstr(ROOT_DIR), arr, len(shows), out, 128) == 0, 'Subscribe')
+    cj = f'{ROOT_DIR}/{m.read_cstr(out)}/cover.jpg'
+    first = m.fs.get(cj)
+    expect(first and Image_size(first) == (192, 192) and f'{SDIR}/preview.jpg' not in m.fs, 'the show\'s first cover.jpg is the fallback picture')
+    r, th = PCN.start(m, [m.read_cstr(out)]); PCN.work(m, th)
+    expect(m.fs.get(cj) == first and not [p for p in m.fs if p.endswith(('.src', '.tmp')) and p.startswith(ROOT_DIR)], 'a refresh whose feed picture is refused leaves cover.jpg as it is')
+
+
+SECTIONS = [classify_tests, request_tests, failure_tests, cancel_tests, preview_tests, fallback_tests, subscribe_tests]
 
 
 def run(ctx):

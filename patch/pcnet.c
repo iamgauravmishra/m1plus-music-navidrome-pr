@@ -23,6 +23,7 @@
 #include "upver.h"
 #include "curlopts.h"
 #include "covercache.h"
+#include "pcregion.h"
 
 #define PN_PATH 400
 #define PN_SHOW_MAX 4096 /* bytes of a show file read */
@@ -95,6 +96,20 @@ static struct {
     char utag[UP_TAG];
     char *
         unotes; /* the offered release's notes (heap, UP_NOTES_MAX + 1 bytes, set by the check before its state, freed by the next check), NULL for none */
+    /* Podcast charts (docs/modules/podcasts.md "Discover"; new fields go below). Per chart, kind 0 the top shows and 1 the top episodes: cstate: 0 none (or the fetch was cancelled), 1 the answer is being fetched, 2 answered;
+     * ccode: the answer's result; cn: rows (written before cstate is 2); creq / cshown: the storefront asked and the one the answer is of (it falls back to the United States); cthumb / cext as sthumb / sext; cres: the rows, in rank order.
+     * ckind: the chart the running job is for; cgen: moves with every answer, thumbnail and end. The answers stay for the session (a changed region asks again). */
+    volatile int cstate[2], ccode[2], cn[2], ckind;
+    volatile unsigned cgen;
+    char creq[2][4], cshown[2][4];
+    volatile unsigned char cthumb[2][PJ_CHART], cext[2][PJ_CHART];
+    pj_chart_t cres[2][PJ_CHART];
+    char pcc[4]; /* the preview's lookup country: a chart row's, "" for a typed address or Apple link */
+    char pfb
+        [PJ_ART]; /* the preview's fallback picture: the store's artworkUrl600 (from the search result or the lookup), "" = none (a typed address) */
+    char peid
+        [16]; /* a chart's episode row: its own id (the store's episode lookup of its show names it); "" for a show row */
+    volatile int pmatch; /* the kept feed item that episode is (pf_match), -1 = none: the show's preview only */
 } pn __attribute__((section(".scratch")));
 
 enum {
@@ -104,7 +119,8 @@ enum {
     PN_KIND_PREVIEW = 4,
     PN_KIND_ART = 5,
     PN_KIND_PICK = 6,
-    PN_KIND_UPDATE = 7
+    PN_KIND_UPDATE = 7,
+    PN_KIND_CHART = 8
 };
 enum { PN_Q_FREE = 0, PN_Q_WAIT = 1, PN_Q_ACTIVE = 2 };
 
@@ -161,7 +177,7 @@ static void pn_set(unsigned feed, int code, unsigned fresh) {
 int pn_busy(void) { return pn.busy && (pn.kind == PN_KIND_REFRESH || !pn.kind); }
 int pn_job_busy(void) {
     return pn.busy && (pn.kind == PN_KIND_SEARCH || pn.kind == PN_KIND_PREVIEW || pn.kind == PN_KIND_ART ||
-                       pn.kind == PN_KIND_PICK || pn.kind == PN_KIND_UPDATE);
+                       pn.kind == PN_KIND_PICK || pn.kind == PN_KIND_UPDATE || pn.kind == PN_KIND_CHART);
 }
 void pn_cancel(void) { pn.cancel = 1; }
 int pn_cancelling(void) { return pn_busy() && pn.cancel; }
@@ -1200,7 +1216,7 @@ static unsigned pn_jwrite(char *d, unsigned size, unsigned nmemb, void *user) {
 }
 
 /* The answer at url into buf (PN_JSON_CAP + 1 bytes), *got bytes of it. PN_OK also for one cut at the cap. A 404 or 410 is PN_GONE here (LRCLIB's "no such record"). */
-static int pn_fetch_json_once(const char *url, char *buf, unsigned *got, long *http_out) {
+static int pn_fetch_json_once(const char *url, char *buf, unsigned *got, long *http_out, int timeout) {
     struct jx f;
     void *h;
     long http = 0;
@@ -1209,6 +1225,9 @@ static int pn_fetch_json_once(const char *url, char *buf, unsigned *got, long *h
     f.buf = buf;
     h = pn_easy(url, pn_jwrite, &f, f.err, (void *)0);
     if (!h) return PN_MEM;
+    if (timeout)
+        curl_easy_setopt(h, CURLOPT_TIMEOUT,
+                         timeout); /* (a chart that hangs: asked again sooner than a feed's 120 s) */
     rc = curl_easy_perform(h);
     curl_easy_getinfo(h, CURLINFO_RESPONSE_CODE, &http);
     curl_easy_cleanup(h);
@@ -1219,14 +1238,14 @@ static int pn_fetch_json_once(const char *url, char *buf, unsigned *got, long *h
 }
 
 static int pn_fetch_json_raw(const char *url, char *buf, unsigned *got) {
-    return pn_fetch_json_once(url, buf, got, (long *)0);
+    return pn_fetch_json_once(url, buf, got, (long *)0, 0);
 }
 
 /* The answer at url of a lookup service, one request, never repeated (a failure shows at once and the page's Try Again asks again). A busy answer (HTTP 503 or 429: LRCLIB under load answers uncached queries so) is
  * PN_OVERLOAD. The other codes as pn_fetch_json_raw (a 404 is PN_GONE). */
 static int pn_fetch_json_api(const char *url, char *buf, unsigned *got) {
     long http = 0;
-    int code = pn_fetch_json_once(url, buf, got, &http);
+    int code = pn_fetch_json_once(url, buf, got, &http, 0);
     return code == PN_HTTP && (http == 503 || http == 429) ? PN_OVERLOAD : code;
 }
 
@@ -1312,12 +1331,189 @@ int pn_search(const char *term) {
     pn_search_dir();
     pn_search_clean();
     pn.surl[0] = 0;
-    if (!pn_cat(pn.surl, sizeof pn.surl, PN_SEARCH_URL) || !pn_urlenc(pn.surl, sizeof pn.surl, term)) return PN_MEM;
+    if (!pn_cat(pn.surl, sizeof pn.surl, PN_SEARCH_URL) || !pn_cat(pn.surl, sizeof pn.surl, pcregion_code()) ||
+        !pn_cat(pn.surl, sizeof pn.surl, "&term=") || !pn_urlenc(pn.surl, sizeof pn.surl, term))
+        return PN_MEM;
     pn.scode = PN_OK;
     pn.sstate = PN_S_QUERY;
     ++pn.sgen;
     g = pn_spawn(pn_smain, PN_KIND_SEARCH);
     if (g) pn.sstate = PN_S_IDLE;
+    return g;
+}
+
+/* ---- Charts (patch/podcasts.c "Discover", docs/modules/podcasts.md "Discover"): Apple's top 25 shows and top 25 episodes of the Podcast Region. One job fetches a chart that is not held (up to PN_CHART_TRIES requests: a network or server
+ * error is asked again; a 404, or an answer with no rows, for a region that is not the United States asks the United States chart instead and the chart says which it is of), then each row's artwork that has not been tried, one by one. */
+#define PN_CHART_TRIES 3 /* requests for one chart before its error shows */
+#define PN_CHART_WAIT 1 /* seconds between two of them */
+#define PN_CHART_TIMEOUT 20 /* seconds one request may take (the shows chart was seen to hang) */
+
+/* The chart's address for the storefront cc (two capitals, sent in lower case). 0 when it does not fit. */
+static int pn_chart_url(char *out, unsigned size, const char *cc, int kind) {
+    char c[3];
+    unsigned i;
+    for (i = 0; i < 2 && cc[i]; ++i) c[i] = cc[i] >= 'A' && cc[i] <= 'Z' ? (char)(cc[i] + 32) : cc[i];
+    c[i] = 0;
+    out[0] = 0;
+    return pn_cat(out, size, PN_CHART_URL) && pn_cat(out, size, c) &&
+           pn_cat(out, size, kind ? PN_CHART_EPISODES : PN_CHART_SHOWS);
+}
+
+static int pn_cthumb_path(int k, int i, const char *ext, char *out, unsigned size) {
+    char name[24];
+    pc_fmt2(name, sizeof name, "/c%d_%d.", (unsigned)k, (unsigned)i);
+    out[0] = 0;
+    return pn_cat(out, size, PN_SEARCH_DIR) && pn_cat(out, size, name) && pn_cat(out, size, ext);
+}
+
+/* The artwork files go and every row's artwork is untried again (the answers stay: the next job fetches the pictures once more). The page does this when it closes. */
+void pn_chart_clean(void) {
+    char path[PN_PATH];
+    int k, i;
+    for (k = 0; k < 2; ++k)
+        for (i = 0; i < PJ_CHART; ++i) {
+            if (pn_cthumb_path(k, i, "jpg", path, sizeof path)) unlink(path);
+            if (pn_cthumb_path(k, i, "png", path, sizeof path)) unlink(path);
+            if (pn_cthumb_path(k, i, "src", path, sizeof path)) unlink(path);
+            pn.cthumb[k][i] = pn.cext[k][i] = 0;
+        }
+}
+
+/* A storefront code (two capitals) into a 4 byte field. */
+static void pn_cc_copy(char *dst, const char *src) {
+    dst[0] = src[0], dst[1] = src[0] ? src[1] : 0, dst[2] = dst[3] = 0;
+}
+
+int pn_chart_state(int kind) { return kind >= 0 && kind < 2 ? pn.cstate[kind] : 0; }
+int pn_chart_code(int kind) { return kind >= 0 && kind < 2 ? pn.ccode[kind] : PN_MEM; }
+int pn_chart_count(int kind) { return kind >= 0 && kind < 2 && pn.cstate[kind] == 2 ? pn.cn[kind] : 0; }
+unsigned pn_chart_gen(void) { return pn.cgen; }
+const char *pn_chart_country(int kind) { return kind >= 0 && kind < 2 ? pn.cshown[kind] : ""; }
+const pj_chart_t *pn_chart_item(int kind, int i) {
+    return kind >= 0 && kind < 2 && pn.cstate[kind] == 2 && i >= 0 && i < pn.cn[kind] ? &pn.cres[kind][i]
+                                                                                      : (const pj_chart_t *)0;
+}
+
+/* The chart is held: answered with rows, for the storefront in use now. */
+int pn_chart_held(int kind) {
+    return kind >= 0 && kind < 2 && pn.cstate[kind] == 2 && pn.ccode[kind] == PN_OK && pn.cn[kind] > 0 &&
+           pn_eq(pn.creq[kind], pcregion_code());
+}
+
+int pn_chart_thumb(int kind, int i, char *path, unsigned size) {
+    if (kind < 0 || kind > 1 || i < 0 || i >= PJ_CHART || pn.cthumb[kind][i] != 1) return 0;
+    return pn_cthumb_path(kind, i, pn.cext[kind][i] == 2 ? "png" : "jpg", path, size);
+}
+
+/* The rows whose artwork has not been tried (the job fetches those). */
+int pn_chart_pending(int kind) {
+    int i, n = 0;
+    if (!pn_chart_held(kind)) return 0;
+    for (i = 0; i < pn.cn[kind]; ++i) n += pn.cthumb[kind][i] == 0;
+    return n;
+}
+
+/* Row i's picture into PN_SEARCH_DIR/c<kind>_<i>.jpg|png, when the answer is a picture the page can decode; else none (the placeholder stays). */
+static void pn_cthumb(int k, int i) {
+    char src[PN_PATH], dst[PN_PATH];
+    unsigned w, h, sof;
+    int kind;
+    const char *url = pn.cres[k][i].art;
+    if ((pn_starts(url, "http://") || pn_starts(url, "https://")) && pn_cthumb_path(k, i, "src", src, sizeof src) &&
+        pn_fetch_file(url, src, PN_THUMB_CAP)) {
+        kind = pc_pic_info(src, &w, &h, &sof);
+        if (kind && pc_cover_ok(src) && pn_cthumb_path(k, i, kind == 2 ? "png" : "jpg", dst, sizeof dst) &&
+            !rename(src, dst)) {
+            pn.cext[k][i] = (unsigned char)kind;
+            __sync_synchronize();
+            pn.cthumb[k][i] = 1;
+        } else
+            unlink(src);
+    }
+    if (pn.cthumb[k][i] != 1) pn.cthumb[k][i] = 2;
+    __sync_synchronize();
+    ++pn.cgen;
+}
+
+/* The chart's answer for storefront use into pn.cres[k]: the rows (>= 0), or -1 with *code the failure. The requests stop when the page cancels. */
+static int pn_chart_ask(int k, const char *use, char *buf, int *code) {
+    char url[PN_PATH];
+    int attempt, n = 0;
+    *code = PN_MEM;
+    if (!pn_chart_url(url, sizeof url, use, k)) return -1;
+    for (attempt = 0; attempt < PN_CHART_TRIES && !pn.cancel; ++attempt) {
+        unsigned got = 0;
+        n = 0;
+        *code = pn_fetch_json_once(url, buf, &got, (long *)0, PN_CHART_TIMEOUT);
+        if (*code == PN_OK) {
+            n = pj_chart(buf, got, k, pn.cres[k], PJ_CHART);
+            if (n < 0) *code = PN_HTTP, n = 0; /* not an answer of the store */
+        }
+        if (*code == PN_GONE || (*code != PN_NET && *code != PN_HTTP))
+            break; /* only a failure that may pass is asked again */
+        if (attempt + 1 < PN_CHART_TRIES && !pn.cancel) sleep(PN_CHART_WAIT);
+    }
+    return *code == PN_OK ? n : -1;
+}
+
+static void *pn_cmain(void *arg) {
+    int k = pn.ckind, i;
+    (void)arg;
+    if (pn.cstate[k] == 1) {
+        char *buf = calloc(PN_JSON_CAP + 1, 1);
+        const char *use = pn.creq[k];
+        int code = PN_MEM, n = -1;
+        if (buf) {
+            n = pn_chart_ask(k, use, buf, &code);
+            if (!pn.cancel && !pn_eq(use, PCREGION_FALLBACK) &&
+                (code == PN_GONE ||
+                 (code == PN_OK && n == 0))) { /* this storefront has no such chart: the United States' */
+                use = PCREGION_FALLBACK;
+                n = pn_chart_ask(k, use, buf, &code);
+            }
+        }
+        free(buf);
+        if (pn.cancel) {
+            pn.cstate[k] = 0; /* (nothing is held: the page asks again) */
+        } else {
+            pn.cn[k] = n > 0 ? n : 0;
+            for (i = 0; i < PJ_CHART; ++i) pn.cthumb[k][i] = pn.cext[k][i] = 0;
+            pn_cc_copy(pn.cshown[k], use);
+            pn.ccode[k] = code;
+            __sync_synchronize();
+            pn.cstate[k] = 2;
+        }
+        ++pn.cgen;
+        pn_bump();
+    }
+    for (i = 0; pn.cstate[k] == 2 && pn.ccode[k] == PN_OK && i < pn.cn[k] && !pn.cancel; ++i)
+        if (pn.cthumb[k][i] == 0) pn_cthumb(k, i);
+    __sync_synchronize();
+    ++pn.cgen;
+    pn.stopped = pn.cancel;
+    pn.kind = 0;
+    pn.busy = 0;
+    pn_bump();
+    return (void *)0;
+}
+
+int pn_chart(int kind) {
+    int g, held;
+    if (kind < 0 || kind > 1) return PN_MEM;
+    if (pn.busy) return PN_BUSY;
+    g = pn_guard();
+    if (g) return g;
+    pn_search_dir();
+    held = pn_chart_held(kind);
+    if (!held) {
+        pn.cstate[kind] = 1;
+        pn.cn[kind] = 0;
+        pn_cc_copy(pn.creq[kind], pcregion_code());
+    }
+    pn.ckind = kind;
+    ++pn.cgen;
+    g = pn_spawn(pn_cmain, PN_KIND_CHART);
+    if (g && !held) pn.cstate[kind] = 0;
     return g;
 }
 
@@ -1812,24 +2008,60 @@ void pn_preview_drop(void) {
 int pn_preview_state(void) { return pn.pstate; }
 int pn_preview_code(void) { return pn.pcode; }
 void *pn_preview_parser(void) { return pn.prev; }
+int pn_preview_match(void) { return pn.pmatch; }
 const char *pn_preview_feed(void) { return pn.purl; }
 int pn_preview_cover(void) { return !access(PN_PREVIEW_COVER, F_OK); }
 
-/* The preview's picture: downloaded, shrunk (the Show page's own path: pv_shrink, pv_shrink_png) to PN_PREVIEW_COVER. Whatever fails leaves no file; the preview has the placeholder. */
-static void pn_preview_picture(const char *url) {
+/* The picture at url downloaded, shrunk (the Show page's own path: pv_shrink, pv_shrink_png) to PN_PREVIEW_COVER. 1 when it is there; whatever fails leaves no file. */
+static int pn_preview_one(const char *url) {
     static const char src[] = PN_SEARCH_DIR "/preview.src", tmp[] = PN_SEARCH_DIR "/preview.tmp";
     unsigned w, h, sof;
     int kind, ok = 0;
-    if (!pn_starts(url, "http://") && !pn_starts(url, "https://")) return;
-    if (!pn_fetch_file(url, src, PN_COVER_CAP)) return;
+    if (!pn_starts(url, "http://") && !pn_starts(url, "https://")) return 0;
+    if (!pn_fetch_file(url, src, PN_COVER_CAP)) return 0;
     kind = pc_pic_info(src, &w, &h, &sof);
     if (kind == 1)
         ok = pv_shrink(src, tmp) && !rename(tmp, PN_PREVIEW_COVER);
     else if (kind == 2)
         ok = pv_shrink_png(src, tmp) > 0 && !rename(tmp, PN_PREVIEW_COVER);
-    (void)ok;
     unlink(tmp);
     unlink(src);
+    return ok;
+}
+
+/* The preview's picture: the feed's image, else (it cannot be fetched, decoded or shrunk: a progressive JPEG of over 2.1 MP is refused) the store's 600 x 600 one when the show came from the store; with neither the
+ * preview has the placeholder. pn_subscribe keeps this file as the show's cover.jpg, so the fallback is the first cover; a refresh never replaces a cover (pn_cover). */
+static void pn_preview_picture(const char *url) {
+    if (!pn_preview_one(url) && pn.pfb[0]) pn_preview_one(pn.pfb);
+}
+
+/* A chart's episode row: the store's episode lookup of its show (the chart's store, &entity=podcastEpisode&limit=20) names the episode by its trackId, and pf_match finds the kept feed item it is (its
+ * enclosure, else its pubDate's minute, else its title). A failed or empty lookup, or no match, leaves pn.pmatch -1: the show's preview, as before. A cancel is the caller's to see. */
+static void pn_pmatch(const pf_parser_t *p) {
+    char *buf = calloc(PN_JSON_CAP + 1, 1);
+    pj_ep_t *eps = calloc(PJ_EPS, sizeof *eps);
+    char url[PN_PATH];
+    unsigned got = 0;
+    int i, n;
+    pn.pmatch = -1;
+    if (!buf || !eps) {
+        free(buf);
+        free(eps);
+        return;
+    }
+    url[0] = 0;
+    pn_cat(url, sizeof url, PN_LOOKUP_URL);
+    pn_cat(url, sizeof url, pn.pid);
+    pn_cat(url, sizeof url, "&entity=podcastEpisode&limit=20&country=");
+    pn_cat(url, sizeof url, pn.pcc);
+    if (pn_fetch_json(url, buf, &got) == PN_OK && (n = pj_episodes(buf, got, eps, PJ_EPS)) > 0)
+        for (i = 0; i < n; ++i)
+            if (pn_eq(eps[i].id, pn.peid)) {
+                pn.pmatch = pf_match(p, eps[i].url, pf_iso(eps[i].date), eps[i].name);
+                break;
+            }
+    free(buf);
+    free(eps);
 }
 
 static void *pn_pmain(void *arg) {
@@ -1847,13 +2079,20 @@ static void *pn_pmain(void *arg) {
         url[0] = 0;
         pn_cat(url, sizeof url, PN_LOOKUP_URL);
         pn_cat(url, sizeof url, pn.pid);
+        if (pn.pcc
+                [0]) { /* a chart row: the store the chart is of (a show of another store has no record in this one's) */
+            pn_cat(url, sizeof url, "&country=");
+            pn_cat(url, sizeof url, pn.pcc);
+        }
         if (!buf || !r)
             code = PN_MEM;
         else if ((code = pn_fetch_json(url, buf, &got)) == PN_OK) {
             if (pj_results(buf, got, r, 1) < 1 || !r->feed[0])
                 code = PN_NOFEED;
-            else
+            else {
                 memcpy(feed, r->feed, sizeof feed);
+                memcpy(pn.pfb, r->art6, sizeof pn.pfb);
+            }
         }
         free(buf);
         free(r);
@@ -1863,6 +2102,7 @@ static void *pn_pmain(void *arg) {
         p = pf_new();
         code = p ? pn_fetch(feed, p, 0, &unused) : PN_MEM;
     }
+    if (code == PN_OK && pn.pid[0] && pn.pcc[0] && pn.peid[0]) pn_pmatch(p);
     if (code == PN_OK && pn.cancel) code = PN_CANCELLED;
     if (code == PN_OK) {
         memcpy(pn.purl, feed, sizeof pn.purl);
@@ -1884,7 +2124,7 @@ static void *pn_pmain(void *arg) {
     return (void *)0;
 }
 
-int pn_preview(const char *url, const char *id) {
+static int pn_preview_start(const char *url, const char *id, const char *cc, const char *art, const char *eid) {
     int g;
     if (pn.busy) return PN_BUSY;
     g = pn_guard();
@@ -1893,6 +2133,12 @@ int pn_preview(const char *url, const char *id) {
     pn_preview_drop();
     pn.purl[0] = 0;
     pn.pid[0] = 0;
+    pn_cc_copy(pn.pcc, cc);
+    pn.pfb[0] = 0;
+    if (pn_len(art) < sizeof pn.pfb) pn_cat(pn.pfb, sizeof pn.pfb, art);
+    pn.peid[0] = 0;
+    pn.pmatch = -1;
+    if (pn_len(eid) < sizeof pn.peid) pn_cat(pn.peid, sizeof pn.peid, eid);
     if (id[0]) {
         if (pn_len(id) >= sizeof pn.pid) return PN_NOTFEED;
         pn_cat(pn.pid, sizeof pn.pid, id);
@@ -1904,6 +2150,9 @@ int pn_preview(const char *url, const char *id) {
     if (g) pn.pstate = 0;
     return g;
 }
+
+int pn_preview(const char *url, const char *id, const char *art) { return pn_preview_start(url, id, "", art, ""); }
+int pn_preview_chart(const char *id, const char *cc, const char *eid) { return pn_preview_start("", id, cc, "", eid); }
 
 /* ---- Subscribe */
 int pn_subscribe(const char *root, const pc_show_t *shows, int nshows, char *dir, unsigned dsize) {

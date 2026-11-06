@@ -612,7 +612,7 @@ def cover_tests(ctx):
 # ---- the page
 SHEET_ROWS = [r[0] for r in pod_ui.PS_SHEET_ROWS]
 PG_WIDGETS = (['podcasts_listview', 'view_grid', 'label_status', 'label_title', 'img_nb_fade', 'label_row_title', 'label_row_sub', 'pg_big', 'img_ah_tint',
-               'btn_return', 'btn_backtoplayer', 'btn_more', 'btn_globe', 'ps_field', 'ps_hint', 'ps_text', 'ps_clear', 'ps_mag', 'btn_selall', 'pg_bar', 'pg_del', 'pg_unsubp', 'pod_pd_scrim', 'pod_pd_card', 'pod_pd_title', 'pod_pd_name', 'pod_pd_track', 'pod_pd_fill', 'pod_pd_count', 'pod_pd_cancel',
+               'btn_return', 'btn_backtoplayer', 'btn_more', 'btn_globe', 'btn_search', 'ps_field', 'ps_hint', 'ps_text', 'ps_clear', 'ps_mag', 'btn_selall', 'pg_bar', 'pg_del', 'pg_unsubp', 'pod_pd_scrim', 'pod_pd_card', 'pod_pd_title', 'pod_pd_name', 'pod_pd_track', 'pod_pd_fill', 'pod_pd_count', 'pod_pd_cancel',
                'pg_sh_scrim', 'pg_sh_card', 'pg_sh_speed_vl', 'pg_sh_refresh_vl'] + [n for n, *_ in pod_ui.PS_STYLES] + [f'pg_sh_{r}{s}' for r in SHEET_ROWS for s in ('', '_tx', '_hr')])
 T0 = 1700000000   # 2023-11-14 22:13:20 UTC
 DAY = 86400
@@ -656,6 +656,7 @@ def page_machine(card=page_card, cls=None):
     m.images['pod_ic_dltile'] = atlas_image('pod_ic_dltile')
     m.images['pod_ic_subtile'] = atlas_image('pod_ic_subtile')
     m.images['pod_ic_savetile'] = atlas_image('pod_ic_savetile')
+    m.images['pod_ic_discovertile'] = atlas_image('pod_ic_discovertile')
     return m
 
 
@@ -722,6 +723,12 @@ def lib_row_at(m, name):
 def tap_downloads(m, **kw):
     """A tap on the Shows level's Downloads row (found by its title, scrolled into view)."""
     y, off = lib_row_at(m, 'Downloads')
+    return tap(m, 150, y, off=off, **kw)
+
+
+def tap_discover(m, **kw):
+    """A tap on the Shows level's Discover row (found by its title, scrolled into view)."""
+    y, off = lib_row_at(m, 'Discover')
     return tap(m, 150, y, off=off, **kw)
 
 
@@ -821,8 +828,8 @@ def open_tests(ctx):
     expect(('window_open', 'm1plus_podcasts') in calls and not [c for c in calls if c[0] in ('list_item_create', 'hscroll_label_create', 'image_create', 'image_base_set_image')],
            'the window opens; no widget is made per show or episode (the content view paints the rows)')
     H2 = pod_show.shows_layout(2, False, 0)
-    expect(m.props.get((m.sv, 'virtual_h')) == H2['h'] == 456 and ('widget_resize', m.view, 320, H2['h']) in calls and m.props.get((m.sv, 'yoffset')) == 0,
-           f'the content is the large title, the Shows header, the grid of two shows (bravo, Alpha Show), then the Downloads and Saved Library rows (no feed: no Subscriptions row) and the air under them ({H2["h"]} px), at the top')
+    expect(m.props.get((m.sv, 'virtual_h')) == H2['h'] == 520 and ('widget_resize', m.view, 320, H2['h']) in calls and m.props.get((m.sv, 'yoffset')) == 0,
+           f'the content is the large title, the Shows header, the grid of two shows (bravo, Alpha Show), then the Discover, Downloads and Saved Library rows (no feed: no Subscriptions row) and the air under them ({H2["h"]} px), at the top')
     expect(title_text(m) == 'Podcasts' and m.props.get((m.widgets['label_status'], 'visible'), 1) == 0 and m.props.get((m.widgets['label_title'], 'visible')) == 0
            and m.props.get((m.widgets['pg_big'], 'visible'), 1) == 1, 'the large title shows, the navbar\'s small one is hidden at rest; the empty-state line is hidden')
     for ev in ('EVT_AFTER_PAINT', 'EVT_POINTER_DOWN', 'EVT_POINTER_UP', 'EVT_POINTER_ABORT'):
@@ -838,7 +845,7 @@ def open_tests(ctx):
     cells = [pod_show.grid_cell(i, H2['y_grid']) for i in range(2)]
     want = [(t, (cx, ty, O['GRID_COVER'], O['GRID_TITLE_H']), 'label_ps_gtitle') for t, (cx, cy, ty, sy) in zip(('bravo', 'Alpha Show'), cells)] + \
            [(t, (cx, sy, O['GRID_COVER'], O['GRID_SUB_H']), 'label_ps_gsub') for t, (cx, cy, ty, sy) in zip(('Local · 3 episodes', 'Local · 2 episodes'), cells)] + \
-           [('Downloads', (O['PP_DL_TEXT_X'], H2['y_dl'] + O['LIST_TITLE_Y'], O['PP_DL_TEXT_W'], O['LIST_TITLE_H']), 'label_row_title'), ('5 episodes', (O['PP_DL_TEXT_X'], H2['y_dl'] + O['LIST_SUB_Y'], O['PP_DL_TEXT_W'], O['LIST_SUB_H']), 'label_row_sub'),
+           [('Discover', (O['PP_DL_TEXT_X'], H2['y_srch'] + O['LIST_TITLE_Y'], O['PP_DL_TEXT_W'], O['LIST_TITLE_H']), 'label_row_title'), ('Apple Podcasts', (O['PP_DL_TEXT_X'], H2['y_srch'] + O['LIST_SUB_Y'], O['PP_DL_TEXT_W'], O['LIST_SUB_H']), 'label_row_sub'),
             ('Shows', (O['PP_SHOWS_X'], H2['y_shows'], 320 - 2 * O['PP_SHOWS_X'], O['PP_HEAD_H']), 'label_ps_sech')]
     expect(sorted((t, r, s) for (t, r), s in zip(texts, styles)) == sorted(want),
            f'a show: its name (18 px) and "N episodes" (15 px grey; no feed: the marker) in the Albums grid\'s places, the most recently updated first: {[(t, r, s) for (t, r), s in zip(texts, styles)]}')
@@ -1071,8 +1078,8 @@ def asset_tests(ctx):
         w = tree.find(name)
         expect(w is not None and w.get('visible') == 'false' and w.get('sensitive') == 'false', f'{name} starts hidden and insensitive')
     nav = tree.find('navigationbar_view')
-    expect([c.name for c in nav.children] == ['label_title', 'btn_return', 'btn_backtoplayer', 'btn_more', 'btn_globe', 'btn_selall'] and tree.find('label_title').get('tr_text') == 'Podcasts',
-           'the navbar: title, Back, Now Playing, "..." (the Show level, and the Shows level when Import is possible) on the same slot, the hidden Globe button (Apple Podcasts search, while Podcast Search is on) and Select All: no Feeds button')
+    expect([c.name for c in nav.children] == ['label_title', 'btn_return', 'btn_backtoplayer', 'btn_more', 'btn_globe', 'btn_search', 'btn_selall'] and tree.find('label_title').get('tr_text') == 'Podcasts',
+           'the navbar: title, Back, Now Playing, "..." (the Show level, and the Shows level when Import is possible), the globe (the Shows level, while Podcast Discover is on) and the magnifier (the Discover level) on the same slot, and Select All: no Feeds button')
     mb, npb = tree.find('btn_more'), tree.find('btn_backtoplayer')
     expect(mb.x == pod_ui.NAV_VIEW_X and mb.get('style:normal:icon') == 'pod_nav_more' and npb.get('style:normal:icon') == 'ah_nav_np' and tree.find('label_title').x + tree.find('label_title').w <= mb.x,
            'the "..." is the left cap of the capsule that ends in Now Playing; the title stops at its left edge')
@@ -1081,7 +1088,7 @@ def asset_tests(ctx):
     expect(tree.find('label_status').h >= 60, 'the hint has room for three lines')
     # the item
     item = next(i for i, r in enumerate(P.ITEMS) if r.label == 'Podcasts')
-    expect(item == 20 == len(P.ITEMS) - 3 and P.ITEMS[item].action == P.ACT_PODCASTS == 23 and P.ID_CHARS[item] == 'l' and item not in P.DEFAULT_MENU and P.PAGES[P.PAGES.index(P.PODCASTS) + 1:] == [P.TAPE, P.NPSET_PAGE, P.KEYBOARD, P.KEYBOARDS_PAGE, P.SORT_PAGE, P.THEME_PAGE, P.ABOUT_PAGE, P.SEARCH, P.ALBUM_PAGE, P.VINYL, P.FOLDERS, P.QUEUE_PAGE, P.RECORD_PAGE, P.VINYL_WHITE, P.VTHEME_PAGE, P.ONLINEART, P.CACHE_PAGE, P.COVLIST, P.FILES_PAGE, P.UPDATE, P.RELNOTES, P.BG_PAGE, P.ACCENT_PAGE, P.APPEARANCE_PAGE, P.PULLDOWN_PAGE, P.RADIO, P.RADIONP, P.RADIOINFO, P.SONGINFO]
+    expect(item == 20 == len(P.ITEMS) - 3 and P.ITEMS[item].action == P.ACT_PODCASTS == 23 and P.ID_CHARS[item] == 'l' and item not in P.DEFAULT_MENU and P.PAGES[P.PAGES.index(P.PODCASTS) + 1:] == [P.TAPE, P.NPSET_PAGE, P.KEYBOARD, P.KEYBOARDS_PAGE, P.SORT_PAGE, P.THEME_PAGE, P.ABOUT_PAGE, P.SEARCH, P.ALBUM_PAGE, P.VINYL, P.FOLDERS, P.QUEUE_PAGE, P.RECORD_PAGE, P.VINYL_WHITE, P.VTHEME_PAGE, P.ONLINEART, P.CACHE_PAGE, P.COVLIST, P.FILES_PAGE, P.UPDATE, P.RELNOTES, P.BG_PAGE, P.ACCENT_PAGE, P.APPEARANCE_PAGE, P.PULLDOWN_PAGE, P.RADIO, P.RADIONP, P.RADIOINFO, P.SONGINFO, P.REGION_PAGE]
            and P.PODCASTS.kind == 'podcasts', 'Podcasts is item 20 (saved as "l"), before Search, hidden from the menu by default; its page follows the Pod (the Tape pages come after it)')
     expect(P.EXTRAS_GROUPS[1][1][-3] == 'Podcasts' and P.EXTRAS_GROUP_OF[item] == 1 and P.EXTRAS_GROUPS[0][1] == ('Now Playing', 'Shuffle', 'Pod')
            and P.parse_menu_full(b'123456l\n') == ([1, 2, 3, 4, 5, 6, 20], []) and P.format_menu([1, 2, 20]) == '12l\n', 'Extras lists it in the Library group, before Radio and Search; the saved list carries it as l')

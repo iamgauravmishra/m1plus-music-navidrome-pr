@@ -99,8 +99,8 @@ def asset_tests(ctx):
     expect = ctx.expect
     import pod_pages as P
     gi = awtk_ui.parse(open(os.path.join(UI_DIR, 'm1plus_songinfo.bin'), 'rb').read()); h = gi.find
-    expect(gi.name == 'm1plus_songinfo_page' == P.SONGINFO.name and P.SONGINFO.kind == 'songinfo' and P.SONGINFO.title == 'Get Info' and P.PAGES[-1] is P.SONGINFO,
-           'the page m1plus_songinfo is built, titled Get Info and last in the page table')
+    expect(gi.name == 'm1plus_songinfo_page' == P.SONGINFO.name and P.SONGINFO.kind == 'songinfo' and P.SONGINFO.title == 'Get Info' and P.PAGES[-2] is P.SONGINFO,
+           'the page m1plus_songinfo is built, titled Get Info and last but one in the page table (the Podcast Region picker follows)')
     expect(all(h(n) is not None for n in WIDGETS + ('gi_scrollview', 'gi_listview', 'label_title')) and gi.get('style:normal:bg_color') == '#000000' and h('gi_view').get('style:normal:bg_color') == '#000000'
            and h('gi_listview').type == 'list_view' and h('gi_scrollview').type == 'scroll_view' and h('scroll_bar_m') is not None and (h('gi_listview').y, h('gi_listview').h, h('gi_view').w) == (50, 400, 320)
            and h('img_nb_fade').get('visible') == 'false' and h('img_nb_fade').get('sensitive') == 'false',

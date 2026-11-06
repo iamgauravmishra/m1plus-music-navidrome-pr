@@ -6,7 +6,7 @@ from harness import *   # noqa: F401,F403  (test/patch.py initialises the harnes
 
 DATA = os.path.join(ROOT, 'test', 'data', 'search')
 NAME, AUTHOR, URL, ART = 80, 56, 320, 160
-REC = 4 + NAME + AUTHOR + URL + ART
+REC = 4 + NAME + AUTHOR + URL + 2 * ART
 REGION, SIZE = 0x30000000, 0x40000   # the input and the output each get a mapped region ending where a page is unmapped
 
 
@@ -53,7 +53,7 @@ class PJ:
         for i in range(mx):
             r = raw[i * REC:(i + 1) * REC]
             f = lambda off, size: r[off:off + size].split(b'\0')[0]
-            res.append((struct.unpack('<I', r[:4])[0], f(4, NAME), f(4 + NAME, AUTHOR), f(4 + NAME + AUTHOR, URL), f(4 + NAME + AUTHOR + URL, ART), r))
+            res.append((struct.unpack('<I', r[:4])[0], f(4, NAME), f(4 + NAME, AUTHOR), f(4 + NAME + AUTHOR, URL), f(4 + NAME + AUTHOR + URL, ART), r, f(4 + NAME + AUTHOR + URL + ART, ART)))
         return n, res[:max(n, 0)], raw
 
 
@@ -85,6 +85,14 @@ def real_tests(ctx):
     raw = open(os.path.join(DATA, 'lookup_1493503146.json'), 'rb').read()
     n, res, _ = P.run(raw, 1)
     expect(n == 1 and res[0][0] == 1493503146 and res[0][1].decode() == '忽左忽右' and res[0][3].decode() == 'https://feed.xyzfm.space/cv4bkgpuglwp', 'the lookup answer: the id, the name and the feed address')
+    # artworkUrl600 (The Rest Is Politics, fetched 2026-11-06; its 600 x 600 picture is a baseline JPEG of about 100 KB): kept beside artworkUrl100
+    raw = open(os.path.join(DATA, 'lookup_1611374685.json'), 'rb').read()
+    want = json.loads(raw)['results'][0]
+    n, res, _ = P.run(raw, 1)
+    expect(n == 1 and res[0][0] == 1611374685 and res[0][4].decode() == want['artworkUrl100'] and res[0][6].decode() == want['artworkUrl600'] and res[0][6].endswith(b'/600x600bb.jpg'),
+           'the lookup answer of a show whose feed picture is progressive: artworkUrl600 is kept (144 bytes) beside artworkUrl100')
+    n, res, _ = P.run(doc(obj(collectionName='L', artworkUrl600='https://i/' + 'b' * 150), obj(collectionName='M', artworkUrl600='https://i/' + 'b' * 149), obj(collectionName='N')))
+    expect(n == 3 and [r[6] for r in res] == [b'', b'https://i/' + b'b' * 149, b''], 'artworkUrl600: one byte too long is none, one that fills the field is kept, a missing one is empty (and never lands in artworkUrl100)')
 
 
 def string_tests(ctx):
@@ -230,7 +238,7 @@ def fuzz_tests(ctx):
         if not -1 <= n <= mx: bad.append((mode, 'count', n))
         for r in res:
             for off, size, v in ((4, NAME, r[5][4:4 + NAME]), (4 + NAME, AUTHOR, r[5][4 + NAME:4 + NAME + AUTHOR]), (4 + NAME + AUTHOR, URL, r[5][4 + NAME + AUTHOR:4 + NAME + AUTHOR + URL]),
-                                 (4 + NAME + AUTHOR + URL, ART, r[5][4 + NAME + AUTHOR + URL:])):
+                                 (4 + NAME + AUTHOR + URL, ART, r[5][4 + NAME + AUTHOR + URL:4 + NAME + AUTHOR + URL + ART]), (4 + NAME + AUTHOR + URL + ART, ART, r[5][4 + NAME + AUTHOR + URL + ART:])):
                 if 0 not in v: bad.append((mode, 'unterminated', off)); continue
                 try: v.split(b'\0')[0].decode('utf-8')
                 except UnicodeDecodeError: bad.append((mode, 'not utf-8', off))

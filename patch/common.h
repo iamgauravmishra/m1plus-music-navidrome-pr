@@ -72,6 +72,14 @@ void *pod_make_mark(void *win, const char *name);
 #define POD_CHEV_H 16
 #define POD_CHEV_RGB 0x8a8a8a
 void *pod_make_chevron(void);
+/* A capsule: the rectangle w x h at (x, y) with corners of radius r (at most half the height: a full capsule), in colour c (a color_t word), edges smoothed with a pixel of partial cover. view_h: the canvas' visible rows
+ * (a row outside 0 .. view_h - 1 is not painted: the page paints into the scrolled content view). */
+void pod_capsule(void *canvas, int view_h, int x, int y, int w, int h, int r, unsigned c);
+/* The segmented control (docs/modules/ui-rules.md "Segmented control"): a SEG_TRACK capsule w x h at (x, y) holding n equal segments, the selected one a SEG_THUMB capsule floating SEG_PAD inside the track; a SEG_SEP
+ * hairline half the track high between two segments that are both unselected (none beside the thumb); each label (label[k], len[k] wide chars) centred in its segment, in the style label st_on on the thumb and st_off elsewhere.
+ * Nothing is painted outside view_h's rows; the caller makes the label styles (their ink is dark on the thumb, light on the track). */
+void pod_segmented(void *canvas, int view_h, int x, int y, int w, int h, int n, int sel, void *st_on, void *st_off,
+                   const unsigned *const *label, const int *len);
 /* A POD_CROSS px square bitmap of a grey x (the Search page's recent searches remove it), made as the chevron; NULL when it cannot be made. */
 #define POD_CROSS 12
 void *pod_make_cross(void);

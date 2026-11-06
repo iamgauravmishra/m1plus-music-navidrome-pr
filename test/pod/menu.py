@@ -638,6 +638,7 @@ def settings_tests(ctx):
     expect(('window_open', P.LIBRARY_PAGE.key) in m.calls, 'the Library row on the Settings page opens m1plus_library')
     library_tests(ctx, on_row)
     keyboards_tests(ctx, on_row, rows_s)
+    region_row_tests(ctx, on_row, rows_s)
     pcsearch_row_tests(ctx, on_row, rows_s)
 
 
@@ -880,17 +881,99 @@ def keyboards_tests(ctx, on_row, rows_s):
         expect(all(pod_i18n.TEXT[k][pod_i18n.table_for(loc)] for k in ('Keyboards', 'English', 'Chinese (Pinyin)')), f'the three strings have a text in {loc}')
 
 
+def region_row_tests(ctx, on_row, rows_s):
+    """Settings > Library > Podcasts > Podcast Region (docs/modules/settings.md): a value row (no glyph) opening the picker m1plus_podcastregion, whose first row is Automatic (naming the storefront it gives) and then the 34
+    storefronts by name, a check on the chosen one; a tap saves /mnt/data/m1plus/podcast-region atomically (Automatic removes the file), a failed save changes neither the file nor the check. Above it Podcast Discover, a switch
+    (ACT_PCSEARCH 34, podcast-online-search: on by default, \"0\" is off)."""
+    expect, P = ctx.expect, pod_pages
+    import pcregion, timezones
+    C, R = P.LIBRARY_PAGE, P.REGION_PAGE
+    FILE = pcregion.FILE
+    cf_i = next(i for i, r in enumerate(P.SETTINGS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.LIBRARY_PAGE_INDEX)
+    rg_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_REGION)
+    layout = [type(x).__name__ + (':' + x.label if isinstance(x, P.Row) else ':' + x.text if hasattr(x, 'text') else '') for x in C.layout]
+    expect(C.rows[rg_i].label == 'Podcast Region' and C.rows[rg_i].arg == P.REGION_PAGE_INDEX and P.row_kind(C.rows[rg_i]) == 'value' and P.ACT_REGION in P.VALUE_ACTIONS and P.ACT_REGIONSET in P.CHECK_ACTIONS
+           and layout[-4:] == ['Hdr:Podcasts', 'Row:Podcast Discover', 'Row:Podcast Region', 'Note:Search words are sent to Apple.'], f'the Library page ends with a Podcasts header, the Podcast Discover switch row, the Podcast Region value row and the note ({layout[-4:]})')
+    ds_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_PCSEARCH)
+    expect(ds_i == rg_i - 1 and C.rows[ds_i].label == 'Podcast Discover' and P.ACT_PCSEARCH == 34 and P.ACT_PCSEARCH in P.SWITCH_ACTIONS and P.row_kind(C.rows[ds_i]) == 'switch' and (P.ACT_REGION, P.ACT_REGIONSET) == (55, 56)
+           and P.SETTING_FILES.index('podcast-online-search') + 1 == P.SETTING_FILES.index('podcast-region') and 'podcast-online-search' not in ' '.join(P.RETIRED_FILES)
+           and not [r for p in P.PAGES for r in p.rows if r.label == 'Podcast Search'], 'Podcast Discover (ACT_PCSEARCH 34, file podcast-online-search) is a switch row directly above Podcast Region; its file is a setting file, not a retired one')
+    expect(R.title == 'Podcast Region' and R.key == 'm1plus_podcastregion' and P.PAGES[P.REGION_PAGE_INDEX] is R and P.REGION_PAGE_INDEX == len(P.PAGES) - 1 and len(R.rows) == 35 and all(P.row_kind(r) == 'check' for r in R.rows),
+           'the picker page is appended to the page table (no index moved): 35 check rows')
+
+    def open_lib(saved=None, lang=None, country='US', zone=timezones.DEFAULT):
+        m = Machine()
+        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(P.SETTINGS_PAGE.rows))] + [f'pod_value{rg_i}', f'pod_label{rg_i}'])}
+        if saved is not None: m.fs[FILE] = saved
+        m.locale = m.alloc(8); m.u.mem_write(m.locale, country.encode().ljust(3, b'\0') + (lang or 'en').encode().ljust(3, b'\0') + b'\0\0'); m.setword(pod.DATA['TIME_ZONE'][0], zone)
+        m.call(on_row, a0=rows_s + 12 * cf_i, count=3000000)
+        return m
+
+    def value(m):
+        v = [c[2] for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] == m.widgets[f'pod_value{rg_i}']]
+        return v[-1] if v else None
+
+    m = open_lib()
+    expect(('window_open', C.key) in m.calls and value(m) == 'Automatic' and FILE not in m.fs, 'opened with nothing saved: the value reads Automatic, nothing is written')
+    for data, want in ((b'JP\n', 'Japan'), (b'GB', 'UK'), (b'US\n', 'United States'), (b'ZA\n', 'South Africa'), (b'gb\n', 'Automatic'), (b'XX\n', 'Automatic'), (b'', 'Automatic'), (b'JPN', 'Automatic')):
+        expect(value(open_lib(data)) == want, f'saved {data!r}: the value reads {want}')
+    m = open_lib()
+    m.click(f'pod_row{rg_i}')
+    expect(('window_open', R.key) in m.calls and FILE not in m.fs, 'a tap on the row opens the picker and saves nothing')
+
+    def open_pick(saved=None, lang='en', country='US', zone=timezones.DEFAULT):
+        m = Machine()
+        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(35)] + [f'pod_check{i}' for i in range(35)] + [f'pod_label{i}' for i in range(35)])}
+        if saved is not None: m.fs[FILE] = saved
+        m.locale = m.alloc(8); m.u.mem_write(m.locale, country.encode().ljust(3, b'\0') + lang.encode().ljust(3, b'\0') + b'\0\0'); m.setword(pod.DATA['TIME_ZONE'][0], zone)
+        row = m.alloc(12)
+        m.setword(row, m.cstr(f'pod_row{rg_i}')); m.setword(row + 4, P.ACT_REGION); m.setword(row + 8, P.REGION_PAGE_INDEX)
+        m.call(on_row, a0=row, count=6000000)
+        return m
+
+    def checks(m):
+        out = []
+        for i in range(35):
+            v = [c[2] for c in m.calls if c[0] == 'widget_set_visible' and c[1] == m.widgets[f'pod_check{i}']]
+            out.append(v[-1] if v else None)
+        return out
+
+    def label0(m):
+        v = [c[2] for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] == m.widgets['pod_label0']]
+        return v[-1] if v else None
+
+    m = open_pick()
+    expect(('window_open', R.key) in m.calls and checks(m) == [1] + [0] * 34 and FILE not in m.fs, 'the picker opens with the check on Automatic, saving nothing')
+    expect(label0(m) == 'Automatic (United States)' and label0(open_pick(zone=12)) == 'Automatic (UK)' and label0(open_pick(lang='ja', country='JP', zone=12)) == 'Automatic (Japan)' and label0(open_pick(saved=b'FR\n', zone=25)) == 'Automatic (Australia)',
+           'the first row names the storefront Automatic gives: the stock zone, London, a Japanese UI, Sydney (the saved France does not change it)')
+    for data, row in ((b'AR\n', 1), (b'JP\n', 1 + pcregion.CODES.index('JP')), (b'US\n', 34), (b'XX\n', 0), (b'', 0)):
+        expect(checks(open_pick(data)) == [int(i == row) for i in range(35)], f'saved {data!r}: the check is on row {row}')
+    m = open_pick()
+    for k in (1 + pcregion.CODES.index('JP'), 34, 1, 0, 1 + pcregion.CODES.index('GB')):
+        m.click(f'pod_row{k}')
+        code_ = pcregion.CODES[k - 1] if k else None
+        expect((m.fs.get(FILE) == code_.encode() + b'\n' if code_ else FILE not in m.fs) and TMP_OK(m, FILE) and checks(m) == [int(i == k) for i in range(35)],
+               f'a tap on {R.rows[k].label}: ' + ('written atomically (a temp file, fsync, rename)' if code_ else 'the file removed') + ', the check follows')
+    m = open_pick(b'FR\n'); m.fail.add(('write', FILE + '.tmp'))
+    m.click('pod_row5')
+    expect(m.fs.get(FILE) == b'FR\n' and FILE + '.tmp' not in m.fs and not any(c[0] == 'widget_set_visible' for c in m.calls), 'a failed save changes neither the file nor the check')
+    for loc in pod_i18n.LOCALES:
+        expect(all(pod_i18n.TEXT[k][pod_i18n.table_for(loc)] for k in ('Podcast Region', 'Automatic', 'Podcasts', 'Search words are sent to Apple.')), f'the row, its choice, its header and its note have a text in {loc}')
+
+
+def TMP_OK(m, path):
+    """The save left no temp file and (when it wrote) renamed it and synced the folder."""
+    return path + '.tmp' not in m.fs and (('rename', path + '.tmp', path) in m.calls or path not in m.fs) and (('fsync', '/mnt/data/m1plus') in m.calls or path not in m.fs)
+
+
 def pcsearch_row_tests(ctx, on_row, rows_s):
-    """Settings > Library > Podcasts > Podcast Search (docs/modules/settings.md): a switch row, off by default, saved as "1" in /mnt/data/m1plus/podcast-online-search (the first byte), written atomically; a failed
-    save changes neither the file nor the switch; the Podcasts page reads it with pcsearch_setting."""
+    """Settings > Library > Podcasts > Podcast Discover (docs/modules/settings.md): a switch row above Podcast Region, on by default; the file /mnt/data/m1plus/podcast-online-search holds "0" when it is off (a lone "0", with
+    or without the newline: anything else, an empty file or no file is on); a tap writes "0" or "1" atomically; a failed save changes neither the file nor the switch; the Podcasts page reads it with pcsearch_setting."""
     expect, P = ctx.expect, pod_pages
     C = P.LIBRARY_PAGE
     FILE = '/mnt/data/m1plus/podcast-online-search'
     cf_i = next(i for i, r in enumerate(P.SETTINGS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.LIBRARY_PAGE_INDEX)
     ps_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_PCSEARCH)
-    layout = [type(x).__name__ + (':' + x.label if isinstance(x, P.Row) else ':' + x.text if hasattr(x, 'text') else '') for x in C.layout]
-    expect(C.rows[ps_i].label == 'Podcast Search' and P.ACT_PCSEARCH in P.SWITCH_ACTIONS and P.row_kind(C.rows[ps_i]) == 'switch'
-           and layout[-3:] == ['Hdr:Podcasts', 'Row:Podcast Search', 'Note:Search words are sent to Apple.'], f'the Library page ends with a Podcasts header, the Podcast Search switch row and its note ({layout[-3:]})')
 
     def open_lib(saved=None):
         m = Machine()
@@ -902,20 +985,20 @@ def pcsearch_row_tests(ctx, on_row, rows_s):
     def images(m): return [c[2] for c in m.calls if c[0] == 'image_base_set_image' and c[1] == m.widgets[f'pod_switch{ps_i}']]
 
     m = open_lib()
-    expect(images(m) == ['sset_off'] and FILE not in m.fs and m.call(PSYMS['pcsearch_setting'], count=2000000) == 0, 'opened with nothing saved: the switch is off, nothing is written, the setting reads 0 (the default)')
-    for data, on in ((b'1\n', 1), (b'1', 1), (b'0\n', 0), (b'', 0), (b'x', 0), (b'1x', 0), (b'11', 0), (b'\n1', 0)):
+    expect(images(m) == ['sset_on'] and FILE not in m.fs and m.call(PSYMS['pcsearch_setting'], count=2000000) == 1, 'opened with nothing saved: the switch is on, nothing is written, the setting reads 1 (the default)')
+    for data, on in ((b'1\n', 1), (b'1', 1), (b'0\n', 0), (b'0', 0), (b'', 1), (b'x', 1), (b'1x', 1), (b'00', 1), (b'\n0', 1)):
         expect(images(open_lib(data)) == [('sset_on' if on else 'sset_off')], f'saved {data!r}: the switch opens {"on" if on else "off"}')
     m = open_lib()
     m.click(f'pod_row{ps_i}')
-    expect(m.fs.get(FILE) == b'1\n' and FILE + '.tmp' not in m.fs and ('rename', FILE + '.tmp', FILE) in m.calls and ('fsync', '/mnt/data/m1plus') in m.calls and images(m)[-1] == 'sset_on'
-           and m.call(PSYMS['pcsearch_setting'], count=2000000) == 1, 'a tap turns it on: written atomically (a temp file, fsync, rename), the switch on')
+    expect(m.fs.get(FILE) == b'0\n' and FILE + '.tmp' not in m.fs and ('rename', FILE + '.tmp', FILE) in m.calls and ('fsync', '/mnt/data/m1plus') in m.calls and images(m)[-1] == 'sset_off'
+           and m.call(PSYMS['pcsearch_setting'], count=2000000) == 0, 'a tap turns it off: "0" written atomically (a temp file, fsync, rename), the switch off')
     m.click(f'pod_row{ps_i}')
-    expect(m.fs.get(FILE) == b'0\n' and images(m)[-1] == 'sset_off' and m.call(PSYMS['pcsearch_setting'], count=2000000) == 0, 'and off again')
+    expect(m.fs.get(FILE) == b'1\n' and images(m)[-1] == 'sset_on' and m.call(PSYMS['pcsearch_setting'], count=2000000) == 1, 'and on again: "1"')
     m = open_lib(b'1\n'); m.fail.add(('write', FILE + '.tmp'))
     m.click(f'pod_row{ps_i}')
     expect(m.fs.get(FILE) == b'1\n' and FILE + '.tmp' not in m.fs and images(m) == [] and m.call(PSYMS['pcsearch_setting'], count=2000000) == 1, 'a failed save changes neither the file nor the switch')
     for loc in pod_i18n.LOCALES:
-        expect(all(pod_i18n.TEXT[k][pod_i18n.table_for(loc)] for k in ('Podcast Search', 'Podcasts', 'Search words are sent to Apple.')), f'the row, its header and its note have a text in {loc}')
+        expect(all(pod_i18n.TEXT[k][pod_i18n.table_for(loc)] for k in ('Podcast Discover', 'Podcasts', 'Search words are sent to Apple.')), f'the row, its header and its note have a text in {loc}')
 
 
 def library_tests(ctx, on_row):
@@ -929,9 +1012,9 @@ def library_tests(ctx, on_row):
     land_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_LANDSCAPE)
     sort_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_SORT)
     sw, val = f'pod_switch{land_i}', f'pod_value{sort_i}'
-    expect([(r.label, r.action) for r in C.rows] == [('Update Library', P.ACT_HOME), ('Rebuild Covers', P.ACT_REBUILD), ('Album Order', P.ACT_SORT), ('Landscape', P.ACT_LANDSCAPE), ('Podcast Search', P.ACT_PCSEARCH)]
+    expect([(r.label, r.action) for r in C.rows] == [('Update Library', P.ACT_HOME), ('Rebuild Covers', P.ACT_REBUILD), ('Album Order', P.ACT_SORT), ('Landscape', P.ACT_LANDSCAPE), ('Podcast Discover', P.ACT_PCSEARCH), ('Podcast Region', P.ACT_REGION)]
            and C.title == 'Library' and C.rows[0].arg == P.HOME_UPDATE and C.rows[sort_i].arg == P.SORT_PAGE_INDEX and P.row_kind(C.rows[0]) == 'action' and P.row_kind(C.rows[sort_i]) == 'value',
-           'the Library page: one card of Update Library (the stock page, no chevron), Rebuild Covers and Album Order (a value, a chevron, its picker), then Landscape (switch) under Cover Flow, and Podcast Search (switch)')
+           'the Library page: one card of Update Library (the stock page, no chevron), Rebuild Covers and Album Order (a value, a chevron, its picker), then Landscape (switch) under Cover Flow, and Podcast Discover (switch) above Podcast Region (a value, its picker)')
 
     def open_lib(land=None, sort=None, language=None):
         m = Machine()
@@ -1095,6 +1178,7 @@ def library_tests(ctx, on_row):
     mm = Machine()
     for r in range(len(C.rows)):
         y = 50 + tree.find(f'pod_row{r}').y + pod_ui.ROW_H // 2
+        if y >= 320: continue   # (a row below the screen's bottom edge is scrolled to: the page is taller than the screen)
         for x in (100, 290):
             got = stock_target(mm, node_tree, x, y)
             expect(f'pod_row{r}' in got and not any(n.startswith('pod_value') or n.startswith('pod_switch') for n in got), f'a tap at x {x} on row {r} reaches the row ({got})')

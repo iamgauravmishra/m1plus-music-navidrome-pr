@@ -35,6 +35,7 @@
 #include "pcnotes.h"
 #include "pcdetail.h"
 #include "pcopml.h"
+#include "pcregion.h"
 #include "pcwrap.h"
 
 extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
@@ -65,8 +66,9 @@ enum {
     L_SHOWS = 0,
     L_EPS = 1,
     L_DLS = 2,
-    L_SRCH = 3
-}; /* the search level: Podcast Search on in Settings, behind the Shows level's Search button */
+    L_SRCH = 3,
+    L_DISC = 4
+}; /* the search level, behind the Discover level's magnifier; the Discover level (the charts), behind the Shows level's Discover row */
 enum {
     SP_NONE = 0,
     SP_SEARCH = 1,
@@ -79,6 +81,7 @@ enum {
     SS_DONE = 3
 }; /* the search: nothing asked, asked and waiting for the worker, the worker has it, the answer is in */
 
+#define PG_DNA_MAX 16 /* Discover rows remembered as having no feed */
 #define PG_IP_MAX PC_MAX_SHOWS /* In Progress rows of the Downloads level (queued, running, failed, paused) */
 #define PG_DLD_MAX 300 /* Downloaded rows: the newest this many (docs/modules/podcasts.md "The Downloads page") */
 #define PG_DLS_MAX \
@@ -132,8 +135,10 @@ enum {
     PH_CLEAR = 9,
     PH_SUBROW = 11,
     PH_SHOW = 12,
-    PH_SAVROW = 13
-}; /* what a touch hit: on the Show level the first four (the episode page's show row: PH_SHOW); on the Shows level the refresh line, the Downloads and Subscriptions rows, a Continue Listening item, a show's cover and captions */
+    PH_SAVROW = 13,
+    PH_SRCHROW = 14,
+    PH_SEG = 15
+}; /* what a touch hit: on the Show level the first four (the episode page's show row: PH_SHOW); on the Shows level the refresh line, the Search, Downloads and Subscriptions rows, a Continue Listening item, a show's cover and captions */
 enum {
     SR_SPEED = 0,
     SR_REFRESH,
@@ -250,6 +255,7 @@ static struct {
     void *
         subtile; /* pod_ic_subtile (the Subscriptions row's tile), decoded the same way once the Shows level first paints */
     void *savetile; /* pod_ic_savetile (the Saved row's tile) */
+    void *srchtile; /* pod_ic_discovertile (the Search row's tile) */
     void *chev; /* the shared list chevron (pod_make_chevron), made on first use */
     pg_cell_t *cells; /* PG_CELLS layouts of the Show level's cells */
     pg_hdr_t *hdr; /* the Show header's layout */
@@ -272,25 +278,35 @@ static struct {
     int ncont;
     int has_import; /* Podcasts/subscriptions.txt exists: the Shows level's "..." has Import from Card */
     int has_line; /* some show has a feed: the refresh line shows */
-    int y_shelf, y_dl, y_sub, y_sav, y_shows, y_grid,
-        home_h; /* the Shows level's blocks' tops (content y): the shelf's header (0: none), the Downloads row, the Subscriptions row (0: none), the "Shows" header, the grid; the content's height */
+    int y_shelf, y_srch, y_dl, y_sub, y_sav, y_shows, y_grid,
+        home_h; /* the Shows level's blocks' tops (content y): the shelf's header (0: none), the Search row (0: none), the Downloads row, the Subscriptions row (0: none), the "Shows" header, the grid; the content's height */
     unsigned gsig,
         ssig; /* what the grid's and the shelf's tiles were made for (a hash of the shows' folders, covers and the items' hashes): the tiles stay when a reload finds the same */
-    /* Search (docs/modules/podcasts.md "Search"): searchon: Podcast Search is on (read when the page opens and each time it is back in front); the field's widgets; the text
+    /* Search (docs/modules/podcasts.md "Search"): the field's widgets; the text
      * of the field; sstate: SS_*; scode: the answer's PN_*; srn: result rows shown; sgen: pn_search_gen() the rows were made at; spend: the job waiting to start (with its address or Apple id); loading:
      * a preview is being fetched; sdone / sback: the keyboard's callbacks, handled when the page is in front; preview: the Show level is a preview (shows[PC_MAX_SHOWS], eps from the held feed); from_search: the Show
      * level (a preview, or the real page of a show that is subscribed already) was opened from the search level: Back returns there. */
-    int searchon, sstate, scode, srn, spend, loading, sdone, sback, preview, from_search;
+    int sstate, scode, srn, spend, loading, sdone, sback, preview, from_search;
     void *sf, *sf_hint, *sf_text, *sf_clear;
+    const char *
+        htext; /* the Discover and search levels' status text, already translated (NULL: rows or none); painted as the hint */
     unsigned sgen;
-    char sq[KB_MAX_LONG + 1], sp_url[PC_URL], sp_id[16], sp_text[KB_MAX_LONG + 1];
-    /* aqh: pc_hash of the text the Apple answer is of (0: none); btn_globe: the navbar's globe (the entry to the search). */
+    char sq[KB_MAX_LONG + 1], sp_url[PC_URL], sp_art[PJ_ART], sp_id[16], sp_eid[16], sp_text[KB_MAX_LONG + 1];
+    /* aqh: pc_hash of the text the Apple answer is of (0: none); sfok: the page has the field's widgets (without them it has no search). */
     unsigned aqh;
-    void *btn_globe;
+    int sfok,
+        searchon; /* searchon: sfok and Podcast Discover is on in Settings (read when the page opens and each time it is back in front) */
+    /* Discover (docs/modules/podcasts.md "Discover"): find: the navbar's magnifier (opens the search level); dtab: the chart shown, 0 Shows or 1 Episodes; dn: its rows; dpend: a chart job waits to start (the downloads pause first);
+     * dtried[t]: chart t was asked for in this visit (a failure is asked again by switching to it or entering the level again); dfail[t]: why starting it failed (a guard's PN_*, 0 none); cgen: pn_chart_gen() the rows were made at;
+     * doff[t]: the scroll offset of each chart; dsel: the row tapped + 1 while its preview is fetched (its grey line says Loading); dna: pc_hash of the Apple ids whose lookup had no feed (dimmed, Not available), ndna of them;
+     * from_disc: the search level was entered from Discover (Back returns there); pv_disc: the preview or show page was opened from a chart row (Back returns there). */
+    void *find, *btn_globe; /* btn_globe: the Shows level's globe (the entry to the search) */
+    int dtab, dn, dpend, dtried[2], dfail[2], doff[2], dsel, ndna, from_disc, pv_disc;
+    unsigned cgen, dna[PG_DNA_MAX];
 } pg __attribute__((section(".scratch")));
 
-/* Settings > Library > Podcasts > Podcast Search: "1" = on, anything else or no file = off. Read when the Podcasts page opens and each time it is back in front. */
-int pcsearch_setting(void) { return set_read(PCSEARCH_FILE, 0) == '1'; }
+/* Settings > Library > Podcasts > Podcast Discover: "0" = off, anything else or no file = on (the default). Read when the Podcasts page opens and each time it is back in front. */
+int pcsearch_setting(void) { return set_read(PCSEARCH_FILE, '1') != '0'; }
 
 int pcsearch_toggle(void) {
     int next = !pcsearch_setting();
@@ -310,7 +326,11 @@ static void pg_redraw(void) { widget_invalidate_force(pg.sv, (void *)0); }
 static void pg_awake_arm(void); /* the downloads' timer, armed when something is queued */
 
 static int pg_count(void) {
-    return pg.level == L_EPS ? pg.neps : pg.level == L_DLS ? pg.nrows : pg.level == L_SRCH ? pg.srn : 0;
+    return pg.level == L_EPS    ? pg.neps
+           : pg.level == L_DLS  ? pg.nrows
+           : pg.level == L_SRCH ? pg.srn
+           : pg.level == L_DISC ? pg.dn
+                                : 0;
 }
 /* The Downloads level's geometry (content y; tools/pod_show.py downloads_layout is the same arithmetic): the storage line, then In Progress (a header and its rows), PP_SEC_GAP, then Downloaded (a header and its
  * rows). The Subscriptions page is plain rows from 0. pg_dy is the top of display row a. */
@@ -340,7 +360,7 @@ static int pg_dhit(int y) {
     return -1;
 }
 static int pg_top(void) {
-    return pg.level == L_SRCH ? PQ_TOP : pg.level == L_EPS && pg.hdr ? pg.hdr->h : 0;
+    return pg.level == L_SRCH ? PQ_TOP : pg.level == L_DISC ? DC_TOP : pg.level == L_EPS && pg.hdr ? pg.hdr->h : 0;
 } /* where the rows start in the content */
 /* The Show level's cell height: PS_CELL_H, or PS_PCELL_H for the preview (no pill row under the description). */
 static int pg_cell_h(void) { return pg.preview ? PS_PCELL_H : PS_CELL_H; }
@@ -350,19 +370,25 @@ static const char *pg_no_eps_key(void);
  * said yet. */
 static const char *pg_hint(void) {
     if (pg.det) return (const char *)0;
+    if (pg.level == L_DISC || pg.level == L_SRCH) return pg.htext; /* (already translated: pg_hint_text) */
     if (pg.level == L_DLS && !pg.nrows && (pg.subs || !pg.dscan_on))
         return pg.subs ? "No subscriptions" : pg.saved ? "No saved episodes" : "No downloads";
     if (pg.level == L_EPS && !pg.neps && !pg.preview) return pg_no_eps_key();
     return (const char *)0;
 }
-static int pg_hint_y(void) { return pg.level == L_EPS ? pg_top() : pg_dh(); }
+static int pg_hint_y(void) { return pg.level == L_DLS ? pg_dh() : pg_top(); }
+static const char *pg_hint_text(void) {
+    const char *k = pg_hint();
+    return k && pg.level != L_DISC && pg.level != L_SRCH ? TR(k) : k;
+}
 static int pg_content(void) {
     if (pg.det && pg.pd) return pg.pd->h; /* (the episode page) */
     if (pg.level == L_SHOWS) return pg.home_h;
-    if (pg.level == L_SRCH) return PQ_TOP + pg.srn * PC_ROW_H + (pg.srn ? PQ_BOTTOM : 0);
     if (pg_hint())
         return pg_hint_y() +
                PG_HINT_H; /* (an empty page: its header and the hint, no taller, so it only scrolls when they don't fit) */
+    if (pg.level == L_SRCH) return PQ_TOP + pg.srn * PC_ROW_H + (pg.srn ? PQ_BOTTOM : 0);
+    if (pg.level == L_DISC) return DC_TOP + pg.dn * PC_ROW_H + (pg.dn ? DC_BOTTOM : 0);
     if (pg.level == L_DLS) return pg_dh() + (pg.select && pg.nrows ? SG_BAR_H : 0);
     return (pg_count()          ? pg_top() + pg_count() * pg_row_h() + (pg.level == L_EPS ? PG_BOTTOM : 0)
             : pg.level == L_EPS ? pg_top()
@@ -940,6 +966,49 @@ static void pg_paint_srch(void *canvas) {
     }
 }
 
+/* The Discover level (docs/modules/podcasts.md "Discover"): a chart row is a name and a grey line (the author; an episode's show) over a thumbnail, as a search result is. A row whose show has no feed (the lookup said so at a tap) says Not available and is dimmed;
+ * while its preview is fetched its grey line says Loading. The rows are the worker's record (pn_chart_item): nothing is copied. */
+static int pg_dna(unsigned id) {
+    int i;
+    for (i = 0; i < pg.ndna; ++i)
+        if (pg.dna[i] == id) return 1;
+    return 0;
+}
+
+static int pg_dim(const pj_chart_t *r) { return !r->id[0] || pg_dna(pc_hash(r->id)); }
+
+static void pg_dtext(grid_tile_t *t, const pj_chart_t *r, int a) {
+    grid_set(t, r->name,
+             pg_dim(r)                        ? TR("Not available")
+             : pg.loading && pg.dsel == a + 1 ? TR("Loading…")
+                                              : r->author,
+             0);
+    t->fit = 0;
+    t->nochev = pg_dim(r);
+}
+
+static grid_tile_t *pg_dtile(int a) {
+    int fresh;
+    grid_tile_t *t = grid_tile(&pg.g, a, 0, pg.dn - 1, &fresh);
+    if (fresh) {
+        const pj_chart_t *r = pn_chart_item(pg.dtab, a);
+        if (r) pg_dtext(t, r, a);
+    }
+    return t;
+}
+
+static grid_tile_t *pg_dtile_of(void *ctx, int a) {
+    (void)ctx;
+    return pg_dtile(a);
+}
+
+/* The text of row a again (its state changed: Loading, Not available). */
+static void pg_dretext(int a) {
+    grid_tile_t *t = grid_find(&pg.g, a);
+    const pj_chart_t *r = pn_chart_item(pg.dtab, a);
+    if (t && r) pg_dtext(t, r, a);
+}
+
 /* pc_atlas (tools/mod_icons.py pc_atlas: the progress ring, the state glyphs, the badge, the "..." and the pills' ends) decoded WITH its alpha into a bitmap of ours, once: the image manager's copy is
  * dropped at once, as the covers' are. cc_decode would composite over black. NULL when it cannot be made (the Show level then paints no cells). */
 static void *pg_rgba(const char *name, unsigned w, unsigned h) {
@@ -991,6 +1060,12 @@ static void *pg_subtile(void) {
 static void *pg_savetile(void) {
     if (!pg.savetile) pg.savetile = pg_rgba("pod_ic_savetile", PA_TILE_PX, PA_TILE_PX);
     return pg.savetile;
+}
+
+/* The Search row's tile (pod_ic_discovertile), the same. */
+static void *pg_srchtile(void) {
+    if (!pg.srchtile) pg.srchtile = pg_rgba("pod_ic_discovertile", PA_TILE_PX, PA_TILE_PX);
+    return pg.srchtile;
 }
 
 /* A w x h piece of the atlas from (sx, sy) at (x, y) of the view, cut by hand to the rows inside it (grid_blit's rule). */
@@ -1178,7 +1253,7 @@ static void pg_paint_eps(void *canvas) {
     if (off > 0) pg_paint_fade(canvas);
 }
 
-/* The episode page (docs/modules/podcasts.md "The episode page"): the date line (with the size) and the cell's badges, the title, the show row (a small cover, the name, a chevron: not in a preview), the cell's
+/* The episode page (docs/modules/podcasts.md "The episode page"): the date line (with the size) and the cell's badges, the title, the show row (a small cover, the name, a chevron: its tap goes back to the show, or to the preview it came from), the cell's
  * state pill and "..." (not in a preview), the description. The texts are pcdetail.c's; the states are read at every paint, as the cells' are. The page is black, with the plain fade under the navbar. */
 static void pg_paint_det(void *canvas) {
     const pd_t *d = pg.pd;
@@ -1190,7 +1265,7 @@ static void pg_paint_det(void *canvas) {
     e = &pg.eps[pg.det - 1];
     y = d->y_show - off + (PD_SHOW_H - PD_COVER) / 2;
     grid_blit(canvas, &pg.g, &pg.g.tiles[0], PD_X, y, GRID_VIEW_H);
-    if (d->y_pill) pg_chev(canvas, PD_CHEV_X, d->y_show - off + (PD_SHOW_H - POD_CHEV_H) / 2);
+    pg_chev(canvas, PD_CHEV_X, d->y_show - off + (PD_SHOW_H - POD_CHEV_H) / 2);
     y = d->y_date - off;
     if (pg_ep_state(e, &pos, &len) == PC_DONE) {
         pg_glyph(canvas, PA_CHECK, x - 1, y + PD_DATE_H / 2 - PA_G_PX / 2);
@@ -1275,7 +1350,7 @@ static void pg_line_make(pg_line_t *l) {
  * the Downloads row (while something is queued), a header "Shows" (only when one of those shows) and the grid. */
 static void pg_home_layout(void) {
     int y = PP_LINE_Y + (pg.has_line ? PP_LINE_PITCH : PP_NOLINE_PITCH);
-    pg.y_shelf = pg.y_sub = pg.y_sav = 0;
+    pg.y_shelf = pg.y_srch = pg.y_sub = pg.y_sav = 0;
     if (pg.ncont) {
         pg.y_shelf = y;
         y += PP_HEAD_PITCH + PP_SHELF_PITCH_Y + PP_SEC_GAP;
@@ -1284,11 +1359,16 @@ static void pg_home_layout(void) {
     y += PP_HEAD_PITCH;
     pg.y_grid = y;
     y += (pg.nshows + GRID_COLS - 1) / GRID_COLS * GRID_PITCH;
-    pg.y_dl =
-        y + (pg.nshows
-                 ? PP_LIB_GAP
-                 : 0); /* the Library rows close the page: Downloads always, Subscriptions while a show has a feed */
-    y = pg.y_dl + PC_ROW_H;
+    y +=
+        pg.nshows
+            ? PP_LIB_GAP
+            : 0; /* the Library rows close the page: Discover while Podcast Discover is on, Downloads always, Subscriptions while a show has a feed */
+    if (pg.searchon) {
+        pg.y_srch = y;
+        y += PC_ROW_H;
+    }
+    pg.y_dl = y;
+    y += PC_ROW_H;
     if (pg.has_line) {
         pg.y_sub = y;
         y += PC_ROW_H;
@@ -1377,8 +1457,8 @@ static void pg_lib_saved_sub(char *out, unsigned size) {
         pc_fmt(out, size, TR(pg.sv_n == 1 ? "%d episode" : "%d episodes"), (unsigned)pg.sv_n);
 }
 
-/* The top of Library row i (Downloads, Subscriptions, Saved), 0 when the row is not there. */
-static int pg_ylib(int i) { return i == 0 ? pg.y_dl : i == 1 ? pg.y_sub : pg.y_sav; }
+/* The top of Library row i (Downloads, Subscriptions, Saved, Search), 0 when the row is not there. */
+static int pg_ylib(int i) { return i == 0 ? pg.y_dl : i == 1 ? pg.y_sub : i == 2 ? pg.y_sav : pg.y_srch; }
 
 static void pg_paint_home(void *canvas) {
     int off = pg_off(), i, a, c0, c1, y;
@@ -1396,15 +1476,17 @@ static void pg_paint_home(void *canvas) {
                       PP_SHELF_X + i * PP_SHELF_PITCH + PP_SHELF_ART - PP_SHELF_PLAY_INSET - PA_PLAYB_PX,
                       pg.y_shelf + PP_HEAD_PITCH + PP_SHELF_ART - PP_SHELF_PLAY_INSET - PA_PLAYB_PX - off);
         }
-    for (i = 0; i < 3;
-         ++i) { /* the Library rows (Downloads, Subscriptions, Saved): a tile, a chevron, a hairline from the text */
+    for (
+        i = 0; i < 4;
+        ++i) { /* the Library rows (Downloads, Subscriptions, Saved, Search): a tile, a chevron, a hairline from the text */
         if (!pg_ylib(i)) continue;
         y = pg_ylib(i) - off;
         if (pg.press == i + 1 && !pg.select) az_fill(canvas, 0, y, y + PC_ROW_H - 1, PG_W, LIST_PRESS);
         pg_blit_from(canvas,
-                     i == 2 ? pg_savetile()
-                     : i    ? pg_subtile()
-                            : pg_dltile(),
+                     i == 3   ? pg_srchtile()
+                     : i == 2 ? pg_savetile()
+                     : i      ? pg_subtile()
+                              : pg_dltile(),
                      0, 0, PA_TILE_PX, PA_TILE_PX, PP_DL_TILE_X, y + PP_DL_TILE_Y);
         pg_chev(canvas, PP_DL_CHEV_X, y + (PC_ROW_H - 1 - POD_CHEV_H) / 2);
         az_fill(canvas, PP_DL_TEXT_X, y + PC_ROW_H - 1, y + PC_ROW_H, PG_W - PP_DL_TEXT_X, LIST_HAIR);
@@ -1441,19 +1523,21 @@ static void pg_paint_home(void *canvas) {
         }
     }
     /* the Library rows' texts: the title and the grey line of each */
-    for (i = 0; i < 3; ++i) {
+    for (i = 0; i < 4; ++i) {
         char sub[96];
         unsigned w[PG_TITLE_MAX];
         int n;
         if (!pg_ylib(i)) continue;
         y = pg_ylib(i) - off;
-        if (i == 2)
+        if (i == 3)
+            sub[0] = 0, pg_cat(sub, sizeof sub, TR("Apple Podcasts"));
+        else if (i == 2)
             pg_lib_saved_sub(sub, sizeof sub);
         else if (i)
             pg_lib_subs_sub(sub, sizeof sub);
         else
             pg_lib_dl_sub(sub, sizeof sub);
-        n = pg_wide(w, PG_TITLE_MAX, TR(i == 2 ? "Saved" : i ? "Subscriptions" : "Downloads"));
+        n = pg_wide(w, PG_TITLE_MAX, TR(i == 3 ? "Discover" : i == 2 ? "Saved" : i ? "Subscriptions" : "Downloads"));
         pg_paint_text_at(canvas, pg.st_title, w, n, PP_DL_TEXT_X, y + LIST_TITLE_Y, PP_DL_TEXT_W, LIST_TITLE_H);
         n = pg_wide(w, PG_TITLE_MAX, sub);
         pg_paint_text_at(canvas, pg.st_sub, w, n, PP_DL_TEXT_X, y + LIST_SUB_Y, PP_DL_TEXT_W, LIST_SUB_H);
@@ -1545,16 +1629,60 @@ static void pg_paint_dls(void *canvas) {
 
 /* The empty page's hint: grey, wrapped to the margins (pg_hint), under the header. */
 static void pg_paint_hint(void *canvas, int off) {
-    const char *key = pg_hint();
+    const char *key = pg_hint_text();
     unsigned t[160];
     pw_line_t ln[4];
     int n, k, nl;
     if (!key) return;
-    n = pg_wide(t, 160, TR(key));
+    n = pg_wide(t, 160, key);
     nl = pg_lines(pg.st[ST_CDIM], t, n, PG_W - 2 * PP_LINE_X, 4, ln); /* (the episode cells' dim 20 px grey) */
     for (k = 0; k < nl; ++k)
         pg_paint_text_at(canvas, pg.st[ST_CDIM], t + ln[k].start, ln[k].len, PP_LINE_X,
                          pg_hint_y() + 8 + k * PS_TITLE_PITCH - off, PG_W - 2 * PP_LINE_X, PS_TITLE_PITCH);
+}
+
+/* The grey line under the large title: the chart's name and the storefront it is of ("Top 25 Shows in United States": the Downloads storage line's place and style). The storefront is the one the answer is of (a fall back
+ * shows as the United States); before an answer, the Podcast Region's. */
+static void pg_disc_line(char *out, unsigned size) {
+    const char *cc =
+        pn_chart_state(pg.dtab) == 2 && pn_chart_country(pg.dtab)[0] ? pn_chart_country(pg.dtab) : pcregion_code();
+    snprintf(out, size, TR(pg.dtab ? "Top 25 Episodes in %s" : "Top 25 Shows in %s"), pcregion_name(cc));
+}
+
+/* The Discover level: the grey line and the control, then the ranked rows (the list rows of the search level, shifted right for the rank). */
+static void pg_paint_disc(void *canvas) {
+    char line[96];
+    unsigned w[96];
+    int off = pg_off(), n, r0, r1, r, len[2];
+    unsigned lw[2][48];
+    const unsigned *label[2];
+    pg_disc_line(line, sizeof line);
+    n = pg_wide(w, 96, line);
+    if (n) pg_paint_text_at(canvas, pg.st[ST_META], w, n, PP_LINE_X, PDL_LINE_Y - off, PG_W - 2 * PP_LINE_X, PP_LINE_H);
+    len[0] = pg_wide(lw[0], 48, TR("Shows")), len[1] = pg_wide(lw[1], 48, TR("Episodes"));
+    label[0] = lw[0], label[1] = lw[1];
+    pod_segmented(canvas, GRID_VIEW_H, DC_SEG_X, DC_SEG_Y - off, DC_SEG_W, DC_SEG_H, 2, pg.dtab, pg.st[ST_LATEST],
+                  pg.st[ST_LATESTW], label, len);
+    pg_span(&r0, &r1);
+    if (r1 < r0) return;
+    grid_list_paint(canvas, &pg.g, pg.st_title, pg.st_sub, r0, r1, off - DC_TOP, GRID_VIEW_H, pg.press, DC_SHIFT, 1,
+                    pg_dtile_of, (void *)0);
+    for (r = r0; r <= r1; ++r) {
+        const pj_chart_t *p = pn_chart_item(pg.dtab, r);
+        if (p && pg_dim(p))
+            az_fill(canvas, 0, DC_TOP + r * PC_ROW_H - off, DC_TOP + (r + 1) * PC_ROW_H - 1 - off, PG_W, PQ_DIM);
+    }
+    widget_prepare_text_style(pg.st_sub,
+                              canvas); /* the ranks: grey, right aligned, centred on the row above its hairline */
+    for (r = r0; r <= r1; ++r) {
+        char num[8];
+        int tw;
+        pc_fmt(num, sizeof num, "%d", (unsigned)r + 1);
+        n = pg_wide(w, 8, num);
+        tw = pg_width(pg.st_sub, w);
+        pg_text(canvas, w, n, DC_RANK_END - tw, DC_TOP + r * PC_ROW_H - off + (PC_ROW_H - 1 - LIST_SUB_H) / 2, tw + 2,
+                LIST_SUB_H);
+    }
 }
 
 static int pg_on_paint(void *ctx, void *e) {
@@ -1574,6 +1702,8 @@ static int pg_on_paint(void *ctx, void *e) {
             pg_paint_eps(canvas);
     } else if (pg.level == L_SRCH && pg.srn)
         pg_paint_srch(canvas);
+    else if (pg.level == L_DISC)
+        pg_paint_disc(canvas);
     pg_paint_hint(canvas, off);
     I(canvas, CANVAS_OY) -= off;
     return RET_OK;
@@ -1706,8 +1836,9 @@ static void pg_title_show(void) {
 }
 
 static void pg_collapse(void) {
-    int c = pg.level == L_EPS ? !pg.det && pg.hdr && pod_title_gone(pg_off(), pg.hdr->collapse)
-                              : (pg.level == L_SHOWS || pg.level == L_DLS) && pod_title_gone(pg_off(), 0);
+    int c = pg.level == L_EPS
+                ? !pg.det && pg.hdr && pod_title_gone(pg_off(), pg.hdr->collapse)
+                : (pg.level == L_SHOWS || pg.level == L_DLS || pg.level == L_DISC) && pod_title_gone(pg_off(), 0);
     if (c != pg.collapsed) {
         pg.collapsed = c;
         pg_title_show();
@@ -1742,6 +1873,22 @@ static int pg_srch_next(void) {
     return -1;
 }
 
+/* The Discover level's next thumbnail: a row of the chart in view whose picture has arrived (pn_chart_thumb) and whose tile has none yet, the rows in view first; -1 for none. */
+static int pg_disc_next(void) {
+    int r0, r1, a;
+    char path[160];
+    pg_span(&r0, &r1);
+    for (a = r0; a <= r1; ++a) {
+        grid_tile_t *t = grid_find(&pg.g, a);
+        if ((!t || !t->art) && pn_chart_thumb(pg.dtab, a, path, sizeof path)) return a;
+    }
+    for (a = 0; a < pg.dn; ++a) {
+        grid_tile_t *t = grid_find(&pg.g, a);
+        if ((!t || !t->art) && pn_chart_thumb(pg.dtab, a, path, sizeof path)) return a;
+    }
+    return -1;
+}
+
 /* The Shows level's next cover: a Continue Listening item's first, then the grid's cells in view and a row either side (the ring holds that many); *idx is the item or the show. 1: an item, 2: a show, 0: none. */
 static int pg_home_next(int *idx) {
     int i, a, c0, c1;
@@ -1768,6 +1915,7 @@ static int pg_load_pending(void) {
     int idx;
     if (pg.level == L_SHOWS) return pg_home_next(&idx) != 0 || pg.tscan_on;
     if (pg.level == L_SRCH) return pg_srch_next() >= 0;
+    if (pg.level == L_DISC) return pg_disc_next() >= 0;
     if (pg.level == L_DLS) return (!pg.subs && pg.dscan_on && !pg.select) || pg_next_cover() >= 0;
     if (pg.level != L_EPS) return pg_next_cover() >= 0;
     return (pg.hg.tiles && !pg.hg.tiles[0].art) || (pg.det && !pg.g.tiles[0].art);
@@ -1799,6 +1947,21 @@ static int pg_on_load(const void *unused) {
             grid_tile_t *t = pg_stile(a);
             char path[160], url[180];
             if (pn_search_thumb(a, path, sizeof path) && pc_cover_ok(path)) {
+                url[0] = 0;
+                pg_cat(url, sizeof url, "file://");
+                pg_cat(url, sizeof url, path);
+                grid_art_url(&pg.g, t, url);
+            } else
+                grid_art_url(&pg.g, t, (const char *)0);
+            pg_redraw();
+            pg_kick();
+        }
+    } else if (pg.level == L_DISC) {
+        int a = pg_disc_next();
+        if (a >= 0) {
+            grid_tile_t *t = pg_dtile(a);
+            char path[160], url[180];
+            if (pn_chart_thumb(pg.dtab, a, path, sizeof path) && pc_cover_ok(path)) {
                 url[0] = 0;
                 pg_cat(url, sizeof url, "file://");
                 pg_cat(url, sizeof url, path);
@@ -1923,12 +2086,14 @@ static void pg_nav(void) {
     int more = !pg.select && pg.btn_more &&
                ((pg.level == L_EPS && !pg.preview && !pg.det) || (pg.level == L_SHOWS && pg.has_import) ||
                 (pg.level == L_DLS && pg.nrows && !pg.saved)),
+        find = pg.find && pg.level == L_DISC,
         globe = !pg.select && pg.btn_globe && pg.level == L_SHOWS &&
-                pg.searchon, /* (the Apple Podcasts search, only while Podcast Search is on) */
-        cap = more || globe,
+                pg.searchon, /* (the Apple Podcasts search, only while Podcast Discover is on) */
+        cap = more || find || globe,
         gx = NAV_VIEW_X - (more ? NAV_VIEW_W : 0); /* the pieces are right-aligned to Now Playing, 46 apart */
     const char *img = cap ? "ah_nav_play" : "ah_nav_np", *mimg = globe && more ? "pod_nav_moremid" : "pod_nav_more";
     pg_show(pg.btn_more, more);
+    pg_show(pg.find, find);
     pg_show(pg.btn_globe, globe);
     if (globe) widget_move(pg.btn_globe, gx, 0); /* [Globe | Now Playing], [Globe | ... | NP] or [... | NP] */
     if (pg.btn_more) {
@@ -1940,10 +2105,10 @@ static void pg_nav(void) {
     if (pg.sf)
         widget_set_visible(pg.sf, pg.level == L_SRCH,
                            0); /* (insensitive for life: a touch on the field goes to the content view) */
-    pg_show(pg.big, pg.level == L_SHOWS || pg.level == L_DLS);
+    pg_show(pg.big, pg.level == L_SHOWS || pg.level == L_DLS || pg.level == L_DISC);
     if (pg.title &&
         !pg.select) { /* the small title ends before the leftmost button, cut with an ellipsis (pg_head sets the text again at the new width) */
-        widget_resize(pg.title, (globe ? gx : more ? NAV_VIEW_X : NAV_VIEW_X + NAV_VIEW_W) - NAV_TITLE_X, 22);
+        widget_resize(pg.title, (globe ? gx : more || find ? NAV_VIEW_X : NAV_VIEW_X + NAV_VIEW_W) - NAV_TITLE_X, 22);
         pg_head();
     }
     pg_title_show();
@@ -2094,7 +2259,7 @@ static void pg_load_shows(int keep) {
     } else
         pg_drop_tiles();
     pg.level = L_SHOWS;
-    pg.preview = pg.from_search = pg.subs = pg.from_subs = pg.from_dls = pg.saved = 0;
+    pg.preview = pg.from_search = pg.subs = pg.from_subs = pg.from_dls = pg.saved = pg.from_disc = pg.pv_disc = 0;
     pg_leave_show();
     pg_scan();
     pg_saved_load(); /* (the Saved row's count) */
@@ -2536,7 +2701,7 @@ static void pg_reload_eps(void) {
     pg_redraw();
 }
 /* ---------------------------------------------------------------------------
- * The search level (docs/modules/podcasts.md "Search"): behind the Shows level's Search button while Podcast Search is on in Settings. The field at the top opens our keyboard (the Playlists page's New
+ * The search level (docs/modules/podcasts.md "Search"): behind Discover's magnifier while Podcast Discover is on in Settings. The field at the top opens our keyboard (the Playlists page's New
  * playlist does the same: keyboard_open, its Search key calls back when the page is in front again); the answer, the thumbnails and the preview are the worker's (patch/pcnet.c): this reads its record from
  * the page's 1 s tick and does no widget work in the dark. A job waits for the downloads to pause, as a refresh does; a running one is cancelled by a newer one and by leaving the page.
  */
@@ -2548,7 +2713,9 @@ static void pg_copy(char *dst, unsigned size, const char *src) {
 static void pg_srch_edit(void);
 static void pg_srch_pending(void);
 static void pg_open_preview(void);
+static void pg_det_open(int a);
 static int pg_open_subscribed(const char *feed);
+static void pg_load_disc(int fresh);
 
 /* The rows again for another answer: the tiles go, so each row's text and thumbnail are made afresh. */
 static void pg_srch_rows_reset(void) {
@@ -2560,11 +2727,8 @@ static void pg_srch_rows_reset(void) {
 
 /* The status line under the field (the label of the empty states), or none. */
 static void pg_srch_hint(const char *text) {
-    if (text) {
-        widget_move(pg.status, 20, PG_LIST_Y + PQ_TOP + PQ_HINT_Y);
-        widget_set_text_utf8(pg.status, text);
-    }
-    pg_show(pg.status, text != (const char *)0);
+    pg.htext = text;
+    pg_show(pg.status, 0);
 }
 
 /* What the level shows for the state: the field's texts, the status line (Loading... while a preview is fetched, Searching..., No results, the failure's words) or the rows of the answer. */
@@ -2603,6 +2767,10 @@ static void pg_srch_submit(const char *text);
 
 /* The level: the field (its text and hint), the answer so far. fresh: the page is entered from the Shows level; the text kept from last time is searched again when it is not the one the answer is of, and with nothing typed the keyboard opens at once. */
 static void pg_load_search(int fresh) {
+    if (!pg.searchon) { /* (Podcast Discover went off in Settings while a preview was open: Back lands on the Shows level) */
+        pg_load_shows(1);
+        return;
+    }
     if (pg.select) pg_select(0);
     if (pg.level == L_SHOWS) pg.show_off = pg_off();
     pg_sheet_close();
@@ -2613,7 +2781,7 @@ static void pg_load_search(int fresh) {
     pg.neps = 0;
     pg.preview = 0;
     pg.level = L_SRCH;
-    pg.from_search = 0;
+    pg.from_search = pg.pv_disc = 0;
     pg.gen = pn_gen(), pg.dgen = pn_dl_gen();
     pg_nav();
     pg_show(pg.view, 1);
@@ -2663,6 +2831,34 @@ static void pg_srch_fail(int code) {
     pod_toast(msg);
 }
 
+static void pg_disc_apply(void);
+
+/* What the level shows after a job's state moved: the search level's rows and status line, or the Discover level's tapped row. */
+static void pg_job_refresh(void) {
+    if (pg.level == L_DISC) {
+        if (pg.dsel && !pg.loading) {
+            int a = pg.dsel - 1;
+            pg.dsel = 0;
+            pg_dretext(a);
+        }
+        pg_redraw();
+    } else
+        pg_srch_apply();
+}
+
+/* The preview failed (or its lookup found no feed): on the Discover level a show with no feed is remembered and its row says Not available (nothing else to say); anything else is the toast. */
+static void pg_preview_fail(int code) {
+    pg.loading = 0;
+    if (pg.level == L_DISC && code == PN_NOFEED && pg.dsel && pg.ndna < PG_DNA_MAX) {
+        const pj_chart_t *r = pn_chart_item(pg.dtab, pg.dsel - 1);
+        if (r) {
+            pg.dna[pg.ndna++] = pc_hash(r->id);
+            return;
+        }
+    }
+    pg_srch_fail(code);
+}
+
 /* Start the job the level waits for: the downloads that run are asked to pause first (the page's tick asks again), a search or preview that runs is cancelled, a refresh is waited for. */
 static void pg_srch_pump(void) {
     int r, job = pg.spend;
@@ -2676,18 +2872,18 @@ static void pg_srch_pump(void) {
         if (pn_job_busy()) pn_cancel();
         return;
     }
-    r = job == SP_SEARCH ? pn_search(pg.sq) : pn_preview(pg.sp_url, pg.sp_id);
+    r = job == SP_SEARCH ? pn_search(pg.sq)
+        : pg.pv_disc     ? pn_preview_chart(pg.sp_id, pn_chart_country(pg.dtab), pg.sp_eid)
+                         : pn_preview(pg.sp_url, pg.sp_id, pg.sp_art);
     if (r == PN_BUSY) return;
     pg.spend = SP_NONE;
     if (job == SP_SEARCH) {
         pg.sstate = r == PN_OK ? SS_RUN : SS_DONE;
         pg.scode = r;
         pg.sgen = pn_search_gen();
-    } else if (r != PN_OK) {
-        pg.loading = 0;
-        pg_srch_fail(r);
-    }
-    pg_srch_apply();
+    } else if (r != PN_OK)
+        pg_preview_fail(r);
+    pg_job_refresh();
 }
 
 /* The text of the field was submitted: an Apple Podcasts link or a feed address goes to its preview, anything else is searched. */
@@ -2711,6 +2907,7 @@ static void pg_srch_submit(const char *text) {
         pg.loading = 1;
         pg_copy(pg.sp_url, sizeof pg.sp_url, kind == 1 ? text : "");
         pg_copy(pg.sp_id, sizeof pg.sp_id, kind == 2 ? id : "");
+        pg.sp_art[0] = 0;
     }
     widget_set_prop_int(pg.sv, "yoffset", 0);
     pg_srch_apply();
@@ -2739,7 +2936,10 @@ static void pg_srch_pending(void) {
         pg.sback = 0;
         if (pg.level == L_SRCH) {
             pg_srch_leave();
-            pg_load_shows(1);
+            if (pg.from_disc)
+                pg_load_disc(0); /* the search was entered from Discover: Back returns there */
+            else
+                pg_load_shows(1);
         }
     }
 }
@@ -2747,6 +2947,20 @@ static void pg_srch_pending(void) {
 static void pg_srch_edit(void) {
     if (pg.level != L_SRCH || pg.dlg) return;
     keyboard_open(TR("Apple Podcasts"), TR("Search Apple Podcasts"), pg.sq, pg_srch_done, pg_srch_cancel, KB_LONG);
+}
+
+/* The preview that is ready is opened (or its failure shown), and the downloads that paused for the job go on (the 1 s tick of the search and Discover levels). */
+static void pg_preview_sync(void) {
+    if (pg.loading && !pg.spend && !pn_job_busy() && pn_preview_state() == 2) {
+        if (pn_preview_code() == PN_OK) {
+            pg_open_preview();
+        } else {
+            pg_preview_fail(pn_preview_code());
+            pg_job_refresh();
+        }
+    }
+    if (!pn_job_busy() && !pg.spend && pn_dl_waiting() && !pn_dl_running())
+        pn_dl_start(); /* the downloads that paused go on */
 }
 
 /* The 1 s tick of the level (lit screen only): a job that waits, the answer that came, a thumbnail that arrived, the preview that is ready. */
@@ -2764,17 +2978,7 @@ static void pg_srch_sync(void) {
         pg_kick();
         pg_redraw();
     }
-    if (pg.loading && !pg.spend && !pn_job_busy() && pn_preview_state() == 2) {
-        if (pn_preview_code() == PN_OK) {
-            pg_open_preview();
-        } else {
-            pg.loading = 0;
-            pg_srch_fail(pn_preview_code());
-            pg_srch_apply();
-        }
-    }
-    if (!pn_job_busy() && !pg.spend && pn_dl_waiting() && !pn_dl_running())
-        pn_dl_start(); /* the downloads that paused go on */
+    pg_preview_sync();
 }
 
 /* A feed that is a show already (the same address, any case): its real Show page opens at once (the cells with their pills, the "..." and the sheets), no fetch and no preview; Back returns to the
@@ -2821,6 +3025,7 @@ static void pg_srch_tap(int a, int part) {
     pg.spend = SP_PREVIEW;
     pg.loading = 1;
     pg_copy(pg.sp_url, sizeof pg.sp_url, r->feed);
+    pg_copy(pg.sp_art, sizeof pg.sp_art, r->art6);
     pg.sp_id[0] = 0;
     pg_srch_apply();
     pg_srch_pump();
@@ -2836,13 +3041,13 @@ static void pg_open_preview(void) {
     pg.loading = 0;
     if (!p) {
         pg_srch_fail(PN_NOTFEED);
-        pg_srch_apply();
+        pg_job_refresh();
         return;
     }
     all = calloc(PF_KEEP + 1, sizeof *all);
     if (!all) {
         pg_srch_fail(PN_MEM);
-        pg_srch_apply();
+        pg_job_refresh();
         return;
     }
     memset(s, 0, sizeof *s);
@@ -2873,13 +3078,19 @@ static void pg_open_preview(void) {
     pg.preview = 1;
     pg_open_show_with(PC_MAX_SHOWS, 0, all, n);
     pg.from_search = 1;
+    /* a chart's episode row: its episode page opens on top of the show (Back returns to the show) */
+    if (pn_preview_match() >= 0) pg_det_open(pn_preview_match());
 }
 
 /* Back from a Show page opened from the search level (a preview, or a show subscribed already): the held feed is let go and the search level is as it was. */
 static void pg_preview_close(void) {
+    int disc = pg.pv_disc; /* opened from a chart row: back to the chart */
     pg.preview = 0;
     pn_preview_drop();
-    pg_load_search(0);
+    if (disc)
+        pg_load_disc(0);
+    else
+        pg_load_search(0);
 }
 
 /* The Subscribe pill: the show is made from the held feed exactly as an import and its first refresh make it, and the page becomes its real Show page in place (the same level, at the top: the preview's
@@ -2903,6 +3114,190 @@ static void pg_subscribe(void) {
     }
     pg_open_show(si, 0);
     pg.from_search = 1;
+}
+
+/* ---------------------------------------------------------------------------
+ * The Discover level (docs/modules/podcasts.md "Discover"): behind the Shows level's Discover row. The charts (Apple's top 25 shows and top 25 episodes of the Podcast Region) are fetched by the worker (patch/pcnet.c), a chart when it is first viewed;
+ * this reads its record from the page's 1 s tick and does no widget work in the dark. A job waits for the downloads to pause, as a refresh does; a running one is cancelled by a newer one and by leaving the level. A row opens the show's
+ * preview (the lookup of its Apple id gives the feed), the navbar's magnifier the search level.
+ */
+/* The status line under the control (the label of the empty states), or none. */
+static void pg_disc_hint(const char *text) {
+    pg.htext = text;
+    pg_show(pg.status, 0);
+}
+
+/* What the level shows for the state of the chart in view: its rows, or the status line (Loading... while it is asked for, the failure's words, No results). */
+static void pg_disc_apply(void) {
+    int t = pg.dtab, n = 0, max, cnt, code;
+    const char *hint = (const char *)0;
+    if (pg.level != L_DISC) return;
+    cnt = pn_chart_count(t), code = pn_chart_code(t);
+    if (pn_chart_held(t))
+        n = cnt;
+    else if (pg.dfail[t])
+        hint = pg_status_word(pg.dfail[t]);
+    else if (pn_chart_state(t) == 2 && !pg.dpend && pg.dtried[t] && code != PN_OK)
+        hint = pg_status_word(code);
+    else if (pn_chart_state(t) == 2 && !pg.dpend && pg.dtried[t] && !cnt)
+        hint = TR("No results");
+    else
+        hint = TR("Loading…");
+    if (n != pg.dn) pg_srch_rows_reset();
+    pg.dn = n;
+    pg.cgen = pn_chart_gen();
+    pg_disc_hint(hint);
+    pg_size();
+    max = pg_content() - GRID_VIEW_H;
+    if (max < 0) max = 0;
+    if (pg_off() > max) widget_set_prop_int(pg.sv, "yoffset", max);
+    pg_redraw();
+    pg_kick();
+}
+
+/* The chart in view is asked for (the tick starts the job when the downloads have paused). */
+static void pg_disc_ask(void) {
+    pg.dtried[pg.dtab] = 1;
+    pg.dfail[pg.dtab] = 0;
+    pg.dpend = 1;
+}
+
+/* Start the job the level waits for: the downloads that run are asked to pause first (the tick asks again), a job that runs is cancelled, a refresh is waited for. */
+static void pg_disc_pump(void) {
+    int r;
+    if (!pg.dpend) return;
+    if (pn_dl_running()) {
+        pn_dl_pause();
+        pg_awake_arm();
+        return;
+    }
+    if (pn_busy() || pn_job_busy()) {
+        if (pn_job_busy()) pn_cancel();
+        return;
+    }
+    r = pn_chart(pg.dtab);
+    if (r == PN_BUSY) return;
+    pg.dpend = 0;
+    pg.dfail[pg.dtab] = r;
+    pg_disc_apply();
+}
+
+/* The 1 s tick of the level (lit screen only): a chart to ask for or a job that waits, the answer or a thumbnail that came, the preview that is ready. */
+static void pg_disc_sync(void) {
+    int t = pg.dtab;
+    if (pg.spend) pg_srch_pump();
+    if (pg.dpend) pg_disc_pump();
+    if (!pg.dpend && !pg.spend && !pg.loading && !pn_job_busy() && !pn_busy() && !pg.dtried[t] &&
+        (!pn_chart_held(t) ||
+         pn_chart_pending(t))) { /* not asked yet this visit, or its artwork is not all tried (a job was cancelled) */
+        pg_disc_ask();
+        pg_disc_pump();
+    }
+    if (!pg.dpend && !pg.spend && !pn_job_busy() && !pn_chart_held(t) && pn_chart_state(t) == 0 && !pg.dfail[t])
+        pg.dtried[t] = 0; /* (cancelled while asking: asked again) */
+    if (pn_chart_gen() != pg.cgen) pg_disc_apply();
+    pg_preview_sync();
+}
+
+/* The level: the Shows | Episodes control, the chart in view. fresh: entered from the Shows level (the Shows chart, at the top); else back from the search level or a show's page (the same chart, where it was). */
+static void pg_load_disc(int fresh) {
+    if (!pg.searchon) {
+        pg_load_shows(1);
+        return;
+    }
+    if (pg.select) pg_select(0);
+    if (pg.level == L_SHOWS) pg.show_off = pg_off();
+    if (pg.level == L_DISC) pg.doff[pg.dtab] = pg_off();
+    pg_sheet_close();
+    pg_leave_show();
+    grid_drop(&pg.hg);
+    free(pg.eps);
+    pg.eps = (pc_ep_t *)0;
+    pg.neps = 0;
+    pg.preview = pg.pv_disc = 0;
+    pg.from_search = 0;
+    pg.from_disc = 1;
+    pg.loading = pg.spend = pg.dpend = pg.dsel = 0;
+    if (fresh) pg.dtab = pg.doff[0] = pg.doff[1] = 0;
+    pg.dtried[0] = pg.dtried[1] = pg.dfail[0] = pg.dfail[1] = 0;
+    pg.level = L_DISC;
+    pg.dn = -1; /* (the rows are made again) */
+    pg_title("Discover", (const char *)0);
+    pg_title((const char *)0, TR("Discover"));
+    pg_srch_rows_reset();
+    pg_nav();
+    pg_show(pg.view, 1);
+    pg_disc_apply();
+    widget_set_prop_int(pg.sv, "yoffset", pg.doff[pg.dtab]);
+    pg_collapse();
+    pg_title_show();
+    pg_fade();
+    pg_redraw();
+    pg_kick();
+}
+
+/* A tap on a half of the control: that chart. Nothing while a row's preview is being fetched. */
+static void pg_disc_tab(int t) {
+    if (t == pg.dtab || pg.loading) return;
+    pg.doff[pg.dtab] = pg_off();
+    pg.dtab = t;
+    pg.dsel = 0;
+    pg.dtried[t] = pg.dfail[t] = 0;
+    pg_srch_rows_reset();
+    pg.dn = -1;
+    pg_disc_apply();
+    widget_set_prop_int(pg.sv, "yoffset", pg.doff[t]);
+    pg_collapse();
+    pg_title_show();
+    pg_fade();
+    pg_redraw();
+}
+
+/* A tap on the control, or on a row that may open: its show's preview (the lookup of the Apple id, then the feed). */
+static void pg_disc_tap(int a, int part) {
+    const pj_chart_t *r;
+    if (part == PH_SEG) {
+        pg_disc_tab(a);
+        return;
+    }
+    r = pn_chart_item(pg.dtab, a);
+    if (!r || pg_dim(r) || pg.loading) return;
+    pg.doff[pg.dtab] = pg_off();
+    pg.pv_disc = 1;
+    pg.dsel = a + 1;
+    pg.loading = 1;
+    pg.spend = SP_PREVIEW;
+    pg.sp_url[0] = 0;
+    pg.sp_art[0] = 0;
+    pg_copy(pg.sp_id, sizeof pg.sp_id, r->id);
+    pg_copy(pg.sp_eid, sizeof pg.sp_eid,
+            pg.dtab ? r->eid : ""); /* (an episode row: its own id, for its episode page) */
+    pg_dretext(a);
+    pg_redraw();
+    pg_srch_pump();
+}
+
+/* The navbar's globe: the search level (Apple Podcasts; only while Podcast Discover is on; Back returns to the Shows level). */
+static int pg_on_globe(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    if (pg.win && pg.level == L_SHOWS && pg.searchon && !pg.select && !pg.dlg && !pg.sheet) {
+        pg.from_disc = 0;
+        pg_load_search(1);
+    }
+    return RET_OK;
+}
+
+/* The navbar's magnifier: the search level (Back returns here). */
+static int pg_on_find(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    if (!pg.win || pg.level != L_DISC || pg.dlg || pg.sheet || !pg.searchon || pg.loading) return RET_OK;
+    pg.doff[pg.dtab] = pg_off();
+    pg_srch_leave();
+    pg.dpend = 0;
+    pg_load_search(1);
+    return RET_OK;
 }
 
 /* ---------------------------------------------------------------------------
@@ -3111,6 +3506,13 @@ static int pg_on_back(void *ctx, void *e) {
         widget_set_prop_int(pg.sv, "yoffset", pg.subs_off);
     } else if (pg.level == L_SRCH) {
         pg_srch_leave();
+        if (pg.from_disc)
+            pg_load_disc(0); /* the search was entered from Discover */
+        else
+            pg_load_shows(1);
+    } else if (pg.level == L_DISC) {
+        pg_srch_leave(); /* (a job that runs is told to stop) */
+        pg.dpend = 0;
         pg_load_shows(1);
     } else if (pg.level != L_SHOWS)
         pg_load_shows(1); /* the Show and Downloads levels go back to the Shows level, where it was */
@@ -3440,6 +3842,18 @@ static int pg_hit(void *e, int *part) {
         r = y < pg.srn ? pn_search_result(y) : (const pj_result_t *)0;
         return r && r->feed[0] ? y : -1;
     }
+    if (pg.level ==
+        L_DISC) { /* the control's halves (a taller touch than the control), or a row that may open (a dimmed one takes no touch) */
+        const pj_chart_t *r;
+        if (pt[0] >= DC_SEG_X && pt[0] < DC_SEG_X + DC_SEG_W && pt[1] >= DC_SEG_Y - 6 &&
+            pt[1] < DC_SEG_Y + DC_SEG_H + 6)
+            return *part = PH_SEG, pt[0] - DC_SEG_X >= DC_SEG_W / 2;
+        y = pt[1] - DC_TOP;
+        if (y < 0) return -1;
+        y /= PC_ROW_H;
+        r = y < pg.dn ? pn_chart_item(pg.dtab, y) : (const pj_chart_t *)0;
+        return r && !pg_dim(r) ? y : -1;
+    }
     if (pg.level == L_SHOWS) {
         int i, a, mid = PP_LINE_Y + PP_LINE_H / 2, cy = pg.y_shelf + PP_HEAD_PITCH;
         if (pg.has_line && pt[1] >= mid - PP_LINE_HIT / 2 && pt[1] < mid - PP_LINE_HIT / 2 + PP_LINE_HIT)
@@ -3449,6 +3863,7 @@ static int pg_hit(void *e, int *part) {
             if (pt[0] >= x && pt[0] < x + PP_SHELF_W && pt[1] >= cy && pt[1] < cy + PP_SHELF_LEFT_Y + PP_SHELF_LEFT_H)
                 return *part = PH_SHELF, i;
         }
+        if (pg.y_srch && pt[1] >= pg.y_srch && pt[1] < pg.y_srch + PC_ROW_H) return *part = PH_SRCHROW, 3;
         if (pt[1] >= pg.y_dl && pt[1] < pg.y_dl + PC_ROW_H) return *part = PH_DLROW, 0;
         if (pg.y_sub && pt[1] >= pg.y_sub && pt[1] < pg.y_sub + PC_ROW_H) return *part = PH_SUBROW, 1;
         if (pg.y_sav && pt[1] >= pg.y_sav && pt[1] < pg.y_sav + PC_ROW_H) return *part = PH_SAVROW, 2;
@@ -3460,9 +3875,9 @@ static int pg_hit(void *e, int *part) {
         pg.det) { /* the episode page: its pill and its "..." (none in a preview); the rest of it takes no touch */
         int py = pt[1] - (pg.pd ? pg.pd->y_pill : 0), mid = PS_PILL_H / 2;
         pg_pill_t pl;
-        if (!pg.pd || !pg.pd->y_pill || pg.det > pg.neps) return -1;
+        if (!pg.pd || pg.det > pg.neps) return -1;
         if (pt[1] >= pg.pd->y_show && pt[1] < pg.pd->y_show + PD_SHOW_H) return *part = PH_SHOW, pg.det - 1;
-        if (py < -7 || py >= PS_PILL_H + 7) return -1;
+        if (!pg.pd->y_pill || py < -7 || py >= PS_PILL_H + 7) return -1; /* (a preview has no pill row) */
         if (pt[0] >= PS_DOTS_CX - PS_DOTS_HIT / 2 && pt[0] < PS_DOTS_CX + PS_DOTS_HIT / 2 &&
             py >= mid - PS_DOTS_HIT / 2 && py < mid + PS_DOTS_HIT / 2)
             return *part = PH_DOTS, pg.det - 1;
@@ -3519,9 +3934,9 @@ static int pg_on_down(void *ctx, void *e) {
     pg.down_part = part;
     pg.down_x = I(e, PE_X), pg.down_y = I(e, PE_Y);
     if (a >= 0 && !pg.select &&
-        (pg.level == L_SHOWS  ? part == PH_DLROW || part == PH_SUBROW || part == PH_SAVROW
-         : pg.level == L_SRCH ? part == PH_BODY
-                              : pg.level != L_EPS || part == PH_BODY))
+        (pg.level == L_SHOWS ? part == PH_DLROW || part == PH_SUBROW || part == PH_SAVROW || part == PH_SRCHROW
+         : pg.level == L_SRCH || pg.level == L_DISC ? part == PH_BODY
+                                                    : pg.level != L_EPS || part == PH_BODY))
         pg_set_press(
             pg.level == L_DLS
                 ? pg.ord[a] + 1
@@ -3836,7 +4251,7 @@ static void pg_sheet_open(int kind, int ep) {
         return;
     pg.sheet = kind, pg.sh_ep = ep;
     if (kind == SH_HOME) {
-        /* Import from Card while the card has a subscriptions.txt or an OPML file (the only row: the Subscriptions page is a Library row of the Shows page). Add Show is not a row: round 3's search is the navbar's Search button. */
+        /* Import from Card while the card has a subscriptions.txt or an OPML file (the only row: the Subscriptions page is a Library row of the Shows page). Add Show is not a row: the search is behind Discover's magnifier. */
         if (pg.has_import) rows[n++] = SR_IMPORT;
         if (!n) {
             pg.sheet = SH_NONE;
@@ -4093,14 +4508,6 @@ static int pg_on_sheet_row(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* The navbar's globe: the search level (Apple Podcasts; only while Podcast Search is on). */
-static int pg_on_globe(void *ctx, void *e) {
-    (void)ctx;
-    (void)e;
-    if (pg.win && pg.level == L_SHOWS && pg.searchon && !pg.select && !pg.dlg && !pg.sheet) pg_load_search(1);
-    return RET_OK;
-}
-
 static int pg_on_more(void *ctx, void *e) {
     (void)ctx;
     (void)e;
@@ -4117,11 +4524,13 @@ static int pg_on_more(void *ctx, void *e) {
  * body (play it when it is on the card; a cell that is not does nothing: only the pill and the "..." download). */
 static void pg_cell_tap(int a, int part) {
     const pc_ep_t *e;
-    if (pg.preview) { /* the preview: the Subscribe pill and nothing else */
+    if (pg.preview) { /* the preview: the Subscribe pill, and the episode page's show row (back to the preview it came from) */
         if (part == PH_LATEST)
             pg_subscribe();
         else if (part == PH_BODY)
             pg_det_open(a);
+        else if (part == PH_SHOW)
+            pg_det_close();
         return;
     }
     if (part ==
@@ -4151,7 +4560,9 @@ static void pg_home_tap(int part, int a) {
         pg_load_subs(0);
     else if (part == PH_SAVROW)
         pg_load_saved();
-    else if (part == PH_SHELF)
+    else if (part == PH_SRCHROW) {
+        if (pg.searchon && !pg.dlg && !pg.sheet) pg_load_disc(1);
+    } else if (part == PH_SHELF)
         pg_cont_play(a);
     else if (part == PH_CELL)
         pg_open_show(a, 0);
@@ -4172,6 +4583,8 @@ static int pg_on_up(void *ctx, void *e) {
             pg_dls_tap(same);
         else if (pg.level == L_SRCH)
             pg_srch_tap(same, part2);
+        else if (pg.level == L_DISC)
+            pg_disc_tap(same, part2);
         else if (pg.level == L_SHOWS)
             pg_home_tap(part, same);
         else
@@ -4226,6 +4639,7 @@ static int pg_tick(const void *timer) {
     }
     if (pg.sdone || pg.sback) pg_srch_pending();
     if (pod_screen_lit() && pg.level == L_SRCH) pg_srch_sync();
+    if (pod_screen_lit() && pg.level == L_DISC) pg_disc_sync();
     if (pod_screen_lit() && pg.level == L_EPS && !pg.preview &&
         !pg.dlg) { /* (not under the refresh dialog: it reads the show again when it closes; the preview is no folder) */
         if (pn_gen() != pg.gen && !pg.select)
@@ -4302,14 +4716,16 @@ static int pg_on_fg(void *ctx, void *e) {
     (void)e;
     pg.fg = 1;
     pg_arm();
-    if (pg.btn_globe) {
-        pg.searchon = pcsearch_setting(); /* Podcast Search may have been switched in Settings */
-        if (!pg.searchon && pg.level == L_SRCH) { /* the level goes with the setting: back to the Shows level */
-            pg_srch_leave();
-            pg_load_shows(1);
-        }
+    pg.searchon = pg.sfok ? pcsearch_setting() : 0; /* Podcast Discover may have been switched in Settings */
+    if (!pg.searchon &&
+        (pg.level == L_SRCH || pg.level == L_DISC)) { /* the levels go with the setting: back to the Shows level */
+        pg_srch_leave();
+        pg.dpend = 0;
+        pg_load_shows(1);
     }
     pg_srch_pending();
+    if (pg.level == L_DISC && !pg.loading)
+        pg_load_disc(0); /* (the region may have been changed in Settings meanwhile) */
     if (pg.dlg &&
         pod_screen_lit()) { /* the dialog was up when another page came in front: it is still right (or closes at its first tick) */
         pg_dlg_update();
@@ -4366,6 +4782,7 @@ static int pg_on_destroy(void *ctx, void *e) {
     if (pg.dlg) pn_cancel(); /* the page is closed (the hardware Back key) with the dialog up: that is Cancel too */
     if (pn_job_busy()) pn_cancel(); /* ... and a search or preview that runs stops */
     pn_search_clean();
+    pn_chart_clean();
     pn_preview_drop();
     pg_bar_black();
     pc_flush();
@@ -4377,6 +4794,7 @@ static int pg_on_destroy(void *ctx, void *e) {
     if (pg.dltile) bitmap_destroy(pg.dltile);
     if (pg.subtile) bitmap_destroy(pg.subtile);
     if (pg.savetile) bitmap_destroy(pg.savetile);
+    if (pg.srchtile) bitmap_destroy(pg.srchtile);
     if (pg.chev) bitmap_destroy(pg.chev);
     free(pg.sv_h);
     free(pg.sv_d);
@@ -4455,8 +4873,11 @@ int podcasts_open(void) {
     pg.sf_hint = widget_lookup(pg.win, "ps_hint", 1);
     pg.sf_text = widget_lookup(pg.win, "ps_text", 1);
     pg.sf_clear = widget_lookup(pg.win, "ps_clear", 1);
+    pg.sfok = pg.sf && pg.sf_hint && pg.sf_text; /* without the field the page has no search */
+    pg.find = pod_bind(pg.win, "btn_search", pg_on_find, (void *)0); /* the Discover level's magnifier */
     pg.btn_globe = pod_bind(pg.win, "btn_globe", pg_on_globe, (void *)0);
-    if (!pg.sf || !pg.sf_hint || !pg.sf_text) pg.btn_globe = (void *)0; /* without the field the page has no search */
+    if (!pg.find || !pg.btn_globe) pg.sfok = 0; /* (a Discover level without the way to the search is not made) */
+    pg.searchon = pg.sfok ? pcsearch_setting() : 0;
     for (i = 0; i < ST_N; ++i) {
         pg.st[i] = widget_lookup(pg.win, st_name[i], 1);
         ok &= pg.st[i] != (void *)0;
@@ -4486,7 +4907,6 @@ int podcasts_open(void) {
     if (pg.del) pod_centre_pill(pg.del, PL_BAR_PILL_W);
     if (pg.unsubp) pod_centre_pill(pg.unsubp, PL_BAR_PILL_W);
     pc_root(pg.root);
-    pg.searchon = pg.btn_globe ? pcsearch_setting() : 0;
     pg.mark[0] = pod_make_mark(pg.win, "unselect");
     pg.mark[1] = pod_make_mark(pg.win, "selected");
     if (!pg.mark[1] && pg.mark[0]) bitmap_destroy(pg.mark[0]), pg.mark[0] = (void *)0;

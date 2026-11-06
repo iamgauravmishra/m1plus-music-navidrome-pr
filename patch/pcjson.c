@@ -220,11 +220,11 @@ static int pj_nested_name(pj_t *p, char *dst, unsigned cap) {
     }
 }
 
-/* The object whose '{' is at p->s into r. dz 0: the store's (collectionId, collectionName, artistName, feedUrl, artworkUrl100); 1: Deezer's album (id, title, artist.name, cover_medium as art).
+/* The object whose '{' is at p->s into r. dz 0: the store's (collectionId, collectionName, artistName, feedUrl, artworkUrl100, artworkUrl600); 1: Deezer's album (id, title, artist.name, cover_medium as art).
  * 1 when its '}' was reached, 0 when the text ended (or it was not an object): then r is not an answer. */
 static int pj_obj(pj_t *p, pj_result_t *r, int dz) {
     r->id = 0;
-    r->name[0] = r->author[0] = r->feed[0] = r->art[0] = 0;
+    r->name[0] = r->author[0] = r->feed[0] = r->art[0] = r->art6[0] = 0;
     ++p->s;
     for (;;) {
         char key[24];
@@ -254,13 +254,18 @@ static int pj_obj(pj_t *p, pj_result_t *r, int dz) {
                     : pj_is("artistName", key)     ? 3
                     : pj_is("feedUrl", key)        ? 4
                     : pj_is("artworkUrl100", key)  ? 5
+                    : pj_is("artworkUrl600", key)  ? 6
                                                    : 0;
         if (which == 1 && *p->s >= '0' && *p->s <= '9')
             r->id = pj_num(p);
         else if (dz && which == 3 && *p->s == '{') {
             if (!pj_nested_name(p, r->author, PJ_AUTHOR)) return 0;
         } else if (which >= 2 && *p->s == '"' && !(dz && which == 3)) {
-            char *dst = which == 2 ? r->name : which == 3 ? r->author : which == 4 ? r->feed : r->art;
+            char *dst = which == 2   ? r->name
+                        : which == 3 ? r->author
+                        : which == 4 ? r->feed
+                        : which == 6 ? r->art6
+                                     : r->art;
             if (!pj_val(p, dst, which == 2 ? PJ_NAME : which == 3 ? PJ_AUTHOR : which == 4 ? PC_URL : PJ_ART, &cut))
                 return 0;
             if (cut && which >= 4) dst[0] = 0; /* a cut address is no address */
@@ -326,6 +331,256 @@ int pj_results(const char *json, unsigned n, pj_result_t *out, int max) {
 }
 
 int pj_deezer(const char *json, unsigned n, pj_result_t *out, int max) { return pj_top(json, n, out, max, "data", 1); }
+
+/* The digits of s, nothing else in it, 1 to 15 of them and not all zeros, into out (16 bytes); 1 when they are an Apple id. */
+static int pj_digits(const char *s, char *out) {
+    unsigned n = 0, nz = 0;
+    for (; *s >= '0' && *s <= '9'; ++s) {
+        if (n >= 15) return 0;
+        out[n++] = *s;
+        nz |= *s != '0';
+    }
+    out[n] = 0;
+    return n && nz && !*s;
+}
+
+/* The Apple id in a store address: the digits after its first "/id" that has a digit next (".../podcast/the-daily/id1200361736?i=1000..."), into out. 0 for none, for more than 15 digits, and for digits that ran to the end of a cut address. */
+static int pj_url_id(const char *u, int cut, char *out) {
+    for (; *u; ++u)
+        if (u[0] == '/' && u[1] == 'i' && u[2] == 'd' && u[3] >= '0' && u[3] <= '9') {
+            unsigned n = 0, nz = 0;
+            const char *d = u + 3;
+            for (; *d >= '0' && *d <= '9'; ++d) {
+                if (n >= 15) return 0;
+                out[n++] = *d;
+                nz |= *d != '0';
+            }
+            out[n] = 0;
+            return n && nz && !(cut && !*d);
+        }
+    return 0;
+}
+
+static void pj_idcopy(char *dst, const char *src) {
+    unsigned i = 0;
+    for (; src[i]; ++i) dst[i] = src[i];
+    dst[i] = 0;
+}
+
+/* An id member's value at p->s (a number or a string) into out (16 bytes): its digits, "" when it is none; 0 when the text is not well formed. */
+static int pj_idval(pj_t *p, char *out) {
+    int cut = 0;
+    if (*p->s >= '0' &&
+        *p->s <= '9') { /* a number: its digits as written (an episode's id is past 32 bits, which pj_num clamps) */
+        char t[24];
+        unsigned i = 0;
+        while (p->s < p->e && *p->s != ',' && *p->s != '}' && *p->s != ']' && *p->s != ' ' && *p->s != '\t' &&
+               *p->s != '\n' && *p->s != '\r') {
+            if (i < sizeof t - 1) t[i++] = (char)*p->s; /* (a longer one has over 15 digits: no id) */
+            ++p->s;
+        }
+        t[i] = 0;
+        if (!pj_digits(t, out)) out[0] = 0; /* (0 is no id) */
+        return 1;
+    }
+    {
+        char t[24];
+        if (!pj_val(p, t, sizeof t, &cut)) return 0;
+        if (cut || !pj_digits(t, out)) out[0] = 0;
+    }
+    return 1;
+}
+
+/* The chart object whose '{' is at p->s into r: id (a string of digits, or a number), name, artistName, artworkUrl100 and url. 1 when its '}' was reached, 0 when the text ended (or it was not well formed). */
+static int pj_cobj(pj_t *p, pj_chart_t *r, int episodes) {
+    char idv[16], urlid[16];
+    idv[0] = urlid[0] = 0;
+    r->name[0] = r->author[0] = r->art[0] = 0;
+    ++p->s;
+    for (;;) {
+        char key[16];
+        int which, cut = 0;
+        unsigned c;
+        pj_ws(p);
+        if (p->s >= p->e) return 0;
+        c = *p->s;
+        if (c == '}') {
+            ++p->s;
+            pj_idcopy(r->id, episodes ? urlid : idv);
+            pj_idcopy(r->eid, episodes ? idv : "");
+            return 1;
+        }
+        if (c == ',') {
+            ++p->s;
+            continue;
+        }
+        if (c != '"' || !pj_key(p, key, sizeof key)) return 0;
+        which = pj_is("id", key)              ? 1
+                : pj_is("name", key)          ? 2
+                : pj_is("artistName", key)    ? 3
+                : pj_is("artworkUrl100", key) ? 4
+                : pj_is("url", key)           ? 5
+                                              : 0;
+        if (which == 1 && (*p->s == '"' || (*p->s >= '0' && *p->s <= '9'))) {
+            if (!pj_idval(p, idv)) return 0;
+        } else if (which == 5 && *p->s == '"') {
+            char u[PC_URL];
+            if (!pj_val(p, u, sizeof u, &cut)) return 0;
+            if (!pj_url_id(u, cut, urlid)) urlid[0] = 0;
+        } else if (which >= 2 && which <= 4 && *p->s == '"') {
+            char *dst = which == 2 ? r->name : which == 3 ? r->author : r->art;
+            if (!pj_val(p, dst, which == 2 ? PJ_NAME : which == 3 ? PJ_AUTHOR : PJ_ART, &cut)) return 0;
+            if (cut && which == 4) dst[0] = 0; /* a cut address is no address */
+        } else if (!pj_skip(p))
+            return 0;
+    }
+}
+
+/* The elements of the "results" array whose '[' has been passed: the objects with a name into out, up to max. */
+static int pj_carray(pj_t *p, pj_chart_t *out, int max, int episodes) {
+    int n = 0;
+    for (;;) {
+        unsigned c;
+        pj_ws(p);
+        if (p->s >= p->e) return n;
+        c = *p->s;
+        if (c == ']') {
+            ++p->s;
+            return n;
+        }
+        if (c == ',') {
+            ++p->s;
+            continue;
+        }
+        if (n >= max) return n;
+        if (c == '{') {
+            if (!pj_cobj(p, &out[n], episodes)) return n; /* cut short: not kept */
+            if (out[n].name[0]) ++n;
+        } else if (!pj_skip(p))
+            return n;
+    }
+}
+
+int pj_chart(const char *json, unsigned n, int episodes, pj_chart_t *out, int max) {
+    pj_t p;
+    int in_feed = 0;
+    p.s = (const unsigned char *)json, p.e = p.s + n;
+    pj_ws(&p);
+    if (p.s >= p.e || *p.s != '{' || max <= 0) return -1;
+    ++p.s;
+    for (;;) {
+        char key[16];
+        unsigned c;
+        pj_ws(&p);
+        if (p.s >= p.e) return -1;
+        c = *p.s;
+        if (c == '}') return -1;
+        if (c == ',') {
+            ++p.s;
+            continue;
+        }
+        if (c != '"' || !pj_key(&p, key, sizeof key)) return -1;
+        if (!in_feed && *p.s == '{' && pj_is("feed", key)) { /* the members of the envelope are the object's own */
+            in_feed = 1;
+            ++p.s;
+            continue;
+        }
+        if (in_feed && *p.s == '[' && pj_is("results", key)) {
+            ++p.s;
+            return pj_carray(&p, out, max, episodes);
+        }
+        if (!pj_skip(&p)) return -1;
+    }
+}
+
+/* The episode record whose '{' is at p->s into r: trackId, episodeUrl, trackName and releaseDate. 1 when its '}' was reached, 0 when the text ended (or it was not well formed). */
+static int pj_eobj(pj_t *p, pj_ep_t *r) {
+    char idv[16];
+    idv[0] = r->id[0] = r->url[0] = r->name[0] = r->date[0] = 0;
+    ++p->s;
+    for (;;) {
+        char key[16];
+        int which, cut = 0;
+        unsigned c;
+        pj_ws(p);
+        if (p->s >= p->e) return 0;
+        c = *p->s;
+        if (c == '}') {
+            ++p->s;
+            pj_idcopy(r->id, idv);
+            return 1;
+        }
+        if (c == ',') {
+            ++p->s;
+            continue;
+        }
+        if (c != '"' || !pj_key(p, key, sizeof key)) return 0;
+        which = pj_is("trackId", key)       ? 1
+                : pj_is("episodeUrl", key)  ? 2
+                : pj_is("trackName", key)   ? 3
+                : pj_is("releaseDate", key) ? 4
+                                            : 0;
+        if (which == 1 && (*p->s == '"' || (*p->s >= '0' && *p->s <= '9'))) {
+            if (!pj_idval(p, idv)) return 0;
+        } else if (which >= 2 && *p->s == '"') {
+            char *dst = which == 2 ? r->url : which == 3 ? r->name : r->date;
+            if (!pj_val(p, dst, which == 2 ? PC_URL : which == 3 ? PJ_NAME : PJ_DATE, &cut)) return 0;
+            if (cut && which == 2) dst[0] = 0; /* a cut address is no address */
+        } else if (!pj_skip(p))
+            return 0;
+    }
+}
+
+/* The elements of the "results" array whose '[' has been passed: the episode records with a trackId into out, up to max. */
+static int pj_earray(pj_t *p, pj_ep_t *out, int max) {
+    int n = 0;
+    for (;;) {
+        unsigned c;
+        pj_ws(p);
+        if (p->s >= p->e) return n;
+        c = *p->s;
+        if (c == ']') {
+            ++p->s;
+            return n;
+        }
+        if (c == ',') {
+            ++p->s;
+            continue;
+        }
+        if (n >= max) return n;
+        if (c == '{') {
+            if (!pj_eobj(p, &out[n])) return n; /* cut short: not kept */
+            if (out[n].id[0]) ++n;
+        } else if (!pj_skip(p))
+            return n;
+    }
+}
+
+int pj_episodes(const char *json, unsigned n, pj_ep_t *out, int max) {
+    pj_t p;
+    p.s = (const unsigned char *)json, p.e = p.s + n;
+    pj_ws(&p);
+    if (p.s >= p.e || *p.s != '{' || max <= 0) return -1;
+    ++p.s;
+    for (;;) {
+        char key[16];
+        unsigned c;
+        pj_ws(&p);
+        if (p.s >= p.e) return -1;
+        c = *p.s;
+        if (c == '}') return -1;
+        if (c == ',') {
+            ++p.s;
+            continue;
+        }
+        if (c != '"' || !pj_key(&p, key, sizeof key)) return -1;
+        if (*p.s == '[' && pj_is("results", key)) {
+            ++p.s;
+            return pj_earray(&p, out, max);
+        }
+        if (!pj_skip(&p)) return -1;
+    }
+}
 
 /* One LRCLIB record at p->s ('{') into r (trackName, artistName, albumName, duration in whole seconds) and the texts s (syncedLyrics) and pl (plainLyrics), each at most cap, a null or a missing one is "";
  * a cut text ends at its last whole line. 1 when the '}' was reached. */

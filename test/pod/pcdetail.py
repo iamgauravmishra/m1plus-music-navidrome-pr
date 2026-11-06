@@ -395,7 +395,7 @@ def tap_show_row(m, off=0):
 
 
 def show_row_tests(ctx):
-    """The show row: a tap opens the show's own page (the list, at the offset it had; Back goes on to the Shows level); nothing in a search preview (see preview_tests)."""
+    """The show row: a tap opens the show's own page (the list, at the offset it had; Back goes on to the Shows level); in a search preview it goes back to that preview (see preview_tests)."""
     expect = ctx.expect
     m = shown_with_notes()
     open_ep(m, 5, off=800)
@@ -594,9 +594,14 @@ def preview_tests(ctx):
     L = pod_show.detail_layout(PCS.font(), p['titles'][0], 'WSJ Minute Briefing', note0, has_pill=False)
     expect(sorted((t[1], t[3]) for t in desc) == sorted(L['desc']) and m.props[(m.sv, 'virtual_h')] == L['h'], f'the description is the held feed\'s note for that item ({len(L["desc"])} lines) {sorted((t[1][:12], t[3]) for t in desc)[:2]} {sorted((t[:12], y) for t, y in L["desc"])[:2]} {m.props[(m.sv, "virtual_h")]} {L["h"]}')
     m.thread = None
-    PCP.tap(m, 30, 200); PCP.tap(m, O['PS_DOTS_CX'], 300); tap_show_row(m)
-    expect(not m.thread and m.props.get((m.widgets['pg_sh_card'], 'visible'), 0) == 0 and is_page(m) and not [b for b in PCP.paint(m, 0)[0] if tuple(b[1]) == (0, 0, 10, 16)],
-           'nothing on the page starts a download or a sheet; the show row has no chevron and a tap on it does nothing')
+    PCP.tap(m, 30, 200); PCP.tap(m, O['PS_DOTS_CX'], 300)
+    chev = [b for b in PCP.paint(m, 0)[0] if tuple(b[1]) == (0, 0, 10, 16)]
+    expect(not m.thread and m.props.get((m.widgets['pg_sh_card'], 'visible'), 0) == 0 and is_page(m) and len(chev) == 1 and tuple(chev[0][2])[0] == PD['PD_CHEV_X'],
+           'nothing on the page starts a download or a sheet; the show row has the list chevron')
+    tap_show_row(m)
+    expect(not is_page(m) and [t for (t, r), s in zip(*PCP.paint(m, 0)[1:3]) if s == 'label_ps_latest'], 'a tap on the show row: back to the preview\'s list with its Subscribe pill')
+    open_ep(m, 0)
+    expect(is_page(m), 'the episode page again')
     PCP.click(m, 'btn_return')
     expect(not is_page(m) and [t for (t, r), s in zip(*PCP.paint(m, 0)[1:3]) if s == 'label_ps_latest'], 'Back: the preview\'s list with its Subscribe pill')
     open_ep(m, 1)

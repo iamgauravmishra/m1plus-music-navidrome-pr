@@ -107,8 +107,7 @@ or change volume on its Now Playing screen.
 
 **Podcasts** reads local episodes from `Podcasts/<Show>/` on the card. Open a show, then an
 episode; its button offers Play or Download. Use an episode's **…** menu to mark it played
-or unplayed. To find shows online, enable **Settings → Library → Podcast Search**, connect
-to Wi-Fi, then use **Search** on the Podcasts page and **Subscribe** on a show's preview.
+or unplayed. To find shows online, connect to Wi-Fi, then use the **Discover** row on the Podcasts page (on unless **Settings → Library → Podcast Discover** is off): the top 25 shows and top 25 episodes of your region (**Settings → Library → Podcast Region**, Automatic by default), the magnifier to search (the Podcasts page's globe opens the same search directly), and **Subscribe** on a show's preview.
 
 **Search** opens the same library search as the Songs page's Search button. It is hidden from
 the main menu by default.

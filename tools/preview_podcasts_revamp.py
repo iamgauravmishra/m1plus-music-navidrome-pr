@@ -229,14 +229,14 @@ def bg_rgb(tone, y):
     return tuple(v * (255 - a) // 255 for v in tone)
 
 
-def capsule_pieces(globe, more):
-    """The glass pieces left of Now Playing (patch/podcasts.c pg_nav): the globe (the left cap), then the "..." (the middle piece beside the globe, else the left cap)."""
-    return (['pod_nav_globe'] if globe else []) + ([('pod_nav_moremid' if globe else 'pod_nav_more')] if more else [])
+def capsule_pieces(more):
+    """The glass piece left of Now Playing (patch/podcasts.c pg_nav): the "..." (the left cap), only while Import is possible."""
+    return ['pod_nav_more'] if more else []
 
 
 def capsule(s, win, kind='more'):
-    """The navbar's right end: '...' | Now Playing ('more'), Globe | Now Playing ('globe'), Globe | ... | Now Playing ('globe_more'), or the round Now Playing alone ('none')."""
-    names = capsule_pieces('globe' in kind, kind.endswith('more'))
+    """The navbar's right end: '...' | Now Playing ('more'), or the round Now Playing alone ('none')."""
+    names = capsule_pieces(kind.endswith('more'))
     for i, n in enumerate(names): PS.glass(s, win, n, O['NAV_VIEW_X'] - O['NAV_VIEW_W'] * (len(names) - 1 - i))
     PS.glass(s, win, 'ah_nav_play' if names else 'ah_nav_np', 260, 60)
 
@@ -495,7 +495,8 @@ def build_shows(s, shows, shelf_n, dl, refreshing):
             s.text(im, x, ty + o['PP_SHELF_TITLE_H'] / 2, PS.fit(s, t, 14, o['PP_SHELF_W']), 14, WHITE)
             s.text(im, x, ly + o['PP_SHELF_LEFT_H'] / 2, left, 13, GREY)
     n_subs = sum(1 for sh in shows if sh.key != 'local')
-    for y, name, sub, tile in ((L['y_dl'], 'Downloads', dl, IMGS[M.PC_DL_TILE]),
+    for y, name, sub, tile in ((L['y_srch'], 'Discover', 'Apple Podcasts', IMGS[M.PC_SRCH_TILE]),
+                               (L['y_dl'], 'Downloads', dl, IMGS[M.PC_DL_TILE]),
                                (L['y_sub'], 'Subscriptions', '%d shows' % n_subs, IMGS[M.PC_LIB_TILE])):
         if not y: continue
         _paste(im, tile, o['PP_DL_TILE_X'], y + o['PP_DL_TILE_Y'])
@@ -522,7 +523,7 @@ def shows_frame(s, shows, shelf_n=3, dl='12 episodes · 1.4 GB', scroll=0, refre
         for y in range(20): _paste(win, Image.new('RGBA', (W, 1), (0, 0, 0, M.nb_fade_alpha(y, 20))), 0, NAV + y)
     ImageDraw.Draw(win).rectangle((0, 0, W - 1, NAV - 1), fill=(0, 0, 0, 255))
     if scroll > O['SG_COLLAPSE']:
-        n = len(capsule_pieces('globe' in caps, caps.endswith('more')))
+        n = len(capsule_pieces(caps.endswith('more')))
         s.text(win, O['NAV_TITLE_X'], 25, PS.fit(s, 'Podcasts', PI.title_px(s.tree), O['NAV_VIEW_X'] - O['NAV_VIEW_W'] * (n - 1) - O['NAV_TITLE_X']), PI.title_px(s.tree))
     PS.glass(s, win, 'ah_nav_back', 7, 44); capsule(s, win, caps)
     fr = frame(s, win, None)
@@ -550,7 +551,7 @@ def search_page(s, shows, results, text='all in', hint=None, status=None):
         s.text(win, o['LIST_TEXT_X'], y + o['LIST_SUB_Y'] + o['LIST_SUB_H'] / 2, PS.fit(s, author if feed else 'Not available', 18, o['LIST_TEXT_W']), 18, GREY)
         hline(win, 0, W, y + o['PC_ROW_H'] - 1)
         if not feed: _paste(win, Image.new('RGBA', (W, o['PC_ROW_H'] - 1), (0, 0, 0, o['PQ_DIM'] >> 24)), 0, y)
-    if status: s.text(win, W // 2, NAV + o['PQ_TOP'] + o['PQ_HINT_Y'] + 45, status, 18, WHITE, 'm')
+    if status: s.text(win, W // 2, NAV + o['PQ_TOP'] + 8 + 45, status, 18, WHITE, 'm')
     ImageDraw.Draw(win).rectangle((0, 0, W - 1, NAV - 1), fill=(0, 0, 0, 255))
     PS.glass(s, win, 'ah_nav_back', 7, 44); PS.glass(s, win, 'ah_nav_np', 260, 60)
     return frame(s, win, None)
@@ -586,13 +587,10 @@ def search_sheet(s, shows, workdir, path):
     prev = Show(mini.key, mini.title, mini.cover, mini.author, mini.genre, mini.sub,
                 [ep(e['date'], e['title'], e['desc'], 'remote', '48 MB') for e in mini.eps], False)
     pg = PK2.Page(s)
-    lib = PSET.draw_page(s, 'm1plus_library', full=True, state={'switches': {'pod_switch3': False}}).convert('RGBA')
+    lib = PSET.draw_page(s, 'm1plus_library', full=True).convert('RGBA')
     lib = lib.crop((0, lib.height - (STAT + WIN), W, lib.height)) if lib.height > STAT + WIN else lib
     libf = Image.new('RGBA', (W, STAT + WIN), (0, 0, 0, 255)); PI.status_bar(s, libf, 0, bg=(0, 0, 0)); libf.alpha_composite(lib, (0, STAT + WIN - lib.height))
-    on = PSET.draw_page(s, 'm1plus_library', full=True, state={'switches': {'pod_switch4': True}}).convert('RGBA')
-    on = on.crop((0, on.height - (STAT + WIN), W, on.height)) if on.height > STAT + WIN else on
-    onf = Image.new('RGBA', (W, STAT + WIN), (0, 0, 0, 255)); PI.status_bar(s, onf, 0, bg=(0, 0, 0)); onf.alpha_composite(on, (0, STAT + WIN - on.height))
-    frames = [('Shows page, Import possible:\n... | Now Playing (the globe: podcasts-search2.png)', shows_frame(s, shows, shelf_n=0, caps='more')[0]),
+    frames = [('Shows page, Import possible:\n... | Now Playing', shows_frame(s, shows, shelf_n=0, caps='more')[0]),
               ('... nothing to import: the plain Now Playing disc', shows_frame(s, shows, shelf_n=0, caps='none')[0]),
               ('Search: the field opens our keyboard page', PK2.screen(s, pg, 'all in', 'abc', held='n', hint='Search')),
               ('Results: the show, its author in grey,\none with no feed: Not available, dimmed', search_page(s, shows, res[:6])),
@@ -603,8 +601,7 @@ def search_sheet(s, shows, workdir, path):
               ('After Subscribe: the real Show page in place\n(pills, "...", sheets; Back = the results)', show_frame(s, prev, 0)[0]),
               ('A result that is a show already: its real page\n(cells with pills, "..."), no Subscribed', show_frame(s, mini, 0)[0]),
               ('The search field, with and without the clear\nbutton, the magnifier unmoved; clear button zoomed', field_panel(s, shows)),
-              ('Settings > Library > Podcasts: Podcast Search off', libf),
-              ('... on', onf)]
+              ('Settings > Library > Podcasts: Podcast Region', libf)]
     assemble(frames, 4, path)
 
 
@@ -668,12 +665,11 @@ def detail_sheet(s, shows, path):
     assemble(frames, 3, path)
 
 
-def nav_strip(s, globe, more):
-    """The Shows page's navbar in one capsule state (patch/podcasts.c pg_nav): Back, the small title cut to the room left of the first piece, the globe (the left cap; Apple Podcasts, only with
-    Podcast Search on) and the "..." (Import possible) as middle pieces, 46 px apart right-aligned to Now Playing; a 320 x 50 strip."""
+def nav_strip(s, more):
+    """The Shows page's navbar in one capsule state (patch/podcasts.c pg_nav): Back, the small title cut to the room left of the "..." (Import possible), right-aligned to Now Playing; a 320 x 50 strip."""
     o = O
     win = Image.new('RGBA', (W, NAV), (0, 0, 0, 255))
-    names = capsule_pieces(globe, more)
+    names = capsule_pieces(more)
     x0 = o['NAV_VIEW_X'] - o['NAV_VIEW_W'] * (len(names) - 1)
     for i, n in enumerate(names): PS.glass(s, win, n, x0 + i * o['NAV_VIEW_W'])
     PS.glass(s, win, 'ah_nav_back', 7, 44); PS.glass(s, win, 'ah_nav_play' if names else 'ah_nav_np', 260, 60)
@@ -683,22 +679,21 @@ def nav_strip(s, globe, more):
 
 
 def capsule_panel(s):
-    """The four capsule states, one under the other, each with the small title as it is cut."""
-    out = Image.new('RGBA', (W, STAT + 4 * (NAV + 22)), (0, 0, 0, 255))
+    """The two capsule states, one under the other, each with the small title as it is cut."""
+    out = Image.new('RGBA', (W, STAT + 2 * (NAV + 22)), (0, 0, 0, 255))
     PI.status_bar(s, out, 0, bg=(0, 0, 0))
     d = ImageDraw.Draw(out)
-    for i, (g, m, cap) in enumerate(((False, False, 'Now Playing disc'), (True, False, 'globe | Now Playing'), (False, True, '... | Now Playing'),
-                                     (True, True, 'globe | ... | Now Playing'))):
+    for i, (m, cap) in enumerate(((False, 'Now Playing disc'), (True, '... | Now Playing'))):
         y = STAT + i * (NAV + 22)
         d.text((8, y + 4), cap, fill=(0xAA,) * 3, font=PI.ANN)
-        out.alpha_composite(nav_strip(s, g, m), (0, y + 22))
+        out.alpha_composite(nav_strip(s, m), (0, y + 22))
     return out
 
 
 def search2_sheet(s, shows, path):
-    """podcasts-search2.png: the four capsule states with the small title as it is cut; a grid with local and subscribed captions (the "Local" marker)."""
-    frames = [("The Shows page's capsule in its four states\n(the small title is cut to the room left of it)", capsule_panel(s)),
-              ('Shows grid: a show that is only on the card\nsays Local (the count where it fits)', shows_frame(s, shows, shelf_n=0, scroll=330, end=True, caps='globe_more')[0])]
+    """podcasts-search2.png: the two capsule states with the small title as it is cut; a grid with local and subscribed captions (the "Local" marker)."""
+    frames = [("The Shows page's capsule in its two states\n(the small title is cut to the room left of it)", capsule_panel(s)),
+              ('Shows grid: a show that is only on the card\nsays Local (the count where it fits)', shows_frame(s, shows, shelf_n=0, scroll=330, end=True, caps='more')[0])]
     assemble(frames, 2, path)
     assemble(frames, 3, path)
 

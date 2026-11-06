@@ -406,9 +406,18 @@ TEXT = dict([
        'Una', 'Uno', 'เพลงเดียว', 'Jeden', 'Один', 'Один'),
     _t('All', '全部', '全部', 'すべて', '전체', 'Tous', 'Alle',
        'Todo', 'Tutti', 'ทั้งหมด', 'Wszystkie', 'Все', 'Усі'),
-    # Podcast search (patch/podcasts.c, docs/modules/podcasts.md "Search"): the Settings row and its note, the search page's states, the preview's Subscribe pill
-    _t('Podcast Search', '播客搜索', '播客搜尋', 'ポッドキャスト検索', '팟캐스트 검색', 'Recherche', 'Podcast-Suche',
-       'Buscar pódcast', 'Cerca podcast', 'ค้นหาพอดแคสต์', 'Szukaj podcastów', 'Поиск подкастов', 'Пошук подкастів'),
+    # Podcast search and Discover (patch/podcasts.c, docs/modules/podcasts.md "Search", "Discover", "Region"): the Settings row (Podcast Region, its Automatic choice) and its note, the search page's states, the preview's Subscribe pill,
+    # the Discover line under the title (the storefront's name stays English in every language: no localised table of country names exists)
+    _t('Podcast Discover', '播客发现', '播客探索', 'ポッドキャスト探索', '팟캐스트 탐색', 'Découvrir', 'Entdecken',
+       'Descubrir', 'Scopri', 'ค้นพบพอดแคสต์', 'Odkrywaj', 'Обзор', 'Огляд'),   # (the switch: Discover and the search level; the short word under the Podcasts header, as Podcast Region)
+    _t('Podcast Region', '播客地区', '播客地區', '地域', '지역', 'Région', 'Region',
+       'Región', 'Regione', 'ภูมิภาค', 'Region', 'Регион', 'Регіон'),   # (the row has no glyph and its value needs the room: the short word under the Podcasts header)
+    _t('Automatic', '自动', '自動', '自動', '자동', 'Automatique', 'Automatisch',
+       'Automática', 'Automatica', 'อัตโนมัติ', 'Automatycznie', 'Автоматически', 'Автоматично'),
+    _t('Top 25 Shows in %s', '%s 热门节目前 25', '%s 熱門節目前 25', '%sの人気番組トップ25', '%s 인기 프로그램 TOP 25', 'Top 25 des émissions : %s', 'Top 25 Sendungen in %s',
+       'Top 25 programas en %s', 'Top 25 programmi in %s', 'รายการยอดนิยม 25 อันดับใน %s', 'Top 25 programów: %s', 'Топ-25 шоу: %s', 'Топ-25 шоу: %s'),
+    _t('Top 25 Episodes in %s', '%s 热门单集前 25', '%s 熱門單集前 25', '%sの人気エピソードトップ25', '%s 인기 에피소드 TOP 25', 'Top 25 des épisodes : %s', 'Top 25 Folgen in %s',
+       'Top 25 episodios en %s', 'Top 25 episodi in %s', 'ตอนยอดนิยม 25 อันดับใน %s', 'Top 25 odcinków: %s', 'Топ-25 выпусков: %s', 'Топ-25 випусків: %s'),
     _t('Search words are sent to Apple.', '搜索词会发送给 Apple。', '搜尋詞會傳送給 Apple。', '検索語は Apple に送信されます。', '검색어는 Apple로 전송됩니다.', 'Les mots recherchés sont envoyés à Apple.',
        'Suchbegriffe werden an Apple gesendet.', 'Los términos se envían a Apple.', 'Le parole cercate vanno ad Apple.', 'คำค้นหาจะถูกส่งไปยัง Apple', 'Szukane słowa trafiają do Apple.',
        'Слова запроса отправляются в Apple.', 'Слова запиту надсилаються до Apple.'),
@@ -658,6 +667,8 @@ TEXT = dict([
     _t('Search', '搜索', '搜尋', '検索', '검색', 'Chercher', 'Suchen',
        'Buscar', 'Cerca', 'ค้นหา', 'Szukaj', 'Поиск', 'Пошук'),
     _t('Apple Podcasts', *['Apple Podcasts'] * 12),
+    _t('Discover', '发现', '探索', '見つける', '탐색', 'Découvrir', 'Entdecken',
+       'Descubrir', 'Scopri', 'ค้นพบ', 'Odkrywaj', 'Обзор', 'Огляд'),   # the Podcasts page's row that opens the Discover charts, and the level's title
     _t('Search Apple Podcasts', '搜索 Apple Podcasts', '搜尋 Apple Podcasts', 'Apple Podcasts を検索', 'Apple Podcasts 검색', 'Chercher sur Apple Podcasts', 'Apple Podcasts durchsuchen',
        'Buscar en Apple Podcasts', 'Cerca su Apple Podcasts', 'ค้นหา Apple Podcasts', 'Szukaj w Apple Podcasts', 'Поиск в Apple Podcasts', 'Пошук в Apple Podcasts'),
     _t('Done', '完成', '完成', '完了', '완료', 'OK', 'Fertig',
@@ -1037,7 +1048,7 @@ def english(key):
 
 
 import pod_pages
-BRANDS = ('M1+ Music', 'Tidal', 'Pod') + pod_pages.GUARD_FILES + (pod_pages.FOLDER_LABEL,) + pod_pages.SETTING_FILES   # shown as they are, no key (the Settings Files labels are file names)
+BRANDS = ('M1+ Music', 'Tidal', 'Pod') + pod_pages.GUARD_FILES + (pod_pages.FOLDER_LABEL,) + pod_pages.SETTING_FILES + pod_pages.pcregion.NAMES   # shown as they are, no key (the Settings Files labels are file names)
 
 
 def key_for(english):

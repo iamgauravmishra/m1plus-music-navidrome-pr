@@ -67,5 +67,10 @@ unsigned pf_render_show(const char *title, const char *feed, const char *image, 
 void pf_folder_name(char *out, unsigned size, const char *title);
 /* The date of an RFC 822 / 2822 pubDate ("Thu, 30 Oct 2026 11:00:00 GMT", "30 Oct 2026 07:00 -0400", zones UT GMT Z EST EDT CST CDT MST MDT PST PDT or +hhmm), seconds since 1970; 0 when it is not one. */
 unsigned pf_rfc822(const char *s);
+/* The date of an ISO 8601 releaseDate of the store ("2026-11-04T13:17:00Z", the zone Z or none), seconds since 1970; 0 when it is not one. */
+unsigned pf_iso(const char *s);
+/* The kept item of p (0 <= i < pf_items) that is an episode of the store's record: the first whose enclosure url is url (url "" = none), else the first whose pubDate is in the minute of pub
+ * (seconds since 1970, 0 = none), else the first whose title is the same as title with its leading "586. " dropped and its case and runs of spaces ignored. -1 when none. */
+int pf_match(const pf_parser_t *p, const char *url, unsigned pub, const char *title);
 /* "1234", "12:34" or "1:02:03" as seconds (a fraction is dropped); 0 when it is none of those. */
 unsigned pf_duration(const char *s);

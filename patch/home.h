@@ -81,7 +81,7 @@
     "/mnt/data/m1plus/keyboard-pinyin" /* the on-screen keyboard's Chinese (Pinyin) layer: "1" = on, anything else or missing = off (Settings > Keyboards; patch/keyboard.c) */
 #define KBZH_TMP "/mnt/data/m1plus/keyboard-pinyin.tmp"
 #define PCSEARCH_FILE \
-    "/mnt/data/m1plus/podcast-online-search" /* Podcast Search: "1" = on, anything else or missing = off (Settings > Library > Podcasts; patch/podcasts.c) */
+    "/mnt/data/m1plus/podcast-online-search" /* Podcast Discover: "0" = off, anything else or missing = on (Settings > Library > Podcasts; patch/podcasts.c) */
 #define PCSEARCH_TMP "/mnt/data/m1plus/podcast-online-search.tmp"
 #define MIX_DIR \
     CARD_DIR \
@@ -216,7 +216,7 @@ extern int
 kb_zh_setting(void); /* patch/keyboard.c: Settings > Keyboards > Chinese (Pinyin): 1 on, 0 off (the default) */
 extern int kb_zh_toggle(void); /* flip it, saved atomically; the new state, or -1 when it could not be saved */
 extern int pcsearch_setting(
-    void); /* patch/podcasts.c: Settings > Library > Podcasts > Podcast Search: 1 on, 0 off (the default) */
+    void); /* patch/podcasts.c: Settings > Library > Podcasts > Podcast Discover: 1 on (the default), 0 off */
 extern int pcsearch_toggle(void); /* flip it, saved atomically; the new state, or -1 when it could not be saved */
 extern int
 battpct_setting(void); /* patch/battery.c: Settings > Home Screen > Battery Percentage: 1 on, 0 off (the default) */

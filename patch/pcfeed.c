@@ -236,6 +236,70 @@ unsigned pf_rfc822(const char *s) {
     return t > 0 ? (unsigned)t : 0;
 }
 
+unsigned pf_iso(const char *s) {
+    int y = 0, mo = 0, d = 0, hh = 0, mm = 0, ss = 0;
+    const char *p = s;
+    if (pf_digits(&p, 4, &y) != 4 || *p++ != '-') return 0;
+    if (pf_digits(&p, 2, &mo) != 2 || *p++ != '-') return 0;
+    if (pf_digits(&p, 2, &d) != 2 || (*p != 'T' && *p != ' ')) return 0;
+    ++p;
+    if (pf_digits(&p, 2, &hh) != 2 || *p++ != ':') return 0;
+    if (pf_digits(&p, 2, &mm) != 2) return 0;
+    if (*p == ':') {
+        ++p;
+        if (pf_digits(&p, 2, &ss) != 2) return 0;
+    }
+    if (*p == 'Z') ++p;
+    if (*p || y < 1970 || mo < 1 || mo > 12 || d < 1 || d > 31 || hh > 23 || mm > 59 || ss > 60) return 0;
+    return (unsigned)((long)pf_civil_days(y, mo, d) * 86400 + hh * 3600 + mm * 60 + ss);
+}
+
+static int pf_key_eq(const char *a, const char *b) {
+    while (*a && *a == *b) ++a, ++b;
+    return *a == *b;
+}
+
+/* A title for comparison into out (cap bytes): ASCII lower case, a leading "586. " dropped, runs of spaces one, no space at either end. */
+static void pf_key_title(const char *s, char *out, unsigned cap) {
+    const char *p = s;
+    unsigned n = 0;
+    while (*p == ' ') ++p;
+    if (*p >= '0' && *p <= '9') {
+        const char *q = p;
+        while (*q >= '0' && *q <= '9') ++q;
+        if (*q == '.' && q[1] == ' ') {
+            p = q + 1;
+            while (*p == ' ') ++p;
+        }
+    }
+    for (; *p && n + 1 < cap; ++p) {
+        if (*p == ' ') {
+            if (n && out[n - 1] != ' ') out[n++] = ' ';
+        } else
+            out[n++] = (char)pf_lc((unsigned char)*p);
+    }
+    if (n && out[n - 1] == ' ') --n;
+    out[n] = 0;
+}
+
+int pf_match(const pf_parser_t *p, const char *url, unsigned pub, const char *title) {
+    int i, n = pf_items(p);
+    char a[PC_TITLE], b[PC_TITLE];
+    if (url[0])
+        for (i = 0; i < n; ++i)
+            if (pf_key_eq(pf_item(p, i)->url, url)) return i;
+    if (pub)
+        for (i = 0; i < n; ++i)
+            if (pf_item(p, i)->pub && pf_item(p, i)->pub / 60 == pub / 60) return i;
+    pf_key_title(title, a, sizeof a);
+    if (a[0])
+        for (i = 0; i < n; ++i) {
+            pf_key_title(pf_item(p, i)->title, b, sizeof b);
+            if (pf_key_eq(a, b)) return i;
+        }
+    return -1;
+}
+
 unsigned pf_duration(const char *s) {
     unsigned parts[3] = {0, 0, 0}, n = 0, v = 0;
     int any = 0;

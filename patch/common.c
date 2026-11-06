@@ -400,3 +400,81 @@ void *pod_make_chevron(void) {
     bitmap_unlock_buffer(b);
     return b;
 }
+
+/* One row of a shape: x .. x + w - 1 of row y of the canvas, in colour c, only when the row is inside the view (rows 0 .. view_h - 1). */
+static void pod_fill_row(void *canvas, int view_h, int x, int y, int w, unsigned c) {
+    if (w <= 0 || y < 0 || y >= view_h) return;
+    ui_fill_color(canvas, c);
+    canvas_fill_rect(canvas, x, y, w, 1);
+}
+
+/* The integer square root of v (the largest s with s * s <= v). */
+static unsigned pod_isqrt(unsigned v) {
+    unsigned s = 0, bit = 1u << 30;
+    while (bit > v) bit >>= 2;
+    for (; bit; bit >>= 2)
+        if (v >= s + bit)
+            v -= s + bit, s = (s >> 1) + bit;
+        else
+            s >>= 1;
+    return s;
+}
+
+void pod_capsule(void *canvas, int view_h, int x, int y, int w, int h, int r, unsigned c) {
+    int i, top, bottom;
+    unsigned a;
+    if (r > h / 2) r = h / 2;
+    if (r > w / 2) r = w / 2;
+    if (r < 0) r = 0;
+    /* the corner rows, from the outside in: the circle's chord on the row's middle, its ends smoothed by a pixel of partial cover */
+    for (i = 0; i < r; ++i) {
+        int dy = 2 * (r - i) - 1, inset, x0, f;
+        inset = r * 256 - (int)(pod_isqrt((unsigned)(4 * r * r - dy * dy) << 16) / 2); /* in 1/256 px */
+        x0 = inset >> 8, f = inset & 255;
+        a = (unsigned)(255 - f);
+        top = y + i, bottom = y + h - 1 - i;
+        if (f) {
+            unsigned edge = (c & 0x00ffffffu) | (((c >> 24) * a / 255) << 24);
+            pod_fill_row(canvas, view_h, x + x0, top, 1, edge);
+            pod_fill_row(canvas, view_h, x + w - 1 - x0, top, 1, edge);
+            pod_fill_row(canvas, view_h, x + x0, bottom, 1, edge);
+            pod_fill_row(canvas, view_h, x + w - 1 - x0, bottom, 1, edge);
+            ++x0;
+        }
+        pod_fill_row(canvas, view_h, x + x0, top, w - 2 * x0, c);
+        pod_fill_row(canvas, view_h, x + x0, bottom, w - 2 * x0, c);
+    }
+    top = y + r, bottom = y + h - r;
+    if (top < 0) top = 0;
+    if (bottom > view_h) bottom = view_h;
+    if (bottom > top) {
+        ui_fill_color(canvas, c);
+        canvas_fill_rect(canvas, x, top, w, bottom - top);
+    }
+}
+
+void pod_segmented(void *canvas, int view_h, int x, int y, int w, int h, int n, int sel, void *st_on, void *st_off,
+                   const unsigned *const *label, const int *len) {
+    int seg = (w - 2 * SEG_PAD) / n, k, rect[4];
+    if (n < 1) return;
+    pod_capsule(canvas, view_h, x, y, w, h, h / 2, SEG_TRACK);
+    pod_capsule(canvas, view_h, x + SEG_PAD + sel * seg, y + SEG_PAD, sel == n - 1 ? w - 2 * SEG_PAD - sel * seg : seg,
+                h - 2 * SEG_PAD, (h - 2 * SEG_PAD) / 2, SEG_THUMB);
+    /* a short hairline between two segments that are both unselected (none next to the thumb) */
+    for (k = 1; k < n; ++k)
+        if (k - 1 != sel && k != sel && y + h / 4 >= 0 && y + h - h / 4 <= view_h) {
+            ui_fill_color(canvas, SEG_SEP);
+            canvas_fill_rect(canvas, x + SEG_PAD + k * seg, y + h / 4, 1, h / 2);
+        }
+    /* the labels, each centred in its segment: the selected one on the thumb in the dark ink */
+    for (k = 0; k < n; ++k) {
+        void *st = k == sel ? st_on : st_off;
+        int tw;
+        widget_prepare_text_style(st, canvas);
+        tw = (int)(widget_measure_text(st, label[k]) + 0.999f);
+        rect[0] = x + SEG_PAD + k * seg + (seg - tw) / 2, rect[1] = y + (h - SEG_LABEL_H) / 2, rect[2] = tw + 2,
+        rect[3] = SEG_LABEL_H;
+        if (len[k] > 0 && rect[1] >= 0 && rect[1] + SEG_LABEL_H <= view_h)
+            canvas_draw_text_in_rect(canvas, label[k], (unsigned)len[k], rect);
+    }
+}
