@@ -256,7 +256,7 @@ def base_tests(ctx):
     expect(said(m, 'kb_mode') == 'ABC' and said(m, 'kb_sym') == '#+=' and shown(m, 'kb_sym') == (1, 1) and shown(m, 'kb_shift') == (0, 0) and shown(m, 'kb_shifton') == (0, 0), '123 shows ABC at the bottom left and #+= where shift was')
     expect([geo(m, f'kb_k{i}')[2] for i in (20, 24)] == [41, 41] and geo(m, 'kb_k20')[0] == 52 and geo(m, 'kb_del')[0] == 279, 'the third row of the 123 page: five 41 px keys between #+= and delete')
     press(m, 'kb_sym')
-    expect(keys(m)[:10] == list('[]{}#%^*+=') and keys(m)[10:20] == list('_\\|~<>€£¥•') and said(m, 'kb_sym') == '123', 'the #+= page: [ ] { } # % ^ * + =, _ \\ | ~ < > € £ ¥ •, with 123 where #+= was')
+    expect(keys(m)[:10] == list('[]{}#%^*+=') and keys(m)[10:20] == list('_\\|~<>€£¥`') and said(m, 'kb_sym') == '123', 'the #+= page: [ ] { } # % ^ * + =, _ \\ | ~ < > € £ ¥ ` (the backtick took the bullet\'s place: every printable ASCII character is typeable), with 123 where #+= was')
     expect(all(c == ' ' or FONT.glyph(c) != 0 for c in PK.LABELS if len(c) == 1), 'the shipped font has a glyph for every key label')
 
     # 4. Typing, shift, 123
@@ -1193,7 +1193,181 @@ def name_tests(ctx):
         expect(width(t, 15) <= PK.KB_MODE_W - 8, f'Done fits the action key in {loc} ({t}: {width(t, 15)} px)')
 
 
-SECTIONS = [base_tests, name_tests,gap_tests, asset_tests, setting_tests, zh_tests, zh_search_tests, zh_limit_tests, strip_tests, hit_tests, lang_gap_tests]   # tools/check.py runs each as its own task
+def attach(m, flags=0, ph=None, tx=0, tw=130, cy=15):
+    """keyboard_attach(win, placeholder, text_x, text_w, caret_y, flags, on_change, on_go): on_change records ('atoi', text), on_go ('on_backtoplayer_onclick',)."""
+    m.setword(STACK + 16, cy); m.setword(STACK + 20, flags); m.setword(STACK + 24, DONE()); m.setword(STACK + 28, CANCEL)
+    r = m.call(PSYMS['keyboard_attach'], a0=m.window, a1=m.cstr(ph) if ph else 0, a2=tx, a3=tw, count=40000000)
+    return r - (1 << 32) if r >= 1 << 31 else r
+
+
+def raw_text(m):
+    """keyboard_text(): the committed text as the payload holds it (UTF-8)."""
+    return m.read_cstr(m.call(PSYMS['keyboard_text'], count=100000)).encode('latin-1').decode('utf-8')
+
+
+def password_tests(ctx):
+    """KB_PASSWORD (keyboard_attach flags): English only, a lowercase page, spaces anywhere, the text as typed, dots with an eye, the action key's label and its dimmed state."""
+    expect = ctx.expect
+    PW = DEFS['KB_PASSWORD']
+    # 1. Chinese on and the dictionary there: a password field has no language key and no composition, a plain one has both
+    m = zh_machine()
+    expect(attach(m) == 0 and shown(m, 'kb_lang') == (1, 1), 'the same machine without the flag: the language key (the setting is on)')
+    m = zh_machine()
+    expect(attach(m, PW, tw=130) == 0 and shown(m, 'kb_lang') == (0, 0) and geo(m, 'kb_space')[0] == 79 and geo(m, 'kb_space')[2] == 163 and not [c for c in m.calls if c[0] in ('im_open_decoder', 'access')],
+           'KB_PASSWORD with Chinese on: no language key, space is as wide as with one keyboard, the dictionary is never looked at')
+    typ(m, 'nihao')
+    expect(raw_text(m) == 'nihao' and not strip_on(m) and m.word(PY.ENGINE_PTR) == 0 and not [c for c in m.calls if c[0] in ('im_search', 'im_open_decoder')], 'letters are typed as they are: no pinyin, no candidate strip, no engine')
+    # a remembered Chinese layer does not carry over either
+    m = zh_machine(); m.setword(PSYMS['kb_memo'], 1)
+    expect(attach(m, PW) == 0 and shown(m, 'kb_lang') == (0, 0) and keys(m)[0] == 'q', 'a remembered Chinese layer does not make a password field Chinese')
+    # 2. Lowercase start, no capital after the field was emptied, spaces anywhere, backtick
+    m = keyboard_machine(); m.fs[KBZH] = b'1\n'
+    attach(m, PW)
+    expect(keys(m)[0] == 'q' and shown(m, 'kb_shift') == (1, 1) and shown(m, 'kb_shifton') == (0, 0) and said(m, 'kb_mode') == '123', 'the pad starts on the lowercase page (an empty search field starts on capitals)')
+    typ(m, 'a'); press(m, 'kb_del')
+    expect(raw_text(m) == '' and keys(m)[0] == 'q' and shown(m, 'kb_shifton') == (0, 0), 'emptying the field does not turn capitals on')
+    press(m, 'kb_space'); press(m, 'kb_space'); typ(m, 'a'); press(m, 'kb_space'); press(m, 'kb_space')
+    expect(raw_text(m) == '  a  ', f'spaces are typed at the start, doubled and at the end, and the text is returned untrimmed ({raw_text(m)!r})')
+    press(m, 'kb_shift'); typ(m, 'B')
+    expect(raw_text(m) == '  a  B' and keys(m)[0] == 'q', 'shift still works for one capital, then back to lowercase')
+    press(m, 'kb_mode'); press(m, 'kb_sym')
+    expect('`' in keys(m) and keys(m).index('`') == 19, 'the backtick is on the #+= page, last key of the second row')
+    typ(m, '`')
+    expect(raw_text(m).endswith('B`'), 'and types')
+    press(m, 'kb_mode')
+    expect(keys(m)[0] == 'q', 'ABC from a symbol page returns to lowercase')
+    m2 = keyboard_machine(); attach(m2, PW); press(m2, 'kb_mode'); press(m2, 'kb_mode')
+    expect(keys(m2)[0] == 'q', 'and for an empty field too')
+    # a search field is as before: no leading space, no double space
+    m3 = keyboard_machine(); attach(m3)
+    press(m3, 'kb_space'); typ(m3, 'A'); press(m3, 'kb_space'); press(m3, 'kb_space')
+    expect(raw_text(m3) == 'A ', 'a field without the flag: no space at the start, none after a space')
+    # 3. The text is dots; the eye shows it; the caret follows what is shown
+    m = keyboard_machine(); attach(m, PW, tw=130)
+    expect(said(m, 'kb_text') in (None, '') and shown(m, 'kb_hint')[0] == 1 and shown(m, 'kb_clear') == (0, 0), 'empty: no text; there is no clear button in a password field')
+    typ(m, 'ab')
+    dot = '•'
+    expect(said(m, 'kb_text') == dot * 2 and caret_x(m) == width(dot * 2) + 1 and geo(m, 'kb_caret')[1] == 15 and shown(m, 'kb_clear') == (0, 0), f'two characters: two dots, the caret after them by their measured width ({said(m, "kb_text")!r}, {caret_x(m)})')
+    expect(FONT.glyph(dot) != 0, 'the shipped font has the dot')
+    press(m, 'kb_space')
+    expect(said(m, 'kb_text') == dot * 3, 'a space is a dot too')
+    m.call(PSYMS['keyboard_set_mask'], a0=0, count=2000000)
+    expect(said(m, 'kb_text') == 'ab ' and caret_x(m) == width('ab ') + 1 and raw_text(m) == 'ab ', 'the eye open: the text, the caret on its width')
+    typ(m, 'c')
+    expect(said(m, 'kb_text') == 'ab c' and caret_x(m) == width('ab c') + 1, 'typing while it is shown')
+    m.call(PSYMS['keyboard_set_mask'], a0=1, count=2000000)
+    expect(said(m, 'kb_text') == dot * 4 and caret_x(m) == width(dot * 4) + 1, 'and hidden again')
+    typ(m, 'defghijklmnopqrstuvwxyz')
+    t = said(m, 'kb_text')
+    expect(t.startswith('…') and set(t[1:]) == {dot} and width(t) <= 130 and caret_x(m) == width(t) + 1 and raw_text(m) == 'ab cdefghijklmnopqrstuvwxyz', f'a long password: dots cut with an ellipsis to the field ({width(t)} px, {len(t)} chars), the caret at its end, the text whole')
+    m.call(PSYMS['keyboard_set_mask'], a0=0, count=2000000)
+    t = said(m, 'kb_text')
+    expect(t.startswith('…') and width(t) <= 130 and t.endswith('xyz') and caret_x(m) == width(t) + 1, f'shown, the end of the text after an ellipsis ({t!r})')
+    for _ in range(40): press(m, 'kb_del')
+    expect(raw_text(m) == '' and said(m, 'kb_text') in (None, '') and caret_x(m) == 0, 'delete empties it, the caret goes back to the text start')
+    typ(m, 'x')
+    expect(said(m, 'kb_text') == 'x', 'with the eye open: the text is shown as typed')
+    # 4. The text limit of a password field is KB_PASS_MAX (127: a WPA3 password; a 64 digit raw PSK needs more than 63); a plain field keeps 63
+    m = keyboard_machine(); attach(m, PW)
+    for _ in range(140): typ(m, 'a')
+    expect(DEFS['KB_PASS_MAX'] == 127 and len(raw_text(m)) == 127, f'a password field takes 127 characters and not one more ({len(raw_text(m))})')
+    t = said(m, 'kb_text')
+    expect(t.startswith('…') and set(t[1:]) == {'•'} and width(t) <= 130 and caret_x(m) == width(t) + 1, 'and shows dots for them, cut to the field')
+    m.call(PSYMS['keyboard_set_mask'], a0=0, count=2000000)
+    expect(said(m, 'kb_text').endswith('aaa') and len(raw_text(m)) == 127, 'with the eye open too')
+    m = keyboard_machine(); attach(m, 0)
+    typ(m, 'A')
+    for _ in range(70): typ(m, 'a')
+    expect(len(raw_text(m)) == 63, 'a plain embedded field keeps 63 bytes')
+    # 5. The action key: its label, dimmed and inert, enabled
+    m = keyboard_machine(); attach(m, PW)
+    m.calls = []
+    m.call(PSYMS['keyboard_set_go'], a0=m.cstr('Join'), a1=0, count=2000000)
+    expect(('widget_set_tr_text', m.widgets['kb_go'], 'Join') in m.calls and shown(m, 'kb_go')[1] == 0 and ('widget_set_state', m.widgets['kb_go'], 'disable') in m.calls, 'Join, dimmed (the disable style) and insensitive')
+    typ(m, 'password')
+    press(m, 'kb_go')
+    expect(not [c for c in m.calls if c[0] == 'on_backtoplayer_onclick'], 'a dimmed key does nothing: on_go does not fire')
+    gx, gy, gw, gh = geo(m, 'kb_go')
+    ptr(m, 'kb_pad', 'down', gx + gw // 2, WIN_Y + PAD_Y + gy - 4, 3000)
+    seen = list(m.calls)
+    ptr(m, 'kb_pad', 'up', gx + gw // 2, WIN_Y + PAD_Y + gy - 4, 3080)
+    seen += m.calls
+    expect(any(c[0] == 'widget_set_state' for c in seen) is False and not [c for c in seen if c[0] == 'on_backtoplayer_onclick'], 'a touch between the keys that the gap rule gives the dimmed key: no pressed look, nothing')
+    m.calls = []
+    m.call(PSYMS['keyboard_set_go'], a0=0, a1=1, count=2000000)
+    expect(('widget_set_state', m.widgets['kb_go'], 'normal') in m.calls and shown(m, 'kb_go')[1] == 1 and not [c for c in m.calls if c[0] == 'widget_set_tr_text'], 'enabled again, the label as it was set (NULL keeps it)')
+    press(m, 'kb_go')
+    expect([c for c in m.calls if c[0] == 'on_backtoplayer_onclick'] == [('on_backtoplayer_onclick',)] and ('navigator_back',) not in m.calls, 'enabled: on_go fires once, no page is closed')
+    m.call(PSYMS['keyboard_detach'], count=2000000)
+    expect(b'password' not in bytes(m.u.mem_read(PSYMS['kb'], 0x1400)), 'keyboard_detach wipes the typed text from the keyboard\'s state')
+
+
+def refocus(m, ph, tw, flags, text):
+    """keyboard_refocus(placeholder, text_w, flags, text, on_change, on_go): another field of the page takes the pad."""
+    m.setword(STACK + 16, DONE()); m.setword(STACK + 20, CANCEL)
+    r = m.call(PSYMS['keyboard_refocus'], a0=m.cstr(ph) if ph else 0, a1=tw, a2=flags, a3=m.cstr(text) if text is not None else 0, count=40000000)
+    return r - (1 << 32) if r >= 1 << 31 else r
+
+
+def refocus_tests(ctx):
+    """keyboard_refocus: one embedded keyboard serving the page's fields in turn (patch/wifipage.c Join Wi-Fi Network): the mode, text, text room and placeholder of the new field, the pending state of the old one dropped."""
+    expect = ctx.expect
+    PW = DEFS['KB_PASSWORD']
+    dot = '•'
+    m = keyboard_machine()
+    expect(refocus(m, 'x', 100, 0, 'a') == -1, 'no keyboard: -1')
+    # a plain field and a password field in turn: the mode, the text each holds, the dots, the hint, the text room
+    m = zh_machine()
+    expect(attach(m, 0, 'Network Name', tw=156) == 0 and shown(m, 'kb_lang') == (1, 1) and said(m, 'kb_hint') == 'Network Name' and keys(m)[0] == 'Q', 'a plain field with Chinese on: the language key, capitals, the placeholder')
+    typ(m, 'H')
+    r = refocus(m, None, 118, PW, 'hunter22')
+    calls = list(m.calls)
+    expect(r == 0 and raw_text(m) == 'hunter22' and said(m, 'kb_text') == dot * 8 and shown(m, 'kb_lang') == (0, 0) and keys(m)[0] == 'q' and shown(m, 'kb_clear') == (0, 0) and said(m, 'kb_hint') in (None, ''),
+           'the password field: its text as dots, no language key, lowercase, no clear button, no placeholder')
+    expect(('atoi', 'hunter22') in calls, 'on_change got the new field\'s text')
+    typ(m, 'x')
+    expect(raw_text(m) == 'hunter22x' and said(m, 'kb_text') == dot * 9, 'typing goes into the password')
+    m.call(PSYMS['keyboard_set_mask'], a0=0, count=2000000)
+    expect(said(m, 'kb_text') == 'hunter22x', 'the eye shows it')
+    expect(refocus(m, 'Network Name', 156, 0, 'Home') == 0 and raw_text(m) == 'Home' and said(m, 'kb_text') == 'Home' and shown(m, 'kb_lang') == (1, 1) and said(m, 'kb_hint') == 'Network Name' and shown(m, 'kb_clear') == (1, 1),
+           'back to the plain field: its text as typed (not masked), the language key, the clear button')
+    typ(m, 'x')
+    expect(raw_text(m) == 'Homex', 'and it types')
+    # a layer the plain field had stays open for it; the password field is English; a pending composition does not travel
+    m = zh_machine()
+    attach(m, 0, 'N', tw=156)
+    press(m, 'kb_lang'); typ(m, 'ni')
+    expect(strip_on(m) and said(m, 'kb_lang') == 'EN', 'the Chinese layer with pinyin pending: the candidate strip')
+    refocus(m, None, 118, PW, '')
+    expect(not strip_on(m) and raw_text(m) == '' and shown(m, 'kb_lang') == (0, 0) and keys(m)[0] == 'q' and shown(m, 'kb_shift') == (1, 1), 'the password field: no composition, no strip, English letters')
+    typ(m, 'nihao')
+    expect(raw_text(m) == 'nihao' and not strip_on(m), 'letters are typed as they are')
+    refocus(m, 'N', 156, 0, 'abc')
+    expect(said(m, 'kb_lang') == 'EN' and shown(m, 'kb_lang') == (1, 1) and raw_text(m) == 'abc' and m.opened.count(PY.SYS_PATH) == 1, 'the plain field is on the Chinese layer again, the engine opened once')
+    typ(m, 'ni')
+    expect(strip_on(m), 'and composes')
+    # the 123 page of one field does not leak a wrong geometry into the next
+    m = keyboard_machine()
+    attach(m, 0, None, tw=156)
+    press(m, 'kb_mode')
+    expect(keys(m)[0] == '1', 'the 123 page')
+    refocus(m, None, 118, PW, 'ab')
+    expect(keys(m)[0] == 'q' and not layout_ok(m, 'abc'), 'the new field starts on the lowercase page, the keys where the model puts them')
+    typ(m, 'c')
+    expect(raw_text(m) == 'abc', 'and types')
+    # the limit follows the field: 127 in a password field, 63 in a plain one (a longer text handed over is cut to it)
+    refocus(m, None, 118, PW, 'p' * 140)
+    expect(len(raw_text(m)) == 127, 'a password field is cut to 127 bytes')
+    refocus(m, 'N', 156, 0, 'n' * 100)
+    expect(len(raw_text(m)) == 63, 'and the plain field after it to 63')
+    refocus(m, None, 118, PW, '')
+    for _ in range(140): typ(m, 'a')
+    expect(len(raw_text(m)) == 127, 'typing into the password field again stops at 127')
+    m.call(PSYMS['keyboard_detach'], count=2000000)
+    expect(b'abc' not in bytes(m.u.mem_read(PSYMS['kb'], 0x1400)), 'detach wipes it')
+
+
+SECTIONS = [base_tests, name_tests, password_tests, refocus_tests, gap_tests, asset_tests, setting_tests, zh_tests, zh_search_tests, zh_limit_tests, strip_tests, hit_tests, lang_gap_tests]   # tools/check.py runs each as its own task
 
 
 def run(ctx):

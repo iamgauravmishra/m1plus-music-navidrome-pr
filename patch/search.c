@@ -1278,7 +1278,7 @@ int search_open_in(int scope) {
     grid_shape(&se.ga, SE_ART, SE_ART / 2, 1); /* corners cut in the alpha: the pressed row's fill shows behind them */
     grid_shape(&se.gb, SE_ART, SE_ART_R, 1);
     se_grids_reset();
-    if (keyboard_attach(se.win, TR("Search"), SE_TEXT_X, SE_TEXT_W, SE_CARET_Y, se_on_text, se_on_go) != 0) {
+    if (keyboard_attach(se.win, TR("Search"), SE_TEXT_X, SE_TEXT_W, SE_CARET_Y, 0, se_on_text, se_on_go) != 0) {
         navigator_back();
         return -1;
     }

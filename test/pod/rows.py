@@ -243,6 +243,7 @@ def rows_tests(expect):
     for a, old, *_ in pod.autotime.EDITS: allowed |= {pod.fileoff(built, a) + k for k in range(0, len(old), 4)}   # the clock sync's string literals (tools/autotime.py)
     allowed |= {pod.fileoff(built, a) for a, *_ in pod.themeoff.EDITS}                                   # stock theme1 off: the clamp, the System page's row table and count (tools/themeoff.py)
     allowed.update(pod.fileoff(built, a) for a, _ in pod.LINEOUT_SITES)                                  # the jalr widget_set_text_utf8 of label_volume in show_sysbar_face and dropdown_showface (patch/lineout.c)
+    allowed.add(pod.fileoff(built, pod.WIFIHUB_SITE))                                                    # the All System Settings Wi-Fi row's navigator_to call (patch/wifipage.c wifi_hub_open)
     allowed.add(pod.fileoff(built, pod.BATTERY_SITE))                                                    # show_sysbar_face's get_battery_capacity call (patch/battery.c)
     allowed |= {pod.fileoff(built, pod.timezones.SELECT), pod.fileoff(built, pod.timezones.SELECT) + 4}   # select_timezone's hook (tools/timezones.py)
     allowed |= {pod.fileoff(built, a) for a, *_ in pod.timezones.edits(0, 0)}                           # the time zone picker's clamp, counts and two call sites

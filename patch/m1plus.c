@@ -79,6 +79,8 @@ extern int playlists_open(void); /* patch/playlists.c: Playlists, a grid of mosa
 extern int ipod_open(void); /* patch/ipod.c: the virtual iPod Classic, a fullscreen page with a touch click wheel */
 extern int podcasts_open(void); /* patch/podcasts.c: the shows on the card and their episodes */
 extern int update_open(void); /* patch/update.c: Software Update, our page; -1 when it did not open */
+extern int wifipage_open(
+    void); /* patch/wifipage.c: Settings > Wi-Fi, our page; -1 when it did not open (the stock page then opens) */
 extern int radio_open(void); /* patch/radiopage.c: Radio's stations page */
 extern int search_open(void); /* patch/search.c: our keyboard, then the results page; -1 when it did not open */
 extern int songs_open(void); /* patch/songs.c: Songs, the library as one list with sections and a jump rail */
@@ -120,8 +122,8 @@ enum {
     INFO_CAP,
     INFO_FREE,
     INFO_CC, /* the Cache page's seven Covers values start here: homecover_stat(kind - INFO_CC) */
-    INFO_SF = INFO_CC + 7, /* the Settings Files page's 35 values: setfiles_stat(kind - INFO_SF) */
-    INFO_SFOLD = INFO_SF + 35, /* the Unsupported Files count (setfiles_old_count), above those rows */
+    INFO_SF = INFO_CC + 7, /* the Settings Files page's 36 values: setfiles_stat(kind - INFO_SF) */
+    INFO_SFOLD = INFO_SF + 36, /* the Unsupported Files count (setfiles_old_count), above those rows */
     INFO_DUR = INFO_SFOLD + 1 /* the Cache page's Measured Tracks: dur_stat (patch/durations.c) */
 };
 
@@ -391,10 +393,12 @@ static int on_row(void *ctx, void *e) {
         reset_all_ask(); /* Developer > Tools: a confirm, then every settings file is deleted */
     else if (row->action == ACT_REGEN)
         dailymix_regen(); /* patch/dailymix.c: no page, a toast when asked; the card is made again when the Home menu is back in front */
-    else if (row->action == ACT_STOCK)
+    else if (row->action == ACT_STOCK) {
+        if (row->arg == 0 /* STOCK_WIFI */ && wifipage_open() == 0)
+            return RET_OK; /* patch/wifipage.c: our Wi-Fi page; the stock page where it will not open */
         navigator_to(
             POD_STOCK[row->arg].name); /* a plain navigator_to, as the stock lists call it: Back returns here */
-    else if (is_pick(row))
+    } else if (is_pick(row))
         pick_choose(ctx); /* a picker row */
     return RET_OK;
 }

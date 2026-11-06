@@ -48,22 +48,22 @@ class Page:
     def px(self, n, key='font_size'): return int(self.root.find(n).get(f'style:normal:{key}'))
 
 
-def keys_of(pg, page, lang=False, zh=False):
+def keys_of(pg, page, lang=False, zh=False, go=None):
     """[(name, label, x, y, w, kind)] in window coordinates for a page: char keys k0.., then the function keys that show (lang: the language key; zh: the Chinese layer's letter page)."""
     lay = PK.layout(page, lang=lang, zh=zh)
     up = page == 'ABC'
     out = [(f'kb_k{i}', c, x, y + pg.pad.y, w, 'key') for i, (c, x, y, w) in enumerate(lay['keys'])]
     names = {'shift': ('kb_shifton' if up else 'kb_shift', 'on' if up else 'fn'), 'sym': ('kb_sym', 'fn'), 'del': ('kb_del', 'fn'), 'mode': ('kb_mode', 'fn'), 'lang': ('kb_lang', 'fn'), 'space': ('kb_space', 'key'), 'go': ('kb_go', 'fn')}
-    label = {'sym': "'" if zh and page == 'abc' else '#+=' if page == '123' else '123', 'lang': PK.LANG_TAGS[1 if zh else 0], 'mode': 'ABC' if page in ('123', '#+=') else '123', 'space': pg.s.shown(pg.root.find('kb_space')), 'go': pg.s.shown(pg.root.find('kb_go'))}
+    label = {'sym': "'" if zh and page == 'abc' else '#+=' if page == '123' else '123', 'lang': PK.LANG_TAGS[1 if zh else 0], 'mode': 'ABC' if page in ('123', '#+=') else '123', 'space': pg.s.shown(pg.root.find('kb_space')), 'go': go[0] if go else pg.s.shown(pg.root.find('kb_go'))}
     for role, (x, y, w) in lay['fn'].items():
         n, kind = names[role]
         out.append((n, label.get(role, ''), x, y + pg.pad.y, w, kind))
     return out
 
 
-def keyboard(pg, im, page, held=None, lang=False, zh=False):
+def keyboard(pg, im, page, held=None, lang=False, zh=False, go=None):
     s = pg.s
-    keys = keys_of(pg, page, lang, zh)
+    keys = keys_of(pg, page, lang, zh, go)
     top = BAR + pg.pad.y
     def paint(d, k):
         d.rectangle(k(0, top, W, H), fill=pg.fill('kb_pad') + (255,))
@@ -79,7 +79,8 @@ def keyboard(pg, im, page, held=None, lang=False, zh=False):
             g = s.img(icon); im.alpha_composite(g, (int(x + (w - g.width) // 2), int(cy - g.height / 2)))
         elif lab:
             px = int(node.get('style:normal:font_size'))
-            s.text(im, x + w / 2, cy - (1 if len(lab) == 1 and lab.islower() else 0), lab, px, rgb(node.get('style:normal:text_color')), 'm')
+            ink = rgb(PK.KB_DIM if go and go[1] and name == 'kb_go' else node.get('style:normal:text_color'))   # (go = (label, dimmed): the password page's Join)
+            s.text(im, x + w / 2, cy - (1 if len(lab) == 1 and lab.islower() else 0), lab, px, ink, 'm')
     if held:   # the key pop-up: the stem over the key, the balloon above it with the letter large
         name, lab, x, y, w, _ = next(kk for kk in keys if kk[1] == held and kk[0].startswith('kb_k'))
         bx, by, sx, sy, sw, sh = PK.pop_rect(x, y - pg.pad.y, w, pg.pad.y)
@@ -162,6 +163,120 @@ def screen(s, pg, text, page=None, held=None, hint='Shows, e.g. All-In', title='
     return im
 
 
+def other_page(s, pg, name='', focus='name', sec='WPA2/WPA3', password='', shown=False, error=False, page='ABC'):
+    """The Join Wi-Fi Network page (patch/wifipage.c wo_open, docs/modules/wifi.md "The Other Network flow"): the widgets of ui/m1plus_wifiother.bin, the keyboard's field on the row being typed in (the text, the grey
+    placeholder while the name is empty, dots or the text for the password), the other row as a static label, card 2 one or two rows by the security, the action key (Next on the Name of a secured network, Join otherwise;
+    dimmed until it can work)."""
+    root = awtk_ui.parse(open(os.path.join(s.tree, PI.RAW, 'ui', 'm1plus_wifiother.bin'), 'rb').read())
+    by = {w.name: w for w in root.walk() if w.name}
+    secured = sec != 'None'
+    im = Image.new('RGBA', (W, H), (0, 0, 0, 255))
+    PI.status_bar(s, im)
+    def paint(d, k):
+        d.line(k(20, BAR + 17, 13, BAR + 25, 20, BAR + 33), fill=WHITE + (255,), width=int(2.5 * SS), joint='curve')
+        for n in ('wo_card0', 'wo_card1b' if secured else 'wo_card1a'):
+            c = by[n]
+            d.rounded_rectangle(k(c.x, BAR + c.y, c.x + c.w, BAR + c.y + c.h), radius=int(c.get('style:normal:round_radius')) * SS, fill=rgb(c.get('style:normal:bg_color')) + (255,))
+        if secured:
+            h = by['wo_hair']
+            d.rectangle(k(h.x, BAR + h.y, h.x + h.w, BAR + h.y + h.h), fill=rgb(h.get('style:normal:bg_color')) + (255,))
+    im.alpha_composite(layer(paint))
+    s.text(im, 36, BAR + 25, 'Join Wi-Fi Network', 22)
+    def label(n, text, colour=None):
+        w = by[n]
+        s.text(im, w.x + 2, BAR + w.y + w.h / 2, text, int(w.get('style:normal:font_size')), colour or rgb(w.get('style:normal:text_color')))
+    label('wo_name_l', 'Name')
+    label('wo_sec_l', 'Security')
+    sv = by['wo_sec_v']
+    s.text(im, sv.x + sv.w - 2 - s.font.width(sec, 18), BAR + sv.y + sv.h / 2, sec, 18, rgb(sv.get('style:normal:text_color')))
+    ch = by['wo_chev']; g = s.img(ch.get('image'))
+    im.alpha_composite(g, (ch.x, BAR + ch.y))
+    if secured: label('wo_pass_l', 'Password')
+    def fitted(text, room):
+        off, prefix = 0, ''
+        while True:
+            t = prefix + text[off:]
+            w = s.font.width(t, 18)
+            if w <= room or off >= len(text): return t, w
+            off += 1; prefix = '…'
+    pw_text = password if shown else '•' * len(password)
+    f, car = by['kb_field'], by['kb_caret']
+    if focus == 'name':
+        t, w = fitted(name, 156)
+        fx, fy, caret_x = 100, 56, 100 + (w + 1 if name else 0)
+        if name:
+            s.text(im, fx, BAR + fy + 24, t, 18, WHITE)
+            c = s.img(by['kb_clear'].get('style:normal:icon')); cl = by['kb_clear']
+            im.alpha_composite(c, (fx + cl.x + (cl.w - c.width) // 2, int(BAR + fy + 24 - c.height / 2)))
+        else:
+            s.text(im, fx, BAR + fy + 24, 'Network Name', 18, rgb(by['wo_name_h'].get('style:normal:text_color')))
+        if secured and password:
+            t2, _ = fitted(pw_text, 118)
+            s.text(im, 144, BAR + 164 + 24, t2, 18, WHITE)
+        cy = fy
+    else:
+        t, w = fitted(pw_text, 118)
+        fx, fy, caret_x = 144, 164, 144 + (w + 1 if password else 0)
+        if password: s.text(im, fx, BAR + fy + 24, t, 18, WHITE)
+        if name:
+            t2, _ = fitted(name, 156)
+            s.text(im, 100, BAR + 56 + 24, t2, 18, WHITE)
+        else:
+            s.text(im, 100, BAR + 56 + 24, 'Network Name', 18, rgb(by['wo_name_h'].get('style:normal:text_color')))
+        cy = fy
+    ImageDraw.Draw(im).rectangle((caret_x, BAR + cy + car.y, caret_x + car.w - 1, BAR + cy + car.y + car.h - 1), fill=WHITE)
+    del f
+    if secured:
+        eye = by['wo_eye']; g = s.img('wf_eye' if shown else 'wf_eyeoff')
+        im.alpha_composite(g, (eye.x + (eye.w - g.width) // 2, BAR + eye.y + (eye.h - g.height) // 2))
+    if error and secured:
+        er = by['wo_err']
+        s.text(im, er.x + 2, BAR + er.y + er.h / 2, 'Incorrect password', int(er.get('style:normal:font_size')), rgb(er.get('style:normal:text_color')))
+    name_ok = 1 <= len(name.encode()) <= 32
+    ok = name_ok and (focus == 'name' or 8 <= len(password) <= 63)
+    keyboard(pg, im, page, go=('Next' if focus == 'name' and secured else 'Join', not ok))
+    return im
+
+
+def password_page(s, pg, text, shown=False, error=False, name='Sam’s iPhone', dim=None, page='abc'):
+    """The Wi-Fi password page (patch/wifipage.c wk_open, docs/modules/wifi.md "The password page"): the widgets of ui/m1plus_wifipass.bin, the field's text as keyboard_attach places it (dots or the text, the end after an ellipsis
+    when wider than 118 px), the keyboard's pad below with Join as its action key (dimmed until the password is valid)."""
+    root = awtk_ui.parse(open(os.path.join(s.tree, PI.RAW, 'ui', 'm1plus_wifipass.bin'), 'rb').read())
+    by = {w.name: w for w in root.walk() if w.name}
+    im = Image.new('RGBA', (W, H), (0, 0, 0, 255))
+    PI.status_bar(s, im)
+    def paint(d, k):
+        d.line(k(20, BAR + 17, 13, BAR + 25, 20, BAR + 33), fill=WHITE + (255,), width=int(2.5 * SS), joint='curve')
+        c = by['wk_card']
+        d.rounded_rectangle(k(c.x, BAR + c.y, c.x + c.w, BAR + c.y + c.h), radius=int(c.get('style:normal:round_radius')) * SS, fill=rgb(c.get('style:normal:bg_color')) + (255,))
+    im.alpha_composite(layer(paint))
+    s.text(im, 36, BAR + 25, 'Enter Password', 22)
+    ln = by['wk_line']
+    s.text(im, ln.x + ln.w / 2, BAR + ln.y + ln.h / 2, f'Enter the password for “{name}”', ln.w and int(ln.get('style:normal:font_size')), rgb(ln.get('style:normal:text_color')), 'm')
+    lab = by['wk_label']
+    s.text(im, lab.x + 2, BAR + lab.y + lab.h / 2, 'Password', int(lab.get('style:normal:font_size')))
+    f, tx = by['kb_field'], by['kb_text']
+    shown_t = ('•' * len(text)) if not shown else text
+    off, prefix = 0, ''
+    while True:
+        t = prefix + shown_t[off:]
+        w = s.font.width(t, 18)
+        if w <= f.w - 2 or off >= len(shown_t): break
+        off += 1; prefix = '…'
+    if text: s.text(im, f.x + tx.x, BAR + f.y + f.h / 2, t, 18, WHITE)
+    cx = f.x + (w + 1 if text else 0)
+    car = by['kb_caret']
+    ImageDraw.Draw(im).rectangle((cx, BAR + f.y + car.y, cx + car.w - 1, BAR + f.y + car.y + car.h - 1), fill=WHITE)
+    eye = by['wk_eye']; g = s.img('wf_eye' if shown else 'wf_eyeoff')
+    im.alpha_composite(g, (eye.x + (eye.w - g.width) // 2, BAR + eye.y + (eye.h - g.height) // 2))
+    if error:
+        er = by['wk_err']
+        s.text(im, er.x + 2, BAR + er.y + er.h / 2, 'Incorrect password', int(er.get('style:normal:font_size')), rgb(er.get('style:normal:text_color')))
+    ok = len(text) >= 8 if dim is None else not dim
+    keyboard(pg, im, page, go=('Join', not ok))
+    return im
+
+
 def magnifier(d, k, x, y, rgb_, r=5):
     d.ellipse(k(x - r, y - r, x + r, y + r), outline=rgb_, width=int(1.6 * SS))
     d.line(k(x + r * 0.7, y + r * 0.7, x + r * 1.7, y + r * 1.7), fill=rgb_, width=int(1.8 * SS))
@@ -238,6 +353,16 @@ def main():
               ('woxihuantingboke, the first word taken', screen(s, pg, '我', 'abc', lang=True, zh=True, strip=('xi huan ting bo ke', rest))),
               ('Row scrolled 80 px', screen(s, pg, '', 'abc', lang=True, zh=True, strip=('ni hao', nihao, None, 80))),
               ('Chinese layer, 123 page (the key stays)', screen(s, pg, '你好', '123', lang=True, zh=True)),
+              ('Wi-Fi password: empty (Join dimmed)', password_page(s, pg, '')),
+              ('Wi-Fi password: 8 characters', password_page(s, pg, 'hunter22')),
+              ('Wi-Fi password: shown', password_page(s, pg, 'hunter22', shown=True)),
+              ('Wi-Fi password: wrong', password_page(s, pg, '', error=True)),
+              ('Join Wi-Fi Network: empty (Next dimmed)', other_page(s, pg, '')),
+              ('Join Wi-Fi Network: a name', other_page(s, pg, 'Hidden net', page='abc')),
+              ('Join Wi-Fi Network: the password', other_page(s, pg, 'Hidden net', 'pass', password='hunter22', page='abc')),
+              ('Join Wi-Fi Network: wrong password', other_page(s, pg, 'Hidden net', 'pass', error=True, page='abc')),
+              ('Join Wi-Fi Network: None', other_page(s, pg, 'Hidden net', sec='None', page='abc')),
+              ('Security picker (the check follows)', PS.draw_wifisec(s)),
               ('Settings', PS.draw_page(s, 'm1plus_settings').convert('RGBA')),
               ('Settings > Keyboards, Chinese off', keyboards_page(s, False)),
               ('Settings > Keyboards, Chinese on', keyboards_page(s, True))]

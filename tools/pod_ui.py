@@ -1823,11 +1823,11 @@ def daily():
 # The keyboard page (patch/keyboard.c, docs/modules/keyboard.md; geometry: tools/pod_keyboard.py): the plain navbar, the search field (magnifier, grey hint, text, caret, clear button),
 # the 180 px pad of buttons at the bottom of the window (26 char keys laid out as the lowercase page, the function keys; the payload moves, relabels and hides them per page), and
 # last the key pop-up (a stem and a balloon with the letter): insensitive, shown by the payload while a key is down. White and grey only.
-def kb_button(name, x, y, w, fill, down, ink=PK.KB_INK, px=20, text=None, icon=None):
+def kb_button(name, x, y, w, fill, down, ink=PK.KB_INK, px=20, text=None, icon=None, dim=None):
     b = Widget('button', x, y, w, PK.KB_KH, [('name', name), ('enable', 'true')] + ([text] if text else []))
     for st in STATES:
         styled(b, (st,), 'bg_color', down if st == 'pressed' else fill)
-        styled(b, (st,), 'text_color', ink)
+        styled(b, (st,), 'text_color', dim if dim and st == 'disable' else ink)
         styled(b, (st,), 'font_size', str(px))
         styled(b, (st,), 'border_width', '0')
         styled(b, (st,), 'round_radius', str(PK.KB_RADIUS))
@@ -1865,7 +1865,7 @@ def keyboard_pad_widgets():
     x, y, w = lay['fn']['space']
     pad.children.append(kb_button('kb_space', x, y, w, PK.KB_KEY, PK.KB_KEY_DOWN, px=15, text=pod_i18n.text_prop('space')))
     x, y, w = lay['fn']['go']
-    pad.children.append(kb_button('kb_go', x, y, w, PK.KB_FN, PK.KB_FN_DOWN, px=15, text=pod_i18n.text_prop('Search')))
+    pad.children.append(kb_button('kb_go', x, y, w, PK.KB_FN, PK.KB_FN_DOWN, px=15, text=pod_i18n.text_prop('Search'), dim=PK.KB_DIM))
     lx, ly, lw = PK.layout('abc', lang=True)['fn']['lang']   # the language key: hidden until the payload finds a second keyboard enabled, then space gives it the room
     pad.children.append(hidden(kb_button('kb_lang', lx, ly, lw, PK.KB_FN, PK.KB_FN_DOWN, px=18, text=('text', PK.LANG_TAGS[0]))))
     # The candidate strip (Chinese layer), a window child before the pop-up so that the balloons of the top row paint over it. It must be sensitive for its candidates view inside it to take
@@ -2146,9 +2146,320 @@ def build_songinfo_page(page):
     return root
 
 
+# The Wi-Fi page (patch/wifipage.c, docs/modules/wifi.md): the Settings pages' grouped cards (tools/pod_settings.py numbers: 52 px rows, cards 10..310, #1C1C1C, 12 px corners, hairlines, the
+# stock switch) under our navbar, in the stock list. The payload shows and hides rows and sets each shown row's picture piece (single / top / mid / bottom) and text, so no widget is made at run
+# time. The children are in display order, so the stock list_view layouter (which stacks the visible children and ignores y) and the payload's own widget_move agree: a top spacer, the switch
+# row, the connected network's row (the first group's second row), the MY NETWORKS header and its rows, the NETWORKS header (a spinner after its text while scanning), its rows and Other..., a bottom spacer.
+# A network row is a stock list_item holding the check or spinner (left), the name, the lock, the Wi-Fi fan signal and the info glyph (right); every child is insensitive: the row takes the tap
+# (a tap right of WF_INFO_X is the info glyph's). Pool sizes: patch/wifictl.h WF_MAX scanned networks, patch/wifipage.c WP_MY saved ones.
+WF_CUR, WF_MY, WF_OTH = 1, 16, 32   # the row pools: the connected network, MY NETWORKS, NETWORKS (patch/wifipage.c WP_CUR, WP_MY, WP_OTH)
+WF_ROWS = WF_CUR + WF_MY + WF_OTH
+WF_CHK_X, WF_NAME_X, WF_NAME_W, WF_LOCK_X, WF_SIG_X, WF_INFO_X, WF_INFO_PX = 24, 54, 156, 216, 242, 274, 22   # row relative: the check column, the name's box (its ink starts at 56), the glyphs' left edges
+WF_SIG_W, WF_SIG_H, WF_LOCK_PX, WF_CHK_PX, WF_SPIN_PX = 20, 16, 16, 20, 14   # the signal fan (mod_icons.WIFI_SIG_W x H): 16 px tall like the lock
+WF_HDR_PX, WF_HDR_X, WF_HDR_H = 15, 24, 40   # the small grey group headers: 15 px, the text of the rows (x 24), a 40 px strip (the label 14..36 in it)
+
+
+def wf_hair(name, x):
+    import pod_settings as ST
+    hair = Widget('view', x, ST.ROW_H - 1, ST.CM + ST.CARD_W - x, 1, [('name', name), ('sensitive', 'false')])
+    for st in STATES: styled(hair, (st,), 'bg_color', ST.CARD_HAIR_RGB)
+    return hair
+
+
+def wf_row(name, piece):
+    """A card row: a stock list_item whose background is the picture piece (the payload changes it), nothing else of its own."""
+    import pod_settings as ST
+    item = Widget('list_item', 0, 0, ST.LIST_W, ST.ROW_H, [('name', name), ('style', 'list_item_style')])
+    normal, down = ST.piece_images(piece)
+    for st in ('normal', 'over', 'pressed', 'focused', 'disable'):
+        styled(item, (st,), 'bg_color', '#00000000')
+        styled(item, (st,), 'bg_image', down if st == 'pressed' else normal)
+        styled(item, (st,), 'bg_image_draw_type', 'default')
+        styled(item, (st,), 'border_width', '0')
+        styled(item, (st,), 'border_color', '#00000000')
+    return item
+
+
+def wf_label(name, x, w, english, style='srlabel_leftwhite21_style'):
+    import pod_settings as ST
+    return Widget('hscroll_label', x, 0, w, ST.ROW_H, [('name', name), ('style', style), pod_i18n.text_prop(english) if english else ('text', ''),
+                                                        ('only_parent_focus', 'true'), ('ellipses', 'true'), ('yoyo', 'true'), ('loop', 'true'), ('sensitive', 'false')])
+
+
+def wf_image(name, x, y, w, h, image, draw='icon'):
+    return Widget('image', x, y, w, h, [('name', name), ('image', image), ('draw_type', draw), ('sensitive', 'false')])
+
+
+def wf_net_row(k):
+    import pod_settings as ST
+    row = hidden(wf_row(f'wf_row{k}', 'mid'))
+    mid = lambda h: (ST.ROW_H - h) // 2
+    row.children = [hidden(wf_image(f'wf_chk{k}', WF_CHK_X, mid(WF_CHK_PX), WF_CHK_PX, WF_CHK_PX, 'wf_check')), wf_label(f'wf_name{k}', WF_NAME_X, WF_NAME_W, ''),
+                    hidden(wf_image(f'wf_lock{k}', WF_LOCK_X, mid(WF_LOCK_PX), WF_LOCK_PX, WF_LOCK_PX, 'wf_lock')),
+                    wf_image(f'wf_sig{k}', WF_SIG_X, mid(WF_SIG_H), WF_SIG_W, WF_SIG_H, 'wf_sig3'), wf_image(f'wf_info{k}', WF_INFO_X, mid(WF_INFO_PX), WF_INFO_PX, WF_INFO_PX, 'wf_info'),
+                    wf_hair(f'wf_hair{k}', WF_HDR_X)]
+    return row
+
+
+def wf_header(name, english, spinner=False):
+    import pod_settings as ST
+    v = hidden(cards_spacer(name, WF_HDR_H))
+    lab = Widget('hscroll_label', WF_HDR_X, ST.HDR_LABEL_Y, ST.HDR_W, ST.HDR_LABEL_H, [('name', name + '_t'), pod_i18n.text_prop(english), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+    for st in ('normal', 'disable', 'focused'):
+        styled(lab, (st,), 'font_size', str(WF_HDR_PX))
+        styled(lab, (st,), 'text_color', ST.GREY)
+        styled(lab, (st,), 'text_align_h', 'left')
+        styled(lab, (st,), 'text_align_v', 'middle')
+    v.children.append(lab)
+    if spinner:   # after the text: the payload moves it there; hidden until a scan runs
+        v.children.append(hidden(wf_image(name + '_spin', 100, ST.HDR_LABEL_Y + (ST.HDR_LABEL_H - WF_SPIN_PX) // 2, WF_SPIN_PX, WF_SPIN_PX, 'wf_spin0', 'default')))
+    return v
+
+
+def build_wifi_page(page):
+    import pod_settings as ST
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    root.children.append(navbar(page.title))
+    lv = stock_list([], True)
+    lv.set('name', 'wifi_listview')
+    sv = lv.children[0]
+    sv.set('name', 'wifi_scrollview')
+    sw = wf_row('wf_row_sw', 'single')
+    x, w = ST.label_box('switch', False)
+    ax, ay, aw, ah = ST.accessory('switch')
+    sw.children = [wf_label('wf_sw_label', x, w, 'Wi-Fi'), wf_image('wf_sw_img', ax, ay, aw, ah, 'sset_off', 'default'), wf_hair('wf_hair_sw', WF_HDR_X)]
+    sv.children.append(cards_spacer('pod_top', ST.CM))
+    sv.children.append(sw)
+    sv.children += [wf_net_row(k) for k in range(WF_CUR)]
+    sv.children.append(wf_header('wf_hdr_my', 'MY NETWORKS'))
+    sv.children += [wf_net_row(k) for k in range(WF_CUR, WF_CUR + WF_MY)]
+    sv.children.append(wf_header('wf_hdr_net', 'NETWORKS', True))
+    sv.children += [wf_net_row(k) for k in range(WF_CUR + WF_MY, WF_ROWS)]
+    other = hidden(wf_row('wf_row_other', 'bot'))
+    other.children = [wf_label('wf_other_label', WF_NAME_X, WF_NAME_W + 40, 'Other…')]
+    sv.children.append(other)
+    sv.children.append(cards_spacer('pod_end', ST.END_H))
+    root.children.append(lv)
+    root.children.append(nav_fade(shown=False))   # patch/wifipage.c shows it while the list is scrolled
+    return root
+
+
+# One network's info page (patch/wifipage.c wi_open, docs/modules/wifi.md "The info page"): the same cards and pieces as the Wi-Fi page; the payload shows, hides and moves the rows (display order again, so the
+# stock layouter's stacking agrees): Forget This Network (a saved network), the info card (WI_FIELDS label / value rows, room for the enterprise rows of a later stage), Auto-Join (saved) or Join (not saved),
+# with the card gaps between them. The navbar's title is the network's name (set by the payload).
+WI_FIELDS = 4   # patch/wifipage.c WI_FIELDS
+WI_LABEL_W, WI_VALUE_X, WI_VALUE_PX = 116, 140, 18   # a field row: the label's box (card relative from x 24) and the right aligned grey value's box up to the card's right ink edge (x 296)
+
+
+def wi_text(name, x, w, english, px, rgb, align):
+    """A label of a row that takes no style name: its own size, colour and alignment (the value labels of the Settings cards are made the same way)."""
+    lab = Widget('hscroll_label', x, 0, w, 52, [('name', name), pod_i18n.text_prop(english) if english else ('text', ''), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+    for st in ('normal', 'disable', 'focused'):
+        styled(lab, (st,), 'font_size', str(px))
+        styled(lab, (st,), 'text_color', rgb)
+        styled(lab, (st,), 'text_align_h', align)
+        styled(lab, (st,), 'text_align_v', 'middle')
+    return lab
+
+
+def build_wifiinfo_page(page):
+    import pod_settings as ST
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    root.children.append(navbar(page.title))
+    lv = stock_list([], True)
+    lv.set('name', 'wifiinfo_listview')
+    sv = lv.children[0]
+    sv.set('name', 'wifiinfo_scrollview')
+    x = ST.CM + ST.PAD
+    centred = lambda name, english: wi_text(name, x, ST.CARD_W - 2 * ST.PAD, english, 21, '#FFFFFF', 'center')
+    forget = hidden(wf_row('wi_row_forget', 'single'))
+    forget.children = [centred('wi_forget_t', 'Forget This Network')]
+    auto = hidden(wf_row('wi_row_auto', 'single'))
+    ax, ay, aw, ah = ST.accessory('switch')
+    auto.children = [wf_label('wi_auto_t', x, ST.accessory('switch')[0] - 8 - x, 'Auto-Join'), wf_image('wi_auto_img', ax, ay, aw, ah, 'sset_on', 'default')]
+    join = hidden(wf_row('wi_row_join', 'single'))
+    join.children = [centred('wi_join_t', 'Join')]
+    sv.children.append(cards_spacer('pod_top', ST.CM))
+    sv.children.append(forget)
+    sv.children.append(hidden(cards_spacer('wi_gap0', ST.GAP_H)))
+    for k in range(WI_FIELDS):
+        row = hidden(wf_row(f'wi_f{k}', 'mid'))
+        row.set('sensitive', 'false')
+        row.children = [wi_text(f'wi_fl{k}', x, WI_LABEL_W, '', 21, '#FFFFFF', 'left'), wi_text(f'wi_fv{k}', WI_VALUE_X, ST.RIGHT - WI_VALUE_X, '', WI_VALUE_PX, ST.GREY, 'right'), wf_hair(f'wi_fh{k}', WF_HDR_X)]
+        sv.children.append(row)
+    sv.children.append(hidden(cards_spacer('wi_gap1', ST.GAP_H)))
+    sv.children.append(auto)
+    sv.children.append(hidden(cards_spacer('wi_gap2', ST.GAP_H)))
+    sv.children.append(join)
+    sv.children.append(cards_spacer('pod_end', ST.END_H))
+    root.children.append(lv)
+    root.children.append(nav_fade(shown=False))   # patch/wifipage.c shows it while the list is scrolled
+    return root
+
+
+# The password page (patch/wifipage.c wk_open, docs/modules/wifi.md "The password page"): the navbar, a grey line naming the network, one Settings card holding the "Password" label, the keyboard's own field
+# (kb_field with its text, hint, caret and clear button, found by keyboard_attach by name; the clear button never shows for a password) and the eye button, an error line under the card, and the keyboard's
+# pad, strip and pop-up. Everything above the candidate strip (y 234): the card ends at y 152, the error line at 182. There is no Join button: the keyboard's action key reads Join.
+WK_LINE_Y, WK_LINE_H, WK_LINE_PX = 62, 22, 15      # the grey line under the navbar (centred, UTF-8, cut with an ellipsis by the payload)
+WK_CARD_X, WK_CARD_Y, WK_CARD_W, WK_CARD_H, WK_CARD_R = 10, 100, 300, 52, 12
+WK_LABEL_X, WK_LABEL_W, WK_LABEL_PX = 24, 118, 21   # "Password", the Settings rows' label (118 px: French's "Mot de passe" is the longest, 117)
+WK_FIELD_X, WK_FIELD_W, WK_FIELD_PX, WK_CARET_Y = 144, 120, 18, 15   # the field: text from x 144, 118 px of room (a dot or a letter is cut with an ellipsis, its end shown); the caret 22 px high centred in the row
+WK_EYE_X, WK_EYE_W = 264, 46                        # the eye button's touch area (the 22 px glyph is centred in it: x 276..298)
+WK_ERR_Y, WK_ERR_H, WK_ERR_PX = 160, 22, 18
+
+
+def kb_field_widget(x, y, w, h, caret_y):
+    """The keyboard's own field (kb_field with its hint, text, caret and clear button, found by keyboard_attach by name) at x, y, w x h; the caret_y is relative to the field. It has no fill: the card is under it."""
+    field = kb_view('kb_field', x, y, w, h, '#00000000')
+    hint = label('kb_hint', 0, 0, w, h, '', WK_FIELD_PX, PK.KB_GREY, 'left')
+    text = label('kb_text', 0, 0, w, h, '', WK_FIELD_PX, PK.KB_INK, 'left')
+    for l in (hint, text):
+        l.set('sensitive', 'false')
+        styled(l, ('normal',), 'text_align_v', 'middle')
+    caret = kb_view('kb_caret', 0, caret_y, PK.CARET_W, PK.CARET_H, PK.KB_INK)
+    clear = hidden(Widget('button', w - PK.FIELD_CLEAR_W, 0, PK.FIELD_CLEAR_W, h, [('name', 'kb_clear'), ('enable', 'true'), ('style', 'img_btn_style'),
+                   ('style:pressed:icon', 'qk_clear'), ('style:normal:icon', 'qk_clear'), ('style:over:icon', 'qk_clear')]))
+    field.children = [hint, text, caret, clear]
+    return field
+
+
+def eye_button(name, x, y, w, h):
+    return Widget('button', x, y, w, h, [('name', name), ('enable', 'true'), ('style', 'img_btn_style'),
+                  ('style:pressed:icon', 'wf_eyeoff'), ('style:normal:icon', 'wf_eyeoff'), ('style:over:icon', 'wf_eyeoff')])
+
+
+def build_wifipass_page(page):
+    """The password page's widgets, in paint order: the navbar, the grey line, the card with its label, the keyboard's field, the eye, the error line, the pad."""
+    import pod_settings as ST
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    root.children.append(navbar(page.title))
+    line = label('wk_line', WK_CARD_X, WK_LINE_Y, WK_CARD_W, WK_LINE_H, '', WK_LINE_PX, ST.GREY, 'center')
+    line.set('sensitive', 'false')
+    styled(line, ('normal',), 'text_align_v', 'middle')
+    root.children.append(line)
+    root.children.append(kb_view('wk_card', WK_CARD_X, WK_CARD_Y, WK_CARD_W, WK_CARD_H, ST.CARD_RGB, ST.CARD_R))
+    lab = label('wk_label', WK_LABEL_X, WK_CARD_Y, WK_LABEL_W, WK_CARD_H, '', WK_LABEL_PX, '#FFFFFF', 'left')
+    lab.set(*pod_i18n.text_prop('Password'))
+    lab.set('sensitive', 'false')
+    styled(lab, ('normal',), 'text_align_v', 'middle')
+    root.children.append(lab)
+    root.children.append(kb_field_widget(WK_FIELD_X, WK_CARD_Y, WK_FIELD_W, WK_CARD_H, WK_CARET_Y))
+    root.children.append(eye_button('wk_eye', WK_EYE_X, WK_CARD_Y, WK_EYE_W, WK_CARD_H))
+    err = hidden(label('wk_err', WK_LABEL_X, WK_ERR_Y, WK_CARD_W - 2 * (WK_LABEL_X - WK_CARD_X), WK_ERR_H, '', WK_ERR_PX, ST.GREY, 'left'))
+    err.set(*pod_i18n.text_prop('Incorrect password'))
+    styled(err, ('normal',), 'text_align_v', 'middle')
+    root.children.append(err)
+    root.children += keyboard_pad_widgets()
+    return root
+
+
+# The Join Wi-Fi Network page (patch/wifipage.c wo_open, docs/modules/wifi.md "The Other Network flow"; the iOS sheet's layout): the navbar (Back = cancel), no grey line, two Settings cards: card 1 holds the
+# Name row, card 2 the Security row (value and chevron) and, under a hairline, the Password row (card 2 is the one-row card while Security is None: the payload shows wo_card1a or wo_card1b). Rows are 48 px
+# (not 52) so that the Password row, the error line under card 2 and nothing else end above the candidate strip (y 234): name y 56..104, gap 12, Security 116..164, Password 164..212, error 212..232.
+# The keyboard has one field, kb_field, which the payload moves to the row being typed in (Name at x 100, Password at x 144, as the password page's); the other row shows its value in a static label
+# (wo_name_v, or wo_name_h, the grey placeholder, while the name is empty; wo_pass_v, dots or the text). Three buttons take the taps on the rows (wo_hit_*), insensitive widgets pass them through.
+WO_ROW_H, WO_NAME_Y, WO_SEC_Y, WO_PASS_Y, WO_ERR_Y, WO_ERR_H, WO_ERR_PX = 48, 56, 116, 164, 212, 20, 16
+WO_NAME_X, WO_NAME_FIELD_W, WO_NAME_TW = 100, 196, 156      # the Name field: the card's ink edge at 296, room for the text before the clear button
+WO_PASS_X, WO_PASS_TW = 144, 118                            # the Password field (the password page's): the same container, 118 px of text room, the eye button right of it
+WO_CARET_Y = (WO_ROW_H - 22) // 2
+WO_LABEL_W = 118
+
+
+def build_wifiother_page(page):
+    import pod_settings as ST
+    from mod_icons import CARD_CHEVRON
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    root.children.append(navbar(page.title))
+    root.children.append(kb_view('wo_card0', WK_CARD_X, WO_NAME_Y, WK_CARD_W, WO_ROW_H, ST.CARD_RGB, ST.CARD_R))
+    root.children.append(hidden(kb_view('wo_card1a', WK_CARD_X, WO_SEC_Y, WK_CARD_W, WO_ROW_H, ST.CARD_RGB, ST.CARD_R)))
+    root.children.append(kb_view('wo_card1b', WK_CARD_X, WO_SEC_Y, WK_CARD_W, 2 * WO_ROW_H, ST.CARD_RGB, ST.CARD_R))
+    def row_label(name, y, english, w=WO_LABEL_W):
+        lab = label(name, WK_LABEL_X, y, w, WO_ROW_H, '', WK_LABEL_PX, '#FFFFFF', 'left')
+        lab.set(*pod_i18n.text_prop(english))
+        lab.set('sensitive', 'false')
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+        return lab
+    def value_label(name, x, y, w, colour, english=None, align='left'):
+        lab = label(name, x, y, w, WO_ROW_H, '', WK_FIELD_PX, colour, align)
+        if english: lab.set(*pod_i18n.text_prop(english))
+        lab.set('sensitive', 'false')
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+        return lab
+    root.children.append(row_label('wo_name_l', WO_NAME_Y, 'Name', 76))
+    root.children.append(row_label('wo_sec_l', WO_SEC_Y, 'Security', 150))   # (Polish's Zabezpieczenia is 132 px; the value is right aligned and never reaches it)
+    root.children.append(row_label('wo_pass_l', WO_PASS_Y, 'Password'))
+    vx, vw = ST.value_box()
+    root.children.append(value_label('wo_sec_v', vx + vw - ST.VALUE_MAX, WO_SEC_Y, ST.VALUE_MAX, ST.GREY, align='right'))
+    ax, ay, aw, ah = ST.accessory('chevron')
+    root.children.append(wf_image('wo_chev', ax, WO_SEC_Y + (WO_ROW_H - 1 - ah) // 2, aw, ah, CARD_CHEVRON[0]))
+    hair = Widget('view', WK_LABEL_X, WO_PASS_Y - 1, ST.CM + ST.CARD_W - WK_LABEL_X, 1, [('name', 'wo_hair'), ('sensitive', 'false')])
+    for st in STATES: styled(hair, (st,), 'bg_color', ST.CARD_HAIR_RGB)
+    root.children.append(hair)
+    root.children.append(hidden(value_label('wo_name_v', WO_NAME_X, WO_NAME_Y, WO_NAME_TW, PK.KB_INK)))
+    root.children.append(hidden(value_label('wo_name_h', WO_NAME_X, WO_NAME_Y, WO_NAME_TW, PK.KB_GREY, 'Network Name')))
+    root.children.append(hidden(value_label('wo_pass_v', WO_PASS_X, WO_PASS_Y, WO_PASS_TW, PK.KB_INK)))
+    for name, y, w in (('wo_hit_name', WO_NAME_Y, WK_CARD_W), ('wo_hit_sec', WO_SEC_Y, WK_CARD_W), ('wo_hit_pass', WO_PASS_Y, WK_EYE_X - WK_CARD_X)):
+        root.children.append(Widget('button', WK_CARD_X, y, w, WO_ROW_H, [('name', name), ('enable', 'true'), ('style', 'img_btn_style')]))
+    root.children.append(kb_field_widget(WO_NAME_X, WO_NAME_Y, WO_NAME_FIELD_W, WO_ROW_H, WO_CARET_Y))
+    root.children.append(eye_button('wo_eye', WK_EYE_X, WO_PASS_Y, WK_EYE_W, WO_ROW_H))
+    err = hidden(label('wo_err', WK_LABEL_X, WO_ERR_Y, WK_CARD_W - 2 * (WK_LABEL_X - WK_CARD_X), WO_ERR_H, '', WO_ERR_PX, ST.GREY, 'left'))
+    err.set(*pod_i18n.text_prop('Incorrect password'))
+    styled(err, ('normal',), 'text_align_v', 'middle')
+    root.children.append(err)
+    root.children += keyboard_pad_widgets()
+    return root
+
+
+# The Security page (patch/wifipage.c ws_open): a Settings-style choice list that the Join Wi-Fi Network page opens as a picker: None, WPA2/WPA3, WPA3 in one card (the pieces and the neutral check of the
+# picker pages); the payload puts the check on the page's current choice, a tap sets it and goes back. The rows are the asset's, the payload only binds them. Enterprise joins the list with the enterprise phase.
+WS_ROWS = ('None', 'WPA2/WPA3', 'WPA3')
+WS_DEFAULT = 1
+
+
+def build_wifisec_page(page):
+    import pod_settings as ST
+    from mod_icons import CARD_CHECK
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    root.children.append(navbar(page.title))
+    lv = stock_list([], True)
+    lv.set('name', 'wifisec_listview')
+    sv = lv.children[0]
+    sv.set('name', 'wifisec_scrollview')
+    sv.children.append(cards_spacer('pod_top', ST.CM))
+    x, w = ST.label_box('check', False)
+    for k, name in enumerate(WS_ROWS):
+        row = wf_row(f'ws_row{k}', 'top' if k == 0 else 'bot' if k == len(WS_ROWS) - 1 else 'mid')
+        row.children = [wf_label(f'ws_label{k}', x, w, name)]
+        ax, ay, aw, ah = ST.accessory('check')
+        chk = Widget('image', ax, ay, aw, ah, [('name', f'ws_check{k}'), ('image', CARD_CHECK[0]), ('draw_type', 'icon'), ('sensitive', 'false')])
+        if k != WS_DEFAULT: chk = hidden(chk)
+        row.children.append(chk)
+        if k < len(WS_ROWS) - 1: row.children.append(wf_hair(f'ws_hair{k}', x))
+        sv.children.append(row)
+    sv.children.append(cards_spacer('pod_end', ST.END_H))
+    root.children.append(lv)
+    root.children.append(nav_fade(shown=False))
+    return root
+
+
 def build_page(page):
+    if page.kind == 'wifiother':
+        return build_wifiother_page(page)
+    if page.kind == 'wifisec':
+        return build_wifisec_page(page)
     if page.kind == 'songinfo':
         return build_songinfo_page(page)
+    if page.kind == 'wifipass':
+        return build_wifipass_page(page)
+    if page.kind == 'wifi':
+        return build_wifi_page(page)
+    if page.kind == 'wifiinfo':
+        return build_wifiinfo_page(page)
     if page.kind == 'radio':
         return build_radio_page(page)
     if page.kind == 'radioinfo':

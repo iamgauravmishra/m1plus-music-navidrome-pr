@@ -43,6 +43,7 @@ Feature settings live in their own folder, `/mnt/data/m1plus/` (`SET_DIR`, patch
 | Podcast Region | `podcast-region` | the storefront's two capital letters and a line feed (one of the 34 in `tools/pcregion.py`); missing/other Automatic ([podcasts](podcasts.md) "Region") |
 | Background | `appearance-background` | `0` Black (default), `1` Tinted; `2` Light and `3` Light Auto are not offered; missing/other Black; Settings > System > Appearance > Background ([accent](accent.md)) |
 | Accent | `appearance-accent` | one digit, the index 0 Neutral (default) .. 6 Champagne; missing/other Neutral; Settings > System > Appearance > Accent ([accent](accent.md)) |
+| Saved Wi-Fi networks stock cannot read (Settings > Wi-Fi) | `wifi-networks` | `network={}` blocks (WPA3, Enhanced Open, Enterprise) the Wi-Fi page writes and `wifi_connect.sh` adds to the copy only the newer supplicant reads; holds passwords; deleting it (or Reset All Settings) forgets those networks only |
 | Battery Percentage | `battery-percentage` | `1` on; missing/other off (the default) |
 | Shuffle (the payload's flag; stock's mode is never 2) | `playback-shuffle` | `1` on; missing/other off ([shuffle](shuffle.md)) |
 | Main Menu / Extras | `home-menu` | item ids in order, optional `-` then the hidden ids ([menu](menu.md)); invalid = defaults |
@@ -63,7 +64,7 @@ Every stock row is `ACT_STOCK` (`pod_pages.STOCK_PAGES`, `POD_STOCK` in `pages.h
 
 | Row | Page | Stock caller |
 |---|---|---|
-| Wi-Fi | `systemset/wifi_page` | the Wi-Fi hub's row thunk `0x4b1448` (the hub `systemset/wifiset_page` is the stock Settings' row 1; its Wi-Fi row goes straight to the list, so does ours) |
+| Wi-Fi | `m1plus_wifi` (ours, [wifi](wifi.md)); `systemset/wifi_page` where ours will not open | the Wi-Fi hub's row thunk `0x4b1440` (the hub `systemset/wifiset_page` is the stock Settings' row 1; its Wi-Fi row goes straight to the list, so did ours). Our row is `ACT_STOCK` with `wifipage_open()` first; the stock hub's row has its `jalr navigator_to` at `0x4b1460` hooked (`wifi_hub_open`, [payload](payload.md) hook 21): our page, the stock page with `/mnt/mmc/m1plus-off` or where ours will not open |
 | Bluetooth | `systemset/bluetooth_page` | the hub's row thunk `0x4b1410` |
 | Display | `systemset/display_page` | Settings row 3, string at `0x4ada74` (shared call `0x4ad830`) |
 | (Language) | `systemset/language_page` | not linked from our page; stock reaches it through All System Settings |

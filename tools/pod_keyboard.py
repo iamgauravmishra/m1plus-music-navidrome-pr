@@ -25,6 +25,7 @@ KB_FN, KB_FN_DOWN = '#2E2E32', '#4A4A4E'
 KB_ON, KB_ON_DOWN = '#E5E5EA', '#C7C7CC'     # shift while it is on: a light key with a dark arrow
 KB_POP = '#6E6E73'
 KB_INK, KB_DARK_INK, KB_GREY = '#FFFFFF', '#1C1C1E', '#8E8E93'
+KB_DIM = '#6E6E73'   # the action key's text while it is dimmed (the "disable" style: the Wi-Fi password page's Join before the password is valid)
 KB_RADIUS = 5
 KB_POP_W, KB_POP_H, KB_POP_R, KB_POP_PX, KB_POP_GAP = 46, 50, 10, 34, 10   # the balloon: 46 x 50, radius 10, its letter 34 px, 10 px above the key
 KB_STEM_UP = 12                                                             # the stem rises to 12 px under the balloon's bottom edge: 22 px above the key
@@ -54,7 +55,7 @@ ROWS = {
     'abc': ('qwertyuiop', 'asdfghjkl', 'zxcvbnm'),
     'ABC': ('QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'),
     '123': ('1234567890', '-/:;()$&@"', ".,?!'"),
-    '#+=': ('[]{}#%^*+=', '_\\|~<>€£¥•', ".,?!'"),
+    '#+=': ('[]{}#%^*+=', '_\\|~<>€£¥`', ".,?!'"),
 }
 # What the keys read: characters and the page switches, the same in every language (not translated: test/pod/i18n.py lets these literals through).
 LABELS = frozenset(c for rows in ROWS.values() for row in rows for c in row) | {'#+=', '123', 'ABC'} | set(LANG_TAGS)   # (the Chinese layer's pinyin separator ' is in the 123 page's row already)

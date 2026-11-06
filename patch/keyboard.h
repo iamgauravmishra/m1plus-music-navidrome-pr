@@ -20,12 +20,28 @@ typedef void (*kb_done_fn)(const char *text);
 typedef void (*kb_cancel_fn)(void);
 #define KB_DONE 2 /* the action key reads "Done" (a name, not a search) */
 #define KB_LONG 4 /* the text may be KB_MAX_LONG bytes, not KB_MAX (the podcast search field takes a feed address) */
+#define KB_LITERAL \
+    16 /* keyboard_attach: spaces are typed as pressed (leading, doubled, trailing; an SSID has them); everything else as a plain field */
+#define KB_PASSWORD \
+    8 /* keyboard_attach: a password field: English layer only (no language key, no pinyin whatever the setting), a lowercase page that no empty field turns to capitals, spaces anywhere
+                       * (leading, doubled), the text as typed (untrimmed), shown as one dot a character until keyboard_set_mask(0), no clear button,
+                       * up to KB_PASS_MAX bytes */
 typedef void (*kb_change_fn)(const char *text);
 typedef void (*kb_go_fn)(void);
 /* The same pad embedded in another page (patch/search.c): the page's window holds the widgets kb_pad, kb_strip, kb_stem, kb_pop and a field (kb_text, kb_hint, kb_caret, kb_clear) of the
- * names of the keyboard page's; on_change gets the field's text whenever it may have changed, on_go the action key. -1 when a keyboard exists already or the widgets are not there. */
-int keyboard_attach(void *win, const char *placeholder, int text_x, int text_w, int caret_y, kb_change_fn on_change,
-                    kb_go_fn on_go);
+ * names of the keyboard page's; on_change gets the field's text whenever it may have changed, on_go the action key. flags: KB_PASSWORD (0 for none). -1 when a keyboard exists already or the
+ * widgets are not there. */
+int keyboard_attach(void *win, const char *placeholder, int text_x, int text_w, int caret_y, unsigned flags,
+                    kb_change_fn on_change, kb_go_fn on_go);
+int keyboard_refocus(
+    const char *placeholder, int text_w, unsigned flags, const char *text, kb_change_fn on_change,
+    kb_go_fn
+        on_go); /* another field of the page takes the pad: new flags, text room, placeholder, text and callbacks (the widgets are the page's to move); on_change gets the text; -1 without a keyboard */
+void keyboard_set_mask(
+    int on); /* the field shows one dot per character (on) or the text; the caret follows what is shown */
+void keyboard_set_go(
+    const char *key,
+    int enabled); /* the action key reads the translated string `key` (NULL keeps its label) and is dimmed and inert while not enabled (on_go does not fire) */
 void keyboard_detach(void); /* the page's destroy event */
 void keyboard_show(int on); /* show or hide the embedded pad (hidden: no touch, no caret) */
 int keyboard_shown(void);
@@ -52,6 +68,7 @@ int keyboard_open(const char *title, const char *placeholder, const char *initia
 #define KB_KEYS 26 /* char key widgets */
 #define KB_MAX 63 /* bytes of text */
 #define KB_MAX_LONG 255 /* ... with KB_LONG (a feed address) */
+#define KB_PASS_MAX 127 /* ... in a KB_PASSWORD field (a WPA3 password; a WPA2 one is 63 bytes or 64 hex digits) */
 #define KB_POP_W 46 /* the key pop-up: the balloon */
 #define KB_POP_H 50
 #define KB_POP_GAP 10 /* above the key */

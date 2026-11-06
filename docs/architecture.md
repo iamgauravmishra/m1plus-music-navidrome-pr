@@ -20,6 +20,7 @@ for commands, [UI](ui.md) for layout/assets, and [history](history.md) for recor
 | [Accent and palette](modules/accent.md) | The colour-mapping layer: three paint-time hooks, background (Black, Light), accent, image rules, exempt pages |
 | [Updater version compare](modules/version.md) | Why the official V2.1 package installs over the mod |
 | [Automatic time](modules/autotime.md) | RTC kept as UTC for stock's NTP sync (`hwclock -su` / `-wu`) |
+| [Wi-Fi supplicant and page](modules/wifi.md) | hostap 2.12 beside stock 2.9 for WPA-Enterprise, WPA3 and Enhanced Open: cross-build, `wifi_connect.sh` choice with stock fallback; the own Settings > Wi-Fi page over the control socket, with the networks stock cannot read in `wifi-networks` |
 | [Time zones](modules/timezones.md) | 43-zone picker west to east, TZ mapping for the saved index (select_timezone hook) |
 | [Safety](modules/safety.md) | Allowed entry points and required invariants |
 | [Validation](modules/validation.md) | Test boundaries and what they prove |

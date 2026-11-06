@@ -60,7 +60,7 @@ static const char *const KB_ROWS[4][3] = {
     {"qwertyuiop", "asdfghjkl", "zxcvbnm"},
     {"QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"},
     {"1234567890", "-/:;()$&@\"", ".,?!'"},
-    {"[]{}#%^*+=", "_\\|~<>€£¥•", ".,?!'"},
+    {"[]{}#%^*+=", "_\\|~<>€£¥`", ".,?!'"},
 };
 
 /* A keyboard layer: the part of typing that differs per language. English has none of the hooks (letters type as they are); the Chinese layer composes pinyin. */
@@ -88,6 +88,7 @@ static struct {
     kb_cancel_fn cancel;
     kb_change_fn on_change; /* embedded: called with the field's text whenever it may have changed */
     kb_go_fn on_go; /* embedded: the action key */
+    int mask, go_off; /* the field shows dots; the action key is dimmed and inert */
     int embedded, hidden, tx, tw,
         cy; /* embedded in another page (keyboard_attach); the pad is hidden; the field's text x, text room and caret y */
     short kx[KB_KEYS], ky[KB_KEYS], kw[KB_KEYS];
@@ -216,15 +217,23 @@ static int kb_fit(void *w, const char *src, unsigned n, int maxw, char *out) {
 }
 
 static void kb_refresh(void) { /* the text and the caret */
-    char shown[KB_MAX_LONG + 8];
+    char shown[KB_PASS_MAX * 3 + 8],
+        dots[KB_PASS_MAX * 3 + 1]; /* (a masked field is dots, 3 bytes each: KB_PASS_MAX at most) */
     int w = 0;
-    if (kb.len)
+    if (kb.len &&
+        kb.mask) { /* one dot (U+2022) per character; a masked field never takes more than KB_PASS_MAX bytes of characters */
+        unsigned i, n = 0;
+        for (i = 0; i < kb.len && n + 3 <= KB_PASS_MAX * 3; i += kb_clen(kb.buf + i), n += 3)
+            dots[n] = (char)0xe2, dots[n + 1] = (char)0x80, dots[n + 2] = (char)0xa2;
+        dots[n] = 0;
+        w = kb_fit(kb.text, dots, n, kb.tw, shown);
+    } else if (kb.len)
         w = kb_fit(kb.text, kb.buf, kb.len, kb.tw, shown);
     else
         shown[0] = 0;
     widget_set_text_utf8(kb.text, shown);
     widget_set_visible(kb.hint, kb.len == 0, 0);
-    kb_show(kb.clear, kb.len != 0);
+    kb_show(kb.clear, kb.len != 0 && !(kb.flags & KB_PASSWORD));
     widget_move(kb.caret, kb.tx + (kb.len ? w + 1 : 0), kb.cy);
     if (kb.embedded && kb.on_change) kb.on_change(kb.buf);
 }
@@ -232,13 +241,13 @@ static void kb_refresh(void) { /* the text and the caret */
 static void kb_page(int page);
 
 static int kb_letters(
-    void) { /* the letter page of the layer: English starts on capitals for an empty field, Chinese is always lowercase */
-    return kb.layer == L_ZH || kb.len ? P_LOWER : P_UPPER;
+    void) { /* the letter page of the layer: English starts on capitals for an empty field (not a password field), Chinese is always lowercase */
+    return kb.layer == L_ZH || kb.len || (kb.flags & KB_PASSWORD) ? P_LOWER : P_UPPER;
 }
 
 /* A new text: the shift rule (an empty field starts a capital, English only) then the field. */
 static void kb_changed(void) {
-    if (kb.len == 0 && kb.page == P_LOWER && kb.layer == L_EN) kb_page(P_UPPER);
+    if (kb.len == 0 && kb.page == P_LOWER && kb.layer == L_EN && !(kb.flags & KB_PASSWORD)) kb_page(P_UPPER);
     kb_refresh();
 }
 
@@ -801,6 +810,7 @@ static void kb_finish(int ok) {
     unsigned a = 0, b, i;
     if (kb.finished) return;
     if (kb.embedded) { /* the action key of an embedded pad: what is pending is committed, the page decides what follows (hides the pad) */
+        if (kb.go_off) return; /* dimmed: nothing happens */
         if (kb_layer_of(kb.layer)->flush) kb_layer_of(kb.layer)->flush();
         kb_unpop();
         kb_stop();
@@ -866,7 +876,7 @@ static void kb_click(int id) {
             return;
         }
         zh_hide();
-        if (kb.len && kb.buf[kb.len - 1] != ' ') {
+        if ((kb.flags & (KB_PASSWORD | KB_LITERAL)) || (kb.len && kb.buf[kb.len - 1] != ' ')) {
             kb_insert(" ");
             kb_refresh();
         }
@@ -980,7 +990,7 @@ static void kb_down(void *e, int from_pad) {
     if (best < 0) return;
     if (bd > 0 && !kb.gap) {
         kb.gap = id[best] + 1;
-        if (kb_widget(id[best])) widget_set_state(kb_widget(id[best]), "pressed");
+        if (kb_widget(id[best]) && !(id[best] == K_GO && kb.go_off)) widget_set_state(kb_widget(id[best]), "pressed");
         kb_press(id[best]);
     }
 }
@@ -989,7 +999,7 @@ static void kb_gap_end(int click) { /* the finger left a touch that was resolved
     int id = kb.gap - 1;
     if (!kb.gap) return;
     kb.gap = 0;
-    if (kb_widget(id)) widget_set_state(kb_widget(id), "normal");
+    if (kb_widget(id) && !(id == K_GO && kb.go_off)) widget_set_state(kb_widget(id), "normal");
     kb_release(id);
     if (click && id != K_DEL) kb_click(id);
 }
@@ -1041,6 +1051,40 @@ static int kb_bind(void *w, int id) {
            widget_on(w, EVT_POINTER_DOWN, kb_on_touch, (void *)(long)id) &&
            widget_on(w, EVT_POINTER_UP, kb_on_touch, (void *)(long)id) &&
            widget_on(w, EVT_POINTER_ABORT, kb_on_touch, (void *)(long)id);
+}
+
+/* The field's text to start with (cut on a character boundary at the limit); NULL or "" for none. */
+static void kb_load(const char *initial) {
+    unsigned n, c = 0, l, i;
+    kb.len = 0;
+    kb.buf[0] = 0;
+    if (!initial) return;
+    n = kb_slen(initial);
+    while (c < n && c + (l = kb_clen(initial + c)) <= kb.max && c + l <= n) c += l;
+    for (i = 0; i < c; ++i) kb.buf[i] = initial[i];
+    kb.len = c;
+    kb.buf[c] = 0;
+}
+
+/* The layers, the bottom row and the first page for the field's flags and text, then the field drawn (the tail of kb_init, also of keyboard_refocus). */
+static void kb_start(void) {
+    kb.layers = 1;
+    if (!(kb.flags & KB_PASSWORD) &&
+        kb_zh_setting()) { /* (a password field: English only) a second keyboard: the language key; the layer the last keyboard ended on comes back (a layer that will not open is dropped) */
+        kb.layers = 2;
+        if (kb_memo == L_ZH) {
+            if (KB_LAYERS[L_ZH].enter() == 0)
+                kb.layer = L_ZH;
+            else
+                kb.layers = 1, kb_memo = L_EN;
+        } else if (access(PINYIN_DICT, 0) != 0) {
+            kb.layers = 1;
+        }
+    }
+    kb_bottom();
+    kb_lang_label();
+    kb_page(kb_letters());
+    kb_refresh();
 }
 
 /* The lookups and bindings both ways of having the pad share (a page of its own, or embedded in another): the widgets by name, the pad's, the field's and the strip's events, the
@@ -1107,30 +1151,9 @@ static int kb_init(const char *placeholder, const char *initial, int embedded) {
     widget_on(kb.cands, EVT_POINTER_ABORT, zh_on_strip, (void *)0);
     zh.hot = -1;
     widget_set_text_utf8(kb.hint, placeholder ? placeholder : "");
-    if (initial) { /* cut on a character boundary */
-        unsigned n = kb_slen(initial), c = 0, l;
-        while (c < n && c + (l = kb_clen(initial + c)) <= kb.max && c + l <= n) c += l;
-        for (i = 0; (unsigned)i < c; ++i) kb.buf[i] = initial[i];
-        kb.len = c;
-        kb.buf[c] = 0;
-    }
+    kb_load(initial);
     kb.geo = 0; /* the asset is the lowercase page's geometry */
-    kb.layers = 1;
-    if (kb_zh_setting()) { /* a second keyboard: the language key; the layer the last keyboard ended on comes back (a layer that will not open is dropped) */
-        kb.layers = 2;
-        if (kb_memo == L_ZH) {
-            if (KB_LAYERS[L_ZH].enter() == 0)
-                kb.layer = L_ZH;
-            else
-                kb.layers = 1, kb_memo = L_EN;
-        } else if (access(PINYIN_DICT, 0) != 0) {
-            kb.layers = 1;
-        }
-    }
-    kb_bottom();
-    kb_lang_label();
-    kb_page(kb_letters());
-    kb_refresh();
+    kb_start();
     return 0;
 }
 
@@ -1159,16 +1182,57 @@ int keyboard_open(const char *title, const char *placeholder, const char *initia
 /* The pad, the candidate strip and the field of ANOTHER page's window (the same widget names; ui/m1plus_search.bin has them, built from the same pieces as the keyboard page: tools/pod_ui.py
  * keyboard_pad_widgets). The text goes to on_change whenever it may have changed (the page ignores a repeat), the action key to on_go (the page hides the pad); the page's own Back closes the
  * window and ends this with keyboard_detach from its destroy handler. The pad starts shown. text_x, text_w, caret_y: the field's inner geometry in that page. */
-int keyboard_attach(void *win, const char *placeholder, int text_x, int text_w, int caret_y, kb_change_fn on_change,
-                    kb_go_fn on_go) {
+int keyboard_attach(void *win, const char *placeholder, int text_x, int text_w, int caret_y, unsigned flags,
+                    kb_change_fn on_change, kb_go_fn on_go) {
     if (kb.win || !win) return -1;
     memset(&kb, 0, sizeof kb);
     memset(&zh, 0, sizeof zh);
-    kb.win = win, kb.embedded = 1, kb.max = KB_MAX;
+    kb.win = win, kb.embedded = 1, kb.max = flags & KB_PASSWORD ? KB_PASS_MAX : KB_MAX, kb.flags = flags;
+    kb.mask = (flags & KB_PASSWORD) != 0;
     kb.tx = text_x, kb.tw = text_w, kb.cy = caret_y;
     if (kb_init(placeholder, (const char *)0, 1) != 0) return -1;
     kb.on_change = on_change, kb.on_go = on_go;
     return 0;
+}
+
+/* Another field of the same page takes the pad (a page with several fields moves the field widgets itself): the flags, the text room, the placeholder, the text and the callbacks of the new field, the
+ * widgets and their bindings kept. What was pending (a pinyin composition, a held key, a pop-up) is dropped, the layers and the first page are chosen again for the flags (a password field is English only;
+ * the Chinese engine stays open for the plain field that comes back), the action key's label and dimming are the page's to set again (keyboard_set_go), and on_change gets the new text. -1 when there is no
+ * embedded keyboard. */
+int keyboard_refocus(const char *placeholder, int text_w, unsigned flags, const char *text, kb_change_fn on_change,
+                     kb_go_fn on_go) {
+    if (!kb.win || !kb.embedded) return -1;
+    kb_gap_end(0);
+    kb_unpop();
+    kb_stop();
+    zh_reset();
+    kb.layer = L_EN;
+    kb.flags = flags;
+    kb.max = flags & KB_PASSWORD ? KB_PASS_MAX : KB_MAX; /* before kb_load, which cuts the text to it */
+    kb.mask = (flags & KB_PASSWORD) != 0;
+    kb.tw = text_w;
+    kb.on_change = on_change, kb.on_go = on_go;
+    widget_set_text_utf8(kb.hint, placeholder ? placeholder : "");
+    kb_load(text);
+    kb_start();
+    return 0;
+}
+
+/* A password field's eye: dots or the text. The caret is measured on what is shown. */
+void keyboard_set_mask(int on) {
+    if (!kb.win || !kb.embedded || kb.mask == !!on) return;
+    kb.mask = !!on;
+    kb_refresh();
+}
+
+/* The action key's label (a string key of tools/pod_i18n.py; NULL keeps it) and whether it works: dimmed (the "disable" style) and insensitive while not, so neither a touch on it nor one that
+ * the gap rule resolves to it does anything. */
+void keyboard_set_go(const char *key, int enabled) {
+    if (!kb.win || !kb.embedded) return;
+    if (key) widget_set_tr_text(kb.go, key);
+    kb.go_off = !enabled;
+    widget_set_sensitive(kb.go, enabled);
+    widget_set_state(kb.go, enabled ? "normal" : "disable");
 }
 
 /* The page's window is going: the timer, the engine's megabyte and the state go with it. */

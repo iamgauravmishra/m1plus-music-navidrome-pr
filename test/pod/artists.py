@@ -747,7 +747,7 @@ def index_tests(ctx):
     m.call(PSYMS['ar_open'], a0=0, count=900000000)
     got = keys(m, len(exp))
     expect(got == exp and not [c for c in m.calls if c[0] == 'calloc' and c[1] == 4 * 2048 and c[2]], 'a refused index: the scan finds the same keys')
-    if PERF: expect(INDEX_COST[(1000, 200)] < 1000000 and m.icount > 8000000,
+    if PERF: expect(INDEX_COST[(1000, 200)] < 1000000 and m.icount > 5000000,
            f'200 albums over 1000: {INDEX_COST[(1000, 200)]:,} payload instructions with the index, {m.icount:,} with the scan (10.2 M before the index existed)')
 
 

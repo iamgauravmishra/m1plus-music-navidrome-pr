@@ -146,7 +146,7 @@ def run(ctx):
     S = P.DEVELOPER_PAGE
     item = 2
     expect(S.key == 'm1plus_developer' and [r.label for r in S.rows] == ['Boot to M1+ Music', 'Open Shanling Home', 'Screenshot', 'Cache', 'Settings Files', 'Reset All Settings'] and S.rows[item].action == P.ACT_SHOT == 14 and P.PAGES[P.DEVELOPER_PAGE_INDEX] is S,
-           'Screenshot is the third row of the Developer page (under Startup; Tools then Reset follow)')
+           'Screenshot is the third row of the Developer page (under Startup; Cache, Settings Files and Reset follow)')
     expect(not [r for page in P.PAGES if page is not S for r in page.rows if r.action == P.ACT_SHOT],
            'no other page has a Screenshot row (menu, Extras and Main Menu page have none)')
     rows_s = PSYMS[f'pod_rows_{P.DEVELOPER_PAGE_INDEX}']

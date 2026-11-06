@@ -33,6 +33,11 @@ STATE = {
 }
 
 
+# Settings > Wi-Fi's sample networks: (name, stock level 0..4, secured, saved, connected), the connected one first
+WIFI_NETS = [('Home', 4, True, True, True), ('Studio', 4, True, True, False), ('Sam’s iPhone', 3, True, False, False), ('Cafe Open', 3, False, False, False), ('eduroam', 3, True, False, False),
+             ('Neighbour 5G', 2, True, False, False)]
+
+
 def rgb(css):
     css = css.lstrip('#')
     return tuple(int(css[i:i + 2], 16) for i in (0, 2, 4))
@@ -127,6 +132,113 @@ def draw_covlist(s, title, albums):
     return im
 
 
+def draw_wifi(s, on=True, nets=(), scanning=True, joining=False, scroll=0):
+    """Settings > Wi-Fi (patch/wifipage.c, docs/modules/wifi.md): the widgets of ui/m1plus_wifi.bin as the payload lays them out. nets: (name, level 0..4, secured, saved, connected) in the page's order (the
+    connected one first). The first group is the switch row (and the connected network under it), MY NETWORKS the saved ones, NETWORKS the others and Other...; a row's picture piece, hairline and glyphs are
+    the payload's (wp_layout). joining: the connected row shows a spinner frame instead of the check. scroll: pixels the list is scrolled."""
+    root = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', 'm1plus_wifi.bin'), 'rb').read())
+    by = {w.name: w for w in root.walk() if w.name}
+    im = Image.new('RGBA', (W, 900), (0, 0, 0, 255)); d = ImageDraw.Draw(im)
+    grey = rgb(ST.GREY)
+    cur = [n for n in nets if on and n[4]][:1]
+    mine = [n for n in nets if on and n[3] and not n[4]]
+    others = [n for n in nets if on and not n[3] and not n[4]]
+    def piece(i, n): return 'single' if n == 1 else 'top' if i == 0 else 'bot' if i == n - 1 else 'mid'
+    def row(y, p, hair):
+        im.alpha_composite(s.img(f'pod_cd_{p}'), (0, y))
+        if hair: d.rectangle((24, y + 51, 309, y + 51), fill=rgb(ST.CARD_HAIR_RGB))
+    def label(name, y, text=None, px=21):
+        w = by[name]; s.text(im, w.x + 2, y + ST.ROW_H / 2, s.clip(text or s.shown(w), px, w.w - 4), px)
+    def net(k, y, n, p, hair):
+        name, level, secured, saved, conn = n
+        row(y, p, hair)
+        w = by['wf_name0']; s.text(im, w.x + 2, y + ST.ROW_H / 2, s.clip(name, 21, w.w - 4), 21)
+        if conn: im.alpha_composite(s.img('wf_spin1' if joining else 'wf_check'), (by['wf_chk0'].x + (3 if joining else 0), y + by['wf_chk0'].y + (3 if joining else 0)))
+        if secured: im.alpha_composite(s.img('wf_lock'), (by['wf_lock0'].x, y + by['wf_lock0'].y))
+        im.alpha_composite(s.img(f'wf_sig{[0, 1, 1, 2, 3][level]}'), (by['wf_sig0'].x, y + by['wf_sig0'].y))
+        im.alpha_composite(s.img('wf_info'), (by['wf_info0'].x, y + by['wf_info0'].y))
+    def header(name, y, spinner=False):
+        t = by[name + '_t']; px = int(style(t, 'font_size'))
+        s.text(im, t.x + 2, y + t.y + t.h / 2, s.shown(t), px, grey)
+        if spinner: im.alpha_composite(s.img('wf_spin2'), (t.x + 2 + s.font.width(s.shown(t), px) + 8, y + by['wf_hdr_net_spin'].y))
+    y = ST.CM
+    row(y, 'top' if cur else 'single', bool(cur))
+    label('wf_sw_label', y); im.alpha_composite(s.img('sset_on' if on else 'sset_off'), (by['wf_sw_img'].x, y + by['wf_sw_img'].y)); y += ST.ROW_H
+    if cur: net(0, y, cur[0], 'bot', False); y += ST.ROW_H
+    if on:
+        if mine:
+            header('wf_hdr_my', y); y += ST.HDR_H
+            for i, n in enumerate(mine): net(1 + i, y, n, piece(i, len(mine)), i < len(mine) - 1); y += ST.ROW_H
+        header('wf_hdr_net', y, scanning); y += ST.HDR_H
+        for i, n in enumerate(others): net(17 + i, y, n, piece(i, len(others) + 1), True); y += ST.ROW_H
+        row(y, piece(len(others), len(others) + 1), False); label('wf_other_label', y, None); y += ST.ROW_H
+    y += ST.END_H
+    out = Image.new('RGBA', (W, SCREEN), (0, 0, 0, 255)); out.alpha_composite(im.crop((0, scroll, W, scroll + SCREEN - NAV)), (0, NAV))
+    d = ImageDraw.Draw(out)
+    lt = by['label_title']; tpx = PI.title_px(s.tree)
+    s.text(out, lt.x, NAV / 2, s.shown(lt), tpx)
+    for name, bx, bw in (('ah_nav_back', 7, 44), ('ah_nav_np', 260, 60)):
+        g = s.img(name); out.alpha_composite(g, (bx + (bw - g.width) // 2, (NAV - g.height) // 2))
+    return out
+
+
+def draw_wifiinfo(s, title, fields, saved=True, auto=True):
+    """One network's info page (patch/wifipage.c wi_layout, docs/modules/wifi.md): the widgets of ui/m1plus_wifiinfo.bin as the payload lays them out. fields: (label, value) of the info card; saved: Forget This
+    Network on top and Auto-Join (on / off by auto) under the card, else Join under it. Pieces, hairlines and gaps are the payload's."""
+    root = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', 'm1plus_wifiinfo.bin'), 'rb').read())
+    by = {w.name: w for w in root.walk() if w.name}
+    im = Image.new('RGBA', (W, 900), (0, 0, 0, 255)); d = ImageDraw.Draw(im)
+    grey = rgb(ST.GREY)
+    def piece(i, n): return 'single' if n == 1 else 'top' if i == 0 else 'bot' if i == n - 1 else 'mid'
+    def row(y, p, hair):
+        im.alpha_composite(s.img(f'pod_cd_{p}'), (0, y))
+        if hair: d.rectangle((24, y + 51, 309, y + 51), fill=rgb(ST.CARD_HAIR_RGB))
+    def centred(name, y):
+        w = by[name]; s.text(im, w.x + w.w // 2, y + ST.ROW_H / 2, s.shown(w), 21, (255, 255, 255), 'm')
+    y = ST.CM
+    if saved:
+        row(y, 'single', False); centred('wi_forget_t', y); y += ST.ROW_H + ST.GAP_H
+    for i, (lab, val) in enumerate(fields):
+        row(y, piece(i, len(fields)), i < len(fields) - 1)
+        s.text(im, by['wi_fl0'].x + 2, y + ST.ROW_H / 2, lab, 21)
+        s.text(im, by['wi_fv0'].x + by['wi_fv0'].w - 2, y + ST.ROW_H / 2, val, 18, grey, 'r')
+        y += ST.ROW_H
+    y += ST.GAP_H
+    row(y, 'single', False)
+    if saved:
+        s.text(im, by['wi_auto_t'].x + 2, y + ST.ROW_H / 2, s.shown(by['wi_auto_t']), 21)
+        im.alpha_composite(s.img('sset_on' if auto else 'sset_off'), (by['wi_auto_img'].x, y + by['wi_auto_img'].y))
+    else:
+        centred('wi_join_t', y)
+    out = Image.new('RGBA', (W, SCREEN), (0, 0, 0, 255)); out.alpha_composite(im.crop((0, 0, W, SCREEN - NAV)), (0, NAV))
+    lt = by['label_title']; tpx = PI.title_px(s.tree)
+    s.text(out, lt.x, NAV / 2, title, tpx)
+    for name, bx, bw in (('ah_nav_back', 7, 44), ('ah_nav_np', 260, 60)):
+        g = s.img(name); out.alpha_composite(g, (bx + (bw - g.width) // 2, (NAV - g.height) // 2))
+    return out
+
+
+def draw_wifisec(s):
+    """The Security picker of the Join Wi-Fi Network page (patch/wifipage.c ws_open): the widgets of ui/m1plus_wifisec.bin, the check on the default row."""
+    root = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', 'm1plus_wifisec.bin'), 'rb').read())
+    by = {w.name: w for w in root.walk() if w.name}
+    im = Image.new('RGBA', (W, SCREEN), (0, 0, 0, 255)); d = ImageDraw.Draw(im)
+    y = NAV + ST.CM
+    for k in range(3):
+        r = by[f'ws_row{k}']
+        im.alpha_composite(s.img(r.get('style:normal:bg_image')), (0, y))
+        l = by[f'ws_label{k}']; s.text(im, l.x + 2, y + ST.ROW_H / 2, s.shown(l), 21)
+        c = by[f'ws_check{k}']
+        if c.get('visible') != 'false': im.alpha_composite(s.img(c.get('image')), (c.x, y + c.y))
+        if k < 2: d.rectangle((l.x, y + 51, 309, y + 51), fill=rgb(ST.CARD_HAIR_RGB))
+        y += ST.ROW_H
+    lt = by['label_title']; tpx = PI.title_px(s.tree)
+    s.text(im, lt.x, NAV / 2, s.shown(lt), tpx)
+    for name, bx, bw in (('ah_nav_back', 7, 44), ('ah_nav_np', 260, 60)):
+        g = s.img(name); im.alpha_composite(g, (bx + (bw - g.width) // 2, (NAV - g.height) // 2))
+    return im
+
+
 def sheet(panels, path):
     pad = 14
     wid = sum(im.width for _, im in panels) + pad * (len(panels) + 1)
@@ -156,6 +268,14 @@ def main():
            ('Cache > empty',draw_covlist(s, 'No Art', [])),
            ('Settings > Keyboards', draw_page(s, 'm1plus_keyboards')),
            ('Settings > About (first screen)', draw_page(s, 'm1plus_about')),
+           ('Settings > Wi-Fi', draw_wifi(s, True, WIFI_NETS)),
+           ('Settings > Wi-Fi, scrolled', draw_wifi(s, True, WIFI_NETS, scroll=116)),
+           ('Settings > Wi-Fi, joining', draw_wifi(s, True, WIFI_NETS, scanning=False, joining=True)),
+           ('Settings > Wi-Fi, off', draw_wifi(s, False)),
+           ('Wi-Fi > info (saved)', draw_wifiinfo(s, 'Studio', [('Security', 'WPA2/WPA3')])),
+           ('Wi-Fi > info (connected)', draw_wifiinfo(s, 'Home', [('Security', 'WPA/WPA2'), ('IP Address', '192.168.1.42'), ('Router', '192.168.1.1')], auto=False)),
+           ('Wi-Fi > info (not saved)', draw_wifiinfo(s, 'Cafe Open', [('Security', 'Open')], saved=False)),
+           ('Wi-Fi > Join Wi-Fi Network > Security', draw_wifisec(s)),
            ('Settings > Appearance', draw_page(s, 'm1plus_appearance')),
            ('Settings > Appearance > Accent', draw_page(s, 'm1plus_accent')),
            ('Settings > Appearance > Background', draw_page(s, 'm1plus_background')),

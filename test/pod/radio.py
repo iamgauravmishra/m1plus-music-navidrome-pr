@@ -970,7 +970,7 @@ def asset_tests(ctx):
     P = pod_pages
     root = ui('m1plus_radio'); f = root.find
     expect(root.name == 'm1plus_radio_page' == P.RADIO.name and P.RADIO.kind == 'radio' and P.RADIO in P.PAGES and ui('m1plus_radionp').name == 'm1plus_radionp_page' == P.RADIONP.name and P.RADIONP in P.PAGES
-           and P.PAGES[-5:-2] == [P.RADIO, P.RADIONP, P.RADIOINFO], 'the pages m1plus_radio, m1plus_radionp and m1plus_radioinfo are built and follow the Pull-down page in the page table (Get Info and the Podcast Region picker come after them)')
+           and P.PAGES[-10:-7] == [P.RADIO, P.RADIONP, P.RADIOINFO] and P.PAGES[-5:] == [P.WIFI_PAGE, P.WIFIINFO_PAGE, P.WIFIPASS_PAGE, P.WIFIOTHER_PAGE, P.WIFISEC_PAGE], 'the pages m1plus_radio, m1plus_radionp and m1plus_radioinfo are built and follow the Pull-down page in the page table (Get Info, the Podcast Region picker and the Wi-Fi pages come after them)')
     expect(all(f(n) is not None for n in PAGE_WIDGETS if n != 'radio_scrollview'), 'every widget the stations page looks up is in the asset')
     lv, sv, grid = f('radio_listview'), f('radio_scrollview'), f('view_grid')
     expect((lv.y, lv.h) == (50, VIEW_H) and sv.w == 310 and f('scroll_bar_m') is not None and grid.get('style:normal:bg_color') == '#000000', 'a stock list under the 50 px navbar holding the content view')

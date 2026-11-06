@@ -1140,7 +1140,8 @@ int radio_open(void) {
     rp.vlist = set_read(RD_VIEW_FILE, '0') != '1'; /* the list unless the file says the grid */
     rp.dir = 1;
     widget_on(rp.field, EVT_POINTER_UP, rp_on_field, (void *)0);
-    if (keyboard_attach(rp.win, TR("Search Stations"), SE_TEXT_X, RP_TEXT_W, SE_CARET_Y, rp_on_text, rp_on_go) != 0) {
+    if (keyboard_attach(rp.win, TR("Search Stations"), SE_TEXT_X, RP_TEXT_W, SE_CARET_Y, 0, rp_on_text, rp_on_go) !=
+        0) {
         navigator_back(); /* an asset that is not ours, or a keyboard already up */
         return -2;
     }

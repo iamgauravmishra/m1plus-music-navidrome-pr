@@ -164,7 +164,34 @@ CARD_IMAGES = sorted({card_name(g) for g in CARD_GLYPHS.values()}) + [CARD_CHEVR
 ES_ICONS = {'pod_es_timer': 'timer', 'pod_es_music': 'music', 'pod_es_image': 'image', 'pod_es_wifi': 'wifi-low', 'pod_es_calendar': 'calendar', 'pod_es_lock': 'lock', 'pod_es_plug': 'plug',
             'pod_es_info': 'info', 'pod_es_card': 'memory-stick', 'pod_es_drive': 'hard-drive', 'pod_es_download': 'download', 'pod_es_check': 'badge-check'}
 ES_PX, ES_RGB = 40, (0x8E, 0x8E, 0x93)
-DAILY = DAILY + CARD_IMAGES + ['pod_ic_tape', 'pod_ic_vinyl', 'pod_ic_art'] + sorted(ES_ICONS)   # (pod_ic_tape, pod_ic_vinyl: Now Playing's More sheet's Cassette Mode and Vinyl Mode rows, tools/mod_lists.py: no row page uses them)
+# The Wi-Fi page's network rows (patch/wifipage.c, docs/modules/wifi.md): a Wi-Fi fan signal glyph (wf_sig0..3: Lucide's wifi drawn whole in the dim grey, the level's arcs white over it: 3 wifi, 2 wifi-high, 1 wifi-low, 0 all dim; 20 x 16), the lock (16 px) and info (22 px)
+# glyphs in the secondary grey, a white check (20 px; not the accent-tinted picker check) and eight frames of a small grey spinner (wf_spin0..7, 14 px: the header's while scanning, the check's place while joining).
+WIFI_SIG_W, WIFI_SIG_H, WIFI_SIG_DIM, WIFI_GREY, WIFI_SPIN_PX = 20, 16, (0x55, 0x55, 0x59), (0xAA,) * 3, 14
+WIFI_SIG_GLYPHS = {1: 'wifi-low', 2: 'wifi-high', 3: 'wifi'}     # the lit arcs of wf_sig1..3
+WIFI_GLYPHS = {'wf_lock': ('lock', 16, WIFI_GREY), 'wf_info': ('info', 22, WIFI_GREY), 'wf_check': ('check', 20, WHITE),
+               'wf_eye': ('eye', 22, WIFI_GREY), 'wf_eyeoff': ('eye-off', 22, WIFI_GREY)}   # the password page's show / hide button (eye: the password is hidden, a tap shows it)
+WIFI_IMAGES = sorted(WIFI_GLYPHS) + [f'wf_sig{n}' for n in range(4)] + [f'wf_spin{i}' for i in range(8)]
+
+
+def wifi_signal(lit):
+    """WIFI_SIG_W x WIFI_SIG_H: Lucide's wifi fan, all of it in WIFI_SIG_DIM, with the arcs of level `lit` (WIFI_SIG_GLYPHS) white over it; 0 is all dim. The fan's ink is the same at every level, so the glyph does not move."""
+    def fan(p):
+        full = glyph('wifi', p, 'small', WIFI_SIG_DIM).copy()
+        if lit: full.alpha_composite(glyph(WIFI_SIG_GLYPHS[lit], p, 'small'))
+        return full
+    return fit(fan, WIFI_SIG_W, WIFI_SIG_H, WIFI_SIG_W, 'c')
+
+
+def wifi_spinner(i, ss=8):
+    """WIFI_SPIN_PX square: a 280 degree arc 2.5 px wide in the secondary grey, turned i x 45 degrees."""
+    from PIL import Image, ImageDraw
+    n = WIFI_SPIN_PX * ss
+    big = Image.new('L', (n, n), 0)
+    ImageDraw.Draw(big).arc((int(1.25 * ss), int(1.25 * ss), n - int(1.25 * ss) - 1, n - int(1.25 * ss) - 1), 45 * i, 45 * i + 280, fill=255, width=int(2.5 * ss))
+    im = Image.new('RGBA', (WIFI_SPIN_PX,) * 2, WIFI_GREY + (0,)); im.putalpha(big.resize((WIFI_SPIN_PX,) * 2, Image.LANCZOS)); return im
+
+
+DAILY = DAILY + CARD_IMAGES + WIFI_IMAGES + ['pod_ic_tape', 'pod_ic_vinyl', 'pod_ic_art'] + sorted(ES_ICONS)   # (pod_ic_tape, pod_ic_vinyl: Now Playing's More sheet's Cassette Mode and Vinyl Mode rows, tools/mod_lists.py: no row page uses them)
 # M1+ Music menu and Shuffle page rows: label -> (added image, glyph). A bare white glyph (BARE_PX canvas) left of the title.
 # '@shanling' = the brand mark cut out of a stock image (shanling_mark below), not a glyph.
 POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'audio-lines'), 'Cover Flow': ('pod_ic_coverflow', '+coverflow'),   # audio-lines: the wave of the navbar's Now Playing button
@@ -737,6 +764,9 @@ def generate_all(sizes):
     f[name] = pod_chevron(rgb)
     f[CARD_CHECK[0]] = glyph_fit('check', CARD_CHECK[1], CARD_CHECK[1])
     for i, n in enumerate(SWATCHES): f[n] = swatch(i)
+    for n, (g, px, rgb) in WIFI_GLYPHS.items(): f[n] = glyph_fit(g, px, px, rgb, 1, 2.0 if px >= 22 else 1.5)
+    for n in range(4): f[f'wf_sig{n}'] = wifi_signal(n)
+    for i in range(8): f[f'wf_spin{i}'] = wifi_spinner(i)
     for p in CARD_PIECES:
         f[f'pod_cd_{p}'] = card_piece(p); f[f'pod_cd_{p}_down'] = card_piece(p, True)
     for n, g in PL_MENU_ICONS: f[n] = glyph(g, PL_MENU_PX, 'bare')

@@ -54,7 +54,7 @@ To show, hide or reorder the tiles of the pull-down, open **Settings → System 
 
 | Page | Options |
 |---|---|
-| Wi-Fi / Bluetooth | Stock connection pages; values show On/Off |
+| Wi-Fi / Bluetooth | Wi-Fi: our page (the stock list under our navbar: switch, scan, saved and nearby networks with their security, add a hidden network; WPA3 and Enhanced Open join; All System Settings > Wi-Fi opens the same page, and the stock page with `/mnt/mmc/m1plus-off`, the route for WEP). Bluetooth: the stock page. Values show On/Off |
 | Home Screen | Recent Albums, Daily Mix, menu items and Battery Percentage (off by default); Regenerate Daily Mix takes effect next Home visit |
 | Library | Update Library, Rebuild Covers and landscape Cover Flow |
 | Now Playing | Cassette Theme: Normal, Chrome or Metal; applies next time Cassette Mode opens |

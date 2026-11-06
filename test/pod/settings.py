@@ -258,8 +258,9 @@ def stock_tests(ctx):
     for label, name in want.items():
         m = settings_machine()
         m.click(f'pod_row{rows[label]}')
-        expect([c for c in m.calls if c[0] == 'navigator_to'] == [('navigator_to', name)] and 'navigator_to_with_context' not in m.names() and 'window_open' not in m.names(),
-               f'{label}: one plain navigator_to("{name}"), no context, no window of ours')
+        opened = [c[1] for c in m.calls if c[0] == 'window_open']
+        expect([c for c in m.calls if c[0] == 'navigator_to'] == [('navigator_to', name)] and 'navigator_to_with_context' not in m.names() and opened == (['m1plus_wifi'] if label == 'Wi-Fi' else []),
+               f'{label}: one plain navigator_to("{name}"), no context, no window of ours' + (' but the Wi-Fi page, which opens first and (here, an asset without its widgets) hands over to the stock page' if label == 'Wi-Fi' else ''))
     m = settings_machine()
     m.click(f'pod_row{rows["All Playback Settings"]}'); m.click(f'pod_row{rows["All System Settings"]}')
     # (the Home dispatcher's ids 16 and 17 are bound to the two rows: tests/pod/menu.py checks the table)

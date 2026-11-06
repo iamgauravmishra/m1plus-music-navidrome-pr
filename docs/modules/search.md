@@ -133,7 +133,7 @@ A tap is a press and a lift within `SC_DRAG_PX` on the same row (a drag, an abor
 
 `keyboard_open` is unchanged for its callers (Playlists New, the Developer Keyboard page: same asset, API and tests). Its body is split: `kb_init` finds the widgets by name and binds them, sets the
 first page and layers (the same for both ways of having the pad); `keyboard_open` adds the window, the title, `KB_DONE`, Back and the destroy handler. `keyboard_attach(win, placeholder, text_x,
-text_w, caret_y, on_change, on_go)` runs the same `kb_init` on another page's window (`kb.embedded`): the field's inner geometry is the caller's (`kb.tx`, `kb.tw`, `kb.cy` instead of the page's
+text_w, caret_y, flags, on_change, on_go)` (flags 0 for Search and Radio; `KB_PASSWORD` is the Wi-Fi password page's, [keyboard](keyboard.md)) runs the same `kb_init` on another page's window (`kb.embedded`): the field's inner geometry is the caller's (`kb.tx`, `kb.tw`, `kb.cy` instead of the page's
 constants), `kb_refresh` ends by calling `on_change` with the text, the action key calls `on_go` (after committing a pending candidate; no page is closed), and the page's destroy handler calls
 `keyboard_detach` (the timer, the engine's megabyte, the state). `keyboard_show(0/1)`, `keyboard_shown()`, `keyboard_text()` and `keyboard_set_text(s)` (the field replaced as if typed; a recent search tapped) are the rest of it. One keyboard at a time: an attach or an open
 refuses while one exists. The asset side is `keyboard_pad_widgets()` in `tools/pod_ui.py`, which both pages end with: the pad, the strip and the pop-up are the same widgets by the same names

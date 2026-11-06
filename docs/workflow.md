@@ -23,6 +23,7 @@ brew install uv squashfs llvm lld
 make setup
 cp "M1 Plus Firmware V2.1.zip" firmware/
 uv run python -I tools/mod_font.py --fetch
+uv run python -I tools/mod_wpa.py --fetch   # hostap source and header packages for the Wi-Fi supplicant (docs/modules/wifi.md)
 make doctor
 ```
 

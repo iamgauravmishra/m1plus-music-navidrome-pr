@@ -36,9 +36,12 @@ def main():
         check(name, got == want, got)
     for tool, version in workflow.environment().items():
         if tool not in ('python', 'requirements'): check(tool, version != 'missing', version)
-    import build, mod_font
+    import build, mod_font, mod_wpa
     for label, path, want in [('firmware', paths.ZIP, build.ZIP_SHA), ('Source Han Sans', paths.SHS_ZIP, mod_font.SHS_ZIP_SHA)]:
         check(label, os.path.isfile(path) and workflow.sha(path) == want, path)
+    for url, want in [mod_wpa.HOSTAP] + [(mod_wpa.DEBIAN + n, s) for n, s in mod_wpa.DEBS]:
+        path = mod_wpa.dl_path(url)
+        check(os.path.basename(path), os.path.isfile(path) and workflow.sha(path) == want, f'{path} (run tools/mod_wpa.py --fetch)')
     llvm = os.environ.get('LLVM_BIN', '/opt/homebrew/opt/llvm/bin')
     try:
         targets = subprocess.run([os.path.join(llvm, 'clang'), '--print-targets'], capture_output=True, text=True, timeout=10)
