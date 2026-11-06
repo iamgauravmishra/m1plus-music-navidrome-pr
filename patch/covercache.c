@@ -239,6 +239,34 @@ unsigned cc_cover_key(void *albums, unsigned key, const char *album, char *url) 
     return key;
 }
 
+/* The cache key of the library album record named album (ASCII case folded): the key of the row getAllAlbum lists for that name, which the cover files of the Albums page,
+ * Cover Flow, Home and the builder are named after, and so the file of a collab ("A; B") or a feature, whose own artist and album give another key. For a page that has no
+ * album list and must not load one (cc_albums replaces *pdeq_showlist, which the page under Now Playing or the Songs page draws from): ONE targeted query, getAllAlbum's own
+ * statement with the album as its filter (the getAlbumBy* shape: STOCK_ALBUM_HEAD where album='<name>' COLLATE NOCASE STOCK_ALBUM_GROUP) and stock's album row callback through
+ * the hooked toolsQueryDbTable (the dm_rows way: the record lands in *tools_pdeq_directory and is cleared at once). The Library filter (pcmodel.c pq_filter) rewrites it as it
+ * rewrites every album list: the condition joins its WHERE and the one min() of its HAVING picks the album's first track, whose row gives the bare columns (id, songer, fileurl), so
+ * the record is the one getAllAlbum's full list has for the name however SQLite orders the rows (test/pod/scan.py runs both on SQLite). 0: no album tag, a name over 250 bytes, a
+ * failed query, no such album. */
+unsigned cc_album_rep_key(const char *album) {
+    static const char head[] = STOCK_ALBUM_HEAD " where album='", tail[] = "' COLLATE NOCASE" STOCK_ALBUM_GROUP;
+    char sql[sizeof head + 2 * 250 + sizeof tail], *o = sql;
+    const char *p;
+    unsigned key = 0;
+    void *dq = (void *)0;
+    if (!album || !*album) return 0;
+    memcpy(o, head, sizeof head - 1), o += sizeof head - 1;
+    for (p = album; *p; ++p) {
+        if (p - album >= 250) return 0;
+        if (*p == '\'') *o++ = '\'';
+        *o++ = *p;
+    }
+    memcpy(o, tail, sizeof tail);
+    if (toolsQueryDbTable(STOCK_DB_PATH, sql, STOCK_ALBUM_ROW, 0) >= 0) dq = *(void **)PDEQ_TOOLS_TMP;
+    if (dq && deque_size(dq)) key = cc_album_key(deque_at(dq, 0));
+    if (dq) deque_clear(dq);
+    return key;
+}
+
 /* A decoded image reduced to size x size over black. Only the four 32-bit formats; the stock loader
  * decodes JPEG and PNG to RGBA8888 with straight alpha. The image manager's copy is only read, and a
  * cover's load is dropped again at once (unload), as the stock cover rows do; w is any widget (the
@@ -389,6 +417,134 @@ int cc_nocase(const char *a, const char *b) {
     while (*a && fold((unsigned char)*a) == fold((unsigned char)*b)) ++a, ++b;
     return fold((unsigned char)*a) - fold((unsigned char)*b);
 }
+
+/* ---------------------------------------------------------------------------
+ * The cover map: album name -> the Cover Flow cache key whose file holds that album's cover, for a page that asks about many tracks (the Queue page) and must not load the
+ * album list (cc_albums replaces *pdeq_showlist) or query once per track. ONE query builds it: getAllAlbum's own statement and row callback (STOCK_ALBUM_SQL, STOCK_ALBUM_ROW,
+ * pinned in tools/pod.py QUERY_PINS) through the hooked toolsQueryDbTable, so the Library filter and the "album = its first track" rule apply and every record is exactly the
+ * Albums page's row; cc_album_key of that record is the name the cache file was built under (the Albums page, Cover Flow, Home and the builder all key by these rows), so no
+ * sibling track is ever guessed at. The records land in *tools_pdeq_directory (the Daily Mix's dm_rows way; *pdeq_showlist is not touched) and are cleared before anything else is
+ * done. The map keeps two integers per album, no names and no record pointers: the album name folded to lower case (ASCII A-Z only, every other byte as is, UTF-8 included: SQLite's
+ * NOCASE, which is also what the query groups by and cc_nocase compares) hashed with FNV-1a, and the key. The build opens NO cover file: whether an entry's file holds a picture
+ * (cc_url: an empty file is the no-art marker) is looked at the first time the entry is asked for and kept in a side array of 2 bits an entry (cmap_state: unknown, picture, none;
+ * 4 to a byte, n / 4 bytes, 1 KB at the cap), so a queue of five tracks probes the files of the albums it shows, not the library's. That is the existence check only, once per
+ * album for the map's life: a tile shown again after it was evicted still opens and decodes its image (grid_art), it just does not ask whether the file is there again. Two albums
+ * with one hash are told apart by nothing but their keys: a hash with two different keys is a collision of two names (or one name under two artists), it cannot be said which cover is
+ * right, so every entry of that hash is dropped (a lookup finds nothing: the placeholder); the same key twice is one album. That holds across the cap too: the albums past CC_CMAP_MAX
+ * are not kept, but their rows are still in the scratch deque, so each is hashed and looked up in the sorted array, and an entry whose hash a later album shares with a different key
+ * is dropped as well (no memory beyond the loop's, only the rows already there are read). The array is sorted by hash (Shell sort: no qsort among the imports), lookup is a binary search.
+ */
+typedef struct {
+    unsigned hash, key;
+} cc_cmap_e;
+
+/* state: 2 bits an entry, 4 to a byte, in the same allocation after e[] (CMAP_UNKNOWN, CMAP_ART or CMAP_NONE) */
+struct cc_cmap {
+    unsigned n;
+    unsigned char *state;
+    cc_cmap_e e[1];
+};
+
+/* the file was not looked at yet */
+#define CMAP_UNKNOWN 0
+/* the cache file exists and holds a picture */
+#define CMAP_ART 1
+/* no file, or the no-art marker: the placeholder, not looked at again */
+#define CMAP_NONE 2
+
+static unsigned cmap_hash(const char *s) {
+    unsigned h = 2166136261u;
+    for (; *s; ++s) h = (h ^ (unsigned)fold((unsigned char)*s)) * 16777619u;
+    return h;
+}
+
+static int cmap_less(const cc_cmap_e *x, const cc_cmap_e *y) {
+    return x->hash != y->hash ? x->hash < y->hash : x->key < y->key;
+}
+
+/* The first of the n sorted entries whose hash is not below h (n when none). */
+static unsigned cmap_lower(const cc_cmap_e *e, unsigned n, unsigned h) {
+    unsigned lo = 0, hi = n;
+    while (lo < hi) {
+        unsigned mid = (lo + hi) / 2;
+        if (e[mid].hash < h)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    return lo;
+}
+
+/* The map of the library's albums, NULL when there is none (no albums, a failed query, no memory, or only ambiguous names). st (NULL ok) gets the counts. The first CC_CMAP_MAX
+ * rows of the query (album name order, NOCASE) are kept and the rest only checked for a shared hash. The query costs what the Albums list costs to build (about five strings
+ * malloc'd and strcpy'd for each album, then _deque_push_back's deep copy of the record); no file is opened. The caller asks once per page. */
+cc_cmap_t *cc_cmap_build(cc_cmap_stat_t *st) {
+    static const unsigned gap[] = {1750, 701, 301, 132, 57, 23, 10, 4, 1};
+    void *dq = toolsQueryDbTable(STOCK_DB_PATH, STOCK_ALBUM_SQL, STOCK_ALBUM_ROW, 0) >= 0 ? *(void **)PDEQ_TOOLS_TMP
+                                                                                          : (void *)0;
+    unsigned rows = dq ? deque_size(dq) : 0, n = rows > CC_CMAP_MAX ? CC_CMAP_MAX : rows, i, j, g, m = 0, out = 0,
+             bad = 0;
+    cc_cmap_t *map =
+        n ? (cc_cmap_t *)calloc(1, sizeof(cc_cmap_t) + (n - 1) * sizeof(cc_cmap_e) + (n + 3) / 4) : (cc_cmap_t *)0;
+    for (i = 0; map && i < n; ++i) {
+        void *r = deque_at(dq, i);
+        if (!*cc_str(r, REC_ALBUM)) continue;
+        map->e[m].hash = cmap_hash(cc_str(r, REC_ALBUM));
+        map->e[m++].key = cc_album_key(r);
+    }
+    if (map) {
+        map->state = (unsigned char *)&map->e[n];
+        for (g = 0; g < sizeof gap / sizeof gap[0]; ++g)
+            for (i = gap[g]; i < m; ++i) {
+                cc_cmap_e x = map->e[i];
+                for (j = i; j >= gap[g] && cmap_less(&x, &map->e[j - gap[g]]); j -= gap[g])
+                    map->e[j] = map->e[j - gap[g]];
+                map->e[j] = x;
+            }
+        for (i = n; i < rows; ++i) {
+            /* an album past the cap that shares a kept hash under another key makes that hash ambiguous: the first entry of the hash gets the key 0 (no album's), which the pass below drops */
+            void *r = deque_at(dq, i);
+            const char *a = cc_str(r, REC_ALBUM);
+            unsigned h = cmap_hash(a), at = cmap_lower(map->e, m, h);
+            if (*a && at < m && map->e[at].hash == h && map->e[at].key != cc_album_key(r)) map->e[at].key = 0;
+        }
+    }
+    if (dq) deque_clear(dq); /* (the stock records are gone before anything else) */
+    if (map) {
+        for (i = 0; i < m; i = j) {
+            for (j = i + 1; j < m && map->e[j].hash == map->e[i].hash; ++j) {
+            }
+            if (!map->e[i].key || map->e[j - 1].key != map->e[i].key)
+                bad += j - i; /* two keys under one hash */
+            else
+                map->e[out++] = map->e[i];
+        }
+        map->n = out;
+    }
+    if (st) st->rows = rows, st->kept = out, st->ambiguous = bad;
+    if (map && !out) free(map), map = (cc_cmap_t *)0;
+    return map;
+}
+
+/* The key of the cache file that holds album's cover (ASCII case folded), 0 when the library has no such album, its name is ambiguous or its file holds no picture. The first
+ * ask for an album looks at the file (cc_url) and keeps the answer in the entry's 2 bits; later asks do not touch the disk. */
+unsigned cc_cmap_key(cc_cmap_t *map, const char *album) {
+    unsigned i, h, shift, s;
+    char url[80];
+    if (!map || !album || !*album) return 0;
+    h = cmap_hash(album);
+    i = cmap_lower(map->e, map->n, h);
+    if (i >= map->n || map->e[i].hash != h) return 0;
+    shift = (i & 3) * 2;
+    s = (map->state[i >> 2] >> shift) & 3;
+    if (s == CMAP_UNKNOWN) {
+        s = cc_url(url, map->e[i].key) ? CMAP_ART : CMAP_NONE;
+        map->state[i >> 2] = (unsigned char)(map->state[i >> 2] | s << shift);
+    }
+    return s == CMAP_ART ? map->e[i].key : 0;
+}
+
+void cc_cmap_free(cc_cmap_t *map) { free(map); }
 
 /* s without leading white space (toolsTrimLeft) and without a following "The " (when something follows it). */
 static const char *so_name(const char *s) {

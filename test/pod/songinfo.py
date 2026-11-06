@@ -293,7 +293,74 @@ def lifecycle_tests(ctx):
     expect(not [c for c in m.calls if c[0] == 'free'], 'the old page\'s late destroy frees nothing of the new one')
 
 
-SECTIONS = [asset_tests, field_tests, geometry_tests, lifecycle_tests]
+def cover_tests(ctx):
+    """5. The cover: the track's own Cover Flow cache file, else the file of the library album record of its album name (a collab, "A; B"): ONE targeted query, getAllAlbum's statement
+    filtered to the name, whose record is the one the album list has (the cache files are named after it); never the album list."""
+    expect = ctx.expect
+    path, album = '/mnt/mmc/Music/a.flac', 'WHAT HAPPENED TO THE STREETS?'
+    def cover_machine(artist, album_, canon=('21 Savage', album), files=(('21 Savage', album),)):
+        """The track `artist` / `album_`; the library lists the album once, as the record `canon` (artist, album), its tracks under several songers; a cache file under each key in `files`."""
+        m = machine(path, flac(), size=30_000_000, artist=artist, album=album_)
+        m.load_image = 0
+        for k, (fa, fb) in enumerate(files):
+            file = art_file(album_key(fa, fb))
+            m.present.add(file); m.files[file] = 4096; m.images['file://' + file] = (168, 168, bytes((190 + 20 * k, 50, 55, 255)) * (168 * 168))
+        m.class_lists[0xf001] = [m.record(album=album, artist='Young Nudy', path='/mnt/mmc/Music/a0.flac', rid=6), m.record(album=album, artist='21 Savage', path='/mnt/mmc/Music/b.flac', rid=7),
+                                 m.record(album=album, artist='Drake', path='/mnt/mmc/Music/c.flac', rid=8), m.rec]
+        m.class_lists[O['CLASS_ALBUMS']] = [m.record(album=canon[1], artist=canon[0], path='/mnt/mmc/Music/b.flac', rid=7), m.record(album='Other', artist='Zed', path='/mnt/mmc/Music/z.flac', rid=9)]
+        return m
+    def asked(m): return [c[2] for c in m.open_calls if c[0] == 'toolsQueryDbTable']
+    def url(a, b): return 'file://' + art_file(album_key(a, b))
+    def quoted(name): return f"select id,album,songer,fileurl from songtable where album='{name.replace(chr(39), chr(39) * 2)}' COLLATE NOCASE group by album COLLATE NOCASE"
+    q = quoted(album)
+    m = cover_machine('21 Savage; Young Nudy', album)
+    shown = m.word(pod.DATA['PDEQ_SHOWLIST'][0])
+    expect(open_page(m) == 0 and asked(m) == [q] and url('21 Savage', album) in m.loads, f'a collab track: the album\'s cover, from one targeted query on the album name ({asked(m)}, {m.loads})')
+    expect(all(c[3:] == (0x4e93c8, 0) for c in m.open_calls if c[0] == 'toolsQueryDbTable'), 'with stock\'s album row callback, as getAllAlbum')
+    expect(not any(c[0] in ('loadLocalClassList', 'deque_assign', 'loadAlbumList') for c in m.open_calls) and m.word(pod.DATA['PDEQ_SHOWLIST'][0]) == shown and m.deques[m.word(pod.DATA['PDEQ_TOOLS_TMP'][0])] == [],
+           'the stock album list is not loaded (*pdeq_showlist untouched), the query\'s record is cleared')
+    # the album's tracks list several artists; the library's record for the album is the one the cache is named after, not the first track's nor the track's own
+    other = ('Young Nudy', album)
+    m = cover_machine('G Herbo; Drake', album, canon=('Drake', album), files=(('Drake', album),))
+    open_page(m)
+    expect(asked(m) == [q] and url('Drake', album) in m.loads and len(m.loads) == 1, f'the cache file exists only under the album record\'s key (a third artist\'s): that is the cover ({m.loads})')
+    m = cover_machine('G Herbo; Drake', album, canon=('Drake', album), files=(other, ('Drake', album), ('21 Savage', album)))
+    open_page(m)
+    expect(url('Drake', album) in m.loads and url(*other) not in m.loads and url('21 Savage', album) not in m.loads and len(asked(m)) == 1,
+           'files under a sibling track\'s artists too (stale or from another build): the album record\'s key decides, not the first track with a file')
+    m = cover_machine('G Herbo; 21 Savage', album.lower())
+    open_page(m)
+    expect(url('21 Savage', album) in m.loads and asked(m) == [quoted(album.lower())], 'the album name is matched without case')
+    m = cover_machine('21 Savage', album)
+    open_page(m)
+    expect(url('21 Savage', album) in m.loads and not asked(m), 'a track whose own key has a file asks nothing')
+    m = cover_machine('21 Savage; Drake', '')
+    open_page(m)
+    expect(not any(u.startswith('file://') for u in m.loads) and not asked(m), 'a track with no album tag: the placeholder, no query')
+    m = cover_machine('21 Savage; Drake', album, files=())
+    open_page(m)
+    expect(asked(m) == [q] and not any(u.startswith('file://') for u in m.loads), 'an album with no cache file at all: the placeholder')
+    m = cover_machine('Ghost; Q', 'Not In The Library')
+    open_page(m)
+    expect(asked(m) == [quoted('Not In The Library')] and not any(u.startswith('file://') for u in m.loads) and m.deques[m.word(pod.DATA['PDEQ_TOOLS_TMP'][0])] == [], 'an album the library lacks: one query, the placeholder')
+    m = cover_machine('21 Savage; Drake', album)
+    m.album_query_fails = True
+    open_page(m)
+    expect(len(asked(m)) == 1 and not any(u.startswith('file://') for u in m.loads), 'a failed query: the placeholder')
+    quote = "It's a 'Wonder'"
+    m = cover_machine("O'Brien; X", quote, canon=("O'Brien", quote), files=(("O'Brien", quote),))
+    open_page(m)
+    expect(asked(m) == [quoted(quote)] and "'It''s a ''Wonder'''" in asked(m)[0] and url("O'Brien", quote) in m.loads, f'quotes in the album name are doubled ({asked(m)})')
+    m = cover_machine('A; B', 'x' * 251)
+    open_page(m)
+    expect(not asked(m), 'a name over 250 bytes asks nothing')
+    # one targeted query on the open and no more: painting asks the database nothing
+    m = cover_machine('21 Savage; Young Nudy', album)
+    open_page(m); m.calls.clear(); paint(m); paint(m, 40)
+    expect([c for c in m.calls if c[0] == 'toolsQueryDbTable'] == [], 'painting asks the database nothing')
+
+
+SECTIONS = [asset_tests, field_tests, geometry_tests, lifecycle_tests, cover_tests]
 
 
 def run(ctx):

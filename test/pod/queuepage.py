@@ -32,6 +32,7 @@ flag_on = lambda m: m.fs.get(FLAG_FILE) == b'1\n'   # the Shuffle flag as saved
 WIDGETS = ('view_queue', 'btn_return', 'btn_shuffle', 'btn_repeat', 'label_status', 'label_row_title', 'label_row_sub', 'qp_title', 'qp_artist', 'qp_empty', 'qp_head', 'btn_qclear', 'label_title')
 NAMES = ['So What', 'Freddie Freeloader', 'Blue in Green', 'All Blues', 'Flamenco Sketches', 'Chorus Complains', 'Come Together', 'Something', 'Hey Jude', 'Let It Be']
 RGB = (190, 50, 55)
+COVER_PIX = [bytes((RGB[0] + 20 * k, RGB[1], RGB[2], 255)) * (168 * 168) for k in range(2)] + [bytes((RGB[0], RGB[1], RGB[2], 255)) * 64]
 
 
 class QM(SG.SongsMachine):
@@ -56,9 +57,10 @@ class QM(SG.SongsMachine):
         u.reg_write(UC_MIPS_REG_V0, ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
 
 
-def queue_machine(n=6, pos=1, titles=None, cover=True, cues=()):
+def queue_machine(n=6, pos=1, titles=None, cover=True, cues=(), tracks=None, library=None):
     """The page's widgets as widget structs (window > list_view > scroll_view > view_queue, for demo's own widget_to_local) and the player on an n track queue at pos. Track i is
-    Artist {i // 3} / Album {i // 3}; a cover file for the first two albums (cover: True, 'marker' for the empty "no art" file, False for none)."""
+    Artist {i // 3} / Album {i // 3}; a cover file for the first two albums (cover: True, 'marker' for the empty "no art" file, False for none). tracks: [(artist, album)] instead.
+    library: [(artist, album, has_cover)], the library's album records (what getAllAlbum's query returns) and their cache files, instead of the first two albums' files."""
     m = QM()
     m.load_image = 0
     for w in WIDGETS: Machine.widget(m, w)
@@ -67,20 +69,23 @@ def queue_machine(n=6, pos=1, titles=None, cover=True, cues=()):
     recs = []
     for i in range(n):
         title = titles[i] if titles else NAMES[i % len(NAMES)] if n <= len(NAMES) else f'Track {i + 1}'
-        r = m.record(album=f'Album {i // 3}', artist=f'Artist {i // 3}', path=f'/mnt/mmc/m/{i}.flac', title=title, name=f'{i}.flac', rid=100 + i)
+        artist, album = tracks[i] if tracks else (f'Artist {i // 3}', f'Album {i // 3}')
+        r = m.record(album=album, artist=artist, path=f'/mnt/mmc/m/{i}.flac', title=title, name=f'{i}.flac', rid=100 + i)
         if i in cues: m.setword(r + O['REC_CUE_START'], 1000 * i)
         m.present.add(f'/mnt/mmc/m/{i}.flac')
         recs.append(r)
     m.songs = recs
     m.play(recs, pos)
     m.cover_paths = {}
-    for k in range(min(2, (n + 2) // 3)):
-        path = art_file(album_key(f'Artist {k}', f'Album {k}'))
+    covers = [(a, b) for a, b, c in library if c] if library is not None else [(f'Artist {k}', f'Album {k}') for k in range(min(2, (n + 2) // 3))]
+    if library is not None: m.class_lists[O['CLASS_ALBUMS']] = [m.record(album=b, artist=a, path=f'/mnt/mmc/lib/{i}.flac', rid=900 + i) for i, (a, b, c) in enumerate(library)]
+    for k, (ar, al) in enumerate(covers):
+        path = art_file(album_key(ar, al))
         m.cover_paths[k] = path
         if cover == 'marker': m.present.add(path); m.files[path] = 0
         elif cover:
             m.present.add(path); m.files[path] = 4096
-            m.images['file://' + path] = (168, 168, bytes((RGB[0] + 20 * k, RGB[1], RGB[2], 255)) * (168 * 168))
+            m.images['file://' + path] = ((8, 8, COVER_PIX[2]) if library is not None else (168, 168, COVER_PIX[k % 2]))   # (shared pictures; a library's are tiny: the emulated heap keeps every decode)
     win, lv, sv, view = m.alloc(0x80), m.alloc(0x80), m.alloc(0x180), m.widgets['view_queue']
     m.u.mem_write(sv, bytes(0x180))
     for w, y, h, parent in ((win, SY0, WIN_H, 0), (lv, 0, WIN_H, win), (sv, 0, WIN_H, lv)):
@@ -372,6 +377,274 @@ def loader_tests(ctx):
     expect(not m.loads and any(c[0] == 'timer_add' for c in m.calls), 'a list that is being dragged decodes nothing and looks again next tick')
     m.u.mem_write(m.sv + O['SC_PRESSED'], bytes([0, 0]))
     destroy(m)
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+def fnv_nocase(s):
+    """The payload's album name hash (cmap_hash): FNV-1a over the bytes of the UTF-8 name with ASCII A-Z folded to lower case."""
+    h = 2166136261
+    for c in s.encode():
+        h = ((h ^ (c + 32 if 65 <= c <= 90 else c)) * 16777619) & 0xffffffff
+    return h
+
+
+def finish_loading(m):
+    """The loader until its timer stops."""
+    for _ in range(400):
+        m.calls = []
+        m.call(PSYMS['qp_on_load'], count=900000000)
+        if not any(c[0] == 'timer_add' for c in m.calls): return
+
+
+def covers_of(m): return sorted(u for u in m.loads if u.startswith('file://'))
+
+
+def load_all(m, step=200):
+    """Every row of the list brought into view (down the list, the loader run at each stop), then back to the top."""
+    top = vh(m)
+    for off in list(range(0, top, step)) + [0]:
+        scroll_to(m, off); paint(m); finish_loading(m); tick(m)
+
+
+def collab_open(tracks, library, pos=0, **kw):
+    """A queue of `tracks` over `library`, the page open and every row loaded once."""
+    m = queue_machine(n=len(tracks), pos=pos, tracks=tracks, library=library, **kw)
+    m.top_main = m.window
+    r, calls = open_queue(m)
+    assert r == 0, f'the page did not open ({r})'
+    load_all(m)
+    return m
+
+
+def collab_tests(ctx):
+    """5b. A track whose artist differs from its album's (a collab, "A; B") shows the album's cover, from the cover map: ONE getAllAlbum query on the first miss, never the album list."""
+    expect = ctx.expect
+    ALB = 'WHAT HAPPENED TO THE STREETS?'
+    url = lambda a, b: 'file://' + art_file(album_key(a, b))
+    queries = lambda m: list(m.__dict__.get('queries', []))
+    ASQL = pod.ALBUM_SQL
+    lib = [('21 Savage', ALB, True), ('Zed', 'Other', False), ("O'Brien", "It's a Wonder", True), ('Café Band', 'Café', True), ('Éa', 'Éclair', True), ('B', 'Born', True),
+           ('Low', 'Lower Case Album', True), ('Feat', 'Featured Album', True)]
+    tracks = [('21 Savage; Young Nudy', ALB), ('21 Savage', ALB), ('Low; X', 'LOWER CASE ALBUM'), ('G Herbo; Feat', 'Featured Album'), ('Nobody', ''), ('Zed; Q', 'Other'),
+              ("O'Brien; X", "It's a Wonder"), ('Cafe Q', 'CAFé'), ('Ea Q', 'éclair'), ('B; Q', 'Born'), ('Ghost', 'Not In The Library')]
+    m = queue_machine(n=len(tracks), pos=0, tracks=tracks, library=lib)
+    m.top_main = m.window
+    shown0, tmp = m.word(pod.DATA['PDEQ_SHOWLIST'][0]), pod.DATA['PDEQ_TOOLS_TMP'][0]
+    m.present.add('/mnt/mmc/m1plus-log')
+    r, calls = open_queue(m)
+    expect(r == 0 and queries(m) == [ASQL] and m.loads.count(url('21 Savage', ALB)) == 1, f'the playing collab track\'s header: the first miss builds the map, ONE query (getAllAlbum\'s statement), the album\'s cover ({queries(m)})')
+    load_all(m)
+    got = set(covers_of(m))
+    expect(got == {url('21 Savage', ALB), url('Low', 'Lower Case Album'), url('Feat', 'Featured Album'), url("O'Brien", "It's a Wonder"), url('Café Band', 'Café'), url('B', 'Born')},
+           f'a collab, an ASCII case difference, a feature, a quote, a name with \u00e9 and a collab of an album with a cover take the album\'s cover; the album-less, the no-art album, '
+           f'\u00e9clair against \u00c9clair (non-ASCII case) and an album the library lacks do not ({sorted(u[-17:] for u in got)})')
+    log = m.fs.get('/mnt/mmc/m1plus.log', b'').decode()
+    expect(log.startswith('queue: cover map ') and ', 8 albums, 8 kept, 0 ambiguous, 11 queued' in log and log.count('\n') == 1, f'the opt-in log gets one line for the build ({log!r})')
+    expect(len(queries(m)) == 1, 'no other query for the page: not per row, not at paint, not in the refresh ticks, not scrolling down and back')
+    expect(not any(c[0] in ('loadLocalClassList', 'deque_assign', 'loadAlbumList') for c in calls + m.calls) and m.word(pod.DATA['PDEQ_SHOWLIST'][0]) == shown0, '*pdeq_showlist is untouched and no album list is loaded')
+    expect(m.deques[m.word(tmp)] == [], 'the stock records are cleared from the scratch deque')
+    destroy(m)
+    expect(any(c[0] == 'free' for c in m.calls), 'closing the page frees the map')
+    m.calls = []
+    r, calls = open_queue(m); load_all(m)
+    expect(r == 0 and len(queries(m)) == 2, f'the next open builds it again, one query ({len(queries(m))})')
+    destroy(m)
+
+    # a queue with no miss builds nothing
+    m = collab_open([('21 Savage', ALB), ('B', 'Born'), ("O'Brien", "It's a Wonder")], lib)
+    expect(not queries(m) and len(set(covers_of(m))) == 3, 'every track has its own file: no query')
+    destroy(m)
+
+    # a failed query and an empty library: one query, then none, the placeholder for every miss
+    for label, kw, lb in (('a failed query', {'fails': True}, lib), ('an empty library', {}, [])):
+        m = queue_machine(n=len(tracks), pos=0, tracks=tracks, library=lb)
+        m.top_main = m.window
+        if kw.get('fails'): m.album_query_fails = True
+        r, calls = open_queue(m); load_all(m)
+        own = {url('21 Savage', ALB)} if lb else set()   # (the tracks whose own key has a file)
+        expect(r == 0 and len(queries(m)) == 1 and set(covers_of(m)) == own, f'{label}: one query, no other, the placeholder for every miss ({len(queries(m))}, {len(covers_of(m))} covers)')
+        destroy(m)
+    # no memory for the map
+    m = queue_machine(n=len(tracks), pos=0, tracks=tracks, library=lib)
+    m.top_main = m.window
+    m.calloc_fail_size = 16 + 8 * (len(lib) - 1) + (len(lib) + 3) // 4   # (the map: count, state pointer, the entries, 2 bits an entry)
+    r, calls = open_queue(m); load_all(m)
+    expect(r == 0 and len(queries(m)) == 1 and set(covers_of(m)) == {url('21 Savage', ALB)} and m.deques[m.word(tmp)] == [], 'no memory for the map: one query, none after it, the scratch deque cleared, the placeholder for every miss')
+    destroy(m)
+
+    # two names with one hash, and one folded name under two records
+    import random
+    seen, a, b, rr = {}, None, None, random.Random(3)
+    for i in range(2000000):
+        nm = 'c%x' % rr.getrandbits(40)
+        h = fnv_nocase(nm)
+        if h in seen and seen[h] != nm: a, b = seen[h], nm; break
+        seen[h] = nm
+    expect(a is not None and fnv_nocase(a) == fnv_nocase(b) and a != b, f'a colliding pair of names was found ({a}, {b})')
+    lib2 = [('P', a, True), ('Q', b, True), ('R', 'Fine', True), ('S', 'Dup', True), ('T', 'DUP', True)]
+    tr2 = [('P; X', a), ('Q; X', b), ('R; X', 'Fine'), ('S; X', 'Dup'), ('T; X', 'dup')]
+    m = collab_open(tr2, lib2, pos=0)
+    got = covers_of(m)
+    expect(set(got) == {url('R', 'Fine')} and len(queries(m)) == 1,
+           f'two different names with one hash are both ambiguous (the placeholder), a name of its own resolves; one folded name under two records with different keys is the same case: dropped ({[g[-30:] for g in got]})')
+    destroy(m)
+
+    # the cap: the first CC_CMAP_MAX albums of the query resolve, the rest show the placeholder; one query
+    cap = O['CC_CMAP_MAX'] if 'CC_CMAP_MAX' in O else 4096
+    lib3 = [(f'Artist {i}', f'Album {i:05d}', True) for i in range(cap + 40)]
+    tr3 = [(f'Artist {i}; G', f'Album {i:05d}') for i in (5, cap - 1, cap, cap + 39)]
+    m = collab_open(tr3, lib3, pos=0)
+    expect(set(covers_of(m)) == {url('Artist 5', 'Album 00005'), url(f'Artist {cap - 1}', f'Album {cap - 1:05d}')} and len(queries(m)) == 1,
+           f'past the cap ({cap}): the albums inside resolve, those beyond show the placeholder, one query ({len(set(covers_of(m)))} covers)')
+    destroy(m)
+
+
+def find_collision():
+    """Two different names with one cover map hash (FNV-1a, ASCII folded)."""
+    import random
+    seen, rr = {}, random.Random(3)
+    for i in range(2000000):
+        nm = 'c%x' % rr.getrandbits(40)
+        h = fnv_nocase(nm)
+        if h in seen and seen[h] != nm: return seen[h], nm
+        seen[h] = nm
+    return None, None
+
+
+def cmap_tests(ctx):
+    """5d. The cover map's lazy file checks: the build opens no file, an album's file is looked at once (and the answer kept, 2 bits an album), a queue opens only what its rows need, a
+    tile shown again after its eviction decodes again without the check; an album past the cap whose hash is a kept album's makes it ambiguous."""
+    expect = ctx.expect
+    ALB = 'WHAT HAPPENED TO THE STREETS?'
+    path = lambda a, b: art_file(album_key(a, b))
+    url = lambda a, b: 'file://' + path(a, b)
+    fopens = lambda m: list(m.__dict__.get('fopens', []))
+    probes = lambda m, p: fopens(m).count(p)
+
+    # the build itself and cc_cmap_key, called as the page does
+    lib = [(f'Artist {i}', f'Album {i:02d}', i % 3 != 1) for i in range(23)] + [('21 Savage', ALB, True), ('Dup', 'Same', True)]
+    m = queue_machine(n=1, tracks=[('X', 'Y')], library=lib)
+    st, before = m.alloc(16), len(fopens(m))
+    mp = m.call(PSYMS['cc_cmap_build'], a0=st, count=900000000)
+    stat = [m.word(st + 4 * k) for k in range(3)]
+    expect(mp and stat == [len(lib), len(lib), 0] and len(fopens(m)) == before and not any(c[0] in ('fopen', 'fseek', 'ftell') for c in m.calls),
+           f'cc_cmap_build: {len(lib)} albums kept, none ambiguous, NO cover file opened ({stat}, {len(fopens(m)) - before} opens)')
+    ask = lambda album: m.call(PSYMS['cc_cmap_key'], a0=mp, a1=m.cstr(album), count=900000000)
+    want = {b: (album_key(a, b) if c else 0) for a, b, c in lib}
+    got, mark = {}, len(fopens(m))
+    for b in want: got[b] = ask(b)
+    expect(got == want and len(fopens(m)) - mark == len(lib), f'every album asked for once: its key (0 with no picture) and one look at its file each ({len(fopens(m)) - mark} opens for {len(lib)} albums)')
+    mark = len(fopens(m))
+    again = {b: ask(b.upper() if k % 2 else b) for k, b in enumerate(reversed(list(want)))}
+    expect(again == want and len(fopens(m)) == mark, 'asked again (in the other order, in either case): the same answers from the 2 bit states, no file looked at, the neighbours in a byte untouched')
+    expect(ask('No Such Album') == 0 and ask('') == 0 and len(fopens(m)) == mark, 'an album the library lacks, and an empty name: 0, no file looked at')
+    m.call(PSYMS['cc_cmap_free'], a0=mp)
+    expect(m.call(PSYMS['cc_cmap_key'], a0=0, a1=m.cstr(ALB)) == 0, 'no map: 0')
+
+    # a queue of five tracks opens the files its rows need and no others
+    big = [(f'Artist {i}', f'Album {i:04d}', i % 2 == 0) for i in range(600)]
+    tr = [('Artist 4; G', 'Album 0004'), ('Artist 10', 'Album 0010'), ('Artist 6; G', 'Album 0006'), ('Artist 7; G', 'Album 0007'), ('Artist 4; H', 'ALBUM 0004')]
+    m = collab_open(tr, big, pos=0)
+    allowed = {path(a, b) for a, b in tr} | {path('Artist 4', 'Album 0004'), path('Artist 6', 'Album 0006'), path('Artist 7', 'Album 0007'), path('Artist 10', 'Album 0010')}
+    art = [f for f in fopens(m) if f.startswith('/mnt/mmc/.m1plus/covers/')]
+    expect(set(art) <= allowed and len(set(art)) <= 8, f'a 5 track queue over 600 albums opens only the files of its own keys and the albums of its collabs ({len(set(art))} files, {len(art)} opens)')
+    expect(set(covers_of(m)) == {url('Artist 4', 'Album 0004'), url('Artist 6', 'Album 0006'), url('Artist 10', 'Album 0010')}, 'the covers shown: the two collabs of an album with a cover, the solo; the odd album has none')
+    destroy(m)
+
+    # several collab rows of one album look at its file once; an album with no picture is looked at once and not again
+    for have in (True, False):
+        lb = [('Artist 0', 'Album A', have), ('Artist 1', 'Album B', True)]
+        tr = [(f'Artist 0; G{i}', 'Album A') for i in range(6)]
+        m = collab_open(tr, lb, pos=0)
+        canon = path('Artist 0', 'Album A')
+        decodes = m.loads.count('file://' + canon)
+        expect(probes(m, canon) == (decodes + 1 if have else 1) and decodes == (6 if have else 0),
+               f'six collab rows (header included) of an album {"with" if have else "with no"} picture: the file is looked at once ({probes(m, canon)} opens, {decodes} decodes)')
+        destroy(m)
+
+    # eviction: more rows than the ring holds, scrolled down and back twice: the tiles decode again, the files are not looked at again
+    lb = [('Artist 0', 'Album A', True), ('Artist 1', 'Album B', True), ('Artist 2', 'Album C', False)]
+    tr = [(f'Artist {i % 3}; G{i}', f'Album {"ABC"[i % 3]}') for i in range(120)]
+    m = collab_open(tr, lb, pos=0)
+    d1 = {k: m.loads.count(url(f'Artist {k}', f'Album {"ABC"[k]}')) for k in range(3)}
+    load_all(m)
+    d2 = {k: m.loads.count(url(f'Artist {k}', f'Album {"ABC"[k]}')) for k in range(3)}
+    expect(d2[0] > d1[0] and d2[1] > d1[1] and d2[2] == 0, f'tiles shown again after their eviction are decoded again ({d1} -> {d2})')
+    left = {k: probes(m, path(f'Artist {k}', f'Album {"ABC"[k]}')) - m.loads.count(url(f'Artist {k}', f'Album {"ABC"[k]}')) for k in range(3)}
+    expect(left == {0: 1, 1: 1, 2: 1}, f'each album\'s file was looked at once however often its tiles came back (extra opens beyond the decodes: {left})')
+    expect(len(m.__dict__.get('queries', [])) == 1, 'and still one query')
+    destroy(m)
+
+    # a collision across the cap: a kept album and one past the cap share a hash under two keys: both show the placeholder (either one inside)
+    a, b = find_collision()
+    cap = O['CC_CMAP_MAX'] if 'CC_CMAP_MAX' in O else 4096
+    expect(a is not None and fnv_nocase(a) == fnv_nocase(b), f'a colliding pair was found ({a}, {b})')
+    for inside, beyond in ((a, b), (b, a)):
+        lb = [(f'Artist {i}', f'Album {i:05d}', True) for i in range(cap - 1)] + [('P', inside, True)] + [(f'Artist {i}', f'Album {i:05d}', True) for i in range(cap, cap + 30)] + [('Q', beyond, True)]
+        tr = [('P; X', inside), ('Q; X', beyond), ('Artist 5; G', 'Album 00005')]
+        m = collab_open(tr, lb, pos=0)
+        m.present.add('/mnt/mmc/m1plus-log')
+        got = covers_of(m)
+        expect(got == [url('Artist 5', 'Album 00005')] and len(m.__dict__.get('queries', [])) == 1,
+               f'a name inside the cap and a name past it with one hash: both the placeholder, an album of its own resolves ({[g[-30:] for g in got]})')
+        destroy(m)
+    # control: a name past the cap with no kept hash of its own changes nothing, and the same album twice (same key) past the cap is no collision
+    lb = [(f'Artist {i}', f'Album {i:05d}', True) for i in range(cap - 1)] + [('P', a, True)] + [('P', a, True), ('Q', 'Elsewhere', True)]
+    m = collab_open([('P; X', a), ('Artist 9; G', 'Album 00009')], lb, pos=0)
+    expect(set(covers_of(m)) == {url('P', a), url('Artist 9', 'Album 00009')}, 'past the cap, the same album again (the same key) is no collision: the kept album resolves')
+    destroy(m)
+    m = queue_machine(n=3, tracks=[('P; X', a), ('Q; X', b), ('Artist 5; G', 'Album 00005')], library=[(f'Artist {i}', f'Album {i:05d}', True) for i in range(cap - 1)] + [('P', a, True)] + [(f'Artist {i}', f'Album {i:05d}', True) for i in range(cap, cap + 5)] + [('Q', b, True)])
+    m.top_main = m.window
+    m.present.add('/mnt/mmc/m1plus-log')
+    open_queue(m)
+    log = m.fs.get('/mnt/mmc/m1plus.log', b'').decode()
+    expect(f', {cap + 6} albums, {cap - 1} kept, 1 ambiguous, 3 queued' in log, f'the log counts the entries dropped for a collision across the cap ({log!r})')
+    destroy(m)
+
+
+def scroll_tests(ctx):
+    """5c. A shuffled queue of thousands: the whole list scrolled down and back asks the database once."""
+    expect = ctx.expect
+    import random
+    rnd = random.Random(7)
+    lib = []
+    for i in range(300):
+        name = f"Album's {i}" if i % 13 == 0 else f'Album {i}'
+        lib.append((f'Artist {i}', name, i % 4 != 3))
+    tracks = []
+    for _ in range(3000):
+        a, b, c = lib[rnd.randrange(len(lib))]
+        k = rnd.randrange(6)
+        tracks.append((a, b) if k < 2 else (f'{a}; Guest', b if k < 4 else b.upper()) if k < 5 else ('Loose', ''))
+    m = queue_machine(n=len(tracks), pos=0, tracks=tracks, library=lib)
+    m.top_main = m.window
+    shown0, tmp = m.word(pod.DATA['PDEQ_SHOWLIST'][0]), pod.DATA['PDEQ_TOOLS_TMP'][0]
+    r, calls = open_queue(m)
+    after_open = len(m.__dict__.get('queries', []))
+    expect(r == 0 and vh(m) == TOP + (len(tracks) - 1) * ROW + O['QP_BOTTOM'] and after_open <= 1, f'a 3,000 track queue opens ({after_open} queries so far)')
+    top = vh(m)
+    path = list(range(0, top, 1400)) + list(range(top, 0, -1400)) + [0]
+    for off in path:
+        scroll_to(m, off); paint(m); finish_loading(m); tick(m)
+    q = m.__dict__.get('queries', [])
+    expect(q == [pod.ALBUM_SQL], f'scrolled to the end and back: exactly one library query in all, none per row, per paint or per tick ({len(q)}: {q[:3]})')
+    expect(not any(c[0] in ('loadLocalClassList', 'deque_assign', 'loadAlbumList') for c in m.calls) and m.word(pod.DATA['PDEQ_SHOWLIST'][0]) == shown0 and m.deques[m.word(tmp)] == [],
+           '*pdeq_showlist unchanged, no album list loaded, the scratch deque cleared')
+    have = {'file://' + art_file(album_key(a, b)) for a, b, c in lib if c}
+    expect(set(covers_of(m)) <= have and covers_of(m), 'every cover read is the cache file of a library album that has one')
+    destroy(m)
+    # cost of the map itself (the payload's instructions only: the SQL is mocked, so this says nothing of the database): the same open with a collab header (builds it) less one with a solo header
+    for n in (1000, 4000):
+        libn = [(f'Artist {i}', f'Album {i}', i % 2 == 0) for i in range(n)]
+        cost = []
+        for header in (('Artist 0; G', 'Album 0'), ('Artist 0', 'Album 0')):
+            m = queue_machine(n=2, pos=0, tracks=[header, ('X', 'Y')], library=libn)
+            m.top_main = m.window
+            m.count()
+            r, calls = open_queue(m)
+            cost.append(m.icount)
+            destroy(m)
+        print(f'  Queue cover map, {n} albums: {cost[0] - cost[1]:,} payload instructions to build it (the query is mocked; no file is opened)')
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -749,7 +1022,7 @@ def clear_tests(ctx):
            'mclSetGaplessMode (prologue, the byte store, the preload test and close) and the three player words are pinned')
 
 
-SECTIONS = [asset_tests, open_tests, header_tests, rows_tests, loader_tests, play_tests, mode_tests, tick_tests, shuffle_tests, clear_tests]   # tools/check.py runs each as its own task
+SECTIONS = [asset_tests, open_tests, header_tests, rows_tests, loader_tests, collab_tests, cmap_tests, scroll_tests, play_tests, mode_tests, tick_tests, shuffle_tests, clear_tests]   # tools/check.py runs each as its own task
 
 
 def run(ctx):

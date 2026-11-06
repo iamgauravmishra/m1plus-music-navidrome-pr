@@ -16,7 +16,9 @@
  *   play      a row tap: start_playqueue(queue index) (the stock drawer's row handler, @0x47a0c8), then force_refreshflag; the page stays, Now Playing below follows.
  *   modes     Shuffle (the payload's flag, pod_set_shuffle) and Repeat (stock's mode 0, 3, 1: pod_set_repeat) are independent: Shuffle toggles the flag; Repeat cycles off, all, one whatever the flag is.
  *   clear     the Clear button (btn_qclear, right of the "Queue" line, shown while songs follow): pod_clear_upnext removes the tracks after the play position, the page reads the queue again.
- *   covers    the Cover Flow cache file of the row's artist and album, one per tick on the page's timer, none while the list moves (the Songs page's loader); else the placeholder.
+ *   covers    the Cover Flow cache file of the row's artist and album, else the file of the library album of that name (cc_cmap_*: a collab), one per tick on the page's timer, none while the list
+ *             moves (the Songs page's loader); else the placeholder. The first miss builds the cover map (ONE getAllAlbum query, no file opened); an album's file is looked
+ *             at once, when first asked for, and the answer kept (2 bits an album, 8 bytes an album kept, at most 4096 albums).
  * No hook of its own; everything runs from the page's widgets and timers.
  */
 #include "offsets.inc"
@@ -58,6 +60,9 @@ static struct {
     int fg; /* 1 from the page's start and EVT_WINDOW_TO_FG, 0 after EVT_WINDOW_TO_BG */
     unsigned more_timer, stale_timer, tick_timer;
     unsigned tick_ms;
+    cc_cmap_t
+        *map; /* the library's album name -> cover key map (qp_key), built by the first miss; freed with the page */
+    int map_tried; /* the map was asked for (built or not): never built twice in the page's life */
     grid_t hg; /* the header's cover: one tile, QP_COVER px with QP_COVER_R px corners cut in the alpha */
     grid_t g; /* the rows' covers and texts: the ring */
 } qp __attribute__((section(".scratch")));
@@ -132,6 +137,43 @@ static const char *qp_text(void *rec) {
     if (I(rec, REC_CUE_START) > 0 || I(rec, REC_CUE_END) > 0) return cc_str(rec, REC_NAME);
     t = cc_str(rec, REC_TITLE);
     return *t ? t : cc_str(rec, REC_NAME);
+}
+
+/* Opt-in log (the file /mnt/mmc/m1plus-log turns it on, as the Home log): what building the cover map cost, once per build, to measure it on the device. The time is the query
+ * and the build only (the stock records read, hashed, sorted and cleared; no cover file is opened); the existence checks of the covers come later, one per album when it is first asked for. */
+static void qp_log(const cc_cmap_stat_t *st, unsigned ms) {
+    char line[120];
+    int fd, n;
+    if (access(LOG_ENABLE, F_OK)) return;
+    fd = open(LOG_FILE, O_WRONLY | O_APPEND | O_CREAT, 0644);
+    if (fd < 0) return;
+    n = snprintf(line, sizeof line, "queue: cover map %u ms, %u albums, %u kept, %u ambiguous, %u queued\n", ms,
+                 st->rows, st->kept, st->ambiguous, qp.count);
+    if (n > 0 && n < (int)sizeof line) write(fd, line, (unsigned)n);
+    close(fd);
+}
+
+/* The cover key of a queued track: its own file (cc_album_key, the artist and album of the record), else the file of the library album of that name (a collab "A; B" or a
+ * feature has no file under its own artist: the cache is keyed by the album's row, which stock lists under one track's artist). The albums come from the cover map
+ * (cc_cmap_build, ONE getAllAlbum query that leaves *pdeq_showlist alone: cc_albums would replace it, and the page under Now Playing draws from it), started by the page's FIRST
+ * miss and kept until it closes. The one query of the page's life: map_tried is set before it runs, so a query that fails, an empty library, no memory and a full map are
+ * never retried; later misses use the map as it is (none: the own key, the placeholder). A queue with a cover for every track pays nothing, a shuffled library of thousands pays
+ * one pause (the query and the map, no file opened) however many rows miss, and scrolling back asks nothing. Whether the album's file exists is looked at by cc_cmap_key the first
+ * time the album is asked for and remembered (an album with no picture answers the placeholder without another look); a tile shown again after it was evicted still opens and
+ * decodes its image in grid_art, only that existence check is not repeated. Called by the loader and the header, never by paint. */
+static unsigned qp_key(void *rec) {
+    unsigned own = cc_album_key(rec), key, t0;
+    char url[80];
+    if (cc_url(url, own) || !*cc_str(rec, REC_ALBUM)) return own;
+    if (!qp.map_tried) {
+        cc_cmap_stat_t st;
+        qp.map_tried = 1;
+        t0 = (unsigned)time_now_ms();
+        qp.map = cc_cmap_build(&st);
+        qp_log(&st, (unsigned)time_now_ms() - t0);
+    }
+    key = cc_cmap_key(qp.map, cc_str(rec, REC_ALBUM));
+    return key ? key : own;
 }
 
 /* The tile of row a (cover key and the two texts), made from the stock record (the caller has checked qp_valid). */
@@ -234,6 +276,7 @@ static int qp_on_load(const void *unused) {
     if (a >= 0) {
         grid_tile_t *t = qp_tile(a);
         int top = qp_row_y(a) - qp_off();
+        t->ckey = qp_key(deque_at(qp.list, (unsigned)(qp.base + a))); /* (qp_next_load checked qp_valid) */
         grid_art(&qp.g, t);
         if (top < QP_WIN_H && top + ROW > 0) qp_redraw();
     }
@@ -267,7 +310,7 @@ static void qp_header(void) {
     void *t = qp.list && qp.row >= 0 ? deque_at(qp.list, (unsigned)qp.row) : cc_playing();
     widget_set_text_utf8(qp.htitle, t ? qp_text(t) : "");
     widget_set_text_utf8(qp.hartist, t ? cc_str(t, REC_ARTIST) : "");
-    qp_cover(t ? cc_album_key(t) : 0);
+    qp_cover(t ? qp_key(t) : 0);
 }
 
 /* ---------------------------------------------------------------------------
@@ -512,6 +555,7 @@ static int qp_on_destroy(void *ctx, void *e) {
     if (qp.tick_timer) timer_remove(qp.tick_timer);
     grid_free(&qp.g);
     grid_free(&qp.hg);
+    cc_cmap_free(qp.map);
     memset(&qp, 0, sizeof qp);
     return RET_OK;
 }

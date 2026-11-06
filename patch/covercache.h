@@ -56,6 +56,24 @@ unsigned cc_cover_key(
     void *albums, unsigned key, const char *album,
     char *
         url); /* url (NULL ok; holds 80) gets the chosen key's cc_url, "" when no file. Key when its cache file has a picture, else the first library album (albums: cc_albums) named album (NOCASE, not the Unknown row) whose file has one, else key */
+/* The cache key of the library album record of that name (ASCII NOCASE): the row getAllAlbum lists for it, which the cover files are named after (a collab's own key has no file).
+ * ONE targeted query through toolsQueryDbTable, *pdeq_showlist untouched; 0: no album tag, a name over 250 bytes, a failed query, no such album. Ask once. */
+unsigned cc_album_rep_key(const char *album);
+/* The cover map (patch/covercache.c): the library albums' names -> the keys of their cache files, from ONE getAllAlbum query that leaves *pdeq_showlist alone. 8 bytes per
+ * album kept (the hash of the folded name and the key; integers only) and 2 bits for whether its file holds a picture (looked at the first time the album is asked for, never
+ * by the build), at most CC_CMAP_MAX albums are kept (the first by name; the rest are not found). Free it with cc_cmap_free. */
+#define CC_CMAP_MAX 4096
+typedef struct cc_cmap cc_cmap_t;
+/* The albums the query returned, the entries kept (not ambiguous), the entries dropped for sharing a hash with another key. */
+typedef struct {
+    unsigned rows, kept, ambiguous;
+} cc_cmap_stat_t;
+/* NULL: nothing to look up (no albums, a failed query, no memory, only ambiguous names); st (NULL ok) is filled either way. Opens no file. */
+cc_cmap_t *cc_cmap_build(cc_cmap_stat_t *st);
+/* The cache key holding album's cover (ASCII NOCASE), 0 when none: not in the library, ambiguous, or its file holds no picture (the file is looked at once, on the first ask);
+ * map NULL ok. */
+unsigned cc_cmap_key(cc_cmap_t *map, const char *album);
+void cc_cmap_free(cc_cmap_t *map);
 int cc_decode(void *w, const char *url, int unload, unsigned size, int box, unsigned *out);
 void *cc_copy_list(void *list); /* a stock list copied into a deque of our own */
 void *

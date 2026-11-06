@@ -159,6 +159,24 @@ def first_track_tests(expect, stock_demo):
                 stock = q.db.execute(sql)
                 expect(len(q.db.execute(q.sql).description) == len(stock.description) and {r[1].lower() for r in stock} == set(got),
                        f'{sql[:70]!r}: stock\'s columns, no album beyond stock\'s')
+    # Get Info's lookup (patch/covercache.c cc_album_rep_key): getAllAlbum's statement filtered to one album name is an album list like the others, so the filter gives its group the same
+    # first track, and the record is the one the full list has for that name, whatever the order SQLite scans the rows in (a track list under several songers, a quote in the name,
+    # a name that exists only as a podcast, a name the library lacks). The stock database has no index (no CREATE INDEX string in the demo), so the unfiltered plan would be a table scan.
+    more = rows + [(24, "It's", 'S1', 'S1', '', '', '/mnt/mmc/m/i/2.flac', 2), (25, "IT'S", 'S2', 'S2', '', '', '/mnt/mmc/m/i/1.flac', 1), (26, "it's", 'S3', 'S3', '', '', '/mnt/mmc/m/i/3.flac', 3),
+                   (27, 'Pod Only', 'P', 'P', '', '', '/mnt/mmc/Podcasts/x.mp3', 1), (28, 'Spaces and, commas; (parens)', 'S4', 'S4', '', '', '/mnt/mmc/m/s/1.flac', 1)]
+    for order in (more, list(reversed(more))):   # (insertion order is the other thing the plain bare-column rule would depend on)
+        q = QueryMachine(order)
+        q.query(pod.ALBUM_SQL)
+        full = {r[1].lower(): r[0] for r in q.results}
+        for name in sorted({r[1] for r in more} | {'ALPHA', 'bEtA', 'No Such Album'}):
+            sql = f"{pod.ALBUM_HEAD} where album='{name.replace(chr(39), chr(39) * 2)}' COLLATE NOCASE{pod.ALBUM_GROUP}"
+            for fn in ('pc_library_query', 'pc_sorted_query'):
+                q.query(sql, fn)
+                got = [r[0] for r in q.results]
+                expect(q.sql == f"{pod.ALBUM_HEAD} where (album='{name.replace(chr(39), chr(39) * 2)}' COLLATE NOCASE) and {MUSIC}{pod.ALBUM_GROUP}{HAVING}", f'{fn}: the targeted album statement is filtered like an album list: {q.sql}')
+                expect(got == ([full[name.lower()]] if name.lower() in full else []), f'{fn}: {name!r}: one record, the full list\'s ({got} against {full.get(name.lower())})')
+    q.query("select id,album,songer,fileurl from songtable where album='x' COLLATE NOCASE group by album COLLATE NOCASE;")
+    expect(q.sql.endswith(HAVING + ';'), 'with a trailing semicolon too')
     # the texts verified by hand against the SQLite 3.19.3 amalgamation
     q.query("select id,album,songer,fileurl from songtable where songer like 'A' group by album COLLATE NOCASE")
     expect(q.sql == "select id,album,songer,fileurl from songtable where (songer like 'A') and ifnull(fileurl,'') not like '/mnt/mmc/podcasts/%' group by album COLLATE NOCASE "

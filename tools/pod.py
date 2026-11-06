@@ -580,6 +580,8 @@ LYRICS_PINS = (   # (address, stock word, what it proves): the stock lyric rows 
 # The Library query filter (patch/pcmodel.c pc_library_query / pc_sorted_query, docs/modules/payload.md hook 6): the two functions every songtable select goes through, hooked at their PIC prologues
 # (q2-pod's toolsQueryDbTable / toolsQueryDbTableAndSort hooks). Both take (db, sql, row callback, sort) in a0..a3 and use no stack arguments.
 QUERY_DB, QUERY_DB_PROLOGUE = 0x5ee77c, (0x3c1c0041, 0x279c5754, 0x0399e021)
+ALBUM_HEAD, ALBUM_GROUP = 'select id,album,songer,fileurl from songtable', ' group by album COLLATE NOCASE'   # the album list statements' head and grouping (getAllAlbum's string at 0x74bad8; the getAlbumBy* family has the same columns and grouping)
+ALBUM_SQL = ALBUM_HEAD + ALBUM_GROUP   # getAllAlbum's statement (sprintf of the string at 0x74bad8 with the one at 0x74ba4c), run by the payload's cover map; Get Info's lookup adds a where album='...' COLLATE NOCASE between the two
 QUERY_SORT, QUERY_SORT_PROLOGUE = 0x5ee9ac, (0x3c1c0041, 0x279c5524, 0x0399e021)
 QUERY_PINS = (   # (address, stock word, what it proves): the first word after the prologue the trampolines resume at (the frame), and the sqlite3_exec calls that run the SQL
     (0x5ee788, 0x27bdff28, 'toolsQueryDbTable: addiu sp, sp, -0xd8 (the trampoline resumes here)'), (0x5ee7fc, 0x0320f809, 'toolsQueryDbTable: jalr sqlite3_exec(db, sql=a1, cb=a2)'),
@@ -590,6 +592,13 @@ QUERY_PINS = (   # (address, stock word, what it proves): the first word after t
     (0x4ea124, 0x24845a34, 'sort_first_alphabet: a0 = the database path string 0x745a34'),
     (0x4e9058, 0x3c1c0052, 'song row callback prologue'), (0x4e905c, 0x279cae78, 'song row callback prologue'), (0x4e9060, 0x0399e021, 'song row callback prologue'),
     (0x4e9068, 0x14a200d5, 'song row callback: bne a1, 0x12 (the column count): a row of any other width is skipped'),
+    # The Queue page's cover map (patch/covercache.c cc_cmap_build, docs/modules/queue.md): getAllAlbum's own statement and row callback, run by the payload. getAllAlbum (0x4ea3c4) sprintf's the string
+    # 0x74bad8 with "songtable" (0x74ba4c) and calls toolsQueryDbTable(db, sql, 0x4e93c8, 1); the callback (4 columns: id, album, songer, fileurl; an empty album is skipped) pushes one record into *tools_pdeq_directory
+    (0x4ea428, 0x8f858020, 'getAllAlbum: a1 = GOT page 0x750000 (the SQL string)'), (0x4ea430, 0x24c6ba4c, 'getAllAlbum: a2 = "songtable" 0x74ba4c'),
+    (0x4ea438, 0x24a5bad8, 'getAllAlbum: a1 = the SQL string 0x74bad8'), (0x4ea458, 0x24c693c8, 'getAllAlbum: a2 = the album row callback 0x4e93c8'),
+    (0x4ea45c, 0x0320f809, 'getAllAlbum: jalr toolsQueryDbTable(db, sql, cb, 1)'),
+    (0x4e93c8, 0x3c1c0052, 'album row callback prologue'), (0x4e93cc, 0x279cab08, 'album row callback prologue'), (0x4e93d0, 0x0399e021, 'album row callback prologue'),
+    (0x4e93d4, 0x24020004, 'album row callback: v0 = 4'), (0x4e93d8, 0x14a20075, 'album row callback: bne a1, 4 (the column count): a row of any other width is skipped'),
     # The Favourites list and Saved (patch/pcmodel.c pq_filter, docs/modules/podcasts.md "Saved"): getAllFav runs sprintf(buf, "select * from %s", "myfav") and toolsQueryDbTable on it; the three myfav
     # wrappers the star button (manage_myfav 0x4ef884) uses are thin calls on the same table, keyed by filename / fileurl / the cue times of the record.
     (0x4ec45c, 0x3c1c0051, 'getAllFav prologue'), (0x4ec460, 0x279c7a74, 'getAllFav prologue'), (0x4ec464, 0x0399e021, 'getAllFav prologue'), (0x4ec4d0, 0x0320f809, 'getAllFav: jalr toolsQueryDbTable'),
@@ -1232,6 +1241,10 @@ def gen_stock_h(out, demo_path):
     h.append('#define CSTL_SIZE_WORDS {' + ','.join(f'0x{w:08x}u' for w in CSTL_SIZE_WORDS) + '}'); h.append('#define CSTL_POP_WORDS {' + ','.join(f'0x{w:08x}u' for w in CSTL_POP_WORDS) + '}')
     h.append('#define STOCK_DB_PATH ((const char *)0x745a34u)')   # "/mnt/data/database.db" (QUERY_PINS)
     h.append('#define STOCK_SONG_ROW ((void *)0x4e9058u)')       # the song row callback getAllMusic passes to toolsQueryDbTable (QUERY_PINS)
+    h.append('#define STOCK_ALBUM_ROW ((void *)0x4e93c8u)')      # the album row callback getAllAlbum passes (QUERY_PINS)
+    h.append('#define STOCK_ALBUM_HEAD "' + ALBUM_HEAD + '"')    # the album list statement up to its filter and the grouping after it (cc_album_rep_key puts a where between them)
+    h.append('#define STOCK_ALBUM_GROUP "' + ALBUM_GROUP + '"')
+    h.append('#define STOCK_ALBUM_SQL STOCK_ALBUM_HEAD STOCK_ALBUM_GROUP')   # getAllAlbum's statement with its %s filled, byte for byte (checked against the string at 0x74bad8)
     h.append(f'#define STOCK_HOME_CLICK 0x{HOME_CLICK:x}u')   # the icon click handler stock registers per icon
     h.append(f'#define POD_ENTRY_NAME "{pod_pages.HOME_ENTRY}"')   # the added icon's widget name (a decimal id, as stock's)
     h.append(f'#define stock_np_mode_button ((int (*)(void *))0x{NP_MODE_BUTTON:x}u)')   # Now Playing's mode button picture (patch/nowplaying.c)
@@ -1570,6 +1583,9 @@ def patch_demo(raw, payload, ps, demo_path):
     for a, old, what in PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + TEXTGAMMA_PINS + BATTERY_PINS + LINEOUT_PINS + SHUFFLE_PINS + FILETIME_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS:   # stock code the Playlists and Songs pages call: checked, not written
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
+    for at, text in ((0x74bad8, ALBUM_SQL.replace('songtable', '%s')), (0x74ba4c, 'songtable')):   # the strings getAllAlbum fills: the payload's STOCK_ALBUM_SQL is their sprintf
+        want = text.encode() + b'\0'
+        check(bytes(patched[fileoff(patched, at):fileoff(patched, at) + len(want)]) == want, f'{at:#x}: not the string "{text}" the album cover map reproduces')
     target5 = ps['pc_id3_path']
     check(BASE <= target5 < BASE + len(payload), 'tag reader hook symbol outside payload')
     struct.pack_into('<I', patched, fileoff(patched, ID3_SITE), jal(target5, ID3_SITE))   # (the pins above checked the site's word and its neighbours)

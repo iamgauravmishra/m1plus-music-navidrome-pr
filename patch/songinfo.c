@@ -429,6 +429,7 @@ static void gi_copy(char *out, unsigned n, const char *s) { snprintf(out, n, "%s
 int songinfo_open(void *rec) {
     gi_rec_t *r;
     grid_tile_t *t;
+    char url[80];
     int fresh = 0;
     if (!rec) return -1;
     if (gi.win && pod_is_top(gi.win) && widget_is_window_opened(gi.win)) return 0;
@@ -439,7 +440,13 @@ int songinfo_open(void *rec) {
     gi_copy(r->artist, sizeof r->artist, cc_str(rec, REC_ARTIST));
     gi_copy(r->album, sizeof r->album, cc_str(rec, REC_ALBUM));
     r->cue_start = GI_I(rec, REC_CUE_START), r->cue_end = GI_I(rec, REC_CUE_END);
+    /* the cover: the file of the track's own artist and album, else the library album record of that name's (a collab shows the album's cover): one targeted query, none when the
+     * own file is there or the track has no album tag; a record with no file shows the placeholder like the own key */
     r->ckey = cc_album_key(rec);
+    if (!cc_url(url, r->ckey)) {
+        unsigned rep = cc_album_rep_key(cc_str(rec, REC_ALBUM));
+        if (rep) r->ckey = rep;
+    }
     if (gi.win) { /* closing (destroyed later) or under another window: let it go, its late EVT_DESTROY finds gi.win changed */
         if (widget_is_window_opened(gi.win)) window_close(gi.win);
         gi_free();

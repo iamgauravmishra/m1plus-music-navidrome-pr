@@ -799,12 +799,24 @@ class Machine:
             # with the library's rows (class_lists[0xf001], else the shown list) that match, in reverse library order (the database's order is not the mix's)
             sql = self.read_cstr(a1)
             self.calls.append(('toolsQueryDbTable', self.read_cstr(a0), sql, a2, a3))
+            self.__dict__.setdefault('queries', []).append(sql)   # (every query of the machine's life, which self.calls loses when a test clears it)
             m_ = re.fullmatch(r"select \* from songtable where fileurl in \((.*)\)", sql)
-            if not m_:
+            a_ = re.fullmatch(re.escape(pod.ALBUM_HEAD) + r" where album='((?:[^']|'')*)' COLLATE NOCASE" + re.escape(pod.ALBUM_GROUP), sql) if a2 == 0x4e93c8 else None   # one album's record (payload cc_album_rep_key): getAllAlbum's statement filtered to a name, so the album list's own record of that name (class_lists[0xf003]), ASCII case folded
+            album_sql = sql == pod.ALBUM_SQL and a2 == 0x4e93c8   # getAllAlbum's statement with stock's album row callback (payload cc_cmap_build): one record per album (class_lists[0xf003]), the empty-album group skipped as the callback does
+            if (album_sql or a_) and self.__dict__.get('album_query_fails'):
+                ret = -1
+            elif not m_ and not a_ and not album_sql:
                 ret = -1
             else:
-                wanted = {p.replace("''", "'") for p in re.findall(r"'((?:[^']|'')*)'", m_.group(1))}
-                rows = [r for r in reversed(self.class_lists.get(0xf001, self.showlist)) if self.read_cstr(self.word(r + O['REC_PATH'])) in wanted]
+                if album_sql:
+                    rows = [r for r in self.class_lists.get(O['CLASS_ALBUMS'], []) if self.read_cstr(self.word(r + O['REC_ALBUM']))]
+                elif a_:
+                    album = a_.group(1).replace("''", "'")
+                    ascii_lower = lambda t: ''.join(c.lower() if c.isascii() else c for c in t)
+                    rows = [r for r in self.class_lists.get(O['CLASS_ALBUMS'], []) if self.read_cstr(self.word(r + O['REC_ALBUM'])) and ascii_lower(self.read_cstr(self.word(r + O['REC_ALBUM']))) == ascii_lower(album)][:1]
+                else:
+                    wanted = {p.replace("''", "'") for p in re.findall(r"'((?:[^']|'')*)'", m_.group(1))}
+                    rows = [r for r in reversed(self.class_lists.get(0xf001, self.showlist)) if self.read_cstr(self.word(r + O['REC_PATH'])) in wanted]
                 tmp = pod.DATA['PDEQ_TOOLS_TMP'][0]
                 if not self.word(tmp): self.setword(tmp, self.new_deque())
                 self.deques[self.word(tmp)] = rows
@@ -1036,6 +1048,7 @@ class Machine:
         elif name == 'fopen':
             path, mode = self.read_cstr(a0), self.read_cstr(a1)
             self.calls.append(('fopen', path, mode))
+            self.__dict__.setdefault('fopens', []).append(path)   # (every open of the machine's life, which self.calls loses when a test clears it)
             if 'w' in mode and ('fopen', path) not in self.fail: self.files[path] = 0; self.present.add(path)
             ret = (self.alloc(4) if path in self.files or path in self.fs else 0)
             self.fh = (ret, path)
