@@ -29,10 +29,10 @@
 #define GI_HEAD_PITCH 26 /* the title (22 px), at most two lines */
 #define GI_HEAD_LINES 2
 #define GI_SUB_PITCH 20 /* the artist and the album (16 px), one line each */
-#define GI_KEY_PITCH 20 /* a pair's label (14 px) */
-#define GI_VAL_PITCH 24 /* and its value (18 px) */
-#define GI_HEAD_GAP 24 /* under the cover */
-#define GI_PAIR_GAP 16
+#define GI_KEY_PITCH 18 /* a pair's label (14 px) */
+#define GI_VAL_PITCH 22 /* and its value (18 px) */
+#define GI_HEAD_GAP 16 /* under the cover */
+#define GI_PAIR_GAP 10 /* (Format to Size fit above the fold, Path's label peeks under them) */
 #define GI_BOTTOM 20
 #define GI_VIEW_H 400 /* the list under the navbar */
 #define GI_SRC 1100 /* wide chars of one text (a longer one ends there, with an ellipsis where the lines end) */

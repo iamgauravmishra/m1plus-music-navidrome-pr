@@ -13,10 +13,10 @@ import preview_nowplaying as NP
 
 W, H, BAR = 320, 450, 30
 X, TOP, COVER, TX, TW, WIDTH = 16, 16, 96, 124, 180, 288
-PITCH = {'head': 26, 'sub': 20, 'key': 20, 'val': 24}
+PITCH = {'head': 26, 'sub': 20, 'key': 18, 'val': 22}
 PX = {'head': 22, 'sub': 16, 'key': 14, 'val': 18}
 RGB = {'head': '#FFFFFF', 'sub': '#8E8E93', 'key': '#8E8E93', 'val': '#FFFFFF'}
-HEAD_GAP, PAIR_GAP, VIEW = 24, 16, 400
+HEAD_GAP, PAIR_GAP, VIEW = 16, 10, 400
 
 SAMPLES = [
     ('FLAC', dict(title='Blue in Green', artist='Miles Davis', album='Kind of Blue', pairs=[

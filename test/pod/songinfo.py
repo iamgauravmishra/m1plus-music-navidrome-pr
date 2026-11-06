@@ -236,6 +236,8 @@ def geometry_tests(ctx):
     expect(all(r[2] == 124 and r[4] == 180 for r in hdr) and all(r[2] == 16 and r[4] == 288 for r in pr), 'the header texts start at x 124 (180 px wide), the pairs at x 16 (288 px)')
     top, bottom = hdr[0][3], hdr[-1][3] + 20
     expect(abs((top + bottom) / 2 - (16 + 48)) <= 2 and min(r[3] for r in pr) >= 16 + 96, f'the three header lines are centred on the cover ({top}..{bottom}); the pairs are under it ({min(r[3] for r in pr)})')
+    keys = [r[1] for r in rows if r[0] == 'label_key' and r[3] + 18 <= 400]
+    expect(keys[-2:] == ['Size', 'Path'] and sum(r[0] == 'label_val' and r[3] + 22 <= 400 for r in rows) >= len(keys) - 1, f'at rest, Format to Size show above the fold and Path\'s label peeks under them ({keys})')
     rows = paint(m, 60)
     expect(all(0 <= r[3] - 60 and r[3] - 60 + 24 <= 400 for r in rows), 'scrolled, every text drawn lies wholly inside the 400 px view')
     expect(m.props.get((m.widgets['img_nb_fade'], 'visible')) == 1, 'scrolled, the navbar fade shows')

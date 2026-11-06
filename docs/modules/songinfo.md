@@ -11,7 +11,7 @@ with no record, no window, an asset without the widgets or no memory; a second o
 ## Content
 - **Header:** the cover, 96 px at (16, 16) with 8 px corners (one `grid_t` tile: the Cover Flow cache file of the album key, else the placeholder disc; no cache job is started), the title (at most two lines), artist and
   album (one line each, left out when empty) at x 124, 180 px wide, centred on the cover's height.
-- **Pairs** (x 16, 288 px, a label over its value, a pair with no value left out), in order: **Format** (the file extension upper-cased), **Sample Rate / Bit Depth** (`44.1 kHz / 16-bit`; just **Sample Rate** when the depth
+- **Pairs** (x 16, 288 px, a label over its value on 18 + 22 px pitches, 10 px between pairs and 16 px under the cover so Format to Size fit above the fold with Path's label peeking, a pair with no value left out), in order: **Format** (the file extension upper-cased), **Sample Rate / Bit Depth** (`44.1 kHz / 16-bit`; just **Sample Rate** when the depth
   is unknown), **Bitrate** (`N kbps`), **Duration** (`m:ss`, `h:mm:ss`), **Size** (decimal units: `845 KB`, `36.4 MB`, `1.23 GB`), **Path** (wrapped in full). Action rows (Go to Album, Go to Artist, Delete) can follow the last pair: the
   content ends at `gi.h`.
 - **Sources:** one read of the file's first 2 KB (a second after an ID3v2 tag, skipped by its synchsafe size) parsed as FLAC STREAMINFO (rate, bits, total samples), a WAV `fmt ` chunk, an Ogg Vorbis identification header
