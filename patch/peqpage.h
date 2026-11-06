@@ -28,6 +28,8 @@ void peq_graph_curve(peq_graph *g, const peq_preset *p); /* g->db and g->range f
 int peq_graph_draw(peq_graph *g); /* g->bmp made or drawn again from the curve; 0 with no memory */
 void peq_graph_free(peq_graph *g);
 void peq_graph_paint(const peq_graph *g, void *e); /* the view's EVT_BEFORE_PAINT event: one blit */
+void peq_blit(void *canvas, void *bmp, int w, int h, int x, int y); /* one 1:1 canvas_draw_image */
+void peq_label_colors(void *w, const char *rgb); /* a label's text colour in its normal, disabled and focused states */
 void peq_graph_scale(const peq_graph *g, void *top, void *bot); /* the scale labels: +R, -R */
 /* "+4.8 dB", "-2.4 dB" (U+2212), "0.0 dB" (plus: the "+" of a boost); the preamp as the page shows it: "Auto - 6.0 dB" or the file's own */
 void pp_gain(char *out, unsigned size, double g, int plus);

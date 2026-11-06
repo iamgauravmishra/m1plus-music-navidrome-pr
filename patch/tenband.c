@@ -181,13 +181,6 @@ static unsigned tb_pill_px(int x, int y, int w, int h) { return tb_px(242, tb_co
 /* ---------------------------------------------------------------------------
  * The page
  */
-static void tb_blit(void *canvas, void *bmp, int w, int h, int x, int y) {
-    int src[4], dst[4];
-    src[0] = src[1] = 0, src[2] = w, src[3] = h;
-    dst[0] = x, dst[1] = y, dst[2] = w, dst[3] = h;
-    canvas_draw_image(canvas, bmp, src, dst);
-}
-
 static int tb_thumb_y(float g) {
     return TB_Y0 + TB_SPAN / 2 - (int)(g * TB_PX_DB + (g < 0 ? -0.5f : 0.5f)) - TB_THUMB_H / 2;
 }
@@ -198,21 +191,14 @@ static int tb_on_paint(void *ctx, void *e) {
     int c;
     (void)ctx;
     if (!canvas || !tb.win || !tb.card) return RET_OK;
-    tb_blit(canvas, tb.card, TB_W, TB_H, TB_CARD_X, 0);
+    peq_blit(canvas, tb.card, TB_W, TB_H, TB_CARD_X, 0);
     if (tb.thumb)
         for (c = 0; c < TB_COLS; ++c)
-            tb_blit(canvas, tb.thumb, TB_THUMB_W, TB_THUMB_H, TB_CARD_X + tb_center_x(c) - TB_THUMB_W / 2,
-                    tb_thumb_y(tb.st.gain[c]));
+            peq_blit(canvas, tb.thumb, TB_THUMB_W, TB_THUMB_H, TB_CARD_X + tb_center_x(c) - TB_THUMB_W / 2,
+                     tb_thumb_y(tb.st.gain[c]));
     if (tb.pill && tb.drag >= 0)
-        tb_blit(canvas, tb.pill, TB_PILL_W, TB_PILL_H, TB_CARD_X + tb_center_x(tb.drag) - TB_PILL_W / 2, TB_VAL_Y);
+        peq_blit(canvas, tb.pill, TB_PILL_W, TB_PILL_H, TB_CARD_X + tb_center_x(tb.drag) - TB_PILL_W / 2, TB_VAL_Y);
     return RET_OK;
-}
-
-static void tb_label_colors(void *w, const char *rgb) {
-    static const char *const prop[3] = {"style:normal:text_color", "style:disable:text_color",
-                                        "style:focused:text_color"};
-    int s;
-    for (s = 0; s < 3; ++s) widget_set_prop_str(w, prop[s], rgb);
 }
 
 static void tb_value_label(int c) {
@@ -334,8 +320,8 @@ static void tb_end(void) {
     tb.drag = -1;
     widget_ungrab(tb.win, tb.view);
     tb_slide(1);
-    tb_label_colors(tb.vlab[c], TB_GREY_VAL);
-    tb_label_colors(tb.flab[c], TB_GREY_VAL);
+    peq_label_colors(tb.vlab[c], TB_GREY_VAL);
+    peq_label_colors(tb.flab[c], TB_GREY_VAL);
     if (tb.dirty) tb_commit(); /* the last step, saved */
     tb.dirty = 0;
     if (tb.graph_due) tb_graph();
@@ -363,8 +349,8 @@ static int tb_on_down(void *ctx, void *e) {
     widget_grab(tb.win, tb.view);
     tb_slide(0);
     tb_region(c);
-    tb_label_colors(tb.vlab[c], "#000000"); /* the value on the pill, the frequency white */
-    tb_label_colors(tb.flab[c], "#FFFFFF");
+    peq_label_colors(tb.vlab[c], "#000000"); /* the value on the pill, the frequency white */
+    peq_label_colors(tb.flab[c], "#FFFFFF");
     tb_follow(e);
     widget_invalidate_force(tb.view, (void *)0); /* the pill, even when the band did not move */
     return RET_OK;

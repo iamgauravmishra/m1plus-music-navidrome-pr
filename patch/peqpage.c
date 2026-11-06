@@ -221,14 +221,27 @@ void peq_graph_free(peq_graph *g) {
     g->bmp = (void *)0;
 }
 
+/* One 1:1 blit of bmp (w x h) at x, y: the graph card, the editors' cards, tracks and thumbs, the Auto EQ glyphs. */
+void peq_blit(void *canvas, void *bmp, int w, int h, int x, int y) {
+    int src[4], dst[4];
+    src[0] = src[1] = 0, src[2] = w, src[3] = h;
+    dst[0] = x, dst[1] = y, dst[2] = w, dst[3] = h;
+    canvas_draw_image(canvas, bmp, src, dst);
+}
+
+/* A label's text colour (rgb, "#rrggbb") in the states it can show. */
+void peq_label_colors(void *w, const char *rgb) {
+    static const char *const prop[3] = {"style:normal:text_color", "style:disable:text_color",
+                                        "style:focused:text_color"};
+    int s;
+    for (s = 0; s < 3; ++s) widget_set_prop_str(w, prop[s], rgb);
+}
+
 /* The graph view's EVT_BEFORE_PAINT: one blit of the bitmap at the card's x (nothing with no bitmap or no canvas). */
 void peq_graph_paint(const peq_graph *g, void *e) {
     void *canvas = e ? *(void **)((char *)e + EVENT_PAINT_CANVAS) : (void *)0;
-    int src[4], dst[4];
     if (!canvas || !g->bmp) return;
-    src[0] = src[1] = 0, src[2] = GR_W, src[3] = GR_H;
-    dst[0] = GR_CARD_X, dst[1] = 0, dst[2] = GR_W, dst[3] = GR_H;
-    canvas_draw_image(canvas, g->bmp, src, dst);
+    peq_blit(canvas, g->bmp, GR_W, GR_H, GR_CARD_X, 0);
 }
 
 /* The scale's ends: +R at the top, -R (U+2212) at the bottom. */
@@ -515,15 +528,8 @@ int peqpage_commit(int play) {
     if (!play) return peq_record(&s);
     if (!peq_commit(&s)) return 0;
     pg.owner =
-        peqout_current() + 1; /* a live edit goes to the output playing now: that output owns the session from here */
+        peqout_session(); /* a live edit goes to the output playing now: that output owns the session from here */
     return 1;
-}
-
-/* The output changed since the session's edits went to the record of another output: the record playing now is not this session's (peqout_sync filed the edits in the session output's slot). */
-static int pg_away(void) {
-    if (!pg.owner) return 0;
-    peqout_sync(1); /* the status bar's timer may not have run yet: file the record before looking at the slots */
-    return pg.owner - 1 != peqout_current();
 }
 
 /* ---------------------------------------------------------------------------
@@ -544,7 +550,8 @@ static int pg_load(void) {
 
 /* After the file changed under the page: what plays is the file's preset, then the rows, the note and the title (only once that was written: a failure leaves the page undrawn for the caller to restore). */
 static int pg_refresh(const char *prev, int active) {
-    if (!pg_away()) {
+    if (!peqout_away(
+            pg.owner)) { /* else the record playing now is not this session's (peqout_sync filed the edits in the session output's slot) */
         if (!peqpage_commit(0)) return 0; /* the session keeps its output until the record is written */
         pg.owner = 0;
         pg_note();
@@ -554,7 +561,7 @@ static int pg_refresh(const char *prev, int active) {
     }
     /* Another output plays now: its record and playback stay as they are. The session output's slot, when it still names the file `prev`, takes the file's preset (as `file`); the record
      * playing now takes it only when it names this file (a Save changed that file; active 0 for a Don't Save, which changed nothing). */
-    if (!peqout_restore(pg.owner - 1, prev, pg.file, &pg.work)) {
+    if (!peqout_session_filed(pg.owner, prev, pg.file, &pg.work)) {
         pod_toast(TR("Not saved"));
         return 0;
     }
@@ -562,14 +569,7 @@ static int pg_refresh(const char *prev, int active) {
     pg_note();
     pg_title();
     pg_fill();
-    if (active) {
-        peq_state s;
-        if (peq_state_load(&s) && s.mode == PEQ_FILE && !strcmp(s.name, pg.file)) {
-            s.preset = pg.work;
-            return peq_record(&s);
-        }
-    }
-    return 1;
+    return active ? peqout_playing_filed(pg.file, &pg.work) : 1;
 }
 
 /* Don't Save: the file's preset plays again. 1 when it was read. */
@@ -805,7 +805,7 @@ void peqpage_opened(void *win) {
         pg.work = st.preset;
         pg_compact(&pg.work);
         pg.owner =
-            peqout_current() + 1; /* an earlier session's unsaved edits are in the record of the output playing now */
+            peqout_session(); /* an earlier session's unsaved edits are in the record of the output playing now */
     }
     pg.win = win;
     memset(&pre, 0, sizeof pre);

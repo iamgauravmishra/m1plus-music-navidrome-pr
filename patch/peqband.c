@@ -140,13 +140,6 @@ static unsigned bd_ring_px(int x, int y, int w, int h) {
     return tb_px(242 * inner, outer);
 }
 
-static void bd_blit(void *canvas, void *bmp, int sw, int sh, int x, int y) {
-    int src[4], dst[4];
-    src[0] = src[1] = 0, src[2] = sw, src[3] = sh;
-    dst[0] = x, dst[1] = y, dst[2] = sw, dst[3] = sh;
-    canvas_draw_image(canvas, bmp, src, dst);
-}
-
 static void *bd_canvas(void *e) { return e ? *(void **)((char *)e + EVENT_PAINT_CANVAS) : (void *)0; }
 
 /* ---------------------------------------------------------------------------
@@ -158,7 +151,7 @@ static int bd_on_gpaint(void *ctx, void *e) {
     if (!bd.win) return RET_OK;
     peq_graph_paint(&bd.g, e);
     if (canvas && bd.ring && bd.ring_x >= 0)
-        bd_blit(canvas, bd.ring, BD_RING, BD_RING, bd.ring_x - BD_RING / 2, bd.ring_y - BD_RING / 2);
+        peq_blit(canvas, bd.ring, BD_RING, BD_RING, bd.ring_x - BD_RING / 2, bd.ring_y - BD_RING / 2);
     return RET_OK;
 }
 
@@ -167,10 +160,10 @@ static int bd_on_spaint(void *ctx, void *e) {
     peq_preset *p = peqpage_work();
     (void)ctx;
     if (!canvas || !bd.win || !bd.segbg || !p || bd.band >= p->count) return RET_OK;
-    bd_blit(canvas, bd.segbg, BD_SEG_W, BD_SEG_H, BD_CARD_X, BD_SEG_Y);
+    peq_blit(canvas, bd.segbg, BD_SEG_W, BD_SEG_H, BD_CARD_X, BD_SEG_Y);
     if (bd.pill)
-        bd_blit(canvas, bd.pill, BD_SEG_PILL_W, BD_SEG_PILL_H,
-                BD_CARD_X + p->bands[bd.band].type * (BD_SEG_W / 3) + BD_SEG_PAD, BD_SEG_Y + BD_SEG_PAD);
+        peq_blit(canvas, bd.pill, BD_SEG_PILL_W, BD_SEG_PILL_H,
+                 BD_CARD_X + p->bands[bd.band].type * (BD_SEG_W / 3) + BD_SEG_PAD, BD_SEG_Y + BD_SEG_PAD);
     return RET_OK;
 }
 
@@ -179,16 +172,11 @@ static int bd_on_hpaint(void *ctx, void *e) {
     int r;
     (void)ctx;
     if (!canvas || !bd.win || !bd.card) return RET_OK;
-    bd_blit(canvas, bd.card, BD_HSL_W, BD_HSL_H, BD_CARD_X, 0);
+    peq_blit(canvas, bd.card, BD_HSL_W, BD_HSL_H, BD_CARD_X, 0);
     for (r = 0; r < BD_ROWS; ++r) {
         int px = bd_px(r), cx = BD_CARD_X + BD_TRACK_X, cy = r * BD_ROW_H + BD_TRACK_Y;
-        if (bd.fill && px > 0) {
-            int src[4], dst[4];
-            src[0] = src[1] = 0, src[2] = px, src[3] = BD_TRACK_H;
-            dst[0] = cx, dst[1] = cy - BD_TRACK_H / 2, dst[2] = px, dst[3] = BD_TRACK_H;
-            canvas_draw_image(canvas, bd.fill, src, dst);
-        }
-        if (bd.thumb) bd_blit(canvas, bd.thumb, BD_THUMB, BD_THUMB, cx + px - BD_THUMB / 2, cy - BD_THUMB / 2);
+        if (bd.fill && px > 0) peq_blit(canvas, bd.fill, px, BD_TRACK_H, cx, cy - BD_TRACK_H / 2);
+        if (bd.thumb) peq_blit(canvas, bd.thumb, BD_THUMB, BD_THUMB, cx + px - BD_THUMB / 2, cy - BD_THUMB / 2);
     }
     return RET_OK;
 }
@@ -196,13 +184,6 @@ static int bd_on_hpaint(void *ctx, void *e) {
 /* ---------------------------------------------------------------------------
  * The page's texts from the band
  */
-static void bd_label_colors(void *w, const char *rgb) {
-    static const char *const prop[3] = {"style:normal:text_color", "style:disable:text_color",
-                                        "style:focused:text_color"};
-    int s;
-    for (s = 0; s < 3; ++s) widget_set_prop_str(w, prop[s], rgb);
-}
-
 /* "3.2": a Q in hundredths, the zeros trimmed (the Preset page's form). */
 static void bd_texts(void) {
     peq_preset *p = peqpage_work();
@@ -215,7 +196,7 @@ static void bd_texts(void) {
     widget_set_text_utf8(bd.hs_v[1], text);
     pp_qtext(text, sizeof text, p->bands[bd.band].q);
     widget_set_text_utf8(bd.hs_v[2], text);
-    for (k = 0; k < 3; ++k) bd_label_colors(bd.seg_l[k], k == p->bands[bd.band].type ? "#000000" : "#FFFFFF");
+    for (k = 0; k < 3; ++k) peq_label_colors(bd.seg_l[k], k == p->bands[bd.band].type ? "#000000" : "#FFFFFF");
 }
 
 /* The ring's place on the curve at the band's frequency (the curve of the whole preset at that column, clamped to the plot). */
@@ -516,7 +497,7 @@ static void bd_type(int r) {
     widget_set_text_utf8(bd.krange, range);
     bd_show(bd.kunitk, r == 0);
     widget_set_sensitive(bd.ksign, r == 1);
-    bd_label_colors(bd.ksign, r == 1 ? "#FFFFFF" : "#5A5A5E");
+    peq_label_colors(bd.ksign, r == 1 ? "#FFFFFF" : "#5A5A5E");
     widget_set_text_utf8(bd.ksign, MINUS);
     bk_show_text();
     bd.kopen = 1;

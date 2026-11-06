@@ -14,6 +14,7 @@
 #include "stock.h"
 #include "peq.h"
 #include "peqout.h"
+#include "peqpage.h"
 
 static const char *const po_file[PO_N] = {PEQ_STATE_DIR "/playback-eq-headphones", PEQ_STATE_DIR "/playback-eq-lineout",
                                           PEQ_STATE_DIR "/playback-eq-usb"};
@@ -160,11 +161,20 @@ int peqout_deleted(const char *file) {
     return ok;
 }
 
-/* The Preset page (patch/peqpage.c) puts a preset file's preset into the output's slot while another output plays: only when the slot is in file mode and names `from`; its file name becomes `to`
+/* An edit session on the Preset page (patch/peqpage.c) belongs to the output whose record received its live edits: the token is that output + 1. */
+int peqout_session(void) { return peqout_current() + 1; }
+
+int peqout_away(int session) {
+    if (!session) return 0;
+    peqout_sync(1);
+    return session - 1 != peqout_current();
+}
+
+/* The Preset page puts a preset file's preset into the session output's slot while another output plays: only when the slot is in file mode and names `from`; its file name becomes `to`
  * (a Save As) and its preset `p`. 0 when the slot could not be rewritten; 1 otherwise, also when there was nothing to do. */
-int peqout_restore(int output, const char *from, const char *to, const peq_preset *p) {
+int peqout_session_filed(int session, const char *from, const char *to, const peq_preset *p) {
     peq_state s;
-    int n = 0;
+    int output = session - 1, n = 0;
     if (output < 0 || output >= PO_N || !peq_state_load_from(po_file[output], &s) || s.mode != PEQ_FILE ||
         strcmp(s.name, from))
         return 1;
@@ -174,4 +184,11 @@ int peqout_restore(int output, const char *from, const char *to, const peq_prese
     memset(s.name, 0, sizeof s.name);
     memcpy(s.name, to, n + 1);
     return peq_state_save_to(po_file[output], &s) == 0;
+}
+
+int peqout_playing_filed(const char *file, const peq_preset *p) {
+    peq_state s;
+    if (!peq_state_load(&s) || s.mode != PEQ_FILE || strcmp(s.name, file)) return 1;
+    s.preset = *p;
+    return peq_record(&s);
 }

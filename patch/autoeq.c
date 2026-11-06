@@ -25,6 +25,7 @@
 #include "search.h"
 #include "i18n.h"
 #include "podcasts.h"
+#include "peqpage.h"
 #include "pcjson.h"
 #include "pcnet.h"
 #include "peq.h"
@@ -511,11 +512,8 @@ static void ae_span(int *r0, int *r1) {
 }
 
 static void ae_icon(void *canvas, void *bmp, int x, int y, int size) {
-    int src[4], dst[4];
     if (!bmp || y < 0 || y + size > AE_LIST_H) return;
-    src[0] = src[1] = 0, src[2] = src[3] = size;
-    dst[0] = x, dst[1] = y, dst[2] = dst[3] = size;
-    canvas_draw_image(canvas, bmp, src, dst);
+    peq_blit(canvas, bmp, size, size, x, y);
 }
 
 static void ae_paint_rows(void *canvas) {

@@ -3003,6 +3003,18 @@ def output_edit_tests(ctx):
     m.fail.discard(('rename', SLOT[0])); m.hist.clear(); fire(m, m.bw['pq_item0'], 'EVT_CLICK')
     expect(went_back(m) and not toasts(m) and slot_preset(m, 0)['bands'][1][3] == edited['bands'][1][3] and NAME_OF(m.fs[SLOT[0]]) == HD.encode() and m.fs[STATE] == pop, f'a second Save, the fault cleared: the slot has the saved preset, USB keeps Pop ({toasts(m)})')
 
+    # Delete Preset reaches every output's slot: the slots that name the file point at the 10-Band EQ with that output's switch off, others stay
+    m = ppage([(HD, AUTOEQ), ('keep.txt', AUTOEQ)], HD)
+    mine = pack_state(1, pack_preset(AUTOEQ_BANDS), HD.encode()); keep = pack_state(1, pack_preset(AUTOEQ_BANDS), b'keep.txt')
+    m.fs[STATE] = keep; m.fs[SLOT[0]] = mine; m.fs[SLOT[1]] = keep; m.fs[SLOT[2]] = mine
+    m.fs[OUT_FILE] = b'M1PEQO1\0' + struct.pack('<4i', 1, 1, 1, 1)
+    m.confirm_yes = True; tap_row(m, 31)
+    expect(HD_PATH not in m.fs and NAME_OF(m.fs[SLOT[0]]) == b'' and NAME_OF(m.fs[SLOT[2]]) == b'' and m.fs[SLOT[1]] == keep and out_rec(m)[0] == (1, 0, 1, 0) and not [c for c in m.calls if c[0] == 'toast'],
+           f'Delete Preset: the Headphones and USB slots drop the file and their switches go off, Line Out is left alone ({out_rec(m)[0]})')
+    m = ppage([(HD, AUTOEQ)], HD)
+    m.fs[SLOT[1]] = mine; m.fail.add(('rename', SLOT[1])); m.confirm_yes = True; tap_row(m, 31)
+    expect([c[1] for c in m.calls if c[0] == 'toast'] == ['Not saved'], 'Delete Preset with a slot that cannot be rewritten: "Not saved"')
+
 
 SECTIONS = [player_tests, carry_tests, parser_tests, page_tests, cross_tests, asset_tests, preset_page_tests, presets_page_tests, layout_peqp_tests, edit_band_tests, edit_select_tests, edit_dialog_tests, edit_revert_tests, edit_saveas_tests, edit_rename_tests, edit_channels_tests, layout_peqlib_tests, tenband_drag_tests, tenband_edit_tests, tenband_switch_tests, tenband_replace_tests, tenband_rows_tests, tenband_reopen_tests, tenband_memory_tests, tenband_reset_tests, tenband_curve_tests, tenband_preamp_tests, save_preset_tests, layout_tenband_tests, widths_tests, output_tests, output_edit_tests, retire_tests]
 
