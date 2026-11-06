@@ -77,7 +77,15 @@ static int lb_stamp(const char *file, char *sub, unsigned size) {
         }
         if (dn >= kn && j == kn) break;
     }
-    for (k = 0; k < a && o + 1 < size; k++) sub[o++] = p[k];
+    /* the stamp keeps the source percent-encoded (it is the file's identity); only the grey line shows it decoded, cut back to a whole character */
+    o = pod_url_decode(sub, size, p, a);
+    for (k = o; k > 0 && ((unsigned char)sub[k - 1] & 0xc0) == 0x80; k--) {
+    }
+    if (k > 0) {
+        unsigned char lead = (unsigned char)sub[k - 1];
+        unsigned need = lead >= 0xf0 ? 4 : lead >= 0xe0 ? 3 : lead >= 0xc0 ? 2 : 1;
+        if (need > o - (k - 1)) o = k - 1;
+    }
     if (i < 3) {
         const char *w = TR(shown[i]);
         for (k = 0; k < 4 && o + 1 < size; k++) sub[o++] = " \xc2\xb7 "[k];

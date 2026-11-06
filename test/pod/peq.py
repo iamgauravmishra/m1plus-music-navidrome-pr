@@ -1475,6 +1475,21 @@ def presets_page_tests(ctx):
     # an edited AutoEq file (a Save marked it) is still listed under AutoEq with the same grey line
     m = libpage([('ed.txt', b'# AutoEq edited: oratory1990/over-ear/Ed\n' + AUTOEQ)])
     expect(vis(m, 'pod_sec0') == 1 and vis(m, 'pod_sec1') == 0 and ptexts(m, 'pod_sub', 1) == ['oratory1990 · Over-ear'], 'an edited AutoEq file: listed under AutoEq, Source · Kind')
+    # the source is shown decoded (the stamp itself stays percent-encoded); a malformed '%' stays, a cut never ends mid character
+    m = libpage([('a.txt', stamped('Super%20Review/over-ear/X')), ('b.txt', stamped('a%2fb%E6%AD%8C%2/in-ear/Y')), ('c.txt', stamped('50%/earbud/Z')), ('d.txt', stamped('x%zz%/Dir/W')),
+                 ('e.txt', stamped('歌' * 30 + '%E6%AD%8C' * 3 + '/Dir/V'))])
+    subs = [ptexts(m, 'pod_sub', i) for i in range(1, 6)]
+    expect(subs[:4] == [['Super Review · Over-ear'], ['a/b歌%2 · In-ear'], ['50% · Earbud'], ['x%zz%']], f'the grey line decodes %XX of either case and leaves a malformed % as it is ({subs[:4]})')
+    expect(subs[4] == ['歌' * 31], f'a decoded source over the line\'s room is cut at a whole character ({subs[4]})')
+    u = m.alloc(16)
+    def dec(s, size, pad=b'\xaa'):
+        m.u.mem_write(u, pad * 16); b = s.encode(); sb = m.alloc(len(b) + 1); m.u.mem_write(sb, b + b'\0')
+        r = m.call(PSYMS['pod_url_decode'], u, size, a2=sb, a3=len(b))
+        raw = bytes(m.u.mem_read(u, 16)); return r, raw[:raw.find(b'\0')], raw[size:] == pad * (16 - size)
+    expect(dec('a%20b', 16)[:2] == (3, b'a b') and dec('%41%4a%4A', 16)[:2] == (3, b'AJJ') and dec('%', 16)[:2] == (1, b'%') and dec('a%2', 16)[:2] == (3, b'a%2') and dec('%g1%1g', 16)[:2] == (6, b'%g1%1g')
+           and dec('%2541', 16)[:2] == (3, b'%41') and dec('', 16)[:2] == (0, b''), 'pod_url_decode: %XX of either case, a malformed or short % as it is, no second pass')
+    expect(dec('abcdef', 4) == (3, b'abc', True) and dec('a%20bcd', 3) == (2, b'a ', True) and dec('x', 1) == (0, b'', True), 'pod_url_decode: never writes past size, always NUL terminated')
+
     # a stamp-looking first line that is not a stamp is a file of the user's
     m = libpage([('a.txt', b'# AutoEq: nosource\n' + AUTOEQ), ('b.txt', b'# AutoEq: /x/y\n' + AUTOEQ), ('c.txt', b'# AutoEq: s//n\n' + AUTOEQ), ('d.txt', b'# autoeq: s/over-ear/n\n' + AUTOEQ)])
     expect(vis(m, 'pod_sec0') == 0 and vis(m, 'pod_sec1') == 1 and [ptexts(m, 'pod_sub', O['PQ_ROWS'] + i) for i in range(1, 5)] == [['On card']] * 4, 'a malformed stamp (no Kind, no Source, an empty Kind, wrong case) is a file of the user\'s')

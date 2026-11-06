@@ -11,6 +11,8 @@
 /* The widget's text as UTF-8 in buf (size bytes, cut at a character boundary, always NUL terminated). Returns the length the whole text needs: it fitted when the result is below
  * size; -1 when the widget has no text. Use this, never stock widget_get_text_utf8, which ignores size for a wide text (docs/modules/payload.md). */
 int pod_text_utf8(void *widget, char *buf, unsigned size);
+/* The n bytes at in with each %XX decoded to its byte, into out (size bytes, always NUL terminated, never written past; a malformed '%' stays). Returns the length written. */
+unsigned pod_url_decode(char *out, unsigned size, const char *in, unsigned n);
 int pod_screen_lit(void); /* stock backlight state */
 
 int pod_on_back(void *ctx, void *e); /* click handler: navigator_back() */

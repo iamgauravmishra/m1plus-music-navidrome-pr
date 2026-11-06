@@ -53,6 +53,31 @@ int pod_text_utf8(void *widget, char *buf, unsigned size) {
     return (int)n;
 }
 
+/* The n bytes at in with each %XX (hex digits of either case) decoded to its byte, into out (size bytes, never written past, always NUL terminated; size >= 1). A '%' not followed
+ * by two hex digits stays as it is. Stops when the next byte does not fit (a cut can split a UTF-8 character: the caller trims). Returns the length written. */
+unsigned pod_url_decode(char *out, unsigned size, const char *in, unsigned n) {
+    unsigned o = 0, i;
+    if (!size) return 0;
+    for (i = 0; i < n && o + 1 < size; ++i) {
+        unsigned char c = (unsigned char)in[i];
+        if (c == '%' && i + 2 < n) {
+            int h = 0, l = 0, k;
+            for (k = 1; k <= 2; ++k) {
+                unsigned char d = (unsigned char)in[i + k];
+                int v = d - '0' < 10u ? d - '0' : (d | 32) - 'a' < 6u ? (d | 32) - 'a' + 10 : -1;
+                if (k == 1)
+                    h = v;
+                else
+                    l = v;
+            }
+            if (h >= 0 && l >= 0) c = (unsigned char)(h << 4 | l), i += 2;
+        }
+        out[o++] = (char)c;
+    }
+    out[o] = 0;
+    return o;
+}
+
 int pod_screen_lit(void) { return *(volatile unsigned char *)BACKLIGHT_STATUS != 0; }
 
 /* Whether the card is mounted: its mount point is another file system than the one it is in (an unmounted /mnt/mmc is a plain directory on the internal flash). */
