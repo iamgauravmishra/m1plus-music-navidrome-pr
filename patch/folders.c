@@ -3,7 +3,7 @@
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
  * One window for every level, ui/m1plus_folders.bin (tools/pod_ui.py build_folders_page): the Songs page's structure (patch/songs.c): the glass navbar (Back, the small title,
- * Select | Now Playing) over a stock list, list_view > scroll_view, whose ONE child, view_grid, holds the large title and the Play / Shuffle pills and paints the rows itself in
+ * "..." | Now Playing) over a stock list, list_view > scroll_view, whose ONE child, view_grid, holds the large title and the Play / Shuffle pills and paints the rows itself in
  * its EVT_AFTER_PAINT (an icon, the name, the chevron of a folder or the wave of what plays, the press fill, the hairline, the select marks), with no widget per row.
  *
  *   state     the stock page's own, untouched: the layer (0xa0554c), the path, the title (0xa0533c), the stack of scroll offsets, and the shown list, *pdeq_showlist, whose records
@@ -15,7 +15,9 @@
  *   play      a file's tap is the stock row's: loadSongList(queue, name, cue, class 1) on the folder's files, then Now Playing at the file (patch/songops.c so_play, a simple
  *             navigator_to_with_context as stock's folder row does, no songerinfoflag pop). Play and Shuffle (shown while the folder holds an audio file) play its first / a random file
  *             with the in-order / Shuffle mode. The wave marks the folder or file that plays (is_folderplaying, is_playing as the stock row asks them).
- *   select    the page's own multi-select on folders and audio files (a folder's tap in select mode marks it; not at the root, where Select is hidden): marks in a bitset by record, "N Selected", Select All, the bar. Delete and
+ *   order     the "..." card (patch/viewsort.c): Select, then Name, Date Modified, Type (folders always first; the ticked row reverses): `vis`, the rows shown, is sorted, the stock list is not; a queue
+ *             built for a play is put in the same order (fo_reorder). Saved in FOLDERS_SORT_FILE.
+ *   select    the page's own multi-select on folders and audio files (a folder's tap in select mode marks it; not at the root, where there is no "..."): marks in a bitset by record, "N Selected", Select All, the bar. Delete and
  *             Add to Playlist run the stock code on the stock selection vector, which is filled from the bitset at that moment (patch/songops.c so_selection): Delete is the stock folder
  *             handler's sequence (@0x5324d0: the confirm dialog, "can't be removed" while a playlist file is open, batch_delete_file(1, list, vector, 0, 1)), Add the stock playlist
  *             picker (so_add, class 1; the stock handler's Favourites question is not asked).
@@ -31,10 +33,12 @@
 #include "azlist.h"
 #include "i18n.h"
 #include "songops.h"
+#include "viewsort.h"
 
 extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
 extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
 extern unsigned pod_rand(unsigned n); /* patch/shuffle.c: 0 .. n - 1 */
+extern int ft_statx(int dirfd, const char *path, int flags, unsigned mask, void *buf); /* patch/filetime.c: the statx syscall (demo imports none) */
 
 #define ROW POD_ROW_H /* the menu rows' pitch (52): one line a row */
 #define FO_ASSET "m1plus_folders"
@@ -52,6 +56,10 @@ extern unsigned pod_rand(unsigned n); /* patch/shuffle.c: 0 .. n - 1 */
 #define FO_MARK_X 262
 #define FO_CHEV_X LIST_CHEV_X /* 288: the shared list chevron */
 #define FO_TEXT_Y ((ROW - LIST_TITLE_H) / 2) /* the name centred in the row */
+#define FO_STAT_MAX 2000 /* the most entries a level may have for Date Modified: one statx each, run when the level is read (more: the row is not offered there and the level shows by Name) */
+#define FO_AT_FDCWD (-100)
+#define FO_STATX_MTIME 0x40u /* STATX_MTIME; stx_mtime.tv_sec is the word at byte 112 of the 256-byte struct statx */
+#define FO_TITLE_END_NP 260 /* the small title's end when Now Playing is the disc alone (NAV_PLAY_X) */
 #define FO_NAME_MAX 160 /* bytes of a name kept (the tile keeps 47 characters anyway) */
 #define FO_PLAYING_MAX 32 /* rows in view are at most GRID_VIEW_H / ROW + 2 */
 
@@ -69,7 +77,8 @@ enum { T_LIST = 1, T_SD = 2, T_OTG = 3, T_DIR = 4, T_FILE = 8 }; /* a record's t
 
 static struct {
     void *win, *view, *sv, *status, *title, *big, *fade, *back, *np;
-    void *btn_select, *btn_selall, *btn_play, *btn_shuffle, *btn_add, *btn_del, *bar;
+    /* btn_select: the Select button in the "..." place on a playlist file's tracks (fo_direct) */
+    void *btn_more, *btn_select, *btn_selall, *btn_play, *btn_shuffle, *btn_add, *btn_del, *bar;
     void *st_title; /* hidden labels whose styles are the row's text styles */
     void *list; /* the stock list the index is of (*pdeq_showlist when valid) */
     void *first; /* its first record: with the size, tells a list another query replaced */
@@ -78,7 +87,13 @@ static struct {
     unsigned nvis;
     int nfile; /* audio files among them */
     int nmark; /* the rows select mode can mark: folders and audio files */
-    int first_file; /* the record of the first one, -1 for none */
+    int first_file; /* the record of the first one in the order shown, -1 for none */
+    vs_t vs; /* the "..." card (patch/viewsort.c): Select, Name, Date Modified, Type */
+    int menu; /* the card is open */
+    int sort, rev; /* the saved order (FOLDERS_SORT_FILE): 0 Name, 1 Date Modified, 2 Type; rev = Z-A / Oldest First */
+    int eff, eff_rev; /* the order this level is shown in: the saved one, or Name when the level is too big for Date Modified */
+    int *mt; /* the modification times by record while Date Modified shows (count ints), else NULL */
+    unsigned *rk; /* the queue's play ranks while fo_reorder runs */
     unsigned char *sel; /* the select mode's bitset, by record: (count + 7) / 8 bytes */
     unsigned nsel;
     int select; /* select mode */
@@ -153,6 +168,140 @@ static int fo_shift(void) { return fo.select ? SG_SEL_COL : 0; }
 static int fo_tx(void) { return FO_TEXT_X + fo_shift(); }
 
 static int fo_is_sel(int rec) { return fo.sel && (fo.sel[rec >> 3] >> (rec & 7) & 1); }
+
+/* ---------------------------------------------------------------------------
+ * The order (docs/modules/folders.md "Order"): the stock list is never reordered; `vis` (the records shown) is sorted. Folders come before files in every order. Name: the lists' name order
+ * (cc_key_cmp: digit runs by value, case folded), Z-A reversed inside each group. Date Modified: newest first, one statx per entry. Type: the extension, then the name; Z-A reverses the extension
+ * only, and folders (no type) stay by name. A level of the storages and a playlist file's tracks keep their own order.
+ */
+static const char *fo_name(int rec) { return cc_str(deque_at(fo.list, (unsigned)rec), REC_NAME); }
+static const char *fo_url(int rec) { return cc_str(deque_at(fo.list, (unsigned)rec), REC_PATH); }
+static int fo_group(int rec) { return fo_type(rec) == T_FILE || fo_type(rec) == T_LIST; } /* 0 folders, 1 files */
+static int fo_m3u(void) { return *(char *)FOLDER_M3U != 0; } /* the level is a playlist file's tracks */
+/* The card would hold Select alone (a playlist file's tracks): the navbar's Select button takes the "..." place, no
+ * card. */
+static int fo_direct(void) { return fo_m3u(); }
+
+/* The text after the last dot (the extension; "" for none). */
+static const char *fo_ext(const char *name) {
+    const char *dot = (const char *)0;
+    for (; *name; ++name)
+        if (*name == '.') dot = name + 1;
+    return dot ? dot : "";
+}
+
+static int fo_cmp(unsigned a, unsigned b) {
+    int c, g = fo_group((int)a), rev = fo.eff_rev;
+    const char *na = fo_name((int)a), *nb = fo_name((int)b);
+    if (g != fo_group((int)b)) return g - fo_group((int)b);
+    if (fo.eff == 1 && fo.mt && fo.mt[a] != fo.mt[b]) { /* Newest First; Oldest First reverses it */
+        c = fo.mt[a] > fo.mt[b] ? -1 : 1;
+        return rev ? -c : c;
+    }
+    if (fo.eff == 2 && g && (c = cc_key_cmp(fo_ext(na), fo_ext(nb))) != 0) return rev ? -c : c;
+    if ((c = cc_key_cmp(na, nb)) != 0) return fo.eff == 0 && rev ? -c : c;
+    return a < b ? -1 : a > b;
+}
+
+/* The modification time of a path (seconds; 0 when the statx call fails). */
+static int fo_mtime(const char *path) {
+    unsigned sx[64];
+    return ft_statx(FO_AT_FDCWD, path, 0, FO_STATX_MTIME, sx) == 0 && (sx[0] & FO_STATX_MTIME) ? (int)sx[28] : 0;
+}
+
+/* The saved order, or Name when this level cannot show it: Date Modified needs one statx per entry, so a level of more than FO_STAT_MAX entries is shown by Name. */
+static int fo_date_ok(void) { return fo.nvis <= FO_STAT_MAX && !fo_m3u(); }
+
+/* Sorts `vis` (the records shown) in the saved order and finds the first audio file in it. */
+static void fo_order(void) {
+    unsigned i;
+    fo.eff = fo.sort, fo.eff_rev = fo.rev;
+    free(fo.mt);
+    fo.mt = (int *)0;
+    if (fo_root() || fo_m3u()) fo.eff = 0, fo.eff_rev = 0; /* (the storages are three fixed rows; a playlist file's tracks play in the file's order) */
+    else {
+        if (fo.eff == 1 && (!fo_date_ok() || !(fo.mt = calloc(fo.count, sizeof(int))))) fo.eff = 0, fo.eff_rev = 0;
+        for (i = 0; fo.mt && i < fo.nvis; ++i) fo.mt[fo.vis[i]] = fo_mtime(fo_url(fo.vis[i]));
+        if (fo.nvis > 1) cc_heapsort((unsigned *)fo.vis, fo.nvis, fo_cmp);
+    }
+    for (i = 0, fo.first_file = -1; i < fo.nvis; ++i)
+        if (fo_type(fo.vis[i]) == T_FILE) {
+            fo.first_file = fo.vis[i];
+            break;
+        }
+}
+
+/* The rows the "..." card offers on this level: Select, and the three orders (Date Modified only where fo_date_ok); a playlist file's tracks have no order. */
+static unsigned fo_offers(void) {
+    unsigned m = VS_WITH_SELECT;
+    if (!fo_m3u()) m |= 1u << 0 | 1u << 2 | (fo_date_ok() ? 1u << 1 : 0);
+    return m;
+}
+
+/* The queue loadSongList built (the folder's audio files in the stock order) put in the order shown: each record takes the place of the row with its path (a binary search over the rows by
+ * path); a file the page does not show (a dot name) goes last. Returns where `pick` is now, -1 with nothing changed when memory is short. In place: the records are exchanged by cycles. */
+static int fo_path_cmp(unsigned a, unsigned b) {
+    int c = strcmp(fo_url(fo.vis[a]), fo_url(fo.vis[b]));
+    return c ? c : a < b ? -1 : a > b;
+}
+
+static int fo_rank_cmp(unsigned a, unsigned b) { return fo.rk[a] != fo.rk[b] ? (fo.rk[a] < fo.rk[b] ? -1 : 1) : a < b ? -1 : a > b; }
+
+static int fo_reorder(void *queue, void *pick) {
+    unsigned n = deque_size(queue), i, lo, hi;
+    unsigned *byp = (unsigned *)calloc(fo.nvis + 1, sizeof(unsigned)), *ord = (unsigned *)calloc(n + 1, sizeof(unsigned));
+    unsigned char *done = (unsigned char *)calloc(n + 1, 1);
+    const char *want = cc_str(pick, REC_PATH); /* (the record may be one of the queue's: kept before the records move) */
+    int ret = -1;
+    fo.rk = (unsigned *)calloc(n + 1, sizeof(unsigned));
+    if (!byp || !ord || !done || !fo.rk) goto out;
+    for (i = 0; i < fo.nvis; ++i) byp[i] = i;
+    cc_heapsort(byp, fo.nvis, fo_path_cmp);
+    for (i = 0; i < n; ++i) {
+        const char *path = cc_str(deque_at(queue, i), REC_PATH);
+        lo = 0, hi = fo.nvis, fo.rk[i] = fo.nvis + i; /* (not shown: after the rows, in the stock order) */
+        while (lo < hi) {
+            unsigned mid = (lo + hi) / 2;
+            int c = strcmp(fo_url(fo.vis[byp[mid]]), path);
+            if (!c) {
+                fo.rk[i] = byp[mid];
+                break;
+            }
+            if (c < 0) lo = mid + 1;
+            else hi = mid;
+        }
+        ord[i] = i;
+    }
+    cc_heapsort(ord, n, fo_rank_cmp); /* ord[k] = the queue record that goes to place k */
+    for (i = 0; i < n; ++i) { /* the cycles of the permutation */
+        unsigned j = i;
+        char tmp[REC_SIZE];
+        if (done[i]) continue;
+        memcpy(tmp, deque_at(queue, i), REC_SIZE);
+        for (;;) {
+            unsigned src = ord[j];
+            done[j] = 1;
+            if (src == i) {
+                memcpy(deque_at(queue, j), tmp, REC_SIZE);
+                break;
+            }
+            memcpy(deque_at(queue, j), deque_at(queue, src), REC_SIZE);
+            j = src;
+        }
+    }
+    for (i = 0, ret = -1; i < n; ++i)
+        if (!strcmp(cc_str(deque_at(queue, i), REC_PATH), want)) {
+            ret = (int)i;
+            break;
+        }
+out:
+    free(byp);
+    free(ord);
+    free(done);
+    free(fo.rk);
+    fo.rk = (unsigned *)0;
+    return ret;
+}
 
 /* ---------------------------------------------------------------------------
  * The tiles: the name (a file's without its extension) and a file's extension in capitals, from the stock record
@@ -328,7 +477,8 @@ static void fo_load(int keep) {
     grid_drop(&fo.g);
     free(fo.vis);
     free(fo.sel);
-    fo.vis = (int *)0, fo.sel = (unsigned char *)0, fo.list = fo.first = (void *)0;
+    free(fo.mt);
+    fo.vis = (int *)0, fo.sel = (unsigned char *)0, fo.mt = (int *)0, fo.list = fo.first = (void *)0;
     fo.count = fo.nvis = fo.nsel = 0, fo.nfile = fo.nmark = 0, fo.first_file = -1, fo.press = fo.down = 0;
     if (list) fo.count = deque_size(list);
     if (fo.count) {
@@ -346,13 +496,12 @@ static void fo_load(int keep) {
             void *rec = deque_at(list, i);
             if (*cc_str(rec, REC_NAME) == '.') continue; /* a dot name (a hidden folder or file) is not shown */
             fo.vis[fo.nvis++] = (int)i;
-            if (I(rec, REC_TYPE) == T_FILE) {
-                if (fo.first_file < 0) fo.first_file = (int)i;
-                ++fo.nfile;
-            }
+            if (I(rec, REC_TYPE) == T_FILE) ++fo.nfile;
             if (fo_markable(I(rec, REC_TYPE))) ++fo.nmark;
         }
     }
+    fo_order();
+    if (!fo_root()) vs_offer(&fo.vs, fo_offers()); /* (the root has no card) */
     fo_show(fo.view, fo.nvis != 0);
     fo_show(fo.status, fo.nvis == 0);
     if (!fo.nvis) widget_set_tr_text(fo.status, nomem ? "Not enough memory" : "Empty folder");
@@ -401,7 +550,7 @@ static void fo_play(int rec, int how) {
         fo_load(1);
         return;
     }
-    so_play(FO_CLASS, fo.list, rec, how, fo_open_player);
+    so_play_with(FO_CLASS, fo.list, rec, how, fo_open_player, 0, fo_m3u() ? (so_reorder_fn)0 : fo_reorder); /* the queue plays in the order shown */
 }
 
 static int fo_on_play(void *ctx, void *e) {
@@ -460,11 +609,18 @@ static void fo_enter(int rec) {
 /* ---------------------------------------------------------------------------
  * The select mode
  */
-/* The capsule: Select | Now Playing, Select hidden in select mode and at the root (nothing selectable there); Now Playing alone is the glass disc, the capsule's right cap otherwise. */
+/* The capsule: "..." | Now Playing, the "..." hidden in select mode and at the root (the card would hold nothing there); Now Playing alone is the glass disc, the capsule's right cap otherwise.
+ * A playlist file's tracks have Select alone (fo_direct): its button takes the "..." place (btn_select, the
+ * left cap at 214), no card.
+ * The small title runs to the first piece: the "..." (NAV_VIEW_X), Now Playing's disc, or Select All in select mode. */
+static void fo_menu(int on);
 static void fo_cap(void) {
     int sel = !fo.select && !fo_root(), np = !fo.select;
     const char *img = sel ? "ah_nav_play" : "ah_nav_np";
-    fo_show(fo.btn_select, sel);
+    fo_show(fo.btn_more, sel && !fo_direct());
+    fo_show(fo.btn_select, sel && fo_direct());
+    if (!sel && fo.menu) fo_menu(0);
+    widget_resize(fo.title, (fo.select ? SG_SELALL_X : sel ? NAV_VIEW_X : FO_TITLE_END_NP) - NAV_TITLE_X, 22);
     fo_show(fo.np, np);
     if (fo.np) {
         widget_set_prop_str(fo.np, "style:normal:icon", img);
@@ -507,10 +663,49 @@ static void fo_toggle(int rec) {
     fo_changed();
 }
 
-static int fo_on_select(void *ctx, void *e) {
+/* ---------------------------------------------------------------------------
+ * The "..." card (patch/viewsort.c): Select, then Name, Date Modified and Type. A row sets the order in its default direction (Name A-Z, Date Modified Newest First, Type A-Z); a tap on the
+ * ticked row reverses it. The order is saved first (FOLDERS_SORT_FILE, one character; a save that fails changes nothing) and the level is read again from the top.
+ */
+static void fo_menu(int on) {
+    fo.menu = on;
+    vs_menu(&fo.vs, on, fo.eff, fo.eff_rev, 0);
+}
+
+static int fo_on_more(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    if (fo.view && fo.nvis) fo_select(1);
+    if (!fo.view || fo.select || fo_root()) return RET_OK;
+    if (fo_direct()) {
+        if (fo.nvis) fo_select(1); /* Select straight away (an empty level has nothing to select) */
+    } else if (fo.vs.card)
+        fo_menu(!fo.menu);
+    return RET_OK;
+}
+
+static int fo_on_scrim(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    fo_menu(0);
+    return RET_OK;
+}
+
+static int fo_on_item(void *ctx, void *e) {
+    int k = (int)(long)ctx, rev;
+    char text[3];
+    (void)e;
+    fo_menu(0);
+    if (!fo.view || fo_root()) return RET_OK;
+    if (k == VS_SELECT) { /* the old Select button: an empty level has nothing to select */
+        if (fo.nvis) fo_select(1);
+        return RET_OK;
+    }
+    if (k < 0 || k > 2 || fo_m3u()) return RET_OK;
+    rev = k == fo.eff ? !fo.eff_rev : 0;
+    text[0] = (char)((rev ? 'a' : '0') + k), text[1] = '\n', text[2] = 0;
+    if (home_write_atomic(FOLDERS_SORT_FILE, FOLDERS_SORT_TMP, text) != 0) return RET_OK;
+    fo.sort = k, fo.rev = rev;
+    fo_load(0);
     return RET_OK;
 }
 
@@ -714,6 +909,7 @@ static int fo_on_destroy(void *ctx, void *e) {
         if (fo.ic[i]) bitmap_destroy(fo.ic[i]);
     free(fo.vis);
     free(fo.sel);
+    free(fo.mt);
     memset(&fo, 0, sizeof fo);
     return RET_OK;
 }
@@ -751,7 +947,8 @@ static int fo_open_page(void) {
     widget_on(fo.win, EVT_DESTROY, fo_on_destroy, (void *)0);
     fo.back = pod_bind(fo.win, "btn_return", fo_on_back, (void *)0);
     fo.np = pod_bind(fo.win, "btn_backtoplayer", pod_on_player, (void *)0);
-    fo.btn_select = pod_bind(fo.win, "btn_select", fo_on_select, (void *)0);
+    fo.btn_more = pod_bind(fo.win, "btn_more", fo_on_more, (void *)0);
+    fo.btn_select = pod_bind(fo.win, "btn_select", fo_on_more, (void *)0);
     fo.btn_selall = pod_bind(fo.win, "btn_selall", fo_on_selall, (void *)0);
     fo.btn_play = pod_bind(fo.win, "btn_play", fo_on_play, (void *)0);
     fo.btn_shuffle = pod_bind(fo.win, "btn_shuffle", fo_on_shuffle, (void *)0);
@@ -765,10 +962,21 @@ static int fo_open_page(void) {
     fo.status = widget_lookup(fo.win, "label_status", 1);
     fo.st_title = widget_lookup(fo.win, "label_row_title", 1);
     fo.bar = widget_lookup(fo.win, "sg_bar", 1);
-    if (!fo.back || !fo.np || !fo.btn_select || !fo.btn_selall || !fo.btn_play || !fo.btn_shuffle || !fo.btn_add ||
-        !fo.btn_del || !fo.title || !fo.big || !fo.view || !fo.sv || !fo.status || !fo.st_title || !fo.bar) {
+    if (!fo.back || !fo.np || !fo.btn_more || !fo.btn_select || !fo.btn_selall || !fo.btn_play || !fo.btn_shuffle ||
+        !fo.btn_add || !fo.btn_del || !fo.title || !fo.big || !fo.view || !fo.sv || !fo.status || !fo.st_title ||
+        !fo.bar) {
         navigator_back(); /* an asset that is not ours */
         return -2;
+    }
+    if (vs_bind(&fo.vs, fo.win, fo_on_item, fo_on_scrim, fo_offers())) {
+        navigator_back(); /* an asset that is not ours */
+        return -2;
+    }
+    vs_dated(&fo.vs, 1u << 1); /* only Date Modified reads Newest First / Oldest First */
+    {
+        int c = set_read(FOLDERS_SORT_FILE, '0');
+        fo.sort = c >= '0' && c <= '2' ? c - '0' : c >= 'a' && c <= 'c' ? c - 'a' : 0;
+        fo.rev = c >= 'a' && c <= 'c';
     }
     pod_centre_pill(fo.btn_play, SG_PILL_W);
     pod_centre_pill(fo.btn_shuffle, SG_PILL_W);

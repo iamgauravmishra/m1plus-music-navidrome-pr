@@ -61,22 +61,27 @@ def run(ctx):
         full = Image.new('RGBA', (320 - x0, H_), (0, 0, 0, 0)); full.alpha_composite(G(311 - c0, H_, 21), (c0 - x0, 0)); return full
     expect(list(capsule_at(177, 161).getdata()) == list(glued_at((('left', 168), ('middle', 214), ('right', 260)), 161).getdata()),
            f'Cover Flow | toggle | Now Playing: the three pieces on main\'s 46 / 46 / 60 px slots glue into the 134 x {H_} capsule (x 177 .. 311) exactly, no seam')
-    # the Songs page's capsule starts at the 122 slot: Search (left), Sort and Select (middle), Now Playing (right), one 180 px capsule, glass 131 .. 311 (the same pieces)
-    expect(list(capsule_at(131, 115).getdata()) == list(glued_at((('left', 122), ('middle', 168), ('middle', 214), ('right', 260)), 115).getdata()),
-           f'Search | Sort | Select | Now Playing: the four pieces of the slots 122 / 168 / 214 / 260 glue into the 180 x {H_} capsule (x 131 .. 311) exactly, no seam')
+    # the Songs page's navbar is "..." (left cap, 214) | Now Playing, as on Artists, and on an artist's songs Cover Flow | "..." (middle) | Now Playing, as on Albums; Select takes the "..." place where its card would hold Select alone; the Sort piece is gone
+    expect(not {'pod_nav_songsort'} & (set(mod_icons.NAV_VIEW) | set(mod_icons.NAV_VIEW_POS)) and 'NAV_SEARCH_X' not in O
+           and mod_icons.NAV_VIEW_POS['pod_nav_select'] == 'middle' and mod_icons.NAV_VIEW['pod_nav_select'] == 'list-checks'
+           and mod_icons.NAV_VIEW_POS['pod_nav_more'] == 'left' and mod_icons.NAV_VIEW_POS['pod_nav_moremid'] == 'middle',
+           'the Songs capsule is [... | Now Playing] (or [Cover Flow | ... | Now Playing]); where the card would hold Select alone the "..." is Select (pod_nav_select as the middle piece after Search / Cover Flow); the Sort middle is gone')
+    # the Albums page's capsule is the three slots 168 / 214 / 260: Cover Flow (left), "..." (middle), Now Playing (right), the pieces glued as above; no Search, so no middle Cover Flow piece
+    expect(mod_icons.NAV_VIEW_POS['pod_nav_coverflow'] == 'left' and mod_icons.NAV_VIEW_POS['pod_nav_moremid'] == 'middle' and 'pod_nav_coverflowmid' not in mod_icons.NAV_VIEW
+           and 'pod_nav_coverflowmid' not in mod_icons.NAV_VIEW_POS and mod_icons.NAV_VIEW_POS['pod_nav_search'] == 'left', 'Cover Flow | ... | Now Playing: left, middle, right pieces; the Cover Flow middle piece is gone with the Search button')
     # a genre's songs have no Search (the stock navbar leaves it out for class 0xff09): Select as the left cap (pod_nav_selectl, runtime icon of btn_select at 214) and Now Playing, an 88 px capsule, glass 223 .. 311
     expect(list(capsule_at(223, 207).getdata()) == list(glued_at((('left', 214), ('right', 260)), 207).getdata()),
            f'Select (left cap) | Now Playing: the two pieces of the slots 214 / 260 glue into the 88 x {H_} capsule (x 223 .. 311) exactly, no seam')
-    expect(mod_icons.NAV_VIEW_POS['pod_nav_selectl'] == 'left' and mod_icons.NAV_VIEW['pod_nav_selectl'] == mod_icons.NAV_VIEW['pod_nav_select'],
-           'pod_nav_selectl is the left-cap piece of the same list-checks glyph as pod_nav_select')
+    expect(mod_icons.NAV_VIEW_POS['pod_nav_selectl'] == 'left' and mod_icons.NAV_VIEW['pod_nav_selectl'] == 'list-checks',
+           'pod_nav_selectl is the left-cap piece of the list-checks glyph')
     # the Extras page's Settings button: the same left cap (so Settings | Now Playing glues as the two-piece capsule above), with the Lucide sliders-horizontal glyph the Settings row's icon uses
     expect(mod_icons.NAV_VIEW_POS['pod_nav_settings'] == 'left' and mod_icons.NAV_VIEW['pod_nav_settings'] == 'sliders-horizontal'
            and mod_icons.POD_ROWS['Settings'][1] == 'sliders-horizontal' and mod_icons.capsule_piece('left', 'sliders-horizontal', False).size == (60, H_)
            and list(mod_icons.capsule_piece('left', 'sliders-horizontal', True).getdata()) != list(mod_icons.capsule_piece('left', 'sliders-horizontal', False).getdata()),
            'pod_nav_settings is the left-cap piece of sliders-horizontal, the Settings row\'s glyph; its _down differs (the round highlight)')
-    # Cover Flow's artist page: Songs (left cap at 214) | Now Playing (ah_nav_play, set at run time): the same two pieces as the Artists page's switch, one 95 px capsule
+    # Cover Flow's artist page: Songs (left cap at 214) | Now Playing (ah_nav_play, set at run time): the same two pieces as the Artists page's "...", one 95 px capsule
     expect(mod_icons.NAV_VIEW_POS['pod_nav_songs'] == 'left' and 'pod_nav_allalbums' not in mod_icons.NAV_VIEW and 'pod_nav_allalbums' not in mod_icons.NAV_VIEW_POS
-           and mod_icons.NAV_VIEW_POS['pod_nav_artist'] == 'left' and O['NAV_VIEW_X'] + O['NAV_VIEW_W'] == 260,
+           and mod_icons.NAV_VIEW_POS['pod_nav_more'] == 'left' and 'pod_nav_artist' not in mod_icons.NAV_VIEW and 'pod_nav_albumartist' not in mod_icons.NAV_VIEW_POS and O['NAV_VIEW_X'] + O['NAV_VIEW_W'] == 260,
            'Cover Flow\'s artist page: Songs is a left cap at 214 and Now Playing (ah_nav_play) the right cap at 260 (glued exactly as Select | Now Playing above, glass 223 .. 311); no All albums disc')
     # a pressed slice is the rest slice but for a round highlight on its glyph, inside its button and its glass: the capsule keeps one pane, no lit block
     slices = [(f'pod {p}', plain(p), plain(p, True), mod_icons.CAPSULE_PIECES[p][3], mod_icons.CAPSULE_PIECES[p][1:3], mod_icons.NAV_SLOT_W if p != 'right' else 60)
@@ -89,7 +94,6 @@ def run(ctx):
         lit = sum(down.getpixel((cx, 6))[:3]) > sum(rest.getpixel((cx, 6))[:3]) and down.getpixel((cx, 2)) == rest.getpixel((cx, 2))
         if not (diff and inside and lit and x0 <= cx - PD // 2 and cx + PD // 2 <= x1 and lo <= cx < lo + bw): bad.append(n)
     expect(not bad, f'a pressed capsule piece differs from its rest piece only in a {PD} px disc on its glyph (lighter; the rim untouched), inside its glass, the glyph inside its button ({bad})')
-    expect(122 + 46 + 46 + 46 == 260 and 131 + 180 == 311 and O['NAV_SEARCH_X'] == 122, 'the Songs capsule: slots 122 + 46 + 46 + 46 = Now Playing at 260 (main\'s), glass 131 .. 311')
     expect(mod_icons.NAV_SLOT_W + mod_icons.NAV_SLOT_W + mod_icons.NAV_PLAY_W == 152 and 177 + 134 == 311 == 290 + 21 and mod_icons.NAV_SHIFT == 7
            and [s + 23 + 7 for s in (122, 168, 214)] + [290] == [152, 198, 244, 290],
            'the capsule ends 21 px (the cap radius) right of Now Playing\'s glyph column 290; its slots are 168 + 46 + 46 = 260, Now Playing at 260 (main\'s); '

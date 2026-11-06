@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Approximate PIL mock-up of the Songs page (patch/songs.c, docs/modules/songs.md) drawn from the built asset (ui/m1plus_songs.bin) and the payload's constants
 (patch/offsets.inc SG_*, LIST_*): the large "Songs" title and the flat Play / Shuffle pills, the songs in sections (pinned header while scrolling), the A-Z
-rail with its disc and the 110 px bubble, the glass navbar with Search / Sort / Select, the sort card, select mode (marks, "N Selected", Select All, the bar), and the
+rail with its disc and the 110 px bubble, the glass navbar (Search | ... | Now Playing; Search | Select | Now Playing on a list with no card), the sort card, select mode (marks, "N Selected", Select All, the bar), and the
 other lists on the page (Favourites, a playlist: Search / Select, no sections, no rail, the title cut with an ellipsis).
 Not pixel-exact AWTK (the text is the project's own text model, the covers are stand-in gradients).
 
@@ -31,8 +31,6 @@ BAND, HAIR = (0x14, 0x14, 0x14), (0x22, 0x22, 0x22)
 RAIL_X, RAIL_W, RAIL_CX, RAIL_PITCH, RAIL_ITEMS, RAIL_DOT, DISC, BUBBLE = (O[k] for k in ('SG_RAIL_X', 'SG_RAIL_W', 'SG_RAIL_CX', 'SG_RAIL_PITCH', 'SG_RAIL_ITEMS', 'SG_RAIL_DOT', 'SG_RAIL_DISC', 'SG_BUBBLE'))
 DOT_RGB = tuple((O['SG_RAIL_DOT_RGB'] >> s) & 255 for s in (16, 8, 0))
 ALL_LETTERS = ['#'] + [chr(65 + i) for i in range(26)]     # a library with a song under every letter: 27 sections, the collapsed index
-CARD_W, CARD_ROW, CARD_PAD = 268, 50, 0
-CARD_X, CARD_Y = O['PL_CARD_RIGHT'] - CARD_W, O['PL_CARD_Y']      # the sort card (tools/pod_ui.py SG_CARD_*: the Playlists menu's rhythm and glass)
 MORE_W, MORE_GAP, DOTS_PX = O['RM_MORE_W'], O['RM_TEXT_GAP'], O['RM_DOTS_PX']   # the rows' "..." (patch/rowmenu.c): its tap zone, the gap before it, the glyph
 DOTS_RGB = tuple((O['RM_DOTS_RGB'] >> sh) & 255 for sh in (16, 8, 0))
 
@@ -196,7 +194,7 @@ def glass(s, im, name, x, button_w=46):
     g = s.img(name); im.alpha_composite(g, (x + (button_w - g.width) // 2, (NAV - g.height) // 2))
 
 
-def navbar(s, im, scroll, select, title=None, genre=False):
+def navbar(s, im, scroll, select, title=None, artist=False, search=True, direct=False):
     d = ImageDraw.Draw(im); d.rectangle((0, 0, W - 1, NAV - 1), fill=(0, 0, 0))
     if select is not None:    # select mode: the x (glass disc) where Back was, "N Selected" from x 58, Select All at the right
         glass(s, im, 'ah_nav_close', 7, 44)
@@ -204,32 +202,27 @@ def navbar(s, im, scroll, select, title=None, genre=False):
         sa = tr(s, 'Select All'); s.text(im, O['SG_SELALL_X'] + 104 - 8 - s.font.width(sa, 18), 25, sa, 18)
         return
     glass(s, im, 'ah_nav_back', 7, 44); glass(s, im, 'ah_nav_play', 260, 60)
-    from pod_ui import SONGS_BUTTONS
-    if title:    # a list: no Sort; Search (the left cap) on Sort's slot, beside Select; the small title cut to its 110 px
-        if genre:    # a genre's songs: no Search either; Select is the left cap (pod_nav_selectl), the small title runs to its slot (156 px)
-            glass(s, im, 'pod_nav_selectl', O['NAV_VIEW_X'])
-        else: glass(s, im, 'pod_nav_search', O['NAV_CF_X']); glass(s, im, 'pod_nav_select', 214)
-        room = (O['NAV_VIEW_X'] if genre else O['NAV_CF_X']) - O['NAV_TITLE_X']
-        if scroll > O['SG_COLLAPSE']: s.text(im, O['NAV_TITLE_X'], 25, fit(s, title, PI.title_px(s.tree), room), PI.title_px(s.tree))
-        return
-    for _, name, x in SONGS_BUTTONS: glass(s, im, name, x)
-    if scroll > O['SG_COLLAPSE']:    # the large title has scrolled away: the navbar carries the small one (cut with an ellipsis where the word is wider than its 64 px room)
-        s.text(im, O['NAV_TITLE_X'], 25, fit(s, tr(s, 'Songs'), PI.title_px(s.tree), O['NAV_SEARCH_X'] - O['NAV_TITLE_X']), PI.title_px(s.tree))
+    if artist:    # an artist's songs: Cover Flow (the left cap) | Select (middle) | Now Playing
+        glass(s, im, 'pod_nav_coverflow', O['NAV_CF_X']); glass(s, im, 'pod_nav_select' if direct else 'pod_nav_moremid', O['NAV_VIEW_X'])
+    elif search: glass(s, im, 'pod_nav_search', O['NAV_CF_X']); glass(s, im, 'pod_nav_select' if direct else 'pod_nav_moremid', O['NAV_VIEW_X'])    # the lists that search: Search (the left cap) | "..." or Select (middle) | Now Playing
+    else: glass(s, im, 'pod_nav_selectl' if direct else 'pod_nav_more', O['NAV_VIEW_X'])    # a genre's or a playlist's songs: Select (the left cap, where the "..." was) | Now Playing
+    room = (O['NAV_CF_X'] if artist or search else O['NAV_VIEW_X']) - O['NAV_TITLE_X']
+    if scroll > O['SG_COLLAPSE']:    # the large title has scrolled away: the navbar carries the small one (cut with an ellipsis to its room)
+        s.text(im, O['NAV_TITLE_X'], 25, fit(s, title or tr(s, 'Songs'), PI.title_px(s.tree), room), PI.title_px(s.tree))
 
 
-def sort_card(s, im, current=0):
-    """The sort card under the Sort button: the scrim's dim, the Playlists card's glass (sg_glass stretched as patch3_x does), the stock labels, hairlines, the current order ticked."""
+def sort_card(s, im, current=0, rev=False, kind='library'):
+    """The \"...\" card (patch/viewsort.c, the shared card): the scrim's dim, then what the list offers (docs/modules/songs.md): the library's Select and Title, File Name, Format and Recently Added
+    in vs_glass5, a tick on `current` (0..3) with its direction line under the label (A-Z / Z-A, and for Recently Added Newest First / Oldest First); 'list' Select (vs_glass1);
+    'recent' Select and Albums / Songs with Songs ticked (vs_glass3); 'albums' Albums ticked, Songs (vs_glass2); 'select' Select alone (vs_glass1)."""
     im.alpha_composite(Image.new('RGBA', im.size, (0, 0, 0, 0x82)))
-    g = s.img('sg_glass'); t = g.width // 3
-    glass = Image.new('RGBA', (CARD_W, g.height))
-    glass.paste(g.crop((0, 0, t, g.height)), (0, 0)); glass.paste(g.crop((g.width - t, 0, g.width, g.height)), (CARD_W - t, 0))
-    glass.paste(g.crop((t, 0, g.width - t, g.height)).resize((CARD_W - 2 * t, g.height)), (t, 0))
-    im.alpha_composite(glass, (CARD_X, CARD_Y))
-    for i, key in enumerate(pod_pages.SORT_MENU):
-        y = CARD_Y + CARD_PAD + i * CARD_ROW
-        if i: im.alpha_composite(Image.new('RGBA', (CARD_W, 1), (255, 255, 255, 0x22)), (CARD_X, y))
-        s.text(im, CARD_X + 16, y + CARD_ROW / 2, s.strings.get(key, key), 18)
-        if i == current: tick(im, CARD_X + CARD_W - 16 - 18, y + (CARD_ROW - 18) // 2, 18, PI.WHITE)
+    sub = tr(s, ('Z–A' if rev else 'A–Z') if current < 3 else ('Oldest First' if rev else 'Newest First'))
+    select = ('Select', 'pod_ic_vsselect', False, None)
+    grid, lst = ('Albums', 'pod_ic_vsgrid', kind == 'albums', None), ('Songs', 'pod_ic_vslist', kind == 'recent', None)
+    sorts = [(k, None, i == current, sub if i == current else None) for i, k in enumerate(pod_pages.SONGS_SORT_KEYS)]
+    rows, glass_name, hairs = {'library': ([select] + sorts, 'vs_glass5', (1,)), 'list': ([select], 'vs_glass1', ()), 'recent': ([select, grid, lst], 'vs_glass3', (1,)),
+                               'albums': ([grid, lst], 'vs_glass2', ()), 'select': ([select], 'vs_glass1', ())}[kind]
+    PI.view_card(s, im, rows, glass_name, hairs)
 
 
 def row_menu(s, im, keys=('Play Next', 'Play After', 'Add to Playlist', 'Favorite', 'Get Info'), fav_on=False):
@@ -248,7 +241,7 @@ def row_menu(s, im, keys=('Play Next', 'Play After', 'Add to Playlist', 'Favorit
     return 0, y, W, h
 
 
-def page(s, covers=True, scroll=0, touched=None, select=None, menu=False, letters=None, title=None, genre=False, head=False, row_menu_at=False):
+def page(s, covers=True, scroll=0, touched=None, select=None, menu=False, order=None, letters=None, title=None, head=False, row_menu_at=False, artist=False, search=True, direct=False):
     items, heads, end = build_items(title is None, O['PH_TOP'] if head else TOP)
     tall, _ = content(s, covers, select, title, head)
     im = Image.new('RGBA', (W, WIN), (0, 0, 0, 255))
@@ -264,14 +257,14 @@ def page(s, covers=True, scroll=0, touched=None, select=None, menu=False, letter
         if push < 0:    # a header that is not wholly inside the window has no letter (patch/songs.c sg_letter_text)
             ImageDraw.Draw(band).rectangle((0, 0, 60, HDR_H - 1), fill=(0, 0, 0))
         im.alpha_composite(band.crop((0, -push, W, HDR_H)), (0, NAV))
-    navbar(s, im, scroll - (O['PH_COLLAPSE'] - O['SG_COLLAPSE'] if head else 0), select, title, genre)   # (a playlist's header collapses the title at PH_COLLAPSE)
+    navbar(s, im, scroll - (O['PH_COLLAPSE'] - O['SG_COLLAPSE'] if head else 0), select, title, artist, search, direct)   # (a playlist's header collapses the title at PH_COLLAPSE)
     if title is None: rail(s, im, letters or [h[1] for h in items if h[0] == 'h'], touched, WIN - NAV - pad)   # (a list has no rail)
     if select is not None:    # the bar: Add to Playlist, Delete (the stock multi-select's add and delete), flat pills
         d = ImageDraw.Draw(im); d.rectangle((0, WIN - BAR_H, W - 1, WIN - 1), fill=(0, 0, 0)); d.rectangle((0, WIN - BAR_H, W - 1, WIN - BAR_H), fill=HAIR)
         py = WIN - BAR_H + (BAR_H - PILL_H) // 2
         pill(s, im, O['SG_PILL_X0'], py, tr(s, 'Add to Playlist'), s.img('sg_listplus'), w=O['SG_BAR_PILL_W'])
         pill(s, im, O['SG_BAR_PILL_X1'], py, tr(s, 'Delete'), s.img('sg_trash'), w=O['SG_BAR_PILL_W'])
-    if menu: sort_card(s, im)
+    if menu: sort_card(s, im, *(order or (0, False)), kind='library' if menu is True else menu)
     if row_menu_at: row_menu(s, im, fav_on=row_menu_at == 'fav')
     if touched:
         x, y = (W - BUBBLE) // 2, NAV + (WIN - NAV - BUBBLE) // 2
@@ -295,14 +288,17 @@ def main():
     _, heads, _ = build_items()
     panels = [('Top (a library with all 27 letters: the collapsed index)', page(s, letters=ALL_LETTERS)),
               ('Finger on M (no drawn letter): bubble', page(s, scroll=heads['M'], touched='M', letters=ALL_LETTERS)),
-              ('Sort button: the order card (Alphabetical ticked)', page(s, menu=True)),
+              ('"...": the card (Select, the order: Title, A–Z); Search | ... | Now Playing', page(s, menu=True)),
+              ('Sort card: Recently Added, Oldest First', page(s, menu=True, order=(3, True))),
               ('Select button: marks, Add to Playlist / Delete', page(s, scroll=heads['C'] - 8, select={'Creep', '春よ、来い'})),
               ('End of the list: Y (a CJK title by pinyin), the song count', page(s, scroll=10 ** 6)),
-              ('Favorites (a list: no Sort, no sections, no rail)', page(s, title=tr(s, 'Favorites'))),
-              ('A playlist: the header', page(s, title='Late Night Drive: Songs for the Long Way Home', head=True)),
-              ('A playlist, past the name', page(s, scroll=260, title='Late Night Drive: Songs for the Long Way Home', head=True)),
-              ('A playlist\'s end: the song count', page(s, scroll=10 ** 6, title='Late Night Drive: Songs for the Long Way Home', head=True)),
-              ('A genre\'s songs, scrolled: no Search, Select | Now Playing', page(s, scroll=200, title='Alternative & Punk', genre=True))]
+              ('Favorites: Search | Select | Now Playing', page(s, title=tr(s, 'Favorites'), direct=True)),
+              ('A playlist: the header', page(s, title='Late Night Drive: Songs for the Long Way Home', head=True, search=False, direct=True)),
+              ('A playlist, past the name', page(s, scroll=260, title='Late Night Drive: Songs for the Long Way Home', head=True, search=False, direct=True)),
+              ('A playlist\'s end: the song count', page(s, scroll=10 ** 6, title='Late Night Drive: Songs for the Long Way Home', head=True, search=False, direct=True)),
+              ('A genre\'s songs, scrolled: Select | Now Playing (no card)', page(s, scroll=200, title='Alternative & Punk', search=False, direct=True)),
+              ('Recently Added: the card (Select, Albums / Songs)', page(s, title=tr(s, 'Recently Added'), menu='recent')),
+              ('An artist\'s songs, scrolled: Cover Flow | Select | Now Playing', page(s, scroll=200, title='Miles Davis', artist=True, direct=True))]
     pad, lab = 12, 20
     sheet = Image.new('RGB', (len(panels) * (320 + pad) + pad, 450 + lab + 2 * pad), (0x2A, 0x2A, 0x2A)); d = ImageDraw.Draw(sheet)
     for i, (title, im) in enumerate(panels):

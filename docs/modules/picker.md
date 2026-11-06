@@ -6,15 +6,15 @@ is only the fallback. Files: `patch/picker.c` / `picker.h` (the add and the copi
 
 ## Choice: a page, not a sheet
 
-Our Playlists page in list mode, titled "Add to Playlist". A glass sheet (the Playlists "..." menu, the Songs Sort card) is for a handful of fixed rows; the picker
+Our Playlists page in list mode, titled "Add to Playlist". A glass sheet (the Playlists "..." card, the Songs Sort card) is for a handful of fixed rows; the picker
 lists up to 100 playlists with mosaics and counts, so it needs the scrolling list, the mosaic loader and the row painter the Playlists page already has. One
 code path, the same rows the user knows, nothing new to keep in step. The design is the page's: neutral greys, 64 px rows (52 px mosaic, name, count), the
 pressed row `#333334`.
 
 - Navbar: Back (glass chevron) and the title "Add to Playlist" (the Songs pill's text, short in all 13 languages; its label is widened to `SG_SELALL_X`, as
-  in select mode). The "..." button, the view toggle and Now Playing are hidden and insensitive; the page is always the list (the saved grid / list choice is
-  the Playlists page's own and is not written).
-- Row 0: "New playlist" (the stock key `playlist_create`, as the Playlists "..." menu), a white plus on a dark rounded square (`pl_plus`), no count. A tap opens our keyboard
+  in select mode). The "..." button and Now Playing are hidden and insensitive; the page is always the list (the saved grid / list choice is
+  the Playlists page's own and is not written). The playlists after the two pinned rows follow the Playlists page's saved order (`playlists-sort`: Name A–Z by default, or Z–A); the picker has no card to change it.
+- Row 0: "New playlist" (the stock key `playlist_create`, the New playlist keyboard's title), a white plus on a dark rounded square (`pl_plus`), no count. A tap opens our keyboard
   (`keyboard_open`, as the Playlists New); its Done creates the playlist (`createPlayListItem`: -1 full and -2 exists say the stock message and leave the picker
   open) and adds to it.
 - Row 1: "Favorites" (our own key, the Favorites row of the Extras page, translated in all 13 languages), a white filled star (24 px alpha bitmap made at open by `pl_make_star`, 4 x 4 samples a pixel; the same glyph as the Favorites icon, which the repo draws as a star everywhere, not a heart) on the New row's dark rounded square, no count. A tap adds to Favourites and closes, as a playlist row does. `pl_v()` is 2 in pick mode (the rows before the playlists).

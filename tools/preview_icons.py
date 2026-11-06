@@ -179,7 +179,7 @@ def pod_page(s, key, tree_rows=8, home=False, first=0, title=None, icon=None, or
     (icon image, label, chevron) on black with the 1 px #222222 hairline. home=True: the Home instance of the
     menu, no navbar at all (the payload hides it) and the list from y HOME_PAD to HOME_PAD above the 450 px window's bottom.
     title / icon: what the payload sets at run time (the Artists page's title and toggle glyph); the toggle button, if the
-    asset has one (btn_artisttype), is drawn centred in its place.
+    asset has one (btn_more, btn_settings), is drawn centred in its place.
     order: the row names top to bottom as patch/menu.c arranged them (hidden rows are left out; default: the asset's order);
     switches: {switch image name: on} (the Settings and Main Menu pages set them at run time); arrows: the up-arrow buttons shown;
     values: {value label name: text} (the Cover Flow settings page's Sort value, as the payload sets it).
@@ -194,7 +194,7 @@ def pod_page(s, key, tree_rows=8, home=False, first=0, title=None, icon=None, or
         title = title or s.shown(lt)
         s.text(im, 36, 25, s.clip(title, title_px(s.tree), lt.w), title_px(s.tree))
         im.alpha_composite(s.img('return'), (14, 14))
-        tog = next((w for w in root.walk() if w.name in ('btn_artisttype', 'btn_settings')), None)
+        tog = next((w for w in root.walk() if w.name in ('btn_more', 'btn_settings')), None)
         if tog and icon != '':   # a capsule piece on the 214 slot: Now Playing is its right cap (ah_nav_play, the whole 60 x 50 button), else the stock glyph
             np_ = s.img('ah_nav_play'); im.alpha_composite(np_, (260 + (60 - np_.width) // 2, (50 - np_.height) // 2))
         else: im.alpha_composite(s.img('back_to_player'), (278, 13))
@@ -265,17 +265,87 @@ def save_compact(im, path, colors=128):
     """A palette PNG (median cut, no dither): the previews are flat UI, and docs/ history keeps every regeneration."""
     im.convert('RGB').quantize(colors, Image.Quantize.MEDIANCUT).save(path, optimize=True)
 
-def albums_navbar(s, im, to):
-    """The Albums page's navbar (Back, title, Now Playing) with the mode toggle, flush left of Now Playing (NAV_VIEW_X),
-    showing the glyph of the mode it switches to."""
+# An artist's albums page (scope CLASS_ARTISTS): the year is the grey line, the All Songs tile / row last (the placeholder disc, no line)
+ARTIST_NAME = 'Miles Davis'
+ARTIST_ALBUMS = [('Kind of Blue', '1959', (70, 110, 190)), ('Sketches of Spain', '1960', (190, 140, 60)), ('Milestones', '1958', (90, 160, 110)),
+                 ('Bitches Brew', '1970', (60, 40, 110)), ('Miles Smiles', '1967', (170, 90, 80)), ('Get Up with It', '', None),
+                 ('Filles de Kilimanjaro', '1968', (110, 130, 150)), ('All Songs', '', None)]
+
+def albums_artist_pills(s, im):
+    """The artist page's Play and Shuffle pills (AL_PLAY_W / AL_SHUFFLE_W wide, at AL_PLAY_X / AL_SHUFFLE_X), at SG_PILL_Y under the large title."""
+    import preview_songs as PS
     o = offsets()
-    s.text(im, 36, 25, 'Albums', title_px(s.tree))
-    im.alpha_composite(s.img('return'), (14, 14))
-    im.alpha_composite(s.img('back_to_player'), (278, 13))
-    c = s.img('pod_nav_coverflow')   # the Cover Flow button, flush left of the toggle
-    im.alpha_composite(c, (o['NAV_CF_X'] + (o['NAV_CF_W'] - c.width) // 2, (o['NAV_H'] - c.height) // 2))
-    n = 'pod_nav_' + to
-    im.alpha_composite(s.img(n), (o['NAV_VIEW_X'] + (o['NAV_VIEW_W'] - s.img(n).width) // 2, (o['NAV_H'] - s.img(n).height) // 2))
+    PS.pill(s, im, o['AL_PLAY_X'], 50 + o['SG_PILL_Y'], PS.tr(s, 'Play'), s.img('sg_play'), w=o['AL_PLAY_W'])
+    PS.pill(s, im, o['AL_SHUFFLE_X'], 50 + o['SG_PILL_Y'], PS.tr(s, 'Shuffle'), s.img('sg_shuffle'), w=o['AL_SHUFFLE_W'])
+
+def albums_navbar(s, im, to=None, scroll=0):
+    """The Albums page's navbar: the glass Back disc, the small title (shown once the large one has scrolled away, SG_COLLAPSE; cut with an ellipsis to its room
+    before the capsule), and the capsule Cover Flow 168, "..." 214, Now Playing 260 (Search and the grid / list switch are rows of the "..." card)."""
+    import preview_songs as PS
+    from pod_ui import ALBUMS_BUTTONS
+    o = offsets()
+    PS.glass(s, im, 'ah_nav_back', 7, 44); PS.glass(s, im, 'ah_nav_play', 260, 60)
+    for _, name, x in ALBUMS_BUTTONS: PS.glass(s, im, name, x)
+    px = title_px(s.tree)
+    if scroll >= o['SG_COLLAPSE']: s.text(im, o['NAV_TITLE_X'], 25, PS.fit(s, PS.tr(s, 'Albums'), px, o['NAV_CF_X'] - o['NAV_TITLE_X']), px)
+
+def albums_big_title(s, im, scroll, text='Albums'):
+    """The large title, the first child of the content (SG_TITLE_X, SG_TITLE_H high, 32 px): it scrolls up under the navbar like the rows."""
+    import preview_songs as PS
+    o = offsets()
+    t = Image.new('RGBA', (im.width, o['SG_TITLE_H']), (0, 0, 0, 255))
+    s.text(t, o['SG_TITLE_X'], o['SG_TITLE_H'] / 2, PS.fit(s, text if text == ARTIST_NAME else PS.tr(s, text), 32, o['SG_TITLE_W']), 32)
+    y = 50 - scroll
+    if y + t.height > 50: im.paste(t.crop((0, max(0, 50 - y), t.width, t.height)), (0, max(50, y)))
+
+def albums_card(s, list_mode=False, current=1, pressed=None, scoped=False, rev=False):
+    """The Albums page with the "..." card open (patch/viewsort.c): the scrim's dim, the card fitted to the language as vs_fit does, its own glass (vs_glass7, the six-row vs_glass6 on one
+    artist's page) stretched as patch3_x does, the Search Albums row (glyph, no tick), a hairline, the View group (Grid, List with their glyphs; a tick on the current view), one hairline, then the Sort group (Title, Artist, Recently Added, Year;
+    a tick on `current` and its direction line under the label, `rev`: Z-A / Oldest First). `scoped`: one artist's page, no Artist row, `current` the sort row's number among Title,
+    Recently Added, Year (0..2). `pressed`: the row's position from the top."""
+    import preview_songs as PS
+    im = albums_list(s) if list_mode else albums_grid(s)
+    im.alpha_composite(Image.new('RGBA', im.size, (0, 0, 0, 0x82)))
+    sorts = ('Title', 'Recently Added', 'Year') if scoped else ('Title', 'Artist', 'Recently Added', 'Year')
+    kind = (0, 2, 3) if scoped else (0, 1, 2, 3)   # the order each sort row stands for: 0 Title, 1 Artist, 2 Recently Added, 3 Year
+    sub = lambda k: PS.tr(s, ('Z–A' if rev else 'A–Z') if k < 2 else ('Oldest First' if rev else 'Newest First'))
+    rows = [('Search Albums', 'pod_ic_vssearch', False, None), ('Grid', 'pod_ic_vsgrid', not list_mode, None), ('List', 'pod_ic_vslist', list_mode, None)]
+    rows += [(k, None, i == current, sub(kind[i]) if i == current else None) for i, k in enumerate(sorts)]
+    return view_card(s, im, rows, 'vs_glass6' if scoped else 'vs_glass7', (1, 3), pressed)
+
+def view_card(s, im, rows, glass_name, hairs, pressed=None):
+    """The shared "..." card (patch/viewsort.c) drawn on im: rows = [(key, glyph or None, ticked, direction line or None)] from the top, fitted to the language as vs_fit does, in the glass
+    `glass_name` (its height must be the rows' height), a hairline at the top of each row number in `hairs`."""
+    import preview_songs as PS
+    o = offsets()
+    ticks = any(r[2] for r in rows)   # a card of action rows only (nothing ticked, nothing tickable) has no tick column: the glyph at the tick's x, the label the same gap after it (vs_fit)
+    gx = o['VS_GLYPH_X'] if ticks else o['VS_TICK_X']
+    x_of = lambda glyph: gx + o['VS_LABEL_X_GLYPH'] - o['VS_GLYPH_X'] if glyph else o['VS_LABEL_X']
+    need = [x_of(g) + max(s.font.width(PS.tr(s, k), 18), s.font.width(sb, 15) if sb else 0) for k, g, _, sb in rows]
+    cw = max(o['VS_CARD_MIN'], min(o['PL_CARD_MAX'], max(need) + o['VS_LABEL_R']))
+    cx, cy, ch = o['PL_CARD_RIGHT'] - cw, o['PL_CARD_Y'], len(rows) * o['VS_ROW_H']
+    g = s.img(glass_name); t = g.width // 3
+    assert g.height == ch, (g.height, ch)
+    glass = Image.new('RGBA', (cw, g.height))
+    glass.paste(g.crop((0, 0, t, g.height)), (0, 0)); glass.paste(g.crop((g.width - t, 0, g.width, g.height)), (cw - t, 0))
+    glass.paste(g.crop((t, 0, g.width - t, g.height)).resize((cw - 2 * t, g.height)), (t, 0))
+    im.alpha_composite(glass, (cx, cy))
+    rh = o['VS_ROW_H']
+    for i, (key, glyph, ticked, sb) in enumerate(rows):
+        y = cy + i * rh
+        if pressed == i: im.alpha_composite(Image.new('RGBA', (cw, rh), (255, 255, 255, 0x10)), (cx, y))
+        if i in hairs: im.alpha_composite(Image.new('RGBA', (cw, 1), (255, 255, 255, 0x22)), (cx, y))   # the hairlines, between the groups
+        if ticked: PS.tick(im, cx + o['VS_TICK_X'], y + (rh - o['VS_TICK_W']) // 2, o['VS_TICK_W'], WHITE)
+        if glyph:
+            gl = s.img(glyph)
+            im.alpha_composite(gl, (cx + gx + (o['VS_GLYPH'] - gl.width) // 2, y + (rh - gl.height) // 2))
+        x = cx + x_of(glyph)
+        if sb:
+            s.text(im, x, y + o['VS_LABEL2_Y'] + o['VS_LABEL2_H'] / 2, PS.tr(s, key), 18)
+            s.text(im, x, y + o['VS_SUB_Y'] + o['VS_SUB_H'] / 2, sb, 15, (0xAA, 0xAA, 0xAA))
+        else:
+            s.text(im, x, y + rh / 2, PS.tr(s, key), 18)
+    return im
 
 def rounded(c, r, k=4):
     """Cover image c with r px rounded corners (drawn k times larger and reduced), as patch/grid.c rounds the Albums covers."""
@@ -285,10 +355,11 @@ def rounded(c, r, k=4):
     c = c.copy(); c.putalpha(mask.resize((n, n), Image.LANCZOS))
     return c
 
-def albums_grid(s, scroll=0):
+def albums_grid(s, scroll=0, artist=False):
     """ui/m1plus_albums.bin as patch/albums.c paints it: GRID_COLS covers a row, a one-line title (ellipsis) under each."""
     o = offsets(); W_, H_ = 320, 450
-    im = Image.new('RGBA', (W_, H_), (0, 0, 0, 255)); albums_navbar(s, im, 'list')
+    im = Image.new('RGBA', (W_, H_), (0, 0, 0, 255)); albums_big_title(s, im, scroll, ARTIST_NAME if artist else 'Albums'); albums_navbar(s, im, 'list', scroll)
+    if artist: albums_artist_pills(s, im)
     cover, gap, m, tg, th, sh = o['GRID_COVER'], o['GRID_GAP'], o['GRID_MARGIN'], o['GRID_TITLE_GAP'], o['GRID_TITLE_H'], o['GRID_SUB_H']
     rgap = o['GRID_ROW_GAP']
     pitch = cover + tg + th + sh + rgap
@@ -296,8 +367,9 @@ def albums_grid(s, scroll=0):
         while s.font.width(text, px) > cover and len(text) > 1:      # the ellipsis cut, as al_fit
             text = text[:-2] + '…' if text.endswith('…') else text[:-1] + '…'
         return text
-    for a, (title, artist, rgb) in enumerate(ALBUMS * 2):
-        x, top = m + (a % o['GRID_COLS']) * (cover + gap), 50 + rgap + (a // o['GRID_COLS']) * pitch - scroll
+    block = o['AL_PILLS_END'] if artist else o['SG_TITLE_H']
+    for a, (title, artist_line, rgb) in enumerate(ARTIST_ALBUMS if artist else ALBUMS * 2):
+        x, top = m + (a % o['GRID_COLS']) * (cover + gap), 50 + block + rgap + (a // o['GRID_COLS']) * pitch - scroll
         if top >= H_ or top + cover + tg + th + sh <= 50: continue
         c = rounded(sample_cover(rgb, cover), o['GRID_R'])
         y0, y1 = max(50, top), min(H_, top + cover)
@@ -306,7 +378,7 @@ def albums_grid(s, scroll=0):
         if ty >= 50 and ty + th <= H_:
             s.text(im, x, ty + th / 2, cut(title, 18), 18)
         if ty + th >= 50 and ty + th + sh <= H_:
-            s.text(im, x, ty + th + sh / 2, cut(artist, 15), 15, (0xAA, 0xAA, 0xAA))
+            s.text(im, x, ty + th + sh / 2, cut(artist_line, 15), 15, (0xAA, 0xAA, 0xAA))
     return im
 
 PLAYLISTS = [('Road Trip', 12, (0, 1, 2, 3)), ('Late Night', 31, (4, 6)), ('日本語のプレイリスト', 8, (10, 6, 7)), ('Focus', 40, (8,)),
@@ -323,12 +395,14 @@ def mosaic(rgbs, size, r):
     for q, k in enumerate(quad): im.paste(sample_cover(rgbs[k], h), ((q & 1) * h, (q >> 1) * h))
     return rounded(im, r)
 
-def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1, select=None, pick=False):
+def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1, select=None, pick=False, order='az'):
     """ui/m1plus_playlists.bin as patch/playlists.c paints it: the Albums grid's cells (a mosaic cover, the playlist's name in 18 px, "N tracks" in
     15 px #AAAAAA) under a navbar with the "..." button; menu=True: the popup card open (row `pressed` held down) under the button. select: the set of marked
     playlists (indexes into PLAYLISTS) in select mode (the menu's Delete Playlists): the glass x, "N Selected", Select All, a mark on every cell or row (the list's rows
-    and texts 30 px to the right), the bar with the Delete pill."""
+    and texts 30 px to the right), the bar with the Delete pill. The navbar is list-plus | "..." | Now Playing; menu=True (or 'more') opens the shared view-sort card (patch/viewsort.c) of the "...": Grid, List,
+    Name; menu='actions' the list-plus button's: New Playlist, Import, Export, Delete Playlists (`pressed`: the row held down, from the top). order: the page's order, the firmware's default 'az' (Name A-Z) or 'za'; the card ticks Name with its direction line."""
     import awtk_ui
+    pls = sorted(PLAYLISTS, key=lambda p: p[0].casefold(), reverse=order == 'za')
     o = offsets(); W_, H_ = 320, 450
     root = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', 'm1plus_playlists.bin'), 'rb').read())
     im = Image.new('RGBA', (W_, H_), (0, 0, 0, 255))
@@ -343,24 +417,30 @@ def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1, sel
         import preview_songs as PS
         PS.glass(s, im, 'ah_nav_back', 7, 44)   # the asset's btn_return: the glass disc
     else:
-        s.text(im, 36, 25, s.shown(root.find('label_title')), title_px(s.tree))
-        im.alpha_composite(s.img('return'), (14, 14)); im.alpha_composite(s.img('back_to_player'), (278, 13))
-        more = root.find('btn_more'); ic = s.img(more.get('style:normal:icon'))
-        im.alpha_composite(ic, (more.x + (more.w - ic.width) // 2, (more.h - ic.height) // 2))
-        tog = root.find('btn_albumview'); ic = s.img('pod_nav_grid' if list_mode else tog.get('style:normal:icon'))   # the glyph of the view a tap switches to
-        im.alpha_composite(ic, (tog.x + (tog.w - ic.width) // 2, (tog.h - ic.height) // 2))
+        import preview_songs as PS
+        PS.glass(s, im, 'ah_nav_back', 7, 44); PS.glass(s, im, 'ah_nav_play', 260, 60); PS.glass(s, im, 'pod_nav_listplus', o['NAV_CF_X']); PS.glass(s, im, 'pod_nav_moremid', o['NAV_VIEW_X'])   # Back, list-plus | "..." | Now Playing
+        s.text(im, o['NAV_TITLE_X'], 25, s.shown(root.find('label_title')), title_px(s.tree))
     def mark(x, y, a):   # a select mark (the stock images, 26 px)
         mk = s.img('selected' if a in select else 'unselect'); im.alpha_composite(mk, (x, y))
     def bar():   # the bar: black, a #222222 hairline, the Delete pill across it
         import preview_songs as PS
         d_ = ImageDraw.Draw(im); d_.rectangle((0, H_ - o['SG_BAR_H'], W_ - 1, H_ - 1), fill=(0, 0, 0)); d_.rectangle((0, H_ - o['SG_BAR_H'], W_ - 1, H_ - o['SG_BAR_H']), fill=PS.HAIR)
         PS.pill(s, im, o['SG_PILL_X0'], H_ - o['SG_BAR_H'] + (o['SG_BAR_H'] - o['SG_PILL_H']) // 2, PS.tr(s, 'Delete'), s.img('sg_trash'), w=o['PL_BAR_PILL_W'])
+    def card():   # the shared card fitted as vs_fit does: the list-plus button's four actions (vs_glass4), or the "..." card's Grid / List (ticked: the current view) and Name (vs_glass3; the order ticked with its direction line)
+        import preview_songs as PS
+        im.alpha_composite(Image.new('RGBA', (W_, H_), (0, 0, 0, 0x82)))
+        if menu == 'actions':
+            rows = [('New Playlist', 'pl_ic_new', False, None), ('Import', 'pl_ic_import', False, None), ('Export', 'pl_ic_export', False, None), ('Delete Playlists', 'pl_ic_delete', False, None)]
+            return view_card(s, im, rows, 'vs_glass4', (), pressed)
+        sub = PS.tr(s, {'az': 'A–Z', 'za': 'Z–A'}[order])
+        rows = [('Grid', 'pod_ic_vsgrid', not list_mode, None), ('List', 'pod_ic_vslist', list_mode, None), ('Name', None, True, sub)]
+        view_card(s, im, rows, 'vs_glass3', (2,), pressed)
     if list_mode:   # 64 px rows as patch/grid.c grid_list_paint draws them: 52 px mosaic, name 21 px, count 18 px #AAAAAA, hairline, the pressed row
         d = ImageDraw.Draw(im); rh = o['LIST_ROW_H']
         def lcut(text, px):
             while s.font.width(text, px) > o['LIST_TEXT_W'] - shift and len(text) > 1: text = text[:-2] + '…' if text.endswith('…') else text[:-1] + '…'
             return text
-        rows = [(s.strings.get('New playlist', 'New playlist'), None, []), (s.strings.get('Favorites', 'Favorites'), None, [])] + PLAYLISTS if pick else PLAYLISTS   # the picker's first rows make a playlist and add to Favourites: no count
+        rows = [(s.strings.get('New playlist', 'New playlist'), None, []), (s.strings.get('Favorites', 'Favorites'), None, [])] + pls if pick else pls   # the picker's first rows make a playlist and add to Favourites: no count
         for r, (name, tracks, albums) in enumerate(rows):
             y = 50 + r * rh
             if y + rh > H_: break
@@ -384,6 +464,7 @@ def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1, sel
             count = s.strings.get('%d track' if tracks == 1 else '%d tracks', '%d tracks').replace('%d', str(tracks))
             if tracks is not None: s.text(im, o['LIST_TEXT_X'] + shift, y + o['LIST_SUB_Y'] + o['LIST_SUB_H'] / 2, lcut(count, 18), 18, (0xAA, 0xAA, 0xAA))
             if select is not None: mark(o['LIST_ART_X'] + (shift - 6 - o['SG_MARK']) // 2, y + (rh - o['SG_MARK']) // 2, r)
+        if menu: card()
         if select is not None: bar()
         return im
     cover, gap, m, tg, th, sh = o['GRID_COVER'], o['GRID_GAP'], o['GRID_MARGIN'], o['GRID_TITLE_GAP'], o['GRID_TITLE_H'], o['GRID_SUB_H']
@@ -391,7 +472,7 @@ def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1, sel
     def cut(text, px):
         while s.font.width(text, px) > cover and len(text) > 1: text = text[:-2] + '…' if text.endswith('…') else text[:-1] + '…'
         return text
-    for a, (name, tracks, albums) in enumerate(PLAYLISTS):
+    for a, (name, tracks, albums) in enumerate(pls):
         x, top = m + (a % o['GRID_COLS']) * (cover + gap), 50 + o['GRID_ROW_GAP'] + (a // o['GRID_COLS']) * pitch
         if top >= H_: continue
         c = mosaic([ALBUMS[i][2] for i in albums if ALBUMS[i][2]], cover, o['GRID_R'])
@@ -403,26 +484,7 @@ def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1, sel
         if ty + th + sh <= H_:
             count = s.strings.get('%d track' if tracks == 1 else '%d tracks', '%d tracks').replace('%d', str(tracks))
             s.text(im, x, ty + th + sh / 2, cut(count, 15), 15, (0xAA, 0xAA, 0xAA))
-    if menu:   # the scrim's dim, the card fitted to the language as pl_fit does, the glass stretched as patch3_x does, the rows' hairlines and pressed band
-        card = root.find('pl_card')
-        dim = card_rgba(root.find('pl_scrim').get('style:normal:bg_color'))
-        im.alpha_composite(Image.new('RGBA', (W_, H_), dim))
-        rows = [root.find(f'pl_item{i}') for i in range(o['PL_MENU_ROWS'])]
-        labs = [next(c for c in row.children if c.type == 'hscroll_label') for row in rows]
-        cw = max(o['PL_CARD_MIN'], min(o['PL_CARD_MAX'], max(s.font.width(s.shown(lab), 18) for lab in labs) + o['PL_TEXT_X'] + o['PL_TEXT_R']))
-        cx = o['PL_CARD_RIGHT'] - cw
-        g = s.img(card.get('style:normal:bg_image')); t = g.width // 3
-        glass = Image.new('RGBA', (cw, g.height))
-        glass.paste(g.crop((0, 0, t, g.height)), (0, 0)); glass.paste(g.crop((g.width - t, 0, g.width, g.height)), (cw - t, 0))
-        glass.paste(g.crop((t, 0, g.width - t, g.height)).resize((cw - 2 * t, g.height)), (t, 0))
-        im.alpha_composite(glass, (cx, card.y))
-        for i, (row, lab) in enumerate(zip(rows, labs)):
-            y = card.y + row.y
-            if i == pressed: im.alpha_composite(Image.new('RGBA', (cw, row.h), card_rgba(row.get('style:pressed:bg_color'))), (cx, y))
-            if row.get('style:normal:border') == 'top': im.alpha_composite(Image.new('RGBA', (cw, 1), card_rgba(row.get('style:normal:border_color'))), (cx, y))
-            ic = next(c for c in row.children if c.type == 'image')
-            im.alpha_composite(s.img(ic.get('image')), (cx + ic.x, y + ic.y))
-            s.text(im, cx + lab.x, y + row.h / 2, s.clip(s.shown(lab), 18, cw - o['PL_TEXT_X'] - o['PL_TEXT_R']), 18)
+    if menu: card()
     if select is not None: bar()
     return im
 
@@ -430,26 +492,30 @@ def card_rgba(c):
     """An AWTK '#RRGGBBAA' (or '#RRGGBB') colour as a PIL RGBA tuple."""
     return tuple(int(c[i:i + 2], 16) for i in range(1, len(c), 2)) + ((255,) if len(c) == 7 else ())
 
-def albums_list(s, pressed=1):
+def albums_list(s, pressed=1, scroll=0, artist=False):
     """ui/m1plus_albums.bin in list mode as patch/albums.c paints it: LIST_ROW_H rows, a LIST_ART px cover, the album (21 px)
     and the artist (18 px, #AAAAAA) cut with an ellipsis at LIST_TEXT_W, a hairline under each row, row `pressed` held down."""
     o = offsets(); H_ = 450
-    im = Image.new('RGBA', (W, H_), (0, 0, 0, 255)); d = ImageDraw.Draw(im); albums_navbar(s, im, 'grid')
+    im = Image.new('RGBA', (W, H_), (0, 0, 0, 255)); d = ImageDraw.Draw(im); albums_big_title(s, im, scroll, ARTIST_NAME if artist else 'Albums')
+    if artist: albums_artist_pills(s, im)
     rh = o['LIST_ROW_H']
+    top = 50 + (o['AL_PILLS_END'] + o['GRID_ROW_GAP'] if artist else o['SG_TITLE_H'])
     def cut(text, px):
         while s.font.width(text, px) > o['LIST_TEXT_W'] and len(text) > 1:      # the ellipsis cut, as al_fit
             text = text[:-2] + '…' if text.endswith('…') else text[:-1] + '…'
         return text
-    for r, (title, artist, rgb) in enumerate(ALBUMS * 2):
-        y = 50 + r * rh
+    for r, (title, artist_line, rgb) in enumerate(ARTIST_ALBUMS if artist else ALBUMS * 2):
+        y = top + r * rh - scroll
         if y >= H_: break
+        if y + rh <= 50: continue
         if r == pressed: d.rectangle((0, y, W - 1, y + rh - 2), fill=(0x33, 0x33, 0x33))
         d.rectangle((0, y + rh - 1, W - 1, y + rh - 1), fill=(0x22, 0x22, 0x22))
         im.alpha_composite(rounded(sample_cover(rgb, o['LIST_ART']), o['LIST_R']), (o['LIST_ART_X'], y + o['LIST_ART_Y']))
         if y + o['LIST_TITLE_Y'] + o['LIST_TITLE_H'] <= H_:     # a text not wholly in the view is not drawn
             s.text(im, o['LIST_TEXT_X'], y + o['LIST_TITLE_Y'] + o['LIST_TITLE_H'] / 2, cut(title, 21), 21)
         if y + o['LIST_SUB_Y'] + o['LIST_SUB_H'] <= H_:
-            s.text(im, o['LIST_TEXT_X'], y + o['LIST_SUB_Y'] + o['LIST_SUB_H'] / 2, cut(artist, 18), 18, (0xAA, 0xAA, 0xAA))
+            s.text(im, o['LIST_TEXT_X'], y + o['LIST_SUB_Y'] + o['LIST_SUB_H'] / 2, cut(artist_line, 18), 18, (0xAA, 0xAA, 0xAA))
+    d.rectangle((0, 0, W - 1, 49), fill=(0, 0, 0, 255)); albums_navbar(s, im, 'grid', scroll)   # (the scroll_view clips the rows under the bar)
     return im.crop((0, 0, W, H_))
 
 def zoom_strip(s):

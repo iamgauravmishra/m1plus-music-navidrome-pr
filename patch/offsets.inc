@@ -707,19 +707,13 @@
 #define PL_SCAN 50             /* songs read per playlist for the mosaic: the first PL_SCAN, in order */
 #define PL_TILES GRID_TILES
 #define PL_MORE_MS 16
-/* The "..." menu's card (tools/pod_ui.py builds it, patch/playlists.c pl_fit sizes it): PL_MENU_ROWS rows of PL_ROW_H filling it (Now Playing's
- * More sheet's 50 px rows, no padding), in each a 20 px glyph at PL_ICON_X and the label from PL_TEXT_X to PL_TEXT_R before the right edge. Its
- * right edge stays at PL_CARD_RIGHT under the button; its width is the language's widest label plus PL_TEXT_X + PL_TEXT_R, at least PL_CARD_MIN,
- * at most PL_CARD_MAX (the asset's: the widest of the 13 languages fits, test/pod/playlists.py). */
+/* The popup cards' shared geometry: the view-sort card (VS_* below) hangs its right edge at PL_CARD_RIGHT, PL_CARD_Y, at most PL_CARD_MAX wide (the widest of the 13 languages fits); PL_MENU_ROWS rows of PL_ROW_H
+ * (Now Playing's More sheet's 50 px rows) are the pl_glass card of the two dialogs that borrow it (the Podcasts refresh, the Software Update download popup). The Playlists page's own "..." card is the view-sort card. */
 #define PL_MENU_ROWS 4
 #define PL_CARD_RIGHT 311      /* flush with the navbar glass's right end */
 #define PL_CARD_Y 52           /* 6 px under the glass (y 4 .. 46) */
 #define PL_CARD_R 14
 #define PL_ROW_H 50
-#define PL_ICON_X 16
-#define PL_TEXT_X 48
-#define PL_TEXT_R 16
-#define PL_CARD_MIN 180
 #define PL_CARD_MAX 292
 /* The track rows' "..." menu (patch/rowmenu.c, tools/pod_ui.py row_menu, docs/modules/rowmenu.md): each row of the album page and of the Songs page's lists ends with a grey "..." (RM_DOTS_PX px,
  * RM_DOTS_RGB) centred in a RM_MORE_W wide tap zone (flush with its right edge beside the rail) whose right edge is RM_MORE_RIGHT (the list's width); on the Songs page, while the A-Z rail is shown, RM_MORE_RIGHT_RAIL (flush with the rail's
@@ -774,7 +768,6 @@
 #define REC_TIME_CREATE 0x50  /* stSongInfo: songtable.time_create (column 14), seconds since the epoch: atoi(argv[14]) @0x4e9344 stored at @0x4e9358; the order of Recently Added (docs/modules/recent-albums.md); the album view reads the query in this order and never the field */
 #define REC_INITIAL 0x54      /* stSongInfo: the songtable's Initial column (15), a byte: the ASCII code of '*' (a title that starts with a digit), 'A'..'Z' (the first letter, a CJK character as its pinyin initial) or '#' (anything else); written by the scan (@0x5edcb8), read by the row callback (@0x4e936c) and copied by 0x5db54c (@0x5db9ac); 0 = never written */
 #define NAV_TITLE_X 58           /* the glass navbars' title (tools/pod_ui.py NAV_TITLE_X) */
-#define NAV_SEARCH_X 122        /* the Songs page's capsule starts here: Search 122, Sort 168, Select 214, Now Playing 260 */
 #define SG_SELALL_X 208         /* the select mode's Select All text button (to the right edge) */
 #define SG_TITLE_X 12
 #define SG_TITLE_W 296          /* the large title's width on every page: the screen less its margin on both sides, cut with an ellipsis */
@@ -784,6 +777,11 @@
 #define SG_PILL_W 129
 #define SG_PILL_X0 10
 #define SG_PILL_X1 149
+#define AL_PLAY_X 10             /* an artist's albums page (patch/albums.c): Play x 10 .. 155 and Shuffle x 165 .. 310, both 145 wide with a 10 px gap (the Songs page's select-bar pills' width; the Songs page's own pills keep SG_PILL_W / SG_PILL_X0 / SG_PILL_X1) */
+#define AL_PLAY_W 145
+#define AL_SHUFFLE_X 165
+#define AL_SHUFFLE_W 145
+#define AL_PILLS_END 92          /* where that page's pill block ends (SG_PILL_Y + SG_PILL_H): the grid's first gap or the list's first row follows, GRID_ROW_GAP under it */
 #define SG_BAR_PILL_W 145        /* the select bar's pills (Add to Playlist needs the room; the bar is below the rail, whose touch column ends at the bar's top) */
 #define SG_BAR_PILL_X1 165
 #define PL_BAR_PILL_W 300        /* the Playlists page's select bar has the one pill, Delete, across the bar (x SG_PILL_X0, a 10 px margin each side) */
@@ -817,7 +815,6 @@
 #define SG_BUILD_N 64
 #define SG_BUILD_MOVE 32
 #define SG_MORE_MS 16
-#define SG_SORT_ROWS 5
 #define PH_COVER 160            /* a playlist's header on the Songs page (docs/modules/songs.md "A playlist's header"): the 2 x 2 mosaic of its albums, centred, the album page's cover (160 px, 10 px corners) */
 #define PH_COVER_X 80
 #define PH_COVER_Y 8
@@ -1450,3 +1447,35 @@
 #define ACC_SHUF_DOWN_R 68
 #define STYLE_COLOR_GRADIENT_RET 0x65a050
 #define BITMAP_PREMULTI 16 /* AWTK's BITMAP_FLAG_PREMULTI_ALPHA in bitmap_t's u16 flags @0xc */
+
+/* The "..." card of the pages with a sort order and a grid / list view (patch/viewsort.c, tools/pod_ui.py view_sort_card; the Albums page first): an Apple-style grouped menu in its own glass.
+ * Slots 0..VS_SORTS - 1 are the sort rows, then VS_VIEWS view rows (Grid, List), then Search (VS_SEARCH) and Select (VS_SELECT); the card shows Search and Select first, then the view rows, then the sorts: VS_ROWS rows of VS_ROW_H. A tick sits at VS_TICK_X on every
+ * row but Search, a glyph (view rows, Search, Select) at VS_LABEL_X, its label at VS_LABEL_X_GLYPH, a sort label at VS_LABEL_X. The ticked sort row's label moves up (VS_LABEL2_Y, VS_LABEL2_H) for the direction line
+ * under it (VS_SUB_Y, VS_SUB_H). The width is the widest label or direction line + its x + VS_LABEL_R, VS_CARD_MIN..PL_CARD_MAX, the right edge PL_CARD_RIGHT. */
+#define VS_SORTS 4
+#define VS_VIEWS 2
+#define VS_SEARCH (VS_SORTS + VS_VIEWS) /* slot 6: the optional Search row, the card's first (a glyph, no tick) */
+#define VS_SELECT (VS_SEARCH + 1) /* slot 7: the optional Select row, second in the card (a check-circle glyph, no tick) */
+#define VS_ACT2 (VS_SELECT + 1) /* slot 8: an optional third action row (only the Playlists asset has it: New Playlist, Import, Export, Delete Playlists are slots 6..9), a glyph, no tick */
+#define VS_ACT3 (VS_ACT2 + 1) /* slot 9: the fourth */
+#define VS_ROWS (VS_ACT3 + 1)
+#define VS_ALL_SORTS ((1u << VS_SORTS) - 1)
+#define VS_WITH_ACT2 (1u << VS_ACT2) /* the vs_bind mask bits that offer slots 8 and 9 */
+#define VS_WITH_ACT3 (1u << VS_ACT3)
+#define VS_WITH_SEARCH (1u << VS_SEARCH) /* the vs_bind mask bit that offers the Search row */
+#define VS_WITH_SELECT (1u << VS_SELECT) /* the vs_bind mask bit that offers the Select row */
+#define VS_WITH_VIEWS (((1u << VS_VIEWS) - 1) << VS_SORTS) /* the vs_bind mask bits that offer the two view rows (Grid, List; the Artists page's Show group Artists, Album Artists) */
+#define VS_GLASS_FMT "vs_glass%d" /* the glass of the card, one picture per row count (tools/mod_icons.py GLASS_VIEWSORT*: 1, 2, 3, 4, 6 and 7 rows); the asset's own is the seven-row vs_glass7 */
+#define VS_ROW_H 48
+#define VS_TICK_X 14 /* the tick column's left inset */
+#define VS_TICK_W 14 /* the tick (sg_tick), centred in the row */
+#define VS_GLYPH 20 /* the view rows' and the Search row's glyph */
+#define VS_GLYPH_X 38 /* the glyph: VS_TICK_X + VS_TICK_W + 10 */
+#define VS_LABEL_X 38 /* a sort label: the glyph column's x */
+#define VS_LABEL_X_GLYPH 66 /* a label after a glyph: VS_GLYPH_X + VS_GLYPH + 8 */
+#define VS_LABEL_R 16
+#define VS_CARD_MIN 206 /* 220 less the 14 px the glyph labels gained (VS_LABEL_X_GLYPH 80 -> 66) */
+#define VS_LABEL2_Y 4
+#define VS_LABEL2_H 22
+#define VS_SUB_Y 24
+#define VS_SUB_H 22

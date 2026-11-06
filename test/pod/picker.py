@@ -62,15 +62,20 @@ def run(ctx):
     t = m.widgets['label_title']
     expect(r == 1 and ('window_open', 'm1plus_playlists') in calls and not [c for c in calls if c[0] == 'navigator_to_with_context'],
            'picker_open opens our Playlists page (1); the stock playlist_page is not opened')
-    expect(('widget_set_tr_text', t, 'Add to Playlist') in calls and all(vis(m, n) == (0, 0) for n in ('btn_more', 'btn_albumview', 'btn_backtoplayer'))
+    expect(('widget_set_tr_text', t, 'Add to Playlist') in calls and all(vis(m, n) == (0, 0) for n in ('btn_plactions', 'btn_more', 'btn_backtoplayer'))
            and vis(m, 'btn_return')[0] == 1 and ('widget_resize', t, O['SG_SELALL_X'] - O['NAV_TITLE_X'], 22) in calls,
-           'the title is Add to Playlist; the "..." button, the view toggle and Now Playing are hidden and insensitive; Back stays')
+           'the title is Add to Playlist; the list-plus button, the "..." button and Now Playing are hidden and insensitive; Back stays')
     blits, texts, styles = PL.settle(m)
     titles = [x for x, s in zip(texts, styles) if s == 'label_row_title']
     subs = [x for x, s in zip(texts, styles) if s == 'label_row_sub']
-    expect([x[0] for x in titles] == ['playlist_create', 'Favorites', 'Road Trip', 'Late Night', 'Focus'] and [x[0] for x in subs] == ['4 tracks', '2 tracks', '1 track'],
-           f'a list: playlist_create (New playlist) and Favorites first (no count), then the playlists with their counts ({[x[0] for x in titles]}, {[x[0] for x in subs]})')
+    expect([x[0] for x in titles] == ['playlist_create', 'Favorites', 'Focus', 'Late Night', 'Road Trip'] and [x[0] for x in subs] == ['1 track', '2 tracks', '4 tracks'],
+           f'a list: playlist_create (New playlist) and Favorites pinned first (no count), then the playlists in the page\'s name order (A-Z) with their counts ({[x[0] for x in titles]}, {[x[0] for x in subs]})')
     expect(m.word(m.widgets['view_grid'] + 0xc) == 5 * ROW, 'five rows high')
+    for saved, want in ((b'1\n', ['Focus', 'Late Night', 'Road Trip']), (b'b\n', ['Focus', 'Late Night', 'Road Trip']), (b'a\n', ['Road Trip', 'Late Night', 'Focus'])):
+        m2 = caller(PL); m2.fs['/mnt/data/m1plus/playlists-sort'] = saved
+        open_picker(m2); blits, texts, styles = PL.settle(m2)
+        got = [x[0] for x, s in zip(texts, styles) if s == 'label_row_title'][2:]
+        expect(got == want, f'the saved order {saved!r} ("a" Name Z-A; the retired Recently Added values "1" and "b" read as A-Z) orders the picker\'s playlists ({got})')
     expect(record_ok(m), 'the browsing class, classinfo[0..1] and the navigation title are the caller\'s after the picker\'s own stock queries')
 
     # 2. A playlist row: the stock add on the copy and the marks, the message, the page closes
@@ -210,6 +215,6 @@ def run(ctx):
     expect([x[0] for x, s in zip(texts, styles) if s == 'label_row_title'][:2] == ['playlist_create', 'Favorites'], 'the picker is the list with New playlist and Favorites first')
     destroy(m)
     blits, texts, styles = PL.paint(m)
-    expect([x[0] for x, s in zip(texts, styles) if s == 'label_grid_title'][:3] == ['Road Trip', 'Late Night', 'Focus'] and first_bound,
+    expect([x[0] for x, s in zip(texts, styles) if s == 'label_grid_title'][:3] == ['Focus', 'Late Night', 'Road Trip'] and first_bound,
            'the Playlists page below is as it was: its grid, its tiles')
     expect(record_ok(m), 'and the caller\'s record is back')

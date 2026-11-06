@@ -44,8 +44,9 @@
  *              AL_TAP_PX (the scroll_view's own drag threshold) to the press on both axes, on the same cell or row, opens the stock album
  *              page as Cover Flow does (cc_open_album). Coordinates go through widget_to_local, which includes the scroll offset.
  *
- * The mode toggle: the navbar button switches in place (no window opens or closes): the tiles are dropped, the
- * content is resized and the scroll keeps the first album in view, the button shows the glyph of the other mode, and the choice is persisted
+ * The navbar is Cover Flow, "..." and Now Playing; the "..." card (patch/viewsort.c) searches (Search Albums), sorts (Title, Artist, Recently Added, Year: cc_album_order, saved in
+ * ALBUMS_SORT_FILE) and switches the mode. The switch is in place (no window opens or closes): the tiles are dropped, the
+ * content is resized and the scroll keeps the first album in view, and the choice is persisted
  * (ALBUMS_FILE, written as the Start-in setting is). The menu's Albums row opens the page in the saved mode; if
  * the page cannot open it falls back to the stock Albums list through the Home dispatcher. No stock function is
  * hooked; everything runs from this page's widgets and timers.
@@ -59,6 +60,9 @@
 #include "grid.h"
 #include "azlist.h"
 #include "i18n.h"
+#include "viewsort.h"
+#include "search.h"
+#include "songops.h"
 
 extern int coverflow_open(void); /* patch/coverflow.c: the menu's Cover Flow row, opened over this page */
 extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
@@ -66,6 +70,9 @@ extern int coverflow_artist(void *artists, unsigned index,
                             unsigned scope); /* patch/coverflow.c: Cover Flow scoped to an artist */
 extern int
 songs_open_artist(void *artist); /* patch/songs.c: our Songs page on all the artist's songs; -1 when it did not open */
+extern void *
+songs_artist_list(void *artist); /* patch/songs.c: the artist's songs through the stock queries (no page); NULL when the artist has no All songs row */
+extern int songs_play_artist(void *artist, int how); /* patch/songs.c: Play (SO_IN_ORDER) / Shuffle (SO_SHUFFLE) on the artist's songs; -1 when nothing plays */
 extern int
 coverflow_artist_albums(void *artist_row, unsigned scope, int keep_card, void **albums,
                         unsigned **keys); /* patch/coverflow.c: one artist's album rows and their cache keys */
@@ -94,7 +101,7 @@ coverflow_artist_albums(void *artist_row, unsigned scope, int keep_card, void **
 typedef grid_tile_t tile_t; /* the grid's tile (patch/grid.h) */
 
 static struct {
-    void *win, *view, *sv, *status, *btn;
+    void *win, *view, *sv, *status, *btn; /* btn: the "..." button */
     void *st_title, *st_sub; /* hidden labels whose styles are the list's two text styles */
     void *st_gtitle, *st_gsub; /* and the grid's two */
     void *albums; /* our copy of the stock album rows */
@@ -117,12 +124,21 @@ static struct {
     unsigned build_timer;
     int own, done;
     void *fade; /* the navbar's fade (img_nb_fade, optional): shown only while the list is scrolled */
+    void *small, *big; /* label_title (the navbar's small title) and al_title (the large one, the first thing in the content); either may be missing */
+    int title_on; /* the small title is shown (the large one has scrolled away, or the scroll events are missing) */
     /* the scan that queues the missing albums runs in AL_SCAN_BATCH steps on build_timer: scanning = a scan is under
      * way (own set held, worker not started); scan_cur / scan_centre = the cc_build_near_step cursor and the album it
      * is centred on; scanned = a finished scan found nothing missing (kept until the page closes: al is cleared on open) */
     int scanning, scanned;
     unsigned scan_cur, scan_centre;
     int fg;
+    int sort, rev; /* the order shown (cc_sort_mode: CC_SORT_*) and its direction (cc_sort_rev: 1 = Z-A, Oldest First) */
+    vs_t vs; /* the "..." card */
+    /* an artist's page (scope CLASS_ARTISTS) under the large title: the Play and Shuffle pills (pills: both widgets exist) and each album's year
+     * (cc_album_years of the artist's songs, one entry per stock row, 0 = none; NULL: no years); the library's page and a composer's have neither */
+    void *btn_play, *btn_shuffle;
+    int pills;
+    unsigned *years;
     grid_t
         g; /* the tile ring (GRID_TILES, heap), the placeholder, the mode's cover size (g.side): patch/grid.c; LAST (test/pod/albums.py reads the fields above by index) */
 } al __attribute__((section(".scratch")));
@@ -135,8 +151,11 @@ static void al_show(void *w, int on) {
 }
 
 static int al_rows(void) { return ((int)al.count + GRID_COLS - 1) / GRID_COLS; }
+/* The content starts with the large title (the Songs and Artists pages' block); the rows, or the grid's first gap, follow it. An artist's page has the pills
+ * under the title: the block ends at AL_PILLS_END and the list's first row is GRID_ROW_GAP under it (the grid's first gap is its own). */
+static int al_top(void) { return !al.pills ? SG_TITLE_H : al.list ? AL_PILLS_END + GRID_ROW_GAP : AL_PILLS_END; }
 static int al_content(void) {
-    return al.list ? (int)al.count * LIST_ROW_H : al_rows() ? GRID_ROW_GAP + al_rows() * PITCH : 0;
+    return al_top() + (al.list ? (int)al.count * LIST_ROW_H : al_rows() ? GRID_ROW_GAP + al_rows() * PITCH : 0);
 }
 static int al_max_scroll(void) {
     int m = al_content() - GRID_VIEW_H;
@@ -146,13 +165,16 @@ static int al_max_scroll(void) {
 /* The scroll_view's offset: px down the content that the top of the window is. */
 static int al_off(void) { return al.sv ? I(al.sv, SC_YOFF) : 0; }
 
+/* The same offset measured from the top of the rows (negative while the title block is in view). */
+static int al_coff(void) { return al_off() - al_top(); }
+
 /* The navbar's fade (an insensitive image, built hidden) is for rows passing under the bar: shown while the list is scrolled, hidden at rest, where the
- * first row would be darkened by it. Visible and sensitive move together (never a touch target). No fade widget = nothing happens. */
+ * first row would be darkened by it. Visible and sensitive move together (never a touch target). No fade widget = nothing happens. The small title
+ * is the navbar's once the large one has scrolled away (pod_title_gone, the rule every large-title page shares); without the scroll events it stays. */
 static void al_fade(void) {
-    int on;
+    pod_title_set(al.small, &al.title_on, al.noscroll || pod_title_gone(al_off(), 0));
     if (!al.fade) return;
-    on = al_off() > 0;
-    widget_set_visible(al.fade, on, 0);
+    widget_set_visible(al.fade, al_off() > 0, 0);
     widget_set_sensitive(al.fade, 0);
 }
 
@@ -176,7 +198,7 @@ static int al_row_of(int s) { return s > GRID_ROW_GAP + CELL_H ? (s - GRID_ROW_G
  * [0, max] while a drag pulls the list past an end (the stock scroll_view's overscroll, the gap above the first row): the
  * rows are kept inside [0, n - 1], never a row before the first (album -1 read past the album list and crashed the app). */
 static void al_span(int *r0, int *r1) {
-    int n = al.list ? (int)al.count : al_rows(), s = al_off();
+    int n = al.list ? (int)al.count : al_rows(), s = al_coff();
     if (al.list)
         *r0 = s / LIST_ROW_H, *r1 = (s + GRID_VIEW_H - 1) / LIST_ROW_H;
     else
@@ -215,10 +237,16 @@ static tile_t *al_tile(int a) {
     t = grid_tile(&al.g, a, lo, hi, &fresh);
     if (fresh) {
         void *rec = cc_row(al.albums, al.order, (unsigned)a);
-        if (al_is_card(rec)) /* All Songs over the artist: no cover file (key 0), the placeholder */
-            grid_set(t, TR("local_allsong"), cc_str(deque_at(al.artist_row, 0), REC_TITLE), 0);
-        else
-            grid_set(t, cc_str(rec, REC_ALBUM), cc_str(rec, REC_ARTIST), al.keys ? al.keys[a] : cc_album_key(rec));
+        unsigned row = al.order ? al.order[a] : (unsigned)a; /* (keys and years are by stock row) */
+        if (al_is_card(rec)) /* All Songs over the artist: no cover file (key 0), the placeholder; an artist's page has no line under it */
+            grid_set(t, TR("local_allsong"), al.scope == CLASS_ARTISTS ? "" : cc_str(deque_at(al.artist_row, 0), REC_TITLE), 0);
+        else if (al.scope == CLASS_ARTISTS) { /* an artist's album: its year as the grey line, none when no song of it has one */
+            char year[5];
+            unsigned y = al.years ? al.years[row] : 0;
+            year[0] = y ? (char)('0' + y / 1000) : 0, year[1] = (char)('0' + y / 100 % 10), year[2] = (char)('0' + y / 10 % 10), year[3] = (char)('0' + y % 10), year[4] = 0;
+            grid_set(t, cc_str(rec, REC_ALBUM), year, al.keys ? al.keys[row] : cc_album_key(rec));
+        } else
+            grid_set(t, cc_str(rec, REC_ALBUM), cc_str(rec, REC_ARTIST), al.keys ? al.keys[row] : cc_album_key(rec));
     }
     return t;
 }
@@ -242,13 +270,13 @@ static void al_paint_grid(void *canvas) {
     if (r1 < r0) return;
     last = (r1 + 1) * GRID_COLS;
     if (last > (int)al.count) last = (int)al.count;
-    grid_paint(canvas, &al.g, r0 * GRID_COLS, last, GRID_ROW_GAP - al_off(), GRID_VIEW_H, al_tile_of, (void *)0);
+    grid_paint(canvas, &al.g, r0 * GRID_COLS, last, GRID_ROW_GAP - al_coff(), GRID_VIEW_H, al_tile_of, (void *)0);
 }
 
 static void al_paint_list(void *canvas) {
     int r0, r1;
     al_span(&r0, &r1);
-    grid_list_paint(canvas, &al.g, al.st_title, al.st_sub, r0, r1, al_off(), GRID_VIEW_H, al.press, 0, 1, al_tile_of,
+    grid_list_paint(canvas, &al.g, al.st_title, al.st_sub, r0, r1, al_coff(), GRID_VIEW_H, al.press, 0, 1, al_tile_of,
                     (void *)0); /* patch/grid.c */
 }
 
@@ -277,7 +305,7 @@ static int al_abs(int v) { return v < 0 ? -v : v; }
 /* The album to decode next, or -1: of the window's albums without a tile that was tried, the cell nearest the middle
  * of the view, the cells in view before the rest (the window is the view and the rows ahead). */
 static int al_next_load(void) {
-    int lo, hi, a, best = -1, bd = 0x7fffffff, s = al_off();
+    int lo, hi, a, best = -1, bd = 0x7fffffff, s = al_coff();
     if (!al.g.tiles || !al.count) return -1;
     al_window(&lo, &hi);
     for (a = lo; a <= hi; ++a) {
@@ -329,7 +357,7 @@ static int al_on_load(const void *unused) {
     a = al_next_load();
     if (a >= 0) {
         tile_t *t = al_tile(a);
-        int top = (al.list ? a * LIST_ROW_H : GRID_ROW_GAP + a / GRID_COLS * PITCH) - al_off();
+        int top = (al.list ? a * LIST_ROW_H : GRID_ROW_GAP + a / GRID_COLS * PITCH) - al_coff();
         al_art(t);
         if (top < GRID_VIEW_H && top + (al.list ? LIST_ROW_H : CELL_H) > 0) al_redraw();
     }
@@ -455,13 +483,15 @@ static int al_on_fg(void *ctx, void *e) {
 
 /* The grid album under content point (x, y), or -1 for a gap, the margins and the empty tail of the last row. */
 static int al_cell_at(int x, int y) {
-    if (y < 0 || y >= al_content()) return -1;
+    y -= al_top(); /* (the title block above the grid is no cell) */
+    if (y < 0 || y >= al_content() - al_top()) return -1;
     return grid_cell_at(x, y, GRID_ROW_GAP, (int)al.count);
 }
 
 /* The list album under content point y, or -1 below the last row. */
 static int al_row_at(int y) {
     int a;
+    y -= al_top();
     if (y < 0) return -1;
     a = y / LIST_ROW_H;
     return a < (int)al.count ? a : -1;
@@ -545,6 +575,21 @@ static int al_on_cover(void *ctx, void *e) {
     return RET_OK;
 }
 
+/* An artist's page: Play is every song of the artist in order from the first, Shuffle the stock Shuffle mode from a random one (the Songs page's pills on the artist's list). */
+static int al_on_play(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    if (al.artist_row && al.count) songs_play_artist(deque_at(al.artist_row, 0), SO_IN_ORDER);
+    return RET_OK;
+}
+
+static int al_on_shuffle(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    if (al.artist_row && al.count) songs_play_artist(deque_at(al.artist_row, 0), SO_SHUFFLE);
+    return RET_OK;
+}
+
 static int al_on_destroy(void *ctx, void *e) {
     (void)ctx;
     (void)e;
@@ -554,24 +599,16 @@ static int al_on_destroy(void *ctx, void *e) {
     if (al.albums) deque_destroy(al.albums);
     if (al.artist_row) deque_destroy(al.artist_row);
     free(al.keys);
+    free(al.years);
     free(al.order);
     memset(&al, 0, sizeof al);
     return RET_OK;
 }
 
-/* The toggle shows the glyph of the mode a tap switches to. */
-static void al_glyph(void) {
-    const char *icon = al.list ? "pod_nav_grid" : "pod_nav_list";
-    if (!al.btn) return;
-    widget_set_prop_str(al.btn, "style:normal:icon", icon);
-    widget_set_prop_str(al.btn, "style:over:icon", icon);
-    widget_set_prop_str(al.btn, "style:pressed:icon", al.list ? "pod_nav_grid_down" : "pod_nav_list_down");
-}
-
 /* The first album in view: its row's first album in the grid, the top row in the list; inside [0, count - 1] also while
  * the list is pulled past an end (overscroll). */
 static int al_first(void) {
-    int a = al.list ? al_off() / LIST_ROW_H : al_row_of(al_off()) * GRID_COLS;
+    int a = al.list ? al_coff() / LIST_ROW_H : al_row_of(al_coff()) * GRID_COLS;
     if (a > (int)al.count - 1) a = (int)al.count - 1;
     return a < 0 ? 0 : a;
 }
@@ -587,15 +624,19 @@ static void al_size(void) {
     widget_set_prop_int(al.sv, "virtual_h", h);
 }
 
-/* Switches the mode in place: nothing opens or closes. The first album in view stays at the top. */
-static void al_set_mode(int list) {
-    int first = al_first(), max;
+/* A coasting list stops (patch/scroll.c sc_down). */
+static void al_stop_scroll(void) {
     void *wa = P(al.sv, SC_WA);
-    if (wa && I(wa, SC_AN_STATE) == SC_AN_RUNNING &&
-        P(wa, SC_AN_WIDGET) == al.sv) { /* a coasting list stops (patch/scroll.c sc_down) */
+    if (wa && I(wa, SC_AN_STATE) == SC_AN_RUNNING && P(wa, SC_AN_WIDGET) == al.sv) {
         widget_animator_destroy(wa);
         stock_scroll_done(al.sv, (void *)0);
     }
+}
+
+/* Switches the mode in place: nothing opens or closes. The first album in view stays at the top. */
+static void al_set_mode(int list) {
+    int first = al_first(), max;
+    al_stop_scroll();
     if (al.more_timer) timer_remove(al.more_timer);
     al.more_timer = 0;
     al.list = list, al.press = 0, al.down = 0, al.dir = 1;
@@ -604,22 +645,71 @@ static void al_set_mode(int list) {
     if (al.g.tiles) grid_placeholder(&al.g);
     al_size();
     max = al_max_scroll();
-    first = list ? first * LIST_ROW_H : first / GRID_COLS * PITCH;
+    first = !first ? 0 : al_top() + (list ? first * LIST_ROW_H : first / GRID_COLS * PITCH); /* (the first album is at the top: the title block with it) */
     widget_set_prop_int(al.sv, "yoffset", first > max ? max : first);
     al.seen = al_off();
     al_fade();
-    al_glyph();
+    vs_view(&al.vs, list);
     al_redraw();
     al_kick();
 }
 
-/* The navbar toggle: the other mode, in place, and the choice saved. */
-static int al_on_toggle(void *ctx, void *e) {
-    (void)ctx;
+/* The order changed: the tiles are dropped (they were for other albums), the list starts at the top, the cover scan starts again (nearest the first album in view first). */
+static void al_resort(void) {
+    free(al.order);
+    al.order = cc_album_order_mode(al.albums, al.sort, al.rev);
+    if (!al.view || !al.g.tiles) return;
+    al_stop_scroll();
+    if (al.more_timer) timer_remove(al.more_timer);
+    al.more_timer = 0;
+    al_build_end();
+    al.scanned = 0;
+    al.press = 0, al.down = 0, al.dir = 1;
+    grid_drop(&al.g);
+    grid_placeholder(&al.g);
+    widget_set_prop_int(al.sv, "yoffset", 0);
+    al.seen = al_off();
+    al_fade();
+    al_redraw();
+    al_kick();
+    al_build_later();
+}
+
+/* The "..." card's rows: a sort row sets the order in its default direction, the row already ticked reverses it (saved first: a save that fails leaves the old order and its tick); the Grid / List row
+ * the other mode, in place, saved (the ticked view does nothing); the Search row opens the Search page scoped to albums (patch/search.c; the library search where that will not open). The card closes. */
+static int al_on_item(void *ctx, void *e) {
+    int k = (int)(long)ctx;
     (void)e;
     if (!al.view) return RET_OK;
-    al_set_mode(!al.list);
-    home_write_atomic(ALBUMS_FILE, ALBUMS_TMP, al.list ? "0\n" : "1\n");
+    vs_menu(&al.vs, 0, al.sort, al.rev, al.list);
+    if (k == VS_SEARCH) {
+        if (search_open_in(SEARCH_ALBUMS) < 0) search_open();
+    } else if (k == VS_SORTS || k == VS_SORTS + 1) {
+        int list = k == VS_SORTS + 1;
+        if (list == al.list) return RET_OK;
+        al_set_mode(list);
+        home_write_atomic(ALBUMS_FILE, ALBUMS_TMP, al.list ? "0\n" : "1\n");
+    } else if (k >= 0 && k < VS_SORTS) {
+        int rev = k == al.sort ? !al.rev : 0;
+        if (cc_sort_mode_set(k, rev) == k) {
+            al.sort = k, al.rev = rev;
+            al_resort();
+        }
+    }
+    return RET_OK;
+}
+
+static int al_on_scrim(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    vs_menu(&al.vs, 0, al.sort, al.rev, al.list);
+    return RET_OK;
+}
+
+static int al_on_more(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    if (al.win && al.vs.card) vs_menu(&al.vs, !al.vs.on, al.sort, al.rev, al.list);
     return RET_OK;
 }
 
@@ -636,12 +726,15 @@ static int al_open(int list, void *artist_row, unsigned scope) {
     widget_on(al.win, EVT_DESTROY, al_on_destroy, (void *)0);
     pod_bind(al.win, "btn_return", pod_on_back, (void *)0);
     pod_bind(al.win, "btn_backtoplayer", pod_on_player, (void *)0);
-    pod_bind(al.win, "btn_albumview", al_on_toggle, (void *)0);
     pod_bind(al.win, "btn_coverflow", al_on_cover, (void *)0);
-    al.btn = widget_lookup(al.win, "btn_albumview", 1);
+    pod_bind(al.win, "btn_more", al_on_more, (void *)0);
+    al.btn = widget_lookup(al.win, "btn_more", 1);
     al.view = widget_lookup(al.win, "view_grid", 1);
     al.sv = widget_lookup(al.win, "albums_scrollview", 1);
     al.status = widget_lookup(al.win, "label_status", 1);
+    al.btn_play = widget_lookup(al.win, "btn_play", 1); /* optional: an artist's page only */
+    al.btn_shuffle = widget_lookup(al.win, "btn_shuffle", 1);
+    al.pills = artist_row && scope == CLASS_ARTISTS && al.btn_play && al.btn_shuffle;
     al.fade = widget_lookup(al.win, "img_nb_fade", 1); /* optional */
     al.st_title = widget_lookup(al.win, "label_row_title", 1);
     al.st_sub = widget_lookup(al.win, "label_row_sub", 1);
@@ -651,16 +744,33 @@ static int al_open(int list, void *artist_row, unsigned scope) {
         navigator_back(); /* an asset that is not ours */
         return -2;
     }
-    al_glyph();
+    if (vs_bind(&al.vs, al.win, al_on_item, al_on_scrim,
+                (artist_row ? VS_ALL_SORTS & ~(1u << CC_SORT_ARTIST) : VS_ALL_SORTS) | VS_WITH_VIEWS | VS_WITH_SEARCH)) { /* (one artist's albums: no Artist row) */
+        navigator_back(); /* an asset that is not ours */
+        return -2;
+    }
+    al.sort = artist_row ? cc_scoped_sort() : cc_sort_mode();
+    al.rev = cc_sort_rev();
+    vs_view(&al.vs, list);
     al_show(al.status, 0);
+    al.small = widget_lookup(al.win, "label_title", 1);
+    al.big = widget_lookup(al.win, "al_title", 1);
     if (artist_row) { /* the artist's albums and, with two or more, the All Songs row last, titled with the artist (Cover Flow's scoped list) */
-        void *title = widget_lookup(al.win, "label_title", 1);
+        const char *name = cc_str(deque_at(artist_row, 0), REC_TITLE);
         al.count = (unsigned)coverflow_artist_albums(artist_row, scope, 1, &al.albums, &al.keys);
-        if (title) az_fit(title, cc_str(deque_at(artist_row, 0), REC_TITLE));
+        if (scope == CLASS_ARTISTS && al.count) { /* the years: one read of the artist's songs (the stock queries of the Songs page's artist list) */
+            void *songs = songs_artist_list(deque_at(artist_row, 0));
+            if (songs) al.years = cc_album_years(al.albums, songs);
+        }
+        al.order = cc_album_order_mode(al.albums, al.sort, al.rev); /* the chosen order (Artist as Title); the keys and years stay by stock row */
+        az_fit(al.big, name); /* both titles cut with an ellipsis to their room (296 px; the 110 px before Cover Flow) */
+        az_fit(al.small, name);
     } else {
+        az_fit(al.big, TR("Albums")); /* (the language's word) */
+        az_fit(al.small, TR("Albums"));
         al.albums = cc_albums();
         al.count = al.albums ? deque_size(al.albums) : 0;
-        al.order = cc_album_order(al.albums);
+        al.order = cc_album_order_mode(al.albums, al.sort, al.rev);
     }
     if (!al.count || !grid_init(&al.g, al.win, GRID_TILES, GRID_COVER, 0)) {
         grid_free(&al.g);
@@ -671,6 +781,14 @@ static int al_open(int list, void *artist_row, unsigned scope) {
                                                    : "Update Local Music first");
         return 0;
     }
+    if (al.pills) { /* under the large title: the pills as the Songs page's (the label and glyph centred as a pair), shown and live */
+        pod_bind(al.win, "btn_play", al_on_play, (void *)0);
+        pod_bind(al.win, "btn_shuffle", al_on_shuffle, (void *)0);
+        pod_centre_pill(al.btn_play, AL_PLAY_W);
+        pod_centre_pill(al.btn_shuffle, AL_SHUFFLE_W);
+        al_show(al.btn_play, 1);
+        al_show(al.btn_shuffle, 1);
+    }
     al_shape(list);
     al.g.st_title = al.st_gtitle,
     al.g.st_sub = al.st_gsub; /* the grid's two text styles (the list mode's are drawn by this page) */
@@ -680,6 +798,8 @@ static int al_open(int list, void *artist_row, unsigned scope) {
     al.fg = 1;
     al.noscroll = !widget_on(al.sv, EVT_SCROLL, al_on_scroll, (void *)0) ||
                   !widget_on(al.sv, EVT_SCROLL_END, al_on_scroll, (void *)0);
+    if (al.noscroll && al.small) widget_set_visible(al.small, 1, 0); /* the large title's collapse needs the scroll events: without them the navbar keeps its title */
+    al.title_on = al.noscroll;
     al_kick();
     al_build_later();
     if (widget_on(al.win, EVT_WINDOW_TO_FG, al_on_fg, (void *)0))

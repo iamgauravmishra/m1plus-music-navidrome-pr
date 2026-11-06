@@ -16,9 +16,9 @@ UI = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_songs.bi
 ALL = O['CLASS_ALL_SONGS']
 TEXT_X, TEXT_END, SEL = O['LIST_TEXT_X'], O['SG_TEXT_END'], O['SG_SEL_COL']
 RAIL_X, RAIL_W = O['SG_RAIL_X'], O['SG_RAIL_W']
-WIDGETS = ('btn_coverflow', 'view_grid', 'sg_rail', 'sg_foot', 'sg_hname', 'btn_return', 'btn_backtoplayer', 'btn_search', 'btn_sort', 'btn_select', 'btn_selall', 'btn_play', 'btn_shuffle', 'sg_add', 'sg_del', 'sg_scrim', 'sg_card',
+WIDGETS = ('btn_coverflow', 'btn_search', 'view_grid', 'sg_rail', 'sg_foot', 'sg_hname', 'btn_return', 'btn_backtoplayer', 'btn_more', 'btn_select', 'btn_selall', 'btn_play', 'btn_shuffle', 'sg_add', 'sg_del',
            'label_title', 'sg_title', 'label_status', 'label_row_title', 'label_row_sub', 'label_hdr', 'label_rail', 'label_rail_on', 'sg_bubble', 'sg_bubble_letter', 'sg_bar',
-           'sg_item0', 'sg_item1', 'sg_item2', 'sg_item3', 'sg_item4', 'sg_tick0', 'sg_tick1', 'sg_tick2', 'sg_tick3', 'sg_tick4')
+           *VS_WIDGETS)
 
 
 def colour(i): return 0xff000000 | (i * 37 % 256) | (i * 59 % 256) << 8 | (i * 83 % 256) << 16
@@ -37,8 +37,33 @@ class SongsMachine(ListMachine):
         super().__init__(*a, **k)
         self.handlers[PSYMS['coverflow_artist_page']] = 'coverflow_artist_page'   # patch/coverflow.c, trapped
 
+    snap = None
+
+    def stock_rows(self):
+        """The library's records as the database would give them again: the page reverses the stock list in place (record contents swapped), so a second query must see the stock order, and a queue loadSongList
+        builds is made of records of its own. snap holds each library record's first contents."""
+        if self.snap is None: self.snap = {}
+        for r in list(self.class_lists.get(ALL, ())) + list(self.songs):
+            if r not in self.snap: self.snap[r] = bytes(self.u.mem_read(r, REC_SIZE))
+
+    def restore_rows(self):
+        for r, data in (self.snap or {}).items(): self.u.mem_write(r, data)
+
     def _hook(self, u, address, size, _):
         name = self.handlers.get(address)
+        ret = None
+        if name == 'loadLocalClassList' and u.reg_read(UC_MIPS_REG_A0) == ALL and hasattr(self, 'songs'):
+            self.stock_rows(); self.restore_rows()   # (the next query sees the stock order again)
+        elif name == 'loadSongList' and self.stock_songlist and self.snap and any(bytes(u.mem_read(r, REC_SIZE)) != d for r, d in self.snap.items()):
+            self.calls.append(('loadSongList', self.read_cstr(u.reg_read(UC_MIPS_REG_A1)), u.reg_read(UC_MIPS_REG_A2), u.reg_read(UC_MIPS_REG_A3)))
+            out, ret = [], -1
+            key = (self.read_cstr(u.reg_read(UC_MIPS_REG_A1)), u.reg_read(UC_MIPS_REG_A2))
+            for r in self.class_lists[ALL]:   # the database's rows again, in the stock order: a record of its own for each
+                c = self.alloc(REC_SIZE); self.u.mem_write(c, self.snap[r]); self.setword(c + O['REC_CLASS'], u.reg_read(UC_MIPS_REG_A3)); out.append(c)
+                if ret < 0 and (self.read_cstr(self.word(c + O['REC_NAME'])), self.word(c + O['REC_CUE_START'])) == key: ret = len(out) - 1
+            self.deques[u.reg_read(UC_MIPS_REG_A0)] = out
+        if ret is not None and name == 'loadSongList':
+            u.reg_write(UC_MIPS_REG_V0, ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
         ret = None
         if name == 'coverflow_artist_page': ret = self.cf_page or 0
         elif name == 'window_manager_get_top_window' and self.stack is not None: ret = self.stack[-1] if self.stack else 0
@@ -172,6 +197,9 @@ def vis(m, name):
     return m.props.get((w, 'visible'), 1), m.props.get((w, 'sensitive'), 1)
 
 
+def is_shown(m, name): return m.props.get((m.widgets[name], 'visible'), 0) == 1   # (a widget the asset builds hidden: never shown unless the page showed it)
+
+
 def touch(m, kind, x, y, fn, t=1000):
     return m.touch(kind, x, y, t, fn=fn)
 
@@ -185,6 +213,24 @@ def tap(m, x, y, dx=0, dy=0):
 
 def click(m, name):
     m.click(name, count=900000000)
+    return list(m.calls)
+
+
+ROW_OF = {'select': 7, 'grid': O['VS_SORTS'], 'list': O['VS_SORTS'] + 1}
+
+
+def pick(m, what):
+    """A row of the \"...\" card by its name (Select, Albums, Songs; the keys 'grid' and 'list' are the rows' slots): the \"...\" tapped, then the row; the calls the row made. 'search' is the navbar button."""
+    if what == 'search':   # the navbar's Search button (the capsule's left cap, Albums' Cover Flow place), not a row of the card
+        m.calls = []
+        m.click('btn_search', count=900000000)
+        return list(m.calls)
+    if what == 'select' and is_shown(m, 'btn_select'):   # a list whose card would hold Select alone: the navbar's Select button enters select mode straight away
+        m.calls = []
+        m.click('btn_select', count=900000000)
+        return list(m.calls)
+    m.click('btn_more', count=900000000); m.calls = []
+    m.click(f'vs_item{ROW_OF[what]}', count=900000000)
     return list(m.calls)
 
 
@@ -293,21 +339,36 @@ def asset_tests(ctx):
     row = next(i for i, r in enumerate(page.rows) if r.label == 'Songs')
     expect(page.rows[row].action == pod_pages.ACT_SONGS == O.get('ACT_SONGS', 18) and pod_pages.SONGS in pod_pages.PAGES and pod_pages.SONGS.key == 'm1plus_songs',
            'the menu\'s Songs row opens our page (ACT_SONGS), which is in the page table')
-    expect(pod_pages.SORT_MENU == ('sort_alphabet', 'sort_filename', 'sort_format', 'sort_time_desc', 'sort_time_asc') and O['SG_SORT_ROWS'] == 5,
-           'the sort card lists the stock sort dialog\'s five labels in sort_flag order')
+    expect(pod_pages.SONGS_SORT_KEYS == ('Title', 'File Name', 'Format', 'Recently Added') and 'SG_SORT_ROWS' not in O and not hasattr(pod_pages, 'SORT_MENU'),
+           'the Sort card lists Title, File Name, Format and Recently Added (sort_flag 0, 1, 2 and 3 / 4); the stock sort dialog\'s five labels are gone')
+
+    expect(pod_pages.SETTING_FILES.index('songs-sort-rev') == pod_pages.SETTING_FILES.index('composers-sort') + 1 and pod_pages.SETTING_FILES.count('songs-sort-rev') == 1,
+           'the direction file songs-sort-rev is on the Settings Files page, after the other pages\' order files')
 
     # 1. The asset
     tree = ui()
     f = tree.find
-    expect([(f(n).x, f(n).w, f(n).h) for n in ('btn_search', 'btn_sort', 'btn_select', 'btn_backtoplayer')] == [(122, 46, 50), (168, 46, 50), (214, 46, 50), (260, 60, 50)]
-           and O['NAV_SEARCH_X'] == pod_ui.NAV_SEARCH_X == 122, 'the navbar: Search 122, Sort 168, Select 214 (46 wide, the stock Songs page\'s order), Now Playing 260')
-    expect([f(n).get('style:normal:icon') for n in ('btn_search', 'btn_sort', 'btn_select', 'btn_backtoplayer')] == ['pod_nav_search', 'pod_nav_songsort', 'pod_nav_select', 'ah_nav_play']
-           and all(f(n).get('style') == 'img_btn_style' for n in ('btn_search', 'btn_sort', 'btn_select')), 'they are the glass capsule\'s pieces; Now Playing is its right cap')
+    expect([(f(n).x, f(n).w, f(n).h) for n in ('btn_more', 'btn_backtoplayer')] == [(214, 46, 50), (260, 60, 50)] and 'NAV_SEARCH_X' not in O,
+           'the navbar: "..." 214 (46 wide), Now Playing 260')
+    expect([f(n).get('style:normal:icon') for n in ('btn_more', 'btn_backtoplayer')] == ['pod_nav_more', 'ah_nav_play'] and f('btn_more').get('style') == 'img_btn_style'
+           and not [n for n in ('btn_sort', 'btn_albumview') if f(n) is not None],
+           'the "..." is the capsule\'s left cap, Now Playing its right cap; the Sort, Select and Recently Added toggle buttons are gone (Search is the button at 168)')
+    sb = f('btn_search')
+    expect((sb.x, sb.w, sb.h) == (O['NAV_CF_X'], 46, 50) and sb.get('style:normal:icon') == 'pod_nav_search' and sb.get('style:pressed:icon') == 'pod_nav_search_down' and sb.get('style') == 'img_btn_style'
+           and sb.get('visible') == 'false' and sb.get('sensitive') == 'false' and sb.get('dirty_rect_tolerance') == '7',
+           'the Search button: the Albums Cover Flow button\'s place (x 168, the capsule\'s left cap), built hidden and insensitive (patch/songs.c shows it on the lists that search)')
+    import mod_icons
+    sel = f('btn_select')
+    expect((sel.x, sel.w, sel.h) == (214, 46, 50) and sel.get('style:normal:icon') == sel.get('style:over:icon') == 'pod_nav_selectl' and sel.get('style:pressed:icon') == 'pod_nav_selectl_down'
+           and sel.get('style') == 'img_btn_style' and sel.get('visible') == 'false' and sel.get('sensitive') == 'false' and sel.get('dirty_rect_tolerance') == '7',
+           'the Select button: the "..." slot (x 214, the capsule\'s left cap), built hidden and insensitive (patch/songs.c shows it instead of the "..." where the card would hold Select alone)')
+    expect(mod_icons.NAV_VIEW['pod_nav_select'] == mod_icons.NAV_VIEW['pod_nav_selectl'] == 'list-checks' and mod_icons.NAV_VIEW_POS['pod_nav_select'] == 'middle' and mod_icons.NAV_VIEW_POS['pod_nav_selectl'] == 'left',
+           'Select\'s glyph is the one the album page and Folders use (Lucide list-checks): a left cap, and a middle piece after Search / Cover Flow')
     cfb = f('btn_coverflow')
     expect((cfb.x, cfb.w, cfb.h) == (O['NAV_CF_X'], 46, 50) and cfb.get('style:normal:icon') == 'pod_nav_coverflow' and cfb.get('visible') == 'false' and cfb.get('sensitive') == 'false',
            'the artist\'s songs Cover Flow button: the Albums page\'s left-cap glyph at 168, built hidden and insensitive (patch/songs.c shows it for an artist\'s songs only)')
     lt = f('label_title')
-    expect((lt.x, lt.w) == (58, 64) and lt.get('visible') == 'false' and lt.x + lt.w == 122 and O['NAV_TITLE_X'] == 58, 'the small title starts at x 58, ends at the capsule (122) and starts hidden')
+    expect((lt.x, lt.w) == (58, 110) and lt.get('visible') == 'false' and lt.x + lt.w == 168 == O['NAV_CF_X'] and O['NAV_TITLE_X'] == 58, 'the small title starts at x 58, ends at the Search button (168) and starts hidden')
     sa = f('btn_selall')
     expect(sa.get('visible') == 'false' and sa.get('sensitive') == 'false' and sa.type == 'button' and sa.x == O['SG_SELALL_X'] and sa.x + sa.w == 312 and sa.x >= lt.x + 142,
            'Select All is a text button at the right, hidden and insensitive until select mode')
@@ -343,8 +404,8 @@ def asset_tests(ctx):
     expect(f('sg_bar').y == f('sg_rail').y + O['GRID_VIEW_H'] - O['SG_BAR_H'] and max(p.x + p.w for p in barpills) == 310,
            'the select bar\'s pills (145 wide, Add to Playlist needs the room) end at 310 but sit below the rail, which is 336 px high in select mode and ends at the bar\'s top')
     expect(not any('glass' in (c.get('style:normal:bg_image') or '') or c.get('style:normal:bg_image') for c in grid.children), 'no glass on the pills: no bg_image')
-    expect(all(tree.find(n).get('visible') == 'false' and tree.find(n).get('sensitive') == 'false' for n in ('sg_bar', 'sg_scrim', 'sg_card', 'label_status', 'label_row_title', 'label_row_sub', 'label_hdr', 'label_rail', 'label_rail_on'))
-           and f('sg_bubble').get('visible') == 'false' and f('sg_bubble').get('sensitive') == 'false' and all(f(f'sg_tick{i}').get('visible') == 'false' for i in range(5)),
+    expect(all(tree.find(n).get('visible') == 'false' and tree.find(n).get('sensitive') == 'false' for n in ('sg_bar', 'vs_scrim', 'vs_card', 'label_status', 'label_row_title', 'label_row_sub', 'label_hdr', 'label_rail', 'label_rail_on'))
+           and f('sg_bubble').get('visible') == 'false' and f('sg_bubble').get('sensitive') == 'false' and all(f(f'vs_tick{i}').get('visible') == 'false' for i in range(4)),
            'everything shown later (the bar, the scrim and card, the bubble, the ticks, the status and style labels) starts hidden; the ones that must not take touches are insensitive')
     expect(all(f(n).get('sensitive') == 'false' for n in ('sg_bubble', 'sg_bubble_letter', 'sg_bar_line', 'sg_title', 'img_nb_fade')), 'decorative overlays are insensitive (the bubble, the bar\'s hairline, the title, the fade)')
     rail, bub = f('sg_rail'), f('sg_bubble')
@@ -360,31 +421,25 @@ def asset_tests(ctx):
            and [(c.name, c.x, c.w, c.h) for c in barw.children if c.type == 'button'] == [('sg_add', 10, 145, 40), ('sg_del', 165, 145, 40)]
            and f('sg_add').get('style:normal:icon') == 'sg_listplus' and f('sg_del').get('style:normal:icon') == 'sg_trash' and f('sg_add').get('style:normal:bg_color') == '#1E1E1E',
            'the select bar: 64 px, black with a #222222 hairline, the two flat pills Add to playlist and Delete')
-    card, scrim = f('sg_card'), f('sg_scrim')
-    items = [f(f'sg_item{i}') for i in range(5)]
-    expect((card.x, card.y, card.w) == (43, 52, 268) and all(card.get(f'style:{st}:bg_image') == 'sg_glass' and card.get(f'style:{st}:bg_image_draw_type') == 'patch3_x'
-                                                             and card.get(f'style:{st}:bg_color') == '#00000000' and card.get(f'style:{st}:round_radius') is None for st in pod_ui.STATES)
-           and (scrim.x, scrim.y, scrim.w, scrim.h) == (0, 0, 320, 450) and all(scrim.get(f'style:{st}:bg_color') == '#00000082' for st in pod_ui.STATES)
-           and scrim.type == 'button' and [(i.y, i.h) for i in items] == [(k * O['PL_ROW_H'], O['PL_ROW_H']) for k in range(5)] and card.h == 5 * O['PL_ROW_H']
-           and card.x + card.w == O['PL_CARD_RIGHT']
-           and all(i.get(f'style:{st}:bg_color') == ('#FFFFFF10' if st == 'pressed' else '#00000000') and i.get(f'style:{st}:border_width') == ('1' if k else '0')
-                   and i.get(f'style:{st}:border_color') == ('#FFFFFF22' if k else '#00000000') for k, i in enumerate(items) for st in pod_ui.STATES)
+    card, scrim = f('vs_card'), f('vs_scrim')
+    items = {i: f(f'vs_item{i}') for i in range(7)}
+    expect((card.x, card.y, card.w, card.h) == (O['PL_CARD_RIGHT'] - O['PL_CARD_MAX'], O['PL_CARD_Y'], O['PL_CARD_MAX'], 7 * 48) and card.get('visible') == 'false'
+           and all(card.get(f'style:{st}:bg_image') == 'vs_glass7' and card.get(f'style:{st}:bg_image_draw_type') == 'patch3_x' and card.get(f'style:{st}:bg_color') == '#00000000' for st in pod_ui.STATES)
+           and (scrim.x, scrim.y, scrim.w, scrim.h) == (0, 0, 320, 450) and scrim.type == 'button' and all(scrim.get(f'style:{st}:bg_color') == '#00000082' for st in pod_ui.STATES)
            and tree.children.index(scrim) > tree.children.index(barw) and tree.children.index(card) == tree.children.index(scrim) + 1 == len(tree.children) - 3,
-           'the sort card: the Playlists menu\'s glass (x 43, y 52, 268 wide, sg_glass drawn patch3_x over no fill, rows transparent, 6 % white pressed, 13 % white hairline above every row but the first, right edge PL_CARD_RIGHT), under the 130/255 dim scrim, then only the rows menu (rm_scrim, rm_card)')
-    import io, mod_icons
-    from PIL import Image
-    gw, gh, gr = mod_icons.GLASS_SORT
-    raw_ = open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx/sg_glass.png'), 'rb').read()
-    gen = mod_icons.glass_image(gw, gh, gr, fill=mod_icons.GLASS_SHEET_FILL)
-    g = Image.open(io.BytesIO(raw_)).convert('RGBA')
-    third = gw // 3
-    expect(raw_ == open(os.path.join(mod_icons.PNG, 'sg_glass.png'), 'rb').read() and same_pixels(raw_, gen) and (gw, gh, gr) == (72, card.h, O['PL_CARD_R'])
-           and all(g.getpixel(p)[3] == 0 for p in ((0, 0), (gw - 1, 0), (0, gh - 1), (gw - 1, gh - 1))) and g.getpixel((gw // 2, gh // 2))[3] >= 0.85 * 255
-           and all(len({g.getpixel((x, y)) for x in range(third, gw - third)}) == 1 for y in range(gh)),
-           f'sg_glass.png is the generator output pixel for pixel ({gw}x{gh}, the card\'s height, r {gr}, the sheet\'s fill), four transparent corners, the middle third the same in every column (patch3_x stretches it exactly)')
-    labs = [next(c for c in i.children if c.type == 'hscroll_label') for i in items]
-    expect([l.get('tr_text') for l in labs] == list(pod_pages.SORT_MENU) and all(c.get('sensitive') == 'false' for l in labs for c in [l]), 'the card rows carry the five stock keys')
-    expect(all(any(c.type == 'image' and c.get('image') == 'sg_tick' for c in i.children) for i in items), 'each row has a tick image (shown on the current order)')
+           'the Sort card is the shared view-sort card (patch/viewsort.c, built at its widest and narrowed to a glass of its height at run time) under the 130/255 dim scrim, then only the rows menu (rm_scrim, rm_card)')
+    labs = {i: f(f'vs_label{i}') for i in range(4)}
+    expect([labs[i].get('tr_text') for i in range(4)] == list(pod_pages.SONGS_SORT_KEYS) and [items[i].y for i in range(4)] == [144, 192, 240, 288]
+           and all(labs[i].get('sensitive') == 'false' and labs[i].x == 38 and f(f'vs_tick{i}').get('image') == 'sg_tick' and f(f'vs_sub{i}') is not None for i in range(4)),
+           'the four sort rows carry the keys Title, File Name, Format, Recently Added, a tick and a second line (the direction)')
+    import mod_icons
+    gw, gh, gr = mod_icons.GLASS_VIEWSORT4
+    raw_ = open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx/vs_glass4.png'), 'rb').read()
+    expect(raw_ == open(os.path.join(mod_icons.PNG, 'vs_glass4.png'), 'rb').read() and same_pixels(raw_, mod_icons.glass_image(gw, gh, gr, fill=mod_icons.GLASS_SHEET_FILL)) and gh == 4 * 48,
+           'vs_glass4.png (the four-row card the payload picks) is the generator output')
+    expect(not hasattr(mod_icons, 'GLASS_SORT') and not os.path.exists(os.path.join(mod_icons.PNG, 'sg_glass.png')) and not os.path.exists(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx/sg_glass.png'))
+           and b'sg_glass' not in open(UI, 'rb').read() and b'sg_item' not in open(UI, 'rb').read() and os.path.exists(os.path.join(mod_icons.PNG, 'pl_glass.png')),
+           'the old Songs sort glass and rows (sg_glass, sg_item) are gone; the Playlists glass stays for its own page')
     for nm in ('btn_play', 'btn_shuffle', 'sg_add', 'sg_del', 'btn_selall'):
         expect(os.path.exists(os.path.join(WORK, 'rootfs/release/assets/default/raw/images/xx', (f(nm).get('style:normal:icon') or 'sg_play') + '.png')), f'{nm}\'s glyph is in the tree')
 
@@ -401,7 +456,7 @@ def open_and_paint_tests(ctx):
     open_page(m)
     expect(('stock_resume', '3') in m.calls, 'if the window will not open the row opens the stock Songs page')
     m = songs_machine(TITLES)
-    m.widgets.pop('sg_card')
+    m.widgets.pop('vs_card')
     open_page(m)
     expect(('navigator_back',) in m.calls and not any(c[0] == 'loadLocalClassList' for c in m.calls), 'an asset that is not ours: the page leaves again, nothing read')
 
@@ -410,8 +465,8 @@ def open_and_paint_tests(ctx):
     calls = open_page(m)
     queries = [c[1] for c in calls if c[0] == 'loadLocalClassList']
     expect(queries == [O['CLASS_ALBUMS'], ALL], f'opening reads the albums (the cover lookup), then the songs, once each: {queries}')
-    expect(all((m.widgets[n], O['EVT_CLICK']) in m.bound for n in ('btn_return', 'btn_backtoplayer', 'btn_search', 'btn_sort', 'btn_select', 'btn_selall', 'btn_play', 'btn_shuffle', 'sg_add', 'sg_del', 'sg_scrim',
-                                                                    'sg_item0', 'sg_item1', 'sg_item2', 'sg_item3', 'sg_item4'))
+    expect(all((m.widgets[n], O['EVT_CLICK']) in m.bound for n in ('btn_return', 'btn_backtoplayer', 'btn_more', 'btn_select', 'btn_search', 'btn_selall', 'btn_play', 'btn_shuffle', 'sg_add', 'sg_del', 'vs_scrim',
+                                                                    'vs_item0', 'vs_item1', 'vs_item2', 'vs_item3', 'vs_item7'))
            and (m.view, O['EVT_AFTER_PAINT']) in m.bound and (m.rail, O['EVT_AFTER_PAINT']) in m.bound and (m.window, O['EVT_WINDOW_TO_FG']) in m.bound
            and all((m.rail, O[e]) in m.bound for e in ('EVT_POINTER_DOWN', 'EVT_POINTER_MOVE', 'EVT_POINTER_UP', 'EVT_POINTER_ABORT'))
            and all((m.sv, O[e]) in m.bound for e in ('EVT_SCROLL', 'EVT_SCROLL_END')), 'the buttons, the paints, the rail\'s touch events and the scroll events are bound')
@@ -743,36 +798,135 @@ def order_search_and_stale_tests(ctx):
     blits, texts, styles = rail_paint(m)
     expect([t for t, _ in texts] == ['#', 'A', 'B', 'C', 'Z'], 'and so does the rail')
 
-    # 11. The sort card
-    m = songs_machine(TITLES); open_page(m)
-    expect([c for c in m.calls if c[0] == 'widget_set_visible' and c[1] in [m.widgets[f'sg_tick{i}'] for i in range(5)]][-5:] == [('widget_set_visible', m.widgets[f'sg_tick{i}'], int(i == 0)) for i in range(5)],
-           'Title (sort_flag 0) is ticked')
-    click(m, 'btn_sort')
-    expect(vis(m, 'sg_scrim') == (1, 1) and vis(m, 'sg_card') == (1, 1), 'the Sort button opens the card and its scrim')
-    click(m, 'sg_scrim')
-    expect(vis(m, 'sg_scrim') == (0, 0) and vis(m, 'sg_card') == (0, 0), 'the scrim closes it')
-    click(m, 'btn_sort'); click(m, 'btn_sort')
-    expect(vis(m, 'sg_card') == (0, 0), 'the button again closes it')
-    click(m, 'btn_sort')
-    calls = click(m, 'sg_item0')
-    expect(vis(m, 'sg_card') == (0, 0) and not any(c[0] in ('loadLocalClassList', 'write_int_config') for c in calls), 'the current order again closes the card and changes nothing')
-    click(m, 'btn_sort')
+    # 11. The Sort card (the shared view-sort card): Title, File Name, Format, Recently Added; the ticked row reverses
+    D = '/mnt/data/m1plus/'
+    def card_texts(m):
+        for i, t in enumerate(pod_pages.SONGS_SORT_KEYS): m.wtext[m.widgets[f'vs_label{i}']] = t
+        for i in range(4): m.wtext[m.widgets[f'vs_sub{i}']] = 'A–Z'
+        m.measure = lambda t: 60
+    def ticks(m): return [dict((c[1], c[2]) for c in m.calls if c[0] == 'widget_set_visible' and c[1] in [m.widgets[f'vs_tick{i}'] for i in range(4)]).get(m.widgets[f'vs_tick{i}']) for i in range(4)]
+    def sub(m, k): return [utf8(c[2]) for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets[f'vs_sub{k}']][-1:]
+    def rec_title(m, a): return utf8(m.read_cstr(m.word(a + O['REC_TITLE'])))
+    def shown_titles(m):
+        names, vh = {}, m.props.get((m.sv, 'virtual_h'), 0) or VIEW_H
+        for off in range(0, max(vh - VIEW_H, 0) + 200, 200):
+            scroll_to(m, off); _, texts, styles, _ = paint(m)
+            for (t, (x, y, w, h)), st in zip(texts, styles):
+                if st == 'label_row_title': names[y + off] = t
+        scroll_to(m, 0)
+        return [names[y] for y in sorted(names)]
+    def rail_letters(m): return [t for t, _ in rail_paint(m)[1]]
+    def card(m, row):
+        m.click('btn_more', count=900000000); m.calls = []
+        m.click(f'vs_item{row}', count=900000000)
+        return list(m.calls)
+    m = songs_machine(TITLES); card_texts(m); open_page(m)
+    click(m, 'btn_more')
+    expect(vis(m, 'vs_scrim') == (1, 1) and vis(m, 'vs_card') == (1, 1), 'the "..." button opens the card and its scrim')
+    expect(ticks(m) == [1, 0, 0, 0] and sub(m, 0) == ['A–Z'], 'Title (sort_flag 0) is ticked with A–Z under it')
+    expect(all(m.props.get((m.widgets['vs_card'], f'style:{st}:bg_image')) == 'vs_glass5' for st in ('normal', 'pressed', 'over')) and [vis(m, f'vs_item{i}') for i in (4, 5, 6)] == [(0, 0)] * 3 and vis(m, 'vs_hair')[0] == 1
+           and all(vis(m, f'vs_item{i}') == (1, 1) for i in (0, 1, 2, 3, 7)) and m.props.get((m.widgets['vs_item0'], 'style:normal:border_width')) == 0
+           and ('widget_move', m.widgets['vs_hair'], 0, 48) in m.calls and ('widget_move', m.widgets['vs_item7'], 0, 0) in m.calls and ('widget_move', m.widgets['vs_item0'], 0, 48) in m.calls,
+           'the library\'s card: Select, the hairline, the four sorts, five rows in the glass of that height (vs_glass5): no Search row (it is the navbar button), no view rows, no second hairline above Title')
+    click(m, 'vs_scrim')
+    expect(vis(m, 'vs_scrim') == (0, 0) and vis(m, 'vs_card') == (0, 0), 'the scrim closes it')
+    click(m, 'btn_more'); click(m, 'btn_more')
+    expect(vis(m, 'vs_card') == (0, 0), 'the button again closes it')
+    # a row that is not ticked: its order, A-Z, the stock flag written as the dialog's row handler does, the list read again, the card closed
     m.class_lists[ALL] = list(reversed(m.songs))
-    calls = click(m, 'sg_item3')
-    expect(m.word(SORT_FLAG) == 3 and ('write_int_config', 3, 'SYSSET', 'SORTSELECT') in calls and [c[1] for c in calls if c[0] == 'loadLocalClassList'] == [ALL] and vis(m, 'sg_card') == (0, 0),
-           'a row: sort_flag, [SYSSET] SORTSELECT written as the stock dialog\'s row handler does, the list read again, the card closed')
-    expect(m.props[(m.sv, 'virtual_h')] == TOP + len(TITLES) * ROW + FOOT and vis(m, 'sg_rail') == (0, 0), 'in Recently Added order the list is plain: no sections, no rail')
-    expect(off_of(m) == 0, 'a new order starts at the top')
-    click(m, 'btn_sort')
-    expect([c for c in m.calls if c[0] == 'widget_set_visible' and c[1] in [m.widgets[f'sg_tick{i}'] for i in range(5)]][-5:] == [('widget_set_visible', m.widgets[f'sg_tick{i}'], int(i == 3)) for i in range(5)],
-           'the tick follows the order')
+    calls = card(m, 3)
+    expect(m.word(SORT_FLAG) == 3 and ('write_int_config', 3, 'SYSSET', 'SORTSELECT') in calls and [c[1] for c in calls if c[0] == 'loadLocalClassList'] == [ALL] and vis(m, 'vs_card') == (0, 0)
+           and not any(c[0] == 'rename' for c in calls), 'Recently Added: sort_flag 3 and [SYSSET] SORTSELECT, the list read again, the card closed, no direction file')
+    expect(m.props[(m.sv, 'virtual_h')] == TOP + len(TITLES) * ROW + FOOT and vis(m, 'sg_rail') == (0, 0) and off_of(m) == 0, 'in Recently Added order the list is plain (no sections, no rail), from the top')
+    m.click('btn_more', count=900000000)
+    expect(ticks(m) == [0, 0, 0, 1] and sub(m, 3) == ['Newest First'], 'the tick follows the order: Recently Added, Newest First under it')
+    # the ticked Recently Added flips sort_flag 3 <-> 4 (Newest First <-> Oldest First)
+    m.calls = []; m.click('vs_item3', count=900000000)
+    calls = list(m.calls)
+    expect(m.word(SORT_FLAG) == 4 and ('write_int_config', 4, 'SYSSET', 'SORTSELECT') in calls and [c[1] for c in calls if c[0] == 'loadLocalClassList'] == [ALL] and D + 'songs-sort-rev' not in m.fs,
+           'the ticked Recently Added row: sort_flag 4 (stock "Time added (ascending)"), written, the list read again, no file of ours')
+    m.click('btn_more', count=900000000)
+    expect(ticks(m) == [0, 0, 0, 1] and sub(m, 3) == ['Oldest First'], 'it reads Oldest First now')
+    m.click('vs_item3', count=900000000)
+    expect(m.word(SORT_FLAG) == 3, 'and back to 3 on the next tap')
     m.class_lists[ALL] = m.songs
-    click(m, 'sg_item0')
+    card(m, 0)
     expect(m.word(SORT_FLAG) == 0 and m.props[(m.sv, 'virtual_h')] == lay.content() and vis(m, 'sg_rail') == (1, 1), 'back to Title: the sections and the rail are back')
+
+    # Title Z-A: the ticked row reverses, saved first (atomically); the list is the stock one the other way round, sections and rail mirrored, "#" last
+    m = songs_machine(TITLES); card_texts(m); open_page(m)
+    scroll_to(m, 100)
+    calls = card(m, 0)
+    expect(m.fs.get(D + 'songs-sort-rev') == b'a\n' and ('rename', D + 'songs-sort-rev.tmp', D + 'songs-sort-rev') in calls and m.word(SORT_FLAG) == 0 and not any(c[0] == 'write_int_config' for c in calls)
+           and [c[1] for c in calls if c[0] == 'loadLocalClassList'] == [ALL], 'the Title row again: songs-sort-rev "a" written atomically, sort_flag stays 0 (the stock code keeps its 0..4), the list read again')
+    expect(off_of(m) == 0 and vis(m, 'vs_card') == (0, 0), 'from the top, the card closed')
+    expect(shown_titles(m) == TITLES[::-1], 'the list is the stock list the other way round, every row')
+    expect(rail_letters(m) == ['Z', 'T', 'M', 'L', 'K', 'H', 'D', 'C', 'B', 'A', '#'] and vis(m, 'sg_rail') == (1, 1), 'the rail runs Z to A, # last')
+    expect(m.props[(m.sv, 'virtual_h')] == TOP + 11 * HDR + len(TITLES) * ROW + FOOT, 'eleven sections: the headers are the mirrored letters')
+    blits, texts, styles, fills = paint(m)
+    expect([t for (t, _), st in zip(texts, styles) if st == 'label_hdr'][:1] == ['Z'], 'the first header is Z')
+    m.click('btn_more', count=900000000)
+    expect(ticks(m) == [1, 0, 0, 0] and sub(m, 0) == ['Z–A'], 'Title is ticked with Z–A under it')
+    # a row, Play and Shuffle play what is shown: the queue is reversed with the list, the row tapped is the song at that row
+    m.click('vs_scrim', count=900000000)
+    m.played = None
+    y0 = TOP + HDR   # the first row, under the Z header
+    calls = tap(m, 150, y0 + ROW // 2)
+    pl = m.played
+    expect(pl and [rec_title(m, a) for a in pl[0]] == TITLES[::-1] and pl[1] == 0 and rec_title(m, pl[0][pl[1]]) == 'Zombie', 'a tap on the first row (Zombie) plays it: the queue is the list as shown, Zombie first')
+    m.played = None
+    tap(m, 150, y0 + HDR + 1 * ROW + ROW // 2 + 0)
+    pl = m.played
+    expect(pl and pl[1] == 1 and rec_title(m, pl[0][1]) == 'Thriller' and [rec_title(m, a) for a in pl[0]] == TITLES[::-1], 'the second row is Thriller in the queue too (position 1) even across the next header')
+    m.played = None
+    click(m, 'btn_play')
+    expect(m.played and m.played[1] == 0 and rec_title(m, m.played[0][0]) == 'Zombie' and [rec_title(m, a) for a in m.played[0]] == TITLES[::-1], 'Play starts at the first row shown, in the order shown')
+    # select mode and Delete use the shown order: the stock list is the shown list, so a marked row index is the shown row
+    pick(m, 'select')
+    tap(m, 150, y0 + SEL * 0 + ROW // 2)
+    shown = m.deques[m.word(SHOWLIST)]
+    m.confirm_answer = O['CONFIRM_DELETE_LIBRARY']
+    calls = click(m, 'sg_del')
+    bd = [c for c in calls if c[0] == 'batch_delete_file']
+    expect(bd and [c[1] for c in calls if c[0] == 'set_selectindex'] == [0] and rec_title(m, shown[0]) == 'Zombie', 'Select: row 0 of the shown list is Zombie, the stock selection vector gets index 0')
+    # again: A-Z; the file says "0"
+    m = songs_machine(TITLES); card_texts(m); open_page(m); card(m, 0); m.calls = []
+    card(m, 0)
+    expect(m.fs.get(D + 'songs-sort-rev') == b'0\n' and shown_titles(m) == TITLES and rail_letters(m)[0] == '#', 'the second tap writes "0" and the list is A-Z again')
+    # the saved direction at open: "a" Z-A for the alphabetical orders, anything else A-Z; Recently Added ignores it
+    for data, sort, rev in ((None, 0, False), (b'0\n', 0, False), (b'x\n', 0, False), (b'a\n', 0, True), (b'a', 0, True), (b'a\n', 1, True), (b'a\n', 2, True), (b'a\n', 3, False), (b'a\n', 4, False)):
+        m = songs_machine(TITLES, sort=sort); card_texts(m)
+        if data is not None: m.fs[D + 'songs-sort-rev'] = data
+        open_page(m)
+        want = TITLES[::-1] if rev else TITLES
+        expect(shown_titles(m) == want, f'songs-sort-rev {data!r}, sort_flag {sort}: {"Z-A" if rev else "the stock order"}')
+        expect((vis(m, 'sg_rail') == (1, 1)) == (sort == 0), f'songs-sort-rev {data!r}, sort_flag {sort}: the rail is there for Title only')
+        m.click('btn_more', count=900000000)
+        expect(sub(m, min(sort, 3)) == (['Z–A'] if rev else ['A–Z'] if sort < 3 else ['Newest First'] if sort == 3 else ['Oldest First']), f'songs-sort-rev {data!r}, sort_flag {sort}: the line under the ticked row')
+    # File Name and Format reverse too (plain lists); another row goes back to its default direction and clears the file
+    m = songs_machine(TITLES, sort=1); card_texts(m); open_page(m)
+    card(m, 1)
+    expect(m.fs.get(D + 'songs-sort-rev') == b'a\n' and m.word(SORT_FLAG) == 1 and shown_titles(m) == TITLES[::-1] and vis(m, 'sg_rail') == (0, 0), 'File Name Z-A: flag 1, the plain list reversed')
+    calls = card(m, 2)
+    expect(m.fs.get(D + 'songs-sort-rev') == b'0\n' and m.word(SORT_FLAG) == 2 and ('write_int_config', 2, 'SYSSET', 'SORTSELECT') in calls and shown_titles(m) == TITLES, 'another row (Format): its default direction, the file "0", flag 2')
+    card(m, 2)
+    expect(m.fs.get(D + 'songs-sort-rev') == b'a\n' and m.word(SORT_FLAG) == 2 and shown_titles(m) == TITLES[::-1], 'Format Z-A')
+    calls = card(m, 3)
+    expect(m.fs.get(D + 'songs-sort-rev') == b'0\n' and m.word(SORT_FLAG) == 3 and shown_titles(m) == TITLES, 'Recently Added from Z-A: the direction is cleared, sort_flag 3')
+    # a save that fails: the order, the list and the tick stay
+    m = songs_machine(TITLES); card_texts(m); open_page(m)
+    m.fail.add(('write', D + 'songs-sort-rev.tmp'))
+    calls = card(m, 0)
+    expect(D + 'songs-sort-rev' not in m.fs and shown_titles(m) == TITLES and not any(c[0] == 'loadLocalClassList' for c in calls) and vis(m, 'vs_card') == (0, 0), 'a save that fails leaves the order and the list as they were')
+    # a failed save when another row clears Z-A: the row still sets its order, in A-Z (the direction file is only a best effort there)
+    m = songs_machine(TITLES); m.fs[D + 'songs-sort-rev'] = b'a\n'; card_texts(m); open_page(m)
+    m.fail.add(('write', D + 'songs-sort-rev.tmp'))
+    card(m, 1)
+    expect(m.word(SORT_FLAG) == 1 and shown_titles(m) == TITLES[::-1], 'another row with a failed save keeps the saved direction (Z-A) with the new order')
 
     # 12. Search: the stock page, no context; the list it leaves is read again when this page is back
     m = songs_machine(TITLES); open_page(m)
-    calls = click(m, 'btn_search')
+    calls = pick(m, 'search')
     expect(('navigator_to_with_context', 'search_page', 0) in calls, 'Search opens the stock search page with no context')
     m.setword(SHOWLIST, m.new_deque(m.songs[:3]))   # what the search page leaves in the stock list
     m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
@@ -812,7 +966,7 @@ def collapse_and_select_tests(ctx):
     expect(shown() == [], 'and is not set again while it stays')
     scroll_to(m, 0)
     expect(shown() == [0], 'back at the top it goes')
-    m = songs_machine(TITLES); m.measure = lambda t: 85 if t else 0; open_page(m)   # a language whose word is wider than the 64 px room (Spanish "Canciones", 85 px)
+    m = songs_machine(TITLES); m.measure = lambda t: 250 if t else 0; open_page(m)   # a word wider than the 110 px room (no language has one)
     scroll_to(m, 100)
     expect([c[2] for c in m.calls if c[0] == 'widget_set_visible' and c[1] == m.widgets['label_title']] == [1] and m.wtext[m.widgets['label_title']].endswith(fitted('…', 0)), 'a title that does not fit its room is cut with an ellipsis and shown all the same')
     m = songs_machine(TITLES); m.widget_on_fail = frozenset({O['EVT_SCROLL']}); open_page(m)
@@ -824,8 +978,12 @@ def collapse_and_select_tests(ctx):
     font = Ttf(os.path.join(raw, 'fonts', 'default.ttf'))
     built = {loc: dict(awtk_strings.load(os.path.join(raw, 'strings', loc + '.bin'))) for loc in pod_i18n.LOCALES}
     wide = [loc for loc in pod_i18n.LOCALES if StbText(font, 20).layout(built[loc]['Songs'])[1] > lt.w]
-    expect(wide == ['sp_ES'], f'only Spanish "Songs" is wider than the title\'s 64 px at 20 px: {wide}')
-    for key, room, px in [(k, 236 - 18 - 8, 18) for k in pod_pages.SORT_MENU]:
+    expect(lt.w == 110 and wide == [], f'no language\'s "Songs" is wider than the title\'s 110 px at 20 px: {wide}')
+    for key in ('Select', 'Albums', 'Songs'):
+        room = O['PL_CARD_MAX'] - O['VS_LABEL_X_GLYPH'] - O['VS_LABEL_R']
+        over = [(loc, StbText(font, 18).layout(built[loc].get(key, key))[1]) for loc in pod_i18n.LOCALES if StbText(font, 18).layout(built[loc].get(key, key))[1] > room]
+        expect(not over, f'the card label {key} (after its glyph) fits its {room} px in all 13 languages ({over[:3]})')
+    for key, room, px in [(k, O['PL_CARD_MAX'] - O['VS_LABEL_X'] - O['VS_LABEL_R'], 18) for k in pod_pages.SONGS_SORT_KEYS]:
         over = [(loc, StbText(font, px).layout(built[loc].get(key, key))[1]) for loc in pod_i18n.LOCALES if StbText(font, px).layout(built[loc].get(key, key))[1] > room]
         expect(not over, f'the sort card label {key} fits its {room} px row in all 13 languages ({over[:3]})')
     small = O['SG_PILL_PX_SMALL']
@@ -846,15 +1004,17 @@ def collapse_and_select_tests(ctx):
     m = songs_machine(TITLES); open_page(m); settle(m)
     n = len(lay.secs)
     n_songs = len(TITLES)
-    click(m, 'btn_select')
-    expect(all(vis(m, n) == (0, 0) for n in ('btn_search', 'btn_sort', 'btn_select', 'btn_backtoplayer')) and vis(m, 'btn_selall') == (1, 1) and vis(m, 'sg_bar') == (1, 1),
-           'Select hides the four buttons, shows Select All and the bar')
+    pick(m, 'select')
+    expect(all(vis(m, n) == (0, 0) for n in ('btn_more', 'btn_backtoplayer')) and vis(m, 'btn_selall') == (1, 1) and vis(m, 'sg_bar') == (1, 1),
+           'the Select row of the card enters select mode: the "..." and Now Playing hide, Select All and the bar show')
     back = m.widgets['btn_return']
     expect(m.props[(back, 'style:normal:icon')] == 'ah_nav_close' and m.props[(back, 'style:pressed:icon')] == 'ah_nav_close_down', 'Back becomes the x (cancel), a glass disc like it')
     expect(m.wtext[m.widgets['label_title']] == '0 Selected' and ('widget_set_visible', m.widgets['label_title'], 1) in m.calls
            and ('widget_resize', m.widgets['label_title'], 150, 22) in m.calls, 'the title reads "0 Selected", from x 58 to Select All')
     expect(('widget_set_sensitive', m.widgets['btn_play'], 0) in m.calls and ('widget_set_sensitive', m.widgets['btn_shuffle'], 0) in m.calls, 'the pills are disabled (their dim style)')
     expect(m.props[(m.sv, 'virtual_h')] == lay.content(O['SG_BAR_H']), 'the content is 64 px longer: the last row scrolls clear of the bar')
+    click(m, 'btn_more')
+    expect(vis(m, 'vs_card') == (0, 0) and vis(m, 'vs_scrim') == (0, 0), 'the "..." does nothing in select mode (hidden and insensitive, a stray click opens no card)')
     blits, texts, styles, fills = settle(m)
     marks = [b for b in blits if b[2][2] == O['SG_MARK']]
     covers = [b for b in blits if b[2][2] == O['LIST_ART']]
@@ -896,15 +1056,15 @@ def collapse_and_select_tests(ctx):
            and bd and bd[0][1:6] == (ALL, list_h, m.word(SEL_VEC), 0, 0) and bd[0][6] == [1, 5, 6], 'Yes (the library only): the stock vector is made as long as the list with the selected rows, then batch_delete_file(0xf001, the shown list, the vector, 0, 0)')
     expect(calls.index(bd[0]) < next(i for i, c in enumerate(calls) if c[0] == 'toast' and c[1] == 'msg_delsongsuccess') and [c[1] for c in calls if c[0] == 'loadLocalClassList'] == [ALL],
            'then the stock "Song Deleted" message and the list is read again')
-    expect(vis(m, 'sg_bar') == (0, 0) and vis(m, 'btn_search') == (1, 1) and m.props[(back, 'style:normal:icon')] == 'ah_nav_back', 'and select mode is over')
-    click(m, 'btn_select'); tap(m, 150, lay.row_y(0) + 30)
+    expect(vis(m, 'sg_bar') == (0, 0) and vis(m, 'btn_more') == (1, 1) and m.props[(back, 'style:normal:icon')] == 'ah_nav_back', 'and select mode is over')
+    pick(m, 'select'); tap(m, 150, lay.row_y(0) + 30)
     m.confirm_answer = O['CONFIRM_DELETE_FILE']
     calls = click(m, 'sg_del')
     bd = [c for c in calls if c[0] == 'batch_delete_file']
     expect(bd and bd[0][5] == 1 and bd[0][6] == [0], 'the second answer (0x14, also the file) sets the delete-file flag')
     m.confirm_answer = None
     # Add to playlist: the stock picker, the selection in the stock vector, the title and class put back when the window is back
-    click(m, 'btn_select')
+    pick(m, 'select')
     calls = click(m, 'sg_add')
     expect(any(c[0] == 'toast' and c[1] == 'msg_addfailed' for c in calls) and not any(c[0] == 'navigator_to_with_context' and c[1] != 'dialog/msginfo_dialog' for c in calls), 'Add with nothing selected: the stock "Adding Failed" message')
     tap(m, 150, lay.row_y(3) + 30); tap(m, 150, lay.row_y(7) + 30)
@@ -919,12 +1079,12 @@ def collapse_and_select_tests(ctx):
     expect(m.word(G_CLASS) == ALL and m.read_cstr(NAV_TITLE) == 'Songs title' and vis(m, 'sg_bar') == (0, 0) and [c[1] for c in m.calls if c[0] == 'loadLocalClassList'] == [ALL],
            'back from the picker: the browsing class and the title are put back, select mode is over, the list is read again (the add changed its records)')
     # leaving select mode
-    click(m, 'btn_select'); tap(m, 150, lay.row_y(1) + 30)
+    pick(m, 'select'); tap(m, 150, lay.row_y(1) + 30)
     calls = click(m, 'btn_return')
     expect(vis(m, 'sg_bar') == (0, 0) and not any(c[0] == 'navigator_back' for c in calls) and m.wtext[m.widgets['label_title']] == 'Songs', 'the x leaves select mode (Back does not go back)')
     calls = click(m, 'btn_return')
     expect(('navigator_back',) in calls, 'Back outside select mode goes back')
-    click(m, 'btn_select')
+    pick(m, 'select')
     expect(m.wtext[m.widgets['label_title']] == '0 Selected', 'select mode starts with nothing marked')
     # the rail stays in select mode, centred on the shorter list
     p2, sel_h = RAIL_P, VIEW_H - O['SG_BAR_H']
@@ -1079,8 +1239,24 @@ def lists_tests(ctx):
                f'{label}: our Songs page reads the albums, then class {cls:#x}, and sets the browsing class as allmusic_page_init does ({queries})')
         expect(m.wtext.get(big) == fitted(label, O['SG_TITLE_W']) and m.wtext.get(lt) == fitted(label, 110),
                f'{label}: the large title and the small one (110 px) are the row\'s text, cut with an ellipsis where too wide ({m.wtext.get(big)!r}, {m.wtext.get(lt)!r})')
-        expect(vis(m, 'btn_sort') == (0, 0) and ('widget_move', m.widgets['btn_search'], O['NAV_CF_X'], 0) in calls and ('widget_resize', lt, O['NAV_CF_X'] - 58, 22) in calls,
-               f'{label}: no Sort; Search (the left cap) moves to Sort\'s slot beside Select, the small title runs from 58 to it')
+        recent = cls == O['CLASS_RECENTADD']   # (its card adds the Albums / Songs group: docs/modules/recent-albums.md)
+        mw = m.widgets['btn_more' if recent else 'btn_select']
+        expect(('widget_resize', lt, O['NAV_CF_X'] - 58, 22) in calls and vis(m, 'btn_search') == (1, 1) and not is_shown(m, 'btn_coverflow')
+               and vis(m, 'btn_more') == ((1, 1) if recent else (0, 0)) and is_shown(m, 'btn_select') != recent
+               and m.props[(mw, 'style:normal:icon')] == m.props[(mw, 'style:over:icon')] == ('pod_nav_moremid' if recent else 'pod_nav_select')
+               and m.props[(mw, 'style:pressed:icon')] == ('pod_nav_moremid_down' if recent else 'pod_nav_select_down'),
+               f'{label}: Search is the capsule\'s left cap at 168 and the small title ends there; the middle piece is the "..." (pod_nav_moremid), or Select (pod_nav_select) where the card would hold Select alone')
+        if not recent:
+            m.click('btn_select', count=900000000)
+            expect(vis(m, 'vs_card') == (0, 0) and vis(m, 'vs_scrim') == (0, 0) and vis(m, 'sg_bar') == (1, 1) and vis(m, 'btn_select') == (0, 0) and vis(m, 'btn_search') == (0, 0),
+                   f'{label}: the Select button enters select mode at once, no card (it hides with Search, as the "..." did)')
+            click(m, 'btn_return')
+        else:
+            m.click('btn_more', count=900000000)
+            expect(vis(m, 'vs_card') == (1, 1) and all(m.props.get((m.widgets['vs_card'], f'style:{st}:bg_image')) == 'vs_glass3' for st in ('normal', 'pressed', 'over'))
+                   and [vis(m, f'vs_item{i}') for i in range(8)] == [(0, 0)] * 4 + [(1, 1)] * 2 + [(0, 0), (1, 1)] and vis(m, 'vs_hair')[0] == 1,
+                   f'{label}: the card is Select and Recently Added\'s Albums / Songs, no Search row, in the glass of its height, the hairline between the groups')
+            m.click('vs_scrim', count=900000000)
         blits, texts, styles, fills = settle(m)
         shown = [t for t, r in texts if t in titles]
         expect(vis(m, 'sg_rail')[0] == 0 and len(shown) >= 4 and shown == titles[:len(shown)] and not any(len(t) == 1 for t, r in texts)
@@ -1106,10 +1282,8 @@ def lists_tests(ctx):
     nav = [c for c in calls if c[0] == 'navigator_to_with_context' and c[1] == 'playing_page']
     expect(('mclSetPlayMode', 2) in calls and nav and nav[0][3] == fav and m.played[0] == m.songs and 0 <= m.played[1] < len(titles)
            and not any(c[0] == 'loadLocalClassList' for c in calls), 'Shuffle: this list in the stock Shuffle mode from a random song of it (not Shuffle Songs of the library)')
-    calls = click(m, 'btn_sort')
-    expect(vis(m, 'sg_card') == (0, 0), 'the Sort handler does nothing on a list (its button is hidden)')
-    click(m, 'btn_select')
-    expect(all(vis(m, n) == (0, 0) for n in ('btn_search', 'btn_sort', 'btn_select', 'btn_backtoplayer')) and vis(m, 'sg_bar') == (1, 1), 'select mode as on Songs')
+    pick(m, 'select')
+    expect(all(vis(m, n) == (0, 0) for n in ('btn_more', 'btn_select', 'btn_backtoplayer')) and vis(m, 'sg_bar') == (1, 1) and vis(m, 'vs_card') == (0, 0), 'select mode as on Songs, entered by the Select button without a card')
     tap(m, 150, lay.row_y(1) + 30); tap(m, 150, lay.row_y(4) + 30)
     m.confirm_answer = O['CONFIRM_DELETE_LIBRARY']
     calls = click(m, 'sg_del')
@@ -1117,9 +1291,9 @@ def lists_tests(ctx):
     expect(bd and bd[0][1] == fav and bd[0][5] == 0 and bd[0][6] == [1, 4] and [c[1] for c in calls if c[0] == 'loadLocalClassList'] == [fav],
            'Delete: batch_delete_file with the list\'s class (the stock removes the songs from that list), then the list is read again')
     m.confirm_answer = None
-    expect(vis(m, 'btn_sort') == (0, 0) and vis(m, 'btn_search') == (1, 1) and vis(m, 'btn_select') == (1, 1) and m.props[(lt, 'w')] == O['NAV_CF_X'] - 58
-           and m.wtext[lt] == fitted('Favorites', 110), 'leaving select mode brings back Search and Select, not Sort, and the list\'s title in its 110 px')
-    click(m, 'btn_select'); tap(m, 150, lay.row_y(2) + 30)
+    expect(vis(m, 'btn_select') == (1, 1) and vis(m, 'btn_more') == (0, 0) and m.props[(lt, 'w')] == O['NAV_CF_X'] - 58 and vis(m, 'btn_search') == (1, 1)
+           and m.wtext[lt] == fitted('Favorites', 110), 'leaving select mode brings back Search and Select and the list\'s title in its 110 px')
+    pick(m, 'select'); tap(m, 150, lay.row_y(2) + 30)
     m.windows['m1plus_playlists'] = 0   # the stock picker (our page does not open)
     calls = click(m, 'sg_add')
     expect(('navigator_to_with_context', 'playlist_page', O['PICKER_ADD'] | fav) in calls, 'Add opens the stock playlist picker with the list\'s class (1 << 16 | class, as the stock button)')
@@ -1169,8 +1343,16 @@ def lists_tests(ctx):
     pl_lay = lambda n: Layout(['A'] * n, sections=False, top=O['PH_TOP'])   # a playlist's rows start under its header
     expect(r == 0 and [c[1] for c in m.calls if c[0] == 'loadLocalClassList'] == [O['CLASS_ALBUMS'], pls] and m.word(ci) == 7 and m.word(G_CLASS) == pls
            and m.props[(m.sv, 'virtual_h')] == pl_lay(5).content(), 'songs_open_playlist: class 0xff13 with the playlist in classinfo[1]: its five songs')
-    expect(m.wtext[big] == fitted(name, O['SG_TITLE_W']) == fitted('A very long playlist name for the ro…', O['SG_TITLE_W']) and m.wtext[m.widgets['label_title']] == fitted(name, 110),
-           f'the name is the title, cut with an ellipsis (no space before it) to the large title\'s full width and the small one\'s 110 ({m.wtext[big]!r})')
+    expect(m.wtext[big] == fitted(name, O['SG_TITLE_W']) == fitted('A very long playlist name for the ro…', O['SG_TITLE_W']) and m.wtext[m.widgets['label_title']] == fitted(name, 156),
+           f'the name is the title, cut with an ellipsis (no space before it) to the large title\'s full width and the small one\'s 156 (a playlist has no Search: the title runs to 214) ({m.wtext[big]!r})')
+    lt = m.widgets['label_title']
+    expect(not is_shown(m, 'btn_search') and not is_shown(m, 'btn_coverflow') and vis(m, 'btn_select') == (1, 1) and vis(m, 'btn_more') == (0, 0) and ('widget_resize', lt, O['NAV_VIEW_X'] - 58, 22) in m.calls
+           and (m.widgets['btn_select'], 'style:normal:icon') not in m.props,
+           'a playlist\'s songs: no Search button, Select alone as the capsule\'s left cap at 214 (no "..."), the small title runs from 58 to 214')
+    m.click('btn_select', count=900000000)
+    expect(vis(m, 'sg_bar') == (1, 1) and vis(m, 'vs_card') == (0, 0) and vis(m, 'btn_select') == (0, 0) and m.props[(lt, 'w')] == O['SG_SELALL_X'] - 58, 'its Select button enters select mode at once')
+    click(m, 'btn_return')
+    expect(vis(m, 'btn_select') == (1, 1) and m.props[(lt, 'w')] == O['NAV_VIEW_X'] - 58, 'and leaving it brings Select back, the title to 214 again')
     foot = m.widgets['sg_foot']
     expect(m.wtext[foot] == '5 songs' and m.props.get((foot, 'y')) == O['PH_TOP'] + 5 * ROW + O['SG_FOOT_GAP'], f'the playlist\'s count under its last row: "5 songs" ({m.wtext.get(foot)!r})')
     m.setword(ci, 3)
@@ -1311,11 +1493,12 @@ def lists_tests(ctx):
            'songs_open_genre: class 0xff09 with classinfo[0], the name at +0x30d and the Unknown byte 0 put in before the query: the genre\'s five songs')
     expect(m.wtext[big] == fitted('Rock', O['SG_TITLE_W']) and m.wtext[lt] == fitted('Rock', 156), 'the genre\'s name is the title (large full width, small 156 px)')
     sel = m.widgets['btn_select']
-    expect(vis(m, 'btn_search') == (0, 0) and vis(m, 'btn_sort') == (0, 0) and vis(m, 'btn_select') == (1, 1) and vis(m, 'btn_backtoplayer') == (1, 1)
-           and ('widget_move', m.widgets['btn_search'], O['NAV_CF_X'], 0) not in m.calls and ('widget_resize', lt, O['NAV_VIEW_X'] - 58, 22) in m.calls,
-           'no Search (hidden and insensitive) and no Sort: Select and Now Playing; the small title runs from 58 to 214 (Select\'s slot)')
-    expect(m.props[(sel, 'style:normal:icon')] == m.props[(sel, 'style:over:icon')] == 'pod_nav_selectl' and m.props[(sel, 'style:pressed:icon')] == 'pod_nav_selectl_down',
-           'Select shows its left-cap glass piece (pod_nav_selectl), so Select | Now Playing is one capsule (test/pod/glassbtn.py glues the two)')
+    expect(vis(m, 'btn_select') == (1, 1) and vis(m, 'btn_more') == (0, 0) and vis(m, 'btn_backtoplayer') == (1, 1) and (sel, 'style:normal:icon') not in m.props and ('widget_resize', lt, O['NAV_VIEW_X'] - 58, 22) in m.calls,
+           'Select (the capsule\'s left cap, no "...") and Now Playing; the small title runs from 58 to 214')
+    expect(not is_shown(m, 'btn_search') and not is_shown(m, 'btn_coverflow'), 'a genre\'s songs have no Search button (as in the stock navbar)')
+    m.click('btn_select', count=900000000)
+    expect(vis(m, 'vs_card') == (0, 0) and vis(m, 'sg_bar') == (1, 1) and vis(m, 'btn_select') == (0, 0), 'a genre\'s songs: Select alone enters select mode at once, no card (no Search there, as in the stock navbar)')
+    click(m, 'btn_return')
     blits, texts, styles, fills = settle(m)
     shown = [t for t, r in texts if t in titles]
     expect(vis(m, 'sg_rail')[0] == 0 and shown == titles[:len(shown)] and len(shown) >= 4, 'a plain list in the query\'s order, no rail')
@@ -1335,8 +1518,8 @@ def lists_tests(ctx):
     calls = click(m, 'btn_shuffle')
     nav = [c for c in calls if c[0] == 'navigator_to_with_context' and c[1] == 'playing_page']
     expect(nav and nav[0][3] == gen and m.word(CI) == gen and ci_name(m) == 'Rock' and ('mclSetPlayMode', 2) in calls, 'Shuffle: this genre in the stock Shuffle mode, the record put back')
-    click(m, 'btn_select')
-    expect(all(vis(m, n) == (0, 0) for n in ('btn_search', 'btn_sort', 'btn_select', 'btn_backtoplayer')) and vis(m, 'sg_bar') == (1, 1), 'select mode as on Songs')
+    pick(m, 'select')
+    expect(all(vis(m, n) == (0, 0) for n in ('btn_select', 'btn_backtoplayer')) and vis(m, 'sg_bar') == (1, 1), 'select mode as on Songs')
     tap(m, 150, lay.row_y(0) + 30); tap(m, 150, lay.row_y(3) + 30)
     m.confirm_answer = O['CONFIRM_DELETE_LIBRARY']
     corrupt(m)
@@ -1345,9 +1528,9 @@ def lists_tests(ctx):
     expect(bd and bd[0][1] == gen and bd[0][6] == [0, 3] and [c[1] for c in calls if c[0] == 'loadLocalClassList'] == [gen] and ci_name(m) == 'Rock',
            'Delete: batch_delete_file with class 0xff09 (the generic library delete), then the genre is read again with the record put back')
     m.confirm_answer = None
-    expect(vis(m, 'btn_search') == (0, 0) and vis(m, 'btn_sort') == (0, 0) and vis(m, 'btn_select') == (1, 1) and vis(m, 'btn_backtoplayer') == (1, 1)
-           and m.props[(lt, 'w')] == O['NAV_VIEW_X'] - 58, 'leaving select mode brings back Select and Now Playing only, the title in its 156 px')
-    click(m, 'btn_select'); tap(m, 150, lay.row_y(2) + 30)
+    expect(vis(m, 'btn_select') == (1, 1) and vis(m, 'btn_backtoplayer') == (1, 1)
+           and m.props[(lt, 'w')] == O['NAV_VIEW_X'] - 58, 'leaving select mode brings back Select and Now Playing, the title in its 156 px')
+    pick(m, 'select'); tap(m, 150, lay.row_y(2) + 30)
     m.windows['m1plus_playlists'] = 0   # the stock picker (our page does not open)
     calls = click(m, 'sg_add')
     expect(('navigator_to_with_context', 'playlist_page', O['PICKER_ADD'] | gen) in calls, 'Add opens the stock playlist picker with 1 << 16 | 0xff09')
@@ -1369,9 +1552,16 @@ def lists_tests(ctx):
     nav = [c for c in m.calls if c[0] == 'navigator_to_with_context']
     expect(r == 0xffffffff and nav and nav[0][:3] == ('navigator_to_with_context', 'allmusic_page', gen) and m.word(CI) == gen and ci_name(m) == 'Rock' and ci_unknown(m) == 0
            and 'loadLocalClassList' not in m.names(), 'a window that will not open: the stock row tap\'s sequence (the record, then allmusic_page 0xff09)')
-    # the other lists keep Search and the plain Select icon
+    # the other lists: Select is a navbar button, the middle piece after Search
     m = list_machine(titles, O['CLASS_FAV']); m.call(PSYMS['songs_open_list'], a0=O['HOME_FAV'], count=900000000)
-    expect(vis(m, 'btn_search') == (1, 1) and (m.widgets['btn_select'], 'style:normal:icon') not in m.props, 'Favorites keeps Search and the middle-piece Select')
+    expect(vis(m, 'btn_select') == (1, 1) and vis(m, 'btn_more') == (0, 0) and vis(m, 'btn_search') == (1, 1) and m.props[(m.widgets['btn_select'], 'style:normal:icon')] == 'pod_nav_select',
+           'Favorites: Search at 168 (the left cap) and Select as its middle piece, no "..."')
+    pick(m, 'select')
+    expect(vis(m, 'btn_search') == (0, 0) and vis(m, 'btn_select') == (0, 0), 'select mode hides the Search button and Select')
+    m.calls = []; click(m, 'btn_search')
+    expect(not any(c[0] in ('navigator_to_with_context', 'window_open') for c in m.calls), 'a stray click on the hidden Search button in select mode opens nothing')
+    click(m, 'btn_return')
+    expect(vis(m, 'btn_search') == (1, 1) and vis(m, 'btn_select') == (1, 1), 'leaving select mode shows them again')
     m.call(PSYMS['sg_on_destroy'], count=4000000)
     # An artist's songs (Cover Flow's artist page): the 0x390 byte browsing record is the list's state
     art_cls, ci0, nci = O['CLASS_ARTIST_SONGS'], pod.DATA['CLASSINFO'][0], O['CLASSINFO_SIZE']
@@ -1392,11 +1582,16 @@ def lists_tests(ctx):
     expect(m.u.mem_read(ci0 + O['CLASSINFO_ALL_SONGS'], 1)[0] == 1 and m.word(ci0) == art_cls and m.read_cstr(ci0 + O['CLASSINFO_ARTIST']) == 'Miles Davis',
            'the record holds the all-songs flag, class 0xff11 and the artist, as the stock queries leave it')
     big, lt = m.widgets['sg_title'], m.widgets['label_title']
-    expect(m.wtext[big] == 'Miles Davis' and m.wtext[lt] == 'Miles Davis' and vis(m, 'btn_sort') == (0, 0) and ('widget_move', m.widgets['btn_search'], O['NAV_CF_X'], 0) not in m.calls,
-           'the artist is the title; no Sort')
+    expect(m.wtext[big] == 'Miles Davis' and m.wtext[lt] == 'Miles Davis', 'the artist is the title')
     cfb = m.widgets['btn_coverflow']
-    expect(vis(m, 'btn_search') == (0, 0) and vis(m, 'btn_coverflow') == (1, 1) and m.props[(lt, 'w')] == O['NAV_CF_X'] - 58,
-           'an artist\'s songs: no Search (hidden and insensitive), the Cover Flow button is the capsule\'s left cap at 168 and the title ends there')
+    mw = m.widgets['btn_select']
+    expect(vis(m, 'btn_coverflow') == (1, 1) and vis(m, 'btn_select') == (1, 1) and vis(m, 'btn_more') == (0, 0) and m.props[(lt, 'w')] == O['NAV_CF_X'] - 58
+           and m.props[(mw, 'style:normal:icon')] == m.props[(mw, 'style:over:icon')] == 'pod_nav_select' and m.props[(mw, 'style:pressed:icon')] == 'pod_nav_select_down',
+           'an artist\'s songs: the Cover Flow button is the capsule\'s left cap at 168 and the title ends there, Select is its middle piece (pod_nav_select), no "..."')
+    expect(not is_shown(m, 'btn_search'), 'an artist\'s songs: no Search button (Cover Flow has its place)')
+    m.click('btn_select', count=900000000)
+    expect(vis(m, 'vs_card') == (0, 0) and vis(m, 'sg_bar') == (1, 1) and vis(m, 'btn_select') == (0, 0) and vis(m, 'btn_coverflow') == (0, 0), 'an artist\'s songs: Select alone enters select mode at once, no card')
+    click(m, 'btn_return')
     expect((cfb, O['EVT_CLICK']) in m.bound, 'the Cover Flow button is bound')
     blits, texts, styles, fills = settle(m)
     shown = [t for t, rc in texts]
@@ -1429,13 +1624,13 @@ def lists_tests(ctx):
     click(m, 'btn_return')
     expect(backs(m) == 1 and m.stack == [0x999], 'Back with another window under this page (no covers page) closes only this page')
     m.cf_page = None; m.stack = None; m.calls = []
-    click(m, 'btn_select')
-    expect(vis(m, 'btn_coverflow') == (0, 0) and vis(m, 'btn_search') == (0, 0), 'select mode hides the Cover Flow button')
+    pick(m, 'select')
+    expect(vis(m, 'btn_coverflow') == (0, 0) and vis(m, 'btn_select') == (0, 0), 'select mode hides the Cover Flow button and Select')
     click(m, 'btn_coverflow')
     expect(backs(m) == 0, 'a stray click on the hidden Cover Flow button in select mode does nothing')
     click(m, 'btn_return')
-    expect(vis(m, 'btn_coverflow') == (1, 1) and vis(m, 'btn_search') == (0, 0) and backs(m) == 0, 'leaving select mode shows the Cover Flow button again, still no Search')
-    click(m, 'btn_select'); tap(m, 150, lay.row_y(0) + 30); tap(m, 150, lay.row_y(3) + 30)
+    expect(vis(m, 'btn_coverflow') == (1, 1) and vis(m, 'btn_select') == (1, 1) and backs(m) == 0, 'leaving select mode shows the Cover Flow button and Select again')
+    pick(m, 'select'); tap(m, 150, lay.row_y(0) + 30); tap(m, 150, lay.row_y(3) + 30)
     m.confirm_answer = O['CONFIRM_DELETE_LIBRARY']
     m.u.mem_write(ci0, b'\xaa' * nci)
     calls = click(m, 'sg_del')
@@ -1443,7 +1638,7 @@ def lists_tests(ctx):
     expect(bd and bd[0][1] == art_cls and bd[0][6] == [0, 3] and [c[1] for c in calls if c[0] == 'loadLocalClassList'] == [art_cls],
            'Delete: batch_delete_file with class 0xff11, then the list is read again')
     m.confirm_answer = None
-    click(m, 'btn_select'); tap(m, 150, lay.row_y(2) + 30)
+    pick(m, 'select'); tap(m, 150, lay.row_y(2) + 30)
     m.windows['m1plus_playlists'] = 0   # the stock picker (our page does not open)
     calls = click(m, 'sg_add')
     expect(('navigator_to_with_context', 'playlist_page', O['PICKER_ADD'] | art_cls) in calls, 'Add opens the playlist picker with class 0xff11')

@@ -3,7 +3,7 @@
 widgets tools/pod_ui.py build_cards_page made from the numbers of tools/pod_settings.py (shared with the tests), with the font, images and navbar of the tree. A value takes the room its text
 needs and the row's label gets the rest, as patch/m1plus.c value_fit does. Approximate (PIL, not AWTK); the sample state (values, switches, checks) is what a typical device shows.
 
-  out/preview/settings-mock-3.png   Settings (first screen and whole list), Home Screen, Library, Album Order, Now Playing, Theme, Developer, Keyboards, About
+  out/preview/settings-mock-3.png   Settings (first screen and whole list), Home Screen, Library, Now Playing, Theme, Developer, Keyboards, About
 
 Usage: uv run python -I tools/preview_settings.py WORKDIR [OUT.png]     (en_US; WORKDIR e.g. work/mod-release after a build)
 """
@@ -22,8 +22,7 @@ STATE = {
     'm1plus_background': {'shown': {'pod_check1'}},
     'm1plus_accent': {'shown': {'pod_check0'}},
     'm1plus_homeset': {'switches': {'pod_switch0': True, 'pod_switch1': True}},
-    'm1plus_library': {'values': {'pod_value1': 'Artist'}, 'switches': {'pod_switch2': False}},
-    'm1plus_albumorder': {'shown': {'pod_check0'}},
+    'm1plus_library': {'switches': {'pod_switch2': False}},
     'm1plus_npset': {'values': {'pod_value0': 'Chrome'}},
     'm1plus_tapetheme': {'shown': {'pod_check1'}},
     'm1plus_developer': {'switches': {'pod_switch0': True}},
@@ -148,7 +147,6 @@ def main():
            ('Settings, whole list (red = screen bottom)', draw_page(s, 'm1plus_settings', full=True)),
            ('Settings > Home Screen', draw_page(s, 'm1plus_homeset')),
            ('Settings > Library', draw_page(s, 'm1plus_library')),
-           ('Settings > Library > Album Order', draw_page(s, 'm1plus_albumorder')),
            ('Settings > Now Playing', draw_page(s, 'm1plus_npset')),
            ('Settings > Now Playing > Theme', draw_page(s, 'm1plus_tapetheme')),
            ('Settings > Developer', draw_page(s, 'm1plus_developer')),

@@ -93,11 +93,19 @@ const char **cc_name_keys(
 void cc_heapsort(unsigned *v, unsigned n,
                  int (*cmp)(unsigned,
                             unsigned)); /* in place, no memory; cmp must be total (break ties by the row number) */
-int cc_sort_artist(void); /* the setting: 1 Artist (default), 0 Album */
-int cc_sort_set(
-    int artist); /* set it (1 Artist, 0 Album), saved atomically; the state, or -1 when it could not be saved (and the setting is unchanged) */
+#define CC_SORT_TITLE 0 /* the Albums page's orders (cc_sort_mode, ALBUMS_SORT_FILE) */
+#define CC_SORT_ARTIST 1
+#define CC_SORT_RECENT 2
+#define CC_SORT_YEAR 3
+#define CC_SORT_MODES 4
+int cc_sort_mode(void); /* the saved order, 0..3; Artist when there is no valid file (the retired album-order file is moved into it once first) */
+int cc_sort_rev(void); /* 1 when the saved order is in its other direction (Z-A, Oldest First); 0 for the default direction and for no valid file */
+int cc_sort_mode_set(int mode, int rev); /* save it atomically; the mode, or -1 when it could not be saved (and the setting is unchanged) */
 unsigned *cc_album_order(
-    void *albums); /* heap array of the rows in display order; NULL = stock order (Album mode, or no memory) */
+    void *albums); /* heap array of the rows in display order for cc_sort_mode (Recently Added and Year read the whole song list once); NULL = stock order (Title, or no memory / no songs) */
+int cc_scoped_sort(void); /* cc_sort_mode for one artist's albums: Artist shows as Title (the stock order); its direction is cc_sort_rev */
+unsigned *cc_album_order_mode(void *albums, int mode, int rev); /* cc_album_order for the given CC_SORT_* and direction instead of the saved ones; NULL for Title in its default direction; "Unknown Album" and the All Songs row stay last */
+unsigned *cc_album_years(void *albums, void *songs); /* one artist's albums' years: per row of `albums` the earliest year tag (1000..2999) among the songs of `songs` that name that album (the Year order's rule), 0 = none; heap, NULL without memory */
 void *cc_row(void *albums, const unsigned *order, unsigned i); /* display row i of the list */
 void *cc_playing(void); /* the stSongInfo of the track the player is on, NULL if nothing is queued */
 

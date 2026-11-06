@@ -52,9 +52,8 @@ OFFSETS = _offsets()
 # The navbar toggle of the Pod pages (Albums grid, Artists), flush left of Now Playing (x 260): a plain white glyph
 # showing the view a tap switches to (the Albums page swaps the glyph with its mode, as the Artists page does).
 NAV_VIEW_X, NAV_VIEW_W = 214, 46     # patch/offsets.inc NAV_VIEW_X, NAV_VIEW_W: main's slots (docs/modules/navbar.md); the glass capsule's pieces are cut to them (docs/modules/navbar.md)
-NAV_VIEW_ICON = {'list': 'pod_nav_list', 'grid': 'pod_nav_grid',
-                 'artist': 'pod_nav_albumartist'}   # images added by tools/mod_icons.py (glass pieces); artist: built in Artist mode, so the Album Artist glyph
-TOGGLE_NAME = {'list': 'btn_albumview', 'grid': 'btn_albumview', 'artist': 'btn_artisttype'}
+NAV_VIEW_ICON = {'list': 'pod_nav_list', 'grid': 'pod_nav_grid'}   # images added by tools/mod_icons.py (glass pieces)
+TOGGLE_NAME = {'list': 'btn_albumview', 'grid': 'btn_albumview'}
 # The Albums page's Cover Flow button, flush left of the toggle: the capsule's left cap.
 NAV_CF_W = NAV_VIEW_W
 NAV_CF_X = NAV_VIEW_X - NAV_CF_W     # 168; patch/offsets.inc NAV_CF_X, NAV_CF_W
@@ -79,23 +78,22 @@ def nav_fade(shown=True):
     return w
 
 
-SONGS_BUTTONS = (('btn_search', 'pod_nav_search', 122), ('btn_sort', 'pod_nav_songsort', 168), ('btn_select', 'pod_nav_select', 214))   # the Songs page's capsule, the stock Songs page's order: Search, Sort, Select, then Now Playing
-NAV_SEARCH_X = SONGS_BUTTONS[0][2]
+ALBUMS_BUTTONS = (('btn_coverflow', 'pod_nav_coverflow', 168), ('btn_more', 'pod_nav_moremid', 214))   # the Albums page's capsule: Cover Flow (left cap), "..." (middle), then Now Playing (the Songs page's slots 168 / 214 / 260)
 
 
 NAV_SETTINGS_ICON = 'pod_nav_settings'   # the Extras page's Settings button: the capsule's left cap on the 214 slot (tools/mod_icons.py)
 
 
-def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, songs=False, settings=False, select=False, show_more=False, show_globe=False):
+def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, songs=False, settings=False, show_more=False, show_globe=False, albums=False, more_left=False, plactions=False):
     nb = Widget('view', 0, 0, SCREEN_W, NAVBAR_H, [('name', 'navigationbar_view')])
     # a title runs under a toggle's button no further than the button's left edge
-    right = NAV_SEARCH_X if songs else NAV_CF_X if coverflow or more else NAV_VIEW_X if toggle or settings or select or show_more else NAV_TITLE_END
+    right = NAV_CF_X if songs or plactions or coverflow or more or albums else NAV_VIEW_X if toggle or settings or show_more or more_left else NAV_TITLE_END
     lbl = Widget('label', NAV_TITLE_X, 14, right - NAV_TITLE_X, 22,
                  [('name', 'label_title'), ('style', 'navbar_label_white'), ('length', '31'), pod_i18n.text_prop(title)])
     ret = Widget('button', NAV_BACK_X, 0, NAV_BACK_W, NAVBAR_H, [
         ('name', 'btn_return'), ('enable', 'true'), ('style', 'img_btn_style'),
         ('style:over:icon', 'ah_nav_back'), ('style:normal:icon', 'ah_nav_back'), ('style:pressed:icon', 'ah_nav_back_down')])
-    img = 'ah_nav_play' if toggle or coverflow or more or songs or settings else 'ah_nav_np'   # a toggle / button makes Now Playing the capsule's right cap; else a disc
+    img = 'ah_nav_play' if toggle or coverflow or more or songs or plactions or settings or albums or more_left else 'ah_nav_np'   # a toggle / button makes Now Playing the capsule's right cap; else a disc
     player = Widget('button', NAV_PLAY_X, 0, NAV_PLAY_W, NAVBAR_H, [
         ('name', 'btn_backtoplayer'), ('enable', 'true'), ('style', 'img_btn_style'),
         ('style:pressed:icon', img + '_down'), ('style:normal:icon', img), ('style:over:icon', img)])
@@ -109,15 +107,20 @@ def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, 
         nb.children.append(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
             ('name', 'btn_settings'), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', NAV_SETTINGS_ICON + '_down'), ('style:normal:icon', NAV_SETTINGS_ICON), ('style:over:icon', NAV_SETTINGS_ICON)]))
-    if select:   # the Folders page's Select button (patch/folders.c shows it, as the capsule's left cap, below the root)
-        nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
-            ('name', 'btn_select'), ('enable', 'true'), ('style', 'img_btn_style'),
-            ('style:pressed:icon', 'pod_nav_selectl_down'), ('style:normal:icon', 'pod_nav_selectl'), ('style:over:icon', 'pod_nav_selectl')])))
     if show_more:   # the Podcasts page's "..." (opens a bottom sheet): the capsule's left cap on the 214 slot, shown on the Show level and on the Shows level when Import is possible (patch/podcasts.c)
         nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
             ('name', 'btn_more'), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', 'pod_nav_more_down'), ('style:normal:icon', 'pod_nav_more'), ('style:over:icon', 'pod_nav_more')])))
-    if show_globe:   # the Podcasts page's globe (Apple Podcasts search, only while Podcast Discover is on in Settings) and the Radio page's left cap (renamed btn_search by its builder: the magnifier): the capsule's left cap, on the 214 slot beside Now Playing (patch/podcasts.c pg_nav moves the globe left of the "...")
+    if more_left:   # the Artists page's "...": the capsule's left cap on the 214 slot, shown always (its card holds Search, the Artist / Album Artist rows and the order; patch/artists.c)
+        mid = 'pod_nav_moremid' if plactions else 'pod_nav_more'   # (the Playlists page: the list-plus button is the left cap and the "..." the middle piece)
+        nb.children.append(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
+            ('name', 'btn_more'), ('enable', 'true'), ('style', 'img_btn_style'),
+            ('style:pressed:icon', mid + '_down'), ('style:normal:icon', mid), ('style:over:icon', mid)]))
+    if plactions:   # the Playlists page's list-plus button (patch/playlists.c): the capsule's left cap on the Albums page's Cover Flow slot (NAV_CF_X), opening the actions card
+        nb.children.append(Widget('button', NAV_CF_X, 0, NAV_CF_W, NAVBAR_H, [
+            ('name', 'btn_plactions'), ('enable', 'true'), ('style', 'img_btn_style'),
+            ('style:pressed:icon', 'pod_nav_listplus_down'), ('style:normal:icon', 'pod_nav_listplus'), ('style:over:icon', 'pod_nav_listplus')]))
+    if show_globe:   # the Podcasts page's globe (Apple Podcasts search, only while Podcast Discover is on in Settings): the capsule's left cap, on the 168 slot with the "..." as its middle piece, or on the 214 slot beside Now Playing alone (patch/podcasts.c pg_nav moves it)
         nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
             ('name', 'btn_globe'), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', 'pod_nav_globe_down'), ('style:normal:icon', 'pod_nav_globe'), ('style:over:icon', 'pod_nav_globe')])))
@@ -129,19 +132,27 @@ def navbar(title, toggle=None, coverflow=False, artist_songs=False, more=False, 
         nb.children.append(Widget('button', NAV_CF_X, 0, NAV_CF_W, NAVBAR_H, [
             ('name', 'btn_more'), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', 'pod_nav_more_down'), ('style:normal:icon', 'pod_nav_more'), ('style:over:icon', 'pod_nav_more')]))
-    if songs:   # Search, Sort, Select: three pieces of the capsule that ends in Now Playing (x 131 .. 311, glass; docs/modules/navbar.md)
-        for name, icon, x in SONGS_BUTTONS:
+    if albums:   # the Albums page's capsule: Cover Flow 168 (left cap), "..." 214 (middle), Now Playing 260; Search and the grid / list switch are rows of the "..." card (patch/albums.c, docs/modules/albums.md)
+        for name, icon, x in ALBUMS_BUTTONS:
             nb.children.append(Widget('button', x, 0, NAV_VIEW_W, NAVBAR_H, [
                 ('name', name), ('enable', 'true'), ('style', 'img_btn_style'),
                 ('style:pressed:icon', icon + '_down'), ('style:normal:icon', icon), ('style:over:icon', icon)]))
-    if songs:   # the artist's songs list (patch/songs.c shows it there only): the Cover Flow button, the capsule's left cap on Search's list slot (the Albums page's, NAV_CF_X); the toggle back to the covers
+    if songs:   # the "..." (its card holds Select, Recently Added's Albums / Songs and the library's sort rows; patch/songs.c): the capsule's left cap on 214, a middle piece where Search (the lists that search) or Cover Flow (an artist's songs) is the left cap
+        nb.children.append(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
+            ('name', 'btn_more'), ('enable', 'true'), ('style', 'img_btn_style'),
+            ('style:pressed:icon', 'pod_nav_more_down'), ('style:normal:icon', 'pod_nav_more'), ('style:over:icon', 'pod_nav_more')]))
+    if songs:   # Select (patch/songs.c shows it instead of the "..." on the lists whose card would hold Select alone): the capsule's left cap on 214, a middle piece where Search or Cover Flow is the left cap; it enters select mode at once
+        nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
+            ('name', 'btn_select'), ('enable', 'true'), ('style', 'img_btn_style'),
+            ('style:pressed:icon', 'pod_nav_selectl_down'), ('style:normal:icon', 'pod_nav_selectl'), ('style:over:icon', 'pod_nav_selectl')])))
+    if songs:   # the artist's songs list (patch/songs.c shows it there only): the Cover Flow button, the capsule's left cap on the Albums page's slot (NAV_CF_X), back to the covers
         nb.children.append(hidden(Widget('button', NAV_CF_X, 0, NAV_CF_W, NAVBAR_H, [
             ('name', 'btn_coverflow'), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', NAV_CF_ICON + '_down'), ('style:normal:icon', NAV_CF_ICON), ('style:over:icon', NAV_CF_ICON)])))
-    if songs:   # Recently Added's songs / albums toggle (patch/songs.c shows it there only; docs/modules/recent-albums.md): the Albums page's slot 214 and glyph, the capsule's third middle piece
-        nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [
-            ('name', TOGGLE_NAME['grid']), ('enable', 'true'), ('style', 'img_btn_style'),
-            ('style:pressed:icon', 'pod_nav_grid_down'), ('style:normal:icon', 'pod_nav_grid'), ('style:over:icon', 'pod_nav_grid')])))
+    if songs:   # Search (patch/songs.c shows it on every list but a genre's and an artist's songs): the capsule's left cap on the Albums page's Cover Flow slot (NAV_CF_X), the same scoped search the card's row used to open
+        nb.children.append(hidden(Widget('button', NAV_CF_X, 0, NAV_CF_W, NAVBAR_H, [
+            ('name', 'btn_search'), ('enable', 'true'), ('style', 'img_btn_style'),
+            ('style:pressed:icon', 'pod_nav_search_down'), ('style:normal:icon', 'pod_nav_search'), ('style:over:icon', 'pod_nav_search')])))
     if artist_songs:   # Cover Flow's artist page (patch/coverflow.c shows it, makes Now Playing the right cap, and shortens the title, only there)
         nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [   # the capsule's left cap: opens our Songs page on the artist's songs
             ('name', 'btn_songs'), ('enable', 'true'), ('style', 'img_btn_style'),
@@ -166,7 +177,7 @@ def switch_image(name, w, h, on):
         ('name', name), ('image', 'sset_on' if on else 'sset_off'), ('draw_type', 'default'), ('sensitive', 'false')])
 
 
-VALUE_W, VALUE_PX = 110, 19                      # a value row's grey value (Settings > Library > Album Order): right aligned, 12 px margin
+VALUE_W, VALUE_PX = 110, 19                      # a value row's grey value (Settings > System > Appearance > Background): right aligned, 12 px margin
 
 
 def value_x(w): return w - SWITCH_MARGIN - VALUE_W
@@ -328,10 +339,12 @@ GRID_ALBUM_PX, GRID_ARTIST_PX = 18, 15   # the grid's album / artist text under 
 LIST_TITLE_PX, LIST_SUB_PX = 21, 18   # the list mode's album / artist text (the library rows': 21 px white, 18 px #AAAAAA)
 
 
-def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview', 'albums_scrollview'), more=False):
+def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview', 'albums_scrollview'), more=False, albums=False, more_left=False, plactions=False):
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
-    root.children.append(navbar(page.title, toggle=toggle, coverflow=coverflow, more=more))
+    nb = navbar(page.title, toggle=toggle, coverflow=coverflow, more=more, albums=albums, more_left=more_left, plactions=plactions)
+    if albums: nb.children[0].set('visible', 'false')   # the small title: the payload shows it once the large title has scrolled away
+    root.children.append(nb)
     lv = stock_list([], True)   # the library lists' structure: list_view > scroll_view 310 wide + scroll_bar_m. The mobile bar is not decoration: the list_view layouter makes the scroll_view yslidable only for it (0x60b1c8), scroll_view_create leaves it 0
     lv.set('name', names[0])
     sv = lv.children[0]
@@ -342,6 +355,15 @@ def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview
     styled(grid, ('normal',), 'font_size', str(GRID_TITLE_PX))
     styled(grid, ('normal',), 'text_align_h', 'left')
     styled(grid, ('normal',), 'text_align_v', 'middle')
+    if albums:   # the large title, the first thing in the content (the Songs and Artists pages' label): it scrolls away and the navbar's small title takes over
+        o = OFFSETS
+        title = Widget('label', o['SG_TITLE_X'], 0, o['SG_TITLE_W'], o['SG_TITLE_H'], [('name', 'al_title'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])
+        styled(title, ('normal',), 'text_color', '#FFFFFF')
+        styled(title, ('normal',), 'font_size', str(SG_TITLE_PX))
+        styled(title, ('normal',), 'text_align_h', 'left')
+        styled(title, ('normal',), 'text_align_v', 'middle')
+        grid.children = [title, hidden(sg_pill('btn_play', o['AL_PLAY_X'], o['SG_PILL_Y'], 'Play', 'sg_play', w=o['AL_PLAY_W'], down=SG_PILL_PRESS_RGB)),   # an artist's page shows the pills (patch/albums.c); the library's keeps them hidden
+                         hidden(sg_pill('btn_shuffle', o['AL_SHUFFLE_X'], o['SG_PILL_Y'], 'Shuffle', 'sg_shuffle', w=o['AL_SHUFFLE_W'], down=SG_PILL_PRESS_RGB))]
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/albums.c / playlists.c show it while yoffset > 0
@@ -352,6 +374,8 @@ def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview
         lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
         styled(lab, ('normal',), 'text_align_v', 'middle')
         root.children.append(lab)
+    if albums:
+        root.children.extend(view_sort_card())   # last: above everything
     return root
 
 
@@ -578,58 +602,26 @@ def podcasts_dialog(prefix='pod_pd', title='Refreshing Podcasts', big=False):
 
 
 # The Playlists page (patch/playlists.c): the Albums grid's structure (a stock list holding the one content view that paints the cells) under a navbar
-# with a "..." button at the toggle's place, and the popup menu: a full-window scrim (a tap outside closes it; it dims the page as Now Playing's
-# More sheet's highlighter does) and a card under the button in that sheet's glass (pl_glass: tools/mod_icons.py, all four corners rounded, drawn
-# patch3_x so the payload can narrow the card to the language: the image's middle third stretches, its gradient is vertical only) of PL_ROW_H rows
-# filling it, each a button (transparent, the sheet's 6 % white pressed, its 13 % white hairline above every row but the first) with a 20 px glyph
-# (tools/mod_icons.py PL_MENU_ICONS) and its label, as the sheet's rows. All of it starts hidden and insensitive; the payload shows the scrim and
-# the card together.
+# "..." | Now Playing (the Songs and Artists capsule). Its "..." card is the shared view-sort card (view_sort_card below, patch/viewsort.c): the four page
+# actions (New Playlist, Import, Export, Delete Playlists: slots 6..9), the View group (Grid, List) and Name. Everything starts hidden and insensitive.
 STATES = ('normal', 'pressed', 'over', 'focused', 'disable', 'selected')
-PL_CARD_RIGHT, PL_CARD_Y, PL_ROW_H, PL_CARD_R, PL_ICON_X, PL_TEXT_X, PL_TEXT_R, PL_CARD_MIN, PL_CARD_MAX = (OFFSETS[k] for k in (
-    'PL_CARD_RIGHT', 'PL_CARD_Y', 'PL_ROW_H', 'PL_CARD_R', 'PL_ICON_X', 'PL_TEXT_X', 'PL_TEXT_R', 'PL_CARD_MIN', 'PL_CARD_MAX'))
-PL_CARD_H = OFFSETS['PL_MENU_ROWS'] * PL_ROW_H
+PL_CARD_RIGHT, PL_CARD_Y, PL_ROW_H, PL_CARD_R, PL_CARD_MAX = (OFFSETS[k] for k in (
+    'PL_CARD_RIGHT', 'PL_CARD_Y', 'PL_ROW_H', 'PL_CARD_R', 'PL_CARD_MAX'))
+PL_CARD_H = OFFSETS['PL_MENU_ROWS'] * PL_ROW_H   # the pl_glass card of the dialogs that borrow it (pcdialog)
 PL_LABEL_PX = 18
 PL_GLASS = 'pl_glass'
 PL_DIM = '#00000082'          # the sheet's highlight="default(alpha=130)" (tools/mod_lists.py edit_playmore)
 PL_PRESSED, PL_HAIR = '#FFFFFF10', '#FFFFFF22'   # the sheet's rows (tools/mod_lists.py PM_PRESSED, PM_HAIR)
 
 
-def playlist_menu():
-    """(scrim, card): the popup menu of the Playlists page, the card at its widest (PL_CARD_MAX); the payload narrows it."""
-    assert len(pod_pages.PLAYLIST_MENU) == OFFSETS['PL_MENU_ROWS']
-    scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', 'pl_scrim'), ('enable', 'true')]))
-    for st in STATES:
-        styled(scrim, (st,), 'bg_color', PL_DIM)
-        styled(scrim, (st,), 'text_color', '#FFFFFF')
-        styled(scrim, (st,), 'border_width', '0')
-        styled(scrim, (st,), 'border_color', '#00000000')
-    card = hidden(Widget('view', PL_CARD_RIGHT - PL_CARD_MAX, PL_CARD_Y, PL_CARD_MAX, PL_CARD_H, [('name', 'pl_card')]))
-    for st in STATES:
-        styled(card, (st,), 'bg_color', '#00000000')
-        styled(card, (st,), 'bg_image', PL_GLASS)
-        styled(card, (st,), 'bg_image_draw_type', 'patch3_x')
-        styled(card, (st,), 'border_width', '0')
-    from mod_icons import PL_MENU_ICONS, PL_MENU_PX as PL_ICON
-    for i, (text, (icon, _)) in enumerate(zip(pod_pages.PLAYLIST_MENU, PL_MENU_ICONS)):
-        item = Widget('button', 0, i * PL_ROW_H, PL_CARD_MAX, PL_ROW_H, [('name', f'pl_item{i}'), ('enable', 'true')])
-        for st in STATES:
-            styled(item, (st,), 'bg_color', PL_PRESSED if st == 'pressed' else '#00000000')
-            styled(item, (st,), 'text_color', '#FFFFFF')
-            styled(item, (st,), 'border', 'top' if i else 'none')
-            styled(item, (st,), 'border_width', '1' if i else '0')
-            styled(item, (st,), 'border_color', PL_HAIR if i else '#00000000')
-        item.children.append(Widget('image', PL_ICON_X, (PL_ROW_H - PL_ICON) // 2, PL_ICON, PL_ICON, [
-            ('name', f'pl_icon{i}'), ('draw_type', 'default'), ('image', icon), ('sensitive', 'false')]))
-        lab = Widget('hscroll_label', PL_TEXT_X, 0, PL_CARD_MAX - PL_TEXT_X - PL_TEXT_R, PL_ROW_H, [
-            ('name', f'pl_label{i}'), pod_i18n.text_prop(text), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
-        for st in ('normal', 'disable', 'focused'):
-            styled(lab, (st,), 'font_size', str(PL_LABEL_PX))
-            styled(lab, (st,), 'text_color', '#FFFFFF')
-            styled(lab, (st,), 'text_align_h', 'left')
-            styled(lab, (st,), 'text_align_v', 'middle')
-        item.children.append(lab)
-        card.children.append(item)
-    return scrim, card
+def build_playlists_page(page):
+    from mod_icons import PL_MENU_ICONS
+    root = build_grid_page(page, toggle=None, coverflow=False, more_left=True, plactions=True, names=('playlists_listview', 'playlists_scrollview'))
+    root.children[0].children.append(selall_button())   # the navbar's select mode text (the card's Delete Playlists starts select mode: patch/playlists.c)
+    root.children.append(select_bar('pl_bar', 'pl_bar_line', [('pl_del', OFFSETS['SG_PILL_X0'], 'Delete', 'sg_trash', OFFSETS['PL_BAR_PILL_W'])]))
+    root.children.extend(view_sort_card(sort_keys=('Name',) * len(VS_SORT_KEYS), act_keys=pod_pages.PLAYLIST_MENU, act_glyphs=[n for n, _ in PL_MENU_ICONS]))   # last: above the list, the bar and the navbar
+    return root
+
 
 
 RM_KEYS = ('Play Next', 'Play After', 'Add to Playlist', 'Favorite', 'Get Info')   # the track rows' "..." menu (patch/rowmenu.c): the rows in order, each with its glyph (tools/mod_icons.py RM_MENU_ICONS)
@@ -680,14 +672,6 @@ def row_menu():
     return scrim, card
 
 
-def build_playlists_page(page):
-    root = build_grid_page(page, toggle='list', coverflow=False, more=True, names=('playlists_listview', 'playlists_scrollview'))
-    root.children[0].children.append(selall_button())   # the navbar's select mode text (the menu's Delete Playlists starts select mode: patch/playlists.c)
-    root.children.append(select_bar('pl_bar', 'pl_bar_line', [('pl_del', OFFSETS['SG_PILL_X0'], 'Delete', 'sg_trash', OFFSETS['PL_BAR_PILL_W'])]))
-    root.children.extend(playlist_menu())   # last: above the list, the bar and the navbar
-    return root
-
-
 # The Songs page (patch/songs.c, docs/modules/songs.md): the Albums structure (a stock list holding the one content view that paints the rows, headers and
 # pinned header itself) under the glass navbar (Back, the small title, Search / Sort / Select / Now Playing), with the page's own widgets: in the content view the
 # large title and the Play / Shuffle pills (real flat buttons: they scroll with the list); over the list the rail (a view of its own, outside the scroll_view, so a
@@ -697,7 +681,6 @@ SG_TITLE_PX, SG_HDR_PX, SG_RAIL_PX, SG_BUBBLE_PX, SG_PILL_PX = 32, 20, 12, 56, 1
 SG_PILL_RGB, SG_PILL_DOWN_RGB, SG_PILL_OFF_RGB = '#1E1E1E', '#333333', '#141414'   # flat: no glass
 SG_PILL_PRESS_RGB = '#333335'   # the Play / Shuffle pills pressed: palette.ROLE_PRESS_PILL, one blue level off #333333 so the accent can find it (the select bars' pills keep #333333)
 SG_FOOT_RGB = '#9C9C9C'   # the song count under the last row: the album page's meta line colour (mod_ipodrows.META_COLOR)
-SG_CARD_ROWS = len(pod_pages.SORT_MENU)
 
 
 RAIL_INK_MIN = 64   # a pixel is "ink" from 25 % coverage up (the antialiased fringe of the outline's bbox is not)
@@ -734,12 +717,6 @@ def rail_metrics(font_path):
         if abs(e - d) > 0.5: d += 1 if e > 0 else -1
         dx.append(d)
     return ink2, dx
-# the sort card: flat (the toolbar alone is glass), the Playlists menu's rhythm (PL_ROW_H rows, no padding, right edge PL_CARD_RIGHT, y PL_CARD_Y, radius PL_CARD_R)
-SG_CARD_W, SG_LABEL_X = 268, 16
-SG_CARD_X = PL_CARD_RIGHT - SG_CARD_W
-SG_CARD_H = SG_CARD_ROWS * PL_ROW_H
-SG_TICK_W = 18
-SG_GLASS = 'sg_glass'    # the card's glass: the Playlists card's pane, 250 px high (tools/mod_icons.py GLASS_SORT)
 SG_SELALL_X, SG_SELALL_W = 208, 104     # the select mode's "Select All" text, right aligned to a 8 px margin
 
 
@@ -758,40 +735,83 @@ def sg_pill(name, x, y, text, icon, ink='#FFFFFF', w=None, down=SG_PILL_DOWN_RGB
     return b
 
 
-def sort_card():
-    """(scrim, card): the sort order card under the Sort button, in the Playlists menu's glass (sg_glass, patch3_x, scrim, pressed fill and hairlines of playlist_menu; PL_ROW_H rows, no padding):
-    the five stock labels and, at the right of each, the tick image that is shown on the current order."""
-    scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', 'sg_scrim'), ('enable', 'true')]))
+VS_SORT_KEYS = ('Title', 'Artist', 'Recently Added', 'Year')   # the Albums "..." card's sort rows in order (patch/covercache.h CC_SORT_*)
+VS_VIEW_KEYS = ('Grid', 'List')                                  # the View group's rows (slots 4 and 5), shown above the sorts
+VS_SEARCH_KEY = 'Search Albums'                                  # the optional first row (slot 6, with a search glyph and no tick), above the View group
+VS_ROW_H, VS_TICK_X, VS_TICK_W, VS_GLYPH, VS_GLYPH_X, VS_LABEL_X, VS_LABEL_X_GLYPH = (OFFSETS[k] for k in (   # patch/offsets.inc: a tick column at x 14 (14 px), a glyph 10 px after it, the labels after the glyph
+    'VS_ROW_H', 'VS_TICK_X', 'VS_TICK_W', 'VS_GLYPH', 'VS_GLYPH_X', 'VS_LABEL_X', 'VS_LABEL_X_GLYPH'))
+VS_CARD_H = (len(VS_SORT_KEYS) + len(VS_VIEW_KEYS) + 1) * VS_ROW_H   # = mod_icons.GLASS_VIEWSORT's height (the six-row glass for a card one row short is the payload's choice, vs_glass6)
+VS_SUB_PX, VS_SUB_Y, VS_SUB_H = 15, 24, 22   # a ticked sort row's second line (the direction): 15 px grey, y 24..46; its label then sits at y 4..26
+
+
+def view_sort_card(sort_keys=VS_SORT_KEYS, view_keys=VS_VIEW_KEYS, search_key=VS_SEARCH_KEY, view_glyphs=('pod_ic_vsgrid', 'pod_ic_vslist'), select_key='Select', act_keys=None, act_glyphs=None):
+    """(scrim, card): the "..." card of the pages with a sort order and a grid / list view (patch/viewsort.c; the Albums page first, docs/modules/albums.md), an Apple-style grouped menu in its own
+    glass (vs_glass7, patch3_x): the Search Albums row, then the View group (Grid, List, each with its glyph; a tick on the current view) above the Sort group (Title, Artist, Recently Added, Year; a tick on the current one and,
+    under its label, a 15 px grey line with the direction), seven 48 px rows, 13 % white hairlines between the groups (above the first sort row: that row's top border; under the Search row:
+    the vs_hair widget, which the payload hides with the row), pressed 6 % white. Widget slots: the sorts are vs_item0..3, Grid vs_item4, List vs_item5, Search vs_item6 (laid out Search,
+    Grid, List, then the sorts; Search has a glyph and no tick). The card is at its widest (PL_CARD_MAX); the payload narrows it to the language. The Albums page's texts are the defaults; the Artists page
+    (patch/artists.c) gives its own: Name for the sort (a card offers the first sort rows it needs and hides the rest), Artists / Album Artists as the two view rows (the Show group) and Search Artists.
+    The Playlists page (patch/playlists.c) gives four action rows instead of Search and Select (act_keys, with the glyph image names act_glyphs): slots 6..9, vs_item8 / 9 exist only then."""
+    from mod_icons import GLASS_VIEWSORT
+    assert VS_CARD_H == GLASS_VIEWSORT[1]
+    scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', 'vs_scrim'), ('enable', 'true')]))
     for st in STATES:
         styled(scrim, (st,), 'bg_color', PL_DIM)
         styled(scrim, (st,), 'text_color', '#FFFFFF')
         styled(scrim, (st,), 'border_width', '0')
         styled(scrim, (st,), 'border_color', '#00000000')
-    card = hidden(Widget('view', SG_CARD_X, PL_CARD_Y, SG_CARD_W, SG_CARD_H, [('name', 'sg_card')]))
+    card = hidden(Widget('view', PL_CARD_RIGHT - PL_CARD_MAX, PL_CARD_Y, PL_CARD_MAX, VS_CARD_H, [('name', 'vs_card')]))
     for st in STATES:
         styled(card, (st,), 'bg_color', '#00000000')
-        styled(card, (st,), 'bg_image', SG_GLASS)
+        styled(card, (st,), 'bg_image', 'vs_glass7')
         styled(card, (st,), 'bg_image_draw_type', 'patch3_x')
         styled(card, (st,), 'border_width', '0')
-    for i, key in enumerate(pod_pages.SORT_MENU):
-        item = Widget('button', 0, i * PL_ROW_H, SG_CARD_W, PL_ROW_H, [('name', f'sg_item{i}'), ('enable', 'true')])
+    acts = tuple(act_keys) if act_keys else (search_key, select_key)
+    act_gl = tuple(act_glyphs) if act_glyphs else ('pod_ic_vssearch', 'pod_ic_vsselect')
+    assert len(acts) == len(act_gl) and len(acts) in (2, 4)
+    keys = tuple(sort_keys) + tuple(view_keys) + acts
+    assert len(sort_keys) == len(VS_SORT_KEYS) and len(view_keys) == len(VS_VIEW_KEYS)
+    slots = (6, 7, 8, 9)[:len(acts)] + (4, 5, 0, 1, 2, 3)   # the actions, Grid, List, Title, Artist, Recently Added, Year: the payload packs the rows a page offers (the asset is seven rows high, Select shares Grid's place until then)
+    where = {6: 0, 7: 1, 4: 1, 5: 2, 0: 3, 1: 4, 2: 5, 3: 6} if len(acts) == 2 else {6: 0, 7: 1, 8: 2, 9: 3, 4: 4, 5: 5, 0: 6, 1: 6, 2: 6, 3: 6}   # (four actions, two views and one sort fill the seven rows; the other sort rows share the last)
+    for slot in slots:
+        pos = where[slot]
+        key, y, glyph = keys[slot], pos * VS_ROW_H, slot >= len(VS_SORT_KEYS)
+        hair = slot == 0   # the one 13 % hairline: between the groups
+        item = Widget('button', 0, y, PL_CARD_MAX, VS_ROW_H, [('name', f'vs_item{slot}'), ('enable', 'true')])
         for st in STATES:
             styled(item, (st,), 'bg_color', PL_PRESSED if st == 'pressed' else '#00000000')
             styled(item, (st,), 'text_color', '#FFFFFF')
-            styled(item, (st,), 'border', 'top' if i else 'none')
-            styled(item, (st,), 'border_width', '1' if i else '0')
-            styled(item, (st,), 'border_color', PL_HAIR if i else '#00000000')
-        lab = Widget('hscroll_label', SG_LABEL_X, 0, SG_CARD_W - 2 * SG_LABEL_X - SG_TICK_W - 8, PL_ROW_H, [
-            ('name', f'sg_label{i}'), pod_i18n.text_prop(pod_i18n.english(key)), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+            styled(item, (st,), 'border', 'top' if hair else 'none')
+            styled(item, (st,), 'border_width', '1' if hair else '0')
+            styled(item, (st,), 'border_color', PL_HAIR if hair else '#00000000')
+        x0 = VS_LABEL_X_GLYPH if glyph else VS_LABEL_X
+        lab = Widget('hscroll_label', x0, 0, PL_CARD_MAX - x0 - 16, VS_ROW_H, [
+            ('name', f'vs_label{slot}'), pod_i18n.text_prop(key), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
         for st in ('normal', 'disable', 'focused'):
             styled(lab, (st,), 'font_size', str(PL_LABEL_PX))
             styled(lab, (st,), 'text_color', '#FFFFFF')
             styled(lab, (st,), 'text_align_h', 'left')
             styled(lab, (st,), 'text_align_v', 'middle')
         item.children.append(lab)
-        item.children.append(hidden(Widget('image', SG_CARD_W - SG_LABEL_X - SG_TICK_W, (PL_ROW_H - SG_TICK_W) // 2, SG_TICK_W, SG_TICK_W, [
-            ('name', f'sg_tick{i}'), ('image', 'sg_tick'), ('draw_type', 'default')])))
+        if slot < 6:   # (the Search and Select rows have no tick)
+            item.children.append(hidden(Widget('image', VS_TICK_X, (VS_ROW_H - VS_TICK_W) // 2, VS_TICK_W, VS_TICK_W, [
+                ('name', f'vs_tick{slot}'), ('image', 'sg_tick'), ('draw_type', 'default')])))
+        if glyph:
+            item.children.append(Widget('image', VS_GLYPH_X, (VS_ROW_H - VS_GLYPH) // 2, VS_GLYPH, VS_GLYPH, [
+                ('name', f'vs_glyph{slot}'), ('image', {4: view_glyphs[0], 5: view_glyphs[1], **{6 + i: g for i, g in enumerate(act_gl)}}[slot]), ('draw_type', 'default'), ('sensitive', 'false')]))
+        else:   # the direction under the label of the ticked sort row (the payload sets the text and the rows' positions)
+            sub = hidden(Widget('hscroll_label', x0, VS_SUB_Y, PL_CARD_MAX - x0 - 16, VS_SUB_H, [
+                ('name', f'vs_sub{slot}'), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')]))
+            for st in ('normal', 'disable', 'focused'):
+                styled(sub, (st,), 'font_size', str(VS_SUB_PX))
+                styled(sub, (st,), 'text_color', '#AAAAAA')
+                styled(sub, (st,), 'text_align_h', 'left')
+                styled(sub, (st,), 'text_align_v', 'middle')
+            item.children.append(sub)
         card.children.append(item)
+    hair = Widget('view', 0, VS_ROW_H, PL_CARD_MAX, 1, [('name', 'vs_hair'), ('sensitive', 'false')])   # the hairline under the Search row (the payload hides it without the row)
+    for st in STATES: styled(hair, (st,), 'bg_color', PL_HAIR)
+    card.children.append(hair)
     return scrim, card
 
 
@@ -856,11 +876,11 @@ def azlist_rail():
 def build_artists_page(page):
     """The Artists / Genres / Composers page (patch/artists.c, docs/modules/artists.md): the Songs page's structure (a stock list holding one content view that paints the
     rows, the section letters and the pinned header; the rail and the bubble beside it; the large title in the content view, the small one in the navbar once it has scrolled
-    away) under the navbar with the Artist / Album Artist switch. No pills, no select mode, no sort card."""
+    away) under the navbar with the "..." (the capsule's left cap; its card: Search Artists, the Show group Artists / Album Artists, Name). No pills, no select mode."""
     o = OFFSETS
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
-    nb = navbar(page.title, toggle='artist')
+    nb = navbar(page.title, more_left=True)
     nb.children[0].set('visible', 'false')   # the small title: the payload shows it once the large title has scrolled away
     root.children.append(nb)
     lv = stock_list([], True)
@@ -884,6 +904,8 @@ def build_artists_page(page):
     root.children.append(lab)
     root.children.extend(azlist_labels())
     root.children.extend(azlist_rail())
+    scrim, card = view_sort_card(sort_keys=('Name',) * len(VS_SORT_KEYS), view_keys=('Artists', 'Album Artists'), search_key='Search Artists', view_glyphs=('pod_ic_vsartist', 'pod_ic_vsalbumartist'))
+    root.children.extend((scrim, card))   # last: above everything (the "..." card: Search Artists, Show: Artists / Album Artists, Name)
     return root
 
 
@@ -985,7 +1007,7 @@ def build_songs_page(page):
     root.children.extend(azlist_rail())
     root.children.append(select_bar('sg_bar', 'sg_bar_line', [('sg_add', o['SG_PILL_X0'], 'Add to Playlist', 'sg_listplus', o['SG_BAR_PILL_W']),
                                                               ('sg_del', o['SG_BAR_PILL_X1'], 'Delete', 'sg_trash', o['SG_BAR_PILL_W'])]))
-    root.children.extend(sort_card())   # above the list, the rail and the select bar
+    root.children.extend(view_sort_card(sort_keys=pod_pages.SONGS_SORT_KEYS, view_keys=('Albums', 'Songs'), search_key='Search Songs'))   # above the list, the rail and the select bar (the "..." card: Select, Albums / Songs on Recently Added, the four sort rows of the library; vs_bind hides what a list does not offer; the Search Songs row is never offered, Search is the navbar button)
     root.children.extend(row_menu())   # last: above everything (the track rows' "..." menu, patch/rowmenu.c)
     return root
 
@@ -1901,20 +1923,19 @@ def build_keyboard_page(page):
     return root
 
 
-# The Folders page (patch/folders.c, docs/modules/folders.md): the Songs page's structure without its sections, rail, sort card and count. The glass navbar (Back, the small title, Select | Now Playing as one
-# capsule: Select is the left cap, Now Playing the right cap) over a stock list whose one child, view_grid, holds the large title and the Play / Shuffle pills (the payload shows the pills for a folder that holds an
+# The Folders page (patch/folders.c, docs/modules/folders.md): the Songs page's structure without its sections, rail, sort card and count. The glass navbar (Back, the small title, "..." | Now Playing as one
+# capsule: the "..." (or btn_select, Select, on a playlist file's tracks) is the left cap, Now Playing the right cap) over a stock list whose one child, view_grid, holds the large title and the Play / Shuffle pills (the payload shows the pills for a folder that holds an
 # audio file) and has the rows painted into it; the select mode's Select All text and bar are the Songs page's.
 def build_folders_page(page):
     o = OFFSETS
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
-    nb = navbar(page.title, select=True)
+    nb = navbar(page.title, more_left=True)   # "..." | Now Playing (the Songs and Artists capsule); the payload hides the "..." at the root list of storages (Now Playing is the disc there)
     nb.children[0].set('visible', 'false')   # the small title: the payload shows it once the large title has scrolled away
-    for c in nb.children:
-        if c.name == 'btn_select':   # shown from the start: the capsule's left cap
-            c.remove('visible'); c.remove('sensitive')
-        elif c.name == 'btn_backtoplayer':   # the capsule's right cap
-            for st, img in (('pressed', 'ah_nav_play_down'), ('normal', 'ah_nav_play'), ('over', 'ah_nav_play')): c.set(f'style:{st}:icon', img)
+    nb.children.append(hidden(Widget('button', NAV_VIEW_X, 0, NAV_VIEW_W, NAVBAR_H, [   # Select in the "..." place on a playlist file's tracks (patch/folders.c fo_direct): the left cap at 214, no card
+        ('name', 'btn_select'), ('enable', 'true'), ('style', 'img_btn_style'),
+        ('style:pressed:icon', 'pod_nav_selectl_down'), ('style:normal:icon', 'pod_nav_selectl'), ('style:over:icon', 'pod_nav_selectl')])))
+    nb.children[-1].set('dirty_rect_tolerance', str(NAV_ICON_OVERFLOW))   # (added after navbar's loop: its 60 px glyph paints 7 px beyond the slot)
     nb.children.append(selall_button())
     root.children.append(nb)
     lv = stock_list([], True)
@@ -1939,6 +1960,7 @@ def build_folders_page(page):
     root.children.append(lab)
     root.children.append(select_bar('sg_bar', 'sg_bar_line', [('sg_add', o['SG_PILL_X0'], 'Add to Playlist', 'sg_listplus', o['SG_BAR_PILL_W']),
                                                               ('sg_del', o['SG_BAR_PILL_X1'], 'Delete', 'sg_trash', o['SG_BAR_PILL_W'])]))
+    root.children.extend(view_sort_card(sort_keys=pod_pages.FOLDERS_SORT_KEYS))   # the "..." card: Select, then Name, Date Modified, Type (patch/folders.c offers rows 0..2; Search and the view rows stay hidden)
     return root
 RD_FIELD_W = SCREEN_W - 2 * PS.SE_FIELD_X   # the Radio search field's width (patch/radiopage.c RP_TEXT_W is its text's)
 RD_TEXT_W = RD_FIELD_W - PS.SE_TEXT_X - PS.SE_CLEAR_W
@@ -2154,7 +2176,7 @@ def build_page(page):
     if page.kind == 'covlist':
         return build_grid_page(page, toggle=None, coverflow=False, names=('covlist_listview', 'covlist_scrollview'))
     if page.kind == 'grid':
-        return build_grid_page(page)
+        return build_grid_page(page, toggle=None, coverflow=False, albums=True)
     if page.kind == 'podcasts':
         return build_podcasts_page(page)
     if page.kind == 'playlists':

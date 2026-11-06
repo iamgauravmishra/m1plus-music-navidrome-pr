@@ -293,6 +293,19 @@ def scroll_to(m, v):
     m.call(fn, a0=ctx, a1=0, count=80000000)
 
 
+def card_texts(m):
+    """The card's texts as the asset's labels give them (the machine measures a text from widget_get_text), and a 60 px measure: the card is fitted to 180 px."""
+    for i, t in enumerate(('Name', 'Name', 'Name', 'Name', 'Artists', 'Album Artists', 'Search Artists')): m.wtext[m.widgets[f'vs_label{i}']] = t
+    for i in range(4): m.wtext[m.widgets[f'vs_sub{i}']] = 'A–Z'
+    m.measure = lambda t: 60
+
+
+def pick(m, row, count=20000000):
+    """Opens the "..." card and taps its row `row` (0 Name, 4 Artists, 5 Album Artists, 6 Search Artists)."""
+    m.click('btn_more')
+    return m.click(f'vs_item{row}', count=count)
+
+
 def vis(m, name):
     w = m.widgets[name]
     return m.props.get((w, 'visible'), 1), m.props.get((w, 'sensitive'), 1)
@@ -463,49 +476,55 @@ def page_tests(expect, cover_asset):
     rail = tree.find('sg_rail')
     expect((rail.x, rail.y, rail.w, rail.h) == (O['SG_RAIL_X'], 50, O['SG_RAIL_W'], VIEW_H) and rail.get('visible') != 'false', 'the rail is the Songs page\'s column')
     names = [w.name for w in tree.walk() if w.name]
-    expect(all(n in names for n in ('btn_return', 'btn_backtoplayer', 'btn_artisttype', 'label_title', 'navigationbar_view', 'sg_bubble_letter')) and
-           not [n for n in names if n in ('pod_listview', 'pod_scrollview')], 'the navbar keeps its buttons and title; the old list names are gone')
-    tog = tree.find('btn_artisttype')
-    expect((tog.x, tog.y, tog.w, tog.h) == (O['NAV_VIEW_X'], 0, O['NAV_VIEW_W'], O['NAV_H']) and tog.x + tog.w == tree.find('btn_backtoplayer').x, 'btn_artisttype is in the toggle slot, flush left of Now Playing')
+    expect(all(n in names for n in ('btn_return', 'btn_backtoplayer', 'btn_more', 'label_title', 'navigationbar_view', 'sg_bubble_letter')) and 'btn_artisttype' not in names and
+           not [n for n in names if n in ('pod_listview', 'pod_scrollview')], 'the navbar keeps its buttons and title, the "..." replaces the switch; the old list names are gone')
+    tog = tree.find('btn_more')
+    expect((tog.x, tog.y, tog.w, tog.h) == (O['NAV_VIEW_X'], 0, O['NAV_VIEW_W'], O['NAV_H']) and tog.x + tog.w == tree.find('btn_backtoplayer').x and tog.get('visible') != 'false', 'btn_more is the capsule\'s left cap in the 214 slot, flush left of Now Playing')
     lbl = tree.find('label_title')
-    expect(lbl.x + lbl.w == O['NAV_VIEW_X'], 'the small title ends where the toggle begins')
-    expect(tog.get('style:normal:icon') == 'pod_nav_albumartist' and tog.get('style:pressed:icon') == 'pod_nav_albumartist_down', 'built in Artist mode, the button shows the Album Artist glyph')
+    expect(lbl.x + lbl.w == O['NAV_VIEW_X'], 'the small title ends where the "..." begins')
+    expect(tog.get('style:normal:icon') == 'pod_nav_more' and tog.get('style:pressed:icon') == 'pod_nav_more_down' and tree.find('btn_backtoplayer').get('style:normal:icon') == 'ah_nav_play',
+           'the "..." is the left cap and Now Playing the right cap of one capsule')
     mm = artists_machine(); mm.call(open_, count=5000000)
     root = asset_tree(asset)
     node(root, 'view_grid').h = 3000
     r = node(root, 'sg_rail'); r.x, r.y, r.w, r.h = (mm.props.get((mm.rail, k), v) for k, v in zip('xywh', (r.x, r.y, r.w, r.h)))
     expect(stock_target(mm, root, 150, 300)[-1] == 'view_grid' and 'artists_scrollview' in stock_target(mm, root, 150, 300), 'a touch in the list is the content view\'s, through the scroll view')
-    expect(stock_target(mm, root, 40, 25)[-1] == 'btn_return' and stock_target(mm, root, 290, 25)[-1] == 'btn_backtoplayer' and stock_target(mm, root, O['NAV_VIEW_X'] + 20, 25)[-1] == 'btn_artisttype',
-           'Back, Now Playing and the switch are hit')
+    expect(stock_target(mm, root, 40, 25)[-1] == 'btn_return' and stock_target(mm, root, 290, 25)[-1] == 'btn_backtoplayer' and stock_target(mm, root, O['NAV_VIEW_X'] + 20, 25)[-1] == 'btn_more',
+           'Back, Now Playing and the "..." are hit')
     expect(stock_target(mm, root, 300, r.y + r.h // 2)[-1] == 'sg_rail', 'a touch in the rail\'s column within its span reaches the rail, never the scroll view')
     expect('label_status' not in stock_target(mm, root, 160, 225) and 'sg_bubble' not in stock_target(mm, root, 160, 225), 'the hidden message and the bubble take no touch')
 
-    # 31. The toggle: the stock switch's writes, the other mode's list, the titles (the large one too), the glyph
+    # 31. The Show group: the stock switch's writes, the other mode's list, the titles (the large one too), the ticks
     AT, RELOAD = pod.DATA['ARTIST_TYPE'][0], pod.DATA['ARTIST_RELOAD'][0]
     m = artists_machine(); m.call(open_, count=5000000)
-    big, title, tglyph = m.widgets['ar_title'], m.widgets['label_title'], m.widgets['btn_artisttype']
-    expect(('widget_set_text_utf8', title, 'Artists') in m.calls and ('widget_set_text_utf8', big, 'Artists') in m.calls and m.props.get((tglyph, 'style:normal:icon')) == 'pod_nav_albumartist'
-           and m.props.get((tglyph, 'style:pressed:icon')) == 'pod_nav_albumartist_down', 'artist_type 0: both titles read "Artists", the Album Artist glyph')
-    tclicks = [c for c in opened if c[0] == 'widget_on' and c[1] == tglyph and c[2] == O['EVT_CLICK']]
-    expect(len(tclicks) == 1 and tclicks[0][3] == PSYMS['ar_on_toggle'], 'the toggle button is bound')
+    big, title = m.widgets['ar_title'], m.widgets['label_title']
+    expect(('widget_set_text_utf8', title, 'Artists') in m.calls and ('widget_set_text_utf8', big, 'Artists') in m.calls, 'artist_type 0: both titles read "Artists"')
+    mclicks = [c for c in opened if c[0] == 'widget_on' and c[1] == m.widgets['btn_more'] and c[2] == O['EVT_CLICK']]
+    expect(len(mclicks) == 1 and mclicks[0][3] == PSYMS['ar_on_more'], 'the "..." button is bound')
+    m.click('btn_more')
+    expect(vis(m, 'vs_card') == (1, 1) and [vis(m, f'vs_tick{i}')[0] for i in (0, 4, 5)] == [1, 1, 0], 'the card opens with Name and Artists ticked')
     scroll_to(m, 300)
-    m.call(PSYMS['ar_on_toggle'], count=5000000)
+    pick(m, 5)
     new = m.calls
-    expect(m.word(AT) == 1 and ('write_int_config', 1, 'PLAYSET', 'ARTISTTYPE') in new and m.u.mem_read(RELOAD, 1)[0] == 1, 'a tap sets artist_type, saves [PLAYSET] ARTISTTYPE and raises the stock reload flag')
-    expect(('widget_set_text_utf8', title, 'Album Artists') in new and ('widget_set_text_utf8', big, 'Album Artists') in new and m.props.get((tglyph, 'style:normal:icon')) == 'pod_nav_artist'
-           and m.props.get((tglyph, 'style:pressed:icon')) == 'pod_nav_artist_down', 'both titles read "Album Artists", the glyph is the Artist one')
+    expect(m.word(AT) == 1 and ('write_int_config', 1, 'PLAYSET', 'ARTISTTYPE') in new and m.u.mem_read(RELOAD, 1)[0] == 1, 'the Album Artists row sets artist_type, saves [PLAYSET] ARTISTTYPE and raises the stock reload flag')
+    expect(('widget_set_text_utf8', title, 'Album Artists') in new and ('widget_set_text_utf8', big, 'Album Artists') in new and vis(m, 'vs_card') == (0, 0), 'both titles read "Album Artists", the card closes')
     expect(('loadLocalClassList', O['CLASS_ARTISTS']) in new and ('widget_set_prop_int', m.sv, 'yoffset', 0) in new and 'deque_destroy' in [c[0] for c in new],
            'the stock query runs again, the list is at the top, the previous copy is freed')
     expect(shown(m) == ['Miles Davis', 'Various Artists'] and m.props.get((m.sv, 'virtual_h')) == Model(['Miles Davis', 'Various Artists']).content(), 'the list is the album-artist list (sorted: stock has Various Artists first)')
-    m.call(PSYMS['ar_on_toggle'], count=5000000)
-    expect(m.word(AT) == 0 and ('write_int_config', 0, 'PLAYSET', 'ARTISTTYPE') in m.calls and m.props.get((tglyph, 'style:normal:icon')) == 'pod_nav_albumartist'
-           and ('widget_set_text_utf8', title, 'Artists') in m.calls, 'the second tap sets Artist again, titles and glyph with it')
+    m.click('btn_more')
+    expect([vis(m, f'vs_tick{i}')[0] for i in (4, 5)] == [0, 1], 'reopened, Album Artists is ticked')
+    m.calls = []
+    m.click('vs_item5', count=20000000)
+    expect(m.word(AT) == 1 and not [c for c in m.calls if c[0] in ('write_int_config', 'loadLocalClassList')] and vis(m, 'vs_card') == (0, 0), 'the ticked row does nothing but close the card')
+    pick(m, 4)
+    expect(m.word(AT) == 0 and ('write_int_config', 0, 'PLAYSET', 'ARTISTTYPE') in m.calls and ('widget_set_text_utf8', title, 'Artists') in m.calls, 'the Artists row sets Artist again, titles with it')
     m3 = artists_machine(); m3.setword(AT, 1); m3.call(open_, count=5000000); calls3 = list(m3.calls)
-    expect(shown(m3) == ['Miles Davis', 'Various Artists'] and ('widget_set_text_utf8', m3.widgets['label_title'], 'Album Artists') in calls3 and m3.props.get((m3.widgets['btn_artisttype'], 'style:normal:icon')) == 'pod_nav_artist',
-           'opening with album artist set lists them, titled "Album Artists" with the Artist glyph')
-    m4 = artists_machine(); del m4.widgets['btn_artisttype']; del m4.widgets['label_title']; del m4.widgets['ar_title']
+    m3.click('btn_more')
+    expect(shown(m3) == ['Miles Davis', 'Various Artists'] and ('widget_set_text_utf8', m3.widgets['label_title'], 'Album Artists') in calls3 and [vis(m3, f'vs_tick{i}')[0] for i in (4, 5)] == [0, 1],
+           'opening with album artist set lists them, titled "Album Artists", ticked in the card')
+    m4 = artists_machine(); del m4.widgets['label_title']; del m4.widgets['ar_title']
     m4.call(open_, count=5000000)
-    expect(shown(m4) == ['Miles Davis', 'Nina Simone', 'Unknown Artist'] and 'navigator_back' not in m4.names(), 'a page without the toggle or the titles still lists')
+    expect(shown(m4) == ['Miles Davis', 'Nina Simone', 'Unknown Artist'] and 'navigator_back' not in m4.names(), 'a page without the titles still lists')
 
     # 32. Back leaves the Artists page; closing it frees its copy and bitmaps. An empty library: the message, no list. A broken asset: leave.
     m.call(PSYMS['pod_on_back'], count=200000)
@@ -633,7 +652,7 @@ def sort_tests(ctx):
     m = artists_machine(); m.album_artists = [artist_rec(m, a, i + 1) for i, a in enumerate(('The Zed', 'Various Artists', 'the Abba', '周'))]
     m.call(open_, count=20000000)
     m.calls = []
-    m.call(PSYMS['ar_on_toggle'], count=20000000)
+    pick(m, 5)
     expect(shown(m) == ['the Abba', 'Various Artists', '周', 'The Zed'],
            'Album Artist mode is sorted too (The Zed files under Z, after 周 "z")')
     m.calls = []
@@ -641,7 +660,7 @@ def sort_tests(ctx):
     expect([c for c in m.calls if c[0] == 'loadAlbumList'][:1] and [c for c in m.calls if c[0] == 'loadAlbumList'][0][3] == 'the Abba',
            'a tap on the first Album Artist row opens it')
     m.calls = []
-    m.call(PSYMS['ar_on_toggle'], count=20000000)
+    pick(m, 4)
     freed = 'free' in m.names()
     expect(shown(m) == ['Miles Davis', 'Nina Simone', 'Unknown Artist'] and freed, 'toggling back re-sorts the Artist list; the old order is freed')
 
@@ -757,28 +776,32 @@ def genre_composer_tests(ctx):
         m = artists_machine(genres=names if cls == 0xf006 else (), composers=names if cls == 0xf005 else ())
         m.call(on_row, a0=rows0 + 12 * row[label], count=20000000)
         calls = list(m.calls)
-        title, tog = m.widgets['label_title'], m.widgets['btn_artisttype']
+        title = m.widgets['label_title']
         expect(('window_open', 'm1plus_artists') in calls and [c[1] for c in calls if c[0] == 'loadLocalClassList'] == [cls] and 'stock_resume' not in m.names(),
                f'{label}: our Artists page lists class {cls:#x}')
         expect(shown(m) == list(names),
                f'{label}: the rows are the stock list in its own order, unsorted ({shown(m)})')
         expect(('widget_set_text_utf8', title, label) in calls and not any(c[0] == 'widget_set_text_utf8' and c[1] == title and c[2] in ('Artists', 'Album Artists') for c in calls),
                f'{label}: the title is the menu row\'s text')
-        expect(m.props.get((tog, 'visible')) == 0 and m.props.get((tog, 'sensitive')) == 0 and (tog, 'style:normal:icon') not in m.props,
-               f'{label}: the Artist / Album Artist switch is hidden and insensitive, its glyph left alone')
         np = m.widgets['btn_backtoplayer']
-        expect(m.props.get((np, 'style:normal:icon')) == m.props.get((np, 'style:over:icon')) == 'ah_nav_np' and m.props.get((np, 'style:pressed:icon')) == 'ah_nav_np_down',
-               f'{label}: with the switch gone Now Playing is the glass disc (ah_nav_np), not the right cap of a capsule that is not there')
+        expect((np, 'style:normal:icon') not in m.props, f'{label}: Now Playing keeps the capsule\'s right cap beside the "..."')
+        card_texts(m)
+        m.click('btn_more')
+        expect([vis(m, f'vs_item{i}') for i in range(7)] == [(1, 1)] + [(0, 0)] * 6 and vis(m, 'vs_card') == (1, 1) and vis(m, 'vs_hair')[0] == 0,
+               f'{label}: the card has the Name row alone (no Search: no search scope; no Show group), the hairline under Search hidden')
+        expect([c[2:] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets['vs_card']][-1][1] == 48
+               and all(m.props.get((m.widgets['vs_card'], f'style:{st}:bg_image')) == 'vs_glass1' for st in ('normal', 'pressed', 'over'))
+               and all(m.props.get((m.widgets['vs_item0'], f'style:{st}:border_width')) == 0 for st in ('normal', 'pressed', 'over')),
+               f'{label}: a 48 px card in its one-row glass, no stray hairline above the row')
+        said = [utf8(c[2]) for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets['vs_sub0']]
+        expect(vis(m, 'vs_tick0')[0] == 1 and vis(m, 'vs_sub0')[0] == 1 and said and said[-1] == 'A–Z', f'{label}: Name is ticked, A–Z under it')
         root = asset_tree(asset)
-        node(root, 'btn_artisttype').flags &= ~F_SENSITIVE
-        if m.props.get((m.widgets['label_status'], 'sensitive')) == 0: node(root, 'label_status').flags &= ~F_SENSITIVE
-        expect(stock_target(m, root, O['NAV_VIEW_X'] + 20, 25)[-1] != 'btn_artisttype', f'{label}: a touch on the switch\'s old slot reaches nothing of it')
-        expect(stock_target(m, root, 290, 25)[-1] == 'btn_backtoplayer' and stock_target(m, root, 40, 25)[-1] == 'btn_return', f'{label}: Back and Now Playing are hit')
+        expect(stock_target(m, root, O['NAV_VIEW_X'] + 20, 25)[-1] == 'btn_more' and stock_target(m, root, 290, 25)[-1] == 'btn_backtoplayer' and stock_target(m, root, 40, 25)[-1] == 'btn_return', f'{label}: Back, the "..." and Now Playing are hit')
         at = m.word(pod.DATA['ARTIST_TYPE'][0])
         m.calls = []
-        m.call(PSYMS['ar_on_toggle'], count=20000000)
+        m.click('vs_item4', count=20000000)
         expect(m.word(pod.DATA['ARTIST_TYPE'][0]) == at and not [c for c in m.calls if c[0] in ('write_int_config', 'loadLocalClassList')],
-               f'{label}: a stray click on the switch changes no setting and queries nothing')
+               f'{label}: a stray click on a hidden Show row changes no setting and queries nothing')
         m.call(PSYMS['pod_on_back'], count=200000)
         expect('navigator_back' in m.names(), f'{label}: Back goes back')
         m.call(PSYMS['ar_on_destroy'], count=200000)
@@ -795,12 +818,21 @@ def genre_composer_tests(ctx):
         expect('list_item_create' not in m.names() and any(c[0] == 'widget_set_text_utf8' and 'Update Local Music' in c[2] for c in m.calls),
                f'{label}: an empty library says so, no rows')
 
-    # Artists itself is as it was: sorted, the switch shown and bound, and the title Artists
+    # Artists itself: sorted, the "..." card with Search Artists, the Show group and Name, and the title Artists
     m = artists_machine(); m.call(on_row, a0=rows0 + 12 * row['Artists'], count=20000000)
-    tog = m.widgets['btn_artisttype']
-    expect(m.props.get((tog, 'visible')) != 0 and m.props.get((tog, 'sensitive')) != 0 and ('widget_set_text_utf8', m.widgets['label_title'], 'Artists') in m.calls
-           and [c[1] for c in m.calls if c[0] == 'loadLocalClassList'] == [O['CLASS_ARTISTS']], 'the Artists row: the switch stays, the title is Artists, class 0xf004')
+    expect(('widget_set_text_utf8', m.widgets['label_title'], 'Artists') in m.calls and [c[1] for c in m.calls if c[0] == 'loadLocalClassList'] == [O['CLASS_ARTISTS']], 'the Artists row: the title is Artists, class 0xf004')
     expect((m.widgets['btn_backtoplayer'], 'style:normal:icon') not in m.props, 'and Now Playing keeps the capsule\'s right cap')
+    card_texts(m)
+    m.click('btn_more')
+    expect([vis(m, f'vs_item{i}') for i in (0, 4, 5, 6)] == [(1, 1)] * 4 and [vis(m, f'vs_item{i}') for i in (1, 2, 3)] == [(0, 0)] * 3 and vis(m, 'vs_hair') == (1, 1),
+           'the Artists card has Search Artists, Artists, Album Artists and Name, with the hairline under Search')
+    moves = {i: [c[2:] for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets[f'vs_item{i}']][-1] for i in (6, 4, 5, 0)}
+    expect(moves == {6: (0, 0), 4: (0, 48), 5: (0, 96), 0: (0, 144)} and [c[2:] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets['vs_card']][-1][1] == 192
+           and all(m.props.get((m.widgets['vs_card'], f'style:{st}:bg_image')) == 'vs_glass4' for st in ('normal', 'pressed', 'over'))
+           and (m.widgets['vs_item0'], 'style:normal:border_width') not in m.props, f'the rows are packed Search, Artists, Album Artists, Name; a 192 px card in the four-row glass; the hairline above Name stays ({moves})')
+    m.calls = []
+    m.click('vs_item6', count=40000000)
+    expect(('window_open', 'm1plus_search') in m.calls and vis(m, 'vs_card') == (0, 0), 'Search Artists closes the card and opens the Search page')
 
     # a genre's tap: our Songs page (songs_open_genre), the genre's name and the Unknown byte; the stock row tap's own sequence when that window will not open
     names = ('Rock', 'Jazz', 'Unknown Genre')
@@ -873,14 +905,16 @@ def scoped_albums_tests(ctx):
     open_ = PSYMS['artists_open']
     ROWH, RGAP = O['LIST_ROW_H'], O['GRID_ROW_GAP']
     CELL_PITCH = O['GRID_COVER'] + O['GRID_TITLE_GAP'] + O['GRID_TITLE_H'] + O['GRID_SUB_H'] + RGAP   # the grid's row pitch (patch/grid.h)
-    sv_y = SCREEN_Y0
+    def block(m): return O['SG_TITLE_H'] if getattr(m, 'plain', False) else O['AL_PILLS_END'] + (0 if m.fs.get('/mnt/data/m1plus/albums-view') == b'1\n' else RGAP)   # the title and pills block above the rows (a list's first row is RGAP under it; the grid's gap is its own)
 
-    def content(m): return [c[3] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.view][-1]
+    def content(m): return [c[3] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.view][-1] - block(m)   # (the rows' height: the block above them is not counted)
     def tap(m, x, y):
+        sv_y = SCREEN_Y0 + block(m)
         m.touch('down', x, sv_y + y, 1000, fn='al_on_down'); calls = list(m.calls)
         m.touch('up', x, sv_y + y, 1080, fn='al_on_up', count=40000000); m.calls = calls + m.calls
-    def opened(artists=('Miles Davis', 'Nina Simone', 'Unknown Artist'), composers=(), view=b'0\n', i=0, home=0):
+    def opened(artists=('Miles Davis', 'Nina Simone', 'Unknown Artist'), composers=(), view=b'0\n', i=0, home=0, files=None):
         m = artists_machine(artists=artists, composers=composers, albums_page=True)
+        if files: m.fs.update(files)
         if view is not None: m.fs['/mnt/data/m1plus/albums-view'] = view
         m.call(open_, a0=home, count=20000000)
         m.calls = []
@@ -895,8 +929,8 @@ def scoped_albums_tests(ctx):
     expect(la and la[0][1] == O['CLASS_ARTISTS'] and la[0][3] == 'Miles Davis', f'the stock artist query runs for that artist ({la[:1]})')
     expect(content(m) == 4 * ROWH, f'three albums and the All Songs row last ({content(m)} px of list rows)')
     expect(('widget_set_text_utf8', m.widgets['label_title'], 'Miles Davis') in m.calls, 'the title is the artist')
-    expect(m.fs['/mnt/data/m1plus/albums-view'] == b'0\n' and m.props.get((m.widgets['btn_albumview'], 'style:normal:icon')) == 'pod_nav_grid',
-           'the list mode saved for Albums is the mode used, the toggle shows the grid glyph')
+    expect(m.fs['/mnt/data/m1plus/albums-view'] == b'0\n' and m.props.get((m.widgets['vs_tick5'], 'visible')) == 1,
+           'the list mode saved for Albums is the mode used, the "..." card ticks List')
     # the covers are the library's files (Jazz Hits is filed under Various Artists there)
     loads = []
     for _ in range(12):
@@ -909,9 +943,25 @@ def scoped_albums_tests(ctx):
     tap(m, 100, ROWH + 10)
     expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_ARTIST_ALBUMS'], 1) in m.calls
            and [c for c in m.calls if c[0] == 'loadAlbumList'][-1][3] == 'Miles Davis', 'a tap on an album opens its page as the artist\'s album (0xff01, its row)')
+    # the page's order (its "..." card, albums-sort; the stock order here, Title, unless the file says another): the Artist order sorts the artist's albums by title and keeps the All Songs row last;
+    # a tap still opens the stock row, and the covers are still the library albums' (the keys follow the stock row, not the position)
+    ms = opened(files={'/mnt/data/m1plus/albums-sort': b'1\n'})
+    ms.calls = []
+    tap(ms, 100, 10)
+    expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_ARTIST_ALBUMS'], 0) in ms.calls, 'the saved Artist order is Title on one artist\'s page (the stock order): the first row is stock row 0')
+    ms.calls = []
+    tap(ms, 100, 3 * ROWH + 10)
+    expect(not [c for c in ms.calls if c[:2] == ('navigator_to_with_context', 'albuminfo_page') and c[3] < 3], 'the All Songs row stays last: the fourth row opens none of the three albums')
+    ms.calls = []
+    loads = []
+    for _ in range(12):
+        ms.call(PSYMS['al_on_load'], count=40000000); loads += [c[1] for c in ms.calls if c[0] == 'widget_load_image']
+        if not any(c[0] == 'timer_add' and c[1] == PSYMS['al_on_load'] for c in ms.calls): break
+    jazz = 'file://' + art_file(fnv(fnv(O['FNV_SEED'], 'Various Artists'), 'Jazz Hits'))
+    expect(jazz in loads and len(set(loads)) == 3, f'the covers still take the library albums\' keys under the sorted order ({loads})')
     # the toggle persists in the shared file and keeps the artist's albums
     m.calls = []
-    m.call(PSYMS['al_on_toggle'], count=40000000)
+    view_switch(m, 40000000)
     expect(m.fs.get('/mnt/data/m1plus/albums-view') == b'1\n' and content(m) == RGAP + 2 * CELL_PITCH, 'the toggle switches to the grid and writes the shared file')
     # Cover Flow, one tap away, on the same artist
     m.calls = []
@@ -927,12 +977,12 @@ def scoped_albums_tests(ctx):
     expect(m.fs.get('/mnt/data/m1plus/albums-view') == b'1\n', 'Back from the scoped page leaves the stored mode alone')
 
     # the mode is the one shared file: the grid chosen on the artist's page is the next artist's and Home > Albums', and the other way round
-    grid = lambda m: m.props.get((m.widgets['btn_albumview'], 'style:normal:icon')) == 'pod_nav_list'
+    grid = lambda m: m.props.get((m.widgets['vs_tick4'], 'visible')) == 1
     m2 = opened(view=b'1\n', i=1)
     expect(grid(m2) and content(m2) == RGAP + CELL_PITCH, 'an artist tap opens the grid when the grid was chosen last')
     m3 = artists_machine(albums_page=True); m3.fs.update(m.fs); m3.call(PSYMS['albums_open'], count=20000000)
     expect(grid(m3), 'Home > Albums opens in the mode chosen on the artist page')
-    m3.call(PSYMS['al_on_toggle'], count=40000000)
+    view_switch(m3, 40000000)
     expect(m3.fs.get('/mnt/data/m1plus/albums-view') == b'0\n', 'toggled on Home > Albums: list')
     m4 = artists_machine(albums_page=True); m4.fs.update(m3.fs); m4.call(open_, count=5000000); m4.calls = []
     m4.call(PSYMS['ar_open'], a0=0, count=40000000)
@@ -946,7 +996,7 @@ def scoped_albums_tests(ctx):
     m.texts.clear(); m.blits.clear()
     m.call(PSYMS['al_on_paint'], a0=0, a1=ev, count=400000000)
     tx = [t for t, r in m.texts]
-    expect(tx == ['Kind of Blue', 'Jazz Hits', 'Bitches Brew', 'All Songs'] + ['Miles Davis'] * 4, f'the fourth row is All Songs over the artist ({tx})')
+    expect(tx == ['Kind of Blue', 'Jazz Hits', 'Bitches Brew', 'All Songs'], f'the fourth row is All Songs, with no line under it (an artist\'s albums show their years) ({tx})')
     m.calls = []
     tap(m, 100, 3 * ROWH + 10)
     expect(('window_open', 'm1plus_songs') in m.calls and not any(c[0] == 'navigator_to_with_context' for c in m.calls), 'a tap on All Songs opens our Songs page on the artist\'s songs')
@@ -967,6 +1017,7 @@ def scoped_albums_tests(ctx):
 
     # a composer: loadAlbumList(0xf005), class 0xff02
     m = opened(composers=('Mozart', 'Bach', 'Unknown Composer'), home=pod_pages.HOME_COMPOSER, i=1)
+    m.plain = True   # (a composer's page has no pills: the rows start under the large title)
     la = [c for c in m.calls if c[0] == 'loadAlbumList']
     expect(('window_open', 'm1plus_albums') in m.calls and la and la[0][1] == O['CLASS_COMPOSERS'] and la[0][3] == 'Bach'
            and ('widget_set_text_utf8', m.widgets['label_title'], 'Bach') in m.calls and content(m) == 3 * ROWH, 'a composer: his two albums and the All Songs row on the Albums page')
@@ -984,7 +1035,311 @@ def scoped_albums_tests(ctx):
     expect(('window_open', 'm1plus_albums') in m.calls and ('window_open', 'm1plus_cover') in m.calls, 'the Albums window will not open: Cover Flow on the artist')
 
 
-SECTIONS = [artists_tests, scoped_albums_tests, genre_composer_tests, index_tests, sort_tests]
+
+
+SORT_FILE = '/mnt/data/m1plus/albums-sort'
+# Miles Davis's albums in the stock order: Kind of Blue (0), Jazz Hits (1), Bitches Brew (2); the library songs, newest first, with their years
+SCOPED_SONGS = [('Bitches Brew', 1970), ('Kind of Blue', 1959), ('Jazz Hits', 1990)]
+SCOPED_ORDERS = {0: [0, 1, 2], 1: [0, 1, 2],   # Title; the saved Artist is Title here
+                 2: [2, 0, 1],                  # Recently Added: Bitches Brew, Kind of Blue, Jazz Hits
+                 3: [1, 2, 0]}                  # Year, newest first: Jazz Hits 1990, Bitches Brew 1970, Kind of Blue 1959
+SCOPED_REV = {0: [2, 1, 0], 1: [2, 1, 0],       # Z-A (the saved Artist's letter b is Title, Z-A here)
+              2: [1, 0, 2],                     # Oldest First: Kind of Blue, Bitches Brew... by newest song: Jazz Hits, Kind of Blue, Bitches Brew
+              3: [0, 2, 1]}                     # Oldest First: Kind of Blue 1959, Bitches Brew 1970, Jazz Hits 1990
+
+
+def scoped_machine(sort=None, albums_page=True, view=b'0\n'):
+    m = artists_machine(albums_page=albums_page)
+    rows = []
+    for i, (album, year) in enumerate(SCOPED_SONGS):
+        r = m.record(album=album, artist='x', path=f'/mnt/mmc/s/{i}.flac', rid=700 + i)
+        m.setword(r + O['REC_YEAR'], year); rows.append(r)
+    m.class_lists[O['CLASS_ALL_SONGS']] = rows
+    m.fs['/mnt/data/m1plus/albums-view'] = view
+    m.fs.pop(SORT_FILE, None)   # (the default, Artist, unless the test gives one)
+    if sort is not None: m.fs[SORT_FILE] = sort
+    if albums_page:
+        for i, t in enumerate(('Title', 'Artist', 'Recently Added', 'Year', 'Grid', 'List', 'Search Albums')): m.wtext[m.widgets[f'vs_label{i}']] = t
+        for i in range(4): m.wtext[m.widgets[f'vs_sub{i}']] = 'A–Z'
+    m.measure = lambda t: 60   # (the card is fitted: 180 px)
+    m.call(PSYMS['artists_open'], a0=0, count=20000000)
+    forget_card(m)   # (the machine's widgets are shared by both pages: the Artists page's bind hid rows of the card the Albums page finds whole in its own window)
+    m.calls = []
+    return m
+
+
+def scoped_sort_tests(ctx):
+    """One album order for every album list (docs/modules/albums.md): the artist's page offers Title, Recently Added and Year (no Artist row, a 200 px card), shows the saved Artist
+    order as Title, writes the shared albums-sort; the artist's Cover Flow follows the same order."""
+    expect = ctx.expect
+    ROWH = O['LIST_ROW_H']
+    TOP_ROWS = O['AL_PILLS_END'] + O['GRID_ROW_GAP']   # the list's first row (the title block and the pills above it)
+    vis = lambda m, n: (m.props.get((m.widgets[n], 'visible'), 1), m.props.get((m.widgets[n], 'sensitive'), 1))
+    def tap(m, y):
+        m.calls = []
+        m.touch('down', 100, 80 + TOP_ROWS + y, 1000, fn='al_on_down')
+        m.touch('up', 100, 80 + TOP_ROWS + y, 1080, fn='al_on_up', count=40000000)
+        return [c[3] for c in m.calls if c[:2] == ('navigator_to_with_context', 'albuminfo_page')]
+    # the card: Search Albums, Grid, List and three sort rows, packed, 288 px, the six-row glass; hidden rows are insensitive; the names are all there
+    m = scoped_machine(); m.call(PSYMS['ar_open'], a0=0, count=40000000)
+    m.click('btn_more')
+    expect(vis(m, 'vs_item1') == (0, 0), 'the scoped card has no Artist row: hidden and insensitive')
+    expect(all(vis(m, f'vs_item{i}') == (1, 1) for i in (0, 2, 3, 4, 5, 6)) and vis(m, 'vs_card') == (1, 1), 'Search Albums, Grid, List, Title, Recently Added and Year are shown')
+    moves = {i: [c[2:] for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets[f'vs_item{i}']] for i in (0, 2, 3, 4, 5, 6)}
+    expect(moves == {6: [(0, 0)], 4: [(0, 48)], 5: [(0, 96)], 0: [(0, 144)], 2: [(0, 192)], 3: [(0, 240)]}, f'the rows are packed from the top, Search, Grid and List first ({moves})')
+    expect(vis(m, 'vs_hair') == (1, 1) and [c[2:] for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets['vs_hair']] == [(0, 48)], 'the hairline between Search and Grid is shown at y 48')
+    expect(all(m.props.get((m.widgets['vs_card'], f'style:{st}:bg_image')) == 'vs_glass6' for st in ('normal', 'pressed', 'over')), 'the card is drawn in the 288 px, six-row glass')
+    expect([c[2:] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets['vs_card']][-1][1] == 288, 'the card is 288 px high')
+    expect([vis(m, f'vs_tick{i}')[0] for i in range(4)] == [1, 0, 0, 0], 'the saved Artist (the default) shows as Title: Title is ticked')
+    # the library page keeps four sorts, the 336 px card and the asset's own seven-row glass
+    ml = scoped_machine(); ml.call(PSYMS['albums_open'], count=20000000); ml.calls = []; ml.click('btn_more')
+    expect(all(vis(ml, f'vs_item{i}') == (1, 1) for i in range(7)) and [c[2:] for c in ml.calls if c[0] == 'widget_resize' and c[1] == ml.widgets['vs_card']][-1][1] == 336
+           and ml.props.get((ml.widgets['vs_card'], 'style:normal:bg_image')) == 'vs_glass7', 'the library page keeps its seven rows on the 336 px card, in the seven-row glass')
+    ms = scoped_machine(); ms.call(PSYMS['ar_open'], a0=0, count=40000000); ms.click('btn_more'); ms.calls = []
+    ms.click('vs_item6', count=40000000)
+    expect(('window_open', 'm1plus_search') in ms.calls and vis(ms, 'vs_card') == (0, 0), 'Search Albums on the artist page closes the card and opens the search page, as the button did')
+    # each saved order on the scoped page: the list, the tick, the stock row a tap opens
+    for k, order in SCOPED_ORDERS.items():
+        m = scoped_machine(f'{k}\n'.encode()); m.call(PSYMS['ar_open'], a0=0, count=40000000)
+        got = [tap(m, r * ROWH + 10) for r in range(3)]
+        expect(got == [[o] for o in order], f'albums-sort {k}: the artist\'s rows open stock rows {order} ({got})')
+        m.click('btn_more')
+        tk = 0 if k == 1 else k
+        expect([vis(m, f'vs_tick{i}')[0] for i in range(4)] == [int(i == tk) for i in range(4)], f'albums-sort {k}: the tick is on row {tk}')
+    # a row writes the shared file and re-sorts; the library page then reads it
+    m = scoped_machine(); m.call(PSYMS['ar_open'], a0=0, count=40000000)
+    m.calls = []; m.click('btn_more'); m.click('vs_item3')
+    expect(m.fs.get(SORT_FILE) == b'3\n' and ('rename', SORT_FILE + '.tmp', SORT_FILE) in m.calls, 'Year on the artist page writes albums-sort, atomically')
+    got = [tap(m, r * ROWH + 10) for r in range(3)]
+    expect(got == [[o] for o in SCOPED_ORDERS[3]], f'and the list is in the Year order ({got})')
+    m.calls = []; m.click('btn_more'); m.click('vs_item0')
+    expect(m.fs.get(SORT_FILE) == b'0\n', 'Title writes 0 once another order is saved')
+    # Title is ticked when Artist is saved: a tap on it is the tap on the ticked row, so it reverses the shown Title order (saved as Title, Z-A)
+    m = scoped_machine(); m.call(PSYMS['ar_open'], a0=0, count=40000000)
+    m.calls = []; m.click('btn_more'); m.click('vs_item0')
+    expect(m.fs.get(SORT_FILE) == b'a\n', 'the ticked Title row flips the direction: albums-sort is Title, Z-A')
+    got = [tap(m, r * ROWH + 10) for r in range(4)]
+    expect(got == [[2], [1], [0], []], f'the artist\'s rows are reversed and the All Songs row stays last ({got})')
+    # reversed orders: the second line, the order, the All Songs row last, the library page and the artist's Cover Flow follow
+    for k, order in SCOPED_REV.items():
+        data = chr(ord('a') + k).encode() + b'\n'
+        m = scoped_machine(data); m.call(PSYMS['ar_open'], a0=0, count=40000000)
+        got = [tap(m, r * ROWH + 10) for r in range(3)]
+        expect(got == [[o] for o in order], f'albums-sort {data!r}: the artist\'s rows open stock rows {order} ({got})')
+        m.calls = []; m.click('btn_more')
+        tk = 0 if k == 1 else k
+        said = {i: [c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets[f'vs_sub{i}']] for i in range(4)}
+        want = ('Z\u2013A' if tk < 2 else 'Oldest First')
+        expect(said[tk] and utf8(said[tk][-1]) == want and vis(m, f'vs_sub{tk}')[0] == 1 and all(vis(m, f'vs_sub{i}')[0] == 0 for i in range(4) if i != tk), f'albums-sort {data!r}: only row {tk} shows "{want}"')
+        m.click(f'vs_item{tk}')
+        expect(m.fs.get(SORT_FILE) == f'{tk}\n'.encode(), 'a tap on the ticked row flips it back to the default direction')
+        expect(tap(m, 3 * ROWH + 10) == [] , 'the All Songs row is still the fourth')   # (it opens the Songs page, which binds the shared "..." name: last)
+        ml = scoped_machine(data, albums_page=False); ml.call(PSYMS['ar_open'], a0=0, count=8000000)
+        seen = []
+        for c in range(3):
+            put_value(ml, c); ml.call(PSYMS['on_changed'], count=2000000)
+            ml.tap(O['CF_CX'])
+            seen += [x[3] for x in ml.calls if x[:2] == ('navigator_to_with_context', 'albuminfo_page')]
+        expect(seen == order, f'albums-sort {data!r}: the artist\'s Cover Flow shelf opens stock rows {order} ({seen})')
+    m = scoped_machine(b'2\n'); m.call(PSYMS['albums_open'], count=20000000)
+    expect(m.fs[SORT_FILE] == b'2\n', 'the library page reads the same file')
+    # the artist's Cover Flow: the same order (Artist as Title), the covers keyed by stock row
+    for k, order in SCOPED_ORDERS.items():
+        m = scoped_machine(f'{k}\n'.encode() if k != 1 else b'1\n', albums_page=False); m.call(PSYMS['ar_open'], a0=0, count=8000000)
+        seen = []
+        for c in range(3):
+            put_value(m, c); m.call(PSYMS['on_changed'], count=2000000)
+            m.tap(O['CF_CX'])
+            seen += [x[3] for x in m.calls if x[:2] == ('navigator_to_with_context', 'albuminfo_page')]
+        expect(seen == order, f'albums-sort {k}: the artist\'s Cover Flow shelf opens stock rows {order} ({seen})')
+
+
+# Miles Davis's songs as the stock artist query lists them (class 0xff11): the albums' tracks with their year tags. Kind of Blue: 1962, 1959 and no tag (earliest wins);
+# Bitches Brew 1970; Jazz Hits has no usable year (999 and 3000 are out of the 1000..2999 range); a song of an album the page does not list is ignored.
+PAGE_SONGS = [('Kind of Blue', 1962), ('Kind of Blue', 1959), ('Kind of Blue', 0), ('Bitches Brew', 1970), ('Jazz Hits', 999), ('Jazz Hits', 3000), ('Other Album', 1980)]
+
+
+def pills_machine(view=b'0\n', sort=None, home=0, i=0, songs=True):
+    m = artists_machine(albums_page=True)
+    recs = []
+    for n, (album, year) in enumerate(PAGE_SONGS):
+        path = f'/mnt/mmc/Miles Davis/{album}/{n}.flac'
+        r = m.record(album=album, artist='Miles Davis', path=path, rid=800 + n)
+        m.setword(r + O['REC_YEAR'], year); m.present.add(path); recs.append(r)
+    if songs: m.artist_songs['Miles Davis'] = recs
+    m.tracklist = recs
+    m.fs['/mnt/data/m1plus/albums-view'] = view
+    if sort is not None: m.fs['/mnt/data/m1plus/albums-sort'] = sort
+    for n, t in (('btn_play', 'Play'), ('btn_shuffle', 'Shuffle')): m.wtext[m.widgets[n]] = t
+    m.call(PSYMS['artists_open'], a0=home, count=20000000)
+    m.calls = []
+    m.call(PSYMS['ar_open'], a0=i, count=40000000)
+    m.open_calls = list(m.calls)
+    return m
+
+
+def scoped_pills_tests(ctx):
+    """An artist's albums page (docs/modules/albums.md "Artist page"): Play and Shuffle pills under the large title, the albums' years as their grey line."""
+    expect = ctx.expect
+    ROWH, RGAP, END = O['LIST_ROW_H'], O['GRID_ROW_GAP'], O['AL_PILLS_END']
+    PITCH = O['GRID_COVER'] + O['GRID_TITLE_GAP'] + O['GRID_TITLE_H'] + O['GRID_SUB_H'] + RGAP
+    expect(END == O['SG_PILL_Y'] + O['SG_PILL_H'] and O['AL_PLAY_W'] == 145 and O['AL_SHUFFLE_W'] == 145 and O['AL_PLAY_X'] == 10 and O['AL_SHUFFLE_X'] == 165 and O['AL_SHUFFLE_X'] - (O['AL_PLAY_X'] + O['AL_PLAY_W']) == 10, 'the pill block ends where the Songs page\'s pills do (52 + 40); the page\'s Play and Shuffle pills are 145 wide, Play at x 10 and Shuffle at x 165 (a 10 px gap)')
+    # the asset: two hidden pills in the content view after the large title, the Songs page's look; Play 145 wide at x 10, Shuffle 145 wide at x 165
+    tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_albums.bin'), 'rb').read())
+    grid = tree.find('view_grid')
+    kids = {c.name: c for c in grid.children}
+    expect(list(kids) == ['al_title', 'btn_play', 'btn_shuffle'], f'the content view holds the large title and the two pills ({list(kids)})')
+    for nm, x, w, icon in (('btn_play', 10, 145, 'sg_play'), ('btn_shuffle', 165, 145, 'sg_shuffle')):
+        b = kids[nm]
+        expect((b.x, b.y, b.w, b.h) == (x, O['SG_PILL_Y'], w, O['SG_PILL_H']) and b.type == 'button' and b.get('visible') == 'false' and b.get('sensitive') == 'false'
+               and b.get('style:normal:bg_color') == '#1E1E1E' and b.get('style:pressed:bg_color') == '#333335' and b.get('style:normal:round_radius') == '20'
+               and b.get('style:normal:icon') == icon and b.get('style:normal:font_size') == '18', f'{nm}: the Songs page\'s flat pill ({w} x 40 at x {x}), hidden and insensitive until the payload shows it')
+
+    # the library Albums page has none
+    m = artists_machine(albums_page=True); m.fs['/mnt/data/m1plus/albums-view'] = b'0\n'; m.call(PSYMS['albums_open'], count=20000000)
+    expect(all(m.props.get((m.widgets[n], 'visible'), 0) != 1 for n in ('btn_play', 'btn_shuffle')) and m.props.get((m.widgets['btn_play'], 'sensitive'), 0) != 1,
+           'the library Albums page keeps the pills hidden')
+    expect(('widget_set_text_utf8', m.widgets['al_title'], 'Albums') in m.calls, 'and its title is Albums')
+
+    for mode, view in (('list', b'0\n'), ('grid', b'1\n')):
+        m = pills_machine(view)
+        top = END + RGAP   # list rows right under the block's gap; the grid's first gap is the same RGAP
+        for nm in ('btn_play', 'btn_shuffle'):
+            w = m.widgets[nm]
+            expect(m.props.get((w, 'visible')) == 1 and m.props.get((w, 'sensitive')) == 1 and (w, O['EVT_CLICK']) in m.bound, f'{mode}: {nm} is shown, sensitive and bound')
+        expect(('widget_set_text_utf8', m.widgets['al_title'], 'Miles Davis') in m.calls, f'{mode}: the large title is the artist')
+        h = [c[3] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.view][-1]
+        want = (top + 4 * ROWH) if mode == 'list' else (END + RGAP + 2 * PITCH)
+        expect(h == want, f'{mode}: the content is the title block, the pills and the albums ({h}, want {want})')
+    # years: the grey line, as the Year order reads them (earliest tag 1000..2999 of the album's songs), empty without one; the All Songs row has none
+    for mode, view in (('list', b'0\n'), ('grid', b'1\n')):
+        m = pills_machine(view)
+        m.strings = {'local_allsong': 'All Songs'}
+        m.canvas = m.alloc(0x80); m.oy_canvas = m.canvas
+        ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+        m.setword(m.canvas + O['CANVAS_OY'], SCREEN_Y0 & 0xffffffff)
+        m.texts.clear(); m.blits.clear()
+        m.call(PSYMS['al_on_paint'], a0=0, a1=ev, count=400000000)
+        tx = [t for t, r in m.texts]
+        expect(tx[:4] == ['Kind of Blue', 'Jazz Hits', 'Bitches Brew', 'All Songs'], f'{mode}: titles ({tx})')
+        expect(tx[4:] == ['1959', '1970'], f'{mode}: Kind of Blue 1959 (the earliest tag), Jazz Hits and All Songs empty, Bitches Brew 1970 ({tx})')
+    # one read of the artist's songs; none for the sorts that need no years beyond it
+    qs = [c for c in m.open_calls if c[0] == 'loadAlbumdetailList']
+    expect(len(qs) == 1 and qs[0][1] == O['CLASS_ARTIST_ALBUMS'], f'one read of the artist\'s songs on open ({qs})')
+    expect(not [c for c in m.open_calls if c[0] == 'loadLocalClassList' and c[1] == O['CLASS_ALL_SONGS']], 'no scan of the library')
+    # no songs read: no years, the page still opens
+    m = pills_machine(b'0\n', songs=False)
+    expect(m.props.get((m.widgets['btn_play'], 'visible')) == 1, 'an artist query that gives no songs still opens the page with its pills')
+
+    # Play: the artist's songs in order from the first; Shuffle: the stock Shuffle mode from a random one
+    m = pills_machine(); m.mode = 2
+    m.calls = []
+    m.click('btn_play', count=900000000)
+    calls = list(m.calls)
+    ls = [c for c in calls if c[0] == 'loadAlbumdetailList']
+    expect(m.played and m.played[1] == 0 and m.played[0] == m.tracklist and m.mode == 0 and [c[3] for c in calls if c[0] == 'loadSongList'] == [O['CLASS_ARTIST_SONGS']]
+           and ls, 'Play: every song of the artist in order from the first (class 0xff11), Shuffle mode off')
+    m = pills_machine(); m.mode = 0
+    m.calls = []
+    m.click('btn_shuffle', count=900000000)
+    nav = [c for c in m.calls if c[0] == 'navigator_to_with_context' and c[1] == 'playing_page']
+    expect(('mclSetPlayMode', 2) in m.calls and nav and m.played[0] == m.tracklist and 0 <= m.played[1] < len(m.tracklist), 'Shuffle: the same list in the stock Shuffle mode from a random song')
+    expect(not [c for c in m.calls if c[0] == 'loadLocalClassList' and c[1] == O['CLASS_ALL_SONGS']], 'Shuffle reads no library list')
+
+    # taps: the first row is at the pill block's end, a tap on the pill block plays/opens no album
+    m = pills_machine(b'0\n')
+    for y, want in ((END + RGAP - 3, False), (END + RGAP + 5, True)):
+        m.calls = []
+        m.touch('down', 100, SCREEN_Y0 + y, 1000, fn='al_on_down'); m.touch('up', 100, SCREEN_Y0 + y, 1080, fn='al_on_up', count=40000000)
+        expect(bool([c for c in m.calls if c[:2] == ('navigator_to_with_context', 'albuminfo_page')]) == want, f'list: a tap at content y {y} {"opens the first album" if want else "opens nothing"}')
+    # the small title still collapses at SG_COLLAPSE (the pills are under the title, as on Songs)
+    m = pills_machine(b'0\n')
+    small = m.widgets['label_title']
+    m.setword(m.sv + O['SC_YOFF'], O['SG_COLLAPSE'] - 1); m.call(PSYMS['al_on_scroll'], count=4000000)
+    expect(m.props.get((small, 'visible'), 0) == 0, 'one px short of SG_COLLAPSE the small title is hidden')
+    m.setword(m.sv + O['SC_YOFF'], O['SG_COLLAPSE']); m.call(PSYMS['al_on_scroll'], count=4000000)
+    expect(m.props.get((small, 'visible')) == 1, 'at SG_COLLAPSE it shows (the threshold is the Songs page\'s)')
+
+    # a composer's page: no pills, no years, the title block as before
+    m = artists_machine(composers=('Mozart', 'Bach', 'Unknown Composer'), albums_page=True)
+    m.fs['/mnt/data/m1plus/albums-view'] = b'0\n'
+    m.call(PSYMS['artists_open'], a0=pod_pages.HOME_COMPOSER, count=20000000); m.calls = []
+    m.call(PSYMS['ar_open'], a0=1, count=40000000); m.open_calls = list(m.calls)
+    expect(m.props.get((m.widgets['btn_play'], 'visible'), 0) != 1 and not [c for c in m.open_calls if c[0] == 'loadAlbumdetailList'], 'a composer\'s page has no pills and reads no songs')
+
+
+def name_order_tests(ctx):
+    """The Name order of the "..." card (docs/modules/artists.md): A-Z is today's order, Z-A its mirror (sections and rail Z..A, "#" last, the Unknown row still last), tapping the ticked row
+    reverses and saves per page (artists-sort, genres-sort, composers-sort: "a" Z-A, anything else A-Z), a save that fails changes nothing."""
+    expect = ctx.expect
+    open_ = PSYMS['artists_open']
+    D = '/mnt/data/m1plus/'
+    stock = ['the Beatles', 'Zed', 'Abba', 'Miles Davis', '2 Pac', 'Unknown Artist']
+    def letters(m): return [l for _, l in sorted(headers(m).items())]
+    def rail_on(m): return m.props.get((m.rail, 'visible')) != 0 and m.props.get((m.rail, 'sensitive')) != 0
+    def sub(m): return [utf8(c[2]) for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets['vs_sub0']]
+    # no file, and files that are not "a": A-Z; "a": Z-A with the Unknown row still last
+    for data, rev in ((None, False), (b'0\n', False), (b'x\n', False), (b'1\n', False), (b'a\n', True), (b'a', True)):
+        m = artists_machine(stock)
+        if data is not None: m.fs[D + 'artists-sort'] = data
+        m.call(open_, count=20000000)
+        want = ['Zed', 'Miles Davis', 'the Beatles', 'Abba', '2 Pac', 'Unknown Artist'] if rev else ['2 Pac', 'Abba', 'the Beatles', 'Miles Davis', 'Zed', 'Unknown Artist']
+        expect(shown(m) == want, f'artists-sort {data!r}: {want}')
+        expect(letters(m) == (['Z', 'M', 'B', 'A', '#'] if rev else ['#', 'A', 'B', 'M', 'Z']) and rail_on(m), f'artists-sort {data!r}: the sections run {"Z to A, # last" if rev else "# then A to Z"}, the rail is there')
+        card_texts(m); m.click('btn_more')
+        expect(vis(m, 'vs_tick0')[0] == 1 and (sub(m) or [''])[-1] == ('Z–A' if rev else 'A–Z'), f'artists-sort {data!r}: Name is ticked with {"Z–A" if rev else "A–Z"} under it')
+        if rev:   # a tap opens the artist shown there
+            m.click('btn_more')
+            m.calls = []
+            artists_tap(m, 0, starts=[s for s, _ in Model(['Zed', 'Miles Davis', 'the Beatles', 'Abba', '2 Pac', 'Unknown Artist']).secs])
+            la = [c for c in m.calls if c[0] == 'loadAlbumList']
+            expect(la and la[0][3] == 'Zed', f'Z-A: a tap on the first row opens Zed ({la[:1]})')
+    # a tap on the ticked Name row reverses and saves, atomically; again, back to A-Z; the scroll goes to the top and the stock query runs again
+    m = artists_machine(stock); m.call(open_, count=20000000); card_texts(m)
+    scroll_to(m, 100)
+    m.calls = []
+    m.click('btn_more'); m.click('vs_item0', count=20000000)
+    calls = list(m.calls)
+    expect(m.fs.get(D + 'artists-sort') == b'a\n' and ('rename', D + 'artists-sort.tmp', D + 'artists-sort') in calls, 'the Name row writes artists-sort "a", atomically')
+    expect(('widget_set_prop_int', m.sv, 'yoffset', 0) in calls and ('loadLocalClassList', O['CLASS_ARTISTS']) in calls and vis(m, 'vs_card') == (0, 0) and shown(m)[0] == 'Zed', 'the list is Z-A from the top, the card is closed')
+    m.calls = []
+    m.click('btn_more')
+    expect((sub(m) or [''])[-1] == 'Z–A', 'reopened, Z–A is under Name')
+    m.click('vs_item0', count=20000000)
+    expect(m.fs.get(D + 'artists-sort') == b'0\n' and shown(m)[0] == '2 Pac', 'the second tap writes "0" and the list is A-Z again')
+    # the Show group and the order are independent: Album Artists keeps Z-A, the other page's file is not touched
+    m = artists_machine(stock); m.fs[D + 'artists-sort'] = b'a\n'; m.call(open_, count=20000000); card_texts(m)
+    pick(m, 5)
+    expect(shown(m) == ['Various Artists', 'Miles Davis'], 'Album Artists keep the saved Z-A')
+    expect(D + 'genres-sort' not in m.fs and D + 'composers-sort' not in m.fs, 'only artists-sort is written')
+    # a save that fails: the order, the list and the tick stay
+    m = artists_machine(stock); m.call(open_, count=20000000); card_texts(m)
+    m.fail.add(('write', D + 'artists-sort.tmp')); m.calls = []
+    m.click('btn_more'); m.click('vs_item0', count=20000000)
+    reloaded = 'loadLocalClassList' in m.names()
+    expect(D + 'artists-sort' not in m.fs and shown(m)[0] == '2 Pac' and not reloaded, 'a save that fails leaves the order and the list as they were')
+    # Genres and Composers: stock order is A-Z (the default), Z-A mirrors it with the Unknown row last, each page its own file
+    P = pod_pages
+    for label, home, cls, fname, names in (('Genres', P.HOME_GENRE, 0xf006, 'genres-sort', ('Rock', 'jazz', '周', 'Unknown Genre')),
+                                           ('Composers', P.HOME_COMPOSER, 0xf005, 'composers-sort', ('Mozart', 'Bach', 'The Beatles', 'Unknown Composer'))):
+        kw = {'genres': names} if cls == 0xf006 else {'composers': names}
+        m = artists_machine(**kw); m.call(open_, a0=home, count=20000000)
+        expect(shown(m) == list(names), f'{label}: no file, the stock order')
+        m = artists_machine(**kw); m.fs[D + fname] = b'a\n'; m.fs[D + 'artists-sort'] = b'0\n'; m.call(open_, a0=home, count=20000000)
+        expect(shown(m) == list(names[:3][::-1]) + [names[3]], f'{label}: {fname} "a" reverses the stock order, the Unknown row stays last ({shown(m)})')
+        m = artists_machine(**kw); m.fs[D + 'artists-sort'] = b'a\n'; m.call(open_, a0=home, count=20000000)
+        expect(shown(m) == list(names), f'{label}: artists-sort does not touch this page')
+        m = artists_machine(**kw); m.call(open_, a0=home, count=20000000); card_texts(m)
+        m.click('btn_more'); m.click('vs_item0', count=20000000)
+        expect(m.fs.get(D + fname) == b'a\n' and shown(m) == list(names[:3][::-1]) + [names[3]] and (D + 'artists-sort') not in m.fs, f'{label}: the Name row writes {fname} "a" only and reverses the list')
+    # Z-A with a large library: the sections never exceed 27 and the other-script names come first, "#" last
+    names = ['Zed', 'Abba', '周', 'Привет', '7 Seas', 'Miles', 'Unknown Artist']
+    m = artists_machine(names); m.fs[D + 'artists-sort'] = b'a\n'; m.call(open_, count=20000000)
+    got = shown(m)
+    expect(got[-1] == 'Unknown Artist' and got.index('Zed') < got.index('Miles') < got.index('Abba') < got.index('7 Seas') and len(letters(m)) <= 27, f'Z-A mirrors the order; letters {letters(m)} ({got})')
+
+
+SECTIONS = [artists_tests, scoped_albums_tests, scoped_pills_tests, scoped_sort_tests, genre_composer_tests, index_tests, sort_tests, name_order_tests]
 
 
 def run(ctx):

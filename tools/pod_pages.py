@@ -45,7 +45,6 @@ ACT_ALBUMS = 11  # open Albums in the last-used view: the grid (patch/albums.c) 
 ACT_GRID = 9     # show the stock Shanling grid for this session (patch/home.c)
 ACT_STARTUP = 10 # switch row: the persistent "Boot to M1+ Music" setting (patch/home.c)
 ACT_LANDSCAPE = 12  # switch row: Cover Flow opens in landscape (patch/coverflow.c)
-ACT_SORT = 13    # value row: the album order of Cover Flow and Albums, Artist or Album; a tap toggles (patch/covercache.c)
 ACT_SHOT = 14    # the Screenshot row (Settings): a 5 s countdown, then the screen is written to /mnt/mmc/screenshots (patch/shot.c)
 ACT_REBUILD = 15 # the Rebuild Covers row (Settings > Cover Flow): a confirm dialog, then a request that Home's cover build acts on (patch/m1plus.c, patch/homecover.c)
 ACT_SHELF = 16    # switch row: the Recently Played shelf on the Home menu (patch/recent.c)
@@ -62,7 +61,6 @@ ACT_KB_EN = 27  # switch row (Settings > Keyboards): English, always on and not 
 ACT_KB_ZH = 28  # switch row (Settings > Keyboards): Chinese (Pinyin), off by default; on gives the on-screen keyboard a language key and the pinyin layer (patch/keyboard.c kb_zh_toggle)
 ACT_CTHEME = 24  # value row: the Cassette Mode theme, Normal, Chrome or Metal; opens its picker page (arg = the page index); the payload shows the saved theme (patch/tape.c tape_theme)
 ACT_STOCK = 29   # open a stock page by name (arg = index in STOCK_PAGES; patch/m1plus.c navigator_to, no context); some show a value of the stock state at the right
-ACT_SORTSET = 30   # picker row (Album Order): choose the album order (arg 1 Artist, 0 Album); a check shows on the chosen row (patch/covercache.c cc_sort_set)
 ACT_THEMESET = 31  # picker row (Cassette Theme): choose the theme (arg 0 Normal, 1 Chrome, 2 Metal); a check shows on the chosen row (patch/tape.c tape_theme_set)
 ACT_INFO = 33     # an information row of the About page: a label and a grey value at the right, no chevron, not tappable (arg = INFO_*: where patch/m1plus.c reads the value; INFO_STATIC: the Row's own text)
 ACT_PCSEARCH = 34  # switch row (Settings > Library > Podcasts): Podcast Discover, on by default; off hides Discover and the search level (patch/podcasts.c pcsearch_toggle, /mnt/data/m1plus/podcast-online-search)
@@ -90,10 +88,10 @@ _ACTS = [v for k, v in globals().items() if k.startswith('ACT_')]
 assert len(set(_ACTS)) == len(_ACTS), 'two ACT_* share an id (patch/m1plus.c mirrors them)'
 SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
-VALUE_ACTIONS = (ACT_SORT, ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
-CHECK_ACTIONS = (ACT_SORTSET, ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_REGIONSET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
+VALUE_ACTIONS = (ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
+CHECK_ACTIONS = (ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_REGIONSET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
 ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_CLEARCACHE, ACT_CLEARDUR, ACT_SFDELALL, ACT_RESETALL, ACT_GRID)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
-VALUE_INIT = {ACT_SORT: 'Artist', ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_REGION: 'Automatic'}   # what the asset's value label says before the payload sets it
+VALUE_INIT = {ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_REGION: 'Automatic'}   # what the asset's value label says before the payload sets it
 # The stock pages ACT_STOCK opens: (the name navigator_to takes = ui/<name>.bin, the value the row shows at the right: the payload reads the stock state, patch/m1plus.c VK_*, or None).
 # Each is a plain navigator_to(name) with no context in stock (docs/modules/settings.md "Stock pages"): the Settings and Play Settings lists' rows, the Wi-Fi hub's two; Back returns to our page.
 STOCK_WIFI, STOCK_BLUETOOTH, STOCK_PLAYMODE, STOCK_EQ, STOCK_DISPLAY = range(5)
@@ -164,17 +162,16 @@ KEYBOARDS_PAGE_INDEX = 20
 HOMESET_PAGE_INDEX = 9
 EXTRASCFG_PAGE_INDEX = 13
 DEVELOPER_PAGE_INDEX = 14
-SORT_PAGE_INDEX = 21
-THEME_PAGE_INDEX = 22
-ABOUT_PAGE_INDEX = 23
-RECORD_PAGE_INDEX = 29
-VINYL_WHITE_INDEX = 30
-VTHEME_PAGE_INDEX = 31
-BG_PAGE_INDEX = 38   # after UPDATE
-ACCENT_PAGE_INDEX = 39  # after BG_PAGE
-APPEARANCE_PAGE_INDEX = 40  # after ACCENT_PAGE
-PULLDOWN_PAGE_INDEX = 41   # before the Radio pages
-REGION_PAGE_INDEX = 46   # the last page (after the Radio pages and Get Info)
+THEME_PAGE_INDEX = 21
+ABOUT_PAGE_INDEX = 22
+RECORD_PAGE_INDEX = 28
+VINYL_WHITE_INDEX = 29
+VTHEME_PAGE_INDEX = 30
+BG_PAGE_INDEX = 37   # after UPDATE
+ACCENT_PAGE_INDEX = 38  # after BG_PAGE
+APPEARANCE_PAGE_INDEX = 39  # after ACCENT_PAGE
+PULLDOWN_PAGE_INDEX = 40   # before the Radio pages
+REGION_PAGE_INDEX = 45   # the last page (after the Radio pages and Get Info)
 ITEMS = [   # item id = index; the default order, essentials first (iPod classic style)
     Row('Now Playing', ACT_PLAYER),
     Row('Cover Flow', ACT_COVER),
@@ -268,16 +265,17 @@ COVER = Page('m1plus_cover', 'm1plus_cover_page', 'Cover Flow', kind='cover')
 ARTISTS = Page('m1plus_artists', 'm1plus_artists_page', 'Artists', kind='artists')
 # Albums: the grid of covers or the list (patch/albums.c draws both in one custom view); the navbar button switches the mode.
 ALBUMS = Page('m1plus_albums', 'm1plus_albums_page', 'Albums', kind='grid')
-# Playlists: the stock playlists as a grid, each a mosaic of its albums' covers (patch/playlists.c); the "..." button opens the popup menu.
+# Playlists: the stock playlists as a grid, each a mosaic of its albums' covers (patch/playlists.c); the "..." button opens the shared view-sort card.
 PLAYLISTS = Page('m1plus_playlists', 'm1plus_playlists_page', 'Playlists', kind='playlists')
-# The popup menu's rows (tools/pod_ui.py builds them as the buttons pl_item0 ..; patch/playlists.c binds them by that order): New, Import, Export
-# are the stock keys of the stock Playlists page's rows; Delete opens that page, whose multi-select button deletes.
-PLAYLIST_MENU = ('New playlist', 'Import playlist', 'Export playlist', 'Delete Playlists')
+# The "..." card's action rows (the shared view-sort card's slots 6..9, tools/pod_ui.py view_sort_card; patch/playlists.c): New Playlist, Import and Export
+# run the stock code, Delete Playlists is the page's own select mode. Short labels of our own (the stock "Import playlist" in Spanish would not fit beside the glyph).
+PLAYLIST_MENU = ('New Playlist', 'Import', 'Export', 'Delete Playlists')
 # Songs: the library as one list (patch/songs.c): a large title, Play / Shuffle pills, sections with a pinned header and the A-Z rail (Title order), the navbar's
-# Search / Sort / Select buttons. The sort card's rows are the stock sort dialog's labels (tools/pod_ui.py builds them as sg_item0 ..; the order is the stock
+# "..." button, whose card is the shared view-sort card (tools/pod_ui.py view_sort_card: Search Songs, Select, Grid / List, the sort rows vs_item0..3; the order is the stock
 # sort_flag 0..4, patch/songs.c writes the flag the way the stock dialog's row handler does).
 SONGS = Page('m1plus_songs', 'm1plus_songs_page', 'Songs', kind='songs')
-SORT_MENU = ('sort_alphabet', 'sort_filename', 'sort_format', 'sort_time_desc', 'sort_time_asc')   # the stock keys of sort_flag 0..4
+FOLDERS_SORT_KEYS = ('Name', 'Date Modified', 'Type', 'Type')   # the Folders page's Sort card (the shared view-sort card, patch/folders.c): rows 0..2; the fourth is hidden
+SONGS_SORT_KEYS = ('Title', 'File Name', 'Format', 'Recently Added')   # the Sort card's rows (the shared view-sort card, patch/viewsort.c): sort_flag 0, 1, 2 and 3 / 4 (Recently Added reads Newest First / Oldest First)
 SHUFFLE_PAGE = Page('m1plus_shuffle', 'm1plus_shuffle_page', 'Shuffle', rows=[
     Row('Shuffle Songs', ACT_SHUFFLE, SHUFFLE_SONGS),
     Row('Shuffle Albums', ACT_SHUFFLE, SHUFFLE_ALBUMS),
@@ -328,8 +326,8 @@ ABOUT_PAGE = Page('m1plus_about', 'm1plus_about_page', 'About', layout=[
 # Settings > Developer > Cache (patch/homecover.c, docs/modules/settings.md "Cache"): the Covers card holds the cache folder's counts (INFO_CC_*: homecover_stat reads each, an ellipsis until counted), the build's Status and Clear Cover Cache;
 # the Track Durations card holds Measured Tracks (INFO_DUR: dur_stat, patch/durations.c) and Clear Track Durations.
 INFO_CC_ALBUMS, INFO_CC_COVERS, INFO_CC_NOART, INFO_CC_MISSING, INFO_CC_OLD, INFO_CC_SIZE, INFO_CC_STATUS = range(8, 15)   # (patch/m1plus.c INFO_CC = 8 + the index homecover_stat takes)
-INFO_DUR = INFO_CC_STATUS + 34   # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asserted below the Settings Files kinds)
-CACHE_PAGE_INDEX = 33   # after ONLINEART (32)
+INFO_DUR = INFO_CC_STATUS + 37   # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asserted below the Settings Files kinds)
+CACHE_PAGE_INDEX = 32   # after ONLINEART (31)
 CACHE_PAGE = Page('m1plus_cache', 'm1plus_cache_page', 'Cache', layout=[
     Hdr('Covers'),
     Row('Albums', ACT_INFO, INFO_CC_ALBUMS),
@@ -352,7 +350,7 @@ COVLIST = Page('m1plus_covlist', 'm1plus_covlist_page', 'Missing Covers', kind='
 
 # Settings > Developer > Tools > Settings Files (patch/setfiles.c, docs/modules/settings.md "Settings Files"): the payload's own files as read when the page opens. The labels are the file names (identifiers, not translated).
 # Only the setting files (ACT_SFDEL) are tappable, while present: a tap deletes the file after a confirm. The guard files and the folder stay ACT_INFO (never deleted).
-SETTING_FILES = ('albums-view', 'playlists-view', 'recently-added-view', 'album-order', 'coverflow-landscape', 'cassette-theme', 'vinyl-record', 'vinyl-base', 'pod-appearance',
+SETTING_FILES = ('albums-view', 'albums-sort', 'artists-sort', 'genres-sort', 'composers-sort', 'songs-sort-rev', 'folders-sort', 'playlists-sort', 'playlists-view', 'recently-added-view', 'coverflow-landscape', 'cassette-theme', 'vinyl-record', 'vinyl-base', 'pod-appearance',
                  'appearance-accent', 'appearance-background', 'home-recent-albums', 'home-daily-mix', 'home-menu', 'pulldown-tiles', 'keyboard-pinyin', 'podcast-online-search', 'podcast-region',
                  'battery-percentage', 'playback-shuffle', 'search-history', 'radio-view', 'radio-recent', 'covers-rebuild')
 GUARD_FILES = ('m1plus-start', 'm1plus-run', 'm1plus-bad', 'm1plus-off')
@@ -364,10 +362,10 @@ RETIRED_FILES = ('/mnt/data/m1plus-albums', '/mnt/data/m1plus-playlists', '/mnt/
                  '/mnt/data/m1plus-battpct', '/mnt/data/m1plus-pod-theme', '/mnt/data/m1plus-mix', '/mnt/data/m1plus-mix.art', '/mnt/data/m1plus/recently-played')
 FOLDER_LABEL = 'm1plus/'
 INFO_SF = INFO_CC_STATUS + 1   # patch/m1plus.c INFO_SF = INFO_CC + 7; row k reads setfiles_stat(k): 4 guard files, the folder, the settings
-INFO_SFOLD = INFO_SF + 32      # patch/m1plus.c: the Unsupported Files count (setfiles_old_count), above the setting rows
+INFO_SFOLD = INFO_SF + 35      # patch/m1plus.c: the Unsupported Files count (setfiles_old_count), above the setting rows
 assert len(GUARD_FILES) + 1 + len(SETTING_FILES) <= INFO_SFOLD - INFO_SF, 'the Settings Files rows reach INFO_SFOLD: raise it here and in patch/m1plus.c'
 assert INFO_DUR == INFO_SFOLD + 1, 'INFO_DUR must follow INFO_SFOLD (patch/m1plus.c)'
-FILES_PAGE_INDEX = 35   # after COVLIST (34)
+FILES_PAGE_INDEX = 34   # after COVLIST (33)
 FILES_PAGE = Page('m1plus_files', 'm1plus_files_page', 'Settings Files', layout=(
     [Row(f, ACT_INFO, INFO_SF + k) for k, f in enumerate(GUARD_FILES)] + [GAP, Row(FOLDER_LABEL, ACT_INFO, INFO_SF + 4)]
     + [Row(f, ACT_SFDEL, INFO_SF + 5 + k) for k, f in enumerate(SETTING_FILES)]
@@ -496,12 +494,10 @@ EXTRAS_PAGE = Page('m1plus_extras', 'm1plus_extras_page', 'Extras', rows=[Row(r.
 EXTRASCFG_PAGE = Page('m1plus_extrascfg', 'm1plus_extrascfg_page', 'Extras', kind='extrascfg')
 
 # Settings > Library: one card of Update Library (the stock page, as the Update Library item), Rebuild Covers (the stock confirm dialog, then Home's cover build extracts every
-# cover again) and Album Order (its value at the right opens a picker; the same order is used by the Albums page and Cover Flow), then Cover Flow's Landscape switch.
+# cover again), then Cover Flow's Landscape switch (the album order is the Albums "..." card's).
 LIBRARY_PAGE = Page('m1plus_library', 'm1plus_library_page', 'Library', layout=[
     Row('Update Library', ACT_HOME, HOME_UPDATE),
     Row('Rebuild Covers', ACT_REBUILD),
-    Row('Album Order', ACT_SORT, SORT_PAGE_INDEX),
-    Note('Albums and Cover Flow'),
     Hdr('Cover Flow'),
     Row('Landscape', ACT_LANDSCAPE),
     Hdr('Podcasts'),
@@ -509,14 +505,6 @@ LIBRARY_PAGE = Page('m1plus_library', 'm1plus_library_page', 'Library', layout=[
     Row('Podcast Region', ACT_REGION, REGION_PAGE_INDEX),
     Note('Search words are sent to Apple.'),
 ])
-# Settings > Library > Album Order: the picker (a check on the chosen row).
-SORT_PAGE = Page('m1plus_albumorder', 'm1plus_albumorder_page', 'Album Order', layout=[
-    Row('Artist', ACT_SORTSET, 1),
-    Row('Album', ACT_SORTSET, 0),
-    Note('Albums and Cover Flow'),
-])
-SORT_VALUES = ('Artist', 'Album')    # the value shown for the setting's two states (the default, Artist, first)
-
 # The album page (patch/albumpage.c, docs/modules/album-page.md): an album's tracks under the glass controls; opened by cc_open_album, never from a menu row.
 ALBUM_PAGE = Page('m1plus_album', 'm1plus_album_page', 'Album', kind='album')
 
@@ -631,7 +619,7 @@ QUEUE_PAGE = Page('m1plus_queue', 'm1plus_queue_page', 'Queue', kind='queue')
 
 # PAGES[0] is the entry page.
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
-         EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, SORT_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL, FOLDERS, QUEUE_PAGE,
+         EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL, FOLDERS, QUEUE_PAGE,
          RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST, FILES_PAGE, UPDATE, RELNOTES, BG_PAGE, ACCENT_PAGE, APPEARANCE_PAGE, PULLDOWN_PAGE, RADIO, RADIONP, RADIOINFO, SONGINFO, REGION_PAGE]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
@@ -642,4 +630,4 @@ assert PAGES[LIBRARY_PAGE_INDEX] is LIBRARY_PAGE and PAGES[HOMESET_PAGE_INDEX] i
 assert PAGES[ABOUT_PAGE_INDEX] is ABOUT_PAGE and PAGES[RECORD_PAGE_INDEX] is RECORD_PAGE and PAGES[BG_PAGE_INDEX] is BG_PAGE and PAGES[ACCENT_PAGE_INDEX] is ACCENT_PAGE and PAGES[APPEARANCE_PAGE_INDEX] is APPEARANCE_PAGE
 assert PAGES[VINYL_WHITE_INDEX] is VINYL_WHITE and PAGES[VTHEME_PAGE_INDEX] is VTHEME_PAGE and PAGES[CACHE_PAGE_INDEX] is CACHE_PAGE and PAGES[FILES_PAGE_INDEX] is FILES_PAGE
 assert PAGES[PULLDOWN_PAGE_INDEX] is PULLDOWN_PAGE and PAGES[REGION_PAGE_INDEX] is REGION_PAGE
-assert PAGES[SORT_PAGE_INDEX] is SORT_PAGE and PAGES[THEME_PAGE_INDEX] is THEME_PAGE
+assert PAGES[THEME_PAGE_INDEX] is THEME_PAGE

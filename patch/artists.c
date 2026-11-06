@@ -14,17 +14,14 @@
  * content and the navbar shows the small one once it has scrolled away; the compact A-Z rail and its bubble (patch/azlist.c, shared with Songs) are widgets of the window
  * beside the scroll_view. Row text is the Albums page's tile text (patch/grid.c: a name cut once with an ellipsis).
  *
- * A navbar button (the Albums toggle's slot, NAV_VIEW_X) switches Artist and Album Artist: it makes the
- * same change the stock Artists page's own switch handler does (@0x535770): artist_type flipped,
- * [PLAYSET] ARTISTTYPE saved with write_int_config, and the stock page's reload flag (0xa06d20) raised so
- * a later stock Artists page rebuilds; the stock handler's toast and style swap are its own page's. The
- * title reads "Artists" or "Album Artists" and the button shows the other mode's glyph, the one a tap
- * switches to. The list is then queried again. Everything stock reads artist_type for (this list, an
- * artist's albums in Cover Flow and the album page) follows. Without the button or the title the page
- * still lists in the current mode.
+ * The navbar's "..." (the capsule's left cap, NAV_VIEW_X) opens the shared card (patch/viewsort.c): Search Artists (Artists only), the Show group (Artists, Album Artists: Artists
+ * only) and the Name order, which a tap on the ticked row reverses (A-Z, Z-A; saved per page in artists-sort, genres-sort, composers-sort). A Show row makes the same change the stock
+ * Artists page's own switch handler does (@0x535770): artist_type set, [PLAYSET] ARTISTTYPE saved with write_int_config, and the stock page's reload flag (0xa06d20) raised so
+ * a later stock Artists page rebuilds; the stock handler's toast and style swap are its own page's. The title reads "Artists" or "Album Artists". The list is then queried again.
+ * Everything stock reads artist_type for (this list, an artist's albums in Cover Flow and the album page) follows.
  *
  * The same page lists Genres (class 0xf006) and Composers (0xf005) for the menu's Genres and Composers rows (artists_open's argument is the stock Home tile; 0 is
- * Artists): the title is the row's text, the Artist / Album Artist button is hidden and the order is the stock query's. A composer's tap is an artist's (Cover Flow on the
+ * Artists): the title is the row's text, the card has the Name order alone and the order is the stock query's (Z-A reversed). A composer's tap is an artist's (Cover Flow on the
  * composer's albums: loadAlbumList(0xf005), class 0xff02); a genre's tap lists the genre's songs on our Songs page (songs_open_genre). Where the window will not open
  * the tile's stock page opens. docs/modules/artists.md.
  *
@@ -33,11 +30,14 @@
  */
 #include "offsets.inc"
 #include "stock.h"
+#include "home.h"
 #include "covercache.h"
 #include "common.h"
 #include "grid.h"
 #include "azlist.h"
 #include "i18n.h"
+#include "viewsort.h"
+#include "search.h"
 
 extern int coverflow_artist(void *artists, unsigned index, unsigned scope); /* patch/coverflow.c */
 extern int albums_open_artist(void *artists, unsigned index, unsigned scope); /* patch/albums.c */
@@ -67,8 +67,10 @@ extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination th
 
 static struct {
     void *win, *view, *sv, *list, *status;
-    void *title, *big, *toggle, *np, *fade,
-        *st_title; /* label_title (the navbar's), ar_title (the large one), btn_artisttype, btn_backtoplayer, img_nb_fade, the row text style; any may be missing */
+    void *title, *big, *fade,
+        *st_title; /* label_title (the navbar's), ar_title (the large one), img_nb_fade, the row text style; any may be missing */
+    vs_t vs; /* the "..." card */
+    int rev; /* the Name order is Z-A (the saved page setting) */
     void *artists; /* our copy of the stock artist rows */
     unsigned *order; /* stock row at each display position; NULL = stock order */
     unsigned char *rank; /* the section rank of each display position */
@@ -132,23 +134,29 @@ static const char *ar_text(const void *ctx, unsigned i) { return ar_name(((void 
 
 static void ar_sort(void) {
     unsigned i, n = 0, *v;
+    int keyed = ar.cls == CLASS_ARTISTS; /* Genres and Composers keep stock's order (the in-memory title sort) unless reversed */
     ar.order = (unsigned *)0;
     ar_key = (const char **)0;
-    if (ar.count < 2) return;
+    if (ar.count < 2 || (!keyed && !ar.rev)) return;
     ar.order = calloc(ar.count, sizeof *ar.order);
     ar_rec = calloc(ar.count, sizeof *ar_rec);
     if (ar.order && ar_rec) {
         for (i = 0; i < ar.count; ++i) ar_rec[i] = deque_at(ar.artists, i);
-        ar_key = cc_name_keys(ar.count, ar_text, ar_rec);
+        if (keyed) ar_key = cc_name_keys(ar.count, ar_text, ar_rec);
     }
-    if (!ar.order || !ar_rec || !ar_key) {
+    if (!ar.order || !ar_rec || (keyed && !ar_key)) {
         free(ar.order);
         ar.order = (unsigned *)0;
     } else {
         v = ar.order; /* the sorted rows first (their stock numbers), then spread over the positions the fixed rows leave */
         for (i = 0; i < ar.count; ++i)
             if (!ar_fixed(ar_rec[i])) v[n++] = i;
-        cc_heapsort(v, n, ar_cmp);
+        if (keyed) cc_heapsort(v, n, ar_cmp);
+        if (ar.rev) /* Z-A: the sorted rows the other way round; the Unknown rows still keep their stock (last) positions */
+            for (i = 0; i < n / 2; ++i) {
+                unsigned t = v[i];
+                v[i] = v[n - 1 - i], v[n - 1 - i] = t;
+            }
         /* from the end: the next sorted row sits at or before i, so nothing still to read is overwritten */
         for (i = ar.count; i-- > 0;) v[i] = ar_fixed(ar_rec[i]) ? i : v[--n];
     }
@@ -168,11 +176,17 @@ static void ar_sections(void) {
     if (!ar.rank) return;
     for (i = 0; i < ar.count; ++i) {
         void *r = deque_at(ar.artists, ar_stock(i));
-        ar.rank[i] = *(int *)((char *)r + REC_ID) == -1 && i ? (unsigned char)prev
-                                                             : (unsigned char)az_rank_of(cc_name_initial(ar_name(r)));
+        int k = az_rank_of(cc_name_initial(ar_name(r)));
+        if (ar.rev) k = k ? 26 - k : 26; /* Z-A: Z is rank 0 .. A rank 25 and "#" (symbols, digits) last, so the ranks still rise down the list */
+        ar.rank[i] = *(int *)((char *)r + REC_ID) == -1 && i ? (unsigned char)prev : (unsigned char)k;
         prev = ar.rank[i];
     }
     az_sections(&ar.al, ar.rank, 1);
+    if (ar.rev) /* the headers and the rail show the letters of those ranks: rank 0 is Z, 25 is A, 26 is "#" */
+        for (i = 0; i < (unsigned)ar.al.nsec; ++i) {
+            int t = ar.al.sec_letter[i] == '#' ? 0 : ar.al.sec_letter[i] - 'A' + 1; /* (the rank az_sections labelled it with) */
+            ar.al.sec_letter[i] = (unsigned char)(t == 26 ? '#' : 'Z' - t);
+        }
 }
 
 static int ar_content(void) { return az_rows_end(&ar.al) + AR_BOTTOM; }
@@ -193,29 +207,13 @@ static void ar_title_update(void) {
     }
 }
 
-/* The title names the mode artist_type selects; the button shows the glyph of the other one. */
+/* The title names the mode artist_type selects (Artists / Album Artists), or the page (Genres, Composers). */
 static void ar_mode_show(void) {
-    int album = *(volatile int *)ARTIST_TYPE == 1;
-    const char *icon = album ? "pod_nav_artist" : "pod_nav_albumartist";
-    if (ar.cls !=
-        CLASS_ARTISTS) { /* Genres and Composers: the menu row's text, and no Artist / Album Artist switch (hidden and out of the hit test) */
+    if (ar.cls != CLASS_ARTISTS) {
         ar_title_text(ar.cls == CLASS_GENRES ? "Genres" : "Composers");
-        ar_show(ar.toggle, 0);
-        if (ar.np) { /* Now Playing is the capsule's right cap in the asset (it has the switch to its left): alone it is the glass disc, as on every page with no toggle */
-            widget_set_prop_str(ar.np, "style:normal:icon", "ah_nav_np");
-            widget_set_prop_str(ar.np, "style:over:icon", "ah_nav_np");
-            widget_set_prop_str(ar.np, "style:pressed:icon", "ah_nav_np_down");
-        }
         return;
     }
-    ar_title_text(album ? "Album Artists" : "Artists");
-    if (ar.toggle) {
-        widget_set_prop_str(ar.toggle, "style:normal:icon", icon);
-        widget_set_prop_str(ar.toggle, "style:over:icon", icon);
-        widget_set_prop_str(ar.toggle, "style:pressed:icon",
-                            album ? "pod_nav_artist_down" : "pod_nav_albumartist_down");
-        widget_invalidate_force(ar.toggle, (void *)0);
-    }
+    ar_title_text(*(volatile int *)ARTIST_TYPE == 1 ? "Album Artists" : "Artists");
 }
 
 /* ---------------------------------------------------------------------------
@@ -368,8 +366,7 @@ static void ar_load(void) {
         deque_assign(ar.artists, list);
         ar.count = deque_size(ar.artists);
         if (ar.count > MAX_ARTISTS) ar.count = MAX_ARTISTS;
-        if (ar.cls == CLASS_ARTISTS)
-            ar_sort(); /* Genres and Composers stay in stock's order (toolsQueryDbTable's in-memory title sort) */
+        ar_sort(); /* Genres and Composers stay in stock's order (toolsQueryDbTable's in-memory title sort) unless Z-A */
     }
     ar.al.count = (int)ar.count;
     if (ar.count) ar_sections();
@@ -385,18 +382,57 @@ static void ar_load(void) {
     ar_redraw();
 }
 
-/* The button: flip the stock setting the way the stock switch does, then list again. */
-static int ar_on_toggle(void *ctx, void *e) {
-    int type = *(volatile int *)ARTIST_TYPE != 1;
-    (void)ctx;
-    (void)e;
-    if (ar.cls != CLASS_ARTISTS)
-        return RET_OK; /* Genres and Composers have no switch (the button is hidden; a stray click changes nothing) */
+/* The page's saved order: artists-sort, genres-sort or composers-sort, one character: '0' Name A-Z (the default and any other content), 'a' Name Z-A. */
+static const char *ar_sort_file(int tmp) {
+    return ar.cls == CLASS_GENRES ? (tmp ? GENRES_SORT_TMP : GENRES_SORT_FILE)
+           : ar.cls == CLASS_COMPOSERS ? (tmp ? COMPOSERS_SORT_TMP : COMPOSERS_SORT_FILE)
+                                       : (tmp ? ARTISTS_SORT_TMP : ARTISTS_SORT_FILE);
+}
+
+static void ar_card(int on) { vs_menu(&ar.vs, on, 0, ar.rev, *(volatile int *)ARTIST_TYPE == 1); }
+
+/* The Show group's rows (Artists only): flip the stock setting the way the stock switch does, then list again; the row already ticked does nothing. */
+static void ar_set_type(int type) {
+    if (ar.cls != CLASS_ARTISTS || type == (*(volatile int *)ARTIST_TYPE == 1)) return;
     *(volatile int *)ARTIST_TYPE = type;
     write_int_config(type, "PLAYSET", "ARTISTTYPE");
     *(volatile unsigned char *)ARTIST_RELOAD = 1;
     ar_mode_show();
     ar_load();
+}
+
+/* The card's rows: Search Artists opens the Search page scoped to artists (the library search where that will not open); Artists / Album Artists set the type; the Name row reverses the order
+ * (saved first: a save that fails leaves the order and its tick). The card closes. */
+static int ar_on_item(void *ctx, void *e) {
+    int k = (int)(long)ctx;
+    (void)e;
+    if (!ar.view) return RET_OK;
+    ar_card(0);
+    if (k == VS_SEARCH) {
+        if (search_open_in(SEARCH_ARTISTS) < 0) search_open();
+    } else if (k == VS_SORTS || k == VS_SORTS + 1) {
+        ar_set_type(k == VS_SORTS + 1);
+    } else if (k == 0) {
+        int rev = !ar.rev;
+        if (home_write_atomic(ar_sort_file(0), ar_sort_file(1), rev ? "a\n" : "0\n") == 0) {
+            ar.rev = rev;
+            ar_load();
+        }
+    }
+    return RET_OK;
+}
+
+static int ar_on_scrim(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    ar_card(0);
+    return RET_OK;
+}
+
+static int ar_on_more(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    if (ar.win && ar.vs.card) ar_card(!ar.vs.on);
     return RET_OK;
 }
 
@@ -422,8 +458,6 @@ int artists_open(int home) {
     ar.status = widget_lookup(ar.win, "label_status", 1);
     ar.title = widget_lookup(ar.win, "label_title", 1);
     ar.big = widget_lookup(ar.win, "ar_title", 1);
-    ar.toggle = widget_lookup(ar.win, "btn_artisttype", 1);
-    ar.np = widget_lookup(ar.win, "btn_backtoplayer", 1);
     ar.fade = widget_lookup(ar.win, "img_nb_fade", 1);
     ar.st_title = widget_lookup(ar.win, "label_row_title", 1);
     ar.al.win = ar.win, ar.al.sv = ar.sv, ar.al.top = AR_TOP, ar.al.row = AR_ROW;
@@ -433,7 +467,7 @@ int artists_open(int home) {
     ar.al.rail = widget_lookup(ar.win, "sg_rail", 1);
     ar.al.bubble = widget_lookup(ar.win, "sg_bubble", 1);
     ar.al.bubble_letter = widget_lookup(ar.win, "sg_bubble_letter", 1);
-    if (ar.toggle) widget_on(ar.toggle, EVT_CLICK, ar_on_toggle, (void *)0);
+    pod_bind(ar.win, "btn_more", ar_on_more, (void *)0);
     if (!ar.list || !ar.sv || !ar.view || !ar.status || !ar.st_title || !ar.al.st_hdr || !ar.al.st_rail ||
         !ar.al.st_rail_on || !ar.al.rail || !ar.al.bubble || !ar.al.bubble_letter) {
         int h = ar.home;
@@ -446,6 +480,14 @@ int artists_open(int home) {
         navigator_back();
         return h ? pod_home_open(h) : -1;
     }
+    if (vs_bind(&ar.vs, ar.win, ar_on_item, ar_on_scrim,
+                ar.cls == CLASS_ARTISTS ? (1u << 0) | VS_WITH_VIEWS | VS_WITH_SEARCH : (1u << 0))) { /* (Name alone on Genres and Composers; they have no Search scope or Show group) */
+        int h = ar.home;
+        grid_free(&ar.g);
+        navigator_back(); /* an asset that is not ours */
+        return h ? pod_home_open(h) : -1;
+    }
+    ar.rev = set_read(ar_sort_file(0), '0') == 'a';
     az_make_disc(&ar.al);
     ar.chev = pod_make_chevron();
     ar.noscroll = !widget_on(ar.sv, EVT_SCROLL, ar_on_scroll, (void *)0) ||

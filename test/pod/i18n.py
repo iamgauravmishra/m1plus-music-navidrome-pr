@@ -6,11 +6,12 @@ import build, awtk_strings, awtk_style, pcregion, pod_i18n, pod_keyboard
 from awtk_text import Ttf, StbText
 
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
-SAME_AS_ENGLISH = {'Cover Flow', 'Playlists', 'Playlist', 'Genres', 'Gain', 'Extras', 'Albums', 'Artists', 'Local', '%s, %s'}   # translations that are the English word by design
+SAME_AS_ENGLISH = {'Cover Flow', 'Playlists', 'Playlist', 'Genres', 'Gain', 'Extras', 'Albums', 'Artists', 'Local', 'Name', '%s, %s'}   # translations that are the English word by design
 SAME_AS_ENGLISH |= {'%d minute', '%d minutes'}    # French writes minute(s) as English does
 SAME_AS_ENGLISH |= {'Podcasts', ', %d', 'Normal', 'Chrome', 'Metal', 'Graphite', '5 s', '10 s'}    # Podcasts in French and German
 SAME_AS_ENGLISH |= {'Downloads', '%d MB', '%d.%d GB', '%d GB'}    # German writes Downloads as English does
-SAME_AS_ENGLISH |= {'Format'}    # French, German and Polish write Format as English does
+SAME_AS_ENGLISH |= {'A–Z', 'Z–A'}    # the alphabet range in Latin-script and CJK tables (Thai and Cyrillic have their own)
+SAME_AS_ENGLISH |= {'Format', 'Type'}    # French, German and Polish write Format as English does; French writes Type the same
 SAME_AS_ENGLISH |= {'Genre', 'Screenshot', 'Collections', 'Cover'}    # French and German write Genre the same; German and Italian say Screenshot; French writes Collections the same; German says Cover
 SAME_AS_ENGLISH |= {'Orange', 'Champagne', 'Neutral'}    # colour names: Orange in French and German, Champagne in French and Italian, Neutral in German
 SAME_AS_ENGLISH |= {'Radio', 'LIVE', 'Live', '%d stations'}    # Radio in French, German, Spanish, Italian and Polish; LIVE and Live in German and Italian; "stations" in French
@@ -120,7 +121,7 @@ def run(ctx):
     orphans = set(pod_i18n.TEXT) | set(pod_i18n.STOCK)
     orphans -= used | {k for k in orphans if any(f'"{k}"' in src for src in sources.values())}
     expect(not orphans, f'every key is used by an asset or the payload: {sorted(orphans)}')
-    expect({'Landscape', 'Album Order', 'Artist', 'album', 'Cover Flow'} <= used | keys_in_c and 'Cover Flow landscape' not in pod_i18n.TEXT,
+    expect({'Landscape', 'Cover Flow'} <= used | keys_in_c and 'Cover Flow landscape' not in pod_i18n.TEXT,
            'Settings > Library uses its keys (rows in the asset, the value by key in the payload); the old landscape row key is gone')
     expect(all(k in sources['home.c'] for k in ('"M1+ Music"',)), 'the Home icon keeps the brand name as plain text')
     expect(len(re.findall(r'locale_info_tr|widget_set_tr_text', ' '.join(pod.FUNCTIONS))) == 2 and pod.FUNCTIONS['locale_info_tr'][2] == 0x658db4
@@ -142,7 +143,7 @@ def run(ctx):
         title = m.widgets['label_title']
         big = m.widgets['ar_title']   # both titles are the table's text (set as text through the title fit, as the Songs lists')
         expect(text_of(m, title) == [T('Artists')] and text_of(m, big) == [T('Artists')], f'{loc}: the Artists titles read {T("Artists")!r}')
-        m.call(PSYMS['ar_on_toggle'], count=5000000)
+        m.click('btn_more'); m.click('vs_item5', count=5000000)
         expect(text_of(m, title) == [T('Album Artists')] and text_of(m, big) == [T('Album Artists')], f'{loc}: the Album Artists titles')
         m = artists_machine(artists=()); m.set_language(loc)
         m.call(open_artists, count=2000000)
@@ -169,7 +170,7 @@ def run(ctx):
         expect(text_of(m, st) == [T('Preparing covers...') + ' 0/3'], f'{loc}: the progress line is the translation and the count ({text_of(m, st)})')
         # Albums grid with no library
         m = Machine(); m.set_language(loc)
-        for w in ('btn_return', 'btn_backtoplayer', 'btn_albumview', 'view_grid', 'albums_scrollview', 'label_status', 'label_row_title', 'label_row_sub', 'label_grid_title', 'label_grid_sub'): m.widget(w)
+        for w in (*VS_WIDGETS, 'btn_return', 'btn_backtoplayer', 'view_grid', 'albums_scrollview', 'label_status', 'label_row_title', 'label_row_sub', 'label_grid_title', 'label_grid_sub'): m.widget(w)
         m.call(PSYMS['albums_open'], count=2000000)
         expect(text_of(m, m.widgets['label_status']) == [T('Update Local Music first')], f'{loc}: the empty Albums page')
         # Shuffle: the message boxes
@@ -208,7 +209,7 @@ def run(ctx):
         if page.kind == 'pdcfg': labels = list(enumerate(pod_pages.PULLDOWN_TILES))   # the Control Center page's rows are the tiles, beside the up arrow
         keys = [(english, [c for c in tree.find(f'pod_row{i}').children if c.type == 'hscroll_label'][0].w) for i, english in labels]
         for loc in LOC:
-            if pod_i18n.key_for(page.title) and page.kind != 'songs':   # the Songs page's small title is hidden by the payload where it does not fit (test/pod/songs.py)
+            if pod_i18n.key_for(page.title) and page.kind not in ('songs', 'grid'):   # the Songs page's small title is hidden by the payload where it does not fit (test/pod/songs.py); the Albums page's is cut with an ellipsis (below)
                 w = width(tr_text(loc, pod_i18n.key_for(page.title)), title_px)
                 if w > lt.w: over.append((page.key, 'title', loc, w, lt.w))
             for english, room in keys:
@@ -229,10 +230,14 @@ def run(ctx):
                 if w > cap.w - 4: hdr_over.append((page.key, title, loc, w, cap.w))
     expect(not hdr_over, f'every Extras section header (Play, Library, Collections, Tools) fits its label in all 13 languages at {pod_ui.HDR_PX} px ({hdr_over[:4]})')
     albums_tree = awtk_ui.parse(open(os.path.join(WORK, RAW, 'ui', pod_pages.ALBUMS.key + '.bin'), 'rb').read())
-    albums_lbl, cf_btn = albums_tree.find('label_title'), albums_tree.find('btn_coverflow')
-    over = [(loc, width(tr_text(loc, pod_i18n.key_for('Albums')), title_px)) for loc in LOC
-            if albums_lbl.x + width(tr_text(loc, pod_i18n.key_for('Albums')), title_px) > cf_btn.x]
-    expect(not over and albums_lbl.x + albums_lbl.w == cf_btn.x == A['NAV_CF_X'], f'the Albums title ends before the Cover Flow button (x {cf_btn.x}) in all languages, at {title_px} px ({over})')
+    albums_lbl = albums_tree.find('label_title')
+    # the Albums title runs from x 58 to the capsule's Cover Flow button (x 168): 110 px; the payload cuts it with an ellipsis where "Albums" outgrows it (az_fit, test/pod/albums.py)
+    wide = [loc for loc in LOC if width(tr_text(loc, pod_i18n.key_for('Albums')), title_px) > albums_lbl.w]
+    expect(albums_lbl.x + albums_lbl.w == albums_tree.find('btn_coverflow').x == A['NAV_CF_X'] == 168 and albums_tree.find('btn_search') is None and not wide,
+           f'the Albums title (110 px) ends before the Cover Flow button (x 168) and fits "Albums" in all 13 languages at {title_px} px, cut with an ellipsis where it would not ({wide}); it shows once the large title has scrolled away')
+    big = albums_tree.find('al_title')
+    big_over = [loc for loc in LOC if width(tr_text(loc, pod_i18n.key_for('Albums')), 32) > big.w]
+    expect(big.w == A['SG_TITLE_W'] and not big_over, f'the Albums large title (32 px, {big.w} px wide) fits in all 13 languages ({big_over})')
     # the artist page's title (the artist's name, set at run time) is cut at the Songs button (NAV_VIEW_X): the page's own
     # title text, which shows until then, fits that room in every language
     cf_title = cover.find('label_title')
@@ -254,13 +259,15 @@ def run(ctx):
             if width(tr_text(loc, key).replace('…', '...'), pod_ui.HC_PX) > A['HC_W'] - 2: over.append((loc, key, 'Home waiting line'))   # (the dots are three ASCII ones at most)   # the waiting pill (patch/homecover.c hc_wait_text): the text alone, no count
         if width(tr_text(loc, 'Cancel'), 20) > cover.find('btn_cancel').w - 10: over.append((loc, 'Cancel'))
         if width(tr_text(loc, 'All albums'), 22) > 288: over.append((loc, 'All albums'))
+        for key, x0, px in (('Title', A['VS_LABEL_X'], 18), ('Artist', A['VS_LABEL_X'], 18), ('Recently Added', A['VS_LABEL_X'], 18), ('Year', A['VS_LABEL_X'], 18), ('Grid', A['VS_LABEL_X_GLYPH'], 18), ('List', A['VS_LABEL_X_GLYPH'], 18), ('Songs', A['VS_LABEL_X_GLYPH'], 18), ('Albums', A['VS_LABEL_X_GLYPH'], 18),
+                            ('Search Albums', A['VS_LABEL_X_GLYPH'], 18), ('Search Artists', A['VS_LABEL_X_GLYPH'], 18), ('Artists', A['VS_LABEL_X_GLYPH'], 18), ('Album Artists', A['VS_LABEL_X_GLYPH'], 18), ('Name', A['VS_LABEL_X'], 18), ('Date Modified', A['VS_LABEL_X'], 18), ('Type', A['VS_LABEL_X'], 18),
+                            ('New Playlist', A['VS_LABEL_X_GLYPH'], 18), ('Import', A['VS_LABEL_X_GLYPH'], 18), ('Export', A['VS_LABEL_X_GLYPH'], 18), ('Delete Playlists', A['VS_LABEL_X_GLYPH'], 18),
+                            ('A–Z', A['VS_LABEL_X'], 15), ('Z–A', A['VS_LABEL_X'], 15), ('Newest First', A['VS_LABEL_X'], 15), ('Oldest First', A['VS_LABEL_X'], 15)):   # the Albums "..." card (patch/viewsort.c): its widest width PL_CARD_MAX, 16 px margin
+            if x0 + width(tr_text(loc, key), px) + A['VS_LABEL_R'] > A['PL_CARD_MAX']: over.append((loc, key, 'Albums card'))
         # the pill: the text is centred in a 104 px rect (194 - margins 32 + 29 - the 44 px icon square - the spacer -15)
         if width(tr_text(loc, 'Play all'), 20) > 104: over.append((loc, 'Play all', 'pill'))
         for key in ('%d track', '%d tracks'):
             if width('1959 \xb7 ' + tr_text(loc, key).replace('%d', '9999'), 13) > A['AH_TEXT_W']: over.append((loc, key, 'count line'))
-        for key in pod_pages.SORT_VALUES:                              # the Sort row's value, in its own label (and the Artist/Album words in the title room)
-            k = pod_i18n.key_for(key)
-            if width(tr_text(loc, k), pod_ui.VALUE_PX) > pod_ui.VALUE_W - 4: over.append((loc, key, 'sort value'))
     # The Rebuild Covers confirm: the stock dialog's wrapped label (centred white 20 px, 260 x 80 at y 25, @0x472e1c) takes at most
     # three lines. A line breaks at a space; a CJK or Thai character is a break of its own (conservative for Thai, which has none).
     wrap_px = px_of('label', 'label_centerwhite20_style')
@@ -308,7 +315,7 @@ def run(ctx):
                     if need > room + ST.TEXT_X - ST.CM - ST.PAD: cards_over.append((page.key, r.label, '99999', loc, need, room))
                     continue
                 if pod_pages.row_kind(r) != 'value': continue
-                vkeys = stock_values[pod_pages.STOCK_PAGES[r.arg][1]] if r.action == pod_pages.ACT_STOCK else ('Artist', 'album') if r.action == pod_pages.ACT_SORT else pod_pages.BG_VALUES if r.action == pod_pages.ACT_BG else pod_pages.ACCENT_VALUES if r.action == pod_pages.ACT_ACCENT else () if r.action == pod_pages.ACT_REGION else ('Normal', 'Chrome', 'Metal')
+                vkeys = stock_values[pod_pages.STOCK_PAGES[r.arg][1]] if r.action == pod_pages.ACT_STOCK else pod_pages.BG_VALUES if r.action == pod_pages.ACT_BG else pod_pages.ACCENT_VALUES if r.action == pod_pages.ACT_ACCENT else () if r.action == pod_pages.ACT_REGION else ('Normal', 'Chrome', 'Metal')
                 vals = [(vk, tr_text(loc, vk)) for vk in vkeys] if r.action != pod_pages.ACT_REGION else [('Automatic', tr_text(loc, 'Automatic'))] + [(n, n) for n in pcregion.NAMES]   # (the Podcast Region's value: Automatic, or a storefront's English name)
                 for vk, vt in vals:
                     need = width(tr_text(loc, pod_i18n.key_for(r.label)), row_px) + ST.VALUE_LABEL_GAP + min(width(vt, ST.VALUE_PX) + 6, ST.VALUE_MAX)

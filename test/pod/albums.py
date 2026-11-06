@@ -3,6 +3,7 @@
 mode of the same page (rows, covers, two text styles, pressed row, taps), the loader that decodes nothing while the scroll_view moves, the in-place
 mode toggle with its persistence, hit tests on the page, and the touch with demo's own scroll_view code (drag, fling, tap, catch a coasting list)."""
 import os, struct
+import mod_icons
 from unicorn import mips_const
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
@@ -11,6 +12,7 @@ ALBUMS_FILE, ALBUMS_TMP = '/mnt/data/m1plus/albums-view', '/mnt/data/m1plus/albu
 COVER, GAP, MARGIN, COLS = O['GRID_COVER'], O['GRID_GAP'], O['GRID_MARGIN'], O['GRID_COLS']
 TGAP, THEIGHT, VIEW_H, TILES = O['GRID_TITLE_GAP'], O['GRID_TITLE_H'], O['GRID_VIEW_H'], O['GRID_TILES']
 RGAP, SUBH = O['GRID_ROW_GAP'], O['GRID_SUB_H']
+TOP = O['SG_TITLE_H']       # the large title's block: the rows start this far down the content (a page offset of TOP puts the first row at the top of the window)
 CELL = COVER + TGAP + THEIGHT + SUBH       # a tile: the cover, the album, the artist
 PITCH = CELL + RGAP
 CPITCH = COVER + GAP
@@ -46,10 +48,11 @@ def albums_world(m, n=30, cached=True, missing=(), empty=(), title=lambda i: f'A
     is in missing / empty (the zero-length "no art" marker), a cache file with a cover. sort: the order setting
     (the machines default to the stock order, 'album', which the layout tests index by album number; 'artist' is the
     setting's own default, tested in the sort tests)."""
-    if sort == 'album': m.fs[CFSORT_FILE] = b'0\n'
+    if sort == 'album': m.fs[SORT_FILE] = b'0\n'
     m.load_image = 0
-    for w in ('btn_return', 'btn_backtoplayer', 'btn_albumview', 'btn_coverflow', 'view_grid', 'label_status', 'label_row_title', 'label_row_sub',
-              'label_grid_title', 'label_grid_sub'): Machine.widget(m, w)
+    for w in (*VS_WIDGETS, 'btn_return', 'btn_backtoplayer', 'btn_coverflow', 'view_grid', 'label_status', 'label_row_title', 'label_row_sub',
+              'label_grid_title', 'label_grid_sub', 'label_title', 'al_title', 'img_nb_fade'): Machine.widget(m, w)
+    m.setword(m.widgets['label_title'] + 8, O['NAV_CF_X'] - O['NAV_TITLE_X']); m.setword(m.widgets['al_title'] + 8, O['SG_TITLE_W'])   # the labels' widths (az_fit cuts to them)
     m.canvas = m.alloc(0x80)                                # a canvas whose origin (canvas_t @4) the paint moves
     m.oy_canvas = m.canvas
     m.showlist = [m.record(album=title(i), artist=f'Artist {i}', path=f'/mnt/mmc/m/{i}/1.flac', rid=i + 1) for i in range(n)]
@@ -63,9 +66,9 @@ def albums_world(m, n=30, cached=True, missing=(), empty=(), title=lambda i: f'A
             if i not in empty: m.cache_index[p] = i
 
 
-def albums_machine(n=30, **world):
-    """A machine with the page's widgets (see albums_world) and the page as widget structs, for widget_to_local."""
-    m = Machine()
+def albums_machine(n=30, cls=Machine, **world):
+    """A machine (cls) with the page's widgets (see albums_world) and the page as widget structs, for widget_to_local."""
+    m = cls()
     albums_world(m, n, **world)
     # the page as widget structs, for widget_to_local (stock's own code, which walks the parents and adds a scroll_view's offset through its
     # vtable): window (30 px under the top: the status bar) > list_view (50: under the navbar) > scroll_view (a real one's fields: demo's vtable, the
@@ -83,9 +86,17 @@ def albums_machine(n=30, **world):
     return m
 
 
+VS_SORTS = O['VS_SORTS']
+
+
+def glyph(m):
+    """The "..." card's view row glyph: the view a tap switches to (pod_nav_grid / pod_nav_list name them as the old toggle did)."""
+    return 'pod_nav_grid' if m.props.get((m.widgets['vs_tick5'], 'visible'), 0) else 'pod_nav_list'   # (List ticked: the page is a list, a tap on Grid switches)
+
+
 def page_mode(m):
-    """1 if the open page is in list mode (its toggle shows the grid glyph), else 0."""
-    return 1 if m.props.get((m.widgets['btn_albumview'], 'style:normal:icon')) == 'pod_nav_grid' else 0
+    """1 if the open page is in list mode (the view row offers the grid), else 0."""
+    return 1 if glyph(m) == 'pod_nav_grid' else 0
 
 
 def open_grid(m):
@@ -151,6 +162,7 @@ def reference(scroll, n):
     None, artist rect or None)] for the cells that touch the view. Brute force over every album unless n is large
     (then a window of rows)."""
     out = []
+    scroll -= TOP
     first = max(0, (scroll - RGAP - CELL) // PITCH - 1) * COLS
     for a in range(first, min(n, first + 40) if n > 200 else n):
         x, top = MARGIN + (a % COLS) * CPITCH, RGAP + (a // COLS) * PITCH - scroll
@@ -166,6 +178,7 @@ def reference(scroll, n):
 def list_ref(scroll, n):
     """[(album, cover (src, dst) or None, title rect or None, artist rect or None, hairline y or None)] of a list frame."""
     out = []
+    scroll -= TOP
     for a in range(n):
         top = a * ROW - scroll
         if top >= VIEW_H or top + ROW <= 0: continue
@@ -349,7 +362,7 @@ def layout_tests(ctx):
     expect(all(grid.get(f'style:normal:{k}') == v for k, v in (('text_color', '#FFFFFF'), ('font_size', '16'),
                                                                  ('text_align_h', 'left'), ('bg_color', '#000000'))),
            'its style is the 16 px white title text on black (what widget_prepare_text_style reads)')
-    expect(not [w for w in tree.walk() if w.type in ('list_item', 'slide_menu') or (w.type == 'image' and w.name != 'img_nb_fade')],
+    expect(not [w for w in tree.walk() if w.type in ('list_item', 'slide_menu') or (w.type == 'image' and w.name != 'img_nb_fade' and not w.name.startswith('vs_'))],
            'no widget per album: the page is a navbar, a list, the fade under the bar and a status label')
     bar = tree.find('scroll_bar_m')
     expect(bar is not None and bar.type == 'scroll_bar_m' and (bar.x, bar.w) == (SVW, 10) and bar in tree.find('albums_listview').children,
@@ -364,21 +377,18 @@ def layout_tests(ctx):
     expect(s_lv is not None and s_sv is not None and all(sv_.get(k) == s_sv.get(k) for k in ('xspeed_scale', 'yspeed_scale')) and s_sv.get('yspeed_scale') == '1'
            and all(lv_.get(k) == v for k, v in s_lv.props if k.startswith('style:')),
            'its scroll_view has the stock list\'s speed scales (1, 1) and its list_view the stock list\'s black / borderless styles')
-    btn = tree.find('btn_albumview')
-    expect(btn is not None and (btn.x, btn.w, btn.h) == (O['NAV_VIEW_X'], O['NAV_VIEW_W'], O['NAV_H'])
-           and btn.get('style:normal:icon') == 'pod_nav_list' and btn.get('style:pressed:icon') == 'pod_nav_list_down',
-           'the navbar button shows the list glyph (the view a tap switches to)')
-    nb = tree.find('btn_backtoplayer')
-    expect(O['NAV_VIEW_X'] + O['NAV_VIEW_W'] == nb.x, 'the toggle sits flush left of Now Playing, no gap')
+    expect(tree.find('btn_albumview') is None, 'the grid / list toggle has left the navbar (it is the "..." card\'s last row)')
+    cfb, more, nb = tree.find('btn_coverflow'), tree.find('btn_more'), tree.find('btn_backtoplayer')
+    expect(tree.find('btn_search') is None, 'no Search button on the navbar: Search is the "..." card\'s first row')
+    expect(all(b is not None and (b.y, b.w, b.h) == (0, O['NAV_VIEW_W'], O['NAV_H']) and b.get('style') == 'img_btn_style' for b in (cfb, more))
+           and [(b.x, b.get('style:normal:icon'), b.get('style:pressed:icon')) for b in (cfb, more)]
+           == [(168, 'pod_nav_coverflow', 'pod_nav_coverflow_down'), (214, 'pod_nav_moremid', 'pod_nav_moremid_down')]
+           and more.x + more.w == nb.x == 260 and nb.get('style:normal:icon') == 'ah_nav_play',
+           'the capsule is Cover Flow 168 (left cap), "..." 214 (middle; 46 x 50) and Now Playing 260 as its right cap')
     lbl = tree.find('label_title')
-    cfb = tree.find('btn_coverflow')
-    expect(cfb is not None and (cfb.x, cfb.y, cfb.w, cfb.h) == (O['NAV_CF_X'], 0, O['NAV_CF_W'], O['NAV_H'])
-           and (O['NAV_CF_X'], O['NAV_CF_W']) == (pod_ui.NAV_CF_X, pod_ui.NAV_CF_W) and cfb.x + cfb.w == btn.x == 168 + 46
-           and cfb.get('style') == btn.get('style') == 'img_btn_style' and cfb.get('style:normal:icon') == 'pod_nav_coverflow'
-           and cfb.get('style:pressed:icon') == 'pod_nav_coverflow_down', 'the Cover Flow button sits flush left of the toggle (x 168, 46x50), same style, carousel glyph')
-    expect(lbl.x + lbl.w == O['NAV_CF_X'] == 168, 'the title ends where the Cover Flow button begins')
-    expect(not [w for w in tree.walk() if w is not cfb and w.name != 'navigationbar_view' and w.type == 'button'
-                and w.x < cfb.x + cfb.w and cfb.x < w.x + w.w], 'no navbar button overlaps the Cover Flow button')
+    expect(lbl.x == O['NAV_TITLE_X'] == 58 and lbl.x + lbl.w == O['NAV_CF_X'] == 168 and lbl.w == 110, 'the small title runs from x 58 to where the capsule begins (168): 110 px')
+    btns = (cfb, more, nb)
+    expect(not [1 for a in btns for b in btns if a is not b and a.x < b.x + b.w and b.x < a.x + a.w], 'no navbar button overlaps another')
     #     list mode: the two hidden text-style labels, the geometry the rows share with the library rows
     for nm, px, col in (('label_row_title', 21, '#FFFFFF'), ('label_row_sub', 18, '#AAAAAA')):
         w = tree.find(nm)
@@ -396,8 +406,8 @@ def layout_tests(ctx):
     expect(O['LIST_HAIR'] == 0xff222222 and O['LIST_PRESS'] == 0xff343333, 'hairline #222222, pressed #333334 (the other lists\' colours; one blue level off #333333 so the accent can find a pressed row)')
     expect(not [w for w in tree.walk() if w.name in ('btn_stocklist',)] and O.get('NAV_LIST_X') is None, 'no trace of the stock-list toggle')
     imgs = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx')
-    expect(all(os.path.isfile(os.path.join(imgs, f'pod_nav_{k}{s}.png')) for k in ('grid', 'list', 'coverflow') for s in ('', '_down')),
-           'the toggle and Cover Flow glyph images are in the tree')
+    expect(all(os.path.isfile(os.path.join(imgs, f'pod_nav_{k}{s}.png')) for k in ('grid', 'list', 'coverflow', 'search', 'moremid') for s in ('', '_down')),
+           'the capsule pieces and the toggle glyph images are in the tree')
 
     # 2. The menu row: the persisted mode, the default constant when there is none (or it is garbage); "0" is the list
     #    mode of the same page, "1" the grid; never a second window or the stock list.
@@ -425,13 +435,13 @@ def layout_tests(ctx):
     m = albums_machine(30)
     calls = open_grid(m)
     names = [c[0] for c in calls]
-    expect(('window_open', 'm1plus_albums') in calls and names.count('widget_on') == 4 + 1 + 2 + 1 + 1 + 3 + 1,
-           f'the window, Back, Now Playing, the toggle, Cover Flow, the scroll and scroll-end events of the scroll_view, foreground, background, three pointer events (down, up, abort) and the paint are bound ({names.count("widget_on")})')
+    expect(('window_open', 'm1plus_albums') in calls and names.count('widget_on') == 4 + 1 + 2 + 1 + 1 + 3 + 1 + 8 + 1,
+           f'the window, Back, Now Playing, Search, "...", Cover Flow, the card\'s eight rows and scrim, the scroll and scroll-end events of the scroll_view, foreground, background, three pointer events (down, up, abort) and the paint are bound ({names.count("widget_on")})')
     sv0, view0 = m.widgets['albums_scrollview'], m.widgets['view_grid']
     expect(all(('widget_on', sv0, O[e], PSYMS['al_on_scroll'], 0) in calls for e in ('EVT_SCROLL', 'EVT_SCROLL_END')) and not any(c[0] == 'widget_grab' for c in calls)
            and all(('widget_on', view0, O[e], PSYMS[f], 0) in calls for e, f in (('EVT_POINTER_DOWN', 'al_on_down'), ('EVT_POINTER_UP', 'al_on_up'), ('EVT_POINTER_ABORT', 'al_on_abort'))),
            'the scroll_view\'s EVT_SCROLL / scroll end re-arm the loader; the content view takes the pointer events the scroll_view passes down, and grabs nothing')
-    expect((content_h(m), m.s32(sv0 + SC_VH)) == (10 + 15 * 200, 10 + 15 * 200), f'the content view is as high as the library (15 rows x 200 + 10) and the scroll_view\'s virtual_h is the same ({content_h(m)})')
+    expect((content_h(m), m.s32(sv0 + SC_VH)) == (TOP + 10 + 15 * 200,) * 2, f'the content view is as high as the title block and the library (52 + 15 rows x 200 + 10) and the scroll_view\'s virtual_h is the same ({content_h(m)})')
     expect(('loadLocalClassList', O['CLASS_ALBUMS']) in calls and ('deque_assign', 30) in calls, 'the stock album list is copied')
     expect(not any(n in names for n in ('image_create', 'list_item_create', 'label_create', 'hscroll_label_create', 'widget_factory_create_widget')),
            'no widget is created per album')
@@ -444,15 +454,15 @@ def layout_tests(ctx):
     #    paced (two covers a frame) and the rest show the placeholder until the reload timer fills them in.
     blits, texts = paint(m)
     ref = reference(0, 30)
-    expect(len(ref) == 4 and [a for a, *_ in ref] == list(range(4)) and all(c[2] and c[3] for c in ref),
-           'two rows of two are in view at the top, every cover and both text lines wholly (10 + 190 + 10 + 190 = 400)')
+    expect(len(ref) == 4 and [a for a, *_ in ref] == list(range(4)) and all(c[1] for c in ref) and ref[0][1][0][3] == COVER and ref[2][1][0][3] == VIEW_H - TOP - RGAP - PITCH,
+           'two rows of two are in view at the top under the title block, the second row cut by the bottom edge')
     expect(dsts(blits) == want_dsts(ref) and all(b[1] == (0, 0, COVER, COVER) or b[1][3] < COVER for b in blits),
            f'one blit per visible cell, at its place, source = the whole tile ({dsts(blits)[:3]})')
     ts, ss = grid_texts(m, texts)
     expect(ts == {f'Album {c[0]}': c[2] for c in ref if c[2]} and ss == {f'Artist {c[0]}': c[3] for c in ref if c[3]},
            'an album (144x22) and an artist (144x20) under each cover')
-    expect(len(ts) == 4 and len(ss) == 4 and ts['Album 0'] == (MARGIN, RGAP + COVER + TGAP, COVER, THEIGHT) and ss['Artist 1'] == (MARGIN + CPITCH, RGAP + COVER + TGAP + THEIGHT, COVER, SUBH),
-           f'album 0\'s title at ({MARGIN}, {RGAP + COVER + TGAP}), album 1\'s artist directly under its title')
+    expect(len(ts) == 4 and len(ss) == 4 and ts['Album 0'] == (MARGIN, TOP + RGAP + COVER + TGAP, COVER, THEIGHT) and ss['Artist 1'] == (MARGIN + CPITCH, TOP + RGAP + COVER + TGAP + THEIGHT, COVER, SUBH),
+           f'album 0\'s title at ({MARGIN}, {TOP + RGAP + COVER + TGAP}), album 1\'s artist directly under its title')
     expect(m.text_styles == ['label_grid_title'] * 4 + ['label_grid_sub'] * 4, 'two text-style passes: the albums, then the artists')
     expect(not [c for c in m.calls if c[0] in ('widget_load_image', 'bitmap_create_ex', 'timer_add')] and nbmp(m) == 1
            and len({b[0] for b in blits}) == 1,
@@ -463,8 +473,8 @@ def layout_tests(ctx):
     expect(prep == [m.widgets['label_grid_title'], m.widgets['label_grid_sub']], 'the text styles are the two grid labels\': 18 px white, then 15 px #AAAAAA')
     # the canvas: the scroll_view leaves the origin at the content's top less the offset; the paint moves it back down by the offset, draws in window
     # coordinates (the top of the window is 0) and leaves it where it was
-    m4 = albums_machine(30); open_grid(m4); scroll_to(m4, 100); paint(m4)
-    expect(m4.draw_oy == [SCREEN_Y0] * len(m4.blits) and m4.draw_oy and m4.oy_after == SCREEN_Y0 - 100,
+    m4 = albums_machine(30); open_grid(m4); scroll_to(m4, TOP + 100); paint(m4)
+    expect(m4.draw_oy == [SCREEN_Y0] * len(m4.blits) and m4.draw_oy and m4.oy_after == SCREEN_Y0 - TOP - 100,
            f'at 100 px every cover is drawn with the canvas origin at the top of the window ({set(m4.draw_oy)}), and the canvas is as the scroll_view left it ({m4.oy_after})')
     # the loader: one cover a tick, the cell nearest the middle of the view first, the view before the row ahead
     order = []
@@ -514,23 +524,23 @@ def layout_tests(ctx):
     m = albums_machine(n, cached=False)
     open_grid(m); settle(m)
     expect(not any(c[0] == 'widget_invalidate_force' for c in m.calls), 'painting invalidates nothing once complete')
-    scroll_to(m, 100)
+    scroll_to(m, TOP + 100)
     blits, texts = paint(m)
-    ref = reference(100, n)
+    ref = reference(TOP + 100, n)
     expect(dsts(blits) == want_dsts(ref), 'after scrolling 100 px: the cells and the cut first row')
     ts, ss = grid_texts(m, texts)
     expect(ts == {f'Album {c[0]}': c[2] for c in ref if c[2]} and ss == {f'Artist {c[0]}': c[3] for c in ref if c[3]},
            'after scrolling 100 px: the albums and artists of every cell in view, cut ones too')
     top_row = [b for b in blits if b[2][1] == 0][0]
     expect(top_row[1] == (0, 90, COVER, 54) and top_row[2] == (MARGIN, 0, COVER, 54), f'the first row is cut to its last 54 px ({top_row[1]} -> {top_row[2]})')
-    scroll_to(m, 165)
-    ref = reference(165, n)
+    scroll_to(m, TOP + 165)
+    ref = reference(TOP + 165, n)
     ts, ss = grid_texts(m, paint(m)[1])
     expect(ts == {f'Album {c[0]}': c[2] for c in ref if c[2]} and ss == {f'Artist {c[0]}': c[3] for c in ref if c[3]}
            and 'Album 0' in ts and 'Artist 0' in ss and ref[0][1] is None,
            'at 165 px the first row\'s cover is gone and its album (7 px cut by the top) and its artist are drawn, the clip cuts the album')
-    mx = RGAP + ((n + COLS - 1) // COLS) * PITCH - VIEW_H
-    expect(mx == 1210, f'fifteen albums are eight rows: 10 + 8 x 200 = 1610 px of content, {mx} px of scroll')
+    mx = TOP + RGAP + ((n + COLS - 1) // COLS) * PITCH - VIEW_H
+    expect(mx == TOP + 1210, f'fifteen albums are eight rows: 52 + 10 + 8 x 200 = 1662 px of content, {mx} px of scroll')
     scroll_to(m, 100000)
     blits, texts = paint(m)
     expect(dsts(blits) == want_dsts(reference(mx, n)), f'dragging far past the end stops at {mx} px')
@@ -543,6 +553,7 @@ def layout_tests(ctx):
         m2 = albums_machine(cnt, cached=False); open_grid(m2)
         scroll_to(m2, 100000)
         blits, _ = paint(m2)
+        top = TOP + top if top else 0
         expect(dsts(blits) == want_dsts(reference(top, cnt)), f'{cnt} albums: the content scrolls by at most {top} px')
 
     # 6. The content: the view is as high as the library in either mode and the scroll_view's virtual_h is the same (the list_view layouter sums it again).
@@ -551,7 +562,7 @@ def layout_tests(ctx):
         m = albums_machine(n_, cached=False)
         if mode_ == 'list': m.fs[ALBUMS_FILE] = b'0\n'
         open_grid(m)
-        want_h = (RGAP + (n_ + COLS - 1) // COLS * PITCH) if mode_ == 'grid' else n_ * ROW
+        want_h = TOP + ((RGAP + (n_ + COLS - 1) // COLS * PITCH) if mode_ == 'grid' else n_ * ROW)
         sv_ = m.widgets['albums_scrollview']
         expect(content_h(m) == want_h and m.s32(sv_ + SC_VH) == want_h and m.word(m.widgets['view_grid'] + 8) == CW,
                f'{n_} albums, {mode_}: the content view is {CW} x {want_h} and the scroll_view\'s virtual_h is {m.s32(sv_ + SC_VH)}')
@@ -635,10 +646,10 @@ def taps_list_tests(ctx):
     m = albums_machine(n, cached=False)
     open_grid(m); settle(m)
     def cell_xy(a, scroll=0, dy=10, dx=10):
-        return MARGIN + (a % COLS) * CPITCH + dx, RGAP + (a // COLS) * PITCH - scroll + dy
+        return MARGIN + (a % COLS) * CPITCH + dx, TOP + RGAP + (a // COLS) * PITCH - scroll + dy
     opened = lambda calls: [c for c in calls if c[0] == 'navigator_to_with_context']
     expect(not opened(tap_at(m, 30, 5)), 'a tap above the first row opens nothing')
-    expect(not opened(tap_at(m, 30, RGAP + CELL + 4)), 'a tap in the gap between the first two rows opens nothing')
+    expect(not opened(tap_at(m, 30, TOP + RGAP + CELL + 4)), 'a tap in the gap between the first two rows opens nothing')
     #     the tile's hit area is its cover, album and artist lines (the whole 144 x 190): corners and edges of album 1 (row 0, right)
     for what, (dx, dy, want) in {'its top-left pixel': (0, 0, True), 'its cover\'s bottom-right pixel': (COVER - 1, COVER - 1, True),
                                  'the gap under the cover (above the album)': (50, COVER + 1, True), 'the album line': (50, COVER + TGAP + 5, True),
@@ -659,9 +670,9 @@ def taps_list_tests(ctx):
     calls = tap_at(m, *cell_xy(4, 300, dy=COVER + TGAP + THEIGHT + 5))
     expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_ALBUMS'], 4) in calls, 'and a tap on an artist line')
     for what, (x, y) in {'the gap between columns': (MARGIN + COVER + 4, 150), 'the left margin': (4, 150), 'the right margin': (316, 150),
-                         'the gap between rows': (30, RGAP + 3 * PITCH - 300 - 5)}.items():
+                         'the gap between rows': (30, TOP + RGAP + 3 * PITCH - 300 - 5)}.items():
         expect(not opened(tap_at(m, x, y)), f'a tap on {what} opens nothing')
-    mx = RGAP + 6 * PITCH - VIEW_H
+    mx = TOP + RGAP + 6 * PITCH - VIEW_H
     scroll_to(m, 100000); settle(m)
     expect(not opened(tap_at(m, 30, VIEW_H - 3)) and not opened(tap_at(m, 30 + CPITCH, 205)) , 'the 10 px under the last row, and the empty cell beside the last album, open nothing')
     for a, want in ((10, True), (9, True), (11, False)):   # (a point above the window is not the page's: the stock hit test never delivers it)
@@ -723,12 +734,12 @@ def taps_list_tests(ctx):
     for i in range(8): m.setword(m.showlist[i] + O['REC_ARTIST'], m.cstr(longs[(i + 2) % 8]))
     open_grid(m)
     got_t, got_s, nmeasure = [None] * 8, [None] * 8, 0
-    for top, albums_in_view in ((0, range(0, 4)), (400, range(4, 8))):
+    for top, albums_in_view in ((0, range(8)), (TOP + 200, range(8)), (TOP + 400, range(8))):
         if top: scroll_to(m, top)
         texts = paint(m)[1]
         nmeasure += len(m.measures)
         for (txt, rect), sty in zip(texts, m.text_styles):
-            a = [i for i in albums_in_view if rect[0] == MARGIN + (i % COLS) * CPITCH and rect[1] - (RGAP + (i // COLS) * PITCH - top) in (COVER + TGAP, COVER + TGAP + THEIGHT)][0]
+            a = [i for i in albums_in_view if rect[0] == MARGIN + (i % COLS) * CPITCH and rect[1] - (TOP + RGAP + (i // COLS) * PITCH - top) in (COVER + TGAP, COVER + TGAP + THEIGHT)][0]
             (got_t if sty == 'label_grid_title' else got_s)[a] = txt
     want_t = [model_cut(longs[i]) if longs[i] else None for i in range(8)]
     want_s = [model_cut(longs[(i + 2) % 8]) if longs[(i + 2) % 8] else None for i in range(8)]
@@ -832,9 +843,9 @@ def taps_list_tests(ctx):
     m = list_machine(30)
     blits, texts = paint(m)
     ref = list_ref(0, 30)
-    expect(len(ref) == 7, 'seven rows touch the 400 px view at the top (the last by 16 px)')
+    expect(len(ref) == 6, 'six rows touch the 400 px view at the top, under the title block (the last by 28 px)')
     expect(dsts(blits) == sorted(c[1][1] for c in ref if c[1]) and all(b[1][2:] == (LART, LART) or b[1][3] < LART for b in blits),
-           f'one {LART} px cover per visible row at ({LAX}, row + {LAY}), the seventh cut to the view')
+           f'one {LART} px cover per visible row at ({LAX}, row + {LAY}), the sixth cut to the view')
     want_t = sorted((f'Album {a}', t) for a, _, t, _, _ in ref if t)
     want_a = sorted((f'Artist {a}', s_) for a, _, _, s_, _ in ref if s_)
     got_t = sorted((t[0], t[1]) for t, sty in zip(texts, m.text_styles) if sty == 'label_row_title')
@@ -846,11 +857,11 @@ def taps_list_tests(ctx):
            'two text-style switches a frame: all titles, then all artists')
     expect(sorted(f[1:] for f in m.fills if f[0] == O['LIST_HAIR']) == sorted((HX, c[4], HW, 1) for c in ref if c[4] is not None)
            and not [f for f in m.fills if f[0] == O['LIST_PRESS']], 'a one pixel hairline under every row whose last line is in view, no pressed fill')
-    expect(sorted(b[2] for b in m.chevs) == sorted((O['LIST_CHEV_X'], c[0] * ROW + (ROW - 1 - CHEV_PX[1]) // 2, *CHEV_PX) for c in ref if c[4] is not None) and O['LIST_CHEV_X'] == 288,
-           f'a chevron {CHEV_PX} at x {O["LIST_CHEV_X"]}, centred above the hairline, on every row whose last line is in view')
+    expect(sorted(b[2] for b in m.chevs) == sorted((O['LIST_CHEV_X'], y, CHEV_PX[0], min(CHEV_PX[1], VIEW_H - y)) for y in (TOP + c[0] * ROW + (ROW - 1 - CHEV_PX[1]) // 2 for c in ref) if y < VIEW_H) and O['LIST_CHEV_X'] == 288,
+           f'a chevron {CHEV_PX} at x {O["LIST_CHEV_X"]}, centred above the hairline, on every row it touches in view, the last cut by the bottom edge ({sorted(b[2] for b in m.chevs)})')
     expect('widget_load_image' not in m.names(), 'list paint decodes nothing either')
     blits, texts = settle(m)
-    expect(len(blits) == 7 and nbmp(m) == 1 + 7 + 2, f'every visible row has its own cover once loaded, and the next two rows are ready ({nbmp(m)} bitmaps)')
+    expect(len(blits) == 6 and nbmp(m) == 1 + 6 + 2, f'every visible row has its own cover once loaded, and the next two rows are ready ({nbmp(m)} bitmaps)')
     data, bw, bh = m.bitmaps[m.blits[0][0]]
     lt, LR = struct.unpack(f'<{bw * bh}I', bytes(m.u.mem_read(data, bw * bh * 4))), O['LIST_R']
     expect((bw, bh) == (LART, LART) and {lt[y * bw + x] for y in range(bh) for x in range(bw) if not (min(x, bw - 1 - x) < LR and min(y, bh - 1 - y) < LR)} == {colour(0)},
@@ -858,13 +869,13 @@ def taps_list_tests(ctx):
     m.count(); paint(m)
     expect('widget_load_image' not in m.names() and 'bitmap_create_ex' not in m.names() and not m.measures,
            'a steady list frame decodes, allocates and measures nothing')
-    print(f'  list frame: {m.icount:,} payload instructions steady (7 rows)')
+    print(f'  list frame: {m.icount:,} payload instructions steady (6 rows)')
 
     # 13b. Scrolling and bounds: the content is count x 64 px; partial rows are cut by hand.
     n = 20
     m = list_machine(n, cached=False); settle(m)
-    mx = n * ROW - VIEW_H
-    expect(mx == 880, 'twenty rows are 1280 px of content: 880 px of scroll')
+    mx = TOP + n * ROW - VIEW_H
+    expect(mx == 932, 'twenty rows are 52 + 1280 px of content: 932 px of scroll')
     scroll_to(m, 100)
     blits, texts = paint(m)
     ref = list_ref(100, n)
@@ -883,9 +894,9 @@ def taps_list_tests(ctx):
     scroll_to(m, -5000)
     blits, texts = paint(m)
     expect(dsts(blits) == sorted(c[1][1] for c in list_ref(0, n) if c[1]), 'dragging past the start stops at 0')
-    m2 = list_machine(6, cached=False); scroll_to(m2, 300)
+    m2 = list_machine(5, cached=False); scroll_to(m2, 300)
     blits, _ = paint(m2)
-    expect(dsts(blits) == sorted(c[1][1] for c in list_ref(0, 6) if c[1]) and len(blits) == 6, 'six rows (384 px) cannot scroll')
+    expect(dsts(blits) == sorted(c[1][1] for c in list_ref(0, 5) if c[1]) and len(blits) == 5, 'five rows (52 + 320 px) cannot scroll')
 
     # 13b'. Overscroll (device crash, V2.1nY): while a drag pulls the list past an end, the stock scroll_view's yoffset is outside [0, max] (the gap above
     #       the first row; scroll_to above clamps, the device does not). The page draws the albums that are there, at their place, and never asks for an
@@ -900,7 +911,7 @@ def taps_list_tests(ctx):
         m = list_machine(n, cached=False) if mode == 'list' else albums_machine(n, cached=False)
         if mode == 'grid': open_grid(m)
         settle(m)
-        top = (n * ROW if mode == 'list' else RGAP + n // COLS * PITCH) - VIEW_H   # the largest offset in range
+        top = TOP + (n * ROW if mode == 'list' else RGAP + n // COLS * PITCH) - VIEW_H   # the largest offset in range
         for v in (-30, -100, -200, -399, top + 100, top + 399):
             try:
                 m.calls = []
@@ -916,7 +927,7 @@ def taps_list_tests(ctx):
             except Exception as ex:
                 expect(False, f'{mode}, offset {v}: the page survives an offset past the end ({type(ex).__name__}: {ex})')
         try:
-            over(m, -150); m.call(PSYMS['al_on_toggle'], a0=0, count=20000000); after = scroll_of(m)
+            over(m, -150); view_switch(m, 20000000); after = scroll_of(m)
             expect(after == 0, f'{mode}: a mode switch while pulled past the top keeps the first album at the top (offset {after})')
         except Exception as ex:
             expect(False, f'{mode}: a mode switch while pulled past the top survives ({type(ex).__name__}: {ex})')
@@ -925,34 +936,34 @@ def taps_list_tests(ctx):
     #      is filled while the finger is down and clears on release, on a drag and on abort.
     n = 9
     m = list_machine(n, cached=False); settle(m)
-    row_xy = lambda a, scroll=0, dy=20, x=200: (x, a * ROW - scroll + dy)
+    row_xy = lambda a, scroll=0, dy=20, x=200: (x, TOP + a * ROW - scroll + dy)
     calls = tap_at(m, *row_xy(4))
     expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_ALBUMS'], 4) in calls, 'a tap on row 4 opens its album with 0xf003 | 4 << 16')
     seq = [c[0] for c in calls if c[0] in ('loadAlbumList', 'albumcoverinfo_init', 'batchadd_albumcover_task', 'navigator_to_with_context')]
     expect(seq == ['loadAlbumList', 'albumcoverinfo_init', 'batchadd_albumcover_task', 'navigator_to_with_context'], f'the stock open sequence, as the grid\'s ({seq})')
-    for what, (x, y, want) in {'its cover': (20, 2 * ROW + 20, 2), 'the right edge': (319, 2 * ROW + 5, 2), 'the hairline line': (100, 3 * ROW - 1, 2),
-                               'the next row\'s first line': (100, 3 * ROW, 3)}.items():
+    for what, (x, y, want) in {'its cover': (20, TOP + 2 * ROW + 20, 2), 'the right edge': (319, TOP + 2 * ROW + 5, 2), 'the hairline line': (100, TOP + 3 * ROW - 1, 2),
+                               'the next row\'s first line': (100, TOP + 3 * ROW, 3), 'the title block': (100, TOP - 1, None)}.items():
         got = [c for c in tap_at(m, x, y) if c[0] == 'navigator_to_with_context']
         expect((got[0][3] if got else None) == want, f'a tap on {what}: ' + (f'album {want}' if want is not None else 'nothing'))
     expect(not [c for c in tap_at(m, 100, -1) if c[0] == 'navigator_to_with_context'], 'a tap above the view opens nothing')
     paint(m)
-    m.touch('down', 100, SCREEN_Y0 + 3 * ROW + 20, 5000, fn='al_on_down')
+    m.touch('down', 100, SCREEN_Y0 + TOP + 3 * ROW + 20, 5000, fn='al_on_down')
     expect(('widget_invalidate_force', m.widgets['albums_scrollview']) in m.calls, 'touching a row redraws the window')
     paint(m)
     pf = [f for f in m.fills if f[0] == O['LIST_PRESS']]
-    expect(pf == [(O['LIST_PRESS'], 0, 3 * ROW, CW, ROW - 1)], f'the pressed row is filled #333333 over its body, above the hairline ({pf})')
-    m.touch('up', 100, SCREEN_Y0 + 3 * ROW + 20, 5080, fn='al_on_up')
+    expect(pf == [(O['LIST_PRESS'], 0, TOP + 3 * ROW, CW, ROW - 1)], f'the pressed row is filled #333333 over its body, above the hairline ({pf})')
+    m.touch('up', 100, SCREEN_Y0 + TOP + 3 * ROW + 20, 5080, fn='al_on_up')
     paint(m)
     expect(not [f for f in m.fills if f[0] == O['LIST_PRESS']], 'and the fill is gone after the release')
-    m.touch('down', 100, SCREEN_Y0 + 3 * ROW + 20, 7000, fn='al_on_down')
-    m.touch('abort', 100, SCREEN_Y0 + 3 * ROW + 20, 7100, fn='al_on_abort')   # the scroll_view took the gesture as a drag: it aborts its children's press
+    m.touch('down', 100, SCREEN_Y0 + TOP + 3 * ROW + 20, 7000, fn='al_on_down')
+    m.touch('abort', 100, SCREEN_Y0 + TOP + 3 * ROW + 20, 7100, fn='al_on_abort')   # the scroll_view took the gesture as a drag: it aborts its children's press
     paint(m)
     expect(not [f for f in m.fills if f[0] == O['LIST_PRESS']], 'a drag (the scroll_view\'s abort) takes the highlight away, and so does an aborted gesture')
-    m.touch('up', 100, SCREEN_Y0 + 3 * ROW + 20, 7200, fn='al_on_up')
+    m.touch('up', 100, SCREEN_Y0 + TOP + 3 * ROW + 20, 7200, fn='al_on_up')
     expect(not [c for c in m.calls if c[0] == 'navigator_to_with_context'], 'and its up opens nothing')
     ms = list_machine(3, cached=False); settle(ms)
-    expect(not [c for c in tap_at(ms, 100, 3 * ROW + 10) if c[0] == 'navigator_to_with_context'], 'a tap below the last row opens nothing')
-    ms.touch('down', 100, SCREEN_Y0 + 3 * ROW + 10, 8000, fn='al_on_down')
+    expect(not [c for c in tap_at(ms, 100, TOP + 3 * ROW + 10) if c[0] == 'navigator_to_with_context'], 'a tap below the last row opens nothing')
+    ms.touch('down', 100, SCREEN_Y0 + TOP + 3 * ROW + 10, 8000, fn='al_on_down')
     paint(ms)
     expect(not [f for f in ms.fills if f[0] == O['LIST_PRESS']], 'and a touch there highlights nothing')
     mg = albums_machine(n, cached=False); open_grid(mg); settle(mg)
@@ -967,8 +978,8 @@ def taps_list_tests(ctx):
     m.fs[ALBUMS_FILE] = b'0\n'
     for i in range(5): m.setword(m.showlist[i] + O['REC_ARTIST'], m.cstr(longs[(i + 1) % 5]))
     open_grid(m); texts = paint(m)[1]
-    titles = {t[1][1] // ROW: t[0] for t, sty in zip(texts, m.text_styles) if sty == 'label_row_title'}
-    artists = {t[1][1] // ROW: t[0] for t, sty in zip(texts, m.text_styles) if sty == 'label_row_sub'}
+    titles = {(t[1][1] - TOP) // ROW: t[0] for t, sty in zip(texts, m.text_styles) if sty == 'label_row_title'}
+    artists = {(t[1][1] - TOP) // ROW: t[0] for t, sty in zip(texts, m.text_styles) if sty == 'label_row_sub'}
     expect(titles[0] == 'T' * fits and titles[1] == 'T' * (fits - 2) + '…', f'a title that fits {TW} px is whole, one more character is cut with an ellipsis ({titles[1]!r})')
     expect(titles[2] == 'あ' * wide and titles[3] == 'あ' * (wide - 1) + '…', f'wide characters count their width ({titles[2]!r}, {titles[3]!r})')
     expect(artists[0] == 'T' * (fits - 2) + '…' and artists[1] == 'あ' * wide and artists[2] == 'あ' * (wide - 1) + '…' and artists[3] == 'Short',
@@ -998,12 +1009,12 @@ def taps_list_tests(ctx):
     def is_list(s): return s[0] == LART and s[1] >> 24 == 0 and s[2] >> 24 == 255 and not s[3]
     def is_grid(s): return s[0] == COVER and s[1] == 0xff000000 and s[2] >> 24 == 255 and s[3]
     m = list_machine(6); s1 = shape_of(m)
-    m.call(PSYMS['al_on_toggle'], a0=0, count=20000000); s2 = shape_of(m)
-    m.call(PSYMS['al_on_toggle'], a0=0, count=20000000); s3 = shape_of(m)
+    view_switch(m, 20000000); s2 = shape_of(m)
+    view_switch(m, 20000000); s3 = shape_of(m)
     expect(is_list(s1) and is_grid(s2) and is_list(s3) and O['LIST_R'] == 4,
            f'list covers: {O["LIST_R"]} px corners in the alpha, not opaque; switched to the grid: {O["GRID_R"]} px corners into black, opaque; and back ({s1}, {s2}, {s3})')
     m = albums_machine(6); open_grid(m); g1 = shape_of(m)
-    m.call(PSYMS['al_on_toggle'], a0=0, count=20000000); l1 = shape_of(m)
+    view_switch(m, 20000000); l1 = shape_of(m)
     expect(is_grid(g1) and is_list(l1), f'opened as the grid and switched to the list, the list gets its own corners, not the grid\'s ({g1}, {l1})')
     m = albums_machine(4000); m.fs[ALBUMS_FILE] = b'0\n'; open_grid(m); settle(m)
     mx = 4000 * ROW - VIEW_H
@@ -1021,35 +1032,32 @@ def toggle_tests(ctx):
     asset = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_albums.bin')
     # 14. The toggle: switches the mode in place (no window opens or closes), saves the choice atomically, swaps the
     #     glyph, drops the tiles, keeps the first album in view.
-    def glyph(m): return m.props.get((m.widgets['btn_albumview'], 'style:normal:icon'))
     opened_ev = ('window_open', 'window_close', 'navigator_back', 'navigator_to_with_context', 'stock_resume', 'widget_destroy')
     m = albums_machine(60)
     open_grid(m); settle(m)
     expect(glyph(m) == 'pod_nav_list', 'the grid shows the list glyph')
     scroll_to(m, 700); paint(m)
-    first_row = (700 - RGAP - CELL) // PITCH + 1
+    first_row = (700 - TOP - RGAP - CELL) // PITCH + 1
     m.calls = []
-    m.call(PSYMS['al_on_toggle'], a0=0, count=20000000)
+    view_switch(m, 20000000)
     calls = m.calls
     expect(not [c for c in calls if c[0] in opened_ev], f'toggling opens and closes nothing ({[c[0] for c in calls if c[0] in opened_ev]})')
     expect(m.fs.get(ALBUMS_FILE) == b'0\n' and ALBUMS_TMP not in m.fs, f'it saves "0" atomically ({m.fs.get(ALBUMS_FILE)!r})')
     expect(('fsync', ALBUMS_TMP) in calls and ('fsync', '/mnt/data/m1plus') in calls and ('rename', ALBUMS_TMP, ALBUMS_FILE) in calls,
            'temp file, fsync, rename, directory fsync (as the Start-in setting)')
-    expect(glyph(m) == 'pod_nav_grid' and m.props.get((m.widgets['btn_albumview'], 'style:pressed:icon')) == 'pod_nav_grid_down'
-           and m.props.get((m.widgets['btn_albumview'], 'style:over:icon')) == 'pod_nav_grid', 'the button now shows the grid glyph')
+    expect(glyph(m) == 'pod_nav_grid' and vis(m, 'vs_tick5')[0] == 1 and vis(m, 'vs_tick4')[0] == 0, 'the List row is ticked now and Grid is not')
     expect(('widget_invalidate_force', m.widgets['albums_scrollview']) in calls, 'and the window is redrawn')
     sv_ = m.widgets['albums_scrollview']
-    expect(content_h(m) == 60 * ROW and m.s32(sv_ + SC_VH) == 60 * ROW, f'the content is now 60 rows of {ROW} px, in the view and the scroll_view ({content_h(m)})')
-    expect(scroll_of(m) == first_row * ROW * COLS, f'the scroll_view is at the first album\'s row ({scroll_of(m)} = album {first_row * COLS} x {ROW})')
+    expect(content_h(m) == TOP + 60 * ROW and m.s32(sv_ + SC_VH) == TOP + 60 * ROW, f'the content is now the title block and 60 rows of {ROW} px, in the view and the scroll_view ({content_h(m)})')
+    expect(scroll_of(m) == TOP + first_row * ROW * COLS, f'the scroll_view is at the first album\'s row ({scroll_of(m)} = album {first_row * COLS} x {ROW})')
     expect(nbmp(m) == 1 and m.bitmaps[next(iter(m.bitmaps))][1:] == (LART, LART), 'the grid\'s covers are dropped; the placeholder is the list\'s size')
     blits, texts = paint(m)
     top = [t for t, sty in zip(texts, m.text_styles) if sty == 'label_row_title' and t[1][1] < 40]
     expect(top and top[0][0] == f'Album {first_row * COLS}', f'the first album in view stays first: Album {first_row * COLS} ({top[0][0] if top else None})')
     # and back
     m.calls = []
-    m.call(PSYMS['al_on_toggle'], a0=0, count=20000000)
-    expect(not [c for c in m.calls if c[0] in opened_ev] and m.fs.get(ALBUMS_FILE) == b'1\n' and glyph(m) == 'pod_nav_list'
-           and m.props.get((m.widgets['btn_albumview'], 'style:pressed:icon')) == 'pod_nav_list_down', 'toggling back: in place, "1" saved, the list glyph')
+    view_switch(m, 20000000)
+    expect(not [c for c in m.calls if c[0] in opened_ev] and m.fs.get(ALBUMS_FILE) == b'1\n' and glyph(m) == 'pod_nav_list', 'toggling back: in place, "1" saved, the row offers the list')
     blits, texts = paint(m)
     expect(min(int(t[0].split()[1]) for t in texts) == first_row * COLS, f'back in the grid the same album row is in view (Album {first_row * COLS})')
     # the tiles of the other mode are never reused: no 144 px blit in the list, no 52 px one in the grid
@@ -1058,36 +1066,36 @@ def toggle_tests(ctx):
     # many switches: no window churn, no leak
     seen = []
     for _ in range(8):
-        m.call(PSYMS['al_on_toggle'], a0=0, count=20000000); seen += m.calls; settle(m); seen += m.calls
+        view_switch(m, 20000000); seen += m.calls; settle(m); seen += m.calls
     expect(nbmp(m) <= TILES + 1, f'after many switches the live bitmaps are still bounded ({nbmp(m)})')
     expect(not [c for c in seen if c[0] in opened_ev], 'eight more switches opened and closed no window')
     # a pending reload timer and a fling are cancelled by the switch
     m = albums_machine(60); calls = open_grid(m)
     assert any(c[0] == 'timer_add' and c[1] == PSYMS['al_on_load'] for c in calls)
     m.calls = []
-    m.call(PSYMS['al_on_toggle'], a0=0, count=20000000)
+    view_switch(m, 20000000)
     expect(('timer_remove', 0x777) in m.calls, 'the pending reload timer is removed when the mode changes')
     # list -> grid -> list keeps the position to the nearest row
     m = list_machine(60, cached=False); scroll_to(m, 5 * ROW)
-    m.call(PSYMS['al_on_toggle'], a0=0, count=20000000)
+    view_switch(m, 20000000)
     blits, texts = paint(m)
     expect(m.fs.get(ALBUMS_FILE) == b'1\n' and min(int(t[0].split()[1]) for t in texts) == (5 // COLS) * COLS, 'from the list at row 5 the grid shows its row 2 (albums 4, 5) first')
     # an empty library, a closed page
     m = albums_machine(0); m.fs[ALBUMS_FILE] = b'0\n'; open_grid(m); m.calls = []
-    m.call(PSYMS['al_on_toggle'], a0=0, count=20000000)
+    view_switch(m, 20000000)
     expect(m.fs.get(ALBUMS_FILE) == b'1\n' and glyph(m) == 'pod_nav_list', 'with an empty library the toggle still switches and saves')
     m = albums_machine(3); open_grid(m); m.call(PSYMS['al_on_destroy'], count=2000000); m.calls = []
-    m.call(PSYMS['al_on_toggle'], a0=0, count=20000000)
+    view_switch(m, 20000000)
     expect(not m.calls and ALBUMS_FILE not in m.fs, 'a late toggle after the page closed does nothing')
 
     # 15. Persistence across opens: the Albums row opens the last mode.
     m = albums_machine(3)
     open_grid(m)
-    m.call(PSYMS['al_on_toggle'], a0=0, count=20000000)
+    view_switch(m, 20000000)
     m.call(PSYMS['al_on_destroy'], count=2000000)
     m.calls = []; m.call(on_row, a0=rows0 + 12 * row, count=20000000)
     expect(('window_open', 'm1plus_albums') in m.calls and glyph(m) == 'pod_nav_grid' and 'stock_resume' not in m.names(), 'after switching to the list, the next Albums row opens the list')
-    m.call(PSYMS['al_on_toggle'], a0=0, count=20000000)
+    view_switch(m, 20000000)
     m.call(PSYMS['al_on_destroy'], count=2000000)
     m.calls = []; m.call(on_row, a0=rows0 + 12 * row, count=20000000)
     expect(('window_open', 'm1plus_albums') in m.calls and glyph(m) == 'pod_nav_list', 'and after switching back, the grid')
@@ -1101,9 +1109,9 @@ def toggle_tests(ctx):
     open_grid(m)
     root = asset_tree(asset)
     for x, y, want in ((160, 60, 'view_grid'), (20, 200, 'view_grid'), (160, 449, 'view_grid'), (40, 25, 'btn_return'),
-                       (O['NAV_VIEW_X'] + 20, 25, 'btn_albumview'), (O['NAV_CF_X'] + 20, 25, 'btn_coverflow'),
+                       (142, 25, 'label_title'), (122, 25, 'label_title'), (O['NAV_CF_X'] + 20, 25, 'btn_coverflow'),
                        (O['NAV_CF_X'], 25, 'btn_coverflow'), (O['NAV_VIEW_X'] - 1, 25, 'btn_coverflow'),
-                       (O['NAV_VIEW_X'], 25, 'btn_albumview'), (290, 25, 'btn_backtoplayer'), (160, 230, 'view_grid')):
+                       (O['NAV_VIEW_X'] + 20, 25, 'btn_more'), (O['NAV_VIEW_X'], 25, 'btn_more'), (290, 25, 'btn_backtoplayer'), (160, 230, 'view_grid')):
         got = stock_target(m, root, x, y)
         expect(got[-1] == want, f'a touch at ({x},{y}) goes to {want} ({got})')
     expect(all(node(root, nm).flags & F_SENSITIVE == 0 for nm in ('label_status', 'label_row_title', 'label_row_sub')),
@@ -1139,22 +1147,22 @@ def stock_widget_tests(ctx):
     for mode in ('grid', 'list'):
         def pos(a, off, dy=10):
             """A window point inside album a's cell (grid) or row (list) when the scroll view is at off."""
-            if mode == 'grid': return MARGIN + (a % COLS) * CPITCH + 10, S + RGAP + (a // COLS) * PITCH - off + dy
-            return 40, S + a * ROW - off + dy + 10
+            if mode == 'grid': return MARGIN + (a % COLS) * CPITCH + 10, S + TOP + RGAP + (a // COLS) * PITCH - off + dy
+            return 40, S + TOP + a * ROW - off + dy + 10
         def fresh(n=300, cached=False, **kw):
             m = SA(n, mode, cached=cached, **kw)
             m.open()
             return m
         def mid_album(off):
             """An album well inside the window when the list is at off."""
-            return (off + 150) // ROW if mode == 'list' else ((off + 250) // PITCH) * COLS + 1
+            return (off - TOP + 150) // ROW if mode == 'list' else ((off - TOP + 250) // PITCH) * COLS + 1
         def pressed_fill(m):
             paint(m); return [f for f in m.fills if f[0] == O['LIST_PRESS']]
 
         # the layouter: the content view at the top of the scroll view, 320 wide, as high as the library; virtual_h is its height (an int for 4000 albums)
         for n_ in (1, 8, 4000):
             m = fresh(n_)
-            want_h = (RGAP + (n_ + COLS - 1) // COLS * PITCH) if mode == 'grid' else n_ * ROW
+            want_h = TOP + ((RGAP + (n_ + COLS - 1) // COLS * PITCH) if mode == 'grid' else n_ * ROW)
             expect((m.s32(m.view + 4), m.word(m.view + 8), m.s32(m.view + 0xc), m.vh()) == (0, CW, want_h, want_h) and m.s32(m.view) == 0,
                    f'{mode}, {n_} albums: after demo\'s own layout the content view is at (0, 0), {CW} x {want_h} and virtual_h is {m.vh()}')
         # THE REGRESSION (V2.1nX did not scroll on the device): the window's first layout, run by demo's window manager after al_open with the
@@ -1214,7 +1222,7 @@ def stock_widget_tests(ctx):
             m = fresh()
             x, y = pos(3, 0)
             m.play([('d', x, y, 0)])
-            expect(pressed_fill(m) == [(O['LIST_PRESS'], 0, 3 * ROW, CW, ROW - 1)], f'{mode}: a finger down on a row fills it #333333')
+            expect(pressed_fill(m) == [(O['LIST_PRESS'], 0, TOP + 3 * ROW, CW, ROW - 1)], f'{mode}: a finger down on a row fills it #333333')
             m.play([('u', x, y, 60)])
             expect(not pressed_fill(m) and m.opened() == [3], f'{mode}: the release clears the fill and opens the album')
             m.play([('d', x, y, 0), ('m', x, y - 4), ('m', x, y - 8)])
@@ -1256,17 +1264,17 @@ def stock_widget_tests(ctx):
         # the mode switch in place: the first album in view stays at the top, the new content size, a coasting list stopped
         m = fresh()
         m.setword(m.sv + SC_YOFF, 700)
-        first_g = ((700 - RGAP - CELL) // PITCH + 1) * COLS if mode == 'grid' else 700 // ROW
-        m.call(PSYMS['al_on_toggle'], a0=0, count=40000000); m.relayout()
-        want_off = first_g * ROW if mode == 'grid' else first_g // COLS * PITCH
-        want_h = 300 * ROW if mode == 'grid' else RGAP + 150 * PITCH
+        first_g = ((700 - TOP - RGAP - CELL) // PITCH + 1) * COLS if mode == 'grid' else (700 - TOP) // ROW
+        view_switch(m, 40000000); m.relayout()
+        want_off = TOP + (first_g * ROW if mode == 'grid' else first_g // COLS * PITCH)
+        want_h = TOP + (300 * ROW if mode == 'grid' else RGAP + 150 * PITCH)
         expect((m.off(), m.vh(), m.s32(m.view + 0xc)) == (want_off, want_h, want_h),
                f'{mode} -> other: the first album in view (album {first_g}) stays first: offset {m.off()} = {want_off}, content {m.vh()}')
-        m.call(PSYMS['al_on_toggle'], a0=0, count=40000000); m.relayout()
-        expect(m.off() == (first_g // COLS * PITCH if mode == 'grid' else first_g * ROW) and m.vh() == (RGAP + 150 * PITCH if mode == 'grid' else 300 * ROW),
+        view_switch(m, 40000000); m.relayout()
+        expect(m.off() == TOP + (first_g // COLS * PITCH if mode == 'grid' else first_g * ROW) and m.vh() == TOP + (RGAP + 150 * PITCH if mode == 'grid' else 300 * ROW),
                f'and back: the same album is first ({m.off()})')
         m = fresh(); m.play(FLICK); wa = m.wa()
-        m.call(PSYMS['al_on_toggle'], a0=0, count=40000000); m.relayout()
+        view_switch(m, 40000000); m.relayout()
         expect(m.wa() == 0 and m.word(wa + 0x28) == 0, f'{mode}: the mode switch stops a coasting list')
 
     # 15b. The navbar's fade (img_nb_fade, built hidden) is shown only while the list is scrolled: hidden at rest, shown at any offset > 0, hidden back at 0, kept across a
@@ -1281,7 +1289,7 @@ def stock_widget_tests(ctx):
         scroll_to(m, 300); s.append(state())
         scroll_to(m, 0); s.append(state())
         expect(s == [(0, 0), (1, 0), (1, 0), (0, 0)], f'{mode}: the fade is hidden at rest, shown (insensitive) when scrolled, hidden again back at 0 ({s})')
-        scroll_to(m, 300); m.call(PSYMS['al_on_toggle'], a0=0, count=40000000)
+        scroll_to(m, 300); view_switch(m, 40000000)
         expect(state() == (1, 0) if scroll_of(m) > 0 else state() == (0, 0), f'{mode}: after a mode switch the fade follows the new offset ({scroll_of(m)}, {state()})')
         m.call(PSYMS['al_on_destroy'], count=2000000)
     m = albums_machine(60); looked = ('widget_lookup', 'img_nb_fade') in open_grid(m); scroll_to(m, 300)
@@ -1359,7 +1367,7 @@ def background_build_tests(ctx):
     # 17d. Order: nearest the first album in view first (forward before back), not the library order.
     m = albums_machine(12, missing={0, 7, 11})
     open_grid(m)
-    scroll_to(m, RGAP + CELL + 2 * PITCH)   # scrolled so that album 6 starts the first row in view
+    scroll_to(m, TOP + RGAP + CELL + 2 * PITCH)   # scrolled so that album 6 starts the first row in view
     fired(m, 'al_on_build_start')
     order = [int(t.split('/')[4]) for t, _ in build_jobs(m)]
     expect(order == [7, 11, 0], f'jobs go nearest the view first: 7, 11, 0 ({order})')
@@ -1498,7 +1506,7 @@ def background_build_tests(ctx):
     # 17k. Missing albums: the order is still nearest the view first across the ticks, the worker starts after the last tick
     #      only, and a scan that found something missing is offered again on the next foreground.
     m = albums_machine(200, missing={0, 150, 199, 100}); open_grid(m)
-    scroll_to(m, RGAP + CELL + 2 * PITCH)   # first album in view: 6
+    scroll_to(m, TOP + RGAP + CELL + 2 * PITCH)   # first album in view: 6
     ticks = scan_all(m)
     order = [int(t.split('/')[4]) for t, _ in build_jobs(m)]
     expect(order == [0, 100, 150, 199],f'jobs across ticks: nearest album 6 first ({order})')
@@ -1562,8 +1570,318 @@ def foreground_loader_tests(ctx):
     expect(not any(c[0] == 'navigator_to_with_context' for c in calls), 'fallback background abort clears the pending press')
     expect(any(c[0] == 'widget_load_image' for c in tick(m)), 'fallback background leaves loader active')
 
-SECTIONS = [layout_tests, taps_list_tests, toggle_tests, stock_widget_tests, background_build_tests, foreground_loader_tests]   # tools/check.py runs each as its own task
+# ---------------------------------------------------------------------------
+# The navbar's "..." card (patch/viewsort.c, docs/modules/albums.md "The ... card"): sort rows, view row, the saved order.
+SORT_FILE, SORT_TMP = '/mnt/data/m1plus/albums-sort', '/mnt/data/m1plus/albums-sort.tmp'
+# (album, artist) in the stock (Title) order: by album, ASCII case aside
+SORT_LIB = [('Alpha', 'Zed'), ('beta', 'Yan'), ('Gamma', 'Zed'), ('Delta', 'The Xu'), ('Epsilon', 'Wu')]
+# the library's songs, newest first (time_create desc): (album, year): Gamma, Alpha 1999, a song with no album, Epsilon, Alpha 1971, Delta (no year), Beta 2005 (the names differ in case from the rows: NOCASE)
+SORT_SONGS = [('gamma', 1985), ('Alpha', 1999), ('', 2020), ('EPSILON', 2010), ('Alpha', 1971), ('Delta', 0), ('Beta', 2005)]
+SORT_ORDERS = {0: [0, 1, 2, 3, 4],     # Title: the stock order
+               1: [4, 3, 1, 0, 2],     # Artist: Wu, Xu (the "The " ignored), Yan, Zed / Alpha, Zed / Gamma
+               2: [2, 0, 4, 3, 1],     # Recently Added: by each album's newest song (Gamma, Alpha, Epsilon, Delta, beta)
+               3: [4, 1, 2, 0, 3]}     # Year: newest first by the earliest year tag (Epsilon 2010, beta 2005, Gamma 1985, Alpha 1971), Delta (none) last
 
+
+def sort_machine(specs=SORT_LIB, songs=SORT_SONGS, list_mode=True, cls=Machine, **files):
+    m = albums_machine(0, cls=cls)
+    m.showlist = [m.record(album=a, artist=r, path=f'/mnt/mmc/m/{i}/1.flac', rid=i + 1) for i, (a, r) in enumerate(specs)]
+    rows = []
+    for i, (album, year) in enumerate(songs):
+        r = m.record(album=album, artist='x', path=f'/mnt/mmc/s/{i}.flac', rid=100 + i)
+        m.setword(r + O['REC_YEAR'], year); rows.append(r)
+    m.class_lists[O['CLASS_ALL_SONGS']] = rows
+    m.fs.pop(SORT_FILE, None)   # the page's world uses the stock order; here the file is missing (the default, Artist) unless a test gives it
+    if list_mode: m.fs[ALBUMS_FILE] = b'0\n'
+    for k, v in files.items(): m.fs[k] = v
+    return m
+
+
+def shown(m):
+    """The album titles in the list's rows, top to bottom."""
+    blits, texts = paint(m)
+    return [t[0] for t, sty in sorted(zip(texts, m.text_styles), key=lambda p: p[0][1][1]) if sty == 'label_row_title']
+
+
+def vis(m, name):
+    w = m.widgets[name]
+    return m.props.get((w, 'visible'), 1), m.props.get((w, 'sensitive'), 1)
+
+
+def ticks(m): return [vis(m, f'vs_tick{i}')[0] for i in range(VS_SORTS)]
+def vticks(m): return [vis(m, f'vs_tick{i}')[0] for i in (VS_SORTS, VS_SORTS + 1)]   # Grid, List
+
+
+def subs(m):
+    """Each sort row's second line: its text (the last widget_set_tr_text of the call log) when shown, None when hidden."""
+    out = []
+    for i in range(VS_SORTS):
+        said = [c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets[f'vs_sub{i}']]
+        out.append((utf8(said[-1]) if said else '?') if vis(m, f'vs_sub{i}')[0] else None)
+    return out
+
+
+# the saved file's character: the order's digit, its letter (a..d) when the direction is reversed
+REV_ORDERS = {0: [4, 3, 2, 1, 0],   # Z-A
+              1: [2, 0, 1, 3, 4],   # Z-A by artist
+              2: [1, 3, 4, 0, 2],   # Oldest First: beta, Delta, Epsilon, Alpha, Gamma
+              3: [0, 2, 1, 4, 3]}   # Oldest First: Alpha 1971, Gamma 1985, beta 2005, Epsilon 2010, Delta (no year) last
+SUB_UP = {0: 'A–Z', 1: 'A–Z', 2: 'Newest First', 3: 'Newest First'}
+SUB_DOWN = {0: 'Z–A', 1: 'Z–A', 2: 'Oldest First', 3: 'Oldest First'}
+def rev_file(k): return (chr(ord('a') + k) + '\n').encode()
+def titles(order): return [SORT_LIB[i][0] for i in order]
+
+
+def card_asset_tests(ctx):
+    expect = ctx.expect
+    asset = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_albums.bin')
+    tree = awtk_ui.parse(open(asset, 'rb').read())
+    scrim, card = tree.find('vs_scrim'), tree.find('vs_card')
+    gw, gh, gr = mod_icons.GLASS_VIEWSORT
+    expect(scrim.get('visible') == card.get('visible') == 'false' and scrim.get('enable') == 'true' and (scrim.x, scrim.y, scrim.w, scrim.h) == (0, 0, 320, 450)
+           and all(scrim.get(f'style:{st}:bg_color') == '#00000082' for st in ('normal', 'pressed', 'over')),
+           'the scrim covers the window, dims it like the Playlists menu (#00000082) and starts hidden')
+    expect((card.x, card.y, card.w, card.h) == (O['PL_CARD_RIGHT'] - O['PL_CARD_MAX'], O['PL_CARD_Y'], O['PL_CARD_MAX'], gh) == (19, 52, 292, 7 * 48)
+           and all(card.get(f'style:{st}:bg_image') == 'vs_glass7' and card.get(f'style:{st}:bg_image_draw_type') == 'patch3_x' and card.get(f'style:{st}:bg_color') == '#00000000' for st in ('normal', 'pressed', 'over')),
+           'the card is at its widest (right edge 311, top y 52), Search, Grid, List and four sorts: seven 48 px rows = 336 px high, drawn in its own glass vs_glass7 with patch3_x and no fill')
+    for name, (w_, h_, r_) in (('vs_glass7', mod_icons.GLASS_VIEWSORT), ('vs_glass6', mod_icons.GLASS_VIEWSORT6), ('vs_glass5', mod_icons.GLASS_VIEWSORT5)):
+        raw = open(os.path.join(WORK, 'rootfs', f'release/assets/default/raw/images/xx/{name}.png'), 'rb').read()
+        gen = mod_icons.glass_image(w_, h_, r_, fill=mod_icons.GLASS_SHEET_FILL)
+        expect(raw == open(os.path.join(mod_icons.PNG, f'{name}.png'), 'rb').read() and same_pixels(raw, gen) and (w_, r_) == (72, O['PL_CARD_R']),
+               f'{name}.png is the generator output pixel for pixel ({w_} x {h_}, r {r_}, the sheet\'s fill)')
+    expect(mod_icons.GLASS_VIEWSORT[1] == 7 * 48 and mod_icons.GLASS_VIEWSORT6[1] == 6 * 48 and mod_icons.GLASS_VIEWSORT5[1] == 5 * 48
+           and not [n for n in ('vs_glass',) if os.path.exists(os.path.join(mod_icons.PNG, n + '.png')) or os.path.exists(os.path.join(WORK, 'rootfs', f'release/assets/default/raw/images/xx/{n}.png'))],
+           'the glasses are seven rows (library), six rows (the scoped page) and five rows (the Songs library) high; the old vs_glass name is gone')
+    order = (6, 4, 5, 0, 1, 2, 3)   # the rows top to bottom: Search, Grid, List, then the sorts
+    items = {i: tree.find(f'vs_item{i}') for i in order}
+    expect([items[i].y for i in order] == [0, 48, 96, 144, 192, 240, 288] and all(it.h == 48 and it.w == 292 and it.type == 'button' for it in items.values())
+           and all(it.get('style:pressed:bg_color') == '#FFFFFF10' and it.get('style:normal:bg_color') == '#00000000' for it in items.values()),
+           'seven 48 px rows, Search above the View group (Grid, List) above the Sort group: transparent, pressed 6 % white')
+    hair = tree.find('vs_hair')
+    expect([items[i].get('style:normal:border_width') for i in order] == ['0', '0', '0', '1', '0', '0', '0'] and items[0].get('style:normal:border_color') == '#FFFFFF22'
+           and all(items[i].get('style:normal:border_color') == '#00000000' for i in (6, 4, 5, 1, 2, 3)),
+           'a 13 % white hairline above the first sort row (between the View and Sort groups); none between the rows of a group')
+    expect(hair is not None and hair.type == 'view' and (hair.x, hair.y, hair.w, hair.h) == (0, 48, 292, 1) and hair.get('sensitive') == 'false' and hair.get('style:normal:bg_color') == '#FFFFFF22'
+           and hair in card.children and [(w.name, w.y) for w in items.values() if w.y == hair.y] == [('vs_item4', 48)],
+           'the second hairline is its own insensitive 1 px widget vs_hair at y 48, under Search and above Grid (the Search row is optional: the helper hides it with the row)')
+    expect(tree.find('vs_sep') is None and tree.find('vs_glyph') is None, 'no separator widget and no single view glyph')
+    keys = {i: tree.find(f'vs_label{i}') for i in range(7)}
+    expect([keys[i].get('tr_text') for i in range(7)] == ['Title', 'Artist', 'Recently Added', 'Year', 'Grid', 'List', 'Search Albums'] and all(k.get('sensitive') == 'false' for k in keys.values())
+           and [keys[i].x for i in range(7)] == [38, 38, 38, 38, 66, 66, 66] and all(k.get('style:normal:font_size') == '18' for k in keys.values()),
+           'the labels are Title, Artist, Recently Added, Year, Grid, List and Search Albums (their keys), 18 px, insensitive, from x 38 (x 66 after a glyph)')
+    ticks_ = {i: tree.find(f'vs_tick{i}') for i in range(6)}
+    expect(all(w.get('image') == 'sg_tick' and w.get('visible') == 'false' and (w.x, w.y, w.w) == (14, 17, 14) for w in ticks_.values()),
+           'a hidden tick (the Songs card\'s image) at x 14 on every row but Search (it has none): the left column')
+    expect(tree.find('vs_tick6') is None, 'the Search row has no tick')
+    g = {i: tree.find(f'vs_glyph{i}') for i in (4, 5, 6)}
+    expect([(g[i].x, g[i].w, g[i].get('image'), g[i].get('sensitive')) for i in (4, 5, 6)] == [(38, 20, 'pod_ic_vsgrid', 'false'), (38, 20, 'pod_ic_vslist', 'false'), (38, 20, 'pod_ic_vssearch', 'false')],
+           'the View rows and the Search row carry their 20 px glyph at x 38 (10 px after the 14 px tick column)')
+    subs_ = {i: tree.find(f'vs_sub{i}') for i in range(4)}
+    expect(all(s.get('visible') == 'false' and s.get('sensitive') == 'false' and s.x == 38 and s.get('style:normal:font_size') == '15' and s.get('style:normal:text_color') == '#AAAAAA'
+               for s in subs_.values()), 'each sort row has a hidden, insensitive 15 px grey second line (the direction) from x 38')
+    expect(all(keys[i] in items[i].children and ticks_[i] in items[i].children for i in range(6)) and keys[6] in items[6].children and all(subs_[i] in items[i].children for i in range(4))
+           and all(g[i] in items[i].children for i in (4, 5, 6)), 'each label, tick, glyph and second line is inside its row')
+    expect(b'sg_glass' not in open(asset, 'rb').read() and b'pl_glass' not in open(asset, 'rb').read(), 'the Albums window no longer uses the Songs sort glass or the Playlists glass')
+    png = os.path.join(mod_icons.PNG, 'pl_glass.png')
+    expect(os.path.exists(png), 'the Playlists glass is still there for its own users')
+
+
+def sort_card_tests(ctx):
+    """The "..." card at run time: opening, the ticks, each order, the saved choice, the view row, Search, a late event, the fit."""
+    expect = ctx.expect
+    m = sort_machine(); open_grid(m)
+    expect(vis(m, 'vs_card') == (0, 0) and vis(m, 'vs_scrim') == (0, 0), 'the card starts hidden and insensitive')
+    m.click('btn_more')
+    expect(vis(m, 'vs_card') == (1, 1) and vis(m, 'vs_scrim') == (1, 1), 'the "..." button opens the card and the scrim')
+    m.click('btn_more')
+    expect(vis(m, 'vs_card') == (0, 0) and vis(m, 'vs_scrim') == (0, 0), 'a second tap closes them')
+    m.click('btn_more'); m.click('vs_scrim')
+    expect(vis(m, 'vs_card') == (0, 0), 'the scrim closes the card')
+    # a page that never chose is Artist
+    m = sort_machine(); open_grid(m); m.click('btn_more')
+    expect(ticks(m) == [0, 1, 0, 0] and shown(m) == titles(SORT_ORDERS[1]), 'no albums-sort file: the default, Artist, is ticked and shown')
+    m = sort_machine(**{OLD_ORDER_FILE: b'0\n'}); open_grid(m); m.click('btn_more')
+    expect(ticks(m) == [1, 0, 0, 0] and shown(m) == titles(SORT_ORDERS[0]) and m.fs.get(SORT_FILE) == b'0\n' and OLD_ORDER_FILE not in m.fs,
+           'no albums-sort file and a retired album-order "0": moved into albums-sort once, Title is ticked and shown')
+    expect(not [c for c in m.calls if c[0] == 'loadLocalClassList' and c[1] == O['CLASS_ALL_SONGS']], 'Title and Artist read no song list')
+    # each order, from the saved file at open (it wins over a retired album-order file)
+    for k, order in SORT_ORDERS.items():
+        for data in (f'{k}\n'.encode(), f'{k}'.encode()):
+            m = sort_machine(**{SORT_FILE: data, OLD_ORDER_FILE: b'0\n' if k else b'1\n'}); open_grid(m); m.click('btn_more')
+            expect(shown(m) == titles(order) and ticks(m) == [int(i == k) for i in range(4)], f'albums-sort {data!r}: the order {order} and the tick on row {k}')
+    for bad in (b'', b'4\n', b'x', b'-1'):
+        m = sort_machine(**{SORT_FILE: bad}); open_grid(m)
+        expect(shown(m) == titles(SORT_ORDERS[1]), f'a garbage albums-sort file ({bad!r}) is Artist')
+    # a row sets the order: saved atomically, the list reordered from the top, the card closed, the tick moved
+    m = sort_machine(); open_grid(m); settle(m)
+    for k in (2, 3, 0, 1):
+        m.calls = []; m.click('btn_more'); m.click(f'vs_item{k}')
+        expect(m.fs.get(SORT_FILE) == f'{k}\n'.encode() and SORT_TMP not in m.fs and ('rename', SORT_TMP, SORT_FILE) in m.calls, f'row {k}: saved atomically')
+        expect(vis(m, 'vs_card') == (0, 0) and vis(m, 'vs_scrim') == (0, 0) and scroll_of(m) == 0, f'row {k}: the card closes, the list is at the top')
+        expect(shown(m) == titles(SORT_ORDERS[k]), f'row {k}: the list is in the order {SORT_ORDERS[k]} ({shown(m)})')
+        m.click('btn_more')
+        expect(ticks(m) == [int(i == k) for i in range(4)], f'row {k}: the tick is on it when the card opens again'); m.click('vs_scrim')
+    # Recently Added and Year read the song list once, newest first (sort_flag 3), and put the flag and the browsing class back
+    m = sort_machine(); open_grid(m)
+    flag0, cls0 = m.word(pod.DATA['SORT_FLAG'][0]), m.word(pod.DATA['G_CLASS_TYPE'][0])
+    m.calls = []; m.click('btn_more'); m.click('vs_item2')
+    expect([c[1] for c in m.calls if c[0] == 'loadLocalClassList'] == [O['CLASS_ALL_SONGS']] and m.word(pod.DATA['SORT_FLAG'][0]) == flag0 and m.word(pod.DATA['G_CLASS_TYPE'][0]) == cls0,
+           'Recently Added reads the library song list once, and sort_flag and the browsing class are as they were')
+    m.calls = []; m.click('btn_more'); m.click('vs_item2')
+    expect(m.fs.get(SORT_FILE) == b'c\n' and [c[1] for c in m.calls if c[0] == 'loadLocalClassList'] == [O['CLASS_ALL_SONGS']], 'the row already ticked flips its direction (saved as its letter) and the order is made again')
+    # no songs: no ranks, the albums keep the stock (title) order
+    m = sort_machine(songs=(), **{SORT_FILE: b'3\n'}); open_grid(m)
+    expect(shown(m) == titles(SORT_ORDERS[0]), 'with no song list Year (and Recently Added) leave the stock order')
+    # a tap opens the stock row of the album at that position
+    m = sort_machine(**{SORT_FILE: b'2\n'}); open_grid(m)
+    calls = tap_at(m, 100, TOP + 10)
+    expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_ALBUMS'], SORT_ORDERS[2][0]) in calls, f'a tap on the first row (Gamma) opens stock row {SORT_ORDERS[2][0]}')
+    calls = tap_at(m, 100, TOP + 3 * ROW + 10)
+    expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_ALBUMS'], SORT_ORDERS[2][3]) in calls, f'a tap on the fourth row opens stock row {SORT_ORDERS[2][3]}')
+    # the view row names the view a tap switches to and switches it in place, saving the mode; the order is not touched
+    for start in (0, 1):   # 0: the page is a grid, 1: a list
+        mk = lambda: sort_machine(**{SORT_FILE: b'2\n'})
+        m = mk(); m.fs[ALBUMS_FILE] = b'0\n' if start else b'1\n'; open_grid(m); m.click('btn_more')
+        expect(vticks(m) == ([0, 1] if start else [1, 0]), f'the View group ticks the current view ({"List" if start else "Grid"})')
+        m.calls = []; m.click('vs_item4' if start else 'vs_item5')
+        expect(m.fs.get(ALBUMS_FILE) == (b'1\n' if start else b'0\n') and m.fs.get(SORT_FILE) == b'2\n' and vis(m, 'vs_card') == (0, 0)
+               and ('widget_resize', m.widgets['view_grid'], 320, TOP + (5 * ROW if not start else 3 * PITCH + RGAP)) in m.calls,
+               'the other view row switches the mode in place, saves it in albums-view, leaves the order alone and closes the card')
+        m.click('btn_more')
+        expect(vticks(m) == ([1, 0] if start else [0, 1]), 'the tick moved to the new view')
+        m = mk(); m.fs[ALBUMS_FILE] = b'0\n' if start else b'1\n'; open_grid(m); m.click('btn_more'); m.calls = []
+        m.click('vs_item5' if start else 'vs_item4')
+        expect(not [c for c in m.calls if c[0] in ('widget_resize', 'rename')] and m.fs[ALBUMS_FILE] == (b'0\n' if start else b'1\n') and vis(m, 'vs_card') == (0, 0),
+               'a tap on the ticked view changes nothing and closes the card')
+    # Search; a late card event after the page closed does nothing
+    m = sort_machine(); open_grid(m)
+    m.click('btn_more'); m.calls = []
+    m.click('vs_item6', count=20000000)
+    expect(('window_open', 'm1plus_search') in m.calls and vis(m, 'vs_card') == (0, 0) and vis(m, 'vs_scrim') == (0, 0),
+           'the card\'s first row, Search Albums, closes the card and opens the search page')
+    m = sort_machine(); open_grid(m); m.windows['m1plus_search'] = 0; m.click('btn_more'); m.calls = []
+    m.click('vs_item6', count=20000000)
+    expect(vis(m, 'vs_card') == (0, 0) and m.calls.count(('window_open', 'm1plus_search')) == 2 and m.fs.get(SORT_FILE) is None,
+           'a Search page that will not open scoped falls back to the library search (search_open: a second try, as the button did), the card closed, the order untouched')
+    m = sort_machine(); open_grid(m); m.call(PSYMS['al_on_destroy'], count=2000000); m.calls = []
+    m.call(PSYMS['al_on_item'], a0=2, count=2000000); m.call(PSYMS['al_on_item'], a0=6, count=2000000); m.call(PSYMS['al_on_more'], count=2000000)
+    expect(not m.calls and SORT_FILE not in m.fs, 'a late card event after the page closed does nothing')
+    # the card's width follows the language: the widest label (or second line) + its x + 16, 206 .. 292, the right edge 311 under the glass; unmeasurable keeps the asset's width
+    m = sort_machine(cls=ListMachine); open_grid(m)
+    for i, t in enumerate(('Title', 'Artist', 'Recently Added', 'Year', 'Grid', 'List', 'Search Albums')): m.wtext[m.widgets[f'vs_label{i}']] = t
+    for i in range(4): m.wtext[m.widgets[f'vs_sub{i}']] = 'A–Z'
+
+    def fit(widest):
+        m.measure = lambda t: widest if t == 'Recently Added' else 40
+        m.calls = []; m.click('btn_more')
+        card = m.widgets['vs_card']
+        mv = [tuple(c[2:]) for c in m.calls if c[0] == 'widget_move' and c[1] == card]
+        rs = [tuple(c[2:]) for c in m.calls if c[0] == 'widget_resize' and c[1] == card]
+        lab = [c[2] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets['vs_label2']]
+        m.click('btn_more')
+        return mv, rs, lab
+    for widest, w in ((60, 206), (130, 206), (200, 254), (300, 292)):
+        mv, rs, lab = fit(widest)
+        expect(mv == [(311 - w, 52)] and rs == [(w, 336)] and lab == [w - 38 - 16], f'a widest label of {widest} px: a card {w} px wide (38 + the label + 16, 206 .. 292), 336 px high, right edge 311 ({mv} {rs} {lab})')
+    m.measure = lambda t: 150 if t == 'Search Albums' else 40
+    m.calls = []; m.click('btn_more')
+    rs = [tuple(c[2:]) for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets['vs_card']]
+    pos = [tuple(c[2:]) for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets['vs_item6']]
+    hr = [tuple(c[2:]) for c in m.calls if c[0] in ('widget_move', 'widget_resize') and c[1] == m.widgets['vs_hair']]
+    expect(rs == [(232, 336)] and pos == [(0, 0)] and hr == [(0, 48), (232, 1)],
+           f'the Search row counts, from its glyph x 66: 66 + 150 + 16 = 232 wide; it is the first row, the hairline under it at y 48 ({rs} {pos} {hr})')
+    m.click('btn_more')
+    m.measure = lambda t: 0
+    m.calls = []; m.click('btn_more')
+    expect(not [c for c in m.calls if c[0] in ('widget_move', 'widget_resize') and c[1] == m.widgets['vs_card']] and vis(m, 'vs_card') == (1, 1), 'a label that cannot be measured leaves the asset\'s width, and the card opens')
+
+
+def reverse_tests(ctx):
+    """Reversible sorts (docs/modules/albums.md): the ticked sort row's second line, a tap on it flips the direction, the saved letter, a new order starts in its default direction."""
+    expect = ctx.expect
+    for k in range(4):
+        m = sort_machine(**{SORT_FILE: f'{k}\n'.encode()}); open_grid(m); m.calls = []; m.click('btn_more')
+        expect(subs(m) == [SUB_UP[k] if i == k else None for i in range(4)] and ticks(m) == [int(i == k) for i in range(4)],
+               f'order {k} saved with its digit: its row alone shows "{SUB_UP[k]}" ({subs(m)})')
+        m = sort_machine(**{SORT_FILE: rev_file(k)}); open_grid(m); m.calls = []; m.click('btn_more')
+        expect(subs(m) == [SUB_DOWN[k] if i == k else None for i in range(4)] and ticks(m) == [int(i == k) for i in range(4)] and shown(m) == titles(REV_ORDERS[k]),
+               f'order {k} saved with its letter: reversed ({REV_ORDERS[k]}), its row alone shows "{SUB_DOWN[k]}" ({subs(m)}, {shown(m)})')
+    m = sort_machine(); open_grid(m); m.calls = []; m.click('btn_more')
+    expect(subs(m) == [None, 'A\u2013Z', None, None], 'no file: Artist, A\u2013Z')
+    for bad in (b'e\n', b'A\n', b'ar', b'a\n\n'):
+        m = sort_machine(**{SORT_FILE: bad}); open_grid(m)
+        expect(shown(m) == titles(SORT_ORDERS[1]), f'a garbage albums-sort file ({bad!r}) is Artist, not reversed')
+    # a tap on the ticked row flips, saves atomically, reorders from the top, closes the card; a second tap flips back
+    m = sort_machine(); open_grid(m); settle(m)
+    for k in range(4):
+        m.click('btn_more'); m.click(f'vs_item{k}')
+        expect(m.fs[SORT_FILE] == f'{k}\n'.encode() and shown(m) == titles(SORT_ORDERS[k]), f'row {k}: another order starts in its default direction')
+        m.calls = []; m.click('btn_more'); m.click(f'vs_item{k}')
+        expect(m.fs[SORT_FILE] == rev_file(k) and SORT_TMP not in m.fs and ('rename', SORT_TMP, SORT_FILE) in m.calls and shown(m) == titles(REV_ORDERS[k])
+               and scroll_of(m) == 0 and vis(m, 'vs_card') == (0, 0), f'row {k}: a tap on the ticked row reverses it ({shown(m)}), saved as "{chr(ord("a") + k)}", the card closed, the list at the top')
+        m.calls = []; m.click('btn_more')
+        expect(subs(m) == [SUB_DOWN[k] if i == k else None for i in range(4)], f'row {k}: the second line reads "{SUB_DOWN[k]}"')
+        m.click(f'vs_item{k}')
+        expect(m.fs[SORT_FILE] == f'{k}\n'.encode() and shown(m) == titles(SORT_ORDERS[k]), f'row {k}: a second tap flips back to the default direction')
+    # from a reversed order, another row starts in its own default direction
+    m = sort_machine(**{SORT_FILE: rev_file(3)}); open_grid(m); m.click('btn_more'); m.click('vs_item0')
+    expect(m.fs[SORT_FILE] == b'0\n' and shown(m) == titles(SORT_ORDERS[0]), 'Title chosen from reversed Year: Title, A\u2013Z')
+    # a failed save leaves the order and the second line as they were
+    m = sort_machine(**{SORT_FILE: b'2\n'}); open_grid(m); m.fail.add(('write', SORT_TMP)); m.click('btn_more'); m.click('vs_item2')
+    expect(m.fs.get(SORT_FILE) == b'2\n' and shown(m) == titles(SORT_ORDERS[2]), 'a failed save changes nothing')
+    # the special rows stay last: the Unknown Album row (id -1) is last in every order and direction
+    lib = SORT_LIB + [('Unknown Album', '')]
+    for k in range(4):
+        for data in (f'{k}\n'.encode(), rev_file(k)):
+            m = sort_machine(specs=lib, **{SORT_FILE: data}); m.showlist[-1] and m.setword(m.showlist[-1] + O['REC_ID'], 0xffffffff); open_grid(m)
+            expect(shown(m)[-1] == 'Unknown Album' and len(shown(m)) == 6, f'albums-sort {data!r}: Unknown Album stays last')
+
+
+def title_tests(ctx):
+    """The large title (the Songs / Artists pattern, the shared collapse rule): the first thing in the content, the navbar's small title hidden until
+    the offset reaches SG_COLLAPSE, the nav fade while scrolled; the content moves down by the title block; the artist-scoped page's title is the name."""
+    expect = ctx.expect
+    TOP, COLLAPSE = O['SG_TITLE_H'], O['SG_COLLAPSE']
+    tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_albums.bin'), 'rb').read())
+    big, grid = tree.find('al_title'), tree.find('view_grid')
+    expect(big is not None and big in grid.children and (big.x, big.y, big.w, big.h) == (O['SG_TITLE_X'], 0, O['SG_TITLE_W'], TOP) and big.get('sensitive') == 'false'
+           and big.get('style:normal:font_size') == '32' and big.get('style:normal:text_color') == '#FFFFFF',
+           'the asset has the large title in the content view: 32 px white at x 12, insensitive, SG_TITLE_H high')
+    expect(tree.find('label_title').get('visible') == 'false', 'the navbar\'s small title starts hidden')
+    for mode, f in (('grid', b'1\n'), ('list', b'0\n')):
+        m = albums_machine(30); m.fs[ALBUMS_FILE] = f; open_grid(m)
+        t, small, fade = m.widgets['al_title'], m.widgets['label_title'], m.widgets['img_nb_fade']
+        expect(('widget_set_text_utf8', t, 'Albums') in m.calls and ('widget_set_text_utf8', small, 'Albums') in m.calls, f'{mode}: both titles read Albums')
+        expect(content_h(m) == TOP + (RGAP + 15 * PITCH if mode == 'grid' else 30 * ROW), f'{mode}: the content is the title block and the albums ({content_h(m)})')
+        blits, _ = settle(m)
+        want = TOP + (RGAP if mode == 'grid' else LAY)
+        expect(min(b[2][1] for b in blits) == want, f'{mode}: the first cover is {want} px down, under the title block ({min(b[2][1] for b in blits)})')
+        expect(m.props.get((small, 'visible'), 0) == 0 and ('widget_set_visible', small, 1) not in m.calls and m.props.get((fade, 'visible'), 0) == 0,
+               f'{mode}: at rest the small title and the fade are hidden')
+        scroll_to(m, COLLAPSE - 1)
+        expect(m.props.get((small, 'visible'), 0) == 0 and m.props.get((fade, 'visible')) == 1, f'{mode}: one px short of SG_COLLAPSE the title is still hidden, the fade shows')
+        scroll_to(m, COLLAPSE)
+        expect(m.props.get((small, 'visible')) == 1 and m.props.get((fade, 'sensitive')) == 0, f'{mode}: at SG_COLLAPSE the small title shows')
+        scroll_to(m, 0)
+        expect(m.props.get((small, 'visible')) == 0 and m.props.get((fade, 'visible')) == 0, f'{mode}: back at the top they go')
+        opened = lambda calls: [c for c in calls if c[0] == 'navigator_to_with_context']
+        expect(not opened(tap_at(m, 100, TOP - 5)), f'{mode}: a tap on the title block opens nothing')
+        expect(opened(tap_at(m, 30, TOP + (RGAP if mode == 'grid' else 0) + 10)), f'{mode}: a tap on the first row opens it')
+        m2 = albums_machine(30); m2.fs[ALBUMS_FILE] = f; m2.widget_on_fail = frozenset({O['EVT_SCROLL']}); open_grid(m2)
+        expect(('widget_set_visible', m2.widgets['label_title'], 1) in m2.calls, f'{mode}: without the scroll events the navbar keeps its title')
+    # the artist-scoped page: the title is the artist's name (both labels)
+    for mode, f in (('grid', b'1\n'), ('list', b'0\n')):
+        m = artists_machine(albums_page=True); m.fs[ALBUMS_FILE] = f
+        m.call(PSYMS['artists_open'], a0=0, count=20000000); m.calls = []
+        m.call(PSYMS['ar_open'], a0=0, count=40000000)
+        expect(('widget_set_text_utf8', m.widgets['al_title'], 'Miles Davis') in m.calls and ('widget_set_text_utf8', m.widgets['label_title'], 'Miles Davis') in m.calls,
+               f'{mode}: the scoped page\'s large and small titles are the artist')
+        end = O['AL_PILLS_END']   # the pills end the block; the list's first row is RGAP under it, the grid's gap is its own
+        expect(content_h(m) == end + (RGAP + 2 * PITCH if mode == 'grid' else RGAP + 4 * ROW), f'{mode}: the scoped content starts under the title and the pills ({content_h(m)})')
+
+
+
+SECTIONS = [layout_tests, taps_list_tests, toggle_tests, stock_widget_tests, background_build_tests, foreground_loader_tests, card_asset_tests, sort_card_tests, reverse_tests, title_tests]   # tools/check.py runs each as its own task
 
 def run(ctx):
     for section in SECTIONS: section(ctx)

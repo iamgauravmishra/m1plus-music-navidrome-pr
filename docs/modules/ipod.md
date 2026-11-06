@@ -224,7 +224,7 @@ Pinned in `tools/pod.py`: `prev_quick_click` `0x4cccb0` (the twin of `next_quick
 - No sound (above). No rotation action on Now Playing (above), no scrubber. No cover flip in Cover Flow (the centre opens the tracks as a list). No search, no Genres,
   Composers or Folders, no Shuffle Albums value. The cover pane does not follow the row and shows only covers already in the Cover Flow cache (from its 168 px file, upscaled to 264). Not built from the reference: the volume overlay and wheel volume (no safe stock volume read-back, “Playback limits”), the progress / scrubber cycle, held next / previous seeking (`seek_time` blocks the UI thread; `mclSetSeek` alone is unpinned and untested), and the Cover Flow to Now Playing cover flip (80 to 5 degrees: the Cover Flow renderer has no cheap rotation of a single cover).
 - No clock in the title bar (the iPod's has none); long translated labels are cut with an ellipsis to the 130 px root text box (Spanish, Russian and Ukrainian Shuffle Songs; the Settings rows French Shuffle and Appearance, German Repeat and Appearance, Polish Repeat, Spanish Shuffle and Repeat values, Russian Shuffle and Appearance, Ukrainian Shuffle: `test/pod/ipod.py` i18n_tests lists them).
-- Albums are in the stock query's order, not Settings > Library > Album Order.
+- Albums are in the stock query's order, not the album order of the Albums "..." card.
 - The play queue is the stock one: `start_player` copies the shown list; a Songs list of thousands of rows is copied once per play, as the Songs page does.
 
 ## Device checklist

@@ -624,7 +624,7 @@ def tap_tests(ctx):
     expect = ctx.expect
     songs = [('Alpha one', 'Ann', 'First'), ('Alpha two', 'Bob', 'Second'), ('Beta', 'Ann', 'First')]
     def albums_widgets(m):   # the Albums page's widgets (an artist's tap opens it)
-        for n in ('view_grid', 'albums_scrollview', 'label_status', 'label_row_title', 'label_row_sub', 'label_grid_title', 'label_grid_sub', 'btn_albumview', 'btn_coverflow'): m.widget(n)
+        for n in ('view_grid', 'albums_scrollview', 'label_status', 'label_row_title', 'label_row_sub', 'label_grid_title', 'label_grid_sub', 'btn_coverflow', *VS_WIDGETS): m.widget(n)
     def fresh(**kw):
         m = opened(songs, ['Alphaville', 'Ann'], [('Alpha Album', 'Ann'), ('Gamma', 'Bob')], playlists=['Alpha Mix'], **kw)
         albums_widgets(m)

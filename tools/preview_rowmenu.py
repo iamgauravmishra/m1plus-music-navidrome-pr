@@ -55,8 +55,8 @@ def main():
     fav = PS.tr(s, 'Favorites')
     panels = [('Songs: the "..." left of the A-Z rail', PS.page(s, scroll=scroll)),
               ('Songs: the menu (a bottom sheet)', PS.page(s, scroll=scroll, row_menu_at=True)),
-              ('A list: no rail, the menu', PS.page(s, title=fav, row_menu_at=True)),
-              ('A favourite: Undo Favorite', PS.page(s, title=fav, row_menu_at='fav')),
+              ('A list: no rail, the menu', PS.page(s, title=fav, row_menu_at=True, direct=True)),
+              ('A favourite: Undo Favorite', PS.page(s, title=fav, row_menu_at='fav', direct=True)),
               ('Album page: the "..." on every track', album(s)),
               ('Album page: the menu', album(s, menu=True))]
     pad, lab = 12, 20

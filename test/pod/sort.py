@@ -1,5 +1,5 @@
-"""Cover Flow opens on the playing album; the album order (Settings > Library > Album Order): the Artist order, the stock
-Album order, the setting file, the same order on the Albums page, and the stock row behind every album that is opened.
+"""Cover Flow opens on the playing album; the album order (the Albums "..." card's albums-sort file): the Artist order, the stock
+Title order, the file, the one-off move of the retired album-order setting into it, the same order on the Albums page, and the stock row behind every album that is opened.
 (The Settings > Cover Flow page itself is tested in test/pod/menu.py, the localisation in test/pod/i18n.py.)"""
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
@@ -28,7 +28,7 @@ def lib_machine(specs=LIB, sort=None, data=None):
     """Cover Flow's machine with these albums in the library list, all cached. sort None: the setting file missing
     (the default, Artist); 'album': the file says Album; data: the file's exact content."""
     m = cover_machine(albums=0, sort='default' if sort is None else sort)
-    if data is not None: m.fs[CFSORT_FILE] = data
+    if data is not None: m.fs[SORT_FILE] = data
     fill(m, specs)
     return m
 
@@ -104,19 +104,57 @@ def run(ctx):
         shown, rows = shelf(m, n)
         expect(rows == list(range(n)) and shown == LIB, f'saved {data!r}: Album order is the stock order, row for row')
 
+    # ===================== 2b. reversed orders: the letter a (Title) / b (Artist) in albums-sort =====================
+    last = [n - 1]    # the Unknown Album row stays last
+    rev_title = list(range(n - 2, -1, -1)) + last
+    rev_artist = sorted(range(n - 1), key=lambda i: (name_sort_key(LIB[i][1]), name_sort_key(LIB[i][0])), reverse=True) + last   # (ties keep the stock order: sorted is stable)
+    for data, want, what in ((b'a\n', rev_title, 'Z-A by title'), (b'a', rev_title, 'Z-A by title, no newline'), (b'b\n', rev_artist, 'Z-A by artist')):
+        m = lib_machine(data=data)
+        m.call(cover_open, count=30000000)
+        shown, rows = shelf(m, n)
+        expect(rows == want, f'saved {data!r} ({what}): the shelf is the reverse of the saved order, Unknown Album last ({rows})')
+    expect(rev_artist[0] == 10, 'the model\'s Z-A artist order starts with Theo')
+    m = lib_machine(data=b'b\n'); m.call(cover_open, count=30000000)
+    put_value(m, 0); m.call(PSYMS['on_changed'], count=2000000)
+    expect(caption(m, 'label_artist') == [LIB[rev_artist[0]][1]] and f'file://{art_file(fnv(fnv(SEED, LIB[rev_artist[0]][1]), LIB[rev_artist[0]][0]) or 1)}' in m.loads,
+           'the first reversed cover is its own album and its own cache file (keys by stock row)')
+
     # ===================== 3. the setting file: strict, anything invalid is Artist =====================
     small = [('Alpha', 'Zed'), ('Beta', 'Amy'), ('Gamma', 'Mel')]
     for data, artist in ((None, True), (b'1\n', True), (b'1', True), (b'', True), (b'x\n', True), (b'00', True), (b'0x', True),
-                         (b'0\n\n', True), (b'2\n', True), (b' 0\n', True), (b'\x00\n', True), (b'\xff\xff', True),
+                         (b'0\n\n', True), (b' 0\n', True), (b'\x00\n', True), (b'\xff\xff', True),
                          (b'0\n', False), (b'0', False)):
         m = lib_machine(small, data=data) if data is not None else lib_machine(small)
         m.call(cover_open, count=10000000)
         shown, rows = shelf(m, 3)
         expect(rows == ([1, 2, 0] if artist else [0, 1, 2]), f'saved {data!r}: {"Artist" if artist else "Album"} order ({rows})')
     m = lib_machine(small); m.call(cover_open, count=10000000)
-    expect(CFSORT_FILE not in m.fs and CFSORT_TMP not in m.fs and not any(c[0] in ('write', 'rename') for c in m.calls),
+    expect(SORT_FILE not in m.fs and SORT_TMP not in m.fs and not any(c[0] in ('write', 'rename') for c in m.calls),
            'reading the setting never writes it (a default or an invalid file is left as it is)')
-    expect(len([c for c in m.calls if c[0] == 'open' and c[1] == CFSORT_FILE]) == 1, 'the file is read once, when the page opens')
+    expect(len([c for c in m.calls if c[0] == 'open' and c[1] == SORT_FILE]) == 1, 'the file is read once, when the page opens')
+    expect(not any(c[0] == 'unlink' for c in m.calls), 'with no retired album-order file nothing is unlinked')
+
+    # The retired Settings > Library > Album Order file moves into albums-sort once (Title for "0", else Artist) and is deleted; albums-sort wins when it is there.
+    for old, now, want_file, want_rows in ((b'0\n', None, b'0\n', [0, 1, 2]), (b'0', None, b'0\n', [0, 1, 2]), (b'1\n', None, b'1\n', [1, 2, 0]),
+                                           (b'x', None, b'1\n', [1, 2, 0]), (b'', None, b'1\n', [1, 2, 0]),
+                                           (b'0\n', b'1\n', b'1\n', [1, 2, 0]), (b'1\n', b'0\n', b'0\n', [0, 1, 2]), (b'0\n', b'junk', b'junk', [1, 2, 0])):
+        m = lib_machine(small)
+        m.fs[OLD_ORDER_FILE] = old; m.fs[OLD_ORDER_TMP] = b'0\n'
+        if now is not None: m.fs[SORT_FILE] = now
+        m.call(cover_open, count=10000000)
+        atomic, written = ('rename', SORT_TMP, SORT_FILE) in m.calls, any(c[0] in ('write', 'rename') for c in m.calls)
+        shown, rows = shelf(m, 3)
+        expect(m.fs.get(SORT_FILE) == want_file and OLD_ORDER_FILE not in m.fs and OLD_ORDER_TMP not in m.fs and rows == want_rows,
+               f'album-order {old!r}, albums-sort {now!r}: albums-sort {want_file!r}, both old files gone, rows {rows}')
+        if now is None: expect(SORT_TMP not in m.fs and atomic, 'the move is written atomically')
+        else: expect(not written, 'an albums-sort that is there is not written')
+    m = lib_machine(small); m.fs[OLD_ORDER_FILE] = b'0\n'; m.fail.add(('write', SORT_TMP))
+    m.call(cover_open, count=10000000)
+    shown, rows = shelf(m, 3)
+    expect(SORT_FILE not in m.fs and OLD_ORDER_FILE not in m.fs and rows == [1, 2, 0], 'a failed write: no albums-sort, the old file still goes, the order is the default Artist')
+    m = lib_machine(small); m.fs[OLD_ORDER_FILE] = b'0\n'; m.call(cover_open, count=10000000); m.calls.clear()
+    m.call(cover_open, count=10000000)
+    expect(not any(c[0] in ('unlink', 'write', 'rename') for c in m.calls) and m.fs.get(SORT_FILE) == b'0\n', 'the move happens once')
 
     # ===================== 4. memory and size limits =====================
     m = lib_machine(small); m.calloc_fail = True
@@ -247,7 +285,7 @@ def run(ctx):
     # ===================== 6. the artist's Cover Flow =====================
     def artist_page(artist_index, tracks=None, pos=0):
         m = artists_machine()
-        m.fs.pop(CFSORT_FILE, None)       # the setting at its default, Artist: the artist's shelf must still keep its own order
+        m.fs.pop(SORT_FILE, None)       # the setting at its default, Artist: the artist's shelf must still keep its own order
         m.call(PSYMS['artists_open'], count=5000000)
         if tracks: m.play(tracks(m), pos)
         artists_tap(m, artist_index)
@@ -276,7 +314,7 @@ def run(ctx):
     def albums_page(specs, data=None, sort='artist'):
         m = albums.albums_machine(0, sort=sort)
         m.fs[ALBUMS_FILE] = b'0\n'      # list mode: a row per album, the title in label_row_title
-        if data is not None: m.fs[CFSORT_FILE] = data
+        if data is not None: m.fs[SORT_FILE] = data
         fill(m, specs)
         albums.open_grid(m)
         return m
@@ -287,7 +325,7 @@ def run(ctx):
         return [t[0][0] for t in rows if t[1] == 'label_row_title'], [t[0][0] for t in rows if t[1] == 'label_row_sub']
 
     def tap_row(m, r):
-        y = albums.SCREEN_Y0 + r * albums.ROW + 20
+        y = albums.SCREEN_Y0 + albums.TOP + r * albums.ROW + 20
         m.touch('down', 40, y, 1000, fn='al_on_down'); down = list(m.calls)
         m.touch('up', 40, y, 1080, fn='al_on_up'); m.calls = down + m.calls
         return [c[3] for c in m.calls if c[0] == 'navigator_to_with_context' and c[1] == 'albuminfo_page']

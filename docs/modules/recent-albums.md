@@ -1,25 +1,23 @@
 # Recently Added albums
 
-**Sources:** `patch/songs.c` (`rv_*`, `sg_on_view`), `patch/grid.c`, `patch/covercache.c`, `tools/pod_ui.py` (`build_songs_page`, `navbar(songs=True)`),
+**Sources:** `patch/songs.c` (`rv_*`, `sg_set_view`), `patch/grid.c`, `patch/covercache.c`, `tools/pod_ui.py` (`build_songs_page`, `navbar(songs=True)`),
 `patch/home.h` (`RECENTADD_VIEW_FILE`), `patch/setfiles.c`. **Tests:** `test/pod/recentalbums.py`. **Preview:** `tools/preview_recent_albums.py` (a PIL approximation
 that `make preview` writes beside the sheet as `recent-songs-view.png` and `recent-album-view.png`; the songs preview path draws no real page).
 
-The Recently Added list (stock `allmusic_page`, class `0xf009`, shown on our Songs page: [songs](songs.md) "The other lists") has a navbar **view toggle** like the Albums
-page's grid / list toggle ([albums](albums.md) "Navbar"; glyphs `pod_nav_grid` / `pod_nav_list`). The page stays the Songs page; the toggle switches in place (nothing opens
-or closes) between the songs and the newest-first Albums grid. Only this list has it: the library, Favourites, Hi-Res, the other lists, playlists, genres and artists are unchanged.
+The Recently Added list (stock `allmusic_page`, class `0xf009`, shown on our Songs page: [songs](songs.md) "The other lists") has a **View group** (**Albums** with the grid glyph, **Songs** with the list glyph: the Albums and Playlists pages keep "Grid" / "List", this list switches between two contents) in its "..." card (the existing translated "Albums" and "Songs" strings; it was a navbar toggle with the glyphs `pod_nav_grid` / `pod_nav_list` before the Songs page's buttons folded into the "..."; `btn_albumview` is gone from the Songs asset, [songs](songs.md), [albums](albums.md)). The page stays the Songs page; the rows switch in place (nothing opens
+or closes) between the songs (Songs) and the newest-first Albums grid (Albums), the ticked row doing nothing. Only this list has the group: the library, Favourites, Hi-Res, the other lists, playlists, genres and artists are unchanged.
 
 ## What the user sees
 
-- **Songs view** (the default): the page as before. Capsule **Search 122 | Select 168 | toggle 214 (`pod_nav_grid`, "show as albums") | Now Playing 260**: the library Songs
-  page's four-piece capsule with Select in Sort's slot (Recently Added has no Sort) and the toggle on the Albums page's slot. Below: large title, Play / Shuffle pills, rows.
-- **Album view**: capsule **Search 168 | toggle 214 (`pod_nav_list`, "show as songs") | Now Playing 260**, the Albums page's three-piece shape; Select is hidden and
-  insensitive (no multi-select on a grid). Content: the large title "Recently Added", then the 2-column Albums grid ([albums](albums.md): 144 px covers, the same cell geometry,
+- **Songs view** (the default): the page as before. Capsule **Search 168 | "..." 214 | Now Playing 260**; the card (`vs_glass3`) is **Select, hairline, Albums, Songs (Songs ticked)**. Below: large title, Play / Shuffle pills, rows.
+- **Album view**: same capsule; the card (`vs_glass2`, `vs_offer` repacks it) is **Albums (ticked), Songs** (no hairline): the Select row is hidden and
+  insensitive (no multi-select on a grid; a stray tap does nothing). Content: the large title "Recently Added", then the 2-column Albums grid ([albums](albums.md): 144 px covers, the same cell geometry,
   cover corners, loader and cover-cache build) from y 52 where the pills begin, newest first. No Play / Shuffle pills and no song count. A tap opens our album page.
   No albums (every recent song untagged): the "No albums" line.
-- The capsules are the real glass pieces (`mod_icons.py`: left cap `pod_nav_search`, middles `pod_nav_select` and `pod_nav_grid` / `pod_nav_list`, right cap `ah_nav_play`).
-- **Small navbar title**: collapses in like the other lists'. "Recently Added" is 127 px at 20 px in English and the room before the capsule (x 122) is 64 px, so it is cut with an
-  ellipsis to that room (`az_fit`).
-- **Remembered choice**: `/mnt/data/m1plus/recently-added-view` (`RECENTADD_VIEW_FILE`): `1` albums; anything else, or missing, the songs. Written on every toggle with `home_write_atomic`.
+- The capsule is the real glass pieces (`mod_icons.py`: left cap `pod_nav_more`, right cap `ah_nav_play`; the old `pod_nav_select` / `pod_nav_search` middles are gone from this page).
+- **Small navbar title**: collapses in like the other lists'. "Recently Added" is 127 px at 20 px in English and the room before the "..." (x 214) is 156 px, so it is shown whole (`az_fit` still cuts a longer word).
+- **Preview**: `make preview` writes `songs-recent-card.png` and `songs-recent-albums-card.png` with the card open (`tools/preview_songs.py` `sort_card` kinds `recent` / `albums`).
+- **Remembered choice**: `/mnt/data/m1plus/recently-added-view` (`RECENTADD_VIEW_FILE`): `1` albums; anything else, or missing, the songs. Written on every view change with `home_write_atomic`.
   Read when the page opens (an open in the album view runs the 0xf009 query first, then the album query). A Settings Files row (after `playlists-view`).
 
 ## Data
@@ -45,11 +43,10 @@ or closes) between the songs and the newest-first Albums grid. Only this list ha
 
 ## Tests and what is not device-verified
 
-`test/pod/recentalbums.py` (emulation of the compiled payload): the asset (toggle, grid text styles, setting file), the songs view (capsule moves, no small title, other lists
-and the library page unchanged, an asset without the toggle keeps the plain list), the album view (the query under `sort_flag` 3 with the flag restored and nothing saved,
-the atomic file, the glyph, the navbar, grouping and order, the grid geometry, a stale stock list ignored, Select refused), the way back (class `0xf009` read again, the songs
+`test/pod/recentalbums.py` (emulation of the compiled payload): the asset (no toggle, the grid text styles, setting file), the songs view (the card's rows and glass, the other lists and the library page without a View group), the album view (the query under `sort_flag` 3 with the flag restored and nothing saved,
+the atomic file, the card (Select gone, Albums ticked), grouping and order, the grid geometry, a stale stock list ignored, Select refused), the way back (class `0xf009` read again, the songs
 shown are its own list), taps (the album page's call with the right library row; the title, a drag and the margin open nothing), the 60 cap, a compilation, no albums, no memory, the
-remembered choice at open (`1`, `1` + newline, `0`, garbage, missing), select mode and the toggle, and destroy in the album view.
+remembered choice at open (`1`, `1` + newline, `0`, garbage, missing), select mode and the Albums row, and destroy in the album view.
 
 Not verified on a device: the real `time_create desc` order after a rescan (see the date notes in [songs](songs.md)), the time of the full query and the grouping on a
 20,000-song library (a scan until the 60th distinct album, at most 60 name compares per song), the look and scroll feel of the grid under the large title (the PIL

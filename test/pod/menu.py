@@ -1002,34 +1002,26 @@ def pcsearch_row_tests(ctx, on_row, rows_s):
 
 
 def library_tests(ctx, on_row):
-    """Settings > Library (m1plus_library): Update Library, Album Order (a value row opening the picker page), the Landscape switch and Rebuild Covers; the picker Album Order."""
+    """Settings > Library (m1plus_library): Update Library, Rebuild Covers, the Landscape switch, Podcast Discover and Podcast Region; no Album Order row or picker."""
     expect, P = ctx.expect, pod_pages
     C = P.LIBRARY_PAGE
     rows_s = PSYMS[f'pod_rows_{P.SETTINGS_PAGE_INDEX}']
-    rows_c = PSYMS[f'pod_rows_{P.LIBRARY_PAGE_INDEX}']
     cf_i = next(i for i, r in enumerate(P.SETTINGS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.LIBRARY_PAGE_INDEX)
-    LAND, SORT = '/mnt/data/m1plus/coverflow-landscape', CFSORT_FILE
+    LAND, SORT = '/mnt/data/m1plus/coverflow-landscape', SORT_FILE
     land_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_LANDSCAPE)
-    sort_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_SORT)
-    sw, val = f'pod_switch{land_i}', f'pod_value{sort_i}'
-    expect([(r.label, r.action) for r in C.rows] == [('Update Library', P.ACT_HOME), ('Rebuild Covers', P.ACT_REBUILD), ('Album Order', P.ACT_SORT), ('Landscape', P.ACT_LANDSCAPE), ('Podcast Discover', P.ACT_PCSEARCH), ('Podcast Region', P.ACT_REGION)]
-           and C.title == 'Library' and C.rows[0].arg == P.HOME_UPDATE and C.rows[sort_i].arg == P.SORT_PAGE_INDEX and P.row_kind(C.rows[0]) == 'action' and P.row_kind(C.rows[sort_i]) == 'value',
-           'the Library page: one card of Update Library (the stock page, no chevron), Rebuild Covers and Album Order (a value, a chevron, its picker), then Landscape (switch) under Cover Flow, and Podcast Discover (switch) above Podcast Region (a value, its picker)')
+    sw = f'pod_switch{land_i}'
+    expect([(r.label, r.action) for r in C.rows] == [('Update Library', P.ACT_HOME), ('Rebuild Covers', P.ACT_REBUILD), ('Landscape', P.ACT_LANDSCAPE), ('Podcast Discover', P.ACT_PCSEARCH), ('Podcast Region', P.ACT_REGION)]
+           and C.title == 'Library' and C.rows[0].arg == P.HOME_UPDATE and P.row_kind(C.rows[0]) == 'action',
+           'the Library page: one card of Update Library (the stock page, no chevron), Rebuild Covers, then Landscape (switch) under Cover Flow, and Podcast Discover (switch) above Podcast Region (a value, its picker)')
 
-    def open_lib(land=None, sort=None, language=None):
+    def open_lib(land=None, language=None):
         m = Machine()
         m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(
-            ['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(P.SETTINGS_PAGE.rows))] + [sw, val])}
+            ['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(P.SETTINGS_PAGE.rows))] + [sw])}
         if land is not None: m.fs[LAND] = land
-        if sort is not None: m.fs[SORT] = sort
         if language: m.set_language(language)
         m.call(on_row, a0=rows_s + 12 * cf_i, count=3000000)
         return m
-
-    def label(m):
-        """The last key the sort value was set to, and the text it shows."""
-        keys = [c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets[val]]
-        return keys[-1] if keys else None
 
     m = open_lib()
     expect(('window_open', C.key) in m.calls and all(('widget_on', m.widgets[f'pod_row{i}'], O['EVT_CLICK']) in [c[:3] for c in m.calls] for i in range(len(C.rows))),
@@ -1053,58 +1045,8 @@ def library_tests(ctx, on_row):
     expect(m.fs.get(LAND) == b'1\n' and not any(c[0] == 'image_base_set_image' for c in m.calls) and LAND + '.tmp' not in m.fs,
            'a failed write changes neither the file nor the switch')
 
-    # Album Order: Artist by default, the value in the row's grey label (set by key, so the language follows)
-    expect(label(open_lib()) == 'Artist', 'with nothing saved the order is Artist')
-    expect(label(open_lib(sort=b'0\n')) == 'album', 'saved "0": Album (the stock key album)')
-    for data in (b'1\n', b'1', b'', b'x', b'00', b'0x', b'0\n\n', b'2\n', b' 0\n', b'\x000'):
-        expect(label(open_lib(sort=data)) == 'Artist', f'saved {data!r}: invalid or Artist, the label reads Artist')
-    expect(label(open_lib(sort=b'0')) == 'album', 'saved "0" without a newline is Album too')
-    m = open_lib()
-    m.click(f'pod_row{sort_i}')
-    expect(('window_open', P.SORT_PAGE.key) in m.calls, 'a tap on Album Order opens the picker page (m1plus_albumorder), it does not change the order')
-    expect(SORT not in m.fs, 'opening the picker saves nothing')
-    # the picker: a check on the chosen row, a tap on the other saves it atomically and the checks follow
-    S = P.SORT_PAGE
-    expect([(r.label, r.action, r.arg) for r in S.rows] == [('Artist', P.ACT_SORTSET, 1), ('Album', P.ACT_SORTSET, 0)] and S.title == 'Album Order' and all(P.row_kind(r) == 'check' for r in S.rows),
-           'the picker: Artist and Album, check rows')
+    expect('m1plus_albumorder' not in [p.key for p in P.PAGES] and 'Album Order' not in [r.label for r in C.rows], 'no Album Order row and no picker page: the order is the Albums "..." card\'s')
 
-    def open_pick(sort=None, language=None):
-        m = Machine()
-        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(
-            ['btn_return', 'btn_backtoplayer', 'pod_row0', 'pod_row1', 'pod_check0', 'pod_check1'])}
-        if sort is not None: m.fs[SORT] = sort
-        if language: m.set_language(language)
-        m.call(on_row, a0=rows_c + 12 * sort_i, count=3000000)
-        return m
-
-    def shown(m, i):
-        v = [c[2] for c in m.calls if c[0] == 'widget_set_visible' and c[1] == m.widgets[f'pod_check{i}']]
-        return v[-1] if v else None
-
-    m = open_pick()
-    expect(('window_open', S.key) in m.calls and shown(m, 0) == 1 and shown(m, 1) == 0, 'the picker opens with the check on Artist (nothing saved)')
-    m = open_pick(b'0\n')
-    expect(shown(m, 0) == 0 and shown(m, 1) == 1, 'saved Album: the check is on Album')
-    m = open_pick()
-    m.click('pod_row1')
-    expect(m.fs.get(SORT) == b'0\n' and SORT + '.tmp' not in m.fs and ('rename', SORT + '.tmp', SORT) in m.calls and ('fsync', '/mnt/data/m1plus') in m.calls
-           and shown(m, 0) == 0 and shown(m, 1) == 1, 'a tap on Album: written atomically, the check follows')
-    m.click('pod_row0')
-    expect(m.fs.get(SORT) == b'1\n' and shown(m, 0) == 1 and shown(m, 1) == 0, 'and back to Artist')
-    expect(LAND not in m.fs, 'the picker does not touch the landscape file')
-    m = open_pick(b'0\n'); m.fail.add(('write', SORT + '.tmp'))
-    m.click('pod_row0')
-    expect(m.fs.get(SORT) == b'0\n' and shown(m, 0) is None and shown(m, 1) is None and SORT + '.tmp' not in m.fs, 'a failed write changes neither the file nor the check (no check is touched)')
-    m = open_pick(); m.fail.add(('rename', SORT))
-    m.click('pod_row1')
-    expect(SORT not in m.fs and shown(m, 0) is None and shown(m, 1) is None, 'a failed rename changes neither')
-    # localisation: the value is the translation in every language
-    for loc in pod_i18n.ALL_TABLES:
-        T = tr_of(loc)
-        m = open_lib(language=loc)
-        expect(label(m) == 'Artist' and T('Artist'), f'{loc}: Artist is set by key')
-        m = open_lib(sort=b'0\n', language=loc)
-        expect(label(m) == 'album', f'{loc}: Album is the stock key album')
     # Rebuild Covers: the row asks first (the stock confirm dialog, a wrapped message), and only Yes opens the rebuild
     rb_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_REBUILD)
     KEY = 'Rebuild all covers? This may take a few minutes.'
@@ -1112,7 +1054,7 @@ def library_tests(ctx, on_row):
     def rebuild_machine(language=None, yes=False, bad=None):
         m = cover_machine(albums=3)
         if bad: m.fs[bad] = b''; m.present.add(bad); m.listing[bad.rsplit('/', 1)[0]] = [('.', 4), ('r00000001-168.jpg', 8), (bad.rsplit('/', 1)[1], 8)]
-        for n in ['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(P.SETTINGS_PAGE.rows))] + [sw, val]:
+        for n in ['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(P.SETTINGS_PAGE.rows))] + [sw]:
             if n not in m.widgets: m.widget(n)
         if language: m.set_language(language)
         m.confirm_yes = yes
@@ -1164,16 +1106,15 @@ def library_tests(ctx, on_row):
     expect(('widget_set_text_utf8', m.widgets[f'pod_value{ms_i}'], '4') in seen and ('widget_set_text_utf8', m.widgets[f'pod_value{na_i}'], '0') in seen, 'and the values are the counts')
     cache_tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui', CP.key + '.bin'), 'rb').read())
     sizes = {int(cache_tree.find(f'pod_value{i}').get('style:normal:font_size')) for i in range(len(CP.rows)) if cache_tree.find(f'pod_value{i}') is not None}
-    expect(sizes == {18}, f'the Cache values are the standard 18 px value size, as Library\'s Album Order value ({sizes})')
+    expect(sizes == {18}, f'the Cache values are the standard 18 px value size, the standard value size ({sizes})')
     expect(not [c for c in cache_tree.find(f'pod_row{na_i}').children if c.name.startswith('pod_icon')] and [c for c in cache_tree.find(f'pod_row{na_i}').children if c.name == 'pod_chevron'], 'No art: no glyph, a chevron the payload shows when there is a list')
     # the built asset: a value label that takes no touch, a chevron, the row takes the tap
     path = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui', C.key + '.bin')
     tree = awtk_ui.parse(open(path, 'rb').read())
-    row, value = tree.find(f'pod_row{sort_i}'), tree.find(val)
-    expect(value is not None and value.get('sensitive') == 'false' and value.get('tr_text') == 'Artist'
-           and [c for c in row.children if c.name == 'pod_chevron'], 'the Album Order row: an insensitive value label (tr_text Artist) and the chevron')
+    reg_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_REGION)
+    expect({n.name for n in tree.walk() if n.name.startswith('pod_value')} == {f'pod_value{reg_i}'}, 'the Library page has one value label: the Podcast Region row')
     expect(tree.find(f'pod_switch{land_i}') is not None and tree.find(f'pod_switch{land_i}').get('sensitive') == 'false'
-           and not [c for c in tree.find(f'pod_row{land_i}').children if c.name == val], 'the Landscape row: its switch image, no value')
+           and not [c for c in tree.find(f'pod_row{land_i}').children if c.name.startswith('pod_value')], 'the Landscape row: its switch image, no value')
     node_tree = asset_tree(path)
     mm = Machine()
     for r in range(len(C.rows)):

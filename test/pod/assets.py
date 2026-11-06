@@ -24,6 +24,7 @@ def run(ctx):
                        and labs[0].get('style') == 'srlabel_leftwhite21_style',
                        f'{asset_name}:{w.name} is a stock-styled row')
             if w.type != 'button' or w.get('style'): continue
+            if w.name.startswith('vs_item'): continue   # the "..." card's rows press as a translucent white over the card's glass (test/pod/albums.py card_asset_tests)
             bad = [st for st in STATES if not is_dark(w.get(f'style:{st}:bg_color', ''))
                    or not is_light(w.get(f'style:{st}:text_color', ''))]
             expect(not bad, f'{asset_name}:{w.name} is dark with light text in every state ({bad})')
@@ -172,8 +173,8 @@ def run(ctx):
            'the custom Cover Flow glyph on the menu row and the navbar button')
     cg = mod_icons.CARD_GLYPHS
     expect(cg['Home Screen'] == 'house' and cg['Boot to M1+ Music'] == 'power' and cg['Developer'] == 'code' and cg['All Playback Settings'] == 'headphones'
-           and cg['Landscape'] == 'rotate-cw-square' and cg['Album Order'] == 'arrow-down-wide-narrow' and cg['Wi-Fi'] == 'wifi' and cg['Bluetooth'] == 'bluetooth',
-           'card rows: Home Screen house, Boot to power, Playback headphones, Developer code, Landscape rotate, Album Order arrow-down-wide-narrow, Wi-Fi, Bluetooth')
+           and cg['Landscape'] == 'rotate-cw-square' and cg['Wi-Fi'] == 'wifi' and cg['Bluetooth'] == 'bluetooth',
+           'card rows: Home Screen house, Boot to power, Playback headphones, Developer code, Landscape rotate, Wi-Fi, Bluetooth')
     import pod_pages
     for page in pod_pages.PAGES:   # every Settings row but the pickers' has a glyph, drawn at 20 px in a 24 px image
         if page.kind == 'cards':

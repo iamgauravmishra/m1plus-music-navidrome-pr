@@ -607,13 +607,21 @@ void cc_heapsort(unsigned *v, unsigned n, int (*cmp)(unsigned, unsigned)) {
 
 static void **so_rec __attribute__((section(".scratch"))); /* the rows being sorted, by stock number */
 static const char **so_key __attribute__((section(".scratch"))); /* their keys: artist 2 * i, album title 2 * i + 1 */
+static int so_rev __attribute__((section(".scratch"))); /* 1: the order's other direction (Z-A, oldest first); the special rows stay last either way */
 
 static int so_cmp(unsigned a, unsigned b) {
-    int ua = I(so_rec[a], REC_ID) == -1, ub = I(so_rec[b], REC_ID) == -1, d;
+    int ua = I(so_rec[a], REC_ID) < 0, ub = I(so_rec[b], REC_ID) < 0, d; /* "Unknown Album" (-1) and a scoped page's All songs row (-2) last */
     if (ua != ub) return ua - ub;
     d = cc_key_cmp(so_key[2 * a], so_key[2 * b]);
     if (!d) d = cc_key_cmp(so_key[2 * a + 1], so_key[2 * b + 1]);
-    return d ? d : a < b ? -1 : a > b;
+    return d ? (so_rev ? -d : d) : a < b ? -1 : a > b;
+}
+
+/* The stock (title) order, as it is or backwards: Z-A. */
+static int so_title_cmp(unsigned a, unsigned b) {
+    int ua = I(so_rec[a], REC_ID) < 0, ub = I(so_rec[b], REC_ID) < 0;
+    if (ua != ub) return ua - ub;
+    return (a < b) != (so_rev != 0) ? -1 : 1;
 }
 
 /* The key texts of the albums being sorted: even i the artist of row i / 2, odd i its title. */
@@ -622,32 +630,196 @@ static const char *so_text(const void *ctx, unsigned i) {
     return cc_str(r, i & 1 ? REC_ALBUM : REC_ARTIST);
 }
 
-int cc_sort_artist(void) { return set_read(CFSORT_FILE, '1') != '0'; /* only "0" / "0\n" is Album */ }
+/* One-off: the retired Settings > Library > Album Order file. When ALBUMS_SORT_FILE is missing its meaning moves there ("0" Title, anything else Artist), then
+ * the old file (and its .tmp) is deleted, whether or not that write worked (a failed write leaves the default, Artist). Nothing else reads it. */
+static void sort_migrate(void) {
+    if (access(OLD_ORDER_FILE, F_OK)) return;
+    if (access(ALBUMS_SORT_FILE, F_OK)) home_write_atomic(ALBUMS_SORT_FILE, ALBUMS_SORT_TMP, set_read(OLD_ORDER_FILE, '1') == '0' ? "0\n" : "1\n");
+    unlink(OLD_ORDER_FILE), unlink(OLD_ORDER_TMP);
+}
 
-int cc_sort_set(int artist) {
-    artist = artist != 0;
-    return home_write_atomic(CFSORT_FILE, CFSORT_TMP, artist ? "1\n" : "0\n") == 0 ? artist : -1;
+/* The album order (the Albums page's "..." card, ALBUMS_SORT_FILE): one character, 0 Title (the stock order), 1 Artist, 2 Recently Added, 3 Year, or a, b, c, d for the same order in its other
+ * direction (Z-A, Oldest First). A missing or invalid file is Artist, not reversed. */
+static int sort_char(void) {
+    sort_migrate();
+    return set_read(ALBUMS_SORT_FILE, 0);
+}
+
+/* the saved order and, in *rev, its direction: one read of the file */
+static int sort_read(int *rev) {
+    int c = sort_char();
+    *rev = c >= 'a' && c <= 'a' + CC_SORT_MODES - 1;
+    if (*rev) return c - 'a';
+    return c >= '0' && c <= '0' + CC_SORT_MODES - 1 ? c - '0' : CC_SORT_ARTIST;
+}
+
+int cc_sort_mode(void) {
+    int rev;
+    return sort_read(&rev);
+}
+
+int cc_sort_rev(void) {
+    int rev;
+    sort_read(&rev);
+    return rev;
+}
+
+int cc_sort_mode_set(int mode, int rev) {
+    char s[3];
+    if (mode < 0 || mode >= CC_SORT_MODES) return -1;
+    s[0] = (char)((rev ? 'a' : '0') + mode), s[1] = '\n', s[2] = 0;
+    return home_write_atomic(ALBUMS_SORT_FILE, ALBUMS_SORT_TMP, s) == 0 ? mode : -1;
+}
+
+/* Recently Added and Year need the songs: per album row (stock number) the rank of its newest song (the position of its first track in the full
+ * `time_create desc` query, stock's sort_flag 3, put back at once) and the earliest year tag among its tracks (1000..2999; 0 none). A song finds its album
+ * by name (ASCII case-insensitive, as getAllAlbum groups) in a copy of the rows ordered by name, a binary search each. */
+#define SO_SORT_TIME_DESC 3
+#define SO_NONE 0xffffffffu
+static unsigned *so_rank __attribute__((section(".scratch"))), *so_year __attribute__((section(".scratch")));
+
+static int so_name_cmp(unsigned a, unsigned b) {
+    int d = cc_nocase(cc_str(so_rec[a], REC_ALBUM), cc_str(so_rec[b], REC_ALBUM));
+    return d ? d : a < b ? -1 : a > b;
+}
+
+static int so_recent_cmp(unsigned a, unsigned b) {
+    int ua = I(so_rec[a], REC_ID) < 0, ub = I(so_rec[b], REC_ID) < 0;
+    if (ua != ub) return ua - ub;
+    if (so_rank[a] != so_rank[b]) {
+        int d = so_rank[a] < so_rank[b] ? -1 : 1;
+        return so_rev && so_rank[a] != SO_NONE && so_rank[b] != SO_NONE ? -d : d; /* (an album with no song stays last) */
+    }
+    return a < b ? -1 : a > b;
+}
+
+/* newest year first (oldest first reversed), albums without one after them, then the stock (title) order */
+static int so_year_cmp(unsigned a, unsigned b) {
+    int ua = I(so_rec[a], REC_ID) < 0, ub = I(so_rec[b], REC_ID) < 0;
+    if (ua != ub) return ua - ub;
+    if (so_year[a] != so_year[b]) {
+        if (so_rev && so_year[a] && so_year[b]) return so_year[a] < so_year[b] ? -1 : 1;
+        return !so_year[b] || (so_year[a] && so_year[a] > so_year[b]) ? -1 : 1;
+    }
+    return a < b ? -1 : a > b;
+}
+
+/* Each song of `songs` finds its album among the m rows idx (so_rec's, ordered by name) and sets that row's rank (the song's position, the first only) and year (the earliest). */
+static void so_scan(void *songs, const unsigned *idx, unsigned m) {
+    unsigned i, lo, hi;
+    for (i = 0; i < deque_size(songs); ++i) {
+        void *r = deque_at(songs, i);
+        const char *album = cc_str(r, REC_ALBUM);
+        int y = I(r, REC_YEAR);
+        lo = 0, hi = m;
+        if (!*album) continue;
+        while (lo < hi) { /* the first of the rows ordered by name that is not before the song's album */
+            unsigned mid = (lo + hi) / 2;
+            if (cc_nocase(cc_str(so_rec[idx[mid]], REC_ALBUM), album) < 0)
+                lo = mid + 1;
+            else
+                hi = mid;
+        }
+        if (lo < m && !cc_nocase(cc_str(so_rec[idx[lo]], REC_ALBUM), album)) {
+            unsigned k = idx[lo];
+            if (so_rank[k] == SO_NONE) so_rank[k] = i;
+            if (y >= 1000 && y <= 2999 && (!so_year[k] || (unsigned)y < so_year[k])) so_year[k] = (unsigned)y;
+        }
+    }
+}
+
+/* rank / year of the n rows in so_rec; 0 when the query or the memory failed (nothing is changed then) */
+static int so_stats(unsigned n) {
+    unsigned *idx = calloc(n, sizeof *idx), m = 0, i;
+    int flag = *(int *)SORT_FLAG, cls = *(int *)G_CLASS_TYPE;
+    void *songs;
+    if (!idx) return 0;
+    for (i = 0; i < n; ++i) {
+        so_rank[i] = SO_NONE, so_year[i] = 0;
+        if (I(so_rec[i], REC_ID) >= 0) idx[m++] = i;
+    }
+    cc_heapsort(idx, m, so_name_cmp);
+    *(int *)SORT_FLAG = SO_SORT_TIME_DESC;
+    songs = loadLocalClassList(CLASS_ALL_SONGS) > 0 ? *(void **)PDEQ_SHOWLIST : (void *)0;
+    *(int *)SORT_FLAG = flag;
+    *(int *)G_CLASS_TYPE = cls;
+    if (!songs) {
+        free(idx);
+        return 0;
+    }
+    so_scan(songs, idx, m);
+    free(idx);
+    return 1;
+}
+
+/* One artist's albums (the Albums page scoped to an artist): the earliest year tag (1000..2999) of each album's songs in `songs`, by the same rule as the Year order;
+ * a heap array of one entry per row of `albums` (0: none, the All Songs row too), NULL when there is no memory. The rows must be one per album name (a stock album list). */
+unsigned *cc_album_years(void *albums, void *songs) {
+    unsigned n = albums ? deque_size(albums) : 0, m = 0, i;
+    unsigned *idx, *year = calloc(n ? n : 1, sizeof *year);
+    so_rec = calloc(n ? n : 1, sizeof *so_rec);
+    idx = calloc(n ? n : 1, sizeof *idx);
+    so_rank = calloc(n ? n : 1, sizeof *so_rank);
+    so_year = year;
+    if (year && so_rec && idx && so_rank) {
+        for (i = 0; i < n; ++i) {
+            so_rec[i] = deque_at(albums, i), so_rank[i] = SO_NONE;
+            if (I(so_rec[i], REC_ID) >= 0) idx[m++] = i;
+        }
+        cc_heapsort(idx, m, so_name_cmp);
+        if (songs) so_scan(songs, idx, m);
+    } else {
+        free(year);
+        year = (unsigned *)0;
+    }
+    free(so_rec);
+    free(idx);
+    free(so_rank);
+    so_rec = (void **)0, so_rank = so_year = (unsigned *)0;
+    return year;
+}
+
+/* One artist's albums have one artist: the saved Artist order shows as Title there. */
+int cc_scoped_sort(void) {
+    int mode = cc_sort_mode();
+    return mode == CC_SORT_ARTIST ? CC_SORT_TITLE : mode;
 }
 
 unsigned *cc_album_order(void *albums) {
+    int rev, mode = sort_read(&rev);
+    return cc_album_order_mode(albums, mode, rev);
+}
+
+unsigned *cc_album_order_mode(void *albums, int mode, int rev) {
     unsigned n = albums ? deque_size(albums) : 0, i;
     unsigned *v;
-    if (!n || !cc_sort_artist()) return (unsigned *)0;
+    if (!n || (mode == CC_SORT_TITLE && !rev)) return (unsigned *)0;
+    so_rev = rev;
     v = calloc(n, sizeof *v);
     so_rec = calloc(n, sizeof *so_rec);
     so_key = (const char **)0;
+    so_rank = so_year = (unsigned *)0;
     if (v && so_rec) {
         for (i = 0; i < n; ++i) v[i] = i, so_rec[i] = deque_at(albums, i);
-        so_key = cc_name_keys(2 * n, so_text, so_rec);
+        if (mode == CC_SORT_ARTIST)
+            so_key = cc_name_keys(2 * n, so_text, so_rec);
+        else if (mode == CC_SORT_TITLE)
+            so_key = (const char **)so_rec; /* (only "it worked": Z-A by title is the stock order backwards) */
+        else {
+            so_rank = calloc(n, sizeof *so_rank), so_year = calloc(n, sizeof *so_year);
+            if (so_rank && so_year && so_stats(n)) so_key = (const char **)so_rank; /* (only "it worked") */
+        }
     }
     if (!v || !so_rec || !so_key) {
         free(v);
         v = (unsigned *)0;
     } else
-        cc_heapsort(v, n, so_cmp);
+        cc_heapsort(v, n, mode == CC_SORT_ARTIST ? so_cmp : mode == CC_SORT_TITLE ? so_title_cmp : mode == CC_SORT_RECENT ? so_recent_cmp : so_year_cmp);
     free(so_rec);
-    free((void *)so_key);
-    so_rec = (void **)0, so_key = (const char **)0;
+    if (mode == CC_SORT_ARTIST) free((void *)so_key);
+    free(so_rank);
+    free(so_year);
+    so_rec = (void **)0, so_key = (const char **)0, so_rank = so_year = (unsigned *)0;
     return v;
 }
 
@@ -1397,9 +1569,9 @@ int cc_build_near_step(void *albums, const unsigned *order, const unsigned *keys
         i = k ? centre - d : centre + d;
         r = cc_row(albums, order, i);
         --left;
-        if (I(r, REC_ID) == ID_ALL_SONGS || (keys && !keys[i]))
+        if (I(r, REC_ID) == ID_ALL_SONGS || (keys && !keys[order ? order[i] : i]))
             continue; /* a scoped list's All songs row has no cover */
-        if (cc_build_add(cc_str(r, REC_PATH), keys ? keys[i] : cc_album_key(r)) < 0) {
+        if (cc_build_add(cc_str(r, REC_PATH), keys ? keys[order ? order[i] : i] : cc_album_key(r)) < 0) {
             cb.truncated = 1;
             --c; /* full (or out of memory): done, the caller told, and the cursor left on the album that did not fit (a later walk can resume there) */
             full = 1;

@@ -140,7 +140,7 @@ CARD_GLYPHS = {'Wi-Fi': 'wifi', 'Bluetooth': 'bluetooth', 'Home Screen': 'house'
                'Play Mode': 'repeat', 'EQ': 'sliders-vertical', 'All Playback Settings': 'headphones', 'Display': 'sun', 'Appearance': 'palette', 'Accent': 'palette', 'Background': '+contrast',
                'Control Center': 'layout-grid',
                'Keyboards': '+keyboard', 'About': 'info', 'All System Settings': 'settings', 'Developer': 'code', 'Main Menu': 'list-checks', 'Extras': 'ellipsis',
-               'Recent Albums': 'history', 'Daily Mix': 'shuffle', 'Regenerate Daily Mix': 'refresh-cw', 'Update Library': 'refresh-cw', 'Album Order': 'arrow-down-wide-narrow',
+               'Recent Albums': 'history', 'Daily Mix': 'shuffle', 'Regenerate Daily Mix': 'refresh-cw', 'Update Library': 'refresh-cw',
                'Landscape': 'rotate-cw-square', 'Rebuild Covers': 'image-up', 'Theme': '+cassette-tape', 'Record': '+turntable', 'Base': 'palette', 'Boot to M1+ Music': 'power', 'Open Shanling Home': '@shanling',
                'Screenshot': 'camera', 'Clear Cover Cache': 'trash', 'Clear Track Durations': 'trash', 'Delete Unsupported Files': 'trash', 'Reset All Settings': 'rotate-ccw', 'Cache': 'hard-drive','Settings Files': 'file-cog', 'Podcast Discover': 'compass', 'English': 'languages', 'Chinese (Pinyin)': 'languages', 'Battery Percentage': 'battery-charging'}
 
@@ -199,21 +199,22 @@ POD_UI = ['m1plus_menu', 'm1plus_shuffle', 'm1plus_extras', 'm1plus_mainmenu', '
 # 24 px white glyph like the navbar's others (pressed #777777), added to the images.
 NAV_VIEW = {'pod_nav_grid': 'layout-grid', 'pod_nav_list': 'list',
             'pod_nav_gridl': 'layout-grid', 'pod_nav_listl': 'list',   # the same toggle as the left cap of [toggle | Now Playing] (the Radio search results, which have no Search button)
-            'pod_nav_artist': 'mic-vocal', 'pod_nav_albumartist': 'user-star',   # the Artists page's Artist / Album Artist switch
             'pod_nav_coverflow': '+coverflow',   # Lucide gallery-horizontal with shorter side covers
             'pod_nav_more': 'ellipsis',   # the Playlists page's "..." menu button
             'pod_nav_globe': 'globe',   # the Podcasts page's Apple Podcasts search, the capsule's left cap
             'pod_nav_moremid': 'ellipsis',   # the Podcasts page's "..." as the middle piece of [Globe | ... | Now Playing]
             'pod_nav_songs': 'list',   # Cover Flow's artist page: our Songs page on the artist's songs (the left cap, then Now Playing)
-            'pod_nav_search': 'search', 'pod_nav_songsort': 'arrow-down-wide-narrow', 'pod_nav_select': 'list-checks',
-            'pod_nav_selectl': 'list-checks',   # the Songs page's Search / Sort / Select (capsule: left, middle, middle, then Now Playing); selectl: Select as the left cap of a genre's songs (no Search: Select | Now Playing)
+            'pod_nav_search': 'search',
+            'pod_nav_listplus': 'list-plus',   # the Playlists page's actions card (New Playlist, Import, Export, Delete Playlists): the capsule's left cap at 168, Lucide list-plus = SF Symbols text.badge.plus
+            'pod_nav_select': 'list-checks',   # the Songs page's Select button as the middle piece after Search / Cover Flow (the lists whose "..." card would hold Select alone)
+            'pod_nav_selectl': 'list-checks',   # Select as the left cap of [Select | Now Playing] (the album page, the Folders page)
             'pod_nav_settings': 'sliders-horizontal'}   # the Extras page's Settings button: the left cap of [Settings | Now Playing]
 # the glass piece each Pod page button is (docs/modules/navbar.md): the Albums and Playlists pages' capsule is Cover Flow / "..." (left cap), the grid / list
-# toggle (middle), Now Playing (right cap); the Artists page's is the switch (left cap) and Now Playing; the Cover Flow artist page's is Songs (left cap) and Now Playing
-NAV_VIEW_POS = {'pod_nav_grid': 'middle', 'pod_nav_list': 'middle', 'pod_nav_gridl': 'left', 'pod_nav_listl': 'left', 'pod_nav_artist': 'left', 'pod_nav_albumartist': 'left', 'pod_nav_coverflow': 'left',
-                'pod_nav_more': 'left', 'pod_nav_moremid': 'middle', 'pod_nav_globe': 'left', 'pod_nav_songs': 'left', 'pod_nav_search': 'left', 'pod_nav_songsort': 'middle', 'pod_nav_select': 'middle', 'pod_nav_selectl': 'left', 'pod_nav_settings': 'left'}
+# toggle (middle), Now Playing (right cap); the Artists page's is "..." (left cap) and Now Playing; the Cover Flow artist page's is Songs (left cap) and Now Playing
+NAV_VIEW_POS = {'pod_nav_grid': 'middle', 'pod_nav_list': 'middle', 'pod_nav_gridl': 'left', 'pod_nav_listl': 'left', 'pod_nav_coverflow': 'left',
+                'pod_nav_more': 'left', 'pod_nav_moremid': 'middle', 'pod_nav_globe': 'left', 'pod_nav_songs': 'left', 'pod_nav_search': 'left', 'pod_nav_listplus': 'left', 'pod_nav_select': 'middle', 'pod_nav_selectl': 'left', 'pod_nav_settings': 'left'}
 NAV_PX = 24
-# The Playlists page's "..." menu rows (tools/pod_ui.py playlist_menu, in row order): a bare white glyph left of the label, as on Now
+# The Playlists page's "..." card's action rows (tools/pod_ui.py build_playlists_page: the shared view-sort card's slots 6..9, in row order): a bare white glyph left of the label, as on Now
 # Playing's More sheet's rows, drawn at PL_MENU_PX (20: the 24 px of the sheet's rows looked big beside the 18 px labels; the stroke stays 2 px).
 # New, Import, Export, Delete.
 PL_MENU_PX = 20
@@ -316,7 +317,9 @@ NP = {'np_play': ('pil:play', 44, 0, 'fg', 'np_play_down'), 'np_pause': ('pil:pa
       'lk_card': ('pil:glass_card', (288, 334), 0, 'fg', None),
       'pm_sheet': ('pil:glass_sheet', (320, 250), 0, 'fg', None), 'pm_sheet6': ('pil:glass_sheet6', (320, 300), 0, 'fg', None),
       'pl_glass': ('pil:glass_menu', (72, 200), 0, 'fg', None),
-      'sg_glass': ('pil:glass_sort', (72, 250), 0, 'fg', None),
+      'vs_glass7': ('pil:glass_viewsort', (72, 336), 0, 'fg', None), 'vs_glass6': ('pil:glass_viewsort6', (72, 288), 0, 'fg', None),
+      'vs_glass5': ('pil:glass_viewsort5', (72, 240), 0, 'fg', None), 'vs_glass4': ('pil:glass_viewsort4', (72, 192), 0, 'fg', None), 'vs_glass1': ('pil:glass_viewsort1', (72, 48), 0, 'fg', None),
+      'vs_glass3': ('pil:glass_viewsort3', (72, 144), 0, 'fg', None), 'vs_glass2': ('pil:glass_viewsort2', (72, 96), 0, 'fg', None),
       'rm_glass': ('pil:glass_rowmenu', (320, 150), 0, 'fg', None),
       'np_grabber': ('pil:grabber', (120, 44), 0, 'ghost', 'np_grabber_down'),
       'np_row_playing': ('pil:wave', (40, 20), 0, 'fg', None),
@@ -778,11 +781,13 @@ def ah_tint_alpha(y):
     return bot if y >= rows - 1 else top + ((bot - top) * y + (rows - 1) // 2) // (rows - 1)
 
 # The Songs page (patch/songs.c, docs/modules/songs.md): the glyphs of its flat pills (Play, Shuffle, Add to playlist, Delete: a 16 px canvas each, the ink at
-# most SG_INK px; Delete's is red-ish) and the tick of the sort card's current order (18 px). White except Delete's; no pressed variants (the pills are flat).
+# most SG_INK px; Delete's is red-ish) and the tick of the sort card's current order (14 px). White except Delete's; no pressed variants (the pills are flat).
 DARK_GLYPH = (0x14, 0x14, 0x14)
 SONGS_IMAGES = {'sg_play': ('play:filled', WHITE, 14, 16), 'sg_shuffle': ('shuffle', WHITE, 16, 16), 'sg_repeat': ('repeat', WHITE, 16, 16), 'sg_repeat1': ('repeat-1', WHITE, 16, 16), 'sg_listplus': ('list-plus', WHITE, 16, 16),
                 'sg_shuffle_on': ('shuffle', DARK_GLYPH, 16, 16), 'sg_repeat_on': ('repeat', DARK_GLYPH, 16, 16), 'sg_repeat1_on': ('repeat-1', DARK_GLYPH, 16, 16),   # the Queue page's lit buttons (#C8C8C8): a near black glyph
-                'sg_trash': ('trash', (0xFF, 0x6B, 0x6B), 16, 16), 'sg_tick': ('+check', WHITE, 18, 18)}
+                'sg_trash': ('trash', (0xFF, 0x6B, 0x6B), 16, 16), 'sg_tick': ('+check', WHITE, 14, 14),
+                'pod_ic_vslist': ('list', WHITE, 20, 20), 'pod_ic_vsgrid': ('layout-grid', WHITE, 20, 20), 'pod_ic_vssearch': ('search', WHITE, 20, 20), 'pod_ic_vsselect': ('T:circle-check', WHITE, 20, 20),
+                'pod_ic_vsartist': ('mic-vocal', WHITE, 20, 20), 'pod_ic_vsalbumartist': ('user-star', WHITE, 20, 20)}   # the view row of the Albums "..." card: the glyph of the view a tap switches to (bare, as the Playlists menu's rows)
 ALBUM += sorted(SONGS_IMAGES)
 
 # The keyboard page's glyphs (patch/keyboard.c, docs/modules/keyboard.md): shift (outline, white) and shift on (filled, dark on the light key), delete, the field's magnifier (grey) and its clear
@@ -1343,7 +1348,13 @@ GLASS_CARD = (288, 334, 18)                                   # the lock screen'
 GLASS_SHEET6 = (320, 300, 18)                               # the same sheet with the Cassette and Vinyl rows (page 1, six rows): its own image, not a crop of a taller one (docs/modules/playmore.md)
 GLASS_SHEET = (320, 250, 18)                                  # Now Playing's More sheet, page 2 (five rows: the back header, Speed, A-B repeat, Find Cover & Lyrics, Delete; patch/playmore.c, docs/modules/playmore.md): top corners only
 GLASS_SHEET_FILL = ((0x2A, 0x2A, 0x2C), (0x1E, 0x1E, 0x20), 0.88)   # denser than the card (0.76): rows, labels and grey badges sit straight on it (docs/modules/playmore.md)
-GLASS_SORT = (72, 250, 14)    # the Songs page's sort card (docs/modules/songs.md): the same pane, five rows high (the gradient is vertical, so each height has its own picture)
+GLASS_VIEWSORT = (72, 336, 14)    # the Albums "..." card (patch/viewsort.c, docs/modules/albums.md): Search, Grid, List and four sort rows of 48 px; one picture per height
+GLASS_VIEWSORT6 = (72, 288, 14)   # the same card one row short (one artist's albums: no Artist row): six rows
+GLASS_VIEWSORT5 = (72, 240, 14)   # the Songs library's card: Select and the four sorts (five rows)
+GLASS_VIEWSORT4 = (72, 192, 14)   # the Artists "..." card: Search, the two Show rows and Name (four rows)
+GLASS_VIEWSORT1 = (72, 48, 14)    # the Genres and Composers "..." card: Name alone (one row); the Songs page's genre and artist lists: Select alone
+GLASS_VIEWSORT2 = (72, 96, 14)    # the Songs page's lists with Search Songs and Select (two rows)
+GLASS_VIEWSORT3 = (72, 144, 14)   # Recently Added's albums view: Search Songs, Grid, List (three rows)
 GLASS_ROWMENU = (320, 250, 18)   # the track rows' menu (patch/rowmenu.c, docs/modules/rowmenu.md): Now Playing's More sheet's pane, five rows high, top corners only
 GLASS_MENU = (72, 200, 14)    # the Playlists page's "..." menu card (patch/playlists.c, docs/modules/playlists.md): the sheet's glass, all four corners; drawn patch3_x
                               # (the middle 24 px stretched to the card's width), as tall as the card (tools/pod_ui.py PL_CARD_H)
@@ -1402,7 +1413,13 @@ def np_images():
             elif g == 'pil:glass_sheet': out[name] = glass_image(*GLASS_SHEET, fill=GLASS_SHEET_FILL, top_only=True)
             elif g == 'pil:glass_sheet6': out[name] = glass_image(*GLASS_SHEET6, fill=GLASS_SHEET_FILL, top_only=True)
             elif g == 'pil:glass_menu': out[name] = glass_image(*GLASS_MENU, fill=GLASS_SHEET_FILL)
-            elif g == 'pil:glass_sort': out[name] = glass_image(*GLASS_SORT, fill=GLASS_SHEET_FILL)
+            elif g == 'pil:glass_viewsort': out[name] = glass_image(*GLASS_VIEWSORT, fill=GLASS_SHEET_FILL)
+            elif g == 'pil:glass_viewsort6': out[name] = glass_image(*GLASS_VIEWSORT6, fill=GLASS_SHEET_FILL)
+            elif g == 'pil:glass_viewsort5': out[name] = glass_image(*GLASS_VIEWSORT5, fill=GLASS_SHEET_FILL)
+            elif g == 'pil:glass_viewsort4': out[name] = glass_image(*GLASS_VIEWSORT4, fill=GLASS_SHEET_FILL)
+            elif g == 'pil:glass_viewsort1': out[name] = glass_image(*GLASS_VIEWSORT1, fill=GLASS_SHEET_FILL)
+            elif g == 'pil:glass_viewsort2': out[name] = glass_image(*GLASS_VIEWSORT2, fill=GLASS_SHEET_FILL)
+            elif g == 'pil:glass_viewsort3': out[name] = glass_image(*GLASS_VIEWSORT3, fill=GLASS_SHEET_FILL)
             elif g == 'pil:glass_rowmenu': out[name] = glass_image(*GLASS_ROWMENU, fill=GLASS_SHEET_FILL, top_only=True)
             elif g.startswith('pil:'): out[name] = pil_glyph(g[4:], px, rgb, alpha)
             elif rest: out[name] = np_disc(px, rest[0], NP_DISC_ALPHA_DOWN if pressed else NP_DISC_ALPHA, g, ink, rgb)

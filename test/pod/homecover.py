@@ -7,7 +7,6 @@ import os, re
 import pod_recent
 import pod_i18n
 
-CFSORT_FILE = '/mnt/data/m1plus/album-order'
 RECENT = '/mnt/mmc/.m1plus/recently-played'
 HC_X, HC_Y, HC_W, HC_H, HOME_PAD, WIN_H = (O[k] for k in ('HC_X', 'HC_Y', 'HC_W', 'HC_H', 'HOME_PAD', 'WIN_H'))
 START_MS, POLL_MS, RESUME_MS = O['RC_RESOLVE_MS'], 500, 1000   # (HC_RESUME_MS is a #define of homecover.c, not an offset)
@@ -33,7 +32,7 @@ def home_machine(n=8, missing=(), empty=(), rebuild=False, stamp='stale', start=
     file unless it is in missing (no file) or empty (the zero-length 'no art' marker). stamp: the card's stamp text; 'stale' (the default) a stamp of another library, so the pill
     shows when the scan begins (the first open since the boot reads the library); None: no stamp (the waiting pill shows at once)."""
     m = Machine()
-    m.fs[CFSORT_FILE] = b'0\n'
+    m.fs[SORT_FILE] = b'0\n'
     if stamp == 'stale': stamp = stamp_text(n, h=hash_of(n) ^ 0x10)
     if stamp is not None: m.fs[STAMP] = stamp.encode()
     m.dirs.add('/mnt/mmc/.m1plus')
@@ -156,7 +155,7 @@ def tests(ctx):
     expect([t for t, _ in build_jobs(m)] == ['/mnt/mmc/m/5/1.flac', '/mnt/mmc/m/3/1.flac', '/mnt/mmc/m/1/1.flac'] and build_state(m)['total'] == 3,
            f'the shelf\'s missing albums first, in its order, then the rest, each once ({build_jobs(m)})')
     expect([e[1] for e in pod_recent.parse(m.fs[RECENT])] == [key_of(5), key_of(3), key_of(0)], 'the shelf\'s stale keys are the rows\' now')
-    m = home_machine(6, missing={1, 3, 5}); m.fs[CFSORT_FILE] = b'1\n'
+    m = home_machine(6, missing={1, 3, 5}); m.fs[SORT_FILE] = b'1\n'
     m.fs[RECENT] = pod_recent.dump([(pod_recent.identity('Album 3'), key_of(3), 1, 'Album 3', 'Artist 3', '/x/3.flac')])
     scan(m)
     expect([t for t, _ in build_jobs(m)][0] == '/mnt/mmc/m/3/1.flac' and build_state(m)['total'] == 3, f'with the artist order too ({build_jobs(m)})')
@@ -611,7 +610,7 @@ def covlist_tests(ctx):
     def world(albums=8, marker=(3, 5), have=(0, 1), folder=True, sort=None):
         """A Home machine with `albums` albums; albums in `have` have a picture, those in `marker` an empty marker; the rest are missing. The cache folder lists exactly those files."""
         m = home_machine(albums, missing=set(range(albums)))
-        if sort: m.fs[CFSORT_FILE] = sort
+        if sort: m.fs[SORT_FILE] = sort
         files = [(f'r{key_of(i):08x}-168.jpg', 4096) for i in have] + [(f'r{key_of(i):08x}-168.jpg', 0) for i in marker]
         for nm, size in files:
             m.present.add(f'{ART}/{nm}'); m.files[f'{ART}/{nm}'] = size
@@ -741,9 +740,10 @@ def files_tests(ctx):
     m.call(PSYMS['on_row'], a0=PSYMS[f'pod_rows_{P.DEVELOPER_PAGE_INDEX}'] + 12 * d_i, count=6000000)
     expect(('window_open', FP.key) in m.calls, 'the link row opens m1plus_files')
     want = {'m1plus-start': '1', 'm1plus-run': 'missing', 'm1plus-bad': 'present', 'm1plus-off': 'missing', P.FOLDER_LABEL: 'present', 'albums-view': '1', 'playlists-view': '0', 'recently-added-view': '1',
-            'album-order': 'missing', 'cassette-theme': 'other', 'home-menu': '6502', 'pulldown-tiles': '2013-4567', 'battery-percentage': '1', 'search-history': '3', 'covers-rebuild': 'present',
+            'albums-sort': 'missing', 'cassette-theme': 'other', 'home-menu': '6502', 'pulldown-tiles': '2013-4567', 'battery-percentage': '1', 'search-history': '3', 'covers-rebuild': 'present',
             'keyboard-pinyin': 'missing'}
     got = {r.label: next((c[2] for c in reversed(m.calls) if c[0] == 'widget_set_text_utf8' and c[1] == m.widgets[f'pod_value{i}']), None) for i, r in enumerate(FP.rows)}
+    expect('album-order' not in got, 'the retired Album Order file has no row')
     expect(all(got[k] == v for k, v in want.items()), f'the seeded values: {[(k, got[k], v) for k, v in want.items() if got[k] != v]}')
     del m.fs[S + 'albums-view']
     m.call(PSYMS['on_page_fg'], a0=P.FILES_PAGE_INDEX, a1=0, count=3000000)
@@ -1049,7 +1049,7 @@ def check_tests(ctx):
     expect(build_state(m)['total'] == 2 and [t for t, _ in build_jobs(m)][0] == f'/mnt/mmc/m/{cap}/1.flac', 'and the chunk is redone from its start')
     m = chain_to_chunk_two()
     hook(m, 'hc_on_background'); m.call(PSYMS['cc_worker'], count=5000000)
-    m.fs[CFSORT_FILE] = b'1\n'   # Albums lists by artist now: Home's scan keeps the stored order, so the chain resumes
+    m.fs[SORT_FILE] = b'1\n'   # Albums lists by artist now: Home's scan keeps the stored order, so the chain resumes
     hook(m, 'hc_on_foreground'); scan(m, 200)
     expect(build_state(m)['total'] == 2 and [t for t, _ in build_jobs(m)][0] == f'/mnt/mmc/m/{cap}/1.flac', 'Album Order changed: the scan order is not the display order, the chain resumes at its chunk')
 
@@ -1078,7 +1078,7 @@ def check_tests(ctx):
 
     # 7d4. The UI thread's cost: the first hc_on_start callback of a chunk (album query + copy + signature + order + the first HC_BATCH step), a later scan step, and the silent probe (hc_expect, then the same query at HC_START_MS).
     for n in (1000, 4000):
-        m = home_machine(n, start=False, missing=range(n)); m.fs[CFSORT_FILE] = b'1\n'   # Album Order by artist: Home does not sort
+        m = home_machine(n, start=False, missing=range(n)); m.fs[SORT_FILE] = b'1\n'   # Album Order by artist: Home does not sort
         m.call(PSYMS['homecover_start'], a0=m.window, count=2000000)
         m.count(); fired(m, 'hc_on_start', 900000000); first = m.icount
         fired(m, 'hc_on_start', 900000000); later = m.icount
@@ -1089,7 +1089,7 @@ def check_tests(ctx):
         expect(first < 400 * n and later < 50000 and probe < 400 * n, f'{n} albums: one UI-thread callback stays bounded ({first:,} / {later:,} / {probe:,})')
     # ... and a truncated chunk: the heaviest scan step (the last, which fingerprints the order) and the next chunk's first callback (query, copy, fingerprint check)
     n = cap + 2
-    m = home_machine(n, missing=range(n)); m.fs[CFSORT_FILE] = b'1\n'; m.count()
+    m = home_machine(n, missing=range(n)); m.fs[SORT_FILE] = b'1\n'; m.count()
     steps = []
     for _ in range(200):
         new = fired(m, 'hc_on_start', 900000000); steps.append(m.icount)

@@ -2,7 +2,7 @@
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
- * One page, ui/m1plus_songs.bin (docs/modules/songs.md has the whole design): the glass navbar (Back, the small title, Search, Sort, Select, Now Playing) over a
+ * One page, ui/m1plus_songs.bin (docs/modules/songs.md has the whole design): the glass navbar (Back, the small title, the "..." that holds Search Songs, Select, Albums / Songs and Sort, Now Playing) over a
  * stock list, list_view > scroll_view (songs_scrollview) whose ONE child, view_grid, is the content view of the Albums page (patch/albums.c): it paints the rows,
  * the section headers, the pinned header and the select marks itself in its own EVT_AFTER_PAINT, with no widget per song; the stock scroll_view does the scrolling.
  * The content view's only children are the large title and the Play / Shuffle pills (real flat buttons that scroll with it). Beside the list, as widgets of the
@@ -26,7 +26,10 @@
  *             selection vector, which the page fills from its bitset at that moment (select_recordinit, set_selectindex): Delete is batch_delete_file (class 0xf001,
  *             *pdeq_showlist, the vector) after the stock confirm dialog; Add opens the stock playlist picker (playlist_page with the add context), which adds the
  *             selection to the playlist that is tapped and closes itself.
- *   sort      the sort card sets sort_flag as the stock sort dialog's row handler does (the flag and [SYSSET] SORTSELECT), then reads the list again.
+ *   sort      the Sort card (patch/viewsort.c: Title, File Name, Format, Recently Added; Recently Added is sort_flag 3 Newest First or 4 Oldest First) sets sort_flag as the stock sort
+ *             dialog's row handler does (the flag and [SYSSET] SORTSELECT), then reads the list again. A tap on the ticked Title, File Name or Format row reverses it (Z-A, SONGS_SORT_FILE; the
+ *             flag stays 0..2): the query's list is reversed in place (records swapped), so the page, its rows, its index, Select and the taps all use the order shown; the sections and the rail are
+ *             mirrored as the Artists page's; play queues are reversed too (so_play_dir).
  *   lists     the same page shows the other stock song lists, each in the stock order of its query (docs/modules/songs.md "The other lists"): Favourites, Recently
  *             Added, Recently Played, Most Played, Hi-Res (the menu rows, songs_open_list) and a playlist (the Playlists page, songs_open_playlist: its id goes into
  *             classinfo[1] before every query and play, as the stock row tap leaves it). A list is what the stock allmusic_page shows for its class: no sort (Search
@@ -35,12 +38,11 @@
  *             song from that list's table, and the file too when asked) use its class; it is read again whenever the page comes back to the front (a play changes
  *             Recently Played and Most Played, Now Playing's star the Favourites).
  *             A genre's songs (songs_open_genre, from the Genres page, class 0xff09) are such a list too: the genre's name is in classinfo + 0x30d (and classinfo[0],
- *             the Unknown Genre byte) for every query and play, as the stock row tap leaves it; the stock navbar has no Search there, so the capsule is Select | Now
- *             Playing (Select the left cap).
+ *             the Unknown Genre byte) for every query and play, as the stock row tap leaves it; the stock navbar has no Search there, so its card is Select alone.
  *             An artist's songs (Cover Flow's artist page, songs_open_artist) is the same page on class 0xff11: its whole state is the 0x390 byte browsing
  *             record loadAlbumList(0xf004) and loadAlbumdetailList(0xff01, the All songs row) build, which the page snapshots and puts back before every query
  *             and play; the artist is the title and the grey line of a row is its album.
- *   albums    Recently Added (class 0xf009) has a navbar toggle (btn_albumview, docs/modules/recent-albums.md): the same page shows the newest-first Albums grid
+ *   albums    Recently Added (class 0xf009) has a View group in the "..." card (Albums / Songs, docs/modules/recent-albums.md): the same page shows the newest-first Albums grid
  *             (patch/grid.c, a second tile ring sg.rg). The grid is read from the full `time_create desc` query (sort_flag 3 through loadLocalClassList(0xf001), the flag put back
  *             at once), copied into at most RV_MAX library album rows (sg.rrow) at the moment of the toggle; the album view reads only that copy and the library's albums, never
  *             *pdeq_showlist, so the stock list the query replaced matters to the songs view only: leaving the album view reads class 0xf009 again (sg_load). The choice is
@@ -51,6 +53,7 @@
 #include "offsets.inc"
 #include "stock.h"
 #include "home.h"
+#include "viewsort.h"
 #include "scroll.h"
 #include "covercache.h"
 #include "common.h"
@@ -97,11 +100,17 @@ static int sg_same_sig(const song_t *a, const song_t *b) {
 static struct {
     void *win, *view, *sv, *status, *title, *back, *np;
     void *fade; /* the navbar's fade (img_nb_fade, optional): shown only while the list is scrolled */
-    void *btn_view; /* Recently Added only (optional widget): the songs / albums toggle */
+    void *
+        btn_more; /* the navbar's "..." (Select, Albums / Songs, Sort: what the list offers), or on a list that would offer Select alone (sg_direct) the Select button: no card */
+    void *btn_select; /* the Select button (sg_direct lists): bound as btn_more once the page knows its list */
     void *btn_cf; /* the artist's songs list only: the Cover Flow button (back to the covers) */
-    void *btn_search, *btn_sort, *btn_select, *btn_selall, *btn_play, *btn_shuffle, *btn_add, *btn_del;
+    void *
+        btn_search; /* the lists that search (not a genre's or an artist's songs): the capsule's left cap at NAV_CF_X, Albums' Cover Flow place */
+    void *btn_selall, *btn_play, *btn_shuffle, *btn_add, *btn_del;
     void *st_title, *st_sub; /* hidden labels whose styles are the text styles (the rail's and the header's are az's) */
-    void *bar, *scrim, *card, *tick[SG_SORT_ROWS];
+    void *bar;
+    vs_t
+        vs; /* the "..." card (patch/viewsort.c): Search Songs, Select, Albums / Songs (Recently Added), Title, File Name, Format, Recently Added (the library) */
     void *list; /* the stock list the index is of (*pdeq_showlist when valid) */
     void *first; /* its first record: with the size, tells a list another query replaced */
     unsigned count;
@@ -110,6 +119,7 @@ static struct {
     unsigned nsel;
     int select; /* select mode */
     int sort; /* sort_flag as the page last read it */
+    int rev; /* the library's Title, File Name and Format orders run Z-A (SONGS_SORT_FILE): the stock list is reversed in place after the query */
     az_t al; /* the sections and the rail (patch/azlist.c); al.nsec is 0 for a plain list */
     void *albums; /* the library's albums (cc_albums), for the cover lookup */
     int albums_tried;
@@ -173,13 +183,30 @@ static const char *sg_name(void *rec) {
  * The stock list and its index
  */
 
+/* The library is shown reversed: the Z-A direction of one of the alphabetical orders (sort_flag 0..2). */
+static int sg_flipped(void) { return sg.cls == CLASS_ALL_SONGS && sg.rev && sg.sort >= 0 && sg.sort < 3; }
+
 /* The section rank of a record, in the order the stock Title sort puts them (toolsQueryDbTable's title comparator 0x5e0dac: digits and most symbols before the
  * letters): 0 "#" (the Initial '*', a title that starts with a digit, or '#', anything else), 1..26 'A'..'Z'. From the Initial the scan stored; 0 (never written: a
  * database older than the column) takes the title's first character. */
 static unsigned char sg_rank(void *rec) {
-    int c = B(rec, REC_INITIAL);
+    int c = B(rec, REC_INITIAL), k;
     if (!c) c = (unsigned char)*sg_name(rec);
-    return (unsigned char)az_rank_of(c);
+    k = az_rank_of(c);
+    if (sg_flipped())
+        k = k ? 26 - k
+              : 26; /* Z-A: Z is rank 0 .. A rank 25 and "#" last, so the ranks still rise down the list (as the Artists page) */
+    return (unsigned char)k;
+}
+
+/* The stock list in the other order, in place: the records (REC_SIZE bytes, as the queue reversal of so_play_dir and the shuffle's swaps) are exchanged. */
+static void sg_reverse(void *list) {
+    unsigned n = deque_size(list), i;
+    char tmp[REC_SIZE];
+    for (i = 0; i < n / 2; ++i) {
+        void *a = deque_at(list, i), *b = deque_at(list, n - 1 - i);
+        memcpy(tmp, a, REC_SIZE), memcpy(a, b, REC_SIZE), memcpy(b, tmp, REC_SIZE);
+    }
 }
 
 /* The index is of the stock list `list` as long as that list is still in *pdeq_showlist, as big, and starts with the same record. */
@@ -198,11 +225,24 @@ static int sg_artist(void) {
     return sg.cls == CLASS_ARTIST_SONGS;
 } /* an artist's songs: Cover Flow's artist page is its other view (a toggle, not a stack) */
 static int sg_recent(void) {
-    return sg.cls == CLASS_RECENTADD && sg.btn_view;
-} /* Recently Added with the view toggle: Search 122 | Select 168 | toggle 214 | Now Playing, no small title (it does not fit before x 122) */
-static int sg_search_x(void) {
-    return sg_lib() || sg_recent() ? NAV_SEARCH_X : sg_genre() ? NAV_VIEW_X : NAV_CF_X;
-} /* the capsule's first piece: a list's Search takes Sort's slot; a genre's has none (Select, the left cap, is first) */
+    return sg.cls == CLASS_RECENTADD;
+} /* Recently Added: its card also holds the Albums / Songs rows (the songs or the newest albums) */
+static int sg_searches(void) {
+    return !sg_genre() && !sg_artist() && sg.cls != CLASS_PLAYLIST_SONGS && sg.btn_search;
+} /* a list with the Search button (a genre's songs: the stock navbar has none; an artist's: Cover Flow has its place; a playlist's: no Search inside a playlist) */
+static int sg_direct(void) {
+    return !sg_lib() && !sg_recent();
+} /* a list whose "..." card would hold Select alone: the navbar has the Select button instead (btn_select), no card */
+static int sg_title_end(void) {
+    return (sg_artist() && sg.btn_cf) || sg_searches() ? NAV_CF_X : NAV_VIEW_X;
+} /* the small title ends at the capsule's first piece: "..." (214), or Search / Cover Flow (168) */
+/* The rows of the "..." card the list offers, what its navbar had as buttons: Select (not in Recently Added's albums view), Albums / Songs (Recently Added), the four sorts (the library).
+ * Search is the navbar button (btn_search), not a row. */
+static unsigned sg_offers(void) {
+    if (sg_lib()) return VS_WITH_SELECT | VS_ALL_SORTS;
+    if (sg_recent()) return VS_WITH_VIEWS | (sg.rv ? 0 : VS_WITH_SELECT);
+    return VS_WITH_SELECT;
+}
 
 /* What a genre's stock row tap leaves in the browsing record (@0x535c4c): classinfo[0] = 0xff09, the name (0x80 bytes, cut as snprintf cuts it) at + 0x30d, the byte + 0xc. */
 static void sg_genre_info(const char *name, int unknown) {
@@ -739,11 +779,6 @@ static void sg_head(
 /* The rail's widget: centred on the list the select bar leaves (docs/modules/songs.md). */
 static void sg_rail_fit(void) { az_rail_fit(&sg.al, GRID_VIEW_H - sg_pad()); }
 
-static void sg_ticks(void) {
-    int i;
-    for (i = 0; i < SG_SORT_ROWS; ++i) widget_set_visible(sg.tick[i], i == sg.sort, 0);
-}
-
 /* The stock query again, and the page rebuilt from it: the index, the sections, the tiles. The library's albums are loaded first (once): both are stock queries
  * that replace *pdeq_showlist. */
 static unsigned sg_sig(void *rec, unsigned key, unsigned rank) {
@@ -782,8 +817,9 @@ static void sg_load(int keep) {
         sg.albums = cc_albums();
     }
     sg.sort = sg_lib() ? *(int *)SORT_FLAG : 0; /* (a list has the order of its query: sort_flag is the library's) */
-    if (sg.sort < 0 || sg.sort >= SG_SORT_ROWS) sg.sort = 0;
+    if (sg.sort < 0 || sg.sort > 4) sg.sort = 0;
     if (sg_query() > 0) list = *(void **)PDEQ_SHOWLIST;
+    if (list && sg_flipped()) sg_reverse(list);
     if (list) sg.count = deque_size(list);
     if (sg.count) {
         sg.idx = calloc(sg.count, sizeof(song_t));
@@ -805,7 +841,14 @@ static void sg_load(int keep) {
                 sg_set_sig(&sg.idx[i], sg_sig(rec, sg.idx[i].key,
                                               sg.idx[i].letter)); /* (the library keeps no old index to compare) */
         }
-        if (sg_lib() && sg.sort == 0) az_sections(&sg.al, &sg.idx[0].letter, sizeof(song_t));
+        if (sg_lib() && sg.sort == 0) {
+            az_sections(&sg.al, &sg.idx[0].letter, sizeof(song_t));
+            if (sg_flipped()) /* the headers and the rail show the letters of the mirrored ranks: rank 0 is Z, 25 is A, 26 is "#" */
+                for (i = 0; i < (unsigned)sg.al.nsec; ++i) {
+                    int t = sg.al.sec_letter[i] == '#' ? 0 : sg.al.sec_letter[i] - 'A' + 1;
+                    sg.al.sec_letter[i] = (unsigned char)(t == 26 ? '#' : 'Z' - t);
+                }
+        }
     }
     /* The same rows as before (count and every sig; the tiles hold their texts and covers by row): the tiles and the placeholder stay, so a list read again
      * does not flash its covers away. Anything else, or a doubt, drops them. A cover that was not there (art 2) is looked for again. */
@@ -838,7 +881,6 @@ static void sg_load(int keep) {
     sg.dir = 1;
     sg.seen = sg_off();
     sg.build_at = sg_first();
-    sg_ticks();
     sg_rail_fit();
     sg_head();
     sg_title_update();
@@ -859,23 +901,12 @@ static int sg_on_stale(const void *unused) {
  * Recently Added's toggle between the songs and the albums (docs/modules/recent-albums.md)
  */
 
-/* The toggle shows the glyph of the view a tap switches to. */
-static void rv_glyph(void) {
-    const char *icon = sg.rv ? "pod_nav_list" : "pod_nav_grid";
-    if (!sg.btn_view) return;
-    widget_set_prop_str(sg.btn_view, "style:normal:icon", icon);
-    widget_set_prop_str(sg.btn_view, "style:over:icon", icon);
-    widget_set_prop_str(sg.btn_view, "style:pressed:icon", sg.rv ? "pod_nav_list_down" : "pod_nav_grid_down");
-}
-
-/* The widgets of the view: the albums have no Play / Shuffle pills, no song count and no Select; Search takes Select's slot (Search 168 | toggle 214 | Now Playing). */
+/* The widgets of the view: the albums have no Play / Shuffle pills, no song count and no Select (the card's Select row goes, Albums ticked then). */
 static void rv_ui(void) {
     sg_show(sg.btn_play, !sg.rv);
     sg_show(sg.btn_shuffle, !sg.rv);
     if (sg.foot) widget_set_visible(sg.foot, !sg.rv, 0); /* (an insensitive label: shown, never a touch target) */
-    sg_show(sg.btn_select, !sg.rv);
-    widget_move(sg.btn_search, sg.rv ? NAV_CF_X : NAV_SEARCH_X, 0);
-    rv_glyph();
+    vs_offer(&sg.vs, sg_offers());
 }
 
 /* The albums of the newest songs: the full `time_create desc` query (stock's "Time added (descending)" order, sort_flag 3 of getAllMusic, the flag put back at once),
@@ -967,17 +998,14 @@ static void rv_leave(void) {
     sg_load(0); /* the songs view reads its own list again (the album view's query replaced it) */
 }
 
-/* The navbar toggle: the other view, in place, and the choice saved. */
-static int sg_on_view(void *ctx, void *e) {
-    (void)ctx;
-    (void)e;
-    if (!sg_recent() || sg.select || sg.menu) return RET_OK;
+/* The card's Albums / Songs rows: the albums grid or the songs list, in place, and the choice saved. The ticked row does nothing. */
+static void sg_set_view(int grid) {
+    if (!sg_recent() || sg.select || grid == sg.rv) return;
     if (sg.rv)
         rv_leave();
     else if (!rv_enter())
-        return RET_OK;
+        return;
     home_write_atomic(RECENTADD_VIEW_FILE, RECENTADD_VIEW_TMP, sg.rv ? "1\n" : "0\n");
-    return RET_OK;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1000,7 +1028,7 @@ static void sg_play_at(int at, int how) {
         return;
     }
     sg_classinfo(); /* loadSongList runs the class query again and keeps classinfo for the memory playback */
-    so_play(sg.cls, sg.list, at, how, sg_open_player);
+    so_play_dir(sg.cls, sg.list, at, how, sg_open_player, sg_flipped());
 }
 
 static int sg_on_play(void *ctx, void *e) {
@@ -1028,25 +1056,21 @@ static int sg_on_shuffle(void *ctx, void *e) {
  */
 static void sg_select(int on) {
     int i;
-    void *nav[4];
+    void *nav[2];
     if (on == sg.select) return;
     sg.select = on;
     sg.nsel = 0;
     if (sg.sel) memset(sg.sel, 0, (sg.count + 7) / 8);
     sg.press = sg.down = 0;
-    nav[0] = sg.btn_search, nav[1] = sg.btn_sort, nav[2] = sg.btn_select, nav[3] = sg.np;
-    for (i = 0; i < 4; ++i)
-        sg_show(nav[i],
-                !on && (i != 1 || sg_lib()) &&
-                    (i != 0 || (!sg_genre() &&
-                                !sg_artist()))); /* (a list has no Sort, a genre's songs and an artist's no Search) */
+    nav[0] = sg.btn_more, nav[1] = sg.np;
+    for (i = 0; i < 2; ++i) sg_show(nav[i], !on);
     if (sg.btn_cf) sg_show(sg.btn_cf, !on && sg_artist());
-    if (sg_recent()) sg_show(sg.btn_view, !on);
+    if (sg.btn_search) sg_show(sg.btn_search, !on && sg_searches());
     sg_show(sg.btn_selall, on);
     sg_show(sg.bar, on);
     widget_set_sensitive(sg.btn_play, !on); /* the pills stay in the content, dim and dead (their disabled style) */
     widget_set_sensitive(sg.btn_shuffle, !on);
-    widget_resize(sg.title, (on ? SG_SELALL_X : sg_search_x()) - NAV_TITLE_X, 22);
+    widget_resize(sg.title, (on ? SG_SELALL_X : sg_title_end()) - NAV_TITLE_X, 22);
     widget_set_prop_str(sg.back, "style:normal:icon", on ? "ah_nav_close" : "ah_nav_back");
     widget_set_prop_str(sg.back, "style:over:icon", on ? "ah_nav_close" : "ah_nav_back");
     widget_set_prop_str(sg.back, "style:pressed:icon", on ? "ah_nav_close_down" : "ah_nav_back_down");
@@ -1138,13 +1162,6 @@ static int sg_on_cf(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     if (sg.view && sg_artist() && !sg.select && !sg.menu) navigator_back();
-    return RET_OK;
-}
-
-static int sg_on_select(void *ctx, void *e) {
-    (void)ctx;
-    (void)e;
-    if (sg.view && sg.count && !sg.menu && !sg.rv) sg_select(1);
     return RET_OK;
 }
 
@@ -1264,19 +1281,23 @@ static int sg_on_rail_paint(void *ctx, void *e) {
 }
 
 /* ---------------------------------------------------------------------------
- * The sort card: the stock sort dialog's five labels under the Sort button; a row sets the stock order (@0x47d114: sort_flag and [SYSSET] SORTSELECT), the list is read again
+ * The Sort card (patch/viewsort.c): Title, File Name, Format and Recently Added are the stock sort_flag 0, 1, 2 and 3 / 4 (Newest First / Oldest First under Recently Added); a row sets the
+ * stock order (@0x47d114: sort_flag and [SYSSET] SORTSELECT) and the list is read again. The ticked row of the alphabetical three reverses (SONGS_SORT_FILE, saved first), Recently Added flips 3 and 4.
  */
 static void sg_menu(int on) {
     sg.menu = on;
-    if (on) sg_ticks();
-    sg_show(sg.scrim, on);
-    sg_show(sg.card, on);
+    vs_menu(&sg.vs, on, sg.sort > 3 ? 3 : sg.sort, sg.sort == 4 || sg_flipped(),
+            !sg.rv); /* (Recently Added's Albums row is ticked in the albums view) */
 }
 
-static int sg_on_sort(void *ctx, void *e) {
+static int sg_on_more(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    if (sg.view && !sg.select && sg_lib()) sg_menu(!sg.menu);
+    if (sg_direct()) {
+        if (sg.view && sg.count && !sg.select)
+            sg_select(1); /* Select straight away (an empty list has nothing to select) */
+    } else if (sg.view && sg.vs.card && !sg.select)
+        sg_menu(!sg.menu);
     return RET_OK;
 }
 
@@ -1287,24 +1308,52 @@ static int sg_on_scrim(void *ctx, void *e) {
     return RET_OK;
 }
 
+static void sg_set_flag(int flag) {
+    *(int *)SORT_FLAG = flag;
+    write_int_config(flag, "SYSSET", "SORTSELECT");
+}
+
+static void sg_search(void);
+
 static int sg_on_item(void *ctx, void *e) {
-    int k = (int)(long)ctx;
+    int k = (int)(long)ctx, cur = sg.sort > 3 ? 3 : sg.sort;
     (void)e;
     sg_menu(0);
-    if (!sg.view || k < 0 || k >= SG_SORT_ROWS || k == *(int *)SORT_FLAG) return RET_OK;
-    *(int *)SORT_FLAG = k;
-    write_int_config(k, "SYSSET", "SORTSELECT");
+    if (k == VS_SELECT) { /* the old Select button: select mode (an empty list has nothing to select) */
+        if (sg.view && sg.count && !sg.rv) sg_select(1);
+        return RET_OK;
+    }
+    if (k == VS_SORTS || k == VS_SORTS + 1) { /* Recently Added's View group */
+        sg_set_view(k == VS_SORTS);
+        return RET_OK;
+    }
+    if (!sg.view || k < 0 || k >= VS_SORTS) return RET_OK;
+    if (k == cur) {
+        if (k == 3) { /* Recently Added: Newest First <-> Oldest First */
+            sg_set_flag(sg.sort == 3 ? 4 : 3);
+        } else { /* Title, File Name, Format: A-Z <-> Z-A, saved first (a save that fails changes nothing) */
+            int rev = !sg.rev;
+            if (home_write_atomic(SONGS_SORT_FILE, SONGS_SORT_TMP, rev ? "a\n" : "0\n") != 0) return RET_OK;
+            sg.rev = rev;
+        }
+    } else { /* another order, in its default direction */
+        if (sg.rev && home_write_atomic(SONGS_SORT_FILE, SONGS_SORT_TMP, "0\n") == 0) sg.rev = 0;
+        sg_set_flag(k);
+    }
     sg_load(0);
     return RET_OK;
 }
 
 /* Search: our keyboard, then our results page (patch/search.c, docs/modules/search.md). Its queries leave their list in *pdeq_showlist, which makes this page read it again when it is
  * back. Where ours will not open (a results page is already under this one, or no keyboard asset) the stock page (@0x52704c: navigator_to("search_page"), nothing set first). */
+static void sg_search(void) {
+    if (sg.view && !sg.select && search_open() < 0) navigator_to_with_context("search_page", (const void *)0);
+}
+
 static int sg_on_search(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    if (sg.view && !sg.select && !sg.menu && search_open() < 0)
-        navigator_to_with_context("search_page", (const void *)0);
+    if (!sg.menu) sg_search();
     return RET_OK;
 }
 
@@ -1379,8 +1428,6 @@ static int sg_stack(void) {
 /* The page listing class cls (pl_id: a playlist's id; key: the title's key, or 0 for name). 0 once the page is up, -1 if the window could not open, -2 if the
  * asset is not ours (the page is left again). */
 static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
-    static const char *const ITEMS[SG_SORT_ROWS] = {"sg_item0", "sg_item1", "sg_item2", "sg_item3", "sg_item4"};
-    static const char *const TICKS[SG_SORT_ROWS] = {"sg_tick0", "sg_tick1", "sg_tick2", "sg_tick3", "sg_tick4"};
     int i;
     if (sg.win && (cls != CLASS_PLAYLIST_SONGS || sg_stack() == -1)) return -1;
     memset(&sg, 0, sizeof sg);
@@ -1401,11 +1448,10 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
     widget_on(sg.win, EVT_DESTROY, sg_on_destroy, (void *)0);
     sg.back = pod_bind(sg.win, "btn_return", sg_on_back, (void *)0);
     sg.np = pod_bind(sg.win, "btn_backtoplayer", pod_on_player, (void *)0);
-    sg.btn_search = pod_bind(sg.win, "btn_search", sg_on_search, (void *)0);
-    sg.btn_sort = pod_bind(sg.win, "btn_sort", sg_on_sort, (void *)0);
+    sg.btn_more = pod_bind(sg.win, "btn_more", sg_on_more, (void *)0);
+    sg.btn_select = pod_bind(sg.win, "btn_select", sg_on_more, (void *)0); /* optional: Select in the "..." place */
     sg.btn_cf = pod_bind(sg.win, "btn_coverflow", sg_on_cf, (void *)0); /* optional */
-    sg.btn_select = pod_bind(sg.win, "btn_select", sg_on_select, (void *)0);
-    sg.btn_view = pod_bind(sg.win, "btn_albumview", sg_on_view, (void *)0); /* optional: Recently Added's toggle */
+    sg.btn_search = pod_bind(sg.win, "btn_search", sg_on_search, (void *)0); /* optional */
     sg.st_gtitle = widget_lookup(sg.win, "label_grid_title", 1); /* optional: the album view's text styles */
     sg.st_gsub = widget_lookup(sg.win, "label_grid_sub", 1);
     sg.btn_selall = pod_bind(sg.win, "btn_selall", sg_on_selall, (void *)0);
@@ -1413,8 +1459,6 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
     sg.btn_shuffle = pod_bind(sg.win, "btn_shuffle", sg_on_shuffle, (void *)0);
     sg.btn_add = pod_bind(sg.win, "sg_add", sg_on_add, (void *)0);
     sg.btn_del = pod_bind(sg.win, "sg_del", sg_on_delete, (void *)0);
-    sg.scrim = pod_bind(sg.win, "sg_scrim", sg_on_scrim, (void *)0);
-    sg.card = widget_lookup(sg.win, "sg_card", 1);
     sg.title = widget_lookup(sg.win, "label_title", 1);
     sg.fade = widget_lookup(sg.win, "img_nb_fade", 1); /* optional */
     sg.view = widget_lookup(sg.win, "view_grid", 1);
@@ -1433,40 +1477,37 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
     sg.foot = widget_lookup(sg.win, "sg_foot", 1);
     sg.hname = widget_lookup(sg.win, "sg_hname", 1); /* optional: a playlist's header */
     sg.al.win = sg.win, sg.al.sv = sg.sv, sg.al.top = SG_TOP, sg.al.row = ROW;
-    if (!sg.foot || !sg.back || !sg.np || !sg.btn_search || !sg.btn_sort || !sg.btn_select || !sg.btn_selall ||
-        !sg.btn_play || !sg.btn_shuffle || !sg.btn_add || !sg.btn_del || !sg.scrim || !sg.card || !sg.title ||
-        !sg.view || !sg.sv || !sg.status || !sg.st_title || !sg.st_sub || !sg.al.st_hdr || !sg.al.st_rail ||
-        !sg.al.st_rail_on || !sg.al.rail || !sg.al.bubble || !sg.al.bubble_letter || !sg.bar) {
+    if (!sg.foot || !sg.back || !sg.np || !sg.btn_more || !sg.btn_select || !sg.btn_selall || !sg.btn_play ||
+        !sg.btn_shuffle || !sg.btn_add || !sg.btn_del || !sg.title || !sg.view || !sg.sv || !sg.status ||
+        !sg.st_title || !sg.st_sub || !sg.al.st_hdr || !sg.al.st_rail || !sg.al.st_rail_on || !sg.al.rail ||
+        !sg.al.bubble || !sg.al.bubble_letter || !sg.bar) {
         navigator_back(); /* an asset that is not ours */
         return -2;
     }
-    for (i = 0; i < SG_SORT_ROWS; ++i) {
-        sg.tick[i] = widget_lookup(sg.win, TICKS[i], 1);
-        if (!sg.tick[i] || !pod_bind(sg.win, ITEMS[i], sg_on_item, (void *)(long)i)) {
-            navigator_back();
-            return -2;
-        }
+    if (vs_bind(&sg.vs, sg.win, sg_on_item, sg_on_scrim, sg_offers())) { /* the rows this list offers (sg_offers) */
+        navigator_back(); /* an asset that is not ours */
+        return -2;
     }
-    sg_menu(0);
+    vs_dated(&sg.vs, 1u << 3); /* only Recently Added reads Newest First / Oldest First */
+    if (sg_lib()) sg.rev = set_read(SONGS_SORT_FILE, '0') == 'a';
     rowmenu_bind(&sg.rm, sg.win); /* the rows' "..." menu (optional: no widgets means no "...") */
-    if (!sg_lib()) { /* a list: no Sort; Search (the capsule's left cap) moves to Sort's slot, beside Select, and the titles are the list's */
-        sg_show(sg.btn_sort, 0);
-        if (sg_genre()) { /* a genre's songs: no Search either; Select is the capsule's left cap (its own glass piece) */
-            sg_show(sg.btn_search, 0);
-            widget_set_prop_str(sg.btn_select, "style:normal:icon", "pod_nav_selectl");
-            widget_set_prop_str(sg.btn_select, "style:over:icon", "pod_nav_selectl");
-            widget_set_prop_str(sg.btn_select, "style:pressed:icon", "pod_nav_selectl_down");
-        } else if (
-            sg_artist() &&
-            sg.btn_cf) { /* an artist's songs: the Cover Flow button is the capsule's left cap (Albums' place), no Search */
-            sg_show(sg.btn_search, 0);
-            sg_show(sg.btn_cf, 1);
-        } else if (sg_recent()) { /* Recently Added: Search 122 | Select 168 | toggle 214 | Now Playing */
-            widget_move(sg.btn_select, NAV_CF_X, 0);
-            sg_show(sg.btn_view, 1);
-        } else
-            widget_move(sg.btn_search, NAV_CF_X, 0);
-        widget_resize(sg.title, sg_search_x() - NAV_TITLE_X, 22);
+    if (sg_direct()) { /* the card would hold Select alone: the Select button takes the "..." place (left cap at 214, or the middle piece after Search / Cover Flow) and sg.btn_more stands for it from here on */
+        sg_show(sg.btn_more, 0);
+        sg.btn_more = sg.btn_select;
+        sg_show(sg.btn_more, 1);
+    }
+    if ((sg_artist() && sg.btn_cf) ||
+        sg_searches()) { /* the capsule's left cap at Albums' Cover Flow place: Cover Flow on an artist's songs, Search on the lists that search; the "..." (or Select) is its middle piece */
+        const char *mid = sg_direct() ? "pod_nav_select" : "pod_nav_moremid";
+        char down[32];
+        snprintf(down, sizeof down, "%s_down", mid);
+        sg_show(sg_artist() ? sg.btn_cf : sg.btn_search, 1);
+        widget_set_prop_str(sg.btn_more, "style:normal:icon", mid);
+        widget_set_prop_str(sg.btn_more, "style:over:icon", mid);
+        widget_set_prop_str(sg.btn_more, "style:pressed:icon", down);
+    }
+    if (!sg_lib()) { /* a list: the titles are the list's */
+        widget_resize(sg.title, sg_title_end() - NAV_TITLE_X, 22);
         az_fit(sg.big, sg_name_text());
     }
     /* A playlist's header (docs/modules/songs.md): the mosaic tile (the Playlists page's, patch/grid.c) and the name under it (the count is the footer under the last row,
@@ -1574,19 +1615,34 @@ int songs_open_genre(const char *name, int unknown) {
     return r;
 }
 
-/* Cover Flow's artist page (`artist`: the Artists row, the name in REC_TITLE): every song of the artist, the way the stock All songs card gets them:
- * loadAlbumList(0xf004, artist) fills the browsing record and the albums, the last one the All songs row, and loadAlbumdetailList(0xff01, that row) turns
- * the record into class 0xff11's (the all-songs flag, the album text, classinfo[0]). The page keeps the record. -1 when the page did not open or the
- * artist has no All songs row (the caller opens the stock page). */
-int songs_open_artist(void *artist) {
+/* The artist's songs as the stock All songs card gets them (the two queries songs_open_artist runs, no page): loadAlbumList(0xf004, artist) fills the browsing record and
+ * the albums, the last one the All songs row, and loadAlbumdetailList(0xff01, that row) turns the record into class 0xff11's and lists the songs. Returns that stock list
+ * (in *pdeq_showlist, good until the next query), or NULL when the artist has no All songs row. */
+void *songs_artist_list(void *artist) {
     void *list, *row;
     unsigned n;
-    if (sg.win || !artist) return -1;
+    if (!artist) return (void *)0;
     loadAlbumList(CLASS_ARTISTS, artist);
     list = *(void **)PDEQ_SHOWLIST;
     n = list ? deque_size(list) : 0;
     row = n ? deque_at(list, n - 1) : (void *)0;
-    if (!row || I(row, REC_ID) != ID_ALL_SONGS) return -1;
+    if (!row || I(row, REC_ID) != ID_ALL_SONGS) return (void *)0;
     loadAlbumdetailList(CLASS_ARTIST_ALBUMS, row);
+    return *(void **)PDEQ_SHOWLIST;
+}
+
+/* Cover Flow's artist page (`artist`: the Artists row, the name in REC_TITLE): every song of the artist (songs_artist_list). The page keeps the record. -1 when the page
+ * did not open or the artist has no All songs row (the caller opens the stock page). */
+int songs_open_artist(void *artist) {
+    if (sg.win || !artist || !songs_artist_list(artist)) return -1;
     return sg_open(CLASS_ARTIST_SONGS, 0, (const char *)0, cc_str(artist, REC_TITLE), -1);
+}
+
+/* The artist's albums page's Play (how SO_IN_ORDER: the songs in order from the first) and Shuffle (SO_SHUFFLE: the stock Shuffle mode from a random song), the way this
+ * page's pills play the artist's list: the two queries, then so_play on class 0xff11 (the record is fresh). -1 when there is nothing to play. */
+int songs_play_artist(void *artist, int how) {
+    void *list = songs_artist_list(artist);
+    if (!list || !deque_size(list)) return -1;
+    so_play(CLASS_ARTIST_SONGS, list, how == SO_SHUFFLE ? -1 : 0, how, sg_open_player);
+    return 0;
 }

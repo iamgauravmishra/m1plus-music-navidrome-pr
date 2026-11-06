@@ -827,6 +827,10 @@ class Machine:
                 for r in self.deques.get(self.word(pod.DATA['PDEQ_SHOWLIST'][0]), []):
                     if self.word(r + O['REC_TYPE']) != 8: continue
                     self.setword(r + O['REC_CLASS'], a3)
+                    if getattr(self, 'copy_queue', False):   # the queue holds copies of the records, as loadSongList's deque_assign makes them
+                        r2 = self.alloc(REC_SIZE); self.u.mem_write(r2, bytes(self.u.mem_read(r, REC_SIZE))); out.append(r2)
+                        if ret < 0 and (self.read_cstr(self.word(r + O['REC_NAME'])), self.word(r + O['REC_CUE_START'])) == key: ret = len(out) - 1
+                        continue
                     out.append(r)
                     if ret < 0 and (self.read_cstr(self.word(r + O['REC_NAME'])), self.word(r + O['REC_CUE_START'])) == key:
                         ret = len(out) - 1
@@ -1762,7 +1766,8 @@ COVER_WIDGETS = ['btn_return', 'btn_backtoplayer', 'btn_cancel', 'navigationbar_
                  'label_album', 'label_artist', 'label_status', 'label_title', 'btn_songs']
 
 
-CFSORT_FILE, CFSORT_TMP = '/mnt/data/m1plus/album-order', '/mnt/data/m1plus/album-order.tmp'   # patch/home.h
+SORT_FILE, SORT_TMP = '/mnt/data/m1plus/albums-sort', '/mnt/data/m1plus/albums-sort.tmp'   # patch/home.h; the album order (0 Title, 1 Artist, 2 Recently Added, 3 Year)
+OLD_ORDER_FILE, OLD_ORDER_TMP = '/mnt/data/m1plus/album-order', '/mnt/data/m1plus/album-order.tmp'   # the retired Album Order setting (patch/covercache.c migrates and deletes it)
 
 
 def cover_machine(albums=3, tracks=2, cached=True, sort='album', cls=None):
@@ -1770,7 +1775,7 @@ def cover_machine(albums=3, tracks=2, cached=True, sort='album', cls=None):
     a complete thumbnail cache (so no build runs). sort: the order setting; the machines default to the stock order
     ('album'), which the shelf tests index by album number; 'artist' is the setting's own default (the sort tests)."""
     m = (cls or Machine)()
-    if sort == 'album': m.fs[CFSORT_FILE] = b'0\n'
+    if sort == 'album': m.fs[SORT_FILE] = b'0\n'
     for n in COVER_WIDGETS: m.widget(n)
     m.showlist = [m.record(album=f'Album {i}', artist=f'Artist {i}',
                            path=f'/mnt/mmc/m/{i}/1.flac', rid=i + 1) for i in range(albums)]
@@ -1840,7 +1845,7 @@ COMPOSER_ALBUMS = {'Bach': ['Goldberg Variations', 'Cello Suites'], 'Mozart': ['
 
 
 AR_WIDGETS = ('artists_listview', 'view_grid', 'sg_rail', 'sg_bubble', 'sg_bubble_letter', 'ar_title', 'label_hdr', 'label_rail', 'label_rail_on', 'label_row_title',
-              'btn_artisttype', 'img_nb_fade')
+              'img_nb_fade')
 
 
 def artists_row_y(i, starts=(0, 1)):
@@ -1857,7 +1862,29 @@ def artists_tap(m, i, starts=(0, 1), dx=0, dy=0, count=30000000):
     m.calls = calls + m.calls
 
 
-ALBUMS_PAGE_WIDGETS = ('btn_albumview', 'btn_coverflow', 'label_row_sub', 'label_grid_title', 'label_grid_sub')
+# the Albums page's navbar buttons and "..." card (patch/viewsort.c): rows 0..3 the sorts, 4 Grid, 5 List, 6 Search, 7 Select (no tick); a tick on each but Search, a glyph on the view rows and Search, vs_hair between Search and Grid, a second line on the sorts
+VS_WIDGETS = ('btn_more', 'vs_scrim', 'vs_card', 'vs_hair', 'vs_glyph4', 'vs_glyph5', 'vs_glyph6', 'vs_glyph7') + tuple(f'vs_item{i}' for i in range(8)) + tuple(f'vs_label{i}' for i in range(8)) + tuple(f'vs_tick{i}' for i in range(6)) + tuple(f'vs_sub{i}' for i in range(4))
+
+
+AR_WIDGETS += VS_WIDGETS   # the Artists page's "..." card is the Albums page's (patch/viewsort.c)
+
+
+def forget_card(m):
+    """The "..." card's widgets as an asset leaves them: what a page's vs_bind hid or restyled is forgotten (a Machine has one set of named widgets for every page)."""
+    ids = {m.widgets[n] for n in VS_WIDGETS if n in m.widgets}
+    for k in [k for k in m.props if k[0] in ids and k[1] != 'x']: del m.props[k]
+
+
+def view_switch(m, count):
+    """A tap on the View row of the view the page is not in (the ticked one is Grid or List; a tap on it does nothing)."""
+    list_now = m.fs.get('/mnt/data/m1plus/albums-view') == b'0\n'   # the saved mode is the page's (a missing file is the grid): the payload writes it at every switch
+    m.call(PSYMS['al_on_item'], a0=O['VS_SORTS'] + (0 if list_now else 1), count=count)
+
+
+def utf8(s):
+    """A text the harness read from payload memory (latin-1 of the UTF-8 bytes) as the text it is."""
+    return s.encode('latin-1').decode('utf-8')
+ALBUMS_PAGE_WIDGETS = ('btn_coverflow', 'btn_play', 'btn_shuffle', 'label_row_sub', 'label_grid_title', 'label_grid_sub', 'al_title', 'img_nb_fade') + VS_WIDGETS
 
 
 def artists_machine(artists=('Miles Davis', 'Nina Simone', 'Unknown Artist'), composers=(), genres=(), albums_page=False):

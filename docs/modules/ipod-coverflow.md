@@ -34,7 +34,7 @@ bitmap or the block does not come, the row opens the existing full-screen Cover 
 ## The albums, the wheel
 
 Entering pushes the level `K_CF` over the main menu; its list is the stock **albums list** (`loadLocalClassList(0xf003)`, as the Albums level, in the stock query's order, not
-Settings > Library > Album Order), read, validated and re-read by the iPod page's machinery (`ip_valid`, `ip_ensure`, the page timer's stale check): paint never queries and shows only the bar
+the Albums "..." card's order), read, validated and re-read by the iPod page's machinery (`ip_valid`, `ip_ensure`, the page timer's stale check): paint never queries and shows only the bar
 while the list is stale. The level's `sel` is the album the cursor is on.
 
 - **Wheel:** the iPod page's: a step per 15 degrees, the reversal hysteresis, the chord dead zone, the tiers **1, 2, 3, 5, 8, 13, 21, 34 albums a step on more than 16 albums**,

@@ -21,18 +21,37 @@
 #define ALBUMS_FILE \
     "/mnt/data/m1plus/albums-view" /* "1" = the Albums grid (default when missing, ALBUMS_DEFAULT_GRID), "0" = the list mode of the same page */
 #define ALBUMS_TMP "/mnt/data/m1plus/albums-view.tmp"
+#define ALBUMS_SORT_FILE \
+    "/mnt/data/m1plus/albums-sort" /* the Albums page's order (its "..." card): "0" Title, "1" Artist, "2" Recently Added, "3" Year, or "a" .. "d" for the same order in its other direction; missing or anything else is Artist (cc_sort_mode, cc_sort_rev) */
+#define ALBUMS_SORT_TMP "/mnt/data/m1plus/albums-sort.tmp"
+#define ARTISTS_SORT_FILE \
+    "/mnt/data/m1plus/artists-sort" /* the Artists page's order (its "..." card): "a" Name Z-A; missing or anything else Name A-Z (patch/artists.c) */
+#define ARTISTS_SORT_TMP "/mnt/data/m1plus/artists-sort.tmp"
+#define GENRES_SORT_FILE "/mnt/data/m1plus/genres-sort" /* the same for the Genres page */
+#define GENRES_SORT_TMP "/mnt/data/m1plus/genres-sort.tmp"
+#define COMPOSERS_SORT_FILE "/mnt/data/m1plus/composers-sort" /* and the Composers page */
+#define COMPOSERS_SORT_TMP "/mnt/data/m1plus/composers-sort.tmp"
+#define SONGS_SORT_FILE \
+    "/mnt/data/m1plus/songs-sort-rev" /* the Songs page's direction of its Title, File Name and Format orders (its Sort card): "a" Z-A; missing or anything else A-Z (patch/songs.c); the order itself is the stock sort_flag */
+#define SONGS_SORT_TMP "/mnt/data/m1plus/songs-sort-rev.tmp"
+#define FOLDERS_SORT_FILE \
+    "/mnt/data/m1plus/folders-sort" /* the Folders page's order (its "..." card, every level): "0" Name, "1" Date Modified, "2" Type, or "a" "b" "c" for the same order reversed (Z-A, Oldest First); missing or anything else Name A-Z (patch/folders.c) */
+#define FOLDERS_SORT_TMP "/mnt/data/m1plus/folders-sort.tmp"
 #define PLAYLISTS_FILE \
     "/mnt/data/m1plus/playlists-view" /* the Playlists page's mode, as ALBUMS_FILE: "1" the grid (default), "0" the list */
 #define PLAYLISTS_TMP "/mnt/data/m1plus/playlists-view.tmp"
+#define PLAYLISTS_SORT_FILE \
+    "/mnt/data/m1plus/playlists-sort" /* the Playlists page's name order (its "..." card): "a" Z-A; missing or anything else A-Z (patch/playlists.c) */
+#define PLAYLISTS_SORT_TMP "/mnt/data/m1plus/playlists-sort.tmp"
 #define RECENTADD_VIEW_FILE \
     "/mnt/data/m1plus/recently-added-view" /* Recently Added on the Songs page: "1" the albums grid, anything else (missing too) the songs (docs/modules/recent-albums.md) */
 #define RECENTADD_VIEW_TMP "/mnt/data/m1plus/recently-added-view.tmp"
 #define LANDSCAPE_FILE \
     "/mnt/data/m1plus/coverflow-landscape" /* "1" = Cover Flow opens in landscape, anything else portrait (the default) */
 #define LANDSCAPE_TMP "/mnt/data/m1plus/coverflow-landscape.tmp"
-#define CFSORT_FILE \
-    "/mnt/data/m1plus/album-order" /* the album order of Cover Flow and Albums: "0" or "0\n" = by album title (stock), anything else or missing = Artist (the default) */
-#define CFSORT_TMP "/mnt/data/m1plus/album-order.tmp"
+#define OLD_ORDER_FILE \
+    "/mnt/data/m1plus/album-order" /* the retired Settings > Library > Album Order ("0" Title, else Artist): cc_sort_mode moves it into ALBUMS_SORT_FILE once and deletes it */
+#define OLD_ORDER_TMP "/mnt/data/m1plus/album-order.tmp"
 #define TAPETHEME_FILE \
     "/mnt/data/m1plus/cassette-theme" /* the Cassette Mode theme: "1" = Chrome, "2" = Metal (each with an optional newline), anything else or missing = Normal (the default) */
 #define TAPETHEME_TMP "/mnt/data/m1plus/cassette-theme.tmp"

@@ -2,7 +2,7 @@
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
- * One page, ui/m1plus_playlists.bin: the navbar (Back, "Playlists", a "..." button, Now Playing) over a stock list, list_view > scroll_view
+ * One page, ui/m1plus_playlists.bin: the navbar (Back, "Playlists", "..." | Now Playing) over a stock list, list_view > scroll_view
  * (playlists_scrollview), the structure of the Albums page (patch/albums.c, docs/modules/albums.md), whose ONE child is a custom view, view_grid,
  * that paints the cells itself in its own EVT_AFTER_PAINT through the shared grid (patch/grid.c). The stock scroll_view does the scrolling.
  * A cell is a GRID_COVER px tile, the playlist's name under it and "N tracks" under that. docs/modules/playlists.md has the whole design.
@@ -17,13 +17,14 @@
  *   tiles     the grid's ring (GRID_TILES). The tile of a playlist with 2..4 albums is composed by grid_mosaic from the 168 px cache files
  *             box-reduced to a quadrant, one source per tick; one album is that cover full size; none is the stock placeholder disc. Paint never
  *             decodes, and neither does the loader while the scroll_view drags or flings.
- *   modes     the navbar toggle (btn_albumview) switches the grid and the list (LIST_ROW_H rows, 52 px mosaics, patch/grid.c grid_list_paint) in place;
+ *   modes     the card's Grid / List rows switch the grid and the list (LIST_ROW_H rows, 52 px mosaics, patch/grid.c grid_list_paint) in place;
  *             the choice is saved in PLAYLISTS_FILE.
+ *   order     the card's Name row (A-Z, Z-A when ticked again, PLAYLISTS_SORT_FILE): pl.ord is the stock row at each display position, the stock list is never reordered.
  *   touch     a tap on a cell or row opens the playlist in our Songs page (patch/songs.c, class 0xff13), or the stock songs page (allmusic_page) as the stock
  *             Playlists page does when ours does not open.
- *   menu      the "..." button opens a popup card of this page (hidden, insensitive widgets shown by the payload): New playlist, Import,
- *             Export (the stock code), Delete playlists (select mode on this page: marks, a bar with the Delete pill, the stock delete handler's sequence on the stock
- *             selection vector; the stock Playlists page only where the page cannot). No hook.
+ *   menu      the "..." button opens the shared view-sort card (patch/viewsort.c): New Playlist, Import, Export (the stock code), Delete Playlists (select mode on this
+ *             page: marks, a bar with the Delete pill, the stock delete handler's sequence on the stock selection vector; the stock Playlists page only where the page
+ *             cannot), then Grid / List, then Name. No hook.
  */
 #include "offsets.inc"
 #include "stock.h"
@@ -35,6 +36,7 @@
 #include "i18n.h"
 #include "keyboard.h"
 #include "picker.h"
+#include "viewsort.h"
 
 extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
 extern int
@@ -72,7 +74,7 @@ typedef struct {
 #define PL_SCAN_MISS 2
 
 static struct {
-    void *win, *view, *sv, *status, *btn_more, *scrim, *card, *btn; /* btn: the view toggle */
+    void *win, *view, *sv, *status, *btn_more;
     void *title, *back, *np, *btn_selall, *bar,
         *del; /* the navbar's title, Back and Now Playing; the select mode's Select All text, bar and Delete pill (the last three optional: no select mode without them) */
     void *mark[2]; /* the select marks (unselect, selected): bitmaps */
@@ -90,14 +92,16 @@ static struct {
     unsigned *tmp; /* one quadrant (side / 2 squared words) for grid_mosaic */
     int seen, dir, noscroll;
     int down, down_x, down_y;
-    int menu; /* the popup card is open */
+    int menu; /* a card is open: 0 none, 1 the "..." card (views, order), 2 the list-plus button's (the four actions) */
     unsigned more_timer;
-    void *items[PL_MENU_ROWS],
-        *labels[PL_MENU_ROWS]; /* the menu's row buttons and their labels (a label may be missing: no fit) */
+    vs_t vs; /* the "..." card (patch/viewsort.c) */
+    unsigned *ord; /* the stock playlist at each display position (after the picker's rows), NULL = the stock order */
+    int rev; /* the name order is Z-A */
     void *fade; /* the navbar's fade (img_nb_fade, optional): shown only while the list is scrolled */
     unsigned sig[PL_SIG]; /* the database's state (pl_dbsig) when the playlists were last read */
     int have_sig;
     int bg; /* another window is in front: the loader does not run (pl_on_bg) */
+    void *btn_plactions; /* the navbar's list-plus button: the capsule's left cap at NAV_CF_X, opens the actions card */
     grid_t g; /* LAST (test/pod/playlists.py reads the fields above by index) */
 } pl __attribute__((section(".scratch")));
 
@@ -140,7 +144,9 @@ static struct {
     void *star; /* the Favourites row's glyph: a 24 px white star, alpha bitmap */
 } pick __attribute__((section(".scratch")));
 static int pl_v(void) { return pick.on ? 2 : 0; } /* the rows before the playlists: New playlist, Favourites */
-static void *pl_rec(int i) { return deque_at(pl.pls, (unsigned)(i - pl_v())); }
+/* The stock playlist (index in the copy of the stock list) shown at display position k, after the picker's rows. */
+static unsigned pl_slot(unsigned k) { return pl.ord ? pl.ord[k] : k; }
+static void *pl_rec(int i) { return deque_at(pl.pls, pl_slot((unsigned)(i - pl_v()))); }
 /* The playlist's id: REC_DISC, what the stock row handler hands to classinfo[1] (@0x53d5f4) */
 static int pl_id(int i) { return I(pl_rec(i), REC_DISC); }
 
@@ -517,6 +523,39 @@ static int pl_same_list(void *old, unsigned oldn, void *fresh, unsigned n) {
     return 1;
 }
 
+/* The name order (the card's Name row): pl.ord[k] = the stock playlist shown at position k. Names compare as the Artist order does (cc_name_keys / cc_key_cmp: digit runs by value, ASCII case
+ * folded, a CJK name by its pinyin initials; ties keep the stock order); Z-A is the whole order reversed. The stock list is never reordered. No memory: NULL (the stock order). */
+static const char **pl_key __attribute__((section(".scratch")));
+
+static int pl_cmp(unsigned a, unsigned b) {
+    int d = cc_key_cmp(pl_key[a], pl_key[b]);
+    return d ? d : a < b ? -1 : a > b;
+}
+
+static const char *pl_ntext(const void *ctx, unsigned i) { return cc_str(deque_at((void *)ctx, i), REC_TITLE); }
+
+static void pl_sort(void) {
+    unsigned n = pl.count > (unsigned)pl_v() ? pl.count - (unsigned)pl_v() : 0, i;
+    free(pl.ord);
+    pl.ord = (unsigned *)0;
+    if (n < 2 || !pl.pls) return;
+    pl.ord = calloc(n, sizeof *pl.ord);
+    pl_key = pl.ord ? cc_name_keys(n, pl_ntext, pl.pls) : (const char **)0;
+    if (!pl.ord || !pl_key) {
+        free(pl.ord);
+        pl.ord = (unsigned *)0;
+    } else {
+        for (i = 0; i < n; ++i) pl.ord[i] = i;
+        cc_heapsort(pl.ord, n, pl_cmp);
+        for (i = 0; pl.rev && i < n / 2; ++i) {
+            unsigned t = pl.ord[i];
+            pl.ord[i] = pl.ord[n - 1 - i], pl.ord[n - 1 - i] = t;
+        }
+    }
+    free((void *)pl_key);
+    pl_key = (const char **)0;
+}
+
 static void pl_load(void) {
     void *list, *old = pl.pls;
     unsigned oldn = pl.count;
@@ -547,6 +586,7 @@ static void pl_load(void) {
     free(pl.sel);
     pl.sel = (unsigned char *)0, pl.nsel = 0;
     if (!keep) {
+        pl_sort();
         grid_drop(&pl.g);
         free(pl.info);
         pl.info = pl.count ? calloc(pl.count, sizeof(info_t)) : (info_t *)0;
@@ -564,6 +604,55 @@ static void pl_load(void) {
     pl_size();
     pl.dir = 1;
     pl.seen = pl_off();
+    pl_redraw();
+    pl_kick();
+}
+
+/* The card's Name row: the order changes (pl.rev is set). The playlists are put in the new order and every playlist keeps its scan (info follows its playlist); the tiles are made again for the
+ * new places and the list goes back to the top. Where the scans cannot be carried over (no memory) the page reads everything again. */
+static void pl_reorder(void) {
+    unsigned n = pl.count > (unsigned)pl_v() ? pl.count - (unsigned)pl_v() : 0, k, v = (unsigned)pl_v(), *old = pl.ord,
+             *inv = (unsigned *)0;
+    info_t *fresh = (info_t *)0;
+    void *wa = P(pl.sv, SC_WA);
+    pl.ord = (unsigned *)0;
+    pl_sort();
+    if (n && pl.info) {
+        inv = calloc(n, sizeof *inv);
+        fresh = calloc(pl.count, sizeof(info_t));
+    }
+    if (!inv || !fresh) {
+        free(inv);
+        free(fresh);
+        free(old);
+        pl.have_sig = 0; /* nothing is kept: pl_load makes the page again (with pl.rev) */
+        pl_load();
+        return;
+    }
+    for (k = 0; k < n; ++k) inv[old ? old[k] : k] = k; /* the stock playlist -> where it was shown */
+    for (k = 0; k < v + n; ++k) { /* (field by field: a struct assignment would call memcpy) */
+        const info_t *from = &pl.info[k < v ? k : v + inv[pl_slot(k - v)]];
+        int j;
+        for (j = 0; j < 4; ++j) fresh[k].key[j] = from->key[j];
+        fresh[k].nk = from->nk, fresh[k].songs = from->songs, fresh[k].scanned = from->scanned;
+    }
+    free(pl.info);
+    pl.info = fresh;
+    free(inv);
+    free(old);
+    if (wa && I(wa, SC_AN_STATE) == SC_AN_RUNNING &&
+        P(wa, SC_AN_WIDGET) == pl.sv) { /* a coasting list stops (patch/scroll.c sc_down) */
+        widget_animator_destroy(wa);
+        stock_scroll_done(pl.sv, (void *)0);
+    }
+    if (pl.more_timer) timer_remove(pl.more_timer);
+    pl.more_timer = 0;
+    pl.press = pl.down = 0, pl.dir = 1;
+    grid_drop(&pl.g); /* the tiles were of the other places */
+    if (pl.g.tiles) grid_placeholder(&pl.g);
+    widget_set_prop_int(pl.sv, "yoffset", 0);
+    pl.seen = pl_off();
+    pl_fade();
     pl_redraw();
     pl_kick();
 }
@@ -644,8 +733,9 @@ static void pl_select(int on) {
     pl.nsel = 0;
     if (pl.sel) memset(pl.sel, 0, (pl.count + 7) / 8);
     pl.press = pl.down = 0;
-    nav[0] = pl.btn_more, nav[1] = pl.btn, nav[2] = pl.np;
-    for (i = 0; i < 3; ++i) pl_show(nav[i], !on);
+    nav[0] = pl.btn_more, nav[1] = pl.np;
+    for (i = 0; i < 2; ++i) pl_show(nav[i], !on);
+    pl_show(pl.btn_plactions, !on);
     pl_show(pl.btn_selall, on);
     pl_show(pl.bar, on);
     if (pl.title) widget_resize(pl.title, (on ? SG_SELALL_X : NAV_CF_X) - NAV_TITLE_X, 22);
@@ -735,38 +825,21 @@ static int pl_on_abort(void *ctx, void *e) {
 }
 
 /* ---------------------------------------------------------------------------
- * The "..." menu: a popup card over the page. New playlist, Import and Export run the stock code and the page reads the playlists again;
- * Delete is select mode (above).
+ * The "..." card (patch/viewsort.c): New Playlist, Import, Export and Delete Playlists, then Grid / List, then Name. New playlist, Import and Export run the stock code and the page reads the
+ * playlists again; Delete is select mode (above); Grid and List switch the view in place (below); the Name row sets the order (below).
  */
-/* The card as wide as the language needs: the widest label (widget_measure_text: the label's own font, its translated text), the glyph's
- * room before it (PL_TEXT_X) and PL_TEXT_R after it, PL_CARD_MIN..PL_CARD_MAX, the right edge kept at PL_CARD_RIGHT under the button; the rows and labels follow. The glass is drawn
- * patch3_x, so it stretches to any of these widths. A label that is missing or cannot be measured leaves the asset's width (PL_CARD_MAX, the
- * widest language's). Run at every open: the language may have changed while the page lay under another. */
-static void pl_fit(void) {
-    int i, w = 0;
-    for (i = 0; i < PL_MENU_ROWS; ++i) {
-        const unsigned *t = pl.labels[i] ? widget_get_text(pl.labels[i]) : 0;
-        int tw = t && *t ? (int)(widget_measure_text(pl.labels[i], t) + 0.999f) : 0;
-        if (tw <= 0) return;
-        if (tw > w) w = tw;
-    }
-    w += PL_TEXT_X + PL_TEXT_R;
-    if (w < PL_CARD_MIN) w = PL_CARD_MIN;
-    if (w > PL_CARD_MAX) w = PL_CARD_MAX;
-    widget_move(pl.card, PL_CARD_RIGHT - w, PL_CARD_Y);
-    widget_resize(pl.card, w, PL_MENU_ROWS * PL_ROW_H);
-    for (i = 0; i < PL_MENU_ROWS; ++i) {
-        widget_resize(pl.items[i], w, PL_ROW_H);
-        widget_resize(pl.labels[i], w - PL_TEXT_X - PL_TEXT_R, PL_ROW_H);
-    }
-}
+#define PL_ROWS_MORE (VS_WITH_VIEWS | 1u << 0) /* the "..." card: Grid, List, Name (the one sort row is slot 0) */
+#define PL_ROWS_ACTIONS \
+    (VS_WITH_SEARCH | VS_WITH_SELECT | VS_WITH_ACT2 | \
+     VS_WITH_ACT3) /* the list-plus button's card: New Playlist, Import, Export, Delete Playlists (slots 6..9) */
 
-static void pl_menu(int on) {
-    if (on) pl_fit();
-    pl.menu = on;
-    pl_show(pl.scrim, on);
-    pl_show(pl.card, on);
+/* Closes the open card, or opens card `kind` (1 the "..." card, 2 the list-plus button's: the one card's rows offered again). */
+static void pl_menu_kind(int kind) {
+    pl.menu = kind;
+    if (kind) vs_offer(&pl.vs, kind == 1 ? PL_ROWS_MORE : PL_ROWS_ACTIONS);
+    vs_menu(&pl.vs, kind != 0, 0, pl.rev, pl.list);
 }
+static void pl_menu(int on) { pl_menu_kind(on ? 1 : 0); }
 
 /* The stock one-line message box, as the stock Playlists page shows "full" and "exists" (@0x53e97c, @0x53e9f8). */
 static void pl_toast(const char *text) {
@@ -854,10 +927,12 @@ static int pl_stock_selection(void) {
     n = list ? deque_size(list) : 0;
     if (!n || !pl.pls || n != deque_size(pl.pls)) return 0;
     for (i = 0; i < n; ++i)
-        if (I(deque_at(list, i), REC_DISC) != pl_id((int)i)) return 0;
+        if (I(deque_at(list, i), REC_DISC) != I(deque_at(pl.pls, i), REC_DISC))
+            return 0; /* (stock positions: the page may show them in the name order) */
     select_recordinit((int)n);
     for (i = 0; i < pl.count && i < n; ++i)
-        if (pl_is_sel((int)i)) set_selectindex((int)i);
+        if (pl_is_sel((int)i))
+            set_selectindex((int)pl_slot(i)); /* the mark of a displayed row is of its stock playlist */
     return 1;
 }
 
@@ -884,7 +959,16 @@ static int pl_on_delete(void *ctx, void *e) {
 static int pl_on_more(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    if (pl.view) pl_menu(!pl.menu);
+    if (pl.view && pl.menu != 2)
+        pl_menu_kind(
+            pl.menu ? 0 : 1); /* (a tap while the list-plus button's card is open is ignored: one card at a time) */
+    return RET_OK;
+}
+
+static int pl_on_actions(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    if (pl.view && !pl.menu && !pl.select) pl_menu_kind(2);
     return RET_OK;
 }
 
@@ -897,11 +981,32 @@ static int pl_on_scrim(void *ctx, void *e) {
 
 enum { PL_NEW, PL_IMPORT, PL_EXPORT, PL_DELETE };
 
+static void pl_set_mode(int list);
+
+/* A tap on a card row: the slots 6..9 are the page's actions (VS_SEARCH + PL_NEW ..), 4 and 5 Grid and List, 0 the Name row, whose tap reverses the order (it is always the ticked one). */
 static int pl_on_item(void *ctx, void *e) {
     int which = (int)(long)ctx;
     (void)e;
     pl_menu(0);
     if (!pl.view) return RET_OK;
+    if (which == VS_SORTS || which == VS_SORTS + 1) { /* Grid, List: the mode in place, saved */
+        int list = which == VS_SORTS + 1;
+        if (list != pl.list && pl.g.tiles) {
+            pl_set_mode(list);
+            home_write_atomic(PLAYLISTS_FILE, PLAYLISTS_TMP, list ? "0\n" : "1\n");
+        }
+        return RET_OK;
+    }
+    if (which == 0) { /* Name: A-Z, the ticked row the other way; saved first (a save that fails changes nothing) */
+        int rev = !pl.rev;
+        char text[3];
+        text[0] = rev ? 'a' : '0', text[1] = '\n', text[2] = 0;
+        if (home_write_atomic(PLAYLISTS_SORT_FILE, PLAYLISTS_SORT_TMP, text) != 0) return RET_OK;
+        pl.rev = rev;
+        pl_reorder();
+        return RET_OK;
+    }
+    which -= VS_SEARCH;
     *(int *)NAVIGATION_STATUS = 0; /* the stock pages' normal (not multi-select) mode: export all */
     if (which == PL_NEW) {
         pl_create(); /* the keyboard is not modal: pl_named reads the list when the name is in */
@@ -947,15 +1052,6 @@ static int pl_on_bg(void *ctx, void *e) {
  */
 static int pl_use_grid(void) { return set_read(PLAYLISTS_FILE, '1') != '0'; }
 
-/* The toggle shows the glyph of the mode a tap switches to. */
-static void pl_glyph(void) {
-    const char *icon = pl.list ? "pod_nav_grid" : "pod_nav_list";
-    if (!pl.btn) return;
-    widget_set_prop_str(pl.btn, "style:normal:icon", icon);
-    widget_set_prop_str(pl.btn, "style:over:icon", icon);
-    widget_set_prop_str(pl.btn, "style:pressed:icon", pl.list ? "pod_nav_grid_down" : "pod_nav_list_down");
-}
-
 /* The covers of a mode: GRID_COVER px with GRID_R corners blended into black, or LIST_ART px with LIST_R corners cut in the alpha (a pressed row lies behind). */
 static void pl_shape(int list) { grid_shape(&pl.g, list ? LIST_ART : GRID_COVER, list ? LIST_R : GRID_R, list); }
 
@@ -986,18 +1082,8 @@ static void pl_set_mode(int list) {
     widget_set_prop_int(pl.sv, "yoffset", first > max ? max : first);
     pl.seen = pl_off();
     pl_fade();
-    pl_glyph();
     pl_redraw();
     pl_kick();
-}
-
-static int pl_on_toggle(void *ctx, void *e) {
-    (void)ctx;
-    (void)e;
-    if (!pl.view || !pl.g.tiles) return RET_OK;
-    pl_set_mode(!pl.list);
-    home_write_atomic(PLAYLISTS_FILE, PLAYLISTS_TMP, pl.list ? "0\n" : "1\n");
-    return RET_OK;
 }
 
 static int pl_on_destroy(void *ctx, void *e) {
@@ -1008,6 +1094,7 @@ static int pl_on_destroy(void *ctx, void *e) {
     if (pl.pls) deque_destroy(pl.pls);
     if (pl.albums) deque_destroy(pl.albums);
     free(pl.info);
+    free(pl.ord);
     free(pl.sel);
     free(pl.tmp);
     if (pl.mark[0]) bitmap_destroy(pl.mark[0]);
@@ -1031,9 +1118,6 @@ static int pl_on_destroy(void *ctx, void *e) {
 
 /* 0 once the page is up, -1 if the window could not open, -2 if the asset is not ours (the page is left again). */
 static int pl_open_page(void) {
-    static const char *const ITEMS[PL_MENU_ROWS] = {"pl_item0", "pl_item1", "pl_item2", "pl_item3"};
-    static const char *const LABELS[PL_MENU_ROWS] = {"pl_label0", "pl_label1", "pl_label2", "pl_label3"};
-    int i;
     if (pl.win) return -1;
     memset(&pl, 0, sizeof pl);
     pl.win = window_open("m1plus_playlists");
@@ -1046,8 +1130,7 @@ static int pl_open_page(void) {
     pl.bar = widget_lookup(pl.win, "pl_bar", 1);
     pl.title = widget_lookup(pl.win, "label_title", 1);
     pl.btn_more = pod_bind(pl.win, "btn_more", pl_on_more, (void *)0);
-    pl.scrim = pod_bind(pl.win, "pl_scrim", pl_on_scrim, (void *)0);
-    pl.card = widget_lookup(pl.win, "pl_card", 1);
+    pl.btn_plactions = pod_bind(pl.win, "btn_plactions", pl_on_actions, (void *)0);
     pl.view = widget_lookup(pl.win, "view_grid", 1);
     pl.sv = widget_lookup(pl.win, "playlists_scrollview", 1);
     pl.status = widget_lookup(pl.win, "label_status", 1);
@@ -1056,20 +1139,19 @@ static int pl_open_page(void) {
     pl.g.st_sub = widget_lookup(pl.win, "label_grid_sub", 1);
     pl.st_ltitle = widget_lookup(pl.win, "label_row_title", 1);
     pl.st_lsub = widget_lookup(pl.win, "label_row_sub", 1);
-    pl.btn = pod_bind(pl.win, "btn_albumview", pl_on_toggle, (void *)0);
-    if (!pl.btn_more || !pl.btn || !pl.scrim || !pl.card || !pl.view || !pl.sv || !pl.status || !pl.g.st_title ||
-        !pl.g.st_sub || !pl.st_ltitle || !pl.st_lsub) {
+    if (!pl.btn_more || !pl.btn_plactions || !pl.view || !pl.sv || !pl.status || !pl.g.st_title || !pl.g.st_sub ||
+        !pl.st_ltitle || !pl.st_lsub) {
         navigator_back(); /* an asset that is not ours */
         return -2;
     }
-    for (i = 0; i < PL_MENU_ROWS; ++i) {
-        if (!(pl.items[i] = pod_bind(pl.win, ITEMS[i], pl_on_item, (void *)(long)i))) {
-            navigator_back();
-            return -2;
-        }
-        pl.labels[i] = widget_lookup(pl.items[i], LABELS[i], 0);
+    if (vs_bind(&pl.vs, pl.win, pl_on_item, pl_on_scrim,
+                1u << 0 | VS_WITH_VIEWS | VS_WITH_SEARCH | VS_WITH_SELECT | VS_WITH_ACT2 | VS_WITH_ACT3)) {
+        navigator_back(); /* an asset that is not ours */
+        return -2;
     }
-    pl_menu(0);
+    vs_dated(&pl.vs, 0); /* Name reads A-Z / Z-A */
+    pl.rev = set_read(PLAYLISTS_SORT_FILE, '0') == 'a';
+    vs_offer(&pl.vs, PL_ROWS_MORE);
     if (pl.del) pod_centre_pill(pl.del, PL_BAR_PILL_W);
     pl.tmp = calloc((GRID_COVER / 2) * (GRID_COVER / 2),
                     4); /* one quadrant of a mosaic; without it a mosaic falls back to its first cover */
@@ -1094,9 +1176,8 @@ static int pl_open_page(void) {
     if (pl_v() && !pick.star) pick.star = pl_make_star();
     pl.list = pl_v() || !pl_use_grid(); /* the picker is always the list (the saved choice is the page's own) */
     pl_shape(pl.list);
-    pl_glyph();
     if (pl_v()) { /* the picker: Back and the title only */
-        pl_show(pl.btn_more, 0), pl_show(pl.btn, 0), pl_show(pl.np, 0);
+        pl_show(pl.btn_more, 0), pl_show(pl.np, 0), pl_show(pl.btn_plactions, 0);
         if (pl.title) widget_resize(pl.title, SG_SELALL_X - NAV_TITLE_X, 22);
         pl_head();
     }

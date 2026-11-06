@@ -121,12 +121,12 @@ def songs_screen(s, pal):
 
 
 def controls_screen(s, pal):
-    """Keyboards' card (a switch on, one off), Album Order's picker rows (the check) and a slider row (the pull-down's drop_bg / drop_fg / drop_dot art)."""
+    """Keyboards' card (a switch on, one off), the Cassette Theme picker's rows (the check) and a slider row (the pull-down's drop_bg / drop_fg / drop_dot art)."""
     kb = PS.draw_page(s, 'm1plus_keyboards', pal=pal)
-    ao = PS.draw_page(s, 'm1plus_albumorder', pal=pal, state={'shown': {'pod_check0'}})
+    ao = PS.draw_page(s, 'm1plus_tapetheme', pal=pal, state={'shown': {'pod_check0'}})
     im = Image.new('RGBA', (W, H), pal.base + (255,))
     im.alpha_composite(kb.crop((0, 0, W, 176)), (0, 0))
-    im.alpha_composite(ao.crop((0, 56, W, 168)), (0, 184))   # the picker's card (Artist checked, Album)
+    im.alpha_composite(ao.crop((0, 56, W, 168)), (0, 184))   # the picker's card (Normal checked, Chrome)
     y = 300; piece = pal.image(s, 'pod_cd_single')
     s.text(im, PS.ST.HDR_X, y + 20, 'Brightness', PS.ST.HDR_PX, pal.ink(rgb(PS.ST.GREY)))
     y += 40

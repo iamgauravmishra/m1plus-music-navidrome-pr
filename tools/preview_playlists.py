@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Approximate PIL mock-up of the Playlists page (patch/playlists.c, docs/modules/playlists.md): the grid of mosaics and the same page with the
-"..." menu open; sample playlists with 4, 2, 3, 1, 0 and 7 albums (the first four are used). Not pixel-exact AWTK.
+list-plus button's and the "..." cards open; sample playlists with 4, 2, 3, 1, 0 and 7 albums (the first four are used). Not pixel-exact AWTK.
 
   preview_playlists.py WORKDIR OUT.png [--lang CODE]
 
@@ -18,8 +18,9 @@ def main():
     ap.add_argument('workdir'); ap.add_argument('out'); ap.add_argument('--lang', default='en_US')
     a = ap.parse_args()
     s = PI.Side(a.workdir, True, a.lang)
-    panels = [('Playlists: grid (the toggle shows the list)', PI.playlists_grid(s)), ('"..." menu open (Delete row pressed)', PI.playlists_grid(s, menu=True, pressed=3)),
-              ('List mode (the toggle shows the grid; row 2 pressed)', PI.playlists_grid(s, list_mode=True)),
+    panels = [('Playlists: grid, list-plus | "..." | Now Playing', PI.playlists_grid(s)), ('Actions card open (Delete Playlists pressed)', PI.playlists_grid(s, menu='actions', pressed=3)),
+              ('"..." card open, grid (Name pressed)', PI.playlists_grid(s, menu='more', pressed=2)), ('"..." card open, list mode', PI.playlists_grid(s, menu='more', list_mode=True, pressed=-1)),
+              ('List mode, Name Z–A', PI.playlists_grid(s, list_mode=True, row_pressed=-1, order='za')), ('Card with Name Z–A ticked', PI.playlists_grid(s, menu='more', pressed=-1, order='za')),
               ('Delete Playlists: select mode (grid), two marked', PI.playlists_grid(s, select={1, 3})),
               ('Select mode in list mode (the rows 30 px to the right), one marked', PI.playlists_grid(s, list_mode=True, row_pressed=-1, select={2}))]
     pad, lab = 12, 20

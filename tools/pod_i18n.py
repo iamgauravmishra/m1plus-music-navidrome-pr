@@ -30,19 +30,12 @@ STOCK = {
     'sset_updatemusic': 'Update Library',
     'cdripper': 'CD Ripper',
     'album': 'Album',
-    'playlist_create': 'New playlist',    # the Playlists page's menu: the stock Playlists page's own row texts
-    'playlist_import': 'Import playlist',
-    'playlist_export': 'Export playlist',
+    'playlist_create': 'New playlist',    # the New playlist keyboard's title (the stock Playlists page's own row text)
     'msg_newplaylists': 'Enter a playlist name',   # the New playlist keyboard's placeholder (the stock keyboard dialog's own hint, patch/playlists.c)
     'msg_playlistfull': 'Playlist Is Full',        # the message boxes of a New playlist that cannot be made (the stock create handler's)
     'msg_playlistexist': 'Playlist Already Exists',
     'msg_addplaylistsuccess': 'Added To Playlist',   # the Daily Mix page's Add disc and the stock playlist picker (@0x53d51c) after a successful add
     'msg_addfavsuccess': 'Added To Fav',   # the picker's Favourites row after a successful add (stock Add button's Favourites path, @0x52822c)
-    'sort_alphabet': 'Alphabetical',           # the Songs page's sort card: the stock sort dialog's five labels, in sort_flag order (patch/songs.c)
-    'sort_filename': 'File name',
-    'sort_format': 'File format',
-    'sort_time_desc': 'Time added (descending)',
-    'sort_time_asc': 'Time added (ascending)',
     'msg_delsong': 'Delete Song?',             # its confirm dialog and the stock message boxes it shows
     'msg_delsongfailed': 'Failed To Delete Song',
     'msg_delsongsuccess': 'Song Deleted',
@@ -115,7 +108,7 @@ TEXT = dict([
        'Desarrollador', 'Sviluppatore', 'นักพัฒนา', 'Programista', 'Разработчик', 'Розробник'),
     _t('Playback', '播放', '播放', '再生', '재생', 'Lecture', 'Wiedergabe',
        'Reproducción', 'Riproduzione', 'การเล่น', 'Odtwarzanie', 'Воспроизведение', 'Відтворення'),
-    # Settings (docs/modules/settings.md): the top page's rows, headers and notes. Rows with a value at the right (Play Mode, Language, Album Order, Theme) have short labels: the value takes the room.
+    # Settings (docs/modules/settings.md): the top page's rows, headers and notes. Rows with a value at the right (Play Mode, Language, Theme) have short labels: the value takes the room.
     _t('Wi-Fi', 'Wi-Fi', 'Wi-Fi', 'Wi-Fi', 'Wi-Fi', 'Wi-Fi', 'Wi-Fi',
        'Wi-Fi', 'Wi-Fi', 'Wi-Fi', 'Wi-Fi', 'Wi-Fi', 'Wi-Fi'),
     _t('Bluetooth', '蓝牙', '藍牙', 'Bluetooth', '블루투스', 'Bluetooth', 'Bluetooth',
@@ -171,8 +164,6 @@ TEXT = dict([
        'Disponible', 'Disponibile', 'ว่าง', 'Dostępne', 'Доступно', 'Доступно'),
     _t('Theme', '主题', '主題', 'テーマ', '테마', 'Thème', 'Design',
        'Tema', 'Tema', 'ธีม', 'Motyw', 'Тема', 'Тема'),
-    _t('Album Order', '专辑排序', '專輯排序', '並び順', '앨범 정렬', 'Tri', 'Sortierung',
-       'Orden', 'Ordine', 'เรียงอัลบั้ม', 'Kolejność', 'Порядок', 'Порядок'),
     _t('Open Shanling Home', '打开山灵主页', '打開山靈主頁', 'Shanling ホームを開く', 'Shanling 홈 열기', 'Accueil Shanling', 'Shanling-Start öffnen',
        'Abrir Inicio Shanling', 'Apri Home Shanling', 'เปิดหน้าหลัก Shanling', 'Otwórz ekran Shanling', 'Открыть экран Shanling', 'Відкрити екран Shanling'),
     _t('Startup', '启动', '啟動', '起動', '시작', 'Démarrage', 'Start',
@@ -185,8 +176,6 @@ TEXT = dict([
        'Una mezcla nueva al abrir Inicio', 'Un nuovo mix alla prossima apertura', 'มิกซ์ใหม่เมื่อเปิดหน้าหลักครั้งถัดไป', 'Nowy miks przy następnym otwarciu', 'Новый микс при следующем открытии', 'Новий мікс при наступному відкритті'),
     _t('New mix when Home opens', '主屏幕打开时生成新精选', '主畫面開啟時產生新精選', 'ホームを開くと新しいミックス', '홈을 열면 새 믹스', "Nouveau mix à l'ouverture", 'Neuer Mix beim Öffnen',
        'Nueva mezcla al abrir Inicio', "Nuovo mix all'apertura", 'มิกซ์ใหม่เมื่อเปิดหน้าหลัก', 'Nowy miks po otwarciu', 'Новый микс при открытии', 'Новий мікс при відкритті'),
-    _t('Albums and Cover Flow', '专辑和封面流', '專輯與封面流', 'アルバムとカバーフロー', '앨범 및 커버 플로우', 'Albums et Cover Flow', 'Alben und Cover Flow',
-       'Álbumes y Cover Flow', 'Album e Cover Flow', 'อัลบั้มและ Cover Flow', 'Albumy i Cover Flow', 'Альбомы и Cover Flow', 'Альбоми та Cover Flow'),
     _t('Applies the next time Cassette Mode opens.', '下次打开磁带模式时生效。', '下次開啟錄音帶模式時生效。', '次回カセットモード起動時に反映', '다음에 카세트 모드를 열 때 적용됩니다.', "S'applique à la prochaine ouverture.", 'Gilt beim nächsten Öffnen.',
        'Se aplica la próxima vez que se abre.', 'Si applica alla prossima apertura.', 'มีผลเมื่อเปิดครั้งถัดไป', 'Zastosowane przy następnym otwarciu.', 'Применится при следующем открытии.', 'Застосується при наступному відкритті.'),
     _t('Off: the device starts on Shanling Home', '关闭：设备启动后进入山灵主页', '關閉：裝置啟動後進入山靈主頁', 'オフ：Shanling ホームで起動', '끔: Shanling 홈으로 시작', "Désactivé : démarre sur l'accueil Shanling", 'Aus: Start im Shanling-Start',
@@ -630,6 +619,36 @@ TEXT = dict([
        'Género', 'Genere', 'ประเภท', 'Gatunek', 'Жанр', 'Жанр'),
     _t('Year', '年份', '年份', '年', '연도', 'Année', 'Jahr',
        'Año', 'Anno', 'ปี', 'Rok', 'Год', 'Рік'),
+    # the Albums "..." card (patch/viewsort.c, docs/modules/albums.md): the Title sort row, the View group (Grid, List) and the direction line under the ticked sort row
+    _t('Title', '标题', '標題', 'タイトル', '제목', 'Titre', 'Titel',
+       'Título', 'Titolo', 'ชื่อเรื่อง', 'Tytuł', 'Название', 'Назва'),
+    # the Songs page's Sort card (the same shared card): File Name beside Title, Format and Recently Added
+    _t('File Name', '文件名', '檔案名稱', 'ファイル名', '파일 이름', 'Nom du fichier', 'Dateiname',
+       'Nombre de archivo', 'Nome file', 'ชื่อไฟล์', 'Nazwa pliku', 'Имя файла', 'Назва файлу'),
+    # the Folders page's Sort card: Date Modified and Type beside Name
+    _t('Date Modified', '修改日期', '修改日期', '更新日', '수정한 날짜', 'Date de modification', 'Änderungsdatum',
+       'Fecha de modificación', 'Data di modifica', 'วันที่แก้ไข', 'Data modyfikacji', 'Дата изменения', 'Дата зміни'),
+    _t('Type', '类型', '類型', '種類', '유형', 'Type', 'Typ',
+       'Tipo', 'Tipo', 'ประเภท', 'Typ', 'Тип', 'Тип'),
+    # the Playlists page's "..." card (the shared view-sort card): short row labels, so the longest languages fit the room after the glyph column
+    _t('New Playlist', '新建歌单', '新增歌單', '新しいプレイリスト', '새 재생 목록', 'Nouvelle playlist', 'Neue Wiedergabeliste',
+       'Nueva lista', 'Nuova playlist', 'เพลย์ลิสต์ใหม่', 'Nowa lista odtwarzania', 'Новый плейлист', 'Новий плейлист'),
+    _t('Import', '导入', '匯入', 'インポート', '가져오기', 'Importer', 'Importieren',
+       'Importar', 'Importa', 'นำเข้า', 'Importuj', 'Импорт', 'Імпорт'),
+    _t('Export', '导出', '匯出', 'エクスポート', '내보내기', 'Exporter', 'Exportieren',
+       'Exportar', 'Esporta', 'ส่งออก', 'Eksportuj', 'Экспорт', 'Експорт'),
+    _t('Grid', '网格', '網格', 'グリッド', '격자', 'Grille', 'Raster',
+       'Cuadrícula', 'Griglia', 'ตาราง', 'Siatka', 'Сетка', 'Сітка'),
+    _t('List', '列表', '列表', 'リスト', '목록', 'Liste', 'Liste',
+       'Lista', 'Elenco', 'รายการ', 'Lista', 'Список', 'Список'),
+    _t('A–Z', 'A–Z', 'A–Z', 'A–Z', 'A–Z', 'A–Z', 'A–Z',
+       'A–Z', 'A–Z', 'ก–ฮ', 'A–Z', 'А–Я', 'А–Я'),
+    _t('Z–A', 'Z–A', 'Z–A', 'Z–A', 'Z–A', 'Z–A', 'Z–A',
+       'Z–A', 'Z–A', 'ฮ–ก', 'Z–A', 'Я–А', 'Я–А'),
+    _t('Newest First', '最新优先', '最新優先', '新しい順', '최신순', "Plus récent d'abord", 'Neueste zuerst',
+       'Más recientes primero', 'Più recenti prima', 'ใหม่สุดก่อน', 'Najnowsze najpierw', 'Сначала новые', 'Спочатку нові'),
+    _t('Oldest First', '最旧优先', '最舊優先', '古い順', '오래된 순', "Plus ancien d'abord", 'Älteste zuerst',
+       'Más antiguos primero', 'Meno recenti prima', 'เก่าสุดก่อน', 'Najstarsze najpierw', 'Сначала старые', 'Спочатку старі'),
     # Screenshot (the Extras row; the toasts of patch/shot.c: the countdown is 5 s or 10 s, chosen on the confirm dialog's buttons)
     _t('Screenshot', '截图', '截圖', 'スクリーンショット', '스크린샷', "Capture d'écran", 'Screenshot',
        'Captura de pantalla', 'Screenshot', 'ภาพหน้าจอ', 'Zrzut ekranu', 'Скриншот', 'Знімок екрана'),
@@ -925,6 +944,14 @@ TEXT = dict([
        'Por género', 'Per genere', 'ตามแนวเพลง', 'Według gatunku', 'По жанрам', 'За жанрами'),
     _t('Countries', '国家和地区', '國家和地區', '国', '국가', 'Pays', 'Länder',
        'Países', 'Paesi', 'ประเทศ', 'Kraje', 'Страны', 'Країни'),
+    _t('Search Albums', '搜索专辑', '搜尋專輯', 'アルバムを検索', '앨범 검색', 'Rechercher un album', 'Alben durchsuchen',
+       'Buscar álbumes', 'Cerca album', 'ค้นหาอัลบั้ม', 'Szukaj albumów', 'Поиск альбомов', 'Пошук альбомів'),
+    _t('Search Songs', '搜索歌曲', '搜尋歌曲', '曲を検索', '노래 검색', 'Rechercher un titre', 'Titel suchen',
+       'Buscar canciones', 'Cerca brani', 'ค้นหาเพลง', 'Szukaj utworów', 'Поиск песен', 'Пошук пісень'),
+    _t('Search Artists', '搜索歌手', '搜尋歌手', 'アーティストを検索', '아티스트 검색', 'Rechercher un artiste', 'Künstler durchsuchen',
+       'Buscar artistas', 'Cerca artisti', 'ค้นหาศิลปิน', 'Szukaj wykonawców', 'Поиск исполнителей', 'Пошук виконавців'),
+    _t('Name', '名称', '名稱', '名前', '이름', 'Nom', 'Name',
+       'Nombre', 'Nome', 'ชื่อ', 'Nazwa', 'Название', 'Назва'),
     _t('Search Stations', '搜索电台', '搜尋電台', '局を検索', '방송국 검색', 'Rechercher une station', 'Sender suchen',
        'Buscar emisoras', 'Cerca stazioni', 'ค้นหาสถานี', 'Szukaj stacji', 'Поиск станций', 'Пошук станцій'),
     _t('Radio Browser', '电台浏览', '電台瀏覽', 'ラジオブラウザ', '라디오 브라우저', 'Navigateur radio', 'Radiobrowser',

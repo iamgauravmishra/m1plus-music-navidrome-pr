@@ -206,7 +206,7 @@ def paint_tests(ctx):
         cov = [c for y in range(DOTS) for x in range(DOTS) for c in [(x * 11 + y * 7) % 250 + 3]]
         expect((bw, bh) == (DOTS, DOTS) and all(p == c << 24 | 0x8c8c8c for p, c in zip(px, cov)), 'the "..." bitmap: #8C8C8C with the image\'s coverage as its alpha')
         # select mode: no "...", the text back to x 296
-        SG.click(m, 'btn_select')
+        SG.pick(m, 'select')
         blits, texts, styles, fills = SG.paint(m)
         t = titles_of(texts)
         expect(not dot_blits(blits) and t and all(r[2] == 296 - tx - O['SG_SEL_COL'] for r in t.values()), f'select mode: no "..." and the text ends at 296 as before ({sorted({r[2] for r in t.values()})})')
@@ -229,7 +229,7 @@ def paint_tests(ctx):
         t = titles_of(texts)
         expect(not dot_blits(blits) and t and all(r[2] == 296 - tx for r in t.values()), f'{what}: no "...", the text ends at 296 as before')
         calls = SG.tap(m, 252, lay.row_y(2) + 30)
-        expect(any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls) and SG.vis(m, 'sg_card') == (0, 0), f'{what}: a tap where the "..." would be plays the song')
+        expect(any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls) and SG.vis(m, 'vs_card') == (0, 0), f'{what}: a tap where the "..." would be plays the song')
     # the album page
     for kw, what in ((dict(), 'the album page'),):
         m = AB.album_machine()
@@ -292,7 +292,7 @@ def touch_tests(ctx):
         calls = SG.tap(m, zx, 60)
         expect(SG.vis(m, 'rm_card') == (0, 0), f'{what}: the title block has no "..."')
         # select mode: the tap marks the row
-        SG.click(m, 'btn_select')
+        SG.pick(m, 'select')
         calls = SG.tap(m, zx, y)
         expect(SG.vis(m, 'rm_card') == (0, 0) and ('widget_set_text_utf8', m.widgets['label_title'], '1 Selected') in calls, f'{what}: in select mode a tap in that place marks the row (1 Selected), no menu')
     # an A-Z section header or the pinned header never opens it

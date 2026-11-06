@@ -76,14 +76,16 @@ AR_SAMPLE = {   # the page's sample rows in display order: name -> (the section 
 }
 
 
-def artists_page(s, album_artist=False, other=None, scroll=0, touched=None, to=None):
+def artists_page(s, album_artist=False, other=None, scroll=0, touched=None, to=None, rev=False, card=False):
     """The Artists page as patch/artists.c paints it (docs/modules/artists.md, the Songs page's manner: tools/preview_songs.py's headers, pinned header, rail and bubble): the
     large title (collapsing into the navbar's small one), the sections' letters, 52 px rows (the name 21 px white at x 24, the chevron, a hairline from the text), the rail.
-    The navbar is the asset's with the title and the toggle glyph the payload sets for artist_type (the glyph is the other mode's). other: 'Genres' or 'Composers', the same
-    page on that class: its title, no toggle, the stock order's sections."""
+    The navbar is the asset's (the "..." and Now Playing) with the title the payload sets for artist_type. other: 'Genres' or 'Composers', the same
+    page on that class: its title, the stock order's sections. rev: the Name order Z-A (the sorted rows and sections mirrored, "#" last, the Unknown row last). card: the "..." card open
+    (Search Artists, the Show group and Name on Artists; Name alone on the others), Name's direction line from rev."""
     import preview_songs as PS
     O_ = PS.O
     names = AR_SAMPLE[other or ('album' if album_artist else 'artists')]
+    if rev: names = [n for n in names if not n.startswith('Unknown')][::-1] + [n for n in names if n.startswith('Unknown')]
     title = other or ('Album Artists' if album_artist else 'Artists')
     top, row, hdr = O_['SG_TITLE_H'], 52, O_['SG_HDR_H']
     def letter(n):
@@ -115,7 +117,7 @@ def artists_page(s, album_artist=False, other=None, scroll=0, touched=None, to=N
         s.text(tall, 24, ry + row / 2, s.clip(n, 21, 252 - 24), 21)
         tall.alpha_composite(chev, (262, ry + (row - 16) // 2))
     scroll = max(0, min(dict(secs)[to] if to else scroll, end - 400))   # to: the rail's jump, section `to`'s header at the window's top
-    im = PI.pod_page(s, 'm1plus_artists', 0, title=' ', icon='' if other else 'pod_nav_artist' if album_artist else 'pod_nav_albumartist')
+    im = PI.pod_page(s, 'm1plus_artists', 0, title=' ')
     im = im.crop((0, 0, 320, 50)); full = Image.new('RGBA', (320, 450), (0, 0, 0, 255)); full.paste(im, (0, 0))
     full.alpha_composite(tall.crop((0, scroll, 320, min(end, scroll + 400))), (0, 50))
     if scroll > O_['SG_COLLAPSE']:   # the large title has scrolled away: the navbar's small title, cut to its 156 px
@@ -137,6 +139,12 @@ def artists_page(s, album_artist=False, other=None, scroll=0, touched=None, to=N
         full.paste(Image.new('RGBA', (PS.BUBBLE, PS.BUBBLE), (0x3A, 0x3A, 0x3A, 255)), (x, y0), mask.resize((PS.BUBBLE, PS.BUBBLE), Image.LANCZOS))
         full.paste(Image.new('RGBA', (PS.BUBBLE, PS.BUBBLE), (0x26, 0x26, 0x26, 255)), (x, y0), inner.resize((PS.BUBBLE, PS.BUBBLE), Image.LANCZOS))
         s.text(full, x + PS.BUBBLE / 2, y0 + PS.BUBBLE / 2, touched, 56, anchor='m')
+    if card:   # the "..." card over the dimmed page (patch/viewsort.c, patch/artists.c): the sort row's direction line under Name
+        full.alpha_composite(Image.new('RGBA', full.size, (0, 0, 0, 0x82)))
+        name = ('Name', None, True, PS.tr(s, 'Z–A' if rev else 'A–Z'))
+        if other: PI.view_card(s, full, [name], 'vs_glass1', ())
+        else: PI.view_card(s, full, [('Search Artists', 'pod_ic_vssearch', False, None), ('Artists', 'pod_ic_vsartist', not album_artist, None),
+                                     ('Album Artists', 'pod_ic_vsalbumartist', album_artist, None), name], 'vs_glass4', (1, 3))
     return full
 
 
@@ -326,25 +334,49 @@ def main():
     art0, art1 = artists_page(s).convert('RGB'), artists_page(s, True).convert('RGB')
     art2 = artists_page(s, to='K', touched='K').convert('RGB')
     gen, comp = artists_page(s, other='Genres').convert('RGB'), artists_page(s, other='Composers').convert('RGB')
-    for name, panel_im in (('artists-top', art0), ('artists-jump-K', art2), ('artists-album', art1), ('artists-genres', gen)):   # the panels alone, for tools/peek.py crops
+    art_card, art_card_z, gen_card = artists_page(s, card=True).convert('RGB'), artists_page(s, rev=True, card=True).convert('RGB'), artists_page(s, other='Genres', card=True).convert('RGB')
+    art_z, art_z_k = artists_page(s, rev=True).convert('RGB'), artists_page(s, rev=True, to='K', touched='K').convert('RGB')
+    for name, panel_im in (('artists-top', art0), ('artists-jump-K', art2), ('artists-album', art1), ('artists-genres', gen), ('artists-card', art_card), ('artists-card-za', art_card_z), ('genres-card', gen_card), ('artists-za', art_z)):   # the panels alone, for tools/peek.py crops
         panel_im.save(os.path.join(os.path.dirname(os.path.abspath(out)), name + '.png'))
+    import preview_songs as PSG   # the Songs page's Sort card (patch/viewsort.c): Title A-Z, Recently Added Oldest First, Title Z-A over the reversed list
+    keep = PSG.SONGS
+    songs_cards = [('songs-top', PSG.page(s)), ('songs-card', PSG.page(s, menu=True)), ('songs-card-recent', PSG.page(s, menu=True, order=(3, True))),
+                   ('songs-recent-card', PSG.page(s, title=PSG.tr(s, 'Recently Added'), menu='recent')), ('songs-recent-albums-card', PSG.page(s, title=PSG.tr(s, 'Recently Added'), menu='albums')),
+                   ('songs-list-card', PSG.page(s, title=PSG.tr(s, 'Favorites'), menu='list')), ('songs-genre-card', PSG.page(s, scroll=200, title='Alternative & Punk', menu='select', search=False)),
+                   ('songs-artist', PSG.page(s, scroll=200, title='Miles Davis', artist=True))]
+    PSG.SONGS = keep[::-1]
+    songs_cards.append(('songs-card-za', PSG.page(s, menu=True, order=(0, True))))
+    songs_cards.append(('songs-za', PSG.page(s)))
+    PSG.SONGS = keep
+    for name, panel_im in songs_cards:
+        panel_im.convert('RGB').save(os.path.join(os.path.dirname(os.path.abspath(out)), name + '.png'))
+    for name, panel_im in (('albums-artist-grid', PI.albums_grid(s, artist=True)), ('albums-artist-list', PI.albums_list(s, pressed=-1, artist=True))):   # the panels alone, for tools/peek.py crops
+        panel_im.convert('RGB').save(os.path.join(os.path.dirname(os.path.abspath(out)), name + '.png'))
     pad, lab = 12, 20
     cols = [('Home page 1', home), ('Home page 3: the M1+ Music icon', home3), ('M1+ Music menu as Home (no top bar)', menu),
             ('Mini player bar: playing, long title', bar1), ('Mini player bar: paused, no cover', bar2), ('Mini player bar: backdrop blur off', bar3),
             ('Home menu with the Recently Played shelf below the rows (list at the top)', sh6top), ('Scrolled to the end: the shelf above the bar, 6 albums (one with no cache file)', sh6), ('Scrolled to the end: 5 albums', sh5), ('Scrolled to the end: 3 albums', sh3),
             ('Scrolled to the end: 1 album', sh1),
-            ('Settings page', sett), ('Settings > Library (Album Order: Artist)', cfset), ('Settings > Home Screen', homeset),('Shuffle page', shuf),
+            ('Settings page', sett), ('Settings > Library', cfset), ('Settings > Home Screen', homeset),('Shuffle page', shuf),
             ('Settings > Main Menu (default: Cover Flow ... Playlists shown, the rest hidden)', mm_def), ('Main Menu after customising (Shuffle, Genres hidden)', mm_cust),
             ('Settings > Appearance > Control Center (default: all eight tiles)', pd_def), ('Control Center: Button Lock, Wi-Fi, Playback, Gain shown; the rest hidden', pd_cust),
             ('Settings > Extras (default: every hidden item listed, under the headers)', xc_def), ('Settings > Extras: Shuffle and Favorites turned off', xc_cust),
             ('The menu with that list', menu_cust), ('Extras (default menu: Play, Library, Collections, Tools under their headers)', extras),
-            ('Extras with Shuffle, Genres hidden, Shuffle and Favorites off', extras_cust), ('Artists: Artist mode (toggle shows Album Artist)', art0), ('Artists: the rail jumps to K (bubble, pinned header, the small title)', art2), ('Artists: Album Artist mode (toggle shows Artist)', art1), ('Genres (the Artists page on class 0xf006: no toggle)', gen), ('Composers (class 0xf005)', comp),
+            ('Extras with Shuffle, Genres hidden, Shuffle and Favorites off', extras_cust), ('Artists: Artist mode (navbar: "..." | Now Playing)', art0), ('Artists: the "..." card (Search Artists, Show: Artists ticked, Name A–Z)', art_card), ('Artists: the card with Name Z–A', art_card_z), ('Artists: Name Z–A (sections Z to A, # last)', art_z), ('Artists: Z–A, the rail jumps to K', art_z_k), ('Genres: the card (Name alone)', gen_card), ('Artists: the rail jumps to K (bubble, pinned header, the small title)', art2), ('Artists: Album Artist mode', art1), ('Genres (the Artists page on class 0xf006: no toggle)', gen), ('Composers (class 0xf005)', comp),
             ('Artist Cover Flow', panel(cf, 2, 3)),
-            ('Albums: grid view (toggle shows the list)', PI.albums_grid(s).convert('RGB')),
-            ('Albums: list mode (toggle shows the grid; row 2 pressed)', PI.albums_list(s).convert('RGB')),
+            ('Albums: grid view (navbar: Cover Flow, "...", Now Playing)', PI.albums_grid(s).convert('RGB')),
+            ('Albums: list mode (row 2 pressed)', PI.albums_list(s).convert('RGB')),
+            ("An artist's albums: grid, Play / Shuffle under the large title, the year under each album", PI.albums_grid(s, artist=True).convert('RGB')),
+            ("An artist's albums: list mode", PI.albums_list(s, pressed=-1, artist=True).convert('RGB')),
+            ('Albums: grid scrolled past the large title (the small title in the navbar)', PI.albums_grid(s, scroll=120).convert('RGB')),
+            ('Albums: list scrolled past the large title (the small title in the navbar)', PI.albums_list(s, scroll=120).convert('RGB')),
+            ('Albums: the "..." card (Search Albums first; Grid and Artist ticked, A–Z)', PI.albums_card(s).convert('RGB')),
+            ('Albums: the "..." card over the list (List and Recently Added ticked, Oldest First)', PI.albums_card(s, list_mode=True, current=2, rev=True).convert('RGB')),
+            ('Albums, one artist: the "..." card (no Artist row, 288 px; Title ticked)', PI.albums_card(s, current=0, scoped=True).convert('RGB')),
             ('Playlists: a 2x2 mosaic of each playlist\'s albums (4, 2, 3, 1, 0 and 7 albums)', PI.playlists_grid(s).convert('RGB')),
-            ('Playlists: the "..." menu (New, Import, Export, Delete)', PI.playlists_grid(s, menu=True).convert('RGB')),
-            ('Playlists: list mode (toggle shows the grid; row 2 pressed)', PI.playlists_grid(s, list_mode=True).convert('RGB')),
+            ('Playlists: the list-plus button\'s card (New Playlist, Import, Export, Delete Playlists)', PI.playlists_grid(s, menu='actions').convert('RGB')),
+            ('Playlists: the "..." card (Grid, List, Name)', PI.playlists_grid(s, menu='more', pressed=-1).convert('RGB')),
+            ('Playlists: list mode (row 2 pressed)', PI.playlists_grid(s, list_mode=True).convert('RGB')),
             ('Pull-down, toggles and sliders', ctl),
             ('Status bar: real (top), pull-down; below, their difference x16 (' + ('identical' if bars_same else 'DIFFER') + ')', bars),
             ('Lock screen over the default wallpaper (playing, idle + charging)', lock),

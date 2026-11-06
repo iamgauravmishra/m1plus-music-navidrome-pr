@@ -30,7 +30,6 @@ enum {
     ACT_STARTUP = 10,
     ACT_ALBUMS = 11,
     ACT_LANDSCAPE = 12,
-    ACT_SORT = 13,
     ACT_SHOT = 14,
     ACT_REBUILD = 15,
     ACT_SHELF = 16,
@@ -46,7 +45,6 @@ enum {
     ACT_KB_EN = 27,
     ACT_KB_ZH = 28,
     ACT_STOCK = 29,
-    ACT_SORTSET = 30,
     ACT_THEMESET = 31,
     ACT_INFO = 33,
     ACT_PCSEARCH = 34,
@@ -122,8 +120,8 @@ enum {
     INFO_CAP,
     INFO_FREE,
     INFO_CC, /* the Cache page's seven Covers values start here: homecover_stat(kind - INFO_CC) */
-    INFO_SF = INFO_CC + 7, /* the Settings Files page's 29 values: setfiles_stat(kind - INFO_SF) */
-    INFO_SFOLD = INFO_SF + 32, /* the Unsupported Files count (setfiles_old_count), above those rows */
+    INFO_SF = INFO_CC + 7, /* the Settings Files page's 35 values: setfiles_stat(kind - INFO_SF) */
+    INFO_SFOLD = INFO_SF + 35, /* the Unsupported Files count (setfiles_old_count), above those rows */
     INFO_DUR = INFO_SFOLD + 1 /* the Cache page's Measured Tracks: dur_stat (patch/durations.c) */
 };
 
@@ -133,7 +131,6 @@ enum {
     VK_BLUETOOTH,
     VK_PLAYMODE,
     VK_EQ,
-    VK_SORT,
     VK_THEME,
     VK_RECORD,
     VK_VTHEME,
@@ -147,7 +144,7 @@ enum {
  * stage's POD_PAGES/POD_PAGE_COUNT tables and the constants POD_ENTRY_ID and POD_ENTRY_PAGE. */
 #include "stock.h"
 #include "pages.h"
-#include "covercache.h" /* the Sort setting (cc_sort_artist, cc_sort_set) */
+#include "covercache.h"
 #include "durations.h" /* Clear Track Durations */
 
 /* The stock Home dispatcher reads only the clicked icon's name (widget_t + W_NAME): it atoi()s it
@@ -324,9 +321,7 @@ __attribute__((noinline)) static void reset_all_ask(void) {
 static void pick_choose(const struct pod_row *row);
 
 static int is_pick(const struct pod_row *row) { /* the pickers' check rows */
-    return row->action == ACT_SORTSET || row->action == ACT_THEMESET || row->action == ACT_RECSET ||
-           row->action == ACT_VTHSET || row->action == ACT_BGSET || row->action == ACT_ACCENTSET ||
-           row->action == ACT_REGIONSET;
+    return row->action == ACT_THEMESET || row->action == ACT_RECSET || row->action == ACT_VTHSET || row->action == ACT_BGSET || row->action == ACT_ACCENTSET || row->action == ACT_REGIONSET;
 }
 
 static int on_row(void *ctx, void *e) {
@@ -335,8 +330,7 @@ static int on_row(void *ctx, void *e) {
     if (!row) return RET_OK;
     if (row->action == ACT_HOME)
         home_open(row->arg);
-    else if (row->action == ACT_PAGE || row->action == ACT_SORT || row->action == ACT_CTHEME ||
-             row->action == ACT_VREC || row->action == ACT_VTHEME || row->action == ACT_BG ||
+    else if (row->action == ACT_PAGE || row->action == ACT_CTHEME || row->action == ACT_VREC || row->action == ACT_VTHEME || row->action == ACT_BG ||
              row->action == ACT_ACCENT || row->action == ACT_REGION) /* the value rows open their picker page */
         open_page(row->arg, 0);
     else if (row->action == ACT_PLAYER)
@@ -510,8 +504,6 @@ static void value_text(void *label, int kind) {
     else if (kind == VK_EQ)
         key = *(volatile unsigned char *)EQ_FLAG && get_equalizer_preset_name(*(volatile int *)EQ_MODE, buf) ? buf
                                                                                                              : "Off";
-    else if (kind == VK_SORT)
-        key = cc_sort_artist() ? "Artist" : "album"; /* "album": the stock key for Album */
     else if (kind == VK_THEME)
         key = tape_theme() == 1 ? "Chrome" : tape_theme() == 2 ? "Metal" : "Normal";
     else if (kind == VK_RECORD)
@@ -590,7 +582,6 @@ static void info_text(void *label, int kind) {
 
 static int row_value(const struct pod_row *row) {
     return row->action == ACT_STOCK    ? POD_STOCK[row->arg].value
-           : row->action == ACT_SORT   ? VK_SORT
            : row->action == ACT_CTHEME ? VK_THEME
            : row->action == ACT_VREC   ? VK_RECORD
            : row->action == ACT_VTHEME ? VK_VTHEME
@@ -600,10 +591,9 @@ static int row_value(const struct pod_row *row) {
                                        : VK_NONE;
 }
 
-/* The chosen picker row: the album order (arg 1 Artist, 0 Album), the cassette theme or the background. */
+/* The chosen picker row: the cassette theme, the vinyl record or base, the background or the accent. */
 static int pick_chosen(const struct pod_row *row) {
-    return row->action == ACT_SORTSET     ? row->arg == (cc_sort_artist() != 0)
-           : row->action == ACT_RECSET    ? row->arg == vinyl_record()
+    return row->action == ACT_RECSET      ? row->arg == vinyl_record()
            : row->action == ACT_BGSET     ? row->arg == pal_bg_mode()
            : row->action == ACT_ACCENTSET ? row->arg == pal_accent_saved()
            : row->action == ACT_REGIONSET ? row->arg == pcregion_saved()
@@ -676,14 +666,13 @@ void pod_page_refresh(int index) {
     if (index >= 0 && index < POD_PAGE_COUNT && pod_fg[index]) page_refresh(pod_fg[index], &POD_PAGES[index]);
 }
 
-/* A picker row (Album Order, Cassette Theme, Record, Background, Accent): choose it (saved first: a failed save leaves the old choice and its check), then the checks follow. */
+/* A picker row (Cassette Theme, Record, Background, Accent): choose it (saved first: a failed save leaves the old choice and its check), then the checks follow. */
 static void pick_choose(const struct pod_row *row) {
     void *win = (void *)0;
     int i;
     for (i = 0; i < POD_PAGE_COUNT; i++)
         if (POD_PAGES[i].rows && row >= POD_PAGES[i].rows && row < POD_PAGES[i].rows + POD_PAGES[i].count) {
-            if ((row->action == ACT_SORTSET     ? cc_sort_set(row->arg)
-                 : row->action == ACT_RECSET    ? vinyl_record_set(row->arg)
+            if ((row->action == ACT_RECSET      ? vinyl_record_set(row->arg)
                  : row->action == ACT_BGSET     ? pal_bg_set(row->arg)
                  : row->action == ACT_ACCENTSET ? pal_accent_set(row->arg)
                  : row->action == ACT_REGIONSET ? pcregion_set(row->arg)

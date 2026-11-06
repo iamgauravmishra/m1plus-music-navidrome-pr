@@ -15,6 +15,9 @@ PITCH = CELL + RGAP
 CPITCH = COVER + GAP
 SVW, CW = 310, 320
 SC_YOFF, SC_VH = O['SC_YOFF'], 0x7c
+CARD_WIDGETS = tuple(dict.fromkeys(VS_WIDGETS + ('vs_item8', 'vs_item9', 'vs_label8', 'vs_label9', 'vs_glyph8', 'vs_glyph9')))   # the shared "..." card's widgets (btn_more among them) and the Playlists asset's two extra action rows
+CARD_TEXTS = ('Name', 'Name', 'Name', 'Name', 'Grid', 'List') + tuple(pod_pages.PLAYLIST_MENU)   # vs_label0..9
+A_NEW, A_IMPORT, A_EXPORT, A_DELETE, V_GRID, V_LIST = 'vs_item6', 'vs_item7', 'vs_item8', 'vs_item9', 'vs_item4', 'vs_item5'
 HALF = COVER // 2
 REC_DISC = O['REC_DISC']
 UI = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_playlists.bin') if WORK else None
@@ -83,12 +86,12 @@ class PM:
 
     def __new__(cls, lists, albums=8, missing=(), other_artist=(), window=0x20001000):
         m = LabelMachine()
-        m.fs[CFSORT_FILE] = b'0\n'
+        m.fs[SORT_FILE] = b'0\n'
         m.load_image = 0
-        for w in ('btn_return', 'btn_backtoplayer', 'btn_more', 'btn_albumview', 'label_row_title', 'label_row_sub', 'pl_scrim', 'pl_card', 'view_grid', 'label_status', 'label_grid_title', 'label_grid_sub',
-                  'pl_item0', 'pl_item1', 'pl_item2', 'pl_item3', 'pl_label0', 'pl_label1', 'pl_label2', 'pl_label3', 'label_title', 'btn_selall', 'pl_bar', 'pl_del'): Machine.widget(m, w)
+        for w in ('btn_return', 'btn_backtoplayer', 'label_row_title', 'label_row_sub', 'view_grid', 'label_status', 'label_grid_title', 'label_grid_sub', 'label_title', 'btn_selall', 'pl_bar', 'pl_del', 'btn_plactions') + CARD_WIDGETS: Machine.widget(m, w)
         m.label_text[m.widgets['pl_del']] = 'Delete'   # the text the asset gives the pill
-        for i, text in enumerate(pod_pages.PLAYLIST_MENU): m.label_text[m.widgets[f'pl_label{i}']] = text
+        for i, text in enumerate(CARD_TEXTS): m.label_text[m.widgets[f'vs_label{i}']] = text
+        for i in range(4): m.label_text[m.widgets[f'vs_sub{i}']] = 'A–Z'
         m.canvas = m.alloc(0x80); m.oy_canvas = m.canvas
         m.images = {'p_default': (24, 24, bytes((0x40, 0x40, 0x40, 255)) * (24 * 24)), 'unselect': (26, 26, struct.pack('<I', 0xff111111) * 676),
                     'selected': (26, 26, struct.pack('<I', 0xff2222ee) * 676)}
@@ -200,66 +203,30 @@ def tap(m, x, y, dx=0, dy=0):
     return list(m.calls)
 
 
-GP = 0xa03ed0
-DIM = 130    # the scrim's alpha: Now Playing's More sheet's highlight (tools/mod_lists.py PM_HIGHLIGHT)
-
-
-def glass_checks(expect, tree, scrim, card, items):
-    """The menu's glass: pl_glass.png is the generator's (Now Playing's More sheet's fill, all four corners), its middle third the same in every
-    column (patch3_x stretches it), the card draws it patch3_x over no fill, the scrim dims the page as the sheet's highlighter does; the stock
-    code draws patch3_x as assumed; white labels keep 7:1 at rest and pressed over black and over white under the dim."""
-    import io, mod_icons
-    from PIL import Image
-    w, h, r = mod_icons.GLASS_MENU
-    raw_ = open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx/pl_glass.png'), 'rb').read()
-    gen = mod_icons.glass_image(w, h, r, fill=mod_icons.GLASS_SHEET_FILL)
-    expect(raw_ == open(os.path.join(mod_icons.PNG, 'pl_glass.png'), 'rb').read() and same_pixels(raw_, gen) and (w, h, r) == (72, card.h, pod_ui.PL_CARD_R),
-           f'pl_glass.png is the generator output pixel for pixel: {w}x{h} (the card\'s height), r {r}, the sheet\'s fill {mod_icons.GLASS_SHEET_FILL[2]}')
-    g = Image.open(io.BytesIO(raw_)).convert('RGBA')
-    a = lambda x, y: g.getpixel((x, y))[3]
-    third = w // 3
-    expect(all(a(x, y) == 0 for x, y in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1))) and a(w // 2, h // 2) >= 0.85 * 255 and r <= third
-           and all(len({g.getpixel((x, y)) for x in range(third, w - third)}) == 1 for y in range(h)),
-           f'pl_glass: four transparent corners (r {r} inside the outer thirds of {third} px), the middle third the same in every column (a stretch is exact)')
-    expect(all(card.get(f'style:{st}:bg_image') == 'pl_glass' and card.get(f'style:{st}:bg_image_draw_type') == 'patch3_x' and card.get(f'style:{st}:bg_color') == '#00000000'
-               and card.get(f'style:{st}:round_radius') is None for st in pod_ui.STATES)
-           and (card.x + card.w, card.y, card.w) == (pod_ui.PL_CARD_RIGHT, pod_ui.PL_CARD_Y, pod_ui.PL_CARD_MAX) == (311, 52, 292),
-           'the card is the glass image drawn patch3_x over no fill, at its widest in the asset (292 px), its right edge at 311 (the navbar glass\'s), 6 px under the glass')
-    expect(all(scrim.get(f'style:{st}:bg_color') == '#%08X' % DIM for st in pod_ui.STATES) and DIM == int(pod_ui.PL_DIM[-2:], 16),
-           f'the scrim dims the page by {DIM}/255, as Now Playing\'s More sheet\'s highlighter')
+def glass_users(expect):
+    """pl_glass.png (the old Playlists menu's pane) is no longer the Playlists page's: the "..." card is the shared view-sort card; the two dialogs that borrow pl_glass still use it."""
     users = []
     ui_root = os.path.join(WORK, 'rootfs', 'release/assets')
     for base, _, files in os.walk(ui_root):
         users += [os.path.relpath(os.path.join(base, f), ui_root) for f in files if f.endswith('.bin') and b'pl_glass' in open(os.path.join(base, f), 'rb').read()]
-    expect(sorted(users) == ['default/raw/ui/m1plus_playlists.bin', 'default/raw/ui/m1plus_podcasts.bin', 'default/raw/ui/m1plus_update.bin'], f'pl_glass is used by the Playlists page and the two dialogs that borrow its card (the Podcasts refresh, the Software Update download popup) only ({users})')
-    # the stock code: an inline bg_image_draw_type name is normalised by image_draw_type_find (style_normalize_value @0x65a1f4: strstr "image_draw_type"),
-    # "patch3_x" is 13 in its table (@0x9050d8), canvas_draw_image_ex's case 13 (jump table @0x75ce40) calls canvas_draw_image_patch3_x (@0x647a08),
-    # which keeps min(dst.w, img.w) / 3 at each end (li $v0, 3; div @0x647b0c) and stretches the middle
-    m = Machine()
-    s32 = lambda v: v - (1 << 32) if v >> 31 else v
-    case13 = (GP + s32(m.word(0x75ce40 + 13 * 4))) & 0xffffffff
-    ins = m.word(case13)
-    expect(m.read_cstr(0x75dee0) == 'image_draw_type' and m.word(0x65a25c) & 0xffff == 0xdee0 and m.read_cstr(m.word(0x9050d8 + 14 * 12)) == 'patch3_x'
-           and m.word(0x9050d8 + 14 * 12 + 8) == 13 and case13 == 0x649404 and ins >> 16 == 0x8f99 and m.word((GP + s32(ins & 0xffff | (0xffff0000 if ins & 0x8000 else 0))) & 0xffffffff) == 0x647a08
-           and (m.word(0x647b0c), m.word(0x647b14)) == (0x24020003, 0x0222001a),
-           'stock draws an inline patch3_x background as canvas_draw_image_patch3_x, both ends a third of the image wide (pinned words)')
-    # contrast: the glass (middle column, every label row) over black and over white under the dim, at rest and pressed
-    press = 0x10 / 255
-    worst = 99
-    for level in (0, round(255 * (255 - DIM) / 255)):
-        for pressed in (False, True):
-            for it in items:
-                for y in range(it.y + (it.h - 22) // 2, it.y + (it.h + 22) // 2):   # the text band (18 px glyphs, centred), as playmore measures each label's box
-                    p = g.getpixel((w // 2, y)); al = p[3] / 255
-                    c = [al * p[i] + (1 - al) * level for i in range(3)]
-                    if pressed: c = [press * 255 + (1 - press) * v for v in c]
-                    worst = min(worst, contrast((255, 255, 255), c))
-    expect(worst >= 7, f'white labels on the glass (their 22 px text band): worst {worst:.1f}:1 over black and over white under the dim, at rest and pressed (floor 7:1)')
+    expect(sorted(users) == ['default/raw/ui/m1plus_podcasts.bin', 'default/raw/ui/m1plus_update.bin'], f'pl_glass is used by the two dialogs that borrow its card (the Podcasts refresh, the Software Update download popup) only ({users})')
 
 
 def vis(m, name):
     w = m.widgets[name]
     return m.props.get((w, 'visible'), 1), m.props.get((w, 'sensitive'), 1)
+
+
+def glyph(m):
+    """What the old toggle showed: the glyph of the view a tap switches to (pod_nav_list on the grid), read off the card's tick on Grid / List."""
+    m.click('btn_more'); grid = vis(m, 'vs_tick4')[0]; m.click('vs_scrim')
+    return 'pod_nav_list' if grid else 'pod_nav_grid'
+
+
+def switch(m, count=60000000):
+    """The other view, from the card: the \"...\" opens it, the row of the view not ticked is tapped."""
+    m.click('btn_more'); grid = vis(m, 'vs_tick4')[0]
+    m.click(V_LIST if grid else V_GRID, count=count)
 
 
 MARK, SEL_COL = O['SG_MARK'], O['SG_SEL_COL']
@@ -275,7 +242,7 @@ def select_tests(expect, lists):
     """Delete Playlists is select mode on this page (the Songs page's manner): the navbar's x, "N Selected", Select All, a mark on every cell or row, a bar with the Delete
     pill; Delete runs the stock handler's sequence (@0x53dbcc) on the stock selection vector: the message when nothing is marked, the stock confirm dialog (Yes 0xa),
     batch_delete_file(0xf00b, *pdeq_playlist, the vector, 0, 0), the success message; the page reads again. Where the page cannot do it the stock page opens."""
-    names = ('btn_return', 'btn_more', 'btn_albumview', 'btn_backtoplayer')
+    names = ('btn_return', 'btn_plactions', 'btn_more', 'btn_backtoplayer')
     # the asset: the select widgets start hidden and insensitive, the bar is the Songs page's (black, a hairline, the flat pill), the popup stays last
     tree = awtk_ui.parse(open(UI, 'rb').read())
     sa, bar, line, pill = (tree.find(n) for n in ('btn_selall', 'pl_bar', 'pl_bar_line', 'pl_del'))
@@ -286,19 +253,19 @@ def select_tests(expect, lists):
            and (pill.x, pill.y, pill.w, pill.h) == (O['SG_PILL_X0'], (O['SG_BAR_H'] - O['SG_PILL_H']) // 2, O['PL_BAR_PILL_W'], O['SG_PILL_H']) and pill.get('style:normal:icon') == 'sg_trash'
            and pill.get('style:normal:round_radius') == str(O['SG_PILL_R']), 'the bar is the Songs page\'s (64 px, a hairline) with one Delete pill across it, hidden and insensitive')
     kids = tree.children
-    expect(kids.index(bar) > kids.index(tree.find('playlists_listview')) and kids.index(bar) < kids.index(tree.find('pl_scrim')), 'the bar lies over the list and under the popup')
+    expect(kids.index(bar) > kids.index(tree.find('playlists_listview')) and kids.index(bar) < kids.index(tree.find('vs_scrim')), 'the bar lies over the list and under the popup')
 
     # entering: from the menu's Delete Playlists row (the card closes); the navbar, the bar, the title, the marks
     m = PM(lists, missing=(7,)); open_page(m)
     expect(sum(1 for c in m.calls if c[0] == 'bitmap_create_ex' and c[1:3] == (MARK, MARK)) == 2 and ('widget_set_visible', m.widgets['pl_bar'], 1) not in m.calls,
            'select mode is off at open (the asset starts its widgets hidden and insensitive); the two marks are decoded once')
     settle(m)
-    m.click('btn_more'); m.calls = []
-    m.click('pl_item3')
+    m.click('btn_plactions'); m.calls = []
+    m.click('vs_item9')
     calls = list(m.calls)
     t, back = m.widgets['label_title'], m.widgets['btn_return']
-    expect(vis(m, 'pl_card') == (0, 0) and vis(m, 'btn_selall') == (1, 1) and vis(m, 'pl_bar') == (1, 1) and all(vis(m, n) == (0, 0) for n in ('btn_more', 'btn_albumview', 'btn_backtoplayer')),
-           'the menu closes; Select All and the bar show; "...", the toggle and Now Playing go (hidden and insensitive)')
+    expect(vis(m, 'vs_card') == (0, 0) and vis(m, 'btn_selall') == (1, 1) and vis(m, 'pl_bar') == (1, 1) and all(vis(m, n) == (0, 0) for n in ('btn_plactions', 'btn_more', 'btn_backtoplayer')),
+           'the menu closes; Select All and the bar show; the list-plus button, "..." and Now Playing go (hidden and insensitive)')
     expect(vis(m, 'btn_return') != (0, 0) and m.props.get((back, 'style:normal:icon')) == 'ah_nav_close' and m.props.get((back, 'style:pressed:icon')) == 'ah_nav_close_down',
            'Back becomes the glass x')
     expect(('widget_set_text_utf8', t, '0 Selected') in calls and ('widget_resize', t, O['SG_SELALL_X'] - O['NAV_TITLE_X'], 22) in calls, 'the title reads 0 Selected and runs to Select All')
@@ -341,7 +308,7 @@ def select_tests(expect, lists):
 
     # Delete: nothing marked is the message; No keeps the mode; Yes runs the stock calls in the stock order
     m = PM(lists, missing=(7,)); open_page(m); settle(m); m.setword(SEL_VEC, m.alloc(8))
-    m.click('btn_more'); m.click('pl_item3'); m.calls = []
+    m.click('btn_plactions'); m.click('vs_item9'); m.calls = []
     m.click('pl_del')
     expect([c for c in m.calls if c[0] == 'toast'] == [('toast', 'msg_delplaylistfailed', 1, 2000)] and not [c for c in m.calls if c[0] in ('confirm', 'batch_delete_file')],
            'Delete with nothing marked: the stock message (msg_delplaylistfailed), no dialog, no delete')
@@ -360,26 +327,26 @@ def select_tests(expect, lists):
            'then the success message, select mode is over and the page shows the playlists read again')
     # the stock list changed under the page (a playlist added elsewhere): nothing is deleted, the page reads again
     m = PM(lists, missing=(7,)); open_page(m); settle(m); m.setword(SEL_VEC, m.alloc(8)); m.confirm_yes = True
-    m.click('btn_more'); m.click('pl_item3'); tap(m, *centre(1))
+    m.click('btn_plactions'); m.click('vs_item9'); tap(m, *centre(1))
     PM.add(m, 9, 'Late', [1])
     m.calls = []
     m.click('pl_del')
     expect('batch_delete_file' not in m.names() and 'select_recordinit' not in m.names() and ('loadLocalClassList', O['CLASS_PLAYLISTS']) in m.calls and vis(m, 'pl_bar') == (0, 0),
            'a stock list that is not what the page shows (a playlist added meanwhile): nothing is deleted, the page reads again')
     m = PM(lists, missing=(7,)); open_page(m); settle(m); m.setword(SEL_VEC, m.alloc(8)); m.confirm_yes = True
-    m.click('btn_more'); m.click('pl_item3'); tap(m, *centre(1))
+    m.click('btn_plactions'); m.click('vs_item9'); tap(m, *centre(1))
     m.playlists[1], m.playlists[2] = m.playlists[2], m.playlists[1]   # the same playlists in another order
     m.calls = []
     m.click('pl_del')
     expect('batch_delete_file' not in m.names(), 'the same playlists in another order: nothing is deleted (the marks are of rows, not of ids)')
     m = PM(lists, missing=(7,)); open_page(m); settle(m); m.confirm_yes = True   # no selection vector (never made): no delete
-    m.click('btn_more'); m.click('pl_item3'); tap(m, *centre(1)); m.calls = []
+    m.click('btn_plactions'); m.click('vs_item9'); tap(m, *centre(1)); m.calls = []
     m.click('pl_del')
     expect('batch_delete_file' not in m.names(), 'no stock selection vector: nothing is deleted')
 
     # list mode: a mark column left of each row, the cover and the texts 30 px to the right, taps mark
     m = PM(lists, missing=(7,)); m.fs[PL_FILE] = b'0\n'; open_page(m); settle(m)
-    m.click('btn_more'); m.click('pl_item3')
+    m.click('btn_plactions'); m.click('vs_item9')
     blits, texts, styles = settle(m)
     mk = marks_of(blits)
     expect([(x, y) for x, y, _ in mk] == [(O['LIST_ART_X'] + (SEL_COL - 6 - MARK) // 2, r * O['LIST_ROW_H'] + (O['LIST_ROW_H'] - MARK) // 2) for r in range(6)],
@@ -403,15 +370,15 @@ def select_tests(expect, lists):
     # fallbacks: the stock Playlists page where the page cannot do it, nothing when there is nothing to select
     for what, tweak in (('the select widgets are not in the asset', lambda m: m.widgets.pop('pl_bar')), ('the Delete pill is not in the asset', lambda m: m.widgets.pop('pl_del')),
                         ('Select All is not in the asset', lambda m: m.widgets.pop('btn_selall')), ('the marks do not decode', lambda m: m.images.pop('selected'))):
-        m = PM(lists); tweak(m); open_page(m); settle(m); m.click('btn_more'); m.calls = []
-        m.click('pl_item3')
+        m = PM(lists); tweak(m); open_page(m); settle(m); m.click('btn_plactions'); m.calls = []
+        m.click('vs_item9')
         expect(('stock_resume', '14') in m.calls, f'{what}: Delete Playlists opens the stock Playlists page (Home id 14), as before')
-    m = PM([]); open_page(m); m.click('btn_more'); m.calls = []
-    m.click('pl_item3')
-    expect(('widget_set_visible', m.widgets['pl_bar'], 1) not in m.calls and 'stock_resume' not in m.names() and vis(m, 'pl_card') == (0, 0), 'with no playlist there is nothing to select: the menu closes, nothing else')
+    m = PM([]); open_page(m); m.click('btn_plactions'); m.calls = []
+    m.click('vs_item9')
+    expect(('widget_set_visible', m.widgets['pl_bar'], 1) not in m.calls and 'stock_resume' not in m.names() and vis(m, 'vs_card') == (0, 0), 'with no playlist there is nothing to select: the menu closes, nothing else')
     # the page read again (back from another window) leaves select mode
     m = PM(lists, missing=(7,)); open_page(m); settle(m)
-    m.click('btn_more'); m.click('pl_item3'); tap(m, *centre(1))
+    m.click('btn_plactions'); m.click('vs_item9'); tap(m, *centre(1))
     fn, c = m.bound[(m.window, O['EVT_WINDOW_TO_FG'])]
     m.call(fn, a0=c, a1=0, count=60000000)
     expect(vis(m, 'pl_bar') == (0, 0) and vis(m, 'btn_selall') == (0, 0) and all(vis(m, n) == (1, 1) for n in names), 'the page read again is out of select mode (the marks were of the old list)')
@@ -419,14 +386,14 @@ def select_tests(expect, lists):
     m.call(PSYMS['pl_on_destroy'], count=400000)
     expect(sum(1 for c in m.calls if c[0] == 'bitmap_destroy') >= 2, 'closing frees the marks')
     # the stock hit test on the asset: the bar's pill and Select All are reached where they show, nothing under the bar's top
-    m = PM(lists, missing=(7,)); open_page(m); settle(m); m.click('btn_more'); m.click('pl_item3')
+    m = PM(lists, missing=(7,)); open_page(m); settle(m); m.click('btn_plactions'); m.click('vs_item9')
     root = asset_tree(UI)
     for n in ('btn_selall', 'pl_bar', 'pl_del'):
         if m.props.get((m.widgets[n], 'sensitive')) == 1: node(root, n).flags |= F_SENSITIVE
-    for n in ('btn_more', 'btn_albumview', 'btn_backtoplayer'):
+    for n in ('btn_plactions', 'btn_more', 'btn_backtoplayer'):
         if m.props.get((m.widgets[n], 'sensitive')) == 0: node(root, n).flags &= ~F_SENSITIVE
     node(root, 'view_grid').h = 3000
-    expect(stock_target(m, root, 160, 450 - 32)[-1] == 'pl_del' and stock_target(m, root, 280, 25)[-1] == 'btn_selall' and stock_target(m, root, 190, 25)[-1] != 'btn_albumview',
+    expect(stock_target(m, root, 160, 450 - 32)[-1] == 'pl_del' and stock_target(m, root, 280, 25)[-1] == 'btn_selall' and stock_target(m, root, 240, 25)[-1] != 'btn_more' and stock_target(m, root, 190, 25)[-1] != 'btn_plactions' and stock_target(m, root, 290, 25)[-1] != 'btn_backtoplayer',
            'in select mode the pill and Select All are hit where they show, and the hidden navbar buttons take no touch')
 
 
@@ -444,67 +411,68 @@ def run(ctx):
            and (lv.x, lv.y, lv.w, lv.h) == (0, 50, 320, VIEW_H) and (sv.w, bar.x, bar.w) == (SVW, SVW, 10),
            'the body is list_view > scroll_view > view_grid with the stock mobile scroll bar, as the Albums page')
     more = tree.find('btn_more')
-    tog = tree.find('btn_albumview')
-    expect(more is not None and (more.x, more.w, more.h) == (O['NAV_CF_X'], O['NAV_CF_W'], O['NAV_H']) and more.get('style') == 'img_btn_style'
-           and more.get('style:normal:icon') == 'pod_nav_more' and more.get('style:pressed:icon') == 'pod_nav_more_down'
-           and tree.find('label_title').x + tree.find('label_title').w == more.x == 168 and more.x + more.w == tog.x,
-           'the "..." button sits at the Albums page\'s Cover Flow button (x 168), flush left of the toggle; the title ends at its edge')
-    expect((tog.x, tog.w, tog.h) == (O['NAV_VIEW_X'], O['NAV_VIEW_W'], O['NAV_H']) and tog.get('style:normal:icon') == 'pod_nav_list'
-           and tog.get('style:pressed:icon') == 'pod_nav_list_down' and tog.x + tog.w == tree.find('btn_backtoplayer').x,
-           'the view toggle is the Albums page\'s: x 214, 46x50, the list glyph (the view a tap switches to), flush left of Now Playing')
+    import mod_icons
+    plactions = tree.find('btn_plactions')
+    expect(more is not None and (more.x, more.w, more.h) == (O['NAV_VIEW_X'], O['NAV_VIEW_W'], O['NAV_H']) and more.get('style') == 'img_btn_style'
+           and more.get('style:normal:icon') == 'pod_nav_moremid' and more.get('style:pressed:icon') == 'pod_nav_moremid_down' and more.get('visible') != 'false'
+           and plactions is not None and (plactions.x, plactions.w, plactions.h) == (O['NAV_CF_X'], O['NAV_CF_W'], O['NAV_H']) and plactions.get('style') == 'img_btn_style' and plactions.get('visible') != 'false'
+           and plactions.get('style:normal:icon') == 'pod_nav_listplus' and plactions.get('style:pressed:icon') == 'pod_nav_listplus_down' and plactions.get('style:over:icon') == 'pod_nav_listplus'
+           and tree.find('label_title').x + tree.find('label_title').w == plactions.x == 168 and plactions.x + plactions.w == more.x and more.x + more.w == tree.find('btn_backtoplayer').x,
+           'the navbar is list-plus | "..." | Now Playing as Songs\' Search | "..." | Now Playing: the list-plus button the capsule\'s left cap (x 168), the "..." its middle piece (x 214, pod_nav_moremid), the title ends at 168')
+    expect(mod_icons.NAV_VIEW['pod_nav_listplus'] == 'list-plus' and mod_icons.NAV_VIEW_POS['pod_nav_listplus'] == 'left' and tree.find('btn_plactions').get('name') == 'btn_plactions', 'the list-plus button is the Lucide list-plus (SF Symbols text.badge.plus) as a left glass piece')
+    expect(tree.find('btn_albumview') is None and tree.find('btn_coverflow') is None and tree.find('pl_scrim') is None and tree.find('pl_card') is None and tree.find('pl_item0') is None
+           and tree.find('btn_backtoplayer').get('style:normal:icon') == 'ah_nav_play',
+           'the grid / list toggle and the old popup (pl_scrim, pl_card, pl_item0..3) are gone; Now Playing is the capsule\'s right cap')
     for nm, px, col in (('label_row_title', 21, '#FFFFFF'), ('label_row_sub', 18, '#AAAAAA')):
         w = tree.find(nm)
         expect(w is not None and w.get('visible') == 'false' and w.get('sensitive') == 'false' and w.get('style:normal:font_size') == str(px)
                and w.get('style:normal:text_color') == col, f'{nm}: a hidden label carrying the list rows\' {px} px {col} text style')
-    expect(os.path.isfile(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx/pod_nav_more.png'))
-           and os.path.isfile(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx/pod_nav_more_down.png')), 'its glyph images are in the tree')
+    expect(all(os.path.isfile(os.path.join(WORK, 'rootfs', f'release/assets/default/raw/images/xx/{n}.png')) for n in ('pod_nav_moremid', 'pod_nav_moremid_down', 'pod_nav_listplus', 'pod_nav_listplus_down')), 'the glyph images of the list-plus button and the "..." middle piece are in the tree')
     for nm, px, col in (('label_grid_title', 18, '#FFFFFF'), ('label_grid_sub', 15, '#AAAAAA')):
         w = tree.find(nm)
         expect(w is not None and w.get('visible') == 'false' and w.get('sensitive') == 'false' and w.get('style:normal:font_size') == str(px)
                and w.get('style:normal:text_color') == col, f'{nm}: a hidden label carrying the {px} px {col} text style (the Albums grid\'s)')
-    scrim, card = tree.find('pl_scrim'), tree.find('pl_card')
+    scrim, card = tree.find('vs_scrim'), tree.find('vs_card')
     expect(scrim.type == 'button' and (scrim.x, scrim.y, scrim.w, scrim.h) == (0, 0, 320, 450) and card.type == 'view'
            and all(w.get('visible') == 'false' and w.get('sensitive') == 'false' for w in (scrim, card)),
-           'the popup\'s scrim (the whole window) and card start hidden AND insensitive (hit tests ignore visible)')
+           'the shared card\'s scrim (the whole window) and card start hidden AND insensitive (hit tests ignore visible)')
     kids = tree.children
     expect(kids.index(scrim) > kids.index(lv) and kids.index(scrim) > kids.index(tree.find('navigationbar_view')) and kids.index(card) == kids.index(scrim) + 1,
            'the scrim and the card come after the navbar and the list: they lie over everything')
-    items = [tree.find(f'pl_item{i}') for i in range(4)]
-    expect(all(it is not None and it.type == 'button' and it in card.children and (it.y, it.h, it.w) == (50 * i, 50, card.w) for i, it in enumerate(items))
-           and card.h == 200 and card.y + card.h <= 450 and card.x + card.w <= 320,
-           'four 50 px row buttons fill the 200 px card edge to edge (Now Playing\'s More sheet\'s rows, no padding: the last row as tall as the others)')
-    labels = [next(c for c in it.children if c.type == 'hscroll_label') for it in items]
-    labs = [pod_i18n.shown_english(lab) for lab in labels]
-    expect(labs == list(pod_pages.PLAYLIST_MENU) == ['New playlist', 'Import playlist', 'Export playlist', 'Delete Playlists'], f'menu rows: {labs}')
-    expect(all(c.get('sensitive') == 'false' for it in items for c in it.children), 'the glyphs and labels in the rows are insensitive (the row button takes the tap)')
-    import mod_icons
-    icons = [next((c for c in it.children if c.type == 'image'), None) for it in items]
+    items = [tree.find(f'vs_item{i}') for i in range(10)]
+    expect(all(it is not None and it.type == 'button' and it in card.children and it.w == card.w for it in items)
+           and card.h == 7 * O['VS_ROW_H'] and card.y + card.h <= 450 and card.x + card.w <= 320 and card.y == O['PL_CARD_Y'] and card.x + card.w == O['PL_CARD_RIGHT'],
+           'ten row buttons (the Playlists asset has the two extra action slots 8 and 9) in the 7-row 336 px card, its right edge at 311, under the navbar and above the window\'s foot (52 + 336 = 388 of 450)')
+    expect(tree.find('vs_hair') is not None and tree.find('vs_glyph8') is not None and tree.find('vs_glyph9') is not None and all(tree.find(f'vs_tick{i}') is not None for i in range(6))
+           and tree.find('vs_tick6') is None and tree.find('vs_tick8') is None, 'the hairline, the glyphs of the action rows and the six ticks (no tick on an action row)')
+    labels = {i: next(c for c in items[i].children if c.type == 'hscroll_label') for i in range(10)}
+    expect([pod_i18n.shown_english(labels[i]) for i in range(6, 10)] == list(pod_pages.PLAYLIST_MENU) == ['New Playlist', 'Import', 'Export', 'Delete Playlists']
+           and [pod_i18n.shown_english(labels[i]) for i in (0, 4, 5)] == ['Name', 'Grid', 'List'],
+           'the rows: New Playlist, Import, Export, Delete Playlists (slots 6..9, the list-plus button\'s card), Grid and List (4, 5), Name (0: the "..." card; the other sort slots are in the asset and never offered)')
+    expect(all(c.get('sensitive') == 'false' for it in items for c in it.children if c.type != 'image' or not c.name.startswith('vs_tick')), 'the glyphs and labels in the rows are insensitive (the row button takes the tap)')
+    glyphs = {i: next((c for c in items[i].children if c.type == 'image' and c.name == f'vs_glyph{i}'), None) for i in range(6, 10)}
     xx = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx')
-    expect([ic and ic.get('image') for ic in icons] == [n for n, _ in mod_icons.PL_MENU_ICONS] == ['pl_ic_new', 'pl_ic_import', 'pl_ic_export', 'pl_ic_delete']
-           and [g for _, g in mod_icons.PL_MENU_ICONS] == ['list-plus', 'file-input', 'file-output', 'trash']
-           and all((ic.x, ic.y, ic.w, ic.h, ic.name) == (16, 15, 20, 20, f'pl_icon{i}') for i, ic in enumerate(icons))
-           and all((lab.x, lab.w) == (48, card.w - 64) for lab in labels),
-           'every row: its 20 px glyph at x 16 (centred where the sheet\'s 24 px glyphs are), vertically centred (New list-plus, Import file-input, Export file-output, Delete trash), the label from x 48 to 16 px before the edge')
+    expect([glyphs[i] and glyphs[i].get('image') for i in range(6, 10)] == [n for n, _ in mod_icons.PL_MENU_ICONS] == ['pl_ic_new', 'pl_ic_import', 'pl_ic_export', 'pl_ic_delete']
+           and [g for _, g in mod_icons.PL_MENU_ICONS] == ['list-plus', 'file-input', 'file-output', 'trash'] and mod_icons.PL_MENU_PX == O['VS_GLYPH'] == 20
+           and all((glyphs[i].x, glyphs[i].y, glyphs[i].w, glyphs[i].h) == (O['VS_GLYPH_X'], (O['VS_ROW_H'] - 20) // 2, 20, 20) for i in range(6, 10))
+           and all(labels[i].x == O['VS_LABEL_X_GLYPH'] for i in range(4, 10)) and labels[0].x == O['VS_LABEL_X'],
+           'the four action rows keep the old card\'s glyphs (New list-plus, Import file-input, Export file-output, Delete trash) at 20 px in the glyph column, like Search and Select; the labels follow it')
     expect(all(open(os.path.join(xx, n + '.png'), 'rb').read() == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read() for n, _ in mod_icons.PL_MENU_ICONS),
            'the four glyph images are in the tree, the committed PNGs')
-    expect(all(it.get(f'style:{st}:bg_color') == ('#FFFFFF10' if st == 'pressed' else '#00000000') and it.get(f'style:{st}:text_color') == '#FFFFFF'
-               and it.get(f'style:{st}:border') == ('top' if i else 'none') and it.get(f'style:{st}:border_color') == ('#FFFFFF22' if i else '#00000000')
-               for i, it in enumerate(items) for st in pod_ui.STATES),
-           'rows are transparent on the glass, pressed 6 % white, a 13 % white hairline above every row but the first (Now Playing\'s More sheet\'s rows)')
-    glass_checks(expect, tree, scrim, card, items)
-    # the labels fit their room in all 13 languages (19 px in the shipped font)
+    glass_users(expect)
+    # the labels fit their room in all 13 languages (18 px in the shipped font; the room after the glyph column is PL_CARD_MAX - VS_LABEL_X_GLYPH - VS_LABEL_R)
     import awtk_strings
     from awtk_text import Ttf, StbText
     raw = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw')
     font = Ttf(os.path.join(raw, 'fonts', 'default.ttf'))
     built = {loc: dict(awtk_strings.load(os.path.join(raw, 'strings', loc + '.bin'))) for loc in pod_i18n.LOCALES}
-    over = [(loc, k, w) for loc in pod_i18n.LOCALES for k in ('playlist_create', 'playlist_import', 'playlist_export', 'Delete Playlists')
-            for w in [StbText(font, pod_ui.PL_LABEL_PX).layout(built[loc][k])[1]] if w > labels[0].w]
-    expect(not over, f'every menu label fits its {labels[0].w} px room in all 13 languages ({over[:4]})')
+    room = O['PL_CARD_MAX'] - O['VS_LABEL_X_GLYPH'] - O['VS_LABEL_R']
+    over = [(loc, k, w) for loc in pod_i18n.LOCALES for k in pod_pages.PLAYLIST_MENU for w in [StbText(font, pod_ui.PL_LABEL_PX).layout(built[loc][k])[1]] if w > room]
+    expect(not over, f'every action label fits its {room} px room in all 13 languages ({over[:4]})')
     over = [(loc, w) for loc in pod_i18n.LOCALES for w in [StbText(font, 20).layout(built[loc]['No playlists'])[1]] if w > tree.find('label_status').w]
     expect(not over, f'"No playlists" fits the status line in all languages ({over})')
-    over = [(loc, w) for loc in pod_i18n.LOCALES for w in [StbText(font, 20).layout(built[loc]['Playlists'])[1]] if tree.find('label_title').x + w > more.x]
-    expect(not over, f'the title "Playlists" ends before the "..." button in all languages ({over})')
+    over = [(loc, w) for loc in pod_i18n.LOCALES for w in [StbText(font, 20).layout(built[loc]['Playlists'])[1]] if tree.find('label_title').x + w > plactions.x]
+    expect(not over, f'the title "Playlists" ends before the list-plus button in all languages, or the label ellipsizes there ({over})')
 
     # 2. The menu row opens the page; a window that will not open leaves the stock Playlists page (Home id 14)
     m = PM([(1, 'Mix', [0, 1])])
@@ -514,20 +482,20 @@ def run(ctx):
     open_page(m)
     expect(('stock_resume', '14') in m.calls, 'if the window will not open the row opens the stock Playlists page')
     m = PM([(1, 'Mix', [0])])
-    m.widgets.pop('pl_card')
+    m.widgets.pop('vs_card')
     open_page(m)
     expect(('navigator_back',) in m.calls and not any(c[0] == 'loadLocalClassList' for c in m.calls), 'an asset that is not ours: the page leaves again')
 
     # 3. Opening reads the stock playlists (class 0xf00b) and the page binds its buttons; nothing is shown or decoded before the first tick
-    lists = [(1, 'Empty', []), (2, 'One', [0]), (3, 'Two', [1, 2, 1, 2]), (4, 'Three', [3, 4, 5]), (5, 'Many', [0, 1, 2, 3, 4, 5, 6]), (6, 'Bare', [7])]
+    lists = [(1, '1 Empty', []), (2, '2 One', [0]), (3, '3 Two', [1, 2, 1, 2]), (4, '4 Three', [3, 4, 5]), (5, '5 Many', [0, 1, 2, 3, 4, 5, 6]), (6, '6 Bare', [7])]   # (the names run in the stock order: the page shows them A-Z; section 14 has the other orders)
     m = PM(lists, missing=(7,))
     calls = open_page(m)
     expect(('window_open', 'm1plus_playlists') in calls and [c for c in calls if c[0] == 'loadLocalClassList'] == [('loadLocalClassList', O['CLASS_PLAYLISTS'])],
            'opening runs the playlist query once and not the song queries (those are the loader\'s, one a tick)')
-    expect(all((m.widgets[n], O['EVT_CLICK']) in m.bound for n in ('btn_return', 'btn_backtoplayer', 'btn_more', 'btn_albumview', 'pl_scrim', 'pl_item0', 'pl_item1', 'pl_item2', 'pl_item3'))
+    expect(all((m.widgets[n], O['EVT_CLICK']) in m.bound for n in ('btn_return', 'btn_backtoplayer', 'btn_more', 'vs_scrim', 'vs_item0', 'vs_item4', 'vs_item5', 'vs_item6', 'vs_item7', 'vs_item8', 'vs_item9'))
            and (m.widgets['view_grid'], O['EVT_AFTER_PAINT']) in m.bound and (m.window, O['EVT_WINDOW_TO_FG']) in m.bound,
            'the buttons, the paint and the window\'s to-foreground event are bound')
-    expect(vis(m, 'view_grid') == (1, 1) and vis(m, 'label_status')[0] == 0 and vis(m, 'pl_scrim') == (0, 0) and vis(m, 'pl_card') == (0, 0),
+    expect(vis(m, 'view_grid') == (1, 1) and vis(m, 'label_status')[0] == 0 and vis(m, 'vs_scrim') == (0, 0) and vis(m, 'vs_card') == (0, 0),
            'the grid shows; the status line, the scrim and the card are hidden and insensitive')
     h = m.word(m.widgets['view_grid'] + 0xc)
     expect(h == RGAP + 3 * PITCH and m.props.get((m.sv, 'virtual_h')) == h, f'6 playlists are 3 rows: the content is {h} px and the scroll_view is told')
@@ -640,7 +608,7 @@ def run(ctx):
     expect(('loadLocalClassList', O['CLASS_PLAYLISTS']) in m.calls, 'the window coming to the front runs the playlist query again')
     blits, texts, styles = settle(m)
     titles = [t for (t, r), s in zip(texts, styles) if s == 'label_grid_title']
-    expect(titles == ['Empty', 'One', 'Fresh'], f'the new list is what the page shows ({titles})')
+    expect(titles == ['1 Empty', '2 One', 'Fresh'], f'the new list is what the page shows ({titles})')
     expect(all(near(a, b2) for a, b2 in zip(quadrants(m, cell_blit(blits, 2)), want_mosaic([5, 6]))), 'and the new playlist\'s mosaic is made')
     m.playlist_songs[2] = m.playlist_songs[2][:0]
     m.db['/mnt/data/database.db'][0] += 1   # the edit wrote the database
@@ -718,21 +686,33 @@ def run(ctx):
     expect(vis(m, 'view_grid')[0] == 0 and vis(m, 'label_status')[0] == 1 and ('widget_set_tr_text', m.widgets['label_status'], 'No playlists') in m.calls,
            'with no playlist the grid is hidden and the status line says "No playlists"')
     m.click('btn_more')
-    expect(vis(m, 'pl_card') == (1, 1) and vis(m, 'pl_scrim') == (1, 1), 'the "..." menu opens on the empty page')
+    expect(vis(m, 'vs_card') == (1, 1) and vis(m, 'vs_scrim') == (1, 1), 'the "..." menu opens on the empty page')
+    m.click('vs_scrim'); m.click('btn_plactions')
+    expect(vis(m, 'vs_card') == (1, 1) and vis(m, 'vs_item6') == (1, 1), 'and so does the list-plus button\'s (New Playlist is what an empty page needs)')
 
     # 11. The menu: open, close by the button, by the scrim, by an action; the actions run the stock code
     m = PM(lists, missing=(7,)); open_page(m); settle(m)
     m.click('btn_more')
-    expect(vis(m, 'pl_card') == (1, 1) and vis(m, 'pl_scrim') == (1, 1), 'the "..." button shows the card and the scrim (visible and sensitive)')
+    expect(vis(m, 'vs_card') == (1, 1) and vis(m, 'vs_scrim') == (1, 1), 'the "..." button shows the card and the scrim (visible and sensitive)')
     m.click('btn_more')
-    expect(vis(m, 'pl_card') == (0, 0) and vis(m, 'pl_scrim') == (0, 0), 'and a second tap closes them (hidden and insensitive)')
-    m.click('btn_more'); m.click('pl_scrim')
-    expect(vis(m, 'pl_card') == (0, 0) and vis(m, 'pl_scrim') == (0, 0), 'a tap on the scrim closes the menu')
+    expect(vis(m, 'vs_card') == (0, 0) and vis(m, 'vs_scrim') == (0, 0), 'and a second tap closes them (hidden and insensitive)')
+    m.click('btn_more'); m.click('vs_scrim')
+    expect(vis(m, 'vs_card') == (0, 0) and vis(m, 'vs_scrim') == (0, 0), 'a tap on the scrim closes the menu')
+    # the list-plus button opens its own card (the actions); one card at a time: while either is open a tap on the other button is ignored
+    m.click('btn_plactions')
+    expect(vis(m, 'vs_card') == (1, 1) and vis(m, 'vs_scrim') == (1, 1) and m.props.get((m.widgets['vs_card'], 'style:normal:bg_image')) == 'vs_glass4', 'the list-plus button shows the card and the scrim')
+    m.calls = []; m.click('btn_more'); m.click('btn_plactions')
+    expect(vis(m, 'vs_card') == (1, 1) and not [c for c in m.calls if c[0] == 'widget_set_visible' and c[1] == m.widgets['vs_card']], 'while the list-plus button\'s card is open a tap on the "..." or the list-plus button changes nothing (the scrim lies over them, and the handlers ignore it too)')
+    m.click('vs_scrim')
+    m.click('btn_more'); m.click('btn_plactions')
+    expect(vis(m, 'vs_card') == (1, 1) and m.props.get((m.widgets['vs_card'], 'style:normal:bg_image')) == 'vs_glass3' and vis(m, 'vs_item6') == (0, 0) and vis(m, 'vs_item4') == (1, 1),
+           'while the "..." card is open the list-plus button is ignored: it still holds Grid and List, not the actions')
+    m.click('vs_scrim')
     # New playlist: our keyboard opens (stock's T9 dialog is gone); its Done calls pl_named: createPlayListItem on the freshly read stock list, then the page reads again.
     # (The keyboard's own behaviour, with this callback as its on_done, is test/pod/keyboard.py name_tests; this machine has no keyboard asset, so the open itself fails here.)
-    m.click('btn_more'); m.calls = []
-    m.click('pl_item0')
-    expect(vis(m, 'pl_card') == (0, 0) and ('window_open', 'm1plus_keyboard') in m.calls and not [c for c in m.calls if c[0] == 'navigator_to_with_context' and c[1] == 'dialog/kbaddplaylist_dialog']
+    m.click('btn_plactions'); m.calls = []
+    m.click('vs_item6')
+    expect(vis(m, 'vs_card') == (0, 0) and ('window_open', 'm1plus_keyboard') in m.calls and not [c for c in m.calls if c[0] == 'navigator_to_with_context' and c[1] == 'dialog/kbaddplaylist_dialog']
            and not [c for c in m.calls if c[0] in ('createPlayListItem', 'loadLocalClassList')],
            'New playlist: the menu closes and our keyboard page is opened; nothing is created and the list is not read until Done (the keyboard is not modal)')
     m.calls = []
@@ -747,51 +727,83 @@ def run(ctx):
         expect([c for c in m.calls if c[0] == 'toast'] == [('toast', key, 1, 2000)], f'a playlist that cannot be made says {key} in the stock message box ({[c for c in m.calls if c[0] == "toast"]})')
     m.create_ret = 5
     # Import / Export: the stock click handlers, in the normal (not multi-select) mode, then the page reads again
-    for item, handler in (('pl_item1', 'stock_playlist_import'), ('pl_item2', 'stock_playlist_export')):
+    for item, handler in (('vs_item7', 'stock_playlist_import'), ('vs_item8', 'stock_playlist_export')):
         m.setword(NAV_STATUS, 1); m.calls = []
         m.click(item)
         expect([c for c in m.calls if c[0] == handler] == [(handler, 0)] and m.word(NAV_STATUS) == 0
                and ('loadLocalClassList', O['CLASS_PLAYLISTS']) in m.calls, f'{item}: the stock {handler[15:]} handler runs with the list in normal mode, then the page reads again')
     # Delete Playlists: select mode on this page (select_tests below); the stock Playlists page only where the page cannot do it
     m.calls = []
-    m.click('pl_item3')
-    expect('stock_resume' not in m.names() and vis(m, 'pl_card') == (0, 0) and vis(m, 'pl_bar') == (1, 1), 'Delete Playlists starts select mode on this page (select_tests); the stock page stays closed')
+    m.click('vs_item9')
+    expect('stock_resume' not in m.names() and vis(m, 'vs_card') == (0, 0) and vis(m, 'pl_bar') == (1, 1), 'Delete Playlists starts select mode on this page (select_tests); the stock page stays closed')
     select_tests(expect, lists)
 
-    # 11b. The card fits the language: the glyph's 48 px + its widest label + 16 px, 180..292, its right edge at 311; rows and labels follow
+    # 11b. The two cards' shape and fit to the language, the list-plus button's four rows in vs_glass4, the "..." three in vs_glass3, packed from the top. The list-plus button's: New Playlist, Import, Export, Delete Playlists, no hairline. The "...": Grid, List, one
+    #      hairline (the first sort row's top border), Name; the view and the order ticked with their direction line under it. Each as wide as its widest label (or direction line) from its
+    #      own x plus 16, 206..292, its right edge at 311, its top at 52
     raw = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw')
     font = Ttf(os.path.join(raw, 'fonts', 'default.ttf'))
-    keys = ('playlist_create', 'playlist_import', 'playlist_export', 'Delete Playlists')
+    px = lambda t: StbText(font, 15 if t in ('A–Z', 'Z–A') else pod_ui.PL_LABEL_PX).layout(t)[1]
     def fit(m):
-        moves = [c[2:] for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets['pl_card']]
-        sizes = {n: c[2:] for c in m.calls if c[0] == 'widget_resize' for n in m.widgets if m.widgets[n] == c[1] and n.startswith('pl_')}
+        moves = [c[2:] for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets['vs_card']]
+        sizes = {n: c[2:] for c in m.calls if c[0] == 'widget_resize' for n in m.widgets if m.widgets[n] == c[1] and n.startswith('vs_')}
         return (moves[-1] if moves else None), sizes
-    def menu_for(texts, measure):
-        m = PM(lists); open_page(m)
-        for i, t in enumerate(texts): m.label_text[m.widgets[f'pl_label{i}']] = t
+    def card_for(loc, measure, mode=None, button='btn_more'):
+        m = PM(lists)
+        if mode is not None: m.fs[PL_FILE] = mode
+        open_page(m)
+        texts = [built[loc][k] for k in ('Name', 'Name', 'Name', 'Name', 'Grid', 'List') + tuple(pod_pages.PLAYLIST_MENU)]
+        for i, t in enumerate(texts): m.label_text[m.widgets[f'vs_label{i}']] = t
         m.measure = measure; m.calls = []
-        m.click('btn_more')
-        return m
-    for loc, want in (('en_US', 180), ('zh_CN', 180), ('sp_ES', None), ('ja_JP', None), ('ge_DE', None)):
-        texts = [built[loc][k] for k in keys]
-        widths = [StbText(font, pod_ui.PL_LABEL_PX).layout(t)[1] for t in texts]
-        w = want or max(widths) + 64
-        m = menu_for(texts, lambda t: StbText(font, pod_ui.PL_LABEL_PX).layout(t)[1])
+        m.click(button)
+        return m, texts
+    def moved_of(m, rows): return [[c[2:] for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets[f'vs_item{i}']][-1] for i in rows]
+    glass = lambda m: [m.props.get((m.widgets['vs_card'], f'style:{st}:bg_image')) for st in ('normal', 'pressed', 'over')]
+    ACTS, MORE = (6, 7, 8, 9), (4, 5, 0)
+    m, _ = card_for('en_US', px, button='btn_plactions')
+    expect(vis(m, 'vs_card') == (1, 1) and vis(m, 'vs_scrim') == (1, 1) and [vis(m, f'vs_item{i}') for i in ACTS] == [(1, 1)] * 4 and [vis(m, f'vs_item{i}') for i in (0, 1, 2, 3, 4, 5)] == [(0, 0)] * 6
+           and moved_of(m, ACTS) == [(0, 48 * k) for k in range(4)] and vis(m, 'vs_hair')[0] == 0 and glass(m) == ['vs_glass4'] * 3,
+           f'the list-plus button\'s card: the four actions in four rows packed from the top, no hairline, vs_glass4 ({moved_of(m, ACTS)})')
+    m, _ = card_for('en_US', px)
+    expect(vis(m, 'vs_card') == (1, 1) and vis(m, 'vs_scrim') == (1, 1) and [vis(m, f'vs_item{i}') for i in MORE] == [(1, 1)] * 3 and [vis(m, f'vs_item{i}') for i in (1, 2, 3, 6, 7, 8, 9)] == [(0, 0)] * 7
+           and moved_of(m, MORE) == [(0, 48 * k) for k in range(3)] and vis(m, 'vs_hair')[0] == 0 and glass(m) == ['vs_glass3'] * 3
+           and m.props.get((m.widgets['vs_item0'], 'style:normal:border_width')) in (None, 1),
+           f'the "..." card: Grid, List, Name in three rows, the hairline is Name\'s top border, vs_glass3 ({moved_of(m, MORE)})')
+    expect([vis(m, f'vs_tick{i}')[0] for i in (4, 5, 0)] == [1, 0, 1] and [utf8(c[2]) for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets['vs_sub0']] == ['A–Z'],
+           'the grid is ticked (the default), Name is ticked with A–Z under it')
+    m, _ = card_for('en_US', px, b'0\n')
+    expect([vis(m, f'vs_tick{i}')[0] for i in (4, 5)] == [0, 1], 'in the list mode the List row is ticked')
+    m = PM(lists); m.fs['/mnt/data/m1plus/playlists-sort'] = b'a\n'; open_page(m); m.calls = []; m.click('btn_more')
+    expect(vis(m, 'vs_tick0')[0] == 1 and [utf8(c[2]) for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets['vs_sub0']] == ['Z–A']
+           and moved_of(m, (0,)) == [(0, 96)], 'with the saved order Z–A, Name is ticked, "Z–A" under it (Name is the third row)')
+    m.click('vs_scrim'); m.click('btn_plactions'); m.click('vs_scrim'); m.click('btn_more')
+    expect(m.props.get((m.widgets['vs_item0'], 'style:normal:border_width')) == 1 and glass(m) == ['vs_glass3'] * 3,
+           'the card offered again after the list-plus button\'s gets the hairline back (Name\'s top border) and the same glass')
+    for loc in pod_i18n.LOCALES:
+        m, texts = card_for(loc, px, button='btn_plactions')
+        lx = O['VS_TICK_X'] + O['VS_LABEL_X_GLYPH'] - O['VS_GLYPH_X']   # no tick column: the glyph at x 14, the label 28 px after it
+        w = max(O['VS_CARD_MIN'], min(O['PL_CARD_MAX'], lx + max(px(t) for t in texts[6:]) + O['VS_LABEL_R']))
         pos, sizes = fit(m)
-        expect(pos == (311 - w, 52) and sizes.get('pl_card') == (w, 200) and all(sizes.get(f'pl_item{i}') == (w, 50) and sizes.get(f'pl_label{i}') == (w - 64, 50) for i in range(4))
-               and 180 <= w <= 292 and max(widths) <= w - 64 and vis(m, 'pl_card') == (1, 1),
-               f'{loc}: the card {w} px wide (glyph room 48 + labels up to {max(widths)} px + 16, at least 180), x {311 - w}..311; rows {w}, labels {w - 64} ({pos}, {sizes.get("pl_card")})')
-    m = menu_for(pod_pages.PLAYLIST_MENU, lambda t: 300)
-    expect(fit(m)[0] == (19, 52) and fit(m)[1].get('pl_card') == (292, 200), f'a label wider than the room keeps the widest card (292 px, its ellipsis): {fit(m)}')
-    m = menu_for(pod_pages.PLAYLIST_MENU, None)
-    expect(fit(m) == (None, {}) and vis(m, 'pl_card') == (1, 1), 'a label that cannot be measured leaves the asset\'s card (292 px), and the menu opens')
-    m = PM(lists); m.widgets.pop('pl_label2'); open_page(m); m.measure = lambda t: 50; m.calls = []
-    m.click('btn_more')
-    expect(fit(m) == (None, {}) and vis(m, 'pl_card') == (1, 1), 'a missing label leaves the asset\'s card, and the menu opens')
-    m = menu_for(pod_pages.PLAYLIST_MENU, lambda t: 100)
+        moved = lambda name: [c[2:] for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets[name]][-1]
+        expect(pos == (311 - w, 52) and sizes.get('vs_card') == (w, 4 * 48) and all(sizes.get(f'vs_item{i}') == (w, 48) for i in ACTS) and 206 <= w <= 292
+               and all(moved(f'vs_glyph{i}') == (O['VS_TICK_X'], 14) for i in ACTS) and all(moved(f'vs_label{i}') == (lx, 0) for i in ACTS) and lx == 42,
+               f'{loc}: the list-plus button\'s card {w} px wide, x {311 - w}..311, 192 px high, glyphs at x 14 and labels at x 42 (no tick column) ({pos}, {sizes.get("vs_card")})')
+        m, texts = card_for(loc, px)
+        w = max(O['VS_LABEL_X_GLYPH'] + max(px(t) for t in texts[4:6]), O['VS_LABEL_X'] + max(px(texts[0]), px('A–Z'))) + O['VS_LABEL_R']
+        w = max(O['VS_CARD_MIN'], min(O['PL_CARD_MAX'], w))
+        pos, sizes = fit(m)
+        moved = lambda name: [c[2:] for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets[name]][-1]
+        expect(pos == (311 - w, 52) and sizes.get('vs_card') == (w, 3 * 48) and all(sizes.get(f'vs_item{i}') == (w, 48) for i in MORE) and 206 <= w <= 292
+               and all(moved(f'vs_glyph{i}') == (O['VS_GLYPH_X'], 14) for i in (4, 5)) and moved('vs_label4') == (O['VS_LABEL_X_GLYPH'], 0),
+               f'{loc}: the "..." card {w} px wide, x {311 - w}..311, 144 px high ({pos}, {sizes.get("vs_card")})')
+    m, _ = card_for('en_US', lambda t: 300)
+    expect(fit(m)[0] == (19, 52) and fit(m)[1].get('vs_card') == (292, 144), f'a label wider than the room keeps the widest card (292 px, its ellipsis): {fit(m)}')
+    m, _ = card_for('en_US', None)
+    expect(fit(m)[0] is None and vis(m, 'vs_card') == (1, 1), 'a label that cannot be measured leaves the asset\'s card (292 px), and the menu opens')
+    m, _ = card_for('en_US', lambda t: 100)
     m.click('btn_more'); m.measure = lambda t: 200; m.calls = []
     m.click('btn_more')
-    expect(fit(m)[1].get('pl_card') == (264, 200) and fit(m)[0] == (47, 52), f'every open measures again (a language changed meanwhile): {fit(m)}')
+    expect(fit(m)[1].get('vs_card') == (282, 144) and fit(m)[0] == (29, 52), f'every open measures again (a language changed meanwhile): {fit(m)}')
 
     # 12. Closing frees everything
     m = PM(lists, missing=(7,)); open_page(m); settle(m)
@@ -806,12 +818,10 @@ def run(ctx):
     # 13. List mode (the Albums page's): 64 px rows, a 52 px mosaic (quadrants of 26 px), the name and the count in the list's two text styles
     ROW, LART, LAX, LAY = O['LIST_ROW_H'], O['LIST_ART'], O['LIST_ART_X'], O['LIST_ART_Y']
     TX, TW, TY, TH, SY, SH = O['LIST_TEXT_X'], O['LIST_TEXT_W_CHEV'], O['LIST_TITLE_Y'], O['LIST_TITLE_H'], O['LIST_SUB_Y'], O['LIST_SUB_H']
-    glyph = lambda m: m.props.get((m.widgets['btn_albumview'], 'style:normal:icon'))
     m = PM(lists, missing=(7,)); open_page(m)
     expect(glyph(m) == 'pod_nav_list' and m.fs.get(PL_FILE) is None, 'with no setting the page opens as the grid (the toggle shows the list glyph)')
     m = PM(lists, missing=(7,)); m.fs[PL_FILE] = b'0\n'; calls = open_page(m)
-    expect(glyph(m) == 'pod_nav_grid' and m.props.get((m.widgets['btn_albumview'], 'style:pressed:icon')) == 'pod_nav_grid_down',
-           'the saved "0" opens the list mode: the toggle shows the grid glyph')
+    expect(glyph(m) == 'pod_nav_grid', 'the saved "0" opens the list mode: the card ticks List (the old toggle would show the grid glyph)')
     expect(('bitmap_create_ex', LART, LART) in calls and not any(c[:3] == ('bitmap_create_ex', COVER, COVER) for c in calls), 'its covers are 52 px bitmaps')
     h = m.word(m.widgets['view_grid'] + 0xc)
     expect(h == len(lists) * ROW and m.props.get((m.sv, 'virtual_h')) == h, f'the content is {len(lists)} rows of {ROW} px = {h} and the scroll_view is told')
@@ -851,7 +861,7 @@ def run(ctx):
     many = [(i + 1, f'P{i}', [i % 7]) for i in range(12)]
     m = PM(many); open_page(m); settle(m)
     scroll_to(m, 300); first_grid = 2
-    m.calls = []; m.click('btn_albumview', count=60000000)
+    m.calls = []; switch(m)
     expect(glyph(m) == 'pod_nav_grid' and m.fs.get(PL_FILE) == b'0\n' and not [c for c in m.calls if c[0] in ('window_open', 'navigator_to_with_context', 'window_close')],
            'the toggle switches to the list in place and saves "0"')
     expect(m.word(m.sv + SC_YOFF) == first_grid * ROW and m.word(m.widgets['view_grid'] + 0xc) == 12 * ROW and m.props.get((m.sv, 'virtual_h')) == 12 * ROW,
@@ -860,13 +870,13 @@ def run(ctx):
     expect(('bitmap_create_ex', LART, LART) in m.calls or any(m.bitmaps[b][1] == LART for b in m.bitmaps), 'the tiles were remade at 52 px')
     tiles_ = [b for b in m.bitmaps if m.bitmaps[b][1:] != (10, 16) and m.bitmaps[b][1] != MARK]   # (the two select marks are 26 px and live as long as the page)
     expect(all(m.bitmaps[b][1] == LART for b in tiles_) and len(tiles_) <= TILES + 1, 'no 144 px tile survives the switch; the ring is bounded')
-    m.calls = []; m.click('btn_albumview', count=60000000)
+    m.calls = []; switch(m)
     expect(glyph(m) == 'pod_nav_list' and m.fs.get(PL_FILE) == b'1\n' and m.word(m.sv + SC_YOFF) == first_grid // COLS * PITCH == 0 + 2 // COLS * PITCH,
            'back to the grid: "1" saved, the glyph back, the first playlist in view kept')
     settle(m)
     expect(all(m.bitmaps[b][1] in (COVER, MARK) or m.bitmaps[b][1:] == (10, 16) for b in m.bitmaps), 'and the tiles are 144 px again')
     #     the choice survives a re-open, and is the Albums page's own file apart
-    m.click('btn_albumview', count=60000000)
+    switch(m)
     fn, c = m.bound[(m.window, O['EVT_DESTROY'])]
     m.call(fn, a0=c, a1=0, count=20000000)
     open_page(m)
@@ -890,7 +900,7 @@ def run(ctx):
     expect(m.most_per_tick <= 1, 'and one cover source at most a tick')
     # the menu works in the list mode too
     m.click('btn_more')
-    expect(vis(m, 'pl_card') == (1, 1), 'the "..." menu opens in the list mode')
+    expect(vis(m, 'vs_card') == (1, 1), 'the "..." menu opens in the list mode')
 
     # The navbar's fade (img_nb_fade, built hidden) is shown only while the list is scrolled; insensitive throughout; without the widget nothing happens.
     for mode in ('1', '0'):
@@ -902,7 +912,68 @@ def run(ctx):
         for v in (1, 300, 0):
             scroll_to(m, v); s.append(state())
         expect(s == [(0, 0), (1, 0), (1, 0), (0, 0)], f'{"grid" if mode == "1" else "list"}: the fade is hidden at rest, shown (insensitive) when scrolled, hidden again back at 0 ({s})')
-        scroll_to(m, 300); m.click('btn_albumview', count=60000000)
+        scroll_to(m, 300); switch(m)
         expect(state() == ((1, 0) if m.word(m.sv + SC_YOFF) > 0 else (0, 0)), f'a mode switch: the fade follows the new offset ({m.word(m.sv + SC_YOFF)}, {state()})')
     m = PM(many); open_page(m); scroll_to(m, 300)
     expect(m.word(m.sv + SC_YOFF) == 300, 'no fade widget: the page opens and scrolls as before')
+
+    # 14. The Name order (the card's last row): A-Z by default, the ticked row reverses, saved in playlists-sort ("a" Z-A); the stock list is never reordered, so the rows, the taps and the
+    #     select mode's marks follow the order shown while the stock calls keep the stock positions; every playlist keeps its scan across a re-sort
+    PLS = '/mnt/data/m1plus/playlists-sort'
+    named = [(1, 'beta', [0]), (2, 'Alpha', [1, 2]), (3, '10 mix', [3]), (4, '2 mix', [4, 5, 6]), (5, 'Zed', [])]
+    AZ, ZA = ['2 mix', '10 mix', 'Alpha', 'beta', 'Zed'], ['Zed', 'beta', 'Alpha', '10 mix', '2 mix']
+    COUNT = {'beta': '1 track', 'Alpha': '2 tracks', '10 mix': '1 track', '2 mix': '3 tracks', 'Zed': '0 tracks'}
+    ROW = O['LIST_ROW_H']
+    def list_page(saved=None):
+        m = PM(named); m.fs[PL_FILE] = b'0\n'
+        if saved is not None: m.fs[PLS] = saved
+        open_page(m)
+        return m
+    def rows(m, log=None):
+        blits, texts, styles = settle(m, log=log)
+        title = {r[1] // ROW: tx for (tx, r), st in zip(texts, styles) if st == 'label_row_title'}
+        sub = {r[1] // ROW: tx for (tx, r), st in zip(texts, styles) if st == 'label_row_sub'}
+        return [title[k] for k in sorted(title)], [sub.get(k) for k in sorted(title)]
+    expect('playlists-sort' in pod_pages.SETTING_FILES and pod_pages.SETTING_FILES.index('playlists-sort') == pod_pages.SETTING_FILES.index('folders-sort') + 1 and pod_pages.SETTING_FILES.count('playlists-sort') == 1,
+           'playlists-sort is on the Settings Files page, after folders-sort and before playlists-view (patch/setfiles.c has it in the same place)')
+    m = list_page()
+    names_, subs_ = rows(m)
+    expect(names_ == AZ and subs_ == [COUNT[n] for n in AZ] and PLS not in m.fs, f'no playlists-sort: Name A-Z, digit runs by value, case folded, not the stock order ({names_}); nothing is written ({subs_})')
+    m.click('btn_more')
+    expect(vis(m, 'vs_tick0')[0] == 1 and [utf8(c[2]) for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets['vs_sub0']][-1:] == ['A–Z'], 'the card ticks Name with A–Z under it')
+    m.calls = []
+    m.click('vs_item0')
+    expect(m.fs.get(PLS) == b'a\n' and ('rename', PLS + '.tmp', PLS) in m.calls and vis(m, 'vs_card') == (0, 0), 'the ticked Name row again: Z–A saved as "a", written through the .tmp file, the card closes')
+    log = []
+    names_, subs_ = rows(m, log)
+    expect(names_ == ZA and subs_ == [COUNT[n] for n in ZA] and not [c for c in log + list(m.calls) if c[0] == 'loadLocalClassList'],
+           f'the list is reversed, each playlist with its own count, and nothing is read again: the scans went with their playlists ({names_}, {subs_})')
+    m.click('btn_more'); m.click('vs_item0')
+    names_, _ = rows(m)
+    expect(m.fs.get(PLS) == b'0\n' and names_ == AZ, 'and again: A–Z, "0"')
+    for saved, want in ((b'a\n', ZA), (b'a', ZA), (b'0\n', AZ), (b'junk', AZ), (b'ax', AZ), (b'', AZ), (b'1\n', AZ), (b'b\n', AZ)):   # (the retired Recently Added values read as A–Z)
+        names_, _ = rows(list_page(saved))
+        expect(names_ == want, f'playlists-sort {saved!r}: {"Z–A" if want == ZA else "A–Z"}')
+    m = list_page(); rows(m); m.fail.add(('rename', PLS)); m.click('btn_more'); m.click('vs_item0')
+    expect(rows(m)[0] == AZ and PLS not in m.fs, 'a save that fails changes nothing')
+    m = PM(named); open_page(m)
+    blits, texts, styles = settle(m)
+    grid_ = {(r[1] - RGAP) // PITCH * COLS + (r[0] - MARGIN) // CPITCH: tx for (tx, r), st in zip(texts, styles) if st == 'label_grid_title'}
+    expect([grid_[k] for k in sorted(grid_)][:4] == AZ[:4], f'the grid shows the same order ({grid_})')
+    # opening follows the rows shown, not the stock positions
+    for saved, want in ((None, (4, '2 mix')), (b'a\n', (5, 'Zed'))):
+        m = list_page(saved); m.windows['m1plus_songs'] = 0; rows(m)
+        calls = tap(m, 100, 20)
+        opened = [c for c in calls if c[0] == 'navigator_to_with_context' and c[1] == 'allmusic_page']
+        expect(opened == [('navigator_to_with_context', 'allmusic_page', O['CLASS_PLAYLIST_SONGS'], *want)], f'a tap on the first row opens {want[1]!r} (id {want[0]}) ({opened})')
+    # Delete: the marks are of the rows shown; the stock vector holds the stock positions
+    m = list_page(); rows(m); m.setword(SEL_VEC, m.alloc(8)); m.confirm_yes = True
+    m.click('btn_plactions'); m.click('vs_item9'); tap(m, 150, 0 * ROW + 20); tap(m, 150, 2 * ROW + 20); m.calls = []
+    m.click('pl_del')
+    bd = next((c for c in m.calls if c[0] == 'batch_delete_file'), None)
+    expect([c[1] for c in m.calls if c[0] == 'set_selectindex'] == [3, 1] and bd and bd[:2] == ('batch_delete_file', O['CLASS_PLAYLISTS']) and bd[6] == [1, 3],
+           f'rows 0 and 2 shown are "2 mix" and "Alpha": the stock positions 3 and 1 are selected, in the stock list ({[c[1] for c in m.calls if c[0] == "set_selectindex"]}, {bd and bd[6]})')
+    # the empty page: the card is there and the order is saved
+    m = PM([]); open_page(m); m.click('btn_more'); m.click('vs_item0')
+    expect(m.fs.get(PLS) == b'a\n' and vis(m, 'vs_card') == (0, 0) and vis(m, 'label_status')[0] == 1, 'with no playlist the Name row still saves the order and the page stays as it was')
+

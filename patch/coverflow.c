@@ -289,7 +289,7 @@ static struct {
     int land; /* landscape: the frame is the body under the navbar, turned a quarter */
     void *albums; /* our copy of the stock album rows */
     unsigned *
-        order; /* the library shelf's display order, as the stock row numbers (cc_album_order); NULL = stock order (always, scoped) */
+        order; /* the library shelf's display order, as the stock row numbers (cc_album_order; scoped: the same order with Artist as Title, cc_scoped_sort); NULL = stock order */
     unsigned count; /* how many of them are covers (scoped: the card only with two albums) */
     /* Scoped (ARTIST_ALBUMS, else 0): albums holds one artist's album rows as the stock artist
      * page lists them (loadAlbumList 0xf004), the last one the stock "All songs" row, shown as
@@ -375,7 +375,7 @@ static int has_songs(void) {
 static unsigned key_at(unsigned i) {
     void *r = album_at(i);
     if (!r || is_card(r)) return 0;
-    return cf.keys ? cf.keys[i] : cc_album_key(r);
+    return cf.keys ? cf.keys[cf.order ? cf.order[i] : i] : cc_album_key(r); /* (the keys are by stock row) */
 }
 
 /* The cache is built by the shared worker (patch/covercache.c, cc_build_*): its thread touches no widget, deque or
@@ -1278,6 +1278,7 @@ int coverflow_artist_albums(void *artist_row, unsigned scope, int keep_card, voi
 
 static int load_artist(void) {
     cf.count = (unsigned)coverflow_artist_albums(cf.artist_row, cf.scope, 1, &cf.albums, &cf.keys);
+    if (cf.count && cf.count <= MAX_ALBUMS) cf.order = cc_album_order_mode(cf.albums, cc_scoped_sort(), cc_sort_rev()); /* the Albums page's order for one artist */
     return (int)cf.count;
 }
 

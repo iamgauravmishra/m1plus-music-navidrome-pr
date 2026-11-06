@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_ui
 import preview_icons as PI
 import preview_songs as PS
+import pod_pages
 import pod_ui
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -78,7 +79,15 @@ def content(s, title, rows, select=None, playing=()):
     return im, end
 
 
-def page(s, title, rows, scroll=0, select=None, playing=(), empty=False, root=False):
+def card(s, im, current=0, rev=False):
+    """The \"...\" card (patch/viewsort.c, patch/folders.c): the scrim's dim, then Select above Name, Date Modified and Type in vs_glass4, a tick on `current` with its direction line under the label."""
+    im.alpha_composite(Image.new('RGBA', im.size, (0, 0, 0, 0x82)))
+    sub = PS.tr(s, ('Oldest First' if rev else 'Newest First') if current == 1 else ('Z–A' if rev else 'A–Z'))
+    rows = [('Select', 'pod_ic_vsselect', False, None)] + [(k, None, i == current, sub if i == current else None) for i, k in enumerate(pod_pages.FOLDERS_SORT_KEYS[:3])]
+    PI.view_card(s, im, rows, 'vs_glass4', (1,))
+
+
+def page(s, title, rows, scroll=0, select=None, playing=(), empty=False, root=False, menu=None, direct=False):
     tall, end = content(s, title, rows, select, playing)
     im = Image.new('RGBA', (W, WIN), (0, 0, 0, 255))
     scroll = max(0, min(scroll, end - (WIN - NAV)))
@@ -88,7 +97,7 @@ def page(s, title, rows, scroll=0, select=None, playing=(), empty=False, root=Fa
         im.alpha_composite(tall.crop((0, scroll, W, min(tall.height, scroll + WIN - NAV))), (0, NAV))
     if root:   # the list of storages: no Select, Now Playing alone is the glass disc
         ImageDraw.Draw(im).rectangle((0, 0, W - 1, NAV - 1), fill=(0, 0, 0)); PS.glass(s, im, 'ah_nav_back', 7, 44); PS.glass(s, im, 'ah_nav_np', 260, 60)
-    else: PS.navbar(s, im, 10 ** 6 if empty else scroll, select, title, genre=True)   # the capsule Select | Now Playing, the small title once the large one has scrolled away (always in an empty folder)
+    else: PS.navbar(s, im, 10 ** 6 if empty else scroll, select, title, direct=direct)   # the capsule "..." | Now Playing, the small title once the large one has scrolled away (always in an empty folder); direct: Select in the "..." place (a playlist file's tracks)
     if select is not None:
         d = ImageDraw.Draw(im); d.rectangle((0, WIN - O['SG_BAR_H'], W - 1, WIN - 1), fill=(0, 0, 0)); d.rectangle((0, WIN - O['SG_BAR_H'], W - 1, WIN - O['SG_BAR_H']), fill=HAIR)
         py = WIN - O['SG_BAR_H'] + (O['SG_BAR_H'] - O['SG_PILL_H']) // 2
@@ -98,19 +107,22 @@ def page(s, title, rows, scroll=0, select=None, playing=(), empty=False, root=Fa
         fade = Image.new('RGBA', (W, 20), (0, 0, 0, 0)); fd = ImageDraw.Draw(fade)
         for y in range(20): fd.rectangle((0, y, W, y), fill=(0, 0, 0, int(160 * (1 - y / 20))))
         im.alpha_composite(fade, (0, NAV))
+    if menu: card(s, im, *menu)
     return im
 
 
 ROOT_ROWS = [(T_SD, 'SD'), (T_OTG, 'OTG'), (T_SD, 'CD Library')]
 ALBUM_ROWS = [(T_DIR, 'Artwork'), (T_DIR, 'Live 1964'), (T_FILE, '01 So What.flac'), (T_FILE, '02 Freddie Freeloader.flac'), (T_FILE, '03 Blue in Green.flac'),
               (T_FILE, '04 All Blues.flac'), (T_FILE, '05 Flamenco Sketches.flac'), (T_LIST, 'Kind of Blue.m3u8')]
+NAME_ZA_ROWS = [(T_DIR, 'Live 1964'), (T_DIR, 'Artwork'), (T_LIST, 'Kind of Blue.m3u8'), (T_FILE, '05 Flamenco Sketches.flac'), (T_FILE, '04 All Blues.flac'), (T_FILE, '03 Blue in Green.flac'),
+               (T_FILE, '02 Freddie Freeloader.flac'), (T_FILE, '01 So What.flac')]
 LONG_ROWS = [(T_DIR, 'Disc 1 - The Complete Columbia Studio Recordings 1955-1961'), (T_DIR, '日本語のフォルダ'), (T_FILE, 'A Very Long File Name That Does Not Fit The Row At All (Remastered 2009).flac'),
              (T_FILE, '東京の夜.mp3')]
 
 
 def extras_panel(s):
     """The Extras / menu page's first rows (stock list rows: a 24 px glyph at x 16, the label at x 56, the stock chevron in its 40 px box at w - 44), for comparison."""
-    import mod_icons as M, pod_pages
+    import mod_icons as M
     im = Image.new('RGBA', (W, WIN), (0, 0, 0, 255)); d = ImageDraw.Draw(im)
     PS.navbar(s, im, 0, None, None)
     s.text(im, O['NAV_TITLE_X'], 25, 'Extras', PI.title_px(s.tree))
@@ -134,12 +146,16 @@ def main():
         img0 = s.img
         s.img = lambda n: palette.render_image(n, img0(n), 'black', a.accent)
     asset = awtk_ui.parse(open(os.path.join(a.workdir, PI.RAW, 'ui', 'm1plus_folders.bin'), 'rb').read())
-    assert asset.find('folders_scrollview') is not None and asset.find('btn_select') is not None, 'not the Folders asset'
+    assert asset.find('folders_scrollview') is not None and asset.find('btn_more') is not None and asset.find('vs_card') is not None, 'not the Folders asset'
     root = PS.tr(s, 'Folders')
     panels = [('Extras (the menu rows: glyph x 16, text x 56), for comparison', extras_panel(s)),
-              ('Root: the storages (the SD card plays), no Select', page(s, root, ROOT_ROWS, playing={'SD'}, root=True)),
+              ('Root: the storages (the SD card plays), no \"...\"', page(s, root, ROOT_ROWS, playing={'SD'}, root=True)),
               ('A folder with audio files: pills, the wave', page(s, 'Kind of Blue', ALBUM_ROWS, playing={'03 Blue in Green.flac'})),
               ('Scrolled past the large title: the small one, the fade', page(s, 'Kind of Blue', ALBUM_ROWS * 2, scroll=120, playing={'03 Blue in Green.flac'})),
+              ('"...": the card (Select, Name ticked with A–Z)', page(s, 'Kind of Blue', ALBUM_ROWS, playing={'03 Blue in Green.flac'}, menu=(0, False))),
+              ('Name, Z–A: folders first, each group reversed', page(s, 'Kind of Blue', NAME_ZA_ROWS, playing={'03 Blue in Green.flac'}, menu=(0, True))),
+              ('Date Modified: the card, Newest First', page(s, 'Kind of Blue', ALBUM_ROWS, playing={'03 Blue in Green.flac'}, menu=(1, False))),
+              ('A playlist file\'s tracks: Select in the "..." place, no card', page(s, 'Mix', ALBUM_ROWS, playing={'03 Blue in Green.flac'}, direct=True)),
               ('Select: marks on folders and audio files', page(s, 'Kind of Blue', ALBUM_ROWS, select={'Live 1964', '01 So What.flac', '04 All Blues.flac'})),
               ('Long names, a CJK name', page(s, 'Disc 1 - The Complete Columbia Studio Recordings', LONG_ROWS)),
               ('An empty folder', page(s, 'Artwork', [], empty=True))]

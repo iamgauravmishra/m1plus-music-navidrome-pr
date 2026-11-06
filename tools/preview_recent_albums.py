@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Mock-up of the Recently Added page with a navbar view toggle (docs/modules/recent-albums.md): a PIL approximation built on preview_songs.py's
+"""Mock-up of the Recently Added page with a "..." card view group (docs/modules/recent-albums.md): a PIL approximation built on preview_songs.py's
 helpers (the Songs rows, pills, glass pieces) and the shared Albums grid's cell geometry (offsets.inc GRID_*, the Recently Played shelf's look).
 Not the payload's paint (the songs preview path draws no real page); the numbers are the page's (offsets.inc). make preview also writes both PNGs beside the sheet. The page keeps the Songs view; the toggle (Albums page slot 214) switches to the newest-first Albums grid.
 
   preview_recent_albums.py WORKDIR OUTDIR
 
 WORKDIR is a built tree (work/mod-release). Writes recent-songs-view.png and recent-album-view.png (320 x 450) to OUTDIR. The navbars are the real
-glass pieces in one capsule: songs view Search 122 | Select 168 | grid toggle 214 | Now Playing 260; album view Search 168 | list toggle 214 | Now Playing 260.
+glass pieces: both views Search 168 | "..." 214 | Now Playing 260 (Search is the navbar button at 168; Select and the Albums / Songs rows are the card's: preview_songs.py sort_card kinds 'recent' and 'albums').
 """
 import argparse, os, sys
 from PIL import Image, ImageDraw
@@ -44,14 +44,14 @@ def album_view(s):
         s.text(tall, x, ty + O['GRID_TITLE_H'] / 2, s.clip(album, 18, O['GRID_COVER']), 18)
         s.text(tall, x, ty + O['GRID_TITLE_H'] + O['GRID_SUB_H'] / 2, s.clip(artist, 15, O['GRID_COVER']), 15, grey)
     im = Image.new('RGBA', (W, WIN), (0, 0, 0, 255)); im.alpha_composite(tall, (0, NAV))
-    navbar(s, im, [('pod_nav_search', 168), ('pod_nav_list', 214)])
+    navbar(s, im, [('pod_nav_search', 168), ('pod_nav_moremid', 214)])
     return im
 
 
 def songs_view(s):
     tall, _ = PS.content(s, title='Recently Added')           # the current page, unchanged: title, pills, rows (no sections)
     im = Image.new('RGBA', (W, WIN), (0, 0, 0, 255)); im.alpha_composite(tall.crop((0, 0, W, WIN - NAV)), (0, NAV))
-    navbar(s, im, [('pod_nav_search', 122), ('pod_nav_select', 168), ('pod_nav_grid', 214)])
+    navbar(s, im, [('pod_nav_search', 168), ('pod_nav_moremid', 214)])
     return im
 
 
@@ -64,7 +64,7 @@ def main():
     for name, im in (('songs', songs_view(s)), ('album', album_view(s))):
         out = os.path.join(a.outdir, f'recent-{name}-view.png'); PI.save_compact(im.convert('RGB'), out); print('wrote', out, im.size)
     px = PI.title_px(s.tree)
-    print('small title room before x 122:', 122 - O['NAV_TITLE_X'], 'px; "Recently Added" at', px, 'px =', s.font.width('Recently Added', px))
+    print('small title room before x 214:', 214 - O['NAV_TITLE_X'], 'px; "Recently Added" at', px, 'px =', s.font.width('Recently Added', px))
 
 
 if __name__ == '__main__': main()

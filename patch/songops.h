@@ -34,3 +34,9 @@ int so_add(int cls, unsigned count, const unsigned char *sel, unsigned nsel, int
 
 /* Song `at` (-1: a random one) of the list as the queue, in Now Playing (open). how: SO_*. Nothing changes when the song is not on the card (a message). */
 void so_play(int cls, void *list, int at, int how, so_open_fn open);
+/* The same for a page that shows the list reversed (list is the reversed stock list, `at` a position in it): the queue loadSongList builds is reversed too, so the song at `at` is the one shown there and the queue plays in the order shown. */
+void so_play_dir(int cls, void *list, int at, int how, so_open_fn open, int rev);
+/* Puts the freshly built queue in the order a page shows (the Folders page's sorts) and returns where the record `pick` (the row played, a record of the page's list) now is, -1 when it cannot say. */
+typedef int (*so_reorder_fn)(void *queue, void *pick);
+/* so_play_dir with a reorder instead of a reversal (NULL: none). */
+void so_play_with(int cls, void *list, int at, int how, so_open_fn open, int rev, so_reorder_fn reorder);

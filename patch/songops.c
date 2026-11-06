@@ -122,7 +122,7 @@ void pod_open_player(void *queue, int idx,
 /* Song `at` (-1: a random one) of the list and the list as the queue, in Now Playing: the stock Songs row's handler (@0x5275a4: loadSongList of the shown list, then
  * Now Playing at the row), as Shuffle Songs does it (patch/shuffle.c). The caller has put the browsing record back (loadSongList runs the class query again and keeps
  * classinfo for the memory playback). */
-void so_play(int cls, void *list, int at, int how, so_open_fn open) {
+void so_play_with(int cls, void *list, int at, int how, so_open_fn open, int rev, so_reorder_fn reorder) {
     void *pick, *queue, *first;
     unsigned n, idx = 0, count = deque_size(list);
     int found;
@@ -134,6 +134,19 @@ void so_play(int cls, void *list, int at, int how, so_open_fn open) {
     deque_init(queue);
     found = loadSongList(queue, cc_str(pick, REC_NAME), I(pick, REC_CUE_START), cls);
     n = deque_size(queue);
+    if (rev && n > 1) { /* the page shows the stock order the other way round (the Songs page's Z-A): the queue too, so the row tapped is where the page shows it */
+        unsigned i;
+        char tmp[REC_SIZE];
+        for (i = 0; i < n / 2; ++i) {
+            void *a = deque_at(queue, i), *b = deque_at(queue, n - 1 - i);
+            memcpy(tmp, a, REC_SIZE), memcpy(a, b, REC_SIZE), memcpy(b, tmp, REC_SIZE);
+        }
+        if (found >= 0 && (unsigned)found < n) found = (int)(n - 1 - (unsigned)found);
+    }
+    if (reorder && n > 1) { /* the page shows another order (the Folders page's sorts): the queue follows it, and the row's own place in it comes back (-1: left as it was) */
+        int f = reorder(queue, pick);
+        if (f >= 0) found = f;
+    }
     if (n) { /* loadSongList finds a song by file name and CUE start: a duplicate name (01.flac) would always start at the first, so the row's own index wins */
         if ((unsigned)at < n && !strcmp(cc_str(deque_at(queue, (unsigned)at), REC_PATH), cc_str(pick, REC_PATH)))
             idx = (unsigned)at;
@@ -165,3 +178,6 @@ void so_play(int cls, void *list, int at, int how, so_open_fn open) {
     open(queue, (int)idx, cls);
     deque_destroy(queue);
 }
+
+void so_play_dir(int cls, void *list, int at, int how, so_open_fn open, int rev) { so_play_with(cls, list, at, how, open, rev, (so_reorder_fn)0); }
+void so_play(int cls, void *list, int at, int how, so_open_fn open) { so_play_with(cls, list, at, how, open, 0, (so_reorder_fn)0); }

@@ -18,14 +18,15 @@ SHOWLIST, G_CLASS, SEL_VEC, NAV_TITLE = (pod.DATA[k][0] for k in ('PDEQ_SHOWLIST
 UI = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_folders.bin') if WORK else None
 T_LIST, T_SD, T_OTG, T_DIR, T_FILE = 1, 2, 3, 4, 8
 WIDGETS = ('view_grid', 'btn_return', 'btn_backtoplayer', 'btn_select', 'btn_selall', 'btn_play', 'btn_shuffle', 'sg_add', 'sg_del', 'label_title', 'sg_title', 'label_status',
-           'label_row_title', 'sg_bar', 'img_nb_fade')
+           'label_row_title', 'sg_bar', 'img_nb_fade') + VS_WIDGETS
 ICONS = ('pod_ic_folders', 'fo_ic_sd', 'fo_ic_usb', 'pod_ic_cdripper', 'pod_ic_playlists', 'fo_ic_file', 'pod_ic_nowplaying')
 ROOT = [(T_SD, 'SD', '/mnt/mmc'), (T_OTG, 'OTG', '/mnt/usb'), (T_SD, 'CD Library', '/mnt/mmc/Ripper')]
 TREE = {
-    '/mnt/mmc': [(T_DIR, 'Music'), (T_DIR, '.m1plus'), (T_DIR, 'Podcasts'), (T_DIR, 'Blank'), (T_FILE, 'readme.mp3'), (T_FILE, '.hidden.flac')],
+    '/mnt/mmc': [(T_DIR, 'Blank'), (T_DIR, '.m1plus'), (T_DIR, 'Music'), (T_DIR, 'Podcasts'), (T_DIR, 'Sort'), (T_FILE, 'readme.mp3'), (T_FILE, '.hidden.flac')],
     '/mnt/mmc/Music': [(T_DIR, 'Kind of Blue'), (T_FILE, '01 So What.flac'), (T_FILE, '02 Freddie Freeloader.FLAC'), (T_FILE, '03 Blue in Green.flac'), (T_LIST, 'Mix.m3u8')],
     '/mnt/mmc/Music/Kind of Blue': [(T_FILE, 'a.flac')],
     '/mnt/mmc/Podcasts': [(T_DIR, '.cache')],   # only a dot name: the stock load lists it, our page shows "Empty folder"
+    '/mnt/mmc/Sort': [(T_FILE, 'b.mp3'), (T_DIR, 'zeta'), (T_FILE, 'A.flac'), (T_FILE, '10 x.ogg'), (T_DIR, 'Alpha'), (T_FILE, '2 x.mp3'), (T_LIST, 'Mix.m3u8'), (T_FILE, 'c.FLAC'), (T_DIR, 'beta')],   # the listing order is not the name order
     '/mnt/mmc/Blank': [],   # nothing at all: toolsLoadDirectory returns 0
     '/mnt/mmc/.m1plus': [],
 }
@@ -84,6 +85,16 @@ class FM(SG.SongsMachine):
             self.setword(out, self.offs.pop())
         self.f_list(); return 1
 
+    def _statx(self, u, intno, _):
+        """The statx syscall (ft_statx): stx_mtime.tv_sec of the path from self.mtimes, STATX_MTIME in the mask; an unknown path fails."""
+        path = self.read_cstr(u.reg_read(UC_MIPS_REG_A1))
+        buf = self.word(u.reg_read(UC_MIPS_REG_SP) + 16)
+        self.statx_paths.append(path)
+        if path not in self.mtimes:
+            u.reg_write(UC_MIPS_REG_A3, 1); u.reg_write(UC_MIPS_REG_V0, 2); return
+        u.mem_write(buf, bytes(256)); u.mem_write(buf, struct.pack('<I', 0x40)); u.mem_write(buf + 112, struct.pack('<Q', self.mtimes[path]))
+        u.reg_write(UC_MIPS_REG_A3, 0); u.reg_write(UC_MIPS_REG_V0, 0)
+
     def _hook(self, u, address, size, _):
         name = self.handlers.get(address, '')
         a0, a1, a2, a3 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3))
@@ -106,6 +117,8 @@ class FM(SG.SongsMachine):
 
 def folder_machine(window=0x20001000, usb=False):
     m = FM()
+    m.mtimes, m.statx_paths, m.copy_queue = {}, [], True
+    m.u.hook_add(UC_HOOK_INTR, m._statx)
     m.window = window
     m.load_image = 0
     m.present_usb = usb
@@ -173,6 +186,12 @@ def click(m, name):
     return list(m.calls)
 
 
+def open_select(m):
+    """The \"...\" card's Select row (the old Select button)."""
+    click(m, 'btn_more')
+    return click(m, 'vs_item7')
+
+
 def vis(m, name):
     w = m.widgets[name]
     return m.props.get((w, 'visible'), 1), m.props.get((w, 'sensitive'), 1)
@@ -202,11 +221,21 @@ def asset_tests(ctx):
            'a stock list under the 50 px navbar (400 high, scroll_view 310 wide with the stock scroll bar) holding the content view')
     nb = f('navigationbar_view')
     k = {c.name: c for c in nb.children}
-    expect((k['btn_select'].x, k['btn_select'].w) == (214, 46) and k['btn_select'].get('style:normal:icon') == 'pod_nav_selectl' and k['btn_select'].get('visible') != 'false'
-           and k['btn_select'].x + k['btn_select'].w == k['btn_backtoplayer'].x and k['btn_backtoplayer'].get('style:normal:icon') == 'ah_nav_play'
-           and k['btn_backtoplayer'].get('style:pressed:icon') == 'ah_nav_play_down', 'Select | Now Playing is one glass capsule: Select the left cap, flush against Now Playing, the right cap')
+    expect(k['btn_select'].get('visible') == 'false' and k['btn_select'].get('sensitive') == 'false' and (k['btn_select'].x, k['btn_select'].w) == (214, 46)
+           and k['btn_select'].get('style:normal:icon') == 'pod_nav_selectl' and k['btn_select'].get('style:pressed:icon') == 'pod_nav_selectl_down',
+           'btn_select: hidden and insensitive, Select (pod_nav_selectl, the left cap at 214) for a playlist file\'s tracks, where the "..." card would hold Select alone')
+    expect((k['btn_more'].x, k['btn_more'].w) == (214, 46) and k['btn_more'].get('style:normal:icon') == 'pod_nav_more' and k['btn_more'].get('visible') != 'false'
+           and k['btn_more'].x + k['btn_more'].w == k['btn_backtoplayer'].x and k['btn_backtoplayer'].get('style:normal:icon') == 'ah_nav_play'
+           and k['btn_backtoplayer'].get('style:pressed:icon') == 'ah_nav_play_down', '"..." | Now Playing is one glass capsule (the Songs and Artists one): the "..." the left cap at 214, flush against Now Playing, the right cap; no Select button of its own')
     expect(k['label_title'].get('visible') == 'false' and k['label_title'].w == 214 - 58 and k['btn_selall'].get('visible') == 'false' and k['btn_selall'].get('sensitive') == 'false',
-           'the small title is hidden until the large one has scrolled away (it runs to Select); Select All is hidden and insensitive')
+           'the small title is hidden until the large one has scrolled away (it runs to the "..."); Select All is hidden and insensitive')
+    scrim, card = f('vs_scrim'), f('vs_card')
+    expect(scrim is not None and card is not None and scrim.get('visible') == 'false' and card.get('visible') == 'false' and root.children[-1] is card,
+           'the card and its scrim are in the asset, hidden')
+    expect(pod_pages.FOLDERS_SORT_KEYS[:3] == ('Name', 'Date Modified', 'Type') and len(pod_pages.FOLDERS_SORT_KEYS) == 4 and all(k in pod_i18n.TEXT for k in pod_pages.FOLDERS_SORT_KEYS),
+           'the card\'s sort rows are Name, Date Modified and Type (translated; the fourth slot is the unused one)')
+    expect('folders-sort' in pod_pages.SETTING_FILES and pod_pages.SETTING_FILES.index('folders-sort') == pod_pages.SETTING_FILES.index('songs-sort-rev') + 1 and pod_pages.SETTING_FILES.count('folders-sort') == 1,
+           'folders-sort is on the Settings Files page, after songs-sort-rev (patch/setfiles.c has it in the same place)')
     big = f('sg_title')
     expect((big.x, big.y, big.h) == (O['SG_TITLE_X'], 0, O['SG_TITLE_H']) and big.get('style:normal:font_size') == '32' and big.get('sensitive') == 'false', 'the large title is the Songs page\'s: 32 px at x 12, insensitive')
     for n, x in (('btn_play', O['SG_PILL_X0']), ('btn_shuffle', O['SG_PILL_X1'])):
@@ -272,7 +301,7 @@ def rows_tests(ctx):
     enter(m, 'SD')
     blits, texts, fills = paint(m)
     names = [t for (t, r), s in texts if s == 'label_row_title']
-    expect(m.word(LAYER) == 2 and names == ['Music', 'Podcasts', 'Blank', 'readme.mp3'],
+    expect(m.word(LAYER) == 2 and names == ['Blank', 'Music', 'Podcasts', 'Sort', 'readme.mp3'],
            f'inside SD: the dot folder and the dot file are not shown, a file is shown by its file name ({names})')
     expect(vis(m, 'btn_play') == (1, 1) and vis(m, 'btn_shuffle') == (1, 1), 'the folder holds an audio file: the pills show')
     expect(m.wtext.get(m.widgets['sg_title']) == 'SD' and m.wtext.get(m.widgets['label_title']) == 'SD', 'the titles are the folder\'s name (the stock title buffer)')
@@ -287,7 +316,7 @@ def rows_tests(ctx):
     enter(m, 'SD')
     blits, texts, fills = paint(m)
     wave = [b for b in blits if b[2][0] == F['FO_MARK_X']]
-    expect(len(wave) == 1 and wave[0][2][1] == TOP + F['FO_ICON_Y'], 'the folder that holds the playing file carries the wave')
+    expect(len(wave) == 1 and wave[0][2][1] == TOP + ROW + F['FO_ICON_Y'], 'the folder that holds the playing file carries the wave')
     # press fill
     m = opened()
     touch(m, 'down', 100, SCREEN_Y0 + TOP_PLAIN + 20, 'fo_on_down')
@@ -334,7 +363,7 @@ def levels_tests(ctx):
            f'the stock load leaves the layer, the path, the title and the shown list (*0xa045d8) alone ({after})')
     blits, texts, fills = paint(m)
     names = [t for (t, r), s in texts if s == 'label_row_title']
-    expect(names == ['Music', 'Podcasts', 'Blank', 'readme.mp3'], f'the page still shows the parent folder\'s rows ({names})')
+    expect(names == ['Blank', 'Music', 'Podcasts', 'Sort', 'readme.mp3'], f'the page still shows the parent folder\'s rows ({names})')
     m = opened(); enter(m, 'SD'); enter(m, 'Music'); m.fail_list = True
     m.calls.clear(); enter(m, 'Mix.m3u8')
     expect([c[1] for c in m.calls if c[0] == 'toast'] == ['msg_notfile'], 'a playlist file that fails keeps the stock "File Not Found"')
@@ -392,19 +421,19 @@ def select_tests(ctx):
     """6. Select mode: marks on folders and audio files, Select All, Delete and Add on the stock selection vector; no Select at the root."""
     expect = ctx.expect
     m = opened()
-    expect(vis(m, 'btn_select') == (0, 0) and vis(m, 'btn_backtoplayer') == (1, 1) and m.props.get((m.widgets['btn_backtoplayer'], 'style:normal:icon')) == 'ah_nav_np'
+    expect(vis(m, 'btn_more') == (0, 0) and vis(m, 'btn_backtoplayer') == (1, 1) and m.props.get((m.widgets['btn_backtoplayer'], 'style:normal:icon')) == 'ah_nav_np'
            and m.props.get((m.widgets['btn_backtoplayer'], 'style:pressed:icon')) == 'ah_nav_np_down',
            'the root list (SD, OTG, CD Library): no Select; Now Playing alone is the glass disc')
     enter(m, 'SD')
-    expect(vis(m, 'btn_select') == (1, 1) and m.props.get((m.widgets['btn_backtoplayer'], 'style:normal:icon')) == 'ah_nav_play' and m.props.get((m.widgets['btn_backtoplayer'], 'style:pressed:icon')) == 'ah_nav_play_down',
+    expect(vis(m, 'btn_more') == (1, 1) and m.props.get((m.widgets['btn_backtoplayer'], 'style:normal:icon')) == 'ah_nav_play' and m.props.get((m.widgets['btn_backtoplayer'], 'style:pressed:icon')) == 'ah_nav_play_down',
            'inside a storage: Select | Now Playing, Now Playing the capsule\'s right cap')
-    click(m, 'btn_select'); m.layer = 1; m.f_list(); m.calls.clear()
+    open_select(m); m.layer = 1; m.f_list(); m.calls.clear()
     fn, ctxp = m.bound[(m.window, O['EVT_WINDOW_TO_FG'])]; m.call(fn, a0=ctxp, a1=0, count=900000000)
-    expect(vis(m, 'btn_selall') == (0, 0) and vis(m, 'sg_bar')[0] == 0 and vis(m, 'btn_select') == (0, 0), 'select mode on when the list becomes the root: it ends, no Select')
+    expect(vis(m, 'btn_selall') == (0, 0) and vis(m, 'sg_bar')[0] == 0 and vis(m, 'btn_more') == (0, 0), 'select mode on when the list becomes the root: it ends, no Select')
     m = opened(); enter(m, 'SD'); enter(m, 'Music')
     m.present.update(f'/mnt/mmc/Music/{n}' for n in ('01 So What.flac', '02 Freddie Freeloader.FLAC', '03 Blue in Green.flac'))
-    click(m, 'btn_select')
-    expect(vis(m, 'btn_select') == (0, 0) and vis(m, 'btn_backtoplayer') == (0, 0) and vis(m, 'btn_selall') == (1, 1) and vis(m, 'sg_bar') == (1, 1) and m.props.get((m.widgets['btn_play'], 'sensitive')) == 0,
+    open_select(m)
+    expect(vis(m, 'btn_more') == (0, 0) and vis(m, 'btn_backtoplayer') == (0, 0) and vis(m, 'btn_selall') == (1, 1) and vis(m, 'sg_bar') == (1, 1) and m.props.get((m.widgets['btn_play'], 'sensitive')) == 0,
            'select mode: Select and Now Playing give way to Select All and the bar; the pills stay, dead')
     blits, texts, fills = paint(m)
     marks = [b for b in blits if b[2][2] == O['SG_MARK']]
@@ -427,7 +456,7 @@ def select_tests(ctx):
     expect(bd and bd[0][1] == 1 and bd[0][5] == 1 and bd[0][6] == [0, 1, 3] and any(c[0] == 'toast' and c[1] == 'msg_delfilesuccess' for c in calls)
            and any(c[0] == 'confirm' and c[1] == 'Delete folder and everything in it?' and c[2] == 1 for c in calls), f'Delete (a folder and files marked): the confirm (kind 1) warns about the folder, then the stock sequence, batch_delete_file(1, list, vector, 0, 1) on the marked records, the message ({bd})')
     expect(m.names().count('folder_reload') >= 1 and vis(m, 'sg_bar')[0] == 0, 'the list is read again and select mode is over')
-    m2 = opened(); enter(m2, 'SD'); enter(m2, 'Music'); click(m2, 'btn_select'); tap_row(m2, 0)
+    m2 = opened(); enter(m2, 'SD'); enter(m2, 'Music'); open_select(m2); tap_row(m2, 0)
     expect(m2.word(LAYER) == 3 and 'folder_enter' not in m2.names() and m2.wtext[m2.widgets['label_title']] == '1 Selected', 'in select mode a tap on a folder marks it instead of entering')
     tap_row(m2, 0)
     expect(m2.wtext[m2.widgets['label_title']] == '0 Selected', 'a second tap unmarks it')
@@ -440,19 +469,19 @@ def select_tests(ctx):
     expect(bd and bd[0][1] == 1 and bd[0][5] == 1 and bd[0][6] == [0], f'Delete with a marked folder: the folder record is on the vector of batch_delete_file(1, ..., 0, 1), which removes it with rm -rf ({bd})')
     expect(any(c[0] == 'confirm' and c[1] == 'Delete folder and everything in it?' for c in calls), 'a lone marked folder: the folder confirm')
     m3 = opened(); enter(m3, 'SD'); enter(m3, 'Music'); m3.present.update(f'/mnt/mmc/Music/{n}' for n in ('01 So What.flac', '02 Freddie Freeloader.FLAC'))
-    click(m3, 'btn_select'); tap_row(m3, 1); tap_row(m3, 2); m3.confirm_yes = True; m3.calls.clear()
+    open_select(m3); tap_row(m3, 1); tap_row(m3, 2); m3.confirm_yes = True; m3.calls.clear()
     calls = click(m3, 'sg_del')
     expect(any(c[0] == 'confirm' and c[1] == 'msg_delfile' and c[2] == 1 for c in calls) and not any(c[0] == 'confirm' and c[1] != 'msg_delfile' for c in calls),
            'Delete with files only: the stock "Delete File?" confirm')
-    m2 = opened(); enter(m2, 'SD'); enter(m2, 'Music'); click(m2, 'btn_select'); tap_row(m2, 0); tap_row(m2, 2); m2.calls.clear()
+    m2 = opened(); enter(m2, 'SD'); enter(m2, 'Music'); open_select(m2); tap_row(m2, 0); tap_row(m2, 2); m2.calls.clear()
     calls = click(m2, 'sg_add')
     expect([c for c in calls if c[0] == 'set_selectindex'] == [('set_selectindex', 0), ('set_selectindex', 2)] and any(c[0] == 'navigator_to_with_context' and c[1] == 'playlist_page' for c in calls),
            'Add with a marked folder: its record and the file on the vector, the stock picker (batch_add_file adds the folder\'s audio files)')
-    m = opened(); enter(m, 'SD'); enter(m, 'Music'); click(m, 'btn_select'); tap_row(m, 1)
+    m = opened(); enter(m, 'SD'); enter(m, 'Music'); open_select(m); tap_row(m, 1)
     m.confirm_yes = False; m.calls.clear()
     calls = click(m, 'sg_del')
     expect(not any(c[0] == 'batch_delete_file' for c in calls) and vis(m, 'sg_bar')[0] == 1, 'No in the confirm dialog: nothing is deleted, select mode stays')
-    m = opened(); enter(m, 'SD'); enter(m, 'Music'); click(m, 'btn_select')
+    m = opened(); enter(m, 'SD'); enter(m, 'Music'); open_select(m)
     calls = click(m, 'sg_del')
     expect(any(c[0] == 'toast' and c[1] == 'msg_delfilefailed' for c in calls) and not any(c[0] == 'confirm' for c in calls), 'Delete with nothing marked: the stock "failed" message, no dialog')
     m.calls.clear(); calls = click(m, 'sg_add')
@@ -488,7 +517,144 @@ def stale_tests(ctx):
     m.call(PSYMS['fo_on_destroy'], count=4000000)
 
 
-SECTIONS = [asset_tests, open_tests, rows_tests, levels_tests, play_tests, select_tests, stale_tests]   # tools/check.py runs each as its own task
+def order_tests(ctx):
+    """8. The \"...\" card: Select, then Name, Date Modified and Type. Folders stay first in every order; the ticked row reverses; the order is saved in folders-sort; play, row taps and Select follow the order shown."""
+    expect = ctx.expect
+    D = '/mnt/data/m1plus/'
+    SORT = '/mnt/mmc/Sort'
+    MT = {'Alpha': 100, 'beta': 300, 'zeta': 200, 'b.mp3': 500, 'A.flac': 400, '2 x.mp3': 600, 'c.FLAC': 400, '10 x.ogg': 50, 'Mix.m3u8': 700}
+    FOLDERS_AZ, FILES_AZ = ['Alpha', 'beta', 'zeta'], ['2 x.mp3', '10 x.ogg', 'A.flac', 'b.mp3', 'c.FLAC', 'Mix.m3u8']
+    ORDERS = {   # (sort, reversed): the rows top to bottom (folders first in each)
+        (0, 0): FOLDERS_AZ + FILES_AZ, (0, 1): FOLDERS_AZ[::-1] + FILES_AZ[::-1],
+        (1, 0): ['beta', 'zeta', 'Alpha', 'Mix.m3u8', '2 x.mp3', 'b.mp3', 'A.flac', 'c.FLAC', '10 x.ogg'], (1, 1): ['Alpha', 'zeta', 'beta', '10 x.ogg', 'A.flac', 'c.FLAC', 'b.mp3', '2 x.mp3', 'Mix.m3u8'],
+        (2, 0): FOLDERS_AZ + ['A.flac', 'c.FLAC', 'Mix.m3u8', '2 x.mp3', 'b.mp3', '10 x.ogg'], (2, 1): FOLDERS_AZ + ['10 x.ogg', '2 x.mp3', 'b.mp3', 'Mix.m3u8', 'A.flac', 'c.FLAC'],
+    }
+    def fresh(saved=None, big=False):
+        m = folder_machine()
+        m.measure = lambda t: 60
+        m.mtimes = {f'{SORT}/{n}': t for n, t in MT.items()}
+        if saved is not None: m.fs[D + 'folders-sort'] = saved
+        open_page(m); tap_row(m, 0, TOP_PLAIN); tap_row(m, shown(m).index('Sort'))
+        for i, t in enumerate(pod_pages.FOLDERS_SORT_KEYS): m.wtext[m.widgets[f'vs_label{i}']] = t
+        for i in range(4): m.wtext[m.widgets[f'vs_sub{i}']] = 'A–Z'
+        m.calls.clear(); m.statx_paths.clear()
+        return m
+    def shown(m):
+        names, vh = {}, m.props.get((m.sv, 'virtual_h'), 0) or VIEW_H
+        for off in range(0, max(vh - VIEW_H, 0) + 200, 200):
+            scroll_to(m, off); _, texts, _ = paint(m)
+            for (t, r), s in texts:
+                if s == 'label_row_title': names[r[1] + off] = t
+        scroll_to(m, 0)
+        return [names[y] for y in sorted(names)]
+    def sub(m, k): return [utf8(c[2]) for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets[f'vs_sub{k}']][-1:]
+    def ticked(m): return [i for i in range(3) if dict((c[1], c[2]) for c in m.calls if c[0] == 'widget_set_visible').get(m.widgets[f'vs_tick{i}'])]
+    def pick(m, row):
+        click(m, 'btn_more'); m.calls.clear()
+        return click(m, f'vs_item{row}')
+    # the default: Name A-Z, folders first; the stock listing order is not shown
+    m = fresh()
+    expect(shown(m) == ORDERS[(0, 0)], f'no folders-sort: Name A-Z, folders first, digit runs by value, case folded ({shown(m)})')
+    expect(m.statx_paths == [], 'Name reads no modification time')
+    click(m, 'btn_more')
+    expect(vis(m, 'vs_scrim') == (1, 1) and vis(m, 'vs_card') == (1, 1) and [vis(m, f'vs_item{i}') for i in (7, 0, 1, 2)] == [(1, 1)] * 4 and [vis(m, f'vs_item{i}') for i in (3, 4, 5, 6)] == [(0, 0)] * 4,
+           'the \"...\" opens the card: Select, Name, Date Modified, Type; the fourth sort row, Grid, List and Search are hidden')
+    expect(ticked(m) == [0] and sub(m, 0) == ['A–Z'] and all(m.props.get((m.widgets['vs_card'], f'style:{st}:bg_image')) == 'vs_glass4' for st in ('normal', 'pressed', 'over')) and vis(m, 'vs_hair')[0] == 1,
+           'Name is ticked with A–Z under it; four rows in vs_glass4 with the one hairline under Select')
+    # each row, then the ticked row again
+    for k, (first, second) in enumerate((('A–Z', 'Z–A'), ('Newest First', 'Oldest First'), ('A–Z', 'Z–A'))):
+        m = fresh()
+        calls = pick(m, k)
+        if k == 0:   # Name is the ticked default: its first tap reverses
+            expect(m.fs.get(D + 'folders-sort') == b'a\n' and shown(m) == ORDERS[(0, 1)], 'the ticked Name again: Z–A saved as "a", the list reversed inside each group')
+            calls = pick(m, 0)
+            expect(m.fs.get(D + 'folders-sort') == b'0\n' and shown(m) == ORDERS[(0, 0)], 'and again: A–Z, "0"')
+            continue
+        expect(m.fs.get(D + 'folders-sort') == f'{k}\n'.encode() and ('rename', D + 'folders-sort.tmp', D + 'folders-sort') in calls and shown(m) == ORDERS[(k, 0)],
+               f'row {k}: saved as "{k}" (atomic), shown {ORDERS[(k, 0)]}')
+        click(m, 'btn_more')
+        expect(ticked(m) == [k] and sub(m, k) == [first], f'row {k} is ticked with {first} under it')
+        calls = pick(m, k)
+        expect(m.fs.get(D + 'folders-sort') == 'abc'[k].encode() + b'\n' and shown(m) == ORDERS[(k, 1)], f'row {k} again: reversed, saved as "{"abc"[k]}", shown {ORDERS[(k, 1)]}')
+        click(m, 'btn_more')
+        expect(sub(m, k) == [second], f'the line under row {k} reads {second}')
+    m = fresh()
+    pick(m, 1)
+    expect(sorted(m.statx_paths) == sorted(f'{SORT}/{n}' for n in MT), 'Date Modified: one statx per entry shown, the entry\'s path')
+    # another row starts in its default direction
+    m = fresh(b'c\n'); pick(m, 0)
+    expect(m.fs.get(D + 'folders-sort') == b'0\n' and shown(m) == ORDERS[(0, 0)], 'from Type Z–A to Name: its default direction, A–Z')
+    # the saved order at open, every level
+    for data, want in ((None, (0, 0)), (b'0\n', (0, 0)), (b'1\n', (1, 0)), (b'2', (2, 0)), (b'a\n', (0, 1)), (b'b\n', (1, 1)), (b'c\n', (2, 1)), (b'x\n', (0, 0)), (b'3\n', (0, 0)), (b'd\n', (0, 0))):
+        m = fresh(data)
+        expect(shown(m) == ORDERS[want], f'folders-sort {data!r}: {want} {shown(m)}')
+    m = fresh(b'c\n'); m.calls.clear()
+    tap_row(m, shown(m).index('Alpha')); click(m, 'btn_return'); m.calls.clear()
+    expect(shown(m) == ORDERS[(2, 1)], 'the saved order applies at every level: back in the folder it is Type Z–A still')
+    # a failed save changes nothing
+    m = fresh(); m.fail.add(('rename', D + 'folders-sort')); pick(m, 2)
+    expect(shown(m) == ORDERS[(0, 0)] and D + 'folders-sort' not in m.fs, 'a save that fails changes nothing')
+    # Play and the row taps follow the order shown; the queue is put in that order
+    present = {f'{SORT}/{n}' for n in MT}
+    for saved, order8 in ((None, ['2 x.mp3', '10 x.ogg', 'A.flac', 'b.mp3', 'c.FLAC']), (b'a\n', ['c.FLAC', 'b.mp3', 'A.flac', '10 x.ogg', '2 x.mp3']), (b'c\n', ['10 x.ogg', '2 x.mp3', 'b.mp3', 'A.flac', 'c.FLAC']),
+                          (b'1\n', ['2 x.mp3', 'b.mp3', 'A.flac', 'c.FLAC', '10 x.ogg'])):
+        m = fresh(saved); m.present.update(present); m.calls.clear()
+        calls = click(m, 'btn_play')
+        q = [m.read_cstr(m.word(r + O['REC_NAME'])) for r in m.played[0]]
+        expect(q == order8 and m.played[1] == 0, f'folders-sort {saved!r}: Play starts at the first file shown and the queue is the files in the order shown ({q}, {m.played[1]})')
+        m = fresh(saved); m.present.update(present); m.calls.clear()
+        rows = shown(m)
+        calls = tap_row(m, rows.index('b.mp3'))
+        q = [m.read_cstr(m.word(r + O['REC_NAME'])) for r in m.played[0]]
+        expect(q == order8 and q[m.played[1]] == 'b.mp3' and [c for c in calls if c[0] == 'loadSongList'][0][1] == 'b.mp3', f'folders-sort {saved!r}: the row b.mp3 plays at its place in that queue ({q}, {m.played[1]})')
+    # Select and Select All use the order shown (marks by stock record), a folder's tap marks it
+    m = fresh(b'a\n'); open_select(m); m.confirm_yes = True
+    tap_row(m, 0)
+    shown_recs = [m.read_cstr(m.word(r + O['REC_NAME'])) for r in m.shown]
+    calls = click(m, 'sg_del')
+    expect([c[1] for c in calls if c[0] == 'set_selectindex'] == [shown_recs.index('zeta')], 'Z–A: the first row shown is zeta, the selection vector gets its stock record')
+    m = fresh(b'a\n'); open_select(m); m.confirm_yes = True
+    tap_row(m, 0); tap_row(m, 4)
+    calls = click(m, 'sg_del')
+    expect(sorted(c[1] for c in calls if c[0] == 'set_selectindex') == sorted(shown_recs.index(n) for n in ('zeta', 'c.FLAC')), 'rows 0 and 4 shown (zeta, c.FLAC; row 3 is the playlist file) are the records marked')
+    # Date Modified is not offered where a level is too big to stat; the level shows by Name
+    big = F['FO_STAT_MAX'] + 1
+    TREE['/mnt/mmc/Big'] = [(T_FILE, f'f{i:04d}.mp3') for i in range(big - 1, -1, -1)] + [(T_DIR, 'Dir')]
+    TREE['/mnt/mmc'].insert(0, (T_DIR, 'Big'))
+    try:
+        m = folder_machine(); m.measure = lambda t: 60
+        open_page(m); enter(m, 'SD')
+        for i, t in enumerate(pod_pages.FOLDERS_SORT_KEYS): m.wtext[m.widgets[f'vs_label{i}']] = t
+        pick(m, 1)   # Date Modified saved (the SD level is small)
+        m.statx_paths.clear(); tap_row(m, shown(m).index('Big'))
+        names = shown(m)
+        click(m, 'btn_more')
+        expect(vis(m, 'vs_item1') == (0, 0) and [vis(m, f'vs_item{i}')[0] for i in (7, 0, 2)] == [1, 1, 1] and names[:3] == ['Dir', 'f0000.mp3', 'f0001.mp3'] and m.statx_paths == []
+               and m.props.get((m.widgets['vs_card'], 'style:normal:bg_image')) == 'vs_glass3',
+               f'{big} entries: no Date Modified row (three rows, vs_glass3), shown by Name, nothing stat-ed ({names[:3]})')
+    finally:
+        TREE['/mnt/mmc'].pop(0); del TREE['/mnt/mmc/Big']
+    # the root has no card and Now Playing is the disc; a level of a playlist file has Select only and keeps its order
+    m = fresh()
+    expect(vis(m, 'btn_more') == (1, 1) and vis(m, 'btn_select') == (0, 0), 'inside a folder the \"...\" shows, Select does not')
+    m.layer = 1; m.f_list(); m.calls.clear()
+    fn, ctxp = m.bound[(m.window, O['EVT_WINDOW_TO_FG'])]; m.call(fn, a0=ctxp, a1=0, count=900000000)
+    expect(vis(m, 'btn_more') == (0, 0) and vis(m, 'vs_card')[0] == 0 and m.props.get((m.widgets['label_title'], 'w'), 0) in (0, 260 - 58) , 'at the root: no \"...\"')
+    m = fresh()
+    m.u.mem_write(M3U, b'/mnt/mmc/Sort/Mix.m3u8\0')
+    fn, ctxp = m.bound[(m.window, O['EVT_WINDOW_TO_FG'])]
+    m.layer = 2; m.f_list(); m.call(fn, a0=ctxp, a1=0, count=900000000)
+    stock = [m.read_cstr(m.word(r + O['REC_NAME'])) for r in m.shown]
+    expect(vis(m, 'btn_select') == (1, 1) and vis(m, 'btn_more') == (0, 0) and vis(m, 'vs_card')[0] == 0 and shown(m) == stock,
+           'a playlist file\'s tracks keep the file\'s order; the card would hold Select alone, so the navbar\'s Select button takes the "..." place (no card)')
+    click(m, 'btn_select')
+    expect(vis(m, 'sg_bar') == (1, 1) and vis(m, 'btn_selall') == (1, 1) and vis(m, 'vs_card')[0] == 0 and vis(m, 'btn_select') == (0, 0) and vis(m, 'btn_more') == (0, 0),
+           'Select enters select mode at once, no card; Select is hidden there as the "..." was')
+    click(m, 'btn_return')
+    expect(vis(m, 'sg_bar')[0] == 0 and vis(m, 'btn_select') == (1, 1), 'leaving select mode brings Select back')
+
+
+SECTIONS = [asset_tests, open_tests, rows_tests, levels_tests, play_tests, select_tests, stale_tests, order_tests]   # tools/check.py runs each as its own task
 
 
 def run(ctx):
