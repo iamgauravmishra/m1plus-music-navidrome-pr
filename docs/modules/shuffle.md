@@ -44,7 +44,7 @@ allowed (set from the Queue page; Now Playing's single button shows Shuffle then
   (`pg_episode_queue`, `patch/podcasts.c`, also used by the iPod). `sh_load_playlist` then shuffles the replacement. So an old queue over 65,536
   songs does not stop Shuffle for a small new one, and no record of the old queue is copied. `pod_set_mode`, `pod_set_in_order`, the Queue page's
   Shuffle button and the stock mode requests (hook) keep the reordering path (no queue load follows).
-- **A queue loaded while it is on** (a song tap, Play all, the stock folder browser and the stock resume after a reboot): `sh_load_playlist`,
+- **A queue loaded while it is on** (a song tap, Play, the stock folder browser and the stock resume after a reboot): `sh_load_playlist`,
   the hook on `mclLoadPlayList`, lets stock load the queue, then moves the song at the load index to slot 0, shuffles the rest
   (`shuffle_load`: one array `p`, which is also `sh.orig`; under the payload lock) and sets the play position to 0 with `mclSetPlayPos` (what `mclStartPlayer` reads).
   Every loader goes through it: `start_player` (`0x4e46e0`), `refresh_playqueue` (`0x4df59c`, the stock rebuild after a library change)

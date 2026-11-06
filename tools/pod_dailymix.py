@@ -336,7 +336,7 @@ DP_TITLE_Y, DP_SUB_Y, DP_UPD_Y, DP_BTN_Y, DP_DESC_Y = 193, 218, 239, 263, 317   
 DP_SHUF_X, DP_PLAY_X = 32, 86                                        # the Shuffle touch rectangle and the pill: 40 + 12 + 148 + 12 + 40 = 252 px centred on x 160 (drawn 34 .. 286)
 DP_ADD_X, DP_ADD_W = 244, 44                                         # the Add disc's touch rectangle: the Shuffle one mirrored about x 160 (DP_SHUF_X + DP_ADD_X + DP_ADD_W = 320)
 DP_ROWS_Y = DP_DESC_Y + DP_DESC_LINES * DP_DESC_PITCH + DP_DESC_BELOW    # 371: the first song's row (the description is two lines' high in every language, so the rows never move)
-DP_PILL_INK = 0x1e1c1c                                               # the pill's text colour #1C1C1E as r | g << 8 | b << 16 (the glyph image dp_play is the same)
+DP_PILL_INK = 0x141414                                               # the pill's text colour #141414 as r | g << 8 | b << 16 (the glyph image dp_play is the same; the album's AH_PLAY_INK)
 DP_BOTTOM = 16                                                       # air under the last row
 DP_V_MIN = 48                                                        # the tint's brightest channel is at least this (never near black)
 DP_LUM_MAX = 4588                                                    # ... and its luminance (16 bit, 0.07) at most: white text 8.7:1, the greys below 4.5:1

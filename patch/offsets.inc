@@ -253,7 +253,7 @@
  * @0x5edb88): the page's total comes from the durations table (patch/durations.c). CLASSINFO_ALL_SONGS: the byte loadAlbumdetailList sets in the browsing record for the stock
  * All songs row (0xff01, @0x4eebec).
  * Geometry in the window (320 wide, the lines centred on x 160): the cover AH_ART square at (AH_ART_X, AH_ART_Y) with its four AH_CORNER px
- * corners cut; the title, artist and "year . N tracks" lines centred in AH_TEXT_W; the round Shuffle (AH_SHUF_W) and the Play all
+ * corners cut; the title, artist and "year . N tracks" lines centred in AH_TEXT_W; the round Shuffle (AH_SHUF_W) and the Play
  * pill (AH_PLAY_W) centred as a pair; the track rows follow at AH_HDR_H. The list starts at the window's top (the glass controls
  * sit over it), so the header's first rows are padding.
  */
@@ -278,13 +278,15 @@
 #define AH_SHUF_X 42
 #define AH_SHUF_W 44
 #define AH_DISC 40              /* the Shuffle disc as drawn (ah_shuffle*.png), centred in its AH_SHUF_W x AH_BTN_H touch rectangle */
-#define AH_PLAY_X 96            /* AH_SHUF_X + (AH_SHUF_W + AH_DISC) / 2 + 12 (the drawn gap): the pill's touch rectangle starts where it is drawn */
+#define AH_PLAY_X 96            /* AH_SHUF_X + (AH_SHUF_W + AH_DISC) / 2 + 12 (the drawn gap): the pill's touch rectangle starts where it is drawn (a playlist's page uses AH_SHUF_X / AH_PLAY_X too) */
 #define AH_PLAY_W 180
 #define AH_PILL_H 40            /* the pill as drawn (ah_pill*.png), centred in its AH_BTN_H touch rectangle */
 /* The pill's glyph and text: the AH_PILL_GLYPH px glyph, AH_PILL_GAP px, then the measured text, centred as a pair in the pill. */
 #define AH_PILL_GLYPH 16
 #define AH_PILL_GAP 8
-#define AH_HDR_H 344
+/* The header ends 12 px under the Play pill (drawn y 294..334, the touch rectangle AH_BTN_Y 292 + 44 is 2 px taller): the first track row
+ * starts there. A playlist's and the Daily Mix page keep the same 12 px gap under their pills. */
+#define AH_HDR_H 346
 /* Now Playing opens like a track tap (pod_open_player, patch/songops.c): the widget name field the stock pop loop compares
  * (@0x525920 lw a0, 0x10(top)), and at most POP_MAX pages popped. */
 #define WIDGET_NAME 0x10
@@ -298,7 +300,7 @@
 #define AH_WIN_H 450
 #define AH_TINT_A_TOP 64
 #define AH_TINT_A_BOT 200
-#define AH_TINT_ROWS 344        /* AH_HDR_H: the ramp ends with the header */
+#define AH_TINT_ROWS 346        /* AH_HDR_H: the ramp ends with the header */
 /* The tone cache (patch/common.c): entries of {key, tone, stamp}, 12 bytes each. The album page names its album as the stock
  * header does: classinfo + 0xd the title, the artist at +0x10d (+0x20d when g_class_type is 0xff14, @0x524b00). */
 #define TONE_CACHE_N 64
@@ -307,11 +309,11 @@
 #define CLASSINFO_ARTIST_14 0x20d
 #define CLASS_14 0xff14
 /* Our album page (patch/albumpage.c, docs/modules/album-page.md; ui/m1plus_album.bin, tools/pod_ui.py build_album_page, which reads this file and must equal it): the
- * header numbers (AH_*: the cover at (AH_ART_X, AH_ART_Y) with AH_CORNER px corners, the lines at AH_TITLE_Y / AH_ARTIST_Y / AH_META_Y, the Shuffle disc and the Play all pill at
+ * header numbers (AH_*: the cover at (AH_ART_X, AH_ART_Y) with AH_CORNER px corners, the lines at AH_TITLE_Y / AH_ARTIST_Y / AH_META_Y, the Shuffle disc and the Play pill at
  * AH_BTN_Y, the rows from AH_HDR_H) in a list that is the whole window (AH_WIN_H, the glass controls float over it). A row is LIST_ROW_H high: the track's number (right aligned in
  * ROW_NUM_W, ROW_NUM_W3 from 100) from x AB_NUM_X, the title AB_NUM_GAP after it to AB_TEXT_END, both in a AB_TEXT_H high line AB_TEXT_Y down the row; the press fill and the 1 px
  * hairline are translucent white over the tint (AB_PRESS, AB_HAIR) across AB_ROW_W (the list less its scroll bar). The select mode's glass buttons (the all / none toggle at
- * AB_SELALL_X, AB_SELALL_W wide; Add, Delete, Cancel AB_BTN_W wide) take the places the stock builder gave them. The Play all pill's text label is AB_TEXT_SLACK wider than its text.
+ * AB_SELALL_X, AB_SELALL_W wide; Add, Delete, Cancel AB_BTN_W wide) take the places the stock builder gave them. The Play pill's text label is AB_TEXT_SLACK wider than its text.
  * AB_COVER_MS: the poll of the cache worker that makes a missing cover. AB_ASSET: the window resource. */
 #define AB_ASSET "m1plus_album"
 #define AB_WINDOW "m1plus_album_page" /* the root widget's name (tools/pod_pages.py ALBUM_PAGE): what navigator_close and the window manager know it by */
@@ -333,7 +335,7 @@
 #define AB_CANCEL_X 268
 #define AB_BTN_W 60
 #define AB_TEXT_SLACK 4
-#define AB_PLAY_TEXT_W 50      /* the English "Play all" at 18 px: where the payload cannot measure the translated text, the pill's pair is centred for this width */
+#define AB_PLAY_TEXT_W 32      /* the English "Play" at 18 px: where the payload cannot measure the translated text, the pill's pair is centred for this width */
 #define AB_COVER_MS 200
 #define AB_FOOT_GAP 14         /* the footer ("13 tracks, 49 minutes", ab_foot) starts this far under the last row, at the number column's left edge AB_NUM_X */
 #define AB_FOOT_TEXT_H 20      /* its label's height; AB_FOOT_PX 15 grey #AAAAAA */
@@ -737,7 +739,9 @@
  * The Songs page (patch/songs.c, docs/modules/songs.md; the widgets are in ui/m1plus_songs.bin, tools/pod_ui.py SG_*, which reads this file and must equal it).
  * The library as one list under the glass navbar: the content view (view_grid, inside the stock list_view > scroll_view, as the Albums page) holds, from its top,
  * the large title (a label, SG_TITLE_PX px, x SG_TITLE_X, SG_TITLE_H high), the Play and Shuffle pills (real flat buttons, SG_PILL_W x SG_PILL_H at x SG_PILL_X0
- * and SG_PILL_X1, y SG_PILL_Y, corner radius SG_PILL_R; the glyph and the label are centred as a pair SG_PILL_GAP apart) and from y SG_TOP the songs: with the
+ * and SG_PILL_X1, y SG_PILL_Y, corner radius SG_PILL_R; the glyph and the label are centred as a pair SG_PILL_GAP apart; a playlist's page has the album page's Shuffle disc and
+ * Play pill instead, hd_shuffle / hd_play at AH_SHUF_X / AH_PLAY_X, 44 px high buttons from y PH_BTN_Y whose pictures are drawn centred in them, the glyph an image and the
+ * text painted by the page, patch/common.c pod_pill_place) and from y SG_TOP the songs: with the
  * stock Title order (sort_flag 0) in sections, each a SG_HDR_H high header (the letter SG_HDR_PX px white at x SG_HDR_X on the page's black, no band, as the Recently Played
  * shelf's header; only the pinned copy is filled, SG_HDR_BG, so the rows scrolling under it are hidden) and its rows; in any other order the rows only. A row is LIST_ROW_H high as the library rows (the cover LIST_ART at (LIST_ART_X, LIST_ART_Y), the title at
  * LIST_TITLE_Y, the artist at LIST_SUB_Y, from x LIST_TEXT_X to SG_TEXT_END, the hairline from there); in select mode every row's content moves SG_SEL_COL right and
@@ -788,7 +792,7 @@
 #define SG_PILL_R 20
 #define SG_PILL_GLYPH 16
 #define SG_PILL_GAP 8
-#define SG_PILL_PX_SMALL 16     /* a pill label too wide beside its glyph at 18 px is drawn at this size (patch/songs.c sg_centre_pill) */
+#define SG_PILL_PX_SMALL 16     /* a pill label too wide beside its glyph at 18 px is drawn at this size (patch/common.c pod_centre_pill) */
 #define SG_TOP 104
 #define SG_HDR_H 28
 #define SG_HDR_X 10
@@ -823,7 +827,8 @@
 #define PH_NAME_W 286
 #define PH_NAME_Y 182           /* 14 px under the cover */
 #define PH_NAME_H 22
-#define PH_PILL_Y 220           /* the Play / Shuffle pills, 16 px under the name's box (no count line: the count is the list's footer); the rows start SG_TOP - SG_PILL_Y - SG_PILL_H = 12 px under them */
+#define PH_PILL_Y 220           /* the Play pill and Shuffle disc as drawn, 16 px under the name's box (no count line: the count is the list's footer); the rows start SG_TOP - SG_PILL_Y - SG_PILL_H = 12 px under them */
+#define PH_BTN_Y 218            /* PH_PILL_Y - (AH_BTN_H - AH_PILL_H) / 2: their 44 px buttons' top (the pill and the disc are drawn centred in them) */
 #define PH_TOP 272              /* PH_PILL_Y + SG_PILL_H + 12: where the rows start (SG_TOP is 104 under the large title) */
 #define PH_COLLAPSE 204         /* the navbar shows the small title once the name's box (its bottom, y 204) has scrolled away */
 #define SG_FOOT_H 52            /* the song count under the last row ("25 songs"): this much content, the text box SG_FOOT_GAP below the row, SG_FOOT_TEXT_H high, from x SG_HDR_X */
@@ -948,7 +953,7 @@
 #define DP_BOTTOM 16
 #define DP_V_MIN 48
 #define DP_LUM_MAX 4588
-#define DP_PILL_INK 0x1e1c1cu     /* the pill's dark text (the glyph image dp_play is the same colour): #1C1C1E as r | g << 8 | b << 16 */
+#define DP_PILL_INK 0x141414u     /* the pill's dark text (the glyph image dp_play is the same colour, the album's AH_PLAY_INK): #141414 as r | g << 8 | b << 16 */
 #define DP_GREY_K 184
 #define DP_ACC_K 208
 #define DP_ROWS_MAX 64          /* songs the page keeps (the mix has MIX_SONGS; a playlist of ours cannot have more, but a rename-proof id could meet a longer one) */

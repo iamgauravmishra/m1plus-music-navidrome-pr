@@ -5,7 +5,7 @@
  * One page, ui/m1plus_songs.bin (docs/modules/songs.md has the whole design): the glass navbar (Back, the small title, the "..." that holds Search Songs, Select, Albums / Songs and Sort, Now Playing) over a
  * stock list, list_view > scroll_view (songs_scrollview) whose ONE child, view_grid, is the content view of the Albums page (patch/albums.c): it paints the rows,
  * the section headers, the pinned header and the select marks itself in its own EVT_AFTER_PAINT, with no widget per song; the stock scroll_view does the scrolling.
- * The content view's only children are the large title and the Play / Shuffle pills (real flat buttons that scroll with it). Beside the list, as widgets of the
+ * The content view's only children are the large title and the Play / Shuffle pills (real flat buttons that scroll with it; a playlist's page has the album page's Shuffle disc and Play pill instead: image buttons, the glyph an image and the text painted here). Beside the list, as widgets of the
  * window: the A-Z rail (outside the scroll_view, so a touch on it never starts a drag) and the letter bubble, the sort card, and the select mode's bar.
  *
  *   data      loadLocalClassList(0xf001) (what allmusic_page_init runs: getAllMusic into *pdeq_showlist, in the stock sort order, sort_flag). The 20,000 songs of a big
@@ -107,6 +107,10 @@ static struct {
     void *
         btn_search; /* the lists that search (not a genre's or an artist's songs): the capsule's left cap at NAV_CF_X, Albums' Cover Flow place */
     void *btn_selall, *btn_play, *btn_shuffle, *btn_add, *btn_del;
+    /* A playlist's header has the album page's Shuffle disc and Play pill instead of the library's two flat pills (btn_play, btn_shuffle): hd_play, hd_shuffle, and the pill's
+     * glyph and hidden text label (sg_glyph, sg_play_text; the text is painted by the content view). Only one set is shown (sg_pills), the other is hidden and insensitive. */
+    void *hd_play, *hd_shuffle;
+    pod_pill_t pill;
     void *st_title, *st_sub; /* hidden labels whose styles are the text styles (the rail's and the header's are az's) */
     void *bar;
     vs_t
@@ -446,6 +450,7 @@ static void sg_paint_rows(void *canvas) {
         grid_tile_t *h = grid_find(&sg.hg, 0);
         if (h) grid_blit(canvas, &sg.hg, h, PH_COVER_X, PH_COVER_Y - off, GRID_VIEW_H);
     }
+    if (sg.head) pod_pill_paint(&sg.pill, canvas, PH_BTN_Y - off); /* a playlist's Play pill text, over its picture */
     sg_span(&r0, &r1);
     for (r = r0; r <= r1; ++r) {
         tile_t *t = sg_tile(r);
@@ -901,10 +906,24 @@ static int sg_on_stale(const void *unused) {
  * Recently Added's toggle between the songs and the albums (docs/modules/recent-albums.md)
  */
 
+/* The Play / Shuffle buttons: the library's two flat pills, or a playlist's header disc and pill (album page style); the set not in use is hidden AND insensitive, the
+ * albums view (rv) has neither, and in select mode the shown ones stay in the content, dead. */
+static void sg_pills(void) {
+    int lib = !sg.rv && !sg.head, hd = !sg.rv && sg.head;
+    widget_set_visible(sg.btn_play, lib, 0);
+    widget_set_visible(sg.btn_shuffle, lib, 0);
+    widget_set_sensitive(sg.btn_play, lib && !sg.select);
+    widget_set_sensitive(sg.btn_shuffle, lib && !sg.select);
+    widget_set_visible(sg.hd_play, hd, 0);
+    widget_set_visible(sg.hd_shuffle, hd, 0);
+    widget_set_sensitive(sg.hd_play, hd && !sg.select);
+    widget_set_sensitive(sg.hd_shuffle, hd && !sg.select);
+    widget_set_visible(sg.pill.glyph, hd, 0); /* (an insensitive image: taps reach hd_play) */
+}
+
 /* The widgets of the view: the albums have no Play / Shuffle pills, no song count and no Select (the card's Select row goes, Albums ticked then). */
 static void rv_ui(void) {
-    sg_show(sg.btn_play, !sg.rv);
-    sg_show(sg.btn_shuffle, !sg.rv);
+    sg_pills();
     if (sg.foot) widget_set_visible(sg.foot, !sg.rv, 0); /* (an insensitive label: shown, never a touch target) */
     vs_offer(&sg.vs, sg_offers());
 }
@@ -1068,8 +1087,7 @@ static void sg_select(int on) {
     if (sg.btn_search) sg_show(sg.btn_search, !on && sg_searches());
     sg_show(sg.btn_selall, on);
     sg_show(sg.bar, on);
-    widget_set_sensitive(sg.btn_play, !on); /* the pills stay in the content, dim and dead (their disabled style) */
-    widget_set_sensitive(sg.btn_shuffle, !on);
+    sg_pills(); /* the pills stay in the content, dim and dead (the library's) or dead (a playlist's) */
     widget_resize(sg.title, (on ? SG_SELALL_X : sg_title_end()) - NAV_TITLE_X, 22);
     widget_set_prop_str(sg.back, "style:normal:icon", on ? "ah_nav_close" : "ah_nav_back");
     widget_set_prop_str(sg.back, "style:over:icon", on ? "ah_nav_close" : "ah_nav_back");
@@ -1457,6 +1475,10 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
     sg.btn_selall = pod_bind(sg.win, "btn_selall", sg_on_selall, (void *)0);
     sg.btn_play = pod_bind(sg.win, "btn_play", sg_on_play, (void *)0);
     sg.btn_shuffle = pod_bind(sg.win, "btn_shuffle", sg_on_shuffle, (void *)0);
+    sg.hd_play = pod_bind(sg.win, "hd_play", sg_on_play, (void *)0);
+    sg.hd_shuffle = pod_bind(sg.win, "hd_shuffle", sg_on_shuffle, (void *)0);
+    sg.pill.glyph = widget_lookup(sg.win, "sg_glyph", 1);
+    sg.pill.ptext = widget_lookup(sg.win, "sg_play_text", 1);
     sg.btn_add = pod_bind(sg.win, "sg_add", sg_on_add, (void *)0);
     sg.btn_del = pod_bind(sg.win, "sg_del", sg_on_delete, (void *)0);
     sg.title = widget_lookup(sg.win, "label_title", 1);
@@ -1478,9 +1500,9 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
     sg.hname = widget_lookup(sg.win, "sg_hname", 1); /* optional: a playlist's header */
     sg.al.win = sg.win, sg.al.sv = sg.sv, sg.al.top = SG_TOP, sg.al.row = ROW;
     if (!sg.foot || !sg.back || !sg.np || !sg.btn_more || !sg.btn_select || !sg.btn_selall || !sg.btn_play ||
-        !sg.btn_shuffle || !sg.btn_add || !sg.btn_del || !sg.title || !sg.view || !sg.sv || !sg.status ||
-        !sg.st_title || !sg.st_sub || !sg.al.st_hdr || !sg.al.st_rail || !sg.al.st_rail_on || !sg.al.rail ||
-        !sg.al.bubble || !sg.al.bubble_letter || !sg.bar) {
+        !sg.btn_shuffle || !sg.hd_play || !sg.hd_shuffle || !sg.pill.glyph || !sg.pill.ptext || !sg.btn_add ||
+        !sg.btn_del || !sg.title || !sg.view || !sg.sv || !sg.status || !sg.st_title || !sg.st_sub || !sg.al.st_hdr ||
+        !sg.al.st_rail || !sg.al.st_rail_on || !sg.al.rail || !sg.al.bubble || !sg.al.bubble_letter || !sg.bar) {
         navigator_back(); /* an asset that is not ours */
         return -2;
     }
@@ -1518,16 +1540,21 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
             grid_placeholder(&sg.hg);
             sg.head = 1;
             sg.al.top = PH_TOP;
-            widget_move(sg.btn_play, SG_PILL_X0, PH_PILL_Y);
-            widget_move(sg.btn_shuffle, SG_PILL_X1, PH_PILL_Y);
+            widget_move(sg.hd_play, AH_PLAY_X, PH_BTN_Y);
+            widget_move(sg.hd_shuffle, AH_SHUF_X, PH_BTN_Y);
             az_fit(sg.hname, sg_name_text());
             sg_show(sg.big, 0);
             widget_set_visible(sg.hname, 1, 0); /* (an insensitive label: shown, never a touch target) */
         } else
             grid_free(&sg.hg);
     }
-    pod_centre_pill(sg.btn_play, SG_PILL_W);
-    pod_centre_pill(sg.btn_shuffle, SG_PILL_W);
+    if (sg.head)
+        pod_pill_place(&sg.pill, PH_BTN_Y);
+    else {
+        pod_centre_pill(sg.btn_play, SG_PILL_W);
+        pod_centre_pill(sg.btn_shuffle, SG_PILL_W);
+    }
+    sg_pills();
     pod_centre_pill(sg.btn_add, SG_BAR_PILL_W);
     pod_centre_pill(sg.btn_del, SG_BAR_PILL_W);
     az_make_disc(&sg.al);

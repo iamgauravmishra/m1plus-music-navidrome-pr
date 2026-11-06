@@ -28,7 +28,7 @@ Open **Extras → Settings** to customize the player. To return to the stock gri
 | Artists | Switch Artist/Album Artist in the navbar, then open an artist's albums |
 | Songs | Jump with the A–Z rail; use Search, Sort or Select from the navbar |
 | Recently Added | The newest songs; the navbar's grid button switches to the newest albums |
-| Album | Play all, shuffle the album, or tap a track; the footer shows the track count and length once measured |
+| Album | Play, shuffle the album, or tap a track; the footer shows the track count and length once measured |
 | Playlists | Open a playlist or use its menu to create, import, export or delete |
 | Shuffle | Shuffle songs, albums or folders from Extras |
 

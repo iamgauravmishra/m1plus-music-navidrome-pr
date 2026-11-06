@@ -666,7 +666,7 @@ def row_menu():
 
 # The Songs page (patch/songs.c, docs/modules/songs.md): the Albums structure (a stock list holding the one content view that paints the rows, headers and
 # pinned header itself) under the glass navbar (Back, the small title, Search / Sort / Select / Now Playing), with the page's own widgets: in the content view the
-# large title and the Play / Shuffle pills (real flat buttons: they scroll with the list); over the list the rail (a view of its own, outside the scroll_view, so a
+# large title and the Play / Shuffle pills (real flat buttons: they scroll with the list; a playlist's header has hidden album-style image buttons, hd_shuffle / hd_play, instead); over the list the rail (a view of its own, outside the scroll_view, so a
 # touch on it never starts a drag) and the letter bubble (insensitive); the sort card (a scrim and the Playlists card's glass) and, hidden until select mode, the
 # bar with the Add to playlist and Delete pills and the navbar's Select All text. Everything that is shown later starts hidden AND insensitive.
 SG_TITLE_PX, SG_HDR_PX, SG_RAIL_PX, SG_BUBBLE_PX, SG_PILL_PX = 32, 20, 12, 56, 18
@@ -984,8 +984,11 @@ def build_songs_page(page):
     # shows these two (hidden and insensitive here, like every decoration it shows later)
     hname = hidden(label('sg_hname', o['PH_NAME_X'], o['PH_NAME_Y'], o['PH_NAME_W'], o['PH_NAME_H'], '', 22, '#FFFFFF', 'center'))
     styled(hname, ('normal',), 'text_align_v', 'middle')
+    # the library's flat pills, and a playlist's header disc and pill (the album page's; hidden, patch/songs.c sg_pills shows one set)
+    pills, ptext = play_header(o['PH_BTN_Y'])
     grid.children = [title, hname, sg_pill('btn_play', o['SG_PILL_X0'], o['SG_PILL_Y'], 'Play', 'sg_play', down=SG_PILL_PRESS_RGB),
-                     sg_pill('btn_shuffle', o['SG_PILL_X1'], o['SG_PILL_Y'], 'Shuffle', 'sg_shuffle', down=SG_PILL_PRESS_RGB), foot]
+                     sg_pill('btn_shuffle', o['SG_PILL_X1'], o['SG_PILL_Y'], 'Shuffle', 'sg_shuffle', down=SG_PILL_PRESS_RGB), *pills, foot]
+    root.children.append(ptext)
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/songs.c shows it while yoffset > 0 (at rest it would darken the large title)
@@ -1007,7 +1010,7 @@ def build_songs_page(page):
 # The album page (patch/albumpage.c, docs/modules/album-page.md; the numbers are patch/offsets.inc AH_* and AB_*): the stock album page's design with our own glass controls. The list is the
 # whole 450 px window (list_view > scroll_view + the mobile scroll bar, the library lists' structure) holding one content view, view_grid, that paints the cover, the tracks and
 # their press fill itself and holds the header's widgets: the title, the artist and the "year . N tracks" line (centred hscroll_labels that scroll a long text), the Shuffle disc (a
-# button, its picture the disc), the Play all pill (a button, its picture the pill) with its glyph (an image) and its text (a label) over it, which the payload centres as a pair.
+# button, its picture the disc), the Play pill (a button, its picture the pill) with its glyph (an image) and its text (a label) over it, which the payload centres as a pair.
 # The window's colour is the cover's tone (the payload sets it); the gradient image img_ah_tint, first in the window, darkens it from the top (the stock page's), and the list over it is
 # transparent. The glass controls are the window's last child, so they paint and take touches over the rows: Back, Select | Now Playing as one capsule (the genre songs list's), and
 # in select mode the all / none toggle, Add, Delete and Cancel in the places the stock builder gave them. Two hidden labels carry the rows' text styles (the number, the title; the playing row's number is the ah_wave image); label_title (hidden) is the page's title for the i18n and asset tests.
@@ -1015,7 +1018,7 @@ AB_STYLES = (('label_row_num', 'right', '#AAAAAA'), ('label_row_title', 'left', 
 AB_ROW_PX = 19
 AB_META = (('ab_title', 'AH_TITLE_Y', 'AH_TITLE_H', 22, '#FFFFFF'), ('ab_artist', 'AH_ARTIST_Y', 'AH_ARTIST_H', 18, '#AAAAAA'), ('ab_meta', 'AH_META_Y', 'AH_META_H', 15, '#9C9C9C'))   # srlabel_ah{title,artist,meta}_style
 AB_FOOT_RGB = '#AAAAAA'   # the footer's grey: the artist line's (not the meta line's #9C9C9C)
-AB_PLAY_TEXT_W = OFFSETS['AB_PLAY_TEXT_W']   # the English "Play all" at 18 px, where the payload cannot measure it; the payload centres the pair for the language
+AB_PLAY_TEXT_W = OFFSETS['AB_PLAY_TEXT_W']   # the English "Play" at 18 px, where the payload cannot measure it; the payload centres the pair for the language
 
 
 def ab_nav_button(name, x, w, rest, down=None, hide=False):
@@ -1073,14 +1076,7 @@ def build_album_page(page):
     grid.children = kids
     sv.children.append(grid)
     root.children.append(lv)
-    play_text = hidden(Widget('label', 0, 0, 10, 10, [('name', 'ab_play_text'), pod_i18n.text_prop('Play all')]))   # the pill's text style and its translated text; the payload paints the text over the pill
-    for st in ('normal', 'pressed', 'disable', 'focused'):
-        styled(play_text, (st,), 'font_size', '18')
-        styled(play_text, (st,), 'text_color', '#141414')
-        styled(play_text, (st,), 'text_align_h', 'left')
-        styled(play_text, (st,), 'text_align_v', 'middle')
-        styled(play_text, (st,), 'bg_color', '#FFFFFF')   # the dark text of the white pill: the contrast scan reads the label's own background
-    root.children.append(play_text)
+    root.children.append(play_text('ab_play_text'))   # the pill's text style and its translated text; the payload paints the text over the pill
     root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, '#FFFFFF')))
     for name, align, colour in AB_STYLES:
         lab = hidden(label(name, 0, 0, 10, 10, '', AB_ROW_PX, colour, align))   # text styles only (widget_prepare_text_style); never shown
@@ -1091,9 +1087,33 @@ def build_album_page(page):
     return root
 
 
-def ab_button(name, x, w, rest, down):
+def play_header(y):
+    """The album page's Shuffle disc and Play pill for a playlist's header on the Songs page (patch/common.c pod_pill_place): (the content view's widgets, hidden and insensitive until patch/songs.c sg_pills shows them; the hidden label the pill's text is painted with).
+    y is the 44 px buttons' top (PH_BTN_Y); the glyph is placed for the English text and the payload centres it for the language."""
     o = OFFSETS
-    return Widget('button', x, o['AH_BTN_Y'], w, o['AH_BTN_H'], [('name', name), ('enable', 'true'), ('style', 'img_btn_style'),
+    pair = o['AH_PILL_GLYPH'] + o['AH_PILL_GAP'] + AB_PLAY_TEXT_W
+    gx = o['AH_PLAY_X'] + (o['AH_PLAY_W'] - pair) // 2
+    kids = [ab_button('hd_shuffle', o['AH_SHUF_X'], o['AH_SHUF_W'], 'ah_shuffle', 'ah_shuffle_down', y),
+            ab_button('hd_play', o['AH_PLAY_X'], o['AH_PLAY_W'], 'ah_pill', 'ah_pill_down', y),
+            Widget('image', gx, y + (o['AH_BTN_H'] - o['AH_PILL_GLYPH']) // 2, o['AH_PILL_GLYPH'], o['AH_PILL_GLYPH'], [('name', 'sg_glyph'), ('image', 'ah_play'), ('draw_type', 'center'), ('sensitive', 'false')])]
+    return [hidden(k) for k in kids], play_text('sg_play_text')
+
+
+def play_text(name):
+    """The Play pill's text style and translated text (hidden; the payload paints the text over the pill)."""
+    t = hidden(Widget('label', 0, 0, 10, 10, [('name', name), pod_i18n.text_prop('Play')]))
+    for st in ('normal', 'pressed', 'disable', 'focused'):
+        styled(t, (st,), 'font_size', '18')
+        styled(t, (st,), 'text_color', '#141414')
+        styled(t, (st,), 'text_align_h', 'left')
+        styled(t, (st,), 'text_align_v', 'middle')
+        styled(t, (st,), 'bg_color', '#FFFFFF')   # the dark text of the white pill: the contrast scan reads the label's own background
+    return t
+
+
+def ab_button(name, x, w, rest, down, y=None):
+    o = OFFSETS
+    return Widget('button', x, o['AH_BTN_Y'] if y is None else y, w, o['AH_BTN_H'], [('name', name), ('enable', 'true'), ('style', 'img_btn_style'),
                                                                  ('style:pressed:icon', down), ('style:normal:icon', rest), ('style:over:icon', rest)])
 
 

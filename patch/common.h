@@ -60,10 +60,19 @@ int pod_bar_tint(void *win, unsigned color);
 void pod_bar_black(void *win);
 int pod_is_top(void *win);
 void *pod_bind(void *win, const char *name, int (*fn)(void *, void *), const void *ctx);
-/* The flat pill's glyph and label (a button whose style has the glyph as its icon) centred as a pair SG_PILL_GAP apart in a pill pw px wide (the Songs page's pills, the
- * album page's Play all; AWTK puts the glyph in a square as high as the button at margin_left and the text at the square's end plus the spacer); a label too wide beside
+/* The flat pill's glyph and label (a button whose style has the glyph as its icon) centred as a pair SG_PILL_GAP apart in a pill pw px wide (the Songs, Folders and artist pages' Play / Shuffle pills, the select bars' pills; AWTK puts the glyph in a square as high as the button at margin_left and the text at the square's end plus the spacer); a label too wide beside
  * the glyph steps down to SG_PILL_PX_SMALL. Needs the button's text (widget_get_text) to be set. */
 void pod_centre_pill(void *btn, int pw);
+/* The header's Play pill, the album page's design (patch/albumpage.c, a playlist's page): the pill is a picture (the button), the glyph an image over it and
+ * the text painted by the page's content view; glyph and text are centred as a pair for the language (AH_PILL_*). ptext is the hidden label with the text style and the translated
+ * text. pod_pill_place puts the glyph and measures the text for a button whose top is y (AH_PLAY_X, AH_BTN_H high; one that cannot be measured, or does not fit, is centred as
+ * the English one); pod_pill_paint draws the text for that y less the scroll offset, over the picture. */
+typedef struct {
+    void *glyph, *ptext;
+    int tx, tw;
+} pod_pill_t;
+void pod_pill_place(pod_pill_t *p, int y);
+void pod_pill_paint(const pod_pill_t *p, void *canvas, int y);
 /* A select mark: the stock image called name (the multi-select's unselect / selected, SG_MARK px) as an opaque bitmap, NULL when it cannot be made. win: any widget of the page. */
 void *pod_make_mark(void *win, const char *name);
 

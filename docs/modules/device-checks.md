@@ -45,7 +45,7 @@ in [history](../history.md); feature modules retain their detailed edge cases.
   sort, select-all, add/delete and return position. Check a large library; covers load after
   scrolling stops. [Details](songs.md)
 - **NAV-01 — Album/navbar:** one seamless capsule, contained pressed highlights and no leftover
-  pixels in button gaps. Play all resets in-order mode; Shuffle and track taps use the expected
+  pixels in button gaps. Play resets in-order mode; Shuffle and track taps use the expected
   queue. Look up album returns correctly to Now Playing. [Album](album-page.md), [navbars](navbar.md)
 - **PLAY-01 — Now Playing/lock screen:** sharp rounded covers, tint changes, neutral missing
   art, remaining time, transport/favorite/More controls, translucent card and swipe behaviour.

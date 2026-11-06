@@ -213,7 +213,7 @@ FUNCTIONS = {
 FUNCTIONS.update({
     'widget_set_style':        ('int', 'void *, const char *, const void *', 0x66c448),
     'value_set_uint32':        ('void *', 'void *, unsigned', 0x711858),
-    # The album page's Play all pill (patch/albumpage.c): the translated text (a wchar_t string) and its width
+    # The album page's Play pill (patch/albumpage.c): the translated text (a wchar_t string) and its width
     # in the widget's own style, as widget_measure_text @0x66c7e0 gets it (widget_get_canvas, widget_prepare_text_style,
     # canvas_measure_text @0x644544; 0 when there is no canvas or no text)
     'widget_get_text':         ('const unsigned *', 'void *', 0x667ea4),

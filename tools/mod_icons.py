@@ -103,15 +103,15 @@ COVERS = ['albumcover_s', 'albumcover_m', 'albumcover_info']   # the "no cover" 
 COVER_GLYPH, COVER_FRAC = 'disc-3', 0.52      # the glyph's px as a fraction of the tile
 # The album page (patch/albumpage.c): the cover tint (ah_tint: a window sized black gradient, patch/offsets.inc AH_TINT_*; the cover's corners are
 # cut by the payload, no masks); Shuffle's 40 px disc
-# with its glyph (pressed one lighter) and the Play all pill's play glyph (dark, 16 px, no padding); the pill itself is an image too (180 x 40,
+# with its glyph (pressed one lighter) and the Play pill's play glyph (dark, 16 px, no padding); the pill itself is an image too (180 x 40,
 # ah_pill / ah_pill_down, drawn centred in the 44 px high button, so the touch rectangle is taller than the pill). The sizes are AH_* in patch/offsets.inc (test/pod/albumpage.py checks them).
-AH_TINT = (64, 200, 344, 450)   # alpha at the top row, at row AH_TINT_ROWS - 1 and below (the held deep tint, 78 % dark), the rows, the window height
+AH_TINT = (64, 200, 346, 450)   # alpha at the top row, at row AH_TINT_ROWS - 1 and below (the held deep tint, 78 % dark), the rows, the window height
 ALBUM = ['ah_tint', 'ah_play', 'ah_shuffle', 'ah_shuffle_down', 'ah_pill', 'ah_pill_down', 'ah_wave']
 AH_SHUF_DISC, AH_SHUF_DISC_DOWN, AH_SHUF_GLYPH, AH_DISC_PX = (0x2A,) * 3, (0x44,) * 3, 19, 40   # AH_DISC (patch/offsets.inc)
 AH_PLAY_GLYPH, AH_PLAY_INK = 16, (0x14,) * 3
 AH_PILL_PX, AH_PILL_FILL, AH_PILL_FILL_DOWN = (180, 40), (0xFF,) * 3, (0xBE,) * 3   # AH_PLAY_W x AH_PILL_H
 DPAGE = ['dp_back', 'dp_back_down', 'dp_pill', 'dp_pill_down', 'dp_play', 'dp_add', 'dp_add_down', 'dp_added', 'dp_added_down']   # the Daily Mix page (patch/dailymix.c dp_*): the glass back disc (a white chevron), the white Play pill (pressed a light grey), its dark play glyph, the Add disc (Shuffle's disc and pressed colours, a plus: saves the mix as a playlist; a check once it is saved)
-DP_BACK_PX, DP_BACK_GLYPH, DP_PILL_PX, DP_PILL_INK, DP_PILL_DOWN = 40, 20, (148, 40), (0x1C, 0x1C, 0x1E), (0xD6, 0xD6, 0xD8)   # patch/offsets.inc DP_BACK_DISC, DP_PILL_H, DP_PLAY_W
+DP_BACK_PX, DP_BACK_GLYPH, DP_PILL_PX, DP_PILL_INK, DP_PILL_DOWN = 40, 20, (148, 40), AH_PLAY_INK, (0xD6, 0xD6, 0xD8)   # patch/offsets.inc DP_BACK_DISC, DP_PILL_H, DP_PLAY_W
 DP_ADD_GLYPH = 'plus'
 DP_ADDED_GLYPH = 'check'
 DAILY = ['dm_disc', 'dm_disc_down'] + DPAGE   # the Daily Mix card's play disc and the page's images (DPAGE) (patch/dailymix.c, tools/pod_ui.py): a 48 px glass disc with a 22 px white play glyph, one px right of centre (a triangle's weight sits left of its box)

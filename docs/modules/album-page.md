@@ -27,7 +27,7 @@ Stock album artwork retains its 100 px size.
 
 ## Layout
 
-A stock list fills the 320 × 450 px window. Its content view paints a 344 px header
+A stock list fills the 320 × 450 px window. Its content view paints a 346 px header
 and 64 px track rows. Glass navigation controls are direct window children above the
 list so an enclosing view cannot intercept the whole navigation band.
 
@@ -38,7 +38,7 @@ list so an enclosing view cannot intercept the whole navigation band.
 | Album | Centered 22 px white at y 224 |
 | Artist | Centered 18 px grey at y 247 |
 | Metadata | 15 px at y 267: year and track count, or track count alone |
-| Playback | Shuffle target 44 × 44 at x 42 with a 40 px disc (the pill's height); Play all target 180 × 44 at x 96 (12 px after the disc); y 292 |
+| Playback | Shuffle target 44 × 44 at x 42 with a 40 px disc (the pill's height); Play target 180 × 44 at x 96 (12 px after the disc); y 292. A playlist's page (the Songs page with its header) copies this group (`patch/common.c` `pod_pill_place` / `pod_pill_paint`; [Songs](songs.md)) |
 | Tracks | Number column, 19 px white title in a 22 px line 20 px down the 64 px row (`AB_TEXT_Y`, centred over the hairline), 20% white press fill, 13% white hairline. The playing track keeps its white title; a 12 px wave (`ah_wave`, `#EEEEEC`, four round bars, the rows' `np_row_playing` scaled; static) replaces its number, right-aligned in the number column and centred on the title's line (`AB_WAVE`) |
 | Footer | `ab_foot` (`13 tracks, 49 minutes`): 15 px `#AAAAAA` left-aligned label at x 12 (`AB_NUM_X`, the number column's left edge), `AB_FOOT_GAP` 14 px under the last row, 20 px high; only when the duration is known (52 px of content), else none |
 
@@ -94,7 +94,7 @@ job, polled at `AB_COVER_MS`, with a placeholder until ready.
 768 bytes total, no card writes.
 
 A cache miss averages the centered cover square and applies `pod_tone`.
-`ah_tint.png` overlays black alpha 64 at the top, rising to 200 at header row 343
+`ah_tint.png` overlays black alpha 64 at the top, rising to 200 at header row 345
 and held below it. No art, an empty cache marker or an All albums card leaves black.
 The gradient stays fixed while content scrolls.
 
@@ -108,11 +108,11 @@ Bright tones may require a darker bar than the top window row to preserve 4.5:1 
 
 ## Playback and selection
 
-Track taps, Play all and Shuffle use `so_play` in `patch/songops.c`.
+Track taps, Play and Shuffle use `so_play` in `patch/songops.c`.
 A missing starting file shows Storage unavailable. An unresolved queue starts nothing
 and changes no play mode.
 
-Play all sets an in-order mode: Shuffle and Repeat one become List play; List play and
+Play sets an in-order mode: Shuffle and Repeat one become List play; List play and
 Repeat all are retained. Shuffle chooses a random starting track and sets the stock
 Shuffle mode for this album queue. Mode changes use the stock notification/config path.
 Selection shares Add/Delete operations with [Songs](songs.md).

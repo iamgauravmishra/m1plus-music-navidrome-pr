@@ -16,7 +16,7 @@ UI = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_songs.bi
 ALL = O['CLASS_ALL_SONGS']
 TEXT_X, TEXT_END, SEL = O['LIST_TEXT_X'], O['SG_TEXT_END'], O['SG_SEL_COL']
 RAIL_X, RAIL_W = O['SG_RAIL_X'], O['SG_RAIL_W']
-WIDGETS = ('btn_coverflow', 'btn_search', 'view_grid', 'sg_rail', 'sg_foot', 'sg_hname', 'btn_return', 'btn_backtoplayer', 'btn_more', 'btn_select', 'btn_selall', 'btn_play', 'btn_shuffle', 'sg_add', 'sg_del',
+WIDGETS = ('btn_coverflow', 'btn_search', 'view_grid', 'sg_rail', 'sg_foot', 'sg_hname', 'btn_return', 'btn_backtoplayer', 'btn_more', 'btn_select', 'btn_selall', 'btn_play', 'btn_shuffle', 'hd_play', 'hd_shuffle', 'sg_glyph', 'sg_play_text', 'sg_add', 'sg_del',
            'label_title', 'sg_title', 'label_status', 'label_row_title', 'label_row_sub', 'label_hdr', 'label_rail', 'label_rail_on', 'sg_bubble', 'sg_bubble_letter', 'sg_bar',
            *VS_WIDGETS)
 
@@ -134,7 +134,7 @@ def songs_machine(songs, sort=0, albums=(), cached=True, window=0x20001000, big=
     for off, v in ((4, 0), (8, 320), (0xc, VIEW_H), (0x44, sv)): m.setword(view + off, v)
     m.setword(m.widgets['label_title'] + 8, 64)
     m.mem_geometry, m.live_scroll = True, frozenset({sv, rail})
-    for n, t in (('btn_play', 'Play'), ('btn_shuffle', 'Shuffle'), ('sg_add', 'Add to Playlist'), ('sg_del', 'Delete')): m.wtext[m.widgets[n]] = t   # the texts the asset gives them
+    for n, t in (('btn_play', 'Play'), ('btn_shuffle', 'Shuffle'), ('sg_play_text', 'Play'), ('sg_add', 'Add to Playlist'), ('sg_del', 'Delete')): m.wtext[m.widgets[n]] = t   # the texts the asset gives them
     m.sv, m.rail, m.view = sv, rail, view
     return m
 
@@ -377,9 +377,9 @@ def asset_tests(ctx):
            and sv.children == [grid] and grid.type == 'view', 'the body is the library lists\' structure: list_view > scroll_view > one content view, with the stock mobile scroll bar')
     kids = {c.name: c for c in grid.children}
     hn = kids['sg_hname']
-    expect(list(kids) == ['sg_title', 'sg_hname', 'btn_play', 'btn_shuffle', 'sg_foot'] and kids['sg_title'].get('style:normal:font_size') == '32' and kids['sg_title'].get('sensitive') == 'false'
+    expect(list(kids) == ['sg_title', 'sg_hname', 'btn_play', 'btn_shuffle', 'hd_shuffle', 'hd_play', 'sg_glyph', 'sg_foot'] and kids['sg_title'].get('style:normal:font_size') == '32' and kids['sg_title'].get('sensitive') == 'false'
            and kids['sg_title'].get('style:normal:text_color') == '#FFFFFF' and (kids['sg_title'].x, kids['sg_title'].y, kids['sg_title'].h) == (12, 0, 52),
-           'the content view holds the large title (32 px white, x 12, insensitive), the playlist header\'s name, the two pills and the song count (no count in the header: the footer is the one)')
+           'the content view holds the large title (32 px white, x 12, insensitive), the playlist header\'s name, the library\'s two flat pills, the playlist header\'s Shuffle disc, Play pill and glyph and the song count (no count in the header: the footer is the one)')
     expect(hn.type == 'label' and hn.get('visible') == 'false' and hn.get('sensitive') == 'false' and hn.get('style:normal:text_align_h') == 'center'
            and (hn.x, hn.y, hn.w, hn.h) == (O['PH_NAME_X'], O['PH_NAME_Y'], O['PH_NAME_W'], O['PH_NAME_H']) and hn.get('style:normal:font_size') == '22' and hn.get('style:normal:text_color') == '#FFFFFF',
            'a playlist\'s header: the name (22 px white), centred in 286 px (the album page\'s title label), hidden and insensitive until the payload shows it')
@@ -395,11 +395,22 @@ def asset_tests(ctx):
         expect((b.x, b.y, b.w, b.h) == (x, 52, 129, 40) and b.type == 'button' and b.get('style:normal:bg_color') == '#1E1E1E' and b.get('style:pressed:bg_color') == '#333335'
                and b.get('style:normal:round_radius') == '20' and b.get('style:normal:icon') == icon and b.get('style:normal:font_size') == '18' and b.get('style:normal:text_color') == '#FFFFFF'
                and all(b.get(f'style:{st}:bg_color') not in (None, '#00000000') for st in pod_ui.STATES), f'{nm}: a flat 129 x 40 pill (#1E1E1E, #333335 pressed, radius 20) with its glyph and an 18 px white label')
-    pills = [kids['btn_play'], kids['btn_shuffle']]
-    expect(kids['btn_play'].x == 10 and kids['btn_shuffle'].x - (kids['btn_play'].x + kids['btn_play'].w) == 10 and max(p.x + p.w for p in pills) == 278,
+    # the playlist header's set: the album page's disc, pill and glyph, hidden and insensitive until the payload shows them (patch/songs.c sg_pills), from y PH_BTN_Y
+    for nm, x, w, rest, down in (('hd_shuffle', 42, 44, 'ah_shuffle', 'ah_shuffle_down'), ('hd_play', 96, 180, 'ah_pill', 'ah_pill_down')):
+        b = kids[nm]
+        expect((b.x, b.y, b.w, b.h) == (x, O['PH_BTN_Y'], w, 44) and O['PH_BTN_Y'] == O['PH_PILL_Y'] - 2 and b.type == 'button' and b.get('style') == 'img_btn_style'
+               and b.get('style:normal:icon') == rest and b.get('style:over:icon') == rest and b.get('style:pressed:icon') == down
+               and b.get('visible') == 'false' and b.get('sensitive') == 'false', f'{nm}: the album page\'s {w} x 44 touch rectangle ({rest}, {down}) from y PH_BTN_Y, hidden and insensitive')
+    gl, pt = kids['sg_glyph'], f('sg_play_text')
+    expect(gl.type == 'image' and (gl.w, gl.h) == (16, 16) and gl.get('image') == 'ah_play' and gl.get('visible') == 'false' and gl.get('sensitive') == 'false' and gl.y == O['PH_BTN_Y'] + 14
+           and pt.get('visible') == 'false' and pt.get('sensitive') == 'false' and pt.get('tr_text') == 'Play' and pt.get('style:normal:font_size') == '18' and pt.get('style:normal:text_color') == '#141414'
+           and pt.get('style:normal:bg_color') == '#FFFFFF', 'the pill\'s play glyph is a 16 px hidden, insensitive image and its text a hidden "Play" label (18 px #141414), as the album page\'s')
+    flat = [kids['btn_play'], kids['btn_shuffle']]
+    pills = flat + [kids['hd_shuffle'], kids['hd_play']]
+    expect(kids['btn_play'].x == 10 and kids['btn_shuffle'].x - (kids['btn_play'].x + kids['btn_play'].w) == 10 and max(p.x + p.w for p in flat) == 278,
            'the content pills are 129 wide at x 10 and 149 with a 10 px gap and end at x 278')
     expect((RAIL_X, RAIL_W) == (284, 36) and all(not (p.x < RAIL_X + RAIL_W and p.x + p.w > RAIL_X) for p in pills) and all(RAIL_X - (p.x + p.w) >= 6 for p in pills),
-           'no pill reaches the rail\'s touch column (x 284..320): the pills end at 278, 6 px before it (the pills scroll, the rail is fixed)')
+           'no pill reaches the rail\'s touch column (x 284..320): the flat pills end at 278, the header\'s pill at 276, 6 px or more before it (the pills scroll, the rail is fixed)')
     barpills = [c for c in f('sg_bar').children if c.type == 'button']
     expect(f('sg_bar').y == f('sg_rail').y + O['GRID_VIEW_H'] - O['SG_BAR_H'] and max(p.x + p.w for p in barpills) == 310,
            'the select bar\'s pills (145 wide, Add to Playlist needs the room) end at 310 but sit below the rail, which is 336 px high in select mode and ends at the bar\'s top')
@@ -442,6 +453,8 @@ def asset_tests(ctx):
            'the old Songs sort glass and rows (sg_glass, sg_item) are gone; the Playlists glass stays for its own page')
     for nm in ('btn_play', 'btn_shuffle', 'sg_add', 'sg_del', 'btn_selall'):
         expect(os.path.exists(os.path.join(WORK, 'rootfs/release/assets/default/raw/images/xx', (f(nm).get('style:normal:icon') or 'sg_play') + '.png')), f'{nm}\'s glyph is in the tree')
+    expect(all(os.path.exists(os.path.join(WORK, 'rootfs/release/assets/default/raw/images/xx', n + '.png')) for n in ('ah_shuffle', 'ah_shuffle_down', 'ah_pill', 'ah_pill_down', 'ah_play')),
+           'the album page\'s disc, pill and play glyph (and their pressed images) are in the tree, for a playlist\'s header')
 
 def open_and_paint_tests(ctx):
     """2. The row opens the page, with the fallbacks; 3. opening; 4. paint; 5. the pinned header and the push."""
@@ -465,11 +478,17 @@ def open_and_paint_tests(ctx):
     calls = open_page(m)
     queries = [c[1] for c in calls if c[0] == 'loadLocalClassList']
     expect(queries == [O['CLASS_ALBUMS'], ALL], f'opening reads the albums (the cover lookup), then the songs, once each: {queries}')
-    expect(all((m.widgets[n], O['EVT_CLICK']) in m.bound for n in ('btn_return', 'btn_backtoplayer', 'btn_more', 'btn_select', 'btn_search', 'btn_selall', 'btn_play', 'btn_shuffle', 'sg_add', 'sg_del', 'vs_scrim',
+    expect(all((m.widgets[n], O['EVT_CLICK']) in m.bound for n in ('btn_return', 'btn_backtoplayer', 'btn_more', 'btn_select', 'btn_search', 'btn_selall', 'btn_play', 'btn_shuffle', 'hd_play', 'hd_shuffle', 'sg_add', 'sg_del', 'vs_scrim',
                                                                     'vs_item0', 'vs_item1', 'vs_item2', 'vs_item3', 'vs_item7'))
            and (m.view, O['EVT_AFTER_PAINT']) in m.bound and (m.rail, O['EVT_AFTER_PAINT']) in m.bound and (m.window, O['EVT_WINDOW_TO_FG']) in m.bound
            and all((m.rail, O[e]) in m.bound for e in ('EVT_POINTER_DOWN', 'EVT_POINTER_MOVE', 'EVT_POINTER_UP', 'EVT_POINTER_ABORT'))
            and all((m.sv, O[e]) in m.bound for e in ('EVT_SCROLL', 'EVT_SCROLL_END')), 'the buttons, the paints, the rail\'s touch events and the scroll events are bound')
+    expect(vis(m, 'btn_play') == (1, 1) and vis(m, 'btn_shuffle') == (1, 1) and vis(m, 'hd_play') == (0, 0) and vis(m, 'hd_shuffle') == (0, 0) and vis(m, 'sg_glyph')[0] == 0
+           and not [1 for c in calls if c[0] == 'widget_move' and c[1] in (m.widgets['hd_play'], m.widgets['hd_shuffle'], m.widgets['btn_play'], m.widgets['btn_shuffle'])],
+           'the library: the two flat pills are shown and live where the asset put them, the playlist header\'s disc, pill and glyph are hidden and insensitive')
+    m3 = songs_machine(TITLES); open_page(m3)
+    blits, texts, styles, fills = settle(m3)
+    expect(not [1 for (t, rc), s in zip(texts, styles) if s == 'sg_play_text'], 'the library paints no Play pill text (the flat pill carries its own)')
     lay = Layout(letters_of(TITLES))
     expect([c for c in m.calls if c[0] == 'widget_resize' and c[1] == m.view][-1][2:] == (320, lay.content()) and m.props[(m.sv, 'virtual_h')] == lay.content(),
            f'the content is {lay.content()} px: {TOP} + {len(lay.secs)} headers x {HDR} + {len(TITLES)} rows x {ROW} + the count\'s {FOOT}; the scroll_view is told')
@@ -1011,7 +1030,9 @@ def collapse_and_select_tests(ctx):
     expect(m.props[(back, 'style:normal:icon')] == 'ah_nav_close' and m.props[(back, 'style:pressed:icon')] == 'ah_nav_close_down', 'Back becomes the x (cancel), a glass disc like it')
     expect(m.wtext[m.widgets['label_title']] == '0 Selected' and ('widget_set_visible', m.widgets['label_title'], 1) in m.calls
            and ('widget_resize', m.widgets['label_title'], 150, 22) in m.calls, 'the title reads "0 Selected", from x 58 to Select All')
-    expect(('widget_set_sensitive', m.widgets['btn_play'], 0) in m.calls and ('widget_set_sensitive', m.widgets['btn_shuffle'], 0) in m.calls, 'the pills are disabled (their dim style)')
+    expect(('widget_set_sensitive', m.widgets['btn_play'], 0) in m.calls and ('widget_set_sensitive', m.widgets['btn_shuffle'], 0) in m.calls
+           and vis(m, 'btn_play')[0] == 1 and vis(m, 'btn_shuffle')[0] == 1 and vis(m, 'hd_play') == (0, 0) and vis(m, 'hd_shuffle') == (0, 0) and vis(m, 'sg_glyph')[0] == 0,
+           'the pills are disabled (their dim style), and the playlist header\'s set stays hidden and insensitive')
     expect(m.props[(m.sv, 'virtual_h')] == lay.content(O['SG_BAR_H']), 'the content is 64 px longer: the last row scrolls clear of the bar')
     click(m, 'btn_more')
     expect(vis(m, 'vs_card') == (0, 0) and vis(m, 'vs_scrim') == (0, 0), 'the "..." does nothing in select mode (hidden and insensitive, a stray click opens no card)')
@@ -1408,13 +1429,34 @@ def lists_tests(ctx):
     hn, big, lt = (m.widgets[n] for n in ('sg_hname', 'sg_title', 'label_title'))
     expect(('widget_set_visible', hn, 1) in calls and not [c for c in calls if c[0] == 'widget_set_sensitive' and c[1] == hn]
            and vis(m, 'sg_title') == (0, 0), 'a playlist shows its name label (insensitive: never a touch target) and hides the large title')
-    expect(('widget_move', m.widgets['btn_play'], O['SG_PILL_X0'], O['PH_PILL_Y']) in calls and ('widget_move', m.widgets['btn_shuffle'], O['SG_PILL_X1'], O['PH_PILL_Y']) in calls,
-           'the pills move under the header (the same x, y PH_PILL_Y)')
+    expect(('widget_move', m.widgets['hd_play'], O['AH_PLAY_X'], O['PH_BTN_Y']) in calls and ('widget_move', m.widgets['hd_shuffle'], O['AH_SHUF_X'], O['PH_BTN_Y']) in calls
+           and O['PH_BTN_Y'] == O['PH_PILL_Y'] - 2 and [c for c in calls if c[0] == 'widget_move' and c[1] == m.widgets['sg_glyph']][-1][3] == O['PH_BTN_Y'] + 14
+           and not [c for c in calls if c[0] == 'widget_move' and c[1] in (m.widgets['btn_play'], m.widgets['btn_shuffle'])],
+           'the disc and the pill move under the header (x AH_SHUF_X / AH_PLAY_X, y PH_BTN_Y: the picture is drawn at PH_PILL_Y), and the glyph with them; the flat pills stay where they were')
+    expect(vis(m, 'hd_play') == (1, 1) and vis(m, 'hd_shuffle') == (1, 1) and vis(m, 'sg_glyph')[0] == 1 and m.props.get((m.widgets['sg_glyph'], 'sensitive')) != 1
+           and vis(m, 'btn_play') == (0, 0) and vis(m, 'btn_shuffle') == (0, 0)
+           and all((m.widgets[n], O['EVT_CLICK']) in m.bound for n in ('hd_play', 'hd_shuffle')),
+           'a playlist shows the disc and the pill (bound, live; the glyph an insensitive image so taps reach the pill) and hides the library\'s flat pills, hidden AND insensitive')
     expect(m.wtext[hn] == 'Road Trip', f'the name ({m.wtext.get(hn)!r})')
     blits, texts, styles, fills = settle(m)
     hb = head_blits(blits)
     expect(len(hb) == 1 and tuple(hb[0][2][:2]) == (O['PH_COVER_X'], O['PH_COVER_Y']) and m.most_per_tick == 1, f'the mosaic is drawn centred at (80, 8), 160 px, one cover decoded a tick ({[b[2] for b in hb]})')
     expect(all(near(a, colour(k)) for k, a in enumerate(quad(m, hb[0][0]))) and pixel(m, hb[0][0], 0, 0) & 0xffffff == 0, 'the four distinct albums fill the quadrants A B / C D, the corner rounded into black')
+    pt = [(t, r) for (t, r), s in zip(texts, styles) if s == 'sg_play_text']
+    gm = [c for c in calls if c[0] == 'widget_move' and c[1] == m.widgets['sg_glyph']][-1]
+    expect(len(pt) == 1 and pt[0][0] == 'Play' and pt[0][1][:2] == (gm[2] + 24, O['PH_BTN_Y'] + 11), f'a playlist paints the Play pill\'s text 8 px after the glyph in a 22 px line in the middle of the pill ({pt})')
+    for tw in (32, 64, 140, 300):   # the glyph and the text centred as a pair for the language; one that is too wide, or cannot be measured, is centred as the English text
+        mt = list_machine(titles); mt.playlist_songs = {7: list(mt.songs[:5])}; mt.measure = lambda t, tw=tw: tw
+        mt.call(PSYMS['songs_open_playlist'], a0=7, a1=mt.cstr('Road Trip'), count=900000000)
+        opened = list(mt.calls)
+        fits = 16 + 8 + tw <= O['AH_PLAY_W']
+        gx = O['AH_PLAY_X'] + (O['AH_PLAY_W'] - (24 + (tw if fits else O['AB_PLAY_TEXT_W']))) // 2
+        _, tt, ss, _ = settle(mt)
+        ptt = [(t, r) for (t, r), s in zip(tt, ss) if s == 'sg_play_text']
+        expect(('widget_move', mt.widgets['sg_glyph'], gx, O['PH_BTN_Y'] + 14) in opened and ptt == [('Play', (gx + 24, O['PH_BTN_Y'] + 11, (tw if fits else O['AB_PLAY_TEXT_W']) + O['AB_TEXT_SLACK'], 22))],
+               f'a {tw} px text: the glyph at x {gx}, the text after it ({ptt})')
+    sty = [(n, v) for w, n, v in m.styled if w in (m.widgets['hd_play'], m.widgets['hd_shuffle'])]
+    expect(not sty, 'the disc and the pill are pictures: no margin or font style is set on them')
     rows0 = [r for t, r in texts if t == titles[0]]
     expect(rows0 and rows0[0][1] >= O['PH_TOP'], 'the first row is under the header (its text from PH_TOP down)')
     keep = hb[0][0]
@@ -1438,6 +1480,14 @@ def lists_tests(ctx):
     expect(head_blits(blits4)[0][1][1] == 100 - O['PH_COVER_Y'] and head_blits(blits4)[0][2][1] == 0, 'the mosaic scrolls with the content (cut at the window\'s top: its first 92 rows are gone)')
     calls = tap(m, 150, 20)
     expect(not [c for c in calls if c[0] in ('navigator_to_with_context', 'loadSongList')], 'a tap on the header opens and plays nothing')
+    m.mode = 2
+    calls = click(m, 'hd_play')
+    expect(m.played and m.played[1] == 0 and ('mclSetPlayMode', 0) in calls, 'the header\'s Play pill plays the playlist in order from its first song')
+    calls = click(m, 'hd_shuffle')
+    expect(('mclSetPlayMode', 2) in calls and any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls), 'the header\'s Shuffle disc plays it in the stock Shuffle mode')
+    pick(m, 'select')
+    expect(vis(m, 'hd_play')[0] == 1 and vis(m, 'hd_shuffle')[0] == 1 and vis(m, 'hd_play')[1] != 1 and vis(m, 'hd_shuffle')[1] != 1 and vis(m, 'sg_glyph')[0] == 1
+           and vis(m, 'btn_play') == (0, 0) and vis(m, 'btn_shuffle') == (0, 0), 'select mode: the disc and the pill stay, dead; the flat pills stay hidden and insensitive')
     m.call(PSYMS['sg_on_destroy'], count=4000000)
     expect(sum(1 for c in m.calls if c[0] == 'bitmap_destroy') >= 3, 'closing frees the header\'s bitmaps with the others')
     # one album: its cover full size; none with a cache file: the placeholder disc; no memory for a quadrant: the first cover

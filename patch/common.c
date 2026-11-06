@@ -122,7 +122,7 @@ __attribute__((noinline)) unsigned pod_tone(unsigned r, unsigned g, unsigned b) 
 
 /* The status bar (a window of the window manager, vtable type "system_bar") in a page's top-edge colour. One owner at a time:
  * the window that last tinted it. Only the owner can put the stock black back, so a page that is replaced or covered after the
- * next page has taken the bar over (Play all, Back) never undoes the new owner's colour. */
+ * next page has taken the bar over (Play, Back) never undoes the new owner's colour. */
 #define POD_LUM(r, g, b) (2126u * (r) * (r) + 7152u * (g) * (g) + 722u * (b) * (b))
 static void *bar_owner __attribute__((section(".scratch")));
 
@@ -251,7 +251,27 @@ __attribute__((noinline)) void pod_corners(void *canvas, const unsigned char *ta
         }
 }
 
-/* The pills: the glyph and the label centred as a pair SG_PILL_GAP apart (the album page's Play all, patch/albumpage.c): AWTK puts the glyph in a
+void pod_pill_place(pod_pill_t *p, int y) {
+    const unsigned *text = widget_get_text(p->ptext);
+    float w = text && *text ? widget_measure_text(p->ptext, text) : 0.0f;
+    int tw = (int)(w + 0.999f), x;
+    if (tw <= 0 || AH_PILL_GLYPH + AH_PILL_GAP + tw > AH_PLAY_W) tw = AB_PLAY_TEXT_W;
+    x = AH_PLAY_X + (AH_PLAY_W - (AH_PILL_GLYPH + AH_PILL_GAP + tw)) / 2;
+    widget_move(p->glyph, x, y + (AH_BTN_H - AH_PILL_GLYPH) / 2);
+    p->tx = x + AH_PILL_GLYPH + AH_PILL_GAP, p->tw = tw + AB_TEXT_SLACK;
+}
+
+void pod_pill_paint(const pod_pill_t *p, void *canvas, int y) {
+    const unsigned *text = widget_get_text(p->ptext);
+    unsigned n = 0;
+    int rect[4];
+    while (text && text[n]) ++n;
+    rect[0] = p->tx, rect[1] = y + (AH_BTN_H - AB_TEXT_H) / 2, rect[2] = p->tw, rect[3] = AB_TEXT_H;
+    widget_prepare_text_style(p->ptext, canvas);
+    if (n) canvas_draw_text_in_rect(canvas, text, n, rect);
+}
+
+/* The pills: the glyph and the label centred as a pair SG_PILL_GAP apart (the flat pills of the Songs, Folders and artist pages, the select bars'): AWTK puts the glyph in a
  * square as high as the button at margin_left and the text at the square's end plus the spacer. Moved from patch/songs.c. */
 void pod_centre_pill(void *btn, int pw) {
     static const char *const key[5] = {"normal:", "pressed:", "over:", "focused:", "disable:"};

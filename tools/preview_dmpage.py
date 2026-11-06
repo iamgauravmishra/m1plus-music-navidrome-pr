@@ -48,7 +48,7 @@ def page_image(s, tones, seed=SEED, loc='en_US', off=0, songs=SONGS, pressed=Non
     tw = min(s.font.width(word, 18), D.DP_PLAY_W - 2 * (D.DP_PILL_GLYPH + D.DP_PILL_GAP))
     gx = D.DP_PLAY_X + (D.DP_PLAY_W - (D.DP_PILL_GLYPH + D.DP_PILL_GAP + tw)) // 2
     c.alpha_composite(s.img('dp_play'), (gx, D.DP_BTN_Y + (D.DP_BTN_H - D.DP_PILL_GLYPH) // 2))
-    s.text(c, gx + D.DP_PILL_GLYPH + D.DP_PILL_GAP, D.DP_BTN_Y + D.DP_BTN_H / 2, s.clip(word, 18, tw + 2), 18, (0x1C, 0x1C, 0x1E))
+    s.text(c, gx + D.DP_PILL_GLYPH + D.DP_PILL_GAP, D.DP_BTN_Y + D.DP_BTN_H / 2, s.clip(word, 18, tw + 4), 18, (0x14, 0x14, 0x14))
     # the description: at most two lines, the second ending in an ellipsis when the text is longer
     text = tr('Songs you love and some to rediscover, made fresh every day.')
     lines = D.wrap(lambda t: s.font.width(t, D.DP_DESC_PX), text, D.DP_TEXT_W, 16) or [text]

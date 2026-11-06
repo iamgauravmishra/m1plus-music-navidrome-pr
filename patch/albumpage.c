@@ -5,7 +5,7 @@
  * One page, ui/m1plus_album.bin (tools/pod_ui.py build_album_page): the stock list (list_view > scroll_view) holding ONE content view, view_grid, as the Songs page, which
  * reaches the window's top (450 px) with the glass controls floating over it (Back, a Select | Now Playing capsule; in select mode the all / none toggle, Add, Delete and
  * Cancel), so the rows scroll under them. The content view holds the header's widgets (the title, the artist and the "year . N tracks" line, the Shuffle disc and the
- * Play all pill with its glyph and text) and paints the rest itself in its EVT_AFTER_PAINT: the rounded cover, the tracks' numbers and titles, the press fill, the hairlines
+ * Play pill with its glyph and text) and paints the rest itself in its EVT_AFTER_PAINT: the rounded cover, the tracks' numbers and titles, the press fill, the hairlines
  * and the select marks. The window is tinted from the cover as Now Playing is (pod_tone under the gradient image img_ah_tint), and so is the status bar (pod_bar_tint).
  *
  *   entry     album_open(class, row), called by cc_open_album (patch/covercache.c) with the album row of the list the caller loaded: loadAlbumdetailList(class, row) leaves
@@ -16,7 +16,7 @@
  *             a file that is not there is made by the cache worker (one job, polled), an empty "no art" marker leaves the placeholder disc and a black page.
  *   tint      the tone cache (pod_tone_get) or the cover file's average colour; none for a page without a cover.
  *   rows      the stock row's number (position + 1) and title (the stock is_playing: a playing track's number is the wave marker), 64 px, from the stock list while painting.
- *   play      Play all / Shuffle / a track: patch/songops.c, and Now Playing opens the way the stock album page's rows do (pod_open_player: with songerinfoflag set the
+ *   play      Play / Shuffle / a track: patch/songops.c, and Now Playing opens the way the stock album page's rows do (pod_open_player: with songerinfoflag set the
  *             pages above the Now Playing in the stack are popped first).
  * No hook; everything runs from the page's widgets and timers.
  */
@@ -45,9 +45,9 @@ static struct {
     void *st_num, *st_title; /* hidden labels whose styles are the number's and the title's */
     void *
         foot; /* the footer under the last row (ab_foot, a label of the content view): "13 tracks, 49 minutes", hidden while the duration is unknown */
-    void *hname, *hartist, *hmeta, *glyph,
-        *ptext; /* the header's labels, the Play all pill's glyph and its hidden text label (the text style and the translated text; the page paints it) */
-    int ptx, ptw; /* where the pill's text is painted: x, and its width */
+    void *hname, *hartist, *hmeta; /* the header's labels */
+    pod_pill_t
+        pill; /* the Play pill's glyph and its hidden text label (the text style and the translated text; the page paints it), patch/common.c */
     void *list; /* the stock list the page is of (*pdeq_showlist when valid) */
     void *first; /* its first record: with the size, tells a list another query replaced */
     unsigned count;
@@ -527,28 +527,8 @@ static void ab_texts(void) {
     widget_set_text_utf8(ab.hmeta, line);
 }
 
-/* The Play all pill's glyph and text, centred as a pair for the page's language: the pill is a picture, the glyph an image over it and the text painted by the page; the pair's
- * width is the glyph, the gap and the measured text (the stock pill's numbers: AH_PILL_*). A text that cannot be measured, or does not fit, is centred as the English one. */
-static void ab_pill(void) {
-    const unsigned *text = widget_get_text(ab.ptext);
-    float w = text && *text ? widget_measure_text(ab.ptext, text) : 0.0f;
-    int tw = (int)(w + 0.999f), x;
-    if (tw <= 0 || AH_PILL_GLYPH + AH_PILL_GAP + tw > AH_PLAY_W) tw = AB_PLAY_TEXT_W;
-    x = AH_PLAY_X + (AH_PLAY_W - (AH_PILL_GLYPH + AH_PILL_GAP + tw)) / 2;
-    widget_move(ab.glyph, x, AH_BTN_Y + (AH_BTN_H - AH_PILL_GLYPH) / 2);
-    ab.ptx = x + AH_PILL_GLYPH + AH_PILL_GAP, ab.ptw = tw + AB_TEXT_SLACK;
-}
-
-/* The pill's text over its picture (cut at the window's edges by the scroll_view's clip, as the picture). */
-static void ab_paint_pill(void *canvas, int off) {
-    const unsigned *text = widget_get_text(ab.ptext);
-    unsigned n = 0;
-    int rect[4];
-    while (text && text[n]) ++n;
-    rect[0] = ab.ptx, rect[1] = AH_BTN_Y + (AH_BTN_H - AB_TEXT_H) / 2 - off, rect[2] = ab.ptw, rect[3] = AB_TEXT_H;
-    widget_prepare_text_style(ab.ptext, canvas);
-    if (n) canvas_draw_text_in_rect(canvas, text, n, rect);
-}
+/* The Play pill's text over its picture (cut at the window's edges by the scroll_view's clip, as the picture); the pair is centred by pod_pill_place (patch/common.c). */
+static void ab_paint_pill(void *canvas, int off) { pod_pill_paint(&ab.pill, canvas, AH_BTN_Y - off); }
 
 /* ---------------------------------------------------------------------------
  * Reading the stock list
@@ -890,11 +870,11 @@ int album_open(unsigned cls, void *row) {
     ab.hartist = widget_lookup(ab.win, "ab_artist", 1);
     ab.hmeta = widget_lookup(ab.win, "ab_meta", 1);
     ab.foot = widget_lookup(ab.win, "ab_foot", 1);
-    ab.glyph = widget_lookup(ab.win, "ab_glyph", 1);
-    ab.ptext = widget_lookup(ab.win, "ab_play_text", 1);
+    ab.pill.glyph = widget_lookup(ab.win, "ab_glyph", 1);
+    ab.pill.ptext = widget_lookup(ab.win, "ab_play_text", 1);
     if (!ab.back || !ab.np || !ab.btn_select || !ab.btn_selall || !ab.btn_add || !ab.btn_del || !ab.btn_cancel ||
         !ab.btn_play || !ab.btn_shuffle || !ab.view || !ab.sv || !ab.status || !ab.st_num || !ab.st_title ||
-        !ab.hname || !ab.hartist || !ab.hmeta || !ab.foot || !ab.glyph || !ab.ptext) {
+        !ab.hname || !ab.hartist || !ab.hmeta || !ab.foot || !ab.pill.glyph || !ab.pill.ptext) {
         navigator_back(); /* an asset that is not ours */
         return -2;
     }
@@ -912,7 +892,7 @@ int album_open(unsigned cls, void *row) {
     widget_on(ab.view, EVT_POINTER_UP, ab_on_up, (void *)0);
     widget_on(ab.view, EVT_POINTER_ABORT, ab_on_abort, (void *)0);
     widget_on(ab.view, EVT_AFTER_PAINT, ab_on_paint, (void *)0);
-    ab_pill();
+    pod_pill_place(&ab.pill, AH_BTN_Y);
     if (!grid_init(&ab.hg, ab.win, 1, AH_ART, AH_CORNER) || !grid_init(&ab.g, ab.win, GRID_TILES, LIST_ART, 0)) {
         grid_free(&ab.hg);
         grid_free(&ab.g);

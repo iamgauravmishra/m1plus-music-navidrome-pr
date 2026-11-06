@@ -1,5 +1,5 @@
 """Glass pieces (mod_icons.glass_image, the Home mini bar's pane): the shared glass stays as it was, and the navbar glass buttons are the generator's output. (The album page's
-Play all pill and Shuffle disc and Now Playing's star and More discs are solid or flat, not glass: test/pod/albumpage.py, test/pod/nowplaying.py.)"""
+Play pill and Shuffle disc and Now Playing's star and More discs are solid or flat, not glass: test/pod/albumpage.py, test/pod/nowplaying.py.)"""
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 import mod_icons
 from PIL import Image

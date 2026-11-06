@@ -1,7 +1,7 @@
 """The album page (patch/albumpage.c, patch/songops.c, docs/modules/album-page.md): our own page in place of the stock albuminfo_page. The built asset (the list that is the
 whole window, the header's widgets, the glass controls last, every number against patch/offsets.inc and the stock page's design), how cc_open_album reaches it and falls back
 to the stock page, the header (the texts, the pill's pair in every language, the cover from the cache or from the cache worker, the tint, the status bar and its hand-over,
-the tone cache), the rows painted from the stock list (number, title, the playing row's gold, a CUE track, three digits, the press fill, the hairline), the taps (a track, Play all,
+the tone cache), the rows painted from the stock list (number, title, the playing row's gold, a CUE track, three digits, the press fill, the hairline), the taps (a track, Play,
 Shuffle: the stock sequence and Now Playing the stock album page's way), the select mode with Add and Delete on the stock selection vector, and a list another query replaced.
 The compiled payload runs under Unicorn; the stock library is the machine's lists."""
 import importlib.util, os, struct, sys
@@ -124,7 +124,7 @@ def album_machine(n=8, album=ALBUM, artist=ARTIST, rgb=RED, cover='file', titles
     m.widgets['songs_scrollview'] = sv
     for off, v in ((4, 0), (8, 320), (0xc, WIN_H), (0x44, sv)): m.setword(view + off, v)
     m.mem_geometry, m.live_scroll = True, frozenset({sv})
-    m.wtext[m.widgets['ab_play_text']] = 'Play all'
+    m.wtext[m.widgets['ab_play_text']] = 'Play'
     m.sv, m.view = sv, view
     m.with_bar()
     return m
@@ -208,8 +208,9 @@ def asset_tests(ctx):
            and all(w.get(f'style:{st}:bg_color') == '#00000000' for w in (lv, sv, grid) for st in ('normal',)),
            'the list is the whole window (y 0, 450 high), its scroll_view 310 wide with the stock scroll bar, all transparent: the window\'s colour and the gradient show through')
     # the header: the stock page's numbers (docs/modules/album-page.md)
-    expect((O['AH_ART'], O['AH_ART_X'], O['AH_ART_Y'], O['AH_CORNER'], O['AH_HDR_H'], O['AH_TITLE_Y'], O['AH_ARTIST_Y'], O['AH_META_Y'], O['AH_BTN_Y']) == (160, 80, 50, 10, 344, 224, 247, 267, 292)
+    expect((O['AH_ART'], O['AH_ART_X'], O['AH_ART_Y'], O['AH_CORNER'], O['AH_HDR_H'], O['AH_TITLE_Y'], O['AH_ARTIST_Y'], O['AH_META_Y'], O['AH_BTN_Y']) == (160, 80, 50, 10, 346, 224, 247, 267, 292)
            and (O['AH_SHUF_X'], O['AH_SHUF_W'], O['AH_PLAY_X'], O['AH_PLAY_W'], O['AH_BTN_H']) == (42, 44, 96, 180, 44), 'the geometry constants are the stock album page\'s')
+    expect(O['AH_HDR_H'] - (O['AH_BTN_Y'] + (O['AH_BTN_H'] + O['AH_PILL_H']) // 2) == 12, 'the first track row is 12 px under the Play pill (drawn 294 .. 334), as on the Songs, playlist, Folders and Daily Mix pages')
     for name, y, h, px, colour in (('ab_title', 224, 22, 22, '#FFFFFF'), ('ab_artist', 247, 18, 18, '#AAAAAA'), ('ab_meta', 267, 15, 15, '#9C9C9C')):
         w = f(name)
         expect(w.type == 'hscroll_label' and (w.x, w.y, w.w, w.h) == (17, y, 286, h) and w.get('sensitive') == 'false' and w.get('ellipses') == 'true' and w.get('yoyo') == 'true'
@@ -218,14 +219,14 @@ def asset_tests(ctx):
     shuf, play, glyph, ptext = f('btn_shuffle'), f('btn_play'), f('ab_glyph'), f('ab_play_text')
     expect((shuf.x, shuf.y, shuf.w, shuf.h) == (42, 292, 44, 44) and shuf.get('style:normal:icon') == 'ah_shuffle' and shuf.get('style:pressed:icon') == 'ah_shuffle_down'
            and (play.x, play.y, play.w, play.h) == (96, 292, 180, 44) and play.get('style:normal:icon') == 'ah_pill' and play.get('style:pressed:icon') == 'ah_pill_down',
-           'Shuffle is a 44 x 44 touch rectangle with the 40 px disc, Play all a 180 x 44 one with the 180 x 40 pill (the disc as high as the pill), 12 px apart')
+           'Shuffle is a 44 x 44 touch rectangle with the 40 px disc, Play a 180 x 44 one with the 180 x 40 pill (the disc as high as the pill), 12 px apart')
     import mod_icons as _mi
     expect(O['AH_DISC'] == 40 == _mi.AH_DISC_PX == O['AH_PILL_H'] and O['AH_PLAY_X'] == O['AH_SHUF_X'] + (O['AH_SHUF_W'] + O['AH_DISC']) // 2 + 12, 'the Shuffle disc is the pill\'s 40 px high; the pill starts 12 px after it')
     expect(glyph.type == 'image' and (glyph.w, glyph.h) == (16, 16) and glyph.get('image') == 'ah_play' and glyph.get('sensitive') == 'false' and glyph.y == 292 + 14
            and glyph.x == pill(O['AB_PLAY_TEXT_W']), 'the pill\'s play glyph is a 16 px insensitive image over the pill (the English pair centred where the payload cannot measure)')
     expect(ptext.get('visible') == 'false' and ptext.get('sensitive') == 'false' and ptext.get('style:normal:font_size') == '18' and ptext.get('style:normal:text_color') == '#141414'
-           and ptext.get('style:normal:bg_color') == '#FFFFFF' and ptext.get('text') in (None, 'Play all') and ptext.get('tr_text', 'Play all') == 'Play all',
-           'the pill\'s text is a hidden label (the 18 px #141414 style and the translated "Play all"; its white background is the pill\'s for the contrast scan)')
+           and ptext.get('style:normal:bg_color') == '#FFFFFF' and ptext.get('text') in (None, 'Play') and ptext.get('tr_text', 'Play') == 'Play',
+           'the pill\'s text is a hidden label (the 18 px #141414 style and the translated "Play"; its white background is the pill\'s for the contrast scan)')
     for name, align, colour in (('label_row_num', 'right', '#AAAAAA'), ('label_row_title', 'left', '#FFFFFF')):
         w = f(name)
         expect(w.get('visible') == 'false' and w.get('sensitive') == 'false' and w.get('style:normal:font_size') == '19' and w.get('style:normal:text_color') == colour and w.get('style:normal:text_align_h') == align,
@@ -351,7 +352,7 @@ def header_tests(ctx):
         expect(('widget_move', m2.widgets['ab_glyph'], x, 292 + 14) in m2.calls, f'a {tw} px text: the glyph at x {x}' + ('' if fits else ' (too wide: centred as the English one)'))
         blits, texts, fills = paint(m2)
         pt = [(t_, r) for (t_, r), s in texts if s == 'ab_play_text']
-        expect(pt == [('Play all', (x + 24, 292 + 11, (tw if fits else O['AB_PLAY_TEXT_W']) + O['AB_TEXT_SLACK'], 22))], f'a {tw} px text: painted 8 px after the glyph in a 22 px line in the middle of the pill ({pt})')
+        expect(pt == [('Play', (x + 24, 292 + 11, (tw if fits else O['AB_PLAY_TEXT_W']) + O['AB_TEXT_SLACK'], 22))], f'a {tw} px text: painted 8 px after the glyph in a 22 px line in the middle of the pill ({pt})')
         m2.call(PSYMS['ab_on_destroy'], count=4000000)
     m2 = album_machine(); m2.measure = lambda text: 0
     open_album(m2)
@@ -362,8 +363,8 @@ def header_tests(ctx):
     raw = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw')
     font = Ttf(os.path.join(raw, 'fonts', 'default.ttf'))
     built = {loc: dict(awtk_strings.load(os.path.join(raw, 'strings', loc + '.bin'))) for loc in pod_i18n.LOCALES}
-    over = [(loc, StbText(font, 18).layout(built[loc]['Play all'])[1]) for loc in pod_i18n.LOCALES if 16 + 8 + StbText(font, 18).layout(built[loc]['Play all'])[1] > 180 - 20]
-    expect(not over, f'"Play all" and its glyph fit the 180 px pill with a margin in all 13 languages ({over})')
+    over = [(loc, StbText(font, 18).layout(built[loc]['Play'])[1]) for loc in pod_i18n.LOCALES if 16 + 8 + StbText(font, 18).layout(built[loc]['Play'])[1] > 180 - 20]
+    expect(not over, f'"Play" and its glyph fit the 180 px pill with a margin in all 13 languages ({over})')
     over = [(loc, w) for loc in pod_i18n.LOCALES for w in [StbText(font, 15).layout(built[loc]['%d tracks'].replace('%d', '9999'))[1] + StbText(font, 15).layout('1959 · ')[1]] if w > 286]
     expect(not over, f'"1959 · 9999 tracks" fits the meta line in all languages ({over})')
     # the cover: the cache file reduced to 160 px with the corners cut in the alpha, drawn at (80, 50)
@@ -573,7 +574,7 @@ def rows_tests(ctx):
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 def play_tests(ctx):
-    """7. Taps: a track, Play all, Shuffle; the press fill; the stock list replaced under the page; back from Now Playing."""
+    """7. Taps: a track, Play, Shuffle; the press fill; the stock list replaced under the page; back from Now Playing."""
     expect = ctx.expect
     m = opened()
     m.watch[PSYMS['pod_open_player']] = 'pod_open_player'; m.hooked and None
@@ -596,12 +597,12 @@ def play_tests(ctx):
     _, _, fills = paint(m)
     expect(not any(f_[0] == O['AB_PRESS'] for f_ in fills), 'and a release')
     m.call(PSYMS['ab_on_destroy'], count=4000000)
-    # Play all: the first track in order (Shuffle and Repeat one become List play); Shuffle: a random track in the stock Shuffle mode
+    # Play: the first track in order (Shuffle and Repeat one become List play); Shuffle: a random track in the stock Shuffle mode
     for before, after in ((0, 0), (1, 0), (2, 0), (3, 3)):
         m = opened(); m.mode = before
         calls = click(m, 'btn_play')
         expect(m.played[1] == 0 and m.played[0] == m.songs and m.mode == after and (('mclSetPlayMode', after) in calls) == (before != after) and [c for c in calls if c[0] == 'loadSongList'][0][1:] == ('0.flac', 0, LIB),
-               f'Play all from mode {before}: the first track of the album, mode {after}')
+               f'Play from mode {before}: the first track of the album, mode {after}')
         m.call(PSYMS['ab_on_destroy'], count=4000000)
     m = opened(); m.mode = 0
     calls = click(m, 'btn_shuffle')
@@ -646,7 +647,7 @@ def play_tests(ctx):
     r, calls = open_album(m)
     expect(r == 0 and vis(m, 'view_grid') == (0, 0) and vis(m, 'label_status') == (1, 1) and m.wtext[m.widgets['label_status']] == 'No songs', 'an album with no tracks: the page opens with the message')
     click(m, 'btn_play'); click(m, 'btn_shuffle'); click(m, 'btn_select')
-    expect(m.played is None and ('widget_set_visible', m.widgets['btn_selall'], 1) not in m.calls and not any(c[0] == 'loadSongList' for c in m.calls), 'Play all, Shuffle and Select do nothing on it')
+    expect(m.played is None and ('widget_set_visible', m.widgets['btn_selall'], 1) not in m.calls and not any(c[0] == 'loadSongList' for c in m.calls), 'Play, Shuffle and Select do nothing on it')
     m.call(PSYMS['ab_on_destroy'], count=4000000)
     # Back and Now Playing
     m = opened()

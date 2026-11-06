@@ -209,7 +209,7 @@ static int pm_on_destroy(void *ctx, void *e) {
 /* Look up album (listitem4): our album page instead of the stock playerjumpinfo_page. Bound after the stock init, so it runs
  * before the stock handler (0x4795cc; top comment); RET_STOP keeps the stock one from running, RET_OK lets it run. The order is
  * the stock Look up artist's (0x4793ac): the sheet closes, an albuminfo_page already in the stack is closed, songerinfoflag is
- * set (the page's track tap and Play all then unwind to the Now Playing that is in the stack instead of stacking a second one),
+ * set (the page's track tap and Play then unwind to the Now Playing that is in the stack instead of stacking a second one),
  * the page opens. The library lookup comes first: no playing track, no album tag or no such album in the list leaves everything
  * as it was and the stock handler runs (its own message or page). Stock clears the flag only on album_page's window event, so
  * the new page's destroy does: pm_flag_owner is the window we set it for, so the end of an older page never clears the flag of
@@ -270,7 +270,7 @@ static int pm_on_lookup_album(void *ctx, void *e) {
  * getAllArtist, or the album-artist list when Settings' artist type says so; a row's name is REC_TITLE, compared ASCII case-insensitively as the list
  * groups; the Unknown Artist row, id -1, never matches). The page opens FIRST (as Cassette Mode does) and the sheet closes once it is up, so any
  * failure (nothing playing, no artist tag, not in the list, Cover Flow already open, the page will not open) leaves everything as it was for the
- * stock handler. Like the stock one it sets songerinfoflag (a track tap or Play all on an album page above then unwinds to the Now Playing that is
+ * stock handler. Like the stock one it sets songerinfoflag (a track tap or Play on an album page above then unwinds to the Now Playing that is
  * in the stack) and closes an albuminfo_page in the stack; the flag is released by the destroy of that page (pm_on_album_gone). */
 static int pm_on_lookup_artist(void *ctx, void *e) {
     void *track, *list, *one, *top, *below;

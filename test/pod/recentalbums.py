@@ -136,8 +136,9 @@ def album_view_tests(ctx):
     expect(m.fs.get(VIEW_FILE) == b'1\n' and VIEW_TMP not in m.fs and ('fsync', VIEW_TMP) in calls and ('fsync', '/mnt/data/m1plus') in calls and ('rename', VIEW_TMP, VIEW_FILE) in calls,
            'the choice is saved atomically ("1"): temporary file, fsync, rename, directory fsync')
     expect(card_state(m) == ALBUMS_CARD, f'the card in the albums view: Albums (ticked), Songs, no Select row, the glass of two rows ({card_state(m)})')
-    expect(vis(m, 'btn_play') == (0, 0) and vis(m, 'btn_shuffle') == (0, 0) and vis(m, 'btn_more') == (1, 1) and vis(m, 'btn_backtoplayer') == (1, 1),
-           'the capsule stays "..." | Now Playing: no Play / Shuffle pills')
+    expect(vis(m, 'btn_play') == (0, 0) and vis(m, 'btn_shuffle') == (0, 0) and vis(m, 'hd_play') == (0, 0) and vis(m, 'hd_shuffle') == (0, 0) and vis(m, 'sg_glyph')[0] == 0
+           and vis(m, 'btn_more') == (1, 1) and vis(m, 'btn_backtoplayer') == (1, 1),
+           'the capsule stays "..." | Now Playing: no Play / Shuffle pills, no playlist-header disc and pill (hidden and insensitive)')
     expect(m.props.get((m.widgets['sg_foot'], 'visible')) == 0 and vis(m, 'view_grid') == (1, 1) and vis(m, 'label_status') == (0, 0), 'no song count under the albums, no empty-list line')
     rows = (len(EXPECT) + 1) // 2
     expect(m.props[(m.sv, 'virtual_h')] == TOP + rows * PITCH, f'the content is the title block and {rows} grid rows ({m.props[(m.sv, "virtual_h")]})')

@@ -380,7 +380,7 @@ def apple_tests(expect):
     shuffled = order(m); hook(m, OR)
     expect(not flag_on(m) and order(m) == shuffled and not [c for c in m.calls if c[0] == 'mclSetPlayPos'], 'a queue whose size changed keeps its order (nothing to restore from), the flag still goes off')
 
-    # 42. A queue loaded while Shuffle is on (a tap, Play all, the stock folder browser, the resume): the song at the index first, the rest shuffled, playing at slot 0.
+    # 42. A queue loaded while Shuffle is on (a tap, Play, the stock folder browser, the resume): the song at the index first, the rest shuffled, playing at slot 0.
     songs = lambda m: [song(m, f'/mnt/mmc/q/{i:02d}.flac', f'Album {i // 4}', i % 4 + 1) for i in range(12)]
     m = apple_machine(n=2, pos=0, flag=True)
     recs = songs(m); h = m.new_deque(recs); before = [field(m, r, O['REC_PATH']) for r in recs]; owned = sorted(m.word(r + O[f]) for r in recs for f in STR_FIELDS)

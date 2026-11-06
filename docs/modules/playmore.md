@@ -36,7 +36,7 @@ Preview, both pages over Now Playing with the dim (each page with its own glass;
   the playing track (`cc_playing`) and looks its album up in the library Albums list (`cc_find_album`: `loadAlbumList(0xf003)`, album name compared
   ASCII case-insensitively as the list groups, the Unknown Album row never matches) BEFORE changing anything; found: it does what the stock Look up artist
   (0x4793ac) does: `window_close` the sheet, `navigator_close("albuminfo_page")` if one is in the stack (0x4d2118), set `songerinfoflag` (0xa04737),
-  `cc_open_album(NULL, 0, row)` (the Albums grid's sequence, class 0xf003 | row << 16). With the flag set, a track tap or Play all on that page unwinds
+  `cc_open_album(NULL, 0, row)` (the Albums grid's sequence, class 0xf003 | row << 16). With the flag set, a track tap or Play on that page unwinds
   to the Now Playing already in the stack and closes it before opening the new one (no second Now Playing, `docs/modules/album-page.md`), and the
   page's navbar has no multi-select and no Now Playing button; Back returns to Now Playing. Stock clears the flag only on `album_page`'s window event
   (0x522c64), so a destroy handler on the new page clears it (restoring the byte as it was: a Look up artist page below keeps it set); the window it was set for is

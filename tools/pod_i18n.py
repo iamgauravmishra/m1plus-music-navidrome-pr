@@ -261,8 +261,6 @@ TEXT = dict([
        'Compositores', 'Compositori', 'นักแต่งเพลง', 'Kompozytorzy', 'Композиторы', 'Композитори'),
     _t('Album Artists', '专辑表演者', '專輯表演者', 'アルバムアーティスト', '앨범 아티스트', "Artistes de l'album", 'Albumkünstler',
        'Artistas del álbum', "Artisti dell'album", 'ศิลปินอัลบั้ม', 'Wykonawcy albumu', 'Исполнители альбома', 'Виконавці альбому'),
-    _t('Play all', '全部播放', '全部播放', 'すべて再生', '모두 재생', 'Tout lire', 'Abspielen',
-       'Reproducir', 'Riproduci', 'เล่นทั้งหมด', 'Odtwórz', 'Слушать', 'Відтворити'),
     _t('Cancel', '取消', '取消', 'キャンセル', '취소', 'Annuler', 'Abbrechen',
        'Cancelar', 'Annulla', 'ยกเลิก', 'Anuluj', 'Отмена', 'Скасувати'),
     _t('Update Local Music first', '请先更新曲库', '請先更新曲庫', '先にライブラリを更新', '먼저 라이브러리를 업데이트하세요',
@@ -941,10 +939,8 @@ TEXT = dict([
        'Morado', 'Viola', 'ม่วง', 'Fioletowy', 'Фиолетовый', 'Фіолетовий'),
     _t('Champagne', '香槟色', '香檳色', 'シャンパン', '샴페인', 'Champagne', 'Champagner',
        'Champán', 'Champagne', 'แชมเปญ', 'Szampański', 'Шампань', 'Шампань'),
-    # The Songs page (patch/songs.c): the Play pill (Shuffle is above), the select mode's navbar ("N Selected", the Select All text button) and its
-    # Delete pill. The count goes where %d is (the payload puts the number there). Add to playlist is the stock key (STOCK).
-    _t('Play', '播放', '播放', '再生', '재생', 'Lire', 'Abspielen',
-       'Reproducir', 'Riproduci', 'เล่น', 'Odtwórz', 'Играть', 'Грати'),
+    # The Songs page (patch/songs.c): the select mode's navbar ("N Selected", the Select All text button) and its
+    # Delete pill. The count goes where %d is (the payload puts the number there). Add to playlist is the stock key (STOCK). The Play pill's text, "Play", is below (the album, playlist and Daily Mix pages, and the Songs, Folders and artist pages' flat pills).
     _t('Select All', '全选', '全選', 'すべて選択', '모두 선택', 'Tout choisir', 'Alle wählen',
        'Todo', 'Tutti', 'เลือกทั้งหมด', 'Wszystko', 'Выбрать все', 'Вибрати все'),
     _t('Add to Playlist', '加入歌单', '加入歌單', 'リストに追加', '목록에 추가', 'Ajouter', 'Hinzufügen',

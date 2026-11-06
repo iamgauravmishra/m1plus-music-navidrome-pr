@@ -5,7 +5,7 @@ from harness import *   # noqa: F401,F403  (test/patch.py initialises the harnes
 
 
 class StackMachine(StockEventMachine):
-    """Play all / Shuffle into Now Playing against a window stack. demo's own window_manager_get_top_window runs for real on
+    """Play / Shuffle into Now Playing against a window stack. demo's own window_manager_get_top_window runs for real on
     a window manager struct laid out in emulated memory (children darray @0x58, a window's name @0x10 and flags @0x24, bit 4 =
     visible); navigator_back, window_close, navigator_window_is_exist and the navigator's open are the model: a window is
     removed at once, except one whose name is in anim (a close animation: it stays in the list, visible, until finish(), as

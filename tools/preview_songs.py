@@ -91,6 +91,19 @@ def round_rect(im, x, y, w, h, r, rgb):
     im.paste(Image.new('RGBA', (w, h), rgb + (255,)), (x, y), mask.resize((w, h), Image.LANCZOS))
 
 
+def play_header(s, im, y):
+    """A playlist's header: the album page's Shuffle disc and Play pill (patch/common.c pod_pill_place): y is the pill's drawn top (PH_PILL_Y), the 44 px buttons start 2 px above it."""
+    by = y - (O['AH_BTN_H'] - O['AH_PILL_H']) // 2
+    disc = s.img('ah_shuffle'); im.alpha_composite(disc, (O['AH_SHUF_X'] + (O['AH_SHUF_W'] - disc.width) // 2, by + (O['AH_BTN_H'] - disc.height) // 2))
+    im.alpha_composite(s.img('ah_pill'), (O['AH_PLAY_X'], by + (O['AH_BTN_H'] - O['AH_PILL_H']) // 2))
+    word = tr(s, 'Play')
+    tw = s.font.width(word, 18)
+    if O['AH_PILL_GLYPH'] + O['AH_PILL_GAP'] + tw > O['AH_PLAY_W']: tw = O['AB_PLAY_TEXT_W']
+    gx = O['AH_PLAY_X'] + (O['AH_PLAY_W'] - (O['AH_PILL_GLYPH'] + O['AH_PILL_GAP'] + tw)) // 2
+    im.alpha_composite(s.img('ah_play'), (gx, by + (O['AH_BTN_H'] - O['AH_PILL_GLYPH']) // 2))
+    s.text(im, gx + O['AH_PILL_GLYPH'] + O['AH_PILL_GAP'], by + O['AH_BTN_H'] / 2, word, 18, (0x14, 0x14, 0x14))
+
+
 def pill(s, im, x, y, label, glyph, rgb=PILL_RGB, w=PILL_W):
     """A flat pill as the payload lays it out: the glyph (centred in a square as high as the button at margin_left) and the label 8 px after the glyph's ink, the pair centred."""
     round_rect(im, x, y, w, PILL_H, PILL_R, rgb)
@@ -124,8 +137,11 @@ def content(s, covers_on=True, select=None, title=None, head=False):
     foot = tuple(int(pod_ui.SG_FOOT_RGB[i:i + 2], 16) for i in (1, 3, 5))
     count = tr(s, '%d song' if n == 1 else '%d songs').replace('%d', str(n))
     s.text(im, O['SG_HDR_X'], end + O['SG_FOOT_GAP'] + O['SG_FOOT_TEXT_H'] / 2, count, O['SG_FOOT_PX'], foot)
-    for i, (label, g) in enumerate((('Play', 'sg_play'), ('Shuffle', 'sg_shuffle'))):
-        pill(s, im, (O['SG_PILL_X0'], O['SG_PILL_X1'])[i], O['PH_PILL_Y'] if head else PILL_Y, tr(s, label), s.img(g), PILL_RGB if select is None else BAND)
+    if head:
+        play_header(s, im, O['PH_PILL_Y'])
+    else:
+        for i, (label, g) in enumerate((('Play', 'sg_play'), ('Shuffle', 'sg_shuffle'))):
+            pill(s, im, (O['SG_PILL_X0'], O['SG_PILL_X1'])[i], PILL_Y, tr(s, label), s.img(g), PILL_RGB if select is None else BAND)
     shift = SEL_COL if select is not None else 0
     tx = TEXT_X + shift
     more, title_none = dots(s), title is None   # (the library has the rail: the "..." sits left of it)

@@ -241,7 +241,7 @@ def run(ctx):
     names = [k for k in O if k.startswith('DP_') and hasattr(D, k)]
     expect(len(names) >= 35 and all(O[k] == getattr(D, k) for k in names), f'patch/offsets.inc DP_* equal tools/pod_dailymix.py ({[k for k in names if O[k] != getattr(D, k)]}; {len(names)} numbers)')
     expect(O['DP_ROWS_Y'] == D.DP_ROWS_Y == ROWS_Y == 371, 'the first song row starts at 371: the description is two lines high in every language')
-    expect(O['DP_PILL_INK'] == D.DP_PILL_INK == 0x1e1c1c, 'the pill\'s text colour is #1C1C1E (r | g << 8 | b << 16)')
+    expect(O['DP_PILL_INK'] == D.DP_PILL_INK == 0x141414, 'the pill\'s text colour is #141414, the album\'s ink (r | g << 8 | b << 16)')
     f = ah_ink.font(WORK)
     lay = D.page_layout(f)
     expect((lay['title'][0], lay['sub'][0], lay['upd'][0], lay['btn_y'], lay['desc_y']) == (O['DP_TITLE_Y'], O['DP_SUB_Y'], O['DP_UPD_Y'], O['DP_BTN_Y'], O['DP_DESC_Y']),
@@ -378,7 +378,7 @@ def run(ctx):
     grey, acc = D.page_colours(mdl_tint)
     word = lambda c: 0xff000000 | c[0] | c[1] << 8 | c[2] << 16
     expect(sty('label_dp_upd', 'normal:text_color') == [word(acc)] and sty('label_dp_desc', 'normal:text_color') == [word(grey)] and sty('label_dp_artist', 'normal:text_color') == [word(grey)]
-           and sty('label_dp_play', 'normal:text_color') == [word((0x1c, 0x1c, 0x1e))], 'the Updated accent, the description and artist grey and the pill\'s dark ink are set on their style labels')
+           and sty('label_dp_play', 'normal:text_color') == [word((0x14, 0x14, 0x14))],'the Updated accent, the description and artist grey and the pill\'s dark ink are set on their style labels')
     expect(m.s32(m.pview + 0xc) == ROWS_Y + 12 * ROW + O['DP_BOTTOM'] and m.word(m.psv + 0x7c) == ROWS_Y + 12 * ROW + O['DP_BOTTOM'],
            f'the content view and the scroll view\'s virtual_h are the header + 12 rows + the air under them ({m.s32(m.pview + 0xc)})')
     evs = {(w, e) for (w, e) in m.bound}
@@ -403,7 +403,7 @@ def run(ctx):
     art_b = [b for b in blits if b[1][2:] == (D.DP_W, D.DP_ART_H)]
     expect(len(art_b) == 1 and art_b[0][2] == (0, 0, D.DP_W, D.DP_ART_H) and art_b[0][1] == (0, 0, D.DP_W, D.DP_ART_H) and m.oy_after == 30 - 0, 'at the top the art is one blit of the whole bitmap at (0, 0), full width; the canvas origin is put back')
     want = [('Daily Mix', (16, 193, 288, 24), 'label_dp_title'), ('Made for You', (16, 218, 288, 17), 'label_dp_sub'), ('Updated today', (16, 239, 288, 14), 'label_dp_upd'),
-            ('Play', (156, 265, 34, 40), 'label_dp_play')]
+            ('Play', (156, 265, 36, 40), 'label_dp_play')]
     got = [(t, r, s) for (t, r), s in zip(texts, styles)]
     expect(got[:4] == want, f'the title, "Made for You", the Updated line and the pill\'s text are drawn centred in their boxes, each in its own style ({got[:4]})')
     desc = [(t, r, s) for (t, r), s in zip(texts, styles) if s == 'label_dp_desc']
@@ -764,7 +764,7 @@ def run(ctx):
         tw = wf(tr('Play')); tw = min(tw, 148 - 2 * 24)
         pgot = [(t_, r) for (t_, r), s in zip(texts, styles) if s == 'label_dp_play']
         gx = 86 + (148 - (24 + tw)) // 2
-        pw_ = [(D.ellipsize(wf, tr('Play'), tw + 2), (gx + 24, 265, tw + 2, 40))]
+        pw_ = [(D.ellipsize(wf, tr('Play'), tw + 4), (gx + 24, 265, tw + 4, 40))]
         mv = (mt.s32(mt.page['img_dp_glyph']), mt.s32(mt.page['img_dp_glyph'] + 4))   # (widget_move runs demo's own code: read the struct)
         if got != want_ or dgot != lines or pgot != pw_ or mv != (gx, 263 + 14): bad.append((loc, got, want_, dgot, lines, pgot, pw_, mv))
     expect(not bad, f'in 13 languages the page draws the model\'s lines: title, subtitle, Updated, the description wrapped in at most two lines, the pill\'s text centred with its glyph ({bad[:1]})')

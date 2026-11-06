@@ -269,7 +269,7 @@ def run(ctx):
                             ('A–Z', A['VS_LABEL_X'], 15), ('Z–A', A['VS_LABEL_X'], 15), ('Newest First', A['VS_LABEL_X'], 15), ('Oldest First', A['VS_LABEL_X'], 15)):   # the Albums "..." card (patch/viewsort.c): its widest width PL_CARD_MAX, 16 px margin
             if x0 + width(tr_text(loc, key), px) + A['VS_LABEL_R'] > A['PL_CARD_MAX']: over.append((loc, key, 'Albums card'))
         # the pill: the text is centred in a 104 px rect (194 - margins 32 + 29 - the 44 px icon square - the spacer -15)
-        if width(tr_text(loc, 'Play all'), 20) > 104: over.append((loc, 'Play all', 'pill'))
+        if width(tr_text(loc, 'Play'), 20) > 104: over.append((loc, 'Play', 'pill'))
         for key in ('%d track', '%d tracks'):
             if width('1959 \xb7 ' + tr_text(loc, key).replace('%d', '9999'), 13) > A['AH_TEXT_W']: over.append((loc, key, 'count line'))
     # The Rebuild Covers confirm: the stock dialog's wrapped label (centred white 20 px, 260 x 80 at y 25, @0x472e1c) takes at most

@@ -2005,7 +2005,7 @@ static void dp_layout(void *canvas) {
 }
 
 /* The pill's glyph, the gap and the text centred as a pair for the language (the album page's centring, patch/albumpage.c). The text is measured with the
- * hidden label's own style; one that cannot be measured is taken as 40 px. */
+ * hidden label's own style; one that cannot be measured is taken as AB_PLAY_TEXT_W px, the album's fallback. */
 static void dp_pill(void) {
     unsigned wide[DM_TEXT];
     float w;
@@ -2013,11 +2013,11 @@ static void dp_pill(void) {
     dp_wide(wide, DM_TEXT, TR("Play"));
     w = widget_measure_text(dp.st_play, wide);
     tw = (int)(w + 0.999f);
-    if (tw <= 0) tw = 40;
+    if (tw <= 0) tw = AB_PLAY_TEXT_W;
     if (tw > room) tw = room;
     dp.glyph_x = DP_PLAY_X + (DP_PLAY_W - (DP_PILL_GLYPH + DP_PILL_GAP + tw)) / 2;
     dp.text_x = dp.glyph_x + DP_PILL_GLYPH + DP_PILL_GAP;
-    dp.text_w = tw + 2;
+    dp.text_w = tw + AB_TEXT_SLACK;
     if (dp.glyph) widget_move(dp.glyph, dp.glyph_x, DP_BTN_Y + (DP_BTN_H - DP_PILL_GLYPH) / 2);
 }
 

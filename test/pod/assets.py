@@ -32,6 +32,13 @@ def run(ctx):
             expect(w.y + w.h <= CLIENT_H,
                    f'{asset_name}:{w.name or w.type} ends inside the 450 px window ({w.y}+{w.h})')
 
+    # 25b. Every image a UI file names exists: a widget's image / icon / bg_image / fg_image (also in a style state) is a file of the built tree (a removed or renamed image shows nothing on the device).
+    have = {os.path.splitext(f)[0] for _, _, fs in os.walk(os.path.join(WORK, 'rootfs', 'release/assets')) for f in fs}
+    missing = sorted({(a, w.name, v) for a in os.listdir(ui_dir) if a.startswith('m1plus_') and a.endswith('.bin')
+                      for w in awtk_ui.parse(open(os.path.join(ui_dir, a), 'rb').read()).walk() for k, v in w.props
+                      if k.rsplit(':', 1)[-1] in ('image', 'icon', 'bg_image', 'fg_image') and v and v not in have})
+    expect(not missing, f'every image the m1plus_*.bin widgets name is in the built tree ({missing[:6]})')
+
     # 39. The default lock screen wallpaper: screensaver_default.png (the resource name demo keeps as
     #     SCREENSAVERPATH when no custom picture is set) is the drawn bokeh field, a 320x480 PNG
     #     under 16 KB; the other files are left alone and no theme shadows it.

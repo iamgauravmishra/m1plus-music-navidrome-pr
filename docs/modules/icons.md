@@ -55,7 +55,7 @@ pause, skip, lock); `ellipsis` is always filled.
 | screensaver transport | `play1`, `pause1` (+ `_down`, 36x36) | solid transport shapes (`transport_mask('ss_play' / 'ss_pause')`, play corners `SS_PLAY_R` 0.16) on a translucent disc |
 | playing marker | `icon_playing` (40x40) | bare `audio-lines`, 24 px ink |
 | queue | `p_playqueue`, `p_playqueuedown` (24x22) | `list-music` in the `SMALL_GLYPHS` box |
-| text badges | speed (8), Play all pills (4), `p_hr` (28x18), `16bit`, `24bit` (40x18), `replaygain` (40x40) | white outline badges (`badge(text, size=)`); Play all an off-white pill with dark text |
+| text badges | speed (8), the stock fallback's Play all pills (4, the PLAYALL images), `p_hr` (28x18), `16bit`, `24bit` (40x18), `replaygain` (40x40) | white outline badges (`badge(text, size=)`); the stock fallback's Play all an off-white pill with dark text (our Play is the album page's `ah_pill`) |
 | step buttons | `vol_add`, `vol_dec` (+ `down`, 44x44), `bt_add`, `bt_dec` (+ `_down`, 100x100) | `plus` / `minus` on a translucent disc; pressed glyph 80 % white |
 | LED, backlight | `led_select` (80x80), `light_lefticon`, `light_righticon` (24x24) | Tabler `circle-check` filled on a 30 % white disc; `sun-dim` / `sun` |
 | mode screens | `usb_dac`, `usb_storage`, `wifits_icon`, `btrecv_icon` | grey gradient disc (`#303030` to `#1A1A1A`, 1 px rim) in soft rings (lines 32 / 23 / 14 % white over a faint glow); `usb`, `hard-drive`, `wifi`, `bluetooth` in `#C0C0C0` (`HERO_GLYPH`), softer than white so it sits in the disc |
