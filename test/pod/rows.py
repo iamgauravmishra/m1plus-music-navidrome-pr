@@ -238,6 +238,7 @@ def rows_tests(expect):
     allowed.add(pod.fileoff(built, pod.SCAN_SITE))                                                       # the library scan's folder test (patch/common.c pod_scan_dir)
     allowed |= {pod.fileoff(built, h) + k for h in (pod.SETMODE, pod.LOADPL, pod.FILETIME) for k in (0, 4)}               # the Shuffle hooks (patch/shuffle.c)
     allowed |= {pod.fileoff(built, a) for a, _ in pod.MODE_SITES}                                           # the 19 play mode display sites (jal sh_display_mode)
+    allowed |= {pod.fileoff(built, pod.EQ_ROW), pod.fileoff(built, pod.EQ_ROW) + 4}                                  # the Play Settings Equalizer row's jump to the 10-Band editor (patch/tenband.c)
     allowed.add(pod.fileoff(built, pod.CLEAR_SITE))                                                      # dmr_serverstart's deque_clear call (jal sh_clear_queue)
     allowed.add(pod.fileoff(built, pod.UPDATE_SITE))                                                     # update_firmware's version compare operand (docs/modules/version.md)
     for a, old, *_ in pod.autotime.EDITS: allowed |= {pod.fileoff(built, a) + k for k in range(0, len(old), 4)}   # the clock sync's string literals (tools/autotime.py)

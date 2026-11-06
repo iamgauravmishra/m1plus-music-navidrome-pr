@@ -141,8 +141,8 @@ CARD_GLYPHS = {'Wi-Fi': 'wifi', 'Bluetooth': 'bluetooth', 'Home Screen': 'house'
                'Control Center': 'layout-grid',
                'Keyboards': '+keyboard', 'About': 'info', 'All System Settings': 'settings', 'Developer': 'code', 'Main Menu': 'list-checks', 'Extras': 'ellipsis',
                'Recent Albums': 'history', 'Daily Mix': 'shuffle', 'Regenerate Daily Mix': 'refresh-cw', 'Update Library': 'refresh-cw',
-               'Landscape': 'rotate-cw-square', 'Rebuild Covers': 'image-up', 'Theme': '+cassette-tape', 'Record': '+turntable', 'Base': 'palette', 'Boot to M1+ Music': 'power', 'Open Shanling Home': '@shanling',
-               'Screenshot': 'camera', 'Clear Cover Cache': 'trash', 'Clear Track Durations': 'trash', 'Delete Unsupported Files': 'trash', 'Reset All Settings': 'rotate-ccw', 'Cache': 'hard-drive','Settings Files': 'file-cog', 'Podcast Discover': 'compass', 'English': 'languages', 'Chinese (Pinyin)': 'languages', 'Battery Percentage': 'battery-charging'}
+               'Landscape': 'rotate-cw-square', 'Rebuild Covers': 'image-up', 'Theme': '+cassette-tape', 'Record': '+turntable', 'Base': 'palette', 'Boot to M1+ Music': 'power', 'Open Shanling Home': '@shanling', 'Equalizer': 'sliders-vertical',
+               'Screenshot': 'camera', 'Clear Cover Cache': 'trash', 'Clear Track Durations': 'trash', 'Delete Unsupported Files': 'trash', 'Reset All Settings': 'rotate-ccw', 'Cache': 'hard-drive','Settings Files': 'file-cog', 'Download from AutoEq': 'download', 'Podcast Discover': 'compass', 'English': 'languages', 'Chinese (Pinyin)': 'languages', 'Battery Percentage': 'battery-charging'}
 
 
 def card_name(g):
@@ -156,10 +156,12 @@ def card_name(g):
 CARD_PIECE = {'ROW_W': 320, 'ROW_H': 52, 'CARD_X': 10, 'CARD_W': 300, 'CARD_R': 12, 'FILL': (0x1C,) * 3, 'LIT': (0x2C, 0x2C, 0x2E)}
 CARD_PIECES = ('single', 'top', 'mid', 'bot')
 CARD_PIECE_IMAGES = [f'pod_cd_{p}{d}' for p in CARD_PIECES for d in ('', '_down')]
+CARD_TALL = 60   # the Presets page's rows (tools/pod_settings.py LIB_ROW_H): the same pieces, CARD_TALL high, pod_cdl_<piece>[_down]
+CARD_TALL_IMAGES = [f'pod_cdl_{p}{d}' for p in CARD_PIECES for d in ('', '_down')]
 # The Accent picker's swatches (docs/modules/accent.md): a round disc of accent i (tools/palette.py ACCENTS' order; Neutral is today's #EEEEEC fill) where a row's glyph goes, SWATCH_PX in the glyph's canvas.
 SWATCH_PX = 20
 SWATCHES = [f'pod_sw{i}' for i in range(7)]
-CARD_IMAGES = sorted({card_name(g) for g in CARD_GLYPHS.values()}) + [CARD_CHEVRON[0], CARD_CHECK[0]] + CARD_PIECE_IMAGES + SWATCHES
+CARD_IMAGES = sorted({card_name(g) for g in CARD_GLYPHS.values()}) + [CARD_CHEVRON[0], CARD_CHECK[0]] + CARD_PIECE_IMAGES + CARD_TALL_IMAGES + SWATCHES
 # Find Cover & Lyrics' empty and failed states (docs/modules/onlineart.md): a muted grey glyph, ES_PX px, stroke 2, over the state's title (tools/pod_ui.py oa_es_icon; patch/onlineart.c names them)
 ES_ICONS = {'pod_es_timer': 'timer', 'pod_es_music': 'music', 'pod_es_image': 'image', 'pod_es_wifi': 'wifi-low', 'pod_es_calendar': 'calendar', 'pod_es_lock': 'lock', 'pod_es_plug': 'plug',
             'pod_es_info': 'info', 'pod_es_card': 'memory-stick', 'pod_es_drive': 'hard-drive', 'pod_es_download': 'download', 'pod_es_check': 'badge-check'}
@@ -235,11 +237,13 @@ NAV_VIEW = {'pod_nav_grid': 'layout-grid', 'pod_nav_list': 'list',
             'pod_nav_listplus': 'list-plus',   # the Playlists page's actions card (New Playlist, Import, Export, Delete Playlists): the capsule's left cap at 168, Lucide list-plus = SF Symbols text.badge.plus
             'pod_nav_select': 'list-checks',   # the Songs page's Select button as the middle piece after Search / Cover Flow (the lists whose "..." card would hold Select alone)
             'pod_nav_selectl': 'list-checks',   # Select as the left cap of [Select | Now Playing] (the album page, the Folders page)
-            'pod_nav_settings': 'sliders-horizontal'}   # the Extras page's Settings button: the left cap of [Settings | Now Playing]
+            'pod_nav_settings': 'sliders-horizontal',   # the Extras page's Settings button: the left cap of [Settings | Now Playing]
+            'pod_nav_bprev': 'chevron-left', 'pod_nav_bnext': 'chevron-right'}   # the band page's Previous / Next band: the capsule [Previous | Next | Now Playing] (patch/peqband.c)
 # the glass piece each Pod page button is (docs/modules/navbar.md): the Albums and Playlists pages' capsule is Cover Flow / "..." (left cap), the grid / list
 # toggle (middle), Now Playing (right cap); the Artists page's is "..." (left cap) and Now Playing; the Cover Flow artist page's is Songs (left cap) and Now Playing
 NAV_VIEW_POS = {'pod_nav_grid': 'middle', 'pod_nav_list': 'middle', 'pod_nav_gridl': 'left', 'pod_nav_listl': 'left', 'pod_nav_coverflow': 'left',
-                'pod_nav_more': 'left', 'pod_nav_moremid': 'middle', 'pod_nav_globe': 'left', 'pod_nav_songs': 'left', 'pod_nav_search': 'left', 'pod_nav_listplus': 'left', 'pod_nav_select': 'middle', 'pod_nav_selectl': 'left', 'pod_nav_settings': 'left'}
+                'pod_nav_more': 'left', 'pod_nav_moremid': 'middle', 'pod_nav_globe': 'left', 'pod_nav_songs': 'left', 'pod_nav_search': 'left', 'pod_nav_listplus': 'left', 'pod_nav_select': 'middle', 'pod_nav_selectl': 'left', 'pod_nav_settings': 'left',
+                'pod_nav_bprev': 'left', 'pod_nav_bnext': 'middle'}
 NAV_PX = 24
 # The Playlists page's "..." card's action rows (tools/pod_ui.py build_playlists_page: the shared view-sort card's slots 6..9, in row order): a bare white glyph left of the label, as on Now
 # Playing's More sheet's rows, drawn at PL_MENU_PX (20: the 24 px of the sheet's rows looked big beside the 18 px labels; the stroke stays 2 px).
@@ -348,6 +352,8 @@ NP = {'np_play': ('pil:play', 44, 0, 'fg', 'np_play_down'), 'np_pause': ('pil:pa
       'vs_glass5': ('pil:glass_viewsort5', (72, 240), 0, 'fg', None), 'vs_glass4': ('pil:glass_viewsort4', (72, 192), 0, 'fg', None), 'vs_glass1': ('pil:glass_viewsort1', (72, 48), 0, 'fg', None),
       'vs_glass3': ('pil:glass_viewsort3', (72, 144), 0, 'fg', None), 'vs_glass2': ('pil:glass_viewsort2', (72, 96), 0, 'fg', None),
       'rm_glass': ('pil:glass_rowmenu', (320, 150), 0, 'fg', None),
+      'pq_glass': ('pil:glass_peqdialog', (72, 276), 0, 'fg', None),   # the band page's unsaved-changes dialog (patch/peqband.c): the Playlists menu's glass (patch3_x), 76 px of head and four 50 px buttons high
+      'bk_glass': ('pil:glass_bandkeypad', (320, 320), 0, 'fg', None),   # the band page's number keypad sheet (patch/peqband.c): the sheet's glass, 320 px high, top corners only
       'np_grabber': ('pil:grabber', (120, 44), 0, 'ghost', 'np_grabber_down'),
       'np_row_playing': ('pil:wave', (40, 20), 0, 'fg', None),
       'rn_play': ('pil:play', 64, 0, 'white', 'rn_play_down'), 'rn_stop': ('pil:stop', 64, 0, 'white', 'rn_stop_down'),   # Radio Now Playing's one large button (patch/radionp.c)
@@ -561,10 +567,10 @@ def bare_icon(g, canvas):
     gi = badge(g[6:]) if is_badge(g) else shanling_mark() if g == SHANLING else glyph(g, BARE_PX, 'bare')
     c = Image.new('RGBA', (canvas, canvas), WHITE + (0,)); c.alpha_composite(gi, ((canvas - gi.width) // 2, (canvas - gi.height) // 2)); return c
 
-def card_piece(piece, lit=False, ss=8):
-    """One row's slice of a card: single (all four corners rounded), top (the upper two), mid (none) or bot (the lower two), anti-aliased, transparent outside the card."""
+def card_piece(piece, lit=False, ss=8, tall=False):
+    """One row's slice of a card: single (all four corners rounded), top (the upper two), mid (none) or bot (the lower two), anti-aliased, transparent outside the card; tall: CARD_TALL high."""
     from PIL import Image, ImageDraw
-    c = CARD_PIECE; w, h, x0, cw, r = c['ROW_W'], c['ROW_H'], c['CARD_X'], c['CARD_W'], c['CARD_R']
+    c = CARD_PIECE; w, h, x0, cw, r = c['ROW_W'], CARD_TALL if tall else c['ROW_H'], c['CARD_X'], c['CARD_W'], c['CARD_R']
     big = Image.new('L', (w * ss, h * ss), 0); d = ImageDraw.Draw(big)
     box = (x0 * ss, 0, (x0 + cw) * ss - 1, h * ss - 1)
     rounded = {'single': (True, True, True, True), 'top': (True, True, False, False), 'mid': (False,) * 4, 'bot': (False, False, True, True)}[piece]
@@ -769,6 +775,7 @@ def generate_all(sizes):
     for i in range(8): f[f'wf_spin{i}'] = wifi_spinner(i)
     for p in CARD_PIECES:
         f[f'pod_cd_{p}'] = card_piece(p); f[f'pod_cd_{p}_down'] = card_piece(p, True)
+        f[f'pod_cdl_{p}'] = card_piece(p, tall=True); f[f'pod_cdl_{p}_down'] = card_piece(p, True, tall=True)
     for n, g in PL_MENU_ICONS: f[n] = glyph(g, PL_MENU_PX, 'bare')
     for n, g in RM_MENU_ICONS: f[n] = glyph(g, BARE_PX, 'bare')
     f[RM_FAV_ON[0]] = glyph(RM_FAV_ON[1], BARE_PX, 'solid')
@@ -1386,6 +1393,8 @@ GLASS_VIEWSORT1 = (72, 48, 14)    # the Genres and Composers "..." card: Name al
 GLASS_VIEWSORT2 = (72, 96, 14)    # the Songs page's lists with Search Songs and Select (two rows)
 GLASS_VIEWSORT3 = (72, 144, 14)   # Recently Added's albums view: Search Songs, Grid, List (three rows)
 GLASS_ROWMENU = (320, 250, 18)   # the track rows' menu (patch/rowmenu.c, docs/modules/rowmenu.md): Now Playing's More sheet's pane, five rows high, top corners only
+GLASS_PEQDIALOG = (72, 276, 14)  # the band page's unsaved-changes dialog (docs/modules/peq.md "Preset editing"): the Playlists menu's pane, 76 px of head and four 50 px buttons high; drawn patch3_x
+GLASS_BANDKEYPAD = (320, 320, 18)   # the band page's number keypad sheet (docs/modules/peq.md "Preset editing"): the track rows' menu's pane, 320 px high
 GLASS_MENU = (72, 200, 14)    # the Playlists page's "..." menu card (patch/playlists.c, docs/modules/playlists.md): the sheet's glass, all four corners; drawn patch3_x
                               # (the middle 24 px stretched to the card's width), as tall as the card (tools/pod_ui.py PL_CARD_H)
 GLASS_FILL = {False: ((0x2D, 0x2D, 0x2F), (0x23, 0x23, 0x25), 0.82), True: ((0x3A, 0x3A, 0x3C), (0x30, 0x30, 0x32), 0.86)}   # top rgb, bottom rgb, alpha
@@ -1451,6 +1460,8 @@ def np_images():
             elif g == 'pil:glass_viewsort2': out[name] = glass_image(*GLASS_VIEWSORT2, fill=GLASS_SHEET_FILL)
             elif g == 'pil:glass_viewsort3': out[name] = glass_image(*GLASS_VIEWSORT3, fill=GLASS_SHEET_FILL)
             elif g == 'pil:glass_rowmenu': out[name] = glass_image(*GLASS_ROWMENU, fill=GLASS_SHEET_FILL, top_only=True)
+            elif g == 'pil:glass_bandkeypad': out[name] = glass_image(*GLASS_BANDKEYPAD, fill=GLASS_SHEET_FILL, top_only=True)
+            elif g == 'pil:glass_peqdialog': out[name] = glass_image(*GLASS_PEQDIALOG, fill=GLASS_SHEET_FILL)
             elif g.startswith('pil:'): out[name] = pil_glyph(g[4:], px, rgb, alpha)
             elif rest: out[name] = np_disc(px, rest[0], NP_DISC_ALPHA_DOWN if pressed else NP_DISC_ALPHA, g, ink, rgb)
             else: out[name] = glyph_fit(g, px, px, rgb, (px - ink) // 2, 1.5 if ink < 22 else None)   # the small mode / queue glyphs keep a 1.5 px stroke

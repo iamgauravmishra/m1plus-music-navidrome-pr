@@ -62,6 +62,7 @@ ACT_KB_ZH = 28  # switch row (Settings > Keyboards): Chinese (Pinyin), off by de
 ACT_CTHEME = 24  # value row: the Cassette Mode theme, Normal, Chrome or Metal; opens its picker page (arg = the page index); the payload shows the saved theme (patch/tape.c tape_theme)
 ACT_STOCK = 29   # open a stock page by name (arg = index in STOCK_PAGES; patch/m1plus.c navigator_to, no context); some show a value of the stock state at the right
 ACT_THEMESET = 31  # picker row (Cassette Theme): choose the theme (arg 0 Normal, 1 Chrome, 2 Metal); a check shows on the chosen row (patch/tape.c tape_theme_set)
+ACT_PEQ = 57      # value row (Settings > Playback > EQ): what the equalizer plays (Off, the 10-Band EQ's curve or the preset's name); opens the Equalizer page (arg = its page index; patch/peq_ui.c)
 ACT_INFO = 33     # an information row of the About page: a label and a grey value at the right, no chevron, not tappable (arg = INFO_*: where patch/m1plus.c reads the value; INFO_STATIC: the Row's own text)
 ACT_PCSEARCH = 34  # switch row (Settings > Library > Podcasts): Podcast Discover, on by default; off hides Discover and the search level (patch/podcasts.c pcsearch_toggle, /mnt/data/m1plus/podcast-online-search)
 ACT_FOLDERS = 37  # open the Folders page: the card's folders and audio files in our list (patch/folders.c; arg = HOME_FOLDER, where a window that will not open falls back to the stock folder_page)
@@ -77,6 +78,24 @@ ACT_UPDATE = 45   # link row (Settings > System > About): Software Update, our o
 ACT_BG = 46       # value row (Settings > System > Appearance > Background): Black or Tinted; opens its picker page (arg = the page index); the payload shows the saved background (patch/palette.c pal_bg_mode)
 ACT_BGSET = 47    # picker row (Background): choose the background (arg 0 Black, 1 Tinted); a check shows on the chosen row, and the choice applies at once (patch/palette.c pal_bg_set)
 ACT_ACCENT = 48    # value row (Settings > System > Accent): the accent's name; opens its picker page (arg = the page index); the payload shows the saved accent (patch/palette.c pal_accent_saved)
+ACT_PEQ_SWITCH = 58  # the Equalizer page's rows (PEQ_PAGE.layout, not exported to the payload: patch/peq_ui.c binds them itself): stock's Equalizer switch ...
+ACT_PEQ_PICK = 59    # ... and a picker row (10-Band EQ, a preset), a check on the one that plays
+ACT_PEQ_AUTOEQ = 60  # ... and the Presets page's Download from AutoEq row (patch/autoeq.c autoeq_open)
+ACT_PEQ_PRESET = 61  # a preset's picker row on the Equalizer page: the check (no chevron); a tap selects it
+ACT_PEQ_PREAMP = 62  # the preset page's preamp row (PEQP_PAGE: a grey value, no chevron, no touch) ...
+ACT_PEQ_BAND = 63    # ... and its band rows (two lines: the frequency and gain, the type and Q; no touch)
+ACT_PEQ_PRESETS = 64  # the Equalizer page's last card: the link row Presets (a grey count of the preset files, the chevron; opens the Presets page: patch/peq_ui.c, patch/peqlib.c)
+ACT_PEQ_LIB = 65      # a preset file's row on the Presets page: two lines (the name, a grey line), a chevron, 60 px (opens its Preset page: patch/peqlib.c)
+ACT_PEQ_TENBAND = 67  # the Equalizer page's bottom card, first row: the link row 10-Band EQ (a grey curve name, the chevron; opens the 10-Band editor: patch/peq_ui.c, patch/tenband.c)
+ACT_PEQ_TCURVE = 68   # the editor's Curve row (TENBAND_PAGE): a grey curve name and the chevron; opens the Curve page ...
+ACT_PEQ_TPREAMP = 69  # ... its Preamp row (a grey "Auto · -5.0 dB" or "-3 dB", the chevron; opens the Preamp page) ...
+ACT_PEQ_TRESET = 70   # ... and its Reset row (white, plain: no glyph, no chevron)
+ACT_PEQ_CPICK = 71    # the Curve page's rows (a check on the current curve) ...
+ACT_PEQ_PAUTO = 72    # ... and the Preamp page's Auto row (the cut Auto makes now in grey, then a check) ...
+ACT_PEQ_PVAL = 73     # ... and its 0 dB .. -12 dB rows (the payload writes their text)
+ACT_PEQ_DELETE = 66   # the Preset page's Delete Preset row: red, no glyph, no chevron (confirms, then unlinks the file: patch/peqpage.c, patch/peq_ui.c peq_delete)
+ACT_PEQ_RENAME = 75   # the Preset page's Rename Preset row (white, plain: no glyph, no chevron), above Delete Preset in one card
+ACT_PEQ_TSAVE = 76    # the 10-Band editor's Save as Preset row (white, plain, its own card at the bottom): the name entry, then a new preset file of the curve (patch/tenband.c tb_on_save)
 ACT_ACCENTSET = 49 # picker row (Accent): choose the accent (arg = its index in ACCENT_VALUES); a check shows on the chosen row and the choice applies at once (patch/palette.c pal_accent_set)
 ACT_SFDEL = 51    # information row of Settings Files (Settings > Developer > Tools): a setting file's label and its value, like ACT_INFO, but tappable while the file is there: a confirm, then the file is deleted (arg = INFO_SF + k; patch/setfiles.c setfiles_delete)
 ACT_SFOLD = 52    # value row of Settings Files: Unsupported Files, the count of retired files (arg = INFO_SFOLD); a chevron and a tap that opens their list (patch/covlist.c kind 2) only while the count is not zero
@@ -86,18 +105,19 @@ ACT_REGION = 55    # value row (Settings > Library > Podcasts): the Podcast Regi
 ACT_REGIONSET = 56 # picker row (Podcast Region): choose Automatic (arg 0) or a storefront (arg = its index in pcregion.CODES + 1); a check shows on the chosen row (patch/pcregion.c pcregion_set)
 _ACTS = [v for k, v in globals().items() if k.startswith('ACT_')]
 assert len(set(_ACTS)) == len(_ACTS), 'two ACT_* share an id (patch/m1plus.c mirrors them)'
-SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT)
+SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT, ACT_PEQ_SWITCH)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
-VALUE_ACTIONS = (ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
-CHECK_ACTIONS = (ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_REGIONSET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
+VALUE_ACTIONS = (ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
+CHECK_ACTIONS = (ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_REGIONSET, ACT_PEQ_PICK, ACT_PEQ_CPICK, ACT_PEQ_PAUTO, ACT_PEQ_PVAL)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
 ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_CLEARCACHE, ACT_CLEARDUR, ACT_SFDELALL, ACT_RESETALL, ACT_GRID)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
 VALUE_INIT = {ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_REGION: 'Automatic'}   # what the asset's value label says before the payload sets it
 # The stock pages ACT_STOCK opens: (the name navigator_to takes = ui/<name>.bin, the value the row shows at the right: the payload reads the stock state, patch/m1plus.c VK_*, or None).
 # Each is a plain navigator_to(name) with no context in stock (docs/modules/settings.md "Stock pages"): the Settings and Play Settings lists' rows, the Wi-Fi hub's two; Back returns to our page.
-STOCK_WIFI, STOCK_BLUETOOTH, STOCK_PLAYMODE, STOCK_EQ, STOCK_DISPLAY = range(5)
-STOCK_PAGES = (('systemset/wifi_page', 'wifi'), ('systemset/bluetooth_page', 'bluetooth'), ('playset/playmode_page', 'playmode'), ('playset/equalizer_page', 'eq'),
+# (The EQ row is ACT_PEQ: our Equalizer page, docs/modules/peq.md; stock's playset/equalizer_page is retired: its one caller opens the 10-Band editor, tools/pod.py EQ_ROW.)
+STOCK_WIFI, STOCK_BLUETOOTH, STOCK_PLAYMODE, STOCK_DISPLAY = range(4)
+STOCK_PAGES = (('systemset/wifi_page', 'wifi'), ('systemset/bluetooth_page', 'bluetooth'), ('playset/playmode_page', 'playmode'),
                ('systemset/display_page', None))
-STOCK_VALUES = ('wifi', 'bluetooth', 'playmode', 'eq')   # the VK_* of patch/m1plus.c, in this order
+STOCK_VALUES = ('wifi', 'bluetooth', 'playmode', 'eq')   # the VK_* of patch/m1plus.c, in this order ('eq': the EQ row's value, ACT_PEQ)
 
 # ACT_SHUFFLE arguments (mirror the enum in patch/shuffle.c)
 SHUFFLE_SONGS = 0    # every song, stock Shuffle play mode, from a random song
@@ -106,13 +126,26 @@ SHUFFLE_FOLDERS = 2  # folders in random order, each folder's files in order
 
 
 class Row:
-    def __init__(self, label, action, arg=0):
+    def __init__(self, label, action, arg=0, rid=None, sub=None, value=None):
         self.label, self.action, self.arg = label, action, arg
+        self.rid = rid       # a cards page: the number in the row's widget names (pod_row<rid>) when it is not the row's place among the rows (the Preset page's Edited and Rename rows: the band rows keep their numbers)
+        self.sub, self.value = sub, value   # the preset page's Edited row: its static grey line and grey value (a band row's are the payload's)
+
+
+WIDE_VALUE_ACTIONS = (ACT_PEQ_TCURVE, ACT_PEQ_TPREAMP)   # value rows of the 10-Band editor: the grey value has PREAMP_W (tools/pod_settings.py) so that "Auto · −12.0 dB" and Классическая fit
 
 
 def row_kind(row):
-    """How a settings row is drawn: 'switch', 'value' (a grey value and the chevron), 'check', 'info' (a grey value, no chevron, no touch), 'action' (no accessory) or 'link' (the chevron)."""
+    """How a settings row is drawn: 'switch', 'value' (a grey value and the chevron), 'check', 'info' (a grey value, no chevron, no touch), 'action' (no accessory) or 'link' (the chevron);
+    the editor's 'wvalue' (a wide grey value and the chevron) and 'plain' (a white label alone), the Equalizer page's 'preset' (a check), the Presets page's 'lib' (two lines and a chevron, 60 px) and 'delete' (a red label), the preset page's 'preamp' (a grey value, no touch) and 'band' (two lines, no touch)."""
     if row.action in SWITCH_ACTIONS: return 'switch'
+    if row.action == ACT_PEQ_PRESET: return 'preset'
+    if row.action == ACT_PEQ_PREAMP: return 'preamp'
+    if row.action in (ACT_PEQ_BAND,): return 'band'
+    if row.action == ACT_PEQ_LIB: return 'lib'
+    if row.action == ACT_PEQ_DELETE: return 'delete'
+    if row.action in (ACT_PEQ_TRESET, ACT_PEQ_RENAME, ACT_PEQ_TSAVE): return 'plain'
+    if row.action in WIDE_VALUE_ACTIONS: return 'wvalue'
     if row.action in VALUE_ACTIONS or (row.action == ACT_STOCK and STOCK_PAGES[row.arg][1]): return 'value'
     if row.action in CHECK_ACTIONS: return 'check'
     if row.action in (ACT_INFO, ACT_SFDEL): return 'info'
@@ -126,10 +159,33 @@ class Hdr:
 
 
 class Note:
-    """A grey note under a card."""
-    def __init__(self, text): self.text = text
+    """A grey note under a card; lines > 1: a wrapping label that tall (the Equalizer page's hint)."""
+    def __init__(self, text, lines=1): self.text, self.lines = text, lines
 
 
+class Sliders:
+    """The 10-Band editor's card of ten vertical sliders (a view the payload paints: patch/tenband.c; tools/pod_settings.py SLIDERS_H high)."""
+
+
+class Graph:
+    """The preset page's frequency-response card (a view the payload paints a bitmap into; tools/pod_settings.py GRAPH_H high)."""
+
+
+class Segment:
+    """The band page's Peak / Low shelf / High shelf control (a view the payload paints: patch/peqband.c; tools/pod_settings.py SEG_H high)."""
+
+
+class HSliders:
+    """The band page's card of three horizontal sliders, Frequency, Gain and Q (a view the payload paints; tools/pod_settings.py HSL_H high)."""
+
+
+GRAPH = Graph()
+SLIDERS = Sliders()
+SEGMENT = Segment()
+HSLIDERS = HSliders()
+SLIDER_TEXTS = ('31', '63', '125', '250', '500', '1k', '2k', '4k', '8k', '16k')   # the sliders' frequency labels: numbers, shown as they are in every language (Hz is the graph's unit)
+GRAPH_TEXTS = ('+12', '0', '\u221212', '100', '1k', '10k', 'Hz')   # the graph card's labels: numbers and a unit, shown as they are in every language (the payload sets the scale's ends: +18 / +24)
+REGION = 'region'   # in the 10-Band editor's layout: a box (REGION_H high) between the graph card and the slider card holding the grey region line pod_region, empty in the asset (patch/tenband.c writes the dragged band's region)
 GAP = 'gap'   # in a cards page's layout: the space between two cards that have no header or note between them
 
 
@@ -171,7 +227,15 @@ BG_PAGE_INDEX = 37   # after UPDATE
 ACCENT_PAGE_INDEX = 38  # after BG_PAGE
 APPEARANCE_PAGE_INDEX = 39  # after ACCENT_PAGE
 PULLDOWN_PAGE_INDEX = 40   # before the Radio pages
-REGION_PAGE_INDEX = 45   # the last page (after the Radio pages and Get Info)
+REGION_PAGE_INDEX = 45   # after the Radio pages and Get Info
+PEQ_PAGE_INDEX = 51        # after the Wi-Fi pages
+PEQP_PAGE_INDEX = 52       # after PEQ_PAGE
+PEQLIB_PAGE_INDEX = 53     # the Presets page
+TENBAND_PAGE_INDEX = 54    # the 10-Band editor, then its Curve and Preamp pages
+TENCURVE_PAGE_INDEX = 55
+TENPREAMP_PAGE_INDEX = 56
+AUTOEQ_PAGE_INDEX = 57
+PEQBAND_PAGE_INDEX = 58   # the band page: the last of PAGES
 ITEMS = [   # item id = index; the default order, essentials first (iPod classic style)
     Row('Now Playing', ACT_PLAYER),
     Row('Cover Flow', ACT_COVER),
@@ -294,7 +358,7 @@ SETTINGS_PAGE = Page('m1plus_settings', 'm1plus_settings_page', 'Settings', layo
     Row('Now Playing', ACT_PAGE, NPSET_PAGE_INDEX),
     Hdr('Playback'),
     Row('Play Mode', ACT_STOCK, STOCK_PLAYMODE),
-    Row('EQ', ACT_STOCK, STOCK_EQ),
+    Row('EQ', ACT_PEQ, PEQ_PAGE_INDEX),
     Row('All Playback Settings', ACT_HOME, HOME_PLAYSET),
     Hdr('System'),
     Row('Display', ACT_STOCK, STOCK_DISPLAY),
@@ -326,7 +390,7 @@ ABOUT_PAGE = Page('m1plus_about', 'm1plus_about_page', 'About', layout=[
 # Settings > Developer > Cache (patch/homecover.c, docs/modules/settings.md "Cache"): the Covers card holds the cache folder's counts (INFO_CC_*: homecover_stat reads each, an ellipsis until counted), the build's Status and Clear Cover Cache;
 # the Track Durations card holds Measured Tracks (INFO_DUR: dur_stat, patch/durations.c) and Clear Track Durations.
 INFO_CC_ALBUMS, INFO_CC_COVERS, INFO_CC_NOART, INFO_CC_MISSING, INFO_CC_OLD, INFO_CC_SIZE, INFO_CC_STATUS = range(8, 15)   # (patch/m1plus.c INFO_CC = 8 + the index homecover_stat takes)
-INFO_DUR = INFO_CC_STATUS + 38   # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asserted below the Settings Files kinds)
+INFO_DUR = INFO_CC_STATUS + 39  # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asserted below the Settings Files kinds)
 CACHE_PAGE_INDEX = 32   # after ONLINEART (31)
 CACHE_PAGE = Page('m1plus_cache', 'm1plus_cache_page', 'Cache', layout=[
     Hdr('Covers'),
@@ -352,7 +416,7 @@ COVLIST = Page('m1plus_covlist', 'm1plus_covlist_page', 'Missing Covers', kind='
 # Only the setting files (ACT_SFDEL) are tappable, while present: a tap deletes the file after a confirm. The guard files and the folder stay ACT_INFO (never deleted).
 SETTING_FILES = ('albums-view', 'albums-sort', 'artists-sort', 'genres-sort', 'composers-sort', 'songs-sort-rev', 'folders-sort', 'playlists-sort', 'playlists-view', 'recently-added-view', 'coverflow-landscape', 'cassette-theme', 'vinyl-record', 'vinyl-base', 'pod-appearance',
                  'appearance-accent', 'appearance-background', 'home-recent-albums', 'home-daily-mix', 'home-menu', 'pulldown-tiles', 'keyboard-pinyin', 'podcast-online-search', 'podcast-region',
-                 'battery-percentage', 'playback-shuffle', 'search-history', 'radio-view', 'radio-recent', 'covers-rebuild', 'wifi-networks')
+                 'battery-percentage', 'playback-shuffle', 'playback-eq', 'search-history', 'radio-view', 'radio-recent', 'covers-rebuild', 'wifi-networks')
 GUARD_FILES = ('m1plus-start', 'm1plus-run', 'm1plus-bad', 'm1plus-off')
 # The files older builds left behind (patch/setfiles.c sf_retired, the same order; each with its .tmp sibling). Unsupported Files counts and lists them and
 # Delete Unsupported Files removes them. A renamed setting's old name goes here, never a guard file or a setting above (tests: unsupported_tests).
@@ -362,7 +426,7 @@ RETIRED_FILES = ('/mnt/data/m1plus-albums', '/mnt/data/m1plus-playlists', '/mnt/
                  '/mnt/data/m1plus-battpct', '/mnt/data/m1plus-pod-theme', '/mnt/data/m1plus-mix', '/mnt/data/m1plus-mix.art', '/mnt/data/m1plus/recently-played')
 FOLDER_LABEL = 'm1plus/'
 INFO_SF = INFO_CC_STATUS + 1   # patch/m1plus.c INFO_SF = INFO_CC + 7; row k reads setfiles_stat(k): 4 guard files, the folder, the settings
-INFO_SFOLD = INFO_SF + 36      # patch/m1plus.c: the Unsupported Files count (setfiles_old_count), above the setting rows
+INFO_SFOLD = INFO_SF + 37      # patch/m1plus.c: the Unsupported Files count (setfiles_old_count), above the setting rows
 assert len(GUARD_FILES) + 1 + len(SETTING_FILES) <= INFO_SFOLD - INFO_SF, 'the Settings Files rows reach INFO_SFOLD: raise it here and in patch/m1plus.c'
 assert INFO_DUR == INFO_SFOLD + 1, 'INFO_DUR must follow INFO_SFOLD (patch/m1plus.c)'
 FILES_PAGE_INDEX = 34   # after COVLIST (33)
@@ -628,16 +692,101 @@ WIFIOTHER_PAGE = Page('m1plus_wifiother', 'm1plus_wifiother_page', 'Join Wi-Fi N
 WIFISEC_PAGE = Page('m1plus_wifisec', 'm1plus_wifisec_page', 'Security', kind='wifisec')
 
 # PAGES[0] is the entry page.
+# Settings > Playback > EQ (patch/peq_ui.c, docs/modules/peq.md): stock's Equalizer switch, the 10-Band EQ (our ten-band curve; its curve's name in grey before the check) and a row per APO / AutoEQ preset in
+# /mnt/mmc/EQ, the one that plays checked. A cards page whose rows the payload binds itself (so kind 'peq', no exported rows): the switch in a card of its own, then a card of 10-Band EQ and
+# one row per preset (the asset has PQ_ROWS, named and shown by the payload, which also sets each shown row's card piece: peq_items(n) is what it shows), or, with no preset, 10-Band EQ
+# alone and the hint as a note under it. The bottom card has two link rows, 10-Band EQ (a grey curve name) and Presets (a grey count).
+PEQ_ROWS = 64    # patch/offsets.inc PQ_ROWS (tools/pod_ui.py asserts it)
+PEQ_SWITCH, PEQ_TENBAND_PICK, PEQ_PRESET = Row('Equalizer', ACT_PEQ_SWITCH), Row('10-Band EQ', ACT_PEQ_PICK), Row('', ACT_PEQ_PRESET)   # the preset rows have no text in the asset
+PEQ_OUTPUT = Note('For Headphones')   # under the switch card: the output this page edits (patch/peqout.c: the payload sets "For Line Out" / "For USB DAC" at run time); the asset's text is the headphone one
+PEQ_HINT = Note('Download headphone presets in Presets, or copy APO .txt files into EQ on the card.', lines=3)
+DSD_NOTE = Note('EQ is not applied to DSD.')   # the grey note at the end of the Equalizer page and the 10-Band editor
+PEQ_TENBAND = Row('Edit 10-Band EQ', ACT_PEQ_TENBAND)   # the bottom card under the picker: this link row (the grey curve name, the chevron: the editor) ...
+PEQ_PRESETS = Row('Presets', ACT_PEQ_PRESETS)   # ... and this one (a grey count, the chevron: the Presets page)
+
+
+def peq_items(n):
+    """The page's layout while the card has n presets (what the payload leaves visible): the switch, the picker (10-Band EQ and the presets, or 10-Band EQ and the hint), the bottom card (10-Band EQ, Presets)."""
+    return [PEQ_SWITCH, PEQ_OUTPUT, PEQ_TENBAND_PICK] + [PEQ_PRESET] * n + ([PEQ_HINT] if n == 0 else [GAP]) + [PEQ_TENBAND, PEQ_PRESETS, DSD_NOTE]
+
+
+PEQ_PAGE = Page('m1plus_peq', 'm1plus_peq_page', 'Equalizer', kind='peq')
+PEQ_PAGE.layout = [PEQ_SWITCH, PEQ_OUTPUT, PEQ_TENBAND_PICK] + [PEQ_PRESET] * PEQ_ROWS + [PEQ_HINT, GAP, PEQ_TENBAND, PEQ_PRESETS, DSD_NOTE]   # the asset: every row, the hint, then the bottom card (the payload hides the hint or the gap before it, whichever the card does not need)
+
+# The Presets page (patch/peqlib.c, docs/modules/peq.md "Presets page"): Download from AutoEq (a card of its own), then a header AutoEq over the stamped files and a header On Card over the
+# others, each file one 60 px row in a card. The asset has PEQ_ROWS slots for each section (the payload names, shows and sets the card pieces of as many as there are; the headers stay hidden
+# while their section is empty). Rows are numbered in this order, so slot s is row 1 + s: the AutoEq slots first, then the On Card slots.
+PEQLIB_DOWNLOAD = Row('Download from AutoEq', ACT_PEQ_AUTOEQ)
+PEQLIB_AUTOEQ, PEQLIB_CARD = Hdr('AutoEq'), Hdr('On Card')
+PEQLIB_ROW = Row('', ACT_PEQ_LIB)
+
+
+def peqlib_items(n_ae=PEQ_ROWS, n_card=PEQ_ROWS):
+    """The Presets page's layout: n_ae stamped files, n_card others (what the payload leaves visible; a section with none has no header)."""
+    return [PEQLIB_DOWNLOAD, PEQLIB_AUTOEQ] + [PEQLIB_ROW] * n_ae + [PEQLIB_CARD] + [PEQLIB_ROW] * n_card
+
+
+PEQLIB_PAGE = Page('m1plus_peqlib', 'm1plus_peqlib_page', 'Presets', kind='peqlib')
+# The AutoEq download page (patch/autoeq.c, docs/modules/peq.md): Radio's search level's top (the glass Back, the title, the field under the bar), over the AutoEq list; opened from the Presets page's row, no menu row.
+AUTOEQ_PAGE = Page('m1plus_autoeq', 'm1plus_autoeq_page', 'AutoEq', kind='autoeq')
+PEQLIB_PAGE.layout = peqlib_items()   # the asset: every slot
+
+# The preset page (patch/peqpage.c, docs/modules/peq.md "Preset page"): a preset's frequency response, its preamp and its bands, read only. A cards page the payload fills (kind 'peqpage', no exported
+# rows): the graph card, the preamp row (a card of its own), a Bands header and PEQ_BANDS band rows in one card (the asset has them all, hidden; the payload names and shows as many as the preset has and sets
+# each shown row's card piece), and the note under the card when the parser skipped lines (hidden otherwise).
+PEQP_ROWS = 30   # patch/peq.h PEQ_BANDS (tools/pod_ui.py asserts it)
+PEQP_PREAMP, PEQP_BAND, PEQP_HDR = Row('Preamp', ACT_PEQ_PREAMP), Row('', ACT_PEQ_BAND), Hdr('Bands')
+PEQP_NOTE = Note('%d lines not supported were skipped.', lines=2)
+PEQP_DELETE = Row('Delete Preset', ACT_PEQ_DELETE)   # row PEQP_ROWS + 1: the last of the card of Rename and Delete under the bands and the note, always shown
+PEQP_RENAME = Row('Rename Preset', ACT_PEQ_RENAME, rid=PEQP_ROWS + 2)   # above Delete Preset in the same card, always shown
+
+
+def peqp_items(n, skipped=False):
+    """The preset page's layout with n bands (what the payload leaves visible); skipped: the note under the card shows (the space before the Rename / Delete card, which is last), else a gap."""
+    return [GRAPH, GAP, PEQP_PREAMP, PEQP_HDR] + [PEQP_BAND] * n + ([PEQP_NOTE] if skipped else [GAP]) + [PEQP_RENAME, PEQP_DELETE]
+
+
+PEQP_PAGE = Page('m1plus_peqpage', 'm1plus_peqpage_page', 'Equalizer', kind='peqpage')
+PEQP_PAGE.layout = [GRAPH, GAP, PEQP_PREAMP, PEQP_HDR] + [PEQP_BAND] * PEQP_ROWS + [PEQP_NOTE, GAP, PEQP_RENAME, PEQP_DELETE]   # the asset: every band row, the note, then the Rename / Delete card (the payload hides the note or the gap before it, whichever the page does not need)
+
+# The band page (patch/peqband.c, docs/modules/peq.md "Preset editing"): one band of the preset page, opened by a band row: the graph card with a ring on the band, the Peak / Low shelf / High shelf control, a card of three
+# horizontal sliders (Frequency, Gain, Q: a tap on a value types it) and a hint. The navbar has Previous and Next band under the title "Band N". No rows: the payload binds the views by name.
+PEQBAND_HINT = Note('Tap a value to type it exactly.')
+PEQBAND_PAGE = Page('m1plus_peqband', 'm1plus_peqband_page', 'Equalizer', kind='peqband')   # (the title is the payload's: Band N)
+PEQBAND_PAGE.layout = [GRAPH, SEGMENT, HSLIDERS, PEQBAND_HINT]
+BAND_SEG_KEYS = ('Peak', 'Low shelf', 'High shelf')   # the control's three labels, in the order of peq_band.type 0 .. 2 (the preset page's keys: the Peak / Low shelf / High shelf forms)
+BAND_ROW_KEYS = ('Frequency', 'Gain', 'Q')            # the sliders' labels (Q is the same everywhere)
+
+# The 10-Band editor (patch/tenband.c, docs/modules/peq.md "10-Band EQ"), opened by the Equalizer page's 10-Band EQ link row: a Curve row card (a grey curve name, the chevron: the Curve page) at the top, the graph card (the preset page's),
+# the region line's box (REGION), the card of ten sliders (a view the payload paints and handles the touch of), then one card with Preamp (grey "Auto · -5.0 dB" or "-3 dB", the chevron: the Preamp page) and Reset (white, plain). Rows are numbered in this order:
+# pod_row0 Curve, pod_row1 Preamp, pod_row2 Reset. No exported rows: the payload binds them itself.
+TB_CURVE, TB_PREAMP, TB_RESET = Row('Curve', ACT_PEQ_TCURVE), Row('Preamp', ACT_PEQ_TPREAMP), Row('Reset', ACT_PEQ_TRESET)
+TB_SAVE = Row('Save as Preset', ACT_PEQ_TSAVE)   # rid 3 by place (pod_row3): its own card under the Preamp and Reset card, above the DSD note
+TENBAND_PAGE = Page('m1plus_tenband', 'm1plus_tenband_page', '10-Band EQ', kind='tenband')
+TENBAND_PAGE.layout = [TB_CURVE, GAP, GRAPH, REGION, SLIDERS, GAP, TB_PREAMP, TB_RESET, GAP, TB_SAVE, DSD_NOTE]
+# The Curve page: one card, the ten curves in the record's order (PEQ_FLAT .. PEQ_CUSTOM), a check on the current one (arg = the curve id).
+TENCURVE_NAMES = ('Flat', 'Pop', 'Rock', 'Dance', 'Blues', 'Metal', 'Vocal', 'Classical', 'Jazz', 'Custom')
+TENCURVE_PAGE = Page('m1plus_tencurve', 'm1plus_tencurve_page', 'Curve', kind='tencurve')
+TENCURVE_PAGE.layout = [Row(n, ACT_PEQ_CPICK, i) for i, n in enumerate(TENCURVE_NAMES)]
+# The Preamp page: Auto (its grey value the cut Auto makes now) in a card of its own with the grey note about it under it, then a card of 0 dB .. -12 dB (the payload writes the texts: "%d dB" with U+2212 before a cut);
+# row 0 is Auto, row 1 + n is -n dB (the rows are numbered across both cards).
+TENPREAMP_STEPS = 13   # patch/peq.h PEQ_GAIN_MAX + 1: 0 .. -12 dB
+TENPREAMP_PAGE = Page('m1plus_tenpreamp', 'm1plus_tenpreamp_page', 'Preamp', kind='tenpreamp')
+TENPREAMP_PAGE.layout = [Row('Auto', ACT_PEQ_PAUTO), Note('Auto reduces the level to help prevent distortion from EQ boosts.', lines=2)] + [Row('', ACT_PEQ_PVAL, n) for n in range(TENPREAMP_STEPS)]   # the note's space is the gap between the cards
+
+# PAGES[0] is the entry page.
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
          EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL, FOLDERS, QUEUE_PAGE,
-         RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST, FILES_PAGE, UPDATE, RELNOTES, BG_PAGE, ACCENT_PAGE, APPEARANCE_PAGE, PULLDOWN_PAGE, RADIO, RADIONP, RADIOINFO, SONGINFO, REGION_PAGE, WIFI_PAGE, WIFIINFO_PAGE, WIFIPASS_PAGE, WIFIOTHER_PAGE, WIFISEC_PAGE]
+         RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST, FILES_PAGE, UPDATE, RELNOTES, BG_PAGE, ACCENT_PAGE, APPEARANCE_PAGE, PULLDOWN_PAGE, RADIO, RADIONP, RADIOINFO, SONGINFO, REGION_PAGE, WIFI_PAGE, WIFIINFO_PAGE, WIFIPASS_PAGE, WIFIOTHER_PAGE, WIFISEC_PAGE,
+         PEQ_PAGE, PEQP_PAGE, PEQLIB_PAGE, TENBAND_PAGE, TENCURVE_PAGE, TENPREAMP_PAGE, AUTOEQ_PAGE, PEQBAND_PAGE]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE
 assert PAGES[EXTRASCFG_PAGE_INDEX] is EXTRASCFG_PAGE and PAGES[DEVELOPER_PAGE_INDEX] is DEVELOPER_PAGE
 assert PAGES[EXTRAS_PAGE_INDEX] is EXTRAS_PAGE and PAGES[MENUCFG_PAGE_INDEX] is MENUCFG_PAGE
 assert PAGES[LIBRARY_PAGE_INDEX] is LIBRARY_PAGE and PAGES[HOMESET_PAGE_INDEX] is HOMESET_PAGE
-assert PAGES[ABOUT_PAGE_INDEX] is ABOUT_PAGE and PAGES[RECORD_PAGE_INDEX] is RECORD_PAGE and PAGES[BG_PAGE_INDEX] is BG_PAGE and PAGES[ACCENT_PAGE_INDEX] is ACCENT_PAGE and PAGES[APPEARANCE_PAGE_INDEX] is APPEARANCE_PAGE
+assert PAGES[ABOUT_PAGE_INDEX] is ABOUT_PAGE and PAGES[RECORD_PAGE_INDEX] is RECORD_PAGE and PAGES[BG_PAGE_INDEX] is BG_PAGE and PAGES[ACCENT_PAGE_INDEX] is ACCENT_PAGE and PAGES[APPEARANCE_PAGE_INDEX] is APPEARANCE_PAGE and PAGES[PEQ_PAGE_INDEX] is PEQ_PAGE and PAGES[PEQP_PAGE_INDEX] is PEQP_PAGE and PAGES[PEQLIB_PAGE_INDEX] is PEQLIB_PAGE
+assert PAGES[TENBAND_PAGE_INDEX] is TENBAND_PAGE and PAGES[TENCURVE_PAGE_INDEX] is TENCURVE_PAGE and PAGES[TENPREAMP_PAGE_INDEX] is TENPREAMP_PAGE and PAGES[AUTOEQ_PAGE_INDEX] is AUTOEQ_PAGE and PAGES[PEQBAND_PAGE_INDEX] is PEQBAND_PAGE and PEQBAND_PAGE_INDEX == len(PAGES) - 1
 assert PAGES[VINYL_WHITE_INDEX] is VINYL_WHITE and PAGES[VTHEME_PAGE_INDEX] is VTHEME_PAGE and PAGES[CACHE_PAGE_INDEX] is CACHE_PAGE and PAGES[FILES_PAGE_INDEX] is FILES_PAGE
 assert PAGES[PULLDOWN_PAGE_INDEX] is PULLDOWN_PAGE and PAGES[REGION_PAGE_INDEX] is REGION_PAGE
 assert PAGES[THEME_PAGE_INDEX] is THEME_PAGE

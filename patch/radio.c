@@ -23,6 +23,7 @@
 #include "pcjson.h"
 #include "pcopml.h"
 #include "pcnet.h"
+#include "peqout.h"
 #include "pccover.h"
 #include "radio.h"
 
@@ -811,6 +812,7 @@ void rd_stop(void) {
 /* mclStartPlayer's hook: local music takes the output. Stock sends set-nexturl while its running byte is 1 and hciplayer does not leave a stream for it, so the stream is stopped first
  * (mclStop waits for hciplayer's exit). No widget, no timer call here (it may run off the UI thread): the engine's timer sees the state and ends itself. */
 int rd_start_player(void) {
+    peqout_sync(0); /* the track starts on whatever output is plugged in now: its EQ (patch/peqout.c) */
     rd.owns = 0; /* local music takes the mini bar back */
     if (rd_running()) rd_apply(RD_EV_LOCAL);
     return stock_start_player_trampoline();
@@ -829,6 +831,7 @@ void rd_save_stop(void) {
 }
 
 void rd_save_start(int paused) {
+    peqout_sync(0); /* the output just changed under the track: its EQ is in place before stock restarts it */
     if (rd_running())
         rd_apply(rd_bt()                 ? RD_EV_BT
                  : get_wifisignal() <= 0 ? RD_EV_NOWIFI

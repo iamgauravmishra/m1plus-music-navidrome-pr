@@ -68,7 +68,8 @@ enum {
     ACT_SFDELALL = 53, /* Settings Files: Delete Unsupported Files, an action row */
     ACT_RESETALL = 54, /* Developer > Tools: Reset All Settings, an action row (a confirm, then setfiles_reset_all) */
     ACT_REGION = 55,
-    ACT_REGIONSET = 56
+    ACT_REGIONSET = 56,
+    ACT_PEQ = 57
 };
 
 extern void shot_start(void); /* patch/shot.c: the Screenshot row: confirm, 5 s countdown, capture; or cancel */
@@ -92,6 +93,17 @@ extern void menu_arrange(void *win, int extras); /* patch/menu.c: the menu / Ext
 extern void menu_custom_opened(void *win); /* patch/menu.c: the Main Menu page's switches and arrows */
 extern void pulldown_page_opened(void *win); /* patch/pulldown.c: the Pull-down page's switches and arrows */
 extern void menu_extras_opened(void *win); /* patch/menu.c: the Settings > Extras page's switches */
+extern void peq_opened(void *win); /* patch/peq_ui.c: the Equalizer page's switch, 10-Band EQ and presets */
+extern void peqpage_opened(void *win); /* patch/peqpage.c: the preset page's graph, preamp and bands */
+extern void tenband_opened(void *win); /* patch/tenband.c: the 10-Band editor and its two picker pages */
+extern void peqband_opened(void *win); /* patch/peqband.c: the band page of a preset */
+extern void tencurve_opened(void *win);
+extern void tenpreamp_opened(void *win);
+extern void peqlib_opened(void *win); /* patch/peqlib.c: the Presets page's download row and the card's files */
+extern int peq_playing_name(
+    char *buf,
+    unsigned
+        size); /* patch/peq_ui.c: the preset the record plays, as the page names it, or the 10-Band EQ's curve key */
 
 struct pod_row {
     const char *name; /* row widget name in the asset (pod_row0, pod_row1, ...) */
@@ -122,8 +134,8 @@ enum {
     INFO_CAP,
     INFO_FREE,
     INFO_CC, /* the Cache page's seven Covers values start here: homecover_stat(kind - INFO_CC) */
-    INFO_SF = INFO_CC + 7, /* the Settings Files page's 36 values: setfiles_stat(kind - INFO_SF) */
-    INFO_SFOLD = INFO_SF + 36, /* the Unsupported Files count (setfiles_old_count), above those rows */
+    INFO_SF = INFO_CC + 7, /* the Settings Files page's 37 values: setfiles_stat(kind - INFO_SF) */
+    INFO_SFOLD = INFO_SF + 37, /* the Unsupported Files count (setfiles_old_count), above those rows */
     INFO_DUR = INFO_SFOLD + 1 /* the Cache page's Measured Tracks: dur_stat (patch/durations.c) */
 };
 
@@ -335,7 +347,7 @@ static int on_row(void *ctx, void *e) {
         home_open(row->arg);
     else if (row->action == ACT_PAGE || row->action == ACT_CTHEME || row->action == ACT_VREC ||
              row->action == ACT_VTHEME || row->action == ACT_BG || row->action == ACT_ACCENT ||
-             row->action == ACT_REGION) /* the value rows open their picker page */
+             row->action == ACT_REGION || row->action == ACT_PEQ) /* the value rows open their picker page */
         open_page(row->arg, 0);
     else if (row->action == ACT_PLAYER)
         pod_open_now_playing();
@@ -498,7 +510,7 @@ static const char *const accent_key[PAL_ACCENTS] = {
     "Neutral", "Red", "Orange", "Green", "Teal", "Purple", "Champagne"}; /* tools/pod_pages.py ACCENT_VALUES */
 
 static void value_text(void *label, int kind) {
-    char buf[48];
+    char buf[64]; /* a preset name: PEQ_NAME */
     const char *key = "";
     int n;
     if (kind == VK_WIFI)
@@ -507,9 +519,10 @@ static void value_text(void *label, int kind) {
         key = *(volatile unsigned char *)BT_FLAG ? "On" : "Off";
     else if (kind == VK_PLAYMODE)
         n = pod_play_mode(), key = playmode_key[n >= 0 && n < 4 ? n : 0];
-    else if (kind == VK_EQ)
-        key = *(volatile unsigned char *)EQ_FLAG && get_equalizer_preset_name(*(volatile int *)EQ_MODE, buf) ? buf
-                                                                                                             : "Off";
+    else if (
+        kind ==
+        VK_EQ) /* Off, the APO / AutoEQ preset that plays (a file name: no key, shown as it is), or the 10-Band EQ's curve (Flat, Rock, Custom: keys) */
+        key = !*(volatile unsigned char *)EQ_FLAG ? "Off" : peq_playing_name(buf, sizeof buf) ? buf : "Off";
     else if (kind == VK_THEME)
         key = tape_theme() == 1 ? "Chrome" : tape_theme() == 2 ? "Metal" : "Normal";
     else if (kind == VK_RECORD)
@@ -594,6 +607,7 @@ static int row_value(const struct pod_row *row) {
            : row->action == ACT_BG     ? VK_BG
            : row->action == ACT_ACCENT ? VK_ACCENT
            : row->action == ACT_REGION ? VK_REGION
+           : row->action == ACT_PEQ    ? VK_EQ
                                        : VK_NONE;
 }
 
@@ -719,8 +733,11 @@ static int open_page(int index, int as_home) {
     if (!win) return -1;
     if (index == POD_FILES_PAGE) setfiles_open(); /* the files, read once as the page opens */
     if (index == POD_CACHE_PAGE) dur_stat_open(); /* the track table's header, read once as the page opens */
-    pod_bind(win, "btn_return", pod_on_back, (void *)0);
-    pod_bind(win, "btn_backtoplayer", pod_on_player, (void *)0);
+    if (index !=
+        POD_PEQBAND_PAGE) { /* the band page asks about unsaved changes first: it binds both itself (patch/peqband.c) */
+        pod_bind(win, "btn_return", pod_on_back, (void *)0);
+        pod_bind(win, "btn_backtoplayer", pod_on_player, (void *)0);
+    }
     for (i = 0; i < page->count; i++) {
         const struct pod_row *row = &page->rows[i];
         if (row->action == ACT_STARTUP || row->action == ACT_LANDSCAPE || row->action == ACT_SHELF ||
@@ -761,6 +778,20 @@ static int open_page(int index, int as_home) {
         pulldown_page_opened(win);
     else if (index == POD_EXTRASCFG_PAGE)
         menu_extras_opened(win);
+    else if (index == POD_PEQ_PAGE)
+        peq_opened(win);
+    else if (index == POD_PEQP_PAGE)
+        peqpage_opened(win);
+    else if (index == POD_PEQLIB_PAGE)
+        peqlib_opened(win);
+    else if (index == POD_TENBAND_PAGE)
+        tenband_opened(win);
+    else if (index == POD_TENCURVE_PAGE)
+        tencurve_opened(win);
+    else if (index == POD_TENPREAMP_PAGE)
+        tenpreamp_opened(win);
+    else if (index == POD_PEQBAND_PAGE)
+        peqband_opened(win);
     { /* the Settings page is the way out to the grid; the menu may be the Home instance (no navbar) */
         int entry = as_home && index == POD_ENTRY_PAGE;
         if (index == POD_SETTINGS_PAGE || entry) home_menu_opened(win, index == POD_SETTINGS_PAGE, entry);
@@ -772,6 +803,20 @@ int m1plus_open_entry(void) { return open_page(POD_ENTRY_PAGE, 1); }
 
 /* The Settings page, for the iPod page's Settings row (patch/ipod.c): the normal instance, with Back, over whatever is in front. */
 int pod_open_settings(void) { return open_page(POD_SETTINGS_PAGE, 0); }
+
+/* The preset page, for the Presets page's rows (patch/peqpage.c): the normal instance, with Back. */
+int pod_open_peqpage(void) { return open_page(POD_PEQP_PAGE, 0); }
+
+/* The 10-Band editor and its Curve and Preamp pages (patch/tenband.c): the normal instance, with Back. */
+int pod_open_tenband(void) { return open_page(POD_TENBAND_PAGE, 0); }
+int pod_open_tencurve(void) { return open_page(POD_TENCURVE_PAGE, 0); }
+int pod_open_tenpreamp(void) { return open_page(POD_TENPREAMP_PAGE, 0); }
+
+/* The band page of a preset (patch/peqband.c): the normal instance, with Back. */
+int pod_open_peqband(void) { return open_page(POD_PEQBAND_PAGE, 0); }
+
+/* The Presets page, for the Equalizer page's Presets card (patch/peqlib.c): the normal instance, with Back. */
+int pod_open_peqlib(void) { return open_page(POD_PEQLIB_PAGE, 0); }
 
 /* Recovery: while the boot guard's bad note exists the grid has no M1+ Music icon (it is boot-created), so the
  * Tidal icon (id 1) opens the menu (normal instance, with Back) to reach Settings > Developer > Boot to M1+ Music (Settings is

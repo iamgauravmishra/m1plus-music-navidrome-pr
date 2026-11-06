@@ -47,16 +47,17 @@ def style(w, prop, default=None):
     return w.get(f'style:normal:{prop}') or default
 
 
-def draw_page(s, key, full=False, state=None, lit=False, pal=None, pressed=None):
+def draw_page(s, key, full=False, state=None, lit=False, pal=None, pressed=None, root=None):
     """A cards page of the tree as the payload leaves it: the widgets of ui/<key>.bin, the sample state applied. lit: in Light Mode (docs/modules/accent.md): every colour of the styles and every
     image as the hooks of patch/palette.c give it (tools/palette.py is their model); the page's layout is the same.
     pal: an optional palette object (tools/preview_accent.py: .ink(rgb), .image(side, name), .base): every colour and image goes through the model of tools/palette.py as the hooks
     of patch/palette.c give it (an accent's tints, the pressed card piece, the row glyphs in the accent); None draws today's colours.
-    pressed: the label text of the one row drawn in its pressed state (needs pal)."""
+    pressed: the label text of the one row drawn in its pressed state (needs pal).
+    root: the same tree, already changed as the payload changes it (the Equalizer page)."""
     ink = (lambda c: palette.flip(c)) if lit else (lambda c: c)
     img = lambda n: palette.flip_image(n, s.img(n)) if lit else s.img(n)
     if pal: ink, img = pal.ink, (lambda n: pal.image(s, n))
-    root = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', key + '.bin'), 'rb').read())
+    if root is None: root = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', key + '.bin'), 'rb').read())
     st = STATE.get(key, {}) if state is None else state
     values, switches, shown = st.get('values', {}), st.get('switches', {}), st.get('shown', set())
     sv = next(w for w in root.walk() if w.name == 'pod_scrollview')
@@ -70,10 +71,7 @@ def draw_page(s, key, full=False, state=None, lit=False, pal=None, pressed=None)
         if c.type == 'list_item':
             lab = next(t for t in c.children if t.name.startswith('pod_label'))
             draw_row(s, im, d, c, y, values, switches, shown, ink, img, pal, pal is not None and pressed is not None and s.shown(lab) == pressed)
-        for t in c.children:   # a header or a note: its grey label
-            if c.type == 'view' and t.type == 'hscroll_label':
-                px = int(style(t, 'font_size'))
-                s.text(im, t.x, y + t.y + t.h / 2, s.clip(s.shown(t), px, t.w), px, ink(rgb(style(t, 'text_color'))))
+        draw_text_item(s, im, c, y, ink)
         y += c.h
     d.rectangle((0, 0, W - 1, NAV - 1), fill=base)   # the list is under the navbar: it clips at its top
     lt = next(w for w in root.walk() if w.name == 'label_title'); tpx = PI.title_px(s.tree)
@@ -83,6 +81,20 @@ def draw_page(s, key, full=False, state=None, lit=False, pal=None, pressed=None)
     if full and im.height > SCREEN:
         for x in range(0, W, 8): d.line((x, SCREEN, x + 3, SCREEN), fill=(0xFF, 0x50, 0x50))
     return im
+
+
+def draw_text_item(s, im, c, y, ink=lambda c: c):
+    """A header or a note (a view holding a grey label) at y."""
+    for t in c.children:   # a header or a note: its grey label
+        if c.type == 'view' and t.type == 'hscroll_label':
+            px = int(style(t, 'font_size'))
+            s.text(im, t.x, y + t.y + t.h / 2, s.clip(s.shown(t), px, t.w), px, ink(rgb(style(t, 'text_color'))))
+        elif c.type == 'view' and t.type == 'label':   # a wrapping note: by words, from the top, ST.WRAP_LINE apart
+            px, line, k = int(style(t, 'font_size')), '', 0
+            for word in s.shown(t).split():
+                if line and s.font.width(line + ' ' + word, px) > t.w: s.text(im, t.x, y + t.y + ST.NOTE_LABEL_H / 2 + k * ST.WRAP_LINE, line, px, ink(rgb(style(t, 'text_color')))); line, k = word, k + 1
+                else: line = (line + ' ' + word).strip()
+            s.text(im, t.x, y + t.y + ST.NOTE_LABEL_H / 2 + k * ST.WRAP_LINE, line, px, ink(rgb(style(t, 'text_color'))))
 
 
 def draw_row(s, im, d, row, y, values, switches, shown, ink=lambda c: c, img=None, pal=None, pressed=False):
@@ -97,7 +109,7 @@ def draw_row(s, im, d, row, y, values, switches, shown, ink=lambda c: c, img=Non
         info = row.get('sensitive') == 'false'   # an About row: 16 px, no chevron, the value ends at the right ink edge
         px, mx = (int(style(val, 'font_size', ST.INFO_PX)), ST.INFO_MAX) if info else (ST.VALUE_PX, ST.VALUE_MAX)   # (an info row's own size: About's 16, the Cover Cache page's 18)
         vw = min(s.font.width(text, px) + 6, mx) if text else 8
-        right = val.x + (ST.INFO_W if info else ST.VALUE_W)
+        right = val.x + (ST.INFO_W if info else val.w)
         s.text(im, right - 2, y + row.h / 2, text, px, ink(rgb(ST.GREY)), 'r')
         lab_w = right - vw - ST.VALUE_LABEL_GAP - label.x
     for c in row.children:
@@ -109,7 +121,9 @@ def draw_row(s, im, d, row, y, values, switches, shown, ink=lambda c: c, img=Non
             im.alpha_composite(g, (c.x, y + c.y))
         elif c.name == 'pod_hair':
             d.rectangle((c.x, y + c.y, c.x + c.w - 1, y + c.y), fill=ink(rgb(style(c, 'bg_color'))))
-    s.text(im, label.x, y + row.h / 2, s.clip(s.shown(label), 21, lab_w), 21, ink((255, 255, 255)))
+    sub = next((c for c in row.children if c.name.startswith('pod_sub')), None)   # a two line row (the Presets page's files): the name on the first line, the grey line under it
+    s.text(im, label.x, y + (label.y + label.h / 2 if sub else row.h / 2), s.clip(s.shown(label), 21, lab_w), 21, ink((255, 255, 255)))
+    if sub: s.text(im, sub.x, y + sub.y + sub.h / 2, s.clip(s.shown(sub), int(style(sub, 'font_size', 18)), sub.w), int(style(sub, 'font_size', 18)), ink(rgb(style(sub, 'text_color', '#AAAAAA'))))
 
 
 def draw_covlist(s, title, albums):

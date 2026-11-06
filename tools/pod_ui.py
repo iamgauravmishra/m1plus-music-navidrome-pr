@@ -542,6 +542,199 @@ def sheet_widgets(prefix, sheet_rows, tallest):
     return scrim, card
 
 
+PQ_FIRST, PQ_ROWS = OFFSETS['PQ_FIRST'], OFFSETS['PQ_ROWS']
+assert PQ_ROWS == pod_pages.PEQ_ROWS and PQ_FIRST == 2
+
+
+PEQP_ROWS = OFFSETS['GR_BANDS']
+assert PEQP_ROWS == pod_pages.PEQP_ROWS == 30
+
+
+PQD_W, PQD_HEAD, PQD_ROW_H = OFFSETS['PD_CARD_W'], 76, OFFSETS['PL_ROW_H']   # the unsaved-changes dialog (patch/peqband.c): the card's width (the Podcasts dialog's PD_CARD_W), the head above the buttons, a button row (PL_ROW_H)
+PQD_KEYS = ('Save', 'Save As New…', "Don't Save", 'Cancel')   # its buttons, top to bottom (pq_item<k>)
+PQD_H = PQD_HEAD + len(PQD_KEYS) * PQD_ROW_H
+
+
+def peq_dialog():
+    """(scrim, card): the band page's unsaved-changes dialog (patch/peqband.c, docs/modules/peq.md "Preset editing"), the Podcasts refresh dialog's pieces (podcasts_dialog): a full-client dim scrim that takes every touch (a tap on it is Cancel) and a
+    centred card in the Playlists menu's glass (pq_glass, patch3_x) with the title "Save Changes?" (pq_title, 20 px white), the preset's name (pq_name, 16 px grey, the payload sets it) and PQD_ROW_H button rows (pq_item<k>: PQD_KEYS, 18 px white
+    centred, the menu rows' 13 % white hairline above each and 6 % white pressed). Hidden AND insensitive until the payload shows them."""
+    scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', 'pq_scrim'), ('enable', 'true')]))
+    for st in STATES:
+        styled(scrim, (st,), 'bg_color', PL_DIM)
+        styled(scrim, (st,), 'text_color', '#FFFFFF')
+        styled(scrim, (st,), 'border_width', '0')
+        styled(scrim, (st,), 'border_color', '#00000000')
+    card = hidden(Widget('view', (SCREEN_W - PQD_W) // 2, (CLIENT_H - PQD_H) // 2, PQD_W, PQD_H, [('name', 'pq_card')]))
+    for st in STATES:
+        styled(card, (st,), 'bg_color', '#00000000')
+        styled(card, (st,), 'bg_image', 'pq_glass')
+        styled(card, (st,), 'bg_image_draw_type', 'patch3_x')
+        styled(card, (st,), 'border_width', '0')
+    def text(name, y, h, px, rgb, prop):
+        lab = Widget('hscroll_label', 12, y, PQD_W - 24, h, [('name', name), prop, ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+        for st in ('normal', 'disable', 'focused'):
+            styled(lab, (st,), 'font_size', str(px))
+            styled(lab, (st,), 'text_color', rgb)
+            styled(lab, (st,), 'text_align_h', 'center')
+            styled(lab, (st,), 'text_align_v', 'middle')
+        return lab
+    card.children.append(text('pq_title', 14, 30, 20, '#FFFFFF', pod_i18n.text_prop('Save Changes?')))
+    card.children.append(text('pq_name', 44, 24, 16, PD_NAME_RGB, ('text', '')))
+    for k, key in enumerate(PQD_KEYS):
+        b = Widget('button', 0, PQD_HEAD + k * PQD_ROW_H, PQD_W, PQD_ROW_H, [('name', f'pq_item{k}'), ('enable', 'true'), pod_i18n.text_prop(key)])
+        for st in STATES:
+            styled(b, (st,), 'bg_color', PL_PRESSED if st == 'pressed' else '#00000000')
+            styled(b, (st,), 'text_color', '#FFFFFF')
+            styled(b, (st,), 'font_size', '18')
+            styled(b, (st,), 'border', 'top')
+            styled(b, (st,), 'border_width', '1')
+            styled(b, (st,), 'border_color', PL_HAIR)
+        card.children.append(b)
+    return scrim, card
+
+
+BK_H, BK_GLASS = 320, 'bk_glass'                              # the number keypad sheet (patch/peqband.c): its height, the sheet's glass (tools/mod_icons.py GLASS_BANDKEYPAD)
+BK_GRAB_W, BK_GRAB_H, BK_GRAB_Y = 36, 5, 8
+BK_TOP_Y, BK_TOP_H, BK_TOP_PX, BK_TOP_W = 14, 36, 17, 100       # Cancel / title / Done row
+BK_RANGE_Y, BK_RANGE_H, BK_RANGE_PX = 54, 22, 14
+BK_FIELD_X, BK_FIELD_Y, BK_FIELD_W, BK_FIELD_H, BK_VAL_H, BK_CARET_W, BK_CARET_H = (OFFSETS[k] for k in ('BK_FIELD_X', 'BK_FIELD_Y', 'BK_FIELD_W', 'BK_FIELD_H', 'BK_VAL_H', 'BK_CARET_W', 'BK_CARET_H'))   # patch/offsets.inc
+BK_FIELD_R, BK_VAL_PX, BK_UNIT_PX = 12, 38, 17
+BK_KEY_X0, BK_KEY_PITCH_X, BK_KEY_W = 6, 78, 74                  # four columns of 74 px, 4 px apart
+BK_KEY_Y0, BK_KEY_PITCH_Y, BK_KEY_H, BK_KEY_PX = 136, 46, 40, 22
+BK_KEY_R = 9
+BK_FIELD_RGB, BK_GRAB_RGB, BK_DIM_RGB = '#2C2C2E', '#6E6E73', '#5A5A5E'
+
+
+def band_keypad():
+    """(scrim, card): the band page's number keypad (patch/peqband.c, docs/modules/peq.md "Preset editing", mockup 10c): the dim scrim (a tap on it is Cancel) and a bottom sheet in the track rows' menu's glass
+    (bk_glass, BK_H high, top corners rounded) with a grabber, Cancel / the field's title / Done, a grey "Range ..." line, the value field (bk_val right aligned, bk_caret, bk_unit; the payload places the three by the unit's width) and
+    the keys: 1-9, a wide 0, "." and, in the right column, backspace, the sign (Gain only) and the Hz / kHz key (Frequency only; the payload sets the texts of those two keys). Neutral greys, no accent. Hidden AND insensitive until the payload shows them."""
+    scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', 'bk_scrim'), ('enable', 'true')]))
+    for st in STATES:
+        styled(scrim, (st,), 'bg_color', PL_DIM)
+        styled(scrim, (st,), 'text_color', '#FFFFFF')
+        styled(scrim, (st,), 'border_width', '0')
+        styled(scrim, (st,), 'border_color', '#00000000')
+    card = hidden(Widget('view', 0, CLIENT_H - BK_H, SCREEN_W, BK_H, [('name', 'bk_card')]))
+    for st in STATES:
+        styled(card, (st,), 'bg_color', '#00000000')
+        styled(card, (st,), 'bg_image', BK_GLASS)
+        styled(card, (st,), 'bg_image_draw_type', 'default')
+        styled(card, (st,), 'border_width', '0')
+
+    def plain(name, x, y, w, h, fill, radius=0):
+        v = Widget('view', x, y, w, h, [('name', name), ('sensitive', 'false')])
+        for st in STATES:
+            styled(v, (st,), 'bg_color', fill)
+            styled(v, (st,), 'border_width', '0')
+            if radius: styled(v, (st,), 'round_radius', str(radius))
+        return v
+
+    def text(name, x, y, w, h, px, rgb, align, prop):
+        lab = Widget('hscroll_label', x, y, w, h, [('name', name), prop, ('only_parent_focus', 'true'), ('sensitive', 'false')])
+        for st in ('normal', 'disable', 'focused'):
+            styled(lab, (st,), 'font_size', str(px))
+            styled(lab, (st,), 'text_color', rgb)
+            styled(lab, (st,), 'text_align_h', align)
+            styled(lab, (st,), 'text_align_v', 'middle')
+            styled(lab, (st,), 'margin_left', '0')
+            styled(lab, (st,), 'margin_right', '0')
+        return lab
+
+    def key(name, x, y, w, prop, fill, down, px=BK_KEY_PX):
+        b = Widget('button', x, y, w, BK_KEY_H, [('name', name), ('enable', 'true'), prop])
+        for st in STATES:
+            styled(b, (st,), 'bg_color', down if st == 'pressed' else fill)
+            styled(b, (st,), 'text_color', BK_DIM_RGB if st == 'disable' else '#FFFFFF')
+            styled(b, (st,), 'font_size', str(px))
+            styled(b, (st,), 'border_width', '0')
+            styled(b, (st,), 'round_radius', str(BK_KEY_R))
+        return b
+
+    card.children.append(plain('bk_grab', (SCREEN_W - BK_GRAB_W) // 2, BK_GRAB_Y, BK_GRAB_W, BK_GRAB_H, BK_GRAB_RGB, BK_GRAB_H // 2))
+    for name, x, align, key_text in (('bk_cancel', 0, 'left', 'Cancel'), ('bk_done', SCREEN_W - BK_TOP_W, 'right', 'Done')):
+        b = Widget('button', x, BK_TOP_Y, BK_TOP_W, BK_TOP_H, [('name', name), ('enable', 'true')])
+        for st in STATES:
+            styled(b, (st,), 'bg_color', '#00000000')
+            styled(b, (st,), 'text_color', '#FFFFFF')
+            styled(b, (st,), 'border_width', '0')
+        b.children.append(text(f'{name}_t', 16 if align == 'left' else 0, 0, BK_TOP_W - 16, BK_TOP_H, BK_TOP_PX, '#FFFFFF', align, pod_i18n.text_prop(key_text)))
+        card.children.append(b)
+    card.children.append(text('bk_title', BK_TOP_W, BK_TOP_Y, SCREEN_W - 2 * BK_TOP_W, BK_TOP_H, BK_TOP_PX, '#FFFFFF', 'center', ('text', '')))
+    card.children.append(text('bk_range', 16, BK_RANGE_Y, SCREEN_W - 32, BK_RANGE_H, BK_RANGE_PX, PD_COUNT_RGB, 'left', ('text', '')))
+    card.children.append(plain('bk_field', BK_FIELD_X, BK_FIELD_Y, BK_FIELD_W, BK_FIELD_H, BK_FIELD_RGB, BK_FIELD_R))
+    card.children.append(text('bk_val', BK_FIELD_X + 10, BK_FIELD_Y + (BK_FIELD_H - BK_VAL_H) // 2, 200, BK_VAL_H, BK_VAL_PX, '#FFFFFF', 'right', ('text', '')))
+    card.children.append(plain('bk_caret', BK_FIELD_X + 220, BK_FIELD_Y + (BK_FIELD_H - BK_CARET_H) // 2, BK_CARET_W, BK_CARET_H, '#FFFFFF'))
+    card.children.append(text('bk_unit', BK_FIELD_X + 226, BK_FIELD_Y, 40, BK_FIELD_H, BK_UNIT_PX, '#8E8E93', 'left', ('text', '')))
+    kx = lambda c: BK_KEY_X0 + c * BK_KEY_PITCH_X
+    ky = lambda r: BK_KEY_Y0 + r * BK_KEY_PITCH_Y
+    for d in range(1, 10):
+        r, c = divmod(d - 1, 3)
+        card.children.append(key(f'bk_k{d}', kx(c), ky(r), BK_KEY_W, ('text', str(d)), PK.KB_KEY, PK.KB_KEY_DOWN))
+    card.children.append(key('bk_k0', kx(0), ky(3), 2 * BK_KEY_PITCH_X - 4 + 0, ('text', '0'), PK.KB_KEY, PK.KB_KEY_DOWN))
+    card.children.append(key('bk_dot', kx(2), ky(3), BK_KEY_W, ('text', '.'), PK.KB_KEY, PK.KB_KEY_DOWN))
+    delete = key('bk_del', kx(3), ky(0), BK_KEY_W, ('text', ''), PK.KB_FN, PK.KB_FN_DOWN)
+    for st in STATES: styled(delete, (st,), 'icon', 'qk_delete')
+    card.children.append(delete)
+    card.children.append(key('bk_sign', kx(3), ky(1), BK_KEY_W, ('text', ''), PK.KB_FN, PK.KB_FN_DOWN))
+    card.children.append(key('bk_unitk', kx(3), ky(2), BK_KEY_W, ('text', ''), PK.KB_FN, PK.KB_FN_DOWN, px=BK_UNIT_PX))
+    return scrim, card
+
+
+def build_peqpage_page(page):
+    """The preset page (patch/peqpage.c, docs/modules/peq.md "Preset page", "Preset editing"): a cards page (build_cards_page, page.layout). pod_graph is the graph card, pod_row0 the preamp row (pod_value0), pod_row1 .. the band
+    rows (pod_label<i> the frequency, pod_value<i> the gain, pod_sub<i> the grey line, a chevron: a tap opens the band page); the band rows and the note (pod_note0) start hidden and insensitive.
+    The Delete Preset row (pod_row<PEQP_ROWS + 1>) and Rename Preset above it (pod_row<PEQP_ROWS + 2>) are always shown: one card with a touch each (patch/peqpage.c)."""
+    root = build_cards_page(page)
+    sv = next(w for w in root.walk() if w.name == 'pod_scrollview')
+    for c in sv.children:
+        if c.name == 'pod_note0' or (c.name.startswith('pod_row') and 1 <= int(c.name[7:]) <= PEQP_ROWS): hidden(c)
+    return root
+
+
+def build_peqband_page(page):
+    """The band page (patch/peqband.c, docs/modules/peq.md "Preset editing"): a cards page (build_cards_page, page.layout) whose navbar is the glass capsule [Previous band | Next band | Now Playing] (btn_bprev, btn_bnext); the title is the payload's ("Band 4"). The unsaved-changes dialog (peq_dialog) is last, above the list and the navbar."""
+    root = build_cards_page(page)
+    nb = root.children[0]
+    nb.children[0].w = NAV_CF_X - NAV_TITLE_X
+    for c in nb.children:
+        if c.name == 'btn_backtoplayer':   # the capsule's right cap
+            for st, img in (('pressed', 'ah_nav_play_down'), ('normal', 'ah_nav_play'), ('over', 'ah_nav_play')): c.set(f'style:{st}:icon', img)
+    for name, icon, x in (('btn_bprev', 'pod_nav_bprev', NAV_CF_X), ('btn_bnext', 'pod_nav_bnext', NAV_VIEW_X)):
+        b = Widget('button', x, 0, NAV_VIEW_W, NAVBAR_H, [('name', name), ('enable', 'true'), ('style', 'img_btn_style'),
+                                                           ('style:pressed:icon', icon + '_down'), ('style:normal:icon', icon), ('style:over:icon', icon)])
+        b.set('dirty_rect_tolerance', str(NAV_ICON_OVERFLOW))
+        nb.children.append(b)
+    root.children.extend(band_keypad())   # the number keypad sheet, then the dialog: above the list and the navbar
+    root.children.extend(peq_dialog())
+    return root
+
+
+def build_peq_page(page):
+    """Settings > Playback > EQ (patch/peq_ui.c, docs/modules/peq.md): a cards page (build_cards_page, page.layout). pod_row0 is the Equalizer switch (pod_switch0) in a card
+    of its own, pod_row1 10-Band EQ (its grey curve name pod_value1) and PQ_ROWS preset rows (pod_label<i>, no text in the asset) one card, a check pod_check<i> on each. The preset rows and the hint
+    (pod_note1, a wrapping label) start hidden and insensitive; the payload shows as many rows as the card has presets, or the hint, and sets each row's card piece and hairline.
+    pod_note0 under the switch card is the grey output line ("For Headphones", the payload sets the text, pod_note0_t), always shown.
+    The bottom card (after the gap pod_gap0, which the payload hides while the hint shows) is always there: the 10-Band EQ link row (pod_row<PQ_FIRST + PQ_ROWS>, its curve name pod_value<that row>) and the Presets link row (the next one, its count pod_value<that row>)."""
+    root = build_cards_page(page)
+    sv = next(w for w in root.walk() if w.name == 'pod_scrollview')
+    for c in sv.children:
+        if c.name == 'pod_note1' or (c.name.startswith('pod_row') and PQ_FIRST <= int(c.name[7:]) < PQ_FIRST + PQ_ROWS): hidden(c)
+    return root
+
+
+def build_peqlib_page(page):
+    """The Presets page (patch/peqlib.c, docs/modules/peq.md "Presets page"): a cards page (build_cards_page, page.layout). pod_row0 is the Download from AutoEq row; the two section
+    headers (pod_sec0 AutoEq, pod_sec1 On Card) and the file rows (pod_row1 .. pod_row<2 * PQ_ROWS>: pod_label<i> the name, pod_sub<i> the grey line, a chevron) start hidden and insensitive,
+    and the payload shows what the card has, with its pieces and hairlines."""
+    root = build_cards_page(page)
+    sv = next(w for w in root.walk() if w.name == 'pod_scrollview')
+    for c in sv.children:
+        if c.name in ('pod_sec0', 'pod_sec1') or (c.name.startswith('pod_row') and int(c.name[7:]) >= 1): hidden(c)
+    return root
+
+
 # The refresh dialog of the Podcasts page (patch/podcasts.c pg_dlg_*): the Playlists menu's pieces. A full-client scrim (dimmed as that menu's, it takes every touch: the dialog is
 # modal) and a card in that menu's glass (pl_glass, patch3_x, PD_CARD_H = its 200 px), centred: the title, the current show's name (the payload sets it; ellipsis), the bar (a track and
 # a fill whose width the payload sets), the "2 of 5" line (or "Cancelling..."), and a Cancel row filling the card's last 50 px with the menu rows' hairline above it and the pressed 6 % white.
@@ -962,6 +1155,39 @@ def build_search_page(page):
         lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'center' if name.startswith('label_chip') else 'left'))   # text styles only (widget_prepare_text_style); never shown
         styled(lab, ('normal',), 'text_align_v', 'middle')
         if name == 'label_chip_on': styled(lab, ('normal', 'pressed', 'disable', 'focused'), 'bg_color', PS.CHIP_ON_RGB)   # the dark text is on the selected pill (the contrast scan reads the label's own background)
+        root.children.append(lab)
+    root.children += keyboard_pad_widgets()
+    return root
+
+
+AE_LIST_Y = NAVBAR_H + 48   # the AutoEq page's list: under the bar, its rows from Radio's search level (patch/radiopage.c RP_TOP_SEARCH 48 below the bar), so they start under the field (patch/autoeq.c AE_LIST_Y)
+
+
+def build_autoeq_page(page):
+    """The AutoEq download page (patch/autoeq.c, docs/modules/peq.md "The page"): Radio's search level's top, the glass navbar (Back, the title, Now Playing as the disc) over the search field
+    (y 56, the page's width, no round X: RD_FIELD_W, RD_TEXT_W), a stock list holding one content view the payload paints from AE_LIST_Y, the state line and the keyboard's pad."""
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    root.children.append(navbar(page.title))   # btn_return (Back), the small title, btn_backtoplayer (Now Playing's disc)
+    lv = stock_list([], True, top=AE_LIST_Y)
+    lv.set('name', 'se_listview')
+    sv = lv.children[0]
+    sv.set('name', 'se_scrollview')
+    grid = Widget('view', 0, 0, SCREEN_W, PS.SE_LIST_H + PS.SE_LIST_Y - AE_LIST_Y, [('name', 'view_grid')])
+    styled(grid, ('normal',), 'bg_color', '#000000')
+    sv.children.append(grid)
+    root.children.append(lv)
+    field = search_field_widget()
+    field.y = 56
+    field.w = RD_FIELD_W
+    for c in field.children:
+        if c.name == 'kb_clear': c.x = RD_FIELD_W - PS.SE_CLEAR_W
+        elif c.name in ('kb_hint', 'kb_text'): c.w = RD_TEXT_W
+    root.children.append(field)
+    root.children.append(hidden(label('label_status', 10, 150, SCREEN_W - 20, 30, '', 20, '#FFFFFF')))
+    for name, px, colour in (('label_row_title', LIST_TITLE_PX, PS.TITLE_RGB), ('label_row_sub', LIST_SUB_PX, PS.SUB_RGB)):
+        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))   # text styles only (widget_prepare_text_style); never shown
+        styled(lab, ('normal',), 'text_align_v', 'middle')
         root.children.append(lab)
     root.children += keyboard_pad_widgets()
     return root
@@ -1596,9 +1822,10 @@ def cards_row(i, row, piece, last):
     from mod_icons import CARD_GLYPHS, card_name, CARD_CHEVRON, CARD_CHECK
     kind = pod_pages.row_kind(row)
     swatch = row.action == pod_pages.ACT_ACCENTSET   # the Accent picker's rows show the accent's round swatch where a glyph goes (never tinted: docs/modules/accent.md)
-    has_icon = swatch or (kind not in ('check', 'info') and row.action not in (pod_pages.ACT_CCLIST, pod_pages.ACT_SFOLD, pod_pages.ACT_UPDATE, pod_pages.ACT_REGION))   # (the Cache counts, Unsupported Files, About's Software Update link and the Podcast Region row, whose value needs the room, have no glyph)
-    item = Widget('list_item', 0, 0, ST.LIST_W, ST.ROW_H, [('name', f'pod_row{i}'), ('style', 'list_item_style')] + ([('sensitive', 'false')] if kind == 'info' and row.action != pod_pages.ACT_SFDEL else []))
-    normal, down = ST.piece_images(piece)
+    has_icon = swatch or (kind not in ('check', 'info', 'preset', 'preamp', 'band', 'lib', 'delete', 'plain', 'wvalue') and row.action not in (pod_pages.ACT_CCLIST, pod_pages.ACT_SFOLD, pod_pages.ACT_UPDATE, pod_pages.ACT_REGION, pod_pages.ACT_PEQ_PRESETS, pod_pages.ACT_PEQ_TENBAND))   # (the Cache counts, Unsupported Files, About's Software Update link, the Podcast Region row and the Presets count have no glyph, like the rows around them)
+    h = ST.row_h(row)
+    item = Widget('list_item', 0, 0, ST.LIST_W, h, [('name', f'pod_row{i}'), ('style', 'list_item_style')] + ([('sensitive', 'false')] if kind in ('info', 'preamp') and row.action != pod_pages.ACT_SFDEL else []))
+    normal, down = ST.piece_images(piece, h != ST.ROW_H)
     for st in ('normal', 'over', 'pressed', 'focused', 'disable'):
         styled(item, (st,), 'bg_color', '#00000000')
         styled(item, (st,), 'bg_image', down if st == 'pressed' else normal)
@@ -1606,16 +1833,61 @@ def cards_row(i, row, piece, last):
         styled(item, (st,), 'border_width', '0')
         styled(item, (st,), 'border_color', '#00000000')
     x, w = ST.label_box(kind, has_icon)
+    curve = row.action in (pod_pages.ACT_PEQ_PICK, pod_pages.ACT_PEQ_PAUTO) and row.label   # the Equalizer page's 10-Band EQ row: a grey curve name before the check (the payload sets it; the preset rows have no label and no name)
+    if curve: w = ST.curve_box()[0] - ST.VALUE_LABEL_GAP - x
     if has_icon:
         item.children.append(Widget('image', ST.ICON_X, ST.ICON_Y, ST.ICON_PX, ST.ICON_PX, [
             ('name', 'pod_swatch' if swatch else 'pod_icon'), ('image', f'pod_sw{row.arg}' if swatch else card_name(CARD_GLYPHS[row.label])), ('draw_type', 'icon'), ('sensitive', 'false')]))
-    item.children.append(Widget('hscroll_label', x, 0, w, ST.ROW_H, [
-        ('name', f'pod_label{i}'), ('style', 'srlabel_leftwhite21_style'), pod_i18n.text_prop(row.label), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('yoyo', 'true'), ('loop', 'true')]))
-    if kind in ('link', 'value'):
-        ax, ay, aw, ah = ST.accessory('chevron')
+    two_lines = kind in ('band', 'lib')   # the preset page's band row: the frequency and the gain on the first line, the type and Q (grey) under it; the Presets page's row: the name and a grey line
+    ty, th, sy, sh = (ST.LIB_TITLE_Y, ST.LIB_TITLE_H, ST.LIB_SUB_Y, ST.LIB_SUB_H) if kind == 'lib' else (ST.BAND_TITLE_Y, ST.BAND_TITLE_H, ST.BAND_SUB_Y, ST.BAND_SUB_H)
+    item.children.append(Widget('hscroll_label', x, ty if two_lines else 0, w, th if two_lines else h, [
+        ('name', f'pod_label{i}'), ('style', 'srlabel_leftwhite21_style'), pod_i18n.text_prop(row.label) if row.label else ('text', ''),('only_parent_focus', 'true'), ('ellipses', 'true'), ('yoyo', 'true'), ('loop', 'true')]))
+    if two_lines:
+        for st in ('normal', 'disable', 'focused'): styled(item.children[-1], (st,), 'font_size', str(ST.BAND_TITLE_PX))
+    if kind in ('preamp', 'band'): item.children[-1].set('sensitive', 'false')   # (a label takes no touch: the row does, or for the Preamp row nothing does)
+    if kind == 'delete':   # the destructive row: its label in the red of the Songs trash (PA_RED)
+        for st in ('normal', 'disable', 'focused'): styled(item.children[-1], (st,), 'text_color', PS_SHEET_RED)
+    if kind == 'lib':   # the Presets page's row: the grey line under the name, the chevron's room on its right
+        sub = Widget('hscroll_label', x, sy, w, sh, [('name', f'pod_sub{i}'), ('text', ''), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+        for st in ('normal', 'disable', 'focused'):
+            styled(sub, (st,), 'font_size', str(ST.BAND_SUB_PX))
+            styled(sub, (st,), 'text_color', ST.GREY)
+            styled(sub, (st,), 'text_align_h', 'left')
+            styled(sub, (st,), 'text_align_v', 'middle')
+        item.children.append(sub)
+    if kind == 'band':   # the gain is a value as every value row's (ST.VALUE_PX grey, the full row high so that it is centred like the chevron, ends VALUE_GAP before it); the grey line stops before it
+        gain = Widget('hscroll_label', ST.band_right() - ST.BAND_GAIN_W, 0, ST.BAND_GAIN_W, ST.ROW_H, [('name', f'pod_value{i}'), ('text', ''), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+        sx, sw = ST.band_sub_box()
+        sub = Widget('hscroll_label', sx, sy, sw, sh, [('name', f'pod_sub{i}'), ('text', ''), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+        for st in ('normal', 'disable', 'focused'):
+            for wd, px, al in ((gain, ST.VALUE_PX, 'right'), (sub, ST.BAND_SUB_PX, 'left')):
+                styled(wd, (st,), 'font_size', str(px))
+                styled(wd, (st,), 'text_color', ST.GREY)
+                styled(wd, (st,), 'text_align_h', al)
+                styled(wd, (st,), 'text_align_v', 'middle')
+        item.children += [gain, sub]
+    if kind == 'preamp':   # a grey value, right aligned at the card's ink edge, no chevron: the row takes no touch
+        val = Widget('hscroll_label', ST.band_right() - ST.PREAMP_W, 0, ST.PREAMP_W, ST.ROW_H, [('name', f'pod_value{i}'), ('text', ''), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+        for st in ('normal', 'disable', 'focused'):
+            styled(val, (st,), 'font_size', str(ST.VALUE_PX))
+            styled(val, (st,), 'text_color', ST.GREY)
+            styled(val, (st,), 'text_align_h', 'right')
+            styled(val, (st,), 'text_align_v', 'middle')
+        item.children.append(val)
+    if curve:
+        vx, vw = ST.curve_box()
+        val = Widget('hscroll_label', vx, 0, vw, ST.ROW_H, [('name', f'pod_value{i}'), ('text', ''), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+        for st in ('normal', 'disable', 'focused'):
+            styled(val, (st,), 'font_size', str(ST.VALUE_PX))
+            styled(val, (st,), 'text_color', ST.GREY)
+            styled(val, (st,), 'text_align_h', 'right')
+            styled(val, (st,), 'text_align_v', 'middle')
+        item.children.append(val)
+    if kind in ('link', 'value', 'wvalue', 'lib', 'band'):
+        ax, ay, aw, ah = ST.accessory('chevron', h)
         item.children.append(Widget('image', ax, ay, aw, ah, [('name', 'pod_chevron'), ('image', CARD_CHEVRON[0]), ('draw_type', 'icon'), ('sensitive', 'false')]))
-    if kind == 'value':
-        vx, vw = ST.value_box()
+    if kind in ('value', 'wvalue'):
+        vx, vw = ST.wvalue_box() if kind == 'wvalue' else ST.value_box()
         init = pod_pages.VALUE_INIT.get(row.action)
         val = Widget('hscroll_label', vx, 0, vw, ST.ROW_H, [('name', f'pod_value{i}'), pod_i18n.text_prop(init) if init else ('text', ''), ('only_parent_focus', 'true'),
                                                               ('ellipses', 'true'), ('sensitive', 'false')])
@@ -1638,14 +1910,111 @@ def cards_row(i, row, piece, last):
     if kind == 'switch':
         ax, ay, aw, ah = ST.accessory('switch')
         item.children.append(Widget('image', ax, ay, aw, ah, [('name', f'pod_switch{i}'), ('image', 'sset_off'), ('draw_type', 'default'), ('sensitive', 'false')]))
-    if kind == 'check':
+    if kind in ('check', 'preset'):
         ax, ay, aw, ah = ST.accessory('check')
         item.children.append(hidden(Widget('image', ax, ay, aw, ah, [('name', f'pod_check{i}'), ('image', CARD_CHECK[0]), ('draw_type', 'icon')])))
     if not last:
-        hair = Widget('view', x, ST.ROW_H - 1, ST.CM + ST.CARD_W - x, 1, [('name', 'pod_hair'), ('sensitive', 'false')])
+        hair = Widget('view', x, h - 1, ST.CM + ST.CARD_W - x, 1, [('name', 'pod_hair'), ('sensitive', 'false')])
         for st in STATES: styled(hair, (st,), 'bg_color', ST.CARD_HAIR_RGB)
         item.children.append(hair)
     return item
+
+
+GR_W, GR_H, GR_X0, GR_W0, GR_Y0, GR_H0, GR_DECADE = (OFFSETS[k] for k in ('GR_W', 'GR_H', 'GR_PX0', 'GR_PW', 'GR_PY0', 'GR_PH', 'GR_DECADE'))
+GR_LABEL_PX, GR_LABEL_RGB = 15, '#8A8A8A'
+import pod_settings as _ST
+assert GR_H == _ST.GRAPH_H and GR_W == _ST.CARD_W and GR_W0 == 3 * GR_DECADE and GR_X0 + GR_W0 < GR_W and GR_Y0 + GR_H0 + 19 <= GR_H   # (the labels under the plot fit in the card)
+
+
+def cards_graph():
+    """The preset page's graph card (patch/peqpage.c): a transparent view, so that the bitmap the payload blits in its EVT_BEFORE_PAINT (the card, the grid, the curve) shows under its children, the
+    labels: the scale at the left (the payload sets the top and bottom ones: +12 / -12, or +18, +24) and the frequencies under the plot. The labels never take a touch."""
+    import math, pod_settings as ST
+    v = Widget('view', 0, 0, ST.LIST_W, ST.GRAPH_H, [('name', 'pod_graph'), ('sensitive', 'false')])
+    for st in STATES: styled(v, (st,), 'bg_color', '#00000000')
+    def lab(name, text, cx, cy, w, align):
+        l = Widget('label', ST.CM + cx, cy - 9, w, 18, [('name', name), ('text', text), ('sensitive', 'false')])
+        for st in ('normal', 'disable', 'focused'):
+            styled(l, (st,), 'font_size', str(GR_LABEL_PX))
+            styled(l, (st,), 'text_color', GR_LABEL_RGB)
+            styled(l, (st,), 'text_align_h', align)
+            styled(l, (st,), 'text_align_v', 'middle')
+        return l
+    mid = GR_Y0 + GR_H0 // 2
+    v.children += [lab('pod_gr_top', pod_pages.GRAPH_TEXTS[0], 6, GR_Y0, 26, 'right'), lab('pod_gr_mid', pod_pages.GRAPH_TEXTS[1], 6, mid, 26, 'right'), lab('pod_gr_bot', pod_pages.GRAPH_TEXTS[2], 6, GR_Y0 + GR_H0, 26, 'right')]
+    for (text, hz), name in zip(zip(pod_pages.GRAPH_TEXTS[3:6], (100, 1000, 10000)), ('pod_gr_f100', 'pod_gr_f1k', 'pod_gr_f10k')):
+        cx = GR_X0 + round(GR_DECADE * math.log10(hz / 20))
+        v.children.append(lab(name, text, cx - 20, GR_Y0 + GR_H0 + 10, 40, 'center'))
+    v.children.append(lab('pod_gr_hz', pod_pages.GRAPH_TEXTS[6], GR_X0 + GR_W0 - 7, GR_Y0 + GR_H0 + 10, 22, 'left'))
+    return v
+
+
+TB = {k: OFFSETS[k] for k in ('TB_W', 'TB_H', 'TB_COLS', 'TB_COL_W', 'TB_X0', 'TB_Y0', 'TB_SPAN', 'TB_VAL_Y', 'TB_VAL_H', 'TB_FREQ_Y', 'TB_FREQ_H', 'TB_LABEL_W', 'TB_LABEL_PX')}
+assert TB['TB_H'] == _ST.SLIDERS_H and TB['TB_W'] == _ST.CARD_W and TB['TB_COLS'] == len(pod_pages.SLIDER_TEXTS) == 10 and TB['TB_X0'] * 2 + TB['TB_COLS'] * TB['TB_COL_W'] == TB['TB_W']
+assert TB['TB_FREQ_Y'] + TB['TB_FREQ_H'] <= TB['TB_H'] and TB['TB_VAL_Y'] + TB['TB_VAL_H'] < TB['TB_Y0']
+
+
+def cards_sliders():
+    """The 10-Band editor's slider card (patch/tenband.c): a sensitive transparent view (the payload blits the card, the tracks and the thumbs in its EVT_BEFORE_PAINT and takes its touch), and over it the ten
+    value labels pod_sl_v<c> (empty in the asset; grey, white-on-the-pill black while dragged) and the ten frequency labels pod_sl_f<c> (31 .. 16k, grey, white while dragged), none sensitive."""
+    import pod_settings as ST
+    v = Widget('view', 0, 0, ST.LIST_W, ST.SLIDERS_H, [('name', 'pod_sliders')])
+    for st in STATES: styled(v, (st,), 'bg_color', '#00000000')
+    def lab(name, text, c, y, h):
+        cx = ST.CM + TB['TB_X0'] + c * TB['TB_COL_W'] + TB['TB_COL_W'] // 2
+        l = Widget('label', cx - TB['TB_LABEL_W'] // 2, y, TB['TB_LABEL_W'], h, [('name', name), ('text', text), ('sensitive', 'false')])
+        for st in ('normal', 'disable', 'focused'):
+            styled(l, (st,), 'font_size', str(TB['TB_LABEL_PX']))
+            styled(l, (st,), 'text_color', GR_LABEL_RGB)
+            styled(l, (st,), 'text_align_h', 'center')
+            styled(l, (st,), 'text_align_v', 'middle')
+        return l
+    for c in range(TB['TB_COLS']):
+        v.children.append(lab(f'pod_sl_v{c}', '', c, TB['TB_VAL_Y'], TB['TB_VAL_H']))
+        v.children.append(lab(f'pod_sl_f{c}', pod_pages.SLIDER_TEXTS[c], c, TB['TB_FREQ_Y'], TB['TB_FREQ_H']))
+    return v
+
+
+BD = {k: OFFSETS[k] for k in ('BD_CARD_X', 'BD_SEG_ITEM_H', 'BD_SEG_Y', 'BD_SEG_W', 'BD_SEG_H', 'BD_HSL_W', 'BD_HSL_H', 'BD_ROWS', 'BD_ROW_H', 'BD_TRACK_X', 'BD_TRACK_W', 'BD_NAME_X', 'BD_NAME_W', 'BD_VAL_W', 'BD_LABEL_Y', 'BD_LABEL_H')}
+assert BD['BD_SEG_ITEM_H'] == _ST.SEG_H and BD['BD_HSL_H'] == _ST.HSL_H == BD['BD_ROWS'] * BD['BD_ROW_H'] and BD['BD_HSL_W'] == BD['BD_SEG_W'] == _ST.CARD_W and BD['BD_CARD_X'] == _ST.CM
+BD_LABEL_PX, BD_SEG_PX = 18, 14
+
+
+def cards_segment():
+    """The band page's Peak / Low shelf / High shelf control (patch/peqband.c): a sensitive transparent view (the payload blits the container and the selected pill in its EVT_BEFORE_PAINT and takes the touch) with the three labels pod_seg_l<k> over it
+    (white; the selected one is black on its pill, set by the payload), none sensitive."""
+    import pod_settings as ST
+    v = Widget('view', 0, 0, ST.LIST_W, ST.SEG_H, [('name', 'pod_seg')])
+    for st in STATES: styled(v, (st,), 'bg_color', '#00000000')
+    w = BD['BD_SEG_W'] // 3
+    for k, key in enumerate(pod_pages.BAND_SEG_KEYS):
+        l = Widget('label', ST.CM + k * w, BD['BD_SEG_Y'], w, BD['BD_SEG_H'], [('name', f'pod_seg_l{k}'), pod_i18n.text_prop(key), ('sensitive', 'false')])
+        for st in ('normal', 'disable', 'focused'):
+            styled(l, (st,), 'font_size', str(BD_SEG_PX))
+            styled(l, (st,), 'text_color', '#FFFFFF')
+            styled(l, (st,), 'text_align_h', 'center')
+            styled(l, (st,), 'text_align_v', 'middle')
+        v.children.append(l)
+    return v
+
+
+def cards_hsliders():
+    """The band page's card of three horizontal sliders (patch/peqband.c): a sensitive transparent view (the payload blits the card with its tracks, the fills and the thumbs in its EVT_BEFORE_PAINT and takes the touch) with, in each BD_ROW_H row, the name
+    pod_hs_n<r> (Frequency, Gain, Q: 18 px white) and the value pod_hs_v<r> (18 px grey, right aligned; written by the payload), none sensitive."""
+    import pod_settings as ST
+    v = Widget('view', 0, 0, ST.LIST_W, ST.HSL_H, [('name', 'pod_hsl')])
+    for st in STATES: styled(v, (st,), 'bg_color', '#00000000')
+    for r, key in enumerate(pod_pages.BAND_ROW_KEYS):
+        for name, x, w, text, rgb, al in ((f'pod_hs_n{r}', BD['BD_NAME_X'], BD['BD_NAME_W'], pod_i18n.text_prop(key), '#FFFFFF', 'left'),
+                                          (f'pod_hs_v{r}', BD['BD_TRACK_X'] + BD['BD_TRACK_W'] - BD['BD_VAL_W'], BD['BD_VAL_W'], ('text', ''), ST.GREY, 'right')):
+            l = Widget('label', ST.CM + x, r * BD['BD_ROW_H'] + BD['BD_LABEL_Y'], w, BD['BD_LABEL_H'], [('name', name), text, ('sensitive', 'false')])
+            for st in ('normal', 'disable', 'focused'):
+                styled(l, (st,), 'font_size', str(BD_LABEL_PX))
+                styled(l, (st,), 'text_color', rgb)
+                styled(l, (st,), 'text_align_h', al)
+                styled(l, (st,), 'text_align_v', 'middle')
+            v.children.append(l)
+    return v
 
 
 def cards_spacer(name, h):
@@ -1656,16 +2025,33 @@ def cards_spacer(name, h):
     return v
 
 
-def cards_text(name, y, h, text, px, item_h):
-    """A header or a note: an insensitive view item_h high holding the grey label (text from HDR_X, which the layouter does not move: it is the child's)."""
+def cards_region():
+    """The box between the editor's graph card and slider card with the region line in it: an 18 px grey label centred in REGION_H (empty; the payload writes the dragged band's region and clears it at the release), from the notes' text x."""
+    import pod_settings as ST
+    v = cards_spacer('pod_regionbox', ST.REGION_H)
+    lab = Widget('label', ST.HDR_X + 2, 0, ST.HDR_W - 4, ST.REGION_H, [('name', 'pod_region'), ('text', ''), ('sensitive', 'false')])
+    for st in ('normal', 'disable', 'focused'):
+        styled(lab, (st,), 'font_size', str(ST.HDR_PX))
+        styled(lab, (st,), 'text_color', ST.GREY)
+        styled(lab, (st,), 'text_align_h', 'left')
+        styled(lab, (st,), 'text_align_v', 'middle')
+    v.children.append(lab)
+    return v
+
+
+def cards_text(name, y, h, text, px, item_h, wrap=False):
+    """A header or a note: an insensitive view item_h high holding the grey label (text from HDR_X, which the layouter does not move: it is the child's).
+    wrap: a plain label (the payload turns its line wrap on: patch/peq_ui.c), several lines, the text from the top."""
     import pod_settings as ST
     v = cards_spacer(name, item_h)
-    lab = Widget('hscroll_label', ST.HDR_X, y, ST.HDR_W, h, [('name', name + '_t'), pod_i18n.text_prop(text), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+    # (a plain label does not inset its text as the hscroll_label does: 2 px each side)
+    if wrap: lab = Widget('label', ST.HDR_X + 2, y, ST.HDR_W - 4, h, [('name', name + '_t'), pod_i18n.text_prop(text), ('sensitive', 'false')])
+    else: lab = Widget('hscroll_label', ST.HDR_X, y, ST.HDR_W, h, [('name', name + '_t'), pod_i18n.text_prop(text), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
     for st in ('normal', 'disable', 'focused'):
         styled(lab, (st,), 'font_size', str(px))
         styled(lab, (st,), 'text_color', ST.GREY)
         styled(lab, (st,), 'text_align_h', 'left')
-        styled(lab, (st,), 'text_align_v', 'middle')
+        styled(lab, (st,), 'text_align_v', 'top' if wrap else 'middle')
     v.children.append(lab)
     return v
 
@@ -1679,15 +2065,22 @@ def build_cards_page(page):
     sv = lv.children[0]
     placed, end = ST.layout(page.layout)
     pieces = ST.pieces(page.layout)
-    n_hdr = n_note = n_gap = i = 0
+    n_hdr = n_note = n_gap = i = pos = 0   # i: the number the next row without a rid gets; pos: its place among the rows (its card piece)
     for it, y in placed:
         if it == ST.TOP: sv.children.append(cards_spacer('pod_top', ST.CM))
         elif it == ST.END: sv.children.append(cards_spacer('pod_end', ST.END_H))
         elif it is pod_pages.GAP: sv.children.append(cards_spacer(f'pod_gap{n_gap}', ST.GAP_H)); n_gap += 1
+        elif it is pod_pages.REGION: sv.children.append(cards_region())
+        elif isinstance(it, pod_pages.Graph): sv.children.append(cards_graph())
+        elif isinstance(it, pod_pages.Sliders): sv.children.append(cards_sliders())
+        elif isinstance(it, pod_pages.Segment): sv.children.append(cards_segment())
+        elif isinstance(it, pod_pages.HSliders): sv.children.append(cards_hsliders())
         elif isinstance(it, pod_pages.Hdr): sv.children.append(cards_text(f'pod_sec{n_hdr}', ST.HDR_LABEL_Y, ST.HDR_LABEL_H, it.text, ST.HDR_PX, ST.HDR_H)); n_hdr += 1
-        elif isinstance(it, pod_pages.Note): sv.children.append(cards_text(f'pod_note{n_note}', ST.NOTE_LABEL_Y, ST.NOTE_LABEL_H, it.text, ST.NOTE_PX, ST.NOTE_H)); n_note += 1
+        elif isinstance(it, pod_pages.Note):
+            sv.children.append(cards_text(f'pod_note{n_note}', ST.NOTE_LABEL_Y, ST.NOTE_LABEL_H + (it.lines - 1) * ST.WRAP_LINE, it.text, ST.NOTE_PX, ST.item_h(it), it.lines > 1)); n_note += 1
         else:
-            sv.children.append(cards_row(i, it, pieces[i], pieces[i] in ('single', 'bot'))); i += 1
+            sv.children.append(cards_row(i if it.rid is None else it.rid, it, pieces[pos], pieces[pos] in ('single', 'bot'))); pos += 1
+            if it.rid is None: i += 1
         sv.children[-1].y = y   # (the layouter sets it again: the asset says the same)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # the first card is 10 px under the bar: the fade would dim its top at rest, so it stays hidden (the content clips at the bar)
@@ -2511,12 +2904,24 @@ def build_page(page):
         return build_grid_page(page, toggle=None, coverflow=False, albums=True)
     if page.kind == 'podcasts':
         return build_podcasts_page(page)
+    if page.kind == 'peq':
+        return build_peq_page(page)
+    if page.kind == 'peqpage':
+        return build_peqpage_page(page)
+    if page.kind == 'peqband':
+        return build_peqband_page(page)
+    if page.kind == 'peqlib':
+        return build_peqlib_page(page)
+    if page.kind in ('tenband', 'tencurve', 'tenpreamp'):
+        return build_cards_page(page)   # (the payload binds the rows by name: patch/tenband.c; the Preamp page's rows have no text in the asset)
     if page.kind == 'playlists':
         return build_playlists_page(page)
     if page.kind == 'songs':
         return build_songs_page(page)
     if page.kind == 'search':
         return build_search_page(page)
+    if page.kind == 'autoeq':
+        return build_autoeq_page(page)
     if page.kind == 'album':
         return build_album_page(page)
     if page.kind == 'queue':

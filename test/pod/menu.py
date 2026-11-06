@@ -898,8 +898,8 @@ def region_row_tests(ctx, on_row, rows_s):
     expect(ds_i == rg_i - 1 and C.rows[ds_i].label == 'Podcast Discover' and P.ACT_PCSEARCH == 34 and P.ACT_PCSEARCH in P.SWITCH_ACTIONS and P.row_kind(C.rows[ds_i]) == 'switch' and (P.ACT_REGION, P.ACT_REGIONSET) == (55, 56)
            and P.SETTING_FILES.index('podcast-online-search') + 1 == P.SETTING_FILES.index('podcast-region') and 'podcast-online-search' not in ' '.join(P.RETIRED_FILES)
            and not [r for p in P.PAGES for r in p.rows if r.label == 'Podcast Search'], 'Podcast Discover (ACT_PCSEARCH 34, file podcast-online-search) is a switch row directly above Podcast Region; its file is a setting file, not a retired one')
-    expect(R.title == 'Podcast Region' and R.key == 'm1plus_podcastregion' and P.PAGES[P.REGION_PAGE_INDEX] is R and P.PAGES[P.REGION_PAGE_INDEX + 1] is P.WIFI_PAGE and len(R.rows) == 35 and all(P.row_kind(r) == 'check' for r in R.rows),
-           'the picker page is appended to the page table before the Wi-Fi pages (no index moved): 35 check rows')
+    expect(R.title == 'Podcast Region' and R.key == 'm1plus_podcastregion' and P.PAGES[P.REGION_PAGE_INDEX] is R and P.PAGES[P.REGION_PAGE_INDEX + 1] is P.WIFI_PAGE and P.PAGES[P.PEQ_PAGE_INDEX - 1] is P.WIFISEC_PAGE and len(R.rows) == 35 and all(P.row_kind(r) == 'check' for r in R.rows),
+           'the picker page is appended to the page table before the Wi-Fi and Equalizer pages (no index moved): 35 check rows')
 
     def open_lib(saved=None, lang=None, country='US', zone=timezones.DEFAULT):
         m = Machine()

@@ -40,7 +40,7 @@ def about(tag):
 STEPS = [('mod_theme', []), ('mod_lists', []), ('mod_nowplaying', []), ('mod_boot', []),
          ('mod_ipodrows', []), ('mod_pulldown', []), ('mod_lockscreen', []), ('mod_wallpaper', []),
          ('mod_icons', []), ('mod_strings', []), ('mod_polish', []), ('mod_overlays', []),
-         ('mod_cacerts', []), ('mod_webapp', []), ('mod_wpa', [])]
+         ('mod_cacerts', []), ('mod_webapp', []), ('mod_wpa', []), ('mod_player', [])]
 BASE = ('mod_battery', 'mod_font', 'mod_space')     # stock tree -> battery art, font, space (cached as one stage)
 
 def sha256(p):

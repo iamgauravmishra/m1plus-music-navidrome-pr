@@ -210,6 +210,7 @@ class Machine:
         self.u.mem_map(STACK & ~0xfffff, 0x200000)
         self.u.mem_map(SCRATCH, 0x100000)
         self.u.mem_map(HEAP, HEAP_SIZE)
+        self.u.reg_write(_STATUS, self.u.reg_read(_STATUS) | 1 << 29 | 1 << 26)   # CU1 and FR: the payload is -mfp64 (patch/peq.c's doubles)
         self.u.mem_write(pod.DATA['BACKLIGHT_STATUS'][0], b'\x01')
         self.next = SCRATCH
         self.heap = HEAP
@@ -222,6 +223,7 @@ class Machine:
         self.window = 0x20001000    # window_open's result (0 = failure)
         self.windows = {}           # ... for the windows named here (a page that opens another: one of them can fail)
         self.widgets = {}           # name -> handle; lookups miss if absent
+        self.lookups = {}            # (parent handle, name) -> handle: a lookup below a widget (rows each have a pod_hair); else self.widgets answers
         self.props = {}             # (handle, prop) -> int, for widget_get_prop_int
         self.children = {}          # parent handle -> [child handles]
         self.types = {}             # handle -> widget type string (widget_get_type)
@@ -460,7 +462,7 @@ class Machine:
             ret = self.page_window
         elif name == 'widget_lookup':
             nm = self.read_cstr(a1); self.calls.append(('widget_lookup', nm))
-            ret = self.widgets.get(nm, 0)
+            ret = self.lookups.get((a0, nm)) or self.widgets.get(nm, 0)
         elif name == 'widget_on':
             self.calls.append(('widget_on', a0, a1, a2, a3)); ret = 0 if a1 in self.widget_on_fail else 1
             if ret: self.bound[(a0, a1)] = (a2, a3)
@@ -946,6 +948,8 @@ class Machine:
             self.calls.append(('notifyPlayMode',))
         elif name == 'dmrSendPlayMode':
             self.calls.append(('dmrSendPlayMode', a0))
+        elif name == 'mclGetOutputWay':
+            ret = getattr(self, 'out_way', 0)   # 0 the jacks, 1 Bluetooth, 2 USB audio (a test sets m.out_way)
         elif name == 'write_int_config':
             self.calls.append(('write_int_config', a0, self.read_cstr(a1), self.read_cstr(a2)))
         elif name == 'toolsRandnum':
@@ -1079,8 +1083,11 @@ class Machine:
                 self.files[dst] = self.files.pop(src); self.present.discard(src); self.present.add(dst)
             else: ret = -1
         elif name == 'unlink':
-            p = self.read_cstr(a0); self.files.pop(p, None); self.present.discard(p)
-            ret = 0 if self.fs.pop(p, None) is not None else ret
+            p = self.read_cstr(a0)
+            if ('unlink', p) in self.fail: ret = -1
+            else:
+                self.files.pop(p, None); self.present.discard(p)
+                ret = 0 if self.fs.pop(p, None) is not None else ret
             parent = p.rsplit('/', 1)[0]
             if parent in self.listing:   # the directory forgets what was unlinked
                 self.listing[parent] = [e for e in self.listing[parent] if f'{parent}/{e[0]}' != p]
@@ -1245,6 +1252,26 @@ class Machine:
         elif name == 'sleep':
             self.calls.append(('sleep', a0)); self.wall += a0
             if getattr(self, 'on_sleep', None): self.on_sleep(len([c for c in self.calls if c[0] == 'sleep']))   # a test's way to act while the worker waits (the number of sleeps so far)
+        # ---- the Equalizer page (patch/peq_ui.c, patch/peq.c): stock's EQ setter (recorded with the switch byte it reads), the parser's sscanf and libm
+        # (doubles in $f12 / $f14, the result in $f0: the payload is -mfp64, so the machine needs FR set, fpu())
+        elif name == 'set_equalizer_value':
+            self.calls.append(('set_equalizer_value', a0, self.u.mem_read(pod.DATA['EQ_FLAG'][0], 1)[0]))
+        elif name == 'ferror':
+            ret = 0
+        elif name == '__isoc99_sscanf':
+            s, fmt = self.read_cstr(a0), self.read_cstr(a1)
+            assert fmt == '%lf%n', fmt
+            num = re.match(r'\s*[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?', s)
+            if num:
+                self.u.mem_write(a2, struct.pack('<d', float(num.group(0)))); self.setword(a3, num.end()); ret = 1
+            else: ret = 0xffffffff if not s.strip() else 0
+        elif name in ('pow', 'sqrt', 'cos', 'sin'):
+            import math
+            f = lambda r: struct.unpack('<d', struct.pack('<Q', u.reg_read(r) & (2 ** 64 - 1)))[0]
+            from unicorn.mips_const import UC_MIPS_REG_F12, UC_MIPS_REG_F14
+            x, y = f(UC_MIPS_REG_F12), f(UC_MIPS_REG_F14)
+            r = {'pow': lambda: math.pow(x, y), 'sqrt': lambda: math.sqrt(x), 'cos': lambda: math.cos(x), 'sin': lambda: math.sin(x)}[name]()
+            u.reg_write(UC_MIPS_REG_F0, struct.unpack('<Q', struct.pack('<d', r))[0])
         else:
             raise AssertionError(f'unmocked call {name} at {address:#x}')
         u.reg_write(UC_MIPS_REG_V0, ret & 0xffffffff)
@@ -1279,7 +1306,8 @@ class Machine:
         for typ, text in r['dbg']:
             buf = self.cstr(text); self.nested(o[20094], h, typ, buf, len(text.encode()), o[10095])
         body, rc, sent = r['body'], r['rc'], 0
-        buf = self.alloc(r['chunk'] + 1)
+        sizes = r['chunk'] if isinstance(r['chunk'], (list, tuple)) else [r['chunk']]   # 'chunk': an int, or a list of sizes in order (the last repeats)
+        buf = self.alloc(max(sizes) + 1)
         total = r.get('length', len(body))   # the answer's length as the server gave it (0: unknown)
 
         def xfer(sent):
@@ -1291,8 +1319,10 @@ class Machine:
                 0x600032: r['total'], 0x600033: r['dns'], 0x600034: r['conn'], 0x600038: r['tls'], 0x600036: r['first']}
         self.curl_last[h] = last   # (libcurl has the headers' facts ready before the first byte reaches the write callback: a download asks for the code and the Content-Type there)
         if r['rc'] == 0 and xfer(0): rc = 42   # CURLE_ABORTED_BY_CALLBACK
-        for i in range(0, len(body) if rc == 0 or r.get('partial') else 0, r['chunk']):   # 'partial': the body arrives, then the transfer fails with rc
-            part = body[i:i + r['chunk']]; self.u.mem_write(buf, part); sent += len(part)
+        i, k = 0, 0
+        while i < (len(body) if rc == 0 or r.get('partial') else 0):   # 'partial': the body arrives, then the transfer fails with rc
+            step = sizes[min(k, len(sizes) - 1)]; k += 1
+            part = body[i:i + step]; i += step; self.u.mem_write(buf, part); sent += len(part)
             if self.nested(o[20011], buf, 1, len(part), o[10001]) != len(part): rc = 23; break   # CURLE_WRITE_ERROR: the callback cut the transfer off
             if xfer(sent): rc = 42; break
         self.calls.append(('curl_perform', o[10002], rc))
@@ -1305,11 +1335,16 @@ class Machine:
         tools/pod_i18n.py, as tools/mod_strings.py writes them into the tables. None: English."""
         self.strings = {} if table is None else {k: v[pod_i18n.table_for(table)] for k, v in pod_i18n.TEXT.items()}
 
+    @staticmethod
+    def real_key(key):
+        """A key as read_cstr returns it (UTF-8 bytes as latin-1 chars) as the text it is, so that a key with an ellipsis or a middle dot finds its table entry and comes back unchanged without one."""
+        try: return key.encode('latin-1').decode('utf-8')
+        except UnicodeError: return key
+
     def tr(self, key):
         """The translation as the payload gets it back, UTF-8 bytes read as latin-1 chars like read_cstr's results."""
-        try: text = key.encode('latin-1').decode('utf-8')   # (a key with non-ASCII characters, such as an ellipsis, arrives as its UTF-8 bytes read as latin-1)
-        except UnicodeError: text = key
-        return self.strings.get(text, text).encode('utf-8').decode('latin-1')
+        key = self.real_key(key)
+        return self.strings.get(key, key).encode('utf-8').decode('latin-1')
 
     def rect(self, w, x, y, cw, ch):
         for k, v in (('x', x), ('y', y), ('w', cw), ('h', ch)): self.props[(w, k)] = v
@@ -1686,12 +1721,16 @@ def lay_out(m, root):
 
 def stock_target(m, root, x, y):
     """The widget a touch at the absolute (x, y) is delivered to, by demo's own code."""
+    mark = m.next   # the laid out tree is scratch for this one query: give it back (a page of 70 rows, asked 20 times, would fill the 1 MB)
     by_addr = lay_out(m, root)
     w, path = root.addr, [root.name]
-    while True:
-        t = m.call(FIND_TARGET, a0=w, a1=x, a2=y, count=200000)
-        if not t or (by_addr[t].flags & 9) != 9: return path
-        w = t; path.append(by_addr[t].name)
+    try:
+        while True:
+            t = m.call(FIND_TARGET, a0=w, a1=x, a2=y, count=200000)
+            if not t or (by_addr[t].flags & 9) != 9: return path
+            w = t; path.append(by_addr[t].name)
+    finally:
+        m.next = mark
 
 
 def node(root, name):

@@ -110,6 +110,10 @@ static struct {
     char peid
         [16]; /* a chart's episode row: its own id (the store's episode lookup of its show names it); "" for a show row */
     volatile int pmatch; /* the kept feed item that episode is (pf_match), -1 = none: the show's preview only */
+    /* AutoEq (docs/modules/peq.md "AutoEq download"; new fields go below). estate: PN_E_*; ecode: the PN_* of a failure; emode: what the worker does (0 the list, 1 a preset); epath: the preset's place below PN_EQ_BASE
+     * ("Source/Kind/Name", as the index writes it); estamp: the comment line that goes first into the file. The state is written after the code. */
+    volatile int estate, ecode, emode;
+    char epath[PN_PATH], estamp[PN_PATH];
 } pn __attribute__((section(".scratch")));
 
 enum {
@@ -120,7 +124,8 @@ enum {
     PN_KIND_ART = 5,
     PN_KIND_PICK = 6,
     PN_KIND_UPDATE = 7,
-    PN_KIND_CHART = 8
+    PN_KIND_CHART = 8,
+    PN_KIND_EQ = 9
 };
 enum { PN_Q_FREE = 0, PN_Q_WAIT = 1, PN_Q_ACTIVE = 2 };
 
@@ -176,8 +181,9 @@ static void pn_set(unsigned feed, int code, unsigned fresh) {
 
 int pn_busy(void) { return pn.busy && (pn.kind == PN_KIND_REFRESH || !pn.kind); }
 int pn_job_busy(void) {
-    return pn.busy && (pn.kind == PN_KIND_SEARCH || pn.kind == PN_KIND_PREVIEW || pn.kind == PN_KIND_ART ||
-                       pn.kind == PN_KIND_PICK || pn.kind == PN_KIND_UPDATE || pn.kind == PN_KIND_CHART);
+    return pn.busy &&
+           (pn.kind == PN_KIND_SEARCH || pn.kind == PN_KIND_PREVIEW || pn.kind == PN_KIND_ART ||
+            pn.kind == PN_KIND_PICK || pn.kind == PN_KIND_UPDATE || pn.kind == PN_KIND_CHART || pn.kind == PN_KIND_EQ);
 }
 void pn_cancel(void) { pn.cancel = 1; }
 int pn_cancelling(void) { return pn_busy() && pn.cancel; }
@@ -2710,3 +2716,185 @@ int pn_up_stage(void) { return pn.ustage; }
 int pn_up_result(void) { return pn.ures; }
 const char *pn_up_tag(void) { return pn.ures ? (const char *)pn.utag : ""; }
 unsigned pn_up_pct(void) { return pn.part >= 1000 ? 100 : pn.part / 10; }
+
+/* ---------------------------------------------------------------------------
+ * AutoEq (docs/modules/peq.md "AutoEq download"): the index of the project's results, and one headphone's ParametricEQ.txt. Two modes of one worker in the job slot, the update's way: written to a part file under
+ * PN_EQ_DIR, checked, and only then made the file the page reads (the list renamed over index.md here; a preset left at PN_EQ_PRESET for the page to parse and move into the card's EQ folder). Every request keeps verification on
+ * and allows https only.
+ */
+static const char PN_EQ_HEAD[] = "# Index";
+struct ex { /* the write callback's data */
+    int fd, werr, capped, bad, check;
+    unsigned total, cap, head; /* head: the bytes of the heading seen so far */
+};
+
+static unsigned pn_ewrite(char *d, unsigned size, unsigned nmemb, void *user) {
+    struct ex *x = user;
+    unsigned len = size * nmemb, at = 0;
+    if (x->check &&
+        x->head <
+            sizeof PN_EQ_HEAD -
+                1) { /* the list starts with its heading (it may arrive in pieces): an answer that is a web page or a redirect is not the list */
+        while (at < len && x->head < sizeof PN_EQ_HEAD - 1) {
+            if (d[at] != PN_EQ_HEAD[x->head]) {
+                x->bad = 1;
+                return 0;
+            }
+            ++at, ++x->head;
+        }
+        at = 0;
+    }
+    if (len > x->cap - x->total) {
+        x->capped = 1;
+        return 0;
+    }
+    while (at < len) {
+        int w = write(x->fd, d + at, len - at);
+        if (w <= 0) {
+            x->werr = 1;
+            return 0;
+        }
+        at += (unsigned)w;
+    }
+    x->total += len;
+    return len;
+}
+
+static void pn_eq_end(int state, int code) {
+    pn.ecode = code;
+    __sync_synchronize();
+    pn.estate = state;
+    pn.stopped = pn.cancel;
+    pn.kind = 0;
+    pn.busy = 0;
+    pn_bump();
+}
+
+static void pn_eq_run(void) {
+    char url[PN_PATH + 160], err[160];
+    const char *part = pn.emode ? PN_EQ_PRESET : PN_EQ_PART, *name;
+    struct ex x;
+    long http = 0;
+    unsigned kb = 0, base = 0; /* base: the bytes of the stamp, which are not the answer */
+    int rc, code = PN_OK;
+    void *h;
+    memset(&x, 0, sizeof x);
+    x.check = !pn.emode, x.cap = pn.emode ? PN_EQ_FILE_CAP : PN_EQ_INDEX_CAP;
+    mkdir("/mnt/mmc/.m1plus", 0755);
+    mkdir(PN_EQ_DIR, 0755);
+    unlink(part);
+    x.fd = open(part, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (x.fd < 0) {
+        pn_eq_end(PN_E_FAILED, PN_STORAGE);
+        return;
+    }
+    if (pn.emode) { /* the first line of the file, the entry it came from (the page finds the file again by it) */
+        unsigned n = 0, at = 0;
+        while (pn.estamp[n]) ++n;
+        while (at < n) {
+            int w = write(x.fd, pn.estamp + at, n - at);
+            if (w <= 0) break;
+            at += (unsigned)w;
+        }
+        if (at < n || write(x.fd, "\n", 1) != 1) x.werr = 1;
+        x.total = base = n + 1;
+        for (name = pn.epath; *name; ++name) {
+        }
+        while (name > pn.epath && name[-1] != '/') --name; /* the folder and the file carry the same name */
+        snprintf(url, sizeof url, "%s%s/%s%%20ParametricEQ.txt", PN_EQ_BASE, pn.epath, name);
+    } else
+        snprintf(url, sizeof url, "%sINDEX.md", PN_EQ_BASE);
+    h = x.werr ? (void *)0 : pn_easy(url, pn_ewrite, &x, err, (void *)0);
+    if (!h) {
+        close(x.fd);
+        unlink(part);
+        pn_eq_end(PN_E_FAILED, x.werr ? PN_STORAGE : PN_MEM);
+        return;
+    }
+    pn_up_https(h);
+    rc = curl_easy_perform(h);
+    curl_easy_getinfo(h, CURLINFO_RESPONSE_CODE, &http);
+    curl_easy_cleanup(h);
+    if (rc) {
+        if (x.werr)
+            code = pn_free_kb(PN_EQ_DIR, &kb) && kb < 1024 ? PN_CARDFULL : PN_STORAGE;
+        else
+            code = x.bad || x.capped ? PN_NOTFEED : pn_rc(rc, http);
+    } else if (http != 200 || x.total <= base || (x.check && x.head < sizeof PN_EQ_HEAD - 1))
+        code = PN_NOTFEED; /* (a body that ended inside the heading is not the list) */
+    if (!code && fsync(x.fd)) code = PN_STORAGE;
+    if (close(x.fd) && !code) code = PN_STORAGE;
+    if (!code && !pn.emode && rename(PN_EQ_PART, PN_EQ_INDEX)) code = PN_STORAGE;
+    if (!code &&
+        !pn.emode) { /* the day it came, for the page's age rule (a failed write only makes the next open ask again) */
+        char day[16];
+        int fd = open(PN_EQ_STAMP, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fd >= 0) {
+            int n = snprintf(day, sizeof day, "%u\n", (unsigned)time((long *)0));
+            if (write(fd, day, (unsigned)n) < 0) unlink(PN_EQ_STAMP);
+            close(fd);
+        }
+    }
+    if (code || !pn.emode) unlink(part); /* (a renamed list has no part file left) */
+    pn_eq_end(code ? PN_E_FAILED : PN_E_DONE, code);
+}
+
+static void *pn_emain(void *arg) {
+    (void)arg;
+    pn_eq_run();
+    return (void *)0;
+}
+
+/* The place of a preset below PN_EQ_BASE as the index writes it ("Source/Kind/Name"): printable, no spaces, no dot segments, nothing that is an address of its own. */
+static int pn_eq_path_ok(const char *p) {
+    unsigned n = 0, seg = 0, slashes = 0;
+    for (; p[n]; ++n) {
+        unsigned char c = (unsigned char)p[n];
+        if (c <= ' ' || c >= 0x7f || c == '"' || c == '\\' || c == '?' || c == '#') return 0;
+        if (c == '/') {
+            if (!seg) return 0;
+            seg = 0, ++slashes;
+        } else if (++seg == 1 && p[n] == '.' &&
+                   (p[n + 1] == '/' || !p[n + 1] || (p[n + 1] == '.' && (p[n + 2] == '/' || !p[n + 2]))))
+            return 0;
+    }
+    return n && n < PN_PATH && seg && slashes == 2 && p[0] != ':' && !pn_starts(p, "http");
+}
+
+static int pn_eq_start(int mode, const char *path, const char *stamp) {
+    int g;
+    if (pn.busy) return PN_BUSY;
+    if (mode && (!path || !stamp || !pn_eq_path_ok(path) || pn_len(stamp) >= sizeof pn.estamp)) return PN_NOFEED;
+    g = pn_guard();
+    if (!g) {
+        pn.emode = mode;
+        if (mode) {
+            pn.epath[0] = 0;
+            pn_cat(pn.epath, sizeof pn.epath, path);
+            pn.estamp[0] = 0;
+            pn_cat(pn.estamp, sizeof pn.estamp, stamp);
+        }
+        pn.ecode = 0;
+        __sync_synchronize();
+        pn.estate = PN_E_RUNNING;
+        g = pn_spawn(pn_emain, PN_KIND_EQ);
+    }
+    if (g) {
+        pn.emode = mode;
+        pn.ecode = g;
+        __sync_synchronize();
+        pn.estate = PN_E_FAILED;
+        pn_bump();
+    }
+    return g;
+}
+
+int pn_eq_index(void) { return pn_eq_start(0, (const char *)0, (const char *)0); }
+int pn_eq_get(const char *path, const char *stamp) { return pn_eq_start(1, path, stamp); }
+int pn_eq_state(void) { return pn.estate; }
+int pn_eq_code(void) { return pn.ecode; }
+int pn_eq_mode(void) { return pn.emode; }
+unsigned pn_eq_pct(void) { return pn.part >= 1000 ? 100 : pn.part / 10; }
+void pn_eq_reset(void) {
+    if (!pn.busy) pn.estate = PN_E_IDLE, pn.ecode = 0;
+}

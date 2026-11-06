@@ -65,7 +65,7 @@ def _t(key, *texts, **by):
     return key, d
 
 
-#       zh_CN    zh_HK    ja_JP    ko_KR    fr_FR    ge_DE    sp_ES    it_IT    th_TH    po_PL    ru_RU    uk_UK
+#       zh_CN   zh_HK    ja_JP    ko_KR    fr_FR    ge_DE    sp_ES    it_IT    th_TH    po_PL    ru_RU    uk_UK
 TEXT = dict([
     _t('Appearance', '外观', '外觀', '外観', '화면 모드', 'Apparence', 'Darstellung',
        'Apariencia', 'Aspetto', 'รูปแบบหน้าจอ', 'Wygląd', 'Оформление', 'Вигляд'),
@@ -1095,6 +1095,149 @@ TEXT = dict([
        'Emisoras de radio-browser.info', 'Stazioni da radio-browser.info', 'สถานีจาก radio-browser.info', 'Stacje z radio-browser.info', 'Станции с radio-browser.info', 'Станції з radio-browser.info'),
     _t('%d stations', '%d 个电台', '%d 個電台', '%d 局', '방송국 %d개', '%d stations', '%d Sender',
        '%d emisoras', '%d stazioni', '%d สถานี', 'Stacje: %d', 'Станций: %d', 'Станцій: %d'),
+    # The Equalizer page (patch/peq_ui.c, docs/modules/peq.md): its title and switch row, the row of stock's own ten-band curve, the hint when the card has no
+    # presets, the message box of a file the parser refuses and of a failed save.
+    _t('Equalizer', '均衡器', '等化器', 'イコライザー', '이퀄라이저', 'Égaliseur', 'Equalizer',
+       'Ecualizador', 'Equalizzatore', 'อีควอไลเซอร์', 'Korektor', 'Эквалайзер', 'Еквалайзер'),
+    _t('10-Band EQ', '10 段均衡器', '10 段等化器', '10バンドEQ', '10밴드 EQ', 'EQ 10 bandes', '10-Band-EQ',
+       'EQ 10 bandas', 'EQ a 10 bande', 'อีคิว 10 แบนด์', 'EQ 10 pasm.', 'EQ 10 полос', 'EQ 10 смуг'),
+    _t('Edit 10-Band EQ', '编辑 10 段均衡器', '編輯 10 段等化器', '10バンドEQ編集', '10밴드 EQ 편집', 'Éditer 10 bandes', 'EQ bearbeiten',
+       'Editar 10 bandas', 'Modifica EQ 10b.', 'แก้อีคิว 10 แบนด์', 'Edytuj 10 pasm.', 'Правка 10 полос', 'Змінити 10 смуг'),
+    # The 10-Band EQ (docs/modules/peq.md "10-Band EQ"): the curve names (the Equalizer page's grey value, the Curve page, the Settings EQ value; the stock genre names are
+    # poor in several languages, so these are our own; Metal is the Cassette theme's existing key), Curve, Custom, the preamp's value form (the payload puts a U+2212 minus before a cut) and the Reset confirm. Reset is the stock key eq_reset.
+    # A native-speaker pass is wanted.
+    _t('Curve', '曲线', '曲線', 'カーブ', '곡선', 'Courbe', 'Kurve',
+       'Curva', 'Curva', 'เส้นโค้ง', 'Krzywa', 'Кривая', 'Крива'),
+    _t('Custom', '自定义', '自訂', 'カスタム', '사용자 지정', 'Personnalisé', 'Eigene',
+       'Personal', 'Personale', 'กำหนดเอง', 'Własna', 'Своя', 'Власна'),
+    _t('Flat', '平直', '平坦', 'フラット', '플랫', 'Neutre', 'Flach',
+       'Plano', 'Lineare', 'ราบเรียบ', 'Płaska', 'Плоская', 'Рівна'),
+    _t('Pop', '流行', '流行', 'ポップ', '팝', 'Pop', 'Pop',
+       'Pop', 'Pop', 'ป๊อป', 'Pop', 'Поп', 'Поп'),
+    _t('Rock', '摇滚', '搖滾', 'ロック', '록', 'Rock', 'Rock',
+       'Rock', 'Rock', 'ร็อก', 'Rock', 'Рок', 'Рок'),
+    _t('Dance', '舞曲', '舞曲', 'ダンス', '댄스', 'Dance', 'Dance',
+       'Dance', 'Dance', 'แดนซ์', 'Dance', 'Танцы', 'Танці'),
+    _t('Blues', '蓝调', '藍調', 'ブルース', '블루스', 'Blues', 'Blues',
+       'Blues', 'Blues', 'บลูส์', 'Blues', 'Блюз', 'Блюз'),
+    _t('Vocal', '人声', '人聲', 'ボーカル', '보컬', 'Voix', 'Gesang',
+       'Voz', 'Voce', 'เสียงร้อง', 'Wokal', 'Вокал', 'Вокал'),
+    _t('Classical', '古典', '古典', 'クラシック', '클래식', 'Classique', 'Klassik',
+       'Clásica', 'Classica', 'คลาสสิก', 'Klasyczna', 'Классика', 'Класика'),
+    _t('Jazz', '爵士', '爵士', 'ジャズ', '재즈', 'Jazz', 'Jazz',
+       'Jazz', 'Jazz', 'แจ๊ส', 'Jazz', 'Джаз', 'Джаз'),
+    _t('%d dB', '%d dB', '%d dB', '%d dB', '%d dB', '%d dB', '%d dB',
+       '%d dB', '%d dB', '%d dB', '%d dB', '%d dB', '%d dB'),
+    _t('Auto reduces the level to help prevent distortion from EQ boosts.', '自动会降低音量，帮助防止 EQ 提升造成失真。', '自動會降低音量，幫助防止 EQ 提升造成失真。', '自動は音量を下げて、EQ のブーストによる歪みを防ぎます。', '자동은 EQ 부스트로 인한 왜곡을 막도록 음량을 줄입니다.',
+       'Auto réduit le niveau pour éviter la distorsion due aux boosts EQ.', 'Auto senkt den Pegel, um Verzerrungen durch EQ-Anhebungen zu vermeiden.', 'Auto reduce el nivel para evitar la distorsión por los refuerzos del EQ.', 'Auto riduce il livello per evitare la distorsione dovuta ai boost dell\'EQ.',
+       'อัตโนมัติจะลดระดับเสียงเพื่อช่วยป้องกันเสียงเพี้ยนจากการเพิ่มของอีคิว', 'Auto obniża poziom, aby zapobiegać zniekształceniom przy wzmocnieniach EQ.', 'Авто снижает уровень, чтобы избежать искажений при усилении EQ.', 'Авто знижує рівень, щоб уникнути спотворень при підсиленні EQ.'),
+    _t('Reset 10-Band EQ?','重置 10 段均衡器？', '重置 10 段等化器？', '10バンドEQをリセットしますか？', '10밴드 EQ를 재설정할까요?', 'Réinitialiser l\'EQ 10 bandes ?', '10-Band-EQ zurücksetzen?',
+       '¿Restablecer el EQ de 10 bandas?', 'Reimpostare l\'EQ a 10 bande?', 'รีเซ็ตอีคิว 10 แบนด์ไหม?', 'Zresetować korektor 10-pasmowy?', 'Сбросить 10-полосный эквалайзер?', 'Скинути 10-смуговий еквалайзер?'),
+    # the 10-Band editor's Save as Preset row (its name entry is the Save As entry) and the message box after the file is written
+    _t('Save as Preset', '存为预设', '存為預設', 'プリセットとして保存', '프리셋으로 저장', 'Enregistrer comme préréglage', 'Als Preset speichern',
+       'Guardar como preajuste', 'Salva come preset', 'บันทึกเป็นพรีเซ็ต', 'Zapisz jako preset', 'Сохранить как пресет', 'Зберегти як пресет'),
+    _t('Saved as Preset', '已存为预设', '已存為預設', 'プリセットとして保存しました', '프리셋으로 저장됨', 'Enregistré comme préréglage', 'Als Preset gespeichert',
+       'Guardado como preajuste', 'Salvato come preset', 'บันทึกเป็นพรีเซ็ตแล้ว', 'Zapisano jako preset', 'Сохранено как пресет', 'Збережено як пресет'),
+    # the 10-Band editor's region line under the graph (the dragged band's range; each fits 272 px at 18 px, widths_tests) and the message box when a slider move replaces a preset file
+    _t('Sub bass · rumble', '超低频 · 隆隆声', '超低頻 · 隆隆聲', 'サブベース · 轟き', '서브 베이스 · 울림', 'Sous-grave · grondement', 'Subbass · Grollen',
+       'Subgrave · retumbo', 'Sub bassi · rimbombo', 'ซับเบส · เสียงก้อง', 'Subbas · dudnienie', 'Суббас · гул', 'Суббас · гул'),
+    _t('Mid bass · punch and warmth', '中低频 · 力度与温暖', '中低頻 · 力度與溫暖', 'ミッドベース · パンチと温かみ', '미드 베이스 · 펀치와 따뜻함', 'Médiums graves · punch et chaleur', 'Tiefmitten · Punch und Wärme',
+       'Medios graves · pegada y calidez', 'Medio-bassi · impatto e calore', 'เบสกลาง · พลังและความอบอุ่น', 'Średni bas · moc i ciepło', 'Средние низы · напор и тепло', 'Середні низи · напір і тепло'),
+    _t('Lower mids · body and fullness', '中低音 · 厚度与丰满', '中低音 · 厚度與豐滿', '中低域 · 厚みと豊かさ', '중저음 · 두께감과 풍성함', 'Bas médiums · corps et plénitude', 'Untere Mitten · Körper und Fülle',
+       'Medios bajos · cuerpo y plenitud', 'Medi bassi · corpo e pienezza', 'กลางต่ำ · เนื้อเสียงและความอิ่ม', 'Dolna średnica · ciało i pełnia', 'Низ. середина · плотность, полнота', 'Низ. середина · щільність, повнота'),
+    _t('Upper mids · shouty if too much', '中高音 · 过多会刺耳', '中高音 · 過多會刺耳', '中高域 · 多すぎると耳障り', '중고음 · 과하면 날카로움', 'Haut médiums · criard si excessif', 'Obere Mitten · schrill bei zu viel',
+       'Medios altos · estridente en exceso', 'Medi alti · stridulo se eccessivo', 'กลางสูง · มากไปจะแสบหู', 'Górny środek · ostry, gdy za dużo', 'Верх. середина · резко при избытке', 'Верх. середина · різко, як забагато'),
+    _t('Treble · detail and sparkle', '高音 · 细节与明亮', '高音 · 細節與明亮', '高域 · 細部ときらめき', '고음 · 디테일과 반짝임', 'Aigus · détail et brillance', 'Höhen · Detail und Glanz',
+       'Agudos · detalle y brillo', 'Alti · dettaglio e brillantezza', 'เสียงแหลม · รายละเอียดและประกาย', 'Wysokie tony · szczegół i blask', 'Высокие · детали и блеск', 'Високі · деталі й блиск'),
+    _t('Air · openness', '空气感 · 开阔', '空氣感 · 開闊', 'エア · 開放感', '공기감 · 개방감', 'Air · ouverture', 'Luft · Offenheit',
+       'Aire · amplitud', 'Aria · apertura', 'อากาศ · ความโปร่ง', 'Powietrze · otwartość', 'Воздух · открытость', 'Повітря · відкритість'),
+    _t('Switched to 10-Band EQ', '已切换到 10 段均衡器', '已切換到 10 段等化器', '10バンドEQに切り替えました', '10밴드 EQ로 전환됨', 'Passé à EQ 10 bandes', 'Zu 10-Band-EQ gewechselt',
+       'Cambiado a EQ 10 bandas', 'Passato a EQ a 10 bande', 'สลับเป็นอีคิว 10 แบนด์แล้ว', 'Przełączono na EQ 10 pasm.', 'Переключено на EQ 10 полос', 'Перемкнено на EQ 10 смуг'),
+    _t('Download headphone presets in Presets, or copy APO .txt files into EQ on the card.',
+       '在“预设”中下载耳机预设，或将 APO 的 .txt 文件复制到存储卡的 EQ 文件夹。', '在「預設」中下載耳機預設，或將 APO 的 .txt 檔案複製到記憶卡的 EQ 資料夾。',
+       '「プリセット」でヘッドホン用プリセットをダウンロードするか、APO の .txt ファイルをカードの EQ フォルダにコピーしてください。', '프리셋에서 헤드폰 프리셋을 다운로드하거나 APO .txt 파일을 카드의 EQ 폴더에 복사하세요.',
+       'Téléchargez des préréglages de casque dans Préréglages, ou copiez des fichiers .txt APO dans EQ sur la carte.', 'Lade Kopfhörer-Presets unter Voreinstellungen herunter oder kopiere APO-.txt-Dateien in EQ auf der Karte.',
+       'Descarga preajustes de auriculares en Preajustes o copia archivos .txt de APO en EQ de la tarjeta.', 'Scarica i preset per cuffie in Preset oppure copia file .txt APO in EQ sulla scheda.',
+       'ดาวน์โหลดพรีเซ็ตหูฟังใน พรีเซ็ต หรือคัดลอกไฟล์ .txt ของ APO ไปที่ EQ บนการ์ด', 'Pobierz presety słuchawek w Presety lub skopiuj pliki .txt APO do EQ na karcie.',
+       'Скачайте пресеты для наушников в разделе Пресеты или скопируйте файлы .txt APO в EQ на карте.', 'Завантажте пресети для навушників у розділі Пресети або скопіюйте файли .txt APO в EQ на картці.'),
+    _t('EQ is not applied to DSD.', 'EQ 不作用于 DSD。', 'EQ 不會套用於 DSD。', 'EQ は DSD には適用されません。', 'EQ는 DSD에 적용되지 않습니다.',
+       'L\'EQ ne s\'applique pas au DSD.', 'Der EQ wird nicht auf DSD angewendet.', 'El EQ no se aplica a DSD.', 'L\'EQ non viene applicato al DSD.',
+       'อีคิวไม่ทำงานกับ DSD', 'EQ nie działa z DSD.', 'EQ не применяется к DSD.', 'EQ не застосовується до DSD.'),
+    # the Equalizer page's grey line under the switch: the output whose EQ the page edits (patch/peqout.c)
+    _t('For Headphones', '用于耳机', '用於耳機', 'ヘッドホン用', '헤드폰용', 'Pour le casque', 'Für Kopfhörer',
+       'Para auriculares', 'Per le cuffie', 'สำหรับหูฟัง', 'Dla słuchawek', 'Для наушников', 'Для навушників'),
+    _t('For Line Out', '用于线路输出', '用於線路輸出', 'ライン出力用', '라인 아웃용', 'Pour la sortie ligne', 'Für Line-Out',
+       'Para salida de línea', 'Per l\'uscita linea', 'สำหรับไลน์เอาต์', 'Dla wyjścia liniowego', 'Для линейного выхода', 'Для лінійного виходу'),
+    _t('For USB DAC', '用于 USB DAC', '用於 USB DAC', 'USB DAC用', 'USB DAC용', 'Pour le DAC USB', 'Für USB-DAC',
+       'Para DAC USB', 'Per il DAC USB', 'สำหรับ USB DAC', 'Dla USB DAC', 'Для USB-ЦАП', 'Для USB-ЦАП'),
+    _t('Cannot read this preset', '无法读取此预设', '無法讀取此預設', 'このプリセットを読み込めません', '이 프리셋을 읽을 수 없습니다', 'Préréglage illisible', 'Preset nicht lesbar',
+       'No se puede leer el preajuste', 'Impossibile leggere il preset', 'อ่านพรีเซ็ตนี้ไม่ได้', 'Nie można odczytać ustawienia', 'Не удалось прочитать пресет', 'Не вдалося прочитати пресет'),
+    _t('Not saved', '未保存', '未儲存', '保存できませんでした', '저장하지 못했습니다', 'Non enregistré', 'Nicht gespeichert',
+       'No se guardó', 'Non salvato', 'บันทึกไม่สำเร็จ', 'Nie zapisano', 'Не сохранено', 'Не збережено'),
+    # The preset page (patch/peqpage.c, docs/modules/peq.md "Preset page"): the Preamp row ("Auto" in its value), the Bands header, a band's type, the note about skipped lines. Short, the Preamp row's label has 116 px.
+    # A native-speaker pass is wanted.
+    _t('Preamp', '前级增益', '前級增益', 'プリアンプ', '프리앰프', 'Préampli', 'Vorstufe',
+       'Previo', 'Preampli', 'พรีแอมป์', 'Przedwzm.', 'Предусил.', 'Передпідс.'),
+    _t('Bands', '频段', '頻段', 'バンド', '밴드', 'Bandes', 'Bänder',
+       'Bandas', 'Bande', 'แบนด์', 'Pasma', 'Полосы', 'Смуги'),
+    _t('Auto', '自动', '自動', '自動', '자동', 'Auto', 'Auto',
+       'Auto', 'Auto', 'อัตโนมัติ', 'Auto', 'Авто', 'Авто'),
+    _t('Low shelf', '低架滤波', '低架濾波', 'ローシェルフ', '로우 셸프', 'Plateau grave', 'Tiefen-Shelf',
+       'Shelf grave', 'Shelf bassi', 'โลว์เชลฟ์', 'Półka niskich', 'НЧ-шельф', 'НЧ-шельф'),
+    _t('High shelf', '高架滤波', '高架濾波', 'ハイシェルフ', '하이 셸프', 'Plateau aigu', 'Höhen-Shelf',
+       'Shelf agudo', 'Shelf alti', 'ไฮเชลฟ์', 'Półka wysokich', 'ВЧ-шельф', 'ВЧ-шельф'),
+    _t('Peak', '峰值', '峰值', 'ピーク', '피크', 'Cloche', 'Glocke',
+       'Pico', 'Picco', 'พีค', 'Pik', 'Пик', 'Пік'),
+    _t('%d line not supported was skipped.', '已跳过 %d 行不支持的内容。', '已略過 %d 行不支援的內容。', '未対応の %d 行をスキップしました。', '지원되지 않는 %d줄을 건너뛰었습니다.',
+       '%d ligne non prise en charge ignorée.', '%d nicht unterstützte Zeile übersprungen.', 'Se omitió %d línea no admitida.', '%d riga non supportata ignorata.',
+       'ข้าม %d บรรทัดที่ไม่รองรับ', 'Pominięto %d nieobsługiwany wiersz.', 'Пропущена %d неподдерживаемая строка.', 'Пропущено %d непідтримуваний рядок.'),
+    _t('%d lines not supported were skipped.', '已跳过 %d 行不支持的内容。', '已略過 %d 行不支援的內容。', '未対応の %d 行をスキップしました。', '지원되지 않는 %d줄을 건너뛰었습니다.',
+       '%d lignes non prises en charge ignorées.', '%d nicht unterstützte Zeilen übersprungen.', 'Se omitieron %d líneas no admitidas.', '%d righe non supportate ignorate.',
+       'ข้าม %d บรรทัดที่ไม่รองรับ', 'Pominięto nieobsługiwane wiersze: %d.', 'Пропущено неподдерживаемых строк: %d.', 'Пропущено непідтримуваних рядків: %d.'),
+    # The AutoEq download (patch/autoeq.c, docs/modules/peq.md "AutoEq download"): the Presets page's card, the list's progress, a result's progress and its states, the kind of headphone.
+    # A native-speaker pass is wanted.
+    # The Presets page (patch/peqlib.c, patch/peqpage.c, docs/modules/peq.md "Presets page"): its title and section headers, the grey line of a file on the card, the Preset page's delete row and its confirm, and the failed delete.
+    _t('Presets', '预设', '預設', 'プリセット', '프리셋', 'Préréglages', 'Voreinstellungen', 'Preajustes', 'Preset', 'พรีเซ็ต', 'Presety', 'Пресеты', 'Пресети'),
+    _t('AutoEq', 'AutoEq', 'AutoEq', 'AutoEq', 'AutoEq', 'AutoEq', 'AutoEq', 'AutoEq', 'AutoEq', 'AutoEq', 'AutoEq', 'AutoEq', 'AutoEq'),
+    _t('On Card', '在存储卡上', '在記憶卡上', 'カード内', '카드 내', 'Sur la carte', 'Auf Karte', 'En la tarjeta', 'Sulla scheda', 'ในการ์ด', 'Na karcie', 'На карте', 'На карті'),
+    _t('On card', '在存储卡上', '在記憶卡上', 'カード内', '카드 내', 'Sur la carte', 'Auf Karte', 'En la tarjeta', 'Sulla scheda', 'ในการ์ด', 'Na karcie', 'На карте', 'На карті'),
+    _t('Delete Preset', '删除预设', '刪除預設', 'プリセットを削除', '프리셋 삭제', 'Supprimer le préréglage', 'Preset löschen', 'Eliminar preajuste', 'Elimina preset', 'ลบพรีเซ็ต', 'Usuń ustawienie', 'Удалить пресет', 'Видалити пресет'),
+    _t('Delete Preset?', '删除预设？', '刪除預設？', 'プリセットを削除しますか？', '프리셋을 삭제할까요?', 'Supprimer le préréglage ?', 'Preset löschen?', '¿Eliminar preajuste?', 'Eliminare il preset?', 'ลบพรีเซ็ตนี้ไหม?', 'Usunąć ustawienie?', 'Удалить пресет?', 'Видалити пресет?'),
+    _t('Failed To Delete Preset', '无法删除预设', '無法刪除預設', 'プリセットを削除できませんでした', '프리셋을 삭제하지 못했습니다', 'Impossible de supprimer le préréglage', 'Preset konnte nicht gelöscht werden', 'No se pudo eliminar el preajuste', 'Impossibile eliminare il preset', 'ไม่สามารถลบพรีเซ็ตได้', 'Nie udało się usunąć ustawienia', 'Не удалось удалить пресет', 'Не вдалося видалити пресет'),
+    _t('Download from AutoEq', '从 AutoEq 下载', '從 AutoEq 下載', 'AutoEq からダウンロード', 'AutoEq에서 다운로드', 'Obtenir depuis AutoEq', 'Von AutoEq laden',
+       'Descargar de AutoEq', 'Scarica da AutoEq', 'ดาวน์โหลดจาก AutoEq', 'Pobierz z AutoEq', 'Скачать из AutoEq', 'Завантажити з AutoEq'),
+    _t('Downloading List…', '正在下载列表…', '正在下載清單…', 'リストをダウンロード中…', '목록 다운로드 중…', 'Téléchargement de la liste…', 'Liste wird geladen…',
+       'Descargando lista…', 'Download elenco…', 'กำลังดาวน์โหลดรายการ…', 'Pobieranie listy…', 'Загрузка списка…', 'Завантаження списку…'),
+    _t('Downloading…', '正在下载…', '正在下載…', 'ダウンロード中…', '다운로드 중…', 'Téléchargement…', 'Wird geladen…',
+       'Descargando…', 'Download…', 'กำลังดาวน์โหลด…', 'Pobieranie…', 'Загрузка…', 'Завантаження…'),
+    _t('Saved to EQ \u00b7 Tap to use', '已存入 EQ \u00b7 点按使用', '已存入 EQ \u00b7 點按使用', 'EQ に保存済み \u00b7 タップで使用', 'EQ에 저장됨 \u00b7 탭하여 사용',
+       'Dans EQ \u00b7 Touchez pour utiliser', 'In EQ \u00b7 Tippen zum Nutzen', 'En EQ \u00b7 Toca para usar', 'In EQ \u00b7 Tocca per usare', 'อยู่ใน EQ \u00b7 แตะเพื่อใช้',
+       'W EQ \u00b7 Dotknij, by użyć', 'В EQ \u00b7 Нажмите, чтобы выбрать', 'В EQ \u00b7 Торкніться, щоб вибрати'),
+    _t('In use','使用中', '使用中', '使用中', '사용 중', 'Utilisé', 'In Gebrauch', 'En uso', 'In uso', 'กำลังใช้', 'W użyciu', 'Используется', 'Використовується'),
+    _t('Over-ear', '头戴式', '頭戴式', 'オーバーイヤー', '오버이어', 'Circum-aural', 'Over-Ear', 'Circumaurales', 'Circumaurali', 'ครอบหู', 'Nauszne', 'Мониторные', 'Повнорозмірні'),
+    _t('In-ear', '入耳式', '入耳式', 'カナル型', '인이어', 'Intra-auriculaire', 'In-Ear', 'Intraurales', 'Intrauricolari', 'อินเอียร์', 'Douszne', 'Вставные', 'Вставні'),
+    _t('Earbud', '耳塞式', '耳塞式', 'イヤホン', '이어버드', 'Écouteurs', 'Earbuds', 'Earbuds', 'Auricolari', 'เอียร์บัด', 'Earbuds', 'Вкладыши', 'Вкладиші'),
+    # Preset editing (patch/peqpage.c, patch/peqband.c, docs/modules/peq.md "Preset editing"): the unsaved-changes dialog, the band page, the name entries and their refusals. A native-speaker pass is wanted.
+    _t('Edited', '已编辑', '已編輯', '編集済み', '편집됨', 'Modifié', 'Geändert', 'Editado', 'Modificato', 'แก้ไขแล้ว', 'Zmieniono', 'Изменено', 'Змінено'),
+    _t('Save', '保存', '儲存', '保存', '저장', 'Enregistrer', 'Speichern', 'Guardar', 'Salva', 'บันทึก', 'Zapisz', 'Сохранить', 'Зберегти'),
+    _t('Save Changes?', '要保存更改吗？', '要儲存更改嗎？', '変更を保存しますか？', '변경 사항을 저장할까요?', 'Enregistrer les modifications ?', 'Änderungen speichern?', '¿Guardar los cambios?', 'Salvare le modifiche?', 'บันทึกการเปลี่ยนแปลงไหม',
+       'Zapisać zmiany?', 'Сохранить изменения?', 'Зберегти зміни?'),
+    _t('Save As New…', '另存为新预设…', '另存為新預設…', '新規として保存…', '새 프리셋으로 저장…', 'Enregistrer comme nouveau…', 'Als neu speichern…', 'Guardar como nuevo…', 'Salva come nuovo…', 'บันทึกเป็นรายการใหม่…',
+       'Zapisz jako nowe…', 'Сохранить как новый…', 'Зберегти як новий…'),
+    _t("Don't Save", '不保存', '不儲存', '保存しない', '저장 안 함', 'Ne pas enregistrer', 'Nicht speichern', 'No guardar', 'Non salvare', 'ไม่บันทึก', 'Nie zapisuj', 'Не сохранять', 'Не зберігати'),
+    _t('Rename Preset', '重命名预设', '重新命名預設', 'プリセット名を変更', '프리셋 이름 변경', 'Renommer le préréglage', 'Preset umbenennen', 'Renombrar preajuste', 'Rinomina preset', 'เปลี่ยนชื่อพรีเซ็ต',
+       'Zmień nazwę ustawienia', 'Переименовать пресет', 'Перейменувати пресет'),
+    _t('Save As', '另存为', '另存為', '別名で保存', '다른 이름으로 저장', 'Enregistrer sous', 'Speichern unter', 'Guardar como', 'Salva come', 'บันทึกเป็น', 'Zapisz jako', 'Сохранить как', 'Зберегти як'),
+    _t('Band %d', '频段 %d', '頻段 %d', 'バンド %d', '밴드 %d', 'Bande %d', 'Band %d', 'Banda %d', 'Banda %d', 'แบนด์ %d', 'Pasmo %d', 'Полоса %d', 'Смуга %d'),
+    _t('Frequency', '频率', '頻率', '周波数', '주파수', 'Fréquence', 'Frequenz', 'Frecuencia', 'Frequenza', 'ความถี่', 'Częstotliwość', 'Частота', 'Частота'),
+    _t('Gain', '增益', '增益', 'ゲイン', '게인', 'Gain', 'Verstärkung', 'Ganancia', 'Guadagno', 'เกน', 'Wzmocnienie', 'Усиление', 'Підсилення'),
+    _t('Range', '范围', '範圍', '範囲', '범위', 'Plage', 'Bereich', 'Rango', 'Intervallo', 'ช่วง', 'Zakres', 'Диапазон', 'Діапазон'),   # the number keypad's "Range 20 Hz – 20 kHz" line (patch/peqband.c)
+    _t('Tap a value to type it exactly.', '点按数值可精确输入。', '點按數值以精確輸入。', '値をタップして正確に入力できます。', '값을 탭하여 정확히 입력하세요.', 'Touchez une valeur pour la saisir.', 'Wert antippen, um ihn einzugeben.',
+       'Toca un valor para escribirlo.', 'Tocca un valore per digitarlo.', 'แตะค่าเพื่อพิมพ์ค่าที่ต้องการ', 'Dotknij wartości, aby ją wpisać.', 'Нажмите на значение, чтобы ввести его.', 'Торкніться значення, щоб ввести його.'),
+    _t('Name already in use', '名称已被使用', '名稱已被使用', '名前は既に使われています', '이미 사용 중인 이름입니다', 'Nom déjà utilisé', 'Name bereits vergeben', 'Nombre ya en uso', 'Nome già in uso', 'ชื่อนี้ถูกใช้แล้ว',
+       'Nazwa jest już używana', 'Имя уже занято', 'Ім\'я вже використовується'),
+    _t('Preset limit reached', '已达预设数量上限', '已達預設數量上限', 'プリセット数の上限です', '프리셋 수 한도에 도달했습니다', 'Limite de préréglages atteinte', 'Preset-Limit erreicht', 'Límite de preajustes alcanzado',
+       'Limite di preset raggiunto', 'ถึงขีดจำกัดจำนวนพรีเซ็ตแล้ว', 'Osiągnięto limit ustawień', 'Достигнут лимит пресетов', 'Досягнуто ліміту пресетів'),
 ])
 # The Podcasts page's dates (patch/pcmodel.c pc_when, docs/modules/podcasts.md "The date"): Apple Podcasts' "Just now", "4m ago", "4h ago", "4d ago", "Oct 23", "Oct 23, 2025". A month
 # text has its one %d (the day) where the language puts it; the year follows as ", %d". These keys do not start with %d, so DATE_KEYS lets the %d test of the tables know them.
@@ -1119,9 +1262,12 @@ TEXT.update([
     _t('%dh ago', '%d小时前', '%d小時前', '%d時間前', '%d시간 전', 'il y a %d h', 'vor %d Std.', 'hace %d h', '%d h fa', '%d ชั่วโมงที่แล้ว', '%d godz. temu', '%d ч назад', '%d год тому'),
     _t('%dd ago', '%d天前', '%d天前', '%d日前', '%d일 전', 'il y a %d j', 'vor %d T.', 'hace %d d', '%d g fa', '%d วันที่แล้ว', '%d dn. temu', '%d дн. назад', '%d дн. тому'),
 ])
-DATE_KEYS = _MONTH_KEYS + (', %d', '%dm ago', '%dh ago', '%dd ago', 'Refreshing %d/%d…', 'Exported %d show', 'Exported %d shows')   # keys with a %d that do not start with it (the tables test, test/pod/i18n.py)
+DATE_KEYS = _MONTH_KEYS + (', %d', '%dm ago', '%dh ago', '%dd ago', 'Refreshing %d/%d…', 'Exported %d show', 'Exported %d shows', 'Band %d')   # keys with a %d that do not start with it (the tables test, test/pod/i18n.py)
 DPAGE_KEYS = ('Updated today', 'Updated yesterday', 'Updated %s', 'Play', 'Songs you love and some to rediscover, made fresh every day.')   # the Daily Mix page's keys
 DAILY_KEYS =('Made for You', 'Daily Mix', 'Regenerate Daily Mix', '%s and more', '%s, %s')     # the card's keys (tools/pod_dailymix.py TEXT)
+
+# Keys a built asset or payload text does not use yet (test/pod/i18n.py exempts them from the orphan check). None: the 10-Band editor's strings are all used (phase 2).
+PENDING_KEYS = ()
 
 KEYS = sorted(TEXT)
 
@@ -1132,7 +1278,7 @@ def english(key):
 
 
 import pod_pages
-BRANDS = ('M1+ Music', 'Tidal', 'Pod') + pod_pages.GUARD_FILES + (pod_pages.FOLDER_LABEL,) + pod_pages.SETTING_FILES + pod_pages.pcregion.NAMES   # shown as they are, no key (the Settings Files labels are file names)
+BRANDS = ('M1+ Music', 'Tidal', 'Pod') + pod_pages.GUARD_FILES + (pod_pages.FOLDER_LABEL,) + pod_pages.SETTING_FILES + pod_pages.pcregion.NAMES + pod_pages.GRAPH_TEXTS + pod_pages.SLIDER_TEXTS + ('Q',)   # shown as they are, no key (the Settings Files labels are file names)
 
 
 def key_for(english):

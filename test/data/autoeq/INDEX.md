@@ -1,0 +1,64 @@
+# Index
+This is a list of all equalization profiles. Target is in parentheses if there are results with multiple targets
+from the same source.
+
+- [1MORE Aero (ANC Off)](./HypetheSonics/GRAS%20RA0045%20in-ear/1MORE%20Aero%20(ANC%20Off)) by HypetheSonics on GRAS RA0045
+- [1MORE Aero (ANC On)](./HypetheSonics/GRAS%20RA0045%20in-ear/1MORE%20Aero%20(ANC%20On)) by HypetheSonics on GRAS RA0045
+- [1MORE Aero (transparency mode)](./HypetheSonics/GRAS%20RA0045%20in-ear/1MORE%20Aero%20(transparency%20mode)) by HypetheSonics on GRAS RA0045
+- [AKG K371](./oratory1990/over-ear/AKG%20K371) by oratory1990
+- [AKG K371](./crinacle/GRAS%2043AG-7%20over-ear/AKG%20K371) by crinacle on GRAS 43AG-7
+- [AKG K371](./Super%20Review/over-ear/AKG%20K371) by Super Review
+- [AKG K371](./Filk/over-ear/AKG%20K371) by Filk
+- [AKG K371](./Rtings/HMS%20II.3%20over-ear/AKG%20K371) by Rtings on HMS II.3
+- [AKG K371 (Brainwavz oval earpads)](./oratory1990/over-ear/AKG%20K371%20(Brainwavz%20oval%20earpads)) by oratory1990
+- [Apple AirPods Pro](./crinacle/711%20in-ear/Apple%20AirPods%20Pro) by crinacle on 711
+- [Apple AirPods Pro](./Super%20Review/in-ear/Apple%20AirPods%20Pro) by Super Review
+- [Apple AirPods Pro](./HypetheSonics/Bruel%20&%20Kjaer%205128%20in-ear/Apple%20AirPods%20Pro) by HypetheSonics on Bruel & Kjaer 5128
+- [Apple AirPods Pro](./Rtings/HMS%20II.3%20in-ear/Apple%20AirPods%20Pro) by Rtings on HMS II.3
+- [Apple AirPods Pro 2 (51dB + ANC)](./crinacle/711%20in-ear/Apple%20AirPods%20Pro%202%20(51dB%20+%20ANC)) by crinacle on 711
+- [Apple AirPods Pro 2 (56dB + ANC)](./crinacle/711%20in-ear/Apple%20AirPods%20Pro%202%20(56dB%20+%20ANC)) by crinacle on 711
+- [Apple AirPods Pro 2 (60dB + ANC)](./crinacle/711%20in-ear/Apple%20AirPods%20Pro%202%20(60dB%20+%20ANC)) by crinacle on 711
+- [Apple AirPods Pro 2 (65dB + ANC)](./crinacle/711%20in-ear/Apple%20AirPods%20Pro%202%20(65dB%20+%20ANC)) by crinacle on 711
+- [Apple AirPods Pro 2 (69dB + ANC)](./crinacle/711%20in-ear/Apple%20AirPods%20Pro%202%20(69dB%20+%20ANC)) by crinacle on 711
+- [Apple AirPods Pro 2 (73dB + ANC)](./crinacle/711%20in-ear/Apple%20AirPods%20Pro%202%20(73dB%20+%20ANC)) by crinacle on 711
+- [Apple AirPods Pro 2 (77dB + ANC)](./crinacle/711%20in-ear/Apple%20AirPods%20Pro%202%20(77dB%20+%20ANC)) by crinacle on 711
+- [Apple AirPods Pro 2 (81dB + ANC)](./crinacle/711%20in-ear/Apple%20AirPods%20Pro%202%20(81dB%20+%20ANC)) by crinacle on 711
+- [Apple AirPods Pro 2 (84dB + ANC)](./crinacle/711%20in-ear/Apple%20AirPods%20Pro%202%20(84dB%20+%20ANC)) by crinacle on 711
+- [Apple AirPods Pro 2 (88dB + ANC)](./crinacle/711%20in-ear/Apple%20AirPods%20Pro%202%20(88dB%20+%20ANC)) by crinacle on 711
+- [Apple AirPods Pro 2 (91dB + ANC)](./crinacle/711%20in-ear/Apple%20AirPods%20Pro%202%20(91dB%20+%20ANC)) by crinacle on 711
+- [Apple AirPods Pro 2 (ANC mode)](./crinacle/711%20in-ear/Apple%20AirPods%20Pro%202%20(ANC%20mode)) by crinacle on 711
+- [Apple AirPods Pro 2 (passive mode)](./crinacle/711%20in-ear/Apple%20AirPods%20Pro%202%20(passive%20mode)) by crinacle on 711
+- [Apple AirPods Pro 2 (transparency mode)](./crinacle/711%20in-ear/Apple%20AirPods%20Pro%202%20(transparency%20mode)) by crinacle on 711
+- [Apple AirPods Pro2](./Rtings/Bruel%20&%20Kjaer%205128%20in-ear/Apple%20AirPods%20Pro2) by Rtings on Bruel & Kjaer 5128
+- [Fischer Audio Oldskool RPM 33 1-3 (Zeppelin & Co Limited Edition)](./crinacle/GRAS%2043AG-7%20over-ear/Fischer%20Audio%20Oldskool%20RPM%2033%201-3%20(Zeppelin%20&%20Co%20Limited%20Edition)) by crinacle on GRAS 43AG-7
+- [Sennheiser HD 25](./Rtings/Bruel%20&%20Kjaer%205128%20over-ear/Sennheiser%20HD%2025) by Rtings on Bruel & Kjaer 5128
+- [Sennheiser HD 25 Aluminium](./crinacle/GRAS%2043AG-7%20over-ear/Sennheiser%20HD%2025%20Aluminium) by crinacle on GRAS 43AG-7
+- [Sennheiser HD 25 Aluminum](./Innerfidelity/over-ear/Sennheiser%20HD%2025%20Aluminum) by Innerfidelity
+- [Sennheiser HD 25 Plus](./crinacle/GRAS%2043AG-7%20over-ear/Sennheiser%20HD%2025%20Plus) by crinacle on GRAS 43AG-7
+- [Sennheiser HD 25-1](./Innerfidelity/over-ear/Sennheiser%20HD%2025-1) by Innerfidelity
+- [Sennheiser HD 25-1](./Headphone.com%20Legacy/over-ear/Sennheiser%20HD%2025-1) by Headphone.com Legacy
+- [Sennheiser HD 25-1 II](./Innerfidelity/over-ear/Sennheiser%20HD%2025-1%20II) by Innerfidelity
+- [Sennheiser HD 25-1 II B (2012)](./Innerfidelity/over-ear/Sennheiser%20HD%2025-1%20II%20B%20(2012)) by Innerfidelity
+- [Sennheiser HD 25-SP](./Headphone.com%20Legacy/over-ear/Sennheiser%20HD%2025-SP) by Headphone.com Legacy
+- [Sennheiser HD 250 II](./Innerfidelity/over-ear/Sennheiser%20HD%20250%20II) by Innerfidelity
+- [Sennheiser HD 250BT](./crinacle/GRAS%2043AG-7%20over-ear/Sennheiser%20HD%20250BT) by crinacle on GRAS 43AG-7
+- [Sennheiser HD 600](./oratory1990/over-ear/Sennheiser%20HD%20600) by oratory1990
+- [Sennheiser HD 600](./crinacle/GRAS%2043AG-7%20over-ear/Sennheiser%20HD%20600) by crinacle on GRAS 43AG-7
+- [Sennheiser HD 600](./Super%20Review/over-ear/Sennheiser%20HD%20600) by Super Review
+- [Sennheiser HD 600](./Auriculares%20Argentina/over-ear/Sennheiser%20HD%20600) by Auriculares Argentina
+- [Sennheiser HD 600](./Filk/over-ear/Sennheiser%20HD%20600) by Filk
+- [Sennheiser HD 600](./Rtings/Bruel%20&%20Kjaer%205128%20over-ear/Sennheiser%20HD%20600) by Rtings on Bruel & Kjaer 5128
+- [Sennheiser HD 600](./Innerfidelity/over-ear/Sennheiser%20HD%20600) by Innerfidelity
+- [Sennheiser HD 600](./Headphone.com%20Legacy/over-ear/Sennheiser%20HD%20600) by Headphone.com Legacy
+- [Sennheiser HD 600 (2020)](./crinacle/GRAS%2043AG-7%20over-ear/Sennheiser%20HD%20600%20(2020)) by crinacle on GRAS 43AG-7
+- [Sennheiser HD 600 (2020)](./Kuulokenurkka/over-ear/Sennheiser%20HD%20600%20(2020)) by Kuulokenurkka
+- [Sennheiser HD 600 (2020, worn earpads)](./crinacle/GRAS%2043AG-7%20over-ear/Sennheiser%20HD%20600%20(2020,%20worn%20earpads)) by crinacle on GRAS 43AG-7
+- [Sennheiser HD 600 (pre-2020, semi-worn earpads)](./crinacle/GRAS%2043AG-7%20over-ear/Sennheiser%20HD%20600%20(pre-2020,%20semi-worn%20earpads)) by crinacle on GRAS 43AG-7
+- [Sennheiser HD 600 (pre-2020, worn earpads)](./crinacle/GRAS%2043AG-7%20over-ear/Sennheiser%20HD%20600%20(pre-2020,%20worn%20earpads)) by crinacle on GRAS 43AG-7
+- [Sennheiser HD 620S](./oratory1990/over-ear/Sennheiser%20HD%20620S) by oratory1990
+- [Sennheiser HD 620S](./Kuulokenurkka/over-ear/Sennheiser%20HD%20620S) by Kuulokenurkka
+- [Sennheiser HD 620S](./Rtings/Bruel%20&%20Kjaer%205128%20over-ear/Sennheiser%20HD%20620S) by Rtings on Bruel & Kjaer 5128
+- [Sennheiser HD 630VB](./oratory1990/over-ear/Sennheiser%20HD%20630VB) by oratory1990
+- [Sennheiser HD 650](./oratory1990/over-ear/Sennheiser%20HD%20650) by oratory1990
+- [Sennheiser HD 650](./crinacle/GRAS%2043AG-7%20over-ear/Sennheiser%20HD%20650) by crinacle on GRAS 43AG-7
+- [Sennheiser HD 650](./Kuulokenurkka/over-ear/Sennheiser%20HD%20650) by Kuulokenurkka

@@ -6,7 +6,8 @@ import build, awtk_strings, awtk_style, pcregion, pod_i18n, pod_keyboard
 from awtk_text import Ttf, StbText
 
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
-SAME_AS_ENGLISH = {'Cover Flow', 'Playlists', 'Playlist', 'Genres', 'Gain', 'Extras', 'Albums', 'Artists', 'Local', 'Name', '%s, %s'}   # translations that are the English word by design
+SAME_AS_ENGLISH = {'Cover Flow', 'Playlists', 'Playlist', 'Genres', 'Gain', 'Extras', 'Albums', 'Artists', 'Local', 'Name', '%s, %s', 'Band %d'}   # translations that are the English word by design
+SAME_AS_ENGLISH |= {'AutoEq'}    # the brand name (the Presets page's section header)
 SAME_AS_ENGLISH |= {'%d minute', '%d minutes'}    # French writes minute(s) as English does
 SAME_AS_ENGLISH |= {'Podcasts', ', %d', 'Normal', 'Chrome', 'Metal', 'Graphite', '5 s', '10 s'}    # Podcasts in French and German
 SAME_AS_ENGLISH |= {'Downloads', '%d MB', '%d.%d GB', '%d GB'}    # German writes Downloads as English does
@@ -16,12 +17,14 @@ SAME_AS_ENGLISH |= {'Genre', 'Screenshot', 'Collections', 'Cover'}    # French a
 SAME_AS_ENGLISH |= {'Orange', 'Champagne', 'Neutral'}    # colour names: Orange in French and German, Champagne in French and Italian, Neutral in German
 SAME_AS_ENGLISH |= {'Radio', 'LIVE', 'Live', '%d stations'}    # Radio in French, German, Spanish, Italian and Polish; LIVE and Live in German and Italian; "stations" in French
 SAME_AS_ENGLISH |= {'Router'}    # Router in German, Spanish, Italian and Polish
+SAME_AS_ENGLISH |= {'Equalizer'}    # German writes Equalizer as English does
 SAME_AS_ENGLISH |= {'Version %s', 'Apple Podcasts', 'Wi-Fi', 'Wi-Fi MAC', 'Bluetooth', 'EQ', 'System', 'Display', 'Firmware', 'Model', 'Device', 'Status', 'Auto'}    # brand and technical words (Wi-Fi, Bluetooth, EQ); System in German and Polish, Display in Italian
 SAME_AS_ENGLISH |= {'Enhanced Open', 'WEP', 'WPA/WPA2', 'WPA2/WPA3', 'WPA3', 'Enterprise'}    # the Wi-Fi page's security labels: the standards' names (Enterprise in German, Italian and Polish)
 SAME_AS_ENGLISH |= {'Password'}    # the password page's label: Password in Italian
 SAME_AS_ENGLISH |= {'Name'}    # the Other Network page's label: Name in German
 SAME_AS_ENGLISH |= {'Codec', 'Bitrate', 'Source'}    # Station Info: Codec in French, German and Italian, Bitrate in German and Italian, Source in French
 
+SAME_AS_ENGLISH |= {'%d dB', 'Pop', 'Rock', 'Dance', 'Blues', 'Jazz'}    # the 10-Band EQ: the unit; the genre names that most languages write as English
 
 
 def call_args(src, name):
@@ -123,6 +126,7 @@ def run(ctx):
     expect(not plain, f'no text is set or toasted untranslated: {plain}')
     expect(all(k in pod_i18n.TEXT or k in pod_i18n.STOCK for k in keys_in_c), f'every key the payload uses exists ({sorted(k for k in keys_in_c if k not in pod_i18n.TEXT and k not in pod_i18n.STOCK)})')
     orphans = set(pod_i18n.TEXT) | set(pod_i18n.STOCK)
+    orphans -= set(pod_i18n.PENDING_KEYS)   # (the 10-Band editor's strings, used from phase 2)
     orphans -= used | {k for k in orphans if any(f'"{k}"' in src for src in sources.values())}
     expect(not orphans, f'every key is used by an asset or the payload: {sorted(orphans)}')
     expect({'Landscape', 'Cover Flow'} <= used | keys_in_c and 'Cover Flow landscape' not in pod_i18n.TEXT,

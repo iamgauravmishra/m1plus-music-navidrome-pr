@@ -99,6 +99,7 @@ def main():
     allow(va_to_off(s, UPDATE_SITE[0]), UPDATE_SITE[1], 'updater version compare')
     allow(va_to_off(s, timezones.SELECT), 8, 'select_timezone hook')   # time zones (tools/timezones.py): the hook, the clamp, the row count and limit, the two call sites
     for a, *_ in timezones.edits(0, 0): allow(va_to_off(s, a), 4, 'time zone words')
+    allow(va_to_off(s, pod.EQ_ROW), 8, 'Play Settings Equalizer row hook')
     for q in SHUFFLE_HOOKS: allow(va_to_off(s, q), 8, 'shuffle hook')
     for q in MODE_SITES: allow(va_to_off(s, q), 4, 'play mode display site')
     allow(va_to_off(s, pod.CLEAR_SITE), 4, 'dmr_serverstart deque_clear site')
@@ -186,6 +187,11 @@ def main():
         good = sw == 0x0320f809 and mw >> 26 == 3 and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s))
         print(f'Line Out pill hook {q:#x}: {sw:#010x} -> {mw:#010x}', 'ok' if good else 'WRONG')
         ok = ok and good
+    o = va_to_off(s, pod.EQ_ROW); mw = struct.unpack_from('<I', m, o)[0]
+    good = (struct.unpack_from('<II', s, o) == (0x8f84a708, 0x1000ff93) and mw >> 26 == 2 and m[o + 4:o + 8] == bytes(4) and s[o + 8:o + 12] == m[o + 8:o + 12]
+            and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s)))
+    print(f'Play Settings Equalizer row hook {pod.EQ_ROW:#x}: {s[o:o + 8].hex()} -> {m[o:o + 8].hex()}', 'ok' if good else 'WRONG')
+    ok = ok and good
     for q in SHUFFLE_HOOKS:
         o = va_to_off(s, q); mw = struct.unpack_from('<I', m, o)[0]
         good = mw >> 26 == 2 and m[o + 4:o + 8] == bytes(4) and s[o + 8:o + 12] == m[o + 8:o + 12] and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s))

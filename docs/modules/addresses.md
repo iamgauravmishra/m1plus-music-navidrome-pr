@@ -18,6 +18,10 @@ resumes and call boundaries.
 | `on_backtoplayer_onclick` (Radio Now Playing hook) | `0x4cd58c` |
 | Empty `scroll_view` event slot | `0x97a330` |
 
+hciplayer (`a6450374…`, `$gp` `0xb16750`, payload `0xe10000`): its equalizer `af_info` `0x893808` (open slot `0x89381c`), the
+rate gates `0x42ce34` / `0x42fa78`, the gains `0xb10df4`, `mpctx` `0xaf9e30` and the rest: [parametric EQ](peq.md),
+`tools/mod_player.py` `PINS`. demo's side: `set_equalizer_value` `0x4d851c`, `equalizer_flag` `0xa05ac2`, `equalizer_mode` `0x97cb00`.
+
 Only `demo`'s unloaded `.pdr` is zeroed. Stock About stays `V2.1`; our own About page (docs/modules/settings.md) shows
 the build tag beside it, without a hook.
 

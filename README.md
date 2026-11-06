@@ -24,6 +24,7 @@
 - **Podcasts:** local episodes, Apple Podcasts directory search, feed subscriptions and episode downloads.
 - **Extras:** album/folder shuffle, internet radio, a virtual iPod, Cassette Mode, Vinyl Mode and an online cover and lyrics lookup.
 - **Appearance:** an accent colour, a translucent lock screen, minimal theme, Lucide icons and Inter + Source Han Sans fonts.
+- **Equalizer:** APO / AutoEQ parametric presets from the card, at every sample rate, beside the stock ten-band EQ.
 - **Settings:** choose menu items, pull-down tiles, startup behaviour, Cover Flow orientation.
 - **Languages:** the added UI follows the player's language setting, with 13 translations.
 

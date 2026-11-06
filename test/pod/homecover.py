@@ -736,12 +736,12 @@ def files_tests(ctx):
     m.fs[D + 'm1plus-start'], m.fs[D + 'm1plus-bad'] = b'1\n', b''
     m.present.add(S.rstrip('/'))
     m.fs.update({S + 'albums-view': b'1', S + 'playlists-view': b'0\n', S + 'recently-added-view': b'1\n', S + 'home-menu': b'6502\n', S + 'pulldown-tiles': b'2013-4567\n', S + 'cassette-theme': b'12', S + 'search-history': b'a\nb\nc\n',
-                 S + 'covers-rebuild': b'1\n', S + 'battery-percentage': b'1'})
+                 S + 'covers-rebuild': b'1\n', S + 'battery-percentage': b'1', S + 'playback-eq': b'M1PEQ01\0'})
     m.call(PSYMS['on_row'], a0=PSYMS[f'pod_rows_{P.DEVELOPER_PAGE_INDEX}'] + 12 * d_i, count=6000000)
     expect(('window_open', FP.key) in m.calls, 'the link row opens m1plus_files')
     want = {'m1plus-start': '1', 'm1plus-run': 'missing', 'm1plus-bad': 'present', 'm1plus-off': 'missing', P.FOLDER_LABEL: 'present', 'albums-view': '1', 'playlists-view': '0', 'recently-added-view': '1',
             'albums-sort': 'missing', 'cassette-theme': 'other', 'home-menu': '6502', 'pulldown-tiles': '2013-4567', 'battery-percentage': '1', 'search-history': '3', 'covers-rebuild': 'present',
-            'keyboard-pinyin': 'missing'}
+            'keyboard-pinyin': 'missing', 'playback-eq': 'present'}
     got = {r.label: next((c[2] for c in reversed(m.calls) if c[0] == 'widget_set_text_utf8' and c[1] == m.widgets[f'pod_value{i}']), None) for i, r in enumerate(FP.rows)}
     expect('album-order' not in got, 'the retired Album Order file has no row')
     expect(all(got[k] == v for k, v in want.items()), f'the seeded values: {[(k, got[k], v) for k, v in want.items() if got[k] != v]}')

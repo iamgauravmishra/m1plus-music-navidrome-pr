@@ -63,13 +63,14 @@ def big_record(m, album, artist, path, title, name, rid):
 def width(t, px=18): return StbText(FONT, px).layout(t)[1]
 
 
-def search_widgets(m, window=0x20003000):
+def search_widgets(m, window=0x20003000, asset=ASSET, key='m1plus_search', list_y=None):
     """The Search page's widgets on machine m: every named widget of the built asset with its geometry and visible / sensitive state, the keyboard's machine under them (the pad, the
-    strip, the field), the list's widget chain for demo's widget_to_local, and the window m1plus_search opens."""
+    strip, the field), the list's widget chain for demo's widget_to_local, and the window m1plus_search opens. asset / key / list_y: another page built on the same widgets (the AutoEq page's
+    m1plus_autoeq, its list under the bar)."""
     kb = sibling('keyboard')
     kb.keyboard_machine(m)            # the pad, the strip, the field widgets, the measure
     px = {}
-    for w in awtk_ui.parse(open(ASSET, 'rb').read()).walk():
+    for w in awtk_ui.parse(open(asset, 'rb').read()).walk():
         if not w.name: continue
         h = m.widget(w.name)
         px[h] = int(w.get('style:normal:font_size') or 18)
@@ -81,14 +82,15 @@ def search_widgets(m, window=0x20003000):
     win, lv, sv, view = m.alloc(0x80), m.widgets['se_listview'], m.alloc(0x180), m.widgets['view_grid']
     for w in (lv, view): m.u.mem_write(w, bytes(0x80))
     m.u.mem_write(sv, bytes(0x180))
-    for w, y, h, parent in ((win, 30, 450, 0), (lv, D['SE_LIST_Y'], LIST_H, win), (sv, 0, LIST_H, lv), (view, 0, LIST_H, sv)):
+    LY = D['SE_LIST_Y'] if list_y is None else list_y
+    for w, y, h, parent in ((win, 30, 450, 0), (lv, LY, LIST_H, win), (sv, 0, LIST_H, lv), (view, 0, LIST_H, sv)):
         for off, v in ((4, y), (8, 320), (0xc, h), (0x44, parent)): m.setword(w + off, v)
     m.setword(sv + 8, 310)
     m.widgets['se_scrollview'] = sv
     m.mem_geometry, m.live_scroll = True, frozenset({sv})
     m.sv, m.view, m.lv = sv, view, lv
     m.canvas = m.alloc(0x80); m.oy_canvas = m.canvas
-    m.window = window; m.windows['m1plus_search'] = window; m.top_main = window
+    m.window = window; m.windows[key] = window; m.top_main = window
     m.load_image = 0
     m.images['p_default'] = (24, 24, bytes((0x40, 0x40, 0x40, 255)) * (24 * 24))
     m.strings['album'] = 'Album'      # the stock key of the album word (the stock tables translate it)

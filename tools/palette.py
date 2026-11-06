@@ -36,7 +36,7 @@ PRESS_SURFACES = {ROLE_PRESS_ROW: (0, 0, 0), ROLE_PRESS_PILL: PILL, ROLE_PRESS_Q
 KEEP = ('tape_', 'ipod_', 'np_shadow', 'lk_card', 'dm_disc', 'pod_sw')
 # Images of ours that are plates, cards and gradients rather than glyphs, flipped whole (every neutral pixel): the Settings cards, the bottom sheets, the mini player's glass pane, and the
 # black fades over a page (the navbar's, the tint under Now Playing / the album page, the lyrics scrim), which become paper fades.
-WHOLE = ('pod_cd_', 'pc_sheet', 'pm_sheet', 'mb_glass', 'nb_fade', 'np_tint', 'np_scrim', 'ah_tint')
+WHOLE = ('pod_cd_', 'pod_cdl_', 'pc_sheet', 'pm_sheet', 'mb_glass', 'nb_fade', 'np_tint', 'np_scrim', 'ah_tint')
 # The fades over a cover-tinted page (Now Playing, the album page): they stay black on the Tinted background, as the pages' cover tones do. The other WHOLE images are surfaces the Tinted background tints.
 COVER_FADES = ('np_tint', 'np_scrim', 'ah_tint')
 TINT_SURFACE = tuple(n for n in WHOLE if n not in COVER_FADES)
@@ -79,7 +79,7 @@ NEUTRAL_FILL = (0xEE, 0xEE, 0xEC)   # what the swatch of Neutral shows: today's 
 # PRESS: the settings card's pressed pieces, mix(card, accent, ACC_TINT %). Pressed rows' glyphs have no twin image of their own: nothing to tint.
 ACCENT_FILL = ('vol_progress', 'volume_fg', 'drop_fg', 'eq_plan', 'other_progress', 'cdprogress_bar', 'datetime_back', 'pod_check', 'np_row_playing')
 ACCENT_SWITCH = ('sset_on',)
-ACCENT_PRESS = tuple(f'pod_cd_{p}_down' for p in ('single', 'top', 'mid', 'bot'))
+ACCENT_PRESS = tuple(f'pod_cd_{p}_down' for p in ('single', 'top', 'mid', 'bot')) + tuple(f'pod_cdl_{p}_down' for p in ('single', 'top', 'mid', 'bot'))
 # DISC: the pull-down's ON tiles, a filled white disc with a #141414 glyph (or a glyph cut out of the disc): white to the accent, the dark glyph stays dark (ACC_KNOB_R), a pixel between moves by its lightness.
 ACCENT_DISC = ('drop_wifiopen', 'drop_btopen', 'drop_keylockopen', 'drop_eqopen', 'drop_usbaudio', 'drop_usbdac', 'drop_usbstorage', 'drop_playsetdown', 'drop_syssetdown', 'drop_highgain', 'drop_lo')
 # GLYPH, by name prefix: every row glyph is white art, tinted at decode: every colour becomes the accent, alpha kept. The M1+ Music rows' (the main menu, Shuffle, Extras and Main Menu pages), the Folders list's own

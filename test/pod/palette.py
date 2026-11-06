@@ -729,10 +729,10 @@ def accent_image_tests(ctx):
     m.call(PSYMS['m1plus_image_add'], a0=1, a1=0, a2=b, count=40000)
     m.call(PSYMS['m1plus_image_add'], a0=1, a1=m.cstr('pod_check'), a2=0, count=40000)
     expect('bitmap_lock_buffer_for_write' not in [c[0] for c in m.calls], 'a bitmap that is not 32 bit, a null name and a null bitmap are left alone')
-    # the cost of the hook on a name it does not tint
+    # the cost of the hook on a name it does not tint (3600: the Equalizer's tall card pieces pod_cdl_* joined the lists, ~3500)
     m = LM(acc=b'1\n').count()
     n0 = m.icount; m.image('np_play', 2, 2, [(0, 0, 0, 0)] * 4); c = m.icount - n0
-    expect(c < 3400, f'an image the accent does not tint costs {c} instructions through the hook (the name lists)')
+    expect(c < 3600, f'an image the accent does not tint costs {c} instructions through the hook (the name lists)')
     print(f'  hook on an untinted image: {c} instructions')
 
 
@@ -869,7 +869,7 @@ def accent_picker_tests(ctx):
     expect(V.rows[row_i].arg == P.APPEARANCE_PAGE_INDEX and V.rows[row_i].action == P.ACT_PAGE and P.row_kind(V.rows[row_i]) == 'link' and [r.label for r in V.rows[row_i - 1:row_i + 2]] == ['Display', 'Appearance', 'Keyboards']
            and 'Light Mode' not in [r.label for r in V.rows] and 'Accent' not in [r.label for r in V.rows], 'Settings > System: an Appearance link (a chevron, no value) between Display and Keyboards; the Light row still hidden')
     expect([(r.label, r.action, r.arg) for r in W.rows][1:2] == [('Accent', P.ACT_ACCENT, P.ACCENT_PAGE_INDEX)] and P.row_kind(W.rows[1]) == 'value' and W.title == 'Appearance' and W.key == 'm1plus_appearance'
-           and P.PAGES[P.APPEARANCE_PAGE_INDEX] is W and P.APPEARANCE_PAGE_INDEX == 39 and P.PAGES[41:46] == [P.RADIO, P.RADIONP, P.RADIOINFO, P.SONGINFO, P.REGION_PAGE], 'the Appearance page (PAGES[39]): an Accent value row opening the picker, the Radio pages after the Pull-down page')
+           and P.PAGES[P.APPEARANCE_PAGE_INDEX] is W and P.APPEARANCE_PAGE_INDEX == 39 and P.PAGES[41:] == [P.RADIO, P.RADIONP, P.RADIOINFO, P.SONGINFO, P.REGION_PAGE, P.WIFI_PAGE, P.WIFIINFO_PAGE, P.WIFIPASS_PAGE, P.WIFIOTHER_PAGE, P.WIFISEC_PAGE, P.PEQ_PAGE, P.PEQP_PAGE, P.PEQLIB_PAGE, P.TENBAND_PAGE, P.TENCURVE_PAGE, P.TENPREAMP_PAGE, P.AUTOEQ_PAGE, P.PEQBAND_PAGE], 'the Appearance page (PAGES[39]): an Accent value row opening the picker, the Radio pages after the Pull-down page')
 
     def open_pick(data=None):
         m = LM(acc=data)
@@ -992,7 +992,7 @@ def tinted_tests(ctx):
     d = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw', 'images', 'xx')
     names = sorted(f[:-4] for f in os.listdir(d) if f.endswith('.png'))
     surf = [n for n in names if n.startswith(L.TINT_SURFACE)]
-    expect(L.TINT_SURFACE == ('pod_cd_', 'pc_sheet', 'pm_sheet', 'mb_glass', 'nb_fade') and len(surf) >= 8 and not [n for n in surf if n.startswith(L.KEEP)], f'{len(surf)} surface images in the tree, none in KEEP')
+    expect(L.TINT_SURFACE == ('pod_cd_', 'pod_cdl_', 'pc_sheet', 'pm_sheet', 'mb_glass', 'nb_fade') and len(surf) >= 8 and not [n for n in surf if n.startswith(L.KEEP)], f'{len(surf)} surface images in the tree, none in KEEP')
     stock_h = open(os.path.join(BUILD, 'stock.h')).read()
     line = next((l for l in stock_h.splitlines() if l.startswith('#define TINT_SURFACE ')), '')
     expect(line == '#define TINT_SURFACE "' + ''.join(n + '\\0' for n in L.TINT_SURFACE) + '"', 'TINT_SURFACE in the generated header is the model\'s list')

@@ -53,8 +53,8 @@ SONGS = [('song', n, 'Song · ' + a, c) for n, a, c in (('Blue in Green', 'Miles
 def chip_texts(s): return [s.shown_key(k) if hasattr(s, 'shown_key') else k for k in PS.CHIPS]
 
 
-def draw_top(s, t, im, text, hint, caret, selected_chip, sx=0):
-    """The page's top: the field (magnifier, text or hint, clear disc, caret), the round X, the chips, the line."""
+def draw_top(s, t, im, text, hint, caret, selected_chip, sx=0, chips=None, sep=True):
+    """The page's top: the field (magnifier, text or hint, clear disc, caret), the round X, the chips (the Search page's; an empty list: none, and no line, as the AutoEq page has it), the line."""
     f = t.field
     mag, clear, caret_n = t.root.find('kb_mag'), t.root.find('kb_clear'), t.root.find('kb_caret')
     def paint(d, k):
@@ -80,7 +80,7 @@ def draw_top(s, t, im, text, hint, caret, selected_chip, sx=0):
     g = s.img(close.get('style:normal:icon'))
     im.alpha_composite(g, (close.x + (close.w - g.width) // 2, BAR + close.y + (close.h - g.height) // 2))
     # the chips
-    texts = list(PS.CHIPS)
+    texts = list(PS.CHIPS if chips is None else chips)
     lay = PS.chip_layout([s.font.width(x, D['SE_CHIP_PX']) for x in texts])
     for i, (x, w) in enumerate(lay):
         x -= sx   # the row scrolled sx px
@@ -93,7 +93,7 @@ def draw_top(s, t, im, text, hint, caret, selected_chip, sx=0):
         tw = s.font.width(texts[i], D['SE_CHIP_PX'])
         s.text(im, x + (w - tw) / 2, BAR + D['SE_CHIPS_Y'] + D['SE_CHIP_Y'] + D['SE_CHIP_H'] / 2, texts[i], D['SE_CHIP_PX'], ink)
     def line(d, k): d.rectangle(k(0, BAR + D['SE_SEP_Y'], W, BAR + D['SE_SEP_Y'] + 1), fill=rgb(PS.SEP_RGB) + (255,))
-    im.alpha_composite(PKV.layer(line))
+    if sep: im.alpha_composite(PKV.layer(line))
 
 
 def draw_rows(s, im, rows, bottom):

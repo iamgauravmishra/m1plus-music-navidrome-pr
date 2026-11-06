@@ -69,6 +69,13 @@ def run(ctx):
     m = machine(); m.present.add(KILL); tick(m, 'LO')
     expect(log(m, 'widget_set_text_utf8') == [(m.label, 'LO')] and log(m, 'widget_set_visible') == [(m.label, 1), (m.pill, 0)], '/mnt/mmc/m1plus-off: the label shows stock\'s "LO", the pill is hidden')
 
+    # 4b. The per-output EQ follows the same one second tick (patch/peqout.c, docs/modules/peq.md "Per-output EQ"): the first tick notes the output, a change files the record; the kill switch leaves it alone.
+    out_file, rec, slot = '/mnt/data/m1plus/playback-eq-output', '/mnt/data/m1plus/playback-eq', '/mnt/data/m1plus/playback-eq-headphones'
+    m = machine(); m.fs[rec] = b'M1PEQ02\0' + bytes(1152); tick(m, '55')
+    expect(out_file in m.fs and m.fs[out_file][8:12] == struct.pack('<i', 0), 'the bar tick notes the output (Headphones) in the per-output EQ file')
+    m = machine(); m.fs[rec] = b'M1PEQ02\0' + bytes(1152); m.present.add(KILL); tick(m, '55')
+    expect(out_file not in m.fs and slot not in m.fs, 'with the kill switch the tick does nothing for the EQ')
+
     # 5. Missing pieces: stock's behaviour, nothing else touched.
     m = machine(pill=False); tick(m, 'LO')
     expect(log(m, 'widget_set_text_utf8') == [(m.label, 'LO')] and log(m, 'widget_set_visible') == [] and log(m, 'widget_set_sensitive') == [], 'no pill in the bar (an asset from another build): stock\'s "LO" label stays')

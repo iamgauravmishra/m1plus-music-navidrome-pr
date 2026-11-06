@@ -15,6 +15,7 @@
 #include "home.h"
 #include "lineout.h"
 #include "covercache.h"
+#include "peqout.h"
 
 static void lo_show(void *w, int on) {
     widget_set_visible(w, on, 0);
@@ -41,6 +42,7 @@ int lo_set_text(void *label, const char *text) {
     if (!parent) return r;
     kill = access(KILL_SD, F_OK) == 0;
     lo_sync(parent, kill);
+    if (!kill) peqout_sync(1); /* the per-output EQ follows Line Out and a USB DAC within a second (patch/peqout.c) */
     pill = widget_lookup(parent, LO_PILL, 0);
     if (!pill) return r; /* no pill in this bar: stock's "LO" text stays */
     if (text && text[0] == 'L' && text[1] == 'O' && !text[2] && !kill) {

@@ -57,6 +57,7 @@ for commands, [UI](ui.md) for layout/assets, and [history](history.md) for recor
 | [iPod Cover Flow](modules/ipod-coverflow.md) | Embedded carousel and album navigation |
 | [Cassette Mode](modules/tape.md) | Landscape rendering, themes and timer |
 | [Vinyl Mode](modules/vinyl.md) | Portrait turntable page: turning cover label, tonearm, keys |
+| [Parametric EQ](modules/peq.md) | hciplayer's equalizer replaced, APO / AutoEQ presets, the Equalizer page |
 | [Menu](modules/menu.md) | Home/normal instances, Extras and customization |
 | [Languages](modules/i18n.md) | Translation tables, keys and width checks |
 | [Wi-Fi Transfer](modules/wifi-transfer.md) | Stock web app replaced: `api.cgi` (static MIPS CGI behind thttpd: list, download, tar, folders, move, delete, upload), API contract, thttpd limits |

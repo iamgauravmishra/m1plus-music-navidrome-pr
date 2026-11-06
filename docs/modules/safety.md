@@ -6,7 +6,9 @@
   (Battery Percentage, off by default), `toolsGetFileCreateTime`'s prologue (song dates: one `statx`, stock's date on any failure), `mclStartPlayer`'s prologue (Radio's hand-over: it stops a running radio, one
   comparison otherwise), `on_backtoplayer_onclick`'s prologue (every stock Now Playing button: Radio Now Playing while a station plays, else stock), the previously empty `scroll_view` event slot, the All System Settings hub's Wi-Fi row (`navigator_to` call site `0x4b1460`: our Wi-Fi page, stock's on the kill switch or a page that will not open), and the
   palette's three paint-time hooks: `style_get_color` `0x659fcc`, `style_get_gradient` `0x659f9c` and
-  `image_manager_add` `0x655638` ([accent](accent.md), payload hooks 10 - 12). Each is pinned, falls back to
+  `image_manager_add` `0x655638` ([accent](accent.md), payload hooks 10 - 12); in `hciplayer`, the
+  equalizer's `af_info` open slot `0x89381c` and its two 48 kHz gates ([parametric EQ](peq.md)).
+  Each is pinned, falls back to
   stock and is a pass-through while the palette is inactive (Black + Neutral) or `/mnt/mmc/m1plus-off` exists.
   [Payload](payload.md) defines the hook sites and fallbacks. Do not add global paint or
   main-loop work outside that scope.
@@ -18,7 +20,9 @@
 - **Treat startup as critical.** Home initialization needs the crash marker. The tag-reader
   hook is also reachable through Memory Playback at boot: run stock's copy first and restrict
   podcast processing to its card path. The `mclStartPlayer` hook is reached there too: with no radio running it
-  is one comparison before stock's function. The recovery button combination remains unverified.
+  is one comparison before stock's function. The player's EQ filter is reachable at boot too (Memory
+  Playback with stock's Equalizer on): it reads one flash file per track and passes DSD and the
+  kill switch through. The recovery button combination remains unverified.
 - **Preserve hook restrictions.** Tidal-icon recovery applies only while the bad note exists.
   Home's ready path changes the language's CJK cmap field and glyph-cache size, repeated
   by a timer after language/theme changes. Podcast tags apply only under

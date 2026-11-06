@@ -17,7 +17,7 @@ class SL(pulldown.SM):
     children_layouter_list_view stacks the visible children in child order, ignoring their y), as test/pod/recent.py does for the menu. hide: names of children that start hidden (and
     insensitive: what the payload does with widget_set_visible / widget_set_sensitive)."""
 
-    def __init__(self, page, hide=()):
+    def __init__(self, page, hide=(), show_all=False):
         super().__init__(True)
         self.page = page
         self.tree = awtk_ui.parse(open(os.path.join(UI, page.key + '.bin'), 'rb').read())
@@ -30,6 +30,7 @@ class SL(pulldown.SM):
         for c in a_sv.children:
             w = self.widget(LI_VT if c.type == 'list_item' else self.zv, 7, 0, c.w, c.h, sv, emitter=True)   # (x and y start wrong: only the layouter can put them right)
             flags = F_ENABLE | (F_VISIBLE if c.get('visible') != 'false' else 0) | (F_SENSITIVE if c.get('sensitive') != 'false' else 0)
+            if show_all and c.get('visible') == 'false': flags |= F_VISIBLE | (F_SENSITIVE if c.type == 'list_item' else 0)   # the Equalizer page's rows the payload shows
             if c.name in hide: flags = F_ENABLE
             self.u.mem_write(w + 0x24, struct.pack('<H', flags))
             self.kid[c.name] = w
@@ -53,12 +54,16 @@ class SL(pulldown.SM):
 def layout_tests(ctx):
     """Every cards page under demo's own layouter, plus the asset against the model."""
     expect, P = ctx.expect, pod_pages
-    pages = [p for p in P.PAGES if p.kind == 'cards']
-    expect([p.key for p in pages] == ['m1plus_settings', 'm1plus_library', 'm1plus_homeset', 'm1plus_developer', 'm1plus_npset', 'm1plus_keyboards', 'm1plus_tapetheme', 'm1plus_about', 'm1plus_vinylrec', 'm1plus_vinyltheme', 'm1plus_cache', 'm1plus_files', 'm1plus_background', 'm1plus_accent', 'm1plus_appearance', 'm1plus_podcastregion'],
-           'the cards pages: Settings, Library, Home Screen, Developer, Now Playing, Keyboards, the three pickers, About, Cache, Settings Files, the Background picker, the Accent picker, Appearance and the Podcast Region picker')
+    pages = [p for p in P.PAGES if p.kind in ('cards', 'peq')]   # (the Equalizer page is a cards page its payload binds itself: its layout is the asset's, every row shown)
+    expect([p.key for p in pages] == ['m1plus_settings', 'm1plus_library', 'm1plus_homeset', 'm1plus_developer', 'm1plus_npset', 'm1plus_keyboards', 'm1plus_tapetheme', 'm1plus_about', 'm1plus_vinylrec', 'm1plus_vinyltheme', 'm1plus_cache', 'm1plus_files', 'm1plus_background', 'm1plus_accent', 'm1plus_appearance', 'm1plus_podcastregion', 'm1plus_peq'],
+           'the cards pages: Settings, Library, Home Screen, Developer, Now Playing, Keyboards, the three pickers, About, Cache, Settings Files, the Background picker, the Accent picker, Appearance and the Podcast Region picker and Equalizer')
     expect(mod_icons.CARD_PIECE == {'ROW_W': ST.ROW_W, 'ROW_H': ST.ROW_H, 'CARD_X': ST.CM, 'CARD_W': ST.CARD_W, 'CARD_R': ST.CARD_R, 'FILL': (0x1C,) * 3, 'LIT': (0x2C, 0x2C, 0x2E)}
            and ST.CARD_RGB == '#1C1C1C' and ST.PRESSED_RGB == '#2C2C2E', 'the pieces\' geometry in tools/mod_icons.py is the layout model\'s')
+    expect(mod_icons.CARD_TALL == ST.LIB_ROW_H == 60 and ST.piece_images('top', tall=True) == ('pod_cdl_top', 'pod_cdl_top_down') and ST.piece_images('mid') == ('pod_cd_mid', 'pod_cd_mid_down')
+           and mod_icons.CARD_TALL_IMAGES == [f'pod_cdl_{p}{d}' for p in mod_icons.CARD_PIECES for d in ('', '_down')] and ST.row_h(P.PEQLIB_ROW) == 60 and ST.row_h(P.PEQ_PRESET) == ST.ROW_H and ST.item_h(P.PEQLIB_ROW) == 60,
+           'the Presets page\'s rows are 60 px with the tall pod_cdl_* pieces; every other row 52')
     for page in pages:
+        prows = [x for x in page.layout if isinstance(x, P.Row)]
         t = page_tree(page)
         lv = next(w for w in t.walk() if w.type == 'list_view')
         sv = lv.children[0]
@@ -75,26 +80,27 @@ def layout_tests(ctx):
             elif it == ST.END: names.append(('pod_end', y, ST.END_H))
             elif it is P.GAP: names.append((f'pod_gap{n_g}', y, ST.GAP_H)); n_g += 1
             elif isinstance(it, P.Hdr): names.append((f'pod_sec{n_h}', y, ST.HDR_H)); n_h += 1
-            elif isinstance(it, P.Note): names.append((f'pod_note{n_n}', y, ST.NOTE_H)); n_n += 1
+            elif isinstance(it, P.Note): names.append((f'pod_note{n_n}', y, ST.item_h(it))); n_n += 1
             else: names.append((f'pod_row{n_r}', y, ST.ROW_H)); n_r += 1
         expect([(c.name, c.y, c.h) for c in sv.children] == names, f'{page.key}: the scroll_view\'s children are the model\'s column in display order, each as high as the model says (asset y = the stacked y)')
         # demo's own layouter on the structs
-        m = SL(page)
-        got = [(n, ) + m.box(n) for n, _, _ in names]
+        m = SL(page, show_all=True)
+        got =[(n, ) + m.box(n) for n, _, _ in names]
         expect(all((x, y, h) == (0, ey, eh) for (n, x, y, w, h), (_, ey, eh) in zip(got, names)), f'{page.key}: demo\'s layouter puts every child at x 0 and the model\'s y with its own height ({[(g[0], g[2]) for g, (_, ey, _) in zip(got, names) if g[2] != ey][:3]})')
         widths = {w for _, _, _, w, _ in got}
         expect(widths <= {ST.ROW_W, ST.LIST_W}, f'{page.key}: every child gets the list width ({sorted(widths)}), which the 320 px pieces cover')
         expect(m.vh() == end and m.vh() == sum(h for _, _, h in names), f'{page.key}: virtual_h {m.vh()} is the model\'s end {end}')
         # the rows, their pieces, glyphs, accessories, hairlines; the headers and notes
         rows = [c for c in sv.children if c.type == 'list_item']
-        expect(len(rows) == len(page.rows) and [c.name for c in rows] == [f'pod_row{i}' for i in range(len(rows))], f'{page.key}: one list_item per row, pod_row0 ..')
-        for n, it in enumerate(page.rows):
+        expect(len(rows) == len(prows) and [c.name for c in rows] == [f'pod_row{i}' for i in range(len(rows))], f'{page.key}: one list_item per row, pod_row0 ..')
+        for n, it in enumerate(prows):
             r, kind = rows[n], P.row_kind(it)
             last = kinds[n] in ('single', 'bot')
             swatch = it.action == P.ACT_ACCENTSET   # the Accent picker's rows: a round swatch where a glyph goes (pod_swatch)
-            has_icon = swatch or (kind not in ('check', 'info') and it.action not in (P.ACT_CCLIST, P.ACT_SFOLD, P.ACT_UPDATE, P.ACT_REGION))
+            has_icon = swatch or (kind not in ('check', 'info', 'preset') and it.action not in (P.ACT_CCLIST, P.ACT_SFOLD, P.ACT_UPDATE, P.ACT_REGION, P.ACT_PEQ_PRESETS, P.ACT_PEQ_TENBAND))
             lab = next(c for c in r.children if c.name == f'pod_label{n}')
             lx, lw = ST.label_box(kind, has_icon)
+            if it.action == P.ACT_PEQ_PICK and it.label: lw = ST.curve_box()[0] - ST.VALUE_LABEL_GAP - lx   # the 10-Band EQ row's grey curve name
             normal, down = ST.piece_images(kinds[n])
             expect((r.x, r.h) == (0, ST.ROW_H) and r.get('style') == 'list_item_style' and (lab.x, lab.w) == (lx, lw) and lab.get('style') == 'srlabel_leftwhite21_style'
                    and r.get('style:normal:bg_image') == normal and r.get('style:pressed:bg_image') == down and r.get('style:normal:bg_image_draw_type') == 'default'
@@ -111,10 +117,11 @@ def layout_tests(ctx):
             sw = [c for c in r.children if c.name == f'pod_switch{n}']
             expect(bool(sw) == (kind == 'switch') and (not sw or (sw[0].x, sw[0].y, sw[0].w, sw[0].h) == ST.accessory('switch') and sw[0].get('sensitive') == 'false'), f'{page.key}:{it.label}: the stock switch on switches')
             ck = [c for c in r.children if c.name == f'pod_check{n}']
-            expect(bool(ck) == (kind == 'check') and (not ck or ((ck[0].x, ck[0].y, ck[0].w, ck[0].h) == ST.accessory('check') and ck[0].get('visible') == 'false' and ck[0].get('sensitive') == 'false')),
-                   f'{page.key}:{it.label}: a hidden insensitive check on picker rows')
+            expect(bool(ck) == (kind in ('check', 'preset')) and (not ck or ((ck[0].x, ck[0].y, ck[0].w, ck[0].h) == ST.accessory('check' if kind == 'check' else 'preset_check') and ck[0].get('visible') == 'false' and ck[0].get('sensitive') == 'false')),
+                   f'{page.key}:{it.label}: a hidden insensitive check on picker rows (a preset row\'s left of its chevron)')
             vl = [c for c in r.children if c.name == f'pod_value{n}']
-            expect(bool(vl) == (kind in ('value', 'info')) and (not vl or ((vl[0].x, vl[0].w) == (ST.info_box() if kind == 'info' else ST.value_box()) and vl[0].get('sensitive') == 'false' and vl[0].get('style:normal:text_color') == ST.GREY
+            pick = it.action == P.ACT_PEQ_PICK and bool(it.label)   # the Equalizer page's 10-Band EQ row: a curve name before the check
+            expect(bool(vl) == (kind in ('value', 'info') or pick) and (not vl or ((vl[0].x, vl[0].w) == (ST.info_box() if kind == 'info' else ST.curve_box() if pick else ST.value_box()) and vl[0].get('sensitive') == 'false' and vl[0].get('style:normal:text_color') == ST.GREY
                                                                  and vl[0].get('style:normal:text_align_h') == 'right')), f'{page.key}:{it.label}: a grey right aligned insensitive value on value and info rows')
             expect(kind != 'info' or ((r.get('sensitive') == 'false') == (it.action != P.ACT_SFDEL) and not chev), f'{page.key}:{it.label}: an info row takes no touch (a Settings Files row is sensitive at build, the payload sets it per file) and has no chevron')
         # a card's pieces: a run of rows is top, mid.., bot; a lone row is single
@@ -123,7 +130,7 @@ def layout_tests(ctx):
         for item in ('pod_sec', 'pod_note'):
             for v in [c for c in sv.children if c.name.startswith(item)]:
                 lab = v.children[0]
-                expect(v.type == 'view' and v.get('sensitive') == 'false' and len(v.children) == 1 and lab.name == v.name + '_t' and lab.x == ST.HDR_X == 24 and lab.w == ST.HDR_W
+                expect(v.type == 'view' and v.get('sensitive') == 'false' and len(v.children) == 1 and lab.name == v.name + '_t' and lab.x == ST.HDR_X + (lab.type == 'label') * 2 == 24 + (lab.type == 'label') * 2 and lab.w == ST.HDR_W - (lab.type == 'label') * 4
                        and lab.get('sensitive') == 'false' and lab.get('style:normal:text_color') == ST.GREY and lab.get('style:normal:text_align_h') == 'left'
                        and int(lab.get('style:normal:font_size')) == (ST.HDR_PX if item == 'pod_sec' else ST.NOTE_PX),
                        f'{page.key}:{v.name}: an insensitive item holding a grey label at x {ST.HDR_X}, where the row glyphs\' ink starts (x {ST.ICON_X + (ST.ICON_PX - ST.GLYPH_PX) // 2})')
@@ -138,12 +145,13 @@ def layout_tests(ctx):
         node_tree = asset_tree(path)
         for n, (x_, y_, w_, h_) in ((n, m.box(n)) for n, _, _ in names):
             nd = node(node_tree, n); nd.x, nd.y, nd.w, nd.h = x_, y_, w_, h_
+            if page.kind == 'peq' and n.startswith('pod_row'): nd.flags |= F_VISIBLE | F_SENSITIVE   # the rows the payload shows (the asset starts them hidden)
         mm = Machine()
         for n, y, h in names:
             if y + h > 400: continue   # (below the list's window)
             for x in (30, 160, 290):
                 got_path = stock_target(mm, node_tree, x, 50 + y + h // 2)
-                if n.startswith('pod_row') and (P.row_kind(page.rows[int(n[7:])]) != 'info' or page.rows[int(n[7:])].action == P.ACT_SFDEL):
+                if n.startswith('pod_row') and (P.row_kind(prows[int(n[7:])]) != 'info' or page.rows[int(n[7:])].action == P.ACT_SFDEL):
                     expect(n in got_path and not any(c.startswith(('pod_value', 'pod_switch', 'pod_chevron', 'pod_icon', 'pod_check', 'pod_hair')) for c in got_path), f'{page.key}: a tap at x {x} on {n} reaches its list_item ({got_path})')
                 else:
                     expect(not any(c.startswith('pod_row') for c in got_path) and got_path[-1] in ('pod_scrollview', 'pod_listview', page.name), f'{page.key}: a tap at x {x} on {n} reaches nothing actionable ({got_path})')
@@ -251,7 +259,7 @@ def stock_tests(ctx):
     m = settings_machine()
     expect(('window_open', S.key) in m.calls, 'the menu row opens the Settings page')
     # the deep links: a plain navigator_to of the stock page's name (the names stock's own lists call it with: tools/pod.py SETTINGS_PINS)
-    want = {'Wi-Fi': 'systemset/wifi_page', 'Bluetooth': 'systemset/bluetooth_page', 'Play Mode': 'playset/playmode_page', 'EQ': 'playset/equalizer_page',
+    want = {'Wi-Fi': 'systemset/wifi_page', 'Bluetooth': 'systemset/bluetooth_page', 'Play Mode': 'playset/playmode_page',
             'Display': 'systemset/display_page'}
     expect({P.STOCK_PAGES[S.rows[rows[k]].arg][0] for k in want} == set(want.values()),
            'the stock pages the rows open are the ones stock\'s Settings and Play Settings lists open')
@@ -264,8 +272,11 @@ def stock_tests(ctx):
     m = settings_machine()
     m.click(f'pod_row{rows["All Playback Settings"]}'); m.click(f'pod_row{rows["All System Settings"]}')
     # (the Home dispatcher's ids 16 and 17 are bound to the two rows: tests/pod/menu.py checks the table)
-    expect(len(P.STOCK_PAGES) == 5 and all(r.action == P.ACT_STOCK for r in S.rows if r.label in want), 'five stock pages, each opened by an ACT_STOCK row')
+    expect(len(P.STOCK_PAGES) == 4 and all(r.action == P.ACT_STOCK for r in S.rows if r.label in want), 'four stock pages, each opened by an ACT_STOCK row')
     expect(not [r for r in P.DEVELOPER_PAGE.rows if r.action == P.ACT_STOCK] and 'systemset/fwupdate_page' not in [n for n, _ in P.STOCK_PAGES], 'no Developer row is a stock page: the firmware update page is not in STOCK_PAGES (About > Software Update is ours)')
+    m = settings_machine()
+    m.click(f'pod_row{rows["EQ"]}')
+    expect(('window_open', P.PEQ_PAGE.key) in m.calls and 'navigator_to' not in m.names(), 'EQ opens our Equalizer page (ACT_PEQ), not stock\'s')
     # the values: the stock state, by the stock keys
     def value(m, label):
         keys = [c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets[f'pod_value{rows[label]}']]
@@ -273,11 +284,10 @@ def stock_tests(ctx):
     m = settings_machine()
     expect([value(m, k) for k in ('Wi-Fi', 'Bluetooth', 'Play Mode', 'EQ')] == ['Off', 'Off', 'playmode_listplay', 'Off'], f'nothing on: Off, Off, List Play, EQ Off ({[value(m, k) for k in ("Wi-Fi", "Bluetooth", "Play Mode", "EQ")]})')
     m = settings_machine(WIFI_FLAG=1, BT_FLAG=1, mode=3, EQ_FLAG=1, EQ_MODE=4)
-    expect([value(m, k) for k in ('Wi-Fi', 'Bluetooth', 'Play Mode', 'EQ')] == ['On', 'On', 'playmode_repeatall', 'eq_4'], 'Wi-Fi and Bluetooth on, Repeat All, an EQ preset (the stock name lookup)')
+    expect([value(m, k) for k in ('Wi-Fi', 'Bluetooth', 'Play Mode', 'EQ')] == ['On', 'On', 'playmode_repeatall', 'Flat'], 'Wi-Fi and Bluetooth on, Repeat All, the 10-Band EQ on (no record: its curve, Flat)')
     for mode, key in enumerate(('playmode_listplay', 'playmode_repeattrack', 'playmode_shuffle', 'playmode_repeatall')):
         expect(value(settings_machine(mode=mode), 'Play Mode') == key, f'play mode {mode} reads {key}')
     expect(value(settings_machine(mode=9), 'Play Mode') == 'playmode_listplay', 'an unknown play mode reads as the first')
-    expect(value(settings_machine(EQ_FLAG=1, EQ_MODE=12), 'EQ') == 'Off', 'a preset the name lookup refuses reads Off')
     expect(not any(c[0] in ('write_int_config', 'mclSetPlayMode', 'write') or (c[0] == 'open' and c[2] != 0) for c in settings_machine().calls), 'opening the page reads state and writes nothing (the Light Mode value reads its file)')
     expect(value(settings_machine(mode=3, shuffle=True), 'Play Mode') == 'playmode_shuffle' and value(settings_machine(mode=0, shuffle=True), 'Play Mode') == 'playmode_shuffle', 'Shuffle on shows Shuffle whatever stock\'s mode is (the payload\'s flag: the display sites)')
     # the value takes the room its text needs: the box is moved and resized, and the label gets the rest (patch/m1plus.c value_fit)

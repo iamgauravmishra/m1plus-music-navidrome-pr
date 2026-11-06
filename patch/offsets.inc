@@ -1484,3 +1484,87 @@
 #define VS_LABEL2_H 22
 #define VS_SUB_Y 24
 #define VS_SUB_H 22
+
+/* The Equalizer page (patch/peq_ui.c, tools/pod_ui.py build_peq_page, docs/modules/peq.md): rows pod_row0 (the switch, pod_switch0), pod_row1 (Graphic EQ)
+ * and PQ_ROWS preset rows from pod_row2, each with its label pod_label<i> and, from row 1, the picker check pod_check<i>; a cards page (docs/modules/settings.md). */
+#define PQ_FIRST 2                /* the first preset row */
+#define PQ_ROWS 64                /* preset rows: the files of /mnt/mmc/EQ the page lists, sorted by name (the Equalizer page; the Presets page has PQ_ROWS per section) */
+/* The preset page (patch/peqpage.c, tools/pod_ui.py build_peqpage_page / cards_graph, tools/pod_settings.py, docs/modules/peq.md "Preset page"): a cards page; pod_graph is the graph card, a transparent
+ * view GRAPH_H = GR_H high whose EVT_BEFORE_PAINT blits a GR_W x GR_H bitmap (the card baked in: #1C1C1C, GR_CARD_R corners in the alpha, the grid and the curve) at x GR_CARD_X; pod_row0 the preamp row
+ * (pod_value0), pod_row1 .. GR_BANDS the band rows (pod_label<i> the frequency, pod_value<i> the gain, pod_sub<i> the grey line). The plot is GR_PW columns from card x GR_PX0, GR_DECADE per decade
+ * from 20 Hz to 20 kHz (a column per pixel), GR_PH rows from card y GR_PY0, +R dB at the top and -R at the bottom, R 12, 18 or 24. */
+#define GR_W 300
+#define GR_H 170
+#define GR_CARD_X 10
+#define GR_CARD_R 12
+#define GR_PX0 36
+#define GR_PW 249
+#define GR_PY0 9
+#define GR_PH 138
+#define GR_DECADE 83
+#define GR_BANDS 30
+/* The 10-Band editor's slider card (patch/tenband.c, tools/pod_ui.py cards_sliders, docs/modules/peq.md "10-Band EQ"): pod_sliders is a view TB_H high; its EVT_BEFORE_PAINT blits a TB_W x TB_H bitmap (the card #1C1C1C
+ * baked in with TB_R corners and the TB_COLS tracks, TB_TRACK_W wide) at x TB_CARD_X, then a thumb TB_THUMB_W x TB_THUMB_H per column, and the white pill behind the value being dragged. Column c is TB_COL_W wide from card x TB_X0 + c * TB_COL_W;
+ * the track runs from card y TB_Y0 (+12 dB) down TB_SPAN px (-12 dB: TB_PX_DB px a decibel, so two a half-decibel step); pod_sl_v<c> (value) and pod_sl_f<c> (frequency) are labels over / under the column. */
+#define TB_W 300
+#define TB_H 170
+#define TB_CARD_X 10
+#define TB_R 12
+#define TB_COLS 10
+#define TB_COL_W 29
+#define TB_X0 5
+#define TB_Y0 40
+#define TB_SPAN 96
+#define TB_PX_DB 4
+#define TB_TRACK_W 4
+#define TB_THUMB_W 24
+#define TB_THUMB_H 13
+#define TB_VAL_Y 10
+#define TB_VAL_H 18
+#define TB_FREQ_Y 145
+#define TB_FREQ_H 18
+#define TB_PILL_W 34
+#define TB_PILL_H 18
+#define TB_LABEL_W 36 /* a value or frequency label: wider than its column (a value like -11.5 at TB_LABEL_PX), centred on it; the labels never take a touch */
+#define TB_LABEL_PX 11
+/* The band page (patch/peqband.c, tools/pod_ui.py cards_segment / cards_hsliders, docs/modules/peq.md "Preset editing"). pod_seg is a view BD_SEG_ITEM_H high holding the Peak / Low shelf / High shelf control: its EVT_BEFORE_PAINT blits a BD_SEG_W x BD_SEG_H
+ * bitmap (the container #1C1C1C, BD_SEG_R corners) at x BD_CARD_X, y BD_SEG_Y, then the selected segment's pill (BD_SEG_PILL_W x BD_SEG_PILL_H, BD_SEG_PAD in); pod_seg_l<k> are the three labels. pod_hsl is a view BD_HSL_H high: a BD_HSL_W x BD_HSL_H card bitmap with the
+ * BD_ROWS rows' tracks (BD_TRACK_W px from card x BD_TRACK_X, BD_TRACK_H thick, centred BD_TRACK_Y into each BD_ROW_H row) baked in, a white fill from the left end to the thumb and a BD_THUMB round thumb; pod_hs_n<r> (name) and pod_hs_v<r> (value) are the row's labels in its top BD_TEXT_H px,
+ * where a tap types the value. The graph card of the preset page is above them; BD_RING is the ring that marks the band on its curve. */
+#define BD_CARD_X 10
+#define BD_SEG_ITEM_H 58
+#define BD_SEG_Y 10
+#define BD_SEG_W 300
+#define BD_SEG_H 40
+#define BD_SEG_R 10
+#define BD_SEG_PAD 3
+#define BD_SEG_PILL_W 94
+#define BD_SEG_PILL_H 34
+#define BD_HSL_W 300
+#define BD_HSL_H 150
+#define BD_HSL_R 12
+#define BD_ROWS 3
+#define BD_ROW_H 50
+#define BD_TRACK_X 14
+#define BD_TRACK_W 272
+#define BD_TRACK_Y 38
+#define BD_TRACK_H 4
+#define BD_THUMB 22
+#define BD_TEXT_H 28
+#define BD_NAME_X 14
+#define BD_NAME_W 150
+#define BD_VAL_W 112
+#define BD_LABEL_Y 6
+#define BD_LABEL_H 22
+#define BD_RING 16
+/* The band page's number keypad sheet (patch/peqband.c, tools/pod_ui.py band_keypad): the value field is BK_FIELD_W x BK_FIELD_H at BK_FIELD_X, BK_FIELD_Y of the sheet; the payload places bk_unit (BK_UNIT_H high), bk_caret (BK_CARET_W x BK_CARET_H) and
+ * bk_val (BK_VAL_H high, right aligned) by the unit's width, BK_PAD in from the field's right edge, BK_CARET_GAP between the number and the unit. */
+#define BK_FIELD_X 10
+#define BK_FIELD_Y 80
+#define BK_FIELD_W 300
+#define BK_FIELD_H 48
+#define BK_PAD 14
+#define BK_VAL_H 44
+#define BK_CARET_W 2
+#define BK_CARET_H 34
+#define BK_CARET_GAP 4

@@ -302,3 +302,33 @@ const char *pn_up_notes(void);
 #define PN_UP_API_CAP 65536u /* the release JSON is read up to this many bytes; a larger answer gives no notes */
 /* Forget an old answer or failure when the page opens (nothing while a job runs; a download whose file is still on the card is kept). */
 void pn_up_reset(void);
+
+/* ---- AutoEq (docs/modules/peq.md "AutoEq download", patch/autoeq.c is the page): the project's index of equalization results, and one headphone's ParametricEQ.txt. One worker in the job slot (never beside another job); the same
+ * guards, libcurl options and thread rules as the others. All of these run on the UI thread; the worker only writes the record they read. */
+#define PN_EQ_BASE "https://raw.githubusercontent.com/jaakkopasanen/AutoEq/master/results/"
+#define PN_EQ_DIR "/mnt/mmc/.m1plus/autoeq"
+#define PN_EQ_INDEX \
+    PN_EQ_DIR "/index.md" /* the list as the project writes it (results/INDEX.md), whole; the page reads it in place */
+#define PN_EQ_PART PN_EQ_DIR "/index.part" /* the list while it downloads */
+#define PN_EQ_STAMP PN_EQ_DIR "/updated" /* the clock (seconds, decimal) when the list was last downloaded whole */
+#define PN_EQ_MAX_AGE \
+    2592000u /* 30 days: an older list is downloaded again when the page opens (the old one serves until then) */
+#define PN_EQ_PRESET \
+    PN_EQ_DIR \
+    "/preset.part" /* the preset the last pn_eq_get fetched: the stamp line, then the file as the project has it */
+#define PN_EQ_INDEX_CAP 3145728u /* the list is 0.85 MB; a larger answer is refused while it downloads */
+#define PN_EQ_FILE_CAP 16384u /* a preset is at most what the parser reads (PEQ_FILE_LIMIT) */
+
+enum { PN_E_IDLE = 0, PN_E_RUNNING = 1, PN_E_DONE = 2, PN_E_FAILED = 3 };
+
+/* Download the list (the guards, then the worker): it is renamed over PN_EQ_INDEX only when it came whole and starts with the project's heading. 0 when the worker runs; PN_BUSY when another job runs; else the guard's PN_*
+ * (also the state: PN_E_FAILED). */
+int pn_eq_index(void);
+/* Download the ParametricEQ.txt of the headphone at path (below PN_EQ_BASE as the index writes it: "Source/Kind/Name", percent-encoded; anything else is PN_NOFEED) into PN_EQ_PRESET, stamp and a line feed first. Same returns. */
+int pn_eq_get(const char *path, const char *stamp);
+int pn_eq_state(void); /* PN_E_* */
+int pn_eq_code(
+    void); /* the failure's PN_*: PN_NOWIFI, PN_NOCLOCK, PN_NOCERT, PN_CERT, PN_NET, PN_GONE, PN_HTTP, PN_NOTFEED, PN_CARDFULL, PN_STORAGE, PN_MEM, PN_CANCELLED */
+int pn_eq_mode(void); /* the job of the state: 0 the list, 1 a preset */
+unsigned pn_eq_pct(void); /* the download's progress, 0..100; 0 while the server has not told the length */
+void pn_eq_reset(void); /* forget a finished job (nothing while one runs) */

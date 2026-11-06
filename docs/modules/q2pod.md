@@ -11,6 +11,7 @@ or patch word without checking the pinned M1 Plus binary.
 | Cover Flow rendering and cache | `patch/coverflow.c`, `patch/covercache.c` |
 | Library row edits | `patch/rows.json`, `patch/rows.c` |
 | UTC RTC (`hwclock -wu`) | `tools/autotime.py` ([autotime](autotime.md)); q2-pod `RTC_WRITE` |
+| PEQ: hciplayer's equalizer replaced, the APO parser, the engine | `tools/mod_player.py`, `patch/peq.c`, `patch/peq_player.c` ([peq](peq.md)) |
 | Host/MIPS testing | `test/coverflow.py`, `test/patch.py`, `test/pod/` |
 
 The README acknowledges q2-pod; file-specific notices identify borrowed material. The

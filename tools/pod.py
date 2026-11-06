@@ -42,7 +42,8 @@ LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
 SOURCES = ['m1plus.c', 'common.c', 'filetime.c', 'menu.c', 'covercache.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c', 'textgamma.c',
-           'scroll.c', 'playmore.c', 'pulldown.c', 'playlists.c', 'azlist.c', 'songops.c', 'rowmenu.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'upnext.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'upver.c', 'pcnet.c', 'podcasts.c', 'radio.c', 'radiopage.c', 'radionp.c', 'radioinfo.c', 'songinfo.c', 'tape.c', 'palette.c', 'vinyl.c', 'onlineart.c', 'update.c', 'relnotes.c', 'keyboard.c', 'search.c', 'battery.c', 'lineout.c', 'lyrics.c', 'picker.c', 'folders.c', 'timezones.c', 'pcregion.c', 'viewsort.c', 'wifictl.c', 'wifipage.c']
+           'scroll.c', 'playmore.c', 'pulldown.c', 'playlists.c', 'azlist.c', 'songops.c', 'rowmenu.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'upnext.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'upver.c', 'pcnet.c', 'podcasts.c', 'radio.c', 'radiopage.c', 'radionp.c', 'radioinfo.c', 'songinfo.c', 'tape.c', 'palette.c', 'vinyl.c', 'onlineart.c', 'update.c', 'relnotes.c', 'keyboard.c', 'search.c', 'battery.c', 'lineout.c', 'lyrics.c', 'picker.c', 'folders.c', 'timezones.c', 'pcregion.c', 'viewsort.c', 'wifictl.c', 'wifipage.c',
+           'peq.c', 'peq_ui.c', 'peqpage.c', 'peqlib.c', 'autoeq.c', 'tenband.c', 'peqband.c', 'peqout.c']
 
 FLAGS = ['--target=mipsel-linux-gnu', '-march=mips32r2', '-mabi=32', '-mfp64',
          '-mno-abicalls', '-fno-pic', '-G0', '-ffreestanding', '-fno-builtin',
@@ -175,6 +176,10 @@ FUNCTIONS = {
     'notifyPlayMode':          ('int', 'void', 0x50ee04),
     'dmrSendPlayMode':         ('int', 'int', 0x4f10f0),
     'write_int_config':        ('int', 'int, const char *, const char *', 0x4d6a2c),
+    # the Equalizer page (patch/peq_ui.c): stock's own switch handler (on_eqswitch_onclick 0x49d750) flips equalizer_flag, writes
+    # [PLAYSET] EQFLAG and calls this with equalizer_mode (1..11, clamped by config_init): mcl-seteq with the mode's ten gains,
+    # flag 0 (closes the player's equalizer) while equalizer_flag is 0, else 1 or 2 (adds it, or sends the gains again)
+    'set_equalizer_value':     ('void', 'int', 0x4d851c),
     'toolsRandnum':            ('int', 'int', 0x5e0c58),
     'time_now_ms':             ('unsigned', 'void', 0x70cf58),   # uint64_t; o32 LE returns the low word in $v0
     'get_wifisignal':          ('int', 'void', 0x506cc8),        # Podcast network guard: -1 when not connected, else a level 2..5 (networkGetWifiSignal / ConnectStatus / PhysicStatus)
@@ -400,7 +405,6 @@ SETTINGS_PINS = (   # (address, stock word, what it proves)
     (0x4ad830, 0x0320f809, 'the Settings rows\' shared call: jalr navigator_to'), (0x4ada74, 0x24848ab4, 'Settings row 3: a0 = "systemset/display_page"'),
     (0x4ada38, 0x24848a68, 'Settings row 1: a0 = "systemset/fwupdate_page"'),
     (0x4a0068, 0x0320f809, 'the Play Settings rows\' shared call: jalr navigator_to'), (0x4a04a4, 0x248475a0, 'Play Settings row: a0 = "playset/playmode_page"'),
-    (0x4a0218, 0x248474d4, 'Play Settings row: a0 = "playset/equalizer_page"'),
     # About: the stock page's values (the widget walk's callback inside what the symbol table calls on_sn_qrcode_onclick, @0x4a1240..0x4a170c; the init 0x4a170c-): the model and firmware version literals, the card
     # numbers (access /tmp/mmc_add, then getDiskMemoryInfo("/mnt/mmc", &cap 0xa03e74, &rem 0xa03e70)), the serial number and the Wi-Fi MAC strings, the IP address
     (0x4a145c, 0x24427718, 'about row 0: v0 = "Shanling M1 Plus" (the model literal)'), (0x4a14cc, 0x2442773c, 'about row 1: v0 = "V2.1" (the firmware version literal)'),
@@ -672,6 +676,14 @@ FILETIME_PINS = (   # (address, stock word, what it proves)
     (0x5e4b44, 0x9050ac7c, 'toolsGetFileCreateTime: lbu s0, 0xa0ac7c (the format byte)'), (0x5e4b48, 0x8fa20068, 'toolsGetFileCreateTime: lw v0, st_ctime (sp+0x68)'),
     (0x5e4b58, 0x0070100b, 'toolsGetFileCreateTime: movn v0, v1, s0 (exFAT / NTFS take the access time)'),
 )
+# Stock's slider page (docs/modules/peq.md "10-Band EQ"): its one caller is the All Playback Settings Equalizer row, a case of on_playsetback_onclick (`lw a0 "playset/equalizer_page"; b 0x4a0064` into the shared navigator_to
+# call). The case's first two words become `j pod_eq_site; nop`: the stub opens our 10-Band editor and resumes at the function's epilogue (0x4a0070). Not reachable at boot (a list click).
+EQ_ROW = 0x4a0210
+EQ_ROW_RESUME = 0x4a0070
+EQ_PINS = (   # (address, stock word, what it proves)
+    (0x49fff4, 0x27bdff90, 'on_playsetback_onclick: addiu sp, sp, -0x70'), (0x4a0080, 0x8fbf006c, 'its epilogue reloads ra'), (0x4a0070, 0x8fb00060, 'its epilogue: lw s0, 0x60(sp)'), (0x4a0088, 0x27bd0070, 'its epilogue frees the frame'),
+    (EQ_ROW, 0x8f84a708, 'Play Settings Equalizer row: lw a0, GOT 0x740000'), (EQ_ROW + 4, 0x1000ff93, 'its `b 0x4a0064` (the shared navigator_to call)'), (EQ_ROW + 8, 0x248474d4, 'its delay slot: a0 = "playset/equalizer_page"'),
+)
 CLEAR_SITE = 0x5089e4   # dmr_serverstart: `jalr deque_clear` of the playing queue (delay slot lw a0, ($v0)); jal sh_clear_queue takes the payload lock around it
 MODE_SITES = (   # (the jalr mclGetPlayMode, the lw t9 that loads it)
     (0x47a3fc, 0x47a3f8), (0x47a530, 0x47a51c), (0x49fb90, 0x49fb68), (0x49fd04, 0x49fcf8), (0x49fd58, 0x49fd4c), (0x49fdac, 0x49fda0), (0x49fe04, 0x49fdf4), (0x49fe7c, 0x49fe78),
@@ -863,6 +875,7 @@ DATA = {
     # Internet Radio (patch/radio.c, RADIO_PINS): the output selector stock's start_player passes to set_outputchannel (0, 1 the jacks, 2 Bluetooth, 3 USB), the idle counter of the DAC's power-off
     # (on_wm_idle_status: counting 1..30 while nothing plays, then mclSetDacPwr(0) and -1; a playing track zeroes it) and the volume the volume dialog and set_hs_po_output set
     'G_HEADSET_OUTPUT':   (0xa05a10, None),
+    'LINEOUT_FLAG':       (0xa05aa7, None),   # the byte Settings > Line Out sets (LINEOUT_PINS: show_sysbar_face tests it); patch/peqout.c reads it for the per-output EQ
     'DACOFF_TIME':        (0x97cae0, 'dacoff_time'),
     'G_VOLUME':           (0x97cb10, 'volume'),
 }
@@ -922,6 +935,9 @@ LIBC = {
     'taglib_album_picture': ('int', 'const char *, char *, int, int'),
     # Track durations (patch/durations.c dur_probe): libtag_c's taglib_file_new(path, readAudioProperties) / taglib_file_audioproperties / taglib_file_free, as toolsGetMusicInfo (0x5ec6a8) calls them (demo imports all three)
     'taglib_file_new': ('void *', 'const char *, int'), 'taglib_file_audioproperties': ('void *', 'void *'), 'taglib_file_free': ('void', 'void *'),
+    # the Equalizer page's preset parser (patch/peq.c, after q2-pod's: it reads numbers with sscanf, the APO shelves need pow and sqrt)
+    '__isoc99_sscanf': ('int', 'const char *, const char *, ...'), 'ferror': ('int', 'void *'),
+    'pow': ('double', 'double, double'), 'sqrt': ('double', 'double'), 'cos': ('double', 'double'), 'sin': ('double', 'double'),
 }
 
 
@@ -1293,6 +1309,12 @@ def gen_stock_h(out, demo_path):
     h.append('#define POD_EXTRAS_GROUP {' + ', '.join(str(g) for g in pod_pages.EXTRAS_GROUP_OF) + '}')   # ... the group of each item id ...
     h.append(f'#define POD_EXTRAS_HDR_H {pod_pages.HDR_H}')   # ... and a header's height
     h.append(f'#define POD_ROW_H {pod_ui.ROW_H}')
+    import pod_settings as PST   # the Equalizer page's column (patch/peq_ui.c): its height with n presets (POD_PEQ_BASE + n rows) and with none (the hint under Graphic EQ)
+    h.append(f'#define POD_PEQ_BASE {PST.layout(pod_pages.peq_items(1))[1] - PST.ROW_H}')
+    h.append(f'#define POD_PEQ_NONE {PST.layout(pod_pages.peq_items(0))[1]}')
+    h.append(f'#define POD_LIB_BASE {PST.layout([pod_pages.PEQLIB_DOWNLOAD])[1]}')   # the Presets page's column with no file: the top and end spacers and the download row (patch/peqlib.c)
+    h.append(f'#define POD_LIB_HDR {PST.HDR_H}')
+    h.append(f'#define POD_LIB_ROW {PST.LIB_ROW_H}')
     # the Songs rail's alignment, from the tree's own font (tools/pod_ui.py rail_metrics): twice the cap ink's centre within an item, and each letter's rect shift
     font_path = os.path.join(os.path.dirname(os.path.dirname(demo_path)), 'assets/default/raw/fonts/default.ttf')
     ink2, dx = pod_ui.rail_metrics(font_path)
@@ -1339,6 +1361,13 @@ def gen_stock_h(out, demo_path):
     h.append(f'#define POD_CACHE_PAGE {pod_pages.CACHE_PAGE_INDEX}')
     h.append(f'#define POD_FILES_PAGE {pod_pages.FILES_PAGE_INDEX}')
     h.append(f'#define POD_PULLDOWN_PAGE {pod_pages.PULLDOWN_PAGE_INDEX}')
+    h.append(f'#define POD_PEQ_PAGE {pod_pages.PEQ_PAGE_INDEX}')
+    h.append(f'#define POD_PEQP_PAGE {pod_pages.PEQP_PAGE_INDEX}')
+    h.append(f'#define POD_PEQLIB_PAGE {pod_pages.PEQLIB_PAGE_INDEX}')
+    h.append(f'#define POD_TENBAND_PAGE {pod_pages.TENBAND_PAGE_INDEX}')
+    h.append(f'#define POD_TENCURVE_PAGE {pod_pages.TENCURVE_PAGE_INDEX}')
+    h.append(f'#define POD_TENPREAMP_PAGE {pod_pages.TENPREAMP_PAGE_INDEX}')
+    h.append(f'#define POD_PEQBAND_PAGE {pod_pages.PEQBAND_PAGE_INDEX}')
     (out / 'pages.h').write_text('\n'.join(h) + '\n')
     return slots
 
@@ -1381,10 +1410,14 @@ def gen_asm(out, slots):
     # and for select_timezone (patch/timezones.c)
     asm += ['.globl stock_timezone_trampoline', 'stock_timezone_trampoline:',
             f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{timezones.SELECT + 12:x}', 'nop']
+    # the Play Settings Equalizer row (patch/tenband.c): open the editor, then the stock function's epilogue (its frame is untouched: the C call uses the stack below it, $gp is set again)
+    asm += ['.globl pod_eq_site', 'pod_eq_site:', 'jal tenband_open', 'nop', f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{EQ_ROW_RESUME:x}', 'nop']
     # libc GOT-slot stubs (load the resolved pointer from demo's own GOT, tail-call it).
     for name, addr in slots.items():
         asm += [f'.section .text.pod_lib_{name},"ax",@progbits', f'.globl pod_lib_{name}', f'pod_lib_{name}:',
                 f'lui $t8, {addr >> 16}', f'ori $t8, $t8, {addr & 0xffff}', 'lw $t9, 0($t8)', 'jr $t9', 'nop']
+    asm += ['.globl memcpy', '.set memcpy, pod_lib_memcpy', '.globl memset', '.set memset, pod_lib_memset',   # the compiler's own struct copies (patch/peq.c)
+            '.globl sqrt', '.set sqrt, pod_lib_sqrt']   # __builtin_sqrt's call for a negative argument (errno), patch/peq.c
     (out / 'pod_asm.S').write_text('\n'.join(asm) + '\n')
 
 
@@ -1425,7 +1458,7 @@ def compile_payload(out, demo_path, tag=TAG):
             '--undefined=stock_playing_init_trampoline', '--undefined=m1plus_scroll_event',
             '--undefined=m1plus_playmore_init', '--undefined=stock_playmore_init_trampoline', '--undefined=m1plus_pulldown_init', '--undefined=stock_pulldown_init_trampoline', '--undefined=rd_start_player', '--undefined=rd_step', '--undefined=stock_start_player_trampoline', '--undefined=rd_save_stop', '--undefined=rd_save_start', '--undefined=stock_save_stop_trampoline', '--undefined=stock_save_start_trampoline', '--undefined=rn_backtoplayer', '--undefined=stock_backtoplayer_trampoline', '--undefined=pc_id3_path', '--undefined=pc_library_query', '--undefined=pc_sorted_query', '--undefined=stock_dbquery_trampoline', '--undefined=stock_sorted_query_trampoline',
             '--undefined=m1plus_style_color', '--undefined=m1plus_style_gradient', '--undefined=m1plus_image_add', '--undefined=stock_style_color_trampoline', '--undefined=stock_image_add_trampoline', '--undefined=pal_map', '--undefined=pal_active', '--undefined=pal_background', '--undefined=pal_accent', '--undefined=pal_accent_saved', '--undefined=pal_accent_set', '--undefined=pal_accent_color', '--undefined=pal_fill',
-            '--undefined=pod_scan_dir', '--undefined=sh_set_mode', '--undefined=sh_load_playlist', '--undefined=sh_display_mode', '--undefined=sh_clear_queue', '--undefined=stock_setmode_trampoline', '--undefined=stock_loadplaylist_trampoline', '--undefined=ft_created', '--undefined=stock_file_created_trampoline', '--undefined=tz_select', '--undefined=tz_row', '--undefined=tz_label', '--undefined=stock_timezone_trampoline', '--undefined=bp_capacity', '--undefined=lo_set_text', '--undefined=wifi_hub_open', '--undefined=pf_items', '--undefined=pf_seen']   # (the last two: accessors of the parser the tests read; nothing in the payload calls them)
+            '--undefined=pod_scan_dir', '--undefined=sh_set_mode', '--undefined=sh_load_playlist', '--undefined=sh_display_mode', '--undefined=sh_clear_queue', '--undefined=stock_setmode_trampoline', '--undefined=stock_loadplaylist_trampoline', '--undefined=ft_created', '--undefined=stock_file_created_trampoline', '--undefined=tz_select', '--undefined=tz_row', '--undefined=tz_label', '--undefined=stock_timezone_trampoline', '--undefined=bp_capacity', '--undefined=lo_set_text', '--undefined=wifi_hub_open', '--undefined=pod_eq_site', '--undefined=pf_items', '--undefined=pf_seen']   # (the last two: accessors of the parser the tests read; nothing in the payload calls them)
     run(LD, '-m', 'elf32ltsmip', '--gc-sections', '-T', os.path.join(PATCH, 'link.ld'),
         '-e', 'm1plus_home_click', '--undefined=m1plus_home_click', '--undefined=stock_home_click_trampoline',
         *keep, *objs, out / 'pod_asm.o', '-o', out / 'patch.elf')
@@ -1580,7 +1613,7 @@ def patch_demo(raw, payload, ps, demo_path):
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     patch_radio(patched, ps, len(payload))
-    for a, old, what in PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + TEXTGAMMA_PINS + BATTERY_PINS + LINEOUT_PINS + SHUFFLE_PINS + FILETIME_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS:   # stock code the Playlists and Songs pages call: checked, not written
+    for a, old, what in PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + TEXTGAMMA_PINS + BATTERY_PINS + LINEOUT_PINS + SHUFFLE_PINS + FILETIME_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS + EQ_PINS:   # stock code the Playlists and Songs pages call: checked, not written
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     for at, text in ((0x74bad8, ALBUM_SQL.replace('songtable', '%s')), (0x74ba4c, 'songtable')):   # the strings getAllAlbum fills: the payload's STOCK_ALBUM_SQL is their sprintf
@@ -1608,6 +1641,8 @@ def patch_demo(raw, payload, ps, demo_path):
     check(BASE <= ps['sh_display_mode'] < BASE + len(payload), 'sh_display_mode outside payload')
     check(BASE <= ps['sh_clear_queue'] < BASE + len(payload), 'sh_clear_queue outside payload')
     struct.pack_into('<I', patched, fileoff(patched, CLEAR_SITE), jal(ps['sh_clear_queue'], CLEAR_SITE))   # the delay slot (a0 = *queue) stays stock's
+    check(BASE <= ps['pod_eq_site'] < BASE + len(payload), 'pod_eq_site outside payload')
+    struct.pack_into('<II', patched, fileoff(patched, EQ_ROW), j(ps['pod_eq_site']), 0)   # (the pins above checked the row's three words and the epilogue it resumes at)
     for a, _ in MODE_SITES:   # the pins above checked each site's jalr and the lw t9 of mclGetPlayMode before it
         struct.pack_into('<I', patched, fileoff(patched, a), jal(ps['sh_display_mode'], a))
     struct.pack_into('<I', patched, fileoff(patched, UPDATE_SITE), UPDATE_NEW)   # (the pins above checked the site's word and its neighbours)
@@ -1627,7 +1662,7 @@ def patch_demo(raw, payload, ps, demo_path):
     check(dynsym(demo_path).get('playsong_id3info') == 0xa0d88c, 'playsong_id3info moved')
     edits = patch_rows(patched, ps)
     # no row edit may touch a PIC prologue (the hooks are the only ones) or a hook site
-    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, PLAYING_INIT, PLAYMORE_INIT, PULLDOWN_INIT, START_PLAYER, SAVE_STOP, SAVE_START, BACKTOPLAYER, QUERY_DB, QUERY_SORT, STYLE_COLOR, IMAGE_ADD, SETMODE, LOADPL, FILETIME, timezones.SELECT)) and not STYLE_GRADIENT <= int(a, 16) < STYLE_GRADIENT + 8 and not any(int(a, 16) == s for s, _ in MODE_SITES) and int(a, 16) != CLEAR_SITE and not ID3_SITE <= int(a, 16) < ID3_SITE + 4 and not SCAN_SITE <= int(a, 16) < SCAN_SITE + 4 and not BATTERY_SITE <= int(a, 16) < BATTERY_SITE + 4 and not any(int(a, 16) == s for s, _ in LINEOUT_SITES) and int(a, 16) != WIFIHUB_SITE
+    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, PLAYING_INIT, PLAYMORE_INIT, PULLDOWN_INIT, START_PLAYER, SAVE_STOP, SAVE_START, BACKTOPLAYER, QUERY_DB, QUERY_SORT, STYLE_COLOR, IMAGE_ADD, SETMODE, LOADPL, FILETIME, timezones.SELECT)) and not STYLE_GRADIENT <= int(a, 16) < STYLE_GRADIENT + 8 and not any(int(a, 16) == s for s, _ in MODE_SITES) and int(a, 16) != CLEAR_SITE and not ID3_SITE <= int(a, 16) < ID3_SITE + 4 and not SCAN_SITE <= int(a, 16) < SCAN_SITE + 4 and not BATTERY_SITE <= int(a, 16) < BATTERY_SITE + 4 and not any(int(a, 16) == s for s, _ in LINEOUT_SITES) and int(a, 16) != WIFIHUB_SITE and not EQ_ROW <= int(a, 16) < EQ_ROW + 8
               for a, *_ in edits), 'row edit on a hook')
     check(all(not (SCROLL_SLOT <= int(a, 16) < SCROLL_SLOT + 4 or a in {hex(p[0]) for p in SCROLL_PINS}) for a, *_ in edits),
           'row edit on a list gesture word')
@@ -1676,7 +1711,7 @@ def main():
         'hook_style_color': {'addr': STYLE_COLOR, 'target': ps['m1plus_style_color']}, 'hook_style_gradient': {'addr': STYLE_GRADIENT, 'target': ps['m1plus_style_gradient']},
         'hook_image_add': {'addr': IMAGE_ADD, 'target': ps['m1plus_image_add']},
         'hook_setmode': {'addr': SETMODE, 'target': ps['sh_set_mode']}, 'hook_loadplaylist': {'addr': LOADPL, 'target': ps['sh_load_playlist']}, 'hook_file_created': {'addr': FILETIME, 'target': ps['ft_created']},
-        'hook_clear_queue': {'addr': CLEAR_SITE, 'target': ps['sh_clear_queue']},
+        'hook_clear_queue': {'addr': CLEAR_SITE, 'target': ps['sh_clear_queue']}, 'hook_eq_row': {'addr': EQ_ROW, 'target': ps['pod_eq_site']},
         'hook_display_mode': {'sites': [hex(a) for a, _ in MODE_SITES], 'target': ps['sh_display_mode']},
         'scroll_slot': {'addr': SCROLL_SLOT, 'target': ps['m1plus_scroll_event']}, 'scroll_edit': scroll,
         'zeroed_demo_sha256': ZEROED_DEMO_SHA, 'patched_demo_sha256': sha(patched),

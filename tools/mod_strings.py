@@ -57,7 +57,7 @@ def apply(work):
     tables = {loc: awtk_strings.load(p) for loc, p in table_paths(work).items()}
     for loc in pod_i18n.LOCALES:
         have = dict(tables[loc])
-        for k, en in pod_i18n.STOCK.items():
+        for k in pod_i18n.STOCK:
             check(have.get(k), f'{loc}: stock key {k!r} missing or empty')
         check(all(dict(tables['en_US']).get(k) == en for k, en in pod_i18n.STOCK.items()), 'a stock key no longer reads as the English in pod_i18n.STOCK')
     check_texts(Ttf(os.path.join(work, FONT)))

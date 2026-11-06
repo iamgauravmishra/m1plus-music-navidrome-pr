@@ -17,7 +17,7 @@ db7bdbc42ffe6d5c1e3fdca9363edb78a01898b9a725c34793394cf6abfa33c0  M1 Plus Firmwa
 | Kernel | Linux 5.10.21+ uImage (xImage), 5,410,880 bytes | same version, same size |
 | Userland | Buildroot 2020.02.1, glibc, BusyBox, AWTK UI | same |
 | Main app | `/release/bin/demo` (AWTK, dynamic symbols kept, spare PT_NULL phdr) | same layout, different build |
-| Audio daemon | `/usr/bin/hciplayer` | same |
+| Audio daemon | `/usr/bin/hciplayer` (MPlayer 1.3.0 modified, spare PT_NULL phdr; patched only by the [parametric EQ](modules/peq.md)) | same source, different build |
 | Package | `update.bin` = plain GNU tar: `firmware_v20.info`, `recovery-update/xImage`, `recovery-update/rootfs.squashfs` | identical (named update.tar) |
 | rootfs | squashfs 4.0, LZO, 128 KiB blocks, 55,738,368 bytes | same format |
 | Signing | none, MD5 only | none |
