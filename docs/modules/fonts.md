@@ -102,8 +102,10 @@ sized from them still adds up. The step runs first so every later step measures 
   (`glyph_t` `w` @+4, `h` @+6, `format` 0 = alpha, bitmap pointer @+0xc, w * h bytes, stride w); the cache entry shares
   that bitmap, so no glyph is mapped twice. Installing empties the glyph cache (keep 0) and repaints. Mono fonts (+0xd0),
   fonts that are not stb fonts, a foreign get_glyph slot and the kill switch (read at each apply, so a file made
-  during a session applies at the next apply) leave stock. No hook and no per-paint work. Not covered: `lyrics.ttf`,
-  which is loaded lazily on the lyrics page (`font_manager_get_font`) and never gets the slot.
+  during a session applies at the next apply) leave stock. No hook and no per-paint work. `lyrics.ttf` is covered too:
+  `ly_start` (patch/lyrics.c) calls `tg_apply` on the `lyrics` font on each Now Playing open. The first open loads
+  `lyrics.ttf` earlier than stock would (stock loads it only when a lyric line is drawn) and repaints once; a later open is
+  a no-op, and a language or theme change recreates the font with the stock slot until the next open reinstalls it.
 - **Pull-down volume.** The pull-down's status bar is laid out like the real one (`tools/statusbar.py`, section 4), where
   `100` at 16 px fits the stock 30 px label; the font step does nothing for it.
 - Not fixed on purpose: Latin UIs draw CJK ellipsis/dashes with Inter's, the colon is not raised between digits

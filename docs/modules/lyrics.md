@@ -22,7 +22,7 @@ It does not read the lyric deque, take its mutex or change the stock loaders and
 `np_lyrics` is a sensitive, non-slidable `scroll_view` at (28, 44, 264, 244) in
 `view_lyrics`. It clips its children. `ly_start` creates 20 reusable labels and a
 measurement label, then hides `view_lrc` with both `visible=false` and
-`sensitive=false`. Stock's no-lyrics message stays stock's. Missing widgets or failed
+`sensitive=false`, and installs the coverage gamma on the `lyrics` font (`tg_apply`, fonts.md "Coverage gamma"). Stock's no-lyrics message stays stock's. Missing widgets or failed
 label creation leave the stock list available.
 
 There is no additional hook: `np_start` calls `ly_start`, the 500 ms `np_work`

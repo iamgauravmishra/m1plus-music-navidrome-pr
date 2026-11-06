@@ -40,6 +40,7 @@
 #include "stock.h"
 #include "home.h"
 #include "lyrics.h"
+#include "textgamma.h"
 
 static struct {
     void *win, *src, *view, *box,
@@ -668,12 +669,15 @@ void ly_stop(void) {
 
 void ly_start(void *win) {
     int i;
+    void *fm;
     if (ly.win) ly_stop();
     memset(&ly, 0, sizeof ly);
     ly.src = widget_lookup(win, "scroll_lrc", 1);
     ly.view = widget_lookup(win, "view_lrc", 1);
     ly.box = widget_lookup(win, "np_lyrics", 1);
     if (!ly.src || !ly.view || !ly.box) goto fail;
+    fm = font_manager(); /* the coverage gamma on the lyrics face (patch/textgamma.c; a no-op once installed) */
+    if (fm) tg_apply(fm, font_manager_get_font(fm, "lyrics", 0));
     for (i = 0; i < LY_POOL; ++i) {
         ly.lab[i] = label_create(ly.box, 0, 0, LY_W, LY_LINE_H);
         if (!ly.lab[i]) goto fail;

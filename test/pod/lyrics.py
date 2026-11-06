@@ -1000,7 +1000,38 @@ def dots_tests(ctx):
     expect(sum(c[0] in ('widget_move', 'widget_resize', 'widget_set_text_utf8', 'widget_use_style') for c in m.calls) == 0 and sum(c[0] == 'widget_set_opacity' for c in m.calls) <= 4, 'it only changes the three dots\' opacity (and a line\'s when it fades)')
 
 
-SECTIONS = [asset_tests, start_tests, follow_tests, dots_tests, face_tests, touch_tests, wrap_tests, cost_tests]
+def font_tests(ctx):
+    """ly_start installs the coverage gamma (patch/textgamma.c) on the lyrics face: the first open maps it, a later open is a no-op,
+    the kill switch leaves the stock slot, and no font manager means no font is asked for (test/pod/textgamma.py covers the wrapper)."""
+    expect = ctx.expect
+    FM, KILL, STB, TG = 0x24000000, '/mnt/mmc/m1plus-off', O['STB_GET_GLYPH'], PSYMS['tg_get_glyph']
+
+    def lyrics_face(m):
+        """The lyrics font object as font_stb_create leaves it (match, get_glyph, mono flag)."""
+        f = m.malloc(0xd4); m.u.mem_write(f, bytes(0xd4))
+        m.setword(f + O['FONT_MATCH'], O['STB_MATCH']); m.setword(f + O['FONT_GET_GLYPH'], STB)
+        m.u.mem_write(f + O['FONT_MONO'], bytes([0]))
+        m.fm, m.font = FM, f
+        return f
+
+    m = LyMachine(SONG); lyrics_face(m); m.init()
+    expect(('font_manager_get_font', FM, 'lyrics', 0) in m.calls and m.word(m.font + O['FONT_GET_GLYPH']) == TG,
+           'opening the lyrics page asks for the lyrics font and installs tg_get_glyph in its get_glyph slot')
+    expect(('font_manager_shrink_cache', FM, 0) in m.calls, 'the install empties the glyph cache (keep 0)')
+    expect(m.shown() == expect_layout(SONG, 0, 0, m.measure_fn), 'and the page lays out its lines as before')
+    m.init()
+    expect(m.word(m.font + O['FONT_GET_GLYPH']) == TG and not any(c[0] == 'font_manager_shrink_cache' for c in m.calls),
+           'a second open is a no-op: the wrapper stays, the cache is not emptied again')
+
+    m = LyMachine(SONG); lyrics_face(m); m.present.add(KILL); m.init()
+    expect(m.word(m.font + O['FONT_GET_GLYPH']) == STB and not any(c[0] == 'font_manager_shrink_cache' for c in m.calls) and m.shown(),
+           'the kill switch: the stock slot stays, and the page still shows its lines')
+
+    m = LyMachine(SONG); m.init()
+    expect(not any(c[0] == 'font_manager_get_font' for c in m.calls) and m.shown(), 'no font manager: no font is asked for, the page still works')
+
+
+SECTIONS = [asset_tests, start_tests, follow_tests, dots_tests, face_tests, touch_tests, wrap_tests, cost_tests, font_tests]
 
 
 def run(ctx):

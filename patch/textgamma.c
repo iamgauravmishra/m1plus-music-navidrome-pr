@@ -6,7 +6,8 @@
  * (the cache entry shares it) is mapped in place, once. Mono fonts are not wrapped.
  *
  * No hook: patch/fontregion.c calls tg_apply from its apply (fr_boot in the boot guard's ready path, and the one-shot
- * timer after a language or theme change, which recreates the font object with the stock slot). A mismatch (the slot is
+ * timer after a language or theme change, which recreates the font object with the stock slot), and patch/lyrics.c's
+ * ly_start calls it on the lyrics font at each Now Playing open. A mismatch (the slot is
  * neither stock's nor ours, the font is mono, not an stb font, no font manager) or the kill switch leaves the stock slot.
  * The kill switch is read at each apply, so a file made during a session takes effect at the next apply. */
 #include "offsets.inc"
