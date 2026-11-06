@@ -2,7 +2,7 @@
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
- * One page, ui/m1plus_playlists.bin: the navbar (Back, "Playlists", "..." | Now Playing) over a stock list, list_view > scroll_view
+ * One page, ui/m1plus_playlists.bin: the navbar (Back, the small title, "..." | Now Playing) over a stock list, list_view > scroll_view
  * (playlists_scrollview), the structure of the Albums page (patch/albums.c, docs/modules/albums.md), whose ONE child is a custom view, view_grid,
  * that paints the cells itself in its own EVT_AFTER_PAINT through the shared grid (patch/grid.c). The stock scroll_view does the scrolling.
  * A cell is a GRID_COVER px tile, the playlist's name under it and "N tracks" under that. docs/modules/playlists.md has the whole design.
@@ -33,6 +33,7 @@
 #include "covercache.h"
 #include "common.h"
 #include "grid.h"
+#include "azlist.h"
 #include "i18n.h"
 #include "keyboard.h"
 #include "picker.h"
@@ -50,6 +51,8 @@ songs_open_playlist(int id,
 #define PL_AHEAD (pl.list ? 2 : 1)
 #define HOME_PLAYLIST 14
 #define PL_PICK_MS 400 /* the picker's add after a New playlist: the keyboard page's close is over */
+#define PL_TOP \
+    SG_TITLE_H /* the content starts with the large title (as Albums' al_top without pills): the rows or the grid's first gap follow it */
 #if GRID_TILES < GRID_COLS * ((GRID_VIEW_H + CELL_H) / PITCH + 2 + 1) + 2
 #error GRID_TILES cannot hold the visible cells, the next row and the history
 #endif
@@ -98,6 +101,8 @@ static struct {
     unsigned *ord; /* the stock playlist at each display position (after the picker's rows), NULL = the stock order */
     int rev; /* the name order is Z-A */
     void *fade; /* the navbar's fade (img_nb_fade, optional): shown only while the list is scrolled */
+    void *big; /* pl_title, the large title: the first thing in the content (optional) */
+    int title_on; /* the navbar's small title (pl.title) is shown: the large one has scrolled away, or select mode, or the scroll events are missing */
     unsigned sig[PL_SIG]; /* the database's state (pl_dbsig) when the playlists were last read */
     int have_sig;
     int bg; /* another window is in front: the loader does not run (pl_on_bg) */
@@ -118,16 +123,20 @@ static int pl_rows_h(void) {
 static int pl_pad(void) {
     return pl.select ? SG_BAR_H : 0;
 } /* the select bar covers the window's last SG_BAR_H rows: the list scrolls clear of it */
-static int pl_content(void) { return pl_rows_h() ? pl_rows_h() + pl_pad() : 0; }
+static int pl_content(void) { return pl_rows_h() ? PL_TOP + pl_rows_h() + pl_pad() : 0; }
 static int pl_max_scroll(void) {
     int m = pl_content() - GRID_VIEW_H;
     return m > 0 ? m : 0;
 }
 static int pl_off(void) { return pl.sv ? I(pl.sv, SC_YOFF) : 0; }
+/* The same offset measured from the top of the rows (negative while the title block is in view). */
+static int pl_coff(void) { return pl_off() - PL_TOP; }
 
 /* The navbar's fade (an insensitive image, built hidden) is for rows passing under the bar: shown while the list is scrolled, hidden at rest, where the
- * first row would be darkened by it. It is never a touch target. No fade widget = nothing happens. */
+ * first row would be darkened by it. It is never a touch target. No fade widget = nothing happens. The small title is the navbar's once the large one
+ * has scrolled away (pod_title_gone, the rule every large-title page shares), and in select mode ("N Selected"); without the scroll events it stays. */
 static void pl_fade(void) {
+    pod_title_set(pl.title, &pl.title_on, pl.noscroll || pl.select || pod_title_gone(pl_off(), 0));
     if (!pl.fade) return;
     widget_set_visible(pl.fade, pl_off() > 0, 0);
     widget_set_sensitive(pl.fade, 0);
@@ -173,7 +182,7 @@ static int pl_row_of(int s) { return s > GRID_ROW_GAP + CELL_H ? (s - GRID_ROW_G
 
 /* The rows (grid rows, or list rows = playlists) that touch the view: [*r0, *r1], inside [0, n - 1] also while a drag pulls the list past an end (overscroll). */
 static void pl_span(int *r0, int *r1) {
-    int n = pl.list ? (int)pl.count : pl_rows(), s = pl_off();
+    int n = pl.list ? (int)pl.count : pl_rows(), s = pl_coff();
     if (pl.list)
         *r0 = s / LIST_ROW_H, *r1 = (s + GRID_VIEW_H - 1) / LIST_ROW_H;
     else
@@ -196,8 +205,8 @@ static void pl_window(int *lo, int *hi) {
     if (*hi > (int)pl.count - 1) *hi = (int)pl.count - 1;
 }
 
-/* The top of playlist a's cell or row in the window, and its height. */
-static int pl_top(int a) { return (pl.list ? a * LIST_ROW_H : GRID_ROW_GAP + a / GRID_COLS * PITCH) - pl_off(); }
+/* The top of playlist a's cell or row in the window, and its height (the rows start PL_TOP down the content: pl_coff is measured from there). */
+static int pl_top(int a) { return (pl.list ? a * LIST_ROW_H : GRID_ROW_GAP + a / GRID_COLS * PITCH) - pl_coff(); }
 static int pl_height(void) { return pl.list ? LIST_ROW_H : CELL_H; }
 
 static tile_t *pl_find(int a) { return grid_find(&pl.g, a); }
@@ -338,26 +347,27 @@ static void pl_star(void *canvas, int y) {
 
 static int pl_on_paint(void *ctx, void *e) {
     void *canvas = e ? *(void **)((char *)e + EVENT_PAINT_CANVAS) : (void *)0;
-    int off = pl_off(), r0, r1, last, a;
+    int off = pl_off(), co = pl_coff(), r0, r1, last, a;
     (void)ctx;
     if (!canvas || !pl.view || !pl.g.tiles || !pl.count) return RET_OK;
-    I(canvas, CANVAS_OY) += off;
+    I(canvas, CANVAS_OY) +=
+        off; /* the window's top is 0: the rows are placed by co (their offset from the first row) */
     pl_span(&r0, &r1);
     if (r1 >= r0 && pl.list) {
-        grid_list_paint(canvas, &pl.g, pl.st_ltitle, pl.st_lsub, r0, r1, off, GRID_VIEW_H, pl.select ? 0 : pl.press,
+        grid_list_paint(canvas, &pl.g, pl.st_ltitle, pl.st_lsub, r0, r1, co, GRID_VIEW_H, pl.select ? 0 : pl.press,
                         pl.select ? SG_SEL_COL : 0, !pl.select && !pl_v(), pl_tile_of, (void *)0);
-        if (pl_v() && r0 == 0) pl_plus(canvas, LIST_ART_Y - off);
-        if (pl_v() && r0 <= 1 && r1 >= 1) pl_star(canvas, LIST_ROW_H + LIST_ART_Y - off);
+        if (pl_v() && r0 == 0) pl_plus(canvas, LIST_ART_Y - co);
+        if (pl_v() && r0 <= 1 && r1 >= 1) pl_star(canvas, LIST_ROW_H + LIST_ART_Y - co);
         for (a = r0; pl.select && pl.mark[0] && a <= r1; ++a)
             pl_mark(canvas, a, LIST_ART_X + (SG_SEL_COL - 6 - SG_MARK) / 2,
-                    a * LIST_ROW_H - off + (LIST_ROW_H - SG_MARK) / 2);
+                    a * LIST_ROW_H - co + (LIST_ROW_H - SG_MARK) / 2);
     } else if (r1 >= r0) {
         last = (r1 + 1) * GRID_COLS;
         if (last > (int)pl.count) last = (int)pl.count;
-        grid_paint(canvas, &pl.g, r0 * GRID_COLS, last, GRID_ROW_GAP - off, GRID_VIEW_H, pl_tile_of, (void *)0);
+        grid_paint(canvas, &pl.g, r0 * GRID_COLS, last, GRID_ROW_GAP - co, GRID_VIEW_H, pl_tile_of, (void *)0);
         for (a = r0 * GRID_COLS; pl.select && pl.mark[0] && a < last; ++a)
             pl_mark(canvas, a, grid_cell_x(a) + GRID_COVER - SG_MARK - 6,
-                    grid_cell_y(a, GRID_ROW_GAP - off) + GRID_COVER - SG_MARK - 6);
+                    grid_cell_y(a, GRID_ROW_GAP - co) + GRID_COVER - SG_MARK - 6);
     }
     I(canvas, CANVAS_OY) -= off;
     return RET_OK;
@@ -662,6 +672,7 @@ static void pl_reorder(void) {
  */
 static int pl_cell_at(int x, int y) {
     int a;
+    y -= PL_TOP; /* (the title block above the rows is no cell) */
     if (y < 0 || y >= pl_rows_h()) return -1;
     if (!pl.list) return grid_cell_at(x, y, GRID_ROW_GAP, (int)pl.count);
     a = y / LIST_ROW_H; /* a list row: any x */
@@ -1056,7 +1067,7 @@ static int pl_use_grid(void) { return set_read(PLAYLISTS_FILE, '1') != '0'; }
 static void pl_shape(int list) { grid_shape(&pl.g, list ? LIST_ART : GRID_COVER, list ? LIST_R : GRID_R, list); }
 
 static int pl_first(void) {
-    int a = pl.list ? pl_off() / LIST_ROW_H : pl_row_of(pl_off()) * GRID_COLS;
+    int a = pl.list ? pl_coff() / LIST_ROW_H : pl_row_of(pl_coff()) * GRID_COLS;
     if (a > (int)pl.count - 1) a = (int)pl.count - 1;
     return a < 0 ? 0 : a;
 }
@@ -1078,7 +1089,8 @@ static void pl_set_mode(int list) {
     if (pl.g.tiles) grid_placeholder(&pl.g);
     pl_size();
     max = pl_max_scroll();
-    first = list ? first * LIST_ROW_H : first / GRID_COLS * PITCH;
+    /* the first playlist in view stays at the top, the title block above it; the first playlist itself = the top, with the title */
+    first = !first ? 0 : PL_TOP + (list ? first * LIST_ROW_H : first / GRID_COLS * PITCH);
     widget_set_prop_int(pl.sv, "yoffset", first > max ? max : first);
     pl.seen = pl_off();
     pl_fade();
@@ -1135,6 +1147,7 @@ static int pl_open_page(void) {
     pl.sv = widget_lookup(pl.win, "playlists_scrollview", 1);
     pl.status = widget_lookup(pl.win, "label_status", 1);
     pl.fade = widget_lookup(pl.win, "img_nb_fade", 1); /* optional */
+    pl.big = widget_lookup(pl.win, "pl_title", 1);
     pl.g.st_title = widget_lookup(pl.win, "label_grid_title", 1);
     pl.g.st_sub = widget_lookup(pl.win, "label_grid_sub", 1);
     pl.st_ltitle = widget_lookup(pl.win, "label_row_title", 1);
@@ -1181,8 +1194,13 @@ static int pl_open_page(void) {
         if (pl.title) widget_resize(pl.title, SG_SELALL_X - NAV_TITLE_X, 22);
         pl_head();
     }
+    if (pl.big) az_fit(pl.big, pl_v() ? TR("Add to Playlist") : TR("Playlists")); /* (296 px, an ellipsis when wider) */
     pl.noscroll = !widget_on(pl.sv, EVT_SCROLL, pl_on_scroll, (void *)0) ||
                   !widget_on(pl.sv, EVT_SCROLL_END, pl_on_scroll, (void *)0);
+    if (pl.noscroll &&
+        pl.title) /* the large title's collapse needs the scroll events: without them the navbar keeps its title */
+        widget_set_visible(pl.title, 1, 0);
+    pl.title_on = pl.noscroll;
     widget_on(pl.win, EVT_WINDOW_TO_FG, pl_on_fg, (void *)0);
     widget_on(pl.win, EVT_WINDOW_TO_BG, pl_on_bg, (void *)0);
     widget_on(pl.view, EVT_POINTER_DOWN, pl_on_down, (void *)0);

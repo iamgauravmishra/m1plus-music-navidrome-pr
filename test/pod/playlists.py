@@ -10,6 +10,8 @@ SCREEN_Y0 = 30 + 50
 COVER, GAP, MARGIN, COLS = O['GRID_COVER'], O['GRID_GAP'], O['GRID_MARGIN'], O['GRID_COLS']
 TGAP, THEIGHT, VIEW_H, TILES = O['GRID_TITLE_GAP'], O['GRID_TITLE_H'], O['GRID_VIEW_H'], O['GRID_TILES']
 RGAP, SUBH = O['GRID_ROW_GAP'], O['GRID_SUB_H']
+TOP = O['SG_TITLE_H']     # the large title block (pl_title) the content starts with; the rows and cells follow it
+R0 = TOP + RGAP           # the content y of the first grid row
 CELL = COVER + TGAP + THEIGHT + SUBH
 PITCH = CELL + RGAP
 CPITCH = COVER + GAP
@@ -88,7 +90,8 @@ class PM:
         m = LabelMachine()
         m.fs[SORT_FILE] = b'0\n'
         m.load_image = 0
-        for w in ('btn_return', 'btn_backtoplayer', 'label_row_title', 'label_row_sub', 'view_grid', 'label_status', 'label_grid_title', 'label_grid_sub', 'label_title', 'btn_selall', 'pl_bar', 'pl_del', 'btn_plactions') + CARD_WIDGETS: Machine.widget(m, w)
+        for w in ('btn_return', 'btn_backtoplayer', 'label_row_title', 'label_row_sub', 'view_grid', 'label_status', 'label_grid_title', 'label_grid_sub', 'label_title', 'pl_title', 'img_nb_fade', 'btn_selall', 'pl_bar', 'pl_del', 'btn_plactions') + CARD_WIDGETS: Machine.widget(m, w)
+        m.setword(m.widgets['label_title'] + 8, O['NAV_CF_X'] - O['NAV_TITLE_X']); m.setword(m.widgets['pl_title'] + 8, O['SG_TITLE_W'])   # the labels' widths (az_fit cuts to them)
         m.label_text[m.widgets['pl_del']] = 'Delete'   # the text the asset gives the pill
         for i, text in enumerate(CARD_TEXTS): m.label_text[m.widgets[f'vs_label{i}']] = text
         for i in range(4): m.label_text[m.widgets[f'vs_sub{i}']] = 'A–Z'
@@ -186,7 +189,7 @@ def scroll_to(m, v):
 
 
 def cell_blit(blits, i, off=0):
-    x, y = MARGIN + (i % COLS) * CPITCH, RGAP + (i // COLS) * PITCH - off
+    x, y = MARGIN + (i % COLS) * CPITCH, R0 + (i // COLS) * PITCH - off
     return next((b[0] for b in blits if b[2][0] == x and b[2][1] == y and b[2][2] == COVER), None)
 
 
@@ -270,13 +273,13 @@ def select_tests(expect, lists):
            'Back becomes the glass x')
     expect(('widget_set_text_utf8', t, '0 Selected') in calls and ('widget_resize', t, O['SG_SELALL_X'] - O['NAV_TITLE_X'], 22) in calls, 'the title reads 0 Selected and runs to Select All')
     expect('stock_resume' not in [c[0] for c in calls], 'the stock Playlists page is not opened')
-    expect(m.props.get((m.sv, 'virtual_h')) == RGAP + 3 * PITCH + O['SG_BAR_H'], 'the content is the bar\'s height longer, so the last row scrolls clear of it')
+    expect(m.props.get((m.sv, 'virtual_h')) == R0 + 3 * PITCH + O['SG_BAR_H'], 'the content is the bar\'s height longer, so the last row scrolls clear of it')
     blits, texts, styles = paint(m)
     mk = marks_of(blits)
-    want = [(MARGIN + (i % COLS) * CPITCH + COVER - MARK - 6, RGAP + (i // COLS) * PITCH + COVER - MARK - 6) for i in range(4)]
+    want = [(MARGIN + (i % COLS) * CPITCH + COVER - MARK - 6, R0 + (i // COLS) * PITCH + COVER - MARK - 6) for i in range(4)]
     expect([(x, y) for x, y, _ in mk] == sorted(want) and len({b for _, _, b in mk}) == 1, f'a mark at the bottom right of each cover in view, all the unselected image ({mk})')
     # a tap marks (and opens nothing); another unmarks; the count follows
-    centre = lambda i: (MARGIN + (i % COLS) * CPITCH + 10, RGAP + (i // COLS) * PITCH + 10)
+    centre = lambda i: (MARGIN + (i % COLS) * CPITCH + 10, R0 + (i // COLS) * PITCH + 10)
     calls = tap(m, *centre(1))
     expect(('widget_set_text_utf8', t, '1 Selected') in calls and not [c for c in calls if c[0] in ('window_open', 'navigator_to_with_context')], 'a tap on a cell marks it (the title reads 1 Selected) and opens no playlist')
     tap(m, *centre(3)); calls = tap(m, *centre(0)); calls = tap(m, *centre(0))
@@ -298,7 +301,7 @@ def select_tests(expect, lists):
     m.click('btn_return')
     expect('navigator_back' not in m.names() and vis(m, 'btn_selall') == (0, 0) and vis(m, 'pl_bar') == (0, 0) and all(vis(m, n) == (1, 1) for n in names)
            and ('widget_set_tr_text', t, 'Playlists') in m.calls and ('widget_resize', t, O['NAV_CF_X'] - O['NAV_TITLE_X'], 22) in m.calls
-           and m.props.get((back, 'style:normal:icon')) == 'ah_nav_back' and m.props.get((m.sv, 'virtual_h')) == RGAP + 3 * PITCH,
+           and m.props.get((back, 'style:normal:icon')) == 'ah_nav_back' and m.props.get((m.sv, 'virtual_h')) == R0 + 3 * PITCH,
            'Back leaves select mode (no navigation): the navbar, the title and the content are as before')
     expect(not marks_of(paint(m)[0]), 'no marks outside select mode')
     calls = tap(m, *centre(1))
@@ -349,18 +352,18 @@ def select_tests(expect, lists):
     m.click('btn_plactions'); m.click('vs_item9')
     blits, texts, styles = settle(m)
     mk = marks_of(blits)
-    expect([(x, y) for x, y, _ in mk] == [(O['LIST_ART_X'] + (SEL_COL - 6 - MARK) // 2, r * O['LIST_ROW_H'] + (O['LIST_ROW_H'] - MARK) // 2) for r in range(6)],
+    expect([(x, y) for x, y, _ in mk] == [(O['LIST_ART_X'] + (SEL_COL - 6 - MARK) // 2, TOP + r * O['LIST_ROW_H'] + (O['LIST_ROW_H'] - MARK) // 2) for r in range(5)],
            f'list mode: a mark in a column left of every row ({mk})')
     covers = sorted(b[2][:4] for b in blits if b[2][2] == O['LIST_ART'])
     expect(all(c[0] == O['LIST_ART_X'] + SEL_COL for c in covers) and len(covers) == 6, 'the covers move right by the mark column')
     rows = [(t, r) for (t, r), s in zip(texts, styles) if s == 'label_row_title']
     expect(rows and all(r[0] == O['LIST_TEXT_X'] + SEL_COL and r[2] == O['LIST_TEXT_W'] - SEL_COL for _, r in rows), f'the texts too, 30 px narrower ({rows[:1]})')
     expect(not chevs_of(m, blits), 'no chevron in select mode (a tap marks, it opens nothing)')
-    calls = tap(m, 150, 1 * O['LIST_ROW_H'] + 20)
+    calls = tap(m, 150, TOP + 1 * O['LIST_ROW_H'] + 20)
     expect(('widget_set_text_utf8', m.widgets['label_title'], '1 Selected') in calls and not [c for c in calls if c[0] == 'window_open'], 'a tap on a row marks it')
-    m.touch('down', 150, SCREEN_Y0 + 2 * O['LIST_ROW_H'] + 20, 5000, fn='pl_on_down'); paint(m)
+    m.touch('down', 150, SCREEN_Y0 + TOP + 2 * O['LIST_ROW_H'] + 20, 5000, fn='pl_on_down'); paint(m)
     expect(not [f for f in m.fills if f[0] == O['LIST_PRESS']], 'a pressed row is not filled in select mode')
-    m.touch('abort', 150, SCREEN_Y0 + 2 * O['LIST_ROW_H'] + 20, 5010, fn='pl_on_abort')
+    m.touch('abort', 150, SCREEN_Y0 + TOP + 2 * O['LIST_ROW_H'] + 20, 5010, fn='pl_on_abort')
     m.click('btn_return')
     blits, texts, styles = settle(m)
     rows = [(t, r) for (t, r), s in zip(texts, styles) if s == 'label_row_title']
@@ -498,7 +501,7 @@ def run(ctx):
     expect(vis(m, 'view_grid') == (1, 1) and vis(m, 'label_status')[0] == 0 and vis(m, 'vs_scrim') == (0, 0) and vis(m, 'vs_card') == (0, 0),
            'the grid shows; the status line, the scrim and the card are hidden and insensitive')
     h = m.word(m.widgets['view_grid'] + 0xc)
-    expect(h == RGAP + 3 * PITCH and m.props.get((m.sv, 'virtual_h')) == h, f'6 playlists are 3 rows: the content is {h} px and the scroll_view is told')
+    expect(h == R0 + 3 * PITCH and m.props.get((m.sv, 'virtual_h')) == h, f'6 playlists are 3 rows: the content is {h} px and the scroll_view is told')
     expect(not [c for c in m.calls if c[0] == 'widget_load_image' and c[1] not in ('p_default', 'unselect', 'selected')], 'no cover is decoded in the open (only the placeholder disc)')
 
     # 4. The loader: one playlist read or one cover source decoded a tick; the mosaics (cells 4 and 5 are in the third row: scrolled to)
@@ -529,7 +532,7 @@ def run(ctx):
             expect(all(near(a, b2) for a, b2 in zip(q, w)), f'{name}: {len(distinct)} album(s) fill the quadrants {[f"{x:#010x}" for x in w]} (got {[f"{x:#010x}" for x in q]})')
     texts_by = {}
     for f, off in (((texts, styles), 0), ((texts2, styles2), top)):
-        for (text, rect), st in zip(*f): texts_by.setdefault(st, {})[(rect[1] + off - RGAP) // PITCH * COLS + (rect[0] - MARGIN) // CPITCH] = text
+        for (text, rect), st in zip(*f): texts_by.setdefault(st, {})[(rect[1] + off - R0) // PITCH * COLS + (rect[0] - MARGIN) // CPITCH] = text
     names = {'label_grid_title': {i: l[1] for i, l in enumerate(lists)},
              'label_grid_sub': {i: ('1 track' if len(l[2]) == 1 else f'{len(l[2])} tracks') for i, l in enumerate(lists)}}
     expect(texts_by.get('label_grid_title') == names['label_grid_title'] and texts_by.get('label_grid_sub') == names['label_grid_sub'],
@@ -560,22 +563,22 @@ def run(ctx):
     # 7. Tap: the playlist opens in our Songs page (patch/songs.c songs_open_playlist; test/pod/songs.py lists_tests has the page); a Songs window that will not
     #    open leaves the stock songs page (allmusic_page, class 0xff13) with its id in classinfo[1] and its name as the title
     m = PM(lists, missing=(7,)); open_page(m); settle(m)
-    calls = tap(m, MARGIN + 40, RGAP + 40)
+    calls = tap(m, MARGIN + 40, R0 + 40)
     expect(('window_open', 'm1plus_songs') in calls and not [c for c in calls if c[0] == 'navigator_to_with_context' and c[1] == 'allmusic_page'],
            'a tap opens the playlist in our Songs page, not the stock one')
     m = PM(lists, missing=(7,)); m.windows['m1plus_songs'] = 0; open_page(m); settle(m)
     for i in (0, 3, 5):
-        x, y = MARGIN + (i % COLS) * CPITCH + 40, RGAP + (i // COLS) * PITCH + 40
+        x, y = MARGIN + (i % COLS) * CPITCH + 40, R0 + (i // COLS) * PITCH + 40
         calls = tap(m, x, y)
         opened = [c for c in calls if c[0] == 'navigator_to_with_context' and c[1] == 'allmusic_page']
         expect(opened == [('navigator_to_with_context', 'allmusic_page', O['CLASS_PLAYLIST_SONGS'], lists[i][0], lists[i][1])],
                f'a tap on cell {i} opens playlist {lists[i][0]} ({lists[i][1]!r}) in the Songs page ({opened})')
-    calls = tap(m, MARGIN + 40, RGAP + 40, dx=O['SC_DRAG_PX'] + 2)
+    calls = tap(m, MARGIN + 40, R0 + 40, dx=O['SC_DRAG_PX'] + 2)
     expect(not [c for c in calls if c[0] == 'navigator_to_with_context'], 'a release past the drag threshold opens nothing')
-    calls = tap(m, MARGIN + COVER + 3, RGAP + 40)
+    calls = tap(m, MARGIN + COVER + 3, R0 + 40)
     expect(not [c for c in calls if c[0] == 'navigator_to_with_context'], 'the gap between the columns is dead')
-    m.touch('down', MARGIN + 40, SCREEN_Y0 + RGAP + 40, 1000, fn='pl_on_down'); m.touch('abort', MARGIN + 40, SCREEN_Y0 + RGAP + 40, 1010, fn='pl_on_abort')
-    m.touch('up', MARGIN + 40, SCREEN_Y0 + RGAP + 40, 1080, fn='pl_on_up')
+    m.touch('down', MARGIN + 40, SCREEN_Y0 + R0 + 40, 1000, fn='pl_on_down'); m.touch('abort', MARGIN + 40, SCREEN_Y0 + R0 + 40, 1010, fn='pl_on_abort')
+    m.touch('up', MARGIN + 40, SCREEN_Y0 + R0 + 40, 1080, fn='pl_on_up')
     expect(not [c for c in m.calls if c[0] == 'navigator_to_with_context'], 'the scroll_view\'s abort forgets the press')
 
     # 8. Nothing is decoded while the scroll_view moves
@@ -824,10 +827,12 @@ def run(ctx):
     expect(glyph(m) == 'pod_nav_grid', 'the saved "0" opens the list mode: the card ticks List (the old toggle would show the grid glyph)')
     expect(('bitmap_create_ex', LART, LART) in calls and not any(c[:3] == ('bitmap_create_ex', COVER, COVER) for c in calls), 'its covers are 52 px bitmaps')
     h = m.word(m.widgets['view_grid'] + 0xc)
-    expect(h == len(lists) * ROW and m.props.get((m.sv, 'virtual_h')) == h, f'the content is {len(lists)} rows of {ROW} px = {h} and the scroll_view is told')
-    blits, texts, styles = settle(m)
+    expect(h == TOP + len(lists) * ROW and m.props.get((m.sv, 'virtual_h')) == h, f'the content is {len(lists)} rows of {ROW} px = {h} and the scroll_view is told')
+    scroll_to(m, 60); blits_end, _, _ = settle(m)   # the last row is only partly in view at the top: its cover is checked scrolled 60 px down
+    scroll_to(m, 0); blits, texts, styles = settle(m)
     for i, (pid, name, songs) in enumerate(lists):
-        b = next((x[0] for x in blits if x[2] == (LAX, i * ROW + LAY, LART, LART)), None)
+        src, dy = (blits, 0) if i < len(lists) - 1 else (blits_end, 60)
+        b = next((x[0] for x in src if x[2] == (LAX, TOP + i * ROW + LAY - dy, LART, LART)), None)
         distinct = []
         for a in songs:
             if a not in distinct and a != 7: distinct.append(a)
@@ -835,25 +840,26 @@ def run(ctx):
         q = quadrants(m, b, LART) if b else []
         expect(b is not None and (all(near(x, y) for x, y in zip(q, w)) if w else len(set(q)) == 1 and near(q[0], GREY_DISC)),
                f'row {i} ({name}): its 52 px cover is the {len(distinct[:4])}-album mosaic in 26 px quadrants ({[hex(x) for x in q]})')
-    got = {st: {r[1] // ROW: t for (t, r), s in zip(texts, styles) if s == st} for st in ('label_row_title', 'label_row_sub')}
+    got = {st: {(r[1] - TOP) // ROW: t for (t, r), s in zip(texts, styles) if s == st} for st in ('label_row_title', 'label_row_sub')}
     expect(got['label_row_title'] == {i: l[1] for i, l in enumerate(lists)}
            and got['label_row_sub'] == {i: ('1 track' if len(l[2]) == 1 else f'{len(l[2])} tracks') for i, l in enumerate(lists)}, f'each row shows the name and the count ({got})')
-    expect(all(r[0] == TX and r[2] == TW and (r[1] % ROW, r[3]) in ((TY, TH), (SY, SH)) for (t, r) in texts), 'the texts are in the list rows\' rects')
-    expect(sorted(f[1:] for f in m.fills if f[0] == O['LIST_HAIR']) == [(TX, i * ROW + ROW - 1, O['LIST_HAIR_END'] - TX, 1) for i in range(len(lists))], 'a hairline from the text to LIST_HAIR_END closes each row')
-    expect(sorted(b[2] for b in chevs_of(m, blits)) == [(O['LIST_CHEV_X'], i * ROW + (ROW - 1 - 16) // 2, 10, 16) for i in range(len(lists))], 'and a chevron ends it')
+    expect(all(r[0] == TX and r[2] == TW and ((r[1] - TOP) % ROW, r[3]) in ((TY, TH), (SY, SH)) for (t, r) in texts), 'the texts are in the list rows\' rects')
+    expect(sorted(f[1:] for f in m.fills if f[0] == O['LIST_HAIR']) == [(TX, TOP + i * ROW + ROW - 1, O['LIST_HAIR_END'] - TX, 1) for i in range(5)], 'a hairline from the text to LIST_HAIR_END closes each row')
+    cy = lambda i: TOP + i * ROW + (ROW - 1 - 16) // 2   # the chevron's top; the sixth row's is cut at the window's foot (its row is partly in view)
+    expect(sorted(b[2] for b in chevs_of(m, blits)) == [(O['LIST_CHEV_X'], cy(i), 10, 16) for i in range(5)] + [(O['LIST_CHEV_X'], cy(5), 10, VIEW_H - cy(5))], 'and a chevron ends it')
     expect(not [f for f in m.fills if f[0] == O['LIST_PRESS']], 'a hairline closes each row, no row is pressed')
     #     a tap on a row (any x) opens its playlist; the press fills the row until the release
-    m.touch('down', 300, SCREEN_Y0 + 3 * ROW + 20, 1000, fn='pl_on_down')
+    m.touch('down', 300, SCREEN_Y0 + TOP + 3 * ROW + 20, 1000, fn='pl_on_down')
     blits, texts, styles = paint(m)
-    expect([f for f in m.fills if f[0] == O['LIST_PRESS']] == [(O['LIST_PRESS'], 0, 3 * ROW, 320, ROW - 1)], 'a finger down fills its row with the pressed colour')
+    expect([f for f in m.fills if f[0] == O['LIST_PRESS']] == [(O['LIST_PRESS'], 0, TOP + 3 * ROW, 320, ROW - 1)], 'a finger down fills its row with the pressed colour')
     m.windows['m1plus_songs'] = 0   # (our Songs page will not open: the stock one shows which playlist the tap opened)
-    m.touch('up', 300, SCREEN_Y0 + 3 * ROW + 20, 1080, fn='pl_on_up')
+    m.touch('up', 300, SCREEN_Y0 + TOP + 3 * ROW + 20, 1080, fn='pl_on_up')
     opened = [c for c in m.calls if c[0] == 'navigator_to_with_context' and c[1] == 'allmusic_page']
     expect(('window_open', 'm1plus_songs') in m.calls and opened == [('navigator_to_with_context', 'allmusic_page', O['CLASS_PLAYLIST_SONGS'], lists[3][0], lists[3][1])],
            f'a tap on row 3 opens its playlist ({opened})')
     paint(m)
     expect(not [f for f in m.fills if f[0] == O['LIST_PRESS']], 'and the fill is gone')
-    calls = tap(m, 100, 5 * ROW + 70)
+    calls = tap(m, 100, TOP + 5 * ROW + 70)
     expect(not [c for c in calls if c[0] == 'navigator_to_with_context'], 'below the last row nothing opens')
     m.touch('down', 40, SCREEN_Y0 + 20, 1000, fn='pl_on_down'); m.touch('abort', 40, SCREEN_Y0 + 20, 1010, fn='pl_on_abort'); paint(m)
     expect(not [f for f in m.fills if f[0] == O['LIST_PRESS']], 'the scroll_view\'s abort clears the pressed row')
@@ -864,14 +870,14 @@ def run(ctx):
     m.calls = []; switch(m)
     expect(glyph(m) == 'pod_nav_grid' and m.fs.get(PL_FILE) == b'0\n' and not [c for c in m.calls if c[0] in ('window_open', 'navigator_to_with_context', 'window_close')],
            'the toggle switches to the list in place and saves "0"')
-    expect(m.word(m.sv + SC_YOFF) == first_grid * ROW and m.word(m.widgets['view_grid'] + 0xc) == 12 * ROW and m.props.get((m.sv, 'virtual_h')) == 12 * ROW,
+    expect(m.word(m.sv + SC_YOFF) == TOP + first_grid * ROW and m.word(m.widgets['view_grid'] + 0xc) == TOP + 12 * ROW and m.props.get((m.sv, 'virtual_h')) == TOP + 12 * ROW,
            'the first playlist in view stays at the top; the content is 12 rows')
     blits, texts, styles = settle(m)
     expect(('bitmap_create_ex', LART, LART) in m.calls or any(m.bitmaps[b][1] == LART for b in m.bitmaps), 'the tiles were remade at 52 px')
     tiles_ = [b for b in m.bitmaps if m.bitmaps[b][1:] != (10, 16) and m.bitmaps[b][1] != MARK]   # (the two select marks are 26 px and live as long as the page)
     expect(all(m.bitmaps[b][1] == LART for b in tiles_) and len(tiles_) <= TILES + 1, 'no 144 px tile survives the switch; the ring is bounded')
     m.calls = []; switch(m)
-    expect(glyph(m) == 'pod_nav_list' and m.fs.get(PL_FILE) == b'1\n' and m.word(m.sv + SC_YOFF) == first_grid // COLS * PITCH == 0 + 2 // COLS * PITCH,
+    expect(glyph(m) == 'pod_nav_list' and m.fs.get(PL_FILE) == b'1\n' and m.word(m.sv + SC_YOFF) == TOP + first_grid // COLS * PITCH,
            'back to the grid: "1" saved, the glyph back, the first playlist in view kept')
     settle(m)
     expect(all(m.bitmaps[b][1] in (COVER, MARK) or m.bitmaps[b][1:] == (10, 16) for b in m.bitmaps), 'and the tiles are 144 px again')
@@ -931,8 +937,8 @@ def run(ctx):
         return m
     def rows(m, log=None):
         blits, texts, styles = settle(m, log=log)
-        title = {r[1] // ROW: tx for (tx, r), st in zip(texts, styles) if st == 'label_row_title'}
-        sub = {r[1] // ROW: tx for (tx, r), st in zip(texts, styles) if st == 'label_row_sub'}
+        title = {(r[1] - TOP) // ROW: tx for (tx, r), st in zip(texts, styles) if st == 'label_row_title'}
+        sub = {(r[1] - TOP) // ROW: tx for (tx, r), st in zip(texts, styles) if st == 'label_row_sub'}
         return [title[k] for k in sorted(title)], [sub.get(k) for k in sorted(title)]
     expect('playlists-sort' in pod_pages.SETTING_FILES and pod_pages.SETTING_FILES.index('playlists-sort') == pod_pages.SETTING_FILES.index('folders-sort') + 1 and pod_pages.SETTING_FILES.count('playlists-sort') == 1,
            'playlists-sort is on the Settings Files page, after folders-sort and before playlists-view (patch/setfiles.c has it in the same place)')
@@ -958,17 +964,17 @@ def run(ctx):
     expect(rows(m)[0] == AZ and PLS not in m.fs, 'a save that fails changes nothing')
     m = PM(named); open_page(m)
     blits, texts, styles = settle(m)
-    grid_ = {(r[1] - RGAP) // PITCH * COLS + (r[0] - MARGIN) // CPITCH: tx for (tx, r), st in zip(texts, styles) if st == 'label_grid_title'}
+    grid_ = {(r[1] - R0) // PITCH * COLS + (r[0] - MARGIN) // CPITCH: tx for (tx, r), st in zip(texts, styles) if st == 'label_grid_title'}
     expect([grid_[k] for k in sorted(grid_)][:4] == AZ[:4], f'the grid shows the same order ({grid_})')
     # opening follows the rows shown, not the stock positions
     for saved, want in ((None, (4, '2 mix')), (b'a\n', (5, 'Zed'))):
         m = list_page(saved); m.windows['m1plus_songs'] = 0; rows(m)
-        calls = tap(m, 100, 20)
+        calls = tap(m, 100, TOP + 20)
         opened = [c for c in calls if c[0] == 'navigator_to_with_context' and c[1] == 'allmusic_page']
         expect(opened == [('navigator_to_with_context', 'allmusic_page', O['CLASS_PLAYLIST_SONGS'], *want)], f'a tap on the first row opens {want[1]!r} (id {want[0]}) ({opened})')
     # Delete: the marks are of the rows shown; the stock vector holds the stock positions
     m = list_page(); rows(m); m.setword(SEL_VEC, m.alloc(8)); m.confirm_yes = True
-    m.click('btn_plactions'); m.click('vs_item9'); tap(m, 150, 0 * ROW + 20); tap(m, 150, 2 * ROW + 20); m.calls = []
+    m.click('btn_plactions'); m.click('vs_item9'); tap(m, 150, TOP + 0 * ROW + 20); tap(m, 150, TOP + 2 * ROW + 20); m.calls = []
     m.click('pl_del')
     bd = next((c for c in m.calls if c[0] == 'batch_delete_file'), None)
     expect([c[1] for c in m.calls if c[0] == 'set_selectindex'] == [3, 1] and bd and bd[:2] == ('batch_delete_file', O['CLASS_PLAYLISTS']) and bd[6] == [1, 3],
@@ -976,4 +982,56 @@ def run(ctx):
     # the empty page: the card is there and the order is saved
     m = PM([]); open_page(m); m.click('btn_more'); m.click('vs_item0')
     expect(m.fs.get(PLS) == b'a\n' and vis(m, 'vs_card') == (0, 0) and vis(m, 'label_status')[0] == 1, 'with no playlist the Name row still saves the order and the page stays as it was')
+
+    # 15. The large title (pl_title, as the Albums page's): the first thing in the content, the navbar's small title hidden until the offset reaches SG_COLLAPSE,
+    #     the fade while scrolled; the rows, the cells and the taps lie TOP px lower in the content, so the hits follow the scroll
+    COLLAPSE = O['SG_COLLAPSE']
+    tree15 = awtk_ui.parse(open(UI, 'rb').read())
+    big15, grid15 = tree15.find('pl_title'), tree15.find('view_grid')
+    expect(big15 is not None and grid15.children[:1] == [big15] and (big15.x, big15.y, big15.w, big15.h) == (O['SG_TITLE_X'], 0, O['SG_TITLE_W'], TOP)
+           and big15.get('sensitive') == 'false' and big15.get('style:normal:font_size') == '32' and big15.get('style:normal:text_color') == '#FFFFFF',
+           'the asset: pl_title, the first child of view_grid: 32 px white at SG_TITLE_X, SG_TITLE_W wide, SG_TITLE_H high, insensitive')
+    expect(tree15.find('label_title').get('visible') == 'false' and tree15.find('img_nb_fade') is not None, 'the navbar\'s small title starts hidden; the fade is in the asset')
+    opened = lambda calls: [c for c in calls if c[0] in ('window_open', 'navigator_to_with_context')]
+    for mode, f in (('grid', b'1\n'), ('list', b'0\n')):
+        m = PM(lists, missing=(7,)); m.fs[PL_FILE] = f; open_page(m)
+        big, small, fade = m.widgets['pl_title'], m.widgets['label_title'], m.widgets['img_nb_fade']
+        expect(('widget_set_text_utf8', big, 'Playlists') in m.calls, f'{mode}: the large title reads Playlists')
+        h = m.word(m.widgets['view_grid'] + 0xc)
+        expect(h == TOP + (RGAP + 3 * PITCH if mode == 'grid' else 6 * O['LIST_ROW_H']) and m.props.get((m.sv, 'virtual_h')) == h,
+               f'{mode}: the content is the title block and the playlists ({h})')
+        blits, _, _ = settle(m)
+        first = cell_blit(blits, 0) if mode == 'grid' else next((b[0] for b in blits if b[2][:2] == (O['LIST_ART_X'], TOP + O['LIST_ART_Y'])), None)
+        expect(first is not None, f'{mode}: the first playlist starts under the title block')
+        expect(m.props.get((small, 'visible'), 0) == 0 and ('widget_set_visible', small, 1) not in m.calls and m.props.get((fade, 'visible'), 0) == 0,
+               f'{mode}: at rest the small title and the fade are hidden')
+        scroll_to(m, COLLAPSE - 1)
+        expect(m.props.get((small, 'visible'), 0) == 0 and m.props.get((fade, 'visible')) == 1, f'{mode}: one px short of SG_COLLAPSE the title is still hidden, the fade shows')
+        scroll_to(m, COLLAPSE)
+        expect(m.props.get((small, 'visible')) == 1 and m.props.get((fade, 'sensitive')) == 0, f'{mode}: at SG_COLLAPSE the small title shows')
+        # the stock scroll moves the content view with the offset: the taps are told through its place (widget_to_local)
+        m.setword(m.widgets['view_grid'] + 4, (-COLLAPSE) & 0xffffffff)
+        m.calls = []
+        expect(not opened(tap(m, 100, TOP - 5 - COLLAPSE)), f'{mode}: a tap on the title block (scrolled up under the navbar) opens nothing')
+        m.calls = []
+        opened_at = opened(tap(m, MARGIN + 40, (R0 if mode == 'grid' else TOP) - COLLAPSE + 10))
+        expect(opened_at, f'{mode}: scrolled to SG_COLLAPSE, a tap on the first playlist (its top {COLLAPSE} px up) opens it')
+        scroll_to(m, 0); m.setword(m.widgets['view_grid'] + 4, 0)
+        expect(m.props.get((small, 'visible')) == 0 and m.props.get((fade, 'visible')) == 0, f'{mode}: back at the top they go')
+        m.calls = []
+        expect(not opened(tap(m, 100, TOP - 5)), f'{mode}: at the top a tap on the title block opens nothing')
+        m.calls = []
+        expect(opened(tap(m, MARGIN + 40, R0 + 10 if mode == 'grid' else TOP + 10)), f'{mode}: a tap on the first playlist opens it, below the title')
+        m2 = PM(lists, missing=(7,)); m2.fs[PL_FILE] = f; m2.widget_on_fail = frozenset({O['EVT_SCROLL']}); open_page(m2)
+        expect(('widget_set_visible', m2.widgets['label_title'], 1) in m2.calls, f'{mode}: without the scroll events the navbar keeps its title')
+    # select mode: the navbar reads "N Selected" (shown), the large title stays in the content; back to the list, the small title goes again
+    m = PM(lists, missing=(7,)); open_page(m); settle(m)
+    m.click('btn_plactions'); m.click('vs_item9')
+    expect(m.props.get((m.widgets['label_title'], 'visible')) == 1 and ('widget_set_visible', m.widgets['pl_title'], 0) not in m.calls,
+           'select mode: the small title shows "N Selected", the large title is not hidden')
+    m.click('btn_return')
+    expect(m.props.get((m.widgets['label_title'], 'visible')) == 0, 'back from select mode the small title is hidden again at the top')
+    # no playlists: the title goes with the empty grid, as the Albums page's empty state
+    m = PM([]); open_page(m)
+    expect(vis(m, 'view_grid') == (0, 0) and m.props.get((m.widgets['label_title'], 'visible'), 0) == 0, 'the empty page hides the grid and its title; the small title stays hidden')
 

@@ -62,6 +62,7 @@ def run(ctx):
     t = m.widgets['label_title']
     expect(r == 1 and ('window_open', 'm1plus_playlists') in calls and not [c for c in calls if c[0] == 'navigator_to_with_context'],
            'picker_open opens our Playlists page (1); the stock playlist_page is not opened')
+    expect(('widget_set_text_utf8', m.widgets['pl_title'], 'Add to Playlist') in calls, 'the large title reads Add to Playlist too')
     expect(('widget_set_tr_text', t, 'Add to Playlist') in calls and all(vis(m, n) == (0, 0) for n in ('btn_plactions', 'btn_more', 'btn_backtoplayer'))
            and vis(m, 'btn_return')[0] == 1 and ('widget_resize', t, O['SG_SELALL_X'] - O['NAV_TITLE_X'], 22) in calls,
            'the title is Add to Playlist; the list-plus button, the "..." button and Now Playing are hidden and insensitive; Back stays')
@@ -70,7 +71,7 @@ def run(ctx):
     subs = [x for x, s in zip(texts, styles) if s == 'label_row_sub']
     expect([x[0] for x in titles] == ['playlist_create', 'Favorites', 'Focus', 'Late Night', 'Road Trip'] and [x[0] for x in subs] == ['1 track', '2 tracks', '4 tracks'],
            f'a list: playlist_create (New playlist) and Favorites pinned first (no count), then the playlists in the page\'s name order (A-Z) with their counts ({[x[0] for x in titles]}, {[x[0] for x in subs]})')
-    expect(m.word(m.widgets['view_grid'] + 0xc) == 5 * ROW, 'five rows high')
+    expect(m.word(m.widgets['view_grid'] + 0xc) == PL.TOP + 5 * ROW, 'five rows high, under the title block')
     for saved, want in ((b'1\n', ['Focus', 'Late Night', 'Road Trip']), (b'b\n', ['Focus', 'Late Night', 'Road Trip']), (b'a\n', ['Road Trip', 'Late Night', 'Focus'])):
         m2 = caller(PL); m2.fs['/mnt/data/m1plus/playlists-sort'] = saved
         open_picker(m2); blits, texts, styles = PL.settle(m2)
@@ -80,7 +81,7 @@ def run(ctx):
 
     # 2. A playlist row: the stock add on the copy and the marks, the message, the page closes
     m.setword(CLASSINFO + 4, 5); m.u.mem_write(NAV_TITLE, b'x\0')   # (what a stock query leaves: put back at the end of the add)
-    calls = PL.tap(m, 100, 3 * ROW + 20)
+    calls = PL.tap(m, 100, PL.TOP + 3 * ROW + 20)
     add = [c for c in calls if c[0] == 'batch_add_file']
     expect(len(add) == 1 and add[0][1:3] == (CLS, O['CLASS_PLAYLISTS']) and add[0][5] == 2 and add[0][6] == [1, 3] and add[0][4] == m.word(SEL_VEC),
            f'a tap on Late Night: batch_add_file({CLS:#x}, 0xf00b, list, the stock vector, 2) with rows 1 and 3 selected ({add})')
@@ -90,7 +91,7 @@ def run(ctx):
            'the stock vector is filled from the marks just before')
     expect(('toast', 'msg_addplaylistsuccess', 1, 2000) in calls and ('window_close', m.window) in calls and not [c for c in calls if c[0] == 'navigator_back'],
            'the stock "Added To Playlist" message, then the picker\'s window is closed as the stock handler closes its own')
-    calls = PL.tap(m, 100, 4 * ROW + 20)
+    calls = PL.tap(m, 100, PL.TOP + 4 * ROW + 20)
     expect(not [c for c in calls if c[0] == 'batch_add_file'], 'a second tap adds nothing again')
     destroy(m)
     expect(record_ok(m), 'the page gone: the caller\'s browsing record is back')
@@ -103,7 +104,7 @@ def run(ctx):
     m = caller(PL)
     open_picker(m); PL.settle(m)
     m.setword(CLASSINFO + 4, 5); m.u.mem_write(NAV_TITLE, b'x\0')
-    calls = PL.tap(m, 100, ROW + 20)
+    calls = PL.tap(m, 100, PL.TOP + ROW + 20)
     add = [c for c in calls if c[0] == 'batch_add_file']
     expect(len(add) == 1 and add[0][1:3] == (CLS, 0xf00a) and add[0][5] == 0 and add[0][6] == [1, 3] and add[0][4] == m.word(SEL_VEC),
            f'a tap on Favorites: batch_add_file({CLS:#x}, 0xf00a, list, the stock vector, 0) with rows 1 and 3 selected ({add})')
@@ -113,7 +114,7 @@ def run(ctx):
     expect(('toast', 'msg_addfavsuccess', 1, 2000) in calls and ('window_close', m.window) in calls and not [c for c in calls if c[0] in ('navigator_back', 'createPlayListItem')]
            and not [c for c in calls if c[0] == 'toast' and c[1] != 'msg_addfavsuccess'],
            'the stock "Added To Fav" message, then the picker\'s window is closed')
-    calls = PL.tap(m, 100, 3 * ROW + 20)
+    calls = PL.tap(m, 100, PL.TOP + 3 * ROW + 20)
     expect(not [c for c in calls if c[0] == 'batch_add_file'], 'a second tap (on a playlist) adds nothing again')
     destroy(m)
     expect(record_ok(m), 'the page gone: the caller\'s browsing record is back')
@@ -122,7 +123,7 @@ def run(ctx):
     m = caller(PL)
     open_picker(m); PL.settle(m)
     m.calls = []
-    calls = PL.tap(m, 100, 20)
+    calls = PL.tap(m, 100, PL.TOP + 20)
     expect(('window_open', 'm1plus_keyboard') in calls and not [c for c in calls if c[0] in ('batch_add_file', 'createPlayListItem', 'window_close')],
            'the New playlist row opens the keyboard; nothing is made or added yet')
     for ret, key in ((-1, 'msg_playlistfull'), (-2, 'msg_playlistexist')):
@@ -157,10 +158,10 @@ def run(ctx):
     expect([f for f in m.fills if f[0] == 0xff2c2c2e and f[3] == O['LIST_ART'] and f[4] == O['LIST_ART'] - 4] and white == [(2, 20), (20, 2)],
            f'the New playlist row paints a dark square and a white plus (two bars, {white})')
     title0 = next(x for x, s in zip(texts, styles) if s == 'label_row_title')
-    expect(title0[1][1] == (ROW - O['LIST_TITLE_H']) // 2, f'the New playlist title is centred in the row ({title0})')
+    expect(title0[1][1] == PL.TOP + (ROW - O['LIST_TITLE_H']) // 2, f'the New playlist title is centred in the row ({title0})')
 
     # the Favourites row: the same dark square and a 24 px star (an alpha bitmap), centred in the art box, titled "Favorites" and centred like New playlist
-    ay = ROW + O['LIST_ART_Y']
+    ay = PL.TOP + ROW + O['LIST_ART_Y']
     star = [b for b in blits if b[2][2] == 24 and b[2][3] == 24 and b[2][1] == ay + (O['LIST_ART'] - 24) // 2]
     expect(len([f for f in m.fills if f[0] == 0xff2c2c2e and f[3] == O['LIST_ART'] and f[4] == O['LIST_ART'] - 4]) == 2 and len(star) == 1
            and star[0][2][0] == O['LIST_ART_X'] + (O['LIST_ART'] - 24) // 2, f'the Favorites row paints the dark square and the star centred in it ({star})')
@@ -170,7 +171,7 @@ def run(ctx):
         expect(a(12, 12) == 255 and a(12, 4) > 200 and a(0, 0) == 0 and a(23, 0) == 0 and a(1, 9) == 0 and a(12, 0) == 0 and a(5, 20) == 0 and a(7, 19) > 0 and a(12, 19) == 0 and rgb == {0xffffff},
                'the star: opaque at its centre and top point, empty at the corners, white')
     title1 = [x for x, s in zip(texts, styles) if s == 'label_row_title'][1]
-    expect(title1[0] == 'Favorites' and title1[1][1] == ROW + (ROW - O['LIST_TITLE_H']) // 2, f'the Favorites title is centred in its row ({title1})')
+    expect(title1[0] == 'Favorites' and title1[1][1] == PL.TOP + ROW + (ROW - O['LIST_TITLE_H']) // 2, f'the Favorites title is centred in its row ({title1})')
 
     # 4. Back: nothing added
     m = caller(PL)

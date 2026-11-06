@@ -331,11 +331,23 @@ GRID_ALBUM_PX, GRID_ARTIST_PX = 18, 15   # the grid's album / artist text under 
 LIST_TITLE_PX, LIST_SUB_PX = 21, 18   # the list mode's album / artist text (the library rows': 21 px white, 18 px #AAAAAA)
 
 
-def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview', 'albums_scrollview'), more=False, albums=False, more_left=False, plactions=False):
+def large_title(name, text):
+    """The large title of a page with a grid or list content (the Songs and Artists pages' label): 32 px white at x 12, SG_TITLE_W wide, SG_TITLE_H high,
+    insensitive; it is the first child of the content view and scrolls away with it (patch/albums.c, patch/playlists.c)."""
+    o = OFFSETS
+    title = Widget('label', o['SG_TITLE_X'], 0, o['SG_TITLE_W'], o['SG_TITLE_H'], [('name', name), pod_i18n.text_prop(text), ('sensitive', 'false')])
+    styled(title, ('normal',), 'text_color', '#FFFFFF')
+    styled(title, ('normal',), 'font_size', str(SG_TITLE_PX))
+    styled(title, ('normal',), 'text_align_h', 'left')
+    styled(title, ('normal',), 'text_align_v', 'middle')
+    return title
+
+
+def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview', 'albums_scrollview'), more=False, albums=False, more_left=False, plactions=False, title_name=None):
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
     nb = navbar(page.title, toggle=toggle, coverflow=coverflow, more=more, albums=albums, more_left=more_left, plactions=plactions)
-    if albums: nb.children[0].set('visible', 'false')   # the small title: the payload shows it once the large title has scrolled away
+    if albums or title_name: nb.children[0].set('visible', 'false')   # the small title: the payload shows it once the large title has scrolled away
     root.children.append(nb)
     lv = stock_list([], True)   # the library lists' structure: list_view > scroll_view 310 wide + scroll_bar_m. The mobile bar is not decoration: the list_view layouter makes the scroll_view yslidable only for it (0x60b1c8), scroll_view_create leaves it 0
     lv.set('name', names[0])
@@ -347,15 +359,12 @@ def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview
     styled(grid, ('normal',), 'font_size', str(GRID_TITLE_PX))
     styled(grid, ('normal',), 'text_align_h', 'left')
     styled(grid, ('normal',), 'text_align_v', 'middle')
-    if albums:   # the large title, the first thing in the content (the Songs and Artists pages' label): it scrolls away and the navbar's small title takes over
+    if albums or title_name:   # the large title, the first thing in the content: it scrolls away and the navbar's small title takes over
+        grid.children = [large_title(title_name or 'al_title', page.title)]
+    if albums:   # an artist's page shows the pills under the title (patch/albums.c); the library's keeps them hidden
         o = OFFSETS
-        title = Widget('label', o['SG_TITLE_X'], 0, o['SG_TITLE_W'], o['SG_TITLE_H'], [('name', 'al_title'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])
-        styled(title, ('normal',), 'text_color', '#FFFFFF')
-        styled(title, ('normal',), 'font_size', str(SG_TITLE_PX))
-        styled(title, ('normal',), 'text_align_h', 'left')
-        styled(title, ('normal',), 'text_align_v', 'middle')
-        grid.children = [title, hidden(sg_pill('btn_play', o['AL_PLAY_X'], o['SG_PILL_Y'], 'Play', 'sg_play', w=o['AL_PLAY_W'], down=SG_PILL_PRESS_RGB)),   # an artist's page shows the pills (patch/albums.c); the library's keeps them hidden
-                         hidden(sg_pill('btn_shuffle', o['AL_SHUFFLE_X'], o['SG_PILL_Y'], 'Shuffle', 'sg_shuffle', w=o['AL_SHUFFLE_W'], down=SG_PILL_PRESS_RGB))]
+        grid.children += [hidden(sg_pill('btn_play', o['AL_PLAY_X'], o['SG_PILL_Y'], 'Play', 'sg_play', w=o['AL_PLAY_W'], down=SG_PILL_PRESS_RGB)),
+                          hidden(sg_pill('btn_shuffle', o['AL_SHUFFLE_X'], o['SG_PILL_Y'], 'Shuffle', 'sg_shuffle', w=o['AL_SHUFFLE_W'], down=SG_PILL_PRESS_RGB))]
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/albums.c / playlists.c show it while yoffset > 0
@@ -608,7 +617,7 @@ PL_PRESSED, PL_HAIR = '#FFFFFF10', '#FFFFFF22'   # the sheet's rows (tools/mod_l
 
 def build_playlists_page(page):
     from mod_icons import PL_MENU_ICONS
-    root = build_grid_page(page, toggle=None, coverflow=False, more_left=True, plactions=True, names=('playlists_listview', 'playlists_scrollview'))
+    root = build_grid_page(page, toggle=None, coverflow=False, more_left=True, plactions=True, names=('playlists_listview', 'playlists_scrollview'), title_name='pl_title')
     root.children[0].children.append(selall_button())   # the navbar's select mode text (the card's Delete Playlists starts select mode: patch/playlists.c)
     root.children.append(select_bar('pl_bar', 'pl_bar_line', [('pl_del', OFFSETS['SG_PILL_X0'], 'Delete', 'sg_trash', OFFSETS['PL_BAR_PILL_W'])]))
     root.children.extend(view_sort_card(sort_keys=('Name',) * len(VS_SORT_KEYS), act_keys=pod_pages.PLAYLIST_MENU, act_glyphs=[n for n, _ in PL_MENU_ICONS]))   # last: above the list, the bar and the navbar

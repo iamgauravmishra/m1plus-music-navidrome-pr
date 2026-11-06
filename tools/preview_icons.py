@@ -399,10 +399,8 @@ def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1, sel
     playlists (indexes into PLAYLISTS) in select mode (the menu's Delete Playlists): the glass x, "N Selected", Select All, a mark on every cell or row (the list's rows
     and texts 30 px to the right), the bar with the Delete pill. The navbar is list-plus | "..." | Now Playing; menu=True (or 'more') opens the shared view-sort card (patch/viewsort.c) of the "...": Grid, List,
     Name; menu='actions' the list-plus button's: New Playlist, Import, Export, Delete Playlists (`pressed`: the row held down, from the top). order: the page's order, the firmware's default 'az' (Name A-Z) or 'za'; the card ticks Name with its direction line."""
-    import awtk_ui
     pls = sorted(PLAYLISTS, key=lambda p: p[0].casefold(), reverse=order == 'za')
     o = offsets(); W_, H_ = 320, 450
-    root = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', 'm1plus_playlists.bin'), 'rb').read())
     im = Image.new('RGBA', (W_, H_), (0, 0, 0, 255))
     shift = o['SG_SEL_COL'] if select is not None else 0
     if select is not None:   # select mode's navbar (the Songs page's): the glass x, "N Selected", Select All at the right
@@ -410,14 +408,13 @@ def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1, sel
         PS.glass(s, im, 'ah_nav_close', 7, 44)
         s.text(im, o['NAV_TITLE_X'], 25, s.strings.get('%d Selected', '%d Selected').replace('%d', str(len(select))), title_px(s.tree))
         sa = s.strings.get('Select All', 'Select All'); s.text(im, o['SG_SELALL_X'] + 104 - 8 - s.font.width(sa, 18), 25, sa, 18)
-    elif pick:   # the Add to Playlist picker (patch/playlists.c pick mode): Back and the title only, list mode
-        s.text(im, o['NAV_TITLE_X'], 25, s.strings.get('Add to Playlist', 'Add to Playlist'), title_px(s.tree))
+    elif pick:   # the Add to Playlist picker (patch/playlists.c pick mode): Back only at rest; its large title is "Add to Playlist"
         import preview_songs as PS
         PS.glass(s, im, 'ah_nav_back', 7, 44)   # the asset's btn_return: the glass disc
     else:
         import preview_songs as PS
-        PS.glass(s, im, 'ah_nav_back', 7, 44); PS.glass(s, im, 'ah_nav_play', 260, 60); PS.glass(s, im, 'pod_nav_listplus', o['NAV_CF_X']); PS.glass(s, im, 'pod_nav_moremid', o['NAV_VIEW_X'])   # Back, list-plus | "..." | Now Playing
-        s.text(im, o['NAV_TITLE_X'], 25, s.shown(root.find('label_title')), title_px(s.tree))
+        PS.glass(s, im, 'ah_nav_back', 7, 44); PS.glass(s, im, 'ah_nav_play', 260, 60); PS.glass(s, im, 'pod_nav_listplus', o['NAV_CF_X']); PS.glass(s, im, 'pod_nav_moremid', o['NAV_VIEW_X'])   # Back, list-plus | "..." | Now Playing; the small title only once the large one has scrolled away (never at rest)
+    albums_big_title(s, im, 0, 'Add to Playlist' if pick else 'Playlists')   # pl_title, the first thing in the content (the Albums page's large title)
     def mark(x, y, a):   # a select mark (the stock images, 26 px)
         mk = s.img('selected' if a in select else 'unselect'); im.alpha_composite(mk, (x, y))
     def bar():   # the bar: black, a #222222 hairline, the Delete pill across it
@@ -440,7 +437,7 @@ def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1, sel
             return text
         rows = [(s.strings.get('New playlist', 'New playlist'), None, []), (s.strings.get('Favorites', 'Favorites'), None, [])] + pls if pick else pls   # the picker's first rows make a playlist and add to Favourites: no count
         for r, (name, tracks, albums) in enumerate(rows):
-            y = 50 + r * rh
+            y = 50 + o['SG_TITLE_H'] + r * rh   # the rows start under the large title block
             if y + rh > H_: break
             if r == row_pressed: d.rectangle((0, y, W_ - 1, y + rh - 2), fill=(0x33, 0x33, 0x33))
             d.rectangle((0, y + rh - 1, W_ - 1, y + rh - 1), fill=(0x22, 0x22, 0x22))
@@ -471,7 +468,7 @@ def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1, sel
         while s.font.width(text, px) > cover and len(text) > 1: text = text[:-2] + '…' if text.endswith('…') else text[:-1] + '…'
         return text
     for a, (name, tracks, albums) in enumerate(pls):
-        x, top = m + (a % o['GRID_COLS']) * (cover + gap), 50 + o['GRID_ROW_GAP'] + (a // o['GRID_COLS']) * pitch
+        x, top = m + (a % o['GRID_COLS']) * (cover + gap), 50 + o['SG_TITLE_H'] + o['GRID_ROW_GAP'] + (a // o['GRID_COLS']) * pitch
         if top >= H_: continue
         c = mosaic([ALBUMS[i][2] for i in albums if ALBUMS[i][2]], cover, o['GRID_R'])
         y1 = min(H_, top + cover)
