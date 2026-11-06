@@ -387,10 +387,9 @@ static void np_info(void) {
     char s[NP_INFO_BUF], out[NP_INFO_BUF + 64];
     unsigned i, h, n;
     for (i = 0; i < NP_INFO_N; ++i) {
-        if (!np.info[i] || widget_get_text_utf8(np.info[i], s, sizeof s) != RET_OK) continue;
-        for (n = 0; n < sizeof s && s[n]; ++n) {
-        }
-        if (!n || n >= sizeof s - 1) continue; /* empty, or maybe cut short: leave it */
+        int need = np.info[i] ? pod_text_utf8(np.info[i], s, sizeof s) : -1;
+        /* none, empty, or too long for s (cut short): leave it */
+        if (need <= 0 || (unsigned)need >= sizeof s) continue;
         h = np_hash(s);
         if (h == np.done[i]) continue; /* the text we last left (or saw) */
         np.done[i] = h; /* whatever happens below, this text is not looked at again */

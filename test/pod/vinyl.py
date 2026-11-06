@@ -56,7 +56,7 @@ class VM(Machine):
         for off, v in ((0, 0), (4, 0), (8, 320), (0xc, 480), (0x44, 0)): self.setword(win + off, v)
         for off, v in ((0, 0), (4, 0), (8, 320), (0xc, 480), (0x44, win)): self.setword(self.view + off, v)
         self.images = {n: self.png(n) for n in A.NAMES}
-        for n in ('mclGetPlayStatus', 'playpause_quick_click', 'next_quick_click', 'prev_quick_click', 'get_playtimeandlength', 'widget_get_text_utf8', 'time_now_ms'):
+        for n in ('mclGetPlayStatus', 'playpause_quick_click', 'next_quick_click', 'prev_quick_click', 'get_playtimeandlength', 'widget_get_text', 'time_now_ms'):
             self.handlers[pod.FUNCTIONS[n][2]] = n
 
     def png(self, n):
@@ -76,9 +76,8 @@ class VM(Machine):
         elif name == 'get_playtimeandlength':
             if self.pt: self.setword(a0, self.pt[0]); self.setword(a1, self.pt[1])
             ret = 1 if self.pt else 0
-        elif name == 'widget_get_text_utf8':
-            raw = self.volume.encode()[:a2 - 1]
-            self.u.mem_write(a1, raw.ljust(a2, b'\0')); ret = 1
+        elif name == 'widget_get_text':   # the volume label's wide text (pod_text_utf8 encodes it)
+            ret = self.alloc(4 * len(self.volume) + 4); self.u.mem_write(ret, struct.pack(f'<{len(self.volume) + 1}I', *map(ord, self.volume), 0))
         elif name == 'widget_get_prop_str':
             ret = self.cstr(self.battery_img) if self.read_cstr(a1) == 'image' else a2
         elif name == 'widget_invalidate_force':
@@ -421,7 +420,7 @@ def number_tests(ctx):
                      ((246, 449), K_PLAY), ((292, 449), K_NEXT), ((171, 479), K_PREV), ((317, 421), K_NEXT), ((100, 449), K_NONE), ((96, 419), K_NONE)):
         expect(m.call(PSYMS['vn_hit'], a0=pt[0], a1=pt[1], count=10000) == want, f'a touch at {pt} is {want}')
     d = open(DEMO, 'rb').read(); image = bytearray(d)
-    expect(all(struct.unpack_from('<I', d, pod.fileoff(image, a))[0] == old for a, old, _ in pod.TAPE_PINS + pod.IPOD_PINS), 'the stock words the page relies on (the Tape page\'s invalidate and label read, the Pod\'s quick clicks and timer) are as pinned')
+    expect(all(struct.unpack_from('<I', d, pod.fileoff(image, a))[0] == old for a, old, _ in pod.TAPE_PINS + pod.IPOD_PINS), 'the stock words the page relies on (the Tape page\'s invalidate, the Pod\'s quick clicks and timer) are as pinned')
 
 
 def asset_tests(ctx):

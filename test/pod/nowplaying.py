@@ -27,7 +27,8 @@ class NowMachine(Machine):
         self.stock_ret = 0
         self.opened = []
         self.texts = {}           # label handle -> its text (latin-1 chars of the UTF-8 bytes, as read_cstr returns)
-        self.get_ret = 0
+        self.get_ret = 0          # nonzero: widget_get_text finds no text
+        self.wide = {}            # label handle -> raw code points for widget_get_text (over texts)
         self.bar = 0              # the status bar's handle (0: the window manager has none)
         self.bar_styles = []      # (bar, "normal:bg_color", uint32)
         self.bar_style_ret = 0
@@ -74,9 +75,13 @@ class NowMachine(Machine):
             self.setword(a0, pos); self.setword(a1, ln); self.calls.append(('get_playtimeandlength',)); ret = r
         elif name == 'widget_set_text_utf8':   # the labels keep their text (the info page is read back)
             t = self.read_cstr(a1); self.texts[a0] = t; self.calls.append(('widget_set_text_utf8', a0, t)); ret = 0
-        elif name == 'widget_get_text_utf8':   # stock: the buffer zero-filled, then at most size - 1 bytes
-            raw = self.texts.get(a0, '').encode('latin-1')[:max(a2 - 1, 0)]
-            self.u.mem_write(a1, raw.ljust(a2, b'\0')); self.calls.append(('widget_get_text_utf8', a0)); ret = self.get_ret
+        elif name == 'widget_get_text':   # the label's wide text (32 bit code points; NULL for a label without one, or while get_ret is set: a failed read); the payload encodes it (pod_text_utf8)
+            t = self.texts.get(a0); self.calls.append(('widget_get_text', a0)); ret = 0
+            if a0 in self.wide and not self.get_ret:   # raw code points (a test of bad ones: no surrogate survives a Python str)
+                cps = self.wide[a0]; ret = self.alloc(4 * len(cps) + 4); self.u.mem_write(ret, struct.pack(f'<{len(cps) + 1}I', *cps, 0))
+            elif t is not None and not self.get_ret:
+                t = t.encode('latin-1').decode('utf-8'); ret = self.alloc(4 * len(t) + 4)
+                self.u.mem_write(ret, struct.pack(f'<{len(t) + 1}I', *map(ord, t), 0))
         elif name == 'fopen' and self.read_cstr(a0) in self.blobs:
             path = self.read_cstr(a0); h = self.alloc(4); self.pos[h] = 0; self.fh = (h, path)
             self.opened.append(path); self.calls.append(('fopen', path, self.read_cstr(a1))); ret = h
@@ -342,6 +347,12 @@ def run(ctx):
     keep = {'label_album': 'Unknown', 'label_genre': ':Rock', 'label_size': '', 'label_location': 'x' * 600, 'label_info': 'A' * 511}
     m = info(keep)
     expect(all(m.label(n) == keep[n] for n in keep) and not sets(m), 'no colon, a leading colon, an empty text, a text too long to have been read whole: untouched')
+    # stock's widget_get_text_utf8 ignores its size and overran the 512 byte buffer with a longer tag: the payload encodes the wide text itself and leaves one that does not fit
+    for t in ('Album:' + 'x' * 600, 'Album:' + '歌' * 200, 'Title:' + '😀' * 130, 'Album:' + 'x' * 506):
+        m = info({'label_album': t}); k = len(t.encode('utf-8'))
+        expect(m.label('label_album') == t and not sets(m), f'a tag of {k} bytes (the buffer holds 511 and a NUL): untouched, nothing written past the buffer')
+    m = info({'label_album': 'Album:' + 'x' * 505}); t = m.label('label_album')
+    expect(t == 'Album: ' + 'x' * 505, 'a text of 511 bytes still fits and is rewritten')
     m = info(stock_en, get_ret=0x10)
     expect(all(m.label(n) == stock_en[n] for n in stock_en) and not sets(m), 'a failed read of the text: untouched')
     m = NowMachine(); m.page(); m.src(0); m.info_page({'label_album': 'Album:X'}); m.init()
@@ -493,7 +504,7 @@ def run(ctx):
     # another page on top: the tick does nothing but the bar check; foreground catches up in the event
     m.fire(O['EVT_WINDOW_TO_BG']); m.top_main = WIN + 0x100; k = len(m.styles); m.calls = []
     m.blobs['/tmp/coverpic.jpg'] = b'third track' * 31; m.images['file://' + '/tmp/coverpic.jpg'] = (2, 2, bytes([20, 20, 200, 255]) * 4); m.tick()
-    expect(len(m.styles) == k and not [c for c in m.calls if c[0] in ('fopen', 'get_playtimeandlength', 'widget_get_text_utf8')],
+    expect(len(m.styles) == k and not [c for c in m.calls if c[0] in ('fopen', 'get_playtimeandlength', 'widget_get_text')],
            'a page on top: a tick reads no cover, asks no player time and reads no info label')
     m.top_main = WIN; m.fire(O['EVT_WINDOW_TO_FG'])
     expect(m.styles[-1][2] == word_of(mn.tone(20, 20, 200)) and m.bar_color() == word_of(bar_model(mn.tone(20, 20, 200))),
@@ -597,7 +608,7 @@ def run(ctx):
            f'an unchanged cover: a tick reads none of it (was 396,187 instructions for 64 KiB, now {steady}; no fread)')
     m.fire(O['EVT_WINDOW_TO_BG']); m.top_main = WIN + 0x100; m.calls = []
     m.tick(count=50000000)
-    expect(m.icount < 3000 and not [c for c in m.calls if c[0] in ('fopen', 'fread', 'get_playtimeandlength', 'widget_get_text_utf8')],
+    expect(m.icount < 3000 and not [c for c in m.calls if c[0] in ('fopen', 'fread', 'get_playtimeandlength', 'widget_get_text')],
            f'a covered page: the tick does no cover, time or info work ({m.icount} instructions)')
     # same length, another track (demo wrote a new cover): hashed; the same file again: not
     m = big_run(); n = len(m.styles)

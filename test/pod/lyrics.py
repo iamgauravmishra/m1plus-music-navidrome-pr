@@ -82,12 +82,6 @@ class LyMachine(nowplaying.NowMachine):
         elif name == 'seek_time':
             self.seeks.append(a0); ret = 1
             if self.seek_moves: self.play = a0
-        elif name == 'widget_get_text':
-            t = self.texts.get(a0)
-            ret = 0
-            if t is not None:
-                t = t.encode('latin-1').decode('utf-8'); ret = self.alloc(4 * len(t) + 4)
-                self.u.mem_write(ret, struct.pack(f'<{len(t) + 1}I', *map(ord, t), 0))
         elif name == 'widget_measure_text':
             n = 0
             while self.word(a1 + 4 * n): n += 1
@@ -572,7 +566,62 @@ def follow_tests(ctx):
     m.call(PSYMS['np_on_destroy'], a0=WIN, a1=0)
     expect(sum(c[0] == 'timer_remove' for c in m.calls) == 2, 'the page destroyed mid-animation removes both timers')
     m = LyMachine(SONG); m.init(); rows = m.children[m.src_w]; m.set_lines(SONG[:3]); m.calls = []; m.tick()
-    expect(not any(c[0] == 'widget_get_text_utf8' and c[1] in rows for c in m.calls), 'rows that stock destroyed are not read')
+    expect(not any(c[0] == 'widget_get_text' and c[1] in rows for c in m.calls), 'rows that stock destroyed are not read')
+
+
+def overflow_tests(ctx):
+    """Stock widget_get_text_utf8 ignores its size for a wide text and a lyric line over the 256 byte stack buffer rebooted the player: pod_text_utf8 (patch/common.c) encodes the wide text bounded."""
+    expect = ctx.expect
+    def want(t, size):
+        """The longest prefix of t's UTF-8 that is whole characters and leaves room for the NUL."""
+        out = ''
+        for c in t:
+            if len((out + c).encode('utf-8')) >= size: break
+            out += c
+        return out
+    m = LyMachine(); h = m.widget('probe_text')
+    def run_(text=None, size=256, cps=None, pad=8):
+        """pod_text_utf8 into a buffer of `size` bytes among 0xAA canaries: (result, the buffer's string, canaries intact)."""
+        if text is not None: m.texts[h] = utf8(text)
+        if cps is not None: m.wide[h] = cps
+        buf = m.alloc(size + 2 * pad); m.u.mem_write(buf, b'\xaa' * (size + 2 * pad))
+        r = m.call(PSYMS['pod_text_utf8'], h, buf + pad, a2=size, count=200000)
+        raw = bytes(m.u.mem_read(buf, size + 2 * pad)); body = raw[pad:pad + size]
+        z = body.find(b'\0')
+        return (r if r < 1 << 31 else r - (1 << 32)), (body[:z] if z >= 0 else None), raw[:pad] + raw[pad + size:] == b'\xaa' * (2 * pad)
+    cases = [('x' * 700, 256), ('x' * 255, 256), ('x' * 256, 256), ('a' + '我' * 300, 256), ('ab' + '😀' * 100, 256), ('é' * 300, 256), ('', 256), ('hello', 3), ('歌歌', 3), ('歌歌', 4), ('歌歌', 7), ('歌歌', 6), ('x', 1)]
+    for text, size in cases:
+        r, got, safe = run_(text, size)
+        w = want(text, size)
+        expect(r == len(text.encode('utf-8')) and got == w.encode('utf-8') and safe,
+               f'{len(text.encode("utf-8"))} bytes into {size}: needs {len(text.encode("utf-8"))}, the buffer holds {len(w.encode("utf-8"))} bytes whole characters, NUL terminated, nothing beyond it written (got {r}, {None if got is None else len(got)}, safe {safe})')
+    # the text fitted when the result is below size; the long lines are cut at a character, not in one
+    r, got, safe = run_('a' + '我' * 300)
+    expect(len(got) == 253 and got.decode('utf-8') == 'a' + '我' * 84 and safe, 'a CJK line cut in the middle of a character (253 of the 255 usable bytes) ends on the one before')
+    r, got, safe = run_('ab' + '😀' * 100)
+    expect(len(got) == 254 and got.decode('utf-8') == 'ab' + '😀' * 63 and safe, 'an emoji line (4 bytes each) too')
+    # a size of 0 writes nothing; a widget without a text is -1 and an empty buffer; U+FFFD for what is not a character
+    buf = m.alloc(8); m.u.mem_write(buf, b'\xaa' * 8)
+    expect((m.call(PSYMS['pod_text_utf8'], h, buf, a2=0) == 0xffffffff) and bytes(m.u.mem_read(buf, 8)) == b'\xaa' * 8, 'a size of 0: -1, nothing written')
+    m.u.mem_write(buf, b'\xaa' * 8)
+    expect(m.call(PSYMS['pod_text_utf8'], m.alloc(8), buf, a2=8) == 0xffffffff and bytes(m.u.mem_read(buf, 2)) == b'\0\xaa', 'a widget without text: -1, an empty string')
+    m.u.mem_write(buf, b'\xaa' * 8)
+    expect(m.call(PSYMS['pod_text_utf8'], 0, buf, a2=8) == 0xffffffff and bytes(m.u.mem_read(buf, 2)) == b'\0\xaa', 'no widget: -1, an empty string')
+    r, got, safe = run_(cps=[0x41, 0xd800, 0x110000, 0xffffffff, 0x10ffff], size=64)
+    expect(got == b'A' + '\ufffd'.encode() * 3 + '\U0010ffff'.encode() and r == 1 + 9 + 4 and safe, 'a surrogate or a code point beyond U+10FFFF is U+FFFD')
+    # the lyric rows: a line over the buffer is cut where the page reads it (ly_text), never written past, and what is set on the labels is whole characters
+    for kind, text in (('ASCII', 'x' * 700), ('CJK', 'a' + '我' * 300), ('emoji', 'ab' + '😀' * 100), ('348 bytes (the user\'s album)', 'la ' * 116)):
+        lines = [(0, 'first'), (1, text), (2, 'last')]
+        m2 = LyMachine(lines, measure=lambda s: 10 * len(s)); sets = []
+        m2.init(); sets += [c[2] for c in m2.calls if c[0] == 'widget_set_text_utf8']
+        for t in (1, 2, 0, 1): m2.at(t); sets += [c[2] for c in m2.calls if c[0] == 'widget_set_text_utf8']
+        try:
+            decoded = [s.encode('latin-1').decode('utf-8') for s in sets]
+        except UnicodeDecodeError:
+            decoded = None
+        longest = max(len(s) for s in sets)
+        expect(decoded is not None and longest <= O['LY_BUF'] - 1 and want(text, O['LY_BUF']) in decoded and all(text.startswith(d) or d in ('first', 'last', '') or d[0] == '-' for d in decoded),
+               f'{kind}: a line of {len(text.encode("utf-8"))} bytes is set on the labels cut to at most {O["LY_BUF"] - 1} bytes, on a character ({longest} bytes)')
 
 
 def touch_tests(ctx):
@@ -1031,7 +1080,7 @@ def font_tests(ctx):
     expect(not any(c[0] == 'font_manager_get_font' for c in m.calls) and m.shown(), 'no font manager: no font is asked for, the page still works')
 
 
-SECTIONS = [asset_tests, start_tests, follow_tests, dots_tests, face_tests, touch_tests, wrap_tests, cost_tests, font_tests]
+SECTIONS = [asset_tests, start_tests, follow_tests, dots_tests, face_tests, touch_tests, wrap_tests, overflow_tests, cost_tests, font_tests]
 
 
 def run(ctx):

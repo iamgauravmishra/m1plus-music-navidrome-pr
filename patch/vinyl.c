@@ -533,7 +533,7 @@ static int vn_volume(void) { /* the status bar's label_volume text, read only (n
     int v = 0, i;
     if (!lab) return 0;
     buf[0] = 0;
-    widget_get_text_utf8(lab, buf, sizeof buf);
+    pod_text_utf8(lab, buf, sizeof buf);
     for (i = 0; buf[i] >= '0' && buf[i] <= '9' && i < 4; ++i) v = v * 10 + buf[i] - '0';
     return v;
 }

@@ -86,9 +86,6 @@ class PM(ListMachine):
             self.fp.pop(a0); ret = 0
         elif name == 'mclGetPlayStatus':
             ret = self.status
-        elif name == 'widget_get_text_utf8':   # the text the label holds (set by widget_set_text_utf8 / widget_set_tr_text), copied like stock: at most size - 1 bytes
-            t = self.wtext.get(a0, '').encode('latin-1')[:max(a2 - 1, 0)]
-            self.u.mem_write(a1, t + b'\0'); ret = 0
         elif name == 'get_playtimeandlength':
             self.calls.append(('get_playtimeandlength',)); pos, ln, r = self.pt
             self.setword(a0, pos); self.setword(a1, ln); ret = r

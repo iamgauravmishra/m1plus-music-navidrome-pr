@@ -69,7 +69,7 @@ class TM(Machine):
         for off, v in ((0, 0), (4, 0), (8, 320), (0xc, 480), (0x44, 0)): self.setword(win + off, v)
         for off, v in ((0, 0), (4, 0), (8, 320), (0xc, 480), (0x44, win)): self.setword(self.view + off, v)
         self.images = {n: self.png(n) for n in tape_art.NAMES}
-        for n in ('mclGetPlayStatus', 'playpause_quick_click', 'next_quick_click', 'prev_quick_click', 'get_playtimeandlength', 'widget_get_text_utf8', 'time_now_ms'):
+        for n in ('mclGetPlayStatus', 'playpause_quick_click', 'next_quick_click', 'prev_quick_click', 'get_playtimeandlength', 'widget_get_text', 'time_now_ms'):
             self.handlers[pod.FUNCTIONS[n][2]] = n
         self.glyph_calls = 0
 
@@ -90,9 +90,8 @@ class TM(Machine):
         elif name == 'get_playtimeandlength':
             if self.pt: self.setword(a0, self.pt[0]); self.setword(a1, self.pt[1])
             ret = 1 if self.pt else 0
-        elif name == 'widget_get_text_utf8':
-            raw = self.volume.encode()[:a2 - 1]
-            self.u.mem_write(a1, raw.ljust(a2, b'\0')); ret = 1
+        elif name == 'widget_get_text':   # the volume label's wide text (pod_text_utf8 encodes it)
+            ret = self.alloc(4 * len(self.volume) + 4); self.u.mem_write(ret, struct.pack(f'<{len(self.volume) + 1}I', *map(ord, self.volume), 0))
         elif name == 'widget_get_prop_str':
             prop = self.read_cstr(a1)
             ret = self.cstr(self.battery_img) if prop == 'image' else a2
@@ -222,8 +221,8 @@ def number_tests(ctx):
     expect(O['TP_LUT_N'] > (2 * (A.PACK_MAX + 1)) ** 2, 'the distance table reaches a full pack')
     expect(O['TP_PLAY_MS'] < O['TP_IDLE_MS'] and 60 <= O['TP_PLAY_MS'] <= 80, 'the timer: 70 ms while playing, 500 ms paused')
     d = open(DEMO, 'rb').read(); image = bytearray(d)
-    expect(all(struct.unpack_from('<I', d, pod.fileoff(image, a))[0] == old for a, old, _ in pod.TAPE_PINS) and len(pod.TAPE_PINS) == 6,
-           'the stock words the page relies on are as pinned: widget_invalidate_force passes its rectangle (16 bytes, the widget\'s own coordinates) to widget_invalidate, widget_get_text_utf8')
+    expect(all(struct.unpack_from('<I', d, pod.fileoff(image, a))[0] == old for a, old, _ in pod.TAPE_PINS) and len(pod.TAPE_PINS) == 3,
+           'the stock words the page relies on are as pinned: widget_invalidate_force passes its rectangle (16 bytes, the widget\'s own coordinates) to widget_invalidate')
     # the label's fields: rectangles that do not overlap, inside the label, text boxes inside their rectangle
     rects = {n: A.TEXT[n]['rect'] for n in FIELDS}
     over = [(a, b) for i, a in enumerate(FIELDS) for b in FIELDS[i + 1:]

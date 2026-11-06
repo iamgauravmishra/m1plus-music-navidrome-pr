@@ -29,6 +29,9 @@ There is no additional hook: `np_start` calls `ly_start`, the 500 ms `np_work`
 tick calls `ly_tick`, and `np_stop` calls `ly_stop`. A row signature (count,
 first and last handles and times) detects replacement lyrics; at most 400 rows are read.
 
+A row's text is read with `pod_text_utf8` (`patch/common.c`) into `LY_BUF` (256) bytes: a longer line is cut at a character, and at most `LY_LINES_MAX` rows of it are drawn anyway.
+Stock `widget_get_text_utf8` ignores its size for a wide text and wrote a ~350 byte line over this stack buffer (the player rebooted; see [payload](payload.md)), so the payload never calls it.
+
 ## Layout and appearance
 
 - The current line's top is anchored at 85 px (0.35 of the 244 px view).

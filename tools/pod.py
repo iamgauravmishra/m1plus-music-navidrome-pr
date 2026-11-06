@@ -241,11 +241,6 @@ FUNCTIONS.update({
     'image_manager':           ('void *', 'void', 0x655544),
     'image_manager_unload_all': ('int', 'void *', 0x655fdc),
 })
-# Now Playing's info page (patch/nowplaying.c np_info): the label text is read back (the buffer is zero-filled, then
-# at most size - 1 bytes of the text are copied) and rewritten with the stock setter
-FUNCTIONS.update({
-    'widget_get_text_utf8':    ('int', 'void *, char *, unsigned', 0x667d84),
-})
 # The track rows' playing marker (patch/rows.c rows_track_icon): widget_restack(widget, index) moves a child within its
 # parent's children (clamps the index to the last; reads the parent @0x66a014; no relayout of its own)
 FUNCTIONS.update({
@@ -557,11 +552,10 @@ COVER_PINS = (   # (address, stock word, what it proves): stock's cover extracti
     (0x7585f0, 0x646c6f66, '"folder.png"'), (0x7585f4, 0x702e7265, '"folder.png"'), (0x7585f8, 0x0000676e, '"folder.png"'),
     (0x758bf0, 0x65766f63, '"cover.png"'), (0x758bf4, 0x6e702e72, '"cover.png"'), (0x758bf8, 0x00000067, '"cover.png"'),
 )
-TAPE_PINS = (   # (address, stock word, what it proves): the Tape page invalidates a rectangle of its view (patch/tape.c tp_flush) and reads a label's text (the status bar's volume)
+TAPE_PINS = (   # (address, stock word, what it proves): the Tape page invalidates a rectangle of its view (patch/tape.c tp_flush)
     (0x6691f0, 0x1000feea, 'widget_invalidate_force: b widget_invalidate (0x668d9c) with the rectangle it was given (a1 untouched)'),
     (0x668de4, 0x14a00011, 'widget_invalidate: bnez a1: a rectangle that is given is used as it is, in the widget\'s own coordinates (NULL: 0, 0, w, h)'),
     (0x668e14, 0x24060010, 'widget_invalidate: the rectangle is 16 bytes (rect_init, copied with memcpy 0x10): four 32 bit words x, y, w, h'),
-    (0x667d84, 0x3c1c003a, 'widget_get_text_utf8 prologue'), (0x667d88, 0x279cc14c, 'widget_get_text_utf8 prologue'), (0x667d8c, 0x0399e021, 'widget_get_text_utf8 prologue'),
 )
 FUNCTIONS['get_playtime'] = ('int', 'void', 0x4e02e4)   # the position the stock lyric timers compare "lrc_time" with (docs/modules/lyrics.md)
 LYRICS_PINS = (   # (address, stock word, what it proves): the stock lyric rows patch/lyrics.c reads (docs/modules/lyrics.md)

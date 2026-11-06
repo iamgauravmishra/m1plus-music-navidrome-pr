@@ -40,6 +40,7 @@
 #include "stock.h"
 #include "home.h"
 #include "lyrics.h"
+#include "common.h"
 #include "textgamma.h"
 
 static struct {
@@ -122,7 +123,8 @@ static int ly_time(int i) {
 static int ly_text(int i, char *buf) {
     void *c = widget_get_child(ly.src, (unsigned)i);
     buf[0] = 0;
-    if (!c || widget_get_text_utf8(c, buf, LY_BUF) != RET_OK) {
+    /* (a line over LY_BUF - 1 bytes is cut: at most LY_LINES_MAX rows of it are drawn anyway) */
+    if (!c || pod_text_utf8(c, buf, LY_BUF) < 0) {
         buf[0] = 0;
         return 0;
     }

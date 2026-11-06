@@ -121,7 +121,7 @@ Following the other page timers (`pod_screen_lit()` in `patch/common.c`, the sto
 ## Safety and fallbacks
 
 - No hook, no patched word. `TAPE_PINS` (`tools/pod.py`) pins the stock words the page newly relies on (`widget_invalidate_force` passing its rectangle on, the rectangle's 16 bytes in widget
-  coordinates, `widget_get_text_utf8`); every other stock call is one the payload already pins (Cover Flow's glyph path, the Pod's timer, battery and quick clicks).
+  coordinates); every other stock call is one the payload already pins (Cover Flow's glyph path, the Pod's timer, battery and quick clicks).
 - A page that fails to open (no window, no view or label, a picture missing or of another size, no memory for the frame) frees what it made, goes back with `navigator_back` and returns -1; the
   More sheet, which closes only after the page is up (`pm_on_tape`), stays as it was.
 - Hidden stays `visible=false` + `sensitive=false`; the only visible, sensitive widget is `tape_view`; the picture is painted, not widgets.

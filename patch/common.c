@@ -16,6 +16,43 @@ __attribute__((noinline)) int pod_scan_dir(const char *name, const char *dot) {
     return name[0] == '.' ? 0 : strcmp(name, dot);
 }
 
+/* A widget's text as UTF-8 in buf (size bytes, never written past): stock widget_get_text_utf8 ignores its size for a wide text (tk_utf8_from_utf16 at 0x70e790 overwrites
+ * its out_size argument before reading it, counts the whole encoding and writes all of it), so a long lyric line or tag overran the caller's stack buffer. This reads the wide
+ * text (widget_get_text) and encodes it here: a text that does not fit is cut at a character boundary, buf is always NUL terminated (size >= 1). Returns the length the whole
+ * text needs (snprintf's), so the text fitted when the result is below size; -1 when the widget has no text (buf is then empty). A code point beyond U+10FFFF or a surrogate is U+FFFD. */
+int pod_text_utf8(void *widget, char *buf, unsigned size) {
+    const unsigned *t = widget ? widget_get_text(widget) : (const unsigned *)0;
+    unsigned n = 0, w = 0, c, len, cut = 0;
+    char e[4];
+    if (!size) return -1;
+    buf[0] = 0;
+    if (!t) return -1;
+    for (; (c = *t) != 0; ++t) {
+        if (c > 0x10ffff || (c >= 0xd800 && c < 0xe000)) c = 0xfffd;
+        if (c < 0x80) {
+            e[0] = (char)c, len = 1;
+        } else if (c < 0x800) {
+            e[0] = (char)(0xc0 | c >> 6), e[1] = (char)(0x80 | (c & 0x3f)), len = 2;
+        } else if (c < 0x10000) {
+            e[0] = (char)(0xe0 | c >> 12), e[1] = (char)(0x80 | (c >> 6 & 0x3f)), e[2] = (char)(0x80 | (c & 0x3f)),
+            len = 3;
+        } else {
+            e[0] = (char)(0xf0 | c >> 18), e[1] = (char)(0x80 | (c >> 12 & 0x3f)),
+            e[2] = (char)(0x80 | (c >> 6 & 0x3f)), e[3] = (char)(0x80 | (c & 0x3f)), len = 4;
+        }
+        /* (room for the character and the NUL; once one does not fit, the rest only counts) */
+        if (!cut && w + len < size) {
+            unsigned k;
+            for (k = 0; k < len; ++k) buf[w + k] = e[k];
+            buf[w += len] = 0;
+        } else {
+            cut = 1;
+        }
+        n += len;
+    }
+    return (int)n;
+}
+
 int pod_screen_lit(void) { return *(volatile unsigned char *)BACKLIGHT_STATUS != 0; }
 
 /* Whether the card is mounted: its mount point is another file system than the one it is in (an unmounted /mnt/mmc is a plain directory on the internal flash). */

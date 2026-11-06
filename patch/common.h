@@ -8,6 +8,9 @@
 #define ELLIPSIS 0x2026 /* U+2026 HORIZONTAL ELLIPSIS, the wide char texts are cut with */
 #define POD_DARK_MS 1000
 
+/* The widget's text as UTF-8 in buf (size bytes, cut at a character boundary, always NUL terminated). Returns the length the whole text needs: it fitted when the result is below
+ * size; -1 when the widget has no text. Use this, never stock widget_get_text_utf8, which ignores size for a wide text (docs/modules/payload.md). */
+int pod_text_utf8(void *widget, char *buf, unsigned size);
 int pod_screen_lit(void); /* stock backlight state */
 
 int pod_on_back(void *ctx, void *e); /* click handler: navigator_back() */
