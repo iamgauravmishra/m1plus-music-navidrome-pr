@@ -751,7 +751,9 @@ static void check_card_name(const char *s) {
     long n = (long)strlen(s);
     for (long i = 0; i < n; i++)
         for (const char *b = "\"*:<>?\\|"; *b; b++)
-            if (s[i] == *b) die(400, "a name cannot contain double quotes, asterisks, colons, angle brackets, question marks, backslashes or bars");
+            if (s[i] == *b)
+                die(400, "a name cannot contain double quotes, asterisks, colons, angle brackets, question marks, "
+                         "backslashes or bars");
     if (s[n - 1] == '.' || s[n - 1] == ' ') die(400, "a name cannot end with a dot or a space");
 }
 static const char *base_name(const char *abs) {
