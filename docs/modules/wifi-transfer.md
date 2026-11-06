@@ -190,8 +190,8 @@ keep, download (about 5.9 MB/s, byte-identical), rename, tar (about 6.2 MB/s) an
 Content-Type is 403 and `/../etc` is 400. Found there and fixed since: a case-only rename was a silent no-op, and a
 name with `"` failed only after part of the body was read.
 
-Not verified on the device: the page in any browser (it was written against the mockup and the API tests; no
-browser or headless test runs it), the two-step case-only rename and the early 400 on illegal names, thttpd's
+Seen on the device (2026-11-06): the page loads and lists the card in Safari on an iPad mini, dark theme. Not
+verified: other browsers and the operations below (no browser or headless test runs the page), the two-step case-only rename and the early 400 on illegal names, thttpd's
 behaviour above 2 GiB and the chunked upload, drag-and-drop and folder upload in each browser, the tar download
 of a large selection through the form POST, `rename` over an existing file, and the base-256 tar size field
 (needs an 8 GiB file).

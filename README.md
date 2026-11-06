@@ -21,10 +21,11 @@
 - **Search:** find music and podcasts with an on-screen QWERTY keyboard.
 - **Home:** Daily Mix, Recently Played and a floating mini player.
 - **Now Playing:** cover-colour backgrounds, rounded artwork and remaining time.
-- **Podcasts:** local episodes, Apple Podcasts directory search, feed subscriptions and episode downloads.
+- **Podcasts:** local episodes, top shows and episodes for your region, directory search, feed subscriptions and episode downloads.
 - **Extras:** album/folder shuffle, internet radio, a virtual iPod, Cassette Mode, Vinyl Mode and an online cover and lyrics lookup.
 - **Appearance:** an accent colour, a translucent lock screen, minimal theme, Lucide icons and Inter + Source Han Sans fonts.
-- **Equalizer:** APO / AutoEQ parametric presets from the card, at every sample rate, beside the stock ten-band EQ.
+- **Equalizer:** a 10-band EQ editor, AutoEq headphone corrections downloaded over Wi-Fi, parametric presets from the card and a separate EQ for headphones, line out and USB DACs.
+- **Wi-Fi:** a new Wi-Fi page with WPA3 and Enhanced Open, and a redesigned Wi-Fi Transfer page to browse, upload, download and organise the card from a browser.
 - **Settings:** choose menu items, pull-down tiles, startup behaviour, Cover Flow orientation.
 - **Languages:** the added UI follows the player's language setting, with 13 translations.
 

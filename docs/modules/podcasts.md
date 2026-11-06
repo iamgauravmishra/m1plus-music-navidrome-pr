@@ -172,13 +172,13 @@ file protection, subscription removal, OPML round trips and responsive scrolling
 Check Discover with Wi-Fi on and off, a region whose chart is missing (falls back to the United States), the Shows chart's failures and retries, taps on shows and episodes, a show with no feed, scrolling the 25 rows, the control's look and the magnifier.
 Record results by build; these checks are not claims of completed hardware validation.
 
-## Handover (Discover, 2026-11-05; branch `feat/podcast-search-row`)
+## Open items (Discover)
 
 Episode rows (2026-11-06): a Top Episodes row opens its show's preview with the episode's page on top (matching in the Discover section); the episode page's show row returns to the preview. Built and tested under Unicorn, not flashed, not device-tested. Open: a subscribed show's chart row opens the show's page only (no episode jump); an episode beyond the 20 kept feed items falls back to the preview; the show row of an episode from a preview has the chevron now (it was not drawn there before).
 
-State: built and tested under Unicorn (`make dev` green), not flashed, not device-tested. Open items for the next agent:
+State: built and tested under Unicorn, not device-tested. Open items:
 - Device check: the capsule painter's cost while scrolling (about 100 one-row fills per capsule per frame, two capsules; not measured: if it shows, cache the control in a bitmap), the thumbnail rate (the worker fetches the 25 pictures of a chart one by one in order, the rows in view are not first), the shows chart's flakiness (the real timeout is 20 s, three tries), the "UK" / Region row widths, Wi-Fi loss mid-chart.
-- Preview: `tools/preview_podcasts_revamp.py` has no Discover frames yet (only the Settings Library frame was updated); the mockups of the design are in `out/mockups/podcasts-discover/` (not committed).
+- Preview: `tools/preview_podcasts_revamp.py` has no Discover frames yet (only the Settings Library frame was updated); the design mockups were not kept.
 - Not done: a chart's country is not shown anywhere else; no pull-to-refresh or Try Again on a failed chart (switch the control or re-enter the level); names stay English; the font has no medium weight for the control's labels; no shadow on the thumb.
 - Not done: a DC-only decoder for progressive feed images (the store's `artworkUrl600` stands in for shows that have an Apple id); shows without one (typed URL, OPML) still get no cover from such a feed. Device check: the Rest Is Politics / News Agents / Rest Is History previews and subscribing to one show a cover.
 - Podcast Discover switch (`ACT_PCSEARCH` 34, `podcast-online-search`, `pg.searchon`): Settings > Library > Podcasts, on by default ("0" is off, a missing file is on); off hides the Discover row and makes `pg_load_disc` / `pg_load_search` land on the Shows level, and `pg_on_fg` sends a Discover or search level back to the Shows level when the page is in front again with the switch off. The switch also gates the Shows level's globe; the Shows "..." has no Search row. Tested in `pcsearchui` `entry_tests` and `menu` `pcsearch_row_tests`; not device-tested.

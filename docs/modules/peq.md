@@ -2,7 +2,7 @@
 
 **Sources:** `patch/peq.h`, `patch/peq.c` (shared), `patch/peq_player.c` (hciplayer), `patch/peq_ui.c` (the page), `patch/peqpage.c` (the preset page), `patch/peqlib.c`, `patch/peqlib.h` (the Presets page), `patch/autoeq.c` (the AutoEq download page), `patch/pcnet.c` "AutoEq" (its network job),
 `tools/mod_player.py` (the hciplayer step), `tools/pod_ui.py` `build_peq_page` / `build_peqpage_page`, `tools/peq_graph.py` (the preset page's model), test `test/pod/peq.py`, previews `tools/preview_peq.py`, `tools/preview_peqpage.py`.
-User instructions: [guide](../guide.md#customize). Based on Diamond Bond's open-source parametric EQ for the Q2 (MIT): the preset layout, the APO parser, the RBJ designs, Auto preamp, the ramped engine, the DSD pass-through and
+User instructions: [guide](../guide.md#equalizer). Based on Diamond Bond's open-source parametric EQ for the Q2 (MIT): the preset layout, the APO parser, the RBJ designs, Auto preamp, the ramped engine, the DSD pass-through and
 the reload on stock's gain command are its; the carried filter memory is its idea, built on this player's own trigger. 3EQ, crossfade and the visualizer tap are not part of this feature.
 
 ## What it does

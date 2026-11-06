@@ -1,6 +1,6 @@
 # Get Info (`patch/songinfo.c`, `patch/songinfo.h`, `test/pod/songinfo.py`)
 
-A track's details page, opened by the Get Info row of the track rows' "..." sheet ([rowmenu](rowmenu.md)). **[E]** emulated, **[U]** not on the device: nothing here has been on the device.
+A track's details page, opened by the Get Info row of the track rows' "..." sheet ([rowmenu](rowmenu.md)). Device: the compact layout was checked on V2.1zAZYTAAAB (look and open); the readers per format are emulated only.
 
 **Source:** `songinfo_open(rec)` copies the title (the file name when empty), artist, album, path and CUE start/end of the row's `stSongInfo`, so the caller may destroy the record at once. The page
 `m1plus_songinfo` (`tools/pod_ui.py build_songinfo_page`, `pod_pages.SONGINFO`, last in the page table) is Station Info's structure ([radio](radio.md), `patch/radioinfo.c`): the stock navbar (Back, Now Playing,

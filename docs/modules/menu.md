@@ -2,7 +2,7 @@
 
 Sources: `tools/pod_pages.py` defines rows/actions; `tools/pod_ui.py` builds assets;
 `patch/menu.c` arranges them at runtime. Tests compare the Python and C models and run stock
-layout/hit-testing. User instructions are in the [guide](../guide.md#home-and-menus).
+layout/hit-testing. User instructions are in the [guide](../guide.md#find-your-way-around).
 
 ## Menu instances
 
