@@ -41,7 +41,7 @@ OBJCOPY = os.path.join(LLVM, 'llvm-objcopy')
 LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
-SOURCES = ['m1plus.c', 'common.c', 'filetime.c', 'menu.c', 'covercache.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c', 'textgamma.c',
+SOURCES = ['m1plus.c', 'common.c', 'filetime.c', 'menu.c', 'covercache.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'bigcover.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c', 'textgamma.c',
            'scroll.c', 'playmore.c', 'pulldown.c', 'playlists.c', 'azlist.c', 'songops.c', 'rowmenu.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'upnext.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'upver.c', 'pcnet.c', 'podcasts.c', 'radio.c', 'radiopage.c', 'radionp.c', 'radioinfo.c', 'songinfo.c', 'tape.c', 'palette.c', 'vinyl.c', 'onlineart.c', 'update.c', 'relnotes.c', 'keyboard.c', 'search.c', 'battery.c', 'lineout.c', 'lyrics.c', 'picker.c', 'folders.c', 'timezones.c', 'pcregion.c', 'viewsort.c', 'wifictl.c', 'wifipage.c',
            'peq.c', 'peq_ui.c', 'peqpage.c', 'peqlib.c', 'autoeq.c', 'tenband.c', 'peqband.c', 'peqout.c']
 
@@ -73,6 +73,17 @@ HOME_INIT_PROLOGUE = (0x3c1c004d, 0x279cf1fc, 0x0399e021)
 # first, then starts the page-scoped tint and remaining-time timer.
 PLAYING_INIT = 0x53d1e4
 PLAYING_INIT_PROLOGUE = (0x3c1c004c, 0x279c6cec, 0x0399e021)
+
+# The timed cover page (patch/bigcover.c, docs/modules/bigcover.md, payload hook 23): bigcover_page_init, built by the navigator's page-init dispatcher whenever the page opens (Now Playing's
+# 500 ms timer after ~10 s is the only opener). m1plus_bigcover_init runs the stock init, then gives the page a 320 px cover of its own.
+BIGCOVER_INIT = 0x529a24
+BIGCOVER_INIT_PROLOGUE = (0x3c1c004e, 0x279ca4ac, 0x0399e021)
+BIGCOVER_PINS = (   # (address, stock word, what it proves)
+    (0x529a30, 0x10800046, 'bigcover_page_init: beqz a0 (the trampoline resumes here)'),
+    (0x4d10c8, 0x0320f809, 'page-init dispatcher: jalr strcmp(name, "bigcover_page")'), (0x4d10cc, 0x24a59f50, 'its delay slot: a1 = "bigcover_page"'),
+    (0x4d10d8, 0x8f99b5b8, 'page-init dispatcher: lw t9, GOT bigcover_page_init'), (0x4d10e0, 0x0320f809, 'page-init dispatcher: jalr bigcover_page_init(window, ctx)'),
+    (0x53d0ec, 0x0320f809, 'the timed open (callback 0x53cf48, registered by player_timer_start): jalr navigator_to'), (0x53d0f0, 0x24849f50, 'its delay slot: a0 = "bigcover_page"'),
+)
 
 # Light Mode (patch/palette.c, docs/modules/accent.md, docs/modules/payload.md hooks 10 - 12): three hooks on the painter's inputs, q2-pod's (its style_get_color / style_get_gradient / image_manager_add hooks).
 # Each is a plain pass-through while Light Mode is off (the setting, the kill switch, the bad-boot note).
@@ -820,6 +831,9 @@ DATA = {
     # the cover source type: parseplaycover_thd sets 1 (busy), 2 / 3 / 5 (a /tmp JPEG), the Now Playing cover loader
     # @0x53a5d8 reads it (`lw s1, 0x97cad8; lw v1, (s1); bne v1, 2 ...`, @0x53a6a8)
     'COVER_SRC':          (0x97cad8, None),
+    # savecover_path: char[0x400], the path parseplaycover_thd last finished a cover for. It copies the track's path here (`snprintf(buf, 0x400, "%s")` @0x4df1a0) only AFTER it has stored the new source (2 / 3 / 5) and
+    # released the lock, and skips a track whose path equals it (strcmp @0x4df028); COVER_SRC is 1 while it works. So source in {2, 3} with this equal to the playing path means the source is that track's (patch/bigcover.c)
+    'COVER_PARSED':       (0xa04c3c, 'savecover_path'),
     # the play queue: a deque_t * (stSongInfo rows, the queue start_player copied). Every reader pairs it with
     # mclGetPlayPos: get_playtimeandlength `lw s1, 0xa0394c; deque_size(*s1)` then `deque_at(*s1, pos)` (@0x4e01cc..0x4e0268),
     # the lock screen refresh (@0x53f73c, "queued" = 0 <= pos < size), the queue drawer (@0x47a8f0)
@@ -1316,6 +1330,7 @@ def gen_stock_h(out, demo_path):
     h.append(f'#define PCREGION_N {len(pcregion.CODES)}')
     h.append('extern int stock_home_click_trampoline(void *, void *);')
     h.append('extern int stock_playing_init_trampoline(void *, void *);')
+    h.append('extern int stock_bigcover_init_trampoline(void *, void *);')
     h.append('extern int stock_playmore_init_trampoline(void *, void *);')
     h.append('extern int stock_pulldown_init_trampoline(void *, void *);')
     h.append('extern int stock_start_player_trampoline(void);')
@@ -1416,6 +1431,9 @@ def gen_asm(out, slots):
     # and for the Now Playing page's init
     asm += ['.globl stock_playing_init_trampoline', 'stock_playing_init_trampoline:',
             f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{PLAYING_INIT + 12:x}', 'nop']
+    # and for the timed cover page's init
+    asm += ['.globl stock_bigcover_init_trampoline', 'stock_bigcover_init_trampoline:',
+            f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{BIGCOVER_INIT + 12:x}', 'nop']
     # and for the Now Playing More dialog's init
     asm += ['.globl stock_playmore_init_trampoline', 'stock_playmore_init_trampoline:',
             f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{PLAYMORE_INIT + 12:x}', 'nop']
@@ -1488,7 +1506,7 @@ def compile_payload(out, demo_path, tag=TAG):
     # compact_set_row_layout is reached only from the patched stock call sites, so keep it
     keep = ['--undefined=compact_set_row_layout', '--undefined=m1plus_home_init',
             '--undefined=stock_home_init_trampoline', '--undefined=m1plus_playing_init',
-            '--undefined=stock_playing_init_trampoline', '--undefined=m1plus_scroll_event',
+            '--undefined=stock_playing_init_trampoline', '--undefined=m1plus_bigcover_init', '--undefined=stock_bigcover_init_trampoline', '--undefined=m1plus_scroll_event',
             '--undefined=m1plus_playmore_init', '--undefined=stock_playmore_init_trampoline', '--undefined=m1plus_pulldown_init', '--undefined=pd_open_settings', '--undefined=stock_pulldown_init_trampoline', '--undefined=rd_start_player', '--undefined=rd_step', '--undefined=stock_start_player_trampoline', '--undefined=rd_save_stop', '--undefined=rd_save_start', '--undefined=stock_save_stop_trampoline', '--undefined=stock_save_start_trampoline', '--undefined=rn_backtoplayer', '--undefined=stock_backtoplayer_trampoline', '--undefined=pc_id3_path', '--undefined=pc_library_query', '--undefined=pc_sorted_query', '--undefined=stock_dbquery_trampoline', '--undefined=stock_sorted_query_trampoline',
             '--undefined=m1plus_style_color', '--undefined=m1plus_style_gradient', '--undefined=m1plus_image_add', '--undefined=stock_style_color_trampoline', '--undefined=stock_image_add_trampoline', '--undefined=pal_map', '--undefined=pal_active', '--undefined=pal_background', '--undefined=pal_accent', '--undefined=pal_accent_saved', '--undefined=pal_accent_set', '--undefined=pal_accent_color', '--undefined=pal_fill',
             '--undefined=pod_scan_dir', '--undefined=sh_set_mode', '--undefined=sh_load_playlist', '--undefined=sh_display_mode', '--undefined=sh_clear_queue', '--undefined=stock_setmode_trampoline', '--undefined=stock_loadplaylist_trampoline', '--undefined=ft_created', '--undefined=stock_file_created_trampoline', '--undefined=tz_select', '--undefined=tz_row', '--undefined=tz_label', '--undefined=stock_timezone_trampoline', '--undefined=bp_capacity', '--undefined=lo_set_text', '--undefined=wifi_hub_open', '--undefined=pod_eq_site', '--undefined=pf_items', '--undefined=pf_seen']   # (the last two: accessors of the parser the tests read; nothing in the payload calls them)
@@ -1639,6 +1657,12 @@ def patch_demo(raw, payload, ps, demo_path):
     target4 = ps['m1plus_playing_init']
     check(BASE <= target4 < BASE + len(payload), 'playing init entry symbol outside payload')
     hook(patched, PLAYING_INIT, PLAYING_INIT_PROLOGUE, target4, 'playing_page_init')
+    target5 = ps['m1plus_bigcover_init']
+    check(BASE <= target5 < BASE + len(payload), 'bigcover init entry symbol outside payload')
+    for a, old, what in BIGCOVER_PINS:
+        got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
+        check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
+    hook(patched, BIGCOVER_INIT, BIGCOVER_INIT_PROLOGUE, target5, 'bigcover_page_init')
     patch_playmore(patched, ps, len(payload))
     patch_timezones(patched, ps, len(payload))
     patch_pulldown(patched, ps, len(payload))
@@ -1695,7 +1719,7 @@ def patch_demo(raw, payload, ps, demo_path):
     check(dynsym(demo_path).get('playsong_id3info') == 0xa0d88c, 'playsong_id3info moved')
     edits = patch_rows(patched, ps)
     # no row edit may touch a PIC prologue (the hooks are the only ones) or a hook site
-    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, PLAYING_INIT, PLAYMORE_INIT, PULLDOWN_INIT, START_PLAYER, SAVE_STOP, SAVE_START, BACKTOPLAYER, QUERY_DB, QUERY_SORT, STYLE_COLOR, IMAGE_ADD, SETMODE, LOADPL, FILETIME, timezones.SELECT)) and not STYLE_GRADIENT <= int(a, 16) < STYLE_GRADIENT + 8 and not any(int(a, 16) == s for s, _ in MODE_SITES) and int(a, 16) != CLEAR_SITE and not ID3_SITE <= int(a, 16) < ID3_SITE + 4 and not SCAN_SITE <= int(a, 16) < SCAN_SITE + 4 and not BATTERY_SITE <= int(a, 16) < BATTERY_SITE + 4 and not any(int(a, 16) == s for s, _ in LINEOUT_SITES) and int(a, 16) != WIFIHUB_SITE and int(a, 16) not in PULLDOWN_OPEN_SITES and not EQ_ROW <= int(a, 16) < EQ_ROW + 8
+    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, PLAYING_INIT, BIGCOVER_INIT, PLAYMORE_INIT, PULLDOWN_INIT, START_PLAYER, SAVE_STOP, SAVE_START, BACKTOPLAYER, QUERY_DB, QUERY_SORT, STYLE_COLOR, IMAGE_ADD, SETMODE, LOADPL, FILETIME, timezones.SELECT)) and not STYLE_GRADIENT <= int(a, 16) < STYLE_GRADIENT + 8 and not any(int(a, 16) == s for s, _ in MODE_SITES) and int(a, 16) != CLEAR_SITE and not ID3_SITE <= int(a, 16) < ID3_SITE + 4 and not SCAN_SITE <= int(a, 16) < SCAN_SITE + 4 and not BATTERY_SITE <= int(a, 16) < BATTERY_SITE + 4 and not any(int(a, 16) == s for s, _ in LINEOUT_SITES) and int(a, 16) != WIFIHUB_SITE and int(a, 16) not in PULLDOWN_OPEN_SITES and not EQ_ROW <= int(a, 16) < EQ_ROW + 8
               for a, *_ in edits), 'row edit on a hook')
     check(all(not (SCROLL_SLOT <= int(a, 16) < SCROLL_SLOT + 4 or a in {hex(p[0]) for p in SCROLL_PINS}) for a, *_ in edits),
           'row edit on a list gesture word')
@@ -1729,6 +1753,7 @@ def main():
         'segment_file_off': seg_off, 'hook': {'addr': HOME_CLICK, 'target': ps['m1plus_home_click']},
         'hook_init': {'addr': HOME_INIT, 'target': ps['m1plus_home_init']},
         'hook_playing': {'addr': PLAYING_INIT, 'target': ps['m1plus_playing_init']},
+        'hook_bigcover': {'addr': BIGCOVER_INIT, 'target': ps['m1plus_bigcover_init']},
         'hook_playmore': {'addr': PLAYMORE_INIT, 'target': ps['m1plus_playmore_init']},
         'hook_pulldown': {'addr': PULLDOWN_INIT, 'target': ps['m1plus_pulldown_init']},
         'hook_pulldown_open': {'sites': [hex(a) for a in PULLDOWN_OPEN_SITES], 'target': ps['pd_open_settings']},

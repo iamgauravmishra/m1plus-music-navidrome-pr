@@ -137,6 +137,38 @@ void cc_box(const unsigned char *data, unsigned w, unsigned h, unsigned stride, 
     for (y = 0; y < side; ++y) ar_push(&a, base + y * stride, 4, at[0], at[1], at[2], at[3], box_emit, &o);
 }
 
+typedef struct {
+    unsigned *out, size, tw, ox, oy, ty;
+} fit_out_t;
+
+static void fit_emit(void *user, const unsigned char *rgb) {
+    fit_out_t *o = user;
+    unsigned *d = o->out + (o->oy + o->ty++) * o->size + o->ox, x, n = o->tw;
+    for (x = 0; x < n; ++x, rgb += 3) *d++ = 0xff000000u | rgb[0] | rgb[1] << 8 | rgb[2] << 16;
+}
+
+/* The whole picture w x h fitted inside size x size, never cropped, centred over bg (a word 0xAABBGGRR) in out (size x size words): its longer side becomes size, the other follows
+ * (at least 1), by the exact area average of ar_push, so a picture of exactly size on its longer side is copied pixel for pixel and any other ratio is filtered, up and down. The
+ * pixels around a non-square picture are bg. 1; 0 (out untouched) when the sizes are over ar_init's limits (size over AR_MAX, a picture over 8192 or AR_LIMIT pixels). */
+int cc_fit(const unsigned char *data, unsigned w, unsigned h, unsigned stride, const unsigned char *at, unsigned size,
+           unsigned bg, unsigned *out) {
+    ar_t a;
+    fit_out_t o;
+    unsigned tw, th, y;
+    if (!w || !h || !size) return 0;
+    if (w >= h)
+        tw = size, th = h * size / w;
+    else
+        th = size, tw = w * size / h;
+    if (!th) th = 1;
+    if (!tw) tw = 1;
+    if (!ar_init(&a, w, h, tw, th)) return 0;
+    for (y = 0; y < size * size; ++y) out[y] = bg;
+    o.out = out, o.size = size, o.tw = tw, o.ox = (size - tw) / 2, o.oy = (size - th) / 2, o.ty = 0;
+    for (y = 0; y < h; ++y) ar_push(&a, data + y * stride, 4, at[0], at[1], at[2], at[3], fit_emit, &o);
+    return 1;
+}
+
 /* Stock's resize 0x5e00bc (toolsGetAlbumCover / toolsGetExternCover) with the picture decoded to w x h and t the requested size on both sides. The wider side (the
  * width when square) is cut to t when it is over t, the other side follows by single precision division (the FPU sequence at 0x5e0200..0x5e0228 and, for a
  * portrait, 0x5e02c4..0x5e02ec, so the same truncation); a side exactly t falls through to the resize with the plain request, t x t (0x5e02f0..0x5e02f8, a stretch of
@@ -288,6 +320,27 @@ int cc_decode(void *w, const char *url, int unload, unsigned size, int box, unsi
     }
     if (unload) widget_unload_image(w, bitmap);
     return data != (const unsigned char *)0;
+}
+
+/* cc_decode's twin for a picture that must not be cropped: the whole picture fitted inside size x size over bg (cc_fit). 1 when out was written. */
+int cc_decode_fit(void *w, const char *url, int unload, unsigned size, unsigned bg, unsigned *out) {
+    static const unsigned char at[4][4] = BITMAP_RGBA_AT;
+    unsigned bitmap[32]; /* bitmap_t is 0x48 bytes */
+    unsigned iw, ih, format;
+    const unsigned char *data;
+    int ok = 0;
+    memset(bitmap, 0, sizeof bitmap);
+    if (widget_load_image(w, url, bitmap)) return 0;
+    iw = bitmap[0], ih = bitmap[1];
+    format = (unsigned)(*(unsigned short *)((char *)bitmap + BITMAP_FORMAT)) - 1u;
+    data = format < 4 && iw && ih && iw <= 4096 && ih <= 4096 ? bitmap_lock_buffer_for_read(bitmap)
+                                                              : (const unsigned char *)0;
+    if (data) {
+        ok = cc_fit(data, iw, ih, bitmap_get_line_length(bitmap), at[format], size, bg, out);
+        bitmap_unlock_buffer(bitmap);
+    }
+    if (unload) widget_unload_image(w, bitmap);
+    return ok;
 }
 
 /* A stock list copied into a deque of our own, so later stock queries cannot pull it away. */
@@ -1029,6 +1082,8 @@ typedef struct {
 static struct {
     char dst[80];
     unsigned px;
+    int aspect; /* 1: the picture keeps its aspect ratio at exactly px too, and stock's own resize is never the fallback (cc_build_add_aspect) */
+    int only; /* with aspect: 1 the embedded picture only, 2 the folder's only (the source stock's page shows); 0 both (cc_build_add_file) */
 } xf __attribute__((section(".scratch")));
 
 static struct {
@@ -1242,7 +1297,7 @@ static int art_lock(int phase, const char *track) {
 
 /* The embedded picture, as toolsGetAlbumCover finds it (taglib_album_picture: 2 a JPEG, 1 a PNG, saved to TAG_TMP, moved to TAG_COPY under the lock), shrunk by pv_cover. No picture, or
  * one pv_cover refuses (PV_REFUSED): 0, and stock's call is not made (it would ask taglib the same, or decode it). */
-static int art_embedded(const char *track, const char *dst, unsigned px) {
+static int art_embedded(const char *track, const char *dst, unsigned px, int aspect) {
     int kind, r = 0;
     if (!art_lock(PH_EMB_TAGS, track)) return 0;
     kind = taglib_album_picture(track, (char *)dst, TAG_LIMIT_A, TAG_LIMIT_B);
@@ -1251,8 +1306,9 @@ static int art_embedded(const char *track, const char *dst, unsigned px) {
     pthread_mutex_unlock((void *)PARSE_COVER_MUTEX);
     if (kind != 1 && kind != 2) return 0;
     at(PH_EMB_SHRINK, "embedded", 0, 0, kind == 2 ? 1 : 2, 0); /* (the picture is not opened again to say more) */
-    if (!access(TAG_COPY, 4)) r = pv_cover(TAG_COPY, dst, px);
+    if (!access(TAG_COPY, 4)) r = aspect ? pv_cover_aspect(TAG_COPY, dst, px) : pv_cover(TAG_COPY, dst, px);
     unlink(TAG_COPY);
+    if (aspect) return r == 1; /* (stock's resize would stretch an exact-size picture) */
     if (r != 0 && r != -1) return r == 1; /* done, or refused */
     if (!art_lock(PH_EMB_STOCK, track)) return 0;
     r = toolsGetAlbumCover(track, dst, px, px) == 1;
@@ -1283,7 +1339,7 @@ static int fl_ext(const char *name) { /* the last extension is .jpg, .png or .jp
  * folder.jpeg, cover.png, cover.jpg, cover.jpeg, <track>.png, <track>.jpg, <track>.jpeg in that order the file of that name (any case) moves to the front, so the order tried is the
  * reverse of that list for the files that exist (<track>.jpeg first, folder.png last of them), then the others as listed. The first whose header is a picture within stock's
  * file size limit goes to pv_cover. 1 when the cover was made; any other outcome is stock's own call (which does the same walk again and handles what is left). */
-static int art_folder(const char *track, const char *dst, unsigned px) {
+static int art_folder(const char *track, const char *dst, unsigned px, int aspect) {
     static const char *const pri[6] = {"folder.png", "folder.jpg", "folder.jpeg",
                                        "cover.png",  "cover.jpg",  "cover.jpeg"};
     static const char *const ext[3] = {".png", ".jpg", ".jpeg"};
@@ -1334,12 +1390,13 @@ static int art_folder(const char *track, const char *dst, unsigned px) {
                 !(kind == 2 && size > 0 && size <= FL_STOCK_PNG))
                 continue;
             at(PH_FOLDER_SHRINK, path, w, h, (unsigned)kind, sof);
-            r = pv_cover(path, dst, px), done = 1;
+            r = aspect ? pv_cover_aspect(path, dst, px) : pv_cover(path, dst, px), done = 1;
         }
     free(names);
     if (r == 1) return 1;
     if (r == PV_REFUSED) return 0; /* no art, as for an embedded one */
 stock:
+    if (aspect) return 0;
     if (!art_lock(PH_FOLDER_STOCK, track)) return 0;
     r = toolsGetExternCover(track, dst, px, px) == 1;
     pthread_mutex_unlock((void *)PARSE_COVER_MUTEX);
@@ -1347,8 +1404,11 @@ stock:
 }
 
 /* The album's art at px x px into dst: the embedded picture, else the folder's. Takes the lock itself, around the stock calls only. */
-static int art_make(const char *track, const char *dst, unsigned px) {
-    return art_embedded(track, dst, px) || (!cb.cancelled && art_folder(track, dst, px));
+static int art_make(const char *track, const char *dst, unsigned px, int aspect, int only) {
+    if (only)
+        return only == 1 ? art_embedded(track, dst, px, aspect)
+                         : art_folder(track, dst, px, aspect); /* (the other source is never a substitute) */
+    return art_embedded(track, dst, px, aspect) || (!cb.cancelled && art_folder(track, dst, px, aspect));
 }
 
 /* A transient extraction (the Pod's cover pane, docs/modules/ipod.md): the album's art, fitted inside px x px by art_make (never upscaled), into xf.dst through
@@ -1358,7 +1418,7 @@ static void build_file(const job_t *j) {
     int ok;
     snprintf(tmp, sizeof tmp, "%s.tmp", xf.dst);
     if (access(j->track, F_OK)) return;
-    ok = art_make(j->track, tmp, xf.px);
+    ok = art_make(j->track, tmp, xf.px, xf.aspect, xf.only);
     if (cb.cancelled) { /* the pane has gone (and removed xf.dst): publish nothing */
         unlink(tmp);
         return;
@@ -1476,7 +1536,7 @@ static void build_art(const job_t *j) {
     cb.cur = j->key, cb.began = 0, ++cb.seq;
     cb.phase = PH_NONE, cb.img.path[0] = 0, cb.img.w = cb.img.h = cb.img.kind = cb.img.sof = 0;
     pthread_mutex_unlock(cb_mutex);
-    ok = art_make(j->track, tmp, ART_SIZE);
+    ok = art_make(j->track, tmp, ART_SIZE, 0, 0);
     pthread_mutex_lock(cb_mutex);
     cb.cur = 0;
     pthread_mutex_unlock(cb_mutex);
@@ -1597,7 +1657,7 @@ int cc_build_dur(int i, unsigned *key, unsigned *size, unsigned *sec) {
     return 1;
 }
 
-int cc_build_add_file(const char *track, const char *dst, unsigned px) {
+static int build_add_file(const char *track, const char *dst, unsigned px, int aspect, int only) {
     unsigned n;
     job_t *j;
     if (!cb.jobs || cb.running || cb.total || !track || !*track || !dst || !*dst || !px) return 0;
@@ -1609,8 +1669,16 @@ int cc_build_add_file(const char *track, const char *dst, unsigned px) {
         xf.dst[n] = dst[n]; /* (a path that does not fit is cut: the callers' is short) */
     xf.dst[n] = 0;
     xf.px = px;
+    xf.aspect = aspect;
+    xf.only = only;
     cb.total = 1;
     return 1;
+}
+
+int cc_build_add_file(const char *track, const char *dst, unsigned px) { return build_add_file(track, dst, px, 0, 0); }
+int cc_build_add_aspect(const char *track, const char *dst, unsigned px, int source) {
+    if (source != 2 && source != 3) return 0; /* (only the two sources the worker can search) */
+    return build_add_file(track, dst, px, 1, source == 2 ? 1 : 2);
 }
 
 void cc_build_stop(void) {

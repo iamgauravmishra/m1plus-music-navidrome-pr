@@ -62,7 +62,7 @@ The stock battery props are restored on `pgbar_battery` (no text readout).
   otherwise. AWTK draws a smaller picture at the widget size by nearest neighbour, hence the 1:1 264 (the lock
   card's cover and Now Playing's `img_playcover` are both 264: `mod_nowplaying` asserts the sizes agree).
   Cost: 1.08x output pixels (about 209 KB instead of 194 KB RGB while encoding). Other readers of the
-  files (resampled by nearest neighbour, as before): `bigcover_page` (320), the Home strip (66), the
+  files (resampled by nearest neighbour, as before): `bigcover_page` (320; it has a 320 px picture of its own since [bigcover](bigcover.md), stock's 264 px one stays underneath), the Home strip (66), the
   Now Playing (254), the remote-control replies (check
   `stat().st_size < 0x16801` = 92,161 bytes; 264 px files are about 1.08x the 254 ones; a larger file means the phone shows no cover). Unchanged: `.downpic` art
   (`cp -f`), DLNA/AirPlay 270 (`0x10e`), HiFi/Tidal 254 (`0x4df348`, `0x4df424`). Cover source types

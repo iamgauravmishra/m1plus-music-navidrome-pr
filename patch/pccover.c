@@ -117,9 +117,18 @@ static int pv_out_close(pv_out_t *o, const char *dst, int ok) {
     return ok;
 }
 
+/* The size of an album cover: stock's (cc_stock_fit); aspect: a picture whose longer side is exactly t keeps its shape too (stock stretches it to t x t). 0: kept as it is (smaller than t). */
+static int pv_fit(unsigned w, unsigned h, unsigned t, int aspect, unsigned *tw, unsigned *th) {
+    if (aspect && (w > h ? w : h) == t) {
+        *tw = w, *th = h;
+        return 1;
+    }
+    return cc_stock_fit(w, h, t, tw, th);
+}
+
 /* The JPEG at src into dst. cover = 0: a podcast cover (PV_SIZE, quality PV_QUALITY, a progressive picture held to PC_COVER_MAX_PX). cover = the size t of an album cover: stock's size and
  * quality 90, the decode scale the smallest picture that still has both target sides; a picture stock keeps as it is (smaller than t) is not touched: -1. Else 1 or 0. */
-static int pv_jpeg(const char *src, const char *dst, unsigned cover) {
+static int pv_jpeg(const char *src, const char *dst, unsigned cover, int aspect) {
     unsigned char dec[PV_DEC_SIZE] __attribute__((aligned(8)));
     pv_out_t o;
     void *volatile fin = (void *)0;
@@ -149,7 +158,7 @@ static int pv_jpeg(const char *src, const char *dst, unsigned cover) {
     if (cover) {
         unsigned sw, sh;
         cc_stock_dims(w, h, n, &sw, &sh);
-        if (!cc_stock_fit(sw, sh, cover, &tw, &th)) {
+        if (!pv_fit(sw, sh, cover, aspect, &tw, &th)) {
             keep = 1;
             goto done;
         }
@@ -179,14 +188,14 @@ done:
     return keep ? -1 : ok;
 }
 
-int pv_shrink(const char *src, const char *dst) { return pv_jpeg(src, dst, 0); }
+int pv_shrink(const char *src, const char *dst) { return pv_jpeg(src, dst, 0, 0); }
 
 static int pv_png_row(void *user, const unsigned char *rgb, unsigned w) {
     (void)w;
     return pv_out_row(user, rgb, 3);
 }
 
-static int pv_png(const char *src, const char *dst, unsigned cover) {
+static int pv_png(const char *src, const char *dst, unsigned cover, int aspect) {
     pv_out_t o;
     void *volatile fin = (void *)0;
     pp_t *volatile pp = (pp_t *)0;
@@ -207,7 +216,7 @@ static int pv_png(const char *src, const char *dst, unsigned cover) {
         goto done;
     }
     if (cover) {
-        if (!cc_stock_fit(w, h, cover, &tw, &th)) { /* stock keeps a picture smaller than the request */
+        if (!pv_fit(w, h, cover, aspect, &tw, &th)) { /* stock keeps a picture smaller than the request */
             keep = 1;
             goto done;
         }
@@ -222,10 +231,13 @@ done:
     return ok ? 1 : -keep;
 }
 
-int pv_shrink_png(const char *src, const char *dst) { return pv_png(src, dst, 0); }
+int pv_shrink_png(const char *src, const char *dst) { return pv_png(src, dst, 0, 0); }
 
-int pv_cover(const char *src, const char *dst, unsigned size) {
+static int pv_pick(const char *src, const char *dst, unsigned size, int aspect) {
     unsigned w, h, sof;
     int kind = pc_pic_info(src, &w, &h, &sof);
-    return kind == 1 ? pv_jpeg(src, dst, size) : kind == 2 ? pv_png(src, dst, size) : 0;
+    return kind == 1 ? pv_jpeg(src, dst, size, aspect) : kind == 2 ? pv_png(src, dst, size, aspect) : 0;
 }
+
+int pv_cover(const char *src, const char *dst, unsigned size) { return pv_pick(src, dst, size, 0); }
+int pv_cover_aspect(const char *src, const char *dst, unsigned size) { return pv_pick(src, dst, size, 1); }

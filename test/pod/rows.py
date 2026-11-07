@@ -228,6 +228,7 @@ def rows_tests(expect):
     # the boot guard's hook on home_page_init, the same two words
     allowed |= {pod.fileoff(built, pod.HOME_INIT), pod.fileoff(built, pod.HOME_INIT) + 4}
     allowed |= {pod.fileoff(built, pod.PLAYING_INIT), pod.fileoff(built, pod.PLAYING_INIT) + 4}           # the Now Playing init hook
+    allowed |= {pod.fileoff(built, pod.BIGCOVER_INIT), pod.fileoff(built, pod.BIGCOVER_INIT) + 4}         # the timed cover page init hook (patch/bigcover.c)
     allowed |= {pod.fileoff(built, pod.PLAYMORE_INIT), pod.fileoff(built, pod.PLAYMORE_INIT) + 4}         # the More dialog init hook
     allowed |= {pod.fileoff(built, pod.PULLDOWN_INIT), pod.fileoff(built, pod.PULLDOWN_INIT) + 4}         # the pull-down init hook
     allowed |= {pod.fileoff(built, pod.START_PLAYER), pod.fileoff(built, pod.START_PLAYER) + 4}           # the mclStartPlayer hook (Internet Radio's hand-over)

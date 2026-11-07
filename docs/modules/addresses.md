@@ -11,6 +11,7 @@ resumes and call boundaries.
 | Home icon dispatcher | `0x533b80` (`widget_on`; GOT slot `0x9fe700`) |
 | `home_page_init` | `0x534cd4` |
 | `playing_page_init` | `0x53d1e4` |
+| `bigcover_page_init` | `0x529a24` (payload hook 23; the dispatcher calls it at `0x4d10e0`, the timed open `navigator_to("bigcover_page")` is `0x53d0ec` in callback `0x53cf48`) |
 | `dialog_playmore_dialog_init` | `0x479cc4` |
 | `dialog_dropdown_dialog_init` | `0x475f04` |
 | `syssetinto_flag` / `playsetinto_flag` | `0xa05a48` / `0xa05a4c`: ints (GOT loads `0x8f82a96c` / `0x8f82a95c`); "inside System / Playback Settings": 1 from the page init, 2 after a pull-down tile tap; read by the tile visitor `0x473f30`, the tile handlers `0x4754c8` / `0x475558`, `on_wm_tsmove_fun` `0x4cd7f0`, Home's `0x534b88`; written by the payload ([pulldown](pulldown.md)) |
@@ -49,6 +50,8 @@ the last one: global `0xa05a40`), `mclGetPlayStatus` `0x5d3640` (2 = playing, 3 
 Pinned for the iPod page (`docs/modules/ipod.md`): `prev_quick_click` `0x4cccb0` (the twin of `next_quick_click`: same prologue and 1 s guard on `e->time`, `prev_music` `0x4e428c`), `loadAlbumdetailList(class, album record)` `0x4eea98` (class `0xf003` -> `0xff10`, `0xff01` -> `0xff11`, `0xff02` -> `0xff14`; the second argument is the album record of the shown list: `lw v0, (a1)` the id, `0x14(a1)` the name), and the data word `system_bar` `0xa06f90` (the status bar window; `pgbar_battery` `value` and `img_battery` `image` are what the real bar shows).
 
 Pinned for the lyrics page (`docs/modules/lyrics.md`, `tools/pod.py` `LYRICS_PINS`): `get_playtime` `0x4e02e4` (the position the stock lyric timers compare each row's int property `lrc_time` with; seconds), the strings `scroll_lrc` `0x751c3c` / `lrc_time` `0x751c80`, the online timer `0x537fec`'s row builder (`0x5384bc`) and reads (`0x538654`, `0x5385cc`, `0x5385e0`, `0x5386a8`), the lyric deque `*0xa062e8` (elements `{int32 time; char *text}`; `online_loadexlyric` `0x508a00`, `toolsTimeConvert` `0x5e3020`); the local deque (`*0xa0aae4`, mutex `0xa0aaf0`) is not read.
+
+Pinned for the timed cover page (`docs/modules/bigcover.md`, `tools/pod.py` `DATA`): `COVER_SRC` `0x97cad8`, and `COVER_PARSED` = `savecover_path` `0xa04c3c` (char[0x400], the path `parseplaycover_thd` last finished a cover for, written after the source word; users: `parseplaycover_thd` `0x4defec`, `0x4df020`, `0x4df180`, `0x4df1a0`, `0x4df470`, `init_usersetting` `0x4e0d7c`).
 
 Pinned for the Tape page (`docs/modules/tape.md`, `tools/pod.py` `TAPE_PINS`; everything else it calls is pinned above for Cover Flow's landscape captions, the Pod and the mini player bar): `widget_invalidate_force` `0x6691d0` ends in `b widget_invalidate` `0x668d9c` with its rectangle untouched, and `widget_invalidate` uses a non-NULL `rect_t` (four 32 bit words x, y, w, h, 16 bytes, in the widget's own coordinates; NULL: `0, 0, w, h`). (`widget_get_text_utf8` `0x667d84` is not called: it ignores its buffer size, see `payload.md`.)
 

@@ -1,7 +1,7 @@
 # Payload safety
 
 - **Keep the approved entry points.** Home icon tap, guarded Home initialization,
-  Now Playing initialization, More-dialog initialization, pull-down initialization (opened by the user's swipe only), the podcast tag-copy call site, the
+  Now Playing initialization, the timed cover page's initialization (`bigcover_page_init`, [bigcover](bigcover.md)), More-dialog initialization, pull-down initialization (opened by the user's swipe only), the podcast tag-copy call site, the
   dot-folder scan, library query functions, status bar's battery-capacity call site
   (Battery Percentage, off by default), `toolsGetFileCreateTime`'s prologue (song dates: one `statx`, stock's date on any failure), `mclStartPlayer`'s prologue (Radio's hand-over: it stops a running radio, one
   comparison otherwise), `on_backtoplayer_onclick`'s prologue (every stock Now Playing button: Radio Now Playing while a station plays, else stock), the previously empty `scroll_view` event slot, the All System Settings hub's Wi-Fi row (`navigator_to` call site `0x4b1460`: our Wi-Fi page, stock's on the kill switch or a page that will not open), the two `navigator_to` call sites that open a Playback / System Settings page after a pull-down tile tap (`0x4cd894`, `0x4cd8bc`: restack the page that is still in the window stack, else stock's call), and the
