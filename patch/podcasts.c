@@ -554,7 +554,7 @@ static void pg_dld_text(const struct pg_dl *d, grid_tile_t *t) {
     if (d->kb) pg_cat(tail, sizeof tail, " \xc2\xb7 "), pg_cat(tail, sizeof tail, size);
     if (played) room -= PS_BADGE_CHECK_W;
     grid_set(t, d->title, "", 0);
-    n = pg_wide(tw, GRID_TEXT, tail);
+    pg_wide(tw, GRID_TEXT, tail);
     room -= pg_width(pg.st_sub, tw);
     k = 0;
     if (room >= 40) { /* the show's name, cut to what is left (the tail keeps its room) */

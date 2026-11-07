@@ -171,8 +171,6 @@ void pc_when(unsigned pub, unsigned now, char *out, unsigned size) {
             pc_fmt(out, size, TR("%dh ago"), d / 3600);
         else if (d < 7 * 86400)
             pc_fmt(out, size, TR("%dd ago"), d / 86400);
-        else
-            d = 0;
         if (out[0]) return;
     }
     p = localtime(&t);

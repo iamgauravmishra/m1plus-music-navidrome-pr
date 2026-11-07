@@ -118,7 +118,7 @@ int rd_playlist(char *buf, unsigned *name, unsigned *url, unsigned *info, int ma
 /* The CSV record at *pp, decoded in place into NUL-terminated fields (offsets from base in off[0..max)); *pp moves past its line end. The write point never passes the read point. Returns
  * the field count, 0 at the end of the text. */
 static int rd_csv_record(char **pp, char *base, unsigned *off, int max) {
-    char *r = *pp, *w = r;
+    char *r = *pp, *w;
     int n = 0;
     while (*r == '\n' || *r == '\r') ++r;
     w = r;

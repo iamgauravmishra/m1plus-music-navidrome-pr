@@ -696,7 +696,6 @@ static void vn_update(int force) {
      * label's, and comes well after stock's pause stall); nothing playing: parked. A jump of more than VN_ARM_SNAP swings there */
     to = !t ? VN_PARK : playing ? vn_groove_at(pos, len) : vn.spin && vn.armed ? vn.arm_at : VN_PARK;
     vn.arm_to = to;
-    d = to - vn.arm_at;
     if (!vn_lock()) /* the layers, locked once for this look's composes */
         ;
     else if (force) { /* the first look: everything above the band at once */
