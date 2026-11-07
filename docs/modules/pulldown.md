@@ -66,3 +66,20 @@ kinds of invalid file, a failed stock init, a null dialog and each of the sixtee
 order, some hidden, hidden-part variants, all hidden (positions at the stock places, captions at their offset, hidden = invisible and insensitive, nothing renamed);
 300 random files against the Python parser; the Settings page (layout from a saved file, taps, arrows, atomic saves, failed save or rename undone, scroll, a page
 that is not ours, the row in the Settings page, the asset's rows) and the Settings Files row. Device: [UI-04](device-checks.md).
+
+## Settings tiles and the window stack (`pd_reconcile`, `pd_open_settings`)
+
+Stock marks "inside settings" in `syssetinto_flag` (`0xa05a48`, System Settings) and `playsetinto_flag` (`0xa05a4c`, Playback Settings): the page inits (`0x4ada78`, `0x4a0c88`) store 1, the Back handlers (`0x4ad550`, `0x49fec0`) clear a positive flag and
+Home's foreground callback (`0x534b88`) clears both. The tile visitor (`0x473f30`) disables a tile and skips its click bind while its flag is positive; the tile handlers (`0x4754c8` System, `0x475558` Playback) do nothing for a nonzero flag and
+otherwise (also after the USB / network-mode tests) store 2 and quit the dialog, and `on_wm_tsmove_fun` (`0x4cd7f0`) then opens the page by `navigator_to` for a flag of 2. The top-right Now Playing button (`on_backtoplayer_onclick`) calls
+`navigator_switch_to_with_context("playing_page", ctx, 0)`: the player is opened or restacked over the page and **nothing is closed**, so the settings window stays in the window stack behind the player with its flag set (Back from the player
+returns to it). Both tiles then stayed disabled on the player and everywhere else until Home cleared the flags (user report, release 1.3; System Settings -> Playback sub-page -> Now Playing leaves both).
+
+The windows are named `sysset_page` and `playset_page` (the assets' roots; `navigator_to` opens them by `systemset/sysset_page` / `playset/playset_page`, which is not their window name, so stock's open never finds a page already in the stack).
+`m1plus_pulldown_init` first makes the flags match the window stack (`pd_reconcile`, two words, before the stock init reads them): a page is **inside settings** (flag 1) when its window is in the window manager, opened, and none of
+`playing_page`, `m1plus_radionp` (Radio Now Playing) or `home_page` is above it (windows between it and the front are its sub-pages); otherwise (no window, or the player or Home above it, or a flag left at 2) the flag is 0. A page in front
+is therefore stock (its tile disabled, also when the user comes back to it from the player and the flag had been cleared), and a page behind the player has its tile enabled and bound by stock's own visitor, whose handler does what it always does.
+The two `navigator_to` calls of `on_wm_tsmove_fun` that open the chosen page are `pd_open_settings` (payload hook 22): when the page's window is still in the stack it is brought to the front with `window_manager_switch_to(wm, top window, page, 0)`
+(what stock does for the player; Back then returns to the player) and its flag set to 1 (no init runs); otherwise, or if the restack fails, stock's `navigator_to(name)` (the init sets the flag), and a failed open clears the flag instead of leaving 2.
+No flag is touched on a Now Playing tap, in the main loop or on paint; Home's reset is unchanged. Tests: `flags_tests` in `test/pod/pdtiles.py` (both pages and both visit orders, repeated cycles, Radio Now Playing, no window, a failed open or restack,
+the pins and call sites). Device check: [UI-04](device-checks.md).

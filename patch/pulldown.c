@@ -106,9 +106,72 @@ static void pd_start(void *dlg) {
         }
 }
 
-/* The hook (tools/pod.py PULLDOWN_INIT): stock first, then ours. */
+/* ---- the Playback / System Settings tiles
+ *
+ * Stock marks "inside settings" in two words: syssetinto_flag (SYSSET_FLAG) and playsetinto_flag (PLAYSET_FLAG), which the page inits set to 1 and the Back handlers clear. The top-right Now Playing button
+ * opens the player over the page without clearing either (the page stays in the window stack behind it), and the tile visitor of the stock pull-down init disables a tile and skips its click bind while its flag
+ * is positive, so both tiles stay dead until Home clears the flags. Before the stock init runs the flags are made to say whether the page is where the user can be: a page that is gone, or has the player (Now
+ * Playing, Radio Now Playing) or Home above it, is not inside settings (flag 0: the tile is enabled and bound as stock does, and its handler does what it always does, store 2 and quit the dialog); a page that is
+ * in the stack with none of those above it is (flag 1; so a page the user returns to has its tile disabled again, as stock). Windows between the page and the front are its sub-pages. */
+static const struct {
+    const char *window, *nav; /* the page's window name (the asset's root) and the name navigator_to opens it by */
+    volatile int *flag;
+} PD_SET[2] = {{"sysset_page", "systemset/sysset_page", (volatile int *)SYSSET_FLAG},
+               {"playset_page", "playset/playset_page", (volatile int *)PLAYSET_FLAG}};
+
+/* The named window in the manager and whether a window that leaves settings is above it; 0 when there is none. */
+static void *pd_window(void *wm, const char *name, int *above) {
+    unsigned n = widget_count_children(wm);
+    *above = 0;
+    while (n--) {
+        void *w = widget_get_child(wm, n);
+        const char *nm = w ? *(const char **)((char *)w + WIDGET_NAME) : (const char *)0;
+        if (!nm) continue;
+        if (!strcmp(nm, name)) return w;
+        if (!strcmp(nm, "playing_page") || !strcmp(nm, "m1plus_radionp") || !strcmp(nm, "home_page")) *above = 1;
+    }
+    return (void *)0;
+}
+
+static void pd_reconcile(void) {
+    void *wm = window_manager();
+    unsigned i;
+    if (!wm) return;
+    for (i = 0; i < 2; i++) {
+        int above;
+        void *win = pd_window(wm, PD_SET[i].window, &above);
+        *PD_SET[i].flag = win && widget_is_window_opened(win) && !above; /* (a page that is closing is gone) */
+    }
+}
+
+/* The hook at the two navigator_to calls of on_wm_tsmove_fun that open the page a tile chose (flag 2): the page when it is still in the stack is brought to the front the way stock brings the player back
+ * (window_manager_switch_to, nothing closed, Back returns to where the user came from); otherwise (or if that fails) stock's call. The page's own init sets the flag when it opens; a restacked page runs no
+ * init, so the flag is set here; a page that will not open leaves no flag of 2. Any other name is the stock call. A tap only. */
+int pd_open_settings(const char *name) {
+    void *wm = window_manager();
+    unsigned i;
+    int ret;
+    for (i = 0; i < 2 && strcmp(name, PD_SET[i].nav); i++) {
+    }
+    if (i < 2 && wm) {
+        int above;
+        void *win = pd_window(wm, PD_SET[i].window, &above);
+        if (win && widget_is_window_opened(win) &&
+            window_manager_switch_to(wm, window_manager_get_top_window(wm), win, 0) == RET_OK) {
+            *PD_SET[i].flag = 1;
+            return RET_OK;
+        }
+    }
+    ret = navigator_to(name);
+    if (i < 2 && ret != RET_OK) *PD_SET[i].flag = 0;
+    return ret;
+}
+
+/* The hook (tools/pod.py PULLDOWN_INIT): the flags, then stock, then ours. */
 int m1plus_pulldown_init(void *dlg, void *ctx) {
-    int ret = stock_pulldown_init_trampoline(dlg, ctx);
+    int ret;
+    pd_reconcile();
+    ret = stock_pulldown_init_trampoline(dlg, ctx);
     if (ret == RET_OK && dlg) pd_start(dlg);
     return ret;
 }

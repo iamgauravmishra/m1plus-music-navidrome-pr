@@ -13,6 +13,9 @@ resumes and call boundaries.
 | `playing_page_init` | `0x53d1e4` |
 | `dialog_playmore_dialog_init` | `0x479cc4` |
 | `dialog_dropdown_dialog_init` | `0x475f04` |
+| `syssetinto_flag` / `playsetinto_flag` | `0xa05a48` / `0xa05a4c`: ints (GOT loads `0x8f82a96c` / `0x8f82a95c`); "inside System / Playback Settings": 1 from the page init, 2 after a pull-down tile tap; read by the tile visitor `0x473f30`, the tile handlers `0x4754c8` / `0x475558`, `on_wm_tsmove_fun` `0x4cd7f0`, Home's `0x534b88`; written by the payload ([pulldown](pulldown.md)) |
+| `on_wm_tsmove_fun` page opens | `0x4cd894`, `0x4cd8bc`: `bal navigator_to` (`0x0411113a`, `0x04111130`) of `playset/playset_page` / `systemset/sysset_page`, now `jal pd_open_settings` (payload hook 22) |
+| `window_manager_switch_to` | `0x67891c`: `(wm, current, target, close)` |
 | `get_id3info` tag-copy call | `0x4dff4c` |
 | `mclStartPlayer` (Radio hand-over) | `0x5d5300` |
 | `on_backtoplayer_onclick` (Radio Now Playing hook) | `0x4cd58c` |

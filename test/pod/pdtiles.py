@@ -308,7 +308,183 @@ def files_tests(ctx):
            'and shows its first 12 characters like home-menu (the seeded value is checked in homecover.py files_tests)')
 
 
-SECTIONS = [hook_tests, page_tests, files_tests]
+# ---------------------------------------------------------------------------------------------------------------------------------
+# The "inside settings" flags (stock syssetinto_flag / playsetinto_flag): a settings page left through the top-right Now Playing button stays in the window stack behind
+# the player with its flag set, which disables and unbinds its pull-down tile. The hook reconciles the flags with the window stack before the stock init reads them, and
+# the call site that opens the page after a tile tap restacks the page that is still there.
+
+SYS, PLAY = pod.DATA['SYSSET_FLAG'][0], pod.DATA['PLAYSET_FLAG'][0]
+NAV = {'sysset_page': 'systemset/sysset_page', 'playset_page': 'playset/playset_page'}
+FLAG = {'sysset_page': SYS, 'playset_page': PLAY}
+
+
+class SF(PD):
+    """The window manager's children as a stack of named windows (the name at +0x10, as the payload reads it), the two flags, and the stock calls the page opening makes."""
+
+    def __init__(self, stack=(), sys=0, play=0, **kw):
+        super().__init__(**kw)
+        self.stack, self.nav_fail, self.switch_fail, self.seen = [], False, False, None
+        for n in stack: self.push(n)
+        self.setword(SYS, sys); self.setword(PLAY, play)
+
+    def push(self, name):
+        w = self.alloc(0x40); self.u.mem_write(w, bytes(0x40)); self.setword(w + O['WIDGET_NAME'], self.cstr(name))
+        self.stack.append((name, w)); self.sync()
+
+    def sync(self):
+        self.children[self.wm] = [w for _, w in self.stack]
+        main = [w for n, w in self.stack if 'dialog' not in n]
+        self.top_main = main[-1] if main else 0
+
+    def names_(self): return [n for n, _ in self.stack if 'dialog' not in n]
+    def flags(self): return (self.word(SYS), self.word(PLAY))
+    def name_of(self, w): return next((n for n, h in self.stack if h == w), None)
+
+    def _hook(self, u, address, size, _):
+        name = self.handlers.get(address)
+        a0, a1, a2, a3 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3))
+        if name == 'stock_pulldown_resume':
+            self.seen = self.flags()   # what the stock init's tile visitor reads
+            return super()._hook(u, address, size, _)
+        elif name == 'window_manager_get_top_window':
+            ret = self.stack[-1][1] if self.stack else 0
+        elif name == 'window_manager_switch_to':
+            self.calls.append(('switch_to', self.name_of(a1), self.name_of(a2), a3))
+            ret = 1
+            if not self.switch_fail and a0 == self.wm:
+                ent = next(e for e in self.stack if e[1] == a2); self.stack.remove(ent); self.stack.append(ent); self.sync(); ret = 0
+        elif name == 'navigator_to':
+            page = self.read_cstr(a0); self.calls.append(('navigator_to', page)); ret = 0x10
+            if not self.nav_fail:
+                short = page.split('/')[-1]; self.push(short); ret = 0
+                if short in FLAG: self.setword(FLAG[short], 1)   # the page's init
+        else:
+            return super()._hook(u, address, size, _)
+        u.reg_write(UC_MIPS_REG_V0, ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+
+    def pulldown(self):
+        """The swipe: the dialog is built over the stack (flags reconciled, then the stock init reads them)."""
+        self.push('dropdown_dialog'); self.open(); self.seen_now = self.seen
+        self.stack = [e for e in self.stack if e[0] != 'dropdown_dialog']; self.sync()   # the modal dialog quits
+        return self.seen
+
+    def tap(self, page):
+        """A tile tap on a tile the stock handler took: flag 2, dialog quit; the caller's call opens the page."""
+        self.setword(FLAG[page], 2)
+        return self.call(PSYMS['pd_open_settings'], a0=self.cstr(NAV[page]), count=3000000)
+
+    def back(self):
+        """The page's Back handler: clears a positive flag, closes the front window."""
+        n, _ = self.stack[-1]
+        if n in FLAG and self.word(FLAG[n]) > 0: self.setword(FLAG[n], 0)
+        self.stack.pop(); self.sync()
+
+
+def flags_tests(ctx):
+    expect = ctx.expect
+    P, S, R, H = 'playing_page', 'sysset_page', 'playset_page', 'home_page'
+    RN = 'm1plus_radionp'
+
+    def seen(stack, sys=0, play=0, **kw):
+        m = SF(stack, sys, play, **kw); return m.pulldown(), m
+
+    # -- the stock init reads the reconciled flags
+    f, _ = seen([H, S, P], sys=1)
+    expect(f == (0, 0), f'System Settings behind the player: its flag is 0 when the stock init binds the tile ({f})')
+    f, _ = seen([H, R, P], play=1)
+    expect(f == (0, 0), f'Playback Settings behind the player: flag 0 ({f})')
+    f, _ = seen([H, S, RN], sys=1)
+    expect(f == (0, 0), f'behind Radio Now Playing: flag 0 ({f})')
+    f, _ = seen([H, S], sys=1)
+    expect(f == (1, 0), f'the settings page in front: stock, its flag stays 1 and the tile stays disabled ({f})')
+    f, _ = seen([H, R], play=1)
+    expect(f == (0, 1), f'Playback Settings in front: flag stays 1 ({f})')
+    f, _ = seen([H, S, 'display_page'], sys=1)
+    expect(f == (1, 0), f'a sub-page over the settings page: still inside settings, flag stays 1 ({f})')
+    f, _ = seen([H, S, R], sys=1, play=1)
+    expect(f == (1, 1), f'System Settings -> Playback sub-page: both flags stay 1 ({f})')
+    f, _ = seen([H, S, R, P], sys=1, play=1)
+    expect(f == (0, 0), f'System Settings -> Playback sub-page -> Now Playing leaves both flags 1 in stock; both pages are behind the player now, both 0 ({f})')
+    f, _ = seen([H, S, R], sys=0, play=0)
+    expect(f == (1, 1), f'back from the player to the sub-page: both pages are live again, both 1 ({f})')
+    f, _ = seen([H, S], sys=0)
+    expect(f == (1, 0), f'back from the player to the settings page: flag 1 again, the tile disabled as stock ({f})')
+    f, _ = seen([H], sys=1, play=1)
+    expect(f == (0, 0), f'no settings window at all (a stale flag): both 0 ({f})')
+    f, _ = seen([H], sys=2, play=2)
+    expect(f == (0, 0), f'a flag left at 2 by a page that failed to open: 0 ({f})')
+    f, _ = seen([H, S], sys=2)
+    expect(f == (1, 0), f'a flag at 2 with the page in front: 1 ({f})')
+    f, _ = seen([S, H], sys=1)
+    expect(f == (0, 0), f'a settings window left under Home: not inside settings, 0 ({f})')
+    f, _ = seen([S, H], sys=0)
+    expect(f == (0, 0), f'and it is not revived under Home ({f})')
+    f, _ = seen([H, S, P, 'albuminfo_page'], sys=1)
+    expect(f == (0, 0), f'the player between the settings page and the front: 0 ({f})')
+    m = SF([H, S], sys=1); m.home_opened = 0; m.pulldown()
+    expect(m.seen == (0, 0), 'a settings window that is not (or no longer) opened, still closing after Back, is not inside settings')
+    m = SF([H, S, P], sys=1); m.init_ret = 5; m.pulldown()
+    expect(m.seen == (0, 0), 'a stock init that fails is still run with the reconciled flags')
+
+    # -- the tile tap opens the page
+    for page in (S, R):
+        m = SF([H, page, P]); fl = FLAG[page]
+        r = m.tap(page)
+        sw = [c for c in m.calls if c[0] == 'switch_to']
+        expect(r == 0 and sw == [('switch_to', P, page, 0)] and not [c for c in m.calls if c[0] == 'navigator_to'] and m.names_() == [H, P, page] and m.word(fl) == 1,
+               f'{page} behind the player: its window is restacked in front (switch_to, nothing closed), no second page, flag 1 ({sw}, {m.names_()}, {m.word(fl)})')
+        m.back()
+        expect(m.names_() == [H, P] and m.word(fl) == 0, f'Back from it: stock clears the flag and returns to the player ({m.names_()})')
+        m = SF([H], 0, 0); r = m.tap(page)
+        expect(r == 0 and [c for c in m.calls if c[0] in ('navigator_to', 'switch_to')] == [('navigator_to', NAV[page])] and m.names_() == [H, page] and m.word(fl) == 1,
+               f'{page} gone: opened fresh by the stock call')
+        m = SF([H], 0, 0); m.nav_fail = True; r = m.tap(page)
+        expect(r == 0x10 and m.word(fl) == 0, f'{page} that will not open: the failure is returned and the flag is not left at 2 ({r:#x}, {m.word(fl)})')
+        m = SF([H, page, P]); m.switch_fail = True; r = m.tap(page)
+        expect(r == 0 and [c[0] for c in m.calls if c[0] in ('switch_to', 'navigator_to')] == ['switch_to', 'navigator_to'] and m.word(fl) == 1,
+               'a restack that fails falls back to the stock open')
+    m = SF([H]); r = m.call(PSYMS['pd_open_settings'], a0=m.cstr('systemset/display_page'), count=3000000)
+    expect(r == 0 and [c for c in m.calls if c[0] in ('navigator_to', 'switch_to')] == [('navigator_to', 'systemset/display_page')] and m.flags() == (0, 0),
+           'any other page is the stock call, flags untouched')
+
+    # -- repeated cycles: page -> Now Playing -> pull-down -> tile -> Back, in both visit orders, never a second window
+    for first, second in ((S, R), (R, S)):
+        m = SF([H])
+        m.call(PSYMS['pd_open_settings'], a0=m.cstr(NAV[first]), count=3000000)   # (flag 1 by the page's init)
+        m.push(second); m.setword(FLAG[second], 1)                                 # the other settings page opened from it
+        m.push(P)                                                                  # top-right Now Playing: switch_to with nothing closed
+        for cycle in range(3):
+            f = m.pulldown()
+            expect(f == (0, 0), f'cycle {cycle} ({first} then {second}): both tiles enabled behind the player ({f})')
+            m.tap(first)
+            expect(m.names_()[-1] == first and sorted(m.names_()) == sorted([H, first, second, P]) and m.word(FLAG[first]) == 1,
+                   f'cycle {cycle}: the first page is in front, the stack unchanged in size ({m.names_()}, {m.flags()})')
+            f = m.pulldown()
+            expect(f[0 if first == S else 1] == 1, f'cycle {cycle}: with the page in front its own tile is disabled again ({f})')
+            m.back()   # to the player
+            expect(m.names_()[-1] == P, f'Back returns to the player ({m.names_()})')
+        m.tap(second)
+        expect(m.names_() == [H, P, second] and m.word(FLAG[second]) == 1, f'{second}, still behind the player, comes forward too ({m.names_()})')
+
+    # -- the build
+    d = open(DEMO, 'rb').read(); image = bytearray(d)
+    word = lambda a: struct.unpack_from('<I', d, pod.fileoff(image, a))[0]
+    import paths
+    stock = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
+    sw = lambda a: struct.unpack_from('<I', stock, pod.fileoff(stock, a))[0]
+    jal = 0x0c000000 | (PSYMS['pd_open_settings'] >> 2)
+    sites = pod.PULLDOWN_OPEN_SITES
+    expect(sites == (0x4cd894, 0x4cd8bc) and [sw(a) for a in sites] == [0x0411113a, 0x04111130] and [word(a) for a in sites] == [jal] * 2,
+           'the two navigator_to calls after the pull-down dialog quits (flag 2) are jal pd_open_settings in the build; stock has bal navigator_to')
+    expect([word(a + 4) for a in sites] == [0x24849a64, 0x24849a7c] and word(0x4cd878) == 0x8f82a95c and word(0x4cd888) == 0x8f82a96c,
+           'their delay slots (a0 = "playset/playset_page", "systemset/sysset_page") and the flag loads around them are stock\'s')
+    expect(MANIFEST['hook_pulldown_open'] == {'sites': [hex(a) for a in sites], 'target': PSYMS['pd_open_settings']}, 'the manifest records the call sites')
+    expect(pod.DATA['SYSSET_FLAG'] == (0xa05a48, 'syssetinto_flag') and pod.DATA['PLAYSET_FLAG'] == (0xa05a4c, 'playsetinto_flag'), 'the flags are stock\'s two words')
+    expect(all(word(a) == old for a, old, _ in pod.PULLDOWN_PINS) and any(a == 0x4754f4 for a, _, _ in pod.PULLDOWN_PINS) and any(a == 0x475584 for a, _, _ in pod.PULLDOWN_PINS),
+           'the tile handlers\' flag tests (they reject a nonzero flag; stock is untouched) are pinned with the rest')
+
+
+SECTIONS = [hook_tests, page_tests, files_tests, flags_tests]
 
 
 def run(ctx):
