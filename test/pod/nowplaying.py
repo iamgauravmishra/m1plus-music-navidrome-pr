@@ -53,7 +53,7 @@ class NowMachine(Machine):
         return out
 
     def label(self, name):
-        if name == 'label_info' and self.widgets.get('np_quality') in self.texts: name = 'np_quality'   # the visible quality line, once it has text
+        if name == 'label_info' and self.props.get((self.widgets.get('np_quality'), 'visible')) == 1: name = 'np_quality'   # the visible quality line: np_quality while it is shown
         return self.texts[self.widgets[name]].encode('latin-1').decode('utf-8')
 
     def _hook(self, u, address, size, _):
@@ -381,19 +381,22 @@ def run(ctx):
     expect(first == ['MP3 | 48 kHz | 16-bit | 320 kbps'] and not qset(m), f'a quality change on a track change updates np_quality once ({qset(m)})')
     # after the takeover, any text that cannot be shown as ours gives the line back to stock (never a stale line), and
     # the next good text takes it over again
-    stock_back = lambda m: m.visible('np_quality') == 0 and m.visible('label_info') == 1
+    # stock_back / ours: who shows the line, and m.label('label_info') (the visible line) is the text the screen has
+    stock_back = lambda m, t: m.visible('np_quality') == 0 and m.visible('label_info') == 1 and m.label('label_info') == t
+    ours = lambda m, t: m.visible('np_quality') == 1 and m.visible('label_info') == 0 and m.label('label_info') == t
     m.texts[h_s] = 'A' * 600; m.calls = []; m.tick()
-    expect(not qset(m) and stock_back(m), 'an unreadable (too long) stock text after the takeover: np_quality hidden, stock label_info shown')
+    expect(not qset(m) and stock_back(m, 'A' * 600), 'an unreadable (too long) stock text after the takeover: np_quality hidden, stock label_info shown with its text')
     m.texts[h_s] = QS; m.calls = []; m.tick()
-    expect(qset(m) == [QF] and m.visible('np_quality') == 1 and m.visible('label_info') == 0, 'readable again: np_quality takes the line over again')
+    expect(qset(m) == [QF] and ours(m, QF), 'readable again: np_quality takes the line over again')
     m.texts[h_s] = 'AAC|44.1kHz|16bit|256kbps'; m.get_ret = 1; m.calls = []; m.tick(); m.get_ret = 0
-    expect(not qset(m) and stock_back(m), 'a failed read after the takeover: stock label_info shown, np_quality hidden')
+    expect(not qset(m) and stock_back(m, 'AAC|44.1kHz|16bit|256kbps'), 'a failed read after the takeover: stock label_info shown with the new text, np_quality hidden')
     m.calls = []; m.tick()
-    expect(qset(m) == ['AAC | 44.1 kHz | 16-bit | 256 kbps'] and m.visible('np_quality') == 1 and m.visible('label_info') == 0, 'read works again: taken over again')
+    expect(qset(m) == ['AAC | 44.1 kHz | 16-bit | 256 kbps'] and ours(m, 'AAC | 44.1 kHz | 16-bit | 256 kbps'), 'read works again: taken over again')
     m.texts[h_s] = 'MP3|48kHz|16bit|320kbps'; m.set_fail.add(h_q); m.calls = []; m.tick(); m.set_fail.clear()
-    expect(stock_back(m) and m.texts[h_q].startswith('AAC'), 'a failed write of a new quality text: stock label_info (the new text) shown, the old np_quality hidden')
+    expect(stock_back(m, 'MP3|48kHz|16bit|320kbps') and m.texts[h_q].startswith('AAC'),
+           f'a failed write of a new quality text: the visible line is stock\'s new MP3 text, not the hidden old AAC ({m.label("label_info")})')
     m.calls = []; m.tick()
-    expect(qset(m) == ['MP3 | 48 kHz | 16-bit | 320 kbps'] and m.visible('np_quality') == 1 and m.visible('label_info') == 0, 'the write works again: taken over again')
+    expect(qset(m) == ['MP3 | 48 kHz | 16-bit | 320 kbps'] and ours(m, 'MP3 | 48 kHz | 16-bit | 320 kbps'), 'the write works again: taken over again')
     m = NowMachine(); m.page(); m.src(0); m.pt = (30, 200, 1); m.info_page({'label_info': QS}); m.set_fail.add(m.widgets['np_quality']); m.init(); m.tick()
     expect(m.visible('np_quality') is None and m.visible('label_info') is None and m.label('label_info') == QS, 'a write that never works: never taken over, stock as it was')
     m = info({'label_info': QS}, quality=False)
