@@ -807,6 +807,9 @@ int pod_open_settings(void) { return open_page(POD_SETTINGS_PAGE, 0); }
 /* The preset page, for the Presets page's rows (patch/peqpage.c): the normal instance, with Back. */
 int pod_open_peqpage(void) { return open_page(POD_PEQP_PAGE, 0); }
 
+/* The Equalizer page, for the All Playback Settings Equalizer row (patch/peq_ui.c peq_open): the normal instance, with Back. */
+int pod_open_peq(void) { return open_page(POD_PEQ_PAGE, 0); }
+
 /* The 10-Band editor and its Curve and Preamp pages (patch/tenband.c): the normal instance, with Back. */
 int pod_open_tenband(void) { return open_page(POD_TENBAND_PAGE, 0); }
 int pod_open_tencurve(void) { return open_page(POD_TENCURVE_PAGE, 0); }

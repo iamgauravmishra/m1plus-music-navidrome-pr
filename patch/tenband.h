@@ -21,6 +21,9 @@ int pod_open_tenband(void);
 int pod_open_tencurve(void);
 int pod_open_tenpreamp(void);
 
+/* patch/peq_ui.c: opens the Equalizer page (1 once it is opening). */
+int peq_open(void);
+
 /* patch/peq_ui.c: save the record and have the player play it (stock's Equalizer turned on when it was off, as a tap on a preset does); 1 when it was saved, else the message box said so and the record is as it was. */
 int peq_commit(const peq_state *s);
 /* patch/peq_ui.c: a curve's name as a translation key (Flat, Pop, ... Custom). */

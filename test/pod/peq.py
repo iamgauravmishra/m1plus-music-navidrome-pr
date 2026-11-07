@@ -2780,8 +2780,8 @@ def retire_tests(ctx):
     expect(all(w(stock_demo, a) == old and (a in (row, row + 4) or w(built, a) == old) for a, old, _ in pod.EQ_PINS), 'every pinned word of the Play Settings Equalizer row is stock\'s in the stock demo and unchanged in the build (but the two edited)')
     expect(w(stock_demo, row) == 0x8f84a708 and w(stock_demo, row + 4) == 0x1000ff93 and w(built, row) == pod.j(stub) and w(built, row + 4) == 0 and w(built, row + 8) == w(stock_demo, row + 8)
            and w(built, row - 4) == w(stock_demo, row - 4) and w(built, row + 12) == w(stock_demo, row + 12), 'the All Playback Settings Equalizer row @0x4a0210: `lw a0; b navigator_to` became `j pod_eq_site; nop`, its neighbours are stock\'s')
-    expect([w(built, stub + 4 * i) for i in range(6)] == [pod.jal(PSYMS['tenband_open'], stub), 0, 0x3c1c0000 | pod.GP >> 16, 0x379c0000 | pod.GP & 0xffff, pod.j(pod.EQ_ROW_RESUME), 0],
-           'pod_eq_site: jal tenband_open, $gp set, then j 0x4a0070 (the click handler\'s epilogue: s0-s2, ra and the frame come from stock\'s own stack slots)')
+    expect([w(built, stub + 4 * i) for i in range(6)] == [pod.jal(PSYMS['peq_open'], stub), 0, 0x3c1c0000 | pod.GP >> 16, 0x379c0000 | pod.GP & 0xffff, pod.j(pod.EQ_ROW_RESUME), 0],
+           'pod_eq_site: jal peq_open, $gp set, then j 0x4a0070 (the click handler\'s epilogue: s0-s2, ra and the frame come from stock\'s own stack slots)')
     expect(MANIFEST['hook_eq_row'] == {'addr': row, 'target': stub}, 'the manifest lists the Equalizer row hook')
     expect(w(built, 0x4d11d0) == w(stock_demo, 0x4d11d0), 'the page\'s init dispatch (strcmp "playset/equalizer_page" @0x4d11d0) is untouched: stock\'s page still exists, nothing opens it')
 

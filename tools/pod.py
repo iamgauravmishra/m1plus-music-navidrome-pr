@@ -682,7 +682,7 @@ FILETIME_PINS = (   # (address, stock word, what it proves)
     (0x5e4b58, 0x0070100b, 'toolsGetFileCreateTime: movn v0, v1, s0 (exFAT / NTFS take the access time)'),
 )
 # Stock's slider page (docs/modules/peq.md "10-Band EQ"): its one caller is the All Playback Settings Equalizer row, a case of on_playsetback_onclick (`lw a0 "playset/equalizer_page"; b 0x4a0064` into the shared navigator_to
-# call). The case's first two words become `j pod_eq_site; nop`: the stub opens our 10-Band editor and resumes at the function's epilogue (0x4a0070). Not reachable at boot (a list click).
+# call). The case's first two words become `j pod_eq_site; nop`: the stub opens our Equalizer page and resumes at the function's epilogue (0x4a0070). Not reachable at boot (a list click).
 EQ_ROW = 0x4a0210
 EQ_ROW_RESUME = 0x4a0070
 EQ_PINS = (   # (address, stock word, what it proves)
@@ -1444,7 +1444,7 @@ def gen_asm(out, slots):
     asm += ['.globl stock_timezone_trampoline', 'stock_timezone_trampoline:',
             f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{timezones.SELECT + 12:x}', 'nop']
     # the Play Settings Equalizer row (patch/tenband.c): open the editor, then the stock function's epilogue (its frame is untouched: the C call uses the stack below it, $gp is set again)
-    asm += ['.globl pod_eq_site', 'pod_eq_site:', 'jal tenband_open', 'nop', f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{EQ_ROW_RESUME:x}', 'nop']
+    asm += ['.globl pod_eq_site', 'pod_eq_site:', 'jal peq_open', 'nop', f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{EQ_ROW_RESUME:x}', 'nop']
     # libc GOT-slot stubs (load the resolved pointer from demo's own GOT, tail-call it).
     for name, addr in slots.items():
         asm += [f'.section .text.pod_lib_{name},"ax",@progbits', f'.globl pod_lib_{name}', f'pod_lib_{name}:',

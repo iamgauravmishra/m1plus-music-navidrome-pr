@@ -351,18 +351,28 @@ static int pq_on_fg(void *ctx, void *e) {
     return RET_OK;
 }
 
+/* ctx is the window: the late destroy of a page that a newer one replaced leaves the newer one's state alone. */
 static int pq_on_destroy(void *ctx, void *e) {
-    (void)ctx;
     (void)e;
-    memset(&pq, 0, sizeof pq);
+    if (ctx == pq.win) memset(&pq, 0, sizeof pq);
     return RET_OK;
 }
+
+extern int pod_open_peq(void); /* patch/m1plus.c: open_page(POD_PEQ_PAGE) */
+
+/* The Equalizer page, for stock's All Playback Settings Equalizer row (the pod_eq_site stub): 1 once it is opening. */
+int peq_open(void) { return pod_open_peq() == 0; }
 
 /* The Equalizer page is up (patch/m1plus.c open_page): find its rows, read the record and the card, bind. A page
  * that is not our asset is left as it is. */
 void peq_opened(void *win) {
     int i;
     char name[24];
+    if (pq.win) { /* a page exists already (stock's All Playback Settings row opened another over it): the new one replaces it */
+        void *old = pq.win;
+        memset(&pq, 0, sizeof pq);
+        if (widget_is_window_opened(old)) window_close(old);
+    }
     memset(&pq, 0, sizeof pq);
     for (i = 0; i < PQ_N; i++) {
         snprintf(name, sizeof name, "pod_row%d", i);
@@ -412,5 +422,5 @@ void peq_opened(void *win) {
     if (pq.tb_row) widget_on(pq.tb_row, EVT_CLICK, pq_on_tenband, (void *)0);
     if (pq.lib_row) widget_on(pq.lib_row, EVT_CLICK, pq_on_presets, (void *)0);
     widget_on(win, EVT_WINDOW_TO_FG, pq_on_fg, (void *)0);
-    widget_on(win, EVT_DESTROY, pq_on_destroy, (void *)0);
+    widget_on(win, EVT_DESTROY, pq_on_destroy, win);
 }
