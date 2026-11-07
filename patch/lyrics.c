@@ -178,16 +178,23 @@ __attribute__((noinline)) int ly_latin(const char *s) {
     return 1;
 }
 
-static void ly_probe_face(int face) {
+/* The probe in the face's style, resolved; 0: it cannot be yet. widget_use_style resolves a style only in an opened window, and the window resolves every widget's
+ * when it is about to open (offsets.inc WINDOW_STAGE_CREATED), after np_start's first tick: a measure before that would be in the label's default style, a width too
+ * small that would be kept (a 30 px line of two rows measured as one, its second row cut). So nothing is measured before (the line is retried, as a measure of 0), and
+ * the probe's style is resolved here (widget_update_style, which does nothing once it is), as stock label_resize_to_content does before it measures. */
+static int ly_probe_face(int face) {
     if (ly.pface != face) {
         widget_use_style(ly.probe, face ? "np_lyric_cjk_style" : "np_lyric_style");
         ly.pface = (unsigned char)face;
     }
+    if (widget_get_prop_int(ly.win, "stage", 0) < WINDOW_STAGE_CREATED) return 0;
+    widget_update_style(ly.probe);
+    return 1;
 }
 
 /* The rows line i takes: 1 + the width it measures at in the label's font over the width of a row (a word wrap wastes a little, so a line
  * over one row gets LY_WRAP_SLACK px more, LY_WRAP_SLACK_CJK in the default font), at most LY_LINES_MAX. Its face is chosen here (ly_latin). Cached, except a
- * measure of non-empty text that came back 0 (the probe not ready): that line is 1 row for now and measured again by the layout ly.redo asks for. Once a measure
+ * measure of non-empty text that came back 0 or was not made (the probe not ready, ly_probe_face): that line is 1 row for now and measured again by the layout ly.redo asks for. Once a measure
  * failed, the rest of that layout (ly.skip, cleared as a layout starts) measures nothing; the page tick counts a layout that saw a failure in ly.miss, and after
  * LY_MISS_MAX of them (10 s at the 500 ms tick) a line is kept at 1 row, so a probe that never measures costs a bounded number of calls. */
 __attribute__((noinline)) int ly_rows(int i) {
@@ -198,8 +205,8 @@ __attribute__((noinline)) int ly_rows(int i) {
     if (ly.probe && ly_text(i, buf) && buf[0]) {
         text = 1;
         face = !ly_latin(buf);
-        ly_probe_face(face);
-        if (!(ly.skip && ly.miss < LY_MISS_MAX) && widget_set_text_utf8(ly.probe, buf) == RET_OK) {
+        if (!(ly.skip && ly.miss < LY_MISS_MAX) && ly_probe_face(face) &&
+            widget_set_text_utf8(ly.probe, buf) == RET_OK) {
             const unsigned *t = widget_get_text(ly.probe);
             if (t && *t) w = (int)(widget_measure_text(ly.probe, t) + 0.999f);
         }
@@ -576,6 +583,8 @@ void ly_tick(void) {
         ly.pad = ly.ck_ok = 0, ly.fresh = 1, memset(ly.dop, 0, sizeof ly.dop);
     }
     if (ly.n > 0) {
+        /* a measure that failed in the last layout is tried again by this tick's move as well (its distance is the lines' measured heights) */
+        ly.skip = 0;
         ly_poll(now);
         if (ly.browse && !ly.down &&
             (int)(now - ly.touch_at) >= LY_IDLE_MS) { /* the user let go: back to the current line, eased */

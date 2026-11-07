@@ -523,6 +523,8 @@ class Machine:
         elif name == 'widget_use_style':
             self.props[(a0, 'style')] = self.read_cstr(a1)
             self.calls.append(('widget_use_style', a0, self.read_cstr(a1)))
+        elif name == 'widget_update_style':
+            self.calls.append(('widget_update_style', a0))
         elif name in ('hscroll_label_set_only_parent_focus', 'hscroll_label_set_ellipses'):
             self.props[(a0, name)] = a1
         elif name == 'hscroll_label_create':

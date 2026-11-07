@@ -47,7 +47,10 @@ def utf8(s): return s.encode('utf-8').decode('latin-1')   # what the machine's r
 
 
 class LyMachine(nowplaying.NowMachine):
-    """The Now Playing machine with a stock lyric list (scroll_lrc's rows: lrc_time and text), the player's position and status, and a text measure."""
+    """The Now Playing machine with a stock lyric list (scroll_lrc's rows: lrc_time and text), the player's position and status, and a text measure.
+    Styles as AWTK resolves them (offsets.inc WINDOW_STAGE_CREATED): the hook runs in a loaded window (stage 1); after it the window is about to open (stage 2,
+    every widget's asked style resolved); widget_use_style resolves only in an opened window (stage 3 or 5), widget_update_style from stage 2. A measure is in
+    the resolved style: the label default style (none resolved) measures 3/5 of the width (18 px against 30)."""
 
     no_dtimer = False
 
@@ -61,6 +64,19 @@ class LyMachine(nowplaying.NowMachine):
         self.set_lines(lines)
         self.seeks, self.seek_moves = [], True        # seek_time's arguments; whether the player then reads the new position
         self.setword(self.box, 28); self.setword(self.box + 4, 44)   # np_lyrics at (28, 44), no parent: widget_to_local (stock code, run for real) subtracts it
+        self.resolved = {}                            # widget -> the style its measures use
+
+    def stage(self, v, win=WIN):
+        self.props[(win, 'stage')] = v
+        if v == 2:   # EVT_WINDOW_WILL_OPEN: every widget's asked style is resolved
+            for (w, k), st in list(self.props.items()):
+                if k == 'style': self.resolved[w] = st
+
+    def init(self, win=WIN, count=6000000, open_after=True):
+        self.stage(1, win)
+        ret = super().init(win, count)
+        if open_after: self.stage(2, win)
+        return ret
 
     def set_lines(self, lines):
         """Stock builds the rows again (destroy children, then one per line): new handles every time."""
@@ -86,8 +102,18 @@ class LyMachine(nowplaying.NowMachine):
             n = 0
             while self.word(a1 + 4 * n): n += 1
             t = ''.join(chr(c) for c in struct.unpack(f'<{n}I', self.u.mem_read(a1, 4 * n))) if n else ''
-            self.calls.append(('widget_measure_text', a0, self.props.get((a0, 'style'))))
-            u.reg_write(UC_MIPS_REG_F0, struct.unpack('<I', struct.pack('<f', float(self.measure_fn(t))))[0]); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+            st = self.resolved.get(a0)
+            self.calls.append(('widget_measure_text', a0, st))
+            w = float(self.measure_fn(t)) * (1 if st in (BOLD, CJKF) else 0.6)
+            u.reg_write(UC_MIPS_REG_F0, struct.unpack('<I', struct.pack('<f', w))[0]); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+            return
+        elif name == 'widget_use_style':
+            super()._hook(u, address, size, _)
+            if self.props.get((WIN, 'stage')) in (3, 5): self.resolved[a0] = self.props[(a0, 'style')]
+            return
+        elif name == 'widget_update_style':
+            super()._hook(u, address, size, _)
+            if self.props.get((WIN, 'stage'), 0) >= 2 and (a0, 'style') in self.props: self.resolved[a0] = self.props[(a0, 'style')]
             return
         else:
             return super()._hook(u, address, size, _)
@@ -409,6 +435,14 @@ def start_tests(ctx):
            f'then 0.45, 0.32, 0.24 times the edge factor with one pitch (LINE_H + GAP) a single line ({[s[f"Line {n}"][1] for n in ("one", "two", "three")]}): the line near the bottom edge fades out')
     expect('Line four' not in s and 'Line five' not in s, 'a line past the view is not laid out')
 
+    # the hook's tick measures nothing: the window resolves the labels' styles only after the stock init (offsets.inc WINDOW_STAGE_CREATED), a measure before would be in
+    # the label default style; the first page tick measures, each line in its own resolved style, and with lines of one row changes no label but the probe
+    expect(not any(x[0] == 'widget_measure_text' for x in m.calls), 'the hook\'s tick measures nothing (the styles are not resolved yet)')
+    c = m.at(0)
+    meas = [x for x in c if x[0] == 'widget_measure_text']
+    expect(len(meas) >= 4 and all(x[1] == m.probe() and x[2] == BOLD for x in meas) and ('widget_update_style', m.probe()) in c
+           and not any(x[0] in ('widget_move', 'widget_resize', 'widget_set_text_utf8', 'widget_use_style', 'widget_set_opacity', 'widget_set_visible') and x[1] != m.probe() for x in c),
+           f'the first page tick measures {len(meas)} lines in the resolved bold style and touches no label')
     # a tick that changes nothing touches nothing
     c = m.at(0)
     expect(not any(x[0] in ('widget_move', 'widget_resize', 'widget_set_text_utf8', 'widget_use_style', 'widget_set_opacity', 'widget_set_visible') for x in c), f'an unchanged tick makes no widget call ({m.names()})')
@@ -792,6 +826,25 @@ def wrap_tests(ctx):
         expect(s[long_line[1]][3] // LINE_H == r >= 2 and s['Hello'][3] == LINE_H and s['Hello'][0] == ANCHOR + r * LINE_H + GAP,
                f'a long {kind} line takes {r} rows ({real(long_line[1])} px of {W}) and pushes the next line down by its height')
         expect(s == expect_layout(lines, 0, 0, real), f'{kind}: the layout is the model\'s')
+    # the page opened mid-song (a 1.3.0 report, Wake Up): the hook's tick lays out the lines round the playing one before the window resolves the probe's style; they
+    # are measured by the next tick in the lyrics font, not kept from a measure in the label default style (18 px: "Still knee-deep..." one row, "in the" its last words)
+    wake = [(60, 'Come on'), (66, "Standing with the fury that they had in '66"), (70, "And like E-Double, I'm mad"), (71, "Still knee-deep in the system's shit"),
+            (73, 'Hoover, he was a body remover'), (76, 'I give a shout out to the living dead')]
+    m = LyMachine(wake, measure=real); m.play = 70; m.init()
+    expect(not any(c[0] == 'widget_measure_text' for c in m.calls), 'opened mid-song: the hook\'s tick measures nothing')
+    m.at(70); m.frame(10000); s = m.shown()
+    knee = wake[3][1]
+    expect(s == expect_layout(wake, 2, 0, real) and s[knee][3] == 2 * LINE_H and s[wake[1][1]][3] == 3 * LINE_H,
+           f'the next tick measures in the lyrics font: "{knee}" {real(knee)} px takes 2 rows, the \'66 line 3 ({ {k: v[3] // LINE_H for k, v in s.items()} })')
+    # a face change while the window opens (stage 2: widget_use_style only marks the probe) is measured in the new face, resolved by the probe itself
+    m = LyMachine([(0, 'Hello there'), (1, '你好，世界'), (2, 'Back to Latin')]); m.init()
+    meas = [c[2] for c in m.at(0) if c[0] == 'widget_measure_text']
+    expect(meas == [BOLD, CJKF, BOLD], f'during the open animation each measure is in the line\'s own resolved face ({meas})')
+    m = LyMachine([(0, 'Hello there'), (1, '你好，世界')]); m.init(open_after=False)
+    for _ in range(3): m.at(0)
+    expect(not any(c[0] == 'widget_measure_text' for c in m.calls) and m.shown()['你好，世界'][3] == LINE_H, 'a window that has not resolved its styles is not measured: the lines stay one row')
+    m.stage(2); m.at(0)
+    expect([c[2] for c in m.calls if c[0] == 'widget_measure_text'] == [BOLD, CJKF], 'and the first tick after it measures them')
     # the label wraps: line wrap and word wrap are asked for on every label
     expect(sum(c[0] == 'label_set_line_wrap' and c[2] == 1 for c in m.calls) == 0 and sum(c[0] == 'label_set_line_wrap' for c in m.calls) == 0, 'the wrap flags are set at the start, not on every layout')
     m = LyMachine(SONG); m.init()
@@ -839,7 +892,7 @@ def face_tests(ctx):
     expect(got == [w for _, w in cases], f'a line of Latin, Greek and Cyrillic is the bold face\'s; CJK, kana, Hangul, symbols, emoji and malformed UTF-8 are not ({got})')
     # the page: one face a line, the probe measures in the line's own face, a label's style is set only when its face changes
     lines = [(0, 'Hello there'), (5, '你好，世界'), (10, 'Mixed 日本語 line'), (15, 'Привет мир')]
-    m = LyMachine(lines); m.init(); meas = [c for c in m.calls if c[0] == 'widget_measure_text']; m.at(5); m.frame(10000)
+    m = LyMachine(lines); m.init(); meas = [c for c in m.at(0) if c[0] == 'widget_measure_text']; m.at(5); m.frame(10000)
     s = m.shown()
     expect({k: v[2] for k, v in s.items()} == {t: face(t) for _, t in lines} and [s[t][2] for _, t in lines] == [BOLD, CJKF, CJKF, BOLD], f'Latin lines take the bold style, lines with CJK the default font\'s ({[s[t][2] for _, t in lines]})')
     expect(len(meas) >= 4 and all(c[2] == face(t) for c, (_, t) in zip(meas, lines)) and m.props.get((m.probe(), 'style')) in (BOLD, CJKF), 'the probe measures each line in its own face (a width in the wrong font would give the wrong rows)')
@@ -1043,7 +1096,7 @@ def dots_tests(ctx):
     expect(is_cur(after, 'Intro line') and {k: v[0] for k, v in after.items() if k in before} == {k: before[k] for k in after if k in before} and not any(m.dot_ops()),
            'the first line starts while the user has scrolled: the highlight moves, the lines stay under the finger, the dots are gone')
     # cost: a dot frame
-    m = LyMachine(INTRO); m.count(); m.init(); m.calls = []
+    m = LyMachine(INTRO); m.count(); m.init(); m.at(0); m.calls = []; m.icount = 0   # (the first page tick measures the lines)
     m.dframe(); n1 = m.icount
     expect(n1 < 60000, f'a dots frame costs {n1} instructions')
     expect(sum(c[0] in ('widget_move', 'widget_resize', 'widget_set_text_utf8', 'widget_use_style') for c in m.calls) == 0 and sum(c[0] == 'widget_set_opacity' for c in m.calls) <= 4, 'it only changes the three dots\' opacity (and a line\'s when it fades)')

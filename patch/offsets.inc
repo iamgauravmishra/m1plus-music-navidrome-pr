@@ -523,6 +523,11 @@
 #define LY_WRAP_SLACK 56
 #define LY_WRAP_SLACK_CJK 8
 #define LY_MISS_MAX 20
+/* The window "stage" from which a widget's style can be resolved: window_base_on_event's EVT_WINDOW_WILL_OPEN (0x12a) stores 2 (@0x676bb8, @0x676bc8), loads the
+ * window's own theme (styles/playing_page.bin, where np_lyric_style lives) and resolves every widget's style (widget_update_style_recursive @0x676bd4). Stock
+ * dispatches that event from an idle, so after playing_page_init (our np_start) has returned. widget_use_style resolves the new style only in an opened window
+ * (stage 3 or 5, @0x66aac0); before that and during the open animation it only marks the widget, and widget_measure_text measures in the old style. */
+#define WINDOW_STAGE_CREATED 2
 /* The interlude dots (docs/modules/lyrics.md, stage 4): LY_DOT px white circles (the image np_dot), LY_DOT_PITCH apart from x LY_DOT_X, centred on the anchor row (LY_DOT_PAD = LY_LINE_H + LY_GAP: the lines sit
  * that far below while they show) for a gap before the first line of at least LY_DOT_MIN_S seconds. Dot k fills from LY_DOT_DIM (0.25) to 255 as the k-th third of the gap (less its last fade) passes, the group breathes
  * between 255 and LY_DOT_BREATH_MIN every LY_DOT_BREATH_MS, and fades out over the last LY_DOT_FADE_MS. One LY_DOT_MS timer exists while they show and the player plays. */

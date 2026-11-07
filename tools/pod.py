@@ -562,6 +562,7 @@ TAPE_PINS = (   # (address, stock word, what it proves): the Tape page invalidat
     (0x668e14, 0x24060010, 'widget_invalidate: the rectangle is 16 bytes (rect_init, copied with memcpy 0x10): four 32 bit words x, y, w, h'),
 )
 FUNCTIONS['get_playtime'] = ('int', 'void', 0x4e02e4)   # the position the stock lyric timers compare "lrc_time" with (docs/modules/lyrics.md)
+FUNCTIONS['widget_update_style'] = ('int', 'void *', 0x666780)   # the lyrics probe resolves its style before it measures (patch/lyrics.c ly_probe_face; a no-op once resolved)
 LYRICS_PINS = (   # (address, stock word, what it proves): the stock lyric rows patch/lyrics.c reads (docs/modules/lyrics.md)
     (0x4e02e4, 0x3c1c0052, 'get_playtime prologue'), (0x4e02e8, 0x279c3bec, 'get_playtime prologue'), (0x4e02ec, 0x0399e021, 'get_playtime prologue'),
     (0x751c3c, 0x6f726373, 'the string "scroll_lrc" (the list the stock timers fill)'), (0x751c40, 0x6c5f6c6c, '"scroll_lrc"'), (0x751c44, 0x00006372, '"scroll_lrc"'),
@@ -575,6 +576,10 @@ LYRICS_PINS = (   # (address, stock word, what it proves): the stock lyric rows 
     (0x62e9f8, 0x24a5add8, 'label paint (the line_wrap branch): a1 = "spacer" (0x75add8), the style int that sets the row pitch'), (0x62ea04, 0x9615000c, 'label paint: lhu s5, 0xc(canvas) = the font size'),
     (0x62ea24, 0x02a29821, 'label paint: row pitch s3 = font size + style "spacer" (default 2): LY_LINE_H = LY_FONT + the style\'s spacer'),
     (0x650ebc, 0x1440ffcf, 'font_manager_get_font: a font name that cannot be loaded is retried with the default font name (the fallback of np_lyric_style when lyrics.ttf is missing); no per-glyph fallback'),
+    (0x66aac0, 0x1040000d, 'widget_use_style: beqz widget_is_window_opened: the style is resolved (widget_update_style) only in an opened window, else only marked: the probe resolves its own (ly_probe_face)'),
+    (0x6667a8, 0x10c00008, 'widget_update_style: beqz on the need_update_style bit: nothing to do once the style is resolved'),
+    (0x676bb8, 0x24020002, 'window_base_on_event, EVT_WINDOW_WILL_OPEN: v0 = 2 (WINDOW_STAGE_CREATED) ...'), (0x676bc8, 0xae220094, '... stored as the window\'s stage'),
+    (0x676bd4, 0x0411beff, 'window_base_on_event, EVT_WINDOW_WILL_OPEN: bal widget_update_style_recursive (every widget\'s style resolved, after the window theme is loaded): from stage 2 a measure is in the asked style'),
 )
 # The library scan's folder walk (patch/common.c pod_scan_dir, docs/modules/payload.md hook 5): toolsLoadAllFile (0x5efd98) lists each folder with the function at 0x5ea364 (readdir
 # loop, 0x5ea600); for a directory entry (d_type 4, name in s0) it skips "." with `strcmp(name, ".")` (0x5ea6a8), ".." and a list of system folders (lost+found, System Volume

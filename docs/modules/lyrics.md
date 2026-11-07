@@ -43,6 +43,17 @@ Stock `widget_get_text_utf8` ignores its size for a wide text and wrote a ~350 b
   stays one row, is not cached, and later page ticks measure it again and redo the layout
   (after the first failed measure a layout measures nothing more; at most 20 ticks' layouts,
   10 s, per lyrics load can fail, then one row is kept).
+- The measuring label measures only in its resolved style. `widget_use_style` resolves a style
+  only in an opened window (stage 3/5). Otherwise it just marks the widget, and
+  `widget_measure_text` measures in the old style. The window resolves every widget's style at
+  `EVT_WINDOW_WILL_OPEN` (stage 2), which stock dispatches from an idle after
+  `playing_page_init`. So `np_start`'s first tick ran before it and measured the lines around
+  the playing one in the label's default style, a width too small that stayed cached (1.3.0
+  report, Wake Up: "Still knee-deep in the system's shit" was cut after "in the", the '66 line
+  lost its last row). Now nothing is measured before stage 2 (that tick's lines are retried
+  like a measure of 0). From stage 2 the probe calls `widget_update_style` itself before each
+  measure, as stock `label_resize_to_content` does, so a face switch during the open
+  animation is measured in the new face.
 - `np_lyric_style` selects `lyrics.ttf` (the Inter Bold subset).
   `np_lyric_cjk_style` uses the default font for mixed scripts, unsupported characters
   or malformed UTF-8. AWTK has no per-glyph font fallback.
@@ -88,7 +99,10 @@ a drag and are insensitive. Dots between lyric lines are not enabled.
 font fallback and label pitch instructions. Key evidence includes `lrc_time` at
 `0x751c80`, its write at `0x5384bc`, timer reads at `0x538654` / `0x5386a8`,
 row-click words at `0x536e3c` / `0x536e50`, pitch instructions at
-`0x62e9f8` / `0x62ea04` / `0x62ea24` and font fallback at `0x650ebc`.
+`0x62e9f8` / `0x62ea04` / `0x62ea24` and font fallback at `0x650ebc`. Style resolution:
+`widget_use_style`'s opened-window test at `0x66aac0`, `widget_update_style`'s no-op test
+at `0x6667a8`, and the WILL_OPEN stage store and recursive style update at `0x676bb8` /
+`0x676bc8` / `0x676bd4`.
 Called functions are also checked against `FUNCTIONS`; consult `tools/pod.py` for the full set.
 
 All work runs on the UI thread from page timers and listeners. No stock words are written,
