@@ -21,6 +21,8 @@ and [UI reference](ui.md). Hardware observations below do not validate later bui
 - **1.3.0, 2026-11-06:** a 10-band EQ editor, AutoEq downloads and per-output EQ, a new Wi-Fi
   page (WPA3, Enhanced Open), a redesigned Wi-Fi Transfer page, Podcast Discover, library "…"
   menus, Favorite and Get Info, and the long-lyric-line reboot fix.
+- **1.3.1, 2026-11-07:** fixes for the pull-down's Settings tiles, long lyric lines opened
+  mid-song and the stock Equalizer row, which now opens the Equalizer page.
 
 ## Device findings
 
