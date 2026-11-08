@@ -1757,6 +1757,34 @@ def timer_tests(ctx):
     m.supp.log = []
     m.tick(60)
     expect('SCAN' not in m.cmds(), 'no scan while the supplicant is connecting')
+    # the connecting row's spinner keeps turning with no scan, one frame per tick (also after the initial scan of an automatic connection)
+    def spin_run(m, n):
+        out = []
+        for _ in range(n):
+            m.tick(1)
+            out.append(int(m.rows()[0][1][len('wf_spin'):]))
+        return out
+    steps = lambda fr: [(b - a) % 8 for a, b in zip(fr, fr[1:])]
+    m = page(); opened(m); m.tick(16)
+    m.supp.state, m.supp.cur, m.supp.ip = 'ASSOCIATING', 0, None
+    m.tick(4)
+    fr = spin_run(m, 24)
+    expect(len(set(fr)) == 8 and steps(fr) == [1] * 23, f'connecting, no scan: the row\'s spinner advances one frame per tick: {fr}')
+    m.supp.state = 'COMPLETED'
+    fr = spin_run(m, 8)
+    expect(len(set(fr)) >= 7 and all(d != 0 for d in steps(fr)), f'associated, no address: still turning (the state change may lay the rows out once more): {fr}')
+    m.supp.ip = '192.168.1.20'
+    m.tick(4)
+    expect(m.rows()[0][1] == 'wf_check', 'DHCP gave an address: the check')
+    supp = Supp(scan=SCAN, known=KNOWN); supp.state, supp.cur, supp.ip = 'ASSOCIATING', 0, None
+    m = page(supp); opened(m); m.tick(20)
+    expect(not m.visible('wf_hdr_net_spin'), 'the initial scan has ended')
+    fr = spin_run(m, 12)
+    expect(len(set(fr)) == 8 and steps(fr) == [1] * 11, f'an automatic connection after the scan: turning: {fr}')
+    supp = Supp(scan=SCAN, known=KNOWN); supp.state, supp.cur, supp.ip = 'ASSOCIATING', 0, None
+    m = page(supp); opened(m)
+    fr = spin_run(m, 8)
+    expect(steps(fr) == [1] * 7 and m.visible('wf_hdr_net_spin'), f'during a scan: one frame per tick, no double advance: {fr}')
     # a dialog is up: the timer leaves everything alone (the page's flag is found as the one word the dialog sets)
     from elftools.elf.elffile import ELFFile
     with open(os.path.join(BUILD, 'patch.elf'), 'rb') as f: size = ELFFile(f).get_section_by_name('.symtab').get_symbol_by_name('wp')[0]['st_size']

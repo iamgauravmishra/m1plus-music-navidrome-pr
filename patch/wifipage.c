@@ -1304,8 +1304,10 @@ static int wp_tick(const void *timer) {
             wp.idle_t = 0;
             wp_spinner();
         }
-    } else if (++wp.idle_t >= WP_SCAN_IDLE && wp.fg && wp.st.state != WF_ST_CONNECTING && wp.want_id < 0)
-        wp_scan();
+    } else {
+        if (wp.crow >= 0) wp_spinner(); /* no scan runs while connecting: the row's circle still turns */
+        if (++wp.idle_t >= WP_SCAN_IDLE && wp.fg && wp.st.state != WF_ST_CONNECTING && wp.want_id < 0) wp_scan();
+    }
     if (wp.tick % WP_POLL == 0) {
         int was = wp.alive;
         wp_poll();
