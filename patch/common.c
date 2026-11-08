@@ -136,6 +136,23 @@ int pod_is_type(void *w, const char *type) {
     return t && strcmp(t, type) == 0;
 }
 
+/* The topmost opened window called name in the window manager is brought to the front the way stock brings the player back (window_manager_switch_to, nothing closed, Back returns to where the user came from).
+ * Stock's navigator_to opens a page that has no single_instance property afresh each time, so a page left in the stack (the top-right Now Playing button restacks the player over it) would be stacked twice. */
+void *pod_restack_window(const char *name) {
+    void *wm = window_manager();
+    unsigned n;
+    if (!wm) return (void *)0;
+    for (n = widget_count_children(wm); n--;) {
+        void *w = widget_get_child(wm, n);
+        const char *nm = w ? *(const char **)((char *)w + WIDGET_NAME) : (const char *)0;
+        if (nm && !strcmp(nm, name)) {
+            if (!widget_is_window_opened(w)) return (void *)0; /* (a page that is closing is gone) */
+            return window_manager_switch_to(wm, window_manager_get_top_window(wm), w, 0) == RET_OK ? w : (void *)0;
+        }
+    }
+    return (void *)0;
+}
+
 /* The navbar's small title of a page with a large heading: shown once the heading has scrolled away, i.e. the scroll offset has reached SG_COLLAPSE, or, on a page whose
  * heading is a header's name (a playlist, a podcast show), `head` (the offset the name has gone at). The page ORs in its own conditions (select mode, no scroll events ...). */
 int pod_title_gone(int off, int head) { return off >= (head ? head : SG_COLLAPSE); }

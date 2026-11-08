@@ -53,6 +53,7 @@ STOCK = {
     # the Wi-Fi page's two confirmations: stock's own texts (patch/wifipage.c)
     'msg_wifidisconnect': 'Disconnect Now?',
     'msg_wificancelsave': 'Delete Record?',
+    'powerm_sleep': 'Sleep Timer',   # Now Playing's More sheet row that opens the stock Power page: the same text as that page's own Sleep Timer row (patch/playmore.c)
 }
 
 _L = LOCALES[1:]    # the order of the translations below (English is the key)

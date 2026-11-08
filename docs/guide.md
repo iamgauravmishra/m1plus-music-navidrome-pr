@@ -33,7 +33,8 @@ Open **Extras → Settings** to customize the player. To return to the stock gri
 | Shuffle | Shuffle songs, albums or folders from Extras |
 
 In Now Playing, tap **…** for playback options, Look up album, Cassette Mode and Vinyl Mode.
-Open its **More** page for the online cover and lyrics lookup (Wi-Fi required).
+Open its **More** page for **Sleep Timer** (opens Settings > Power, where the timer is set) and the
+online cover and lyrics lookup (Wi-Fi required).
 
 A track row's **…** on the album page and the Songs lists offers **Play Next**, **Play After**,
 **Add to Playlist**, **Favorite** (Undo Favorite when it is one) and **Get Info**: the track's

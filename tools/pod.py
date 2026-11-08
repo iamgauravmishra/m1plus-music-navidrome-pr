@@ -1133,6 +1133,10 @@ PLAYMORE_PINS = (   # (address, stock word, what it proves)
     (0x668ae4, 0x0320f809, 'widget_foreach: visit(widget) first'),
     (0x668af0, 0x1440000b, 'widget_foreach: then its children, if the visit returned RET_OK (the dialog before its list_view)'),
     (0x60c53c, 0x1443fff6, 'list_view_on_event: RET_OK for an event it does not handle (0x12c reaches the list_view\'s emitter)'),
+    # why a restacked Power page needs no refresh of ours (pm_on_sleep): stock's restack delivers EVT_WINDOW_TO_FG to it, and the handler its init bound for that event runs the page's refresh
+    (0x6789e8, 0x2405012d, 'window_manager_switch_to (animation 0): a1 = EVT_WINDOW_TO_FG 0x12d ...'), (0x6789f4, 0x0411ff88, '... window_manager_dispatch_window_event(new window, 0x12d)'),
+    (0x4a9d34, 0x2405012d, 'powermanager_page init: widget_on(win, 0x12d, ...)'), (0x4a9d44, 0x24c69b2c, 'its handler is 0x4a9b2c'), (0x4a9d50, 0x0320f809, 'jalr widget_on'),
+    (0x4a9b48, 0x27399924, 'handler 0x4a9b2c: t9 = 0x4a9924, the page refresh'), (0x4a9b50, 0x0411ff74, 'bal 0x4a9924, with a0 = the window (the delay slot move s0, a0)'),
 )
 
 
