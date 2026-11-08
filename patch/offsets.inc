@@ -497,7 +497,7 @@
  * (at most LY_MAX; each row's int property "lrc_time" and its text, LY_BUF bytes). A move of the anchored line is a damped spring of LY_SPRING_MS per line (a table of 65 entries, overshoot cut at LY_OVERSHOOT_MAX px), each line starting LY_DELAY_MS
  * (shrinking 20/21 a line) after the one before, in LY_FRAME_MS steps; a move over LY_SNAP_LINES lines jumps. The window of lines laid out round the anchor is LY_POOL, those
  * further than LY_OFF_MAX px are not measured. Touch: a vertical drag over LY_TAP_PX scrolls, LY_IDLE_MS after the last touch the lines come back, a tap under LY_TAP_PX (not within
- * LY_COAST_MS of a started move) seeks (seek_time) and the tick leaves the lines alone for LY_HOLD_MS. Opacity table 1.0 / 0.45 / 0.32 / 0.24 / 0.18, times an edge factor over the last LY_FADE px at the top and bottom of the view. LY_WRAP_SLACK px (LY_WRAP_SLACK_CJK for the default font): what a word wrap wastes of a row. get_playtime is the stock call the lyric timers compare "lrc_time" with (0x5385e0). */
+ * LY_COAST_MS of a started move) seeks (seek_time) and the tick leaves the lines alone for LY_HOLD_MS. Opacity table 1.0 / 0.45 / 0.32 / 0.24 / 0.18, times an edge factor over the last LY_FADE px at the top and bottom of the view. LY_FIT_W (LY_W less the style's 2 px margins each side) is what a one-row line may measure, LY_ROW_W (one less: stock's wrap check adds 1 px) what a row of a broken line may (ly_break). get_playtime is the stock call the lyric timers compare "lrc_time" with (0x5385e0). */
 #define LY_W 264
 #define LY_VIEW_H 244
 #define LY_ANCHOR 85
@@ -520,8 +520,8 @@
 #define LY_TAP_PX 10
 #define LY_COAST_MS 200
 #define LY_HOLD_MS 1000
-#define LY_WRAP_SLACK 56
-#define LY_WRAP_SLACK_CJK 8
+#define LY_FIT_W 260
+#define LY_ROW_W 259
 #define LY_MISS_MAX 20
 /* The window "stage" from which a widget's style can be resolved: window_base_on_event's EVT_WINDOW_WILL_OPEN (0x12a) stores 2 (@0x676bb8, @0x676bc8), loads the
  * window's own theme (styles/playing_page.bin, where np_lyric_style lives) and resolves every widget's style (widget_update_style_recursive @0x676bd4). Stock
