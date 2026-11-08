@@ -55,8 +55,8 @@ def layout_tests(ctx):
     """Every cards page under demo's own layouter, plus the asset against the model."""
     expect, P = ctx.expect, pod_pages
     pages = [p for p in P.PAGES if p.kind in ('cards', 'peq')]   # (the Equalizer page is a cards page its payload binds itself: its layout is the asset's, every row shown)
-    expect([p.key for p in pages] == ['m1plus_settings', 'm1plus_library', 'm1plus_homeset', 'm1plus_developer', 'm1plus_npset', 'm1plus_keyboards', 'm1plus_tapetheme', 'm1plus_about', 'm1plus_vinylrec', 'm1plus_vinyltheme', 'm1plus_cache', 'm1plus_files', 'm1plus_background', 'm1plus_accent', 'm1plus_appearance', 'm1plus_podcastregion', 'm1plus_peq'],
-           'the cards pages: Settings, Library, Home Screen, Developer, Now Playing, Keyboards, the three pickers, About, Cache, Settings Files, the Background picker, the Accent picker, Appearance and the Podcast Region picker and Equalizer')
+    expect([p.key for p in pages] == ['m1plus_settings', 'm1plus_library', 'm1plus_homeset', 'm1plus_developer', 'm1plus_npset', 'm1plus_keyboards', 'm1plus_tapetheme', 'm1plus_about', 'm1plus_vinylrec', 'm1plus_vinyltheme', 'm1plus_cache', 'm1plus_files', 'm1plus_background', 'm1plus_accent', 'm1plus_appearance', 'm1plus_podcastregion', 'm1plus_peq', 'm1plus_battery', 'm1plus_chargelimit'],
+           'the cards pages: Settings, Library, Home Screen, Developer, Now Playing, Keyboards, the three pickers, About, Cache, Settings Files, the Background picker, the Accent picker, Appearance and the Podcast Region picker, Equalizer, Battery and the Charge Limit picker')
     expect(mod_icons.CARD_PIECE == {'ROW_W': ST.ROW_W, 'ROW_H': ST.ROW_H, 'CARD_X': ST.CM, 'CARD_W': ST.CARD_W, 'CARD_R': ST.CARD_R, 'FILL': (0x1C,) * 3, 'LIT': (0x2C, 0x2C, 0x2E)}
            and ST.CARD_RGB == '#1C1C1C' and ST.PRESSED_RGB == '#2C2C2E', 'the pieces\' geometry in tools/mod_icons.py is the layout model\'s')
     expect(mod_icons.CARD_TALL == ST.LIB_ROW_H == 60 and ST.piece_images('top', tall=True) == ('pod_cdl_top', 'pod_cdl_top_down') and ST.piece_images('mid') == ('pod_cd_mid', 'pod_cd_mid_down')
@@ -160,7 +160,7 @@ def layout_tests(ctx):
     regen_i = next(i for i, r in enumerate(page.rows) if r.action == P.ACT_REGEN)
     regen_row, regen_note = f'pod_row{regen_i}', f'pod_note{sum(isinstance(it, P.Note) for it in page.layout) - 1}'
     expect(regen_i == len(page.rows) - 1 and isinstance(page.layout[-1], P.Note) and page.layout[-1].text == 'A new mix the next time Home opens' and page.layout[-2].label == 'Regenerate Daily Mix'
-           and page.layout[-4].label == 'Battery Percentage' and regen_note == 'pod_note4', 'Regenerate Daily Mix and its note end the Home Screen page, after Battery Percentage and its note (pod_note4, the name the payload hides)')
+           and page.layout[-3].text == 'Items the menu does not show' and regen_note == 'pod_note3', 'Regenerate Daily Mix and its note end the Home Screen page, after Extras and its note (pod_note3, the name the payload hides)')
     full, hid = SL(page),SL(page, hide=(regen_row, regen_note))
     placed, end = ST.layout(page.layout)
     expect(ST.pieces(page.layout)[regen_i] == 'single', 'Regenerate Daily Mix is a card of its own: a single piece, correct whatever its neighbours do')

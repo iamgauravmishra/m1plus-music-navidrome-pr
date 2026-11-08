@@ -3,7 +3,7 @@
 - **Keep the approved entry points.** Home icon tap, guarded Home initialization,
   Now Playing initialization, the timed cover page's initialization (`bigcover_page_init`, [bigcover](bigcover.md)), More-dialog initialization, pull-down initialization (opened by the user's swipe only), the podcast tag-copy call site, the
   dot-folder scan, library query functions, status bar's battery-capacity call site
-  (Battery Percentage, off by default), `toolsGetFileCreateTime`'s prologue (song dates: one `statx`, stock's date on any failure), `mclStartPlayer`'s prologue (Radio's hand-over: it stops a running radio, one
+  (Battery Percentage and the Charge Limit, both off by default), `toolsGetFileCreateTime`'s prologue (song dates: one `statx`, stock's date on any failure), `mclStartPlayer`'s prologue (Radio's hand-over: it stops a running radio, one
   comparison otherwise), `on_backtoplayer_onclick`'s prologue (every stock Now Playing button: Radio Now Playing while a station plays, else stock), the previously empty `scroll_view` event slot, the All System Settings hub's Wi-Fi row (`navigator_to` call site `0x4b1460`: our Wi-Fi page, stock's on the kill switch or a page that will not open), the two `navigator_to` call sites that open a Playback / System Settings page after a pull-down tile tap (`0x4cd894`, `0x4cd8bc`: restack the page that is still in the window stack, else stock's call), and the
   palette's three paint-time hooks: `style_get_color` `0x659fcc`, `style_get_gradient` `0x659f9c` and
   `image_manager_add` `0x655638` ([accent](accent.md), payload hooks 10 - 12); in `hciplayer`, the
@@ -30,8 +30,9 @@
   Memory Playback at boot: rewrite only the documented songtable/myfav cases and pass
   other SQL untouched. Album queries use track order so the first track supplies the row/cover.
   The scan hook skips dot-folders outside the boot path. The battery hook runs stock first
-  from the first status refresh; only an enabled percentage setting changes capacity/label.
-  Disabled it adds only an access and cached flag. Now Playing's paint work stays on the
+  from the first status refresh; only an enabled percentage setting changes capacity/label,
+  and only a set Charge Limit writes the charger switch, releasing only its own hold ([charging](charging.md)).
+  Both disabled it adds only an access and two cached flags. Now Playing's paint work stays on the
   cover widget; More work stays on init, More/back taps and covering-dialog handling. The pull-down hook runs stock's init first,
   then moves and hides the eight tiles and their captions once; before the stock init it also writes the two "inside settings" flags (`syssetinto_flag`, `playsetinto_flag`) from the window stack.
 - **Pin every edit.** Check stock SHA-256, words, symbols, `$gp` and offsets before writing.

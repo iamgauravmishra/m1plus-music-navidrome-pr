@@ -21,6 +21,8 @@ STATE = {
     'm1plus_appearance': {'values': {'pod_value0': 'Neutral'}},
     'm1plus_background': {'shown': {'pod_check1'}},
     'm1plus_accent': {'shown': {'pod_check0'}},
+    'm1plus_battery': {'values': {'pod_value1': '80%'}, 'switches': {'pod_switch0': True}},
+    'm1plus_chargelimit': {'shown': {'pod_check0'}},
     'm1plus_homeset': {'switches': {'pod_switch0': True, 'pod_switch1': True}},
     'm1plus_library': {'switches': {'pod_switch2': False}},
     'm1plus_npset': {'values': {'pod_value0': 'Chrome'}},
@@ -293,6 +295,8 @@ def main():
            ('Settings > Appearance', draw_page(s, 'm1plus_appearance')),
            ('Settings > Appearance > Accent', draw_page(s, 'm1plus_accent')),
            ('Settings > Appearance > Background', draw_page(s, 'm1plus_background')),
+           ('Settings > Battery', draw_page(s, 'm1plus_battery')),
+           ('Settings > Battery > Charge Limit', draw_page(s, 'm1plus_chargelimit')),
            ], out)
     # Light Mode (docs/modules/accent.md): the same pages with the hooks' colours and images (tools/palette.py); the Settings page with Light Mode On, and the picker
     lit = os.path.join(os.path.dirname(out), 'settings-light.png')

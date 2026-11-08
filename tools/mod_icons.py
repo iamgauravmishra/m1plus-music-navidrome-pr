@@ -142,7 +142,7 @@ CARD_GLYPHS = {'Wi-Fi': 'wifi', 'Bluetooth': 'bluetooth', 'Home Screen': 'house'
                'Keyboards': '+keyboard', 'About': 'info', 'All System Settings': 'settings', 'Developer': 'code', 'Main Menu': 'list-checks', 'Extras': 'ellipsis',
                'Recent Albums': 'history', 'Daily Mix': 'shuffle', 'Regenerate Daily Mix': 'refresh-cw', 'Update Library': 'refresh-cw',
                'Landscape': 'rotate-cw-square', 'Rebuild Covers': 'image-up', 'Theme': '+cassette-tape', 'Record': '+turntable', 'Base': 'palette', 'Boot to M1+ Music': 'power', 'Open Shanling Home': '@shanling', 'Equalizer': 'sliders-vertical',
-               'Screenshot': 'camera', 'Clear Cover Cache': 'trash', 'Clear Track Durations': 'trash', 'Delete Unsupported Files': 'trash', 'Reset All Settings': 'rotate-ccw', 'Cache': 'hard-drive','Settings Files': 'file-cog', 'Download from AutoEq': 'download', 'Podcast Discover': 'compass', 'English': 'languages', 'Chinese (Pinyin)': 'languages', 'Battery Percentage': 'battery-charging'}
+               'Screenshot': 'camera', 'Clear Cover Cache': 'trash', 'Clear Track Durations': 'trash', 'Delete Unsupported Files': 'trash', 'Reset All Settings': 'rotate-ccw', 'Cache': 'hard-drive','Settings Files': 'file-cog', 'Download from AutoEq': 'download', 'Podcast Discover': 'compass', 'English': 'languages', 'Chinese (Pinyin)': 'languages', 'Battery Percentage': 'battery-charging', 'Battery': 'battery-full', 'Charge Limit': 'battery-medium'}
 
 
 def card_name(g):

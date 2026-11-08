@@ -469,14 +469,23 @@ TEXT = dict([
     _t('Search words are sent to Apple.', '搜索词会发送给 Apple。', '搜尋詞會傳送給 Apple。', '検索語は Apple に送信されます。', '검색어는 Apple로 전송됩니다.', 'Les mots recherchés sont envoyés à Apple.',
        'Suchbegriffe werden an Apple gesendet.', 'Los términos se envían a Apple.', 'Le parole cercate vanno ad Apple.', 'คำค้นหาจะถูกส่งไปยัง Apple', 'Szukane słowa trafiają do Apple.',
        'Слова запроса отправляются в Apple.', 'Слова запиту надсилаються до Apple.'),
-    # Battery Percentage (patch/battery.c, docs/modules/battery.md): Settings > Home Screen > Status Bar
-    _t('Status Bar', '状态栏', '狀態列', 'ステータスバー', '상태 표시줄', 'Barre d’état', 'Statusleiste',
-       'Barra de estado', 'Barra di stato', 'แถบสถานะ', 'Pasek stanu', 'Строка состояния', 'Рядок стану'),
+    # Battery Percentage (patch/battery.c, docs/modules/battery.md): Settings > System > Battery
     _t('Battery Percentage', '电量百分比', '電量百分比', 'バッテリー残量', '배터리 잔량', 'Pourcentage', 'Akkustand',
        'Porcentaje', 'Percentuale', 'เปอร์เซ็นต์แบต', 'Poziom baterii', 'Процент заряда', 'Відсоток заряду'),
     _t('The exact charge beside the battery icon', '电池图标旁显示精确电量', '電池圖示旁顯示精確電量', 'バッテリーアイコンの横に正確な残量を表示', '배터리 아이콘 옆에 정확한 잔량 표시',
        'La charge exacte à côté de l’icône', 'Der genaue Ladestand neben dem Symbol', 'La carga exacta junto al icono', 'La carica esatta accanto all’icona',
        'ระดับแบตที่แน่นอนข้างไอคอน', 'Dokładny poziom obok ikony', 'Точный заряд рядом со значком', 'Точний заряд поруч зі значком'),
+    # Charge Limit (patch/charging.c, docs/modules/charging.md): Settings > System > Battery
+    _t('Battery', '电池', '電池', 'バッテリー', '배터리', 'Batterie', 'Batterie',
+       'Batería', 'Batteria', 'แบตเตอรี่', 'Bateria', 'Аккумулятор', 'Акумулятор'),
+    _t('Charge Limit', '充电上限', '充電上限', '充電上限', '충전 한도', 'Limite de charge', 'Ladelimit',
+       'Límite de carga', 'Limite di carica', 'ขีดจำกัดการชาร์จ', 'Limit ładowania', 'Лимит зарядки', 'Ліміт заряду'),
+    _t('Applies while the player is on', '仅在开机时生效', '僅在開機時生效', '電源オン中のみ有効', '켜져 있는 동안 적용',
+       'S’applique quand l’appareil est allumé', 'Gilt, solange das Gerät an ist', 'Se aplica con el equipo encendido',
+       'Vale a dispositivo acceso', 'ใช้ขณะเปิดเครื่อง', 'Działa, gdy urządzenie jest włączone', 'Действует, пока плеер включён', 'Діє, поки плеєр увімкнено'),
+    _t('Resumes a little below the limit', '略低于上限时恢复充电', '略低於上限時恢復充電', '上限を少し下回ると再開', '한도보다 조금 낮아지면 재개',
+       'Reprend un peu sous la limite', 'Lädt knapp unter dem Limit weiter', 'Se reanuda algo por debajo del límite', 'Riprende poco sotto il limite',
+       'ชาร์จต่อเมื่อต่ำกว่าขีดจำกัดเล็กน้อย', 'Wznawia nieco poniżej limitu', 'Возобновится чуть ниже предела', 'Відновиться трохи нижче межі'),
     _t('Searching…','正在搜索…', '正在搜尋…', '検索中…', '검색 중…', 'Recherche…', 'Suche läuft…',
        'Buscando…', 'Ricerca in corso…', 'กำลังค้นหา…', 'Szukanie…', 'Поиск…', 'Пошук…'),
     _t('Loading…', '正在加载…', '正在載入…', '読み込み中…', '불러오는 중…', 'Chargement…', 'Wird geladen…',
@@ -1278,7 +1287,7 @@ def english(key):
 
 
 import pod_pages
-BRANDS = ('M1+ Music', 'Tidal', 'Pod') + pod_pages.GUARD_FILES + (pod_pages.FOLDER_LABEL,) + pod_pages.SETTING_FILES + pod_pages.pcregion.NAMES + pod_pages.GRAPH_TEXTS + pod_pages.SLIDER_TEXTS + ('Q',)   # shown as they are, no key (the Settings Files labels are file names)
+BRANDS = ('M1+ Music', 'Tidal', 'Pod') + pod_pages.GUARD_FILES + (pod_pages.FOLDER_LABEL,) + pod_pages.SETTING_FILES + pod_pages.pcregion.NAMES + pod_pages.GRAPH_TEXTS + pod_pages.SLIDER_TEXTS + ('Q',) + tuple(f'{p}%' for p in pod_pages.CHGLIMIT_VALUES)   # shown as they are, no key (the Settings Files labels are file names)
 
 
 def key_for(english):

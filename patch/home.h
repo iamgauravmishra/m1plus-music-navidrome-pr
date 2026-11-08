@@ -240,8 +240,8 @@ extern int kb_zh_toggle(void); /* flip it, saved atomically; the new state, or -
 extern int pcsearch_setting(
     void); /* patch/podcasts.c: Settings > Library > Podcasts > Podcast Discover: 1 on (the default), 0 off */
 extern int pcsearch_toggle(void); /* flip it, saved atomically; the new state, or -1 when it could not be saved */
-extern int
-battpct_setting(void); /* patch/battery.c: Settings > Home Screen > Battery Percentage: 1 on, 0 off (the default) */
+extern int battpct_setting(
+    void); /* patch/battery.c: Settings > System > Battery > Battery Percentage: 1 on, 0 off (the default) */
 extern int battpct_toggle(void); /* flip it, saved atomically; the new state, or -1 when it could not be saved */
 
 /* patch/m1plus.c (stages with the home feature) */
