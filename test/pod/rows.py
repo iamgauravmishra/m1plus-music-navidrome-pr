@@ -242,6 +242,7 @@ def rows_tests(expect):
     allowed |= {pod.fileoff(built, a) for a, _ in pod.MODE_SITES}                                           # the 19 play mode display sites (jal sh_display_mode)
     allowed |= {pod.fileoff(built, pod.LOCKROW), pod.fileoff(built, pod.LOCKROW) + 4}                                  # the Display page's Lock Screen row: its jump to our Lock Screen page (patch/lockscreen.c lk_redirect)
     allowed |= {pod.fileoff(built, pod.EQ_ROW), pod.fileoff(built, pod.EQ_ROW) + 4}                                  # the Play Settings Equalizer row's jump to the 10-Band editor (patch/tenband.c)
+    allowed |= {pod.fileoff(built, pod.NEXTALBUM_SITE), pod.fileoff(built, pod.NEXTALBUM_SITE) + 4}                     # mclNextSong's List play end branch (Continue with Next Album, hook 24)
     allowed.add(pod.fileoff(built, pod.CLEAR_SITE))                                                      # dmr_serverstart's deque_clear call (jal sh_clear_queue)
     allowed.add(pod.fileoff(built, pod.UPDATE_SITE))                                                     # update_firmware's version compare operand (docs/modules/version.md)
     for a, old, *_ in pod.autotime.EDITS: allowed |= {pod.fileoff(built, a) + k for k in range(0, len(old), 4)}   # the clock sync's string literals (tools/autotime.py)

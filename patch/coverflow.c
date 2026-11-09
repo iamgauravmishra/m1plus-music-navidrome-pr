@@ -38,6 +38,7 @@
 #include "home.h"
 #endif
 #include "covercache.h"
+#include "nextalbum.h"
 #include "common.h"
 
 extern int
@@ -1076,8 +1077,11 @@ static void open_album(int index) {
     cf.album = index;
     if (is_card(r) && has_songs() && songs_open_artist(deque_at(cf.artist_row, 0)) != -1) return;
     if (!cf.scoped) cf.saved_album = cc_album_key(r);
+    na_note_albums(cf.albums, cf.order, album_count(), cf.scoped ? cf.scope : 0,
+                   cf.scoped ? cf.artist_row : (void *)0); /* the order shown, for Continue with Next Album */
     cc_open_album(cf.scoped ? cf.artist_row : (void *)0, cf.scope,
                   (int)(cf.order ? cf.order[index] : (unsigned)index)); /* the stock row */
+    na_note_drop();
 }
 
 /* The artist page's Songs button: our Songs page on all the artist's songs, so Back returns here. A page that did not open falls back to the stock page on the

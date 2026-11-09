@@ -150,6 +150,7 @@ int upnext_add(void *rows, int after);   /* rows: a deque_t of stSongInfo (the c
 - Rows: any `stSongInfo` the library lists give (`deque_at(list, i)`); an album or an artist is a deque of its tracks. One call is one Play Next: its rows keep their order and go in front of earlier Play Nexts.
 - Call from the UI thread; the insert itself is under the payload lock. Stock readers on other threads take no lock (the shuffle "Remaining gap"): a reader can see a row mid-swap for microseconds (not observed, [U]).
 - Not done: remove or reorder queued rows (stock cannot), persistence across a reboot, a "Playing Next" section on the Queue page (Up Next shows the real order, so the rows are there).
+- **Continue with Next Album** also uses `upnext_add(rows, 1)`: when a List play queue started from an album ends, `na_end` (payload hook 26) appends the next album's tracks at the end and stock plays on ([nextalbum](nextalbum.md)). Only `UPNEXT_ADDED` counts; every refusal leaves stock's end.
 
 ### What is tested
 

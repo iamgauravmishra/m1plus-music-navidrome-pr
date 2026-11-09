@@ -609,10 +609,10 @@ def settings_tests(ctx):
         m.call(on_row, a0=rows0 + 12 * settings_i, count=3000000)
         return m
 
-    # 15. Settings (cards): the stock Wi-Fi and Bluetooth pages, our pages, Playback (Play Mode, EQ, the stock list), System (Display, Accent, Keyboards, About, the stock list), Developer
-    expect([r.label for r in S.rows] == ['Wi-Fi', 'Bluetooth', 'Home Screen', 'Library', 'Now Playing', 'Play Mode', 'EQ', 'All Playback Settings',
+    # 15. Settings (cards): the stock Wi-Fi and Bluetooth pages, our pages, Playback (EQ, Continue Playing, the stock list), System (Display, Accent, Keyboards, About, the stock list), Developer
+    expect([r.label for r in S.rows] == ['Wi-Fi', 'Bluetooth', 'Home Screen', 'Library', 'Now Playing', 'EQ', 'Continue Playing', 'All Playback Settings',
                                          'Display', 'Appearance', 'Keyboards', 'Battery', 'About', 'All System Settings', 'Developer'],
-           'the Settings page lists Wi-Fi, Bluetooth, Home Screen, Library, Now Playing, Play Mode, EQ, All Playback Settings, Display, Appearance, Keyboards, Battery, About, All System Settings, Developer')
+           'the Settings page lists Wi-Fi, Bluetooth, Home Screen, Library, Now Playing, EQ, Continue Playing, All Playback Settings, Display, Appearance, Keyboards, Battery, About, All System Settings, Developer')
     pb = next(r for r in S.rows if r.label == 'All Playback Settings'); ss = next(r for r in S.rows if r.label == 'All System Settings')
     expect((pb.action, pb.arg) == (P.ACT_HOME, P.HOME_PLAYSET) and (ss.action, ss.arg) == (P.ACT_HOME, P.HOME_SYSSET),
            'All Playback Settings opens the stock Play settings list, All System Settings the stock one')

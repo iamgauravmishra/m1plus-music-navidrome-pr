@@ -36,6 +36,7 @@
 #include "i18n.h"
 #include "podcasts.h"
 #include "home.h"
+#include "nextalbum.h"
 
 #define P(r, off) (*(char **)((char *)(r) + (off)))
 #define I(r, off) (*(int *)((char *)(r) + (off)))
@@ -401,6 +402,7 @@ int sh_load_playlist(void *queue, int pos, int cls) {
     int r;
     void *q;
     unsigned n;
+    na_on_load(); /* Continue with Next Album: the armed load of an album page keeps its order, every other load drops it */
     sh_enter();
     r = stock_loadplaylist_trampoline(queue, pos, cls);
     drop_order();

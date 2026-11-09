@@ -533,10 +533,10 @@ def stockopen_tests(ctx):
 
     kinds = lambda m: [c for c in m.calls if c[0] in ('navigator_to', 'switch_to', 'to_fg')]
     names = [(path, window) for path, _, window in P.STOCK_PAGES]
-    expect(len(names) == 4 and all(window is None or path.split('/')[-1] == window for path, window in names) and [w for _, w in names].count(None) == 3
-           and dict(names)['playset/playmode_page'] is None and dict(names)['systemset/bluetooth_page'] is None and dict(names)['systemset/wifi_page'] is None
+    expect(len(names) == 3 and all(window is None or path.split('/')[-1] == window for path, window in names) and [w for _, w in names].count(None) == 2
+           and dict(names)['systemset/bluetooth_page'] is None and dict(names)['systemset/wifi_page'] is None
            and dict(names)['systemset/display_page'] == 'display_page',
-           'Display names its window (the last component of the path); Play Mode (init reads the mode once, no foreground handler), Bluetooth (its background handler stops discovery and only init restarts it) and Wi-Fi (init scans on every open, the foreground handler only rebuilds the list) are opened afresh each time')
+           'Display names its window (the last component of the path); Bluetooth (its background handler stops discovery and only init restarts it) and Wi-Fi (init scans on every open, the foreground handler only rebuilds the list) are opened afresh each time')
     for path, window in names:
         if window is None: continue
         m = SF([H, PL])
@@ -564,8 +564,6 @@ def stockopen_tests(ctx):
         expect(r == 0x10 and [c[0] for c in kinds(m)] == ['navigator_to'] and m.names_() == [H], f'{window} that will not open: the navigator_to result is returned ({r:#x})')
         m = SF([H, window]); m.nav_fail = True; m.calls = []; r = open_(m, path, window)
         expect(r == 0 and [c[0] for c in kinds(m)] == ['switch_to', 'to_fg'], f'{window} in the stack: opened though navigator_to would refuse')
-    m = SF([H, 'playmode_page']); m.calls = []; r = open_(m, 'playset/playmode_page', None)
-    expect(r == 0 and kinds(m) == [('navigator_to', 'playset/playmode_page')] and m.names_().count('playmode_page') == 2, 'Play Mode (no window name): always stock\'s navigator_to')
 
     # -- Bluetooth: its background handler stops discovery and only init restarts it, so the page is opened afresh, init (btStartSearch) running each time
     bt = next(p for p, w, win in P.STOCK_PAGES if p.endswith('bluetooth_page')); bwin = dict(names)[bt]
@@ -583,7 +581,7 @@ def stockopen_tests(ctx):
 
     # -- every page: what init does per open (STOCK_LIFE: wifi_scan with Wi-Fi on, btStartSearch with Bluetooth on) has happened again after open, Now Playing button, reopen,
     #    whether through a fresh init or through the foreground handler
-    per_open = {'wifi_page': 'wifi_scan', 'bluetooth_page': 'bt_search', 'display_page': None, 'playmode_page': None}
+    per_open = {'wifi_page': 'wifi_scan', 'bluetooth_page': 'bt_search', 'display_page': None}
     for path, _, window in P.STOCK_PAGES:
         page = path.split('/')[-1]
         m = SF([H, PL]); m.bt_on = True

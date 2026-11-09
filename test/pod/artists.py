@@ -1394,7 +1394,55 @@ def name_order_tests(ctx):
     expect(got[-1] == 'Unknown Artist' and got.index('Zed') < got.index('Miles') < got.index('Abba') < got.index('7 Seas') and len(letters(m)) <= 27, f'Z-A mirrors the order; letters {letters(m)} ({got})')
 
 
-SECTIONS = [artists_tests, scoped_albums_tests, scoped_pills_tests, scoped_sort_tests, genre_composer_tests, index_tests, sort_tests, name_order_tests]
+def scoped_nextalbum_tests(ctx):
+    """Continue with Next Album, phase 1 (patch/nextalbum.c): an album tapped on an artist's page notes that artist's albums in the order shown, the scope and a copy of the artist row;
+    the All Songs row is not in it."""
+    expect = ctx.expect
+    NA = sibling('nextalbum')
+    ROWH = O['LIST_ROW_H']
+    FILE = NA.FILE
+
+    def block(m): return O['AL_PILLS_END'] + 0   # the title and pills block above the list rows (the list view: the first row directly under it)
+
+    def tap(m, x, y):
+        sv_y = SCREEN_Y0 + block(m)
+        m.touch('down', x, sv_y + y, 1000, fn='al_on_down'); calls = list(m.calls)
+        m.touch('up', x, sv_y + y, 1080, fn='al_on_up', count=40000000); m.calls = calls + m.calls
+
+    def opened(extra=None, composers=(), home=0, i=0):
+        m = NA.snap(artists_machine(composers=composers, albums_page=True))
+        m.fs['/mnt/data/m1plus/albums-view'] = b'0\n'
+        if extra: m.fs.update(extra)
+        m.call(PSYMS['artists_open'], a0=home, count=20000000)
+        m.calls = []
+        m.call(PSYMS['ar_open'], a0=i, count=40000000)
+        return m
+
+    def keys_of(m, artist): return [album_key(m.read_cstr(m.word(r + O['REC_ARTIST'])), m.read_cstr(m.word(r + O['REC_ALBUM']))) for r in m.artist_albums[artist]]
+
+    m = opened({FILE: b'1\n'})
+    tap(m, 100, ROWH + 10)
+    n = m.noted
+    expect(n and n['keys'] == keys_of(m, 'Miles Davis') and n['scope'] == O['CLASS_ARTISTS'] and n['artist'] and len(n['artist_rows']) == 1
+           and m.read_cstr(m.word(n['artist_rows'][0] + O['REC_TITLE'])) == 'Miles Davis',
+           'an artist\'s page: the three albums in the stock order (the All Songs row is not one), the artist scope and a copy of the artist row')
+    expect(NA.state(m)['pending'] is None, 'the note is dropped when cc_open_album returns')
+    tap(m, 100, 3 * ROWH + 10)   # the All Songs row: our Songs page, no album
+    m2 = opened({FILE: b'1\n'})
+    m2.noted = None
+    tap(m2, 100, 3 * ROWH + 10)
+    expect(m2.noted is None, 'the All Songs row opens the Songs page: nothing is noted')
+    # the sorted view: Title on the scoped page is the stock order; reversed it is the reverse of the albums, the card still left out
+    ms = opened({FILE: b'1\n', '/mnt/data/m1plus/albums-sort': b'a\n'})
+    tap(ms, 100, 10)
+    expect(ms.noted and ms.noted['keys'] == keys_of(ms, 'Miles Davis')[::-1], f'Z-A on the artist\'s page: the reversed order ({ms.noted and [hex(k) for k in ms.noted["keys"]]})')
+    # setting off: nothing noted
+    mo = opened()
+    tap(mo, 100, ROWH + 10)
+    expect(mo.noted is None, 'setting off: nothing is noted')
+
+
+SECTIONS = [artists_tests, scoped_albums_tests, scoped_nextalbum_tests, scoped_pills_tests, scoped_sort_tests, genre_composer_tests, index_tests, sort_tests, name_order_tests]
 
 
 def run(ctx):

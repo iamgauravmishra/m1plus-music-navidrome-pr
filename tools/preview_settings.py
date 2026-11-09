@@ -17,12 +17,13 @@ RAW = PI.RAW
 
 # What a typical device shows: widget name -> text (values), name -> on (switches), name -> shown (checks, the hidden card), per page key.
 STATE = {
-    'm1plus_settings': {'values': {'pod_value0': 'Off', 'pod_value1': 'Off', 'pod_value5': 'Repeat All', 'pod_value6': 'Off'}},
+    'm1plus_settings': {'values': {'pod_value0': 'Off', 'pod_value1': 'Off', 'pod_value5': 'Repeat All', 'pod_value6': 'Off', 'pod_value7': 'Off'}},
     'm1plus_appearance': {'values': {'pod_value0': 'Neutral'}},
     'm1plus_background': {'shown': {'pod_check1'}},
     'm1plus_accent': {'shown': {'pod_check0'}},
     'm1plus_battery': {'values': {'pod_value1': '80%'}, 'switches': {'pod_switch0': True}},
     'm1plus_chargelimit': {'shown': {'pod_check0'}},
+    'm1plus_nextalbum': {'shown': {'pod_check0'}},
     'm1plus_lockscreen': {'switches': {'pod_switch0': True, 'pod_switch2': True}, 'values': {'pod_value3': 'Large Cover'}},
     'm1plus_lockstyle': {'shown': {'pod_check0'}},
     'm1plus_homeset': {'switches': {'pod_switch0': True, 'pod_switch1': True}},
@@ -356,6 +357,7 @@ def main():
            ('Wallpaper, Default only (empty folder)', draw_lockwall(s, entries=1, chosen=0)),
            ('Settings > Battery', draw_page(s, 'm1plus_battery')),
            ('Settings > Battery > Charge Limit', draw_page(s, 'm1plus_chargelimit')),
+           ('Settings > Playback > Continue Playing', draw_page(s, 'm1plus_nextalbum')),
            ], out)
     # Light Mode (docs/modules/accent.md): the same pages with the hooks' colours and images (tools/palette.py); the Settings page with Light Mode On, and the picker
     lit = os.path.join(os.path.dirname(out), 'settings-light.png')

@@ -70,7 +70,7 @@ pause, skip, lock); `ellipsis` is always filled.
 | page | rows |
 |---|---|
 | M1+ Music menu | Now Playing `audio-lines`, Cover Flow custom `coverflow`, Shuffle `shuffle`, Songs `music`, Albums `disc-3`, Artists `mic-vocal`, Genres `guitar`, Folders `folder`, Playlists `list-music`, Settings `sliders-horizontal`, Extras `ellipsis` |
-| Settings (cards, 20 px) | `CARD_GLYPHS` in `tools/mod_icons.py`: Wi-Fi `wifi`, Bluetooth `bluetooth`, Home Screen `house`, Library `disc-3`, Now Playing `audio-lines`, Play Mode `repeat`, EQ `sliders-vertical`, Display `sun`, Language `languages`, Developer `code`; sub-pages: Landscape `rotate-cw-square`, Rebuild Covers `image-up`, Boot to M1+ Music `power`, Open Shanling Home the mark |
+| Settings (cards, 20 px) | `CARD_GLYPHS` in `tools/mod_icons.py`: Wi-Fi `wifi`, Bluetooth `bluetooth`, Home Screen `house`, Library `disc-3`, Now Playing `audio-lines`, EQ `sliders-vertical`, Display `sun`, Language `languages`, Developer `code`; sub-pages: Landscape `rotate-cw-square`, Rebuild Covers `image-up`, Boot to M1+ Music `power`, Open Shanling Home the mark |
 | Extras | the Home grid's glyphs: `star`, `clock-plus`, `history`, `flame`, `feather`, `badge-hr`, `refresh-cw`, `globe`, `disc` |
 | Shuffle | the song, album and folder glyphs |
 

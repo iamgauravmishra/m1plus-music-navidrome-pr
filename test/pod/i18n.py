@@ -304,8 +304,7 @@ def run(ctx):
     # the Settings cards (tools/pod_settings.py): a value and the row's label share the room between the glyph column and the chevron (the payload gives the value the room its text needs, at most VALUE_MAX);
     # every value text of every language fits with its label, and the headers and notes fit their 272 px labels
     import pod_settings as ST
-    stock_values = {'wifi': ('On', 'Off'), 'bluetooth': ('On', 'Off'), 'playmode': ('playmode_listplay', 'playmode_repeattrack', 'playmode_shuffle', 'playmode_repeatall'),
-                    'eq': ('Off', 'eq_custom1', 'eq_custom2', 'eq_custom3', 'eq_pop', 'eq_rock', 'eq_dance', 'eq_blues', 'eq_metal', 'eq_vocal', 'eq_classical', 'eq_jazz')}
+    stock_values = {'wifi': ('On', 'Off'), 'bluetooth': ('On', 'Off'), 'eq': ('Off', 'eq_custom1', 'eq_custom2', 'eq_custom3', 'eq_pop', 'eq_rock', 'eq_dance', 'eq_blues', 'eq_metal', 'eq_vocal', 'eq_classical', 'eq_jazz')}
     cards_over, room = [], ST.chevron_left() - ST.VALUE_GAP - ST.TEXT_X
     for page in [p for p in pod_pages.PAGES if p.kind == 'cards']:
         tree = awtk_ui.parse(open(os.path.join(WORK, RAW, 'ui', page.key + '.bin'), 'rb').read())
@@ -327,7 +326,7 @@ def run(ctx):
                     if need > room + ST.TEXT_X - ST.CM - ST.PAD: cards_over.append((page.key, r.label, '99999', loc, need, room))
                     continue
                 if pod_pages.row_kind(r) != 'value': continue
-                vkeys = stock_values[pod_pages.STOCK_PAGES[r.arg][1]] if r.action == pod_pages.ACT_STOCK else pod_pages.BG_VALUES if r.action == pod_pages.ACT_BG else pod_pages.ACCENT_VALUES if r.action == pod_pages.ACT_ACCENT else pod_pages.IDLE_VALUES if r.action == pod_pages.ACT_IDLE else ('Large Cover', 'Mini Player') if r.action == pod_pages.ACT_LOCKSTYLE else () if r.action == pod_pages.ACT_REGION else ('Normal', 'Chrome', 'Metal')
+                vkeys = stock_values[pod_pages.STOCK_PAGES[r.arg][1]] if r.action == pod_pages.ACT_STOCK else pod_pages.BG_VALUES if r.action == pod_pages.ACT_BG else pod_pages.ACCENT_VALUES if r.action == pod_pages.ACT_ACCENT else pod_pages.IDLE_VALUES if r.action == pod_pages.ACT_IDLE else ('Large Cover', 'Mini Player') if r.action == pod_pages.ACT_LOCKSTYLE else ('Off', 'Albums') if r.action == pod_pages.ACT_NEXTALBUM else () if r.action == pod_pages.ACT_REGION else ('Normal', 'Chrome', 'Metal')
                 vals = [(vk, tr_text(loc, vk)) for vk in vkeys] if r.action != pod_pages.ACT_REGION else [('Automatic', tr_text(loc, 'Automatic'))] + [(n, n) for n in pcregion.NAMES]   # (the Podcast Region's value: Automatic, or a storefront's English name)
                 for vk, vt in vals:
                     need = width(tr_text(loc, pod_i18n.key_for(r.label)), row_px) + ST.VALUE_LABEL_GAP + min(width(vt, ST.VALUE_PX) + 6, ST.VALUE_MAX)
@@ -335,6 +334,11 @@ def run(ctx):
             for node in tree.walk():
                 if node.name.startswith(('pod_sec', 'pod_note')) and node.name.endswith('_t') and node.type == 'hscroll_label':   # a one-line header or note: one line
                     px = int(node.get('style:normal:font_size'))
+                    if node.type == 'label':   # a wrapping note (Note.lines > 1): as many lines as its box holds
+                        allowed = (node.h - ST.NOTE_LABEL_H) // ST.WRAP_LINE + 1
+                        n = wrapped(tr_text(loc, pod_i18n.key_for(pod_i18n.shown_english(node))), px, node.w - 4)
+                        if n > allowed: cards_over.append((page.key, node.name, loc, n, allowed))
+                        continue
                     if width(tr_text(loc, pod_i18n.key_for(pod_i18n.shown_english(node))), px) > node.w - 4: cards_over.append((page.key, node.name, loc, px))
     # every wrapping note (Note.lines > 1, a plain label) of every generated settings page wraps to at most `lines` lines of its label's width, in every language
     wrap_seen = 0

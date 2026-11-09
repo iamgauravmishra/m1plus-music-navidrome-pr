@@ -55,8 +55,8 @@ def layout_tests(ctx):
     """Every cards page under demo's own layouter, plus the asset against the model."""
     expect, P = ctx.expect, pod_pages
     pages = [p for p in P.PAGES if p.kind in ('cards', 'peq')]   # (the Equalizer page is a cards page its payload binds itself: its layout is the asset's, every row shown)
-    expect([p.key for p in pages] == ['m1plus_settings', 'm1plus_library', 'm1plus_homeset', 'm1plus_developer', 'm1plus_npset', 'm1plus_keyboards', 'm1plus_tapetheme', 'm1plus_about', 'm1plus_vinylrec', 'm1plus_vinyltheme', 'm1plus_cache', 'm1plus_files', 'm1plus_background', 'm1plus_accent', 'm1plus_appearance', 'm1plus_podcastregion', 'm1plus_peq', 'm1plus_battery', 'm1plus_chargelimit', 'm1plus_idleview', 'm1plus_lockscreen', 'm1plus_lockstyle'],
-           'the cards pages: Settings, Library, Home Screen, Developer, Now Playing, Keyboards, the three pickers, About, Cache, Settings Files, the Background picker, the Accent picker, Appearance and the Podcast Region picker, Equalizer, Battery, the Charge Limit picker, the Idle Display picker, the Lock Screen page and the Player Style picker')
+    expect([p.key for p in pages] == ['m1plus_settings', 'm1plus_library', 'm1plus_homeset', 'm1plus_developer', 'm1plus_npset', 'm1plus_keyboards', 'm1plus_tapetheme', 'm1plus_about', 'm1plus_vinylrec', 'm1plus_vinyltheme', 'm1plus_cache', 'm1plus_files', 'm1plus_background', 'm1plus_accent', 'm1plus_appearance', 'm1plus_podcastregion', 'm1plus_peq', 'm1plus_battery', 'm1plus_chargelimit', 'm1plus_idleview', 'm1plus_lockscreen', 'm1plus_lockstyle', 'm1plus_nextalbum'],
+           'the cards pages: Settings, Library, Home Screen, Developer, Now Playing, Keyboards, the three pickers, About, Cache, Settings Files, the Background picker, the Accent picker, Appearance and the Podcast Region picker, Equalizer, Battery, the Charge Limit picker, the Idle Display picker, the Lock Screen page, the Player Style picker and the Continue Playing picker last')
     expect(mod_icons.CARD_PIECE == {'ROW_W': ST.ROW_W, 'ROW_H': ST.ROW_H, 'CARD_X': ST.CM, 'CARD_W': ST.CARD_W, 'CARD_R': ST.CARD_R, 'FILL': (0x1C,) * 3, 'LIT': (0x2C, 0x2C, 0x2E)}
            and ST.CARD_RGB == '#1C1C1C' and ST.PRESSED_RGB == '#2C2C2E', 'the pieces\' geometry in tools/mod_icons.py is the layout model\'s')
     expect(mod_icons.CARD_TALL == ST.LIB_ROW_H == 60 and ST.piece_images('top', tall=True) == ('pod_cdl_top', 'pod_cdl_top_down') and ST.piece_images('mid') == ('pod_cd_mid', 'pod_cd_mid_down')
@@ -259,10 +259,10 @@ def stock_tests(ctx):
     m = settings_machine()
     expect(('window_open', S.key) in m.calls, 'the menu row opens the Settings page')
     # the deep links: a plain navigator_to of the stock page's name (the names stock's own lists call it with: tools/pod.py SETTINGS_PINS)
-    want = {'Wi-Fi': 'systemset/wifi_page', 'Bluetooth': 'systemset/bluetooth_page', 'Play Mode': 'playset/playmode_page',
+    want = {'Wi-Fi': 'systemset/wifi_page', 'Bluetooth': 'systemset/bluetooth_page',
             'Display': 'systemset/display_page'}
     expect({P.STOCK_PAGES[S.rows[rows[k]].arg][0] for k in want} == set(want.values()),
-           'the stock pages the rows open are the ones stock\'s Settings and Play Settings lists open')
+           'the stock pages the rows open are the ones stock\'s Settings list and Wi-Fi hub open')
     for label, name in want.items():
         m = settings_machine()
         m.click(f'pod_row{rows[label]}')
@@ -272,7 +272,7 @@ def stock_tests(ctx):
     m = settings_machine()
     m.click(f'pod_row{rows["All Playback Settings"]}'); m.click(f'pod_row{rows["All System Settings"]}')
     # (the Home dispatcher's ids 16 and 17 are bound to the two rows: tests/pod/menu.py checks the table)
-    expect(len(P.STOCK_PAGES) == 4 and all(r.action == P.ACT_STOCK for r in S.rows if r.label in want), 'four stock pages, each opened by an ACT_STOCK row (Lock Screen > Custom Wallpaper is our own page, see lockscreen/setting_tests)')
+    expect(len(P.STOCK_PAGES) == 3 and all(r.action == P.ACT_STOCK for r in S.rows if r.label in want), 'three stock pages, each opened by an ACT_STOCK row (Lock Screen > Custom Wallpaper is our own page, see lockscreen/setting_tests)')
     expect(not [r for r in P.DEVELOPER_PAGE.rows if r.action == P.ACT_STOCK] and 'systemset/fwupdate_page' not in [n for n, *_ in P.STOCK_PAGES], 'no Developer row is a stock page: the firmware update page is not in STOCK_PAGES (About > Software Update is ours)')
     m = settings_machine()
     m.click(f'pod_row{rows["EQ"]}')
@@ -282,17 +282,13 @@ def stock_tests(ctx):
         keys = [c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets[f'pod_value{rows[label]}']]
         return keys[-1] if keys else None
     m = settings_machine()
-    expect([value(m, k) for k in ('Wi-Fi', 'Bluetooth', 'Play Mode', 'EQ')] == ['Off', 'Off', 'playmode_listplay', 'Off'], f'nothing on: Off, Off, List Play, EQ Off ({[value(m, k) for k in ("Wi-Fi", "Bluetooth", "Play Mode", "EQ")]})')
+    expect([value(m, k) for k in ('Wi-Fi', 'Bluetooth', 'EQ')] == ['Off', 'Off', 'Off'], f'nothing on: Off, Off, EQ Off ({[value(m, k) for k in ("Wi-Fi", "Bluetooth", "EQ")]})')
     m = settings_machine(WIFI_FLAG=1, BT_FLAG=1, mode=3, EQ_FLAG=1, EQ_MODE=4)
-    expect([value(m, k) for k in ('Wi-Fi', 'Bluetooth', 'Play Mode', 'EQ')] == ['On', 'On', 'playmode_repeatall', 'Flat'], 'Wi-Fi and Bluetooth on, Repeat All, the 10-Band EQ on (no record: its curve, Flat)')
-    for mode, key in enumerate(('playmode_listplay', 'playmode_repeattrack', 'playmode_shuffle', 'playmode_repeatall')):
-        expect(value(settings_machine(mode=mode), 'Play Mode') == key, f'play mode {mode} reads {key}')
-    expect(value(settings_machine(mode=9), 'Play Mode') == 'playmode_listplay', 'an unknown play mode reads as the first')
+    expect([value(m, k) for k in ('Wi-Fi', 'Bluetooth', 'EQ')] == ['On', 'On', 'Flat'], 'Wi-Fi and Bluetooth on, the 10-Band EQ on (no record: its curve, Flat)')
     expect(not any(c[0] in ('write_int_config', 'mclSetPlayMode', 'write') or (c[0] == 'open' and c[2] != 0) for c in settings_machine().calls), 'opening the page reads state and writes nothing (the Light Mode value reads its file)')
-    expect(value(settings_machine(mode=3, shuffle=True), 'Play Mode') == 'playmode_shuffle' and value(settings_machine(mode=0, shuffle=True), 'Play Mode') == 'playmode_shuffle', 'Shuffle on shows Shuffle whatever stock\'s mode is (the payload\'s flag: the display sites)')
     # the value takes the room its text needs: the box is moved and resized, and the label gets the rest (patch/m1plus.c value_fit)
     m = settings_machine()
-    vi = rows['Play Mode']
+    vi = rows['EQ']
     expect(any(c[0] == 'widget_resize' and c[1] == m.widgets[f'pod_label{vi}'] for c in m.calls) and any(c[0] == 'widget_move' and c[1] == m.widgets[f'pod_value{vi}'] for c in m.calls), 'value_fit moves the value box and resizes the row\'s label')
 
     # coming back to the page (a stock page may have changed the state) shows it again

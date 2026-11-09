@@ -1846,6 +1846,38 @@ def reverse_tests(ctx):
             expect(shown(m)[-1] == 'Unknown Album' and len(shown(m)) == 6, f'albums-sort {data!r}: Unknown Album stays last')
 
 
+def nextalbum_tests(ctx):
+    """Continue with Next Album, phase 1 (patch/nextalbum.c): a tap on an album notes the albums in the order the page shows them (sort and direction, the Unknown Album row left out)
+    just before cc_open_album; the note is dropped when the opener returns, and a page with the setting off notes nothing."""
+    expect = ctx.expect
+    NA = sibling('nextalbum')
+    keyof = lambda i: album_key(SORT_LIB[i][1], SORT_LIB[i][0])
+    row_xy = lambda a: (200, TOP + a * ROW + 20)
+    stock_rows = lambda calls: [c[3] for c in calls if c[0] == 'navigator_to_with_context' and c[1] == 'albuminfo_page']
+    for k in range(4):
+        for data, orders in ((f'{k}\n'.encode(), SORT_ORDERS), (rev_file(k), REV_ORDERS)):
+            m = NA.snap(sort_machine(**{SORT_FILE: data, NA.FILE: b'1\n'})); open_grid(m); settle(m)
+            calls = tap_at(m, *row_xy(1))
+            got = m.noted and m.noted['keys']
+            expect(got == [keyof(i) for i in orders[k]] and m.noted['scope'] == 0 and m.noted['artist'] == 0,
+                   f'albums-sort {data!r}: the note holds the keys in the order shown ({orders[k]}), no scope')
+            expect(stock_rows(calls) == [orders[k][1]] and NA.state(m)['pending'] is None, f'albums-sort {data!r}: the tapped row is the stock row of the album; the note is gone once the opener returns')
+    # the Unknown Album row stays out, wherever the order puts it
+    lib = SORT_LIB + [('Unknown Album', '')]
+    for k in (0, 1):
+        m = NA.snap(sort_machine(specs=lib, **{SORT_FILE: f'{k}\n'.encode(), NA.FILE: b'1\n'})); m.setword(m.showlist[-1] + O['REC_ID'], 0xffffffff); open_grid(m); settle(m)
+        tap_at(m, *row_xy(0))
+        expect(m.noted and m.noted['keys'] == [keyof(i) for i in SORT_ORDERS[k]], f'order {k}: Unknown Album is not in the note')
+    # a grid page notes the same way
+    m = NA.snap(sort_machine(list_mode=False, **{SORT_FILE: b'0\n', NA.FILE: b'1\n'})); open_grid(m); settle(m)
+    tap_at(m, 30, TOP + RGAP + 20)
+    expect(m.noted and m.noted['keys'] == [keyof(i) for i in SORT_ORDERS[0]], 'the grid page: the same note')
+    # the setting off (the default): nothing is noted or allocated
+    m = NA.snap(sort_machine(**{SORT_FILE: b'0\n'})); open_grid(m); settle(m)
+    calls = tap_at(m, *row_xy(1))
+    expect(m.noted is None and NA.state(m)['pending'] is None and stock_rows(calls) == [1], 'setting off: the album opens as before, nothing is noted')
+
+
 def title_tests(ctx):
     """The large title (the Songs / Artists pattern, the shared collapse rule): the first thing in the content, the navbar's small title hidden until
     the offset reaches SG_COLLAPSE, the nav fade while scrolled; the content moves down by the title block; the artist-scoped page's title is the name."""
@@ -2083,7 +2115,7 @@ def az_tests(ctx):
     expect(content_h(m) == az_model(0)[2] and vis(m, 'sg_rail') == (1, 1), 'the switches are read when the page opens: a change meanwhile waits for the next open')
 
 
-SECTIONS = [layout_tests, taps_list_tests, toggle_tests, stock_widget_tests, background_build_tests, foreground_loader_tests, card_asset_tests, sort_card_tests, reverse_tests, title_tests, az_tests]   # tools/check.py runs each as its own task
+SECTIONS = [layout_tests, taps_list_tests, toggle_tests, stock_widget_tests, background_build_tests, foreground_loader_tests, card_asset_tests, sort_card_tests, reverse_tests, title_tests, az_tests, nextalbum_tests]   # tools/check.py runs each as its own task
 
 def run(ctx):
     for section in SECTIONS: section(ctx)

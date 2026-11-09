@@ -63,6 +63,7 @@
 #include "viewsort.h"
 #include "search.h"
 #include "songops.h"
+#include "nextalbum.h"
 
 extern int coverflow_open(void); /* patch/coverflow.c: the menu's Cover Flow row, opened over this page */
 extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
@@ -549,7 +550,10 @@ static int al_on_up(void *ctx, void *e) {
         if (al_is_card(deque_at(al.albums, (unsigned)row)) && al.scope == CLASS_ARTISTS &&
             songs_open_artist(deque_at(al.artist_row, 0)) != -1)
             return RET_OK;
+        na_note_albums(al.albums, al.order, al.count, al.scope,
+                       al.artist_row); /* the order shown, for Continue with Next Album */
         cc_open_album(al.artist_row, al.scope, row); /* scoped: the artist's list, class 0xff01 / 0xff02 */
+        na_note_drop();
     }
     return RET_OK;
 }

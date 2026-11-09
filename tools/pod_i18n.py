@@ -113,7 +113,7 @@ TEXT = dict([
        'Desarrollador', 'Sviluppatore', 'นักพัฒนา', 'Programista', 'Разработчик', 'Розробник'),
     _t('Playback', '播放', '播放', '再生', '재생', 'Lecture', 'Wiedergabe',
        'Reproducción', 'Riproduzione', 'การเล่น', 'Odtwarzanie', 'Воспроизведение', 'Відтворення'),
-    # Settings (docs/modules/settings.md): the top page's rows, headers and notes. Rows with a value at the right (Play Mode, Language, Theme) have short labels: the value takes the room.
+    # Settings (docs/modules/settings.md): the top page's rows, headers and notes. Rows with a value at the right (Language, Theme) have short labels: the value takes the room.
     _t('Wi-Fi', 'Wi-Fi', 'Wi-Fi', 'Wi-Fi', 'Wi-Fi', 'Wi-Fi', 'Wi-Fi',
        'Wi-Fi', 'Wi-Fi', 'Wi-Fi', 'Wi-Fi', 'Wi-Fi', 'Wi-Fi'),
     _t('Bluetooth', '蓝牙', '藍牙', 'Bluetooth', '블루투스', 'Bluetooth', 'Bluetooth',
@@ -122,8 +122,6 @@ TEXT = dict([
        'Activado', 'Attivo', 'เปิด', 'Wł.', 'Вкл.', 'Увімк.'),
     _t('Off', '关', '關', 'オフ', '꺼짐', 'Désactivé', 'Aus',
        'Desactivado', 'Disattivo', 'ปิด', 'Wył.', 'Выкл.', 'Вимк.'),
-    _t('Play Mode', '播放模式', '播放模式', '再生モード', '재생 모드', 'Lecture', 'Modus',
-       'Modo', 'Modalità', 'โหมดเล่น', 'Tryb', 'Режим', 'Режим'),
     _t('EQ', 'EQ', 'EQ', 'EQ', 'EQ', 'EQ', 'EQ',
        'EQ', 'EQ', 'EQ', 'EQ', 'EQ', 'EQ'),
     _t('All Playback Settings', '全部播放设置', '全部播放設定', 'すべての再生設定', '모든 재생 설정', 'Réglages de lecture', 'Wiedergabe-Optionen',
@@ -493,6 +491,17 @@ TEXT = dict([
     _t('The exact charge beside the battery icon', '电池图标旁显示精确电量', '電池圖示旁顯示精確電量', 'バッテリーアイコンの横に正確な残量を表示', '배터리 아이콘 옆에 정확한 잔량 표시',
        'La charge exacte à côté de l’icône', 'Der genaue Ladestand neben dem Symbol', 'La carga exacta junto al icono', 'La carica esatta accanto all’icona',
        'ระดับแบตที่แน่นอนข้างไอคอน', 'Dokładny poziom obok ikony', 'Точный заряд рядом со значком', 'Точний заряд поруч зі значком'),
+    # Continue with Next Album (patch/nextalbum.c, docs/modules/nextalbum.md): Settings > Playback
+    _t('Continue Playing', '继续播放', '繼續播放', '続けて再生', '계속 재생', 'Enchaîner', 'Weiterspielen',
+       'Continuar', 'Continua', 'เล่นต่อ', 'Kontynuuj', 'Продолжить', 'Продовжити'),
+    _t('Next Albums', '下一张专辑', '下一張專輯', '次のアルバム', '다음 앨범', 'Albums suivants', 'Nächste Alben',
+       'Álbumes siguientes', 'Album successivi', 'อัลบั้มถัดไป', 'Kolejne albumy', 'След. альбомы', 'Наст. альбоми'),
+    _t('Plays the next album in the order of Albums, the artist or Cover Flow', '按专辑、艺人或封面流的顺序播放下一张专辑', '依專輯、藝人或封面流的順序播放下一張專輯',
+       'アルバム、アーティスト、カバーフローの順で次のアルバムを再生', '앨범, 아티스트 또는 커버 플로우 순서로 다음 앨범 재생',
+       'Lit l’album suivant dans l’ordre des Albums, de l’artiste ou de Cover Flow', 'Nächstes Album in der Reihenfolge von Alben, Künstler oder Cover Flow',
+       'Reproduce el siguiente álbum en el orden de Álbumes, del artista o de Cover Flow', 'Riproduce l’album successivo nell’ordine di Album, artista o Cover Flow',
+       'เล่นอัลบั้มถัดไปตามลำดับของอัลบั้ม ศิลปิน หรือ Cover Flow', 'Odtwarza następny album w kolejności Albumów, wykonawcy lub Cover Flow',
+       'Играет следующий альбом в порядке списка, исполнителя или Cover Flow', 'Грає наступний альбом у порядку списку, виконавця або Cover Flow'),
     # Charge Limit (patch/charging.c, docs/modules/charging.md): Settings > System > Battery
     _t('Battery', '电池', '電池', 'バッテリー', '배터리', 'Batterie', 'Batterie',
        'Batería', 'Batteria', 'แบตเตอรี่', 'Bateria', 'Аккумулятор', 'Акумулятор'),

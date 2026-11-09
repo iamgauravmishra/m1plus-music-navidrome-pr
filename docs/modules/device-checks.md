@@ -61,6 +61,17 @@ in [history](../history.md); feature modules retain their detailed edge cases.
 - **PLAY-01 — Now Playing/lock screen:** sharp rounded covers, tint changes, neutral missing
   art, remaining time, transport/favorite/More controls, translucent card and swipe behaviour.
   Check idle/no-queue and charging states. [Now Playing](nowplaying.md), [lock screen](lockscreen.md)
+- **NEXT-01 — Continue Playing:** Settings > Playback > Continue Playing > Next Albums (the row then shows Albums). Albums (Artist order): Play an
+  album with 2 to 3 short tracks, let it end: the next album in the list plays after a short gap (not
+  gapless), the Queue page shows both albums, Now Playing shows the new album. Repeat the chain two
+  albums further; after the last album in the list the player stops as stock does. Manual Next on the last
+  song also goes on to the next album. Album sort Z-A and an artist's Albums page follow their shown
+  order; Cover Flow (library and artist) likewise. Shuffle on, Repeat one, Repeat all, setting off, an
+  album opened from Recently Added / Search / Songs / a playlist: stock behaviour (stops at the end). Gapless
+  on and off. Previous after the join returns to the old album. Open the Queue page and a track's "..." menu
+  during the last song (the album page must not change). Whether Now Playing's init makes one
+  `mclLoadPlayList` only (a second would drop the order); behaviour after a reboot and resume (the order is
+  gone; the queue resumes as stock does). [Details](nextalbum.md)
 
 ## Home content
 

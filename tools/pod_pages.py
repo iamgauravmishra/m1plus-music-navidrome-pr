@@ -115,25 +115,27 @@ ACT_IDLESET = 83    # picker row (Idle Display): choose Off (arg 0), Album Cover
 ACT_LOCKWP = 84     # link row (Settings > Lock Screen): Wallpaper, our own picker page (patch/lockscreen.c lkwp_open).
 ACT_LOCKSTYLE = 85  # value row (Settings > Lock Screen): Player Style, the saved layout (Large Cover / Mini Player); opens its picker page (arg = the page index; patch/lockscreen.c lk_layout)
 ACT_LOCKINFO = 87   # link row (Settings > Lock Screen): Custom Wallpaper, the instructions on a Release Notes page of our own (patch/relnotes.c lockinfo_open)
+ACT_NEXTALBUM = 90  # value row (Settings > Playback): Continue Playing, Off (the default) or Next Albums; opens its picker page (arg = the page index; patch/nextalbum.c na_setting). Next Albums plays the next album of the list an album was opened from when its queue ends (/mnt/data/m1plus/playback-next-album)
+ACT_NASET = 91      # picker row (Continue Playing): choose the mode (arg = 0 Off, 1 Next Albums; 2 Auto Mix is planned); a check shows on the chosen row (patch/nextalbum.c na_set)
 ACT_LOCKTIME = 86   # switch row (Settings > Lock Screen): Show Time, stock's lock screen clock switch, the byte screensaver_timeshow saved as [SYSSET] SSAVERTIMESHOW (patch/lockscreen.c lk_time_toggle)
 _ACTS = [v for k, v in globals().items() if k.startswith('ACT_')]
 assert len(set(_ACTS)) == len(_ACTS), 'two ACT_* share an id (patch/m1plus.c mirrors them)'
 SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT, ACT_PEQ_SWITCH, ACT_AZRAIL, ACT_AZHEAD, ACT_LOCKON, ACT_LOCKTIME, ACT_VOLKEYS)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
-VALUE_ACTIONS = (ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM, ACT_LOCKSTYLE, ACT_IDLE)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
-CHECK_ACTIONS = (ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_LOCKSET, ACT_REGIONSET, ACT_CHGLIMSET, ACT_PEQ_PICK, ACT_PEQ_CPICK, ACT_PEQ_PAUTO, ACT_PEQ_PVAL, ACT_IDLESET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
+VALUE_ACTIONS = (ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM, ACT_LOCKSTYLE, ACT_IDLE, ACT_NEXTALBUM)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
+CHECK_ACTIONS = (ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_LOCKSET, ACT_REGIONSET, ACT_CHGLIMSET, ACT_PEQ_PICK, ACT_PEQ_CPICK, ACT_PEQ_PAUTO, ACT_PEQ_PVAL, ACT_IDLESET, ACT_NASET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
 ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_CLEARCACHE, ACT_CLEARDUR, ACT_SFDELALL, ACT_RESETALL, ACT_GRID)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
-VALUE_INIT = {ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_REGION: 'Automatic', ACT_CHGLIM: '100%', ACT_LOCKSTYLE: 'Large Cover', ACT_IDLE: 'Album Cover'}   # what the asset's value label says before the payload sets it
+VALUE_INIT = {ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_REGION: 'Automatic', ACT_CHGLIM: '100%', ACT_LOCKSTYLE: 'Large Cover', ACT_IDLE: 'Album Cover', ACT_NEXTALBUM: 'Off'}   # what the asset's value label says before the payload sets it
 # The stock pages ACT_STOCK opens: (the name navigator_to takes = ui/<name>.bin, the value the row shows at the right: the payload reads the stock state, patch/m1plus.c VK_*, or None).
-# Each is a plain navigator_to(name) with no context in stock (docs/modules/settings.md "Stock pages"): the Settings and Play Settings lists' rows, the Wi-Fi hub's two; Back returns to our page.
+# Each is a plain navigator_to(name) with no context in stock (docs/modules/settings.md "Stock pages"): the Settings list's rows, the Wi-Fi hub's two; Back returns to our page.
 # (The EQ row is ACT_PEQ: our Equalizer page, docs/modules/peq.md; stock's playset/equalizer_page is retired: its one caller opens the 10-Band editor, tools/pod.py EQ_ROW.)
-STOCK_WIFI, STOCK_BLUETOOTH, STOCK_PLAYMODE, STOCK_DISPLAY = range(4)
+STOCK_WIFI, STOCK_BLUETOOTH, STOCK_DISPLAY = range(3)
 # (navigator path, value shown, window name): the window name is the asset's root widget name, which pod_open_stock restacks an opened window of instead of stacking a second one; None: always a new window.
 # Only a page whose init does nothing that a restack would not redo has one (docs/modules/settings.md "Stock pages"): Display (nothing started). Wi-Fi: its init scans (wifi_scan) on every open and the foreground handler only rebuilds the list from the old results.
-# Bluetooth: its background handler stops discovery (btStopSearch) and the foreground handler does not restart it, only init does. Play Mode: its init reads the mode once and binds no EVT_WINDOW_TO_FG handler.
-STOCK_PAGES = (('systemset/wifi_page', 'wifi', None), ('systemset/bluetooth_page', 'bluetooth', None), ('playset/playmode_page', 'playmode', None),
+# Bluetooth: its background handler stops discovery (btStopSearch) and the foreground handler does not restart it, only init does.
+STOCK_PAGES = (('systemset/wifi_page', 'wifi', None), ('systemset/bluetooth_page', 'bluetooth', None),
                ('systemset/display_page', None, 'display_page'))
-STOCK_VALUES = ('wifi', 'bluetooth', 'playmode', 'eq')   # the VK_* of patch/m1plus.c, in this order ('eq': the EQ row's value, ACT_PEQ)
+STOCK_VALUES = ('wifi', 'bluetooth', 'eq')   # the VK_* of patch/m1plus.c, in this order ('eq': the EQ row's value, ACT_PEQ)
 
 # ACT_SHUFFLE arguments (mirror the enum in patch/shuffle.c)
 SHUFFLE_SONGS = 0    # every song, stock Shuffle play mode, from a random song
@@ -264,7 +266,8 @@ IDLE_PAGE_INDEX = 61      # the Idle Display picker
 LOCK_PAGE_INDEX = 62      # the Lock Screen picker
 LOCKWALL_PAGE_INDEX = 63  # the Lock Screen's Wallpaper picker
 LOCKSTYLE_PAGE_INDEX = 64 # the Lock Screen's Player Style picker
-LOCKINFO_PAGE_INDEX = 65  # the Lock Screen's Custom Wallpaper instructions: the last of PAGES
+LOCKINFO_PAGE_INDEX = 65  # the Lock Screen's Custom Wallpaper instructions
+NEXTALBUM_PAGE_INDEX = 66   # Settings > Playback > Continue Playing picker: the last of PAGES
 ITEMS = [   # item id = index; the default order, essentials first (iPod classic style)
     Row('Now Playing', ACT_PLAYER),
     Row('Cover Flow', ACT_COVER),
@@ -376,7 +379,7 @@ SHUFFLE_PAGE = Page('m1plus_shuffle', 'm1plus_shuffle_page', 'Shuffle', rows=[
 ])
 
 # Settings (iOS style grouped cards, tools/pod_settings.py places them; the design is tools/preview_settings.py's): the stock Wi-Fi and Bluetooth pages, the M1+ Music pages
-# (Home Screen, Library, Now Playing, Keyboards), Playback (Play Mode, EQ, the stock Play Settings list) and System (Display, Appearance, Keyboards, About, the stock
+# (Home Screen, Library, Now Playing, Keyboards), Playback (EQ, the stock Play Settings list) and System (Display, Appearance, Keyboards, About, the stock
 # System Settings list), then Developer. Every "stock page" row is a plain navigator_to of the page stock's own list calls (STOCK_PAGES).
 SETTINGS_PAGE = Page('m1plus_settings', 'm1plus_settings_page', 'Settings', layout=[
     Row('Wi-Fi', ACT_STOCK, STOCK_WIFI),
@@ -386,8 +389,8 @@ SETTINGS_PAGE = Page('m1plus_settings', 'm1plus_settings_page', 'Settings', layo
     Row('Library', ACT_PAGE, LIBRARY_PAGE_INDEX),
     Row('Now Playing', ACT_PAGE, NPSET_PAGE_INDEX),
     Hdr('Playback'),
-    Row('Play Mode', ACT_STOCK, STOCK_PLAYMODE),
     Row('EQ', ACT_PEQ, PEQ_PAGE_INDEX),
+    Row('Continue Playing', ACT_NEXTALBUM, NEXTALBUM_PAGE_INDEX),
     Row('All Playback Settings', ACT_HOME, HOME_PLAYSET),
     Hdr('System'),
     Row('Display', ACT_STOCK, STOCK_DISPLAY),
@@ -420,7 +423,7 @@ ABOUT_PAGE = Page('m1plus_about', 'm1plus_about_page', 'About', layout=[
 # Settings > Developer > Cache (patch/homecover.c, docs/modules/settings.md "Cache"): the Covers card holds the cache folder's counts (INFO_CC_*: homecover_stat reads each, an ellipsis until counted), the build's Status and Clear Cover Cache;
 # the Track Durations card holds Measured Tracks (INFO_DUR: dur_stat, patch/durations.c) and Clear Track Durations.
 INFO_CC_ALBUMS, INFO_CC_COVERS, INFO_CC_NOART, INFO_CC_MISSING, INFO_CC_OLD, INFO_CC_SIZE, INFO_CC_STATUS = range(8, 15)   # (patch/m1plus.c INFO_CC = 8 + the index homecover_stat takes)
-INFO_DUR = INFO_CC_STATUS + 45  # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asserted below the Settings Files kinds)
+INFO_DUR = INFO_CC_STATUS + 46  # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asserted below the Settings Files kinds)
 CACHE_PAGE_INDEX = 32   # after ONLINEART (31)
 CACHE_PAGE = Page('m1plus_cache', 'm1plus_cache_page', 'Cache', layout=[
     Hdr('Covers'),
@@ -446,7 +449,7 @@ COVLIST = Page('m1plus_covlist', 'm1plus_covlist_page', 'Missing Covers', kind='
 # Only the setting files (ACT_SFDEL) are tappable, while present: a tap deletes the file after a confirm. The guard files and the folder stay ACT_INFO (never deleted).
 SETTING_FILES = ('albums-view', 'albums-sort', 'artists-sort', 'genres-sort', 'composers-sort', 'songs-sort-rev', 'folders-sort', 'playlists-sort', 'playlists-view', 'recently-added-view', 'coverflow-landscape', 'coverflow-volume-keys', 'cassette-theme', 'vinyl-record', 'vinyl-base', 'nowplaying-idle', 'pod-appearance',
                  'appearance-accent', 'appearance-background', 'lockscreen-layout', 'appearance-index-rail', 'appearance-headers', 'home-recent-albums', 'home-daily-mix', 'home-menu', 'pulldown-tiles', 'keyboard-pinyin', 'podcast-online-search', 'podcast-region',
-                 'battery-percentage', 'battery-charge-limit', 'playback-shuffle', 'playback-eq', 'search-history', 'radio-view', 'radio-recent', 'covers-rebuild', 'wifi-networks')
+                 'battery-percentage', 'battery-charge-limit', 'playback-shuffle', 'playback-eq', 'playback-next-album', 'search-history', 'radio-view', 'radio-recent', 'covers-rebuild', 'wifi-networks')
 GUARD_FILES = ('m1plus-start', 'm1plus-run', 'm1plus-bad', 'm1plus-off')
 # The files older builds left behind (patch/setfiles.c sf_retired, the same order; each with its .tmp sibling). Unsupported Files counts and lists them and
 # Delete Unsupported Files removes them. A renamed setting's old name goes here, never a guard file or a setting above (tests: unsupported_tests).
@@ -456,7 +459,7 @@ RETIRED_FILES = ('/mnt/data/m1plus-albums', '/mnt/data/m1plus-playlists', '/mnt/
                  '/mnt/data/m1plus-battpct', '/mnt/data/m1plus-pod-theme', '/mnt/data/m1plus-mix', '/mnt/data/m1plus-mix.art', '/mnt/data/m1plus/recently-played')
 FOLDER_LABEL = 'm1plus/'
 INFO_SF = INFO_CC_STATUS + 1   # patch/m1plus.c INFO_SF = INFO_CC + 7; row k reads setfiles_stat(k): 4 guard files, the folder, the settings
-INFO_SFOLD = INFO_SF + 43      # patch/m1plus.c: the Unsupported Files count (setfiles_old_count), above the setting rows
+INFO_SFOLD = INFO_SF + 44      # patch/m1plus.c: the Unsupported Files count (setfiles_old_count), above the setting rows
 assert len(GUARD_FILES) + 1 + len(SETTING_FILES) <= INFO_SFOLD - INFO_SF, 'the Settings Files rows reach INFO_SFOLD: raise it here and in patch/m1plus.c'
 assert INFO_DUR == INFO_SFOLD + 1, 'INFO_DUR must follow INFO_SFOLD (patch/m1plus.c)'
 FILES_PAGE_INDEX = 34   # after COVLIST (33)
@@ -743,6 +746,10 @@ BATTERY_PAGE = Page('m1plus_battery', 'm1plus_battery_page', 'Battery', layout=[
 ])
 CHGLIMIT_PAGE = Page('m1plus_chargelimit', 'm1plus_chargelimit_page', 'Charge Limit', layout=[Row(f'{p}%', ACT_CHGLIMSET, p) for p in CHGLIMIT_VALUES] + [Note('Resumes a little below the limit')])
 
+# Settings > Playback > Continue Playing (patch/nextalbum.c, docs/modules/nextalbum.md): Off or Next Albums, a check on the chosen one; Auto Mix is planned as a third (file value '2').
+NEXTALBUM_PAGE = Page('m1plus_nextalbum', 'm1plus_nextalbum_page', 'Continue Playing', layout=[Row('Off', ACT_NASET, 0), Row('Next Albums', ACT_NASET, 1),
+                                                                                        Note('Plays the next album in the order of Albums, the artist or Cover Flow', lines=2)])
+
 # The keyboard page (patch/keyboard.c, docs/modules/keyboard.md): the navbar, a search field and our own QWERTY pad; opened by keyboard_open (the Developer row, later podcast search), no menu row.
 KEYBOARD = Page('m1plus_keyboard', 'm1plus_keyboard_page', 'Keyboard', kind='keyboard')
 
@@ -860,7 +867,7 @@ TENPREAMP_PAGE.layout = [Row('Auto', ACT_PEQ_PAUTO), Note('Auto reduces the leve
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
          EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL, FOLDERS, QUEUE_PAGE,
          RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST, FILES_PAGE, UPDATE, RELNOTES, BG_PAGE, ACCENT_PAGE, APPEARANCE_PAGE, PULLDOWN_PAGE, RADIO, RADIONP, RADIOINFO, SONGINFO, REGION_PAGE, WIFI_PAGE, WIFIINFO_PAGE, WIFIPASS_PAGE, WIFIOTHER_PAGE, WIFISEC_PAGE,
-         PEQ_PAGE, PEQP_PAGE, PEQLIB_PAGE, TENBAND_PAGE, TENCURVE_PAGE, TENPREAMP_PAGE, AUTOEQ_PAGE, PEQBAND_PAGE, BATTERY_PAGE, CHGLIMIT_PAGE, IDLE_PAGE, LOCK_PAGE, LOCKWALL_PAGE, LOCKSTYLE_PAGE, LOCKINFO_PAGE]
+         PEQ_PAGE, PEQP_PAGE, PEQLIB_PAGE, TENBAND_PAGE, TENCURVE_PAGE, TENPREAMP_PAGE, AUTOEQ_PAGE, PEQBAND_PAGE, BATTERY_PAGE, CHGLIMIT_PAGE, IDLE_PAGE, LOCK_PAGE, LOCKWALL_PAGE, LOCKSTYLE_PAGE, LOCKINFO_PAGE, NEXTALBUM_PAGE]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE
@@ -871,6 +878,7 @@ assert PAGES[ABOUT_PAGE_INDEX] is ABOUT_PAGE and PAGES[RECORD_PAGE_INDEX] is REC
 assert PAGES[TENBAND_PAGE_INDEX] is TENBAND_PAGE and PAGES[TENCURVE_PAGE_INDEX] is TENCURVE_PAGE and PAGES[TENPREAMP_PAGE_INDEX] is TENPREAMP_PAGE and PAGES[AUTOEQ_PAGE_INDEX] is AUTOEQ_PAGE and PAGES[PEQBAND_PAGE_INDEX] is PEQBAND_PAGE
 assert PAGES[VINYL_WHITE_INDEX] is VINYL_WHITE and PAGES[VTHEME_PAGE_INDEX] is VTHEME_PAGE and PAGES[CACHE_PAGE_INDEX] is CACHE_PAGE and PAGES[FILES_PAGE_INDEX] is FILES_PAGE
 assert PAGES[PULLDOWN_PAGE_INDEX] is PULLDOWN_PAGE and PAGES[REGION_PAGE_INDEX] is REGION_PAGE
-assert PAGES[BATTERY_PAGE_INDEX] is BATTERY_PAGE and PAGES[CHGLIMIT_PAGE_INDEX] is CHGLIMIT_PAGE and PAGES[LOCK_PAGE_INDEX] is LOCK_PAGE and PAGES[LOCKWALL_PAGE_INDEX] is LOCKWALL_PAGE and PAGES[LOCKSTYLE_PAGE_INDEX] is LOCKSTYLE_PAGE and PAGES[LOCKINFO_PAGE_INDEX] is LOCKINFO_PAGE and LOCKINFO_PAGE_INDEX == len(PAGES) - 1
+assert PAGES[BATTERY_PAGE_INDEX] is BATTERY_PAGE and PAGES[CHGLIMIT_PAGE_INDEX] is CHGLIMIT_PAGE and PAGES[LOCK_PAGE_INDEX] is LOCK_PAGE and PAGES[LOCKWALL_PAGE_INDEX] is LOCKWALL_PAGE and PAGES[LOCKSTYLE_PAGE_INDEX] is LOCKSTYLE_PAGE and PAGES[LOCKINFO_PAGE_INDEX] is LOCKINFO_PAGE 
 assert PAGES[IDLE_PAGE_INDEX] is IDLE_PAGE
+assert PAGES[NEXTALBUM_PAGE_INDEX] is NEXTALBUM_PAGE and NEXTALBUM_PAGE_INDEX == len(PAGES) - 1
 assert PAGES[THEME_PAGE_INDEX] is THEME_PAGE
