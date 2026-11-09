@@ -364,7 +364,9 @@ def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview
     if albums:   # an artist's page shows the pills under the title (patch/albums.c); the library's keeps them hidden
         o = OFFSETS
         grid.children += [hidden(sg_pill('btn_play', o['AL_PLAY_X'], o['SG_PILL_Y'], 'Play', 'sg_play', w=o['AL_PLAY_W'], down=SG_PILL_PRESS_RGB)),
-                          hidden(sg_pill('btn_shuffle', o['AL_SHUFFLE_X'], o['SG_PILL_Y'], 'Shuffle', 'sg_shuffle', w=o['AL_SHUFFLE_W'], down=SG_PILL_PRESS_RGB))]
+                          hidden(sg_pill('btn_shuffle', o['AL_SHUFFLE_X'], o['SG_PILL_Y'], 'Shuffle', 'sg_shuffle', w=o['AL_SHUFFLE_W'], down=SG_PILL_PRESS_RGB)),
+                          # the photo header's name (22 px white, centred, the album page's title label; docs/modules/albums.md "Scoped to an artist"): shown in place of al_title, the circle is drawn by the payload
+                          hidden(label('al_name', o['PH_NAME_X'], o['AL_NAME_Y'], o['PH_NAME_W'], o['PH_NAME_H'], '', 22, '#FFFFFF'))]
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/albums.c / playlists.c show it while yoffset > 0

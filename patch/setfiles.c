@@ -47,7 +47,7 @@ static const struct sf_file sf_files[] = {
     {PCREGION_FILE, K_TEXT},       {BP_FILE, K_CHAR},           {CHG_FILE, K_CHAR},
     {SHUFFLE_FILE, K_CHAR},        {PEQ_STATE, K_PRESENT},      {NA_FILE, K_CHAR},
     {SEARCH_RECENT_FILE, K_LINES}, {RD_VIEW_FILE, K_CHAR},      {RD_RECENT_FILE, K_PRESENT},
-    {REBUILD_FILE, K_PRESENT},     {WIFINET_FILE, K_PRESENT},
+    {REBUILD_FILE, K_PRESENT},     {AREBUILD_FILE, K_PRESENT},  {WIFINET_FILE, K_PRESENT},
 };
 #define SF_FILES (sizeof sf_files / sizeof sf_files[0])
 #define SF_SETTING 5 /* the first setting file's row: the rows before it (guard files, folder) are never deleted */

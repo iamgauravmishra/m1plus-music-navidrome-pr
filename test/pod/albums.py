@@ -1917,7 +1917,7 @@ def title_tests(ctx):
         m.call(PSYMS['ar_open'], a0=0, count=40000000)
         expect(('widget_set_text_utf8', m.widgets['al_title'], 'Miles Davis') in m.calls and ('widget_set_text_utf8', m.widgets['label_title'], 'Miles Davis') in m.calls,
                f'{mode}: the scoped page\'s large and small titles are the artist')
-        end = O['AL_PILLS_END']   # the pills end the block; the list's first row is RGAP under it, the grid's gap is its own
+        end = O['AL_HEAD_END'] - O['PH_SHIFT']   # no photo in this card: the header without the circle and the pills end the block (PH_SHIFT higher: test/pod/artists.py scoped_plain_tests); the list's first row is RGAP under it, the grid's gap is its own
         expect(content_h(m) == end + (RGAP + 2 * PITCH if mode == 'grid' else RGAP + 4 * ROW), f'{mode}: the scoped content starts under the title and the pills ({content_h(m)})')
 
 

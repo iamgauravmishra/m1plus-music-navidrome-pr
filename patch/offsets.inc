@@ -804,7 +804,14 @@
 #define AL_SHUFFLE_X 165
 #define AL_SHUFFLE_W 145
 #define AL_PILLS_END 92          /* where that page's pill block ends (SG_PILL_Y + SG_PILL_H): the grid's first gap or the list's first row follows, GRID_ROW_GAP under it */
-#define SG_BAR_PILL_W 145        /* the select bar's pills (Add to Playlist needs the room; the bar is below the rail, whose touch column ends at the bar's top) */
+#define AL_PHOTO_D 88            /* an artist's page with a photo header (patch/albums.c, docs/modules/albums.md): the circle, 88 px, centred, 8 px under the navbar (much smaller than the album page's 160 px cover) */
+#define AL_PHOTO_X 116
+#define AL_PHOTO_Y 8
+#define AL_NAME_Y 110            /* the name's box (PH_NAME_X / _W / _H): 14 px under the circle */
+#define AL_HEAD_PILL_Y 148       /* the pills' y, 16 px under the name's box */
+#define AL_HEAD_END 188          /* where that block ends (AL_HEAD_PILL_Y + SG_PILL_H): the grid's first gap or the list's first row follows, as AL_PILLS_END */
+#define AL_HEAD_COLLAPSE 132     /* the navbar shows the small title once the name's box (its bottom, AL_NAME_Y + PH_NAME_H) has scrolled away */
+#define SG_BAR_PILL_W 145       /* the select bar's pills (Add to Playlist needs the room; the bar is below the rail, whose touch column ends at the bar's top) */
 #define SG_BAR_PILL_X1 165
 #define PL_BAR_PILL_W 300        /* the Playlists page's select bar has the one pill, Delete, across the bar (x SG_PILL_X0, a 10 px margin each side) */
 #define SG_PILL_R 20
@@ -848,7 +855,8 @@
 #define PH_PILL_Y 220           /* the Play pill and Shuffle disc as drawn, 16 px under the name's box (no count line: the count is the list's footer); the rows start SG_TOP - SG_PILL_Y - SG_PILL_H = 12 px under them */
 #define PH_BTN_Y 218            /* PH_PILL_Y - (AH_BTN_H - AH_PILL_H) / 2: their 44 px buttons' top (the pill and the disc are drawn centred in them) */
 #define PH_TOP 272              /* PH_PILL_Y + SG_PILL_H + 12: where the rows start (SG_TOP is 104 under the large title) */
-#define PH_COLLAPSE 204         /* the navbar shows the small title once the name's box (its bottom, y 204) has scrolled away */
+#define PH_SHIFT 96             /* an artist's page with no photo (patch/albums.c, docs/modules/albums.md): the circle's room, AL_PHOTO_Y + AL_PHOTO_D, is taken out - the name (AL_NAME_Y), the pills (AL_HEAD_PILL_Y), the rows (AL_HEAD_END) and the small title's AL_HEAD_COLLAPSE all move up by it and nothing else changes: the name at y 14, the pills at y 52 (SG_PILL_Y), the block ending at AL_PILLS_END */
+#define PH_COLLAPSE 204        /* the navbar shows the small title once the name's box (its bottom, y 204) has scrolled away */
 #define SG_FOOT_H 52            /* the song count under the last row ("25 songs"): this much content, the text box SG_FOOT_GAP below the row, SG_FOOT_TEXT_H high, from x SG_HDR_X */
 #define SG_FOOT_GAP 14
 #define SG_FOOT_TEXT_H 20

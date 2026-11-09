@@ -1643,34 +1643,38 @@ int songs_open_genre(const char *name, int unknown) {
     return r;
 }
 
-/* The artist's songs as the stock All songs card gets them (the two queries songs_open_artist runs, no page): loadAlbumList(0xf004, artist) fills the browsing record and
- * the albums, the last one the All songs row, and loadAlbumdetailList(0xff01, that row) turns the record into class 0xff11's and lists the songs. Returns that stock list
- * (in *pdeq_showlist, good until the next query), or NULL when the artist has no All songs row. */
-void *songs_artist_list(void *artist) {
+/* The artist's (scope CLASS_ARTISTS) or composer's (CLASS_COMPOSERS) songs as the stock All songs card gets them (the two queries songs_open_artist runs, no page):
+ * loadAlbumList(0xf004 / 0xf005, row) fills the browsing record and the albums, the last one the All songs row (getAlbumByArtist and getAlbumByComposer both append it),
+ * and loadAlbumdetailList(0xff01 / 0xff02, that row) turns the record into class 0xff11's / 0xff14's and lists the songs. Returns that stock list (in *pdeq_showlist,
+ * good until the next query), or NULL when there is no All songs row. */
+void *songs_artist_list(void *artist, unsigned scope) {
     void *list, *row;
     unsigned n;
+    int comp = scope == CLASS_COMPOSERS;
     if (!artist) return (void *)0;
-    loadAlbumList(CLASS_ARTISTS, artist);
+    loadAlbumList(comp ? CLASS_COMPOSERS : CLASS_ARTISTS, artist);
     list = *(void **)PDEQ_SHOWLIST;
     n = list ? deque_size(list) : 0;
     row = n ? deque_at(list, n - 1) : (void *)0;
     if (!row || I(row, REC_ID) != ID_ALL_SONGS) return (void *)0;
-    loadAlbumdetailList(CLASS_ARTIST_ALBUMS, row);
+    loadAlbumdetailList(comp ? CLASS_COMPOSER_ALBUMS : CLASS_ARTIST_ALBUMS, row);
     return *(void **)PDEQ_SHOWLIST;
 }
 
 /* Cover Flow's artist page (`artist`: the Artists row, the name in REC_TITLE): every song of the artist (songs_artist_list). The page keeps the record. -1 when the page
  * did not open or the artist has no All songs row (the caller opens the stock page). */
 int songs_open_artist(void *artist) {
-    if (sg.win || !artist || !songs_artist_list(artist)) return -1;
+    if (sg.win || !artist || !songs_artist_list(artist, CLASS_ARTISTS)) return -1;
     return sg_open(CLASS_ARTIST_SONGS, 0, (const char *)0, cc_str(artist, REC_TITLE), -1);
 }
 
-/* The artist's albums page's Play (how SO_IN_ORDER: the songs in order from the first) and Shuffle (SO_SHUFFLE: the stock Shuffle mode from a random song), the way this
- * page's pills play the artist's list: the two queries, then so_play on class 0xff11 (the record is fresh). -1 when there is nothing to play. */
-int songs_play_artist(void *artist, int how) {
-    void *list = songs_artist_list(artist);
+/* The artist's (or composer's: scope CLASS_COMPOSERS) albums page's Play (how SO_IN_ORDER: the songs in order from the first) and Shuffle (SO_SHUFFLE: the stock Shuffle
+ * mode from a random song), the way this page's pills play the list: the two queries, then so_play on class 0xff11 (a composer's 0xff14, the class the stock All songs
+ * row leaves; the record is fresh). -1 when there is nothing to play. */
+int songs_play_artist(void *artist, unsigned scope, int how) {
+    void *list = songs_artist_list(artist, scope);
     if (!list || !deque_size(list)) return -1;
-    so_play(CLASS_ARTIST_SONGS, list, how == SO_SHUFFLE ? -1 : 0, how, sg_open_player);
+    so_play(scope == CLASS_COMPOSERS ? CLASS_14 : CLASS_ARTIST_SONGS, list, how == SO_SHUFFLE ? -1 : 0, how,
+            sg_open_player);
     return 0;
 }

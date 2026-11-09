@@ -7,6 +7,7 @@ VIEW_H, TOP, HDR, ROW, BOTTOM = O['GRID_VIEW_H'], O['SG_TITLE_H'], O['SG_HDR_H']
 INSET = O['SG_RAIL_INSET']   # the rows give up this much on the right while the A-Z rail is shown (patch/azlist.c az_inset); rail off: the list-row spec (chevron x 288, text to 278, hairline to 310)
 TEXT_X, TEXT_Y, TEXT_H, TEXT_END = 24, (52 - O['LIST_TITLE_H']) // 2, O['LIST_TITLE_H'], O['LIST_TEXT_X'] + O['LIST_TEXT_W_CHEV'] - INSET
 CHEV_X, CHEV_W, CHEV_H = O['LIST_CHEV_X'] - INSET, 10, 16
+PHOTO, PHOTO_X, NAME_X = 40, 16, 68   # layout A (Artists and Album Artists): a 40 px circle at x 16, the name and the hairline from x 68; Genres and Composers keep TEXT_X
 HAIR_END = O['LIST_HAIR_END'] - INSET
 SCREEN_Y0, SC_YOFF = 80, O['SC_YOFF']   # the list's top on the screen (30 px system bar + 50 px navbar)
 
@@ -343,14 +344,14 @@ def page_tests(expect, cover_asset):
     # 29. Paint: the names (the Albums page's tile text, 21 px white), the chevrons, the hairlines, the section letters
     blits, texts, styles, fills = ar_paint(m, 0)
     rows = [(t, r) for (t, r), s in zip(texts, styles) if s == 'label_row_title']
-    want = [(n, (TEXT_X, mod.row_y(i) + TEXT_Y, TEXT_END - TEXT_X, TEXT_H)) for i, n in enumerate(['Miles Davis', 'Nina Simone', 'Unknown Artist'])]
-    expect(rows == want, f'the names are drawn in their 24 px boxes from x {TEXT_X}, up to x {TEXT_END} (the chevron\'s room): {rows}')
+    want = [(n, (NAME_X, mod.row_y(i) + TEXT_Y, TEXT_END - NAME_X, TEXT_H)) for i, n in enumerate(['Miles Davis', 'Nina Simone', 'Unknown Artist'])]
+    expect(rows == want, f'the names are drawn in their 24 px boxes from x {NAME_X} (right of the circle), up to x {TEXT_END} (the chevron\'s room): {rows}')
     hd = [(t, r[1]) for (t, r), s in zip(texts, styles) if s == 'label_hdr']
     expect(hd == [('M', mod.hdr_y(0)), ('N', mod.hdr_y(1))], f'the section letters at their headers, the Songs page\'s (x {O["SG_HDR_X"]}, 20 px): {hd}')
     chev = [b for b in blits if tuple(b[2][2:]) == (CHEV_W, CHEV_H)]
     expect([tuple(b[2]) for b in chev] == [(CHEV_X, mod.row_y(i) + (ROW - CHEV_H) // 2, CHEV_W, CHEV_H) for i in range(3)], 'a chevron at the right of every row, centred in its row')
-    hair = [f for f in fills if f[0] == O['LIST_HAIR'] and f[3] == HAIR_END - TEXT_X]
-    expect([(f[1], f[2], f[4]) for f in hair] == [(TEXT_X, mod.row_y(i) + ROW - 1, 1) for i in range(3)], 'a hairline under every row from the text\'s x')
+    hair = [f for f in fills if f[0] == O['LIST_HAIR'] and f[3] == HAIR_END - NAME_X]
+    expect([(f[1], f[2], f[4]) for f in hair] == [(NAME_X, mod.row_y(i) + ROW - 1, 1) for i in range(3)], 'a hairline under every row from the text\'s x (68)')
     expect(not [f for f in fills if f[0] == O['SG_HDR_BG']], 'no pinned header at the top (the first header has not reached the window\'s top)')
     # the chevron's pixels: a stroke of two segments, the grey of the rail's dots, antialiased in the alpha
     data, w, h = m.bitmaps[chev[0][0]]
@@ -450,7 +451,7 @@ def page_tests(expect, cover_asset):
         expect(rows[:3] == [mod.row_y(i) + TEXT_Y for i in range(3)], f'{what}: the rows start at {mod.row_y(0)}')
         hair = [f for f in fills if f[0] == O['LIST_HAIR']]
         gap = INSET if rail == b'1\n' else 0   # the rail's footprint: hairline end, chevron x and text end move left by it, with the rail off the rows keep the list-row spec
-        expect(hair and all(f[1] == TEXT_X and f[3] == O['LIST_HAIR_END'] - gap - TEXT_X for f in hair), f'{what}: the hairlines end at {O["LIST_HAIR_END"] - gap}')
+        expect(hair and all(f[1] == NAME_X and f[3] == O['LIST_HAIR_END'] - gap - NAME_X for f in hair), f'{what}: the hairlines end at {O["LIST_HAIR_END"] - gap}')
         blits, texts, styles, _ = ar_paint(mm, 0)
         chev = [tuple(b[2]) for b in blits if tuple(b[2][2:]) == (CHEV_W, CHEV_H)]
         names = [r for (t, r), s in zip(texts, styles) if s == 'label_row_title']
@@ -571,7 +572,7 @@ def page_tests(expect, cover_asset):
     m.call(PSYMS['pod_on_back'], count=200000)
     expect('navigator_back' in m.names(), 'Back on the Artists page goes back')
     m.call(PSYMS['ar_on_destroy'], count=2000000)
-    expect('deque_destroy' in m.names() and sum(1 for c in m.calls if c[0] == 'bitmap_destroy') == 2, 'closing the Artists page frees its list and the two bitmaps')
+    expect('deque_destroy' in m.names() and sum(1 for c in m.calls if c[0] == 'bitmap_destroy') == 3, 'closing the Artists page frees its list and its bitmaps (the rail disc, the chevron, the circle placeholder)')
     m = artists_machine(artists=())
     m.call(open_, count=2000000)
     expect(any(c[0] == 'widget_set_text_utf8' and 'Update Local Music' in c[2] for c in m.calls), 'no artists says so')
@@ -601,7 +602,7 @@ def shown(m):
     for off in range(0, max(vh - VIEW_H, 0) + 200, 200):
         _, texts, _, _ = ar_paint(m, off)
         for t, (x, y, w, h) in texts:
-            if x == TEXT_X: names[y + off] = t
+            if x in (TEXT_X, NAME_X): names[y + off] = t
     return [names[y] for y in sorted(names)]
 
 
@@ -958,7 +959,7 @@ def scoped_albums_tests(ctx):
     open_ = PSYMS['artists_open']
     ROWH, RGAP = O['LIST_ROW_H'], O['GRID_ROW_GAP']
     CELL_PITCH = O['GRID_COVER'] + O['GRID_TITLE_GAP'] + O['GRID_TITLE_H'] + O['GRID_SUB_H'] + RGAP   # the grid's row pitch (patch/grid.h)
-    def block(m): return O['SG_TITLE_H'] if getattr(m, 'plain', False) else O['AL_PILLS_END'] + (0 if m.fs.get('/mnt/data/m1plus/albums-view') == b'1\n' else RGAP)   # the title and pills block above the rows (a list's first row is RGAP under it; the grid's gap is its own)
+    def block(m): return O['AL_HEAD_END'] - (O['PH_SHIFT'] if getattr(m, 'nocirc', False) else 0) + (0 if m.fs.get('/mnt/data/m1plus/albums-view') == b'1\n' else RGAP)   # the name and pills block above the rows (a list's first row is RGAP under it; the grid's gap is its own); nocirc: the header without the circle
 
     def content(m): return [c[3] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.view][-1] - block(m)   # (the rows' height: the block above them is not counted)
     def tap(m, x, y):
@@ -989,7 +990,7 @@ def scoped_albums_tests(ctx):
     # the covers are the library's files (Jazz Hits is filed under Various Artists there)
     loads = []
     for _ in range(12):
-        m.call(PSYMS['al_on_load'], count=40000000); loads += [c[1] for c in m.calls if c[0] == 'widget_load_image']
+        m.call(PSYMS['al_on_load'], count=40000000); loads += [c[1] for c in m.calls if c[0] == 'widget_load_image' and c[1].startswith('file://') and AP_DIR not in c[1]]
         if not any(c[0] == 'timer_add' and c[1] == PSYMS['al_on_load'] for c in m.calls): break
     jazz = 'file://' + art_file(fnv(fnv(O['FNV_SEED'], 'Various Artists'), 'Jazz Hits'))
     expect(jazz in loads and len(set(loads)) == 3, f'the covers take the library album\'s cache keys ({loads})')
@@ -1010,7 +1011,7 @@ def scoped_albums_tests(ctx):
     ms.calls = []
     loads = []
     for _ in range(12):
-        ms.call(PSYMS['al_on_load'], count=40000000); loads += [c[1] for c in ms.calls if c[0] == 'widget_load_image']
+        ms.call(PSYMS['al_on_load'], count=40000000); loads += [c[1] for c in ms.calls if c[0] == 'widget_load_image' and c[1].startswith('file://') and AP_DIR not in c[1]]
         if not any(c[0] == 'timer_add' and c[1] == PSYMS['al_on_load'] for c in ms.calls): break
     jazz = 'file://' + art_file(fnv(fnv(O['FNV_SEED'], 'Various Artists'), 'Jazz Hits'))
     expect(jazz in loads and len(set(loads)) == 3, f'the covers still take the library albums\' keys under the sorted order ({loads})')
@@ -1049,6 +1050,7 @@ def scoped_albums_tests(ctx):
     ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
     m.setword(m.canvas + O['CANVAS_OY'], SCREEN_Y0 & 0xffffffff)
     m.texts.clear(); m.blits.clear()
+    m.setword(m.sv + SC_YOFF, 200)   # (the rows start under the photo header and the pills)
     m.call(PSYMS['al_on_paint'], a0=0, a1=ev, count=400000000)
     tx = [t for t, r in m.texts]
     expect(tx == ['Bitches Brew', 'Jazz Hits', 'Kind of Blue', 'All Songs'], f'the fourth row is All Songs, with no line under it (an artist\'s albums show their years) ({tx})')
@@ -1072,7 +1074,7 @@ def scoped_albums_tests(ctx):
 
     # a composer: loadAlbumList(0xf005), class 0xff02
     m = opened(composers=('Mozart', 'Bach', 'Unknown Composer'), home=pod_pages.HOME_COMPOSER, i=1)
-    m.plain = True   # (a composer's page has no pills: the rows start under the large title)
+    m.nocirc = True   # (a composer's page has the artist header without the circle: a composer has no photo)
     la = [c for c in m.calls if c[0] == 'loadAlbumList']
     expect(('window_open', 'm1plus_albums') in m.calls and la and la[0][1] == O['CLASS_COMPOSERS'] and la[0][3] == 'Bach'
            and ('widget_set_text_utf8', m.widgets['label_title'], 'Bach') in m.calls and content(m) == 3 * ROWH, 'a composer: his two albums and the All Songs row on the Albums page')
@@ -1128,31 +1130,28 @@ def scoped_sort_tests(ctx):
     order as Title, writes the shared albums-sort; the artist's Cover Flow follows the same order."""
     expect = ctx.expect
     ROWH = O['LIST_ROW_H']
-    TOP_ROWS = O['AL_PILLS_END'] + O['GRID_ROW_GAP']   # the list's first row (the title block and the pills above it)
+    TOP_ROWS = O['AL_HEAD_END'] + O['GRID_ROW_GAP']   # the list's first row (the photo header and the pills above it)
     vis = lambda m, n: (m.props.get((m.widgets[n], 'visible'), 1), m.props.get((m.widgets[n], 'sensitive'), 1))
     def tap(m, y):
         m.calls = []
         m.touch('down', 100, 80 + TOP_ROWS + y, 1000, fn='al_on_down')
         m.touch('up', 100, 80 + TOP_ROWS + y, 1080, fn='al_on_up', count=40000000)
         return [c[3] for c in m.calls if c[:2] == ('navigator_to_with_context', 'albuminfo_page')]
-    # the card: Search Albums, Grid, List and three sort rows, packed, 288 px, the six-row glass; hidden rows are insensitive; the names are all there
+    # the card: Grid, List and three sort rows, packed, 240 px, the five-row glass; no Search row (it searched every album, not the artist's); hidden rows are insensitive; the names are all there
     m = scoped_machine(); m.call(PSYMS['ar_open'], a0=0, count=40000000)
     m.click('btn_more')
-    expect(vis(m, 'vs_item1') == (0, 0), 'the scoped card has no Artist row: hidden and insensitive')
-    expect(all(vis(m, f'vs_item{i}') == (1, 1) for i in (0, 2, 3, 4, 5, 6)) and vis(m, 'vs_card') == (1, 1), 'Search Albums, Grid, List, Title, Recently Added and Year are shown')
-    moves = {i: [c[2:] for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets[f'vs_item{i}']] for i in (0, 2, 3, 4, 5, 6)}
-    expect(moves == {6: [(0, 0)], 4: [(0, 48)], 5: [(0, 96)], 0: [(0, 144)], 2: [(0, 192)], 3: [(0, 240)]}, f'the rows are packed from the top, Search, Grid and List first ({moves})')
-    expect(vis(m, 'vs_hair') == (1, 1) and [c[2:] for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets['vs_hair']] == [(0, 48)], 'the hairline between Search and Grid is shown at y 48')
-    expect(all(m.props.get((m.widgets['vs_card'], f'style:{st}:bg_image')) == 'vs_glass6' for st in ('normal', 'pressed', 'over')), 'the card is drawn in the 288 px, six-row glass')
-    expect([c[2:] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets['vs_card']][-1][1] == 288, 'the card is 288 px high')
+    expect(vis(m, 'vs_item1') == (0, 0) and vis(m, 'vs_item6') == (0, 0), 'the scoped card has no Artist row and no Search row: hidden and insensitive')
+    expect(all(vis(m, f'vs_item{i}') == (1, 1) for i in (0, 2, 3, 4, 5)) and vis(m, 'vs_card') == (1, 1), 'Grid, List, Title, Recently Added and Year are shown')
+    moves = {i: [c[2:] for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets[f'vs_item{i}']] for i in (0, 2, 3, 4, 5)}
+    expect(moves == {4: [(0, 0)], 5: [(0, 48)], 0: [(0, 96)], 2: [(0, 144)], 3: [(0, 192)]}, f'the rows are packed from the top, Grid and List first ({moves})')
+    expect(vis(m, 'vs_hair')[0] == 0, 'no hairline over Grid (nothing above it)')
+    expect(all(m.props.get((m.widgets['vs_card'], f'style:{st}:bg_image')) == 'vs_glass5' for st in ('normal', 'pressed', 'over')), 'the card is drawn in the 240 px, five-row glass')
+    expect([c[2:] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets['vs_card']][-1][1] == 240, 'the card is 240 px high')
     expect([vis(m, f'vs_tick{i}')[0] for i in range(4)] == [1, 0, 0, 0], 'the saved Artist (the default) shows as Title: Title is ticked')
     # the library page keeps four sorts, the 336 px card and the asset's own seven-row glass
     ml = scoped_machine(); ml.call(PSYMS['albums_open'], count=20000000); ml.calls = []; ml.click('btn_more')
     expect(all(vis(ml, f'vs_item{i}') == (1, 1) for i in range(7)) and [c[2:] for c in ml.calls if c[0] == 'widget_resize' and c[1] == ml.widgets['vs_card']][-1][1] == 336
            and ml.props.get((ml.widgets['vs_card'], 'style:normal:bg_image')) == 'vs_glass7', 'the library page keeps its seven rows on the 336 px card, in the seven-row glass')
-    ms = scoped_machine(); ms.call(PSYMS['ar_open'], a0=0, count=40000000); ms.click('btn_more'); ms.calls = []
-    ms.click('vs_item6', count=40000000)
-    expect(('window_open', 'm1plus_search') in ms.calls and vis(ms, 'vs_card') == (0, 0), 'Search Albums on the artist page closes the card and opens the search page, as the button did')
     # each saved order on the scoped page: the list, the tick, the stock row a tap opens
     for k, order in SCOPED_ORDERS.items():
         m = scoped_machine(f'{k}\n'.encode()); m.call(PSYMS['ar_open'], a0=0, count=40000000)
@@ -1236,14 +1235,14 @@ def pills_machine(view=b'0\n', sort=None, home=0, i=0, songs=True):
 def scoped_pills_tests(ctx):
     """An artist's albums page (docs/modules/albums.md "Artist page"): Play and Shuffle pills under the large title, the albums' years as their grey line."""
     expect = ctx.expect
-    ROWH, RGAP, END = O['LIST_ROW_H'], O['GRID_ROW_GAP'], O['AL_PILLS_END']
+    ROWH, RGAP, END = O['LIST_ROW_H'], O['GRID_ROW_GAP'], O['AL_HEAD_END']
     PITCH = O['GRID_COVER'] + O['GRID_TITLE_GAP'] + O['GRID_TITLE_H'] + O['GRID_SUB_H'] + RGAP
-    expect(END == O['SG_PILL_Y'] + O['SG_PILL_H'] and O['AL_PLAY_W'] == 145 and O['AL_SHUFFLE_W'] == 145 and O['AL_PLAY_X'] == 10 and O['AL_SHUFFLE_X'] == 165 and O['AL_SHUFFLE_X'] - (O['AL_PLAY_X'] + O['AL_PLAY_W']) == 10, 'the pill block ends where the Songs page\'s pills do (52 + 40); the page\'s Play and Shuffle pills are 145 wide, Play at x 10 and Shuffle at x 165 (a 10 px gap)')
+    expect(O['AL_PILLS_END'] == O['SG_PILL_Y'] + O['SG_PILL_H'] and END == O['AL_HEAD_PILL_Y'] + O['SG_PILL_H'] and O['AL_PLAY_W'] == 145 and O['AL_SHUFFLE_W'] == 145 and O['AL_PLAY_X'] == 10 and O['AL_SHUFFLE_X'] == 165 and O['AL_SHUFFLE_X'] - (O['AL_PLAY_X'] + O['AL_PLAY_W']) == 10, 'the pill block ends where the Songs page\'s pills do (52 + 40) and, under the photo header, 148 + 40; the page\'s Play and Shuffle pills are 145 wide, Play at x 10 and Shuffle at x 165 (a 10 px gap)')
     # the asset: two hidden pills in the content view after the large title, the Songs page's look; Play 145 wide at x 10, Shuffle 145 wide at x 165
     tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_albums.bin'), 'rb').read())
     grid = tree.find('view_grid')
     kids = {c.name: c for c in grid.children}
-    expect(list(kids) == ['al_title', 'btn_play', 'btn_shuffle'], f'the content view holds the large title and the two pills ({list(kids)})')
+    expect(list(kids) == ['al_title', 'btn_play', 'btn_shuffle', 'al_name'], f'the content view holds the large title, the two pills and the header\'s name ({list(kids)})')
     for nm, x, w, icon in (('btn_play', 10, 145, 'sg_play'), ('btn_shuffle', 165, 145, 'sg_shuffle')):
         b = kids[nm]
         expect((b.x, b.y, b.w, b.h) == (x, O['SG_PILL_Y'], w, O['SG_PILL_H']) and b.type == 'button' and b.get('visible') == 'false' and b.get('sensitive') == 'false'
@@ -1274,6 +1273,7 @@ def scoped_pills_tests(ctx):
         ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
         m.setword(m.canvas + O['CANVAS_OY'], SCREEN_Y0 & 0xffffffff)
         m.texts.clear(); m.blits.clear()
+        m.setword(m.sv + SC_YOFF, 200)   # (the rows start under the photo header and the pills: scrolled so the whole list is in the window)
         m.call(PSYMS['al_on_paint'], a0=0, a1=ev, count=400000000)
         tx = [t for t, r in m.texts]
         expect(tx[:4] == ['Bitches Brew', 'Jazz Hits', 'Kind of Blue', 'All Songs'], f'{mode}: titles ({tx})')
@@ -1307,20 +1307,48 @@ def scoped_pills_tests(ctx):
         m.calls = []
         m.touch('down', 100, SCREEN_Y0 + y, 1000, fn='al_on_down'); m.touch('up', 100, SCREEN_Y0 + y, 1080, fn='al_on_up', count=40000000)
         expect(bool([c for c in m.calls if c[:2] == ('navigator_to_with_context', 'albuminfo_page')]) == want, f'list: a tap at content y {y} {"opens the first album" if want else "opens nothing"}')
-    # the small title still collapses at SG_COLLAPSE (the pills are under the title, as on Songs)
+    # the small title appears once the name has scrolled away (AL_HEAD_COLLAPSE: the name's box bottom, as the playlist header's)
     m = pills_machine(b'0\n')
     small = m.widgets['label_title']
-    m.setword(m.sv + O['SC_YOFF'], O['SG_COLLAPSE'] - 1); m.call(PSYMS['al_on_scroll'], count=4000000)
-    expect(m.props.get((small, 'visible'), 0) == 0, 'one px short of SG_COLLAPSE the small title is hidden')
-    m.setword(m.sv + O['SC_YOFF'], O['SG_COLLAPSE']); m.call(PSYMS['al_on_scroll'], count=4000000)
-    expect(m.props.get((small, 'visible')) == 1, 'at SG_COLLAPSE it shows (the threshold is the Songs page\'s)')
+    m.setword(m.sv + O['SC_YOFF'], O['AL_HEAD_COLLAPSE'] - 1); m.call(PSYMS['al_on_scroll'], count=4000000)
+    expect(m.props.get((small, 'visible'), 0) == 0, 'one px short of AL_HEAD_COLLAPSE the small title is hidden')
+    m.setword(m.sv + O['SC_YOFF'], O['AL_HEAD_COLLAPSE']); m.call(PSYMS['al_on_scroll'], count=4000000)
+    expect(m.props.get((small, 'visible')) == 1, 'at AL_HEAD_COLLAPSE (132) it shows')
 
-    # a composer's page: no pills, no years, the title block as before
-    m = artists_machine(composers=('Mozart', 'Bach', 'Unknown Composer'), albums_page=True)
-    m.fs['/mnt/data/m1plus/albums-view'] = b'0\n'
-    m.call(PSYMS['artists_open'], a0=pod_pages.HOME_COMPOSER, count=20000000); m.calls = []
-    m.call(PSYMS['ar_open'], a0=1, count=40000000); m.open_calls = list(m.calls)
-    expect(m.props.get((m.widgets['btn_play'], 'visible'), 0) != 1 and not [c for c in m.open_calls if c[0] == 'loadAlbumdetailList'], 'a composer\'s page has no pills and reads no songs')
+    # a composer's page: the same pills and years, the composer's songs through the stock composer queries (0xf005, then 0xff02 on the All songs row: class 0xff14)
+    def composer_machine():
+        m = artists_machine(composers=('Mozart', 'Bach', 'Unknown Composer'), albums_page=True)
+        recs = []
+        for n, (album, year) in enumerate((('Cello Suites', 1720), ('Goldberg Variations', 1741), ('Goldberg Variations', 0))):
+            r = m.record(album=album, artist='Glenn Gould', path=f'/mnt/mmc/Bach/{album}/{n}.flac', rid=900 + n)
+            m.setword(r + O['REC_YEAR'], year); m.present.add(f'/mnt/mmc/Bach/{album}/{n}.flac'); recs.append(r)
+        m.composer_songs['Bach'] = recs; m.tracklist = recs
+        m.fs['/mnt/data/m1plus/albums-view'] = b'0\n'
+        for n, t in (('btn_play', 'Play'), ('btn_shuffle', 'Shuffle')): m.wtext[m.widgets[n]] = t
+        m.call(PSYMS['artists_open'], a0=pod_pages.HOME_COMPOSER, count=20000000); m.calls = []
+        m.call(PSYMS['ar_open'], a0=1, count=40000000); m.open_calls = list(m.calls)
+        return m
+    m = composer_machine()
+    qs = [c for c in m.open_calls if c[0] in ('loadAlbumList', 'loadAlbumdetailList')]
+    expect(all(m.props.get((m.widgets[n], 'visible')) == 1 and m.props.get((m.widgets[n], 'sensitive')) == 1 for n in ('btn_play', 'btn_shuffle'))
+           and [c[:2] for c in qs][-2:] == [('loadAlbumList', O['CLASS_COMPOSERS']), ('loadAlbumdetailList', O['CLASS_COMPOSER_ALBUMS'])],
+           f'a composer\'s page has the pills and reads the composer\'s songs once ({[c[:2] for c in qs]})')
+    m.strings = {'local_allsong': 'All Songs'}
+    m.canvas = m.alloc(0x80); m.oy_canvas = m.canvas
+    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    m.setword(m.canvas + O['CANVAS_OY'], SCREEN_Y0 & 0xffffffff)
+    m.texts.clear(); m.blits.clear()
+    m.setword(m.sv + SC_YOFF, 0)   # (the header without the circle is short: the three rows are in view)
+    m.call(PSYMS['al_on_paint'], a0=0, a1=ev, count=400000000)
+    tx = [t for t, r in m.texts]
+    expect(tx == ['Cello Suites', 'Goldberg Variations', 'All Songs', '1720', '1741'], f'a composer\'s albums show their years; All Songs has no line (not the composer\'s name) ({tx})')
+    m.calls = []
+    m.click('btn_play', count=900000000)
+    expect(m.played and m.played[1] == 0 and [c[3] for c in m.calls if c[0] == 'loadSongList'] == [O['CLASS_14']],
+           'Play on a composer\'s page: every song of the composer from the first, class 0xff14 (what the stock All songs row leaves)')
+    m = composer_machine(); m.calls = []
+    m.click('btn_shuffle', count=900000000)
+    expect(m.played and [c[3] for c in m.calls if c[0] == 'loadSongList'] == [O['CLASS_14']], 'Shuffle on a composer\'s page plays the composer\'s songs (0xff14)')
 
 
 def name_order_tests(ctx):
@@ -1402,7 +1430,7 @@ def scoped_nextalbum_tests(ctx):
     ROWH = O['LIST_ROW_H']
     FILE = NA.FILE
 
-    def block(m): return O['AL_PILLS_END'] + 0   # the title and pills block above the list rows (the list view: the first row directly under it)
+    def block(m): return O['AL_HEAD_END'] + 0   # the header and pills block above the list rows (the photo header of the artist's page; the list view: the first row directly under it)
 
     def tap(m, x, y):
         sv_y = SCREEN_Y0 + block(m)
@@ -1442,7 +1470,461 @@ def scoped_nextalbum_tests(ctx):
     expect(mo.noted is None, 'setting off: nothing is noted')
 
 
-SECTIONS = [artists_tests, scoped_albums_tests, scoped_nextalbum_tests, scoped_pills_tests, scoped_sort_tests, genre_composer_tests, index_tests, sort_tests, name_order_tests]
+AP_DIR = '/mnt/mmc/.m1plus/artists'
+
+
+def ap_key(name):
+    """patch/artistphoto.c ap_key, written again: FNV of the name trimmed, ASCII case folded, without a leading "The "."""
+    s = ''.join(chr(ord(c) + 32) if 'A' <= c <= 'Z' else c for c in name.strip(' \t'))
+    if len(s) > 4 and s.startswith('the '): s = s[4:].lstrip(' \t')
+    h = fnv(O['FNV_SEED'], s)
+    return h or 1
+
+
+def ap44(name): return f'{AP_DIR}/a{ap_key(name):08x}-44.jpg'
+
+
+def seed_photos(m, names=('Miles Davis', 'Nina Simone'), color=(40, 40, 40)):
+    """The -168 file (a flat picture) of each name: an artist's page with a photo in the cache has the circle header."""
+    m.load_image = 0
+    for n in names:
+        p = f'{AP_DIR}/a{ap_key(n):08x}-168.jpg'
+        m.files[p] = 5000; m.present.add(p); m.images['file://' + p] = (168, 168, bytes((*color, 255)) * (168 * 168))
+
+
+_artists_machine = artists_machine
+
+
+def artists_machine(*args, photos=True, **kw):
+    """The harness's machine; photos: the two artists have a photo in the cache (so their pages open with the circle, as most tests here expect); False: none."""
+    m = _artists_machine(*args, **kw)
+    if photos: seed_photos(m)
+    return m
+
+
+def photo_machine(artists, photos=(), markers=(), colours=None, **kw):
+    """The Artists page's world with photos: photos (names) have a -44 file with a flat picture (colours[name], else by position), markers (names) the empty "no photo" file; the glyph of the placeholder."""
+    m = artists_machine(artists, **kw)
+    m.load_image = 0
+    m.images['pod_ic_ar_art'] = (24, 24, bytes((0x8c, 0x8c, 0x8c, 255)) * (24 * 24))
+    for i, n in enumerate(photos):
+        c = (colours or {}).get(n, (40 * (i + 1) % 256, 90, 200 - 30 * i))
+        m.files[ap44(n)] = 900; m.present.add(ap44(n))
+        m.images['file://' + ap44(n)] = (44, 44, bytes((*c, 255)) * (44 * 44))
+    for n in markers: m.files[ap44(n)] = 0; m.present.add(ap44(n))
+    return m
+
+
+def photo_tick(m, limit=60):
+    """The photo loader's timer fires until it does not re-arm itself; the calls of all the ticks."""
+    seen = []
+    for _ in range(limit):
+        m.calls = []
+        m.call(PSYMS['ar_on_photo'], a0=0, count=40000000)
+        seen += m.calls
+        if not any(c[0] == 'timer_add' and c[1] == PSYMS['ar_on_photo'] for c in m.calls): return seen
+    raise AssertionError('the photo loader never finished')
+
+
+def circles(m, blits):
+    """The row circles of a frame: [(dst y, bitmap handle)] of the 40 px blits at x 16."""
+    return sorted((b[2][1], b[0]) for b in blits if b[2][0] == PHOTO_X and b[2][2] == PHOTO)
+
+
+def bmp_px(m, bmp, x, y):
+    data, w, h = m.bitmaps[bmp]
+    return struct.unpack('<I', m.u.mem_read(data + (y * w + x) * 4, 4))[0]
+
+
+def photo_rows_tests(ctx):
+    """Layout A of the Artists and Album Artists rows (docs/modules/artists.md "Rows"): a 40 px circle at x 16 centred in the 52 px row, the name and the hairline from x 68; the circle
+    decoded by the page's own loader (one a tick, none while the list moves, paint opens nothing), the shared placeholder for a row with no photo or not yet looked at, the lead artist's
+    photo for "A feat. B"; Genres and Composers rows untouched."""
+    expect = ctx.expect
+    open_ = PSYMS['artists_open']
+    names = ('Abba', 'Abel feat. Zed', 'Adele', 'Aha & Faithless', 'Alt', 'Unknown Artist')
+    photos, markers = ('Abba', 'Abel', 'Aha', 'Unknown Artist'), ('Adele', 'Aha & Faithless')
+    col = {'Abba': (200, 30, 30), 'Abel': (30, 200, 30), 'Aha': (30, 30, 200), 'Unknown Artist': (250, 250, 250)}
+    m = photo_machine(names, photos, markers, colours=col)
+    m.call(open_, count=20000000)
+    opened = list(m.calls)
+    mod = Model(list(names))
+    # rows before anything is decoded: the shared placeholder in every circle slot, the names from x 68, the hairlines from x 68
+    blits, texts, styles, fills = ar_paint(m, 0)
+    ph = circles(m, blits)
+    ys = [mod.row_y(i) + (ROW - PHOTO) // 2 for i in range(len(names))]
+    expect([y for y, _ in ph] == ys and len({b for _, b in ph}) == 1, f'a 40 px circle at x 16, centred in each row, all the one placeholder bitmap ({ph})')
+    touched = lambda calls: [c for c in calls if (c[0] == 'widget_load_image' and c[1].startswith('file://')) or (c[0] in ('fopen', 'access', 'stat') and AP_DIR in str(c[1]))]
+    expect(not touched(m.calls) and not touched(opened), 'paint (and open) opens no photo file')
+    rows = [(t, r) for (t, r), s in zip(texts, styles) if s == 'label_row_title']
+    expect(rows == [(n, (NAME_X, mod.row_y(i) + TEXT_Y, TEXT_END - NAME_X, TEXT_H)) for i, n in enumerate(names)], f'the names from x {NAME_X} to the chevron\'s room ({rows})')
+    hair = [f for f in fills if f[0] == O['LIST_HAIR']]
+    expect([(f[1], f[3]) for f in hair] == [(NAME_X, O['LIST_HAIR_END'] - INSET - NAME_X)] * len(names), 'the hairlines run from x 68 to 284 (the rail shown)')
+    chev = [b for b in blits if tuple(b[2][2:]) == (CHEV_W, CHEV_H)]
+    expect([b[2][0] for b in chev] == [CHEV_X] * len(names), 'the chevrons stay at x 262')
+    # the placeholder: #333333 circle (alpha-cut edge), the glyph's grey in the middle
+    p = ph[0][1]
+    expect(bmp_px(m, p, 20, 6) == 0xff333333 and bmp_px(m, p, 0, 0) >> 24 == 0 and bmp_px(m, p, 39, 39) >> 24 == 0, 'the placeholder is a #333333 circle: the corners clear, the inside opaque')
+    expect(bmp_px(m, p, 20, 20) & 0xffffff == 0x8c8c8c and bmp_px(m, p, 20, 11) & 0xffffff == 0x8c8c8c, 'the glyph in #8C8C8C at the middle (0.52 of the diameter: 20 px)')
+    edge = [bmp_px(m, p, x, 20) >> 24 for x in range(0, 6)]
+    expect(edge == sorted(edge) and edge[0] < 255 and 0 < max(edge) and any(0 < a < 255 for a in edge) or any(0 < bmp_px(m, p, x, 3) >> 24 < 255 for x in range(40)), f'the edge is antialiased ({edge})')
+    # the loader: one row a tick, nearest the middle first; nothing for the rows whose state is known (the marker) or the Unknown row
+    seen = photo_tick(m)
+    loads = [c[1] for c in seen if c[0] == 'widget_load_image' and c[1].startswith('file://')]
+    want = sorted('file://' + ap44(n) for n in ('Abba', 'Abel', 'Aha'))
+    expect(sorted(loads) == want, f'the full name\'s file, else the lead artist\'s ("Abel feat. Zed" -> Abel, "Aha & Faithless" -> Aha, whose own file is the empty marker); ({loads})')
+    expect('file://' + ap44('Unknown Artist') not in loads and 'file://' + ap44('Adele') not in loads, 'the Unknown Artist row and a marker row are never decoded')
+    blits, _, _, _ = ar_paint(m, 0)
+    got = dict(circles(m, blits))
+    real = [y for y in ys if got[y] != ph[0][1]]
+    expect(real == [ys[0], ys[1], ys[3]], f'the circles of Abba, Abel feat. Zed and Aha & Faithless are decoded, the rest keep the placeholder ({real})')
+    for y, name in ((ys[0], 'Abba'), (ys[1], 'Abel'), (ys[3], 'Aha')):
+        v = bmp_px(m, got[y], 20, 20)
+        want_c = col[name]
+        expect(v >> 24 == 255 and all(abs(((v >> (8 * k)) & 255) - want_c[k]) <= 3 for k in range(3)) and bmp_px(m, got[y], 0, 0) >> 24 == 0 and bmp_px(m, got[y], 20, 0) >> 24 > 200,
+               f'{name}: the photo, cut to a circle (the corners clear)')
+    expect(not touched(m.calls), 'the repaint opens nothing')
+    # the 2-bit states: the marker is remembered (scrolling away and back never opens its file again); a missing file (Enya) is looked for again
+    count44 = lambda mm, n: sum(1 for p in mm.__dict__.get('fopens', []) if p == ap44(n))
+    adele, alt = count44(m, 'Adele'), count44(m, 'Alt')
+    expect(adele >= 1 and alt >= 1, 'each was looked at once')
+    many = [f'A{i:02d}' for i in range(1, 41)]
+    ml = photo_machine(many, ('A03',), ('A01',))
+    ml.call(open_, count=20000000)
+    photo_tick(ml)
+    first = (count44(ml, 'A01'), count44(ml, 'A02'), count44(ml, 'A03'))
+    scroll_to(ml, 1200); photo_tick(ml)
+    scroll_to(ml, 0); photo_tick(ml)
+    after = (count44(ml, 'A01'), count44(ml, 'A02'), count44(ml, 'A03'))
+    expect(after[0] == first[0] and after[1] == first[1] + 1 and after[2] == first[2] + 1,
+           f'the ring let the top rows go: the marker row (A01) is remembered and its file not opened again, the unknown (A02) and the photo (A03) are looked at again ({first} -> {after})')
+    # one decode a tick; none while the list moves
+    m2 = photo_machine(names, photos, markers, colours=col)
+    m2.call(open_, count=20000000)
+    m2.calls = []; m2.call(PSYMS['ar_on_photo'], a0=0, count=40000000)
+    one = [c for c in m2.calls if c[0] == 'widget_load_image' and c[1].startswith('file://')]
+    expect(len(one) <= 1 and any(c[0] == 'timer_add' for c in m2.calls), f'one photo a tick, the timer re-armed ({len(one)})')
+    m3 = photo_machine(names, photos, markers, colours=col)
+    m3.call(open_, count=20000000)
+    m3.u.mem_write(m3.sv + O['SC_PRESSED'], b'\x01'); m3.u.mem_write(m3.sv + O['SC_DRAGGED'], b'\x01')   # a finger dragging the list
+    m3.calls = []; m3.call(PSYMS['ar_on_photo'], a0=0, count=40000000)
+    expect(not touched(m3.calls) and any(c[0] == 'timer_add' for c in m3.calls), 'nothing is decoded while the scroll_view moves; the timer polls')
+    m3.u.mem_write(m3.sv + O['SC_PRESSED'], b'\x00')
+    seen = photo_tick(m3)
+    expect(len([c for c in seen if c[0] == 'widget_load_image' and c[1].startswith('file://')]) == 3, 'and the photos come once it rests')
+    # a file that does not decode is "no photo": the placeholder, remembered
+    m4 = photo_machine(('Abba', 'Unknown Artist'), ('Abba',)); m4.load_image = 0
+    del m4.images['file://' + ap44('Abba')]
+    m4.call(open_, count=20000000)
+    photo_tick(m4)
+    b4, _, _, _ = ar_paint(m4, 0)
+    expect(len({b for _, b in circles(m4, b4)}) == 1, 'a picture that does not decode leaves the placeholder')
+    # the destroy frees the timer and every bitmap (the ring's circles, the placeholder, the disc, the chevron)
+    m.calls = []
+    m.call(PSYMS['ar_on_destroy'], count=2000000)
+    freed = sum(1 for c in m.calls if c[0] == 'bitmap_destroy')
+    expect(freed >= 6, f'closing the page frees the circles and the placeholder ({freed} bitmaps)')
+
+    # Genres and Composers: no circle, the name at x 24, the hairline from 24, no loader, no file looked at
+    P = pod_pages
+    for label, home, kw in (('Genres', P.HOME_GENRE, {'genres': ('Rock', 'Jazz', 'Unknown Genre')}), ('Composers', P.HOME_COMPOSER, {'composers': ('Bach', 'Mozart', 'Unknown Composer')})):
+        g = photo_machine((), (), (), **kw)
+        for n in kw.get('genres', ()) + kw.get('composers', ()):
+            g.files[ap44(n)] = 900; g.present.add(ap44(n))
+        g.call(open_, a0=home, count=20000000)
+        gb, gt, gs, gf = ar_paint(g, 0)
+        rows = [(t, r[0], r[2]) for (t, r), s in zip(gt, gs) if s == 'label_row_title']
+        expect([x for _, x, _ in rows] == [TEXT_X] * 3 and all(w == TEXT_END - TEXT_X for _, _, w in rows), f'{label}: the names stay at x 24')
+        expect(not circles(g, gb) and not [f for f in gf if f[0] == O['LIST_HAIR'] and f[1] != TEXT_X], f'{label}: no circle, the hairlines from x 24')
+        expect(not any(c[0] == 'timer_add' and c[1] == PSYMS['ar_on_photo'] for c in g.calls) and not [c for c in g.calls if c[0] == 'widget_load_image' and c[1].startswith('file://')], f'{label}: no photo loader')
+
+    # Album Artists (the Show group) has circles too, and the state restarts with the new list
+    m5 = photo_machine(('Abba', 'Adele'), ('Abba', 'Miles Davis'), ('Adele',))
+    m5.call(open_, count=20000000)
+    photo_tick(m5)
+    card_texts(m5)
+    pick(m5, 5)
+    photo_tick(m5)
+    b5, _, _, _ = ar_paint(m5, 0)
+    got5 = circles(m5, b5)
+    expect(shown(m5) == ['Miles Davis', 'Various Artists'] and len(got5) == 2 and got5[0][1] != got5[1][1], f'Album Artists rows have circles too, Miles Davis\'s decoded ({shown(m5)})')
+
+
+def al_paint(m, off=0):
+    """One EVT_AFTER_PAINT of the Albums page's content view at scroll offset off: the frame's blits."""
+    m.canvas = m.alloc(0x80); m.oy_canvas = m.canvas
+    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    m.setword(m.canvas + O['CANVAS_OY'], SCREEN_Y0 & 0xffffffff)
+    m.setword(m.sv + SC_YOFF, off)
+    m.blits.clear(); m.texts.clear()
+    m.call(PSYMS['al_on_paint'], a0=0, a1=ev, count=400000000)
+    return list(m.blits)
+
+
+def al_settle(m, limit=30):
+    """The Albums page's loader timer fires until it stops re-arming (the header first, then the covers)."""
+    for _ in range(limit):
+        m.calls = []
+        m.call(PSYMS['al_on_load'], count=40000000)
+        if not any(c[0] == 'timer_add' and c[1] == PSYMS['al_on_load'] for c in m.calls): return
+    raise AssertionError('the Albums loader never finished')
+
+
+def head_machine(view=b'0\n', photo=None, key_name='Miles Davis', glyph=True, drop=(), home=0):
+    """The artist-scoped Albums page of Miles Davis with the photo header (photo: the colour of his -168 file's flat picture, else no file)."""
+    m = artists_machine(albums_page=True, photos=False)
+    for w in drop: del m.widgets[w]
+    m.load_image = 0
+    m.fs['/mnt/data/m1plus/albums-view'] = view
+    if glyph: m.images['pod_ic_ar_art'] = (24, 24, bytes((0x8c, 0x8c, 0x8c, 255)) * (24 * 24))
+    if photo:
+        p = f'{AP_DIR}/a{ap_key(key_name):08x}-168.jpg'
+        m.files[p] = 5000; m.present.add(p); m.images['file://' + p] = (168, 168, bytes((*photo, 255)) * (168 * 168))
+    for n, t in (('btn_play', 'Play'), ('btn_shuffle', 'Shuffle')): m.wtext[m.widgets[n]] = t
+    m.call(PSYMS['artists_open'], a0=home, count=20000000)
+    m.calls = []
+    m.call(PSYMS['ar_open'], a0=0, count=40000000)
+    m.open_calls = list(m.calls)
+    return m
+
+
+def scoped_head_tests(ctx):
+    """The artist page's header (docs/modules/albums.md "Scoped to an artist"): the album page's header with a circle: 160 px at (80, 8), the name under it (22 px white, centred, al_name), the pills
+    under the name; every offset of the page (rows, hit tests, loader, collapse) starts the header's height further down; the circle is the -168 photo; an artist with no photo has the same header without the circle (PH_SHIFT higher); a composer's page and the
+    library's keep the large title."""
+    import awtk_ui
+    expect = ctx.expect
+    END, RGAP, ROWH = O['AL_HEAD_END'], O['GRID_ROW_GAP'], O['LIST_ROW_H']
+    PITCH = O['GRID_COVER'] + O['GRID_TITLE_GAP'] + O['GRID_TITLE_H'] + O['GRID_SUB_H'] + RGAP
+    CX, CY, CD = O['AL_PHOTO_X'], O['AL_PHOTO_Y'], O['AL_PHOTO_D']
+    expect((CD, CX, CY) == (88, 116, 8) and (O['PH_NAME_X'], O['PH_NAME_W'], O['AL_NAME_Y'], O['PH_NAME_H']) == (17, 286, 110, 22),
+           'the circle is 88 px, centred (x 116), 8 px under the navbar; the name is 22 px high, 14 px under it, in the album page\'s 286 px')
+    expect(O['AL_HEAD_PILL_Y'] == O['AL_NAME_Y'] + O['PH_NAME_H'] + 16 and END == O['AL_HEAD_PILL_Y'] + O['SG_PILL_H'] == 188 and O['AL_HEAD_COLLAPSE'] == O['AL_NAME_Y'] + O['PH_NAME_H'],
+           'the pills are 16 px under the name\'s box and the block ends at 188; the navbar title shows once the name\'s box has scrolled away (132)')
+    tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_albums.bin'), 'rb').read())
+    nm = tree.find('al_name')
+    expect(nm is not None and nm in tree.find('view_grid').children and (nm.x, nm.y, nm.w, nm.h) == (17, 110, 286, 22) and nm.get('visible') == 'false' and nm.get('sensitive') == 'false'
+           and nm.get('style:normal:font_size') == '22' and nm.get('style:normal:text_color') == '#FFFFFF' and nm.get('style:normal:text_align_h') == 'center',
+           'the asset has al_name in the content view: 22 px white, centred, in the album page\'s title box, hidden and insensitive')
+    mod_icons_art = mod_icons.ARTIST_ART
+    expect(mod_icons_art == ('pod_ic_ar_art', 'mic-vocal') and mod_icons.COVER_FRAC == 0.52 and os.path.exists(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx/pod_ic_ar_art.png')),
+           'the placeholder\'s glyph is the Lucide mic-vocal asset pod_ic_ar_art (the no-cover tile rule: 0.52 of the circle)')
+
+    for mode, view in (('list', b'0\n'), ('grid', b'1\n')):
+        m = head_machine(view, photo=(60, 90, 200))
+        w = lambda n: (m.props.get((m.widgets[n], 'visible'), 1), m.props.get((m.widgets[n], 'sensitive'), 1))
+        expect(('widget_set_text_utf8', m.widgets['al_name'], 'Miles Davis') in m.open_calls and w('al_name') == (1, 1) and w('al_title') == (0, 0),
+               f'{mode}: the name is on al_name, shown; the large title is hidden and insensitive')
+        expect(('widget_set_text_utf8', m.widgets['label_title'], 'Miles Davis') in m.open_calls and m.props.get((m.widgets['label_title'], 'visible'), 0) != 1, f'{mode}: the navbar\'s small title is the name, hidden at rest')
+        expect(('widget_move', m.widgets['btn_play'], O['AL_PLAY_X'], O['AL_HEAD_PILL_Y']) in m.open_calls and ('widget_move', m.widgets['btn_shuffle'], O['AL_SHUFFLE_X'], O['AL_HEAD_PILL_Y']) in m.open_calls,
+               f'{mode}: Play and Shuffle move under the name')
+        h = [c[3] for c in m.open_calls if c[0] == 'widget_resize' and c[1] == m.view][-1]
+        expect(h == END + (RGAP + 4 * ROWH if mode == 'list' else RGAP + 2 * PITCH), f'{mode}: the content is the header block and the albums ({h})')
+        # nothing is drawn before the loader has run; then the placeholder circle at 160 px
+        expect(not [b for b in al_paint(m) if tuple(b[2]) == (CX, CY, CD, CD)], f'{mode}: no circle before the loader has made it')
+        al_settle(m)
+        got = [b for b in al_paint(m) if tuple(b[2]) == (CX, CY, CD, CD)]
+        expect(len(got) == 1, f'{mode}: the circle is drawn at (116, 8), 88 x 88 ({len(got)})')
+        # scrolled: the circle is cut by hand at the top of the window and gone past its end
+        c1 = [b for b in al_paint(m, 50) if b[2][0] == CX and b[2][2] == CD]
+        c2 = [b for b in al_paint(m, CY + CD) if b[2][0] == CX and b[2][2] == CD]
+        expect(c1 and tuple(c1[0][2]) == (CX, 0, CD, CD + CY - 50) and tuple(c1[0][1]) == (0, 50 - CY, CD, CD + CY - 50) and not c2, f'{mode}: scrolled 50 px the top 42 rows are cut away; past the circle nothing is drawn ({c1[:1]})')
+        # hit tests: the header and the pills block open nothing; the first album starts END (+ the gap) down
+        opened = lambda calls: [c for c in calls if c[:2] == ('navigator_to_with_context', 'albuminfo_page')]
+        def tap(y, x=30):
+            m.calls = []
+            m.touch('down', x, SCREEN_Y0 + y, 1000, fn='al_on_down'); m.touch('up', x, SCREEN_Y0 + y, 1080, fn='al_on_up', count=40000000)
+            return opened(m.calls)
+        m.setword(m.sv + SC_YOFF, 0)
+        first = END + RGAP
+        expect(not tap(100) and not tap(CY + 20, CX + CD // 2) and not tap(first - 3) and tap(first + 5), f'{mode}: a tap on the circle, the name or the pills block opens nothing; the first row/cell starts at {first}')
+        # the small title appears once the name has gone
+        small = m.widgets['label_title']
+        m.setword(m.sv + SC_YOFF, O['AL_HEAD_COLLAPSE'] - 1); m.call(PSYMS['al_on_scroll'], count=4000000)
+        a = m.props.get((small, 'visible'), 0)
+        m.setword(m.sv + SC_YOFF, O['AL_HEAD_COLLAPSE']); m.call(PSYMS['al_on_scroll'], count=4000000)
+        expect(a == 0 and m.props.get((small, 'visible')) == 1, f'{mode}: the navbar\'s title shows at 132 (the name\'s box has scrolled away), not at 46')
+        m.setword(m.sv + SC_YOFF, 0); m.call(PSYMS['al_on_scroll'], count=4000000)
+
+    # the photo: the -168 file cut to a circle (the corners clear, the edge antialiased); one decode, none while the list moves
+    m = head_machine(photo=(10, 120, 240))
+    m.u.mem_write(m.sv + O['SC_PRESSED'], b'\x01'); m.u.mem_write(m.sv + O['SC_DRAGGED'], b'\x01')
+    m.calls = []; m.call(PSYMS['al_on_load'], count=40000000)
+    expect(not [c for c in m.calls if c[0] == 'widget_load_image'] and any(c[0] == 'timer_add' for c in m.calls), 'while the list moves nothing is decoded: the timer polls')
+    m.u.mem_write(m.sv + O['SC_PRESSED'], b'\x00')
+    al_settle(m)
+    got = [b for b in al_paint(m) if tuple(b[2]) == (CX, CY, CD, CD)]
+    v = bmp_px(m, got[0][0], CD // 2, CD // 2) if got else 0
+    expect(got and v >> 24 == 255 and all(abs(((v >> (8 * k)) & 255) - c) <= 3 for k, c in enumerate((10, 120, 240))) and bmp_px(m, got[0][0], 0, 0) >> 24 == 0 and 0 < bmp_px(m, got[0][0], CD // 2, 0) >> 24 < 256
+           and any(0 < bmp_px(m, got[0][0], x, 4) >> 24 < 255 for x in range(CD // 2)), 'the photo: the -168 file cut to a circle, the corners clear, the edge antialiased')
+    url = 'file://' + f'{AP_DIR}/a{ap_key("Miles Davis"):08x}-168.jpg'
+    expect(len([c for c in m.calls if c[0] == 'widget_load_image' and c[1] == url]) <= 1, 'decoded once')
+    m.calls = []
+    m.call(PSYMS['al_on_destroy'], count=4000000)
+    expect(sum(1 for c in m.calls if c[0] == 'bitmap_destroy') >= 1, 'closing the page frees the circle')
+
+    # an asset without al_name and the library's page keep the large title and the old block; a composer's page has the header without the circle
+    m = head_machine(drop=('al_name',))
+    expect(m.props.get((m.widgets['al_title'], 'visible'), 1) != 0 and [c[3] for c in m.open_calls if c[0] == 'widget_resize' and c[1] == m.view][-1] == O['AL_PILLS_END'] + RGAP + 4 * ROWH
+           and not [c for c in m.open_calls if c[0] == 'widget_move' and c[1] == m.widgets['btn_play']], 'a page without al_name: the large title and the pills at 52, as before')
+    m = artists_machine(composers=('Mozart', 'Bach', 'Unknown Composer'), albums_page=True)
+    m.fs['/mnt/data/m1plus/albums-view'] = b'0\n'; m.load_image = 0
+    m.call(PSYMS['artists_open'], a0=pod_pages.HOME_COMPOSER, count=20000000); m.calls = []
+    m.call(PSYMS['ar_open'], a0=1, count=40000000)
+    expect(m.props.get((m.widgets['al_name'], 'visible')) == 1 and m.props.get((m.widgets['al_title'], 'visible'), 1) == 0 and ('widget_set_text_utf8', m.widgets['al_name'], 'Bach') in m.calls
+           and [c[3] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.view][-1] == O['AL_HEAD_END'] - O['PH_SHIFT'] + RGAP + 3 * ROWH
+           and not [c for c in m.calls if c[0] == 'widget_load_image' and AP_DIR in str(c[1])], 'a composer\'s page: the artist header without the circle (centred name, pills), no photo looked up')
+    al_settle(m)
+    expect(not [b for b in al_paint(m) if b[2][2] == CD], 'and no circle')
+    m = artists_machine(albums_page=True); m.fs['/mnt/data/m1plus/albums-view'] = b'0\n'; m.call(PSYMS['albums_open'], count=20000000)
+    expect(m.props.get((m.widgets['al_name'], 'visible'), 0) != 1 and ('widget_set_text_utf8', m.widgets['al_title'], 'Albums') in m.calls, 'the library Albums page: unchanged')
+
+
+def scoped_plain_tests(ctx):
+    """An artist with no photo in the cache (docs/modules/albums.md "Scoped to an artist"): the artist header without the circle - the name and the pills PH_SHIFT higher, same gaps and x, the rows
+    and the title's collapse with them; no placeholder; the page's re-check of the artist (patch/artistphoto.c ap_recheck, on the cover worker) switches the circle in place."""
+    expect = ctx.expect
+    END, RGAP, ROWH, SH = O['AL_HEAD_END'], O['GRID_ROW_GAP'], O['LIST_ROW_H'], O['PH_SHIFT']
+    PITCH = O['GRID_COVER'] + O['GRID_TITLE_GAP'] + O['GRID_TITLE_H'] + O['GRID_SUB_H'] + RGAP
+    CX, CY, CD = O['AL_PHOTO_X'], O['AL_PHOTO_Y'], O['AL_PHOTO_D']
+    NX, NY, NH = O['PH_NAME_X'], O['AL_NAME_Y'], O['PH_NAME_H']
+    PY, PX1, PX2 = O['AL_HEAD_PILL_Y'], O['AL_PLAY_X'], O['AL_SHUFFLE_X']
+    expect(SH == CY + CD == 96 and NY - SH == 14 and PY - SH == O['SG_PILL_Y'] == 52 and END - SH == O['AL_PILLS_END'] == 92 and O['AL_HEAD_COLLAPSE'] - SH == 36,
+           'the circle\'s room (8 + 88 px) is the one shift: name y 14, pills y 52, block end 92, collapse 36')
+    moves = lambda m, n: [c[2:] for c in m.open_calls if c[0] == 'widget_move' and c[1] == m.widgets[n]]
+    for mode, view in (('list', b'0\n'), ('grid', b'1\n')):
+        mp, mc = head_machine(view), head_machine(view, photo=(60, 90, 200))
+        w = lambda n: (mp.props.get((mp.widgets[n], 'visible'), 1), mp.props.get((mp.widgets[n], 'sensitive'), 1))
+        expect(('widget_set_text_utf8', mp.widgets['al_name'], 'Miles Davis') in mp.open_calls and w('al_name') == (1, 1) and w('al_title') == (0, 0),
+               f'{mode}: no photo: the same name label, shown; the large title hidden')
+        pn, pp, ps, cp, cs = moves(mp, 'al_name'), moves(mp, 'btn_play'), moves(mp, 'btn_shuffle'), moves(mc, 'btn_play'), moves(mc, 'btn_shuffle')
+        expect(pn == [(NX, NY - SH)] and pp == [(PX1, PY - SH)] and ps == [(PX2, PY - SH)] and cp == [(PX1, PY)] and cs == [(PX2, PY)] and not moves(mc, 'al_name'),
+               f'{mode}: the name and the pills are PH_SHIFT higher without the circle: same x, y {NY - SH} / {PY - SH} against {NY} / {PY}')
+        expect(pp[0][1] - (pn[0][1] + NH) == cp[0][1] - (NY + NH) == 16 and pn[0][0] == NX and pp[0][0] == cp[0][0] and ps[0][0] == cs[0][0],
+               f'{mode}: the name-to-pills gap (16 px) and every x are the same in both')
+        h = [c[3] for c in mp.open_calls if c[0] == 'widget_resize' and c[1] == mp.view][-1]
+        expect(h == END - SH + (RGAP + 4 * ROWH if mode == 'list' else RGAP + 2 * PITCH), f'{mode}: the content is the header block (92) and the albums ({h})')
+        al_settle(mp)
+        expect(not [b for b in al_paint(mp) if b[2][2] == CD] and not [c for c in mp.calls if c[0] == 'widget_load_image' and (AP_DIR in c[1] or c[1] == 'pod_ic_ar_art')]
+               , f'{mode}: no circle, no placeholder, no photo file looked at')
+        opened = lambda calls: [c for c in calls if c[:2] == ('navigator_to_with_context', 'albuminfo_page')]
+        def tap(y, x=30):
+            mp.calls = []
+            mp.touch('down', x, SCREEN_Y0 + y, 1000, fn='al_on_down'); mp.touch('up', x, SCREEN_Y0 + y, 1080, fn='al_on_up', count=40000000)
+            return opened(mp.calls)
+        mp.setword(mp.sv + SC_YOFF, 0)
+        first = END - SH + RGAP
+        expect(not tap(30) and not tap(first - 3) and tap(first + 5), f'{mode}: the pills block opens nothing; the first row/cell starts at {first}')
+        small = mp.widgets['label_title']
+        mp.setword(mp.sv + SC_YOFF, O['AL_HEAD_COLLAPSE'] - SH - 1); mp.call(PSYMS['al_on_scroll'], count=4000000)
+        a = mp.props.get((small, 'visible'), 0)
+        mp.setword(mp.sv + SC_YOFF, O['AL_HEAD_COLLAPSE'] - SH); mp.call(PSYMS['al_on_scroll'], count=4000000)
+        expect(a == 0 and mp.props.get((small, 'visible')) == 1, f'{mode}: the navbar\'s title shows at 36 (the name\'s box has scrolled away)')
+
+    # the re-check on the page's own set: started once the page's cover build has nothing (or no more) to do; the job holds the artist's albums' first tracks
+    def fire(m, name):
+        m.calls = []
+        m.call(PSYMS[name], count=40000000)
+        return list(m.calls)
+    def swap(m, photo):
+        p = f'{AP_DIR}/a{ap_key("Miles Davis"):08x}-168.jpg'
+        if photo:
+            m.files[p] = 5000; m.present.add(p); m.images['file://' + p] = (168, 168, bytes((*photo, 255)) * (168 * 168))
+        else:
+            m.files.pop(p, None); m.present.discard(p)
+    def finish(m, changed):
+        if changed: m.setword(PSYMS['ap_ep'], m.word(PSYMS['ap_ep']) + 1)
+        m.setword(PSYMS['cb'] + 4 * 5, build_state(m)['total'])   # the worker is done
+        return fire(m, 'al_on_build')
+    for mode, view in (('list', b'0\n'), ('grid', b'1\n')):
+        # found: the circle appears, the header moves down
+        m = head_machine(view)
+        new = fire(m, 'al_on_build_start')
+        s = build_state(m)
+        jobs = [(m.read_cstr(m.word(s['jobs'] + 16 * i)), m.word(s['jobs'] + 16 * i + 4), m.word(s['jobs'] + 16 * i + 12)) for i in range(s['total'])]
+        expect(('pthread_create',) in new and s['total'] == 1 and jobs[0][1] == ap_key('Miles Davis') and jobs[0][2] == 2 and len(jobs[0][0].splitlines()) == 3 and jobs[0][0].endswith('\n')
+               and all(t.startswith('/mnt/mmc/Miles Davis/') and t.endswith('/1.flac') for t in jobs[0][0].splitlines()) and [c for c in new if c[0] == 'timer_add' and c[1] == PSYMS['al_on_build']],
+               f'{mode}: the page asks for a re-check of Miles Davis on the worker: one job (sec 2), the three albums\' first tracks ({jobs}), the poll timer runs')
+        expect(not any(c[0] in ('opendir', 'readdir', 'fopen') and AP_DIR in str(c[1:]) for c in new), f'{mode}: the UI thread opens no photo file for it')
+        swap(m, (60, 90, 200))
+        new = finish(m, True)
+        expect(('widget_move', m.widgets['btn_play'], PX1, PY) in new and ('widget_move', m.widgets['al_name'], NX, NY) in new, f'{mode}: a photo found: the name and the pills move down by the circle')
+        h = [c[3] for c in new if c[0] == 'widget_resize' and c[1] == m.view][-1]
+        expect(h == END + (RGAP + 4 * ROWH if mode == 'list' else RGAP + 2 * PITCH), f'{mode}: and the content grows by the circle\'s room ({h})')
+        al_settle(m)
+        expect(len([b for b in al_paint(m) if tuple(b[2]) == (CX, CY, CD, CD)]) == 1, f'{mode}: the circle is drawn once the loader has made it')
+        expect(build_state(m)['jobs'] == 0, f'{mode}: the set is freed')
+        # removed: the photo goes, the circle too
+        m = head_machine(view, photo=(60, 90, 200)); al_settle(m)
+        fire(m, 'al_on_build_start')
+        swap(m, None)
+        new = finish(m, True)
+        expect(('widget_move', m.widgets['btn_play'], PX1, PY - SH) in new and ('widget_move', m.widgets['al_name'], NX, NY - SH) in new and [c for c in new if c[0] == 'bitmap_destroy'],
+               f'{mode}: a photo that is gone: the circle is freed, the name and the pills move up')
+        al_settle(m)
+        expect(not [b for b in al_paint(m) if b[2][2] == CD], f'{mode}: and no circle is drawn')
+        # a replaced photo: the same layout, the circle read again; unchanged: nothing moves and nothing is decoded again
+        m = head_machine(view, photo=(60, 90, 200)); al_settle(m)
+        fire(m, 'al_on_build_start')
+        new = finish(m, False)
+        al_settle(m)
+        expect(not [c for c in new if c[0] == 'widget_move'] and not [c for c in m.calls if c[0] == 'widget_load_image' and AP_DIR in c[1]], f'{mode}: unchanged: the header stays')
+        m = head_machine(view, photo=(60, 90, 200)); al_settle(m)
+        fire(m, 'al_on_build_start')
+        swap(m, (200, 90, 60))
+        new = finish(m, True)
+        al_settle(m)
+        got = [b for b in al_paint(m) if tuple(b[2]) == (CX, CY, CD, CD)]
+        v = bmp_px(m, got[0][0], 80, 80) if got else 0
+        expect(not [c for c in new if c[0] == 'widget_move'] and got and abs((v & 255) - 200) <= 3, f'{mode}: a replaced photo: the circle is made again from the new file, nothing moves')
+    # the worker busy (Home's pass, Cover Flow): the page asks nothing; a page that closes cancels the re-check
+    m = head_machine()
+    assert m.call(PSYMS['cc_build_open'], a0=4, a1=0, count=1 << 40) == 1
+    new = fire(m, 'al_on_build_start')
+    expect(('pthread_create',) not in new and build_state(m)['total'] == 0, 'the worker is held by another set: no re-check, nothing waits for it')
+    m = head_machine()
+    fire(m, 'al_on_build_start')
+    m.calls = []
+    m.call(PSYMS['al_on_destroy'], count=4000000)
+    expect(not [c for c in m.calls if c[0] == 'pthread_join'] and build_state(m)['orphan'] == 1, 'closing the page cancels the re-check, never waiting for the worker (it is orphaned until it exits)')
+    # the Artists list behind the page: the circles are looked for again when it is in front and a re-check changed a photo
+    m = photo_machine(('Abba', 'Adele'), ('Abba',), ('Adele',), colours={'Abba': (200, 30, 30)})
+    m.call(PSYMS['artists_open'], count=20000000)
+    photo_tick(m)
+    new = fire(m, 'ar_on_fg')
+    expect(not [c for c in new if c[0] == 'timer_add'], 'the Artists page in front again, no photo changed: nothing is looked at again')
+    m.files[ap44('Adele')] = 900
+    m.images['file://' + ap44('Adele')] = (44, 44, bytes((10, 200, 10, 255)) * (44 * 44))
+    m.setword(PSYMS['ap_ep'], m.word(PSYMS['ap_ep']) + 1)
+    new = fire(m, 'ar_on_fg')
+    expect([c for c in new if c[0] == 'timer_add' and c[1] == PSYMS['ar_on_photo']], 'a re-check changed a photo: the loader runs again')
+    seen = photo_tick(m)
+    loads = [c[1] for c in seen if c[0] == 'widget_load_image' and c[1].startswith('file://')]
+    expect(sorted(loads) == sorted('file://' + ap44(n) for n in ('Abba', 'Adele')), f'every circle is decoded again, Adele\'s new photo too ({loads})')
+    blits, _, _, _ = ar_paint(m, 0)
+    expect(len({b for _, b in circles(m, blits)}) == 2, 'both rows show a photo now')
+    new = fire(m, 'ar_on_fg')
+    expect(not [c for c in new if c[0] == 'timer_add'], 'and once only')
+    # rows whose file was missing are looked at again when the Home pass that makes the photos is over
+    m = photo_machine(('Abba', 'Alt'), ('Abba',))
+    m.call(PSYMS['artists_open'], count=20000000)
+    assert m.call(PSYMS['cc_build_open'], a0=4, a1=0, count=1 << 40) == 1
+    assert m.call(PSYMS['cc_build_add'], a0=m.cstr('/mnt/mmc/x/1.flac'), a1=5, count=1 << 40) == 1
+    m.call(PSYMS['cc_build_start'], count=1 << 40)
+    seen = photo_tick(m)
+    expect([c for c in seen if c[0] == 'timer_add' and c[1] == PSYMS['ar_on_retry']], 'a row with no file while a set runs: the page waits for its end')
+    new = fire(m, 'ar_on_retry')
+    expect([c for c in new if c[0] == 'timer_add' and c[1] == PSYMS['ar_on_retry']] and not [c for c in new if c[1] == PSYMS['ar_on_photo']], 'the set still runs: it asks again later')
+    m.files[ap44('Alt')] = 0; m.present.add(ap44('Alt'))
+    m.setword(PSYMS['cb'] + 4 * 5, 1)
+    new = fire(m, 'ar_on_retry')
+    expect([c for c in new if c[0] == 'timer_add' and c[1] == PSYMS['ar_on_photo']] and not [c for c in new if c[0] == 'timer_add' and c[1] == PSYMS['ar_on_retry']], 'the set is over: the rows look again, the page asks no more')
+    photo_tick(m)
+    new = fire(m, 'ar_on_retry')
+    expect(not [c for c in new if c[0] == 'timer_add' and c[1] == PSYMS['ar_on_retry']], 'and the row\'s marker is known now (no more waiting)')
+
+
+SECTIONS = [artists_tests, scoped_albums_tests, scoped_nextalbum_tests, scoped_pills_tests, scoped_sort_tests, genre_composer_tests, index_tests, sort_tests, name_order_tests, photo_rows_tests, scoped_head_tests, scoped_plain_tests]
 
 
 def run(ctx):

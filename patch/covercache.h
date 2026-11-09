@@ -180,6 +180,13 @@ int cc_build_dur(
 int cc_build_open(unsigned capacity, int mode); /* 1: an empty job set held; 0: another set is held, or no memory */
 int cc_build_add(const char *track,
                  unsigned key); /* 1 added; 0 skipped (CC_MISSING and the file exists); -1 full or no memory */
+/* An album's artist for the artist photos (patch/artistphoto.h): the album's track folder is kept for the purity check, and the artist gets one job (1) unless it has a result already (0), or the set
+ * is full (-1). Call it for EVERY album of the library, before cc_build_start. force: check the artist again whatever it has (an artists-rebuild request). The snapshot is bounded (AP_LIB_MAX
+ * albums; cc_build_artist_ok is 0 once it overflowed or ran out of memory, and the artist jobs then write nothing). Not in a CC_DURATIONS set. */
+int cc_build_add_artist(const char *track, const char *artist, int force);
+int cc_build_artist_ok(void);
+/* One re-check job of the artist with key (patch/artistphoto.c ap_recheck); tracks = the first track path of each of its albums, one per line (copied). 1 added, -1 full or no memory. */
+int cc_build_add_recheck(const char *tracks, unsigned key);
 int cc_build_add_file(
     const char *track, const char *dst,
     unsigned

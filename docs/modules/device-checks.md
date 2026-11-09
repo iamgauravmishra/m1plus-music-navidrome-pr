@@ -52,6 +52,10 @@ in [history](../history.md); feature modules retain their detailed edge cases.
   Pod Cover Flow still changes the volume. Switch off: the volume dialog and volume change are
   back. Screen off: a press wakes/behaves as stock. Also with `ROTATEMODE=1` (up/down swapped).
   [Details](coverflow.md)
+- **COMP-01 — Composer page:** Composers > a composer with two or more albums: the centred name and the
+  Play / Shuffle pills (no circle, no photo), each album's year under it, All Songs with no line. Play
+  plays every song of the composer from the first, Shuffle from a random one (stock class 0xff14, not
+  run on a device before): Now Playing and the Queue show the composer's songs. [Details](albums.md)
 - **SONG-01 — Songs:** title collapse, pinned letters, all rail sections/bubble, search, each
   sort, select-all, add/delete and return position. Check a large library; covers load after
   scrolling stops. [Details](songs.md)

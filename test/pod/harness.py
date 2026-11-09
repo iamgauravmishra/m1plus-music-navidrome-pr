@@ -253,6 +253,7 @@ class Machine:
         self.tracklist = []         # what loadSongList leaves there
         self.artist_albums = {}     # artist name -> its album rows (loadAlbumList 0xf004)
         self.artist_songs = {}      # artist name -> all its song rows (loadLocalClassList(0xff11) after loadAlbumdetailList on the All songs row)
+        self.composer_songs = {}    # composer name -> all its song rows (0xff14 after loadAlbumdetailList(0xff02) on the composer's All songs row)
         self.free_mb = 1024
         self.thread_ok = True
         self.thread = None          # (start routine, argument) of the last pthread_create
@@ -402,9 +403,10 @@ class Machine:
         return r
 
     def artist_query(self):
-        """loadLocalClassList(0xff11) as stock reads the record: the all-songs flag (+8) and the artist (+0x10d)."""
+        """loadLocalClassList(0xff11) as stock reads the record: the all-songs flag (+8) and the artist (+0x10d); 0xff14 (a composer's) the composer at +0x20d."""
         ci = pod.DATA['CLASSINFO'][0]
         if not self.u.mem_read(ci + O['CLASSINFO_ALL_SONGS'], 1)[0]: return []
+        if self.word(ci) == O['CLASS_14']: return list(self.composer_songs.get(self.read_cstr(ci + O['CLASSINFO_ARTIST_14']), []))
         return list(self.artist_songs.get(self.read_cstr(ci + O['CLASSINFO_ARTIST']), []))
 
     CSTL_BASE = 0x77000000   # where install_libcstl maps the "library"
@@ -796,6 +798,7 @@ class Machine:
             self.u.mem_write(pod.DATA['CLASSINFO'][0], bytes(O['CLASSINFO_SIZE']))   # memset, as stock
             self.setword(pod.DATA['CLASSINFO'][0], O['CLASS_COMPOSER_ALBUMS'] if a0 == O['CLASS_COMPOSERS'] else O['CLASS_ARTIST_ALBUMS'])
             if a0 == O['CLASS_ARTISTS']: self.u.mem_write(pod.DATA['CLASSINFO'][0] + O['CLASSINFO_ARTIST'], artist.encode() + b'\0')
+            if a0 == O['CLASS_COMPOSERS']: self.u.mem_write(pod.DATA['CLASSINFO'][0] + O['CLASSINFO_ARTIST_14'], artist.encode() + b'\0')   # (the composer's name at +0x20d, addresses.md)
             ret = len(items)
         elif name == 'loadAlbumdetailList':
             # loadAlbumdetailList(0xff01, album row POINTER): the all-songs flag (+8) and the album text (+0xd) into the record, class 0xff11, then that class's query
@@ -803,7 +806,7 @@ class Machine:
             ci = pod.DATA['CLASSINFO'][0]
             self.u.mem_write(ci + O['CLASSINFO_ALL_SONGS'], bytes([1 if self.word(a1 + O['REC_ID']) == 0xfffffffe else 0]))
             self.u.mem_write(ci + O['CLASSINFO_ALBUM'], self.read_cstr(self.word(a1 + O['REC_ALBUM'])).encode() + b'\0')
-            self.setword(ci, O['CLASS_ARTIST_SONGS'])
+            self.setword(ci, O['CLASS_14'] if a0 == O['CLASS_COMPOSER_ALBUMS'] else O['CLASS_ARTIST_SONGS'])   # (0xff02 -> 0xff14, 0xff01 -> 0xff11)
             items = self.artist_query()
             self.setword(pod.DATA['PDEQ_SHOWLIST'][0], self.new_deque(items))
             ret = len(items)
@@ -1941,7 +1944,7 @@ def view_switch(m, count):
 def utf8(s):
     """A text the harness read from payload memory (latin-1 of the UTF-8 bytes) as the text it is."""
     return s.encode('latin-1').decode('utf-8')
-ALBUMS_PAGE_WIDGETS = ('btn_coverflow', 'btn_play', 'btn_shuffle', 'label_row_sub', 'label_grid_title', 'label_grid_sub', 'al_title', 'img_nb_fade') + VS_WIDGETS
+ALBUMS_PAGE_WIDGETS = ('btn_coverflow', 'btn_play', 'btn_shuffle', 'label_row_sub', 'label_grid_title', 'label_grid_sub', 'al_title', 'al_name', 'img_nb_fade') + VS_WIDGETS
 
 
 def artists_machine(artists=('Miles Davis', 'Nina Simone', 'Unknown Artist'), composers=(), genres=(), albums_page=False):

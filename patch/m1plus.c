@@ -89,7 +89,9 @@ enum {
     ACT_LOCKINFO =
         87, /* Settings > Lock Screen > Custom Wallpaper: the instructions page (patch/relnotes.c lockinfo_open) */
     ACT_NEXTALBUM = 90, /* Settings > Playback: Continue Playing, a value row opening its picker */
-    ACT_NASET = 91 /* the Continue Playing picker's rows (arg = NA_OFF or NA_ALBUMS) */
+    ACT_NASET = 91, /* the Continue Playing picker's rows (arg = NA_OFF or NA_ALBUMS) */
+    ACT_AREBUILD =
+        92 /* Settings > Library: Rebuild Artist Photos, an action row (a confirm, then the request file Home's pass acts on) */
 };
 
 extern void shot_start(void); /* patch/shot.c: the Screenshot row: confirm, 5 s countdown, capture; or cancel */
@@ -162,9 +164,12 @@ enum {
     INFO_CAP,
     INFO_FREE,
     INFO_CC, /* the Cache page's seven Covers values start here: homecover_stat(kind - INFO_CC) */
-    INFO_SF = INFO_CC + 7, /* the Settings Files page's 44 values: setfiles_stat(kind - INFO_SF) */
-    INFO_SFOLD = INFO_SF + 44, /* the Unsupported Files count (setfiles_old_count), above those rows */
-    INFO_DUR = INFO_SFOLD + 1 /* the Cache page's Measured Tracks: dur_stat (patch/durations.c) */
+    INFO_SF = INFO_CC + 7, /* the Settings Files page's 45 values: setfiles_stat(kind - INFO_SF) */
+    INFO_SFOLD = INFO_SF + 45, /* the Unsupported Files count (setfiles_old_count), above those rows */
+    INFO_DUR = INFO_SFOLD + 1, /* the Cache page's Measured Tracks: dur_stat (patch/durations.c) */
+    INFO_APHOTOS = INFO_DUR +
+        1, /* the Cache page's Artist Photos card: the photos, and the artists with none (homecover_stat 7, 8) */
+    INFO_ANONE = INFO_DUR + 2
 };
 
 enum {
@@ -306,6 +311,16 @@ static void rebuild_ask(void) {
         pod_toast(TR("Storage unavailable"));
 }
 
+/* Settings > Library > Rebuild Artist Photos: the same dialog, then the request file (AREBUILD_FILE) Home's pass acts on (every artist is looked at again, found photos too). Rebuild Covers and this stay apart. */
+static void arebuild_ask(void) {
+    if (!pod_confirm(TR("Rebuild all artist photos? This may take a few minutes."))) return;
+    if (home_write_atomic(AREBUILD_FILE, AREBUILD_TMP, "1\n") == 0) {
+        homecover_rebuild_asked();
+        pod_toast(TR("Artist photos will rebuild on Home"));
+    } else
+        pod_toast(TR("Storage unavailable"));
+}
+
 void pod_page_refresh(int index);
 
 /* Settings > Developer > Clear Cover Cache: the same confirm dialog; refused (a toast) while the cover worker is busy. */
@@ -425,6 +440,8 @@ static int on_row(void *ctx, void *e) {
         shot_start(); /* patch/shot.c; a timer, no page */
     else if (row->action == ACT_REBUILD)
         rebuild_ask(); /* a confirm dialog, then a request for Home's cover build */
+    else if (row->action == ACT_AREBUILD)
+        arebuild_ask(); /* a confirm dialog, then a request for Home's artist photo pass */
     else if (row->action == ACT_CCLIST)
         homecover_list_open(
             row->arg -
@@ -657,7 +674,9 @@ static void info_text(void *label, int kind) {
     const char *s = buf;
     float cap, rem;
     buf[0] = 0;
-    if (kind == INFO_DUR)
+    if (kind == INFO_APHOTOS || kind == INFO_ANONE)
+        homecover_stat(kind == INFO_APHOTOS ? 7 : 8, buf, sizeof buf);
+    else if (kind == INFO_DUR)
         dur_stat(buf, sizeof buf);
     else if (kind == INFO_SFOLD)
         snprintf(buf, sizeof buf, "%d", setfiles_old_count());

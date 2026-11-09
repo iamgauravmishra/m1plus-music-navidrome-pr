@@ -101,6 +101,7 @@ LISTS = [('icon_folder', 'folder', 'folder'), ('icon_playlist', 'playlist', 'lis
          ('icon_composer', 'composer', 'feather'), ('icon_cdalbum', 'album', 'disc-3')]
 COVERS = ['albumcover_s', 'albumcover_m', 'albumcover_info']   # the "no cover" placeholder, 60/90/100 px
 COVER_GLYPH, COVER_FRAC = 'disc-3', 0.52      # the glyph's px as a fraction of the tile
+ARTIST_ART, ARTIST_ART_PX = ('pod_ic_ar_art', 'mic-vocal'), 96   # the artist photo placeholder's glyph (patch/artistphoto.c ap_placeholder): the no-cover tile's #8C8C8C stroke 2 glyph on transparent; the payload draws it at 0.52 of the circle on #333333
 # The album page (patch/albumpage.c): the cover tint (ah_tint: a window sized black gradient, patch/offsets.inc AH_TINT_*; the cover's corners are
 # cut by the payload, no masks); Shuffle's 40 px disc
 # with its glyph (pressed one lighter) and the Play pill's play glyph (dark, 16 px, no padding); the pill itself is an image too (180 x 40,
@@ -141,7 +142,7 @@ CARD_GLYPHS = {'Wi-Fi': 'wifi', 'Bluetooth': 'bluetooth', 'Home Screen': 'house'
                'Control Center': 'layout-grid', 'Lock Screen': 'lock', 'Wallpaper': 'image', 'Enable': 'lock', 'Show Time': 'clock', 'Player Style': 'square-play', 'Custom Wallpaper': 'info',
                'Keyboards': '+keyboard', 'About': 'info', 'All System Settings': 'settings', 'Developer': 'code', 'Main Menu': 'list-checks', 'Extras': 'ellipsis',
                'Recent Albums': 'history', 'Daily Mix': 'shuffle', 'Regenerate Daily Mix': 'refresh-cw', 'Update Library': 'refresh-cw',
-               'Landscape': 'rotate-cw-square', 'Volume Buttons': 'volume-2', 'Rebuild Covers': 'image-up', 'Idle Display': 'timer', 'Theme': '+cassette-tape', 'Record': '+turntable', 'Base': 'palette', 'Boot to M1+ Music': 'power', 'Open Shanling Home': '@shanling', 'Equalizer': 'sliders-vertical',
+               'Landscape': 'rotate-cw-square', 'Volume Buttons': 'volume-2', 'Rebuild Covers': 'image-up', 'Rebuild Artist Photos': 'mic-vocal', 'Idle Display': 'timer', 'Theme': '+cassette-tape', 'Record': '+turntable', 'Base': 'palette', 'Boot to M1+ Music': 'power', 'Open Shanling Home': '@shanling', 'Equalizer': 'sliders-vertical',
                'Screenshot': 'camera', 'Clear Cover Cache': 'trash', 'Clear Track Durations': 'trash', 'Delete Unsupported Files': 'trash', 'Reset All Settings': 'rotate-ccw', 'Cache': 'hard-drive','Settings Files': 'file-cog', 'Download from AutoEq': 'download', 'Podcast Discover': 'compass', 'English': 'languages', 'Chinese (Pinyin)': 'languages', 'Battery Percentage': 'battery-charging', 'Battery': 'battery-full', 'Charge Limit': 'battery-medium',
                'Index Rail': 'list', 'Section Headers': 'list-start', 'Continue Playing': 'skip-forward'}
 
@@ -762,6 +763,7 @@ def generate_all(sizes):
         g = glyph(COVER_GLYPH, round(w * COVER_FRAC), 'cover', (0x8C,) * 3)       # stroke 2
         t.alpha_composite(g, ((w - g.width) // 2, (w - g.height) // 2))
         f[n] = t if sizes[n + ':mode'] == 'RGBA' else t.convert('RGB')
+    f[ARTIST_ART[0]] = glyph(ARTIST_ART[1], ARTIST_ART_PX, 'cover', (0x8C,) * 3)
     for n, g in POD_ROWS.values(): f[n] = bare_icon(g, POD_ICON)
     for n, g in FOLDER_ROWS.items(): f[n] = bare_icon(g, POD_ICON)
     for n, g in RADIO_ROWS.items(): f[n] = bare_icon(g, POD_ICON)
@@ -824,8 +826,9 @@ DARK_GLYPH = (0x14, 0x14, 0x14)
 SONGS_IMAGES = {'sg_play': ('play:filled', WHITE, 14, 16), 'sg_shuffle': ('shuffle', WHITE, 16, 16), 'sg_repeat': ('repeat', WHITE, 16, 16), 'sg_repeat1': ('repeat-1', WHITE, 16, 16), 'sg_listplus': ('list-plus', WHITE, 16, 16),
                 'sg_shuffle_on': ('shuffle', DARK_GLYPH, 16, 16), 'sg_repeat_on': ('repeat', DARK_GLYPH, 16, 16), 'sg_repeat1_on': ('repeat-1', DARK_GLYPH, 16, 16),   # the Queue page's lit buttons (#C8C8C8): a near black glyph
                 'sg_trash': ('trash', (0xFF, 0x6B, 0x6B), 16, 16), 'sg_tick': ('+check', WHITE, 14, 14),
-                'pod_ic_vslist': ('list', WHITE, 20, 20), 'pod_ic_vsgrid': ('layout-grid', WHITE, 20, 20), 'pod_ic_vssearch': ('search', WHITE, 20, 20), 'pod_ic_vsselect': ('T:circle-check', WHITE, 20, 20),
-                'pod_ic_vsartist': ('mic-vocal', WHITE, 20, 20), 'pod_ic_vsalbumartist': ('user-star', WHITE, 20, 20)}   # the view row of the Albums "..." card: the glyph of the view a tap switches to (bare, as the Playlists menu's rows)
+                'pod_ic_vslist': ('list', WHITE, None, 20), 'pod_ic_vsgrid': ('layout-grid', WHITE, None, 20), 'pod_ic_vssearch': ('search', WHITE, None, 20), 'pod_ic_vsselect': ('T:circle-check', WHITE, None, 20),
+                'pod_ic_vsartist': ('mic-vocal', WHITE, None, 20), 'pod_ic_vsalbumartist': ('user-star', WHITE, None, 20)}   # the "..." cards' row glyphs (bare, as the Playlists menu's rows); ink None: drawn on the icon set's own 24 grid at VS_GRID_PX, not fitted to the box, so a round or square shape keeps the set's optical balance and the rows' glyphs look one size
+VS_GRID_PX = 21   # the "..." card glyphs' grid: 24 units = 21 px (1.5 px stroke), so a full-grid shape (layout-grid, circle-check) has about 17 px of ink in its 20 px box
 ALBUM += sorted(SONGS_IMAGES)
 
 # The keyboard page's glyphs (patch/keyboard.c, docs/modules/keyboard.md): shift (outline, white) and shift on (filled, dark on the light key), delete, the field's magnifier (grey) and its clear
@@ -869,7 +872,8 @@ def songs_images():
     from PIL import Image
     f = {}
     for n, (g, rgb, ink, canvas) in SONGS_IMAGES.items():
-        c = Image.new('RGBA', (canvas, canvas), (0, 0, 0, 0)); gi = glyph_fit(g, ink, ink, rgb, 0)
+        c = Image.new('RGBA', (canvas, canvas), (0, 0, 0, 0))
+        gi = glyph_fit(g, ink, ink, rgb, 0) if ink else tint(ink_crop(render(gname(g), VS_GRID_PX, 'outline', 1.5 * 24 / VS_GRID_PX)), rgb)
         c.alpha_composite(gi, ((canvas - gi.width) // 2, (canvas - gi.height) // 2)); f[n] = c
     return f
 
@@ -1664,7 +1668,7 @@ def replaced_names():
 
 def pod_row_names(): return sorted({n for n, _ in POD_ROWS.values()})
 def nav_names(): return sorted(set(NAV_VIEW) | {n + '_down' for n in NAV_VIEW})
-def pod_names(): return sorted(set(pod_row_names()) | set(FOLDER_ROWS) | set(RADIO_ROWS) | {RADIO_ART[0]} | set(POD_HOME) | set(nav_names()) | set(ALBUM) | set(DAILY) | {SHOT_BAR[0], LO_BAR, SYNC_BAR[0], SYNC_DM} | {n for n, _ in PL_MENU_ICONS} | {n for n, _ in RM_MENU_ICONS} | {RM_FAV_ON[0], RM_DOTS[0]})
+def pod_names(): return sorted(set(pod_row_names()) | set(FOLDER_ROWS) | set(RADIO_ROWS) | {RADIO_ART[0], ARTIST_ART[0]} | set(POD_HOME) | set(nav_names()) | set(ALBUM) | set(DAILY) | {SHOT_BAR[0], LO_BAR, SYNC_BAR[0], SYNC_DM} | {n for n, _ in PL_MENU_ICONS} | {n for n, _ in RM_MENU_ICONS} | {RM_FAV_ON[0], RM_DOTS[0]})
 def np_names(): return sorted(set(NP) | {v[4] for v in NP.values() if v[4]})
 
 def added_rels(stock_rootfs=None, *args):
@@ -1846,7 +1850,7 @@ def add_album_icons(out):
     """The album page's images (ALBUM): the tint, Shuffle's disc and glyph, the pill and the play glyph; patch/albumpage.c
     and tools/pod_ui.py build_album_page refer to them by name."""
     d = os.path.join(out, IMG)
-    for n in ALBUM + DAILY + list(FOLDER_ROWS) + list(RADIO_ROWS) + [RADIO_ART[0]]:   # (the Folders page's three row glyphs, the Radio page's too)
+    for n in ALBUM + DAILY + list(FOLDER_ROWS) + list(RADIO_ROWS) + [RADIO_ART[0], ARTIST_ART[0]]:   # (the Folders page's three row glyphs, the Radio page's too, the artist photo placeholder's)
         q = os.path.join(d, n + '.png'); assert not os.path.exists(q), f'{n}.png already in the tree'
         shutil.copyfile(os.path.join(PNG, n + '.png'), q); os.chmod(q, IMG_MODE); os.utime(q, (IMG_MTIME, IMG_MTIME))
 

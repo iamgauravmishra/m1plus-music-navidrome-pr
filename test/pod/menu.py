@@ -1012,8 +1012,8 @@ def azswitch_row_tests(ctx, on_row, rows_s):
         FILE = '/mnt/data/m1plus/' + name
         r_i = next(i for i, r in enumerate(A.rows) if r.action == act)
         layout = [type(x).__name__ + (':' + x.label if isinstance(x, P.Row) else '') for x in A.layout]
-        expect(A.rows[r_i].label == label and act in P.SWITCH_ACTIONS and P.row_kind(A.rows[r_i]) == 'switch' and name in P.SETTING_FILES and layout[2:6] == ['Hdr', 'Row:Index Rail', 'Row:Section Headers', 'Note'],
-               f'{label}: a switch row in the List Navigation card (header and note) under the first card of the Library page, its file {name} among the Settings Files ({layout[2:6]})')
+        expect(A.rows[r_i].label == label and act in P.SWITCH_ACTIONS and P.row_kind(A.rows[r_i]) == 'switch' and name in P.SETTING_FILES and layout[3:7] == ['Hdr', 'Row:Index Rail', 'Row:Section Headers', 'Note'],
+               f'{label}: a switch row in the List Navigation card (header and note) under the first card of the Library page, its file {name} among the Settings Files ({layout[3:7]})')
 
         def open_page(saved=None):
             m = Machine()
@@ -1053,9 +1053,9 @@ def library_tests(ctx, on_row):
     vk_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_VOLKEYS)
     vsw, VK = f'pod_switch{vk_i}', '/mnt/data/m1plus/coverflow-volume-keys'
     sw = f'pod_switch{land_i}'
-    expect([(r.label, r.action) for r in C.rows] == [('Update Library', P.ACT_HOME), ('Rebuild Covers', P.ACT_REBUILD), ('Index Rail', P.ACT_AZRAIL), ('Section Headers', P.ACT_AZHEAD), ('Landscape', P.ACT_LANDSCAPE), ('Volume Buttons', P.ACT_VOLKEYS), ('Podcast Discover', P.ACT_PCSEARCH), ('Podcast Region', P.ACT_REGION)]
+    expect([(r.label, r.action) for r in C.rows] == [('Update Library', P.ACT_HOME), ('Rebuild Covers', P.ACT_REBUILD), ('Rebuild Artist Photos', P.ACT_AREBUILD), ('Index Rail', P.ACT_AZRAIL), ('Section Headers', P.ACT_AZHEAD), ('Landscape', P.ACT_LANDSCAPE), ('Volume Buttons', P.ACT_VOLKEYS), ('Podcast Discover', P.ACT_PCSEARCH), ('Podcast Region', P.ACT_REGION)]
            and C.title == 'Library' and C.rows[0].arg == P.HOME_UPDATE and P.row_kind(C.rows[0]) == 'action',
-           'the Library page: one card of Update Library (the stock page, no chevron), Rebuild Covers, then the List Navigation switches (Index Rail, Section Headers), Landscape and Volume Buttons (switches, the second with its note) under Cover Flow, and Podcast Discover (switch) above Podcast Region (a value, its picker)')
+           'the Library page: one card of Update Library (the stock page, no chevron), Rebuild Covers, Rebuild Artist Photos, then the List Navigation switches (Index Rail, Section Headers), Landscape and Volume Buttons (switches, the second with its note) under Cover Flow, and Podcast Discover (switch) above Podcast Region (a value, its picker)')
 
     def open_lib(land=None, language=None, vk=None):
         m = Machine()

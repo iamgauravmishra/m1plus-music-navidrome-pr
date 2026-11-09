@@ -107,6 +107,9 @@
 #define REBUILD_FILE \
     "/mnt/data/m1plus/covers-rebuild" /* exists while a Settings > Library > Rebuild Covers is requested; Home's cover build (patch/homecover.c) does it and removes it when done */
 #define REBUILD_TMP "/mnt/data/m1plus/covers-rebuild.tmp"
+#define AREBUILD_FILE \
+    "/mnt/data/m1plus/artists-rebuild" /* exists while a rebuild of the artist photos is requested (Settings > Library > Rebuild Artist Photos writes it); Home's build (patch/homecover.c) checks every artist again and removes it when done */
+#define AREBUILD_TMP "/mnt/data/m1plus/artists-rebuild.tmp"
 #define STAMP_FILE \
     CARD_DIR \
     "/cache-stamp" /* what the library was when Home's last pass finished: "covers <albums> <hash>" and "tracks <albums> <hash>" lines (patch/homecover.c); on the card, like the cache it describes */

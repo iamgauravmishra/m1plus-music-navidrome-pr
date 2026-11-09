@@ -22,6 +22,7 @@ SAME_AS_ENGLISH |= {'Version %s', 'Apple Podcasts', 'Wi-Fi', 'Wi-Fi MAC', 'Bluet
 SAME_AS_ENGLISH |= {'Enhanced Open', 'WEP', 'WPA/WPA2', 'WPA2/WPA3', 'WPA3', 'Enterprise'}    # the Wi-Fi page's security labels: the standards' names (Enterprise in German, Italian and Polish)
 SAME_AS_ENGLISH |= {'Password'}    # the password page's label: Password in Italian
 SAME_AS_ENGLISH |= {'Name'}    # the Other Network page's label: Name in German
+SAME_AS_ENGLISH |= {'Photos'}    # the Cache page's Artist Photos count: Photos in French
 SAME_AS_ENGLISH |= {'Codec', 'Bitrate', 'Source'}    # Station Info: Codec in French, German and Italian, Bitrate in German and Italian, Source in French
 
 SAME_AS_ENGLISH |= {'%d dB', 'Pop', 'Rock', 'Dance', 'Blues', 'Jazz'}    # the 10-Band EQ: the unit; the genre names that most languages write as English
@@ -265,9 +266,9 @@ def run(ctx):
         for key in ('Update Local Music first', 'Library too large', 'No albums', 'Not enough memory'):
             if width(tr_text(loc, key), 20) > cover.find('label_status').w: over.append((loc, key, 'status'))
         if width(tr_text(loc, 'Preparing covers...') + ' 4000/4000', 20) > cover.find('label_status').w: over.append((loc, 'progress'))
-        for key in ('Preparing covers', 'Rebuilding covers', 'Measuring tracks'):
+        for key in ('Preparing covers', 'Rebuilding covers', 'Measuring tracks', 'Preparing artist photos', 'Rebuilding artist photos'):
             if width(tr_text(loc, key) + ' 4000/4000', pod_ui.HC_PX) > A['HC_W'] - 2: over.append((loc, key, 'Home progress line'))   # the Home line (patch/homecover.c): one 15 px line in a 300 px label with its 2 px margin
-        for key in ('Checking library…', 'Rebuilding covers…'):
+        for key in ('Checking library…', 'Rebuilding covers…', 'Rebuilding artist photos…'):
             if width(tr_text(loc, key).replace('…', '...'), pod_ui.HC_PX) > A['HC_W'] - 2: over.append((loc, key, 'Home waiting line'))   # (the dots are three ASCII ones at most)   # the waiting pill (patch/homecover.c hc_wait_text): the text alone, no count
         if width(tr_text(loc, 'Cancel'), 20) > cover.find('btn_cancel').w - 10: over.append((loc, 'Cancel'))
         if width(tr_text(loc, 'All albums'), 22) > 288: over.append((loc, 'All albums'))
@@ -295,7 +296,7 @@ def run(ctx):
             cur += u
             while width(cur.rstrip(), px) > maxw: lines, cur = lines + 1, cur[len(cur) // 2:]     # a unit wider than a line
         return lines
-    for key, what in (('Rebuild all covers? This may take a few minutes.', 'Rebuild Covers'), ('Take a screenshot?', 'Screenshot'), ('Take a screenshot in:', 'Screenshot delay'),
+    for key, what in (('Rebuild all covers? This may take a few minutes.', 'Rebuild Covers'), ('Rebuild all artist photos? This may take a few minutes.', 'Rebuild Artist Photos'), ('Take a screenshot?', 'Screenshot'), ('Take a screenshot in:', 'Screenshot delay'),
                       ('Cancel the screenshot?', 'Cancel Screenshot'), ('Delete all cached covers? They will be made again on Home.', 'Clear Cover Cache'), ('Delete all measured track durations? They will be measured again on Home.', 'Clear Track Durations'), ('Reset all settings to their defaults?', 'Reset All Settings'), ('Delete this settings file?', 'Delete Settings File'), ('Delete all unsupported files?', 'Delete Unsupported Files'), ('Delete this unsupported file?', 'Delete Unsupported File'),('Delete folder and everything in it?', 'Delete folder'), ('Download %s (55 MB)? It replaces update.bin on the card.', 'Software Update'),
                       ('msg_bt_open', 'Bluetooth switch-on warning'), ('msg_wifi_open', 'Wi-Fi switch-on warning')):
         lines = {loc: wrapped((dict(built[loc]).get(key, dict(built['en_US'])[key]) if key.startswith('msg_') else tr_text(loc, key)).replace('%s', '10.0.1'), wrap_px, wrap_w) for loc in LOC}

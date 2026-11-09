@@ -18,6 +18,7 @@
 #include "home.h"
 #include "podcasts.h"
 #include "pccover.h"
+#include "artistphoto.h"
 #endif
 #include "covercache.h"
 #include "durations.h"
@@ -1112,12 +1113,15 @@ typedef struct {
     char path[CR_PATH];
 } img_t;
 
+#define CC_ARTIST_JOB 1 /* job_t sec of an artist photo job (a cover job never sets it) */
+#define CC_RECHECK_JOB 2 /* ... of the re-check of one artist: track holds the albums' first tracks, one per line */
+
 typedef struct {
     char *track; /* the album's first track, copied so the thread never reads stock deques */
     unsigned
         key; /* 0: the one transient job (xf below), not a cache job (cc_build_add refuses key 0); CC_DURATIONS: the path's dur_key */
     unsigned size,
-        sec; /* CC_DURATIONS: the file's size when queued, and its measured seconds (written by the worker before done advances) */
+        sec; /* CC_DURATIONS: the file's size when queued, and its measured seconds (written by the worker before done advances). An artist photo job (patch/artistphoto.c; key the artist key): sec 1, size 1 = check it again even if it has a result */
 } job_t;
 
 /* The one transient extraction a set may hold instead of cache jobs (cc_build_add_file): where it writes and how big. Set before the worker starts, read only by it. */
@@ -1564,6 +1568,14 @@ static void build_art(const job_t *j) {
         build_file(j);
         return;
     }
+    if (j->sec == CC_ARTIST_JOB) {
+        ap_job(j->track, j->key, (int)j->size, &cb.cancelled);
+        return;
+    }
+    if (j->sec == CC_RECHECK_JOB) {
+        ap_recheck_job(j->track, j->key, &cb.cancelled);
+        return;
+    }
     if (access(j->track, F_OK)) return; /* storage gone: no marker, the next open retries */
     cc_path(dst, sizeof dst, j->key, "");
     cc_path(tmp, sizeof tmp, j->key, ".tmp");
@@ -1635,6 +1647,7 @@ static void build_free(void) {
     for (i = 0; i < cb.total; ++i)
         if (cb.jobs) free(cb.jobs[i].track);
     free(cb.jobs);
+    ap_lib_free();
     cb.jobs = (job_t *)0;
     cb.cap = 0;
     cb.total = cb.done = cb.cancelled = 0;
@@ -1656,6 +1669,7 @@ int cc_build_open(unsigned capacity, int mode) {
         capacity = mode == CC_DURATIONS ? CC_MAX_LEN_JOBS : CC_MAX_JOBS;
     cb.jobs = calloc(capacity ? capacity : 1, sizeof(job_t));
     if (!cb.jobs) return 0;
+    ap_lib_free();
     cb.cap = capacity;
     cb.mode = mode;
     cb.done = cb.total = cb.cancelled = cb.stalled = cb.truncated = cb.claimed = 0;
@@ -1674,6 +1688,40 @@ int cc_build_add(const char *track, unsigned key) {
     j->track = strdup(track);
     if (!j->track) return -1;
     j->key = key;
+    ++cb.total;
+    return 1;
+}
+
+/* An album for the artist photos: its track folder joins the purity snapshot (every album, jobs or not), and the artist gets one job per set when it has no result yet (or force). */
+int cc_build_add_artist(const char *track, const char *artist, int force) {
+    char path[72];
+    job_t *j;
+    unsigned key = ap_key(artist);
+    if (!cb.jobs || cb.running || cb.mode == CC_DURATIONS || !track || !*track) return 0;
+    if (key == ap_key("Unknown Artist"))
+        key = 0; /* no artist: it joins the snapshot (a folder it is in is no artist's own) but gets no job */
+    if (!ap_lib_add(track, key) || !key || !ap_first(key)) return 0;
+    snprintf(path, sizeof path, AP_DIR "/a%08x-44.jpg", key);
+    if (!force && !access(path, F_OK)) return 0;
+    if ((unsigned)cb.total >= cb.cap) return -1;
+    j = &cb.jobs[cb.total];
+    j->track = strdup(track);
+    if (!j->track) return -1;
+    j->key = key, j->sec = CC_ARTIST_JOB, j->size = (unsigned)(force != 0);
+    ++cb.total;
+    return 1;
+}
+
+int cc_build_artist_ok(void) { return ap_lib_ok(); }
+
+int cc_build_add_recheck(const char *tracks, unsigned key) {
+    job_t *j;
+    if (!cb.jobs || cb.running || cb.mode == CC_DURATIONS || !key || !tracks || !*tracks) return 0;
+    if ((unsigned)cb.total >= cb.cap) return -1;
+    j = &cb.jobs[cb.total];
+    j->track = strdup(tracks);
+    if (!j->track) return -1;
+    j->key = key, j->sec = CC_RECHECK_JOB, j->size = 0;
     ++cb.total;
     return 1;
 }
@@ -1751,6 +1799,7 @@ int cc_build_start(void) {
     if (cb.mode != CC_DURATIONS) {
         mkdir(CARD_DIR, 0755); /* the folder, then the cache in it (EEXIST is fine) */
         mkdir(ART_DIR, 0755);
+        mkdir(AP_DIR, 0755);
     }
     cb.exited = 0;
     if ((cb.mode != CC_DURATIONS && !card_space(ART_DIR)) ||

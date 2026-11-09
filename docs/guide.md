@@ -25,7 +25,7 @@ Open **Extras → Settings** to customize the player. To return to the stock gri
 |---|---|
 | Cover Flow | Drag to browse, tap a side cover to centre it, tap the centre cover to open its album; with Settings > Library > Volume Buttons on, volume down / up moves to the next / previous album |
 | Albums | The navbar's **…** switches grid/list and sorts by Title, Artist, Recently Added or Year; the choices are remembered; the list in Title order has section letters |
-| Artists | Switch Artist/Album Artist in the navbar's **…**, then open an artist's albums |
+| Artists | Switch Artist/Album Artist in the navbar's **…**, then open an artist's albums: Play or Shuffle all the artist's songs, each album with its year; the **…** switches grid/list and the album order; the rows and the artist's page show [artist photos](#artist-photos). A composer's page (Extras → Composers) looks the same, without a photo |
 | Songs | Jump with the A–Z rail (Settings → Library → Index Rail, on by default); Search in the navbar; the **…** has Select and Sort (Title, File Name, Format, Recently Added; tap the ticked order to reverse it) |
 | Recently Added | The newest songs; the navbar's **…** switches to the newest albums |
 | Album | Play, shuffle the album, or tap a track; the footer shows the track count and length once measured |
@@ -45,6 +45,23 @@ While Line Out is on, the status bar shows an amber **LO** pill.
 
 Drag a list to scroll; tap a row to open or play it.
 
+### Artist photos
+
+The Artists list and an artist's page show a photo you put on the card:
+
+- Name it `artist.jpg` (`artist.jpeg` and `artist.png` work too).
+- Put it in one of the artist's album folders, or in the folder above them if that folder holds only
+  this artist's albums, e.g. `Music/Adele/artist.jpg` next to `Music/Adele/21/` and
+  `Music/Adele/25/`. A folder that mixes artists (`Music/`, `Various Artists/`) is not used, and
+  `CD1` / `Disc 2` folders are skipped.
+- The photo belongs to the artist in the album's tags. "A feat. B" with no photo of its own shows A's.
+- A square picture fits best. Other shapes are cut to a square: a wide one at the centre, a tall one
+  near the top so a face stays in.
+
+Home looks for photos while it builds covers after a library change. To pick up a photo added
+later, open that artist's page, or use **Settings → Library → Rebuild Artist Photos**, which checks
+every artist again in the background.
+
 ## Settings
 
 Grey values show the current setting.
@@ -58,13 +75,13 @@ To show, hide or reorder the tiles of the pull-down, open **Settings → System 
 |---|---|
 | Wi-Fi / Bluetooth | Wi-Fi: the Wi-Fi switch, the connected network, My Networks and nearby networks with their security, and Other… for a hidden network; a saved network's page has Forget This Network and Auto-Join. WPA3 and Enhanced Open networks join. All System Settings > Wi-Fi opens the same page (the stock page with `/mnt/mmc/m1plus-off`, the only route for WEP). Bluetooth: the stock page. Values show On/Off |
 | Home Screen | Recent Albums, Daily Mix, menu items; Regenerate Daily Mix takes effect next Home visit |
-| Library | Update Library, Rebuild Covers, under **List Navigation** (the Songs, Artists, Albums and Radio lists) **Index Rail** (on by default: the A–Z rail on Songs, Artists, Radio countries and the Albums list in Title order) and **Section Headers** (on by default: the section letters and the pinned header; off closes the rows up), landscape Cover Flow, Volume Buttons (the volume buttons move between albums in Cover Flow; off by default), Podcast Discover and Podcast Region |
+| Library | Update Library, Rebuild Covers, Rebuild Artist Photos, under **List Navigation** (the Songs, Artists, Albums and Radio lists) **Index Rail** (on by default: the A–Z rail on Songs, Artists, Radio countries and the Albums list in Title order) and **Section Headers** (on by default: the section letters and the pinned header; off closes the rows up), landscape Cover Flow, Volume Buttons (the volume buttons move between albums in Cover Flow; off by default), Podcast Discover and Podcast Region |
 | Now Playing | Cassette Theme: Normal, Chrome or Metal, applies next time Cassette Mode opens; Vinyl Record and Base; Idle Display (last card): what Now Playing shows after 10 seconds, Off, Album Cover, Cassette or Vinyl (Off is the same switch as Playback Settings > Cover mode) |
 | Playback | **EQ** opens the [Equalizer](#equalizer). All Playback Settings includes Gapless, and its Equalizer row opens the Equalizer |
 | System | Display, **Appearance** > **Background** (Black, or Tinted: with an accent chosen, the dark greys of every page, card and sheet take a 12 % wash of it; covers and cover-coloured pages keep their look) and **Accent** (the main menu's icons show in the accent; Neutral, Red, Orange, Green, Teal, Purple or Champagne: tints pressed rows and their icons, switches that are on, the lit pull-down tiles, sliders, progress bars and the picker check; applies at once), **Lock Screen** (Enable; Wallpaper: the default or one of up to five pictures you copy to `lockscreenimage` on the card, JPG or PNG, 320 x 480, under 1 MB, the chosen one framed in the accent; Show Time; Player Style: Large Cover or Mini Player, a bar like Home's at the bottom; Custom Wallpaper explains the pictures. Display > Lock Screen opens the same page) and **Control Center** (show, hide and reorder the eight tiles of the status bar swipe-down panel), Language (under All System Settings), Keyboards, **Battery** (**Battery Percentage**, off by default, shows the exact charge beside the status bar's battery icon; **Charge Limit** stops charging at 80, 85, 90 or 95 % while the player is on and resumes about 5 % lower, 100 % (the default) is no limit, and a switched-off player charges fully) and About (firmware, device, network and storage details; **Software Update** is the row under the version) |
 | Keyboards | English always enabled; Chinese (Pinyin) adds a language key and candidates above the keys. Swipe candidates sideways; space selects the first |
 | Developer → Startup | Boot to M1+ Music; Open Shanling Home |
-| Developer → Tools | Screenshot, Cache (Covers, then Track Durations: its last row is Clear Track Durations), Settings Files (tap a file to delete it; Unsupported Files removes leftovers of older builds) |
+| Developer → Tools | Screenshot, Cache (Covers, Artist Photos: how many artists have a photo and how many have none, then Track Durations: its last row is Clear Track Durations), Settings Files (tap a file to delete it; Unsupported Files removes leftovers of older builds) |
 | Developer → Reset | Reset All Settings |
 
 Home builds missing album covers (and measures track lengths) in the background. A pill at the top
@@ -72,8 +89,8 @@ of Home shows the progress, and a sync icon in the status bar shows while it run
 stops it until the next restart. Nothing is scanned when the library has not changed, and an
 album whose cover hangs the build is skipped. **Rebuild Covers** asks for confirmation, then
 Home rebuilds every cover the same way. **Cache**
-shows cached/missing/stale counts, current work and the measured tracks; **Clear Cover Cache** asks before deleting,
-then Home regenerates covers.
+shows cached/missing/stale counts, current work, the artist photo counts and the measured tracks; **Clear Cover Cache** asks before deleting,
+then Home regenerates covers (artist photos are kept).
 
 **Software Update** (Settings → System → About, the row under the version; needs Wi-Fi) checks GitHub for a newer release: **Check for Update**, then **Download and Install**; **Release Notes** shows what changed.
 A dialog asks first (about 55 MB, replaces the card's `update.bin`; 110 MB of free card space needed); a popup shows the progress and **Cancel** (Back is Cancel too; the card's old `update.bin` stays). When the download

@@ -107,6 +107,7 @@ ACT_AZRAIL = 77   # switch row (Settings > Library): Index Rail, on by default; 
 ACT_AZHEAD = 78   # switch row (Settings > Library): Section Headers, on by default; off drops the section letters and the pinned header and closes the rows up (patch/azlist.c azhead_toggle, /mnt/data/m1plus/appearance-headers)
 ACT_RESETALL = 54 # action row of Developer > Tools: Reset All Settings, a confirm, then every settings file is deleted (patch/m1plus.c reset_all_ask, patch/setfiles.c setfiles_reset_all)
 ACT_REGION = 55    # value row (Settings > Library > Podcasts): the Podcast Region, the storefront the podcast search and Discover use, or Automatic; opens its picker page (arg = the page index; patch/pcregion.c pcregion_value)
+ACT_AREBUILD = 92  # action row (Settings > Library): Rebuild Artist Photos, a confirm dialog, then the request file Home's artist photo pass acts on (patch/m1plus.c arebuild_ask, patch/homecover.c)
 ACT_REGIONSET = 56 # picker row (Podcast Region): choose Automatic (arg 0) or a storefront (arg = its index in pcregion.CODES + 1); a check shows on the chosen row (patch/pcregion.c pcregion_set)
 ACT_CHGLIM = 80     # value row (Settings > System > Battery): Charge Limit, the saved limit ("80%" .. "100%"); opens its picker page (arg = the page index; patch/charging.c chg_limit)
 ACT_CHGLIMSET = 81  # picker row (Charge Limit): choose the limit (arg = 80, 85, 90, 95 or 100, no limit); a check shows on the chosen row (patch/charging.c chg_set)
@@ -124,7 +125,7 @@ SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, A
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
 VALUE_ACTIONS = (ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM, ACT_LOCKSTYLE, ACT_IDLE, ACT_NEXTALBUM)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
 CHECK_ACTIONS = (ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_LOCKSET, ACT_REGIONSET, ACT_CHGLIMSET, ACT_PEQ_PICK, ACT_PEQ_CPICK, ACT_PEQ_PAUTO, ACT_PEQ_PVAL, ACT_IDLESET, ACT_NASET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
-ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_CLEARCACHE, ACT_CLEARDUR, ACT_SFDELALL, ACT_RESETALL, ACT_GRID)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
+ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_AREBUILD, ACT_CLEARCACHE, ACT_CLEARDUR, ACT_SFDELALL, ACT_RESETALL, ACT_GRID)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
 VALUE_INIT = {ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_REGION: 'Automatic', ACT_CHGLIM: '100%', ACT_LOCKSTYLE: 'Large Cover', ACT_IDLE: 'Album Cover', ACT_NEXTALBUM: 'Off'}   # what the asset's value label says before the payload sets it
 # The stock pages ACT_STOCK opens: (the name navigator_to takes = ui/<name>.bin, the value the row shows at the right: the payload reads the stock state, patch/m1plus.c VK_*, or None).
 # Each is a plain navigator_to(name) with no context in stock (docs/modules/settings.md "Stock pages"): the Settings list's rows, the Wi-Fi hub's two; Back returns to our page.
@@ -423,7 +424,8 @@ ABOUT_PAGE = Page('m1plus_about', 'm1plus_about_page', 'About', layout=[
 # Settings > Developer > Cache (patch/homecover.c, docs/modules/settings.md "Cache"): the Covers card holds the cache folder's counts (INFO_CC_*: homecover_stat reads each, an ellipsis until counted), the build's Status and Clear Cover Cache;
 # the Track Durations card holds Measured Tracks (INFO_DUR: dur_stat, patch/durations.c) and Clear Track Durations.
 INFO_CC_ALBUMS, INFO_CC_COVERS, INFO_CC_NOART, INFO_CC_MISSING, INFO_CC_OLD, INFO_CC_SIZE, INFO_CC_STATUS = range(8, 15)   # (patch/m1plus.c INFO_CC = 8 + the index homecover_stat takes)
-INFO_DUR = INFO_CC_STATUS + 46  # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asserted below the Settings Files kinds)
+INFO_DUR = INFO_CC_STATUS + 47  # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asserted below the Settings Files kinds)
+INFO_APHOTOS, INFO_ANONE = INFO_DUR + 1, INFO_DUR + 2   # patch/m1plus.c: the Artist Photos card's counts (homecover_stat 7, 8)
 CACHE_PAGE_INDEX = 32   # after ONLINEART (31)
 CACHE_PAGE = Page('m1plus_cache', 'm1plus_cache_page', 'Cache', layout=[
     Hdr('Covers'),
@@ -437,6 +439,9 @@ CACHE_PAGE = Page('m1plus_cache', 'm1plus_cache_page', 'Cache', layout=[
     Row('Status', ACT_INFO, INFO_CC_STATUS),
     GAP,
     Row('Clear Cover Cache', ACT_CLEARCACHE),
+    Hdr('Artist Photos'),
+    Row('Photos', ACT_INFO, INFO_APHOTOS),
+    Row('None', ACT_INFO, INFO_ANONE),
     Hdr('Track Durations'),
     Row('Measured Tracks', ACT_INFO, INFO_DUR),
     Row('Clear Track Durations', ACT_CLEARDUR),
@@ -449,7 +454,7 @@ COVLIST = Page('m1plus_covlist', 'm1plus_covlist_page', 'Missing Covers', kind='
 # Only the setting files (ACT_SFDEL) are tappable, while present: a tap deletes the file after a confirm. The guard files and the folder stay ACT_INFO (never deleted).
 SETTING_FILES = ('albums-view', 'albums-sort', 'artists-sort', 'genres-sort', 'composers-sort', 'songs-sort-rev', 'folders-sort', 'playlists-sort', 'playlists-view', 'recently-added-view', 'coverflow-landscape', 'coverflow-volume-keys', 'cassette-theme', 'vinyl-record', 'vinyl-base', 'nowplaying-idle', 'pod-appearance',
                  'appearance-accent', 'appearance-background', 'lockscreen-layout', 'appearance-index-rail', 'appearance-headers', 'home-recent-albums', 'home-daily-mix', 'home-menu', 'pulldown-tiles', 'keyboard-pinyin', 'podcast-online-search', 'podcast-region',
-                 'battery-percentage', 'battery-charge-limit', 'playback-shuffle', 'playback-eq', 'playback-next-album', 'search-history', 'radio-view', 'radio-recent', 'covers-rebuild', 'wifi-networks')
+                 'battery-percentage', 'battery-charge-limit', 'playback-shuffle', 'playback-eq', 'playback-next-album', 'search-history', 'radio-view', 'radio-recent', 'covers-rebuild', 'artists-rebuild', 'wifi-networks')
 GUARD_FILES = ('m1plus-start', 'm1plus-run', 'm1plus-bad', 'm1plus-off')
 # The files older builds left behind (patch/setfiles.c sf_retired, the same order; each with its .tmp sibling). Unsupported Files counts and lists them and
 # Delete Unsupported Files removes them. A renamed setting's old name goes here, never a guard file or a setting above (tests: unsupported_tests).
@@ -459,7 +464,7 @@ RETIRED_FILES = ('/mnt/data/m1plus-albums', '/mnt/data/m1plus-playlists', '/mnt/
                  '/mnt/data/m1plus-battpct', '/mnt/data/m1plus-pod-theme', '/mnt/data/m1plus-mix', '/mnt/data/m1plus-mix.art', '/mnt/data/m1plus/recently-played')
 FOLDER_LABEL = 'm1plus/'
 INFO_SF = INFO_CC_STATUS + 1   # patch/m1plus.c INFO_SF = INFO_CC + 7; row k reads setfiles_stat(k): 4 guard files, the folder, the settings
-INFO_SFOLD = INFO_SF + 44      # patch/m1plus.c: the Unsupported Files count (setfiles_old_count), above the setting rows
+INFO_SFOLD = INFO_SF + 45      # patch/m1plus.c: the Unsupported Files count (setfiles_old_count), above the setting rows
 assert len(GUARD_FILES) + 1 + len(SETTING_FILES) <= INFO_SFOLD - INFO_SF, 'the Settings Files rows reach INFO_SFOLD: raise it here and in patch/m1plus.c'
 assert INFO_DUR == INFO_SFOLD + 1, 'INFO_DUR must follow INFO_SFOLD (patch/m1plus.c)'
 FILES_PAGE_INDEX = 34   # after COVLIST (33)
@@ -592,6 +597,7 @@ EXTRASCFG_PAGE = Page('m1plus_extrascfg', 'm1plus_extrascfg_page', 'Extras', kin
 LIBRARY_PAGE = Page('m1plus_library', 'm1plus_library_page', 'Library', layout=[
     Row('Update Library', ACT_HOME, HOME_UPDATE),
     Row('Rebuild Covers', ACT_REBUILD),
+    Row('Rebuild Artist Photos', ACT_AREBUILD),
     Hdr('List Navigation'),
     Row('Index Rail', ACT_AZRAIL),
     Row('Section Headers', ACT_AZHEAD),
