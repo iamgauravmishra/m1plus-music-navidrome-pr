@@ -146,9 +146,9 @@ def hook_tests(ctx):
     expect(tramp == (0x3c1c0000 | pod.GP >> 16, 0x379c0000 | pod.GP & 0xffff, pod.j(INIT + 12), 0), 'the trampoline restores $gp and resumes at the 4th instruction')
     expect(MANIFEST['hook_bigcover'] == {'addr': INIT, 'target': PSYMS['m1plus_bigcover_init']}, 'the manifest records the hook')
     expect(all(word(stock, a) == old and word(built, a) == old for a, old, _ in pod.BIGCOVER_PINS[1:]),
-           'the pinned stock words (the page-init dispatcher\'s compare and call, the timed open) are stock\'s in stock and in the build: only the init\'s prologue is hooked')
+           'the pinned stock words of the page-init dispatcher (its compare and call) are stock\'s in stock and in the build: only the init\'s prologue is hooked')
     expect(stock[pod.fileoff(stock, 0x749f50):][:14] == b'bigcover_page\0', 'the name the dispatcher compares with, and the timed open passes')
-    expect([a for a, _, _ in pod.BIGCOVER_PINS] == [0x529a30, 0x4d10c8, 0x4d10cc, 0x4d10d8, 0x4d10e0, 0x53d0ec, 0x53d0f0], 'the pins: init resume, dispatcher, timed open')
+    expect([a for a, _, _ in pod.BIGCOVER_PINS] == [0x529a30, 0x4d10c8, 0x4d10cc, 0x4d10d8, 0x4d10e0], 'the pins: init resume, dispatcher (the timed open is the idle view\'s: idle_tests)')
     expect('bigcover.c' in pod.SOURCES and INIT not in range(pod.PLAYING_INIT - 12, pod.PLAYING_INIT + 12), 'in the payload sources, a hook of its own')
     expect(PSYMS['m1plus_bigcover_init'] >= pod.BASE and 'cc_decode_fit' in PSYMS and 'cc_fit' in PSYMS, 'the hook and the fit are in the payload')
 
@@ -401,7 +401,257 @@ def life_tests(ctx):
     expect(len(m.paint()) == 1, 'the picture stays while the screen sleeps (only new jobs wait for the screen)')
 
 
-SECTIONS = [hook_tests, job_tests, life_tests]
+# ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+# The idle view (docs/modules/bigcover.md "Idle view"): the dispatcher at the timed open and the Settings > Now Playing > Idle Display row and picker.
+IDLE = '/mnt/data/m1plus/nowplaying-idle'
+COVER_MODE = pod.DATA['COVER_MODE'][0]
+NAME = 'bigcover_page'
+CFG_ON, CFG_OFF = ('write_int_config', 1, 'SYSSET', 'COVERMODE'), ('write_int_config', 0, 'SYSSET', 'COVERMODE')
+
+
+class IM(Machine):
+    """The dispatcher with the two open functions mocked at the payload function boundary (their own tests are tape.py / vinyl.py): what each returns is scripted."""
+    def __init__(self, tape=0, vinyl=0):
+        super().__init__()
+        self.rets = {'tape_open_idle': tape, 'vinyl_open_idle': vinyl}
+        for n in self.rets: self.handlers[PSYMS[n]] = n
+
+    def _hook(self, u, address, size, _):
+        name = self.handlers.get(address)
+        if name not in self.rets: return super()._hook(u, address, size, _)
+        self.calls.append((name,))
+        u.reg_write(UC_MIPS_REG_V0, self.rets[name] & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+
+
+def go(m, name=NAME):
+    r = m.call(PSYMS['bc_timed_open'], a0=m.cstr(name), count=60000000)
+    return struct.unpack('<i', struct.pack('<I', r & 0xffffffff))[0]
+
+
+def sibling(name):
+    """test/pod/<name>.py loaded under another name (its Machine subclass and helpers)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('idle_' + name, os.path.join(os.path.dirname(os.path.abspath(__file__)), name + '.py'))
+    mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+    return mod
+
+
+def idle_tests(ctx):
+    """payload hook 24: the timed open's navigator_to becomes bc_timed_open (tools/pod.py IDLE_SITE, patch/bigcover.c)."""
+    expect = ctx.expect
+    import paths
+    stock = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
+    built = open(DEMO, 'rb').read()
+    word = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
+    site = pod.IDLE_SITE
+
+    # -- the site and the stock code round it
+    expect(site == 0x53d0ec and word(stock, site) == 0x0320f809 and word(built, site) >> 26 == 3 and (word(built, site) & 0x3ffffff) << 2 == PSYMS['bc_timed_open'],
+           'the build replaced stock\'s `jalr t9` (navigator_to) at 0x53d0ec by `jal bc_timed_open`')
+    expect(all(word(stock, a) == old and (a == site or word(built, a) == old) for a, old, _ in pod.IDLE_PINS), 'every pinned word is stock\'s in stock and in the build, except the one call')
+    expect([a for a, _, _ in pod.IDLE_PINS if a >> 20 == 0x5] == [0x53cf48, 0x53cf4c, 0x53cf50, 0x53d008, 0x53d00c, 0x53d010, 0x53d0bc, 0x53d0c4, 0x53d0c8, 0x53d0cc, 0x53d0d4, 0x53d0d8, 0x53d0dc,
+                                                                    0x53d0e0, 0x53d0e4, 0x53d0e8, site, 0x53d0f0, 0x53d0f4, 0x53d0f8, 0x53d0fc],
+           'the pins: the callback\'s prologue, the Cover mode test, the playing_page test, the countdown, the GOT loads, the call, its delay slot, the restart and the $gp reload')
+    expect(word(built, 0x53d0f0) == 0x24849f50 and stock[pod.fileoff(stock, 0x749f50):][:14] == b'bigcover_page\0', 'the delay slot still loads "bigcover_page" into a0')
+    expect(MANIFEST['hook_idle'] == {'addr': site, 'target': PSYMS['bc_timed_open']}, 'the manifest records the hook')
+    expect([word(stock, a) for a in (0x4a0098, 0x4a00bc, 0x4a00c0)] == [0x8f92ae50, 0x38840001, 0x0320f809] and COVER_MODE == 0xa05aa5,
+           'stock\'s Cover mode row (0x4a0098) toggles the byte 0xa05aa5 with xori and saves it with write_int_config')
+    expect(PSYMS['bc_timed_open'] >= pod.BASE and 'idle_set' in PSYMS and 'idle_choice' in PSYMS, 'the dispatcher and the setting are in the payload')
+
+    # -- the dispatcher: every destination
+    def run(data=None, kill=False, tape=0, vinyl=0, name=NAME):
+        m = IM(tape, vinyl)
+        if data is not None: m.fs[IDLE] = data
+        if kill: m.present.add(KILL)
+        r = go(m, name)
+        return m, r, [c[0] for c in m.calls if c[0] in ('tape_open_idle', 'vinyl_open_idle')], [c for c in m.calls if c[0] == 'navigator_to']
+    for data in (None, b'0\n', b'0'):
+        m, r, opened, nav = run(data)
+        expect(opened == [] and nav == [('navigator_to', NAME)], f'Album Cover ({data!r}): stock\'s navigator_to once, no other page')
+    for data in (b'1\n', b'1'):
+        m, r, opened, nav = run(data)
+        expect(r == 0 and opened == ['tape_open_idle'] and nav == [], f'Cassette ({data!r}): tape_open once, no stock cover page')
+    for data in (b'2\n', b'2'):
+        m, r, opened, nav = run(data)
+        expect(r == 0 and opened == ['vinyl_open_idle'] and nav == [], f'Vinyl ({data!r}): vinyl_open once, no stock cover page')
+    for data in (b'', b'3\n', b'x', b'11', b'1\n\n', b' 1', b'-1', b'\x001', b'a', b'12\n'):
+        m, r, opened, nav = run(data)
+        expect(opened == [] and nav == [('navigator_to', NAME)], f'an invalid setting ({data!r}) is Album Cover: stock\'s call once')
+    # -- the kill switch, another name
+    for data in (b'1\n', b'2\n'):
+        m, r, opened, nav = run(data, kill=True)
+        expect(opened == [] and nav == [('navigator_to', NAME)], f'the kill switch with {data!r}: stock\'s call, no open function')
+    m, r, opened, nav = run(b'1\n', name='playing_page')
+    expect(opened == [] and nav == [('navigator_to', 'playing_page')], 'another page name goes to stock with its own name')
+    m, r, opened, nav = run(b'2\n', name='')
+    expect(opened == [] and nav == [('navigator_to', '')], 'an empty name goes to stock')
+    # -- an open that fails: stock's call, exactly once, with the name
+    m, r, opened, nav = run(b'1\n', tape=-1)
+    expect(opened == ['tape_open_idle'] and nav == [('navigator_to', NAME)], 'Cassette that will not open: stock\'s cover page once')
+    m, r, opened, nav = run(b'2\n', vinyl=-1)
+    expect(opened == ['vinyl_open_idle'] and nav == [('navigator_to', NAME)], 'Vinyl that will not open: stock\'s cover page once')
+    m, r, opened, nav = run(b'1\n', tape=-1, vinyl=0)
+    expect(opened == ['tape_open_idle'], 'a failed Cassette never tries Vinyl')
+    # -- reading never writes
+    expect(not any(c[0] in ('rename', 'unlink') for c in run(b'1\n')[0].calls) and IDLE not in run(None)[0].fs, 'the dispatcher writes nothing')
+
+    # -- the singleton: the real pages. A page that is already up is left as it is (tape_open / vinyl_open return 0 and open nothing), the stock cover page does not come over it,
+    #    and no second window or timer is made.
+    T, V = sibling('tape'), sibling('vinyl')
+    m = T.machine(playing=True); m.fs[IDLE] = b'1\n'
+    allc = []
+    r1 = go(m); allc += m.calls; timers = list(m.timers)
+    r2 = go(m); allc += m.calls
+    r3 = go(m); allc += m.calls
+    expect((r1, r2, r3) == (0, 0, 0) and [c for c in allc if c[0] == 'window_open'] == [('window_open', 'm1plus_tape')] and not [c for c in allc if c[0] == 'navigator_to'] and m.timers == timers and len(timers) == 1,
+           f'Cassette: opened once; the next two timed opens while it is up open no window, no timer and no stock page ({[c for c in allc if c[0] in ("window_open", "navigator_to")]})')
+    m = V.machine(playing=True); m.fs[IDLE] = b'2\n'
+    allc = []
+    r1 = go(m); allc += m.calls; timers = list(m.timers)
+    r2 = go(m); allc += m.calls
+    expect((r1, r2) == (0, 0) and len([c for c in allc if c[0] == 'window_open']) == 1 and not [c for c in allc if c[0] == 'navigator_to'] and m.timers == timers and len(timers) == 1,
+           'Vinyl: opened once; the next timed open while it is up opens no window, no timer and no stock page')
+    # the page closed again: the next timed open opens a fresh one
+    m = T.machine(playing=True); m.fs[IDLE] = b'1\n'
+    go(m); n_open = len([c for c in m.calls if c[0] == 'window_open'])
+    fn, ctx_ = m.bound[(T.WIN, O['EVT_DESTROY'])]; m.call(fn, a0=ctx_, a1=0, count=3000000)
+    go(m)
+    expect(n_open == 1 and len([c for c in m.calls if c[0] == 'window_open']) == 1, 'after the page was destroyed the next timed open opens it again')
+    # a page whose asset is not ours (the real open failing after window_open): stock's call once
+    m = T.machine(playing=True); m.fs[IDLE] = b'1\n'; del m.widgets['tape_view']
+    r = go(m); nav = [c for c in m.calls if c[0] == 'navigator_to']
+    expect(r == 0 and nav == [('navigator_to', NAME)] and m.timers == [], 'a Cassette asset without its view: the page is taken back (navigator_back) and stock\'s cover page opens once')
+    m = V.machine(playing=True); m.fs[IDLE] = b'2\n'; m.windows = {}
+    del m.widgets['vinyl_view']
+    r = go(m); nav = [c for c in m.calls if c[0] == 'navigator_to']
+    expect(nav == [('navigator_to', NAME)] and m.timers == [], 'a Vinyl asset without its view: stock\'s cover page opens once')
+
+
+def idle_setting_tests(ctx):
+    """Settings > Now Playing > Idle Display and its picker (m1plus_idleview): the value is stock's Cover mode byte and the saved destination, read live; a pick saves both the stock way."""
+    expect, P = ctx.expect, pod_pages
+    N, I = P.NPSET_PAGE, P.IDLE_PAGE
+    rows_n = PSYMS[f'pod_rows_{P.NPSET_PAGE_INDEX}']
+    expect([(r.label, r.action, r.arg) for r in N.rows][-1:] == [('Idle Display', P.ACT_IDLE, P.IDLE_PAGE_INDEX)] and P.ACT_IDLE == 82 and P.ACT_IDLESET == 83 and P.ACT_IDLE in P.VALUE_ACTIONS and P.ACT_IDLESET in P.CHECK_ACTIONS,
+           'Settings > Now Playing ends with the Idle Display value row (a new action id, a value row), the picker\'s rows are check rows')
+    expect([type(x).__name__ for x in N.layout][-3:] == ['str', 'Row', 'Note'] and N.layout[-1].text == 'Shown after 10 seconds on Now Playing.' and N.layout[0].text == 'Cassette Mode',
+           'the last card is the Idle Display row and its note, after the Cassette Mode and Vinyl Mode cards')
+    expect([(r.label, r.action, r.arg) for r in I.rows] == [('Off', P.ACT_IDLESET, 0), ('Album Cover', P.ACT_IDLESET, 1), ('Cassette', P.ACT_IDLESET, 2), ('Vinyl', P.ACT_IDLESET, 3)]
+           and I.title == 'Idle Display' and I.key == 'm1plus_idleview' and P.IDLE_VALUES == ('Off', 'Album Cover', 'Cassette', 'Vinyl') and I.layout[-1].text == 'Shown after 10 seconds on Now Playing.'
+           and P.PAGES[P.IDLE_PAGE_INDEX] is I, 'the picker: Off, Album Cover, Cassette, Vinyl, titled Idle Display, with the note')
+    expect(IDLE.rsplit('/', 1)[1] in P.SETTING_FILES and 'nowplaying-idle' not in ' '.join(P.RETIRED_FILES), 'the file is a Settings Files row and not a retired one')
+    ids = [v for k, v in vars(P).items() if k.startswith('ACT_')]
+    expect(len(set(ids)) == len(ids), 'the action ids are distinct')
+
+    def bytes_on(m, on): m.u.mem_write(COVER_MODE, bytes([on]))
+
+    def open_picker(data=None, on=1, language=None):
+        m = Machine()
+        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(4)] + [f'pod_check{i}' for i in range(4)])}
+        if data is not None: m.fs[IDLE] = data
+        if language: m.set_language(language)
+        bytes_on(m, on)
+        m.call(PSYMS['on_row'], a0=rows_n + 12 * 3, count=3000000)   # the Idle Display row (the page's last)
+        return m
+
+    def shown(m, i):
+        v = [c[2] for c in m.calls if c[0] == 'widget_set_visible' and c[1] == m.widgets[f'pod_check{i}']]
+        return v[-1] if v else None
+
+    def checks(m): return [shown(m, i) for i in range(4)]
+
+    def untouched(m): return not any(c[0] == 'widget_set_visible' for c in m.calls)   # a refused pick: the click redraws no check
+
+    m = open_picker()
+    expect(('window_open', I.key) in m.calls, 'the Idle Display row opens the picker')
+    expect(checks(m) == [0, 1, 0, 0] and IDLE not in m.fs and not any(c[0] == 'write_int_config' for c in m.calls), 'with the byte on and nothing saved the check is on Album Cover; reading writes nothing')
+    expect([checks(open_picker(d)) for d in (b'1\n', b'2\n', b'0\n', b'9', b'', b'1\n\n')] == [[0, 0, 1, 0], [0, 0, 0, 1], [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0]],
+           'a saved Cassette or Vinyl has the check; an invalid file is Album Cover')
+    expect([checks(open_picker(d, on=0)) for d in (None, b'1\n', b'2\n')] == [[1, 0, 0, 0]] * 3, 'with the byte off the check is on Off, whatever the destination')
+
+    # a pick: the destination first (atomically), the byte through stock's save only when it changes
+    m = open_picker(b'1\n', on=1)
+    m.click('pod_row3')
+    expect(m.fs.get(IDLE) == b'2\n' and IDLE + '.tmp' not in m.fs and ('rename', IDLE + '.tmp', IDLE) in m.calls and ('fsync', '/mnt/data/m1plus') in m.calls
+           and not any(c[0] == 'write_int_config' for c in m.calls) and checks(m) == [0, 0, 0, 1] and m.u.mem_read(COVER_MODE, 1)[0] == 1,
+           'Vinyl while the byte is on: the file is written atomically, stock\'s save is not touched, the check follows')
+    m.click('pod_row0')
+    expect(CFG_OFF in m.calls and m.u.mem_read(COVER_MODE, 1)[0] == 0 and m.fs.get(IDLE) == b'2\n' and checks(m) == [1, 0, 0, 0],
+           'Off: [SYSSET] COVERMODE = 0 saved with stock\'s write_int_config, the byte off, the destination kept')
+    m.click('pod_row2')
+    expect(CFG_ON in m.calls and m.u.mem_read(COVER_MODE, 1)[0] == 1 and m.fs.get(IDLE) == b'1\n' and checks(m) == [0, 0, 1, 0],
+           'Cassette while off: the destination is saved and the byte turned on through stock\'s save')
+    m.click('pod_row0'); m.click('pod_row0')
+    expect(CFG_OFF not in m.calls and m.u.mem_read(COVER_MODE, 1)[0] == 0 and checks(m)[0] == 1, 'Off twice: the second tap saves nothing, it stays off')
+    m = open_picker(b'1\n', on=0)
+    m.click('pod_row0')
+    expect(not any(c[0] == 'write_int_config' for c in m.calls), 'Off while off saves nothing')
+    m = open_picker(None, on=0)
+    m.click('pod_row1')
+    expect(CFG_ON in m.calls and m.u.mem_read(COVER_MODE, 1)[0] == 1 and m.fs.get(IDLE) == b'0\n' and checks(m)[1] == 1,
+           'Album Cover while off with nothing saved saves "0" and turns the byte on')
+
+    # failures change neither file nor byte nor label
+    m = open_picker(b'1\n', on=1); m.fail.add(('write', IDLE + '.tmp')); m.click('pod_row3')
+    expect(m.fs.get(IDLE) == b'1\n' and IDLE + '.tmp' not in m.fs and m.u.mem_read(COVER_MODE, 1)[0] == 1 and untouched(m)
+           and not any(c[0] == 'write_int_config' for c in m.calls), 'a failed file write: file, byte and check unchanged, stock\'s save not called')
+    m = open_picker(b'2\n', on=1); m.fail.add(('rename', IDLE)); m.click('pod_row2')
+    expect(m.fs.get(IDLE) == b'2\n' and untouched(m) and m.u.mem_read(COVER_MODE, 1)[0] == 1, 'a failed rename changes neither')
+    m = open_picker(b'1\n', on=1); m.config_ret = -1; m.click('pod_row0')
+    expect(m.u.mem_read(COVER_MODE, 1)[0] == 1 and m.fs.get(IDLE) == b'1\n' and untouched(m), 'Off with a failed config save: the byte stays on, the file and the check unchanged')
+    m = open_picker(b'1\n', on=0); m.config_ret = -1; m.click('pod_row3')
+    expect(m.u.mem_read(COVER_MODE, 1)[0] == 0 and m.fs.get(IDLE) == b'1\n' and untouched(m) and IDLE + '.tmp' not in m.fs,
+           'Vinyl while off with a failed config save: the byte stays off, the file is put back, the check stays on Off')
+    m = open_picker(None, on=0); m.config_ret = -1; m.click('pod_row3')
+    expect(m.u.mem_read(COVER_MODE, 1)[0] == 0 and IDLE not in m.fs and IDLE + '.tmp' not in m.fs, 'the same with no file before: no file after')
+    m = open_picker(b'2\n', on=0); m.config_ret = -1; m.click('pod_row3')
+    expect(m.u.mem_read(COVER_MODE, 1)[0] == 0 and m.fs.get(IDLE) == b'2\n', 'a pick of the saved destination while off with a failed config save leaves the file alone')
+
+    # the row: the label follows stock's byte live, both ways
+    val = 'pod_value3'
+
+    def open_row(data=None, on=1, language=None):
+        m = Machine()
+        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(N.rows))] + ['pod_value0', 'pod_value1', 'pod_value2', val])}
+        if data is not None: m.fs[IDLE] = data
+        if language: m.set_language(language)
+        bytes_on(m, on)
+        np_i = next(i for i, r in enumerate(P.SETTINGS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.NPSET_PAGE_INDEX)
+        m.call(PSYMS['on_row'], a0=PSYMS[f'pod_rows_{P.SETTINGS_PAGE_INDEX}'] + 12 * np_i, count=3000000)
+        return m
+
+    def label(m):
+        keys = [c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets[val]]
+        return keys[-1] if keys else None
+    expect([label(open_row(d, on)) for d, on in ((None, 1), (b'1\n', 1), (b'2\n', 1), (b'0\n', 1), (b'7', 1), (None, 0), (b'1\n', 0), (b'2\n', 0))]
+           == ['Album Cover', 'Cassette', 'Vinyl', 'Album Cover', 'Album Cover', 'Off', 'Off', 'Off'], 'the row reads Off when stock\'s Cover mode byte is off, else the destination')
+    m = open_row(b'2\n', on=1)
+    first = label(m)
+    bytes_on(m, 0)
+    f, c = m.bound[next(k for k in m.bound if k[1] == O['EVT_WINDOW_TO_FG'])]
+    m.call(f, a0=c, a1=0, count=3000000)
+    expect(first == 'Vinyl' and label(m) == 'Off', 'stock\'s own Cover mode row switching the byte off shows as Off the next time the page is in front (read live)')
+    bytes_on(m, 1)
+    m.call(f, a0=c, a1=0, count=3000000)
+    expect(label(m) == 'Vinyl', '... and on again as the saved destination')
+    for loc in pod_i18n.ALL_TABLES:
+        for d, on, key in ((None, 1, 'Album Cover'), (b'1\n', 1, 'Cassette'), (b'2\n', 1, 'Vinyl'), (None, 0, 'Off')):
+            expect(label(open_row(d, on, loc)) == key, f'{loc}: {key} is set by key')
+    # translations: every text of the page is in every table, nothing is the key's twin by mistake for the longer ones
+    for key in ('Idle Display', 'Album Cover', 'Cassette', 'Vinyl', 'Shown after 10 seconds on Now Playing.'):
+        expect(all(pod_i18n.TEXT[key].get(loc) for loc in pod_i18n.LOCALES), f'{key!r} has a text in every language')
+    # the assets
+    tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets/default/raw/ui/m1plus_npset.bin'), 'rb').read())
+    row, lab = tree.find('pod_row3'), tree.find('pod_value3')
+    expect(row is not None and lab is not None and (lab.get('tr_text') or lab.get('text')) == 'Album Cover' and row.find('pod_icon') is not None and tree.find('pod_note0_t').get('tr_text') == 'Shown after 10 seconds on Now Playing.',
+           'the page asset: the last row has a glyph and its value label (Album Cover until the payload sets it), then the note')
+    tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets/default/raw/ui/m1plus_idleview.bin'), 'rb').read())
+    expect(all(tree.find(f'pod_check{i}').get('visible') == 'false' and tree.find(f'pod_check{i}').get('sensitive') == 'false' and tree.find(f'pod_row{i}').find('pod_icon') is None for i in range(4))
+           and tree.find('pod_note0_t').get('tr_text') == 'Shown after 10 seconds on Now Playing.' and tree.find('label_title').get('tr_text') == 'Idle Display',
+           'the picker asset: four rows without a glyph, a hidden insensitive check each, the note, the title')
+
+
+SECTIONS = [hook_tests, job_tests, life_tests, idle_tests, idle_setting_tests]
 
 
 def run(ctx):

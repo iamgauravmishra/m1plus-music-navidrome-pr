@@ -82,7 +82,27 @@ BIGCOVER_PINS = (   # (address, stock word, what it proves)
     (0x529a30, 0x10800046, 'bigcover_page_init: beqz a0 (the trampoline resumes here)'),
     (0x4d10c8, 0x0320f809, 'page-init dispatcher: jalr strcmp(name, "bigcover_page")'), (0x4d10cc, 0x24a59f50, 'its delay slot: a1 = "bigcover_page"'),
     (0x4d10d8, 0x8f99b5b8, 'page-init dispatcher: lw t9, GOT bigcover_page_init'), (0x4d10e0, 0x0320f809, 'page-init dispatcher: jalr bigcover_page_init(window, ctx)'),
-    (0x53d0ec, 0x0320f809, 'the timed open (callback 0x53cf48, registered by player_timer_start): jalr navigator_to'), (0x53d0f0, 0x24849f50, 'its delay slot: a0 = "bigcover_page"'),
+)
+
+# The idle view (patch/bigcover.c bc_timed_open, docs/modules/bigcover.md "Idle view", payload hook 24): the timed open's `jalr navigator_to("bigcover_page")` in Now Playing's page timer callback
+# 0x53cf48 becomes `jal bc_timed_open`; the delay slot still loads the name, and everything round it is stock's: the Cover mode byte test, the playing_page window test, the countdown
+# (0x97ccd0: decremented before the call, reset to 20 after it). The Settings row's other stock side is the Cover mode row's handler (on_playsetback_onclick 0x4a0098), whose toggle
+# idle_cover_mode repeats: [SYSSET] COVERMODE saved with write_int_config, the byte 0xa05aa5 stored.
+IDLE_SITE = 0x53d0ec
+IDLE_PINS = (   # (address, stock word, what it proves)
+    (0x53cf48, 0x3c1c004c, 'the timer callback 0x53cf48: PIC prologue (lui gp)'), (0x53cf4c, 0x279c6f88, 'the timer callback: addiu gp'), (0x53cf50, 0x0399e021, 'the timer callback: addu gp, gp, t9'),
+    (0x53d008, 0x8f82ae50, 'the timer callback: lw v0, GOT 0xa05aa5 (Cover mode)'), (0x53d00c, 0x90420000, 'the timer callback: lbu v0, (v0)'), (0x53d010, 0x1040003c, 'the timer callback: beqz v0 (Cover mode off: no timed open)'),
+    (0x53d0bc, 0x8f85a708, 'the timer callback: lw a1, GOT (the string page)'), (0x53d0c4, 0x0320f809, 'the timer callback: jalr strcmp(top window name, "playing_page")'),
+    (0x53d0c8, 0x24a55b14, 'its delay slot: a1 = "playing_page"'), (0x53d0cc, 0x1440000c, 'bnez v0: the timed open only with Now Playing on top'),
+    (0x53d0d4, 0x8e22ccd0, 'the countdown: lw v0, 0x97ccd0'), (0x53d0d8, 0x2442ffff, 'addiu v0, v0, -1'), (0x53d0dc, 0x14400008, 'bnez: not yet'), (0x53d0e0, 0xae22ccd0, 'sw v0, countdown (in the branch delay slot)'),
+    (0x53d0e4, 0x8f848020, 'the timed open: lw a0, GOT (the string page)'), (0x53d0e8, 0x8f99a704, 'the timed open: lw t9, GOT navigator_to'),
+    (IDLE_SITE, 0x0320f809, 'the timed open: jalr navigator_to'), (0x53d0f0, 0x24849f50, 'its delay slot: a0 = "bigcover_page"'),
+    (0x53d0f4, 0x24020014, 'addiu v0, zero, 20: the countdown restarts'), (0x53d0f8, 0x8fbc0010, 'lw gp, 0x10(sp): stock restores $gp after the call'), (0x53d0fc, 0xae22ccd0, 'sw v0, countdown'),
+    # Cover mode's own row (on_playsetback_onclick's case, 0x4a0098): the byte is flipped, saved as [SYSSET] COVERMODE with write_int_config and stored; the Settings row does the same and saves first
+    (0x4a0098, 0x8f92ae50, 'cover mode row: lw s2, GOT 0xa05aa5'), (0x4a00ac, 0x92440000, 'cover mode row: lbu a0, (s2)'), (0x4a00b0, 0x24c6745c, 'cover mode row: a2 = "COVERMODE"'),
+    (0x4a00b4, 0x24a54540, 'cover mode row: a1 = "SYSSET"'), (0x4a00bc, 0x38840001, 'cover mode row: xori a0, a0, 1'), (0x4a00c0, 0x0320f809, 'cover mode row: jalr write_int_config'),
+    (0x4a00c4, 0xa2440000, 'cover mode row: sb a0, (s2) in the delay slot (the byte is stored)'),
+    (0x744540, 0x53535953, 'the string "SYSS(ET)"'), (0x74745c, 0x45564f43, 'the string "COVE(RMODE)"'), (0x747460, 0x444f4d52, 'the string "(COVE)RMOD(E)"'),
 )
 
 # Light Mode (patch/palette.c, docs/modules/accent.md, docs/modules/payload.md hooks 10 - 12): three hooks on the painter's inputs, q2-pod's (its style_get_color / style_get_gradient / image_manager_add hooks).
@@ -833,6 +853,8 @@ DATA = {
     # savecover_path: char[0x400], the path parseplaycover_thd last finished a cover for. It copies the track's path here (`snprintf(buf, 0x400, "%s")` @0x4df1a0) only AFTER it has stored the new source (2 / 3 / 5) and
     # released the lock, and skips a track whose path equals it (strcmp @0x4df028); COVER_SRC is 1 while it works. So source in {2, 3} with this equal to the playing path means the source is that track's (patch/bigcover.c)
     'COVER_PARSED':       (0xa04c3c, 'savecover_path'),
+    # stock's Cover mode switch (Playback Settings > Cover mode; the timed Now Playing view runs only while it is on): a byte, 0 / 1, toggled by xori and saved as [SYSSET] COVERMODE (IDLE_PINS, patch/bigcover.c)
+    'COVER_MODE':         (0xa05aa5, None),
     # the play queue: a deque_t * (stSongInfo rows, the queue start_player copied). Every reader pairs it with
     # mclGetPlayPos: get_playtimeandlength `lw s1, 0xa0394c; deque_size(*s1)` then `deque_at(*s1, pos)` (@0x4e01cc..0x4e0268),
     # the lock screen refresh (@0x53f73c, "queued" = 0 <= pos < size), the queue drawer (@0x47a8f0)
@@ -1509,7 +1531,7 @@ def compile_payload(out, demo_path, tag=TAG):
             '--undefined=stock_playing_init_trampoline', '--undefined=m1plus_bigcover_init', '--undefined=stock_bigcover_init_trampoline', '--undefined=m1plus_scroll_event',
             '--undefined=m1plus_playmore_init', '--undefined=stock_playmore_init_trampoline', '--undefined=m1plus_pulldown_init', '--undefined=pd_open_settings', '--undefined=stock_pulldown_init_trampoline', '--undefined=rd_start_player', '--undefined=rd_step', '--undefined=stock_start_player_trampoline', '--undefined=rd_save_stop', '--undefined=rd_save_start', '--undefined=stock_save_stop_trampoline', '--undefined=stock_save_start_trampoline', '--undefined=rn_backtoplayer', '--undefined=stock_backtoplayer_trampoline', '--undefined=pc_id3_path', '--undefined=pc_library_query', '--undefined=pc_sorted_query', '--undefined=stock_dbquery_trampoline', '--undefined=stock_sorted_query_trampoline',
             '--undefined=m1plus_style_color', '--undefined=m1plus_style_gradient', '--undefined=m1plus_image_add', '--undefined=stock_style_color_trampoline', '--undefined=stock_image_add_trampoline', '--undefined=pal_map', '--undefined=pal_active', '--undefined=pal_background', '--undefined=pal_accent', '--undefined=pal_accent_saved', '--undefined=pal_accent_set', '--undefined=pal_accent_color', '--undefined=pal_fill',
-            '--undefined=pod_scan_dir', '--undefined=sh_set_mode', '--undefined=sh_load_playlist', '--undefined=sh_display_mode', '--undefined=sh_clear_queue', '--undefined=stock_setmode_trampoline', '--undefined=stock_loadplaylist_trampoline', '--undefined=ft_created', '--undefined=stock_file_created_trampoline', '--undefined=tz_select', '--undefined=tz_row', '--undefined=tz_label', '--undefined=stock_timezone_trampoline', '--undefined=bp_capacity', '--undefined=lo_set_text', '--undefined=wifi_hub_open', '--undefined=pod_eq_site', '--undefined=pf_items', '--undefined=pf_seen']   # (the last two: accessors of the parser the tests read; nothing in the payload calls them)
+            '--undefined=bc_timed_open', '--undefined=pod_scan_dir', '--undefined=sh_set_mode', '--undefined=sh_load_playlist', '--undefined=sh_display_mode', '--undefined=sh_clear_queue', '--undefined=stock_setmode_trampoline', '--undefined=stock_loadplaylist_trampoline', '--undefined=ft_created', '--undefined=stock_file_created_trampoline', '--undefined=tz_select', '--undefined=tz_row', '--undefined=tz_label', '--undefined=stock_timezone_trampoline', '--undefined=bp_capacity', '--undefined=lo_set_text', '--undefined=wifi_hub_open', '--undefined=pod_eq_site', '--undefined=pf_items', '--undefined=pf_seen']   # (the last two: accessors of the parser the tests read; nothing in the payload calls them)
     run(LD, '-m', 'elf32ltsmip', '--gc-sections', '-T', os.path.join(PATCH, 'link.ld'),
         '-e', 'm1plus_home_click', '--undefined=m1plus_home_click', '--undefined=stock_home_click_trampoline',
         *keep, *objs, out / 'pod_asm.o', '-o', out / 'patch.elf')
@@ -1663,6 +1685,11 @@ def patch_demo(raw, payload, ps, demo_path):
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     hook(patched, BIGCOVER_INIT, BIGCOVER_INIT_PROLOGUE, target5, 'bigcover_page_init')
+    check(BASE <= ps['bc_timed_open'] < BASE + len(payload), 'idle view hook symbol outside payload')
+    for a, old, what in IDLE_PINS:
+        got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
+        check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
+    struct.pack_into('<I', patched, fileoff(patched, IDLE_SITE), jal(ps['bc_timed_open'], IDLE_SITE))   # (the pins above checked the site's word, its delay slot, the GOT load and the callback round it)
     patch_playmore(patched, ps, len(payload))
     patch_timezones(patched, ps, len(payload))
     patch_pulldown(patched, ps, len(payload))
@@ -1720,7 +1747,7 @@ def patch_demo(raw, payload, ps, demo_path):
     check(dynsym(demo_path).get('playsong_id3info') == 0xa0d88c, 'playsong_id3info moved')
     edits = patch_rows(patched, ps)
     # no row edit may touch a PIC prologue (the hooks are the only ones) or a hook site
-    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, PLAYING_INIT, BIGCOVER_INIT, PLAYMORE_INIT, PULLDOWN_INIT, START_PLAYER, SAVE_STOP, SAVE_START, BACKTOPLAYER, QUERY_DB, QUERY_SORT, STYLE_COLOR, IMAGE_ADD, SETMODE, LOADPL, FILETIME, timezones.SELECT)) and not STYLE_GRADIENT <= int(a, 16) < STYLE_GRADIENT + 8 and not any(int(a, 16) == s for s, _ in MODE_SITES) and int(a, 16) != CLEAR_SITE and not ID3_SITE <= int(a, 16) < ID3_SITE + 4 and not SCAN_SITE <= int(a, 16) < SCAN_SITE + 4 and not BATTERY_SITE <= int(a, 16) < BATTERY_SITE + 4 and not any(int(a, 16) == s for s, _ in LINEOUT_SITES) and int(a, 16) != WIFIHUB_SITE and int(a, 16) not in PULLDOWN_OPEN_SITES and not EQ_ROW <= int(a, 16) < EQ_ROW + 8
+    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, PLAYING_INIT, BIGCOVER_INIT, PLAYMORE_INIT, PULLDOWN_INIT, START_PLAYER, SAVE_STOP, SAVE_START, BACKTOPLAYER, QUERY_DB, QUERY_SORT, STYLE_COLOR, IMAGE_ADD, SETMODE, LOADPL, FILETIME, timezones.SELECT)) and not STYLE_GRADIENT <= int(a, 16) < STYLE_GRADIENT + 8 and not any(int(a, 16) == s for s, _ in MODE_SITES) and int(a, 16) != CLEAR_SITE and not ID3_SITE <= int(a, 16) < ID3_SITE + 4 and not SCAN_SITE <= int(a, 16) < SCAN_SITE + 4 and not BATTERY_SITE <= int(a, 16) < BATTERY_SITE + 4 and not any(int(a, 16) == s for s, _ in LINEOUT_SITES) and int(a, 16) != WIFIHUB_SITE and int(a, 16) != IDLE_SITE and int(a, 16) not in PULLDOWN_OPEN_SITES and not EQ_ROW <= int(a, 16) < EQ_ROW + 8
               for a, *_ in edits), 'row edit on a hook')
     check(all(not (SCROLL_SLOT <= int(a, 16) < SCROLL_SLOT + 4 or a in {hex(p[0]) for p in SCROLL_PINS}) for a, *_ in edits),
           'row edit on a list gesture word')
@@ -1766,6 +1793,7 @@ def main():
         'hook_scan': {'addr': SCAN_SITE, 'target': ps['pod_scan_dir']},
         'hook_battery': {'addr': BATTERY_SITE, 'target': ps['bp_capacity']},
         'hook_wifihub': {'addr': WIFIHUB_SITE, 'target': ps['wifi_hub_open']},
+        'hook_idle': {'addr': IDLE_SITE, 'target': ps['bc_timed_open']},
         'hook_lineout': {'sites': [hex(a) for a, _ in LINEOUT_SITES], 'target': ps['lo_set_text']},
         'hook_timezone': {'addr': timezones.SELECT, 'target': ps['tz_select']}, 'timezone_row': {'addr': timezones.ROW_CALL, 'target': ps['tz_row']}, 'timezone_label': {'addr': timezones.LABEL_CALL, 'target': ps['tz_label']},
         'hook_style_color': {'addr': STYLE_COLOR, 'target': ps['m1plus_style_color']}, 'hook_style_gradient': {'addr': STYLE_GRADIENT, 'target': ps['m1plus_style_gradient']},

@@ -55,6 +55,9 @@
 #define TAPETHEME_FILE \
     "/mnt/data/m1plus/cassette-theme" /* the Cassette Mode theme: "1" = Chrome, "2" = Metal (each with an optional newline), anything else or missing = Normal (the default) */
 #define TAPETHEME_TMP "/mnt/data/m1plus/cassette-theme.tmp"
+#define IDLE_FILE \
+    "/mnt/data/m1plus/nowplaying-idle" /* where Now Playing's timed view goes: "1" Cassette, "2" Vinyl (each with an optional newline), anything else or missing = Album Cover (the default; docs/modules/bigcover.md "Idle view") */
+#define IDLE_TMP "/mnt/data/m1plus/nowplaying-idle.tmp"
 #define VINYLREC_FILE \
     "/mnt/data/m1plus/vinyl-record" /* Vinyl Mode's record colour: "1" Cover (with an optional newline), anything else or missing = Black (the default) */
 #define VINYLREC_TMP "/mnt/data/m1plus/vinyl-record.tmp"

@@ -963,6 +963,7 @@ class Machine:
             ret = getattr(self, 'out_way', 0)   # 0 the jacks, 1 Bluetooth, 2 USB audio (a test sets m.out_way)
         elif name == 'write_int_config':
             self.calls.append(('write_int_config', a0, self.read_cstr(a1), self.read_cstr(a2)))
+            ret = getattr(self, 'config_ret', 0)   # toolsWriteConfig's: 0 done, -1 config.ini could not be opened (a test sets m.config_ret)
         elif name == 'toolsRandnum':
             ret = self.seed % a0 if a0 else 0
         elif name == 'time_now_ms':

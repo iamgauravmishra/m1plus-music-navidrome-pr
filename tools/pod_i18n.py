@@ -183,6 +183,17 @@ TEXT = dict([
        'Nueva mezcla al abrir Inicio', "Nuovo mix all'apertura", 'มิกซ์ใหม่เมื่อเปิดหน้าหลัก', 'Nowy miks po otwarciu', 'Новый микс при открытии', 'Новий мікс при відкритті'),
     _t('Applies the next time Cassette Mode opens.', '下次打开磁带模式时生效。', '下次開啟錄音帶模式時生效。', '次回カセットモード起動時に反映', '다음에 카세트 모드를 열 때 적용됩니다.', "S'applique à la prochaine ouverture.", 'Gilt beim nächsten Öffnen.',
        'Se aplica la próxima vez que se abre.', 'Si applica alla prossima apertura.', 'มีผลเมื่อเปิดครั้งถัดไป', 'Zastosowane przy następnym otwarciu.', 'Применится при следующем открытии.', 'Застосується при наступному відкритті.'),
+    # Settings > Now Playing > Idle Display (patch/bigcover.c, docs/modules/bigcover.md "Idle view")
+    _t('Idle Display', '空闲显示', '閒置顯示', '待機表示', '대기 화면', 'Affichage veille', 'Ruheanzeige',
+       'Vista reposo', 'Vista inattiva', 'แสดงขณะว่าง', 'Ekran czuwania', 'Экран простоя', 'Заставка'),
+    _t('Album Cover', '专辑封面', '專輯封面', 'アルバムカバー', '앨범 커버', 'Pochette', 'Albumcover',
+       'Portada', 'Copertina', 'ปกอัลบั้ม', 'Okładka', 'Обложка', 'Обкладинка'),
+    _t('Cassette', '磁带', '錄音帶', 'カセット', '카세트', 'Cassette', 'Kassette',
+       'Casete', 'Cassetta', 'เทป', 'Kaseta', 'Кассета', 'Касета'),
+    _t('Vinyl', '黑胶', '黑膠', 'レコード', '바이닐', 'Vinyle', 'Vinyl',
+       'Vinilo', 'Vinile', 'แผ่นเสียง', 'Winyl', 'Винил', 'Вініл'),
+    _t('Shown after 10 seconds on Now Playing.', '在正在播放界面停留10秒后显示。', '在正在播放畫面停留10秒後顯示。', '再生画面で10秒後に表示されます。', '지금 재생 화면에서 10초 후 표시됩니다.', "Affichée après 10 s sur Lecture en cours.", 'Nach 10 Sekunden auf „Jetzt läuft“.',
+       'Se muestra tras 10 s en Reproduciendo.', 'Mostrata dopo 10 secondi in Riproduzione.', 'แสดงหลัง 10 วินาทีในหน้ากำลังเล่น', 'Pokazywane po 10 s na ekranie odtwarzania.', 'Через 10 с на экране «Сейчас играет».', 'Через 10 секунд на екрані «Зараз грає».'),
     # The Wi-Fi page (patch/wifipage.c, docs/modules/wifi.md): the group headers, Other..., the toasts and the Bluetooth question
     _t("Enterprise isn't supported yet", '暂不支持企业级网络', '暫不支援企業級網路', 'エンタープライズは未対応です', '엔터프라이즈는 아직 지원되지 않음', 'Entreprise : pas encore pris en charge', 'Enterprise wird noch nicht unterstützt',
        'Empresarial aún no es compatible', 'Enterprise non ancora supportato', 'ยังไม่รองรับเครือข่ายองค์กร', 'Enterprise nie jest jeszcze obsługiwane', 'Корпоративные сети пока не поддерживаются', 'Корпоративні мережі ще не підтримуються'),
