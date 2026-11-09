@@ -192,7 +192,7 @@ def about_tests(ctx):
     S = P.SETTINGS_PAGE
     ab_i = next(i for i, r in enumerate(S.rows) if r.label == 'About')
     expect((S.rows[ab_i].action, S.rows[ab_i].arg) == (P.ACT_PAGE, P.ABOUT_PAGE_INDEX) and A.title == 'About' and A.key == 'm1plus_about' and all(P.row_kind(r) == 'info' for r in A.rows if r.action != P.ACT_UPDATE) and [r.label for r in A.rows][:2] == ['M1+ Music', 'Software Update'] and P.row_kind(A.rows[1]) == 'link'
-           and not any(n == 'systemset/about_page' for n, _ in P.STOCK_PAGES), 'Settings > About opens our own page of information rows; the stock About page is not linked')
+           and not any(n == 'systemset/about_page' for n, *_ in P.STOCK_PAGES), 'Settings > About opens our own page of information rows; the stock About page is not linked')
     sections = [x.text if isinstance(x, P.Hdr) else x.label if isinstance(x, P.Row) else None for x in A.layout]
     expect(sections == ['M1+ Music', 'Software Update', 'Firmware', 'Device', 'Model', 'Serial Number', 'Wi-Fi MAC', 'IP Address', 'Storage', 'Capacity', 'Available'], f'the sections: build and firmware, Device, Storage ({sections})')
     names = {r.label: i for i, r in enumerate(A.rows)}
@@ -273,7 +273,7 @@ def stock_tests(ctx):
     m.click(f'pod_row{rows["All Playback Settings"]}'); m.click(f'pod_row{rows["All System Settings"]}')
     # (the Home dispatcher's ids 16 and 17 are bound to the two rows: tests/pod/menu.py checks the table)
     expect(len(P.STOCK_PAGES) == 4 and all(r.action == P.ACT_STOCK for r in S.rows if r.label in want), 'four stock pages, each opened by an ACT_STOCK row')
-    expect(not [r for r in P.DEVELOPER_PAGE.rows if r.action == P.ACT_STOCK] and 'systemset/fwupdate_page' not in [n for n, _ in P.STOCK_PAGES], 'no Developer row is a stock page: the firmware update page is not in STOCK_PAGES (About > Software Update is ours)')
+    expect(not [r for r in P.DEVELOPER_PAGE.rows if r.action == P.ACT_STOCK] and 'systemset/fwupdate_page' not in [n for n, *_ in P.STOCK_PAGES], 'no Developer row is a stock page: the firmware update page is not in STOCK_PAGES (About > Software Update is ours)')
     m = settings_machine()
     m.click(f'pod_row{rows["EQ"]}')
     expect(('window_open', P.PEQ_PAGE.key) in m.calls and 'navigator_to' not in m.names(), 'EQ opens our Equalizer page (ACT_PEQ), not stock\'s')

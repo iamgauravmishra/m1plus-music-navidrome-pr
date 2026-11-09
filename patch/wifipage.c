@@ -1362,11 +1362,11 @@ static void wp_spin_place(void) {
 
 /* The hook at the Wi-Fi row of the stock All System Settings hub (tools/pod.py WIFIHUB_SITE, docs/modules/payload.md hook 21): stock's row is `navigator_to("systemset/wifi_page")` and this call takes
  * its place with the same argument (the delay slot still loads it). Our page opens unless the kill switch exists (then the stock page and stock's supplicant, the only route for WEP) or the page will not open;
- * both leave stock's call. A tap on the row only: no state, no timer, not on the boot path. */
+ * both leave stock's page, opened with stock's navigator_to each time (never restacked: its init scans on every open, 0x4b115c, and a restack runs no init; its EVT_WINDOW_TO_FG handler 0x4b0a34 only rebuilds the list from the old results). Stock ignores the result. A tap on the row only: no state, no timer, not on the boot path. */
 int wifipage_open(void);
 int wifi_hub_open(const char *name) {
     if (access(KILL_SD, F_OK) != 0 && wifipage_open() == 0) return 0;
-    return navigator_to(name);
+    return navigator_to(name); /* a new stock page, its init scans (the result is unused by stock's row) */
 }
 
 /* Settings > Wi-Fi. 0 once the page is up (or already open); -1 when it could not open (nothing is left of it): the caller opens the stock page. */

@@ -121,6 +121,8 @@ struct pod_page {
 
 struct pod_stock {
     const char *name; /* a stock page, for navigator_to */
+    const char *
+        window; /* its window's name (the asset's root), restacked when opened; 0: always opened afresh (Wi-Fi, Bluetooth, Play Mode: init does what a restack would not redo) */
     int value; /* the value the row shows at the right: VK_* (0: none) */
 };
 
@@ -414,8 +416,8 @@ static int on_row(void *ctx, void *e) {
     else if (row->action == ACT_STOCK) {
         if (row->arg == 0 /* STOCK_WIFI */ && wifipage_open() == 0)
             return RET_OK; /* patch/wifipage.c: our Wi-Fi page; the stock page where it will not open */
-        navigator_to(
-            POD_STOCK[row->arg].name); /* a plain navigator_to, as the stock lists call it: Back returns here */
+        pod_open_stock(POD_STOCK[row->arg].name,
+                       POD_STOCK[row->arg].window); /* stock's navigator_to, or the page's window if in the stack */
     } else if (is_pick(row))
         pick_choose(ctx); /* a picker row */
     return RET_OK;

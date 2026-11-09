@@ -1384,9 +1384,9 @@ def gen_stock_h(out, demo_path):
             for ri, r in enumerate(page.rows):
                 h.append(f'    {{"pod_row{ri}", {r.action}, {r.arg}}},')
             h.append('};')
-    h.append('static const struct pod_stock POD_STOCK[] = {')   # ACT_STOCK's pages: the name and the value the row shows (VK_*: 0 none, else 1 + the index in STOCK_VALUES)
-    for name, value in pod_pages.STOCK_PAGES:
-        h.append(f'    {{"{name}", {pod_pages.STOCK_VALUES.index(value) + 1 if value else 0}}},')
+    h.append('static const struct pod_stock POD_STOCK[] = {')   # ACT_STOCK's pages: the navigator path, the window name (0: no restack) and the value the row shows (VK_*: 0 none, else 1 + the index in STOCK_VALUES)
+    for name, value, window in pod_pages.STOCK_PAGES:
+        h.append(f'    {{"{name}", {chr(34) + window + chr(34) if window else 0}, {pod_pages.STOCK_VALUES.index(value) + 1 if value else 0}}},')
     h.append('};')
     import pod_settings as ST   # the value labels' fit (patch/m1plus.c value_fit): the right edge of a value's box and the room a value may take, the label's left edge and the gap between them
     h.append(f'#define POD_VALUE_RIGHT {ST.value_box()[0] + ST.VALUE_W}')

@@ -195,16 +195,14 @@ static int pm_on_art(void *ctx, void *e) {
 
 /* Sleep Timer (the row is pod_sleep, page 2): the stock Settings > Power page (powermanager_page: the Sleep Timer switch and its hour / minute selectors), opened over Now Playing. The page has no single_instance property,
  * so a plain navigator_to stacks a new one every time. The pile-up needs the page's top-right Now Playing button, which restacks the player and leaves the Power page under it, and then reopening Sleep Timer; a plain
- * Back closes the page. A Power window already in the stack is brought to the front (pod_restack_window, as the Settings tiles do); otherwise stock's open. The restacked page refreshes itself: stock's restack delivers
+ * Back closes the page. A Power window already in the stack is brought to the front (pod_open_stock, which restacks as the Settings tiles do); otherwise stock's open. The restacked page refreshes itself: stock's restack delivers
  * EVT_WINDOW_TO_FG, and the handler the page's init bound for it (0x4a9b2c) runs the page refresh (0x4a9924: switch and selectors from the timer), so nothing here refreshes it (pinned in tools/pod.py PLAYMORE_PINS).
  * Back (0x4a91d0) saves the picker values and calls navigator_back; with Now Playing directly below the page that returns to Now Playing. The page FIRST, the sheet closed once it is up (a window below the top one);
  * a page that cannot open leaves the sheet. */
 static int pm_on_sleep(void *ctx, void *e) {
-    void *win;
     (void)e;
     if (!pm.dlg || ctx != pm.dlg) return RET_OK;
-    win = pod_restack_window("powermanager_page");
-    if (!win && navigator_to("systemset/powermanager_page") != RET_OK) return RET_OK;
+    if (pod_open_stock("systemset/powermanager_page", "powermanager_page") != RET_OK) return RET_OK;
     window_close(ctx);
     return RET_OK;
 }

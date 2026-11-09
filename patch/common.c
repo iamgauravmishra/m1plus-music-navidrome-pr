@@ -153,6 +153,14 @@ void *pod_restack_window(const char *name) {
     return (void *)0;
 }
 
+/* A stock page opened the way the stock lists would, without stacking a second window of a page that has no single_instance property: the opened window is restacked, else navigator_to(path).
+ * window is NULL for a page that must be opened afresh because its init starts or reads something that a restack does not redo: stock's restack sends EVT_WINDOW_TO_FG (0x12d) to the page and EVT_WINDOW_TO_BG (0x12c) to the window it leaves, and
+ * only a new open runs init. Wi-Fi (init 0x4b1048 calls wifi_scan on every open, its 0x12d handler 0x4b0a34 only rebuilds the list), Bluetooth (its 0x12c handler 0x4a2a20 calls btStopSearch, its 0x12d handler 0x4a3a28 does not restart discovery, init 0x4a411c does) and Play Mode (init reads the mode once, no 0x12d handler) are opened afresh. */
+int pod_open_stock(const char *path, const char *window) {
+    if (window && pod_restack_window(window)) return RET_OK;
+    return navigator_to(path);
+}
+
 /* The navbar's small title of a page with a large heading: shown once the heading has scrolled away, i.e. the scroll offset has reached SG_COLLAPSE, or, on a page whose
  * heading is a header's name (a playlist, a podcast show), `head` (the offset the name has gone at). The page ORs in its own conditions (select mode, no scroll events ...). */
 int pod_title_gone(int off, int head) { return off >= (head ? head : SG_COLLAPSE); }
